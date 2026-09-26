@@ -280,7 +280,7 @@ class CivController(private val context: Context? = null) : RigDriver {
         val hex = frames.flatMap { f -> f.map { it } }.joinToString(" ") { "%02X".format(it) }
         val p = CatDecode.payload(frames, radioAddr, controllerAddr, 0x03)
         val hz = p?.let { CatDecode.bcdLeToFreq(it) }
-        return if (hz != null) tf("civ_link_ok", "%.5f MHz".format(hz / 1e6))
+        return if (hz != null) tf("civ_link_ok", "%.5f MHz".format(java.util.Locale.US, hz / 1e6))
         else tf("civ_unexpected", hex)
     }
 

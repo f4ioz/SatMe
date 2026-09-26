@@ -46,8 +46,8 @@ object CatBench {
         cat.setModes("FM", "FM"); steps += "modes FM / FM"
         cat.setPair(downlinkHz, uplinkHz); steps += "descente et montée"
         val back = cat.readDownlink()
-        steps += "relecture : " + (back?.let { "%.5f MHz".format(it / 1e6) } ?: "aucune réponse")
-        cat.setCtcss(toneTenthHz); steps += "ton d'accès %.1f Hz".format(toneTenthHz / 10.0)
+        steps += "relecture : " + (back?.let { "%.5f MHz".format(java.util.Locale.US, it / 1e6) } ?: "aucune réponse")
+        cat.setCtcss(toneTenthHz); steps += "ton d'accès %.1f Hz".format(java.util.Locale.US, toneTenthHz / 10.0)
 
         val ok = sim.refusals == 0 && back == downlinkHz &&
             sim.subHz == uplinkHz && sim.toneTenthHz == toneTenthHz
@@ -70,8 +70,8 @@ object CatBench {
         pair.setModes("FM", "FM"); steps += "modes FM / FM"
         pair.setPair(downlinkHz, uplinkHz); steps += "descente et montée"
         val back = pair.readDownlink()
-        steps += "relecture : " + (back?.let { "%.5f MHz".format(it / 1e6) } ?: "aucune réponse")
-        pair.setCtcss(toneTenthHz); steps += "ton d'accès %.1f Hz".format(toneTenthHz / 10.0)
+        steps += "relecture : " + (back?.let { "%.5f MHz".format(java.util.Locale.US, it / 1e6) } ?: "aucune réponse")
+        pair.setCtcss(toneTenthHz); steps += "ton d'accès %.1f Hz".format(java.util.Locale.US, toneTenthHz / 10.0)
 
         val refusals = rxSim.refusals + txSim.refusals
         val ok = refusals == 0 && back == downlinkHz &&

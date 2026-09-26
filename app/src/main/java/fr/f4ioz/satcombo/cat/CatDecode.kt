@@ -208,7 +208,7 @@ object CatDecode {
 
     // ------------------------------------------------- human-readable text
 
-    private fun mhz(hz: Long): String = "%.5f MHz".format(hz / 1e6)
+    private fun mhz(hz: Long): String = "%.5f MHz".format(java.util.Locale.US, hz / 1e6)
 
     /**
      * Mode name as printed on the rig's front panel.
@@ -254,7 +254,7 @@ object CatDecode {
             }
             0x1B -> if (d.size >= 4) {
                 val t = bcdBeToTone(d, 1)
-                if (t != null) "ton d'accès ← %.1f Hz".format(t / 10.0) else "ton d'accès"
+                if (t != null) "ton d'accès ← %.1f Hz".format(java.util.Locale.US, t / 10.0) else "ton d'accès"
             } else "lecture du ton d'accès"
             0x25 -> {
                 val which = if (sub(0) == 0x01) "VFO non sélectionné" else "VFO sélectionné"
@@ -297,7 +297,7 @@ object CatDecode {
                 0x0B -> {
                     val t = ((f[0].toInt() shr 4 and 0x0F) * 1000 + (f[0].toInt() and 0x0F) * 100 +
                         (f[1].toInt() shr 4 and 0x0F) * 10 + (f[1].toInt() and 0x0F))
-                    "ton d'accès ← %.1f Hz".format(t / 10.0)
+                    "ton d'accès ← %.1f Hz".format(java.util.Locale.US, t / 10.0)
                 }
                 0x81 -> "PTT ouvert"
                 0xF7 -> "lecture de l'état d'émission"

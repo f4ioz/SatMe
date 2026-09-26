@@ -18,6 +18,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.util.Locale
 
 /**
  * The CI-V driver, against a simulated IC-9700.
@@ -249,6 +250,31 @@ class CivControllerTest {
             // The log does not grow without bound.
             assertTrue(e.size <= CatJournal.DEPTH)
         } finally {
+            CatJournal.enabled = false
+            CatJournal.clear()
+        }
+    }
+
+    @Test
+    fun le_journal_ecrit_les_frequences_avec_un_point_meme_en_francais() = runBlocking {
+        // A French phone used to log "145,90000 MHz" while the rest of the app
+        // shows "145.90000": the same frequency read two ways on one screen.
+        val defaut = Locale.getDefault()
+        CatJournal.clear()
+        CatJournal.enabled = true
+        try {
+            Locale.setDefault(Locale.FRANCE)
+            val cat = bench()
+            cat.selectMainSub(true)
+            cat.setFrequency(145_900_000L)
+            cat.readFrequency()
+            val e = CatJournal.entries.value
+            assertTrue("envoi absent : ${e.map { it.text }}",
+                e.any { it.out && it.text.contains("145.90000 MHz") })
+            assertTrue("relecture absente : ${e.map { it.text }}",
+                e.any { !it.out && it.text.contains("fréquence : 145.90000 MHz") })
+        } finally {
+            Locale.setDefault(defaut)
             CatJournal.enabled = false
             CatJournal.clear()
         }

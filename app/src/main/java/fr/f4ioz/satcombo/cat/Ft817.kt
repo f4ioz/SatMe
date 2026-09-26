@@ -388,8 +388,8 @@ class Ft817Pair(private val context: Context? = null) {
 
     /** Human-readable link test of both rigs. */
     suspend fun testLink(): String {
-        val r = if (!rx.isOpen) "—" else rx.readFrequency()?.let { "%.5f MHz".format(it / 1e6) } ?: "?"
-        val t = if (!tx.isOpen) "—" else tx.readFrequency()?.let { "%.5f MHz".format(it / 1e6) } ?: "?"
+        val r = if (!rx.isOpen) "—" else rx.readFrequency()?.let { "%.5f MHz".format(java.util.Locale.US, it / 1e6) } ?: "?"
+        val t = if (!tx.isOpen) "—" else tx.readFrequency()?.let { "%.5f MHz".format(java.util.Locale.US, it / 1e6) } ?: "?"
         return "RX: $r · TX: $t"
     }
 }
