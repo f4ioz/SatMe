@@ -6606,8 +6606,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 }
                 kotlinx.coroutines.delay(_ui.value.catUi.sondeMs.toLong())
             }
-            if (_ui.value.catUi.enEmission)
-                _ui.value = _ui.value.copy(catUi = _ui.value.catUi.copy(enEmission = false))
+            // Never exits: only a restart cancels it, and the next loop clears
+            // `enEmission` itself when there is no link or no reply.
         }
     }
 
