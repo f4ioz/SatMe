@@ -66,6 +66,17 @@ Release signing reads `keystore.properties` at the root (not committed): `storeF
 
 ## Credits
 
-T. S. Kelso · John Magliacane KD2BD · Neoklis Kyriazis 5B4AZ · David Johnson G4DPZ · AMSAT · SatNOGS · Celestrak · radio club F6KMX
+- T. S. Kelso — SGP4/SDP4 models and CelesTrak (orbital elements)
+- John Magliacane KD2BD — PREDICT
+- Neoklis Kyriazis 5B4AZ — C translation of SGP4/SDP4, used by PREDICT
+- David Johnson G4DPZ — predict4java (pass and Doppler computation)
+- Kārlis Goba — ft8_lib (FT8/FT4 error-correcting code tables)
+- K9AN, G4WJS and K1JT — FT8 and FT4 protocols (QEX article)
+- Peter Goodhall 2M0SQL — Cloudlog, the original logbook
+- The Wavelog team — Wavelog, the Cloudlog fork SatMe uploads its contacts to
+- IS0GRB — QO-100 WebSDR (frequency reference)
+- John Morris G4ANB — Maidenhead locator squares
+- AMSAT and SatNOGS — satellite status
+- F6KMX radio club
 
 73 de **F4IOZ**

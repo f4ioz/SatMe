@@ -66,6 +66,17 @@ La signature de publication lit `keystore.properties` à la racine (non versionn
 
 ## Remerciements
 
-T. S. Kelso · John Magliacane KD2BD · Neoklis Kyriazis 5B4AZ · David Johnson G4DPZ · AMSAT · SatNOGS · Celestrak · radio-club F6KMX
+- T. S. Kelso — modèles SGP4/SDP4 et CelesTrak (éléments orbitaux)
+- John Magliacane KD2BD — PREDICT
+- Neoklis Kyriazis 5B4AZ — traduction en C de SGP4/SDP4, reprise par PREDICT
+- David Johnson G4DPZ — predict4java (calcul des passages et du Doppler)
+- Kārlis Goba — ft8_lib (tables du code correcteur FT8/FT4)
+- K9AN, G4WJS et K1JT — protocoles FT8 et FT4 (article QEX)
+- Peter Goodhall 2M0SQL — Cloudlog, le carnet d'origine
+- L'équipe Wavelog — Wavelog, le fork de Cloudlog auquel SatMe verse ses contacts
+- IS0GRB — WebSDR QO-100 (référence de fréquence)
+- John Morris G4ANB — carrés locateurs Maidenhead
+- AMSAT et SatNOGS — état des satellites
+- radio-club F6KMX
 
 73 de **F4IOZ**

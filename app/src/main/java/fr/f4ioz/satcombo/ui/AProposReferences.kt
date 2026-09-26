@@ -53,7 +53,7 @@ private val SOURCES = listOf(
     ),
     Remerciement(
         "Wavelog",
-        "Ein Wavelog et ses contributeurs",
+        "L'équipe Wavelog",
         "Le carnet de trafic auquel SatMe verse ses contacts, et qui lui dit " +
             "quels carrés voisins restent à faire. Wavelog est un fork de " +
             "Cloudlog, dont il a repris et prolongé le travail.",
@@ -90,6 +90,14 @@ private val SOURCES = listOf(
         "T.S. Kelso",
         "Les éléments orbitaux, tenus à jour depuis plus de trente ans.",
         "https://celestrak.org/"
+    ),
+    Remerciement(
+        "predict4java",
+        "David Johnson G4DPZ, d'après PREDICT de John Magliacane KD2BD et " +
+            "Neoklis Kyriazis 5B4AZ",
+        "La bibliothèque qui calcule les passages et le Doppler. Portage Java " +
+            "de PREDICT, sous GPL : c'est d'elle que SatMe tient sa licence.",
+        "https://github.com/davidmoten/predict4java"
     ),
     Remerciement(
         "SGP4",
