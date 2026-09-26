@@ -52,19 +52,16 @@ private val SOURCES = listOf(
         "https://github.com/kgoba/ft8_lib"
     ),
     Remerciement(
-        "Wavelog",
-        "L'équipe Wavelog",
-        "Le carnet de trafic auquel SatMe verse ses contacts, et qui lui dit " +
-            "quels carrés voisins restent à faire. Wavelog est un fork de " +
-            "Cloudlog, dont il a repris et prolongé le travail.",
-        "https://www.wavelog.org/"
-    ),
-    Remerciement(
         "Cloudlog",
         "Peter Goodhall 2M0SQL",
-        "Le carnet d'origine, dont Wavelog est issu et dont SatMe parle encore " +
-            "l'interface.",
+        "Le carnet de trafic en ligne auquel SatMe verse ses contacts.",
         "https://www.magicbug.co.uk/cloudlog/"
+    ),
+    Remerciement(
+        "Wavelog",
+        "L'équipe Wavelog",
+        "Fork de Cloudlog.",
+        "https://www.wavelog.org/"
     ),
     Remerciement(
         "QRZ.com",
