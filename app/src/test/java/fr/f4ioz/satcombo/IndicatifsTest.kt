@@ -448,6 +448,7 @@ class RattrapageTest {
             Indicatifs.Contact("F9ABC", "IN95", t0 - 2 * j),
         )).first()
         assertEquals("IN95", c.locatorPrincipal)
+    }
 }
 
 /** ADIF import, which only feeds the predictive memory. */
@@ -598,7 +599,6 @@ class AdifImportTest {
         assertEquals("JN17",
             Indicatifs.locatorPropose(m.first(), "F5RRO/P"))
     }
-}
 
     /**
      * The summary counts **distinct callsigns**, not contacts: 38 QSOs with one
