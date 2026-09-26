@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <cache-path name="skeds" path="skeds/" />
+    <cache-path name="photos" path="photos/" />
+    <!--
+        Les fichiers d'export : ADIF du carnet, lots de contacts, sauvegardes.
+
+        Il manquait, et le défaut était muet. `adifFileUri` écrit bien le .adi
+        dans cacheDir/export, puis demande son URI au FileProvider — qui lève,
+        faute de connaître ce dossier. Le `runCatching` avalait l'exception,
+        l'URI valait null, et le partage retombait sur le texte brut : c'est
+        exactement le repli prévu pour le cas où le fichier échoue, sauf qu'il
+        échouait toujours.
+    -->
+    <cache-path name="export" path="export/" />
+    <files-path name="files" path="." />
+    <external-files-path name="recordings" path="recordings/" />
+    <external-files-path name="sstv" path="sstv/" />
+    <external-files-path name="mires" path="mires/" />
+</paths>

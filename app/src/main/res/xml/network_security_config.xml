@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  La politique réseau de SatMe.
+
+  Android refuse le HTTP en clair depuis la version 9, et c'est une bonne chose :
+  tout ce que SatMe va chercher sur internet — éléments orbitaux, carnets en
+  ligne, bases d'indicatifs — passe en HTTPS et doit continuer.
+
+  Mais l'écoute déportée se branche sur un téléphone voisin, désigné par son
+  adresse IP sur un réseau local ou un partage de connexion. Un certificat n'a
+  aucun sens dans ce cadre : pas de nom de domaine, pas d'autorité pour le
+  signer, et rien ne sort du local. Sans cette autorisation, la connexion
+  échouait sur « Cleartext HTTP traffic not permitted ».
+
+  **Pourquoi l'autorisation est générale, et non limitée aux plages privées.**
+  C'est ce que j'ai écrit d'abord, et ça ne marche pas : la balise `domain`
+  n'accepte qu'un hôte exact ou un suffixe de nom, jamais un masque d'adresses.
+  Énumérer « 192.168.0.0 » ne couvre pas « 192.168.0.79 ». Une telle politique
+  aurait échoué en silence, ce qui est pire que pas de politique du tout.
+
+  Le clair est donc permis partout. Cela ne dégrade rien : permettre n'est pas
+  imposer, et toutes les adresses distantes employées par SatMe sont écrites en
+  HTTPS dans le code. Le seul usage réel du clair reste le voisin de réseau.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

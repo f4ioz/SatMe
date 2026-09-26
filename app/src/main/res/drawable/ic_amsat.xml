@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  La marque de l'AMSAT, réduite à ce qui reste lisible dans un bouton de
+  vingt-quatre points : le globe rouge quadrillé de blanc et la flèche
+  circulaire qui l'entoure. Le tracé précédent, monochrome, était une orbite
+  inventée que personne ne reconnaissait ; celui-ci reprend le logo officiel
+  (rouge #EA0303) en laissant tomber le mot AMSAT, les étoiles et la légende
+  « Amateur Radio in Space », illisibles à cette taille.
+
+  Les traits du globe sont blancs comme sur le logo d'origine : ce sont des
+  vides entre les quartiers rouges, ils se lisent donc aussi bien sur fond
+  clair que sur fond sombre. La couleur étant portée par le dessin, l'icône
+  ne doit surtout pas être teintée à l'affichage.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+
+    <!-- Le globe -->
+    <path
+        android:pathData="M12,6.7 a5.3,5.3 0 1,0 0,10.6 a5.3,5.3 0 1,0 0,-10.6"
+        android:fillColor="#FFEA0303" />
+
+    <!-- L'équateur -->
+    <path
+        android:pathData="M6.9,12 L17.1,12"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="0.9"
+        android:fillColor="#00000000" />
+
+    <!-- Le méridien -->
+    <path
+        android:pathData="M12,6.9 L12,17.1"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="0.9"
+        android:fillColor="#00000000" />
+
+    <!-- Les deux parallèles -->
+    <path
+        android:pathData="M7.6,9.1 Q12,7.3 16.4,9.1"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="0.9"
+        android:fillColor="#00000000" />
+    <path
+        android:pathData="M7.6,14.9 Q12,16.7 16.4,14.9"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="0.9"
+        android:fillColor="#00000000" />
+
+    <!-- La flèche circulaire, ouverte en haut à gauche -->
+    <path
+        android:pathData="M14.4,20.3 A8.6,8.6 0 1,0 5.92,5.92"
+        android:strokeColor="#FFEA0303"
+        android:strokeWidth="2.1"
+        android:fillColor="#00000000" />
+
+    <!-- Sa pointe -->
+    <path
+        android:pathData="M3.7,8.14 L7.27,7.27 L4.5,4.5 Z"
+        android:fillColor="#FFEA0303" />
+</vector>

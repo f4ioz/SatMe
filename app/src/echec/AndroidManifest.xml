@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Le manifeste du type de compilation « echec », fusionné par-dessus celui de
+    l'application ordinaire.
+
+    Il n'ajoute qu'une chose : une SECONDE icône de lancement, qui ouvre le mode
+    échec. La première continue d'ouvrir SatMe normalement, et c'est délibéré —
+    on veut que le testeur puisse déclencher la panne, puis revenir lire ce
+    qu'elle a laissé, sans réinstaller quoi que ce soit entre les deux.
+
+    Le thème est celui du système, pas le nôtre : un thème d'application est du
+    code de ressources, et le mode échec ne doit dépendre d'aucune ressource
+    qu'il puisse partager avec ce qui plante.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application>
+        <activity
+            android:name=".diag.EchecActivity"
+            android:exported="true"
+            android:label="SatMe — mode échec"
+            android:excludeFromRecents="false"
+            android:theme="@android:style/Theme.DeviceDefault.NoActionBar">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>
