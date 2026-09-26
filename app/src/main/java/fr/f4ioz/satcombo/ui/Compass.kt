@@ -58,20 +58,12 @@ data class DeviceOrientation(
  * Makes an operator-chosen colour readable on white.
  *
  * In full sun contrast is the limit, not hue. Keep the hue (the operator
- * picked it and recognises it) and only darken until it passes ~4.5:1 on
- * white. Luminance uses perceptual weights (green 71 %, red 21 %, blue 7 %):
- * a flat threshold on raw components would kill dark blues and leave yellows
- * glaring.
+ * picked it and recognises it) and only darken until it passes 4.5:1 on
+ * white — measured with WCAG luminance, see [ContrasteSoleil].
  */
 private fun assombrisPourSoleil(c: Color): Color {
-    var couleur = c
-    repeat(8) {
-        val l = 0.2126f * couleur.red + 0.7152f * couleur.green + 0.0722f * couleur.blue
-        if (l <= 0.30f) return couleur
-        couleur = Color(couleur.red * 0.78f, couleur.green * 0.78f, couleur.blue * 0.78f,
-            couleur.alpha)
-    }
-    return couleur
+    val (r, g, b) = ContrasteSoleil.assombris(c.red, c.green, c.blue)
+    return Color(r, g, b, c.alpha)
 }
 
 /** Live "where the back of the phone points" (azimuth + elevation), smoothed,
