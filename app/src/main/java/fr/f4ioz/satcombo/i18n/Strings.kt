@@ -274,6 +274,10 @@ val FR: Map<String, String> = mapOf(
 
     // Misc warnings
     "stale_elements" to "Éléments datés de {0} j — précision réduite.",
+    "tle_maj_ok" to "Éléments mis à jour ({0}).",
+    "tle_maj_deja" to "Déjà les plus récents disponibles ({0}).",
+    "tle_maj_absent" to "Aucune source active ne publie ce satellite.",
+    "tle_maj_injoignable" to "Sources injoignables — éléments inchangés.",
     "offline_cache" to "Hors-ligne — éléments en cache (âge {0})",
 
     // Batch 2 — remaining labels
@@ -1986,6 +1990,10 @@ val EN: Map<String, String> = mapOf(
     "elev_low_hint" to "Low: includes grazing passes (e.g. AO-73 at 2°).",
 
     "stale_elements" to "Elements {0} days old — reduced accuracy.",
+    "tle_maj_ok" to "Elements updated ({0}).",
+    "tle_maj_deja" to "Already the latest available ({0}).",
+    "tle_maj_absent" to "No enabled source publishes this satellite.",
+    "tle_maj_injoignable" to "Sources unreachable — elements unchanged.",
     "offline_cache" to "Offline — cached elements (age {0})",
 
     "settings_title" to "Settings",

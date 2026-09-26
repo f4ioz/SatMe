@@ -70,16 +70,19 @@ class TleRepository(
             seen.values.toList()
         }
 
-    /** Freshest GP data for a single satellite via Celestrak CATNR query. */
-    suspend fun fetchByCatnr(catnum: Int): TleEntry? = withContext(Dispatchers.IO) {
-        val url = "https://celestrak.org/NORAD/elements/gp.php?CATNR=$catnum&FORMAT=json"
-        runCatching { fetchOne(url).firstOrNull { it.catalogNumber == catnum } }.getOrNull()
-    }
+    /** Freshest elements for one satellite, from the enabled [sources]. */
+    suspend fun plusRecent(catnum: Int, sources: List<TleSource>): RafraichissementTle.Resultat =
+        withContext(Dispatchers.IO) {
+            RafraichissementTle.plusRecent(catnum,
+                RafraichissementTle.adresses(catnum, sources), ::fetchOne)
+        }
 
     private fun fetchOne(url: String): List<TleEntry> {
         val req = Request.Builder().url(url).header("User-Agent", "SatCombo/1.0 (F4IOZ)").build()
         client.newCall(req).execute().use { resp ->
-            if (!resp.isSuccessful) return emptyList()
+            // An error status is a failure, not an empty answer: a blocked
+            // address must not read as "no such satellite".
+            if (!resp.isSuccessful) throw java.io.IOException("HTTP ${resp.code}")
             val body = resp.body?.string().orEmpty()
             return parse(body)
         }

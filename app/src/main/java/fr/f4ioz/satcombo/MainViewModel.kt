@@ -36,6 +36,7 @@ import fr.f4ioz.satcombo.domain.SuiviPosition
 import fr.f4ioz.satcombo.data.LogEntry
 import fr.f4ioz.satcombo.notify.TleRefreshWorker
 import fr.f4ioz.satcombo.data.Sources
+import fr.f4ioz.satcombo.data.RafraichissementTle
 import fr.f4ioz.satcombo.data.SourcesStore
 import fr.f4ioz.satcombo.data.TleCache
 import fr.f4ioz.satcombo.data.TleEntry
@@ -7397,13 +7398,36 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * Re-download the freshest TLE for one satellite by catalog number (Celestrak
-     * CATNR query) and replace it in the list. Used when a sked is near so the
-     * common-window calc uses up-to-date elements.
+     * Re-download the freshest TLE for one satellite from the enabled sources
+     * and replace it in the list. Used when a sked is near so the common-window
+     * calc uses up-to-date elements, and by the stale-elements button.
+     *
+     * [annonce]: say what happened (the button). Automatic refreshes stay
+     * silent; a button that answers nothing looks broken.
      */
-    fun refreshTleFor(catnum: Int) {
+    fun refreshTleFor(catnum: Int, annonce: Boolean = false) {
         viewModelScope.launch {
-            val fresh = runCatching { repo.fetchByCatnr(catnum) }.getOrNull() ?: return@launch
+            val r = repo.plusRecent(catnum, Sources.byIds(srcStore.load()))
+            val ancienne = _ui.value.satellites.firstOrNull { it.catalogNumber == catnum }
+            if (annonce) {
+                val date = { e: TleEntry? -> e?.epochMs?.let {
+                    java.text.SimpleDateFormat("dd/MM HH:mm", java.util.Locale.getDefault())
+                        .apply { timeZone = java.util.TimeZone.getTimeZone("UTC") }
+                        .format(java.util.Date(it)) + " UTC" } ?: "?" }
+                val texte = when (r) {
+                    is RafraichissementTle.Resultat.Trouve ->
+                        if ((r.entree.epochMs ?: 0L) > (ancienne?.epochMs ?: 0L))
+                            tf("tle_maj_ok", date(r.entree))
+                        else tf("tle_maj_deja", date(ancienne))
+                    RafraichissementTle.Resultat.Absent -> t("tle_maj_absent")
+                    RafraichissementTle.Resultat.Injoignable -> t("tle_maj_injoignable")
+                }
+                android.widget.Toast.makeText(getApplication(), texte,
+                    android.widget.Toast.LENGTH_LONG).show()
+            }
+            val fresh = (r as? RafraichissementTle.Resultat.Trouve)?.entree ?: return@launch
+            // Never step back to older elements than those loaded.
+            if ((fresh.epochMs ?: 0L) < (ancienne?.epochMs ?: 0L)) return@launch
             val updated = _ui.value.satellites.map {
                 if (it.catalogNumber == catnum) fresh.copy(
                     uplinkHz = it.uplinkHz, downlinkHz = it.downlinkHz, mode = it.mode) else it

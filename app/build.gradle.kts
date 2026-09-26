@@ -28,8 +28,8 @@ android {
         applicationId = "fr.f4ioz.satcombo"
         minSdk = 26
         targetSdk = 36
-        versionCode = 2168
-        versionName = "20.68"
+        versionCode = 2169
+        versionName = "20.69"
     }
 
     // No AAB splits. Some vendor installers drop a language/density/ABI split,

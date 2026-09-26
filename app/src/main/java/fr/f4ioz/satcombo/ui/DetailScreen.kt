@@ -268,7 +268,7 @@ internal fun DetailScreen(ui: UiState, vm: MainViewModel, onBack: () -> Unit) {
                             Row(Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
                                 Text("⚠ " + tf("stale_elements", daysOut.toInt()),
                                     color = Amber, fontSize = 11.sp, modifier = Modifier.weight(1f))
-                                TextButton(onClick = { vm.refreshTleFor(sat.catalogNumber) }) {
+                                TextButton(onClick = { vm.refreshTleFor(sat.catalogNumber, annonce = true) }) {
                                     Text(t("refresh"), color = Cyan, fontSize = 12.sp)
                                 }
                             }
