@@ -210,18 +210,18 @@ object Ft8 {
     /**
      * Aligns a callsign on the six slots.
      *
-     * The digit must land in third position once padded ("F4IOZ" → " F4IOZ",
-     * "G0ABC" likewise). A callsign whose first digit is neither second nor
-     * third does not fit, which covers every compound callsign.
+     * The area digit must land in third position once padded ("F4IOZ" →
+     * " F4IOZ", "G0ABC" likewise). The third character is tried before the
+     * second: in "2E0XYZ" the area digit is the "0", not the leading "2".
+     * Anything else does not fit, which covers every compound callsign.
      */
     private fun cadre(s: String): String? {
         if (s.length !in 3..6) return null
-        val pos = s.indexOfFirst { it.isDigit() }
-        return when (pos) {
-            1 -> " " + s.padEnd(5, ' ')
-            2 -> s.padEnd(6, ' ')
+        return when {
+            s[2].isDigit() -> s.padEnd(6, ' ')
+            s[1].isDigit() -> " " + s.padEnd(5, ' ')
             else -> null
-        }.takeIf { it?.length == 6 }
+        }?.takeIf { it.length == 6 }
     }
 
     // -------------------------------------------------------------- message

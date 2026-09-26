@@ -128,6 +128,19 @@ class Ft8Test {
     }
 
     /**
+     * A prefix starting with a digit (2E0, 9A1, 3D2, 4X4) is still a standard
+     * callsign: the slot holds the area digit, not the first digit met.
+     */
+    @Test
+    fun un_prefixe_qui_commence_par_un_chiffre_fait_l_aller_retour() {
+        listOf("2E0XYZ", "9A1AB", "3D2AB", "4X4ABC").forEach { ind ->
+            val n = Ft8.indicatifVers28(ind)
+            assertNotNull("codage de $ind", n)
+            assertEquals(ind, Ft8.indicatifDepuis28(n!!))
+        }
+    }
+
+    /**
      * A compound callsign does not fit the 28-bit form: it travels hashed and
      * cannot be recovered without having heard it in clear. Return nothing
      * rather than an approximation that would end up in the log.
