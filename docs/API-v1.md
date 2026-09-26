@@ -1,54 +1,56 @@
-# API du poste de commande SatMe — version 1
+# SatMe control station API — version 1
 
-SatMe ouvre un petit serveur HTTP sur le téléphone. La page web du poste de
-commande n'est qu'un client parmi d'autres : tout programme capable d'une
-requête HTTP peut faire la même chose, sur Windows, Linux, macOS ou ailleurs.
+*[Version française](API-v1.fr.md)*
 
-Ce document fige le contrat de la **version 1**.
+SatMe runs a small HTTP server on the phone. The control station web page is
+just one client among others: any program that can make an HTTP request can
+do the same, on Windows, Linux, macOS or elsewhere.
 
----
-
-## 1. Principes
-
-**Deux portes, deux jetons.** `/d/<jeton>/` est la porte du public : lecture
-seule, jeton fait pour être montré en QR code. `/c/<jetonCommande>/` est le
-poste de commande : il écrit dans le carnet, donc son jeton ne quitte jamais le
-téléphone, et un code à six chiffres s'y ajoute.
-
-**Tout est en clair, sur le réseau local.** C'est proportionné à un point
-d'accès de démonstration ou à un réseau domestique. Pour un accès depuis
-internet, il faut un tunnel — WireGuard par exemple — et surtout pas une
-redirection de port.
-
-**La version ne bouge que si un client casse.** Ajouter une route ou un champ
-ne change pas le numéro : un programme écrit pour la version 1 continue de
-fonctionner. Retirer un champ ou en changer le sens, si.
+This document freezes the **version 1** contract.
 
 ---
 
-## 2. S'y connecter
+## 1. Principles
 
-L'opérateur active le poste de commande dans **Réglages → Partage et écoute →
-Partage**. L'application affiche alors une adresse de la forme :
+**Two doors, two tokens.** `/d/<jeton>/` is the public door: read-only, with a
+token meant to be shown as a QR code. `/c/<jetonCommande>/` is the control
+station: it writes to the log, so its token never leaves the phone, and a
+six-digit code is required on top of it.
+
+**Everything is in clear text, on the local network.** That is proportionate
+for a demo hotspot or a home network. For access from the internet, use a
+tunnel — WireGuard, for example — and certainly not port forwarding.
+
+**The version only changes if a client breaks.** Adding a route or a field
+doesn't change the number: a program written for version 1 keeps working.
+Removing a field or changing its meaning does.
+
+---
+
+## 2. Connecting
+
+The operator enables the control station under **Settings → Share and listen →
+Share** (French UI: **Réglages → Partage et écoute → Partage**). The app then
+shows an address of the form:
 
 ```
 http://192.168.1.42:8080/c/nkq7wz3d5f/
 ```
 
-et un code à six chiffres. Cette adresse est la **base** de toutes les requêtes
-qui suivent.
+and a six-digit code. This address is the **base** for all the requests that
+follow.
 
-### Savoir à qui l'on parle
+### Finding out who you are talking to
 
 ```
 GET <base>/api
 → {"api":1,"satme":"20.53"}
 ```
 
-Sans authentification. À appeler en premier : un client doit pouvoir vérifier
-la version avant de présenter un code.
+No authentication. Call it first: a client must be able to check the version
+before presenting a code.
 
-### Ouvrir une session
+### Opening a session
 
 ```
 GET <base>/entrer?code=123456
@@ -56,19 +58,21 @@ GET <base>/entrer?code=123456
 → {"ok":false}          (code refusé, réponse retardée d'une seconde)
 ```
 
-La clé rendue vaut **trois heures**. Elle accompagne toutes les requêtes
-suivantes sous le paramètre `cle`. Une clé expirée ou inconnue donne un
-**403** avec `{"ok":false,"raison":"session"}` — le client doit alors
-redemander le code.
+A rejected code gets `{"ok":false}`, with the response delayed by one second.
 
-Si le pont vers l'application n'est pas monté — cela arrive le temps du
-démarrage — les routes répondent `{"ok":false,"raison":"pasPret"}`.
+The returned key is valid for **three hours**. It goes with every subsequent
+request as the `cle` parameter. An expired or unknown key gets a **403** with
+`{"ok":false,"raison":"session"}` — the client must then ask for the code
+again.
+
+If the bridge to the app isn't up yet — which happens during startup — routes
+answer `{"ok":false,"raison":"pasPret"}`.
 
 ---
 
-## 3. Lire
+## 3. Reading
 
-### État courant
+### Current state
 
 ```
 GET <base>/etat?cle=…
@@ -91,31 +95,31 @@ GET <base>/etat?cle=…
 }
 ```
 
-Les fréquences sont en **hertz**, corrigées du Doppler. `aos` et `los` sont des
-millisecondes depuis 1970 : à comparer à `now`, l'heure du téléphone, pour
-obtenir un compte à rebours juste même si l'horloge du PC dérive. `antaz` et
-`antel` valent `null` quand aucune boussole n'est branchée. `trace` est la
-trajectoire du passage, en paires azimut/élévation.
+Frequencies are in **hertz**, Doppler-corrected. `aos` and `los` are
+milliseconds since 1970: compare them with `now`, the phone's clock, to get
+an accurate countdown even if the PC's clock drifts. `antaz` and `antel` are
+`null` when no compass is connected. `trace` is the pass track, as
+azimuth/elevation pairs.
 
-### Satellites suivis
+### Tracked satellites
 
 ```
 GET <base>/sats?cle=…
 → ["ISS","SO-50","JO-97"]
 ```
 
-### Propositions d'indicatif
+### Callsign suggestions
 
 ```
 GET <base>/propose?cle=…&q=F5R
 → [{"c":"F5RRS","l":"JN36EB","n":"Jean Dupont","q":4}]
 ```
 
-Trois au maximum, classées par fréquence de contact, récence, et bonus si
-l'indicatif a déjà été travaillé sur le satellite en cours. Rien n'est proposé
-sous deux caractères. `q` est le nombre de contacts déjà faits.
+Three at most, ranked by contact frequency, recency, and a bonus if the
+callsign has already been worked on the current satellite. Nothing is
+suggested below two characters. `q` is the number of contacts already made.
 
-### Fiche QRZ
+### QRZ lookup
 
 ```
 GET <base>/qrz?cle=…&call=F5RRS
@@ -123,35 +127,37 @@ GET <base>/qrz?cle=…&call=F5RRS
    "f":"Jean","v":"Quimper","p":"France","e":""}
 ```
 
-`f` est le prénom seul, `v` la ville, `p` le pays, `e` l'erreur éventuelle.
-Demande un abonnement XML QRZ configuré dans l'application. **Le quota est
-celui de l'abonnement** : un client qui interroge à chaque frappe l'épuisera.
-SatMe met les réponses en cache, mais le client doit tout de même espacer ses
-demandes.
+`f` is the first name only, `v` the city, `p` the country, `e` the error, if
+any. Requires a QRZ XML subscription configured in the app. **The quota is
+the subscription's**: a client that queries on every keystroke will use it
+up. SatMe caches responses, but the client should still space out its
+requests.
 
 ---
 
-## 4. Agir
+## 4. Acting
 
-### Enregistrer un contact
+### Logging a contact
 
 ```
 GET <base>/qso?cle=…&call=F5RRS&loc=JN36EB&rse=59&rsr=59
 → {"ok":true}
 ```
 
-`loc`, `rse` et `rsr` sont facultatifs ; les RST valent 59 par défaut. Le
-contact est rangé sous le satellite actuellement suivi : si aucun n'est
-sélectionné, la réponse est `{"ok":false}`.
+`loc`, `rse` and `rsr` are optional; RST defaults to 59. The contact is filed
+under the currently tracked satellite: if none is selected, the response is
+`{"ok":false}`.
 
-### Enregistrement du passage
+### Pass recording
 
 ```
 GET <base>/rec?cle=…&on=1      (1 démarre, 0 arrête)
 → {"ok":true}
 ```
 
-### Changer de satellite
+`on=1` starts recording, `on=0` stops it.
+
+### Switching satellite
 
 ```
 GET <base>/sat?cle=…&nom=SO-50
@@ -159,34 +165,35 @@ GET <base>/sat?cle=…&nom=SO-50
 → {"ok":false}    (nom inconnu des satellites suivis)
 ```
 
-Le nom doit correspondre à l'un de ceux rendus par `/sats`, casse indifférente.
+`{"ok":false}` means the name isn't among the tracked satellites. The name
+must match one of those returned by `/sats`, case-insensitive.
 
 ---
 
-## 5. Ce que l'API ne fait pas
+## 5. What the API doesn't do
 
-C'est délibéré, et la liste est aussi importante que le reste.
+This is deliberate, and the list matters as much as the rest.
 
-**Elle ne pilote pas le poste.** Ni fréquence, ni PTT, ni mode. L'émission
-engage la responsabilité de l'opérateur devant sa licence, et elle ne doit pas
-partir d'une requête HTTP sur un réseau local partagé.
+**It doesn't control the radio.** No frequency, no PTT, no mode.
+Transmitting puts the operator's license on the line, and it must not be
+triggered by an HTTP request on a shared local network.
 
-**Elle ne modifie pas les réglages** de l'application, ni le carnet au-delà de
-l'ajout d'un contact. Rien ne s'efface depuis le réseau.
+**It doesn't change the app's settings**, nor the log beyond adding a
+contact. Nothing can be deleted over the network.
 
-**Elle n'expose pas le flux audio du poste de commande.** Le son passe par la
-page du public — `/d/<jeton>/son.pcm`, PCM 16 bits mono à 22 050 Hz — et
-seulement pendant un enregistrement de passage.
+**It doesn't expose an audio stream on the control station.** Audio goes
+through the public page — `/d/<jeton>/son.pcm`, 16-bit mono PCM at
+22,050 Hz — and only while a pass is being recorded.
 
-La surface exposée tient dans un seul fichier, `demo/PontCommande.kt` : six
-gestes, relisibles d'un coup. Une surface qu'on peut lire est une surface
-qu'on peut défendre.
+The exposed surface fits in a single file, `demo/PontCommande.kt`: six
+actions, readable in one sitting. A surface you can read is a surface you can
+defend.
 
 ---
 
-## 6. Écrire un client
+## 6. Writing a client
 
-Rien d'autre qu'un client HTTP n'est nécessaire. En Python :
+Nothing more than an HTTP client is needed. In Python:
 
 ```python
 import requests
@@ -203,18 +210,17 @@ requests.get(f"{BASE}/qso", params={"cle": cle, "call": "F5RRS",
                                     "loc": "JN36EB"})
 ```
 
-**Trois conseils tirés de l'écriture de la page web.**
+**Three tips learned from writing the web page.**
 
-Rafraîchir l'état **une fois par seconde** suffit : la télémétrie n'est
-calculée qu'à cette cadence dans l'application, et interroger plus vite ne
-donne rien de plus frais.
+Polling the state **once per second** is enough: telemetry is only computed at
+that rate in the app, and polling faster gets you nothing fresher.
 
-Traiter le **403** comme un retour à l'écran de code, pas comme une panne.
+Treat a **403** as a return to the code screen, not as a failure.
 
-Ne jamais reprendre le curseur de l'opérateur pendant qu'il tape. Pendant un
-passage, chaque geste rendu à la souris est un contact perdu.
+Never steal the operator's cursor while they're typing. During a pass, every
+move back to the mouse is a lost contact.
 
 ---
 
-*Version 1 du contrat, figée à SatMe 20.53. Les évolutions compatibles
-s'ajouteront sans changer ce numéro.*
+*Contract version 1, frozen at SatMe 20.53. Compatible changes will be added
+without changing this number.*
