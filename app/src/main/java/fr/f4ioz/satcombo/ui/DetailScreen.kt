@@ -1051,8 +1051,6 @@ private fun TransmittersSection(ui: UiState, vm: MainViewModel, sat: TleEntry, r
     // Each knob therefore moves exactly one field, and NOR/REV follows the
     // user's override chip, not just the catalogue flag.
     val calib = ui.calibShiftHz
-    val rxOff = if (ui.opMode == "CW") ui.rxOffsetCwHz else ui.rxOffsetVoiceHz
-    val effInvert = ui.invertOverride ?: tx.invert
     // **Computed by the ViewModel, not here.** This screen and the public
     // page each had their own computation and drifted 5 kHz apart. One
     // function, two callers.

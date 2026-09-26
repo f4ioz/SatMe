@@ -106,11 +106,10 @@ object Lotw {
                 // **One request only.** LoTW throttles repeated downloads:
                 // asking for two full logs back to back returned a tiny report.
                 // The squares are in the confirmations; a second request for
-                // all contacts added almost nothing (`tous` stays empty).
+                // all contacts added almost nothing.
                 val confirme = runCatching {
                     demande("&qso_qsl=yes&qso_qsldetail=yes&qso_mydetail=yes" + depuis)
                 }.getOrDefault("")
-                val tous = ""
                 // LoTW announces the record count: fewer read means a
                 // truncated file, and we say so.
                 val annonce = Regex("<APP_LoTW_NUMREC:\\d+>(\\d+)")
@@ -120,9 +119,8 @@ object Lotw {
                     (if (annonce > 0 && lus < annonce) " TRONQUÉ" else "")
                 runCatching {
                     File(ctx.getExternalFilesDir(null), "lotw_confirme.adi").writeText(confirme)
-                    File(ctx.getExternalFilesDir(null), "lotw_tous.adi").writeText(tous)
                 }
-                val txt = confirme + "\n" + tous
+                val txt = confirme
                 if (!txt.contains("<call:", true)) {
                     return@withContext if (txt.contains("password", true))
                         "identifiants refusés" else "réponse inattendue de LoTW"

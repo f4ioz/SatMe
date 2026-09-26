@@ -8,9 +8,7 @@
  */
 package fr.f4ioz.satcombo.sonde
 
-import kotlin.math.PI
 import kotlin.math.cos
-import kotlin.math.exp
 import kotlin.math.sin
 import kotlin.math.sqrt
 
@@ -35,7 +33,15 @@ object SondeMire {
     /** Square-wave peak amplitude, well above the demodulator threshold. */
     const val AMPLITUDE = 9_000
 
-    /** Synthesis oversampling factor, before filtering and decimation. */
+    /**
+     * Synthesis oversampling factor, before filtering and decimation.
+     *
+     * Picking the nearest symbol per sample at 44.1 kHz (4.6 samples per
+     * half-bit) moves each edge by up to half a sample: 10 % symbol jitter made
+     * by the generator, absent from any real sonde. Synthesising 8x faster then
+     * filtering puts edges where they should be, rounded like a real
+     * discriminator's.
+     */
     const val OVERSAMPLE = 8
 
     /** Ambience noise, as a fraction of amplitude. */
@@ -403,28 +409,6 @@ object SondeMire {
         private val points = flight(lat, lon, maxOf(1, seconds), stepSec = stepSec)
         private val rate = chipRate(model)
 
-        /**
-         * Synthesis oversampling factor.
-         *
-         * Picking the nearest symbol per sample at 44.1 kHz (4.6 samples per
-         * half-bit) moves each edge by up to half a sample: 10 % symbol jitter
-         * made by the generator, absent from any real sonde. So we synthesise
-         * 8x faster, filter and decimate: edges land where they should, rounded
-         * like a real discriminator's.
-         */
-        private val over = 8
-
-        /**
-         * Shaping filter: two cascaded first-order stages at 0.9x the symbol
-         * rate, roughly what a radio chain does (transitions take ~1/6 symbol).
-         */
-        private val lpA = exp(-2.0 * PI * (rate * 0.9) / (sampleRate.toDouble() * over))
-        private var z1 = 0.0
-        private var z2 = 0.0
-
-        /** Fixed seed: two identical test signals must match bit for bit. */
-        private val noise = java.util.Random(20_260_731L)
-
         /** Samples in a one-second slot. */
         private val perSlot = sampleRate
 
@@ -459,17 +443,6 @@ object SondeMire {
             slot = out
             slotIndex = i
             sampleInSlot = 0
-        }
-
-        /**
-         * Slow fading envelope, between one half and one. Two incommensurate
-         * periods (6.5 s and 1.7 s), so no audible cycle and frames drop and
-         * return as behind a hill.
-         */
-        private fun qsb(tSec: Double): Double {
-            val slow = 0.55 + 0.45 * (0.5 + 0.5 * cos(2.0 * PI * tSec / 6.5))
-            val fast = 0.85 + 0.15 * sin(2.0 * PI * tSec / 1.7)
-            return slow * fast
         }
 
         /** Fills [chunk]; returns samples written, or 0 when finished. */

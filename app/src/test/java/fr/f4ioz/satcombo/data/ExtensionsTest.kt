@@ -51,9 +51,7 @@ class ExtensionsTest {
      * read at the moment of use, rather than by an undocumented key.
      */
     @Test
-    fun tout_est_ouvert_sans_rien_taper_sauf_la_base_adif() {
-        // Everything is open except NOAA images. (The test name still refers
-        // to the built-in ADIF callsign base, since removed.)
+    fun tout_est_ouvert_sans_rien_taper_sauf_les_images_noaa() {
         val rien = Extensions.unlocked("F1ABC", "")
         (Extensions.ALL - Extensions.APT).forEach {
             assertTrue("« $it » doit être ouvert", it in rien)

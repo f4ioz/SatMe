@@ -61,34 +61,6 @@ fun BoussoleCarte(vm: MainViewModel, ui: fr.f4ioz.satcombo.UiState) {
     val posee = PointageAntenne.depuisTexte(r.boussoleFleche)
     val trames by BoussoleBle.trames
 
-    var azimutVise by remember { mutableStateOf("") }
-
-    // The north reading waits for the west one; nothing is written until the
-    // second sighting is done.
-    var releveNord by remember { mutableStateOf<Float?>(null) }
-    var messageCap by remember { mutableStateOf("") }
-
-    // Azimuth **before** offset or inversion: that is what must be compared
-    // between sightings, not the already-corrected value.
-    val brutVecteur: Float? = attitude?.let { att ->
-        val f = BoussoleBle.fleche
-        // A null vector has no direction: no calibration without it.
-        if (f == null || f.norme < 0.1f) null
-        // **Same computation path as the calibration**, no exceptions.
-        // The dial once used the old enum, which does not know measured
-        // conventions and silently fell back to "direct": calibration passed
-        // while the needle showed an exact mirror (read = 336° − true).
-        else PointageAntenne.pointageLibre(
-            att, f,
-            PointageAntenne.ConventionLibre.decode(r.boussoleConvention)).azimutDeg
-    }
-
-    // Axis learning is two-step: the flat reading waits here for the second
-    // gesture. Nothing is written until the second button is pressed.
-    var relevePol1 by remember {
-        mutableStateOf<fr.f4ioz.satcombo.domain.AttitudeWit?>(null) }
-    var flecheApprise by remember {
-        mutableStateOf<fr.f4ioz.satcombo.domain.Vec3?>(null) }
     var messageAppr by remember { mutableStateOf("") }
 
     // A half-done calibration is a wrong one that looks right: nothing is
@@ -679,7 +651,10 @@ private fun messageEchec(raison: String): String = when {
     else -> "${t("bouss_err_autre")} ($raison)"
 }
 
-/** Nearest compass point: "N", "NNE", "NE"… */
+/**
+ * Nearest compass point: "N", "NNE", "NE"… "187°" cannot be checked at a
+ * glance; "S" can, and shows at once you are facing south while aiming north.
+ */
 private fun cardinal(azimut: Float): String {
     val noms = arrayOf("N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE",
                        "S", "SSO", "SO", "OSO", "O", "ONO", "NO", "NNO")
@@ -688,14 +663,3 @@ private fun cardinal(azimut: Float): String {
     return noms[(((a + 11.25f) / 22.5f).toInt()) % 16]
 }
 
-/**
- * Nearest compass point name. "187°" cannot be checked at a glance; "S" can,
- * and shows at once you are facing south while aiming north.
- */
-private fun rose(capDeg: Float): String {
-    val noms = listOf("N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE",
-                      "S", "SSO", "SO", "OSO", "O", "ONO", "NO", "NNO")
-    var a = capDeg % 360f
-    if (a < 0f) a += 360f
-    return noms[(Math.round(a / 22.5f) % 16)]
-}
