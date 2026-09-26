@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.diag
 
@@ -15,17 +15,15 @@ import java.util.Date
 import java.util.Locale
 
 /**
- * Le guetteur. Posé à la toute première instruction de l'application — avant
- * la moindre activité, avant le moindre écran — parce qu'un plantage au
- * démarrage arrive justement avant tout le reste.
+ * The crash watcher. Installed at the very first line of the application,
+ * before any activity or screen, because a startup crash happens before
+ * everything else.
  *
- * On garde le gestionnaire précédent et on le rappelle. Sans cela le système
- * n'afficherait plus « SatMe s'est arrêté », le Play Console ne compterait
- * plus rien, et l'on aurait remplacé une cécité par une autre.
+ * The previous handler is kept and called. Otherwise the system would no
+ * longer show "SatMe has stopped" and Play Console would count nothing.
  *
- * Le renseignement sur l'appareil est récolté ici, à l'installation, et non au
- * moment de la chute : un processus qui meurt n'est pas l'endroit où
- * interroger le gestionnaire de paquets.
+ * Device info is collected here, at install time, not at crash time: a dying
+ * process is no place to query the package manager.
  */
 object PlantageGarde {
 
@@ -34,8 +32,8 @@ object PlantageGarde {
     @Volatile private var pose = false
 
     fun installe(app: Application) {
-        // Posé une fois. Deux poses enchaîneraient le guetteur sur lui-même,
-        // et le rapport partirait en double.
+        // Install once: a second install would chain the handler to itself
+        // and write the report twice.
         if (pose) return
         pose = true
 
@@ -68,7 +66,7 @@ object PlantageGarde {
                     fil = fil.name)
                 PlantageDisque.ecrit(app.filesDir, texte)
             }
-            // Et l'on rend la main : le système garde le dernier mot.
+            // Hand back to the system: it keeps the last word.
             precedent?.uncaughtException(fil, t)
         }
     }

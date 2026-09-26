@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.cat
 
@@ -13,27 +13,23 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 
 /**
- * Un fil série, et rien d'autre : écrire, lire, fermer.
+ * A serial line and nothing else: write, read, close.
  *
- * C'est la pièce qui manquait, et son absence a coûté cher. Les deux pilotes
- * CAT tenaient chacun leur `UsbSerialPort` ; aucun essai ne pouvait donc
- * exister sans radio, sans câble et sans opérateur. La seule vérification
- * possible était de brancher, de regarder la face avant, et de conclure que la
- * fréquence avait bougé, donc que c'était bon. Ce raisonnement a un trou, et il
- * est large : une radio qui accuse réception d'une commande qu'elle ignore
- * ensuite ressemble en tout point, vue de l'extérieur, à une radio qui obéit.
+ * Exists so the CAT drivers can be tested without a radio. Checking by looking
+ * at the front panel is not enough: a radio that acknowledges a command and
+ * then ignores it looks, from outside, exactly like one that obeys.
  */
 interface SerialLink {
-    /** Écrit [bytes]. Rend vrai si l'écriture est partie. */
+    /** Writes [bytes]. True if the write went out. */
     fun write(bytes: ByteArray, timeoutMs: Int = 500): Boolean
 
-    /** Lit au plus [buf].size octets. Rend le nombre lu, zéro si rien. */
+    /** Reads at most [buf].size bytes. Returns the count read, zero if none. */
     fun read(buf: ByteArray, timeoutMs: Int = 300): Int
 
     fun close()
 }
 
-/** Le fil série réel, celui du câble USB. */
+/** The real serial line, over the USB cable. */
 class UsbSerialLink(private val port: UsbSerialPort) : SerialLink {
     override fun write(bytes: ByteArray, timeoutMs: Int): Boolean =
         runCatching { port.write(bytes, timeoutMs) }.isSuccess
@@ -45,26 +41,25 @@ class UsbSerialLink(private val port: UsbSerialPort) : SerialLink {
 }
 
 /**
- * Le journal des trames : les deux cents dernières, dans les deux sens.
+ * Frame log: the last 200 frames, both directions.
  *
- * Il ne sert pas à faire joli. Quand une vraie radio boude, la seule question
- * utile est « la trame est-elle partie, et qu'a répondu le poste ? » — et
- * jusqu'ici rien dans l'application ne pouvait y répondre.
+ * When a real radio misbehaves, the only useful question is "did the frame go
+ * out, and what did the rig answer?".
  */
 object CatJournal {
 
     data class Entry(
         val tMs: Long,
-        /** Vrai pour une trame émise vers le poste, faux pour une réponse. */
+        /** True for a frame sent to the rig, false for a reply. */
         val out: Boolean,
         val hex: String,
-        /** La même chose en français, pour ceux qui ne lisent pas l'hexadécimal. */
+        /** Human-readable decoding, for those who don't read hex. */
         val text: String
     )
 
     const val DEPTH = 200
 
-    /** Journalisation active. Coupée par défaut : elle coûte une allocation par trame. */
+    /** Logging on. Off by default: it costs one allocation per frame. */
     @Volatile var enabled: Boolean = false
 
     private val _entries = MutableStateFlow<List<Entry>>(emptyList())

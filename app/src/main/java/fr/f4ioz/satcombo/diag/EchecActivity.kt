@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.diag
 
@@ -29,20 +29,16 @@ import java.io.File
 import java.util.Locale
 
 /**
- * Le mode échec.
+ * Failure mode.
  *
- * Cet écran est écrit contre lui-même : pas de Compose, pas de modèle de vue,
- * pas de thème de l'application, pas une seule chaîne tirée des ressources, pas
- * de fichier de mise en page. Les vues sont construites à la main et les
- * couleurs sont des entiers. Tout ce qu'on lui retire est une cause de panne en
- * moins qu'il partage avec l'écran qui ne s'ouvre pas — et c'est exactement ce
- * qu'on lui demande : s'ouvrir quand l'autre n'y arrive plus.
+ * **Deliberately bare:** no Compose, no ViewModel, no app theme, no string
+ * resources, no layout file. Views are built by hand and colours are ints.
+ * Everything removed is one less failure cause shared with the screen that
+ * will not open — this screen's only job is to open when that one cannot.
  *
- * Il ne répare rien de lui-même. Il montre le rapport que le garde-fou a écrit
- * lors de la chute précédente, ce qu'Android a retenu de la mort du processus,
- * et le résultat d'un démarrage démonté en épreuves. Puis il propose d'envoyer
- * le tout. C'est la boucle qui manquait : jusqu'ici la trace était écrite, et
- * personne ne pouvait aller la chercher.
+ * It repairs nothing by itself. It shows the report the crash handler wrote,
+ * what Android kept of the process death, and the result of the startup split
+ * into test steps, then offers to send it all.
  */
 class EchecActivity : Activity() {
 
@@ -66,8 +62,8 @@ class EchecActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         runCatching { construis() }.onFailure {
-            // Si même cela échoue, il reste le texte brut : mieux vaut un écran
-            // laid qu'un second écran qui ne s'ouvre pas.
+            // If even this fails, fall back to raw text: an ugly screen beats a
+            // second screen that will not open.
             val t = TextView(this)
             t.setPadding(32, 64, 32, 32)
             t.text = ModeEchec.decrit(it)
@@ -124,7 +120,7 @@ class EchecActivity : Activity() {
         collecte()
     }
 
-    /** Ce qui se lit sans rien lancer : l'appareil, la trace, le registre. */
+    /** What can be read without running anything: device, trace, exit history. */
     private fun collecte() {
         entete = runCatching { EtatAppareil.entete(this) }.getOrElse { ModeEchec.decrit(it) }
         plantage = runCatching { PlantageDisque.lit(filesDir) }.getOrNull()
@@ -149,9 +145,9 @@ class EchecActivity : Activity() {
     }
 
     /**
-     * Une épreuve par tour de boucle de messages, et non toutes d'affilée : la
-     * liste se remplit sous les yeux du testeur, et surtout la dernière ligne
-     * affichée désigne l'épreuve en cours si le processus meurt pendant.
+     * One step per message-loop turn, not all at once: the list fills up in
+     * front of the tester, and if the process dies, the last line shown names
+     * the step that was running.
      */
     private fun lanceDiagnostic() {
         resultats.clear()
@@ -171,10 +167,8 @@ class EchecActivity : Activity() {
     }
 
     /**
-     * Le rapport complet part en pièce jointe, et sa tête dans le corps du
-     * message : une pièce jointe se perd dans un partage par messagerie
-     * instantanée, un corps trop long se fait couper par le client de courrier.
-     * Les deux ensemble survivent à l'un comme à l'autre.
+     * Full report as attachment, its head in the body: instant messengers drop
+     * attachments, mail clients cut long bodies. Both together survive either.
      */
     private fun envoie() {
         val complet = rapport()
@@ -205,9 +199,9 @@ class EchecActivity : Activity() {
     }
 
     /**
-     * Deux appuis, parce que ceci efface le QTH, les favoris et les réglages du
-     * poste. C'est la dernière chose à essayer, pas la première — mais quand un
-     * réglage enregistré est ce qui tue le démarrage, c'est la seule qui marche.
+     * Two taps, because this erases the QTH, favourites and station settings.
+     * Last thing to try, but the only one that works when a stored setting is
+     * what kills startup.
      */
     private fun efface() {
         if (!confirmeEffacement) {

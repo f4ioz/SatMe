@@ -1,38 +1,33 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.diag
 
 /**
- * Le mode échec : ce que l'application peut encore dire quand elle ne s'ouvre
- * plus.
+ * Failure mode: what the app can still say when it no longer opens.
  *
- * Le garde-fou de la 18.28 écrit bien la trace sur le disque au moment de la
- * chute. Ce qu'il ne peut pas faire, c'est la montrer : la fenêtre qui propose
- * de l'envoyer vit dans l'écran principal, et l'écran principal est justement
- * celui qui n'apparaît pas. Chez un testeur dont l'application meurt au
- * démarrage, le rapport est donc écrit, complet, et inaccessible.
+ * The crash handler writes the trace to disk, but the dialog that offers to
+ * send it lives in the main screen — the very screen that does not appear when
+ * the app dies at startup. The report would be written and unreachable.
  *
- * D'où un second point d'entrée, avec sa propre icône, qui ne partage rien
- * avec le premier : ni Compose, ni modèle de vue, ni thème de l'application,
- * ni la moindre chaîne de caractères tirée des ressources. Il ne peut donc pas
- * mourir des mêmes causes. S'il s'ouvre alors que l'application ne s'ouvre pas,
- * c'est déjà un renseignement ; s'il ne s'ouvre pas non plus, c'en est un autre,
- * bien plus fort.
+ * Hence a second entry point with its own icon, sharing nothing with the first
+ * (no Compose, ViewModel, app theme or string resources), so it cannot die of
+ * the same causes. If it opens while the app does not, that is already a clue;
+ * if it does not open either, a stronger one.
  *
- * Cet objet-ci ne connaît pas Android — il ne fait que du texte, et se vérifie
- * donc au banc ordinaire.
+ * This object knows nothing of Android: text only, so it runs in plain unit
+ * tests.
  */
 object ModeEchec {
 
     /**
-     * Une épreuve du diagnostic. [action] rend une phrase courte décrivant ce
-     * qu'elle a constaté ; si elle lève, c'est l'exception qui parle.
+     * One diagnostic step. [action] returns a short sentence on what it found;
+     * if it throws, the exception speaks.
      */
     class Etape(val nom: String, val action: () -> String)
 
@@ -44,12 +39,10 @@ object ModeEchec {
     )
 
     /**
-     * On attrape `Throwable` et non `Exception`, délibérément. Les pannes que
-     * l'on cherche ici sont précisément celles qui ne sont pas des exceptions
-     * ordinaires : `OutOfMemoryError` sur un appareil à petite mémoire,
-     * `NoClassDefFoundError` sur un téléphone sans services Google,
-     * `UnsatisfiedLinkError` sur une bibliothèque native mal alignée. Les
-     * laisser passer reviendrait à ne pas tester ce qu'on est venu tester.
+     * Catches `Throwable`, not `Exception`, on purpose: the failures sought
+     * here are precisely not ordinary exceptions — `OutOfMemoryError` on a
+     * low-RAM device, `NoClassDefFoundError` without Google services,
+     * `UnsatisfiedLinkError` on a misaligned native library.
      */
     fun execute(etape: Etape, horloge: () -> Long = System::currentTimeMillis): Resultat {
         val debut = horloge()
@@ -62,11 +55,10 @@ object ModeEchec {
     }
 
     /**
-     * Le nom de la classe compte autant que le message, et souvent davantage :
-     * un message nul se lit « null » et ne dit rien, alors que
-     * `NoClassDefFoundError` désigne la panne à lui tout seul. On ajoute la
-     * cause racine quand elle diffère, car c'est elle qui nomme la vraie
-     * défaillance derrière un `ExceptionInInitializerError`.
+     * The class name matters as much as the message, often more: a null
+     * message says nothing, `NoClassDefFoundError` names the fault by itself.
+     * The root cause is appended when different, since it names the real
+     * failure behind an `ExceptionInInitializerError`.
      */
     fun decrit(t: Throwable): String {
         val tete = "${t.javaClass.simpleName}: ${t.message ?: "(sans message)"}"
@@ -82,7 +74,7 @@ object ModeEchec {
     fun ligne(r: Resultat): String =
         "${if (r.ok) "OK  " else "ÉCHEC"} ${r.nom} (${r.ms} ms)\n      ${r.detail}"
 
-    /** Le bloc des épreuves, dans l'ordre où elles ont été passées. */
+    /** The step results, in the order they ran. */
     fun bloc(resultats: List<Resultat>): String {
         if (resultats.isEmpty()) return "Diagnostic non lancé."
         val echecs = resultats.count { !it.ok }
@@ -94,12 +86,10 @@ object ModeEchec {
     }
 
     /**
-     * Coupe par le DÉBUT, à l'inverse de [Plantage.tronque].
+     * Cuts from the START, unlike [Plantage.tronque].
      *
-     * Ce n'est pas une symétrie gratuite : dans une pile d'appels, ce sont les
-     * premières lignes qui nomment la panne, alors que dans un journal système
-     * ce sont les dernières. Couper du mauvais côté jette exactement ce qu'on
-     * était venu chercher.
+     * In a stack trace the first lines name the fault; in a system log, the
+     * last ones do. Cutting the wrong end throws away what we came for.
      */
     fun tronqueParLeDebut(s: String, max: Int = 40_000): String =
         if (s.length <= max) s
@@ -107,16 +97,13 @@ object ModeEchec {
             s.takeLast(max)
 
     /**
-     * Les motifs de mort de processus tels qu'Android les numérote
-     * (`ApplicationExitInfo`). Recopiés en clair plutôt qu'importés : cette
-     * table doit se lire au banc d'essai, où la classe Android n'existe pas, et
-     * les valeurs sont figées par compatibilité ascendante.
+     * Process exit reasons as numbered by Android (`ApplicationExitInfo`).
+     * Copied rather than imported so unit tests can read them without the
+     * Android class; the values are frozen for backward compatibility.
      *
-     * `INITIALISATION` (7) mérite l'attention : c'est le motif d'un processus
-     * qui n'a jamais réussi à se construire — paquet servi en morceaux dont il
-     * manque une pièce, bibliothèque native refusée, ressources introuvables.
-     * Aucune de nos lignes n'a tourné, donc aucun garde-fou à nous ne peut
-     * l'avoir noté.
+     * Watch `INITIALISATION` (7): a process that never managed to build
+     * itself — missing split, rejected native library, missing resources.
+     * None of our code ran, so no handler of ours can have recorded it.
      */
     fun nomDeRaison(code: Int): String = when (code) {
         0 -> "inconnu"
@@ -139,7 +126,7 @@ object ModeEchec {
         else -> "code $code"
     }
 
-    /** Une mort de processus, réduite à ce qui se raconte. */
+    /** One process death, reduced to what is worth reporting. */
     class Sortie(
         val quand: String,
         val raison: Int,
@@ -149,9 +136,9 @@ object ModeEchec {
     )
 
     /**
-     * Le registre des morts précédentes. Android le tient lui-même, sans
-     * permission et sans que nous ayons eu à survivre pour l'écrire : c'est le
-     * seul témoin des chutes survenues avant notre première instruction.
+     * Past process deaths. Android keeps this itself, with no permission and
+     * without us surviving to write it: the only witness of crashes before our
+     * first instruction.
      */
     fun blocSorties(sorties: List<Sortie>): String {
         if (sorties.isEmpty())
@@ -168,7 +155,7 @@ object ModeEchec {
         }.trimEnd()
     }
 
-    /** L'assemblage final, dans l'ordre où on le lira. */
+    /** The final report, in reading order. */
     fun rapport(
         entete: String,
         plantage: String?,

@@ -1,33 +1,28 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.cat
 
 /**
- * Deux postes qui n'existent pas, et qui sont pourtant plus utiles que les vrais.
+ * Two simulated rigs.
  *
- * L'intérêt d'un poste simulé n'est pas de dire oui. Un poste qui dit toujours
- * oui ne prouve rien : c'est exactement le comportement qui a laissé passer
- * pendant des mois un ton d'accès mal encodé, poliment accusé et jamais
- * appliqué. Ceux-ci refusent ce que le vrai refuse — un ton hors plage, une
- * commande interdite sur la bande secondaire en mode satellite — et ils
- * comptent leurs refus. Un essai peut alors exiger qu'une séquence saine n'en
- * produise aucun, ce qui est une affirmation autrement plus forte que « ça n'a
- * pas planté ».
+ * A simulator that always says yes proves nothing: that is how a misencoded
+ * access tone, politely acknowledged and never applied, went unnoticed for
+ * months. These refuse what the real rigs refuse (out-of-range tone, commands
+ * forbidden on SUB in satellite mode) and count their refusals, so a test can
+ * demand zero refusals for a sane sequence.
  */
 
 /**
- * Un IC-9700 en mémoire : deux bandes, un mode satellite, un split, des VFO.
+ * An in-memory IC-9700: two bands, satellite mode, split, VFOs.
  *
- * Il sait aussi renvoyer l'écho de ce qu'on lui écrit — c'est le réglage
- * « CI-V USB Echo Back » des vrais postes, et c'est la panne qu'il faut pouvoir
- * reproduire à volonté, puisque c'est elle qui faisait relire au pilote sa
- * propre question.
+ * Can echo what it receives ("CI-V USB Echo Back" on real rigs) — the fault
+ * that made the driver read back its own question.
  */
 class Ic9700Sim(
     val radioAddr: Int = 0xA2,
@@ -36,32 +31,28 @@ class Ic9700Sim(
 
     var satMode: Boolean = false; private set
     var split: Boolean = false; private set
-    /** Descente : la bande principale. */
+    /** Downlink: MAIN band. */
     var mainHz: Long = 435_000_000L; private set
-    /** Montée : la bande secondaire. */
+    /** Uplink: SUB band. */
     var subHz: Long = 145_000_000L; private set
-    /** Vrai quand la bande secondaire est celle qui est sélectionnée. */
+    /** True when SUB is the selected band. */
     var onSub: Boolean = false; private set
     var mainMode: Int = 0x01; private set
     var subMode: Int = 0x01; private set
     var toneOn: Boolean = false; private set
     var toneTenthHz: Int = 0; private set
 
-    /** Le nombre de commandes que le poste a refusées depuis le début. */
+    /** Number of commands refused so far. */
     var refusals: Int = 0; private set
 
     /**
-     * La règle du vrai poste : **jamais les deux bandes sur la même à la fois**.
-     *
-     * « Attention, on ne peut pas être sur la même bande en même temps sur VFO A
-     * et B. » L'ancien simulateur acceptait tout, et c'est pour cela qu'il n'a
-     * rien vu venir : la séquence qui échouait sur le bureau d'Olivier passait
-     * ici sans un refus. Le poste, lui, répond NAK — en silence, puisque rien
-     * n'affichait ce refus — et la bande ne change pas.
+     * Real rig rule: **MAIN and SUB never on the same band at once**. The real
+     * rig NAKs and the band doesn't change; a simulator that accepted this
+     * missed the band-swap bug entirely.
      */
     var bandExclusive: Boolean = true
 
-    /** Vrai si poser [hz] sur cette bande-là mettrait les deux ensemble. */
+    /** True if setting [hz] on that VFO would put both on one band. */
     private fun collision(surSub: Boolean, hz: Long): Boolean {
         if (!bandExclusive) return false
         val b = BandPlan.band(hz)
@@ -69,18 +60,16 @@ class Ic9700Sim(
         return b == BandPlan.band(if (surSub) mainHz else subHz)
     }
 
-    /** Renvoyer la question avant la réponse, comme le fait « CI-V Echo Back ». */
+    /** Send the question back before the answer, like "CI-V Echo Back". */
     var echo: Boolean = false
 
     /**
-     * Faire précéder chaque réponse d'un accusé de réception.
-     *
-     * Certains postes le font, et c'est ce qui tronquait la lecture unique de
-     * l'ancien pilote : il rendait l'accusé, et la vraie réponse se perdait.
+     * Precede each reply with an ACK. Some rigs do; a single-read driver then
+     * returned the ACK and lost the real answer.
      */
     var ackBeforeReply: Boolean = false
 
-    /** Tout ce que le poste a reçu, trame par trame — pour les essais. */
+    /** Every frame received, for tests. */
     val received = ArrayList<ByteArray>()
 
     private val outbox = ArrayDeque<Byte>()
@@ -90,13 +79,13 @@ class Ic9700Sim(
     override fun write(bytes: ByteArray, timeoutMs: Int): Boolean {
         if (closed) return false
         bytes.forEach { inbox += it }
-        // On ne traite que les trames complètes ; le reste attend la suite.
+        // Only complete frames are handled; the rest waits for more bytes.
         val buf = inbox.toByteArray()
         val frames = CatDecode.splitCiv(buf)
         if (frames.isNotEmpty()) {
             val consumed = frames.sumOf { it.size }
-            // Approximation volontaire : nos essais n'émettent pas de bruit
-            // entre les trames, donc ce qui reste est bien une trame partielle.
+            // Deliberate shortcut: tests send no noise between frames, so the
+            // remainder is a partial frame.
             val lastEnd = buf.indexOfLast { (it.toInt() and 0xFF) == CatDecode.END } + 1
             val keep = if (lastEnd in 1..buf.size) buf.copyOfRange(lastEnd, buf.size) else ByteArray(0)
             inbox.clear(); keep.forEach { inbox += it }
@@ -123,7 +112,7 @@ class Ic9700Sim(
 
     private fun ack() = emit(frameToCtrl(CatDecode.ACK))
 
-    /** Une réponse, précédée s'il le faut d'un accusé de réception. */
+    /** A reply, preceded by an ACK if configured. */
     private fun reply(cmd: Int, data: ByteArray) {
         if (ackBeforeReply) emit(frameToCtrl(CatDecode.ACK))
         emit(frameToCtrl(cmd, data))
@@ -132,8 +121,8 @@ class Ic9700Sim(
 
     private fun handle(f: ByteArray) {
         received += f
-        // Une trame qui ne nous est pas adressée n'est pas la nôtre : sur un bus
-        // partagé, c'est la règle, et c'est aussi le cas de notre propre écho.
+        // Ignore frames not addressed to us: shared-bus rule, and it also
+        // covers our own echo.
         if (f.size < 6) return
         val to = f[2].toInt() and 0xFF
         if (to != radioAddr) return
@@ -183,16 +172,13 @@ class Ic9700Sim(
                     return
                 }
                 val t = CatDecode.bcdBeToTone(d, 1)
-                // Et voilà le refus qui manquait. L'ancien encodeur envoyait
-                // 88,5 Hz sous la forme 00 88 50, soit 885,0 Hz : hors plage.
-                // Le vrai poste le refuse ; celui-ci aussi, et il le compte.
+                // The old encoder sent 88.5 Hz as 00 88 50 = 885.0 Hz, out of
+                // range. The real rig refuses it; so does this one, and counts it.
                 if (t == null || !CatDecode.toneInRange(t)) nak() else { toneTenthHz = t; ack() }
             }
             0x25, 0x26 -> {
-                // Sur un IC-9700 en mode satellite transbande, ces deux
-                // commandes ne savent pas atteindre la bande secondaire. Elles
-                // sont refusées, et non silencieusement appliquées à la
-                // principale — ce qui aurait été bien pire.
+                // In satellite mode these can't reach SUB on an IC-9700. They
+                // are refused, not silently applied to MAIN (much worse).
                 val unselected = at(0) == 0x01
                 if (satMode && unselected) { nak(); return }
                 if (cmd == 0x25) {
@@ -218,13 +204,12 @@ class Ic9700Sim(
 }
 
 /**
- * Un FT-817 en mémoire : une seule fréquence, un mode, un ton, et ce bit
- * d'état inversé qui a piégé tout le monde au moins une fois.
+ * An in-memory FT-817: one frequency, a mode, a tone, and the inverted status
+ * bit that catches everyone once.
  *
- * Le protocole Yaesu n'a ni adresse ni délimiteur : cinq octets à l'aller,
- * toujours, et une réponse dont la longueur dépend de la question. Il n'y a
- * donc rien à découper, mais tout à compter — un octet de trop et l'on décale
- * tout ce qui suit.
+ * Yaesu CAT has no address or delimiter: always five bytes out, and a reply
+ * whose length depends on the question. Nothing to split, everything to count —
+ * one extra byte shifts everything after it.
  */
 class Ft817Sim : SerialLink {
 
@@ -232,10 +217,10 @@ class Ft817Sim : SerialLink {
     var mode: Int = 0x01; private set
     var toneTenthHz: Int = 0; private set
     var toneMode: Int = 0x8A; private set
-    /** Vrai quand le poste émet. Le bit d'état, lui, est mis en **réception**. */
+    /** True while transmitting. The status bit, however, is set on **receive**. */
     var transmitting: Boolean = false
 
-    /** Commandes que le poste n'a pas comprises et laissées sans réponse. */
+    /** Commands not understood and left unanswered. */
     var refusals: Int = 0; private set
 
     val received = ArrayList<ByteArray>()
@@ -294,9 +279,9 @@ class Ft817Sim : SerialLink {
                 toneTenthHz = t; emit(0x00)
             }
             0xF7 -> {
-                // Le bit 7 est MIS en réception et effacé en émission. C'est
-                // contre-intuitif, c'est le manuel, et l'inverser revient à
-                // écrire sur le VFO du poste pendant qu'il émet.
+                // Bit 7 is SET on receive, cleared on transmit. Counter-intuitive
+                // but per the manual; inverting it means writing the VFO while
+                // the rig transmits.
                 val b = if (transmitting) 0x00 else 0x80
                 emit(b.toByte())
             }

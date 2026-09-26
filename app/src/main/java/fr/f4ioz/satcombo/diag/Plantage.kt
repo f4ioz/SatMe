@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.diag
 
@@ -13,45 +13,37 @@ import java.io.PrintWriter
 import java.io.StringWriter
 
 /**
- * Le récit de la dernière mort de l'application.
+ * The story of the app's last death.
  *
- * On a passé deux jours à chercher pourquoi SatMe se fermait au démarrage sur
- * un POCO M4 sans jamais obtenir une seule ligne de trace. Le Play Console ne
- * dit rien : les remontées de plantage demandent un volume d'installations
- * qu'un test fermé à trois personnes n'atteindra jamais, et ne comptent que
- * les appareils dont le propriétaire a accepté le partage des diagnostics.
- * Le rapport de pré-lancement, lui, teste des appareils qui ne sont pas celui
- * qui plante. Autrement dit : quand l'application meurt chez un testeur,
- * personne ne le sait, et surtout pas nous.
+ * Play Console tells nothing about a crash on a tester's phone: crash reports
+ * need an install volume a three-person closed test never reaches, and only
+ * count users who opted into diagnostics sharing. The pre-launch report tests
+ * other devices. So when the app dies on a tester's phone, nobody knows.
  *
- * D'où ceci. Au moment où le processus tombe, on écrit la trace sur le disque
- * de l'application, puis on laisse Android finir son travail — le système
- * affiche toujours « SatMe s'est arrêté », rien n'est masqué. Au lancement
- * suivant, on propose d'envoyer le fichier par courrier. Aucun serveur, aucune
- * bibliothèque tierce, aucune permission de plus : un fichier texte et une
- * intention `mailto:`.
+ * Hence this: when the process falls, the trace is written to app storage,
+ * then Android finishes its job ("SatMe has stopped" still shows). On the next
+ * launch we offer to email the file. No server, no third-party library, no
+ * extra permission: a text file and a `mailto:` intent.
  *
- * Cet objet-ci ne connaît pas Android : il ne sait que mettre en forme du
- * texte, ce qui le rend vérifiable sur le banc d'essai ordinaire.
+ * This object knows nothing of Android: text formatting only, so it runs in
+ * plain unit tests.
  */
 object Plantage {
 
-    /** Le fichier vit dans `filesDir`, effacé avec l'application. */
+    /** The file lives in `filesDir`, deleted with the app. */
     const val NOM = "dernier-plantage.txt"
 
     const val DESTINATAIRE = "mail@f4ioz.fr"
     const val SUJET = "SatMe — rapport de plantage"
 
     /**
-     * Une intention transporte ses extras par un tuyau du noyau dont la
-     * capacité se compte en centaines de kilo-octets, partagée avec tout le
-     * reste. Une pile d'appels profonde, avec ses causes chaînées, dépasse
-     * vite le raisonnable ; passé cette limite on coupe par la fin, parce que
-     * les premières lignes sont celles qui nomment la panne.
+     * Intent extras go through a Binder buffer of a few hundred KB, shared
+     * with everything else. A deep stack with chained causes quickly exceeds
+     * it; past this limit we cut the end, since the first lines name the fault.
      */
     const val MAX = 12_000
 
-    /** La pile d'appels complète, causes comprises, telle que la JVM la rend. */
+    /** The full stack trace, causes included, as the JVM prints it. */
     fun trace(t: Throwable): String {
         val w = StringWriter()
         PrintWriter(w).use { t.printStackTrace(it) }
@@ -59,19 +51,16 @@ object Plantage {
     }
 
     /**
-     * Coupe par la fin en le disant. Une trace tronquée sans avertissement se
-     * lit comme une trace complète, et l'on cherche alors une cause racine qui
-     * a simplement été jetée.
+     * Cuts the end, and says so. A silently truncated trace reads as complete,
+     * and one then hunts for a root cause that was simply thrown away.
      */
     fun tronque(s: String, max: Int = MAX): String =
         if (s.length <= max) s
         else s.take(max) + "\n\n[…] rapport coupé à $max caractères sur ${s.length}."
 
     /**
-     * L'en-tête compte autant que la pile. « Ça plante » et « ça plante sur ce
-     * modèle-là, avec ces modules-là » ne se réparent pas de la même façon :
-     * c'est justement la ligne des modules qui départage un défaut de notre
-     * code d'une installation à laquelle il manque un morceau.
+     * The header matters as much as the stack. The modules line is what tells
+     * a bug in our code from an install missing a split.
      */
     fun redige(
         t: Throwable,
@@ -95,8 +84,8 @@ object Plantage {
         })
 
     /**
-     * Le corps du courrier. On demande une phrase au testeur : la trace dit ce
-     * qui a cassé, elle ne dit jamais ce qu'il était en train de faire.
+     * The email body. It asks the tester for one sentence: the trace says what
+     * broke, never what they were doing.
      */
     fun corpsDuMail(rapport: String): String = buildString {
         appendLine("Bonjour,")
@@ -111,11 +100,10 @@ object Plantage {
     }
 
     /**
-     * La ligne des modules, à partir de ce qu'Android déclare. Un paquet
-     * d'installation servi en morceaux — langue, densité, jeu d'instructions —
-     * peut en perdre un en chemin chez certains constructeurs, et l'application
-     * meurt alors avant sa première ligne de code. Savoir qu'il n'y en avait
-     * aucun élimine cette piste d'un coup.
+     * The modules line, from what Android declares. A split APK (language,
+     * density, ABI) can lose a split on some vendors' devices, and the app then
+     * dies before its first line of code. Knowing there were none rules this
+     * out at once.
      */
     fun modules(noms: Array<String?>?): String {
         val propres = noms?.filterNotNull()?.filter { it.isNotBlank() } ?: emptyList()
@@ -124,13 +112,12 @@ object Plantage {
 }
 
 /**
- * Le rapport sur le disque. Séparé de sa mise en forme parce qu'un objet qui
- * écrit des fichiers se vérifie avec un dossier temporaire, et que l'on ne
- * veut pas d'Android pour cela non plus.
+ * The report on disk. Kept apart from formatting so it can be tested with a
+ * temp directory, without Android.
  *
- * Toutes les opérations avalent leurs échecs. Elles sont appelées depuis un
- * processus en train de mourir : une exception ici remplacerait la panne à
- * expliquer par une panne dans l'explication.
+ * Every operation swallows its failures: they run in a dying process, and an
+ * exception here would replace the fault to explain with a fault in the
+ * explanation.
  */
 object PlantageDisque {
 
@@ -142,7 +129,7 @@ object PlantageDisque {
         true
     }.getOrDefault(false)
 
-    /** Le rapport, ou `null` s'il n'y en a pas — ou s'il est vide. */
+    /** The report, or `null` when absent or empty. */
     fun lit(dossier: File): String? = runCatching {
         val f = fichier(dossier)
         if (!f.isFile) return null

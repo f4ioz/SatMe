@@ -1,30 +1,23 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.cat
 
 /**
- * Les deux dialectes CAT, réduits à des fonctions pures.
+ * The two CAT dialects as pure functions, so framing can be unit-tested with
+ * hand-written bytes instead of a radio.
  *
- * Tant que le découpage des trames vivait à l'intérieur des pilotes, mélangé
- * aux appels USB, il ne pouvait pas être vérifié : la seule façon de savoir si
- * une réponse était bien lue était de brancher une radio et de regarder. Sorti
- * ici, tout se contrôle au banc, avec des octets écrits à la main.
- *
- * Le bus CI-V mérite un mot, parce que c'est là qu'était le défaut le plus
- * coûteux. C'est un bus à un seul fil : ce que l'on écrit revient dans sa
- * propre oreille. Beaucoup de postes Icom ont en plus un réglage « CI-V USB
- * Echo Back » qui renvoie délibérément la question avant la réponse. Chercher
- * un octet 0x03 dans ce qui revient, comme le faisait l'ancien code, trouvait
- * donc la commande que l'on venait d'émettre, et lisait cinq octets de rien du
- * tout derrière. On croyait relire la fréquence du poste ; on relisait la
- * sienne. Il faut découper en trames, garder celles qui vont du poste vers le
- * pupitre, et alors seulement lire la charge utile.
+ * **CI-V pitfall.** It is a single-wire bus: what you write comes back to you.
+ * Many Icoms also have "CI-V USB Echo Back", which deliberately returns the
+ * question before the answer. Searching for a 0x03 byte in the input found our
+ * own command and read five bytes of nothing after it — we were reading back
+ * our own frequency. Split into frames, keep only rig-to-controller frames,
+ * and only then read the payload.
  */
 object CatDecode {
 
@@ -36,18 +29,17 @@ object CatDecode {
     // ---------------------------------------------------------------- CI-V
 
     /**
-     * Découpe un tampon en trames CI-V complètes : `FE FE … FD`.
+     * Splits a buffer into complete CI-V frames: `FE FE … FD`.
      *
-     * Les octets qui traînent avant un préambule ou après la dernière fin de
-     * trame sont jetés sans bruit — sur un bus partagé, il y en a toujours.
+     * Stray bytes before a preamble or after the last end byte are dropped
+     * silently — on a shared bus there are always some.
      */
     fun splitCiv(buf: ByteArray, n: Int = buf.size): List<ByteArray> {
         val out = ArrayList<ByteArray>()
         var i = 0
         val end = n.coerceAtMost(buf.size)
         while (i < end) {
-            // Un préambule, c'est deux 0xFE de suite ; certains postes en
-            // émettent davantage, on les avale tous.
+            // Preamble is two 0xFE; some rigs send more, swallow them all.
             if ((buf[i].toInt() and 0xFF) != PREAMBLE) { i++; continue }
             var j = i
             while (j < end && (buf[j].toInt() and 0xFF) == PREAMBLE) j++
@@ -55,35 +47,34 @@ object CatDecode {
             val start = j - 2
             var k = j
             while (k < end && (buf[k].toInt() and 0xFF) != END) k++
-            if (k >= end) break            // trame tronquée : on la laisse
+            if (k >= end) break            // truncated frame: leave it
             out += buf.copyOfRange(start, k + 1)
             i = k + 1
         }
         return out
     }
 
-    /** Cette trame va-t-elle du poste [radioAddr] vers le pupitre [ctrlAddr] ? */
+    /** Does this frame go from rig [radioAddr] to controller [ctrlAddr]? */
     fun isFromRadio(f: ByteArray, radioAddr: Int, ctrlAddr: Int): Boolean =
         f.size >= 6 &&
             (f[2].toInt() and 0xFF) == ctrlAddr &&
             (f[3].toInt() and 0xFF) == radioAddr
 
-    /** Cette trame est-elle notre propre question, revenue par l'écho du bus ? */
+    /** Is this frame our own question, echoed back by the bus? */
     fun isEcho(f: ByteArray, radioAddr: Int, ctrlAddr: Int): Boolean =
         f.size >= 6 &&
             (f[2].toInt() and 0xFF) == radioAddr &&
             (f[3].toInt() and 0xFF) == ctrlAddr
 
-    /** Le code de commande d'une trame, ou -1 si elle est trop courte. */
+    /** Command code of a frame, or -1 if too short. */
     fun command(f: ByteArray): Int = if (f.size >= 6) f[4].toInt() and 0xFF else -1
 
     /**
-     * La charge utile de la première réponse du poste à la commande [cmd].
+     * Payload of the rig's first reply to command [cmd].
      *
-     * @param sub sous-commande attendue, ou -1 s'il n'y en a pas. Quand elle est
-     *   donnée, elle est vérifiée et retirée de ce qui est rendu.
-     * @return les octets entre la commande et le 0xFD final, ou null si aucune
-     *   trame ne convient — un ACK ou un NAK ne conviennent jamais.
+     * @param sub expected sub-command, or -1. When given, it is checked and stripped.
+     * @return bytes between the command and the final 0xFD, or null if no frame
+     *   matches — an ACK or NAK never does.
      */
     fun payload(
         frames: List<ByteArray>, radioAddr: Int, ctrlAddr: Int, cmd: Int, sub: Int = -1
@@ -102,17 +93,17 @@ object CatDecode {
         return null
     }
 
-    /** Le poste a-t-il accusé réception (0xFB) ? */
+    /** Did the rig acknowledge (0xFB)? */
     fun isAck(frames: List<ByteArray>, radioAddr: Int, ctrlAddr: Int): Boolean =
         frames.any { isFromRadio(it, radioAddr, ctrlAddr) && command(it) == ACK }
 
-    /** Le poste a-t-il refusé (0xFA) ? */
+    /** Did the rig refuse (0xFA)? */
     fun isNak(frames: List<ByteArray>, radioAddr: Int, ctrlAddr: Int): Boolean =
         frames.any { isFromRadio(it, radioAddr, ctrlAddr) && command(it) == NAK }
 
-    // ------------------------------------------------------- BCD fréquence
+    // ------------------------------------------------------- frequency BCD
 
-    /** Une fréquence en hertz, en cinq octets BCD petit-boutiens (10 chiffres). */
+    /** Frequency in Hz as five little-endian BCD bytes (10 digits). */
     fun freqToBcdLe(hz: Long): ByteArray {
         val out = ByteArray(5)
         var d = hz
@@ -125,10 +116,8 @@ object CatDecode {
     }
 
     /**
-     * Le chemin inverse. Rend null si les octets ne sont pas du BCD valide ou
-     * si la fréquence obtenue ne ressemble à rien : un demi-mégahertz ou
-     * quarante gigahertz signifient qu'on a lu au mauvais endroit, et il vaut
-     * mille fois mieux le dire que d'afficher un nombre.
+     * The reverse. Null if not valid BCD or implausible: an absurd value means
+     * we read at the wrong offset, and saying so beats displaying a number.
      */
     fun bcdLeToFreq(buf: ByteArray, start: Int = 0): Long? {
         if (start + 5 > buf.size) return null
@@ -145,28 +134,25 @@ object CatDecode {
         return if (hz in PLAUSIBLE_HZ) hz else null
     }
 
-    /** Bornes de vraisemblance d'une fréquence relue. */
+    /** Plausibility bounds for a frequency read back. */
     val PLAUSIBLE_HZ = 100_000L..30_000_000_000L
 
     // ------------------------------------------------------------- CTCSS
 
-    /** Le ton le plus bas admis par un poste Icom, en dixièmes de hertz. */
+    /** Lowest tone an Icom accepts, in tenths of Hz. */
     const val TONE_MIN_TENTH = 670
 
-    /** Et le plus haut. */
+    /** Highest. */
     const val TONE_MAX_TENTH = 2541
 
     /**
-     * Un ton CTCSS en trois octets BCD **gros-boutiens** : 88,5 Hz donne
-     * `00 08 85`.
+     * CTCSS tone as three **big-endian** BCD bytes: 88.5 Hz gives `00 08 85`.
      *
-     * C'est ici qu'était le défaut qui a coûté des passages entiers sur SO-50.
-     * La fréquence, elle, est petit-boutienne, et l'ancien code a appliqué la
-     * même règle au ton : 88,5 partait en `00 88 50`, que le poste relit comme
-     * 885,0 Hz. Hors plage, donc ignoré — mais poliment accusé par un 0xFB, si
-     * bien que l'application affichait « ton réglé » pendant que le relais
-     * restait muet. Un accusé de réception ne dit pas que la commande a été
-     * comprise ; il dit qu'elle a été reçue. Toute la différence est là.
+     * Pitfall that cost whole SO-50 passes: frequency is little-endian, and the
+     * old code applied the same rule to the tone. 88.5 went out as `00 88 50`,
+     * read by the rig as 885.0 Hz — out of range, ignored, yet ACKed with 0xFB,
+     * so the app showed "tone set" while the repeater stayed silent. An ACK
+     * means received, not understood.
      */
     fun toneToBcdBe(tenthHz: Int): ByteArray {
         val v = tenthHz.coerceIn(0, 9999)
@@ -179,7 +165,7 @@ object CatDecode {
         )
     }
 
-    /** Le chemin inverse, en dixièmes de hertz. Null si ce n'est pas du BCD. */
+    /** The reverse, in tenths of Hz. Null if not BCD. */
     fun bcdBeToTone(buf: ByteArray, start: Int = 0): Int? {
         if (start + 3 > buf.size) return null
         var v = 0
@@ -193,12 +179,12 @@ object CatDecode {
         return v
     }
 
-    /** Ce ton est-il dans ce qu'un poste accepte réellement ? */
+    /** Is this tone within what a rig really accepts? */
     fun toneInRange(tenthHz: Int): Boolean = tenthHz in TONE_MIN_TENTH..TONE_MAX_TENTH
 
     // ------------------------------------------------------------- Yaesu
 
-    /** Les quatre octets BCD d'une fréquence FT-817, par pas de dix hertz. */
+    /** The four BCD bytes of an FT-817 frequency, in 10 Hz steps. */
     fun yaesuFreq(hz: Long): ByteArray {
         val tenHz = (hz / 10).coerceIn(0, 99_999_999)
         val s = "%08d".format(tenHz)
@@ -206,7 +192,7 @@ object CatDecode {
         return byteArrayOf(b(0), b(2), b(4), b(6))
     }
 
-    /** Et l'inverse, sur les quatre premiers octets d'une réponse. */
+    /** The reverse, from the first four bytes of a reply. */
     fun yaesuFreqOf(buf: ByteArray, start: Int = 0): Long? {
         if (start + 4 > buf.size) return null
         var hz = 0L
@@ -220,18 +206,15 @@ object CatDecode {
         return hz * 10
     }
 
-    // ------------------------------------------------- traductions humaines
+    // ------------------------------------------------- human-readable text
 
     private fun mhz(hz: Long): String = "%.5f MHz".format(hz / 1e6)
 
     /**
-     * Le nom du mode, tel qu'on l'écrit sur la face avant du poste.
+     * Mode name as printed on the rig's front panel.
      *
-     * Public depuis la 18.19 : ce n'est plus seulement une commodité de
-     * journal, c'est ce qu'affiche le panneau POSTE. USB ou LSB décide de quel
-     * côté du transpondeur on se trouve, et se tromper de bande latérale c'est
-     * s'entendre à l'envers ou pas du tout — un défaut qui ne se voit pas,
-     * puisque tout le reste est juste.
+     * Public: the rig panel shows it. The wrong sideband means hearing yourself
+     * inverted or not at all — invisible, since everything else looks right.
      */
     fun civModeName(b: Int): String = when (b) {
         0x00 -> "LSB"; 0x01 -> "USB"; 0x02 -> "AM"; 0x03 -> "CW"
@@ -239,10 +222,8 @@ object CatDecode {
     }
 
     /**
-     * Une trame CI-V en français, pour le journal.
-     *
-     * Le but n'est pas l'exhaustivité : c'est de rendre lisible, sans manuel
-     * ouvert à côté, la poignée de commandes que l'application émet vraiment.
+     * A CI-V frame described in French, for the log. Not exhaustive: covers
+     * the handful of commands the app actually sends.
      */
     fun describeCiv(f: ByteArray): String {
         if (f.size < 6) return "trame incomplète"
@@ -295,10 +276,9 @@ object CatDecode {
     }
 
     /**
-     * Une trame Yaesu en français. Le protocole du FT-817 n'a ni adresse ni
-     * délimiteur : c'est cinq octets à l'aller, et une réponse dont la longueur
-     * dépend de la question posée. [fromRig] dit donc de quel côté on est, et
-     * [lastOp] rappelle la question quand on décrit la réponse.
+     * A Yaesu frame described in French. FT-817 CAT has no address or
+     * delimiter, and reply length depends on the question: [fromRig] gives the
+     * direction, [lastOp] the question when describing a reply.
      */
     fun describeYaesu(f: ByteArray, fromRig: Boolean, lastOp: Int = -1): String {
         if (!fromRig) {

@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.audio
 
@@ -25,25 +25,21 @@ import fr.f4ioz.satcombo.MainActivity
 import fr.f4ioz.satcombo.i18n.t
 
 /**
- * La prise de son dédiée aux radiosondes.
+ * Audio capture for radiosondes.
  *
- * Une sonde ne se reçoit pas forcément avec la clé RTL : beaucoup d'opérateurs
- * ont déjà un récepteur qui sort le 404 MHz proprement, et il suffit alors de
- * lui prendre son audio. Le service ouvre donc l'entrée choisie — micro du
- * téléphone devant le haut-parleur, ou carte son USB câblée sur la sortie
- * discriminateur — et pousse le son brut dans [fr.f4ioz.satcombo.sonde.SondeHub].
+ * Many operators already have a receiver that outputs 404 MHz cleanly, so no
+ * RTL dongle is needed: the service opens the chosen input (phone mic in front
+ * of the speaker, or a USB sound card wired to the discriminator output) and
+ * pushes raw audio into [fr.f4ioz.satcombo.sonde.SondeHub].
  *
- * Il ne ressemble pas à [RecorderService] sur un point essentiel : rien n'est
- * écrit sur la carte. Un vol de sonde dure trois heures, ce qui ferait cent
- * soixante-dix mégaoctets de MP3 dont personne ne veut ; seules les trames
- * décodées méritent d'être gardées, et c'est déjà le journal CSV qui s'en
- * charge. On se contente donc de lire le flux et de le donner au décodeur.
+ * Unlike [RecorderService], nothing is written to storage: a three-hour flight
+ * would make ~170 MB of MP3 nobody wants. Only decoded frames are worth
+ * keeping, and the CSV log already does that.
  *
- * Le Bluetooth n'est volontairement pas proposé : le profil mains-libres
- * échantillonne à 8 ou 16 kHz avec réducteur de bruit obligatoire, ce qui
- * détruit une modulation à 4800 ou 9600 bauds. Pour la même raison la capture
- * demande UNPROCESSED quand le téléphone sait le faire : la correction
- * automatique de gain arrondit les fronts et le décodage tombe à zéro trame.
+ * Bluetooth is deliberately not offered: the hands-free profile samples at 8 or
+ * 16 kHz with forced noise reduction, which destroys 4800/9600 baud modulation.
+ * Likewise UNPROCESSED is requested when available: AGC rounds the edges and
+ * decoding drops to zero frames.
  */
 class SondeAudioService : Service() {
 
@@ -54,10 +50,10 @@ class SondeAudioService : Service() {
         private const val CHANNEL = "sonde_audio"
         private const val NOTIF_ID = 4219
 
-        /** Fréquence d'échantillonnage de la prise de son, en hertz. */
+        /** Capture sample rate, Hz. */
         const val RATE = 44_100
 
-        /** Le service tourne-t-il ? Lu par le ViewModel pour l'affichage. */
+        /** Whether the service runs. Read by the ViewModel for display. */
         @Volatile
         var running: Boolean = false
             private set
@@ -112,9 +108,8 @@ class SondeAudioService : Service() {
     }
 
     /**
-     * Ouvre l'entrée demandée. La source UNPROCESSED est préférée dès que le
-     * téléphone la déclare, sinon VOICE_RECOGNITION qui, sur la plupart des
-     * appareils, se passe déjà du réducteur de bruit.
+     * Opens the requested input. UNPROCESSED when the phone declares it, else
+     * VOICE_RECOGNITION, which skips noise reduction on most devices.
      */
     private fun openInput(src: String): Boolean = runCatching {
         val am = getSystemService(android.media.AudioManager::class.java)
@@ -145,8 +140,8 @@ class SondeAudioService : Service() {
         true
     }.getOrDefault(false)
 
-    /** Boucle de lecture : des blocs courts, pour que le décodeur voie le
-     *  signal presque en temps réel et que la jauge de niveau vive. */
+    /** Read loop in short blocks, so the decoder sees the signal in near real
+     *  time and the level meter stays alive. */
     private fun pump() {
         val buf = ShortArray(4096)
         val r = rec ?: return

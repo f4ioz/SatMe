@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.diag
 
@@ -34,17 +34,14 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 /**
- * « La dernière fois, SatMe s'est arrêté. Tu me l'envoies ? »
+ * "SatMe stopped last time. Send the report?"
  *
- * Une seule fenêtre, au lancement qui suit la chute, refusable. Le rapport
- * part par courrier, avec le client de courrier du testeur : rien ne quitte le
- * téléphone sans qu'il l'ait vu et validé, et il peut écrire au-dessus la
- * seule chose que la trace ne contiendra jamais — ce qu'il était en train de
- * faire.
+ * One dismissable dialog, on the launch after the crash. The report goes by
+ * email through the tester's own mail client: nothing leaves the phone unseen,
+ * and they can add what the trace never contains — what they were doing.
  *
- * Dans les deux cas le fichier est effacé. Une fenêtre qui revient à chaque
- * lancement finit par être fermée sans être lue, et l'on perd le rapport
- * suivant, le vrai.
+ * The file is deleted either way. A dialog that comes back on every launch
+ * ends up closed unread, and the next, real report gets lost.
  */
 @Composable
 fun PlantagePrompt() {

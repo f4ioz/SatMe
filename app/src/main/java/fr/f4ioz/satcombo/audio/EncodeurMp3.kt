@@ -1,55 +1,47 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.audio
 
 /**
- * Le portier de l'encodeur MP3.
+ * Gatekeeper for the MP3 encoder.
  *
- * ### Pourquoi ce fichier existe
+ * ### Why this file exists
  *
- * L'enveloppe Java de LAME que l'application embarque
- * (`com.naman14.androidlame.AndroidLame`) déclare **toutes** ses méthodes
- * natives en `static` : `initialize`, `lameEncode`, `lameFlush`, `lameClose`.
- * Derrière elles, une seule variable globale dans la bibliothèque native — le
- * symbole `glf` en zone `.bss` du `libandroidlame.so`. Autrement dit : peu
- * importe le nombre d'objets `AndroidLame` construits côté Kotlin, il n'y a
- * **qu'un seul encodeur dans tout le processus**.
+ * The bundled LAME Java wrapper (`com.naman14.androidlame.AndroidLame`)
+ * declares **all** its native methods `static`: `initialize`, `lameEncode`,
+ * `lameFlush`, `lameClose`. Behind them sits one global in the native library
+ * (symbol `glf` in the `.bss` of `libandroidlame.so`). However many
+ * `AndroidLame` objects exist, there is **only one encoder per process**.
  *
- * Deux utilisateurs à la fois, et la panne est silencieuse jusqu'à ce qu'elle
- * soit mortelle : le second `build()` réinitialise l'encodeur du premier, et le
- * premier `close()` libère celui du second. L'appel suivant à `encode()`
- * travaille alors sur une structure libérée, et le processus meurt dans
- * `lame_encode_mp3_frame` → `format_bitstream`, sans qu'une seule ligne de
- * Kotlin ne figure au sommet de la pile. C'est exactement la trace remontée par
- * le Play Console sur un Galaxy A35 : un plantage natif, que le ramasse-plantage
- * de la 18.28 ne peut pas attraper — un SIGSEGV ne passe jamais par
- * `Thread.setDefaultUncaughtExceptionHandler`.
+ * With two users, the fault is silent until fatal: the second `build()` resets
+ * the first one's encoder, and the first `close()` frees the second's. The next
+ * `encode()` works on freed memory and the process dies in
+ * `lame_encode_mp3_frame` → `format_bitstream`, with no Kotlin frame on top
+ * (seen in Play Console on a Galaxy A35). The crash handler cannot catch it: a
+ * SIGSEGV never goes through `Thread.setDefaultUncaughtExceptionHandler`.
  *
- * ### Ce que ce portier fait, et ce qu'il ne fait pas
+ * ### What it does and does not do
  *
- * Il ne rend pas la bibliothèque réentrante : cela demanderait de la
- * recompiler avec un état par instance. Il garantit qu'un seul appelant la
- * tient à la fois.
+ * It does not make the library reentrant (that would need a rebuild with
+ * per-instance state). It ensures only one caller holds it at a time.
  *
- * Et surtout il **refuse** le second au lieu de le faire attendre. C'est
- * délibéré : un enregistrement de passage tient l'encodeur dix minutes, une
- * réception SDR autant. Une fenêtre d'export bloquée dix minutes serait un
- * plantage de plus, simplement plus lent et plus difficile à raconter. Un refus
- * immédiat, lui, se dit en une phrase à l'écran.
+ * It **refuses** the second caller rather than making it wait, on purpose: a
+ * pass recording or an SDR session holds the encoder for ten minutes, and an
+ * export dialog blocked that long is just a slower failure. An immediate
+ * refusal can be stated in one sentence on screen.
  *
- * Ce fichier ne connaît pas Android et ne touche pas à LAME : il ne fait que
- * distribuer un droit de passage. C'est ce qui le rend vérifiable sur le banc
- * ordinaire, là où la bibliothèque native ne se charge pas.
+ * No Android, no LAME here: it only hands out a token, so it runs in plain unit
+ * tests where the native library does not load.
  */
 object EncodeurMp3 {
 
-    /** Les tenants possibles, nommés une fois pour toutes. */
+    /** The possible holders, named once. */
     const val ENREGISTREUR = "enregistrement"
     const val SDR = "SDR"
     const val MIRE_SSTV = "mire SSTV"
@@ -58,19 +50,18 @@ object EncodeurMp3 {
     private val verrou = Any()
     private var occupant: String? = null
 
-    /** Qui tient l'encodeur, ou `null` s'il est libre. */
+    /** Who holds the encoder, or `null` when free. */
     val occupePar: String? get() = synchronized(verrou) { occupant }
 
-    /** Vrai si personne ne l'a pris. Indicatif seulement : voir [prend]. */
+    /** True when nobody holds it. Informational only: see [prend]. */
     val libre: Boolean get() = occupePar == null
 
     /**
-     * Prend l'encodeur pour [qui], ou rend `false` s'il est déjà pris.
+     * Takes the encoder for [qui], or returns `false` if already taken.
      *
-     * Le test et la prise sont dans le même bloc synchronisé : deux appelants
-     * simultanés ne peuvent pas conclure tous les deux qu'il est libre. C'est
-     * tout l'intérêt de la manœuvre, et la raison pour laquelle [libre] ne doit
-     * jamais servir à décider — seulement à renseigner.
+     * Test and take share one synchronized block, so two simultaneous callers
+     * cannot both see it free. That is why [libre] must never be used to
+     * decide — only to inform.
      */
     fun prend(qui: String): Boolean = synchronized(verrou) {
         if (occupant != null) false else { occupant = qui; true }
@@ -81,17 +72,14 @@ object EncodeurMp3 {
     }
 
     /**
-     * Exécute [bloc] avec l'encodeur, ou rend `null` sans rien faire s'il est
-     * déjà pris.
+     * Runs [bloc] with the encoder, or returns `null` doing nothing if taken.
      *
-     * Pour les usages courts qui commencent et finissent au même endroit — les
-     * exports de mire. L'enregistreur de passage et le SDR, eux, prennent
-     * l'encodeur dans un fil et le rendent dans un autre bloc : ils appellent
-     * [prend] et [rend] directement.
+     * For short uses that start and end in one place (test-pattern exports).
+     * The pass recorder and SDR take and release in different places, so they
+     * call [prend] and [rend] directly.
      *
-     * La libération est dans un `finally` : une exception au milieu d'un export
-     * ne doit pas condamner l'encodeur jusqu'au prochain démarrage de
-     * l'application.
+     * Released in `finally`: an exception mid-export must not lock the encoder
+     * until the next app start.
      */
     fun <T> avec(qui: String, bloc: () -> T): T? {
         if (!prend(qui)) return null
@@ -99,10 +87,10 @@ object EncodeurMp3 {
     }
 
     /**
-     * Rend l'encodeur quel que soit son tenant.
+     * Frees the encoder whoever holds it.
      *
-     * Réservé au banc d'essai : en production, un tenant qui ne rend pas son
-     * tour est un défaut à corriger, pas à contourner.
+     * Tests only: in production, a holder that never releases is a bug to fix,
+     * not to work around.
      */
     internal fun forceLibere() = synchronized(verrou) { occupant = null }
 }

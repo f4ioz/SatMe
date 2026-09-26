@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.rotor
 
@@ -20,45 +20,38 @@ import java.net.Socket
 import java.util.Locale
 
 /**
- * Le dialecte de `rotctld`, le démon de rotor de Hamlib.
+ * The dialect of `rotctld`, the Hamlib rotator daemon.
  *
- * C'est l'autre chemin vers le mât, et il ne ressemble en rien au premier :
- * pas de câble série ici, mais une prise TCP vers un petit serveur — sur un
- * Raspberry Pi au pied de l'antenne, le plus souvent — qui parle, lui, au
- * contrôleur. L'intérêt est considérable pour l'opérateur : Hamlib connaît
- * plus de rotors que nous n'en verrons jamais, et le téléphone n'a plus besoin
- * d'être relié physiquement à quoi que ce soit.
+ * No serial cable here: a TCP socket to a small server (often a Raspberry Pi
+ * at the foot of the antenna) that talks to the controller. Hamlib knows far
+ * more rotators than we ever will, and the phone needs no physical link.
  *
- * Le protocole est du texte, une commande par ligne. `P 180.00 45.00` pour
- * viser, `p` pour lire, `S` pour arrêter, et le serveur rend `RPRT 0` quand
- * tout va bien. Trois pièges s'y cachent, et les trois ont été rencontrés :
+ * Text protocol, one command per line: `P 180.00 45.00` to aim, `p` to read,
+ * `S` to stop; the server answers `RPRT 0` on success. Three traps, all hit:
  *
- * **Le point décimal.** Hamlib lit ses nombres en C, avec la virgule flottante
- * anglo-saxonne. Un `String.format` sans [Locale] écrit `180,00` sur un
- * téléphone réglé en français, et le serveur répond `RPRT -1` sans autre
- * explication. Tout ce fichier formate en [Locale.US], sans exception.
+ * **Decimal point.** Hamlib parses numbers in C locale. `String.format`
+ * without a [Locale] writes `180,00` on a French phone and the server answers
+ * `RPRT -1` with no explanation. Everything here formats in [Locale.US].
  *
- * **Le `RPRT -1` rendu à la place des deux lignes de position.** Quand le
- * contrôleur ne répond pas, `p` ne rend pas deux nombres : il rend un code
- * d'erreur, sur une seule ligne. Un lecteur qui attend aveuglément deux lignes
- * consomme alors la réponse de la commande **suivante**, et à partir de là tout
- * est décalé d'un cran — indéfiniment.
+ * **`RPRT -1` instead of two position lines.** When the controller does not
+ * answer, `p` returns a single error line. A reader that blindly expects two
+ * lines eats the reply of the **next** command, and everything stays shifted
+ * by one, forever.
  *
- * **L'écho du mode étendu.** Un `rotctld` lancé avec les réponses étendues fait
- * précéder chaque réponse de l'écho de la commande (`get_pos:`) et nomme ses
- * champs (`Azimuth: 180.000000`), puis termine par `RPRT 0`. Le `RPRT 0` final
- * n'existe pas en mode simple ; l'oublier laisse une ligne en trop dans le
- * tuyau, et l'on retombe sur le décalage précédent.
+ * **Extended mode echo.** With extended replies, each answer is preceded by
+ * the command echo (`get_pos:`), fields are named (`Azimuth: 180.000000`),
+ * and it ends with `RPRT 0`. That final `RPRT 0` does not exist in simple
+ * mode; forgetting it leaves an extra line in the pipe and the same shift.
  */
 object RotctldCodec {
 
-    /** Demande de position. */
+    /** Position query. */
     const val QUERY = "p\n"
 
-    /** Arrêt immédiat. */
+    /** Immediate stop. */
     const val STOP = "S\n"
 
-    /** La consigne, toujours avec un point décimal, quelle que soit la langue. */
+    /** The target, always with a decimal point whatever the locale. */
     fun moveCommand(azDeg: Double, elDeg: Double): String? {
         if (azDeg.isNaN() || elDeg.isNaN() || azDeg.isInfinite() || elDeg.isInfinite()) return null
         return String.format(Locale.US, "P %.2f %.2f\n", azDeg, elDeg)
@@ -66,11 +59,10 @@ object RotctldCodec {
 }
 
 /**
- * Le client `rotctld`, sur une prise TCP.
+ * The `rotctld` client over TCP.
  *
- * Rien ici ne connaît Android : le client s'éprouve au banc contre un faux
- * serveur Hamlib de trente lignes, sur un port que le système choisit
- * lui-même.
+ * No Android dependency: tested against a thirty-line fake Hamlib server on a
+ * system-chosen port.
  */
 class RotctldRotor : RotorDriver {
 
@@ -80,7 +72,7 @@ class RotctldRotor : RotorDriver {
 
     override val isOpen: Boolean get() = socket?.isConnected == true && socket?.isClosed == false
 
-    /** Ouvre la prise vers [host]:[port]. */
+    /** Opens the socket to [host]:[port]. */
     suspend fun open(host: String, port: Int, timeoutMs: Int = 2000): Boolean =
         withContext(Dispatchers.IO) {
             close()
@@ -103,11 +95,11 @@ class RotctldRotor : RotorDriver {
     }
 
     /**
-     * Jette ce qui traîne encore avant de poser une question.
+     * Discards leftovers before asking a question.
      *
-     * C'est le filet de sécurité contre le décalage : si une réponse
-     * précédente a laissé une ligne — un `RPRT 0` de mode étendu, un message
-     * d'erreur inattendu —, elle part ici, et non dans la lecture suivante.
+     * Safety net against the shift: a stray line from a previous reply (an
+     * extended-mode `RPRT 0`, an unexpected error) goes here, not into the
+     * next read.
      */
     private fun drain(r: BufferedReader) {
         var guard = 0
@@ -125,7 +117,7 @@ class RotctldRotor : RotorDriver {
         }.getOrDefault(false)
     }
 
-    /** Attend le compte rendu d'une commande d'écriture. Vrai sur `RPRT 0`. */
+    /** Waits for the report of a write command. True on `RPRT 0`. */
     private fun readRprt(): Boolean {
         val r = reader ?: return false
         var guard = 0
@@ -141,12 +133,11 @@ class RotctldRotor : RotorDriver {
     }
 
     /**
-     * Relit une position, en mode simple comme en mode étendu.
+     * Reads a position, in simple or extended mode.
      *
-     * Le mode se reconnaît tout seul : une ligne qui se termine par deux points
-     * sans rien derrière est l'écho de la commande, donc on est en étendu, donc
-     * il y aura un `RPRT` final à consommer. En mode simple, deux nombres
-     * suffisent et il n'y a rien derrière.
+     * The mode is detected on the fly: a line ending with a colon and nothing
+     * after it is the command echo, so extended mode, so a final `RPRT` must be
+     * consumed. In simple mode two numbers are enough.
      */
     private fun readPositionReply(): RotorPos? {
         val r = reader ?: return null

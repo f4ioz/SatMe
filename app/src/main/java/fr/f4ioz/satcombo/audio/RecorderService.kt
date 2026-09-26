@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.audio
 
@@ -173,19 +173,16 @@ class RecorderService : Service() {
                     val rate = if (btDev != null) 16_000 else 44_100
                     // SSTV listens to the raw capture, not to the MP3: the
                     // decoder sees the samples before the encoder touches them.
-                    // Le décodeur ne tourne que si l'extension SSTV est ouverte :
-                    // sinon on dépenserait du processeur pour une fonction que
-                    // l'opérateur ne voit nulle part.
+                    // Only runs when the SSTV extension is enabled: no CPU spent
+                    // on a feature the operator cannot see.
                     val sstv = runCatching {
                         val st = fr.f4ioz.satcombo.data.SettingsStore(this)
                         st.sstvEnabled && fr.f4ioz.satcombo.data.Extensions.isUnlocked(
                             fr.f4ioz.satcombo.data.Extensions.SSTV, st.callsign, st.extensionsCode)
                     }.getOrDefault(false)
-                    // Même raisonnement pour l'APT : le décodeur n'a pas
-                    // d'en-tête à attendre, il tourne du début à la fin du
-                    // passage, donc il ne se met en route que si l'opérateur
-                    // l'a demandé — un passage NOAA se prépare, il ne se
-                    // rencontre pas par hasard.
+                    // Same for APT: with no header to wait for, it runs for the
+                    // whole pass, so only when asked for (a NOAA pass is
+                    // planned, not stumbled upon).
                     val apt = runCatching {
                         val st = fr.f4ioz.satcombo.data.SettingsStore(this)
                         st.aptEnabled && fr.f4ioz.satcombo.data.Extensions.isUnlocked(
@@ -193,19 +190,17 @@ class RecorderService : Service() {
                     }.getOrDefault(false)
                     if (sstv) fr.f4ioz.satcombo.sstv.SstvHub.startLive(this, rate, sat)
                     if (apt) fr.f4ioz.satcombo.apt.AptHub.startLive(this, rate, sat)
-                    // Le moniteur : le spectre à l'écran, et le renvoi du son au
-                    // haut-parleur. Il est ouvert même si les deux options sont
-                    // fermées, pour que l'opérateur puisse les allumer en plein
-                    // passage sans avoir à relancer l'enregistrement.
+                    // Monitor (spectrum + speaker playback). Opened even with
+                    // both options off, so they can be turned on mid-pass
+                    // without restarting the recording.
                     val reg = runCatching { fr.f4ioz.satcombo.data.SettingsStore(this) }.getOrNull()
                     MoniteurAudio.demarrer(
                         rate = rate,
                         sourceExterne = src != "MIC",
                         spectre = reg?.monitorSpectre ?: false,
                         hautParleur = reg?.monitorSpeaker ?: false)
-                    // Un seul puits, qui sert tout le monde dans l'ordre : le
-                    // moniteur d'abord parce qu'il ne fait que recopier, les
-                    // décodeurs ensuite.
+                    // One sink feeding everyone in order: the monitor first,
+                    // since it only copies, then the decoders.
                     val sink: ((ShortArray, Int) -> Unit) = { p, n ->
                         MoniteurAudio.alimenter(p, n)
                         if (sstv) fr.f4ioz.satcombo.sstv.SstvHub.feedLive(p, n)
@@ -329,14 +324,14 @@ class RecorderService : Service() {
         handler.removeCallbacks(autoStop)
         if (_state.value.recording) {
             recorder.stop()
-            // Le moniteur s'arrête avec la capture : son fil ne survit jamais à
-            // l'enregistrement qui l'alimente.
+            // The monitor stops with the capture: its thread never outlives
+            // the recording that feeds it.
             MoniteurAudio.arreter()
             // Flush the SSTV engine after the capture thread has stopped, so a
             // picture that was still building when the pass ended is kept.
             fr.f4ioz.satcombo.sstv.SstvHub.stopLive()
-            // L'APT s'écrit au même moment : l'image n'existe qu'une fois le
-            // passage fini, puisqu'elle est le passage lui-même.
+            // APT is written at the same point: the image is the whole pass,
+            // so it only exists once the pass is over.
             fr.f4ioz.satcombo.apt.AptHub.stopLive()
             val startMs = _state.value.startMs
             _state.value = _state.value.copy(recording = false, autoStopMs = null)

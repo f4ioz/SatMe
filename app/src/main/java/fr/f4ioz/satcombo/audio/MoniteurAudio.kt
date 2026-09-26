@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.audio
 
@@ -17,69 +17,66 @@ import java.util.concurrent.ArrayBlockingQueue
 import java.util.concurrent.TimeUnit
 import kotlin.concurrent.thread
 
-/** Ce que l'écran montre du son en cours d'enregistrement. */
+/** What the screen shows of the audio being recorded. */
 data class EtatMoniteur(
     val actif: Boolean = false,
     val bandes: List<Float> = emptyList(),
     val crete: Float = 0f,
-    /** Vrai quand le son part réellement vers le haut-parleur. */
+    /** True when audio is actually going to the speaker. */
     val hautParleur: Boolean = false
 )
 
 /**
- * Le contrôle à l'oreille et à l'œil de ce qui s'enregistre.
+ * Monitoring, by ear and by eye, of what is being recorded.
  *
- * Deux services rendus par le même robinet : le spectre du son capté, et le
- * renvoi de ce son vers le haut-parleur du téléphone. Les deux se branchent sur
- * la prise déjà posée par [PassRecorder] pour le décodeur SSTV — les
- * échantillons bruts, avant l'encodeur MP3.
+ * Two features from the same tap: the spectrum of the captured audio, and
+ * playback of that audio on the phone speaker. Both hook into the tap
+ * [PassRecorder] already provides for the SSTV decoder (raw samples, before
+ * the MP3 encoder).
  *
- * Toute la difficulté tient en une phrase du magnétophone : la prise de son
- * *doit rendre la main tout de suite*, sinon le tampon de l'AudioRecord
- * déborde et l'enregistrement se retrouve troué. On ne calcule donc rien et on
- * n'écrit rien sur le fil de capture : [alimenter] recopie le bloc dans une
- * petite file et repart. Un fil à nous fait la transformée de Fourier et écrit
- * dans l'AudioTrack, dont l'écriture, elle, a tout le droit de bloquer.
+ * **The capture thread must return at once**, or the AudioRecord buffer
+ * overflows and the recording gets gaps. So nothing is computed or written on
+ * it: [alimenter] copies the block into a small queue and returns. Our own
+ * thread does the FFT and writes to the AudioTrack, which may block.
  *
- * Quand la file est pleine, on jette. C'est le bon arbitrage : un moniteur qui
- * hoquette se remarque à peine, un enregistrement troué est perdu pour de bon.
+ * When the queue is full, blocks are dropped: a stuttering monitor is barely
+ * noticed, a recording with gaps is lost for good.
  *
- * Le haut-parleur ne s'ouvre que sur une source extérieure — carte son USB du
- * poste, ou liaison Bluetooth. Renvoyer le micro du téléphone dans le
- * haut-parleur du même téléphone ne donnerait qu'un effet Larsen, et n'aurait
- * de toute façon aucun intérêt puisque le son est déjà dans la pièce.
+ * The speaker only opens for an external source (rig USB sound card or
+ * Bluetooth). Playing the phone mic through the same phone's speaker would
+ * only cause feedback, and the sound is already in the room anyway.
  */
 object MoniteurAudio {
 
     private val _etat = MutableStateFlow(EtatMoniteur())
     val etat: StateFlow<EtatMoniteur> = _etat
 
-    /** Calculer et publier le spectre. Se change en cours d'enregistrement. */
+    /** Compute and publish the spectrum. Can change mid-recording. */
     @Volatile var spectre = false
-    /** Renvoyer le son au haut-parleur. Se change en cours d'enregistrement. */
+    /** Play audio on the speaker. Can change mid-recording. */
     @Volatile var hautParleur = false
 
-    /** Vrai si la prise de son ne vient pas du micro du téléphone. */
+    /** True when capture does not come from the phone mic. */
     @Volatile private var sourceExterne = false
     @Volatile private var enMarche = false
     private var fil: Thread? = null
-    /** La cadence de la capture en cours, lisible par qui en a besoin. */
+    /** Sample rate of the current capture. */
     @Volatile var cadence: Int = 44_100
         private set
 
     private var rate = 44_100
 
-    /** Huit blocs : environ un dixième de seconde d'avance, pas davantage —
-     *  au-delà, le contrôle à l'oreille arriverait après le son du poste. */
+    /** Eight blocks, about 0.1 s of lead, no more: beyond that the monitor
+     *  would lag behind the rig's own audio. */
     private val file = ArrayBlockingQueue<ShortArray>(8)
 
-    /** Le haut-parleur est-il utilisable avec la source en cours ? */
+    /** Whether the speaker can be used with the current source. */
     fun hautParleurPossible(): Boolean = sourceExterne
 
     /**
-     * Ouvre le moniteur pour la durée d'un enregistrement. Appelé même quand
-     * les deux options sont fermées : le fil dort alors sans rien consommer, et
-     * l'opérateur peut allumer le spectre ou le haut-parleur en plein passage.
+     * Opens the monitor for one recording. Called even with both options off:
+     * the thread then sleeps at no cost, and the operator can turn either on
+     * mid-pass.
      */
     fun demarrer(rate: Int, sourceExterne: Boolean, spectre: Boolean, hautParleur: Boolean) {
         cadence = rate
@@ -94,12 +91,12 @@ object MoniteurAudio {
         fil = thread(name = "MoniteurAudio", isDaemon = true) { boucle() }
     }
 
-    /** Recopie [n] échantillons dans la file. Appelé sur le fil de capture :
-     *  ne doit jamais bloquer ni calculer quoi que ce soit. */
+    /** Copies [n] samples into the queue. Runs on the capture thread: must
+     *  never block or compute anything. */
     fun alimenter(pcm: ShortArray, n: Int) {
-        // La démonstration se sert au passage, avant toute autre condition :
-        // elle doit recevoir le son même quand ni le spectre ni le haut-parleur
-        // ne sont demandés. L'encodage est fait là-bas, et n'y bloque pas.
+        // The demo server taps first, before any other condition: it needs the
+        // audio even with spectrum and speaker off. It encodes on its side
+        // without blocking here.
         fr.f4ioz.satcombo.demo.ServeurDemo.verseAudio(pcm, n, cadence)
         if (!enMarche) return
         if (!spectre && !(hautParleur && sourceExterne)) return
@@ -128,10 +125,9 @@ object MoniteurAudio {
                 if (bloc == null) continue
 
                 if (spectre && analyseur.pousser(bloc, bloc.size)) {
-                    // Une fenêtre de mille points à 44 100 Hz revient toutes les
-                    // vingt-trois millisecondes : republier à ce rythme ferait
-                    // redessiner l'écran quarante fois par seconde pour un œil
-                    // qui n'en demande pas tant.
+                    // A 1024-point window at 44.1 kHz arrives every 23 ms;
+                    // publishing each would redraw ~40 times a second for
+                    // no visible gain.
                     val t = System.currentTimeMillis()
                     if (t - dernierePublication >= 60) {
                         dernierePublication = t
@@ -145,8 +141,8 @@ object MoniteurAudio {
 
                 if (veutHp) {
                     if (piste == null) piste = runCatching { ouvrirPiste() }.getOrNull()
-                    // L'écriture bloque quand le tampon est plein : c'est elle
-                    // qui cadence le fil, et c'est très bien ainsi.
+                    // write() blocks when the buffer is full: it paces the
+                    // thread, as intended.
                     piste?.let { runCatching { it.write(bloc, 0, bloc.size) } }
                 }
             }
@@ -158,8 +154,8 @@ object MoniteurAudio {
     private fun ouvrirPiste(): AudioTrack {
         val min = AudioTrack.getMinBufferSize(
             rate, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_16BIT)
-        // Un demi-seconde de marge : le fil partage le processeur avec
-        // l'encodeur MP3 et, le cas échéant, avec le décodeur SSTV.
+        // Half a second of margin: the thread shares the CPU with the MP3
+        // encoder and possibly the SSTV decoder.
         val taille = maxOf(min * 2, rate)
         val t = AudioTrack.Builder()
             .setAudioAttributes(
@@ -177,23 +173,18 @@ object MoniteurAudio {
             .setTransferMode(AudioTrack.MODE_STREAM)
             .build()
         runCatching { t.setVolume(AudioTrack.getMaxVolume()) }
-        // **Forcer le haut-parleur du téléphone.**
+        // **Force the phone's built-in speaker.**
         //
-        // Dès qu'une carte audio USB est branchée, Android y dirige la sortie
-        // média : le moniteur jouait dans la carte, dont la sortie n'est
-        // souvent reliée à rien. Le spectre s'affichait — la capture, elle,
-        // fonctionnait — mais le téléphone restait muet, et l'option « écouter
-        // au haut-parleur » semblait sans effet.
-        //
-        // C'est exactement le cas où l'on veut **l'inverse** du routage par
-        // défaut : la source vient de la carte, l'écoute doit rester sur le
-        // téléphone. On le dit donc explicitement.
+        // With a USB sound card plugged in, Android routes media output to it,
+        // and its output is often wired to nothing: the spectrum showed but the
+        // phone stayed silent. Here we want the **opposite** of the default
+        // routing: source from the card, playback on the phone.
         forceHautParleur(t)
         t.play()
         return t
     }
 
-    /** Le contexte, posé au démarrage : sans lui, pas d'accès au routage. */
+    /** Set at startup: needed to reach audio routing. */
     @Volatile var contexte: android.content.Context? = null
 
     private fun forceHautParleur(t: AudioTrack) {
@@ -205,8 +196,8 @@ object MoniteurAudio {
                 .firstOrNull {
                     it.type == android.media.AudioDeviceInfo.TYPE_BUILTIN_SPEAKER
                 }
-            // Un échec n'est pas fatal : sans carte USB branchée, le routage
-            // par défaut était déjà le bon.
+            // Failure is not fatal: without a USB card the default routing
+            // was already right.
             if (hp != null) t.preferredDevice = hp
         }
     }

@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.sstv
 
@@ -47,20 +47,15 @@ object SstvHub {
         val fileName: String? = null,
         /** Pictures found in the last re-decode. */
         val fileImages: Int = 0,
-        /** Mode imposé par l'opérateur, ou null pour suivre l'en-tête VIS. */
+        /** Mode forced by the operator, or null to follow the VIS header. */
         val forcedMode: String? = null,
-        /** La dernière panne du moteur, à montrer plutôt qu'à taire. */
+        /** Last engine failure — shown, not hidden. */
         val erreur: String? = null,
-        /** Vrai quand une trame est engagée — en-tête reçu ou départ forcé. */
+        /** True once a frame is under way (header received or forced start). */
         val decoding: Boolean = false,
         /**
-         * Le satellite sur lequel l'écoute a été lancée.
-         *
-         * Une image sans satellite ne vaut pas grand-chose : six mois plus tard
-         * on ne sait plus si elle vient de l'ISS ou d'un relais. Le nom est déjà
-         * écrit dans le fichier annexe ; il est aussi porté ici pour que la
-         * bande de la page du passage puisse dire à qui appartient l'image
-         * qu'elle affiche.
+         * Satellite the listening was started on. Already in the sidecar; also
+         * here so the pass page strip can say whose image it shows.
          */
         val satName: String = ""
     )
@@ -69,21 +64,19 @@ object SstvHub {
     val state: StateFlow<SstvState> = _state
 
     /**
-     * Locator de la station, tenu à jour par le modèle. Le hub vit dans un
-     * service et n'a pas accès au GPS ; sans cela une image archivée ne saurait
-     * pas d'où elle a été reçue, ce qui est la moitié de l'intérêt d'une
-     * archive quand on opère en portable.
+     * Station locator, kept up to date by the ViewModel. The hub lives in a
+     * service with no GPS access; without this an archived image would not
+     * know where it was received — half the point when operating portable.
      */
     @Volatile var qthLocator: String = ""
 
     /**
-     * Mode imposé, mémorisé ici pour qu'un décodeur créé plus tard — au
-     * branchement de la clé, au démarrage d'un enregistrement — le reprenne
-     * sans que l'écran ait à repasser derrière.
+     * Forced mode, kept here so a decoder created later (dongle plugged in,
+     * recording started) picks it up without the screen setting it again.
      */
     @Volatile private var forced: SstvMode? = null
 
-    /** Charge le mode imposé enregistré dans les réglages. */
+    /** Loads the forced mode from settings. */
     fun loadForced(ctx: Context) {
         val name = runCatching { SettingsStore(ctx).sstvForcedMode }.getOrDefault("")
         forced = if (name.isBlank()) null else SstvMode.byName(name)
@@ -92,9 +85,8 @@ object SstvHub {
     }
 
     /**
-     * Impose un mode, ou revient à la lecture de l'en-tête avec [name] vide.
-     * Le choix est retenu : sur un satellite qui émet toujours dans le même
-     * mode, on ne veut pas le redire à chaque passage.
+     * Forces a mode, or back to VIS detection when [name] is empty. Persisted:
+     * a satellite that always uses the same mode should not need it every pass.
      */
     fun setForcedMode(ctx: Context, name: String?) {
         val m = if (name.isNullOrBlank()) null else SstvMode.byName(name)
@@ -105,10 +97,8 @@ object SstvHub {
     }
 
     /**
-     * Démarre le décodage tout de suite, sans attendre d'en-tête.
-     *
-     * Sans mode imposé il n'y a rien à décoder — le mode ne se devine pas — et
-     * l'appel ne fait rien. Renvoie vrai quand le décodage est bien engagé.
+     * Starts decoding now, without waiting for a header. Needs a forced mode
+     * (it cannot be guessed); otherwise does nothing. True when started.
      */
     fun forceStart(): Boolean {
         val d = live ?: run {
@@ -116,8 +106,7 @@ object SstvHub {
             return false
         }
         val m = forced ?: run {
-            // Un appui sans effet passe pour une panne : mieux vaut dire ce
-            // qui manque.
+            // A button with no effect looks broken: say what is missing.
             _state.value = _state.value.copy(erreur = "choisir un mode d'abord")
             return false
         }
@@ -129,7 +118,7 @@ object SstvHub {
         return true
     }
 
-    /** Abandonne la trame en cours et se remet à l'écoute. */
+    /** Drops the current frame and goes back to listening. */
     fun abortFrame() {
         val d = live ?: return
         runCatching { d.abort() }
@@ -167,11 +156,9 @@ object SstvHub {
     }
 
     /**
-     * Appelé depuis le fil de capture pour chaque tampon.
-     *
-     * Une panne du décodeur ne doit pas tuer la capture — d'où le filet — mais
-     * elle ne doit pas non plus disparaître : l'écran continuerait d'afficher
-     * « à l'écoute » devant un moteur mort. On la retient et on la montre.
+     * Called from the capture thread for each buffer. A decoder failure must
+     * not kill the capture, but must not vanish either — the screen would keep
+     * saying "listening" over a dead engine. It is recorded and shown.
      */
     fun feedLive(pcm: ShortArray, count: Int) {
         val d = live ?: return
@@ -182,7 +169,7 @@ object SstvHub {
         }
     }
 
-    /** Combien de fois le décodeur a lâché depuis le début de l'écoute. */
+    /** Decoder failures since listening started. */
     @Volatile private var pannes = 0
 
     @Synchronized
@@ -303,14 +290,8 @@ object SstvHub {
         Bitmap.createBitmap(pixels, mode.width, mode.height, Bitmap.Config.ARGB_8888)
 
     /**
-     * Writes the picture as a PNG, drops a small sidecar next to it and mirrors
-     * the image into the export folder.
-     *
-     * The sidecar is what turns a folder of pictures into an archive: six
-     * months later the operator wants to know which pass a picture came from,
-     * and where he was standing when he took it. The file name keeps carrying
-     * satellite, UTC stamp and mode so that a picture shared by e-mail still
-     * says what it is; the rest lives beside it.
+     * Writes the PNG, its sidecar (see [SstvMeta]) and a copy in the export
+     * folder.
      */
     private fun save(
         ctx: Context, bmp: Bitmap, mode: SstvMode, sat: String, complete: Boolean,
@@ -344,8 +325,7 @@ object SstvHub {
             val text = runCatching { if (side.isFile) side.readText(Charsets.UTF_8) else null }
                 .getOrNull()
             var shot = SstvMeta.decode(f.name, text)
-            // Une image d'avant les fichiers annexes n'a pas d'horodatage
-            // lisible dans son nom : la date du fichier fera l'affaire.
+            // Images older than sidecars have no parsable stamp: use the file date.
             if (shot.timeMs <= 0L) shot = shot.copy(timeMs = f.lastModified())
             f to shot
         }

@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.diag
 
@@ -18,16 +18,14 @@ import java.util.Date
 import java.util.Locale
 
 /**
- * Ce que l'appareil veut bien dire de lui-même.
+ * What the device is willing to say about itself.
  *
- * Chaque ligne est ici parce qu'elle a déjà servi, ou parce qu'elle élimine une
- * piste d'un coup. La ligne des modules, notamment : un paquet servi en
- * morceaux à qui il en manque un meurt avant sa première instruction, et savoir
- * qu'il n'y en avait aucun ferme le dossier au lieu de l'ouvrir.
+ * Each line is here because it has already helped, or rules out a lead at
+ * once. The modules line especially: a split APK missing one split dies before
+ * its first instruction, and knowing there were none closes that lead.
  *
- * Tout est en `runCatching` sans exception. On interroge un appareil qu'on
- * soupçonne d'être en mauvais état ; l'inventaire ne doit pas mourir de ce
- * qu'il inventorie.
+ * Everything is wrapped in `runCatching`: the device is suspected to be in bad
+ * shape, and the inventory must not die of what it inventories.
  */
 object EtatAppareil {
 
@@ -112,9 +110,8 @@ object EtatAppareil {
     }.trimEnd()
 
     /**
-     * Le registre des morts de processus tenu par Android. Il demande Android 11
-     * ; en dessous, on le dit plutôt que de rendre une liste vide qui se lirait
-     * comme « aucun plantage ».
+     * Android's process exit history. Needs Android 11; below that, callers
+     * must say so rather than show an empty list that reads as "no crash".
      */
     fun sorties(ctx: Context, combien: Int = 8): List<ModeEchec.Sortie> {
         if (Build.VERSION.SDK_INT < 30) return emptyList()
@@ -133,10 +130,9 @@ object EtatAppareil {
     }
 
     /**
-     * La trace détaillée que le système garde pour les ANR et les plantages
-     * natifs. Elle ne nous est accessible que pour notre propre application, et
-     * seulement pour certains motifs — quand elle existe, c'est le document le
-     * plus précis dont on puisse disposer.
+     * The detailed trace the system keeps for ANRs and native crashes. Only
+     * available for our own app and some exit reasons; when present, it is the
+     * most precise document we can get.
      */
     fun traceSysteme(ctx: Context, max: Int = 20_000): String? {
         if (Build.VERSION.SDK_INT < 30) return null
@@ -150,12 +146,11 @@ object EtatAppareil {
     }
 
     /**
-     * Le journal système, filtré par Android sur notre seule application.
+     * The system log, filtered by Android to our app only.
      *
-     * Le tampon survit à la mort du processus : la trace du démarrage raté s'y
-     * trouve encore, même si aucune de nos lignes n'a eu le temps de l'écrire
-     * ailleurs. Certains constructeurs refusent l'exécution de `logcat` à une
-     * application ordinaire ; on le dit alors, au lieu de rendre du vide.
+     * The buffer survives process death, so a failed startup is still there
+     * even if we never wrote it anywhere. Some vendors forbid `logcat` to
+     * ordinary apps; we say so instead of returning nothing.
      */
     fun journal(lignes: Int = 400): String = runCatching {
         val p = ProcessBuilder("logcat", "-d", "-v", "threadtime", "-t", lignes.toString())

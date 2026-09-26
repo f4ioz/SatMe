@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.sstv
 
@@ -19,39 +19,28 @@ import androidx.core.content.ContextCompat
 import fr.f4ioz.satcombo.R
 
 /**
- * La mire d'essai : l'image que SatMe émet pour se faire décoder ailleurs.
+ * The test card SatMe transmits to be decoded elsewhere. Each zone exposes
+ * one fault:
  *
- * Une mire ne sert pas à être jolie, elle sert à rendre visible ce qui ne va
- * pas. Chaque zone répond à une question précise :
+ *  - colour bars: swapped channels (Martin decoded as Scottie swaps red/green);
+ *  - grey steps: a wrong level scale — saturating early means white is not
+ *    at 2300 Hz;
+ *  - edge strips, green left and red right: horizontal offset, the fault that
+ *    puts a coloured band on one side. Green on the right means sync was taken
+ *    half a block too early;
+ *  - top/bottom checkers measure that offset, one square = 1/16 of the width;
+ *  - the text says who sent it and in which mode.
  *
- *  - les barres de couleur montrent une inversion de canaux (un mode Martin
- *    décodé comme un Scottie sort avec le rouge et le vert échangés) ;
- *  - le dégradé de gris montre une échelle de niveaux fausse — un dégradé qui
- *    sature avant la fin veut dire que le blanc n'est pas à 2300 Hz ;
- *  - les bandes verticales de bord, vert à gauche et rouge à droite, montrent
- *    le décalage horizontal : c'est exactement le défaut qui fait apparaître
- *    une bande colorée sur un côté de l'image reçue. Si le vert se retrouve à
- *    droite, la synchro est prise un demi-bloc trop tôt ;
- *  - les repères en damier du haut et du bas donnent la mesure de ce décalage,
- *    un carreau valant un seizième de la largeur ;
- *  - le texte, enfin, dit d'où vient l'image et dans quel mode elle est partie.
- *
- * L'image est rendue aux dimensions exactes du mode, sans redimensionnement :
- * un PD 290 fait 800 × 616, un Robot 36 fait 320 × 240, et la mire s'adapte.
+ * Rendered at the exact mode size (PD 290 800 × 616, Robot 36 320 × 240).
  */
 object SstvPattern {
 
-    /** Barres de couleur classiques, du blanc au noir. */
+    /** Classic colour bars, white to black. */
     private val BARS = intArrayOf(
         0xFFFFFFFF.toInt(), 0xFFFFFF00.toInt(), 0xFF00FFFF.toInt(), 0xFF00FF00.toInt(),
         0xFFFF00FF.toInt(), 0xFFFF0000.toInt(), 0xFF0000FF.toInt(), 0xFF000000.toInt())
 
-    /**
-     * Fabrique la mire d'un mode.
-     *
-     * [callsign] et [locator] peuvent être vides : la ligne correspondante
-     * disparaît simplement.
-     */
+    /** Renders the card for [mode]. An empty [callsign]/[locator] drops that line. */
     fun render(
         ctx: Context, mode: SstvMode, callsign: String = "", locator: String = ""
     ): Bitmap {
@@ -61,17 +50,16 @@ object SstvPattern {
         val c = Canvas(bmp)
         val p = Paint(Paint.ANTI_ALIAS_FLAG)
 
-        // Fond : le bleu nuit de l'application, pour que la zone de texte ne
-        // soit pas un aplat noir indistinct d'une perte de signal.
+        // App navy background, so the text area can't be mistaken for signal loss.
         c.drawColor(0xFF0B1020.toInt())
 
-        val edge = maxOf(4, w / 40)          // largeur des bandes de bord
-        val tick = maxOf(4, h / 40)          // hauteur des damiers
+        val edge = maxOf(4, w / 40)          // edge strip width
+        val tick = maxOf(4, h / 40)          // checker height
         val barsTop = tick
         val barsBot = (h * 0.42f).toInt()
         val greyBot = (h * 0.54f).toInt()
 
-        // --- barres de couleur ------------------------------------------------
+        // --- colour bars -----------------------------------------------------
         p.style = Paint.Style.FILL
         for (i in BARS.indices) {
             val x0 = edge + (w - 2 * edge) * i / BARS.size
@@ -80,7 +68,7 @@ object SstvPattern {
             c.drawRect(x0.toFloat(), barsTop.toFloat(), x1.toFloat(), barsBot.toFloat(), p)
         }
 
-        // --- dégradé de gris, par marches de 1/16 ----------------------------
+        // --- grey steps, 1/16 each ------------------------------------------
         val steps = 16
         for (i in 0 until steps) {
             val x0 = edge + (w - 2 * edge) * i / steps
@@ -90,7 +78,7 @@ object SstvPattern {
             c.drawRect(x0.toFloat(), barsBot.toFloat(), x1.toFloat(), greyBot.toFloat(), p)
         }
 
-        // --- damiers de repère, en haut et en bas ----------------------------
+        // --- reference checkers, top and bottom -----------------------------
         for (i in 0 until 16) {
             val x0 = edge + (w - 2 * edge) * i / 16
             val x1 = edge + (w - 2 * edge) * (i + 1) / 16
@@ -99,7 +87,7 @@ object SstvPattern {
             c.drawRect(x0.toFloat(), (h - tick).toFloat(), x1.toFloat(), h.toFloat(), p)
         }
 
-        // --- bandes de bord : vert à gauche, rouge à droite -------------------
+        // --- edge strips: green left, red right -----------------------------
         p.color = 0xFF00C000.toInt()
         c.drawRect(0f, 0f, edge.toFloat(), h.toFloat(), p)
         p.color = 0xFFC00000.toInt()
@@ -117,7 +105,7 @@ object SstvPattern {
             }
         }
 
-        // --- texte -------------------------------------------------------------
+        // --- text --------------------------------------------------------------
         val tx = (logoX + logoSize + w / 40).toFloat()
         val avail = h - textTop - tick
         p.color = Color.WHITE
@@ -135,8 +123,7 @@ object SstvPattern {
         p.color = 0xFFFFC65C.toInt()
         c.drawText(mode.name, tx, textTop + avail * 0.82f, p)
 
-        // Dimensions, en petit, contre le bord droit : elles disent d'un coup
-        // d'œil si l'image a été décodée dans le bon mode.
+        // Small dimensions, right-aligned: shows at a glance if the mode was right.
         p.color = 0xFF8AA0C0.toInt()
         p.textSize = avail * 0.13f
         val dim = "${w}x$h"
@@ -148,7 +135,7 @@ object SstvPattern {
         return bmp
     }
 
-    /** La mire sous la forme attendue par l'émetteur : ARGB, ligne par ligne. */
+    /** The card as the encoder expects it: ARGB, row by row. */
     fun pixels(bmp: Bitmap): IntArray {
         val out = IntArray(bmp.width * bmp.height)
         bmp.getPixels(out, 0, bmp.width, 0, 0, bmp.width, bmp.height)

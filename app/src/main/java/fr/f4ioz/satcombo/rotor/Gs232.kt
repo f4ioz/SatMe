@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.rotor
 
@@ -29,49 +29,37 @@ import kotlin.math.roundToInt
 import kotlin.math.sign
 
 /**
- * Le dialecte GS-232, celui des contrôleurs Yaesu — et de tous ceux qui l'ont
- * copié depuis trente ans.
+ * The GS-232 dialect: Yaesu controllers and everything that copied them.
  *
- * C'est de l'ASCII sur un fil série, terminé par un retour chariot, et c'est
- * d'une simplicité désarmante : `W180 045` pour viser, `C2` pour demander où
- * l'on en est, `S` pour tout arrêter. La simplicité a un prix — il n'y a ni
- * somme de contrôle, ni accusé de réception, ni longueur annoncée. Le
- * contrôleur ne dit jamais « je n'ai pas compris » : il ne fait rien, et rien
- * ne ressemble davantage à un mât qui n'a pas fini de tourner qu'à un mât qui
- * n'a pas reçu l'ordre.
+ * ASCII over serial, CR-terminated: `W180 045` to aim, `C2` to ask the
+ * position, `S` to stop. No checksum, no acknowledgement, no length. The
+ * controller never says "not understood": it does nothing, and a mast that
+ * has not finished turning looks exactly like one that never got the order.
  *
- * D'où le soin porté ici à deux détails que l'on croit sans importance.
+ * **Three digits, always.** The controller reads fixed columns. `W180 45` is
+ * not "almost right", it is a 450° elevation read from a shifted field. Zero
+ * padded, in [Locale.US], and anything that does not fit is refused.
  *
- * Le premier : **trois chiffres, toujours**. Le contrôleur lit des positions
- * fixes dans la chaîne. `W180 45` n'est pas « presque bon », c'est une consigne
- * d'élévation de 450 degrés lue sur un champ décalé. On formate donc avec un
- * zéro de tête, en [Locale.US] pour que rien ne dépende de la langue du
- * téléphone, et l'on refuse net ce qui ne tient pas en trois chiffres.
+ * **Two reply forms.** GS-232B answers `AZ=180 EL=045`, GS-232A `+0180+0045`,
+ * and the same box can switch on an internal jumper. Both are parsed with no
+ * setting.
  *
- * Le second : **deux formes de réponse**. Un GS-232B répond `AZ=180 EL=045`,
- * un GS-232A `+0180+0045`, et le même contrôleur peut passer de l'une à
- * l'autre selon un cavalier interne que personne ne se souvient d'avoir
- * déplacé. Les deux se relisent ici, sans réglage à faire.
- *
- * Et l'on ne relit pas la lettre du manuel, mais ce que les contrôleurs
- * envoient vraiment : les émulateurs sur Arduino, qui sont aujourd'hui la
- * moitié du parc, écrivent volontiers `AZ=155EL=016` sans l'espace que le
- * manuel montre. Exiger cet espace revient à refuser une réponse juste.
+ * Parse what controllers actually send, not the manual: Arduino emulators,
+ * half the installed base today, write `AZ=155EL=016` without the space.
  */
 object Gs232Codec {
 
-    /** Demande de position, forme longue (azimut ET élévation). */
+    /** Position query, long form (azimuth AND elevation). */
     const val QUERY = "C2\r"
 
-    /** Arrêt immédiat de tous les moteurs. */
+    /** Immediate stop of all motors. */
     const val STOP = "S\r"
 
     /**
-     * La consigne `Waaa eee`, ou null si elle ne tient pas dans le format.
+     * The `Waaa eee` command, or null if it does not fit the format.
      *
-     * Rendre null plutôt que de tronquer est le même choix que dans
-     * [RotorMath] : une consigne mal formée ne fait pas revenir une erreur, elle
-     * fait tourner le mât ailleurs.
+     * Null rather than truncated, as in [RotorMath]: a malformed command does
+     * not return an error, it turns the mast somewhere else.
      */
     fun moveCommand(azDeg: Double, elDeg: Double): String? {
         if (azDeg.isNaN() || elDeg.isNaN()) return null
@@ -81,26 +69,20 @@ object Gs232Codec {
         return String.format(Locale.US, "W%03d %03d\r", az, el)
     }
 
-    // Le séparateur entre les deux champs est **facultatif**, et c'est le
-    // détail qui a coûté une version. Un GS-232B de Yaesu écrit
-    // `AZ=180 EL=045`, mais l'émulateur sur Arduino le plus répandu écrit
-    // `AZ=155EL=016`, tout collé. L'ancien `\D+` réclamait au moins un
-    // caractère entre l'azimut et le `EL` : la trame était rejetée, et
-    // l'écran annonçait « réponse illisible » alors que le contrôleur venait
-    // de dire exactement la bonne chose. Le signe `=` devient facultatif lui
-    // aussi — certains croquis écrivent `AZ 155 EL 016`.
+    // The separator between the two fields is **optional**. The most common
+    // Arduino emulator writes `AZ=155EL=016`; the old `\D+` required a char
+    // before `EL` and rejected a correct reply as "unreadable". `=` is
+    // optional too — some sketches write `AZ 155 EL 016`.
     private val B_FORM = Regex(
         """AZ\s*[=:]?\s*([+-]?\d+(?:\.\d+)?)\s*\D*?EL\s*[=:]?\s*([+-]?\d+(?:\.\d+)?)""",
         RegexOption.IGNORE_CASE)
     private val A_FORM = Regex("""([+-]\d{3,4})\s*([+-]\d{3,4})""")
 
     /**
-     * Relit une position, dans l'une ou l'autre des deux formes.
+     * Parses a position in either form.
      *
-     * Rend null quand la réponse n'est ni l'une ni l'autre — un fragment reçu
-     * trop tôt, un écho de la commande, ou du bruit sur le câble. L'appelant
-     * réessaiera à la seconde suivante ; il ne doit surtout pas croire que le
-     * mât est à l'azimut zéro.
+     * Null when it is neither — an early fragment, a command echo, line noise.
+     * The caller retries next second; it must never assume azimuth zero.
      */
     fun parsePosition(reply: String): RotorPos? {
         B_FORM.find(reply)?.let { m ->
@@ -116,7 +98,7 @@ object Gs232Codec {
         return null
     }
 
-    /** La même trame en français, pour le journal. */
+    /** The same frame in plain French, for the log. */
     fun describe(text: String, out: Boolean): String {
         val t = text.trim()
         if (out) {
@@ -135,71 +117,55 @@ object Gs232Codec {
 }
 
 /**
- * Le pilote GS-232, branché sur n'importe quel fil série — un vrai câble USB,
- * ou un contrôleur simulé.
+ * GS-232 driver over any serial link — a real USB cable or a simulator.
  *
- * L'adaptateur USB se choisit **par indice**, et c'est délibéré : une station
- * complète a souvent deux adaptateurs identiques, l'un vers le poste, l'autre
- * vers le rotor. Prendre « le premier » revient tôt ou tard à envoyer `W180
- * 045` à un IC-9700, qui n'en pensera rien de bon.
+ * The USB adapter is chosen **by index**, on purpose: a full station often has
+ * two identical adapters, one to the rig, one to the rotator. Taking "the
+ * first" eventually sends `W180 045` to an IC-9700.
  */
 class Gs232Rotor(private val context: Context? = null) : RotorDriver {
 
     private var link: SerialLink? = null
     override val isOpen: Boolean get() = link != null
 
-    /** Silence entre deux trames. Mis à zéro au banc : il n'y a personne à ménager. */
+    /** Gap between frames. Zero on the bench. */
     var pacingMs: Long = 20L
 
     /**
-     * Le temps qu'on laisse à la carte pour revenir à elle après l'ouverture.
+     * Time left for the board to come back after opening.
      *
-     * Sur une carte Arduino, la ligne DTR n'est pas un simple signal de
-     * courtoisie : elle est reliée au RESET par un condensateur. L'hôte qui
-     * ouvre le port et lève DTR **redémarre le microcontrôleur**. Suit une
-     * seconde et demie d'amorçage pendant laquelle le croquis ne tourne pas
-     * encore et où tout ce qui arrive sur le fil est perdu.
+     * On Arduino, DTR is tied to RESET through a capacitor: opening the port
+     * and raising DTR **reboots the microcontroller**. For about 1.5 s the
+     * sketch is not running and anything sent is lost. Misleading symptom:
+     * "open, but the controller does not answer" — port, cable and baud rate
+     * are fine, the `C2` just came too early. So we wait, and ask several
+     * times.
      *
-     * D'où le symptôme, parfaitement trompeur : « ouvert, mais le contrôleur ne
-     * répond pas ». Le port est bon, le câble est bon, la vitesse est bonne —
-     * seul le `C2` était arrivé trop tôt. On attend donc, et on redemande
-     * plusieurs fois ; c'est le prix d'une convention vieille de quinze ans.
-     *
-     * Mis à zéro au banc, où il n'y a ni carte ni condensateur.
+     * Zero on the bench, where there is no board.
      */
     var settleMs: Long = 1500L
 
-    /** Branche un fil série déjà ouvert — un câble, ou un contrôleur simulé. */
+    /** Attaches an already open serial link — a cable or a simulator. */
     fun attach(l: SerialLink) { link = l }
 
     /**
-     * La raison du dernier échec, en clair.
-     *
-     * « J'ai l'impression que ça ne marche pas » : jusqu'ici l'écran répondait
-     * « ouverture impossible » et rien d'autre. Permission pas encore accordée,
-     * appareil déjà pris, port inexistant, boîtier muet : quatre causes, un
-     * seul message. On les distingue, comme du côté du poste.
+     * Reason for the last failure: permission, device busy, no port, silent
+     * box — four causes, four messages, as on the rig side.
      */
     var lastError: String = ""
         private set
 
-    /** La dernière trame reçue, telle quelle, pour la montrer à l'opérateur. */
+    /** Last frame received, raw, to show the operator. */
     var lastReply: String = ""
         private set
 
-    /** La dernière trame envoyée, telle quelle. */
+    /** Last frame sent, raw. */
     var lastSent: String = ""
         private set
 
     /**
-     * Tous les ports série visibles, appareil par appareil, mis à plat.
-     *
-     * Un montage Arduino n'expose généralement qu'un port ; un adaptateur à
-     * deux canaux en expose deux, et le rotor n'est pas toujours sur le premier.
-     * Le pilote n'ouvrait que le port 0 du n-ième **appareil** — l'indice
-     * choisi désignait donc un appareil, alors que la liste affichée à l'écran
-     * ne comptait, elle aussi, que les appareils. Deux ports derrière une seule
-     * prise, et le second était inatteignable.
+     * Every visible serial port, flattened across devices. A dual-channel
+     * adapter has two ports and the rotator is not always on port 0.
      */
     fun availablePorts(): List<PortRef> {
         val ctx = context ?: return emptyList()
@@ -216,14 +182,11 @@ class Gs232Rotor(private val context: Context? = null) : RotorDriver {
     }
 
     /**
-     * Demande la permission pour le port n° [index] **et attend la réponse**.
+     * Requests permission for port [index] **and waits for the answer**.
      *
-     * C'est la moitié qui manquait. L'ancienne suite affichait la boîte de
-     * dialogue puis ouvrait le port dans la foulée, alors que l'autorisation
-     * n'était pas encore accordée : `hasPermission` répondait non, l'ouverture
-     * échouait, et il fallait recommencer une fois la boîte refermée pour que
-     * ça marche enfin. Le même défaut, mot pour mot, que celui qui rendait le
-     * poste injoignable avant la 18.20.
+     * Opening right after showing the dialog fails: `hasPermission` is still
+     * false, and the user had to try again once the dialog closed. Same bug as
+     * the one that made the rig unreachable before 18.20.
      */
     suspend fun ensurePermission(index: Int): Boolean {
         val ctx = context ?: return false
@@ -237,11 +200,8 @@ class Gs232Rotor(private val context: Context? = null) : RotorDriver {
     }
 
     /**
-     * Ouvre le port n° [index] à [baud] bauds, 8N1.
-     *
-     * Le GS-232 travaille en 9600 bauds d'usine, mais les cavaliers du boîtier
-     * permettent 1200, 2400 et 4800 : le réglage reste à l'opérateur. Un
-     * émulateur sur Arduino, lui, suit ce que dit son croquis — souvent 9600.
+     * Opens port [index] at [baud] baud, 8N1. GS-232 ships at 9600 but jumpers
+     * allow 1200/2400/4800, so the operator chooses.
      */
     suspend fun open(index: Int, baud: Int): Boolean = withContext(Dispatchers.IO) {
         val ctx = context ?: return@withContext false
@@ -262,17 +222,14 @@ class Gs232Rotor(private val context: Context? = null) : RotorDriver {
         runCatching {
             p.open(conn)
             p.setParameters(baud, 8, UsbSerialPort.STOPBITS_1, UsbSerialPort.PARITY_NONE)
-            // Les deux lignes de contrôle du terminal. Un Arduino se réinitialise
-            // quand DTR monte ; c'est désagréable mais c'est la convention, et
-            // beaucoup de croquis n'écrivent rien tant que l'hôte ne s'est pas
-            // annoncé. Sans elles, le port s'ouvre, la consigne part, et rien ne
-            // revient jamais : le symptôme exact décrit sur le poste avant 18.20.
+            // Raise DTR/RTS. An Arduino resets on DTR rising, but many sketches
+            // stay silent until the host has asserted them: without this the
+            // port opens, the command goes out, and nothing ever comes back.
             runCatching { p.setDTR(true); p.setRTS(true) }
             val l = UsbSerialLink(p)
-            // La carte vient peut-être de redémarrer : on lui laisse le temps
-            // de finir son amorçage, puis on jette ce que l'amorceur a pu
-            // cracher (« Arduino », des zéros, un écho) pour que la première
-            // réponse lue soit bien une réponse à notre question.
+            // The board may have just rebooted: let it finish booting, then
+            // discard what the bootloader spat out (banner, zeros, echo) so
+            // the first line read really answers our question.
             if (settleMs > 0L) {
                 delay(settleMs)
                 vide(l)
@@ -292,15 +249,12 @@ class Gs232Rotor(private val context: Context? = null) : RotorDriver {
         link = null
     }
 
-    /** Les ports reconnus, dans l'ordre où l'indice les désigne. */
+    /** Recognised ports, in index order. */
     fun listDevices(): List<String> = availablePorts().map { it.label }
 
     /**
-     * Cet appareil qu'on vient de brancher est-il un pont série ?
-     *
-     * La question se pose au branchement : la même intention réveille
-     * l'application pour une clé SDR, pour le poste et pour le rotor, et il
-     * serait fâcheux d'aller demander sa position à un récepteur.
+     * Is this newly plugged device a serial bridge? The same intent fires for
+     * SDR dongles; don't ask a receiver for its position.
      */
     fun recognises(dev: android.hardware.usb.UsbDevice?): Boolean {
         if (dev == null) return false
@@ -309,7 +263,7 @@ class Gs232Rotor(private val context: Context? = null) : RotorDriver {
         }.getOrDefault(false)
     }
 
-    /** Demande la permission pour tout appareil qui ne l'a pas encore, sans attendre. */
+    /** Requests permission for every device lacking it, without waiting. */
     fun requestPermissions() {
         val ctx = context ?: return
         val um = ctx.getSystemService(Context.USB_SERVICE) as UsbManager
@@ -326,32 +280,26 @@ class Gs232Rotor(private val context: Context? = null) : RotorDriver {
     }
 
     /**
-     * Lit une ligne complète, en la rassemblant morceau par morceau.
+     * Reads a full line, assembling it chunk by chunk.
      *
-     * Sur un vrai câble à 9600 bauds, `AZ=180 EL=045` met une douzaine de
-     * millisecondes à passer et n'arrive presque jamais d'un seul coup. Une
-     * lecture unique attrapait `AZ=1` et le pilote concluait « pas de
-     * réponse » — la même faute que celle qui avait coûté des passages du côté
-     * CAT, et il n'y a aucune raison de la refaire ici.
+     * At 9600 baud `AZ=180 EL=045` takes about 12 ms and rarely arrives in one
+     * read; a single read caught `AZ=1` and reported "no reply" (the same
+     * mistake once made on the CAT side).
      *
-     * **Une ligne terminée n'est pas forcément la réponse.** C'est la panne du
-     * 2 août : le tour précédent avait envoyé un `W155 016`, l'émulateur en
-     * renvoie l'écho, et cet écho arrive terminé par un retour chariot avant la
-     * position. On rendait donc `W155 016` comme réponse au `C2` ; le décodeur
-     * n'y trouvait rien, la position disparaissait de l'écran, et la boussole
-     * repassait au satellite le temps d'un battement. On continue maintenant de
-     * lire jusqu'à tenir une ligne **qui se relit**, ou jusqu'à l'échéance ; la
-     * dernière ligne illisible est conservée pour le journal, parce que
-     * « quelque chose, mais pas ça » et « rien du tout » ne se réparent pas de
-     * la même façon.
+     * **A terminated line is not necessarily the reply.** The emulator echoes
+     * the previous `W155 016`, CR-terminated, before the position. Returning
+     * that echo as the `C2` reply made the position vanish and the compass
+     * flip to the satellite for a beat. So we keep reading until a line that
+     * **parses**, or the deadline. The last unparseable line is kept for the
+     * log: "something, but not that" and "nothing" are fixed differently.
      */
     private fun readLine(l: SerialLink, timeoutMs: Long): String? {
         val sb = StringBuilder()
         val scratch = ByteArray(64)
         val deadline = System.currentTimeMillis() + timeoutMs
         var silences = 0
-        // La dernière ligne complète que le décodeur a refusée : elle ne sert
-        // pas à pointer le mât, elle sert à dire pourquoi il ne pointe pas.
+        // Last complete line the parser refused: not used for pointing, only
+        // to explain why the mast is not pointing.
         var illisible: String? = null
         while (true) {
             val n = runCatching { l.read(scratch, 200) }.getOrDefault(0)
@@ -369,18 +317,16 @@ class Gs232Rotor(private val context: Context? = null) : RotorDriver {
                     } else sb.append(c)
                 }
             } else {
-                // Le tuyau s'est tu. Certains contrôleurs ne terminent pas leur
-                // dernière ligne : c'est ici, et seulement ici, qu'on accepte
-                // une réponse sans retour chariot.
+                // The line went quiet. Some controllers don't terminate their
+                // last line: here, and only here, an unterminated reply is
+                // accepted.
                 //
-                // L'accepter plus tôt — dès que ce qu'on tient « se relit » —
-                // est un piège qui coûte cher : sur un vrai câble la trame
-                // arrive caractère par caractère, et `AZ=090 EL=0` se relit
-                // parfaitement. On rendrait alors une élévation de zéro degré
-                // au beau milieu d'une réponse qui disait trente, et le mât
-                // repartirait vers l'horizon pendant que le satellite monte.
-                // Deux silences d'affilée, donc : un seul peut n'être qu'un
-                // creux entre deux octets.
+                // Accepting it as soon as it parses is a costly trap: on a
+                // real cable the frame arrives char by char, and `AZ=090 EL=0`
+                // parses fine — a 0° elevation in the middle of a reply that
+                // said 30, and the mast heads for the horizon while the
+                // satellite climbs. Hence two silences in a row: one may just
+                // be a gap between bytes.
                 silences++
                 if (silences >= 2) {
                     if (Gs232Codec.parsePosition(sb.toString()) != null) return sb.toString()
@@ -389,13 +335,12 @@ class Gs232Rotor(private val context: Context? = null) : RotorDriver {
             }
             if (System.currentTimeMillis() >= deadline) break
         }
-        // Rien de lisible n'est venu. On rend quand même ce qu'on a entendu :
-        // le reliquat non terminé s'il y en a un, sinon la dernière ligne
-        // refusée par le décodeur.
+        // Nothing readable came. Still return what was heard: the unterminated
+        // remainder if any, else the last line the parser refused.
         return if (sb.isNotEmpty()) sb.toString() else illisible
     }
 
-    /** Jette tout ce qui traîne dans le tampon de réception, sans l'interpréter. */
+    /** Discards whatever sits in the receive buffer, uninterpreted. */
     private fun vide(l: SerialLink) {
         val scratch = ByteArray(64)
         var garde = 0
@@ -405,22 +350,19 @@ class Gs232Rotor(private val context: Context? = null) : RotorDriver {
         }
     }
 
-    /** Le nombre d'interrogations qu'il a fallu pour obtenir la première réponse. */
+    /** Number of queries it took to get the first reply. */
     var lastTries: Int = 0
         private set
 
     /**
-     * Interroge le contrôleur jusqu'à [tries] fois avant de le déclarer muet.
+     * Queries the controller up to [tries] times before calling it silent.
      *
-     * Une seule question ne prouve rien. Un GS-232 réel répond du premier coup,
-     * mais un émulateur sur Arduino sort tout juste de son amorçage ; un
-     * contrôleur qui vient d'être allumé peut aussi mettre une seconde à
-     * s'occuper du port série. Déclarer le silence sur une seule tentative,
-     * c'est envoyer l'opérateur vérifier un câble qui n'a rien.
+     * One question proves nothing: an Arduino emulator may be just out of
+     * boot, a freshly powered controller may take a second to serve the port.
+     * Giving up after one try sends the operator to check a cable that is fine.
      *
-     * On garde la dernière trame reçue, même illisible : c'est elle qui
-     * distingue « rien du tout » de « quelque chose, mais pas ça », et ces deux
-     * pannes ne se réparent pas de la même façon.
+     * The last frame received is kept even if unreadable: it tells "nothing"
+     * from "something, but not that".
      */
     suspend fun probePosition(tries: Int = 3, gapMs: Long = 400L): RotorPos? {
         var dernier = ""
@@ -431,8 +373,7 @@ class Gs232Rotor(private val context: Context? = null) : RotorDriver {
             if (lastReply.isNotBlank()) dernier = lastReply
             if (i < tries && gapMs > 0L) delay(gapMs)
         }
-        // On rend à l'appelant la meilleure trace disponible : mieux vaut une
-        // réponse illisible affichée à l'écran qu'un silence supposé.
+        // Better an unreadable reply on screen than an assumed silence.
         if (dernier.isNotBlank()) lastReply = dernier
         return null
     }
@@ -446,16 +387,14 @@ class Gs232Rotor(private val context: Context? = null) : RotorDriver {
 
     override suspend fun readPosition(): RotorPos? = withContext(Dispatchers.IO) {
         val l = link ?: return@withContext null
-        // On jette ce qui traîne avant de poser la question. Le tour précédent
-        // a pu laisser un écho de consigne ou une réponse arrivée trop tard :
-        // relus ici, ils passeraient pour la réponse au `C2` d'aujourd'hui.
+        // Discard leftovers first: a command echo or a late reply from the
+        // previous round would pass for the answer to this `C2`.
         vide(l)
         if (!send(l, Gs232Codec.QUERY)) { lastReply = ""; return@withContext null }
         val line = readLine(l, 800)
-        // Le silence est une information, et c'est même la seule qui compte
-        // quand rien ne marche : on la garde pour l'écrire à l'écran plutôt que
-        // de laisser l'opérateur deviner entre « pas branché », « mauvais port »
-        // et « mauvaise vitesse ».
+        // Silence is information — the only one when nothing works. Keep it
+        // for the screen rather than let the operator guess between "not
+        // plugged", "wrong port" and "wrong baud rate".
         lastReply = line ?: ""
         if (line == null) return@withContext null
         CatJournal.log(false, line.toByteArray(Charsets.US_ASCII),
@@ -470,27 +409,21 @@ class Gs232Rotor(private val context: Context? = null) : RotorDriver {
 }
 
 /**
- * Un contrôleur GS-232 qui n'existe pas, et un mât qui met du temps à tourner.
+ * A fake GS-232 controller with a mast that takes time to turn.
  *
- * Un simulateur qui obéirait instantanément ne prouverait rien : c'est
- * justement parce qu'un rotor est **lent** que les questions intéressantes se
- * posent. Six degrés par seconde, c'est la vitesse d'un G-5500 ; un demi-tour
- * d'azimut prend donc une minute, pendant laquelle le satellite, lui, a
- * continué son chemin. Toute la valeur du recouvrement et de l'hystérésis tient
- * dans ces secondes-là.
+ * An instant simulator would prove nothing: the interesting questions arise
+ * because a rotator is **slow**. 6°/s is a G-5500; half a turn takes thirty
+ * seconds while the satellite keeps moving. That is where overlap and
+ * hysteresis earn their keep.
  *
- * L'horloge n'avance pas toute seule : c'est l'essai qui l'avance à la main,
- * avec [advance]. Un essai qui dépend d'une vraie horloge est un essai qui
- * échouera un jour sur une machine chargée, et l'on ne saura pas pourquoi.
- *
- * Deux compteurs retiennent les degrés **réellement parcourus** — pas les
- * consignes envoyées, ce qui ne prouverait rien. C'est ce que l'on veut
- * comparer entre deux stratégies de visée.
+ * The test drives the clock with [advance]: a real clock fails one day on
+ * a loaded machine. Counters hold degrees **actually travelled**, to compare
+ * pointing strategies.
  */
 class Gs232Simulator(
     val azMaxDeg: Double = 450.0,
     val elMaxDeg: Double = 180.0,
-    /** Degrés par seconde, azimut comme élévation. */
+    /** Degrees per second, azimuth and elevation alike. */
     val speedDegPerSec: Double = 6.0
 ) : SerialLink {
 
@@ -499,16 +432,16 @@ class Gs232Simulator(
     private var azTarget: Double = 0.0
     private var elTarget: Double = 0.0
 
-    /** Degrés d'azimut réellement parcourus depuis le début. */
+    /** Azimuth degrees actually travelled since start. */
     var azTravelDeg: Double = 0.0; private set
 
-    /** Degrés d'élévation réellement parcourus depuis le début. */
+    /** Elevation degrees actually travelled since start. */
     var elTravelDeg: Double = 0.0; private set
 
-    /** Le nombre de consignes que le contrôleur a refusées. */
+    /** Number of commands the controller refused. */
     var refusals: Int = 0; private set
 
-    /** Tout ce que le contrôleur a reçu, ligne par ligne — pour les essais. */
+    /** Everything the controller received, line by line — for tests. */
     val received = ArrayList<String>()
 
     private val outbox = ArrayDeque<Byte>()
@@ -516,13 +449,13 @@ class Gs232Simulator(
     private var closed = false
     val isClosed: Boolean get() = closed
 
-    /** Vrai tant que le mât n'est pas arrivé. */
+    /** True until the mast has arrived. */
     val isMoving: Boolean
         get() = abs(azTarget - azDeg) > 1e-9 || abs(elTarget - elDeg) > 1e-9
 
     /**
-     * Fait passer [ms] millisecondes : le mât avance vers sa consigne, et pas
-     * plus vite que sa mécanique.
+     * Lets [ms] milliseconds pass: the mast moves toward its target, no faster
+     * than its mechanics allow.
      */
     fun advance(ms: Long) {
         val budget = speedDegPerSec * ms / 1000.0
@@ -565,10 +498,9 @@ class Gs232Simulator(
         received += line
         when (line.first().uppercaseChar()) {
             'W' -> {
-                // `Waaa eee` : trois chiffres de chaque côté, pas deux, pas
-                // quatre. Un contrôleur réel lit des colonnes fixes ; tout ce
-                // qui n'est pas à la bonne place est ignoré en silence — ici,
-                // c'est compté.
+                // `Waaa eee`: exactly three digits each side. A real controller
+                // reads fixed columns and silently ignores anything misplaced;
+                // here it is counted.
                 val m = Regex("""^W\s*(\d{3})\s+(\d{3})$""", RegexOption.IGNORE_CASE).find(line)
                 if (m == null) { refusals++; return }
                 val az = m.groupValues[1].toDouble()

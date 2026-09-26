@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.cat
 
@@ -18,12 +18,10 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
 /**
- * La clé d'un périphérique : son numéro de série s'il en a un, sinon son couple
- * constructeur/produit et sa position dans l'arbre USB.
+ * A device's key: serial number if any, else vendor/product plus USB tree position.
  *
- * Au niveau du fichier parce que les deux classes s'en servent — le poste seul
- * pour ouvrir, le couple pour lister et pour sonder — et qu'une clé calculée de
- * deux façons différentes serait une clé qui ne désigne rien.
+ * File-level because both classes need it (single rig to open, pair to list and
+ * probe); a key computed two different ways would designate nothing.
  */
 internal fun cleDe(dev: android.hardware.usb.UsbDevice): String =
     IdentiteUsb.cle(
@@ -32,20 +30,18 @@ internal fun cleDe(dev: android.hardware.usb.UsbDevice): String =
 
 /** A USB-serial adapter as shown in the RX/TX assignment UI. */
 data class UsbSerialInfo(
-    val serial: String?,        // numéro de série USB, absent sur beaucoup de puces
+    val serial: String?,        // USB serial number, missing on many chips
     val label: String,          // product name or device path
     val deviceName: String,     // /dev/bus/usb/…
     val hasPermission: Boolean,
     /**
-     * La clé qui désigne cet adaptateur, numéro de série ou identité de repli.
-     *
-     * C'est elle qu'on mémorise désormais, et non le numéro de série : un
-     * PL2303TA n'en a pas, et l'ouverture échouait avant même d'essayer.
+     * Key designating this adapter: serial number or fallback identity.
+     * This is what gets remembered — a PL2303TA has no serial number.
      */
     val cle: String = serial.orEmpty(),
-    /** Fréquence lue au bout de ce câble, si un poste a répondu. */
+    /** Frequency read on this cable, if a rig answered. */
     val freqLueHz: Long? = null,
-    /** L'adaptateur a-t-il déjà été interrogé ? Distingue « pas encore » de « muet ». */
+    /** Already probed? Tells "not yet" from "silent". */
     val sonde: Boolean = false,
 )
 
@@ -63,8 +59,7 @@ data class UsbSerialInfo(
  *  - CTCSS tone    : 2 BCD bytes (tenths of Hz, e.g. 06 70 = 67.0) + 0x0B
  *  - read TX status: 00 00 00 00 0xF7 → 1 byte, bit7 SET while receiving
  *
- * Comme le pilote CI-V, celui-ci ne connaît plus de port USB : il parle à un
- * [SerialLink], que [attach] peut remplir avec un [Ft817Sim].
+ * Talks to a [SerialLink], so [attach] can plug in an [Ft817Sim].
  */
 class Ft817Cat(private val context: Context? = null) {
 
@@ -74,47 +69,37 @@ class Ft817Cat(private val context: Context? = null) {
     val isOpen: Boolean get() = link != null
 
     /**
-     * Le fil ne porte qu'une conversation à la fois.
+     * One conversation at a time on the line.
      *
-     * Le protocole Yaesu n'a **ni délimiteur ni adresse** : une réponse est
-     * une suite d'octets qu'on reconnaît uniquement en les comptant. Deux
-     * questions posées en même temps sur le même fil rendent donc deux
-     * réponses indiscernables, et chacune ramasse celle de l'autre.
+     * Yaesu CAT has **no delimiter and no address**: a reply is recognised only
+     * by counting bytes. Two concurrent questions yield indistinguishable
+     * replies, each picking up the other's.
      *
-     * Or c'est exactement ce qui se passait : la boucle Doppler écrit les
-     * fréquences pendant que le sondage d'émission demande l'état deux fois
-     * par seconde. Le `drain` du sondage jetait les octets attendus par le
-     * Doppler ; l'acquittement du Doppler était lu par le sondage à la place
-     * de son octet d'état. D'où un liseré qui s'allume au hasard — et une
-     * fréquence relue au dixième de sa valeur, plausible et fausse.
+     * This happened: the Doppler loop writes while the TX-status poll asks
+     * twice a second. The poll's `drain` ate Doppler bytes, and the Doppler ACK
+     * was read as the status byte — a TX indicator lighting at random, and a
+     * frequency read back at a tenth of its value, plausible and wrong. It
+     * looked port-dependent; it was only timing.
      *
-     * Le symptôme semblait dépendre du port : il ne dépendait que du hasard
-     * des instants, et changer de câble changeait les temps de réponse assez
-     * pour déplacer le hasard.
-     *
-     * Une transaction — question, réponse, acquittement — est donc prise en
-     * entier sous ce verrou.
+     * So a whole transaction (question, reply, ACK) runs under this lock.
      */
     private val fil = kotlinx.coroutines.sync.Mutex()
 
-    /** Silence entre deux trames : vingt-cinq millisecondes sur un vrai poste. */
+    /** Gap between frames: 25 ms on a real rig. */
     var pacingMs: Long = 25L
 
-    /** Branche n'importe quel fil série — un vrai câble, ou un poste simulé. */
+    /** Plugs in any serial line — a real cable or a simulated rig. */
     fun attach(l: SerialLink) { link = l }
 
-    /** Open the adapter whose FTDI serial matches [deviceSerial] at [baud], 8N2. */
+    /** Opens the adapter matching key [deviceSerial] (see [IdentiteUsb]) at [baud], 8N2. */
     suspend fun open(deviceSerial: String?, baud: Int): Boolean = withContext(Dispatchers.IO) {
         val ctx = context ?: return@withContext false
         val um = ctx.getSystemService(Context.USB_SERVICE) as UsbManager
         val drivers = UsbSerialProber.getDefaultProber().findAllDrivers(um)
             .filter { um.hasPermission(it.device) }
 
-        // On désigne l'adaptateur par sa clé et non par son numéro de série.
-        // L'ancienne écriture exigeait `deviceSerial != null` : un câble sans
-        // numéro — un PL2303TA, par exemple — ne pouvait jamais satisfaire
-        // cette condition, et n'était donc jamais ouvert, alors que le pilote
-        // le reconnaissait parfaitement.
+        // Match by key, not serial number: requiring a serial meant a cable
+        // without one (e.g. PL2303TA) was never opened.
         val cles = drivers.map { cleDe(it.device) }
         val choisie = IdentiteUsb.resout(deviceSerial, cles) ?: return@withContext false
         val driver = drivers.getOrNull(cles.indexOf(choisie)) ?: return@withContext false
@@ -137,21 +122,17 @@ class Ft817Cat(private val context: Context? = null) {
         byteArrayOf(p1.toByte(), p2.toByte(), p3.toByte(), p4.toByte(), op.toByte())
 
     /**
-     * Un acquittement n'a pas été ramassé : le fil porte encore un octet.
-     *
-     * Tant que ce drapeau est levé, la question suivante prend le temps de
-     * vider le fil pour de bon au lieu d'y jeter un coup d'œil.
+     * An ACK was not collected: a byte is still on the line. While set, the
+     * next question drains properly instead of taking a quick look.
      */
     @Volatile private var residu = false
 
     /**
-     * Jette ce qui traîne encore sur le fil avant de poser une question.
+     * Discards leftover bytes before a question.
      *
-     * Le coup d'œil ordinaire ne coûte rien : une milliseconde suffit à voir
-     * ce qui est **déjà arrivé**. Mais un octet encore en vol ne s'y montre
-     * pas — un adaptateur USB-série garde ses octets jusqu'à seize
-     * millisecondes avant de les remonter. D'où [patient], employé quand on
-     * sait qu'un acquittement manque à l'appel.
+     * The quick look (1 ms) only sees bytes **already arrived**; a USB-serial
+     * adapter can hold bytes up to 16 ms before passing them up. Hence
+     * [patient], used when an ACK is known to be missing.
      */
     private fun drain(l: SerialLink, patient: Boolean = false) {
         val scratch = ByteArray(16)
@@ -164,26 +145,21 @@ class Ft817Cat(private val context: Context? = null) {
     }
 
     /**
-     * Ramasse l'octet d'acquittement qui suit toute commande d'écriture.
+     * Collects the ACK byte that follows every write command.
      *
-     * Le FT-817 répond `00` à chaque ordre. Ne pas le lire laissait cet octet
-     * sur le fil, et la lecture suivante commençait donc un octet trop tôt :
-     * la fréquence revenait au dixième, au centième de sa valeur — un nombre
-     * parfaitement plausible, jamais signalé, et faux.
+     * The FT-817 answers `00` to each command. Leaving it on the line made the
+     * next read start one byte early: the frequency came back at a tenth or a
+     * hundredth of its value — plausible, unflagged, wrong.
      */
     private fun eatAck(l: SerialLink) {
         val one = ByteArray(1)
-        // Le délai est un plafond, pas un coût : la lecture rend la main dès
-        // que l'octet arrive. L'ancien plafond de soixante millisecondes — et
-        // d'**une** seule quand le rythme était nul — était parfois trop court,
-        // et l'acquittement restait alors sur le fil.
+        // The timeout is a ceiling, not a cost: read returns as soon as the
+        // byte arrives. The old 60 ms (1 ms with zero pacing) was sometimes too
+        // short and the ACK stayed on the line.
         //
-        // C'est de là que venait le liseré qui clignote quand on tourne la
-        // molette : l'application écrit beaucoup pendant qu'on cherche, un
-        // acquittement `00` est laissé derrière, et la lecture d'état
-        // d'émission qui suit le ramasse à la place de son octet. Or `00` a le
-        // bit de poids fort à zéro, c'est-à-dire, pour le FT-817, « en
-        // émission ». Le poste ne mentait pas : on ne lisait pas sa réponse.
+        // That caused the TX indicator flickering while turning the dial: a
+        // leftover `00` was read by the next TX-status query, and `00` has the
+        // top bit clear, which on the FT-817 means "transmitting".
         val n = runCatching { l.read(one, if (pacingMs > 0) 150 else 5) }.getOrDefault(0)
         if (n > 0) {
             CatJournal.log(false, one, CatDecode.describeYaesu(one, fromRig = true))
@@ -197,20 +173,19 @@ class Ft817Cat(private val context: Context? = null) {
             val f = frameOf(p1, p2, p3, p4, op)
             val ok = l.write(f, 500)
             CatJournal.log(true, f, CatDecode.describeYaesu(f, fromRig = false))
-            if (pacingMs > 0) kotlinx.coroutines.delay(pacingMs)   // demi-duplex
+            if (pacingMs > 0) kotlinx.coroutines.delay(pacingMs)   // half-duplex
             eatAck(l)
             ok
         } }
 
     /**
-     * Émet une question et rassemble exactement [want] octets de réponse.
+     * Sends a question and gathers exactly [want] reply bytes.
      *
-     * Le protocole Yaesu n'ayant pas de délimiteur, il n'y a rien à
-     * reconnaître : il faut compter. À 4800 bauds, cinq octets prennent une
-     * dizaine de millisecondes et arrivent rarement d'un seul coup.
+     * No delimiter, so count. At 4800 baud five bytes take ~10 ms and rarely
+     * arrive in one read.
      */
     private fun ask(l: SerialLink, f: ByteArray, want: Int, timeoutMs: Long): ByteArray? {
-        // Ce qui traîne encore appartient à la commande précédente.
+        // Anything left over belongs to the previous command.
         drain(l, patient = residu)
         if (!l.write(f, 500)) return null
         CatJournal.log(true, f, CatDecode.describeYaesu(f, fromRig = false))
@@ -255,19 +230,12 @@ class Ft817Cat(private val context: Context? = null) {
     suspend fun setMode(mode: String): Boolean = cmd(modeByte(mode), 0, 0, 0, 0x07)
 
     /**
-     * Ton d'accès en émission, en dixièmes de hertz (670 = 67,0 Hz), zéro pour
-     * le couper.
-     *
-     * Ici l'encodage était déjà juste — deux octets BCD gros-boutiens, 88,5 Hz
-     * donnant `08 85`. C'est le pilote Icom qui appliquait à tort la règle
-     * petit-boutienne de la fréquence ; la comparaison des deux dialectes rend
-     * l'erreur évidente, ce qui est un argument de plus pour les avoir mis côte
-     * à côte.
+     * TX access tone in tenths of Hz (670 = 67.0 Hz), zero to turn it off.
+     * Two big-endian BCD bytes: 88.5 Hz gives `08 85`.
      */
     suspend fun setCtcss(tenthHz: Int): Boolean {
-        // Les deux trames du ton forment un ordre unique : les séparer
-        // laisserait une écriture de fréquence s'intercaler entre le mode de
-        // ton et sa valeur.
+        // The two tone frames form one command: split apart, a frequency write
+        // could slip between tone mode and tone value.
         return if (tenthHz > 0) {
             if (!CatDecode.toneInRange(tenthHz)) return false
             val b = CatDecode.toneToBcdBe(tenthHz)   // 00 <hh> <ll>
@@ -276,28 +244,25 @@ class Ft817Cat(private val context: Context? = null) {
         } else cmd(0x8A, 0, 0, 0, 0x0A)
     }
 
-    /** True while the rig is TRANSMITTING (PTT down), false while receiving,
-     *  null if unknown. Bit 7 of the 0xF7 status byte is SET during RX. */
     /**
-     * Le dernier octet d'état rendu par le poste, ou `null` s'il n'a rien dit.
+     * Last status byte returned by the rig, or `null` if it said nothing.
      *
-     * Uniquement pour la ligne de diagnostic. Le liseré a coûté plusieurs
-     * versions parce qu'on raisonnait sur une conclusion — « émission » ou
-     * « réception » — sans jamais voir ce que le poste avait réellement
-     * répondu. Trois causes possibles demandaient trois correctifs opposés, et
-     * un seul octet les départage.
+     * Diagnostic line only. Reasoning on the conclusion ("TX"/"RX") without
+     * seeing the raw byte cost several versions: three possible causes needed
+     * three opposite fixes, and this one byte tells them apart.
      */
     @Volatile var dernierEtatTx: Int? = null
         private set
 
+    /** True while the rig is TRANSMITTING (PTT down), false while receiving,
+     *  null if unknown. Bit 7 of the 0xF7 status byte is SET during RX. */
     suspend fun isTransmitting(): Boolean? = withContext(Dispatchers.IO) { fil.withLock {
         val l = link ?: return@withLock null
         val acc = ask(l, frameOf(0, 0, 0, 0, 0xF7), 1, 300)
         if (acc == null) { dernierEtatTx = null; return@withLock null }
         val octet = acc[0].toInt() and 0xFF
         dernierEtatTx = octet
-        // Bit de poids fort à zéro : le FT-817 déclare l'émission. Au repos il
-        // rend 0xFF.
+        // Top bit clear: the FT-817 reports TX. Idle it returns 0xFF.
         (octet and 0x80) == 0
     } }
 
@@ -310,9 +275,9 @@ class Ft817Cat(private val context: Context? = null) {
 
 /**
  * The classic portable full-duplex satellite station: TWO FT-817s, one fixed on
- * RX (downlink) and one on TX (uplink), each on its own FTDI cable. Assignment
- * is remembered by the FTDI chips' unique serial numbers, so it survives
- * replugging and hub-port changes.
+ * RX (downlink) and one on TX (uplink), each on its own USB-serial cable.
+ * Assignment is remembered by adapter key (see [IdentiteUsb]): the serial number
+ * survives replugging; the fallback identity only while nothing is moved.
  */
 class Ft817Pair(private val context: Context? = null) {
 
@@ -321,12 +286,12 @@ class Ft817Pair(private val context: Context? = null) {
     val isOpen: Boolean get() = rx.isOpen || tx.isOpen
     val bothOpen: Boolean get() = rx.isOpen && tx.isOpen
 
-    /** Branche deux postes simulés — le couple entier tient alors au banc. */
+    /** Plugs in two simulated rigs, for bench tests. */
     fun attach(rxLink: SerialLink, txLink: SerialLink) {
         rx.attach(rxLink); tx.attach(txLink)
     }
 
-    /** Silence entre trames, appliqué aux deux postes à la fois. */
+    /** Gap between frames, applied to both rigs. */
     var pacingMs: Long
         get() = rx.pacingMs
         set(v) { rx.pacingMs = v; tx.pacingMs = v }
@@ -353,26 +318,13 @@ class Ft817Pair(private val context: Context? = null) {
     }
 
     /**
-     * Interroge un adaptateur : y a-t-il un poste au bout, et sur quelle
-     * fréquence ?
+     * Probes an adapter: is there a rig on it, and on which frequency?
      *
-     * C'est la réponse au cas du duplex, où deux câbles identiques sans numéro
-     * de série sont indiscernables par leur étiquette. Les deux postes, eux, ne
-     * sont pas sur la même bande — l'un sur la descente, l'autre sur la montée —
-     * et leur propre réponse dit lequel est lequel.
-     */
-    /**
-     * Interroge un adaptateur : y a-t-il un poste au bout, et sur quelle
-     * fréquence ?
+     * Solves duplex with two identical cables lacking serial numbers: the two
+     * rigs are on different bands, so their answers tell which is which.
      *
-     * C'est la réponse au cas du duplex, où deux câbles identiques sans numéro
-     * de série sont indiscernables par leur étiquette. Les deux postes, eux, ne
-     * sont pas sur la même bande — l'un sur la descente, l'autre sur la montée —
-     * et leur propre réponse dit lequel est lequel.
-     *
-     * On passe par un poste seul plutôt que de réécrire la trame et le
-     * décodage : `open` et `readFrequency` sont déjà éprouvés, et deux
-     * écritures du même protocole finiraient par diverger.
+     * Goes through a single [Ft817Cat] rather than re-implementing framing:
+     * two copies of the same protocol would drift apart.
      */
     suspend fun sonde(cle: String, baud: Int): Long? {
         val poste = Ft817Cat(context)
@@ -387,8 +339,8 @@ class Ft817Pair(private val context: Context? = null) {
         val ctx = context ?: return
         val um = ctx.getSystemService(Context.USB_SERVICE) as UsbManager
         UsbSerialProber.getDefaultProber().findAllDrivers(um).forEach { d ->
-            // Un code de requête par adaptateur : le couple en demande deux à la
-            // suite, et deux PendingIntent de même code n'en feraient qu'un.
+            // One request code per adapter: the pair asks twice in a row, and
+            // two PendingIntents with the same code would collapse into one.
             UsbPermission.ensure(ctx, um, d.device, ACTION_USB_PERMISSION, d.device.deviceId)
         }
     }
@@ -417,15 +369,11 @@ class Ft817Pair(private val context: Context? = null) {
     suspend fun readDownlink(): Long? = if (rx.isOpen) rx.readFrequency() else null
 
     /**
-     * Relit le VFO du poste d'émission.
+     * Reads back the TX rig's VFO, so its dial can act as a control (a gesture
+     * you can't see can't be followed).
      *
-     * Symétrique de [readDownlink], et absente jusqu'ici : l'émission était
-     * écrite sans jamais être relue. C'est ce qui interdisait de se servir de sa
-     * molette comme d'une commande — on ne peut pas tenir compte d'un geste
-     * qu'on ne voit pas.
-     *
-     * On ne lit pas en émission : le poste répondrait mal, et l'on n'a de toute
-     * façon rien à corriger pendant qu'on parle.
+     * Not read while transmitting: the rig answers badly, and there is nothing
+     * to correct while talking.
      */
     suspend fun readUplink(): Long? =
         if (tx.isOpen && tx.isTransmitting() != true) tx.readFrequency() else null

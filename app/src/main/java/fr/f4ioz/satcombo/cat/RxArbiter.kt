@@ -1,53 +1,46 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.cat
 
 import kotlin.math.abs
 
 /**
- * Qui, de l'opérateur ou du logiciel, tient le VFO de réception.
+ * Who holds the RX VFO: the operator or the software.
  *
- * Sur un transpondeur linéaire, les deux ont raison tour à tour. L'opérateur
- * cherche son correspondant : c'est lui qui décide où l'on écoute, et rien ne
- * doit lui reprendre la molette pendant qu'il la tourne. Puis il trouve, il
- * s'arrête, et à partir de cet instant la fréquence qu'il a choisie n'est plus
- * une fréquence de poste mais une fréquence de satellite : c'est au logiciel de
- * la maintenir, en descendant le VFO à mesure que le satellite s'éloigne. Sans
- * quoi le correspondant glisse hors du filtre en une minute, et l'opérateur
- * passe le passage à courir derrière lui.
+ * On a linear transponder both are right in turn. While the operator tunes,
+ * nothing must fight the dial. Once he stops, his frequency becomes a
+ * *satellite* frequency and the software must hold it, moving the VFO with
+ * Doppler — otherwise the station drifts out of the filter within a minute.
  *
- * Jusqu'à la 18.17 la seconde moitié manquait : la réception était lue en
- * permanence et jamais écrite. Le repos étant recalculé à chaque lecture à
- * partir d'un VFO immobile, il dérivait de tout le Doppler — l'émission, elle,
- * bougeait, dans le mauvais sens et pour la mauvaise raison. C'est exactement
- * ce qu'Olivier a vu : « la fréquence poste ne bouge pas ».
+ * Pitfall (fixed in 18.17): RX was read constantly but never written, so the
+ * rest frequency, recomputed from a still VFO, drifted by the full Doppler and
+ * the uplink moved the wrong way instead.
  *
- * Toute la difficulté tient en une phrase : le poste ne dit pas *qui* a bougé
- * son VFO. Ce que l'on relit après avoir écrit ressemble trait pour trait à un
- * geste de l'opérateur. D'où la mémoire des dernières consignes : une lecture
- * qui retombe sur l'une d'elles est la nôtre, et ne rend la main à personne.
+ * The core difficulty: the rig doesn't say *who* moved the VFO. Reading back
+ * our own write looks exactly like an operator gesture. Hence the memory of
+ * recent commands: a read matching one of them is ours.
  *
- * Aucune ligne d'Android ici, et c'est voulu : l'arbitrage est la seule partie
- * de la chaîne CAT que l'on puisse juger sans radio branchée.
+ * No Android here on purpose: this is the only part of the CAT chain that can
+ * be tested without a radio.
  */
 class RxArbiter(
-    /** En deçà, l'écart lu n'est pas un geste : c'est l'arrondi du poste. */
+    /** Below this, a difference is rig rounding, not a gesture. */
     private val moveHz: Long = 20L,
-    /** Silence exigé après le dernier geste avant de reprendre la main. */
+    /** Quiet time required after the last gesture before taking over. */
     private var holdMs: Long = 2_000L,
-    /** Lectures tranquilles exigées en plus du silence. */
+    /** Quiet reads required on top of the quiet time. */
     private var stableSamples: Int = 8,
-    /** Combien de consignes récentes restent reconnaissables. */
+    /** How many recent commands stay recognisable. */
     private val memory: Int = 8
 ) {
 
-    /** Vrai quand c'est le logiciel qui pose la fréquence de réception. */
+    /** True when the software sets the RX frequency. */
     var driven: Boolean = true
         private set
 
@@ -56,19 +49,16 @@ class RxArbiter(
     private var lastMoveMs = 0L
     private var stable = 0
 
-    /** Combien de lectures tranquilles se sont enchaînées (pour l'affichage). */
+    /** Consecutive quiet reads so far (for display). */
     val stableCount: Int get() = stable
 
     /**
-     * Change le délai de reprise en main, en cours de route.
+     * Changes the takeover delay at runtime.
      *
-     * Les deux valeurs bougent **ensemble**, et c'est le point : le silence
-     * exigé n'agit jamais seul, il est doublé d'un nombre de lectures
-     * tranquilles. Régler le délai à une demi-seconde en laissant huit lectures
-     * à attendre ne changerait rien du tout — selon la cadence d'interrogation
-     * du poste, ces huit lectures durent souvent plus longtemps que le silence
-     * lui-même. Un réglage sans effet est pire qu'un réglage absent : on le
-     * tourne, on ne voit rien, et on cesse de croire à ce que dit l'écran.
+     * Both values move **together**: the quiet time is always paired with a
+     * count of quiet reads. Setting 0.5 s while still waiting for eight reads
+     * would change nothing — at the rig's poll rate those reads often last
+     * longer. A setting with no effect is worse than no setting.
      */
     fun regle(nouveauHoldMs: Long) {
         holdMs = nouveauHoldMs.coerceIn(200L, 5_000L)
@@ -77,23 +67,18 @@ class RxArbiter(
 
     companion object {
         /**
-         * Lectures tranquilles exigées pour un délai donné : une par quart de
-         * seconde, jamais moins de deux.
-         *
-         * Deux au minimum parce qu'une seule lecture tranquille ne prouve rien
-         * — c'est peut-être le creux entre deux crans de la molette.
+         * Quiet reads required for a delay: one per 250 ms, at least two — a
+         * single quiet read may just be the gap between two dial clicks.
          */
         fun echantillonsPour(holdMs: Long): Int =
             (holdMs / 250L).toInt().coerceAtLeast(2)
     }
 
-    /** Retour à zéro : nouveau passage, nouveau satellite, ou lien rouvert. */
+    /** Reset: new pass, new satellite, or link reopened. */
     fun reset() {
-        // Vrai, et non faux. Après un changement de satellite, de transpondeur
-        // ou une reconnexion, c'est **nous** qui savons où il faut être :
-        // l'opérateur n'a encore rien touché. Partir en « il a la main »
-        // faisait adopter la fréquence où traînait le poste au lieu d'imposer
-        // le milieu de la bande passante qu'on venait de calculer.
+        // True, not false. After a satellite/transponder change or reconnect,
+        // **we** know where to be. Starting operator-driven adopted wherever the
+        // rig happened to sit instead of the computed passband centre.
         driven = true
         commands.clear()
         lastObserved = 0L
@@ -101,31 +86,21 @@ class RxArbiter(
         stable = 0
     }
 
-    /**
-     * Ce que nous venons d'écrire dans le poste ne doit pas nous surprendre
-     * quand nous le relirons.
-     */
+    /** Remember what we just wrote, so reading it back doesn't look like a gesture. */
     fun commanded(hz: Long) {
         commands += hz
         while (commands.size > memory) commands.removeAt(0)
     }
 
     /**
-     * Une lecture du poste, datée.
+     * A timestamped read from the rig.
      *
-     * @return vrai si elle vient de la main de l'opérateur, c'est-à-dire si
-     *   elle ne s'explique par aucune consigne que nous ayons donnée.
+     * @return true if it came from the operator, i.e. no command of ours explains it.
      */
     fun observe(hz: Long, nowMs: Long): Boolean {
-        // La toute première lecture n'est pas un geste : personne n'a encore
-        // rien touché depuis que nous nous sommes accrochés au poste.
-        //
-        // Elle laissait auparavant la main à l'opérateur (`driven = false`), et
-        // c'était le défaut : à la connexion, le poste traîne où on l'avait
-        // laissé, et l'application adoptait cette fréquence-là comme canal — au
-        // lieu d'imposer le milieu de la bande passante qu'elle venait de
-        // calculer pour le satellite choisi. On suivait avant d'avoir jamais
-        // mené, et le satellite sélectionné n'y changeait rien.
+        // The very first read is not a gesture. It used to hand control to the
+        // operator, and the app then adopted wherever the rig had been left as
+        // the channel, ignoring the selected satellite's passband centre.
         if (lastObserved == 0L) {
             lastObserved = hz
             lastMoveMs = nowMs
@@ -136,9 +111,8 @@ class RxArbiter(
         val notre = commands.any { abs(hz - it) < moveHz }
         val bouge = !notre && abs(hz - lastObserved) >= moveHz
         if (bouge) {
-            // L'opérateur reprend la molette : nos anciennes consignes ne
-            // veulent plus rien dire, et masqueraient un accord lent qui
-            // repasserait par l'une d'elles.
+            // Operator took the dial: drop old commands, or slow tuning passing
+            // through one of them would be mistaken for ours.
             driven = false
             stable = 0
             lastMoveMs = nowMs

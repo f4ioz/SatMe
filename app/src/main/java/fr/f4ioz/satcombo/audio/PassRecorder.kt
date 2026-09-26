@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.audio
 
@@ -85,12 +85,10 @@ class PassRecorder {
             runCatching { recorder.preferredDevice = preferredDevice }
         }
 
-        // Il n'y a qu'un encodeur MP3 dans le processus — voir [EncodeurMp3].
-        // Si le SDR ou un export de mire le tient déjà, on ne démarre pas :
-        // deux encodeurs à la fois ne produisent pas deux fichiers, ils tuent
-        // le processus dans le code natif, sans trace côté Kotlin. Mieux vaut
-        // un enregistrement refusé, qui se voit et se dit, qu'un enregistrement
-        // qui emporte l'application au milieu du passage.
+        // Only one MP3 encoder per process — see [EncodeurMp3]. If the SDR or
+        // a test-pattern export holds it, do not start: two encoders at once
+        // kill the process in native code with no Kotlin trace. A visible
+        // refusal beats losing the app mid-pass.
         if (!EncodeurMp3.prend(EncodeurMp3.ENREGISTREUR)) {
             recorder.release()
             return false
@@ -138,10 +136,9 @@ class PassRecorder {
                 try { recorder.stop() } catch (_: Exception) {}
                 recorder.release()
                 lame.close()
-                // Rendu après la fermeture, jamais avant : tant que
-                // `lame_close` n'a pas rendu la main, l'encodeur natif est
-                // encore en train de se démonter, et un autre `build()` à cet
-                // instant retomberait exactement sur la panne qu'on corrige.
+                // Released after close, never before: until `lame_close`
+                // returns, the native encoder is still tearing down, and
+                // another `build()` then would hit the very crash this avoids.
                 EncodeurMp3.rend(EncodeurMp3.ENREGISTREUR)
                 try { out.flush(); out.close() } catch (_: Exception) {}
             }

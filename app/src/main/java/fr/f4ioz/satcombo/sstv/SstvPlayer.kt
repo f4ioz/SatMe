@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.sstv
 
@@ -25,51 +25,40 @@ import java.util.Locale
 import java.util.TimeZone
 
 /**
- * L'émission de la mire par le haut-parleur du téléphone.
+ * Plays the test card through the phone speaker.
  *
- * Le signal est produit au fil de la lecture, jamais d'un bloc : un PD 290
- * dure quatre minutes cinquante, ce qui ferait vingt-cinq mégaoctets de PCM
- * à porter en mémoire pour un son qui sort de toute façon paquet par paquet.
- * [SstvEncoder.Source] rend les échantillons à la demande et garde la phase
- * entre deux paquets — une discontinuité à chaque jointure produirait des
- * claquements qu'un décodeur prend pour des synchros.
- *
- * L'émission tourne sur son propre fil, arrêtable à tout moment : personne
- * n'attend quatre minutes pour se rendre compte qu'il s'est trompé de mode.
+ * Streamed from [SstvEncoder.Source], never rendered at once (a PD 290 is
+ * 4 min 50 s, ~25 MB of PCM). Runs on its own thread and can be stopped any
+ * time: nobody should wait four minutes to find they picked the wrong mode.
  */
 object SstvPlayer {
 
     data class PlayState(
-        /** Vrai pendant l'émission. */
+        /** True while transmitting. */
         val playing: Boolean = false,
-        /** Mode en cours d'émission. */
+        /** Mode being transmitted. */
         val modeName: String? = null,
-        /** Avancement de l'émission, 0 à 1. */
+        /** Progress, 0..1. */
         val progress: Float = 0f,
-        /** Durée totale de l'émission en secondes. */
+        /** Total length, seconds. */
         val seconds: Int = 0,
-        /** Dernier fichier WAV exporté. */
+        /** Last exported file. */
         val lastFile: String? = null
     )
 
     private val _state = MutableStateFlow(PlayState())
     val state: StateFlow<PlayState> = _state
 
-    /** Fréquence d'échantillonnage de l'émission — celle de la carte son. */
+    /** Output sample rate — the sound card's. */
     const val RATE = 44_100
 
     @Volatile private var thread: Thread? = null
     @Volatile private var stopping = false
 
-    /** Vrai quand une émission est en cours. */
+    /** True while a transmission runs. */
     val playing: Boolean get() = thread != null
 
-    /**
-     * Émet la mire de [mode] par la sortie audio.
-     *
-     * Une émission déjà en cours est interrompue : on ne superpose pas deux
-     * signaux SSTV, le décodeur d'en face n'en tirerait rien.
-     */
+    /** Plays the [mode] test card. Stops any running one first: two overlaid SSTV signals decode to nothing. */
     fun play(ctx: Context, mode: SstvMode, callsign: String, locator: String) {
         stop()
         val app = ctx.applicationContext
@@ -85,7 +74,7 @@ object SstvPlayer {
                 val src = SstvEncoder.Source(mode, pixels, RATE)
                 val min = AudioTrack.getMinBufferSize(
                     RATE, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_16BIT)
-                val bufBytes = maxOf(min, RATE / 2 * 2)      // une demi-seconde au moins
+                val bufBytes = maxOf(min, RATE / 2 * 2)      // at least half a second
                 track = AudioTrack.Builder()
                     .setAudioAttributes(
                         AudioAttributes.Builder()
@@ -114,12 +103,10 @@ object SstvPlayer {
                     }
                     _state.value = _state.value.copy(progress = src.progress)
                 }
-                // Laisse sortir ce qui reste dans le tampon, sinon la fin de
-                // l'image est coupée net et la dernière ligne manque en face.
+                // Let the buffer drain, or the last line is lost at the far end.
                 if (!stopping) runCatching { Thread.sleep(300) }
             } catch (_: Throwable) {
-                // Sortie audio refusée ou occupée : rien à faire de plus que
-                // rendre la main, l'écran repasse au repos.
+                // Audio output refused or busy: just give up, the screen goes idle.
             } finally {
                 runCatching { track?.stop() }
                 runCatching { track?.release() }
@@ -132,7 +119,7 @@ object SstvPlayer {
         t.start()
     }
 
-    /** Coupe l'émission en cours. */
+    /** Stops the running transmission. */
     fun stop() {
         stopping = true
         val t = thread ?: return
@@ -143,16 +130,13 @@ object SstvPlayer {
 
     // ---------------------------------------------------------------- export
 
-    /** Dossier des mires exportées. */
+    /** Folder for exported test cards. */
     fun dir(ctx: Context): File =
         File(ctx.getExternalFilesDir(null), "mires").apply { mkdirs() }
 
     /**
-     * Écrit la mire dans un WAV mono 44,1 kHz, à jouer depuis un autre appareil
-     * ou à envoyer sur l'air par une radio.
-     *
-     * Le fichier est écrit au fil de la synthèse : même raison qu'à la lecture,
-     * on ne garde jamais toute l'émission en mémoire.
+     * Writes the test card as a mono 44.1 kHz WAV, to play from another device
+     * or over a radio. Streamed to disk, never held in memory.
      */
     fun exportWav(
         ctx: Context, mode: SstvMode, callsign: String, locator: String
@@ -181,18 +165,10 @@ object SstvPlayer {
     }.getOrNull()
 
     /**
-     * La même mire, mais en MP3.
-     *
-     * Un PD 290 en WAV pèse vingt-cinq mégaoctets ; le même en MP3 à 128 kbit/s
-     * en fait moins de cinq, ce qui passe par messagerie et se met sur un
-     * baladeur sans y penser. Le codage perceptuel n'inquiète pas ici : la SSTV
-     * est une modulation de fréquence entre 1500 et 2300 Hz, en plein milieu de
-     * la bande que le codeur conserve le mieux, et c'est de toute façon déjà le
-     * format dans lequel l'application enregistre les passages qu'elle sait
-     * redécoder ensuite.
-     *
-     * L'encodeur est celui du magnétophone — LAME, embarqué — et le fichier est
-     * écrit au fil de la synthèse, paquet par paquet.
+     * Same test card as MP3: a PD 290 is 25 MB as WAV, under 5 MB at 128 kbit/s.
+     * Perceptual coding is harmless here: SSTV is FM between 1500 and 2300 Hz,
+     * right where the codec is most faithful, and pass recordings already use
+     * MP3. Uses the recorder's embedded LAME, streamed chunk by chunk.
      */
     fun exportMp3(
         ctx: Context, mode: SstvMode, callsign: String, locator: String
@@ -219,8 +195,7 @@ object SstvPlayer {
                 while (true) {
                     val n = src.read(chunk)
                     if (n <= 0) break
-                    // LAME veut les deux canaux même en mono : on lui donne
-                    // deux fois le même tampon, comme le magnétophone.
+                    // LAME wants both channels even in mono: pass the same buffer twice.
                     val enc = lame.encode(chunk, chunk, n, mp3)
                     if (enc > 0) out.write(mp3, 0, enc)
                 }
@@ -239,7 +214,7 @@ object SstvPlayer {
             .apply { timeZone = TimeZone.getTimeZone("UTC") }
             .format(Date())
 
-    /** En-tête WAV canonique, 44 octets, mono PCM 16 bits. */
+    /** Canonical 44-byte WAV header, mono 16-bit PCM. */
     private fun wavHeader(samples: Int): ByteArray {
         val dataLen = samples * 2
         val h = ByteArray(44)
@@ -263,7 +238,7 @@ object SstvPlayer {
         return h
     }
 
-    /** Volume média conseillé avant émission — purement indicatif. */
+    /** Media volume to show before playing — informational only. */
     fun volumeHint(ctx: Context): Pair<Int, Int> {
         val am = ctx.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
             ?: return 0 to 0

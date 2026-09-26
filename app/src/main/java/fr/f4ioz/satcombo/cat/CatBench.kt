@@ -1,22 +1,19 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.cat
 
 /**
- * Le banc d'essai : la séquence complète d'un début de passage, jouée contre un
- * poste qui n'existe pas.
+ * Test bench: the full start-of-pass sequence, played against a simulated rig.
  *
- * Ce n'est pas une démonstration. C'est la seule façon, pour l'instant,
- * d'affirmer quelque chose de vérifiable sur le pilotage CAT — et l'affirmation
- * est simple : une séquence saine ne doit produire **aucun refus**. Un poste
- * simulé qui compte ses refus transforme « ça n'a pas planté » en « le poste a
- * tout compris », et ces deux phrases n'ont rien à voir.
+ * The claim it checks: a sane sequence must produce **zero refusals**. A
+ * simulator that counts refusals turns "it didn't crash" into "the rig
+ * understood everything" — two very different statements.
  */
 object CatBench {
 
@@ -31,9 +28,8 @@ object CatBench {
     }
 
     /**
-     * Un début de passage FM transbande sur un IC-9700 : mode satellite, modes
-     * des deux voies, couple de fréquences, relecture de la descente, ton
-     * d'accès. Rien d'exotique — c'est exactement ce que l'application émet.
+     * Start of a cross-band FM pass on an IC-9700: satellite mode, modes,
+     * frequency pair, downlink read-back, access tone. Exactly what the app sends.
      */
     suspend fun runIc9700(
         sim: Ic9700Sim = Ic9700Sim(),
@@ -58,10 +54,7 @@ object CatBench {
         return Report(steps, sim.refusals, ok)
     }
 
-    /**
-     * La même chose sur un couple de FT-817 : un poste sur la descente, un sur
-     * la montée, chacun sur son câble.
-     */
+    /** Same on a pair of FT-817s: one on the downlink, one on the uplink, each on its own cable. */
     suspend fun runFt817Pair(
         rxSim: Ft817Sim = Ft817Sim(),
         txSim: Ft817Sim = Ft817Sim(),

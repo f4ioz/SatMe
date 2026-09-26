@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.sstv
 
@@ -14,64 +14,55 @@ import java.util.Locale
 import java.util.TimeZone
 
 /**
- * Ce qu'on sait d'une image reçue, en dehors des pixels.
+ * What is known about a received image besides its pixels.
  *
- * Une image SSTV sans contexte ne vaut pas grand-chose : six mois plus tard,
- * « c'était laquelle, l'ISS ou un relais ? » n'a plus de réponse. Le nom de
- * fichier porte déjà le satellite, l'heure UTC et le mode, et il continue de
- * les porter — c'est le seul renseignement qui survit à une copie vers la
- * galerie du téléphone ou à un envoi par messagerie.
+ * The file name carries satellite, UTC time and mode: it is the only thing
+ * that survives a copy to the phone gallery or a messaging app. The rest
+ * (locator, callsign, source) goes in a sidecar file, one `key=value` line per
+ * field. Not JSON: a missing brace would lose everything, a damaged line here
+ * only loses its own field.
  *
- * Le reste — locator, indicatif, provenance — va dans un petit fichier voisin,
- * une ligne par champ. Pas de JSON : un fichier annexe illisible parce qu'une
- * accolade manque serait pire que pas de fichier du tout, alors qu'une ligne
- * abîmée dans ce format-ci ne coûte que son propre champ.
- *
- * Rien ici ne touche à Android, donc tout se vérifie sur machine.
+ * No Android dependency, so it is unit-testable.
  */
 object SstvMeta {
 
     data class SstvShot(
-        /** Nom du PNG, tel qu'il est sur le disque. */
+        /** PNG name as on disk. */
         val fileName: String,
-        /** Satellite écouté au moment de la réception, « ISS » par exemple. */
+        /** Satellite tracked at reception time, e.g. "ISS". */
         val satName: String = "",
-        /** Instant de la réception, en millisecondes UTC ; 0 si illisible. */
+        /** Reception time, UTC ms; 0 if unreadable. */
         val timeMs: Long = 0L,
-        /** Mode SSTV décodé, « PD120 », « Robot36 »… */
+        /** Decoded mode, e.g. PD120, Robot36. */
         val mode: String = "",
-        /** Faux quand la trame s'est arrêtée en route (perte de signal). */
+        /** False when the frame stopped early (signal loss). */
         val complete: Boolean = true,
-        /** Locator de la station au moment de la réception. */
+        /** Station locator at reception time. */
         val locator: String = "",
-        /** Indicatif de la station. */
+        /** Station callsign. */
         val callsign: String = "",
-        /** « live » pendant un passage, « file » après redécodage d'un MP3. */
+        /** "live" during a pass, "file" when re-decoded from an MP3. */
         val source: String = "",
-        /** Fichier audio d'origine, quand l'image vient d'un redécodage. */
+        /** Source recording, when re-decoded. */
         val recording: String = "",
-        /** Note libre, laissée à l'opérateur. */
+        /** Free note for the operator. */
         val note: String = ""
     )
 
     /**
-     * Les familles d'images que SatMe archive. Le format du nom et du fichier
-     * annexe est le même pour toutes — seule la marque change — parce qu'une
-     * image APT et une image SSTV posent exactement la même question six mois
-     * plus tard : quel satellite, quand, et depuis où ?
+     * Image kinds SatMe archives. Same name and sidecar format for all, only
+     * the tag differs: APT and SSTV images raise the same question later —
+     * which satellite, when, from where.
      */
     private val KINDS = setOf("SSTV", "APT")
 
-    /** Nom du fichier annexe correspondant à une image. */
+    /** Sidecar file name for an image. */
     fun sidecarName(pngName: String): String = pngName.removeSuffix(".png") + ".meta"
 
     /**
-     * Fabrique le nom de fichier d'une image.
-     *
-     * Le satellite est nettoyé de tout ce qui n'est pas alphanumérique parce
-     * qu'un nom comme « ISS (ZARYA) » traverse mal les systèmes de fichiers ;
-     * les tirets bas y compris, sinon la relecture ne saurait plus où finit le
-     * nom du satellite et où commence la date.
+     * Builds an image file name. The satellite name is stripped of anything
+     * but letters, digits and '-': "ISS (ZARYA)" travels badly across file
+     * systems, and an underscore would break parsing of where the date starts.
      */
     fun fileName(
         satName: String, timeMs: Long, mode: String, complete: Boolean,
@@ -94,9 +85,8 @@ object SstvMeta {
     private val TIME_RE = Regex("^\\d{6}Z$")
 
     /**
-     * Relit un nom de fichier. La lecture se fait par la fin — mode, puis
-     * horodatage — pour qu'un nom de satellite contenant un tiret bas hérité
-     * d'une ancienne version ne décale pas tout le reste.
+     * Parses a file name from the end (mode, then timestamp), so a satellite
+     * name with an underscore from an older version does not shift the rest.
      */
     fun parseName(pngName: String): SstvShot {
         val base = pngName.removeSuffix(".png")
@@ -134,9 +124,9 @@ object SstvMeta {
             .parse(date + time.removeSuffix("Z"))!!.time
     }.getOrDefault(0L)
 
-    // ------------------------------------------------------------ fichier annexe
+    // ------------------------------------------------------------ sidecar file
 
-    /** Le fichier annexe, une ligne « clé=valeur » par renseignement connu. */
+    /** The sidecar: one `key=value` line per known field. */
     fun encode(shot: SstvShot): String {
         val sb = StringBuilder()
         fun put(k: String, v: String) {
@@ -156,9 +146,8 @@ object SstvMeta {
     }
 
     /**
-     * Relit le fichier annexe par-dessus ce que dit déjà le nom de fichier :
-     * une image dont l'annexe a été perdue garde son satellite, son heure et
-     * son mode, et ne perd que le locator et l'indicatif.
+     * Applies the sidecar over what the file name says: an image whose sidecar
+     * is lost keeps satellite, time and mode, and only loses locator/callsign.
      */
     fun decode(pngName: String, text: String?): SstvShot {
         var shot = parseName(pngName)

@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.apt
 
@@ -18,59 +18,56 @@ import kotlinx.coroutines.flow.StateFlow
 import java.io.File
 
 /**
- * Le pont entre le décodeur APT et le reste de l'application.
+ * Bridge between the APT decoder and the rest of the app.
  *
- * Même dessin que pour la SSTV, et pour les mêmes raisons : le son vient du
- * fil de capture du service d'enregistrement, l'image doit arriver sur un écran
- * Compose qui n'est peut-être même pas affiché, et il n'y a jamais qu'un seul
- * récepteur à la fois.
+ * Same design as SSTV, for the same reasons: audio comes from the recording
+ * service's capture thread, the image goes to a Compose screen that may not
+ * even be shown, and there is only ever one receiver at a time.
  *
- * Une différence de taille avec la SSTV : une image APT n'a ni début ni fin
- * annoncés. Le satellite émet en continu tant qu'il est en vue, et l'image est
- * simplement ce qui a été reçu entre le lever et le coucher — dix à quinze
- * minutes, soit jusqu'à deux mille lignes. On garde donc les lignes brutes au
- * fil de l'eau et on ne fabrique l'image qu'au moment de l'afficher ou de
- * l'écrire, ce qui permet de recalculer le contraste sur l'ensemble du passage
- * plutôt que ligne par ligne — sans quoi l'image serait zébrée dès qu'un nuage
- * passe.
+ * Key difference: an APT image has no announced start or end. The satellite
+ * transmits continuously while in view, and the image is whatever was received
+ * between AOS and LOS — ten to fifteen minutes, up to two thousand lines. Raw
+ * lines are kept as they come and the image is only built when shown or
+ * written, so contrast is computed over the whole pass rather than line by
+ * line (otherwise the image stripes whenever a cloud goes by).
  */
 object AptHub {
 
-    /** Environ dix-sept minutes. Au-delà, le satellite est couché depuis un moment. */
+    /** About seventeen minutes. Beyond that, the satellite has long set. */
     const val MAX_LINES = 2000
 
     data class AptState(
-        /** Le décodeur est branché sur la prise de son. */
+        /** The decoder is attached to the audio tap. */
         val listening: Boolean = false,
-        /** Une ligne a été trouvée et le rythme est tenu. */
+        /** A line was found and timing is held. */
         val locked: Boolean = false,
-        /** Qualité de la dernière salve de synchronisation, 0 à 1. */
+        /** Quality of the last sync burst, 0 to 1. */
         val quality: Float = 0f,
-        /** Lignes reçues depuis le début de l'écoute. */
+        /** Lines received since listening started. */
         val lines: Int = 0,
-        /** Aperçu réduit, rafraîchi une fois par seconde. */
+        /** Reduced preview, refreshed once per second. */
         val preview: Bitmap? = null,
-        /** Nom du dernier PNG écrit. */
+        /** Name of the last PNG written. */
         val lastSaved: String? = null,
-        /** Images écrites depuis le démarrage. */
+        /** Images written since start. */
         val savedCount: Int = 0,
-        /** 0 à 1 pendant la relecture d'un enregistrement, -1 au repos. */
+        /** 0 to 1 while replaying a recording, -1 when idle. */
         val fileProgress: Float = -1f,
-        /** Fichier en cours de relecture, ou le dernier traité. */
+        /** File being replayed, or the last one processed. */
         val fileName: String? = null,
-        /** Images trouvées lors de la dernière relecture. */
+        /** Images found in the last replay. */
         val fileImages: Int = 0,
-        /** Le satellite sur lequel l'écoute a été lancée. */
+        /** Satellite the listening was started for. */
         val satName: String = ""
     )
 
     private val _state = MutableStateFlow(AptState())
     val state: StateFlow<AptState> = _state
 
-    /** Locator de la station, tenu à jour par le modèle. */
+    /** Station locator, kept up to date by the ViewModel. */
     @Volatile var qthLocator: String = ""
 
-    /** Où vivent les images décodées. */
+    /** Where decoded images live. */
     fun dir(ctx: Context): File =
         File(ctx.getExternalFilesDir(null), "apt").apply { mkdirs() }
 
@@ -78,7 +75,7 @@ object AptHub {
         dir(ctx).listFiles { f -> f.isFile && f.name.endsWith(".png") }
             ?.sortedByDescending { it.lastModified() } ?: emptyList()
 
-    // ------------------------------------------------------------ écoute directe
+    // ------------------------------------------------------------ live listening
 
     private var live: AptDecoder? = null
     private var liveCtx: Context? = null
@@ -86,7 +83,7 @@ object AptHub {
     private val liveLines = ArrayList<FloatArray>()
     private var lastPreviewMs = 0L
 
-    /** Branche le décodeur sur une capture tournant à [sampleRate]. */
+    /** Attaches the decoder to a capture running at [sampleRate]. */
     @Synchronized
     fun startLive(ctx: Context, sampleRate: Int, satName: String) {
         liveCtx = ctx.applicationContext
@@ -99,21 +96,21 @@ object AptHub {
             preview = null, savedCount = 0, satName = satName)
     }
 
-    /** Appelé depuis le fil de capture pour chaque paquet d'échantillons. */
+    /** Called from the capture thread for each block of samples. */
     fun feedLive(pcm: ShortArray, count: Int) {
         val d = live ?: return
         runCatching { d.feed(pcm, count) }
     }
 
-    /** Coupe l'écoute et écrit ce qui a été reçu. */
+    /** Stops listening and writes what was received. */
     @Synchronized
     fun stopLive() {
         val d = live
         if (d != null) runCatching { d.finish() }
         live = null
         val ctx = liveCtx
-        // Moins de trente lignes, c'est quinze secondes : un bout de bruit,
-        // pas une image. Au-delà, même tronquée, elle vaut d'être gardée.
+        // Under thirty lines (15 s) it is a scrap of noise, not an image.
+        // Above that, even truncated, it is worth keeping.
         if (ctx != null && liveLines.size >= 30) {
             val name = save(ctx, ArrayList(liveLines), liveSat, "live")
             _state.value = _state.value.copy(
@@ -121,19 +118,17 @@ object AptHub {
                 savedCount = _state.value.savedCount + (if (name != null) 1 else 0))
         }
         liveLines.clear()
-        // L'aperçu reste : l'écran APT complet le montre comme dernière image
-        // reçue. C'est la bande de la page du passage qui, elle, disparaît —
-        // là-bas une image figée laisserait croire qu'on reçoit encore.
+        // The preview stays: the full APT screen shows it as the last image.
+        // Only the strip on the pass page disappears — a frozen image there
+        // would suggest we are still receiving.
         _state.value = _state.value.copy(listening = false, locked = false, quality = 0f)
     }
 
     /**
-     * Écrit tout de suite ce qui est reçu, sans couper l'écoute.
+     * Writes what was received so far, without stopping.
      *
-     * Un passage NOAA dure un quart d'heure pendant lequel le téléphone est
-     * dehors, batterie qui descend et système qui peut décider de tuer
-     * l'application. Pouvoir mettre l'image à l'abri en cours de route évite de
-     * tout perdre pour une mauvaise raison.
+     * A NOAA pass lasts a quarter of an hour outdoors, battery draining, and
+     * the system may kill the app. Saving mid-pass avoids losing everything.
      */
     @Synchronized
     fun saveNow(ctx: Context): String? {
@@ -164,19 +159,18 @@ object AptHub {
         }
     }
 
-    // ------------------------------------------------------------ relecture
+    // ------------------------------------------------------------ replay
 
     @Volatile private var cancelFile = false
 
-    /** Demande à une relecture en cours d'abandonner. */
+    /** Asks a running replay to stop. */
     fun cancelFileDecode() { cancelFile = true }
 
     /**
-     * Relit un enregistrement déjà fait. Bloquant : à appeler hors du fil principal.
+     * Replays an existing recording. Blocking: call off the main thread.
      *
-     * C'est ce qui rend la fonction utilisable : pendant le passage l'opérateur
-     * tient l'antenne, et il trie ses images une fois rentré. Un enregistrement
-     * fait avant même que le décodage APT existe reste exploitable.
+     * During the pass the operator holds the antenna and sorts images once back
+     * home. Recordings made before APT decoding existed remain usable.
      */
     fun decodeFile(ctx: Context, mp3: File): Int {
         cancelFile = false
@@ -226,12 +220,11 @@ object AptHub {
     // ------------------------------------------------------------------ images
 
     /**
-     * Fabrique l'image à partir des lignes brutes.
+     * Builds the image from raw lines.
      *
-     * Les bornes de contraste sont reprises sur l'ensemble des lignes à chaque
-     * fabrication : une image APT s'éclaircit et s'assombrit au fil du passage,
-     * selon l'angle du soleil et l'affaiblissement du signal, et un étalonnage
-     * figé sur les premières lignes donnerait une moitié d'image brûlée.
+     * Contrast bounds are recomputed over all lines each time: an APT image
+     * brightens and darkens along the pass (sun angle, signal fading), and a
+     * calibration frozen on the first lines would burn half the image.
      */
     private fun renderBitmap(lines: List<FloatArray>, wStep: Int, hStep: Int): Bitmap? {
         if (lines.isEmpty()) return null
@@ -260,7 +253,7 @@ object AptHub {
         }.getOrNull()
     }
 
-    /** Aperçu allégé : un mot sur deux, et jamais plus de neuf cents lignes. */
+    /** Light preview: every other word, never more than 900 lines. */
     private fun preview(lines: List<FloatArray>): Bitmap? {
         if (lines.isEmpty()) return null
         val hStep = maxOf(1, (lines.size + 899) / 900)
@@ -273,9 +266,8 @@ object AptHub {
     ): String? {
         val bmp = renderBitmap(lines, 1, 1) ?: return null
         val now = System.currentTimeMillis()
-        // Une image complète ferait deux mille lignes ; en dessous de trois
-        // cents, le passage a été pris en route ou coupé, et l'archive doit le
-        // dire plutôt que de laisser croire à une image entière.
+        // A full image is ~2000 lines; under 300 the pass was joined late or
+        // cut, and the archive must say so.
         val complete = lines.size >= 300
         val name = SstvMeta.fileName(sat, now, "APT", complete, kind = "APT")
         val out = File(dir(ctx), name)
@@ -298,7 +290,7 @@ object AptHub {
         return name
     }
 
-    /** Chaque image enregistrée avec ce qu'on en sait, la plus récente devant. */
+    /** Each saved image with its metadata, newest first. */
     fun shots(ctx: Context): List<Pair<File, SstvMeta.SstvShot>> =
         images(ctx).map { f ->
             val side = File(f.parentFile, SstvMeta.sidecarName(f.name))
@@ -309,13 +301,13 @@ object AptHub {
             f to shot
         }
 
-    /** Supprime une image et son fichier annexe ensemble. */
+    /** Deletes an image together with its sidecar file. */
     fun delete(file: File): Boolean {
         runCatching { File(file.parentFile, SstvMeta.sidecarName(file.name)).delete() }
         return runCatching { file.delete() }.getOrDefault(false)
     }
 
-    /** Même dossier d'export que les enregistrements audio, s'il est configuré. */
+    /** Same export folder as audio recordings, if configured. */
     private fun exportCopy(ctx: Context, file: File) {
         val uriStr = SettingsStore(ctx).recordingsTreeUri
         if (uriStr.isBlank()) return

@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.apt
 
@@ -16,35 +16,32 @@ import kotlin.math.sin
 import kotlin.math.sqrt
 
 /**
- * La géométrie d'une ligne APT.
+ * Geometry of an APT line.
  *
- * Les satellites NOAA descendent leurs images sur 137 MHz en modulant en
- * amplitude une sous-porteuse de 2400 Hz. Le débit est fixe et connu depuis
- * 1978 : 4160 mots par seconde, deux lignes par seconde, donc 2080 mots par
- * ligne. Une ligne porte deux images côte à côte — le canal A (visible ou
- * proche infrarouge selon l'heure) et le canal B (infrarouge thermique) —
- * chacune précédée d'une salve de synchronisation et suivie d'une échelle de
- * télémétrie.
+ * NOAA satellites send images on 137 MHz as an AM 2400 Hz subcarrier. The rate
+ * has been fixed since 1978: 4160 words/s, two lines/s, so 2080 words per line.
+ * A line carries two images side by side — channel A (visible or near IR
+ * depending on time of day) and channel B (thermal IR) — each preceded by a
+ * sync burst and followed by a telemetry wedge.
  *
- * Tout est ici en constantes plutôt qu'en nombres semés dans le code : le jour
- * où une ligne se décale d'un mot, il vaut mieux avoir un seul endroit à
- * relire.
+ * All offsets are constants in one place: the day a line is off by one word,
+ * there is only one spot to re-read.
  *
- * Aucun import Android : le décodage complet se vérifie sur machine, ce qui
- * compte d'autant plus qu'il n'y a pas de passage NOAA à la demande.
+ * No Android import: the full decode is unit-tested, which matters all the
+ * more since NOAA passes do not come on demand.
  */
 object Apt {
 
-    /** Mots par seconde. Fixé par la norme, jamais négocié. */
+    /** Words per second, fixed by the standard. */
     const val WORD_RATE = 4160
 
-    /** Mots par ligne — donc deux lignes par seconde. */
+    /** Words per line, hence two lines per second. */
     const val WORDS_PER_LINE = 2080
 
-    /** Sous-porteuse modulée en amplitude, en hertz. */
+    /** AM subcarrier, Hz. */
     const val SUBCARRIER_HZ = 2400.0
 
-    /** Longueur d'une salve de synchronisation, en mots. */
+    /** Sync burst length, in words. */
     const val SYNC_LEN = 39
 
     const val SYNC_A = 0
@@ -60,12 +57,12 @@ object Apt {
     const val TELEMETRY_B = 2035
 
     /**
-     * La salve A : sept créneaux à 1040 Hz, soit quatre mots par cycle.
-     * Quatre mots noirs devant, le reste au noir derrière, 39 mots en tout.
+     * Sync A: seven pulses at 1040 Hz, four words per cycle. Four black words
+     * before, black padding after, 39 words in all.
      */
     val SYNC_A_PATTERN: FloatArray = buildSync(high = 2, low = 2)
 
-    /** La salve B : sept créneaux à 832 Hz, soit cinq mots par cycle. */
+    /** Sync B: seven pulses at 832 Hz, five words per cycle. */
     val SYNC_B_PATTERN: FloatArray = buildSync(high = 3, low = 2)
 
     private fun buildSync(high: Int, low: Int): FloatArray {
@@ -78,7 +75,7 @@ object Apt {
         return out
     }
 
-    /** Extrait les 909 mots d'un canal dans une ligne complète. */
+    /** Extracts one channel's 909 words from a full line. */
     fun channel(line: FloatArray, b: Boolean): FloatArray {
         val from = if (b) VIDEO_B else VIDEO_A
         if (line.size < from + VIDEO_LEN) return FloatArray(VIDEO_LEN)
@@ -86,15 +83,13 @@ object Apt {
     }
 
     /**
-     * Les deux bornes de contraste, prises sur les seuls mots d'image.
+     * The two contrast bounds, from image words only.
      *
-     * Un étalement bête entre le minimum et le maximum donnerait une image
-     * délavée : une seule ligne de parasites suffit à occuper toute l'échelle.
-     * On prend donc le premier et le quatre-vingt-dix-neuvième centile, ce qui
-     * accepte de brûler un pour cent des pixels aux deux bouts en échange d'un
-     * contraste qui tient debout. Les salves de synchronisation et la
-     * télémétrie sont écartées du calcul — elles sont toujours au blanc ou au
-     * noir franc et fausseraient les bornes.
+     * Plain min/max stretching gives a washed-out image: one line of
+     * interference fills the whole scale. The 1st and 99th percentiles are
+     * used instead, burning 1 % of pixels at each end for usable contrast.
+     * Sync bursts and telemetry are excluded: always pure black or white, they
+     * would skew the bounds.
      */
     fun levels(lines: List<FloatArray>): FloatArray {
         if (lines.isEmpty()) return floatArrayOf(0f, 1f)
@@ -119,7 +114,7 @@ object Apt {
         return floatArrayOf(lo, hi)
     }
 
-    /** Ramène une ligne brute sur 0..255 avec les bornes données. */
+    /** Maps a raw line to 0..255 with the given bounds. */
     fun gray(line: FloatArray, lo: Float, hi: Float): IntArray {
         val span = if (hi > lo) hi - lo else 1e-6f
         val out = IntArray(line.size)
@@ -137,31 +132,25 @@ object Apt {
 }
 
 /**
- * Le décodeur APT : du son vers des lignes d'image.
+ * APT decoder: audio in, image lines out. Three stages.
  *
- * Le travail se fait en trois temps, et chacun a sa raison d'être.
+ * Demodulation: the 2400 Hz subcarrier's amplitude carries the image. Mix with
+ * cos and sin at that frequency, low-pass, and the I/Q magnitude is the
+ * envelope. Using both paths means the carrier phase need not be known, which
+ * would be hopeless with an SDR dongle or a cable from a receiver.
  *
- * D'abord la démodulation. Le signal reçu est une sous-porteuse à 2400 Hz dont
- * l'amplitude porte l'image. On la multiplie par un cosinus et un sinus à cette
- * même fréquence, on filtre le tout en passe-bas, et le module du couple obtenu
- * donne l'enveloppe. Ce détour par les deux voies évite d'avoir à connaître la
- * phase du signal reçu — ce qui serait illusoire avec une clé SDR ou un simple
- * câble entre un récepteur et le téléphone.
+ * Resampling: the envelope comes at the sound card rate (usually 44.1 kHz) and
+ * the image is read at 4160 words/s; linear interpolation lands on each word.
  *
- * Ensuite le rééchantillonnage. L'enveloppe arrive au rythme de la carte son
- * (44 100 Hz le plus souvent) et l'image se lit à 4160 mots par seconde ; on
- * interpole linéairement entre deux échantillons pour tomber sur chaque mot.
+ * Line alignment: each line starts with a sync burst, found by correlation.
+ * The first search covers a whole line; after that only ±[DRIFT] words around
+ * the expected spot — enough to follow a phone clock's drift, too little to be
+ * thrown off by a burst of interference. When correlation collapses, timing is
+ * held without re-syncing: one second of lost signal must not shift the rest
+ * of the image.
  *
- * Enfin la mise en ligne. Chaque ligne commence par une salve de
- * synchronisation reconnaissable ; on la cherche par corrélation. La première
- * fois on fouille une ligne entière, ensuite on ne regarde qu'à quarante mots
- * autour de l'endroit attendu — assez pour suivre la dérive d'une horloge de
- * téléphone, trop peu pour partir en vrille sur un coup de parasite. Quand la
- * corrélation s'effondre, on garde le rythme sans se recaler : une seconde de
- * signal perdu ne doit pas décaler tout le reste de l'image.
- *
- * Rien ici ne dépend d'Android, ce qui permet de tout vérifier sur un signal
- * fabriqué de toutes pièces, faute de satellite NOAA disponible sur commande.
+ * No Android dependency: everything is tested on synthetic signals, since NOAA
+ * satellites do not come on demand.
  */
 class AptDecoder(
     private val sampleRate: Int,
@@ -169,26 +158,26 @@ class AptDecoder(
 ) {
 
     interface Listener {
-        /** Une ligne complète de 2080 mots bruts, dans l'ordre d'arrivée. */
+        /** One full line of 2080 raw words, in arrival order. */
         fun onLine(index: Int, line: FloatArray)
 
-        /** L'état du verrouillage ligne et la qualité de la dernière salve. */
+        /** Line lock state and quality of the last burst. */
         fun onSync(locked: Boolean, quality: Float)
     }
 
-    /** Nombre de lignes déjà rendues. */
+    /** Lines output so far. */
     var lineCount: Int = 0
         private set
 
-    /** Qualité de la dernière corrélation retenue, entre 0 et 1. */
+    /** Quality of the last accepted correlation, 0 to 1. */
     var quality: Float = 0f
         private set
 
-    /** Vrai quand une ligne a été trouvée et que le rythme est tenu. */
+    /** True when a line was found and timing is held. */
     var locked: Boolean = false
         private set
 
-    // --------------------------------------------------------- démodulation
+    // --------------------------------------------------------- demodulation
 
     private val taps: Int = 101
     private val fir: DoubleArray = lowpass(sampleRate, 2200.0, taps)
@@ -196,22 +185,22 @@ class AptDecoder(
     private val bufQ = DoubleArray(taps * 2)
     private var wp = 0
 
-    // Phaseur tournant : moins cher qu'un cosinus par échantillon, et
-    // renormalisé régulièrement pour que l'erreur d'arrondi ne l'aplatisse pas.
+    // Rotating phasor: cheaper than a cos per sample, renormalised regularly
+    // so rounding error does not shrink it.
     private val dc = cos(2.0 * PI * Apt.SUBCARRIER_HZ / sampleRate)
     private val ds = sin(2.0 * PI * Apt.SUBCARRIER_HZ / sampleRate)
     private var oc = 1.0
     private var os = 0.0
     private var spin = 0
 
-    // ------------------------------------------------------ rééchantillonnage
+    // ------------------------------------------------------ resampling
 
     private val step: Double = sampleRate.toDouble() / Apt.WORD_RATE
     private var nextPos = 0.0
     private var absIndex = 0L
     private var lastEnv = 0.0
 
-    // ------------------------------------------------------------ mise en ligne
+    // ------------------------------------------------------------ line alignment
 
     private val wbuf = FloatArray(Apt.WORDS_PER_LINE * 6)
     private var wn = 0
@@ -232,13 +221,13 @@ class AptDecoder(
         tplNorm = sqrt(max(sum, 1e-12))
     }
 
-    /** Donne du son au décodeur. Les échantillons sont consommés sur place. */
+    /** Feeds audio to the decoder. Samples are consumed immediately. */
     fun feed(pcm: ShortArray, count: Int) {
         val n = min(count, pcm.size)
         for (i in 0 until n) {
             val s = pcm[i] / 32768.0
 
-            // Descente en bande de base par les deux voies.
+            // I/Q downconversion to baseband.
             val vi = s * oc
             val vq = -s * os
             val nc = oc * dc - os * ds
@@ -263,7 +252,7 @@ class AptDecoder(
             }
             val env = sqrt(ai * ai + aq * aq)
 
-            // Un mot au plus par échantillon : le pas vaut environ 10,6.
+            // At most one word per sample: the step is about 10.6.
             while (nextPos <= absIndex) {
                 val f = (nextPos - (absIndex - 1)).coerceIn(0.0, 1.0)
                 pushWord(lastEnv + (env - lastEnv) * f)
@@ -275,21 +264,21 @@ class AptDecoder(
         drain()
     }
 
-    /** Vide ce qui reste de complet. Les lignes tronquées sont abandonnées. */
+    /** Flushes remaining complete lines. Partial lines are dropped. */
     fun finish() {
         drain()
     }
 
     private fun pushWord(v: Double) {
         if (wn == wbuf.size) drain()
-        if (wn == wbuf.size) { wn = 0; start = 0 } // garde-fou : ne jamais bloquer
+        if (wn == wbuf.size) { wn = 0; start = 0 } // safety: never get stuck
         wbuf[wn++] = v.toFloat()
     }
 
     /**
-     * Corrélation normalisée entre la salve attendue et ce qu'on a à cet
-     * endroit. Normalisée parce que le niveau de réception varie du tout au
-     * tout d'un passage à l'autre : ce qui compte est la forme, pas l'amplitude.
+     * Normalised correlation between the expected burst and the words at
+     * [off]. Normalised because signal level varies wildly between passes:
+     * shape matters, not amplitude.
      */
     private fun corr(off: Int): Double {
         var mean = 0.0
@@ -310,9 +299,8 @@ class AptDecoder(
         val line = Apt.WORDS_PER_LINE
 
         if (!locked) {
-            // Il faut deux lignes derrière l'essai pour juger d'un accrochage :
-            // une salve isolée peut être un hasard, deux séparées d'exactement
-            // une ligne, beaucoup moins.
+            // Lock needs two bursts: one alone can be chance, two exactly one
+            // line apart much less so.
             if (wn - start < line * 3) return
             var best = -2.0
             var bestOff = start
@@ -346,8 +334,7 @@ class AptDecoder(
                     start = bi
                     quality = b.toFloat()
                 } else {
-                    // Signal perdu : on tient le rythme plutôt que de se
-                    // recaler sur du bruit.
+                    // Signal lost: hold timing rather than sync on noise.
                     quality = max(0f, quality * 0.8f)
                 }
             }
@@ -362,8 +349,8 @@ class AptDecoder(
     }
 
     private fun compact() {
-        // On laisse une marge derrière pour que le recalage puisse encore
-        // reculer de quelques dizaines de mots à la ligne suivante.
+        // Keep a margin behind so the next line's re-sync can still move
+        // back a few dozen words.
         val shift = max(0, start - DRIFT * 2)
         if (shift > 0) {
             System.arraycopy(wbuf, shift, wbuf, 0, wn - shift)
@@ -389,13 +376,13 @@ class AptDecoder(
     }
 
     companion object {
-        /** En deçà, la salve trouvée ne vaut pas mieux que du bruit. */
+        /** Below this, a found burst is no better than noise. */
         const val LOCK_THRESHOLD = 0.30
 
-        /** Fenêtre de rattrapage d'une ligne à l'autre, en mots. */
+        /** Line-to-line re-sync window, in words. */
         const val DRIFT = 40
 
-        /** Décode d'un coup un enregistrement entier. Sert surtout aux essais. */
+        /** Decodes a whole recording at once. Mostly for tests. */
         fun decodeAll(pcm: ShortArray, sampleRate: Int): List<FloatArray> {
             val out = ArrayList<FloatArray>()
             val d = AptDecoder(sampleRate, object : Listener {

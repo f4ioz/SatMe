@@ -1,44 +1,37 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.cat
 
 import kotlin.math.abs
 
 /**
- * Désigner un adaptateur série qui n'a pas de nom.
+ * Identifying a serial adapter that has no serial number.
  *
- * Le défaut : `Ft817.open` retrouvait l'adaptateur **par son numéro de série
- * USB**, et refusait d'ouvrir quoi que ce soit quand ce numéro manquait. Le
- * commentaire d'origine disait « the adapter whose FTDI serial matches » — tout
- * est là. Un FTDI en porte toujours un ; un PL2303TA n'en porte aucun, et c'est
- * conforme à sa fiche : seuls les PL2303 récents (HXD, GC, GS) ont un
- * descripteur `iSerialNumber`. Le câble était donc reconnu par le pilote et
- * restait inutilisable, faute qu'on puisse le désigner.
+ * Pitfall: matching adapters only by USB serial number fails on a PL2303TA,
+ * which has none (only the newer HXD/GC/GS carry `iSerialNumber`; FTDI always
+ * does). The cable was recognised by the driver yet unusable.
  *
- * Ce fichier remplace le nom par une identité qui existe toujours, et — pour le
- * cas où deux câbles identiques sont branchés en duplex — par une méthode qui
- * ne se fie pas du tout à l'étiquette : on demande au poste sur quelle
- * fréquence il est, et sa réponse dit lequel est lequel.
+ * So: an identity that always exists, and — when two identical cables are
+ * plugged in for duplex — a method that ignores labels entirely: ask each rig
+ * its frequency, and the answer tells which is which.
  */
 object IdentiteUsb {
 
     /**
-     * La clé sous laquelle un adaptateur est mémorisé.
+     * Key under which an adapter is remembered.
      *
-     * Le numéro de série quand il existe — rien ne change alors pour un FTDI
-     * déjà configuré, et les réglages enregistrés continuent de fonctionner.
-     * Sinon, le couple constructeur/produit et la position dans l'arbre USB.
+     * The serial number when present (existing FTDI settings keep working).
+     * Otherwise vendor/product plus position in the USB tree.
      *
-     * Cette seconde forme est stable tant qu'on ne débranche rien, et peut
-     * s'échanger entre deux branchements si deux câbles identiques sont
-     * présents. C'est pourquoi elle ne suffit pas seule : elle sert à retrouver
-     * un adaptateur, jamais à garantir qu'on tient le bon poste.
+     * The second form is stable only while nothing is unplugged, and two
+     * identical cables can swap between plug-ins. It finds an adapter; it never
+     * guarantees it is the right rig.
      */
     fun cle(serie: String?, vid: Int, pid: Int, position: String): String {
         val s = serie?.trim().orEmpty()
@@ -46,16 +39,15 @@ object IdentiteUsb {
         else "%04X:%04X@%s".format(vid, pid, position)
     }
 
-    /** Cette clé désigne-t-elle un adaptateur dépourvu de numéro de série ? */
+    /** Does this key denote an adapter without a serial number? */
     fun sansNumeroDeSerie(cle: String): Boolean = cle.contains('@') && cle.contains(':')
 
     /**
-     * Retrouve un adaptateur parmi les candidats.
+     * Finds an adapter among candidates.
      *
-     * Deux règles, dans cet ordre. La clé exacte d'abord. Puis, **s'il n'y a
-     * qu'un seul candidat, on le prend** : il n'y a rien à distinguer, et
-     * refuser d'ouvrir le seul câble branché sous prétexte que sa position a
-     * changé depuis la veille serait exactement le défaut qu'on corrige.
+     * Exact key first. Then, **if there is only one candidate, take it**:
+     * refusing the only cable because its USB position changed would be the
+     * very bug being fixed.
      */
     fun resout(cleMemorisee: String?, candidats: List<String>): String? {
         if (candidats.isEmpty()) return null
@@ -64,31 +56,27 @@ object IdentiteUsb {
         return null
     }
 
-    // ------------------------------------------- qui est en réception, qui en émission
+    // ------------------------------------------- which is RX, which is TX
 
     /**
-     * Ce qu'un adaptateur a répondu quand on lui a demandé sa fréquence.
-     * [freqHz] nul veut dire « rien de lisible » : pas de poste au bout, ou pas
-     * la bonne vitesse.
+     * What an adapter answered when asked its frequency. Null [freqHz] means
+     * nothing readable: no rig on the line, or wrong baud rate.
      */
     class Sonde(val cle: String, val freqHz: Long?)
 
-    /** L'attribution proposée. */
+    /** The proposed assignment. */
     class Attribution(val rx: String?, val tx: String?, val certaine: Boolean)
 
     /**
-     * Attribue les adaptateurs d'après ce que les postes ont répondu.
+     * Assigns adapters from what the rigs answered.
      *
-     * L'idée qui rend l'affaire simple : en duplex, les deux postes ne sont pas
-     * sur la même bande. Celui de réception est sur la descente, celui
-     * d'émission sur la montée, et l'application connaît déjà les deux bandes
-     * par le transpondeur. La fréquence lue désigne donc le rôle sans ambiguïté,
-     * là où une position dans l'arbre USB ne dit rien.
+     * In duplex the two rigs are on different bands: RX on the downlink, TX on
+     * the uplink, both known from the transponder. The frequency read gives the
+     * role unambiguously; a USB tree position says nothing.
      *
-     * [certaine] vaut faux quand les deux postes répondent dans la même bande ou
-     * qu'un seul répond : on propose alors, on n'impose pas, et l'opérateur
-     * tranche en voyant les fréquences lues — un discriminant qu'il comprend,
-     * contrairement à « USB serial (1) » et « USB serial (2) ».
+     * [certaine] is false when both answer in the same band or only one answers:
+     * we propose, the operator decides by seeing the frequencies — something he
+     * understands, unlike "USB serial (1)" and "USB serial (2)".
      */
     fun attribue(
         sondes: List<Sonde>,
@@ -108,12 +96,12 @@ object IdentiteUsb {
         val versRx = repondeurs.filter { pres(it.freqHz!!, descenteHz) }
         val versTx = repondeurs.filter { pres(it.freqHz!!, monteeHz) }
 
-        // Le cas net : un poste dans chaque bande, et ils diffèrent.
+        // Clear case: one rig in each band, and they differ.
         if (versRx.size == 1 && versTx.size == 1 && versRx[0].cle != versTx[0].cle) {
             return Attribution(versRx[0].cle, versTx[0].cle, true)
         }
 
-        // Sinon on propose sans prétendre : l'opérateur verra les fréquences.
+        // Otherwise propose without claiming: the operator will see the frequencies.
         return Attribution(
             rx = versRx.firstOrNull()?.cle ?: repondeurs.getOrNull(0)?.cle,
             tx = versTx.firstOrNull()?.cle
@@ -122,11 +110,10 @@ object IdentiteUsb {
     }
 
     /**
-     * Une fréquence lue est-elle plausible pour un poste amateur portable ?
+     * Is a frequency read plausible for a portable amateur rig?
      *
-     * Sert à distinguer une vraie réponse d'un octet de bruit interprété comme
-     * une fréquence. Le FT-817 couvre de 100 kHz à 470 MHz ; au-delà de ces
-     * bornes, ce n'est pas le poste qui a parlé.
+     * Tells a real answer from noise bytes parsed as a frequency. The FT-817
+     * covers 100 kHz to 470 MHz; outside that, the rig didn't speak.
      */
     fun freqPlausible(hz: Long): Boolean = hz in 100_000L..470_000_000L
 }

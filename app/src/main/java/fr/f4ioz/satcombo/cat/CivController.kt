@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.cat
 
@@ -20,16 +20,13 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
 /**
- * Le pilote CI-V de l'IC-9700, derrière un [SerialLink].
+ * IC-9700 CI-V driver, behind a [SerialLink].
  *
- * Trame CI-V : `FE FE <poste> <pupitre> <commande> [données…] FD`, le poste à
- * 0xA2 par défaut, le pupitre à 0xE0 par convention. La fréquence tient en cinq
- * octets BCD petit-boutiens ; le ton d'accès, lui, est **gros-boutien**, et
- * cette seule différence a coûté des passages entiers sur SO-50.
+ * Frame: `FE FE <rig> <controller> <cmd> [data…] FD`, rig at 0xA2 by default,
+ * controller at 0xE0 by convention. Frequency is five little-endian BCD bytes;
+ * the access tone is **big-endian** — that one difference cost whole SO-50 passes.
  *
- * Le pilote ne connaît plus de port USB : il parle à un [SerialLink], que
- * [open] remplit avec le vrai câble et que [attach] remplit, au banc, avec un
- * [Ic9700Sim]. C'est ce qui rend le reste de ce fichier vérifiable.
+ * [open] plugs in the real cable, [attach] an [Ic9700Sim] for bench tests.
  */
 class CivController(private val context: Context? = null) : RigDriver {
 
@@ -37,23 +34,20 @@ class CivController(private val context: Context? = null) : RigDriver {
     private var link: SerialLink? = null
 
     /**
-     * Le fil ne porte qu'une conversation à la fois.
+     * One conversation at a time on the line.
      *
-     * Le CI-V délimite ses trames et porte des adresses, ce qui le rend moins
-     * fragile que le Yaesu — mais pas invulnérable : le `drain` d'une question
-     * jette ce qui traîne, et ce qui traîne peut être la réponse qu'une autre
-     * coroutine attend. La boucle Doppler écrit pendant que le sondage
-     * d'émission interroge deux fois par seconde ; sans verrou, l'une ramasse
-     * la réponse de l'autre.
+     * CI-V has delimiters and addresses, so it is sturdier than Yaesu, but a
+     * question's `drain` can still discard a reply another coroutine awaits.
+     * The Doppler loop writes while the TX-status poll asks twice a second;
+     * without the lock one picks up the other's reply.
      */
     private val fil = kotlinx.coroutines.sync.Mutex()
     var radioAddr: Int = 0xA2
     var controllerAddr: Int = 0xE0
 
     /**
-     * Silence imposé entre deux trames. Quarante millisecondes sur un vrai bus
-     * CI-V, sans quoi le poste en laisse tomber ; zéro au banc, où il n'y a
-     * personne à ménager et où l'attente ne ferait qu'allonger les essais.
+     * Gap between frames: 40 ms on a real CI-V bus, or the rig drops some;
+     * zero on the bench.
      */
     var pacingMs: Long = 40L
 
@@ -63,24 +57,20 @@ class CivController(private val context: Context? = null) : RigDriver {
         private const val ACTION_USB_PERMISSION = UsbPermission.ACTION_CAT
     }
 
-    /** Branche n'importe quel fil série — un vrai câble, ou un poste simulé. */
+    /** Plugs in any serial line — a real cable or a simulated rig. */
     fun attach(l: SerialLink) { link = l }
 
     /**
-     * La raison du dernier echec, en clair, pour l'ecran de diagnostic.
-     *
-     * « J'ai vraiment du mal a connecter » : jusqu'ici l'application repondait
-     * « ouverture impossible » et se taisait. Permission refusee, appareil deja
-     * pris par une autre application, port inexistant, poste muet : quatre
-     * causes, un seul message. On les distingue maintenant.
+     * Reason for the last failure, in plain words, for the diagnostic screen.
+     * Permission denied, device held by another app, missing port, silent rig:
+     * four causes that used to share one "cannot open" message.
      */
     var lastError: String = ""
         private set
 
     /**
-     * Tous les ports serie visibles, appareil par appareil, mis a plat.
-     *
-     * Un IC-9700 branche seul donne donc deux entrees, pas une.
+     * All visible serial ports, device by device, flattened.
+     * An IC-9700 alone gives two entries, not one.
      */
     fun availablePorts(): List<PortRef> {
         val ctx = context ?: return emptyList()
@@ -96,7 +86,7 @@ class CivController(private val context: Context? = null) : RigDriver {
         return out
     }
 
-    /** Les etiquettes des ports, dans l'ordre ou on peut les choisir. */
+    /** Port labels, in selectable order. */
     fun availableDeviceNames(): List<String> = availablePorts().map { it.label }
 
     /** Request permission for the first recognized device (async; user prompt). */
@@ -108,21 +98,16 @@ class CivController(private val context: Context? = null) : RigDriver {
     }
 
     /**
-     * Demande la permission pour l'adaptateur n° [index] **et attend la
-     * réponse** de l'utilisateur.
+     * Requests permission for port [index] **and waits for the user's answer**.
      *
-     * C'est la moitié qui manquait à la connexion CAT : l'ancienne suite
-     * affichait la boîte de dialogue puis ouvrait le port dans la foulée, alors
-     * que la permission n'était pas encore accordée. L'ouverture échouait, et
-     * seule une seconde tentative — après un débranchement, un détour par le
-     * menu SDR, un rebranchement — finissait par marcher.
+     * Showing the dialog and opening the port straight away failed, since
+     * permission wasn't granted yet; only a second attempt worked.
      */
     suspend fun ensurePermission(index: Int = 0): Boolean {
         val ctx = context ?: return false
         val um = ctx.getSystemService(Context.USB_SERVICE) as UsbManager
-        // L'index designe un port, pas un appareil : la permission, elle, se
-        // demande pour l'appareil qui le porte. Les deux ports de l'IC-9700
-        // partagent donc une seule autorisation, et une seule boite de dialogue.
+        // Index is a port, but permission is per device: both IC-9700 ports
+        // share one grant and one dialog.
         val ref = availablePorts().getOrNull(index) ?: return false
         val driver = UsbSerialProber.getDefaultProber().findAllDrivers(um)
             .getOrNull(ref.deviceIndex) ?: return false
@@ -134,13 +119,10 @@ class CivController(private val context: Context? = null) : RigDriver {
     override suspend fun open(baud: Int): Boolean = open(0, baud)
 
     /**
-     * Ouvre l'adaptateur n° [index], et non plus systématiquement le premier.
+     * Opens port [index] (chosen in settings), not blindly the first.
      *
-     * Le premier reconnu n'est pas forcément le poste : une clé SDR branchée
-     * en même temps se présente elle aussi comme un adaptateur série, et selon
-     * l'ordre de branchement c'est elle que l'on ouvrait. D'où une connexion
-     * qui dépendait de la chorégraphie des câbles. L'index se choisit
-     * maintenant dans les paramètres.
+     * The first one found isn't necessarily the rig: an SDR dongle also shows
+     * up as a serial adapter, and depending on plug order we opened it.
      */
     suspend fun open(index: Int, baud: Int): Boolean = withContext(Dispatchers.IO) {
         val ctx = context ?: return@withContext false
@@ -161,10 +143,8 @@ class CivController(private val context: Context? = null) : RigDriver {
         runCatching {
             p.open(connection)
             p.setParameters(baud, 8, UsbSerialPort.STOPBITS_1, UsbSerialPort.PARITY_NONE)
-            // Les deux lignes de controle du terminal. Beaucoup de ponts CDC —
-            // et celui de l'Icom en fait partie — restent muets tant que l'hote
-            // ne s'est pas annonce : le port s'ouvre, l'ecriture passe, et rien
-            // ne revient jamais. Deux lignes, et le poste repond.
+            // Many CDC bridges (Icom's included) stay silent until the host
+            // raises DTR/RTS: the port opens, writes succeed, nothing comes back.
             runCatching { p.setDTR(true); p.setRTS(true) }
             link = UsbSerialLink(p)
             lastError = ""
@@ -190,14 +170,10 @@ class CivController(private val context: Context? = null) : RigDriver {
             cmd.toByte()) + data + byteArrayOf(CatDecode.END.toByte())
 
     /**
-     * Rassemble ce qui revient du fil jusqu'à ce que [stop] soit satisfait, ou
-     * jusqu'à [timeoutMs].
+     * Gathers incoming bytes until [stop] is satisfied or [timeoutMs] elapses.
      *
-     * C'est la boucle qui manquait. L'ancienne version faisait une lecture
-     * unique de soixante-quatre octets : quand le poste faisait précéder sa
-     * réponse d'un accusé de réception — ce qui arrive — la lecture rendait
-     * l'accusé, et la réponse tombait dans le vide de la lecture suivante,
-     * c'est-à-dire nulle part.
+     * Must loop: with a single read, a rig that sends an ACK before its reply
+     * returned only the ACK and the reply was lost.
      */
     private fun collect(
         l: SerialLink, timeoutMs: Long, stop: (List<ByteArray>) -> Boolean
@@ -213,8 +189,7 @@ class CivController(private val context: Context? = null) : RigDriver {
                 frames = CatDecode.splitCiv(acc.toByteArray())
                 if (stop(frames)) break
             } else if (pacingMs == 0L) {
-                // Au banc, rien ne met du temps à arriver : une lecture vide
-                // veut dire qu'il n'y a plus rien, et non qu'il faut patienter.
+                // On the bench nothing is in flight: an empty read means done.
                 break
             }
             if (System.currentTimeMillis() >= deadline) break
@@ -226,7 +201,7 @@ class CivController(private val context: Context? = null) : RigDriver {
         return frames
     }
 
-    /** Jette ce qui traîne encore sur le fil avant de poser une question. */
+    /** Discards leftover bytes before a question. */
     private fun drain(l: SerialLink) {
         val scratch = ByteArray(256)
         var guard = 0
@@ -237,17 +212,16 @@ class CivController(private val context: Context? = null) : RigDriver {
     }
 
     /**
-     * Émet une trame et attend l'accusé de réception.
+     * Sends a frame and waits for the ACK.
      *
-     * Rend faux quand le poste refuse : jusqu'ici, un refus était indiscernable
-     * d'un succès, et c'est précisément par là que le ton d'accès mal encodé
-     * est passé.
+     * Returns false on NAK. When a refusal looked like success, the misencoded
+     * access tone went unnoticed.
      */
     private suspend fun send(bytes: ByteArray): Boolean = withContext(Dispatchers.IO) { fil.withLock {
         val l = link ?: return@withLock false
         if (!l.write(bytes, 500)) return@withLock false
         CatJournal.log(true, bytes, CatDecode.describeCiv(bytes))
-        // Le poste a besoin d'un souffle entre deux trames, ou il en perd.
+        // The rig needs a pause between frames, or it drops some.
         if (pacingMs > 0) kotlinx.coroutines.delay(pacingMs)
         val frames = collect(l, if (pacingMs > 0) 200L else 0L) { f ->
             CatDecode.isAck(f, radioAddr, controllerAddr) ||
@@ -257,26 +231,20 @@ class CivController(private val context: Context? = null) : RigDriver {
     } }
 
     /**
-     * Émet une trame et rassemble ce qui revient, jusqu'à reconnaître la
-     * réponse attendue.
+     * Sends a frame and gathers incoming frames until the expected reply shows up.
      *
-     * Deux défauts corrigés ici, et ils allaient ensemble. Le premier : une
-     * seule lecture de soixante-quatre octets. Quand le poste faisait précéder
-     * sa réponse d'un accusé de réception — ce qui arrive — la lecture unique
-     * rendait l'accusé, et la réponse tombait dans le vide de la lecture
-     * suivante, c'est-à-dire nulle part. Le second : la réponse était cherchée
-     * à l'octet près dans un tampon brut, sans se demander d'où elle venait.
-     * Le bus CI-V étant à un seul fil, ce qui revient contient toujours notre
-     * propre question ; on relisait donc ce que l'on venait d'écrire.
+     * Two pitfalls: a single read loses a reply preceded by an ACK; and
+     * searching raw bytes finds our own question, since the single-wire CI-V
+     * bus always echoes it. Hence framing plus address filtering.
      *
-     * @return toutes les trames reçues, dans l'ordre, écho compris.
+     * @return all frames received, in order, echo included.
      */
     suspend fun exchange(
         cmd: Int, data: ByteArray = ByteArray(0),
         expect: Int = -1, expectSub: Int = -1, timeoutMs: Long = 600
     ): List<ByteArray> = withContext(Dispatchers.IO) { fil.withLock {
         val l = link ?: return@withLock emptyList()
-        // Ce qui traîne encore sur le fil appartient à la question précédente.
+        // Anything left over belongs to the previous question.
         drain(l)
         val out = frame(cmd, data)
         if (!l.write(out, 500)) return@withLock emptyList()
@@ -317,17 +285,16 @@ class CivController(private val context: Context? = null) : RigDriver {
     }
 
     /**
-     * Le poste émet-il ? `null` si l'on ne sait pas.
+     * Is the rig transmitting? `null` if unknown.
      *
-     * CI-V 0x1C 0x00 : la réponse vaut 00 en réception, 01 en émission. C'est
-     * la seule façon de le savoir quand l'opérateur passe en émission par le
-     * VOX — l'application ne commande alors rien, elle observe.
+     * CI-V 0x1C 0x00: 00 on RX, 01 on TX. The only way to know when the
+     * operator keys via VOX — the app commands nothing then, it observes.
      */
     suspend fun isTransmitting(): Boolean? {
         if (link == null) return null
         val frames = exchange(0x1C, byteArrayOf(0x00), expect = 0x1C)
         val p = CatDecode.payload(frames, radioAddr, controllerAddr, 0x1C) ?: return null
-        // La charge utile est « 00 <état> » : on lit le dernier octet.
+        // Payload is "00 <state>": read the last byte.
         return p.lastOrNull()?.let { (it.toInt() and 0xFF) != 0 }
     }
 
@@ -358,10 +325,8 @@ class CivController(private val context: Context? = null) : RigDriver {
         send(frame(0x06, byteArrayOf(mode.toByte(), filter.toByte())))
 
     /**
-     * Relit la fréquence du VFO courant (Hz), ou null.
-     *
-     * Trois conditions, et il en manquait trois : la trame doit venir du poste,
-     * porter la commande 0x03, et donner une fréquence vraisemblable.
+     * Reads the current VFO frequency (Hz), or null. The frame must come from
+     * the rig, carry command 0x03, and hold a plausible frequency.
      */
     suspend fun readFrequency(): Long? {
         if (link == null) return null
@@ -371,11 +336,9 @@ class CivController(private val context: Context? = null) : RigDriver {
     }
 
     /**
-     * Relit le mode du VFO courant (0x00 LSB, 0x01 USB, 0x05 FM…), ou null.
-     *
-     * Le poste répond `04 <mode> <filtre>` ; seul le premier octet nous
-     * intéresse. On relit parce qu'on ne peut pas faire autrement : le mode se
-     * change aussi à la main, et rien n'oblige le poste à rester où on l'a mis.
+     * Reads the current VFO mode (0x00 LSB, 0x01 USB, 0x05 FM…), or null.
+     * Reply is `04 <mode> <filter>`. Must be read back: the mode can also be
+     * changed by hand.
      */
     suspend fun readMode(): Int? {
         if (link == null) return null
@@ -400,6 +363,8 @@ class CivController(private val context: Context? = null) : RigDriver {
      * Set the SELECTED (00) or UNSELECTED (01) VFO frequency via cmd 0x25,
      * WITHOUT changing the active band/VFO. In IC-9700 satellite mode the
      * unselected VFO is the uplink (SUB) — so we tune it without swapping.
+     * Caveat: in cross-band satellite mode the rig refuses 0x25/0x26 on the
+     * unselected VFO — see [setSatellitePair].
      */
     suspend fun setVfoFreq(hz: Long, unselected: Boolean): Boolean =
         send(frame(0x25, byteArrayOf(if (unselected) 0x01 else 0x00) + freqToBcd(hz)))
@@ -413,21 +378,18 @@ class CivController(private val context: Context? = null) : RigDriver {
         send(frame(0x16, byteArrayOf(0x42, if (on) 0x01 else 0x00)))
 
     /**
-     * Règle le ton d'accès (670 = 67,0 Hz). Commande 0x1B 0x00, trois octets BCD
-     * **gros-boutiens** : 88,5 Hz donne `00 08 85`.
+     * Sets the access tone (670 = 67.0 Hz). Command 0x1B 0x00, three
+     * **big-endian** BCD bytes: 88.5 Hz gives `00 08 85`.
      *
-     * L'ancienne version encodait le ton comme une fréquence, c'est-à-dire à
-     * l'envers : `00 88 50`, soit 885,0 Hz pour le poste. Hors plage, donc
-     * ignoré — mais accusé réception, si bien que rien ne le signalait. Sur
-     * SO-50 le relais ne s'ouvrait jamais, et l'on cherchait la panne du côté
-     * de la puissance.
+     * Encoding it like a frequency gives `00 88 50` = 885.0 Hz: out of range,
+     * ignored, yet ACKed. SO-50 never opened and the fault was sought in power.
      */
     suspend fun setToneFreq(tenthHz: Int): Boolean {
         if (!CatDecode.toneInRange(tenthHz)) return false
         return send(frame(0x1B, byteArrayOf(0x00) + CatDecode.toneToBcdBe(tenthHz)))
     }
 
-    /** Relit le ton d'accès réglé dans le poste, en dixièmes de hertz. */
+    /** Reads back the access tone set in the rig, in tenths of Hz. */
     suspend fun readToneFreq(): Int? {
         if (link == null) return null
         val frames = exchange(0x1B, byteArrayOf(0x00), expect = 0x1B, expectSub = 0x00)
@@ -438,25 +400,20 @@ class CivController(private val context: Context? = null) : RigDriver {
     private var onSub = false  // tracks which band is currently selected
 
     /**
-     * Ce que le poste affiche, pour autant qu'on le sache.
+     * What the rig shows, as far as we know.
      *
-     * Deux valeurs, mises à jour à chaque écriture réussie, et remises à null
-     * dès qu'on n'en répond plus — changement de satellite, débranchement. Elles
-     * ne servent qu'à une chose : choisir l'ordre des deux écritures du couple
-     * satellite, ce qui suppose de savoir d'où l'on part. Tant qu'on ne le sait
-     * pas, on relit le poste une fois ; ensuite on suit ses propres consignes,
-     * car relire deux fréquences dix fois par seconde encombrerait le bus pour
-     * rien.
+     * Updated on each successful write, reset to null when no longer reliable
+     * (satellite change, unplug). Used only to choose the write order of the
+     * satellite pair. Read from the rig once, then tracked from our own
+     * commands — reading two frequencies ten times a second would clog the bus.
      */
     private var knownMain: Long? = null
     private var knownSub: Long? = null
     private var bandesLues = false
 
     /**
-     * Oublier l'état supposé du poste.
-     *
-     * À appeler au changement de satellite et à la fermeture : c'est le seul
-     * moment où quelqu'un d'autre que nous a pu toucher aux VFO.
+     * Forget the assumed rig state. Call on satellite change and on close —
+     * the moments when someone else may have touched the VFOs.
      */
     fun forgetBands() { knownMain = null; knownSub = null; bandesLues = false }
 
@@ -475,32 +432,21 @@ class CivController(private val context: Context? = null) : RigDriver {
     }
 
     /**
-     * Poser la descente sur MAIN et la montée sur SUB, en mode satellite.
+     * Downlink on MAIN, uplink on SUB, in satellite mode.
      *
-     * Les commandes 0x25/0x26 ne savent pas atteindre la bande secondaire d'un
-     * IC-9700 en satellite transbande : il faut sélectionner la bande (0x07
-     * D0/D1) puis écrire avec 0x05. Cela, c'était déjà vrai en 18.18.
+     * 0x25/0x26 can't reach SUB on an IC-9700 in cross-band satellite mode:
+     * select the band (0x07 D0/D1), then write with 0x05.
      *
-     * Ce qui manquait, c'est **l'ordre**. Le poste refuse d'avoir ses deux
-     * bandes sur la même à la fois, et passer d'un satellite en V/U à un
-     * satellite en U/V est précisément un échange des deux bandes : la première
-     * écriture, quelle qu'elle soit, amenait une bande là où l'autre se trouvait
-     * encore, le poste répondait NAK sans que rien ne l'affiche, et l'on voyait
-     * deux fréquences en 435 dans le panneau POSTE. « Ça ne switch pas » : non,
-     * et aucun ordre fixe ne pouvait le faire.
-     *
-     * [BandPlan] décide donc de l'ordre à partir de l'état du poste, quitte à
-     * garer la montée sur une troisième bande le temps de libérer la place. On
-     * finit toujours sur MAIN, pour que la molette de réception reste sous la
-     * main de l'opérateur.
+     * **Order matters**: the rig refuses both bands on the same band, and going
+     * V/U → U/V is a pure swap, so any fixed order gets a silent NAK. [BandPlan]
+     * picks the order from the rig state, parking the uplink on a third band if
+     * needed. Always ends on MAIN so the RX dial stays with the operator.
      */
     suspend fun setSatellitePair(downlinkHz: Long, uplinkHz: Long) {
-        // Au premier couple d'un passage, on ne sait rien du poste : on le lit
-        // une fois. Ensuite nos propres consignes suffisent à le savoir.
+        // First pair of a pass: read the rig once; afterwards our own commands suffice.
         if (!bandesLues) {
-            // Une seule fois : un poste muet ne doit pas nous faire relire deux
-            // fréquences dix fois par seconde. Sans réponse, on retombe sur
-            // l'ordre d'avant, qui a le mérite d'être celui qu'on connaît.
+            // Only once: a silent rig must not make us re-read ten times a
+            // second. With no answer we fall back to the usual order.
             bandesLues = true
             knownSub = readSubFrequency()
             knownMain = readMainFrequency()
@@ -511,8 +457,8 @@ class CivController(private val context: Context? = null) : RigDriver {
             if (setFrequency(e.hz)) {
                 if (e.sub) knownSub = e.hz else knownMain = e.hz
             } else {
-                // Un refus veut dire que le poste n'est pas où on le croyait :
-                // on le rappellera au tour suivant plutôt que de s'enfoncer.
+                // A refusal means the rig isn't where we thought: re-read it
+                // next round rather than dig deeper.
                 forgetBands()
             }
         }

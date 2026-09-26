@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.sstv
 
@@ -79,19 +79,18 @@ class SstvDecoder(
     private var huntLimit = 0L
     private var flushing = false
 
-    /** Synchros consécutives manquées sur la trame en cours. */
+    /** Consecutive missed syncs in the current frame. */
     private var missedRun = 0
 
-    /** Vrai quand la trame a été lancée à la main, sans en-tête VIS. */
+    /** True when the frame was started by hand, without a VIS header. */
     private var forcedAnchor = false
 
     /**
-     * Mode imposé par l'opérateur, ou null pour suivre l'en-tête VIS.
+     * Mode forced by the operator, or null to follow the VIS header.
      *
-     * Un en-tête reçu sur un signal faible se lit parfois de travers : la
-     * parité passe, le code ne correspond pas au mode réellement émis, et
-     * l'image sort mélangée. Quand l'opérateur sait ce qui est émis — sur
-     * l'ISS c'est annoncé à l'avance — il vaut mieux le lui laisser dire.
+     * On a weak signal a header can pass parity yet name the wrong mode, and
+     * the picture comes out scrambled. When the operator knows the mode (ISS
+     * events announce it), let them say so.
      */
     @Volatile var forcedMode: SstvMode? = null
 
@@ -110,15 +109,13 @@ class SstvDecoder(
     val currentMode: SstvMode? get() = if (state == State.IMAGE) mode else null
 
     /**
-     * Mode engagé : celui de l'image en cours, ou celui qu'on vient d'accrocher
-     * et dont on cherche encore la première synchro. C'est ce qu'il faut
-     * afficher, parce qu'entre l'en-tête et la première ligne il se passe
-     * jusqu'à une centaine de millisecondes pendant lesquelles l'opérateur a
-     * déjà besoin de savoir ce qui arrive.
+     * Armed mode: the picture in progress, or the one just locked whose first
+     * sync is still being searched. This is what to display — up to ~100 ms
+     * pass between header and first line.
      */
     val armedMode: SstvMode? get() = if (state == State.IDLE) null else mode
 
-    /** Vrai dès qu'une trame est engagée, forcée ou non. */
+    /** True once a frame is under way, forced or not. */
     val decoding: Boolean get() = state != State.IDLE
 
     /** 0..1 progress through the current frame. */
@@ -151,12 +148,10 @@ class SstvDecoder(
         when (state) {
             State.IDLE -> huntVis()
             State.SYNC_HUNT -> huntFirstSync()
-            // La chasse à l'en-tête continue pendant l'image. Sans cela, une
-            // trame commencée puis abandonnée — l'émission s'arrête en route —
-            // occupe le décodeur jusqu'à sa dernière ligne, soit deux minutes
-            // en PD 180, et la transmission suivante passe inaperçue. Un
-            // en-tête reconnu l'emporte donc sur l'image en cours, qui est
-            // rendue telle quelle.
+            // Keep hunting for headers during the image. Otherwise a frame the
+            // sender abandoned holds the decoder to its last line (two minutes
+            // in PD 180) and the next transmission is missed. A new header wins;
+            // the current picture is emitted as is.
             State.IMAGE -> if (!huntVis()) decodeBlocks()
         }
         compact()
@@ -176,11 +171,9 @@ class SstvDecoder(
     }
 
     /**
-     * Rend l'image en cours, complète ou non, et oublie la trame.
-     *
-     * Une image coupée en route reste une image : la moitié d'une réception
-     * ISS vaut mieux que rien du tout, et c'est le Hub qui décidera si elle
-     * porte assez de lignes pour être archivée.
+     * Emits the current picture, complete or not, and forgets the frame. Half
+     * an ISS picture beats nothing; the Hub decides whether it has enough
+     * lines to archive.
      */
     private fun emitPartial() {
         val m = mode ?: return
@@ -194,13 +187,9 @@ class SstvDecoder(
     }
 
     /**
-     * Lance le décodage sans attendre d'en-tête.
-     *
-     * Sur un signal pris en route — l'opérateur allume la radio alors que
-     * l'image a déjà commencé, ou l'en-tête est passé dans un évanouissement —
-     * il n'y a plus rien à reconnaître. Reste les impulsions de synchro, qui
-     * elles sont émises à chaque ligne : on s'accroche à la première venue et
-     * on déroule le mode demandé.
+     * Starts decoding without a header — for a signal joined mid-picture or a
+     * header lost in a fade. Locks on the first sync pulse (sent every line)
+     * and runs the given mode.
      */
     @Synchronized
     fun forceStart(m: SstvMode) {
@@ -213,7 +202,7 @@ class SstvDecoder(
         listener?.onVis(m)
     }
 
-    /** Abandonne la trame en cours et se remet à l'écoute. */
+    /** Drops the current frame and goes back to listening. */
     @Synchronized
     fun abort() {
         if (state == State.IDLE) return
@@ -248,9 +237,8 @@ class SstvDecoder(
 
     private fun keepFrom(): Long {
         val msNeed = (msProduced * spms).toLong()
-        // On garde un demi-bloc de plus que le strict nécessaire : c'est ce
-        // que coûte la recherche de synchro élargie qui rattrape un décalage
-        // de ligne installé.
+        // Keep an extra half block: the widened sync search that recovers a
+        // settled line offset looks that far back.
         val imgNeed = if (state == State.IMAGE || state == State.SYNC_HUNT)
             (blockStart - 0.55 * blockPeriod - 40 * spms).toLong() else msNeed
         return minOf(msNeed, imgNeed).coerceAtLeast(0L)
@@ -350,20 +338,16 @@ class SstvDecoder(
             }
             if (!ok) continue
             if (ones % 2 != 0) continue                      // even parity
-            // Le mode imposé l'emporte sur ce que dit l'en-tête : l'en-tête
-            // sert alors seulement de top de départ.
+            // A forced mode overrides the header, which then only marks the start.
             val m = forcedMode ?: SstvMode.byVis(vis) ?: continue
 
-            // Un décodage forcé ne se laisse pas interrompre par un en-tête.
-            //
-            // Sur un signal bruité, le détecteur d'en-tête se déclenche parfois
-            // à tort ; il relançait alors la trame en cours depuis le début et
-            // l'image était perdue. Tant que l'opérateur a forcé, la trame va
-            // à son terme — le prochain en-tête sera lu après.
+            // A forced decode is never interrupted by a header: on noise the
+            // detector fires falsely and used to restart the frame, losing the
+            // picture. The forced frame runs to its end first.
             if (forcedAnchor && state != State.IDLE) return false
 
             if (state != State.IDLE) emitPartial()
-            // Ne pas relire l'en-tête qu'on vient de consommer.
+            // Do not re-read the header just consumed.
             nextTest = s + VIS_MS + 60
             startImage(m, ((s + VIS_MS) * spms).toLong())
             return true
@@ -371,7 +355,7 @@ class SstvDecoder(
         return false
     }
 
-    /** Remise à zéro de tout ce qui est propre à une trame. */
+    /** Resets all per-frame state. */
     private fun prepare(m: SstvMode) {
         mode = m
         if (pixels.size != m.width * m.height) pixels = IntArray(m.width * m.height)
@@ -441,12 +425,10 @@ class SstvDecoder(
         if (total < huntLimit + (2 * spms).toLong()) return      // wait for audio
         val hit = findSync(huntFrom, huntLimit, minRun)
         if (forcedAnchor) {
-            // Départ manuel : aucun en-tête n'a été lu, le seul repère est une
-            // impulsion de synchro trouvée en pleine émission. Elle situe le
-            // bloc auquel elle appartient — pour Scottie, dont la synchro est
-            // au milieu du bloc, ce bloc a commencé bien avant. Si son début
-            // n'est plus dans le tampon, on repart sur le suivant plutôt que
-            // de décoder du vide.
+            // Manual start: the only anchor is a sync found mid-transmission.
+            // It locates its own block — for Scottie, sync is mid-block, so the
+            // block began well before. If that start is no longer buffered,
+            // move to the next block rather than decode nothing.
             blockStart = if (hit >= 0) lastRunEnd - (m.syncMs + m.syncAtMs) * spms
                          else huntLimit.toDouble()
             while (blockStart < (freqBase + 8).toDouble()) blockStart += blockPeriod
@@ -488,13 +470,11 @@ class SstvDecoder(
             // would run straight back into the VIS stop bit — 1200 Hz as well —
             // and drag the whole frame several milliseconds early.
             val expected = blockStart + m.syncAtMs * spms
-            // Tant que la ligne est accrochée, ±10 ms suffisent et évitent de
-            // confondre la synchro avec autre chose. Après quelques synchros
-            // manquées d'affilée la ligne n'est plus accrochée du tout : c'est
-            // exactement ce qui laisse une bande de couleur sur un bord de
-            // l'image, un décalage constant qu'une fenêtre de ±10 ms ne peut
-            // plus rattraper. On rouvre alors la recherche sur un demi-bloc et
-            // on applique la correction en entier pour se raccrocher d'un coup.
+            // While locked, ±10 ms avoids mistaking something else for sync.
+            // After a few misses in a row the line is unlocked: a constant
+            // offset that ±10 ms can't recover, seen as a colour band on one
+            // edge. Then search half a block and apply the full correction to
+            // relock in one step.
             val wide = missedRun >= WIDE_AFTER
             val win = if (wide) blockPeriod * 0.45 else 10.0 * spms
             val minRun = (m.syncMs * 0.55 * spms).toInt().coerceAtLeast(2)
@@ -503,8 +483,7 @@ class SstvDecoder(
             if (blockIndex == 0) lastSync = expected
             if (hit >= 0) {
                 val err = hit - expected
-                // Le suivi de période ne vaut que sur une ligne déjà accrochée :
-                // un saut de rattrapage n'est pas une dérive d'horloge.
+                // Track the period only while locked: a relock jump is not clock drift.
                 if (!wide && lastSync > 0) {
                     val measured = hit - lastSync
                     if (measured > nominalPeriod * 0.97 && measured < nominalPeriod * 1.03) {
@@ -525,18 +504,12 @@ class SstvDecoder(
             val done = (blockIndex * m.linesPerBlock).coerceAtMost(m.height)
             listener?.onProgress(m, pixels, done)
 
-            // Plus aucune synchro depuis plusieurs secondes : l'émission s'est
-            // arrêtée. Continuer à dérouler des lignes de bruit jusqu'au bout
-            // de la trame ferait manquer la transmission suivante.
+            // No sync for several seconds: the transmission stopped. Rolling
+            // noise lines to the end would miss the next transmission.
             //
-            // **Sauf sur un départ forcé.** L'opérateur qui appuie sur
-            // « Forcer » sait ce qu'il fait : il décode un signal faible, une
-            // réception commencée en retard, ou une bande où la synchro se
-            // perd. Abandonner à sa place, c'est lui reprendre la décision
-            // qu'il vient de prendre — et sur un passage satellite, il n'aura
-            // pas de seconde chance. Le décodage forcé va donc au bout de la
-            // trame, quitte à écrire du bruit sur les lignes perdues : une
-            // image partielle vaut mieux que rien du tout.
+            // **Except on a forced start.** The operator chose to force (weak
+            // signal, late start, sync fading) and gets no second chance on a
+            // pass; a forced decode runs to the end, noise and all.
             if (missedRun >= missLimit && !forcedAnchor) {
                 emitPartial()
                 state = State.IDLE
@@ -554,9 +527,8 @@ class SstvDecoder(
     }
 
     /**
-     * Nombre de synchros manquées d'affilée au bout duquel on considère que
-     * l'émission est terminée : environ [ABORT_MS], jamais moins de huit
-     * lignes pour ne pas lâcher sur un simple évanouissement.
+     * Consecutive misses that end the frame: about [ABORT_MS], never fewer
+     * than eight lines so a short fade does not abort.
      */
     private fun missLimitFor(m: SstvMode): Int =
         maxOf(8, (ABORT_MS / m.blockMs).toInt())
@@ -680,9 +652,9 @@ class SstvDecoder(
         const val VIS_MS = 910L
         /** Everything below this is treated as the sync tone. */
         private const val SYNC_MAX = 1350f
-        /** Synchros manquées avant d'élargir la recherche. */
+        /** Missed syncs before widening the search. */
         private const val WIDE_AFTER = 3
-        /** Silence toléré, en millisecondes, avant d'abandonner la trame. */
+        /** Tolerated sync loss, ms, before abandoning the frame. */
         private const val ABORT_MS = 8000.0
     }
 }

@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.diag
 
@@ -15,20 +15,18 @@ import android.view.ContextThemeWrapper
 import fr.f4ioz.satcombo.R
 
 /**
- * Le démarrage de SatMe, démonté en pièces qu'on éprouve une par une.
+ * SatMe's startup, taken apart and tested piece by piece.
  *
- * L'ordre suit celui du vrai démarrage, du plus fondamental au plus construit :
- * les ressources d'abord, le thème ensuite, puis les gros fichiers embarqués,
- * les réglages, les services du téléphone, et le modèle de vue en dernier —
- * lui seul rassemble tout le reste.
+ * The order follows the real startup, from most basic to most built: resources,
+ * theme, large bundled files, settings, phone services, and the ViewModel last,
+ * since it pulls in everything else.
  *
- * Ce découpage vaut mieux qu'une pile d'appels, parce qu'il répond à la
- * question suivante : non pas « qu'est-ce qui a levé », mais « à partir d'où
- * cet appareil-ci n'est plus d'accord ». Une seule ligne ÉCHEC au milieu d'une
- * colonne d'OK vaut deux jours de suppositions.
+ * This beats a stack trace because it answers "from which point does this
+ * device stop agreeing", not just "what threw". One FAIL line in a column of
+ * OKs saves days of guessing.
  *
- * Chaque épreuve rend une phrase même quand elle réussit. « OK » tout seul ne
- * se compare pas d'un appareil à l'autre ; « 3 262 504 octets lus » se compare.
+ * Each step returns a sentence even on success: "OK" alone cannot be compared
+ * across devices, "3 262 504 bytes read" can.
  */
 object Epreuves {
 
@@ -55,18 +53,17 @@ object Epreuves {
             "$cfr clés FR, $cen clés EN"
         },
 
-        // Six méga-octets de JSON dorment dans le paquet. Sur un appareil
-        // déclaré à faible mémoire, c'est le premier endroit où regarder.
+        // Megabytes of JSON sit in the APK: first place to look on a
+        // low-RAM device.
         ModeEchec.Etape("Données géographiques embarquées") {
             val terres = ctx.resources.openRawResource(R.raw.land).use { it.readBytes().size }
-            val pota = 0  // catalogue POTA retiré des ressources embarquées
+            val pota = 0  // POTA catalogue removed from bundled resources
             val communes = ctx.resources.openRawResource(R.raw.communes_fr).use { it.readBytes().size }
             "terres $terres o, POTA $pota o, communes $communes o"
         },
 
-        // L'épreuve sur les images du planisphère a été retirée avec elles :
-        // les côtes se tracent désormais depuis land.json, déjà éprouvé par
-        // l'étape des données vectorielles juste au-dessus.
+        // No world-map image step any more: coastlines are drawn from
+        // land.json, already tested by the step above.
 
         ModeEchec.Etape("Réglages enregistrés") {
             val noms = listOf("satcombo_settings", "satcombo_favorites", "satcombo_satconfig",
@@ -88,9 +85,8 @@ object Epreuves {
             "canal en place"
         },
 
-        // Sur un appareil sans services Google — une tablette Huawei récente
-        // n'en a aucun — ces deux épreuves sont les seules à pouvoir échouer
-        // sans que rien d'autre ne bouge.
+        // On a device without Google services (e.g. a recent Huawei tablet),
+        // these steps can fail while everything else passes.
         ModeEchec.Etape("Services Google Play") {
             val code = com.google.android.gms.common.GoogleApiAvailability.getInstance()
                 .isGooglePlayServicesAvailable(ctx)
@@ -117,11 +113,10 @@ object Epreuves {
             "fabrique construite"
         },
 
-        // Le suspect le plus sérieux de la liste. `WorkManager.getInstance`
-        // lève `IllegalStateException` quand son fournisseur d'initialisation
-        // n'a pas été installé — ce qui arrive chez certains installeurs de
-        // constructeurs, et chez eux seulement. L'appel a lieu dans l'`init`
-        // du modèle de vue, donc avant le premier écran.
+        // Prime suspect. `WorkManager.getInstance` throws
+        // `IllegalStateException` when its initialization provider was not
+        // installed, which happens with some vendor installers only. It is
+        // called in the ViewModel `init`, hence before the first screen.
         ModeEchec.Etape("Planificateur de tâches (WorkManager)") {
             val wm = androidx.work.WorkManager.getInstance(ctx)
             "instance ${wm.javaClass.simpleName}"
@@ -137,10 +132,10 @@ object Epreuves {
             "vue ${v.javaClass.simpleName} construite"
         },
 
-        // En dernier, et c'est voulu : sa construction rejoue à elle seule la
-        // quasi-totalité du démarrage. Si le processus meurt ici, la trace est
-        // écrite par le garde-fou et le mode échec la montrera à la
-        // réouverture — l'épreuve reste donc concluante même quand elle tue.
+        // Last on purpose: constructing it replays nearly the whole startup.
+        // If the process dies here, the crash handler writes the trace and
+        // failure mode shows it on reopen, so the step is conclusive even
+        // when it kills.
         ModeEchec.Etape("Modèle de vue (démarrage complet)") {
             val app = ctx.applicationContext as Application
             val vm = fr.f4ioz.satcombo.MainViewModel(app)

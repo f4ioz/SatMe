@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.sstv
 
@@ -13,33 +13,22 @@ import kotlin.math.roundToInt
 import kotlin.math.sin
 
 /**
- * L'émetteur SSTV : une image d'un côté, le son à émettre de l'autre.
+ * SSTV encoder: image in, audio out.
  *
- * Il est écrit à partir de la description publiée des modes, et non des
- * chemins de code du décodeur, pour que les deux puissent se contredire —
- * c'est ce qui donne sa valeur au test qui ré-encode puis redécode.
+ * Written from the published mode descriptions, not from the decoder's code,
+ * so the two can disagree — that is what makes the encode/decode round-trip
+ * test worth anything. Also used in the field: a test card played on one
+ * phone and decoded on another checks the whole receive chain without a
+ * satellite.
  *
- * Il sert à deux choses. Aux essais d'abord : sans radio dans la machine de
- * compilation, la seule façon honnête de vérifier la table des modes est de
- * resynthétiser un signal et de regarder si le décodeur retrouve l'image.
- * Sur le terrain ensuite : une mire émise par le haut-parleur d'un téléphone
- * et décodée par un autre vérifie toute la chaîne de réception sans mobiliser
- * un satellite ni un correspondant.
- *
- * L'émission se fait au fil de l'eau, par [Source]. Un PD 290 dure près de
- * cinq minutes : le rendre d'un bloc réclamerait vingt-cinq mégaoctets de PCM
- * en mémoire sur un téléphone, pour un son qui sort de toute façon paquet par
- * paquet. [encode] reste disponible pour les essais, où la durée est courte
- * et où avoir tout le signal sous la main simplifie les vérifications.
+ * Streams through [Source]: a PD 290 lasts almost five minutes, ~25 MB of PCM
+ * if rendered at once. [encode] is for tests with short modes.
  */
 object SstvEncoder {
 
     /**
-     * L'émission, échantillon par échantillon.
-     *
-     * L'objet garde la phase de la sinusoïde entre deux lectures : c'est ce
-     * qui évite les claquements aux jointures de paquets, qu'un décodeur
-     * prend pour des synchros parasites.
+     * Sample-by-sample transmission. Keeps the sine phase across reads: a
+     * click at a buffer boundary looks like a spurious sync to a decoder.
      */
     class Source(
         private val mode: SstvMode,
@@ -47,30 +36,27 @@ object SstvEncoder {
         private val sampleRate: Int,
         private val blocks: Int = mode.blocks,
         private val leadMs: Double = 120.0,
-        /** Un vrai émetteur ne coupe pas la porteuse sur le dernier pixel. */
+        /** A real transmitter does not drop the carrier on the last pixel. */
         private val trailMs: Double = 60.0
     ) {
         private val spms = sampleRate / 1000.0
         private val header = headerTones(mode)
         private val headerMs = header.sumOf { it.second }
 
-        /** Nombre total d'échantillons de l'émission. */
+        /** Total samples in the transmission. */
         val totalSamples: Int =
             ((leadMs + headerMs + blocks * mode.blockMs + trailMs) * spms).roundToInt()
 
         private var pos = 0
         private var phase = 0.0
 
-        /** Avancement entre 0 et 1, pour la barre de progression. */
+        /** Progress 0..1, for the progress bar. */
         val progress: Float
             get() = if (totalSamples <= 0) 1f else (pos.toFloat() / totalSamples).coerceIn(0f, 1f)
 
         val done: Boolean get() = pos >= totalSamples
 
-        /**
-         * Remplit [buf] et renvoie le nombre d'échantillons écrits, 0 une fois
-         * l'émission terminée.
-         */
+        /** Fills [buf]; returns samples written, 0 once finished. */
         fun read(buf: ShortArray): Int {
             val n = minOf(buf.size, totalSamples - pos)
             if (n <= 0) return 0
@@ -99,17 +85,12 @@ object SstvEncoder {
         }
     }
 
-    /** Durée d'une émission complète, en secondes. */
+    /** Full transmission length, seconds. */
     fun seconds(mode: SstvMode, leadMs: Double = 120.0, trailMs: Double = 60.0): Double =
         (leadMs + headerTones(mode).sumOf { it.second } +
             mode.blocks * mode.blockMs + trailMs) / 1000.0
 
-    /**
-     * Rend toute l'émission d'un coup : en-tête VIS, puis l'image.
-     *
-     * Réservé aux essais et aux modes courts — voir [Source] pour l'émission
-     * réelle.
-     */
+    /** Renders VIS header and image at once. Tests and short modes only; see [Source]. */
     fun encode(
         mode: SstvMode,
         image: IntArray,
