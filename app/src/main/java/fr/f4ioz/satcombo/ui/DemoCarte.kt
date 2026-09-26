@@ -46,8 +46,6 @@ fun DemoCarte(vm: fr.f4ioz.satcombo.MainViewModel) {
     val etat by ServeurDemo.etat.collectAsState()
     // The Wi-Fi share lives in the server state only. Keep a single copy.
     val qrw = remember(etat.ssid, etat.motDePasse) { ServeurDemo.qrWifi() }
-    var ssid by remember(etat.ssid) { mutableStateOf(etat.ssid) }
-    var mdp by remember(etat.motDePasse) { mutableStateOf(etat.motDePasse) }
     val presse = LocalClipboardManager.current
 
     Surface(color = SpaceCard, shape = RoundedCornerShape(16.dp),

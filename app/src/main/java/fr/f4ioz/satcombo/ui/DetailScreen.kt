@@ -1628,7 +1628,7 @@ internal fun LogEditDialog(entry: fr.f4ioz.satcombo.data.LogEntry, useUtc: Boole
     val defaultRst = if (entry.mode.uppercase().contains("CW")) "599" else "59"
     var rstS by remember { mutableStateOf(entry.rstSent.ifBlank { defaultRst }) }
     var rstR by remember { mutableStateOf(entry.rstRcvd.ifBlank { defaultRst }) }
-    val tf = remember(useUtc) {
+    val heureFmt = remember(useUtc) {
         SimpleDateFormat("dd/MM HH:mm:ss", Locale.getDefault()).apply {
             if (useUtc) timeZone = java.util.TimeZone.getTimeZone("UTC")
         }
@@ -1696,7 +1696,7 @@ internal fun LogEditDialog(entry: fr.f4ioz.satcombo.data.LogEntry, useUtc: Boole
                         }
                     }
                 }
-                Text("${entry.satName}  ·  ${tf.format(Date(entry.timeMs))} ${if (useUtc) "UTC" else "LOC"}",
+                Text("${entry.satName}  ·  ${heureFmt.format(Date(entry.timeMs))} ${if (useUtc) "UTC" else "LOC"}",
                     color = TextLo, fontSize = 13.sp)
                 Text(tf("az_el_line", entry.azimuthDeg.toInt(), entry.elevationDeg.toInt()) + "  ·  ${entry.myLocator}",
                     color = TextLo, fontSize = 12.sp, modifier = Modifier.padding(bottom = 8.dp))
