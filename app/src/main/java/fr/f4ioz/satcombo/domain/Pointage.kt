@@ -557,11 +557,17 @@ object PointageAntenne {
 
         companion object {
             /**
-             * The WT901BLE convention, measured on a full reading. Default,
+             * The WT901BLE convention, measured on a full reading with an
+             * east pose: Rz(yaw)·Ry(pitch)·Rx(roll), east-north-up. Default,
              * since most of these modules share the same firmware.
+             *
+             * It carries the vector computation whenever the boom was chosen
+             * by hand without a full analysis, so it must be one of
+             * [toutes]. The former `xyz|012|+-+|ENU` put roll first: right at
+             * north, 0° of elevation east and west.
              */
-            val PAR_DEFAUT = ConventionLibre("xyz", intArrayOf(0, 1, 2),
-                intArrayOf(1, -1, 1), true)
+            val PAR_DEFAUT = ConventionLibre("zyx", intArrayOf(2, 1, 0),
+                intArrayOf(1, 1, 1), true)
 
             fun decode(t: String): ConventionLibre {
                 val p = t.split('|')

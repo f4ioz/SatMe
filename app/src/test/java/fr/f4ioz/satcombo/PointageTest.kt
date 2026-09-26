@@ -621,4 +621,34 @@ class PointageTest {
             scene(fleche, 0f, 0f, 0f), 0f,
             scene(fleche, 200f, 0f, 0f), 90f))
     }
+
+    /**
+     * The default convention must be one the analysis can return: yaw
+     * composed first. It used to be `xyz|012|+-+|ENU`, roll first — the very
+     * trap [PointageAntenne.ConventionLibre.toutes] rules out.
+     */
+    @Test
+    fun la_convention_par_defaut_est_une_candidate_de_l_analyse() {
+        val defaut = PointageAntenne.ConventionLibre.PAR_DEFAUT
+        assertEquals("zyx|210|+++|ENU", defaut.encode())
+        assertTrue(defaut in PointageAntenne.ConventionLibre.toutes())
+        // An old setting that is not a measured convention falls back to it.
+        assertEquals(defaut, PointageAntenne.ConventionLibre.decode("AXES_ECHANGES"))
+    }
+
+    /**
+     * With the boom learned by hand and no full analysis, the default carries
+     * the vector computation. Raised to 56°, it must read 56° wherever it
+     * aims — the roll-first default read 0° east and west, −56° south.
+     */
+    @Test
+    fun la_convention_par_defaut_garde_l_elevation_hors_du_nord() {
+        val avant = Vec3(0f, 1f, 0f)
+        val c = PointageAntenne.ConventionLibre.PAR_DEFAUT
+        listOf(0f to 0f, 90f to -90f, 180f to -180f, 270f to 90f).forEach { (az, lacet) ->
+            val p = PointageAntenne.pointageLibre(AttitudeWit(56f, 0f, lacet), avant, c)
+            assertEquals("élévation visée $az°", 56f, p.elevationDeg, 0.5f)
+            assertTrue("azimut visé $az° : ${p.azimutDeg}", ecart(az, p.azimutDeg) < 0.5f)
+        }
+    }
 }
