@@ -72,7 +72,7 @@ La signature de publication lit `keystore.properties` à la racine (non versionn
 - David Johnson G4DPZ — predict4java (calcul des passages et du Doppler)
 - Kārlis Goba — ft8_lib (tables du code correcteur FT8/FT4)
 - K9AN, G4WJS et K1JT — protocoles FT8 et FT4 (article QEX)
-- Peter Goodhall 2M0SQL — Cloudlog
+- Peter Goodhall MM9SQL — Cloudlog
 - L'équipe Wavelog — Wavelog, fork de Cloudlog
 - IS0GRB — WebSDR QO-100 (référence de fréquence)
 - John Morris G4ANB — carrés locateurs Maidenhead

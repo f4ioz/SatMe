@@ -72,7 +72,7 @@ Release signing reads `keystore.properties` at the root (not committed): `storeF
 - David Johnson G4DPZ — predict4java (pass and Doppler computation)
 - Kārlis Goba — ft8_lib (FT8/FT4 error-correcting code tables)
 - K9AN, G4WJS and K1JT — FT8 and FT4 protocols (QEX article)
-- Peter Goodhall 2M0SQL — Cloudlog
+- Peter Goodhall MM9SQL — Cloudlog
 - The Wavelog team — Wavelog, a Cloudlog fork
 - IS0GRB — QO-100 WebSDR (frequency reference)
 - John Morris G4ANB — Maidenhead locator squares

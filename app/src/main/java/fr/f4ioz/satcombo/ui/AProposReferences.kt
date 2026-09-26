@@ -53,7 +53,7 @@ private val SOURCES = listOf(
     ),
     Remerciement(
         "Cloudlog",
-        "Peter Goodhall 2M0SQL",
+        "Peter Goodhall MM9SQL",
         "Le carnet de trafic en ligne auquel SatMe verse ses contacts.",
         "https://www.magicbug.co.uk/cloudlog/"
     ),
