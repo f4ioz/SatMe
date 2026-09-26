@@ -10,9 +10,9 @@ package fr.f4ioz.satcombo.domain
  * MIT License — Copyright (c) 2018 Kārlis Goba
  * ```
  *
- * La licence MIT autorise cet usage dans une application propriétaire à
- * condition d'en conserver la mention — d'où ce bloc, et l'entrée
- * correspondante dans l'écran « À propos ». Le protocole lui-même est décrit
+ * La licence MIT est compatible avec la GPL de SatMe et autorise cet usage à
+ * condition d'en conserver la mention — d'où ce bloc, l'entrée correspondante
+ * dans l'écran « À propos » et `THIRD-PARTY.md`. Le protocole lui-même est décrit
  * par K9AN, G4WJS et K1JT dans QEX, où ses auteurs l'ont placé dans le domaine
  * public.
  *
