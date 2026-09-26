@@ -1,65 +1,61 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.sonde
 
 /**
- * Où sont lâchées les radiosondes qu'on peut espérer entendre depuis la France,
- * et sur quoi les chercher.
+ * Where the radiosondes audible from France are launched, and on what
+ * frequency.
  *
- * Les coordonnées sont celles des aires de lâcher, pas celles des stations
- * météo : entre les deux il y a parfois deux kilomètres, ce qui compte quand on
- * cherche à confirmer qu'un ballon vient bien de là. Les fréquences bougent —
- * une station peut changer de canal du jour au lendemain — donc elles servent à
- * pointer la clé au bon endroit, pas à identifier une sonde. C'est le numéro de
- * série transmis qui identifie.
+ * Coordinates are launch pads, not weather stations: sometimes 2 km apart,
+ * which matters when confirming where a balloon came from. Frequencies change
+ * overnight, so they only point the dongle; the transmitted serial identifies
+ * the sonde.
  *
- * Les heures de lâcher sont le détail que tout le monde rate : Météo-France
- * lâche à 23 h 11 et 11 h 11 UTC, soit quarante-neuf minutes *avant* l'heure
- * synoptique, pour que le ballon soit à trente kilomètres pile à l'heure ronde.
- * Écouter à minuit et à midi, c'est arriver après la bataille.
+ * Launch times are the detail everyone misses: Météo-France launches at 23:11
+ * and 11:11 UTC, 49 minutes *before* the synoptic hour, so the balloon is at
+ * 30 km on the hour. Listening at midnight or noon is too late.
  */
 object SondeSites {
 
-    /** Un site de lâcher. */
     data class Site(
-        /** Indicatif OMM, ou une chaîne libre pour les sites occasionnels. */
+        /** WMO id, or a free string for occasional sites. */
         val wmo: String,
         val name: String,
         val country: String,
         val lat: Double,
         val lon: Double,
-        /** Altitude du site, en mètres. */
+        /** Site altitude, metres. */
         val altM: Int,
-        /** Type de sonde habituel : "RS41", "M20", "M10", "DFM". */
+        /** Usual sonde type: "RS41", "M20", "M10", "DFM". */
         val sonde: String,
-        /** Fréquences relevées, en kilohertz. */
+        /** Observed frequencies, kHz. */
         val freqKhz: List<Int>,
-        /** Heures de lâcher, en heures UTC décimales (23,183 = 23 h 11). */
+        /** Launch times, decimal UTC hours (23.183 = 23:11). */
         val launchesUtc: List<Double>,
-        /** Site occasionnel : campagnes, recherche, pas tous les jours. */
+        /** Occasional site: campaigns, research, not daily. */
         val occasional: Boolean = false
     ) {
-        /** Fréquence principale, en hertz. */
+        /** Main frequency, Hz. */
         val mainHz: Long get() = (freqKhz.firstOrNull() ?: 0) * 1000L
     }
 
-    /** Lâcher de nuit de Météo-France, 23 h 11 UTC. */
+    /** Météo-France night launch, 23:11 UTC. */
     const val MF_NIGHT = 23.0 + 11.0 / 60.0
 
-    /** Lâcher de jour de Météo-France, 11 h 11 UTC. */
+    /** Météo-France day launch, 11:11 UTC. */
     const val MF_DAY = 11.0 + 11.0 / 60.0
 
     private val MF = listOf(MF_NIGHT, MF_DAY)
     private val SYNOPTIC2 = listOf(0.0, 12.0)
     private val SYNOPTIC4 = listOf(0.0, 6.0, 12.0, 18.0)
 
-    /** Les stations françaises en service. */
+    /** Operational French stations. */
     val FRANCE = listOf(
         Site("07110", "Brest-Guipavas", "FR", 48.44425, -4.41238, 95, "M20",
             listOf(404_000), MF),
@@ -72,7 +68,7 @@ object SondeSites {
         Site("07761", "Ajaccio", "FR", 41.918003, 8.792084, 6, "M20",
             listOf(403_000), MF))
 
-    /** Sites français occasionnels : campagnes, recherche, essais constructeur. */
+    /** Occasional French sites: campaigns, research, manufacturer tests. */
     val FRANCE_OCCASIONAL = listOf(
         Site("LAN", "CMS Lannion", "FR", 48.7506, -3.4729, 80, "M20",
             listOf(402_000), emptyList(), occasional = true),
@@ -89,7 +85,7 @@ object SondeSites {
         Site("BOU", "Bourges", "FR", 47.0592, 2.3697, 161, "DFM",
             listOf(403_000), emptyList(), occasional = true))
 
-    /** Les voisins dont les sondes atteignent régulièrement le territoire. */
+    /** Neighbours whose sondes regularly reach France. */
     val NEIGHBOURS = listOf(
         Site("03808", "Camborne", "GB", 50.218698, -5.326914, 88, "RS41",
             listOf(405_700), SYNOPTIC2),
@@ -120,10 +116,10 @@ object SondeSites {
         Site("08430", "Murcie", "ES", 38.0000, -1.1667, 62, "M10",
             listOf(403_400), SYNOPTIC2))
 
-    /** Tout ce qui vole, sites occasionnels compris. */
+    /** Everything, occasional sites included. */
     val ALL: List<Site> = FRANCE + FRANCE_OCCASIONAL + NEIGHBOURS
 
-    /** Les sites triés par distance depuis un QTH. */
+    /** Sites sorted by distance from a QTH. */
     fun nearest(lat: Double, lon: Double, max: Int = 6,
                 includeOccasional: Boolean = false): List<Pair<Site, Double>> =
         (if (includeOccasional) ALL else ALL.filter { !it.occasional })
@@ -132,10 +128,8 @@ object SondeSites {
             .take(max)
 
     /**
-     * Le site le plus probable pour une sonde entendue à une position donnée.
-     *
-     * Ce n'est qu'une présomption : un ballon dérive de cinquante à cent
-     * vingt kilomètres, donc au-delà de deux cents on ne se prononce pas.
+     * Most likely launch site for a sonde heard at this position. Only a guess:
+     * a balloon drifts 50 to 120 km, so beyond 200 km we don't say.
      */
     fun likelyOrigin(lat: Double, lon: Double, type: String = ""): Site? {
         val cands = ALL.filter { type.isBlank() || it.sonde == type }
@@ -144,31 +138,29 @@ object SondeSites {
         return if (Geo.distanceKm(lat, lon, best.lat, best.lon) <= 200.0) best else null
     }
 
-    // ---------------------------------------------------------- le plan de balayage
+    // ---------------------------------------------------------- scan plan
 
-    /** Première fréquence du plan de balayage, en hertz. */
+    /** First scan frequency, Hz. */
     const val SCAN_FROM_HZ = 400_150_000L
 
     /**
-     * Dernière fréquence du plan de balayage, en hertz.
+     * Last scan frequency, Hz.
      *
-     * La bande météo va officiellement jusqu'à 406 MHz, mais on s'arrête à
-     * 405,9 : au-dessus commencent les balises de détresse COSPAS-SARSAT, et il
-     * n'y a aucune raison de promener un récepteur dessus. Cette limite n'est
-     * pas un réglage, elle est en dur.
+     * The met band officially goes to 406 MHz, but we stop at 405.9: above
+     * start the COSPAS-SARSAT distress beacons, and there is no reason to sweep
+     * a receiver over them. Hard-coded on purpose, not a setting.
      */
     const val SCAN_TO_HZ = 405_900_000L
 
-    /** Pas de balayage, en hertz : les sondes se calent au multiple de 10 kHz. */
+    /** Scan step, Hz: sondes sit on 10 kHz multiples. */
     const val SCAN_STEP_HZ = 10_000L
 
-    /** Une fréquence est-elle dans la bande autorisée à l'écoute ? */
+    /** Is the frequency in the allowed listening band? */
     fun inBand(hz: Long): Boolean = hz in SCAN_FROM_HZ..SCAN_TO_HZ
 
     /**
-     * Les fréquences à essayer, dans l'ordre : d'abord celles des stations
-     * proches, ensuite le balayage complet. Chercher d'abord là où on sait
-     * qu'il y a quelque chose fait gagner plusieurs minutes à chaque lâcher.
+     * Frequencies to try, in order: nearby stations first, then the full
+     * sweep. Looking where something is known to be saves minutes per launch.
      */
     fun scanPlan(lat: Double, lon: Double): List<Long> {
         val out = LinkedHashSet<Long>()
@@ -183,13 +175,13 @@ object SondeSites {
         return out.toList()
     }
 
-    /** Largeur de filtre conseillée pour un type de sonde, en hertz. */
+    /** Recommended filter width for a sonde type, Hz. */
     fun bandwidthFor(sonde: String): Int = when (sonde) {
         "M10", "M20" -> Meteomodem.BANDWIDTH_HZ
         else -> Rs41.BANDWIDTH_HZ
     }
 
-    /** Débit binaire d'un type de sonde, en bauds. */
+    /** Bit rate for a sonde type, baud. */
     fun baudFor(sonde: String): Double = when (sonde) {
         "M10" -> Meteomodem.M10_BAUD
         "M20" -> Meteomodem.M20_BAUD
@@ -197,9 +189,8 @@ object SondeSites {
     }
 
     /**
-     * Minutes restant avant le prochain lâcher d'un site, ou -1 si le site n'a
-     * pas d'horaire régulier. [nowUtcMinutes] est l'heure UTC du jour, en
-     * minutes depuis minuit.
+     * Minutes to the site's next launch, or -1 if it has no schedule.
+     * [nowUtcMinutes] is minutes since UTC midnight.
      */
     fun minutesToNextLaunch(site: Site, nowUtcMinutes: Int): Int {
         if (site.launchesUtc.isEmpty()) return -1
@@ -214,9 +205,8 @@ object SondeSites {
     }
 
     /**
-     * Est-on dans une fenêtre d'écoute utile pour ce site ? On ouvre dix
-     * minutes avant le lâcher et on laisse tourner trois heures : c'est la
-     * durée d'un vol complet, montée, éclatement et descente.
+     * Inside a useful listening window for this site? From 10 minutes before
+     * launch to 3 hours after: a full flight, ascent, burst and descent.
      */
     fun listeningNow(site: Site, nowUtcMinutes: Int): Boolean {
         if (site.launchesUtc.isEmpty()) return false

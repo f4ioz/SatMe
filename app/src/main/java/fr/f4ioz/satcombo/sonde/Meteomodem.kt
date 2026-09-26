@@ -1,163 +1,138 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.sonde
 
 /**
- * Décodage des sondes Meteomodem M10 et M20, celles que lâche Météo-France.
+ * Meteomodem M10 and M20 decoding, the sondes Météo-France launches.
  *
- * C'est le décodeur qui compte pour un Breton : Brest-Guipavas lâche des M20
- * sur 404,000 MHz deux fois par jour, et c'est la sonde la plus susceptible de
- * tomber dans le Finistère.
+ * Brest-Guipavas launches M20s on 404.000 MHz twice a day: the sonde most
+ * likely to land in Finistère.
  *
- * Ce qu'il a fallu comprendre pour que la M10 se décode enfin, en 18.7 :
+ * What it took to decode the M10:
  *
- * 1. Elle ne module pas en Manchester. Le codage est celui que rs1729 appelle
- *    `psk_bpm`, un bi-phase à marque : deux chips **identiques** valent un
- *    zéro, deux chips **différents** valent un un, et le niveau bascule à
- *    chaque frontière de bit. Le décodage Manchester faisait exactement
- *    l'inverse — il choisissait la phase qui minimise les paires plates, alors
- *    que les paires plates sont ici des données légitimes. C'est pour cela
- *    qu'un signal parfaitement propre rendait du charabia, et que le charabia
- *    avait l'air d'un bon décodage : quatre pour cent de paires plates, un
- *    chiffre rassurant et rigoureusement trompeur.
+ * 1. It is not Manchester. It is what rs1729 calls `psk_bpm`, biphase mark:
+ *    two **identical** chips are a 0, two **different** chips a 1, and the
+ *    level flips at every bit boundary. A Manchester decoder does the exact
+ *    opposite, picking the phase that minimises flat pairs, while flat pairs
+ *    are legitimate data here. A clean signal then gives garbage that looks
+ *    like a good decode (4 % flat pairs: reassuring and wrong).
  *
- * 2. L'alignement ne se cherche pas sur les octets mais sur les chips. La M10
- *    émet quatre cents chips d'alternances, puis un motif de synchronisation de
- *    trente-deux chips, et la trame commence trente et un chips après le début
- *    de ce motif — pas trente-deux : le dernier chip du motif est déjà le
- *    premier demi-bit de la trame. Un chip de trop et tout sort à `FF`.
+ * 2. Alignment is on chips, not bytes. The M10 sends 400 alternating chips,
+ *    then a 32-chip sync pattern, and the frame starts 31 chips after the
+ *    pattern start, not 32: the last pattern chip is already the first
+ *    half-bit of the frame. One chip off and everything reads `FF`.
  *
- * 3. Elle n'émet pas en continu. Elle module par tout ou rien, deux cent neuf
- *    millisecondes de porteuse par seconde, le reste au repos. Un opérateur qui
- *    regarde la cascade voit un trait pointillé, et c'est normal.
+ * 3. It does not transmit continuously: on-off keyed, 209 ms of carrier per
+ *    second. A dotted line on the waterfall is normal.
  *
- * 4. Contrairement à ce que l'on croyait, la M10 porte bien un contrôle : deux
- *    octets en 0x63, calculés par l'algorithme de Meteomodem. Une trame M10
- *    n'est donc plus retenue sur sa seule vraisemblance physique, elle est
- *    prouvée. Sur l'enregistrement de référence de radiosonde_auto_rx, vingt
- *    trames sur vingt passent le contrôle.
+ * 4. The M10 does carry a check: two bytes at 0x63, Meteomodem's algorithm.
+ *    So an M10 frame is proven, not just plausible. 20/20 frames pass on the
+ *    auto_rx reference recording.
  *
- * La M20, elle, reste en 2-FSK simple à 9600 bits par seconde, sans contrôle
- * reproductible : c'est la vraisemblance qui lui sert de garde-fou.
+ * The M20 is plain 2-FSK at 9600 bit/s with no check we can reproduce:
+ * plausibility is its only guard.
  */
 object Meteomodem {
 
     /**
-     * Débit de chips de la M10 sur l'air, en chips par seconde.
+     * M10 on-air chip rate, chips/s.
      *
-     * La 18.6 a corrigé un facteur deux qui traînait depuis le début : le nombre
-     * 9616 est bien celui des chips, et non celui des bits. La M10 code en
-     * Manchester, donc son débit binaire utile est la moitié, 4808 bits par
-     * seconde. Les versions précédentes prenaient 9616 pour un débit binaire et
-     * réglaient donc le démodulateur sur 19232 chips par seconde, c'est-à-dire
-     * deux fois trop vite : chaque chip était lu deux fois, le décodage
-     * Manchester ne voyait que des paires plates et jetait tout.
-     *
-     * La mesure a tranché. Sur l'enregistrement de référence de
-     * radiosonde_auto_rx, le spectre des impulsions de transition montre une
-     * raie à 9614,7 Hz à vingt-deux décibels au-dessus du fond, la raie binaire
-     * à 4807,5 Hz, et celle de 19228,5 Hz n'est que l'harmonique deux.
+     * Trap: 9616 is the chip rate, not the bit rate. Two chips per bit, so the
+     * payload rate is 4808 bit/s. Taking 9616 as the bit rate runs the
+     * demodulator at 19232 chips/s, reading each chip twice. Measured on the
+     * auto_rx reference recording: a transition line at 9614.7 Hz, 22 dB above
+     * the floor, the bit line at 4807.5 Hz; 19228.5 Hz is only the 2nd harmonic.
      */
     const val M10_CHIP_RATE = 9616.0
 
-    /** Débit binaire utile de la M10 : moitié des chips, codage bi-phase. */
+    /** M10 payload bit rate: half the chip rate (biphase). */
     const val M10_BAUD = M10_CHIP_RATE / 2.0
 
-    /** Débit de la M20, en bits par seconde. */
+    /** M20 bit rate, bit/s. */
     const val M20_BAUD = 9600.0
 
-    /** Largeur de filtre conseillée pour les deux, en hertz. */
+    /** Recommended filter width for both, Hz. */
     const val BANDWIDTH_HZ = 22_000
 
     /**
-     * Longueur d'une trame M10, en octets.
+     * M10 frame length, bytes.
      *
-     * Le premier octet vaut 0x64, soit cent, et c'est ce qui a longtemps induit
-     * en erreur : c'est la longueur annoncée par la sonde, et la trame en
-     * compte un de plus, les deux octets de contrôle finissant en 0x63 et 0x64.
+     * Misleading: the first byte is 0x64 (100), the declared length, but the
+     * frame has one more byte; the two check bytes sit at 0x63 and 0x64.
      */
     const val M10_LEN = 101
 
-    /** Longueur d'une trame M20, en octets. */
+    /** M20 frame length, bytes. */
     const val M20_LEN = 0x45
 
-    /** En-tête de trame M10 : longueur annoncée, puis type. */
+    /** M10 frame header: declared length, then type. */
     val M10_HEADER = intArrayOf(0x64, 0x9F, 0x20)
 
     /**
-     * Motif de synchronisation de la M10, en chips.
+     * M10 sync pattern, in chips.
      *
-     * Il se cherche dans le flux de demi-bits, pas dans les octets, et il se
-     * cherche aussi bien à l'endroit qu'à l'envers : selon le sens de la
-     * démodulation FM, le flux peut sortir inversé. Cela ne change rien au
-     * décodage lui-même — une paire de chips identiques le reste après
-     * inversion — mais cela change tout à la reconnaissance du motif.
+     * Searched in the half-bit stream, in both polarities: depending on the FM
+     * demodulation sense the stream may come out inverted. That doesn't affect
+     * biphase decoding (identical pairs stay identical) but it does affect
+     * pattern matching.
      */
     val M10_SYNC = byteArrayOf(
         1, 0, 0, 1, 1, 0, 0, 1, 1, 0, 0, 1, 1, 0, 0, 1,
         0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 0, 1, 1, 0, 0, 1)
 
     /**
-     * Distance en chips entre le début du motif et le premier demi-bit de la
-     * trame. Trente et un, et non trente-deux : le dernier chip du motif
-     * appartient déjà à la trame.
+     * Chips from pattern start to the first frame half-bit. 31, not 32: the
+     * last pattern chip already belongs to the frame.
      */
     const val M10_SYNC_TO_FRAME = 31
 
     /**
-     * Échelle des coordonnées M10 : le tour complet tient sur trente-deux bits.
+     * M10 coordinate scale: a full turn is 2^32.
      *
-     * rs1729 divise par 0xB60B60, qui est l'arrondi entier de ce nombre. La
-     * différence est de six centièmes de millionième, soit un demi-mètre au
-     * pôle — sans conséquence sur le terrain, mais assez pour qu'une latitude
-     * de quatre-vingt-dix degrés ressorte à 90,000004 et se fasse jeter par le
-     * contrôle de vraisemblance. On garde donc la valeur exacte.
+     * rs1729 divides by 0xB60B60, the integer rounding. Harmless in the field,
+     * but enough for a 90° latitude to come out as 90.000004 and be rejected by
+     * the plausibility check. So we keep the exact value.
      */
     const val M10_DEG = 4_294_967_296.0 / 360.0
 
     /**
-     * Les cinq octets de numéro de série d'une vraie M10, relevés sur
-     * l'enregistrement de référence de radiosonde_auto_rx. Ils se lisent
-     * « 803-2-10732 » et servent à la mire comme aux essais : une sonde de
-     * synthèse qui s'annonce sous un nom crédible évite d'avoir à vérifier deux
-     * fois si l'on regarde une vraie trame ou une trame fabriquée.
+     * The five serial bytes of a real M10 from the auto_rx reference recording,
+     * read as "803-2-10732". Used by the test generator and the tests.
      */
     val M10_SERIAL_DEMO = byteArrayOf(0x02, 0x14, 0x83.toByte(), 0xDC.toByte(), 0x22)
 
-    /** En-tête de trame M20. */
+    /** M20 frame header. */
     val M20_HEADER = intArrayOf(0x45, 0x20)
 
     private fun b(f: ByteArray, i: Int) = f[i].toInt() and 0xff
 
-    /** Entier trente-deux bits signé, poids fort en tête (les Meteomodem sont big endian). */
+    /** Signed 32-bit big-endian integer (Meteomodem is big-endian). */
     fun be32(f: ByteArray, i: Int): Int =
         (b(f, i) shl 24) or (b(f, i + 1) shl 16) or (b(f, i + 2) shl 8) or b(f, i + 3)
 
-    /** Entier seize bits signé, poids fort en tête. */
+    /** Signed 16-bit big-endian. */
     fun be16(f: ByteArray, i: Int): Int {
         val v = (b(f, i) shl 8) or b(f, i + 1)
         return if (v >= 0x8000) v - 0x10000 else v
     }
 
-    /** Entier seize bits non signé, poids fort en tête. */
+    /** Unsigned 16-bit big-endian. */
     fun beu16(f: ByteArray, i: Int): Int = (b(f, i) shl 8) or b(f, i + 1)
 
     /**
-     * Décodage bi-phase à marque de la M10 : deux chips font un bit.
+     * M10 biphase-mark decoding: identical chips = 0, different = 1.
      *
-     * Deux chips identiques valent zéro, deux chips différents valent un. Rien
-     * n'est rejeté ici, et c'est voulu : contrairement au Manchester, aucune
-     * combinaison de chips n'est illégale, donc aucun comptage de paires plates
-     * ne peut dire si la phase est bonne. C'est le motif de synchronisation qui
-     * décide de la phase, et la somme de contrôle qui décide de la trame.
+     * Nothing is rejected, on purpose: unlike Manchester no chip combination is
+     * illegal, so counting flat pairs cannot tell the right phase. The sync
+     * pattern picks the phase, the checksum validates the frame.
      *
-     * Rend le nombre de bits écrits.
+     * Returns the number of bits written.
      */
     fun biphase(chips: ByteArray, from: Int, count: Int, out: ByteArray): Int {
         var n = 0
@@ -170,13 +145,12 @@ object Meteomodem {
     }
 
     /**
-     * Cherche le motif de synchronisation M10 dans un flux de chips.
+     * Finds the M10 sync pattern in a chip stream, both polarities in one pass.
      *
-     * Les deux polarités sont éprouvées en un seul passage : [maxErrors] chips
-     * faux sont tolérés, ce qui laisse passer un front mou sans ouvrir la porte
-     * au bruit — sur trente-deux chips, deux erreurs tolérées donnent une
-     * fausse alarme toutes les quatre millions de positions, et la somme de
-     * contrôle balaie le reste. Rend l'indice du premier chip du motif, ou -1.
+     * [maxErrors] wrong chips are tolerated, enough for a soft edge without
+     * letting noise in: over 32 chips, 2 errors give one false alarm per ~4
+     * million positions, and the checksum catches the rest. Returns the index
+     * of the first pattern chip, or -1.
      */
     fun findSync(chips: ByteArray, count: Int, from: Int, maxErrors: Int = 2): Int {
         val n = M10_SYNC.size
@@ -196,9 +170,8 @@ object Meteomodem {
     }
 
     /**
-     * Assemble une trame M10 à partir d'un flux de chips calé sur son motif.
-     *
-     * Rend null si le flux est trop court ou si la somme de contrôle refuse.
+     * Builds an M10 frame into [out] from a chip stream aligned on its pattern.
+     * False if the stream is too short or the checksum fails.
      */
     fun frameFromChips(chips: ByteArray, syncAt: Int, out: ByteArray): Boolean {
         val start = syncAt + M10_SYNC_TO_FRAME
@@ -216,13 +189,12 @@ object Meteomodem {
         return checkOkM10(out)
     }
 
-    // ------------------------------------------------------ somme de contrôle
+    // ------------------------------------------------------ checksum
 
     /**
-     * Un octet de plus dans la somme de contrôle M10, telle que Meteomodem la
-     * calcule. Portage direct de `update_checkM10` de rs1729 : ce n'est ni un
-     * CRC connu ni une somme simple, et il n'y a rien à en comprendre — il faut
-     * la reproduire au bit près, ce que vérifie [MeteomodemM10Test].
+     * Adds one byte to the M10 checksum. Direct port of rs1729's
+     * `update_checkM10`: neither a known CRC nor a plain sum, nothing to
+     * understand, it must match bit for bit ([MeteomodemM10Test] checks it).
      */
     fun updateCheckM10(c: Int, byteIn: Int): Int {
         val c1 = c and 0xFF
@@ -237,19 +209,18 @@ object Meteomodem {
         return ((c1 shl 8) or c0) and 0xFFFF
     }
 
-    /** La somme de contrôle des [n] premiers octets d'une trame M10. */
+    /** Checksum of the first [n] bytes of an M10 frame. */
     fun checkM10(f: ByteArray, n: Int): Int {
         var c = 0
         for (i in 0 until n) c = updateCheckM10(c, f[i].toInt() and 0xff)
         return c and 0xFFFF
     }
 
-    /** La trame porte-t-elle une somme de contrôle juste ? */
     fun checkOkM10(f: ByteArray): Boolean =
         f.size >= M10_LEN &&
             checkM10(f, M10.CHECK) == ((b(f, M10.CHECK) shl 8) or b(f, M10.CHECK + 1))
 
-    /** Écrit la bonne somme de contrôle dans une trame fabriquée (mire, essais). */
+    /** Writes the correct checksum into a synthetic frame (test generator, tests). */
     fun stampCheckM10(f: ByteArray) {
         val c = checkM10(f, M10.CHECK)
         f[M10.CHECK] = ((c shr 8) and 0xff).toByte()
@@ -257,9 +228,8 @@ object Meteomodem {
     }
 
     /**
-     * Le numéro de série imprimé sur la sonde, reconstitué depuis les cinq
-     * octets de 0x5D. La mise en forme est celle de rs1729, les espaces en
-     * moins : ils passent mal dans un fichier de journal.
+     * Printed serial, rebuilt from the five bytes at 0x5D. rs1729's format
+     * without the spaces, which don't sit well in a log file.
      */
     fun serialM10(f: ByteArray): String {
         if (f.size < M10.SN + 5) return ""
@@ -271,45 +241,36 @@ object Meteomodem {
     }
 
     /**
-     * Position des champs dans une trame M20.
-     *
-     * Les décalages sont regroupés ici, et pas éparpillés dans le code, parce
-     * qu'ils dépendent de la version du firmware : le jour où Meteomodem change
-     * quelque chose, c'est cette table qu'il faudra corriger, et elle seule.
+     * M20 field offsets. Kept in one table because they depend on the firmware
+     * version: when Meteomodem changes something, only this table needs fixing.
      */
     object M20 {
-        const val ALT = 0x08          // altitude, 3 octets, centimètres
-        const val VE = 0x0C           // vitesse est, 2 octets, 0,01 m/s
-        const val VN = 0x0E           // vitesse nord
-        const val VU = 0x10           // vitesse verticale
-        const val LAT = 0x1C          // latitude, 4 octets, 1e-6 degré
+        const val ALT = 0x08          // altitude, 3 bytes, cm
+        const val VE = 0x0C           // east velocity, 2 bytes, 0.01 m/s
+        const val VN = 0x0E           // north velocity
+        const val VU = 0x10           // vertical velocity
+        const val LAT = 0x1C          // latitude, 4 bytes, 1e-6 degree
         const val LON = 0x20          // longitude
-        const val SERIAL = 0x2C       // numéro de série, 2 octets
+        const val SERIAL = 0x2C       // serial, 2 bytes
         const val SATS = 0x30
     }
 
-    /**
-     * Position des champs dans une trame M10.
-     * Même remarque que pour la M20 : table unique, corrigible d'un endroit.
-     */
+    /** M10 field offsets, same reasoning as for the M20. */
     object M10 {
-        const val VE = 0x04           // vitesse est, 2 octets, 1/200 m/s
-        const val VN = 0x06           // vitesse nord
-        const val VU = 0x08           // vitesse verticale
-        const val TOW = 0x0A          // heure GPS de la semaine, 4 octets, ms
-        const val LAT = 0x0E          // latitude, 4 octets, tour = 2^32
-        const val LON = 0x12          // longitude, même échelle
-        const val ALT = 0x16          // altitude, 4 octets, millimètres
-        const val WEEK = 0x20         // semaine GPS, 2 octets
-        const val SN = 0x5D           // numéro de série, 5 octets
-        const val CNT = 0x62          // compteur de trames, 1 octet
-        const val CHECK = 0x63        // somme de contrôle, 2 octets
+        const val VE = 0x04           // east velocity, 2 bytes, 1/200 m/s
+        const val VN = 0x06           // north velocity
+        const val VU = 0x08           // vertical velocity
+        const val TOW = 0x0A          // GPS time of week, 4 bytes, ms
+        const val LAT = 0x0E          // latitude, 4 bytes, full turn = 2^32
+        const val LON = 0x12          // longitude, same scale
+        const val ALT = 0x16          // altitude, 4 bytes, mm
+        const val WEEK = 0x20         // GPS week, 2 bytes
+        const val SN = 0x5D           // serial, 5 bytes
+        const val CNT = 0x62          // frame counter, 1 byte
+        const val CHECK = 0x63        // checksum, 2 bytes
     }
 
-    /**
-     * Décode une trame M20 déjà alignée sur son en-tête.
-     * Rend null si les chiffres obtenus ne tiennent pas debout.
-     */
+    /** Decodes a header-aligned M20 frame. Null if the numbers don't make sense. */
     fun parseM20(f: ByteArray, freqHz: Long = 0L, nowMs: Long = 0L): SondeFrame? {
         if (f.size < M20_LEN) return null
         val altCm = (b(f, M20.ALT) shl 16) or (b(f, M20.ALT + 1) shl 8) or b(f, M20.ALT + 2)
@@ -331,10 +292,8 @@ object Meteomodem {
     }
 
     /**
-     * Décode une trame M10 déjà alignée sur son en-tête.
-     *
-     * La somme de contrôle est exigée : une trame qui ne la passe pas est du
-     * bruit qui a eu de la chance, et il n'y a aucune raison de l'afficher.
+     * Decodes a header-aligned M10 frame. The checksum is mandatory: a frame
+     * failing it is lucky noise.
      */
     fun parseM10(f: ByteArray, freqHz: Long = 0L, nowMs: Long = 0L): SondeFrame? {
         if (f.size < M10_LEN) return null
@@ -360,7 +319,7 @@ object Meteomodem {
         return if (out.plausible) out else null
     }
 
-    /** Cherche un en-tête donné dans un tampon d'octets. */
+    /** Finds a given header in a byte buffer. */
     fun find(buf: ByteArray, header: IntArray, from: Int, to: Int): Int {
         val last = to - header.size
         var i = from
@@ -376,13 +335,11 @@ object Meteomodem {
     }
 
     /**
-     * Cherche et décode la première trame M20 d'un tampon.
+     * Finds and decodes the first M20 frame in a buffer.
      *
-     * Séparé du M10 parce que les deux ne se démodulent pas de la même façon :
-     * la M20 est une FSK à deux états toute simple, la M10 code un bit par
-     * paire de demi-bits.
-     * Les faire sortir du même démodulateur revenait à en sacrifier une, et
-     * c'est la M20 qui était sacrifiée — celle que lâche Météo-France.
+     * Separate from the M10 because they demodulate differently (plain 2-FSK
+     * vs one bit per half-bit pair). One shared demodulator sacrificed one of
+     * them, and it was the M20, the one Météo-France launches.
      */
     fun scanM20(buf: ByteArray, from: Int, to: Int,
                 freqHz: Long = 0L, nowMs: Long = 0L): Rs41.Hit? {
@@ -398,7 +355,7 @@ object Meteomodem {
         return null
     }
 
-    /** Cherche et décode la première trame M10 d'un tampon. */
+    /** Finds and decodes the first M10 frame in a buffer. */
     fun scanM10(buf: ByteArray, from: Int, to: Int,
                 freqHz: Long = 0L, nowMs: Long = 0L): Rs41.Hit? {
         var at = from
@@ -414,8 +371,8 @@ object Meteomodem {
     }
 
     /**
-     * Cherche et décode la première trame Meteomodem d'un tampon, M20 d'abord
-     * puis M10. Rend la trame et l'indice de reprise.
+     * Finds and decodes the first Meteomodem frame (M20 or M10, whichever
+     * header comes first). Returns the frame and the resume index.
      */
     fun scan(buf: ByteArray, from: Int, to: Int, freqHz: Long = 0L, nowMs: Long = 0L): Rs41.Hit? {
         var at = from

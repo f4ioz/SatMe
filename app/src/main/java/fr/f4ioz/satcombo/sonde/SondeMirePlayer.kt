@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.sonde
 
@@ -24,40 +24,25 @@ import java.util.Locale
 import java.util.TimeZone
 
 /**
- * L'émission de la mire radiosonde, et sa démonstration hors antenne.
- *
- * Trois emplois, trois boutons, un seul signal derrière — celui que fabrique
- * [SondeMire], au format exact du constructeur.
- *
- * Le premier emploi est le haut-parleur : le téléphone émet, un autre appareil
- * écoute, et l'on éprouve toute la chaîne d'en face, micro compris. Le
- * deuxième est le fichier : un WAV ou un MP3 que l'on repasse dans une radio,
- * dans une carte son, ou que l'on envoie à un camarade qui n'a pas encore vu
- * de sonde passer. Le troisième est la démonstration : le son n'est joué nulle
- * part, il est versé directement dans le décodeur, et l'écran des radiosondes
- * se remplit d'un vol entier — montée, éclatement, descente, trace sur la
- * carte, journal exportable — sans clé, sans antenne et sans attendre le
- * lâcher de midi.
- *
- * La démonstration tourne plus vite que le temps réel : une mire de cinq
- * minutes se déroule en une dizaine de secondes. Le décodeur n'y voit rien,
- * puisqu'il ne travaille que sur des échantillons ; seul l'écran s'en aperçoit,
- * et c'est justement ce qu'on lui demande.
+ * Plays the [SondeMire] test signal three ways: through the speaker (tests
+ * another device's whole chain, microphone included), as a WAV/MP3 file, or
+ * as an off-air demo fed straight into the decoder, filling the radiosonde
+ * screen with a full flight with no dongle or antenna. The demo runs ~30x
+ * real time; the decoder only sees samples and can't tell.
  */
 object SondeMirePlayer {
 
     data class MireState(
-        /** Vrai pendant l'émission par le haut-parleur. */
+        /** True while playing through the speaker. */
         val playing: Boolean = false,
-        /** Vrai pendant la démonstration dans le décodeur. */
+        /** True while the demo feeds the decoder. */
         val demo: Boolean = false,
-        /** Modèle émis. */
         val model: String = "RS41",
-        /** Avancement, de 0 à 1. */
+        /** Progress, 0 to 1. */
         val progress: Float = 0f,
-        /** Durée demandée, en secondes. */
+        /** Requested duration, seconds. */
         val seconds: Int = 60,
-        /** Dernier fichier écrit. */
+        /** Last file written. */
         val lastFile: String? = null
     )
 
@@ -67,17 +52,15 @@ object SondeMirePlayer {
     @Volatile private var thread: Thread? = null
     @Volatile private var stopping = false
 
-    /** Vrai quand quelque chose tourne, émission ou démonstration. */
+    /** True while playing or demoing. */
     val busy: Boolean get() = thread != null
 
-    // ------------------------------------------------------------- émission
+    // ------------------------------------------------------------- playback
 
     /**
-     * Émet la mire par la sortie audio du téléphone.
-     *
-     * Le signal est un carré à pleine amplitude : ce n'est pas de la musique,
-     * et le haut-parleur d'un téléphone en rend assez pour qu'un micro à trente
-     * centimètres décode. Au-delà, il faut un cordon.
+     * Plays the test signal through the phone's audio output. Full-scale
+     * square wave: a phone speaker is enough for a microphone 30 cm away to
+     * decode. Further than that, use a cable.
      */
     fun play(
         ctx: Context, model: String, lat: Double, lon: Double, seconds: Int,
@@ -125,7 +108,7 @@ object SondeMirePlayer {
                 }
                 if (!stopping) runCatching { Thread.sleep(300) }
             } catch (_: Throwable) {
-                // Sortie audio refusée ou occupée : on rend la main.
+                // Audio output refused or busy: give up.
             } finally {
                 runCatching { track?.stop() }
                 runCatching { track?.release() }
@@ -138,19 +121,16 @@ object SondeMirePlayer {
         t.start()
     }
 
-    // --------------------------------------------------------- démonstration
+    // --------------------------------------------------------- demo
 
     /**
-     * Verse la mire directement dans le décodeur, sans passer par le son.
+     * Feeds the test signal straight into the decoder.
      *
-     * C'est le mode qui sert le plus, et pas seulement pour montrer
-     * l'application : quand rien ne se décode sur l'air, il répond en dix
-     * secondes à la seule question qui compte — est-ce le décodeur, ou est-ce
-     * la réception ? Si la mire passe et pas la sonde, le décodeur est hors de
-     * cause et le défaut est devant, dans le cordon, l'accord ou l'antenne.
+     * The most useful mode: when nothing decodes on air, it answers in ten
+     * seconds whether it's the decoder or the reception. If the test signal
+     * decodes and the sonde doesn't, look at the cable, tuning or antenna.
      *
-     * Le journal n'est pas écrit : un vol de synthèse n'a rien à faire dans les
-     * traces enregistrées, où l'on va chercher de vraies sondes.
+     * No log: a synthetic flight has no place among real sonde tracks.
      */
     fun demo(
         ctx: Context, model: String, lat: Double, lon: Double, seconds: Int,
@@ -172,10 +152,9 @@ object SondeMirePlayer {
                     if (n <= 0) break
                     SondeHub.feedLive(chunk, n)
                     _state.value = _state.value.copy(progress = src.progress)
-                    // Une petite pause par quart de seconde de signal : le vol
-                    // se déroule une trentaine de fois plus vite que sur l'air,
-                    // ce qui laisse tout de même l'écran suivre la trace au lieu
-                    // de la voir apparaître d'un coup.
+                    // Short pause per quarter second of signal: ~30x real time,
+                    // slow enough for the screen to follow the track instead of
+                    // showing it all at once.
                     runCatching { Thread.sleep(8) }
                 }
             } catch (_: Throwable) {
@@ -189,7 +168,7 @@ object SondeMirePlayer {
         t.start()
     }
 
-    /** Coupe l'émission ou la démonstration en cours. */
+    /** Stops playback or demo. */
     fun stop() {
         stopping = true
         val t = thread ?: return
@@ -198,7 +177,7 @@ object SondeMirePlayer {
         _state.value = _state.value.copy(playing = false, demo = false, progress = 0f)
     }
 
-    /** Arrête la démonstration et désarme le décodeur avec elle. */
+    /** Stops the demo and disarms the decoder with it. */
     fun stopDemo() {
         stop()
         if (SondeHub.state.value.source == "DEMO") SondeHub.stop()
@@ -206,11 +185,11 @@ object SondeMirePlayer {
 
     // ---------------------------------------------------------------- export
 
-    /** Dossier des mires exportées, partagé avec la mire SSTV. */
+    /** Export directory, shared with the SSTV test signal. */
     fun dir(ctx: Context): File =
         File(ctx.getExternalFilesDir(null), "mires").apply { mkdirs() }
 
-    /** Écrit la mire dans un WAV mono 44,1 kHz. */
+    /** Writes the test signal as a 44.1 kHz mono WAV. */
     fun exportWav(
         ctx: Context, model: String, lat: Double, lon: Double, seconds: Int,
         ambience: Boolean = false
@@ -237,13 +216,11 @@ object SondeMirePlayer {
     }.getOrNull()
 
     /**
-     * La même mire en MP3.
+     * Same signal as MP3.
      *
-     * Prudence ici, et c'est écrit exprès : le MP3 est parfait pour la SSTV,
-     * qui module entre 1500 et 2300 Hz, mais une sonde jette des fronts à
-     * plusieurs kilohertz que le codage perceptuel arrondit. Le fichier
-     * s'envoie et s'écoute, il sert à montrer ; pour éprouver vraiment une
-     * chaîne de décodage, c'est le WAV qu'il faut repasser.
+     * Caution: MP3 is fine for SSTV (1500 to 2300 Hz), but sonde edges reach
+     * several kHz and perceptual coding rounds them. Good for showing; to
+     * really test a decoding chain, replay the WAV.
      */
     fun exportMp3(
         ctx: Context, model: String, lat: Double, lon: Double, seconds: Int,
@@ -287,7 +264,7 @@ object SondeMirePlayer {
             .apply { timeZone = TimeZone.getTimeZone("UTC") }
             .format(Date())
 
-    /** En-tête WAV canonique, 44 octets, mono PCM 16 bits. */
+    /** Canonical 44-byte WAV header, mono 16-bit PCM. */
     private fun wavHeader(samples: Int): ByteArray {
         val dataLen = samples * 2
         val h = ByteArray(44)

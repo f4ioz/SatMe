@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.sdr
 
@@ -18,83 +18,62 @@ import kotlin.math.sin
 import kotlin.math.sqrt
 
 /**
- * Traitement du signal de la chaîne SDR, sans une ligne d'Android : la clé
- * fournit de l'IQ, ce fichier en fait de l'audio.
+ * SDR signal processing, no Android: IQ from the dongle in, audio out.
  *
- * Le découpage suit la logique d'un récepteur classique :
+ *   1 058 400 S/s IQ    <- dongle output (24 x 44 100, on purpose)
+ *        | decimate 6, wide filter     "drop the useless band"
+ *     176 400 S/s IQ    <- spectrum and waterfall computed here
+ *        | decimate 4, channel filter  "keep only the station"
+ *      44 100 S/s IQ
+ *        | demodulation (NFM, USB, LSB, AM)
+ *      44 100 S/s audio <- exactly what the SSTV engine expects
  *
- *   1 058 400 éch/s IQ    ← ce que sort la clé (24 × 44 100, choisi exprès)
- *        ↓ décimation 6, filtre large   « on jette la bande qui ne sert à rien »
- *     176 400 éch/s IQ    ← c'est là qu'on calcule le spectre et la cascade
- *        ↓ décimation 4, filtre de canal   « on ne garde que la station »
- *      44 100 éch/s IQ
- *        ↓ démodulation (FM étroite, BLU supérieure ou inférieure, AM)
- *      44 100 éch/s audio  ← exactement ce qu'attend le moteur SSTV
- *
- * Filtrer en deux temps n'est pas de la coquetterie : un filtre de canal à
- * 8 kHz appliqué directement à 1 MHz d'échantillonnage demanderait des
- * centaines de coefficients. En descendant d'abord d'un facteur 6, le même
- * filtre en coûte soixante.
+ * Two stages because an 8 kHz channel filter at 1 MHz would need hundreds of
+ * taps; after decimating by 6 it needs about sixty.
  */
 object Dsp {
 
-    /** Débit demandé à la clé : 24 fois la fréquence audio, pour tomber juste. */
+    /** Dongle sample rate: 24x the audio rate, so decimation is exact. */
     const val RTL_RATE = 1_058_400
 
-    /** Fréquence audio de sortie, celle du moteur SSTV et de l'encodeur MP3. */
+    /** Output audio rate, as used by the SSTV engine and MP3 encoder. */
     const val AUDIO_RATE = 44_100
 
     const val DECIM_1 = 6
     const val DECIM_2 = 4
 
     /**
-     * Nombre de raies de l'analyseur de spectre. Quatre mille quatre-vingt-seize
-     * raies sur 176 400 Hz font 43 Hz par raie : de quoi voir une porteuse et
-     * la poser au bon endroit sur la cascade. Mille raies donnaient 172 Hz, et
-     * à l'échelle de six kilohertz il ne restait qu'une trentaine de points
-     * réels étirés sur toute la largeur de l'écran.
+     * Spectrum bins. 4096 over 176 400 Hz = 43 Hz per bin, enough to place a
+     * carrier on the waterfall. 1024 bins gave 172 Hz: on a 6 kHz scale, only
+     * ~30 real points stretched across the screen.
      */
     const val SPECTRUM_SIZE = 4096
 
     /**
-     * Nombre de raies du panorama, l'analyseur branché sur le flux brut.
+     * Panorama bins: the analyser on the raw stream.
      *
-     * Le spectre ordinaire est pris après le premier décimateur : il couvre
-     * 176 400 Hz, ce qui suffit largement pour poser une porteuse sur une
-     * cascade. Le transpondeur étroit de QO-100 en fait 492 000, plus les deux
-     * balises qui l'encadrent : 500 000 en tout. Il ne rentre pas.
+     * The regular spectrum covers 176 400 Hz; the QO-100 narrowband
+     * transponder plus beacons is 500 000 Hz. On the raw 1 058 400 S/s stream
+     * **the whole transponder always fits**: half-width 529 200 Hz, so wherever
+     * the dongle is tuned inside it, the whole band plan stays visible with no
+     * PLL retune and no sweep mode. Margin is only 29 kHz worst case and
+     * tuner edges are soft: a station at the far edge may look weaker than it
+     * is.
      *
-     * On prend donc le flux tel qu'il sort de la clé, à 1 058 400 échantillons
-     * par seconde, et **le transpondeur y tient toujours en entier** : la
-     * demi-largeur de la fenêtre est de 529 200 Hz, contre 500 000 pour la
-     * réglette. Autrement dit, où que soit accordée la clé à l'intérieur du
-     * transpondeur, la totalité du plan de bande reste visible — il n'y a
-     * jamais à reprogrammer la PLL pour voir l'autre bout. C'est une
-     * coïncidence heureuse entre un débit choisi pour l'audio et une largeur
-     * choisie par AMSAT-DL, et elle vaut d'être écrite : elle a dispensé
-     * d'inventer un mode de balayage.
-     *
-     * Reste la marge : vingt-neuf kilohertz au pire, et les bords d'un tuner
-     * de clé sont mous. Un correspondant à l'extrême bord de la bande peut
-     * donc paraître plus faible qu'il n'est si l'on écoute à l'autre bout.
-     * Cela ne trompe personne tant qu'on n'en fait pas une mesure.
-     *
-     * Seize mille raies sur 1 058 400 Hz font 64,6 Hz par raie : une note de
-     * télégraphie occupe une raie, la balise BPSK médiane deux ou trois, et
-     * l'interpolation parabolique de [fr.f4ioz.satcombo.domain.MesureBalise]
-     * descend l'incertitude bien en dessous.
+     * 16384 bins = 64.6 Hz per bin: a CW note fills one bin, the middle BPSK
+     * beacon two or three, and the parabolic interpolation in
+     * [fr.f4ioz.satcombo.domain.MesureBalise] gets well below that.
      */
     const val PANORAMA_SIZE = 16384
 
     /**
-     * Réponse d'un passe-bas par fenêtrage d'un sinus cardinal (fenêtre de
-     * Blackman). [taps] doit être impair pour que le filtre soit à phase
-     * linéaire et sans retard fractionnaire.
+     * Windowed-sinc low-pass (Blackman). [taps] must be odd for linear phase
+     * with no fractional delay.
      */
     fun lowPass(taps: Int, cutoffHz: Double, sampleRate: Double): FloatArray {
         val n = if (taps % 2 == 0) taps + 1 else taps
         val out = FloatArray(n)
-        val fc = cutoffHz / sampleRate          // fréquence normalisée (0..0,5)
+        val fc = cutoffHz / sampleRate          // normalised frequency (0..0.5)
         val mid = (n - 1) / 2
         var sum = 0.0
         for (i in 0 until n) {
@@ -105,41 +84,40 @@ object Dsp {
             out[i] = v.toFloat()
             sum += v
         }
-        // Gain unitaire en continu : sinon chaque étage change le niveau.
+        // Unity DC gain, or every stage changes the level.
         if (sum != 0.0) for (i in 0 until n) out[i] = (out[i] / sum).toFloat()
         return out
     }
 }
 
-/** Ce que la chaîne doit faire du signal une fois ramené en bande de base. */
+/** What the chain does with the baseband signal. */
 enum class RxMode {
-    /** FM étroite : phonie satellite, télémétrie, SSTV. */
+    /** Narrowband FM: satellite voice, telemetry, SSTV. */
     NFM,
 
-    /** Bande latérale supérieure : transpondeurs linéaires en mode inversé ou non. */
+    /** Upper sideband: linear transponders, inverting or not. */
     USB,
 
-    /** Bande latérale inférieure. */
+    /** Lower sideband. */
     LSB,
 
-    /** Amplitude : balises, et plus tard les images météo APT. */
+    /** AM: beacons, and later APT weather images. */
     AM
 }
 
 /**
- * Filtre décimateur complexe. Les coefficients ne sont évalués qu'aux instants
- * réellement produits : décimer par 6 divise le coût par 6, ce qui est tout
- * l'intérêt de mettre le filtre et la décimation dans le même objet.
+ * Complex decimating filter. Taps are only evaluated at output instants, so
+ * decimating by 6 divides the cost by 6: the point of combining both.
  */
 class ComplexDecimator(private val taps: FloatArray, private val factor: Int) {
 
     private val n = taps.size
     private var bufI = FloatArray(n - 1)
     private var bufQ = FloatArray(n - 1)
-    /** Position, dans le prochain bloc, du premier échantillon qui produira une sortie. */
+    /** Index in the next block of the first sample that produces an output. */
     private var phase = 0
 
-    /** Nombre de sorties maximal pour un bloc de [count] entrées. */
+    /** Maximum outputs for [count] inputs. */
     fun maxOut(count: Int): Int = count / factor + 2
 
     fun reset() {
@@ -183,20 +161,16 @@ class ComplexDecimator(private val taps: FloatArray, private val factor: Int) {
 }
 
 /**
- * Filtre passe-bande à coefficients complexes, la pièce qui permet la BLU.
+ * Complex-coefficient band-pass, the piece that makes SSB possible.
  *
- * En bande de base complexe, une bande latérale supérieure occupe uniquement
- * les fréquences positives et une bande latérale inférieure uniquement les
- * négatives. Un filtre réel ne sait pas les distinguer : il traite +1 500 Hz et
- * −1 500 Hz de la même façon. En décalant la réponse d'un passe-bas par
- * h[k] = passe_bas[k]·e^{j2πf_c k/f_e}, on obtient un passe-bande qui n'existe
- * que d'un seul côté de zéro. Le signal filtré vaut alors m + j·m̂ (ou m − j·m̂
- * pour l'autre côté) : dans les deux cas la partie réelle est le message, et la
- * démodulation se réduit à jeter la partie imaginaire.
+ * In complex baseband, USB occupies only positive frequencies and LSB only
+ * negative ones. A real filter can't tell +1500 Hz from -1500 Hz. Shifting a
+ * low-pass by h[k] = lowpass[k]·e^{j2πf_c k/f_s} gives a band-pass on one side
+ * of zero only. The output is m + j·m̂ (or m − j·m̂): the real part is the
+ * message, so demodulation is just dropping the imaginary part.
  *
- * C'est la méthode « par déphasage », la même que dans un transceiver, sauf
- * qu'ici le déphasage exact de 90° est obtenu par construction plutôt que par
- * des réseaux RC appairés.
+ * The phasing method, as in a transceiver, except the exact 90° shift comes by
+ * construction rather than from matched RC networks.
  */
 class ComplexBandpass(
     taps: Int,
@@ -227,10 +201,7 @@ class ComplexBandpass(
 
     fun reset() { bufI.fill(0f); bufQ.fill(0f) }
 
-    /**
-     * Filtre [count] échantillons complexes et n'écrit que la partie réelle du
-     * résultat dans [out] — c'est déjà l'audio BLU.
-     */
+    /** Filters [count] complex samples, writing only the real part (the SSB audio) to [out]. */
     fun process(inI: FloatArray, inQ: FloatArray, count: Int, out: FloatArray): Int {
         val need = n - 1 + count
         if (bufI.size < need) {
@@ -254,10 +225,8 @@ class ComplexBandpass(
 }
 
 /**
- * Discriminateur de fréquence. La FM porte l'information dans la dérivée de la
- * phase, donc l'argument de z[n]·conj(z[n-1]) donne directement l'écart de
- * fréquence instantané, indépendamment de l'amplitude — c'est pour cela qu'une
- * liaison FM est insensible au niveau tant qu'elle reste au-dessus du seuil.
+ * Frequency discriminator: arg(z[n]·conj(z[n-1])) is the instantaneous
+ * frequency deviation, independent of amplitude.
  */
 class FmDiscriminator(private val sampleRate: Double, private val maxDeviationHz: Double) {
 
@@ -265,13 +234,13 @@ class FmDiscriminator(private val sampleRate: Double, private val maxDeviationHz
     private var prevQ = 0f
     private val hzPerRad = sampleRate / (2.0 * PI)
 
-    /** Niveau moyen du dernier bloc, en dB pleine échelle (négatif). */
+    /** Mean level of the last block, dBFS (negative). */
     var levelDb: Float = -120f
         private set
 
     fun reset() { prevI = 0f; prevQ = 0f; levelDb = -120f }
 
-    /** Démodule [count] échantillons complexes en audio 16 bits. */
+    /** Demodulates [count] complex samples to 16-bit audio. */
     fun process(inI: FloatArray, inQ: FloatArray, count: Int, out: ShortArray): Int {
         var mag = 0.0
         for (k in 0 until count) {
@@ -294,24 +263,21 @@ class FmDiscriminator(private val sampleRate: Double, private val maxDeviationHz
 }
 
 /**
- * Désaccentuation audio. La FM commerciale et amateur accentue les aigus à
- * l'émission ; sans le filtre inverse, la réception siffle.
- *
- * Le moteur SSTV n'en souffre pas : son propre discriminateur ne regarde que
- * la fréquence, pas le niveau. Le réglage reste néanmoins débrayable, parce
- * qu'un signal télémétrique ou une balise se lisent mieux à plat.
+ * Audio de-emphasis. Broadcast and amateur FM pre-emphasise the highs; without
+ * the inverse filter reception hisses. SSTV doesn't care (its discriminator
+ * only looks at frequency). Can be turned off: telemetry and beacons read
+ * better flat.
  */
 class Deemphasis(tauMicros: Double, sampleRate: Double) {
     private val a = kotlin.math.exp(-1.0 / (sampleRate * tauMicros * 1e-6)).toFloat()
 
     /**
-     * Rattrapage de niveau, calculé et non plus deviné.
+     * Make-up gain, computed rather than guessed.
      *
-     * Le filtre a pour réponse H(f) = (1 − a) / |1 − a·e^{−jω}|. Multiplier
-     * bêtement par trois laissait mille hertz onze décibels trop bas : une
-     * tonalité d'appel à 1 750 Hz devenait inaudible alors que le signal était
-     * parfaitement reçu. On normalise donc à 1 kHz, la référence des mesures de
-     * modulation, pour que la voix sorte au même niveau qu'à plat.
+     * H(f) = (1 − a) / |1 − a·e^{−jω}|. A fixed x3 left 1 kHz 11 dB too low: a
+     * 1750 Hz tone-burst became inaudible on a perfectly received signal. So we
+     * normalise at 1 kHz, the modulation reference, so voice comes out at the
+     * same level as flat.
      */
     private val makeup: Float = run {
         val ad = a.toDouble()
@@ -323,7 +289,7 @@ class Deemphasis(tauMicros: Double, sampleRate: Double) {
         if (h <= 1e-9) 1f else (1.0 / h).coerceIn(1.0, 64.0).toFloat()
     }
 
-    /** Gain de rattrapage réellement appliqué (essais). */
+    /** Make-up gain actually applied (for tests). */
     val makeupGain: Float get() = makeup
 
     private var y = 0f
@@ -337,7 +303,7 @@ class Deemphasis(tauMicros: Double, sampleRate: Double) {
     }
 }
 
-/** Retire la composante continue résiduelle du discriminateur (désaccord). */
+/** Removes residual discriminator DC (mistuning). */
 class DcBlock(private val alpha: Float = 0.9995f) {
     private var xPrev = 0f
     private var yPrev = 0f
@@ -353,15 +319,14 @@ class DcBlock(private val alpha: Float = 0.9995f) {
 }
 
 /**
- * Commande automatique de gain audio.
+ * Audio AGC.
  *
- * En FM le niveau sonore ne dépend pas du signal reçu ; en BLU et en AM si, et
- * dans des proportions énormes : entre un correspondant qui passe au zénith
- * avec dix watts et un autre au ras de l'horizon, il y a facilement quarante
- * décibels. Sans CAG, on passe le passage à courir après le bouton de volume.
+ * In FM the audio level doesn't depend on signal strength; in SSB and AM it
+ * does, massively: 40 dB between a station at zenith and one on the horizon.
+ * Without AGC you spend the pass chasing the volume knob.
  *
- * L'enveloppe monte vite (on ne veut pas saturer sur une syllabe) et redescend
- * lentement (on ne veut pas que le souffle remonte entre deux mots).
+ * Fast attack (don't saturate on a syllable), slow release (don't let noise
+ * pump up between words).
  */
 class AudioAgc(
     private val target: Float = 8_000f,
@@ -373,7 +338,7 @@ class AudioAgc(
 
     fun reset() { env = 0f }
 
-    /** Convertit [count] échantillons flottants en audio 16 bits à niveau tenu. */
+    /** Converts [count] float samples to levelled 16-bit audio. */
     fun process(buf: FloatArray, count: Int, out: ShortArray) {
         for (k in 0 until count) {
             val x = buf[k]
@@ -386,11 +351,8 @@ class AudioAgc(
 }
 
 /**
- * Silencieux. Coupe la sortie tant que le niveau reste sous le seuil, avec une
- * hystérésis pour que le souffle ne fasse pas battre la porte à chaque syllabe.
- *
- * Seuil à −120 dB : la porte reste ouverte en permanence, c'est le réglage
- * « silencieux coupé ».
+ * Squelch, with hysteresis so noise doesn't flap the gate on every syllable.
+ * A −120 dB threshold keeps it always open ("squelch off").
  */
 class Squelch(var thresholdDb: Float = -120f, private val hysteresisDb: Float = 4f) {
 
@@ -399,7 +361,7 @@ class Squelch(var thresholdDb: Float = -120f, private val hysteresisDb: Float = 
 
     fun reset() { open = true }
 
-    /** Met la porte à jour pour un bloc au niveau [levelDb] ; renvoie son état. */
+    /** Updates the gate for a block at [levelDb]; returns its state. */
     fun update(levelDb: Float): Boolean {
         open = if (open) levelDb > thresholdDb - hysteresisDb else levelDb > thresholdDb
         return open
@@ -407,21 +369,19 @@ class Squelch(var thresholdDb: Float = -120f, private val hysteresisDb: Float = 
 }
 
 /**
- * Transformée de Fourier rapide, radix 2, sur place.
- *
- * Écrite ici plutôt qu'empruntée à une bibliothèque : la chaîne SDR entière
- * tient dans du Kotlin pur testable sur machine de bureau, et une FFT de mille
- * points fait vingt lignes.
+ * In-place radix-2 FFT. Written here rather than pulled from a library: the
+ * whole SDR chain stays pure Kotlin, testable on a desktop, and an FFT is
+ * twenty lines.
  */
 object Fft {
 
-    /** Transforme [re]/[im] sur place. La taille doit être une puissance de deux. */
+    /** Transforms [re]/[im] in place. Size must be a power of two. */
     fun transform(re: DoubleArray, im: DoubleArray) {
         val n = re.size
         if (n <= 1) return
         require(n and (n - 1) == 0) { "taille non puissance de deux : $n" }
 
-        // Permutation par inversion de bits.
+        // Bit-reversal permutation.
         var j = 0
         for (i in 1 until n) {
             var bit = n shr 1
@@ -463,12 +423,11 @@ object Fft {
 }
 
 /**
- * Analyseur de spectre : accumule des échantillons complexes et produit, une
- * fois la fenêtre pleine, la puissance par raie en dB pleine échelle.
+ * Spectrum analyser: accumulates complex samples and, once the window is full,
+ * outputs power per bin in dBFS.
  *
- * Le résultat est rangé « à l'endroit » : l'indice 0 correspond à −f_e/2, le
- * milieu à la fréquence d'accord, le dernier à +f_e/2. C'est ce que l'œil
- * attend d'un panoramique, et cela évite à l'affichage de faire la gymnastique.
+ * Output is already shifted: index 0 is −f_s/2, the middle is the tuned
+ * frequency, the last +f_s/2, so the display needs no reordering.
  */
 class SpectrumAnalyzer(val size: Int = 1024) {
 
@@ -477,30 +436,25 @@ class SpectrumAnalyzer(val size: Int = 1024) {
     private val win = DoubleArray(size) { 0.5 - 0.5 * cos(2.0 * PI * it / (size - 1)) }
     private var fill = 0
 
-    /** Puissance par raie, en dB pleine échelle, de −f_e/2 à +f_e/2. */
+    /** Power per bin, dBFS, from −f_s/2 to +f_s/2. */
     val magDb = FloatArray(size) { -120f }
 
-    /** Nombre de trames complètes calculées depuis le dernier [reset]. */
+    /** Complete frames computed since the last [reset]. */
     var frames: Long = 0
         private set
 
     fun reset() { fill = 0; frames = 0; magDb.fill(-120f) }
 
     /**
-     * Repart d'une trame vide sans effacer l'affichage.
+     * Starts an empty frame without clearing the display.
      *
-     * L'appelant n'alimente l'analyseur que dix fois par seconde : sans cet
-     * appel, une trame se retrouvait recollée à partir de morceaux pris à
-     * quatre-vingt-dix millisecondes d'intervalle, et la FFT d'un signal ainsi
-     * découpé n'a plus de sens — la porteuse s'étalait au lieu de faire une
-     * raie.
+     * The caller only feeds the analyser ten times a second. Without this, a
+     * frame got stitched from pieces 90 ms apart, and the FFT of such a signal
+     * is meaningless: the carrier smeared instead of making a line.
      */
     fun begin() { fill = 0 }
 
-    /**
-     * Empile [count] échantillons complexes. Renvoie vrai si une trame vient
-     * d'être calculée, auquel cas [magDb] est à jour.
-     */
+    /** Pushes [count] complex samples. True if a frame was just computed ([magDb] updated). */
     fun push(inI: FloatArray, inQ: FloatArray, count: Int): Boolean {
         var done = false
         var k = 0
@@ -528,10 +482,10 @@ class SpectrumAnalyzer(val size: Int = 1024) {
         }
         Fft.transform(re, im)
         val half = size / 2
-        val norm = 1.0 / (size * 0.5)   // 0,5 : gain moyen de la fenêtre de Hann
+        val norm = 1.0 / (size * 0.5)   // 0.5: mean gain of the Hann window
         for (i in 0 until size) {
-            // fftshift : la raie 0 de la FFT est la fréquence d'accord, elle va
-            // au milieu ; les raies au-delà de size/2 sont les négatives.
+            // fftshift: FFT bin 0 (the tuned frequency) goes to the middle;
+            // bins above size/2 are the negative frequencies.
             val src = if (i < half) i + half else i - half
             val m = sqrt(re[src] * re[src] + im[src] * im[src]) * norm
             magDb[i] = if (m <= 1e-9) -120f else (20.0 * log10(m)).toFloat()
@@ -541,16 +495,14 @@ class SpectrumAnalyzer(val size: Int = 1024) {
 }
 
 /**
- * Chaîne complète : octets IQ bruts de la clé → audio 44 100 Hz mono, dans le
- * mode demandé.
+ * Full chain: raw dongle IQ bytes to 44 100 Hz mono audio, in the chosen mode.
  *
- * [offsetHz] décale la fréquence d'écoute à l'intérieur de la bande reçue sans
- * toucher à la PLL du tuner. Cela sert à trois choses : rattraper le pas fini
- * du synthétiseur (une centaine de hertz, invisible en FM mais pas en BLU),
- * suivre un correspondant qui dérive dans le transpondeur, et permettre de
- * poser le doigt sur la cascade pour s'accorder. Le décalage est appliqué sur
- * l'IQ brut, avant le premier filtre : après le décalage la station visée se
- * retrouve à zéro hertz et toute la chaîne fonctionne comme d'habitude.
+ * [offsetHz] shifts the listening frequency inside the received band without
+ * touching the tuner PLL: it compensates the synthesiser step (~100 Hz,
+ * invisible in FM but not in SSB), follows a station drifting in the
+ * transponder, and lets the user tap the waterfall to tune. The shift is
+ * applied after the first decimator; the target station lands on 0 Hz and the
+ * rest of the chain works as usual.
  */
 class RxChain(
     private val rtlRate: Double = Dsp.RTL_RATE.toDouble(),
@@ -559,15 +511,14 @@ class RxChain(
     private val stage1Rate = rtlRate / Dsp.DECIM_1
     private val stage2Rate = stage1Rate / Dsp.DECIM_2
 
-    // Étage 1 : on ne cherche pas la sélectivité, seulement à ne pas replier
-    // de bruit dans la bande utile en descendant d'un facteur 6.
-    // Le filtre est plus raide et plus large qu'avant : le décalage fin se fait
-    // maintenant après cet étage, donc tout ce que l'utilisateur peut viser à
-    // l'écran doit y survivre. À 2,9 la bande utile s'arrêtait à ±30 kHz.
+    // Stage 1: not about selectivity, only avoiding aliasing when decimating
+    // by 6. Wide and steep, because the fine shift happens after this stage:
+    // anything the user can tap on screen must survive it. With a divisor of
+    // 2.9 the usable band stopped at ±30 kHz.
     private val dec1 = ComplexDecimator(
         Dsp.lowPass(95, rtlRate / Dsp.DECIM_1 / 2.4, rtlRate), Dsp.DECIM_1)
 
-    // Étage 2 : le filtre de canal, reconstruit quand la largeur change.
+    // Stage 2: channel filter, rebuilt when the width changes.
     private var dec2Cutoff = 8_000.0
     private var dec2 = ComplexDecimator(
         Dsp.lowPass(63, dec2Cutoff, stage1Rate), Dsp.DECIM_2)
@@ -577,62 +528,59 @@ class RxChain(
     private val deemph = Deemphasis(750.0, stage2Rate)
     private val agc = AudioAgc()
 
-    /** Filtre de bande latérale, reconstruit quand le mode ou la largeur change. */
+    /** Sideband filter, rebuilt when mode or width changes. */
     private var ssb: ComplexBandpass? = null
     private var ssbKey = ""
 
-    /** Mode de démodulation. */
     var mode: RxMode = RxMode.NFM
 
     /**
-     * Désaccentuation. Coupée par défaut : elle n'a de sens qu'en FM à large
-     * bande (radiodiffusion), et sur un répéteur ou une image SSTV elle ne fait
-     * qu'écraser les aigus. Les récepteurs sérieux la réservent à la WFM.
+     * De-emphasis. Off by default: it only makes sense for wideband (broadcast)
+     * FM; on a repeater or SSTV image it just crushes the highs.
      */
     var deemphasis: Boolean = false
 
-    /** Décalage fin appliqué en logiciel, en hertz. */
+    /** Software fine offset, Hz. */
     var offsetHz: Double = 0.0
 
     /**
-     * Décalage Doppler encaissé en logiciel, en hertz, en plus de [offsetHz].
+     * Software Doppler shift, Hz, on top of [offsetHz].
      *
-     * Les deux sont séparés parce qu'ils n'appartiennent pas à la même main :
-     * [offsetHz] est le doigt de l'opérateur sur la cascade, celui-ci est le
-     * suivi automatique. Les additionner dans une seule variable ferait
-     * disparaître le réglage manuel à la première seconde de passage.
+     * Kept separate because they have different owners: [offsetHz] is the
+     * operator's finger on the waterfall, this is automatic tracking. One
+     * shared variable would wipe the manual setting in the first second of
+     * the pass.
      */
     var dopplerFineHz: Double = 0.0
 
     /**
-     * Largeur de canal demandée, en hertz. Zéro veut dire « au mode de
-     * décider » : 16 kHz en FM étroite, 2,4 kHz en BLU, 6 kHz en AM.
+     * Requested channel width, Hz. Zero means "mode default": 16 kHz NFM,
+     * 2.4 kHz SSB, 6 kHz AM.
      */
     var bandwidthHz: Double = 0.0
 
-    /** Silencieux, en dB pleine échelle. −120 dB veut dire « coupé ». */
+    /** Squelch, dBFS. −120 dB means off. */
     val squelch = Squelch()
 
-    /** Analyseur de spectre, alimenté à la demande sur la sortie du premier étage. */
+    /** Spectrum analyser, fed on demand from the first stage output. */
     val spectrum = SpectrumAnalyzer(Dsp.SPECTRUM_SIZE)
 
-    /** Vrai tant qu'on remplit une trame de spectre entamée. */
+    /** True while filling a started spectrum frame. */
     private var collecting = false
 
     /**
-     * Analyseur du flux brut, avant toute décimation : tout ce que la clé
-     * reçoit, d'un bord à l'autre. Voir [Dsp.PANORAMA_SIZE] pour la raison
-     * d'être de ce second analyseur.
+     * Analyser on the raw stream before any decimation: everything the dongle
+     * receives, edge to edge. See [Dsp.PANORAMA_SIZE] for why.
      */
     val panorama = SpectrumAnalyzer(Dsp.PANORAMA_SIZE)
 
-    /** Vrai tant qu'on remplit une trame de panorama entamée. */
+    /** True while filling a started panorama frame. */
     private var collectingPan = false
 
-    /** Largeur, en hertz, couverte par le spectre (débit du premier étage). */
+    /** Spectrum span, Hz (first stage rate). */
     val spectrumSpanHz: Double get() = stage1Rate
 
-    /** Largeur, en hertz, couverte par le panorama : le débit de la clé. */
+    /** Panorama span, Hz: the dongle rate. */
     val panoramaSpanHz: Double get() = rtlRate
 
     private var nco = 0.0
@@ -642,20 +590,19 @@ class RxChain(
     private var peak = 0f
 
     /**
-     * Part des échantillons bruts collés aux butées du convertisseur. Au-delà
-     * de quelques pour mille, l'étage d'entrée de la clé est saturé : le
-     * souffle disparaît et la modulation avec — exactement ce qu'on observe
-     * quand un émetteur voisin arrose le dongle. Aucun réglage logiciel ne
-     * rattrape cela, il faut baisser le gain ou éloigner l'antenne.
+     * Fraction of raw samples stuck at the ADC limits. Above a few per mille
+     * the dongle front end is saturated: noise disappears and modulation with
+     * it, typically a nearby transmitter flooding the dongle. No software fix:
+     * lower the gain or move the antenna.
      */
     val clipRatio: Float get() = clip
 
-    /** Crête audio de sortie, ramenée à 0..1. Sert de vu-mètre. */
+    /** Output audio peak, 0..1, for the VU meter. */
     val audioPeak: Float get() = peak
 
     /**
-     * Fréquence, en hertz relatifs à l'accord, de la raie la plus forte entre
-     * [fromHz] et [toHz] d'après la dernière trame de spectre.
+     * Offset from the tuned frequency (Hz) of the strongest bin between
+     * [fromHz] and [toHz] in the last spectrum frame.
      */
     fun peakOffsetHz(fromHz: Double, toHz: Double): Double {
         val n = spectrum.size
@@ -674,40 +621,31 @@ class RxChain(
     }
 
     /**
-     * Centre de gravité du signal dans le spectre, en hertz relatifs à
-     * l'accord de la clé. C'est l'accord automatique de la 18.5, et il est né
-     * au banc de mesure des radiosondes.
+     * Power-weighted centre of the signal in the spectrum, Hz relative to the
+     * dongle tuning. The auto-tune, born on the radiosonde test bench.
      *
-     * Chercher la raie la plus forte — ce que fait [peakOffsetHz] — convient à
-     * une porteuse, et à elle seule. Une modulation par déplacement de
-     * fréquence n'en a pas : elle a deux bosses écartées d'une excursion, et
-     * viser la plus haute des deux revient à s'accorder systématiquement à
-     * côté. La moyenne pondérée par la puissance, elle, tombe entre les deux
-     * bosses, c'est-à-dire là où serait la porteuse s'il y en avait une.
+     * The strongest bin ([peakOffsetHz]) suits a carrier and nothing else.
+     * FSK has no carrier, just two humps one deviation apart; aiming at the
+     * higher one always tunes off to the side. The power-weighted mean falls
+     * between the humps, where the carrier would be.
      *
-     * Trois précautions, et chacune a coûté une mesure :
+     * Three precautions, each learned from a measurement:
+     *  - [thresholdDb] above the floor rejects noise. Otherwise thousands of
+     *    empty bins pull the mean towards the window centre.
+     *  - [dcNotchHz] skips bins near zero. That line comes from the dongle, not
+     *    the station (every direct-conversion receiver has a DC spike) and it
+     *    shaved about a sixth off the estimate: 1600 Hz reported for 2000.
+     *  - Two passes: a wide one for a rough position, then one within
+     *    [narrowHz] of it where only the station remains. Residual noise in a
+     *    wide window always pulls towards its centre.
      *
-     *  - Le seuil relatif [thresholdDb] écarte le plancher de bruit. Sans lui
-     *    les milliers de raies vides de la bande, toutes également faibles mais
-     *    innombrables, tirent la moyenne vers le milieu de la fenêtre.
-     *  - [dcNotchHz] saute les raies collées au zéro. Elles ne viennent pas de
-     *    la station mais de la clé : tout récepteur à conversion directe laisse
-     *    une raie de continu au centre de sa bande, et comme elle est forte,
-     *    elle rabotait l'estimation d'un bon sixième — mille six cents hertz
-     *    annoncés là où il y en avait deux mille.
-     *  - La mesure se fait en deux passes. La première cherche large et rend
-     *    une position approchée ; la seconde recommence dans une fenêtre de
-     *    [narrowHz] autour d'elle, où il ne reste plus que la station. Le bruit
-     *    résiduel d'une fenêtre large pèse peu mais tire toujours vers son
-     *    centre, d'autant plus que la station en est loin.
+     * The spectrum is taken before the fine-tuning mixer, so the result is
+     * absolute relative to the dongle frequency and is *written* to
+     * [offsetHz], not added. That is what makes continuous re-centring
+     * harmless: once tuned, it returns zero.
      *
-     * Le spectre est prélevé avant le mélangeur d'accord fin : le chiffre rendu
-     * est donc absolu par rapport à la fréquence affichée par la clé, et
-     * s'écrit directement dans [offsetHz] — il ne s'y ajoute pas. C'est ce qui
-     * rend le recentrage continu inoffensif : une fois accordé, il rend zéro.
-     *
-     * Rend zéro quand rien ne dépasse le seuil : pas de signal, pas d'accord,
-     * et surtout pas de dérive vers le bruit.
+     * Returns zero when nothing clears the threshold: no signal, no tuning,
+     * and above all no drift towards noise.
      */
     fun centroidOffsetHz(
         searchHz: Double = 25_000.0,
@@ -715,13 +653,12 @@ class RxChain(
         dcNotchHz: Double = 400.0,
         narrowHz: Double = 4_000.0,
         /**
-         * Milieu de la fenêtre de recherche, en hertz relatifs à l'accord.
+         * Search window centre, Hz relative to tuning.
          *
-         * Zéro — l'ancien comportement — cherche autour de la clé, ce qui est
-         * ce qu'il faut pour rattraper une radiosonde dans une bande vide. Pour
-         * caler sur le correspondant qu'on écoute déjà, il faut au contraire
-         * chercher autour de l'endroit où l'on est **posé** : sinon la mesure
-         * saute sur la station voisine plus forte au premier silence.
+         * Zero searches around the dongle frequency: right for catching a
+         * radiosonde in an empty band. To lock onto the station already being
+         * heard, search around where you are **parked**, or the measurement
+         * jumps to a stronger neighbour at the first silence.
          */
         centreHz: Double = 0.0
     ): Double {
@@ -764,13 +701,13 @@ class RxChain(
         return if (fine.isNaN()) rough else fine
     }
 
-    /** Niveau du signal dans le canal, en dB pleine échelle. */
+    /** In-channel signal level, dBFS. */
     val levelDb: Float get() = level
 
-    /** Débit audio de sortie, arrondi à l'entier le plus proche. */
+    /** Output audio rate, rounded. */
     val audioRate: Int get() = Math.round(stage2Rate).toInt()
 
-    /** Largeur de canal réellement appliquée, en hertz. */
+    /** Channel width actually applied, Hz. */
     val effectiveBandwidthHz: Double
         get() {
             val asked = bandwidthHz
@@ -797,14 +734,14 @@ class RxChain(
         clip = 0f; peak = 0f; collecting = false
     }
 
-    /** Taille d'un tampon audio suffisant pour [iqBytes] octets d'entrée. */
+    /** Audio buffer size needed for [iqBytes] input bytes. */
     fun maxAudio(iqBytes: Int): Int = iqBytes / 2 / (Dsp.DECIM_1 * Dsp.DECIM_2) + 4
 
-    /** Reconstruit les filtres si le mode ou la largeur ont bougé. */
+    /** Rebuilds filters if mode or width changed. */
     private fun retune() {
         val bw = effectiveBandwidthHz
-        // En BLU le filtre de canal reste large : c'est le passe-bande complexe
-        // qui fait la sélectivité, et il travaille mieux avec de la marge.
+        // In SSB the channel filter stays wide: the complex band-pass does the
+        // selectivity and works better with some margin.
         val wanted = when (mode) {
             RxMode.NFM -> (bw / 2.0).coerceIn(2_500.0, 20_000.0)
             RxMode.USB, RxMode.LSB -> 6_000.0
@@ -816,8 +753,8 @@ class RxChain(
         }
         if (mode == RxMode.USB || mode == RxMode.LSB) {
             val sign = if (mode == RxMode.USB) 1.0 else -1.0
-            // Bande passante de 300 Hz à 300 + largeur : le grave n'apporte rien
-            // en phonie et coûte cher en souffle.
+            // Passband 300 Hz to 300 + width: lows add nothing to voice and
+            // cost a lot of noise.
             val center = sign * (300.0 + bw / 2.0)
             val key = "$center/$bw"
             if (key != ssbKey) {
@@ -831,19 +768,16 @@ class RxChain(
     }
 
     /**
-     * Traite [len] octets d'IQ (I puis Q, entiers 8 bits non signés) et écrit
-     * l'audio dans [out]. Renvoie le nombre d'échantillons audio produits.
+     * Processes [len] IQ bytes (I then Q, unsigned 8-bit) into audio in [out].
+     * Returns the number of audio samples.
      *
-     * Si [feedSpectrum] est vrai, la sortie du premier étage part aussi dans
-     * l'analyseur de spectre. L'appelant ne le demande que dix fois par seconde :
-     * une FFT de mille points par bloc reçu serait du calcul jeté à l'écran.
+     * [feedSpectrum] also sends the first stage output to the spectrum
+     * analyser. The caller asks ten times a second; an FFT per received block
+     * would be wasted work.
      *
-     * [feedPanorama] fait de même avec le flux brut, pour l'analyseur large.
-     * Il se demande encore plus rarement — quelques fois par seconde — parce
-     * qu'une FFT de seize mille points coûte quatre fois celle du spectre et
-     * qu'un panorama de transpondeur n'a rien d'un signal qui file : la
-     * répartition des stations dans le transpondeur change à l'échelle de la
-     * minute, pas de l'image.
+     * [feedPanorama] does the same with the raw stream for the wide analyser,
+     * even less often (a few times a second): a 16k FFT costs about four
+     * spectrum FFTs, and station layout in a transponder changes by the minute.
      */
     fun process(
         iq: ByteArray,
@@ -857,7 +791,7 @@ class RxChain(
         retune()
         if (aI.size < n) { aI = FloatArray(n); aQ = FloatArray(n) }
 
-        // Conversion des octets bruts, et comptage de la saturation au passage.
+        // Convert raw bytes, counting clipping along the way.
         var clipped = 0
         for (k in 0 until n) {
             val bi = iq[2 * k].toInt() and 0xff
@@ -869,12 +803,10 @@ class RxChain(
         }
         clip = clipped.toFloat() / (2 * n)
 
-        // Le panorama se prend ici, sur le flux brut, avant le premier
-        // décimateur et bien avant le mélangeur d'accord fin. Il est donc
-        // ancré sur la fréquence programmée dans la PLL, et sur elle seule :
-        // c'est ce qui permet de tracer une échelle en fréquences absolues du
-        // ciel et d'y poser des repères fixes. Un panorama pris après le
-        // mélangeur glisserait sous les repères à chaque coup de curseur.
+        // Panorama taken here, on the raw stream, before the fine-tuning mixer:
+        // anchored to the PLL frequency alone, so an absolute frequency scale
+        // with fixed markers can be drawn. Taken after the mixer, it would
+        // slide under the markers at every cursor move.
         if (feedPanorama && !collectingPan) { panorama.begin(); collectingPan = true }
         if (collectingPan && panorama.push(aI, aQ, n)) collectingPan = false
 
@@ -882,18 +814,16 @@ class RxChain(
         if (bI.size < m1) { bI = FloatArray(m1); bQ = FloatArray(m1) }
         val n1 = dec1.process(aI, aQ, n, bI, bQ)
 
-        // Le spectre est prélevé AVANT le décalage fin : c'était là le défaut
-        // qui rendait l'accord impossible. Le mélangeur déplaçait tout le
-        // signal, donc la cascade glissait avec le curseur, et l'écart affiché
-        // se cumulait au lieu de se réduire. Ici la cascade reste fixe, ancrée
-        // sur la fréquence d'accord de la clé, et le curseur désigne enfin un
-        // endroit réel du spectre.
+        // Spectrum taken BEFORE the fine shift. Taken after, the waterfall
+        // slid with the cursor and the displayed offset accumulated instead of
+        // shrinking, making tuning impossible. Here the waterfall stays
+        // anchored to the dongle frequency and the cursor points at a real
+        // place in the spectrum.
         if (feedSpectrum && !collecting) { spectrum.begin(); collecting = true }
         if (collecting && spectrum.push(bI, bQ, n1)) collecting = false
 
-        // Décalage fin : on descend la station visée sur zéro. Le signe est
-        // celui du bon sens — « + 2 000 Hz » veut dire « écouter deux
-        // kilohertz au-dessus de la fréquence affichée ».
+        // Fine shift: bring the target station to zero. "+2000 Hz" means
+        // "listen 2 kHz above the displayed frequency".
         val shiftHz = offsetHz + dopplerFineHz
         if (shiftHz != 0.0) {
             val dp = 2.0 * PI * shiftHz / stage1Rate
@@ -915,7 +845,7 @@ class RxChain(
         val count = minOf(n2, out.size)
         if (count <= 0) return 0
 
-        // Niveau mesuré sur la bande de base, valable dans tous les modes.
+        // Level measured on baseband, valid in every mode.
         var mag = 0.0
         for (k in 0 until count) {
             val i = cI[k]; val q = cQ[k]
@@ -943,8 +873,8 @@ class RxChain(
                 for (k in 0 until count) {
                     val i = cI[k]; val q = cQ[k]
                     val a = sqrt(i * i + q * q)
-                    // La porteuse est une continue : on la retire, sinon elle
-                    // sature l'étage audio sans rien apporter à l'oreille.
+                    // Remove the carrier (DC after envelope detection), or it
+                    // saturates the audio stage for nothing.
                     amDc += 0.0005f * (a - amDc)
                     fl[k] = a - amDc
                 }
@@ -966,37 +896,32 @@ class RxChain(
     }
 }
 
-/**
- * Ancien nom de la chaîne, du temps où elle ne savait faire que la FM étroite.
- * Conservé pour ne pas casser les appels et les tests existants.
- */
+/** Old name from the NFM-only days, kept so existing callers and tests still build. */
 typealias NfmChain = RxChain
 
 /**
- * Mesure de spectre par bandes, sans FFT. Gardée parce qu'elle travaille
- * directement sur les octets bruts et sert de contrôle indépendant de
- * [SpectrumAnalyzer] : deux méthodes qui tombent d'accord sur la position d'une
- * porteuse valent mieux qu'une seule qu'on croit sur parole.
+ * Band-based spectrum measurement without FFT. Kept because it works directly
+ * on raw bytes and independently cross-checks [SpectrumAnalyzer]: two methods
+ * agreeing on a carrier position beat one taken on trust.
  */
 class SpectrumProbe(private val bins: Int = 64) {
 
     private val acc = FloatArray(bins)
 
-    /** Puissance par bande, en dB pleine échelle, du plus bas au plus haut. */
+    /** Power per band, dBFS, lowest to highest. */
     val bands = FloatArray(bins) { -120f }
 
     /**
-     * Analyse un extrait d'IQ par transformée de Goertzel sur [bins] bandes
-     * réparties sur toute la largeur reçue. On travaille sur un extrait court
-     * et espacé : l'affichage se rafraîchit dix fois par seconde, inutile de
-     * passer tout le flux dedans.
+     * Single-bin DFTs (Goertzel-style) on [bins] bands across the received
+     * width, on a decimated excerpt ([stride]): the display refreshes ten
+     * times a second, no need to process the whole stream.
      */
     fun analyse(iq: ByteArray, len: Int, stride: Int = 4) {
         val n = len / 2
         if (n < bins * 4) return
         acc.fill(0f)
         for (b in 0 until bins) {
-            // Bande b centrée sur (b/bins - 0,5) fois le débit.
+            // Band b centred on (b/bins - 0.5) x the sample rate.
             val f = (b.toDouble() / bins) - 0.5
             var re = 0.0
             var im = 0.0

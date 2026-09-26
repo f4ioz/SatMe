@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.sonde
 
@@ -15,92 +15,65 @@ import kotlin.math.sin
 import kotlin.math.sqrt
 
 /**
- * La mire radiosonde : un ballon de synthèse, entièrement fabriqué par le
- * téléphone.
+ * Radiosonde test signal: a synthetic balloon made entirely by the phone.
  *
- * Le problème est le même que pour la SSTV, en pire. Un lâcher a lieu deux fois
- * par jour, à heure fixe, et une sonde ne passe à portée que si le vent le veut
- * bien. Quand on finit par en entendre une et que rien ne se décode, il est
- * trop tard pour chercher si le tort en revient au décodeur, au cordon, au
- * niveau d'entrée ou à l'accord — la sonde est déjà partie, et il faut attendre
- * douze heures pour réessayer. La mire supprime l'attente : elle fabrique le
- * son qu'un discriminateur rendrait sur une vraie sonde, à la demande, autant
- * de fois qu'on veut.
+ * Launches happen twice a day and a sonde is in range only if the wind
+ * agrees; when nothing decodes, the next try is twelve hours away. This
+ * generates on demand what a discriminator outputs on a real sonde: real
+ * frames in the manufacturer's exact format, scrambling and checks included.
+ * The decoder cannot tell it from the air. Played by [SondeMirePlayer].
  *
- * Ce qui est produit ici n'est pas une imitation approximative. Ce sont de
- * vraies trames, au format exact du constructeur, brouillage et contrôles
- * compris, portant les coordonnées d'un vol plausible ; le décodeur ne peut
- * pas faire la différence avec l'air, et c'est bien le but. Trois emplois :
- *
- * 1. Par le haut-parleur, un téléphone contre l'autre, pour éprouver la chaîne
- *    micro d'un camarade.
- * 2. En fichier, à repasser sur une radio ou dans une carte son, pour éprouver
- *    tout le cordon.
- * 3. En démonstration pure, le son étant versé directement dans le décodeur :
- *    l'écran se remplit d'un vol complet — montée, éclatement, descente,
- *    trace sur la carte, journal exportable — sans radio du tout.
- *
- * Le vol simulé part du carré de l'opérateur, monte à cinq mètres par seconde
- * en dérivant avec un vent d'ouest, éclate vers trente kilomètres et redescend
- * de plus en plus lentement à mesure que l'air s'épaissit. C'est le profil
- * d'une vraie sonde, et il a l'avantage de faire passer la trace par tous les
- * cas que l'application doit savoir afficher.
+ * The flight starts at the operator's grid square, climbs at 5 m/s drifting
+ * on a westerly wind, bursts around 30 km and falls ever slower as the air
+ * thickens: a real sonde profile, which exercises every case the UI must show.
  */
 object SondeMire {
 
-    /** Fréquence d'échantillonnage du signal produit — celle de la carte son. */
+    /** Output sample rate, the sound card's. */
     const val RATE = 44_100
 
-    /** Amplitude crête du carré, largement au-dessus du seuil du démodulateur. */
+    /** Square-wave peak amplitude, well above the demodulator threshold. */
     const val AMPLITUDE = 9_000
 
-    /** Facteur de sur-échantillonnage de la synthèse, avant filtrage et décimation. */
+    /** Synthesis oversampling factor, before filtering and decimation. */
     const val OVERSAMPLE = 8
 
-    /** Souffle de l'ambiance réaliste, en fraction de l'amplitude. */
+    /** Ambience noise, as a fraction of amplitude. */
     const val NOISE = 0.12
 
-    /** Plancher de l'évanouissement : la sonde faiblit sans jamais disparaître. */
+    /** Fading floor: the sonde weakens but never disappears. */
     const val FADE_FLOOR = 0.45
 
-    /** Cadence de l'évanouissement, en hertz. */
+    /** Fading rate, Hz. */
     const val FADE_HZ = 0.07
 
-    /** Fréquence annoncée dans les trames, en hertz. */
+    /** Frequency written into the frames, Hz. */
     const val DEMO_FREQ_HZ = 404_000_000L
 
-    /** Durées proposées, en secondes : une trame par seconde comme sur l'air. */
+    /** Offered durations, seconds: one frame per second, as on air. */
     val DURATIONS = listOf(30, 60, 120, 300)
 
-    // ------------------------------------------------------------------ vol
+    // ------------------------------------------------------------------ flight
 
-    /** Un instant du vol simulé. */
     data class Point(
         val lat: Double, val lon: Double, val altM: Double,
         val east: Double, val north: Double, val up: Double,
         val sats: Int,
         /**
-         * Instant du vol représenté, en secondes depuis le lâcher.
+         * Flight time represented, seconds since launch.
          *
-         * Il ne vaut pas le numéro de trame : une mire d'une minute raconte un
-         * vol de deux heures, donc chaque pas de mire vaut plusieurs centaines
-         * de secondes de vol. Ce chiffre-là est celui qu'il faut écrire dans
-         * l'horloge GPS de la trame, faute de quoi la mire se contredit — elle
-         * déplace le ballon de quarante kilomètres en annonçant une seconde,
-         * et le contrôle de continuité du suivi de vol a bien raison de jeter
-         * le point. C'est exactement ce qui se passait : la mire ne rendait
-         * qu'une trame retenue sur six, et l'on a d'abord cru à un défaut du
-         * récepteur.
+         * Not the frame number: a one-minute test signal tells a two-hour
+         * flight. This value must go into the frame's GPS clock, otherwise the
+         * signal contradicts itself (40 km moved in "one second") and the
+         * flight continuity check rightly drops the point. Symptom: only one
+         * frame in six retained, which looks like a receiver fault.
          */
         val tSec: Double = 0.0)
 
     /**
-     * Le vol complet, en [frames] points régulièrement espacés.
-     *
-     * Le temps réel du vol est comprimé : une sonde met deux heures à monter et
-     * à redescendre, et personne n'écoute une mire pendant deux heures. Une
-     * minute de mire raconte donc le vol entier, ce qui donne à la trace sur la
-     * carte l'allure qu'elle aura le jour venu.
+     * The full flight in [frames] evenly spaced points. Time is compressed:
+     * nobody listens to a test signal for two hours, so one minute tells the
+     * whole flight and the map track looks like the real thing.
      */
     fun flight(
         lat0: Double, lon0: Double, frames: Int,
@@ -108,18 +81,14 @@ object SondeMire {
         stepSec: Double = 0.0
     ): List<Point> {
         val out = ArrayList<Point>(frames)
-        // Vol en temps réel quand on donne un pas : chaque trame vaut alors la
-        // tranche de vol qu'elle annonce, ni plus ni moins. C'est ce que veut
-        // le banc de mesure, qui compte les trames retenues et ne peut donc
-        // rien mesurer si la mire se déplace de quarante kilomètres entre deux
-        // trames espacées d'une seconde. La démo, elle, garde le vol comprimé.
+        // Real time when a step is given: each frame covers exactly the flight
+        // time it announces. The test bench needs this, since it counts
+        // retained frames. The demo keeps the compressed flight.
         val realTime = stepSec > 0.0
         val step = if (realTime) stepSec
                    else (burstAltM - groundAltM) / 5.0 * 1.5 / frames
-        // Deux tiers du vol en montée, un tiers en descente : c'est le rapport
-        // habituel, la chute étant freinée par le parachute mais partant de
-        // beaucoup plus haut et beaucoup plus vite. En temps réel, quelques
-        // secondes de vol ne sont jamais que de la montée.
+        // Two thirds ascent, one third descent, the usual ratio. In real time,
+        // a few seconds of flight are only ascent.
         val up = if (realTime) frames else (frames * 2) / 3
         var lat = lat0
         var lon = lon0
@@ -131,17 +100,14 @@ object SondeMire {
             val alt = if (realTime) groundAltM + 5.0 * t
                       else if (ascending) groundAltM + (burstAltM - groundAltM) * f
                       else burstAltM - (burstAltM - groundAltM) * f
-            // Le vent forcit avec l'altitude, comme dans la vraie atmosphère :
-            // presque rien au sol, une trentaine de mètres par seconde vers dix
-            // kilomètres, ce qui emmène la sonde loin sous le vent.
+            // Wind grows with altitude: almost nothing on the ground, ~30 m/s
+            // around 10 km.
             val windE = 4.0 + 26.0 * (alt / 12_000.0).coerceIn(0.0, 1.0)
             val windN = 2.0 + 6.0 * (alt / 12_000.0).coerceIn(0.0, 1.0)
-            // Vitesse verticale : cinq mètres par seconde à la montée, et une
-            // descente qui s'amortit à mesure que l'air porte davantage.
+            // 5 m/s up; descent slows as the air gets denser.
             val climb = if (ascending) 5.0
                         else -(4.0 + 26.0 * (alt / burstAltM).coerceIn(0.0, 1.0))
-            // Un pas de mire vaut un pas de vol : on déplace la sonde du chemin
-            // qu'elle ferait pendant la tranche de vol représentée.
+            // Move the sonde by the distance covered during the represented step.
             lat += windN * step / 111_320.0
             lon += windE * step / (111_320.0 * cos(Math.toRadians(lat)).coerceAtLeast(0.2))
             out += Point(lat, lon, alt, windE, windN, climb,
@@ -151,9 +117,9 @@ object SondeMire {
         return out
     }
 
-    // ------------------------------------------------------------- géodésie
+    // ------------------------------------------------------------- geodesy
 
-    /** Géodésique vers ECEF : la RS41 transmet ses coordonnées sous cette forme. */
+    /** Geodetic to ECEF, the form the RS41 transmits. */
     fun geodeticToEcef(latDeg: Double, lonDeg: Double, hM: Double): DoubleArray {
         val la = Math.toRadians(latDeg)
         val lo = Math.toRadians(lonDeg)
@@ -165,7 +131,7 @@ object SondeMire {
             (n * (1.0 - Geo.E2) + hM) * s)
     }
 
-    /** Vitesse locale est/nord/haut vers vitesse ECEF. */
+    /** Local east/north/up velocity to ECEF. */
     fun enuToEcefVel(latDeg: Double, lonDeg: Double,
                      e: Double, n: Double, u: Double): DoubleArray {
         val la = Math.toRadians(latDeg)
@@ -178,7 +144,7 @@ object SondeMire {
             cla * n + sla * u)
     }
 
-    // -------------------------------------------------------------- écriture
+    // -------------------------------------------------------------- writers
 
     private fun putU16(f: ByteArray, at: Int, v: Int) {
         f[at] = (v and 0xff).toByte()
@@ -212,7 +178,7 @@ object SondeMire {
 
     // ------------------------------------------------------------------ RS41
 
-    /** Écrit un bloc identifiant / longueur / données / CRC, rend la position suivante. */
+    /** Writes an id/length/data/CRC block, returns the next position. */
     private fun block(f: ByteArray, at: Int, id: Int, data: ByteArray): Int {
         f[at] = id.toByte()
         f[at + 1] = data.size.toByte()
@@ -222,19 +188,17 @@ object SondeMire {
     }
 
     /**
-     * Une trame RS41 standard, désembrouillée, portant ce point de vol.
+     * A standard RS41 frame for this flight point, scrambled as on air.
      *
-     * Les quarante-huit octets de parité Reed-Solomon restent à zéro : le
-     * décodeur de l'application les ignore, et les remplir demanderait un
-     * codeur RS(255,231) pour un signal qui, ici, n'a de toute façon aucune
-     * erreur à corriger.
+     * The 48 Reed-Solomon parity bytes stay zero: our decoder ignores them,
+     * and this signal has no errors to correct anyway.
      */
     fun rs41Frame(p: Point, frameNo: Int, serial: String = "S1234567",
                   week: Int = 2380, itowMs: Long = 43_200_000L,
                   batteryTenthV: Int = 27): ByteArray {
         val f = ByteArray(Rs41.LEN_STD)
         for (k in Rs41.HEADER.indices) f[k] = Rs41.HEADER[k].toByte()
-        f[Rs41.TYPE_AT] = 0x0F               // type : trame standard
+        f[Rs41.TYPE_AT] = 0x0F               // standard frame type
         var pos = Rs41.BLOCKS_AT
 
         val status = ByteArray(11)
@@ -260,15 +224,15 @@ object SondeMire {
         gps[18] = p.sats.toByte()
         block(f, pos, Rs41.BLK_GPS_POS, gps)
 
-        // Sur l'air, la trame passe brouillée : c'est cet état-là qu'il faut
-        // moduler, sinon le décodeur ne reconnaîtra même pas l'en-tête.
+        // The frame goes out scrambled; otherwise the decoder won't even find
+        // the header.
         Rs41.descramble(f)
         return f
     }
 
     // ------------------------------------------------------------ Meteomodem
 
-    /** Une trame M20 portant ce point de vol. */
+    /** An M20 frame for this flight point. */
     fun m20Frame(p: Point, frameNo: Int, serial: Int = 4321): ByteArray {
         val f = ByteArray(Meteomodem.M20_LEN)
         f[0] = Meteomodem.M20_HEADER[0].toByte()
@@ -285,13 +249,9 @@ object SondeMire {
     }
 
     /**
-     * Une trame M10 portant ce point de vol.
-     *
-     * Les décalages et les échelles sont ceux qui ont été relevés sur un vrai
-     * enregistrement en 18.7 : vitesses au deux-centième de mètre par seconde,
-     * coordonnées sur un tour complet en trente-deux bits, altitude en
-     * millimètres. La somme de contrôle est calculée en dernier, sinon la mire
-     * fabriquerait des trames que son propre décodeur refuserait.
+     * An M10 frame for this flight point, with offsets and scales taken from a
+     * real recording. The checksum must be stamped last, or our own decoder
+     * rejects the frame.
      */
     fun m10Frame(p: Point, frameNo: Int, week: Int = 2380,
                  itowMs: Long = 43_200_000L, serial: Int = 10732): ByteArray {
@@ -305,8 +265,7 @@ object SondeMire {
         putBe32(f, Meteomodem.M10.LON, Math.round(p.lon * Meteomodem.M10_DEG).toInt())
         putBe32(f, Meteomodem.M10.ALT, Math.round(p.altM * 1000.0).toInt())
         putBe16(f, Meteomodem.M10.WEEK, week)
-        // Numéro de série : le même codage que celui que rend le décodeur, de
-        // sorte que la mire s'annonce sous un nom lisible et stable.
+        // Serial encoded the way the decoder reads it, for a stable readable name.
         f[Meteomodem.M10.SN] = 0x02
         f[Meteomodem.M10.SN + 1] = 0x14
         f[Meteomodem.M10.SN + 2] = 0x83.toByte()
@@ -318,7 +277,7 @@ object SondeMire {
         return f
     }
 
-    /** La trame du modèle demandé pour ce point. */
+    /** Frame of the requested model for this point. */
     fun frameFor(model: String, p: Point, frameNo: Int): ByteArray = when (model) {
         "M20" -> m20Frame(p, frameNo)
         "M10" -> m10Frame(p, frameNo)
@@ -327,7 +286,7 @@ object SondeMire {
 
     // ------------------------------------------------------------ modulation
 
-    /** Les bits d'une suite d'octets, poids faible ou poids fort en tête. */
+    /** Bits of a byte sequence, LSB or MSB first. */
     fun bitsOf(bytes: ByteArray, lsbFirst: Boolean): ByteArray {
         val out = ByteArray(bytes.size * 8)
         for (i in bytes.indices) {
@@ -341,13 +300,11 @@ object SondeMire {
     }
 
     /**
-     * Codage bi-phase à marque de la M10, l'exact inverse de
-     * [Meteomodem.biphase].
+     * M10 biphase-mark encoding, the exact inverse of [Meteomodem.biphase].
      *
-     * Le niveau bascule à chaque frontière de bit ; un zéro laisse les deux
-     * demi-bits égaux, un un les fait différer. Ce n'est pas du Manchester, et
-     * la confusion a coûté trois versions : le codeur Manchester produisait un
-     * flux que le nouveau décodeur lit comme une suite ininterrompue de uns.
+     * The level flips at each bit boundary; a 0 keeps both half-bits equal, a
+     * 1 makes them differ. This is not Manchester: a Manchester encoder
+     * produces a stream the decoder reads as all ones.
      */
     fun biphaseEncode(bits: ByteArray, firstChip: Int = 1): ByteArray {
         val out = ByteArray(bits.size * 2)
@@ -363,11 +320,9 @@ object SondeMire {
     }
 
     /**
-     * Le préambule de la M10 : le motif 1001 répété, qui n'est rien d'autre que
-     * le codage bi-phase d'une suite de uns. Les seize premiers demi-bits du
-     * motif de synchronisation le prolongent sans rupture, ce qui explique
-     * pourquoi la recherche de synchronisation doit regarder les seize suivants
-     * pour ne pas se déclencher dans le préambule.
+     * M10 preamble: 1001 repeated, i.e. biphase-coded ones. The first 16
+     * half-bits of the sync pattern continue it seamlessly, so sync detection
+     * relies on the next 16 not to fire inside the preamble.
      */
     private fun m10Preamble(n: Int): ByteArray {
         val out = ByteArray(n)
@@ -376,22 +331,18 @@ object SondeMire {
     }
 
     /**
-     * La suite de symboles à émettre pour une trame du modèle demandé,
-     * préambule d'alternances compris.
+     * Symbols to transmit for one frame, preamble included.
      *
-     * Le préambule n'est pas décoratif : le démodulateur suit le zéro du
-     * discriminateur par une moyenne glissante lente et cale son horloge sur
-     * les transitions. Sans une bonne centaine d'alternances pour s'installer,
-     * les premiers octets de la trame sortent faux et l'en-tête est manqué.
-     * Une vraie sonde émet ce préambule pour la même raison.
+     * The preamble is not decoration: the demodulator's slow zero tracker and
+     * edge-driven clock need ~100 alternations to settle, or the first bytes
+     * come out wrong and the header is missed. Real sondes send one for the
+     * same reason.
      */
     fun chipsFor(model: String, p: Point, frameNo: Int, preamble: Int = 128): ByteArray {
         val frame = frameFor(model, p, frameNo)
         if (model == "M10") {
-            // La M10 se cale sur les demi-bits, pas sur les octets : il faut
-            // donc émettre son vrai motif de synchronisation, et la trame
-            // commence au trente et unième demi-bit de ce motif — le
-            // trente-deuxième appartient déjà au corps.
+            // The M10 aligns on half-bits: send the real sync pattern. The
+            // frame starts after its 31st half-bit; the 32nd is already body.
             val head = m10Preamble(M10_PREAMBLE)
             val sync = Meteomodem.M10_SYNC
             val cut = Meteomodem.M10_SYNC_TO_FRAME
@@ -413,44 +364,39 @@ object SondeMire {
         return out
     }
 
-    /** Longueur du préambule M10, en demi-bits : ce qu'émet une vraie sonde. */
+    /** M10 preamble length in half-bits, as a real sonde sends. */
     const val M10_PREAMBLE = 400
 
-    /** Le débit de symboles du modèle, en symboles par seconde. */
+    /** Model symbol rate, symbols/s. */
     fun chipRate(model: String): Double = SondeModel.byId(model).let {
         if (it.chipRate > 0.0) it.chipRate else Rs41.BAUD
     }
 
     /**
-     * Le signal de la mire, rendu par tranches.
+     * The test signal, generated in chunks.
      *
-     * Une mire de cinq minutes fait plus de vingt-cinq mégaoctets de PCM : on
-     * ne la garde pas en mémoire, on la fabrique au fil de la lecture, comme la
-     * mire SSTV. Chaque seconde du signal porte une trame suivie d'alternances
-     * qui comblent le reste — c'est ce que fait une vraie sonde, dont la
-     * porteuse ne s'interrompt jamais entre deux trames.
+     * Five minutes is over 25 MB of PCM, so it is generated on the fly, as for
+     * the SSTV test signal. Each second carries one frame followed by filler
+     * alternations, like a real sonde whose carrier never stops between frames.
      */
     class Source(
-        /** Modèle émis : "RS41", "M20" ou "M10". */
+        /** Model: "RS41", "M20" or "M10". */
         val model: String,
-        /** Point de départ du vol. */
+        /** Flight start point. */
         lat: Double, lon: Double,
-        /** Durée voulue, en secondes. */
+        /** Duration, seconds. */
         val seconds: Int,
         val sampleRate: Int = RATE,
         val amplitude: Int = AMPLITUDE,
         /**
-         * Pas de vol demandé, en secondes réelles ; zéro pour le vol comprimé
-         * de la démonstration. Le banc de mesure met une seconde, pour que
-         * l'horloge de la mire dise la même chose que sa position.
+         * Flight step in real seconds; zero for the compressed demo flight.
+         * The test bench uses one second so the clock agrees with the position.
          */
         val stepSec: Double = 0.0,
         /**
-         * Ambiance réaliste : souffle et évanouissement, comme une sonde
-         * lointaine. Décochée par défaut, et ce n'est pas de la timidité — la
-         * mire sert d'abord à éprouver une chaîne, et quand on cherche à savoir
-         * si un cordon marche, un signal propre est le seul qui réponde sans
-         * ambiguïté. L'ambiance est pour la démonstration en club.
+         * Realistic ambience: noise and fading, like a distant sonde. Off by
+         * default: to test whether a cable works, only a clean signal gives an
+         * unambiguous answer. Ambience is for club demos.
          */
         val ambience: Boolean = false
     ) {
@@ -458,60 +404,53 @@ object SondeMire {
         private val rate = chipRate(model)
 
         /**
-         * Facteur de suréchantillonnage de la synthèse.
+         * Synthesis oversampling factor.
          *
-         * Le carré était fabriqué directement à 44 100 Hz, en prenant le
-         * symbole le plus proche de chaque échantillon. À quatre virgule six
-         * échantillons par demi-bit, cela déplace chaque front jusqu'à un demi
-         * échantillon au hasard : une gigue de dix pour cent de la durée d'un
-         * symbole, entièrement fabriquée par la mire, qui n'existe sur aucune
-         * vraie sonde. On synthétise donc huit fois plus vite, on filtre, et
-         * l'on décime : les fronts tombent alors où ils doivent, et ils sont
-         * arrondis comme le sont ceux d'un vrai discriminateur.
+         * Picking the nearest symbol per sample at 44.1 kHz (4.6 samples per
+         * half-bit) moves each edge by up to half a sample: 10 % symbol jitter
+         * made by the generator, absent from any real sonde. So we synthesise
+         * 8x faster, filter and decimate: edges land where they should, rounded
+         * like a real discriminator's.
          */
         private val over = 8
 
         /**
-         * Filtre de mise en forme : deux cellules du premier ordre en cascade,
-         * coupant à neuf dixièmes du débit de symboles. C'est à peu près ce que
-         * rend la chaîne d'une radio : le signal ne saute pas d'un état à
-         * l'autre, il y va en un sixième de symbole.
+         * Shaping filter: two cascaded first-order stages at 0.9x the symbol
+         * rate, roughly what a radio chain does (transitions take ~1/6 symbol).
          */
         private val lpA = exp(-2.0 * PI * (rate * 0.9) / (sampleRate.toDouble() * over))
         private var z1 = 0.0
         private var z2 = 0.0
 
-        /** Graine fixe : deux mires identiques doivent l'être au bit près. */
+        /** Fixed seed: two identical test signals must match bit for bit. */
         private val noise = java.util.Random(20_260_731L)
 
-        /** Nombre d'échantillons dans une tranche d'une seconde. */
+        /** Samples in a one-second slot. */
         private val perSlot = sampleRate
 
-        /** Symboles de la tranche en cours, complétés d'alternances. */
+        /** Symbols of the current slot, padded with alternations. */
         private var slot = ByteArray(0)
         private var slotIndex = -1
         private var sampleInSlot = 0
 
-        /** Longueur totale du signal, en échantillons. */
+        /** Total length, samples. */
         val totalSamples: Int = points.size * perSlot
 
         private var produced = 0
 
-        /** Avancement de l'émission, de 0 à 1. */
+        /** Progress, 0 to 1. */
         val progress: Float
             get() = if (totalSamples == 0) 1f else produced.toFloat() / totalSamples
 
         private fun buildSlot(i: Int) {
             val body = chipsFor(model, points[i], i + 1)
-            // Nombre de symboles que dure une seconde à ce débit : la trame
-            // occupe le début, les alternances comblent jusqu'au bout.
+            // Symbols in one second: frame first, alternations fill the rest.
             val n = Math.round(rate).toInt()
             val out = ByteArray(maxOf(n, body.size))
             System.arraycopy(body, 0, out, 0, body.size)
             if (model == "M10") {
-                // Le remplissage reprend le motif du préambule : c'est ce que
-                // fait la sonde entre deux trames, et cela évite d'inventer une
-                // alternance qui n'existe pas sur l'air.
+                // Fill with the preamble pattern, as the sonde does between
+                // frames.
                 val fill = m10Preamble(out.size - body.size)
                 System.arraycopy(fill, 0, out, body.size, fill.size)
             } else {
@@ -523,12 +462,9 @@ object SondeMire {
         }
 
         /**
-         * L'enveloppe du fading lent, entre un demi et un.
-         *
-         * Deux périodes incommensurables, l'une de six secondes et demie,
-         * l'autre d'une seconde sept : cela suffit à ce que l'oreille n'entende
-         * pas de cycle, et à ce que l'écran montre des trames qui tombent puis
-         * reviennent, comme sur une sonde qui descend derrière une colline.
+         * Slow fading envelope, between one half and one. Two incommensurate
+         * periods (6.5 s and 1.7 s), so no audible cycle and frames drop and
+         * return as behind a hill.
          */
         private fun qsb(tSec: Double): Double {
             val slow = 0.55 + 0.45 * (0.5 + 0.5 * cos(2.0 * PI * tSec / 6.5))
@@ -536,10 +472,7 @@ object SondeMire {
             return slow * fast
         }
 
-        /**
-         * Remplit [chunk] et rend le nombre d'échantillons écrits, ou 0 quand
-         * la mire est finie.
-         */
+        /** Fills [chunk]; returns samples written, or 0 when finished. */
         fun read(chunk: ShortArray): Int {
             if (produced >= totalSamples) return 0
             var n = 0
@@ -547,9 +480,8 @@ object SondeMire {
                 val i = produced / perSlot
                 if (i != slotIndex) buildSlot(i)
                 val posInSlot = produced % perSlot
-                // Sur-échantillonnage à huit fois : on regarde le symbole à huit
-                // instants dans l'intervalle, on lisse, et on ne garde que le
-                // dernier. C'est ce qui arrondit les fronts.
+                // Oversample: look at the symbol at OVERSAMPLE instants, filter,
+                // keep the last output. This rounds the edges.
                 var v = 0.0
                 for (sub in 0 until OVERSAMPLE) {
                     val fine = posInSlot.toLong() * OVERSAMPLE + sub
@@ -561,8 +493,8 @@ object SondeMire {
                     v = lp2
                 }
                 if (ambience) {
-                    // Évanouissement lent, puis souffle. Dans cet ordre : le
-                    // bruit d'un récepteur ne s'évanouit pas avec le signal.
+                    // Fading first, then noise: receiver noise doesn't fade
+                    // with the signal.
                     val t = produced.toDouble() / sampleRate
                     v *= FADE_FLOOR + (1.0 - FADE_FLOOR) *
                         (0.5 + 0.5 * kotlin.math.cos(2.0 * Math.PI * FADE_HZ * t))
@@ -575,19 +507,17 @@ object SondeMire {
             return n
         }
 
-        /** Les deux cellules passe-bas du premier ordre, en cascade. */
+        /** The two cascaded first-order low-pass stages. */
         private var lp1 = 0.0
         private var lp2 = 0.0
 
         /**
-         * Constante des cellules, calée sur 0,9 fois la cadence chip.
+         * Stage coefficient, tuned to 0.9x the chip rate.
          *
-         * Conséquence à dire tout haut, parce qu'elle ressemble à une
-         * régression et n'en est pas une : la crête ne touche plus tout à fait
-         * la consigne d'amplitude. C'est le filtre qui fait son travail. Un
-         * essai exige donc désormais que la crête reste *sous* la consigne —
-         * sinon le WAV écrête — et *au-dessus de 75 %* — sinon le signal a
-         * fondu.
+         * Looks like a regression but isn't: the peak no longer quite reaches
+         * the amplitude setting; that's the filter working. A test requires the
+         * peak to stay *below* the setting (or the WAV clips) and *above 75 %*
+         * (or the signal has melted).
          */
         private val alpha: Double = run {
             val fc = 0.9 * rate
@@ -595,14 +525,13 @@ object SondeMire {
             (1.0 - Math.exp(-2.0 * Math.PI * fc / fs)).coerceIn(1e-4, 0.999)
         }
 
-        /** Graine fixe : une mire doit être reproductible, ambiance comprise. */
+        /** Fixed seed: the signal must be reproducible, ambience included. */
         private val rnd = java.util.Random(20_240_907L)
     }
 
     /**
-     * Tout le signal d'un coup, pour les essais et pour la démonstration.
-     * À n'employer que sur des durées courtes : une seconde pèse déjà
-     * quatre-vingt-huit kilooctets.
+     * Whole signal at once, for tests and the demo. Short durations only: one
+     * second is already 88 KB.
      */
     fun render(model: String, lat: Double, lon: Double, seconds: Int,
                ambience: Boolean = false): ShortArray {

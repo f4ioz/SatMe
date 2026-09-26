@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.sdr
 
@@ -19,34 +19,29 @@ import android.hardware.usb.UsbRequest
 import java.nio.ByteBuffer
 
 /**
- * Pilote RTL-SDR intégré : la clé se branche sur l'USB-C du téléphone et SatMe
- * la commande directement, sans passer par une application tierce.
+ * Built-in RTL-SDR driver: the dongle plugs into the phone's USB-C and SatMe
+ * drives it directly, with no third-party app.
  *
- * Une clé RTL-SDR est un tuner Rafael Micro R820T/R2 suivi d'un démodulateur
- * DVB-T Realtek RTL2832U. On la détourne de sa fonction : le RTL2832U est
- * placé en « mode SDR », son décodeur DVB-T court-circuité, et il déverse par
- * son entrée bulk le flux IQ 8 bits non signé venant du convertisseur.
+ * An RTL-SDR is a Rafael Micro R820T/R2 tuner followed by a Realtek RTL2832U
+ * DVB-T demodulator, put in "SDR mode" with DVB-T bypassed so it streams raw
+ * unsigned 8-bit IQ over its bulk endpoint.
  *
- * Le dialogue se fait entièrement en transferts de contrôle sur l'endpoint 0 :
- *  - écriture/lecture d'un bloc de registres (démodulateur, USB, système) ;
- *  - passerelle I2C vers le tuner, qui n'est pas visible autrement.
- * Le tuner ne répond que si le « répéteur I2C » du RTL2832U est ouvert : toute
- * transaction vers le R820T est donc encadrée par une ouverture et une
- * fermeture de ce répéteur. C'est le piège classique du pilote.
+ * All control goes through control transfers on endpoint 0: register block
+ * read/write (demod, USB, system) and an I2C bridge to the tuner.
+ * **Classic trap:** the tuner only answers while the RTL2832U "I2C repeater" is
+ * open, so every R820T transaction must be wrapped in open/close.
  *
- * Toute l'arithmétique (PLL, FI, débit, gain) est déportée dans [RtlTuning],
- * qui ne dépend pas d'Android et se teste au banc. Ici il ne reste que du
- * transport d'octets.
+ * All arithmetic (PLL, IF, rate, gain) is in [RtlTuning], Android-free and
+ * unit-tested. Only byte transport remains here.
  *
- * ATTENTION : cette fonction est en bêta. Elle n'a pas pu être validée sur
- * matériel dans l'environnement de compilation.
+ * WARNING: beta. Not validated on hardware in the build environment.
  */
 class RtlSdr(private val ctx: Context) {
 
     companion object {
         const val ACTION_USB_PERMISSION = "fr.f4ioz.satcombo.SDR_USB_PERMISSION"
 
-        // Blocs de registres du RTL2832U.
+        // RTL2832U register blocks.
         private const val BLOCK_DEMOD = 0
         private const val BLOCK_USB = 1
         private const val BLOCK_SYS = 2
@@ -65,26 +60,23 @@ class RtlSdr(private val ctx: Context) {
         private const val R820T_I2C = 0x34
 
         /**
-         * Taille d'un transfert bulk, et pas une de plus.
+         * Bulk transfer size, and not one byte more.
          *
-         * C'est le point qui empêchait la clé de débiter quoi que ce soit :
-         * sous Android, usbfs refuse les transferts bulk de plus de 16 ko et
-         * renvoie -1 sans autre explication. On lisait par blocs de 64 ko —
-         * aucune lecture n'aboutissait, la vingtième erreur d'affilée coupait
-         * la réception, et l'écran affichait « plus de données de la clé :
-         * débranche et rebranche ». Le matériel n'y était pour rien.
+         * **Trap:** on Android, usbfs rejects bulk transfers over 16 KB with a
+         * bare -1. Reading 64 KB blocks meant no read ever succeeded and the
+         * UI said "no more data from the dongle: unplug and replug". The
+         * hardware was fine.
          *
-         * 16 ko à 1,06 Ms/s font 7,7 ms d'IQ, soit 130 transferts par seconde :
-         * c'est précisément pour cela que la lecture est asynchrone (voir
-         * [startStream]), sans quoi le temps de démodulation d'un bloc serait
-         * du temps pendant lequel la clé n'est pas lue.
+         * 16 KB at 1.06 Msps is 7.7 ms of IQ, 130 transfers per second: that
+         * is why reading is asynchronous (see [startStream]); otherwise time
+         * spent demodulating a block is time the dongle isn't read.
          */
         const val XFER = 16 * 1024
 
         /**
-         * Couples identifiant/produit connus. La grande majorité des clés du
-         * commerce sont des Realtek 0x0bda 0x2832 ou 0x2838 ; les autres sont
-         * d'anciens tuners TNT réutilisés par la communauté.
+         * Known vendor/product pairs. Most dongles are Realtek 0x0bda
+         * 0x2832 or 0x2838; the rest are old DVB-T sticks reused by the
+         * community.
          */
         private val KNOWN = setOf(
             0x0bda to 0x2832, 0x0bda to 0x2838,
@@ -106,10 +98,10 @@ class RtlSdr(private val ctx: Context) {
 
         fun isRtl(d: UsbDevice): Boolean = (d.vendorId to d.productId) in KNOWN
 
-        /** Première clé RTL-SDR branchée, ou null. */
+        /** First connected RTL-SDR, or null. */
         fun find(um: UsbManager): UsbDevice? = um.deviceList.values.firstOrNull { isRtl(it) }
 
-        /** Demande la permission USB pour [dev] (boîte de dialogue système). */
+        /** Requests USB permission for [dev] (system dialog). */
         fun requestPermission(ctx: Context, dev: UsbDevice) {
             val um = ctx.getSystemService(Context.USB_SERVICE) as UsbManager
             fr.f4ioz.satcombo.usb.UsbPermission.ensure(ctx, um, dev, ACTION_USB_PERMISSION)
@@ -124,19 +116,19 @@ class RtlSdr(private val ctx: Context) {
 
     val isOpen: Boolean get() = conn != null
 
-    /** Débit réellement délivré par la clé (voir [RtlTuning.actualRate]). */
+    /** Actual sample rate delivered (see [RtlTuning.actualRate]). */
     var actualSampleRate: Double = 0.0
         private set
 
-    /** Dernière fréquence centrale réellement synthétisée. */
+    /** Last centre frequency actually synthesised. */
     var tunedHz: Long = 0L
         private set
 
-    /** Dernier message d'erreur technique, utile en bêta. */
+    /** Last technical error, useful during beta. */
     var lastError: String? = null
         private set
 
-    // ------------------------------------------------------ transferts bruts
+    // ------------------------------------------------------ raw transfers
 
     private fun writeArray(block: Int, addr: Int, data: ByteArray): Boolean {
         val c = conn ?: return false
@@ -166,8 +158,8 @@ class RtlSdr(private val ctx: Context) {
         val data = if (len == 1) byteArrayOf(value.toByte())
                    else byteArrayOf((value shr 8).toByte(), value.toByte())
         val n = c.controlTransfer(CTRL_OUT, 0, wValue, index, data, data.size, CTRL_TIMEOUT)
-        // librtlsdr relit systématiquement un registre après écriture : le
-        // démodulateur ne valide la page qu'à la transaction suivante.
+        // Like librtlsdr, always read back after a write: the demod only
+        // commits the page on the next transaction.
         demodReadReg(0x0a, 0x01, 1)
         return n == data.size
     }
@@ -182,21 +174,21 @@ class RtlSdr(private val ctx: Context) {
                else ((buf[0].toInt() and 0xff) shl 8) or (buf[1].toInt() and 0xff)
     }
 
-    /** Ouvre ou ferme le passage I2C vers le tuner. */
+    /** Opens or closes the I2C path to the tuner. */
     private fun i2cRepeater(on: Boolean) {
         demodWriteReg(1, 0x01, if (on) 0x18 else 0x10, 1)
     }
 
     // ------------------------------------------------------------- tuner
 
-    /** Table d'inversion de bits : le R820T renvoie ses octets à l'envers. */
+    /** Bit-reversal table: the R820T returns its bytes bit-reversed. */
     private val bitrevLut = intArrayOf(
         0x0, 0x8, 0x4, 0xc, 0x2, 0xa, 0x6, 0xe, 0x1, 0x9, 0x5, 0xd, 0x3, 0xb, 0x7, 0xf)
 
     private fun bitrev(b: Int): Int =
         (bitrevLut[b and 0x0f] shl 4) or bitrevLut[(b shr 4) and 0x0f]
 
-    /** Image locale des registres du tuner : il ne se relit pas registre par registre. */
+    /** Shadow of tuner registers: it can't be read back register by register. */
     private val shadow = IntArray(32)
 
     private fun tunerWrite(reg: Int, values: IntArray): Boolean {
@@ -204,8 +196,8 @@ class RtlSdr(private val ctx: Context) {
             val r = reg + i
             if (r in 5..31) shadow[r] = values[i] and 0xff
         }
-        // Le RTL2832U n'accepte pas plus de 8 octets par transaction I2C,
-        // index de registre compris.
+        // The RTL2832U accepts at most 8 bytes per I2C transaction, register
+        // index included.
         var pos = 0
         while (pos < values.size) {
             val size = minOf(7, values.size - pos)
@@ -220,7 +212,7 @@ class RtlSdr(private val ctx: Context) {
 
     private fun tunerWriteReg(reg: Int, value: Int): Boolean = tunerWrite(reg, intArrayOf(value))
 
-    /** Écriture partielle : seuls les bits de [mask] sont remplacés. */
+    /** Masked write: only the bits in [mask] change. */
     private fun tunerWriteMask(reg: Int, value: Int, mask: Int): Boolean {
         val cur = if (reg in 5..31) shadow[reg] else 0
         val v = (cur and mask.inv()) or (value and mask)
@@ -228,15 +220,15 @@ class RtlSdr(private val ctx: Context) {
     }
 
     /**
-     * Lecture du tuner. Le R820T ne sait pas lire à une adresse arbitraire :
-     * il recrache toujours depuis le registre 0, et à l'envers bit à bit.
+     * Tuner read. The R820T can't read from an arbitrary address: it always
+     * dumps from register 0, bit-reversed.
      */
     private fun tunerRead(len: Int): IntArray? {
         val raw = readArray(BLOCK_I2C, R820T_I2C, len) ?: return null
         return IntArray(len) { bitrev(raw[it].toInt() and 0xff) }
     }
 
-    /** Séquence d'initialisation du R820T (registres 0x05 à 0x1f). */
+    /** R820T init sequence (registers 0x05 to 0x1f). */
     private val r820tInit = intArrayOf(
         0x83, 0x32, 0x75,
         0xc0, 0x40, 0xd6, 0x6c,
@@ -252,44 +244,43 @@ class RtlSdr(private val ctx: Context) {
         try {
             if (!tunerWrite(0x05, r820tInit)) return false
 
-            // Étalonnage du filtre FI. On force le VGA à zéro, on lance le
-            // calibrage à 56 MHz, puis on relit le code obtenu. L'échec n'est
-            // pas fatal : le filtre garde alors sa valeur par défaut, large,
-            // ce qui convient parfaitement à une réception FM étroite.
+            // IF filter calibration: VGA to zero, calibrate at 56 MHz, read
+            // back the code. Failure is not fatal: the filter keeps its wide
+            // default, fine for NBFM.
             tunerWriteMask(0x0c, 0x00, 0x0f)   // VGA = 0
             tunerWriteMask(0x13, 49, 0x3f)     // version
             tunerWriteMask(0x1d, 0x00, 0x38)   // LT gain test
-            tunerWriteMask(0x0f, 0x04, 0x04)   // horloge de calibrage
+            tunerWriteMask(0x0f, 0x04, 0x04)   // calibration clock
             setTunerPll(56_000_000L)
-            tunerWriteMask(0x0b, 0x10, 0x10)   // déclenchement
+            tunerWriteMask(0x0b, 0x10, 0x10)   // trigger
             Thread.sleep(2)
             tunerWriteMask(0x0b, 0x00, 0x10)
-            tunerWriteMask(0x0f, 0x00, 0x04)   // horloge de calibrage coupée
+            tunerWriteMask(0x0f, 0x00, 0x04)   // calibration clock off
             val cal = tunerRead(5)
             val code = if (cal != null) cal[4] and 0x0f else 0
-            // 0x0f signale un calibrage raté : on retombe sur la valeur neutre.
+            // 0x0f means calibration failed: fall back to neutral.
             val filtCode = if (code == 0x0f) 0 else code
-            tunerWriteMask(0x0a, 0x10 or filtCode, 0x1f)  // filtre passe-bande
-            tunerWriteMask(0x0b, 0x6b, 0xef)              // coin haut, 1,0 MHz
+            tunerWriteMask(0x0a, 0x10 or filtCode, 0x1f)  // band-pass filter
+            tunerWriteMask(0x0b, 0x6b, 0xef)              // high corner, 1.0 MHz
 
-            tunerWriteMask(0x07, 0x00, 0x80)   // pas de filtre image
+            tunerWriteMask(0x07, 0x00, 0x80)   // no image filter
             tunerWriteMask(0x06, 0x10, 0x30)   // +3 dB, 6 MHz
-            tunerWriteMask(0x1e, 0x60, 0x60)   // extension à gain LNA max-1
-            tunerWriteMask(0x05, 0x00, 0x80)   // loop-through actif
+            tunerWriteMask(0x1e, 0x60, 0x60)   // extension at LNA gain max-1
+            tunerWriteMask(0x05, 0x00, 0x80)   // loop-through on
             tunerWriteMask(0x1f, 0x00, 0x80)
-            tunerWriteMask(0x0f, 0x00, 0x80)   // filtre non élargi
-            tunerWriteMask(0x19, 0x60, 0x60)   // courant polyphase minimal
+            tunerWriteMask(0x0f, 0x00, 0x80)   // filter not widened
+            tunerWriteMask(0x19, 0x60, 0x60)   // minimum polyphase current
             return true
         } finally {
             i2cRepeater(false)
         }
     }
 
-    /** Programme la PLL du tuner sur [loHz] et renvoie la fréquence obtenue. */
+    /** Programs the tuner PLL to [loHz]; returns the achieved frequency. */
     private fun setTunerPll(loHz: Long): Long {
         tunerWriteMask(0x10, 0x00, 0x10)   // refdiv = 1
         tunerWriteMask(0x1a, 0x00, 0x0c)   // autotune 128 kHz
-        tunerWriteMask(0x12, 0x80, 0xe0)   // courant du VCO
+        tunerWriteMask(0x12, 0x80, 0xe0)   // VCO current
 
         val probe = tunerRead(5)
         val fine = if (probe != null) (probe[4] and 0x30) shr 4 else 2
@@ -302,8 +293,8 @@ class RtlSdr(private val ctx: Context) {
         tunerWriteReg(0x16, (plan.sdm shr 8) and 0xff)
         tunerWriteReg(0x15, plan.sdm and 0xff)
 
-        // Deux tentatives d'accrochage : si la première échoue, on remonte le
-        // courant du VCO, ce qui débloque la plupart des clés bon marché.
+        // Two lock attempts: if the first fails, raise VCO current, which
+        // unsticks most cheap dongles.
         var locked = false
         for (i in 0 until 2) {
             val st = tunerRead(3)
@@ -315,7 +306,7 @@ class RtlSdr(private val ctx: Context) {
         return if (locked) plan.achievedHz else 0L
     }
 
-    /** Filtre d'accord d'entrée pour l'oscillateur local demandé. */
+    /** Input tracking filter for the requested LO. */
     private fun setTunerMux(loHz: Long) {
         val r = RtlTuning.muxRange(loHz)
         tunerWriteMask(0x17, r.openD, 0x08)
@@ -326,9 +317,9 @@ class RtlSdr(private val ctx: Context) {
         tunerWriteMask(0x09, 0x00, 0x3f)
     }
 
-    // -------------------------------------------------------------- ouverture
+    // -------------------------------------------------------------- open
 
-    /** Ouvre la clé et l'amène en mode SDR. */
+    /** Opens the dongle and puts it in SDR mode. */
     fun open(dev: UsbDevice): Boolean {
         lastError = null
         val um = ctx.getSystemService(Context.USB_SERVICE) as UsbManager
@@ -360,11 +351,11 @@ class RtlSdr(private val ctx: Context) {
         if (c != null) {
             stopStream()
             runCatching {
-                // Coupe l'endpoint puis endort le démodulateur : sans cela la
-                // clé reste chaude et refuse parfois la réouverture.
+                // Stop the endpoint, then put the demod to sleep: otherwise the
+                // dongle stays hot and sometimes refuses to reopen.
                 writeReg(BLOCK_USB, USB_EPA_CTL, 0x1002, 2)
                 i2cRepeater(true)
-                tunerWriteReg(0x06, 0xb1)   // tuner en veille
+                tunerWriteReg(0x06, 0xb1)   // tuner standby
                 i2cRepeater(false)
                 demodWriteReg(0, 0x0c, 0x00, 1)
                 writeReg(BLOCK_SYS, DEMOD_CTL, 0x20, 1)
@@ -375,7 +366,7 @@ class RtlSdr(private val ctx: Context) {
         conn = null; iface = null; epIn = null; device = null
     }
 
-    /** Réveil du RTL2832U et mise en mode SDR (décodeur DVB-T contourné). */
+    /** Wakes the RTL2832U and enters SDR mode (DVB-T decoder bypassed). */
     private fun initBaseband(): Boolean {
         writeReg(BLOCK_USB, USB_SYSCTL, 0x09, 1)
         writeReg(BLOCK_USB, USB_EPA_MAXPKT, 0x0002, 2)
@@ -384,47 +375,46 @@ class RtlSdr(private val ctx: Context) {
         writeReg(BLOCK_SYS, DEMOD_CTL_1, 0x22, 1)
         writeReg(BLOCK_SYS, DEMOD_CTL, 0xe8, 1)
 
-        demodWriteReg(1, 0x01, 0x14, 1)   // reset logiciel
+        demodWriteReg(1, 0x01, 0x14, 1)   // soft reset
         demodWriteReg(1, 0x01, 0x10, 1)
 
-        demodWriteReg(1, 0x15, 0x00, 1)   // pas d'inversion de spectre
+        demodWriteReg(1, 0x15, 0x00, 1)   // no spectrum inversion
         demodWriteReg(1, 0x16, 0x0000, 2)
         for (i in 0 until 6) demodWriteReg(1, 0x16 + i, 0x00, 1)
 
         val fir = RtlTuning.packFir()
         for (i in fir.indices) demodWriteReg(1, 0x1c + i, fir[i].toInt() and 0xff, 1)
 
-        demodWriteReg(0, 0x19, 0x05, 1)   // mode SDR, AGC numérique coupée
+        demodWriteReg(0, 0x19, 0x05, 1)   // SDR mode, digital AGC off
         demodWriteReg(1, 0x93, 0xf0, 1)
         demodWriteReg(1, 0x94, 0x0f, 1)
         demodWriteReg(1, 0x11, 0x00, 1)
-        demodWriteReg(1, 0x04, 0x00, 1)   // pas de boucle AGC RF/FI
-        demodWriteReg(0, 0x61, 0x60, 1)   // filtre PID désactivé
-        demodWriteReg(0, 0x06, 0x80, 1)   // chemin ADC I/Q par défaut
-        demodWriteReg(1, 0xb1, 0x1b, 1)   // zéro-FI, correction DC et IQ
-        demodWriteReg(0, 0x0d, 0x83, 1)   // pas d'horloge 4,096 MHz sur TP_CK0
+        demodWriteReg(1, 0x04, 0x00, 1)   // no RF/IF AGC loop
+        demodWriteReg(0, 0x61, 0x60, 1)   // PID filter off
+        demodWriteReg(0, 0x06, 0x80, 1)   // default ADC I/Q path
+        demodWriteReg(1, 0xb1, 0x1b, 1)   // zero-IF, DC and IQ correction
+        demodWriteReg(0, 0x0d, 0x83, 1)   // no 4.096 MHz clock on TP_CK0
         return true
     }
 
     /**
-     * Configuration propre au R820T : la clé ne travaille pas en zéro-FI mais
-     * à 3,57 MHz, avec une seule voie du convertisseur, et c'est le DDC du
-     * RTL2832U qui redescend le tout en bande de base — d'où l'inversion de
-     * spectre à réactiver.
+     * R820T-specific setup: not zero-IF but 3.57 MHz on a single ADC channel;
+     * the RTL2832U DDC brings it down to baseband, hence spectrum inversion
+     * must be turned back on.
      */
     private fun configureForR82xx() {
-        demodWriteReg(1, 0xb1, 0x1a, 1)   // zéro-FI désactivé
-        demodWriteReg(0, 0x08, 0x4d, 1)   // seule l'entrée I du convertisseur
+        demodWriteReg(1, 0xb1, 0x1a, 1)   // zero-IF off
+        demodWriteReg(0, 0x08, 0x4d, 1)   // ADC I input only
         val ifr = RtlTuning.ifFreqRegs(RtlTuning.IF_FREQ)
         demodWriteReg(1, 0x19, ifr[0], 1)
         demodWriteReg(1, 0x1a, ifr[1], 1)
         demodWriteReg(1, 0x1b, ifr[2], 1)
-        demodWriteReg(1, 0x15, 0x01, 1)   // inversion de spectre
+        demodWriteReg(1, 0x15, 0x01, 1)   // spectrum inversion
     }
 
-    // -------------------------------------------------------------- réglages
+    // -------------------------------------------------------------- settings
 
-    /** Débit d'échantillonnage ; renvoie le débit réel, ou 0 si refusé. */
+    /** Sets the sample rate; returns the actual rate, or 0 if refused. */
     fun setSampleRate(rate: Int): Double {
         if (!RtlTuning.rateSupported(rate)) { lastError = "débit non supporté"; return 0.0 }
         val ratio = RtlTuning.resampRatio(rate)
@@ -436,14 +426,14 @@ class RtlSdr(private val ctx: Context) {
         return actualSampleRate
     }
 
-    /** Correction d'horloge en parties par million. */
+    /** Clock correction, ppm. */
     fun setFreqCorrection(ppm: Int) {
         val r = RtlTuning.freqCorrectionRegs(ppm)
         demodWriteReg(1, 0x3f, r[0], 1)
         demodWriteReg(1, 0x3e, r[1], 1)
     }
 
-    /** Fréquence centrale ; renvoie la fréquence réellement obtenue, ou 0. */
+    /** Sets the centre frequency; returns the achieved one, or 0. */
     fun setCenterFreq(hz: Long): Long {
         if (conn == null) return 0L
         val lo = hz + RtlTuning.IF_FREQ
@@ -459,18 +449,18 @@ class RtlSdr(private val ctx: Context) {
         }
     }
 
-    /** Gain du tuner en dixièmes de dB, ou null pour le mode automatique. */
+    /** Tuner gain in tenths of dB, or null for auto. */
     fun setGain(tenthDb: Int?) {
         i2cRepeater(true)
         try {
             if (tenthDb == null) {
-                tunerWriteMask(0x05, 0x00, 0x10)   // LNA automatique
-                tunerWriteMask(0x07, 0x10, 0x10)   // mélangeur automatique
-                tunerWriteMask(0x0c, 0x0b, 0x9f)   // VGA fixe 26,5 dB
+                tunerWriteMask(0x05, 0x00, 0x10)   // LNA auto
+                tunerWriteMask(0x07, 0x10, 0x10)   // mixer auto
+                tunerWriteMask(0x0c, 0x0b, 0x9f)   // VGA fixed 26.5 dB
             } else {
-                tunerWriteMask(0x05, 0x10, 0x10)   // LNA manuel
-                tunerWriteMask(0x07, 0x00, 0x10)   // mélangeur manuel
-                tunerWriteMask(0x0c, 0x08, 0x9f)   // VGA fixe 16,3 dB
+                tunerWriteMask(0x05, 0x10, 0x10)   // LNA manual
+                tunerWriteMask(0x07, 0x00, 0x10)   // mixer manual
+                tunerWriteMask(0x0c, 0x08, 0x9f)   // VGA fixed 16.3 dB
                 val (lna, mix) = RtlTuning.gainSplit(tenthDb)
                 tunerWriteMask(0x05, lna, 0x0f)
                 tunerWriteMask(0x07, mix, 0x0f)
@@ -480,27 +470,26 @@ class RtlSdr(private val ctx: Context) {
         }
     }
 
-    /** AGC numérique du RTL2832U (indépendante du gain du tuner). */
+    /** RTL2832U digital AGC (independent of tuner gain). */
     fun setAgc(on: Boolean) {
         demodWriteReg(0, 0x19, if (on) 0x25 else 0x05, 1)
     }
 
-    // ------------------------------------------------------------- flux IQ
+    // ------------------------------------------------------------- IQ stream
 
-    /** Vide les tampons USB avant de commencer à lire. */
+    /** Flushes USB buffers before reading. */
     fun resetBuffer() {
         writeReg(BLOCK_USB, USB_EPA_CTL, 0x1002, 2)
         writeReg(BLOCK_USB, USB_EPA_CTL, 0x0000, 2)
     }
 
     /**
-     * Lit un paquet d'IQ en synchrone. Renvoie le nombre d'octets, 0 sur
-     * expiration, -1 si le lien est mort. Les échantillons sont des entiers
-     * 8 bits non signés, I puis Q, centrés sur 127,5.
+     * Synchronous IQ read. Returns bytes read, 0 on timeout, -1 if the link is
+     * dead. Samples are unsigned 8-bit, I then Q, centred on 127.5.
      *
-     * Chemin de secours : entre deux appels la clé n'est lue par personne et
-     * ses tampons débordent. Utilisable pour vérifier qu'une clé répond, pas
-     * pour décoder du SSTV. Le chemin normal est [startStream]/[readStream].
+     * Fallback only: between calls nobody reads the dongle and its buffers
+     * overflow. Fine to check a dongle answers, not to decode SSTV. The normal
+     * path is [startStream]/[readStream].
      */
     fun read(buf: ByteArray, timeoutMs: Int = 1000): Int {
         val c = conn ?: return -1
@@ -508,22 +497,19 @@ class RtlSdr(private val ctx: Context) {
         return c.bulkTransfer(e, buf, minOf(buf.size, XFER), timeoutMs)
     }
 
-    // --------------------------------------------------- flux IQ asynchrone
+    // --------------------------------------------------- async IQ stream
 
-    /** Requêtes en vol. Toujours manipulées depuis le fil de lecture. */
+    /** In-flight requests. Only touched from the reader thread. */
     private val inflight = ArrayList<UsbRequest>()
 
     /**
-     * Met [depth] transferts en file d'attente auprès du noyau.
+     * Queues [depth] transfers with the kernel.
      *
-     * Le principe : pendant qu'on démodule le bloc qui vient d'arriver, les
-     * autres requêtes continuent de se remplir. Le flux ne s'interrompt donc
-     * jamais, ce qui est indispensable pour le SSTV — une image se décode sur
-     * deux minutes de son continu, un trou de quelques millisecondes décale
-     * toutes les lignes suivantes.
+     * While one block is demodulated the others keep filling, so the stream
+     * never breaks. Essential for SSTV: an image spans two minutes of
+     * continuous audio, and a few-millisecond gap shifts every following line.
      *
-     * Huit tampons de 16 ko font 128 ko, soit 60 ms de marge : largement de
-     * quoi encaisser un coup de charge du téléphone.
+     * Eight 16 KB buffers = 128 KB, ~60 ms of margin: plenty for a load spike.
      */
     fun startStream(depth: Int = 8): Boolean {
         stopStream()
@@ -543,9 +529,8 @@ class RtlSdr(private val ctx: Context) {
     }
 
     /**
-     * Attend le prochain transfert terminé, recopie les octets et remet
-     * aussitôt la requête en file. Renvoie le nombre d'octets lus, 0 si rien
-     * n'est arrivé dans le délai, -1 si le lien est mort.
+     * Waits for the next completed transfer, copies it and requeues the request
+     * at once. Returns bytes read, 0 on timeout, -1 if the link is dead.
      */
     fun readStream(out: ByteArray, timeoutMs: Long): Int {
         val c = conn ?: return -1
@@ -558,7 +543,7 @@ class RtlSdr(private val ctx: Context) {
             return -1
         } ?: return -1
         val b = r.clientData as? ByteBuffer ?: return -1
-        // Après requestWait, la position du tampon est le nombre d'octets reçus.
+        // After requestWait, the buffer position is the byte count received.
         val n = minOf(b.position(), out.size)
         if (n > 0) {
             b.flip()
@@ -569,7 +554,7 @@ class RtlSdr(private val ctx: Context) {
         return n
     }
 
-    /** Annule les transferts en vol. À appeler avant de fermer la connexion. */
+    /** Cancels in-flight transfers. Call before closing the connection. */
     fun stopStream() {
         for (r in inflight) {
             runCatching { r.cancel() }

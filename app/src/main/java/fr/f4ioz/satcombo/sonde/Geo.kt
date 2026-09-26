@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.sonde
 
@@ -16,42 +16,39 @@ import kotlin.math.sin
 import kotlin.math.sqrt
 
 /**
- * La géométrie dont une chasse à la radiosonde a besoin.
+ * The geometry a radiosonde hunt needs.
  *
- * La RS41 ne transmet pas sa latitude : elle transmet sa position cartésienne
- * géocentrée (ECEF, en centimètres) et sa vitesse dans le même repère. Tout le
- * reste — latitude, longitude, altitude, vitesse au sol, cap, vitesse
- * verticale — se calcule ici. C'est du calcul pur, sans Android : c'est donc la
- * partie du décodage qui se vérifie entièrement en test unitaire, et c'est
- * voulu. Une erreur de signe sur un axe enverrait le chasseur dans le mauvais
- * département.
+ * The RS41 does not send latitude: it sends its ECEF position (centimetres)
+ * and velocity. Everything else is computed here. Pure maths, no Android, so
+ * it is fully unit-tested on purpose: a sign error on one axis would send the
+ * hunter to the wrong département.
  */
 object Geo {
 
-    /** Demi-grand axe de l'ellipsoïde WGS84, en mètres. */
+    /** WGS84 semi-major axis, metres. */
     const val A = 6_378_137.0
 
-    /** Aplatissement de l'ellipsoïde WGS84. */
+    /** WGS84 flattening. */
     const val F = 1.0 / 298.257223563
 
-    /** Demi-petit axe, en mètres. */
+    /** Semi-minor axis, metres. */
     const val B = A * (1.0 - F)
 
-    /** Première excentricité au carré. */
+    /** First eccentricity squared. */
     const val E2 = F * (2.0 - F)
 
-    /** Rayon terrestre moyen utilisé pour les distances au sol, en kilomètres. */
+    /** Mean Earth radius for ground distances, kilometres. */
     const val EARTH_KM = 6371.0088
 
-    /** Position géodésique : latitude et longitude en degrés, altitude en mètres. */
+    /** Geodetic position: lat/lon in degrees, altitude in metres. */
     data class Fix(val lat: Double, val lon: Double, val altM: Double)
 
-    /** Vitesse locale : est, nord et vertical, en mètres par seconde. */
+    /** Local velocity: east, north, up, in m/s. */
     data class Enu(val east: Double, val north: Double, val up: Double) {
-        /** Vitesse au sol, en mètres par seconde. */
+        /** Ground speed, m/s. */
         val groundMps: Double get() = hypot(east, north)
 
-        /** Cap suivi, en degrés depuis le nord, ramené dans 0..360. */
+        /** Heading in degrees from north, 0..360. */
         val headingDeg: Double
             get() {
                 if (groundMps < 1e-6) return 0.0
@@ -61,18 +58,16 @@ object Geo {
     }
 
     /**
-     * ECEF vers géodésique, par la méthode de Bowring.
+     * ECEF to geodetic, Bowring's method.
      *
-     * Bowring converge en un seul passage à mieux que le millimètre pour toutes
-     * les altitudes qui nous concernent (du niveau de la mer à quarante
-     * kilomètres) : pas de boucle, pas de critère d'arrêt, donc pas de cas où
-     * le décodage prendrait soudain plus de temps qu'un intervalle de trame.
+     * One pass gives sub-millimetre accuracy from sea level to 40 km: no loop,
+     * no stop criterion, so decoding can never suddenly take longer than a
+     * frame interval.
      */
     fun ecefToGeodetic(x: Double, y: Double, z: Double): Fix {
         val p = hypot(x, y)
         if (p < 1e-9) {
-            // Sur l'axe des pôles : la formule générale divise par zéro, et de
-            // toute façon aucune radiosonde française ne passera par là.
+            // On the polar axis the general formula divides by zero.
             val lat = if (z >= 0) 90.0 else -90.0
             return Fix(lat, 0.0, abs(z) - B)
         }
@@ -88,11 +83,7 @@ object Geo {
         return Fix(Math.toDegrees(lat), Math.toDegrees(lon), alt)
     }
 
-    /**
-     * Vitesse ECEF vers vitesse locale est/nord/haut, à la latitude et à la
-     * longitude données (en degrés). C'est la rotation classique du repère
-     * géocentré vers le repère du lieu.
-     */
+    /** ECEF velocity to local east/north/up at the given lat/lon (degrees). */
     fun ecefVelToEnu(latDeg: Double, lonDeg: Double,
                      vx: Double, vy: Double, vz: Double): Enu {
         val la = Math.toRadians(latDeg)
@@ -105,7 +96,7 @@ object Geo {
         return Enu(e, n, u)
     }
 
-    /** Distance au sol entre deux points, en kilomètres (formule du haversine). */
+    /** Ground distance in kilometres (haversine). */
     fun distanceKm(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
         val p1 = Math.toRadians(lat1)
         val p2 = Math.toRadians(lat2)
@@ -116,11 +107,7 @@ object Geo {
         return 2.0 * EARTH_KM * atan2(sqrt(a), sqrt(1.0 - a))
     }
 
-    /**
-     * Azimut initial du premier point vers le second, en degrés depuis le nord.
-     * C'est le chiffre à mettre sous les yeux du chasseur : la sonde est
-     * par là.
-     */
+    /** Initial bearing from the first point to the second, degrees from north. */
     fun bearingDeg(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
         val p1 = Math.toRadians(lat1)
         val p2 = Math.toRadians(lat2)
@@ -134,22 +121,21 @@ object Geo {
     private val ROSE = arrayOf("N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE",
         "S", "SSO", "SO", "OSO", "O", "ONO", "NO", "NNO")
 
-    /** Le même azimut, en rose des vents à seize branches. */
+    /** Same bearing as a 16-point compass rose (French letters: O = west). */
     fun compass(deg: Double): String {
         val d = ((deg % 360.0) + 360.0) % 360.0
         return ROSE[(((d + 11.25) / 22.5).toInt()) % 16]
     }
 
-    /** Origine du temps GPS (6 janvier 1980) en millisecondes Unix. */
+    /** GPS epoch (6 January 1980) in Unix milliseconds. */
     const val GPS_EPOCH_MS = 315_964_800_000L
 
     /**
-     * Semaine GPS et temps dans la semaine vers l'horloge Unix.
+     * GPS week + time of week to Unix time.
      *
-     * Le décalage de secondes intercalaires est un paramètre parce qu'il change
-     * : dix-huit secondes depuis 2017, mais la sonde qu'on écoutera dans dix ans
-     * n'en saura rien. Les firmwares récents transmettent le numéro de semaine
-     * complet ; les anciens le donnent modulo 1024, d'où le rattrapage.
+     * Leap seconds are a parameter because they change: 18 since 2017, but a
+     * sonde heard in ten years won't know. Recent firmware sends the full week
+     * number; older ones send it modulo 1024, hence the correction.
      */
     fun gpsToUnixMs(week: Int, itowMs: Long, leapSeconds: Int = 18): Long {
         val w = if (week in 1..1023) week + 2048 else week

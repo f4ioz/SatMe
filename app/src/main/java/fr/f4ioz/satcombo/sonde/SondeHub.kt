@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.sonde
 
@@ -14,73 +14,49 @@ import kotlinx.coroutines.flow.StateFlow
 import java.io.File
 
 /**
- * Le décodage des radiosondes, branché sur la sortie de la chaîne SDR.
+ * Radiosonde decoding, fed from the SDR chain output.
  *
- * Le principe est le même que pour la SSTV : la boucle de lecture de la clé
- * appelle [feedLive] avec le son démodulé, et tout le travail se fait ici, hors
- * du fil critique de l'USB. La différence est qu'une radiosonde ne module pas
- * du son mais des bits : ce que l'on reçoit est la sortie brute du
- * discriminateur, et la désaccentuation doit être coupée, sinon les fronts sont
- * arrondis et plus rien ne se décode.
+ * As for SSTV, the dongle read loop calls [feedLive] with demodulated audio and
+ * the work happens here, off the USB-critical path. But a radiosonde modulates
+ * bits, not audio: we need the raw discriminator output, and de-emphasis must
+ * be off, or the edges get rounded and nothing decodes.
  *
- * Trois décodeurs tournent en parallèle sur le même flux, un par famille :
- * 4800 bauds pour la RS41, 9600 bauds en FSK droite pour la M20, et 9616
- * chips pour le bi-phase de la M10 — soit 4808 bits utiles. Cela coûte un peu
- * de calcul et évite d'avoir à demander à l'opérateur ce qu'il écoute : sur
- * 404,000 MHz au large de Brest, ce sera une M20 ; sur 405,700 une RS41 de
- * Camborne. La machine s'en aperçoit toute seule en une seconde.
- *
- * Il a fallu trois versions pour comprendre pourquoi aucune M20 ne sortait
- * jamais. La M20 et la M10 partageaient un seul démodulateur, réglé sur les
- * demi-bits de la M10, et le flux de la M20 y était donc lu à deux symboles par
- * bit — deux symboles rigoureusement identiques, puisqu'elle ne code rien en
- * demi-bits. Or c'est précisément à cette signature-là que l'ancien décodage
- * dit « Manchester » reconnaissait une mauvaise phase : il voyait des paires
- * plates partout, concluait au bruit, et jetait chaque trame. Le décodeur
- * marchait, les essais passaient, et rien n'arrivait jamais à l'écran. D'où le
- * démodulateur séparé, et l'essai de bout en bout qui va avec.
- *
- * La M10 a demandé une quatrième version. Elle ne se cale pas sur des octets
- * mais sur des chips : on cherche son motif de synchronisation dans le flux de
- * demi-bits, on part de là, et la somme de contrôle dit si c'était le bon
- * endroit. Les huit décalages d'octet et les deux phases de l'ancien code n'ont
- * plus lieu d'être — ils cherchaient un alignement qui n'existait pas.
- *
- * L'opérateur peut nommer le modèle qu'il écoute : les décodeurs inutiles sont
- * alors éteints et la chaîne SDR resserre son filtre sur la bonne largeur, ce
- * qui vaut quelques décibels sur une sonde lointaine.
+ * One decoder per family on the same stream: RS41 at 4800 baud, M20 plain
+ * FSK at 9600 baud, M10 biphase at 9616 chips/s. **M20 and M10 must not share
+ * a demodulator:** tuned to M10 half-bits, the M20 is read as two identical
+ * symbols per bit and every frame gets discarded while unit tests still pass
+ * (hence the end-to-end test). Naming the model turns off unneeded decoders
+ * and narrows the SDR filter, worth a few dB on a distant sonde.
  */
 object SondeHub {
 
     data class SondeState(
-        /** Le décodage tourne. */
+        /** Decoding is running. */
         val running: Boolean = false,
-        /** Nombre de trames retenues depuis le démarrage. */
+        /** Frames retained since start. */
         val frames: Int = 0,
-        /** Trames rejetées : utile pour juger si l'accord est bon. */
+        /** Rejected frames: helps judge whether tuning is right. */
         val rejected: Int = 0,
-        /** Dernière trame décodée. */
         val last: SondeFrame? = null,
-        /** Numéro de série suivi. */
+        /** Serial and type of the tracked sonde. */
         val serial: String = "",
-        /** Type de la sonde suivie. */
         val type: String = "",
-        /** Fichier journal en cours d'écriture. */
+        /** Log file being written. */
         val logFile: String? = null,
-        /** Amplitude du signal vue par le discriminateur, 0 à 100. */
+        /** Discriminator signal swing, 0 to 100. */
         val swing: Int = 0,
-        /** D'où vient le son : "SDR", "MIC" ou "USB". */
+        /** Audio source: "SDR", "MIC" or "USB". */
         val source: String = "SDR",
-        /** Modèle écouté, ou "AUTO" quand on les cherche tous. */
+        /** Selected model, or "AUTO" to search for all. */
         val model: String = SondeModel.AUTO,
-        /** Vrai quand la carte son est trop lente pour le modèle choisi. */
+        /** True when the sound card is too slow for the chosen model. */
         val marginal: Boolean = false
     )
 
     private val _state = MutableStateFlow(SondeState())
     val state: StateFlow<SondeState> = _state
 
-    /** Le décodage est-il armé ? Testé à chaque bloc, donc volatile. */
+    /** Checked on every block, hence volatile. */
     @Volatile
     var active: Boolean = false
         private set
@@ -97,16 +73,12 @@ object SondeHub {
     private var rejected = 0
     private var lastUiMs = 0L
 
-    /** Le vol en cours, ou null. */
     val currentFlight: SondeFlight? get() = flight
 
     /**
-     * Arme le décodage.
-     *
-     * [sampleRate] est celui du flux rendu par la chaîne SDR (44 100 Hz), et
-     * [freq] la fréquence écoutée : elle est recopiée dans chaque trame pour
-     * qu'on sache, en relisant le journal six mois plus tard, sur quoi la sonde
-     * émettait.
+     * Arms decoding. [sampleRate] is the SDR chain output rate (44 100 Hz).
+     * [freq] is copied into every frame so the log still says, months later,
+     * what the sonde was transmitting on.
      */
     fun start(ctx: Context?, sampleRate: Int, freq: Long, source: String = "SDR",
               model: String = SondeModel.AUTO, log: Boolean = true) {
@@ -114,28 +86,25 @@ object SondeHub {
         this.model = model
         val r = sampleRate.toDouble()
         rs41 = if (SondeModel.wantsRs41(model)) SondeDemod(r, Rs41.BAUD, 2048) else null
-        // La M20 est une FSK à deux états : un symbole par bit, et rien de plus.
+        // M20: two-level FSK, one symbol per bit.
         m20 = if (SondeModel.wantsM20(model))
             SondeDemod(r, Meteomodem.M20_BAUD, 2048) else null
-        // La M10 code en bi-phase à marque : le démodulateur compte les chips,
-        // soit 9616 par seconde pour 4808 bits utiles. La 18.6 a corrigé ici un
-        // facteur deux qui faisait tourner l'horloge à 19232 et rendait tout
-        // décodage M10 impossible.
+        // M10: biphase mark, so the demodulator counts chips (9616/s, not the
+        // 4808 bit/s payload, and not 19232, which made M10 undecodable).
         m10 = if (SondeModel.wantsM10(model))
             SondeDemod(r, Meteomodem.M10_CHIP_RATE, 2048) else null
         frames = 0
         rejected = 0
         flight = null
-        // Le contexte n'est demandé que pour le journal : la démonstration et
-        // les essais s'en passent, et peuvent donc faire tourner la chaîne
-        // entière hors d'Android.
+        // The context is only needed for the log, so demo and tests can run
+        // the whole chain outside Android.
         logFile = if (log && ctx != null) runCatching { openLog(ctx) }.getOrNull() else null
         active = true
         _state.value = SondeState(running = true, logFile = logFile?.name, source = source,
             model = model, marginal = SondeModel.byId(model).marginal(sampleRate))
     }
 
-    /** Désarme le décodage et ferme le journal. */
+    /** Disarms decoding. */
     fun stop() {
         active = false
         rs41 = null
@@ -144,7 +113,7 @@ object SondeHub {
         _state.value = _state.value.copy(running = false)
     }
 
-    /** Efface le vol suivi sans arrêter le décodage. */
+    /** Clears the tracked flight without stopping decoding. */
     fun clearFlight() {
         flight = null
         frames = 0
@@ -154,9 +123,9 @@ object SondeHub {
     }
 
     /**
-     * Avale un bloc de son démodulé. Appelé depuis la boucle de lecture de la
-     * clé : tout ce qui est fait ici retarde la lecture USB, d'où le tampon
-     * borné et l'absence de toute écriture bloquante en dehors du journal.
+     * Consumes a block of demodulated audio. Called from the dongle read loop:
+     * anything done here delays USB reads, hence bounded buffers and no
+     * blocking writes apart from the log.
      */
     fun feedLive(pcm: ShortArray, count: Int) {
         if (!active || count <= 0) return
@@ -167,10 +136,8 @@ object SondeHub {
             a.feedBits(pcm, count, null)
             if (a.bitsAvailable >= Rs41.LEN_STD * 8 + 64) {
                 var found = false
-                // L'alignement des octets est inconnu : on essaie les huit
-                // décalages possibles, ce qui est bien moins coûteux qu'il n'y
-                // paraît puisque la recherche d'en-tête échoue tout de suite sur
-                // sept d'entre eux.
+                // Byte alignment is unknown: try all eight bit offsets. Cheap,
+                // since the header search fails immediately on seven of them.
                 for (off in 0 until 8) {
                     val n = a.packBytes(off)
                     val hit = Rs41.scan(a.bytes, 0, n, freqHz, now) ?: continue
@@ -184,8 +151,7 @@ object SondeHub {
         }
 
         // -------------------------------------------------------------- M20
-        // Deux états, un symbole par bit, poids fort en tête : la trame se lit
-        // directement dans les symboles, sans passer par les demi-bits.
+        // One symbol per bit, MSB first: read the frame straight from symbols.
         m20?.let { d ->
             d.feedBits(pcm, count, null)
             if (d.bitsAvailable >= Meteomodem.M20_LEN * 8 + 128) {
@@ -201,10 +167,9 @@ object SondeHub {
         }
 
         // -------------------------------------------------------------- M10
-        // On travaille au niveau des chips : le motif de synchronisation donne
-        // le point de départ exact, la somme de contrôle valide le reste. Toutes
-        // les occurrences du motif sont essayées, parce qu'un tampon d'une
-        // seconde contient une bonne dizaine de rafales.
+        // Chip level: the sync pattern gives the exact start, the checksum
+        // validates. Every pattern occurrence is tried, since a buffer can
+        // hold several bursts.
         m10?.let { b ->
             b.feedBits(pcm, count, null)
             val need = Meteomodem.M10_LEN * 16 + Meteomodem.M10_SYNC.size
@@ -237,8 +202,8 @@ object SondeHub {
     private fun accept(f: SondeFrame) {
         val fl = flight ?: SondeFlight(
             if (f.serial.isNotBlank()) f.serial else "?", f.type).also { flight = it }
-        // Un changement de numéro de série en cours de route, c'est une autre
-        // sonde : on repart d'un vol neuf plutôt que de mélanger deux traces.
+        // A new serial means another sonde: start a new flight rather than mix
+        // two tracks.
         if (f.serial.isNotBlank() && fl.serial != "?" && fl.serial != f.serial) {
             flight = SondeFlight(f.serial, f.type)
         }
@@ -250,9 +215,9 @@ object SondeHub {
             frames = frames, last = f, serial = target.serial, type = target.type)
     }
 
-    // ---------------------------------------------------------------- journal
+    // ---------------------------------------------------------------- log
 
-    /** Dossier des journaux de sondes, créé au besoin. */
+    /** Sonde log directory, created if needed. */
     fun logDir(ctx: Context): File =
         File(ctx.filesDir, "sondes").also { if (!it.exists()) it.mkdirs() }
 
@@ -269,12 +234,12 @@ object SondeHub {
         file.appendText(SondeExport.csvLine(f))
     }
 
-    /** Les journaux enregistrés, du plus récent au plus ancien. */
+    /** Saved logs, newest first. */
     fun logs(ctx: Context): List<File> =
         logDir(ctx).listFiles()?.filter { it.isFile }?.sortedByDescending { it.lastModified() }
             ?: emptyList()
 
-    /** Écrit la trace du vol en cours au format demandé et rend le fichier. */
+    /** Writes the current flight track in the requested format, returns the file. */
     fun export(ctx: Context, kml: Boolean): File? {
         val fl = flight ?: return null
         if (fl.count == 0) return null

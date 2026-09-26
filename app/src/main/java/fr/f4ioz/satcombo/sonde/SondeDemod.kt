@@ -1,47 +1,43 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.sonde
 
 import kotlin.math.abs
 
 /**
- * Du son démodulé en FM aux octets d'une radiosonde.
+ * From FM-demodulated audio to radiosonde bytes.
  *
- * La chaîne SDR rend déjà la sortie du discriminateur FM : une tension qui monte
- * quand la fréquence monte. Une modulation FSK à deux états y ressemble alors à
- * un carré bruité, et il ne reste que deux choses à faire : décider où est le
- * milieu (le zéro), et décider quand échantillonner (l'horloge).
+ * The SDR chain already outputs the FM discriminator. Two-level FSK then looks
+ * like a noisy square wave, and two things remain: where the middle is (the
+ * zero) and when to sample (the clock).
  *
- * Le zéro est une moyenne glissante lente. Elle absorbe le décalage d'accord :
- * si l'opérateur est cinq cents hertz à côté, le carré est décentré, et sans
- * cette moyenne un bit sur deux serait faux. Lente exprès, pour qu'une longue
- * suite de bits identiques ne la déplace pas.
+ * The zero is a slow moving average that absorbs tuning offset: 500 Hz off
+ * and the square is off-centre, making every other bit wrong. Slow on purpose,
+ * so a long run of identical bits doesn't drag it.
  *
- * L'horloge est un accumulateur de phase, avec un rattrapage à chaque
- * changement d'état. On ne dispose que de neuf échantillons par bit à 4800
- * bauds — et de quatre à peine à 9600 — donc rien de plus élaboré n'aurait de
- * sens : il faut un nombre fractionnaire d'échantillons par bit, et un
- * recalage doux sur les transitions.
+ * The clock is a phase accumulator nudged at each transition. With only ~9
+ * samples per bit at 4800 baud (barely 4 at 9600), nothing fancier makes
+ * sense: a fractional samples-per-bit count and a gentle re-sync on edges.
  */
 class SondeDemod(
-    /** Débit d'échantillonnage du flux d'entrée, en hertz. */
+    /** Input sample rate, Hz. */
     private val sampleRate: Double,
-    /** Débit binaire attendu, en bauds. */
+    /** Expected bit rate, baud. */
     private val baud: Double,
-    /** Nombre d'octets conservés dans le tampon de recherche de trame. */
+    /** Bytes kept in the frame search buffer. */
     bufferBytes: Int = 4096
 ) {
 
-    /** Nombre d'échantillons par bit, en général pas entier. */
+    /** Samples per bit, usually not an integer. */
     val samplesPerBit: Double = sampleRate / baud
 
-    /** Vrai si le débit d'échantillonnage est trop juste pour ce débit binaire. */
+    /** True if the sample rate is too low for this bit rate. */
     val marginal: Boolean get() = samplesPerBit < 3.0
 
     private var dcLevel = 0.0
@@ -52,11 +48,11 @@ class SondeDemod(
     private var haveLast = false
     private var corrected = false
 
-    /** Bits reçus, un par octet, dans l'ordre d'arrivée. */
+    /** Received bits, one per byte, in arrival order. */
     private val chips = ByteArray(bufferBytes * 8 + 64)
     private var chipCount = 0
 
-    /** Tampon d'octets reconstitués, poids faible en tête. */
+    /** Rebuilt bytes. */
     val bytes = ByteArray(bufferBytes)
     var byteCount = 0
         private set
@@ -64,27 +60,23 @@ class SondeDemod(
     private var bitInByte = 0
     private var acc = 0
 
-    /** Constante de la moyenne glissante qui suit le zéro du discriminateur. */
+    /** Time constant of the moving average tracking the discriminator zero. */
     private val dcAlpha = (baud / sampleRate / 400.0).coerceIn(1e-5, 1e-2)
 
     /**
-     * Lissage d'entrée, de l'ordre de la largeur d'un symbole.
-     *
-     * C'est le filtre adapté du pauvre, et il change tout sur un signal réel :
-     * sans lui, le souffle fait franchir le zéro plusieurs fois par symbole, et
-     * chaque faux passage recale l'horloge un peu plus loin. Sur les
-     * enregistrements de référence de radiosonde_auto_rx, la version 18.5
-     * produisait quatre-vingt-dix-neuf virgule un pour cent des bits attendus —
-     * un bit perdu sur cent, c'est-à-dire vingt-cinq bits perdus par trame de
-     * trois cent vingt octets, donc aucune trame entière. Avec le lissage,
-     * l'hystérésis et un seul recalage par symbole : cent virgule zéro zéro.
+     * Input smoothing, about one symbol wide: a poor man's matched filter, and
+     * it changes everything on a real signal. Without it, noise crosses zero
+     * several times per symbol and each false crossing pushes the clock. On the
+     * auto_rx reference recordings that meant 99.1 % of bits, i.e. ~25 bits
+     * lost per 320-byte frame and no complete frame at all. With smoothing,
+     * hysteresis and one re-sync per symbol: 100.00 %.
      */
     private val smoothK = (2.0 / samplesPerBit).coerceIn(0.05, 1.0)
 
-    /** Suivi de l'amplitude, pour dimensionner l'hystérésis. */
+    /** Amplitude tracking, to size the hysteresis. */
     private val ampK = (dcAlpha * 20.0).coerceIn(1e-4, 0.2)
 
-    /** Largeur de l'hystérésis, en fraction de l'amplitude observée. */
+    /** Hysteresis width, as a fraction of observed amplitude. */
     private val hysteresis = 0.30
 
     fun reset() {
@@ -101,11 +93,8 @@ class SondeDemod(
     }
 
     /**
-     * Avale un bloc de son et produit des bits.
-     *
-     * Rend le nombre de bits produits. Les bits sont rangés dans [chipsOut]
-     * quand il est fourni : c'est ce dont le décodage bi-phase a besoin, la
-     * M10 travaillant sur les demi-bits.
+     * Consumes an audio block, returns the number of bits produced. Bits also go
+     * to [chipsOut] when given: biphase decoding (M10) works on half-bits.
      */
     fun feedBits(pcm: ShortArray, count: Int, chipsOut: ByteArray?): Int {
         var produced = 0
@@ -116,17 +105,15 @@ class SondeDemod(
             val d = smooth - dcLevel
             amp += ampK * (abs(d) - amp)
             val th = hysteresis * amp
-            // Hystérésis : tant que le signal reste dans la bande morte, on
-            // garde l'état précédent. Un souffle centré ne fabrique donc plus de
-            // transitions.
+            // Inside the dead band, keep the previous state, so centred noise
+            // no longer creates transitions.
             val bit = if (d > th) 1 else if (d < -th) 0 else last
 
             if (haveLast && bit != last && !corrected) {
-                // Transition : on recale doucement l'horloge sur le milieu du
-                // bit. Un recalage brutal ferait osciller la boucle sur le
-                // bruit, un recalage nul la laisserait dériver. Un seul recalage
-                // par symbole, sinon un front un peu mou en déclenche trois et
-                // l'horloge prend du retard jusqu'à sauter un bit.
+                // Gently pull the clock towards mid-bit: too hard and the loop
+                // oscillates on noise, not at all and it drifts. Only once per
+                // symbol, or a soft edge triggers three corrections and the
+                // clock lags until it skips a bit.
                 phase += (samplesPerBit / 2.0 - phase) * 0.20
                 corrected = true
             }
@@ -146,9 +133,9 @@ class SondeDemod(
     }
 
     /**
-     * Assemble les bits accumulés en octets, poids faible en tête, en glissant
-     * d'un bit à chaque appel infructueux : c'est l'appelant qui décide de
-     * l'alignement en cherchant un en-tête.
+     * Packs accumulated bits into LSB-first bytes from [offsetBits]. The caller
+     * picks the alignment by searching for a header, shifting one bit per
+     * unsuccessful try.
      */
     fun packBytes(offsetBits: Int = 0): Int {
         byteCount = 0
@@ -162,7 +149,7 @@ class SondeDemod(
         return byteCount
     }
 
-    /** Assemble les bits en octets poids fort en tête (Meteomodem). */
+    /** Packs bits into MSB-first bytes (Meteomodem). */
     fun packBytesMsb(source: ByteArray, count: Int, offsetBits: Int = 0): Int {
         byteCount = 0
         var k = offsetBits
@@ -175,16 +162,14 @@ class SondeDemod(
         return byteCount
     }
 
-    /** Bits en attente. */
     val bitsAvailable: Int get() = chipCount
 
-    /** Copie des bits accumulés, pour le décodage bi-phase. */
+    /** Copy of accumulated bits, for biphase decoding. */
     fun chipsCopy(): ByteArray = chips.copyOf(chipCount)
 
     /**
-     * Oublie les bits déjà consommés. On garde toujours de quoi contenir une
-     * trame entière moins un bit, sinon une trame à cheval sur deux blocs
-     * audio serait perdue à chaque fois.
+     * Drops consumed bits. Callers must always keep a whole frame minus one
+     * bit, or a frame straddling two audio blocks is lost every time.
      */
     fun consumeBits(n: Int) {
         val keep = chipCount - n
@@ -193,12 +178,12 @@ class SondeDemod(
         chipCount = keep
     }
 
-    /** Vide le tampon en gardant les [keep] derniers bits. */
+    /** Keeps only the last [keep] bits. */
     fun trimTo(keep: Int) {
         if (chipCount > keep) consumeBits(chipCount - keep)
     }
 
-    /** Amplitude crête à crête vue par le discriminateur, indicateur de présence. */
+    /** Peak-to-peak discriminator swing, a presence indicator. */
     fun swing(pcm: ShortArray, count: Int): Int {
         var lo = Int.MAX_VALUE
         var hi = Int.MIN_VALUE

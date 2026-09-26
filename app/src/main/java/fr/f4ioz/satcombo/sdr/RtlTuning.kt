@@ -1,47 +1,44 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.sdr
 
 /**
- * Toute l'arithmétique du RTL2832U et du tuner R820T, sans une seule ligne
- * d'Android : les registres se calculent ici et se testent au banc.
+ * All the RTL2832U and R820T arithmetic, with no Android: registers are
+ * computed here and unit-tested.
  *
- * C'est volontaire. Le pilote USB [RtlSdr] ne fait que transporter des octets ;
- * dès qu'un chiffre doit être calculé (rapport de rééchantillonnage, plan de
- * PLL, encodage de la fréquence intermédiaire, découpage du gain), le calcul
- * vit ici et une suite de tests le vérifie sans clé branchée. Il n'y a pas de
- * RTL-SDR dans l'atelier de compilation : c'est la seule façon d'avoir une
- * certitude sur autre chose que la relecture du code.
+ * On purpose. The USB driver [RtlSdr] only moves bytes; anything that must be
+ * computed (resampling ratio, PLL plan, IF encoding, gain split) lives here
+ * and is tested without a dongle. There is no RTL-SDR on the build machine, so
+ * this is the only way to be sure of more than a code review.
  *
- * Références : librtlsdr (rtlsdr.c, r82xx.c), le tuner Rafael Micro R820T/R2.
+ * References: librtlsdr (rtlsdr.c, r82xx.c), Rafael Micro R820T/R2 tuner.
  */
 object RtlTuning {
 
-    /** Quartz du RTL2832U (et du R820T, qui s'y raccroche). */
+    /** RTL2832U crystal (the R820T shares it). */
     const val XTAL = 28_800_000
 
-    /** Fréquence intermédiaire du R82xx telle que la programme librtlsdr. */
+    /** R82xx IF as programmed by librtlsdr. */
     const val IF_FREQ = 3_570_000
 
     private const val TWO_POW_22 = 4_194_304.0
     private const val TWO_POW_24 = 16_777_216.0
 
-    // ---------------------------------------------------------------- débit
+    // ---------------------------------------------------------------- sample rate
 
-    /** Le rééchantillonneur du RTL2832U ne couvre pas tout le spectre. */
+    /** The RTL2832U resampler doesn't cover every rate. */
     fun rateSupported(rate: Int): Boolean =
         rate > 225_000 && rate <= 3_200_000 && !(rate > 300_000 && rate <= 900_000)
 
     /**
-     * Rapport de rééchantillonnage écrit dans les registres 0x9f/0xa1 de la
-     * page 1. Les deux bits de poids faible sont toujours nuls : le
-     * rééchantillonneur ne les regarde pas.
+     * Resampling ratio for page 1 registers 0x9f/0xa1. The two low bits are
+     * always zero: the resampler ignores them.
      */
     fun resampRatio(rate: Int, xtal: Int = XTAL): Int {
         val ratio = (xtal * TWO_POW_22 / rate).toLong()
@@ -49,35 +46,33 @@ object RtlTuning {
     }
 
     /**
-     * Débit réellement obtenu pour un rapport donné. Il diffère du débit
-     * demandé de moins d'un millionième, mais le moteur SSTV doit connaître le
-     * vrai chiffre : une image met deux minutes à descendre, et une erreur
-     * d'horloge se lit directement comme une inclinaison.
+     * Actual rate for the ratio. It differs by under 1 ppm, but SSTV needs the
+     * true value: an image takes two minutes, and a clock error shows directly
+     * as slant.
      */
     fun actualRate(rate: Int, xtal: Int = XTAL): Double {
         val ratio = resampRatio(rate, xtal)
-        // Le bit 27 est recopié sur le bit 28 par le matériel.
+        // Hardware copies bit 27 into bit 28.
         val real = ratio.toLong() or ((ratio.toLong() and 0x08000000L) shl 1)
         if (real == 0L) return rate.toDouble()
         return xtal * TWO_POW_22 / real
     }
 
     /**
-     * Correction de fréquence d'échantillonnage en ppm (registres 0x3e/0x3f).
-     * Renvoie les deux octets dans l'ordre { reg 0x3f, reg 0x3e }.
+     * Sample-rate ppm correction (registers 0x3e/0x3f). Returns the bytes in
+     * the order { reg 0x3f, reg 0x3e }.
      */
     fun freqCorrectionRegs(ppm: Int): IntArray {
         val offs = (-ppm * TWO_POW_24 / 1_000_000).toInt()
         return intArrayOf(offs and 0xff, (offs shr 8) and 0x3f)
     }
 
-    // ------------------------------------------------------- FI du démodul.
+    // ------------------------------------------------------- demodulator IF
 
     /**
-     * Encodage de la fréquence intermédiaire (registres 0x19/0x1a/0x1b de la
-     * page 1). Le DDC du RTL2832U descend cette FI à zéro, ce qui est la
-     * raison pour laquelle un R820T fournit quand même de l'IQ en bande de
-     * base alors que son mélangeur travaille à 3,57 MHz.
+     * IF encoding (page 1 registers 0x19/0x1a/0x1b). The RTL2832U DDC brings
+     * this IF down to zero, which is why an R820T still yields baseband IQ
+     * although its mixer works at 3.57 MHz.
      */
     fun ifFreqRegs(ifHz: Int, xtal: Int = XTAL): IntArray {
         val v = (-(ifHz * TWO_POW_22 / xtal)).toInt()
@@ -86,16 +81,15 @@ object RtlTuning {
 
     // ------------------------------------------------------------- FIR RTL
 
-    /** Réponse du filtre d'entrée par défaut : 8 valeurs 8 bits, 8 valeurs 12 bits. */
+    /** Default input filter: 8 values of 8 bits, 8 of 12 bits. */
     val FIR_DEFAULT = intArrayOf(
         -54, -36, -41, -40, -32, -14, 14, 53,
         101, 156, 215, 273, 327, 372, 404, 421
     )
 
     /**
-     * Empaquette les 16 coefficients en 20 octets : les huit premiers sont des
-     * entiers signés 8 bits, les huit suivants des entiers signés 12 bits
-     * tassés deux par trois octets.
+     * Packs the 16 coefficients into 20 bytes: eight signed 8-bit values, then
+     * eight signed 12-bit values packed two per three bytes.
      */
     fun packFir(fir: IntArray = FIR_DEFAULT): ByteArray {
         require(fir.size == 16) { "16 coefficients attendus" }
@@ -117,12 +111,12 @@ object RtlTuning {
         return out
     }
 
-    // ------------------------------------------------------ filtre d'accord
+    // ------------------------------------------------------ tracking filter
 
     /**
-     * Une tranche de la table de filtres d'accord du R820T. Le tuner n'a pas de
-     * filtre d'entrée continu mais une série de bancs commutés : à chaque bande
-     * sa combinaison de drain ouvert, de multiplexeur RF et de capacités.
+     * One row of the R820T tracking filter table. The tuner has switched banks,
+     * not a continuous input filter: each band has its own open-drain, RF mux
+     * and capacitor setting.
      */
     data class MuxRange(
         val fromMHz: Int,
@@ -154,7 +148,7 @@ object RtlTuning {
         MuxRange(588, 0x00, 0x40, 0x00, 0x00)
     )
 
-    /** Tranche à programmer pour un oscillateur local donné (en Hz). */
+    /** Row to program for a given LO (Hz). */
     fun muxRange(loHz: Long): MuxRange {
         val mhz = loHz / 1_000_000
         var chosen = MUX_RANGES[0]
@@ -165,14 +159,13 @@ object RtlTuning {
     // ------------------------------------------------------------- PLL
 
     /**
-     * Plan de synthèse pour un oscillateur local. [lockable] est faux quand le
-     * diviseur entier sort de la plage du tuner : la clé ne pourra pas
-     * s'accrocher, autant le dire tout de suite plutôt que de recevoir du bruit.
+     * Synthesis plan for an LO. [lockable] is false when the integer divider is
+     * out of the tuner's range: the PLL won't lock, better to say so than to
+     * receive noise.
      *
-     * [achievedHz] est la fréquence réellement produite, qui n'est pas tout à
-     * fait celle demandée : le sigma-delta a un pas fini. L'écart reste sous la
-     * centaine de hertz en VHF/UHF, invisible en FM étroite, mais il faudra le
-     * corriger en logiciel pour la BLU.
+     * [achievedHz] is the frequency actually produced; the sigma-delta has a
+     * finite step. Under ~100 Hz on VHF/UHF, invisible in NBFM, but it will
+     * need software correction for SSB.
      */
     data class PllPlan(
         val mixDiv: Int,
@@ -187,9 +180,9 @@ object RtlTuning {
     )
 
     /**
-     * Calcule le plan de PLL. [vcoFineTune] vient du registre 0x04 du tuner
-     * (bits 5:4) et corrige le diviseur ; sur un R820T la valeur de référence
-     * est 2, donc une lecture à 2 laisse [divNum] inchangé.
+     * Computes the PLL plan. [vcoFineTune] comes from tuner register 0x04
+     * (bits 5:4) and adjusts the divider; the R820T reference is 2, so reading
+     * 2 leaves [divNum] unchanged.
      */
     fun pllPlan(loHz: Long, xtal: Int = XTAL, vcoFineTune: Int = 2, vcoPowerRef: Int = 2): PllPlan {
         val freqKhz = (loHz + 500) / 1000
@@ -218,7 +211,7 @@ object RtlTuning {
 
         val vcoFreq = loHz * mixDiv
         val nint = (vcoFreq / (2L * xtal)).toInt()
-        var vcoFra = ((vcoFreq - 2L * xtal * nint) / 1000L).toInt()   // en kHz
+        var vcoFra = ((vcoFreq - 2L * xtal * nint) / 1000L).toInt()   // kHz
 
         if (nint > (128 / vcoPowerRef) - 1) {
             return PllPlan(mixDiv, divNum, nint, 0, 0, 0, true, false, 0L)
@@ -239,7 +232,7 @@ object RtlTuning {
             nSdm = nSdm shl 1
         }
 
-        // Fréquence effectivement synthétisée : 2 * xtal * (nint + sdm/65536) / mixDiv
+        // Actual synthesised frequency: 2 * xtal * (nint + sdm/65536) / mixDiv
         val achieved = Math.round(2.0 * xtal * (nint + sdm / 65536.0) / mixDiv)
 
         return PllPlan(mixDiv, divNum, nint, ni, si, sdm, sdmOff, true, achieved)
@@ -247,13 +240,13 @@ object RtlTuning {
 
     // ------------------------------------------------------------- gain
 
-    /** Pas de gain du LNA du R820T, en dixièmes de dB. */
+    /** R820T LNA gain steps, tenths of dB. */
     val LNA_STEPS = intArrayOf(0, 9, 13, 40, 38, 13, 31, 22, 26, 31, 26, 14, 19, 5, 35, 13)
 
-    /** Pas de gain du mélangeur, en dixièmes de dB. */
+    /** Mixer gain steps, tenths of dB. */
     val MIXER_STEPS = intArrayOf(0, 5, 10, 10, 19, 9, 10, 25, 17, 10, 8, 16, 13, 6, 3, -8)
 
-    /** Gains manuels annoncés par librtlsdr, en dixièmes de dB. */
+    /** Manual gains listed by librtlsdr, tenths of dB. */
     val GAINS = intArrayOf(
         0, 9, 14, 27, 37, 77, 87, 125, 144, 157, 166, 197, 207, 229,
         254, 280, 297, 328, 338, 364, 372, 386, 402, 421, 434, 439,
@@ -261,9 +254,9 @@ object RtlTuning {
     )
 
     /**
-     * Répartit un gain demandé (dixièmes de dB) entre le LNA et le mélangeur,
-     * exactement comme librtlsdr : on empile alternativement un cran de LNA et
-     * un cran de mélangeur jusqu'à atteindre la cible.
+     * Splits a gain (tenths of dB) between LNA and mixer exactly as librtlsdr
+     * does: alternately add one LNA step and one mixer step until the target
+     * is reached.
      */
     fun gainSplit(tenthDb: Int): Pair<Int, Int> {
         var total = 0

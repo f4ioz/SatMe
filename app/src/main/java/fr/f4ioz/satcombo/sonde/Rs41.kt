@@ -1,40 +1,35 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.sonde
 
 /**
- * Décodage des trames Vaisala RS41, la sonde la plus répandue en Europe.
+ * Vaisala RS41 frame decoding, the most common sonde in Europe.
  *
- * La RS41 émet en GFSK à 4800 bits par seconde, octets poids faible en tête.
- * La trame entière est brouillée par un OU exclusif avec un masque de
- * soixante-quatre octets qui se répète, appliqué dès le premier octet — en-tête
- * compris. On cherche donc l'en-tête *brouillé* dans le flux : c'est une
- * constante, et cela évite de désembrouiller tout ce qui passe pour découvrir
- * ensuite que ce n'était pas une sonde.
+ * GFSK at 4800 bit/s, little-endian. The whole frame, header included, is
+ * XORed with a repeating 64-byte mask. So we search for the header as it
+ * appears on air (a constant) instead of descrambling everything first.
  *
- * Une fois désembrouillée, la trame se lit comme une suite de blocs
- * indépendants, chacun protégé par son propre CRC. Les quarante-huit octets de
- * parité Reed-Solomon qui suivent l'en-tête sont volontairement ignorés :
- * corriger les erreurs demanderait un décodeur RS(255,231) complet pour un gain
- * qui ne se voit que sur les trames déjà à moitié perdues, alors qu'un CRC par
- * bloc suffit à ne jamais afficher une position fausse. Mieux vaut sauter une
- * trame que mentir sur une coordonnée.
+ * Once descrambled, the frame is a series of blocks, each with its own CRC.
+ * The 48 Reed-Solomon parity bytes are deliberately ignored: a full RS(255,231)
+ * decoder only helps on half-lost frames, while a per-block CRC is enough to
+ * never show a wrong position. Better to skip a frame than lie about a
+ * coordinate.
  */
 object Rs41 {
 
-    /** Débit binaire, en bits par seconde. */
+    /** Bit rate, bit/s. */
     const val BAUD = 4800.0
 
-    /** Largeur de filtre conseillée pour la démodulation, en hertz. */
+    /** Recommended demodulation filter width, Hz. */
     const val BANDWIDTH_HZ = 15_000
 
-    /** Masque de désembrouillage, répété tous les soixante-quatre octets. */
+    /** Descrambling mask, repeated every 64 bytes. */
     val MASK = intArrayOf(
         0x96, 0x83, 0x3E, 0x51, 0xB1, 0x49, 0x08, 0x98,
         0x32, 0x05, 0x59, 0x0E, 0xF9, 0x44, 0xC6, 0x26,
@@ -46,72 +41,63 @@ object Rs41 {
         0x78, 0x6E, 0x3B, 0xAE, 0xBF, 0x7B, 0x4C, 0xC1)
 
     /**
-     * En-tête tel qu'il passe sur l'air.
+     * Header as it goes over the air.
      *
-     * C'est bien celui-ci qui est émis tel quel : la RS41 envoie son en-tête en
-     * clair, et le brouillage ne se voit que sur la suite. La version 18.6 a
-     * corrigé une inversion des deux constantes — la mire et le décodeur
-     * s'accordaient entre eux sur la convention inverse, si bien que les essais
-     * passaient tous et qu'aucune sonde réelle n'était jamais reconnue. Les
-     * enregistrements de référence de radiosonde_auto_rx ont tranché : cent
-     * vingt en-têtes parfaits en cent vingt secondes avec celui-ci, aucun avec
-     * l'autre.
+     * Trap: these two constants were once swapped. The test generator and the
+     * decoder agreed on the wrong convention, so every test passed and no real
+     * sonde was ever recognised. auto_rx reference recordings settled it: 120
+     * perfect headers in 120 s with this one, none with the other.
      */
     val HEADER_RAW = intArrayOf(0x10, 0xB6, 0xCA, 0x11, 0x22, 0x96, 0x12, 0xF8)
 
-    /** Le même en-tête une fois la trame désembrouillée. */
+    /** Same header after descrambling. */
     val HEADER = IntArray(HEADER_RAW.size) { HEADER_RAW[it] xor MASK[it] }
 
-    /** Longueur d'une trame standard, en octets (type 0x0F). */
+    /** Standard frame length, bytes (type 0x0F). */
     const val LEN_STD = 320
 
-    /** Longueur d'une trame étendue, en octets (type 0xF0). */
+    /** Extended frame length, bytes (type 0xF0). */
     const val LEN_EXT = 518
 
     /**
-     * Octet de type, juste avant les blocs.
+     * Type byte, just before the blocks.
      *
-     * Il vient après les quarante-huit octets de parité Reed-Solomon, et non
-     * juste après l'en-tête : la 18.5 le lisait en neuvième position, c'est-à-dire
-     * au milieu de la parité, donc une valeur au hasard à chaque trame. Aucune
-     * sonde réelle ne passait ce test.
+     * It comes after the 48 parity bytes, not right after the header. Reading
+     * it at offset 8 (inside the parity) gives a random value and rejects every
+     * real sonde.
      */
     const val TYPE_AT = 0x38
 
-    /** Premier octet des blocs de données, juste après la parité Reed-Solomon. */
+    /** First byte of the data blocks. */
     const val BLOCKS_AT = 0x39
 
-    /** Bloc d'état : numéro de trame, numéro de série, tension de la pile. */
+    /** Status block: frame number, serial, battery voltage. */
     const val BLK_STATUS = 0x79
 
-    /** Bloc GPS « temps » : semaine et temps dans la semaine. */
+    /** GPS time block: week and time of week. */
     const val BLK_GPS_TIME = 0x7A
 
-    /** Bloc GPS « position » : coordonnées et vitesse en ECEF. */
+    /** GPS position block: ECEF position and velocity. */
     const val BLK_GPS_POS = 0x7B
 
     private fun b(f: ByteArray, i: Int) = f[i].toInt() and 0xff
 
-    /** Entier seize bits non signé, poids faible en tête. */
+    // Little-endian integer readers.
     fun u16(f: ByteArray, i: Int) = b(f, i) or (b(f, i + 1) shl 8)
 
-    /** Entier seize bits signé, poids faible en tête. */
     fun i16(f: ByteArray, i: Int): Int {
         val v = u16(f, i)
         return if (v >= 0x8000) v - 0x10000 else v
     }
 
-    /** Entier trente-deux bits signé, poids faible en tête. */
     fun i32(f: ByteArray, i: Int): Int =
         b(f, i) or (b(f, i + 1) shl 8) or (b(f, i + 2) shl 16) or (b(f, i + 3) shl 24)
 
-    /** Entier trente-deux bits non signé, poids faible en tête. */
     fun u32(f: ByteArray, i: Int): Long = i32(f, i).toLong() and 0xFFFF_FFFFL
 
     /**
-     * CRC-16-CCITT, polynôme 0x1021, registre initialisé à 0xFFFF, sans
-     * inversion finale. C'est celui que la RS41 range en fin de bloc, poids
-     * faible en tête.
+     * CRC-16-CCITT: poly 0x1021, init 0xFFFF, no final XOR. Stored
+     * little-endian at the end of each RS41 block.
      */
     fun crc16(data: ByteArray, off: Int, len: Int): Int {
         var crc = 0xFFFF
@@ -125,17 +111,14 @@ object Rs41 {
         return crc and 0xFFFF
     }
 
-    /** Applique (ou retire, c'est la même opération) le masque de brouillage. */
+    /** Applies (or removes, same operation) the scrambling mask. */
     fun descramble(frame: ByteArray) {
         for (k in frame.indices) {
             frame[k] = (frame[k].toInt() xor MASK[k % MASK.size]).toByte()
         }
     }
 
-    /**
-     * Cherche l'en-tête brouillé dans un tampon d'octets déjà alignés.
-     * Rend l'indice du premier octet de la trame, ou -1.
-     */
+    /** Finds the on-air header in byte-aligned data. Returns the frame start, or -1. */
     fun findHeader(buf: ByteArray, from: Int = 0, to: Int = buf.size): Int {
         val last = to - HEADER_RAW.size
         var i = from
@@ -150,22 +133,19 @@ object Rs41 {
         return -1
     }
 
-    /** Longueur annoncée par l'octet de type, ou 0 si le type est inconnu. */
+    /** Length for this type byte, or 0 if unknown. */
     fun frameLength(typeByte: Int): Int = when (typeByte and 0xff) {
         0x0F -> LEN_STD
         0xF0 -> LEN_EXT
         else -> 0
     }
 
-    /** Un bloc reconnu dans la trame. */
     data class Block(val id: Int, val at: Int, val len: Int, val crcOk: Boolean)
 
     /**
-     * Parcourt les blocs d'une trame désembrouillée.
-     *
-     * On avance de bloc en bloc en se fiant à la longueur annoncée, et on
-     * s'arrête dès qu'elle ne tient plus dans la trame : sur une trame abîmée,
-     * un octet de longueur farfelu enverrait la lecture n'importe où.
+     * Walks the blocks of a descrambled frame, stopping as soon as a declared
+     * length overruns the frame: on a damaged frame a bogus length byte would
+     * send the reader anywhere.
      */
     fun blocks(frame: ByteArray): List<Block> {
         val out = ArrayList<Block>(8)
@@ -186,11 +166,9 @@ object Rs41 {
     }
 
     /**
-     * Décode une trame complète et désembrouillée.
-     *
-     * Rend null si l'en-tête ne correspond pas, ou si aucun bloc de position
-     * valide n'a été trouvé : sans coordonnées, la trame n'apprend rien à un
-     * chasseur, autant ne pas encombrer le journal.
+     * Decodes a complete descrambled frame. Null if the header doesn't match or
+     * no valid position block was found: without coordinates the frame is
+     * useless to a hunter.
      */
     fun parse(frame: ByteArray, freqHz: Long = 0L, nowMs: Long = 0L): SondeFrame? {
         if (frame.size < BLOCKS_AT + 4) return null
@@ -225,9 +203,7 @@ object Rs41 {
                     haveTime = true
                 }
                 BLK_GPS_POS -> if (blk.len >= 21) {
-                    // Les coordonnées sont en centimètres, les vitesses en
-                    // centimètres par seconde : la sonde compte plus fin que ce
-                    // dont on a besoin, on ramène tout en unités du système.
+                    // Position in cm, velocity in cm/s.
                     val x = i32(frame, blk.at).toDouble() / 100.0
                     val y = i32(frame, blk.at + 4).toDouble() / 100.0
                     val z = i32(frame, blk.at + 8).toDouble() / 100.0
@@ -263,9 +239,8 @@ object Rs41 {
     }
 
     /**
-     * Cherche, désembrouille et décode la première trame trouvée dans un
-     * tampon. Rend la trame décodée et l'indice du premier octet qui suit,
-     * pour que l'appelant sache où reprendre.
+     * Finds, descrambles and decodes the first frame in a buffer. Returns it
+     * with the index just past it, so the caller knows where to resume.
      */
     data class Hit(val frame: SondeFrame, val nextIndex: Int)
 
@@ -274,7 +249,7 @@ object Rs41 {
         while (true) {
             val h = findHeader(buf, at, to)
             if (h < 0) return null
-            // Le type suit la parité Reed-Solomon, et il est encore brouillé.
+            // The type byte follows the parity and is still scrambled.
             val typeAt = h + TYPE_AT
             if (typeAt >= to) return null
             val type = (buf[typeAt].toInt() xor MASK[TYPE_AT % MASK.size]) and 0xff

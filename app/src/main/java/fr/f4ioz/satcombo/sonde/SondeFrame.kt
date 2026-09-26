@@ -1,87 +1,80 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.sonde
 
 /**
- * Une trame de radiosonde décodée, quel que soit le constructeur.
+ * A decoded radiosonde frame, whatever the manufacturer.
  *
- * Toutes les sondes ne disent pas la même chose : la RS41 donne sa tension de
- * pile et son numéro de série alphanumérique, la M20 donne un numéro de série
- * numérique et pas toujours le nombre de satellites. Les champs inconnus valent
- * zéro plutôt que null : ce qui compte pour la chasse, c'est de savoir si le
- * point est digne de confiance, et [trusted] le dit d'un seul coup d'œil.
+ * Sondes don't all send the same fields. Unknown fields are zero rather than
+ * null: what matters for the hunt is whether the fix can be trusted, and
+ * [trusted] says so at a glance.
  */
 data class SondeFrame(
-    /** Type de sonde : "RS41", "M20", "M10". */
+    /** Sonde type: "RS41", "M20", "M10". */
     val type: String,
-    /** Numéro de série imprimé sur la sonde, vide si la trame ne le porte pas. */
+    /** Serial printed on the sonde; empty if the frame doesn't carry it. */
     val serial: String = "",
-    /** Compteur de trames de la sonde, utile pour repérer les trous. */
+    /** Sonde frame counter, used to spot gaps. */
     val frameNo: Int = 0,
-    /** Horodatage GPS converti en millisecondes Unix, 0 si inconnu. */
+    /** GPS time as Unix milliseconds, 0 if unknown. */
     val timeUtcMs: Long = 0L,
     val lat: Double = 0.0,
     val lon: Double = 0.0,
-    /** Altitude GPS au-dessus de l'ellipsoïde, en mètres. */
+    /** GPS altitude above the ellipsoid, metres. */
     val altM: Double = 0.0,
-    /** Vitesse au sol, en mètres par seconde. */
+    /** Ground speed, m/s. */
     val speedMps: Double = 0.0,
-    /** Cap suivi, en degrés depuis le nord. */
+    /** Heading, degrees from north. */
     val headingDeg: Double = 0.0,
-    /** Vitesse verticale, en mètres par seconde. Négative en descente. */
+    /** Vertical speed, m/s. Negative when descending. */
     val climbMps: Double = 0.0,
-    /** Satellites utilisés pour le point. */
+    /** Satellites used for the fix. */
     val sats: Int = 0,
     /**
-     * Vrai quand la trame ne transmet pas le nombre de satellites.
+     * True when the frame does not carry the satellite count.
      *
-     * La M10 est dans ce cas : notre décodage lit sa position, son horloge GPS
-     * et son compteur, mais pas le nombre de satellites du point. Sans ce
-     * drapeau, [trusted] serait faux pour toutes les M10, et l'application
-     * n'aurait jamais de dernier point sûr à donner au chasseur — ni
-     * d'éclatement, ni de point de chute. Ce qui tient lieu de garantie, alors,
-     * c'est l'horloge GPS : une trame qui porte une semaine et une heure GPS
-     * valables vient d'un récepteur qui a fait le point.
+     * The M10 is such a case. Without this flag [trusted] would be false for
+     * every M10, and the app would never have a safe last fix, burst or landing
+     * point to give. The guarantee then is the GPS clock: a frame with a valid
+     * GPS week and time comes from a receiver that has a fix.
      */
     val satsUnknown: Boolean = false,
-    /** Tension de la pile, en volts. 0 = non transmise. */
+    /** Battery voltage, volts. 0 = not sent. */
     val batteryV: Double = 0.0,
-    /** Fréquence sur laquelle la trame a été reçue, en hertz. */
+    /** Frequency the frame was received on, Hz. */
     val freqHz: Long = 0L,
-    /** Horloge du téléphone au moment de la réception, en millisecondes. */
+    /** Phone clock at reception, milliseconds. */
     val heardAtMs: Long = 0L
 ) {
 
     /**
-     * Le point est-il exploitable ?
+     * Is the fix usable?
      *
-     * Sous quatre satellites, un récepteur GPS rend quand même des chiffres,
-     * mais ils peuvent être faux de plusieurs kilomètres. Envoyer un chasseur
-     * sur un point à trois satellites, c'est lui faire perdre son après-midi :
-     * on préfère afficher le dernier point sûr, même vieux d'une minute.
+     * Below four satellites a GPS still outputs numbers, but they can be off by
+     * kilometres. Better to show the last safe fix, even a minute old, than to
+     * waste a hunter's afternoon.
      */
     val trusted: Boolean
         get() = (sats >= 4 || (satsUnknown && timeUtcMs > 0L)) &&
             (lat != 0.0 || lon != 0.0) &&
             lat > -90.0 && lat < 90.0 && lon >= -180.0 && lon <= 180.0
 
-    /** La sonde descend-elle ? Le passage du positif au négatif, c'est l'éclatement. */
+    /** Descending? The switch from positive to negative is the burst. */
     val descending: Boolean get() = climbMps < -1.0
 
     /**
-     * Contrôle de vraisemblance, appliqué avant même de regarder [trusted].
+     * Sanity check, applied even before [trusted].
      *
-     * Les formats M10 et M20 n'ont pas de contrôle de redondance que l'on
-     * sache reproduire à coup sûr : c'est la physique qui sert de garde-fou.
-     * Un ballon météo ne dépasse pas quarante kilomètres d'altitude, ne descend
-     * pas sous le niveau de la mer et ne file pas à plus de cent mètres par
-     * seconde au sol. Une trame qui prétend le contraire est du bruit.
+     * M10 and M20 have no redundancy check we can reliably reproduce, so
+     * physics is the guard: a weather balloon stays below ~40 km, above sea
+     * level, and under 100 m/s ground speed. A frame claiming otherwise is
+     * noise.
      */
     val plausible: Boolean
         get() = lat >= -90.0 && lat <= 90.0 && lon >= -180.0 && lon <= 180.0 &&

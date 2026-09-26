@@ -1,60 +1,55 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.sonde
 
 /**
- * Le vol d'une radiosonde, du premier point entendu au dernier.
+ * A radiosonde flight, from first point heard to last.
  *
- * C'est le cœur de la chasse. Une sonde monte deux heures, éclate vers trente
- * kilomètres, retombe en une demi-heure et se tait au sol — ou continue
- * d'émettre pendant des heures si la pile tient. Ce qui décide de la retrouver
- * ou non tient en trois chiffres : le dernier point sûr, l'endroit où elle a
- * éclaté, et le point d'impact extrapolé quand on a perdu le signal avant le
- * sol.
+ * A sonde climbs for two hours, bursts around 30 km, falls in half an hour and
+ * goes quiet on the ground (or keeps transmitting for hours if the battery
+ * lasts). Finding it comes down to three things: the last trusted fix, the
+ * burst point, and the extrapolated landing when the signal is lost before
+ * the ground.
  *
- * La classe est volontairement sans Android : elle se teste entièrement, et
- * c'est le genre de calcul où une erreur coûte un après-midi de marche.
+ * No Android on purpose: fully testable, and an error here costs an afternoon
+ * of walking.
  */
 class SondeFlight(val serial: String, val type: String) {
 
     private val points = ArrayList<SondeFrame>(4096)
 
-    /** Tous les points reçus, du plus ancien au plus récent. */
+    /** All retained points, oldest first. */
     val track: List<SondeFrame> get() = points
 
-    /** Dernier point reçu, sûr ou non. */
+    /** Last point, trusted or not. */
     var last: SondeFrame? = null
         private set
 
-    /** Dernier point à quatre satellites ou plus : celui vers lequel on marche. */
+    /** Last trusted point: the one we walk towards. */
     var lastTrusted: SondeFrame? = null
         private set
 
-    /** Point le plus haut retenu, qui est aussi l'éclatement du ballon. */
+    /** Highest trusted point, i.e. the burst. */
     var burst: SondeFrame? = null
         private set
 
-    /** Nombre de trames retenues. */
     val count: Int get() = points.size
 
-    /** Fréquence de la dernière réception, en hertz. */
+    /** Frequency of the last reception, Hz. */
     var freqHz: Long = 0L
         private set
 
     /**
-     * Ajoute une trame. Rend vrai si elle a été retenue.
+     * Adds a frame; true if retained.
      *
-     * Le filtre de continuité est ce qui protège des trames fausses d'un
-     * décodeur sans CRC : entre deux points d'une même sonde il ne peut pas y
-     * avoir plus d'une dizaine de kilomètres, même à la vitesse d'un jet
-     * stream. Un point qui saute de cent kilomètres est un octet mal lu, pas un
-     * ballon.
+     * The continuity filter guards against bad frames from CRC-less decoders:
+     * a point jumping 100 km is a misread byte, not a balloon.
      */
     fun add(f: SondeFrame): Boolean {
         if (!f.plausible) return false
@@ -62,9 +57,8 @@ class SondeFlight(val serial: String, val type: String) {
         if (prev != null && f.trusted && prev.trusted) {
             val jump = Geo.distanceKm(prev.lat, prev.lon, f.lat, f.lon)
             val dt = elapsedSec(prev, f)
-            // Cent mètres par seconde est déjà généreux : c'est le maximum
-            // relevé dans un courant-jet. Vingt kilomètres de tolérance en plus
-            // couvrent un trou de réception d'une poignée de minutes.
+            // 100 m/s is already generous (jet-stream maximum). The extra 20 km
+            // covers a reception gap of a few minutes.
             if (jump > 0.1 * dt + 20.0) return false
         }
         points += f
@@ -79,16 +73,13 @@ class SondeFlight(val serial: String, val type: String) {
     }
 
     /**
-     * Temps écoulé entre deux trames, en secondes.
+     * Seconds between two frames.
      *
-     * On demande l'heure à la sonde avant de la demander au téléphone. Les deux
-     * donnent le même chiffre quand on écoute en direct, mais pas quand on
-     * relit un enregistrement : un fichier d'une heure se redécode en deux
-     * minutes, l'horloge du téléphone avance alors trente fois trop lentement
-     * par rapport au vol, et le contrôle de continuité — qui autorise cent
-     * mètres par seconde — refuserait des points parfaitement bons. L'horloge
-     * GPS de la sonde, elle, dit toujours la vérité sur le vol, qu'on l'écoute
-     * en direct, en différé ou depuis un journal relu six mois plus tard.
+     * Sonde GPS time first, phone clock second. They agree live, but not when
+     * replaying a recording: an hour of audio decodes in two minutes, the phone
+     * clock runs 30x slow relative to the flight, and the continuity check
+     * would reject good points. The sonde's GPS clock is always right about
+     * the flight.
      */
     private fun elapsedSec(prev: SondeFrame, f: SondeFrame): Double {
         if (f.timeUtcMs > 0L && prev.timeUtcMs > 0L && f.timeUtcMs > prev.timeUtcMs) {
@@ -98,7 +89,7 @@ class SondeFlight(val serial: String, val type: String) {
         return 1.0
     }
 
-    /** La sonde a-t-elle éclaté ? On le sait quand elle est repassée sous son sommet. */
+    /** Has it burst? Known once it is back below its peak. */
     val hasBurst: Boolean
         get() {
             val b = burst ?: return false
@@ -106,13 +97,10 @@ class SondeFlight(val serial: String, val type: String) {
             return b.altM > 12_000.0 && l.altM < b.altM - 500.0
         }
 
-    /** Altitude d'éclatement, en mètres, ou 0. */
+    /** Burst altitude, metres, or 0. */
     val burstAltM: Double get() = burst?.altM ?: 0.0
 
-    /**
-     * Vitesse de descente moyenne des dernières trames, en mètres par seconde,
-     * comptée positive. Sert à extrapoler l'impact.
-     */
+    /** Mean descent rate over recent frames, m/s, positive. Used for the landing estimate. */
     fun descentRate(samples: Int = 10): Double {
         val recent = points.filter { it.trusted }.takeLast(samples)
         if (recent.size < 2) return 0.0
@@ -122,14 +110,11 @@ class SondeFlight(val serial: String, val type: String) {
     }
 
     /**
-     * Point d'impact estimé, ou null si la sonde monte encore ou si on n'a pas
-     * de quoi extrapoler.
+     * Estimated landing point, or null if still climbing or not enough data.
      *
-     * L'extrapolation est délibérément simple : on prolonge le dernier vecteur
-     * horizontal pendant le temps qu'il reste à tomber. Ce n'est pas un modèle
-     * de vent, et cela ne prétend pas l'être — mais sur les mille derniers
-     * mètres la dérive est faible et le résultat vaut mieux que rien. Un modèle
-     * de vent complet demanderait des données que l'application n'a pas.
+     * Deliberately simple: extend the last horizontal vector over the
+     * remaining fall time. Not a wind model (the app lacks the data for one),
+     * but over the last kilometre drift is small and it beats nothing.
      */
     fun estimatedLanding(): Pair<Double, Double>? {
         val l = lastTrusted ?: return null
@@ -146,22 +131,22 @@ class SondeFlight(val serial: String, val type: String) {
         return Pair(l.lat + dLat, l.lon + dLon)
     }
 
-    /** Distance depuis le QTH jusqu'au dernier point sûr, en kilomètres. */
+    /** Distance from the QTH to the last trusted point, km. */
     fun distanceFromKm(lat: Double, lon: Double): Double {
         val l = lastTrusted ?: return 0.0
         return Geo.distanceKm(lat, lon, l.lat, l.lon)
     }
 
-    /** Azimut depuis le QTH vers le dernier point sûr, en degrés. */
+    /** Bearing from the QTH to the last trusted point, degrees. */
     fun bearingFrom(lat: Double, lon: Double): Double {
         val l = lastTrusted ?: return 0.0
         return Geo.bearingDeg(lat, lon, l.lat, l.lon)
     }
 
-    /** Premier point du vol, ce qui donne l'heure et le lieu approximatifs du lâcher. */
+    /** First trusted point: approximate launch time and place. */
     val first: SondeFrame? get() = points.firstOrNull { it.trusted }
 
-    /** Durée écoutée, en secondes. */
+    /** Listening duration, seconds. */
     val durationSec: Long
         get() {
             val a = points.firstOrNull()?.heardAtMs ?: return 0L
@@ -169,7 +154,7 @@ class SondeFlight(val serial: String, val type: String) {
             return ((b - a) / 1000L).coerceAtLeast(0L)
         }
 
-    /** Vide le vol, en gardant le nom. */
+    /** Clears the flight, keeping its identity. */
     fun clear() {
         points.clear()
         last = null
@@ -177,7 +162,7 @@ class SondeFlight(val serial: String, val type: String) {
         burst = null
     }
 
-    /** N'en garde qu'un point sur [step], pour ne pas faire un GPX de dix mégaoctets. */
+    /** Keeps one trusted point in [step], to avoid a 10 MB GPX. */
     fun thinned(step: Int = 1): List<SondeFrame> {
         if (step <= 1) return points.filter { it.trusted }
         val t = points.filter { it.trusted }
@@ -186,12 +171,8 @@ class SondeFlight(val serial: String, val type: String) {
 }
 
 /**
- * Écriture des traces au format GPX et KML.
- *
- * Le GPX se charge dans OsmAnd ou dans un GPS de randonnée, le KML dans Google
- * Earth : ce sont les deux outils qu'un chasseur a sous la main. Les deux
- * exports portent les mêmes repères, parce qu'ils servent la même chose :
- * le dernier point sûr, l'éclatement, et l'impact estimé.
+ * Track export as GPX (OsmAnd, hiking GPS) and KML (Google Earth). Both carry
+ * the same waypoints: last trusted fix, burst, estimated landing.
  */
 object SondeExport {
 
@@ -261,9 +242,8 @@ object SondeExport {
     }
 
     /**
-     * Une ligne de journal, lisible à l'œil et relisible par la machine.
-     * Le format est volontairement plat : un jour où l'application ne sera plus
-     * là, un tableur ouvrira encore le fichier.
+     * Log line, human- and machine-readable. Deliberately flat: a spreadsheet
+     * will still open it when the app is long gone.
      */
     fun csvHeader() = "utc;serial;type;lat;lon;alt_m;speed_mps;heading_deg;climb_mps;sats;batt_v;freq_hz\n"
 

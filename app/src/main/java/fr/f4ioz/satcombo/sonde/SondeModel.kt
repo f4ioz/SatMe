@@ -1,76 +1,65 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.sonde
 
 /**
- * Ce qui distingue un modèle de radiosonde d'un autre, du point de vue du poste.
+ * What sets one radiosonde model apart, from the receiver's point of view.
  *
- * On a longtemps fait tourner les décodeurs à l'aveugle, tous en même temps,
- * avec un filtre unique de vingt-deux kilohertz. C'était commode et c'était
- * faux : la largeur du filtre doit suivre l'excursion de la sonde écoutée. Une
- * RS41 tient dans quinze kilohertz ; lui en ouvrir vingt-deux, c'est laisser
- * entrer la moitié de bruit en plus pour rien, et perdre les deux décibels qui
- * font la différence entre une sonde décodée à cent kilomètres et une sonde
- * perdue. Les valeurs retenues ici sont celles que le projet auto_rx a mesurées
- * banc en main, modèle par modèle.
+ * Running every decoder blind behind a single 22 kHz filter was convenient but
+ * wrong: the filter width must follow the sonde's deviation. An RS41 fits in
+ * 15 kHz; opening 22 lets in half as much noise again and loses the ~2 dB that
+ * separate a sonde decoded at 100 km from a lost one. Values here are those
+ * auto_rx measured on the bench, model by model.
  *
- * Le mode automatique reste le réglage de départ : il ouvre large et fait
- * tourner tous les décodeurs, ce qui est le bon compromis quand on ne sait pas
- * encore ce qui passe. Dès que l'opérateur sait — et il le sait presque
- * toujours, la fréquence désigne la station et la station désigne le modèle —
- * lui nommer la sonde lui rend ces décibels.
+ * Auto mode stays the default: wide filter, all decoders. Once the operator
+ * knows the model (the frequency usually names the station, the station the
+ * model), selecting it wins those decibels back.
  */
 object SondeModel {
 
     /**
-     * Un profil de réception.
+     * A reception profile.
      *
-     * [baud] est le débit binaire vrai, [chipRate] celui auquel le
-     * démodulateur doit tourner : ils diffèrent pour la M10, dont le codage
-     * bi-phase impose de compter les demi-bits.
+     * [baud] is the true bit rate, [chipRate] the rate the demodulator runs
+     * at. They differ for the M10, whose biphase coding means counting half-bits.
      */
     data class Profile(
-        /** Identifiant rangé dans les réglages. */
+        /** Id stored in settings. */
         val id: String,
-        /** Nom affiché, en clair et non traduit : ce sont des noms propres. */
+        /** Display name, not translated: these are proper names. */
         val label: String,
-        /** Largeur du filtre FM conseillée, en hertz. */
+        /** Recommended FM filter width, Hz. */
         val bandwidthHz: Int,
-        /** Débit binaire utile, en bits par seconde. 0 pour le mode automatique. */
+        /** Payload bit rate, bit/s. 0 for auto mode. */
         val baud: Double,
-        /** Débit auquel tourne le démodulateur, en symboles par seconde. */
+        /** Demodulator rate, symbols/s. */
         val chipRate: Double,
-        /** La trame est-elle codée en bi-phase, deux demi-bits par bit ? */
+        /** Biphase frame, two half-bits per bit? */
         val biphase: Boolean
     ) {
         /**
-         * Nombre d'échantillons par symbole à ce débit d'échantillonnage.
+         * Samples per symbol at this sample rate.
          *
-         * C'est le chiffre qui dit si la carte son suit : sous deux
-         * échantillons par symbole, la récupération d'horloge n'a plus de quoi
-         * travailler et le décodage devient une affaire de chance.
+         * Below two, clock recovery has nothing to work with and decoding
+         * becomes luck.
          */
         fun samplesPerChip(sampleRate: Int): Double =
             if (chipRate <= 0.0) 0.0 else sampleRate / chipRate
 
         /**
-         * Vrai quand la carte son ne suit pas le débit de ce modèle.
+         * True when the sound card can't keep up with this model's rate.
          *
-         * Le seuil est à deux, et non à trois comme on l'avait posé d'abord.
-         * La M10 est le cas limite : ses demi-bits sortent à 9 616 par seconde,
-         * ce qui donne 4,59 échantillons par symbole à 44 100 Hz — la 18.6 a
-         * corrigé ici un facteur deux qui faisait croire à 2,29. Le seuil reste
-         * à deux : radiosonde_auto_rx décode en production à 2,5 échantillons
-         * par symbole, et une chaîne qui marche à 2,5 ne s'effondre pas à 2,29.
-         * Placer l'avertissement à trois revenait à décourager l'opérateur
-         * devant un montage parfaitement utilisable, et l'OHP de Saint-Michel,
-         * la station la plus proche d'ici, lâche justement des M10.
+         * Threshold is two, not three. The M10 is the edge case: 9 616
+         * half-bits/s gives 4.59 samples per symbol at 44.1 kHz (an older
+         * version wrongly computed 2.29, off by a factor of two). auto_rx
+         * decodes in production at 2.5 samples per symbol, so a threshold of
+         * three would scare the operator off a perfectly usable setup.
          */
         fun marginal(sampleRate: Int): Boolean {
             val s = samplesPerChip(sampleRate)
@@ -78,7 +67,7 @@ object SondeModel {
         }
     }
 
-    /** Mode automatique : filtre large, tous les décodeurs en parallèle. */
+    /** Auto mode: wide filter, all decoders in parallel. */
     const val AUTO = "AUTO"
 
     val RS41 = Profile(
@@ -97,38 +86,32 @@ object SondeModel {
         baud = Meteomodem.M10_BAUD, chipRate = Meteomodem.M10_CHIP_RATE,
         biphase = true)
 
-    /** Le profil du mode automatique : le plus large des trois. */
+    /** Auto-mode profile: the widest of the three. */
     val ANY = Profile(
         id = AUTO, label = "Auto",
         bandwidthHz = maxOf(Rs41.BANDWIDTH_HZ, Meteomodem.BANDWIDTH_HZ),
         baud = 0.0, chipRate = 0.0, biphase = false)
 
-    /** Les modèles proposés, mode automatique en tête. */
+    /** Offered models, auto first. */
     val ALL = listOf(ANY, RS41, M20, M10)
 
-    /** Le profil portant cet identifiant, ou le mode automatique. */
+    /** Profile with this id, or auto. */
     fun byId(id: String?): Profile = ALL.firstOrNull { it.id == id } ?: ANY
 
-    /** Largeur de filtre à demander à la chaîne SDR pour ce choix. */
+    /** Filter width to request from the SDR chain for this choice. */
     fun bandwidthFor(id: String?): Int = byId(id).bandwidthHz
 
-    /** Faut-il faire tourner le décodeur RS41 pour ce choix ? */
     fun wantsRs41(id: String?): Boolean = id == null || id == AUTO || id == "RS41"
 
-    /** Faut-il faire tourner le décodeur M20 ? */
     fun wantsM20(id: String?): Boolean = id == null || id == AUTO || id == "M20"
 
-    /** Faut-il faire tourner le décodeur M10 ? */
     fun wantsM10(id: String?): Boolean = id == null || id == AUTO || id == "M10"
 
     /**
-     * Les modèles qu'on ne sait pas encore décoder, pour mémoire.
-     *
-     * Ils sont nommés ici plutôt que passés sous silence : quelqu'un qui ne
-     * décode rien sur 403,100 doit pouvoir vérifier en trois secondes que la
-     * sonde qu'il écoute n'est simplement pas de la partie. Aucune des stations
-     * du quart sud-est de la France ne lâche autre chose que des RS41 et des
-     * Meteomodem, mais l'Allemagne lâche des Graw DFM et la Russie des MRZ.
+     * Models not decoded yet, listed so that someone decoding nothing can check
+     * in seconds that their sonde simply isn't supported. South-east France
+     * only launches RS41 and Meteomodem, but Germany launches Graw DFM and
+     * Russia MRZ.
      */
     val NOT_YET = listOf(
         "Graw DFM-09/17", "Vaisala RS92", "Meisei iMS-100", "iMet-4", "LMS6", "MRZ-N1")
