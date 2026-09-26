@@ -1,21 +1,21 @@
-# Signature de publication — ne jamais versionner la clé ni ses mots de passe
+# Release signing — never commit the key or its passwords
 keystore.properties
 *.jks
 *.keystore
 
-# Gradle et sorties de compilation
+# Gradle and build outputs
 .gradle/
 build/
 app/build/
 local.properties
 .kotlin/
 
-# Environnements de développement
+# IDEs and OS files
 .idea/
 *.iml
 .DS_Store
 
-# Sorties d'atelier
+# Local build artifacts
 /outputs/
 *.apk
 *.aab

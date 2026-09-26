@@ -3,14 +3,11 @@
     <cache-path name="skeds" path="skeds/" />
     <cache-path name="photos" path="photos/" />
     <!--
-        Les fichiers d'export : ADIF du carnet, lots de contacts, sauvegardes.
+        Export files: log ADIF, contact batches, backups.
 
-        Il manquait, et le défaut était muet. `adifFileUri` écrit bien le .adi
-        dans cacheDir/export, puis demande son URI au FileProvider — qui lève,
-        faute de connaître ce dossier. Le `runCatching` avalait l'exception,
-        l'URI valait null, et le partage retombait sur le texte brut : c'est
-        exactement le repli prévu pour le cas où le fichier échoue, sauf qu'il
-        échouait toujours.
+        Without this entry the failure is silent: FileProvider throws on the
+        unknown folder, `runCatching` swallows it, the URI is null, and sharing
+        always falls back to plain text.
     -->
     <cache-path name="export" path="export/" />
     <files-path name="files" path="." />

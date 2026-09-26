@@ -30,16 +30,12 @@
 
 # Compose keeps its own rules via the AGP; nothing extra needed here.
 
-# ————— Pour que le rapport de plantage soit lisible tel quel —————
-# Depuis la 18.28, l'application écrit sa propre trace d'appels et propose de
-# l'envoyer par courrier. Obfusquée, cette trace ne vaut rien sans le fichier
-# de correspondance de la version exacte qui a planté — et ce fichier fait
-# cinquante méga-octets, qu'il faudrait archiver puis retrouver, version par
-# version, des mois plus tard. Une seule perte, et le rapport devient un
-# alignement de « a.b.c ».
-# On garde donc les noms de nos propres classes. Le retrait du code mort et
-# les optimisations continuent (`allowshrinking, allowoptimization`) : seuls
-# les noms survivent. Le paquet grossit un peu ; une trace qui se lit à l'œil
-# nu, six mois après, sans rien d'autre que le courrier reçu, vaut ce prix.
+# ————— Keep crash reports readable as-is —————
+# Since 18.28 the app writes its own stack trace and offers to email it. An
+# obfuscated trace is useless without the exact version's mapping file (~50 MB,
+# to be archived and found again months later); lose one and the report is a
+# row of "a.b.c". So our own class names are kept; shrinking and optimization
+# still apply (`allowshrinking, allowoptimization`). A slightly bigger package
+# is worth a trace that reads on its own from the email alone.
 -keepattributes SourceFile,LineNumberTable
 -keep,allowshrinking,allowoptimization class fr.f4ioz.satcombo.** { *; }

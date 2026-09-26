@@ -7,8 +7,8 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
-    <!-- La boussole déportée : la découverte BLE demande SCAN depuis Android 12.
-         Sans elle, startScan rend un code d'erreur et rien n'apparaît jamais. -->
+    <!-- Remote compass: BLE discovery needs SCAN since Android 12. Without it,
+         startScan returns an error code and nothing ever shows up. -->
     <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />
     <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
     <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
@@ -17,8 +17,8 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-feature android:name="android.hardware.usb.host" android:required="false" />
-    <!-- Photo QRV : la prise de vue passe par l'appli appareil photo du système,
-         aucune permission CAMERA n'est demandée. -->
+    <!-- QRV photo goes through the system camera app, so no CAMERA
+         permission is requested. -->
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <uses-feature android:name="android.hardware.camera.any" android:required="false" />
 
@@ -37,18 +37,15 @@
         android:theme="@style/Theme.SatCombo"
         android:networkSecurityConfig="@xml/network_security_config">
 
-        <!-- configChanges : tourner le téléphone ne doit PAS détruire l'activité.
-             On cadre souvent une photo QRV en paysage pendant que l'appareil
-             photo est au premier plan, et la recréation faisait perdre le
-             fichier de destination de la prise de vue : la photo revenait et
-             était ignorée. Compose recompose seul sur changement de config. -->
-        <!-- launchMode singleTop : sans lui, brancher la clé SDR empilait une
-             SECONDE MainActivity par-dessus la première (le filtre
-             USB_DEVICE_ATTACHED ci-dessous est une intention de lancement).
-             Le ViewModel repartait de zéro et l'écran retombait sur la liste
-             des satellites au moment précis où l'on venait de brancher la clé.
-             En singleTop l'instance en cours reçoit onNewIntent : l'écran, le
-             passage suivi et la boussole restent en place. -->
+        <!-- configChanges: rotating must NOT recreate the activity. QRV photos
+             are often framed in landscape while the camera app is in front,
+             and recreation lost the capture's target file, so the returned
+             photo was ignored. Compose recomposes on config changes itself. -->
+        <!-- launchMode singleTop: without it, plugging in the SDR dongle
+             stacked a SECOND MainActivity (the USB_DEVICE_ATTACHED filter
+             below is a launch intent), resetting the ViewModel and dropping
+             back to the satellite list. With singleTop the running instance
+             gets onNewIntent and keeps its screen, pass and compass. -->
         <activity
             android:name=".MainActivity"
             android:exported="true"

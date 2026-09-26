@@ -16,9 +16,9 @@ android {
 
     testOptions {
         unitTests {
-            // Robolectric lit le manifeste et les ressources fusionnées : sans
-            // cela il démarre sur une application vide et R.raw reste
-            // introuvable — donc pas de base interne d'indicatifs.
+            // Robolectric needs the merged manifest and resources; without them
+            // it starts on an empty app and R.raw (the built-in callsign
+            // database) is missing.
             isIncludeAndroidResources = true
             isReturnDefaultValues = true
         }
@@ -32,16 +32,10 @@ android {
         versionName = "20.67"
     }
 
-    // Un AAB est servi en morceaux : le tronc, plus un module par langue, par
-    // densité d'écran et par jeu d'instructions. C'est plus léger à télécharger
-    // — et c'est aussi une pièce mobile de plus. Certains installeurs de
-    // constructeurs en égarent un, et l'application meurt alors sur un
-    // `Resources$NotFoundException` avant sa première ligne de code : rien à
-    // déboguer, rien dans les journaux, juste une application qui ne s'ouvre
-    // pas chez celui-là et s'ouvre chez tous les autres. On renonce donc au
-    // découpage. Le paquet grossit de quelques centaines de kilo-octets ; on
-    // les échange volontiers contre un démarrage qui ne dépend plus de la
-    // bonne foi de l'installeur.
+    // No AAB splits. Some vendor installers drop a language/density/ABI split,
+    // and the app then dies on `Resources$NotFoundException` before its first
+    // line of code, with nothing in the logs. A few hundred KB more is worth a
+    // startup that doesn't depend on the installer.
     bundle {
         language { enableSplit = false }
         density { enableSplit = false }
@@ -94,13 +88,11 @@ android {
             )
         }
 
-        // Le type « echec » est une release ordinaire, au bit près, PLUS une
-        // seconde icône de lancement qui ouvre le mode échec (voir
-        // src/echec/AndroidManifest.xml). Même identifiant d'application et
-        // même clé de signature que la release : c'est la condition pour qu'il
-        // s'installe PAR-DESSUS une copie qui plante sans la désinstaller —
-        // désinstaller effacerait le dossier privé, donc le rapport de plantage
-        // qu'on est précisément venu chercher.
+        // "echec" is a bit-for-bit release build PLUS a second launcher icon
+        // that opens failure mode (see src/echec/AndroidManifest.xml). Same
+        // application ID and signing key as release, so it installs OVER a
+        // crashing copy: uninstalling would wipe the private folder, and with
+        // it the crash report we came for.
         create("echec") {
             initWith(getByName("release"))
             matchingFallbacks += listOf("release")
@@ -116,11 +108,9 @@ android {
     buildFeatures { compose = true }
 }
 
-// Le banc de mesure radiosonde ne tourne que sur demande : ses balayages
-// prennent plusieurs minutes, ce qui n'a pas sa place dans une compilation
-// ordinaire. On le réveille par `gradle testDebugUnitTest -Dsatme.bench=1`, et
-// l'on montre alors la sortie standard, faute de quoi le tableau de mesures
-// finirait dans un rapport HTML que personne ne va lire.
+// The radiosonde benchmark runs only on demand (its sweeps take minutes):
+// `gradle testDebugUnitTest -Dsatme.bench=1`. Stdout is shown then, otherwise
+// the results table ends up in an HTML report nobody reads.
 tasks.withType<Test>().configureEach {
     val bench = System.getProperty("satme.bench") ?: ""
     systemProperty("satme.bench", bench)
@@ -131,9 +121,8 @@ tasks.withType<Test>().configureEach {
 }
 
 dependencies {
-    // Le générateur de QR code du mode démonstration. Licence Apache 2.0,
-    // compatible avec la distribution de SatMe ; le cœur seul, sans la partie
-    // Android qui apporterait une dépendance à la caméra dont on n'a pas besoin.
+    // QR codes for demo mode (Apache 2.0). Core only: the Android module would
+    // pull in a camera dependency we don't need.
     implementation("com.google.zxing:core:3.5.3")
     val composeBom = platform("androidx.compose:compose-bom:2024.09.00")
     implementation(composeBom)
@@ -179,17 +168,14 @@ dependencies {
 
     // Unit tests (JVM): orbital maths, grid conversions, sked interpolation.
     testImplementation("junit:junit:4.13.2")
-    // Robolectric : un Android en mémoire, sur la JVM.
-    //
-    // Les essais de domaine ne voient pas le démarrage, et c'est de là que
-    // viennent les trois dernières régressions livrées — la mémoire du clavier
-    // perdue en 19.11, notamment. Il faut un SharedPreferences, un Application
-    // et des ressources pour instancier le ViewModel : Robolectric les fournit
-    // sans appareil ni émulateur.
+    // Robolectric: an in-memory Android on the JVM. Domain tests don't cover
+    // startup, where the last three shipped regressions came from (e.g. the
+    // keypad memory lost in 19.11). The ViewModel needs SharedPreferences, an
+    // Application and resources; Robolectric provides them without a device.
     testImplementation("org.robolectric:robolectric:4.13")
     testImplementation("androidx.test:core:1.6.1")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.8.1")
-    // Le ViewModel programme le rafraîchissement des TLE dès sa construction ;
-    // hors appareil, WorkManager doit être initialisé à la main.
+    // The ViewModel schedules the TLE refresh on construction; off-device,
+    // WorkManager must be initialized by hand.
     testImplementation("androidx.work:work-testing:2.9.1")
 }

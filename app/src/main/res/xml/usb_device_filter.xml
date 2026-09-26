@@ -1,50 +1,42 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-     Ce fichier ne sert pas qu'à décorer le manifeste : c'est lui qui décide si
-     SatMe apparaît dans la boîte « ouvrir avec » quand on branche un câble.
-     Android ne propose une application que si l'appareil branché correspond à
-     l'un des filtres ci-dessous, et le choix de l'application vaut en même
-     temps autorisation d'accès — c'est le seul chemin qui évite la demande de
-     permission à chaque branchement.
+     This file decides whether SatMe appears in the "open with" dialog when a
+     cable is plugged in. Picking the app there also grants USB access, the
+     only way to avoid a permission prompt on every connection.
 
-     Un identifiant manquant ne se voit nulle part : rien ne plante, rien ne
-     s'affiche, l'application est simplement absente de la liste. C'est ce qui
-     est arrivé à l'émulateur GS-232 sur Arduino Mega 2560, dont le fabricant
-     (0x2341) n'était pas déclaré ici : « quand je branche, on me demande
-     d'ouvrir avec une application, SatMe n'est pas dedans ».
+     A missing ID fails silently: the app is simply absent from the list (this
+     happened with a GS-232 emulator on an Arduino Mega 2560, vendor 0x2341).
 
-     Les valeurs sont en décimal — la plateforme n'accepte pas l'hexadécimal.
+     Values are decimal; the platform does not accept hex.
 -->
 <resources>
-    <!-- ============================ Ponts série ============================ -->
+    <!-- =========================== Serial bridges ========================== -->
 
-    <!-- Silicon Labs CP210x, 0x10C4. Le produit 0xEA60 est celui de l'UART
-         interne de l'IC-9700 ; les CP2105 et CP2108 en exposent d'autres, et
-         un montage amateur peut porter n'importe lequel. On prend donc le
-         fabricant entier plutôt que le seul produit connu. -->
+    <!-- Silicon Labs CP210x, 0x10C4. Product 0xEA60 is the IC-9700's internal
+         UART, but CP2105/CP2108 expose other IDs and homebrew builds may use
+         any of them, so the whole vendor is matched. -->
     <usb-device vendor-id="4292" />
     <!-- FTDI 0x0403 -->
     <usb-device vendor-id="1027" />
     <!-- Prolific PL2303 0x067B -->
     <usb-device vendor-id="1659" />
-    <!-- WCH CH340 / CH341 / CH9102 0x1A86 — les clones d'Arduino -->
+    <!-- WCH CH340 / CH341 / CH9102 0x1A86 — Arduino clones -->
     <usb-device vendor-id="6790" />
-    <!-- Icom (générique) 0x0BC2 -->
+    <!-- Icom (generic) 0x0BC2 -->
     <usb-device vendor-id="3018" />
     <!-- Microchip MCP2200 / MCP2221 0x04D8 -->
     <usb-device vendor-id="1240" />
 
-    <!-- =================== Cartes à microcontrôleur ======================== -->
-    <!-- Un émulateur GS-232 tourne presque toujours sur l'une d'elles. Les
-         cartes officielles se présentent en CDC par leur second processeur
-         (ATmega16U2 sur la Mega 2560), et portent l'identifiant du fabricant
-         de la carte, pas celui d'un pont série. -->
+    <!-- ======================= Microcontroller boards ====================== -->
+    <!-- GS-232 emulators almost always run on one of these. Official boards
+         enumerate as CDC via their second chip (ATmega16U2 on the Mega 2560)
+         and carry the board maker's vendor ID, not a serial bridge's. -->
 
-    <!-- Arduino SA 0x2341 : Uno, Mega 2560, Leonardo, Micro, Due… -->
+    <!-- Arduino SA 0x2341: Uno, Mega 2560, Leonardo, Micro, Due… -->
     <usb-device vendor-id="9025" />
-    <!-- Arduino (ancien arduino.org) 0x2A03 -->
+    <!-- Arduino (former arduino.org) 0x2A03 -->
     <usb-device vendor-id="10755" />
-    <!-- Atmel / Microchip, cartes en amorçage DFU 0x03EB -->
+    <!-- Atmel / Microchip, boards in DFU bootloader 0x03EB -->
     <usb-device vendor-id="1003" />
     <!-- SparkFun 0x1B4F -->
     <usb-device vendor-id="6991" />
@@ -52,24 +44,23 @@
     <usb-device vendor-id="9114" />
     <!-- Van Ooijen / Teensy 0x16C0 -->
     <usb-device vendor-id="5824" />
-    <!-- STMicroelectronics, CDC des STM32 0x0483 -->
+    <!-- STMicroelectronics, STM32 CDC 0x0483 -->
     <usb-device vendor-id="1155" />
     <!-- LeafLabs Maple 0x1EAF -->
     <usb-device vendor-id="7855" />
     <!-- Raspberry Pi Pico 0x2E8A -->
     <usb-device vendor-id="11914" />
-    <!-- Espressif, ESP32-S2/S3 en USB natif 0x303A -->
+    <!-- Espressif, ESP32-S2/S3 native USB 0x303A -->
     <usb-device vendor-id="12346" />
 
-    <!-- Le filet : toute carte qui se déclare « communication » au niveau de
-         l'appareil, quel que soit son fabricant. C'est le cas de la quasi
-         totalité des montages maison à port série virtuel, et cela évite de
-         courir après un identifiant de plus à chaque nouvelle carte. -->
+    <!-- Catch-all: any device declaring the communications class at device
+         level, whatever the vendor. Covers nearly every homebrew virtual
+         serial port without chasing one more ID per new board. -->
     <usb-device class="2" />
 
-    <!-- ========================== Clés RTL-SDR ============================= -->
-    <!-- Le vendeur Realtek couvre l'immense majorité des clés ; les autres sont
-         des rebadgeages qui gardent leur propre identifiant fabricant. -->
+    <!-- ========================== RTL-SDR dongles ========================== -->
+    <!-- Realtek covers the vast majority of dongles; the others are rebadges
+         that keep their own vendor ID. -->
     <!-- Realtek 0x0BDA -->
     <usb-device vendor-id="3034" />
     <!-- Terratec 0x0CCD -->
