@@ -2320,32 +2320,6 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
                                     }
                                 }
                             }
-                            Text(t("cat_usb_port_hint"), color = TextLo, fontSize = 11.sp)
-                            // Port scan (same as above).
-                            Row(verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.padding(top = 6.dp)) {
-                                Column(Modifier.weight(1f)) {
-                                    Text(t("cat_usb_auto"), color = TextHi, fontSize = 13.sp)
-                                    Text(t("cat_usb_auto_hint"), color = TextLo, fontSize = 11.sp)
-                                }
-                                Switch(checked = ui.civUsbAuto, onCheckedChange = vm::setCivUsbAuto,
-                                    colors = SwitchDefaults.colors(checkedTrackColor = Cyan))
-                            }
-                            // Report of the last attempt (same as above).
-                            if (ui.catDiag.isNotEmpty()) {
-                                Spacer(Modifier.height(10.dp))
-                                Text(t("cat_diag_title"), color = TextHi, fontSize = 13.sp,
-                                    fontWeight = FontWeight.Bold)
-                                Surface(color = SpaceSurface, shape = RoundedCornerShape(8.dp),
-                                    modifier = Modifier.fillMaxWidth().padding(top = 4.dp)) {
-                                    Column(Modifier.padding(8.dp)) {
-                                        ui.catDiag.forEach { ligne ->
-                                            Text(ligne, color = TextLo, fontSize = 11.sp,
-                                                fontFamily = FontFamily.Monospace)
-                                        }
-                                    }
-                                }
-                            }
 
                             Text(t("rig_menu_hint"),
                                 color = TextLo.copy(alpha = 0.7f), fontSize = 10.sp,
