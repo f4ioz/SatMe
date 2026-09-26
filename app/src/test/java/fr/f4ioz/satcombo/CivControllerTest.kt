@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo
 
@@ -20,19 +20,18 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Le pilote CI-V, contre un IC-9700 qui n'existe pas.
+ * The CI-V driver, against a simulated IC-9700.
  *
- * Dix essais, dont trois portent sur des défauts qui ont réellement coûté des
- * passages : un ton d'accès encodé à l'envers, une réponse cherchée dans son
- * propre écho, et une lecture unique qui tronquait tout ce qui suivait un
- * accusé de réception. Aucun des trois ne se voit sur la face avant du poste,
- * et c'est bien le problème.
+ * Several tests cover bugs that really cost passes: a tone encoded backwards,
+ * a reply searched for in our own echo, and a single read that truncated
+ * everything after an ack. None shows on the radio's front panel — that is
+ * the problem.
  */
 class CivControllerTest {
 
     private fun bench(sim: Ic9700Sim = Ic9700Sim()): CivController {
         val cat = CivController()
-        cat.pacingMs = 0L        // au banc, il n'y a personne à ménager
+        cat.pacingMs = 0L        // no real device to spare in tests
         cat.attach(sim)
         return cat
     }
@@ -41,8 +40,8 @@ class CivControllerTest {
 
     @Test
     fun une_sequence_saine_ne_fait_rien_refuser_au_poste() = runBlocking {
-        // L'affirmation que l'on n'avait jamais pu faire : le poste a tout
-        // compris. Pas « ça n'a pas planté » — tout compris.
+        // The claim we could never make before: the radio understood
+        // everything. Not "nothing crashed" — understood.
         val sim = Ic9700Sim()
         val r = CatBench.runIc9700(sim)
         assertEquals("refus du poste simulé : ${r.steps}", 0, r.refusals)
@@ -58,19 +57,16 @@ class CivControllerTest {
         cat.setSatellitePair(435_500_000L, 145_900_000L)
         assertEquals(435_500_000L, sim.mainHz)
         assertEquals(145_900_000L, sim.subHz)
-        // Et l'on finit sur la principale, pour que le bouton de l'opérateur
-        // reste celui de la réception.
+        // End on MAIN, so the operator's dial stays on receive.
         assertTrue("le poste est resté sur la bande secondaire", !sim.onSub)
         assertEquals(0, sim.refusals)
     }
 
     @Test
     fun l_echo_du_bus_ne_se_fait_plus_prendre_pour_une_reponse() = runBlocking {
-        // « CI-V USB Echo Back » activé : le poste renvoie la question avant la
-        // réponse. L'ancien code cherchait un octet 0x03 dans le tampon brut ;
-        // il trouvait donc sa propre question, et lisait cinq octets de rien
-        // derrière. On croyait relire la fréquence du poste : on relisait la
-        // sienne.
+        // With "CI-V USB Echo Back" on, the radio echoes the query before the
+        // reply. The old code searched the raw buffer for 0x03, found its own
+        // query and read five bytes of nothing after it.
         val sim = Ic9700Sim()
         sim.echo = true
         val cat = bench(sim)
@@ -80,17 +76,15 @@ class CivControllerTest {
 
     @Test
     fun une_reponse_precedee_d_un_accuse_n_est_plus_tronquee() = runBlocking {
-        // Certains postes accusent réception puis répondent. Une lecture unique
-        // rendait l'accusé, et la réponse tombait dans le vide.
+        // Some radios ack then reply. A single read returned the ack and lost
+        // the reply.
         val sim = Ic9700Sim()
         sim.ackBeforeReply = true
-        sim.echo = true          // les deux à la fois, tant qu'à faire
-        // Le simulateur applique désormais la règle du vrai poste : jamais les
-        // deux bandes ensemble. La bande principale part sur 435 et la
-        // secondaire sur 145 ; écrire 145 sur la principale serait refusé —
-        // par le simulateur comme par l'IC-9700. Cet essai-ci porte sur le
-        // découpage des trames, pas sur les bandes, alors on écrit là où le
-        // poste est déjà.
+        sim.echo = true          // both at once
+        // The simulator enforces the real rule: never both VFOs on one band.
+        // MAIN starts on 435, SUB on 145; writing 145 to MAIN would be refused.
+        // This test is about frame splitting, not bands, so write where the
+        // radio already is.
         val cat = bench(sim)
         cat.setFrequency(435_875_000L)
         assertEquals(435_875_000L, cat.readFrequency())
@@ -98,7 +92,7 @@ class CivControllerTest {
 
     @Test
     fun le_ton_de_so_50_est_enfin_accepte() = runBlocking {
-        // 67,0 Hz sur SO-50, et 74,4 Hz pour l'armement : les deux passent.
+        // 67.0 Hz for SO-50, 74.4 Hz to arm it: both pass.
         val sim = Ic9700Sim()
         val cat = bench(sim)
         assertTrue(cat.setToneFreq(670))
@@ -111,17 +105,16 @@ class CivControllerTest {
 
     @Test
     fun l_ancien_encodage_du_ton_est_refuse_par_le_poste() = runBlocking {
-        // La preuve par l'octet. On rejoue à la main ce que l'ancien code
-        // émettait pour 88,5 Hz — 1B 00 00 88 50 — et le poste le refuse,
-        // comme le vrai le faisait. À l'époque, rien ne le disait : l'accusé de
-        // réception arrivait quand même, et l'application affichait « ton
-        // réglé » pendant que le relais restait muet.
+        // Byte-level proof: replay what the old code sent for 88.5 Hz —
+        // 1B 00 00 88 50 — and the radio refuses it, like the real one. Back
+        // then nothing said so: an ack still arrived, and the app showed "tone
+        // set" while the repeater stayed silent.
         val sim = Ic9700Sim()
         sim.write(b(0xFE, 0xFE, 0xA2, 0xE0, 0x1B, 0x00, 0x00, 0x88, 0x50, 0xFD), 500)
         assertEquals(1, sim.refusals)
         assertEquals(0, sim.toneTenthHz)
 
-        // Et le bon encodage, lui, passe.
+        // The correct encoding passes.
         sim.write(b(0xFE, 0xFE, 0xA2, 0xE0, 0x1B, 0x00, 0x00, 0x08, 0x85, 0xFD), 500)
         assertEquals(1, sim.refusals)
         assertEquals(885, sim.toneTenthHz)
@@ -129,8 +122,8 @@ class CivControllerTest {
 
     @Test
     fun un_ton_hors_plage_ne_part_meme_pas() = runBlocking {
-        // Deuxième garde-fou, en amont du poste : le pilote refuse d'émettre ce
-        // qu'aucune radio n'accepterait.
+        // Second guard, before the radio: the driver refuses to send what no
+        // radio would accept.
         val sim = Ic9700Sim()
         val cat = bench(sim)
         val avant = sim.received.size
@@ -142,16 +135,15 @@ class CivControllerTest {
 
     @Test
     fun la_commande_25_est_refusee_sur_la_bande_secondaire_en_mode_satellite() = runBlocking {
-        // C'est la raison pour laquelle le couple passe par 0x07 D0/D1 puis
-        // 0x05, et non par 0x25. Un poste qui refuse vaut mille fois mieux
-        // qu'un poste qui appliquerait la commande à la mauvaise bande.
+        // This is why the pair goes via 0x07 D0/D1 then 0x05, not 0x25. A
+        // refusal is far better than applying the command to the wrong band.
         val sim = Ic9700Sim()
         val cat = bench(sim)
         cat.setSatelliteMode(true)
         assertTrue("le poste aurait dû refuser", !cat.setVfoFreq(145_900_000L, unselected = true))
         assertEquals(1, sim.refusals)
         assertEquals(145_000_000L, sim.subHz)
-        // Hors mode satellite, la même commande est parfaitement légitime.
+        // Outside satellite mode the same command is legitimate.
         cat.setSatelliteMode(false)
         assertTrue(cat.setVfoFreq(145_900_000L, unselected = true))
         assertEquals(145_900_000L, sim.subHz)
@@ -167,7 +159,7 @@ class CivControllerTest {
         assertNull(cat.readVfoFreq(unselected = true))
         assertNull(cat.sendAndRead(0x03))
         assertTrue(!cat.setFrequency(435_000_000L))
-        // Et un poste refermé se comporte de même.
+        // A closed radio behaves the same.
         val sim = Ic9700Sim()
         val ouvert = bench(sim)
         ouvert.close()
@@ -177,11 +169,10 @@ class CivControllerTest {
 
     @Test
     fun le_changement_de_v_sur_u_a_u_sur_v_ne_fait_rien_refuser() = runBlocking {
-        // Le défaut d'Olivier, joué en entier : RS-44 (descente 435, montée 145)
-        // puis AO-91 (descente 145, montée 435). Le poste simulé refuse
-        // désormais ce que le vrai refuse — les deux bandes ensemble — donc un
-        // seul refus suffirait à faire échouer cet essai. En 18.18 il y en avait
-        // un, et c'est pour cela que le panneau POSTE montrait deux fois 435.
+        // The reported bug in full: RS-44 (down 435, up 145) then AO-91 (down
+        // 145, up 435). The simulator refuses what the real radio refuses (both
+        // VFOs on one band), so a single refusal fails this test. There used to
+        // be one, leaving both VFOs on 435.
         val sim = Ic9700Sim()
         val cat = bench(sim)
         cat.setSatelliteMode(true)
@@ -194,7 +185,7 @@ class CivControllerTest {
         assertEquals("la descente n'a pas changé de bande", 145_960_000L, sim.mainHz)
         assertEquals("la montée n'a pas changé de bande", 435_250_000L, sim.subHz)
 
-        // Et l'on repasse dans l'autre sens, parce qu'un passage en suit un autre.
+        // And back again, since one pass follows another.
         cat.setSatellitePair(435_660_000L, 145_940_000L)
         assertEquals(435_660_000L, sim.mainHz)
         assertEquals(145_940_000L, sim.subHz)
@@ -205,9 +196,9 @@ class CivControllerTest {
 
     @Test
     fun le_doppler_ne_relit_le_poste_qu_une_fois_par_passage() = runBlocking {
-        // La lecture des deux bandes coûte quatre trames ; à dix tours par
-        // seconde elle noierait le bus. Elle ne doit avoir lieu qu'au premier
-        // couple, puis plus jamais tant qu'on suit le même satellite.
+        // Reading both bands costs four frames; at ten cycles a second it would
+        // flood the bus. Only on the first pair, then never while tracking the
+        // same satellite.
         val sim = Ic9700Sim()
         val cat = bench(sim)
         cat.setSatelliteMode(true)
@@ -223,8 +214,8 @@ class CivControllerTest {
 
     @Test
     fun changer_de_satellite_fait_oublier_ce_qu_on_croyait_savoir() = runBlocking {
-        // Entre deux passages, l'opérateur touche au poste. Ce qu'on croyait
-        // savoir ne vaut plus rien, et forgetBands() est ce qui l'admet.
+        // Between passes the operator touches the radio. What we thought we
+        // knew is worthless, and forgetBands() admits it.
         val sim = Ic9700Sim()
         val cat = bench(sim)
         cat.setSatelliteMode(true)
@@ -253,9 +244,9 @@ class CivControllerTest {
             assertTrue(e.any { it.out && it.text.contains("145.90000 MHz") })
             assertTrue(e.any { !it.out && it.text.contains("accusé") })
             assertTrue(e.any { !it.out && it.text.contains("fréquence : 145.90000 MHz") })
-            // L'hexadécimal reste là pour qui veut vérifier octet par octet.
+            // Hex stays available for byte-by-byte checking.
             assertTrue(e.first().hex.startsWith("FE FE A2 E0"))
-            // Et le journal ne grossit pas indéfiniment.
+            // The log does not grow without bound.
             assertTrue(e.size <= CatJournal.DEPTH)
         } finally {
             CatJournal.enabled = false

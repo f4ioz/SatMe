@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo
 
@@ -21,12 +21,8 @@ import kotlin.math.exp
 import kotlin.math.roundToInt
 
 /**
- * Le banc de la mesure de balise.
- *
- * On ne branche pas de clé : on fabrique un spectre dont on connaît la vérité
- * au hertz près, et on demande à la pièce de la retrouver. C'est le seul moyen
- * de juger une mesure dont la sortie sert à corriger un étalonnage — sur le
- * ciel, on n'a jamais la réponse.
+ * Beacon measurement, on a synthetic spectrum whose truth is known to the
+ * hertz — the only way to judge a measurement that feeds a calibration.
  */
 class MesureBaliseTest {
 
@@ -34,15 +30,12 @@ class MesureBaliseTest {
     private val etendue = 1_058_400.0
     private val centre = Qo100.BALISE_MEDIANE_HZ.toDouble()
 
-    /** La largeur d'une raie du panorama : soixante-cinq hertz environ. */
+    /** Width of one panorama bin: about 65 Hz. */
     private val hzParRaie = etendue / n
 
     /**
-     * Un spectre de bruit à −90 dB avec une raie gaussienne à [baliseHz].
-     *
-     * La raie est étalée sur quelques dixièmes de raie de FFT, comme le fait
-     * une vraie fenêtre de Hann : une raie parfaitement ponctuelle rendrait
-     * l'interpolation parabolique triviale et l'essai sans valeur.
+     * −90 dB noise with a Gaussian line at [baliseHz], spread like a Hann
+     * window would; a perfectly sharp line would make the test worthless.
      */
     private fun spectre(
         baliseHz: Double,
@@ -53,7 +46,7 @@ class MesureBaliseTest {
         return FloatArray(n) { i ->
             val f = centre + (i - n / 2.0) * (etendueSignee / n)
             val d = (f - baliseHz) / (largeurRaies * abs(etendueSignee / n))
-            // Un bruit reproductible : une dent de scie, pas un tirage au sort.
+            // Reproducible noise: a sawtooth, not random.
             val bruit = -90f + (i % 7) * 0.3f
             bruit + hauteurDb * exp(-0.5 * d * d).toFloat()
         }
@@ -68,7 +61,7 @@ class MesureBaliseTest {
 
     @Test
     fun l_ecart_mesure_est_celui_qu_on_a_mis() {
-        // Un LNB froid : douze kilohertz trop haut.
+        // E.g. a cold LNB: 12 kHz off.
         for (vrai in listOf(-12_000.0, -3_500.0, -70.0, 0.0, 70.0, 3_500.0, 12_000.0)) {
             val m = MesureBalise.mesurer(spectre(centre + vrai), centre, etendue)
             assertNotNull("balise perdue à $vrai Hz", m)
@@ -77,11 +70,8 @@ class MesureBaliseTest {
     }
 
     /**
-     * L'interpolation parabolique sert à quelque chose.
-     *
-     * Sans elle, la mesure serait un multiple de la largeur de raie, soit
-     * soixante-cinq hertz : un écart de trente hertz ressortirait à zéro. On
-     * vérifie donc qu'un décalage plus petit qu'une raie est bien vu.
+     * Parabolic interpolation is useful: without it the result would be a
+     * multiple of the bin width (~65 Hz) and a 30 Hz offset would read zero.
      */
     @Test
     fun un_ecart_plus_petit_qu_une_raie_est_quand_meme_vu() {
@@ -95,9 +85,9 @@ class MesureBaliseTest {
     }
 
     /**
-     * Derrière une injection haute, le spectre est retourné et le tableau se
-     * parcourt à l'envers. L'écart mesuré doit rester celui du ciel, pas son
-     * opposé — c'est tout l'intérêt de l'étendue signée.
+     * Behind high-side injection the spectrum is inverted and the array runs
+     * backwards. The offset must stay the sky's, not its opposite — the point
+     * of the signed span.
      */
     @Test
     fun un_montage_inverseur_ne_change_pas_le_signe_de_l_ecart() {
@@ -115,7 +105,7 @@ class MesureBaliseTest {
         assertNotNull(faible); assertNotNull(fort)
         assertTrue("le rapport ne monte pas avec le signal",
             fort!!.rapportDb > faible!!.rapportDb + 20f)
-        // Le plancher est celui qu'on a mis, à la dent de scie près.
+        // The floor is what we set, give or take the sawtooth.
         assertEquals(-90f, fort.plancherDb, 2.5f)
     }
 
@@ -126,9 +116,8 @@ class MesureBaliseTest {
     }
 
     /**
-     * Une raie qui dépasse à peine ne doit pas passer pour une balise. Ce qui
-     * se ramasse au bruit finit dans l'étalonnage, et l'étalonnage est
-     * persistant : une mauvaise mesure survit à la session.
+     * A line barely above noise must not pass for a beacon: it would end up
+     * in the calibration, which persists beyond the session.
      */
     @Test
     fun une_raie_sous_le_seuil_est_refusee() {
@@ -138,23 +127,22 @@ class MesureBaliseTest {
     }
 
     /**
-     * Hors de la fenêtre, la balise n'existe pas. On préfère une absence de
-     * mesure à une mesure prise sur le premier correspondant venu.
+     * Outside the window the beacon does not exist. No measurement beats one
+     * taken on whatever station happens to be there.
      */
     @Test
     fun une_balise_hors_fenetre_n_est_pas_attrapee() {
         val m = MesureBalise.mesurer(
             spectre(centre + 40_000.0), centre, etendue, fenetreHz = 20_000.0)
-        // Ou bien rien du tout, ou bien pas la balise : dans les deux cas
-        // l'écart annoncé ne doit pas être celui d'une balise trouvée.
+        // Either nothing, or not the beacon: either way the reported offset
+        // must not be that of a found beacon.
         if (m != null) assertTrue("on a attrapé quelque chose à 40 kHz",
             abs(m.ecartHz) < 20_000.0)
     }
 
     @Test
     fun une_fenetre_hors_du_tableau_ne_rend_rien() {
-        // Le centre est à dix mégahertz de la cible : la fenêtre tombe très
-        // au-delà du tableau.
+        // Centre 10 MHz from the target: the window falls far outside the array.
         assertNull(MesureBalise.mesurer(
             spectre(centre), centre + 10_000_000.0, etendue))
     }

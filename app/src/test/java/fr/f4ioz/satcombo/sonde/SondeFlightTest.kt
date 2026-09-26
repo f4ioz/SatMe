@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.sonde
 
@@ -15,20 +15,19 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Le vol, et ce qu'on en déduit pour aller chercher la sonde.
+ * The flight, and what it tells us for recovering the sonde.
  *
- * Deux choses comptent ici. La première est le filtre de continuité : un octet
- * mal lu produit une position parfaitement formée mais fausse, et rien dans la
- * trame ne permet de la distinguer d'une bonne. Seule la comparaison avec le
- * point précédent la démasque. La seconde est l'extrapolation d'impact, qui doit
- * refuser de répondre plus souvent qu'elle ne répond : un point d'impact inventé
- * envoie quelqu'un marcher pour rien.
+ * Two things matter. The continuity filter: a misread byte gives a well-formed
+ * but wrong position that nothing in the frame can flag; only comparison with
+ * the previous point exposes it. And landing extrapolation, which must refuse
+ * to answer more often than it answers: an invented landing point sends
+ * someone walking for nothing.
  */
 class SondeFlightTest {
 
     private val T0 = 1_700_000_000_000L
 
-    /** Une trame de vol, à un rang donné, avec une dérive lente vers le nord-est. */
+    /** A flight frame at a given index, drifting slowly north-east. */
     private fun pt(alt: Double, climb: Double, i: Int, sats: Int = 8,
                    speed: Double = 12.0, heading: Double = 90.0) = SondeFrame(
         type = "M20", serial = "4242", frameNo = i,
@@ -38,7 +37,7 @@ class SondeFlightTest {
         sats = sats, batteryV = 2.7, freqHz = 404_000_000L,
         heardAtMs = T0 + i * 1000L)
 
-    /** Un vol complet : montée à trente kilomètres, éclatement, descente. */
+    /** A full flight: climb to 30 km, burst, descent. */
     private fun vol(): SondeFlight {
         val f = SondeFlight("4242", "M20")
         var i = 0
@@ -54,7 +53,7 @@ class SondeFlightTest {
     @Test
     fun `une trame invraisemblable n est pas retenue`() {
         val f = SondeFlight("4242", "M20")
-        assertTrue(!f.add(pt(50_000.0, 3.0, 0)))          // au-dessus de tout ballon
+        assertTrue(!f.add(pt(50_000.0, 3.0, 0)))          // above any balloon
         assertTrue(!f.add(pt(5_000.0, 3.0, 1, speed = 400.0)))
         assertEquals(0, f.count)
         assertNull(f.last)
@@ -64,19 +63,18 @@ class SondeFlightTest {
     fun `un saut impossible est refuse`() {
         val f = SondeFlight("4242", "M20")
         assertTrue(f.add(pt(5_000.0, 4.0, 0)))
-        // Deux cents kilomètres en une seconde : c'est un octet mal lu, pas un vent.
+        // 200 km in one second is a misread byte, not wind.
         val faux = pt(5_100.0, 4.0, 1).copy(lat = 50.2, lon = -4.4)
         assertTrue(!f.add(faux))
         assertEquals(1, f.count)
-        // Le point suivant, lui, est cohérent et doit passer.
+        // The next point is consistent and must pass.
         assertTrue(f.add(pt(5_100.0, 4.0, 2)))
         assertEquals(2, f.count)
     }
 
     @Test
     fun `un trou de reception elargit la tolerance`() {
-        // Une demi-heure sans rien entendre : au retour la sonde a le droit
-        // d'avoir bougé de plus de vingt kilomètres.
+        // Half an hour of silence: the sonde may have moved more than 20 km.
         val f = SondeFlight("4242", "M20")
         f.add(pt(5_000.0, 4.0, 0))
         val plusTard = pt(20_000.0, 4.0, 0)
@@ -93,7 +91,7 @@ class SondeFlightTest {
         assertTrue(f.add(douteuse))
         assertEquals(2, f.count)
         assertEquals(6_000.0, f.last!!.altM, 0.0)
-        // Le point vers lequel on marche reste le dernier point sûr.
+        // The point we walk towards stays the last trusted one.
         assertEquals(5_000.0, f.lastTrusted!!.altM, 0.0)
     }
 
@@ -111,7 +109,7 @@ class SondeFlightTest {
         var alt = 1_000.0
         var i = 0
         while (alt <= 25_000.0) { f.add(pt(alt, 5.0, i)); alt += 1_000.0; i++ }
-        // Elle monte encore : rien à annoncer.
+        // Still climbing: nothing to report.
         assertTrue(!f.hasBurst)
         assertEquals(25_000.0, f.burstAltM, 0.0)
         f.add(pt(24_000.0, -8.0, i))
@@ -121,7 +119,7 @@ class SondeFlightTest {
 
     @Test
     fun `une sonde basse ne compte pas comme eclatee`() {
-        // Un vol coupé à huit kilomètres : perte de signal, pas éclatement.
+        // Flight lost at 8 km: signal loss, not burst.
         val f = SondeFlight("4242", "M20")
         f.add(pt(8_000.0, 5.0, 0))
         f.add(pt(7_000.0, -5.0, 1))
@@ -132,12 +130,12 @@ class SondeFlightTest {
     fun `vitesse de descente moyenne`() {
         val f = vol()
         assertEquals(6.0, f.descentRate(), 1e-9)
-        // Une sonde qui monte n'a pas de vitesse de descente.
+        // A climbing sonde has no descent rate.
         val m = SondeFlight("4242", "M20")
         m.add(pt(1_000.0, 5.0, 0))
         m.add(pt(2_000.0, 5.0, 1))
         assertEquals(0.0, m.descentRate(), 0.0)
-        // Un seul point ne suffit pas à faire une moyenne.
+        // One point is not enough for an average.
         val u = SondeFlight("4242", "M20")
         u.add(pt(1_000.0, -5.0, 0))
         assertEquals(0.0, u.descentRate(), 0.0)
@@ -145,15 +143,15 @@ class SondeFlightTest {
 
     @Test
     fun `l impact n est estime que quand il a un sens`() {
-        // Vol vide : rien à extrapoler.
+        // Empty flight: nothing to extrapolate.
         assertNull(SondeFlight("4242", "M20").estimatedLanding())
-        // En montée : surtout ne rien annoncer.
+        // Climbing: above all, announce nothing.
         val m = SondeFlight("4242", "M20")
         m.add(pt(5_000.0, 5.0, 0))
         m.add(pt(6_000.0, 5.0, 1))
         assertNull(m.estimatedLanding())
-        // Vingt kilomètres à cinq mètres par seconde : plus d'une heure de chute,
-        // la dérive du vent rendrait le point d'impact fantaisiste.
+        // 20 km at 5 m/s is over an hour of fall: wind drift would make the
+        // landing point fiction.
         val h = SondeFlight("4242", "M20")
         h.add(pt(21_000.0, -5.0, 0))
         h.add(pt(20_000.0, -5.0, 1))
@@ -167,11 +165,10 @@ class SondeFlightTest {
         val p = f.estimatedLanding()
         assertNotNull(p)
         p!!
-        // Cap plein est : la latitude ne bouge presque pas, la longitude monte.
+        // Heading due east: latitude barely moves, longitude increases.
         assertEquals(l.lat, p.first, 1e-3)
         assertTrue("longitude ${p.second} contre ${l.lon}", p.second > l.lon)
-        // Huit cents mètres à six mètres par seconde, douze mètres par seconde
-        // de vent : environ un kilomètre six de dérive.
+        // 800 m at 6 m/s with 12 m/s wind: about 1.6 km of drift.
         val d = Geo.distanceKm(l.lat, l.lon, p.first, p.second)
         assertTrue("dérive $d km", d > 1.0 && d < 2.5)
     }
@@ -184,7 +181,7 @@ class SondeFlightTest {
             f.distanceFromKm(48.0, -4.0), 1e-9)
         assertEquals(Geo.bearingDeg(48.0, -4.0, l.lat, l.lon),
             f.bearingFrom(48.0, -4.0), 1e-9)
-        // Sans point sûr, on rend zéro plutôt qu'une direction inventée.
+        // No trusted point: return zero rather than an invented bearing.
         val vide = SondeFlight("4242", "M20")
         assertEquals(0.0, vide.distanceFromKm(48.0, -4.0), 0.0)
         assertEquals(0.0, vide.bearingFrom(48.0, -4.0), 0.0)
@@ -214,7 +211,7 @@ class SondeFlightTest {
         assertTrue(allege.size < tous.size)
         assertEquals(tous.first(), allege.first())
         assertEquals(tous.last(), allege.last())
-        // Un point douteux n'entre pas dans la trace exportée.
+        // A doubtful point is left out of the exported track.
         val g = SondeFlight("4242", "M20")
         g.add(pt(1_000.0, 5.0, 0))
         g.add(pt(1_100.0, 5.0, 1, sats = 2))
@@ -230,11 +227,11 @@ class SondeFlightTest {
         assertTrue(x.contains("Éclatement"))
         assertTrue(x.contains("Impact estimé"))
         assertTrue(x.contains("</gpx>"))
-        // Un point de trace par point sûr.
+        // One track point per trusted point.
         val n = Regex("<trkpt").findAll(x).count()
         assertEquals(vol().count, n)
-        // Les coordonnées s'écrivent avec un point décimal, quelle que soit la
-        // langue du téléphone : sinon aucun GPS ne relit le fichier.
+        // Coordinates use a decimal point whatever the phone locale, or no GPS
+        // can read the file.
         assertTrue(!x.contains("lat=\"48,"))
     }
 
@@ -270,7 +267,7 @@ class SondeFlightTest {
         assertTrue(l.contains("4242"))
         assertTrue(l.contains("M20"))
         assertTrue(l.contains("404000000"))
-        // Point décimal, séparateur point-virgule : le fichier s'ouvre partout.
+        // Decimal point and semicolon separator: opens everywhere.
         assertTrue(l.contains("12345.0"))
     }
 }

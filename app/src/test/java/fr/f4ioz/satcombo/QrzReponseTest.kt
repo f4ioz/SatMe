@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo
 
@@ -13,7 +13,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** Le banc de lecture des réponses QRZ.com. */
+/** Parsing QRZ.com responses. */
 class QrzReponseTest {
 
     private val fiche = """<?xml version="1.0" encoding="utf-8" ?>
@@ -57,8 +57,8 @@ class QrzReponseTest {
     }
 
     /**
-     * Une erreur est rendue telle quelle : « pas d'abonnement XML » et
-     * « indicatif inconnu » ne se soignent pas de la même façon.
+     * Errors are returned verbatim: "no XML subscription" and "unknown
+     * callsign" call for different fixes.
      */
     @Test
     fun une_erreur_est_rendue_mot_pour_mot() {
@@ -72,7 +72,7 @@ class QrzReponseTest {
         assertTrue(!QrzReponse.lis(fiche).vide)
     }
 
-    /** Une réponse illisible ne fait pas tomber l'application. */
+    /** An unreadable response does not crash the app. */
     @Test
     fun un_charabia_ne_leve_pas() {
         val f = QrzReponse.lis("<pas du xml du tout")
@@ -81,11 +81,8 @@ class QrzReponseTest {
     }
 
     /**
-     * La ville et le courriel se lisent aussi.
-     *
-     * QRZ range la ville dans `addr2`. Ces deux champs ne servaient à rien
-     * tant que le journal ne savait pas les garder — c'est corrigé, et le
-     * carnet d'en face les reçoit désormais avec le contact.
+     * City and email are read too. QRZ stores the city in `addr2`; both
+     * fields are now kept in the log and sent along with the contact.
      */
     @Test
     fun la_ville_et_le_courriel_se_lisent() {

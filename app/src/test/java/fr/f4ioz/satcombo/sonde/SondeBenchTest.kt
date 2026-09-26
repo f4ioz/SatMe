@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.sonde
 
@@ -14,14 +14,13 @@ import org.junit.Assume
 import org.junit.Test
 
 /**
- * Le banc de mesure, et le garde-fou rapide qui l'accompagne.
+ * The measurement bench, plus its quick safety check.
  *
- * Les balayages complets prennent des minutes : ils ne tournent que sur demande,
- * par `-Dsatme.bench=1`, et ils impriment un tableau. Le seul essai qui tourne à
- * chaque compilation est le premier, qui vérifie en quelques secondes qu'une
- * sonde propre traverse bel et bien la chaîne radio complète — pas la mire
- * versée directement dans le décodeur, mais de l'IQ au format de la clé passé
- * par la décimation, le filtre de canal et le discriminateur.
+ * Full sweeps take minutes: they only run with `-Dsatme.bench=1` and print a
+ * table. The only test run on every build is the first one: in a few seconds
+ * it checks that a clean sonde gets through the whole radio chain — dongle-
+ * format IQ through decimation, channel filter and discriminator, not the
+ * test pattern fed straight into the decoder.
  */
 class SondeBenchTest {
 

@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo
 
@@ -20,14 +20,9 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.atomic.AtomicInteger
 
 /**
- * Le portier de l'encodeur MP3.
- *
- * Ce qu'il empêche ne se voit pas sur un banc : la panne qu'il ferme est un
- * SIGSEGV dans du code natif, et aucun essai JVM ne chargera jamais
- * `libandroidlame.so`. On ne peut donc pas éprouver ici que l'encodeur ne
- * plante plus. On éprouve la seule chose dont dépend cette garantie — qu'à
- * aucun moment deux appelants ne se croient tous les deux autorisés à
- * l'utiliser, et qu'un tour pris finit toujours par être rendu.
+ * The MP3 encoder gatekeeper. It prevents a native SIGSEGV no JVM test can
+ * reproduce, so we test what that depends on: never two holders at once, and
+ * a taken turn is always given back.
  */
 class EncodeurMp3Test {
 
@@ -60,9 +55,8 @@ class EncodeurMp3Test {
 
     @Test
     fun rendre_ce_qu_on_ne_tient_pas_ne_libere_pas_le_tour_d_un_autre() {
-        // Un `finally` en retard — celui d'un export qui s'est terminé il y a
-        // longtemps — ne doit pas ouvrir la porte pendant qu'un enregistrement
-        // encode. Ce serait la panne d'origine, reconstituée par la correction.
+        // A late `finally` from a long-finished export must not open the door
+        // while a recording is encoding: that would recreate the original crash.
         assertTrue(EncodeurMp3.prend(EncodeurMp3.ENREGISTREUR))
         EncodeurMp3.rend(EncodeurMp3.MIRE_SSTV)
         assertEquals(EncodeurMp3.ENREGISTREUR, EncodeurMp3.occupePar)
@@ -91,8 +85,8 @@ class EncodeurMp3Test {
 
     @Test
     fun une_exception_dans_le_bloc_ne_condamne_pas_l_encodeur() {
-        // Sans le `finally`, un seul export raté rendrait tout enregistrement
-        // impossible jusqu'au prochain démarrage de l'application.
+        // Without the `finally`, one failed export would block recording until
+        // the app restarts.
         runCatching {
             EncodeurMp3.avec(EncodeurMp3.MIRE_SSTV) { throw IllegalStateException("disque plein") }
         }
@@ -101,9 +95,8 @@ class EncodeurMp3Test {
 
     @Test
     fun un_seul_gagnant_quand_tout_le_monde_se_precipite() {
-        // Le test et la prise doivent être indivisibles. S'ils ne l'étaient
-        // pas, deux fils pourraient conclure ensemble que la place est libre —
-        // et c'est précisément ainsi que le processus meurt.
+        // Test-and-take must be atomic; otherwise two threads could both see
+        // it free, which is exactly how the process dies.
         val fils = 24
         val depart = CountDownLatch(1)
         val fini = CountDownLatch(fils)
@@ -122,9 +115,8 @@ class EncodeurMp3Test {
 
     @Test
     fun le_tour_circule_sans_se_perdre_sous_la_bousculade() {
-        // Chaque fil prend, travaille un instant, rend. À la fin, personne ne
-        // doit tenir l'encodeur, et personne ne doit avoir travaillé pendant
-        // qu'un autre travaillait.
+        // Each thread takes, works briefly, gives back. At the end nobody holds
+        // the encoder and no two threads ever worked at the same time.
         val fils = 16
         val dedans = AtomicInteger(0)
         val collisions = AtomicInteger(0)

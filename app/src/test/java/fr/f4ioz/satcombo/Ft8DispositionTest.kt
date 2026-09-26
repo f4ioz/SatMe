@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo
 
@@ -15,28 +15,25 @@ import org.junit.Assert.assertNull
 import org.junit.Test
 
 /**
- * Le banc de la disposition des 77 bits.
+ * Layout of the 77 message bits.
  *
- * Il naît d'un défaut que le banc précédent **n'a pas su voir** : le champ du
- * carré était lu au bit 58 au lieu du 59, et les essais écrivaient au même
- * mauvais endroit avant de relire. L'aller-retour tombait juste sur une erreur
- * partagée.
+ * The previous tests **could not see** this bug: the grid field was read at
+ * bit 58 instead of 59, and the tests wrote to the same wrong place. The
+ * round trip agreed on a shared mistake.
  *
- * Le défaut n'est apparu qu'en décodant de vraies stations, où l'on connaît la
- * réponse par ailleurs : une station hongroise ne peut pas être en EP93. La
- * leçon est dans les essais ci-dessous — ils posent les **positions absolues**
- * des champs, et vérifient des carrés dont la valeur est connue du dehors.
+ * It only showed when decoding real stations whose answer is known
+ * independently: a Hungarian station cannot be in EP93. Hence these tests set
+ * **absolute field positions** and check grids known from outside.
  */
 class Ft8DispositionTest {
 
-    /** Écrit un message de type 1 aux positions de la spécification. */
+    /** Writes a type 1 message at the positions given by the specification. */
     private fun typeUn(
         appele: String, appelant: String, g15: Int,
         roger: Boolean = false, r1a: Boolean = false, r1b: Boolean = false
     ): BooleanArray {
         val m = BooleanArray(Ft8.BITS_MESSAGE)
-        // Les trois premiers codes ne sont pas des indicatifs mais des jetons :
-        // 0 pour DE, 1 pour QRZ, 2 pour CQ.
+        // The first three codes are tokens, not callsigns: 0 = DE, 1 = QRZ, 2 = CQ.
         val code1 = when (appele) {
             "DE" -> 0L; "QRZ" -> 1L; "CQ" -> 2L
             else -> Ft8.indicatifVers28(appele)!!
@@ -51,22 +48,22 @@ class Ft8DispositionTest {
         return m
     }
 
-    /** La valeur d'un carré à quatre caractères, en base mixte. */
+    /** Value of a four-character grid, in mixed radix. */
     private fun valeur(carre: String): Int =
         (carre[0] - 'A') * 18 * 100 + (carre[1] - 'A') * 100 +
             (carre[2] - '0') * 10 + (carre[3] - '0')
 
-    // ---- le défaut du terrain ----
+    // ---- the field bug ----
 
     @Test
     fun un_carre_ne_vaut_pas_la_moitie_du_vrai() {
-        // Les trois cas relevés à l'écoute, avec le carré que ces stations ont
-        // réellement. Avant correction, chacun sortait divisé par deux.
+        // Cases heard on air, with each station's real grid. Before the fix,
+        // each came out halved.
         val cas = listOf(
-            "HA1ZW" to "JN87",     // sortait en EP93
-            "SP5UFE" to "KO02",    // sortait en FH01
-            "OH2ZZ" to "KP20",     // sortait en FH60
-            "IZ2DPX" to "JN45"     // sortait en EP72
+            "HA1ZW" to "JN87",     // came out as EP93
+            "SP5UFE" to "KO02",    // came out as FH01
+            "OH2ZZ" to "KP20",     // came out as FH60
+            "IZ2DPX" to "JN45"     // came out as EP72
         )
         for ((indicatif, carre) in cas) {
             val m = typeUn("CQ", indicatif, valeur(carre))
@@ -78,8 +75,8 @@ class Ft8DispositionTest {
 
     @Test
     fun le_bit_roger_ne_deborde_pas_dans_le_carre() {
-        // C'est lui que le champ avalait. Levé ou baissé, le carré ne doit pas
-        // bouger d'un iota.
+        // This is the bit the grid field swallowed. Set or clear, the grid
+        // must not change at all.
         val g = valeur("JN18")
         val sans = Ft8.deplie(typeUn("CQ", "F4IOZ", g, roger = false))!!
         val avec = Ft8.deplie(typeUn("CQ", "F4IOZ", g, roger = true))!!
@@ -95,7 +92,7 @@ class Ft8DispositionTest {
         assertEquals("F4IOZ", lu.appelant)
     }
 
-    // ---- les bornes du champ ----
+    // ---- field bounds ----
 
     @Test
     fun les_deux_bouts_de_la_grille_tiennent() {
@@ -111,7 +108,7 @@ class Ft8DispositionTest {
         }
     }
 
-    // ---- accusés et rapports ----
+    // ---- acks and reports ----
 
     @Test
     fun les_accuses_de_reception_se_lisent() {
@@ -122,8 +119,8 @@ class Ft8DispositionTest {
 
     @Test
     fun un_rapport_se_compte_a_partir_de_trente_deux_mille_quatre_cents() {
-        // code = g15 − 32 400, puis rapport = code − 35. Le « − 35 » tout seul
-        // affichait +32 367.
+        // code = g15 − 32400, then report = code − 35. Applying "− 35" alone
+        // displayed +32367.
         val zero = Ft8.deplie(typeUn("W9XYZ", "F4IOZ", 32_400 + 35))!!
         assertEquals(0, zero.rapportDb)
         val moinsDix = Ft8.deplie(typeUn("W9XYZ", "F4IOZ", 32_400 + 25))!!
@@ -134,8 +131,8 @@ class Ft8DispositionTest {
 
     @Test
     fun un_rapport_reste_dans_les_bornes_du_plausible() {
-        // Aucun report FT8 ne dépasse la centaine de décibels : si un nombre
-        // pareil sortait, c'est que le champ serait relu de travers.
+        // No FT8 report gets near 100 dB: such a number means the field was
+        // misread.
         for (code in 5..84) {
             val r = Ft8.deplie(typeUn("W9XYZ", "F4IOZ", 32_400 + code))!!.rapportDb
             if (r != null) {
@@ -144,7 +141,7 @@ class Ft8DispositionTest {
         }
     }
 
-    // ---- le message entier ----
+    // ---- whole message ----
 
     @Test
     fun un_appel_complet_se_relit_mot_pour_mot() {

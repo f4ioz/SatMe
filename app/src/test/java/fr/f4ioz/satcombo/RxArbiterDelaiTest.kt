@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo
 
@@ -14,23 +14,21 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Le banc du délai de reprise.
+ * The resume delay.
  *
- * Il garde une promesse simple : **le réglage doit se sentir**. Olivier a
- * réglé le délai, n'a vu aucune différence, et a conclu que l'option était
- * inopérante sur son IC-9700. Elle l'était — mais pas pour la raison qu'il
- * croyait : les arbitres repartaient à leurs deux secondes d'usine à chaque
- * lancement, parce que le réglage rangé n'était appliqué que depuis le
- * sélecteur.
+ * **The setting must be noticeable.** It once had no effect on an IC-9700,
+ * though not for the obvious reason: the arbiters reverted to their 2 s
+ * default on every launch, because the stored setting was only applied from
+ * the selector.
  */
 class RxArbiterDelaiTest {
 
-    /** Fait tourner la molette, puis attend, et dit quand la main revient. */
+    /** Turns the dial, waits, and reports when control comes back. */
     private fun msAvantReprise(delaiMs: Long, pasMs: Long = 100L): Long {
         val a = RxArbiter()
         a.regle(delaiMs)
         a.observe(435_000_000L, 0L)
-        a.observe(435_001_000L, pasMs)      // un cran de molette
+        a.observe(435_001_000L, pasMs)      // one dial step
         assertFalse("la main doit passer à l'opérateur", a.driven)
         var t = pasMs
         repeat(60) {
@@ -47,15 +45,14 @@ class RxArbiterDelaiTest {
         val long = msAvantReprise(2_000L)
         assertTrue("reprise à $court ms pour un délai de 250 ms", court in 1..800)
         assertTrue("reprise à $long ms pour un délai de 2 s", long >= 1_900)
-        // Le cœur du banc : les deux réglages ne doivent pas se ressembler.
+        // The point of the test: the two settings must feel different.
         assertTrue("le réglage ne se sent pas : $court contre $long", long > court * 2)
     }
 
     @Test
     fun le_delai_commande_aussi_le_nombre_dechantillons() {
-        // Les deux doivent bouger ensemble. Un délai court avec huit
-        // échantillons à attendre resterait long, et le réglage paraîtrait
-        // sans effet — c'est exactement ce piège qu'on évite ici.
+        // Both must move together: a short delay that still waits for eight
+        // samples stays long, and the setting seems to do nothing.
         val a = RxArbiter()
         a.regle(250L)
         a.observe(435_000_000L, 0L)
@@ -68,8 +65,8 @@ class RxArbiterDelaiTest {
 
     @Test
     fun un_delai_hors_bornes_ne_casse_rien() {
-        // Ni zéro, qui reprendrait la main au milieu d'un geste, ni l'infini,
-        // qui ne la rendrait jamais.
+        // Neither zero (would grab control mid-gesture) nor infinity (would
+        // never give it back).
         val a = RxArbiter()
         a.regle(0L)
         a.observe(435_000_000L, 0L)
@@ -86,7 +83,7 @@ class RxArbiterDelaiTest {
         var t = 0L
         a.observe(hz, t)
         repeat(20) {
-            t += 100L; hz -= 1_000L      // l'opérateur descend sans s'arrêter
+            t += 100L; hz -= 1_000L      // operator keeps tuning down
             a.observe(hz, t)
         }
         assertFalse("la main ne doit pas être reprise pendant le geste", a.driven)

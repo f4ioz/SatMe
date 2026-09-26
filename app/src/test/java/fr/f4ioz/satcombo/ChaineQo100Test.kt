@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo
 
@@ -16,12 +16,9 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Le banc des chaînes de conversion QO-100.
- *
- * Les nombres de référence sont ceux mesurés par F4IOZ le 3 septembre 2026 :
- * WebSDR IS0GRB à 10 489,805 60 MHz, FT-817 à 144,832 65 MHz sur le même
- * signal. Ce sont des mesures réelles, pas des exemples inventés — si un jour
- * ce banc rougit, c'est que la règle a changé, pas les faits.
+ * QO-100 converter chains. Reference numbers are real measurements (IS0GRB
+ * WebSDR 10489.80560 MHz vs FT-817 144.83265 MHz, same signal): if this fails,
+ * the rule changed, not the facts.
  */
 class ChaineQo100Test {
 
@@ -31,11 +28,11 @@ class ChaineQo100Test {
         const val OL = 10_344_972_950L
     }
 
-    // ------------------------------------------------- la mesure à deux nombres
+    // ------------------------------------------------- two-frequency measurement
 
     /**
-     * La mesure que fait tout le monde et que personne n'automatise : deux
-     * fréquences observées, l'écart est l'oscillateur.
+     * The measurement everyone does by hand: two observed frequencies, the
+     * difference is the LO.
      */
     @Test
     fun l_oscillateur_se_deduit_de_deux_frequences_observees() {
@@ -48,25 +45,25 @@ class ChaineQo100Test {
         assertEquals(POSTE, c.posteRx(CIEL))
     }
 
-    /** Le second relevé, deux heures plus tard, extinction complète entre. */
+    /** Second reading, two hours later, full power-off in between. */
     @Test
     fun le_second_releve_donne_la_meme_chose_a_dix_hertz() {
         val ol2 = ChaineQo100.olMesure(10_489_805_590L, 144_832_650L)
         assertTrue("écart ${OL - ol2} Hz", kotlin.math.abs(OL - ol2) <= 20L)
     }
 
-    /** La balise CW basse doit tomber à 144,527 05 sur cette chaîne. */
+    /** The lower CW beacon must land on 144.52705 with this chain. */
     @Test
     fun la_balise_basse_tombe_ou_elle_doit() {
         val c = Chaine(descenteOlHz = OL)
         assertEquals(144_527_050L, c.posteRx(10_489_500_000L))
     }
 
-    // ------------------------------------------------------------- la montée
+    // ------------------------------------------------------------- uplink
 
     @Test
     fun la_montee_se_mesure_de_la_meme_facon() {
-        // Porteuse émise, vue à 2 400,200 sur le WebSDR, poste affichant 432,200.
+        // Carrier seen at 2400.200 on the WebSDR, radio showing 432.200.
         assertEquals(1_968_000_000L,
             ChaineQo100.olMesure(2_400_200_000L, 432_200_000L))
     }
@@ -78,12 +75,11 @@ class ChaineQo100Test {
         assertFalse(directe.descenteActive)
     }
 
-    // ------------------------------------------------------- la plausibilité
+    // ------------------------------------------------------- plausibility
 
     /**
-     * On ne refuse pas un chiffre parce qu'il s'écarte du nominal — c'est
-     * précisément ce qu'on mesure. On refuse ce qui ne peut pas être un
-     * oscillateur du tout.
+     * A value is not rejected for being off nominal — that offset is what we
+     * measure. Only what cannot be an LO at all is rejected.
      */
     @Test
     fun un_ecart_important_au_nominal_reste_credible() {
@@ -110,11 +106,11 @@ class ChaineQo100Test {
         assertFalse(ChaineQo100.monteeCredible(OL))
     }
 
-    // ----------------------------------------------------- la liste nommée
+    // ----------------------------------------------------- named list
 
     /**
-     * Fixe et portable n'ont ni les mêmes convertisseurs ni les mêmes erreurs.
-     * Retaper la valeur à chaque changement de site, c'est se tromper un jour.
+     * Home and portable have different converters and errors. Retyping the
+     * value at each site change means getting it wrong one day.
      */
     @Test
     fun deux_chaines_cohabitent_sans_se_melanger() {
@@ -141,7 +137,7 @@ class ChaineQo100Test {
         assertEquals(3, liste.size)
     }
 
-    /** Un nom inconnu ne doit pas laisser l'écran sans chaîne. */
+    /** An unknown name must not leave the screen without a chain. */
     @Test
     fun un_nom_inconnu_retombe_sur_la_premiere() {
         assertEquals("Fixe", ChaineQo100.choisie(ChaineQo100.PAR_DEFAUT, "Bateau").nom)
@@ -149,9 +145,8 @@ class ChaineQo100Test {
     }
 
     /**
-     * Les chaînes par défaut sont des **noms**, pas des valeurs : proposer un
-     * oscillateur nominal ferait croire qu'il convient, alors que chaque
-     * exemplaire a son erreur propre.
+     * Default chains are **names**, not values: offering a nominal LO would
+     * suggest it fits, while each unit has its own error.
      */
     @Test
     fun les_chaines_par_defaut_sont_vides() {

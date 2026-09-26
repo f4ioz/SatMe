@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo
 
@@ -16,20 +16,16 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Le banc du codec FT8.
+ * The FT8 codec.
  *
- * **Ce qu'il prouve et ce qu'il ne prouve pas.** Un aller-retour vérifie que
- * l'encodeur et le décodeur s'accordent — donc qu'il n'y a pas de faute de
- * frappe entre les deux. Il ne prouve pas la compatibilité avec WSJT-X : si
- * les deux partagent la même erreur d'interprétation de la norme, l'essai
- * passe et rien ne se décodera en l'air.
- *
- * La seule preuve qui vaille est un signal réel décodé. Ces essais évitent les
- * fautes internes ; ils ne remplacent pas la première station entendue.
+ * **What this proves and what it does not.** A round trip shows encoder and
+ * decoder agree, i.e. no typo between them. It does not prove WSJT-X
+ * compatibility: if both share the same misreading of the spec, the test
+ * passes and nothing decodes on air. Only a real decoded signal proves that.
  */
 class Ft8Test {
 
-    // ---------------------------------------------------------- les symboles
+    // ---------------------------------------------------------- symbols
 
     @Test
     fun un_message_fait_soixante_dix_neuf_symboles() {
@@ -56,17 +52,15 @@ class Ft8Test {
     }
 
     /**
-     * Le code de Gray n'est pas une décoration.
+     * The Gray code is not decoration.
      *
-     * La propriété porte sur les **tons voisins en fréquence**, et non sur les
-     * valeurs voisines : c'est une erreur d'un demi-écartement qui doit ne
-     * fausser qu'un seul bit sur trois. Ma première rédaction posait la
-     * question à l'envers et échouait sur un code pourtant juste — l'essai
-     * avait tort, pas le code.
+     * The property is about **tones adjacent in frequency**, not adjacent
+     * values: an error of one tone step must corrupt only one bit of three.
+     * Testing it the other way round fails on correct code.
      */
     @Test
     fun deux_tons_voisins_en_frequence_ne_different_que_d_un_bit() {
-        // Le ton d'un symbole de données, pour chacune des huit valeurs.
+        // Tone of a data symbol, for each of the eight values.
         val valeurPourTon = IntArray(8)
         val bits = BooleanArray(Ft8.BITS)
         for (v in 0 until 8) {
@@ -88,7 +82,7 @@ class Ft8Test {
         assertEquals(19, Ft8.scoreCostas(tons))
     }
 
-    // --------------------------------------------------------------- le CRC
+    // --------------------------------------------------------------- CRC
 
     @Test
     fun le_controle_valide_un_message_intact() {
@@ -97,8 +91,8 @@ class Ft8Test {
     }
 
     /**
-     * C'est lui qui remplace le code correcteur : un seul bit faux doit
-     * conduire au rejet, jamais à l'affichage d'un message inventé.
+     * The CRC is the last guard: a single wrong bit must lead to rejection,
+     * never to an invented message on screen.
      */
     @Test
     fun un_seul_bit_faux_fait_echouer_le_controle() {
@@ -122,7 +116,7 @@ class Ft8Test {
         }
     }
 
-    // -------------------------------------------------------- les indicatifs
+    // -------------------------------------------------------- callsigns
 
     @Test
     fun un_indicatif_standard_fait_l_aller_retour() {
@@ -134,9 +128,9 @@ class Ft8Test {
     }
 
     /**
-     * Un indicatif composé ne tient pas dans le moule : il voyage haché, et
-     * l'on ne peut pas le retrouver sans l'avoir déjà entendu en clair. On
-     * rend donc rien, plutôt qu'une approximation qui finirait au carnet.
+     * A compound callsign does not fit the 28-bit form: it travels hashed and
+     * cannot be recovered without having heard it in clear. Return nothing
+     * rather than an approximation that would end up in the log.
      */
     @Test
     fun un_indicatif_compose_est_refuse_plutot_que_devine() {
@@ -150,7 +144,7 @@ class Ft8Test {
         assertNull(Ft8.indicatifDepuis28(2L))
     }
 
-    // ---------------------------------------------------------- les messages
+    // ---------------------------------------------------------- messages
 
     private fun messageType1(appele: String, appelant: String, carre: String): BooleanArray {
         val m = BooleanArray(Ft8.BITS_MESSAGE)
@@ -158,8 +152,8 @@ class Ft8Test {
         Ft8.ecritEntier(m, 29, 28, Ft8.indicatifVers28(appelant)!!)
         val j = (carre[0] - 'A') * 18 * 10 * 10 + (carre[1] - 'A') * 10 * 10 +
             (carre[2] - '0') * 10 + (carre[3] - '0')
-        // Bit 59 : la spécification range c28 r1 c28 r1 R1 g15 i3, et le bit
-        // 58 est celui du « roger », pas le premier du carré.
+        // Bit 59: the spec layout is c28 r1 c28 r1 R1 g15 i3; bit 58 is the
+        // "roger" bit, not the first grid bit.
         Ft8.ecritEntier(m, 59, 15, j.toLong())
         Ft8.ecritEntier(m, 74, 3, 1L)
         return m
@@ -189,7 +183,7 @@ class Ft8Test {
         assertTrue(d.brut.startsWith("CQ F4IOZ"))
     }
 
-    /** Les autres types de message sont écartés, non devinés. */
+    /** Other message types are dropped, not guessed. */
     @Test
     fun un_type_inconnu_est_ecarte() {
         val m = messageType1("F5RRO", "F4IOZ", "JN18")

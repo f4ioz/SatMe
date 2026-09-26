@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo
 
@@ -46,9 +46,9 @@ class PassPredictorTest {
     }
 
     /**
-     * Le passage en cours se retrouve depuis un instant quelconque du passage,
-     * et il coïncide avec celui qu'annonce la liste — c'est ce qui manquait
-     * pour que « déjà appelé sur ce passage » veuille dire quelque chose.
+     * The current pass is found from any instant within it, and matches the
+     * one in the list — required for "already worked on this pass" to mean
+     * anything.
      */
     @Test fun `currentPass retrouve le passage depuis son milieu`() {
         val pred = PassPredictor()
@@ -56,7 +56,7 @@ class PassPredictorTest {
         val milieu = (passe.aosEpochMs + passe.losEpochMs) / 2
         val trouve = pred.currentPass(iss, paris, milieu)
         assertTrue("aucun passage trouvé au milieu du passage", trouve != null)
-        // À la seconde près : les deux bords sont affinés par dichotomie.
+        // To the second: both edges are refined by bisection.
         assertTrue("aos ${trouve!!.first} vs ${passe.aosEpochMs}",
             Math.abs(trouve.first - passe.aosEpochMs) < 2000)
         assertTrue("los ${trouve.second} vs ${passe.losEpochMs}",
@@ -66,7 +66,7 @@ class PassPredictorTest {
     @Test fun `currentPass ne rend rien quand le satellite est couche`() {
         val pred = PassPredictor()
         val passe = pred.upcomingPasses(iss, paris, epochMs, 48, 0.0).first()
-        // Dix minutes après la perte du signal : plus de passage en cours.
+        // Ten minutes after LOS: no current pass.
         assertEquals(null, pred.currentPass(iss, paris, passe.losEpochMs + 600_000L))
     }
 
@@ -131,15 +131,15 @@ class PassPredictorTest {
             line2 = "2 25544  51.6416 247.4627 0006703 130.5360 325.0288 15.49514637 12345")
         assertTrue(PassPredictor.elementsUtilisables(bon))
 
-        // Un caractère non numérique là où la bibliothèque attend un entier.
+        // A non-digit where the library expects an integer.
         val abime = bon.copy(
             line1 = "1 25544U 98067A   24001.50000000  .00016717  00000-0  10270-3 0  9XX3")
         assertTrue(!PassPredictor.elementsUtilisables(abime))
 
-        // Une ligne tronquée : le cas d'un téléchargement coupé.
+        // A truncated line, as from an interrupted download.
         assertTrue(!PassPredictor.elementsUtilisables(bon.copy(line2 = "2 25544  51.64")))
 
-        // Et surtout : le contrôle ne lève rien, quoi qu'on lui donne.
+        // Above all: the check never throws, whatever the input.
         assertTrue(!PassPredictor.elementsUtilisables(
             bon.copy(line1 = "", line2 = "")))
     }
@@ -164,13 +164,13 @@ class PassPredictorTest {
             catalogNumber = 100057)
         assertTrue(PassPredictor.elementsUtilisables(soyouz))
 
-        // Le champ vu par la bibliothèque est numérique, et la somme de
-        // contrôle est refaite sur les colonnes modifiées.
+        // The field seen by the library is numeric, and the checksum is
+        // recomputed over the modified columns.
         val vue = PassPredictor.lisible(soyouz.line1)
         assertTrue(vue.substring(2, 7).all { it.isDigit() })
         assertEquals(69, vue.length)
 
-        // Un numéro ordinaire n'est pas touché : pas de réécriture inutile.
+        // An ordinary number is left alone: no needless rewrite.
         val iss = soyouz.copy(
             line1 = "1 25544U 98067A   24001.50000000  .00016717  00000-0  10270-3 0  9003")
         assertEquals(iss.line1, PassPredictor.lisible(iss.line1))
@@ -194,14 +194,14 @@ class PassPredictorTest {
         assertEquals("A0000", OmmParser.alpha5(100000))
         assertEquals("Z9999", OmmParser.alpha5(339999))
 
-        // Au-delà de la limite du format, on retombe sur des chiffres.
+        // Beyond the format limit, fall back to digits.
         listOf(340000, 799500001, 999999999).forEach { n ->
             val champ = OmmParser.alpha5(n)
             assertEquals(5, champ.length)
             assertTrue("« $champ » doit être numérique", champ.all { it.isDigit() })
         }
 
-        // Et une ligne portant un tel champ reste utilisable de bout en bout.
+        // A line carrying such a field stays usable end to end.
         val e = TleEntry(
             name = "NOMINAL 799500001",
             line1 = "1 " + OmmParser.alpha5(799500001) +

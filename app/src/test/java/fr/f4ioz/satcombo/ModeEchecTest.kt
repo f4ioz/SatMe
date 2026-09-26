@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo
 
@@ -16,10 +16,10 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Le mode échec ne se vérifie pas sur le terrain : quand on en a besoin, on
- * n'a précisément plus rien pour observer. Il se vérifie donc ici, là où l'on
- * peut fabriquer des pannes qui n'arrivent pas sur commande — une mémoire
- * épuisée, une classe absente, une chaîne de causes qui se mord la queue.
+ * Failure mode cannot be tested in the field: when it is needed, there is
+ * nothing left to observe with. So it is tested here, where failures that do
+ * not happen on demand can be manufactured — out of memory, missing class,
+ * circular cause chain.
  */
 class ModeEchecTest {
 
@@ -39,12 +39,11 @@ class ModeEchecTest {
     }
 
     /**
-     * Le point le plus important du fichier. Les pannes que le mode échec
-     * cherche ne sont pas des exceptions ordinaires : mémoire épuisée sur un
-     * appareil modeste, classe absente sur un téléphone sans services Google,
-     * bibliothèque native refusée. Attraper `Exception` au lieu de `Throwable`
-     * les laisserait toutes passer — et le diagnostic mourrait de ce qu'il est
-     * venu diagnostiquer.
+     * The most important point in this file. The failures sought are not
+     * ordinary exceptions: out of memory on a low-end device, missing class on
+     * a phone without Google services, native library refused. Catching
+     * `Exception` instead of `Throwable` would miss them all, and the
+     * diagnostic would die of what it came to diagnose.
      */
     @Test
     fun on_attrape_les_erreurs_et_pas_seulement_les_exceptions() {
@@ -74,8 +73,8 @@ class ModeEchecTest {
     }
 
     /**
-     * Une exception sans message se lisait « null », mot qui ne désigne rien et
-     * qu'on prend pour un défaut du rapport plutôt que pour un fait.
+     * A message-less exception used to read "null", which looks like a bug in
+     * the report rather than a fact.
      */
     @Test
     fun une_exception_sans_message_ne_produit_pas_le_mot_null() {
@@ -89,7 +88,7 @@ class ModeEchecTest {
         val a = RuntimeException("a")
         val b = RuntimeException("b", a)
         a.initCause(b)
-        val d = ModeEchec.decrit(a)   // doit rendre la main
+        val d = ModeEchec.decrit(a)   // must return
         assertTrue(d.isNotEmpty())
     }
 
@@ -111,8 +110,8 @@ class ModeEchecTest {
     }
 
     /**
-     * Les deux coupes vont dans des sens opposés, et c'est le sens qui compte :
-     * une pile d'appels se nomme par sa tête, un journal système par sa queue.
+     * The two truncations go opposite ways, on purpose: a stack trace is
+     * identified by its head, a system log by its tail.
      */
     @Test
     fun la_pile_se_coupe_par_la_fin_et_le_journal_par_le_debut() {
@@ -133,10 +132,9 @@ class ModeEchecTest {
     }
 
     /**
-     * Le motif 7 est celui d'un processus qui n'a jamais réussi à se construire.
-     * C'est le seul de la table qu'aucun garde-fou à nous ne peut avoir noté,
-     * puisqu'aucune de nos lignes n'a tourné — et donc le seul que ce registre
-     * soit seul à pouvoir dire.
+     * Reason 7 is a process that never managed to initialise. None of our own
+     * guards can have recorded it, since none of our code ran — so only this
+     * system record can report it.
      */
     @Test
     fun le_motif_sept_est_un_echec_d_initialisation() {
@@ -184,10 +182,9 @@ class ModeEchecTest {
     }
 
     /**
-     * L'absence de rapport est un résultat, pas un blanc. Une section vide se
-     * lit « je n'ai pas regardé » ; « aucun rapport sur le disque » se lit
-     * « j'ai regardé, il n'y a rien » — et écarte alors une hypothèse au lieu
-     * d'en laisser flotter deux.
+     * No report is a result, not a blank. An empty section reads "didn't
+     * look"; "no report on disk" reads "looked, nothing there" — and rules out
+     * a hypothesis instead of leaving two open.
      */
     @Test
     fun l_absence_de_plantage_enregistre_est_dite_en_toutes_lettres() {
@@ -197,9 +194,9 @@ class ModeEchecTest {
     }
 
     /**
-     * Le corps du courrier passe par un tuyau du noyau partagé avec tout le
-     * système. Un rapport complet, journal compris, le dépasse : on vérifie que
-     * la coupe existe et qu'elle se signale.
+     * The mail body goes through a kernel buffer shared system-wide (Binder).
+     * A full report with log exceeds it, so check the truncation exists and
+     * announces itself.
      */
     @Test
     fun le_corps_du_courrier_reste_transportable() {

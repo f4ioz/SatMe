@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.data
 
@@ -15,9 +15,8 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Le catalogue de drapeaux est du Kotlin pur, donc verifiable ici : c'est la
- * seule chose qu'on puisse controler sans Canvas, et c'est justement la que se
- * glissent les fautes de frappe qui feraient un drapeau muet dans le selecteur.
+ * The flag catalogue is pure Kotlin, so testable without a Canvas — and that
+ * is exactly where typos slip in that would leave a blank flag in the picker.
  */
 class FlagsTest {
 
@@ -42,8 +41,8 @@ class FlagsTest {
 
     @Test
     fun ratiosArePlausible() {
-        // Aucun drapeau du monde n'est plus haut que large ni trois fois plus
-        // long que haut : hors de cette fourchette, c'est une faute de saisie.
+        // No real flag is taller than wide or three times longer than tall:
+        // outside that range it is a typo.
         Flags.ALL.forEach {
             assertTrue(it.code, it.ratio >= 0.9f && it.ratio <= 3f)
         }
@@ -53,8 +52,7 @@ class FlagsTest {
     fun everyFlagHasColours() {
         Flags.ALL.forEach {
             assertTrue(it.code, it.colors.isNotEmpty())
-            // Opaques : une couleur a demi transparente laisserait passer la
-            // photo au travers du drapeau.
+            // Opaque: a semi-transparent colour would let the photo show through.
             it.colors.forEach { c -> assertEquals(0xFF, (c ushr 24) and 0xFF) }
         }
     }
@@ -87,10 +85,9 @@ class FlagsTest {
     fun bothBretonFlagsComeFirstAndEachHasItsOwnErmineLayout() {
         assertEquals(Flags.BZH, Flags.ALL[0].code)
         assertEquals(Flags.BIGOUDEN, Flags.ALL[1].code)
-        // Le canton du Gwenn ha Du est haut de moins de la moitie du drapeau ;
-        // le panneau bigouden descend jusqu'en bas. Deux traces differents,
-        // donc deux familles differentes : les confondre a deja produit un
-        // drapeau bigouden faux.
+        // The Gwenn ha Du canton is less than half the flag height; the
+        // Bigouden panel runs to the bottom. Two layouts, two kinds: mixing
+        // them up once produced a wrong Bigouden flag.
         assertEquals(Flags.ERMINE, Flags.ALL[0].kind)
         assertEquals(Flags.ERMINE_HOIST, Flags.ALL[1].kind)
     }
@@ -98,7 +95,7 @@ class FlagsTest {
     @Test
     fun theBigoudenPanelIsYellowAndItsErminesRed() {
         val f = Flags.byCode(Flags.BIGOUDEN)!!
-        // bande 1 rouge, bande 2 jaune, panneau jaune, hermines rouges.
+        // band 1 red, band 2 yellow, yellow panel, red ermines.
         assertEquals(f.colors[1], f.colors[2])
         assertEquals(f.colors[0], f.colors[3])
         assertTrue(f.colors[0] != f.colors[1])
@@ -122,8 +119,7 @@ class FlagsTest {
 
     @Test
     fun theCatalogueCoversTheUsualRadioNeighbours() {
-        // Russie comprise : un OM francais travaille RS44 avec des stations
-        // russes toutes les semaines.
+        // Russia included: a French ham works Russian stations on RS-44 weekly.
         listOf("RU", "FR", "GB", "DE", "US", "JP", "BR", "IN", "TR", "NZ")
             .forEach { assertNotNull(it, Flags.byCode(it)) }
         assertTrue("catalogue trop court", Flags.ALL.size >= 45)
@@ -131,7 +127,7 @@ class FlagsTest {
 
     @Test
     fun ermineFlagsCarryFourColoursAndTheirBands() {
-        // bande 1, bande 2, fond du canton, couleur des mouchetures.
+        // band 1, band 2, canton background, ermine spot colour.
         listOf(Flags.BZH, Flags.BIGOUDEN).forEach { code ->
             val f = Flags.byCode(code)!!
             assertEquals(code, 4, f.colors.size)

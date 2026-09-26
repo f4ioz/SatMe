@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.sonde
 
@@ -15,21 +15,16 @@ import org.junit.Test
 import kotlin.math.abs
 
 /**
- * L'essai de bout en bout de la chaîne radiosonde.
+ * End-to-end test of the radiosonde chain.
  *
- * Celui-ci compte plus que tous les autres, et il a une histoire. Pendant trois
- * versions, la M20 n'est jamais sortie à l'écran alors que chaque morceau du
- * décodage passait ses essais un par un : la trame se fabriquait bien, l'analyse
- * de trame marchait bien, le démodulateur marchait bien. C'est l'assemblage qui
- * était faux — la M20 était lue par le démodulateur de la M10, à deux symboles
- * par bit, et l'ancien décodage par demi-bits jetait tout. Aucun essai
- * unitaire ne
- * pouvait le voir, puisque aucun ne traversait la chaîne entière.
+ * This one matters most. The M20 once never decoded although every piece
+ * passed its own tests: the wiring was wrong — the M20 was fed to the M10
+ * demodulator (two symbols per bit) and the half-bit decoding discarded
+ * everything. No unit test crossed the whole chain, so none could see it.
  *
- * D'où celui-ci : la mire fabrique le signal, on le verse dans [SondeHub]
- * exactement comme le fait la clé, et l'on exige des trames à la sortie. Si
- * quelqu'un recâble un jour les démodulateurs de travers, l'essai tombe avant
- * que l'application ne parte.
+ * Here the test pattern generates the signal, it is fed to [SondeHub] exactly
+ * as the dongle does, and frames are required at the output. Miswired
+ * demodulators fail this before shipping.
  */
 class SondeMireTest {
 
@@ -38,7 +33,7 @@ class SondeMireTest {
         SondeHub.stop()
     }
 
-    /** Pousse la mire dans le concentrateur comme le ferait la clé SDR. */
+    /** Feeds the test pattern into the hub as the SDR dongle would. */
     private fun run(model: String, seconds: Int = 6): SondeHub.SondeState {
         SondeHub.stop()
         SondeHub.start(null, SondeMire.RATE, SondeMire.DEMO_FREQ_HZ,
@@ -64,7 +59,7 @@ class SondeMireTest {
 
     @Test
     fun la_mire_m20_traverse_toute_la_chaine() {
-        // L'essai qui aurait dû exister trois versions plus tôt.
+        // The test that should have existed from the start.
         val st = run("M20")
         assertTrue("aucune trame M20 décodée", st.frames > 0)
         assertEquals("M20", st.type)
@@ -79,7 +74,7 @@ class SondeMireTest {
 
     @Test
     fun le_mode_automatique_trouve_la_sonde_sans_qu_on_la_nomme() {
-        // C'est le réglage par défaut : les trois décodeurs en parallèle.
+        // The default setting: all three decoders in parallel.
         SondeHub.stop()
         SondeHub.start(null, SondeMire.RATE, SondeMire.DEMO_FREQ_HZ,
             source = "DEMO", model = SondeModel.AUTO, log = false)
@@ -98,13 +93,11 @@ class SondeMireTest {
 
     @Test
     fun la_position_decodee_est_celle_qui_a_ete_emise() {
-        // Le décodage peut « sortir des trames » et rendre des coordonnées
-        // fausses. On ne peut pas pour autant exiger que le dernier point soit
-        // resté près du lâcher : le vol de la mire est comprimé, le ballon
-        // dérive de plusieurs degrés en huit trames, et c'est voulu. Ce qu'on
-        // exige, c'est que la position décodée soit l'une de celles que la mire
-        // a réellement émises — la vérification est plus serrée, et elle ne
-        // dépend plus de la dramaturgie du vol.
+        // Decoding can produce frames with wrong coordinates. We cannot require
+        // the last point near the launch (the test flight is compressed and
+        // drifts several degrees in eight frames, on purpose). Instead the
+        // decoded position must be one the pattern actually sent — a tighter
+        // check, independent of the flight profile.
         val emitted = SondeMire.flight(48.2, -4.5, 8)
         val st = run("RS41", 8)
         val f = st.last
@@ -123,8 +116,8 @@ class SondeMireTest {
         assertTrue("le ballon n'a pas éclaté haut : ${top.altM}", top.altM > 25_000.0)
         assertTrue("la descente manque",
             pts.last().altM < top.altM - 10_000.0)
-        // La dérive doit être visible : un ballon qui reste sur place n'a
-        // aucun intérêt pour éprouver l'affichage de la trace.
+        // Drift must be visible: a stationary balloon is useless for testing
+        // the track display.
         val drift = abs(pts.last().lon - pts.first().lon)
         assertTrue("aucune dérive : $drift", drift > 0.1)
     }
@@ -134,19 +127,17 @@ class SondeMireTest {
         val pcm = SondeMire.render("M20", 48.0, -4.0, 2)
         assertEquals(2 * SondeMire.RATE, pcm.size)
         val peak = pcm.maxOf { abs(it.toInt()) }
-        // Depuis la 18.7 la synthèse passe par un filtre qui arrondit les
-        // fronts : la crête ne touche plus tout à fait la consigne, et c'est
-        // exactement ce qu'on lui demande. On vérifie qu'elle reste dessous —
-        // sinon le WAV écrête — et qu'elle n'a pas fondu.
+        // Synthesis goes through a filter that rounds edges, so the peak stays
+        // just under the target, as intended. Check it stays below (or the WAV
+        // clips) and has not collapsed.
         assertTrue("crete $peak", peak <= SondeMire.AMPLITUDE)
         assertTrue("crete $peak", peak > SondeMire.AMPLITUDE * 0.75)
     }
 
     @Test
     fun la_mire_reste_decodable_avec_l_ambiance() {
-        // Le souffle et le fading sont là pour la démonstration, pas pour
-        // saborder le décodeur : une mire bruitée doit encore sortir des
-        // trames, sans quoi la case ne montrerait rien du tout.
+        // Hiss and fading are for the demo, not to sink the decoder: a noisy
+        // pattern must still produce frames, or the demo shows nothing.
         SondeHub.stop()
         SondeHub.start(null, SondeMire.RATE, SondeMire.DEMO_FREQ_HZ,
             source = "DEMO", model = "RS41", log = false)
@@ -164,8 +155,7 @@ class SondeMireTest {
 
     @Test
     fun les_profils_disent_la_bonne_largeur_de_filtre() {
-        // Une RS41 dans quinze kilohertz, une Meteomodem dans vingt-deux :
-        // c'est tout l'intérêt de nommer le modèle.
+        // RS41 in 15 kHz, Meteomodem in 22 kHz: why naming the model helps.
         assertEquals(Rs41.BANDWIDTH_HZ, SondeModel.bandwidthFor("RS41"))
         assertEquals(Meteomodem.BANDWIDTH_HZ, SondeModel.bandwidthFor("M20"))
         assertEquals(Meteomodem.BANDWIDTH_HZ, SondeModel.bandwidthFor(SondeModel.AUTO))
@@ -178,15 +168,15 @@ class SondeMireTest {
 
     @Test
     fun la_m10_reste_jouable_a_quarante_quatre_kilohertz() {
-        // 44 100 / 9 616 = 4,59 échantillons par chip. La 18.5 attendait 2,29
-        // ici, parce qu'elle prenait 9616 pour un débit binaire au lieu d'un
-        // débit de chips ; l'essai gardait donc la faute au chaud.
+        // 44100 / 9616 = 4.59 samples per chip. This test once expected 2.29,
+        // treating 9616 as a bit rate instead of a chip rate, and so protected
+        // the bug.
         val m10 = SondeModel.byId("M10")
         val s = m10.samplesPerChip(SondeMire.RATE)
         assertTrue("échantillons par symbole : $s", s > 4.5 && s < 4.7)
         assertTrue("la M10 ne devrait pas être signalée comme limite",
             !m10.marginal(SondeMire.RATE))
-        // À huit kilohertz, en revanche, elle ne passe plus.
+        // At 8 kHz, however, it no longer works.
         assertTrue(m10.marginal(8_000))
     }
 }

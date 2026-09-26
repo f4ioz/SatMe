@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.sonde
 
@@ -14,17 +14,15 @@ import java.io.DataInputStream
 import java.io.File
 
 /**
- * Le décodeur devant de vraies sondes.
+ * The decoder against real sondes.
  *
- * Le banc mesure la chaîne sur un signal qu'on fabrique nous-mêmes ; il dit
- * donc surtout que l'émetteur et le récepteur sont d'accord entre eux. Ces
- * essais-ci partent des enregistrements de référence du projet
- * radiosonde_auto_rx — de l'air, capté par une vraie station — démodulés en FM
- * puis versés dans le concentrateur tel quel. Rien ici n'est de notre
- * fabrication sauf le discriminateur.
+ * The bench uses a signal we generate ourselves, so it mostly proves that our
+ * encoder and decoder agree. These tests use the radiosonde_auto_rx reference
+ * recordings — real off-air captures — FM-demodulated and fed to the hub
+ * as is. Nothing here is ours except the discriminator.
  *
- * Les fichiers ne sont pas dans le dépôt : ils pèsent quatre-vingt-dix
- * mégaoctets pièce. L'essai s'efface tout seul quand ils ne sont pas là.
+ * The files are not in the repository (90 MB each); the test skips itself
+ * when they are absent.
  */
 class SondeRealTest {
 

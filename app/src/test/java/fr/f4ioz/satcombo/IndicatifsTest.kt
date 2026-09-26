@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo
 
@@ -17,12 +17,9 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Le carnet express : ce qui se calcule, calculé au banc.
- *
- * Le fil rouge de ces essais est une règle et une seule : **rien ne doit
- * bloquer une saisie**. La plausibilité est une couleur, le clavier met en
- * valeur sans jamais retirer, et l'indicatif que le format rejette est
- * justement celui pour lequel on avait sorti l'antenne.
+ * The quick log. One rule throughout: **nothing may block an entry**.
+ * Plausibility is a colour, the keypad highlights but never removes, and the
+ * callsign the format rejects is exactly the one you put the antenna up for.
  */
 class IndicatifsTest {
 
@@ -49,29 +46,24 @@ class IndicatifsTest {
     }
 
     /**
-     * `FG/F4IOZ` a un préfixe, pas un suffixe : c'est une autre entité. Le
-     * fondre avec `F4IOZ` mélangerait deux pays dans les statistiques et
-     * proposerait le carré de la métropole à un opérateur en Guadeloupe.
+     * `FG/F4IOZ` has a prefix, not a suffix: a different entity. Merging it
+     * with `F4IOZ` would mix two countries in the stats and suggest the
+     * mainland grid to an operator in Guadeloupe.
      */
     @Test
     fun un_prefixe_de_pays_n_est_pas_un_suffixe() {
         assertEquals("FG/F4IOZ" to "", Indicatifs.separe("FG/F4IOZ"))
         assertEquals("FG/F4IOZ", Indicatifs.cle("FG/F4IOZ"))
         assertEquals("FG/F4IOZ" to "/P", Indicatifs.separe("FG/F4IOZ/P"))
-        // La clé garde le suffixe depuis la 18.74 : FG/F4IOZ/P est une entrée
-        // à part entière, avec ses propres carrés.
+        // The key keeps the suffix: FG/F4IOZ/P is an entry of its own, with its
+        // own grid squares.
         assertEquals("FG/F4IOZ/P", Indicatifs.cle("FG/F4IOZ/P"))
     }
 
     /**
-     * Préfixe de pays **et** suffixe d'exploitation à la fois.
-     *
-     * Le carnet réel d'Olivier en compte dix-huit sur 3763 contacts satellite :
-     * `LA/DF2ET/P`, `TF/M0NKC/P`, `EA6/DF2ET/P`, `F/DF2ET/P`, `PA/DF2ET/P`.
-     * L'ancienne lecture exigeait exactement deux morceaux et laissait donc
-     * passer ces indicatifs en bloc, `/P` compris — de sorte que le carré de la
-     * station fixe était hérité par la station portable, c'est-à-dire le seul
-     * carré dont on sait qu'il est faux.
+     * Country prefix **and** operating suffix (`LA/DF2ET/P`, `TF/M0NKC/P`…).
+     * The old parser required exactly two parts, so the portable station
+     * inherited the home grid — the one grid known to be wrong.
      */
     @Test
     fun un_prefixe_de_pays_et_un_suffixe_coexistent() {
@@ -79,16 +71,16 @@ class IndicatifsTest {
         assertEquals("TF/M0NKC" to "/P", Indicatifs.separe("TF/M0NKC/P"))
         assertEquals("EA6/DF2ET" to "/P", Indicatifs.separe("ea6/df2et/p"))
         assertEquals("EA5/F4IOZ" to "/P", Indicatifs.separe("EA5/F4IOZ/P"))
-        // La clé garde préfixe ET suffixe : chaque exploitation est une
-        // entrée, avec ses propres carrés.
+        // The key keeps prefix AND suffix: each operation is its own entry,
+        // with its own grid squares.
         assertEquals("LA/DF2ET/P", Indicatifs.cle("LA/DF2ET/P"))
     }
 
     @Test
     fun un_portable_a_prefixe_n_herite_pas_du_carre() {
-        // La garde n'est plus dans locatorPropose : elle est dans la clé. En
-        // tapant LA/DF2ET/P, la recherche ne trouve PAS l'entrée LA/DF2ET —
-        // donc rien n'est proposé, sans qu'une règle spéciale intervienne.
+        // The guard is in the key, not in locatorPropose: typing LA/DF2ET/P does
+        // NOT find the LA/DF2ET entry, so nothing is suggested, with no special
+        // rule.
         val memoire = Indicatifs.memoire(listOf(
             Indicatifs.Contact("LA/DF2ET", "JP99", 10L)))
         val trouve = memoire.firstOrNull { it.indicatif == Indicatifs.cle("LA/DF2ET/P") }
@@ -96,7 +88,7 @@ class IndicatifsTest {
         assertEquals("", Indicatifs.locatorPropose(trouve, "LA/DF2ET/P"))
     }
 
-    /** Les formes maritimes du carnet réel : `UT1FG/MM`, `PA3GAN/MM`. */
+    /** Maritime forms from a real log: `UT1FG/MM`, `PA3GAN/MM`. */
     @Test
     fun le_suffixe_maritime_se_detache_aussi() {
         assertEquals("UT1FG" to "/MM", Indicatifs.separe("UT1FG/MM"))
@@ -104,9 +96,8 @@ class IndicatifsTest {
     }
 
     /**
-     * Ce qui n'est pas un suffixe d'exploitation reste attaché : `SM/UA1CBX`,
-     * `EA5/PA3GAN`, `4X/OM2IB` sont d'autres entités, pas d'autres modes de
-     * fonctionnement.
+     * What is not an operating suffix stays attached: `SM/UA1CBX`,
+     * `EA5/PA3GAN`, `4X/OM2IB` are other entities, not other operating modes.
      */
     @Test
     fun un_prefixe_seul_ne_se_detache_jamais() {
@@ -133,7 +124,7 @@ class IndicatifsTest {
         assertEquals("F4", Indicatifs.prefixe("F4HRJ/P"))
     }
 
-    // ---------------------------------------------------------- plausibilité
+    // ---------------------------------------------------------- plausibility
 
     @Test
     fun un_indicatif_ordinaire_est_plausible() {
@@ -150,15 +141,14 @@ class IndicatifsTest {
     }
 
     /**
-     * Le point de principe du fichier. Un indicatif jugé inhabituel reste
-     * saisissable : `etat` rend une couleur, jamais un refus, et aucune
-     * fonction de cet objet ne peut empêcher l'enregistrement.
+     * The principle of this file: an unusual callsign stays enterable. `etat`
+     * returns a colour, never a refusal, and nothing here can prevent saving.
      */
     @Test
     fun un_indicatif_inhabituel_reste_saisissable() {
         val etat = Indicatifs.etat("XYZ", emptyList())
         assertEquals(Indicatifs.Etat.INHABITUEL, etat)
-        // Il entre quand même dans la mémoire, donc dans le carnet.
+        // It still enters the memory, hence the log.
         val m = Indicatifs.memoire(listOf(Indicatifs.Contact("XYZ", "JN18", maintenant)))
         assertEquals(1, m.size)
     }
@@ -175,8 +165,8 @@ class IndicatifsTest {
     // ------------------------------------------------------------ suggestions
 
     /**
-     * Le scénario de la feuille de route, tel quel : on tape trois caractères,
-     * le correspondant des quatorze contacts arrive en tête.
+     * The roadmap scenario as is: type three characters, the station with
+     * fourteen contacts comes first.
      */
     @Test
     fun trois_caracteres_suffisent_a_faire_remonter_le_bon() {
@@ -191,7 +181,7 @@ class IndicatifsTest {
         assertTrue(s.none { it.indicatif == "DL1ABC" })
     }
 
-    /** Sous deux caractères, tout ressemble à tout : on ne propose rien. */
+    /** Under two characters everything looks alike: suggest nothing. */
     @Test
     fun une_seule_lettre_ne_declenche_aucune_proposition() {
         val m = listOf(connu("F4HRJ", 14, 5))
@@ -200,8 +190,8 @@ class IndicatifsTest {
     }
 
     /**
-     * Trois propositions au maximum. Au-delà, la ligne demande une lecture au
-     * lieu d'un coup d'œil, et l'on a reperdu les secondes qu'on venait gagner.
+     * At most three suggestions. Beyond that the line needs reading instead
+     * of a glance, and the seconds gained are lost again.
      */
     @Test
     fun jamais_plus_de_trois_propositions() {
@@ -222,9 +212,8 @@ class IndicatifsTest {
     }
 
     /**
-     * Le satellite en cours est le meilleur indice court dont on dispose
-     * pendant un passage : à égalité par ailleurs, celui qu'on a déjà entendu
-     * sur RS-44 passe devant.
+     * The current satellite is the best short-term hint during a pass: all
+     * else equal, the station already heard on RS-44 comes first.
      */
     @Test
     fun le_satellite_actif_departage() {
@@ -242,35 +231,34 @@ class IndicatifsTest {
         assertEquals(listOf("F4HAA", "F4HBB"), s.map { it.indicatif })
     }
 
-    // --------------------------------------------------------------- clavier
+    // --------------------------------------------------------------- keypad
 
     /**
-     * Mettre en valeur, jamais retirer : `suitesConnues` rend les lettres qui
-     * prolongent quelque chose, et le clavier s'en sert pour grossir des
-     * touches — toutes les autres restent frappables.
+     * Highlight, never remove: `suitesConnues` returns letters that extend
+     * something known, and the keypad enlarges those keys — all others stay
+     * usable.
      */
     @Test
     fun les_suites_connues_ne_sont_qu_une_mise_en_valeur() {
         val m = listOf(connu("F4HRJ", 1, 1), connu("F4HKA", 1, 1), connu("F4IOZ", 1, 1))
         assertEquals(setOf('R', 'K'), Indicatifs.suitesConnues("F4H", m))
         assertEquals(setOf('H', 'I'), Indicatifs.suitesConnues("F4", m))
-        // Rien de connu ne prolonge : l'ensemble est vide, et le clavier reste
-        // entier — c'est le cas du DX rare jamais contacté.
+        // Nothing known extends it: empty set, the keypad stays whole — the
+        // rare DX never worked before.
         assertTrue(Indicatifs.suitesConnues("ZZ9", m).isEmpty())
     }
 
     // -------------------------------------------------------------- locators
 
     /**
-     * Le cas qui compte le plus. `/P` dit précisément que le correspondant
-     * s'est déplacé : hériter du carré reviendrait à inscrire avec assurance le
-     * seul carré dont on sait qu'il est faux — et un champ pré-rempli est un
-     * champ accepté sans être lu.
+     * The case that matters most. `/P` says the station has moved: inheriting
+     * the grid would confidently log the one grid known to be wrong — and a
+     * pre-filled field is accepted without being read.
      */
     @Test
     fun un_suffixe_portable_n_herite_jamais_du_carre() {
-        // Même garde, portée par la clé : F4HRJ/P ne trouve pas l'entrée
-        // F4HRJ, donc n'hérite pas de JN18.
+        // Same guard, via the key: F4HRJ/P does not find F4HRJ, so does not
+        // inherit JN18.
         val memoire = Indicatifs.memoire(listOf(
             Indicatifs.Contact("F4HRJ", "JN18", 3L)))
         assertEquals("JN18", Indicatifs.locatorPropose(
@@ -282,9 +270,9 @@ class IndicatifsTest {
 
     @Test
     fun le_carre_propose_est_le_plus_frequent() {
-        // Cet essai consacrait « le plus récent gagne » — la règle qui a
-        // laissé trois contacts fautifs évincer dix-sept bons chez F5RRO.
-        // C'est désormais le plus fréquent : JN07 et ses quatre contacts.
+        // This test once enshrined "most recent wins" — which let three bad
+        // contacts override seventeen good ones. Now the most frequent wins:
+        // JN07 with four contacts.
         val c = Indicatifs.Connu(
             "F4ABC", 7, maintenant,
             locators = listOf(
@@ -296,11 +284,9 @@ class IndicatifsTest {
 
     @Test
     fun la_memoire_separe_la_base_et_l_exploitation_suffixee() {
-        // Troisième forme de cet essai. La première consacrait la fuite du
-        // carré /P vers la base ; la deuxième jetait le carré du /P, qui
-        // devenait invisible ; celle-ci sépare : deux entrées, chacune ses
-        // carrés. F5RRO propose JN18, F5RRO/P propose JN33 — retour d'Olivier
-        // sur la 18.73.
+        // Third form of this test. The first let the /P grid leak into the base;
+        // the second discarded the /P grid; this one separates: two entries,
+        // each with its own grid squares.
         val m = Indicatifs.memoire(listOf(
             Indicatifs.Contact("F4ABC", "JN07", maintenant - 90 * jour),
             Indicatifs.Contact("F4ABC", "JN07", maintenant - 80 * jour),
@@ -326,11 +312,8 @@ class IndicatifsTest {
     }
 
     /**
-     * Le nom du correspondant, retenu à l'import.
-     *
-     * 3668 des 3763 contacts du carnet d'Olivier en portent un. Il ne sert à
-     * aucun calcul et à tout à l'usage : reconnaître « Olivier » d'un coup
-     * d'œil vaut mieux que relire cinq caractères.
+     * The station's name, kept on import: recognising a first name at a glance
+     * beats re-reading five characters.
      */
     @Test
     fun le_nom_du_correspondant_est_retenu() {
@@ -340,9 +323,8 @@ class IndicatifsTest {
     }
 
     /**
-     * Un carnet ne porte pas de nom à chaque ligne, et le contact le plus
-     * récent est parfois justement celui qui n'en a pas : on garde le premier
-     * nom vu, quelle que soit sa date.
+     * Not every log line has a name, and the latest contact may be the one
+     * without: keep the first name seen, whatever its date.
      */
     @Test
     fun un_contact_recent_sans_nom_n_efface_pas_le_nom_connu() {
@@ -369,7 +351,7 @@ class IndicatifsTest {
     }
 }
 
-/** Le rattrapage à la bande, sur les deux sources d'enregistrement. */
+/** Locating contacts in a recording, for both recording sources. */
 class RattrapageTest {
 
     private val debut = 1_800_000_000_000L
@@ -382,9 +364,9 @@ class RattrapageTest {
     }
 
     /**
-     * Un enregistrement lancé en retard donne une position négative. Il faut
-     * qu'elle se voie : la ramener à zéro en silence ferait écouter le début de
-     * la bande en croyant y trouver un contact qui n'y est pas.
+     * A recording started late gives a negative position. It must show:
+     * silently clamping to zero would play the start of the recording while
+     * expecting a contact that is not there.
      */
     @Test
     fun un_contact_anterieur_a_la_bande_rend_une_position_negative() {
@@ -393,24 +375,24 @@ class RattrapageTest {
     }
 
     /**
-     * Le point d'alignement unique, qui rattrape un enregistreur extérieur.
-     * Un passage dure douze minutes et la dérive d'un dictaphone y est très
-     * inférieure à la seconde : un seul repère cale tout le fichier.
+     * A single alignment point syncs an external recorder. A pass lasts about
+     * twelve minutes and a voice recorder drifts far less than a second in
+     * that time: one marker aligns the whole file.
      */
     @Test
     fun un_seul_point_d_alignement_cale_tout_le_fichier() {
         val contacts = listOf(debut + 60_000L, debut + 180_000L, debut + 400_000L)
-        // L'opérateur reconnaît le deuxième contact à 2 min 05 dans le fichier.
+        // The operator recognises the second contact at 2:05 into the file.
         val deduit = Rattrapage.debutDeduit(contacts[1], 125_000L)
         assertEquals(debut + 55_000L, deduit)
-        // Les deux autres tombent en place tout seuls.
+        // The other two fall into place.
         assertEquals(5_000L, Rattrapage.position(contacts[0], deduit))
         assertEquals(345_000L, Rattrapage.position(contacts[2], deduit))
     }
 
     @Test
     fun la_fenetre_d_ecoute_commence_avant_le_tampon() {
-        // On parle avant d'appuyer : la marge amont doit être la plus large.
+        // People speak before tapping: the lead margin must be the larger.
         val f = Rattrapage.fenetre(120_000L, 720_000L)
         assertTrue(f.first < 120_000L)
         assertTrue(f.last > 120_000L)
@@ -424,8 +406,8 @@ class RattrapageTest {
     }
 
     /**
-     * Un alignement absurde se refuse. Sans ce garde-fou, désigner le mauvais
-     * fichier ferait écouter du silence en croyant avoir raté son repère.
+     * An absurd alignment is rejected. Otherwise picking the wrong file would
+     * play silence while the user thinks they missed the marker.
      */
     @Test
     fun un_alignement_absurde_est_refuse() {
@@ -436,14 +418,13 @@ class RattrapageTest {
     }
 
     /**
-     * Une poignée de contacts fautifs ne doit pas évincer un carré établi.
-     * Cas réel F5RRO : 17 contacts en JN18FR, 3 écrits par erreur en JN33AF
-     * plus récemment.
+     * A handful of wrong contacts must not override an established grid. Real
+     * case: 17 contacts in JN18FR, 3 more recent ones mistakenly in JN33AF.
      */
     @Test
     fun le_carre_le_plus_frequent_l_emporte_sur_le_plus_recent() {
-        // Constantes locales : cette classe-ci n'a pas celles de la classe
-        // voisine, et un essai ne doit rien emprunter à son voisinage.
+        // Local constants: this class does not share the neighbouring class's,
+        // and a test should borrow nothing from its surroundings.
         val j = 86_400_000L
         val t0 = 1_800_000_000_000L
         val vieux = t0 - 200 * j
@@ -457,7 +438,7 @@ class RattrapageTest {
         assertEquals("JN18FR", c.locatorPrincipal)
     }
 
-    /** À égalité de comptes, le plus récent tranche. */
+    /** On equal counts, the most recent wins. */
     @Test
     fun a_egalite_le_plus_recent_tranche() {
         val j = 86_400_000L
@@ -469,7 +450,7 @@ class RattrapageTest {
         assertEquals("IN95", c.locatorPrincipal)
 }
 
-/** L'import ADIF, qui n'alimente que la mémoire prédictive. */
+/** ADIF import, which only feeds the predictive memory. */
 class AdifImportTest {
 
     private fun enr(vararg champs: Pair<String, String>): String =
@@ -482,7 +463,7 @@ class AdifImportTest {
         assertEquals("JN18FS", f["GRIDSQUARE"])
     }
 
-    /** La longueur fait foi, même quand la valeur contient un espace. */
+    /** The declared length rules, even when the value contains a space. */
     @Test
     fun une_valeur_avec_espace_se_lit_entierement() {
         val f = AdifImport.champs("<SAT_NAME:5>RS 44<CALL:5>F4IOZ<EOR>")
@@ -497,9 +478,8 @@ class AdifImportTest {
     }
 
     /**
-     * Tolérance délibérée : un ADIF de carnet tiers comporte toujours quelque
-     * chose d'inattendu, et un import qui échoue en entier sur un
-     * enregistrement bancal ne sert personne.
+     * Deliberate tolerance: third-party ADIF always has something unexpected,
+     * and an import failing entirely on one bad record helps nobody.
      */
     @Test
     fun une_longueur_qui_deborde_ne_fait_pas_tout_echouer() {
@@ -511,14 +491,14 @@ class AdifImportTest {
     fun l_heure_est_lue_en_temps_universel() {
         val t = AdifImport.instant("20260805", "143722")
         assertEquals(1_785_940_642_000L, t)
-        // Quatre chiffres : les secondes valent zéro.
+        // Four digits: seconds are zero.
         assertEquals(AdifImport.instant("20260805", "1437"),
             AdifImport.instant("20260805", "143700"))
         assertEquals(null, AdifImport.instant("2026080", "143722"))
         assertEquals(null, AdifImport.instant("20260805", "1"))
     }
 
-    /** Le champ NAME de l'ADIF alimente le nom affiché. */
+    /** The ADIF NAME field feeds the displayed name. */
     @Test
     fun le_champ_nom_de_l_adif_est_lu() {
         val texte = "<EOH>" + enr(
@@ -541,9 +521,8 @@ class AdifImportTest {
     }
 
     /**
-     * On ne garde que le satellite. Les correspondants d'un contest VHF ne
-     * feraient que pousser vers le bas ceux qu'on va vraiment entendre pendant
-     * un passage.
+     * Satellite only. VHF contest stations would just push down the ones
+     * you will actually hear during a pass.
      */
     @Test
     fun seuls_les_contacts_satellite_alimentent_la_prediction() {
@@ -577,7 +556,7 @@ class AdifImportTest {
         assertTrue(b.contacts.isEmpty())
     }
 
-    /** Bout à bout : un export Wavelog devient une mémoire interrogeable. */
+    /** End to end: a Wavelog export becomes a searchable memory. */
     @Test
     fun un_export_devient_une_memoire_interrogeable() {
         val texte = "<EOH>" +
@@ -594,9 +573,9 @@ class AdifImportTest {
         assertEquals("JN18", s[0].locatorPrincipal)
     }
     /**
-     * F5RRO/P est ailleurs que F5RRO : le carré appris pendant une sortie
-     * portable ne doit jamais être proposé pour la station de base. C'est le
-     * défaut relevé par Olivier — taper F5RRO proposait le carré de F5RRO/P.
+     * F5RRO/P is not where F5RRO is: a grid learned during a portable outing
+     * must never be suggested for the home station. Reported bug: typing F5RRO
+     * suggested F5RRO/P's grid.
      */
     @Test
     fun le_carre_d_une_sortie_portable_n_alimente_pas_la_station_de_base() {
@@ -605,10 +584,9 @@ class AdifImportTest {
             Indicatifs.Contact("F5RRO/P", "JN17", 2_000L, "RS-44"),
         ))
         val base = m.first { it.indicatif == "F5RRO" }
-        // Un seul carré pour la base : IN95 reste IN95. (J'avais remplacé
-        // cette valeur par erreur en corrigeant l'essai voisin.)
+        // One grid for the base: IN95 stays IN95.
         assertEquals("IN95", base.locatorPrincipal)
-        // Et la sortie portable propose le sien, au lieu d'être muette.
+        // And the portable entry suggests its own instead of staying silent.
         assertEquals("JN17", m.first { it.indicatif == "F5RRO/P" }.locatorPrincipal)
     }
 
@@ -623,12 +601,8 @@ class AdifImportTest {
 }
 
     /**
-     * Le bilan compte les **indicatifs distincts**, pas les contacts.
-     *
-     * C'est le seul chiffre qui décrive ce que le clavier a gagné : trente-huit
-     * QSO avec le même correspondant n'ajoutent qu'une entrée à sa mémoire, et
-     * annoncer les contacts laisserait croire à un enrichissement qui n'a pas
-     * eu lieu.
+     * The summary counts **distinct callsigns**, not contacts: 38 QSOs with one
+     * station add a single memory entry.
      */
     @Test
     fun le_bilan_compte_les_indicatifs_distincts() {
@@ -647,7 +621,7 @@ class AdifImportTest {
         assertEquals(2, b.indicatifs)
     }
 
-    /** Ce qui est perdu, et pourquoi : sans indicatif ou sans date. */
+    /** What is dropped, and why: no callsign or no date. */
     @Test
     fun le_bilan_compte_les_ecartes() {
         val texte = "<EOH>\n" +

@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.i18n
 
@@ -14,16 +14,13 @@ import org.junit.Test
 import java.io.File
 
 /**
- * Garde-fou contre la maladie de la reconstruction : les clés en double.
+ * Guard against duplicate keys, the typical result of a file rebuild.
  *
- * `mapOf` accepte sans broncher deux fois la même clé et garde la dernière.
- * Rien ne se voit donc à l'exécution — mais le fichier enfle, deux libellés
- * concurrents cohabitent, et la version qui gagne dépend de l'ordre des lignes.
- * Après l'incident du 2 août, `Strings.kt` portait soixante et onze clés en
- * double par table, dont une vingtaine avec des textes différents : l'ancienne
- * formulation de la 18.16 dormait sous la nouvelle. On ne peut pas repérer ça
- * depuis les tables compilées, puisqu'elles ont déjà tranché ; il faut relire
- * la source.
+ * `mapOf` silently accepts a repeated key and keeps the last one. Nothing
+ * shows at runtime, but two competing labels coexist and the winner depends
+ * on line order. After one rebuild `Strings.kt` had 71 duplicate keys per
+ * table, about twenty with different texts. The compiled tables have already
+ * picked a winner, so only the source can reveal this.
  */
 class StringsSourceTest {
 
@@ -32,7 +29,7 @@ class StringsSourceTest {
             .map { File(it, "fr/f4ioz/satcombo/i18n/Strings.kt") }
             .firstOrNull { it.isFile }
 
-    /** Les clés de la table qui commence à `marque`, dans l'ordre du fichier. */
+    /** Keys of the table starting at `marque`, in file order. */
     private fun cles(lignes: List<String>, marque: String): List<String> {
         val debut = lignes.indexOfFirst { it.startsWith(marque) }
         if (debut < 0) return emptyList()
@@ -57,10 +54,9 @@ class StringsSourceTest {
     }
 
     /**
-     * Les deux tables sont lues séparément : une clé peut — et doit — exister
-     * des deux côtés. Cet essai vérifie surtout que le découpage ci-dessus a
-     * bien trouvé deux blocs non vides, sans quoi l'essai précédent passerait
-     * en ne regardant rien du tout.
+     * The two tables are read separately (a key may, and should, exist in
+     * both). This mainly checks that the split above found two non-empty
+     * blocks; otherwise the previous test would pass while checking nothing.
      */
     @Test
     fun les_deux_tables_sont_bien_reperees() {

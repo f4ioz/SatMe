@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo
 
@@ -18,27 +18,26 @@ import org.junit.Test
 import kotlin.math.abs
 
 /**
- * Les contours de pays de la photo QRV.
+ * Country outlines for the QRV photo.
  *
- * On travaille ici sur des carrés fabriqués plutôt que sur les vrais contours :
- * un essai qui dépend d'un fichier de 460 Ko cesse de dire ce qu'il vérifie. Les
- * formes sont grossières, les questions sont exactes.
+ * Built squares instead of real outlines: a test depending on a 460 KB file
+ * stops saying what it checks. Crude shapes, exact questions.
  */
 class PaysTest {
 
-    /** Un carré, aplati en lat, lon, lat, lon… comme les anneaux du catalogue. */
+    /** A square, flattened as lat, lon, lat, lon… like catalogue rings. */
     private fun carre(sud: Double, ouest: Double, nord: Double, est: Double) =
         doubleArrayOf(sud, ouest, sud, est, nord, est, nord, ouest)
 
-    // Une « métropole » et son « île », séparées de trois degrés.
+    // A "mainland" and a separate "island".
     private val metropole = carre(42.0, -5.0, 51.0, 8.0)
     private val ile = carre(41.3, 8.5, 43.0, 9.6)
-    // Un territoire lointain, de l'autre côté de l'Atlantique.
+    // A distant territory across the Atlantic.
     private val lointain = carre(2.0, -54.0, 6.0, -52.0)
     private val bleu = Pays.Contour("FR", "France", listOf(metropole, ile, lointain))
     private val voisin = Pays.Contour("ES", "Espagne", listOf(carre(36.0, -9.0, 43.5, 3.0)))
 
-    // ------------------------------------------------------------- appartenance
+    // ------------------------------------------------------------- membership
 
     @Test
     fun un_point_interieur_est_reconnu() {
@@ -65,9 +64,9 @@ class PaysTest {
     }
 
     /**
-     * Un opérateur en portable est souvent sur une plage, une jetée ou une
-     * pointe — c'est-à-dire hors du contour une fois celui-ci simplifié. Rendre
-     * « aucun pays » le laisserait sans carte alors qu'il est chez lui.
+     * A portable operator is often on a beach, pier or headland — outside the
+     * simplified outline. Returning "no country" would leave them without a
+     * map in their own country.
      */
     @Test
     fun un_point_juste_en_mer_retombe_sur_le_pays_le_plus_proche() {
@@ -76,18 +75,18 @@ class PaysTest {
         assertEquals("FR", c?.code)
     }
 
-    /** Mais le milieu de l'Atlantique n'appartient à personne. */
+    /** But mid-Atlantic belongs to nobody. */
     @Test
     fun le_large_n_appartient_a_aucun_pays() {
         assertNull(Pays.trouve(listOf(bleu, voisin), 45.0, -40.0))
     }
 
-    // ------------------------------------------------------- morceaux à dessiner
+    // ------------------------------------------------------- pieces to draw
 
     /**
-     * Le cœur de l'affaire, et ce qu'aucune liste de territoires n'aurait fait
-     * proprement : depuis la métropole on veut la métropole **et** l'île, mais
-     * pas le territoire d'outre-mer, qui rendrait la carte illisible.
+     * The core of it, which no territory list would do cleanly: from the
+     * mainland we want the mainland **and** the island, but not the overseas
+     * territory, which would make the map unreadable.
      */
     @Test
     fun depuis_la_metropole_on_dessine_la_metropole_et_son_ile() {
@@ -98,7 +97,7 @@ class PaysTest {
         assertFalse(m.contains(lointain))
     }
 
-    /** Et depuis l'outre-mer, on ne dessine que l'outre-mer. */
+    /** From overseas, draw only the overseas piece. */
     @Test
     fun depuis_l_outre_mer_on_ne_dessine_que_lui() {
         val m = Pays.morceauxAutour(bleu, 4.0, -53.0)
@@ -112,7 +111,7 @@ class PaysTest {
         assertTrue(Pays.morceauxAutour(vide, 0.0, 0.0).isEmpty())
     }
 
-    // ------------------------------------------------------------------- boîte
+    // ------------------------------------------------------------------- bounding box
 
     @Test
     fun la_boite_englobe_tous_les_morceaux() {
@@ -123,24 +122,23 @@ class PaysTest {
         assertEquals(9.6, b.est, 1e-9)
     }
 
-    // -------------------------------------------------------------- placement
+    // -------------------------------------------------------------- layout
 
     /**
-     * La longitude doit être comprimée par le cosinus de la latitude. Sans
-     * cela, la France apparaît environ un tiers trop large — c'est l'erreur
-     * classique quand on projette des degrés directement en pixels.
+     * Longitude must be scaled by cos(latitude). Without it France looks
+     * about a third too wide — the classic mistake of mapping degrees straight
+     * to pixels.
      */
     @Test
     fun la_longitude_est_comprimee_selon_la_latitude() {
         val b = Pays.boite(listOf(metropole))
         val p = Pays.place(b, 0.0, 0.0, 1000.0, 1000.0)
-        // À 46,5° de latitude moyenne, le facteur vaut environ 0,69.
+        // At 46.5° mean latitude the factor is about 0.69.
         assertEquals(0.69, p.compression, 0.02)
     }
 
     /**
-     * L'échelle est la même dans les deux sens : un pays doit garder sa forme,
-     * pas être étiré au cadre.
+     * Same scale both ways: a country keeps its shape, not stretched to the frame.
      */
     @Test
     fun le_pays_garde_sa_forme_dans_un_cadre_allonge() {
@@ -150,7 +148,7 @@ class PaysTest {
         val hauteurRendue = b.hauteur * p.echelle
         val rapportReel = (b.largeur * p.compression) / b.hauteur
         assertEquals(rapportReel, largeurRendue / hauteurRendue, 1e-6)
-        // Et rien ne déborde du cadre.
+        // Nothing overflows the frame.
         assertTrue(largeurRendue <= 2000.0 + 1e-6)
         assertTrue(hauteurRendue <= 500.0 + 1e-6)
     }
@@ -167,9 +165,8 @@ class PaysTest {
     }
 
     /**
-     * Le point du QTH doit tomber à l'intérieur du contour dessiné : c'est tout
-     * l'intérêt de la carte, et une erreur de projection s'y verrait au premier
-     * coup d'œil.
+     * The QTH dot must fall inside the drawn outline: the whole point of the
+     * map, and a projection error would show at a glance.
      */
     @Test
     fun le_point_du_qth_tombe_dans_le_cadre_et_au_bon_endroit() {
@@ -178,7 +175,7 @@ class PaysTest {
         val x = p.x(2.35); val y = p.y(48.86)
         assertTrue(x in 0.0..1000.0)
         assertTrue(y in 0.0..1000.0)
-        // Paris est au nord-est du centre du carré : à droite et au-dessus.
+        // Paris is north-east of the square's centre: right and above.
         val xc = p.x((b.ouest + b.est) / 2)
         val yc = p.y(b.latMoyenne)
         assertTrue("Paris doit être à droite du centre", x > xc)
@@ -192,7 +189,7 @@ class PaysTest {
         assertTrue(p.y(b.nord) < p.y(b.sud))
     }
 
-    // ---------------------------------------------------------------- divers
+    // ---------------------------------------------------------------- misc
 
     @Test
     fun l_aire_d_un_carre_est_celle_qu_on_attend() {

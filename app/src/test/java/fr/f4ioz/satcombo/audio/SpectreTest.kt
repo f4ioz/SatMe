@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.audio
 
@@ -15,14 +15,12 @@ import kotlin.math.PI
 import kotlin.math.sin
 
 /**
- * L'analyseur de spectre du moniteur audio, au banc.
+ * The audio monitor's spectrum analyser.
  *
- * Ce qu'on demande à cet objet est modeste et vérifiable sans téléphone : qu'un
- * sifflement à 1 500 Hz allume la barre qui est à 1 500 Hz, que le silence
- * laisse les barres à zéro, et que la crête dise vraiment ce qui entre. Les
- * trois répondent à la même question de l'opérateur — « est-ce que le son
- * arrive, et à quel niveau » — et une erreur d'échelle ou de fenêtre les fait
- * toutes tomber.
+ * A 1500 Hz tone must light the 1500 Hz bar, silence must leave all bars at
+ * zero, and the peak must reflect the input. All three answer the operator's
+ * question — "is audio arriving, and how loud" — and a scale or window error
+ * breaks all of them.
  */
 class SpectreTest {
 
@@ -74,8 +72,8 @@ class SpectreTest {
 
     @Test
     fun une_saturation_se_voit_a_la_crete() {
-        // Un signal collé aux butées : c'est exactement ce que le moniteur doit
-        // montrer en magenta pour dire de baisser le volume du poste.
+        // A signal pinned to the rails: the monitor must show this in magenta
+        // to tell the operator to turn the radio volume down.
         val a = AnalyseurSpectre()
         val n = a.taille * 2
         val pcm = ShortArray(n) { if ((it / 8) % 2 == 0) 32_767 else -32_768 }
@@ -85,14 +83,12 @@ class SpectreTest {
 
     @Test
     fun les_trames_se_comptent_et_le_reste_est_garde() {
-        // Le service livre des blocs qui ne tombent pas juste sur la taille de
-        // la transformée : le reste doit être conservé d'un bloc à l'autre,
-        // sinon un morceau de son sur trois n'est jamais analysé.
+        // The service delivers blocks that do not match the FFT size: the
+        // remainder must carry over, or part of the audio is never analysed.
         val a = AnalyseurSpectre()
         val bloc = ShortArray(300)
         repeat(10) { a.pousser(bloc, bloc.size) }
-        // 3 000 échantillons : deux transformées de 1 024, et 952 échantillons
-        // gardés sous le coude pour le bloc suivant.
+        // 3000 samples: two 1024-point FFTs, 952 samples kept for the next block.
         assertEquals(2L, a.trames)
         assertTrue(a.trames * a.taille <= 3_000)
     }
@@ -110,8 +106,8 @@ class SpectreTest {
 
     @Test
     fun les_bandes_restent_ordonnees_a_seize_kilohertz() {
-        // La liaison Bluetooth capture à 16 kHz : les bornes de bandes doivent
-        // rester strictement croissantes, sinon une bande vide plante le calcul.
+        // Bluetooth audio captures at 16 kHz: band edges must stay strictly
+        // increasing, or an empty band breaks the computation.
         val a = AnalyseurSpectre(rate = 16_000)
         var precedent = -1.0
         for (i in 0 until a.nbBandes) {

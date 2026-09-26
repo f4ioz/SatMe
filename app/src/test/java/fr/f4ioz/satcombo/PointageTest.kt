@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo
 
@@ -26,19 +26,15 @@ import kotlin.math.cos
 import kotlin.math.sin
 
 /**
- * Le banc du pointage.
- *
- * Il tient une promesse précise, celle qui manquait à la première version :
- * **tourner l'antenne sur son axe ne change pas où elle pointe**. C'est le
- * défaut relevé au terrain par F4IOZ — azimut et élévation justes en
- * polarisation horizontale, faux dès qu'on passe en verticale — et il se
- * reproduit ici à la table.
+ * Antenna pointing from the IMU. **Rotating the antenna about its own axis
+ * must not change where it points** — the field bug was right readings in
+ * horizontal polarisation, wrong in vertical.
  */
 class PointageTest {
 
-    // --- de quoi fabriquer des attitudes de synthèse ---
+    // --- building synthetic attitudes ---
 
-    /** L'écart absolu entre deux azimuts, par le plus court chemin. */
+    /** Absolute difference between two azimuths, shortest way. */
     private fun ecart(a: Float, b: Float): Float {
         var d = (b - a) % 360f
         if (d > 180f) d -= 360f
@@ -56,7 +52,7 @@ class PointageTest {
         return r
     }
 
-    /** Rotation d'angle [deg] autour de [axe], par la formule de Rodrigues. */
+    /** Rotation by [deg] about [axe], via Rodrigues' formula. */
     private fun rotation(axe: Vec3, deg: Float): FloatArray {
         val u = axe.normalise()
         val t = Math.toRadians(deg.toDouble()).toFloat()
@@ -68,14 +64,14 @@ class PointageTest {
         )
     }
 
-    /** La direction au sol correspondant à un azimut et une élévation. */
+    /** Ground-frame direction for an azimuth and elevation. */
     private fun direction(az: Float, el: Float): Vec3 {
         val a = Math.toRadians(az.toDouble()).toFloat()
         val e = Math.toRadians(el.toDouble()).toFloat()
         return Vec3(cos(e) * cos(a), cos(e) * sin(a), -sin(e))
     }
 
-    /** Les angles d'Euler que le module annoncerait pour cette rotation. */
+    /** Euler angles the module would report for this rotation. */
     private fun attitude(m: FloatArray): AttitudeWit {
         val tangage = Math.toDegrees(asin((-m[6]).coerceIn(-1f, 1f).toDouble())).toFloat()
         val lacet = Math.toDegrees(atan2(m[3].toDouble(), m[0].toDouble())).toFloat()
@@ -84,13 +80,13 @@ class PointageTest {
     }
 
     /**
-     * L'attitude d'un boîtier dont la flèche est portée par [fleche], visant
-     * [az]/[el], tourné de [pol] degrés sur son axe.
+     * Attitude of a box whose arrow is along [fleche], aimed at [az]/[el],
+     * rotated [pol] degrees about its axis.
      */
     private fun scene(fleche: Vec3, az: Float, el: Float, pol: Float): AttitudeWit {
         val cible = direction(az, el)
         val f = fleche.normalise()
-        // Une rotation quelconque qui amène la flèche sur la cible.
+        // Any rotation bringing the arrow onto the target.
         val axe = Vec3(
             f.y * cible.z - f.z * cible.y,
             f.z * cible.x - f.x * cible.z,
@@ -102,7 +98,7 @@ class PointageTest {
             if (cosinus > 0f) rotation(Vec3(0f, 0f, 1f), 0f)
             else rotation(Vec3(0f, 0f, 1f), 180f)
         } else rotation(axe, angle)
-        // Puis la polarisation, qui tourne autour de la flèche elle-même.
+        // Then polarisation, rotating about the arrow itself.
         return attitude(produit(amene, rotation(f, pol)))
     }
 
@@ -114,7 +110,7 @@ class PointageTest {
         assertEquals(el, p.elevationDeg, tol)
     }
 
-    // --- le défaut du terrain, reproduit puis corrigé ---
+    // --- the field bug, reproduced then fixed ---
 
     @Test
     fun la_polarisation_ne_deplace_plus_le_pointage() {
@@ -126,10 +122,9 @@ class PointageTest {
 
     @Test
     fun une_fleche_portee_par_x_ne_souffrait_pas_de_la_polarisation() {
-        // À garder en tête : tourner autour de X ne touche ni le lacet ni le
-        // tangage, parce que ce sont eux qui définissent où pointe X. Un
-        // boîtier monté ainsi marchait déjà avec l'ancienne lecture — ce qui
-        // explique que le défaut n'apparaisse pas sur tous les montages.
+        // Note: rotating about X touches neither yaw nor pitch, since they
+        // define where X points. A box mounted this way already worked with the
+        // old reading — which is why the bug does not show on every mounting.
         val fleche = Vec3(1f, 0f, 0f)
         val plat = scene(fleche, 125f, 32f, 0f)
         val vertical = scene(fleche, 125f, 32f, 90f)
@@ -139,20 +134,19 @@ class PointageTest {
 
     @Test
     fun lancienne_lecture_par_angles_separes_se_defait_hors_de_laxe_x() {
-        // Le cas relevé au terrain par F4IOZ : flèche portée par Y — celui pour
-        // lequel l'apprentissage d'élévation avait retenu « roulis ». Juste en
-        // polarisation horizontale, faux dès qu'on tourne l'antenne.
+        // The field case: arrow along Y, where elevation learning had picked
+        // "roll". Right in horizontal polarisation, wrong once rotated.
         val fleche = Vec3(0f, 1f, 0f)
         val plat = scene(fleche, 125f, 32f, 0f)
         val vertical = scene(fleche, 125f, 32f, 90f)
-        // À plat, le roulis vaut bien l'élévation, au signe près.
+        // Flat, roll equals elevation, up to sign.
         assertEquals(32f, abs(plat.roulis), 1f)
-        // En verticale, il ne la vaut plus, et le lacet a lui aussi dérivé.
+        // Vertical, it no longer does, and yaw has drifted too.
         assertTrue("le roulis devrait cesser de valoir l'élévation",
             abs(abs(vertical.roulis) - 32f) > 15f)
         assertTrue("le lacet devrait cesser de valoir l'azimut",
             abs(abs(vertical.lacet) - 125f) > 15f)
-        // Et le calcul vectoriel, lui, ne bronche ni dans un cas ni dans l'autre.
+        // The vector computation is right in both cases.
         assertPointage(plat, fleche, 125f, 32f)
         assertPointage(vertical, fleche, 125f, 32f)
     }
@@ -169,13 +163,12 @@ class PointageTest {
         }
     }
 
-    // --- l'accord avec ce qui marchait déjà ---
+    // --- agreement with what already worked ---
 
     @Test
     fun a_plat_sur_laxe_x_on_retrouve_lacet_et_tangage() {
-        // Le comportement qui fonctionnait en polarisation horizontale doit
-        // sortir inchangé du nouveau calcul, sinon la correction en casserait
-        // autant qu'elle en répare.
+        // Behaviour that worked in horizontal polarisation must be unchanged,
+        // or the fix would break as much as it repairs.
         val a = AttitudeWit(roulis = 0f, tangage = 25f, lacet = 140f)
         val p = PointageAntenne.pointage(a, Vec3(1f, 0f, 0f))
         assertEquals(140f, p.azimutDeg, 0.1f)
@@ -205,7 +198,7 @@ class PointageTest {
         assertEquals(350f, PointageAntenne.pointage(a, Vec3(1f, 0f, 0f), calageAzimut = -110f).azimutDeg, 0.1f)
     }
 
-    // --- l'apprentissage de l'axe ---
+    // --- learning the axis ---
 
     @Test
     fun deux_polarisations_designent_laxe_de_la_fleche() {
@@ -214,7 +207,7 @@ class PointageTest {
             val a2 = scene(vrai, 80f, 15f, 90f)
             val appris = PointageAntenne.apprendFleche(a1, a2)
             assertNotNull(appris)
-            // Au signe près : les deux sens ont le même axe de rotation.
+            // Up to sign: both directions share the rotation axis.
             assertEquals(1f, abs(appris!!.normalise().produitScalaire(vrai)), 0.02f)
         }
     }
@@ -236,8 +229,9 @@ class PointageTest {
 
     @Test
     fun un_presque_demi_tour_ne_decide_rien_non_plus() {
-        // Même amplitude antisymétrique qu'une rotation minuscule : l'axe y est
-        // aussi mal posé, et le taire donnerait un pointage faux bien présenté.
+        // Same antisymmetric magnitude as a tiny rotation: the axis is equally
+        // ill-conditioned, and accepting it would give a well-presented wrong
+        // pointing.
         val vrai = Vec3(1f, 0f, 0f)
         assertNull(PointageAntenne.apprendFleche(
             scene(vrai, 80f, 15f, 0f), scene(vrai, 80f, 15f, 178f)))
@@ -252,7 +246,7 @@ class PointageTest {
         val oriente = PointageAntenne.resoutSens(appris, levee)
         assertNotNull(oriente)
         assertEquals(1f, oriente!!.produitScalaire(vrai), 0.02f)
-        // Et il tranche pareil si l'apprentissage avait donné l'inverse.
+        // Same result if learning had given the opposite sign.
         assertEquals(1f, PointageAntenne.resoutSens(-appris, levee)!!.produitScalaire(vrai), 0.02f)
     }
 
@@ -264,7 +258,7 @@ class PointageTest {
         assertNull(PointageAntenne.resoutSens(appris, scene(vrai, 80f, 1f, 0f)))
     }
 
-    // --- le rangement ---
+    // --- storage ---
 
     @Test
     fun une_fleche_presque_alignee_est_ramenee_sur_laxe() {
@@ -298,7 +292,7 @@ class PointageTest {
 
     @Test
     fun la_trame_du_module_alimente_bien_le_pointage() {
-        // Bout à bout : des octets conformes jusqu'au pointage.
+        // End to end: valid bytes through to pointing.
         val o = ByteArray(BoussoleWit.LONGUEUR)
         o[0] = 0x55; o[1] = 0x61.toByte()
         fun pose(i: Int, deg: Float) {
@@ -312,14 +306,13 @@ class PointageTest {
         assertEquals(30f, p.elevationDeg, 0.2f)
     }
 
-    // ---- l'étalonnage sur un azimut connu ----
+    // ---- calibration on a known azimuth ----
 
     /**
-     * Le remède au défaut du terrain : nord et sud inversés.
+     * Fix for the field bug: north and south swapped.
      *
-     * Deux poses de polarisation donnent une droite, pas une direction, et le
-     * sens deviné peut se tromper de bout. Un azimut connu ne laisse aucun
-     * choix à faire.
+     * Two polarisation poses give a line, not a direction, and the guessed
+     * sense can be the wrong end. A known azimuth leaves no choice.
      */
     @Test
     fun un_azimut_connu_donne_la_fleche_sans_ambiguite() {
@@ -335,9 +328,8 @@ class PointageTest {
 
     @Test
     fun letalonnage_au_nord_ne_confond_pas_le_sud() {
-        // Le boîtier est vissé à l'envers : le lacet dit 180 alors que
-        // l'antenne pointe le nord. C'est le cas qui piégeait l'ancienne
-        // méthode.
+        // Box mounted backwards: yaw says 180 while the antenna points north.
+        // The case that trapped the old method.
         val pose = AttitudeWit(0f, 0f, 180f)
         val f = PointageAntenne.apprendFlecheDepuisAzimut(pose, 0f)!!
         val p = PointageAntenne.pointage(pose, f)!!
@@ -349,7 +341,7 @@ class PointageTest {
     fun letalonnage_reste_juste_quand_on_tourne_ensuite() {
         val pose = AttitudeWit(11f, 0f, 30f)
         val f = PointageAntenne.apprendFlecheDepuisAzimut(pose, 270f)
-        // On tourne de 60° : l'azimut doit suivre d'autant.
+        // Turn by 60°: azimuth must follow by as much.
         val apres = AttitudeWit(11f, 0f, 90f)
         val p = PointageAntenne.pointage(apres, f!!)!!
         assertTrue("attendu 330, obtenu ${p.azimutDeg}",
@@ -379,7 +371,7 @@ class PointageTest {
         val p = PointageAntenne.pointage(pose, envers)!!
         assertTrue("attendu 180, obtenu ${p.azimutDeg}",
             ecart(180f, p.azimutDeg) < 0.5f)
-        // Et deux retournements ramènent au point de départ.
+        // Two flips return to the start.
         val p2 = PointageAntenne.pointage(pose, PointageAntenne.retourne(envers))!!
         assertTrue(ecart(0f, p2.azimutDeg) < 0.5f)
     }
@@ -393,9 +385,9 @@ class PointageTest {
         assertEquals(35f, p.elevationDeg, 0.5f)
     }
 
-    // ---- le calage du cap par deux visées ----
+    // ---- heading calibration from two sightings ----
 
-    /** Ce que le cadran affichera, une fois le calage posé. */
+    /** What the dial will show once calibration is applied. */
     private fun affiche(brut: Float, c: PointageAntenne.CalageCap): Float {
         val signe = if (c.inverse) -brut else brut
         var a = (signe + c.calageDeg) % 360f
@@ -405,7 +397,7 @@ class PointageTest {
 
     @Test
     fun un_module_bien_oriente_ne_demande_aucun_calage() {
-        // Nord lu 0, ouest lu 270 : rien à corriger.
+        // North reads 0, west reads 270: nothing to correct.
         val c = PointageAntenne.calageCapDepuisNordOuest(0f, 270f)!!
         assertFalse(c.inverse)
         assertEquals(0f, c.calageDeg, 0.5f)
@@ -415,16 +407,15 @@ class PointageTest {
 
     @Test
     fun le_nord_et_le_sud_inverses_se_rattrapent() {
-        // Le cas d'Olivier : viser le nord affiche le sud.
-        // Décalage pur de 180°, sens conservé.
+        // Field case: aiming north shows south. Pure 180° offset, same sense.
         val c = PointageAntenne.calageCapDepuisNordOuest(180f, 90f)!!
-        assertEquals(0f, affiche(180f, c), 0.5f)    // le nord redevient le nord
-        assertEquals(270f, affiche(90f, c), 0.5f)   // et l'ouest, l'ouest
+        assertEquals(0f, affiche(180f, c), 0.5f)    // north is north again
+        assertEquals(270f, affiche(90f, c), 0.5f)   // and west is west
     }
 
     @Test
     fun un_sens_de_rotation_retourne_se_detecte() {
-        // Nord lu 0, ouest lu 90 : le module compte à l'envers.
+        // North reads 0, west reads 90: the module counts backwards.
         val c = PointageAntenne.calageCapDepuisNordOuest(0f, 90f)!!
         assertTrue(c.inverse)
         assertEquals(0f, affiche(0f, c), 0.5f)
@@ -433,7 +424,7 @@ class PointageTest {
 
     @Test
     fun un_decalage_quelconque_se_rattrape_aussi() {
-        // Boîtier vissé de travers : nord lu 37, ouest lu 307.
+        // Box mounted askew: north reads 37, west reads 307.
         val c = PointageAntenne.calageCapDepuisNordOuest(37f, 307f)!!
         assertFalse(c.inverse)
         assertEquals(0f, affiche(37f, c), 0.5f)
@@ -442,7 +433,7 @@ class PointageTest {
 
     @Test
     fun le_calage_reste_lisible() {
-        // Un petit écart doit s'afficher petit : −3, pas 357.
+        // A small offset must show small: −3, not 357.
         val c = PointageAntenne.calageCapDepuisNordOuest(3f, 273f)!!
         assertTrue("calage illisible : ${c.calageDeg}",
             c.calageDeg > -180f && c.calageDeg <= 180f)
@@ -451,36 +442,27 @@ class PointageTest {
 
     @Test
     fun deux_releves_ambigus_nécrivent_rien() {
-        // Même direction visée deux fois : rien à en tirer.
+        // Same direction sighted twice: nothing to learn.
         assertNull(PointageAntenne.calageCapDepuisNordOuest(50f, 50f))
-        // Et une visée à l'opposé ne dit pas non plus le sens.
+        // An opposite sighting does not tell the sense either.
         assertNull(PointageAntenne.calageCapDepuisNordOuest(0f, 180f))
     }
 
     @Test
     fun un_releve_approximatif_passe_quand_meme() {
-        // L'ouest à quinze degrés près : on ne vise pas au théodolite.
+        // West within 15°: this is not a theodolite.
         val c = PointageAntenne.calageCapDepuisNordOuest(0f, 255f)
         assertNotNull(c)
         assertFalse(c!!.inverse)
     }
 
-    // ---- ce que le terrain a appris ----
+    // ---- lessons from the field ----
 
     /**
-     * **L'essai qui manquait.** Le chemin vectoriel ne doit connaître aucune
-     * inversion de sens.
-     *
-     * Le drapeau « sens inverse » appartenait à l'ancienne méthode scalaire,
-     * mais il continuait de s'appliquer à la sortie du calcul vectoriel :
-     * retourner un azimut est une **symétrie**, pas une rotation, et
-     * l'invariance à la polarisation n'existe que pour les rotations. Olivier
-     * voyait ses points cardinaux à l'envers, puis son calage se décaler dès
-     * qu'il passait en polarisation verticale.
-     *
-     * On vérifie ici qu'un cardinal appris se relit juste, et qu'il résiste
-     * ensuite à un tour complet de polarisation — les deux symptômes du
-     * terrain, réunis.
+     * **The vector path must know no sense inversion.** The old "reverse sense"
+     * flag was still applied to the vector result; flipping an azimuth is a
+     * **reflection**, and polarisation invariance only holds for rotations.
+     * Cardinals came out reversed and shifted in vertical polarisation.
      */
     @Test
     fun un_cardinal_appris_se_relit_juste() {
@@ -514,8 +496,7 @@ class PointageTest {
 
     @Test
     fun les_quatre_cardinaux_sortent_dans_le_bon_ordre() {
-        // Nord, est, sud, ouest : si deux d'entre eux se croisent, c'est qu'une
-        // symétrie s'est glissée quelque part.
+        // N, E, S, W: if two swap, a reflection has crept in somewhere.
         val pose = AttitudeWit(roulis = 5f, tangage = 3f, lacet = 77f)
         val f = PointageAntenne.apprendFlecheDepuisAzimut(pose, 0f)!!
         val lus = listOf(0f, 90f, 180f, 270f).map { az ->
@@ -528,25 +509,16 @@ class PointageTest {
         }
     }
 
-    // ---- le sens du module, mesuré et non supposé ----
+    // ---- module handedness, measured not assumed ----
 
     /**
-     * Simule un module qui compte le lacet à l'envers.
+     * Simulates a module reporting `-yaw`: east and west swap, north and south
+     * stay right. (Trap: building scenes in one convention and reading them in
+     * the other always fails, and once wrongly condemned the correction.)
      *
-     * **C'est ici que je m'étais trompé la première fois.** Mon banc précédent
-     * fabriquait ses scènes dans la convention directe et les relisait dans la
-     * convention inverse : forcément faux, et j'en avais conclu à tort que la
-     * correction elle-même était mauvaise, avant de la retirer.
-     *
-     * Un module au repère opposé, c'est un module qui rapporte `-lacet` là où
-     * la réalité dit `lacet`. Rien d'autre ne change — et c'est bien assez pour
-     * échanger l'est et l'ouest en laissant le nord et le sud justes.
-     *
-     * Lire dans le repère est-nord-haut revient exactement à cela : l'échange
-     * des deux premiers axes est une rotation d'un demi-tour autour de la
-     * diagonale horizontale, et conjuguer une rotation de lacet par elle rend
-     * son inverse. D'où le choix de corriger à la lecture plutôt qu'en
-     * retouchant le lacet — l'invariance à la polarisation y survit.
+     * Reading in east-north-up frame undoes it: swapping the first two axes is
+     * a half-turn about the horizontal diagonal, which inverts a yaw rotation.
+     * Correcting at read time keeps polarisation invariance.
      */
     private fun vuParUnModuleOppose(a: AttitudeWit) =
         AttitudeWit(a.roulis, a.tangage, -a.lacet)
@@ -578,16 +550,16 @@ class PointageTest {
 
     @Test
     fun deux_visees_demasquent_un_module_au_repere_oppose() {
-        // Le cas d'Olivier : nord et sud tombent juste, est et ouest sont
-        // échangés. Une seule visée ne l'aurait jamais vu.
+        // Field case: north and south right, east and west swapped. A single
+        // sighting would never see it.
         val fleche = Vec3(1f, 0.1f, 0f).normalise()
         val c = PointageAntenne.calibreDepuisDeuxVisees(
             vuParUnModuleOppose(scene(fleche, 0f, 0f, 0f)), 0f,
             vuParUnModuleOppose(scene(fleche, 90f, 0f, 0f)), 90f)
         assertNotNull("le sens inverse n'a pas été détecté", c)
-        // Peu importe laquelle des quatre est retenue : ce qui compte est
-        // qu'elle ne soit pas la directe, et surtout qu'elle **relise juste**.
-        // C'est l'essai suivant qui l'exige sur les quatre cardinaux.
+        // Which of the four is chosen does not matter, as long as it is not
+        // the direct one and it **reads back right** — required by the next
+        // test on all four cardinals.
         assertNotEquals("module opposé pris pour direct",
             PointageAntenne.Convention.DIRECTE, c!!.convention)
     }
@@ -615,8 +587,8 @@ class PointageTest {
 
     @Test
     fun la_calibration_mesuree_resiste_a_la_polarisation() {
-        // La propriété qui compte : une fois le sens mesuré, tourner l'antenne
-        // sur son axe ne doit plus rien changer.
+        // What matters: once handedness is measured, rotating the antenna about
+        // its axis changes nothing.
         val fleche = Vec3(0.3f, 0.9f, 0.2f).normalise()
         fun vu(a: AttitudeWit) = vuParUnModuleOppose(a)
         val c = PointageAntenne.calibreDepuisDeuxVisees(
@@ -643,7 +615,7 @@ class PointageTest {
 
     @Test
     fun des_releves_incoherents_sont_refuses() {
-        // L'opérateur s'est trompé de bouton : aucune hypothèse ne colle.
+        // Operator pressed the wrong button: no hypothesis fits.
         val fleche = Vec3(1f, 0f, 0f)
         assertNull(PointageAntenne.calibreDepuisDeuxVisees(
             scene(fleche, 0f, 0f, 0f), 0f,

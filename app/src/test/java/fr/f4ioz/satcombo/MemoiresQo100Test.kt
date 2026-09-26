@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo
 
@@ -15,7 +15,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** Le banc des raccourcis de fréquence du transpondeur étroit. */
+/** Frequency shortcuts for the narrowband transponder. */
 class MemoiresQo100Test {
 
     @Test
@@ -33,12 +33,11 @@ class MemoiresQo100Test {
     }
 
     /**
-     * Tout repère tient entre les deux balises CW, bornes comprises.
+     * Every marker lies between the two CW beacons, inclusive.
      *
-     * Et non « dans le transpondeur » : les balises encadrent la bande utile,
-     * elles n'y sont pas. La basse est cinq kilohertz sous le premier segment
-     * exploitable, la haute trois au-dessus du dernier. C'est ce qui en fait
-     * des bornes.
+     * Not "inside the transponder": the beacons frame the usable band rather
+     * than sit in it (lower one 5 kHz below the first segment, upper one 3 kHz
+     * above the last). That is what makes them bounds.
      */
     @Test
     fun aucun_repere_ne_sort_des_balises() {
@@ -48,7 +47,7 @@ class MemoiresQo100Test {
         }
     }
 
-    /** Les segments de travail donnent un repère un peu après leur bord. */
+    /** Operating segments give a marker a little past their edge. */
     @Test
     fun les_segments_de_travail_donnent_un_repere() {
         val cles = MemoiresQo100.reperes().map { it.cle }
@@ -71,10 +70,8 @@ class MemoiresQo100Test {
     }
 
     /**
-     * Deux mémoires à moins d'un kilohertz sont la même.
-     *
-     * Sur 492 kHz avec des signaux de 2,7 kHz, deux raccourcis distants de
-     * 300 Hz ne se distinguent pas à l'usage.
+     * Two memories less than 1 kHz apart are the same one: on 492 kHz with
+     * 2.7 kHz signals, shortcuts 300 Hz apart are indistinguishable in use.
      */
     @Test
     fun poser_tout_pres_remplace_au_lieu_d_ajouter() {
@@ -104,7 +101,7 @@ class MemoiresQo100Test {
         assertTrue(m.isEmpty())
     }
 
-    /** Les repères d'abord, les mémoires posées ensuite. */
+    /** Fixed markers first, user memories after. */
     @Test
     fun les_reperes_precedent_les_memoires_posees(): Unit {
         val posees = listOf(Memoire("", 10_489_510_000L, fixe = false, nom = "tôt"))

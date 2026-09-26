@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.sonde
 
@@ -12,13 +12,12 @@ import org.junit.Assume
 import org.junit.Test
 
 /**
- * Le diagnostic, à démonter le concentrateur.
+ * Diagnostics that take the hub apart.
  *
- * Le banc dit que la RS41 et la M20 ne rendent qu'une trame sur six, et le
- * témoin sans radio dit la même chose : ce n'est donc pas le récepteur. Reste à
- * savoir où les cinq autres se perdent — jamais trouvées par le décodeur, ou
- * bien trouvées puis refusées par le suivi de vol. On refait donc ici, à la
- * main, ce que fait [SondeHub], en comptant chaque étape.
+ * When RS41 and M20 yield only one frame in six, both with and without the
+ * radio chain, the receiver is not to blame. The question is where the rest
+ * are lost: never found by the decoder, or found then rejected by flight
+ * tracking. So this redoes by hand what [SondeHub] does, counting each step.
  */
 class SondeDiagTest {
 
@@ -84,14 +83,14 @@ class SondeDiagTest {
     @Test
     fun le_suivi_de_vol_accepte_t_il_tout() {
         Assume.assumeTrue("banc désactivé", enabled())
-        // Six trames RS41 fabriquées et analysées sans passer par la radio :
-        // si le suivi de vol en refuse, le défaut est là et nulle part ailleurs.
+        // Six RS41 frames built and parsed without the radio: if flight
+        // tracking rejects any, the fault is there and nowhere else.
         val flight = SondeMire.flight(48.2, -4.5, 6, stepSec = SondeBench.STEP_SEC)
         val fl = SondeFlight("MIRE", "RS41")
         for (s in 0 until 6) {
-            // La mire rend la trame telle qu'elle part sur l'air, c'est-à-dire
-            // brouillée : le décodeur la débrouille avant de la lire, et nous
-            // devons faire pareil, l'opération étant sa propre réciproque.
+            // The test pattern returns the frame as sent over the air, i.e.
+            // scrambled: descramble it first, as the decoder does (the
+            // operation is its own inverse).
             val bytes = SondeMire.frameFor("RS41", flight[s], s + 1)
             Rs41.descramble(bytes)
             val f = Rs41.parse(bytes, 404_000_000L, 1_000L * (s + 1))

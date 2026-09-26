@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo
 
@@ -25,17 +25,9 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 /**
- * Le banc du démarrage, sur un vrai Android en mémoire.
- *
- * Il existe à cause des régressions livrées d'affilée que rien ne pouvait
- * attraper : le carnet du clavier vidé en 19.11, et avant lui des écrans dont
- * l'état se reconstruisait de travers. Les 768 essais de domaine vérifient des
- * règles pures ; **aucun ne construisait l'application**. Or c'est là que les
- * choses se branchent les unes aux autres, et donc là qu'elles se débranchent.
- *
- * Robolectric fournit préférences, ressources et manifeste sur la JVM. Un essai
- * ici coûte quelques secondes au lieu d'un appareil et d'un passage de
- * satellite.
+ * Startup, on an in-memory Android (Robolectric). Domain tests check pure
+ * rules but **none built the app** — where things get wired together, and
+ * so where they come apart. Several regressions shipped that way.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
@@ -47,9 +39,9 @@ class DemarrageViewModelTest {
         .getSharedPreferences("satcombo_settings", Context.MODE_PRIVATE)
 
     /**
-     * Le ViewModel programme le rafraîchissement des TLE dès sa construction.
-     * Sur l'appareil, WorkManager s'initialise depuis le manifeste ; ici il
-     * faut le poser à la main, sinon la construction lève.
+     * The ViewModel schedules TLE refresh on construction. On device
+     * WorkManager initialises from the manifest; here it must be set up by
+     * hand or construction throws.
      */
     @Before
     fun poseWorkManager() {
@@ -62,19 +54,12 @@ class DemarrageViewModelTest {
         assertNotNull(MainViewModel(app()).ui.value)
     }
 
-    // ------------------------------------------------ la mémoire du clavier
+    // ------------------------------------------------ keypad memory
 
     /**
-     * **La régression du 25 août.**
-     *
-     * La mémoire du clavier était construite par `rafraichitFile()`, fonction
-     * de la file d'attente sur laquelle la construction du carnet avait été
-     * greffée. La file supprimée, la mémoire est partie avec — et le clavier
-     * s'ouvrait sur un carnet vide après chaque mise à jour, jusqu'à ce qu'on
-     * aille éteindre puis rallumer la base interne dans les réglages.
-     *
-     * Un carnet plein doit donner une mémoire pleine, **au démarrage**, sans
-     * qu'aucun écran n'ait été ouvert.
+     * **Keypad memory regression.** It was built by `rafraichitFile()`, a queue
+     * function; removing the queue emptied the keypad. A full log must give a
+     * full memory **at startup**, before any screen is opened.
      */
     @Test
     fun le_carnet_local_peuple_la_memoire_des_le_demarrage() {
@@ -89,7 +74,7 @@ class DemarrageViewModelTest {
         assertTrue(memoire.any { it.indicatif == "F1FPL" })
     }
 
-    /** Le carré connu remonte avec l'indicatif : c'est tout l'intérêt. */
+    /** The known grid square comes with the callsign: that is the point. */
     @Test
     fun la_memoire_porte_le_carre_du_correspondant() {
         LogStore(app()).add(LogEntry(
@@ -103,13 +88,11 @@ class DemarrageViewModelTest {
         assertEquals("IN77US", connu.locatorPrincipal)
     }
 
-    // ------------------------------------------------ la reprise du geste
+    // ------------------------------------------------ gesture migration
 
     /**
-     * Une installation existante réglée sur trois appuis passe à deux.
-     *
-     * Changer un défaut ne touche que les installations neuves : la valeur
-     * déjà écrite est relue telle quelle. Il faut donc la réécrire une fois.
+     * An existing install set to three taps moves to two: changing a default
+     * does not touch stored values, so it must be rewritten once.
      */
     @Test
     fun une_installation_existante_passe_au_double_appui() {
@@ -119,21 +102,21 @@ class DemarrageViewModelTest {
     }
 
     /**
-     * **Et une seule fois.** Rejouée à chaque démarrage, la reprise écraserait
-     * le choix que l'opérateur vient de faire, et le réglage deviendrait
-     * impossible à changer — un défaut pire que celui qu'on corrige.
+     * **Only once.** Replayed on every start, the migration would overwrite the
+     * operator's choice and make the setting impossible to change — worse
+     * than the bug being fixed.
      */
     @Test
     fun la_reprise_ne_rejoue_pas_sur_le_choix_de_l_operateur() {
         prefs().edit().putInt("log_taps", 3).remove("reprises").commit()
-        MainViewModel(app())                            // la reprise passe : 2
+        MainViewModel(app())                            // migration runs: 2
 
-        prefs().edit().putInt("log_taps", 3).commit()   // l'opérateur reprend 3
+        prefs().edit().putInt("log_taps", 3).commit()   // operator picks 3 again
 
         assertEquals(3, MainViewModel(app()).ui.value.logTaps)
     }
 
-    /** Une installation neuve démarre à deux appuis. */
+    /** A new install starts at two taps. */
     @Test
     fun une_installation_neuve_demarre_au_double_appui() {
         prefs().edit().clear().commit()
@@ -141,16 +124,12 @@ class DemarrageViewModelTest {
         assertEquals(2, MainViewModel(app()).ui.value.logTaps)
     }
 
-    // ------------------------------------------- le geste sur la boussole
+    // ------------------------------------------- compass gesture
 
     /**
-     * **Le geste n'écrit plus rien.**
-     *
-     * Il posait au carnet une entrée complète — heure, satellite, azimut,
-     * élévation — et vide de nom. Quatre le 25 août, parties jusque dans
-     * l'export ADIF. Un contact sans indicatif n'est pas un contact à moitié
-     * fait : c'est un indicatif qu'on connaissait à l'instant même et qu'on a
-     * perdu.
+     * **The gesture no longer writes anything.** It used to log entries with no
+     * callsign, which reached the ADIF export. A contact without a callsign is
+     * not half a contact: it is a callsign known a moment ago and lost.
      */
     @Test
     fun le_geste_ouvre_le_clavier_sans_rien_inscrire() {
@@ -164,16 +143,12 @@ class DemarrageViewModelTest {
         assertEquals(0, LogStore(app()).load().size)
     }
 
-    // ------------------------------------------ les journaux d'avant la 19.11
+    // ------------------------------------------ logs from older versions
 
     /**
-     * Les tampons déjà en mémoire ne sont pas perdus.
-     *
-     * Le drapeau `aNommer` a disparu de `LogEntry` en 19.11 ; les journaux
-     * écrits avant portent encore sa clé `"an"`. Un appareil qui met à jour
-     * doit relire son carnet entier — l'appareil d'Olivier en comptait douze
-     * marqués, plus treize contacts. Les entrées reviennent simplement sans
-     * nom, et l'éditeur du journal sait les corriger.
+     * Older logs still carry the removed `aNommer` flag (`"an"`). The whole log
+     * must read back; those entries return without a callsign, fixable in the
+     * log editor.
      */
     @Test
     fun un_journal_d_avant_la_suppression_se_relit_entier() {
@@ -186,20 +161,17 @@ class DemarrageViewModelTest {
         assertEquals(2, journal.size)
         assertEquals("F1FPL", journal.first { it.timeMs == 2L }.callsign)
         assertEquals("", journal.first { it.timeMs == 1L }.callsign)
-        // Et le tampon d'hier ne part pas à l'ADIF : il n'a pas d'indicatif.
+        // The old placeholder does not go to ADIF: it has no callsign.
         assertEquals(1, LogStore(app()).toAdif().split("<EOR>").size - 1)
     }
 
-    // ------------------------------------------------ l'export ADIF
+    // ------------------------------------------------ ADIF export
 
-    /**
-     * Un relevé sans indicatif n'est pas un contact et ne sort pas du carnet.
-     * Quatre d'entre eux étaient partis dans l'export du 25 août.
-     */
+    /** An entry without a callsign is not a contact and is not exported. */
     @Test
     fun l_export_adif_laisse_les_entrees_sans_indicatif() {
         val journal = LogStore(app())
-        journal.add(LogEntry(1L, "RS-44", 44909, 30.0, 5.0))          // anonyme
+        journal.add(LogEntry(1L, "RS-44", 44909, 30.0, 5.0))          // anonymous
         journal.add(LogEntry(2L, "RS-44", 44909, 30.0, 5.0, callsign = "F1FPL"))
 
         val adif = journal.toAdif("F4IOZ")

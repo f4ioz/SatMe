@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.sstv
 
@@ -14,16 +14,15 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Le nom de fichier et le fichier annexe d'une image SSTV.
+ * File name and sidecar file of an SSTV image.
  *
- * Ce qui est vérifié ici, c'est qu'une image écrite pendant un passage se
- * relit correctement des mois plus tard, y compris si son fichier annexe a
- * disparu — un dossier copié à la main vers la galerie du téléphone ne garde
- * souvent que les PNG.
+ * An image saved during a pass must read back correctly months later, even
+ * when its sidecar is gone: a folder copied by hand to the phone gallery
+ * often keeps only the PNGs.
  */
 class SstvMetaTest {
 
-    // 14 novembre 2023, 22 h 13 min 20 s UTC.
+    // 14 November 2023, 22:13:20 UTC.
     private val t = 1_700_000_000_000L
 
     @Test
@@ -41,8 +40,8 @@ class SstvMetaTest {
 
     @Test
     fun `un nom de satellite exotique ne casse pas la relecture`() {
-        // « ISS (ZARYA) » traverse mal un système de fichiers, et un tiret bas
-        // dans le nom décalerait la lecture de la date.
+        // "ISS (ZARYA)" is hostile to file systems, and an underscore in the
+        // name would shift the date parsing.
         val n = SstvMeta.fileName("ISS (ZARYA)", t, "Martin 1", true)
         val s = SstvMeta.parseName(n)
         assertEquals("ISS--ZARYA", s.satName)

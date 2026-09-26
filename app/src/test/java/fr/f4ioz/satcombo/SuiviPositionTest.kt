@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo
 
@@ -15,23 +15,17 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Le suivi de position en mouvement.
- *
- * Le défaut d'origine : le suivi n'était lancé qu'à l'ouverture de la carte et
- * arrêté en la quittant. Sur la page des passages — celle qu'on regarde pendant
- * qu'on trafique — la position restait celle du démarrage de l'application, et
- * un opérateur monté sur une colline voyait des azimuts calculés pour l'endroit
- * d'où il était parti. Sans le moindre message pour le prévenir, ce qui est le
- * pire des cas : des chiffres faux qui ont l'air justes.
+ * Position tracking on the move. Updates once only ran with the map open, so
+ * the passes page kept the startup position: wrong azimuths that looked right.
  */
 class SuiviPositionTest {
 
-    private val jn18fs = 48.86 to 2.35      // région parisienne
+    private val jn18fs = 48.86 to 2.35      // Paris area
     private val t0 = 1_800_000_000_000L
 
     @Test
     fun la_distance_est_juste_sur_un_trajet_connu() {
-        // Paris → Lyon, environ 392 km à vol d'oiseau.
+        // Paris → Lyon, about 392 km great-circle.
         val d = SuiviPosition.distanceM(48.86, 2.35, 45.76, 4.84)
         assertEquals(392_000.0, d, 8_000.0)
     }
@@ -41,10 +35,7 @@ class SuiviPositionTest {
         assertEquals(0.0, SuiviPosition.distanceM(48.86, 2.35, 48.86, 2.35), 1e-6)
     }
 
-    /**
-     * Sans position antérieure, on calcule : c'est le cas d'une application qui
-     * vient de démarrer et qui reçoit son premier point.
-     */
+    /** No previous position: compute. The case of a freshly started app. */
     @Test
     fun le_premier_point_declenche_toujours_un_calcul() {
         assertTrue(SuiviPosition.doitRecalculer(
@@ -54,15 +45,13 @@ class SuiviPositionTest {
     }
 
     /**
-     * Le cœur du réglage. Un GPS qui frémit de quelques mètres ne doit pas
-     * relancer une prédiction SGP4 sur quarante-huit heures pour tous les
-     * satellites suivis : ce serait dépenser la batterie sans changer une
-     * seconde aux horaires affichés.
+     * The core of it: GPS jitter of a few metres must not rerun a 48-hour SGP4
+     * prediction for every tracked satellite — battery spent without changing
+     * a single displayed second.
      */
     @Test
     fun un_fremissement_du_gps_ne_relance_pas_la_prediction() {
-        // Une trentaine de mètres, deux heures plus tard : le délai est
-        // largement franchi, mais pas la distance.
+        // About 30 m, two hours later: time threshold passed, distance not.
         val proche = jn18fs.first + 0.0003
         assertFalse(SuiviPosition.doitRecalculer(
             jn18fs.first, jn18fs.second, proche, jn18fs.second,
@@ -71,7 +60,7 @@ class SuiviPositionTest {
 
     @Test
     fun un_vrai_deplacement_relance_la_prediction() {
-        // Une dizaine de kilomètres vers le nord.
+        // About 10 km north.
         val colline = jn18fs.first + 0.1
         assertTrue(SuiviPosition.doitRecalculer(
             jn18fs.first, jn18fs.second, colline, jn18fs.second,
@@ -79,13 +68,12 @@ class SuiviPositionTest {
     }
 
     /**
-     * Le seuil de distance ne suffit pas seul : sur autoroute on le franchit
-     * toutes les quatre-vingt-dix secondes, et l'on passerait la journée à
-     * prédire au lieu d'afficher.
+     * The distance threshold alone is not enough: on a motorway it is crossed
+     * every 90 seconds, and we would spend the day predicting.
      */
     @Test
     fun le_plancher_de_temps_tient_meme_a_grande_distance() {
-        val loin = jn18fs.first + 1.0     // une centaine de kilomètres
+        val loin = jn18fs.first + 1.0     // about 100 km
         assertFalse(SuiviPosition.doitRecalculer(
             jn18fs.first, jn18fs.second, loin, jn18fs.second,
             t0, t0 + SuiviPosition.DELAI_MIN_MS - 1))
@@ -96,7 +84,7 @@ class SuiviPositionTest {
 
     @Test
     fun le_seuil_tombe_ou_il_est_annonce() {
-        // Un degré de latitude fait environ 111 km : on vise le seuil de près.
+        // One degree of latitude ≈ 111 km: aim close to the threshold.
         val juste_sous = jn18fs.first + (SuiviPosition.SEUIL_M * 0.9) / 111_000.0
         val juste_au_dessus = jn18fs.first + (SuiviPosition.SEUIL_M * 1.1) / 111_000.0
         val plus_tard = t0 + SuiviPosition.DELAI_MIN_MS
@@ -107,11 +95,10 @@ class SuiviPositionTest {
     }
 
     /**
-     * Le zéro absolu mérite son essai. C'est ce que rend un récepteur qui n'a
-     * pas encore de position, et il tombe dans le golfe de Guinée — un endroit
-     * parfaitement valide, ce qui le rend d'autant plus traître : accepté, il
-     * déplacerait le QTH de plusieurs milliers de kilomètres et pointerait
-     * l'antenne au hasard.
+     * 0,0 deserves its own test. A receiver with no fix returns it, and it
+     * lies in the Gulf of Guinea — a perfectly valid place, which makes it
+     * treacherous: accepted, it would move the QTH thousands of kilometres and
+     * point the antenna at random.
      */
     @Test
     fun le_point_nul_du_recepteur_est_refuse() {
@@ -127,19 +114,12 @@ class SuiviPositionTest {
         assertTrue(SuiviPosition.vraisemblable(-33.9, 151.2))
     }
 
-    // ------------------------------------------------------------- le veilleur
+    // ------------------------------------------------------------- watchdog
 
     /**
-     * Le cœur du second correctif, et la raison pour laquelle le premier ne
-     * suffisait pas.
-     *
-     * L'ancienne garde se contentait de vérifier que la tâche **existait**.
-     * Or une demande de position adressée aux services Google avant qu'ils ne
-     * soient prêts laisse une tâche parfaitement vivante qui ne délivre jamais
-     * rien. La tâche existait, donc on ne la relançait pas, donc plus rien
-     * n'arrivait — jusqu'à ce qu'ouvrir la carte demande une autre cadence, ce
-     * qui annulait et relançait la tâche, et tout se remettait à marcher. D'où
-     * « il faut aller sur une carte pour la mise à jour ».
+     * A request sent to Google services before they are ready leaves a live
+     * task that never delivers. Checking that the task **exists** is not
+     * enough; only opening the map restarted it ("open a map to get an update").
      */
     @Test
     fun une_tache_vivante_mais_muette_est_relancee() {
@@ -151,9 +131,8 @@ class SuiviPositionTest {
     }
 
     /**
-     * Mais on laisse au fournisseur le temps du premier point : un démarrage à
-     * froid du GPS met parfois une minute, et relancer pendant ce temps-là
-     * empêcherait justement le point d'arriver.
+     * But give the provider time for a first fix: a GPS cold start can take a
+     * minute, and restarting meanwhile would prevent the fix.
      */
     @Test
     fun on_laisse_au_gps_le_temps_du_premier_point() {
@@ -179,7 +158,7 @@ class SuiviPositionTest {
             dernierPointMs = t0, demarreDepuisMs = t0, maintenantMs = t0 + 1))
     }
 
-    /** En mode manuel, on ne relance rien : l'opérateur a choisi son QTH. */
+    /** In manual mode nothing restarts: the operator chose the QTH. */
     @Test
     fun le_mode_manuel_n_est_jamais_relance() {
         assertFalse(SuiviPosition.doitRelancer(
@@ -189,9 +168,8 @@ class SuiviPositionTest {
     }
 
     /**
-     * Le silence toléré doit rester très supérieur à la cadence de fond, sinon
-     * le veilleur relancerait le suivi entre deux points normaux et
-     * l'empêcherait de jamais s'établir.
+     * Tolerated silence must be well above the background rate, or the watchdog
+     * would restart tracking between normal fixes and never let it settle.
      */
     @Test
     fun le_silence_tolere_laisse_passer_plusieurs_points_normaux() {
@@ -199,14 +177,14 @@ class SuiviPositionTest {
     }
 
     /**
-     * La cadence de fond est bien plus lente que celle de la carte, et c'est
-     * délibéré : le suivi tourne désormais en permanence, donc sa cadence est
-     * devenue une ligne du bilan de batterie et non un détail d'affichage.
+     * The background rate is much slower than the map's, on purpose: tracking
+     * now runs permanently, so its rate is a battery budget item, not a
+     * display detail.
      */
     @Test
     fun la_cadence_de_fond_menage_la_batterie() {
         assertTrue(SuiviPosition.CADENCE_FOND_MS >= 5 * SuiviPosition.CADENCE_CARTE_MS)
-        // Mais assez rapide pour voir un carré changer sans attendre.
+        // But fast enough to see a grid square change promptly.
         assertTrue(SuiviPosition.CADENCE_FOND_MS <= 60_000L)
     }
 }

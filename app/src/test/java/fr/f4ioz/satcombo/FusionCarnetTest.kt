@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo
 
@@ -13,7 +13,7 @@ import fr.f4ioz.satcombo.domain.FusionCarnet.Fiche
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
-/** Le banc de la fusion des carnets, entre deux téléphones. */
+/** Merging logs between two phones. */
 class FusionCarnetTest {
 
     private val t = 1_800_000_000_000L
@@ -37,7 +37,7 @@ class FusionCarnetTest {
         assertEquals(1, b.identiques)
     }
 
-    /** Les millisecondes ne font pas deux contacts : l'identité est à la seconde. */
+    /** Milliseconds do not make two contacts: identity is to the second. */
     @Test
     fun la_seconde_suffit_a_reconnaitre_un_contact() {
         val b = FusionCarnet.fusionne(listOf(f(t, "F1FPL")), listOf(f(t + 400, "F1FPL")))
@@ -64,7 +64,7 @@ class FusionCarnetTest {
         assertEquals(1, b.fondu.size)
     }
 
-    // ------------------------------------------------------- compléter
+    // ------------------------------------------------------- filling in
 
     @Test
     fun un_champ_vide_localement_se_remplit() {
@@ -83,13 +83,13 @@ class FusionCarnetTest {
         assertEquals("Erwin", b.fondu.first().champs["nom"])
     }
 
-    // ------------------------------------------------------- ne pas écraser
+    // ------------------------------------------------------- never overwrite
 
     /**
-     * La règle qui tient tout le reste : une fusion n'écrase jamais.
+     * The rule everything else rests on: a merge never overwrites.
      *
-     * Rien dans une entrée ne dit laquelle des deux valeurs a été corrigée en
-     * dernier. Départager au hasard, c'est perdre une correction sans le dire.
+     * Nothing in an entry says which value was corrected last. Picking one at
+     * random silently loses a correction.
      */
     @Test
     fun une_valeur_differente_ne_remplace_pas_la_locale() {
@@ -119,7 +119,7 @@ class FusionCarnetTest {
         assertEquals(1, b.desaccords)
     }
 
-    // ------------------------------------------------------- l'ensemble
+    // ------------------------------------------------------- the whole log
 
     @Test
     fun le_carnet_fondu_reste_du_plus_recent_au_plus_ancien() {

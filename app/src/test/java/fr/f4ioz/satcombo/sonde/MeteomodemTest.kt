@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.sonde
 
@@ -15,12 +15,11 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Le décodage des Meteomodem M10 et M20, celles de Météo-France.
+ * Decoding Meteomodem M10 and M20 (the Météo-France sondes).
  *
- * La M20 n'a pas de contrôle de redondance reproductible : c'est la
- * vraisemblance physique qui lui sert de garde-fou. La M10, elle, en a un — la
- * 18.7 l'a retrouvé — et il est exigé. Ces essais vérifient d'abord que le
- * garde-fou tient, ensuite seulement que les chiffres sont les bons.
+ * The M20 has no reproducible checksum, so physical plausibility is its
+ * guard. The M10 has one, and it is required. These tests check first that
+ * the guard holds, only then that the numbers are right.
  */
 class MeteomodemTest {
 
@@ -42,7 +41,7 @@ class MeteomodemTest {
 
     @Test
     fun `le bi-phase lit un bit par paire de demi-bits`() {
-        // Paires égales : des zéros. Paires différentes : des uns.
+        // Equal pairs: zeros. Different pairs: ones.
         val chips = byteArrayOf(1, 1, 0, 0, 1, 0, 0, 1)
         val out = ByteArray(8)
         assertEquals(4, Meteomodem.biphase(chips, 0, chips.size, out))
@@ -54,12 +53,10 @@ class MeteomodemTest {
 
     @Test
     fun `le bi-phase ne change rien quand tout le flux est inverse`() {
-        // C'est la propriété qui permet de ne chercher la polarité qu'au moment
-        // de la synchronisation : l'égalité de deux demi-bits survit à
-        // l'inversion, donc les bits décodés aussi. L'ancien décodage dit
-        // « Manchester » n'avait pas cette propriété, et choisissait sa phase
-        // sur un comptage de paires plates — c'est-à-dire sur des données
-        // parfaitement légitimes.
+        // This property lets polarity be resolved only at sync time: equality
+        // of two half-bits survives inversion, so decoded bits do too. The old
+        // "Manchester" decoding lacked it and picked its phase by counting flat
+        // pairs — i.e. from perfectly legitimate data.
         val chips = byteArrayOf(1, 1, 0, 0, 1, 0, 0, 1, 1, 0, 1, 1)
         val flip = ByteArray(chips.size) { ((chips[it].toInt() xor 1)).toByte() }
         val a = ByteArray(8)
@@ -89,7 +86,7 @@ class MeteomodemTest {
         assertEquals(77L, d.heardAtMs)
         assertTrue(d.trusted)
         assertTrue(d.descending)
-        assertEquals(323.13, d.headingDeg, 0.1)       // ouest-nord-ouest
+        assertEquals(323.13, d.headingDeg, 0.1)       // north-west
     }
 
     @Test
@@ -100,7 +97,7 @@ class MeteomodemTest {
 
     @Test
     fun `une M20 trop rapide est refusee`() {
-        // Deux cent cinquante mètres par seconde au sol : aucun courant-jet.
+        // 250 m/s ground speed: no jet stream does that.
         val f = SondeTestFrames.m20(LAT, LON, ALT, east = 250.0, north = 0.0, up = 0.0)
         assertNull(Meteomodem.parseM20(f))
     }
@@ -127,13 +124,10 @@ class MeteomodemTest {
         assertEquals(5.0, d.speedMps, 0.01)
         assertEquals(5.0, d.climbMps, 0.01)
         assertEquals(Geo.gpsToUnixMs(2300, 43_200_000L), d.timeUtcMs)
-        // Notre décodage de la M10 ne lit pas le nombre de satellites, et l'on
-        // en tirait autrefois la conclusion que le point n'était jamais sûr.
-        // C'était une faute : le chasseur perdait sur ce modèle le dernier point
-        // fiable, l'éclatement et le point de chute, c'est-à-dire tout ce qui
-        // sert sur le terrain. Ce qui garantit le point, ici, c'est l'horloge :
-        // une trame qui porte une semaine et une heure GPS valables vient d'un
-        // récepteur qui a fait le point.
+        // We do not read the M10 satellite count. Treating that as "never
+        // trusted" was wrong: the chaser lost the last trusted point, burst and
+        // landing — everything useful in the field. Here the clock is the
+        // guarantee: a valid GPS week and time means the receiver had a fix.
         assertEquals(0, d.sats)
         assertTrue("le nombre de satellites doit être signalé comme inconnu", d.satsUnknown)
         assertTrue("une M10 horodatée doit être un point sûr", d.trusted)
@@ -141,9 +135,8 @@ class MeteomodemTest {
 
     @Test
     fun `une M10 sans horloge GPS ne passe pas pour un point sur`() {
-        // Le revers de la médaille : si l'horloge ne dit rien, plus rien ne
-        // garantit que le récepteur de la sonde avait fait le point, et la
-        // trame ne doit pas servir de dernière position connue.
+        // The flip side: with no clock, nothing guarantees a fix, and the frame
+        // must not serve as last known position.
         val f = SondeTestFrames.m10(LAT, LON, ALT, east = 3.0, north = 4.0, up = 5.0,
             count = 778, week = 0, itowMs = 0L)
         val d = Meteomodem.parseM10(f, 401_000_000L, 55L)!!
@@ -152,10 +145,9 @@ class MeteomodemTest {
 
     @Test
     fun `les champs M10 ne se chevauchent pas`() {
-        // Les décalages de la 18.6 étaient faux d'un bout à l'autre : le
-        // compteur mordait sur la longitude, le numéro de série n'était qu'un
-        // morceau de coordonnée. Ceux-ci viennent d'un vrai enregistrement, et
-        // l'essai vérifie au moins qu'ils ne se marchent pas dessus.
+        // Earlier offsets were wrong throughout: the counter overlapped the
+        // longitude and the serial was a piece of a coordinate. These come from
+        // a real recording; this at least checks they do not overlap.
         val m = Meteomodem.M10
         assertTrue(m.VE + 2 <= m.VN)
         assertTrue(m.VN + 2 <= m.VU)
@@ -176,9 +168,8 @@ class MeteomodemTest {
 
     @Test
     fun `une M10 dont la somme de controle est fausse est refusee`() {
-        // Le vrai garde-fou de la M10, depuis la 18.7 : un octet changé au
-        // milieu de la trame et tout est jeté, même si les coordonnées restent
-        // parfaitement plausibles.
+        // The M10's real guard: one byte changed mid-frame and everything is
+        // dropped, even if coordinates stay perfectly plausible.
         val f = SondeTestFrames.m10(LAT, LON, ALT, 1.0, 1.0, 2.0)
         assertNotNull(Meteomodem.parseM10(f))
         f[0x30] = (f[0x30].toInt() xor 0x01).toByte()

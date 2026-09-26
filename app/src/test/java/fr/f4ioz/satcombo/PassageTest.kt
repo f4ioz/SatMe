@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo
 
@@ -15,17 +15,17 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
 
-/** Le banc du « déjà appelé sur ce passage ». */
+/** The "already worked on this pass" list. */
 class PassageTest {
 
     private val min = 60_000L
-    private val t = 1_800_000_000_000L      // un instant de référence
+    private val t = 1_800_000_000_000L      // reference instant
     private val passage = Fenetre(t - 10 * min, t + 20 * min)
 
     private fun inscrit(quand: Long, ind: String, el: Double = 30.0,
                         sat: String = "RS-44") = Inscrit(quand, sat, el, ind)
 
-    // ------------------------------------------------------- la fenêtre
+    // ------------------------------------------------------- the window
 
     @Test
     fun le_passage_en_cours_est_celui_qui_contient_l_instant() {
@@ -47,7 +47,7 @@ class PassageTest {
         assertNull(Passage.enCours(emptyList(), t))
     }
 
-    // ------------------------------------------------------ les indicatifs
+    // ------------------------------------------------------ the callsigns
 
     @Test
     fun un_contact_du_passage_compte() {
@@ -56,8 +56,8 @@ class PassageTest {
     }
 
     /**
-     * Le défaut du 25 août : un contact fait quarante minutes plus tôt,
-     * satellite sous l'horizon, était annoncé comme appelé sur ce passage.
+     * Bug of 25 August: a contact made forty minutes earlier, satellite below
+     * the horizon, was shown as worked on this pass.
      */
     @Test
     fun un_contact_d_avant_l_acquisition_n_est_pas_de_ce_passage() {
@@ -65,7 +65,7 @@ class PassageTest {
         assertEquals(emptyList<String>(), Passage.indicatifs(j, "RS-44", passage))
     }
 
-    /** Même dans la fenêtre, une entrée sous l'horizon est un essai de table. */
+    /** Even inside the window, an entry below the horizon is a bench test. */
     @Test
     fun un_contact_sous_l_horizon_ne_compte_pas() {
         val j = listOf(inscrit(t - 5 * min, "F1FPL", el = -12.0))
@@ -90,7 +90,7 @@ class PassageTest {
         assertEquals(emptyList<String>(), Passage.indicatifs(j, "RS-44", passage))
     }
 
-    /** Un passage de plusieurs heures ne se coupe pas au bout d'une heure. */
+    /** A pass lasting several hours is not cut off after one hour. */
     @Test
     fun un_passage_long_garde_ses_contacts_du_debut() {
         val longue = Fenetre(t - 180 * min, t + 60 * min)

@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.sonde
 
@@ -15,11 +15,10 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Le décodage de la Vaisala RS41.
+ * Vaisala RS41 decoding.
  *
- * La règle qui gouverne ces essais : une trame abîmée doit rendre null, jamais
- * une position approchée. Mieux vaut un écran vide qu'un chasseur envoyé à
- * trente kilomètres du ballon.
+ * The governing rule: a damaged frame must return null, never an approximate
+ * position. An empty screen beats a chaser sent thirty kilometres off.
  */
 class Rs41Test {
 
@@ -29,7 +28,7 @@ class Rs41Test {
 
     @Test
     fun `le CRC est bien le CCITT a registre plein`() {
-        // Valeur d'épreuve normalisée du CRC-16-CCITT-FALSE sur « 123456789 ».
+        // Standard CRC-16-CCITT-FALSE check value for "123456789".
         val d = "123456789".toByteArray(Charsets.US_ASCII)
         assertEquals(0x29B1, Rs41.crc16(d, 0, d.size))
         assertEquals(0xFFFF, Rs41.crc16(ByteArray(0), 0, 0))
@@ -104,7 +103,7 @@ class Rs41Test {
         assertEquals(405_700_000L, d.freqHz)
         assertEquals(1234L, d.heardAtMs)
         assertTrue(d.trusted)
-        // Le cap : vers l'est-sud-est, puisqu'on file douze à l'est et cinq au sud.
+        // Heading east-south-east: twelve east, five south.
         assertEquals(112.6, d.headingDeg, 0.5)
     }
 
@@ -126,8 +125,8 @@ class Rs41Test {
     @Test
     fun `un bloc de position abime est ignore plutot que cru`() {
         val f = SondeTestFrames.rs41(LAT, LON, ALT, 0.0, 0.0, 5.0)
-        // On abîme un octet de coordonnée : le CRC du bloc ne passe plus, le
-        // bloc est sauté, et sans position la trame n'apprend rien.
+        // Corrupt one coordinate byte: the block CRC fails, the block is
+        // skipped, and without a position the frame yields nothing.
         val blocks = Rs41.blocks(f)
         val pos = blocks.first { it.id == Rs41.BLK_GPS_POS }
         f[pos.at + 2] = (f[pos.at + 2].toInt() xor 0x40).toByte()
@@ -137,7 +136,7 @@ class Rs41Test {
 
     @Test
     fun `une position invraisemblable est refusee`() {
-        // Cent kilomètres d'altitude : ce n'est plus un ballon météo.
+        // 100 km altitude is no longer a weather balloon.
         val f = SondeTestFrames.rs41(LAT, LON, 100_000.0, 0.0, 0.0, 5.0)
         assertNull(Rs41.parse(f))
     }
@@ -145,7 +144,7 @@ class Rs41Test {
     @Test
     fun `la trame est retrouvee au milieu d un flux brouille`() {
         val frame = SondeTestFrames.rs41(LAT, LON, ALT, 8.0, 3.0, -6.0, sats = 7)
-        Rs41.descramble(frame)                       // telle qu'elle passe sur l'air
+        Rs41.descramble(frame)                       // as sent over the air
         val buf = ByteArray(64 + frame.size + 32)
         for (k in 0 until 64) buf[k] = 0x55
         System.arraycopy(frame, 0, buf, 64, frame.size)

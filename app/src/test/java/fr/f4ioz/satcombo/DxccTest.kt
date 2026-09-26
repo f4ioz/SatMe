@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo
 
@@ -13,7 +13,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
 
-/** Le pays d'un indicatif, d'après son préfixe. */
+/** The country of a callsign, from its prefix. */
 class DxccTest {
 
     @Test
@@ -28,7 +28,7 @@ class DxccTest {
         assertEquals("États-Unis", Dxcc.entite("W1AW")?.nom)
     }
 
-    /** Le préfixe le plus long gagne : EA8 est les Canaries, pas l'Espagne. */
+    /** Longest prefix wins: EA8 is the Canaries, not Spain. */
     @Test
     fun le_prefixe_le_plus_long_gagne() {
         assertEquals("Canaries", Dxcc.entite("EA8ABC")?.nom)
@@ -37,17 +37,14 @@ class DxccTest {
         assertEquals("Corse", Dxcc.entite("TK5EP")?.nom)
     }
 
-    /**
-     * EA5/F4IOZ est en Espagne : le préfixe pays prime sur l'indicatif
-     * d'origine — c'est tout son sens.
-     */
+    /** EA5/F4IOZ is in Spain: the country prefix overrides the home callsign. */
     @Test
     fun le_prefixe_pays_prime() {
         assertEquals("Espagne", Dxcc.entite("EA5/F4IOZ")?.nom)
         assertEquals("Suisse", Dxcc.entite("HB9/DL2MF")?.nom)
     }
 
-    /** /P et /M ne changent pas le pays. */
+    /** /P and /M do not change the country. */
     @Test
     fun le_suffixe_d_exploitation_ne_change_pas_le_pays() {
         assertEquals("France", Dxcc.entite("F4IOZ/P")?.nom)

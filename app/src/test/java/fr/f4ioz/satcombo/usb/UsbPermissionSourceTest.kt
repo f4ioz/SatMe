@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.usb
 
@@ -15,23 +15,17 @@ import org.junit.Test
 import java.io.File
 
 /**
- * Garde-fou sur la fabrication des PendingIntent de permission USB.
+ * Guard on how USB permission PendingIntents are built.
  *
- * L'histoire : en 18.5, le CAT arrêtait l'application dès qu'on basculait
- * l'interrupteur — mais seulement sur un téléphone en Android 14 ou plus
- * récent. `CivController` et `Ft817Cat` demandaient la permission USB avec un
- * PendingIntent MUTABLE portant une intention implicite, ce que la plateforme
- * refuse depuis l'API 34 en levant une IllegalArgumentException. Sur un
- * appareil resté en Android 13 le même code passait sans un mot, si bien que la
- * panne s'est vue pour la première fois sur un Pixel 8 alors qu'un Xiaomi
- * fonctionnait.
+ * Android 14 (API 34) throws IllegalArgumentException on a MUTABLE
+ * PendingIntent carrying an implicit intent. `CivController` and `Ft817Cat`
+ * did exactly that, so enabling CAT crashed the app on Android 14+ only,
+ * while Android 13 devices ran the same code silently.
  *
- * Aucun essai unitaire ne peut instancier un vrai PendingIntent hors appareil,
- * et le module n'utilise pas Robolectric. Ce qu'on peut vérifier en revanche,
- * c'est la règle d'écriture qui rend la faute impossible : un seul endroit dans
- * tout le code fabrique ces objets, et cet endroit rend l'intention explicite.
- * Un futur ajout qui rappellerait `PendingIntent.getBroadcast` ailleurs — le
- * geste exact qui a causé la panne — fait tomber cet essai.
+ * No unit test can build a real PendingIntent off-device (no Robolectric
+ * here). Instead we check the rule that makes the mistake impossible: a
+ * single place creates these objects, and it makes the intent explicit. Any
+ * new `PendingIntent.getBroadcast` call elsewhere fails this test.
  */
 class UsbPermissionSourceTest {
 
@@ -63,9 +57,9 @@ class UsbPermissionSourceTest {
         val helper = kotlinSources(root!!).firstOrNull { it.name == "UsbPermission.kt" }
         assertTrue("UsbPermission.kt introuvable", helper != null)
         val text = helper!!.readText()
-        // L'intention doit être limitée à notre paquet : c'est la seule façon de
-        // garder FLAG_MUTABLE — dont UsbManager a besoin pour y déposer sa
-        // réponse — sans tomber sous le refus de l'API 34.
+        // The intent must be limited to our package: the only way to keep
+        // FLAG_MUTABLE (UsbManager needs it to write its answer) without being
+        // rejected by API 34.
         assertTrue("l'intention de permission USB doit porter setPackage(...)",
             text.contains("setPackage(ctx.packageName)"))
         assertTrue("le PendingIntent doit rester MUTABLE au-delà de l'API 31",

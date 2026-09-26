@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.sonde
 
@@ -14,18 +14,18 @@ import org.junit.Test
 import kotlin.math.abs
 
 /**
- * La géométrie de la chasse.
+ * Sonde-hunting geometry.
  *
- * C'est ici qu'une erreur coûterait le plus cher : une faute de signe sur un
- * axe, et le chasseur part dans le département voisin. Chaque conversion est
- * donc vérifiée dans les deux sens, contre des valeurs calculées à part.
+ * This is where a mistake costs most: one sign error on an axis and the chaser
+ * drives off to the next county. Every conversion is checked both ways against
+ * independently computed values.
  */
 class GeoTest {
 
     @Test
     fun `ECEF et retour rendent la position de depart`() {
-        // Quatre points bien choisis : chez l'auteur, l'équateur, l'hémisphère
-        // sud, et le méridien de changement de date.
+        // Author's home, the equator, the southern hemisphere, and near the
+        // date line.
         val cases = listOf(
             Triple(48.44425, -4.41238, 95.0),
             Triple(0.0, 0.0, 0.0),
@@ -51,8 +51,8 @@ class GeoTest {
 
     @Test
     fun `la rotation des vitesses est celle du lieu`() {
-        // Au point zéro de l'ellipsoïde, la rotation est immédiate à vérifier :
-        // l'est du lieu est le Y géocentré, le nord est le Z, le haut est le X.
+        // At lat 0, lon 0 the rotation is trivial: local east is ECEF Y, north
+        // is Z, up is X.
         val v = Geo.ecefVelToEnu(0.0, 0.0, 1.0, 2.0, 3.0)
         assertEquals(2.0, v.east, 1e-12)
         assertEquals(3.0, v.north, 1e-12)
@@ -76,18 +76,17 @@ class GeoTest {
         assertEquals(0.0, Geo.Enu(0.0, 10.0, 0.0).headingDeg, 1e-9)
         assertEquals(180.0, Geo.Enu(0.0, -10.0, 0.0).headingDeg, 1e-9)
         assertEquals(270.0, Geo.Enu(-10.0, 0.0, 0.0).headingDeg, 1e-9)
-        // Sonde immobile : pas de cap inventé.
+        // Stationary sonde: no invented heading.
         assertEquals(0.0, Geo.Enu(0.0, 0.0, -5.0).headingDeg, 1e-12)
     }
 
     @Test
     fun `distance au sol`() {
-        // Un degré de longitude à l'équateur, c'est le rayon moyen fois pi sur
-        // cent quatre-vingts.
+        // One degree of longitude at the equator = mean radius × π / 180.
         val d = Geo.distanceKm(0.0, 0.0, 0.0, 1.0)
         assertEquals(Geo.EARTH_KM * Math.PI / 180.0, d, 1e-6)
         assertEquals(0.0, Geo.distanceKm(48.4, -4.4, 48.4, -4.4), 1e-12)
-        // Brest vers Paris, de l'ordre de cinq cents kilomètres.
+        // Brest to Paris, about 500 km.
         val bp = Geo.distanceKm(48.4, -4.5, 48.85, 2.35)
         assertTrue("Brest-Paris = $bp", bp > 495.0 && bp < 515.0)
     }
@@ -98,7 +97,7 @@ class GeoTest {
         assertEquals(90.0, Geo.bearingDeg(0.0, 0.0, 0.0, 1.0), 1e-9)
         assertEquals(180.0, Geo.bearingDeg(1.0, 0.0, 0.0, 0.0), 1e-9)
         assertEquals(270.0, Geo.bearingDeg(0.0, 0.0, 0.0, -1.0), 1e-9)
-        // Jamais de valeur négative à afficher.
+        // Never a negative value to display.
         for (lon in -180..180 step 7) {
             val b = Geo.bearingDeg(48.0, 0.0, 48.0, lon.toDouble())
             assertTrue("azimut $b", b >= 0.0 && b < 360.0)
@@ -115,14 +114,14 @@ class GeoTest {
         assertEquals("O", Geo.compass(270.0))
         assertEquals("NNO", Geo.compass(340.0))
         assertEquals("N", Geo.compass(355.0))
-        // Les valeurs hors bornes ne doivent pas sortir du tableau.
+        // Out-of-range values must not index outside the table.
         assertEquals("N", Geo.compass(720.0))
         assertEquals("O", Geo.compass(-90.0))
     }
 
     @Test
     fun `temps GPS vers temps Unix`() {
-        // Semaine 2300, midi dans la semaine : la date doit tomber en 2024.
+        // Week 2300, 12 h into the week: the date must fall in 2024.
         val ms = Geo.gpsToUnixMs(2300, 43_200_000L)
         assertEquals(Geo.GPS_EPOCH_MS + 2300L * 604_800_000L + 43_200_000L - 18_000L, ms)
         val f = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US)
@@ -132,10 +131,10 @@ class GeoTest {
 
     @Test
     fun `le rattrapage des mille vingt-quatre semaines`() {
-        // Un firmware ancien annonce la semaine modulo 1024 : sans rattrapage la
-        // trame serait datée de 1999, et le journal deviendrait illisible.
+        // Old firmware reports the week modulo 1024: without rollover handling
+        // the frame would be dated 1999.
         assertEquals(Geo.gpsToUnixMs(2148, 1000L), Geo.gpsToUnixMs(100, 1000L))
-        // Une semaine déjà complète n'est pas touchée.
+        // A full week number is left alone.
         assertEquals(Geo.GPS_EPOCH_MS + 2300L * 604_800_000L - 18_000L,
             Geo.gpsToUnixMs(2300, 0L))
     }

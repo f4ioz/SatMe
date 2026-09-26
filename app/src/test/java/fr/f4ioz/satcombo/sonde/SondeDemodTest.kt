@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.sonde
 
@@ -14,12 +14,12 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Le passage du son aux bits, puis aux octets.
+ * From audio to bits, then bytes.
  *
- * L'essai qui compte est le dernier : une trame RS41 fabriquée, modulée en
- * carré, repassée dans le démodulateur, et retrouvée intacte de l'autre côté.
- * Tant que celui-là passe, la chaîne complète — horloge, tranchage, alignement
- * d'octets, désembrouillage, CRC, coordonnées — tient debout.
+ * The key tests are the last ones: a built RS41 frame, square-modulated, run
+ * through the demodulator and recovered intact. While they pass, the whole
+ * chain — clock, slicing, byte alignment, descrambling, CRC, coordinates —
+ * holds.
  */
 class SondeDemodTest {
 
@@ -30,16 +30,15 @@ class SondeDemodTest {
         val d = SondeDemod(RATE, Rs41.BAUD)
         assertEquals(9.1875, d.samplesPerBit, 1e-12)
         assertTrue(!d.marginal)
-        // La M10 module en bi-phase à marque : le démodulateur compte les chips,
-        // 9616 par seconde, soit 4808 bits utiles. À 44 100 Hz cela fait 4,59
-        // échantillons par chip, ce qui est confortable. La 18.5 croyait devoir
-        // tourner à 19232 et n'en avait que 2,29 : c'est ce facteur deux, et
-        // non la carte son, qui empêchait toute M10 de sortir.
+        // The M10 uses biphase-mark: the demodulator counts chips, 9616/s,
+        // i.e. 4808 data bits/s. At 44100 Hz that is 4.59 samples per chip,
+        // comfortable. Assuming 19232 gives only 2.29 — that factor of two,
+        // not the sound card, once kept every M10 from decoding.
         val m10 = SondeDemod(RATE, Meteomodem.M10_CHIP_RATE)
         assertEquals(44_100.0 / 9_616.0, m10.samplesPerBit, 1e-9)
         assertTrue(m10.samplesPerBit > 4.5)
         assertTrue(!m10.marginal)
-        // Sur une carte son à huit kilohertz, en revanche, elle ne passe plus.
+        // On an 8 kHz sound card, however, it no longer works.
         assertTrue(SondeDemod(8_000.0, Meteomodem.M10_CHIP_RATE).marginal)
     }
 
@@ -59,7 +58,7 @@ class SondeDemodTest {
         assertEquals(2, d.packBytesMsb(bits, bits.size, 0))
         assertEquals(0x45, d.bytes[0].toInt() and 0xff)
         assertEquals(0x20, d.bytes[1].toInt() and 0xff)
-        // Un décalage d'un bit doit donner autre chose, et un octet de moins.
+        // A one-bit offset gives something else, and one byte fewer.
         assertEquals(1, d.packBytesMsb(bits, bits.size, 1))
         assertEquals(0x8A, d.bytes[0].toInt() and 0xff)
     }
@@ -72,18 +71,18 @@ class SondeDemodTest {
         val pcm = SondeTestFrames.modulate(pattern, RATE, Rs41.BAUD, leadingBits = 32)
         d.feedBits(pcm, pcm.size, null)
         val chips = d.chipsCopy()
-        // Le nombre de bits produits suit le nombre d'échantillons.
+        // Bits produced track the sample count.
         val attendu = (pcm.size / 9.1875).toInt()
         assertTrue("bits produits : ${chips.size} au lieu de $attendu",
             kotlin.math.abs(chips.size - attendu) <= 2)
-        // Et la suite envoyée se retrouve telle quelle dans ce qui sort.
+        // And the sent pattern appears unchanged in the output.
         assertTrue("motif introuvable dans ${chips.size} bits", contains(chips, pattern))
     }
 
     @Test
     fun `un desaccord ne fausse pas le tranchage`() {
-        // Cinq cents hertz à côté : le carré est décentré, et sans la moyenne
-        // glissante un bit sur deux serait faux.
+        // Mistuned: the square wave is off-centre, and without the running
+        // mean every other bit would be wrong.
         val d = SondeDemod(RATE, Rs41.BAUD, 256)
         val pattern = byteArrayOf(1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 1, 0, 0, 1, 0, 1)
         val pcm = SondeTestFrames.modulate(pattern, RATE, Rs41.BAUD, leadingBits = 64)
@@ -103,9 +102,9 @@ class SondeDemodTest {
         d.trimTo(64)
         val after = d.chipsCopy()
         assertEquals(64, after.size)
-        // Ce sont bien les derniers bits qui restent.
+        // The last bits are the ones kept.
         for (k in 0 until 64) assertEquals(before[before.size - 64 + k], after[k])
-        // Rogner plus large que le tampon ne fait rien.
+        // Trimming to more than the buffer holds does nothing.
         d.trimTo(1000)
         assertEquals(64, d.chipsCopy().size)
     }
@@ -126,15 +125,14 @@ class SondeDemodTest {
         val lat = 48.5; val lon = -4.0; val alt = 22_500.0
         val frame = SondeTestFrames.rs41(lat, lon, alt,
             east = 15.0, north = -8.0, up = -7.0, sats = 8, serial = "P0912345")
-        Rs41.descramble(frame)                       // telle qu'elle passe sur l'air
+        Rs41.descramble(frame)                       // as sent over the air
         val bits = SondeTestFrames.bitsOf(frame, lsbFirst = true)
         val pcm = SondeTestFrames.modulate(bits, RATE, Rs41.BAUD, leadingBits = 96)
 
         val d = SondeDemod(RATE, Rs41.BAUD, 4096)
         d.feedBits(pcm, pcm.size, null)
 
-        // L'alignement des octets est inconnu : c'est exactement ce que fait le
-        // décodage en direct, on essaie les huit décalages possibles.
+        // Byte alignment is unknown: as live decoding does, try all eight offsets.
         var hit: Rs41.Hit? = null
         for (off in 0 until 8) {
             val n = d.packBytes(off)
@@ -180,7 +178,7 @@ class SondeDemodTest {
         assertEquals(29.0, hit.frame.speedMps, 0.02)     // hypot(20, 21)
     }
 
-    /** La suite [needle] apparaît-elle dans [hay] ? */
+    /** Does [needle] occur in [hay]? */
     private fun contains(hay: ByteArray, needle: ByteArray): Boolean {
         if (needle.size > hay.size) return false
         outer@ for (i in 0..hay.size - needle.size) {

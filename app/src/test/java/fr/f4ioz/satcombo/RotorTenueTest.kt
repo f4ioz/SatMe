@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo
 
@@ -15,14 +15,12 @@ import org.junit.Assert.assertNull
 import org.junit.Test
 
 /**
- * La tenue de position : ne pas clignoter, sans pour autant mentir.
+ * Position hold: no flicker, but no lying either.
  *
- * Le 2 août, une seule réponse manquée sur le fil suffisait à effacer toute la
- * position du mât ; la boussole rebasculait sur le satellite pour revenir au
- * mât la seconde suivante. « ça suit bien… et puis ça ne suit plus le rotor,
- * on passe en normal. » Ces essais tiennent les deux bouts de la corde : la
- * position tenue doit survivre à un trou, et elle doit mourir avant d'être
- * fausse.
+ * A single missed reply once wiped the mast position; the compass flipped to
+ * the satellite and back to the mast a second later. These tests hold both
+ * ends: the held position must survive a gap, and must expire before it
+ * becomes wrong.
  */
 class RotorTenueTest {
 
@@ -31,27 +29,25 @@ class RotorTenueTest {
 
     @Test
     fun une_lecture_fraiche_passe_toujours_devant_la_precedente() {
-        // Le cas ordinaire : le contrôleur a répondu, on affiche sa réponse.
-        // Rien de tenu ne doit pouvoir la recouvrir, fût-elle d'une milliseconde.
+        // Normal case: the controller answered, show the answer. Nothing held
+        // may override it, even by a millisecond.
         val vu = RotorTenue.montrer(autre, pos, dateMs = 1_000L, maintenant = 1_001L)
         assertEquals(autre, vu)
     }
 
     @Test
     fun un_trou_court_ne_fait_pas_disparaitre_le_mat() {
-        // Une réponse sautée, trois cents millisecondes plus tard : c'est
-        // exactement le trou observé sur l'émulateur Arduino occupé à faire
-        // tourner deux moteurs. L'écran ne doit rien montrer de ce trou.
+        // One skipped reply, 300 ms later: exactly the gap seen on an Arduino
+        // emulator busy driving two motors. The screen must not show it.
         val vu = RotorTenue.montrer(null, pos, dateMs = 10_000L, maintenant = 10_300L)
         assertEquals(pos, vu)
     }
 
     @Test
     fun la_tenue_finit_et_le_satellite_reprend_la_main() {
-        // Passé le délai, la main revient au satellite — libellé compris. Un
-        // contrôleur débranché doit se voir : tenir indéfiniment la dernière
-        // position d'un mât muet serait un chiffre juste affiché longtemps
-        // après avoir cessé d'être vrai.
+        // After the delay the satellite takes over, label included. An
+        // unplugged controller must be visible: holding a silent mast's last
+        // position forever shows a number long after it stopped being true.
         val juste = RotorTenue.montrer(null, pos, 10_000L, 10_000L + RotorTenue.DEFAUT_MS)
         assertEquals("la tenue doit couvrir toute sa durée", pos, juste)
         val apres = RotorTenue.montrer(null, pos, 10_000L, 10_001L + RotorTenue.DEFAUT_MS)
@@ -60,24 +56,22 @@ class RotorTenueTest {
 
     @Test
     fun une_horloge_qui_recule_ne_prolonge_pas_la_tenue() {
-        // Changement d'heure, redémarrage, correction NTP : un âge négatif ne
-        // doit pas passer pour « très jeune » et figer la position à l'écran
-        // jusqu'à la fin des temps.
+        // DST change, reboot, NTP step: a negative age must not count as "very
+        // fresh" and freeze the position on screen forever.
         assertNull(RotorTenue.montrer(null, pos, dateMs = 50_000L, maintenant = 10_000L))
     }
 
     @Test
     fun sans_lecture_precedente_il_n_y_a_rien_a_tenir() {
-        // Au tout premier tour, ou juste après un débranchement qui a effacé
-        // la mémoire : on ne montre pas une position inventée.
+        // First cycle, or right after an unplug cleared memory: never show an
+        // invented position.
         assertNull(RotorTenue.montrer(null, null, dateMs = 0L, maintenant = 1_000L))
     }
 
     @Test
     fun une_tenue_nulle_rend_la_main_immediatement() {
-        // La durée est un paramètre : à zéro, le comportement d'avant 18.27.
-        // Un essai le fixe, pour que « désactiver la tenue » reste possible
-        // sans rouvrir la question.
+        // The duration is a parameter: zero gives the old no-hold behaviour.
+        // Pinned by a test so that disabling the hold stays possible.
         assertNull(RotorTenue.montrer(null, pos, 10_000L, 10_001L, tenueMs = 0L))
     }
 }

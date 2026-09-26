@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo
 
@@ -18,10 +18,10 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Le banc du rattachement au profil de station.
+ * Matching contacts to Wavelog station profiles.
  *
- * C'est la règle qui empêche la perte la plus coûteuse et la plus discrète du
- * dépôt : des sorties portables reclassées sous le carré de la maison.
+ * This rule prevents the costliest and quietest loss on upload: portable
+ * operations filed under the home grid square.
  */
 class ProfilsStationTest {
 
@@ -30,19 +30,18 @@ class ProfilsStationTest {
         Profil(id = "2", carre = "IN77", indicatif = "F4IOZ/P"),
         Profil(id = "9", carre = "JN16AJ", indicatif = "F4IOZ"))
 
-    /** Un emplacement à carré unique, écrit court pour la lisibilité. */
+    /** A single-square location, short for readability. */
     private fun lieu(carre: String, precision: Int = 4): Set<String> =
         ProfilsStation.emplacement(carre, "", precision)
 
-    // ------------------------------------------------- lignes de carrés
+    // ------------------------------------------------- grid lines
 
     /**
-     * Posé sur une ligne, l'opérateur est **dans les deux carrés à la fois**.
+     * On a grid line the operator is **in both squares at once**.
      *
-     * Wavelog le sait : quand le carré d'un profil contient une virgule, son
-     * import l'écrit dans MY_VUCC_GRIDS au lieu de MY_GRIDSQUARE. Un profil
-     * « JN16,JN06 » est donc la façon correcte de déclarer l'opération —
-     * encore faut-il n'y envoyer que les contacts qui la revendiquent.
+     * Wavelog handles this: a profile grid containing a comma is imported into
+     * MY_VUCC_GRIDS instead of MY_GRIDSQUARE. A "JN16,JN06" profile is the
+     * right way to declare it — provided only contacts claiming it go there.
      */
     @Test
     fun une_ligne_est_un_emplacement_a_part() {
@@ -64,7 +63,7 @@ class ProfilsStationTest {
             ProfilsStation.apparieEmplacements(listOf(cle), surLigne, "F4IOZ/P", 4)[cle])
     }
 
-    /** Sinon on donnerait la double revendication à qui n'y a pas droit. */
+    /** Otherwise the double claim would go to contacts not entitled to it. */
     @Test
     fun un_profil_sur_ligne_ne_couvre_pas_un_carre_seul() {
         val surLigne = listOf(Profil(id = "7", carre = "JN16,JN06", indicatif = "F4IOZ/P"))
@@ -72,7 +71,7 @@ class ProfilsStationTest {
         assertNull(ProfilsStation.apparieEmplacements(listOf(cle), surLigne, "F4IOZ/P", 4)[cle])
     }
 
-    /** Et l'inverse : la revendication serait perdue. */
+    /** And the reverse: the claim would be lost. */
     @Test
     fun un_profil_simple_ne_couvre_pas_une_ligne() {
         val cle = ProfilsStation.emplacement("JN16AJ", "JN16,JN06")
@@ -99,12 +98,12 @@ class ProfilsStationTest {
         val table = mapOf(ProfilsStation.emplacement("JN16AJ", "JN16,JN06") to "7")
         assertEquals("7",
             ProfilsStation.profilPourEmplacement("JN16AJ", "JN16,JN06", table, "1", 4))
-        // Le même carré sans revendication double retombe sur le défaut.
+        // The same square without a double claim falls back to the default.
         assertEquals("1",
             ProfilsStation.profilPourEmplacement("JN16AJ", "", table, "1", 4))
     }
 
-    // ------------------------------------------------- carré unique
+    // ------------------------------------------------- single square
 
     @Test
     fun un_carre_connu_trouve_son_profil() {
@@ -113,7 +112,7 @@ class ProfilsStationTest {
                 .mapKeys { ProfilsStation.nomEmplacement(it.key) })
     }
 
-    /** Six caractères d'un côté, quatre de l'autre : sans troncature, rien. */
+    /** Six characters on one side, four on the other: without truncation, no match. */
     @Test
     fun les_deux_cotes_sont_tronques_a_la_meme_maille() {
         assertEquals(mapOf("IN77" to "2"),
@@ -127,7 +126,7 @@ class ProfilsStationTest {
             listOf(lieu("JO21AB")), profils, "F4IOZ/P", 4)[lieu("JO21AB")])
     }
 
-    /** JN16AJ existe, mais sous F4IOZ et non F4IOZ/P : ce n'est pas le même. */
+    /** JN16AJ exists, but under F4IOZ, not F4IOZ/P: not the same location. */
     @Test
     fun l_indicatif_de_station_distingue_deux_emplacements() {
         assertNull(ProfilsStation.apparieEmplacements(
@@ -150,7 +149,7 @@ class ProfilsStationTest {
         assertEquals("2", ProfilsStation.profilPourEmplacement("IN77US", "", table, "7", 4))
     }
 
-    /** Sans table relevée, le profil unique des réglages fait foi. */
+    /** Without a fetched table, the single profile from settings applies. */
     @Test
     fun sans_table_on_retombe_sur_le_profil_par_defaut() {
         assertEquals("7", ProfilsStation.profilPourEmplacement("JN06XJ", "", emptyMap(), "7", 4))

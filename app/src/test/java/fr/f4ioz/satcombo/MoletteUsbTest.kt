@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo
 
@@ -14,7 +14,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 import org.junit.Assert.assertTrue
 
-/** Le banc de la molette USB détournée en commande de VFO. */
+/** A USB volume knob repurposed as a VFO dial. */
 class MoletteUsbTest {
 
     @Test
@@ -32,11 +32,8 @@ class MoletteUsbTest {
     }
 
     /**
-     * **La garde qui rend la fonction acceptable.**
-     *
-     * Sans elle, activer la molette confisquerait les boutons de volume du
-     * téléphone : l'opérateur ne pourrait plus régler son écoute, ce qui sur
-     * une application de trafic serait absurde.
+     * **The guard that makes the feature acceptable**: the phone's own volume
+     * buttons must still set the audio level.
      */
     @Test
     fun les_boutons_du_telephone_restent_au_telephone() {
@@ -46,7 +43,7 @@ class MoletteUsbTest {
             MoletteUsb.geste(MoletteUsb.VOLUME_MUTE, actif = true, externe = false, pasHz = 100L))
     }
 
-    /** Réglage fermé : qui n'a pas de molette ne doit rien perdre. */
+    /** Setting off: users without a knob lose nothing. */
     @Test
     fun sans_le_reglage_tout_passe_au_systeme() {
         assertEquals(Geste.Ignore,
@@ -66,7 +63,7 @@ class MoletteUsbTest {
         assertEquals(10L, MoletteUsb.pasSuivant(1_000L))
     }
 
-    /** Un réglage abîmé ne doit pas figer la molette sur un pas introuvable. */
+    /** A corrupted setting must not lock the knob on a non-existent step. */
     @Test
     fun un_pas_inconnu_revient_au_premier() {
         assertEquals(10L, MoletteUsb.pasSuivant(7L))
@@ -75,11 +72,10 @@ class MoletteUsbTest {
 }
 
 /**
- * Le banc du boîtier à trois touches.
+ * The three-key box.
  *
- * Il garde surtout deux gardes : une touche non apprise ne déclenche jamais
- * rien, et les touches qui permettent de sortir de l'application ne sont pas
- * apprenables.
+ * Two guards: an unlearned key never triggers anything, and keys that exit
+ * the app cannot be learned.
  */
 class MoletteBoitierTest {
 
@@ -106,8 +102,8 @@ class MoletteBoitierTest {
 
     @org.junit.Test
     fun une_touche_non_apprise_ne_declenche_rien() {
-        // Trois zéros ne doivent pas répondre au même code, sinon la cible
-        // changerait à chaque frappe du boîtier.
+        // Unlearned keys (code 0) must not match key code 0, or the target
+        // would change on every key press.
         val vierges = MoletteUsb.Touches()
         assertEquals(MoletteUsb.Geste.Ignore, MoletteUsb.geste(0, true, true, 100L, vierges))
         assertEquals(MoletteUsb.Geste.Bouge(100L), MoletteUsb.geste(24, true, true, 100L, vierges))
@@ -115,8 +111,8 @@ class MoletteBoitierTest {
 
     @org.junit.Test
     fun une_touche_apprise_sur_le_volume_prend_le_pas() {
-        // Le cas courant : un boîtier de macros n'a souvent que le volume à
-        // offrir. Si l'opérateur l'a appris, c'est qu'il veut la cible.
+        // Common case: a macro box often only offers volume keys. If the
+        // operator learned it, they want the target.
         val t = MoletteUsb.Touches(codeA = 24, cibleA = MoletteUsb.Cible.SHIFT_TX)
         assertEquals(MoletteUsb.Geste.ChoisitCible(MoletteUsb.Cible.SHIFT_TX),
             MoletteUsb.geste(24, true, true, 100L, t))
@@ -134,20 +130,20 @@ class MoletteBoitierTest {
 
     @org.junit.Test
     fun on_ne_peut_pas_confisquer_la_sortie() {
-        assertTrue(!MoletteUsb.apprenable(4))      // retour
-        assertTrue(!MoletteUsb.apprenable(3))      // accueil
-        assertTrue(!MoletteUsb.apprenable(187))    // applications récentes
+        assertTrue(!MoletteUsb.apprenable(4))      // back
+        assertTrue(!MoletteUsb.apprenable(3))      // home
+        assertTrue(!MoletteUsb.apprenable(187))    // recent apps
         assertTrue(!MoletteUsb.apprenable(0))
         assertTrue(MoletteUsb.apprenable(24))
         assertTrue(MoletteUsb.apprenable(131))
     }
 
-    // ---- le poussoir de la molette ----
+    // ---- the knob push button ----
 
     @Test
     fun le_poussoir_vaut_sourdine_par_defaut() {
-        // Le comportement d'avant est conservé sans cas particulier : c'est la
-        // même règle, avec une valeur par défaut.
+        // The old behaviour is kept with no special case: same rule, with a
+        // default value.
         val t = MoletteUsb.Touches()
         assertEquals(MoletteUsb.Geste.ChangePas,
             MoletteUsb.geste(MoletteUsb.VOLUME_MUTE, true, true, 100L, t))
@@ -158,7 +154,7 @@ class MoletteBoitierTest {
         val t = MoletteUsb.Touches(codeD = 66, actionD = MoletteUsb.Action.CIBLE)
         assertEquals(MoletteUsb.Geste.CibleSuivante,
             MoletteUsb.geste(66, true, true, 100L, t))
-        // Et « Sourdine » ne fait plus rien : une seule touche pour l'appui.
+        // And Mute no longer does anything: one key for the push action.
         assertEquals(MoletteUsb.Geste.Ignore,
             MoletteUsb.geste(MoletteUsb.VOLUME_MUTE, true, true, 100L, t))
     }
@@ -172,8 +168,8 @@ class MoletteBoitierTest {
 
     @Test
     fun une_touche_de_cible_lemporte_sur_le_poussoir() {
-        // Si la même touche était apprise deux fois, c'est la cible qui gagne :
-        // sans ordre défini, le boîtier ferait tantôt l'un tantôt l'autre.
+        // If one key is learned twice, the target wins: without a defined
+        // order the box would do one or the other at random.
         val t = MoletteUsb.Touches(codeA = 30, codeD = 30)
         assertEquals(MoletteUsb.Geste.ChoisitCible(MoletteUsb.Cible.SHIFT_RX),
             MoletteUsb.geste(30, true, true, 100L, t))
@@ -191,7 +187,7 @@ class MoletteBoitierTest {
         assertEquals("SHIFT_TX", MoletteUsb.cibleSuivante("SHIFT_RX"))
         assertEquals("VFO", MoletteUsb.cibleSuivante("SHIFT_TX"))
         assertEquals("SHIFT_RX", MoletteUsb.cibleSuivante("VFO"))
-        // Une valeur abîmée ne fige pas le défilement.
+        // A corrupted value does not stall the cycle.
         assertEquals("SHIFT_RX", MoletteUsb.cibleSuivante("n'importe quoi"))
     }
 }

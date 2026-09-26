@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.data
 
@@ -14,12 +14,11 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * L'export ADIF, vérifié sur machine.
+ * ADIF export.
  *
- * Un fichier ADIF mal formé n'est pas à moitié importé : il est refusé en bloc,
- * souvent sans dire pourquoi. Comme le carnet part vers LoTW ou Club Log, où
- * une erreur se corrige mal, autant que la génération soit tenue par des
- * essais plutôt que par la confiance.
+ * A malformed ADIF file is not half imported: it is rejected wholesale, often
+ * without a reason. The log goes to LoTW or Club Log, where mistakes are hard
+ * to fix, so generation is held by tests rather than trust.
  */
 class AdifTest {
 
@@ -40,9 +39,9 @@ class AdifTest {
 
     @Test
     fun `le mode satellite s-ecrit avec les lettres de bande`() {
-        // RS-44 : montée 145 MHz, descente 435 MHz — donc V/U.
+        // RS-44: uplink 145 MHz, downlink 435 MHz — V/U.
         assertEquals("V/U", Adif.satMode(145.965, 435.640))
-        // AO-7 mode B : montée 432, descente 145 — U/V.
+        // AO-7 mode B: uplink 432, downlink 145 — U/V.
         assertEquals("U/V", Adif.satMode(432.150, 145.950))
     }
 
@@ -64,8 +63,8 @@ class AdifTest {
 
     @Test
     fun `la longueur d-un champ est comptee en octets`() {
-        // « é » occupe deux octets en UTF-8. Les carnets lisent l'ADIF octet
-        // par octet : annoncer 5 pour « café » décalerait tout le fichier.
+        // "é" is two bytes in UTF-8. Loggers read ADIF byte by byte: declaring
+        // 4 for "café" would shift the rest of the file.
         assertEquals("<COMMENT:5>café", Adif.field("COMMENT", "café"))
         assertEquals("<CALL:5>F4IOZ", Adif.field("CALL", "F4IOZ"))
         assertEquals("", Adif.field("CALL", "   "))
@@ -97,9 +96,8 @@ class AdifTest {
         assertTrue(out.contains("<SUBMODE:3>USB"))
         assertTrue(out.contains("<RST_SENT:2>59"))
         assertTrue(out.contains("<RST_RCVD:2>57"))
-        // On monte sur 145 et on écoute sur 435 : c'est la montée qui va
-        // dans BAND, la descente dans BAND_RX. L'essai exigeait l'inverse et
-        // consacrait ainsi le défaut.
+        // Uplink 145, downlink 435: the uplink goes in BAND, the downlink in
+        // BAND_RX. This test once required the reverse and enshrined the bug.
         assertTrue(out.contains("<BAND:2>2m"))
         assertTrue(out.contains("<BAND_RX:4>70cm"))
         assertTrue(out.contains("<SAT_MODE:3>V/U"))
@@ -110,7 +108,7 @@ class AdifTest {
 
     @Test
     fun `l-horodatage est en UTC`() {
-        // 1 700 000 000 000 ms = 14 novembre 2023, 22 h 13 min 20 s UTC.
+        // 1 700 000 000 000 ms = 14 November 2023, 22:13:20 UTC.
         val e = LogEntry(1_700_000_000_000L, "ISS", 25544, 180.0, 30.0,
             callsign = "F6ABC")
         val out = Adif.export(listOf(e))
@@ -124,8 +122,8 @@ class AdifTest {
             callsign = "F6ABC", myGrids = "JN18,JN19")
         assertTrue(Adif.export(listOf(two)).contains("<MY_VUCC_GRIDS:9>JN18,JN19"))
 
-        // La norme n'admet que deux ou quatre carrés adjacents : trois ferait
-        // rejeter le contact, donc on le range dans le commentaire.
+        // The spec only allows two or four adjacent squares: three would get
+        // the contact rejected, so it goes in the comment.
         val three = LogEntry(1L, "ISS", 25544, 0.0, 0.0,
             callsign = "F6ABC", myGrids = "JN18,JN19,JN28")
         val out = Adif.export(listOf(three))
@@ -134,8 +132,8 @@ class AdifTest {
     }
 
     /**
-     * Le défaut du 25 août : quatre relevés anonymes — un appui sur la
-     * boussole, sans indicatif — étaient partis dans le fichier d'export.
+     * Bug: anonymous entries (a compass tap, no callsign) ended up in the
+     * export file.
      */
     @Test
     fun `une entree sans indicatif ne sort pas`() {
@@ -147,11 +145,11 @@ class AdifTest {
     }
 
     /**
-     * Le défaut relevé le 26 août : FREQ portait la descente.
+     * Bug: FREQ carried the downlink.
      *
-     * La norme définit FREQ et BAND du point de vue de la station qui
-     * journalise — donc son émission. Un contact V/U déclarait 435 MHz comme
-     * bande d'émission alors que le poste montait sur 145.
+     * The spec defines FREQ and BAND from the logging station's point of view,
+     * i.e. its transmit side. A V/U contact declared 435 MHz as TX band while
+     * the radio transmitted on 145.
      */
     @Test
     fun `FREQ porte la montee et FREQ_RX la descente`() {
@@ -172,7 +170,7 @@ class AdifTest {
         assertTrue(out.contains("<ANT_EL:4>37.2"))
     }
 
-    /** Sous l'horizon, la visée ne décrit rien : on n'invente pas un pointage. */
+    /** Below the horizon the pointing means nothing: do not invent one. */
     @Test
     fun `sous l horizon l azimut ne sort pas`() {
         val e = LogEntry(1L, "FO-29", 24278, 191.4, -12.0, callsign = "F6ABC")
@@ -182,8 +180,8 @@ class AdifTest {
     }
 
     /**
-     * QO-100 descend sur 10 489 MHz. La table des bandes s'arrêtait à 13 cm :
-     * tous les contacts géostationnaires partaient sans BAND_RX.
+     * QO-100 downlinks on 10489 MHz. The band table once stopped at 13 cm, so
+     * every geostationary contact went out without BAND_RX.
      */
     @Test
     fun `les bandes hautes de QO-100 sont connues`() {
@@ -195,11 +193,9 @@ class AdifTest {
     }
 
     /**
-     * Ce que l'annuaire apprend doit arriver jusqu'au carnet d'en face.
-     *
-     * Wavelog montre Nom, QTH et E-mail dans sa fiche de QSO ; sans ces
-     * champs il faut les y remplir un par un, alors que QRZ les avait déjà
-     * donnés au moment du dépôt.
+     * What the QRZ lookup learned must reach the remote log. Wavelog shows
+     * Name, QTH and E-mail on its QSO page; without these fields they must be
+     * filled in by hand although QRZ already provided them.
      */
     @Test
     fun `le nom la ville et le courriel sortent`() {

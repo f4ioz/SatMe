@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo
 
@@ -21,22 +21,10 @@ import kotlin.math.abs
 import kotlin.math.sin
 
 /**
- * Le banc des butées : six balayages qui font passer des milliers de passages
- * devant un mât imaginaire.
- *
- * Aucun de ces essais ne tourne à la compilation ordinaire — ils prennent du
- * temps et impriment des tableaux, ce qui n'a d'intérêt qu'au moment où l'on
- * règle quelque chose. Ils s'ouvrent par `-Dsatme.bench=1`, comme le banc des
- * sondes, et pour la même raison : un chiffre imprimé sur mille passages dit ce
- * qu'aucun essai à cinq points ne peut dire, à savoir si la stratégie tient sur
- * la variété réelle du ciel plutôt que sur le cas qu'on avait en tête en
- * l'écrivant.
- *
- * Ce qu'ils mesurent tient en une phrase : sur un mât qui ne fait pas le tour
- * complet, l'endroit où l'on démarre décide de tout le passage. Le plan est
- * choisi une fois, à l'acquisition, et ne se rattrape plus ensuite — d'où
- * l'insistance de ces balayages sur la couverture et sur le pire écart, qui
- * sont les deux seules choses que l'opérateur verra.
+ * Rotator stop bench: thousands of passes past an imaginary mast, to check the
+ * strategy holds across the real variety of the sky. Slow; enable with
+ * `-Dsatme.bench=1`. On a mast without full rotation the start decides the
+ * whole pass, hence the focus on coverage and worst error.
  */
 class RotorBenchTest {
 
@@ -44,14 +32,9 @@ class RotorBenchTest {
         (System.getProperty("satme.bench") ?: "").isNotEmpty()
 
     /**
-     * Un passage vu du sol, à la cadence d'une position par seconde.
-     *
-     * Le modèle est volontairement grossier — l'azimut défile régulièrement,
-     * l'élévation monte en cloche — parce que ce qui est mesuré ici n'est pas
-     * la mécanique céleste mais la stratégie de pointage. Ce qui compte est que
-     * le balayage d'azimut grandisse avec la culmination : un passage rasant
-     * traverse vingt degrés d'horizon, un passage au zénith en traverse cent
-     * quatre-vingts, et c'est exactement la différence qui fait souffrir un mât.
+     * A deliberately crude pass, one position per second. What matters is that
+     * azimuth sweep grows with max elevation (20° grazing, 180° overhead) —
+     * what strains a mast.
      */
     private fun passage(
         azDepartDeg: Double,
@@ -66,7 +49,7 @@ class RotorBenchTest {
         }
     }
 
-    /** Ce qu'un passage a coûté au mât, une fois le plan choisi et suivi. */
+    /** What a pass cost the mast, once the plan is chosen and followed. */
     private class Trace(
         val couverture: Double,
         val pireEcartDeg: Double,
@@ -76,13 +59,8 @@ class RotorBenchTest {
     )
 
     /**
-     * Le plan est choisi une fois, puis suivi seconde par seconde.
-     *
-     * Le mât part à l'azimut que le plan a désigné — borné, car ce départ peut
-     * être derrière la butée : c'est le cas d'Olivier, où le plan vise 560° sur
-     * un mât qui s'arrête à 540. La suite se déroule toute seule, le
-     * déroulement libre de [RotorMath.follow] restant naturellement sur la
-     * branche que le plan a ouverte.
+     * Plan once, then follow. The start azimuth is clamped (it may be past the
+     * stop); [RotorMath.follow] then stays on the branch the plan opened.
      */
     private fun suivre(
         track: List<Pair<Double, Double>>,
@@ -110,7 +88,7 @@ class RotorBenchTest {
         return Trace(p.coverage, pire, course, pas, retournements)
     }
 
-    /** La façon naïve : viser, sans plan, en partant de la butée. */
+    /** The naive way: aim with no plan, starting from the stop. */
     private fun sansPlan(
         track: List<Pair<Double, Double>>,
         limits: RotorMath.Limits
@@ -156,7 +134,7 @@ class RotorBenchTest {
                         " : couverture ${pourcent(somme / n)}" +
                         String.format(Locale.US, "  pire écart %5.1f°  sur %d passages", pire, n)
                 )
-                // Un mât d'un tour et demi ne devrait jamais rien manquer.
+                // A 540° mast should never miss anything.
                 if (course >= 540.0) {
                     assertEquals("un mât de $course° a manqué du ciel", 1.0, somme / n, 1e-9)
                 }
@@ -190,8 +168,8 @@ class RotorBenchTest {
                 avec / n, sans / n, n, refus
             )
         )
-        // Le plan ne doit jamais coûter plus cher que la visée au fil de l'eau :
-        // il choisit la même branche, simplement il la choisit à l'avance.
+        // The plan must never cost more than aiming on the fly: it picks the same
+        // branch, just in advance.
         assertTrue("le plan fait tourner le mât davantage : $avec contre $sans", avec <= sans + 1e-6)
     }
 
@@ -210,8 +188,8 @@ class RotorBenchTest {
             }
         }
         println(String.format(Locale.US, "plus grand pas d'une seconde : %.2f° sur %d passages", pireSaut, n))
-        // Un mât qui saute de trente degrés en une seconde, c'est un mât qui
-        // déroule : le recouvrement n'a pas été vu, et l'antenne part à l'envers.
+        // A 30° jump in one second means the mast is unwinding: the overlap was
+        // missed and the antenna swings the wrong way.
         assertTrue("un pas de $pireSaut° en une seconde", pireSaut <= 30.0)
     }
 
@@ -230,8 +208,8 @@ class RotorBenchTest {
             }
         }
         println(String.format(Locale.US, "%.2f retournement par passage (%d passages)", total.toDouble() / n, n))
-        // L'hystérésis existe pour cela : au voisinage du zénith, le choix
-        // bascule d'une seconde à l'autre si rien ne le retient.
+        // That is what hysteresis is for: near zenith the choice flips every
+        // second if nothing holds it.
         assertTrue("le mât passe son temps à se retourner", total.toDouble() / n < 2.0)
     }
 
@@ -252,8 +230,8 @@ class RotorBenchTest {
             val part = traces.count { it.pireEcartDeg <= seuil + 1e-9 }.toDouble() / traces.size
             println(String.format(Locale.US, "écart toléré %2.0f° : %s des passages", seuil, pourcent(part)))
         }
-        // Le réglage par défaut est quinze degrés ; s'il ne laissait passer
-        // presque rien, ce ne serait pas un défaut mais une alarme permanente.
+        // Default is 15°; if it let almost nothing through it would be a
+        // permanent alarm, not a default.
         val defaut = traces.count { it.pireEcartDeg <= 15.0 + 1e-9 }.toDouble() / traces.size
         assertTrue("le réglage par défaut alarme tout le temps : $defaut", defaut > 0.5)
     }

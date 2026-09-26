@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo
 
@@ -14,16 +14,9 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Le banc du démarrage.
- *
- * Il n'y en avait aucun, et c'est ce qui a laissé partir la 19.11 avec un
- * clavier sans mémoire : la construction du carnet était greffée sur une
- * fonction de file d'attente, la file a été supprimée, et personne — ni le
- * compilateur, ni les 762 essais — n'avait de raison de s'en apercevoir.
- *
- * On ne peut pas instancier le ViewModel ici (il lui faut un Application et
- * des SharedPreferences ; c'est le domaine de Robolectric, encore à faire).
- * Ce qu'on peut vérifier, ce sont les deux règles que le démarrage applique.
+ * The two rules startup applies (the ViewModel itself is covered by the
+ * Robolectric test). A release once shipped a keypad with no memory: log
+ * loading hung off a removed queue function, and nothing noticed.
  */
 class DemarrageTest {
 
@@ -32,12 +25,11 @@ class DemarrageTest {
         Indicatifs.Contact(indicatif = ind, locator = carre, quandMs = quand,
             satellite = sat, nom = nom)
 
-    // ------------------------------------------------ la mémoire du clavier
+    // ------------------------------------------------ keypad memory
 
     /**
-     * Les trois sources se rejoignent dans une seule mémoire : le carnet
-     * local, l'ADIF importé, la base interne. C'est cette réunion que le
-     * démarrage doit refaire, et qu'il ne refaisait plus.
+     * Three sources merge into one memory: local log, imported ADIF, built-in
+     * database. Startup must redo this merge; it once stopped doing so.
      */
     @Test
     fun les_trois_sources_se_reunissent() {
@@ -54,10 +46,9 @@ class DemarrageTest {
     }
 
     /**
-     * Le symptôme exact rapporté après la mise à jour : sans source, le
-     * clavier n'a rien à proposer. Une mémoire vide n'est pas une erreur en
-     * soi — c'est le cas d'une installation neuve — mais elle ne doit jamais
-     * être le résultat d'un carnet qui, lui, est plein.
+     * The reported symptom: with no source, the keypad suggests nothing. An
+     * empty memory is fine on a fresh install, but must never come from a
+     * log that is full.
      */
     @Test
     fun sans_source_la_memoire_est_vide() {
@@ -70,16 +61,11 @@ class DemarrageTest {
         assertTrue(Indicatifs.memoire(carnet).isNotEmpty())
     }
 
-    // ------------------------------------------------ la reprise du geste
+    // ------------------------------------------------ gesture migration
 
     /**
-     * La règle de reprise, telle que `SettingsStore` l'applique : on réécrit
-     * une fois, et une seule.
-     *
-     * La seconde partie compte autant que la première. Une reprise rejouée à
-     * chaque démarrage écraserait le choix que l'opérateur vient de faire, et
-     * le réglage deviendrait impossible à changer — un défaut bien pire que
-     * celui qu'on corrige.
+     * Migration as `SettingsStore` applies it: rewrite once, and only once —
+     * replayed on every start it would make the setting impossible to change.
      */
     private fun reprise(faites: Int, appuisActuels: Int): Pair<Int, Int> =
         if (faites < 1) 2 to 1 else appuisActuels to faites
@@ -91,16 +77,15 @@ class DemarrageTest {
 
     @Test
     fun la_reprise_ne_se_rejoue_pas() {
-        // L'opérateur est repassé à trois appuis après la reprise : son choix
-        // tient au démarrage suivant.
+        // The operator went back to three taps after migration: the choice
+        // survives the next start.
         assertEquals(3 to 1, reprise(faites = 1, appuisActuels = 3))
     }
 
     @Test
     fun le_nombre_d_appuis_reste_borne_a_deux_ou_trois() {
-        // Un appui simple ouvrirait l'écran chaque fois qu'on touche la
-        // boussole ; au-delà de trois le geste devient impraticable avec des
-        // gants.
+        // A single tap would open the screen whenever the compass is touched;
+        // more than three is impractical with gloves.
         listOf(0, 1, 2, 3, 4, 9).forEach {
             assertTrue(it.coerceIn(2, 3) in 2..3)
         }

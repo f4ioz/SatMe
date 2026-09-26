@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo
 
@@ -19,25 +19,24 @@ import kotlin.math.abs
 import kotlin.math.sin
 
 /**
- * Le banc de la démodulation.
+ * Demodulation.
  *
- * On fabrique le signal soi-même à partir de symboles connus, on le maltraite —
- * décalé dans le temps, décentré en fréquence, noyé dans le bruit — et l'on
- * regarde si les mêmes symboles ressortent. Pour cette partie-là le banc est
- * plus sévère que le terrain, parce qu'on connaît la vérité.
+ * Build the signal from known symbols, abuse it (time shift, frequency
+ * offset, noise) and check the same symbols come out. Here the bench is
+ * stricter than the field, because we know the truth.
  */
 class Ft8SignalTest {
 
     private val MODE = Ft8Signal.FT8
 
-    /** Une suite de 79 symboles licite : Costas aux bons endroits. */
+    /** A valid 79-symbol sequence with Costas arrays in place. */
     private fun symbolesExemple(graine: Long = 7): IntArray {
         val alea = java.util.Random(graine)
         val bits = BooleanArray(Ft8.BITS) { alea.nextBoolean() }
         return Ft8.bitsVersSymboles(bits)
     }
 
-    /** La chaîne complète : audio → spectrogramme → meilleur candidat → tons. */
+    /** Full chain: audio → spectrogram → best candidate → tones. */
     private fun demodule(
         audio: FloatArray, basseHz: Double = 900.0, hauteHz: Double = 1200.0
     ): Pair<Ft8Signal.Candidat, IntArray>? {
@@ -46,7 +45,7 @@ class Ft8SignalTest {
         return c to Ft8Signal.tons(spec, c)
     }
 
-    // ------------------------------------------------------------- fondations
+    // ------------------------------------------------------------- foundations
 
     @Test
     fun la_fft_place_un_ton_sur_sa_raie() {
@@ -69,9 +68,9 @@ class Ft8SignalTest {
         val vers = MODE.cadenceHz
         val entree = FloatArray(48000) { sin(2.0 * PI * 1000.0 * it / de).toFloat() }
         val sortie = Ft8Signal.reechantillonne(entree, de, vers)
-        // Une seconde à la nouvelle cadence, à l'arrondi près.
+        // One second at the new rate, give or take rounding.
         assertTrue(abs(vers.toInt() - sortie.size) <= 4)
-        // Le ton doit toujours tomber sur la raie des 1000 Hz.
+        // The tone must still land on the 1000 Hz bin.
         val n = 2048
         val re = FloatArray(n) { sortie[4096 + it] }
         val im = FloatArray(n)
@@ -88,11 +87,11 @@ class Ft8SignalTest {
     fun la_cadence_interne_donne_un_symbole_entier() {
         assertEquals(12800.0, MODE.cadenceHz, 1e-6)
         assertEquals(6.25, MODE.ecartHz, 1e-9)
-        // Une puissance de deux, sans quoi la transformée refuserait.
+        // A power of two, or the FFT would refuse.
         assertTrue(MODE.parSymbole and (MODE.parSymbole - 1) == 0)
     }
 
-    // ------------------------------------------------------ le cas nominal
+    // ------------------------------------------------------ nominal case
 
     @Test
     fun un_signal_propre_rend_exactement_ses_symboles() {
@@ -125,12 +124,12 @@ class Ft8SignalTest {
         assertEquals(bits.toList(), Ft8.symbolesVersBits(lus).toList())
     }
 
-    // ------------------------------------------ décalages en temps et fréquence
+    // ------------------------------------------ time and frequency offsets
 
     @Test
     fun un_decalage_de_temps_quelconque_passe() {
         val attendus = symbolesExemple(5)
-        // Un dixième de symbole : rien d'aligné sur la grille d'analyse.
+        // Offsets not aligned on the analysis grid.
         for (d in listOf(0.30, 0.416, 0.55, 0.704)) {
             val audio = Ft8Signal.synthetise(attendus, MODE, 1000.0, decalageS = d)
             val (_, lus) = demodule(audio) ?: error("rien trouvé à $d s")
@@ -141,7 +140,7 @@ class Ft8SignalTest {
     @Test
     fun un_signal_entre_deux_raies_passe_aussi() {
         val attendus = symbolesExemple(9)
-        // Pile entre deux raies : le pire cas pour une analyse par transformée.
+        // Exactly between two bins: worst case for FFT analysis.
         val audio = Ft8Signal.synthetise(attendus, MODE, 1003.125, decalageS = 0.5)
         val (_, lus) = demodule(audio) ?: error("rien trouvé")
         assertEquals(attendus.toList(), lus.toList())
@@ -149,8 +148,8 @@ class Ft8SignalTest {
 
     @Test
     fun le_decalage_doppler_dun_passage_ne_gene_pas() {
-        // Un satellite bas décale de plusieurs kilohertz ; ce qui compte est que
-        // la recherche balaie large, pas que la fréquence soit celle prévue.
+        // A LEO satellite shifts by several kHz; what matters is that the search
+        // sweeps wide, not that the frequency is where expected.
         val attendus = symbolesExemple(13)
         val audio = Ft8Signal.synthetise(attendus, MODE, 2400.0, decalageS = 0.5)
         val spec = Ft8Signal.spectrogramme(audio, MODE, 300.0, 2800.0)
@@ -160,7 +159,7 @@ class Ft8SignalTest {
         assertEquals(attendus.toList(), Ft8Signal.tons(spec, c).toList())
     }
 
-    // -------------------------------------------------------------- le bruit
+    // -------------------------------------------------------------- noise
 
     @Test
     fun un_signal_fort_se_decode_dans_le_bruit() {
@@ -173,8 +172,8 @@ class Ft8SignalTest {
 
     @Test
     fun la_synchronisation_tient_plus_bas_que_le_decodage() {
-        // Le repérage survit là où la lecture dure des symboles échoue déjà.
-        // C'est exactement la marge qu'un décodeur LDPC viendrait exploiter.
+        // Detection survives where hard symbol decisions already fail: exactly
+        // the margin LDPC decoding exploits.
         val attendus = symbolesExemple(23)
         val propre = Ft8Signal.synthetise(attendus, MODE, 1000.0, decalageS = 0.5)
         val bruite = Ft8Signal.avecBruit(propre, MODE, rapportDb = -3.0, graine = 5)
@@ -186,8 +185,8 @@ class Ft8SignalTest {
 
     @Test
     fun le_bruit_seul_ne_fabrique_pas_de_message() {
-        // Un décodeur qui invente est pire qu'un décodeur qui rate : on vérifie
-        // qu'aucun candidat tiré du bruit ne franchit le contrôle.
+        // A decoder that invents is worse than one that misses: no candidate
+        // drawn from noise may pass the CRC.
         val bruit = Ft8Signal.avecBruit(
             FloatArray((MODE.dureeS * MODE.cadenceHz).toInt() + 12800) { 0.01f },
             MODE, rapportDb = -30.0, graine = 99)
@@ -199,7 +198,7 @@ class Ft8SignalTest {
         }
     }
 
-    // ------------------------------------------------------ plusieurs stations
+    // ------------------------------------------------------ several stations
 
     @Test
     fun deux_stations_cote_a_cote_sont_vues_toutes_les_deux() {
@@ -222,11 +221,11 @@ class Ft8SignalTest {
         val audio = Ft8Signal.synthetise(a, MODE, 1000.0, decalageS = 0.5, amplitude = 0.9f)
         val spec = Ft8Signal.spectrogramme(audio, MODE, 900.0, 1200.0)
         val trouves = Ft8Signal.candidats(spec, maximum = 16)
-        // Sans le tri des voisins, les seize places seraient seize vues du même.
+        // Without neighbour suppression, all sixteen slots would be the same signal.
         assertTrue("trop de doublons : ${trouves.size}", trouves.size <= 2)
     }
 
-    // ------------------------------------------------------- les vraisemblances
+    // ------------------------------------------------------- likelihoods
 
     @Test
     fun les_vraisemblances_saccordent_avec_les_decisions_dures() {
@@ -238,7 +237,7 @@ class Ft8SignalTest {
         val dures = Ft8.symbolesVersBits(Ft8Signal.tons(spec, c))
         assertEquals(Ft8.BITS, douces.size)
         for (i in 0 until Ft8.BITS) {
-            val depuisDouce = douces[i] < 0f      // négatif = un
+            val depuisDouce = douces[i] < 0f      // negative = one
             assertEquals("bit $i", dures[i], depuisDouce)
         }
     }
@@ -263,17 +262,15 @@ class Ft8SignalTest {
         assertEquals(105, m.symboles)
         assertEquals(12000.0 / 576.0, m.ecartHz, 1e-6)
         assertEquals(0.048, m.dureeSymbole, 1e-6)
-        // 4 × 20,8333 = 83,3 Hz de largeur.
+        // 4 × 20.8333 = 83.3 Hz wide.
         assertEquals(83.33, 4 * m.ecartHz, 0.01)
         assertTrue(m.parSymbole and (m.parSymbole - 1) == 0)
-        // Quatre réseaux de quatre symboles : seize repères.
+        // Four arrays of four symbols: sixteen sync symbols.
         assertEquals(16, m.synchro.size)
-        // Les deux modes ne se lissent pas pareil : BT = 2 pour FT8, BT = 1
-        // pour FT4, dont l'impulsion est plus fortement adoucie.
+        // Different pulse shaping: BT = 2 for FT8, BT = 1 for FT4 (smoother).
         assertEquals(2.0, Ft8Signal.FT8.lissageBT, 1e-9)
         assertEquals(1.0, m.lissageBT, 1e-9)
-        // Du silence ne donne aucun candidat : pas de plancher de bruit, donc
-        // rien à comparer.
+        // Silence gives no candidate: no noise floor, nothing to compare against.
         val spec = Ft8Signal.spectrogramme(FloatArray(200_000), m, 900.0, 1200.0)
         assertTrue(Ft8Signal.candidats(spec).isEmpty())
     }

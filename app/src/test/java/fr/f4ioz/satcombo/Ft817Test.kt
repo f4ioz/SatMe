@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo
 
@@ -22,15 +22,9 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * La paire de FT-817, contre deux postes qui n'existent pas.
- *
- * Douze essais. Le dialecte Yaesu n'a ni adresse ni délimiteur : cinq octets à
- * l'aller, toujours, et une réponse dont la longueur dépend de la question. Il
- * n'y a donc rien à reconnaître, seulement à compter — et un octet manquant
- * décale tout ce qui suit sans que rien ne le signale. D'où l'essai qui fait
- * arriver la réponse octet par octet, et celui qui vérifie le bit d'état, mis
- * en **réception** et non en émission, ce qui est exactement l'inverse de ce
- * que l'on écrit spontanément.
+ * The FT-817 pair against simulated radios. The Yaesu dialect has no address
+ * or delimiter: replies can only be counted, and one missing byte silently
+ * shifts everything. Note the status bit is set on **receive**, not transmit.
  */
 class Ft817Test {
 
@@ -38,7 +32,7 @@ class Ft817Test {
 
     private fun rig(sim: Ft817Sim): Ft817Cat {
         val cat = Ft817Cat()
-        cat.pacingMs = 0L        // au banc, il n'y a personne à ménager
+        cat.pacingMs = 0L        // no real device to spare in tests
         cat.attach(sim)
         return cat
     }
@@ -51,12 +45,8 @@ class Ft817Test {
     }
 
     /**
-     * Un fil série qui ne rend qu'un octet à la fois.
-     *
-     * C'est le comportement réel d'un adaptateur USB à 4800 bauds : cinq octets
-     * mettent une dizaine de millisecondes à passer et n'arrivent presque jamais
-     * d'un seul coup. Une lecture unique en attrapait un ou deux, et le pilote
-     * concluait « pas de réponse ».
+     * One byte at a time, as a real 4800-baud USB adapter delivers; a single
+     * read once caught one or two bytes and concluded "no answer".
      */
     private class DribbleLink(private val inner: SerialLink) : SerialLink {
         override fun write(bytes: ByteArray, timeoutMs: Int): Boolean = inner.write(bytes, timeoutMs)
@@ -93,9 +83,8 @@ class Ft817Test {
 
     @Test
     fun les_unites_de_hertz_disparaissent_comme_le_veut_le_poste() = runBlocking {
-        // Le pas du FT-817 est de dix hertz. Ce n'est pas un défaut à corriger :
-        // c'est une limite à connaître, sans quoi la correction Doppler croit
-        // écrire une valeur que le poste n'affichera jamais.
+        // The FT-817 tunes in 10 Hz steps. Not a bug, a limit to know, or
+        // Doppler correction thinks it wrote a value the radio never shows.
         val sim = Ft817Sim()
         val cat = rig(sim)
         cat.setFrequency(145_800_007L)
@@ -106,8 +95,8 @@ class Ft817Test {
 
     @Test
     fun la_lecture_rend_la_frequence_et_le_mode_ensemble() = runBlocking {
-        // Une seule question, cinq octets de réponse : quatre de fréquence et un
-        // de mode. Les séparer coûterait un aller-retour de plus par seconde.
+        // One query, five reply bytes: four frequency, one mode. Splitting
+        // them would cost an extra round trip every second.
         val sim = Ft817Sim()
         val cat = rig(sim)
         cat.setFrequency(437_800_000L)
@@ -120,8 +109,8 @@ class Ft817Test {
 
     @Test
     fun le_bit_d_etat_est_mis_quand_le_poste_recoit() = runBlocking {
-        // Le manuel dit bien : bit 7 MIS en réception. L'écrire à l'envers
-        // revient à écrire sur le VFO d'un poste en pleine émission.
+        // Per the manual: bit 7 SET on receive. Getting it backwards means
+        // writing the VFO of a radio mid-transmission.
         val sim = Ft817Sim()
         sim.transmitting = false
         val cat = rig(sim)
@@ -138,9 +127,9 @@ class Ft817Test {
 
     @Test
     fun on_n_ecrit_pas_sur_un_poste_qui_emet() = runBlocking {
-        // Sécurité semi-duplex, celle de SatPC32 : pendant que l'opérateur
-        // parle, la montée ne bouge pas. La descente, elle, continue d'être
-        // corrigée — c'est tout l'intérêt d'avoir deux postes.
+        // Half-duplex safety, as in SatPC32: while the operator talks the
+        // uplink stays put. The downlink keeps being corrected — the whole
+        // point of two radios.
         val rxSim = Ft817Sim()
         val txSim = Ft817Sim()
         txSim.transmitting = true
@@ -149,7 +138,7 @@ class Ft817Test {
         p.setPair(145_805_000L, 437_805_000L)
         assertEquals("la montée a bougé pendant l'émission", avant, txSim.hz)
         assertEquals(145_805_000L, rxSim.hz)
-        // Et dès que le PTT retombe, la montée repart.
+        // As soon as PTT drops, the uplink resumes.
         txSim.transmitting = false
         p.setUplink(437_805_000L)
         assertEquals(437_805_000L, txSim.hz)
@@ -157,20 +146,19 @@ class Ft817Test {
 
     @Test
     fun le_ton_d_acces_part_en_gros_boutien() = runBlocking {
-        // Ici l'encodage était déjà juste, et c'est précisément ce qui rend la
-        // comparaison utile : le même ton, deux dialectes, une seule des deux
-        // implémentations était fausse.
+        // This encoding was already right, which makes the comparison useful:
+        // same tone, two dialects, only the CI-V one was wrong.
         val sim = Ft817Sim()
         val cat = rig(sim)
         assertTrue(cat.setCtcss(885))
         assertEquals(885, sim.toneTenthHz)
         assertEquals(0x4A, sim.toneMode)
-        // La trame 0x0B, relue octet par octet : 08 85, et non 88 50.
+        // Frame 0x0B, byte by byte: 08 85, not 88 50.
         val ton = sim.received.last()
         assertEquals(0x0B, ton[4].toInt() and 0xFF)
         assertEquals(0x08, ton[0].toInt() and 0xFF)
         assertEquals(0x85, ton[1].toInt() and 0xFF)
-        // Et zéro coupe le ton, sans rien envoyer de plus.
+        // Zero turns the tone off, nothing more sent.
         assertTrue(cat.setCtcss(0))
         assertEquals(0x8A, sim.toneMode)
         assertEquals(0, sim.refusals)
@@ -185,16 +173,15 @@ class Ft817Test {
         assertTrue(!cat.setCtcss(CatDecode.TONE_MAX_TENTH + 1))
         assertEquals("une trame est partie quand même", avant, sim.received.size)
         assertEquals(0, sim.refusals)
-        // La borne, elle, passe.
+        // The limit itself passes.
         assertTrue(cat.setCtcss(CatDecode.TONE_MAX_TENTH))
         assertEquals(CatDecode.TONE_MAX_TENTH, sim.toneTenthHz)
     }
 
     @Test
     fun la_reponse_qui_arrive_octet_par_octet_est_rassemblee() = runBlocking {
-        // Le défaut le plus discret des deux pilotes : une lecture unique. Sur
-        // un vrai câble, la réponse arrive en morceaux, et le pilote concluait
-        // « pas de réponse » une fois sur deux.
+        // The quietest bug in both drivers: a single read. On a real cable the
+        // reply arrives in pieces, and the driver said "no answer" half the time.
         val sim = Ft817Sim()
         val cat = Ft817Cat()
         cat.pacingMs = 0L
@@ -206,10 +193,10 @@ class Ft817Test {
 
     @Test
     fun le_dialecte_yaesu_se_relit_octet_par_octet() {
-        // Sans radio ni simulateur : les octets à la main, contre le manuel.
+        // No radio or simulator: hand-written bytes against the manual.
         assertArrayEqualsInt(intArrayOf(0x43, 0x78, 0x00, 0x00), CatDecode.yaesuFreq(437_800_000L))
         assertEquals(437_800_000L, CatDecode.yaesuFreqOf(b(0x43, 0x78, 0x00, 0x00)))
-        // Une réponse d'état, dans les deux sens.
+        // A status reply, both directions.
         assertTrue(CatDecode.describeYaesu(b(0x00), fromRig = true, lastOp = 0xF7).contains("émet"))
         assertTrue(CatDecode.describeYaesu(b(0x08, 0x00, 0x00, 0x00, 0x07), fromRig = false)
             .contains("FM"))
@@ -222,7 +209,7 @@ class Ft817Test {
         assertTrue(!p.isOpen)
         assertTrue(!p.bothOpen)
         assertNull(p.readDownlink())
-        p.setPair(145_800_000L, 437_800_000L)   // ne doit rien faire, et surtout pas planter
+        p.setPair(145_800_000L, 437_800_000L)   // must do nothing, and above all not crash
         p.setCtcss(670)
         val cat = Ft817Cat()
         cat.pacingMs = 0L
@@ -231,7 +218,7 @@ class Ft817Test {
         assertNull(cat.readFrequencyAndMode())
         assertNull(cat.isTransmitting())
         assertTrue(!cat.setFrequency(435_000_000L))
-        // Un poste refermé se comporte de même.
+        // A closed radio behaves the same.
         val sim = Ft817Sim()
         val ouvert = rig(sim)
         ouvert.close()

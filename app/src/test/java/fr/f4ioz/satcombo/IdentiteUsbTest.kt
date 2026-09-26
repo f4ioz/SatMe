@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo
 
@@ -16,14 +16,9 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Désigner un adaptateur série qui n'a pas de nom.
- *
- * Le défaut d'origine tenait en une ligne : `open` exigeait
- * `deviceSerial != null` et un `serialNumber` correspondant. Le commentaire
- * disait « the adapter whose **FTDI** serial matches » — l'hypothèse de départ
- * était là. Un FTDI porte toujours un numéro de série ; un PL2303TA n'en porte
- * aucun, conformément à sa fiche. Le câble était reconnu par le pilote et
- * restait inutilisable, faute qu'on puisse le désigner.
+ * Identifying a serial adapter with no serial number. `open` once required
+ * one, assuming FTDI; a PL2303TA has none, so the cable was recognised yet
+ * impossible to select.
  */
 class IdentiteUsbTest {
 
@@ -32,8 +27,8 @@ class IdentiteUsbTest {
 
     @Test
     fun un_adaptateur_avec_numero_de_serie_garde_son_numero() {
-        // Rien ne doit changer pour un FTDI déjà configuré : les réglages
-        // enregistrés avant ce correctif continuent de fonctionner.
+        // Nothing changes for an already configured FTDI: existing settings
+        // keep working.
         assertEquals("A50285BI",
             IdentiteUsb.cle("A50285BI", FTDI, 0x6001, "/dev/bus/usb/001/004"))
     }
@@ -63,7 +58,7 @@ class IdentiteUsbTest {
         assertFalse(a == b)
     }
 
-    // ------------------------------------------------------------ résolution
+    // ------------------------------------------------------------ resolution
 
     @Test
     fun la_cle_exacte_est_retrouvee_parmi_plusieurs() {
@@ -72,9 +67,9 @@ class IdentiteUsbTest {
     }
 
     /**
-     * La règle qui règle la majorité des cas sans rien demander. Refuser
-     * d'ouvrir le seul câble branché sous prétexte que sa position a changé
-     * depuis la veille serait exactement le défaut qu'on corrige.
+     * The rule that settles most cases without asking. Refusing the only
+     * plugged-in cable because its port changed since yesterday would be the
+     * very bug being fixed.
      */
     @Test
     fun un_seul_candidat_est_pris_sans_discuter() {
@@ -90,9 +85,9 @@ class IdentiteUsbTest {
     }
 
     /**
-     * Deux candidats et aucune correspondance : on ne devine pas. Ouvrir au
-     * hasard piloterait le mauvais poste — en duplex, cela veut dire émettre
-     * sur la fréquence d'écoute.
+     * Two candidates and no match: do not guess. Picking at random would drive
+     * the wrong radio — in duplex, that means transmitting on the receive
+     * frequency.
      */
     @Test
     fun deux_candidats_sans_correspondance_ne_se_devinent_pas() {
@@ -101,14 +96,14 @@ class IdentiteUsbTest {
         assertNull(IdentiteUsb.resout("a", emptyList()))
     }
 
-    // ------------------------------------------------------------ attribution
+    // ------------------------------------------------------------ assignment
 
     private fun sonde(cle: String, hz: Long?) = IdentiteUsb.Sonde(cle, hz)
 
     /**
-     * Le cœur de la réponse au duplex. Deux câbles identiques sans numéro de
-     * série sont indiscernables par leur étiquette — mais les deux postes ne
-     * sont pas sur la même bande, et leur propre réponse dit lequel est lequel.
+     * The core of the duplex answer. Two identical cables without serial
+     * numbers look the same, but the two radios are on different bands, and
+     * their own replies tell which is which.
      */
     @Test
     fun les_postes_se_designent_eux_memes_par_leur_bande() {
@@ -122,8 +117,8 @@ class IdentiteUsbTest {
 
     @Test
     fun l_attribution_tient_malgre_un_decalage_de_quelques_kilohertz() {
-        // Le poste n'est jamais exactement sur la fréquence calculée : Doppler,
-        // calibration, et l'opérateur qui a bougé son VFO.
+        // The radio is never exactly on the computed frequency: Doppler,
+        // calibration, and the operator moving the VFO.
         val a = IdentiteUsb.attribue(
             listOf(sonde("rx", 145_871_500L), sonde("tx", 435_103_000L)),
             descenteHz = 145_866_000L, monteeHz = 435_108_000L)
@@ -133,9 +128,9 @@ class IdentiteUsbTest {
     }
 
     /**
-     * Deux postes dans la même bande : on propose, on n'impose pas. L'opérateur
-     * tranchera en voyant les fréquences lues — un discriminant qu'il comprend,
-     * contrairement à « USB serial (1) » et « USB serial (2) ».
+     * Two radios on the same band: suggest, do not impose. The operator decides
+     * from the frequencies read — something they understand, unlike
+     * "USB serial (1)" and "USB serial (2)".
      */
     @Test
     fun deux_postes_dans_la_meme_bande_ne_donnent_pas_de_certitude() {
@@ -164,7 +159,7 @@ class IdentiteUsbTest {
         assertFalse(a.certaine)
     }
 
-    /** Sans transpondeur connu, il n'y a aucune bande à comparer. */
+    /** Without a known transponder there is no band to compare. */
     @Test
     fun sans_bandes_connues_on_propose_dans_l_ordre_sans_certitude() {
         val a = IdentiteUsb.attribue(
@@ -176,9 +171,8 @@ class IdentiteUsbTest {
     }
 
     /**
-     * Distinguer une vraie réponse d'octets de bruit interprétés comme une
-     * fréquence : le FT-817 couvre de 100 kHz à 470 MHz, au-delà ce n'est pas
-     * le poste qui a parlé.
+     * Tell a real reply from noise bytes read as a frequency: the FT-817
+     * covers 100 kHz to 470 MHz; beyond that it was not the radio talking.
      */
     @Test
     fun une_frequence_hors_des_bornes_du_poste_est_ecartee() {

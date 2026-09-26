@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.sdr
 
@@ -17,16 +17,15 @@ import kotlin.math.cos
 import kotlin.math.sin
 
 /**
- * La chaîne de démodulation, vérifiée sur de l'IQ fabriqué.
+ * The demodulation chain, checked on synthetic IQ.
  *
- * Le principe est celui qui a déjà attrapé deux vrais défauts dans le moteur
- * SSTV : on fabrique un signal dont on connaît la réponse exacte, on le passe
- * dans la vraie chaîne, et on vérifie le chiffre qui sort. Une clé RTL-SDR n'a
- * pas besoin d'être branchée pour que la décimation soit fausse.
+ * Same approach that caught real SSTV bugs: build a signal with a known
+ * answer, run it through the real chain, check the number that comes out.
+ * Decimation can be wrong without an RTL-SDR plugged in.
  */
 class DspTest {
 
-    // ------------------------------------------------------------- filtre
+    // ------------------------------------------------------------- filter
 
     @Test
     fun le_filtre_passe_bas_a_un_gain_unite_en_continu() {
@@ -70,7 +69,7 @@ class DspTest {
         return Math.hypot(re, im)
     }
 
-    // ---------------------------------------------------------- décimation
+    // ---------------------------------------------------------- decimation
 
     @Test
     fun le_decimateur_produit_le_bon_nombre_dechantillons() {
@@ -85,10 +84,9 @@ class DspTest {
 
     @Test
     fun le_decimateur_garde_la_continuite_entre_deux_blocs() {
-        // Une sinusoïde lente découpée en blocs doit donner exactement le même
-        // résultat qu'en un seul morceau. C'est le test qui attrape les erreurs
-        // d'indice de l'historique du filtre : sans lui, une discontinuité
-        // toutes les 30 ms passerait pour du souffle.
+        // A slow sine split into blocks must give exactly the same result as
+        // one piece. This catches filter-history index errors: otherwise a
+        // discontinuity every 30 ms would pass for hiss.
         val taps = Dsp.lowPass(31, 2000.0, 48000.0)
         val total = 1200
         val i = FloatArray(total) { cos(2.0 * PI * 300.0 * it / 48000.0).toFloat() }
@@ -123,19 +121,19 @@ class DspTest {
         }
     }
 
-    // ------------------------------------------------------- discriminateur
+    // ------------------------------------------------------- discriminator
 
     @Test
     fun le_discriminateur_mesure_la_deviation() {
-        // Une porteuse décalée d'un offset constant est, pour un discriminateur
-        // FM, une déviation constante : la sortie doit être une valeur fixe.
+        // To an FM discriminator, a carrier at a constant offset is a constant
+        // deviation: the output must be a fixed value.
         val fs = 44_100.0
         val dev = 5_000.0
         val disc = FmDiscriminator(fs, dev)
         val n = 4000
         val i = FloatArray(n)
         val q = FloatArray(n)
-        val offset = 2_500.0                    // moitié de la déviation max
+        val offset = 2_500.0                    // half the max deviation
         for (k in 0 until n) {
             val ph = 2.0 * PI * offset * k / fs
             i[k] = cos(ph).toFloat()
@@ -144,8 +142,8 @@ class DspTest {
         val out = ShortArray(n)
         val produced = disc.process(i, q, n, out)
         assertEquals(n, produced)
-        // Attendu : 0,5 * 26 000 = 13 000, en ignorant le tout premier
-        // échantillon qui n'a pas de précédent.
+        // Expected 0.5 × 26000 = 13000, skipping the first sample, which has
+        // no predecessor.
         for (k in 10 until n) {
             assertTrue("échantillon $k = ${out[k]}", abs(out[k] - 13_000) < 200)
         }
@@ -185,7 +183,7 @@ class DspTest {
         assertTrue(fort <= 1f)
     }
 
-    // ------------------------------------------------------------- chaîne
+    // ------------------------------------------------------------- chain
 
     @Test
     fun la_chaine_retombe_sur_la_frequence_audio_du_sstv() {
@@ -196,11 +194,10 @@ class DspTest {
 
     @Test
     fun la_chaine_demodule_une_tonalite_fm() {
-        // Signal de synthèse : porteuse au centre, modulée en fréquence par une
-        // sinusoïde de 1 000 Hz avec 3 kHz de déviation — exactement ce que
-        // produit une balise FM. On vérifie que la tonalité ressort à 1 000 Hz.
+        // Synthetic carrier at centre, FM-modulated by a 1000 Hz tone with 3 kHz
+        // deviation, like an FM beacon. The tone must come out at 1000 Hz.
         val chain = NfmChain()
-        chain.deemphasis = false          // la désaccentuation fausserait le niveau
+        chain.deemphasis = false          // de-emphasis would skew the level
         val rate = Dsp.RTL_RATE
         val durMs = 300
         val n = rate * durMs / 1000
@@ -219,7 +216,7 @@ class DspTest {
         val produced = chain.process(iq, iq.size, out)
         assertTrue("aucun audio produit", produced > Dsp.AUDIO_RATE / 10)
 
-        // On saute le régime transitoire des filtres.
+        // Skip filter transients.
         val skip = 400
         val used = produced - skip
         assertTrue(used > 4000)
@@ -230,15 +227,14 @@ class DspTest {
         assertTrue("1 kHz=$f1000 vs 2,5 kHz=$f2500", f1000 > 10 * f2500)
         assertTrue("1 kHz=$f1000 vs 300 Hz=$f300", f1000 > 10 * f300)
 
-        // Amplitude attendue : 3 000 / 5 000 de la pleine échelle de 26 000.
+        // Expected amplitude: 3000/5000 of the 26000 full scale.
         val crete = (0 until used).maxOf { abs(out[skip + it].toInt()) }
         assertTrue("crête $crete", crete in 12_000..20_000)
     }
 
     @Test
     fun la_chaine_supporte_un_decoupage_en_blocs() {
-        // Même signal, découpé comme le fait la lecture USB. Le contenu doit
-        // rester identique à un bloc unique.
+        // Same signal, split as USB reads do. Content must match a single block.
         val rate = Dsp.RTL_RATE
         val n = rate / 10
         val iq = ByteArray(n * 2)
@@ -258,7 +254,7 @@ class DspTest {
         val so = ShortArray(whole.maxAudio(iq.size))
         var pos = 0
         var out = 0
-        val block = 24 * 1024 * 2      // multiple de 2 octets et de la décimation
+        val block = 24 * 1024 * 2      // multiple of 2 bytes and of the decimation
         while (pos < iq.size) {
             val len = minOf(block, iq.size - pos)
             val chunk = ByteArray(len)
@@ -309,7 +305,7 @@ class DspTest {
         val rate = Dsp.RTL_RATE
         val n = 8192
         val iq = ByteArray(n * 2)
-        // Porteuse à un quart du débit au-dessus du centre.
+        // Carrier a quarter of the sample rate above centre.
         val offset = rate / 4.0
         for (k in 0 until n) {
             val ph = 2.0 * PI * offset * k / rate
@@ -319,7 +315,7 @@ class DspTest {
         probe.analyse(iq, iq.size, stride = 1)
         var best = 0
         for (b in 1 until bins) if (probe.bands[b] > probe.bands[best]) best = b
-        // +rate/4 correspond au trois-quarts de la largeur : bin 48 sur 64.
+        // +rate/4 is three quarters across: bin 48 of 64.
         assertTrue("maximum au bin $best", abs(best - 48) <= 2)
     }
 
@@ -368,9 +364,8 @@ class DspTest {
     }
 
     /**
-     * Un signal a deux raies : +1 500 Hz (dans la bande superieure) et
-     * -2 500 Hz (dans la bande inferieure). Un recepteur BLU correct n'en
-     * entend qu'une seule a la fois.
+     * A signal with two lines: +1500 Hz (upper sideband) and −2500 Hz (lower
+     * sideband). A correct SSB receiver hears only one at a time.
      */
     private fun deuxTons(mode: RxMode): ShortArray {
         val rate = Dsp.RTL_RATE.toDouble()
@@ -426,16 +421,16 @@ class DspTest {
         assertEquals(24_000.0, chain.effectiveBandwidthHz, 1.0)
     }
 
-    // -------------------------------------------------------- silencieux
+    // -------------------------------------------------------- squelch
 
     @Test
     fun le_silencieux_a_une_hysteresis() {
         val sq = Squelch(thresholdDb = -40f, hysteresisDb = 4f)
-        assertTrue(sq.update(-30f))          // signal franc : ouvert
-        assertTrue(sq.update(-43f))          // dans l'hysteresis : reste ouvert
-        assertTrue(!sq.update(-50f))         // sous le seuil : ferme
-        assertTrue(!sq.update(-42f))         // pas assez pour rouvrir
-        assertTrue(sq.update(-35f))          // au-dessus du seuil : rouvre
+        assertTrue(sq.update(-30f))          // strong signal: open
+        assertTrue(sq.update(-43f))          // within hysteresis: stays open
+        assertTrue(!sq.update(-50f))         // below threshold: closes
+        assertTrue(!sq.update(-42f))         // not enough to reopen
+        assertTrue(sq.update(-35f))          // above threshold: reopens
     }
 
     @Test
@@ -449,7 +444,7 @@ class DspTest {
             iq[2 * k + 1] = ((sin(ph) * 60.0) + 127.5).toInt().coerceIn(0, 255).toByte()
         }
         val chain = RxChain().apply { mode = RxMode.USB }
-        chain.squelch.thresholdDb = 40f      // seuil inatteignable : tout est coupe
+        chain.squelch.thresholdDb = 40f      // unreachable threshold: all muted
         val out = ShortArray(chain.maxAudio(iq.size))
         val produced = chain.process(iq, iq.size, out)
         var peak = 0
@@ -469,7 +464,7 @@ class DspTest {
         assertTrue("niveau apres CAG $peak", peak > 5_000 && peak < 20_000)
     }
 
-    // ---------------------------------------------------- spectre et FFT
+    // ---------------------------------------------------- spectrum and FFT
 
     @Test
     fun la_fft_trouve_une_raie_pure() {
@@ -497,7 +492,7 @@ class DspTest {
         val n = 4096
         val i = FloatArray(n)
         val q = FloatArray(n)
-        // Un huitieme du debit au-dessus de la frequence d'accord.
+        // One eighth of the sample rate above the tuned frequency.
         for (k in 0 until n) {
             val ph = 2.0 * PI * k / 8.0
             i[k] = cos(ph).toFloat()
@@ -506,7 +501,7 @@ class DspTest {
         assertTrue(an.push(i, q, n))
         var best = 0
         for (k in 1 until an.size) if (an.magDb[k] > an.magDb[best]) best = k
-        // Milieu (512) plus un huitieme de 1024.
+        // Centre (512) plus one eighth of 1024.
         assertTrue("maximum a la raie $best", abs(best - 640) <= 1)
         assertTrue("niveau ${an.magDb[best]}", an.magDb[best] > -6f)
     }
@@ -531,12 +526,9 @@ class DspTest {
         assertTrue("maximum a la raie $best", abs(best - 768) <= 1)
     }
 
-    // ------------------------------------------------- accord fin et spectre
+    // ------------------------------------------------- fine tuning and spectrum
 
-    /**
-     * Fabrique un bloc d'IQ brut (octets non signés) contenant une porteuse
-     * unique à [hz] de la fréquence d'accord.
-     */
+    /** Builds raw IQ (unsigned bytes) with a single carrier [hz] from the tuned frequency. */
     private fun porteuse(hz: Double, n: Int, amp: Double = 90.0): ByteArray {
         val rate = Dsp.RTL_RATE.toDouble()
         val iq = ByteArray(n * 2)
@@ -550,10 +542,9 @@ class DspTest {
 
     @Test
     fun le_spectre_ne_bouge_pas_avec_laccord_fin() {
-        // C'est le défaut qui rendait l'accord impossible sur le terrain : le
-        // spectre était prélevé APRÈS le mélangeur de décalage, si bien que
-        // toucher une raie la faisait fuir à deux fois l'écart touché. La raie
-        // doit rester à sa place quel que soit le décalage demandé.
+        // The bug that made tuning impossible in the field: the spectrum was
+        // taken AFTER the offset mixer, so tapping a line made it run away by
+        // twice the offset. The line must stay put whatever the offset.
         val n = 262_144
         val iq = porteuse(4_000.0, n)
         val hzParRaie = Dsp.RTL_RATE.toDouble() / Dsp.DECIM_1 / Dsp.SPECTRUM_SIZE
@@ -581,17 +572,16 @@ class DspTest {
 
     @Test
     fun laccord_fin_descend_la_station_visee_sur_zero() {
-        // Le signe comptait autant que la place du mélangeur : régler « +4 kHz »
-        // doit écouter quatre kilohertz AU-DESSUS de la fréquence affichée, pas
-        // en dessous. On pose une raie à 4 000 Hz et une autre, plus faible, à
-        // −4 000 Hz ; en BLU supérieure et avec l'accord à +4 000 Hz, seule la
-        // première doit s'entendre, et à 1 500 Hz.
+        // The sign mattered as much as the mixer position: "+4 kHz" must listen
+        // 4 kHz ABOVE the displayed frequency, not below. Lines at +5500 and
+        // −5500 Hz; in USB with the offset at +4000 Hz, only the first must be
+        // heard, at 1500 Hz.
         val rate = Dsp.RTL_RATE.toDouble()
         val n = 262_144
         val iq = ByteArray(n * 2)
         for (k in 0 until n) {
-            val p1 = 2.0 * PI * 5_500.0 * k / rate      // +4 000 + 1 500 Hz audio
-            val p2 = 2.0 * PI * -5_500.0 * k / rate     // l'image, du mauvais côté
+            val p1 = 2.0 * PI * 5_500.0 * k / rate      // +4000 + 1500 Hz audio
+            val p2 = 2.0 * PI * -5_500.0 * k / rate     // the image, on the wrong side
             val i = cos(p1) + cos(p2)
             val q = sin(p1) + sin(p2)
             iq[2 * k] = ((i * 45.0) + 127.5).toInt().coerceIn(0, 255).toByte()
@@ -610,8 +600,8 @@ class DspTest {
 
     @Test
     fun la_chaine_retrouve_la_raie_la_plus_forte() {
-        // Le bouton « Crête » repose là-dessus : l'écart annoncé doit être
-        // celui de la porteuse, en hertz, et pas une raie de bruit.
+        // The "Peak" button relies on this: the reported offset must be the
+        // carrier's, in hertz, not a noise line.
         val n = 262_144
         val iq = porteuse(-12_000.0, n)
         val chain = RxChain()
@@ -628,31 +618,28 @@ class DspTest {
         val chain = RxChain()
         val out = ShortArray(chain.maxAudio(iq.size))
         chain.process(iq, iq.size, out, feedSpectrum = true)
-        // Fenêtre volontairement à côté de la porteuse : le résultat doit y
-        // rester, sinon le bouton irait chercher une station hors écran.
+        // Window deliberately beside the carrier: the result must stay inside,
+        // or the button would chase a station off screen.
         val trouve = chain.peakOffsetHz(-6_000.0, 6_000.0)
         assertTrue("crête hors fenêtre : $trouve", trouve >= -6_100.0 && trouve <= 6_100.0)
     }
 
     /**
-     * Une modulation par déplacement de fréquence, deux bosses et rien au
-     * milieu : c'est ce que rend une radiosonde, et c'est ce sur quoi la
-     * recherche de crête se trompe.
+     * FSK: two humps and nothing in the middle — what a radiosonde looks like,
+     * and what fools peak search.
      */
     private fun fsk(centreHz: Double, deviationHz: Double, n: Int,
                     amp: Double = 90.0): ByteArray {
         val rate = Dsp.RTL_RATE.toDouble()
         val iq = ByteArray(n * 2)
         var ph = 0.0
-        // 4 800 bauds, le débit d'une RS41.
+        // 4800 baud, the RS41 rate.
         val perBit = (rate / 4_800.0).toInt().coerceAtLeast(1)
         var bit = 1
         for (k in 0 until n) {
-            // Autant de uns que de zéros : c'est la condition pour que les deux
-            // bosses portent la même puissance et que leur milieu soit la
-            // fréquence centrale. Une suite déséquilibrée déplace le centre de
-            // gravité, et c'est bien ce qu'il doit faire — ce n'est simplement
-            // plus la grandeur qu'on mesure ici.
+            // As many ones as zeros, so both humps carry equal power and their
+            // midpoint is the centre frequency. An unbalanced sequence shifts
+            // the centroid, correctly — but that is not what is measured here.
             if (k % perBit == 0) bit = (k / perBit) % 2
             val f = centreHz + if (bit == 1) deviationHz else -deviationHz
             ph += 2.0 * PI * f / rate
@@ -666,11 +653,9 @@ class DspTest {
 
     @Test
     fun le_recentrage_vise_le_milieu_des_deux_bosses() {
-        // L'accord automatique de la 18.5. Sur une FSK, la raie la plus forte
-        // est décalée d'une excursion entière : viser la crête, c'est
-        // s'accorder deux mille quatre cents hertz à côté, et une RS41 tombe
-        // pour bien moins que cela. Le centre de gravité, lui, tombe entre les
-        // deux bosses.
+        // Auto-tune. On FSK the strongest line is a full deviation off: aiming
+        // at the peak tunes 2400 Hz off, and an RS41 drops out for much less.
+        // The centroid lands between the two humps.
         val n = 262_144
         val iq = fsk(6_000.0, 2_400.0, n)
         val chain = RxChain()
@@ -682,10 +667,10 @@ class DspTest {
 
     @Test
     fun le_recentrage_est_absolu_et_non_cumulatif() {
-        // Le spectre est prélevé avant le mélangeur d'accord fin : le chiffre
-        // rendu ne dépend donc pas de l'accord déjà posé. C'est ce qui rend le
-        // recentrage continu inoffensif — sans cela il s'ajouterait à lui-même
-        // à chaque tour et la station partirait hors bande en trois secondes.
+        // The spectrum is taken before the fine-tuning mixer, so the result does
+        // not depend on the current offset. That makes continuous recentring
+        // safe — otherwise it would add to itself every cycle and the station
+        // would leave the band in three seconds.
         val n = 262_144
         val iq = fsk(6_000.0, 2_400.0, n)
         val chain = RxChain().apply { offsetHz = 6_000.0 }
@@ -698,17 +683,16 @@ class DspTest {
 
     @Test
     fun le_recentrage_ne_rend_rien_sans_signal() {
-        // Pas de trame de spectre, pas d'accord : zéro veut dire « je ne sais
-        // pas », et l'appelant doit garder l'accord en cours plutôt que sauter
-        // au milieu de la bande.
+        // No spectrum frame, no tuning: zero means "don't know", and the caller
+        // must keep the current tuning rather than jump to band centre.
         assertEquals(0.0, RxChain().centroidOffsetHz(), 1e-9)
     }
 
     @Test
     fun la_desaccentuation_rattrape_le_niveau_a_mille_hertz() {
-        // L'ancien facteur trois laissait 1 000 Hz onze décibels trop bas : la
-        // tonalité d'appel à 1 750 Hz devenait inaudible alors que le signal
-        // était parfaitement reçu. Le rattrapage est maintenant calculé.
+        // A fixed factor of three once left 1000 Hz 11 dB too low: the 1750 Hz
+        // tone burst became inaudible on a perfectly received signal. The
+        // make-up gain is now computed.
         val de = Deemphasis(750.0, 44_100.0)
         assertTrue("gain de rattrapage ${de.makeupGain}",
             de.makeupGain > 3.5f && de.makeupGain < 7f)
@@ -724,9 +708,9 @@ class DspTest {
 
     @Test
     fun la_saturation_de_lentree_est_signalee() {
-        // Un émetteur à trois mètres écrase l'étage d'entrée de la clé : le
-        // souffle disparaît, l'écran montre un signal fort, et il ne sort rien.
-        // L'application ne peut pas le corriger, mais elle doit le dire.
+        // A transmitter three metres away overloads the dongle front end: noise
+        // vanishes, the screen shows a strong signal, and nothing comes out.
+        // The app cannot fix it but must say so.
         val n = 65_536
         val propre = porteuse(1_000.0, n, amp = 60.0)
         val sature = porteuse(1_000.0, n, amp = 400.0)
@@ -742,12 +726,10 @@ class DspTest {
 
     @Test
     fun le_vumetre_audio_suit_la_modulation() {
-        // Une porteuse pure ne module rien : la barre BF doit rester au
-        // plancher alors que la barre HF est au maximum. C'est ce couple qui
-        // distingue « pas de modulation » de « pas de signal ».
-        // On mesure sur le SECOND bloc : le tout premier échantillon d'un
-        // discriminateur n'a pas de précédent et produit une pointe de pleine
-        // échelle, une fois pour toutes au démarrage.
+        // An unmodulated carrier: the AF bar must stay at the floor while the
+        // RF bar is at max. That pair tells "no modulation" from "no signal".
+        // Measure on the SECOND block: a discriminator's very first sample has
+        // no predecessor and gives a one-off full-scale spike.
         val n = 131_072
         val chain = RxChain().apply { mode = RxMode.NFM }
         chain.squelch.thresholdDb = -120f

@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo
 
@@ -12,23 +12,14 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 
 /**
- * Le banc du sondage d'émission.
- *
- * Le liseré ne s'allumait pas « selon le port ». Il ne dépendait pas du port :
- * il dépendait de deux choses que le port ne faisait que révéler.
- *
- * La première est une course sur le fil, corrigée dans les pilotes eux-mêmes
- * par un verrou de transaction — elle ne se teste pas ici.
- *
- * La seconde est cette règle-ci : **quel poste interroger, et que dire quand
- * on ne peut pas.** Le repli vers le poste de réception rendait « réception »
- * avec constance, puisqu'un poste de réception n'émet jamais. L'écran
- * affirmait donc quelque chose de faux au lieu d'avouer son ignorance, et
- * l'opérateur se fiait à l'absence de liseré.
+ * TX status polling: **which radio to ask, and what to say when we can't.**
+ * Falling back to the RX radio always answered "receive" (it never
+ * transmits), so the screen asserted something false instead of admitting
+ * ignorance. (The wire race also involved is fixed in the drivers.)
  */
 class SondeEmissionTest {
 
-    /** Ce que le sondage doit conclure, à partir de ce qu'il a sous la main. */
+    /** What polling should conclude from what it has. */
     private fun diagnostic(txOuvert: Boolean, reponse: Boolean?, erreur: Boolean = false): String =
         when {
             !txOuvert -> "poste d'émission non ouvert"
@@ -38,7 +29,7 @@ class SondeEmissionTest {
             else -> "réception"
         }
 
-    /** Le liseré s'allume-t-il ? Sans lecture sûre, jamais. */
+    /** Is the border lit? Never without a reliable reading. */
     private fun liseret(txOuvert: Boolean, reponse: Boolean?): Boolean =
         txOuvert && reponse == true
 
@@ -55,10 +46,8 @@ class SondeEmissionTest {
     }
 
     /**
-     * Le défaut : sans poste d'émission ouvert, on ne conclut rien.
-     *
-     * L'ancienne écriture interrogeait alors le poste de réception et
-     * rapportait sa réponse comme si c'était celle de l'émission.
+     * The bug: with no TX radio open, conclude nothing. The old code queried
+     * the RX radio and reported its answer as the TX one.
      */
     @Test
     fun sans_poste_d_emission_on_ne_conclut_pas() {
@@ -67,10 +56,7 @@ class SondeEmissionTest {
         assertEquals(false, liseret(txOuvert = false, reponse = null))
     }
 
-    /**
-     * Et surtout : même si l'autre poste, lui, répondait « réception », ce
-     * n'est pas une raison pour l'afficher.
-     */
+    /** Even if the other radio answers "receive", that is no reason to show it. */
     @Test
     fun la_reponse_de_l_autre_poste_ne_vaut_pas_reponse() {
         assertEquals("poste d'émission non ouvert",
@@ -83,12 +69,12 @@ class SondeEmissionTest {
         assertEquals(false, liseret(txOuvert = true, reponse = null))
     }
 
-    // ------------------------------------------- le garde à deux relevés
+    // ------------------------------------------- two-reading guard
 
     /**
-     * La règle d'allumage, telle que le sondage l'applique : deux relevés
-     * « émission » consécutifs pour allumer, un seul « réception » pour
-     * éteindre, et une lecture manquée ne change rien.
+     * The lighting rule as polling applies it: two consecutive "transmit"
+     * readings to light, one "receive" to clear, a missed reading changes
+     * nothing.
      */
     private fun suite(releves: List<Boolean?>): List<Boolean> {
         var n = 0
@@ -105,9 +91,9 @@ class SondeEmissionTest {
     }
 
     /**
-     * Le défaut du 26 août : en tournant la molette, un acquittement laissé
-     * sur le fil était lu comme un octet d'état — `00`, donc « émission ».
-     * Un relevé isolé ne doit plus rien allumer.
+     * Bug: while turning the dial, a leftover ack on the wire was read as a
+     * status byte — `00`, i.e. "transmit". A single reading must not light
+     * anything.
      */
     @Test
     fun un_releve_isole_n_allume_pas() {
@@ -127,7 +113,7 @@ class SondeEmissionTest {
             suite(listOf(true, true, false)))
     }
 
-    /** Une lecture manquée ne décide de rien : on garde l'état précédent. */
+    /** A missed reading decides nothing: keep the previous state. */
     @Test
     fun une_lecture_manquee_laisse_l_etat_en_place() {
         assertEquals(listOf(false, true, true),
@@ -135,11 +121,9 @@ class SondeEmissionTest {
     }
 
     /**
-     * Le défaut du 26 août au soir : le liseré ne s'allumait plus du tout.
-     *
-     * C'est pendant l'émission que le poste répond le moins bien. Une réponse
-     * sur deux se perdait, et comme le silence remettait le compteur à zéro,
-     * deux confirmations consécutives n'étaient jamais atteintes.
+     * Follow-up bug: the border never lit. The radio answers worst while
+     * transmitting; with silence resetting the counter, two consecutive
+     * confirmations were never reached.
      */
     @Test
     fun un_silence_entre_deux_confirmations_n_empeche_pas_l_allumage() {
@@ -149,8 +133,8 @@ class SondeEmissionTest {
 
     @Test
     fun un_silence_ne_vaut_pas_reception() {
-        // Allumé, puis un silence : on reste allumé, et la confirmation
-        // suivante n'a pas à tout recommencer.
+        // Lit, then silence: stay lit, and the next confirmation need not
+        // start over.
         assertEquals(listOf(false, true, true, true),
             suite(listOf(true, true, null, true)))
     }

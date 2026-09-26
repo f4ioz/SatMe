@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.data
 
@@ -14,13 +14,12 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Le trousseau des fonctions optionnelles.
+ * Optional features and their unlock keywords.
  *
- * Depuis que la SSTV, la clé SDR et les images NOAA sont ouvertes à tous, ces
- * tests couvrent deux choses : que ce qui est ouvert le reste quoi qu'on tape
- * dans le champ « Extensions » — un champ vide, un mot inconnu, une apostrophe
- * ne doivent jamais refermer une porte —, et que le mécanisme de clé lui-même
- * fonctionne toujours, puisque la prochaine fonction non éprouvée s'en servira.
+ * Two things are covered: what is open stays open whatever is typed in the
+ * "Extensions" field (empty field, unknown word, apostrophe must never close
+ * a door), and the key mechanism itself still works — NOAA images still use
+ * it, and the next untested feature will too.
  */
 class ExtensionsTest {
 
@@ -32,10 +31,9 @@ class ExtensionsTest {
 
     @Test
     fun lindicatif_de_lauteur_nouvre_plus_rien_de_particulier() {
-        // L'auteur voyait autrefois tout sans rien taper : il etait donc le
-        // seul a ne jamais voir l'application telle que les autres la voient,
-        // ce qui est la meilleure facon de laisser passer un defaut. Son
-        // indicatif est desormais un indicatif comme un autre.
+        // The author's callsign once unlocked everything, so he never saw the
+        // app as others did — the best way to miss a bug. It is now an
+        // ordinary callsign.
         assertEquals(Extensions.OPEN, Extensions.unlocked("F4IOZ", ""))
         assertEquals(Extensions.OPEN, Extensions.unlocked("f4ioz", ""))
         assertEquals(Extensions.OPEN, Extensions.unlocked("F4IOZ/P", ""))
@@ -43,40 +41,35 @@ class ExtensionsTest {
     }
 
     /**
-     * Depuis la publication, **tout est ouvert sans rien taper**.
+     * **Everything is open without typing anything**, except NOAA images.
      *
-     * Cet essai disait auparavant l'inverse : que les drapeaux bretons
-     * restaient fermés tant qu'on n'avait pas tapé le mot. Il a mordu au moment
-     * du changement de règle, et c'est exactement ce qu'on attend de lui — une
-     * politique d'ouverture ne doit pas pouvoir changer par distraction.
+     * This test used to assert the opposite for the Breton flags and failed
+     * when the rule changed — as intended: an access policy must not change by
+     * accident.
      *
-     * Ce qui protège désormais l'opérateur d'une fonction non éprouvée, ce n'est
-     * plus une clé mais le bandeau d'avertissement en tête de l'écran concerné :
-     * il se lit au moment de s'en servir, ce qu'une clé non documentée ne fait
-     * pas.
+     * Untested features are now guarded by a warning banner on their screen,
+     * read at the moment of use, rather than by an undocumented key.
      */
     @Test
     fun tout_est_ouvert_sans_rien_taper_sauf_la_base_adif() {
-        // Tout le trousseau est ouvert, à une exception : la base d'indicatifs
-        // embarquée est le carnet personnel d'Olivier — noms et carrés de ses
-        // correspondants — et l'application est publique. Elle ne se sert
-        // qu'à qui écrit « adif » dans le champ Extensions.
+        // Everything is open except NOAA images. (The test name still refers
+        // to the built-in ADIF callsign base, since removed.)
         val rien = Extensions.unlocked("F1ABC", "")
         (Extensions.ALL - Extensions.APT).forEach {
             assertTrue("« $it » doit être ouvert", it in rien)
         }
-        // Les images NOAA sont la seule fonction fermée, et « noaa » l'ouvre.
+        // NOAA images are the only closed feature, and "noaa" opens it.
         assertTrue(Extensions.APT !in rien)
         assertTrue(Extensions.APT in Extensions.unlocked("F1ABC", "noaa"))
         assertTrue(Extensions.APT in Extensions.unlocked("F1ABC", "NOAA"))
-        // L'ancien nom du format n'ouvre rien : le mot-clé est celui que
-        // cherche l'opérateur, pas celui de l'ingénieur.
+        // The format name does not unlock it: the keyword is the operator's
+        // word, not the engineer's.
         assertTrue(Extensions.APT !in Extensions.unlocked("F1ABC", "apt"))
     }
 
     /**
-     * Le mécanisme de clé reste en état de marche : la prochaine fonction non
-     * éprouvée pourra s'en servir sans avoir à le réécrire.
+     * The key mechanism stays working, so the next untested feature can use
+     * it without rewriting it.
      */
     @Test
     fun le_mecanisme_de_cle_fonctionne_toujours() {
@@ -95,8 +88,8 @@ class ExtensionsTest {
 
     @Test
     fun un_mot_cle_najoute_rien_a_ce_qui_est_deja_ouvert() {
-        // Le mot reste accepté — il ne doit simplement plus rien changer tant
-        // que la fonction qu'il désigne est ouverte à tous.
+        // The word is still accepted; it just changes nothing while its
+        // feature is open to all.
         assertEquals(Extensions.OPEN, Extensions.unlocked("F1ABC", "sstv"))
         assertEquals(Extensions.OPEN, Extensions.unlocked("F1ABC", "sdr"))
     }
@@ -122,8 +115,8 @@ class ExtensionsTest {
         assertTrue(Extensions.isUnlocked(Extensions.SDR, "F4IOZ", ""))
         assertTrue(Extensions.isUnlocked(Extensions.FLAG, "F1ABC", "drapeau"))
         assertTrue(Extensions.isUnlocked(Extensions.SSTV, "F1ABC", ""))
-        // Les images NOAA sont fermées depuis la 20.47 : le raccourci doit le dire
-        // aussi, et s'ouvrir avec le mot-clé.
+        // NOAA images are closed: the shortcut must say so too, and open with
+        // the keyword.
         assertFalse(Extensions.isUnlocked(Extensions.APT, "", ""))
         assertTrue(Extensions.isUnlocked(Extensions.APT, "F1ABC", "noaa"))
     }
@@ -139,10 +132,9 @@ class ExtensionsTest {
         assertTrue(Extensions.ALL.containsAll(Extensions.OPEN))
     }
     /**
-     * Choix assumé : un mot maître ouvre tout, images NOAA comprises.
-     *
-     * Cet essai visait la base ADIF, retirée à la 20.42. Il garde la même
-     * intention sur la seule fonction encore fermée.
+     * Deliberate choice: a master word opens everything, NOAA images included.
+     * (This test once targeted the ADIF base, since removed; same intent on the
+     * only feature still closed.)
      */
     @Test
     fun le_mot_maitre_ouvre_aussi_les_images_noaa() {

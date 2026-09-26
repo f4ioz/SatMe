@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.data
 
@@ -16,14 +16,12 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * L'agenda, vérifié là où il peut l'être : la sérialisation et le
- * rapprochement entre un créneau et un passage.
+ * The agenda: serialisation and matching a time window against a pass.
  *
- * Deux choses comptent. Qu'un agenda écrit par une version précédente se
- * relise sans rien perdre — l'opérateur a déjà noté des rendez-vous, et une
- * mise à jour qui les efface est une mise à jour qu'on n'installe qu'une fois.
- * Et qu'un créneau de plusieurs jours reconnaisse bien tous les passages
- * qu'il contient, ce qui est toute la raison d'être des créneaux.
+ * Two things matter. An agenda written by an older version must read back
+ * losslessly — an update that wipes appointments gets installed only once.
+ * And a multi-day window must match every pass it contains; that is the
+ * whole point of windows.
  */
 class AgendaStoreTest {
 
@@ -38,7 +36,7 @@ class AgendaStoreTest {
 
     @Test
     fun un_agenda_ecrit_par_lancienne_version_se_relit_entier() {
-        // Sept champs : exactement ce qu'écrivait la version d'avant.
+        // Seven fields: exactly what the previous version wrote.
         val old = "17\t1000000\t60\t1\tSSTV ISS\tISS (ZARYA)\tsur 145.800"
         val list = AgendaStore.decode(old)
         assertEquals(1, list.size)
@@ -48,7 +46,7 @@ class AgendaStoreTest {
         assertEquals("SSTV ISS", e.title)
         assertEquals("ISS (ZARYA)", e.satName)
         assertEquals("sur 145.800", e.note)
-        // Et sans créneau ni fréquence, faute de les avoir jamais eus.
+        // No window and no frequency, since it never had any.
         assertFalse(e.isWindow)
         assertEquals(0L, e.freqHz)
         assertEquals("", e.kind)
@@ -73,8 +71,8 @@ class AgendaStoreTest {
 
     @Test
     fun un_creneau_reconnait_tous_les_passages_quil_contient() {
-        // 1er août 06:30 → 2 août 19:30 : trente-sept heures, des dizaines de
-        // passages. Chacun doit être marqué, pas seulement le premier.
+        // 1 Aug 06:30 → 2 Aug 19:30: 37 hours, dozens of passes. Each must be
+        // marked, not only the first.
         val e = ev(start = 0L, end = 37 * H)
         assertTrue(e.covers(1 * H, 1 * H + 600_000L))
         assertTrue(e.covers(18 * H, 18 * H + 600_000L))
@@ -91,25 +89,25 @@ class AgendaStoreTest {
     @Test
     fun un_passage_a_cheval_sur_le_debut_ou_la_fin_compte_quand_meme() {
         val e = ev(start = 10 * H, end = 12 * H)
-        // Commence avant le créneau et finit dedans.
+        // Starts before the window, ends inside.
         assertTrue(e.covers(10 * H - 300_000L, 10 * H + 300_000L))
-        // Commence dedans et finit après.
+        // Starts inside, ends after.
         assertTrue(e.covers(12 * H - 300_000L, 12 * H + 300_000L))
     }
 
     @Test
     fun sans_creneau_le_rendez_vous_garde_lancien_comportement() {
-        // Un instant, avec le battement de cinq minutes de part et d'autre.
+        // A single instant, with five minutes of slack either side.
         val e = ev(start = 10 * H)
         assertTrue(e.covers(10 * H - 60_000L, 10 * H + 60_000L))
-        assertTrue(e.covers(10 * H + 120_000L, 10 * H + 600_000L))   // rdv 2 min avant l'AOS
+        assertTrue(e.covers(10 * H + 120_000L, 10 * H + 600_000L))   // appointment 2 min before AOS
         assertFalse(e.covers(10 * H + 20 * 60_000L, 10 * H + 30 * 60_000L))
         assertEquals(e.timeMs, e.endOrStartMs)
     }
 
     @Test
     fun une_fin_anterieure_au_debut_est_traitee_comme_une_absence_de_fin() {
-        // Saisie impossible dans l'écran, mais un fichier se répare à la main.
+        // The screen cannot produce this, but files get hand-edited.
         val e = ev(start = 10 * H, end = 5 * H)
         assertFalse(e.isWindow)
         assertEquals(10 * H, e.endOrStartMs)
@@ -118,9 +116,9 @@ class AgendaStoreTest {
     @Test
     fun le_recouvrement_avec_un_filtre_de_dates_se_lit_dans_les_deux_sens() {
         val e = ev(start = 10 * H, end = 12 * H)
-        assertTrue(e.overlaps(0L, 11 * H))        // le filtre finit dans le créneau
-        assertTrue(e.overlaps(11 * H, 40 * H))    // le filtre commence dedans
-        assertTrue(e.overlaps(0L, 40 * H))        // le filtre l'englobe
+        assertTrue(e.overlaps(0L, 11 * H))        // filter ends inside the window
+        assertTrue(e.overlaps(11 * H, 40 * H))    // filter starts inside
+        assertTrue(e.overlaps(0L, 40 * H))        // filter contains it
         assertFalse(e.overlaps(20 * H, 30 * H))
     }
 

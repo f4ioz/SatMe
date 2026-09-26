@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo
 
@@ -14,13 +14,9 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Le mode de SatNOGS ne vaut que pour ce qui n'est pas un transpondeur.
- *
- * La base ne porte qu'un mode par entrée. Pour une balise c'est exact et
- * utile ; pour un transpondeur linéaire il n'y a pas de mode, et le champ
- * contient ce que le premier contributeur a bien voulu mettre. Sur QO-100,
- * les segments réservés à la BLU sont étiquetés « FM » — le montrer serait
- * une instruction fausse, pas une imprécision.
+ * The SatNOGS mode only means something for non-transponders: a linear
+ * transponder has no mode, and the field holds whatever was typed (QO-100 SSB
+ * segments say "FM") — a wrong instruction if shown.
  */
 class TransmittersModeTest {
 
@@ -46,7 +42,7 @@ class TransmittersModeTest {
         assertFalse(t.modeSignifiant)
     }
 
-    /** Sans plage de descente, on ne sait pas : on garde ce qu'on a. */
+    /** Without a downlink range we cannot tell: keep what we have. */
     @Test
     fun sans_plage_le_mode_reste_affiche() {
         assertTrue(emetteur(null, null, "CW").modeSignifiant)

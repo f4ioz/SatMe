@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo
 
@@ -16,25 +16,15 @@ import org.junit.Test
 import java.io.File
 
 /**
- * Le banc des traductions.
- *
- * **Le défaut qu'il empêche.** `bouss_nord_ok` avait été écrite deux fois dans
- * la table française, avec deux sens différents : « Nord relevé — pointe
- * maintenant à l'ouest » pour le calage à deux visées, et « Calé sur le %s »
- * pour celui de la flèche. Dans une `mapOf`, la seconde gagne **en silence**.
- * Le premier calage affichait donc le message du second, gabarit `%s` non
- * rempli compris — au moment précis où l'opérateur attend qu'on lui dise quoi
- * faire ensuite.
- *
- * Rien ne l'aurait signalé : ni le compilateur, ni l'exécution. Seule une
- * relecture du fichier source peut voir deux clés identiques, et c'est ce que
- * fait cet essai.
+ * Translation tables. A key once defined twice with two meanings: `mapOf`
+ * keeps the second **silently**, so a calibration step showed the wrong
+ * message, raw `%s` included. Only reading the source spots duplicates.
  */
 class StringsTest {
 
     private fun source(): String {
-        // Le fichier est lu tel qu'il est écrit : la table compilée, elle, a
-        // déjà perdu les doublons — c'est tout le problème.
+        // Read the source as written: the compiled table has already lost the
+        // duplicates — that is the whole problem.
         val chemins = listOf(
             "src/main/java/fr/f4ioz/satcombo/i18n/Strings.kt",
             "app/src/main/java/fr/f4ioz/satcombo/i18n/Strings.kt"
@@ -49,8 +39,8 @@ class StringsTest {
     @Test
     fun aucune_cle_nest_ecrite_deux_fois() {
         val toutes = cle.findAll(source()).map { it.groupValues[1] }.toList()
-        // Deux tables dans le fichier, donc chaque clé doit apparaître au plus
-        // deux fois : une en français, une en anglais.
+        // Two tables in the file, so each key appears at most twice: once in
+        // French, once in English.
         val enTrop = toutes.groupingBy { it }.eachCount().filter { it.value > 2 }
         assertEquals("clés écrites plusieurs fois dans une même table : $enTrop",
             emptyMap<String, Int>(), enTrop)
@@ -60,9 +50,9 @@ class StringsTest {
     fun les_deux_tables_couvrent_les_memes_cles() {
         val manquantEn = FR.keys - EN.keys
         val manquantFr = EN.keys - FR.keys
-        // L'anglais retombe sur le français quand une clé manque, donc une
-        // absence ne casse rien — mais elle laisse du français à un anglophone,
-        // et personne ne s'en aperçoit sans ce compte.
+        // English falls back to French when a key is missing, so nothing
+        // breaks — but an English speaker sees French, and nobody notices
+        // without this check.
         assertTrue("clés absentes de l'anglais : ${manquantEn.sorted().take(20)}",
             manquantEn.isEmpty())
         assertTrue("clés absentes du français : ${manquantFr.sorted().take(20)}",
@@ -79,8 +69,8 @@ class StringsTest {
 
     @Test
     fun les_gabarits_sont_les_memes_dans_les_deux_langues() {
-        // Un « %s » présent d'un côté et absent de l'autre donne, selon le sens,
-        // un gabarit affiché brut ou un argument perdu.
+        // A "%s" on one side only gives either a raw placeholder on screen or
+        // a lost argument.
         val gabarit = Regex("""%[sdf]""")
         val ecarts = FR.keys.filter { k ->
             val a = gabarit.findAll(FR[k] ?: "").count()

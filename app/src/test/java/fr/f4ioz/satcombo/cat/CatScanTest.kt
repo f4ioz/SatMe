@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.cat
 
@@ -12,13 +12,11 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 
 /**
- * L'ordre d'essai des ports, vérifié au banc.
+ * Port probing order.
  *
- * Le cas qui a motivé tout ceci : un IC-9700 branché seul expose deux ports
- * série derrière une seule prise. L'opérateur en désigne un — il n'a aucun
- * moyen de savoir lequel porte le CI-V —, et si ce n'est pas le bon il faut que
- * le voisin soit essayé aussitôt après, avant d'aller déranger les autres
- * appareils.
+ * An IC-9700 alone exposes two serial ports behind one plug. The operator
+ * picks one with no way of knowing which carries CI-V; if it is the wrong
+ * one, its sibling must be tried next, before bothering other devices.
  */
 class CatScanTest {
 
@@ -34,15 +32,15 @@ class CatScanTest {
 
     @Test
     fun le_frere_du_meme_appareil_vient_avant_les_autres() {
-        // Choix = port A de l'Icom. Le port B est du même appareil : il passe
-        // avant la clé SDR, qui n'a aucune chance de répondre en CI-V.
+        // Choice = Icom port A. Port B is on the same device: it comes before
+        // the SDR dongle, which will never answer CI-V.
         assertEquals(listOf(0, 1, 2), CatScan.ordre(ic9700EtCleSdr(), 0))
     }
 
     @Test
     fun un_choix_hors_bornes_ne_fait_pas_tomber_la_connexion() {
-        // L'index est retenu d'une session à l'autre : il peut désigner un port
-        // qui n'existe plus parce qu'un câble a été débranché entre-temps.
+        // The index persists across sessions: it may point to a port that is
+        // gone because a cable was unplugged meanwhile.
         assertEquals(listOf(2, 0, 1), CatScan.ordre(ic9700EtCleSdr(), 9))
         assertEquals(listOf(0, 1, 2), CatScan.ordre(ic9700EtCleSdr(), -3))
     }
@@ -71,8 +69,8 @@ class CatScanTest {
 
     @Test
     fun sans_nom_de_produit_on_montre_au_moins_le_chemin() {
-        // Beaucoup de ponts série ne déclarent aucun nom de produit ; le chemin
-        // du noyau est laid, mais il permet au moins de distinguer deux prises.
+        // Many serial bridges declare no product name; the kernel path is ugly
+        // but at least tells two plugs apart.
         assertEquals("/dev/bus/usb/001/004",
             CatScan.etiquette(null, "/dev/bus/usb/001/004", 0, 1))
         assertEquals("/dev/bus/usb/001/004",

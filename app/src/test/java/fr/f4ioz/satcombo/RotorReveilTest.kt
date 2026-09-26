@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo
 
@@ -21,34 +21,20 @@ import org.junit.Test
 import java.io.File
 
 /**
- * Le réveil de la carte, et le filtre qui décide si l'application existe.
+ * "Cannot connect; SatMe is not in the open-with list." Two causes:
  *
- * « Impossible de connecter. Quand je branche, on me demande d'ouvrir avec une
- * application, SatMe n'est pas dedans. » Deux pannes derrière une seule phrase,
- * et aucune des deux ne se voit dans le code qui commande le mât.
- *
- * La première est un fichier de ressources : Android ne propose une application
- * au branchement que si l'appareil correspond à un filtre déclaré, et
- * l'identifiant du fabricant Arduino n'y était pas. Rien ne plante, rien ne
- * s'affiche — l'application est simplement absente de la liste, et avec elle
- * l'autorisation d'accès que le système accorde en même temps que le choix.
- *
- * La seconde est une convention de câblage vieille de quinze ans : sur une
- * carte Arduino, DTR est relié au RESET. Ouvrir le port redémarre la carte, et
- * la question posée dans la foulée tombe pendant l'amorçage. Le port est bon,
- * le câble est bon, la vitesse est bonne, et l'écran affiche pourtant « ouvert,
- * mais le contrôleur ne répond pas » — le message le plus trompeur de toute
- * l'application.
+ * - The USB filter lacked the Arduino vendor id: the app is silently absent
+ *   from the list, and so is the access grant that comes with it.
+ * - On Arduino boards DTR resets the board, so the first query lands during
+ *   boot and the screen wrongly says "open, but the controller does not
+ *   answer". Hence retries.
  */
 class RotorReveilTest {
 
     @After
     fun apres() { CatJournal.enabled = false; CatJournal.clear() }
 
-    /**
-     * Une carte qui redémarre : elle avale les premières questions, puis
-     * répond normalement.
-     */
+    /** A rebooting board: swallows the first queries, then answers normally. */
     private class ArduinoQuiRedemarre(private val avalees: Int) : SerialLink {
         var recues = 0; private set
         private val sortie = ArrayDeque<Byte>()
@@ -81,7 +67,7 @@ class RotorReveilTest {
     }
 
     // ------------------------------------------------------------------
-    // Les relances
+    // Retries
     // ------------------------------------------------------------------
 
     @Test
@@ -89,10 +75,10 @@ class RotorReveilTest {
         val carte = ArduinoQuiRedemarre(avalees = 2)
         val r = rotor(carte)
 
-        // Ce que faisait la 18.23 : une question, un silence, un verdict.
+        // The old behaviour: one query, silence, verdict.
         assertNull("la carte n'a pas encore fini de redémarrer", r.readPosition())
 
-        // Ce que fait la 18.24 : on redemande.
+        // Now: ask again.
         val pos = r.probePosition(tries = 3, gapMs = 0L)
         assertNotNull("le contrôleur répond dès qu'il est réveillé", pos)
         assertEquals(123.0, pos!!.azDeg, 1e-9)
@@ -109,8 +95,8 @@ class RotorReveilTest {
         }
         val r = rotor(muet)
         assertNull(r.probePosition(tries = 3, gapMs = 0L))
-        // Trois questions posées, pas une de plus : les relances ne doivent pas
-        // faire attendre l'opérateur une minute devant un câble débranché.
+        // Three queries, no more: retries must not keep the operator waiting a
+        // minute in front of an unplugged cable.
         assertEquals(3, muet.ecrit)
         assertEquals(3, r.lastTries)
         assertTrue("aucune trame reçue", r.lastReply.isBlank())
@@ -118,8 +104,8 @@ class RotorReveilTest {
 
     @Test
     fun la_derniere_trame_illisible_est_conservee_pour_l_ecran() = runBlocking {
-        // Un appareil qui parle, mais pas le même dialecte : ce n'est pas un
-        // silence, et cela ne se répare pas de la même façon.
+        // A device that talks a different dialect: not silence, and fixed
+        // differently.
         val bavard = object : SerialLink {
             private val sortie = ArrayDeque<Byte>()
             override fun write(bytes: ByteArray, timeoutMs: Int): Boolean {
@@ -148,7 +134,7 @@ class RotorReveilTest {
     }
 
     // ------------------------------------------------------------------
-    // Le filtre USB
+    // USB filter
     // ------------------------------------------------------------------
 
     private fun filtre(): File? = listOf(
@@ -158,8 +144,8 @@ class RotorReveilTest {
         .map { File(it) }.firstOrNull { it.isFile }
 
     /**
-     * Sans cette déclaration, SatMe n'apparaît pas dans « ouvrir avec » au
-     * branchement — et rien, nulle part, ne le signale.
+     * Without this declaration SatMe is missing from "open with" on plug-in —
+     * and nothing anywhere says so.
      */
     @Test
     fun le_filtre_usb_declare_les_cartes_a_microcontroleur() {
@@ -167,7 +153,7 @@ class RotorReveilTest {
         assertTrue("usb_device_filter.xml introuvable depuis " + File(".").absolutePath,
             f != null)
         val texte = f!!.readText()
-        // Les valeurs sont en décimal : la plateforme n'accepte pas 0x2341.
+        // Values are decimal: the platform does not accept 0x2341.
         val attendus = mapOf(
             "Arduino SA (0x2341)" to 9025,
             "Arduino ancien (0x2A03)" to 10755,
@@ -191,11 +177,11 @@ class RotorReveilTest {
         val f = filtre()
         assertTrue("usb_device_filter.xml introuvable", f != null)
         val texte = f!!.readText()
-        // La ligne d'origine ne retenait que le produit 0xEA60 de l'IC-9700 ;
-        // un CP2105 ou un CP2108 portait un autre numéro et disparaissait.
+        // The original entry only matched product 0xEA60 (IC-9700); a CP2105 or
+        // CP2108 has another product id and was left out.
         assertTrue("le CP210x doit être déclaré sans numéro de produit",
             Regex("""<usb-device\s+vendor-id="4292"\s*/>""").containsMatchIn(texte))
-        // Et le filet de la classe « communication », pour les montages maison.
+        // And the CDC class as a safety net for home-built controllers.
         assertTrue("la classe CDC doit être déclarée",
             Regex("""<usb-device\s+class="2"\s*/>""").containsMatchIn(texte))
     }

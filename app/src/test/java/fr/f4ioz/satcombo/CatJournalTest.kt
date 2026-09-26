@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo
 
@@ -21,13 +21,11 @@ import org.junit.Before
 import org.junit.Test
 
 /**
- * Le journal des trames : ce qui manquait le plus.
+ * The CAT frame log.
  *
- * Quand un passage se passait mal, il n'y avait rien à regarder. Le poste ne
- * répondait pas comme prévu, l'application affichait un message poli, et l'on
- * en était réduit à deviner. Cinq essais pour que le journal soit fiable — car
- * un journal qui perd des lignes, ou qui en garde trop, est pire qu'aucun
- * journal : il fait chercher au mauvais endroit.
+ * Without it, a bad pass left nothing to look at but a polite message. A log
+ * that drops lines, or keeps too many, is worse than none: it sends you
+ * looking in the wrong place.
  */
 class CatJournalTest {
 
@@ -39,9 +37,8 @@ class CatJournalTest {
 
     @Test
     fun le_journal_est_muet_tant_qu_on_ne_le_demande_pas() {
-        // Il tourne au cœur de la boucle Doppler, plusieurs fois par seconde,
-        // pendant tout un passage. Éteint, il ne doit rien coûter et rien
-        // retenir.
+        // It runs inside the Doppler loop several times a second for a whole
+        // pass. When off, it must cost nothing and keep nothing.
         CatJournal.log(true, byteArrayOf(0xFE.toByte(), 0xFE.toByte()), "quelque chose")
         assertTrue(CatJournal.entries.value.isEmpty())
         CatJournal.enabled = true
@@ -51,24 +48,22 @@ class CatJournalTest {
 
     @Test
     fun le_journal_ne_grossit_pas_indefiniment() {
-        // Deux cents lignes, pas une de plus : c'est de quoi couvrir largement
-        // le début d'un passage, et cela tient dans une mémoire de téléphone
-        // sans qu'on ait à y penser.
+        // Bounded depth: enough to cover the start of a pass, small enough to
+        // ignore on a phone.
         CatJournal.enabled = true
         repeat(CatJournal.DEPTH + 25) { i ->
             CatJournal.log(i % 2 == 0, byteArrayOf(i.toByte()), "trame $i")
         }
         val e = CatJournal.entries.value
         assertEquals(CatJournal.DEPTH, e.size)
-        // Et ce sont les plus anciennes qui partent, pas les plus récentes.
+        // The oldest lines go, not the newest.
         assertEquals("trame 25", e.first().text)
         assertEquals("trame ${CatJournal.DEPTH + 24}", e.last().text)
     }
 
     @Test
     fun l_ordre_d_arrivee_est_conserve_et_l_horodatage_avec() {
-        // Un journal dans le désordre ne sert à rien : ce que l'on cherche,
-        // c'est ce qui a précédé le refus.
+        // An unordered log is useless: what you want is what preceded the refusal.
         CatJournal.enabled = true
         CatJournal.log(true, byteArrayOf(0x01), "question", tMs = 1_000L)
         CatJournal.log(false, byteArrayOf(0x02), "réponse", tMs = 1_040L)
@@ -87,17 +82,16 @@ class CatJournalTest {
         assertEquals(1, CatJournal.entries.value.size)
         CatJournal.clear()
         assertTrue(CatJournal.entries.value.isEmpty())
-        // Il reste ouvert : vider n'est pas éteindre.
+        // Still on: clearing is not disabling.
         CatJournal.log(true, byteArrayOf(0x02), "après")
         assertEquals(1, CatJournal.entries.value.size)
     }
 
     @Test
     fun les_deux_dialectes_tiennent_dans_le_meme_journal() = runBlocking {
-        // C'est le point : un opérateur qui a deux postes de marques
-        // différentes lit une seule liste, en français, sans manuel ouvert à
-        // côté. L'hexadécimal reste là-dessous pour qui veut compter les
-        // octets.
+        // The point: an operator with two radios of different brands reads one
+        // list in plain language, no manual needed. The hex stays underneath
+        // for byte counting.
         CatJournal.enabled = true
         val icom = Ic9700Sim()
         val civ = CivController()

@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo
 
@@ -14,34 +14,19 @@ import org.junit.Assume.assumeTrue
 import org.junit.Test
 
 /**
- * La falaise des 255 registres.
+ * The 255-register cliff. `invoke-direct/range` encodes its register count in
+ * one byte: a `UiState` needing 259 became 3, ART rejected the class, and the
+ * app died at startup with no warning from compiler, R8 or JVM tests. So we
+ * count in the source.
  *
- * La 18.22 ne demarrait pas, et rien ne le disait : ni le compilateur, ni R8,
- * ni les 439 essais. La cause tenait a un detail du format dex. Un appel
- * `invoke-direct/range` code le nombre de registres qu'il transmet sur un
- * seul octet. Le constructeur de `UiState` en reclamait 259 ; D8 a ecrit
- * 259 et 0xFF, soit 3. L'instruction produite disait « passe trois
- * registres » a une methode qui en attendait deux cent cinquante-neuf. Le
- * verificateur d'ART refuse la classe au chargement, et l'application meurt a
- * la seconde ou le `MainViewModel` fabrique son premier etat.
- *
- * Aucun essai unitaire ordinaire ne pouvait le voir : ils tournent sur la JVM,
- * ou la limite n'existe pas, et aucun d'eux ne construisait `UiState`. Il faut
- * donc compter a la source, comme on compte les cles de traduction repetees.
- *
- * Le compte : un `Double` ou un `Long` non nul occupe deux registres, tout le
- * reste en occupe un. La methode la plus gourmande d'un `data class` n'est pas
- * le constructeur mais `copy$default`, qui recoit en plus l'instance, un
- * masque de bits par tranche de 32 parametres, et un marqueur. C'est elle qui
- * sert de mesure ici.
- *
- * Le seuil est volontairement bas. Repasser de 240 a 255 demande une quinzaine
- * de champs : cela laisse le temps de voir venir, et l'echec arrive au bon
- * moment — a l'essai, pas sur le telephone d'Olivier.
+ * A non-null `Double`/`Long` takes two registers, anything else one. The
+ * hungriest method is `copy$default` (plus instance, one mask per 32
+ * parameters, a marker). The threshold is low on purpose, to fail in a test
+ * rather than on a phone.
  */
 class RegistresTest {
 
-    /** Au-dela, le prochain champ ajoute peut rendre l'application inutilisable. */
+    /** Beyond this, the next field added may make the app unusable. */
     private val seuil = 240
 
     private fun racine(): File? = listOf(
@@ -50,13 +35,13 @@ class RegistresTest {
         "../app/src/main/java/fr/f4ioz/satcombo")
         .map { File(it) }.firstOrNull { it.isDirectory }
 
-    /** Le cout en registres d'un parametre : deux pour un Double/Long non nul. */
+    /** Register cost of a parameter: two for a non-null Double/Long. */
     private fun cout(type: String): Int =
         if (type == "Double" || type == "Long") 2 else 1
 
     private data class Mesure(val nom: String, val champs: Int, val registres: Int)
 
-    /** Mesure tous les `data class` de premier niveau declares dans un fichier. */
+    /** Measures every top-level `data class` declared in a file. */
     private fun mesures(f: File): List<Mesure> {
         val lignes = f.readLines()
         val entete = Regex("^data class (\\w+)\\($")
@@ -78,8 +63,7 @@ class RegistresTest {
                 }
                 j++
             }
-            // copy$default : l'instance, les parametres, un masque par tranche
-            // de 32, et le marqueur de fin.
+            // copy$default: instance, parameters, one mask per 32, end marker.
             if (n > 0) out.add(Mesure(e.groupValues[1], n, 1 + somme + (n + 31) / 32 + 1))
             i = j + 1
         }
@@ -108,10 +92,10 @@ class RegistresTest {
     }
 
     /**
-     * Le lecteur de source voit-il bien la classe qui a coute la 18.22 ?
+     * Does the source reader actually see the classes that caused the crash?
      *
-     * Sans cette verification, une faute de frappe dans l'expression reguliere
-     * rendrait l'essai precedent vert pour toujours — et parfaitement inutile.
+     * Without this, a regex typo would keep the previous test green forever,
+     * and useless.
      */
     @Test
     fun le_compteur_voit_bien_UiState_et_RotorUi() {

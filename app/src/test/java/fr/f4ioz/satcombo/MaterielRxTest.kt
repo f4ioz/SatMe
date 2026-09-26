@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo
 
@@ -15,11 +15,11 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Le banc des écarts par appareil.
+ * Per-device frequency offsets.
  *
- * Il tient surtout une promesse : **rien ne bouge tant qu'on n'a pas mesuré**.
- * C'était la condition posée — pas d'effet de bord sur les satellites à
- * défilement — et elle se vérifie ici plutôt qu'au terrain.
+ * **Nothing moves until something has been measured.** That was the condition
+ * (no side effect on LEO satellites), and it is checked here rather than in
+ * the field.
  */
 class MaterielRxTest {
 
@@ -39,8 +39,8 @@ class MaterielRxTest {
     }
 
     /**
-     * L'erreur est une proportion : trois fois plus haut, trois fois plus
-     * d'écart. C'est ce qui interdit de ranger des hertz.
+     * The error is proportional: three times the frequency, three times the
+     * offset. That is why we store ppm, not hertz.
      */
     @Test
     fun l_ecart_suit_la_frequence() {
@@ -62,14 +62,14 @@ class MaterielRxTest {
 
     @Test
     fun une_mesure_donne_l_ecart() {
-        // 144,790 MHz attendus, 144,793 lus : environ +20,7 ppm.
+        // 144.790 MHz expected, 144.793 read: about +20.7 ppm.
         val ppm = MaterielRx.ppmDepuisMesure(144_790_000L, 144_793_000L)
         assertTrue(ppm != null && kotlin.math.abs(ppm - 20.72) < 0.05)
     }
 
     /**
-     * Cent ppm valent quatorze kilohertz à 144 MHz : au-delà ce n'est plus un
-     * quartz, c'est une faute de frappe, et la ranger déplacerait tout.
+     * 100 ppm is 14 kHz at 144 MHz: beyond that it is a typo, not a crystal,
+     * and storing it would shift everything.
      */
     @Test
     fun une_mesure_absurde_est_refusee() {
@@ -84,7 +84,7 @@ class MaterielRxTest {
         assertEquals(144_000_000L, MaterielRx.corrige(144_000_000L, Double.NaN))
     }
 
-    /** La référence reste à zéro : c'est ce qui donne un point fixe. */
+    /** The reference stays at zero: it is the fixed point. */
     @Test
     fun la_reference_ne_se_regle_pas() {
         val apres = MaterielRx.range(MaterielRx.parDefaut(), "FT-817 A", 12.0)
@@ -95,7 +95,7 @@ class MaterielRxTest {
     fun un_autre_appareil_se_regle() {
         val apres = MaterielRx.range(MaterielRx.parDefaut(), "Clé SDR 1", 25.0)
         assertEquals(25.0, MaterielRx.choisi(apres, "Clé SDR 1").ppm, 0.0)
-        // Et les autres n'ont pas bougé.
+        // The others have not moved.
         assertEquals(0.0, MaterielRx.choisi(apres, "Clé SDR 2").ppm, 0.0)
     }
 
@@ -111,14 +111,14 @@ class MaterielRxTest {
         assertEquals(liste, relue)
     }
 
-    /** Sans liste, on rend celle par défaut : jamais aucun appareil. */
+    /** No list gives the default list, never an empty one. */
     @Test
     fun une_liste_illisible_rend_celle_par_defaut() {
         assertEquals(MaterielRx.parDefaut(), MaterielRx.lit("n'importe quoi"))
         assertEquals(MaterielRx.parDefaut(), MaterielRx.lit("[]"))
     }
 
-    /** Une valeur abîmée dans le fichier ne doit pas déplacer les fréquences. */
+    /** A corrupted stored value must not shift frequencies. */
     @Test
     fun une_valeur_rangee_absurde_est_ramenee_a_zero() {
         val relue = MaterielRx.lit("Clé SDR 1|99999.0|false")

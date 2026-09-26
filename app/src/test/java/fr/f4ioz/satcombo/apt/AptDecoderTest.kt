@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.apt
 
@@ -16,31 +16,27 @@ import kotlin.math.cos
 import kotlin.random.Random
 
 /**
- * Le décodage APT, vérifié sur un signal fabriqué.
+ * APT decoding, checked on a synthetic signal.
  *
- * Un passage NOAA ne se commande pas : il faut être dehors, au bon moment,
- * avec la bonne antenne. Vérifier le décodeur en attendant un satellite
- * reviendrait à ne jamais le vérifier. On fabrique donc ici un signal APT
- * complet à partir d'une image connue — dégradé croissant à gauche,
- * décroissant à droite — et on demande au décodeur de la retrouver.
+ * A NOAA pass cannot be ordered on demand, so we build a full APT signal from
+ * a known image (rising ramp on the left, falling on the right) and ask the
+ * decoder to recover it.
  *
- * Ce que ces essais prouvent : la démodulation d'amplitude, le
- * rééchantillonnage à 4160 mots par seconde et le calage sur la salve de
- * synchronisation. Ce qu'ils ne prouvent pas : le comportement sur un vrai
- * signal bruité, avec effet Doppler et évanouissements. D'où la mention
- * « bêta » tant que personne n'a décodé une vraie image.
+ * Proven: AM demodulation, resampling to 4160 words/s, and locking on the
+ * sync burst. Not proven: behaviour on a real noisy signal with Doppler and
+ * fading. Hence "beta" until someone decodes a real image.
  */
 class AptDecoderTest {
 
     private val fs = 44_100
 
-    // ------------------------------------------------------------- géométrie
+    // ------------------------------------------------------------- geometry
 
     @Test
     fun `la ligne fait bien 2080 mots repartis en deux canaux`() {
         assertEquals(2080, Apt.WORDS_PER_LINE)
         assertEquals(4160, Apt.WORD_RATE)
-        // Canal A puis canal B, chacun salve + espace + image + télémétrie.
+        // Channel A then B, each sync + space + video + telemetry.
         assertEquals(Apt.SPACE_A, Apt.SYNC_A + Apt.SYNC_LEN)
         assertEquals(Apt.VIDEO_A, Apt.SPACE_A + Apt.SPACE_LEN)
         assertEquals(Apt.TELEMETRY_A, Apt.VIDEO_A + Apt.VIDEO_LEN)
@@ -55,21 +51,21 @@ class AptDecoderTest {
     fun `les salves portent sept creneaux`() {
         assertEquals(39, Apt.SYNC_A_PATTERN.size)
         assertEquals(39, Apt.SYNC_B_PATTERN.size)
-        // Salve A : 1040 Hz, quatre mots par cycle, deux hauts par cycle.
+        // Sync A: 1040 Hz, four words per cycle, two high.
         assertEquals(14f, Apt.SYNC_A_PATTERN.sum(), 0.001f)
-        // Salve B : 832 Hz, cinq mots par cycle, trois hauts par cycle.
+        // Sync B: 832 Hz, five words per cycle, three high.
         assertEquals(21f, Apt.SYNC_B_PATTERN.sum(), 0.001f)
-        // Les quatre premiers mots restent au noir dans les deux cas.
+        // The leading words stay black in both.
         assertEquals(0f, Apt.SYNC_A_PATTERN[0], 0f)
         assertEquals(0f, Apt.SYNC_B_PATTERN[3], 0f)
     }
 
-    // ------------------------------------------------------------- décodage
+    // ------------------------------------------------------------- decoding
 
     @Test
     fun `un signal fabrique se decode en lignes`() {
         val lines = AptDecoder.decodeAll(signal(14), fs)
-        // Le filtre met une ligne à s'établir et la dernière est tronquée.
+        // The filter takes one line to settle and the last is truncated.
         assertTrue("lignes rendues : ${lines.size}", lines.size >= 11)
         assertEquals(Apt.WORDS_PER_LINE, lines[0].size)
     }
@@ -95,8 +91,8 @@ class AptDecoderTest {
 
     @Test
     fun `le calage ne depend pas de l-instant ou l-on commence a ecouter`() {
-        // 7 431 échantillons de silence devant : le début de ligne ne tombe
-        // plus sur une frontière ronde, ce qui est le cas courant en l'air.
+        // 7431 samples of leading silence: line start no longer falls on a
+        // round boundary, the usual case on air.
         val lines = AptDecoder.decodeAll(signal(14, lead = 7_431), fs)
         assertTrue("lignes rendues : ${lines.size}", lines.size >= 10)
         val lv = Apt.levels(lines)
@@ -126,8 +122,8 @@ class AptDecoderTest {
         val d = AptDecoder(fs)
         d.feed(s, s.size)
         d.finish()
-        // Soit rien ne s'accroche, soit l'accrochage est franchement mauvais :
-        // dans les deux cas l'appelant sait qu'il n'y a pas d'image.
+        // Either no lock, or a clearly bad one: either way the caller knows
+        // there is no image.
         assertTrue("qualité = ${d.quality}", !d.locked || d.quality < 0.55f)
     }
 
@@ -139,7 +135,7 @@ class AptDecoderTest {
             override fun onSync(locked: Boolean, quality: Float) {}
         })
         val s = signal(10)
-        // Par petits morceaux, comme le fait la prise de son.
+        // In small chunks, like audio capture.
         var i = 0
         val chunk = 4096
         while (i < s.size) {
@@ -152,15 +148,15 @@ class AptDecoderTest {
         assertEquals(seen.indices.toList(), seen)
     }
 
-    // ------------------------------------------------------------- contraste
+    // ------------------------------------------------------------- contrast
 
     @Test
     fun `une ligne de parasites ne delave pas toute l-image`() {
         val clean = ArrayList<FloatArray>()
         repeat(300) { clean.add(rawLine()) }
         val lv0 = Apt.levels(clean)
-        // Une ligne saturée à cent fois le niveau utile, sur trois minutes
-        // d'image : moins d'un pour cent des mots, donc écartée par les bornes.
+        // One line at 100× the useful level over ~300 lines: under 1% of words,
+        // so the percentile bounds exclude it.
         clean.add(FloatArray(Apt.WORDS_PER_LINE) { 100f })
         val lv1 = Apt.levels(clean)
         assertTrue("avant ${lv0[1]}, après ${lv1[1]}", lv1[1] < lv0[1] * 3f)
@@ -184,9 +180,9 @@ class AptDecoderTest {
         assertEquals(255, g[4])
     }
 
-    // ------------------------------------------------------------- fabrication
+    // ------------------------------------------------------------- synthesis
 
-    /** Une ligne d'image telle qu'un NOAA l'enverrait. */
+    /** An image line as a NOAA satellite would send it. */
     private fun rawLine(): FloatArray {
         val w = FloatArray(Apt.WORDS_PER_LINE)
         for (k in 0 until Apt.SYNC_LEN) w[Apt.SYNC_A + k] = Apt.SYNC_A_PATTERN[k]
@@ -199,7 +195,7 @@ class AptDecoderTest {
         return w
     }
 
-    /** Module ces lignes sur une sous-porteuse de 2400 Hz. */
+    /** Modulates the lines onto a 2400 Hz subcarrier. */
     private fun signal(lineCount: Int, lead: Int = 0): ShortArray {
         val words = FloatArray(lineCount * Apt.WORDS_PER_LINE)
         val line = rawLine()

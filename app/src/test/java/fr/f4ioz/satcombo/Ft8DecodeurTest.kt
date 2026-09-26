@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo
 
@@ -17,23 +17,21 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Le banc du décodage complet.
+ * End-to-end decoding.
  *
- * On fabrique un vrai message — indicatifs, carré —, on l'émet en audio, on le
- * réécoute, et l'on vérifie qu'il ressort mot pour mot. Et surtout : on vérifie
- * qu'**un signal abîmé ne ressort pas du tout**, plutôt que de ressortir faux.
+ * Build a real message (callsigns, grid), synthesise audio, decode it, and
+ * check it comes out word for word. Above all, check that **a damaged signal
+ * comes out not at all** rather than wrong.
  */
 class Ft8DecodeurTest {
 
     private val MODE = Ft8Signal.FT8
 
     /**
-     * Fabrique l'audio d'un message type 1.
+     * Builds the audio of a type 1 message.
      *
-     * Les 83 bits de parité sont tirés au hasard : ce décodeur les ignore, et
-     * c'est justement ce que l'essai doit refléter. Le jour où le code
-     * correcteur existera, il faudra les calculer — et cet essai échouera, ce
-     * qui sera le bon signal.
+     * The 83 parity bits are random, so LDPC cannot converge and the decoder
+     * relies on its hard-decision fallback. Real parity would exercise LDPC.
      */
     private fun audioDeMessage(
         appele: String, appelant: String, carre: String,
@@ -48,11 +46,10 @@ class Ft8DecodeurTest {
         val message = BooleanArray(Ft8.BITS_MESSAGE)
         Ft8.ecritEntier(message, 0, 28, c1)
         Ft8.ecritEntier(message, 29, 28, c2)
-        // Bit 59, pas 58. Ces essais écrivaient au même mauvais endroit que
-        // le décodeur les relisait : l'aller-retour tombait juste sur une
-        // erreur partagée, et le défaut n'est sorti qu'en écoutant de vraies
-        // stations. Un banc qui pose lui-même la convention qu'il vérifie ne
-        // vérifie rien.
+        // Bit 59, not 58. These tests once wrote to the same wrong place the
+        // decoder read from: the round trip agreed on a shared mistake, found
+        // only on real stations. A test that sets the convention it checks
+        // checks nothing.
         Ft8.ecritEntier(message, 59, 15, g15.toLong())
         Ft8.ecritEntier(message, 74, 3, 1L)
 
@@ -66,7 +63,7 @@ class Ft8DecodeurTest {
             Ft8.bitsVersSymboles(bits), MODE, frequenceHz, decalageS)
     }
 
-    // ------------------------------------------------------- le cas nominal
+    // ------------------------------------------------------- nominal case
 
     @Test
     fun un_appel_general_est_relu_mot_pour_mot() {
@@ -100,7 +97,7 @@ class Ft8DecodeurTest {
 
     @Test
     fun la_cadence_de_capture_na_pas_dimportance() {
-        // Ce que le micro fournit varie d'un téléphone à l'autre ; on ramène.
+        // Capture rate varies between phones; we resample.
         val a12800 = audioDeMessage("CQ", "F4IOZ", "IN77")
         for (cadence in listOf(48000.0, 44100.0, 16000.0)) {
             val audio = Ft8Signal.reechantillonne(a12800, MODE.cadenceHz, cadence)
@@ -110,15 +107,15 @@ class Ft8DecodeurTest {
         }
     }
 
-    // ------------------------------------------------------- le refus de mentir
+    // ------------------------------------------------------- refusing to lie
 
     @Test
     fun un_signal_abime_ne_rend_rien_plutot_quun_faux() {
         val propre = audioDeMessage("CQ", "F4IOZ", "IN77")
-        // Assez de bruit pour que des symboles tombent faux.
+        // Enough noise for some symbols to come out wrong.
         val abime = Ft8Signal.avecBruit(propre, MODE, rapportDb = -8.0, graine = 3)
         val r = Ft8Decodeur.decode(abime, MODE.cadenceHz, MODE, 900.0, 1200.0)
-        // Soit le message exact, soit rien — jamais autre chose.
+        // Either the exact message or nothing — never anything else.
         for (d in r) assertEquals("CQ F4IOZ IN77", d.message.brut)
     }
 
@@ -146,7 +143,7 @@ class Ft8DecodeurTest {
         assertTrue(Ft8Decodeur.decode(audio, 12000.0, Ft8Signal.FT4).isEmpty())
     }
 
-    // ------------------------------------------------------- plusieurs stations
+    // ------------------------------------------------------- several stations
 
     @Test
     fun deux_stations_sont_decodees_toutes_les_deux() {
@@ -166,15 +163,15 @@ class Ft8DecodeurTest {
         assertEquals(1, r.count { it.message.brut == "CQ F4IOZ IN77" })
     }
 
-    // --------------------------------------------------------- le rapport
+    // --------------------------------------------------------- signal report
 
     @Test
     fun un_signal_fort_annonce_un_rapport_fort() {
         val audio = audioDeMessage("CQ", "F4IOZ", "IN77")
         val r = Ft8Decodeur.decode(audio, MODE.cadenceHz, MODE, 900.0, 1200.0)
         assertEquals(1, r.size)
-        // L'estimation sature : la jupe spectrale du signal est indiscernable
-        // d'un bruit. On vérifie donc le bon côté de zéro, pas une valeur.
+        // The estimate saturates (the signal's spectral skirt looks like
+        // noise), so check the sign, not a value.
         assertTrue("rapport trop bas : ${r[0].rapportDb}", r[0].rapportDb >= 0)
     }
 

@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo
 
@@ -13,12 +13,12 @@ import fr.f4ioz.satcombo.domain.EnvoiCarnet.Fiche
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
-/** Le banc de l'envoi vers Wavelog. */
+/** Uploading to Wavelog. */
 class EnvoiCarnetTest {
 
     private fun f(t: Long, ind: String = "F1FPL", envoye: Long = 0L) = Fiche(t, ind, envoye)
 
-    // ------------------------------------------------------ la sélection
+    // ------------------------------------------------------ selection
 
     @Test
     fun un_contact_neuf_attend_d_etre_depose() {
@@ -26,8 +26,8 @@ class EnvoiCarnetTest {
     }
 
     /**
-     * Wavelog ne dédoublonne pas : un contact déjà déposé qui repartirait
-     * ferait un doublon à effacer à la main sur l'interface web.
+     * Wavelog does not deduplicate: re-sending an uploaded contact creates a
+     * duplicate to delete by hand in the web interface.
      */
     @Test
     fun un_contact_deja_depose_ne_repart_pas() {
@@ -35,7 +35,7 @@ class EnvoiCarnetTest {
             EnvoiCarnet.aDeposer(listOf(f(10, envoye = 99))).map { it.timeMs })
     }
 
-    /** Même règle que le fichier ADIF : sans indicatif, ce n'est pas un contact. */
+    /** Same rule as the ADIF file: no callsign, no contact. */
     @Test
     fun un_contact_sans_indicatif_ne_part_jamais() {
         assertEquals(emptyList<Long>(),
@@ -43,8 +43,8 @@ class EnvoiCarnetTest {
     }
 
     /**
-     * Du plus ancien au plus récent : si l'envoi s'arrête en chemin, ce qui
-     * est parti forme un bloc continu et non un carnet troué.
+     * Oldest first: if the upload stops midway, what was sent is a contiguous
+     * block, not a log full of holes.
      */
     @Test
     fun les_plus_anciens_partent_en_premier() {
@@ -63,7 +63,7 @@ class EnvoiCarnetTest {
         assertEquals(0, EnvoiCarnet.combienAttendent(listOf(f(1, envoye = 9), f(2, envoye = 9))))
     }
 
-    // --------------------------------------------------------- le bilan
+    // --------------------------------------------------------- summary
 
     @Test
     fun le_bilan_compte_ce_qui_est_passe() {
@@ -74,9 +74,8 @@ class EnvoiCarnetTest {
     }
 
     /**
-     * Un refus ne marque rien : le contact repartira au prochain essai. Il ne
-     * doit donc pas être compté deux fois — ni comme déposé, ni retiré de ce
-     * qui reste.
+     * A rejection marks nothing: the contact goes again next time. So it is
+     * neither counted as uploaded nor removed from what remains.
      */
     @Test
     fun un_refus_reste_a_deposer() {
@@ -87,7 +86,7 @@ class EnvoiCarnetTest {
         assertEquals(1, b.restants)
     }
 
-    /** Une coupure au premier contact ne dépose rien et ne perd rien. */
+    /** A failure on the first contact uploads nothing and loses nothing. */
     @Test
     fun une_coupure_immediate_laisse_tout_en_attente() {
         val j = listOf(f(1), f(2), f(3))
@@ -96,7 +95,7 @@ class EnvoiCarnetTest {
         assertEquals(3, b.restants)
     }
 
-    /** Un acquittement portant sur un contact déjà déposé ne compte pas double. */
+    /** An ack for an already-uploaded contact does not count twice. */
     @Test
     fun un_acquittement_hors_lot_ne_compte_pas() {
         val j = listOf(f(1), f(2, envoye = 50))

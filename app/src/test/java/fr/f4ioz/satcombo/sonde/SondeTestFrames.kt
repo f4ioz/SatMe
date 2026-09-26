@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.sonde
 
@@ -14,21 +14,19 @@ import kotlin.math.sin
 import kotlin.math.sqrt
 
 /**
- * Fabrique de trames et de signaux de synthèse pour les tests du décodage.
+ * Synthetic frames and signals for decoder tests.
  *
- * Le banc d'essai n'a pas de ballon. Ce fichier remplace la radiosonde : il
- * fabrique une trame conforme au format, la brouille comme le ferait la sonde,
- * et la module en carré comme le rendrait un discriminateur FM. Le décodeur est
- * alors mis à l'épreuve de bout en bout — bits, alignement d'octets,
- * désembrouillage, CRC, coordonnées — sur des chiffres dont on connaît la
- * réponse. C'est le seul moyen honnête de vérifier qu'une position affichée est
- * bien celle qui a été transmise.
+ * Stands in for the radiosonde: builds a well-formed frame, scrambles it as
+ * the sonde would, and square-modulates it as an FM discriminator would
+ * output it. The decoder is then tested end to end — bits, byte alignment,
+ * descrambling, CRC, coordinates — on known values: the only honest way to
+ * check a displayed position is the one transmitted.
  */
 internal object SondeTestFrames {
 
-    // ------------------------------------------------------------ géodésie
+    // ------------------------------------------------------------ geodesy
 
-    /** Géodésique vers ECEF, l'inverse de [Geo.ecefToGeodetic]. */
+    /** Geodetic to ECEF, the inverse of [Geo.ecefToGeodetic]. */
     fun geodeticToEcef(latDeg: Double, lonDeg: Double, hM: Double): DoubleArray {
         val la = Math.toRadians(latDeg)
         val lo = Math.toRadians(lonDeg)
@@ -40,7 +38,7 @@ internal object SondeTestFrames {
             (n * (1.0 - Geo.E2) + hM) * s)
     }
 
-    /** Vitesse locale est/nord/haut vers vitesse ECEF, l'inverse de [Geo.ecefVelToEnu]. */
+    /** Local east/north/up velocity to ECEF, the inverse of [Geo.ecefVelToEnu]. */
     fun enuToEcefVel(latDeg: Double, lonDeg: Double,
                      e: Double, n: Double, u: Double): DoubleArray {
         val la = Math.toRadians(latDeg)
@@ -53,7 +51,7 @@ internal object SondeTestFrames {
             cla * n + sla * u)
     }
 
-    // ------------------------------------------------------------- écriture
+    // ------------------------------------------------------------- writers
 
     fun putU16(f: ByteArray, at: Int, v: Int) {
         f[at] = (v and 0xff).toByte()
@@ -87,7 +85,7 @@ internal object SondeTestFrames {
 
     // ------------------------------------------------------------ RS41
 
-    /** Écrit un bloc identifiant / longueur / données / CRC, rend la position suivante. */
+    /** Writes an id / length / data / CRC block; returns the next position. */
     private fun block(f: ByteArray, at: Int, id: Int, data: ByteArray): Int {
         f[at] = id.toByte()
         f[at + 1] = data.size.toByte()
@@ -97,9 +95,8 @@ internal object SondeTestFrames {
     }
 
     /**
-     * Une trame RS41 standard, désembrouillée, portant les valeurs demandées.
-     * Passer le résultat à [Rs41.descramble] rend la trame telle qu'elle
-     * passerait sur l'air.
+     * A standard RS41 frame, descrambled, carrying the given values. Pass it
+     * to [Rs41.descramble] to get the frame as sent over the air.
      */
     fun rs41(lat: Double, lon: Double, altM: Double,
              east: Double, north: Double, up: Double,
@@ -109,7 +106,7 @@ internal object SondeTestFrames {
 
         val f = ByteArray(Rs41.LEN_STD)
         for (k in Rs41.HEADER.indices) f[k] = Rs41.HEADER[k].toByte()
-        f[Rs41.TYPE_AT] = 0x0F            // type : trame standard
+        f[Rs41.TYPE_AT] = 0x0F            // type: standard frame
 
         var pos = Rs41.BLOCKS_AT
 
@@ -141,7 +138,7 @@ internal object SondeTestFrames {
 
     // ------------------------------------------------------------ Meteomodem
 
-    /** Une trame M20 portant les valeurs demandées. */
+    /** An M20 frame carrying the given values. */
     fun m20(lat: Double, lon: Double, altM: Double,
             east: Double, north: Double, up: Double,
             sats: Int = 9, serial: Int = 1234): ByteArray {
@@ -160,10 +157,9 @@ internal object SondeTestFrames {
     }
 
     /**
-     * Une trame M10 portant les valeurs demandées, somme de contrôle comprise.
-     *
-     * Depuis la 18.7 la somme est exigée au décodage : une trame d'essai qui ne
-     * la porterait pas serait refusée, et l'essai ne prouverait plus rien.
+     * An M10 frame carrying the given values, checksum included. The decoder
+     * requires the checksum, so a test frame without it would be rejected and
+     * prove nothing.
      */
     fun m10(lat: Double, lon: Double, altM: Double,
             east: Double, north: Double, up: Double,
@@ -189,7 +185,7 @@ internal object SondeTestFrames {
 
     // ------------------------------------------------------------ modulation
 
-    /** Les bits d'une suite d'octets, poids faible ou poids fort en tête. */
+    /** Bits of a byte sequence, LSB or MSB first. */
     fun bitsOf(bytes: ByteArray, lsbFirst: Boolean): ByteArray {
         val out = ByteArray(bytes.size * 8)
         for (i in bytes.indices) {
@@ -203,18 +199,15 @@ internal object SondeTestFrames {
     }
 
     /**
-     * Rend le signal carré qu'un discriminateur FM produirait pour ces bits.
+     * The square wave an FM discriminator would output for these bits.
      *
-     * Pas de bruit, pas de dérive : le but n'est pas de simuler une liaison
-     * difficile, c'est de vérifier que dans le cas idéal le décodeur retrouve
-     * exactement ce qui a été envoyé. Un décodeur qui échoue là n'a aucune
-     * chance sur l'air.
+     * No noise, no drift: the point is that in the ideal case the decoder
+     * recovers exactly what was sent. A decoder failing here has no chance
+     * on air.
      */
-    // Depuis 18.6 la modulation ajoute aussi une queue. Le filtre adapté du
-    // démodulateur retarde le signal d'un demi-symbole : sur un flux continu
-    // cela ne coûte rien, mais sur un tampon qui s'arrête pile au dernier
-    // symbole utile, ce dernier symbole n'a pas le temps de sortir. Un vrai
-    // enregistrement ne s'arrête jamais là ; la mire non plus, désormais.
+    // A tail is appended too: the demodulator's matched filter delays the
+    // signal by half a symbol, so a buffer ending exactly on the last data
+    // symbol never lets it out. Real recordings never stop there.
     fun modulate(bits: ByteArray, sampleRate: Double, baud: Double,
                  amplitude: Int = 10_000, leadingBits: Int = 64,
                  trailingBits: Int = 16): ShortArray {

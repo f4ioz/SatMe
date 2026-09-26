@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo
 
@@ -22,19 +22,11 @@ import java.time.ZoneOffset
 import java.util.Date
 
 /**
- * L'alignement de la parabole par le Soleil.
- *
- * Ces essais ont une particularité : ils épinglent des dates. Le 2 mars 2026 à
- * 10 h 18 TU, depuis Paris, le Soleil passe à deux centièmes de degré du
- * satellite. Ce n'est pas une valeur choisie pour faire passer le code, c'est
- * une prédiction vérifiable — et si un jour le modèle solaire est retouché,
- * c'est exactement le genre de chose qu'on veut voir bouger avant que
- * quelqu'un ne monte sur un toit.
- *
- * Les deux fenêtres trouvées — fin février / début mars, et début octobre —
- * encadrent les équinoxes, ce qui est la signature d'un transit solaire sur un
- * géostationnaire. Un résultat qui tomberait en juin ou en décembre serait
- * faux quelle que soit la précision du calcul.
+ * Aligning the dish using the Sun. These tests pin dates (e.g. 2 March 2026
+ * 10:18 UTC from Paris, 0.02° separation): checkable predictions that must
+ * move if the solar model is touched, before someone climbs onto a roof.
+ * Transit windows must bracket the equinoxes; June or December would be wrong
+ * however precise.
  */
 class SoleilQo100Test {
 
@@ -52,48 +44,42 @@ class SoleilQo100Test {
         Instant.ofEpochMilli(t).atZone(ZoneOffset.UTC).toLocalTime()
             .withSecond(0).withNano(0).toString()
 
-    // --- L'écart angulaire ------------------------------------------------
+    // --- Angular separation ------------------------------------------------
 
     /**
-     * Le cas qui casse toutes les implémentations naïves : deux directions
-     * identiques. Le produit scalaire vaut alors 1,000000000000002 par
-     * arrondi, et un arc-cosinus non borné rend NaN — précisément sur la seule
-     * valeur qui compte, puisque c'est celle du transit parfait.
+     * The case that breaks naive implementations: two identical directions.
+     * The dot product rounds to 1.000000000000002, and an unclamped acos
+     * returns NaN — precisely on the value that matters, a perfect transit.
      */
     @Test
     fun deux_directions_identiques_donnent_un_ecart_nul_et_pas_un_nan() {
         val e = SoleilQo100.ecartDeg(149.942, 29.533, 149.942, 29.533)
         assertFalse("l'écart est NaN", e.isNaN())
-        // Un dix-millième de degré : l'arc-cosinus perd ses chiffres près de
-        // zéro — son argument est plat au voisinage de 1, donc l'erreur
-        // d'arrondi du produit scalaire y est amplifiée d'un facteur cent
-        // millions. Un millionième de degré d'erreur sur un disque solaire qui
-        // en fait un demi : la formule est parfaitement suffisante ici, et
-        // elle serait à revoir pour de l'astrométrie.
+        // 1e-4° tolerance: acos loses digits near zero (flat near 1, so dot
+        // product rounding is hugely amplified). Negligible against a 0.5°
+        // solar disk; it would need revisiting for astrometry.
         assertEquals(0.0, e, 1e-4)
     }
 
     @Test
     fun l_ecart_angulaire_suit_la_geometrie() {
-        // Deux points à l'horizon, à 90° d'azimut l'un de l'autre.
+        // Two horizon points 90° apart in azimuth.
         assertEquals(90.0, SoleilQo100.ecartDeg(0.0, 0.0, 90.0, 0.0), 1e-9)
-        // Le zénith est à 90° de tout l'horizon, quel que soit l'azimut.
+        // Zenith is 90° from any horizon point.
         assertEquals(90.0, SoleilQo100.ecartDeg(0.0, 90.0, 217.0, 0.0), 1e-9)
-        // Deux points diamétralement opposés à l'horizon.
+        // Two opposite horizon points.
         assertEquals(180.0, SoleilQo100.ecartDeg(0.0, 0.0, 180.0, 0.0), 1e-9)
-        // L'écart d'azimut compte d'autant moins qu'on monte : à 80°
-        // d'élévation, dix degrés d'azimut ne font pas deux degrés d'écart.
+        // Azimuth matters less higher up: at 80° elevation, 10° of azimuth is
+        // under 2° of separation.
         assertTrue(SoleilQo100.ecartDeg(100.0, 80.0, 110.0, 80.0) < 2.0)
     }
 
-    // --- Le Soleil, azimut compris ---------------------------------------
+    // --- The Sun, azimuth included ---------------------------------------
 
     /**
-     * Le modèle solaire n'avait jusqu'ici que l'élévation. On lui a ajouté
-     * l'azimut, et la première chose à vérifier est que l'élévation n'a pas
-     * bougé : [SunCalc.elevationDeg] est utilisé par la prédiction de passages
-     * pour décider si un satellite est éclairé, et un décalage passerait
-     * inaperçu longtemps.
+     * Adding azimuth to the solar model must not change elevation:
+     * [SunCalc.elevationDeg] is used by pass prediction to decide whether a
+     * satellite is sunlit, and a shift would go unnoticed for a long time.
      */
     @Test
     fun l_elevation_du_soleil_est_inchangee_par_l_ajout_de_l_azimut() {
@@ -109,30 +95,25 @@ class SoleilQo100Test {
     }
 
     /**
-     * Le midi solaire au méridien de Greenwich, au solstice d'été : le Soleil
-     * est au sud, et à 90° − latitude + 23,44° de hauteur. C'est la
-     * vérification que l'azimut n'est pas décalé d'un quadrant — l'erreur
-     * classique quand on se trompe de signe sur l'angle horaire.
+     * Solar noon at Greenwich on the summer solstice: the Sun is due south at
+     * 90° − latitude + 23.44°. Checks azimuth is not off by a quadrant — the
+     * classic hour-angle sign error.
      */
     @Test
     fun au_midi_solaire_le_soleil_est_au_sud() {
         val p = SunCalc.azElDeg(48.8566, 0.0, Date(ms("2026-06-21T12:00:00Z")))
-        // Un degré d'écart au sud : l'équation du temps, qui vaut une poignée
-        // de minutes en juin et qu'on ne cherche pas à corriger.
+        // About 1° off south: the equation of time (a few minutes in June),
+        // deliberately not corrected here.
         assertEquals(179.0, p[0], 1.5)
         assertEquals(90.0 - 48.8566 + 23.44, p[1], 0.2)
     }
 
-    // --- Le passage en azimut, tous les jours ----------------------------
+    // --- Daily azimuth crossing -------------------------------------------
 
     /**
-     * Le geste de tous les jours : à cette minute-là, l'ombre d'un piquet
-     * vertical est dans l'axe de la parabole, à 180° près.
-     *
-     * On épingle la minute, et surtout on vérifie la propriété qui fait le
-     * service — l'azimut du Soleil est bien celui du satellite, à un
-     * centième de degré, ce qui est cent fois mieux qu'une boussole de
-     * téléphone.
+     * The everyday method: at that minute a vertical stake's shadow lies along
+     * the dish axis (180° off). Sun azimuth equals the satellite's to 0.01°,
+     * far better than a phone compass.
      */
     @Test
     fun le_passage_en_azimut_du_21_juillet_2026_depuis_paris() {
@@ -148,15 +129,12 @@ class SoleilQo100Test {
         assertTrue("le Soleil doit être levé", soleil[1] > 0.0)
         assertTrue(SoleilQo100.memeAzimut(soleil[0], sat.azDeg))
 
-        // En juillet le Soleil est bien plus haut que le satellite : c'est
-        // pourquoi ce passage-là règle l'azimut et rien d'autre.
+        // In July the Sun is far higher than the satellite: this crossing sets
+        // azimuth only.
         assertTrue(soleil[1] > sat.elDeg + 20.0)
     }
 
-    /**
-     * Il y en a un chaque jour de l'année, et c'est tout l'intérêt : on n'a
-     * pas à attendre l'équinoxe pour régler son azimut.
-     */
+    /** There is one every day of the year: no need to wait for the equinox. */
     @Test
     fun il_y_a_un_passage_en_azimut_tous_les_jours_de_l_annee() {
         val sat = Qo100.pointage(parisLat, parisLon)
@@ -172,10 +150,9 @@ class SoleilQo100Test {
     }
 
     /**
-     * Depuis New York le satellite est seize degrés sous l'horizon — cent
-     * degrés de longitude d'écart, c'est vingt de trop. Aucune ombre ne pointe
-     * vers quoi que ce soit, et la fonction doit le dire plutôt que de rendre
-     * une heure qui n'a pas de sens.
+     * From New York the satellite is well below the horizon. No shadow points
+     * anywhere useful, and the function must say so rather than return a
+     * meaningless time.
      */
     @Test
     fun sans_satellite_visible_il_n_y_a_ni_passage_ni_transit() {
@@ -185,18 +162,13 @@ class SoleilQo100Test {
             nyLat, nyLon, ms("2026-01-01T00:00:00Z")).isEmpty())
     }
 
-    // --- Les transits, deux fois l'an ------------------------------------
+    // --- Transits, twice a year -------------------------------------------
 
     /**
-     * Les dix jours de 2026 où, depuis Paris, le Soleil passe à moins d'un
-     * degré du satellite. Cinq autour du 2 mars, cinq autour du 11 octobre :
-     * les deux équinoxes, comme il se doit pour un géostationnaire.
-     *
-     * Le meilleur jour du printemps passe à 0,02°, celui de l'automne à
-     * 0,04° — soit un vingtième de la largeur du disque solaire. Ce jour-là,
-     * l'ombre de la source se centre au fond de la parabole quand le pointage
-     * est juste, et c'est le réglage le plus fin qu'on puisse faire sans
-     * mesurer de signal.
+     * The ten 2026 days when the Sun passes within 1° of the satellite from
+     * Paris, around the equinoxes. On the best day the feed's shadow centres
+     * in the dish when pointing is right: the finest adjustment possible
+     * without measuring signal.
      */
     @Test
     fun les_transits_solaires_de_2026_depuis_paris() {
@@ -220,16 +192,14 @@ class SoleilQo100Test {
         assertEquals("09:53", minuteTu(automne.instantMs))
         assertEquals(0.042, automne.ecartDeg, 0.01)
 
-        // Le meilleur des deux est celui de mars : deux centièmes de degré,
-        // soit un vingt-cinquième du diamètre du disque solaire.
+        // March is the better one: 0.02°, about 1/25 of the solar diameter.
         assertEquals(printemps.ecartDeg, transits.minOf { it.ecartDeg }, 1e-12)
     }
 
     /**
-     * Ce qu'un transit doit garantir pour être utilisable : le Soleil est bien
-     * là où est le satellite, la fenêtre encadre l'instant, et elle dure assez
-     * pour qu'on ait le temps de tourner une parabole sans durer si longtemps
-     * qu'elle ne voudrait plus rien dire.
+     * What a usable transit guarantees: the Sun is where the satellite is, the
+     * window brackets the instant, and it lasts long enough to turn a dish but
+     * not so long it becomes meaningless.
      */
     @Test
     fun chaque_transit_est_coherent_avec_lui_meme() {
@@ -242,7 +212,7 @@ class SoleilQo100Test {
             assertTrue("écart au-dessus du seuil", tr.ecartDeg <= 1.0)
             assertEquals(sat.azDeg, tr.azSoleilDeg, 1.2)
             assertEquals(sat.elDeg, tr.elSoleilDeg, 1.2)
-            // L'écart annoncé est bien celui qu'on recalcule à cet instant.
+            // The reported separation matches a recomputation at that instant.
             assertEquals(
                 tr.ecartDeg,
                 SoleilQo100.ecartDeg(tr.azSoleilDeg, tr.elSoleilDeg, sat.azDeg, sat.elDeg),
@@ -251,16 +221,14 @@ class SoleilQo100Test {
             assertTrue("la fenêtre n'encadre pas l'instant",
                 tr.debutMs <= tr.instantMs && tr.instantMs <= tr.finMs)
             assertTrue("fenêtre vide", tr.dureeS > 0)
-            // Le Soleil parcourt un quart de degré par minute : une fenêtre à
-            // un degré ne peut pas durer une demi-heure.
+            // The Sun moves 0.25° per minute: a 1° window cannot last half an hour.
             assertTrue("fenêtre de ${tr.dureeS} s, invraisemblable", tr.dureeS < 1800)
         }
     }
 
     /**
-     * Le nombre demandé est une borne, pas une suggestion : l'écran n'affiche
-     * que les prochaines dates et n'a aucune raison de balayer l'année pour
-     * les jeter ensuite.
+     * The requested count is a hard limit: the screen only shows the next
+     * dates and has no reason to scan the year only to discard them.
      */
     @Test
     fun le_nombre_de_transits_rendus_est_borne() {
@@ -268,16 +236,15 @@ class SoleilQo100Test {
             parisLat, parisLon, ms("2026-01-01T00:00:00Z"), jours = 400, maximum = 3)
         assertEquals(3, trois.size)
         assertEquals("2026-02-28", jourTu(trois.first().instantMs))
-        // Et ils sont rendus dans l'ordre chronologique.
+        // In chronological order.
         trois.zipWithNext().forEach { (a, b) ->
             assertTrue(a.instantMs < b.instantMs)
         }
     }
 
     /**
-     * Un seuil plus serré donne moins de jours, jamais plus. La propriété a
-     * l'air évidente ; elle ne l'est pas si le bord de fenêtre et le minimum
-     * ne sont pas calculés avec le même seuil.
+     * A tighter threshold gives fewer days, never more. Obvious — unless the
+     * window edge and the minimum use different thresholds.
      */
     @Test
     fun un_seuil_plus_serre_ne_donne_jamais_plus_de_jours() {
@@ -290,21 +257,20 @@ class SoleilQo100Test {
         assertTrue(serre.size <= large.size)
         assertTrue(serre.isNotEmpty())
         assertEquals("2026-03-02", jourTu(serre.first().instantMs))
-        // Et une fenêtre plus serrée est une fenêtre plus courte.
+        // A tighter window is a shorter window.
         assertTrue(serre.first().dureeS < large[2].dureeS)
     }
 
     /**
-     * L'ombre part à l'opposé du satellite. C'est la seule ligne du dispositif
-     * où une erreur de signe retourne la parabole à 180°, et rien à l'écran ne
-     * le dirait.
+     * The shadow points away from the satellite. The one place where a sign
+     * error turns the dish 180°, and nothing on screen would say so.
      */
     @Test
     fun l_ombre_est_a_l_oppose_du_satellite() {
         assertEquals(329.942, SoleilQo100.azimutDeLOmbre(149.942), 1e-9)
         assertEquals(10.0, SoleilQo100.azimutDeLOmbre(190.0), 1e-9)
         assertEquals(0.0, SoleilQo100.azimutDeLOmbre(180.0), 1e-9)
-        // Et l'opération est bien une involution.
+        // The operation is an involution.
         listOf(0.0, 45.0, 149.942, 200.0, 359.9).forEach {
             assertEquals(it, SoleilQo100.azimutDeLOmbre(SoleilQo100.azimutDeLOmbre(it)), 1e-9)
         }

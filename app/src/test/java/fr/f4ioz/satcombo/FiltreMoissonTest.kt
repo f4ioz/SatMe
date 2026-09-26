@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo
 
@@ -15,14 +15,14 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** Le banc du tri de la moisson Wavelog. */
+/** Filtering contacts harvested from Wavelog. */
 class FiltreMoissonTest {
 
-    // ------------------------------------------------ ce que le serveur trie
+    // ------------------------------------------------ server-side filtering
 
     /**
-     * Seul le satellite peut être trié par Wavelog : son filtre `band`
-     * n'accepte qu'une bande, et il n'existe aucun filtre par mode.
+     * Only satellite can be filtered by Wavelog: its `band` filter takes a
+     * single band, and there is no mode filter.
      */
     @Test
     fun seul_le_satellite_se_trie_chez_le_serveur() {
@@ -48,7 +48,7 @@ class FiltreMoissonTest {
         assertFalse(FiltreMoisson.retient(FiltreMoisson.SAT, "", "SSB", "20m"))
     }
 
-    // ---------------------------------------------------------- phonie HF
+    // ---------------------------------------------------------- HF phone
 
     @Test
     fun la_phonie_hf_retient_la_voix_sur_les_bandes_hf() {
@@ -58,7 +58,7 @@ class FiltreMoissonTest {
         }
     }
 
-    /** C'est le but énoncé : écarter FT8, FT4 et leurs cousins. */
+    /** The stated goal: exclude FT8, FT4 and their relatives. */
     @Test
     fun la_phonie_hf_ecarte_le_numerique() {
         listOf("FT8", "FT4", "JT65", "PSK31", "RTTY", "MFSK", "PKT").forEach { mode ->
@@ -68,10 +68,8 @@ class FiltreMoissonTest {
     }
 
     /**
-     * Un mode inventé demain doit être écarté lui aussi.
-     *
-     * On reconnaît ce qu'on garde plutôt que d'énumérer ce qu'on rejette :
-     * une liste fermée du bon côté vieillit mieux.
+     * A mode invented tomorrow must be excluded too: we list what we keep,
+     * not what we reject, so the closed list is on the side that ages well.
      */
     @Test
     fun un_mode_numerique_inconnu_est_ecarte_aussi() {
@@ -94,7 +92,7 @@ class FiltreMoissonTest {
         assertFalse(FiltreMoisson.retient(FiltreMoisson.CW, "SAT", "CW", "70cm"))
     }
 
-    // --------------------------------------------------------------- tout
+    // --------------------------------------------------------------- all
 
     @Test
     fun tout_retient_tout() {
@@ -103,12 +101,11 @@ class FiltreMoissonTest {
         assertTrue(FiltreMoisson.retient(FiltreMoisson.TOUT, "", "", ""))
     }
 
-    // ------------------------------------------------------- cas limites
+    // ------------------------------------------------------- edge cases
 
     /**
-     * Un champ absent ne doit jamais faire retenir un contact par défaut :
-     * mieux vaut une mémoire un peu courte qu'une mémoire pleine de ce qu'on
-     * avait demandé d'écarter.
+     * A missing field never lets a contact through by default: a slightly
+     * short memory beats one full of what was meant to be excluded.
      */
     @Test
     fun les_champs_absents_ne_font_rien_passer() {
@@ -124,7 +121,7 @@ class FiltreMoissonTest {
         assertTrue(FiltreMoisson.retient(FiltreMoisson.CW, "", "cw", "40m"))
     }
 
-    /** Un réglage abîmé retombe sur le satellite, qui est le défaut. */
+    /** A corrupted setting falls back to satellite, the default. */
     @Test
     fun un_filtre_inconnu_retombe_sur_le_satellite() {
         assertTrue(FiltreMoisson.retient("gribouille", "SAT", "SSB", "2m"))

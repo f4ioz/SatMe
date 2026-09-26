@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo
 
@@ -13,7 +13,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** Douglas-Peucker : le tracé perd ses points, jamais sa forme. */
+/** Douglas-Peucker: the outline loses points, never its shape. */
 class SimplifieTest {
 
     @Test
@@ -25,7 +25,7 @@ class SimplifieTest {
 
     @Test
     fun un_cap_reel_survit_a_la_simplification() {
-        // Un L : le coin dépasse largement la tolérance, il doit rester.
+        // An L: the corner is well beyond tolerance and must survive.
         val pts = (0..50).map { doubleArrayOf(it / 50.0, 0.0) } +
             (1..50).map { doubleArrayOf(1.0, it / 50.0) }
         val s = Simplifie.ligne(pts, 0.001)
@@ -36,7 +36,7 @@ class SimplifieTest {
 
     @Test
     fun un_anneau_ferme_reste_un_anneau_sans_doublon() {
-        // Un carré fermé (premier == dernier) échantillonné finement.
+        // A closed square (first == last), finely sampled.
         val cote = { a: DoubleArray, b: DoubleArray ->
             (0 until 25).map { i ->
                 doubleArrayOf(a[0] + (b[0] - a[0]) * i / 25.0,
@@ -50,7 +50,7 @@ class SimplifieTest {
             cote(c[3], c[0]) + listOf(doubleArrayOf(0.0, 0.0))
         val s = Simplifie.anneau(pts, 0.001)
         assertEquals(4, s.size)
-        // Aucun point en double : l'anneau est ouvert, prêt à être refermé.
+        // No duplicate point: the ring comes back open, ready to be closed.
         assertTrue(s.map { it[0] to it[1] }.toSet().size == 4)
     }
 }

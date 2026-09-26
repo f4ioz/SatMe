@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.sonde
 
@@ -19,83 +19,48 @@ import kotlin.math.sin
 import kotlin.math.sqrt
 
 /**
- * Le banc de mesure de la chaîne radiosonde.
+ * Measurement bench for the radiosonde chain: at what signal level does
+ * decoding drop out? (A noiseless test pattern always decodes.)
  *
- * La mire répond à « est-ce que c'est branché dans le bon ordre ». Elle a
- * rendu ce service et il n'était pas mince — c'est elle qui a fait tomber le
- * défaut de la M20. Mais elle ne répond pas à la question que se pose
- * réellement l'opérateur devant son écran : à quelle distance ça décroche.
- * Une mire sans bruit se décode toujours ; l'air, jamais.
+ * Method copied from radiosonde_auto_rx: add noise of known power to a clean
+ * signal until decoding collapses, and report Eb/N0 in dB — demodulator
+ * quality only, independent of antenna and dongle. Their reference values:
+ * RS41 10.2 dB, M10 8.9 dB, DFM 6.9 dB.
  *
- * Le projet radiosonde_auto_rx mesure cela d'une manière qu'on peut copier
- * telle quelle : on part d'un signal propre, on lui ajoute un bruit dont on
- * connaît exactement la puissance, et on descend jusqu'à ce que le décodage
- * s'effondre. Le chiffre qui sort est un rapport Eb/N0 en décibels — l'énergie
- * d'un bit divisée par la densité de bruit — et il a l'immense avantage de ne
- * dépendre ni de l'antenne, ni du préampli, ni du dongle : c'est la qualité du
- * démodulateur, et rien d'autre. Leurs valeurs de référence, obtenues sur de
- * vrais enregistrements : RS41 10,2 dB, M10 8,9 dB, DFM 6,9 dB.
- *
- * Ce qu'on fabrique ici n'est pas un modèle simplifié de la chaîne. C'est de
- * l'IQ au format exact de la clé — deux octets non signés par échantillon, à
- * 1 058 400 Hz — versé dans [RxChain], c'est-à-dire dans le récepteur complet
- * de l'application, décimation, filtre de canal, discriminateur et correction
- * continue compris. La quantification sur huit bits du dongle est donc dans la
- * mesure, elle aussi, ce qui est honnête : elle est bien là sur le terrain.
- *
- * Deux balayages sont utiles :
- *
- * 1. Le bruit, à accord parfait, qui donne notre seuil et le situe par rapport
- *    aux chiffres publiés.
- * 2. Le désaccord, à bruit fixe, qui chiffre ce que coûte un poste mal calé.
- *    Le wiki d'auto_rx annonce 2,5 dB perdus à cinq kilohertz de côté sur une
- *    RS41 — plus que tout ce qu'a rapporté le filtrage par modèle de la 18.4.
- *    C'est la mesure qui doit décider du contenu de la 18.5.
+ * Input is IQ in the dongle's exact format (unsigned bytes at 1058400 Hz)
+ * fed to the app's full [RxChain], so 8-bit quantisation is included.
+ * Sweeps: noise at perfect tuning, and mistuning at fixed noise (auto_rx
+ * reports 2.5 dB lost at 5 kHz off on an RS41).
  */
 object SondeBench {
 
-    /** Débit d'échantillonnage de la clé, celui de la vraie chaîne. */
+    /** Dongle sample rate, as in the real chain. */
     const val RATE = Dsp.RTL_RATE
 
     /**
-     * Taille du bloc USB, en octets d'IQ — seize kilo-octets, exactement ce que
-     * rend la clé à chaque transfert.
-     *
-     * Ce détail n'en est pas un. Le concentrateur ne cherche une trame que
-     * lorsqu'il a de quoi en contenir une, puis oublie le trop-plein ; la
-     * cadence de recherche suit donc la taille des blocs. Verser une seconde
-     * entière d'un coup, comme le faisait la première version de ce banc, ne
-     * laisse qu'une occasion par seconde et fait mentir la mesure. On découpe
-     * donc comme la vraie clé : trois cent quarante et un échantillons de son
-     * par bloc, cent vingt-neuf blocs par seconde.
+     * USB block size in IQ bytes, as the dongle returns per transfer. Not a
+     * detail: the hub searches once per block and drops the excess, so feeding
+     * a whole second at once leaves one chance per second and skews results.
      */
     const val BLOCK = 16 * 1024
 
     /**
-     * Pas de vol demandé à la mire, en secondes réelles.
-     *
-     * La mire de démonstration comprime deux heures de vol en une minute :
-     * chaque trame déplace alors le ballon d'une quarantaine de kilomètres tout
-     * en annonçant une seconde d'horloge GPS. Le suivi de vol refuse ces
-     * points-là, et il a raison — mais le banc, lui, comptait ces refus comme
-     * des échecs de décodage et accusait le récepteur. On demande donc ici un
-     * vol honnête : une trame, une seconde, cinq mètres de montée.
+     * Flight step in real seconds. The demo pattern compresses a two-hour
+     * flight into a minute, which flight tracking rightly rejects — and the
+     * bench would count as decode failures. So: one frame per real second.
      */
     const val STEP_SEC = 1.0
 
     /**
-     * Excursion de la modulation, en hertz.
-     *
-     * La RS41 module à ±2,4 kHz, les Meteomodem environ deux fois plus large —
-     * ce qui explique les quinze kilohertz de filtre d'un côté et les
-     * vingt-deux de l'autre.
+     * FM deviation in hertz. RS41 uses ±2.4 kHz, Meteomodem about twice that —
+     * hence 15 kHz filters for one and 22 kHz for the other.
      */
     fun deviationHz(model: String): Double = when (model) {
         "RS41" -> 2_400.0
         else -> 4_800.0
     }
 
-    /** Un point de mesure. */
+    /** One measurement point. */
     data class Point(
         val model: String,
         val ebn0Db: Double,
@@ -107,7 +72,7 @@ object SondeBench {
         val swing: Int = 0,
         val perSecond: String = ""
     ) {
-        /** Taux d'erreur trame, la grandeur que mesure auto_rx. */
+        /** Frame error rate, the quantity auto_rx measures. */
         val per: Double get() =
             if (expected <= 0) 1.0 else (1.0 - frames.toDouble() / expected).coerceIn(0.0, 1.0)
 
@@ -118,7 +83,7 @@ object SondeBench {
                     rejected, swing, perSecond)
     }
 
-    /** La suite de symboles d'une seconde d'émission, alternances de bourrage comprises. */
+    /** One second of transmitted symbols, including alternating padding. */
     private fun slotOf(model: String, p: SondeMire.Point, frameNo: Int, symbols: Int): ByteArray {
         val body = SondeMire.chipsFor(model, p, frameNo)
         val out = ByteArray(maxOf(symbols, body.size))
@@ -127,19 +92,13 @@ object SondeBench {
         return out
     }
 
-    /** Quantification sur huit bits non signés, exactement comme le fait la clé. */
+    /** Unsigned 8-bit quantisation, exactly as the dongle does. */
     private fun q8(v: Double): Byte =
         (Math.round(v + 127.5).toInt().coerceIn(0, 255)).toByte()
 
     /**
-     * Centre de gravité du signal dans le spectre, en hertz relatifs à
-     * l'accord.
-     *
-     * L'algorithme a été mis au point ici, éprouvé ici, puis versé dans le
-     * récepteur : il vit maintenant dans [RxChain.centroidOffsetHz], et le banc
-     * se contente de l'appeler. C'est la seule façon de garantir que le chiffre
-     * mesuré est bien celui que l'application applique — un banc qui mesure sa
-     * propre copie ne mesure rien du tout.
+     * Spectral centroid relative to the tuning. Calls [RxChain.centroidOffsetHz]
+     * directly: a bench measuring its own copy measures nothing.
      */
     fun centroidHz(
         chain: RxChain,
@@ -150,9 +109,9 @@ object SondeBench {
     ): Double = chain.centroidOffsetHz(searchHz, thresholdDb, dcNotchHz, narrowHz)
 
     /**
-     * La même mesure, mais sans radio du tout : la mire est versée telle quelle
-     * dans le décodeur. C'est le témoin. Tout ce que ce chiffre-là n'atteint
-     * pas, ce n'est pas la faute du récepteur.
+     * Same measurement with no radio: the pattern goes straight into the
+     * decoder. This is the control — whatever it does not reach is not the
+     * receiver's fault.
      */
     fun measureAudio(model: String, seconds: Int = 6): Point {
         SondeHub.stop()
@@ -181,13 +140,9 @@ object SondeBench {
     }
 
     /**
-     * Une mesure complète : on émet [seconds] trames, une par seconde, avec le
-     * bruit demandé et le désaccord demandé, et l'on compte ce qui ressort.
-     *
-     * [tuneHz] est la correction d'accord appliquée dans le logiciel, celle que
-     * l'opérateur pose au doigt sur la cascade. [autoTune] la calcule tout seul
-     * sur la première seconde reçue : c'est la proposition pour la 18.5, et le
-     * banc est là pour dire si elle tient.
+     * Sends [seconds] frames with the given noise and mistuning and counts what
+     * comes out. [tuneHz] is the manual software tuning; [autoTune] computes it
+     * from the first second.
      */
     fun measure(
         model: String,
@@ -204,13 +159,12 @@ object SondeBench {
         val baud = SondeModel.byId(model).baud
         require(baud > 0.0) { "le banc veut un modèle précis, pas le mode automatique" }
 
-        // Bruit blanc complexe. La porteuse vaut un en puissance ; la densité de
-        // bruit se déduit du rapport voulu et du débit binaire utile.
+        // Complex white noise. Carrier power is one; noise density follows
+        // from the target Eb/N0 and the data bit rate.
         val gamma = 10.0.pow(ebn0Db / 10.0)
         val sigma = sqrt(RATE / (2.0 * baud * gamma))
-        // On loge signal plus bruit dans la dynamique du convertisseur sans
-        // taper les butées : au-delà, la clé écrête et la mesure ne veut plus
-        // rien dire.
+        // Fit signal plus noise into the ADC range without hitting the rails:
+        // beyond that the dongle clips and the measurement is meaningless.
         val scale = 100.0 / (1.0 + 3.0 * sigma)
         val rnd = Random(seed)
 
@@ -242,7 +196,7 @@ object SondeBench {
                 iq[2 * k] = q8((cos(phase) + sigma * rnd.nextGaussian()) * scale)
                 iq[2 * k + 1] = q8((sin(phase) + sigma * rnd.nextGaussian()) * scale)
             }
-            // Découpage en blocs USB : c'est ce que voit le décodeur en vrai.
+            // Split into USB blocks: what the decoder sees for real.
             var at = 0
             while (at < iq.size) {
                 val len = minOf(BLOCK, iq.size - at)

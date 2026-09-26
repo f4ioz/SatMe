@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo
 
@@ -19,15 +19,15 @@ import org.junit.Test
 import org.junit.rules.TemporaryFolder
 
 /**
- * Le rapport de plantage est la seule chose qui parlera quand l'application se
- * taira. S'il est faux, il est pire qu'absent : on ira réparer ce qu'il montre
- * au lieu de ce qui casse. D'où ce banc.
+ * The crash report is the only thing left talking when the app goes silent.
+ * A wrong report is worse than none: we would fix what it shows instead of
+ * what breaks.
  */
 class PlantageTest {
 
     @get:Rule val dossier = TemporaryFolder()
 
-    // ————— la mise en forme —————
+    // ————— formatting —————
 
     @Test
     fun le_rapport_nomme_la_panne_des_les_premieres_lignes() {
@@ -84,7 +84,7 @@ class PlantageTest {
             corps.indexOf("Ce que je faisais") < corps.indexOf("TRACE"))
     }
 
-    // ————— le fichier —————
+    // ————— the file —————
 
     @Test
     fun ce_qui_est_ecrit_se_relit() {
@@ -136,9 +136,8 @@ class PlantageTest {
 
     @Test
     fun ecrire_dans_un_endroit_impossible_echoue_sans_lever() {
-        // Un fichier ordinaire là où l'on attend un dossier : l'écriture ne
-        // peut pas aboutir. Elle doit rendre `false`, pas jeter une exception
-        // par-dessus celle que l'on était en train de consigner.
+        // A plain file where a directory is expected: the write cannot succeed.
+        // It must return `false`, not throw on top of the exception being logged.
         val f = dossier.newFile()
         assertFalse(PlantageDisque.ecrit(f, "le rapport"))
         assertNull(PlantageDisque.lit(f))

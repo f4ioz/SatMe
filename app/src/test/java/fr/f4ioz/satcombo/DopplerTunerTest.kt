@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo
 
@@ -19,12 +19,9 @@ import org.junit.Test
 import kotlin.math.abs
 
 /**
- * Le partage du travail entre la PLL et le mélangeur logiciel.
- *
- * L'essai qui compte est le dernier : il rejoue un vrai passage d'ISS seconde
- * par seconde et compte les reprogrammations du tuner. C'est le genre
- * d'affirmation qu'aucune relecture de code ne donne et qu'un compteur donne en
- * une seconde.
+ * Splitting work between the tuner PLL and the software mixer. The key test
+ * replays a real ISS pass and counts PLL reprogrammings — something no code
+ * review can tell you.
  */
 class DopplerTunerTest {
 
@@ -32,7 +29,7 @@ class DopplerTunerTest {
 
     @Test
     fun le_premier_accord_programme_la_pll() {
-        // Zéro veut dire « jamais accordé » : il faut bien commencer quelque part.
+        // Zero means "never tuned".
         val p = DopplerTuner.plan(rest, 0L, 0L)
         assertTrue(p.retune)
         assertEquals(rest, p.pllHz)
@@ -45,19 +42,18 @@ class DopplerTunerTest {
         assertTrue("la PLL n'avait aucune raison de bouger", !p.retune)
         assertEquals(rest, p.pllHz)
         assertEquals(9_000L, p.fineHz)
-        // Et le signe suit le bon sens : écouter plus haut, décaler vers le haut.
+        // Sign check: listening higher shifts upward.
         assertTrue(DopplerTuner.plan(rest - 9_000L, rest, 0L).fineHz == -9_000L)
     }
 
     @Test
     fun sous_la_bande_morte_on_ne_touche_a_rien() {
-        // Corriger de trois hertz coûte plus cher que de les ignorer : le
-        // décalage rendu est celui déjà en place, à l'identique, pour que
-        // l'appelant compare et n'écrive rien.
+        // Correcting 3 Hz costs more than ignoring it: the current offset is
+        // returned unchanged so the caller compares equal and writes nothing.
         val p = DopplerTuner.plan(rest + 9_003L, rest, 9_000L)
         assertEquals(9_000L, p.fineHz)
         assertTrue(!p.retune)
-        // Dix hertz, en revanche, passent.
+        // 10 Hz does go through.
         assertEquals(9_010L, DopplerTuner.plan(rest + 9_010L, rest, 9_000L).fineHz)
     }
 
@@ -66,10 +62,10 @@ class DopplerTunerTest {
         val p = DopplerTuner.plan(rest + 31_000L, rest, 25_000L)
         assertTrue("il fallait recentrer", p.retune)
         assertEquals(rest + 31_000L, p.pllHz)
-        // On recentre sur la fréquence voulue, et non sur le repos : le passage
-        // repart avec toute la marge devant lui.
+        // Recentre on the wanted frequency, not the rest frequency, so the pass
+        // continues with the full margin ahead.
         assertEquals(0L, p.fineHz)
-        // Juste en dessous du seuil, on ne bouge toujours pas.
+        // Just under the threshold, still no move.
         assertTrue(!DopplerTuner.plan(rest + 30_000L, rest, 0L).retune)
     }
 
@@ -79,8 +75,8 @@ class DopplerTunerTest {
         assertEquals(-DopplerTuner.FINE_MAX_HZ, DopplerTuner.clampFine(-200_000L))
         assertTrue(DopplerTuner.fits(80_000L))
         assertTrue(!DopplerTuner.fits(80_001L))
-        // Le seuil de recentrage reste bien à l'intérieur de la butée, sans quoi
-        // la PLL bougerait toujours trop tard.
+        // The recentre threshold must sit inside the hard limit, or the PLL
+        // would always move too late.
         assertTrue(DopplerTuner.FINE_LIMIT_HZ < DopplerTuner.FINE_MAX_HZ)
     }
 
@@ -105,7 +101,7 @@ class DopplerTunerTest {
             .maxByOrNull { it.maxElevationDeg }
         assertTrue("aucun passage exploitable", pass != null)
 
-        // Seconde par seconde, exactement comme le fait le suivi en direct.
+        // Second by second, exactly like live tracking.
         val samples = predictor.samplePositions(iss, paris,
             pass!!.aosEpochMs, pass.losEpochMs, 1_000L)
         assertTrue("passage trop court : ${samples.size} s", samples.size > 300)
@@ -120,13 +116,13 @@ class DopplerTunerTest {
             if (p.retune) { pll = p.pllHz; writes++ }
             fine = p.fineHz
             worstFine = maxOf(worstFine, abs(fine))
-            // Et à tout instant, ce qu'on écoute reste ce qu'on voulait écouter.
+            // At every instant, what we hear is what we wanted to hear.
             assertTrue("écart résiduel de ${want - (pll + fine)} Hz",
                 abs(want - (pll + fine)) < DopplerTuner.DEADBAND_HZ)
         }
         assertEquals("reprogrammations de PLL sur un passage entier", 1, writes)
-        // Sur 435 MHz l'excursion approche les dix kilohertz de part et d'autre :
-        // le décalage fin travaille, mais n'approche jamais sa butée.
+        // On 435 MHz the swing nears ±10 kHz: the fine offset works but never
+        // gets near its limit.
         assertTrue("décalage maximal atteint : $worstFine Hz",
             worstFine in 3_000L..DopplerTuner.FINE_LIMIT_HZ)
         assertTrue(worstFine < DopplerTuner.FINE_MAX_HZ / 2)

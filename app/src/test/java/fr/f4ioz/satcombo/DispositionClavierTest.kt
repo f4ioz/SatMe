@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo
 
@@ -14,11 +14,10 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Le banc des dispositions de clavier.
+ * Keypad layouts.
  *
- * Il vise un défaut qui ne se verrait qu'au pire moment : une lettre absente
- * de la grille ne se remarque que le jour où un indicatif la réclame, en plein
- * passage, et l'on croirait à une panne du clavier.
+ * A letter missing from the grid only shows the day a callsign needs it, in
+ * the middle of a pass, and looks like a broken keypad.
  */
 class DispositionClavierTest {
 
@@ -55,7 +54,7 @@ class DispositionClavierTest {
         assertEquals("ZXCVBNM", rangees[3].joinToString(""))
     }
 
-    /** Sur un clavier physique on a « 1234567890 » sous les doigts. */
+    /** A physical keyboard has "1234567890" in that order. */
     @Test
     fun les_chiffres_suivent_le_clavier_physique() {
         listOf(DispositionClavier.AZERTY, DispositionClavier.QWERTY).forEach { nom ->
@@ -72,8 +71,8 @@ class DispositionClavierTest {
     }
 
     /**
-     * Un réglage venu d'une version ultérieure, ou abîmé, ne doit pas laisser
-     * l'opérateur sans clavier au milieu d'un passage.
+     * A setting from a later version, or a corrupted one, must not leave the
+     * operator without a keypad mid-pass.
      */
     @Test
     fun un_nom_inconnu_rend_l_alphabetique() {

@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.sonde
 
@@ -15,16 +15,15 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Les sites de lâcher, la bande, et l'heure à laquelle il faut écouter.
+ * Launch sites, the band, and when to listen.
  *
- * L'essai le plus important de ce fichier est celui de la borne haute : la
- * bande d'écoute s'arrête à 405,9 MHz parce qu'au-dessus commencent les balises
- * de détresse. Cette limite n'est pas un réglage confortable, c'est une règle,
- * et elle doit rester vérifiée à chaque compilation.
+ * The most important test here is the upper band edge: listening stops at
+ * 405.9 MHz because distress beacons start above it. That limit is a rule,
+ * not a preference, and must be checked on every build.
  */
 class SondeSitesTest {
 
-    // Le QTH de référence : Brest-Guipavas.
+    // Reference QTH: Brest-Guipavas.
     private val LAT = 48.44425
     private val LON = -4.41238
 
@@ -34,7 +33,7 @@ class SondeSitesTest {
         assertTrue(SondeSites.inBand(SondeSites.SCAN_TO_HZ))
         assertTrue(!SondeSites.inBand(SondeSites.SCAN_FROM_HZ - 1))
         assertTrue(!SondeSites.inBand(SondeSites.SCAN_TO_HZ + 1))
-        // 406 MHz est la fréquence COSPAS-SARSAT : jamais dans le plan.
+        // 406 MHz is COSPAS-SARSAT: never in the plan.
         assertTrue(!SondeSites.inBand(406_000_000L))
         assertTrue(!SondeSites.inBand(0L))
         assertEquals(400_150_000L, SondeSites.SCAN_FROM_HZ)
@@ -56,7 +55,7 @@ class SondeSitesTest {
             assertTrue("${s.name} longitude", s.lon >= -180.0 && s.lon <= 180.0)
             assertEquals(s.freqKhz[0] * 1000L, s.mainHz)
         }
-        // Les sites français réguliers ont tous l'horaire Météo-France.
+        // Regular French sites all follow the Météo-France schedule.
         for (s in SondeSites.FRANCE) {
             assertTrue(!s.occasional)
             assertEquals(2, s.launchesUtc.size)
@@ -71,7 +70,7 @@ class SondeSitesTest {
         assertEquals("07110", n[0].first.wmo)
         assertEquals(0.0, n[0].second, 0.1)
         for (k in 1 until n.size) assertTrue(n[k].second >= n[k - 1].second)
-        // Par défaut on ne propose pas les sites occasionnels.
+        // Occasional sites are not offered by default.
         assertTrue(n.none { it.first.occasional })
         val avec = SondeSites.nearest(LAT, LON, max = 10, includeOccasional = true)
         assertTrue(avec.any { it.first.occasional })
@@ -83,12 +82,12 @@ class SondeSitesTest {
         val p = SondeSites.scanPlan(LAT, LON)
         assertEquals(404_000_000L, p[0])
         assertTrue(p.all { SondeSites.inBand(it) })
-        assertEquals(p.size, p.toSet().size)          // aucune fréquence deux fois
-        // Le balayage complet de la bande au pas de 10 kHz.
+        assertEquals(p.size, p.toSet().size)          // no frequency twice
+        // Full band sweep in 10 kHz steps.
         assertEquals(576, p.size)
         assertTrue(p.contains(SondeSites.SCAN_FROM_HZ))
         assertTrue(p.contains(SondeSites.SCAN_TO_HZ))
-        // Les canaux des stations proches passent avant le balayage.
+        // Nearby station channels come before the sweep.
         assertTrue(p.indexOf(404_000_000L) < p.indexOf(SondeSites.SCAN_FROM_HZ))
     }
 
@@ -97,14 +96,14 @@ class SondeSitesTest {
         val o = SondeSites.likelyOrigin(48.5, -4.3, "M20")
         assertNotNull(o)
         assertEquals("07110", o!!.wmo)
-        // Au milieu de l'Atlantique, aucun site ne peut être invoqué.
+        // Mid-Atlantic, no site can be claimed.
         assertNull(SondeSites.likelyOrigin(30.0, -40.0, "M20"))
-        // Un type inconnu ne doit pas faire disparaître la réponse : on retombe
-        // sur le site le plus proche, tous types confondus.
+        // An unknown type must not drop the answer: fall back to the nearest
+        // site of any type.
         val q = SondeSites.likelyOrigin(48.5, -4.3, "XYZ")
         assertNotNull(q)
         assertEquals("07110", q!!.wmo)
-        // Sans type demandé, la réponse est la même.
+        // Same answer without a type.
         assertEquals("07110", SondeSites.likelyOrigin(48.5, -4.3)!!.wmo)
     }
 
@@ -122,21 +121,21 @@ class SondeSitesTest {
 
     @Test
     fun `les lachers Meteo-France sont a onze minutes de l heure`() {
-        assertEquals(671, Math.round(SondeSites.MF_DAY * 60.0).toInt())     // 11 h 11
-        assertEquals(1391, Math.round(SondeSites.MF_NIGHT * 60.0).toInt())  // 23 h 11
+        assertEquals(671, Math.round(SondeSites.MF_DAY * 60.0).toInt())     // 11:11
+        assertEquals(1391, Math.round(SondeSites.MF_NIGHT * 60.0).toInt())  // 23:11
     }
 
     @Test
     fun `minutes avant le prochain lacher`() {
         val brest = SondeSites.FRANCE.first { it.wmo == "07110" }
-        assertEquals(71, SondeSites.minutesToNextLaunch(brest, 600))    // 10 h 00 UTC
-        assertEquals(711, SondeSites.minutesToNextLaunch(brest, 1400))  // 23 h 20 UTC
-        assertEquals(0, SondeSites.minutesToNextLaunch(brest, 671))     // pile à l'heure
-        // Un site occasionnel n'a pas d'horaire : on le dit au lieu d'inventer.
+        assertEquals(71, SondeSites.minutesToNextLaunch(brest, 600))    // 10:00 UTC
+        assertEquals(711, SondeSites.minutesToNextLaunch(brest, 1400))  // 23:20 UTC
+        assertEquals(0, SondeSites.minutesToNextLaunch(brest, 671))     // exactly on time
+        // An occasional site has no schedule: say so rather than invent one.
         val ury = SondeSites.FRANCE_OCCASIONAL.first { it.wmo == "URY" }
         assertEquals(-1, SondeSites.minutesToNextLaunch(ury, 600))
         assertTrue(!SondeSites.listeningNow(ury, 600))
-        // Le résultat reste toujours dans la journée.
+        // The result always stays within one day.
         for (m in 0 until 1440 step 17) {
             val d = SondeSites.minutesToNextLaunch(brest, m)
             assertTrue("à $m minutes : $d", d in 0..1439)
@@ -146,14 +145,13 @@ class SondeSitesTest {
     @Test
     fun `la fenetre d ecoute couvre le vol entier`() {
         val brest = SondeSites.FRANCE.first { it.wmo == "07110" }
-        // Une demi-heure après le lâcher de nuit : la sonde monte encore.
+        // Half an hour after the night launch: the sonde is still climbing.
         assertTrue(SondeSites.listeningNow(brest, 1421))
-        // Cinq minutes avant le lâcher de jour : on ouvre en avance.
+        // Five minutes before the day launch: open early.
         assertTrue(SondeSites.listeningNow(brest, 666))
-        // Vingt minutes avant : trop tôt, et le vol du matin est fini depuis
-        // longtemps.
+        // Twenty minutes before: too early, and the previous flight is long over.
         assertTrue(!SondeSites.listeningNow(brest, 651))
-        // Trois heures après le lâcher de jour, la sonde est au sol.
+        // Three hours after the day launch the sonde is on the ground.
         assertTrue(SondeSites.listeningNow(brest, 671 + 180))
         assertTrue(!SondeSites.listeningNow(brest, 671 + 181))
     }

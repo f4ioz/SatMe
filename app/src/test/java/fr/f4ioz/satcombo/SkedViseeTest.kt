@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo
 
@@ -12,13 +12,13 @@ import fr.f4ioz.satcombo.domain.SkedVisee
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
-/** Le banc de la fenêtre mise en avant après un calcul de sked. */
+/** Which window is highlighted after a sked computation. */
 class SkedViseeTest {
 
     private val min = 60_000L
     private val t = 1_800_000_000_000L
 
-    /** Trois créneaux mutuels sur les 48 h : ce soir, demain matin, demain soir. */
+    /** Three mutual windows over 48 h: tonight, tomorrow morning, tomorrow evening. */
     private val fenetres = listOf(
         t + 60 * min..t + 75 * min,
         t + 600 * min..t + 618 * min,
@@ -29,7 +29,7 @@ class SkedViseeTest {
         assertEquals(0, SkedVisee.index(fenetres, null))
     }
 
-    /** Le défaut rapporté : l'annonce de mercredi matin ouvrait sur ce soir. */
+    /** The reported bug: a Wednesday-morning announcement opened on tonight. */
     @Test
     fun la_visee_designe_la_fenetre_qui_la_contient() {
         assertEquals(1, SkedVisee.index(fenetres, t + 605 * min))
@@ -42,10 +42,9 @@ class SkedViseeTest {
     }
 
     /**
-     * Les éléments orbitaux vieillissent et le créneau local glisse de
-     * quelques minutes. Une visée qui tombe juste à côté doit désigner la
-     * fenêtre voisine, pas la première de la liste : on la reconnaît d'un coup
-     * d'œil, alors que la première venue n'a aucun rapport.
+     * Orbital elements age and the local window drifts by a few minutes. A
+     * target just outside must pick the neighbouring window, not the first in
+     * the list: the operator recognises the former, the latter is unrelated.
      */
     @Test
     fun une_visee_juste_a_cote_prend_la_fenetre_voisine() {

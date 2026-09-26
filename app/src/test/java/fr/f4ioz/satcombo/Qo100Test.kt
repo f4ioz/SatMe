@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo
 
@@ -16,35 +16,20 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * QO-100 : le plan de fréquences et le pointage de la parabole.
+ * QO-100 frequency plan and dish pointing — neither checkable by eye.
  *
- * Deux choses se jouent ici, et aucune des deux ne se vérifie à l'œil sur
- * l'écran du téléphone.
+ * The 8089.5 MHz offset is a transponder fact; one MHz off and the app would
+ * transmit outside the band, undetectable from home. Pinned on the published
+ * narrowband edges.
  *
- * D'abord le plan de fréquences. Le décalage montée/descente de 8 089,5 MHz
- * est une donnée du transpondeur, pas un réglage : s'il était faux d'un
- * mégahertz, l'application émettrait poliment à côté de la bande amateur, et
- * l'opérateur n'aurait aucun moyen de s'en apercevoir depuis chez lui. On
- * l'épingle donc sur les bords du transpondeur étroit, qui sont publiés.
- *
- * Ensuite le pointage. Une parabole de 60 cm en bande X a une ouverture à
- * mi-puissance de l'ordre de 3° : un degré d'erreur se paie en décibels, deux
- * degrés se paient en « je n'entends rien ». Les valeurs de référence
- * ci-dessous ont été calculées séparément, hors de ce code, et recoupées avec
- * les chiffres publiés par les stations françaises actives sur le satellite —
- * Paris à 150° / 30° est la valeur que tout le monde cite. Elles sont
- * volontairement épinglées au centième de degré : ce n'est pas une prétention
- * de précision, c'est un détecteur de changement. Si quelqu'un touche à la
- * géométrie un jour, l'essai le dira tout de suite.
- *
- * On y ajoute deux points hors de France — Le Cap et Doha — parce que la
- * formule fermée des manuels change de branche sans prévenir dans l'hémisphère
- * sud et à l'est du satellite, et que c'est exactement la raison pour laquelle
- * le calcul est fait par vecteurs.
+ * A 60 cm dish has a ~3° beamwidth. Reference values were computed
+ * independently and match published French figures (Paris 150°/30°); pinned
+ * to 0.01° as a change detector. Cape Town and Doha are included because the
+ * textbook closed formula switches branch there — why the maths uses vectors.
  */
 class Qo100Test {
 
-    /** Un centième de degré : bien en dessous de ce qu'on sait pointer. */
+    /** 0.01°: far below what anyone can point. */
     private val tol = 0.01
 
     private fun verifie(
@@ -58,7 +43,7 @@ class Qo100Test {
         assertTrue("$nom devrait voir le satellite", p.visible)
     }
 
-    // --- Le pointage sur des villes de référence -------------------------
+    // --- Pointing from reference cities ------------------------------------
 
     @Test
     fun paris_pointe_au_sud_sud_est_a_trente_degres() {
@@ -74,8 +59,8 @@ class Qo100Test {
     }
 
     /**
-     * Depuis l'hémisphère sud le satellite est au *nord*, et le skew change
-     * de signe. C'est le cas qui fait mentir la formule fermée.
+     * From the southern hemisphere the satellite is to the *north* and skew
+     * changes sign — where the closed formula lies.
      */
     @Test
     fun depuis_le_cap_le_satellite_est_au_nord() {
@@ -83,8 +68,8 @@ class Qo100Test {
     }
 
     /**
-     * Doha est à l'est du satellite : la parabole se tourne vers le
-     * sud-ouest, azimut au-delà de 180°. L'autre moitié du piège.
+     * Doha is east of the satellite: the dish faces south-west, azimuth past
+     * 180°. The other half of the trap.
      */
     @Test
     fun depuis_doha_le_satellite_est_au_sud_ouest() {
@@ -92,9 +77,8 @@ class Qo100Test {
     }
 
     /**
-     * Pile sous le satellite, la parabole regarde le zénith. L'azimut n'a
-     * alors plus de sens — toutes les directions se valent — donc on ne
-     * l'épingle pas ; seule l'élévation est vérifiable.
+     * Directly below the satellite the dish looks at zenith. Azimuth is then
+     * meaningless, so only elevation is checked.
      */
     @Test
     fun sous_le_satellite_la_parabole_regarde_en_haut() {
@@ -105,10 +89,9 @@ class Qo100Test {
     }
 
     /**
-     * Aux antipodes du satellite la Terre fait écran : l'élévation est
-     * négative et [Qo100.Pointage.visible] doit le dire. Un écran qui
-     * afficherait « azimut 42° » à quelqu'un qui ne peut pas le voir serait
-     * pire que rien.
+     * At the antipode the Earth is in the way: elevation is negative and
+     * [Qo100.Pointage.visible] must say so. Showing "azimuth 42°" to someone
+     * who cannot see it would be worse than nothing.
      */
     @Test
     fun aux_antipodes_le_satellite_est_sous_l_horizon() {
@@ -118,9 +101,8 @@ class Qo100Test {
     }
 
     /**
-     * Le long d'un même méridien, plus on monte vers le nord, plus le
-     * satellite s'abaisse. Une propriété que la géométrie garantit et qu'un
-     * signe inversé quelque part casserait immédiatement.
+     * Along one meridian, the further north, the lower the satellite. Geometry
+     * guarantees it; a flipped sign anywhere would break it at once.
      */
     @Test
     fun l_elevation_baisse_quand_on_remonte_vers_le_nord() {
@@ -130,12 +112,11 @@ class Qo100Test {
         }
     }
 
-    // --- Le plan de fréquences ------------------------------------------
+    // --- Frequency plan ---------------------------------------------------
 
     /**
-     * Le bord bas du transpondeur étroit concorde exactement avec le
-     * décalage : c'est la meilleure preuve que la constante de 8 089,5 MHz
-     * est juste.
+     * The NB low edge matches the offset exactly: the best proof the 8089.5 MHz
+     * constant is right.
      */
     @Test
     fun le_decalage_relie_exactement_le_bord_bas_du_transpondeur_etroit() {
@@ -144,54 +125,39 @@ class Qo100Test {
     }
 
     /**
-     * Le bord haut, lui, ne concorde pas : le tableau publié par AMSAT-DL
-     * annonce une montée à 2 400,490 et une descente à 10 489,997, soit 7 kHz
-     * d'écart avec le décalage.
-     *
-     * Longtemps cet essai s'appelait « le bord haut publié est incohérent ».
-     * Il ne l'était pas : ces 7 kHz sont la balise multimédia, et l'essai
-     * suivant le montre. Les deux bords sont donc justes, ils ne parlent
-     * simplement pas de la même chose — l'un de la dernière fréquence sur
-     * laquelle on émet, l'autre de la dernière sur laquelle on reçoit.
-     *
-     * On épingle quand même l'écart : pour que personne ne « corrige » un jour
-     * l'un des deux bords en croyant réparer un bogue, et parce que sept
-     * kilohertz suffisent à poser une porteuse sur une balise.
+     * The published high edges (up 2400.490, down 10489.997) differ by 7 kHz
+     * from the offset: that is the multimedia beacon, not an error — last TX
+     * vs last RX frequency. Pinned so nobody "fixes" an edge.
      */
     @Test
     fun les_sept_kilohertz_du_bord_haut_sont_la_balise_multimedia() {
         val ecart = Qo100.NB.descenteHautHz - Qo100.descenteDepuisMontee(Qo100.NB.monteeHautHz)
         assertEquals(7_000L, ecart)
 
-        // Ces 7 kHz-là, exactement, sont une balise : même largeur, mêmes bornes.
+        // Those exact 7 kHz are a beacon: same width, same bounds.
         val multi = Qo100.SEGMENTS.first { it.cle == "balise_multimedia" }
         assertEquals(7_000L, multi.largeurHz)
         assertEquals(Qo100.descenteDepuisMontee(Qo100.NB.monteeHautHz), multi.basHz)
         assertEquals(Qo100.NB.descenteHautHz, multi.hautHz)
         assertEquals(Qo100.Usage.BALISE, multi.usage)
 
-        // Et le bord de montée publié est bien la dernière fréquence émissible.
+        // The published uplink edge is the last transmittable frequency.
         assertEquals(Qo100.DERNIERE_DESCENTE_EMISSIBLE_HZ,
             Qo100.descenteDepuisMontee(Qo100.NB.monteeHautHz))
 
-        // La montée calculée depuis le bord haut de la descente, elle, sort du
-        // transpondeur : c'est le calcul qu'il ne faut jamais faire.
+        // An uplink computed from the downlink high edge falls outside the
+        // transponder: the computation never to do.
         val monteeCalculee = Qo100.monteeDepuisDescente(Qo100.NB.descenteHautHz)
         assertTrue("la montée déduite sort du transpondeur publié",
             monteeCalculee > Qo100.NB.monteeHautHz)
     }
 
-    // --- Le plan de bande, segment par segment ---------------------------
+    // --- Band plan, segment by segment ------------------------------------
 
     /**
-     * La propriété qui porte toute la réglette : les douze segments se
-     * recollent bout à bout, de 10 489,500 à 10 490,000, sans un hertz de trou
-     * ni un hertz de recouvrement.
-     *
-     * Un trou, et le curseur traverserait une zone sans nom ni couleur, où
-     * [Qo100.emissionAutorisee] répondrait « non » sans raison affichable. Un
-     * recouvrement, et l'ordre de la liste déciderait silencieusement du
-     * libellé. Aucun des deux ne se verrait à l'œil sur l'écran.
+     * The twelve segments join end to end from 10489.500 to 10490.000. A gap
+     * would give an unnamed zone where TX is refused without reason; an
+     * overlap would let list order pick the label.
      */
     @Test
     fun les_douze_segments_couvrent_la_reglette_sans_trou_ni_recouvrement() {
@@ -206,21 +172,21 @@ class Qo100Test {
         Qo100.SEGMENTS.forEach {
             assertTrue("le segment « ${it.cle} » est vide ou à l'envers", it.largeurHz > 0)
         }
-        // Les clés servent à composer une clé de traduction : elles doivent
-        // être uniques, sinon deux segments partagent un libellé.
+        // Keys build translation keys: they must be unique, or two segments
+        // share a label.
         assertEquals(12, Qo100.SEGMENTS.map { it.cle }.toSet().size)
     }
 
     /**
-     * Le balayage au kilohertz : chaque fréquence de la réglette appartient à
-     * exactement un segment, et [Qo100.segment] rend celui-là.
+     * Fine sweep: every ruler frequency belongs to exactly one segment, and
+     * [Qo100.segment] returns it.
      */
     @Test
     fun chaque_frequence_de_la_reglette_appartient_a_un_seul_segment() {
         var hz = Qo100.REGLETTE_BAS_HZ
         while (hz <= Qo100.REGLETTE_HAUT_HZ) {
             val trouves = Qo100.SEGMENTS.filter { hz in it }
-            // La toute dernière fréquence est la borne haute fermée à la main.
+            // The very last frequency is the upper bound, closed by hand.
             val attendu = if (hz == Qo100.REGLETTE_HAUT_HZ) 0 else 1
             assertEquals("$hz appartient à ${trouves.size} segments", attendu, trouves.size)
             assertTrue("aucun segment rendu pour $hz", Qo100.segment(hz) != null)
@@ -233,17 +199,14 @@ class Qo100Test {
         assertNull(Qo100.segment(Qo100.REGLETTE_BAS_HZ - 1))
         assertNull(Qo100.segment(Qo100.REGLETTE_HAUT_HZ + 1))
         assertNull(Qo100.segment(145_800_000L))
-        // Et donc pas d'émission non plus : la réponse par défaut est « non ».
+        // Hence no transmission either: the default answer is "no".
         assertFalse(Qo100.emissionAutorisee(Qo100.REGLETTE_BAS_HZ - 1))
         assertFalse(Qo100.emissionAutorisee(2_400_100_000L))
     }
 
     /**
-     * Les quatre balises, et le fait qu'on n'émet sur aucune des quatre.
-     *
-     * C'est la raison d'être de tout ce tableau : sans lui, l'application
-     * laisserait poser une porteuse sur la balise médiane, qui est justement
-     * celle que tout le monde utilise pour se caler.
+     * No transmitting on any of the four beacons — the reason for this table:
+     * otherwise a carrier could land on the middle beacon everyone uses.
      */
     @Test
     fun on_n_emet_sur_aucune_des_quatre_balises() {
@@ -257,13 +220,13 @@ class Qo100Test {
         listOf(Qo100.BALISE_BASSE_HZ, Qo100.BALISE_MEDIANE_HZ, Qo100.BALISE_HAUTE_HZ).forEach {
             assertFalse("émission autorisée sur la balise $it", Qo100.emissionAutorisee(it))
         }
-        // Et la multimédia, qui n'a pas de constante à elle.
+        // And the multimedia one, which has no constant of its own.
         assertFalse(Qo100.emissionAutorisee(10_489_993_500L))
     }
 
     /**
-     * La frontière du haut, à un kilohertz près. C'est le seul endroit du
-     * fichier où une erreur d'un kilohertz est un brouillage.
+     * The upper boundary, to the kilohertz. The one place here where 1 kHz off
+     * means interference.
      */
     @Test
     fun la_derniere_frequence_emissible_est_dix_mille_quatre_cent_quatre_vingt_neuf_neuf_cent_quatre_vingt_dix() {
@@ -271,14 +234,14 @@ class Qo100Test {
         assertTrue(Qo100.emissionAutorisee(Qo100.DERNIERE_DESCENTE_EMISSIBLE_HZ - 1))
         assertFalse(Qo100.emissionAutorisee(Qo100.DERNIERE_DESCENTE_EMISSIBLE_HZ))
         assertFalse(Qo100.emissionAutorisee(Qo100.NB.descenteHautHz))
-        // La montée correspondante est exactement le bord haut publié.
+        // The matching uplink is exactly the published high edge.
         assertEquals(Qo100.NB.monteeHautHz,
             Qo100.monteeDepuisDescente(Qo100.DERNIERE_DESCENTE_EMISSIBLE_HZ))
     }
 
     /**
-     * Le bas de la bande passante utile est le premier segment où l'on émet.
-     * Autrement dit : [Qo100.NB] et [Qo100.SEGMENTS] racontent la même bande.
+     * The usable passband starts at the first transmit segment: [Qo100.NB] and
+     * [Qo100.SEGMENTS] describe the same band.
      */
     @Test
     fun les_bornes_du_transpondeur_etroit_concordent_avec_les_segments() {
@@ -290,9 +253,9 @@ class Qo100Test {
     }
 
     /**
-     * Les largeurs maximales publiées. Le segment numérique étroit à 500 Hz
-     * est le seul du plan à ne pas être à 2,7 kHz, et c'est aussi celui où une
-     * BLU posée par erreur écraserait le plus de monde.
+     * Published maximum bandwidths. The 500 Hz narrow digital segment is the
+     * only one not at 2.7 kHz, and where a stray SSB signal would wipe out the
+     * most stations.
      */
     @Test
     fun les_largeurs_maximales_suivent_le_plan_publie() {
@@ -302,15 +265,14 @@ class Qo100Test {
         assertEquals(2_700, seg("ssb_bas").largeurMaxHz)
         assertEquals(2_700, seg("ssb_haut").largeurMaxHz)
         assertEquals(2_700, seg("mixte").largeurMaxHz)
-        // La CW n'a pas de largeur au plan : l'usage tient lieu de règle.
+        // CW has no width in the plan: practice is the rule.
         assertEquals(0, seg("cw").largeurMaxHz)
     }
 
     /**
-     * Diffusion et urgence : deux tranches de 7,5 kHz autour de deux
-     * fréquences qui se retiennent, 10 489,855 et 10 489,860. La frontière
-     * tombe donc sur un demi-kilohertz, ce qui a tout l'air d'une coquille et
-     * n'en est pas une.
+     * Broadcast and emergency: two 7.5 kHz slices around 10489.855 and
+     * 10489.860. The boundary falls on a half kilohertz — looks like a typo,
+     * is not.
      */
     @Test
     fun la_diffusion_et_l_urgence_font_sept_kilohertz_et_demi_chacune() {
@@ -321,14 +283,14 @@ class Qo100Test {
         assertEquals(10_489_855_000L, diff.repereHz!!)
         assertEquals(10_489_860_000L, urg.repereHz!!)
         assertEquals(10_489_857_500L, diff.hautHz)
-        // On y émet : ce sont des usages réservés, pas des interdictions.
+        // Transmitting is allowed: reserved uses, not prohibitions.
         assertTrue(diff.emissionPermise)
         assertTrue(urg.emissionPermise)
     }
 
     /**
-     * Le repère d'un segment, quand il existe, tombe dans ce segment. Sinon
-     * l'écran dessinerait un trait de balise à côté de sa balise.
+     * A segment's marker, if any, lies within that segment; otherwise the screen
+     * would draw a beacon mark beside its beacon.
      */
     @Test
     fun les_reperes_tombent_dans_leur_propre_segment() {
@@ -337,9 +299,8 @@ class Qo100Test {
             assertTrue("le repère $r sort du segment « ${s.cle} »",
                 r in s || r == s.hautHz)
         }
-        // Six segments portent un repère : les quatre balises, plus la
-        // diffusion et l'urgence. Le compte est là pour qu'on s'en aperçoive
-        // si l'un d'eux disparaît.
+        // Six segments carry a marker: four beacons, broadcast, emergency. The
+        // count catches one disappearing.
         assertEquals(6, Qo100.SEGMENTS.count { it.repereHz != null })
     }
 
@@ -350,9 +311,8 @@ class Qo100Test {
     }
 
     /**
-     * Sans inversion, monter d'un kilohertz descend d'un kilohertz. C'est ce
-     * qui distingue QO-100 de la plupart des transpondeurs linéaires, et
-     * l'oublier retournerait la bande.
+     * Non-inverting: +1 kHz up is +1 kHz down. Unlike most linear
+     * transponders; forgetting it would flip the band.
      */
     @Test
     fun le_transpondeur_n_inverse_pas_le_spectre() {
@@ -368,21 +328,20 @@ class Qo100Test {
         }
     }
 
-    /** Les trois balises sont dans le transpondeur étroit, ou juste à son bord. */
+    /** The three CW beacons: the middle one inside NB, the others just outside. */
     @Test
     fun les_balises_encadrent_le_transpondeur_etroit() {
         assertTrue(Qo100.BALISE_BASSE_HZ < Qo100.NB.descenteBasHz)
         assertTrue(Qo100.NB.contientDescente(Qo100.BALISE_MEDIANE_HZ))
         assertTrue(Qo100.BALISE_HAUTE_HZ > Qo100.NB.descenteHautHz)
-        // 250 kHz entre chacune : le repère qu'on cherche à l'oreille.
+        // 250 kHz apart: the landmarks one listens for.
         assertEquals(250_000L, Qo100.BALISE_MEDIANE_HZ - Qo100.BALISE_BASSE_HZ)
         assertEquals(250_000L, Qo100.BALISE_HAUTE_HZ - Qo100.BALISE_MEDIANE_HZ)
     }
 
     /**
-     * La balise médiane tombe pile au milieu du transpondeur étroit, à un
-     * kilohertz près. C'est ce qui en fait un point de départ raisonnable
-     * quand on ouvre l'écran sans savoir où aller.
+     * The middle beacon sits at the NB centre, within 1 kHz: a sensible
+     * starting point when opening the screen.
      */
     @Test
     fun le_centre_du_transpondeur_etroit_est_sur_la_balise_mediane() {
@@ -412,8 +371,8 @@ class Qo100Test {
     }
 
     /**
-     * Le NORAD est la clé sous laquelle se range le décalage d'étalonnage :
-     * s'il changeait, le calage fait sur la balise se perdrait sans bruit.
+     * The NORAD number keys the stored calibration offset: if it changed, the
+     * beacon calibration would be silently lost.
      */
     @Test
     fun le_numero_de_catalogue_est_celui_d_es_hail_2() {

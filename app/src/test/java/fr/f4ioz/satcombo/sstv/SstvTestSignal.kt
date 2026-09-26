@@ -1,21 +1,19 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.sstv
 
 /**
- * L'émetteur utilisé par les essais.
+ * The encoder used by the tests.
  *
- * Il vivait ici tant que rien d'autre n'en avait besoin ; il est passé dans
- * les sources de l'application le jour où les mires SSTV ont eu à produire du
- * son. Ce n'est plus qu'un nom, gardé pour que les essais continuent de dire
- * ce qu'ils vérifient : une table de modes relue par un chemin indépendant du
- * décodeur.
+ * It now lives in the app sources (SSTV test patterns need to make sound);
+ * this name stays so the tests keep saying what they check: the mode table
+ * read back through a path independent of the decoder.
  */
 object SstvTestSignal {
 

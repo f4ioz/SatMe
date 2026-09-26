@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo
 
@@ -21,26 +21,18 @@ import java.util.Collections
 import java.util.Locale
 
 /**
- * Le client `rotctld`, contre un faux Hamlib de trente lignes.
- *
- * Sept essais, et trois d'entre eux existent parce que le protocole a trois
- * pièges qui ne se voient pas : le point décimal, le `RPRT -1` rendu à la place
- * des deux lignes de position, et l'écho du mode étendu. Les deux derniers ont
- * la même conséquence, et c'est la pire qui soit sur un protocole en texte
- * sans délimiteur : une ligne de trop dans le tuyau, et tout ce qui suit est
- * décalé d'un cran — indéfiniment. Le mât répond alors une élévation quand on
- * lui demande un azimut, et rien ne le dit.
- *
- * Le serveur écoute sur un port choisi par le système : deux essais qui
- * tournent en même temps ne doivent pas se disputer un numéro écrit en dur.
+ * The `rotctld` client against a tiny fake Hamlib (on a system-chosen port).
+ * Three hidden traps: the decimal point, `RPRT -1` instead of two position
+ * lines, and the extended-mode echo. The last two leave one extra line in the
+ * pipe, shifting every later reply by one, forever and silently.
  */
 class RotctldTest {
 
     /**
-     * Un `rotctld` qui n'existe pas.
+     * A fake `rotctld`.
      *
-     * [extended] rejoue le mode étendu (`rotctld -vv` et ses réponses nommées),
-     * [failing] un contrôleur muet qui rend `RPRT -1` au lieu d'une position.
+     * [extended] replays extended mode (`rotctld -vv`, named replies);
+     * [failing] a silent controller returning `RPRT -1` instead of a position.
      */
     private class FauxHamlib(
         private val extended: Boolean = false,
@@ -68,8 +60,8 @@ class RotctldTest {
                     val t = ligne.trim()
                     when {
                         t.startsWith("P ") -> {
-                            // Hamlib lit ses nombres en C. Une virgule décimale
-                            // n'est pas « presque bon » : c'est un refus net.
+                            // Hamlib parses numbers in the C locale. A decimal
+                            // comma is not "almost right": it is a flat refusal.
                             val p = t.split(Regex("\\s+"))
                             val a = p.getOrNull(1)?.toDoubleOrNull()
                             val e = p.getOrNull(2)?.toDoubleOrNull()
@@ -115,10 +107,9 @@ class RotctldTest {
 
     @Test
     fun la_consigne_part_avec_un_point_decimal_meme_en_francais() {
-        // Le piège le plus bête et le plus coûteux : un téléphone réglé en
-        // français écrit « 180,00 », et Hamlib répond `RPRT -1` sans autre
-        // explication. Le mât ne bouge pas, l'application n'affiche rien
-        // d'anormal, et l'on cherche pendant un passage entier.
+        // The dumbest, costliest trap: a phone set to French writes "180,00"
+        // and Hamlib answers `RPRT -1` with no explanation. The mast does not
+        // move, the app shows nothing wrong, and a whole pass is lost.
         val defaut = Locale.getDefault()
         try {
             Locale.setDefault(Locale.FRANCE)
@@ -137,7 +128,7 @@ class RotctldTest {
         val h = FauxHamlib()
         avecServeur(h) { r ->
             assertEquals(RotorPos(180.0, 45.0), r.readPosition())
-            // Et l'aller-retour tient : ce qu'on écrit, on le relit.
+            // Round trip: what we write, we read back.
             assertTrue(r.moveTo(12.0, 3.5))
             assertEquals(RotorPos(12.0, 3.5), r.readPosition())
         }
@@ -146,15 +137,13 @@ class RotctldTest {
 
     @Test
     fun un_rprt_negatif_rend_null_au_lieu_de_decaler_tout_le_reste() {
-        // Quand le contrôleur ne répond pas, `p` ne rend pas deux nombres : il
-        // rend un code d'erreur, sur une seule ligne. Un lecteur qui attend
-        // aveuglément deux lignes consomme la réponse de la commande suivante,
-        // et à partir de là tout est décalé.
+        // When the controller does not answer, `p` returns a one-line error
+        // code, not two numbers. A reader blindly expecting two lines eats the
+        // next command's reply, and everything is shifted from then on.
         val h = FauxHamlib(failing = true)
         avecServeur(h) { r ->
             assertNull(r.readPosition())
-            // La preuve que rien n'a été décalé : la commande suivante est
-            // comprise, et sa réponse arrive bien à elle.
+            // Proof nothing shifted: the next command gets its own reply.
             assertTrue(r.moveTo(90.0, 10.0))
             assertNull(r.readPosition())
             assertTrue(r.stop())
@@ -163,10 +152,9 @@ class RotctldTest {
 
     @Test
     fun l_echo_du_mode_etendu_ne_se_fait_plus_prendre_pour_une_position() {
-        // En mode étendu le serveur nomme ses champs et termine par `RPRT 0`.
-        // Ce `RPRT 0` final n'existe pas en mode simple ; l'oublier laisse une
-        // ligne en trop, et l'on retombe sur le décalage précédent — d'où la
-        // seconde lecture, qui est le véritable objet de l'essai.
+        // Extended mode names its fields and ends with `RPRT 0`, which simple
+        // mode lacks. Ignoring it leaves one extra line and the same shift —
+        // hence the second read, which is the real point of the test.
         val h = FauxHamlib(extended = true)
         avecServeur(h) { r ->
             assertEquals(RotorPos(180.0, 45.0), r.readPosition())
@@ -193,7 +181,7 @@ class RotctldTest {
         assertNull(r.readPosition())
         assertTrue(!r.moveTo(180.0, 45.0))
         assertTrue(!r.stop())
-        // Un port fermé ne s'ouvre pas, et ne fait pas tomber l'application.
+        // A closed port does not open, and does not crash the app.
         val libre = ServerSocket(0)
         val port = libre.localPort
         libre.close()

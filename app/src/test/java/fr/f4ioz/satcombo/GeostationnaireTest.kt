@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo
 
@@ -16,21 +16,20 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Reconnaître un satellite qui ne bouge pas, d'après son TLE.
+ * Recognising a satellite that does not move, from its TLE.
  *
- * On ne se fie pas à une liste de numéros : elle serait juste pour QO-100 et
- * fausse pour le prochain géostationnaire venu. Le nombre de tours par jour
- * est dans les éléments orbitaux, et il vaut pour tous.
+ * No list of catalogue numbers: it would be right for QO-100 and wrong for
+ * the next geostationary one. Mean motion is in the elements and works for all.
  */
 class GeostationnaireTest {
 
-    // QO-100 / Es'hail-2 : 1,00 tour par jour.
+    // QO-100 / Es'hail-2: 1.00 rev/day.
     private val qo100 = TleEntry(
         name = "QO-100",
         line1 = "1 43700U 18090A   26246.50000000  .00000100  00000-0  00000-0 0  9990",
         line2 = "2 43700   0.0200  95.0000 0002000 250.0000 110.0000  1.00271000 24000")
 
-    // FO-29 : un peu plus de 12 tours par jour.
+    // FO-29: a little over 12 rev/day.
     private val fo29 = TleEntry(
         name = "FO-29",
         line1 = "1 24278U 96046B   26246.50000000  .00000010  00000-0  00000-0 0  9990",
@@ -53,10 +52,10 @@ class GeostationnaireTest {
     }
 
     /**
-     * Sans ligne 2 lisible, on répond « non ».
+     * Without a readable line 2, answer "no".
      *
-     * Mieux vaut une boussole inutile qu'une boussole cachée sur un satellite
-     * qui passe : la première encombre, la seconde fait manquer le passage.
+     * A useless compass is better than a hidden one on a moving satellite:
+     * the first is clutter, the second makes you miss the pass.
      */
     @Test
     fun un_tle_illisible_ne_passe_pas_pour_immobile() {
@@ -65,7 +64,7 @@ class GeostationnaireTest {
         assertFalse(casse.estImmobile)
     }
 
-    /** Un géosynchrone incliné décrit un huit, mais la parabole ne bouge pas. */
+    /** An inclined geosynchronous traces a figure eight, but the dish stays put. */
     @Test
     fun un_geosynchrone_incline_compte_aussi() {
         val incline = TleEntry(

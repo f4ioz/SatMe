@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo
 
@@ -17,37 +17,32 @@ import org.junit.Test
 import kotlin.math.abs
 
 /**
- * L'accord fin se juge en hertz sous le doigt, et cela se calcule.
- *
- * Le défaut d'origine tenait dans un rapport : 490 kHz de transpondeur étalés
- * sur la largeur d'un écran font 1,4 kHz par dp, quand une BLU se cale à 50 Hz
- * près. Les essais qui suivent vérifient d'abord ce chiffre, puis que chacune
- * des trois aides le ramène dans le domaine de la main.
+ * Fine tuning, judged in hertz per finger movement. 490 kHz of transponder
+ * across a screen is 1.4 kHz per dp, while SSB needs 50 Hz: each of the three
+ * aids must bring that within hand reach.
  */
 class AccordFinTest {
 
-    /** Densité d'un téléphone courant : 3× la densité de référence. */
+    /** Typical phone density: 3× the reference density. */
     private val dpi = 480f
 
-    // ------------------------------------------------------------------ loupe
+    // ------------------------------------------------------------------ magnifier
 
-    /**
-     * Le chiffre qui a motivé tout le reste, et son remède, côte à côte.
-     */
+    /** The figure that motivated everything, and its remedy, side by side. */
     @Test
     fun la_loupe_ramene_le_doigt_dans_le_domaine_de_la_blu() {
         val largeurDp = 360f
 
-        // La réglette entière : ce qu'on avait.
+        // The full scale: what we had.
         val reglette = AccordFin.hzParDp(490_000, largeurDp)
         assertTrue("la réglette entière donne $reglette Hz/dp", reglette > 1_000)
 
-        // La loupe de cinq kilohertz : ce qu'on a maintenant.
+        // The 5 kHz magnifier: what we have now.
         val loupe = AccordFin.hzParDp(5_000, largeurDp)
         assertTrue("la loupe donne $loupe Hz/dp", loupe < 20)
 
-        // Une pulpe de doigt fait une dizaine de dp. Sous la loupe, elle doit
-        // couvrir moins que la largeur d'un canal BLU.
+        // A fingertip is about 10 dp. Under the magnifier it must cover less
+        // than an SSB channel.
         assertTrue(loupe * 10 < 2_400)
     }
 
@@ -59,24 +54,23 @@ class AccordFinTest {
     // ---------------------------------------------------------------- vernier
 
     /**
-     * Le rapport se dit en hertz par centimètre et non par pixel : c'est la
-     * seule unité qui rende le même geste sur deux écrans de densités
-     * différentes. On le vérifie en faisant glisser un centimètre réel sur
-     * deux appareils que tout oppose.
+     * The ratio is in Hz per centimetre, not per pixel: the only unit giving
+     * the same gesture on screens of different density. Checked by sliding a
+     * real centimetre on two very different devices.
      */
     @Test
     fun un_centimetre_de_doigt_vaut_le_meme_ecart_sur_deux_ecrans() {
         val telephone = AccordFin.hzParPixel(200, 480f)
         val tablette = AccordFin.hzParPixel(200, 160f)
 
-        val cmTelephone = 480f / 2.54f      // pixels dans un centimètre
+        val cmTelephone = 480f / 2.54f      // pixels per centimetre
         val cmTablette = 160f / 2.54f
 
         assertEquals(200.0, telephone * cmTelephone, 0.5)
         assertEquals(200.0, tablette * cmTablette, 0.5)
     }
 
-    /** On glisse le cadran, pas l'aiguille : vers la gauche fait monter. */
+    /** You drag the dial, not the needle: leftwards tunes up. */
     @Test
     fun tirer_vers_la_gauche_fait_monter_en_frequence() {
         val hzParPx = AccordFin.hzParPixel(200, 480f)
@@ -85,13 +79,9 @@ class AccordFinTest {
     }
 
     /**
-     * Le point le plus important du vernier.
-     *
-     * Au rapport le plus fin, un pixel vaut moins d'un hertz : 20 Hz/cm sur un
-     * écran à 480 points par pouce font environ 0,1 Hz par pixel. Sans
-     * accumulation des restes, chaque événement de glissement s'arrondirait à
-     * zéro et le vernier serait mort exactement là où il sert le plus — un
-     * glissement lent ne produirait rien du tout.
+     * Key vernier point: at the finest ratio a pixel is under 1 Hz. Without
+     * accumulating remainders every drag event rounds to zero and a slow drag
+     * produces nothing — dead exactly where it matters.
      */
     @Test
     fun le_rapport_le_plus_fin_ne_s_arrondit_pas_a_zero() {
@@ -100,7 +90,7 @@ class AccordFinTest {
 
         val aiguille = AccordFin.Aiguille()
         var total = 0L
-        // Cent événements d'un pixel : un glissement lent d'environ 2 mm.
+        // 100 one-pixel events: a slow drag of about 5 mm.
         repeat(100) { total += aiguille.pousse(-1f, hzParPx) }
 
         assertTrue("un glissement lent doit produire quelque chose", total > 0)
@@ -125,7 +115,7 @@ class AccordFinTest {
         assertEquals(0L, aiguille.pousse(-1f, 0.4))
     }
 
-    // ----------------------------------------------------------------- lancer
+    // ----------------------------------------------------------------- fling
 
     @Test
     fun le_lancer_s_amortit_et_finit_par_s_arreter() {
@@ -135,8 +125,8 @@ class AccordFinTest {
     }
 
     /**
-     * Le parcours total est fini, et c'est ce qui rend le lancer utilisable :
-     * un geste vif traverse quelques kilohertz, pas la bande entière.
+     * Total travel is finite, which makes the fling usable: a quick flick
+     * crosses a few kHz, not the whole band.
      */
     @Test
     fun un_lancer_parcourt_une_distance_finie() {
@@ -148,7 +138,7 @@ class AccordFinTest {
         assertTrue("un lancer vif parcourt $hz Hz", hz in 100.0..20_000.0)
     }
 
-    // ------------------------------------------------------------ graduations
+    // ------------------------------------------------------------ tick marks
 
     @Test
     fun les_graduations_ne_se_serrent_jamais_au_dela_du_lisible() {
@@ -159,7 +149,7 @@ class AccordFinTest {
         }
     }
 
-    /** La suite 1-2-5 : jamais de pas en 3, 4 ou 7, qui ne se lisent pas. */
+    /** 1-2-5 sequence: never steps of 3, 4 or 7, which do not read well. */
     @Test
     fun le_pas_suit_la_suite_un_deux_cinq() {
         listOf(0.01, 0.1, 1.0, 10.0, 100.0).forEach { hzParPx ->
@@ -177,7 +167,7 @@ class AccordFinTest {
         assertTrue(traits.isNotEmpty())
         assertTrue(traits.all { it.xPixels >= -1f && it.xPixels <= 1081f })
         assertTrue("il faut des traits majeurs", traits.any { it.majeur })
-        // Le cadran est ordonné : les fréquences montent vers la droite.
+        // The dial is ordered: frequencies increase to the right.
         val hz = traits.map { it.hz }
         assertEquals(hz.sorted(), hz)
     }
@@ -189,9 +179,8 @@ class AccordFinTest {
     }
 
     /**
-     * Une borne, pas une élégance : au rapport le plus grossier sur un écran
-     * large, un pas mal choisi produirait des milliers de traits et la boucle
-     * de dessin s'en apercevrait à chaque trame.
+     * A hard limit, not polish: at the coarsest ratio on a wide screen a bad
+     * step would produce thousands of ticks, felt by the draw loop every frame.
      */
     @Test
     fun le_nombre_de_traits_reste_borne() {
@@ -199,16 +188,12 @@ class AccordFinTest {
         assertTrue(traits.size <= 400)
     }
 
-    // ----------------------------------------------------------------- calage
+    // ----------------------------------------------------------------- voice centring
 
     /**
-     * Le cœur du calage, et la raison pour laquelle le recentrage existant ne
-     * pouvait pas servir tel quel.
-     *
-     * Ce dernier pose le centre de gravité sur zéro, ce qui convient à une
-     * porteuse. Posée sur zéro, une voix en bande latérale se retrouve à cheval
-     * sur la fréquence d'accord : on n'entend qu'une moitié de chaque syllabe.
-     * Il faut la poser vers 1 500 hertz, et du bon côté selon la latérale.
+     * The existing recentring puts the centroid at zero — fine for a carrier,
+     * but an SSB voice there straddles the tuning point and you hear half of
+     * each syllable. It must sit near ±1500 Hz depending on the sideband.
      */
     @Test
     fun la_cible_depend_de_la_bande_laterale() {
@@ -228,25 +213,23 @@ class AccordFinTest {
     }
 
     /**
-     * Un correspondant dont la voix est mesurée 800 Hz au-dessus de l'accord
-     * est écouté trop bas : sa voix sort à 800 Hz, sourde. Il faut descendre
-     * l'accord de 700 Hz pour qu'elle remonte à 1 500.
+     * A voice measured 800 Hz above the tuning point sounds dull at 800 Hz:
+     * tune down 700 Hz to bring it up to 1500.
      */
     @Test
     fun l_accord_vise_place_la_voix_au_bon_endroit() {
         assertEquals(-700L, AccordFin.accordVise(800.0, 1_500))
         assertEquals(500L, AccordFin.accordVise(2_000.0, 1_500))
-        // En latérale inférieure, le spectre est retourné et le signe suit.
+        // On LSB the spectrum is inverted and the sign follows.
         assertEquals(700L, AccordFin.accordVise(-800.0, -1_500))
-        // Sans cible, on retombe exactement sur l'ancien recentrage.
+        // With no target, this is exactly the old recentring.
         assertEquals(800L, AccordFin.accordVise(800.0, 0))
     }
 
     /**
-     * La recherche est étroite, et c'est délibéré : on cale sur le
-     * correspondant qu'on écoute déjà. Ratisser les ±25 kHz du recentrage
-     * automatique ferait sauter sur la station voisine plus forte au premier
-     * silence.
+     * The search is deliberately narrow: centre on the station already being
+     * heard. Sweeping the ±25 kHz of auto-recentring would jump to a stronger
+     * neighbour at the first pause.
      */
     @Test
     fun la_recherche_du_calage_tient_dans_un_canal() {
@@ -254,12 +237,12 @@ class AccordFinTest {
         assertTrue(AccordFin.RECHERCHE_VOIX_HZ >= 2_400.0)
     }
 
-    // ------------------------------------------------------------ envoi en aval
+    // ------------------------------------------------------------ downstream
 
     /**
-     * Sous le seuil du planificateur Doppler, la consigne serait ignorée plus
-     * bas de toute façon : l'envoyer ne ferait que du trafic dans la boucle
-     * chaude. Le vernier doit donc filtrer au même seuil, et pas à un autre.
+     * Below the Doppler planner's threshold the command would be ignored
+     * downstream anyway: sending it only adds traffic to the hot loop. So the
+     * vernier filters at the same threshold, not another one.
      */
     @Test
     fun un_deplacement_sous_le_seuil_ne_part_pas() {
@@ -269,23 +252,23 @@ class AccordFinTest {
         assertTrue(AccordFin.vautLaPeine(-DopplerTuner.DEADBAND_HZ))
     }
 
-    /** Les rapports proposés doivent couvrir les trois gestes réels. */
+    /** The offered ratios must cover the three real gestures. */
     @Test
     fun les_rapports_proposes_vont_du_hertz_au_kilohertz() {
         assertEquals(3, AccordFin.RAPPORTS.size)
         assertEquals(AccordFin.RAPPORTS.sorted(), AccordFin.RAPPORTS)
-        // Le plus fin doit permettre de se poser au hertz près sur un
-        // centimètre de doigt ; le plus grossier de traverser un bout de bande.
+        // The finest must allow hertz-level placement within a centimetre of
+        // finger travel; the coarsest must cross a chunk of band.
         assertTrue(AccordFin.RAPPORTS.first() <= 50)
         assertTrue(AccordFin.RAPPORTS.last() >= 1_000)
     }
 
-    // ------------------------------------------------ ce que le vernier pilote
+    // ------------------------------------------------ what the vernier drives
 
     /**
-     * Le cœur du correctif. Deux accords s'ignoraient : le canal du
-     * transpondeur — celui qui produit les lignes RX et TX et qu'on reporte au
-     * poste — et l'accord de la clé SDR. Le vernier ne touchait que le second.
+     * The core of the fix. Two tunings ignored each other: the transponder
+     * channel (which produces the RX and TX lines sent to the radio) and the
+     * SDR dongle tuning. The vernier only moved the latter.
      */
     @Test
     fun sur_un_transpondeur_le_vernier_deplace_le_canal() {
@@ -294,15 +277,15 @@ class AccordFinTest {
     }
 
     /**
-     * Sur un canal fixe — de la FM — il n'y a pas de bande à parcourir : rien
-     * d'autre à déplacer que l'accord de la clé.
+     * On a fixed channel (FM) there is no band to travel: only the dongle
+     * tuning moves.
      */
     @Test
     fun sur_un_canal_fixe_le_vernier_deplace_la_cle() {
         assertEquals(AccordFin.Cible.CLE,
             AccordFin.cibleDuVernier(false, 145_800_000L, 145_800_000L))
-        // Un transpondeur annoncé sans bornes, ou de largeur nulle, n'en est
-        // pas un du point de vue du geste.
+        // A transponder with no bounds, or zero width, is not one as far as
+        // the gesture is concerned.
         assertEquals(AccordFin.Cible.CLE, AccordFin.cibleDuVernier(true, null, null))
         assertEquals(AccordFin.Cible.CLE,
             AccordFin.cibleDuVernier(true, 145_855_000L, 145_855_000L))
@@ -317,10 +300,9 @@ class AccordFinTest {
     }
 
     /**
-     * On borne, on ne boucle pas. Un vernier qui repasserait de l'autre côté
-     * après le bord ferait sauter d'un bout à l'autre du transpondeur au milieu
-     * d'un contact — et le lancer, qui parcourt plusieurs kilohertz d'un geste,
-     * rendrait l'accident fréquent.
+     * Clamp, do not wrap. Wrapping past the edge would jump across the whole
+     * transponder mid-contact — and the fling, covering several kHz per flick,
+     * would make that frequent.
      */
     @Test
     fun le_canal_s_arrete_aux_bords_de_la_bande() {
@@ -330,7 +312,7 @@ class AccordFinTest {
             AccordFin.nouveauCanal(145_856_000L, -50_000L, 145_855_000L, 145_875_000L))
     }
 
-    /** Des bornes données à l'envers ne doivent pas coincer le vernier. */
+    /** Reversed bounds must not jam the vernier. */
     @Test
     fun des_bornes_inversees_sont_remises_a_l_endroit() {
         assertEquals(145_867_000L,

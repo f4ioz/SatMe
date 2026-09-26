@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo
 
@@ -15,16 +15,14 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * La fuite du convertisseur QO-100 vers les satellites à défilement.
+ * The QO-100 converter leaking onto LEO satellites.
  *
- * Terrain d'Olivier : sur un LEO, avec le CAT branché, l'écran annonçait une
- * fréquence en gigahertz dès qu'on touchait au VFO. Le convertisseur de
- * descente de QO-100 s'appliquait à une chaîne qui n'était pas la sienne.
+ * On a LEO with CAT connected, the screen showed a GHz frequency as soon as
+ * the VFO moved: the QO-100 downconverter was applied to the wrong chain.
  *
- * La cause tient en une ligne : demander si le **résultat** de la conversion
- * tombe dans la bande ne prouve rien, puisque c'est toujours vrai. Un LNB
- * transforme précisément du 2 m en QO-100 — c'est son métier. La seule
- * question qui ait un sens est celle du satellite qu'on écoute.
+ * Asking whether the **result** of the conversion falls in band proves
+ * nothing — it always does; turning 2 m into QO-100 is exactly what an LNB
+ * does. The only meaningful question is which satellite we are listening to.
  */
 class ConvertisseurFuiteTest {
 
@@ -32,13 +30,13 @@ class ConvertisseurFuiteTest {
         actif = true, olHz = 10_344_973_000L, inverseur = false,
         basHz = 10_400_000_000L, hautHz = 10_800_000_000L)
 
-    /** Le piège, nommé pour qu'on ne le repose pas. */
+    /** The trap, named so nobody sets it again. */
     @Test
     fun le_resultat_dans_la_bande_ne_prouve_rien() {
-        // Une clé sur 145,9 MHz : le résultat tombe pile dans QO-100.
+        // A dongle on 145.9 MHz: the result lands right in QO-100.
         val faussementCouvert = 145_900_000L + lnb.olHz
         assertTrue("le piège lui-même", lnb.couvre(faussementCouvert))
-        // Mais le satellite écouté, lui, est bien en 2 m.
+        // But the satellite being heard is on 2 m.
         assertFalse("la bonne question", lnb.couvre(145_900_000L))
     }
 
@@ -55,9 +53,8 @@ class ConvertisseurFuiteTest {
     }
 
     /**
-     * Hors de sa bande, le convertisseur laisse passer la fréquence intacte.
-     * C'est ce qui permet de le laisser coché en permanence sans qu'il gêne
-     * l'ISS le mardi.
+     * Out of band, the converter passes the frequency unchanged, so it can stay
+     * enabled permanently without disturbing the ISS.
      */
     @Test
     fun hors_bande_la_frequence_ressort_intacte() {
@@ -69,7 +66,7 @@ class ConvertisseurFuiteTest {
         assertEquals(144_777_000L, lnb.versPoste(10_489_750_000L))
     }
 
-    /** Décoché, il est transparent quelle que soit la fréquence. */
+    /** Disabled, it is transparent at any frequency. */
     @Test
     fun decoche_il_ne_fait_rien() {
         val eteint = lnb.copy(actif = false)
@@ -79,22 +76,19 @@ class ConvertisseurFuiteTest {
 }
 
 /**
- * Pourquoi la garde d'entrée ne peut pas sauver la chaîne de F4IOZ.
+ * Why the input guard cannot save F4IOZ's chain.
  *
- * `accepteEnEntree` avait été posée pour fermer la fuite du convertisseur sur
- * les satellites à défilement : une fréquence n'est une intermédiaire que si
- * elle tombe dans la fenêtre que ce convertisseur produit réellement. C'est
- * juste — et ici, parfaitement inopérant.
+ * `accepteEnEntree` was meant to close the LEO leak: a frequency is an IF only
+ * if it falls in the window this converter actually produces. Correct — and
+ * useless here.
  *
- * Le calcul, qui tient en deux lignes : bornes Ku 10 400–10 800 MHz, oscillateur
- * mesuré 10 344,973 MHz, donc fenêtre intermédiaire **55 à 455 MHz**. Quatre
- * cents mégahertz de large, qui avalent le 2 m entier, le 70 cm entier, et de
- * quoi loger tous les satellites à défilement qui existent.
+ * Ku bounds 10400–10800 MHz, measured LO 10344.973 MHz, so the IF window is
+ * **55 to 455 MHz**: 400 MHz wide, swallowing all of 2 m and 70 cm and every
+ * LEO satellite in existence.
  *
- * Ce banc n'attend donc pas que la garde marche : il **fige la preuve qu'elle
- * ne peut pas**, pour qu'on ne perde pas une quatrième fois une soirée à
- * resserrer une règle de fréquence. Le seul discriminant est le satellite
- * sélectionné.
+ * This test does not expect the guard to work: it **pins the proof that it
+ * cannot**, so nobody wastes another evening tightening a frequency rule. The
+ * only discriminator is the selected satellite.
  */
 class ConvertisseurFenetreTest {
 
@@ -104,10 +98,10 @@ class ConvertisseurFenetreTest {
 
     @Test
     fun la_fenetre_intermediaire_avale_le_deux_metres() {
-        // La descente d'un LEO — AO-91, SO-50, l'ISS — est ici dedans.
+        // A LEO downlink (AO-91, SO-50, ISS) is inside.
         assertTrue(chaineF4ioz.accepteEnEntree(145_950_000L))
         assertTrue(chaineF4ioz.accepteEnEntree(145_800_000L))
-        // Et le 70 cm avec, tant qu'on y est.
+        // And 70 cm too.
         assertTrue(chaineF4ioz.accepteEnEntree(435_500_000L))
     }
 
@@ -119,10 +113,9 @@ class ConvertisseurFenetreTest {
 
     @Test
     fun aucune_borne_ne_referme_cela_sans_casser_qo100() {
-        // Resserrer les bornes Ku pour exclure le 2 m reviendrait à exiger une
-        // fenêtre intermédiaire au-dessus de 146 MHz, donc une borne basse Ku
-        // au-dessus de 10 490,973 — soit au-dessus de la balise médiane
-        // elle-même. On perdrait QO-100 pour sauver les LEO.
+        // Excluding 2 m would need an IF window above 146 MHz, hence a lower Ku
+        // bound above 10490.973 — above the middle beacon itself. We would
+        // lose QO-100 to save the LEOs.
         val basNecessaire = 10_344_973_000L + 146_000_000L
         assertTrue(basNecessaire > fr.f4ioz.satcombo.domain.Convertisseur.BALISE_MEDIANE_HZ)
     }

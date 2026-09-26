@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo
 
@@ -15,29 +15,24 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Le banc de la règle d'écriture de la montée.
- *
- * Il garde une correction née d'une vidéo prise au shack : sur RS-44 puis
- * FO-29, l'IC-9700 et SatMe se disputaient le même couple de VFO. L'opérateur
- * tournait vers le bas, SatMe écrivait la montée, le suivi inversé du poste
- * renvoyait la réception vers le haut, et ainsi de suite.
- *
- * **La condition à ne jamais reperdre** : ne rien écrire pendant que
- * l'opérateur tourne, sur un poste qui tient le couple lui-même.
+ * When to write the uplink. The IC-9700 and SatMe once fought over the VFO
+ * pair (operator tunes, SatMe writes uplink, radio's reverse tracking pushes
+ * back…). **Never lose this**: write nothing while the operator is tuning, on
+ * a radio that keeps the pair in step itself.
  */
 class SuiviMonteeTest {
 
-    private val LARGE = 500L      // un écart bien au-dessus de tous les seuils
+    private val LARGE = 500L      // offset well above every threshold
 
-    // ---- le défaut filmé ----
+    // ---- the original bug ----
 
     @Test
     fun sur_ic9700_on_se_tait_pendant_que_loperateur_tourne() {
         assertFalse(
             SuiviMontee.doitEcrire("IC9700", operateurTourne = true,
                 txSuitVite = true, maintienDoppler = false, ecartHz = LARGE))
-        // Et le réglage « suit vite » ne doit pas pouvoir le contourner :
-        // c'est lui qui avait introduit la bagarre.
+        // The "fast tracking" setting must not bypass this: it is what
+        // started the fight.
         assertFalse(
             SuiviMontee.doitEcrire("IC9700", operateurTourne = true,
                 txSuitVite = false, maintienDoppler = false, ecartHz = LARGE))
@@ -50,12 +45,12 @@ class SuiviMonteeTest {
                 txSuitVite = true, maintienDoppler = false, ecartHz = LARGE))
     }
 
-    // ---- ce qui ne doit surtout pas changer ----
+    // ---- what must not change ----
 
     @Test
     fun les_ft817_continuent_decrire_pendant_quil_tourne() {
-        // Deux postes indépendants : personne ne recale la montée à notre
-        // place. Olivier a dit que tout y fonctionne ; on n'y touche pas.
+        // Two independent radios: nobody else corrects the uplink. This setup
+        // works; leave it alone.
         assertTrue(
             SuiviMontee.doitEcrire("FT817x2", operateurTourne = true,
                 txSuitVite = true, maintienDoppler = false, ecartHz = LARGE))
@@ -74,7 +69,7 @@ class SuiviMonteeTest {
                 txSuitVite = false, maintienDoppler = false, ecartHz = LARGE))
     }
 
-    // ---- le maintien passe avant tout ----
+    // ---- Doppler hold overrides everything ----
 
     @Test
     fun le_maintien_doppler_interdit_toute_ecriture() {
@@ -87,7 +82,7 @@ class SuiviMonteeTest {
         }
     }
 
-    // ---- les seuils ----
+    // ---- thresholds ----
 
     @Test
     fun un_ecart_trop_petit_nest_pas_ecrit() {
@@ -105,17 +100,16 @@ class SuiviMonteeTest {
         assertEquals(50L, SuiviMontee.seuilHz(false))
     }
 
-    // ---- la liste des postes ----
+    // ---- radio list ----
 
     @Test
     fun seul_lic9700_tient_le_couple_lui_meme() {
         assertTrue(SuiviMontee.posteSuitSeul("IC9700"))
         assertFalse(SuiviMontee.posteSuitSeul("FT817x2"))
         assertFalse(SuiviMontee.posteSuitSeul("FT817TX"))
-        // Un poste inconnu est traité comme indépendant : se taire chez
-        // quelqu'un dont on ignore le comportement le priverait de suivi sans
-        // raison, là où écrire ne fait de dégât que sur les postes qui
-        // recalent seuls — et ceux-là sont nommés.
+        // An unknown radio is treated as independent: staying silent would
+        // deprive it of tracking for no reason, whereas writing only harms
+        // radios that track on their own — and those are named.
         assertFalse(SuiviMontee.posteSuitSeul("UN_AUTRE_POSTE"))
     }
 }

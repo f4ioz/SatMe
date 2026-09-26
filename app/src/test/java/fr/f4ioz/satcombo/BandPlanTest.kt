@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo
 
@@ -16,22 +16,18 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * « Problème de U/V V/U, ça ne switch pas. »
- *
- * La contrainte, telle qu'Olivier l'a écrite : *on ne peut pas être sur la même
- * bande en même temps sur VFO A et B*. Tout ce qui suit en découle, et le seul
- * essai qui compte vraiment est le dernier : passer d'un satellite en V/U à un
- * satellite en U/V, c'est-à-dire échanger les deux bandes, sans jamais les
- * réunir en chemin.
+ * Switching between V/U and U/V satellites. Constraint: *VFO A and B can never
+ * share a band*. The key test swaps both bands without ever putting them
+ * together on the way.
  */
 class BandPlanTest {
 
-    private val rs44Dl = 435_660_000L   // V/U : on écoute en 70 cm…
-    private val rs44Ul = 145_940_000L   // …et l'on émet en 2 m.
-    private val ao91Dl = 145_960_000L   // U/V : l'inverse, exactement.
+    private val rs44Dl = 435_660_000L   // V/U: receive on 70 cm…
+    private val rs44Ul = 145_940_000L   // …transmit on 2 m.
+    private val ao91Dl = 145_960_000L   // U/V: exactly the reverse.
     private val ao91Ul = 435_250_000L
 
-    /** L'état du poste après avoir joué toutes les étapes, vérifié à chaque pas. */
+    /** Radio state after playing all steps, checked at each step. */
     private fun jouer(mainNow: Long, subNow: Long, mainT: Long, subT: Long): Pair<Long, Long> {
         var m = mainNow
         var s = subNow
@@ -53,9 +49,8 @@ class BandPlanTest {
 
     @Test
     fun sans_rien_savoir_du_poste_l_ordre_reste_celui_d_avant() {
-        // La montée d'abord, la descente ensuite : on finit sur la réception,
-        // molette utile sous la main. C'est le comportement de la 18.18, et il
-        // ne doit pas changer tant qu'aucune bande n'est connue.
+        // Uplink first, downlink last: we end on receive, with the useful dial
+        // at hand. This must not change while no band is known.
         val e = BandPlan.steps(null, null, rs44Dl, rs44Ul)
         assertEquals(2, e.size)
         assertTrue("la montée n'est pas écrite en premier", e[0].sub)
@@ -65,9 +60,9 @@ class BandPlanTest {
 
     @Test
     fun le_doppler_d_un_meme_satellite_n_ajoute_aucune_etape() {
-        // Cent tours de boucle sur RS-44 : les bandes ne bougent pas, donc rien
-        // ne doit s'ajouter. Une étape de garage à chaque tour ferait trois
-        // trames de plus dix fois par seconde sur le bus CI-V.
+        // 100 loop cycles on RS-44: bands do not change, so nothing is added.
+        // A parking step every cycle would add three frames ten times a second
+        // on the CI-V bus.
         var m = rs44Dl
         var s = rs44Ul
         for (i in 1..100) {
@@ -82,9 +77,8 @@ class BandPlanTest {
 
     @Test
     fun passer_de_v_sur_u_a_u_sur_v_echange_les_bandes_sans_les_reunir() {
-        // Le cas d'Olivier, dans les deux sens. Sans garage, la première
-        // écriture posait 435 en face de 435 et le poste refusait : d'où les
-        // deux fréquences en 435 dans le panneau POSTE.
+        // The reported case, both ways. Without parking, the first write put
+        // 435 against 435 and the radio refused, leaving both VFOs on 435.
         val (m1, s1) = jouer(rs44Dl, rs44Ul, ao91Dl, ao91Ul)
         assertEquals(ao91Dl, m1)
         assertEquals(ao91Ul, s1)
@@ -107,18 +101,16 @@ class BandPlanTest {
 
     @Test
     fun quand_un_seul_ordre_passe_c_est_celui_la_qui_est_choisi() {
-        // Le poste écoute en 2 m et émet en 23 cm ; on veut écouter en 2 m et
-        // émettre en 70 cm. La montée peut partir la première sans gêner
-        // personne, et rien ne justifie un garage.
+        // Radio on 2 m RX / 23 cm TX; target 2 m RX / 70 cm TX. The uplink can
+        // go first without conflict; no parking needed.
         val e = BandPlan.steps(145_960_000L, 1_296_000_000L, 145_960_000L, 435_250_000L)
         assertEquals(2, e.size)
         assertTrue(e[0].sub)
 
-        // L'inverse : la montée vise le 2 m, où la descente se trouve encore ;
-        // elle ne peut donc pas partir la première. Mais la descente, elle,
-        // vise le 70 cm, que personne n'occupe — deux écritures suffisent, et
-        // c'est la descente qui ouvre. (Si la montée occupait le 70 cm, ce
-        // serait l'échange pur de l'essai précédent, et il faudrait un garage.)
+        // Reverse: the uplink targets 2 m, where the downlink still sits, so it
+        // cannot go first. The downlink targets the free 70 cm band: two writes,
+        // downlink first. (If the uplink held 70 cm, it would be the pure swap
+        // above and need parking.)
         val f = BandPlan.steps(145_960_000L, 1_296_000_000L, 435_660_000L, 145_940_000L)
         assertEquals("un garage inutile a été ajouté : $f", 2, f.size)
         assertTrue("la descente aurait dû partir la première", !f[0].sub)
@@ -129,9 +121,9 @@ class BandPlanTest {
 
     @Test
     fun une_consigne_impossible_ne_pose_que_la_descente() {
-        // Deux fréquences sur la même bande : c'est précisément ce que le poste
-        // ne sait pas faire. On pose ce qui permet d'entendre et l'on ne touche
-        // pas à la montée, plutôt que de l'écrire n'importe où.
+        // Both frequencies on one band: exactly what the radio cannot do. Set
+        // what lets us hear and leave the uplink alone rather than write it
+        // anywhere.
         val e = BandPlan.steps(rs44Dl, rs44Ul, 435_800_000L, 435_250_000L)
         assertEquals(1, e.size)
         assertTrue(!e[0].sub)

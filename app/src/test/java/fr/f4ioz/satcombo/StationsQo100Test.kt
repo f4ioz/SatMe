@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo
 
@@ -15,12 +15,10 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Le banc de l'étalonnage QO-100.
+ * QO-100 calibration.
  *
- * Les valeurs de référence sont celles mesurées par F4IOZ le 3 septembre 2026
- * contre le WebSDR IS0GRB, lui-même sur GPSDO. Elles ne sont pas inventées
- * pour l'occasion : c'est un relevé réel, confirmé deux heures plus tard avec
- * extinction complète entre les deux essais.
+ * Reference values are real measurements by F4IOZ (3 Sep 2026) against the
+ * GPSDO-locked IS0GRB WebSDR, confirmed two hours later after a full power-off.
  */
 class StationsQo100Test {
 
@@ -36,8 +34,8 @@ class StationsQo100Test {
     }
 
     /**
-     * L'erreur naturelle : on lit d'abord son poste, qui est devant soi, puis
-     * le WebSDR. Une différence négative la trahit immédiatement.
+     * The natural mistake: reading your own radio first, then the WebSDR. A
+     * negative difference gives it away.
      */
     @Test
     fun les_champs_intervertis_sont_refuses() {
@@ -52,7 +50,7 @@ class StationsQo100Test {
         assertTrue(StationsQo100.etalonne(ciel, 0L) is Etalonnage.Refuse)
     }
 
-    /** Deux fréquences voisines ne donnent pas un oscillateur crédible. */
+    /** Two close frequencies do not give a credible LO. */
     @Test
     fun un_ecart_absurde_est_refuse() {
         val r = StationsQo100.etalonne(10_489_805_600L, 10_489_805_000L)
@@ -60,20 +58,13 @@ class StationsQo100Test {
         assertEquals("qo100_cal_absurde", (r as Etalonnage.Refuse).motif)
     }
 
-    // ------------------------------------------------ ce que vaut l'écart
+    // ------------------------------------------------ the offset
 
     /**
-     * −27 kHz d'écart au nominal, soit **−2,6 ppm** : c'est le TCXO du LNB,
-     * pas un défaut, et c'est conforme à sa spécification de 2 ppm.
-     *
-     * Le nominal est 10 345 000 kHz — celui qui range la balise CW basse à
-     * 144,500. L'autre lecture du manuel DX Patrol, qui la range à 144,550,
-     * donne un nominal 50 kHz plus bas et un écart de +23 kHz. Les deux
-     * lectures restent possibles ; aucune mesure relative ne les départage, et
-     * cela n'a plus d'importance dès lors que l'oscillateur absolu est connu.
-     *
-     * Un GPSDO ne corrigera pas cet écart : il ne touche pas au LNB, dont
-     * l'oscillateur est interne.
+     * −27 kHz from nominal (**−2.6 ppm**): the LNB TCXO, not a fault, and not
+     * fixable by a GPSDO. Nominal is 10345000 kHz (lower beacon at 144.500);
+     * the other reading of the DX Patrol manual gives 50 kHz lower. Irrelevant
+     * once the absolute LO is known.
      */
     @Test
     fun l_ecart_au_nominal_se_mesure() {
@@ -83,7 +74,7 @@ class StationsQo100Test {
         assertTrue("ppm = $ppm", ppm in -2.7..-2.5)
     }
 
-    /** L'autre lecture du nominal, 50 kHz plus bas, donne +23 kHz. */
+    /** The other nominal, 50 kHz lower, gives +23 kHz. */
     @Test
     fun l_autre_nominal_donne_l_ecart_symetrique() {
         assertEquals(22_950L,
@@ -95,7 +86,7 @@ class StationsQo100Test {
         assertEquals(0.0, StationsQo100.ecartPpm(olAttendu, 0L), 0.0)
     }
 
-    // ------------------------------------------------------- les stations
+    // ------------------------------------------------------- stations
 
     @Test
     fun une_station_reglee_convertit_dans_les_deux_sens() {
@@ -105,7 +96,7 @@ class StationsQo100Test {
         assertEquals(2_400_250_000L - 1_968_000_000L, s.posteTx(2_400_250_000L))
     }
 
-    /** Sans convertisseur, la fréquence traverse sans changer. */
+    /** Without a converter the frequency passes unchanged. */
     @Test
     fun une_station_sans_etage_laisse_passer() {
         val s = StationsQo100.Station("directe")
@@ -114,8 +105,8 @@ class StationsQo100Test {
     }
 
     /**
-     * Une station non étalonnée doit se dire telle, plutôt que de proposer une
-     * valeur nominale qui aurait l'air juste sans l'être.
+     * An uncalibrated station must say so, rather than offer a nominal value
+     * that looks right without being right.
      */
     @Test
     fun les_stations_par_defaut_ne_sont_pas_etalonnees() {
@@ -145,8 +136,8 @@ class StationsQo100Test {
     }
 
     /**
-     * Le montage fixe et le montage portable n'ont pas le même LNB, donc pas
-     * le même oscillateur. C'est toute la raison d'être de cette liste.
+     * Home and portable setups have different LNBs, hence different LOs. That
+     * is the whole point of this list.
      */
     @Test
     fun deux_stations_gardent_chacune_son_etalonnage() {

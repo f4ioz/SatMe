@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo
 
@@ -18,16 +18,15 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Le banc de la boussole Bluetooth.
+ * The Bluetooth compass.
  *
- * Il ne prouve pas que le module parle : cela, seule la première trame reçue au
- * terrain le dira. Il prouve que **si** les octets arrivent conformes à la
- * notice, on en tire le bon angle — et surtout qu'un flux coupé, recollé ou
- * bruité ne fait pas dire n'importe quoi à l'aiguille.
+ * This does not prove the module talks (only a real frame in the field will).
+ * It proves that **if** bytes arrive as documented we get the right angle, and
+ * above all that a split, merged or noisy stream does not make the needle lie.
  */
 class BoussoleWitTest {
 
-    /** Fabrique une trame 0x55 0x61 avec les trois angles demandés. */
+    /** Builds a 0x55 0x61 frame with the given three angles. */
     private fun trame(roulis: Float, tangage: Float, lacet: Float): ByteArray {
         val o = ByteArray(BoussoleWit.LONGUEUR)
         o[0] = 0x55; o[1] = 0x61.toByte()
@@ -40,7 +39,7 @@ class BoussoleWitTest {
         return o
     }
 
-    // ---- la trame ----
+    // ---- the frame ----
 
     @Test
     fun une_trame_conforme_rend_ses_trois_angles() {
@@ -66,11 +65,11 @@ class BoussoleWitTest {
     @Test
     fun un_mauvais_drapeau_ne_rend_rien() {
         val t = trame(0f, 0f, 45f)
-        t[1] = 0x71   // champ magnétique : même longueur, autre contenu
+        t[1] = 0x71   // magnetic field: same length, other content
         assertNull(BoussoleWit.litAttitude(t))
     }
 
-    // ---- le recollage ----
+    // ---- reassembly ----
 
     @Test
     fun une_trame_coupee_en_deux_est_recollee() {
@@ -122,7 +121,7 @@ class BoussoleWitTest {
         assertEquals(0, acc.enAttente)
     }
 
-    // ---- le cap ----
+    // ---- heading ----
 
     @Test
     fun le_lacet_negatif_devient_un_azimut_de_boussole() {
@@ -134,7 +133,7 @@ class BoussoleWitTest {
     @Test
     fun le_calage_deplace_le_zero() {
         assertEquals(100f, BoussoleWit.azimutDepuisLacet(90f, offsetDeg = 10f), 0.01f)
-        // Et il repasse par zéro proprement.
+        // And wraps through zero cleanly.
         assertEquals(5f, BoussoleWit.azimutDepuisLacet(355f, offsetDeg = 10f), 0.01f)
     }
 
@@ -154,7 +153,7 @@ class BoussoleWitTest {
 
     @Test
     fun le_calage_deduit_reste_lisible_pour_un_petit_ecart() {
-        // Le module dit 3° de plus que la réalité : on veut voir −3, pas 357.
+        // Module reads 3° high: we want to see −3, not 357.
         val cal = BoussoleWit.calageDepuisReleve(3f, 0f)
         assertEquals(-3f, cal, 0.01f)
         assertTrue(cal > -180f && cal <= 180f)
@@ -166,7 +165,7 @@ class BoussoleWitTest {
         assertEquals(145f, BoussoleWit.azimutDepuisLacet(37f, cal, inverse = true), 0.01f)
     }
 
-    // ---- le lissage ----
+    // ---- smoothing ----
 
     @Test
     fun le_lissage_part_de_la_premiere_valeur() {
@@ -175,7 +174,7 @@ class BoussoleWitTest {
 
     @Test
     fun le_lissage_passe_par_le_plus_court_chemin() {
-        // 359 → 1 : deux degrés à franchir, pas trois cent cinquante-huit.
+        // 359 → 1: two degrees to cross, not 358.
         val r = BoussoleWit.lisse(359f, 1f, k = 0.5f)
         assertEquals(0f, r, 0.01f)
     }
@@ -187,15 +186,15 @@ class BoussoleWitTest {
         assertTrue(v >= 0f && v < 360f)
     }
 
-    // ---- les identifiants ----
+    // ---- identifiers ----
 
     @Test
     fun la_base_des_uuid_est_celle_de_witmotion_pas_la_normalisee() {
-        // Le piège du projet : 9a et non 9b. Une base normalisée ne trouve rien.
+        // The trap: 9a, not 9b. The standard base finds nothing.
         assertTrue(GattWit.SERVICE.endsWith("00805f9a34fb"))
         assertTrue(GattWit.NOTIFICATION.endsWith("00805f9a34fb"))
         assertTrue(GattWit.ECRITURE.endsWith("00805f9a34fb"))
-        // Le descripteur d'abonnement, lui, est bien normalisé : 9b.
+        // The subscription descriptor, though, is standard: 9b.
         assertTrue(GattWit.CCCD.endsWith("00805f9b34fb"))
     }
 
