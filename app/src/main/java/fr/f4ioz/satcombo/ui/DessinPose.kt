@@ -206,8 +206,8 @@ fun DessinPose(cle: String) {
 }
 
 /**
- * Module thumbnail, so the settings make clear this is the small WT901BLE
- * Bluetooth case, not the phone's compass. Reuses the calibration drawing:
+ * Module thumbnail, so the settings make clear this is a small WitMotion
+ * Bluetooth case (WT901BLE / WT9011DCL), not the phone's compass. Reuses the calibration drawing:
  * a second copy would drift out of likeness.
  */
 @Composable

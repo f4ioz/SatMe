@@ -30,7 +30,8 @@ package fr.f4ioz.satcombo.cat
  *            until you hear yourself), like SatPC32.
  *
  *  IC-9700 — CI-V, full duplex, MAIN(selected)=downlink, SUB(unselected)=uplink.
- *            Use cmd 0x25/0x26 to set the unselected VFO WITHOUT swapping bands.
+ *            In satellite mode the rig refuses 0x25/0x26 on SUB: select the
+ *            band (0x07 D0/D1), then write with 0x05 (see setSatellitePair).
  */
 interface RigDriver {
     val name: String

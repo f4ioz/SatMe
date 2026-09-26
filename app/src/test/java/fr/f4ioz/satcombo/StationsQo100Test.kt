@@ -63,8 +63,10 @@ class StationsQo100Test {
     /**
      * −27 kHz from nominal (**−2.6 ppm**): the LNB TCXO, not a fault, and not
      * fixable by a GPSDO. Nominal is 10345000 kHz (lower beacon at 144.500);
-     * the other reading of the DX Patrol manual gives 50 kHz lower. Irrelevant
-     * once the absolute LO is known.
+     * the other reading of the DX Patrol manual gives 50 kHz lower. Note:
+     * ConvertisseurTest assumes 10 344.000 MHz instead (middle beacon at
+     * 145.750); the true nominal is still to be checked by the author.
+     * Irrelevant once the absolute LO is known.
      */
     @Test
     fun l_ecart_au_nominal_se_mesure() {

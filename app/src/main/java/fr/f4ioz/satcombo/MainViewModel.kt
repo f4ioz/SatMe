@@ -6709,8 +6709,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      * Dedicated CAT loop, faster than the 1 Hz tracking loop (OscarWatch-style).
      * Runs every 100 ms plus tick time: reads the MAIN (downlink) every cycle so the display and
      * VFO-follow stay responsive; writes the uplink (SUB) only when needed, and
-     * for linear, defers the uplink write briefly after the operator stops
-     * moving the dial (so we don't fight the tuning).
+     * for linear leaves the dial to the operator until RxArbiter takes over
+     * again (so we don't fight the tuning).
      */
     private fun startCatLoop() {
         catLoopJob?.cancel()
@@ -6917,8 +6917,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      *  - FM cross-band (V/U): both legs Doppler-tuned (MAIN downlink, SUB uplink).
      *  - FM same-band (V/V, ISS): split A/B; RX on VFO A, TX on VFO B.
      *  - Linear: read the operator's RX dial; pause Doppler while it moves; resume
-     *    after 8 stable samples (~800 ms); defer the uplink write 2.5 s after the
-     *    dial last changed, so we never fight live tuning.
+     *    after RxArbiter.holdMs of quiet (setting, 2 s by default). While the
+     *    dial turns, SuiviMontee decides whether the uplink follows (at once,
+     *    except on single-knob rigs such as the IC-9700).
      *  - Beacon: receive-only, Doppler on downlink only.
      */
     private suspend fun catTick() {

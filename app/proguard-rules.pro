@@ -1,6 +1,7 @@
 # SatMe ProGuard/R8 rules for release builds.
 
-# predict4java (com.github.amsacode fork actually used by the app).
+# predict4java: the com.github.davidmoten artifact ships the
+# com.github.amsacode.predict4java package.
 -keep class com.github.amsacode.predict4java.** { *; }
 -dontwarn com.github.amsacode.predict4java.**
 # (legacy package name kept harmlessly in case of transitive use)

@@ -535,8 +535,9 @@ class RxChain(
     var mode: RxMode = RxMode.NFM
 
     /**
-     * De-emphasis. Off by default: it only makes sense for wideband (broadcast)
-     * FM; on a repeater or SSTV image it just crushes the highs.
+     * De-emphasis, NFM only, τ = 750 µs (the amateur value; there is no
+     * wideband FM mode). Off by default: on a repeater or SSTV image it just
+     * crushes the highs.
      */
     var deemphasis: Boolean = false
 

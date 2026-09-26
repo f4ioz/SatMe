@@ -159,8 +159,9 @@ class ConvertisseurTest {
             "lnb9750" to 739_750_000L,
             "lnb10000" to 489_750_000L,
             "lnb10057" to 432_250_000L,
-            // The measured LO puts the middle beacon at 144.777, not 145.750:
-            // the LNB TCXO's 27 kHz plus the nominal's own offset.
+            // The measured LO puts the middle beacon at 144.777, not 145.750
+            // (nominal 10 344.000 MHz assumed here; StationsQo100Test uses
+            // 10 345.000, which one is right is still open).
             "down145" to 144_777_000L)
         Convertisseur.PRESETS.filter { it.descente }.forEach { p ->
             assertEquals("préréglage ${p.cle}",

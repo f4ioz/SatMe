@@ -18,8 +18,9 @@ package fr.f4ioz.satcombo.sonde
  * the sonde.
  *
  * Launch times are the detail everyone misses: Météo-France launches at 23:11
- * and 11:11 UTC, 49 minutes *before* the synoptic hour, so the balloon is at
- * 30 km on the hour. Listening at midnight or noon is too late.
+ * and 11:11 UTC, 49 minutes *before* the synoptic hour, so the ascent is well
+ * under way on the hour (about 15 km at 5 m/s). Listening at midnight or noon
+ * is too late.
  */
 object SondeSites {
 
