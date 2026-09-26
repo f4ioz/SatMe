@@ -90,12 +90,12 @@ class QrzReponseTest {
             <QRZDatabase version="1.34" xmlns="http://xmldata.qrz.com">
             <Callsign><call>DO1BEN</call><grid>JO31NB</grid>
             <fname>Clubstation</fname><addr2>Leverkusen</addr2>
-            <email>do1ben@darc.de</email><country>Germany</country></Callsign>
+            <email>qso@example.org</email><country>Germany</country></Callsign>
             </QRZDatabase>"""
         val f = QrzReponse.lis(xml)
         assertEquals("JO31NB", f.carre)
         assertEquals("Leverkusen", f.qth)
-        assertEquals("do1ben@darc.de", f.courriel)
+        assertEquals("qso@example.org", f.courriel)
         assertEquals("Clubstation", f.nom)
     }
 

@@ -200,11 +200,11 @@ class AdifTest {
     @Test
     fun `le nom la ville et le courriel sortent`() {
         val e = LogEntry(1L, "FO-29", 24278, 0.0, 0.0, callsign = "DO1BEN",
-            nom = "Clubstation", qth = "Leverkusen", courriel = "do1ben@darc.de")
+            nom = "Clubstation", qth = "Leverkusen", courriel = "qso@example.org")
         val out = Adif.export(listOf(e))
         assertTrue(out.contains("<NAME:11>Clubstation"))
         assertTrue(out.contains("<QTH:10>Leverkusen"))
-        assertTrue(out.contains("<EMAIL:14>do1ben@darc.de"))
+        assertTrue(out.contains("<EMAIL:15>qso@example.org"))
     }
 
     @Test
