@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo
 
@@ -69,24 +69,12 @@ import kotlinx.coroutines.withContext
 enum class Screen { PASSES, SETTINGS, LOCATOR, SKED, TIMELINE, PHOTO, ACTIVATION, SSTV, SDR, APT, AGENDA, SONDE, ROTOR, QO100, NOMMAGE, GLOBE, FT8 }
 
 /**
- * L'état du carnet express, tenu hors de [UiState].
- *
- * Même raison que pour l'état du rotor : la machine virtuelle d'Android code le
- * nombre de registres d'un appel `invoke/range` sur un seul octet, et un
- * `data class` dont le constructeur en réclame plus de 255 compile sans un mot
- * puis fait mourir l'application à la seconde où elle demande son premier état.
- */
-/**
- * Les réglages de l'accord fin, hors de [UiState] pour la même raison que
- * [CarnetExpress] : chaque champ posé directement sur l'état principal
- * rapproche le constructeur de la falaise des 255 registres.
+ * Fine-tuning settings, kept out of [UiState] because of the 255-register
+ * constructor limit (see [RotorUi]). The three-key box lives here too: it also
+ * answers "what are we tuning".
  */
 data class AccordUi(
-    // Le boîtier à trois touches loge ici et non à plat dans UiState : le
-    // constructeur d'UiState frôle les 255 registres que la machine virtuelle
-    // sait écrire. AccordUi est le bon porteur — lui aussi répond à « ce qu'on
-    // est en train d'accorder ».
-    /** Ce que la molette commande : « VFO », « SHIFT_RX » ou « SHIFT_TX ». */
+    /** What the knob drives: "VFO", "SHIFT_RX" or "SHIFT_TX". */
     val moletteCible: String = "VFO",
     val macroCodeA: Int = 0,
     val macroCodeB: Int = 0,
@@ -94,206 +82,156 @@ data class AccordUi(
     val macroCibleA: String = "SHIFT_RX",
     val macroCibleB: String = "SHIFT_TX",
     val macroCibleC: String = "VFO",
-    /** Le poussoir de la molette : sa touche et son action. */
+    /** The knob's push button: its key and its action. */
     val macroCodeD: Int = 164,
     val macroActionD: String = "PAS",
-    /** Loupe : seconde vue du spectre, large de quelques kilohertz. */
+    /** Magnifier: second spectrum view, a few kHz wide. */
     val loupe: Boolean = true,
     val loupeSpanHz: Int = 5_000,
-    /** Vernier : cadran à défilement, accord relatif au doigt. */
+    /** Vernier: scrolling dial, relative tuning by finger. */
     val vernier: Boolean = true,
     val vernierHzParCm: Int = 200,
-    /** Bouton de calage sur la voix reçue. */
+    /** Button that locks onto the received voice. */
     val calageVoix: Boolean = true,
 )
 
 /**
- * Ce que le suivi de position peut raconter de lui-même.
- *
- * Deux correctifs successifs n'ont pas suffi à régler le défaut du premier
- * démarrage, et à chaque fois on a diagnostiqué sans voir. Ceci met fin aux
- * suppositions : l'opérateur lit l'état à l'écran et le rapporte, au lieu qu'on
- * devine à distance.
- */
-/**
- * Les réglages du dialogue avec le poste.
- *
- * Regroupés, comme le reste : la falaise des 255 registres de Dalvik se frôle à
- * chaque champ ajouté sur `UiState`.
+ * Radio (CAT) link settings, kept out of [UiState] (255-register limit, see
+ * [RotorUi]).
  */
 data class CatUi(
     /**
-     * Le poste émet-il ? Lu au CAT, donc vrai aussi quand l'émission part du
-     * VOX — c'est justement le cas où l'opérateur n'a rien commandé et où
-     * l'avertissement compte.
-     *
-     * Dans le porteur du poste et non dans `UiState` : la falaise des 255
-     * registres a mordu pour la troisième fois de la session sur ce champ-là.
+     * Is the rig transmitting? Read over CAT, so also true when VOX keyed it —
+     * precisely the case where the operator commanded nothing and the warning
+     * matters.
      */
     val enEmission: Boolean = false,
-    /** Le liseré d'émission est-il demandé ? */
+    /** Is the transmit border requested? */
     val liseret: Boolean = true,
     /**
-     * L'émission suit la molette de réception sans attendre le silence.
-     *
-     * Réglable : qui trouve l'écriture trop bavarde sur sa liaison peut
-     * revenir à l'ancien comportement.
+     * TX follows the RX knob without waiting for silence. Adjustable for links
+     * where the extra writes are too chatty.
      */
     val txSuitVite: Boolean = true,
-    /** Cadence du sondage, en millisecondes. */
+    /** Polling period, ms. */
     val sondeMs: Int = 500,
     /**
-     * Ce que la lecture PTT a répondu, en clair.
-     *
-     * Le liseré ne s'allume pas : impossible de savoir, sans le poste sous la
-     * main, si la commande n'est pas envoyée, si le poste ne répond pas, ou si
-     * la réponse est mal lue. On montre donc la réponse brute.
+     * Raw PTT read reply. When the border does not light, there is no other
+     * way to tell a command not sent from a rig not answering or a reply
+     * misparsed.
      */
     val txDiag: String = "",
     /**
-     * Silence exigé, en millisecondes, avant que le logiciel ne reprenne la
-     * molette de réception. Deux secondes par défaut ; réglable à une seconde
-     * ou une demi-seconde pour qui cherche vite.
+     * Silence required, ms, before the software takes the RX knob back.
+     * Default 2 s; 1 s or 0.5 s for fast searching.
      */
     val holdMs: Int = 2_000,
     /**
-     * La molette d'émission tient lieu de commande de décalage.
-     *
-     * Quand c'est actif, tourner le VFO du poste d'émission revient à appuyer
-     * sur les boutons de décalage : l'écart entre ce qu'on a commandé et ce
-     * qu'on relit devient le nouveau Shift TX. Les boutons restent actifs en
-     * parallèle — c'est le dernier geste qui l'emporte, le décalage étant une
-     * valeur unique et non une somme de deux sources.
+     * The TX knob acts as the shift control: the gap between what was
+     * commanded and what is read back becomes the new TX shift. The buttons
+     * stay active — the last gesture wins, since the shift is one value, not
+     * a sum of two sources.
      */
     val txVfoShift: Boolean = false,
     /**
-     * Le témoin vivant des réglages CAT : ce que chaque poste répond, en Hz.
-     *
-     * Il n'existait aucun moyen de vérifier la liaison depuis l'écran qui sert
-     * à l'établir. Pour savoir si le poste suivait la molette, il fallait
-     * quitter les réglages, retrouver une page de passage, regarder si le
-     * curseur bougeait — et revenir si non. Trois écrans pour répondre à une
-     * question qui se pose là où on est.
-     *
-     * Ces deux nombres se rafraîchissent tant que la section CAT est à
-     * l'écran : tourner le VFO les fait bouger sous les yeux, et la liaison se
-     * prouve d'elle-même. Ils s'arrêtent dès qu'on sort — le fil appartient au
-     * Doppler, pas à un témoin.
+     * Live CAT readback, Hz, shown in the CAT settings so the link can be
+     * checked on the screen that sets it up (it used to take three screens).
+     * Refreshed only while the CAT section is visible — the port belongs to
+     * Doppler, not to this indicator.
      */
     val veilleRxHz: Long? = null,
     val veilleTxHz: Long? = null,
-    /** Le témoin a-t-il obtenu une réponse au dernier tour ? */
+    /** Did the readback get an answer on the last round? */
     val veilleVivante: Boolean = false,
-    /**
-     * Les décalages mémorisés pour le satellite affiché, s'il y en a.
-     *
-     * Dans ce porteur et non dans `UiState` : la falaise des 255 registres du
-     * constructeur a déjà mordu trois fois.
-     */
+    /** Shifts saved as reference for the displayed satellite, if any. */
     val refCalibShiftHz: Long? = null,
     val refTxShiftHz: Long? = null,
     /**
-     * Les décalages **tels qu'ils étaient à l'arrivée sur ce satellite**.
+     * Shifts **as they were when this satellite was opened**.
      *
-     * La référence explicite ne protège que ce que l'opérateur a pensé à
-     * mémoriser. Or la fausse manœuvre arrive précisément à celui qui n'y a
-     * pas pensé : la molette d'émission tient lieu de commande de décalage, et
-     * `setTxShift` écrit au disque à chaque cran. La valeur d'hier — celle qui
-     * marchait — est donc perdue au premier effleurement, avant même qu'on
-     * ait compris qu'on a touché quelque chose.
+     * The explicit reference only protects what the operator thought to save.
+     * The TX knob acts as the shift control and `setTxShift` writes to disk on
+     * every detent, so yesterday's working value is lost at the first touch.
+     * We silently keep the value from opening time: not "the right value" —
+     * nobody knows that — but "the one before this pass", enough to go back.
      *
-     * On retient donc, sans rien demander, ce qui était enregistré au moment
-     * où le satellite a été ouvert. Ce n'est pas « la bonne valeur » — nul ne
-     * peut le savoir — mais « celle d'avant ce passage », ce qui suffit à
-     * revenir en arrière et ne demande aucun jugement.
-     *
-     * En mémoire seulement : cela ne survit pas à la fermeture, et c'est
-     * voulu. Persister ferait un troisième décalage à comprendre, là où deux
-     * suffisent — celui qui court, et celui qu'on a choisi de garder.
+     * Memory only, on purpose: persisting would make a third shift to
+     * understand.
      */
     val arriveeCalibShiftHz: Long? = null,
     val arriveeTxShiftHz: Long? = null,
-    /** Le bilan de la dernière fusion de lot, en clair, ou vide. */
+    /** Summary of the last batch merge, or empty. */
     val lotBilan: String = "",
 )
 
+/**
+ * What location tracking can report about itself. Two first-launch fixes were
+ * made blind; this lets the operator read the state on screen and report it.
+ */
 data class SuiviUi(
-    /** Dernière chose qui est arrivée au suivi, en clair. */
+    /** Last thing that happened to tracking, in plain words. */
     val etat: String = "",
-    /** Points reçus depuis le lancement. Zéro est le symptôme. */
+    /** Fixes received since launch. Zero is the symptom. */
     val points: Int = 0,
-    /** Relances décidées par le veilleur. */
+    /** Restarts decided by the watchdog. */
     val relances: Int = 0,
-    /** La permission de localisation est-elle accordée ? */
+    /** Is location permission granted? */
     val permission: Boolean = false,
 )
 
-/** La carte du pays posée sur la photo QRV. */
-/** Le porteur des surimpressions de la photo QRV : carte du pays et POTA. */
 /**
- * Le carnet en ligne et ce qu'il répond.
- *
- * Dans son porteur dès le premier jour : trois champs posés dans `UiState`
- * auraient franchi la falaise des 255 registres, qui a déjà mordu trois fois
- * cette session.
+ * Online log (Wavelog) and its answers. In its own holder from day one
+ * (255-register limit, see [RotorUi]).
  */
 data class CarnetUi(
     val url: String = "",
     val cle: String = "",
     val slug: String = "",
-    /** Le résultat du dernier essai de connexion, pour l'écran. */
+    /** Result of the last connection test. */
     val essai: String = "",
-    /** L'identifiant du profil de station, pour déposer les contacts. */
+    /** Station profile id used to upload contacts. */
     val profil: String = "",
-    /** Ce qu'on moissonne : « sat », « phonie », « cw » ou « tout ». */
+    /** What to harvest: "sat", "phonie", "cw" or "tout". */
     val filtre: String = "sat",
-    /** Ce que le dernier dépôt a donné, en clair. */
+    /** Result of the last upload. */
     val depot: String = "",
-    /** Un dépôt est en cours : le bouton ne se réappuie pas. */
+    /** Upload in progress: the button cannot be pressed again. */
     val depotEnCours: Boolean = false,
-    /** LoTW : identifiants et résumé du dernier rafraîchissement. */
+    /** LoTW: credentials and summary of the last refresh. */
     val lotwCall: String = "",
     val lotwMdp: String = "",
     val lotwEtat: String = "",
     val lotwConfirmes: Set<String> = emptySet(),
     val lotwTravailles: Set<String> = emptySet(),
-    /** Les carrés d'où j'ai émis, à peindre d'une autre couleur. */
+    /** Grid squares I transmitted from, painted in another colour. */
     val lotwActives: Set<String> = emptySet(),
-    /** Peindre les carrés sur les cartes. */
+    /** Paint the squares on the maps. */
     val peindre: Boolean = true,
-    /** Carré → état, tel qu'affiché sur la page locator. */
+    /** Square → state, as shown on the locator page. */
     val carres: Map<String, fr.f4ioz.satcombo.data.CarnetEnLigne.Etat> = emptyMap(),
     /**
-     * Carré tronqué → identifiant de profil de station, ou `null`.
+     * Location → station profile id.
      *
-     * Wavelog range un contact d'après son profil et **ignore le
-     * `MY_GRIDSQUARE`** du fichier. Sans cette table, un opérateur qui active
-     * plusieurs carrés voit toutes ses sorties reclassées sous celui du profil
-     * unique — en silence, et c'est le carré du profil qui compte pour les
-     * diplômes.
-     */
-    /**
-     * Emplacement → identifiant de profil. La clé est un **ensemble** de
-     * carrés : posé sur une ligne, on est dans les deux à la fois, et ces
-     * contacts-là ne peuvent pas partager le profil de ceux faits dans un
-     * seul des deux.
+     * Wavelog files a contact by its profile and **ignores the file's
+     * `MY_GRIDSQUARE`**. Without this table, an operator activating several
+     * squares silently sees everything filed under the single profile's
+     * square — and that is the one that counts for awards. The key is a
+     * **set** of squares: on a line you are in both, and those contacts cannot
+     * share the profile of contacts made in only one.
      */
     val profils: Map<Set<String>, String?> = emptyMap(),
     /**
-     * Les profils tels que Wavelog les rend, gardés en clair.
-     *
-     * La table ci-dessus ne retient que l'identifiant. Or un identifiant est
-     * un nombre que personne ne reconnaît : avec vingt-six profils déclarés,
-     * le taper de mémoire est une devinette, et une erreur ne se voit nulle
-     * part — le contact part, il est accepté, et il est rangé sous le carré
-     * d'un autre emplacement.
+     * Profiles as Wavelog returns them. An id alone is a number nobody
+     * recognises; typing one from memory among 26 profiles is guesswork, and a
+     * mistake shows nowhere — the contact is accepted and filed under another
+     * location's square.
      */
     val profilsListe: List<fr.f4ioz.satcombo.domain.ProfilsStation.Profil> = emptyList(),
-    /** La maille d'appariement : 4 comme le VUCC, ou 6. */
+    /** Matching precision: 4 like VUCC, or 6. */
     val maille: Int = 4,
-    /** Ce que le dernier relevé de profils a donné. */
+    /** Result of the last profile fetch. */
     val profilsEtat: String = "",
-    /** QRZ.com : identifiants, et ce que le dernier essai ou comblement a dit. */
+    /** QRZ.com: credentials, and what the last test or fill reported. */
     val qrzUser: String = "",
     val qrzMdp: String = "",
     val qrzEtat: String = "",
@@ -302,42 +240,39 @@ data class CarnetUi(
     val configure: Boolean get() = url.isNotBlank() && cle.isNotBlank() && slug.isNotBlank()
 }
 
+/** QRV photo overlays: country map and POTA. */
 data class CarteUi(
     /**
-     * La liste des contacts du satellite est-elle dépliée ?
+     * Is the satellite's contact list expanded?
      *
-     * Logée dans un porteur existant plutôt que dans un nouveau : créer
-     * `DetailUi` ajoutait un registre à `UiState`, qui est à sa limite. La
-     * falaise a mordu cinq fois cette session — la règle n'est pas « un
-     * porteur », c'est « pas un champ de plus dans `UiState` ».
+     * Put in an existing holder: a new holder would still add a register to
+     * `UiState`, which is at its limit. The rule is not "use a holder", it is
+     * "not one more field in `UiState`".
      */
     val listeContactsOuverte: Boolean = false,
-    /**
-     * Le second drapeau de la photo. Déplacé ici depuis `UiState` : c'est un
-     * réglage de la photo, et la falaise des 255 registres réclamait sa place.
-     */
+    /** The photo's second flag (moved out of `UiState` for the register limit). */
     val flagRight: String = "",
     val affichee: Boolean = false,
-    /** La ligne POTA : référence et nom trouvés autour de la position. */
+    /** POTA line: reference and name found around the position. */
     val potaAffiche: Boolean = false,
     val potaRef: String = "",
     val potaNom: String = "",
-    /** Un parc proche, proposé à l'opérateur mais jamais inscrit d'office. */
+    /** A nearby park, suggested to the operator but never filled in automatically. */
     val potaPropose: String = "",
     val potaProposeNom: String = "",
-    /** Ce que le dernier préchargement de contours a donné. */
+    /** Result of the last outline preload. */
     val contoursEtat: String = "",
     val taille: Float = 0.42f,
     val x: Float = 0.5f,
     val y: Float = 0.52f,
     val remplissage: String = "DRAPEAU",
-    /** « PAYS » ou « ZONE » : ce que la silhouette montre. */
+    /** "PAYS" or "ZONE": what the outline shows. */
     val contenu: String = "PAYS",
     val potaTaille: Float = 1f,
     val potaMonte: Float = 0f,
     val couleur: Int = 0x66FFFFFF,
     val bandeauAccueil: Boolean = true,
-    /** Les villes autour de la zone, pour se repérer. */
+    /** Towns around the area, as landmarks. */
     val villes: List<Triple<String, Double, Double>> = emptyList(),
     val fondu: Boolean = true,
     val potaNomAffiche: Boolean = true,
@@ -346,33 +281,26 @@ data class CarteUi(
     val qrgTexte: String = "",
     val passScale: Float = 1f,
     val fondUni: Int = 0xFF102030.toInt(),
-    /** Les anneaux du pays où l'on se trouve, chargés à la demande. */
+    /** Rings of the current country, loaded on demand. */
     val anneaux: List<DoubleArray> = emptyList(),
     val paysNom: String = "",
     /**
-     * La zone POTA dont l'emprise contient la position, si elle existe.
-     * Jugée au polygone (pota-map.fr), pas au rayon : être « au parc » est
-     * une affaire de limite, pas de distance au centre.
+     * The POTA area whose outline contains the position, if any. Judged by
+     * polygon (pota-map.fr), not radius: being "in the park" is a matter of
+     * boundary, not distance to the centre.
      */
     val zoneRef: String = "",
     val zoneNom: String = "",
     val zoneAnneaux: List<DoubleArray> = emptyList(),
 )
 
+/** Quick-log state, kept out of [UiState] (255-register limit, see [RotorUi]). */
 data class CarnetExpress(
-    /**
-     * La base d'indicatifs embarquée est-elle servie au clavier ?
-     *
-     * Le champ vit ici et non dans UiState : c'est un réglage du clavier
-     * express, et surtout le 222e champ direct de UiState portait son
-     * constructeur à 241 registres — un au-dessus du seuil de l'essai, quinze
-     * sous le plantage silencieux de Dalvik.
-     */
-    /** La mémoire des correspondants : carnet local plus index importé. */
+    /** Known stations: local log plus imported index. */
     val memoire: List<fr.f4ioz.satcombo.domain.Indicatifs.Connu> = emptyList(),
-    /** Clavier des indicatifs : validation du côté de la main qui tient. */
+    /** Callsign keypad: confirm key on the side of the holding hand. */
     val mainGauche: Boolean = false,
-    /** Disposition des touches : « abc », « azerty » ou « qwerty ». */
+    /** Key layout: "abc", "azerty" or "qwerty". */
     val disposition: String = "abc",
 )
 
@@ -387,21 +315,19 @@ data class TimelineTrack(
 }
 
 /**
- * L'etat du rotor, tenu a part.
+ * Rotor state, kept separate.
  *
- * Ce n'est pas un rangement de confort. La machine virtuelle d'Android code
- * le nombre de registres d'un appel `invoke/range` sur un seul octet : au-dela
- * de 255, l'instruction ne peut pas s'ecrire. Un `data class` dont le
- * constructeur reclame plus de 255 registres compile sans un mot, passe les
- * essais tant qu'aucun d'eux ne le construit, et fait mourir l'application a
- * la seconde ou elle demande son premier etat. C'est arrive en 18.22, a six
- * champs pres. Un `Double` ou un `Long` non nul coute deux registres, tout le
- * reste en coute un, et l'objet lui-meme en coute un de plus.
+ * **Not a tidiness choice: the 255-register limit.** Dalvik encodes the
+ * register count of an `invoke/range` call on one byte. A `data class` whose
+ * constructor needs more than 255 registers compiles silently, passes every
+ * test that does not build it, and kills the app the moment it asks for its
+ * first state (happened in 18.22). A non-null `Double` or `Long` costs two
+ * registers, everything else one, plus one for the object itself. This is why
+ * [UiState] is split into holders: never add a flat field to it lightly.
  *
- * Grouper les champs d'un meme sujet dans un objet imbrique ramene le compte
- * a un seul registre pour les quarante-cinq. Les lectures gardent leur nom
- * d'origine (`ui.rotorEnabled`) grace aux accesseurs delegants de [UiState] ;
- * seules les ecritures passent par [UiState.rot].
+ * Grouping brings these forty-five fields down to one register. Reads keep
+ * their original names (`ui.rotorEnabled`) through the delegating accessors
+ * of [UiState]; only writes go through [UiState.rot].
  */
 data class RotorUi(
     // --- rotor az/el ---
@@ -414,22 +340,18 @@ data class RotorUi(
     val rotorPort: Int = 4533,
     val rotorMaxAz: Int = 450,
     val rotorMaxEl: Int = 90,
-    /** Où le mât a son point mort : « NORTH » ou « SOUTH ». */
+    /** Where the mast's end stop is: "NORTH" or "SOUTH". */
     val rotorAzStop: String = "NORTH",
-    /** Le contrôleur compte-t-il depuis sa butée plutôt qu'au nord vrai ? */
+    /** Does the controller count from its end stop rather than true north? */
     val rotorAzFromStop: Boolean = false,
-    /** Écart de pointage toléré avant de considérer le satellite perdu. */
+    /** Pointing error tolerated before the satellite is considered lost. */
     val rotorMaxError: Int = 15,
     val rotorMinEl: Int = 0,
     val rotorFlip: Boolean = false,
     val rotorAzOnly: Boolean = false,
-    /**
-     * « Il faut qu'il soit positionné avant le début du passage, x minutes en
-     * paramètre. » Combien de minutes avant l'acquisition le mât part attendre
-     * le satellite à son point de lever.
-     */
+    /** Minutes before AOS at which the mast goes to wait at the rise point. */
     val rotorPreAos: Int = 3,
-    /** Vrai pendant que le mât attend le satellite à son point de lever. */
+    /** True while the mast waits for the satellite at its rise point. */
     val rotorPrePositioning: Boolean = false,
     val rotorPark: Boolean = true,
     val rotorParkAz: Int = 0,
@@ -440,7 +362,7 @@ data class RotorUi(
     val rotorFlipped: Boolean = false,
     val rotorMoves: Int = 0,
     val rotorDevices: List<String> = emptyList(),
-    /** Part du passage en cours réellement pointable, entre 0 et 1. */
+    /** Share of the current pass actually reachable, 0 to 1. */
     val rotorCoverage: Double? = null,
     val rotorLink: String = "GS232",
     val rotorHost: String = "192.168.1.10",
@@ -451,191 +373,154 @@ data class RotorUi(
     val rotorActualAz: Double? = null,
     val rotorActualEl: Double? = null,
     /**
-     * Où l'antenne pointe, telle que la boussole doit la montrer : azimut
-     * ramené dans le tour, retournement d'élévation défait. Null quand le mât
-     * ne dit rien — la boussole revient alors au téléphone, sans rien changer
-     * d'autre. [rotorAimEl] reste null sur un rotor d'azimut seul.
+     * Where the antenna points, as the compass must show it: azimuth wrapped
+     * into one turn, elevation flip undone. Null when the mast says nothing —
+     * the compass falls back to the phone. [rotorAimEl] stays null on an
+     * azimuth-only rotor.
      */
     val rotorAimAz: Double? = null,
     val rotorAimEl: Double? = null,
     val rotorOutOfRange: Boolean = false,
 
     /**
-     * Le compte rendu de la dernière tentative de connexion, ligne par ligne.
-     *
-     * Sans lui, « ça ne marche pas » n'a qu'une seule réponse possible :
-     * réessayer. Avec lui, on sait lequel des ports a été essayé, lequel a
-     * refusé la permission, lequel s'est ouvert sans jamais répondre.
+     * Log of the last connection attempt, line by line: which port was tried,
+     * which refused permission, which opened and never answered.
      */
     val rotorDiag: List<String> = emptyList(),
 
     /**
-     * Essayer les autres ports quand celui qui est choisi ne répond pas.
-     *
-     * Le même service que du côté du poste, et pour la même raison : l'indice
-     * du bon port dépend de l'ordre de branchement, que personne ne contrôle.
+     * Try the other ports when the chosen one does not answer: as for the rig,
+     * the port index depends on plug-in order, which nobody controls.
      */
     val rotorAutoPort: Boolean = true,
 
-    /** L'azimut saisi à la main, pour l'essai sans satellite. */
+    /** Manual azimuth, for testing without a satellite. */
     val rotorManualAz: Int = 0,
 
-    /** L'élévation saisie à la main, pour l'essai sans satellite. */
+    /** Manual elevation, for testing without a satellite. */
     val rotorManualEl: Int = 0,
 
-    /** La dernière trame reçue du contrôleur, telle quelle — vide s'il se tait. */
+    /** Last frame received from the controller, verbatim — empty if silent. */
     val rotorLastReply: String = "",
 
-    /** La dernière trame envoyée au contrôleur, telle quelle. */
+    /** Last frame sent to the controller, verbatim. */
     val rotorLastSent: String = "",
-    /** Écart entre le point visé et le point atteignable, en degrés. */
+    /** Gap between the target and the reachable point, degrees. */
     val rotorErrorDeg: Double = 0.0,
 
-    // ---- La boussole déportée ----
-    // Elle loge ici et non à plat dans UiState : le constructeur d'UiState
-    // frôle les 255 registres que la machine virtuelle sait écrire, et quatre
-    // champs de plus le feraient mourir sans un mot du compilateur. Le rotor
-    // est le bon porteur — lui aussi répond à « où pointe l'antenne ».
-    /** « TEL » = capteurs du téléphone, « BLE » = module sur la flèche. */
+    // ---- Remote compass ----
+    // Here rather than flat in UiState (register limit). The rotor is the
+    // right holder: it also answers "where does the antenna point".
+    /** "TEL" = phone sensors, "BLE" = module on the boom. */
     val boussoleSource: String = "TEL",
     val boussoleAdresse: String = "",
     val boussoleNom: String = "",
     val boussoleCalage: Float = 0f,
-    /** La convention du module, mesurée : « DIRECTE », « LACET_OPPOSE »… */
+    /** The module's measured convention: "DIRECTE", "LACET_OPPOSE"… */
     val boussoleConvention: String = "DIRECTE",
-    /** Le relevé de calibrage, une ligne par pose. */
+    /** Calibration readings, one line per pose. */
     val boussoleReleves: String = "",
-    /** « TANGAGE », « ROULIS » ou « AUCUN » : d'où vient l'élévation. */
-    /** La flèche dans le repère du boîtier, « x,y,z ». Vide = pas apprise. */
+    /** The boom in the module's frame, "x,y,z". Empty = not learnt. */
     val boussoleFleche: String = "",
 )
 
 /**
- * L'état de l'écran QO-100, tenu à part.
+ * QO-100 screen state, kept separate for the same reason as [RotorUi] (fifteen
+ * flat fields would have crossed the 255-register limit).
  *
- * Même raison que [RotorUi], et cette fois sans marge : le constructeur de
- * [UiState] réclamait déjà 227 registres d'arguments sur les 255 que la
- * machine virtuelle sait écrire. Une quinzaine de champs à plat auraient suffi
- * à faire mourir l'application au premier état construit, sans un mot du
- * compilateur. Groupés ici, ils en coûtent un.
+ * Unlike [RotorUi], no delegating accessors on [UiState]: read directly via
+ * `ui.qo100.`, write via [UiState.qo].
  *
- * Contrairement à [RotorUi], aucun accesseur délégant n'est posé sur
- * [UiState] : rien d'existant ne lit ces champs, ils se lisent donc
- * directement par `ui.qo100.` — et les écritures passent par [UiState.qo].
- *
- * Tout ce qui est ici est en fréquences du ciel. La traduction vers le poste
- * et vers la clé se fait au dernier moment, par les convertisseurs, comme
- * partout ailleurs — à deux exceptions près, [posteRxHz] et [posteTxHz], qui
- * ne servent qu'à être affichées et sont nommées pour qu'on ne s'y trompe pas.
+ * Everything here is in sky frequencies. Conversion to rig and dongle happens
+ * at the last moment, through the converters, as everywhere else — except
+ * [posteRxHz] and [posteTxHz], display-only and named so nobody mistakes them.
  */
 data class Qo100Ui(
-    /**
-     * Les appareils de réception et leur écart propre, en ppm.
-     *
-     * Ils vivent ici plutôt que dans l'état principal, déjà au bord des deux
-     * cent cinquante-cinq registres. Le sujet est d'ailleurs le même que la
-     * chaîne de station — décrire son matériel — et l'écran les montre côte à
-     * côte.
-     */
+    /** Receivers and their own offset, ppm. */
     val materiels: List<fr.f4ioz.satcombo.domain.MaterielRx.Materiel> =
         fr.f4ioz.satcombo.domain.MaterielRx.parDefaut(),
     val materielPoste: String = "FT-817 A",
     val materielCle: String = "Clé SDR 1",
-    /** La clé du transpondeur choisi : « nb » ou « wb ». Voir [Qo100.TRANSPONDEURS]. */
+    /** Selected transponder key: "nb" or "wb". See [Qo100.TRANSPONDEURS]. */
     val transpondeur: String = "nb",
-    /** Vrai quand on balaie tout QO-100 au lieu du seul transpondeur. */
+    /** True when sweeping all of QO-100 instead of just the transponder. */
     val sansBride: Boolean = false,
 
-    /**
-     * Où l'on écoute, dans le ciel. La montée s'en déduit exactement par le
-     * décalage du transpondeur : il n'y a donc rien d'autre à régler.
-     */
+    /** Where we listen, in the sky. The uplink follows from the transponder offset. */
     val descenteHz: Long = Qo100.BALISE_MEDIANE_HZ,
 
-    /** Le poste suit-il l'écran ? Indépendant de [aLaCle], et volontairement. */
+    /** Does the rig follow the screen? Independent of [aLaCle], on purpose. */
     val auPoste: Boolean = false,
 
-    /** La clé SDR suit-elle l'écran ? */
+    /** Does the SDR dongle follow the screen? */
     val aLaCle: Boolean = false,
 
     /**
-     * Ce qui est réellement affiché sur le poste, après convertisseurs.
-     *
-     * Sur la station visée : 145 en réception, 432 en émission. Zéro tant
-     * qu'aucune conversion n'a été faite. C'est le nombre qu'on compare à
-     * l'écran de la radio pour savoir si tout est en place, et c'est la seule
-     * vérification possible avant d'entendre quoi que ce soit.
+     * What the rig actually displays, after converters (on the target station:
+     * 145 RX, 432 TX). Zero until a conversion is done. It is the number to
+     * compare with the radio's display — the only check possible before
+     * hearing anything.
      */
     val posteRxHz: Long = 0L,
     val posteTxHz: Long = 0L,
 
-    /** Idem côté clé SDR, qui peut être branchée derrière un autre montage. */
+    /** Same for the SDR dongle, which may sit behind another setup. */
     val cleRxHz: Long = 0L,
 
     /**
-     * Les raccourcis posés par l'opérateur.
-     *
-     * Les repères du plan de bande ne sont **pas** ici : ils se déduisent des
-     * segments, qui sont des faits publiés. Les mélanger obligerait à les
-     * recopier, donc à les maintenir à deux endroits.
+     * Operator shortcuts. Band plan markers are **not** here: they derive from
+     * the published segments; mixing them in would mean maintaining them twice.
      */
     val memoires: List<fr.f4ioz.satcombo.domain.MemoiresQo100.Memoire> = emptyList(),
 
-    /** Les chaînes de conversion mémorisées, et celle en service. */
+    /** Saved conversion chains, and the one in use. */
     val chaines: List<fr.f4ioz.satcombo.domain.ChaineQo100.Chaine> = emptyList(),
     val chaine: String = "Fixe",
 
     /**
-     * Le poste peut-il vraiment aller là ? Faux quand le convertisseur n'est
-     * pas réglé, ou quand la fréquence obtenue tombe hors de ses bandes.
+     * Can the rig really go there? False when the converter is not set, or the
+     * resulting frequency falls outside its bands.
      */
     val posteAtteignable: Boolean = false,
     val cleAtteignable: Boolean = false,
 
     /**
-     * Le décalage d'étalonnage courant, en hertz, tel qu'il est rangé pour le
-     * NORAD 43700. Il absorbe la dérive de l'oscillateur du convertisseur de
-     * descente, et rien d'autre — surtout pas l'oscillateur lui-même, qui vit
-     * dans [fr.f4ioz.satcombo.domain.Convertisseur].
+     * Current calibration offset, Hz, as stored for NORAD 43700. It absorbs the
+     * downconverter oscillator drift and nothing else — certainly not the
+     * oscillator itself, which lives in [fr.f4ioz.satcombo.domain.Convertisseur].
      */
     val calageHz: Long = 0L,
 
-    /** Le curseur est posé sur la balise médiane, à la tolérance d'affichage près. */
+    /** Cursor is on the middle beacon, within display tolerance. */
     val surBalise: Boolean = false,
 
-    /** Le pointage de la parabole, calculé une fois depuis le QTH. Null tant qu'il ne l'est pas. */
+    /** Dish pointing, computed once from the QTH. Null until computed. */
     val azDeg: Double? = null,
     val elDeg: Double? = null,
     val skewDeg: Double? = null,
 
     /**
-     * Le prochain instant où le Soleil est dans l'azimut du satellite — celui
-     * où l'ombre d'un piquet vertical donne l'axe de la parabole sans
-     * boussole. Null tant que le calcul n'a pas eu lieu, ou quand le
-     * satellite n'est pas visible du QTH.
+     * Next time the Sun is at the satellite's azimuth: the shadow of a vertical
+     * stake then gives the dish axis without a compass. Null until computed,
+     * or when the satellite is not visible from the QTH.
      */
     val soleilAzimutMs: Long? = null,
 
     /**
-     * Les prochains passages du Soleil *devant* le satellite : le réglage fin
-     * des deux angles à la fois, et l'explication d'une réception qui
-     * s'effondre quelques minutes autour des équinoxes. Vide hors calcul.
+     * Next Sun transits *behind* the satellite: fine-tunes both angles at once,
+     * and explains reception collapsing for a few minutes around the equinoxes.
      */
     val soleilTransits: List<fr.f4ioz.satcombo.domain.SoleilQo100.Transit> = emptyList(),
 
     /**
-     * La balise médiane telle que la clé la voit en ce moment : de combien
-     * elle est décalée, et de combien elle dépasse le bruit. Null tant qu'on
-     * ne la trouve pas — clé arrêtée, panorama pas encore calculé, parabole à
-     * côté, ou simplement pas de convertisseur derrière la clé.
-     *
-     * C'est le témoin permanent de la station : l'écart dit si l'étalonnage
-     * tient, le rapport dit si le pointage est bon. Les deux se lisent d'un
-     * coup d'œil pendant qu'on tourne quelque chose.
+     * Middle beacon as the dongle sees it now: offset and margin above noise.
+     * Null when not found (dongle stopped, no panorama yet, dish off, or no
+     * converter). The station's permanent check: the offset says whether
+     * calibration holds, the ratio whether pointing is good.
      */
     val balise: fr.f4ioz.satcombo.domain.MesureBalise.Mesure? = null,
 
-    /** La dernière ligne de compte rendu affichée sous les commandes. */
+    /** Last status line shown under the controls. */
     val statut: String = "",
 )
 
@@ -655,9 +540,8 @@ data class UiState(
     val compassStyle: String = "NEEDLE",
     val tleCacheHours: Int = 24,
     /**
-     * D’où vient l’état affiché à côté du satellite. AMSAT seul par défaut :
-     * c’est le relevé que les OM alimentent eux-mêmes en temps réel, et c’est
-     * celui qu’ils citent sur l’air.
+     * Source of the status shown next to the satellite. AMSAT alone by default:
+     * hams feed it themselves in real time, and it is the one quoted on the air.
      */
     val statusSource: String = "AMSAT",
     val darkTheme: Boolean = true,
@@ -683,7 +567,7 @@ data class UiState(
     val skedError: String? = null,        // "bad" = invalid locator
     val skedPlans: List<SkedPlan> = emptyList(),
     val skedSelectedIndex: Int = 0,
-    /** Appuis rapides sur la boussole qui ouvrent l'écran de saisie. */
+    /** Quick taps on the compass that open the log entry screen. */
     val logTaps: Int = 3,
     val logEditTimeMs: Long? = null,  // entry awaiting callsign/grid input
     val minElevDeg: Int = 5,
@@ -709,17 +593,16 @@ data class UiState(
     val recorderSource: String = "MIC",   // MIC, BT (Bluetooth HFP) or USB (sound card)
     val recorderUnprocessed: Boolean = false,
     /**
-     * Pause Doppler : le calcul, l'affichage et le suivi continuent, mais plus
-     * une seule fréquence ne part vers le poste. Volontairement absent des
-     * réglages enregistrés — une pause oubliée d'un passage à l'autre ne
-     * pourrait que faire perdre le suivant.
+     * Doppler hold: computing, display and tracking go on, but no frequency is
+     * sent to the rig. Deliberately not persisted — a hold forgotten from one
+     * pass to the next could only lose the next one.
      */
     val dopplerHold: Boolean = false,
     val monitorSpectre: Boolean = false,
     val monitorSpeaker: Boolean = false,
     val sstvEnabled: Boolean = true,
     val aptEnabled: Boolean = false,
-    // --- clé RTL-SDR (bêta) ---
+    // --- RTL-SDR dongle (beta) ---
     val sdrSstv: Boolean = true,
     val sdrRecord: Boolean = true,
     val sdrAudio: Boolean = true,
@@ -729,36 +612,32 @@ data class UiState(
     val sdrBandwidthHz: Int = 0,
     val sdrSquelchDb: Int = -120,
     val sdrSpanHz: Int = 48_000,
-    /** Les trois aides à l'accord fin, tenues à part (falaise des registres). */
+    /** The three fine-tuning aids (register limit, see [RotorUi]). */
     val accord: AccordUi = AccordUi(),
     /**
-     * Le carnet express, tenu à part.
-     *
-     * Quatre champs de plus sur [UiState] ont franchi la falaise des 255
-     * registres de Dalvik, et l'essai de garde l'a dit avant que l'appareil ne
-     * le dise à sa façon — c'est-à-dire en mourant au démarrage, comme en
-     * 18.22. Le regroupement dans un porteur ramène quatre paramètres à un.
+     * Quick log, kept separate: four more flat fields crossed the 255-register
+     * limit; the guard test caught it before a device died at startup.
      */
     val express: CarnetExpress = CarnetExpress(),
-    /** L'état du suivi de position, pour qu'il puisse se raconter. */
+    /** Location tracking state, so it can report on itself. */
     val suivi: SuiviUi = SuiviUi(),
-    /** 0 sombre, 1 clair, 2 soleil. */
+    /** 0 dark, 1 light, 2 sunlight. */
     val themeIndex: Int = 0,
-    /** La molette USB pilote le VFO, et son pas courant en hertz. */
+    /** USB knob drives the VFO, and its current step in Hz. */
     val moletteVfo: Boolean = false,
     val molettePasHz: Long = 100L,
-    /** Les réglages du dialogue avec le poste. */
+    /** Radio (CAT) link settings. */
     val catUi: CatUi = CatUi(),
     val carnet: CarnetUi = CarnetUi(),
 
-    /** Désaccentuation FM (écoute radiodiffusion) ; fermée par défaut. */
+    /** FM de-emphasis (broadcast listening); off by default. */
     val sdrDeemph: Boolean = false,
-    /** Suivi Doppler automatique de la clé pendant le passage. */
+    /** Automatic Doppler tracking of the dongle during the pass. */
     val sdrDopplerTrack: Boolean = true,
-    /** Petite cascade sous la boussole, sur la page du passage. */
+    /** Small waterfall under the compass on the pass page. */
     val sdrInlineWaterfall: Boolean = true,
     val recordingsTreeUri: String = "",   // SAF export folder ("" = app dir only)
-    /** Ce que la bande image du passage suit : "SSTV" ou "NOAA". */
+    /** What the pass image strip follows: "SSTV" or "NOAA". */
     val rxImageMode: String = "SSTV",
     val recording: Boolean = false,
     // Freeze the detail screen scroll position (field use: no accidental scrolls
@@ -784,14 +663,10 @@ data class UiState(
     val groundTrack: List<Pair<Double, Double>> = emptyList(),
     val dateFilter: Pair<Long, Long>? = null, // [startMs, endMs] local-day bounds
     /**
-     * Profondeur de la liste des passages, en heures.
-     *
-     * On ouvre sur quarante-huit heures, parce que c'est ce qu'on regarde
-     * quatre-vingt-dix-neuf fois sur cent, et parce que calculer quinze jours
-     * pour tout le monde à chaque démarrage serait payé par tous pour l'usage
-     * de quelques-uns. Descendre en bas de la liste ajoute deux jours de plus,
-     * autant de fois qu'il le faut, jusqu'à la limite de quinze jours au-delà
-     * de laquelle les éléments orbitaux ne valent plus grand-chose.
+     * Pass list depth, hours. Opens at 48 h — what is looked at 99 times out of
+     * 100; computing fifteen days at every startup would make everyone pay for
+     * a few. Scrolling to the bottom adds two days at a time, up to fifteen
+     * days, beyond which orbital elements are worth little.
      */
     val passHorizonHours: Int = 48,
     val showDatePicker: Boolean = false,
@@ -814,17 +689,16 @@ data class UiState(
     val opMode: String = "VOICE",        // VOICE or CW (linear operating sub-mode)
     val rxOffsetVoiceHz: Long = 0L,
     val rxOffsetCwHz: Long = 0L,
-    // --- convertisseurs (LNB en descente, transverter en montée) ---
-    // Ce sont les seules pièces qui séparent la fréquence du satellite de
-    // celle qu'on lit sur le poste. Elles vivent ici pour que l'écran de
-    // réglage montre la fréquence intermédiaire pendant qu'on tape l'OL.
+    // --- converters (LNB on the downlink, transverter on the uplink) ---
+    // The only parts between the satellite frequency and the one read on the
+    // rig. Kept here so the settings screen shows the IF while the LO is typed.
     val convRx: fr.f4ioz.satcombo.domain.Convertisseur =
         fr.f4ioz.satcombo.domain.Convertisseur.AUCUN,
     val convTx: fr.f4ioz.satcombo.domain.Convertisseur =
         fr.f4ioz.satcombo.domain.Convertisseur.AUCUN,
-    /** La descente traverse le poste piloté en CAT. */
+    /** The downlink converter feeds the CAT-controlled rig. */
     val convRxPoste: Boolean = false,
-    /** La descente traverse la clé SDR. */
+    /** The downlink converter feeds the SDR dongle. */
     val convRxCle: Boolean = true,
     val showSatConfig: Boolean = false,
     val favoritePasses: List<SatPass> = emptyList(),
@@ -834,9 +708,9 @@ data class UiState(
     val lastLogMs: Long = 0L,
     // --- operator identity + QRV photo overlay ---
     val callsign: String = "",
-    /** Contenu du champ « Extensions » des réglages (mots-clés de déverrouillage). */
+    /** Content of the "Extensions" settings field (unlock keywords). */
     val extensionsCode: String = "",
-    /** Fonctions en bêta ouvertes pour cet opérateur (voir Extensions). */
+    /** Beta features unlocked for this operator (see Extensions). */
     val extensions: Set<String> = emptySet(),
     val photoShowCallsign: Boolean = true,
     val photoShowDate: Boolean = true,
@@ -847,44 +721,38 @@ data class UiState(
     val photoShowPass: Boolean = true,
     val photoPolarScale: Float = 1f,
     val photoSatLabelScale: Float = 1f,
-    /** Altitude du QTH sur la photo, quand le téléphone la connaît. */
+    /** QTH altitude on the photo, when the phone knows it. */
     val photoShowAlt: Boolean = false,
-    /** Couleur de l’indicatif sur la photo QRV (ARGB). */
+    /** Callsign colour on the QRV photo (ARGB). */
     val photoCallColor: Int = 0xFFFFC65C.toInt(),
-    /** Taille de l’indicatif sur la photo QRV, 1.0 = référence. */
+    /** Callsign size on the QRV photo, 1.0 = reference. */
     val photoCallScale: Float = 1f,
     /** True = the picture shows "JN18" only, false = "JN18fv". */
     val photoLoc4: Boolean = false,
     /** Distance (m) under which a neighbouring grid square is announced. */
     val nearGridMeters: Int = 100,
-    /** Nombre de carrés voisins imprimés sur la photo QRV, du plus proche. */
+    /** Number of neighbouring squares printed on the QRV photo, nearest first. */
     val photoNearCount: Int = 4,
-    /** Système d'unités : metric, imperial ou nautical. */
+    /** Unit system: metric, imperial or nautical. */
     val units: String = fr.f4ioz.satcombo.data.Units.METRIC,
-    /** Fréquence d'écoute des radiosondes, en hertz. */
+    /** Radiosonde listening frequency, Hz. */
     val sondeFreqHz: Long = 404_000_000L,
     val sondeSource: String = "SDR",
-    /** Modèle de sonde écouté : "AUTO", "RS41", "M20" ou "M10". */
+    /** Sonde model: "AUTO", "RS41", "M20" or "M10". */
     val sondeModel: String = "AUTO",
-    /** Code du drapeau placé devant l’indicatif, vide = aucun. */
+    /** Flag code shown before the callsign, empty = none. */
     val photoFlag: String = "",
     /**
-     * La carte du pays sur la photo QRV, dans son porteur.
-     *
-     * Sept champs de plus posés directement dans `UiState` ont fait mordre
-     * `RegistresTest` : le constructeur franchissait la falaise des 255
-     * registres de Dalvik, et l'application serait morte à la première
-     * instanciation, sans rien dans le journal. Le porteur ne coûte qu'un
-     * registre.
+     * QRV photo country map, in its holder: seven more flat fields tripped
+     * `RegistresTest` (255-register limit, see [RotorUi]).
      */
     val carte: CarteUi = CarteUi(),
-    /** Code du drapeau placé à droite de l’indicatif, vide = aucun. */
-    /** Les rendez-vous de l’agenda, relus à chaque modification de l’écran. */
+    /** Agenda appointments, re-read on every change from the screen. */
     val agenda: List<fr.f4ioz.satcombo.data.AgendaStore.AgendaEvent> = emptyList(),
     /**
-     * La fréquence de descente imposée par un rendez-vous d’agenda en cours,
-     * en hertz. Non nulle, elle veut dire que le VFO affiché ne vient pas du
-     * catalogue mais de l’annonce, et l’écran du passage le dit.
+     * Downlink frequency imposed by a running agenda appointment, Hz. When set,
+     * the displayed VFO comes from the announcement, not the catalogue, and
+     * the pass screen says so.
      */
     val rxFromAgendaHz: Long? = null,
     /** True while the "your callsign is missing" prompt must be shown. */
@@ -939,54 +807,46 @@ data class UiState(
     val catStatus: String = "",           // human-readable status/last error
     val catRadioDownlinkHz: Long? = null, // frequency actually read from the rig
     val catRadioUplinkHz: Long? = null,
-    /** Vrai quand c'est le logiciel qui tient le VFO de réception du poste. */
+    /** True when the software holds the rig's RX VFO. */
     val catRxDriven: Boolean = false,
-    /** Suivre le Doppler en réception, et pas seulement en émission. */
+    /** Track Doppler on receive too, not only on transmit. */
     val catRxDoppler: Boolean = true,
     /**
-     * Le mode relu dans le poste — « USB », « LSB », « FM »… — ou null tant
-     * qu'on ne l'a pas encore demandé.
-     *
-     * Il est relu, et non déduit de ce qu'on a écrit : le mode se change aussi
-     * à la main, et une bande latérale à l'envers sur un transpondeur inverseur
-     * ne s'entend pas, elle s'ignore.
+     * Mode read back from the rig ("USB", "LSB", "FM"…), null until asked.
+     * Read back, not inferred from what we wrote: the mode also changes by
+     * hand, and a wrong sideband on an inverting transponder is not heard —
+     * it goes unnoticed.
      */
     val catRadioMode: String? = null,
-    /** Vrai quand le mode du poste n'est pas celui que le satellite demande. */
+    /** True when the rig's mode is not the one the satellite needs. */
     val catModeMismatch: Boolean = false,
     val amsatReports: Map<String, fr.f4ioz.satcombo.data.AmsatReport> = emptyMap(),
     val rigModel: String = "IC9700",
     val civAddress: Int = 0xA2,
     val civBaud: Int = 115200,
     /**
-     * Quel adaptateur série porte le poste, quand il y en a plusieurs.
-     *
-     * « Il faut que je plugue la clé SDR, que j'aille dans le menu SDR, je
-     * débranche puis connecte l'IC-9700 et c'est bon. » Le pilote prenait le
-     * premier périphérique reconnu, quel qu'il soit : une clé SDR branchée
-     * avant le poste lui volait la place, et la seule façon de s'en sortir
-     * était cette gymnastique de débranchement.
+     * Which serial adapter carries the rig, when there are several. The driver
+     * used to take the first device found: an SDR dongle plugged in before the
+     * rig stole its place, and only unplug/replug gymnastics got out of it.
      */
     val civUsbIndex: Int = 0,
-    /** Les adaptateurs série visibles, pour que l'on puisse choisir. */
+    /** Visible serial adapters, to choose from. */
     val catDevices: List<String> = emptyList(),
-    /** Essayer les ports voisins quand celui qui est désigné ne répond pas. */
+    /** Try neighbouring ports when the chosen one does not answer. */
     val civUsbAuto: Boolean = true,
     /**
-     * Le récit de la dernière tentative de connexion, ligne à ligne.
-     *
-     * « J'ai vraiment du mal a connecter » : sans trace, il n'y a rien à
-     * répondre à ça. Avec, l'opérateur voit lequel des ports a été ouvert, s'il
-     * a répondu, et sinon pourquoi.
+     * Log of the last connection attempt, line by line: which port was opened,
+     * whether it answered, and if not why. Without it, "I can't connect" has
+     * no answer.
      */
     val catDiag: List<String> = emptyList(),
-    /** Le CAT parle à un poste en mémoire au lieu d'un câble. */
+    /** CAT talks to an in-memory rig instead of a cable. */
     val catSimulated: Boolean = false,
-    /** Le journal des trames CAT tourne. */
+    /** CAT frame log is running. */
     val catMonitor: Boolean = false,
-    /** Tout l'etat du rotor, groupe : voir [RotorUi]. */
+    /** All rotor state, grouped: see [RotorUi]. */
     val rotor: RotorUi = RotorUi(),
-    /** Tout l'état de l'écran QO-100, groupé : voir [Qo100Ui]. */
+    /** All QO-100 screen state, grouped: see [Qo100Ui]. */
     val qo100: Qo100Ui = Qo100Ui(),
     // Dual FT-817 (full-duplex pair): FTDI serials for the RX/TX rigs, CAT baud,
     // and the currently visible USB adapters for the assignment UI.
@@ -997,10 +857,9 @@ data class UiState(
     val ctcssTenthHz: Int = 0,
     val ctcssAuto: Boolean = true,
     val catTestSendAlways: Boolean = false,  // send even below horizon (diagnostics)
-    // Banc d'essai : la séquence de début de passage jouée contre un poste en
-    // mémoire, et le journal des trames. Le premier permet enfin d'affirmer
-    // quelque chose sans radio branchée ; le second de savoir, quand un
-    // passage se passe mal, ce qui a précédé le refus.
+    // Test bench: the start-of-pass sequence played against an in-memory rig
+    // (to assert something without a radio), and the frame journal (to see
+    // what preceded a refusal when a pass goes wrong).
     val benchRunning: Boolean = false,
     val benchReport: String = "",
     val benchOk: Boolean = false,
@@ -1014,9 +873,8 @@ data class UiState(
     val satActiveOnly: Boolean = false
 ) {
 
-    // --- Les 45 champs du rotor, relus sous leur nom d'origine. Voir
-    //     [RotorUi] : ils sont ranges ailleurs pour tenir sous la limite
-    //     des 255 registres d'un appel Dalvik.
+    // --- The 45 rotor fields, read under their original names. See
+    //     [RotorUi]: stored elsewhere to stay under the 255-register limit.
     // ---------------------------------------------------------------
     val rotorEnabled: Boolean get() = rotor.rotorEnabled
     val rotorConnected: Boolean get() = rotor.rotorConnected
@@ -1064,10 +922,10 @@ data class UiState(
     val rotorLastSent: String get() = rotor.rotorLastSent
     val rotorErrorDeg: Double get() = rotor.rotorErrorDeg
 
-    /** Recopie l'etat en ne changeant que le bloc rotor. */
+    /** Copies the state, changing only the rotor block. */
     fun rot(f: RotorUi.() -> RotorUi): UiState = copy(rotor = rotor.f())
 
-    /** Recopie l'état en ne changeant que le bloc QO-100. */
+    /** Copies the state, changing only the QO-100 block. */
     fun qo(f: Qo100Ui.() -> Qo100Ui): UiState = copy(qo100 = qo100.f())
 
     val filteredSatellites: List<TleEntry>
@@ -1131,29 +989,22 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val cat = fr.f4ioz.satcombo.cat.CivController(app)
     private val ft817 = fr.f4ioz.satcombo.cat.Ft817Pair(app)
     /**
-     * Le pilote de rotor, choisi à la connexion.
-     *
-     * Nul tant que rien n'est connecté : c'est la seule façon d'être certain
-     * qu'aucune consigne ne peut partir vers un mât qu'on n'a pas ouvert.
+     * Rotor driver, chosen on connect. Null while nothing is connected: the
+     * only way to be sure no command reaches a mast we have not opened.
      */
     private var rotorDriver: fr.f4ioz.satcombo.rotor.RotorDriver? = null
-    /** True when the dual-FT-817 full-duplex rig model is selected. */
-    /** Le pilotage passe par le couple FT-817 — deux postes, ou un seul en émission. */
+    /** Control goes through the FT-817 pair — two rigs, or one for TX only. */
     private val isPairRig: Boolean
         get() = _ui.value.rigModel == "FT817x2" || _ui.value.rigModel == "FT817TX"
 
     /**
-     * Un seul FT-817, en émission, la réception se faisant à la clé SDR.
+     * A single FT-817 on TX, receiving on the SDR dongle.
      *
-     * Rien à inventer dans la boucle : elle sait déjà ne piloter qu'une chaîne
-     * quand l'autre lui échappe — c'est ce qui fait fonctionner QO-100, où la
-     * descente s'écoute forcément à la clé. `descenteAuPoste` demande si le
-     * poste peut recevoir la descente ; ici la réponse est non par
-     * construction, et c'est le point d'écoute choisi sur la cascade qui mène
-     * l'émission.
-     *
-     * L'accord se fait donc au doigt sur le spectre, et le 817 suit en miroir —
-     * à l'envers sur un transpondeur inverse.
+     * The loop already knows how to drive one chain when the other is out of
+     * reach (that is how QO-100 works). `descenteAuPoste` answers no by
+     * construction, so the listening point picked on the waterfall drives TX:
+     * tuning is done by finger on the spectrum and the 817 mirrors it —
+     * reversed on an inverting transponder.
      */
     private val isTxOnlyRig: Boolean get() = _ui.value.rigModel == "FT817TX"
     private val satConfigStore = SatConfigStore(app)
@@ -1233,9 +1084,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             statusSource = settings.statusSource,
             tleCacheHours = settings.tleCacheHours,
             darkTheme = settings.darkTheme,
-            // Sans cette ligne, le sélecteur retombe sur « Sombre » à chaque
-            // ouverture, quelle que soit la palette réellement appliquée : la
-            // palette était restaurée, son index ne l'était pas.
+            // Without this the picker falls back to "Dark" on every launch,
+            // whatever palette is applied: the palette was restored, its index
+            // was not.
             themeIndex = settings.themeIndex,
             moletteVfo = settings.moletteVfo,
             molettePasHz = settings.molettePasHz,
@@ -1375,17 +1226,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     val ui: StateFlow<UiState> = _ui.asStateFlow()
 
     init {
-        // Le point d'accès annoncé en démonstration survit au redémarrage : sans
-        // cela il faudrait le ressaisir avant chaque séance.
+        // The demo access point survives a restart, so it need not be retyped
+        // before each session.
         fr.f4ioz.satcombo.demo.ServeurDemo.configureWifi(
             settings.demoSsid, settings.demoMotDePasse)
-        // Le moniteur a besoin du contexte pour choisir sa sortie : sans lui,
-        // il ne peut pas forcer le haut-parleur quand une carte USB est là.
-        // --- le poste de commande ---
-        //
-        // Le ViewModel pose ici les seuls gestes qu'un PC peut déclencher. Le
-        // serveur ne peut rien appeler d'autre : la surface exposée au réseau
-        // local tient en quatre lignes, et se relit d'un coup.
+        // --- control desk ---
+        // The only gestures a PC can trigger are placed here; the server can
+        // call nothing else, so the surface exposed to the LAN reads at a glance.
         fr.f4ioz.satcombo.demo.PontCommande.ajouteQso = { call, loc, rse, rsr ->
             val sat = _ui.value.selected
             if (sat == null || call.isBlank()) false
@@ -1398,15 +1245,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             if (on != _ui.value.recording) toggleRecording()
         }
         fr.f4ioz.satcombo.demo.PontCommande.satellites = {
-            // **Les favoris seuls.** La liste complète compte des dizaines de
-            // satellites, dont la plupart qu'on ne travaille jamais : les faire
-            // défiler pendant un passage, c'est du temps perdu à côté de ceux
-            // qu'on cherche. L'étoile est déjà le geste par lequel l'opérateur
-            // dit lesquels comptent.
+            // **Favourites only.** The full list has dozens of satellites never
+            // worked; scrolling through them mid-pass wastes time. The star is
+            // already how the operator says which ones matter.
             val u = _ui.value
             val favoris = u.satellites.filter { it.catalogNumber in u.favorites }
-            // Si aucune étoile n'est posée, mieux vaut la liste entière qu'un
-            // menu vide : on ne pourrait plus changer de satellite du tout.
+            // No star set: the whole list beats an empty menu, which would make
+            // switching satellite impossible.
             (if (favoris.isEmpty()) u.satellites else favoris).map { it.name }
         }
         fr.f4ioz.satcombo.demo.PontCommande.propose = { saisie ->
@@ -1419,15 +1264,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             }
         }
         fr.f4ioz.satcombo.demo.PontCommande.chercheQrz = { call ->
-            // **Ouvrir la session avant de chercher.**
-            //
-            // `cherche()` ne se connecte pas toute seule : sans clé de session
-            // elle rend « pas connecté à QRZ ». Le chemin de l'application se
-            // connecte d'abord ; le pont appelait directement, et le poste de
-            // commande n'affichait donc jamais d'identité.
-            //
-            // On ne se reconnecte que si la clé manque : QRZ compte aussi les
-            // ouvertures de session.
+            // **Open the session before searching.** `cherche()` does not log
+            // in by itself: without a session key it returns "not connected",
+            // and the control desk never showed an identity.
+            // Reconnect only when the key is missing: QRZ also counts logins.
             val f = runCatching {
                 val c = _ui.value.carnet
                 var fiche = qrz.cherche(call.trim().uppercase())
@@ -1448,6 +1288,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             if (t == null) false else { select(t); true }
         }
 
+        // The monitor needs the context to pick its output: without it, it
+        // cannot force the speaker when a USB sound card is present.
         fr.f4ioz.satcombo.audio.MoniteurAudio.contexte =
             getApplication<android.app.Application>().applicationContext
         fr.f4ioz.satcombo.demo.ServeurDemo.versionApp = runCatching {
@@ -1464,16 +1306,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _ui.value = _ui.value.copy(
             potaRegionLabel = potaRepo.downloadedRegion,
             potaCount = potaRepo.downloadedCount)
-        // **La télémétrie de démonstration a sa propre boucle.**
-        //
-        // Elle était publiée depuis la boucle de suivi d'un satellite : elle ne
-        // tournait donc que si un satellite était sélectionné **et** sa
-        // poursuite active. Le public voyait une page correctement servie mais
-        // entièrement vide, sans que rien n'indique pourquoi.
-        //
-        // Ici elle tourne dès que la diffusion est allumée, quel que soit
-        // l'écran affiché et qu'un passage soit en cours ou non. Une seconde de
-        // période, et rien n'est calculé quand personne ne diffuse.
+        // **Demo telemetry has its own loop.** Published from the satellite
+        // tracking loop, it only ran when a satellite was selected **and**
+        // tracked: the audience saw a correctly served but empty page. Here it
+        // runs whenever broadcasting is on, whatever the screen. One-second
+        // period; nothing is computed when nobody broadcasts.
         viewModelScope.launch {
             while (true) {
                 if (fr.f4ioz.satcombo.demo.ServeurDemo.etat.value.actif) {
@@ -1597,8 +1434,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             refreshPota()
             refreshSkeds()
 
-            // Le suivi commence ici, avec l'application, et non à la première
-            // ouverture de la carte.
+            // Tracking starts here, with the app, not when the map first opens.
             startLiveLocation(SuiviPosition.CADENCE_FOND_MS)
         }
     }
@@ -1618,10 +1454,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         startLiveLocation(SuiviPosition.CADENCE_CARTE_MS)
     }
 
-    /** Cadence courante du suivi, pour ne relancer que si elle change. */
+    /** Current tracking period, so we restart only when it changes. */
     private var cadenceSuiviMs = 0L
 
-    /** Instant du dernier point reçu, et instant du démarrage du suivi. */
+    /** Time of the last fix received, and time tracking started. */
     @Volatile private var dernierPointMs = 0L
     @Volatile private var suiviDemarreMs = 0L
 
@@ -1645,31 +1481,21 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         ) == android.content.pm.PackageManager.PERMISSION_GRANTED
 
     /**
-     * La permission vient d'être accordée — ou refusée.
+     * The permission was just granted — or refused.
      *
-     * C'est le chaînon qui manquait au premier démarrage après installation. À
-     * ce moment-là, le suivi a déjà tenté de démarrer et s'est fait refuser par
-     * le système ; rien ensuite ne le prévenait que la situation avait changé.
-     * Le veilleur finissait par le rattraper, mais seulement s'il trouvait la
-     * tâche morte — et une demande refusée peut laisser une tâche qui se
-     * termine proprement, sans qu'aucun point n'arrive jamais.
-     *
-     * On ne devine plus : dès que la réponse de l'utilisateur est connue, on
-     * repart de zéro et on demande en plus un point immédiat, pour ne pas faire
-     * attendre l'opérateur le temps d'un cycle complet.
+     * On first launch after install, tracking has already tried to start and
+     * been refused, and nothing told it the situation changed. The watchdog
+     * only caught a dead job, but a refused request can leave a job that ends
+     * cleanly with no fix ever arriving. So: as soon as the answer is known,
+     * restart from scratch and ask for an immediate fix too.
      */
     fun onPermissionsResult() {
         val ok = permissionPosition()
         noteSuivi(if (ok) "permission accordée" else "permission refusée")
         if (!ok) return
-        // En mode manuel, un point GPS n'a rien à dire : l'opérateur a choisi
-        // son carré, et le lui reprendre est le seul vrai défaut possible ici.
-        //
-        // C'est ce qui se passait : cette fonction est appelée au retour de la
-        // boîte de permissions, donc aussi quand le suivi est à l'arrêt, et
-        // elle écrivait l'observateur sans regarder le mode. Le locator saisi
-        // à la main était remplacé par la position du téléphone quelques
-        // secondes plus tard.
+        // In manual mode a GPS fix must not override the chosen square. This is
+        // called on return from the permission dialog, even with tracking
+        // stopped; it used to overwrite a hand-typed locator seconds later.
         if (_ui.value.locationMode != LocationMode.AUTO) {
             noteSuivi("mode manuel : point GPS ignoré")
             return
@@ -1689,24 +1515,21 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** Point où la dernière prédiction a été calculée, et quand. */
+    /** Where and when the last prediction was computed. */
     private var qthCalculLat: Double? = null
     private var qthCalculLon: Double? = null
     private var dernierRecalculMs = 0L
 
     /**
-     * Suit la position en continu, tant que le mode automatique est actif.
+     * Tracks position continuously while in automatic mode.
      *
-     * Auparavant ce suivi n'était lancé qu'à l'ouverture de la carte et arrêté
-     * en la quittant : sur la page des passages — celle qu'on regarde pendant
-     * qu'on trafique — la position restait celle du démarrage. Un opérateur qui
-     * monte sur une colline ou qui sort en portable voyait ses azimuts calculés
-     * pour l'endroit d'où il était parti, sans qu'aucun message ne le lui dise.
+     * It used to run only while the map was open, so on the pass page — the one
+     * used while operating — a portable operator silently got azimuths for the
+     * place he started from.
      *
-     * Deux cadences, parce que le suivi tourne désormais en permanence et que
-     * sa cadence est devenue une ligne du bilan de batterie : rapide sur la
-     * carte, où le marqueur doit suivre le doigt ; lente ailleurs, où voir un
-     * carré changer en vingt secondes suffit largement.
+     * Two periods, since it now runs permanently and shows up in the battery
+     * report: fast on the map, where the marker must follow; slow elsewhere,
+     * where seeing a square change within twenty seconds is plenty.
      */
     private fun startLiveLocation(cadenceMs: Long = SuiviPosition.CADENCE_FOND_MS) {
         if (_ui.value.locationMode != LocationMode.AUTO) return
@@ -1721,25 +1544,24 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         locationUpdatesJob = viewModelScope.launch {
             runCatching {
                 locationProvider.updates(cadenceMs).collect { obs ->
-                    // Un point aberrant déplacerait le QTH, donc les azimuts,
-                    // donc l'antenne, sur la foi d'un accident de récepteur.
+                    // An aberrant fix would move the QTH, hence the azimuths,
+                    // hence the antenna, on a receiver glitch.
                     if (!SuiviPosition.vraisemblable(obs.latDeg, obs.lonDeg)) return@collect
-                    // Un point reçu : c'est la seule preuve que le suivi suit.
+                    // A received fix is the only proof tracking works.
                     dernierPointMs = System.currentTimeMillis()
                     noteSuivi("point reçu", point = true)
 
-                    // Le mode a pu changer depuis le démarrage du suivi : un
-                    // point en vol ne doit pas atterrir sur un QTH manuel.
+                    // The mode may have changed since tracking started: an
+                    // in-flight fix must not land on a manual QTH.
                     if (_ui.value.locationMode != LocationMode.AUTO) return@collect
 
                     val named = obs.copy(
                         name = "GPS · " + Maidenhead.fromLatLon(obs.latDeg, obs.lonDeg))
                     _ui.value = _ui.value.copy(observer = named)
 
-                    // Redessiner à chaque point ne coûte rien ; relancer une
-                    // prédiction SGP4 sur 48 h pour tous les satellites suivis
-                    // en coûte, et ne change rien tant qu'on n'a pas vraiment
-                    // bougé. D'où le seuil.
+                    // Redrawing on every fix is free; a 48 h SGP4 prediction
+                    // for all tracked satellites is not, and changes nothing
+                    // until we really move. Hence the threshold.
                     val maintenant = System.currentTimeMillis()
                     if (SuiviPosition.doitRecalculer(
                             qthCalculLat, qthCalculLon, obs.latDeg, obs.lonDeg,
@@ -1749,16 +1571,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         qthCalculLon = obs.lonDeg
                         dernierRecalculMs = maintenant
                         computeFavoritePasses()
-                        // Tout ce qui dépend de la position suit le GPS, pas
-                        // seulement les passages.
-                        //
-                        // C'est le défaut vu à IN78SA : l'accueil annonçait
-                        // trois parcs à 0 m pendant que la photo répondait
-                        // « aucun parc à moins de 3 km ». Ces trois-là
-                        // n'étaient rafraîchis que par `applyLocation`, appelé
-                        // sur un changement manuel de locator — jamais en se
-                        // déplaçant. La photo restait donc sur le lieu d'où
-                        // l'on était parti.
+                        // Everything position-dependent follows the GPS, not
+                        // just passes. These three used to refresh only in
+                        // `applyLocation` (manual locator change), so the home
+                        // screen showed parks at 0 m while the photo said
+                        // "no park within 3 km".
                         chargeZonePota()
                         if (_ui.value.carte.affichee) chargeCartePays()
                         if (_ui.value.carte.potaAffiche) chargePotaPhoto()
@@ -1776,18 +1593,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * Le veilleur du suivi de position.
+     * Location tracking watchdog.
      *
-     * Il vit dans l'`init` du modèle de vue et non dans `bootstrap`, et c'est
-     * délibéré : `bootstrap` sort par la petite porte quand le cache orbital est
-     * frais — `if (!force && cacheFresh && satellites.isNotEmpty()) return` —
-     * et tout ce qu'on lui confie peut donc ne jamais s'exécuter. L'`init`,
-     * lui, tourne exactement une fois par modèle de vue, sans condition.
+     * Started from `init`, not `bootstrap`, on purpose: `bootstrap` returns
+     * early when the orbital cache is fresh, so anything placed there may never
+     * run. `init` runs exactly once per ViewModel.
      *
-     * Toutes les cinq secondes, il vérifie non pas que la tâche existe mais
-     * qu'elle **délivre**. C'est la distinction qui manquait : une demande de
-     * position adressée aux services Google avant qu'ils ne soient prêts laisse
-     * une tâche vivante et muette, que l'ancienne garde refusait de relancer.
+     * Every five seconds it checks not that the job exists but that it
+     * **delivers**: a location request made before Google services are ready
+     * leaves a live but silent job.
      */
     private fun veilleSuiviPosition() {
         viewModelScope.launch {
@@ -1851,23 +1665,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     // Mutual-sked page (full screen, animated, exportable)
     // ---------------------------------------------------------------------
 
-    /** Open the dedicated sked page, pre-selecting a sensible satellite. */
     /**
-     * L'écran du sked mutuel, éventuellement ouvert **depuis une annonce**.
+     * Opens the mutual-sked page, pre-selecting a sensible satellite, possibly
+     * **from an announcement**.
      *
-     * Sans [depuis], c'est l'entrée par la porte : on choisit le satellite, on
-     * tape le locator de l'OM, on calcule.
-     *
-     * Avec [depuis], tout est déjà connu — hams.at a donné l'indicatif, le
-     * satellite, le créneau et le carré. L'écran s'ouvrait pourtant vide, et
-     * il fallait recopier à la main un carré qu'on venait de lire deux lignes
-     * plus haut. Faire retaper à l'opérateur ce que l'application affiche est
-     * la meilleure façon d'introduire une faute de frappe dans un rendez-vous.
-     *
-     * Le créneau annoncé n'est pas recopié dans un champ : il n'y en a pas —
-     * le calcul balaie quarante-huit heures. Il sert de **visée**, retenue le
-     * temps du calcul, pour présenter d'emblée la fenêtre du rendez-vous plutôt
-     * que la première venue.
+     * With [depuis], hams.at already gave callsign, satellite, slot and grid
+     * square; making the operator retype what the app displays is the best way
+     * to put a typo into a sked. The announced slot is not copied into a field
+     * (the computation sweeps 48 h): it is kept as a **target** so the sked's
+     * window is shown first rather than the first one found.
      */
     fun openSked(depuis: fr.f4ioz.satcombo.data.SkedAlert? = null) {
         val cat = depuis?.satNorad
@@ -1888,19 +1694,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             skedPlans = if (carre.isNotBlank()) emptyList() else _ui.value.skedPlans,
             skedError = null
         )
-        // Tout est là : le calcul part seul. Un bouton à appuyer alors qu'il
-        // ne reste aucun choix à faire n'est pas une confirmation, c'est un
-        // obstacle.
+        // Everything is known: compute right away. A button with no choice left
+        // is not a confirmation, it is an obstacle.
         if (carre.trim().length >= 4 && cat != null) computeSkedPlans()
     }
 
     /**
-     * L'instant que le prochain calcul doit mettre en avant, ou null.
-     *
-     * Ce n'est pas de l'état d'écran — rien ne l'affiche — mais un renvoi
-     * d'une action à l'autre, consommé au premier calcul. Le porter dans
-     * `UiState` ajouterait un paramètre de plus au constructeur, qui frôle
-     * déjà les 255 registres de Dalvik.
+     * Time the next computation should highlight, or null. Not screen state —
+     * a hand-off consumed by the first computation, kept out of `UiState`
+     * (255-register limit).
      */
     private var skedViseeMs: Long? = null
 
@@ -1969,10 +1771,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 }
                 out.sortedBy { it.mutualStartMs }
             }
-            // La fenêtre du rendez-vous annoncé passe devant, quand il y en a
-            // un : celle qui le contient, sinon la plus proche. Sans cela
-            // l'écran ouvrait sur le premier créneau des quarante-huit heures,
-            // qui n'est pas celui dont on vient de parler.
+            // The announced sked's window comes first: the one containing it,
+            // else the nearest — not simply the first slot of the 48 h.
             val visee = skedViseeMs
             skedViseeMs = null
             val index = fr.f4ioz.satcombo.domain.SkedVisee.index(
@@ -1994,9 +1794,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun setSettingsSection(id: String?) { _ui.value = _ui.value.copy(settingsSection = id) }
     fun closeLocator() {
-        // On ne coupe plus le suivi en quittant la carte : on redescend à la
-        // cadence de fond. C'était là le défaut — quitter la carte figeait la
-        // position jusqu'à la prochaine visite.
+        // Do not stop tracking when leaving the map, drop to the background
+        // period: stopping it froze the position until the next visit.
         startLiveLocation(SuiviPosition.CADENCE_FOND_MS)
         _ui.value = _ui.value.copy(screen = Screen.PASSES)
     }
@@ -2054,7 +1853,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             val obs = resolveObserver()
             _ui.value = _ui.value.copy(observer = obs)
-            // Le QTH vient de changer : la silhouette du pays doit suivre.
+            // The QTH changed: the country outline must follow.
             if (_ui.value.carte.affichee) chargeCartePays()
             chargeZonePota()
             if (_ui.value.carte.potaAffiche) chargePotaPhoto()
@@ -2141,24 +1940,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * Le spectre du son pendant l'enregistrement.
+     * Doppler hold: only writing to the rig is suspended. Satellite position,
+     * Doppler, rest frequency and display go on, so on release the rig lands
+     * back in place with nothing to redo.
      *
-     * Se rallume et s'éteint en plein passage : le moniteur tourne déjà, il ne
-     * fait que se remettre à calculer.
-     */
-    /**
-     * « Un bouton pour couper le doppler (ne pas mettre à jour le poste). »
-     *
-     * On suspend l'écriture, rien d'autre : la position du satellite, le
-     * Doppler, la fréquence de repos et l'affichage continuent exactement comme
-     * avant, de sorte qu'en relâchant la pause le poste se retrouve à sa place
-     * sans qu'on ait rien à refaire.
-     *
-     * Au relâchement, tout ce qui sert de mémoire des dernières consignes est
-     * effacé : sans cela l'application croirait avoir déjà écrit la bonne
-     * fréquence et resterait muette jusqu'au prochain écart de deux cents
-     * hertz. L'armement est également oublié, pour que le poste soit remis en
-     * mode satellite et en split au premier tour de boucle qui suit.
+     * On release, the memory of the last commands is cleared: otherwise the app
+     * would think it already wrote the right frequency and stay silent until
+     * the next 200 Hz gap. Arming is forgotten too, so the rig is put back in
+     * satellite/split mode on the next loop round.
      */
     fun toggleDopplerHold() {
         val on = !_ui.value.dopplerHold
@@ -2170,6 +1959,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /**
+     * Audio spectrum during recording. Can be toggled mid-pass: the monitor is
+     * already running, it just resumes computing.
+     */
     fun setMonitorSpectre(on: Boolean) {
         settings.monitorSpectre = on
         fr.f4ioz.satcombo.audio.MoniteurAudio.spectre = on
@@ -2177,9 +1970,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * Le contrôle à l'oreille. N'a d'effet que sur une source extérieure —
-     * carte son USB du poste ou liaison Bluetooth : renvoyer le micro du
-     * téléphone dans son propre haut-parleur ne ferait que du Larsen.
+     * Listen-through. Only affects an external source (rig USB sound card or
+     * Bluetooth): routing the phone mic to its own speaker would just howl.
      */
     fun setMonitorSpeaker(on: Boolean) {
         settings.monitorSpeaker = on
@@ -2198,11 +1990,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * Choisit ce que la bande image de la page du passage suit.
-     *
-     * Choisir NOAA allume le décodeur APT au passage : on ne va pas demander à
-     * l'opérateur de cocher une case dans les réglages après avoir dit, sur la
-     * page du passage, que c'est du NOAA qu'il attend.
+     * Chooses what the pass page image strip follows. Choosing NOAA also turns
+     * the APT decoder on: no settings checkbox after the operator has already
+     * said, on the pass page, that NOAA is expected.
      */
     fun setRxImageMode(mode: String) {
         val m = if (mode.equals("NOAA", true) || mode.equals("APT", true)) "NOAA" else "SSTV"
@@ -2213,12 +2003,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * Le bouton d'enregistrement de la bande image, sur la page du passage.
-     *
-     * C'est le même magnétophone que partout ailleurs — une seule capture, un
-     * seul MP3 — mais lancé depuis l'endroit où l'on regarde l'image arriver.
-     * On s'assure au passage que le décodeur correspondant est bien allumé,
-     * sinon le bouton donnerait un enregistrement muet d'images.
+     * Record button of the pass page image strip. Same recorder as everywhere
+     * (one capture, one MP3); also makes sure the matching decoder is on,
+     * otherwise it would record with no image decoded.
      */
     fun toggleRxRecording() {
         if (_ui.value.recording) { stopRecording(); return }
@@ -2298,20 +2085,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * La saisie, et rien d'autre.
+     * Opens the entry keypad, nothing else.
      *
-     * Un appui sur la boussole ouvrait un contact dans le carnet : heure,
-     * satellite, azimut, élévation — et **pas d'indicatif**. Le geste était né
-     * pour marquer un contact au vol et le nommer ensuite ; il ne produisait en
-     * réalité que des lignes anonymes. Quatre d'entre elles ont été relevées le
-     * 25 août, dans le carnet et dans l'export ADIF.
-     *
-     * Un contact sans indicatif n'est pas un contact incomplet : c'est un
-     * indicatif qu'on connaissait à l'instant même et qu'on a perdu. La file
-     * d'attente avait été bâtie pour rattraper ces lignes-là ; elle a coûté
-     * sept versions de correctifs et n'a jamais servi à Olivier, qui tape et
-     * valide. **Le geste ouvre donc le clavier, et c'est la validation qui
-     * écrit.** Rien ne se pose au carnet tant qu'un indicatif n'est pas frappé.
+     * A compass tap used to write a contact at once — time, satellite, az/el —
+     * with **no callsign**, meant to be named later. It only produced anonymous
+     * lines, which ended up in the ADIF export. A contact without a callsign is
+     * a callsign known a moment ago and lost. **The gesture opens the keypad;
+     * confirming writes.** Nothing reaches the log until a callsign is typed.
      */
     fun ouvreSaisie() {
         _ui.value = _ui.value.copy(screen = Screen.NOMMAGE)
@@ -2323,11 +2103,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             m.contains("FM") -> "FM"
             t != null && t.isTransponder && _ui.value.opMode == "CW" -> "CW"
             m.contains("CW") -> "CW"
-            // Sur un transpondeur linéaire, le poste est réglé par le CAT
-            // selon une convention fixe — descente USB, montée LSB si le
-            // transpondeur est inverse — **sans consulter le mode annoncé par
-            // le catalogue**. Le carnet doit dire la même chose, sans quoi il
-            // décrit un mode que le VFO n'a jamais eu.
+            // On a linear transponder CAT sets the rig by a fixed convention
+            // (downlink USB, uplink LSB when inverting) **ignoring the
+            // catalogue's mode**. The log must say the same, or it records a
+            // mode the VFO never had.
             t != null && t.isTransponder -> if (effectiveInvert(t)) "LSB" else "USB"
             m.contains("LSB") -> "LSB"
             m.contains("USB") -> "USB"
@@ -2335,16 +2114,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    // ---- la silhouette du pays, sur la photo QRV ----
-    //
-    // Elle est une option de la photo et non un écran : une carte QRV est une
-    // photo avec des choses dessus, et la carte en est une de plus.
+    // ---- country outline on the QRV photo ----
+    // A photo option, not a screen: a QRV card is a photo with things on it.
 
     /**
-     * L'opérateur confirme qu'il est bien dans le parc proposé.
-     *
-     * C'est lui qui décide, parce que lui seul sait s'il a franchi la limite :
-     * aucun contour ne le dira depuis un rayon de trois kilomètres.
+     * The operator confirms being in the suggested park. His call: only he
+     * knows whether he crossed the boundary; no 3 km radius can tell.
      */
     fun accepteParcPropose() {
         val c = _ui.value.carte
@@ -2361,17 +2136,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * Le parc le plus proche de la position : référence et nom, servis à la
-     * photo. Le catalogue régional est déjà dans PotaRepository — celui de la
-     * carte des parcs — donc hors connexion une fois la région chargée.
-     */
-    /**
-     * La zone POTA contenant la position, jugée au polygone.
+     * The POTA area containing the position, judged by polygon.
      *
-     * Le premier appel charge le fichier embarqué (1 Mo, ~100 ms) : tout se
-     * fait hors du fil principal. Les suivants coûtent 0,03 ms — le
-     * pré-filtre par boîtes englobantes ne parcourt un polygone que si le
-     * point est dans sa boîte.
+     * The first call loads the bundled file (1 MB, ~100 ms), hence off the main
+     * thread. Later calls cost 0.03 ms: the bounding-box prefilter only walks a
+     * polygon when the point is inside its box.
      */
     fun chargeZonePota() {
         val obs = _ui.value.observer ?: return
@@ -2382,9 +2151,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         getApplication(), obs.latDeg, obs.lonDeg)
                 }.getOrNull()
             }
-            // Les villes de la fenêtre du parc, chargées en même temps : un
-            // contour sans nom est une tache, avec trois communes c'est un
-            // endroit.
+            // Towns around the park: an outline without names is a blob; with
+            // three towns it is a place.
             val villes = if (z != null) withContext(Dispatchers.IO) {
                 runCatching {
                     var laMin = 90.0; var laMax = -90.0
@@ -2411,39 +2179,30 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 zoneNom = z?.nom.orEmpty(),
                 zoneAnneaux = z?.anneaux ?: emptyList(),
                 villes = villes,
-                // La ligne POTA suit la détection par contour, la seule qui
-                // prouve qu'on est dans le parc. Hors contour, on efface : une
-                // ligne qui survit à la sortie du parc suivrait l'opérateur
-                // toute la journée.
+                // The POTA line follows outline detection, the only proof of
+                // being in the park. Outside, clear it: a line surviving the
+                // exit would follow the operator all day.
                 potaRef = z?.ref.orEmpty(),
                 potaNom = z?.nom.orEmpty(),
                 potaPropose = if (z != null) "" else _ui.value.carte.potaPropose,
                 potaProposeNom = if (z != null) "" else _ui.value.carte.potaProposeNom))
 
-            // Rien d'embarqué ici ? On va chercher les contours des parcs
-            // proches sur pota-map.fr, un par un, et on les garde. Tant que la
-            // récupération complète n'est pas finie, c'est ce qui fait marcher
-            // la détection partout ailleurs qu'en Bretagne.
+            // Nothing bundled here? Fetch nearby park outlines from
+            // pota-map.fr one by one and keep them. Until a full grab exists,
+            // this is what makes detection work outside Brittany.
             if (z == null) {
-                // Pas de contour : le parc le plus proche renseigne au moins
-                // la ligne, et l'on tente le réseau pour la prochaine fois.
+                // No outline: suggest the nearest park, and try the network
+                // for next time.
                 val hit = withContext(Dispatchers.IO) {
                     runCatching {
                         potaRepo.near(obs.latDeg, obs.lonDeg, radiusKm = 3.0,
                             context = getApplication()).firstOrNull()
                     }.getOrNull()
                 }
-                // **Le parc proche est proposé, jamais affirmé.**
-                //
-                // Ces deux champs remplissaient directement la ligne de la
-                // photo : être à trois kilomètres du point d'un parc suffisait
-                // à s'en déclarer activateur. Or une ligne POTA sur une photo
-                // partagée est une affirmation d'activation, et une
-                // affirmation fausse vaut moins que pas de ligne du tout.
-                //
-                // Le parc proche devient donc une proposition, que l'opérateur
-                // retient d'un geste s'il y est vraiment. Lui seul sait s'il a
-                // franchi la limite.
+                // **The nearby park is suggested, never asserted.** A POTA line
+                // on a shared photo claims an activation; being within 3 km of
+                // a park's point used to be enough. A false claim is worse than
+                // no line. The operator accepts it with one tap if really there.
                 _ui.value = _ui.value.copy(carte = _ui.value.carte.copy(
                     potaPropose = hit?.park?.reference.orEmpty(),
                     potaProposeNom = hit?.park?.name.orEmpty()))
@@ -2453,37 +2212,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * La référence POTA écrite sur la photo.
+     * Preloads park outlines around the position.
      *
-     * **L'emprise prime sur la distance.** La photo affichait le parc dont le
-     * point central est le plus proche — FR-5151 à Kerléguer — pendant que
-     * l'accueil annonçait FR-8200, celui dont le polygone contient vraiment la
-     * position. Deux chemins pour une même question, donc deux réponses : la
-     * photo suit maintenant la zone, et ne retombe sur le plus proche que si
-     * aucun contour ne contient le point.
-     */
-    /**
-     * Va chercher au réseau les contours des parcs proches, faute d'embarqué.
+     * **Why in advance.** Normal detection fetches an outline only when needed.
+     * In the field, network is where you leave from, not where you arrive: a
+     * park activated in a valley without coverage stays without outline, and
+     * no POTA line shows.
      *
-     * Un parc à la fois, dans l'ordre de proximité, et l'on s'arrête au
-     * premier qui contient la position — le site est celui d'un radioamateur,
-     * pas un CDN. Chaque contour récupéré est mis en cache définitivement :
-     * le deuxième passage au même endroit ne demandera plus rien.
-     */
-    /**
-     * Précharge les contours des parcs autour de soi.
-     *
-     * **Pourquoi d'avance.** La détection courante ne cherche un contour qu'au
-     * moment où l'on en a besoin, et s'arrête au premier qui contient la
-     * position. Sur le terrain, le réseau est souvent là où l'on part, jamais
-     * là où l'on arrive : un parc activé au fond d'un vallon sans couverture
-     * reste sans contour, et la ligne POTA ne s'affiche pas.
-     *
-     * **La politesse envers les serveurs fait partie de la fonction.**
-     * `pota-map.fr` est un service communautaire, pas une infrastructure. On
-     * plafonne à trente parcs, on espace les demandes d'un cinquième de
-     * seconde, et l'on passe les contours déjà en cache. Tirer cent contours
-     * d'un coup ferait fermer la porte à tout le monde.
+     * **Politeness to the server is part of the feature.** `pota-map.fr` is a
+     * community service, not infrastructure: capped at thirty parks, 200 ms
+     * between requests, cached outlines skipped.
      */
     fun chargeContoursAutour(rayonKm: Double) {
         if (contoursEnCours) return
@@ -2521,6 +2259,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     @Volatile private var contoursEnCours = false
 
+    /**
+     * Fetches nearby park outlines from the network when nothing is bundled.
+     * One park at a time, nearest first, stopping at the first containing the
+     * position — the site is a ham's, not a CDN. Each outline is cached for good.
+     */
     private fun chercheZoneAuReseau(lat: Double, lon: Double) {
         if (chercheZoneEnCours) return
         chercheZoneEnCours = true
@@ -2554,23 +2297,17 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private var chercheZoneEnCours = false
 
     /**
-     * La référence POTA de la photo est celle de la zone détectée.
-     *
-     * Elle avait son propre chemin — `zoneContenant` puis repli sur le parc le
-     * plus proche — et ce chemin pouvait répondre « aucun parc » pendant que
-     * la carte dessinait le contour du parc, tous deux partant pourtant de la
-     * même position. Un seul calcul désormais : `chargeZonePota` remplit la
-     * zone, la ligne POTA la recopie. Deux affichages, une vérité.
+     * The photo's POTA reference is the detected area's. It once had its own
+     * path (nearest park point), which could say "no park" — or name another
+     * park — while the map drew the containing outline. One computation now:
+     * `chargeZonePota` fills the area, the POTA line copies it.
      */
     fun chargePotaPhoto() = chargeZonePota()
 
     /**
-     * Installe un fichier de zones POTA produit par PotaGrab.
-     *
-     * Le fichier vit dans l'espace privé de l'application, pas dans l'APK :
-     * la France entière pèse des dizaines de mégaoctets, qu'il serait absurde
-     * d'imposer à quelqu'un qui n'active jamais de parc. Celui qui en veut le
-     * pose, les autres gardent l'embarqué.
+     * Installs a POTA area file produced by PotaGrab. Stored in app-private
+     * storage, not the APK: all of France weighs tens of MB, not to be imposed
+     * on someone who never activates a park.
      */
     fun importeZonesPota(texte: String): Int {
         val n = runCatching {
@@ -2599,10 +2336,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun setPhotoCarte(on: Boolean) {
         settings.photoShowCarte = on
         _ui.value = _ui.value.copy(carte = _ui.value.carte.copy(affichee = on))
-        // Recharger à chaque activation, pas seulement quand rien n'est
-        // chargé : conditionné à « anneaux vides », le pays restait celui du
-        // QTH d'avant — un opérateur passé d'IO86 à EM87 gardait le
-        // Royaume-Uni sur une photo américaine, même en décochant-recochant.
+        // Reload on every activation, not only when nothing is loaded: gated on
+        // "no rings", the country stayed that of the previous QTH (UK outline on
+        // an American photo, even after unchecking/rechecking).
         if (on) chargeCartePays()
     }
 
@@ -2643,12 +2379,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun setLiseretEmission(on: Boolean) {
         settings.liseréEmission = on
         _ui.value = _ui.value.copy(catUi = _ui.value.catUi.copy(liseret = on))
-        // Le réglage prend effet tout de suite : on relance ou l'on arrête,
-        // sans attendre une reconnexion.
+        // Takes effect at once: start or stop without waiting for a reconnect.
         surveilleEmission()
     }
 
-    // ---- le carnet en ligne (Wavelog / Cloudlog) ----
+    // ---- online log (Wavelog / Cloudlog) ----
 
     fun setCarnetUrl(v: String) {
         settings.carnetUrl = v
@@ -2676,24 +2411,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _ui.value = _ui.value.copy(carnet = _ui.value.carnet.copy(profil = settings.carnetProfil))
     }
 
-    /** Combien de contacts attendent d'être déposés au carnet en ligne. */
+    /** How many contacts are waiting to be uploaded to the online log. */
     fun contactsADeposer(): Int =
         fr.f4ioz.satcombo.domain.EnvoiCarnet.combienAttendent(
             _ui.value.log.map {
                 fr.f4ioz.satcombo.domain.EnvoiCarnet.Fiche(it.timeMs, it.callsign, it.envoyeMs)
             })
 
-    /**
-     * Dépose **un seul** contact au carnet en ligne.
-     *
-     * Le dépôt en lot était le seul chemin, et c'était un défaut de méthode :
-     * le premier essai est précisément celui où la clé d'écriture et le profil
-     * de station se révèlent faux, et un lot entier déposé de travers se
-     * démêle à la main, contact par contact, du côté du serveur.
-     *
-     * Le même garde qu'en lot : marqué seulement après que le serveur a dit
-     * l'avoir pris.
-     */
     private val qrz = fr.f4ioz.satcombo.data.Qrz()
 
     fun setMaille(n: Int) {
@@ -2701,10 +2425,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * Combien de contacts portent encore un nom de satellite brut.
-     *
-     * Le compte est sur le bouton : c'est la seule façon de savoir, sans
-     * appuyer, s'il y a quelque chose à faire.
+     * How many contacts still carry a raw satellite name. Shown on the button,
+     * so you know without pressing whether there is anything to do.
      */
     fun nomsSatellitesANettoyer(): Int =
         _ui.value.log.count {
@@ -2713,12 +2435,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
 
     /**
-     * La maille d'appariement des carrés : 4 comme le VUCC, ou 6.
-     *
-     * Changer la maille invalide la table relevée — les identifiants de profil
-     * y sont rangés par carré tronqué, et la troncature vient de changer. La
-     * vider force un nouveau relevé plutôt que de laisser déposer sur une
-     * correspondance qui ne veut plus rien dire.
+     * Square matching precision: 4 like VUCC, or 6. Changing it invalidates the
+     * fetched table (profiles are keyed by truncated square), so it is cleared
+     * to force a new fetch rather than upload on a stale mapping.
      */
     fun setMailleCarres(m: Int) {
         _ui.value = _ui.value.copy(carnet = _ui.value.carnet.copy(
@@ -2734,10 +2453,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * Relève les profils de station et les confronte aux carrés du carnet.
-     *
-     * **À faire avant tout dépôt quand on active plusieurs carrés.** Sans ce
-     * relevé, tout part sur le profil unique et se range sous son carré.
+     * Fetches station profiles and matches them against the log's squares.
+     * **Do it before any upload when activating several squares**, otherwise
+     * everything goes to the single profile and is filed under its square.
      */
     fun relevProfils() {
         val c = _ui.value.carnet
@@ -2768,11 +2486,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * Les emplacements d'où le carnet a été fait, avec le nombre de contacts.
-     *
-     * Une ligne de carrés compte pour un emplacement à part : les contacts
-     * qui la revendiquent ne doivent pas se mélanger à ceux faits dans un
-     * seul des deux carrés.
+     * Locations the log was made from, with contact counts. A line of squares
+     * is a location of its own: its contacts must not mix with those made in
+     * only one of the squares.
      */
     fun emplacementsDuCarnet(maille: Int): Map<Set<String>, Int> {
         val out = LinkedHashMap<Set<String>, Int>()
@@ -2786,13 +2502,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             .toMap(LinkedHashMap())
     }
 
-    /** Les emplacements du carnet, nommés, pour l'écran. */
+    /** Log locations, named, for the screen. */
     fun carresDuCarnet(maille: Int): Map<String, Int> =
         emplacementsDuCarnet(maille).mapKeys {
             fr.f4ioz.satcombo.domain.ProfilsStation.nomEmplacement(it.key)
         }
 
-    /** Crée chez Wavelog les emplacements que le carnet réclame. */
+    /** Creates in Wavelog the locations the log needs. */
     fun creeProfilsManquants(dxcc: String, pays: String, cq: String, itu: String) {
         val c = _ui.value.carnet
         if (itu.isBlank()) {
@@ -2819,17 +2535,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             _ui.value = _ui.value.copy(carnet = _ui.value.carnet.copy(
                 profilsEtat = tf("profils_crees", faits, orphelins.size) +
                     (if (dernier.isBlank()) "" else " · " + dernier)))
-            // Les identifiants neufs ne sont connus qu'après relevé.
+            // New ids are only known after a fetch.
             relevProfils()
         }
     }
 
     /**
-     * Nettoie les noms de satellites du carnet.
-     *
-     * « RS-44 & BREEZE-KM R/B » devient « RS-44 ». LoTW et Wavelog apparient
-     * sur ce champ : sous le nom long, le contact ne rencontrera jamais celui
-     * que l'autre station a déclaré.
+     * Cleans satellite names in the log: "RS-44 & BREEZE-KM R/B" becomes
+     * "RS-44". LoTW and Wavelog match on this field; under the long name the
+     * contact never meets the other station's.
      */
     fun nettoieNomsSatellites() {
         var changes = 0
@@ -2847,23 +2561,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             profilsEtat = tf("sat_noms_nettoyes", changes)))
     }
 
-    /** Combien de contacts attendent un carré que QRZ pourrait donner. */
+    /** How many contacts lack a square QRZ might provide. */
     fun carresManquants(): Int =
         _ui.value.log.count { it.callsign.isNotBlank() && it.theirLocator.isBlank() }
 
     /**
-     * Comble par QRZ les carrés absents du carnet.
-     *
-     * **Seuls les carrés absents.** Un carré noté à l'oreille pendant le
-     * contact vaut mieux qu'un carré d'annuaire : l'autre était peut-être
-     * portable, et QRZ donne son domicile. Écraser remplacerait un fait par
-     * une présomption.
-     */
-    /**
-     * Éprouve les identifiants QRZ et le dit en clair.
-     *
-     * Sans ce bouton, un mot de passe faux ne se découvrait qu'au premier
-     * contact, au milieu d'un passage — c'est-à-dire au pire moment.
+     * Tests the QRZ credentials and says so plainly. Otherwise a wrong
+     * password is only found at the first contact, mid-pass — the worst moment.
      */
     fun testeQrz() {
         val c = _ui.value.carnet
@@ -2875,8 +2579,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             val souci = withContext(Dispatchers.IO) { qrz.connecte(c.qrzUser, c.qrzMdp) }
             val dit = if (souci.isNotBlank()) souci else {
-                // Une connexion réussie ne prouve pas que l'abonnement XML est
-                // actif : on cherche un indicatif pour le vérifier vraiment.
+                // A successful login does not prove the XML subscription is
+                // active: look up a callsign to really check.
                 val f = withContext(Dispatchers.IO) { qrz.cherche(settings.callsign.ifBlank { "F4IOZ" }) }
                 if (f.erreur.isNotBlank()) f.erreur else t("qrz_test_ok")
             }
@@ -2885,6 +2589,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /**
+     * Fills missing fields of the log from QRZ.
+     *
+     * **Only what is missing.** A square noted by ear during the contact beats
+     * a directory one: the other station may have been portable, and QRZ gives
+     * the home address. Overwriting would replace a fact with a guess.
+     */
     fun combleParQrz() {
         val c = _ui.value.carnet
         if (c.qrzEnCours) return
@@ -2900,10 +2611,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     qrzEnCours = false, qrzEtat = souci.take(140)))
                 return@launch
             }
-            // On interroge pour **tout ce qui manque**, pas seulement le
-            // carré : le carnet d'en face attend aussi le nom, la ville et le
-            // courriel, et les remplir un par un dans son écran quand
-            // l'annuaire les a déjà n'a pas de sens.
+            // Query for **everything missing**, not just the square: the online
+            // log also wants name, town and e-mail.
             val aCombler = _ui.value.log
                 .filter {
                     it.callsign.isNotBlank() &&
@@ -2916,15 +2625,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 val f = withContext(Dispatchers.IO) { qrz.cherche(indicatif) }
                 if (f.erreur.isNotBlank()) {
                     dernier = f.erreur.take(90)
-                    // Session perdue ou abonnement absent : insister ne
-                    // servirait qu'à répéter la même erreur cent fois.
+                    // Session lost or no subscription: insisting would repeat
+                    // the same error a hundred times.
                     break
                 }
                 if (f.vide) continue
-                // **On ne comble que le vide.** Un carré noté à l'oreille
-                // pendant le passage vaut mieux qu'un carré d'annuaire :
-                // l'autre était peut-être portable, et QRZ donne son
-                // domicile. La même prudence vaut pour le reste.
+                // **Only fill blanks** (see above).
                 var pose = false
                 val neuf = _ui.value.log.map { e ->
                     if (e.timeMs != quand) e else {
@@ -2954,12 +2660,18 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 qrzEnCours = false,
                 qrzEtat = tf("qrz_bilan", trouves, aCombler.size) +
                     (if (dernier.isBlank()) "" else " · " + dernier)),
-                // Les carrés neufs doivent rejoindre la mémoire du clavier :
-                // c'est elle qui les proposera au passage suivant.
+                // New squares must join the keypad memory, which suggests
+                // them on the next pass.
                 express = _ui.value.express.copy(memoire = construitMemoire()))
         }
     }
 
+    /**
+     * Uploads **a single** contact. Batch was the only path, which was wrong:
+     * the first try is exactly when the API key and station profile turn out
+     * wrong, and a whole batch filed wrongly must be untangled by hand on the
+     * server. Same guard as batch: marked only once the server confirmed it.
+     */
     fun deposeUnContact(timeMs: Long) {
         val c = _ui.value.carnet
         if (c.depotEnCours) return
@@ -2983,24 +2695,20 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             }
             _ui.value = _ui.value.copy(carnet = _ui.value.carnet.copy(
                 depotEnCours = false,
-                // La réponse du serveur est rendue telle quelle : c'est elle
-                // qui apprend que la clé est en lecture seule ou que le profil
-                // manque, et un « échec » résumé ne l'apprendrait pas.
+                // Server reply shown verbatim: it is what says the key is
+                // read-only or the profile is missing; a bare "failed" would not.
                 depot = if (pris) tf("carnet_depot_un", e.callsign) else r.take(160)))
         }
     }
 
     /**
-     * Dépose au carnet en ligne les contacts qui n'y sont pas encore.
+     * Uploads the contacts not yet in the online log.
      *
-     * Un par un, du plus ancien au plus récent, et **marqué seulement après
-     * que le serveur a répondu qu'il l'avait pris**. Wavelog ne dédoublonne
-     * pas : marquer d'avance ferait perdre un contact au premier réseau qui
-     * flanche, marquer trop large en ferait un doublon à effacer à la main.
-     *
-     * Le carnet est réécrit après chaque acceptation plutôt qu'à la fin : une
-     * coupure au milieu du lot laisse alors le travail déjà fait, au lieu de
-     * le refaire au prochain essai.
+     * One by one, oldest first, **marked only after the server said it took
+     * it**. Wavelog does not dedupe: marking early loses a contact on the first
+     * network hiccup, marking too broadly makes a duplicate to delete by hand.
+     * The log is rewritten after each acceptance, so a cut mid-batch keeps the
+     * work done.
      */
     fun deposeAuCarnet() {
         val c = _ui.value.carnet
@@ -3024,9 +2732,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 val e = _ui.value.log.firstOrNull { it.timeMs == fiche.timeMs } ?: continue
                 val adif = fr.f4ioz.satcombo.data.Adif.enregistrement(e, station)
                 if (adif.isBlank()) continue
-                // Le profil suit l'emplacement d'où le contact a été fait —
-                // ligne de carrés comprise ; sans table relevée, on retombe
-                // sur le profil unique des réglages.
+                // Profile follows the contact's location (lines of squares
+                // included); without a fetched table, the single settings profile.
                 val profil = fr.f4ioz.satcombo.domain.ProfilsStation.profilPourEmplacement(
                     e.myLocator, e.myGrids, c.profils, c.profil, c.maille)
                 val r = fr.f4ioz.satcombo.data.CarnetEnLigne.depose(c.url, c.cle, profil, adif)
@@ -3039,17 +2746,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     fr.f4ioz.satcombo.data.CarnetEnLigne.Issue.REFUS -> {
                         refuses++
                         dernier = r.take(90)
-                        // Trois refus d'affilée : c'est la configuration ou le
-                        // serveur, pas ce contact-là. Insister ne ferait
-                        // qu'allonger l'attente sans rien déposer.
+                        // Three refusals with no success: it is the setup or
+                        // the server, not this contact. Stop.
                         if (refuses >= 3 && acceptes.isEmpty()) break
                     }
                     fr.f4ioz.satcombo.data.CarnetEnLigne.Issue.DOUTE -> {
-                        // **Le doute n'arrête pas le lot.** La requête est
-                        // partie ; c'est la réponse qui manque. Le contact
-                        // reste à déposer — Wavelog écarte les doublons — mais
-                        // renoncer au reste du lot parce que le serveur a
-                        // tardé une fois serait perdre le passage entier.
+                        // **Doubt does not stop the batch.** The request left;
+                        // only the reply is missing. The contact stays pending
+                        // — Wavelog discards duplicates — but giving up the
+                        // batch because the server was slow once would lose
+                        // the whole pass.
                         doutes++
                         dernier = r.take(90)
                     }
@@ -3067,17 +2773,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * Le globe réutilise `groundTrack`, déjà calculé pour la carte des
-     * passages : deux affichages d'une même donnée lisent la même variable,
-     * ils ne refont pas le calcul chacun de leur côté.
+     * The globe reuses `groundTrack`, already computed for the pass map: two
+     * views of the same data read the same variable.
      */
     fun ouvreGlobe() { _ui.value = _ui.value.copy(screen = Screen.GLOBE) }
 
     fun ouvreFt8() { _ui.value = _ui.value.copy(screen = Screen.FT8) }
     /**
-     * Quitter l'écran n'arrête pas l'écoute : une tranche dure quinze secondes,
-     * et la couper pour consulter le carnet ferait perdre un cycle entier.
-     * C'est le bouton de l'écran qui arrête, et lui seul.
+     * Leaving the screen does not stop listening: a slot lasts fifteen seconds
+     * and cutting it to check the log would lose a cycle. Only the screen's
+     * button stops it.
      */
     fun fermeFt8() { _ui.value = _ui.value.copy(screen = Screen.PASSES) }
     fun fermeGlobe() { _ui.value = _ui.value.copy(screen = Screen.PASSES) }
@@ -3092,7 +2797,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _ui.value = _ui.value.copy(carnet = _ui.value.carnet.copy(lotwMdp = v))
     }
 
-    /** Charge ce que LoTW a déjà donné, sans rien demander au réseau. */
+    /** Loads what LoTW already returned, without network. */
     fun chargeLotwLocal() {
         val e = fr.f4ioz.satcombo.data.Lotw.charge(getApplication())
         if (e.travailles.isEmpty() && e.confirmes.isEmpty()) return
@@ -3103,17 +2808,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * Les carrés des correspondants que LoTW n'a pas su situer.
-     *
-     * LoTW ne rend le carré que si le correspondant l'a déclaré ; trente-trois
-     * contacts satellite confirmés d'Olivier n'en ont aucun. La mémoire des
-     * indicatifs — carnet, ADIF importé, base embarquée — en connaît une
-     * bonne part. Le contact est confirmé de toute façon : lui rendre son
-     * carré ne fabrique rien, cela retrouve ce que LoTW a perdu.
-     */
-    /**
-     * Mes carrés d'après le carnet local : LoTW ne connaît que ce qui y a été
-     * téléversé, l'activation d'hier n'y est pas encore.
+     * My squares from the local log: LoTW only knows what was uploaded, so
+     * yesterday's activation is not there yet.
      */
     private fun mesCarresLocaux(): Set<String> =
         _ui.value.log.mapNotNull {
@@ -3121,12 +2817,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }.toSet()
 
     /**
-     * Corrige le satellite — et l'heure — d'un contact enregistré.
-     *
-     * L'azimut et l'élévation sont **recalculés** pour le nouveau couple
-     * satellite/instant : ils décrivent où pointait l'antenne, pas une donnée
-     * saisie. Les garder tels quels après un changement de satellite
-     * produirait un carnet cohérent en apparence et faux en fond.
+     * Corrects the satellite — and time — of a logged contact. Az/el are
+     * **recomputed**: they describe where the antenna pointed, not typed data;
+     * keeping them would make a log that looks consistent and is wrong.
      */
     fun corrigeSatellite(timeMs: Long, sat: TleEntry, nouvelleHeure: Long? = null) {
         val quand = nouvelleHeure ?: timeMs
@@ -3141,21 +2834,19 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * Ajoute un contact après coup, à l'heure indiquée.
-     *
-     * Un contact noté sur un carnet papier pendant le passage se saisit en
-     * rentrant : l'heure est celle du contact, pas celle de la saisie, et
-     * l'azimut se recalcule à partir d'elle.
+     * Adds a contact afterwards, at the given time (paper log typed in back
+     * home): the time is the contact's, not the entry's, and az is recomputed
+     * from it.
      */
     fun ajouteContact(quandMs: Long, sat: TleEntry, indicatif: String, locator: String) {
-        // Le public voit le contact au moment où il est validé : c'est le
-        // moment fort d'une démonstration, et il ne se raconte pas après coup.
+        // The audience sees the contact the moment it is confirmed: the
+        // highlight of a demo cannot be told afterwards.
         if (fr.f4ioz.satcombo.demo.ServeurDemo.etat.value.actif) {
             fr.f4ioz.satcombo.demo.ServeurDemo.ajouteContact(indicatif, locator, sat.name)
         }
-        // Le même garde que la saisie au clavier : sans indicatif, il n'y a pas
-        // de contact à inscrire. La boîte de dialogue le sait déjà — son bouton
-        // reste éteint — mais la règle appartient à l'écriture, pas au bouton.
+        // Same guard as keypad entry: no callsign, no contact. The dialog's
+        // button is already disabled, but the rule belongs to the write, not
+        // the button.
         if (indicatif.isBlank()) return
         val obs = _ui.value.observer
         val pos = if (obs != null) runCatching {
@@ -3176,23 +2867,19 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * Les indicatifs déjà travaillés pendant le passage en cours.
-     *
-     * Sert à ne pas rappeler deux fois la même station — ce qui, sur un
-     * transpondeur encombré, coûte du temps à tout le monde. Encore faut-il
-     * que « ce passage » veuille dire quelque chose : la règle est au domaine,
-     * avec son banc, parce qu'elle a été fausse deux fois. Ici, on ne fait que
-     * lui donner la fenêtre AOS–LOS calculée pour le satellite affiché.
+     * Callsigns already worked during the current pass, so the same station is
+     * not called twice on a busy transponder. What "this pass" means is a
+     * domain rule with its tests (it was wrong twice); here we only give it the
+     * AOS–LOS window of the displayed satellite.
      */
     fun indicatifsDuPassage(): List<String> {
         val choisi = _ui.value.selected ?: return emptyList()
         val sat = choisi.name
         val maintenant = System.currentTimeMillis()
         val obs = _ui.value.observer
-        // Le vrai début du passage, calculé pour ce satellite-ci. La liste des
-        // passages sert de recours quand on n'a pas de position d'observation :
-        // sa fenêtre peut être tronquée en arrière, mais tronquée vaut mieux
-        // qu'absente.
+        // The real pass start, computed for this satellite. The pass list is the
+        // fallback without an observer position: its window may be truncated
+        // at the start, but truncated beats missing.
         val fenetre = obs?.let {
             runCatching { predictor.currentPass(choisi, it, maintenant) }.getOrNull()
         }?.let { fr.f4ioz.satcombo.domain.Passage.Fenetre(it.first, it.second) }
@@ -3215,19 +2902,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * Enregistre un contact saisi au clavier, ici et maintenant.
+     * Logs a contact typed on the keypad, here and now: displayed satellite,
+     * confirmation time, and geometry for that time.
      *
-     * Le chemin direct : pas de tampon à retrouver, pas de file à faire
-     * avancer, pas d'entrée dont hériter le satellite ou l'heure. Le contact
-     * porte le satellite affiché, l'instant de la validation, et la géométrie
-     * calculée pour cet instant.
-     *
-     * **C'est désormais le seul chemin qui écrit au carnet**, et il doit donc
-     * porter tout ce que portait le relevé d'un appui sur la boussole : le mode
-     * d'émission, les deux fréquences au repos, les carrés revendiqués. Ces
-     * champs-là ne se retrouvent pas le soir venu — ils décrivent l'état du
-     * poste à l'instant du contact — et sans eux l'ADIF part amputé de BAND, de
-     * MODE et de SAT_MODE.
+     * **The only live path that writes to the log**, so it must carry what
+     * cannot be recovered in the evening: mode, both rest frequencies, claimed
+     * squares. Without them the ADIF lacks BAND, MODE and SAT_MODE.
      */
     fun ajouteContactDirect(
         sat: TleEntry, indicatif: String, locator: String,
@@ -3235,9 +2915,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     ) {
         val call = indicatif.trim().uppercase()
         if (call.isEmpty()) return
-        // Le clavier d'indicatifs est le chemin réel du terrain : c'est celui
-        // qu'il fallait brancher. Le premier branchement ne couvrait que la
-        // saisie manuelle des réglages, que personne n'utilise en passage.
+        // The callsign keypad is the real field path, so the demo hook belongs
+        // here (not only on manual entry, which nobody uses mid-pass).
         if (fr.f4ioz.satcombo.demo.ServeurDemo.etat.value.actif) {
             fr.f4ioz.satcombo.demo.ServeurDemo.ajouteContact(call, locator, sat.name)
         }
@@ -3246,9 +2925,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val pos = _ui.value.livePosition ?: obs?.let {
             runCatching { predictor.positionAt(sat, it, maintenant) }.getOrNull()
         }
-        // Le transpondeur en cours donne le mode et les deux fréquences : c'est
-        // ce que le carnet d'en face attend dans MODE, BAND et SAT_MODE, et
-        // c'est l'instant où l'information est encore sûre.
+        // The current transponder gives mode and both frequencies (MODE, BAND,
+        // SAT_MODE), and now is when that information is still reliable.
         val tx = activeTransmitters().getOrNull(_ui.value.selectedTxIndex)
         val e = fr.f4ioz.satcombo.data.LogEntry(
             timeMs = maintenant,
@@ -3257,8 +2935,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             elevationDeg = pos?.elevationDeg ?: 0.0,
             myLocator = obs?.let { Maidenhead.fromLatLon(it.latDeg, it.lonDeg) }
                 ?: _ui.value.manualLocator,
-            // Depuis une ligne de carrés, le contact compte dans les deux : la
-            // revendication ne tient que si le carnet le dit à l'heure dite.
+            // From a line of squares the contact counts for both; the claim
+            // only holds if the log records it at the time.
             myGrids = myGridsCsv(),
             callsign = call,
             theirLocator = locator.trim().uppercase(),
@@ -3269,8 +2947,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             uplinkMhz = monteeAuRepos()?.let { it / 1_000_000.0 } ?: 0.0)
         _ui.value = _ui.value.copy(log = logStore.add(e),
             express = _ui.value.express.copy(memoire = construitMemoire()))
-        // Un enregistrement en cours reçoit un repère : le contact se retrouve
-        // à la bonne seconde quand on réécoute le passage.
+        // A running recording gets a marker, to find the contact at the right
+        // second on playback.
         if (_ui.value.recording) {
             fr.f4ioz.satcombo.audio.RecorderService.addMarker(
                 tf("qso_marker_call", call, sat.name, (pos?.elevationDeg ?: 0.0).toInt()))
@@ -3282,6 +2960,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _ui.value = _ui.value.copy(carnet = _ui.value.carnet.copy(peindre = on))
     }
 
+    /**
+     * Squares of stations LoTW could not locate. LoTW returns a square only if
+     * the other station declared one; many confirmed satellite contacts have
+     * none. The callsign memory (log, imported ADIF, bundled base) knows many.
+     * The contact is confirmed anyway: restoring its square invents nothing.
+     */
     private fun carresDeMemoire(indicatifs: Set<String>): Set<String> {
         if (indicatifs.isEmpty()) return emptySet()
         val memoire = _ui.value.express.memoire
@@ -3301,10 +2985,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * Va chercher le journal chez LoTW.
-     *
-     * Un téléchargement complet, à la demande : LoTW ne répond pas carré par
-     * carré, et le fichier peut être long. On ne le fait donc pas tout seul.
+     * Downloads the log from LoTW. Full download, on demand only: LoTW does not
+     * answer square by square and the file can be long.
      */
     fun rafraichisLotw() {
         val c = _ui.value.carnet
@@ -3337,11 +3019,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * Interroge le carnet pour une poignée de carrés.
-     *
-     * Un carré à la fois et jamais deux fois le même : le cache du connecteur
-     * s'en charge, et la documentation demande expressément de ne pas
-     * marteler ces routes.
+     * Queries the online log for a handful of squares: one at a time, never the
+     * same twice (the connector caches) — the API docs explicitly ask not to
+     * hammer these routes.
      */
     fun demandeCarres(liste: List<String>) {
         val c = _ui.value.carnet
@@ -3416,17 +3096,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * Charge la silhouette du pays où l'on se trouve.
-     *
-     * Le catalogue pèse 463 Ko : on le lit hors du fil principal, une seule
-     * fois, et seulement si l'opérateur demande la carte. Qui ne s'en sert pas
-     * ne paie rien.
+     * Loads the outline of the current country. The catalogue is 463 KB: read
+     * off the main thread, only if the operator asks for the map.
      */
     fun chargeCartePays() {
         val obs = _ui.value.observer ?: return
-        // Si le pays chargé contient déjà la position, rien à relire : l'effet
-        // de l'écran Photo rappelle cette fonction à chaque point GPS, et le
-        // catalogue pèse 463 Ko.
+        // If the loaded country already contains the position, nothing to
+        // re-read: the Photo screen calls this on every GPS fix.
         val c = _ui.value.carte
         if (c.anneaux.isNotEmpty() &&
             c.anneaux.any { fr.f4ioz.satcombo.domain.Pays.dansAnneau(it, obs.latDeg, obs.lonDeg) }
@@ -3437,9 +3113,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     fr.f4ioz.satcombo.data.PaysStore.autour(getApplication(), obs.latDeg, obs.lonDeg)
                 }.getOrNull()
             }
-            // Pays introuvable : on efface plutôt que de garder l'ancien.
-            // Une silhouette périmée est pire qu'un message — elle a l'air
-            // juste.
+            // Country not found: clear rather than keep the old one. A stale
+            // outline is worse than a message — it looks right.
             _ui.value = _ui.value.copy(carte = _ui.value.carte.copy(
                 anneaux = r?.second ?: emptyList(),
                 paysNom = r?.first?.nom ?: ""))
@@ -3451,12 +3126,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * La mémoire des correspondants : le carnet local, plus l'index importé.
-     *
-     * Reconstruite en entier plutôt que tenue à jour au fil de l'eau. Dix mille
-     * contacts se replient en quelques millisecondes, et une mémoire
-     * reconstruite d'un bloc ne peut pas diverger de la source — un index
-     * entretenu par incréments finit toujours par le faire.
+     * Known stations: local log plus imported index. Rebuilt whole rather than
+     * maintained incrementally: ten thousand contacts fold in milliseconds, and
+     * a rebuilt memory cannot drift from its source.
      */
     private fun construitMemoire(): List<fr.f4ioz.satcombo.domain.Indicatifs.Connu> {
         val locaux = _ui.value.log.filter { it.callsign.isNotBlank() }.map {
@@ -3464,37 +3136,20 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 indicatif = it.callsign, locator = it.theirLocator,
                 quandMs = it.timeMs, satellite = it.satName)
         }
-        // La base interne vient EN DERNIER : à indicatif égal, le carnet local
-        // et l'ADIF importé par l'opérateur ont déjà parlé, la base ne fait
-        // qu'ajouter ce qu'ils ignorent.
-        // Deux verrous : l'extension ADIF d'abord — le carnet d'Olivier ne se
-        // sert pas d'office —, l'interrupteur des réglages ensuite.
         return fr.f4ioz.satcombo.domain.Indicatifs.memoire(locaux + indexImporte)
     }
 
     private var indexImporte: List<fr.f4ioz.satcombo.domain.Indicatifs.Contact> = emptyList()
 
-    /**
-     * La base embarquée a été retirée.
-     *
-     * Elle portait 3 763 contacts du carnet F4IOZ, soit 294 Ko dans chaque
-     * installation. Depuis que le clavier se nourrit directement du carnet en
-     * ligne, elle faisait double emploi : chacun rapatrie son propre carnet,
-     * plus à jour et plus pertinent que celui d'un autre opérateur.
-     *
-     * Le réglage qui la commandait a disparu avec elle : garder un
-     * interrupteur sans rien derrière est la meilleure façon de faire croire
-     * qu'une fonction existe encore.
-     */
+    // The bundled callsign base (3,763 contacts of the F4IOZ log, 294 KB in
+    // every install) was removed, with its setting: each operator now harvests
+    // his own online log.
 
     /**
-     * Oublie tout ce qui a été rapatrié dans la mémoire du clavier.
-     *
-     * **Ne touche pas au carnet.** Les contacts que l'opérateur a lui-même
-     * enregistrés restent : seul l'index importé — ADIF ou moisson Wavelog —
-     * est effacé. Le curseur de moisson repart à zéro, sans quoi le prochain
-     * rapatriement ne reprendrait qu'à partir du dernier contact vu et
-     * laisserait la mémoire à moitié vide.
+     * Forgets everything harvested into the keypad memory. **Does not touch the
+     * log**: only the imported index (ADIF or Wavelog harvest) is cleared. The
+     * harvest cursor is reset, otherwise the next harvest would resume from the
+     * last contact seen and leave the memory half empty.
      */
     fun purgeIndexImporte() {
         indexImporte = emptyList()
@@ -3514,24 +3169,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         return bilan
     }
 
-    /**
-     * Va chercher chez Wavelog de quoi nourrir le clavier.
-     *
-     * Le clavier propose des indicatifs d'après ce qu'on a déjà travaillé.
-     * Cette mémoire ne connaissait que le carnet local et ce qu'on avait
-     * importé à la main : un téléphone neuf, ou le second téléphone, partait
-     * donc sans rien. Or Wavelog **sait déjà tout** — c'est le carnet de
-     * référence, alimenté par les deux appareils.
-     *
-     * Chargement différentiel : on repart du dernier contact rapatrié. Le
-     * point d'entrée est fait pour cela, et redemander tout le journal à
-     * chaque fois heurterait les limites de débit de l'instance.
-     *
-     * L'index seul est conservé — indicatif, carré, date, satellite. Le
-     * carnet local reste seul maître de ses contacts : aucune règle de fusion
-     * à trancher, aucune correction locale à écraser.
-     */
-    /** L'ensemble demandé, sous une forme stable et comparable. */
+    /** The requested profile set, in a stable comparable form. */
     private fun profilsDemandes(
         c: fr.f4ioz.satcombo.CarnetUi, choisis: List<String>
     ): String = choisis.ifEmpty {
@@ -3539,6 +3177,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             .ifEmpty { listOf(c.profil).filter { it.isNotBlank() } }
     }.sorted().joinToString(",")
 
+    /**
+     * Harvests from Wavelog to feed the keypad. A new or second phone otherwise
+     * starts empty, while Wavelog, fed by both devices, **already knows
+     * everything**.
+     *
+     * Incremental: resumes from the last harvested contact (re-fetching the
+     * whole log each time would hit the instance's rate limits). Only the index
+     * is kept (callsign, square, date, satellite); the local log stays sole
+     * master of its contacts — no merge rule, no local fix overwritten.
+     */
     fun moissonneCarnet(choisis: List<String> = emptyList()) {
         val c = _ui.value.carnet
         if (c.url.isBlank() || c.cle.isBlank()) {
@@ -3547,33 +3195,27 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
         viewModelScope.launch {
             _ui.value = _ui.value.copy(carnet = _ui.value.carnet.copy(depotEnCours = true))
-            // **Changer d'ensemble de profils remet le curseur à zéro.**
-            //
-            // Le curseur repère le dernier contact rapatrié ; il n'a de sens
-            // que pour un ensemble donné. Rapatrier d'un nouveau profil en
-            // repartant du curseur de l'ancien sauterait tout son historique,
-            // et l'opérateur ne s'en apercevrait qu'aux carrés manquants.
+            // **Changing the profile set resets the cursor.** The cursor only
+            // means something for a given set; resuming a new profile from the
+            // old cursor would skip its whole history, noticed only through
+            // missing squares.
             val empreinte = profilsDemandes(c, choisis)
             if (empreinte != settings.carnetProfilsVus) {
                 settings.carnetDernierId = 0L
                 settings.carnetProfilsVus = empreinte
             }
             val depuisId = settings.carnetDernierId
-            // Tous les emplacements relevés, à défaut le profil unique : la
-            // mémoire du clavier n'a pas à s'arrêter à un seul carré.
-            // Les profils que l'opérateur a cochés ; à défaut, tous ceux qui
-            // sont connus, à défaut encore le profil unique saisi à la main.
+            // Profiles ticked by the operator; else all known ones; else the
+            // single hand-typed profile. The keypad memory need not stop at
+            // one square.
             val profils = choisis.ifEmpty {
                 c.profils.values.filterNotNull().distinct()
                     .ifEmpty { listOf(c.profil).filter { it.isNotBlank() } }
             }
-            // **Sans profil, on n'appelle pas.**
-            //
-            // Une liste vide partait comme `station_id: []`, et le serveur
-            // répondait « HTTP 400 » — un code qui désigne le corps de la
-            // requête et laisse croire à une panne de connexion, alors que
-            // « Tester » venait de passer. C'est un réglage manquant, et il
-            // faut le dire comme tel.
+            // **No profile, no call.** An empty list went out as
+            // `station_id: []` and the server answered HTTP 400, which looks
+            // like a connection failure right after "Test" passed. It is a
+            // missing setting and must be reported as such.
             if (profils.isEmpty()) {
                 _ui.value = _ui.value.copy(carnet = _ui.value.carnet.copy(
                     depotEnCours = false, depot = t("carnet_sans_profil")))
@@ -3594,16 +3236,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     depot = m.message.ifBlank { t("carnet_moisson_rien") }))
                 return@launch
             }
-            // On **ajoute** à l'index plutôt que de le remplacer : une moisson
-            // différentielle ne rend que les nouveaux, et repartir d'eux seuls
-            // effacerait tout l'historique déjà connu.
+            // **Append** to the index rather than replace: an incremental
+            // harvest only returns new contacts.
             val bilan = fr.f4ioz.satcombo.data.AdifImport.lit(m.adif, settings.carnetFiltre)
-            // Les indicatifs que le clavier ne connaissait pas encore : c'est
-            // la seule mesure de ce qu'il a gagné. Trente-huit QSO avec le même
-            // correspondant n'ajoutent qu'une entrée à sa mémoire, et annoncer
-            // les contacts laisserait croire à un enrichissement qui n'a pas eu
-            // lieu. Le compte se fait **avant** la fusion, faute de quoi il n'y
-            // aurait plus rien à comparer.
+            // Callsigns the keypad did not know yet — the only measure of what
+            // it gained (38 QSOs with one station add one entry). Counted
+            // **before** the merge, or there is nothing left to compare.
             val connus = indexImporte.mapTo(HashSet()) { it.indicatif }
             val nouveaux = bilan.contacts.mapTo(HashSet()) { it.indicatif }
                 .count { it !in connus }
@@ -3616,17 +3254,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 express = _ui.value.express.copy(memoire = construitMemoire()),
                 carnet = _ui.value.carnet.copy(
                     depotEnCours = false,
-// **Dire ce que les chiffres veulent dire.**
-                    //
-                    // « Zéro nouveau » avait fait croire à une panne alors que
-                    // tout marchait : les contacts rapatriés concernaient des
-                    // correspondants déjà connus du clavier. Le compte-rendu
-                    // annonçait des nombres sans les interpréter, et un nombre
-                    // nu laisse toujours craindre le pire.
-                    //
-                    // Le curseur reste affiché en petit : c'est lui qui dit si
-                    // une moisson est différentielle ou repart de zéro, et il a
-                    // servi une fois à trancher.
+                    // **Say what the numbers mean.** "Zero new" looked like a
+                    // failure while everything worked (the contacts were with
+                    // known stations). The cursor stays shown in small print:
+                    // it tells whether a harvest was incremental or from zero.
                     depot = (if (m.nombre == 0) t("carnet_moisson_ajour")
                              else tf("carnet_moisson", m.nombre, bilan.retenus,
                                  nouveaux, fusion.distinctBy { it.indicatif }.size)) +
@@ -3635,12 +3266,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * Change ce qu'on moissonne, et **remet le compteur différentiel à zéro**.
-     *
-     * Sans cette remise, passer de « satellite » à « tout » ne rapporterait
-     * que les contacts postérieurs au dernier appel : tout l'historique HF
-     * resterait invisible, et l'on croirait le filtre inopérant. Le défaut
-     * serait silencieux, et durable.
+     * Changes what is harvested and **resets the incremental cursor** (done in
+     * the `carnetFiltre` setter). Otherwise going from "sat" to "all" would
+     * only bring contacts after the last call: the HF history would stay
+     * invisible, silently.
      */
     fun setCarnetFiltre(f: String) {
         settings.carnetFiltre = f
@@ -3648,7 +3277,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             filtre = f, depot = t("carnet_moisson_remise")))
     }
 
-    /** Repart de zéro : la moisson suivante rechargera tout le journal. */
+    /** Starts over: the next harvest reloads the whole log. */
     fun oublieMoisson() {
         settings.carnetDernierId = 0L
         _ui.value = _ui.value.copy(carnet = _ui.value.carnet.copy(
@@ -3658,23 +3287,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val indexStore = fr.f4ioz.satcombo.data.IndexImporte(app)
 
     init {
-        // L'index importé survit à la fermeture : le relire au démarrage est ce
-        // qui le rend digne de confiance.
+        // The imported index survives closing; reload it at startup.
         runCatching { indexImporte = indexStore.charge() }
-        // **La mémoire du clavier se construit au démarrage.**
-        //
-        // Elle était bâtie par `rafraichitFile()`, appelée ici pour remplir la
-        // file d'attente ; la construction de la mémoire y avait été greffée
-        // parce que les deux se faisaient au même moment. En 19.11 la file a
-        // disparu, la fonction avec elle, et la mémoire est partie dans le même
-        // mouvement — sans que rien ne le signale, puisque aucun essai ne
-        // couvre le démarrage.
-        //
-        // Le clavier ouvrait donc un carnet vide après chaque mise à jour :
-        // ni ADIF importé, ni base interne, aucune suggestion. Il fallait aller
-        // dans les réglages éteindre puis rallumer la base pour que
-        // `setBaseInterneIndicatifs` la reconstruise. Ce qu'un écran de
-        // réglages sait faire, le démarrage doit savoir le faire.
+        // **The keypad memory is built at startup.** It used to be built as a
+        // side effect of a queue refresh; when the queue was removed (19.11),
+        // the memory went with it, silently — no test covers startup — and the
+        // keypad opened empty after every update.
         runCatching {
             _ui.value = _ui.value.copy(
                 express = _ui.value.express.copy(memoire = construitMemoire()))
@@ -3699,10 +3317,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun logAdif(): String = logStore.toAdif(settings.callsign)
 
     /**
-     * Écrit le carnet dans un vrai fichier .adi et rend son URI partageable.
-     * Coller de l'ADIF dans un courriel marche, mais beaucoup de carnets
-     * n'acceptent qu'un fichier — et le texte collé perd ses retours à la
-     * ligne dès qu'une application se croit maligne.
+     * Writes the log to a real .adi file and returns a shareable URI. Many logs
+     * only accept a file, and pasted text loses its line breaks as soon as an
+     * app tries to be clever.
      */
     fun adifFileUri(entries: List<LogEntry>? = null, tag: String = "carnet"): android.net.Uri? {
         val app = getApplication<android.app.Application>()
@@ -3724,7 +3341,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun setCallsign(cs: String) {
         settings.callsign = cs
-        // L'indicatif est aussi une clé : F4IOZ ouvre les fonctions en bêta.
+        // The callsign is also a key: F4IOZ unlocks beta features.
         _ui.value = _ui.value.copy(
             callsign = settings.callsign,
             extensions = fr.f4ioz.satcombo.data.Extensions.unlocked(
@@ -3732,12 +3349,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * Enregistre le champ « Extensions » et recalcule ce qui est ouvert.
-     *
-     * Si l'opérateur referme une extension pendant qu'il est dessus, on le
-     * ramène à la liste des passages : rester sur un écran devenu invisible
-     * dans le menu serait un piège, le bouton retour marcherait mais rien
-     * n'indiquerait comment y revenir.
+     * Saves the "Extensions" field and recomputes what is unlocked. If the
+     * operator locks the extension he is on, go back to the pass list: staying
+     * on a screen no longer in the menu would be a trap.
      */
     fun setExtensionsCode(code: String) {
         settings.extensionsCode = code
@@ -3751,13 +3365,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             extensionsCode = settings.extensionsCode,
             extensions = ext,
             screen = if (lost) Screen.PASSES else u.screen)
-        // L'extension ADIF ouvre ou ferme la base embarquée : la mémoire du
-        // clavier suit tout de suite, pas au prochain démarrage.
+        // Rebuild the keypad memory now, not at next startup.
         _ui.value = _ui.value.copy(
             express = _ui.value.express.copy(memoire = construitMemoire()))
     }
 
-    /** Vrai si la fonction en bêta [name] est ouverte pour cet opérateur. */
+    /** True if beta feature [name] is unlocked for this operator. */
     fun hasExtension(name: String): Boolean = name in _ui.value.extensions
 
     /**
@@ -3776,9 +3389,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * Combien des huit carrés voisins sont écrits sur la photo QRV. Un centre
-     * de carré n'en veut aucun, un coin à quatre carrés en veut au moins
-     * quatre, et un opérateur qui chasse le carré les veut tous.
+     * How many of the eight neighbouring squares are written on the QRV photo:
+     * none at a square's centre, at least four at a four-square corner, all for
+     * a grid chaser.
      */
     fun setPhotoNearCount(n: Int) {
         settings.photoNearCount = n
@@ -3786,22 +3399,21 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * Le système d'unités. Un OM anglo-saxon ne convertit pas de tête pendant
-     * un passage de trois minutes ; celui qui chasse un ballon raisonne en
-     * milles nautiques et en nœuds.
+     * Unit system. Nobody converts in his head during a three-minute pass; a
+     * balloon chaser thinks in nautical miles and knots.
      */
     fun setUnits(v: String) {
         settings.units = v
         _ui.value = _ui.value.copy(units = settings.units)
     }
 
-    /** Drapeau placé devant l'indicatif sur la photo QRV. Vide = aucun. */
+    /** Flag before the callsign on the QRV photo. Empty = none. */
     fun setPhotoFlag(code: String) {
         settings.photoFlag = code
         _ui.value = _ui.value.copy(photoFlag = settings.photoFlag)
     }
 
-    /** Drapeau placé à droite de l'indicatif, choisi dans le même catalogue. */
+    /** Flag right of the callsign, from the same catalogue. */
     fun setPhotoFlagRight(code: String) {
         settings.photoFlagRight = code
         _ui.value = _ui.value.copy(carte = _ui.value.carte.copy(flagRight = settings.photoFlagRight))
@@ -3812,19 +3424,19 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _ui.value = _ui.value.copy(photoPolarScale = settings.photoPolarScale)
     }
 
-    /** Taille du nom du satellite inscrit sous le tracé polaire. */
+    /** Size of the satellite name under the polar plot. */
     fun setPhotoSatLabelScale(v: Float) {
         settings.photoSatLabelScale = v
         _ui.value = _ui.value.copy(photoSatLabelScale = settings.photoSatLabelScale)
     }
 
-    /** Couleur de l’indicatif sur la photo QRV (ARGB opaque). */
+    /** Callsign colour on the QRV photo (opaque ARGB). */
     fun setPhotoCallColor(argb: Int) {
         settings.photoCallColor = argb
         _ui.value = _ui.value.copy(photoCallColor = settings.photoCallColor)
     }
 
-    /** Taille de l’indicatif sur la photo QRV. Bornée par le réglage. */
+    /** Callsign size on the QRV photo, clamped by the setting. */
     fun setPhotoCallScale(v: Float) {
         settings.photoCallScale = v
         _ui.value = _ui.value.copy(photoCallScale = settings.photoCallScale)
@@ -3926,23 +3538,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /**
-     * The SatMe mark is the app's signature on every picture that leaves the
-     * phone, so it is not up for negotiation — except on the author's own
-     * station, which needs pictures without it for the store listing.
-     */
-    // `estAuteur()` a été retirée : la section « Lieu » qu'elle gardait est
-    // ouverte à tous depuis la 20.58. Une garde sans rien derrière finit par
-    // servir à autre chose que ce pour quoi elle avait été écrite.
+    // `estAuteur()` was removed: the "Location" section it guarded is open to
+    // all since 20.58. A guard with nothing behind it ends up used for
+    // something else.
 
     /**
-     * Le code du drapeau, si le trousseau l'autorise.
-     *
-     * [gated] dit si l'emplacement demande encore le mot « drapeau » : celui de
-     * gauche ne le demande plus, celui de droite si. Le filtre BZH, lui, reste
-     * en place des deux côtés — le breton et le bigouden ne sont pas des
-     * drapeaux nationaux, et un réglage hérité ne doit pas ressortir sur la
-     * photo de quelqu'un qui ne les a pas demandés.
+     * The flag code, if the unlocked extensions allow it. [gated]: whether this
+     * slot still needs the "flag" keyword (left: no, right: yes). The BZH filter
+     * stays on both sides — Breton and Bigouden are not national flags, and an
+     * inherited setting must not show up on the photo of someone who did not
+     * ask for them.
      */
     private fun photoFlagOrNothing(s: UiState, code: String, gated: Boolean): String {
         if (gated && fr.f4ioz.satcombo.data.Extensions.FLAG !in s.extensions) return ""
@@ -3978,42 +3583,38 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         else if (_ui.value.photoSatCat == null) setPhotoSat(null)
     }
 
-    // ---- Mise a jour : on detecte, le Play Store fait le reste ----
+    // ---- Update: we detect, the Play Store does the rest ----
 
     /**
-     * Le Store a une version plus recente. Proposee une fois par version : un
-     * « plus tard » est retenu, donc on ne harcele jamais deux fois pour la
-     * meme.
+     * The Store has a newer version. Offered once per version: a "later" is
+     * remembered, so we never nag twice for the same one.
      */
     fun updateFound(code: Int) {
         if (code <= settings.updateSkipped) return
         _ui.value = _ui.value.copy(updateCode = code, updateMsg = "")
     }
 
-    /** Quelque chose n'a pas marche, et il faut le dire. Une version ratee
-     *  n'est jamais marquee comme vue : elle doit repasser. */
+    /** Something failed and must be said. A failed version is never marked as
+     *  seen: it must come round again. */
     fun updateFailed(msg: String) {
         settings.updateSkipped = 0
         _ui.value = _ui.value.copy(updateCode = 0, updateMsg = msg)
     }
 
-    /** Ligne d'etat toute simple (a jour, pas de Store...), affichee puis
-     *  balayee d'un doigt. */
+    /** Simple status line (up to date, no Store…), swiped away. */
     fun updateSay(msg: String) { _ui.value = _ui.value.copy(updateMsg = msg) }
     fun updateMsgClear() { _ui.value = _ui.value.copy(updateMsg = "") }
 
-    /** Verification manuelle : on oublie le « plus tard » pour que la meme
-     *  version puisse etre reproposee. */
+    /** Manual check: forget the "later" so the same version can be offered again. */
     fun updateForget() {
         settings.updateSkipped = 0
         _ui.value = _ui.value.copy(updateMsg = "")
     }
 
     /**
-     * On part vers la fiche du Store. La version est classee traitee : si
-     * l'operateur revient sans avoir mis a jour, on ne lui remet pas la
-     * fenetre au nez a chaque fois qu'il rouvre l'application. La prochaine
-     * version publiee, elle, sera bien annoncee.
+     * Going to the Store page. The version is marked handled: if the operator
+     * comes back without updating, the prompt does not reappear on every
+     * launch. The next published version will be announced.
      */
     fun updateOpened() {
         if (_ui.value.updateCode > 0) settings.updateSkipped = _ui.value.updateCode
@@ -4030,11 +3631,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _ui.value = _ui.value.copy(screen = if (back == Screen.PHOTO) Screen.PASSES else back)
     }
 
-    /**
-     * Binds the photo to a satellite and grabs the arc of the pass being worked
-     * — the one in progress, otherwise the one that has just finished, otherwise
-     * the next one — so the polar plot on the picture is the right one.
-     */
     /**
      * Finds the satellite back from the name alone and rebinds the photo to it,
      * WITHOUT moving the pass already stamped on the picture. Used for pictures
@@ -4053,6 +3649,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
+     * Binds the photo to a satellite and grabs the arc of the pass being worked
+     * — the one in progress, otherwise the one that has just finished, otherwise
+     * the next one — so the polar plot on the picture is the right one.
+     *
      * [keepPass] leaves the pass already chosen alone when the prediction window
      * does not contain it — reopening a picture shot last month must not stamp
      * it with a pass of today.
@@ -4208,9 +3808,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val obs = _ui.value.observer
         val loc = if (obs != null) Maidenhead.fromLatLon(obs.latDeg, obs.lonDeg)
         else _ui.value.manualLocator.uppercase()
-        // Le décodeur SSTV tourne dans un service, loin d'ici, et n'a pas de
-        // GPS à lui : on lui laisse le locator au passage pour qu'il puisse
-        // l'écrire à côté de l'image reçue.
+        // The SSTV decoder runs in a service with no GPS of its own: hand it
+        // the locator so it can write it next to the received image.
         fr.f4ioz.satcombo.sstv.SstvHub.qthLocator = loc
         return loc
     }
@@ -4242,8 +3841,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             showDate = s.photoShowDate,
             showGrids = s.photoShowGrids,
             showCoords = s.photoShowCoords,
-            // **Le logo est permanent.** La marque SatMe signe chaque photo
-            // partagée ; plus personne ne peut la retirer, auteur compris.
+            // **The logo is permanent.** The SatMe mark signs every shared
+            // photo; nobody can remove it, author included.
             showLogo = true,
             showSat = s.photoShowSat,
             showPolar = s.photoShowPolar,
@@ -4282,19 +3881,17 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             polarScale = s.photoPolarScale,
             satLabelScale = s.photoSatLabelScale,
             loc4 = s.photoLoc4,
-            // L’altitude n’est écrite que si elle a été mesurée. Un locator
-            // saisi à la main laisse l’altitude à zéro, et « 0 m » sur une
-            // activation en montagne serait pire que rien du tout.
+            // Altitude only when measured: a hand-typed locator leaves it at
+            // zero, and "0 m" on a mountain activation is worse than nothing.
             altM = if (s.photoShowAlt) obs?.altMeters?.takeIf {
                 it != 0.0 && !it.isNaN() } else null,
             callColor = s.photoCallColor,
             callScale = s.photoCallScale,
             nearCount = s.photoNearCount,
-            // Les drapeaux sont une extension : sans le mot-clé, ils ne
-            // s'impriment pas, même si le réglage est resté en mémoire. Et les
-            // deux bretons demandent en plus le mot BZH — un réglage hérité ne
-            // doit pas ressortir sur la photo d'un OM qui ne les a plus.
             units = s.units,
+            // Flags are an extension: without the keyword they are not printed,
+            // even if the setting remains; the Breton ones also need BZH (see
+            // photoFlagOrNothing).
             flagLeft = photoFlagOrNothing(s, s.photoFlag, gated = false),
             flagsRight = listOfNotNull(
                 photoFlagOrNothing(s, s.carte.flagRight, gated = true)
@@ -4308,22 +3905,19 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun openActivation() { _ui.value = _ui.value.copy(screen = Screen.ACTIVATION) }
     fun closeActivation() { _ui.value = _ui.value.copy(screen = Screen.PASSES) }
 
-    // ================= Agenda (rendez-vous personnels) =================
+    // ================= Agenda (personal appointments) =================
 
     /**
-     * L'agenda n'est pas une extension bêta : un rappel d'horaire ne dépend
-     * d'aucun matériel et ne peut rien casser, il est donc ouvert à tous.
+     * Not a beta extension: a time reminder depends on no hardware and cannot
+     * break anything, so it is open to all.
      */
     fun openAgenda() { _ui.value = _ui.value.copy(screen = Screen.AGENDA) }
     fun closeAgenda() { _ui.value = _ui.value.copy(screen = Screen.PASSES) }
 
     /**
-     * Relit l’agenda depuis le disque.
-     *
-     * Appelé au démarrage et après chaque modification de l’écran Agenda : la
-     * liste des passages porte maintenant une pastille pour les rendez-vous, et
-     * une pastille qui n’apparaîtrait qu’au prochain lancement ne servirait à
-     * personne — on note justement un rendez-vous pour le voir tout de suite.
+     * Re-reads the agenda from disk, at startup and after every change on the
+     * Agenda screen: the pass list shows a badge for appointments, and a badge
+     * appearing only at next launch would be useless.
      */
     fun refreshAgenda() {
         _ui.value = _ui.value.copy(
@@ -4331,17 +3925,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * Le rendez-vous d’agenda qui tombe pendant ce passage, s’il y en a un.
+     * The agenda appointment falling during this pass, if any.
      *
-     * Deux conditions. L’instant du rendez-vous doit tomber dans la fenêtre du
-     * passage, avec cinq minutes de battement de part et d’autre : personne ne
-     * note un rendez-vous à la seconde, et un « SSTV ISS à 14 h 30 » vaut pour
-     * le passage qui commence à 14 h 32. Et le satellite doit correspondre.
-     *
-     * Un rendez-vous sans satellite ne s’accroche à aucun passage : il vaut
-     * pour une heure, pas pour une orbite. Un rendez-vous dont le rappel est
-     * coupé reste affiché — couper le rappel, c’est refuser d’être réveillé,
-     * pas effacer la note.
+     * Its time must fall within the pass window with five minutes' slack each
+     * side (nobody notes an appointment to the second: "ISS SSTV at 14:30"
+     * applies to the pass starting at 14:32), and the satellite must match.
+     * An appointment without a satellite attaches to no pass. One whose
+     * reminder is off still shows: muting the reminder is not deleting the note.
      */
     fun agendaForPass(p: SatPass): fr.f4ioz.satcombo.data.AgendaStore.AgendaEvent? {
         val list = _ui.value.agenda
@@ -4354,14 +3944,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * Le rendez-vous qui concerne ce satellite et qui n’est pas encore fini.
-     *
-     * Sert à la liste des satellites et à l’en-tête de la page du satellite.
-     * Un créneau annoncé trois semaines à l’avance mérite d’être vu tout de
-     * suite : on choisit le plus proche encore à venir, pas seulement celui
-     * qui a lieu à la seconde présente. Une fois la fin passée, la marque
-     * disparaît d’elle-même — un agenda qui garde ses vieilles marques finit
-     * par ne plus rien signaler du tout.
+     * The not-yet-finished appointment for this satellite (satellite list and
+     * satellite page header). The nearest upcoming one, not only a current
+     * one: a slot announced three weeks ahead deserves to be seen now. Once
+     * over, the mark disappears — an agenda keeping old marks ends up
+     * signalling nothing.
      */
     fun agendaForSat(satName: String): fr.f4ioz.satcombo.data.AgendaStore.AgendaEvent? {
         val list = _ui.value.agenda
@@ -4373,22 +3960,17 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * Les rendez-vous qui tombent dans la période demandée.
-     *
-     * Le filtre par date sert justement à préparer un jour précis ; s’il
-     * recouvre un créneau annoncé, le dire en haut de la liste évite d’avoir
-     * à repérer la pastille passage par passage.
+     * Appointments within the requested period. The date filter is used to
+     * prepare a given day; showing them at the top saves hunting badges pass
+     * by pass.
      */
     fun agendaInRange(fromMs: Long, toMs: Long): List<fr.f4ioz.satcombo.data.AgendaStore.AgendaEvent> =
         _ui.value.agenda.filter { it.overlaps(fromMs, toMs) }.sortedBy { it.timeMs }
 
     /**
-     * Le rendez-vous qui impose une fréquence pour ce satellite à cet instant.
-     *
-     * Seul un rendez-vous portant une fréquence compte ici : les autres se
-     * contentent de marquer le passage. [refMs] est l’instant de référence —
-     * l’AOS du passage regardé, ou maintenant à défaut —, parce qu’on ouvre
-     * souvent la page d’un passage qui n’a pas encore commencé.
+     * The appointment imposing a frequency for this satellite at this time
+     * (only those carrying a frequency). [refMs] is the AOS of the viewed pass,
+     * else now, since a pass page is often opened before the pass starts.
      */
     private fun agendaFreqFor(satName: String, refMs: Long):
         fr.f4ioz.satcombo.data.AgendaStore.AgendaEvent? =
@@ -4398,12 +3980,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
 
     /**
-     * Deux noms de satellite qui désignent le même engin.
-     *
-     * La comparaison est large dans les deux sens, parce que l’opérateur écrit
-     * « ISS » là où le catalogue dit « ISS (ZARYA) », et « AO-91 » là où il dit
-     * « FOX-1B (AO-91) ». Un rapprochement trop large affiche une pastille de
-     * trop ; un rapprochement trop strict fait rater le rendez-vous.
+     * Two satellite names for the same spacecraft. Loose both ways: the
+     * operator writes "ISS" for "ISS (ZARYA)", "AO-91" for "FOX-1B (AO-91)".
+     * Too loose shows one badge too many; too strict misses the appointment.
      */
     private fun sameSatName(a: String, b: String): Boolean {
         val x = a.trim().uppercase()
@@ -4415,14 +3994,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     // ================= SSTV =================
 
     fun openSstv() {
-        // Verrou de bêta : sans la clé, l'écran n'existe pas. Le menu le cache
-        // déjà, mais un raccourci futur ou un état restauré ne doit pas passer.
+        // Beta lock: the menu already hides it, but a future shortcut or a
+        // restored state must not get through.
         if (!hasExtension(fr.f4ioz.satcombo.data.Extensions.SSTV)) return
         _ui.value = _ui.value.copy(screen = Screen.SSTV)
     }
     fun closeSstv() { _ui.value = _ui.value.copy(screen = Screen.PASSES) }
 
-    // ================= APT (images NOAA, bêta) =================
+    // ================= APT (NOAA images, beta) =================
 
     fun openApt() {
         if (!hasExtension(fr.f4ioz.satcombo.data.Extensions.APT)) return
@@ -4431,7 +4010,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
     fun closeApt() { _ui.value = _ui.value.copy(screen = Screen.PASSES) }
 
-    // ================= SDR (clé RTL-SDR, bêta) =================
+    // ================= SDR (RTL-SDR dongle, beta) =================
 
     fun openSdr() {
         if (!hasExtension(fr.f4ioz.satcombo.data.Extensions.SDR)) return
@@ -4441,17 +4020,17 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun closeSdr() { _ui.value = _ui.value.copy(screen = Screen.PASSES) }
 
-    // ===================== radiosondes météo =====================
+    // ===================== weather radiosondes =====================
 
     fun openSonde() {
         if (!hasExtension(fr.f4ioz.satcombo.data.Extensions.SONDE)) return
         _ui.value = _ui.value.copy(screen = Screen.SONDE)
     }
 
-    /** Quitter l'écran n'arrête pas l'écoute : un vol dure trois heures. */
+    /** Leaving the screen does not stop listening: a flight lasts three hours. */
     fun closeSonde() { _ui.value = _ui.value.copy(screen = Screen.PASSES) }
 
-    /** Se caler sur une fréquence, à chaud si la réception tourne déjà. */
+    /** Tunes to a frequency, live if reception is already running. */
     fun setSondeFreq(hz: Long) {
         if (!fr.f4ioz.satcombo.sonde.SondeSites.inBand(hz)) return
         settings.sondeFreqHz = hz
@@ -4461,34 +4040,22 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** Un cran de dix kilohertz : c'est le pas sur lequel les sondes se calent. */
+    /** One 10 kHz step: the raster sondes sit on. */
     fun stepSondeFreq(steps: Int) {
         val step = fr.f4ioz.satcombo.sonde.SondeSites.SCAN_STEP_HZ
         setSondeFreq(_ui.value.sondeFreqHz + steps * step)
     }
 
-    /**
-     * Démarre l'écoute d'une radiosonde.
-     *
-     * Trois différences avec une écoute de phonie, et chacune compte : pas de
-     * son (on ne veut pas de bruit blanc dans le haut-parleur pendant trois
-     * heures), pas de silencieux (une sonde lointaine passe sous le seuil bien
-     * avant de cesser d'être décodable), et surtout pas de désaccentuation —
-     * elle arrondit les fronts du signal et le décodeur ne trouve plus rien.
-     */
-    /** Choisit d'où vient le son des sondes : "SDR", "MIC" ou "USB". */
+    /** Where sonde audio comes from: "SDR", "MIC" or "USB". */
     fun setSondeSource(v: String) {
         settings.sondeSource = v
         _ui.value = _ui.value.copy(sondeSource = settings.sondeSource)
     }
 
     /**
-     * Choisit le modèle écouté : "AUTO", "RS41", "M20" ou "M10".
-     *
-     * Ce n'est pas un réglage cosmétique. Il commande à la fois la largeur du
-     * filtre FM demandée à la chaîne SDR et les décodeurs mis en route : une
-     * RS41 tient dans quinze kilohertz, lui en ouvrir vingt-deux revient à
-     * laisser entrer la moitié de bruit en plus pour rien.
+     * Sonde model: "AUTO", "RS41", "M20" or "M10". Not cosmetic: it sets both
+     * the FM filter width and the decoders started. An RS41 fits in 15 kHz;
+     * opening 22 lets in half as much noise again for nothing.
      */
     fun setSondeModel(v: String) {
         settings.sondeModel = v
@@ -4496,13 +4063,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * Démarre la réception d'une sonde par la source choisie.
-     *
-     * La clé RTL n'est qu'une façon d'entendre le 404 MHz parmi d'autres :
-     * celui qui a déjà un récepteur convenable lui prend son audio, par le
-     * micro du téléphone ou par une carte son USB, exactement comme pour la
-     * SSTV ou les NOAA. Le décodeur, lui, ne voit aucune différence : il reçoit
-     * du son échantillonné et y cherche des trames.
+     * Starts sonde reception from the chosen source. The RTL dongle is only
+     * one way to hear 404 MHz: an existing receiver's audio can come through
+     * the phone mic or a USB sound card, as for SSTV or NOAA. The decoder sees
+     * no difference.
      */
     fun startSondeRx() {
         when (_ui.value.sondeSource) {
@@ -4511,14 +4075,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** Arrête la réception, quelle que soit la source engagée. */
+    /** Stops reception, whatever the source. */
     fun stopSondeRx() {
         if (fr.f4ioz.satcombo.audio.SondeAudioService.running) stopSondeAudio()
         else stopSonde()
     }
 
-    /** Écoute par l'audio du téléphone : aucun fichier n'est écrit, seul le
-     *  journal des trames décodées reste sur la carte. */
+    /** Listening through phone audio: no file is written, only the decoded
+     *  frame log remains. */
     fun startSondeAudio(source: String) {
         val hz = _ui.value.sondeFreqHz
         fr.f4ioz.satcombo.sonde.SondeHub.start(
@@ -4533,6 +4097,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         fr.f4ioz.satcombo.sonde.SondeHub.stop()
     }
 
+    /**
+     * Starts listening to a sonde on the SDR dongle. Three differences from
+     * voice, each one matters: no audio (no three hours of white noise), no
+     * squelch (a distant sonde drops below it long before it stops decoding),
+     * and above all no de-emphasis — it rounds the signal edges and the
+     * decoder finds nothing.
+     */
     fun startSonde() {
         val hz = _ui.value.sondeFreqHz
         val gain = settings.sdrGainTenthDb.takeIf { it >= 0 }
@@ -4561,7 +4132,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun stopSonde() {
         fr.f4ioz.satcombo.sonde.SondeHub.stop()
         fr.f4ioz.satcombo.sdr.SdrHub.stop()
-        // On rend à la désaccentuation le réglage choisi par l'utilisateur.
+        // Restore the user's de-emphasis setting.
         fr.f4ioz.satcombo.sdr.SdrHub.setDeemphasis(settings.sdrDeemph)
     }
 
@@ -4571,14 +4142,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * Une clé USB vient d'être branchée (intention USB_DEVICE_ATTACHED).
+     * A USB device was plugged in (USB_DEVICE_ATTACHED).
      *
-     * On ne navigue nulle part : l'opérateur est presque toujours en train de
-     * suivre un passage quand il branche sa clé, et le renvoyer à la liste des
-     * satellites à cet instant est exactement ce qu'il ne faut pas faire. On se
-     * contente de noter la clé ; le panneau SDR apparaît alors tout seul sous
-     * la boussole. Bonus de cette route : l'autorisation USB est déjà accordée
-     * par le système, il n'y a pas de boîte de dialogue à attendre.
+     * Navigate nowhere: the operator is almost always tracking a pass when he
+     * plugs the dongle in, and sending him to the satellite list is exactly
+     * wrong. Just note the device; the SDR panel appears under the compass.
+     * Bonus: the system has already granted USB permission, no dialog to wait.
      */
     fun onUsbDeviceAttached(dev: android.hardware.usb.UsbDevice?) {
         if (hasExtension(fr.f4ioz.satcombo.data.Extensions.SDR)) {
@@ -4588,19 +4157,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * Le branchement d'un pont série : le rotor, ou le poste.
+     * A serial bridge was plugged in: the rotor, or the rig.
      *
-     * Jusqu'ici cette intention ne servait qu'à la clé SDR, et elle repartait
-     * même sans rien faire quand l'extension SDR n'était pas activée. Or c'est
-     * la meilleure occasion de la journée : le système vient d'accorder
-     * l'autorisation d'accès en même temps qu'il a désigné l'application, il
-     * n'y a donc aucune boîte de dialogue à attendre — ce qui est précisément
-     * ce qui bloquait la connexion du rotor.
-     *
-     * On rafraîchit les deux listes de ports, puis on tente la connexion du
-     * rotor si elle a des chances d'aboutir : liaison USB choisie, pas de
-     * simulateur, rien de déjà connecté. Un port qui ne répond pas au `C2` est
-     * refermé aussitôt, le poste ne risque donc pas de rester pris.
+     * The best moment of the day: the system has just granted access while
+     * choosing the app, so no permission dialog — which is exactly what blocked
+     * rotor connection. Refresh both port lists, then try the rotor when it can
+     * succeed (USB link chosen, no simulator, nothing connected). A port that
+     * does not answer `C2` is closed at once, so the rig is never left held.
      */
     private fun onSerialAttached(dev: android.hardware.usb.UsbDevice?) {
         val d = runCatching { fr.f4ioz.satcombo.rotor.Gs232Rotor(getApplication()) }.getOrNull()
@@ -4617,19 +4180,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
 
     // ==================================================================
-    // Convertisseurs
+    // Converters
     //
-    // Tout ce qui précède, dans cette classe, raisonne en fréquences de
-    // satellite : le Doppler, les bornes du transpondeur, l'inversion, le
-    // repos choisi dans le passband. Tout cela reste vrai avec un LNB devant
-    // le récepteur — c'est toujours 10 489 MHz qui descend du ciel. Seule
-    // change la dernière ligne : ce qu'on écrit dans le poste ou dans la
-    // clé, et ce qu'on relit d'eux.
-    //
-    // La conversion est donc posée au plus tard possible, juste avant
-    // l'écriture et juste après la lecture, et nulle part ailleurs. C'est ce
-    // qui permet de ne toucher à aucun des calculs existants : ils n'ont
-    // jamais à savoir qu'il y a une boîte dans le câble.
+    // Everything in this class reasons in satellite frequencies: Doppler,
+    // transponder edges, inversion, rest point in the passband. That stays
+    // true with an LNB in front of the receiver — 10 489 MHz still comes down.
+    // Only the last step changes: what is written to rig or dongle, and what
+    // is read back. So conversion happens as late as possible, right before
+    // writing and right after reading, nowhere else: no computation ever
+    // needs to know there is a box in the cable.
     // ==================================================================
 
     private fun convRxDepuisReglages() = fr.f4ioz.satcombo.domain.Convertisseur(
@@ -4642,14 +4201,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         inverseur = settings.convTxInverseur,
         basHz = settings.convTxBasHz, hautHz = settings.convTxHautHz)
 
-    /** Descente : du ciel vers le poste piloté en CAT. */
     /**
-     * L'écart de l'appareil, appliqué **après** le convertisseur.
-     *
-     * Le quartz d'un récepteur se trompe là où il accorde — sur la fréquence
-     * intermédiaire, pas sur celle du ciel. Corriger avant le convertisseur
-     * mettrait l'erreur à l'échelle du gigahertz : deux ppm valent vingt
-     * kilohertz à 10 GHz, contre trois cents hertz à 144 MHz.
+     * Receiver offset, applied **after** the converter. A receiver's crystal
+     * errs where it tunes — on the IF, not the sky frequency. Correcting before
+     * the converter would scale the error to GHz: 2 ppm is 20 kHz at 10 GHz,
+     * versus 300 Hz at 144 MHz.
      */
     private fun ppmPoste(): Double =
         fr.f4ioz.satcombo.domain.MaterielRx.choisi(
@@ -4659,44 +4215,18 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         fr.f4ioz.satcombo.domain.MaterielRx.choisi(
             _ui.value.qo100.materiels, _ui.value.qo100.materielCle).ppm
 
+    /** Downlink: sky to CAT-controlled rig. */
     private fun posteRx(satHz: Long): Long {
         val fi = if (_ui.value.convRxPoste) _ui.value.convRx.versPoste(satHz) else satHz
         return fr.f4ioz.satcombo.domain.MaterielRx.corrige(fi, ppmPoste())
     }
 
-    /** Descente : ce que le poste affiche, ramené à ce qui est dans le ciel. */
     /**
-     * Le convertisseur est-il dans la chaîne du satellite en cours ?
-     *
-     * **C'est le satellite qui décide, pas la fréquence de l'instant.** Un
-     * convertisseur appartient à une bande : celui de QO-100 descend du Ku, et
-     * il n'a rien à faire dans la chaîne d'un satellite qui émet en 145 MHz.
-     *
-     * Sans cette question, la lecture du poste se convertissait à l'aveugle.
-     * Sur un LEO, le 817 lit 145,9, l'application ajoute l'oscillateur du LNB
-     * et conclut à 10 490,9 — une fréquence QO-100 affichée sur une orbite
-     * basse. Le convertisseur avait pourtant des bornes, mais elles portent
-     * sur le résultat : 10 490,9 tombe dedans, et la garde laissait passer.
-     *
-     * On interroge donc la descente du transpondeur sélectionné, qui ne ment
-     * pas : elle vaut 435 MHz sur un LEO et 10 489 sur QO-100.
-     */
-    /**
-     * Le convertisseur est-il dans la chaîne **de la clé** ?
-     *
-     * La même question que pour le poste, et elle manquait. `versSatellite`
-     * se contentait de vérifier que le résultat tombe dans la bande — ce qui
-     * est toujours vrai et ne prouve rien : une clé posée sur 145,9 MHz plus
-     * l'oscillateur d'un LNB donne 10 490 MHz, soit précisément le milieu des
-     * bornes de QO-100. La garde se validait elle-même.
-     *
-     * D'où le symptôme : sur un satellite à défilement, l'écran annonçait une
-     * fréquence en gigahertz alors qu'on écoutait du 145. Le convertisseur
-     * n'avait rien à faire dans cette chaîne, et rien ne l'en écartait.
-     *
-     * On pose donc la seule question qui ait un sens : **le satellite qu'on
-     * écoute est-il dans la bande de ce convertisseur ?** C'est déjà la règle
-     * du poste ; elle vaut mot pour mot pour la clé.
+     * Is the converter in **the dongle's** chain? Same rule as for the rig
+     * (see [convRxDansLaChaine]). Checking that the converted result falls in
+     * band proves nothing: a dongle on 145.9 MHz plus an LNB LO gives 10 490
+     * MHz, right in QO-100's range — the guard validated itself, and a LEO
+     * showed a GHz frequency.
      */
     private fun convRxCleDansLaChaine(): Boolean {
         if (!_ui.value.convRxCle || !_ui.value.convRx.configure) return false
@@ -4705,6 +4235,17 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         return _ui.value.convRx.couvre(dl)
     }
 
+    /**
+     * Is the converter in the current satellite's chain?
+     *
+     * **The satellite decides, not the instant frequency.** A converter belongs
+     * to a band: the QO-100 one comes down from Ku and has no place in a
+     * 145 MHz satellite's chain. Without this, on a LEO the 817 read 145.9, the
+     * app added the LNB LO and showed 10 490.9 — which passed the converter's
+     * bounds, since they apply to the result. So ask the selected
+     * transponder's downlink, which does not lie: 435 MHz on a LEO, 10 489 on
+     * QO-100.
+     */
     private fun convRxDansLaChaine(): Boolean {
         if (!_ui.value.convRxPoste || !_ui.value.convRx.configure) return false
         val t = activeTransmitters().getOrNull(_ui.value.selectedTxIndex) ?: return false
@@ -4712,22 +4253,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         return _ui.value.convRx.couvre(dl)
     }
 
+    /** Downlink: what the rig displays, brought back to the sky. */
     private fun satDepuisPoste(posteHz: Long): Long =
         fr.f4ioz.satcombo.domain.MaterielRx.redresse(posteHz, ppmPoste()).let {
             if (convRxDansLaChaine()) _ui.value.convRx.versSatellite(it) else it
         }
 
-    /** Montée : du ciel vers l'excitateur, en amont du transverter. */
+    /** Uplink: sky to the exciter, upstream of the transverter. */
     private fun posteTx(satHz: Long): Long = _ui.value.convTx.versPoste(satHz)
 
-    /**
-     * Montée : ce que l'excitateur affiche, ramené à ce qui part vers le ciel.
-     *
-     * L'inverse exact de [posteTx]. Sans elle, un opérateur derrière un
-     * transverter verrait sa molette interprétée dans la mauvaise bande, et le
-     * décalage déduit vaudrait des mégahertz.
-     */
-    /** Même question pour la montée : c'est le satellite qui décide. */
+    /** Same question for the uplink: the satellite decides. */
     private fun convTxDansLaChaine(): Boolean {
         if (!_ui.value.convTx.configure) return false
         val t = activeTransmitters().getOrNull(_ui.value.selectedTxIndex) ?: return false
@@ -4735,27 +4270,31 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         return _ui.value.convTx.couvre(ul)
     }
 
+    /**
+     * Uplink: what the exciter displays, brought back to the sky. Inverse of
+     * [posteTx]; without it, behind a transverter the knob would be read in the
+     * wrong band and the derived shift would be megahertz.
+     */
     private fun satDepuisPosteTx(posteHz: Long): Long =
         if (convTxDansLaChaine()) _ui.value.convTx.versSatellite(posteHz) else posteHz
 
-    /** Descente : du ciel vers la PLL de la clé SDR. */
+    /** Downlink: sky to the SDR dongle's PLL. */
     private fun cleRx(satHz: Long): Long {
         val fi = if (convRxCleDansLaChaine()) _ui.value.convRx.versPoste(satHz) else satHz
         return fr.f4ioz.satcombo.domain.MaterielRx.corrige(fi, ppmCle())
     }
 
     /**
-     * Le retour : ce que la clé est en train de recevoir, exprimé dans le
-     * ciel. L'écran SDR affiche des fréquences ; avec un LNB il afficherait
-     * 739 MHz, ce qui ne veut rien dire pour l'opérateur — il travaille sur
-     * 10 489 et c'est cela qu'il note dans son carnet.
+     * The way back: what the dongle receives, as a sky frequency. With an LNB
+     * the SDR screen would show 739 MHz, meaningless to the operator, who works
+     * on 10 489 and logs that.
      */
     fun cleVersSat(cleHz: Long): Long =
         fr.f4ioz.satcombo.domain.MaterielRx.redresse(cleHz, ppmCle()).let {
             if (convRxCleDansLaChaine()) _ui.value.convRx.versSatellite(it) else it
         }
 
-    /** Vrai quand une boîte est réellement dans la chaîne de la clé. */
+    /** True when a converter is set on the dongle's chain. */
     val convertisseurSurLaCle: Boolean
         get() = _ui.value.convRxCle && _ui.value.convRx.configure
 
@@ -4810,12 +4349,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * Applique un montage tout fait, du bon côté de la chaîne.
-     *
-     * Un préréglage de descente coche aussi la clé SDR et décoche le poste :
-     * un LNB à OL 9 750 sort en 739 MHz, et aucun poste d'amateur ne reçoit
-     * là. Le préréglage à 10 057,5, lui, sort en 432 — celui-là, on le donne
-     * au poste. Personne n'a envie de deviner cette règle tout seul.
+     * Applies a ready-made setup on the right side of the chain. A downlink
+     * preset also ticks the SDR dongle and unticks the rig when its IF is out
+     * of ham bands: a 9 750 LO LNB outputs 739 MHz, which no ham rig receives,
+     * while the 10 057.5 preset outputs 432 and goes to the rig.
      */
     fun appliquerPreset(cle: String) {
         val p = fr.f4ioz.satcombo.domain.Convertisseur.PRESETS.firstOrNull { it.cle == cle } ?: return
@@ -4843,10 +4380,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * Fréquence de repos à afficher sur la clé : celle que l'opérateur a déjà
-     * choisie dans le passband, sinon le centre du transpondeur sélectionné,
-     * sinon la fréquence SSTV de l'ISS — c'est de loin le cas le plus courant
-     * pour quelqu'un qui vient de brancher une clé.
+     * Rest frequency for the dongle: the one chosen in the passband, else the
+     * selected transponder's centre, else ISS SSTV — by far the most common
+     * case for someone who just plugged a dongle in.
      */
     fun sdrRestHz(): Long {
         val t = activeTransmitters().getOrNull(_ui.value.selectedTxIndex)
@@ -4856,10 +4392,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private var sdrLoopJob: kotlinx.coroutines.Job? = null
 
     /**
-     * Démarre la réception. La clé se règle sur la fréquence de repos, puis la
-     * boucle Doppler la déplace une fois par seconde tant que le satellite est
-     * au-dessus de l'horizon. Correction en réception seulement : la clé ne
-     * transmet pas.
+     * Starts reception on the rest frequency, then the Doppler loop moves it
+     * while the satellite is above the horizon (receive only: the dongle does
+     * not transmit).
      */
     fun startSdr() {
         val sat = _ui.value.selected?.name ?: "SAT"
@@ -4868,8 +4403,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val ok = fr.f4ioz.satcombo.sdr.SdrHub.start(
             ctx = getApplication(),
             satName = sat,
-            // La clé ne connaît que sa fréquence intermédiaire ; [rest], lui,
-            // reste la fréquence du satellite pour toute la boucle Doppler.
+            // The dongle only knows its IF; [rest] stays the satellite
+            // frequency for the whole Doppler loop.
             restHz = cleRx(rest),
             gainTenthDb = gain,
             agc = settings.sdrAgc,
@@ -4886,26 +4421,18 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * Le suivi Doppler de la clé, quatre fois par seconde.
+     * Dongle Doppler tracking, four times a second.
      *
-     * L'ancienne version reprogrammait la PLL une fois par seconde. En FM cela
-     * passait ; en BLU chaque reprogrammation est un saut de phase — un petit
-     * « clac » à chaque seconde — et comme la garde de [SdrHub.setCenter] vaut
-     * cent hertz, la note montait par marches de cent hertz. Sur un
-     * transpondeur linéaire c'était intenable.
+     * Reprogramming the PLL is a phase jump — a click on SSB — and with the
+     * 100 Hz guard of [SdrHub.setCenter] the note climbed in 100 Hz steps.
+     * Now [DopplerTuner] decides, and almost always says: leave the dongle,
+     * slide the software offset (applied to the raw signal before the channel
+     * filter, continuous and free). A whole 435 MHz pass sweeps about 10 kHz,
+     * the window absorbs 30: the PLL does not move from AOS to LOS.
      *
-     * Maintenant c'est [DopplerTuner] qui décide, et sa réponse est presque
-     * toujours la même : ne touche pas à la clé, glisse le décalage logiciel.
-     * Ce décalage est appliqué sur le signal brut, avant le filtre de canal ;
-     * il est continu et gratuit. Un passage entier sur 435 MHz balaie une
-     * dizaine de kilohertz, la fenêtre en encaisse trente : la PLL ne bouge
-     * pas une seule fois du lever au coucher.
-     *
-     * La cadence est passée à quatre fois par seconde parce qu'elle ne coûte
-     * plus rien : au point le plus haut d'une orbite basse la dérive atteint la
-     * centaine de hertz par seconde, et rafraîchir au quart de seconde garde
-     * l'erreur sous trente hertz. Le [DopplerTuner.worthWriting] évite d'écrire
-     * pour un ou deux hertz entre deux tours.
+     * At the top of a LEO pass drift reaches ~100 Hz/s; refreshing every
+     * 250 ms keeps the error under 30 Hz. [DopplerTuner.worthWriting] skips
+     * writes of a hertz or two.
      */
     private fun startSdrLoop(restHz: Long) {
         sdrLoopJob?.cancel()
@@ -4914,22 +4441,19 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 runCatching {
                     val rest = _ui.value.rxRestHz ?: restHz
                     if (!_ui.value.sdrDopplerTrack) {
-                        // Suivi fermé : la clé reste sur la fréquence de repos.
+                        // Tracking off: the dongle stays on the rest frequency.
                         fr.f4ioz.satcombo.sdr.SdrHub.setCenter(cleRx(rest), cleRx(rest))
                     } else {
                         val pos = _ui.value.livePosition
                         val rr = if (pos != null && pos.elevationDeg >= 0) pos.rangeRateKmS else 0.0
                         val target = Doppler.downlink(rest, rr) + _ui.value.calibShiftHz
-                        // C'est le hub qui décide, entre deux blocs, si la PLL
-                        // doit vraiment bouger ou si le mélangeur logiciel
-                        // encaisse l'écart : on ne fait que donner la cible.
-                        //
-                        // Les deux passent par le convertisseur, et c'est ce
-                        // qui rend la suite juste sans un cas particulier : un
-                        // OL soustractif décale cible et repos du même nombre
-                        // de hertz, leur écart — le Doppler — ne bouge pas ;
-                        // un OL inverseur retourne cet écart, ce qui est
-                        // exactement ce que fait le matériel.
+                        // The hub decides between blocks whether the PLL must
+                        // move or the software mixer absorbs the gap; we only
+                        // give the target. Both go through the converter, which
+                        // keeps this right with no special case: a subtractive
+                        // LO shifts target and rest equally (Doppler unchanged);
+                        // an inverting LO flips the gap, exactly as the
+                        // hardware does.
                         fr.f4ioz.satcombo.sdr.SdrHub.setCenter(cleRx(target), cleRx(rest))
                     }
                 }
@@ -4939,11 +4463,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * Ouvre ou ferme le suivi Doppler de la clé.
-     *
-     * Fermer remet le décalage Doppler à zéro au tour suivant : on retrouve la
-     * fréquence de repos, ce qui est exactement ce qu'on veut pour écouter une
-     * balise fixe ou pour entendre de combien le satellite dérive seul.
+     * Toggles dongle Doppler tracking. Off resets the Doppler offset: back to
+     * the rest frequency, as wanted for a fixed beacon or to hear the raw drift.
      */
     fun setSdrDopplerTrack(on: Boolean) {
         settings.sdrDopplerTrack = on
@@ -4970,8 +4491,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
     fun setSdrAgc(on: Boolean) { settings.sdrAgc = on; _ui.value = _ui.value.copy(sdrAgc = on) }
 
-    /** La petite cascade de la page du passage : utile pour voir le satellite
-     *  arriver, mais elle mange de la place sur un petit écran. */
+    /** Small waterfall on the pass page: handy to see the satellite arrive, but
+     *  it takes room on a small screen. */
     fun setSdrInlineWaterfall(on: Boolean) {
         settings.sdrInlineWaterfall = on
         _ui.value = _ui.value.copy(sdrInlineWaterfall = on)
@@ -4982,15 +4503,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _ui.value = _ui.value.copy(sdrPpm = v)
     }
 
-    /** Mode de démodulation enregistré, relu proprement s'il est abîmé. */
+    /** Saved demodulation mode, with a safe fallback if corrupt. */
     fun sdrMode(): fr.f4ioz.satcombo.sdr.RxMode =
         runCatching { fr.f4ioz.satcombo.sdr.RxMode.valueOf(_ui.value.sdrMode) }
             .getOrDefault(fr.f4ioz.satcombo.sdr.RxMode.NFM)
 
     /**
-     * Change le mode de réception. La largeur de canal repart sur celle du
-     * mode : passer de la FM étroite à la BLU en gardant seize kilohertz de
-     * bande passante n'aurait aucun sens.
+     * Changes receive mode. Channel width resets to the mode's default: SSB
+     * with the 16 kHz of NFM makes no sense.
      */
     fun setSdrMode(m: fr.f4ioz.satcombo.sdr.RxMode) {
         settings.sdrMode = m.name
@@ -5000,7 +4520,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         fr.f4ioz.satcombo.sdr.SdrHub.setMode(m)
     }
 
-    /** Largeur de canal en hertz ; zéro laisse le mode décider. */
+    /** Channel width, Hz; zero lets the mode decide. */
     fun setSdrBandwidth(hz: Int) {
         val v = if (hz <= 0) 0 else hz.coerceIn(500, 24_000)
         settings.sdrBandwidthHz = v
@@ -5008,7 +4528,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         fr.f4ioz.satcombo.sdr.SdrHub.setBandwidth(v)
     }
 
-    /** Seuil du silencieux en dBFS ; -120 le coupe. */
+    /** Squelch threshold, dBFS; -120 turns it off. */
     fun setSdrSquelch(db: Int) {
         val v = db.coerceIn(-120, 0)
         settings.sdrSquelchDb = v
@@ -5017,9 +4537,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * Désaccentuation FM. À n'ouvrir que pour écouter de la FM à large bande :
-     * sur un répéteur, une balise ou une image SSTV, elle ne fait qu'écraser
-     * les aigus.
+     * FM de-emphasis. Only for wideband FM: on a repeater, a beacon or SSTV it
+     * just crushes the highs.
      */
     fun setSdrDeemph(on: Boolean) {
         settings.sdrDeemph = on
@@ -5028,23 +4547,22 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * Accord automatique sur la porteuse la plus forte de la fenêtre affichée.
-     * C'est le geste qui remplace le tâtonnement au doigt : on voit la raie,
-     * on appuie, la chaîne se pose dessus au hertz près que permet la FFT.
+     * Auto-tunes to the strongest carrier in the displayed window: see the
+     * line, tap, and the chain lands on it to FFT precision.
      */
     fun tuneSdrPeak(spanHz: Int) {
         val half = (spanHz / 2.0).coerceIn(2_000.0, 80_000.0)
         fr.f4ioz.satcombo.sdr.SdrHub.tunePeak(-half, half)
     }
 
-    /** Largeur affichée par le spectre, en hertz. */
+    /** Spectrum display width, Hz. */
     fun setSdrSpan(hz: Int) {
         val v = hz.coerceIn(6_000, 176_400)
         settings.sdrSpanHz = v
         _ui.value = _ui.value.copy(sdrSpanHz = v)
     }
 
-    // ------------------------------------------------------------ accord fin
+    // ------------------------------------------------------------ fine tuning
 
     fun setSdrLoupe(on: Boolean) {
         settings.sdrLoupe = on
@@ -5074,17 +4592,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * Un cran de molette USB.
-     *
-     * L'action dépend de l'écran ouvert, et c'est voulu : la molette commande
-     * « ce qu'on est en train d'accorder », pas un champ nommé. Sur QO-100
-     * c'est la fréquence de descente, ailleurs le décalage de réception —
-     * exactement ce que déplacent les boutons à l'écran.
+     * One USB knob detent. The action depends on the open screen, on purpose:
+     * the knob drives "what is being tuned", not a named field — on QO-100 the
+     * downlink, elsewhere the chosen target, as the on-screen buttons do.
      */
     fun moletteCran(codeTouche: Int, externe: Boolean): Boolean {
         val M = fr.f4ioz.satcombo.domain.MoletteUsb
-        // L'apprentissage passe avant tout : c'est le seul moment où l'on veut
-        // qu'une touche soit capturée plutôt qu'interprétée.
+        // Learning comes first: the only time a key must be captured rather
+        // than interpreted.
         val rang = _apprentissage.value
         if (rang != null && externe) {
             if (M.apprenable(codeTouche)) { apprendMacro(rang, codeTouche); _apprentissage.value = null }
@@ -5101,8 +4616,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         return when (geste) {
             is fr.f4ioz.satcombo.domain.MoletteUsb.Geste.ChoisitCible -> { setMoletteCible(geste.cible.name); true }
             is fr.f4ioz.satcombo.domain.MoletteUsb.Geste.Bouge -> {
-                // La cible commande, sauf sur QO-100 où l'écran est déjà tout
-                // entier un VFO : y déplacer un décalage n'aurait pas de sens.
+                // The target decides, except on QO-100 where the whole screen
+                // is already a VFO.
                 when {
                     _ui.value.screen == Screen.QO100 -> qo100Pas(geste.deltaHz)
                     a.moletteCible == "SHIFT_TX" -> nudgeTxShift(geste.deltaHz)
@@ -5117,13 +4632,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 true
             }
             fr.f4ioz.satcombo.domain.MoletteUsb.Geste.RemetZero -> {
-                // Remettre à zéro ce qui est en cours, et rien d'autre : une
-                // remise à zéro qui toucherait les deux décalages d'un coup
-                // effacerait un réglage que l'opérateur voulait garder.
+                // Reset only the current target: resetting both shifts at
+                // once would erase a setting the operator wanted to keep.
                 when (_ui.value.accord.moletteCible) {
                     "SHIFT_TX" -> setTxShift(0L)
                     "SHIFT_RX" -> setRxOffset(0L)
-                    else -> Unit          // le VFO n'a pas de zéro à retrouver
+                    else -> Unit          // the VFO has no zero
                 }
                 true
             }
@@ -5143,10 +4657,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * Le rang de la touche en cours d'apprentissage, ou `null`.
-     *
-     * Hors d'`UiState` : c'est un état passager de réglage, qui n'a rien à
-     * faire dans l'état global d'une application de trafic.
+     * Index of the key being learnt, or `null`. Out of `UiState`: transient
+     * settings state.
      */
     private val _apprentissage = kotlinx.coroutines.flow.MutableStateFlow<Int?>(null)
     val apprentissage: kotlinx.coroutines.flow.StateFlow<Int?> = _apprentissage
@@ -5160,11 +4672,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * Retient une touche apprise.
-     *
-     * Une même touche ne peut pas servir deux fois : sans cette garde, le
-     * boîtier changerait de cible de façon imprévisible, et l'opérateur
-     * croirait à une panne du matériel.
+     * Stores a learnt key. A key cannot serve twice: otherwise the box would
+     * switch targets unpredictably and look like a hardware fault.
      */
     fun apprendMacro(rang: Int, code: Int) {
         if (!fr.f4ioz.satcombo.domain.MoletteUsb.apprenable(code)) return
@@ -5186,7 +4695,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _ui.value = _ui.value.copy(accord = a)
     }
 
-    /** L'action du poussoir : « PAS », « CIBLE » ou « ZERO ». */
+    /** Push-button action: "PAS", "CIBLE" or "ZERO". */
     fun setMacroAction(action: String) {
         settings.macroActionD = action
         _ui.value = _ui.value.copy(accord = _ui.value.accord.copy(macroActionD = action))
@@ -5221,11 +4730,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * Calage sur la voix du correspondant, en bande latérale.
-     *
-     * Le mode vient de l'état affiché et non de la chaîne : c'est celui que
-     * l'opérateur voit, et si les deux divergent c'est la vue qui a raison du
-     * point de vue de sa main.
+     * Locks onto the other station's voice, in SSB. The mode comes from the
+     * displayed state, not the chain: if they differ, what the operator sees
+     * is what his hand acts on.
      */
     fun sdrCaleSurLaVoix() {
         val cible = fr.f4ioz.satcombo.domain.AccordFin.cibleVoixHz(_ui.value.sdrMode)
@@ -5234,26 +4741,21 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * Le même calage sur la page QO-100, où il demande un pas de plus.
+     * Same voice lock on the QO-100 page, with one more step. There the number
+     * that matters is a **downlink** frequency, while the lock acts on the
+     * receiver's fine offset, which that page ignores. The voice would sound
+     * right while the displayed number stayed a few hundred Hz off — and that
+     * is the number announced to the other station.
      *
-     * Là-bas, la fréquence qui compte est une **descente** — un nombre affiché,
-     * reporté au poste et à la clé. Le calage, lui, agit sur le décalage fin du
-     * récepteur, que la page QO-100 ne regarde pas. Sans reprise, on entendrait
-     * la voix se poser correctement pendant que le nombre à l'écran resterait
-     * faux de quelques centaines de hertz — et c'est ce nombre que l'opérateur
-     * annonce à son correspondant.
-     *
-     * On attend donc que le fil de lecture ait résolu la mesure, puis on la
-     * verse dans la descente et on rend le décalage fin à zéro. Le bref retour
-     * en arrière entre les deux dure un bloc de lecture ; il s'entend à peine
-     * et il vaut mieux que deux chiffres qui divergent.
+     * So wait for the reader thread to resolve the measurement, fold it into
+     * the downlink and reset the fine offset. The brief jump back lasts one
+     * block; barely audible, and better than two diverging numbers.
      */
     fun qo100CaleSurLaVoix() {
         val hub = fr.f4ioz.satcombo.sdr.SdrHub
         if (!hub.isRunning) return
         val avant = hub.state.value.tunedAtMs
-        // Le transpondeur étroit est en bande latérale supérieure, toujours :
-        // la question du mode ne se pose pas ici comme sur la page du SDR.
+        // The narrowband transponder is always USB.
         hub.caleVoix(fr.f4ioz.satcombo.domain.AccordFin.cibleVoixHz("USB"))
         viewModelScope.launch {
             repeat(25) {
@@ -5272,19 +4774,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * Déplacement relatif de l'accord fin, en hertz. C'est ce que pousse le
-     * vernier sur la page du SDR ; sur QO-100 c'est [qo100Pas] qui s'en charge,
-     * parce que là-bas la fréquence affichée est une descente et non un écart.
+     * Relative fine-tuning step, Hz, pushed by the vernier on the SDR page. On
+     * QO-100 [qo100Pas] does it, since the displayed value there is a downlink,
+     * not an offset.
      */
     fun sdrPasFin(deltaHz: Long) {
         val st = fr.f4ioz.satcombo.sdr.SdrHub.state.value
         setSdrOffset((st.offsetHz + deltaHz).toInt().coerceIn(-80_000, 80_000))
     }
 
-    /**
-     * Accord fin logiciel, en hertz autour de la fréquence de la clé. C'est ce
-     * que déplace le doigt posé sur la cascade.
-     */
+    /** Software fine tuning, Hz around the dongle frequency (finger on the waterfall). */
     fun setSdrOffset(hz: Int) {
         fr.f4ioz.satcombo.sdr.SdrHub.setOffset(hz.coerceIn(-80_000, 80_000))
     }
@@ -5382,7 +4881,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     private val configBackup = fr.f4ioz.satcombo.data.ConfigBackup(app)
 
-    /** Full configuration as JSON (satellites suivis, réglages, config par sat, journal). */
+    /** Full configuration as JSON (tracked satellites, settings, per-sat config, log). */
     fun exportConfig(): String = configBackup.export()
     fun configFileName(): String = configBackup.suggestedFileName()
 
@@ -5406,9 +4905,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             locationMode = settings.locationMode,
             useUtc = settings.useUtc,
             darkTheme = settings.darkTheme,
-            // Sans cette ligne, le sélecteur retombe sur « Sombre » à chaque
-            // ouverture, quelle que soit la palette réellement appliquée : la
-            // palette était restaurée, son index ne l'était pas.
+            // Without this the picker falls back to "Dark" on every launch,
+            // whatever palette is applied: the palette was restored, its index
+            // was not.
             themeIndex = settings.themeIndex,
             moletteVfo = settings.moletteVfo,
             molettePasHz = settings.molettePasHz,
@@ -5491,10 +4990,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * True if the announced sat is visible from my QTH during the sked window.
-     * Samples elevation across [aos,los]; workable if it rises above ~1° here.
-     */
-    /**
      * Mutual-visibility window for a sked: the time span where the satellite is
      * above the horizon BOTH at my QTH and at the announced station's grid.
      * Returns null if they never see it together (sked not workable from here).
@@ -5548,6 +5043,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         return s to e
     }
 
+    /** True if the announced sat is visible from both stations together around the sked window. */
     fun isSkedWorkable(sked: SkedAlert): Boolean {
         // Unknown TLE or no grid: keep it visible rather than hide wrongly.
         _ui.value.satellites.firstOrNull { it.catalogNumber == sked.satNorad } ?: return true
@@ -5667,13 +5163,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * Rallonge la liste de deux jours, à chaque fois qu'on arrive au bas de
-     * l'écran, jusqu'à quinze jours.
-     *
-     * On recalcule tout depuis le début plutôt que de coller la suite au bout :
-     * la prédiction est déterministe et son coût reste linéaire, alors qu'un
-     * assemblage de morceaux finirait par laisser passer un passage à cheval
-     * sur la couture.
+     * Extends the list by two days each time the bottom is reached, up to
+     * fifteen days. Recomputed from the start rather than appended: prediction
+     * is deterministic and linear in cost, while stitched chunks would
+     * eventually drop a pass straddling the seam.
      */
     fun extendPassHorizon() {
         if (_ui.value.dateFilter != null) return
@@ -5733,11 +5226,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             (passes + _ui.value.passes).distinctBy { passKey(it) }
                 .filter { passKey(it) in keys }
         } else {
-            // Mode FAV, celui par défaut : seuls les satellites cochés en
-            // favori réveillent l’opérateur. La liste reçue ici est déjà celle
-            // des favoris, mais elle est calculée ailleurs ; le filtre explicite
-            // coûte une ligne et garantit qu’aucun passage d’un satellite non
-            // choisi ne peut sonner à trois heures du matin.
+            // FAV mode (default): only favourite satellites wake the operator.
+            // The list is already favourites, but computed elsewhere; the
+            // explicit filter costs one line and guarantees no unchosen
+            // satellite rings at 3 a.m.
             val favs = _ui.value.favorites
             passes.filter { it.catalogNumber in favs }
         }
@@ -5825,14 +5317,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _ui.value = _ui.value.copy(aimMode = mode)
     }
 
-    // ---- La boussole déportée ----
+    // ---- Remote compass ----
 
     fun setBoussoleSource(src: String) {
         settings.boussoleSource = src
         _ui.value = _ui.value.copy(rotor = _ui.value.rotor.copy(boussoleSource = src))
     }
 
-    /** Retient le module choisi dans la liste, sans s'y connecter. */
+    /** Remembers the module picked in the list, without connecting. */
     fun setBoussoleModule(nom: String, adresse: String) {
         settings.boussoleNom = nom
         settings.boussoleAdresse = adresse
@@ -5845,14 +5337,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _ui.value = _ui.value.copy(rotor = _ui.value.rotor.copy(boussoleCalage = deg))
     }
 
-    /** Ajoute une pose au relevé, ou remplace celle qui porte déjà cette clé. */
+    /** Adds a pose to the readings, or replaces the one with the same key. */
     fun ajouteReleve(cle: String, roulis: Float, tangage: Float, lacet: Float) {
         val liste = fr.f4ioz.satcombo.domain.SequenceCalibrage
             .decode(settings.boussoleReleves)
             .filterNot { it.cle == cle } +
             fr.f4ioz.satcombo.domain.SequenceCalibrage.Releve(cle, roulis, tangage, lacet)
-        // Rangées dans l'ordre de la séquence, pas dans celui des gestes :
-        // un rapport qui suit l'ordre des poses se relit, un autre non.
+        // Sorted in sequence order, not gesture order: a report following the
+        // pose order can be re-read.
         val ordonnees = fr.f4ioz.satcombo.domain.SequenceCalibrage.ETAPES
             .mapNotNull { e -> liste.firstOrNull { it.cle == e.cle } }
         val texte = fr.f4ioz.satcombo.domain.SequenceCalibrage.encode(ordonnees)
@@ -5866,38 +5358,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * Compose la télémétrie envoyée aux spectateurs.
+     * The two displayed frequencies, downlink and uplink, Doppler included.
      *
-     * Du JSON écrit à la main : la structure tient en six champs, et ajouter un
-     * sérialiseur pour cela serait une dépendance de plus à entretenir.
-     *
-     * La trace du passage est réduite à un point sur trois — soixante points
-     * suffisent à dessiner un arc, et trois fois moins de texte à envoyer
-     * quatre fois par minute à dix spectateurs.
-     */
-    /**
-     * Compose la télémétrie envoyée aux spectateurs.
-     *
-     * Du JSON écrit à la main : la structure tient en huit champs, et ajouter
-     * un sérialiseur pour cela serait une dépendance de plus à entretenir.
-     *
-     * Elle lit l'état plutôt que de recevoir des arguments : ainsi elle
-     * fonctionne depuis n'importe quel écran, même quand aucune poursuite ne
-     * tourne — c'est tout l'objet de la correction.
-     *
-     * La trace du passage est réduite à un point sur trois : soixante points
-     * suffisent à dessiner un arc, et trois fois moins de texte à envoyer
-     * chaque seconde à dix spectateurs.
-     */
-    /**
-     * Les deux fréquences affichées : descente et montée, Doppler compris.
-     *
-     * **Une seule fonction, deux appelants.** L'écran de passage et la page du
-     * public la calculaient chacun de leur côté, et elles ont divergé : cinq
-     * kilohertz d'écart en réception, presque deux en émission. C'est la
-     * troisième fois de la session que deux chemins pour une même question
-     * finissent par ne plus dire la même chose, et la règle est toujours la
-     * même — il n'en faut qu'un.
+     * **One function, two callers.** The pass screen and the audience page
+     * each computed them and drifted apart (5 kHz on RX, almost 2 on TX). Two
+     * paths for one question always end up disagreeing: keep only one.
      */
     fun freqAffichees(): Pair<Long?, Long?> {
         val u = _ui.value
@@ -5931,6 +5396,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     private var dernierApercu: android.graphics.Bitmap? = null
 
+    /**
+     * Builds the telemetry sent to the audience. Hand-written JSON: a handful
+     * of fields does not justify a serializer dependency. It reads the state
+     * instead of taking arguments, so it works from any screen, even with no
+     * tracking running. The pass trace keeps one point in three: sixty points
+     * draw an arc, with a third of the text sent every second to each viewer.
+     */
     private fun publieDemo() {
         val u = _ui.value
         val pos = u.livePosition
@@ -5945,14 +5417,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val az = pos?.azimuthDeg ?: 0.0
         val el = if (pos == null) "null"
                  else "%.1f".format(java.util.Locale.US, pos.elevationDeg)
-        // Les mêmes fréquences que l'écran, parce que c'est la même fonction.
+        // Same frequencies as the screen, because same function.
         val (calcRx, calcTx) = freqAffichees()
         val rx = (u.catRadioDownlinkHz ?: calcRx)?.toString() ?: "null"
         val tx = (u.catRadioUplinkHz ?: calcTx)?.toString() ?: "null"
 
-        // Le passage en cours ou le prochain : acquisition et perte du signal,
-        // élévation maximale. C'est ce qui donne au public le sens de ce qui se
-        // joue — dix minutes, pas davantage.
+        // Current or next pass: AOS, LOS, max elevation — what tells the
+        // audience what is at stake: ten minutes, no more.
         val passage = u.focusedPassAos
             ?.let { f -> u.passes.minByOrNull { kotlin.math.abs(it.aosEpochMs - f) } }
             ?: u.passes.firstOrNull { it.losEpochMs > u.nowMs }
@@ -5961,20 +5432,18 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val elMax = passage?.let { "%.0f".format(java.util.Locale.US, it.maxElevationDeg) }
             ?: "null"
 
-        // L'orientation réelle de l'antenne, quand la boussole la donne : c'est
-        // ce que le public voit bouger dans les mains de l'opérateur, et le
-        // rapprocher de la position du satellite rend le pointage évident.
-        // Le cap **effectif** : module déporté s'il parle, boussole du
-        // téléphone sinon. Lire le module directement ne montrait rien dès que
-        // l'opérateur se servait du téléphone, c'est-à-dire la plupart du temps.
+        // Actual antenna heading: what the audience sees move in the
+        // operator's hands; next to the satellite position it makes pointing
+        // obvious. The **effective** heading: remote module if it talks, phone
+        // compass otherwise (reading the module alone showed nothing most of
+        // the time).
         val capAnt = fr.f4ioz.satcombo.domain.CapVivant.azimutDeg
         val elAnt = fr.f4ioz.satcombo.domain.CapVivant.elevationDeg
         val antAz = capAnt?.let { "%.0f".format(java.util.Locale.US, it) } ?: "null"
         val antEl = elAnt?.let { "%.0f".format(java.util.Locale.US, it) } ?: "null"
         val propre = nom.replace("\\", " ").replace("\"", " ")
-        // L'image SSTV, encodée seulement quand elle change : un aperçu pèse
-        // quelques dizaines de kilo-octets, et le ré-encoder chaque seconde
-        // pour rien chaufferait le téléphone toute la durée du passage.
+        // SSTV image, encoded only when it changes: re-encoding tens of KB
+        // every second would heat the phone for the whole pass.
         val apercu = fr.f4ioz.satcombo.sstv.SstvHub.state.value.preview
         if (apercu != null && apercu !== dernierApercu) {
             dernierApercu = apercu
@@ -6002,10 +5471,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * Retient le partage de connexion annoncé par le QR code.
-     *
-     * Deux écritures, une seule vérité : le serveur la porte pendant la séance,
-     * les réglages ne font que s'en souvenir d'une fois sur l'autre.
+     * Stores the hotspot announced by the QR code. The server holds it during
+     * the session; settings only remember it between sessions.
      */
     fun setDemoWifi(ssid: String, motDePasse: String) {
         settings.demoSsid = ssid
@@ -6013,7 +5480,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         fr.f4ioz.satcombo.demo.ServeurDemo.configureWifi(ssid, motDePasse)
     }
 
-    /** Retient l'adresse de la station écoutée, pour ne pas la ressaisir. */
+    /** Remembers the listened station's address, so it need not be retyped. */
     fun setEcouteAdresse(v: String) { settings.ecouteAdresse = v }
 
     fun ecouteAdresse(): String = settings.ecouteAdresse
@@ -6024,11 +5491,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * Retient la flèche apprise, ou l'oublie.
-     *
-     * `null` remet l'élévation au téléphone et le cap sur le lacet seul : c'est
-     * ce qu'il faut après un démontage, tant que le nouveau relevé n'est pas
-     * fait. Mieux vaut un cadran qui dit ne pas savoir qu'un cadran faux.
+     * Stores the learnt boom axis, or forgets it. `null` gives elevation back
+     * to the phone and heading to yaw alone — right after a dismount, until
+     * the new calibration. A dial that says it does not know beats a wrong one.
      */
     fun setBoussoleFleche(v: fr.f4ioz.satcombo.domain.Vec3?) {
         val t = v?.let { fr.f4ioz.satcombo.domain.PointageAntenne.enTexte(it) } ?: ""
@@ -6062,17 +5527,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     private companion object {
         /**
-         * Profondeur maximale des prédictions, en jours. Au-delà, un jeu
-         * d'éléments orbitaux vieillit assez pour que l'heure annoncée dérive
-         * de plusieurs minutes : mieux vaut ne rien promettre.
+         * Maximum prediction depth, days. Beyond, orbital elements age enough
+         * for pass times to drift by minutes: better promise nothing.
          */
         const val MAX_PASS_DAYS = 15
 
         /**
-         * Garde-fou sur le nombre de passages gardés en mémoire. Quinze jours,
-         * trente favoris et une élévation minimale basse font environ deux
-         * mille lignes : le plafond doit rester au-dessus de ce cas réel, sinon
-         * il redevient la coupure silencieuse qu'on vient d'enlever.
+         * Safety cap on passes kept. Fifteen days, thirty favourites and a low
+         * minimum elevation make about two thousand rows: the cap must stay
+         * above that real case, or it becomes a silent cut again.
          */
         const val MAX_PASSES = 4000
     }
@@ -6088,7 +5551,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             val filter = _ui.value.dateFilter
             val now = System.currentTimeMillis()
-            // "Passages passés": the lists reach back this far so the pass just
+            // "Past passes": the lists reach back this far so the pass just
             // worked stays available (polar plot included) to write up the log.
             val back = maxOf(_ui.value.pastPassHours * 3_600_000L, 20 * 60_000L)
             val from: Long; val hours: Int; val windowEnd: Long
@@ -6106,11 +5569,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 favs.flatMap { predictor.upcomingPasses(it, obs, fromMs = from, hours = hours, minElDeg = settings.minElevDeg.toDouble()) }
                     .filter { it.losEpochMs > now - back && it.aosEpochMs < windowEnd }
                     .sortedBy { it.aosEpochMs }
-                    // Plafond de sécurité, et rien d'autre. L'ancienne limite de
-                    // cent vingt tombait APRÈS le tri : sur une période choisie
-                    // au calendrier avec beaucoup de favoris, les derniers jours
-                    // disparaissaient sans un mot, et le compteur affiché comptait
-                    // la liste déjà coupée, si bien que tout avait l'air normal.
+                    // Safety cap only. The old limit of 120 silently dropped the
+                    // last days of a long date range, and the displayed counter
+                    // counted the cut list, so everything looked normal.
                     .take(MAX_PASSES)
             }
             _ui.value = _ui.value.copy(favoritePasses = merged, favPassesLoading = false)
@@ -6129,21 +5590,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _ui.value.transmitters.filter { it.alive && (it.downlinkLowHz != null || it.uplinkLowHz != null) }
 
     /**
-     * Se poser n'importe où dans la bande, et **laisser le transpondeur
-     * suivre**.
+     * Goes anywhere in the band and **lets the transponder follow**.
      *
-     * La réglette dessine tout le plan de QO-100, mais `setRxRest` ramenait de
-     * force dans le transpondeur sélectionné : on voyait où aller sans pouvoir
-     * y aller, et il fallait choisir le bon transpondeur dans une liste de
-     * quinze avant de pouvoir s'y déplacer. C'est l'inverse du geste — on
-     * cherche d'abord une station, on découvre ensuite dans quel segment elle
-     * est.
-     *
-     * Le transpondeur est donc une **conséquence** de la fréquence, non une
-     * condition d'y accéder. Si la fréquence visée tombe dans un autre
-     * transpondeur, on bascule dessus ; si elle ne tombe dans aucun — une
-     * balise, un intervalle — on garde celui qui est choisi et l'on s'y pose
-     * quand même, parce qu'écouter n'oblige à rien.
+     * The ruler draws the whole QO-100 plan, but `setRxRest` clamps into the
+     * selected transponder: you saw where to go and could not go there without
+     * first picking the right one from a list of fifteen. The transponder is a
+     * **consequence** of the frequency, not a precondition: switch to the one
+     * containing it; if none (a beacon, a gap), keep the current one and go
+     * anyway — listening commits to nothing.
      */
     fun allerLibre(satHz: Long) {
         val liste = activeTransmitters()
@@ -6161,8 +5615,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             catArmedFor = null
             _ui.value = _ui.value.copy(selectedTxIndex = i)
         }
-        // Sans bornage au transpondeur : la réglette est le plan de bande
-        // entier, et l'on doit pouvoir se poser partout où elle est dessinée.
+        // No clamping: the ruler is the whole band plan.
         _ui.value = _ui.value.copy(rxRestHz = satHz, rxFromAgendaHz = null)
     }
 
@@ -6183,25 +5636,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * La montée au repos : la fréquence sur laquelle on émet réellement,
-     * Doppler ôté.
+     * Uplink at rest: the frequency actually transmitted on, Doppler removed.
      *
-     * Le carnet inscrivait jusqu'ici `uplinkLowHz` — le **bord bas** du
-     * transpondeur. Sur FO-29, cela revenait à déclarer 145,950 quel que soit
-     * l'endroit du passband où le contact a eu lieu : une valeur constante,
-     * donc sans information, et fausse pour tout le monde sauf celui qui
-     * travaille tout en bas de la bande.
-     *
-     * La vraie montée se déduit de la descente choisie, par la même règle que
-     * le moteur Doppler applique quatre fois par seconde — inversion comprise,
-     * puisque sur un transpondeur inverseur monter d'un kilohertz fait
-     * descendre d'autant. Le décalage d'émission de l'opérateur s'y ajoute :
-     * il fait partie de la fréquence sur laquelle il a réellement émis.
-     *
-     * C'est la fréquence **au repos** qui part au carnet, et non celle qui a
-     * été envoyée au poste : le Doppler d'un instant décrit la géométrie du
-     * passage, pas le créneau du transpondeur. Deux stations qui se
-     * répondent inscrivent ainsi la même chose.
+     * The log used to record `uplinkLowHz`, the transponder's **lower edge**
+     * (145.950 on FO-29 wherever the contact was): constant, hence no
+     * information. The real uplink derives from the chosen downlink by the
+     * same rule as the Doppler engine, inversion included, plus the operator's
+     * TX shift. The **rest** frequency goes to the log, not what was sent to
+     * the rig: instant Doppler describes the pass geometry, not the
+     * transponder slot, so two stations in QSO log the same thing.
      */
     fun monteeAuRepos(): Long? {
         val t = activeTransmitters().getOrNull(_ui.value.selectedTxIndex) ?: return null
@@ -6216,7 +5659,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         return base + _ui.value.txShiftHz
     }
 
-    /** La descente au repos, telle qu'elle part au carnet. */
+    /** Downlink at rest, as logged. */
     fun descenteAuRepos(): Long? {
         val t = activeTransmitters().getOrNull(_ui.value.selectedTxIndex)
         return _ui.value.rxRestHz ?: t?.let { centreRx(it) } ?: t?.downlinkLowHz
@@ -6229,14 +5672,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
     fun nudgeTxShift(deltaHz: Long) = setTxShift(_ui.value.txShiftHz + deltaHz)
 
-    // ---- les décalages de référence ----
+    // ---- reference shifts ----
 
     /**
-     * Mémorise les décalages courants comme référence pour ce satellite.
-     *
-     * L'opérateur le fait quand il juge que c'est bon. Un enregistrement
-     * automatique ne saurait pas distinguer le réglage qui converge de la
-     * molette qu'on a effleurée.
+     * Saves the current shifts as this satellite's reference. Done by the
+     * operator when he judges it right: automatic saving could not tell a
+     * converging setting from a brushed knob.
      */
     fun memoriseDecalages() {
         val sat = _ui.value.selected ?: return
@@ -6251,11 +5692,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * Revient aux décalages tels qu'ils étaient en ouvrant ce satellite.
-     *
-     * Le filet pour qui n'a rien mémorisé. Il ne prétend pas restaurer un bon
-     * réglage : il défait ce qui a été fait depuis l'ouverture, ce qui est
-     * exactement ce qu'on veut après avoir effleuré la molette.
+     * Back to the shifts as they were when this satellite was opened: the
+     * safety net for those who saved nothing. It undoes what happened since
+     * opening — exactly what is wanted after brushing the knob.
      */
     fun rappelleArrivee() {
         val sat = _ui.value.selected ?: return
@@ -6267,7 +5706,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             satStatus = tf("shift_back", calib, tx))
     }
 
-    /** Revient aux décalages mémorisés pour ce satellite. */
+    /** Back to the saved reference shifts for this satellite. */
     fun rappelleDecalages() {
         val sat = _ui.value.selected ?: return
         val cfg = satConfigStore.load(sat.catalogNumber)
@@ -6279,26 +5718,25 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             satStatus = tf("shift_recalled", calib, tx))
     }
 
-    // ---- le lot de contacts, d'un téléphone à l'autre ----
+    // ---- contact batch, from one phone to another ----
 
-    /** Sérialise les contacts choisis, désignés par leur heure. */
+    /** Serialises the chosen contacts, identified by their time. */
     fun ecritLotContacts(heures: Set<Long>): String =
         fr.f4ioz.satcombo.data.LotContacts.ecrit(
             _ui.value.log.filter { it.timeMs in heures && it.callsign.isNotBlank() },
             settings.callsign)
 
-    /** Nom proposé pour le fichier du lot. */
+    /** Suggested batch file name. */
     fun nomLotContacts(): String {
         val f = java.text.SimpleDateFormat("yyyyMMdd-HHmm", java.util.Locale.US)
         return "satme-contacts-" + f.format(java.util.Date()) + ".json"
     }
 
     /**
-     * Fond un lot reçu dans le carnet local.
-     *
-     * Rend le bilan en clair. **Rien n'est écrasé** : la règle est au domaine,
-     * avec son banc. Les désaccords sont comptés et non résolus — rien dans une
-     * entrée ne dit laquelle des deux valeurs a été corrigée en dernier.
+     * Merges a received batch into the local log and reports the result.
+     * **Nothing is overwritten** (domain rule, tested). Disagreements are
+     * counted, not resolved: nothing in an entry says which value was
+     * corrected last.
      */
     fun fusionneLotContacts(json: String) {
         val entrant = fr.f4ioz.satcombo.data.LotContacts.lit(json)
@@ -6318,11 +5756,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * Délai avant que le logiciel ne reprenne la molette de réception.
-     *
-     * Les deux arbitres sont réglés ensemble : celui du transpondeur linéaire
-     * et celui de la FM. Un opérateur qui trouve deux secondes trop longues les
-     * trouve trop longues partout.
+     * Delay before the software takes the RX knob back. All arbiters (linear,
+     * FM, TX) are set together: two seconds too long is too long everywhere.
      */
     fun setCatHold(ms: Int) {
         val v = ms.coerceIn(200, 5_000)
@@ -6334,13 +5769,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * La molette d'émission tient lieu de commande de décalage.
-     *
-     * Réservé au duplex à deux postes. En mono-poste avec split, la montée est
-     * le VFO B, que le poste n'expose pas de la même façon pendant qu'on écoute
-     * sur le A : relire ce VFO-là n'est pas fiable d'un modèle à l'autre, et un
-     * interrupteur qui ne marche qu'une fois sur deux vaut moins qu'un
-     * interrupteur absent.
+     * The TX knob acts as the shift control. Two-rig duplex only: on a single
+     * rig in split the uplink is VFO B, not reliably readable while listening
+     * on A across models — a switch that works half the time is worse than none.
      */
     fun setCatTxVfoShift(on: Boolean) {
         settings.catTxVfoShift = on
@@ -6380,24 +5811,18 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private fun effectiveInvert(t: fr.f4ioz.satcombo.data.Transmitter): Boolean =
         _ui.value.invertOverride ?: t.invert
 
-    /** Set the chosen RX (downlink) REST frequency, clamped to the passband. */
     /**
-     * La molette déplace le VFO, et **la montée suit**.
+     * The knob moves the VFO, and **the uplink follows**.
      *
-     * Elle ne bougeait que le décalage d'écoute : on s'éloignait de son
-     * correspondant en réception tout en continuant d'émettre au même endroit.
-     * Sur un transpondeur linéaire c'est le contraire de ce qu'on veut — le
-     * geste naturel est celui du VFO d'un poste satellite, où déplacer la
-     * réception déplace l'émission par la loi du transpondeur.
+     * It used to move only the RX offset: you drifted away from the other
+     * station on receive while transmitting in the same place. On a linear
+     * transponder the natural gesture is a satellite rig's VFO, where moving
+     * RX moves TX by the transponder law. So act on the same value as the
+     * on-screen cursor, from which the uplink is already derived — one path,
+     * no second uplink computation to drift apart.
      *
-     * On agit donc sur la même valeur que le curseur de l'écran, dont la
-     * montée se déduit déjà. Un seul chemin pour un seul geste : ajouter un
-     * second calcul de la montée pour la molette aurait fini par diverger de
-     * celui du curseur.
-     *
-     * Hors transpondeur — une balise, un relais FM — il n'y a pas de montée à
-     * suivre, et le décalage d'écoute reste le bon réglage : c'est là qu'on
-     * corrige une dérive de réception sans toucher à l'émission.
+     * Off a transponder (beacon, FM relay) there is no uplink to follow and
+     * the RX offset stays the right control.
      */
     private fun moletteDeplaceVfo(deltaHz: Long) {
         val t = activeTransmitters().getOrNull(_ui.value.selectedTxIndex)
@@ -6406,27 +5831,18 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             return
         }
         val actuel = _ui.value.rxRestHz ?: t.downlinkLowHz ?: return
-        // Sur QO-100 la molette traverse les transpondeurs comme la réglette :
-        // buter au bord obligerait à lâcher la molette pour aller changer de
-        // transpondeur dans une liste, au milieu d'un balayage.
+        // On QO-100 the knob crosses transponders like the ruler: stopping at
+        // the edge would force a trip to a list mid-sweep.
         if (_ui.value.selected?.catalogNumber == fr.f4ioz.satcombo.domain.Qo100.NORAD)
             allerLibre(actuel + deltaHz)
         else setRxRest(actuel + deltaHz)
     }
 
+    /** Sets the chosen RX (downlink) REST frequency, clamped to the passband. */
     fun setRxRest(hz: Long) {
-        // **Le transpondeur suit le doigt.**
-        //
-        // La réglette montre tout le plan de bande, mais le curseur restait
-        // bridé au transpondeur sélectionné : on touchait un segment lointain
-        // et rien ne bougeait. Pour parcourir la bande il fallait aller
-        // choisir chaque transpondeur un par un dans une liste de quinze —
-        // c'est-à-dire renoncer à la parcourir.
-        //
-        // Quand la fréquence visée tombe dans un autre transpondeur, on s'y
-        // place. C'est le geste qu'on ferait sur un poste : on tourne, et l'on
-        // arrive où l'on arrive. Une coche de déverrouillage n'aurait rien
-        // ajouté — il n'y a pas de raison de vouloir rester enfermé.
+        // **The transponder follows the finger.** When the target falls in
+        // another transponder, switch to it — as on a rig: you turn and land
+        // where you land. Otherwise touching a distant segment did nothing.
         val tous = activeTransmitters()
         val ailleurs = tous.indexOfFirst { autre ->
             val b = autre.downlinkLowHz
@@ -6439,27 +5855,21 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val t = tous.getOrNull(_ui.value.selectedTxIndex) ?: return
         val lo = t.downlinkLowHz ?: return
         val hi = t.downlinkHighHz ?: lo
-        // L’opérateur qui touche au curseur reprend la main : la mention
-        // « fréquence de l’agenda » disparaît, elle serait devenue fausse.
+        // Touching the cursor takes control back: the "agenda frequency" note
+        // goes, it would now be false.
         _ui.value = _ui.value.copy(
             rxRestHz = hz.coerceIn(minOf(lo, hi), maxOf(lo, hi)), rxFromAgendaHz = null)
     }
 
     /**
-     * Ce que déplace le vernier de la carte SDR.
+     * What the SDR card's vernier moves.
      *
-     * Il y avait deux accords qui s'ignoraient : le VFO satellite — le canal
-     * dans la bande du transpondeur, celui qui produit les lignes RX et TX et
-     * qu'on reporte au poste — et l'accord de la clé SDR. Le vernier ne
-     * touchait que le second : le curseur ne bougeait pas, la ligne RX ne
-     * suivait pas, et l'opérateur ne savait plus sur quelle fréquence il se
-     * trouvait réellement.
-     *
-     * Une seule grandeur désormais. Sur un transpondeur, le vernier déplace le
-     * canal : le curseur suit, la ligne RX suit, l'émission part en miroir — à
-     * l'envers si le transpondeur est inverse, ce qui est exactement ce qu'il
-     * faut pour rester sur son correspondant — et la clé se réaccorde derrière,
-     * donc la cascade reste cohérente.
+     * There were two tunings ignoring each other: the satellite VFO (the
+     * channel in the transponder, which drives the RX/TX lines and the rig)
+     * and the dongle's tuning. The vernier moved only the latter, and the
+     * operator no longer knew his real frequency. Now, on a transponder, the
+     * vernier moves the channel: cursor and RX line follow, TX mirrors it
+     * (reversed on an inverting transponder), and the dongle retunes behind.
      */
     fun vernierPas(deltaHz: Long) {
         val t = activeTransmitters().getOrNull(_ui.value.selectedTxIndex)
@@ -6478,22 +5888,17 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun passKey(p: fr.f4ioz.satcombo.data.SatPass) = "${p.catalogNumber}@${p.aosEpochMs}"
 
-    // ------------------------------------------------- Doppler du passage
+    // ------------------------------------------------- pass Doppler
 
     private var dopplerPassKey: String = ""
     private var dopplerPassTable = fr.f4ioz.satcombo.domain.DopplerPass.Table()
 
     /**
-     * Le tableau du Doppler pour le passage montré, calculé à la demande.
-     *
-     * Ce chemin-là ne passe par aucun garde `si le satellite est au-dessus de
-     * l'horizon` : c'était précisément le défaut. La vitesse radiale existe
-     * aussi bien pour un passage à venir, et c'est avant le passage qu'on veut
-     * savoir où poser le VFO.
-     *
-     * Le résultat est gardé sous la clé (satellite, AOS, RX, TX) : recomposer
-     * l'écran chaque seconde ne doit pas relancer la centaine de propagations
-     * SGP4 que demandent les deux balayages.
+     * Doppler table for the shown pass, computed on demand. No "satellite above
+     * horizon" guard here — that was the bug: range rate exists for a future
+     * pass too, and before the pass is when you want to know where to set the
+     * VFO. Cached by (satellite, AOS, RX, TX): recomposing every second must
+     * not rerun the hundred SGP4 propagations of the two sweeps.
      */
     fun dopplerPassRows(passAosMs: Long? = null): fr.f4ioz.satcombo.domain.DopplerPass.Table {
         val sat = _ui.value.selected ?: return fr.f4ioz.satcombo.domain.DopplerPass.Table()
@@ -6548,26 +5953,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * Demande aux postes eux-mêmes qui est en réception et qui en émission.
-     *
-     * Deux câbles identiques sans numéro de série sont indiscernables par leur
-     * étiquette, et leur position dans l'arbre USB peut s'échanger d'un
-     * branchement à l'autre. Mais les deux postes ne sont pas sur la même bande
-     * — l'un sur la descente, l'autre sur la montée — et leur propre réponse
-     * tranche là où aucune étiquette ne le peut.
-     */
-    /**
-     * Interroge chaque adaptateur et affiche la fréquence lue à côté de lui.
-     *
-     * Deux câbles PL2303 identiques ne se distinguent par aucune étiquette :
-     * ni numéro de série, ni nom de produit qui diffère. En revanche les postes
-     * au bout, eux, sont sur des bandes différentes. Écrire « 145,866 MHz » sur
-     * une ligne et « 435,108 MHz » sur l'autre règle la question sans qu'on ait
-     * à appuyer sur quoi que ce soit.
-     *
-     * En tâche de fond, et une ligne à la fois : chaque lecture coûte jusqu'à
-     * 600 ms, et la liste doit s'afficher tout de suite quitte à se remplir
-     * ensuite.
+     * Queries each adapter and shows the frequency read next to it. Two
+     * identical PL2303 cables differ by no label, but the rigs behind them are
+     * on different bands: "145.866" on one line and "435.108" on the other
+     * settles it. In the background, one line at a time: each read costs up to
+     * 600 ms, and the list must show at once.
      */
     fun litFrequencesUsb() {
         if (!isPairRig) return
@@ -6584,16 +5974,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * À la connexion, on ne fait confiance à une assignation que si elle repose
-     * sur un numéro de série.
-     *
-     * Une identité bâtie sur l'emplacement USB n'est stable que tant qu'on ne
-     * débranche rien ; deux câbles identiques peuvent échanger leur place au
-     * branchement suivant. On interroge alors les postes, et on ne corrige que
-     * si la réponse est **certaine** — c'est-à-dire si l'un répond dans la bande
-     * de descente et l'autre dans celle de montée. Dans le doute, on garde ce
-     * qui était enregistré : une correction hasardeuse serait pire que l'erreur
-     * qu'elle prétend réparer.
+     * On connect, an assignment is trusted only if based on a serial number.
+     * An identity built on the USB slot holds only until something is
+     * unplugged. Otherwise query the rigs and correct only when the answer is
+     * **certain** (one in the downlink band, the other in the uplink band). In
+     * doubt keep what was stored: a guessed correction is worse than the error.
      */
     private suspend fun verifieRolesFt817SiSansNumero() {
         val cleRx = _ui.value.ft817RxSerial
@@ -6623,25 +6008,18 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * Vérifie les rôles **une fois les liaisons ouvertes**, et corrige.
+     * Checks roles **once the links are open**, and corrects.
      *
-     * `verifieRolesFt817SiSansNumero` interroge les adaptateurs avant
-     * l'ouverture, et c'est une bonne idée — mais elle abandonne en silence
-     * dans trois cas : aucun satellite choisi, transpondeurs pas encore
-     * chargés, ou un adaptateur qui ne répond pas à la sonde. On se connecte
-     * alors avec l'attribution héritée de l'emplacement USB, laquelle change
-     * d'un branchement à l'autre pour deux PL2303 sans numéro de série.
+     * `verifieRolesFt817SiSansNumero` silently gives up when no satellite is
+     * chosen, transponders are not loaded, or an adapter does not answer; we
+     * then connect with the slot-based assignment, which changes between
+     * plug-ins for two serial-less PL2303. Symptoms are scattered and hard to
+     * name: downlink written to the TX rig, TX border polling the rig that
+     * never transmits, readback showing two right numbers swapped.
      *
-     * Les conséquences ne se ressemblent pas et c'est ce qui rend le défaut
-     * difficile à nommer : on écrit la descente dans le poste d'émission, le
-     * liseré interroge le poste qui ne transmet jamais et reste donc éteint,
-     * et le témoin affiche deux nombres justes attribués à l'envers.
-     *
-     * Ici, les liaisons sont ouvertes : on demande à chacune sa fréquence par
-     * le fil déjà établi — sans rouvrir de port, donc sans conflit — et si la
-     * réponse est **nette**, on échange. Nette veut dire : l'un dans la bande
-     * de montée, l'autre dans celle de descente, et ce ne sont pas les mêmes.
-     * Dans le doute on ne touche à rien et on le dit.
+     * Here each open link is asked its frequency over the existing connection
+     * (no port reopened, no conflict), and roles are swapped only when the
+     * answer is **clear**: one in the uplink band, the other in the downlink.
      */
     private suspend fun verifieRolesOuverts() {
         if (!isPairRig || isTxOnlyRig) return
@@ -6649,8 +6027,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val t0 = activeTransmitters().getOrNull(_ui.value.selectedTxIndex) ?: return
         val descente = _ui.value.rxRestHz ?: t0.downlinkLowHz ?: return
         val montee = t0.uplinkLowHz ?: return
-        // Sur un satellite dont la montée et la descente partagent la bande,
-        // aucune lecture ne peut les départager : on ne prétend rien.
+        // When uplink and downlink share a band, no reading can tell them apart.
         if (kotlin.math.abs(descente - montee) < 4_000_000L) return
 
         val fRx = runCatching { ft817.rx.readFrequency() }.getOrNull() ?: return
@@ -6664,19 +6041,22 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val cleRx = _ui.value.ft817RxSerial
         val cleTx = _ui.value.ft817TxSerial
         if (cleRx.isNullOrBlank() || cleTx.isNullOrBlank()) return
-        // On pose les deux rôles **sans reconnecter**, puis on rouvre une
-        // seule fois, ici, où l'on sait que c'est fini.
+        // Set both roles **without reconnecting**, then reopen once, here.
         poseRoleFt817(cleTx, "RX")
         poseRoleFt817(cleRx, "TX")
         _ui.value = _ui.value.copy(catStatus = t("ft817_roles_swapped"))
         ft817.close()
         ft817.open(_ui.value.ft817RxSerial, _ui.value.ft817TxSerial, _ui.value.ft817Baud)
-        // Les liaisons ont été fermées et rouvertes sous le sondage : il
-        // interrogeait un port mort. Le redémarrer fait partie de la
-        // réouverture, au même titre que l'ouverture elle-même.
+        // The links were closed and reopened under the PTT poll, which was
+        // querying a dead port: restarting it is part of reopening.
         surveilleEmission()
     }
 
+    /**
+     * Asks the rigs themselves which one is RX and which TX. Two identical
+     * serial-less cables are indistinguishable and may swap USB positions, but
+     * the rigs are on different bands and their answer settles it.
+     */
     fun detecteFt817Roles() {
         viewModelScope.launch { detecteFt817RolesEtAttend() }
     }
@@ -6715,23 +6095,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** Assign an adapter (by its key) to the RX or TX rig. */
     /**
-     * Écrit l'attribution, sans toucher à la liaison.
+     * Writes the assignment without touching the link.
      *
-     * La pose et la réouverture étaient un seul geste, et c'est ce qui a
-     * éteint le liseré. Attribuer les deux rôles demande **deux** appels ; il
-     * partait donc deux reconnexions concurrentes, chacune enchaînant
-     * fermeture, attente et ouverture — et l'appelant en lançait souvent une
-     * troisième derrière. Les liaisons finissaient ouvertes, puisque la
-     * dernière l'emportait, et le CAT paraissait sain.
-     *
-     * Mais le sondage d'émission, lui, ne survivait pas : il est démarré par
-     * l'ouverture et sa boucle s'arrête dès que `catConnected` retombe. Une
-     * reconnexion partie plus tôt et terminée plus tard éteignait donc le
-     * sondage démarré par la précédente, sans que rien ne le redémarre. Le
-     * liseré ne s'allumait plus, et tout le reste marchait — ce qui rendait le
-     * défaut incompréhensible depuis l'écran.
+     * Setting and reopening used to be one gesture. Assigning both roles takes
+     * **two** calls, so two concurrent reconnects ran (often a third behind).
+     * The links ended open and CAT looked healthy, but the PTT poll — started
+     * by opening, stopped when `catConnected` drops — was killed by a
+     * reconnect that started earlier and finished later, and nothing restarted
+     * it. The TX border stayed dark while everything else worked.
      */
     private fun poseRoleFt817(serial: String, role: String) {
         if (role == "RX") {
@@ -6745,33 +6117,24 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             ft817RxSerial = settings.ft817RxSerial, ft817TxSerial = settings.ft817TxSerial)
     }
 
+    /** Assigns an adapter (by its key) to the RX or TX rig, and reopens if open. */
     fun setFt817Role(serial: String, role: String) {
         poseRoleFt817(serial, role)
         rouvreSiOuvert()
     }
 
     /**
-     * Rouvre la liaison quand l'assignation change sous elle.
-     *
-     * C'est le défaut qui a coûté un passage à Olivier : activer le CAT
-     * **puis** détecter les postes ne changeait rien, parce que les ports
-     * étaient déjà ouverts sur l'ancienne assignation — souvent aucune, ou une
-     * assignation périmée. Rien ne reliait le nouveau choix à la liaison en
-     * cours ; il fallait couper le CAT et le rallumer, ce qu'aucun écran ne
-     * disait.
-     *
-     * Une assignation qui change pendant que la liaison est ouverte est une
-     * contradiction : on la résout tout de suite plutôt que d'attendre que
-     * l'opérateur la découvre au milieu d'un passage.
+     * Reopens the link when the assignment changes under it. Enabling CAT
+     * **then** detecting the rigs changed nothing: the ports were already open
+     * on the old (often empty) assignment, and only toggling CAT fixed it — a
+     * pass was lost to this. Resolve the contradiction at once rather than let
+     * the operator find it mid-pass.
      */
     private fun rouvreSiOuvert() {
         if (!_ui.value.catEnabled) return
-        // **Une réouverture à la fois.**
-        //
-        // Deux reconnexions concurrentes s'entrelacent : la fermeture de
-        // l'une tombe au milieu de l'ouverture de l'autre, et le sondage
-        // d'émission démarré par la première est arrêté par la seconde. On
-        // annule celle qui court plutôt que d'en superposer une de plus.
+        // **One reopen at a time.** Concurrent reconnects interleave: one's
+        // close lands in the other's open, and the PTT poll started by the
+        // first is stopped by the second. Cancel the running one.
         rouvreJob?.cancel()
         rouvreJob = viewModelScope.launch {
             runCatching {
@@ -6783,32 +6146,21 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * Le raccourci : tout ce qu'il faut pour trafiquer, en un seul appui.
-     *
-     * L'enchaînement correct comptait quatre gestes dans le bon ordre —
-     * rafraîchir la liste, accorder les permissions, détecter les rôles,
-     * connecter — et l'ordre importait sans que rien ne le dise. Un opérateur
-     * qui a trois minutes avant l'AOS n'a pas à connaître cet ordre.
+     * One tap for everything needed to operate. The right sequence was four
+     * steps in an order that mattered and was written nowhere (list, grant,
+     * detect roles, connect); three minutes before AOS nobody should need it.
      */
     fun prepareFt817() {
         viewModelScope.launch {
             runCatching {
-                // 1. Lister, sans lire les fréquences : sans autorisation, la
-                //    lecture échouerait et laisserait les lignes en suspens.
+                // 1. List without reading frequencies: without permission the
+                //    read would fail and leave the lines pending.
                 _ui.value = _ui.value.copy(usbDevices = ft817.listDevices())
 
-                // 2. Demander les autorisations et **attendre la réponse**.
-                //
-                //    C'est ici que la préparation échouait une fois sur deux.
-                //    Le système ouvre une boîte de dialogue que l'opérateur
-                //    doit toucher ; l'ancienne suite lui accordait quatre
-                //    cents millisecondes, puis passait à l'étape suivante que
-                //    la réponse soit venue ou non. Un doigt un peu lent, et
-                //    tout le reste travaillait sans autorisation.
-                //
-                //    Une durée ne remplace pas une condition. On attend donc
-                //    que les adaptateurs soient autorisés, jusqu'à dix
-                //    secondes — le temps qu'il faut pour lire et toucher.
+                // 2. Ask permissions and **wait for the answer**. A fixed
+                //    400 ms made this fail half the time (a slow finger on the
+                //    system dialog). A delay is no substitute for a condition:
+                //    wait until adapters are granted, up to ten seconds.
                 ft817.requestPermissions()
                 val autorises = attendAutorisationsUsb(10_000)
                 if (autorises.isEmpty()) {
@@ -6816,22 +6168,18 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     return@runCatching
                 }
 
-                // 3. Attribuer les rôles en interrogeant les postes.
+                // 3. Assign roles by querying the rigs.
                 detecteFt817RolesEtAttend()
 
-                // 4. Connecter, et **attendre que ce soit fait**.
-                //
-                //    `setCatEnabled` et `rouvreSiOuvert` lançaient chacun leur
-                //    coroutine et rendaient la main aussitôt : l'étape 5
-                //    sondait les adaptateurs pendant que la connexion les
-                //    ouvrait. Deux ouvertures du même périphérique USB, et
-                //    celle qui perd ne dit rien.
+                // 4. Connect and **wait until done**. `setCatEnabled` and
+                //    `rouvreSiOuvert` return at once, so step 5 probed the
+                //    adapters while they were being opened: two opens of one
+                //    USB device, and the loser says nothing.
                 if (!_ui.value.catEnabled) _ui.value = _ui.value.copy(catEnabled = true)
                 else { disconnectCat(); delay(200) }
                 ouvreCat()
 
-                // 5. Vérifier par la liaison qui vient de s'ouvrir, et non en
-                //    rouvrant les ports derrière elle.
+                // 5. Check through the link just opened, not by reopening ports.
                 verifieFt817Ouvert()
             }.onFailure {
                 _ui.value = _ui.value.copy(
@@ -6842,10 +6190,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * Attend que les adaptateurs USB soient autorisés, sans dépasser [maxMs].
-     *
-     * Rend la liste des adaptateurs autorisés — vide si le délai s'épuise, ce
-     * qui veut dire que l'opérateur a refusé ou n'a rien touché.
+     * Waits up to [maxMs] for USB adapters to be granted. Returns the granted
+     * ones — empty on timeout (refused or untouched).
      */
     private suspend fun attendAutorisationsUsb(maxMs: Long): List<fr.f4ioz.satcombo.cat.UsbSerialInfo> {
         val fin = System.currentTimeMillis() + maxMs
@@ -6864,12 +6210,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * Dit si la préparation a abouti, et sur quoi.
-     *
-     * L'ancienne suite se terminait en silence : elle avait fait ses cinq
-     * gestes, et c'était tout. Pour savoir si la liaison vivait, il fallait
-     * quitter les réglages et regarder ailleurs. Une préparation doit se
-     * conclure par un verdict.
+     * Reports whether preparation succeeded, and on what. It used to end
+     * silently; a preparation must end with a verdict.
      */
     private suspend fun verifieFt817Ouvert() {
         if (!_ui.value.catConnected) {
@@ -6879,17 +6221,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val rx = runCatching { if (ft817.rx.isOpen) ft817.rx.readFrequency() else null }.getOrNull()
         val tx = runCatching { if (ft817.tx.isOpen) ft817.tx.readFrequency() else null }.getOrNull()
         fun mhz(hz: Long?) = if (hz == null) "—" else "%.4f".format(hz / 1_000_000.0)
-        // **Les lignes d'adaptateurs se remplissent aussi.**
-        //
-        // Elles restaient sur « interrogation… » après une préparation
-        // réussie, et il fallait appuyer sur ↻ pour les voir — alors que les
-        // fréquences venaient d'être lues, deux lignes plus haut. Une valeur
-        // connue qu'on n'affiche pas oblige l'opérateur à redemander ce que
-        // l'application sait déjà, et lui laisse croire que rien n'a marché.
-        //
-        // On garnit depuis les liaisons ouvertes, sans rouvrir les ports :
-        // c'est ce que faisait `litFrequencesUsb`, et c'est le conflit
-        // d'ouverture corrigé en 19.18.
+        // **Fill the adapter lines too**: they stayed on "querying…" although
+        // the frequencies were just read, which suggests nothing worked. Fill
+        // from the open links, without reopening ports (`litFrequencesUsb`
+        // reopening them was the open conflict fixed in 19.18).
         val cleRx = _ui.value.ft817RxSerial
         val cleTx = _ui.value.ft817TxSerial
         val garnis = _ui.value.usbDevices.map { d ->
@@ -6950,19 +6285,19 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _ui.value = _ui.value.copy(civBaud = baud)
     }
 
-    /** Lequel des adaptateurs branchés est le poste. */
+    /** Which plugged-in adapter is the rig. */
     fun setCivUsbIndex(v: Int) {
         settings.civUsbIndex = v
         _ui.value = _ui.value.copy(civUsbIndex = settings.civUsbIndex)
     }
 
-    /** Balayer les ports voisins, ou s'en tenir strictement à celui qui est choisi. */
+    /** Scan neighbouring ports, or stick strictly to the chosen one. */
     fun setCivUsbAuto(on: Boolean) {
         settings.civUsbAuto = on
         _ui.value = _ui.value.copy(civUsbAuto = on)
     }
 
-    /** La liste des adaptateurs USB visibles, pour que le numéro se choisisse à vue. */
+    /** Visible USB adapters, so the index can be chosen by sight. */
     fun refreshCatDevices() {
         _ui.value = _ui.value.copy(catDevices = runCatching { cat.availableDeviceNames() }
             .getOrDefault(emptyList()))
@@ -7015,11 +6350,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * Suivre le Doppler en réception.
-     *
-     * Allumé, le poste est accordé par le téléphone dès que la molette se tait
-     * deux secondes ; éteint, on retrouve l'ancien comportement, où seule
-     * l'émission suit et où la réception reste entièrement à l'opérateur.
+     * Doppler tracking on receive. On: the phone tunes the rig once the knob
+     * has been idle for the hold time. Off: only TX follows, RX is entirely
+     * the operator's.
      */
     fun setCatRxDoppler(on: Boolean) {
         settings.catRxDoppler = on
@@ -7033,12 +6366,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * Joue la séquence de début de passage contre un poste simulé.
-     *
-     * Aucune radio n'est nécessaire, et c'est le but : le poste en mémoire
-     * refuse ce qu'un vrai refuse, et compte ses refus. Une séquence saine doit
-     * donc en produire zéro — affirmation autrement plus forte que « ça n'a pas
-     * planté », qui était tout ce que l'on pouvait dire jusqu'ici.
+     * Plays the start-of-pass sequence against a simulated rig, no radio
+     * needed. The in-memory rig refuses what a real one refuses and counts
+     * refusals: a healthy sequence produces zero — much stronger than "it did
+     * not crash".
      */
     fun runCatBench() {
         viewModelScope.launch {
@@ -7086,12 +6417,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /**
-     * Le poste simulé en cours, s'il y en a un.
-     *
-     * On le garde pour pouvoir le refermer proprement, et parce qu'un écran de
-     * mise au point pourrait un jour montrer ce que « voit » la face avant.
-     */
+    /** The current simulated rig, if any, kept so it can be closed cleanly. */
     private var civSim: fr.f4ioz.satcombo.cat.Ic9700Sim? = null
     private var ft817Sims: Pair<fr.f4ioz.satcombo.cat.Ft817Sim,
             fr.f4ioz.satcombo.cat.Ft817Sim>? = null
@@ -7110,11 +6436,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * Ouvre la liaison sur un poste en mémoire.
-     *
-     * Le mouchard s'empile par-dessus quand il est ouvert : on voit alors
-     * exactement les mêmes trames que sur un vrai câble, ce qui fait du poste
-     * simulé un outil d'apprentissage du protocole autant qu'un banc d'essai.
+     * Opens the link on an in-memory rig. The frame monitor stacks on top, so
+     * the frames are exactly those of a real cable: a protocol-learning tool
+     * as much as a test bench.
      */
     private fun connectSimulated() {
         if (isPairRig) {
@@ -7138,7 +6462,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     private var sondeTxJob: Job? = null
 
-    /** Relevés « en émission » consécutifs ; il en faut deux pour y croire. */
+    /** Consecutive "transmitting" reads; two are needed to believe it. */
     private var confirmationsTx = 0
 
     private var veilleCatJob: Job? = null
@@ -7146,18 +6470,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private var rouvreJob: Job? = null
 
     /**
-     * Le témoin de liaison des réglages CAT.
-     *
-     * Il ne tourne que pendant que la section CAT est affichée, et s'arrête
-     * dès qu'on en sort : le fil série appartient au Doppler, un témoin n'a
-     * pas à le disputer pendant un passage.
-     *
-     * Il existe pour une raison d'usage, pas de diagnostic. Pour savoir si la
-     * liaison suivait la molette, il fallait quitter les réglages, retrouver
-     * une page de passage, regarder si le curseur bougeait, et revenir si non.
-     * La question se pose à l'endroit où l'on branche : la réponse doit s'y
-     * trouver aussi. Tourner le VFO fait bouger le nombre, et la démonstration
-     * est faite sans changer d'écran.
+     * CAT settings link readback (see [CatUi.veilleRxHz]). Runs only while the
+     * CAT section is shown: the serial port belongs to Doppler during a pass.
      */
     fun veilleCat(actif: Boolean) {
         veilleCatJob?.cancel()
@@ -7176,12 +6490,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     if (isPairRig) { if (ft817.tx.isOpen) ft817.tx.readFrequency() else null }
                     else null
                 }.getOrNull()
-                // Les lignes par adaptateur se remplissent de la même lecture.
-                //
-                // Elles affichaient « interrogation… » jusqu'à ce qu'on presse
-                // la flèche : la fréquence était pourtant lue deux fois par
-                // seconde, mais elle n'allait qu'au témoin. Une donnée déjà
-                // sous la main ne doit pas se redemander d'un geste.
+                // The per-adapter lines are filled from the same read: data
+                // already at hand must not require a tap.
                 val cleRx = _ui.value.ft817RxSerial
                 val cleTx = _ui.value.ft817TxSerial
                 _ui.value = _ui.value.copy(
@@ -7202,36 +6512,23 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * Surveille l'état d'émission du poste.
-     *
-     * L'opérateur passe en émission au VOX : l'application ne commande rien,
-     * elle **observe**. Deux fois par seconde suffit — assez pour que le
-     * liseré apparaisse dès le premier mot, assez peu pour ne pas encombrer
-     * la liaison série pendant que le Doppler travaille.
+     * Watches the rig's transmit state. The operator keys up with VOX: the app
+     * commands nothing, it **observes**. Twice a second is enough for the
+     * border to show on the first word without cluttering the serial link
+     * while Doppler works.
      */
     private fun surveilleEmission() {
         sondeTxJob?.cancel()
         confirmationsTx = 0
-        // **La boucle patiente au lieu de mourir.**
-        //
-        // Sa condition d'entrée lisait `catConnected`, et le sondage était
-        // lancé depuis un `.also` **pendant le calcul** de l'état qui allait
-        // justement poser `catConnected` à vrai. Or `viewModelScope` répartit
-        // sur `Main.immediate` : appelée depuis le fil principal, la coroutine
-        // démarre sur-le-champ, en ligne, et lisait donc l'ancienne valeur —
-        // fausse. La boucle s'arrêtait avant son premier tour.
-        //
-        // Cela dépendait du fil d'où venait l'appel, ce qui explique
-        // l'intermittence : la connexion ordinaire marchait, la réouverture
-        // qui suit un changement de rôle échouait. Le liseré cessait donc de
-        // fonctionner exactement quand Olivier devait corriger l'attribution à
-        // la main, et jamais autrement.
-        //
-        // L'ordre est corrigé chez les appelants, mais le remède véritable est
-        // ici : une boucle qui **attend** que la liaison revienne au lieu de
-        // rendre l'âme. Elle ne dépend plus de savoir qui la relance ni quand,
-        // et elle survit à toute reconnexion — c'est une classe entière de
-        // défauts qui disparaît, et non le seul d'aujourd'hui.
+        // **The loop waits instead of dying.** Its entry condition read
+        // `catConnected`, and it was launched from an `.also` **while computing**
+        // the state that would set `catConnected` true. `viewModelScope` uses
+        // `Main.immediate`: called from the main thread the coroutine starts
+        // inline, read the old (false) value and exited before its first round.
+        // It depended on the calling thread, hence intermittent: ordinary
+        // connect worked, reopening after a role change failed. Callers are
+        // fixed, but the real remedy is a loop that **waits** for the link and
+        // survives any reconnect, whoever restarts it.
         sondeTxJob = viewModelScope.launch {
             while (true) {
                 if (!_ui.value.catUi.liseret) {
@@ -7243,8 +6540,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     continue
                 }
                 if (!_ui.value.catConnected) {
-                    // Liaison absente : on n'affirme rien et on ne demande
-                    // rien. Aucun octet ne part sur un fil fermé.
+                    // No link: assert nothing, ask nothing.
                     if (_ui.value.catUi.enEmission)
                         _ui.value = _ui.value.copy(
                             catUi = _ui.value.catUi.copy(enEmission = false))
@@ -7252,19 +6548,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     delay(500)
                     continue
                 }
-                // **On interroge le poste qui émet, ou personne.**
-                //
-                // Le repli vers le poste de réception paraissait prudent : à
-                // défaut du bon, interroger celui qui répond. Mais un poste de
-                // réception n'émet jamais — il répond donc « réception » avec
-                // constance, et le liseré ne s'allume plus jamais. C'est le
-                // pire des états : l'écran affirme quelque chose de faux au
-                // lieu d'avouer qu'il ne sait pas. L'opérateur croit alors que
-                // le liseré fonctionne, et se fie à son absence.
-                //
-                // Le poste d'émission fermé n'a rien d'exceptionnel — câble
-                // débranché, rôles non attribués, deuxième adaptateur absent.
-                // La réponse honnête est de le dire.
+                // **Query the TX rig, or nobody.** Falling back to the RX rig
+                // seemed prudent, but an RX rig never transmits: it steadily
+                // answers "receive" and the border never lights. The worst
+                // state — the screen asserts something false instead of
+                // admitting it does not know, and the operator trusts its
+                // absence. A closed TX rig is common (cable out, roles not set,
+                // second adapter missing); the honest answer is to say so.
                 val txOuvert = if (isPairRig) ft817.tx.isOpen else cat.isOpen
                 val r = runCatching {
                     if (!txOuvert) null
@@ -7272,9 +6562,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     else cat.isTransmitting()
                 }
                 val tx = r.getOrNull()
-                // L'octet brut accompagne la conclusion : sans lui, « réception »
-                // et « pas de réponse » se ressemblent à l'écran alors qu'ils
-                // désignent deux défauts sans rapport.
+                // The raw byte comes with the verdict: without it "receive" and
+                // "no reply" look alike though they are unrelated faults.
                 val brut = if (isPairRig) ft817.tx.dernierEtatTx else null
                 val hex = brut?.let { " · 0x%02X".format(it) } ?: ""
                 val diag = when {
@@ -7284,7 +6573,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     tx -> "émission" + hex
                     else -> "réception" + hex
                 }
-                // Sans lecture, le liseré s'éteint : on n'affirme rien.
+                // No reading: the border goes off, assert nothing.
                 if (tx == null && _ui.value.catUi.enEmission) {
                     _ui.value = _ui.value.copy(
                         catUi = _ui.value.catUi.copy(enEmission = false))
@@ -7292,35 +6581,18 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 if (diag != _ui.value.catUi.txDiag) {
                     _ui.value = _ui.value.copy(catUi = _ui.value.catUi.copy(txDiag = diag))
                 }
-                // **Deux relevés pour allumer, un seul pour éteindre.**
-                //
-                // Un garde, et non un correctif : la cause du clignotement est
-                // ailleurs, dans l'acquittement laissé sur le fil. Mais une
-                // liaison série traverse un câble, un hub et un poste occupé à
-                // servir son encodeur ; un octet égaré reste possible, et un
-                // liseré qui s'allume à tort une demi-seconde apprend à
-                // l'opérateur à ne plus le regarder.
-                //
-                // La dissymétrie est voulue. Allumer à tort ruine le signal ;
-                // éteindre avec un demi-tour de retard ne coûte rien, et
-                // surtout on ne veut jamais faire attendre l'extinction —
-                // c'est l'allumage qui doit se mériter, pas l'inverse.
-                // **Une absence de réponse n'est pas un démenti.**
-                //
-                // Le compteur était remis à zéro dès qu'une lecture manquait,
-                // c'est-à-dire qu'un silence comptait comme un « réception ».
-                // Or c'est pendant l'émission que le poste répond le moins
-                // bien : il sert son encodeur, l'application lui écrit des
-                // fréquences qu'il ignore, et une réponse sur deux se perd. Il
-                // suffisait donc d'alterner « émission » et silence pour que
-                // deux confirmations consécutives ne soient **jamais**
-                // atteintes — et le liseré ne s'allumait plus du tout, alors
-                // même que la lecture était juste une fois sur deux.
-                //
-                // Le garde de la 19.19 visait un octet égaré isolé ; il s'est
-                // mis à interdire l'allumage. Un silence ne prouve rien : il
-                // laisse le compteur où il est. Seul un « réception » franc le
-                // remet à zéro.
+                // **Two reads to light, one to clear.** A guard, not the fix
+                // (flicker came from an ack left on the wire), but a stray byte
+                // through cable, hub and busy rig stays possible, and a border
+                // lit wrongly for half a second teaches the operator to ignore
+                // it. Lighting wrongly ruins the signal; clearing half a round
+                // late costs nothing.
+                // **No reply is not a denial.** A missing read used to reset
+                // the counter, i.e. count as "receive". The rig answers worst
+                // while transmitting (one reply in two lost), so alternating
+                // "transmit"/silence never reached two in a row and the border
+                // never lit. Silence leaves the counter alone; only a clear
+                // "receive" resets it.
                 when (tx) {
                     true -> confirmationsTx++
                     false -> confirmationsTx = 0
@@ -7342,22 +6614,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun connectCat() { viewModelScope.launch { ouvreCat() } }
 
     /**
-     * L'ouverture, attendable.
-     *
-     * `connectCat` lançait sa propre coroutine et rendait la main aussitôt.
-     * La préparation en un appui enchaînait donc « connecter » puis « lire les
-     * fréquences » en pariant sur un délai de trois cents millisecondes — et
-     * les deux se retrouvaient à ouvrir les mêmes adaptateurs USB en même
-     * temps. D'où une préparation qui aboutit une fois sur deux, sans que rien
-     * ne dise pourquoi.
-     *
-     * Séparer le corps de son lancement permet d'attendre la fin plutôt que de
-     * l'estimer.
+     * Opening, awaitable. `connectCat` returns at once, so one-tap preparation
+     * bet on a 300 ms delay between "connect" and "read frequencies", and both
+     * opened the same USB adapters simultaneously. Separating the body from
+     * its launch lets callers wait for the end instead of guessing it.
      */
     private suspend fun ouvreCat() {
         run {
-            // Le mouchard doit être armé AVANT l'ouverture : c'est à ce moment
-            // que le pilote décide de s'envelopper dedans ou non.
+            // The frame monitor must be armed BEFORE opening: that is when the
+            // driver decides whether to wrap itself in it.
             fr.f4ioz.satcombo.cat.CatJournal.enabled = _ui.value.catMonitor
             if (_ui.value.catSimulated) { connectSimulated(); return@run }
             if (isPairRig) {
@@ -7367,24 +6632,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     return@run
                 }
                 ft817.requestPermissions()
-                // Vérifier les rôles AVANT d'ouvrir, quand les câbles n'ont pas
-                // de numéro de série.
-                //
-                // Deux PL2303 identiques ne se distinguent alors que par leur
-                // emplacement dans l'arbre USB — et cet emplacement **change
-                // d'un branchement à l'autre**. L'assignation enregistrée hier
-                // désigne donc peut-être l'autre câble aujourd'hui : on écrit
-                // la descente dans le poste d'émission, et l'on se retrouve en
-                // UHF là où l'on attendait de la VHF.
-                //
-                // Le remède ne consiste pas à mieux deviner mais à ne plus se
-                // fier à l'étiquette : on demande à chaque poste sur quelle
-                // fréquence il est, et sa réponse dit son rôle.
+                // Check roles BEFORE opening when cables have no serial number:
+                // two identical PL2303 differ only by USB slot, which **changes
+                // between plug-ins**, so yesterday's assignment may name the
+                // other cable today. Don't guess better; ask each rig its
+                // frequency, and its answer gives its role.
                 verifieRolesFt817SiSansNumero()
 
                 val (rxOk, txOk) = if (isTxOnlyRig)
-                    // Un seul câble : on n'ouvre que l'émission, et l'unique
-                    // adaptateur présent fait l'affaire sans assignation.
+                    // Single cable: open TX only; the one adapter present will
+                    // do without assignment.
                     ft817.open("", _ui.value.ft817TxSerial.ifBlank {
                         ft817.listDevices().firstOrNull { it.hasPermission }?.cle.orEmpty()
                     }, _ui.value.ft817Baud)
@@ -7396,8 +6653,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     catStatus = if (ok) tf("ft817_connected",
                         if (rxOk) "✓" else "✗", if (txOk) "✓" else "✗")
                     else t("open_failed_usb"))
-                // Après la pose de `catConnected`, jamais pendant : la boucle
-                // de sondage lit cet état à son premier tour.
+                // After setting `catConnected`, never during: the poll loop
+                // reads it on its first round.
                 if (ok) { surveilleEmission(); startCatLoop() }
                 return@run
             }
@@ -7410,12 +6667,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     catDiag = listOf(t("cat_err_no_device")))
                 return@run
             }
-            // Ce qui manquait ici, et qui explique l'essentiel de la peine :
-            // l'ancienne suite demandait la permission sans attendre la réponse,
-            // puis ouvrait le port dans la foulée — sur l'appareil 0, port 0,
-            // quel que soit le choix de l'opérateur. Trois erreurs en deux
-            // lignes. On attend la permission, on ouvre le port désigné, et on
-            // vérifie que le poste répond avant de crier victoire.
+            // Wait for permission, open the designated port, and check the rig
+            // answers before claiming success. (It used to request permission
+            // without waiting, then open device 0 port 0 whatever the choice.)
             val trace = ArrayList<String>()
             val ordre =
                 if (_ui.value.civUsbAuto) fr.f4ioz.satcombo.cat.CatScan.ordre(refs, _ui.value.civUsbIndex)
@@ -7429,7 +6683,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 }
                 val hz = runCatching { cat.readFrequency() }.getOrNull()
                 if (hz == null) {
-                    // Le port s'ouvre toujours ; c'est le silence qui trahit.
+                    // A port always opens; silence is the tell.
                     trace.add(t("cat_diag_line_mute")); cat.close(); continue
                 }
                 trace.add(tf("cat_diag_line_ok",
@@ -7438,8 +6692,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             }
             val ok = gagnant >= 0
             if (ok && gagnant != _ui.value.civUsbIndex) {
-                // Le port qui a répondu devient celui que l'on retient : la
-                // fois suivante, la connexion est immédiate.
+                // The port that answered is remembered: next time connection
+                // is immediate.
                 settings.civUsbIndex = gagnant
                 _ui.value = _ui.value.copy(civUsbIndex = settings.civUsbIndex)
             }
@@ -7454,7 +6708,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     /**
      * Dedicated CAT loop, faster than the 1 Hz tracking loop (OscarWatch-style).
-     * Runs ~4x/second: reads the MAIN (downlink) every cycle so the display and
+     * Runs every 100 ms plus tick time: reads the MAIN (downlink) every cycle so the display and
      * VFO-follow stay responsive; writes the uplink (SUB) only when needed, and
      * for linear, defers the uplink write briefly after the operator stops
      * moving the dial (so we don't fight the tuning).
@@ -7519,51 +6773,42 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     // ------------------------------------------------------------------
-    // La frontière entre le ciel et le poste.
+    // The boundary between sky and rig.
     //
-    // Ces trois passages sont les seuls endroits de la boucle CAT où une
-    // fréquence change de monde. Partout ailleurs — Doppler, inversion,
-    // arbitrage de la molette, seuils d'écriture — tout est en fréquences de
-    // satellite, et doit le rester : un `lastSentDl` mélangeant les deux
-    // domaines rendrait le seuil de vingt hertz inopérant, et l'arbitre
-    // prendrait notre propre consigne pour un geste de l'opérateur.
-    //
-    // Les regrouper ici a un second mérite : quand un jour il faudra ajouter
-    // un troisième cas de poste, il n'y aura qu'un endroit à relire.
+    // These are the only places in the CAT loop where a frequency changes
+    // domain. Everywhere else — Doppler, inversion, knob arbitration, write
+    // thresholds — everything is in satellite frequencies and must stay so:
+    // a `lastSentDl` mixing both domains would break the 20 Hz threshold, and
+    // the arbiter would take our own command for an operator gesture.
     // ------------------------------------------------------------------
 
     /**
-     * Ce que le poste sait faire.
-     *
-     * Une fréquence hors de ses bandes n'est pas une erreur de calcul : c'est
-     * une voie qui ne passe pas par lui. Sur une station QO-100 ordinaire, la
-     * descente sort d'un LNB à 739 MHz et s'écoute à la clé ; le poste, lui, ne
-     * fait plus qu'émettre en 144 ou 432. Lui envoyer 10 GHz ne provoquerait
-     * qu'un NAK silencieux à chaque tour de boucle, dix fois par seconde.
-     *
-     * D'où cette garde, posée exactement là où la fréquence devient une trame.
+     * What the rig can do. A frequency outside its bands is not a computation
+     * error but a path that does not go through it: on a typical QO-100
+     * station the downlink leaves the LNB at 739 MHz for the dongle, and the
+     * rig only transmits on 144 or 432. Sending it 10 GHz would just get a
+     * silent NAK ten times a second. Hence this guard, right where the
+     * frequency becomes a frame.
      */
     private fun atteignableParLePoste(posteHz: Long): Boolean =
         fr.f4ioz.satcombo.cat.BandPlan.band(posteHz) != fr.f4ioz.satcombo.cat.BandPlan.Band.AUTRE
 
     /**
-     * La descente arrive-t-elle jusqu'au poste ?
-     *
-     * Se demande avant de le relire : sans convertisseur vers le poste, ce
-     * qu'on y lirait serait la fréquence d'émission, et l'arbitre y verrait un
-     * geste de l'opérateur à chaque tour.
+     * Does the downlink reach the rig? Asked before reading it back: otherwise
+     * what we read would be the TX frequency, and the arbiter would see an
+     * operator gesture on every round.
      */
     private fun descenteAuPoste(dlSat: Long): Boolean =
         !isTxOnlyRig && atteignableParLePoste(posteRx(dlSat))
 
-    /** Écrit le couple descente/montée, chacun par son convertisseur. */
+    /** Writes the downlink/uplink pair, each through its converter. */
     private suspend fun ecrireCouple(dlSat: Long, ulSat: Long, sameBand: Boolean) {
         if (isTxOnlyRig) { ecrireMontee(ulSat, sameBand); return }
         val dl = posteRx(dlSat)
         if (!atteignableParLePoste(dl)) { ecrireMontee(ulSat, sameBand); return }
         val ul = posteTx(ulSat)
         if (!atteignableParLePoste(ul)) {
-            // La montée passe par ailleurs : on ne garde que l'écoute.
+            // The uplink goes elsewhere: keep only the downlink.
             if (isPairRig) ft817.rx.setFrequency(dl)
             else { cat.readMainFrequency(); cat.setFrequency(dl) }
             return
@@ -7572,7 +6817,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         else if (sameBand) cat.setSplitPair(dl, ul) else cat.setSatellitePair(dl, ul)
     }
 
-    /** Écrit la seule montée — le cas où l'opérateur tient la réception. */
+    /** Writes the uplink only — when the operator holds the receive side. */
     private suspend fun ecrireMontee(ulSat: Long, sameBand: Boolean) {
         val ul = posteTx(ulSat)
         if (!atteignableParLePoste(ul)) return
@@ -7580,7 +6825,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         else if (sameBand) cat.setSplitUplink(ul) else cat.setUplink(ul)
     }
 
-    /** Relit la descente et la ramène tout de suite dans le ciel. */
+    /** Reads the downlink back and converts it straight to sky frequency. */
     private suspend fun lireDescente(sameBand: Boolean): Long? =
         runCatching {
             if (isPairRig) ft817.readDownlink()
@@ -7595,10 +6840,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Arm the radio for the current satellite according to its RF layout. */
     private suspend fun armCatForCurrent() {
-        // Pause Doppler : l'armement écrit le mode, le split et la tonalité —
-        // c'est déjà toucher au poste. On sort avant le test « déjà armé » pour
-        // que rien ne soit noté comme fait : l'armement complet aura lieu au
-        // relâchement.
+        // Doppler hold: arming writes mode, split and tone — that is touching
+        // the rig. Return before the "already armed" test so nothing is
+        // recorded as done: full arming happens on release.
         if (_ui.value.dopplerHold) return
         val sat = _ui.value.selected ?: return
         val t = activeTransmitters().getOrNull(_ui.value.selectedTxIndex) ?: return
@@ -7663,9 +6907,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         catLayout = layout
         lastSentDl = 0L; lastSentUl = 0L
         rxArbiter.reset(); fmArbiter.reset()
-        // Nouveau satellite, donc nouvelles bandes : ce que le pilote croyait
-        // savoir du poste ne vaut plus rien, et c'est précisément le moment où
-        // l'ordre des deux écritures va se décider.
+        // New satellite, new bands: what the driver knew about the rig is
+        // void, and this is exactly when the order of the two writes is decided.
         cat.forgetBands()
     }
     private var catLayout: SatLayout = SatLayout.CROSS_BAND
@@ -7687,8 +6930,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             val dlNow = runCatching {
                 if (isPairRig) ft817.readDownlink() else cat.readMainFrequency()
             }.getOrNull()?.let { satDepuisPoste(it) }
-            // Sous l'horizon, personne ne pilote : le compte à rebours des
-            // deux secondes repartira de zéro à l'acquisition.
+            // Below the horizon nobody drives: the hold countdown restarts
+            // from zero at AOS.
             rxArbiter.reset(); fmArbiter.reset()
             if (dlNow != null) _ui.value = _ui.value.copy(catRadioDownlinkHz = dlNow,
                 catRxDriven = false)
@@ -7705,12 +6948,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 val dlRest = _ui.value.rxRestHz ?: centreRx(t) ?: return
                 val dl = Doppler.downlink(dlRest, rr) + shift
                 if (_ui.value.dopplerHold) {
-                    // En pause, l'écran doit montrer le poste tel qu'il est, et
-                    // non la consigne qu'on ne lui envoie pas : afficher la
-                    // seconde ferait croire à un suivi qui n'a pas lieu.
-                    // Relue par `lireDescente`, donc déjà ramenée dans le
-                    // ciel : l'écran n'affiche jamais la fréquence intermédiaire
-                    // du LNB, qui ne veut rien dire pour l'opérateur.
+                    // On hold, show the rig as it is, not the command we do not
+                    // send (that would fake tracking). Read via `lireDescente`,
+                    // so already a sky frequency, never the LNB IF.
                     val lu = lireDescente(sameBand = false)
                     _ui.value = _ui.value.copy(catRadioDownlinkHz = lu ?: dl,
                         catRadioUplinkHz = null, catRxDriven = false)
@@ -7742,22 +6982,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         surveillerLeMode(t)
     }
 
-    /** Depuis combien de tours de boucle on n'a pas demandé son mode au poste. */
+    /** Loop rounds since the rig's mode was last asked. */
     private var toursDepuisLeMode = 0
 
     /**
-     * « USB LSB… à contrôler + afficher. »
-     *
-     * Le mode est posé une fois, à l'armement, et plus personne ne le regarde :
-     * si l'opérateur passe le poste en LSB d'un coup de bouton, ou si le poste
-     * revient de lui-même à ce qu'il avait en mémoire de bande, l'écran
-     * continue d'annoncer USB et le correspondant devient inaudible sans que
-     * rien ne l'explique. On relit donc le mode, on l'affiche tel que le poste
-     * le donne, et on le remet quand il a bougé.
-     *
-     * Toutes les deux secondes, soit un tour de boucle sur vingt : le mode ne
-     * change pas dix fois par seconde, et le bus CI-V a déjà fort à faire avec
-     * le Doppler.
+     * Checks and shows the rig's mode. Set once at arming, nobody looked at it
+     * again: if the operator switched to LSB or the rig reverted to its band
+     * memory, the screen still said USB and the other station became
+     * inaudible with no explanation. So read it back, show it, and restore it
+     * when it moved. One round in twenty (~2 s): the mode does not change ten
+     * times a second, and the CI-V bus is busy with Doppler.
      */
     private suspend fun surveillerLeMode(t: fr.f4ioz.satcombo.data.Transmitter) {
         if (isPairRig) return
@@ -7769,9 +7003,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _ui.value = _ui.value.copy(
             catRadioMode = fr.f4ioz.satcombo.cat.CatDecode.civModeName(lu),
             catModeMismatch = ecart)
-        // La remise en mode est une écriture comme une autre : en pause Doppler
-        // on se contente de dire à l'écran que le poste n'est plus au mode
-        // attendu, et l'opérateur en fait ce qu'il veut.
+        // Restoring the mode is a write like any other: on Doppler hold, only
+        // report the mismatch.
         if (ecart && !_ui.value.dopplerHold) runCatching { cat.setMode(attendu) }
     }
 
@@ -7809,48 +7042,34 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         return if (_ui.value.ctcssAuto) autoCtcssTenthHz(t) else 0
     }
 
-    // Qui tient le VFO de réception : l'opérateur, ou nous.
+    // Who holds the RX VFO: the operator, or us.
     private val rxArbiter = fr.f4ioz.satcombo.cat.RxArbiter()
 
     /**
-     * Le même arbitrage en FM, mais avec une main beaucoup moins fine.
-     *
-     * Vingt hertz suffisent à reconnaître un geste sur un transpondeur linéaire,
-     * où l'on cherche une station à la bande latérale près. En FM cela ne
-     * marcherait pas : le poste arrondit ce qu'on lui écrit à son pas d'accord,
-     * et cet arrondi-là, relu au tour suivant, passerait pour un geste de
-     * l'opérateur — le logiciel rendrait la main toutes les cent millisecondes
-     * sans que personne n'ait touché à rien. Un vrai changement de canal FM
-     * vaut au moins cinq kilohertz ; un kilohertz et demi est donc large pour
-     * l'un et hors d'atteinte pour l'autre.
+     * Same arbitration for FM, with a much coarser hand. 20 Hz recognises a
+     * gesture on a linear transponder; in FM the rig rounds what we write to
+     * its tuning step, and that rounding, read back, would look like an
+     * operator gesture — control released every 100 ms with nobody touching
+     * anything. A real FM channel change is at least 5 kHz; 1.5 kHz is wide
+     * for one and out of reach for the other.
      */
     private val fmArbiter = fr.f4ioz.satcombo.cat.RxArbiter(moveHz = 1_500L)
 
     /**
-     * L'arbitre de la molette d'émission.
-     *
-     * Le même objet que pour la réception, et c'est délibéré : le problème est
-     * identique au mot près — le poste ne dit pas *qui* a tourné la molette, et
-     * ce qu'on relit après avoir écrit ressemble trait pour trait à un geste de
-     * l'opérateur. Sa mémoire des dernières consignes est exactement ce qu'il
-     * faut. Un second arbitre écrit à part aurait fini par diverger du premier.
+     * TX knob arbiter. Same class as RX on purpose: the problem is identical —
+     * the rig does not say *who* turned the knob, and what we read after
+     * writing looks exactly like a gesture. A separate arbiter would drift.
      */
     private val txArbiter = fr.f4ioz.satcombo.cat.RxArbiter()
 
     /**
-     * Applique le délai de reprise rangé, dès la création des arbitres.
-     *
-     * **Le défaut qu'il répare.** `regle()` n'était appelé que depuis le
-     * sélecteur de réglage. Le choix de l'opérateur était donc bien enregistré,
-     * mais les arbitres repartaient à leurs deux secondes d'usine à chaque
-     * lancement — et il croyait, à juste titre, que le réglage ne servait à
-     * rien. Une préférence qui ne survit pas au redémarrage est pire qu'une
-     * préférence absente : elle fait douter de ce qu'on a sous les yeux.
+     * Applies the stored hold delay as soon as the arbiters exist. `regle()`
+     * used to be called only from the settings picker, so arbiters restarted
+     * at their factory 2 s on every launch and the setting seemed useless.
      */
     init {
-        // Les identifiants du partage sont posés dès le départ : sans cela le
-        // QR code du Wi-Fi resterait vide jusqu'à la première saisie, même
-        // quand ils sont déjà rangés.
+        // Hotspot credentials set from the start, otherwise the Wi-Fi QR code
+        // stays empty until first typed, even when stored.
         fr.f4ioz.satcombo.demo.ServeurDemo.configureWifi(
             settings.demoSsid, settings.demoMotDePasse)
         val v = settings.catHoldMs.toLong()
@@ -7860,31 +7079,22 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * Un geste sur la molette d'émission a été vu et n'a pas encore été absorbé.
-     *
-     * Sans ce drapeau, l'absorption se déclencherait à chaque tour de boucle dès
-     * que l'arbitre a la main — c'est-à-dire en permanence — et le moindre
-     * arrondi du poste finirait par dériver dans le décalage.
+     * A TX knob gesture was seen and not yet absorbed. Without this flag,
+     * absorption would fire on every round while the arbiter holds control —
+     * i.e. always — and every rig rounding would drift into the shift.
      */
     @Volatile private var mainSurMoletteTx = false
 
     /**
-     * FM : le Doppler tient les deux voies, et lâche la molette quand
-     * l'opérateur y touche.
+     * FM: Doppler drives both legs, and lets go of the knob when the operator
+     * touches it. It used to write both frequencies every round without
+     * looking, so any manual RX touch was erased 100 ms later.
      *
-     * « Quelques fois j'ajuste via le VFO, puis reprendre le doppler. » En FM
-     * l'application écrivait jusqu'ici les deux fréquences à chaque tour, sans
-     * jamais regarder le poste : retoucher la réception à la main était donc
-     * impossible, la consigne suivante l'effaçait cent millisecondes plus tard.
-     *
-     * Désormais on relit la descente. Un écart qui ne s'explique par aucune de
-     * nos consignes est un geste : on se tait, et le canal choisi devient le
-     * nouveau repos — corrigé du Doppler de l'instant, sans quoi la correction
-     * s'appliquerait deux fois. Deux secondes de silence plus tard, le suivi
-     * reprend à partir de ce repos-là.
-     *
-     * La montée, elle, ne bouge pas de canal : sur un relais satellite c'est
-     * une fréquence d'entrée fixe, et seul son Doppler la fait varier.
+     * Now the downlink is read back. A gap explained by none of our commands
+     * is a gesture: go quiet, and the chosen channel becomes the new rest —
+     * with the instant Doppler removed, or it would apply twice. After the
+     * hold time, tracking resumes from that rest. The uplink never changes
+     * channel: a satellite repeater input is fixed, only its Doppler varies.
      */
     private suspend fun interactiveFm(
         t: fr.f4ioz.satcombo.data.Transmitter, rr: Double, shift: Long, txShift: Long,
@@ -7897,9 +7107,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             val geste = fmArbiter.observe(dlObserved, System.currentTimeMillis())
             if (geste) {
                 lastSentDl = 0L
-                // Le canal choisi à la main est une fréquence de poste ; le
-                // repos, lui, est une fréquence de satellite. Ôter le Doppler de
-                // l'instant est ce qui fait la différence entre les deux.
+                // The hand-picked channel is a rig frequency; rest is a
+                // satellite frequency. Removing instant Doppler converts.
                 _ui.value = _ui.value.copy(
                     rxRestHz = Doppler.restFromDownlink(dlObserved - shift, rr))
             }
@@ -7909,10 +7118,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val dl = Doppler.downlink(rest, rr) + shift
         val ul = Doppler.uplink(ulRest, rr) + txShift
 
-        // Sans relecture possible, on retombe sur le comportement d'avant :
-        // écrire, toujours. Un poste muet ne doit pas priver de Doppler.
-        // En pause Doppler on ne pilote pas, quoi qu'en dise l'arbitre : le
-        // poste garde ce que l'opérateur y a laissé.
+        // No readback possible: always write — a mute rig must not lose
+        // Doppler. On Doppler hold, never drive, whatever the arbiter says.
         val pilote = (dlObserved == null || fmArbiter.driven) && !_ui.value.dopplerHold
         if (pilote) {
             if (kotlin.math.abs(dl - lastSentDl) >= 200 || kotlin.math.abs(ul - lastSentUl) >= 200) {
@@ -7923,37 +7130,32 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             _ui.value = _ui.value.copy(catRadioDownlinkHz = dl, catRadioUplinkHz = ul,
                 catRxDriven = true)
         } else {
-            // Sans relecture — poste muet et pause en cours — on affiche la
-            // consigne calculée plutôt que rien : le suivi doit rester lisible.
+            // No readback (mute rig and hold): show the computed command
+            // rather than nothing.
             _ui.value = _ui.value.copy(catRadioDownlinkHz = dlObserved ?: dl,
                 catRadioUplinkHz = ul, catRxDriven = false)
         }
     }
 
     /**
-     * Transpondeur linéaire : l'opérateur mène, puis le logiciel prend le
-     * relais.
+     * Linear transponder: the operator leads, then the software takes over.
      *
-     * Tant que la molette bouge, on la lit et on en déduit la fréquence de
-     * repos : c'est l'opérateur qui choisit où l'on écoute, et l'on ne touche à
-     * rien. Deux secondes de silence plus tard, ce choix devient une fréquence
-     * de satellite, que le poste ne saurait pas tenir tout seul : le téléphone
-     * accorde alors la réception **et** l'émission, tous deux dérivés du même
-     * repos figé.
+     * While the knob moves, read it and derive the rest frequency: the operator
+     * chooses where to listen, and we touch nothing. After the hold time that
+     * choice becomes a satellite frequency, and the phone tunes RX **and** TX,
+     * both derived from the same frozen rest.
      *
-     * Le repos figé est le cœur de la correction. Le recalculer à chaque
-     * lecture, comme on le faisait jusqu'ici, revenait à demander au poste où
-     * il en était pour lui répondre qu'il avait raison : la réception ne
-     * bougeait jamais, et l'émission dérivait du Doppler qu'on venait de lui
-     * réinjecter par erreur.
+     * **The frozen rest is the key.** Recomputing it on every read asked the rig
+     * where it was only to tell it it was right: RX never moved, and TX drifted
+     * with the Doppler we had just re-injected by mistake.
      */
     private suspend fun interactiveLinear(
         t: fr.f4ioz.satcombo.data.Transmitter, rr: Double, shift: Long, txShift: Long,
         sameBand: Boolean
     ) {
-        // La descente ne revient au poste que s'il sait la recevoir. Sur une
-        // station QO-100 elle s'écoute à la clé : il n'y a alors rien à relire,
-        // rien à arbitrer, et c'est le repos choisi ailleurs qui mène l'émission.
+        // The downlink comes back to the rig only if it can receive it. On a
+        // QO-100 station it is heard on the dongle: nothing to read back or
+        // arbitrate, and the rest chosen elsewhere drives TX.
         val auPoste = descenteAuPoste(_ui.value.rxRestHz ?: centreRx(t) ?: return)
         val dlObserved = if (auPoste) lireDescente(sameBand) else null
         if (auPoste && dlObserved == null) return
@@ -7963,9 +7165,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val pilote = (!auPoste || rxArbiter.driven) && _ui.value.catRxDoppler &&
             !_ui.value.dopplerHold
 
-        // Tant que nous ne pilotons pas, le repos se relit du poste — décalage
-        // d'étalonnage et décalage de mode (voix/CW) ôtés, puisqu'ils sont
-        // remis à l'écriture.
+        // While not driving, rest is read from the rig, with calibration and
+        // mode (voice/CW) offsets removed since they are re-added on write.
         val lu = if (dlObserved != null)
             Doppler.restFromDownlink(dlObserved - shift - activeRxOffset(), rr)
         else _ui.value.rxRestHz ?: centreRx(t) ?: return
@@ -7985,25 +7186,19 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val ul = Doppler.uplink(ulRest, rr) + txShift
         val dl = Doppler.downlink(rest, rr) + shift + activeRxOffset()
 
-        // --- la molette d'émission comme commande de décalage ---
-        //
-        // `ul` vaut `Doppler.uplink(ulRest, rr) + txShift`. Si l'opérateur a
-        // tourné sa molette jusqu'à `ulLu`, le décalage qu'il vient d'exprimer
-        // vaut donc `ulLu - (ul - txShift)`. Rien à inventer : une soustraction.
-        //
-        // Réservé au duplex à deux postes, et seulement quand nous pilotons —
-        // sinon nous prendrions pour un geste la dérive d'un poste que nous
-        // n'avons pas encore commandé.
+        // --- TX knob as shift control ---
+        // `ul` = `Doppler.uplink(ulRest, rr) + txShift`; if the operator turned
+        // the knob to `ulLu`, the shift expressed is `ulLu - (ul - txShift)`.
+        // Two-rig duplex only, and only while driving — otherwise we would take
+        // the drift of a rig not yet commanded for a gesture.
         if (_ui.value.catUi.txVfoShift && isPairRig && !sameBand && pilote) {
             val ulLu = runCatching { ft817.readUplink() }.getOrNull()
                 ?.let { satDepuisPosteTx(it) }
             if (ulLu != null) {
-                // Le calcul vit désormais dans `MoletteTx`, hors de cette
-                // boucle : il a été faux deux fois de suite ici, invérifiable
-                // parce que mêlé à des lectures série et à des écritures.
-                // Isolé, il se met en défaut au banc — et l'essai de régression
-                // rejoue exactement la dérive Doppler qui faisait osciller le
-                // décalage entre deux valeurs.
+                // The computation lives in `MoletteTx`: it was wrong twice here,
+                // untestable amid serial reads and writes. Isolated, it is
+                // tested, including the Doppler drift that made the shift
+                // oscillate between two values.
                 if (txArbiter.observe(ulLu, now)) mainSurMoletteTx = true
                 val d = fr.f4ioz.satcombo.domain.MoletteTx.decide(
                     shiftHz = txShift,
@@ -8020,37 +7215,27 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
 
         if (pilote) {
-            // Vingt hertz : en dessous, l'écart ne s'entend pas et l'écriture
-            // ne ferait que charger le bus CI-V.
+            // 20 Hz: below that the gap is inaudible and writing only loads
+            // the CI-V bus.
             if (kotlin.math.abs(dl - lastSentDl) >= 20 || kotlin.math.abs(ul - lastSentUl) >= 20) {
                 lastSentDl = dl; lastSentUl = ul
-                // Se reconnaître soi-même à la relecture : sans cela, notre
-                // propre consigne passerait pour un geste de l'opérateur et
-                // nous rendrions la main à chaque tour de boucle.
+                // Recognise ourselves on readback, or our own command would
+                // look like an operator gesture and we would let go every round.
                 rxArbiter.commanded(dl)
-                // Notre propre montée ne doit pas nous revenir comme un geste.
+                // Same for our own uplink.
                 txArbiter.commanded(ul)
                 runCatching { ecrireCouple(dl, ul, sameBand) }
             }
             _ui.value = _ui.value.copy(catRadioDownlinkHz = dl, catRadioUplinkHz = ul,
                 catRxDriven = true)
         } else {
-            // La montée suit la molette de réception — mais pas sur tous les
-            // postes, et c'est la correction apportée ici.
-            //
-            // L'ancienne règle disait : « ce délai protège la molette de
-            // RÉCEPTION ; il n'a aucune raison de retenir l'ÉMISSION, que
-            // l'opérateur ne touche pas ». Cette dernière phrase est fausse sur
-            // un poste à double VFO commandé par un seul bouton : sur un
-            // IC-9700 en mode satellite, écrire la montée déplace la réception
-            // en retour, et l'opérateur se retrouve à se battre contre nous.
-            //
-            // Filmé sur RS-44 et FO-29 : la somme des deux VFO restait
-            // rigoureusement constante pendant la bagarre, preuve que c'était
-            // le poste qui tenait le couple, pas nous.
-            //
-            // La décision est rendue par `SuiviMontee`, qui ne dépend de rien
-            // et s'éprouve à la table.
+            // The uplink follows the RX knob — but not on every rig. "The hold
+            // protects the RX knob, no reason to hold back TX" is false on a
+            // dual-VFO rig with one knob: on an IC-9700 in satellite mode,
+            // writing the uplink moves RX back, and the operator fights us
+            // (filmed on RS-44 and FO-29: the sum of both VFOs stayed constant,
+            // proof the rig held the pair). The decision is in `SuiviMontee`,
+            // dependency-free and tested.
             if (fr.f4ioz.satcombo.domain.SuiviMontee.doitEcrire(
                     rigModel = _ui.value.rigModel,
                     operateurTourne = !rxArbiter.driven,
@@ -8199,11 +7384,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             logEditTimeMs = null, uiLocked = false)
     }
 
-    /**
-     * Re-download the freshest TLE for one satellite by catalog number (Celestrak
-     * CATNR query) and replace it in the list. Used when a sked is near so the
-     * common-window calc uses up-to-date elements.
-     */
     /** If an announced sked for this sat is near and its TLE is aging, refresh it. */
     private fun maybeRefreshTleForSkeds(sat: TleEntry) {
         if (!_ui.value.skedsEnabled) return
@@ -8216,6 +7396,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         if (soon && epochAgeDays > 2) refreshTleFor(sat.catalogNumber)
     }
 
+    /**
+     * Re-download the freshest TLE for one satellite by catalog number (Celestrak
+     * CATNR query) and replace it in the list. Used when a sked is near so the
+     * common-window calc uses up-to-date elements.
+     */
     fun refreshTleFor(catnum: Int) {
         viewModelScope.launch {
             val fresh = runCatching { repo.fetchByCatnr(catnum) }.getOrNull() ?: return@launch
@@ -8223,13 +7408,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 if (it.catalogNumber == catnum) fresh.copy(
                     uplinkHz = it.uplinkHz, downlinkHz = it.downlinkHz, mode = it.mode) else it
             }
-            // Si les éléments n'ont pas changé, il n'y a rien à recalculer.
-            //
-            // `select()` vide les transpondeurs et rallume l'indicateur de
-            // chargement : appelé à chaque rafraîchissement, il faisait
-            // clignoter l'écran du satellite ouvert et rechargeait le
-            // catalogue pour rien. Or un TLE ne bouge que quelques fois par
-            // jour.
+            // Unchanged elements: nothing to recompute. `select()` clears the
+            // transponders and shows the loading indicator; calling it on every
+            // refresh made the open satellite screen flicker for nothing.
             val ancien = _ui.value.satellites.firstOrNull { it.catalogNumber == catnum }
             val identique = ancien != null &&
                 ancien.line1 == fresh.line1 && ancien.line2 == fresh.line2
@@ -8244,9 +7425,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun select(sat: TleEntry, focusPassAos: Long? = null) {
         val obs = _ui.value.observer ?: locationProvider.defaultObserver
-        // Tout ce qui appartenait au satellite précédent s'en va avec lui. Le
-        // repos accordé à la main, surtout : le garder, c'était afficher les
-        // fréquences de l'ancien satellite sous le nom du nouveau.
+        // Everything belonging to the previous satellite goes with it —
+        // especially the hand-tuned rest, or the old satellite's frequencies
+        // would show under the new name.
         _ui.value = _ui.value.copy(selected = sat, loading = true, trail = emptyList(),
             passTrack = emptyList(), transmitters = emptyList(), transmittersLoading = true,
             satStatus = null, focusedPassAos = focusPassAos, rxFromAgendaHz = null,
@@ -8259,25 +7440,19 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             if (_ui.value.selected?.catalogNumber == sat.catalogNumber) {
                 val active = tx.filter { it.alive && (it.downlinkLowHz != null || it.uplinkLowHz != null) }
                 val cfg = satConfigStore.load(sat.catalogNumber)
-                // À défaut de choix enregistré, on prend le premier émetteur
-                // qui ait **une montée et une descente** — c'est-à-dire un
-                // transpondeur, avec lequel on peut trafiquer.
-                //
-                // L'ancien repli sur l'indice zéro tombait, sur FO-29, sur la
-                // balise CW : une descente seule, sans montée. De quoi écouter,
-                // pas de quoi faire un contact, et rien à écrire dans le poste
-                // d'émission.
+                // Without a saved choice, take the first transmitter with **both
+                // uplink and downlink** — something you can work. Index zero
+                // was the CW beacon on FO-29: listen-only.
                 var idx = active.indexOfFirst { it.description == cfg.txDescription }
                 if (idx < 0) idx = active.indexOfFirst {
                     it.downlinkLowHz != null && it.uplinkLowHz != null
                 }
                 if (idx < 0) idx = 0
                 var rx = active.getOrNull(idx)?.let { centreRx(it) }
-                // Une fréquence annoncée dans l’agenda passe devant le
-                // catalogue pendant toute la durée du créneau : c’est le sens
-                // même de l’annonce. On cherche d’abord l’émetteur dont la
-                // bande la contient — sinon le VFO afficherait une fréquence
-                // sous une étiquette de transpondeur qui n’a rien à voir.
+                // An agenda frequency beats the catalogue for the whole slot —
+                // that is the point of the announcement. Pick the transmitter
+                // whose band contains it, or the VFO would show it under an
+                // unrelated transponder label.
                 val evFreq = agendaFreqFor(sat.name,
                     focusPassAos ?: System.currentTimeMillis())
                 if (evFreq != null) {
@@ -8341,43 +7516,35 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _ui.value = _ui.value.copy(passTrack = track)
     }
 
-    // ===================== rotor d'azimut et d'élévation =====================
+    // ===================== az/el rotor =====================
 
     /**
-     * L'état mécanique du mât, tel que l'application le croit.
-     *
-     * Ce n'est pas la même chose que la consigne : entre les deux il y a une
-     * minute de rotation, et c'est précisément cet écart qui rend le
-     * recouvrement utile. Quand le contrôleur rend sa position, elle fait
-     * autorité ; quand il ne rend rien — câble arraché, contrôleur muet —, on
-     * continue avec la dernière consigne, faute de mieux, et le bandeau le dit.
+     * The mast's mechanical state as the app believes it. Not the command:
+     * a minute of rotation lies between them, which is what makes overlap
+     * useful. When the controller reports its position it is authoritative;
+     * when silent (cable torn, mute controller) we fall back on the last
+     * command, and the banner says so.
      */
     private var rotorAt = fr.f4ioz.satcombo.rotor.RotorPos(0.0, 0.0)
 
     /**
-     * La dernière position **vraiment lue**, et l'instant où elle l'a été.
-     *
-     * Elles ne servent qu'à l'affichage, et seulement pour tenir quelques
-     * secondes quand le contrôleur saute une réponse — voir [RotorTenue]. Rien
-     * d'autre ne s'en sert : une position tenue n'a pas à décider d'un
-     * pointage.
+     * Last position **actually read**, and when. Display only, to hold a few
+     * seconds when the controller skips a reply (see [RotorTenue]); a held
+     * position must never decide pointing.
      */
     private var rotorLu: fr.f4ioz.satcombo.rotor.RotorPos? = null
     private var rotorLuMs: Long = 0L
 
     /**
-     * La dernière consigne envoyée, qui n'est pas la position du mât.
-     *
-     * C'est près d'elle, et non près de la position lue, que l'azimut suivant
-     * se déroule. La différence est tout sauf théorique : pendant la minute où
-     * le mât monte vers 540°, le contrôleur répond 380, puis 400, puis 420 ; se
-     * dérouler près de ces valeurs-là ferait redescendre la consigne vers la
-     * branche d'où l'on vient, et le mât ferait demi-tour au milieu du passage
-     * — précisément ce que le plan avait choisi d'éviter.
+     * Last command sent — not the mast position. The next azimuth is unwrapped
+     * near it, not near the read position: while the mast climbs towards 540°
+     * the controller answers 380, 400, 420; unwrapping near those would send
+     * the command back to the branch we came from, and the mast would turn
+     * round mid-pass — exactly what the plan avoided.
      */
     private var rotorCmd = fr.f4ioz.satcombo.rotor.RotorPos(0.0, 0.0)
 
-    /** Le tour de mât retenu pour le passage en cours, choisi à l'acquisition. */
+    /** Mast turn chosen for the current pass, at AOS. */
     private var rotorPlan: fr.f4ioz.satcombo.rotor.RotorMath.Plan? = null
     private var rotorPlanKey: String? = null
     private var rotorLoopJob: kotlinx.coroutines.Job? = null
@@ -8385,43 +7552,35 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private var rotorSimLink: fr.f4ioz.satcombo.rotor.Gs232Simulator? = null
 
     /**
-     * Le même pilote que [rotorDriver], quand il parle GS-232.
-     *
-     * Il faut la vraie sorte pour lire les trames brutes : l'interface commune
-     * ne connaît que « la position » et « c'est parti », ce qui suffit pour
-     * suivre un satellite et ne suffit pas du tout pour comprendre pourquoi
-     * rien ne bouge.
+     * Same driver as [rotorDriver] when it speaks GS-232. The concrete type is
+     * needed for raw frames: the common interface knows only "position" and
+     * "go", enough to track, not to understand why nothing moves.
      */
     private var rotorSerial: fr.f4ioz.satcombo.rotor.Gs232Rotor? = null
 
     // ==================================================================
-    // QO-100 — le satellite qui ne bouge pas
+    // QO-100 — the satellite that does not move
     //
-    // Cet écran ne passe par aucune des boucles habituelles, et c'est
-    // délibéré. `catTick()` part de `livePosition`, qui vient d'une
-    // propagation SGP4 ; un géostationnaire n'a pas de position propagée
-    // utilisable, et le prédicteur de passages ne rendrait jamais rien. Plutôt
-    // que de piquer des exceptions dans ces boucles — chacune serait une
-    // occasion de casser les autres satellites — on écrit ici, à la main, au
-    // moment où l'opérateur bouge quelque chose. Il n'y a rien à rafraîchir
-    // dix fois par seconde : sans Doppler, la fréquence ne bouge que quand on
-    // la bouge.
+    // This screen uses none of the usual loops, on purpose. `catTick()` starts
+    // from `livePosition` (SGP4); a geostationary has no usable propagated
+    // position and the pass predictor would return nothing. Rather than
+    // sprinkle exceptions in those loops — each a chance to break other
+    // satellites — we write here, when the operator moves something. Without
+    // Doppler the frequency only moves when you move it.
     //
-    // Ce qui est réutilisé tel quel, en revanche : [ecrireCouple], donc les
-    // convertisseurs, la garde d'atteignabilité et le mode satellite du
-    // poste ; et le décalage d'étalonnage par NORAD, qui existe déjà.
+    // Reused as is: [ecrireCouple] (converters, reachability guard, satellite
+    // mode) and the per-NORAD calibration offset.
     // ==================================================================
 
-    /** Le transpondeur couramment choisi, jamais nul. */
+    /** The currently chosen transponder, never null. */
     private fun qo100Tp(): Qo100.Transpondeur =
         Qo100.TRANSPONDEURS.firstOrNull { it.cle == _ui.value.qo100.transpondeur } ?: Qo100.NB
 
     fun openQo100() {
         if (!hasExtension(fr.f4ioz.satcombo.data.Extensions.QO100)) return
         _ui.value = _ui.value.copy(screen = Screen.QO100)
-        // Le calage déjà mesuré pour ce satellite, et le pointage depuis le
-        // QTH : deux choses qui ne changent pas pendant qu'on opère, donc
-        // relues une fois à l'ouverture plutôt qu'à chaque tour.
+        // Calibration and dish pointing do not change while operating: read
+        // once on opening.
         val calage = satConfigStore.load(Qo100.NORAD).calibShiftHz
         _ui.value = _ui.value.qo { copy(calageHz = calage) }
         qo100Recalcule()
@@ -8436,16 +7595,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         qo100Panorama(true)
     }
 
-    /** Le fil qui suit la balise. Un seul, et il meurt avec l'écran. */
+    /** The beacon-watching job. Only one, and it dies with the screen. */
     private var jobBalise: kotlinx.coroutines.Job? = null
 
     /**
-     * Allume ou éteint le panorama, et avec lui le témoin de balise.
-     *
-     * Les deux vont ensemble et n'ont qu'un seul client : cet écran. Une FFT
-     * de seize mille points trois fois par seconde n'a rien à faire dans le
-     * dos de l'opérateur pendant qu'il écoute une radiosonde — d'où
-     * l'interrupteur, plutôt qu'un calcul permanent dans [SdrHub].
+     * Turns the panorama and the beacon indicator on or off. Their only client
+     * is this screen: a 16k-point FFT three times a second has no business
+     * running while the operator listens to a radiosonde — hence a switch,
+     * not a permanent computation in [SdrHub].
      */
     private fun qo100Panorama(on: Boolean) {
         runCatching { fr.f4ioz.satcombo.sdr.SdrHub.setPanorama(on) }
@@ -8461,9 +7618,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             fr.f4ioz.satcombo.sdr.SdrHub.panorama.collect { pan ->
                 val m = if (pan.isEmpty()) null
                 else withContext(Dispatchers.Default) { qo100MesureBalise(pan) }
-                // On ne réécrit l'état que quand la mesure a bougé : sans ce
-                // filet, trois recompositions par seconde de tout l'écran pour
-                // apprendre que rien n'a changé.
+                // Write state only when the measurement changed, or the whole
+                // screen recomposes three times a second for nothing.
                 if (m != _ui.value.qo100.balise) {
                     _ui.value = _ui.value.qo { copy(balise = m) }
                 }
@@ -8472,19 +7628,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * Où tombe la balise médiane dans le panorama, ramené à l'échelle de la
-     * réglette.
+     * Where the middle beacon falls in the panorama, on the ruler's scale.
      *
-     * Tout le raisonnement tient dans le choix du repère. Le panorama est
-     * ancré sur la PLL de la clé — pas sur l'accord fin, qui est en aval de la
-     * prise. On remonte donc de la fréquence de la clé vers le ciel par le
-     * convertisseur, puis on retire le calage déjà appliqué : ce qui reste est
-     * exprimé dans les mêmes fréquences que la réglette et que le plan de
-     * bande, c'est-à-dire les fréquences nominales.
-     *
-     * L'écart rendu est alors, exactement, ce qu'il reste à ajouter au calage.
-     * C'est ce qui permet au bouton de la carte d'écrire
-     * `calage + écart` sans autre calcul, et de converger en un coup.
+     * It is all about the reference frame. The panorama is anchored on the
+     * dongle's PLL (not the fine tuning, downstream of the tap). Go from the
+     * dongle frequency to the sky through the converter, then remove the
+     * calibration already applied: what remains is in nominal frequencies,
+     * like the ruler and band plan. The returned offset is then exactly what
+     * must be added to the calibration, so the button writes
+     * `calibration + offset` and converges in one step.
      */
     private fun qo100MesureBalise(
         pan: FloatArray
@@ -8494,22 +7646,17 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * L'axe du panorama : le centre du ciel, et l'étendue signée.
-     *
-     * Rendu au singulier pour que la mesure de balise et le dessin de la
-     * cascade parlent du même axe. Deux calculs séparés finiraient par diverger
-     * d'un signe ou d'un calage, et la raie ne tomberait plus sur son trait —
-     * c'est-à-dire que l'écran mentirait précisément là où on lui demande de
-     * dire la vérité.
-     *
-     * `null` quand la clé ne tourne pas : il n'y a pas d'axe sans porteuse.
+     * Panorama axis: sky centre and signed span. One function so the beacon
+     * measurement and the waterfall drawing share the same axis; two would
+     * eventually differ by a sign or a calibration, and the line would miss
+     * its mark. `null` when the dongle is not running.
      */
     fun qo100AxeCiel(): Pair<Double, Double>? {
         val st = fr.f4ioz.satcombo.sdr.SdrHub.state.value
         if (!st.running) return null
         val q = _ui.value.qo100
-        // La PLL, sans la part de Doppler encaissée en logiciel — nulle sur un
-        // géostationnaire, mais on ne s'appuie pas sur une valeur nulle.
+        // PLL without the software Doppler part — zero on a geostationary, but
+        // do not rely on it being zero.
         val pllHz = st.centerHz - st.dopplerFineHz
         val centreCiel = cleVersSat(pllHz).toDouble() - q.calageHz
         val conv = _ui.value.convRx
@@ -8521,12 +7668,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * Écrire d'un coup le calage que la balise vient de dicter.
-     *
-     * C'est la même opération que la saisie manuelle de la carte de calage, à
-     * ceci près qu'on ne recopie pas un chiffre lu sur une cascade : on prend
-     * celui que la mesure vient de rendre. Sans mesure, on ne fait rien —
-     * surtout pas remettre à zéro.
+     * Writes at once the calibration dictated by the beacon — like manual
+     * entry, but using the measured value. No measurement: do nothing,
+     * certainly not reset to zero.
      */
     fun qo100CalerSurLaMesure() {
         val m = _ui.value.qo100.balise ?: return
@@ -8534,18 +7678,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * Les repères solaires, calculés hors du fil principal.
-     *
-     * Le balayage des transits parcourt une année minute par minute, soit un
-     * demi-million de positions solaires. C'est rapide — quelques dizaines de
-     * millisecondes — et c'est exactement le genre de calcul qui n'a rien à
-     * faire sur le fil d'affichage : sur un téléphone lent, quelques dizaines
-     * de millisecondes sont deux images perdues, et il n'y a aucune raison de
-     * les perdre pour une information qui ne change pas de la journée.
-     *
-     * On ne recalcule pas non plus à chaque tour : le prochain passage en
-     * azimut est valable jusqu'à demain, et les transits jusqu'à l'équinoxe
-     * suivant. Une fois à l'ouverture de l'écran suffit.
+     * Sun markers, computed off the main thread: the transit sweep walks a
+     * year minute by minute (half a million Sun positions, tens of ms — two
+     * dropped frames on a slow phone). Computed once on opening: the azimuth
+     * time holds until tomorrow, transits until the next equinox.
      */
     private suspend fun qo100Soleil(latDeg: Double, lonDeg: Double) {
         val maintenant = System.currentTimeMillis()
@@ -8563,11 +7699,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * Quitter l'écran ne défait rien.
-     *
-     * Le poste reste où on l'a mis, comme il resterait si on avait tourné la
-     * molette : on ne va pas déranger une station en plein QSO parce que
-     * quelqu'un a regardé la liste des passages.
+     * Leaving the screen undoes nothing: the rig stays where it was put, so a
+     * QSO is not disturbed because someone looked at the pass list.
      */
     fun closeQo100() {
         qo100Panorama(false)
@@ -8584,16 +7717,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * Se poser sur une descente, bridée au transpondeur.
-     *
-     * La bride n'est pas du confort : au-delà des bords, la montée
-     * correspondante sort du transpondeur et la porteuse part chez le voisin —
-     * un satellite géostationnaire n'a pas d'horizon pour rattraper l'erreur.
+     * Tunes to a downlink, clamped to the transponder. Not comfort: beyond the
+     * edges the matching uplink leaves the transponder and the carrier lands
+     * on the neighbour — a geostationary has no horizon to end the mistake.
      */
     fun setQo100Descente(hz: Long) {
-        // Sans bride, on balaie tout QO-100 — mais jamais au-delà du plan de
-        // bande lui-même : au-dehors il n'y a plus de satellite, et l'écran
-        // n'aurait plus rien de vrai à montrer.
+        // Unclamped mode sweeps all of QO-100, never beyond the band plan.
         val borne = if (settings.qo100SansBride)
             hz.coerceIn(Qo100.REGLETTE_BAS_HZ, Qo100.REGLETTE_HAUT_HZ)
         else qo100Tp().brideDescente(hz)
@@ -8602,28 +7731,25 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         qo100Pousser()
     }
 
-    /** Balayer tout QO-100, ou rester dans le transpondeur choisi. */
+    /** Sweep all of QO-100, or stay in the chosen transponder. */
     fun setQo100SansBride(on: Boolean) {
         settings.qo100SansBride = on
         _ui.value = _ui.value.qo { copy(sansBride = on) }
     }
 
-    /** Le pas de molette de l'écran, en hertz signés. */
+    /** The screen's knob step, signed Hz. */
     fun qo100Pas(deltaHz: Long) = setQo100Descente(_ui.value.qo100.descenteHz + deltaHz)
 
-    /** Se poser sur la balise médiane : le point de repère de tout le monde. */
+    /** Go to the middle beacon: everyone's reference point. */
     fun qo100AllerBalise() = setQo100Descente(Qo100.BALISE_MEDIANE_HZ)
 
-    /** Se poser sur une mémoire ou un repère. */
+    /** Go to a memory or marker. */
     fun qo100Aller(hz: Long) = setQo100Descente(hz)
 
     /**
-     * Range la fréquence courante dans les mémoires.
-     *
-     * Le nom est facultatif : sans lui, la mémoire prend ses kilohertz, ce qui
-     * suffit à la reconnaître dans une liste courte. Demander un nom
-     * obligatoire ferait renoncer à poser la mémoire au moment où elle sert —
-     * en plein QSO, quand on n'a pas une main pour taper.
+     * Stores the current frequency as a memory. The name is optional (the kHz
+     * are used otherwise): a mandatory name would stop you saving it mid-QSO,
+     * with no hand free to type.
      */
     fun qo100PoseMemoire(nom: String) {
         val posees = fr.f4ioz.satcombo.domain.MemoiresQo100.pose(
@@ -8639,21 +7765,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _ui.value = _ui.value.qo { copy(memoires = posees) }
     }
 
-    // ---------------------------------------------- les chaînes de conversion
+    // ---------------------------------------------- conversion chains
 
     /**
-     * Change de chaîne : station fixe, station portable, ce qu'on veut.
-     *
-     * Chaque site a ses convertisseurs et **chaque oscillateur a son erreur
-     * propre, mesurée**. Retaper la valeur à chaque changement de site, c'est
-     * se tromper un jour — et trois cents kilohertz d'erreur sur QO-100, c'est
-     * ne rien entendre du tout.
-     */
-    /**
-     * Range l'écart mesuré d'un appareil.
-     *
-     * La référence est ignorée : sans point fixe, une mesure ne peut pas dire
-     * ce qui revient au LNB et ce qui revient au récepteur.
+     * Stores a receiver's measured offset. The reference is ignored: without a
+     * fixed point a measurement cannot tell the LNB's share from the receiver's.
      */
     fun setMaterielPpm(nom: String, ppm: Double) {
         val liste = fr.f4ioz.satcombo.domain.MaterielRx.range(
@@ -8675,6 +7791,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         qo100Recalcule()
     }
 
+    /**
+     * Switches chain: fixed station, portable, anything. Each site has its
+     * converters and **each oscillator its own measured error**; retyping it at
+     * every site change means one day getting it wrong — and 300 kHz off on
+     * QO-100 means hearing nothing.
+     */
     fun setQo100Chaine(nom: String) {
         settings.qo100Chaine = nom
         _ui.value = _ui.value.qo { copy(chaine = nom) }
@@ -8682,24 +7804,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * Enregistre un oscillateur mesuré dans la chaîne en service.
+     * Stores a measured oscillator in the active chain. [cielHz] is read on a
+     * reference (a GPSDO-locked WebSDR), [posteHz] shown by the rig on the
+     * **same signal**; the difference is the oscillator — the operator just
+     * copies two numbers.
      *
-     * [cielHz] est la fréquence lue sur une référence — un WebSDR sur GPSDO —
-     * et [posteHz] celle affichée par le poste sur le **même signal**. L'écart
-     * est l'oscillateur : l'opérateur n'a rien à calculer, il recopie deux
-     * nombres qu'il a sous les yeux.
-     *
-     * Rend le message à afficher, vide si tout va bien. On refuse ce qui ne
-     * peut pas être un oscillateur — deux champs inversés, une virgule
-     * déplacée — mais **jamais un simple écart au nominal** : c'est justement
-     * ce qu'on cherche à mesurer.
-     */
-    /**
-     * Rend le succès **et** le texte, plutôt que le texte seul.
-     *
-     * Une chaîne vide signifiait « réussi » et une chaîne pleine « refusé ».
-     * L'écran ne pouvait donc pas colorer un succès autrement qu'un échec, et
-     * surtout il n'avait rien à montrer quand tout allait bien.
+     * Rejects what cannot be an oscillator (swapped fields, misplaced decimal)
+     * but **never a mere offset from nominal**: that is what we measure.
+     * Returns success **and** the message, so the screen can show a success
+     * differently from a failure.
      */
     fun qo100Mesure(descente: Boolean, cielHz: Long, posteHz: Long): Pair<Boolean, String> {
         if (cielHz <= 0L || posteHz <= 0L) return false to t("qo100_mesure_vide")
@@ -8716,21 +7829,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         settings.qo100Chaines = liste
         _ui.value = _ui.value.qo { copy(chaines = liste) }
         qo100AppliqueChaine()
-        // **Une réussite se dit.**
-        //
-        // Elle rendait une chaîne vide, donc l'écran n'affichait rien : le
-        // même écran qu'avant d'appuyer. Rien ne distinguait « c'est fait » de
-        // « le bouton n'a pas répondu », et l'opérateur concluait à un défaut
-        // alors que sa mesure était prise et rangée.
-        //
-        // On rend donc l'oscillateur trouvé, et son écart au nominal — qui est
-        // l'information intéressante : 27 kHz, c'est le quartz du LNB, et
-        // c'est reproductible.
+        // **Say when it worked**: return the oscillator found and its offset
+        // from nominal — the interesting part (27 kHz is the LNB crystal, and
+        // it is reproducible). Silence looked like a button that did nothing.
         val nominal = if (descente) 10_345_000_000L else 1_968_000_000L
         return true to tf("qo100_mesure_ok", ol / 1_000_000.0, (ol - nominal) / 1_000.0)
     }
 
-    /** Efface un oscillateur : la chaîne redevient directe de ce côté. */
+    /** Clears an oscillator: the chain becomes direct on that side. */
     fun qo100EffaceOl(descente: Boolean) {
         val q = _ui.value.qo100
         val actuelle = fr.f4ioz.satcombo.domain.ChaineQo100.choisie(q.chaines, q.chaine)
@@ -8743,15 +7849,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * Pose un oscillateur nominal, choisi dans un préréglage.
-     *
-     * C'est le geste de départ : on désigne le matériel — « descente vers
-     * 144 », « LNB nu » — et l'appareil en déduit l'oscillateur du catalogue.
-     * La mesure vient après et le corrige ; mais il faut bien partir de
-     * quelque part, et taper dix chiffres de mémoire n'est pas un départ.
-     *
-     * `olHz` à zéro retire le convertisseur : c'est le cas « prise directe »,
-     * où le poste travaille déjà sur la fréquence du ciel.
+     * Sets a nominal oscillator from a preset: the starting point (pick the
+     * hardware, get the catalogue LO; measurement corrects it later). `olHz`
+     * zero removes the converter — the rig already works on the sky frequency.
      */
     fun qo100PoseOl(descente: Boolean, olHz: Long) {
         val q = _ui.value.qo100
@@ -8764,7 +7864,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         qo100AppliqueChaine()
     }
 
-    /** Ajoute une chaîne vide sous ce nom, et s'y place. */
+    /** Adds an empty chain with this name and selects it. */
     fun qo100AjouteChaine(nom: String) {
         if (nom.isBlank()) return
         val liste = fr.f4ioz.satcombo.domain.ChaineQo100.range(
@@ -8777,30 +7877,19 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * Porte les oscillateurs de la chaîne en service dans les convertisseurs.
-     *
-     * Une seule source de vérité : la chaîne. Les convertisseurs restent le
-     * mécanisme, mais ils ne se règlent plus à la main pour QO-100 — deux
-     * endroits où poser le même oscillateur finiraient par diverger.
+     * Copies the active chain's oscillators into the converters. Single source
+     * of truth: the chain. Converters remain the mechanism but are no longer
+     * set by hand for QO-100 — two places for one oscillator would diverge.
      */
     private fun qo100AppliqueChaine() {
         val q = _ui.value.qo100
         val c = fr.f4ioz.satcombo.domain.ChaineQo100.choisie(q.chaines, q.chaine)
-        // **La chaîne décide, y compris quand elle ne veut aucun
-        // convertisseur.**
-        //
-        // Le `if` ne posait la valeur que dans un sens : choisir « prise
-        // directe » laissait l'ancien oscillateur actif dans les réglages, et
-        // la chaîne disait une chose pendant que la chaîne réelle en faisait
-        // une autre. Une source unique de vérité n'en est une que si elle
-        // écrit aussi les cas vides.
-        // **Des bornes à la mesure de QO-100, non de toute la bande Ku.**
-        //
-        // Elles couvraient 10 400 à 10 800 MHz — quatre cents mégahertz pour
-        // un transpondeur qui en fait un demi. Plus les bornes sont larges,
-        // plus la fenêtre intermédiaire l'est aussi, et plus il devient facile
-        // qu'une fréquence étrangère y ressemble. Les resserrer sur les seules
-        // descentes de QO-100 réduit d'autant les occasions de confusion.
+        // **The chain decides, including when it wants no converter.** Setting
+        // only when active left the old oscillator on after choosing "direct".
+        // A single source of truth must write the empty cases too.
+        // **Bounds sized for QO-100, not the whole Ku band**: the wider the
+        // bounds, the wider the IF window and the easier a foreign frequency
+        // looks like one of ours.
         settings.convRxActif = c.descenteActive
         settings.convRxOlHz = c.descenteOlHz
         settings.convRxInverseur = false
@@ -8811,8 +7900,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         settings.convTxInverseur = false
         settings.convTxBasHz = 2_390_000_000L
         settings.convTxHautHz = 2_450_000_000L
-        // L'état affiché doit suivre la même écriture, sinon l'écran des
-        // convertisseurs montrerait la valeur d'avant.
+        // The displayed state must follow, or the converter screen would show
+        // the old value.
         _ui.value = _ui.value.copy(
             convRx = fr.f4ioz.satcombo.domain.Convertisseur(
                 actif = c.descenteActive, olHz = c.descenteOlHz,
@@ -8836,25 +7925,20 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * Le calage sur la balise.
+     * Calibration on the beacon. The operator notes where the middle BPSK
+     * beacon really falls; the gap from 10 489.750 is the downconverter LO
+     * drift (tens of kHz at power-up of an ordinary LNB, under one after half
+     * an hour). Stored like every other calibration offset, under the
+     * satellite's NORAD.
      *
-     * L'opérateur écoute la balise BPSK médiane et note où elle tombe
-     * réellement. L'écart avec 10 489,750 est la dérive de l'oscillateur du
-     * convertisseur de descente — quelques dizaines de kilohertz à la mise
-     * sous tension d'un LNB ordinaire, puis moins d'un après une demi-heure.
-     *
-     * Il se range là où tous les autres décalages d'étalonnage se rangent,
-     * sous le NORAD du satellite, et sert ensuite partout sans mécanisme
-     * nouveau.
-     *
-     * @param entenduHz où la balise a été entendue, en fréquence du ciel.
+     * @param entenduHz where the beacon was heard, as a sky frequency.
      */
     fun qo100CalerSurLaBalise(entenduHz: Long) {
         val ecart = entenduHz - Qo100.BALISE_MEDIANE_HZ
         setQo100Calage(_ui.value.qo100.calageHz + ecart)
     }
 
-    /** Le décalage d'étalonnage, réglé directement. */
+    /** Calibration offset, set directly. */
     fun setQo100Calage(hz: Long) {
         satConfigStore.saveShift(Qo100.NORAD, hz)
         _ui.value = _ui.value.qo { copy(calageHz = hz) }
@@ -8862,17 +7946,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         qo100Pousser()
     }
 
-    /** Remet le calage à zéro : ce qu'on fait après avoir changé de LNB. */
+    /** Resets calibration to zero — after changing LNB. */
     fun qo100AnnulerCalage() = setQo100Calage(0L)
 
     /**
-     * Recalcule ce qui se déduit — et rien d'autre.
-     *
-     * Les fréquences du poste et de la clé ne servent qu'à être affichées :
-     * elles disent à l'opérateur ce qu'il devrait lire sur la face avant. Les
-     * écritures réelles repassent par [ecrireCouple], qui refait la conversion
-     * pour son compte. Recopier une valeur déjà convertie serait la seule
-     * façon de la convertir deux fois.
+     * Recomputes derived values, nothing else. Rig and dongle frequencies are
+     * display-only (what the front panel should read); real writes go through
+     * [ecrireCouple], which converts on its own. Reusing a converted value
+     * would convert it twice.
      */
     private fun qo100Recalcule() {
         val q = _ui.value.qo100
@@ -8891,34 +7972,26 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * Pousse la fréquence courante vers ce qui est coché, et vers cela seul.
-     *
-     * « Les deux, selon les essais » : les deux cases sont réellement
-     * indépendantes. Un montage où le poste émet en 432 pendant que l'écoute
-     * se fait à la clé sur un tout autre convertisseur est un montage courant
-     * sur ce satellite, et il ne doit rien coûter de plus qu'une case cochée.
+     * Pushes the current frequency to what is ticked, and only that. The two
+     * boxes are truly independent: rig transmitting on 432 while listening on
+     * the dongle through another converter is a common QO-100 setup.
      */
     private fun qo100Pousser() {
         val q = _ui.value.qo100
         val dlSat = q.descenteHz + q.calageHz
         val ulSat = Qo100.monteeDepuisDescente(q.descenteHz)
-        // **Balayer n'est pas émettre.**
-        //
-        // Débridé, on traverse les balises et les segments où l'émission est
-        // proscrite, pour écouter ce qui s'y passe. Y pousser une fréquence
-        // d'émission préparerait le poste à transmettre sur une balise — celle
-        // qui sert de référence à toute la bande — et il suffirait alors d'un
-        // appui sur l'alternat.
-        //
-        // La montée n'est donc écrite que là où le plan l'autorise, et l'écran
-        // le dit : sans cela l'opérateur croirait son poste prêt.
+        // **Sweeping is not transmitting.** Unclamped, you cross beacons and
+        // no-TX segments to listen. Pushing an uplink there would set the rig
+        // to transmit on a beacon — the whole band's reference — one PTT press
+        // away. So the uplink is written only where the band plan allows, and
+        // the screen says so.
         val peutEmettre = Qo100.emissionAutorisee(q.descenteHz)
         if (q.auPoste && !peutEmettre) {
             _ui.value = _ui.value.qo { copy(statut = t("qo100_ecoute_seule")) }
         }
         if (q.auPoste && peutEmettre) viewModelScope.launch {
-            // sameBand = false : 145 en réception et 432 en émission, c'est le
-            // mode satellite du poste, pas un simple split.
+            // sameBand = false: 145 RX / 432 TX is the rig's satellite mode,
+            // not a plain split.
             runCatching { ecrireCouple(dlSat, ulSat, sameBand = false) }
                 .onFailure { e ->
                     _ui.value = _ui.value.qo { copy(statut = e.message ?: "CAT ?") }
@@ -8935,17 +8008,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _ui.value = _ui.value.copy(screen = Screen.ROTOR)
     }
 
-    /** Quitter l'écran n'arrête pas le mât : un passage dure dix minutes. */
+    /** Leaving the screen does not stop the mast: a pass lasts ten minutes. */
     fun closeRotor() { _ui.value = _ui.value.copy(screen = Screen.PASSES) }
 
     /**
-     * Le même filet que pour le CAT, et pour la même raison.
-     *
-     * À une différence près, qui pèse : ici la panne coupe aussi la poursuite.
-     * Un pilote qui a levé une exception est un pilote dont on ne sait plus ce
-     * qu'il a envoyé, et laisser une boucle continuer à pousser des consignes
-     * vers un lien dans cet état est la meilleure façon de faire tourner un mât
-     * sans savoir vers où.
+     * Same safety net as for CAT, with one weighty difference: a failure also
+     * stops tracking. After an exception we no longer know what the driver
+     * sent; a loop still pushing commands would turn a mast who knows where.
      */
     private inline fun rotorGuard(where: String, body: () -> Unit) {
         try {
@@ -8993,13 +8062,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * Changer la butée jette le plan en cours.
-     *
-     * Le plan dit de combien de tours il faut décaler le passage ; il a été
-     * calculé pour une butée donnée et ne veut plus rien dire pour une autre.
-     * Le garder « en attendant le prochain passage » ferait pointer le mât à
-     * cent quatre-vingts degrés de la vérité, ce qui est exactement l'erreur
-     * que tout ce travail cherche à rendre impossible.
+     * Changing the end stop discards the current plan: it was computed for one
+     * stop and means nothing for another. Keeping it until the next pass would
+     * point the mast 180° off.
      */
     fun setRotorAzStop(v: String) {
         settings.rotorAzStop = v
@@ -9055,7 +8120,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _ui.value = _ui.value.rot { copy(rotorMinEl = settings.rotorMinEl) }
     }
 
-    /** Combien de minutes avant le lever le mât part attendre le satellite. */
+    /** Minutes before AOS at which the mast goes to wait for the satellite. */
     fun setRotorPreAos(v: Int) {
         settings.rotorPreAos = v
         _ui.value = _ui.value.rot { copy(rotorPreAos = settings.rotorPreAos) }
@@ -9066,7 +8131,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _ui.value = _ui.value.rot { copy(rotorSim = v) }
     }
 
-    /** La liste des adaptateurs USB visibles, pour que le numéro veuille dire quelque chose. */
+    /** Visible USB adapters, so the index means something. */
     fun refreshRotorDevices() {
         rotorGuard("rotor_devices") {
             _ui.value = _ui.value.rot { copy(
@@ -9089,7 +8154,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         disconnectRotor()
         val u = _ui.value
         if (u.rotorSim) {
-            // Un mât qui n'existe pas : tout se voit à l'écran, rien ne bouge.
+            // A mast that does not exist: everything shows, nothing moves.
             val sim = fr.f4ioz.satcombo.rotor.Gs232Simulator(
                 azMaxDeg = u.rotorMaxAz.toDouble(),
                 elMaxDeg = if (u.rotorFlip) 180.0 else u.rotorMaxEl.toDouble())
@@ -9122,20 +8187,17 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 rotorDiag = listOf(t("cat_err_no_device"))) }
             return
         }
-        // La même suite que pour le poste, et pour les mêmes trois fautes :
-        // on attendait pas la permission, on ouvrait le port 0 du premier
-        // appareil quel que soit le choix, et on ne levait ni DTR ni RTS. Un
-        // émulateur GS-232 sur Arduino se comporte comme n'importe quel pont
-        // série : il ne pardonne aucune des trois.
+        // Same sequence as for the rig: wait for permission, open the chosen
+        // port, raise DTR/RTS. An Arduino GS-232 emulator forgives none of
+        // these.
         val trace = ArrayList<String>()
         val ordre = if (u.rotorAutoPort)
             fr.f4ioz.satcombo.cat.CatScan.ordre(refs, u.rotorUsbIndex)
         else listOf(u.rotorUsbIndex.coerceIn(0, refs.size - 1))
         var gagnant = -1
-        // Pourquoi le dernier port essayé n'a pas convenu. Sans cela l'écran
-        // affichait « autorise l'accès USB » quel que soit l'échec — y compris
-        // quand le port s'était ouvert et que le contrôleur avait répondu :
-        // le message envoyait chercher une permission déjà accordée.
+        // Why the last port tried failed. Otherwise the screen said "allow USB
+        // access" whatever the failure, sending the operator after a
+        // permission already granted.
         var echec = ""
         for (i in ordre) {
             trace.add(tf("cat_diag_try", refs[i].label))
@@ -9146,10 +8208,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 trace.add(tf("cat_diag_line_open", d.lastError))
                 echec = tf("rotor_fail_open", d.lastError); continue
             }
-            // Le port s'ouvre toujours. C'est la réponse à `C2` qui départage
-            // le contrôleur du rotor d'une clé SDR ou d'un poste — et il faut
-            // la demander plusieurs fois : lever DTR redémarre une carte
-            // Arduino, et la première question part pendant l'amorçage.
+            // A port always opens. The reply to `C2` tells the rotor
+            // controller from an SDR dongle or a rig — asked several times:
+            // raising DTR resets an Arduino, and the first query goes out
+            // during boot.
             trace.add(t("rotor_diag_settle"))
             val pos = runCatching { d.probePosition() }.getOrNull()
             if (pos == null) {
@@ -9166,7 +8228,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
         val ok = gagnant >= 0
         if (ok && gagnant != u.rotorUsbIndex) {
-            // Le port qui a répondu devient celui que l'on retient.
+            // The port that answered is remembered.
             settings.rotorUsbIndex = gagnant
         }
         rotorDriver = if (ok) d else null
@@ -9192,20 +8254,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * Envoie la consigne saisie à la main, sans satellite ni poursuite.
+     * Sends the hand-entered command, without satellite or tracking — the
+     * honest way to test a whole chain: a pass comes when it wants and does
+     * not wait for a cable to be sorted out.
      *
-     * « Est-il possible de forcer le rotor à tourner vers des angles… pour
-     * tester sans satellite. » Oui, et c'est même la seule façon honnête
-     * d'essayer une chaîne complète : un passage arrive quand il veut, et il
-     * n'attend pas qu'on ait fini de débrouiller un câble.
-     *
-     * La consigne coupe la poursuite avant de partir. Deux volontés qui
-     * commandent le même mât à une seconde d'intervalle ne se partagent pas le
-     * travail : elles se contredisent, et le mât vibre entre les deux.
-     *
-     * L'angle est saisi en azimut **vrai**, comme tout ce qui est affiché ; la
-     * conversion vers l'origine du contrôleur se fait au dernier moment, sur la
-     * trame qui part — exactement comme pour le garage et pour la poursuite.
+     * It stops tracking first: two masters commanding one mast a second apart
+     * contradict each other and the mast shakes between them. The angle is in
+     * **true** azimuth like everything displayed; conversion to the
+     * controller's origin happens on the outgoing frame, as for park and
+     * tracking.
      */
     fun rotorGotoManual() {
         viewModelScope.launch {
@@ -9242,12 +8299,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * Un pas de plus ou de moins, à partir de là où l'on croit être.
-     *
-     * Le point de départ est la position **lue** quand le contrôleur en donne
-     * une, et la consigne précédente sinon. C'est ce qui rend le bouton utile
-     * pour dégrossir un réglage de fin de course : on avance de dix degrés, on
-     * regarde l'antenne, on recommence.
+     * One step more or less from where we think we are: the **read** position
+     * when available, else the previous command. Handy for rough end-stop
+     * setup: step ten degrees, look at the antenna, repeat.
      */
     fun rotorJog(dAz: Int, dEl: Int) {
         val u = _ui.value
@@ -9259,11 +8313,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * Une interrogation isolée, hors de la boucle.
-     *
-     * Utile quand rien n'est encore branché comme il faut : le bouton demande
-     * la position, et l'écran montre la réponse telle qu'elle arrive — ou son
-     * absence, qui est aussi une réponse.
+     * A single query outside the loop, for when nothing is wired right yet:
+     * shows the reply as it arrives — or its absence, which is an answer too.
      */
     fun rotorReadNow() {
         viewModelScope.launch {
@@ -9290,8 +8341,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         rotorDriver = null
         rotorSimLink = null
         rotorSerial = null
-        // Un mât débranché n'a plus de position à tenir : on oublie la dernière
-        // lue, sans quoi elle survivrait quatre secondes à la déconnexion.
+        // A disconnected mast has no position to hold: forget the last read,
+        // or it would outlive the disconnection by four seconds.
         rotorLu = null; rotorLuMs = 0L
         _ui.value = _ui.value.rot { copy(rotorConnected = false, rotorStatus = t("rotor_offline"),
             rotorTargetAz = null, rotorTargetEl = null,
@@ -9300,11 +8351,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * L'arrêt immédiat.
-     *
-     * Il coupe aussi la poursuite, et ce n'est pas un détail : un arrêt suivi
-     * d'une consigne une seconde plus tard n'est pas un arrêt, c'est une pause.
-     * Le bouton doit faire ce que son nom dit.
+     * Immediate stop. It also stops tracking: a stop followed by a command a
+     * second later is not a stop, it is a pause.
      */
     fun rotorStopNow() {
         viewModelScope.launch {
@@ -9348,12 +8396,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         azStopDeg = if (u.rotorAzStop == "SOUTH") 180.0 else 0.0)
 
     /**
-     * Le plan du passage : choisi une fois, tenu jusqu'au bout.
-     *
-     * Il ne se recalcule qu'au changement de passage, de butée, de course ou
-     * d'écart toléré. Le recalculer à chaque seconde donnerait un mât qui
-     * change d'avis en plein passage, et deux minutes de rotation pour arriver
-     * à un endroit d'où le satellite sera déjà parti.
+     * The pass plan: chosen once, held to the end. Recomputed only when pass,
+     * end stop, travel or tolerance change; recomputing every second would
+     * give a mast changing its mind mid-pass, with two minutes of rotation to
+     * reach a place the satellite has already left.
      */
     private fun ensureRotorPlan(
         u: UiState,
@@ -9381,11 +8427,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * La boucle de poursuite du mât : une consigne par seconde, pas plus.
-     *
-     * Un rotor n'a rien à gagner à être commandé plus vite que cela — il tourne
-     * à six degrés par seconde, et chaque départ use un relais. La cadence est
-     * celle de la position calculée, et c'est bien ainsi.
+     * Mast tracking loop: one command per second, no more. A rotor gains
+     * nothing from faster commands — it turns at ~6°/s and every start wears a
+     * relay.
      */
     private fun startRotorLoop() {
         rotorLoopJob?.cancel()
@@ -9399,21 +8443,20 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     private suspend fun rotorTick() {
         val d = rotorDriver ?: return
-        // Le mât simulé n'avance que si on le fait avancer.
+        // The simulated mast only moves when advanced.
         rotorSimLink?.advance(1000)
         val u = _ui.value
         val limits = rotorLimits(u)
-        // Une question, et une seconde si la première est restée sans réponse.
-        // Un émulateur occupé à faire tourner deux moteurs saute une réponse de
-        // temps en temps ; redemander trois cents millisecondes plus tard coûte
-        // deux octets sur le fil et récupère la quasi-totalité de ces trous.
+        // Ask twice if the first query got no answer: an emulator busy driving
+        // two motors skips a reply now and then; asking again 300 ms later
+        // costs two bytes and recovers nearly all of those gaps.
         var brut = runCatching { d.readPosition() }.getOrNull()
         if (brut == null) {
             delay(300)
             brut = runCatching { d.readPosition() }.getOrNull()
         }
-        // Ce que le contrôleur rend est dans son origine à lui ; tout ce qui
-        // suit est en azimut vrai, et le restera jusqu'à la trame suivante.
+        // The controller answers in its own origin; from here on it is true
+        // azimuth until the next outgoing frame.
         val frais = brut?.let {
             fr.f4ioz.satcombo.rotor.RotorPos(
                 fr.f4ioz.satcombo.rotor.RotorMath.trueAz(it.azDeg, limits, u.rotorAzFromStop),
@@ -9421,16 +8464,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
         val maintenant = System.currentTimeMillis()
         if (frais != null) { rotorLu = frais; rotorLuMs = maintenant }
-        // Et si le contrôleur se tait quand même, on garde quelques secondes ce
-        // qu'il a dit en dernier plutôt que de faire clignoter la boussole entre
-        // le mât et le satellite. Voir RotorTenue : la tenue sert l'écran, elle
-        // ne sert jamais la consigne.
+        // If it still stays silent, hold its last answer a few seconds rather
+        // than make the compass flicker between mast and satellite. See
+        // RotorTenue: holding serves the display, never the command.
         val lu = fr.f4ioz.satcombo.rotor.RotorTenue.montrer(
             frais, rotorLu, rotorLuMs, maintenant)
         if (frais != null) rotorAt = frais
-        // Le mât branché tient l'antenne : c'est lui, et non le téléphone, que
-        // la boussole doit montrer. Rien d'autre ne change — mêmes couleurs,
-        // même trace, même écart — seule la source de la visée est remplacée.
+        // A connected mast holds the antenna: the compass shows it, not the
+        // phone. Only the aim source changes — same colours, trace, error.
         val visee = lu?.let { fr.f4ioz.satcombo.rotor.RotorMath.antennaAim(it) }
         _ui.value = u.rot { copy(rotorActualAz = lu?.azDeg, rotorActualEl = lu?.elDeg,
             rotorAimAz = visee?.azDeg,
@@ -9445,14 +8486,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             return
         }
         val plan = ensureRotorPlan(u, limits)
-        // Sous l'élévation minimale, le satellite est derrière la colline : le
-        // mât rentre au garage plutôt que de suivre un point qu'on n'entend pas.
+        // Below minimum elevation the satellite is behind the hill: park
+        // rather than follow a point we cannot hear…
         val garage = pos.elevationDeg < u.rotorMinEl.toDouble()
-        // …sauf dans les dernières minutes avant l'acquisition : il vaut mieux
-        // aller attendre le satellite là où il se lèvera que rentrer au garage
-        // pour en repartir aussitôt. Le point d'attente est le départ du tour de
-        // mât déjà retenu pour ce passage, butée comprise — le mât n'aura donc
-        // plus rien à dérouler quand le satellite se montrera.
+        // …except in the last minutes before AOS: better wait where it will
+        // rise than park and leave again. The waiting point is the start of
+        // the mast turn already chosen for this pass, end stop included, so
+        // nothing is left to unwind at AOS.
         val avance = garage && plan != null &&
             fr.f4ioz.satcombo.rotor.RotorMath.prePositionDue(
                 System.currentTimeMillis(), trackedPassAos.takeIf { it > 0L }, u.rotorPreAos)
@@ -9469,15 +8509,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         else fr.f4ioz.satcombo.rotor.RotorMath.follow(
             pos.azimuthDeg, pos.elevationDeg, rotorCmd, limits, rotorWasFlipped)
         if (aim == null) {
-            // Un garage impossible reste impossible : on ne borne pas une
-            // position que l'opérateur a choisie lui-même, on le lui dit.
+            // An impossible park stays impossible: do not clamp a position the
+            // operator chose, tell him.
             _ui.value = _ui.value.rot { copy(rotorOutOfRange = true,
                 rotorTargetAz = null, rotorTargetEl = null) }
             return
         }
-        // Derrière la butée, le mât ne déroule pas : il attend au plus près et
-        // l'écart est annoncé en degrés. Un mât qui pointe ailleurs sans le dire
-        // est pire qu'un mât qui n'a pas bougé.
+        // Beyond the end stop the mast does not unwind: it waits as close as
+        // possible and the error is shown in degrees. A mast pointing elsewhere
+        // silently is worse than one that did not move.
         _ui.value = _ui.value.rot { copy(rotorOutOfRange = false, rotorErrorDeg = aim.errorDeg,
             rotorTargetAz = aim.azDeg, rotorTargetEl = aim.elDeg, rotorFlipped = aim.flipped) }
         if (!garage) rotorCmd = fr.f4ioz.satcombo.rotor.RotorPos(aim.azDeg, aim.elDeg)
@@ -9485,14 +8525,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             return
         rotorWasFlipped = aim.flipped
         val cmd = fr.f4ioz.satcombo.rotor.RotorMath.commandAz(aim.azDeg, limits, u.rotorAzFromStop)
-        // « lu » peut être une position tenue, vieille de trois secondes ; ce
-        // n'est pas une lecture. Faute d'avoir vraiment lu le mât, on suppose
-        // qu'il est allé où on le lui a dit — comme avant la tenue.
+        // `lu` may be a held position three seconds old — not a reading.
+        // Without a real read, assume the mast went where it was told.
         if (d.moveTo(cmd, aim.elDeg) && frais == null)
             rotorAt = fr.f4ioz.satcombo.rotor.RotorPos(aim.azDeg, aim.elDeg)
     }
 
-    // ===================== rotor d'azimut et d'élévation =====================
+    // ===================== live satellite position =====================
 
     private var trackingFor: Int? = null
     private fun trackLive(sat: TleEntry, obs: Observer) {

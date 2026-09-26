@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo
 
@@ -12,24 +12,20 @@ import android.app.Application
 import fr.f4ioz.satcombo.diag.PlantageGarde
 
 /**
- * La première chose qu'Android construit dans notre processus, et donc le seul
- * endroit d'où l'on puisse voir un plantage survenu avant l'écran d'accueil.
+ * The first thing Android builds in our process, hence the only place that
+ * can see a crash occurring before the first screen. Without it, a tester's
+ * app once died at startup before any of our code had run to report it.
  *
- * Il n'y avait pas de classe `Application` jusqu'ici, et c'est précisément ce
- * qui manquait le 2 août : l'application mourait au démarrage chez un testeur,
- * et aucune de nos lignes n'avait encore tourné pour le raconter.
- *
- * On n'y met rien d'autre. Tout travail placé ici retarde l'apparition du
- * premier écran, sur tous les téléphones, pour toujours.
+ * Put nothing else here: any work done here delays the first screen, on every
+ * phone, forever.
  */
 class SatMeApp : Application() {
 
     /**
-     * Et non `onCreate`. Android construit les fournisseurs de contenu — dont
-     * celui qui initialise WorkManager — ENTRE `attachBaseContext` et
-     * `onCreate`. Un plantage dans cette fenêtre-là échappait donc au
-     * garde-fou, et c'est exactement la fenêtre où meurent les démarrages qui
-     * dépendent d'un installeur de constructeur.
+     * Not `onCreate`. Android builds content providers — including the one
+     * that initialises WorkManager — BETWEEN `attachBaseContext` and
+     * `onCreate`. A crash in that window escaped the guard, and that is exactly
+     * where startups that depend on a vendor installer die.
      */
     override fun attachBaseContext(base: android.content.Context?) {
         super.attachBaseContext(base)

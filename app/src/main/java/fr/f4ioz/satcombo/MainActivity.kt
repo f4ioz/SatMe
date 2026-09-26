@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo
 
@@ -31,20 +31,18 @@ class MainActivity : ComponentActivity() {
     private val vm: MainViewModel by viewModels()
 
     /**
-     * Les touches de volume, détournées en commande de VFO.
+     * Volume keys hijacked as a VFO control.
      *
-     * Une molette USB de volume est un clavier HID qui n'envoie que volume
-     * plus, volume moins et sourdine. Android les traite comme les touches du
-     * téléphone ; c'est ici, et seulement quand l'application est au premier
-     * plan, qu'on peut les reprendre.
+     * A USB volume knob is a HID keyboard sending only volume up, volume down
+     * and mute. Android treats them like the phone's own keys; this is the only
+     * place, and only while in the foreground, where we can take them back.
      *
-     * **On ne reprend que ce qui vient d'un appareil branché.** Les touches
-     * physiques du téléphone gardent leur rôle : confisquer le réglage
-     * d'écoute sur une application de trafic serait absurde, et l'opérateur
-     * n'aurait aucun moyen de comprendre pourquoi son volume ne bouge plus.
+     * **Only keys from an external device are taken.** The phone's own keys
+     * keep their role: the operator would have no way to understand why the
+     * volume no longer moves.
      *
-     * Rendre `false` laisse l'événement au système : c'est ce qui se passe
-     * quand le réglage est fermé, ou que la touche vient du téléphone.
+     * Returning `false` leaves the event to the system (setting off, or key
+     * from the phone).
      */
     override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean {
         if (event.action == android.view.KeyEvent.ACTION_DOWN) {
@@ -53,9 +51,9 @@ class MainActivity : ComponentActivity() {
             }.getOrDefault(false)
             if (vm.moletteCran(event.keyCode, externe)) return true
         }
-        // Le relâchement de la touche qu'on a prise doit être avalé lui aussi,
-        // sinon le système la voit remonter sans l'avoir vue descendre et
-        // applique quand même son effet.
+        // The release of a key we took must be swallowed too, otherwise the
+        // system sees it come up without having seen it go down and still
+        // applies its effect.
         if (event.action == android.view.KeyEvent.ACTION_UP) {
             val externe = runCatching {
                 android.view.InputDevice.getDevice(event.deviceId)?.isExternal == true
@@ -82,20 +80,18 @@ class MainActivity : ComponentActivity() {
     private val permLauncher =
         registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
             vm.bootstrap()
-            // Au premier démarrage après installation, le suivi de position a
-            // déjà tenté de partir et s'est fait refuser par le système. Rien
-            // ne le prévenait ensuite que la réponse était arrivée : c'est le
-            // chaînon qui manquait.
+            // On first launch after install, location tracking has already
+            // tried to start and been refused. Nothing else tells it that the
+            // answer has arrived.
             runCatching { vm.onPermissionsResult() }
         }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // Les trois instructions qui suivent parlent au système, et le système
-        // n'est pas le même partout. Une seule d'entre elles qui lève, et
-        // l'application se ferme avant d'avoir dessiné quoi que ce soit — sans
-        // canal de notification, sans mise à jour proposée ou sans satellite
-        // pré-ouvert, SatMe reste parfaitement utilisable ; fermée, non.
+        // These system calls differ between vendors. If one throws, the app
+        // closes before drawing anything. Without a notification channel, an
+        // update prompt or a pre-opened satellite SatMe is still usable;
+        // closed, it is not.
         runCatching { PassNotifier.ensureChannel(this) }
         updater = PlayUpdater(this, vm)
 
@@ -108,9 +104,9 @@ class MainActivity : ComponentActivity() {
         }
         permLauncher.launch(perms.toTypedArray())
 
-        // L'intention vient du lanceur, d'une notification, ou d'une clé USB
-        // que le constructeur a décrite à sa façon. La lire, c'est désérialiser
-        // un colis que nous n'avons pas emballé.
+        // The intent comes from the launcher, a notification, or a USB device
+        // described the vendor's way. Reading it deserialises a parcel we did
+        // not pack.
         runCatching { handleOpenIntent(intent) }
 
         setContent {
@@ -120,9 +116,9 @@ class MainActivity : ComponentActivity() {
                         SatComboApp(vm)
                         UpdatePrompt(vm, updater)
                         PlantagePrompt()
-                        // La liaison de la boussole déportée : globale, donc à
-                        // la racine — pas dans l'écran de pointage, qu'on
-                        // quitte en plein passage pour ouvrir le carnet.
+                        // Remote compass link: global, so at the root — not in
+                        // the pointing screen, which is left mid-pass to open
+                        // the log.
                         fr.f4ioz.satcombo.ble.TenueBoussole(vm)
                     }
                 }
@@ -155,13 +151,12 @@ class MainActivity : ComponentActivity() {
             val aos = intent?.getLongExtra("open_aos", 0L) ?: 0L
             vm.openFromNotification(cat, aos)
         }
-        // Le rappel d'un rendez-vous : on ouvre l'agenda, pas un satellite.
+        // An appointment reminder opens the agenda, not a satellite.
         if (intent?.getBooleanExtra("open_agenda", false) == true) vm.openAgenda()
 
-        // Une clé USB vient d'être branchée. Android nous réveille avec cette
-        // intention ; en singleTop elle arrive par onNewIntent, l'écran en
-        // cours est donc conservé. On note simplement la présence de la clé —
-        // et surtout on ne change pas d'écran, c'était tout le problème.
+        // A USB device was plugged in. In singleTop this arrives via
+        // onNewIntent, so the current screen is kept. Just record the device —
+        // and do NOT change screen, that was the whole problem.
         if (intent?.action == android.hardware.usb.UsbManager.ACTION_USB_DEVICE_ATTACHED) {
             val dev: android.hardware.usb.UsbDevice? =
                 if (Build.VERSION.SDK_INT >= 33)
