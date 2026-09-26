@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.ui
 
@@ -43,37 +43,28 @@ import fr.f4ioz.satcombo.ui.theme.TextHi
 import fr.f4ioz.satcombo.ui.theme.TextLo
 
 /**
- * Le clavier des indicatifs.
+ * Callsign keyboard.
  *
- * Trente-six touches — A à Z, 0 à 9 — et rien d'autre. Pas de ponctuation, pas
- * de bascule majuscules, pas de rangée de chiffres à aller chercher : un
- * indicatif n'a besoin d'aucun des trois, et chacun coûterait de la place aux
- * touches qui servent vraiment.
+ * Thirty-six keys, A–Z and 0–9, nothing else: a callsign needs no
+ * punctuation, shift or number row, and each would steal room from real keys.
  *
- * Le choix de six colonnes plutôt que dix n'est pas esthétique. Sur un
- * téléphone de 360 dp, dix colonnes donnent des touches de 34 dp — sous le
- * minimum recommandé pour un doigt, et très loin de ce qu'il faut avec des
- * gants. Six colonnes donnent 56 dp, soit près du double d'un clavier système.
+ * Six columns rather than ten is not aesthetic: on a 360 dp phone ten columns
+ * give 34 dp keys, below the finger minimum and hopeless with gloves; six give
+ * 56 dp. A phone-style grouped keypad would not save presses: with
+ * suggestions from the third character, `F4H` + tap on the suggestion is four
+ * presses; grouped keys would need five plus disambiguation.
  *
- * On aurait pu chercher à réduire le **nombre** de touches — un clavier groupé
- * façon téléphone. Le calcul dit le contraire : avec les suggestions au
- * troisième caractère, taper `F4H` puis appuyer sur la proposition fait quatre
- * appuis, carré compris. Un clavier groupé en demanderait cinq, plus les levées
- * d'ambiguïté sur les indicatifs inconnus. La prédiction a déjà pris le gain ;
- * il ne restait aux grosses touches qu'à agrandir la cible.
- *
- * Et une règle qui ne souffre aucune exception : **le clavier ne retire jamais
- * une touche**. Il grossit celles qui prolongent quelque chose de connu, il
- * laisse toutes les autres en place. Un clavier qui supprimerait les touches
- * improbables interdirait de noter le DX rare jamais contacté, c'est-à-dire
- * exactement celui pour lequel on avait sorti l'antenne.
+ * **The keyboard never removes a key.** It highlights keys that extend a known
+ * callsign and leaves the rest in place. Dropping unlikely keys would make it
+ * impossible to log the rare DX never worked before — the very one you set up
+ * the antenna for.
  */
 @Composable
 fun ClavierIndicatif(
     saisie: String,
     memoire: List<Indicatifs.Connu>,
     mainGauche: Boolean,
-    /** Disposition des touches : « abc », « azerty » ou « qwerty ». */
+    /** Key layout: "abc", "azerty" or "qwerty". */
     disposition: String = "abc",
     onCaractere: (Char) -> Unit,
     onBarre: () -> Unit,
@@ -82,14 +73,10 @@ fun ClavierIndicatif(
     onValide: () -> Unit,
     modifier: Modifier = Modifier,
     /**
-     * La couleur du liseré d'émission, ou `null` quand le poste ne transmet
-     * pas.
-     *
-     * Le clavier ne sait pas ce qu'est une émission et n'a pas à l'apprendre :
-     * il reçoit une couleur ou rien. La pulsation est calculée par l'écran, en
-     * même temps que celle du cadre général, pour que les deux battent
-     * ensemble — deux rouges qui clignotent chacun de son côté se liraient
-     * comme deux alarmes distinctes.
+     * TX border colour, or `null` when not transmitting. The keyboard knows
+     * nothing about TX; the screen computes the pulse together with the main
+     * frame's so both beat in sync — two reds blinking independently read as
+     * two separate alarms.
      */
     liseretTx: Color? = null,
 ) {
@@ -103,10 +90,8 @@ fun ClavierIndicatif(
                 else Modifier
             )
     ) {
-        // Les rangées n'ont pas toutes la même longueur en AZERTY et en
-        // QWERTY — dix, dix, six. `weight` répartit dans chaque rangée
-        // indépendamment : les touches d'une rangée courte sont donc plus
-        // larges, exactement comme sur un clavier physique.
+        // AZERTY/QWERTY rows differ in length (10, 10, 6). `weight` works per
+        // row, so keys in a short row are wider.
         fr.f4ioz.satcombo.domain.DispositionClavier.rangees(disposition).forEach { rangee ->
             Row(
                 Modifier.fillMaxWidth().padding(vertical = 2.dp),
@@ -124,18 +109,13 @@ fun ClavierIndicatif(
 
         Spacer(Modifier.height(6.dp))
 
-        // La rangée de commande, et le côté qui compte. Sur un écran tenu d'une
-        // main, le pouce atteint bien son propre bord et mal celui d'en face :
-        // validation et effacement doivent tomber du côté de la main qui tient.
+        // Command row: one-handed, the thumb reaches its own edge, not the far
+        // one, so save and delete go on the holding hand's side.
         val commandes = @Composable {
-            // La barre seule, distincte de la touche à suffixes.
-            //
-            // Les deux servent à des choses opposées : celle-ci ouvre un
-            // **préfixe de pays** — `EA5/F5RRO`, l'indicatif d'un opérateur
-            // français en Espagne — quand l'autre ajoute un **suffixe
-            // d'exploitation** à la fin. Une seule touche pour les deux
-            // obligerait à deviner lequel des deux on veut, et se tromperait la
-            // moitié du temps.
+            // Plain slash, separate from the suffix key: it opens a **country
+            // prefix** (`EA5/F5RRO`, a French operator in Spain) whereas the
+            // other appends an **operating suffix**. One key for both would
+            // guess wrong half the time.
             Touche(
                 libelle = "/",
                 misEnValeur = false,
@@ -178,16 +158,11 @@ fun ClavierIndicatif(
 }
 
 /**
- * La ligne de suggestions.
+ * Suggestion row.
  *
- * Placée **entre le champ et le clavier**, et non au-dessus du champ : c'est la
- * zone que le pouce atteint le mieux, et c'est là que se joue toute l'économie
- * de temps. Trois propositions au maximum — au-delà, la ligne demande une
- * lecture au lieu d'un coup d'œil, et l'on a reperdu les secondes qu'on venait
- * gagner.
- *
- * Chaque proposition porte son carré et son nombre de contacts, parce que c'est
- * ce qui permet de choisir sans réfléchir entre deux indicatifs voisins.
+ * Placed **between the field and the keyboard**, where the thumb reaches best.
+ * Three suggestions at most: more needs reading instead of a glance. Each shows
+ * grid square and contact count, to pick between similar callsigns at once.
  */
 @Composable
 fun LigneSuggestions(
@@ -231,11 +206,8 @@ fun LigneSuggestions(
 }
 
 /**
- * Le champ de saisie et sa pastille d'état.
- *
- * La pastille informe, elle n'interdit rien : « déjà contacté », « format
- * plausible », « format inhabituel ». Le troisième cas n'empêche jamais la
- * validation.
+ * Entry field and its status dot. The dot informs, never blocks: "worked
+ * before", "plausible format", "unusual format". Unusual never prevents saving.
  */
 @Composable
 fun ChampIndicatif(
@@ -243,12 +215,8 @@ fun ChampIndicatif(
     etat: Indicatifs.Etat,
     modifier: Modifier = Modifier,
     /**
-     * Le nom du correspondant, à droite sur la même ligne.
-     *
-     * Il ne participe à rien : il se lit. Reconnaître « Olivier » d'un coup
-     * d'œil vaut mieux que relire cinq caractères, et c'est ce qui permet de
-     * valider sans hésiter au milieu d'un passage. La place existait, elle ne
-     * servait à rien.
+     * The other station's name, display only. Recognising "Olivier" at a
+     * glance beats re-reading five characters mid-pass.
      */
     nom: String = "",
 ) {
@@ -320,11 +288,10 @@ private fun Touche(
     }
 }
 
-// Les dispositions vivent au domaine, avec leur banc : une lettre absente de
-// la grille ne se verrait qu'au moment où un indicatif la réclame, en plein
-// passage, et l'on croirait à une panne du clavier.
+// Layouts live in the domain layer with their tests: a letter missing from a
+// grid would otherwise only show up mid-pass, when a callsign needs it.
 
-/** `remember` avec deux clés, pour ne pas recalculer les suites à chaque trame. */
+/** Two-key `remember`, so suggestions aren't recomputed every frame. */
 @Composable
 private fun <T> remember2(a: Any?, b: Any?, calcul: () -> T): T =
     androidx.compose.runtime.remember(a, b) { calcul() }

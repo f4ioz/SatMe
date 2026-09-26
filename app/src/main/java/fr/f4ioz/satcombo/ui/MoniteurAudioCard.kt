@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.ui
 
@@ -36,12 +36,9 @@ import fr.f4ioz.satcombo.i18n.t
 import fr.f4ioz.satcombo.ui.theme.*
 
 /**
- * Le spectre du son en cours d'enregistrement, et l'interrupteur du contrôle
- * à l'oreille.
- *
- * La carte n'existe que pendant un enregistrement : hors enregistrement il n'y
- * a pas d'échantillons, et une carte vide sur la page du passage ne ferait que
- * prendre la place de la boussole.
+ * Spectrum of the audio being recorded, plus the monitor-by-ear switch.
+ * Only shown while recording: otherwise there are no samples, and an empty card
+ * would just take space from the compass.
  */
 @Composable
 fun MoniteurAudioCard(ui: UiState, vm: MainViewModel) {
@@ -59,15 +56,13 @@ fun MoniteurAudioCard(ui: UiState, vm: MainViewModel) {
                         modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
                 }
                 Spacer(Modifier.width(8.dp))
-                // Le vumètre en chiffres : une crête qui colle à 1 est une
-                // saturation, une crête qui ne décolle pas de 0 est un câble
-                // débranché. Les deux se voient mieux ici qu'à l'oreille.
+                // Peak stuck at 1 = clipping; stuck at 0 = unplugged cable.
+                // Both show better here than by ear.
                 Text(niveauTexte(etat.crete), color = teinteNiveau(etat.crete),
                     fontSize = 11.sp, fontWeight = FontWeight.Bold)
                 Spacer(Modifier.weight(1f))
-                // L'écoute au haut-parleur ne s'offre que sur une source
-                // extérieure : sur le micro du téléphone elle ne donnerait
-                // qu'un Larsen.
+                // Speaker monitoring only for external sources: on the phone
+                // mic it would just howl (feedback).
                 if (ui.recorderSource != "MIC") {
                     IconButton(onClick = { vm.setMonitorSpeaker(!ui.monitorSpeaker) },
                         modifier = Modifier.size(32.dp)) {
@@ -93,7 +88,7 @@ fun MoniteurAudioCard(ui: UiState, vm: MainViewModel) {
     }
 }
 
-/** « Crête −6 dB » plutôt qu'un nombre nu : c'est ce que lit un opérateur. */
+/** "Peak −6 dB" rather than a bare number: what an operator reads. */
 private fun niveauTexte(crete: Float): String {
     if (crete <= 0.0005f) return "—"
     val db = 20.0 * kotlin.math.log10(crete.toDouble())
@@ -101,15 +96,12 @@ private fun niveauTexte(crete: Float): String {
 }
 
 private fun teinteNiveau(crete: Float): Color = when {
-    crete >= 0.95f -> Magenta      // ça écrête
-    crete >= 0.05f -> Aurora       // niveau utile
-    else -> TextLo                 // rien n'entre
+    crete >= 0.95f -> Magenta      // clipping
+    crete >= 0.05f -> Aurora       // usable level
+    else -> TextLo                 // no input
 }
 
-/**
- * Les barres. Dessinées à la main plutôt qu'empilées en composables : trente
- * barres redessinées quinze fois par seconde méritent un seul Canvas.
- */
+/** The bars, in a single Canvas: 30 bars redrawn 15 times a second. */
 @Composable
 private fun BarresSpectre(bandes: List<Float>, hauteur: androidx.compose.ui.unit.Dp = 56.dp) {
     Canvas(Modifier.fillMaxWidth().height(hauteur)) {
@@ -122,9 +114,8 @@ private fun BarresSpectre(bandes: List<Float>, hauteur: androidx.compose.ui.unit
             val v = bandes[i].coerceIn(0f, 1f)
             val h = (size.height * v).coerceAtLeast(1f)
             val x = i * (largeur + ecart)
-            // Vert tant que le niveau est confortable, ambre puis magenta
-            // quand il approche de l'écrêtage : la couleur dit tout de suite
-            // s'il faut baisser le volume du poste.
+            // Green when comfortable, amber then magenta near clipping: tells
+            // at once whether to turn the radio's volume down.
             val c = when {
                 v >= 0.92f -> Magenta
                 v >= 0.75f -> Amber

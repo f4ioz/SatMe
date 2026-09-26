@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.ui
 
@@ -82,8 +82,8 @@ fun SstvScreen(ui: UiState, vm: MainViewModel) {
     var gallery by remember { mutableStateOf(SstvHub.shots(ctx)) }
     var pickRecording by remember { mutableStateOf(false) }
     var viewing by remember { mutableStateOf<File?>(null) }
-    // Filtre par satellite : une saison d'écoute mélange l'ISS, les relais et
-    // les essais, et on cherche presque toujours « les images de l'ISS ».
+    // Filter by satellite: a season mixes ISS, repeaters and tests, and
+    // you almost always want "the ISS pictures".
     var satFilter by remember { mutableStateOf("") }
 
     // Refresh the gallery whenever the engine says it has written something.
@@ -144,17 +144,13 @@ fun SstvScreen(ui: UiState, vm: MainViewModel) {
                             modifier = Modifier.fillMaxWidth()
                                 .clip(RoundedCornerShape(10.dp)))
                     }
-                    // D'où vient le son que l'on décode.
+                    // Where the decoded audio comes from.
                     //
-                    // « J'ai essayé d'enregistrer l'audio via cette carte son
-                    // intégrée ça fonctionne. » Elle fonctionnait déjà — le
-                    // magnétophone sait ouvrir une entrée USB depuis la 18.10 —
-                    // mais le réglage vivait dans les paramètres du magnéto, à
-                    // trois écrans d'ici, et rien sur cette page ne laissait
-                    // deviner qu'un IC-9700 branché en USB pouvait alimenter le
-                    // décodeur directement. Le câble audio entre le poste et le
-                    // téléphone n'a plus lieu d'être : plus de souffle, plus de
-                    // niveau à régler, plus de bruit de la pièce dans l'image.
+                    // USB input already worked (the recorder opens USB inputs since
+                    // 18.10), but the setting lived three screens away in the recorder
+                    // settings, and nothing here hinted that an IC-9700 on USB can feed
+                    // the decoder directly. No audio cable between rig and phone: no
+                    // hiss, no level to set, no room noise in the picture.
                     Spacer(Modifier.height(10.dp))
                     Text(t("sstv_audio_source"), color = TextHi, fontSize = 13.sp)
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -182,17 +178,6 @@ fun SstvScreen(ui: UiState, vm: MainViewModel) {
                     }
                     Text(t("sstv_audio_hint"), color = TextLo, fontSize = 11.sp,
                         modifier = Modifier.padding(top = 4.dp))
-                    // D'où vient le son que l'on décode.
-                    //
-                    // « J'ai essayé d'enregistrer l'audio via cette carte son
-                    // intégrée ça fonctionne. » Elle fonctionnait déjà — le
-                    // magnétophone sait ouvrir une entrée USB depuis la 18.10 —
-                    // mais le réglage vivait dans les paramètres du magnéto, à
-                    // trois écrans d'ici, et rien sur cette page ne laissait
-                    // deviner qu'un IC-9700 branché en USB pouvait alimenter le
-                    // décodeur directement. Le câble audio entre le poste et le
-                    // téléphone n'a plus lieu d'être : plus de souffle, plus de
-                    // niveau à régler, plus de bruit de la pièce dans l'image.
                     Spacer(Modifier.height(10.dp))
                     if (!st.listening) {
                         Spacer(Modifier.height(8.dp))
@@ -354,9 +339,8 @@ private fun SstvThumb(file: File, shot: SstvMeta.SstvShot, useUtc: Boolean,
                     (if (shot.source == "file") "  ·  " + t("sstv_from_file") else ""),
                     color = TextLo, fontSize = 10.sp)
             }
-            // Partager répond à « à qui », enregistrer à « où ». En portable,
-            // sans réseau, le sélecteur de partage n'a souvent rien à proposer
-            // et l'image décodée n'a nulle part où aller.
+            // Share answers "to whom", save answers "where". Portable and
+            // offline, the share sheet often has nothing to offer.
             val enregistreImage = rememberEnregistrer()
             IconButton(onClick = {
                 runCatching {

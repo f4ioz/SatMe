@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.ui
 
@@ -43,62 +43,48 @@ import kotlin.math.floor
 import kotlin.math.max
 import kotlin.math.min
 
-/** Largeur du panorama en colonnes. 500 kHz / 512 ≈ 977 Hz par colonne. */
+/** Panorama width in columns. 500 kHz / 512 ≈ 977 Hz per column. */
 private const val PCOLS = 512
 
-/** Hauteur de l'histoire gardée : à une trame toutes les 300 ms, une demi-minute. */
+/** History depth: at one frame every 300 ms, half a minute. */
 private const val PROWS = 80
 
 /**
- * Valeur écrite dans une colonne que la clé ne reçoit pas.
- *
- * Ce n'est pas un niveau : c'est une absence. Une colonne hors fenêtre ne doit
- * ni compter dans la mise à l'échelle, ni être peinte comme du bruit très bas —
- * les deux mentiraient. Elle se peint en gris sombre, ce qui se lit tout de
- * suite comme « je ne regarde pas là ».
+ * Marker for a column the dongle doesn't receive. Not a level but an absence:
+ * it must neither count in scaling nor be painted as very low noise. It is
+ * painted dark grey, read at once as "not looking here".
  */
 private const val HORS = -999f
 
-/** Le gris des colonnes non reçues. Assez clair pour ne pas passer pour du noir. */
+/** Grey for unreceived columns; light enough not to pass for black. */
 private const val COULEUR_HORS = 0xFF202430.toInt()
 
 /**
- * Le transpondeur étroit vu par la clé, à l'échelle de la réglette.
+ * The QO-100 narrowband transponder as seen by the dongle, on the band-plan
+ * ruler scale.
  *
- * ### Pourquoi cette vue existe
+ * **Why.** The normal waterfall shows a narrow window around the dongle tuning
+ * that moves with the VFO — right for following a station, useless for
+ * reading a transponder. Here the axis is **fixed**, in sky frequencies across
+ * the band plan: beacons always sit in the same place and busy areas show at
+ * a glance.
  *
- * La cascade ordinaire de l'application montre ce que la clé reçoit *autour de
- * son accord* : une fenêtre étroite qui se déplace avec le VFO. C'est ce qu'il
- * faut pour suivre un correspondant, et c'est inutilisable pour comprendre un
- * transpondeur. Ici on veut l'inverse : un axe **fixe**, gradué en fréquences
- * du ciel, du bas au haut du plan de bande, sur lequel les balises sont
- * toujours au même endroit et où l'on voit d'un coup d'œil où il y a du monde.
+ * **Why it works.** The dongle digitises 1 058 400 Hz (±529 200 Hz); the
+ * narrowband plan spans 500 000 Hz. **Wherever the dongle is tuned inside the
+ * transponder, the whole transponder stays in its window**: no sweep, no PLL
+ * retune, no stitching — one FFT placed on an absolute axis. Worst-case margin
+ * is 29.2 kHz and tuner edges roll off, so extreme columns may dim a bit when
+ * tuned at a band end. Harmless.
  *
- * ### La coïncidence qui rend la chose possible
+ * **Keeping the axis still.** Resampling happens **before** stacking into
+ * history, not at draw time: each frame is projected with its own sky centre.
+ * If the operator retunes or Doppler moves the PLL, older rows stay correct.
  *
- * La clé numérise 1 058 400 Hz d'un coup, soit ±529 200 Hz autour de sa boucle.
- * Le plan de bande étroit en fait 500 000. Autrement dit : **où que la clé soit
- * accordée dans le transpondeur, le transpondeur entier reste dans sa fenêtre**.
- * Il n'y a donc ni balayage, ni changement de PLL, ni recollage de morceaux —
- * on lit une seule FFT et on la range dans un axe absolu. La marge dans le pire
- * cas est de 29,2 kHz, et les bords d'un tuner sont mous : les colonnes
- * extrêmes peuvent s'assombrir un peu quand l'accord est tout en bout de bande.
- * C'est visible et sans conséquence, la fenêtre restant centrée sur le trafic.
- *
- * ### Comment l'axe reste immobile
- *
- * Le rééchantillonnage se fait **avant** l'empilement dans l'histoire, pas au
- * dessin. Chaque trame arrive avec le centre du ciel qui lui correspond, et
- * elle est immédiatement projetée sur les colonnes absolues de la réglette. Si
- * l'opérateur change de fréquence, ou si le Doppler bouge la PLL, les lignes
- * déjà empilées restent justes — elles avaient été rangées avec leur propre
- * centre. Une cascade qui glisserait à chaque coup de VFO ne servirait à rien.
- *
- * @param pan la FFT brute de la clé, rangée du plus bas au plus haut *indice*.
- * @param centreCielHz la fréquence du ciel qui tombe au milieu de [pan].
- * @param etendueCielHz la largeur couverte, **signée** : négative derrière une
- *        injection haute, auquel cas le tableau se parcourt à l'envers.
- * @param descenteHz la fréquence de travail, dessinée en curseur.
+ * @param pan raw dongle FFT, lowest to highest *index*.
+ * @param centreCielHz sky frequency at the middle of [pan].
+ * @param etendueCielHz covered width, **signed**: negative behind high-side
+ *        injection, in which case the array runs backwards.
+ * @param descenteHz working frequency, drawn as the cursor.
  */
 @Composable
 fun PanoramaQo100(
@@ -116,9 +102,8 @@ fun PanoramaQo100(
     val bitmap = remember { Bitmap.createBitmap(PCOLS, PROWS, Bitmap.Config.ARGB_8888) }
     val image: ImageBitmap = remember(bitmap) { bitmap.asImageBitmap() }
 
-    // Une trame neuve arrive : on la projette tout de suite sur l'axe absolu,
-    // puis on l'empile. Le tableau est neuf à chaque fois, donc l'égalité
-    // d'identité de Compose suffit à déclencher l'effet.
+    // Project each new frame onto the absolute axis, then stack it. The array
+    // is new every time, so Compose's identity check triggers the effect.
     LaunchedEffect(pan) {
         val col = colonnes(pan, centreCielHz, etendueCielHz)
         if (col != null) {
@@ -168,10 +153,9 @@ fun PanoramaQo100(
             val l = size.width
             fun x(f: Long): Float = (((f - bas) / etendue) * l).toFloat()
 
-            // Les repères du plan de bande : quatre balises et deux fréquences
-            // réservées, aux mêmes abscisses que sur la réglette juste au-dessus.
-            // Ils sont la preuve visuelle que l'étalonnage est bon : si la raie
-            // de la balise ne tombe pas sur son trait, le LNB a dérivé.
+            // Band-plan markers (beacons and reserved frequencies), aligned with
+            // the ruler above. Visual calibration check: if a beacon line misses
+            // its marker, the LNB has drifted.
             Qo100.SEGMENTS.forEach { s ->
                 val r = s.repereHz ?: return@forEach
                 drawLine(
@@ -181,7 +165,6 @@ fun PanoramaQo100(
                     strokeWidth = 1.dp.toPx())
             }
 
-            // Le curseur d'accord.
             val xc = x(descenteHz).coerceIn(0f, l)
             drawLine(
                 color = TextHi,
@@ -194,15 +177,12 @@ fun PanoramaQo100(
 }
 
 /**
- * Projette une FFT sur les [PCOLS] colonnes fixes de la réglette.
+ * Projects an FFT onto the [PCOLS] fixed ruler columns.
  *
- * Chaque colonne prend le **maximum** des raies qui tombent dedans, jamais leur
- * moyenne : une porteuse SSB tient dans deux ou trois raies sur la quinzaine
- * que couvre une colonne, et une moyenne la noierait dans le bruit voisin. Une
- * cascade qui efface les signaux faibles n'a aucun intérêt.
- *
- * Rend `null` quand il n'y a rien d'exploitable, pour que l'appelant n'empile
- * pas une ligne vide dans l'histoire.
+ * Each column takes the **maximum** of its bins, never the mean: an SSB
+ * signal fills two or three of the ~15 bins per column and averaging would
+ * drown it in noise. Returns `null` when nothing is usable, so no empty row
+ * gets stacked.
  */
 private fun colonnes(pan: FloatArray, centreHz: Double, etendueHz: Double): FloatArray? {
     val n = pan.size
@@ -227,11 +207,11 @@ private fun colonnes(pan: FloatArray, centreHz: Double, etendueHz: Double): Floa
         out[c] = m
         utiles++
     }
-    // Tout hors fenêtre : l'accord est ailleurs, la ligne ne dirait rien.
+    // Mostly out of window: tuned elsewhere, the row would say nothing.
     return if (utiles < PCOLS / 8) null else out
 }
 
-/** Remplit [pixels] avec l'histoire, la ligne récente en haut. */
+/** Fills [pixels] from history, newest row on top. */
 private fun peindre(history: List<FloatArray>, pixels: IntArray) {
     val rows = history.size
     var lo = Float.MAX_VALUE
@@ -242,8 +222,8 @@ private fun peindre(history: List<FloatArray>, pixels: IntArray) {
         if (v > hi) hi = v
     }
     if (lo == Float.MAX_VALUE) lo = -120f
-    // Au moins vingt décibels d'échelle, sinon du bruit seul se peindrait en
-    // montagnes et donnerait l'illusion d'un transpondeur plein.
+    // At least 20 dB of scale, or plain noise would paint as mountains and
+    // look like a busy transponder.
     if (hi < lo + 20f) hi = lo + 20f
     val inv = 1f / (hi - lo)
     for (r in 0 until PROWS) {

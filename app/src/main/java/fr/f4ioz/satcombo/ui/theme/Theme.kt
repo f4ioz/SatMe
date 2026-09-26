@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.ui.theme
 
@@ -58,23 +58,19 @@ private val LightPalette = Palette(
 )
 
 /**
- * Palette « Soleil » — pour lire l'écran en plein jour.
+ * "Sun" palette — for reading the screen in full daylight.
  *
- * **Sombre sur clair, et c'est l'inverse de l'intuition courante.** En plein
- * soleil, le facteur limitant n'est pas la réflexion du fond mais le rapport
- * entre ce que la dalle émet et ce que le verre renvoie. La vitre réfléchit 4 à
- * 5 % de l'ambiant : sous cent mille lux, cela équivaut à plusieurs milliers de
- * nits, quand un téléphone plafonne vers mille. Un pixel noir ne peut donc pas
- * être plus sombre que ce reflet — il devient gris et le contraste s'effondre.
- * Un pixel blanc, lui, ajoute son émission par-dessus. C'est pourquoi les
- * liseuses, les GPS de randonnée et les instruments de plein air sont tous en
- * sombre sur clair.
+ * **Dark on light, against common intuition.** In sunlight the glass reflects
+ * 4-5 % of ambient light: under 100,000 lux that is thousands of nits, while a
+ * phone peaks around a thousand. A black pixel cannot be darker than that
+ * reflection, so it turns grey and contrast collapses; a white pixel adds its
+ * emission on top. That is why e-readers and outdoor GPS units are dark on
+ * light.
  *
- * D'où les choix : blanc pur, noir pur, et **aucun gris intermédiaire**. Le
- * `textLo` du thème clair ordinaire (#64748B) tombe à 4,8:1 sur blanc — correct
- * au bureau, invisible au soleil ; ici il monte à #303030, soit 12:1. Les
- * accents cyan et magenta sont remplacés par des teintes foncées et saturées :
- * un cyan clair sur blanc ne se voit tout simplement pas.
+ * Hence pure white, pure black and **no mid greys**: the light theme's
+ * `textLo` (#64748B) is 4.8:1 on white, fine indoors, invisible outside; here
+ * it is #303030, 12:1. Cyan and magenta become dark saturated tones: light
+ * cyan on white simply does not show.
  */
 private val SunPalette = Palette(
     bg = Color(0xFFFFFFFF), surface = Color(0xFFFFFFFF), card = Color(0xFFFFFFFF),
@@ -87,7 +83,7 @@ private val SunPalette = Palette(
 
 private var activePalette by mutableStateOf(DarkPalette)
 
-/** Les trois thèmes, dans l'ordre du sélecteur. */
+/** The three themes, in selector order. */
 const val THEME_SOMBRE = 0
 const val THEME_CLAIR = 1
 const val THEME_SOLEIL = 2
@@ -105,11 +101,8 @@ fun applyTheme(theme: Int) {
 fun isDarkTheme(): Boolean = activePalette.isDark
 
 /**
- * Le mode soleil est-il actif ?
- *
- * Les tracés en ont besoin : une boussole dessinée en traits fins et en teintes
- * pastel se lit très bien à l'ombre et disparaît au soleil, quelle que soit la
- * palette de texte.
+ * Is sun mode active? Drawings need it: a compass in thin pastel strokes reads
+ * well in the shade and vanishes in the sun, whatever the text palette.
  */
 fun isSunTheme(): Boolean = activePalette === SunPalette
 

@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.ui
 
@@ -53,22 +53,15 @@ import fr.f4ioz.satcombo.ui.theme.TextLo
 import kotlin.math.abs
 
 /**
- * Le vernier : un cadran de fréquences qui défile sous un repère fixe.
+ * The vernier: a frequency dial scrolling under a fixed marker.
  *
- * Ce n'est pas une carte de bande. Rien n'y est à sa place absolue : seul le
- * déplacement compte, à raison de tant de hertz par centimètre de doigt. C'est
- * la différence qui fait tout — sur une carte, la précision est imposée par la
- * largeur de l'écran divisée par la largeur de la bande, et sur QO-100 cela
- * donne 1,4 kHz par dp, dix fois trop grossier pour de la BLU. Ici la précision
- * est **choisie**, et l'écran ne la contraint plus.
+ * Not a band map: only displacement counts, in hertz per centimetre of finger.
+ * On a band map the resolution is screen width over band width — 1.4 kHz per dp
+ * on QO-100, ten times too coarse for SSB. Here the resolution is **chosen**.
+ * Bonus: the finger does not cover what you are looking at, as it does on a
+ * waterfall.
  *
- * Deuxième bénéfice, plus discret mais qui compte à l'usage : le doigt ne se
- * pose pas sur ce qu'on regarde. Sur une cascade, la main masque exactement le
- * signal qu'on essaie de viser.
- *
- * Le lancer est conservé — un geste rapide fait défiler puis s'arrête tout
- * seul. Sans lui, traverser dix kilohertz au rapport fin demanderait une
- * cinquantaine de glissements.
+ * Fling is kept: without it, crossing 10 kHz at the fine ratio takes ~50 swipes.
  */
 @Composable
 fun Vernier(
@@ -78,13 +71,9 @@ fun Vernier(
     onDelta: (Long) -> Unit,
     modifier: Modifier = Modifier,
     /**
-     * Forme courte, pour la carte SDR de la page du passage.
-     *
-     * Là-bas, la place se dispute avec la boussole, la cascade et les
-     * interrupteurs qu'on touche pendant le passage. Le cadran perd un tiers de
-     * sa hauteur et le chiffre disparaît — il est déjà écrit en gros juste
-     * au-dessus, et le répéter volerait la place à ce qui n'est écrit nulle part
-     * ailleurs.
+     * Short form for the SDR card on the pass page, where space is shared with
+     * the compass, waterfall and switches. A third less height and no readout:
+     * the frequency is already shown large just above.
      */
     compact: Boolean = false,
 ) {
@@ -93,12 +82,11 @@ fun Vernier(
     val dpi = densite.density * 160f
     val hzParPx = AccordFin.hzParPixel(hzParCm, dpi)
 
-    // L'accumulateur de restes vit aussi longtemps que le composable : au
-    // rapport fin, un pixel vaut moins d'un hertz, et le remettre à zéro entre
-    // deux événements de glissement rendrait zéro à chaque fois.
+    // The remainder accumulator must outlive each drag event: at the fine ratio
+    // a pixel is under one hertz, so resetting it would always yield zero.
     val aiguille = remember { AccordFin.Aiguille() }
 
-    // Le lancer, s'il y en a un : vitesse au lâcher et instant du lâcher.
+    // Fling state: velocity and time at release.
     var vitesse by remember { mutableFloatStateOf(0f) }
     var lache by remember { mutableLongStateOf(0L) }
 
@@ -111,10 +99,8 @@ fun Vernier(
             val t = (System.nanoTime() - t0) / 1e9
             val v = AccordFin.vitesseApres(v0, t)
             if (abs(v) < AccordFin.VITESSE_ARRET) break
-            // On intègre la position plutôt que la vitesse : sur une
-            // décroissance exponentielle, multiplier la vitesse courante par le
-            // pas de temps accumule une erreur qui se voit au bout d'un demi
-            // lancer.
+            // Use the closed-form position, not velocity × dt: on an exponential
+            // decay the Euler error becomes visible within half a fling.
             val parcouru = AccordFin.parcoursTotal(v0) * (1.0 - Math.exp(-t / AccordFin.TAU))
             val pas = aiguille.pousse((parcouru - precedent).toFloat(), hzParPx)
             precedent = parcouru
@@ -134,9 +120,8 @@ fun Vernier(
                 .pointerInput(hzParCm) {
                     awaitEachGesture {
                         val bas = awaitFirstDown(requireUnconsumed = false)
-                        // Un doigt qui se pose arrête le lancer en cours : c'est
-                        // le geste universel, et sans lui on ne peut pas
-                        // rattraper un lancer trop appuyé.
+                        // Touching down stops a running fling (the usual gesture
+                        // to catch an overshoot).
                         vitesse = 0f
                         aiguille.oublie()
                         var dernierX = bas.position.x
@@ -183,7 +168,7 @@ fun Vernier(
                     )
                 }
 
-                // Le repère fixe, au milieu, par-dessus le cadran.
+                // Fixed centre marker, drawn over the dial.
                 drawLine(
                     color = Magenta,
                     start = Offset(l / 2f, 0f),
@@ -198,9 +183,8 @@ fun Vernier(
                 )
             }
 
-            // Le chiffre, dans le coin : le cadran dit le déplacement, ce texte
-            // dit où l'on est. Les deux sont nécessaires — un cadran sans
-            // chiffre ne se relit pas après avoir levé les yeux.
+            // The dial shows movement, the readout shows position: without it
+            // the dial cannot be re-read after looking away.
             if (!compact) {
                 Text(
                     "%.3f".format(freqHz / 1_000_000.0),

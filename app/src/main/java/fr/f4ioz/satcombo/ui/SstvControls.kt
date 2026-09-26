@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.ui
 
@@ -34,24 +34,19 @@ import fr.f4ioz.satcombo.sstv.SstvMode
 import fr.f4ioz.satcombo.ui.theme.*
 
 /**
- * Les commandes de décodage SSTV : le mode imposé et le départ à la main.
+ * SSTV decode controls: forced mode and manual start. Shared by the SSTV page
+ * and the pass page (under the compass) so both behave the same.
  *
- * Elles apparaissent à deux endroits — dans la page SSTV et sous la boussole
- * de la page passage — et il serait fâcheux qu'elles s'y comportent
- * différemment, alors elles vivent ici.
- *
- * Pourquoi imposer un mode alors que l'en-tête VIS le dit ? Parce que
- * l'en-tête ne dure qu'une seconde et qu'il arrive au pire moment : quand le
- * satellite se lève, dans le bruit, avant que l'opérateur ait fini de pointer
- * l'antenne. Manqué, il ne revient pas — et il reste deux minutes de signal
- * parfaitement décodable dont SatMe ne saurait quoi faire. Sur l'ISS, où le
- * mode est annoncé à l'avance et ne change pas de la journée, l'imposer une
- * fois pour toutes est même la conduite normale.
+ * Why force a mode when the VIS header gives it? The header lasts one second and
+ * arrives at the worst moment — at AOS, in the noise, while still aiming. Missed,
+ * it never comes back, leaving two minutes of decodable signal unusable. On the
+ * ISS the mode is announced in advance and fixed for the day, so forcing it is
+ * the normal practice.
  */
 @Composable
 fun SstvModeControls(
     st: SstvHub.SstvState,
-    /** Version resserrée, pour la page passage sous la boussole. */
+    /** Compact form for the pass page, under the compass. */
     compact: Boolean = false,
     modifier: Modifier = Modifier
 ) {
@@ -91,9 +86,9 @@ fun SstvModeControls(
             }
         }
 
-        // Départ forcé : sans mode imposé il n'y a rien à décoder, le mode ne
-        // se devine pas d'un signal en cours. Le bouton reste visible mais
-        // inerte, plutôt que de disparaître et laisser croire à un bogue.
+        // Manual start needs a forced mode: the mode cannot be guessed from a
+        // signal already under way. The button stays visible but disabled
+        // rather than vanishing and looking like a bug.
         if (st.decoding) {
             OutlinedButton(
                 onClick = { SstvHub.abortFrame() },
@@ -121,8 +116,7 @@ fun SstvModeControls(
             }
         }
     }
-    // Ce qui a lâché, s'il y a lieu : un moteur mort derrière un écran qui
-    // affiche « à l'écoute » est le pire des deux mondes.
+    // Show failures: a dead engine behind a "listening" label is the worst case.
     st.erreur?.let {
         Text(it, color = Amber, fontSize = 10.sp,
             modifier = Modifier.padding(top = 2.dp))
@@ -130,10 +124,8 @@ fun SstvModeControls(
 }
 
 /**
- * La phrase d'état du décodeur, la même partout.
- *
- * Elle dit le mode dès qu'il est connu — c'est le premier renseignement que
- * l'opérateur cherche quand une image commence à se peindre de travers.
+ * Decoder status line, identical everywhere. States the mode as soon as it is
+ * known: the first thing checked when an image starts skewing.
  */
 fun sstvStatusLine(st: SstvHub.SstvState): String = when {
     st.modeName != null && st.decoding ->

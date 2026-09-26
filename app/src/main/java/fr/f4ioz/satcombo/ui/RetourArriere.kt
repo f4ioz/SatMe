@@ -1,42 +1,32 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.ui
 
 import fr.f4ioz.satcombo.Screen
 
 /**
- * Ce que le bouton retour du téléphone doit fermer, et dans quel ordre.
+ * What the phone's back button closes, and in which order.
  *
- * La règle est simple à énoncer et facile à enfreindre : **on ferme ce que
- * l'on voit**. L'ordre des branches doit donc être exactement celui du `when`
- * qui choisit l'écran à dessiner, sans quoi le retour agit sur une couche
- * cachée pendant que la couche visible reste à l'écran.
+ * **Close what is visible.** The branch order must match exactly the `when`
+ * that picks the screen to draw, otherwise back acts on a hidden layer.
  *
- * C'est la panne du 2 août, et elle coûtait un passage entier. L'écran Rotor
- * se dessine par-dessus la fiche du satellite : `screen == ROTOR` gagne contre
- * `selected != null` au moment de dessiner. Mais le bouton retour, lui,
- * essayait `selected != null` en premier — il appelait donc `backToList()`,
- * qui vide la sélection, la position calculée, le tour de mât et la trace, et
- * arrête la poursuite. À l'écran, rien ne bougeait : l'écran Rotor était
- * toujours là, il affichait simplement « Aucun satellite suivi » et une
- * consigne vide, et le mât s'arrêtait de suivre. Un opérateur qui fait un
- * aller-retour entre la fiche et l'écran du mât — c'est-à-dire tout le monde,
- * pendant un réglage — perdait la poursuite à chaque retour, sans qu'aucun
- * message ne le dise.
+ * Real failure: the Rotor screen is drawn over the satellite sheet
+ * (`screen == ROTOR` beats `selected != null` when drawing), but back tested
+ * `selected != null` first and called `backToList()` — clearing the selection
+ * and stopping tracking while the Rotor screen stayed up showing "no satellite
+ * tracked". Every sheet/rotor round trip silently lost tracking.
  *
- * D'où cette fonction, séparée du composable pour qu'un essai puisse relire
- * l'ordre. Un ordre de branches ne se voit pas à la relecture ; il se voit
- * quand le mât s'arrête.
+ * Kept outside the composable so a test can pin the order down.
  */
 object RetourArriere {
 
-    /** Ce que le retour ferme. [RIEN] laisse le système quitter l'application. */
+    /** What back closes. [RIEN] lets the system leave the app. */
     enum class Geste {
         RIEN,
         SECTION_REGLAGES,
@@ -61,11 +51,10 @@ object RetourArriere {
     }
 
     /**
-     * @param sectionReglages vrai quand une sous-section des réglages est
-     *                        ouverte : le retour ferme la sous-section avant
-     *                        les réglages eux-mêmes.
-     * @param selection       vrai quand une fiche satellite est ouverte.
-     * @param modeSelection   vrai en mode de sélection multiple dans la liste.
+     * @param sectionReglages true when a settings sub-section is open: back
+     *                        closes it before the settings themselves.
+     * @param selection       true when a satellite sheet is open.
+     * @param modeSelection   true in list multi-selection mode.
      */
     fun geste(
         ecran: Screen,
@@ -73,7 +62,7 @@ object RetourArriere {
         selection: Boolean,
         modeSelection: Boolean
     ): Geste = when {
-        // Les écrans plein cadre d'abord : ce sont eux qui sont dessinés.
+        // Full-screen pages first: they are the ones drawn on top.
         ecran == Screen.SETTINGS && sectionReglages -> Geste.SECTION_REGLAGES
         ecran == Screen.SETTINGS -> Geste.FERMER_REGLAGES
         ecran == Screen.FT8 -> Geste.FERMER_FT8
@@ -91,13 +80,13 @@ object RetourArriere {
         ecran == Screen.QO100 -> Geste.FERMER_QO100
         ecran == Screen.NOMMAGE -> Geste.FERMER_NOMMAGE
         ecran == Screen.AGENDA -> Geste.FERMER_AGENDA
-        // Puis seulement la fiche, qui est dessous.
+        // Only then the sheet underneath.
         selection -> Geste.RETOUR_LISTE
         modeSelection -> Geste.QUITTER_SELECTION
         else -> Geste.RIEN
     }
 
-    /** Vrai quand le retour a quelque chose à fermer dans l'application. */
+    /** True when back has something to close inside the app. */
     fun intercepte(
         ecran: Screen,
         sectionReglages: Boolean,

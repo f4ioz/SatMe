@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.ui
 
@@ -50,46 +50,36 @@ import fr.f4ioz.satcombo.ui.theme.*
 import kotlinx.coroutines.delay
 
 /**
- * Ce que la clé SDR et le décodeur SSTV montrent sur la page du passage.
+ * What the SDR dongle and the SSTV decoder show on the pass page.
  *
- * L'idée est simple à énoncer et change tout à l'usage : quand on reçoit un
- * satellite, on ne veut pas choisir entre voir la boussole et régler la clé.
- * Sur un passage de dix minutes, aller-retour entre deux écrans pour toucher
- * au gain, c'est du temps où l'on ne pointe plus l'antenne. Ces deux blocs se
- * glissent donc juste sous la boussole : l'image SSTV en train d'arriver
- * d'abord, la clé et ses réglages ensuite.
- *
- * L'écran SDR complet reste là pour tout le reste (débit, ppm, dossier des
- * images) ; ici on ne met que ce qui se règle une antenne à la main.
+ * During a ten-minute pass, switching screens to touch the gain is time not
+ * spent pointing the antenna. So these blocks sit right under the compass:
+ * the incoming image first, then the dongle and its controls. The full SDR
+ * screen keeps everything else (rate, ppm, image folder); here only what you
+ * adjust with an antenna in hand.
  */
 
 /**
- * La bande image du passage : SSTV ou NOAA, au choix.
+ * The pass image strip: SSTV or NOAA.
  *
- * Un satellite ne fait jamais les deux à la fois et l'écran n'a la place que
- * d'une image : la puce de titre porte donc le choix, d'une touche, avec un
- * raccourci vers les réglages du décodeur concerné.
+ * A satellite never does both and there is room for one image, so the title
+ * chip carries the choice, with a shortcut to that decoder's settings.
  *
- * Tant que rien n'est reçu, la bande se réduit à une ligne — la puce et le
- * bouton d'enregistrement. C'est justement là qu'on veut lancer la capture :
- * on est sur la page du passage, le satellite se lève, et il serait absurde
- * d'aller la chercher dans un menu. Dès que l'enregistrement est coupé,
- * l'image disparaît : une image figée sous la boussole laisse croire qu'on
- * reçoit encore.
+ * With nothing received the strip shrinks to one line — chip and record
+ * button — because that is exactly where you start the capture as the
+ * satellite rises. When recording stops the image goes away: a frozen image
+ * under the compass suggests you are still receiving.
  */
 @Composable
 fun RxImageInline(ui: UiState, vm: MainViewModel) {
-    // Deux conditions, et la seconde est celle qui compte à l’usage :
-    // la bande ne s’affiche que si le décodeur correspondant est armé dans
-    // les réglages. Un opérateur qui a décoché SSTV et NOAA a dit qu’il ne
-    // faisait pas d’images ; lui laisser la bande sous la boussole, c’est lui
-    // occuper le haut de l’écran avec une fonction qu’il a refusée.
+    // Shown only if the matching decoder is enabled in settings: an operator
+    // who unchecked SSTV and NOAA doesn't want the top of the screen taken by
+    // a feature they turned down.
     val hasSstv = fr.f4ioz.satcombo.data.Extensions.SSTV in ui.extensions && ui.sstvEnabled
     val hasApt = fr.f4ioz.satcombo.data.Extensions.APT in ui.extensions && ui.aptEnabled
     if (!hasSstv && !hasApt) return
 
-    // Le mode retenu, sauf s'il n'est pas déverrouillé : mieux vaut montrer
-    // l'autre que rien du tout.
+    // The chosen mode, unless it isn't unlocked: better show the other than nothing.
     val noaa = when {
         !hasApt -> false
         !hasSstv -> true
@@ -109,7 +99,7 @@ fun RxImageInline(ui: UiState, vm: MainViewModel) {
     }
 }
 
-/** Le choix SSTV / NOAA, et la porte vers les réglages du décodeur choisi. */
+/** SSTV / NOAA choice, and the way to the chosen decoder's settings. */
 @Composable
 private fun RxModeDialog(
     noaa: Boolean, hasSstv: Boolean, hasApt: Boolean,
@@ -141,11 +131,8 @@ private fun RxModeDialog(
 }
 
 /**
- * Le bouton d'enregistrement de la bande : rouge à l'arrêt, carré pendant.
- *
- * Il commande le même magnétophone que le reste de l'application — il n'y a
- * qu'une capture à la fois — mais depuis l'endroit où l'on regarde l'image
- * arriver.
+ * Strip record button. Drives the same recorder as the rest of the app (one
+ * capture at a time), from where you watch the image arrive.
  */
 @Composable
 private fun RxRecordButton(ui: UiState, vm: MainViewModel) {
@@ -159,17 +146,16 @@ private fun RxRecordButton(ui: UiState, vm: MainViewModel) {
     }
 }
 
-/** L'image SSTV en cours de construction, sous la boussole. */
+/** The SSTV image being built, under the compass. */
 @Composable
 private fun SstvInlineCard(ui: UiState, vm: MainViewModel, onTitleClick: () -> Unit) {
     val st by SstvHub.state.collectAsState()
-    // L'image ne survit pas à l'arrêt de l'écoute : le décodeur garde la
-    // dernière trame pour l'écran SSTV complet, la page du passage non.
+    // Hidden once listening stops: the decoder keeps the last frame for the
+    // full SSTV screen, not for the pass page.
     val bmp = if (st.listening) st.preview else null
 
-    // La prévisualisation est le même objet Bitmap rempli ligne à ligne : on
-    // reconstruit l'ImageBitmap dès que la progression bouge, sinon Compose ne
-    // voit aucune raison de redessiner et l'image resterait figée.
+    // The preview is the same Bitmap filled line by line: rebuild the
+    // ImageBitmap on each progress change or Compose never redraws.
     val img = remember(bmp, st.progress) { bmp?.asImageBitmap() }
 
     Surface(color = SpaceCard, shape = RoundedCornerShape(12.dp),
@@ -188,16 +174,14 @@ private fun SstvInlineCard(ui: UiState, vm: MainViewModel, onTitleClick: () -> U
                     modifier = Modifier.weight(1f))
                 RxRecordButton(ui, vm)
             }
-            // Le satellite auquel l'image appartient : c'est ce qui distingue
-            // une archive d'un tas de PNG.
+            // The satellite name: what makes an archive rather than a pile of PNGs.
             val sat = st.satName.ifBlank { ui.selected?.name.orEmpty() }
             if (st.listening && sat.isNotBlank()) {
                 Text(sat, color = Cyan, fontSize = 11.sp, fontWeight = FontWeight.Bold)
             }
             if (st.listening) {
-                // Le mode imposé et le départ à la main, à portée de pouce
-                // pendant le passage : c'est là, antenne en l'air, qu'on
-                // s'aperçoit que l'en-tête est passé sans être vu.
+                // Forced mode and manual start within thumb reach: it's during
+                // the pass that you notice the VIS header was missed.
                 Spacer(Modifier.height(6.dp))
                 SstvModeControls(st, compact = true)
             }
@@ -222,14 +206,12 @@ private fun SstvInlineCard(ui: UiState, vm: MainViewModel, onTitleClick: () -> U
 }
 
 /**
- * L'image NOAA en cours de construction, sous la boussole.
+ * The NOAA image being built, under the compass.
  *
- * Même dessin que la SSTV, à une différence près : une image APT n'a pas de
- * fin annoncée, elle s'allonge tant que le satellite est en vue. On montre donc
- * le nombre de lignes et l'accrochage de la synchronisation plutôt qu'un
- * pourcentage de trame, et un bouton permet de mettre à l'abri ce qui est reçu
- * sans couper l'écoute — un quart d'heure dehors, le système peut décider de
- * tuer l'application avant le coucher.
+ * Unlike SSTV, an APT image has no known end; it grows while the satellite is
+ * in view. So show line count and sync lock instead of a percentage, plus a
+ * button to save what's received without stopping — over fifteen minutes the
+ * system may kill the app before LOS.
  */
 @Composable
 private fun AptInlineCard(ui: UiState, vm: MainViewModel, onTitleClick: () -> Unit) {
@@ -294,20 +276,19 @@ private fun AptInlineCard(ui: UiState, vm: MainViewModel, onTitleClick: () -> Un
 }
 
 /**
- * La clé SDR, en condensé, sur la page du passage.
+ * Condensed SDR dongle panel on the pass page.
  *
- * Invisible tant qu'aucune clé n'est branchée. Dès qu'elle l'est : un bouton
- * pour recevoir, la fréquence réellement affichée (Doppler compris), le niveau,
- * et les trois interrupteurs qu'on touche en l'air — le son, le SSTV, le MP3 —
- * plus le gain. Le logo passe au vert dès que la réception tourne.
+ * Hidden while no dongle is plugged in. Then: receive button, actual frequency
+ * (Doppler included), level, the three toggles used mid-pass (audio, SSTV,
+ * MP3) and gain. The icon turns green while receiving.
  */
 @Composable
 fun SdrInline(ui: UiState, vm: MainViewModel) {
     val ctx = LocalContext.current
     val st by SdrHub.state.collectAsState()
 
-    // La clé se branche en plein passage : on regarde régulièrement plutôt que
-    // d'attendre un événement, comme sur l'écran SDR complet.
+    // The dongle may be plugged in mid-pass: poll rather than wait for an
+    // event, as on the full SDR screen.
     var present by remember { mutableStateOf(SdrHub.devicePresent(ctx) != null) }
     LaunchedEffect(Unit) {
         while (true) {
@@ -315,13 +296,10 @@ fun SdrInline(ui: UiState, vm: MainViewModel) {
             delay(2000)
         }
     }
-    // **L'absence de clé se dit, quand on l'attendait.**
-    //
-    // Se retirer en silence est juste tant que la clé n'a pas de rôle : un
-    // cadre vide ne renseigne personne. Mais l'opérateur qui a choisi
-    // « FT-817 + clé SDR » attend une cascade, et son absence ressemble à un
-    // défaut du logiciel alors que c'est un câble. On nomme donc la condition
-    // qui manque, plutôt que de laisser chercher.
+    // **Say the dongle is missing when it was expected.** Staying silent is
+    // right when the dongle has no role. But with "FT-817 + SDR dongle" the
+    // operator expects a waterfall, and its absence looks like a software bug
+    // when it's a cable. Name the missing condition.
     if (!present && !st.running) {
         if (ui.rigModel == "FT817TX") {
             Text(t("sdr_absente"), color = Amber, fontSize = 11.sp,
@@ -338,7 +316,6 @@ fun SdrInline(ui: UiState, vm: MainViewModel) {
         Column(Modifier.padding(10.dp)) {
 
             Row(verticalAlignment = Alignment.CenterVertically) {
-                // Le logo de la clé : vert pendant la réception, cyan à l'arrêt.
                 Icon(Icons.Default.Usb, null, tint = accent, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(6.dp))
                 Surface(color = accent.copy(alpha = 0.20f), shape = RoundedCornerShape(6.dp)) {
@@ -368,9 +345,8 @@ fun SdrInline(ui: UiState, vm: MainViewModel) {
             if (rx) {
                 Spacer(Modifier.height(6.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    // Toujours la fréquence du ciel, jamais la FI : c'est
-                    // celle-là qu'on compare au panneau du passage juste
-                    // au-dessus.
+                    // Always the sky frequency, never the IF: that's what you
+                    // compare with the pass panel above.
                     Text("%.4f MHz".format(vm.cleVersSat(st.centerHz) / 1_000_000.0),
                         color = Aurora, fontFamily = FontFamily.Monospace,
                         fontSize = 16.sp, fontWeight = FontWeight.Bold)
@@ -378,19 +354,12 @@ fun SdrInline(ui: UiState, vm: MainViewModel) {
                     Text((if (st.dopplerHz >= 0) "+" else "") + "${st.dopplerHz} Hz",
                         color = TextLo, fontFamily = FontFamily.Monospace, fontSize = 11.sp)
                 }
-                // **Sur quoi la clé est réellement accordée.**
-                //
-                // La ligne du dessus donne la fréquence du ciel, parce que
-                // c'est celle sur laquelle on travaille et qu'on note. Mais
-                // avec un convertisseur dans la chaîne, ce n'est pas ce que la
-                // clé reçoit — et rien ne permettait de vérifier qu'elle était
-                // pilotée au bon endroit. On ne pouvait que constater
-                // l'absence de signal, sans savoir si la clé cherchait en 144,
-                // en 739, ou en 10 489 où aucune clé du commerce ne va.
-                //
-                // Affichée seulement quand un convertisseur s'applique
-                // vraiment à la clé : sans lui, les deux nombres seraient
-                // identiques.
+                // **What the dongle is actually tuned to.** With a converter in
+                // the chain, the sky frequency above is not what the dongle
+                // receives, and without this line you could not tell whether
+                // it was looking at 144, 739, or 10 489 MHz (which no dongle
+                // reaches). Shown only when a converter applies to the dongle;
+                // otherwise both numbers are identical.
                 if (vm.convertisseurSurLaCle) {
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                         Text(t("sdr_sur_cle"), color = TextLo, fontSize = 10.sp)
@@ -400,15 +369,10 @@ fun SdrInline(ui: UiState, vm: MainViewModel) {
                             fontFamily = FontFamily.Monospace, fontSize = 12.sp)
                     }
                 }
-                // **Mode et largeur, ici aussi.**
-                //
-                // Ils n'existaient que dans l'écran SDR complet. Or c'est en
-                // pleine écoute qu'on s'aperçoit que la bande est trop étroite
-                // ou le mode mal choisi — sur QO-100 le FT8 tient dans 3 kHz
-                // quand la voix se contente de 2,4, et une bande trop serrée
-                // rabote le signal sans qu'on comprenne pourquoi il paraît
-                // faible. Aller le corriger dans un autre écran fait perdre le
-                // passage.
+                // **Mode and bandwidth here too.** It's while listening that you
+                // find the filter too narrow or the mode wrong (on QO-100 FT8
+                // needs 3 kHz, voice 2.4); a too-tight filter clips the signal
+                // and it just seems weak. Fixing it on another screen loses the pass.
                 Spacer(Modifier.height(6.dp))
                 Row(Modifier.horizontalScroll(rememberScrollState()),
                     horizontalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -426,9 +390,8 @@ fun SdrInline(ui: UiState, vm: MainViewModel) {
                         FilterChip(
                             selected = ui.sdrBandwidthHz == b,
                             onClick = { vm.setSdrBandwidth(b) },
-                            // Zéro n'est pas une largeur : c'est « laisse le
-                            // mode décider », et le dire vaut mieux que
-                            // d'afficher « 0 Hz ».
+                            // Zero means "let the mode decide"; say so rather
+                            // than show "0 Hz".
                             label = {
                                 Text(if (b == 0) t("sdr_bw_auto") else "${b / 1000.0} k",
                                     fontSize = 10.sp)
@@ -439,9 +402,8 @@ fun SdrInline(ui: UiState, vm: MainViewModel) {
                 Spacer(Modifier.height(6.dp))
                 InlineLevelBar(st.levelDb)
 
-                // La petite cascade : sur la page du passage on n'a pas la
-                // place d'un spectre en plus, mais la trace suffit pour voir
-                // le satellite arriver et poser le curseur dessus.
+                // Small waterfall only: no room for a spectrum on the pass page,
+                // but it's enough to see the satellite arrive and tap onto it.
                 if (ui.sdrInlineWaterfall) {
                     val spec by SdrHub.spectrum.collectAsState()
                     Spacer(Modifier.height(6.dp))
@@ -456,22 +418,15 @@ fun SdrInline(ui: UiState, vm: MainViewModel) {
                         onTune = { vm.setSdrOffset(it) })
                 }
 
-                // Le vernier, juste sous la cascade.
-                //
-                // La cascade sert à voir le satellite arriver, pas à s'accorder
-                // dessus : le doigt y désigne une position absolue, et la main
-                // masque précisément le signal qu'on vise. Le vernier fait
-                // l'inverse — il pousse la fréquence sans rien cacher, à raison
-                // de tant de hertz par centimètre. C'est ce qui permet de
-                // rattraper un Doppler résiduel ou de se poser sur une bande
-                // latérale pendant qu'on suit le satellite à l'antenne.
+                // Vernier under the waterfall. On the waterfall a finger picks
+                // an absolute spot and hides the very signal you aim at. The
+                // vernier nudges frequency (Hz per cm) without hiding anything:
+                // for residual Doppler or settling on a sideband while tracking.
                 if (ui.accord.vernier) {
                     Spacer(Modifier.height(6.dp))
                     Vernier(
-                        // Le cadran gradue la grandeur qu'il déplace : le canal
-                        // du transpondeur quand il y en a un, l'accord de la
-                        // clé sinon. Graduer autre chose ferait défiler des
-                        // chiffres qui ne correspondent à rien de ce qui bouge.
+                        // The dial is graduated in what it moves: the
+                        // transponder channel if any, else the dongle tuning.
                         freqHz = ui.rxRestHz ?: (st.centerHz + st.offsetHz),
                         hzParCm = ui.accord.vernierHzParCm,
                         onRapport = { vm.setSdrVernierRatio(it) },
@@ -492,7 +447,6 @@ fun SdrInline(ui: UiState, vm: MainViewModel) {
                 Text(t("sdr_permission_wait"), color = Cyan, fontSize = 11.sp)
             }
 
-            // Les trois interrupteurs qu'on touche pendant un passage.
             Spacer(Modifier.height(6.dp))
             Row(Modifier.horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -501,8 +455,8 @@ fun SdrInline(ui: UiState, vm: MainViewModel) {
                 MiniChip(t("sdr_record"), ui.sdrRecord) { vm.setSdrRecord(!ui.sdrRecord) }
             }
 
-            // Le gain : le seul réglage qui se retouche vraiment en l'air, quand
-            // le satellite monte et que le signal passe de rien à saturé.
+            // Gain: the one setting really touched mid-pass, as the signal goes
+            // from nothing to saturated.
             Spacer(Modifier.height(6.dp))
             val gains = remember { listOf<Int?>(null) + RtlTuning.GAINS.toList().filter { it > 0 } }
             Row(Modifier.horizontalScroll(rememberScrollState()),
@@ -530,7 +484,7 @@ private fun MiniChip(label: String, selected: Boolean, onClick: () -> Unit) {
             selectedLabelColor = SpaceBg))
 }
 
-/** Barre de niveau compacte : -80 dBFS à gauche, 0 dBFS à droite. */
+/** Compact level bar: -80 dBFS left, 0 dBFS right. */
 @Composable
 private fun InlineLevelBar(levelDb: Float) {
     val frac = ((levelDb + 80f) / 80f).coerceIn(0f, 1f)

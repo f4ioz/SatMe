@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.ui
 
@@ -41,11 +41,10 @@ import fr.f4ioz.satcombo.i18n.tf
 import fr.f4ioz.satcombo.ui.theme.*
 
 /**
- * Le réglage de la boussole déportée.
+ * Settings for the remote compass.
  *
- * Trois choses à faire ici, dans cet ordre : choisir la source, désigner le
- * module, puis le caler. Le calage vient en dernier parce qu'il ne veut rien
- * dire tant qu'aucune trame n'arrive.
+ * Three steps, in order: pick the source, select the module, then calibrate.
+ * Calibration comes last because it means nothing until frames arrive.
  */
 @Composable
 fun BoussoleCarte(vm: MainViewModel, ui: fr.f4ioz.satcombo.UiState) {
@@ -56,60 +55,52 @@ fun BoussoleCarte(vm: MainViewModel, ui: fr.f4ioz.satcombo.UiState) {
     val cap by BoussoleBle.cap
     val brut by BoussoleBle.lacetBrut
     val attitude by BoussoleBle.attitudeBrute
-    // Un seul lanceur pour l'export du relevé : le contrat ACTION_CREATE_DOCUMENT
-    // est déjà écrit, inutile d'en refaire un.
+    // Reuses the existing ACTION_CREATE_DOCUMENT launcher for the log export.
     val enregistreReleve = rememberEnregistrer()
-    // La flèche rangée, lue une fois : plusieurs blocs en ont besoin.
+    // Stored boom vector, read once: several blocks need it.
     val posee = PointageAntenne.depuisTexte(r.boussoleFleche)
     val trames by BoussoleBle.trames
 
     var azimutVise by remember { mutableStateOf("") }
 
-    // Le relevé du nord attend celui de l'ouest. Rien n'est écrit tant que la
-    // seconde visée n'est pas faite.
+    // The north reading waits for the west one; nothing is written until the
+    // second sighting is done.
     var releveNord by remember { mutableStateOf<Float?>(null) }
     var messageCap by remember { mutableStateOf("") }
 
-    // L'azimut **avant** calage ni inversion : c'est lui qu'il faut comparer
-    // entre les deux visées, pas celui qu'on vient déjà de corriger.
+    // Azimuth **before** offset or inversion: that is what must be compared
+    // between sightings, not the already-corrected value.
     val brutVecteur: Float? = attitude?.let { att ->
         val f = BoussoleBle.fleche
-        // Une flèche nulle n'a pas de direction : sans elle, pas de calage.
+        // A null vector has no direction: no calibration without it.
         if (f == null || f.norme < 0.1f) null
-        // **Le même chemin de calcul que le calibrage**, sans exception.
-        //
-        // Le cadran passait par l'ancienne énumération, qui ne reconnaît pas
-        // les conventions mesurées et retombait sur « directe » **en silence**.
-        // SatMe mesurait donc une convention et en appliquait une autre : le
-        // calibrage se déclarait bon et l'aiguille affichait un miroir exact,
-        // azimut lu = 336° − azimut réel sur les quatre points cardinaux.
+        // **Same computation path as the calibration**, no exceptions.
+        // The dial once used the old enum, which does not know measured
+        // conventions and silently fell back to "direct": calibration passed
+        // while the needle showed an exact mirror (read = 336° − true).
         else PointageAntenne.pointageLibre(
             att, f,
             PointageAntenne.ConventionLibre.decode(r.boussoleConvention)).azimutDeg
     }
 
-    // L'apprentissage de l'axe se fait en deux temps : le relevé à plat attend
-    // ici que le second geste vienne le confirmer. Rien n'est écrit tant que le
-    // deuxième bouton n'a pas été touché.
+    // Axis learning is two-step: the flat reading waits here for the second
+    // gesture. Nothing is written until the second button is pressed.
     var relevePol1 by remember {
         mutableStateOf<fr.f4ioz.satcombo.domain.AttitudeWit?>(null) }
     var flecheApprise by remember {
         mutableStateOf<fr.f4ioz.satcombo.domain.Vec3?>(null) }
     var messageAppr by remember { mutableStateOf("") }
 
-    // La première visée attend ici que la seconde vienne la confirmer. Rien
-    // n'est écrit tant que les deux ne sont pas prises : une calibration à
-    // moitié faite est une calibration fausse qu'on croit bonne.
+    // A half-done calibration is a wrong one that looks right: nothing is
+    // written until both sightings are taken.
 
     val demande = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { accords ->
-        // Une permission refusée n'est pas un silence : sans cette branche,
-        // l'opérateur appuie sur « Chercher », rien ne se passe, et rien ne dit
-        // pourquoi.
+        // Without this branch a refused permission makes "Search" do nothing,
+        // with no explanation.
         if (accords.values.all { it }) BoussoleBle.cherche(ctx)
         else {
-            // Un refus silencieux, c'est un bouton qui ne fait rien.
             BoussoleBle.raison.value = "permissions"
             BoussoleBle.etat.value = BoussoleBle.Etat.ECHEC
         }
@@ -118,13 +109,9 @@ fun BoussoleCarte(vm: MainViewModel, ui: fr.f4ioz.satcombo.UiState) {
     Surface(color = SpaceCard, shape = RoundedCornerShape(16.dp),
         modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp)) {
-            // **La miniature ne s'affiche qu'avec le module.**
-            //
-            // Elle annonce le boîtier Bluetooth ; quand la boussole du téléphone
-            // est choisie, elle promet un appareil qui ne sert pas. Tout le
-            // reste de cette carte était déjà conditionné au même choix : la
-            // seule chose qui ne l'était pas était justement celle qui nomme
-            // un matériel.
+            // **The thumbnail shows only with the module.** It depicts the
+            // Bluetooth box; with the phone compass selected it would promise
+            // hardware that is not in use.
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (r.boussoleSource == "BLE") {
                     MiniatureModule(Modifier.size(width = 34.dp, height = 46.dp))
@@ -153,15 +140,15 @@ fun BoussoleCarte(vm: MainViewModel, ui: fr.f4ioz.satcombo.UiState) {
             }
 
             if (r.boussoleSource == "BLE") {
-            // La notice n'est pas une recommandation : un module posé contre un
-            // FT-817 lit l'aimant du haut-parleur, pas la Terre.
+            // Not just advice: a module placed against an FT-817 reads the
+            // speaker magnet, not the Earth.
             Spacer(Modifier.height(10.dp))
             Surface(color = Amber.copy(alpha = 0.13f), shape = RoundedCornerShape(8.dp)) {
                 Text(t("bouss_avert"), color = Amber, fontSize = 11.sp,
                     modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp))
             }
 
-            // --- le module ---
+            // --- module ---
             Spacer(Modifier.height(12.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
@@ -203,7 +190,7 @@ fun BoussoleCarte(vm: MainViewModel, ui: fr.f4ioz.satcombo.UiState) {
                 }
             }
 
-            // --- l'état ---
+            // --- status ---
             Spacer(Modifier.height(10.dp))
             val (couleur, texte) = when (etat) {
                 BoussoleBle.Etat.CONNECTE -> Color(0xFF2FB344) to t("bouss_etat_connecte")
@@ -229,33 +216,27 @@ fun BoussoleCarte(vm: MainViewModel, ui: fr.f4ioz.satcombo.UiState) {
                 }
             }
 
-            // **Un seul cadran, un seul calage.**
+            // **One dial, one offset.**
             //
-            // Cette page portait deux cadrans et quatre calages — deux visées,
-            // un azimut tapé à la main, un point cardinal, un retournement à
-            // 180° — plus un interrupteur de sens. Tous répondaient à la même
-            // question, et ils se contredisaient : un calage résiduel et un sens
-            // inversé se superposaient au vecteur, et l'est sortait à l'ouest.
-            //
-            // Le vecteur de flèche détermine à lui seul le cap **et**
-            // l'élévation, et il est insensible à la polarisation. Une seule
-            // visée suffit à l'établir exactement. Tout le reste a été retiré,
-            // pas désactivé : un réglage qu'on garde « au cas où » finit par
-            // reprendre la main sans qu'on sache pourquoi.
+            // This page once had two dials and four offsets plus a direction
+            // switch. They answered the same question and contradicted each
+            // other: a leftover offset and an inverted direction stacked on the
+            // vector, and east came out west. The boom vector alone gives
+            // heading **and** elevation, independent of polarisation. The rest
+            // was removed, not disabled: a setting kept "just in case" ends up
+            // taking over without anyone knowing why.
 
 
-            // --- le cadran de contrôle ---
+            // --- check dial ---
             //
-            // Un nombre ne se conteste pas facilement : « 187° » a l'air juste
-            // tant qu'on ne le compare à rien. Une aiguille sur un cadran se
-            // compare d'un coup d'œil au paysage, et c'est ainsi qu'Olivier a
-            // vu que le nord et le sud étaient échangés.
+            // "187°" looks right until compared with something. A needle is
+            // compared with the landscape at a glance; that is how swapped
+            // north/south was spotted.
             val capVu = cap
             if (capVu != null) {
                 Spacer(Modifier.height(12.dp))
-                // Les lettres sont mesurées hors du Canvas : `drawText` a besoin
-                // d'un mesureur, et le créer à chaque image coûterait cher pour
-                // quatre lettres qui ne changent jamais.
+                // Measured outside the Canvas: `drawText` needs a measurer, too
+                // costly to create every frame for four fixed letters.
                 val mesureur = androidx.compose.ui.text.rememberTextMeasurer()
                 val styleCardinal = androidx.compose.ui.text.TextStyle(
                     fontSize = 13.sp, fontWeight = FontWeight.Black,
@@ -267,9 +248,8 @@ fun BoussoleCarte(vm: MainViewModel, ui: fr.f4ioz.satcombo.UiState) {
                     drawCircle(SpaceSurface, r, androidx.compose.ui.geometry.Offset(cx, cy))
                     drawCircle(Cyan.copy(alpha = 0.35f), r, androidx.compose.ui.geometry.Offset(cx, cy),
                         style = androidx.compose.ui.graphics.drawscope.Stroke(2f))
-                    // Les graduations intermédiaires, tous les trente degrés :
-                    // elles donnent l'échelle sans encombrer, et permettent
-                    // d'estimer un cap entre deux cardinaux.
+                    // Minor ticks every 30° to estimate headings between
+                    // cardinal points.
                     for (k in 0 until 12) {
                         if (k % 3 == 0) continue
                         val a1 = Math.toRadians((k * 30).toDouble())
@@ -281,13 +261,10 @@ fun BoussoleCarte(vm: MainViewModel, ui: fr.f4ioz.satcombo.UiState) {
                             androidx.compose.ui.geometry.Offset(sx, sy),
                             androidx.compose.ui.geometry.Offset(ex, ey), 2f)
                     }
-                    // **Les quatre points cardinaux, écrits.**
-                    //
-                    // Un trait plus long pour le nord se devine ; une lettre se
-                    // lit. Sur un cadran qu'on consulte antenne en main, en
-                    // plein soleil, le doute n'a pas sa place — et c'est
-                    // précisément un nord pris pour un sud qui a coûté une
-                    // partie de ces seize versions.
+                    // **Cardinal points written as letters.** A longer tick
+                    // for north has to be guessed; a letter is read, even in
+                    // full sun with the antenna in hand. A north mistaken for
+                    // south cost many versions.
                     val lettres = listOf("N", "E", "S", "O")
                     for (k in 0 until 4) {
                         val a2 = Math.toRadians((k * 90).toDouble())
@@ -309,21 +286,21 @@ fun BoussoleCarte(vm: MainViewModel, ui: fr.f4ioz.satcombo.UiState) {
                         drawText(mesure,
                             topLeft = androidx.compose.ui.geometry.Offset(lx, ly))
                     }
-                    // L'aiguille : elle pointe là où SatMe croit que l'antenne vise.
+                    // Needle: where SatMe thinks the antenna points.
                     val a3 = Math.toRadians(capVu.toDouble())
                     val sin = kotlin.math.sin(a3).toFloat()
                     val cos = kotlin.math.cos(a3).toFloat()
                     val px = cx + (r - 20f) * sin
                     val py = cy - (r - 20f) * cos
-                    // Une queue à l'opposé : sans elle, une aiguille symétrique
-                    // se lit aussi bien à cent quatre-vingts degrés près.
+                    // Tail on the opposite side; together with the arrowhead
+                    // it removes the 180° ambiguity.
                     drawLine(Cyan.copy(alpha = 0.3f),
                         androidx.compose.ui.geometry.Offset(cx, cy),
                         androidx.compose.ui.geometry.Offset(cx - (r - 45f) * sin,
                             cy + (r - 45f) * cos), 4f)
                     drawLine(Cyan, androidx.compose.ui.geometry.Offset(cx, cy),
                         androidx.compose.ui.geometry.Offset(px, py), 6f)
-                    // La pointe, en triangle : elle dit où est l'avant.
+                    // Triangular tip marks the front.
                     val pointe = androidx.compose.ui.graphics.Path().apply {
                         moveTo(cx + r * sin, cy - r * cos)
                         lineTo(cx + (r - 18f) * sin - 7f * cos,
@@ -346,9 +323,8 @@ fun BoussoleCarte(vm: MainViewModel, ui: fr.f4ioz.satcombo.UiState) {
                     textAlign = androidx.compose.ui.text.style.TextAlign.Center)
             }
 
-            // Repartir de zéro, quand on ne sait plus où l'on en est.
-            // Sans ce bouton, un étalonnage raté laisse des valeurs dont on ne
-            // peut plus se défaire qu'en réinstallant.
+            // Reset. Without it, a failed calibration leaves values that only
+            // a reinstall clears.
             TextButton(onClick = {
                 vm.setBoussoleFleche(null)
                 vm.setBoussoleConvention("AXES_ECHANGES")
@@ -358,26 +334,19 @@ fun BoussoleCarte(vm: MainViewModel, ui: fr.f4ioz.satcombo.UiState) {
                 Text(t("bouss_remise"), color = Amber, fontSize = 12.sp)
             }
 
-            // La section « convention du module » a été retirée, ainsi que le
-            // calibrage à trois visées.
-            //
-            // **Elle répondait à un défaut qui n'existait pas.** Olivier a
-            // rapporté « le nord donne le sud, l'ouest donne l'est » : les
-            // quatre points tournent **ensemble**, donc c'est une rotation de
-            // cent quatre-vingts degrés, pas un miroir — un miroir aurait
-            // échangé est et ouest en laissant nord et sud en place. Et à ce
-            // moment-là, l'horizontale, la verticale et l'élévation étaient
-            // justes.
-            //
-            // Le seul défaut était une flèche apprise à l'envers. Miroirs,
-            // repères et ordres de composition ont été empilés par-dessus une
-            // cause imaginaire, et ont cassé l'élévation en chemin.
+            // The "module convention" section and the three-sighting
+            // calibration were removed. **They fixed a fault that did not
+            // exist.** "North reads south, west reads east" means all four
+            // points rotate **together**: a 180° rotation, not a mirror (a
+            // mirror swaps E/W and leaves N/S). The only fault was a boom
+            // vector learnt backwards; mirrors and frame changes stacked on an
+            // imaginary cause broke elevation along the way.
 
-            // --- l'étalonnage sur un azimut connu ---
+            // --- calibration on a known azimuth ---
             //
-            // Deux poses de polarisation donnent une droite, pas une direction :
-            // le sens doit être deviné, et il peut se tromper de bout. Un azimut
-            // connu ne laisse rien à deviner.
+            // Two polarisation poses give a line, not a direction: the end must
+            // be guessed and can be wrong. A known azimuth leaves nothing to
+            // guess.
             Spacer(Modifier.height(14.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Default.Explore, null, tint = Cyan,
@@ -388,12 +357,11 @@ fun BoussoleCarte(vm: MainViewModel, ui: fr.f4ioz.satcombo.UiState) {
             }
             Text(t("bouss_nord_desc"), color = TextLo, fontSize = 11.sp,
                 modifier = Modifier.padding(bottom = 6.dp))
-            // --- l'axe de montage, déclaré et non deviné ---
+            // --- mounting axis, declared, not guessed ---
             //
-            // C'est de la géométrie : on sait par quelle face le boîtier est
-            // vissé sur la flèche. La déduire d'une visée magnétique y
-            // incorporait l'erreur du magnétomètre — dix-sept degrés dans le
-            // relevé d'Olivier — et l'élévation plafonnait d'autant.
+            // It is geometry: we know which face is screwed to the boom.
+            // Deriving it from a magnetic sighting baked in the magnetometer
+            // error (17° in one field log) and capped elevation by as much.
             Spacer(Modifier.height(12.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Default.Straighten, null, tint = Cyan,
@@ -418,7 +386,7 @@ fun BoussoleCarte(vm: MainViewModel, ui: fr.f4ioz.satcombo.UiState) {
                         kotlin.math.abs(posee.z) < 0.05f
                     TextButton(onClick = {
                         vm.setBoussoleFleche(v)
-                        // Le décalage hérité d'un autre axe n'a plus de sens.
+                        // An offset from another axis is meaningless now.
                         vm.setBoussoleCalage(0f)
                         messageAppr = t("bouss_axe_ok")
                     }) {
@@ -428,49 +396,28 @@ fun BoussoleCarte(vm: MainViewModel, ui: fr.f4ioz.satcombo.UiState) {
                 }
             }
 
-            // **L'avertissement qui manquait.**
-            //
-            // Le calcul était juste : une flèche apprise à trente-huit degrés
-            // de l'axe réel donne une élévation qui plafonne à cinquante-deux
-            // au lieu de quatre-vingt-dix, et c'est exactement ce qu'Olivier a
-            // relevé. L'application ne peut pas savoir si le boîtier est de
-            // travers — mais elle peut le dire.
+            // A boom vector 38° off the real axis caps elevation at 52° instead
+            // of 90°. The app cannot detect a crooked box, but it can warn.
             Surface(color = Amber.copy(alpha = 0.13f),
                 shape = RoundedCornerShape(8.dp)) {
                 Text(t("bouss_axe_avert"), color = Amber, fontSize = 11.sp,
                     modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp))
             }
             Spacer(Modifier.height(8.dp))
-            // **Deux visées, et le sens est mesuré au lieu d'être supposé.**
-            //
-            // Une seule visée fixe la flèche mais ne dit rien du sens dans
-            // lequel le module compte le lacet : les deux hypothèses la
-            // satisfont également. D'où le nord juste et l'est à l'ouest. La
-            // seconde visée tranche — c'est une mesure, pas une case à cocher.
-            // **Une seule visée, et elle est exacte.**
-            //
-            // Le calibrage à deux puis trois visées a été retiré : il servait à
-            // mesurer une convention dont le module n'avait pas besoin. Une
-            // visée cardinale détermine la flèche exactement — `b = Rᵀ·p` — et
-            // si le bout est le mauvais, le bouton de retournement suffit.
+            // **One sighting, and it is exact.** The two- and three-sighting
+            // calibrations were removed: they measured a convention the module
+            // did not need. If the boom end is wrong, the flip button fixes it.
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp),
                 verticalAlignment = Alignment.CenterVertically) {
                 listOf(0f to t("bouss_nord"), 90f to t("bouss_est"),
                        180f to t("bouss_sud"), 270f to t("bouss_ouest"))
                     .forEach { (az, nom) ->
-                    // **La visée ne touche plus à la flèche.**
-                    //
-                    // Elle l'apprenait, et c'était l'erreur de fond : une visée
-                    // magnétique porte l'erreur du magnétomètre, et l'inscrire
-                    // dans le vecteur désaligne celui-ci de l'axe réel du
-                    // boîtier. Le relevé d'Olivier l'a chiffré — l'élévation
-                    // plafonnait à 73° au lieu de 90, exactement l'effet d'une
-                    // flèche déviée de dix-sept degrés.
-                    //
-                    // La flèche est désormais **déclarée** (la géométrie du
-                    // montage, qu'on connaît), et la visée ne règle plus que le
-                    // décalage de cap (le magnétisme, qu'on mesure). Deux
-                    // questions distinctes, deux réglages distincts.
+                    // **The sighting no longer touches the boom vector.**
+                    // Learning it from a magnetic sighting baked the
+                    // magnetometer error into the vector (elevation capped at
+                    // 73°, i.e. a 17° tilt). The vector is now **declared**
+                    // (mounting geometry) and the sighting only sets the
+                    // heading offset (magnetism). Two questions, two settings.
                     TextButton(enabled = attitude != null && posee != null, onClick = {
                         val pose = attitude ?: return@TextButton
                         val f2 = posee ?: return@TextButton
@@ -491,14 +438,10 @@ fun BoussoleCarte(vm: MainViewModel, ui: fr.f4ioz.satcombo.UiState) {
                 }
             }
 
-            // **Le remède en un geste, et il est de retour.**
-            //
-            // Je l'avais supprimé en croyant qu'une visée cardinale faisait
-            // mieux. C'était vrai en théorie et faux en pratique : quand la
-            // flèche a été apprise par les deux poses de polarisation, elle
-            // donne un axe — une droite, pas une direction — et le bout peut
-            // être le mauvais. Rien d'autre n'est faux alors, et ce bouton
-            // suffit.
+            // **One-tap flip.** Removed once in favour of a cardinal sighting,
+            // then restored: a vector learnt from two polarisation poses is a
+            // line, not a direction, and its end can be wrong. Then nothing
+            // else is wrong and this button is enough.
             TextButton(enabled = r.boussoleFleche.isNotBlank(), onClick = {
                 val f = PointageAntenne.depuisTexte(r.boussoleFleche)
                 if (f == null) messageAppr = t("bouss_nord_echec")
@@ -510,18 +453,14 @@ fun BoussoleCarte(vm: MainViewModel, ui: fr.f4ioz.satcombo.UiState) {
                 Text(t("bouss_retourne"), color = Amber, fontSize = 12.sp)
             }
 
-            // --- la séquence de calibrage guidée ---
+            // --- guided calibration sequence ---
             //
-            // **On ne devine plus, on relève.** Six versions ont tenté de
-            // deviner la convention du module à partir d'une ou deux poses ;
-            // chaque hypothèse tenait à l'horizontale et tombait ailleurs. Une
-            // pose unique ne contraint qu'une partie de la rotation.
-            //
-            // La séquence prend les neuf poses qui, ensemble, déterminent tout :
-            // le lacet sur un tour complet, le roulis dans les deux sens, le
-            // tangage jusqu'à la verticale. Le relevé s'exporte, parce que
-            // personne n'analyse neuf triplets de tête et que les recopier à la
-            // main les corromprait.
+            // **Measure, don't guess.** Guessing the module convention from one
+            // or two poses always held when level and failed elsewhere: one pose
+            // constrains only part of the rotation. The nine poses together
+            // determine everything (yaw over a full turn, roll both ways, pitch
+            // to vertical). The log is exportable because copying nine triplets
+            // by hand corrupts them.
             Spacer(Modifier.height(16.dp))
             HorizontalDivider(color = SpaceSurface)
             Spacer(Modifier.height(12.dp))
@@ -547,17 +486,15 @@ fun BoussoleCarte(vm: MainViewModel, ui: fr.f4ioz.satcombo.UiState) {
                             fontWeight = FontWeight.Bold)
                         Text(prochaine.aide, color = TextHi, fontSize = 12.sp,
                             modifier = Modifier.padding(top = 4.dp))
-                        // Le dessin sous la consigne : une phrase se relit de
-                        // travers, une image beaucoup moins. Deux relevés ont
-                        // été perdus parce que l'arête visée à plat n'était pas
-                        // celle qu'on a levée ensuite.
+                        // A drawing is misread far less than a sentence; logs
+                        // were lost because the edge sighted flat was not the
+                        // one raised next.
                         DessinPose(prochaine.cle)
                     }
                 }
                 Spacer(Modifier.height(8.dp))
-                // Le bouton reste éteint tant qu'aucune trame n'arrive : relever
-                // une attitude absente écrirait des zéros qu'on prendrait
-                // ensuite pour une mesure.
+                // Disabled without frames: it would record zeros that later
+                // pass for a measurement.
                 TextButton(enabled = attitude != null, onClick = {
                     attitude?.let { a ->
                         vm.ajouteReleve(prochaine.cle, a.roulis, a.tangage, a.lacet)
@@ -577,8 +514,7 @@ fun BoussoleCarte(vm: MainViewModel, ui: fr.f4ioz.satcombo.UiState) {
                 color = TextLo, fontSize = 11.sp,
                 modifier = Modifier.padding(top = 6.dp))
 
-            // Le tableau, visible au fur et à mesure : on voit ce qu'on a fait,
-            // et une valeur aberrante saute aux yeux avant l'export.
+            // Table shown as it fills, so an outlier stands out before export.
             SequenceCalibrage.ETAPES.forEach { e ->
                 val v = releves.firstOrNull { it.cle == e.cle }
                 Row(Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
@@ -596,18 +532,14 @@ fun BoussoleCarte(vm: MainViewModel, ui: fr.f4ioz.satcombo.UiState) {
                 }
             }
 
-            // --- le verdict, calculé sur place ---
+            // --- verdict, computed on the spot ---
             //
-            // Le premier relevé a dû m'être envoyé pour être analysé. C'était
-            // un aller-retour de trop : l'application sait faire ce calcul, et
-            // l'opérateur a besoin du verdict pendant qu'il a encore l'antenne
-            // en main.
+            // The operator needs it while still holding the antenna.
             if (SequenceCalibrage.complete(releves)) {
                 val an = SequenceCalibrage.analyse(releves)
                 Spacer(Modifier.height(10.dp))
-                // Le verdict porte sur le **pire** écart, pas sur la seule
-                // dispersion des poses à plat : une convention qui les réussit
-                // et rate la verticale est fausse, pas « plutôt bonne ».
+                // Judged on the **worst** error, not the spread of level poses:
+                // a convention that passes those and fails vertical is wrong.
                 val franc = an.scoreDeg < 15f
                 Text(
                     tf(if (franc) "bouss_an_bonne" else "bouss_an_dispersee",
@@ -619,7 +551,7 @@ fun BoussoleCarte(vm: MainViewModel, ui: fr.f4ioz.satcombo.UiState) {
                         fontSize = 10.sp, fontFamily = FontFamily.Monospace)
                 }
                 if (!franc) {
-                    // La cause est presque toujours la même, et elle se dit.
+                    // The cause is almost always the same; say it.
                     Text(t("bouss_an_arete"), color = Amber, fontSize = 11.sp)
                 }
                 an.controles.forEach { c ->
@@ -641,9 +573,9 @@ fun BoussoleCarte(vm: MainViewModel, ui: fr.f4ioz.satcombo.UiState) {
                         vm.setBoussoleConvention(
                             an.convention?.encode()
                                 ?: PointageAntenne.ConventionLibre.PAR_DEFAUT.encode())
-                        // Le calage mesuré annule le reliquat d'étalonnage
-                        // magnétique du module, que la pose verticale a permis
-                        // de chiffrer. Le poser à zéro le réintroduirait.
+                        // The measured offset cancels the module's residual
+                        // magnetic error (quantified by the vertical pose).
+                        // Setting it to zero would bring it back.
                         vm.setBoussoleCalage(an.calageDeg)
                         messageAppr = t("bouss_an_applique")
                     }) {
@@ -669,9 +601,8 @@ fun BoussoleCarte(vm: MainViewModel, ui: fr.f4ioz.satcombo.UiState) {
                 }
             }
 
-            // La vérification, écrite noir sur blanc. Un étalonnage qu'on ne
-            // sait pas contrôler est un étalonnage auquel on ne peut pas se
-            // fier — et c'est ce contrôle-là qui révèle un boîtier de travers.
+            // A calibration you cannot check cannot be trusted; this check is
+            // what reveals a crooked box.
             Spacer(Modifier.height(10.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Default.CheckCircle, null, tint = Cyan,
@@ -682,7 +613,7 @@ fun BoussoleCarte(vm: MainViewModel, ui: fr.f4ioz.satcombo.UiState) {
             }
             Text(t("bouss_verif"), color = TextLo, fontSize = 11.sp,
                 modifier = Modifier.padding(top = 2.dp))
-            // Ce que SatMe ne peut pas réparer, il doit au moins le nommer.
+            // What SatMe cannot fix, it must at least name.
             Spacer(Modifier.height(8.dp))
             Surface(color = Amber.copy(alpha = 0.13f), shape = RoundedCornerShape(8.dp)) {
                 Text(t("bouss_magneto"), color = Amber, fontSize = 11.sp,
@@ -690,9 +621,8 @@ fun BoussoleCarte(vm: MainViewModel, ui: fr.f4ioz.satcombo.UiState) {
             }
 
             Spacer(Modifier.height(12.dp))
-            // L'état, dit sans jargon : soit le module donne le pointage
-            // complet, soit il ne donne que le cap et l'élévation reste au
-            // téléphone. Pas de troisième cas silencieux.
+            // Either the module gives full pointing, or only heading and the
+            // phone keeps elevation. No silent third case.
             Text(
                 if (posee == null) t("bouss_fleche_absente")
                 else "${t("bouss_fleche_presente")}  (%.2f, %.2f, %.2f)"
@@ -701,17 +631,12 @@ fun BoussoleCarte(vm: MainViewModel, ui: fr.f4ioz.satcombo.UiState) {
                 fontFamily = FontFamily.Monospace,
                 modifier = Modifier.padding(top = 4.dp))
 
-            // **Les trois angles bruts, tels que le module les envoie.**
+            // **The three raw angles, as the module sends them.**
             //
-            // Une élévation qui plafonne sous quatre-vingt-dix degrés ne vient
-            // pas d'un décalage mais d'une matrice fausse : le calage à
-            // l'horizontale la masque à la pose d'étalonnage et elle se révèle
-            // dès qu'on s'en éloigne. Cinq hypothèses de convention ont été
-            // tentées et réfutées ; celle-ci est la donnée qui manquait.
-            //
-            // Ces trois nombres disent sans ambiguïté ce que fait le module :
-            // relevés à plat puis à la verticale, ils identifient l'axe qui
-            // porte l'inclinaison, son signe et ses bornes. On ne devine plus.
+            // Elevation capped below 90° comes from a wrong matrix, not an
+            // offset: levelling hides it at the calibration pose and it shows
+            // as soon as you move away. Read flat then vertical, these numbers
+            // identify the tilt axis, its sign and its range.
             attitude?.let { a ->
                 Text(
                     "R %+6.1f   T %+6.1f   L %+6.1f".format(
@@ -736,14 +661,13 @@ fun BoussoleCarte(vm: MainViewModel, ui: fr.f4ioz.satcombo.UiState) {
 }
 
 /**
- * La raison brute, rendue lisible.
+ * Raw failure reason made readable.
  *
- * Les causes qu'on peut corriger soi-même ont leur phrase ; les autres tombent
- * dans un message générique qui **garde le code**. Un « Échec (liaison_perdue_8)
- * » ne dit rien à l'opérateur mais tout à celui qui devra le réparer, et c'est
- * l'opérateur qui le recopiera.
+ * Causes the operator can fix get their own sentence; others fall into a
+ * generic message that **keeps the code**: "liaison_perdue_8" means nothing to
+ * the operator but everything to whoever fixes it, and the operator relays it.
  */
-/** Le nom lisible d'une convention : personne ne doit lire « AXES_ET_LACET ». */
+/** Readable name of a convention: nobody should have to read "AXES_ET_LACET". */
 private fun messageEchec(raison: String): String = when {
     raison == "permissions" -> t("bouss_err_permissions")
     raison == "pas_de_bluetooth" -> t("bouss_err_pas_de_bluetooth")
@@ -755,7 +679,7 @@ private fun messageEchec(raison: String): String = when {
     else -> "${t("bouss_err_autre")} ($raison)"
 }
 
-/** Le point cardinal le plus proche : « N », « NNE », « NE »… */
+/** Nearest compass point: "N", "NNE", "NE"… */
 private fun cardinal(azimut: Float): String {
     val noms = arrayOf("N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE",
                        "S", "SSO", "SO", "OSO", "O", "ONO", "NO", "NNO")
@@ -765,10 +689,8 @@ private fun cardinal(azimut: Float): String {
 }
 
 /**
- * Le nom du point de compas le plus proche.
- *
- * « 187° » ne se vérifie pas d'un coup d'œil ; « S » si. C'est ce mot qui
- * permet de voir tout de suite qu'on regarde au sud en croyant viser le nord.
+ * Nearest compass point name. "187°" cannot be checked at a glance; "S" can,
+ * and shows at once you are facing south while aiming north.
  */
 private fun rose(capDeg: Float): String {
     val noms = listOf("N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE",

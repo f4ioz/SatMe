@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.ui
 
@@ -42,27 +42,24 @@ import fr.f4ioz.satcombo.ui.theme.Magenta
 import fr.f4ioz.satcombo.ui.theme.SpaceSurface
 import kotlin.math.roundToInt
 
-/** Nombre de lignes gardées dans la cascade : environ dix secondes d'histoire. */
+/** Waterfall rows kept: about ten seconds of history. */
 private const val ROWS = 96
 
-/** Résolution horizontale de la cascade. Au-delà, l'écran ne suit plus. */
+/** Waterfall horizontal resolution. Beyond this the screen cannot keep up. */
 private const val COLS = 256
 
 /**
- * Spectre et cascade, avec accord au doigt.
+ * Spectrum and waterfall, with tap-to-tune.
  *
- * Le tableau reçu couvre toute la largeur numérisée après le premier étage —
- * 176 400 Hz — rangé de la fréquence la plus basse à la plus haute, la
- * fréquence de la clé au milieu. On n'en affiche qu'une tranche, celle que
- * l'opérateur a choisie, parce que chercher un correspondant dans 176 kHz
- * revient à chercher une mouche dans un hangar.
+ * The input covers the whole band digitised after the first stage — 176,400 Hz
+ * — low to high, dongle frequency in the middle. Only the slice the operator
+ * chose is shown: finding a station in 176 kHz is a fly in a hangar.
  *
- * La fenêtre affichée suit l'accord, comme sur un récepteur à écran : tant que
- * le curseur reste dans la vue, la vue ne bouge pas ; quand il s'approche du
- * bord, la fenêtre glisse pour le garder visible, sans jamais sortir de la
- * bande réellement numérisée. Poser le doigt désigne donc un endroit précis du
- * spectre, et non plus un écart relatif à un centre qui se serait déplacé —
- * c'était le défaut qui rendait l'accord fuyant.
+ * The displayed window follows the tuning like a panadapter: it stays still
+ * while the cursor is in view and slides when it nears the edge, never beyond
+ * the digitised band. A tap therefore points at an absolute spot in the
+ * spectrum, not an offset from a centre that may have moved — that was what
+ * made tuning slippery.
  */
 @Composable
 fun SpectrumWaterfall(
@@ -72,9 +69,9 @@ fun SpectrumWaterfall(
     offsetHz: Int,
     bandwidthHz: Double,
     modifier: Modifier = Modifier,
-    /** Hauteur du tracé de spectre. 0.dp = pas de spectre, seulement la cascade. */
+    /** Spectrum trace height. 0.dp = no spectrum, waterfall only. */
     spectrumHeight: Dp = 76.dp,
-    /** Hauteur de la cascade. */
+    /** Waterfall height. */
     waterfallHeight: Dp = 120.dp,
     onTune: (Int) -> Unit
 ) {
@@ -82,13 +79,13 @@ fun SpectrumWaterfall(
     var version by remember { mutableIntStateOf(0) }
     val pixels = remember { IntArray(COLS * ROWS) }
     val bitmap = remember { Bitmap.createBitmap(COLS, ROWS, Bitmap.Config.ARGB_8888) }
-    // L'enveloppe Compose est créée une fois pour toutes : elle pointe sur le
-    // même bitmap, qu'on réécrit à chaque trame. Recréer un ImageBitmap dans la
-    // phase de dessin ferait un objet par trame, dix par seconde, pour rien.
+    // The Compose wrapper is created once and points at the same bitmap,
+    // rewritten each frame. Creating an ImageBitmap in the draw phase would
+    // allocate one object per frame for nothing.
     val image: ImageBitmap = remember(bitmap) { bitmap.asImageBitmap() }
 
-    // Une trame arrive : on l'empile, on redessine. Le tableau est neuf à chaque
-    // fois, donc la comparaison d'identité de Compose suffit à déclencher.
+    // New frame: push and redraw. The array is new each time, so Compose's
+    // identity check is enough to trigger.
     androidx.compose.runtime.LaunchedEffect(spectrum) {
         if (spectrum.isNotEmpty()) {
             history.add(spectrum)
@@ -97,20 +94,19 @@ fun SpectrumWaterfall(
         }
     }
 
-    // Plancher descendu de quatre kilohertz à un : la loupe de l'accord fin
-    // s'ouvre justement sous cette valeur, et l'ancien plancher la ramenait
-    // silencieusement à une largeur où l'on ne voit plus une bande latérale.
+    // Floor lowered from 4 kHz to 1 kHz: the fine-tuning magnifier opens
+    // below that value, and the old floor silently widened it back to where
+    // a sideband is no longer visible.
     val span = spanHz.coerceIn(1_000, fullSpanHz.toInt())
-    // Centre de la fenêtre affichée. Il suit l'accord mais reste borné à la
-    // bande numérisée : sinon on regarderait du vide au-delà de ±88 kHz.
+    // Display window centre: follows tuning but stays within the digitised
+    // band, or we would be looking at nothing beyond ±88 kHz.
     val limit = ((fullSpanHz - span) / 2.0).coerceAtLeast(0.0)
     val viewCenter = offsetHz.toDouble().coerceIn(-limit, limit)
 
     Column(modifier) {
-        // --------------------------------------------------------- le spectre
-        // Sur la page du passage il n'y a pas la place pour les deux : c'est la
-        // cascade qu'on garde, parce qu'un porteur qui monte se voit sur sa
-        // trace, pas sur une aiguille qui saute.
+        // --------------------------------------------------------- spectrum
+        // On the pass page there is no room for both: keep the waterfall, since
+        // a rising carrier shows as a trace, not as a jumping needle.
         if (spectrumHeight > 0.dp) {
         Box(
             Modifier.fillMaxWidth().height(spectrumHeight)
@@ -143,7 +139,7 @@ fun SpectrumWaterfall(
         Spacer(Modifier.height(4.dp))
         }
 
-        // --------------------------------------------------------- la cascade
+        // --------------------------------------------------------- waterfall
         Box(
             Modifier.fillMaxWidth().height(waterfallHeight)
                 .clip(RoundedCornerShape(8.dp)).background(SpaceSurface)
@@ -178,7 +174,7 @@ fun SpectrumWaterfall(
     }
 }
 
-/** Trait d'accord et bande passante du canal, dessinés par-dessus. */
+/** Tuning line and channel passband, drawn on top. */
 private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawMarker(
     w: Float, h: Float, offsetHz: Int, viewCenterHz: Double, span: Int, bandwidthHz: Double
 ) {
@@ -194,7 +190,7 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawMarker(
     drawLine(Magenta, Offset(cx, 0f), Offset(cx, h), strokeWidth = 2f)
 }
 
-/** Tranche de [span] hertz centrée sur [centerHz] (hertz relatifs à l'accord). */
+/** A [span] Hz slice centred on [centerHz] (Hz relative to tuning). */
 private fun slice(full: FloatArray, span: Int, fullSpanHz: Double,
                   centerHz: Double = 0.0): FloatArray {
     val n = full.size
@@ -206,8 +202,8 @@ private fun slice(full: FloatArray, span: Int, fullSpanHz: Double,
     val to = (mid + halfBins).coerceAtMost(n)
     val take = to - from
     if (take <= 0) return FloatArray(0)
-    // Ramené à COLS colonnes en gardant le maximum de chaque paquet : un signal
-    // étroit ne doit pas disparaître parce qu'il tombe entre deux colonnes.
+    // Reduced to COLS columns keeping each bucket's maximum: a narrow signal
+    // must not vanish because it falls between two columns.
     val out = FloatArray(COLS)
     for (c in 0 until COLS) {
         val a = from + take * c / COLS
@@ -228,12 +224,12 @@ private fun floorOf(cut: FloatArray): Float {
 private fun ceilOf(cut: FloatArray, lo: Float): Float {
     var max = -Float.MAX_VALUE
     for (v in cut) if (v > max) max = v
-    // Au moins vingt décibels d'échelle : sans cela, du bruit seul remplirait
-    // l'écran de montagnes et donnerait l'illusion d'un trafic intense.
+    // At least 20 dB of scale: otherwise noise alone would fill the screen
+    // with mountains and look like heavy traffic.
     return maxOf(max, lo + 20f)
 }
 
-/** Remplit [pixels] avec l'histoire de la cascade, la ligne récente en haut. */
+/** Fills [pixels] with the waterfall history, newest row on top. */
 private fun paint(history: List<FloatArray>, span: Int, fullSpanHz: Double,
                   centerHz: Double, pixels: IntArray) {
     val rows = history.size
@@ -261,8 +257,8 @@ private fun paint(history: List<FloatArray>, span: Int, fullSpanHz: Double,
 }
 
 /**
- * Palette de cascade : noir, bleu, cyan, vert, jaune, blanc. L'œil suit une
- * trace mieux qu'un dégradé de gris, et le blanc marque la saturation.
+ * Waterfall palette: black, blue, cyan, green, yellow, white. The eye follows
+ * a trace better than a grey ramp, and white marks saturation.
  */
 internal fun heat(v: Float): Int {
     val r: Int; val g: Int; val b: Int
@@ -277,5 +273,5 @@ internal fun heat(v: Float): Int {
         (g.coerceIn(0, 255) shl 8) or b.coerceIn(0, 255)
 }
 
-/** Couleur d'appoint, exposée pour que l'écran garde la même palette. */
+/** Accent colour, exposed so the screen keeps the same palette. */
 val SpectrumTrace: Color get() = Aurora

@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.ui
 
@@ -163,11 +163,9 @@ fun SatComboApp(vm: MainViewModel) {
     // detail -> list, settings -> main, selection mode -> off. Only the
     // top-level passes screen lets back fall through to leave the app.
     //
-    // L'ordre des branches est celui de RetourArriere, et c'est lui qui
-    // compte : on ferme ce que l'on voit. Tant que la fiche passait en
-    // premier, le retour depuis l'écran Rotor vidait la sélection sous un
-    // écran qui restait affiché — la poursuite s'arrêtait sans que rien ne le
-    // dise. Voir le commentaire de RetourArriere.
+    // Branch order is RetourArriere's and it matters: close what is visible.
+    // With the detail sheet first, back from the Rotor screen cleared the
+    // selection under a screen still shown, silently stopping tracking.
     val sectionReglages = ui.settingsSection != null
     val canHandleBack = RetourArriere.intercepte(
         ui.screen, sectionReglages, ui.selected != null, ui.selectionMode)
@@ -197,11 +195,9 @@ fun SatComboApp(vm: MainViewModel) {
         }
     }
 
-    // Le liseré d'émission : rouge, tout autour de l'écran, tant que le poste
-    // émet. L'opérateur passe au VOX — rien ne le prévient qu'il est encore en
-    // émission, et un transpondeur bloqué par un micro ouvert gêne tout le
-    // monde. Il pulse doucement : un cadre fixe se confond avec la décoration,
-    // un cadre qui bouge se voit du coin de l'œil.
+    // TX border: red around the whole screen while the rig transmits. On VOX
+    // nothing else warns that a stuck TX is hogging the transponder. It pulses
+    // because a still frame reads as decoration.
     Box(Modifier.fillMaxSize().background(SpaceGradient)) {
         Scaffold(containerColor = Color.Transparent, topBar = { TopBar(ui, vm) }) { pad ->
             Box(Modifier.padding(pad).fillMaxSize()) {
@@ -232,10 +228,9 @@ fun SatComboApp(vm: MainViewModel) {
         // so it is asked once at start-up — with a way to never be asked again.
         if (ui.askCallsign) CallsignPromptDialog(vm)
 
-        // La modification d'un contact : dans le Box racine, donc au-dessus de
-        // n'importe quel écran. Elle ne vivait que dans l'écran de détail, et
-        // l'appui sur une ligne du journal — qui est dans les réglages —
-        // n'ouvrait donc rien de visible.
+        // Contact editor in the root Box, above any screen. It used to live
+        // in the detail screen only, so tapping a log line (in settings)
+        // opened nothing visible.
         ui.logEditTimeMs?.let { tEdit ->
             ui.log.firstOrNull { it.timeMs == tEdit }?.let { e ->
                 LogEditDialog(e, ui.useUtc,
@@ -248,9 +243,8 @@ fun SatComboApp(vm: MainViewModel) {
             }
         }
 
-        // Le liseré d'émission : dans le Box racine, donc par-dessus tous les
-        // écrans. Il était par erreur dans la barre d'actions, où il ne
-        // couvrait que l'en-tête.
+        // TX border in the root Box, over every screen (not in the action
+        // bar, where it only covered the header).
         if (ui.catUi.enEmission) {
             val pulse = rememberInfiniteTransition(label = "tx")
             val eclat by pulse.animateFloat(
@@ -357,13 +351,11 @@ private fun TopBar(ui: UiState, vm: MainViewModel) {
                     // ("GPS · JN18FS" -> "JN18FS", or a plain manual locator).
                     val loc = obs.name.substringAfterLast("· ").trim().ifEmpty { obs.name }
                     val isGps = ui.locationMode == LocationMode.AUTO
-                    // En automatique et tant qu'aucun point n'est arrivé, le
-                    // carré affiché n'est pas le nôtre : c'est le repli en dur
-                    // de `LocationProvider.defaultObserver`, le QTH de F6KMX à
-                    // Saint-Maur. L'afficher comme s'il était mesuré serait le
-                    // seul mensonge que l'application se permette — et il porte
-                    // sur la grandeur dont dépendent tous les azimuts. On dit
-                    // donc qu'on cherche, jusqu'au premier point.
+                    // In automatic mode before the first fix, the square is
+                    // the hard-coded fallback of `LocationProvider.defaultObserver`
+                    // (F6KMX's QTH), not ours. Showing it as measured would lie
+                    // about the value every azimuth depends on, so say we are
+                    // searching until the first fix.
                     val cherche = isGps && ui.suivi.points == 0
                     Row(verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier.padding(top = 1.dp)
@@ -402,22 +394,14 @@ private fun TopBar(ui: UiState, vm: MainViewModel) {
             }
         },
         navigationIcon = {
-            // **Une seule liste d'écrans**, celle de `RetourArriere`.
+            // **One screen list only**, `RetourArriere`'s. The top bar had its
+            // own hand-written list, which lacked FT8 and the logging screen
+            // (no way out). Now the arrow and the phone's back button do the
+            // same thing, and the test walking all screens covers both.
             //
-            // La barre du haut avait la sienne, écrite à la main, et FT8 n'y
-            // figurait pas : l'écran s'ouvrait sans plus offrir de sortie. Deux
-            // listes qui répondent à la même question finissent toujours par
-            // diverger — ici il en manquait deux, FT8 et le nommage.
-            //
-            // En passant par le geste de retour, la flèche et le bouton du
-            // téléphone font désormais exactement la même chose, et l'essai qui
-            // parcourt tous les écrans garde les deux d'un coup.
-            //
-            // `sectionReglages = false` est voulu : dans les réglages, la
-            // flèche ferme la page entière, là où le bouton du téléphone
-            // referme d'abord la sous-section. C'était déjà le cas, et les deux
-            // gestes n'ont pas à se confondre — l'un est un retour, l'autre une
-            // sortie.
+            // `sectionReglages = false` is intended: in settings the arrow
+            // closes the whole page, while the back button first closes the
+            // subsection.
             val fermeture: (() -> Unit)? = when (
                 RetourArriere.geste(ui.screen, sectionReglages = false,
                     selection = false, modeSelection = false)
@@ -468,8 +452,8 @@ private fun TopBar(ui: UiState, vm: MainViewModel) {
                 IconButton(onClick = { vm.openTimeline() }) {
                     Icon(Icons.Default.ShowChart, t("timeline_title"), tint = TextLo)
                 }
-                // (Le sélecteur LOC/UTC vit dans Paramètres › Heure — la barre
-                // était trop chargée et écrasait le titre avec le bouton REC.)
+                // (LOC/UTC selector lives in Settings > Time: the bar was
+                // crushing the title.)
                 IconButton(onClick = { vm.bootstrap(force = true) }) {
                     Icon(Icons.Default.Refresh, t("refresh"), tint = Cyan)
                 }
@@ -509,8 +493,7 @@ private fun OverflowMenu(ui: UiState, vm: MainViewModel) {
                 tint = if (running) Amber else TextLo)
         }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-            // Le globe : dans le menu comme les autres pages occasionnelles,
-            // la barre du haut étant déjà pleine.
+            // Globe: in the menu, the top bar is full.
             DropdownMenuItem(
                 text = { Text(t("globe_title")) },
                 leadingIcon = { Icon(Icons.Default.Public, null, tint = Cyan) },
@@ -538,8 +521,8 @@ private fun OverflowMenu(ui: UiState, vm: MainViewModel) {
                 text = { Text(t("ft8_titre")) },
                 leadingIcon = { Icon(Icons.Default.GraphicEq, null, tint = Cyan) },
                 onClick = { open = false; vm.ouvreFt8() })
-            // Fonctions en bêta : elles n'apparaissent que pour qui détient la
-            // clé (indicatif F4IOZ ou champ « Extensions » des réglages).
+            // Beta features: shown only with the key (callsign F4IOZ or the
+            // "Extensions" settings field).
             if (fr.f4ioz.satcombo.data.Extensions.SSTV in ui.extensions) {
                 DropdownMenuItem(
                     text = { Text(t("sstv_title")) },
@@ -722,10 +705,9 @@ private fun PassesScreen(ui: UiState, vm: MainViewModel) {
         }
     }
 
-    // Arrivée en bas de la liste : on rallonge l'horizon de deux jours. La
-    // condition « canScrollBackward » évite de déclencher la chose sur une
-    // liste plus courte que l'écran, où le bas est atteint sans avoir bougé le
-    // doigt — sinon on partirait tout seul jusqu'à quinze jours.
+    // Reaching the bottom extends the horizon by two days. `canScrollBackward`
+    // prevents firing on a list shorter than the screen, which would run away
+    // on its own up to fifteen days.
     val atListEnd by remember {
         derivedStateOf {
             val info = listState.layoutInfo
@@ -795,9 +777,8 @@ private fun PassesScreen(ui: UiState, vm: MainViewModel) {
                     }
                 }
             }
-            // Le filtre par date sert a preparer un jour precis. S'il recouvre
-            // un creneau annonce, le dire ici evite d'avoir a chercher la
-            // pastille passage par passage dans une liste de trente lignes.
+            // Date filter prepares a given day; if it covers an announced
+            // slot, say so here rather than hunting for the badge pass by pass.
             val dayEvents = vm.agendaInRange(s, e)
             if (dayEvents.isNotEmpty()) {
                 item {
@@ -993,9 +974,8 @@ private fun PassesScreen(ui: UiState, vm: MainViewModel) {
         if (ui.potaEnabled && ui.nearbyPota.isNotEmpty()) {
             item {
                 val anyInside = ui.nearbyPota.any { it.inside }
-                // Le vert doit rester lisible sur les quatre thèmes : clair
-                // sur fond sombre, foncé sur fond clair. Un vert pâle posé sur
-                // un carton presque noir disparaissait en mode Soleil.
+                // The green must stay readable on all four themes: light on
+                // dark, dark on light.
                 val sombre = SpaceBg.luminance() < 0.4f
                 val green = if (sombre) Color(0xFF7FE3A0) else Color(0xFF1B6B3A)
                 Surface(color = if (sombre) Color(0xFF13261C) else Color(0xFFE2F5E9),
@@ -1016,8 +996,7 @@ private fun PassesScreen(ui: UiState, vm: MainViewModel) {
                                     modifier = Modifier.padding(horizontal = 7.dp, vertical = 1.dp))
                             }
                         }
-                        // Replié, on lit quand même DANS QUEL parc on est :
-                        // c'est l'information qu'on vient chercher.
+                        // Collapsed, still show WHICH park we are in.
                         val dedans = ui.nearbyPota.firstOrNull { it.inside }
                         if (!potaExpanded && dedans != null) {
                             Text("${dedans.park.reference} · ${dedans.park.name}",
@@ -1095,9 +1074,8 @@ private fun PassesScreen(ui: UiState, vm: MainViewModel) {
                 }
             }
         }
-        // Pied de liste : il dit où l'on s'arrête, et permet de rallonger à la
-        // main quand la liste tient dans l'écran et que le défilement ne suffit
-        // donc pas à déclencher l'ajout.
+        // Footer: shows where the list stops, and extends it by hand when the
+        // list fits on screen and scrolling cannot trigger it.
         if (ui.dateFilter == null && passes.isNotEmpty()) {
             item(key = "horizon") {
                 Box(Modifier.fillMaxWidth().padding(vertical = 10.dp),
@@ -1119,16 +1097,16 @@ private fun PassesScreen(ui: UiState, vm: MainViewModel) {
     }
 }
 
-/** Quinze jours : au-delà, les éléments orbitaux ne tiennent plus la route. */
+/** Fifteen days: beyond that, orbital elements are no longer reliable. */
 private const val MAX_PASS_HOURS = 15 * 24
 
 @Composable
 private fun HeroNextPass(
     p: SatPass, now: Long, useUtc: Boolean,
     skeds: List<fr.f4ioz.satcombo.data.SkedAlert> = emptyList(),
-    /** Rendez-vous d'agenda dont le creneau couvre ce passage, s'il y en a un. */
+    /** Agenda event whose slot covers this pass, if any. */
     agenda: fr.f4ioz.satcombo.data.AgendaStore.AgendaEvent? = null,
-    /** Le statut AMSAT du satellite, pour la pastille posée sur son nom. */
+    /** AMSAT status, for the badge next to the name. */
     amsatStatus: fr.f4ioz.satcombo.data.AmsatStatus? = null,
     onClick: () -> Unit
 ) {
@@ -1165,9 +1143,8 @@ private fun HeroNextPass(
                     }
                 }
             }
-            // Le rendez-vous note a l'agenda tombe pile sur ce passage : c'est
-            // la raison meme de sortir l'antenne, il se lit avant le compte a
-            // rebours et sans ouvrir le satellite.
+            // An agenda event on this pass is the reason to go out: show it
+            // before the countdown.
             agenda?.let { ev ->
                 Spacer(Modifier.height(6.dp))
                 Surface(color = Magenta.copy(alpha = 0.18f), shape = RoundedCornerShape(8.dp),
@@ -1192,10 +1169,8 @@ private fun HeroNextPass(
             Spacer(Modifier.height(6.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
-                    // La pastille de statut suit le nom, ici comme dans la
-                    // liste : c'est la première chose qu'on lit en ouvrant
-                    // l'application, et savoir qu'un satellite est muet avant
-                    // de sortir l'antenne évite une sortie pour rien.
+                    // Status badge after the name, as in the list: knowing a
+                    // satellite is silent saves a trip out.
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Box(Modifier.size(10.dp).clip(CircleShape)
                                 .background(couleurStatut(amsatStatus)))
@@ -1245,7 +1220,7 @@ internal fun PassCard(
     p: SatPass, now: Long, showSat: Boolean = false,
     selectable: Boolean = false, checked: Boolean = false, onCheck: (() -> Unit)? = null,
     skedCount: Int = 0, highlight: Boolean = false, useUtc: Boolean = false,
-    /** Titre du rendez-vous d’agenda tombant sur ce passage, null s’il n’y en a pas. */
+    /** Title of the agenda event on this pass, or null. */
     agendaTitle: String? = null,
     amsatStatus: fr.f4ioz.satcombo.data.AmsatStatus? = null,
     showBell: Boolean = false, bellOn: Boolean = false, onBell: (() -> Unit)? = null,
@@ -1286,9 +1261,8 @@ internal fun PassCard(
                                 .background(couleurStatut(amsatStatus)))
                             Spacer(Modifier.width(6.dp))
                         Text(p.satName, color = TextHi, fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                        // La pastille agenda se pose sur le satellite lui-même :
-                        // c’est le nom que l’œil cherche en descendant la liste,
-                        // et un rendez-vous se rate justement en faisant défiler.
+                        // Agenda badge on the satellite name: that is what the
+                        // eye scans while scrolling.
                         if (agendaTitle != null) {
                             Spacer(Modifier.width(6.dp))
                             Icon(Icons.Default.EventNote, contentDescription = t("agenda_on_pass_cd"),
@@ -1308,9 +1282,8 @@ internal fun PassCard(
                     }
                     Text(tf("pass_card_line", hm.format(Date(p.losEpochMs)), p.durationSec, p.maxElevationDeg.toInt(), p.aosAzimuthDeg.toInt(), p.losAzimuthDeg.toInt()),
                         color = TextLo, style = MaterialTheme.typography.bodySmall)
-                    // Le titre du rendez-vous sous la ligne du passage : la
-                    // pastille dit qu’il y a quelque chose, le titre dit quoi,
-                    // et sur la page du passage il n’y a pas de nom à pastiller.
+                    // Event title under the pass line: the badge says there is
+                    // something, the title says what.
                     if (agendaTitle != null) {
                         Spacer(Modifier.height(4.dp))
                         Surface(color = Amber.copy(alpha = 0.18f), shape = RoundedCornerShape(6.dp)) {
@@ -1377,17 +1350,12 @@ internal fun PassCard(
 // ---------- detail ----------
 
 /**
- * La couleur de la pastille de statut, définie **une seule fois**.
+ * Status badge colour, defined **once** (list, hero card and detail page used
+ * to each copy the same `when`).
  *
- * Elle était écrite à trois endroits — la liste, la carte héros, la page de
- * détail — avec le même `when` recopié. Trois copies d'une même règle finissent
- * par diverger ; celle-ci est désormais unique.
- *
- * **Le gris n'est pas un défaut, c'est une réponse.** Sans rapport récent, on
- * ne dessinait rien : l'emplacement restait vide et l'absence de donnée ne se
- * distinguait pas d'une absence de fonction. Un satellite peu écouté — JO-97,
- * par exemple — paraissait donc dépourvu de statut. Le gris dit « personne ne
- * l'a signalé », ce qui est une information.
+ * **Grey is an answer, not a default.** Drawing nothing without a recent
+ * report made missing data look like a missing feature; grey says "nobody
+ * reported it".
  */
 @Composable
 fun couleurStatut(st: fr.f4ioz.satcombo.data.AmsatStatus?): Color = when (st) {

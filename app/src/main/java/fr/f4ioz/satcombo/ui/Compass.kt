@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.ui
 
@@ -54,20 +54,14 @@ data class DeviceOrientation(
     val needsCalibration: Boolean = false   // sensor reports LOW/UNRELIABLE accuracy
 )
 
-/** Live "where the back of the phone points" (azimuth + elevation), smoothed,
- *  with magnetic declination applied (true-north azimuth). */
 /**
- * Une couleur choisie par l'opérateur, rendue lisible sur fond blanc.
+ * Makes an operator-chosen colour readable on white.
  *
- * En plein soleil le facteur limitant est le contraste, pas la teinte. On
- * garde donc la teinte — c'est elle que l'opérateur a choisie et qu'il
- * reconnaît — et l'on ne touche qu'à la clarté, jusqu'à passer le seuil de
- * 4,5:1 sur blanc.
- *
- * La luminance est calculée selon la pondération de la vision humaine : le
- * vert compte pour 71 %, le rouge 21 %, le bleu 7 %. Assombrir de la même
- * quantité toutes les composantes ferait passer un bleu déjà sombre pour
- * illisible et laisserait un jaune éblouissant.
+ * In full sun contrast is the limit, not hue. Keep the hue (the operator
+ * picked it and recognises it) and only darken until it passes ~4.5:1 on
+ * white. Luminance uses perceptual weights (green 71 %, red 21 %, blue 7 %):
+ * a flat threshold on raw components would kill dark blues and leave yellows
+ * glaring.
  */
 private fun assombrisPourSoleil(c: Color): Color {
     var couleur = c
@@ -80,6 +74,8 @@ private fun assombrisPourSoleil(c: Color): Color {
     return couleur
 }
 
+/** Live "where the back of the phone points" (azimuth + elevation), smoothed,
+ *  with magnetic declination applied (true-north azimuth). */
 @Composable
 fun rememberDeviceOrientation(
     declinationDeg: Float = 0f,
@@ -129,33 +125,29 @@ fun rememberDeviceOrientation(
         onDispose { sm.unregisterListener(listener) }
     }
 
-    // --- l'aiguillage vers la boussole déportée ---
+    // --- switch to the remote BLE compass ---
     //
-    // Le module donne toujours le cap. Il donne **aussi** l'élévation, mais
-    // seulement si l'opérateur a dit sur quel axe la lire : vissé sur la
-    // flèche, le module est dans l'axe de l'antenne, ce que le téléphone tenu
-    // à côté n'est jamais. Tant que l'axe n'est pas désigné, l'élévation reste
-    // celle du téléphone — une aiguille fausse qui bouge est pire qu'une
-    // aiguille approximative qu'on sait approximative.
+    // The module always gives heading. It gives elevation **too**, but only
+    // once the operator has said which axis to read: screwed onto the boom it
+    // is on the antenna axis, which a hand-held phone never is. Until then
+    // elevation stays the phone's — a wrong needle that moves is worse than a
+    // rough one known to be rough.
     //
-    // Les capteurs du téléphone continuent de tourner en arrière-plan. C'est
-    // voulu : quand le module se tait — batterie, distance, boîtier resté dans
-    // le sac — `cap` repasse à `null` et le cadran retrouve le téléphone à la
-    // trame suivante, sans écran vide ni manipulation.
+    // Phone sensors keep running on purpose: when the module goes quiet
+    // (battery, range, left in the bag) `cap` returns to `null` and the dial
+    // falls back to the phone on the next frame.
     //
-    // La déclinaison s'applique ici comme aux capteurs du téléphone : le module
-    // lit le champ magnétique terrestre, donc il donne un nord magnétique. Un
-    // rotor, lui, est réglé au nord vrai et n'y a pas droit.
+    // Declination applies as for the phone: the module reads magnetic north.
+    // A rotor is set to true north and must not get it.
     //
-    // Le porteur est créé inconditionnellement : un `remember` posé dans une
-    // branche décale la table de slots de Compose dès que la branche change
-    // d'avis — et elle en change à chaque fois que le module se tait.
+    // The holder is created unconditionally: a `remember` inside a branch
+    // shifts Compose's slot table whenever the branch flips — and it flips
+    // every time the module goes quiet.
     val depuisModule = remember { mutableStateOf(DeviceOrientation(0f, 0f, false)) }
     val capModule = fr.f4ioz.satcombo.ble.BoussoleBle.cap.value
     if (!fr.f4ioz.satcombo.ble.BoussoleBle.choisie || capModule == null) {
-        // Le cap du téléphone est publié pour qui en a besoin hors de l'arbre
-        // d'affichage — la page de démonstration, notamment. `SideEffect` et
-        // non une écriture directe : on ne modifie rien pendant la composition.
+        // Publish the phone heading for consumers outside the UI tree (the demo
+        // page). `SideEffect`, not a direct write: never mutate during composition.
         val vu = state.value
         SideEffect {
             fr.f4ioz.satcombo.domain.CapVivant.pose(
@@ -171,8 +163,8 @@ fun rememberDeviceOrientation(
         azimuthDeg = azimut,
         elevationDeg = elModule ?: state.value.elevationDeg,
         available = true,
-        // Le module fait sa propre fusion : la mise en garde d'Android sur la
-        // précision du magnétomètre ne parle pas de lui.
+        // The module does its own fusion: Android's magnetometer accuracy
+        // warning does not apply to it.
         needsCalibration = false
     )
     val posé = depuisModule.value
@@ -205,13 +197,13 @@ fun CompassAim(
     aimMode: String = "EDGE",
     onAimModeChange: (String) -> Unit = {},
     /**
-     * Le geste d'appuis rapides : il **ouvre l'écran de saisie**, il n'écrit
-     * rien. Le nom disait « quick log » tant qu'il posait un contact au
-     * carnet — un contact sans indicatif, c'est-à-dire pas un contact.
+     * The quick-tap gesture **opens the entry screen**; it writes nothing.
+     * It used to log a contact directly — a contact with no callsign, i.e.
+     * not a contact.
      */
     onSaisie: () -> Unit = {},
-    logTaps: Int = 3,                    // appuis qui déclenchent onSaisie (2 ou 3)
-    compact: Boolean = false,            // hide verbose status/visée; show mode chips only if asked
+    logTaps: Int = 3,                    // taps that trigger onSaisie (2 or 3)
+    compact: Boolean = false,            // hide verbose status/aim text; show mode chips only if asked
     showModeChips: Boolean = true,
     headUp: Boolean = false,             // rotate map so phone heading is up; aim fixed on axis
     needleStyle: Boolean = false,        // big golden needle from center instead of guidance arrow
@@ -219,11 +211,9 @@ fun CompassAim(
     cornerTR: Pair<String, String>? = null,
     cornerBL: Pair<String, String>? = null,
     cornerBR: Pair<String, String>? = null,
-    // User-customisable colours (defaults = the shipped palette).
-    // Les couleurs par défaut valent pour les thèmes sombre et clair ; le mode
-    // soleil les remplace plus bas par des teintes foncées et saturées. Un rose
-    // et un orange pastel sur fond blanc, dehors, ne se distinguent ni l'un de
-    // l'autre ni du fond.
+    // User-customisable colours (defaults = the shipped palette, for dark and
+    // light themes). Sun mode overrides them below with dark saturated tones:
+    // pastel pink and orange on white, outdoors, are indistinguishable.
     traceColor: Color = Color(0xFFFF6BA9),               // predicted pass track
     traceWidth: Float = 1f,                              // thickness × for trace + arrows
     needleFar: Color = Color(0xFFD6336C),                // azimuth: far / near / on-axis
@@ -237,17 +227,16 @@ fun CompassAim(
     ringAzClose: Color = Color(0xFF2FB344),
     ringElNear: Color = Color(0xFFF59F00),
     ringElClose: Color = Color(0xFF2FB344),
-    // Quand un mât tient l'antenne, c'est lui qui sait où elle pointe.
+    // When a rotor holds the antenna, the rotor knows where it points.
     rotorAzDeg: Double? = null,
     rotorElDeg: Double? = null,
     modifier: Modifier = Modifier
 ) {
     val sensor by rememberDeviceOrientation(declinationDeg, aimMode)
-    // Le mât remplace le téléphone, et rien d'autre ne bouge : les couleurs,
-    // les seuils, la trace et l'aiguille ne savent pas d'où vient la visée.
-    // Un rotor d'azimut seul ne donne que l'azimut ; l'élévation reste celle du
-    // téléphone, parce qu'aucun capteur du mât ne la connaît. La déclinaison ne
-    // s'applique pas : un rotor est réglé au nord vrai, pas au nord magnétique.
+    // The rotor replaces the phone and nothing else changes: colours,
+    // thresholds, track and needle don't know where the aim comes from.
+    // An az-only rotor leaves elevation to the phone. No declination: a rotor
+    // is set to true north.
     val dev = if (rotorAzDeg != null)
         DeviceOrientation(
             azimuthDeg = rotorAzDeg.toFloat(),
@@ -269,8 +258,8 @@ fun CompassAim(
     // Separate 3-tier proximity for azimuth and elevation, each with its own
     // color: far = magenta, near = amber, on-target = green. Thresholds are in
     // degrees of absolute error. Level 2 = on target, 1 = near, 0 = far.
-    val NEAR_DEG = 25.0   // within this = "proche"
-    val CLOSE_DEG = 8.0   // within this = "très proche / OK"
+    val NEAR_DEG = 25.0   // within this = "near"
+    val CLOSE_DEG = 8.0   // within this = "on target"
     fun tier(errAbs: Double?): Int = when {
         errAbs == null -> 0
         errAbs <= CLOSE_DEG -> 2
@@ -293,16 +282,13 @@ fun CompassAim(
     val ringElTier = if (targetUp) tierRing(dEl?.let { kotlin.math.abs(it) }) else 0
     val soleilActif = fr.f4ioz.satcombo.ui.theme.isSunTheme()
 
-    // Le système à trois couleurs — loin, proche, dans l'axe — doit rester
-    // lisible dehors. Le vert #2FB344 et l'orange #F59F00 passent sous 3:1 sur
-    // blanc en plein jour ; leurs équivalents foncés tiennent au-delà de 7:1
-    // tout en restant distincts l'un de l'autre pour un œil pressé.
+    // The far/near/on-axis colours must stay readable outdoors: #2FB344 and
+    // #F59F00 fall below 3:1 on white; the dark variants exceed 7:1 and stay
+    // distinct from each other.
     //
-    // **La couleur de tracé, elle, appartient à l'opérateur.** L'imposer en
-    // mode Soleil rendait le réglage muet : on le changeait, rien ne bougeait,
-    // et rien ne disait pourquoi. Un réglage qui ne fait rien est pire que pas
-    // de réglage. On assombrit donc la couleur choisie au lieu de la
-    // remplacer — elle reste reconnaissable, et lisible sur blanc.
+    // **The trace colour belongs to the operator.** Forcing it in sun mode made
+    // the setting silently do nothing, which is worse than no setting. So we
+    // darken the chosen colour instead of replacing it.
     val traceColor = if (soleilActif) assombrisPourSoleil(traceColor) else traceColor
     val needleFar = if (soleilActif) Color(0xFFA80030) else needleFar
     val needleNear = if (soleilActif) Color(0xFF8A4B00) else needleNear
@@ -334,9 +320,8 @@ fun CompassAim(
         wasAligned = aligned
     }
 
-    // Le détecteur d'appuis : le nombre choisi d'appuis en 800 ms ouvre la
-    // saisie d'une seule main. La fenêtre reste de 800 ms quel que soit le
-    // compte, pour que deux appuis restent aussi délibérés que trois.
+    // N taps within 800 ms open the entry screen one-handed. The window stays
+    // 800 ms whatever N, so two taps remain as deliberate as three.
     val needTaps = logTaps.coerceIn(2, 3)
     val tapTimes = remember { mutableStateListOf<Long>() }
 
@@ -354,14 +339,10 @@ fun CompassAim(
             val r = min(size.width, size.height) / 2f * 0.84f
             val c = Offset(size.width / 2f, size.height / 2f)
             val dark = fr.f4ioz.satcombo.ui.theme.isDarkTheme()
-            // Au soleil, le cadran perd ses demi-teintes.
-            //
-            // Les gris de grille du thème clair ordinaire — #B9C6D8 et
-            // #CFD9E6 — donnent moins de 2:1 de contraste sur leur fond. C'est
-            // agréable à l'ombre et strictement invisible dehors, où le reflet
-            // du verre noie tout ce qui n'est pas franchement noir. Le mode
-            // soleil garde donc un fond blanc et une grille noire atténuée par
-            // l'épaisseur du trait, jamais par la couleur.
+            // Sun mode drops the half-tones. The light-theme grid greys
+            // (#B9C6D8, #CFD9E6) are under 2:1 on their background: fine in
+            // the shade, invisible outdoors under glass glare. Sun mode uses a
+            // white dial and black grid, softened by stroke width, never colour.
             val soleil = fr.f4ioz.satcombo.ui.theme.isSunTheme()
             val dialBg = when {
                 soleil -> Color(0xFFFFFFFF)
@@ -399,8 +380,8 @@ fun CompassAim(
             drawCardinal(c, r, "S", 180, rot); drawCardinal(c, r, "W", 270, rot)
 
             // --- alignment status rings ---
-            // Outer solid ring = AZIMUT, inner dashed ring (slightly smaller)
-            // = ÉLÉVATION. Three states: far -> NO ring, near -> first colour,
+            // Outer solid ring = AZIMUTH, inner dashed ring (slightly smaller)
+            // = ELEVATION. Three states: far -> NO ring, near -> first colour,
             // on-axis -> second colour (both user-configurable). Readable at
             // arm's length without looking at the numbers.
             if (dev.available && targetUp) {
@@ -479,15 +460,10 @@ fun CompassAim(
             if (targetUp && target != null) {
                 val pt = azElToXy(target.azimuthDeg, target.elevationDeg, c, r, rot)
                 val col = if (target.sunlit) Amber else Aurora
-                // **Le satellite doit se détacher du tracé, quelle que soit
-                // la couleur du tracé.**
-                //
-                // Le point et la trajectoire partageaient la même famille de
-                // teintes : sur fond clair ils se confondaient, et l'on
-                // perdait de vue la seule chose qui bouge. On l'entoure donc
-                // d'un anneau de la couleur du fond — une césure franche que
-                // ni le tracé ni la grille ne peuvent imiter — avant de poser
-                // le point et son contour.
+                // **The satellite must stand out from the track, whatever the
+                // track colour.** On light backgrounds dot and track merged.
+                // A background-coloured ring around the dot gives a clean gap
+                // neither track nor grid can mimic.
                 val fond = fr.f4ioz.satcombo.ui.theme.SpaceCard
                 drawCircle(col.copy(alpha = 0.25f), 20f, pt)
                 drawCircle(fond, 14f, pt)
@@ -623,8 +599,8 @@ fun CompassAim(
             Spacer(Modifier.height(6.dp))
             Text(t("orientation_sensor_unavailable"), color = Magenta, fontSize = 11.sp)
         }
-        // Une ligne, et une seule : savoir que l'aiguille suit le mât et non la
-        // main change tout ce qu'on en conclut quand elle ne bouge pas.
+        // One line: knowing the needle follows the rotor, not the hand, changes
+        // what you conclude when it doesn't move.
         if (rotorAzDeg != null) {
             Spacer(Modifier.height(6.dp))
             Text(

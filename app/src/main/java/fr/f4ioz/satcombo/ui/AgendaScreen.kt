@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.ui
 
@@ -48,21 +48,17 @@ import java.util.Locale
 import java.util.TimeZone
 
 /**
- * L'agenda : les rendez-vous que l'orbite ne connaît pas.
+ * Agenda: appointments the orbit doesn't know about.
  *
- * SatMe calcule tous les passages du monde, et cela ne dit toujours pas qu'un
- * correspondant attend sur le passage de 19 h 42, ni qu'une station a annoncé
- * de la SSTV le 1er août. Ces informations arrivent par un forum ou un
- * réseau, des jours à l'avance, et se perdent exactement dans cet intervalle.
+ * Pass predictions don't tell you a station waits on the 19:42 pass, or that
+ * SSTV was announced for 1 August. Such news arrives days ahead via forums and
+ * gets lost in between.
  *
- * Un rendez-vous se note en quelques gestes — quand (un instant, ou un créneau
- * du début à la fin), quoi, sur quel satellite, sur quelle fréquence — et le
- * rappel arrive par la même notification que les alertes de passage, avec le
- * même canal : un opérateur qui a autorisé l'une n'a pas à autoriser l'autre.
- *
- * Le créneau est ce qui relie l'agenda au reste de l'application : tous les
- * passages du satellite qui tombent dedans se marquent d'eux-mêmes dans la
- * liste, sur la page du satellite et dans le filtre par date.
+ * An entry is when (instant or start–end window), what, satellite, frequency.
+ * The reminder uses the same notification channel as pass alerts, so no
+ * second permission. A window links the agenda to the rest of the app: every
+ * pass of that satellite inside it is flagged in the list, the satellite page
+ * and the date filter.
  */
 @Composable
 fun AgendaScreen(ui: UiState, vm: MainViewModel) {
@@ -74,14 +70,12 @@ fun AgendaScreen(ui: UiState, vm: MainViewModel) {
     fun refresh() {
         events = AgendaStore.load(ctx)
         AgendaAlertWorker.reschedule(ctx)
-        // La liste des passages porte une pastille pour les rendez-vous : sans
-        // ceci elle ne la verrait qu’au prochain démarrage de l’application.
+        // Otherwise the pass list's agenda badges only update on next app start.
         vm.refreshAgenda()
     }
 
     val now = System.currentTimeMillis()
-    // Un créneau en cours reste « à venir » tant qu’il n’est pas fini : ranger
-    // dans les passés un événement qui a lieu en ce moment serait absurde.
+    // A window in progress stays "upcoming" until it ends.
     val upcoming = events.filter { it.endOrStartMs >= now }
     val past = events.filter { it.endOrStartMs < now }.sortedByDescending { it.timeMs }
 
@@ -143,11 +137,10 @@ fun AgendaScreen(ui: UiState, vm: MainViewModel) {
         AgendaEditDialog(
             initial = editing,
             useUtc = ui.useUtc,
-            // La liste proposée : les favoris d'abord — ce sont eux qu'on
-            // suit —, puis tout le catalogue chargé. Se limiter aux passages
-            // calculés vidait la liste dès qu'on notait un rendez-vous pour un
-            // satellite sans passage dans la fenêtre courante, ce qui est
-            // justement le cas d'une SSTV annoncée trois semaines à l'avance.
+            // Favourites first, then the whole loaded catalogue. Using only
+            // computed passes emptied the list for a satellite with no pass in
+            // the current window — exactly the case of SSTV announced three
+            // weeks ahead.
             satNames = remember(ui.satellites, ui.favorites, ui.passes) {
                 val favs = ui.satellites.filter { it.catalogNumber in ui.favorites }
                     .map { it.name }.sorted()
@@ -167,16 +160,13 @@ private fun AgendaHeader(text: String) {
         letterSpacing = 1.2.sp, modifier = Modifier.padding(top = 10.dp, start = 4.dp))
 }
 
-/** La fréquence telle qu'on l'écrit sur l'air : « 436.950 MHz ». */
+/** Frequency as written on air: "436.950 MHz". */
 internal fun agendaFreqLabel(hz: Long): String =
     "%.3f MHz".format(Locale.US, hz / 1e6)
 
 /**
- * Le quand d'un rendez-vous, en une ligne.
- *
- * Un créneau d'un seul jour ne répète pas la date : « lun 03 août 06:30 →
- * 19:30 » se lit mieux que la même date deux fois. Sur deux jours, les deux
- * dates sont écrites, sinon on ne sait pas jusqu'à quand ça dure.
+ * An entry's time on one line. A same-day window doesn't repeat the date
+ * ("Mon 03 Aug 06:30 → 19:30"); a multi-day window shows both dates.
  */
 internal fun agendaWhen(e: AgendaEvent, useUtc: Boolean): String {
     val zone = if (useUtc) TimeZone.getTimeZone("UTC") else TimeZone.getDefault()
@@ -217,8 +207,7 @@ private fun AgendaRow(
                                 modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp))
                         }
                     }
-                    // Un créneau en cours mérite d’être dit : c’est maintenant
-                    // qu’il faut sortir l’antenne, pas au prochain rappel.
+                    // Flag a window in progress: time to get the antenna out now.
                     if (live) {
                         Spacer(Modifier.width(6.dp))
                         Surface(color = Aurora.copy(alpha = 0.18f), shape = RoundedCornerShape(5.dp)) {
@@ -263,7 +252,7 @@ private fun AgendaRow(
     }
 }
 
-/** Les préavis proposés, du quart d'heure à la semaine. */
+/** Reminder lead times offered, from none to a week (minutes). */
 private val LEADS = listOf(0, 5, 15, 30, 60, 120, 360, 720, 1440, 2880, 10080)
 
 private fun leadLabel(min: Int): String = when {
@@ -273,7 +262,7 @@ private fun leadLabel(min: Int): String = when {
     else -> tf("agenda_lead_day", min / 1440)
 }
 
-/** Une date-heure décomposée, telle que la manipulent les sélecteurs. */
+/** Broken-down date-time, as the pickers handle it. */
 private data class Stamp(
     var year: Int, var month: Int, var day: Int, var hour: Int, var minute: Int)
 
@@ -289,16 +278,15 @@ private fun AgendaEditDialog(
     val zone = remember(useUtc) {
         if (useUtc) TimeZone.getTimeZone("UTC") else TimeZone.getDefault()
     }
-    // Par défaut : aujourd'hui, à la prochaine heure ronde. Décaler d'office
-    // au lendemain donnait l'impression d'une date fausse — on ouvrait la
-    // boîte le 30 et elle proposait le 31.
+    // Default: today, next round hour. Defaulting to tomorrow looked like a
+    // wrong date (open on the 30th, get the 31st).
     val startMs = remember {
         initial?.timeMs ?: (System.currentTimeMillis() + 3_600_000L)
     }
     fun stampOf(ms: Long, round: Boolean) = Calendar.getInstance(zone).apply {
         timeInMillis = ms
         set(Calendar.SECOND, 0)
-        // Un rendez-vous se note à l'heure ronde, pas à 14 h 37.
+        // New entries start on the hour, not at 14:37.
         if (round) set(Calendar.MINUTE, 0)
     }.let {
         Stamp(it.get(Calendar.YEAR), it.get(Calendar.MONTH), it.get(Calendar.DAY_OF_MONTH),
@@ -310,14 +298,13 @@ private fun AgendaEditDialog(
     var note by remember { mutableStateOf(initial?.note ?: "") }
     var lead by remember { mutableStateOf(initial?.leadMin ?: 60) }
     var kind by remember { mutableStateOf(initial?.kind ?: "") }
-    // La fréquence se tape en MHz, comme elle est annoncée : « 436.950 ».
+    // Frequency typed in MHz, as announced: "436.950".
     var freq by remember {
         mutableStateOf(initial?.freqHz?.takeIf { it > 0L }
             ?.let { "%.3f".format(Locale.US, it / 1e6) } ?: "")
     }
-    // Un rendez-vous dure : une SSTV s'annonce du samedi au dimanche, pas a
-    // 19 h 00 pile. Le creneau est donc arme d'office, avec une heure de fin
-    // proposee une heure plus tard ; qui note un instant precis coupe l'interrupteur.
+    // Events last: SSTV is announced Saturday to Sunday, not 19:00 sharp. So the
+    // window is on by default, ending one hour later; switch it off for an instant.
     var window by remember { mutableStateOf(initial?.isWindow ?: true) }
 
     var s0 by remember { mutableStateOf(stampOf(startMs, initial == null)) }
@@ -326,7 +313,7 @@ private fun AgendaEditDialog(
             initial?.endMs?.takeIf { it > 0L } ?: (startMs + 3_600_000L), initial == null))
     }
 
-    // 0 = fermé, 1 = début, 2 = fin.
+    // 0 = closed, 1 = start, 2 = end.
     var pickDate by remember { mutableStateOf(0) }
     var pickTime by remember { mutableStateOf(0) }
     var leadOpen by remember { mutableStateOf(false) }
@@ -349,8 +336,7 @@ private fun AgendaEditDialog(
             TextButton(
                 enabled = !badWindow,
                 onClick = {
-                    // Une fréquence tapée à moitié ne doit pas bloquer
-                    // l'enregistrement : elle est simplement ignorée.
+                    // A half-typed frequency must not block saving; it's ignored.
                     val hz = freq.trim().replace(',', '.').toDoubleOrNull()
                         ?.takeIf { it > 0.0 }?.let { (it * 1e6).toLong() } ?: 0L
                     onSave(AgendaEvent(
@@ -377,9 +363,8 @@ private fun AgendaEditDialog(
                     placeholder = { Text(t("agenda_what_hint")) },
                     singleLine = true, modifier = Modifier.fillMaxWidth())
 
-                // Satellite : proposé depuis les passages calculés, mais
-                // librement saisissable — un rendez-vous peut viser un
-                // satellite que SatMe ne suit pas encore.
+                // Satellite: suggested from a list but free text — the entry may
+                // target a satellite SatMe doesn't track yet.
                 Box {
                     OutlinedTextField(
                         value = sat, onValueChange = { sat = it },
@@ -398,8 +383,8 @@ private fun AgendaEditDialog(
                     }
                 }
 
-                // Genre et fréquence sur la même ligne : ce sont les deux
-                // choses que porte une annonce, « SSTV sur 436.950 ».
+                // Kind and frequency on one line, like an announcement:
+                // "SSTV on 436.950".
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Box(Modifier.weight(1f)) {
                         OutlinedButton(onClick = { kindOpen = true },
@@ -436,9 +421,8 @@ private fun AgendaEditDialog(
                     }
                 }
 
-                // Le créneau ne s'impose pas : un sked reste un instant. Mais
-                // une séance SSTV annoncée sur deux jours ne se note pas
-                // autrement que par un début et une fin.
+                // Window optional: a sked is an instant, a two-day SSTV event
+                // needs a start and an end.
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(t("agenda_window"), color = TextHi, fontSize = 13.sp,
                         modifier = Modifier.weight(1f))
@@ -488,9 +472,8 @@ private fun AgendaEditDialog(
     if (pickDate != 0) {
         val which = pickDate
         val cur = if (which == 1) s0 else s1
-        // Le sélecteur travaille en UTC minuit : on lui donne donc minuit UTC
-        // du jour affiché, et non l'instant local — sinon un rendez-vous noté
-        // à 1 h du matin ouvrait le calendrier sur la veille.
+        // DatePicker works in UTC midnight: pass UTC midnight of the shown day,
+        // not the local instant, or a 01:00 entry opens on the previous day.
         val utcMidnight = remember(which, cur.year, cur.month, cur.day) {
             Calendar.getInstance(TimeZone.getTimeZone("UTC")).apply {
                 clear(); set(cur.year, cur.month, cur.day, 0, 0, 0)

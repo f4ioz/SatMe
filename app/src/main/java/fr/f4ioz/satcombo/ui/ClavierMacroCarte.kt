@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.ui
 
@@ -31,17 +31,13 @@ import fr.f4ioz.satcombo.i18n.tf
 import fr.f4ioz.satcombo.ui.theme.*
 
 /**
- * Le mini clavier de commande : molette et trois touches.
+ * The mini control pad: a knob and three keys.
  *
- * **Pourquoi une section à part.** Ces réglages vivaient au milieu du clavier
- * express, où personne ne pouvait les deviner — Olivier les a cherchés et ne
- * les a pas trouvés. Un boîtier physique se règle là où on le cherche : sous
- * son propre nom.
+ * **Own section** because buried in the express keyboard settings nobody found
+ * them. A physical box is configured under its own name.
  *
- * **Pourquoi un schéma.** Trois touches noires identiques ne se distinguent que
- * par leur place. Une liste « A, B, C » oblige l'opérateur à retenir laquelle
- * est laquelle ; un dessin le lui montre, et il reflète ses propres réglages —
- * ce qu'une photo ne saurait pas faire.
+ * **A diagram** because three identical black keys differ only by position; a
+ * drawing that reflects the current settings beats an "A, B, C" list.
  */
 @Composable
 fun ClavierMacroCarte(ui: UiState, vm: MainViewModel) {
@@ -56,11 +52,10 @@ fun ClavierMacroCarte(ui: UiState, vm: MainViewModel) {
             Text(t("macro_desc"), color = TextLo, fontSize = 11.sp,
                 modifier = Modifier.padding(top = 4.dp, bottom = 12.dp))
 
-            // --- le schéma du boîtier ---
+            // --- box diagram ---
             //
-            // Disposé comme le matériel : la molette à gauche, les trois
-            // touches à sa droite. Un schéma qui ne correspondrait pas à
-            // l'objet qu'on a sous les yeux serait pire que pas de schéma.
+            // Laid out like the hardware: knob left, three keys to its right.
+            // A diagram that does not match the object is worse than none.
             Surface(color = SpaceSurface, shape = RoundedCornerShape(12.dp),
                 modifier = Modifier.fillMaxWidth()) {
                 Row(Modifier.padding(12.dp),
@@ -95,7 +90,7 @@ fun ClavierMacroCarte(ui: UiState, vm: MainViewModel) {
                         val enCours = enApprentissage == rang
                         val teinte = when {
                             enCours -> Amber
-                            code == 0 -> TextLo          // pas encore apprise
+                            code == 0 -> TextLo          // not learnt yet
                             else -> Cyan
                         }
                         Column(Modifier.weight(1f),
@@ -114,7 +109,7 @@ fun ClavierMacroCarte(ui: UiState, vm: MainViewModel) {
                                 fontWeight = FontWeight.SemiBold,
                                 textAlign = TextAlign.Center,
                                 modifier = Modifier.padding(top = 4.dp))
-                            // Le code appris, ou son absence — dite, pas tue.
+                            // The learnt code, or an explicit "none".
                             Text(
                                 if (code == 0) t("macro_vide") else "#$code",
                                 color = TextLo, fontSize = 9.sp,
@@ -125,14 +120,13 @@ fun ClavierMacroCarte(ui: UiState, vm: MainViewModel) {
                 }
             }
 
-            // --- l'interrupteur maître ---
+            // --- master switch ---
             //
-            // Fermé par défaut, et il le reste : ces boîtiers envoient des
-            // touches de volume, et qui n'en a pas ne doit rien perdre.
+            // Off by default: these boxes send volume keys, and users without
+            // one must not lose them.
             Spacer(Modifier.height(12.dp))
-            // L'interrupteur est écrit ici plutôt que repris de l'écran des
-            // réglages : celui-là y est privé, et l'ouvrir pour un seul appel
-            // élargirait sa portée sans nécessité.
+            // Switch written inline: the settings-screen one is private and
+            // not worth widening for a single use.
             Row(verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.weight(1f)) {
@@ -148,7 +142,7 @@ fun ClavierMacroCarte(ui: UiState, vm: MainViewModel) {
                 return@Column
             }
 
-            // --- le pas ---
+            // --- step ---
             Text(t("macro_pas"), color = TextHi, fontSize = 13.sp,
                 fontWeight = FontWeight.SemiBold,
                 modifier = Modifier.padding(top = 6.dp))
@@ -163,7 +157,7 @@ fun ClavierMacroCarte(ui: UiState, vm: MainViewModel) {
             Text(t("macro_pas_desc"), color = TextLo, fontSize = 11.sp,
                 modifier = Modifier.padding(bottom = 8.dp))
 
-            // --- les trois touches ---
+            // --- the three keys ---
             HorizontalDivider(color = SpaceSurface,
                 modifier = Modifier.padding(vertical = 8.dp))
 
@@ -202,7 +196,7 @@ fun ClavierMacroCarte(ui: UiState, vm: MainViewModel) {
                 }
             }
 
-            // --- le poussoir de la molette ---
+            // --- knob push button ---
             HorizontalDivider(color = SpaceSurface,
                 modifier = Modifier.padding(vertical = 8.dp))
             Text(t("macro_clic"), color = TextHi, fontSize = 13.sp,
@@ -244,9 +238,9 @@ fun ClavierMacroCarte(ui: UiState, vm: MainViewModel) {
                 color = TextLo, fontSize = 11.sp,
                 modifier = Modifier.padding(top = 4.dp))
 
-            // Le piège qui fait croire à une panne de matériel : une touche
-            // programmée sur « volume » serait prise pour un sélecteur de
-            // cible, et la molette cesserait de tourner le VFO.
+            // Trap that looks like a hardware fault: a key programmed as
+            // "volume" is taken for a target selector and the knob stops
+            // tuning the VFO.
             Spacer(Modifier.height(10.dp))
             Surface(color = Amber.copy(alpha = 0.13f), shape = RoundedCornerShape(8.dp)) {
                 Text(t("macro_piege"), color = Amber, fontSize = 11.sp,

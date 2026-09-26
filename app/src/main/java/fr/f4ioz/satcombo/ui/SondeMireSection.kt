@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.ui
 
@@ -41,17 +41,15 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
- * La mire radiosonde, pendant exact de la mire SSTV.
+ * Radiosonde test signal, the counterpart of the SSTV test pattern.
  *
- * Une sonde part deux fois par jour et ne repasse pas ; quand rien ne se décode
- * il est déjà trop tard pour chercher pourquoi. La mire répond à la question
- * hors antenne et à la demande : elle fabrique de vraies trames, au format du
- * constructeur, portant un vol plausible parti du carré de l'opérateur.
+ * A sonde launches twice a day and never comes back; when nothing decodes it is
+ * too late to find out why. This builds real frames in the manufacturer format,
+ * carrying a plausible flight starting from the operator's grid square.
  *
- * Trois usages, du plus utile au plus démonstratif : la démonstration, qui
- * verse le signal directement dans le décodeur et remplit l'écran des sondes
- * d'un vol entier ; le fichier, qu'on repasse dans une radio ou qu'on envoie à
- * un camarade ; et le haut-parleur, pour éprouver la chaîne micro d'en face.
+ * Uses: demo (feeds the decoder directly and fills the sonde screen with a whole
+ * flight), file (replay through a radio or send to a friend), speaker (test the
+ * other side's mic chain).
  */
 @Composable
 fun SondeMireSection(ui: UiState, vm: MainViewModel) {
@@ -59,14 +57,12 @@ fun SondeMireSection(ui: UiState, vm: MainViewModel) {
     val scope = rememberCoroutineScope()
     val st by SondeMirePlayer.state.collectAsState()
 
-    // La RS41 par défaut : c'est la sonde la plus répandue en Europe, et celle
-    // dont le format est le mieux vérifié par les essais.
+    // RS41 by default: most common in Europe and best covered by tests.
     var model by remember { mutableStateOf("RS41") }
     var seconds by remember { mutableIntStateOf(60) }
     var saved by remember { mutableStateOf<String?>(null) }
     var saving by remember { mutableStateOf(false) }
-    // Décochée par défaut : la mire sert d'abord à éprouver une chaîne, et un
-    // signal propre est le seul qui dise sans ambiguïté si le cordon marche.
+    // Off by default: only a clean signal tells unambiguously whether the cable works.
     var ambiance by remember { mutableStateOf(false) }
 
     val lat = ui.observer?.latDeg ?: 48.0
@@ -80,8 +76,7 @@ fun SondeMireSection(ui: UiState, vm: MainViewModel) {
                 else SondeMirePlayer.exportWav(ctx, model, lat, lon, seconds, ambiance)
             }
             saving = false
-            // Voir MireSection : le silence sur échec coûte plus cher qu'un
-            // message un peu long.
+            // See MireSection: never fail silently.
             saved = f?.name ?: if (mp3) t("mp3_occupe") else t("mire_export_echec")
             if (f != null) runCatching {
                 val uri = androidx.core.content.FileProvider.getUriForFile(
@@ -108,7 +103,7 @@ fun SondeMireSection(ui: UiState, vm: MainViewModel) {
                 Text(t("sondemire_desc"), color = TextLo, fontSize = 11.sp,
                     modifier = Modifier.padding(top = 4.dp, bottom = 12.dp))
 
-                // --- modèle émis ---------------------------------------------
+                // --- emitted model -------------------------------------------
                 Text(t("sondemire_model"), color = TextLo, fontSize = 11.sp)
                 Spacer(Modifier.height(6.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -130,7 +125,7 @@ fun SondeMireSection(ui: UiState, vm: MainViewModel) {
                     }
                 }
 
-                // --- durée ----------------------------------------------------
+                // --- duration ------------------------------------------------
                 Spacer(Modifier.height(12.dp))
                 Text(t("sondemire_duration"), color = TextLo, fontSize = 11.sp)
                 Spacer(Modifier.height(6.dp))
@@ -156,7 +151,7 @@ fun SondeMireSection(ui: UiState, vm: MainViewModel) {
                 Spacer(Modifier.height(6.dp))
                 Text(tf("sondemire_frames", seconds), color = TextLo, fontSize = 10.sp)
 
-                // --- ambiance -------------------------------------------------
+                // --- background noise ----------------------------------------
                 Spacer(Modifier.height(10.dp))
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
@@ -174,7 +169,7 @@ fun SondeMireSection(ui: UiState, vm: MainViewModel) {
                     }
                 }
 
-                // --- ce qui tourne --------------------------------------------
+                // --- running ---------------------------------------------------
                 Spacer(Modifier.height(14.dp))
                 if (busy) {
                     LinearProgressIndicator(
@@ -196,8 +191,7 @@ fun SondeMireSection(ui: UiState, vm: MainViewModel) {
                         Text(t("mire_stop"))
                     }
                 } else {
-                    // La démonstration d'abord : c'est elle qui répond à la
-                    // question « est-ce le décodeur ou est-ce la réception ? »
+                    // Demo first: it answers "decoder or reception?".
                     Button(
                         onClick = {
                             SondeMirePlayer.demo(ctx, model, lat, lon, seconds, ambiance)
@@ -232,8 +226,7 @@ fun SondeMireSection(ui: UiState, vm: MainViewModel) {
                             Text(if (saving) t("mire_exporting") else t("sondemire_export"))
                         }
                     }
-                    // Le MP3 en second rideau : il s'envoie, mais il arrondit
-                    // les fronts. Pour éprouver une chaîne, c'est le WAV.
+                    // MP3 as second choice: shareable but it smooths edges. Use WAV to test a chain.
                     TextButton(onClick = { export(true) }, enabled = !saving) {
                         Text(t("sondemire_export_mp3"), color = TextLo, fontSize = 11.sp)
                     }
@@ -247,7 +240,7 @@ fun SondeMireSection(ui: UiState, vm: MainViewModel) {
             }
         }
 
-        // ------------------------------------------------- modèles connus
+        // ------------------------------------------------- known models
         Surface(color = SpaceCard, shape = RoundedCornerShape(16.dp),
             modifier = Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp)) {

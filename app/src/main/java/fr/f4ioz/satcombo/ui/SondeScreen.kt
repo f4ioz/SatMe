@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.ui
 
@@ -67,24 +67,21 @@ import java.util.Date
 import java.util.Locale
 
 /**
- * La chasse aux radiosondes.
+ * Radiosonde hunting.
  *
- * Deux fois par jour, chaque station météo lâche un ballon qui monte à trente
- * kilomètres, éclate et redescend sous parachute. La sonde accrochée dessous
- * émet sa position en clair sur la bande des 400 MHz jusqu'à ce que la pile
- * lâche. Personne ne va la rechercher : c'est du matériel perdu, et le
- * retrouver est un jeu de piste que beaucoup d'OM pratiquent.
+ * Weather stations launch balloons twice a day; the sonde transmits its
+ * position in the clear on 400 MHz until the battery dies, and finding it is a
+ * treasure hunt many hams enjoy.
  *
- * L'écran est organisé dans l'ordre où l'on s'en sert sur le terrain : la
- * fréquence, la réception, le dernier point reçu avec le cap et la distance
- * depuis chez soi, puis le vol complet à exporter dans le GPS. Le cap et la
- * distance restent affichés en permanence, gros et lisibles — c'est ce qu'on
- * regarde en marchant, souvent d'une main, souvent sous la pluie.
+ * The screen follows field order: frequency, reception, last fix with bearing
+ * and distance from home, then the full flight to export to a GPS. Bearing and
+ * distance stay big and always visible — read while walking, one-handed, often
+ * in the rain.
  */
 @Composable
 fun SondeScreen(ui: UiState, vm: MainViewModel) {
     val ctx = LocalContext.current
-    // Un seul lanceur pour l'écran : il sert les traces et les journaux.
+    // One launcher for the screen: tracks and logs.
     val enregistreSonde = rememberEnregistrer()
     val st by SondeHub.state.collectAsState()
     val sdr by SdrHub.state.collectAsState()
@@ -97,8 +94,8 @@ fun SondeScreen(ui: UiState, vm: MainViewModel) {
         }
     }
 
-    // Le micro n'est demandé qu'au moment où l'on choisit vraiment d'écouter
-    // par l'audio : la clé RTL, elle, n'a besoin d'aucune permission.
+    // Microphone permission only when audio input is actually chosen; the RTL
+    // dongle needs none.
     val micLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()) { res ->
         if (res[android.Manifest.permission.RECORD_AUDIO] == true) vm.startSondeRx()
@@ -121,7 +118,7 @@ fun SondeScreen(ui: UiState, vm: MainViewModel) {
     ) {
         item { Spacer(Modifier.height(4.dp)) }
 
-        // ------------------------------------------------------------- bêta
+        // ------------------------------------------------------------- beta
         item {
             Surface(color = SpaceCard, shape = RoundedCornerShape(14.dp)) {
                 Column(Modifier.fillMaxWidth().padding(14.dp)) {
@@ -140,7 +137,7 @@ fun SondeScreen(ui: UiState, vm: MainViewModel) {
             }
         }
 
-        // -------------------------------------------------------- fréquence
+        // -------------------------------------------------------- frequency
         item {
             Surface(color = SpaceCard, shape = RoundedCornerShape(14.dp)) {
                 Column(Modifier.fillMaxWidth().padding(14.dp)) {
@@ -207,7 +204,7 @@ fun SondeScreen(ui: UiState, vm: MainViewModel) {
             }
         }
 
-        // -------------------------------------------------------- réception
+        // -------------------------------------------------------- reception
         item {
             Surface(color = SpaceCard, shape = RoundedCornerShape(14.dp)) {
                 Column(Modifier.fillMaxWidth().padding(14.dp)) {
@@ -232,9 +229,8 @@ fun SondeScreen(ui: UiState, vm: MainViewModel) {
                         Text(t("sdr_err_$e"), color = Magenta, fontSize = 12.sp)
                     }
 
-                    // D'où vient le son. Une sonde ne s'écoute pas forcément
-                    // avec la clé : un poste convenable et un cordon font
-                    // aussi bien, et c'est ce que beaucoup ont sous la main.
+                    // Audio source: a decent receiver and a cable work as well as the
+                    // dongle, and that is what many people have at hand.
                     Spacer(Modifier.height(12.dp))
                     Text(t("sonde_source"), color = TextLo, fontSize = 11.sp)
                     Spacer(Modifier.height(6.dp))
@@ -270,13 +266,11 @@ fun SondeScreen(ui: UiState, vm: MainViewModel) {
                         },
                         color = TextLo, fontSize = 10.sp)
 
-                    // Le modèle écouté. En automatique les trois décodeurs
-                    // tournent ensemble et le filtre reste au plus large ;
-                    // nommer la sonde resserre le filtre sur sa largeur exacte,
-                    // ce qui vaut deux à trois décibels — souvent la différence
-                    // entre une sonde décodée à cent kilomètres et une sonde
-                    // perdue. Les fréquences de la liste des stations disent
-                    // déjà le modèle : la lecture est faite.
+                    // Sonde model. In auto mode the three decoders run together with
+                    // the widest filter; naming the model narrows the filter to its
+                    // exact bandwidth, worth 2-3 dB — often the difference between a
+                    // sonde decoded at 100 km and a lost one. Station list frequencies
+                    // already imply the model.
                     Spacer(Modifier.height(12.dp))
                     Text(t("sonde_model"), color = TextLo, fontSize = 11.sp)
                     Spacer(Modifier.height(6.dp))
@@ -347,10 +341,9 @@ fun SondeScreen(ui: UiState, vm: MainViewModel) {
                                 fontWeight = FontWeight.Bold)
                         }
                         Spacer(Modifier.height(10.dp))
-                        // Le niveau vu par le discriminateur : sans trame
-                        // décodée, c'est le seul indice qu'il y a quelque
-                        // chose sur la fréquence, et qu'il faut chercher à
-                        // côté plutôt que remonter l'antenne.
+                        // Discriminator level: with no decoded frame it is the only hint
+                        // that something is there, and that you should retune rather
+                        // than raise the antenna.
                         Text(t("sonde_swing"), color = TextLo, fontSize = 11.sp)
                         Spacer(Modifier.height(4.dp))
                         Box(Modifier.fillMaxWidth().height(6.dp)
@@ -363,14 +356,12 @@ fun SondeScreen(ui: UiState, vm: MainViewModel) {
                             color = TextLo, fontSize = 11.sp,
                             fontFamily = FontFamily.Monospace)
 
-                        // ------------------------------------ l'accord
-                        // Une sonde n'est presque jamais pile sur la fréquence
-                        // annoncée : le quartz dérive avec le froid, et la clé
-                        // a la sienne. Deux kilohertz d'écart suffisent à faire
-                        // tomber le décodage d'une RS41 — c'est mesuré au banc,
-                        // six trames sur six deviennent une. D'où ce bouton :
-                        // il lit le spectre, y trouve le centre de gravité du
-                        // signal, et pose l'accord fin dessus.
+                        // ------------------------------------ tuning
+                        // A sonde is almost never exactly on its announced frequency:
+                        // the crystal drifts with cold, and so does the dongle. 2 kHz
+                        // off is enough to break RS41 decoding (bench-measured: six
+                        // frames out of six drop to one). This button finds the
+                        // signal's centroid in the spectrum and sets fine tuning on it.
                         if (bySdr) {
                             Spacer(Modifier.height(12.dp))
                             HorizontalDivider(color = SpaceSurface)
@@ -419,7 +410,7 @@ fun SondeScreen(ui: UiState, vm: MainViewModel) {
             }
         }
 
-        // ------------------------------------------------- le point à suivre
+        // ------------------------------------------------- the fix to follow
         val last = st.last
         if (last != null) {
             item {
@@ -434,8 +425,8 @@ fun SondeScreen(ui: UiState, vm: MainViewModel) {
                                 fontFamily = FontFamily.Monospace)
                         }
 
-                        // Cap et distance, en gros : c'est ce que l'on regarde
-                        // en marchant, le reste peut attendre la voiture.
+                        // Bearing and distance, large: that is what you read while
+                        // walking.
                         if (obs != null) {
                             val km = Geo.distanceKm(obs.latDeg, obs.lonDeg, last.lat, last.lon)
                             val br = Geo.bearingDeg(obs.latDeg, obs.lonDeg, last.lat, last.lon)
@@ -475,8 +466,8 @@ fun SondeScreen(ui: UiState, vm: MainViewModel) {
                             Spacer(Modifier.height(6.dp))
                             Text(t("sonde_unsure"), color = Amber, fontSize = 11.sp)
                         }
-                        // D'où vient-elle ? Une présomption, pas une certitude,
-                        // et l'écran le dit avec ses mots.
+                        // Where does it come from? A guess, not a certainty, and the
+                        // screen says so.
                         val org = remember(last.lat, last.lon, last.type) {
                             SondeSites.likelyOrigin(last.lat, last.lon, last.type)
                         }
@@ -489,7 +480,7 @@ fun SondeScreen(ui: UiState, vm: MainViewModel) {
             }
         }
 
-        // -------------------------------------------------------------- vol
+        // -------------------------------------------------------------- flight
         item {
             val fl = SondeHub.currentFlight
             Surface(color = SpaceCard, shape = RoundedCornerShape(14.dp)) {
@@ -532,8 +523,7 @@ fun SondeScreen(ui: UiState, vm: MainViewModel) {
                             OutlinedButton(onClick = {
                                 SondeHub.export(ctx, kml = true)?.let { share(ctx, it) }
                             }) { Text("KML") }
-                            // Une trace qu'on veut garder n'a pas de
-                            // destinataire : elle a un dossier.
+                            // A track you want to keep has no recipient: it needs a folder.
                             OutlinedButton(onClick = {
                                 SondeHub.export(ctx, kml = false)?.let {
                                     enregistreSonde(it.name, typeSonde(it), depuisFichier(it)) }
@@ -551,7 +541,7 @@ fun SondeScreen(ui: UiState, vm: MainViewModel) {
             }
         }
 
-        // ---------------------------------------------------------- journaux
+        // ---------------------------------------------------------- logs
         item {
             Row(verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.fillMaxWidth().padding(top = 4.dp)) {
@@ -625,7 +615,7 @@ fun SondeScreen(ui: UiState, vm: MainViewModel) {
     }
 }
 
-/** Une ligne « intitulé — valeur », alignée comme les autres fiches. */
+/** A "label — value" row, aligned like the other panels. */
 @Composable
 private fun SondeLine(label: String, value: String) {
     Row(Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
@@ -634,14 +624,14 @@ private fun SondeLine(label: String, value: String) {
     }
 }
 
-/** Le type MIME d'une trace de sonde, déduit de son extension. */
+/** MIME type of a sonde track, from its extension. */
 private fun typeSonde(f: File): String = when {
     f.name.endsWith(".kml") -> "application/vnd.google-earth.kml+xml"
     f.name.endsWith(".gpx") -> "application/gpx+xml"
     else -> "text/csv"
 }
 
-/** Partage d'un fichier par le sélecteur du système. */
+/** Shares a file through the system chooser. */
 private fun share(ctx: android.content.Context, f: File) {
     runCatching {
         val uri = androidx.core.content.FileProvider.getUriForFile(

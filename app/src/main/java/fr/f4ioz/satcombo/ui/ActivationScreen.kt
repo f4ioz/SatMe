@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.ui
 
@@ -73,7 +73,7 @@ fun ActivationScreen(ui: UiState, vm: MainViewModel) {
 
     val enregistre = rememberEnregistrer()
 
-    /** La fiche d'activation posée dans un dossier, sans passer par le partage. */
+    /** Saves the activation sheet to a folder, bypassing the share sheet. */
     fun savePdf(a: Activation) {
         vm.exportActivationPdf(a) { uri ->
             enregistre("SatMe-${a.locator.uppercase()}-${nomDate("activation", "pdf")}",
@@ -100,7 +100,7 @@ fun ActivationScreen(ui: UiState, vm: MainViewModel) {
     }
 
     fun shareAdif(a: Activation) {
-        // Comme pour le carnet complet : un fichier .adi, importable tel quel.
+        // Same as the full log: a .adi file, importable as is.
         val uri = vm.adifFileUri(vm.activationQsos(a), "activation-" + a.locator.uppercase())
         val send = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
             putExtra(android.content.Intent.EXTRA_SUBJECT,
@@ -276,8 +276,7 @@ fun ActivationScreen(ui: UiState, vm: MainViewModel) {
                                 Icon(Icons.Default.Delete, t("act_delete"), tint = Magenta)
                             }
                         }
-                        // Enregistrer plutôt que partager : en portable on veut
-                        // poser la fiche quelque part, pas l'envoyer.
+                        // Save rather than share: in the field you want to store it, not send it.
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             TextButton(onClick = { savePdf(a) }, modifier = Modifier.weight(1f)) {
                                 Text("${t("export_save")} PDF", color = Cyan, fontSize = 12.sp)

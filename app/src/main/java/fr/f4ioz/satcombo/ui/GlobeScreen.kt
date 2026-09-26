@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.ui
 
@@ -33,27 +33,20 @@ import fr.f4ioz.satcombo.ui.theme.*
 import kotlin.math.*
 
 /**
- * Le globe : où sont les satellites, vus de l'extérieur.
+ * The globe: where the satellites are, seen from outside.
  *
- * Une carte plate ment sur les hautes latitudes et coupe les orbites en deux
- * au bord de l'image ; un satellite qui « sort à droite pour rentrer à
- * gauche » n'apprend rien à personne. Sur une sphère, une orbite est une
- * orbite.
+ * A flat map lies at high latitudes and cuts orbits at the image edge; on a
+ * sphere an orbit is an orbit. Orthographic projection: three lines of maths,
+ * no distortion at the centre where you look.
  *
- * Projection orthographique : ce que verrait un œil très loin. Le calcul tient
- * en trois lignes et rien n'est déformé au centre du disque, là où l'on
- * regarde.
- *
- * Les données viennent d'où elles existaient déjà : les 196 pays embarqués
- * pour la carte QRV, et les traces au sol de `PassPredictor.groundTrack`.
- * Aucune donnée nouvelle, aucune dépendance nouvelle.
+ * Reuses existing data only: the 196 countries embedded for the QRV map and
+ * the ground tracks from `PassPredictor.groundTrack`.
  */
 @Composable
 fun GlobeScreen(ui: UiState, vm: MainViewModel) {
 
-    // La rotation, en degrés. La longitude tourne le globe, la latitude
-    // l'incline — bornée pour ne jamais passer par-dessus le pôle, geste dont
-    // personne ne sait revenir.
+    // Rotation in degrees. Longitude spins the globe, latitude tilts it —
+    // clamped so it never flips over the pole, which nobody can undo.
     var lonVue by remember { mutableStateOf(-(ui.observer?.lonDeg ?: 0.0).toFloat()) }
     var latVue by remember { mutableStateOf((ui.observer?.latDeg ?: 30.0).toFloat()) }
     var zoom by remember { mutableStateOf(1f) }
@@ -61,8 +54,8 @@ fun GlobeScreen(ui: UiState, vm: MainViewModel) {
     val ctx = androidx.compose.ui.platform.LocalContext.current
     val pays = remember { fr.f4ioz.satcombo.data.PaysStore.tous(ctx) }
 
-    // Les carrés n'étaient chargés que par la page Locator : arrivé
-    // directement ici, le globe n'avait rien à peindre.
+    // Squares were only loaded by the Locator page: opened directly, the
+    // globe had nothing to paint.
     LaunchedEffect(Unit) { vm.chargeLotwLocal() }
 
     Column(Modifier.fillMaxSize().padding(12.dp)) {
@@ -73,13 +66,9 @@ fun GlobeScreen(ui: UiState, vm: MainViewModel) {
             Canvas(
                 Modifier.fillMaxSize().pointerInput(Unit) {
                     detectTransformGestures { _, pan, z, _ ->
-                        // Le déplacement se cumule localement : lire l'état
-                        // dans le bloc de geste le rendrait périmé dès le
-                        // premier mouvement.
-                        // Le doigt entraîne la surface : glisser vers la
-                        // droite fait venir vers soi ce qui était à gauche.
-                        // C'était inversé — on tournait le point de vue au
-                        // lieu du globe, et le globe partait à l'envers.
+                        // The finger drags the surface: swiping right brings what was on the
+                        // left towards you. This was once inverted (rotating the viewpoint
+                        // instead of the globe).
                         lonVue += pan.x * 0.35f
                         latVue = (latVue - pan.y * 0.35f).coerceIn(-85f, 85f)
                         zoom = (zoom * z).coerceIn(0.8f, 12f)
@@ -89,21 +78,19 @@ fun GlobeScreen(ui: UiState, vm: MainViewModel) {
                 val r = min(size.width, size.height) / 2f * 0.92f * zoom
                 val c = Offset(size.width / 2f, size.height / 2f)
 
-                // L'océan, puis les terres.
+                // Ocean, then land.
                 drawCircle(Color(0xFF0E2036), r, c)
                 drawCircle(Color(0xFF1E4A6E), r, c, style = Stroke(width = 1.5f))
 
                 paralleles(this, c, r, latVue, lonVue)
 
-                // Les carrés, peints avant les côtes pour rester sous le
-                // trait : vert pour ceux d'où j'ai émis, cyan pour ceux que
-                // j'ai contactés, les deux couleurs superposées quand c'est
-                // les deux. Un carré fait 2° de latitude sur 1° de longitude.
+                // Squares, painted before coastlines so they stay under the stroke:
+                // green for operated from, cyan for worked, both overlaid when both.
+                // A square is 2° of latitude by 1° of longitude.
                 if (ui.carnet.peindre) {
                     fun peins(carres: Set<String>, col: Color) {
                         for (k in carres) {
-                            // `bounds` rend lat, lon, hauteur, largeur : le
-                            // coin sud-ouest et les côtés.
+                            // `bounds` returns lat, lon, height, width: south-west corner and sides.
                             val b = fr.f4ioz.satcombo.location.Maidenhead
                                 .bounds(k) ?: continue
                             val la0 = b[0]; val lo0 = b[1]
@@ -143,9 +130,8 @@ fun GlobeScreen(ui: UiState, vm: MainViewModel) {
                     }
                 }
 
-                // La grille Maidenhead et les noms des carrés, à partir d'un
-                // certain grossissement : au-delà, les traits se lisent ; en
-                // dessous, ils feraient un moiré illisible.
+                // Maidenhead grid and square names, only above a given zoom: below
+                // it the lines would make an unreadable moiré.
                 if (zoom >= 2f) {
                     val centreLat = latVue.toDouble()
                     val centreLon = -lonVue.toDouble()
@@ -173,7 +159,7 @@ fun GlobeScreen(ui: UiState, vm: MainViewModel) {
                     }
                 }
 
-                // La trace au sol du satellite suivi, s'il y en a un.
+                // Ground track of the tracked satellite, if any.
                 ui.groundTrack.takeIf { it.size > 2 }?.let { tr ->
                     val chemin = Path()
                     var ouvert = false
@@ -184,14 +170,14 @@ fun GlobeScreen(ui: UiState, vm: MainViewModel) {
                         else chemin.lineTo(pt.x, pt.y)
                     }
                     drawPath(chemin, Color(0xFF35E0C0), style = Stroke(width = 2f))
-                    // La position du moment, au bout de la trace.
+                    // Current position, at the end of the track.
                     val (la, lo) = tr[tr.size / 8]
                     projette(la, lo, latVue, lonVue, c, r)?.let {
                         drawCircle(Color(0xFF35E0C0), 5f, it)
                     }
                 }
 
-                // Le QTH.
+                // QTH.
                 ui.observer?.let { o ->
                     projette(o.latDeg, o.lonDeg, latVue, lonVue, c, r)?.let {
                         drawCircle(Color.White, 4.5f, it)
@@ -210,11 +196,11 @@ fun GlobeScreen(ui: UiState, vm: MainViewModel) {
 }
 
 /**
- * Projection orthographique.
+ * Orthographic projection.
  *
- * Rend `null` quand le point est **derrière** la sphère : c'est le cosinus de
- * l'angle au centre qui le dit. Sans ce test, les côtes de l'autre hémisphère
- * se dessineraient par transparence et le globe ressemblerait à une assiette.
+ * Returns `null` when the point is **behind** the sphere (cosine of the
+ * central angle). Without this test the far-side coastlines would show
+ * through and the globe would look like a plate.
  */
 private fun projette(
     latDeg: Double, lonDeg: Double, latVue: Float, lonVue: Float,
@@ -230,7 +216,7 @@ private fun projette(
     return Offset(c.x + (r * x).toFloat(), c.y - (r * y).toFloat())
 }
 
-/** Équateur et tropiques, pour donner l'échelle sans charger le dessin. */
+/** Equator and tropics, for scale without cluttering the drawing. */
 private fun paralleles(d: DrawScope, c: Offset, r: Float, latVue: Float, lonVue: Float) {
     for (lat in listOf(-66.5, -23.5, 0.0, 23.5, 66.5)) {
         val chemin = Path()

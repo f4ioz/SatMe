@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.ui
 
@@ -72,33 +72,24 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.saveable.rememberSaveable
 
 /**
- * L'écran QO-100.
+ * The QO-100 screen.
  *
- * Il est à part, et pas replié dans la fiche d'un satellite, pour une raison
- * de fond : sur QO-100 il n'y a rien de ce qui fait une fiche de satellite. Ni
- * heure de passage, ni compte à rebours, ni trace au sol, ni Doppler qui
- * défile. Le satellite est là en permanence, à un azimut qui ne change pas, et
- * tout ce qu'un opérateur a à faire tient en quatre gestes : choisir sa
- * fréquence dans le transpondeur, vérifier que le poste et la clé suivent,
- * pointer la parabole une fois pour toutes, et caler l'ensemble sur la balise.
+ * Separate from the satellite detail page because QO-100 has none of what
+ * makes one: no pass time, no countdown, no ground track, no moving Doppler.
+ * The operator's work is four gestures: pick a frequency in the transponder,
+ * check the rig and dongle follow, aim the dish once, calibrate on the beacon.
+ * The screen is ordered that way, most frequent first: the frequency on top
+ * (the only thing touched during a QSO), dish aiming at the bottom.
  *
- * L'écran est donc ordonné dans cet ordre-là, du plus fréquent au plus rare.
- * La fréquence en haut, gros et lisible, parce que c'est la seule chose qu'on
- * touche pendant un QSO. Le pointage tout en bas : on le lit une fois le jour
- * de l'installation, et plus jamais.
+ * ### Which frequencies are shown
  *
- * ### Ce qui s'affiche, et dans quel monde
+ * The big figures are **sky frequencies** (10 489.750 for the middle beacon),
+ * as in every log and published band plan. What the rig and dongle actually
+ * show (e.g. 145.750 / 432.250) is printed smaller below, as a check: the
+ * conversion is plumbing, not the subject.
  *
- * Les fréquences en gros sont **dans le ciel** : 10 489,750 pour la balise
- * médiane, comme dans tous les carnets de trafic et sur tous les tableaux
- * publiés. Ce que le poste et la clé affichent réellement — 145,750 et
- * 432,250 sur la station visée — est écrit en dessous, plus petit, comme une
- * vérification. C'est le sens qui compte : l'opérateur travaille sur 10 489 et
- * la conversion est une plomberie, pas un sujet.
- *
- * Quand un convertisseur manque ou ne couvre pas la bande, la ligne du poste
- * passe à l'ambre plutôt que de disparaître. Un champ qui s'efface ne dit rien ;
- * un champ qui s'allume dit où regarder.
+ * When a converter is missing or does not cover the band, the rig line turns
+ * amber instead of disappearing: a field that lights up says where to look.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -112,12 +103,11 @@ fun Qo100Screen(ui: UiState, vm: MainViewModel) {
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
 
-        // ---- l'en-tête ------------------------------------------------------
+        // ---- header -------------------------------------------------------
         //
-        // Le nom en gros, parce que cet écran ne ressemble à aucun autre de
-        // l'application et qu'on y arrive par plusieurs chemins. Savoir d'un
-        // coup d'œil qu'on est sur QO-100, et non sur un passage ordinaire,
-        // évite de chercher un compte à rebours qui n'existera jamais.
+        // Big name: the screen is reached several ways and looks like no
+        // other; knowing at a glance it is QO-100 saves looking for a
+        // countdown that will never exist.
         Surface(color = SpaceCard, shape = RoundedCornerShape(14.dp)) {
             Row(
                 Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
@@ -131,9 +121,9 @@ fun Qo100Screen(ui: UiState, vm: MainViewModel) {
                         fontWeight = FontWeight.Bold)
                     Text(t("qo100_sous_titre"), color = TextLo, fontSize = 11.sp)
                 }
-                // Le témoin de chaîne : vert quand le poste peut réellement
-                // aller là où l'écran pointe. C'est la seule vérification
-                // possible avant d'entendre quoi que ce soit.
+                // Chain indicator: green when the rig can really reach the
+                // displayed frequency. The only check possible before hearing
+                // anything.
                 Icon(
                     if (q.posteAtteignable) Icons.Default.CheckCircle
                     else Icons.Default.Warning,
@@ -143,7 +133,7 @@ fun Qo100Screen(ui: UiState, vm: MainViewModel) {
             }
         }
 
-        // ---- la fréquence ---------------------------------------------------
+        // ---- frequency ----------------------------------------------------
         Surface(color = SpaceCard, shape = RoundedCornerShape(14.dp)) {
             Column(Modifier.fillMaxWidth().padding(14.dp)) {
                 Text(t("qo100_downlink"), color = TextLo, fontSize = 11.sp)
@@ -155,8 +145,8 @@ fun Qo100Screen(ui: UiState, vm: MainViewModel) {
                     color = TextLo, fontSize = 13.sp, fontFamily = FontFamily.Monospace)
 
                 Spacer(Modifier.height(12.dp))
-                // Les pas : 1 kHz pour se poser sur un correspondant, 100 Hz
-                // pour affiner une SSB, 10 kHz pour traverser le transpondeur.
+                // Steps: 10 kHz to cross the transponder, 1 kHz to land on a
+                // station, 100 Hz to fine-tune SSB.
                 PasLigne(vm, 10_000L)
                 Spacer(Modifier.height(6.dp))
                 PasLigne(vm, 1_000L)
@@ -177,10 +167,9 @@ fun Qo100Screen(ui: UiState, vm: MainViewModel) {
                     }
                 }
 
-                // La position dans le transpondeur, en clair. Sans elle, un
-                // opérateur posé à 3 kHz du bord ne le sait pas — et sur un
-                // géostationnaire il n'y a pas de fin de passage pour lui
-                // apprendre son erreur.
+                // Distance to the transponder edges. Without it an operator
+                // 3 kHz from the edge does not know it, and on a geostationary
+                // satellite no end of pass reveals the mistake.
                 Spacer(Modifier.height(10.dp))
                 val depuisBas = (q.descenteHz - tp.descenteBasHz) / 1000
                 val restant = (tp.descenteHautHz - q.descenteHz) / 1000
@@ -190,7 +179,7 @@ fun Qo100Screen(ui: UiState, vm: MainViewModel) {
             }
         }
 
-        // ---- ce que voit le matériel ---------------------------------------
+        // ---- what the hardware sees ---------------------------------------
         Surface(color = SpaceCard, shape = RoundedCornerShape(14.dp)) {
             Column(Modifier.fillMaxWidth().padding(14.dp)) {
                 Text(t("qo100_hardware"), color = TextHi,
@@ -227,12 +216,11 @@ fun Qo100Screen(ui: UiState, vm: MainViewModel) {
             }
         }
 
-        // ---- les mémoires ---------------------------------------------------
+        // ---- memories -----------------------------------------------------
         //
-        // Se poser au bon endroit dans 492 kHz est tout le travail sur QO-100.
-        // Les repères du plan de bande ne se modifient pas — ce sont des faits
-        // publiés, pas des préférences ; les mémoires posées par l'opérateur
-        // s'ajoutent en dessous et se retirent d'un appui long.
+        // Band plan markers are read-only (published facts, not preferences);
+        // operator memories are added after them and removed with a long
+        // press.
         Surface(color = SpaceCard, shape = RoundedCornerShape(14.dp)) {
             Column(Modifier.fillMaxWidth().padding(14.dp)) {
                 Text(t("qo100_memoires"), color = TextHi,
@@ -267,9 +255,8 @@ fun Qo100Screen(ui: UiState, vm: MainViewModel) {
             }
         }
 
-        // ---- la réglette du transpondeur ------------------------------------
-        // Seulement sur l'étroit : le large fait huit mégahertz et n'a pas de
-        // plan de bande en segments, une réglette n'y voudrait rien dire.
+        // ---- transponder ruler --------------------------------------------
+        // Narrowband only: the 8 MHz wideband has no segmented band plan.
         if (q.transpondeur == Qo100.NB.cle) {
             Surface(color = SpaceCard, shape = RoundedCornerShape(14.dp)) {
                 Column(Modifier.fillMaxWidth().padding(14.dp)) {
@@ -293,9 +280,8 @@ fun Qo100Screen(ui: UiState, vm: MainViewModel) {
                     Spacer(Modifier.height(10.dp))
                     val seg = Qo100.segment(q.descenteHz)
                     if (seg == null) {
-                        // Hors réglette : ni segment, ni couleur, ni droit
-                        // d'émettre. Le cas ne devrait pas se produire, le
-                        // modèle bornant la fréquence — on le dit quand même.
+                        // Off the ruler. Should not happen (the model clamps
+                        // the frequency), but say so anyway.
                         Text(t("qo100_warn_hors"), color = Amber, fontSize = 12.sp)
                     } else {
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -325,10 +311,9 @@ fun Qo100Screen(ui: UiState, vm: MainViewModel) {
             }
         }
 
-        // ---- le panorama et le témoin de balise -----------------------------
-        // Même condition que la réglette, et pour la même raison : l'axe du
-        // panorama *est* celui de la réglette. Sur le large il n'y aurait ni
-        // échelle commune, ni balise à surveiller.
+        // ---- panorama and beacon indicator --------------------------------
+        // Same condition as the ruler: the panorama shares its axis. On the
+        // wideband there is no common scale and no beacon to watch.
         if (q.transpondeur == Qo100.NB.cle) {
             Surface(color = SpaceCard, shape = RoundedCornerShape(14.dp)) {
                 Column(Modifier.fillMaxWidth().padding(14.dp)) {
@@ -351,11 +336,10 @@ fun Qo100Screen(ui: UiState, vm: MainViewModel) {
                         ) { vm.setQo100Descente(it) }
                     }
 
-                    // ------------------------------------- l'accord fin
-                    // Le panorama ci-dessus étale 490 kHz sur la largeur de
-                    // l'écran : environ 1,4 kHz par dp, soit une douzaine de
-                    // kilohertz sous une pulpe de doigt. Il sert à trouver, pas
-                    // à se poser. Ce qui suit sert à se poser.
+                    // ------------------------------------- fine tuning
+                    // The panorama spreads 490 kHz over the screen (~1.4 kHz
+                    // per dp, a dozen kHz under a fingertip): it is for
+                    // finding. What follows is for landing.
                     val stAf by fr.f4ioz.satcombo.sdr.SdrHub.state.collectAsState()
                     if (ui.accord.loupe && stAf.running) {
                         Spacer(Modifier.height(12.dp))
@@ -371,10 +355,9 @@ fun Qo100Screen(ui: UiState, vm: MainViewModel) {
                             bandwidthHz = 2_400.0,
                             spectrumHeight = 64.dp,
                             waterfallHeight = 54.dp,
-                            // Le doigt désigne un écart par rapport à l'accord
-                            // de la clé ; la page, elle, ne connaît que des
-                            // descentes. On convertit l'un en l'autre plutôt que
-                            // de laisser deux chiffres vivre côte à côte.
+                            // The tap gives an offset from the dongle tuning;
+                            // this page only knows downlink frequencies, so
+                            // convert rather than keep two numbers side by side.
                             onTune = { vm.qo100Pas((it - stAf.offsetHz).toLong()) })
                     }
 
@@ -402,15 +385,12 @@ fun Qo100Screen(ui: UiState, vm: MainViewModel) {
                     HorizontalDivider(color = Color(0x22FFFFFF))
                     Spacer(Modifier.height(12.dp))
 
-                    // --- le témoin de balise ---
-                    // La balise médiane est allumée en permanence et à une
-                    // fréquence connue au hertz : c'est le seul étalon dont
-                    // dispose une station QO-100. Deux chiffres en sortent, et
-                    // ils ne disent pas la même chose. L'écart, c'est la dérive
-                    // du LNB — un défaut de fréquence, qui se corrige d'un
-                    // bouton. Le rapport au plancher, c'est la qualité de
-                    // réception — un défaut de pointage ou de câble, qui ne se
-                    // corrige qu'à la main sur le mât.
+                    // --- beacon indicator ---
+                    // The middle beacon is always on at a frequency known to
+                    // the hertz: a QO-100 station's only reference. Two
+                    // different figures come out of it. The offset is LNB
+                    // drift, fixed with a button. The SNR is reception quality
+                    // (aiming or cabling), fixed only by hand at the mast.
                     Text(t("qo100_beacon"), color = TextHi,
                         fontWeight = FontWeight.Bold, fontSize = 14.sp)
                     Spacer(Modifier.height(6.dp))
@@ -455,7 +435,7 @@ fun Qo100Screen(ui: UiState, vm: MainViewModel) {
             }
         }
 
-        // ---- le calage sur la balise ---------------------------------------
+        // ---- beacon calibration -------------------------------------------
         Surface(color = SpaceCard, shape = RoundedCornerShape(14.dp)) {
             Column(Modifier.fillMaxWidth().padding(14.dp)) {
                 Text(t("qo100_calib"), color = TextHi,
@@ -474,8 +454,8 @@ fun Qo100Screen(ui: UiState, vm: MainViewModel) {
                 }
 
                 Spacer(Modifier.height(10.dp))
-                // La saisie est en fréquence du ciel : l'opérateur lit sa
-                // cascade, il n'a pas à faire la soustraction lui-même.
+                // Entered as a sky frequency, read off the waterfall: no
+                // subtraction for the operator.
                 var entendu by remember(q.calageHz) {
                     mutableStateOf(qoMhz(Qo100.BALISE_MEDIANE_HZ + q.calageHz))
                 }
@@ -504,7 +484,7 @@ fun Qo100Screen(ui: UiState, vm: MainViewModel) {
             }
         }
 
-        // ---- le transpondeur ------------------------------------------------
+        // ---- transponder --------------------------------------------------
         Surface(color = SpaceCard, shape = RoundedCornerShape(14.dp)) {
             Column(Modifier.fillMaxWidth().padding(14.dp)) {
                 Text(t("qo100_transponder"), color = TextHi,
@@ -535,12 +515,10 @@ fun Qo100Screen(ui: UiState, vm: MainViewModel) {
             }
         }
 
-        // ---- les réglages de la station, repliés ----------------------------
+        // ---- station settings, collapsed ----------------------------------
         //
-        // Les convertisseurs vivaient dans les réglages généraux, à côté de
-        // ceux qui servent aux satellites bas. Or un oscillateur à 10 345 MHz
-        // n'a de sens que pour QO-100 : le réglage se cherchait dans un écran
-        // où l'on n'avait aucune raison d'aller.
+        // Converters live here, not in the general settings: a 10 345 MHz
+        // oscillator only makes sense for QO-100.
         var chaineOuverte by rememberSaveable { mutableStateOf(false) }
         val chaineActive = fr.f4ioz.satcombo.domain.ChaineQo100
             .choisie(q.chaines, q.chaine)
@@ -558,8 +536,8 @@ fun Qo100Screen(ui: UiState, vm: MainViewModel) {
                     Column(Modifier.weight(1f)) {
                         Text(t("qo100_chaines"), color = TextHi,
                             fontWeight = FontWeight.Bold, fontSize = 15.sp)
-                        // Le résumé se lit sans déplier : c'est ce qu'on veut
-                        // vérifier d'un coup d'œil avant d'émettre.
+                        // Summary readable without expanding: the check before
+                        // transmitting.
                         Text(
                             chaineActive.nom + " · " +
                                 (if (chaineActive.descenteActive)
@@ -588,14 +566,11 @@ fun Qo100Screen(ui: UiState, vm: MainViewModel) {
                             }
                         }
                         Spacer(Modifier.height(12.dp))
-                        // Sortir du transpondeur pour écouter ailleurs.
-                        //
-                        // La bride empêche la porteuse de partir chez le
-                        // voisin, ce qui est bien en émission. Mais elle
-                        // empêchait aussi d'**écouter** : chercher une balise,
-                        // voir si le transpondeur large travaille, retrouver
-                        // quelqu'un qui s'est déplacé. Décochée par défaut,
-                        // celui qui n'a rien demandé garde la garde.
+                        // Leave the transponder to listen elsewhere. The clamp
+                        // keeps the carrier out of neighbouring bands, but also
+                        // prevented **listening** (beacon search, wideband,
+                        // a station that moved). Off by default, so the guard
+                        // stays unless asked.
                         Row(verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier.fillMaxWidth()
                                 .clickable { vm.setQo100SansBride(!q.sansBride) }
@@ -643,14 +618,11 @@ fun Qo100Screen(ui: UiState, vm: MainViewModel) {
             }
         }
 
-        // ---- le réglage initial, replié -------------------------------------
+        // ---- initial setup, collapsed -------------------------------------
         //
-        // Le pointage et l'alignement solaire ne servent **qu'une fois** : une
-        // parabole visant un géostationnaire ne se retouche plus. Les laisser
-        // déployés en permanence poussait vers le bas ce dont on se sert à
-        // chaque passage — les fréquences, les mémoires. Repliés par défaut,
-        // donc, et non supprimés : le jour où l'on déplace la station, ils
-        // redeviennent la première chose dont on a besoin.
+        // Dish aiming and sun alignment are used **once**: expanded, they
+        // pushed down what is used every session. Collapsed, not removed:
+        // when the station moves they are the first thing needed.
         var initialOuvert by rememberSaveable { mutableStateOf(false) }
         Surface(color = SpaceCard, shape = RoundedCornerShape(14.dp)) {
             Column(Modifier.fillMaxWidth()) {
@@ -676,7 +648,7 @@ fun Qo100Screen(ui: UiState, vm: MainViewModel) {
             }
         }
         if (initialOuvert) {
-        // ---- le pointage de la parabole --------------------------------------
+        // ---- dish aiming ----------------------------------------------------
         Surface(color = SpaceCard, shape = RoundedCornerShape(14.dp)) {
             Column(Modifier.fillMaxWidth().padding(14.dp)) {
                 Text(t("qo100_aim"), color = TextHi,
@@ -687,9 +659,8 @@ fun Qo100Screen(ui: UiState, vm: MainViewModel) {
                 if (q.elDeg == null) {
                     Text(t("qo100_aim_unknown"), color = TextLo, fontSize = 12.sp)
                 } else if (q.elDeg <= 0.0) {
-                    // Le seul cas où l'écran doit dire non : depuis l'Amérique
-                    // ou le Pacifique, le satellite est de l'autre côté de la
-                    // Terre et aucune parabole n'y peut rien.
+                    // From the Americas or the Pacific the satellite is below
+                    // the horizon; no dish can help.
                     Text(t("qo100_aim_invisible"), color = Amber, fontSize = 13.sp)
                 } else {
                     LigneAngle(t("qo100_aim_az"), q.azDeg)
@@ -701,9 +672,8 @@ fun Qo100Screen(ui: UiState, vm: MainViewModel) {
             }
         }
 
-        // ---- l'alignement par le Soleil --------------------------------------
-        // Rien à afficher là où le satellite est sous l'horizon : il n'y a pas
-        // d'ombre à suivre vers une direction qui n'existe pas.
+        // ---- sun alignment -------------------------------------------------
+        // Hidden when the satellite is below the horizon.
         if (q.azDeg != null && q.elDeg != null && q.elDeg > 0.0) {
             Surface(color = SpaceCard, shape = RoundedCornerShape(14.dp)) {
                 Column(Modifier.fillMaxWidth().padding(14.dp)) {
@@ -714,7 +684,7 @@ fun Qo100Screen(ui: UiState, vm: MainViewModel) {
 
                     val quand = tzFormat("EEE dd/MM HH:mm", ui.useUtc)
 
-                    // --- le service de tous les jours ---
+                    // --- daily: sun at the satellite azimuth ---
                     Spacer(Modifier.height(12.dp))
                     Text(t("qo100_sun_az"), color = TextHi,
                         fontWeight = FontWeight.Bold, fontSize = 13.sp)
@@ -736,7 +706,7 @@ fun Qo100Screen(ui: UiState, vm: MainViewModel) {
                     HorizontalDivider(color = Color(0x22FFFFFF))
                     Spacer(Modifier.height(10.dp))
 
-                    // --- le réglage fin, deux fois l'an ---
+                    // --- fine alignment, twice a year (sun transits) ---
                     Text(t("qo100_sun_transit"), color = TextHi,
                         fontWeight = FontWeight.Bold, fontSize = 13.sp)
                     Spacer(Modifier.height(4.dp))
@@ -768,16 +738,12 @@ fun Qo100Screen(ui: UiState, vm: MainViewModel) {
     }
         }
 
-        // ---- ce qu'est ce satellite ----------------------------------------
+        // ---- about this satellite -----------------------------------------
         //
-        // L'avertissement sur la montée non mesurée occupait cinq lignes en
-        // tête d'écran, à chaque visite, alors qu'il ne concerne qu'un geste :
-        // émettre. Il est descendu **à côté du convertisseur de montée**, là
-        // où l'on peut agir, et réduit à une ligne. Il disparaîtra de lui-même
-        // le jour où cet oscillateur sera mesuré.
-        //
-        // Un avertissement qu'on lit dix fois sans pouvoir rien en faire finit
-        // par ne plus être lu du tout.
+        // The unmeasured-uplink warning sits **next to the uplink converter**,
+        // where one can act, not at the top of the screen: a warning read ten
+        // times without being actionable stops being read. It disappears once
+        // that oscillator is measured.
         Surface(color = SpaceCard, shape = RoundedCornerShape(14.dp)) {
             Column(Modifier.fillMaxWidth().padding(14.dp)) {
                 Text(t("qo100_desc"), color = TextLo, fontSize = 12.sp)
@@ -786,15 +752,12 @@ fun Qo100Screen(ui: UiState, vm: MainViewModel) {
 }
 
 /**
- * La couleur d'un usage sur la réglette.
+ * Colour of a band plan usage on the ruler.
  *
- * Trois familles se distinguent au premier coup d'œil, et c'est tout ce qu'on
- * demande à ces couleurs : les balises en magenta, sur lesquelles on n'émet
- * jamais ; les fréquences réservées — diffusion, urgence — en ambre, la
- * couleur que l'application emploie partout ailleurs pour dire « attention » ;
- * le trafic ordinaire en cyan, plus pâle pour les modes numériques que pour la
- * phonie. La télégraphie prend l'aurore parce qu'elle occupe le bas de la
- * bande d'un bloc et qu'elle mérite d'être repérable de loin.
+ * Beacons magenta (never transmit there); reserved frequencies (broadcast,
+ * emergency) amber, the app-wide "caution" colour; ordinary traffic cyan,
+ * paler for digital than for voice. CW gets aurora: it fills the bottom of the
+ * band in one block and should stand out.
  */
 private fun couleurUsage(u: Qo100.Usage): Color = when (u) {
     Qo100.Usage.BALISE -> Magenta
@@ -807,65 +770,36 @@ private fun couleurUsage(u: Qo100.Usage): Color = when (u) {
 }
 
 /**
- * Les 500 kHz du transpondeur étroit, dessinés à l'échelle.
+ * The 500 kHz narrowband transponder drawn to scale. The figure gives the
+ * position; the ruler shows the neighbourhood (beacon 5 kHz away, digital
+ * segment where SSB would be abuse, band edge).
  *
- * C'est la vue qui manquait : un opérateur qui lit « 10 489,750 » sait où il
- * est, mais un opérateur qui *voit* où il est sait aussi ce qu'il y a autour
- * de lui — la balise à cinq kilohertz, le segment numérique où sa BLU serait
- * un abus, le bord de bande qu'il s'apprête à franchir. Le chiffre dit la
- * position, la réglette dit le voisinage.
+ * The bar holds the [Qo100.SEGMENTS] end to end; they join without gaps (a
+ * test checks it to the kHz), so a missing colour shows as a black hole. Ticks
+ * above mark beacons and reserved frequencies; a scale tick every 50 kHz below.
+ * The cursor spans the full height with a dot on top, to stay visible on cyan.
  *
- * ### Ce qui est dessiné, du bas vers le haut
- *
- * La barre porte les douze segments de [Qo100.SEGMENTS] bout à bout, chacun de
- * sa couleur. Comme les segments se recollent sans trou — un essai le prouve
- * au kilohertz — la barre est pleine, et une couleur qui manquerait se verrait
- * comme un trou noir. Au-dessus, un trait par repère : les quatre balises et
- * les deux fréquences réservées. En dessous, une graduation tous les 50 kHz,
- * assez pour donner l'échelle sans faire une règle graduée.
- *
- * Le curseur traverse toute la hauteur, coiffé d'une pastille : il faut qu'il
- * reste visible même posé sur un segment cyan.
- *
- * ### Le doigt
- *
- * Le geste est direct — on touche l'endroit où l'on veut aller, et on peut
- * glisser sans lever le doigt. Cinq cents kilohertz sur une largeur d'écran
- * font environ un kilohertz et demi par pixel : c'est grossier, et c'est
- * voulu. La réglette sert à traverser la bande, pas à se poser au hertz près ;
- * les boutons de pas, juste au-dessus, sont là pour l'affinage.
- *
- * La fréquence rendue n'est pas bornée ici : [MainViewModel.setQo100Descente]
- * la ramène déjà dans le transpondeur. Les deux balises CW extrêmes restent
- * donc des repères visibles sur lesquels on ne peut pas se poser, ce qui est
- * exactement ce qu'on veut d'une butée.
+ * Tap or drag. About 1.5 kHz per pixel is coarse on purpose: the ruler is for
+ * crossing the band, the step buttons for fine tuning. No clamping here:
+ * [MainViewModel.setQo100Descente] already clamps, so the outer CW beacons are
+ * visible stops you cannot land on.
  */
 /**
- * La mesure d'un oscillateur par deux fréquences observées.
+ * Measuring an oscillator from two observed frequencies of **the same
+ * signal**: the reference reading and the rig display. The app does the
+ * subtraction, which never gets the sign wrong.
  *
- * L'opérateur ne calcule rien : il recopie ce qu'il lit sur une référence et
- * ce qu'affiche son poste, pour **le même signal**. La soustraction ne se
- * trompe jamais de sens, contrairement à celui qui la fait de tête à
- * vingt-deux heures.
- *
- * Le résultat est affiché en clair plutôt que réduit à un « validé » : un
- * oscillateur faux mais plausible ne se détecte qu'à l'oreille, en cherchant
- * la balise, et il faut donc pouvoir comparer le chiffre obtenu à celui qu'on
- * attendait.
+ * The result is shown in full, not as "OK": a wrong but plausible oscillator
+ * is only caught by ear when hunting the beacon, so the figure must be
+ * comparable with the expected one.
  */
 /**
- * Le poste qui tient la station, choisi ici plutôt qu'ailleurs.
+ * The station rig, chosen here rather than in the CAT settings three screens
+ * away: describing one installation should not mean crossing the app.
  *
- * Le modèle vivait dans les réglages CAT, à trois écrans de là. Or c'est le
- * même geste que le reste de ce bloc : on arrive quelque part, on branche ce
- * qu'on a, et l'on dit à l'appareil ce que c'est. Séparer le poste des
- * convertisseurs obligeait à traverser l'application pour décrire une seule
- * installation.
- *
- * **Un seul endroit conserve la valeur.** Ce sélecteur écrit dans le même
- * réglage que celui des réglages CAT — il ne la recopie pas. C'est ce qui a
- * fait diverger les convertisseurs, et la leçon vaut ici : deux copies d'une
- * même valeur finissent par ne plus dire la même chose.
+ * **One place holds the value.** This selector writes the same setting as the
+ * CAT settings, it does not copy it. Copies are what made the converters
+ * diverge: two copies of a value end up disagreeing.
  */
 @Composable
 private fun ChoixMateriel(ui: UiState, vm: MainViewModel) {
@@ -885,15 +819,13 @@ private fun ChoixMateriel(ui: UiState, vm: MainViewModel) {
 }
 
 /**
- * L'appareil qui reçoit, et son écart propre.
+ * The receiving device and its own offset.
  *
- * La même mesure ne donne pas le même oscillateur au FT-817 et à la clé, alors
- * qu'il n'y a qu'un LNB : la différence est le quartz de l'appareil, et elle
- * lui appartient. La ranger dans la chaîne confondrait deux erreurs
- * indépendantes, et corriger l'une déplacerait l'autre.
- *
- * Zéro par défaut, référence non réglable : tant qu'on n'a rien mesuré, rien
- * ne bouge — sur QO-100 comme sur les satellites à défilement.
+ * With a single LNB, the same measurement gives different oscillators on the
+ * FT-817 and the dongle: the difference is the device's crystal and belongs to
+ * it. Storing it in the chain would mix two independent errors, and fixing one
+ * would shift the other. Zero by default, reference not adjustable: nothing
+ * moves until measured.
  */
 @Composable
 private fun ChoixPoste(ui: UiState, vm: MainViewModel) {
@@ -916,20 +848,13 @@ private fun ChoixPoste(ui: UiState, vm: MainViewModel) {
 }
 
 /**
- * Le choix du convertisseur, avec **la fréquence qu'il donnera en face**.
+ * Converter choice, showing **the resulting IF frequency**.
  *
- * Un oscillateur local est un nombre à onze chiffres : personne ne le
- * reconnaît, et personne ne peut dire de mémoire lequel correspond à son
- * matériel. Une fréquence intermédiaire, si — « 144,750 », on sait
- * immédiatement si c'est la bonne, parce que c'est ce qu'on lit sur la face
- * avant du poste depuis toujours.
- *
- * Chaque choix montre donc **ce que le poste afficherait** pour la fréquence
- * du ciel où l'on se trouve à cet instant. On ne choisit plus un oscillateur
- * en aveugle : on choisit un résultat, et on le voit avant de le poser.
- *
- * Le dernier choix, « prise directe », retire le convertisseur — le poste ou
- * la clé travaille alors sur la fréquence du ciel.
+ * Nobody recognises an 11-digit LO frequency, but everyone recognises
+ * "144.750" on the rig front panel. Each option shows what the rig would
+ * display for the current sky frequency, so you pick a result, not an LO.
+ * The last option, "direct", removes the converter: rig or dongle then works
+ * on the sky frequency.
  */
 @Composable
 private fun ChoixConvertisseur(
@@ -945,9 +870,8 @@ private fun ChoixConvertisseur(
     Spacer(Modifier.height(6.dp))
 
     presets.forEach { p ->
-        // La fréquence que ce choix donnerait, ici et maintenant. Hors de la
-        // plage du préréglage, on n'invente rien : le convertisseur ne
-        // s'appliquerait pas, et l'annoncer serait mentir.
+        // Frequency this option would give now. Out of range, show nothing
+        // made up: the converter would not apply.
         val fi = if (reference > 0L) reference - p.olHz else 0L
         LigneChoix(
             actif = olActuel == p.olHz,
@@ -962,7 +886,7 @@ private fun ChoixConvertisseur(
         onClick = { vm.qo100PoseOl(descente, 0L) })
 }
 
-/** Une ligne de choix : une coche, un nom, et le résultat en face. */
+/** Choice row: a check mark, a name, and the result opposite. */
 @Composable
 private fun LigneChoix(
     actif: Boolean, titre: String, detail: String, onClick: () -> Unit,
@@ -1017,15 +941,11 @@ private fun MesureOl(vm: MainViewModel, descente: Boolean, ol: Long) {
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         OutlinedButton(
             onClick = {
-                // Une virgule pour un point : c'est ce que donne le clavier
-                // français, et refuser la saisie serait la refuser à tous.
+                // Accept a decimal comma (French keyboards).
                 val c = ciel.replace(',', '.').trim().toDoubleOrNull()
                 val p = poste.replace(',', '.').trim().toDoubleOrNull()
-                // Arrondi et non troncature : « 10489.498 » vaut
-                // 10489497999,999998 en virgule flottante, et couper la
-                // partie décimale ôterait un hertz au passage. Un hertz ne se
-                // voit pas, mais un calage qu'on croit exact et qui ne l'est
-                // pas se paie plus tard, quand on cherche d'où vient l'écart.
+                // Round, don't truncate: "10489.498" is 10489497999.999998 in
+                // floating point, and truncation silently loses a hertz.
                 val (ok, texte) = vm.qo100Mesure(
                     descente,
                     Math.round((c ?: 0.0) * 1_000_000),
@@ -1045,30 +965,25 @@ private fun MesureOl(vm: MainViewModel, descente: Boolean, ol: Long) {
     }
     if (message.isNotBlank()) {
         Spacer(Modifier.height(6.dp))
-        // Vert pour une mesure prise, ambre pour un refus : la couleur dit
-        // l'issue avant qu'on ait lu la phrase.
+        // Green accepted, amber refused: the colour tells before the text.
         Text(message, color = if (reussi) Aurora else Amber, fontSize = 11.sp)
     }
 }
 
 /**
- * La réglette du plan de bande, partagée par les deux écrans.
+ * Band plan ruler, shared by the QO-100 and pass screens (the pass screen
+ * used to have a plain bar, so you could not tell whether you were allowed to
+ * transmit where you landed).
  *
- * Elle vivait dans l'écran QO-100 seul. La page du passage, elle, n'avait
- * qu'une barre unie : on s'y déplaçait dans les 492 kHz sans savoir si l'on
- * arrivait sur la CW, sur le numérique étroit ou sur une balise — c'est-à-dire
- * sans savoir si l'on avait le droit d'y émettre.
- *
- * **Un seul composant pour les deux écrans**, plutôt qu'un second dessin à
- * tenir à jour : le plan de bande change rarement, mais quand il change, il
- * doit changer partout à la fois.
+ * **One component for both screens**: when the band plan changes, it must
+ * change everywhere at once.
  */
 @Composable
 internal fun Reglette(descenteHz: Long, sur: (Long) -> Unit) {
     val bas = Qo100.REGLETTE_BAS_HZ
     val etendue = (Qo100.REGLETTE_HAUT_HZ - bas).toDouble()
 
-    // La conversion pixel → hertz, écrite une fois pour les deux gestes.
+    // Pixel → Hz, shared by tap and drag.
     fun hz(x: Float, largeur: Int): Long {
         val r = (x / largeur.coerceAtLeast(1)).coerceIn(0f, 1f)
         return bas + (r * etendue).toLong()
@@ -1094,20 +1009,19 @@ internal fun Reglette(descenteHz: Long, sur: (Long) -> Unit) {
         val basBarre = 42.dp.toPx()
         val hauteurBarre = basBarre - hautBarre
 
-        // Les douze segments, dans l'ordre du plan de bande.
+        // Segments in band plan order.
         Qo100.SEGMENTS.forEach { s ->
             val x0 = x(s.basHz)
             val x1 = x(s.hautHz)
             drawRect(
                 color = couleurUsage(s.usage),
                 topLeft = Offset(x0, hautBarre),
-                // Au moins un pixel : la balise basse ne fait que 5 kHz, soit
-                // un centième de la réglette, et un arrondi à zéro l'effacerait.
+                // At least one pixel: the 5 kHz lower beacon could round to 0.
                 size = Size((x1 - x0).coerceAtLeast(1f), hauteurBarre),
             )
         }
 
-        // Les repères, au-dessus de la barre.
+        // Markers above the bar.
         Qo100.SEGMENTS.forEach { s ->
             val r = s.repereHz ?: return@forEach
             drawLine(
@@ -1118,7 +1032,7 @@ internal fun Reglette(descenteHz: Long, sur: (Long) -> Unit) {
             )
         }
 
-        // La graduation, tous les 50 kHz.
+        // Scale ticks every 50 kHz.
         var g = bas
         while (g <= Qo100.REGLETTE_HAUT_HZ) {
             drawLine(
@@ -1130,7 +1044,7 @@ internal fun Reglette(descenteHz: Long, sur: (Long) -> Unit) {
             g += 50_000L
         }
 
-        // Le curseur, par-dessus tout le reste.
+        // Cursor on top of everything.
         val xc = x(descenteHz).coerceIn(0f, l)
         drawLine(
             color = TextHi,
@@ -1142,7 +1056,7 @@ internal fun Reglette(descenteHz: Long, sur: (Long) -> Unit) {
     }
 }
 
-/** Une ligne « − pas … + pas », symétrique, avec le pas écrit au milieu. */
+/** A symmetric "− step / + step" row. */
 @Composable
 private fun PasLigne(vm: MainViewModel, pasHz: Long) {
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -1169,7 +1083,7 @@ private fun Interrupteur(titre: String, coche: Boolean, sur: (Boolean) -> Unit) 
     }
 }
 
-/** Ce que le matériel affiche, ou l'ambre quand il ne peut pas y aller. */
+/** What the hardware displays; amber when it cannot get there. */
 @Composable
 private fun LigneMateriel(titre: String, hz: Long, atteignable: Boolean) {
     Row(verticalAlignment = Alignment.CenterVertically,
@@ -1192,31 +1106,27 @@ private fun LigneAngle(titre: String, deg: Double?) {
 }
 
 /**
- * Une fréquence en mégahertz, au hertz près.
- *
- * Trois décimales suffiraient pour lire un plan de bande, mais pas pour caler
- * un LNB : la dérive se mesure en centaines de hertz une fois l'oscillateur
- * chaud, et c'est précisément ce qu'on cherche à voir.
+ * Frequency in MHz, to the hertz. Three decimals would do for a band plan but
+ * not for LNB calibration: warm drift is hundreds of hertz, which is exactly
+ * what we want to see.
  */
 private fun qoMhz(hz: Long): String =
     String.format(Locale.US, "%,.6f", hz / 1_000_000.0).replace(',', ' ')
 
 /**
- * Un écart en hertz, signé.
- *
- * La mesure de balise se lit en hertz et pas en kilohertz : sous les cinq cents
- * hertz, un affichage en kilohertz écrirait « +0,000 » et ferait croire à un
- * calage parfait là où la BLU est déjà décalée d'un demi-timbre.
+ * Signed offset in Hz. The beacon measurement is shown in Hz, not kHz: small
+ * offsets would round to "+0.000 kHz" and suggest a perfect calibration while
+ * SSB is already audibly off.
  */
 private fun qoHzSigne(hz: Long): String = (if (hz > 0) "+" else "") + "$hz Hz"
 
-/** Un écart, signé et en kilohertz : c'est l'ordre de grandeur d'un LNB. */
+/** Signed offset in kHz: the order of magnitude of an LNB error. */
 private fun qoKhzSigne(hz: Long): String {
     val signe = if (hz > 0) "+" else ""
     return signe + String.format(Locale.US, "%.3f kHz", hz / 1000.0)
 }
 
-/** Relit une saisie en mégahertz, en tolérant l'espace et la virgule. */
+/** Parses a MHz entry, tolerating spaces and a decimal comma. */
 private fun qoDepuisMhz(texte: String): Long? {
     val propre = texte.replace(" ", "").replace(" ", "").replace(',', '.')
     val v = propre.toDoubleOrNull() ?: return null

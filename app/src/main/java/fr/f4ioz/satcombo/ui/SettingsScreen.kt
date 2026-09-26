@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.ui
 
@@ -149,17 +149,13 @@ private fun PillTabs(
 
 @Composable
 private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
-    // L'onglet du carnet vit au-dessus de la liste : un élément de
-    // `LazyColumn` est détruit et recréé au gré du défilement, et un état qui y
-    // habiterait repartirait à zéro dès qu'on remonte.
+    // The log tab state lives above the list: `LazyColumn` items are destroyed
+    // and recreated while scrolling, so state held inside one would reset.
     var ongletCarnet by remember { mutableStateOf(0) }
 
-    // **Chaque section s'ouvre en haut.**
-    //
-    // La liste est la même d'une section à l'autre : elle gardait donc la
-    // position de défilement de la précédente, et l'on arrivait au milieu du
-    // journal de contacts sans voir ses onglets. Un écran qui s'ouvre ailleurs
-    // qu'à son début donne l'impression d'avoir manqué quelque chose.
+    // **Each section opens at the top.** The same list is reused across
+    // sections, so it kept the previous scroll position and you landed mid-log
+    // without seeing its tabs.
     val defilement = rememberLazyListState()
     LaunchedEffect(ui.settingsSection) { defilement.scrollToItem(0) }
 
@@ -181,10 +177,8 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
 
                     MenuGroupLabel("🧭 " + t("grp_aiming"))
                     SettingsMenuRow(Icons.Default.Explore, t("menu_aim")) { vm.setSettingsSection("aim") }
-                    // « Peut-être faire comme CAT, mettre rotor en paramètre, ou
-                    // l'inverse. » Le rotor est un réglage de pointage, il est
-                    // donc ici — mais il ouvre son écran à lui, qui porte déjà
-                    // tout : la liaison, les butées, le garage, le pré-pointage.
+                    // The rotor is a pointing setting, so it sits here, but it
+                    // opens its own screen: link, end stops, park, pre-pointing.
                     if (fr.f4ioz.satcombo.data.Extensions.ROTOR in ui.extensions) {
                         SettingsMenuRow(Icons.Default.Sync, t("menu_rotor")) { vm.openRotor() }
                     }
@@ -194,11 +188,9 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
                     MenuGroupLabel("🎙 " + t("grp_traffic"))
                     SettingsMenuRow(Icons.Default.SettingsInputAntenna, t("menu_cat")) { vm.setSettingsSection("cat") }
                     SettingsMenuRow(Icons.Default.SwapVert, t("menu_conv")) { vm.setSettingsSection("conv") }
-                    // Le QO-100 est ici et non dans la visée : la parabole se
-                    // pointe une fois pour toutes, alors que la fréquence, le
-                    // poste et les convertisseurs sont l'affaire de chaque
-                    // trafic. Ses deux voisins de ligne sont justement ceux
-                    // dont il dépend.
+                    // QO-100 lives here, not under pointing: the dish is aimed
+                    // once, while frequency, radio and converters change per
+                    // session. Its neighbours are the settings it depends on.
                     if (fr.f4ioz.satcombo.data.Extensions.QO100 in ui.extensions) {
                         SettingsMenuRow(Icons.Default.SatelliteAlt, t("menu_qo100")) { vm.openQo100() }
                     }
@@ -245,9 +237,8 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
         if (sec == "docs") { item { DocsContent() } }
         if (sec == "accord") { item { AccordFinCard(ui, vm) } }
         if (sec == "macro") { item { ClavierMacroCarte(ui, vm) } }
-        // **Deux faces d'une même chose, donc un seul menu.** Diffuser et
-        // écouter sont les deux bouts du même mécanisme : les séparer en deux
-        // entrées de menu obligeait à se souvenir de quel côté on était.
+        // **One menu for both ends.** Broadcasting and listening are the same
+        // mechanism; two entries forced you to remember which side you were on.
         if (sec == "partage") {
             item {
                 var onglet by remember { mutableStateOf(0) }
@@ -293,11 +284,9 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
                                     selectedContainerColor = Cyan.copy(alpha = 0.25f), selectedLabelColor = Cyan))
                         }
                     }
-                    // Les unités : la langue de l'interface et le système de
-                    // mesure sont deux choses distinctes. Un OM britannique lit
-                    // volontiers l'anglais et compte en miles, un pilote lit le
-                    // français et compte en milles nautiques et en pieds. On
-                    // choisit donc les deux séparément.
+                    // Units are chosen separately from the UI language: a UK ham
+                    // reads English and counts in miles, a French pilot reads
+                    // French and counts in nautical miles and feet.
                     Spacer(Modifier.height(14.dp))
                     Text(t("set_units"), color = TextHi, fontWeight = FontWeight.Bold)
                     Text(t("set_units_desc"), color = TextLo, fontSize = 11.sp,
@@ -403,8 +392,8 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
                     }
                     if (showMap) {
                         LocatorMapDialog(
-                            // Les carrés viennent de LoTW, chargés à
-                            // l'ouverture de la page locator.
+                            // Squares come from LoTW, loaded when the
+                            // locator page opens.
                             carresContactes = if (ui.carnet.peindre)
                                 ui.carnet.lotwTravailles + ui.carnet.lotwConfirmes
                             else emptySet(),
@@ -496,11 +485,9 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
                     Text(t("callsign_title"), color = TextHi)
                     Text(t("callsign_desc"), color = TextLo, fontSize = 11.sp,
                         modifier = Modifier.padding(bottom = 8.dp))
-                    // NO remember(ui.callsign) here: each keystroke wrote the
-                    // callsign back into the state, the key changed, the field
-                    // state was rebuilt — and a keystroke landing during that
-                    // round trip was written into the discarded state and lost.
-                    // "F4IOZ" typed at normal speed came out "F4I".
+                    // NO remember(ui.callsign) here: each keystroke changed the
+                    // key and rebuilt the field state, and a keystroke landing
+                    // during that round trip was lost ("F4IOZ" came out "F4I").
                     var cs by remember { mutableStateOf(ui.callsign) }
                     OutlinedTextField(
                         value = cs,
@@ -514,14 +501,14 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
                 }
             }
         }
-        // --- Extensions : les fonctions en bêta, ouvertes par mot-clé ---
+        // --- Extensions: beta features, unlocked by keyword ---
         item {
             Surface(color = SpaceCard, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp)) {
                     Text(t("ext_title"), color = TextHi)
                     Spacer(Modifier.height(8.dp))
-                    // Même piège que l'indicatif : pas de remember(ui.…) ici,
-                    // sinon une frappe rapide se perd pendant la recomposition.
+                    // Same trap as the callsign: no remember(ui.…) here, or fast
+                    // typing loses keystrokes during recomposition.
                     var ext by remember { mutableStateOf(ui.extensionsCode) }
                     OutlinedTextField(
                         value = ext,
@@ -634,9 +621,8 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
         if (sec == "sources") {
         item { SectionHeader(t("sources_gp")) }
 
-        // Les satellites écartés du dernier bulletin. Rien ne s'affiche quand
-        // tout va bien, ce qui est le cas ordinaire — un écran qui parle
-        // seulement quand il a quelque chose à dire se lit encore.
+        // Satellites rejected from the last bulletin. Shows nothing in the usual
+        // case, so it still gets read when it does speak.
         item {
             val ecartes = fr.f4ioz.satcombo.data.TleRepository.ecartes
             if (ecartes.isNotEmpty()) {
@@ -702,12 +688,9 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
         }
 
         // --- notifications ---
-        // **La source du statut vient en dernier, et c'est sa place.**
-        //
-        // Posée juste sous le titre « sources orbitales », elle
-        // s'intercalait entre l'en-tête et ce qu'il annonce : les éléments
-        // orbitaux et leur cache, qui vont ensemble. Elle choisit d'où
-        // vient un badge, pas d'où viennent les orbites — donc après.
+        // **The status source comes last.** It picks where a badge comes from,
+        // not where orbits come from, so it goes after the orbital elements and
+        // their cache rather than between them and their header.
         item {
             Surface(color = SpaceCard, shape = RoundedCornerShape(16.dp),
                 modifier = Modifier.fillMaxWidth()) {
@@ -789,10 +772,8 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
                 }
             }
         }
-        // La « source du statut » a quitté ce menu : elle choisit d'où vient le
-        // badge vert ou rouge d'un satellite, ce qui relève des sources de
-        // données, pas de la visée. Elle était ici par habitude, entre le style
-        // du cadran et la boussole, et personne ne l'y cherchait.
+        // The status source moved to data sources: it picks where a satellite's
+        // green/red badge comes from, which has nothing to do with pointing.
         item { BoussoleCarte(vm, ui) }
 
         }
@@ -873,10 +854,9 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
                                     colors = SwitchDefaults.colors(checkedTrackColor = Cyan))
                             }
                         }
-                        // Le contrôle de ce qui s'enregistre : le spectre à
-                        // l'œil, le son à l'oreille. Les deux se branchent sur
-                        // la même prise que les décodeurs, et se rallument en
-                        // plein passage.
+                        // Monitoring what gets recorded: spectrum by eye, audio
+                        // by ear. Both tap the same capture as the decoders and
+                        // can be switched back on mid-pass.
                         Spacer(Modifier.height(10.dp))
                         Text(t("monitor_title"), color = TextHi,
                             fontWeight = FontWeight.Bold, fontSize = 13.sp)
@@ -906,7 +886,7 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
                         }
                         // SSTV rides on the same capture: no extra recording,
                         // the engine just watches the samples going past.
-                        // Fonction en bêta : masquée sans la clé d'extension.
+                        // Beta: hidden without the extension key.
                         if (fr.f4ioz.satcombo.data.Extensions.SSTV in ui.extensions) {
                             Spacer(Modifier.height(10.dp))
                             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -925,10 +905,9 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
                                 }
                             }
                         }
-                        // L'APT se branche sur la meme prise de son, mais il n'y
-                        // a pas d'en-tete a guetter : le decodeur tourne du
-                        // debut a la fin de l'enregistrement. On l'arme donc a
-                        // la main, avant un passage NOAA, et pas par defaut.
+                        // APT uses the same capture but has no header to wait
+                        // for: the decoder runs for the whole recording. So it
+                        // is armed by hand before a NOAA pass, off by default.
                         if (fr.f4ioz.satcombo.data.Extensions.APT in ui.extensions) {
                             Spacer(Modifier.height(10.dp))
                             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1177,9 +1156,8 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
                             color = TextLo.copy(alpha = 0.7f), fontSize = 10.sp,
                             modifier = Modifier.padding(top = 2.dp))
 
-                        // Le fichier de zones : produit par PotaGrab, posé
-                        // ici. Il ne pèse rien dans l'application puisqu'il
-                        // n'y est pas — il vit à côté.
+                        // The zone file is produced by PotaGrab and dropped
+                        // here; it is not bundled in the app.
                         Spacer(Modifier.height(14.dp))
                         val ctx = LocalContext.current
                         var zonesN by remember { mutableStateOf(vm.compteZonesPota()) }
@@ -1213,8 +1191,8 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
                             }
                         }
 
-                        // Le bandeau d'accueil se règle ici, avec le reste du
-                        // POTA : il parle des parcs, pas de la photo.
+                        // The welcome banner is set here with the rest of
+                        // POTA: it is about parks, not the photo.
                         Spacer(Modifier.height(10.dp))
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(t("pota_home_banner"), color = TextHi,
@@ -1225,10 +1203,8 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
                                     checkedTrackColor = Color(0xFF7FE3A0)))
                         }
 
-                        // **Préparer la sortie avant de partir.**
-                        //
-                        // Le réseau est là où l'on part, rarement là où l'on
-                        // arrive. Les contours se prennent d'avance, chez soi.
+                        // **Prepare before leaving.** The network is at home,
+                        // rarely at the park: fetch the outlines in advance.
                         Spacer(Modifier.height(12.dp))
                         Text(t("pota_contours"), color = TextHi, fontSize = 13.sp,
                             fontWeight = FontWeight.SemiBold)
@@ -1281,12 +1257,9 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
 
         }
         if (sec == "log") {
-        // **Deux onglets, parce que ce sont deux usages.**
-        //
-        // Les identifiants de Wavelog, QRZ et LoTW se saisissent une fois et ne
-        // se revoient plus ; la saisie des contacts sert à chaque passage. Les
-        // mêler obligeait à faire défiler des centaines de lignes de comptes
-        // pour atteindre le bouton qu'on cherche réellement.
+        // **Two tabs for two uses.** Wavelog/QRZ/LoTW credentials are entered
+        // once; contact entry is used every pass. Mixed together, you scrolled
+        // past hundreds of lines of accounts to reach the button you wanted.
         item {
             Column {
                 TabRow(selectedTabIndex = ongletCarnet, containerColor = SpaceBg,
@@ -1308,10 +1281,9 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
                 Column(Modifier.padding(16.dp)) {
                     Text(tf("n_contacts", ui.log.size), color = TextHi)
 
-                    // Ajouter un contact après coup : le carnet papier tenu
-                    // pendant le passage se ressaisit en rentrant. L'heure est
-                    // celle du contact, jamais celle de la saisie — c'est elle
-                    // qui donne l'azimut et l'élévation.
+                    // Add a contact afterwards (paper log typed in back home).
+                    // The time is the contact's, never the entry time: it
+                    // drives azimuth and elevation.
                     var ajout by remember { mutableStateOf(false) }
                     TextButton(onClick = { ajout = true }) {
                         Text("+ " + t("log_add"), color = Cyan, fontSize = 13.sp)
@@ -1390,10 +1362,9 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
                         val enregistre = rememberEnregistrer()
                         Row(Modifier.padding(top = 10.dp)) {
                             Button(onClick = {
-                                // Un vrai fichier .adi plutôt que du texte collé :
-                                // c'est ce qu'attendent LoTW, Club Log et les
-                                // carnets de bureau, et le texte perd ses retours
-                                // à la ligne dès qu'une messagerie s'en mêle.
+                                // A real .adi file, not pasted text: that is what
+                                // LoTW, Club Log and desktop loggers expect, and
+                                // messaging apps mangle line breaks.
                                 val uri = vm.adifFileUri()
                                 val send = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
                                     putExtra(android.content.Intent.EXTRA_SUBJECT, t("adif_subject"))
@@ -1410,9 +1381,8 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
                             }, colors = ButtonDefaults.buttonColors(containerColor = Cyan)) {
                                 Text(t("export_adif"), color = Color(0xFF00201D))
                             }
-                            // Poser le carnet dans un dossier, plutôt que
-                            // l'envoyer à quelqu'un. En portable, sans réseau,
-                            // le partage n'a souvent rien à proposer.
+                            // Save the log to a folder rather than share it:
+                            // portable without network, share often offers nothing.
                             OutlinedButton(onClick = {
                                 enregistre(nomDate("SatMe-carnet", "adi"),
                                     "application/octet-stream", depuisTexte(vm.logAdif()))
@@ -1441,25 +1411,18 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
                             // A QSO made on a grid line belongs to both squares.
                             // The log shows them, because that is what has to be
                             // claimed and what the ADIF export will carry.
-                            // Mode et reports : ce que l'export ADIF emportera,
-                            // donc ce qu'il faut pouvoir relire d'un coup d'œil
-                            // avant d'envoyer le carnet à LoTW.
+                            // Mode and reports too, so they can be checked at a
+                            // glance before sending the log to LoTW.
                             val tech = buildList {
                                 if (e.mode.isNotBlank()) add(e.mode.uppercase())
                                 if (e.rstSent.isNotBlank() || e.rstRcvd.isNotBlank()) {
                                     add(e.rstSent.ifBlank { "—" } + "/" + e.rstRcvd.ifBlank { "—" })
                                 }
-                                // **Les deux fréquences, montée en tête.**
-                                //
-                                // Seule la descente s'affichait. C'est la
-                                // montée qui vient d'être corrigée — elle
-                                // valait le bord bas du transpondeur — et
-                                // c'est elle qui part dans FREQ à l'ADIF :
-                                // une valeur qu'on ne peut pas relire est une
-                                // valeur qu'on ne peut pas vérifier.
-                                //
-                                // La flèche dit le sens, pour qu'on n'ait pas
-                                // à se souvenir de l'ordre.
+                                // **Both frequencies, uplink first.** The
+                                // uplink goes into ADIF FREQ and once held the
+                                // transponder's lower edge by mistake; a value
+                                // you cannot read back you cannot check. The
+                                // arrow gives the direction.
                                 if (e.uplinkMhz > 0.0)
                                     add("↑" + "%.3f".format(java.util.Locale.US, e.uplinkMhz))
                                 if (e.downlinkMhz > 0.0)
@@ -1476,13 +1439,11 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
                                     fontWeight = FontWeight.Bold)
                             }
                         }
-                        // Déposer **ce** contact au carnet en ligne.
-                        //
-                        // Le premier essai est celui où la clé d'écriture et le
-                        // profil de station se révèlent faux ; un lot entier
-                        // déposé de travers se démêle contact par contact du
-                        // côté du serveur. Le bouton n'apparaît que sur ce qui
-                        // porte un indicatif et n'est pas encore parti.
+                        // Upload **this** contact to the online log. The first
+                        // try is where a wrong write key or station profile
+                        // shows up; a whole batch uploaded wrong must be undone
+                        // one by one on the server. Only shown for contacts
+                        // with a callsign that are not yet uploaded.
                         if (e.callsign.isNotBlank() && ui.carnet.url.isNotBlank()) {
                             if (e.envoyeMs > 0L) {
                                 Text("✓", color = Cyan, fontSize = 14.sp,
@@ -1504,16 +1465,14 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
         }
 
         if (ongletCarnet == 1) {
-        // Le nombre d'appuis qui ouvre la saisie a rejoint cet onglet : c'est un
-        // réglage, posé une fois, et non un geste de passage. Il traînait au
-        // milieu de la liste des contacts.
+        // The tap count that opens entry is a set-once setting, so it lives in
+        // this tab, not among the contacts.
         item {
             Surface(color = SpaceCard, shape = RoundedCornerShape(16.dp),
                 modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp)) {
-                    // Combien d'appuis ouvrent la saisie. Deux choix seulement :
-                    // un appui simple ouvrirait l'écran chaque fois qu'on touche
-                    // la boussole.
+                    // Only two choices: a single tap would open the screen
+                    // every time the compass is touched.
                     Row(verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier.padding(top = 2.dp)) {
                         Column(Modifier.weight(1f)) {
@@ -1541,8 +1500,8 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
             }
         }
 
-        // Le carnet en ligne : Wavelog et Cloudlog partagent la même API, on
-        // ne demande donc pas lequel c'est.
+        // Online log: Wavelog and Cloudlog share the same API, so we do not ask
+        // which one it is.
         item {
             Surface(color = SpaceCard, shape = RoundedCornerShape(16.dp),
                 modifier = Modifier.fillMaxWidth()) {
@@ -1577,11 +1536,9 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
                         }
                     }
 
-                    // Le dépôt des contacts, sous les réglages qui le rendent
-                    // possible. L'identifiant du profil est demandé ici et non
-                    // plus haut : il ne sert qu'à écrire, et l'opérateur qui
-                    // veut seulement la peinture des carrés n'a pas à le
-                    // chercher dans son interface web pour rien.
+                    // Upload, below the settings it needs. The profile id is
+                    // asked here, not above: it is only used for writing, and
+                    // someone who only wants the square map need not dig it up.
                     Spacer(Modifier.height(10.dp))
                     Text(t("profils_titre"), color = TextHi, fontSize = 13.sp,
                         fontWeight = FontWeight.SemiBold)
@@ -1590,8 +1547,7 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(t("maille_titre"), color = TextLo, fontSize = 12.sp)
                         Spacer(Modifier.width(8.dp))
-                        // La maille du VUCC est de quatre caractères : c'est
-                        // elle qui compte pour un diplôme, donc le défaut.
+                        // VUCC counts 4-character squares, hence the default.
                         listOf(4, 6).forEach { m ->
                             FilterChip(
                                 selected = ui.carnet.maille == m,
@@ -1626,17 +1582,11 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
                     }
                     Spacer(Modifier.height(8.dp))
 
-                    // **Le numéro ne s'affiche plus dès qu'on connaît les noms.**
-                    //
-                    // Un identifiant de profil est un nombre que personne ne
-                    // reconnaît : « 32 » ne dit ni le carré, ni l'indicatif, ni
-                    // le lieu. Une fois les profils relevés, on choisit dans une
-                    // liste lisible et le nombre disparaît — il reste une donnée
-                    // interne, pas quelque chose à lire.
-                    //
-                    // Le champ libre ne revient que si le relevé n'a rien donné :
-                    // sans lui, un opérateur dont le serveur refuse la lecture
-                    // ne pourrait plus rien déposer du tout.
+                    // **The raw id disappears once profile names are known.**
+                    // "32" says nothing about square, callsign or place. The
+                    // free field only returns if fetching found nothing:
+                    // without it, a server that refuses reads would block
+                    // uploads entirely.
                     if (ui.carnet.profilsListe.isEmpty()) {
                         OutlinedTextField(
                             value = ui.carnet.profil, onValueChange = vm::setCarnetProfil,
@@ -1646,17 +1596,10 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
                             modifier = Modifier.padding(top = 2.dp, bottom = 6.dp))
                     }
 
-                    // **Les profils en clair, une fois relevés.**
-                    //
-                    // Un identifiant de profil est un nombre que personne ne
-                    // reconnaît. Avec vingt-six profils déclarés, le taper de
-                    // mémoire est une devinette — et une erreur ne se voit
-                    // nulle part : le contact part, Wavelog l'accepte, et il
-                    // est rangé sous le carré d'un autre emplacement. Cela ne
-                    // se découvre qu'aux diplômes.
-                    //
-                    // Le champ libre reste, pour qui n'a qu'un emplacement ou
-                    // n'a pas encore relevé.
+                    // **Readable profiles once fetched.** With 26 profiles,
+                    // typing an id from memory is a guess, and a wrong one is
+                    // silent: Wavelog accepts the contact under another
+                    // location's square, found out only at award time.
                     if (ui.carnet.profilsListe.isNotEmpty()) {
                         Text(t("carnet_profil_liste"), color = TextHi, fontSize = 12.sp,
                             fontWeight = FontWeight.SemiBold)
@@ -1675,9 +1618,8 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
                                     null, tint = if (actif) Cyan else TextLo,
                                     modifier = Modifier.size(16.dp))
                                 Spacer(Modifier.width(8.dp))
-                                // Le carré et l'indicatif d'abord : c'est ce
-                                // que l'opérateur reconnaît. Le numéro n'y
-                                // figure pas — il ne lui apprendrait rien.
+                                // Square and callsign first: that is what the
+                                // operator recognises. The id is left out.
                                 Text(
                                     listOf(p.carre, p.indicatif, p.nom)
                                         .filter { it.isNotBlank() }
@@ -1692,19 +1634,14 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
                         Spacer(Modifier.height(6.dp))
                     }
 
-                    // Le compte est sur le bouton : c'est la seule façon de
-                    // savoir, sans appuyer, s'il y a quelque chose à faire.
+                    // The count is on the button: you see whether there is
+                    // anything to do without pressing it.
                     val attente = remember(ui.log.size, ui.carnet.depot) { vm.contactsADeposer() }
 
-                    // **Un récapitulatif avant d'envoyer.**
-                    //
-                    // Le dépôt est irréversible : l'API écrit, elle ne corrige
-                    // pas. Un profil mal choisi range tout sous le mauvais
-                    // carré, et cela ne se découvre qu'aux diplômes, des mois
-                    // plus tard. Une fenêtre qui rappelle ce qui va partir —
-                    // combien de contacts, sous quel indicatif, vers quel
-                    // profil — coûte une seconde et rend l'erreur visible
-                    // pendant qu'elle est encore réparable.
+                    // **A summary before sending.** Upload is irreversible (the
+                    // API writes, it does not correct) and a wrong profile files
+                    // everything under the wrong square, found months later.
+                    // Showing count, callsign and profile costs a second.
                     var confirme by remember { mutableStateOf(false) }
                     if (confirme) {
                         val lieux = remember(ui.log.size) { vm.carresDuCarnet(ui.carnet.maille) }
@@ -1728,10 +1665,9 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
                                         t("depot_carres"),
                                         lieux.keys.joinToString(", ").ifBlank { "—" })
                                     LigneRecap(t("depot_serveur"), ui.carnet.url)
-                                    // Les carrés du carnet et le carré du profil
-                                    // doivent concorder : c'est là que se voit
-                                    // la sortie portable déposée sous le carré
-                                    // de la maison.
+                                    // Log squares and profile square must match:
+                                    // this is where a portable outing filed
+                                    // under the home square shows up.
                                     if (nomProfil != null && lieux.size > 1) {
                                         Spacer(Modifier.height(6.dp))
                                         Text(t("depot_plusieurs"), color = Amber,
@@ -1771,16 +1707,12 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
             }
         }
 
-        // ------------------------------------------------ après le passage
+        // ------------------------------------------------ after the pass
         //
-        // Ce qu'on faisait au PC, sur le téléphone. Le travail d'après-passage
-        // n'attend pas d'être rentré : les carrés manquants se comblent dans
-        // la voiture, et un contact déposé le soir même ne se redemande plus.
-        //
-        // Les trois gestes sont dans l'ordre où ils se font, et c'est le seul
-        // ordre qui marche : nettoyer les noms de satellites, relever les
-        // profils, puis déposer. Déposer avant d'avoir relevé range tout sous
-        // le mauvais carré, et cela ne se voit qu'aux diplômes.
+        // Post-pass work done on the phone instead of the PC. The three steps
+        // are in the only order that works: clean satellite names, fetch
+        // profiles, then upload. Uploading before fetching files everything
+        // under the wrong square.
         item {
             Surface(color = SpaceCard, shape = RoundedCornerShape(16.dp),
                 modifier = Modifier.fillMaxWidth()) {
@@ -1789,7 +1721,7 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
                     Text(t("apres_aide"), color = TextLo, fontSize = 11.sp,
                         modifier = Modifier.padding(top = 2.dp, bottom = 10.dp))
 
-                    // 1. Les noms de satellites.
+                    // 1. Satellite names.
                     val aNettoyer = remember(ui.log.size) { vm.nomsSatellitesANettoyer() }
                     OutlinedButton(onClick = { vm.nettoieNomsSatellites() },
                         enabled = aNettoyer > 0,
@@ -1799,7 +1731,7 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
                              color = if (aNettoyer > 0) Amber else TextLo, fontSize = 12.sp)
                     }
 
-                    // 2. QRZ : combler les carrés absents.
+                    // 2. QRZ: fill in missing squares.
                     Spacer(Modifier.height(12.dp))
                     Text(t("qrz_titre"), color = TextHi, fontSize = 13.sp,
                         fontWeight = FontWeight.SemiBold)
@@ -1817,12 +1749,8 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
                             visualTransformation = PasswordVisualTransformation(),
                             singleLine = true, modifier = Modifier.weight(1f))
                     }
-                    // **Éprouver les identifiants tout de suite.**
-                    //
-                    // Sans ce bouton, un mot de passe faux ne se découvrait
-                    // qu'au premier contact, au milieu d'un passage. Il est
-                    // collé aux champs qu'il vérifie : c'est là qu'on se pose
-                    // la question.
+                    // **Test credentials right away**, next to the fields.
+                    // Otherwise a wrong password only showed up mid-pass.
                     Spacer(Modifier.height(6.dp))
                     OutlinedButton(
                         onClick = { vm.testeQrz() },
@@ -1847,22 +1775,16 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
                             modifier = Modifier.padding(top = 4.dp))
                     }
 
-                    // Le bloc « nourrir le clavier » a quitté cette carte pour
-                    // « Carnet express » : il remplit la mémoire du clavier
-                    // d'indicatifs, pas le carnet. Il était ici parce que la clé
-                    // Wavelog s'y saisit — une raison de plomberie, pas d'usage.
-                    // Le bloc « profils de station » qui vivait ici a rejoint
-                    // celui du dépôt, plus haut : relever les profils et en
-                    // choisir un sont le même geste, et les séparer obligeait à
-                    // faire la navette entre deux cartes pour une seule idée.
+                    // "Feed the keyboard" moved to the quick-log card (it fills
+                    // the callsign memory, not the log). Station profiles moved
+                    // up next to upload: fetching and choosing are one gesture.
                 }
             }
         }
 
 
-        // LoTW : un téléchargement complet, à la demande. Les carrés confirmés
-        // par un correspondant sont ceux qui comptent pour un diplôme ; c'est
-        // une autre information que « déjà travaillé ».
+        // LoTW: full download on demand. Confirmed squares are what count for
+        // awards, which is not the same as "already worked".
         item {
             Surface(color = SpaceCard, shape = RoundedCornerShape(16.dp),
                 modifier = Modifier.fillMaxWidth()) {
@@ -1906,10 +1828,8 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
         }
         if (sec == "cat") {
         item { SectionHeader(t("cat_control")) }
-        // L'interrupteur maître en tête de section, et non tout en bas après
-        // le banc d'essai comme auparavant : c'est lui qui commande tout le
-        // reste, et le chercher sous trois écrans de réglages n'avait aucun
-        // sens pour qui ouvre la page afin de brancher son poste.
+        // Master switch at the top of the section: it controls everything
+        // else, and used to be buried three screens down below the test bench.
         item {
             Surface(color = SpaceCard, shape = RoundedCornerShape(16.dp),
                 modifier = Modifier.fillMaxWidth()) {
@@ -1930,9 +1850,8 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
                     Text(t("rig"), color = TextHi, fontWeight = FontWeight.Bold)
                     Text(t("rig_desc"),
                         color = TextLo, fontSize = 11.sp, modifier = Modifier.padding(bottom = 6.dp))
-                    // Seuls les postes réellement pilotés. Les entrées « à
-                    // venir » occupaient trois lignes sans rien offrir, sur un
-                    // écran qu'on ouvre en général trois minutes avant l'AOS.
+                    // Only radios actually supported; no "coming soon" entries
+                    // on a screen usually opened three minutes before AOS.
                     val rigs = listOf(
                         Triple("IC9700", "Icom IC-9700", true),
                         Triple("FT817x2", "2× Yaesu FT-817", true),
@@ -1995,14 +1914,10 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
                         Text(t("ft817_no_adapters"), color = TextLo, fontSize = 12.sp)
                     }
 
-                    // Le raccourci, en tête et toujours visible.
-                    //
-                    // L'enchaînement correct comptait quatre gestes dans le bon
-                    // ordre — rafraîchir, autoriser, détecter, connecter — et
-                    // l'ordre importait sans que rien ne le dise : activer le
-                    // CAT avant de détecter laissait les ports accrochés à
-                    // l'ancienne assignation. Un opérateur qui a trois minutes
-                    // avant l'AOS n'a pas à connaître cet ordre.
+                    // One-tap shortcut, always visible. The manual sequence is
+                    // refresh, authorise, detect, connect, and order matters:
+                    // enabling CAT before detecting left ports bound to the old
+                    // assignment.
                     Button(onClick = { vm.prepareFt817() },
                         colors = ButtonDefaults.buttonColors(containerColor = Cyan),
                         modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
@@ -2012,17 +1927,12 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
                     Text(t("ft817_prepare_desc"), color = TextLo, fontSize = 11.sp,
                         modifier = Modifier.padding(bottom = 6.dp))
 
-                    // Le témoin de liaison, ici et pas ailleurs.
+                    // Link indicator here, where "is it tracking?" is asked
+                    // while plugging in.
                     //
-                    // La question « est-ce que ça suit ? » se pose sur cet
-                    // écran, au moment où l'on branche. Elle ne trouvait sa
-                    // réponse qu'à deux écrans de là, sur une page de passage,
-                    // en regardant si un curseur bougeait — et il fallait
-                    // revenir ici quand la réponse était non.
-                    //
-                    // La veille ne tourne que tant que cette section est
-                    // affichée : `DisposableEffect` l'arrête en sortant, pour
-                    // que le fil série reste au Doppler pendant un passage.
+                    // Polling only runs while this section is shown:
+                    // `DisposableEffect` stops it on exit so the serial line
+                    // stays free for Doppler during a pass.
                     androidx.compose.runtime.DisposableEffect(ui.catConnected) {
                         vm.veilleCat(true)
                         onDispose { vm.veilleCat(false) }
@@ -2066,17 +1976,15 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
                                     when {
                                         !dev.hasPermission -> t("ft817_serial_locked")
                                         dev.serial != null -> dev.serial!!
-                                        // Beaucoup de puces n'ont pas de numéro
-                                        // de série — un PL2303TA, par exemple.
-                                        // On le dit au lieu de laisser une ligne
-                                        // vide qui passerait pour une panne.
+                                        // Many chips (e.g. PL2303TA) have no
+                                        // serial; say so rather than show a
+                                        // blank line that looks like a fault.
                                         else -> t("ft817_no_serial") + " · " + dev.deviceName
                                     },
                                     color = TextLo, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
-                                // La fréquence lue au bout du câble : deux
-                                // PL2303 identiques ne se distinguent par
-                                // aucune étiquette, mais les postes au bout
-                                // sont sur des bandes différentes.
+                                // Frequency read through the cable: two
+                                // identical PL2303s are indistinguishable,
+                                // but the radios are on different bands.
                                 Text(
                                     when {
                                         dev.freqLueHz != null ->
@@ -2087,11 +1995,9 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
                                     color = if (dev.freqLueHz != null) Aurora else TextLo,
                                     fontSize = 13.sp, fontWeight = FontWeight.Bold,
                                     fontFamily = FontFamily.Monospace)
-                                // Les pastilles dépendent de la permission, et
-                                // non du numéro de série. Les conditionner au
-                                // numéro privait d'affectation tout câble qui
-                                // n'en a pas : il apparaissait dans la liste et
-                                // restait inutilisable.
+                                // Chips depend on permission, not on the serial:
+                                // gating on the serial made cables without one
+                                // listed but unassignable.
                                 if (dev.hasPermission) {
                                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp),
                                         modifier = Modifier.padding(top = 4.dp)) {
@@ -2125,9 +2031,8 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
                                 checkedTrackColor = Color(0xFF7FE3A0)))
                     }
 
-                    // Le liseré d'émission et son coût : le sondage partage
-                    // la liaison avec le Doppler. Le compromis se règle, il ne
-                    // se devine pas.
+                    // TX indicator and its cost: polling shares the link with
+                    // Doppler, so the trade-off is a setting.
                     Spacer(Modifier.height(12.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
@@ -2165,9 +2070,9 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
                     Text(t("cat_hold_desc"), color = TextLo, fontSize = 11.sp,
                         modifier = Modifier.padding(bottom = 6.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        // 0,25 s en plus : sur un IC-9700, la montée n'est plus
-                        // écrite tant que la molette bouge, donc reprendre vite
-                        // ne coûte rien — et l'attente se sent au trafic.
+                        // 0.25 s steps: on an IC-9700 the uplink is not written
+                        // while the dial moves, so resuming fast costs nothing,
+                        // and the delay is felt when operating.
                         listOf(2_000 to "2 s", 1_000 to "1 s", 500 to "0,5 s",
                                250 to "0,25 s").forEach { (ms, lib) ->
                             FilterChip(
@@ -2206,13 +2111,9 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
                 Column(Modifier.padding(16.dp)) {
                     var bancDeplie by rememberSaveable { mutableStateOf(false) }
                     if (ui.catEnabled) {
-                        // Le banc d'essai se replie.
-                        //
-                        // Poste simulé, journal des trames : on y va une fois,
-                        // quand quelque chose ne marche pas. Déplié en
-                        // permanence, il repoussait vers le bas la connexion
-                        // et les réglages de passage, qui eux servent à chaque
-                        // sortie.
+                        // The test bench (simulated radio, frame log) folds
+                        // away: used only when something breaks, it pushed the
+                        // everyday settings down.
                         Spacer(Modifier.height(10.dp))
                         Row(Modifier.fillMaxWidth().clickable { bancDeplie = !bancDeplie },
                             verticalAlignment = Alignment.CenterVertically) {
@@ -2224,7 +2125,7 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
                             Text(t("cat_bench"), color = Amber, fontSize = 13.sp)
                         }
                         if (bancDeplie) {
-                            // --- Banc d'essai : poste simulé et journal des trames ---
+                            // --- Test bench: simulated radio and frame log ---
                             Spacer(Modifier.height(10.dp))
                             Text(t("cat_bench"), color = Amber, fontSize = 13.sp)
                             Text(t("cat_bench_desc"), color = TextLo, fontSize = 11.sp)
@@ -2267,8 +2168,8 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
                                             .background(SpaceBg, RoundedCornerShape(8.dp))
                                             .padding(8.dp)
                                     ) {
-                                        // Le plus récent en haut : au banc on regarde
-                                        // ce qui vient de partir, pas l'historique.
+                                        // Newest first: at the bench you look at
+                                        // what was just sent.
                                         trames.asReversed().forEach { trame ->
                                             Text(
                                                 (if (trame.out) "▶ " else "◀ ") +
@@ -2317,7 +2218,7 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
                             Switch(checked = ui.catTestSendAlways, onCheckedChange = vm::setCatTestSendAlways,
                                 colors = SwitchDefaults.colors(checkedTrackColor = Amber))
                         }
-                        // Qui tient la molette de réception pendant le passage.
+                        // Who owns the RX dial during the pass.
                         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 6.dp)) {
                             Column(Modifier.weight(1f)) {
                                 Text(t("cat_rx_doppler"), color = TextHi, fontSize = 13.sp)
@@ -2327,15 +2228,9 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
                                 colors = SwitchDefaults.colors(checkedTrackColor = Cyan))
                         }
                         // ------------------------------------------------
-                        // Ce qui suit ne concerne QUE les postes Icom en CI-V.
-                        //
-                        // Le sélecteur de poste existait déjà, et le bloc des
-                        // deux FT-817 était bien conditionné — mais pas
-                        // celui-ci. Adresse CI-V, débit et choix de
-                        // l'adaptateur s'affichaient donc même en duplex Yaesu,
-                        // où ils ne veulent rien dire : c'est de là que venait
-                        // le mélange des deux postes dans un même écran, avec
-                        // deux sections « adaptateur USB » concurrentes.
+                        // What follows is for Icom CI-V radios ONLY. Left
+                        // unconditioned, it showed in Yaesu dual mode too, with
+                        // two competing "USB adapter" sections.
                         if (ui.rigModel != "FT817x2") {
                             // CI-V address + baud.
                             Spacer(Modifier.height(8.dp))
@@ -2363,10 +2258,9 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
                                             selectedContainerColor = Cyan.copy(alpha = 0.25f), selectedLabelColor = Cyan))
                                 }
                             }
-                            // Quel adaptateur est le poste. Le premier reconnu ne
-                            // l'est pas toujours : une clé SDR branchée en même
-                            // temps se présente elle aussi comme un port série, et
-                            // la connexion dépendait alors de l'ordre de branchement.
+                            // Which adapter is the radio. Not always the first
+                            // found: an SDR dongle also shows up as a serial port,
+                            // and the link then depended on plug-in order.
                             Spacer(Modifier.height(10.dp))
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(t("cat_usb_device"), color = TextHi, fontSize = 13.sp,
@@ -2398,11 +2292,9 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
                             }
                             Text(t("cat_usb_hint"), color = TextLo, fontSize = 11.sp)
                             Text(t("cat_usb_port_hint"), color = TextLo, fontSize = 11.sp)
-                            // Le balayage. L'opérateur ne sait pas — et n'a aucune
-                            // raison de savoir — lequel des deux ports du poste
-                            // porte le CI-V : rien ne le dit ni sur l'appareil ni
-                            // dans son manuel. On essaie donc le voisin avant de
-                            // déclarer forfait, et on retient celui qui a répondu.
+                            // Port scan. Nothing on the radio or in its manual says
+                            // which of its two ports carries CI-V, so try the other
+                            // one before giving up and remember whichever answered.
                             Row(verticalAlignment = Alignment.CenterVertically,
                                 modifier = Modifier.padding(top = 6.dp)) {
                                 Column(Modifier.weight(1f)) {
@@ -2412,9 +2304,8 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
                                 Switch(checked = ui.civUsbAuto, onCheckedChange = vm::setCivUsbAuto,
                                     colors = SwitchDefaults.colors(checkedTrackColor = Cyan))
                             }
-                            // Le compte rendu de la dernière tentative. Sans lui il
-                            // n'y a rien à répondre à « je n'arrive pas à me
-                            // connecter » ; avec lui, la panne se lit.
+                            // Report of the last attempt: without it, "I can't
+                            // connect" has no answer; with it, the fault is readable.
                             if (ui.catDiag.isNotEmpty()) {
                                 Spacer(Modifier.height(10.dp))
                                 Text(t("cat_diag_title"), color = TextHi, fontSize = 13.sp,
@@ -2430,11 +2321,7 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
                                 }
                             }
                             Text(t("cat_usb_port_hint"), color = TextLo, fontSize = 11.sp)
-                            // Le balayage. L'opérateur ne sait pas — et n'a aucune
-                            // raison de savoir — lequel des deux ports du poste
-                            // porte le CI-V : rien ne le dit ni sur l'appareil ni
-                            // dans son manuel. On essaie donc le voisin avant de
-                            // déclarer forfait, et on retient celui qui a répondu.
+                            // Port scan (same as above).
                             Row(verticalAlignment = Alignment.CenterVertically,
                                 modifier = Modifier.padding(top = 6.dp)) {
                                 Column(Modifier.weight(1f)) {
@@ -2444,9 +2331,7 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
                                 Switch(checked = ui.civUsbAuto, onCheckedChange = vm::setCivUsbAuto,
                                     colors = SwitchDefaults.colors(checkedTrackColor = Cyan))
                             }
-                            // Le compte rendu de la dernière tentative. Sans lui il
-                            // n'y a rien à répondre à « je n'arrive pas à me
-                            // connecter » ; avec lui, la panne se lit.
+                            // Report of the last attempt (same as above).
                             if (ui.catDiag.isNotEmpty()) {
                                 Spacer(Modifier.height(10.dp))
                                 Text(t("cat_diag_title"), color = TextHi, fontSize = 13.sp,
@@ -2496,10 +2381,10 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
                             }
                         }
 
-                        // ---- Banc d'essai ----
-                        // Le poste simulé n'est pas une démonstration : c'est la
-                        // seule façon, sans radio branchée, de vérifier que le
-                        // poste a compris et pas seulement accusé réception.
+                        // ---- Test bench ----
+                        // The simulated radio is not a demo: without a radio
+                        // attached, it is the only way to check that commands
+                        // were understood, not just acknowledged.
                         Spacer(Modifier.height(14.dp))
                         HorizontalDivider(color = Color(0xFF2A3647))
                         Spacer(Modifier.height(10.dp))
@@ -2525,7 +2410,7 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
                             }
                         }
 
-                        // ---- Journal des trames ----
+                        // ---- Frame log ----
                         Spacer(Modifier.height(12.dp))
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Column(Modifier.weight(1f)) {
@@ -2547,8 +2432,7 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
                             } else {
                                 val hms = remember { SimpleDateFormat("HH:mm:ss.SSS", Locale.US) }
                                 Column(Modifier.padding(top = 4.dp)) {
-                                    // Les plus récentes en haut : c'est ce que l'on
-                                    // vient de faire que l'on cherche.
+                                    // Newest first.
                                     entries.asReversed().take(60).forEach { e ->
                                         Text(
                                             (if (e.out) "▶ " else "◀ ") + hms.format(Date(e.tMs)) +
@@ -2571,26 +2455,15 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
 
         }
 
-        // --- Convertisseurs (LNB / transverter) ---
-        // Une page à part, et pas un repli de la page CAT : un convertisseur
-        // sert autant à la clé SDR qu'au poste, et sur une station QO-100 il
-        // arrive qu'aucune radio ne soit branchée du tout.
+        // --- Converters (LNB / transverter) ---
+        // A page of its own, not part of CAT: a converter serves the SDR dongle
+        // as much as the radio, and a QO-100 station may have no radio at all.
         if (sec == "conv") {
-            // **Un seul endroit règle les convertisseurs : la chaîne de
-            // station, dans l'écran QO-100.**
-            //
-            // Cet écran les réglait aussi, et les deux s'écrasaient l'un
-            // l'autre : la chaîne recopie son oscillateur dans les réglages à
-            // chaque application, mais l'inverse n'existait pas. Une valeur
-            // corrigée ici disparaissait donc au prochain changement de
-            // chaîne, sans un mot — et l'opérateur voyait deux nombres
-            // différents pour le même LNB selon l'écran qu'il ouvrait.
-            //
-            // Deux règles qui répondent à la même question finissent par
-            // diverger. On retire donc celle-ci plutôt que de la garder à
-            // côté, et cet écran ne fait plus que montrer ce que la chaîne
-            // applique. Il reste utile pour cela : on vient y vérifier sans
-            // risquer de modifier.
+            // **Converters are set in one place only: the station chain in
+            // the QO-100 screen.** This screen used to set them too, and the
+            // two overwrote each other: the chain copies its LO into settings
+            // on every apply, never the reverse, so a value fixed here silently
+            // vanished at the next chain change. This screen is now read-only.
             item { SectionHeader(t("conv_title")) }
             item {
                 Surface(color = SpaceCard, shape = RoundedCornerShape(16.dp),
@@ -2619,9 +2492,8 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
         item {
             val ctxBk = LocalContext.current
             val scope = rememberCoroutineScope()
-            // Les contacts retenus pour le prochain envoi, désignés par leur
-            // heure : c'est la seule chose qui ne bouge pas quand le carnet
-            // change sous les doigts.
+            // Contacts selected for the next send, keyed by time: the only thing
+            // that stays stable while the log changes underneath.
             var choisis by remember { mutableStateOf(emptySet<Long>()) }
             // File picker for import.
             val importLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
@@ -2649,12 +2521,11 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
                     }
                 }
             }
-            // --- Contacts vers l'autre téléphone ---
+            // --- Contacts to the other phone ---
             //
-            // Le lot voisine avec la sauvegarde de configuration parce que les
-            // deux voyagent par fichier, mais ils ne font pas la même chose :
-            // la sauvegarde **remplace**, le lot **fond**. C'est pourquoi la
-            // règle de fusion est dite ici, à l'endroit où l'on appuie.
+            // Sits next to config backup because both travel as files, but the
+            // backup **replaces** while the batch **merges**; hence the merge
+            // rule is stated right where you tap.
             val lotEnvoi = androidx.activity.compose.rememberLauncherForActivityResult(
                 androidx.activity.result.contract.ActivityResultContracts.CreateDocument("application/json")
             ) { uri ->
@@ -2693,9 +2564,7 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
                         }
                     }
 
-                    // Seuls les contacts nommés se transfèrent : une entrée sans
-                    // indicatif n'est pas un contact, et n'a rien à faire dans
-                    // le carnet d'en face.
+                    // Only entries with a callsign are transferred.
                     val transferables = remember(ui.log.size) {
                         ui.log.filter { it.callsign.isNotBlank() }.sortedByDescending { it.timeMs }
                     }
@@ -2794,7 +2663,7 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
             }
         }
 
-        // --- Fiches PDF ---
+        // --- PDF sheets ---
         }
         if (sec == "pdf") {
         item { SectionHeader(t("pdf_sheets")) }
@@ -2834,7 +2703,7 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
             }
         }
 
-        // --- À propos ---
+        // --- About ---
         }
         if (sec == "about") {
         item { SectionHeader(t("about")) }
@@ -3007,13 +2876,11 @@ private fun SkedCalcDialog(vm: MainViewModel, catnum: Int, onDismiss: () -> Unit
 }
 
 /**
- * L'état du suivi de position, en clair.
+ * Location tracking state, in plain words.
  *
- * Deux correctifs successifs n'ont pas réglé le défaut du premier démarrage, et
- * à chaque fois on a diagnostiqué à l'aveugle depuis l'autre bout d'un fil.
- * Cette carte met fin aux suppositions : le compteur de points est le fait
- * décisif — s'il reste à zéro, aucune position n'est jamais arrivée, et la
- * dernière ligne d'état dit pourquoi.
+ * Built after two blind fixes failed to cure a first-launch fault. The fix
+ * count is the key fact: if it stays at zero, no position ever arrived, and
+ * the last status line says why.
  */
 @Composable
 private fun GpsEtatCard(ui: UiState) {
@@ -3046,12 +2913,11 @@ private fun GpsLigne(cle: String, valeur: String) {
 }
 
 /**
- * Le carnet express : le clavier et la mémoire des correspondants.
+ * Quick log: the keyboard and the memory of worked stations.
  *
- * L'import ADIF est ici et non dans la sauvegarde, parce qu'il ne restaure
- * rien : il alimente la prédiction. Ce qui entre n'est pas un carnet, c'est un
- * index — indicatif, carré, date, satellite — et le carnet de référence reste
- * celui de l'appareil.
+ * ADIF import lives here, not in backup, because it restores nothing: it feeds
+ * prediction. What comes in is an index (callsign, square, date, satellite),
+ * not a log; the device log stays the reference.
  */
 @Composable
 private fun CarnetExpressCard(ui: UiState, vm: MainViewModel) {
@@ -3079,15 +2945,8 @@ private fun CarnetExpressCard(ui: UiState, vm: MainViewModel) {
         modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp)) {
             Text(t("express_title"), color = TextHi, fontWeight = FontWeight.Bold)
-            // La base interne : le carnet personnel d'Olivier, embarqué. Elle
-            // ne se montre — et ne se charge — que si le mot ADIF est dans le
-            // champ Extensions : un carnet personnel ne se publie pas
-            // d'office, et rien ici ne dit quel mot ouvre quoi. Un seul
-            // chemin d'ouverture, le trousseau ; l'ancien champ de code local
-            // faisait double emploi avec lui.
-            // L'interrupteur de la base embarquée vivait ici. La base a été
-            // retirée : chacun rapatrie désormais son propre carnet, plus à
-            // jour et plus pertinent que celui d'un autre opérateur.
+            // The bundled log switch used to live here. The bundled base was
+            // removed: everyone now pulls in their own log.
             Text(t("express_desc"), color = TextLo, fontSize = 11.sp,
                 modifier = Modifier.padding(top = 4.dp, bottom = 12.dp))
 
@@ -3108,9 +2967,8 @@ private fun CarnetExpressCard(ui: UiState, vm: MainViewModel) {
                 }
             }
 
-            // La molette et le boîtier à trois touches ont quitté cette carte
-            // pour leur propre section : enterrés ici, personne ne les
-            // trouvait — et c'est bien ce qui est arrivé.
+            // The dial and three-key box have their own section: buried here,
+            // nobody found them.
 
             SettingSwitch(t("kb_hand"), t("kb_hand_desc"), ui.express.mainGauche) {
                 vm.setClavierMainGauche(it)
@@ -3127,13 +2985,9 @@ private fun CarnetExpressCard(ui: UiState, vm: MainViewModel) {
                 choix.launch(arrayOf("text/plain", "application/octet-stream", "*/*"))
             }) { Text(t("express_import")) }
 
-            // **Purger ce qui a été rapatrié.**
-            //
-            // Un index importé finit par contenir des carrés faux ou des
-            // indicatifs d'une autre époque, et rien ne permettait de repartir
-            // propre. La purge n'efface que l'index : les contacts du carnet,
-            // eux, restent — ce sont les seuls que l'opérateur ne peut pas
-            // retrouver ailleurs.
+            // **Purge what was imported.** An index gathers wrong squares and
+            // stale callsigns. The purge clears only the index; log contacts
+            // stay, as they are the only thing that cannot be fetched again.
             var confirmePurge by remember { mutableStateOf(false) }
             if (ui.express.memoire.isNotEmpty()) {
                 TextButton(onClick = { confirmePurge = true }) {
@@ -3162,18 +3016,11 @@ private fun CarnetExpressCard(ui: UiState, vm: MainViewModel) {
                 Text(it, color = Aurora, fontSize = 12.sp)
             }
 
-            // **Le compte-rendu s'affiche là où l'on a appuyé.**
-            //
-            // Le message de la moisson atterrit dans `carnet.depot`, qui n'était
-            // affiché que dans la carte du carnet en ligne. En déplaçant le
-            // bouton ici, je l'ai séparé de son retour : l'opérateur appuyait et
-            // ne savait ni si la connexion avait abouti, ni ce qu'il avait
-            // gagné.
-            //
-            // On guette donc la fin de l'opération — `depotEnCours` qui retombe
-            // — et on montre le résultat dans une boîte. Une boîte plutôt qu'une
-            // ligne : le compte-rendu porte quatre nombres, et une ligne de plus
-            // sous un bouton passe inaperçue.
+            // **The report shows where you tapped.** The harvest message lands
+            // in `carnet.depot`, which is only displayed in the online-log card,
+            // so moving the button here cut it off from its feedback. We watch
+            // for `depotEnCours` falling back and show the result in a dialog:
+            // it carries four numbers, and one more line would go unnoticed.
             var compteRendu by remember { mutableStateOf<String?>(null) }
             var moissonnait by remember { mutableStateOf(false) }
             LaunchedEffect(ui.carnet.depotEnCours) {
@@ -3195,27 +3042,16 @@ private fun CarnetExpressCard(ui: UiState, vm: MainViewModel) {
                     })
             }
 
-            // **Nourrir le clavier a rejoint le clavier.**
-            //
-            // Ce bloc vivait dans la carte du carnet en ligne, parce que c'est
-            // là qu'on saisit la clé Wavelog. Mais il ne remplit pas le carnet :
-            // il remplit la mémoire d'indicatifs du clavier, juste au-dessus.
-            // On le cherchait donc à l'endroit où il agit, et il était rangé à
-            // l'endroit d'où il tire ses données.
-                    // Nourrir le clavier depuis le carnet en ligne.
-            //
-            // La mémoire du clavier ne connaissait que le carnet local
-            // et ce qu'on avait importé à la main : un téléphone neuf,
-            // ou le second téléphone, partait donc sans rien. Or
-            // Wavelog sait déjà tout — c'est le carnet de référence,
-            // alimenté par les deux appareils.
+            // **Feeding the keyboard from the online log lives with the
+            // keyboard**, not with the Wavelog key: it fills the callsign
+            // memory above, not the log. Without it a new or second phone
+            // started empty, while Wavelog, fed by both devices, knows it all.
             Spacer(Modifier.height(10.dp))
             Text(t("carnet_moisson_desc"), color = TextLo, fontSize = 11.sp,
                 modifier = Modifier.padding(bottom = 4.dp))
 
-            // Ce qu'on rapatrie. Satellite par défaut : c'est ce à quoi
-            // sert le clavier, et un correspondant croisé une fois en
-            // quarante mètres n'a rien à faire dans ses suggestions.
+            // What to import. Satellite by default: a station worked once on
+            // 40 m has no place in the keyboard's suggestions.
             Text(t("moisson_filtre"), color = TextHi, fontSize = 12.sp)
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp),
                 modifier = Modifier.padding(vertical = 4.dp)) {
@@ -3226,19 +3062,15 @@ private fun CarnetExpressCard(ui: UiState, vm: MainViewModel) {
                         label = { Text(t("moisson_$f"), fontSize = 11.sp) })
                 }
             }
-            // L'asymétrie doit être dite : sans elle, l'opérateur
-            // croira à une panne devant une attente qu'il n'a pas
-            // demandée.
+            // Warn that non-satellite imports are slow, or the wait looks
+            // like a fault.
             if (ui.carnet.filtre != fr.f4ioz.satcombo.domain.FiltreMoisson.SAT) {
                 Text(t("moisson_lourd"), color = Amber, fontSize = 10.sp,
                     modifier = Modifier.padding(bottom = 4.dp))
             }
-            // **Dire pourquoi le bouton est éteint.**
-            //
-            // Sans adresse ni clé Wavelog, il était simplement grisé : rien
-            // n'indiquait où aller les saisir, et le réglage se trouve dans une
-            // autre section. Un bouton inerte sans explication laisse croire à
-            // une panne.
+            // **Say why the button is disabled.** Without a Wavelog URL and
+            // key it was just greyed out, with no hint that the setting lives
+            // in another section. A dead button looks like a fault.
             if (ui.carnet.url.isBlank() || ui.carnet.cle.isBlank()) {
                 Surface(color = Amber.copy(alpha = 0.13f),
                     shape = RoundedCornerShape(10.dp),
@@ -3247,12 +3079,8 @@ private fun CarnetExpressCard(ui: UiState, vm: MainViewModel) {
                         modifier = Modifier.padding(10.dp))
                 }
             }
-            // **Dire que le carnet n'est pas réglé, plutôt qu'un bouton mort.**
-            //
-            // Le bouton se grisait quand l'adresse ou la clé manquaient, sans
-            // expliquer pourquoi ni où les saisir. Un bouton inerte ressemble à
-            // une panne, alors qu'il s'agit d'un réglage à faire deux écrans
-            // plus loin.
+            // **Say the online log is not set up, rather than show a dead
+            // button** (see `carnetPret` below).
             var choixProfils by remember { mutableStateOf(false) }
             val coches = remember { mutableStateListOf<String>() }
             if (choixProfils) {
@@ -3260,11 +3088,9 @@ private fun CarnetExpressCard(ui: UiState, vm: MainViewModel) {
                     onDismissRequest = { choixProfils = false },
                     title = { Text(t("moisson_choix_titre")) },
                     text = {
-                        // **La liste défile.** Une station peut compter des
-                        // dizaines de profils ; sans défilement, les derniers
-                        // sortaient de l'écran et le bouton de validation avec
-                        // eux. La hauteur est bornée pour que la boîte ne
-                        // mange pas tout l'écran.
+                        // **The list scrolls.** With dozens of profiles the last
+                        // ones, and the OK button, fell off screen. Height is
+                        // capped so the dialog does not take the whole screen.
                         Column(Modifier.heightIn(max = 380.dp)
                             .verticalScroll(rememberScrollState())) {
                             Text(t("moisson_choix_desc"), color = TextLo, fontSize = 12.sp,
@@ -3297,9 +3123,8 @@ private fun CarnetExpressCard(ui: UiState, vm: MainViewModel) {
                                         color = TextHi, fontSize = 13.sp)
                                 }
                             }
-                            // « Tout » n'est pas une case de plus : c'est un
-                            // raccourci qui coche les autres, pour qu'on voie
-                            // toujours ce qui part réellement.
+                            // "All" is not another checkbox but a shortcut that
+                            // ticks the others, so you always see what is sent.
                             if (ui.carnet.profilsListe.isNotEmpty()) {
                                 TextButton(onClick = {
                                     coches.clear()
@@ -3335,28 +3160,18 @@ private fun CarnetExpressCard(ui: UiState, vm: MainViewModel) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 OutlinedButton(
                     onClick = {
-                        // **Choisir la source avant d'aller la chercher.**
-                        //
-                        // Une station a souvent plusieurs profils — portable,
-                        // fixe, indicatif de club — et rapatrier les quatre
-                        // quand on n'en veut qu'un remplit le clavier
-                        // d'indicatifs travaillés dans un autre cadre. Si un
-                        // seul profil est connu, la question ne se pose pas et
-                        // l'on part directement.
-                        // **Le clavier va chercher les profils lui-même.**
-                        //
-                        // Il fallait passer par le journal, relever les
-                        // profils, puis revenir ici : deux écrans et un ordre
-                        // à deviner pour une seule intention. Si la liste est
-                        // vide, on la relève à l'ouverture de la boîte.
+                        // **Choose the source before fetching.** A station often
+                        // has several profiles (portable, home, club call);
+                        // importing all fills the keyboard with calls worked
+                        // elsewhere. If the profile list is empty, it is
+                        // fetched when the dialog opens.
                         choixProfils = true
                         if (ui.carnet.profilsListe.isEmpty()) vm.relevProfils()
                     },
                     enabled = !ui.carnet.depotEnCours &&
                         ui.carnet.url.isNotBlank() && ui.carnet.cle.isNotBlank(),
                     modifier = Modifier.weight(1f)) {
-                    // L'attente se voit : une moisson dure plusieurs secondes,
-                    // et un bouton qui ne réagit pas ressemble à une panne.
+                    // Show progress: a harvest takes several seconds.
                     if (ui.carnet.depotEnCours) {
                         CircularProgressIndicator(color = Cyan,
                             strokeWidth = 2.dp, modifier = Modifier.size(16.dp))
@@ -3364,8 +3179,7 @@ private fun CarnetExpressCard(ui: UiState, vm: MainViewModel) {
                     }
                     Text(t("carnet_moisson_bouton"), color = Cyan, fontSize = 12.sp)
                 }
-                // Repartir de zéro : la sortie de secours quand
-                // l'index paraît incomplet.
+                // Start over: the way out when the index looks incomplete.
                 TextButton(onClick = { vm.oublieMoisson() }) {
                     Text("↺", color = TextLo, fontSize = 16.sp)
                 }
@@ -3375,11 +3189,9 @@ private fun CarnetExpressCard(ui: UiState, vm: MainViewModel) {
 }
 
 /**
- * Les trois aides à l'accord fin.
- *
- * Trois interrupteurs indépendants et non un choix unique : elles ne se
- * remplacent pas. La loupe montre, le vernier déplace, le calage décide — on
- * peut vouloir voir sans pousser, ou pousser sans voir quand l'écran est court.
+ * The three fine-tuning aids, as independent switches: they do not replace
+ * each other. The magnifier shows, the vernier moves, voice lock decides; you
+ * may want to see without pushing, or push without seeing on a small screen.
  */
 @Composable
 private fun AccordFinCard(ui: UiState, vm: MainViewModel) {
@@ -3451,7 +3263,7 @@ private fun SettingSwitch(titre: String, desc: String, coche: Boolean, sur: (Boo
     }
 }
 
-/** Une ligne du récapitulatif : intitulé à gauche, valeur à droite. */
+/** One summary row: label on the left, value on the right. */
 @Composable
 private fun LigneRecap(titre: String, valeur: String) {
     Row(Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
@@ -3580,9 +3392,9 @@ private fun RecordingsSection(ui: UiState, vm: MainViewModel) {
                 Text(t("rec_none"), color = TextLo, fontSize = 13.sp, modifier = Modifier.padding(14.dp))
             }
         }
-        // Le lecteur : un seul pour toute la liste, l'ouverture d'un fichier
-        // ferme le précédent. Détruit avec l'écran.
-        var joue by remember { mutableStateOf("") }          // chemin du fichier ouvert
+        // One player for the whole list: opening a file closes the previous
+        // one. Released with the screen.
+        var joue by remember { mutableStateOf("") }          // path of the open file
         var enLecture by remember { mutableStateOf(false) }
         var positionMs by remember { mutableStateOf(0) }
         var dureeMs by remember { mutableStateOf(0) }
@@ -3604,17 +3416,16 @@ private fun RecordingsSection(ui: UiState, vm: MainViewModel) {
                     joue = chemin
                     dureeMs = lecteur.duration
                 }
-                // Deux secondes d'avance sur le marqueur : le tampon date le
-                // début de l'échange, et l'on veut entendre l'appel, pas
-                // arriver dessus.
+                // Start two seconds before the marker: it stamps the start of
+                // the exchange, and you want to hear the call, not land on it.
                 lecteur.seekTo((versMs - 2000).coerceAtLeast(0))
                 lecteur.start()
                 enLecture = true
             }
         }
 
-        // Un seul lanceur pour toute la liste : le fichier à écrire voyage avec
-        // l'appel, pas avec le lanceur.
+        // One launcher for the whole list: the file to write travels with the
+        // call, not the launcher.
         val enregistreRec = rememberEnregistrer()
         files.forEach { f ->
             val sidecar = java.io.File(f.parentFile, f.name.removeSuffix(".mp3") + ".txt")
@@ -3640,9 +3451,8 @@ private fun RecordingsSection(ui: UiState, vm: MainViewModel) {
                                 Text(t("rec_markers"), color = Amber, fontSize = 10.sp,
                                     fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
                                 markerLines.take(12).forEach { line ->
-                                    // « MM:SS (…) » en tête de ligne : c'est la
-                                    // position dans le fichier, donc la cible
-                                    // du saut.
+                                    // Leading "MM:SS (…)" is the offset in the
+                                    // file, hence the seek target.
                                     val versMs = Regex("^(\\d+):(\\d\\d)")
                                         .find(line.trim())?.let {
                                             (it.groupValues[1].toInt() * 60 +
@@ -3661,7 +3471,7 @@ private fun RecordingsSection(ui: UiState, vm: MainViewModel) {
                         }
                     }
                     Spacer(Modifier.height(4.dp))
-                    // La barre de lecture, seulement sous le fichier ouvert.
+                    // Playback bar, only under the open file.
                     if (joue == f.path) {
                         Slider(
                             value = positionMs.toFloat(),
@@ -3763,9 +3573,8 @@ private fun DocsContent() {
                 "doc_notif" to "🔔", "doc_skeds" to "🤝", "doc_grid" to "▦",
                 "doc_pdf" to "🖨", "doc_sstv" to "🖼", "doc_sdr" to "📡"
             ).forEach { (key, emoji) -> add(Triple(emoji, t(key + "_t"), t(key + "_b"))) }
-            // Le câblage audio est la question qui revient le plus souvent : elle
-            // arrive juste après les chapitres SSTV et SDR, là où l'on se demande
-            // par où faire entrer le son.
+            // Audio wiring is the most frequent question: it comes right after
+            // the SSTV and SDR chapters, where you wonder how to get sound in.
             add(Triple("🎚", t("doc_wiring_title"), wiring))
             add(Triple("💾", t("doc_backup_t"), t("doc_backup_b")))
         }
@@ -3787,27 +3596,25 @@ private fun DocsContent() {
 }
 
 // ----------------------------------------------------------------------
-// Convertisseurs : une seule carte, deux instances.
+// Converters: one card, two instances.
 //
-// La descente et la montée se règlent exactement pareil — un oscillateur,
-// un sens, une plage — et les écrire deux fois inviterait la divergence.
-// Seuls diffèrent le titre, le chiffre d'essai affiché en bas, et les deux
-// interrupteurs de routage, qui n'ont de sens qu'en réception.
+// Downlink and uplink are set the same way (LO, direction, range); writing it
+// twice invites divergence. Only the title, the sample figure at the bottom
+// and the two routing switches (RX only) differ.
 // ----------------------------------------------------------------------
 
-/** Un nombre de hertz en mégahertz lisibles, sans zéros inutiles. */
+/** Hertz as readable megahertz, without trailing zeros. */
 private fun convMhz(hz: Long): String {
     val s = "%.6f".format(java.util.Locale.US, hz / 1_000_000.0)
     return s.trimEnd('0').trimEnd('.') + " MHz"
 }
 
 /**
- * Un champ de fréquence en MHz.
+ * A frequency field in MHz.
  *
- * L'état du texte est volontairement local et non recalculé depuis la valeur
- * écrite : sinon taper « 1 » dans « 9750 » reconstruirait le champ à chaque
- * frappe. Même piège que l'adresse CI-V et que l'indicatif, déjà payé deux
- * fois.
+ * Text state is deliberately local, not derived from the written value:
+ * otherwise typing into "9750" rebuilds the field on every keystroke. Same
+ * trap as the CI-V address and the callsign.
  */
 @Composable
 private fun ConvChampMhz(label: String, valeurHz: Long, largeur: Dp, onHz: (Long) -> Unit) {
@@ -3824,11 +3631,10 @@ private fun ConvChampMhz(label: String, valeurHz: Long, largeur: Dp, onHz: (Long
 }
 
 /**
- * Un convertisseur, en lecture seule.
+ * A converter, read-only.
  *
- * Décoché, on écrit « aucun » plutôt que zéro : un oscillateur à zéro n'est
- * pas un oscillateur lent, c'est l'absence de convertisseur, et le chiffre
- * laisserait croire à un réglage.
+ * When off, show "none" rather than zero: a zero LO means no converter, and
+ * the figure would look like a setting.
  */
 @Composable
 private fun LigneConv(titre: String, c: fr.f4ioz.satcombo.domain.Convertisseur) {
@@ -3914,8 +3720,7 @@ private fun ConvCard(ui: UiState, vm: MainViewModel, descente: Boolean) {
                     }
                 }
 
-                // Le contrôle du réglage, en clair : ce qu'un chiffre connu
-                // devient une fois passé par la boîte.
+                // Sanity check: what a known frequency becomes through the box.
                 Spacer(Modifier.height(10.dp))
                 Surface(color = SpaceBg, shape = RoundedCornerShape(10.dp),
                     modifier = Modifier.fillMaxWidth()) {
@@ -4007,10 +3812,10 @@ private fun SettingsSats(ui: UiState, vm: MainViewModel) {
 }
 
 /**
- * « AAAA-MM-JJ HH:MM » ramené à un instant.
+ * Parses "YYYY-MM-DD HH:MM" into an instant.
  *
- * Format explicite plutôt qu'un sélecteur de date : on ressaisit un carnet
- * papier, la frappe est plus rapide que deux boîtes de dialogue.
+ * Typed format rather than a date picker: when copying a paper log, typing is
+ * faster than two dialogs.
  */
 private fun dateHeureVersMs(txt: String, useUtc: Boolean): Long? = runCatching {
     val f = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.US)
@@ -4052,8 +3857,8 @@ private fun SatRow(sat: TleEntry, isFav: Boolean,
                 val sub = sat.downlinkHz?.let { "↓ " + Doppler.formatMHzShort(it) } ?: "NORAD #${sat.catalogNumber}"
                 Text(listOfNotNull(sub, sat.mode).joinToString("  ·  "),
                     color = TextLo, fontSize = 12.sp)
-                // Un rendez-vous encore a venir se voit des la liste : c'est la
-                // qu'on choisit quoi suivre, pas une fois entre dans la fiche.
+                // An upcoming sked shows in the list itself: that is where you
+                // choose what to follow, not inside the detail.
                 agenda?.let { ev ->
                     Row(verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier.padding(top = 2.dp)) {
@@ -4076,7 +3881,7 @@ private fun SatRow(sat: TleEntry, isFav: Boolean,
 
 // ---------- pass card ----------
 
-/** Le nom lisible d'une cible de molette. */
+/** Readable name of a dial target. */
 private fun nomCible(id: String): String = when (id) {
     "SHIFT_RX" -> t("macro_rx")
     "SHIFT_TX" -> t("macro_tx")

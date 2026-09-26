@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.ui
 
@@ -25,19 +25,14 @@ import fr.f4ioz.satcombo.i18n.t
 import fr.f4ioz.satcombo.ui.theme.*
 
 /**
- * Les remerciements, dans la section « À propos » des réglages.
+ * Credits, in the "About" section of the settings.
  *
- * **Il n'y en a qu'un seul endroit**, et c'est celui-là. J'en avais d'abord
- * fait un écran séparé, rangé dans le menu à trois points, alors que SatMe
- * avait déjà son « À propos » dans les réglages. Deux destinations pour la
- * même question : Olivier a ouvert la sienne, la bonne, et n'y a rien trouvé.
- * L'écran en trop a été supprimé plutôt que gardé à côté.
+ * **This is the only place for them.** A separate screen in the overflow menu
+ * once duplicated it, and users opened the settings one and found nothing.
  *
- * SatMe ne serait pas grand-chose sans le travail déjà fait par d'autres —
- * protocoles publiés, carnets de trafic ouverts, éléments orbitaux mis à
- * disposition, bibliothèques libres. Les citer n'est pas une formalité : c'est
- * la contrepartie ordinaire de ce qu'on a reçu, et pour certaines de ces
- * sources c'est même une condition d'usage.
+ * SatMe builds on published protocols, open logbooks, orbital elements and free
+ * libraries. Crediting them is the normal return for what was received, and for
+ * some sources a condition of use.
  */
 
 private data class Remerciement(
@@ -119,8 +114,8 @@ private val SOURCES = listOf(
 @Composable
 fun AProposReferences() {
     val liens = LocalUriHandler.current
-    // Pas de défilement propre ici : la carte vit dans la liste des réglages,
-    // qui défile déjà. Deux défilements imbriqués se disputeraient le doigt.
+    // No scrolling of its own: the settings list already scrolls, and nested
+    // scrolls would fight over the finger.
     Surface(color = SpaceCard, shape = RoundedCornerShape(16.dp),
         modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp)) {
@@ -134,9 +129,7 @@ fun AProposReferences() {
                 Column(
                     Modifier.fillMaxWidth().then(
                         if (r.lien != null) Modifier.clickable {
-                            // Un lien qui ne s'ouvre pas ne doit pas faire
-                            // tomber l'écran : certains téléphones n'ont aucun
-                            // navigateur déclaré.
+                            // Must not crash: some phones have no browser registered.
                             runCatching { liens.openUri(r.lien) }
                         } else Modifier
                     )

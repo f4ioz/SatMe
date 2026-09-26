@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.ui
 
@@ -52,18 +52,13 @@ fun WorldMap(
     val dark = fr.f4ioz.satcombo.ui.theme.isDarkTheme()
     Box(modifier.fillMaxWidth().aspectRatio(2f).clip(RoundedCornerShape(14.dp))
         .background(if (dark) Color(0xFF0B1018) else Color(0xFFDDE6F1))) {
-        // **Les côtes sont dessinées, plus photographiées.**
-        //
-        // Le planisphère était une image dont la provenance s'était perdue —
-        // impossible à redistribuer dans une source publique sans savoir sous
-        // quelles conditions elle avait été faite. Les mêmes côtes sont tracées
-        // depuis `land.json`, qui vient de Natural Earth, dans le domaine
-        // public. C'est aussi le tracé qu'emploie la carte des locators : une
-        // seule source pour un seul monde.
+        // **Coastlines are drawn, not a bitmap.** The old map image had unknown
+        // provenance and could not be redistributed. `land.json` comes from
+        // Natural Earth (public domain) and is shared with the locator map.
         val terres = rememberLandPath()
         Canvas(Modifier.matchParentSize()) {
             val p = terres ?: return@Canvas
-            // Le tracé est en degrés : 360 de large, 180 de haut.
+            // Path is in degrees: 360 wide, 180 high.
             withTransform({ scale(size.width / 360f, size.height / 180f, Offset.Zero) }) {
                 drawPath(p, color = if (dark) Color(0xFF16232F) else Color(0xFFBFD2E4))
                 drawPath(p, color = if (dark) Color(0xFF2A3D4E) else Color(0xFF8FA8BF),

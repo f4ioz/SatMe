@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.ui
 
@@ -96,8 +96,8 @@ fun LocatorScreen(ui: UiState, vm: MainViewModel) {
                     fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
                 Text(tf("grid_square_label", loc6.take(4)), color = TextHi, fontSize = 12.sp,
                     modifier = Modifier.padding(top = 2.dp, bottom = 10.dp))
-                // Une demande par liste de voisins, et le connecteur ne
-                // redemande jamais un carré déjà connu.
+                // One request per neighbour list; the connector never re-asks
+                // for a square it already knows.
                 LaunchedEffect(Unit) { vm.chargeLotwLocal() }
                 LaunchedEffect(loc6.take(4), ui.carnet.configure) {
                     if (ui.carnet.configure) {
@@ -107,13 +107,12 @@ fun LocatorScreen(ui: UiState, vm: MainViewModel) {
                 around.forEach { n ->
                     BorderRow(arrowOf(n.dir), dirLabel(n.dir), n.km, n.square,
                         units = ui.units, announced = n.square in announced,
-                        // Les deux sources se lisent au même endroit : LoTW
-                        // confirme, Wavelog dit ce qui est au journal. Le plus
-                        // fort gagne — un carré confirmé reste confirmé.
+                        // LoTW confirms, Wavelog tells what is logged; the
+                        // stronger wins — a confirmed square stays confirmed.
                         carnet = etatCarre(ui, n.square))
                 }
-                // La légende s'affiche dès qu'une source parle : LoTW seul
-                // suffit à marquer les carrés, Wavelog n'est pas obligatoire.
+                // Legend shows as soon as any source answers: LoTW alone is
+                // enough, Wavelog is optional.
                 if (ui.carnet.configure || ui.carnet.lotwTravailles.isNotEmpty() ||
                     ui.carnet.lotwConfirmes.isNotEmpty()) {
                     Text(t("carnet_legend"), color = TextLo, fontSize = 11.sp,
@@ -172,9 +171,8 @@ private fun BorderRow(arrow: String, dir: String, km: Double, square: String,
         Text(square, color = if (announced) Amber else Aurora, fontSize = 14.sp,
             fontWeight = if (announced) FontWeight.Bold else FontWeight.Normal,
             fontFamily = FontFamily.Monospace)
-        // Ce que le carnet en ligne sait de ce carré. En rover, c'est
-        // l'information qui décide : trois kilomètres de voiture valent la
-        // peine pour un carré jamais travaillé, pas pour un déjà fait.
+        // What the online log knows about this square. For a rover this is
+        // what decides whether a few km of driving is worth it.
         when (carnet) {
             fr.f4ioz.satcombo.data.CarnetEnLigne.Etat.JAMAIS ->
                 Text("  ★", color = Color(0xFF7FE3A0), fontSize = 13.sp,
@@ -192,11 +190,8 @@ private fun BorderRow(arrow: String, dir: String, km: Double, square: String,
 }
 
 /**
- * Ce que l'on sait d'un carré, toutes sources confondues.
- *
- * LoTW l'emporte quand il confirme : c'est la seule source qui vaut pour un
- * diplôme. Sinon le journal en ligne parle, puis les carrés simplement
- * travaillés d'après LoTW.
+ * Square status across all sources. A LoTW confirmation wins (the only one
+ * valid for awards), then the online log, then LoTW worked-only squares.
  */
 private fun etatCarre(
     ui: UiState, carre: String
@@ -207,7 +202,7 @@ private fun etatCarre(
     ui.carnet.carres[carre.uppercase()]?.let { return it }
     if (k in ui.carnet.lotwTravailles)
         return fr.f4ioz.satcombo.data.CarnetEnLigne.Etat.TRAVAILLE
-    // LoTW a répondu et ne connaît pas ce carré : il reste à faire.
+    // LoTW answered and does not know this square: still needed.
     if (ui.carnet.lotwTravailles.isNotEmpty())
         return fr.f4ioz.satcombo.data.CarnetEnLigne.Etat.JAMAIS
     return null

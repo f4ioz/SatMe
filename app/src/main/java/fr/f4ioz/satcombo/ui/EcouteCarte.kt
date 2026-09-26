@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.ui
 
@@ -28,13 +28,12 @@ import fr.f4ioz.satcombo.i18n.tf
 import fr.f4ioz.satcombo.ui.theme.*
 
 /**
- * L'écoute déportée : entendre une station SatMe depuis un autre téléphone.
+ * Remote listening: hear a SatMe station from another phone.
  *
- * **Le son seul.** L'écran de passage et la page web montrent déjà la position,
- * les fréquences et les contacts ; une troisième représentation des mêmes
- * données finirait par les contredire — c'est arrivé aux fréquences, qui ont
- * divergé de cinq kilohertz pendant trois versions parce qu'elles étaient
- * calculées à deux endroits. Ici, on écoute, et c'est tout.
+ * **Audio only.** The pass screen and web page already show position,
+ * frequencies and QSOs; a third representation would end up contradicting them
+ * (frequencies once drifted 5 kHz apart for three releases because they were
+ * computed in two places).
  */
 @Composable
 fun EcouteCarte(vm: MainViewModel) {
@@ -54,11 +53,10 @@ fun EcouteCarte(vm: MainViewModel) {
             Text(t("ecoute_desc"), color = TextLo, fontSize = 11.sp,
                 modifier = Modifier.padding(top = 4.dp, bottom = 10.dp))
 
-            // --- les stations trouvées sur le réseau ---
+            // --- stations found on the network ---
             //
-            // L'écoute des annonces ne tourne que tant que cet écran est
-            // affiché : un guetteur réseau permanent consommerait sans qu'on
-            // le lui demande, pour une fonction dont on se sert dix minutes.
+            // Announcement listening runs only while this screen is shown; a
+            // permanent listener would drain the battery for a rarely used feature.
             DisposableEffect(Unit) {
                 fr.f4ioz.satcombo.demo.AnnonceReseau.ecoute()
                 onDispose { fr.f4ioz.satcombo.demo.AnnonceReseau.cesse() }
@@ -118,8 +116,7 @@ fun EcouteCarte(vm: MainViewModel) {
                 TextButton(onClick = {
                     if (etat.actif) EcouteDeportee.arrete()
                     else {
-                        // L'adresse est retenue au branchement, pas à la frappe :
-                        // on ne range pas une adresse à demi tapée.
+                        // Saved on connect, not on each keystroke: never store a half-typed address.
                         vm.setEcouteAdresse(adresse.trim())
                         EcouteDeportee.demarre(adresse)
                     }
@@ -129,17 +126,11 @@ fun EcouteCarte(vm: MainViewModel) {
                         fontSize = 14.sp, fontWeight = FontWeight.Bold)
                 }
             }
-            // --- ce que la station raconte ---
+            // --- what the station reports ---
             //
-            // **Rien n'est recalculé ici.** La station reste seule à calculer
-            // position, fréquences et Doppler ; on affiche ce qu'elle envoie.
-            // C'est ce qui évite la troisième représentation des mêmes données,
-            // celle qui avait fait diverger les fréquences de cinq kilohertz
-            // entre l'écran de passage et la page web.
-            //
-            // Le cadran est celui de l'application — `PolarPlot` — nourri par la
-            // position reçue. Redessiner un cadran pour cet écran aurait été
-            // deux dessins à tenir à jour.
+            // **Nothing is recomputed here.** The station alone computes
+            // position, frequencies and Doppler; we display what it sends.
+            // The dial is the app's own `PolarPlot`, fed with the received position.
             if (etat.connecte && st.satellite.isNotBlank()) {
                 Spacer(Modifier.height(14.dp))
                 HorizontalDivider(color = SpaceSurface)
@@ -219,7 +210,7 @@ fun EcouteCarte(vm: MainViewModel) {
     }
 }
 
-/** Une ligne « libellé — valeur », comme ailleurs dans les réglages. */
+/** A "label — value" row, as elsewhere in settings. */
 @Composable
 private fun LigneChiffre(libelle: String, valeur: String, teinte: Color) {
     Row(Modifier.fillMaxWidth().padding(vertical = 3.dp),
@@ -230,6 +221,6 @@ private fun LigneChiffre(libelle: String, valeur: String, teinte: Color) {
     }
 }
 
-/** La même mise en forme que partout : quatre décimales, virgule française. */
+/** Same format as everywhere: four decimals, French decimal comma. */
 private fun mhz(hz: Long?): String =
     if (hz == null) "—" else "%.4f MHz".format(hz / 1e6).replace('.', ',')

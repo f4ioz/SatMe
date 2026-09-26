@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.ui
 
@@ -69,79 +69,57 @@ import java.util.Date
 import java.util.Locale
 
 /**
- * Saisir un contact, pendant le passage.
+ * Logging a contact during the pass.
  *
- * L'écran est plein et le clavier occupe la moitié basse : on tape l'indicatif,
- * on valide, on recommence. Le contact porte le satellite affiché et l'heure de
- * sa validation.
+ * Full screen, keyboard in the lower half: type the callsign, validate, repeat.
+ * The contact carries the displayed satellite and the time of validation.
  *
- * **Il ne reste rien de la file.** Cet écran l'a servie pendant sept versions —
- * un tampon posé pendant le contact, nommé après — et cet usage n'a jamais été
- * celui d'Olivier. La file laissait derrière elle un compteur qui ne menait
- * nulle part, une croix qui n'effaçait rien, et un bouton « ⏱ tampon » qui
- * enregistrait un second contact sans vider les champs : c'est lui qui a
- * inscrit F1FPL deux fois à une seconde d'intervalle le 25 août.
+ * **The old queue is gone** (stamp during the contact, name it later). Its
+ * leftover "⏱ stamp" button saved a second contact without clearing the
+ * fields and logged the same callsign twice one second apart.
  *
- * Ce qui reste en tête — le satellite, l'heure, l'azimut, l'élévation — n'est
- * pas décoratif : ce sont les seules choses qui ne se retrouvent pas après
- * coup.
+ * The header (satellite, time, azimuth, elevation) holds the only things that
+ * cannot be recovered afterwards.
  */
 
 @Composable
 fun NommageScreen(ui: UiState, vm: MainViewModel) {
-    // **Le contact est daté de sa validation, sans exception**, et il porte le
-    // satellite affiché. Il n'y a rien d'autre à retrouver avant de saisir.
+    // **The contact is timestamped at validation, always**, and carries the
+    // displayed satellite.
     val satCourant = ui.selected
 
     val enCw = ui.opMode == "CW"
     val rstDefaut = if (enCw) "599" else "59"
-    // RS en phonie (deux chiffres), RST en CW (trois) : le T est le tonus
-    // d'une note télégraphique, il n'existe pas en FM ni en BLU.
+    // RS in phone (two digits), RST in CW (three): T is tone, meaningless in
+    // FM or SSB.
     val rstMax = if (enCw) 3 else 2
-    // Mêmes raisons que la saisie : la file peut avancer pendant qu'on règle
-    // un report, il n'a pas à revenir au défaut pour autant.
     var rstEnvoye by remember { mutableStateOf(rstDefaut) }
     var rstRecu by remember { mutableStateOf(rstDefaut) }
-    // Le champ qui reçoit le clavier : 0 = RS envoyé, 1 = RS reçu,
-    // 2 = locator, null = indicatif.
+    // Field receiving the keyboard: 0 = RS sent, 1 = RS received,
+    // 2 = locator, null = callsign.
     //
-    // **Sans clé de rappel.** Ces deux-là étaient rappelés sur `entree.timeMs`,
-    // c'est-à-dire sur `System.currentTimeMillis()` relu à chaque composition :
-    // la clé changeait à chaque rafraîchissement de position, donc une fois par
-    // seconde. On touchait « Locator », le champ se vidait, et une seconde plus
-    // tard le focus retombait sur l'indicatif sans rien dire — les lettres
-    // suivantes partaient dans l'indicatif et le carré restait vide. C'est le
-    // décalage relevé le 25 août. Le focus n'appartient qu'aux doigts : rien
-    // d'autre ne le déplace, et la validation le remet à zéro elle-même.
+    // **No remember key.** These were keyed on `entree.timeMs`, i.e.
+    // `System.currentTimeMillis()`, which changed on every position refresh:
+    // a second after tapping "Locator" the focus silently fell back to the
+    // callsign and the next letters went there. Only the fingers move the
+    // focus; validation resets it itself.
     var rstActif by remember { mutableStateOf<Int?>(null) }
     var carreAvantFocus by remember { mutableStateOf("") }
-    // Le suffixe a-t-il été posé par la touche « /P /M » ?
-    //
-    // La question n'a pas de réponse dans le texte : la touche de suffixe et
-    // la touche « / » produisent la même barre. Seul le geste sait laquelle
-    // des deux a servi, donc seul le geste peut le dire.
+    // Was the suffix set by the "/P /M" key? The text cannot tell: that key
+    // and the "/" key produce the same slash. Only the gesture knows.
     var suffixePose by remember { mutableStateOf(false) }
 
-    // **Le champ ne se vide qu'à la validation.** Il était remis à zéro dès que
-    // l'entrée présentée changeait, c'est-à-dire à chaque rafraîchissement :
-    // l'indicatif à moitié frappé partait au carnet, et c'est de là que
-    // venaient les indicatifs tronqués.
+    // **Cleared only on validation.** Clearing it whenever the presented entry
+    // changed (every refresh) sent half-typed callsigns to the log.
     var saisie by remember { mutableStateOf("") }
     var carre by remember { mutableStateOf("") }
     var carreTouche by remember { mutableStateOf(false) }
 
     val memoire = ui.express.memoire
 
-    // Le liseré d'émission, **ici aussi**.
-    //
-    // Il existe déjà tout autour de l'écran, dans le Box racine. Mais sur cet
-    // écran-là les yeux sont sur les touches, en bas, et un filet de cinq
-    // points au bord d'un téléphone tenu à bout de bras ne se voit pas quand
-    // on cherche la lettre suivante. Le rappel se pose donc autour du clavier,
-    // à l'endroit où le regard travaille.
-    //
-    // Même pulsation, même rouge : c'est un seul signal montré deux fois, et
-    // non deux signaux à interpréter.
+    // TX border, **here too**. The root Box already draws one around the
+    // screen, but here the eyes are on the keys and a thin edge line goes
+    // unnoticed. Same pulse, same red: one signal shown twice.
     val eclatTx = if (ui.catUi.enEmission) {
         val pulse = rememberInfiniteTransition(label = "txSaisie")
         pulse.animateFloat(
@@ -159,11 +137,9 @@ fun NommageScreen(ui: UiState, vm: MainViewModel) {
             }
             Text(t("entry_title"), color = TextHi, fontWeight = FontWeight.Bold, fontSize = 17.sp)
             Spacer(Modifier.weight(1f))
-            // Le compteur de la file et la croix d'abandon sont partis avec
-            // elle. La croix appelait `supprimeEntree` avec l'heure courante,
-            // c'est-à-dire la clé d'une entrée qui n'existait pas : elle
-            // n'effaçait rien, elle fermait l'écran. Une flèche de retour dit
-            // déjà cela, et ne prétend rien de plus.
+            // No queue counter or discard cross: the cross called
+            // `supprimeEntree` with the current time, a key that never
+            // existed, so it deleted nothing. The back arrow is enough.
             IconButton(onClick = {
                 vm.setSettingsSection("express")
                 vm.openSettings()
@@ -173,7 +149,7 @@ fun NommageScreen(ui: UiState, vm: MainViewModel) {
             }
         }
 
-        // On saisit toujours ; seul un satellite manquant empêche d'enregistrer.
+        // Only a missing satellite prevents logging.
         if (satCourant == null) {
             Box(Modifier.fillMaxSize(), Alignment.Center) {
                 Text(t("nommage_no_sat"), color = TextLo, fontSize = 14.sp)
@@ -181,7 +157,7 @@ fun NommageScreen(ui: UiState, vm: MainViewModel) {
             return@Column
         }
 
-        // ------------------------------------------------ les trois chiffres
+        // ------------------------------------------------ the three figures
         val tf = remember(ui.useUtc) {
             SimpleDateFormat("HH:mm:ss", Locale.getDefault()).apply {
                 if (ui.useUtc) timeZone = java.util.TimeZone.getTimeZone("UTC")
@@ -191,28 +167,19 @@ fun NommageScreen(ui: UiState, vm: MainViewModel) {
             modifier = Modifier.fillMaxWidth()) {
             Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
-                    // Le satellite est cliquable : il se corrige ici, tant
-                    // que le contact n'est pas parti dans l'ADIF.
+                    // The satellite is tappable: fix it here before the
+                    // contact goes to ADIF.
                     var choixSat by remember { mutableStateOf(false) }
-                    // Le nom et la mire sur la même rangée. **La mire passe en
-                    // premier dans le partage de la largeur** : c'est le nom
-                    // qui cède, jamais elle.
+                    // Name and aim widget on one row. **The widget gets its
+                    // width first**; the name yields, never the widget.
+                    // Otherwise a long name ("JAS-2 (FO-29)") overflows and
+                    // Compose wraps the widget text one letter per line,
+                    // doubling the card height.
                     //
-                    // Sans cela la rangée déborde — « JAS-2 (FO-29) », le
-                    // compteur du passage et le cadran ne tiennent pas —, et
-                    // Compose replie alors les textes de la mire caractère par
-                    // caractère : « −58° ÉL » se lisait à la verticale, une
-                    // lettre par ligne, et la carte doublait de hauteur en
-                    // poussant tout l'écran vers le bas. Un alignement ne vaut
-                    // que par la largeur de son conteneur.
-                    //
-                    // Le nom **remplit** la largeur qui reste (`fill` par
-                    // défaut), et c'est ce qui repousse la mire au bord droit :
-                    // les chiffres se lisent alors au même endroit quel que
-                    // soit le satellite. En `fill = false` le nom ne prenait
-                    // que sa propre largeur et la mire venait se coller contre
-                    // lui, à mi-écran — la place gagnée l'avait été au prix de
-                    // l'alignement.
+                    // The name **fills** the remaining width (default `fill`),
+                    // pushing the widget to the right edge so the figures stay
+                    // in the same place. With `fill = false` the widget stuck
+                    // to the name, mid-screen.
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(satCourant.name + " ▾", color = TextHi,
                             fontWeight = FontWeight.Bold,
@@ -222,8 +189,8 @@ fun NommageScreen(ui: UiState, vm: MainViewModel) {
                             modifier = Modifier.weight(1f)
                                 .clickable { choixSat = true }
                                 .padding(end = 6.dp))
-                        // Qui a déjà été appelé pendant ce passage : on
-                        // évite de rappeler deux fois la même station.
+                        // Stations already worked this pass, to avoid
+                        // calling one twice.
                         var listeFaits by remember { mutableStateOf(false) }
                         val faits = remember(ui.log.size, satCourant.catalogNumber,
                             ui.passes.size) { vm.indicatifsDuPassage() }
@@ -254,13 +221,10 @@ fun NommageScreen(ui: UiState, vm: MainViewModel) {
                                     }
                                 })
                         }
-                        // Il y avait ici un bouton « ⏱ tampon », dernier reste
-                        // de l'heure du tampon. Il appelait le même
-                        // `ajouteContactDirect` que le gros bouton — même
-                        // contact, même heure — mais sans vider les champs :
-                        // deux appuis, deux contacts identiques. C'est lui qui
-                        // a inscrit F1FPL à 12:12:42 puis à 12:12:43. Il n'y a
-                        // qu'une façon d'enregistrer, et c'est ENREGISTRER.
+                        // No "⏱ stamp" button here: it called the same
+                        // `ajouteContactDirect` without clearing the fields,
+                        // so two taps made two identical contacts. There is
+                        // one way to save, and it is SAVE.
                         MireClavier(ui.livePosition, Modifier)
                     }
 
@@ -277,8 +241,6 @@ fun NommageScreen(ui: UiState, vm: MainViewModel) {
                                             fontSize = 15.sp,
                                             modifier = Modifier.fillMaxWidth()
                                                 .clickable {
-                                                    // On choisit le satellite
-                                                    // sur lequel on trafique.
                                                     vm.select(s)
                                                     choixSat = false
                                                 }
@@ -287,17 +249,10 @@ fun NommageScreen(ui: UiState, vm: MainViewModel) {
                                 }
                             })
                     }
-                    // **L'heure et le temps qui reste, sur la même ligne.**
-                    //
-                    // Deux nombres courts, chacun sur sa rangée, mangeaient
-                    // deux fois la hauteur pour rien — et cette hauteur est
-                    // prise au clavier, qui est ce que l'écran a de plus
-                    // précieux. L'heure à gauche, le rebours à droite : ils
-                    // se lisent ensemble et coûtent une ligne.
-                    //
-                    // Rien à droite quand le satellite ne se couche pas. Sur
-                    // QO-100 un compte à rebours n'aurait aucun sens, et un
-                    // tiret laisserait croire à une donnée manquante.
+                    // **Time and countdown on one line**: every row taken
+                    // here is taken from the keyboard. Nothing on the right
+                    // when the satellite never sets (QO-100); a dash would
+                    // look like missing data.
                     val passage = ui.passes.firstOrNull {
                         ui.nowMs in it.aosEpochMs..it.losEpochMs
                     } ?: ui.passes.firstOrNull { it.aosEpochMs > ui.nowMs }
@@ -306,9 +261,9 @@ fun NommageScreen(ui: UiState, vm: MainViewModel) {
                         Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        // L'heure qui court : le contact sera daté de sa
-                        // validation. L'azimut et l'élévation sont au cadran ;
-                        // les répéter en chiffres volerait la place du clavier.
+                        // Running clock (the contact is dated at validation).
+                        // Az/el are on the dial; repeating them as figures
+                        // would steal keyboard space.
                         Text(maintenantTexte + (if (ui.useUtc) " UTC" else " LOC"),
                             color = TextLo, fontSize = 12.sp,
                             fontFamily = FontFamily.Monospace)
@@ -332,9 +287,8 @@ fun NommageScreen(ui: UiState, vm: MainViewModel) {
 
         Spacer(Modifier.height(8.dp))
         val connu = memoire.firstOrNull { it.indicatif == Indicatifs.cle(saisie) }
-        // Le conteneur prend toute la largeur : sans cela, l'alignement à
-        // droite du drapeau se fait sur la largeur du champ, et il retombe
-        // au milieu — c'est ce qu'on voyait, une rangée perdue en hauteur.
+        // Full width, or the flag aligns to the field width and ends up in
+        // the middle.
         Box(Modifier.fillMaxWidth().clickable {
             if (rstActif == 2 && carre.isEmpty()) {
                 carre = carreAvantFocus; carreTouche = false
@@ -343,9 +297,8 @@ fun NommageScreen(ui: UiState, vm: MainViewModel) {
         }) {
             ChampIndicatif(saisie, Indicatifs.etat(saisie, memoire), nom = connu?.nom.orEmpty())
 
-            // Le drapeau et le pays, **posés sur** le champ de l'indicatif
-            // plutôt qu'en dessous : ils n'ont plus de rangée à eux, et cette
-            // hauteur revient au clavier.
+            // Flag and country drawn **over** the callsign field, not below:
+            // the saved row goes to the keyboard.
             val pays = remember(saisie) { fr.f4ioz.satcombo.domain.Dxcc.entite(saisie) }
             if (pays != null) {
                 val f = fr.f4ioz.satcombo.data.Flags.ALL
@@ -364,15 +317,11 @@ fun NommageScreen(ui: UiState, vm: MainViewModel) {
             }
         }
 
-        // Où pointer, pendant qu'on écrit : la page du clavier est celle où
-        // l'on reste tout le passage.
-        // Où l'on est dans le transpondeur : purement visuel, sans prise sur
-        // la fréquence — un doigt qui vise une lettre ne doit pas déplacer le
-        // VFO.
+        // Position within the transponder: display only. A finger aiming at
+        // a letter must not move the VFO.
         BandePassante(
-            // Les transpondeurs ne sont chargés que pour le satellite ouvert
-            // dans l'écran de détail : hors de là, il n'y a pas de bande à
-            // situer, et la barre ne s'affiche pas plutôt que de mentir.
+            // Transmitters are loaded only for the satellite open in the
+            // detail screen; elsewhere the bar hides rather than lie.
             basHz = ui.transmitters.getOrNull(ui.selectedTxIndex)?.downlinkLowHz,
             hautHz = ui.transmitters.getOrNull(ui.selectedTxIndex)?.downlinkHighHz,
             courantHz = ui.rxRestHz ?: ui.catRadioDownlinkHz,
@@ -382,9 +331,9 @@ fun NommageScreen(ui: UiState, vm: MainViewModel) {
 
         Spacer(Modifier.height(6.dp))
         if (rstActif == 2) {
-            // Les carrés déjà vus pour cette station, du plus récent au plus
-            // ancien, filtrés par le début tapé. Un appui remplit et rend le
-            // focus à l'indicatif : le geste est fini.
+            // Grid squares already seen for this station, newest first,
+            // filtered by what is typed. A tap fills and returns focus to
+            // the callsign.
             val candidats = (connu?.locators ?: emptyList())
                 .map { it.locator }
                 .filter { carre.isEmpty() || it.startsWith(carre) }
@@ -405,17 +354,12 @@ fun NommageScreen(ui: UiState, vm: MainViewModel) {
             suggestions = Indicatifs.suggestions(
                 saisie, memoire, System.currentTimeMillis(), satCourant.name),
             onChoisir = { c ->
-                // La suggestion se prend telle quelle. L'ancien code recollait
-                // le suffixe déjà tapé — juste quand les entrées étaient
-                // groupées par base, faux depuis qu'elles portent leur
-                // suffixe : F5RRO proposé + « /P » en cours redonnait
-                // F5RRO/P (l'appui semblait mort), et F5RRO/P proposé
-                // fabriquait F5RRO/P/P.
+                // Taken as is. Entries carry their own suffix; re-appending
+                // the typed suffix produced F5RRO/P/P.
                 saisie = c.indicatif
-                // Choisir une suggestion est un choix explicite : le carré de
-                // cette entrée s'installe, même si le champ avait été touché —
-                // c'est le second défaut relevé, le locator vidé au focus qui
-                // ne se remplissait plus.
+                // An explicit choice: its grid square is installed even if
+                // the field was touched (otherwise a locator cleared on focus
+                // never refilled).
                 carre = Indicatifs.locatorPropose(c, c.indicatif)
                 carreTouche = false
                 rstActif = null
@@ -423,17 +367,13 @@ fun NommageScreen(ui: UiState, vm: MainViewModel) {
 
         Spacer(Modifier.weight(1f))
 
-        // Le report, pré-rempli 59 (phonie) ou 599 (CW) : le cas courant ne
-        // coûte aucun geste. Un appui sur un champ lui donne le focus — cyan —
-        // et les chiffres du clavier s'y écrivent ; un second appui le rend à
-        // l'indicatif. La rangée est volontairement basse : sa première
-        // version avait poussé « Enregistrer à l'heure actuelle » hors de
-        // l'écran.
+        // Report prefilled 59 (phone) or 599 (CW). A tap gives a field the
+        // focus (cyan) and keyboard digits go there; a second tap returns to
+        // the callsign. The row is deliberately low: a taller one pushed the
+        // save button off screen.
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            // Le locator, éditable comme les reports : un appui donne le
-            // focus, le clavier écrit dedans — lettres et chiffres, six
-            // caractères. La couleur cyan continue de dire « proposé, pas
-            // vérifié » tant qu'on n'y a pas touché.
+            // Locator, editable like the reports (six chars). Cyan means
+            // "proposed, not verified" until touched.
             Text(t("contact_locator_label"), color = TextLo, fontSize = 12.sp,
                 modifier = Modifier.padding(end = 6.dp))
             Surface(
@@ -442,9 +382,8 @@ fun NommageScreen(ui: UiState, vm: MainViewModel) {
                 modifier = Modifier.padding(end = 10.dp)
                     .clickable {
                         if (rstActif == 2) {
-                            // On quitte le focus : si rien n'a été tapé, le
-                            // carré d'avant revient — l'appui par erreur ne
-                            // coûte rien.
+                            // Leaving focus with nothing typed restores the
+                            // previous square: a mistaken tap costs nothing.
                             if (carre.isEmpty()) { carre = carreAvantFocus; carreTouche = false }
                             rstActif = null
                         } else {
@@ -507,11 +446,8 @@ fun NommageScreen(ui: UiState, vm: MainViewModel) {
                     carre = (carre + c).take(6).uppercase()
                     carreTouche = true
                 } else if (actif != null && c.isDigit()) {
-                    // Le report se tape sur le même clavier que l'indicatif :
-                    // pas de second clavier, pas de clavier système. Trois
-                    // chiffres au plus — 599 est le plus long des reports
-                    // usuels — et le champ repart à vide au premier chiffre
-                    // s'il portait encore la valeur proposée.
+                    // Same keyboard as the callsign. The first digit
+                    // replaces the default value.
                     if (actif == 0) {
                         rstEnvoye = ((if (rstEnvoye == rstDefaut) "" else rstEnvoye) + c).take(rstMax)
                     } else {
@@ -526,26 +462,23 @@ fun NommageScreen(ui: UiState, vm: MainViewModel) {
                 }
             },
             onBarre = {
-                // La barre s'ajoute à la fin, jamais en tête et jamais en
-                // double : un indicatif ne commence pas par une barre, et deux
-                // barres consécutives ne veulent rien dire.
+                // Slash appended at the end only, never leading, never doubled.
                 if (saisie.isNotEmpty() && !saisie.endsWith("/")) saisie += "/"
-                // Ce qui suit appartient à l'indicatif, pas à un suffixe : les
-                // lettres s'écriront dans l'ordre où on les entend.
+                // What follows belongs to the callsign, not a suffix: letters
+                // go in the order heard.
                 suffixePose = false
-                // Un préfixe de pays change l'entité : le carré du correspondant
-                // en métropole n'a plus rien à voir avec celui d'où il émet.
+                // A country prefix changes the entity: the home grid square
+                // no longer applies.
                 if (!carreTouche || carre.isEmpty()) carre = ""
             },
             onSuffixe = {
                 val (b, suf) = Indicatifs.separe(saisie)
                 saisie = b + Indicatifs.suffixeSuivant(suf)
-                // Le cycle repasse par « aucun suffixe » : la marque tombe avec
-                // lui, sans quoi les lettres continueraient de s'insérer devant
-                // une barre qui n'est plus là.
+                // The cycle passes through "no suffix": drop the flag then, or
+                // letters keep being inserted before a slash that is gone.
                 suffixePose = Indicatifs.suffixe(saisie).isNotEmpty()
-                // Le suffixe vient d'apparaître : le carré hérité n'a plus lieu
-                // d'être, puisque le correspondant s'est déplacé.
+                // A new suffix means the station moved: the inherited square
+                // no longer applies.
                 if (!carreTouche || carre.isEmpty()) {
                     val connu = memoire.firstOrNull { it.indicatif == Indicatifs.cle(saisie) }
                     carre = Indicatifs.locatorPropose(connu, saisie)
@@ -558,8 +491,7 @@ fun NommageScreen(ui: UiState, vm: MainViewModel) {
                 else if (actif == 1 && rstRecu.isNotEmpty()) rstRecu = rstRecu.dropLast(1)
                 else if (saisie.isNotEmpty()) {
                     saisie = saisie.dropLast(1)
-                    // Effacer le suffixe efface la marque : « F4IOZ/P » revenu
-                    // à « F4IOZ/ » n'a plus de suffixe à protéger.
+                    // Erasing the suffix clears the flag ("F4IOZ/P" -> "F4IOZ/").
                     if (Indicatifs.suffixe(saisie).isEmpty()) suffixePose = false
                 }
             },
@@ -569,20 +501,12 @@ fun NommageScreen(ui: UiState, vm: MainViewModel) {
                     carreTouche -> Indicatifs.OrigineLocator.SAISI
                     else -> Indicatifs.OrigineLocator.PROPOSE
                 }
-                // Le gros bouton enregistre **à l'heure actuelle**.
-                //
-                // C'est le geste courant : on valide en fin de contact, et
-                // l'heure du contact est celle-là. L'heure du tampon — celle
-                // du double appui sur la boussole — sert au rattrapage d'une
-                // file en retard, cas plus rare : elle passe sur le petit
-                // bouton du dessous.
-                // Un contact neuf, à l'heure actuelle, sur le satellite
-                // affiché. Pas de file à faire avancer.
+                // New contact **at the current time**, on the displayed
+                // satellite: you validate at the end of the contact.
                 vm.ajouteContactDirect(satCourant, saisie, carre,
                     rstEnvoye, rstRecu, origine.name)
-                // Tout se vide ici, et seulement ici — le focus compris, sans
-                // quoi le report du contact suivant se taperait dans le champ
-                // resté ouvert.
+                // Everything is cleared here and only here, focus included,
+                // or the next report would go into the field left open.
                 saisie = ""; carre = ""; carreTouche = false
                 rstEnvoye = rstDefaut; rstRecu = rstDefaut
                 rstActif = null; carreAvantFocus = ""; suffixePose = false

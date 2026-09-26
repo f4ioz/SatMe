@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.ui
 
@@ -84,8 +84,8 @@ fun PolarPlot(
             )
             val aosPt = azElToXy(passTrack.first().first, passTrack.first().second, c, r)
             val losPt = azElToXy(passTrack.last().first, passTrack.last().second, c, r)
-            drawCircle(Magenta, 8f, aosPt)                       // AOS plein
-            drawCircle(Magenta, 8f, losPt, style = Stroke(3f))   // LOS creux
+            drawCircle(Magenta, 8f, aosPt)                       // AOS filled
+            drawCircle(Magenta, 8f, losPt, style = Stroke(3f))   // LOS hollow
             // Direction arrows along the arc.
             for (f in listOf(0.25f, 0.50f, 0.75f)) {
                 val i = (passTrack.size * f).toInt().coerceIn(1, passTrack.size - 1)

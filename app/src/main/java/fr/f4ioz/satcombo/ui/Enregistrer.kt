@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.ui
 
@@ -22,33 +22,21 @@ import fr.f4ioz.satcombo.i18n.t
 import java.io.OutputStream
 
 /**
- * L'enregistrement direct d'un export, à côté du partage.
+ * Saving an export straight to a file, alongside sharing.
  *
- * **Pourquoi le partage ne suffisait pas.** Tout sortait de SatMe par
- * `ACTION_SEND` : un carnet ADIF, une sauvegarde de configuration, une fiche
- * PDF partaient vers une messagerie ou un nuage. C'est le bon geste quand on
- * envoie quelque chose à quelqu'un, et le mauvais quand on veut simplement
- * poser un fichier dans un dossier du téléphone. Sur le terrain, en portable,
- * sans réseau, le partage n'a souvent rien à proposer — et l'export n'a nulle
- * part où aller.
- *
- * `ACTION_CREATE_DOCUMENT` fait l'autre moitié du travail : l'opérateur choisit
- * l'emplacement et le nom, et le fichier y est écrit. Aucune permission de
- * stockage n'est nécessaire, c'est lui qui désigne la destination.
- *
- * Le partage reste en place partout. Les deux répondent à des questions
- * différentes — « à qui » et « où » — donc aucun ne remplace l'autre.
+ * `ACTION_SEND` answers "to whom"; in the field, offline, it often has nothing
+ * to offer and the export goes nowhere. `ACTION_CREATE_DOCUMENT` answers
+ * "where": the operator picks the location and name, so no storage permission
+ * is needed. Neither replaces the other; both stay.
  */
 
-/** Ce qu'il faut écrire dans le fichier, une fois la destination choisie. */
+/** What to write into the file once the destination is chosen. */
 typealias Deversement = (OutputStream) -> Unit
 
 /**
- * Le contrat, écrit à la main plutôt que `CreateDocument`.
- *
- * `ActivityResultContracts.CreateDocument` fige le type MIME à la
- * construction ; il en faudrait un par format. Ici le type et le nom proposé
- * voyagent avec l'appel, et un seul lanceur sert tous les exports.
+ * Hand-written contract instead of `CreateDocument`, which fixes the MIME type
+ * at construction. Here type and suggested name travel with the call, so one
+ * launcher serves every export.
  */
 private class CreerDocument : ActivityResultContract<Pair<String, String>, Uri?>() {
     override fun createIntent(context: Context, input: Pair<String, String>): Intent =
@@ -62,12 +50,9 @@ private class CreerDocument : ActivityResultContract<Pair<String, String>, Uri?>
 }
 
 /**
- * Rend une fonction `(nom, type MIME, déversement)` qui demande où enregistrer
- * puis écrit.
- *
- * Le déversement est retenu entre l'appel et le retour du sélecteur : il y a
- * un aller-retour par une autre activité, et le contenu à écrire doit survivre
- * à la recomposition qui suit.
+ * Returns a `(name, MIME type, writer)` function that asks where to save, then
+ * writes. The writer is kept in state because the round trip through another
+ * activity is followed by a recomposition.
  */
 @Composable
 fun rememberEnregistrer(): (String, String, Deversement) -> Unit {
@@ -77,12 +62,10 @@ fun rememberEnregistrer(): (String, String, Deversement) -> Unit {
     val lanceur = rememberLauncherForActivityResult(CreerDocument()) { uri ->
         val quoi = enAttente.value
         enAttente.value = null
-        // L'opérateur a refermé le sélecteur : c'est un choix, pas une panne.
-        // On ne dit rien — un message ici serait du bruit à chaque hésitation.
+        // Picker closed by the operator: a choice, not a failure. Stay silent.
         if (uri == null) return@rememberLauncherForActivityResult
-        // En revanche, un déversement manquant est une panne franche : sans
-        // cette branche, le sélecteur se refermerait sur un fichier vide et
-        // personne ne saurait pourquoi.
+        // A missing writer is a real failure: without this branch the picker
+        // would close on an empty file and nobody would know why.
         if (quoi == null) { avertis(ctx, t("export_saved_fail")); return@rememberLauncherForActivityResult }
 
         val ecrit = runCatching {
@@ -94,9 +77,8 @@ fun rememberEnregistrer(): (String, String, Deversement) -> Unit {
         }
         ecrit.fold(
             onSuccess = { avertis(ctx, t("export_saved_ok")) },
-            // Un `runCatching` sans branche d'échec transforme une panne dure
-            // en panne silencieuse : le carnet n'est pas écrit, et l'opérateur
-            // croit l'avoir sauvegardé.
+            // Without a failure branch, `runCatching` turns a hard failure into
+            // a silent one: the log is not written but looks saved.
             onFailure = { e ->
                 avertis(ctx, "${t("export_saved_fail")} — ${e.message ?: e.javaClass.simpleName}")
             }
@@ -107,8 +89,8 @@ fun rememberEnregistrer(): (String, String, Deversement) -> Unit {
         enAttente.value = quoi
         val ouvert = runCatching { lanceur.launch(nom to mime) }
         if (ouvert.isFailure) {
-            // Certains téléphones dépouillés n'ont aucun explorateur de
-            // fichiers. Le dire vaut mieux qu'un bouton qui ne réagit pas.
+            // Some stripped-down phones have no file picker at all. Say so
+            // rather than leave a dead button.
             enAttente.value = null
             avertis(ctx, t("export_saved_nopicker"))
         }
@@ -119,30 +101,26 @@ private fun avertis(ctx: Context, message: String) {
     android.widget.Toast.makeText(ctx, message, android.widget.Toast.LENGTH_SHORT).show()
 }
 
-// --- les déversements courants ---
+// --- common writers ---
 
-/** Recopie un fichier de l'espace privé de SatMe vers la destination choisie. */
+/** Copies a file from SatMe's private storage to the chosen destination. */
 fun depuisFichier(f: java.io.File): Deversement = { sortie -> f.inputStream().use { it.copyTo(sortie) } }
 
-/** Recopie ce que désigne une URI — c'est ce que rendent déjà les exports PDF. */
+/** Copies what a URI points to — what the PDF exports already return. */
 fun depuisUri(ctx: Context, u: Uri): Deversement = { sortie ->
     val entree = ctx.contentResolver.openInputStream(u)
         ?: throw java.io.IOException("source illisible")
     entree.use { it.copyTo(sortie) }
 }
 
-/** Écrit du texte, en UTF-8. */
+/** Writes text as UTF-8. */
 fun depuisTexte(s: String): Deversement = { sortie -> sortie.write(s.toByteArray(Charsets.UTF_8)) }
 
 /**
- * Un nom de fichier daté : `SatMe-carnet-20260912-1043.adi`.
+ * A dated file name: `SatMe-carnet-20260912-1043.adi`.
  *
- * Le sélecteur propose ce nom, et l'opérateur peut le changer. Le dater par
- * défaut évite le travers du « carnet.adi » écrasé chaque semaine — et un
- * export qu'on croit avoir gardé n'existe plus.
- *
- * L'heure est celle du téléphone et non UTC : c'est un nom de fichier qu'on
- * relit dans un explorateur, pas une donnée de trafic.
+ * Dating by default avoids a "carnet.adi" overwritten every week. Local phone
+ * time, not UTC: it is a file name read in a file browser, not traffic data.
  */
 fun nomDate(base: String, extension: String): String {
     val d = java.text.SimpleDateFormat("yyyyMMdd-HHmm", java.util.Locale.US)

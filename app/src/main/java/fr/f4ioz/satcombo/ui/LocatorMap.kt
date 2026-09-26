@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.ui
 
@@ -88,7 +88,7 @@ fun LocatorMapDialog(
     initialLocator: String,
     mapStyle: String,
     initialPoint: Pair<Double, Double>? = null,
-    /** Carrés à peindre : contactés, puis ceux d'où l'on a émis. */
+    /** Squares to paint: worked, then those operated from. */
     carresContactes: Set<String> = emptySet(),
     carresActives: Set<String> = emptySet(),
     showPota: Boolean = false,
@@ -224,11 +224,10 @@ object MapProviders {
 private data class City(val lon: Double, val lat: Double, val pop: Int, val name: String)
 
 /**
- * Le tracé des terres, en degrés : `x = longitude + 180`, `y = 90 - latitude`.
+ * Land outline in degrees: `x = longitude + 180`, `y = 90 - latitude`.
  *
- * Rendu accessible au planisphère de `WorldMap`, qui dessinait jusque-là une
- * image dont personne ne savait plus d'où elle venait. Une seule source pour
- * les côtes : deux tracés du même monde finiraient par ne plus se ressembler.
+ * Shared with `WorldMap`: one coastline source, since two drawings of the same
+ * world end up disagreeing.
  */
 @Composable
 internal fun rememberLandPath(): Path? {
@@ -399,7 +398,7 @@ internal fun LocatorMapCanvas(
     centerOn: Pair<Double, Double>? = null,
     marker: Pair<Double, Double>? = null,   // exact (lat, lon) live position dot
     pin: Pair<Double, Double>? = null,      // exact (lat, lon) picked spot, drawn as a pin
-    /** Carrés à peindre : contactés, puis ceux d'où l'on a émis. */
+    /** Squares to paint: worked, then those operated from. */
     carresContactes: Set<String> = emptySet(),
     carresActives: Set<String> = emptySet(),
     showPota: Boolean = false,
@@ -703,12 +702,11 @@ internal fun LocatorMapCanvas(
             }
         }
 
-        // ---------- carrés travaillés et activés ----------
+        // ---------- worked and activated squares ----------
         //
-        // Peints sous la sélection : le carré courant reste le plus lisible,
-        // c'est lui qu'on vient chercher. Ce qui sort de l'écran n'est ni
-        // dessiné ni calculé — la France entière tiendrait sinon dans la
-        // boucle à chaque image.
+        // Painted under the selection so the current square stays most
+        // readable. Off-screen squares are skipped, or the whole set would be
+        // drawn every frame.
         if (carresContactes.isNotEmpty() || carresActives.isNotEmpty()) {
             fun peins(carres: Set<String>, col: Color) {
                 for (k in carres) {

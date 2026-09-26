@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.ui
 
@@ -41,19 +41,15 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
- * La mire d'essai : de quoi vérifier une chaîne de réception sans satellite.
+ * Test pattern: check a receive chain without a satellite.
  *
- * Le problème que cela résout est celui de tout essai de décodage : quand
- * l'image reçue est mauvaise, on ne sait pas si le tort en revient au
- * décodeur, au câblage audio, au niveau d'entrée ou à l'émetteur d'en face.
- * Une mire connue, émise depuis un appareil dont on maîtrise tout, tranche la
- * question — si elle sort propre, le récepteur est hors de cause.
+ * When a received image is bad you cannot tell decoder, audio wiring, input
+ * level or the far transmitter apart. A known pattern from a device you fully
+ * control settles it: if it decodes clean, the receiver is cleared.
  *
- * Deux façons de s'en servir : par le haut-parleur, un téléphone contre
- * l'autre, ou par le fichier, qu'on repasse sur une radio pour éprouver toute
- * la chaîne HF. L'export se fait en MP3 — un PD 290 en WAV pèse vingt-cinq
- * mégaoctets et ne passe par aucune messagerie ; le WAV reste offert en
- * second choix pour qui veut la source non compressée.
+ * Use it speaker-to-phone, or as a file replayed through a radio to test the
+ * whole RF chain. Export defaults to MP3 (a PD 290 WAV is ~25 MB and no
+ * messenger takes it); WAV stays available for the uncompressed source.
  */
 @Composable
 fun MireSection(ui: UiState, vm: MainViewModel) {
@@ -61,9 +57,7 @@ fun MireSection(ui: UiState, vm: MainViewModel) {
     val scope = rememberCoroutineScope()
     val st by SstvPlayer.state.collectAsState()
 
-    // PD 120 par défaut : c'est le mode de l'ISS, celui que l'on cherche à
-    // décoder neuf fois sur dix, et il dure deux minutes — assez court pour
-    // qu'un essai ne soit pas une corvée.
+    // PD 120 by default: the ISS mode, and only two minutes long.
     var mode by remember {
         mutableStateOf(SstvMode.byName("PD 120") ?: SstvMode.ALL.first())
     }
@@ -77,11 +71,7 @@ fun MireSection(ui: UiState, vm: MainViewModel) {
         runCatching { SstvPattern.render(ctx, mode, call, loc) }.getOrNull()
     }
 
-    /**
-     * Écrit le fichier puis propose de le partager. Le geste est le même pour
-     * les deux formats : seuls l'encodeur et le type MIME changent, il n'y a
-     * donc aucune raison d'en écrire deux fois le code.
-     */
+    /** Writes the file then offers to share it; only encoder and MIME type differ. */
     fun export(mp3: Boolean) {
         saving = true
         scope.launch {
@@ -90,9 +80,8 @@ fun MireSection(ui: UiState, vm: MainViewModel) {
                 else SstvPlayer.exportWav(ctx, mode, call, loc)
             }
             saving = false
-            // Un export qui échoue sans rien dire est un export qu'on refait
-            // trois fois avant de comprendre. La cause de loin la plus probable
-            // est l'encodeur déjà pris — il n'y en a qu'un dans le processus.
+            // Never fail silently. The likely cause is the encoder being busy:
+            // there is only one per process.
             saved = f?.name ?: if (mp3) t("mp3_occupe") else t("mire_export_echec")
             if (f != null) runCatching {
                 val uri = androidx.core.content.FileProvider.getUriForFile(
@@ -118,7 +107,7 @@ fun MireSection(ui: UiState, vm: MainViewModel) {
                 Text(t("mire_desc"), color = TextLo, fontSize = 11.sp,
                     modifier = Modifier.padding(top = 4.dp, bottom = 12.dp))
 
-                // --- choix du mode -------------------------------------------
+                // --- mode choice ---------------------------------------------
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(t("mire_mode"), color = TextLo, fontSize = 12.sp)
                     Spacer(Modifier.width(10.dp))
@@ -153,7 +142,7 @@ fun MireSection(ui: UiState, vm: MainViewModel) {
                     color = TextLo, fontSize = 11.sp,
                     modifier = Modifier.padding(top = 6.dp))
 
-                // --- aperçu ---------------------------------------------------
+                // --- preview -------------------------------------------------
                 bmp?.let {
                     Spacer(Modifier.height(12.dp))
                     Image(
@@ -163,7 +152,7 @@ fun MireSection(ui: UiState, vm: MainViewModel) {
                         modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)))
                 }
 
-                // --- émission -------------------------------------------------
+                // --- transmit ------------------------------------------------
                 Spacer(Modifier.height(14.dp))
                 if (st.playing) {
                     LinearProgressIndicator(
@@ -205,8 +194,7 @@ fun MireSection(ui: UiState, vm: MainViewModel) {
                             Text(if (saving) t("mire_exporting") else t("mire_export"))
                         }
                     }
-                    // Le WAV en second rideau : plus lourd, mais c'est la source
-                    // non compressée, utile pour une mesure fine.
+                    // WAV as second choice: heavier, but uncompressed for fine measurement.
                     TextButton(onClick = { export(false) }, enabled = !saving) {
                         Text(t("mire_export_wav"), color = TextLo, fontSize = 11.sp)
                     }
@@ -222,5 +210,5 @@ fun MireSection(ui: UiState, vm: MainViewModel) {
     }
 }
 
-/** m:ss, la seule forme lisible pour des durées de une à cinq minutes. */
+/** m:ss, the readable form for one-to-five-minute durations. */
 private fun fmtDur(sec: Int): String = "%d:%02d".format(sec / 60, sec % 60)

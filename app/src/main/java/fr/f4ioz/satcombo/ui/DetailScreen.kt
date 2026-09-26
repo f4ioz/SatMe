@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.ui
 
@@ -96,9 +96,8 @@ import java.util.Locale
 @Composable
 internal fun DetailScreen(ui: UiState, vm: MainViewModel, onBack: () -> Unit) {
     val sat = ui.selected ?: return
-    // Un seul état pour les deux emplacements du bouton AMSAT : la boîte est
-    // la même, seul l'endroit où l'on appuie change selon que le satellite
-    // passe ou non. Déclaré ici, à la portée commune des deux.
+    // One state for both AMSAT button locations (header for a stationary sat,
+    // pass row otherwise): same dialog, declared at their common scope.
     var statusOpen by remember { mutableStateOf(false) }
     // Keep the screen awake while tracking (field use with gloves/antenna).
     val view = androidx.compose.ui.platform.LocalView.current
@@ -198,9 +197,8 @@ internal fun DetailScreen(ui: UiState, vm: MainViewModel, onBack: () -> Unit) {
                                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
                         }
                     }
-                    // Une pause Doppler oubliée expliquerait à elle seule un
-                    // passage entier passé à côté du correspondant : elle
-                    // s'annonce donc à côté du témoin CAT, en ambre.
+                    // A forgotten Doppler hold alone can ruin a whole pass, so
+                    // it shows next to the CAT badge, in amber.
                     if (ui.catConnected && ui.dopplerHold) {
                         Surface(color = Amber.copy(alpha = 0.20f), shape = RoundedCornerShape(6.dp)) {
                             Text(t("doppler_hold_badge"), color = Amber, fontSize = 10.sp,
@@ -208,10 +206,9 @@ internal fun DetailScreen(ui: UiState, vm: MainViewModel, onBack: () -> Unit) {
                                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
                         }
                     }
-                    // « Mettre un logo Rotor quand il est activé. » Le mât est la
-                    // seule fonction qui déplace quelque chose : savoir d'un coup
-                    // d'œil qu'il est branché, et qu'il est déjà parti attendre le
-                    // satellite, vaut mieux que d'aller le vérifier dans un menu.
+                    // Rotor badge: the mast is the only thing that physically
+                    // moves, so show at a glance that it is connected and
+                    // whether it is pre-positioning for the pass.
                     if (ui.rotorConnected) {
                         val teinte = if (ui.rotorPrePositioning) Amber else Aurora
                         Surface(color = teinte.copy(alpha = 0.18f), shape = RoundedCornerShape(6.dp)) {
@@ -225,9 +222,8 @@ internal fun DetailScreen(ui: UiState, vm: MainViewModel, onBack: () -> Unit) {
                     val amsat = if (showAmsat) vm.amsatFor(sat.name) else null
                     if (showSatnogs && ui.satStatus != null) SatStatusBadge(ui.satStatus)
                     if (amsat != null) AmsatBadge(amsat)
-                    // Sur un géostationnaire, la ligne du passage n'existe pas
-                    // et le globe AMSAT n'aurait plus où se poser : il vient
-                    // ici, dans l'en-tête, à côté des autres pastilles d'état.
+                    // Geostationary: there is no pass row to host the AMSAT
+                    // button, so it moves here next to the status badges.
                     if (sat.estImmobile && ui.callsign.isNotBlank()) {
                         IconButton(
                             onClick = { vm.clearAmsatSubmitState(); statusOpen = true },
@@ -294,9 +290,8 @@ internal fun DetailScreen(ui: UiState, vm: MainViewModel, onBack: () -> Unit) {
             else vm.skedsFor(sat.catalogNumber)
             if (topSkeds.isNotEmpty()) {
                 item {
-                    // L'appui ouvre le sked mutuel **avec l'annonce**, pas à
-                    // vide : indicatif, satellite, carré et créneau sont déjà
-                    // connus, il n'y a rien à retaper.
+                    // Tapping opens the mutual sked pre-filled from the
+                    // announcement: nothing to retype.
                     Surface(color = Amber.copy(alpha = 0.15f), shape = RoundedCornerShape(10.dp),
                         modifier = Modifier.fillMaxWidth()
                             .clickable { vm.openSked(topSkeds.first()) }) {
@@ -314,17 +309,11 @@ internal fun DetailScreen(ui: UiState, vm: MainViewModel, onBack: () -> Unit) {
                                     val win = if (ws != null && we != null)
                                         "${hmb.format(Date(ws))}\u2013${hmb.format(Date(we))} ${tzTag(ui.useUtc)}"
                                     else "${hmb.format(Date(s.aosMs))}\u2013${hmb.format(Date(s.losMs))} ${tzTag(ui.useUtc)}"
-                                    // Le carré de l'autre station, ici et pas
-                                    // seulement dans la carte du bas.
-                                    //
-                                    // C'est **la** donnée qu'on va chercher
-                                    // dans une annonce : le reste dit quand et
-                                    // sur quoi, le carré dit où — donc l'azimut
-                                    // à prendre et la distance à couvrir. Il
-                                    // n'apparaissait qu'après avoir fait défiler
-                                    // la page jusqu'au bas, alors que ce bandeau
-                                    // existe précisément pour éviter ce
-                                    // défilement.
+                                    // The other station's grid square belongs
+                                    // here too: it is what you look for in an
+                                    // announcement (where = azimuth and
+                                    // distance), and this banner exists to
+                                    // spare the scroll to the card below.
                                     val carre = s.grids.firstOrNull { it.isNotBlank() }
                                     Text("${s.callsign}  \u00B7  $win" +
                                         (s.mode?.let { "  \u00B7  $it" } ?: "") +
@@ -342,11 +331,8 @@ internal fun DetailScreen(ui: UiState, vm: MainViewModel, onBack: () -> Unit) {
             }
         }
 
-        // Le creneau ne parle que du passage montre par la page. Un rendez-vous
-        // qui commence dimanche n'a rien a dire sur le passage de vendredi :
-        // annoncer une SSTV au-dessus d'un passage qui n'y est pas fait rater
-        // le vrai. On reprend donc le passage affiche et on ne garde l'annonce
-        // que si ses dates l'englobent.
+        // Agenda banner only for the pass shown on the page: announcing an SSTV
+        // event over the wrong pass makes you miss the real one.
         val bannerPass = ui.focusedPassAos?.let { f -> ui.passes.minByOrNull { kotlin.math.abs(it.aosEpochMs - f) } }
             ?: ui.passes.firstOrNull { it.losEpochMs > ui.nowMs }
         bannerPass?.let { bp -> vm.agendaForPass(bp) }?.let { ev ->
@@ -394,16 +380,10 @@ internal fun DetailScreen(ui: UiState, vm: MainViewModel, onBack: () -> Unit) {
                             ?: ui.passes.firstOrNull { it.losEpochMs > ui.nowMs }
                     }
                     val hm = tzFormat("HH:mm:ss", ui.useUtc)
-                    // Une seule ligne : le jour, AOS→LOS, le fuseau, et au bout
-                    // le petit globe AMSAT. Signaler un satellite entendu est un
-                    // geste de dix secondes ; le bouton pleine largeur qu'il
-                    // occupait avant repoussait la boussole hors de l'écran, sur
-                    // les téléphones où elle est justement ce qu'on regarde.
-                    // Sur un satellite immobile il n'y a pas de passage à
-                    // annoncer : la ligne se réduisait au seul globe AMSAT,
-                    // flottant au milieu de deux blancs. Le bouton rejoint donc
-                    // l'en-tête, où il tient sans consommer de hauteur — et la
-                    // ligne disparaît quand elle n'a rien à dire.
+                    // One line: day, AOS→LOS, time zone, small AMSAT globe. A
+                    // full-width button used to push the compass off-screen on
+                    // small phones. On a stationary sat the button lives in the
+                    // header and this row disappears.
                     if (shownPass != null || !sat.estImmobile)
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
@@ -415,17 +395,14 @@ internal fun DetailScreen(ui: UiState, vm: MainViewModel, onBack: () -> Unit) {
                                     "${hm.format(Date(shownPass.aosEpochMs))} → ${hm.format(Date(shownPass.losEpochMs))} ${tzTag(ui.useUtc)}",
                                 color = TextHi, fontWeight = FontWeight.Bold, fontSize = 14.sp)
                         }
-                        // AMSAT refuse les comptes rendus anonymes : sans
-                        // indicatif, le bouton n'aurait nulle part où aller.
+                        // AMSAT rejects anonymous reports: no callsign, no button.
                         if (ui.callsign.isNotBlank()) {
                             Spacer(Modifier.width(6.dp))
                             IconButton(
                                 onClick = { vm.clearAmsatSubmitState(); statusOpen = true },
                                 modifier = Modifier.size(30.dp)
                             ) {
-                                // Sans teinte : le logo AMSAT est rouge et
-                                // blanc, une teinte uniforme en ferait une
-                                // tache ambre qui ne ressemble à rien.
+                                // Untinted: the logo is red and white.
                                 Icon(
                                     painterResource(fr.f4ioz.satcombo.R.drawable.ic_amsat),
                                     contentDescription = t("status_btn"),
@@ -447,9 +424,8 @@ internal fun DetailScreen(ui: UiState, vm: MainViewModel, onBack: () -> Unit) {
                             ).declination
                         } ?: 0f
                     }
-                    // La boîte de modification vit désormais dans le Box
-                    // racine (SatComboApp) : une seule instance, visible
-                    // depuis tous les écrans.
+                    // The edit dialog lives in the root Box (SatComboApp): one
+                    // instance, visible from every screen.
                     // Corner telemetry: time left, max el, current az, current el.
                     val live = ui.livePosition
                     val above = live != null && live.elevationDeg >= 0
@@ -458,43 +434,24 @@ internal fun DetailScreen(ui: UiState, vm: MainViewModel, onBack: () -> Unit) {
                         else if (it.aosEpochMs > ui.nowMs) "AOS " + fmtCountdown(it.aosEpochMs - ui.nowMs)
                         else "—"
                     } ?: "—"
-                    // « Quand le rotor est connecté, la boussole est dirigée par
-                    // les éléments élévation azimut du rotor. Même quand le
-                    // satellite n'est pas à vue. »
-                    //
-                    // Sous l'horizon, les deux coins n'affichaient que « — » :
-                    // l'écran ne disait nulle part où le mât pointait vraiment,
-                    // alors que le contrôleur le répète chaque seconde. On y met
-                    // donc la position lue dès qu'elle existe — et le libellé
-                    // change avec elle, pour qu'aucun chiffre ne puisse être pris
-                    // pour celui du satellite. Quand le rotor se tait, le libellé
-                    // redevient « AZ » : le retour au satellite se voit.
+                    // With a rotor connected, the corners show the mast's read
+                    // position, even below the horizon (otherwise just "—").
+                    // The label changes too, so a mast figure is never taken
+                    // for the satellite's; it reverts to "AZ" when the rotor
+                    // goes silent.
                     val coinAz = CoinsAim.coin(
                         if (ui.rotorConnected) ui.rotorAimAz else null,
                         live?.azimuthDeg, above, t("az_mast_label"), "AZ")
                     val coinEl = CoinsAim.coin(
                         if (ui.rotorConnected) ui.rotorAimEl else null,
                         live?.elevationDeg, above, t("el_mast_label"), t("el_label"))
-                    // La pastille de la file est partie avec la file : elle
-                    // comptait des tampons que plus aucun écran ne savait
-                    // atteindre.
                     Spacer(Modifier.height(2.dp))
-                    // **Sur un satellite immobile, la boussole se replie.**
-                    //
-                    // Es'hail-2 ne se lève ni ne se couche : une fois la
-                    // parabole pointée, le cadran et l'aiguille n'apprennent
-                    // plus rien, et ils occupent le haut de l'écran à chaque
-                    // ouverture — au détriment des fréquences, qui sont tout
-                    // le travail sur un géostationnaire.
-                    //
-                    // Le repli est décidé par le TLE, non par une liste de
-                    // numéros : la donnée vaut pour tous les géostationnaires,
-                    // y compris ceux qu'on n'a pas pensé à inscrire.
-                    //
-                    // Replié, et non supprimé : un appui la rouvre, et l'état
-                    // est propre à ce satellite. Le jour où l'on déplace la
-                    // station, elle redevient la première chose dont on a
-                    // besoin.
+                    // **On a stationary satellite, the compass collapses.**
+                    // Once the dish is aimed at Es'hail-2 it teaches nothing and
+                    // eats the space the frequencies need. Decided from the TLE,
+                    // not a list of catalog numbers, so it covers every
+                    // geostationary sat. Collapsed, not removed: one tap reopens
+                    // it, per satellite (needed again when the station moves).
                     var boussoleOuverte by rememberSaveable(sat.catalogNumber) {
                         mutableStateOf(!sat.estImmobile)
                     }
@@ -516,11 +473,10 @@ internal fun DetailScreen(ui: UiState, vm: MainViewModel, onBack: () -> Unit) {
                     if (boussoleOuverte)
                     CompassAim(ui.livePosition, ui.passTrack, ui.trail, decl, ui.aimMode,
                         vm::setAimMode,
-                        // **Le geste n'écrit plus, il ouvre le clavier.** Il
-                        // posait un contact sans indicatif — quatre le 25 août,
-                        // partis jusque dans l'export ADIF. Un contact sans nom
-                        // n'est pas un contact à moitié fait, c'est un
-                        // indicatif perdu.
+                        // **The gesture opens the keypad, it no longer logs.**
+                        // It used to log callsign-less contacts, which leaked
+                        // into the ADIF export. A contact without a callsign is
+                        // a lost callsign, not half a contact.
                         onSaisie = { vm.ouvreSaisie() },
                         logTaps = ui.logTaps,
                         compact = true,
@@ -540,10 +496,8 @@ internal fun DetailScreen(ui: UiState, vm: MainViewModel, onBack: () -> Unit) {
                         rotorAzDeg = if (ui.rotorConnected) ui.rotorAimAz else null,
                         rotorElDeg = if (ui.rotorConnected) ui.rotorAimEl else null,
                         modifier = Modifier.fillMaxWidth())
-                    // **Le clavier s'ouvrait par un appui sur la boussole.**
-                    // La replier lui retirait donc son seul accès depuis cet
-                    // écran. Un bouton le rend, et il ne s'affiche que dans ce
-                    // cas — ailleurs, le geste sur le cadran suffit.
+                    // The compass tap is the keypad's only entry on this
+                    // screen, so a collapsed compass gets a button instead.
                     if (!boussoleOuverte) {
                         OutlinedButton(
                             onClick = { vm.ouvreSaisie() },
@@ -552,23 +506,14 @@ internal fun DetailScreen(ui: UiState, vm: MainViewModel, onBack: () -> Unit) {
                         }
                     }
                     Spacer(Modifier.height(8.dp))
-                    // Juste sous la boussole : l'image SSTV qui arrive, puis la
-                    // clé SDR et ses réglages. On reçoit et on pointe l'antenne
-                    // sur le même écran ; c'était l'inverse jusqu'ici.
+                    // Right under the compass: incoming SSTV image, then the
+                    // SDR dongle, so you receive and aim on the same screen.
                     RxImageInline(ui, vm)
                     MoniteurAudioCard(ui, vm)
-                    // **Dire pourquoi la cascade n'est pas là.**
-                    //
-                    // Le panneau SDR se retire en silence quand l'extension
-                    // est fermée ou qu'aucune clé n'est branchée. C'est juste
-                    // — un cadre vide ne renseigne personne — mais l'opérateur
-                    // qui a choisi « FT-817 + clé SDR » attend une cascade, et
-                    // ne voit rien. Il cherche alors un défaut là où il n'y a
-                    // qu'une condition non remplie.
-                    //
-                    // On ne le dit que dans ce cas précis : quand la réception
-                    // est censée passer par la clé. Ailleurs, l'absence de
-                    // panneau est normale et n'appelle aucun commentaire.
+                    // **Say why the waterfall is missing.** The SDR panel hides
+                    // silently when the extension is off. Fine in general, but
+                    // an operator who chose "FT-817 + SDR dongle" expects a
+                    // waterfall and would hunt for a fault. Only in that case.
                     val recoitParCle = ui.rigModel == "FT817TX"
                     val sdrOuvert = fr.f4ioz.satcombo.data.Extensions.SDR in ui.extensions
                     if (sdrOuvert) SdrInline(ui, vm)
@@ -594,16 +539,12 @@ internal fun DetailScreen(ui: UiState, vm: MainViewModel, onBack: () -> Unit) {
                                     Text("↑ TX " + (ui.catRadioUplinkHz?.let { "%.4f MHz".format(it/1e6) } ?: "—"),
                                         color = Aurora, fontFamily = FontFamily.Monospace, fontSize = 14.sp,
                                         fontWeight = FontWeight.Bold)
-                                    // Une ligne pour savoir à qui est la molette :
-                                    // sans elle, on ne sait pas si le poste ne
-                                    // bouge pas parce qu'il attend, ou parce
-                                    // qu'on lui a laissé la main.
+                                    // Who owns the VFO knob: app-driven or manual.
                                     Text(if (ui.catRxDriven) t("cat_rx_driven") else t("cat_rx_manual"),
                                         color = if (ui.catRxDriven) Cyan else TextLo, fontSize = 10.sp)
-                                    // « USB LSB… à contrôler + afficher. » Le mode
-                                    // relu du poste, et non celui qu'on croit lui
-                                    // avoir posé : c'est toute la différence quand
-                                    // le correspondant devient inaudible.
+                                    // The mode read back from the rig, not the one
+                                    // we think we set: that is what matters when
+                                    // the other station turns unintelligible.
                                     if (ui.catRadioMode != null) {
                                         Text(tf("cat_radio_mode", ui.catRadioMode) +
                                             (if (ui.catModeMismatch) " " + t("cat_mode_fixed") else ""),
@@ -614,11 +555,9 @@ internal fun DetailScreen(ui: UiState, vm: MainViewModel, onBack: () -> Unit) {
                                         Text(t("doppler_hold_on"), color = Amber, fontSize = 10.sp)
                                     }
                                 }
-                                // « Un bouton pour couper le doppler. » Le
-                                // calcul continue, l'affichage continue, seule
-                                // l'écriture vers le poste s'arrête — de quoi
-                                // reprendre la main sur la molette sans perdre
-                                // le suivi du passage.
+                                // Doppler hold: computation and display go on,
+                                // only writes to the rig stop, so you can take
+                                // the knob without losing pass tracking.
                                 IconButton(onClick = { vm.toggleDopplerHold() },
                                     modifier = Modifier.size(40.dp)) {
                                     Icon(
@@ -711,36 +650,24 @@ internal fun DetailScreen(ui: UiState, vm: MainViewModel, onBack: () -> Unit) {
                         }
                     }
 
-                    // Le tableau du Doppler vient APRÈS les réglages, et replié.
-                    //
-                    // Il occupait le haut de la page alors qu'on le consulte une
-                    // fois, avant le passage, pour savoir de combien la
-                    // fréquence va bouger. L'offset et le décalage d'émission,
-                    // eux, se touchent pendant le contact, une main sur
-                    // l'antenne — ils doivent tomber sous le pouce, pas après
-                    // huit lignes de tableau qu'il faut faire défiler.
+                    // Doppler table AFTER the adjustments, collapsed: it is read
+                    // once before the pass, while offsets are touched during the
+                    // contact with one hand on the antenna.
                     DopplerPassPanel(ui, vm)
                 }
             }
         }
 
-        // Les contacts de ce satellite, sous la carte.
+        // This satellite's contacts, under the card.
         val satLog = ui.log.filter { it.catnum == sat.catalogNumber }
-        // **Le compte ne compte que les contacts.**
-        //
-        // Il annonçait « CONTACTS LOGGÉS (13) » là où quatre lignes n'avaient
-        // pas d'indicatif : des relevés posés d'un appui sur la boussole, qui
-        // ne sont plus fabriqués mais dorment encore dans les carnets
-        // existants. Elles restent visibles — l'éditeur sait les nommer ou les
-        // effacer — mais elles se comptent à part, faute de quoi le carnet
-        // annonce plus de trafic qu'il n'y en a eu.
+        // **The count only counts real contacts.** Old logs still hold
+        // callsign-less entries from the former compass-tap logging. They stay
+        // visible (the editor can name or delete them) but are counted apart.
         val nommes = satLog.count { it.callsign.isNotBlank() }
         val anonymes = satLog.size - nommes
         if (satLog.isNotEmpty()) {
-            // La liste se replie : vingt contacts poussent tout le reste hors
-            // de l'écran, alors qu'on vient ici pour la boussole et les
-            // fréquences. Fermée par défaut au-delà de trois contacts —
-            // en dessous, elle ne gêne personne.
+            // Collapsible list: twenty contacts push the compass and
+            // frequencies off-screen. Closed by default above three contacts.
             item {
                 Row(Modifier.fillMaxWidth().clickable { vm.basculeListeContacts() },
                     verticalAlignment = Alignment.CenterVertically) {
@@ -767,10 +694,8 @@ internal fun DetailScreen(ui: UiState, vm: MainViewModel, onBack: () -> Unit) {
                                         ?: "  ·  " + t("log_no_call_short")),
                                 color = if (e.callsign.isBlank()) Amber else TextHi,
                                 fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                            // La montée figure sur la ligne : c'est elle qui
-                            // part dans FREQ à l'export, et elle n'était nulle
-                            // part à l'écran — donc invérifiable avant que le
-                            // carnet d'en face ne la refuse.
+                            // Uplink shown: it is what goes into FREQ on export,
+                            // so it must be checkable before a logbook rejects it.
                             Text(tf("az_el_line", e.azimuthDeg.toInt(), e.elevationDeg.toInt()) +
                                     (e.theirLocator.takeIf { it.isNotBlank() }?.let { "  ·  $it" } ?: "") +
                                     (e.uplinkMhz.takeIf { it > 0.0 }?.let {
@@ -785,19 +710,12 @@ internal fun DetailScreen(ui: UiState, vm: MainViewModel, onBack: () -> Unit) {
                                     color = Amber, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                             }
                         }
-                        // Déposer **ce** contact au carnet en ligne.
-                        //
-                        // Le dépôt en lot était le seul chemin, et c'est un
-                        // défaut de méthode : le premier essai est justement
-                        // celui où l'on découvre que la clé est en lecture
-                        // seule ou que le profil de station manque. Un lot
-                        // entier déposé de travers se démêle ensuite à la
-                        // main, contact par contact, du côté du serveur.
-                        //
-                        // Le bouton ne paraît que s'il a quelque chose à
-                        // faire : un carnet configuré, un indicatif, et rien
-                        // d'encore déposé. Sinon une coche, qui dit que c'est
-                        // parti et qu'il n'y a pas à recommencer.
+                        // Upload **this** contact to the online logbook. Batch
+                        // upload alone was a trap: the first try is where you
+                        // find the key is read-only or the station profile is
+                        // missing, and a bad batch must be untangled by hand
+                        // on the server. Button only when configured, with a
+                        // callsign and not yet sent; otherwise a check mark.
                         val carnetPret = ui.carnet.url.isNotBlank() &&
                             ui.carnet.cle.isNotBlank() && ui.carnet.profil.isNotBlank()
                         if (e.callsign.isNotBlank() && carnetPret) {
@@ -859,11 +777,8 @@ internal fun DetailScreen(ui: UiState, vm: MainViewModel, onBack: () -> Unit) {
                                 val win = remember(s.callsign, s.aosMs, ui.observer) {
                                     vm.skedMutualWindow(s)
                                 }
-                                // Chaque annonce ouvre le sked mutuel avec ses
-                                // propres données : c'est le même geste que
-                                // depuis le bandeau du haut, et il serait
-                                // déroutant qu'une carte qui montre le carré ne
-                                // sache pas le transmettre.
+                                // Each announcement opens the mutual sked with
+                                // its own data, same gesture as the top banner.
                                 Column(Modifier.fillMaxWidth()
                                     .clickable { vm.openSked(s) }
                                     .padding(vertical = 5.dp)) {
@@ -1058,9 +973,8 @@ private fun TransmittersSection(ui: UiState, vm: MainViewModel, sat: TleEntry, r
                 color = TextLo, fontSize = 10.sp, fontFamily = FontFamily.Monospace)
     }
 
-    // Le VFO ne vient pas toujours du catalogue : quand un rendez-vous impose
-    // une descente, on le dit, sinon l'ecart avec le transpondeur affiche
-    // ressemble a une erreur. Toucher au curseur fait disparaitre la mention.
+    // When an agenda event imposes the downlink, say so, or the gap with the
+    // shown transponder looks like a bug. Touching the slider clears it.
     ui.rxFromAgendaHz?.let { hz ->
         Surface(color = Magenta.copy(alpha = 0.14f), shape = RoundedCornerShape(8.dp),
             modifier = Modifier.fillMaxWidth().padding(top = 6.dp)) {
@@ -1070,28 +984,12 @@ private fun TransmittersSection(ui: UiState, vm: MainViewModel, sat: TleEntry, r
         }
     }
 
-    // **Ce que le plan de bande autorise ici.**
-    //
-    // Sur QO-100 chaque segment a sa largeur maximale — 500 Hz pour le
-    // numérique étroit, 2700 Hz pour la phonie — et l'ignorer, c'est déborder
-    // sur ses voisins sans le savoir. L'information existait dans l'écran
-    // QO-100 ; elle manquait là où l'on se déplace réellement dans la bande.
-    //
-    // Rien ne s'affiche hors de QO-100 : les autres transpondeurs n'ont pas de
-    // plan de bande par segment, et une ligne vide vaut mieux qu'une ligne
-    // fausse.
-    // **Le convertisseur de QO-100 est actif, et l'on n'est pas sur QO-100.**
-    //
-    // Avec un oscillateur choisi pour poser QO-100 sur le 2 m, la fenêtre
-    // intermédiaire du LNB recouvre forcément le 2 m des satellites à
-    // défilement : aucune règle de fréquence ne peut distinguer une descente
-    // d'ISS d'une intermédiaire de QO-100. Le seul discriminant est le
-    // satellite choisi, et si une lecture du poste passe malgré tout par le
-    // convertisseur, l'écran affiche des gigahertz sans rien expliquer.
-    //
-    // On le dit donc, et l'on met le remède sous le doigt : deux touches au
-    // lieu d'un aller-retour dans les réglages, au moment précis où le
-    // satellite est en vue.
+    // **QO-100 converter active on a non-QO-100 satellite.** With a local
+    // oscillator that puts QO-100 on 2 m, the LNB IF window necessarily
+    // overlaps the 2 m downlinks of LEO sats: no frequency rule can tell an
+    // ISS downlink from a QO-100 IF. Only the selected satellite can, and
+    // otherwise the screen shows gigahertz with no explanation. So warn, with
+    // the fix one tap away while the sat is in view.
     if (sat.catalogNumber != fr.f4ioz.satcombo.domain.Qo100.NORAD &&
         ui.convRx.configure && (ui.convRxPoste || ui.convRxCle)
     ) {
@@ -1107,6 +1005,10 @@ private fun TransmittersSection(ui: UiState, vm: MainViewModel, sat: TleEntry, r
         }
     }
 
+    // **What the band plan allows here.** Each QO-100 segment has a max
+    // width (500 Hz narrow digital, 2700 Hz SSB); ignoring it spills onto
+    // neighbours. QO-100 only: other transponders have no per-segment plan,
+    // and no line beats a wrong one.
     val rxRestPourPlan = ui.rxRestHz ?: dlLow
     if (sat.catalogNumber == fr.f4ioz.satcombo.domain.Qo100.NORAD && rxRestPourPlan != null) {
         fr.f4ioz.satcombo.domain.Qo100.segment(rxRestPourPlan)?.let { seg ->
@@ -1121,17 +1023,12 @@ private fun TransmittersSection(ui: UiState, vm: MainViewModel, sat: TleEntry, r
                     color = TextLo, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
             }
         }
-        // Le plan de bande dessiné, et le curseur posé dessus.
-        //
-        // La barre unie disait où l'on était dans la plage, pas dans quoi.
-        // Ici les segments se distinguent — balises, télégraphie, numérique,
-        // phonie — et l'on voit d'un coup d'œil sur quoi on arrive. Le même
-        // composant que l'écran QO-100, pour que le plan ne puisse pas dire
-        // deux choses différentes selon la page.
+        // Drawn band plan with the cursor on it (beacons, CW, digital, SSB).
+        // Same component as the QO-100 screen, so the plan cannot differ
+        // between pages.
         Spacer(Modifier.height(6.dp))
-        // La réglette n'est pas bornée au transpondeur : elle dessine tout
-        // QO-100, et l'on doit pouvoir se poser partout où elle est dessinée.
-        // Le transpondeur suit la fréquence, au lieu de la commander.
+        // Not bounded to the transponder: it draws all of QO-100 and you can
+        // land anywhere on it. The transponder follows the frequency.
         Reglette(rxRestPourPlan) { vm.allerLibre(it) }
     }
 
@@ -1156,24 +1053,16 @@ private fun TransmittersSection(ui: UiState, vm: MainViewModel, sat: TleEntry, r
     val calib = ui.calibShiftHz
     val rxOff = if (ui.opMode == "CW") ui.rxOffsetCwHz else ui.rxOffsetVoiceHz
     val effInvert = ui.invertOverride ?: tx.invert
-    // **Calculées par le ViewModel, pas ici.** L'écran et la page du public
-    // faisaient chacun leur calcul, et ils ont divergé de cinq kilohertz. Une
-    // seule fonction, deux appelants : elles ne peuvent plus se contredire.
+    // **Computed by the ViewModel, not here.** This screen and the public
+    // page each had their own computation and drifted 5 kHz apart. One
+    // function, two callers.
     val (rxShown, txShown) = vm.freqAffichees()
 
 
-    // **Le ciel et le poste, ensemble.**
-    //
-    // Ces deux nombres sont la fréquence du satellite. Dès qu'un
-    // convertisseur est dans la chaîne, ce n'est plus ce que le poste affiche
-    // — sur QO-100, l'écran annonce 10 489,802 quand le FT-817 est sur
-    // 144,830. L'opérateur devait faire la soustraction de tête, ou aller la
-    // chercher dans un autre écran, au moment précis où il cherche à se poser
-    // sur une station qui l'appelle.
-    //
-    // La ligne du poste n'apparaît que si un convertisseur s'applique
-    // réellement à cette fréquence : sans convertisseur les deux nombres
-    // seraient identiques, et répéter le même chiffre ne renseigne personne.
+    // **Sky and rig frequencies together.** These are satellite frequencies;
+    // with a converter in the chain the rig shows something else (QO-100:
+    // 10 489.802 on screen, 144.830 on the FT-817). The rig line appears only
+    // when a converter actually covers the frequency.
     rxShown?.let { f ->
         VfoChip("RX ↓", Doppler.formatMHz(f), Cyan)
         if (ui.convRx.couvre(f)) LignePoste(ui.convRx.versPoste(f), Cyan)
@@ -1194,17 +1083,13 @@ private fun TransmittersSection(ui: UiState, vm: MainViewModel, sat: TleEntry, r
 }
 
 /**
- * Le Doppler du passage entier, en tableau.
+ * Doppler over the whole pass, as a table: time, elevation, RX ↓, TX ↑, plus
+ * total excursion. Answers the pre-pass question the live readout cannot: how
+ * far and which way will the frequency move.
  *
- * Quatre colonnes — repère et heure, élévation, RX ↓, TX ↑ — et l'excursion
- * totale des deux voies. Ce panneau existe parce que la lecture instantanée ne
- * répondait pas à la question qu'on se pose vraiment avant un passage : de
- * combien la fréquence va-t-elle bouger, et dans quel sens.
- *
- * Les deux VFO partent en sens contraires, et c'est normal : la descente baisse
- * du début à la fin, la montée monte. Sur 435 MHz l'excursion fait une dizaine
- * de kilohertz, sur 145 elle est trois fois moindre — d'où la vieille règle du
- * pouce, quand on ne peut suivre qu'un seul VFO, on corrige la descente.
+ * The two VFOs move in opposite directions, as they should: downlink falls,
+ * uplink rises. About 10 kHz on 435 MHz, a third of that on 145 — hence the
+ * old rule of thumb: with only one VFO to follow, correct the downlink.
  */
 @Composable
 private fun DopplerPassPanel(ui: UiState, vm: MainViewModel) {
@@ -1214,19 +1099,14 @@ private fun DopplerPassPanel(ui: UiState, vm: MainViewModel) {
     }
     if (table.isEmpty) return
     val fmt = tzFormat("HH:mm:ss", ui.useUtc)
-    // L'état de dépliage survit au défilement de la liste, pas à la sortie de
-    // l'écran : on rouvre toujours sur la page repliée, qui est celle des
-    // réglages.
+    // Survives list scrolling, not leaving the screen: always reopens collapsed.
     var deplie by rememberSaveable { mutableStateOf(false) }
 
     Spacer(Modifier.height(10.dp))
     Surface(color = SpaceCard, shape = RoundedCornerShape(14.dp),
         modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(12.dp)) {
-            // L'en-tête reste, le tableau se replie. Replié par défaut :
-            // huit lignes de fréquences ne se lisent qu'une fois, avant le
-            // passage, et le reste du temps elles éloignent du pouce les
-            // réglages qu'on touche vraiment.
+            // Header stays, table collapses (collapsed by default).
             Surface(color = SpaceSurface, shape = RoundedCornerShape(10.dp),
                 modifier = Modifier.fillMaxWidth()) {
             Row(Modifier.fillMaxWidth()
@@ -1241,8 +1121,8 @@ private fun DopplerPassPanel(ui: UiState, vm: MainViewModel) {
                 Text(t("doppler_pass_title"), color = TextHi, fontWeight = FontWeight.Bold,
                     fontSize = 12.sp)
                 Spacer(Modifier.weight(1f))
-                // Replié, l'excursion reste affichée : c'est le seul chiffre
-                // qu'on retient du tableau, et le voir évite de le déplier.
+                // Collapsed, the excursion stays visible: the one figure
+                // people take from the table.
                 if (!deplie) {
                     Text(
                         "±" + fr.f4ioz.satcombo.domain.DopplerPass.kHz(table.rxExcursionHz),
@@ -1297,10 +1177,8 @@ private fun DopplerPassPanel(ui: UiState, vm: MainViewModel) {
             Spacer(Modifier.height(8.dp))
             HorizontalDivider(color = SpaceSurface)
             Spacer(Modifier.height(6.dp))
-            // La clé porte deux marques de format `%.1f` et attend donc `tf`.
-            // Concaténée telle quelle, elle affichait « Excursion : RX %.1f kHz
-            // · TX %.1f kHz  RX 16,9 kHz · TX 5,6 kHz » — les marques en clair,
-            // suivies des vraies valeurs.
+            // The key holds `%.1f` placeholders, so it needs `tf`; plain
+            // concatenation showed the raw placeholders before the values.
             Text(
                 if (table.txExcursionHz > 0)
                     tf("doppler_pass_span",
@@ -1313,12 +1191,8 @@ private fun DopplerPassPanel(ui: UiState, vm: MainViewModel) {
 }
 
 /**
- * Ce que le poste affiche réellement, sous la fréquence du ciel.
- *
- * En retrait et en plus petit : c'est une conséquence, pas la donnée
- * principale. On travaille sur la fréquence du satellite ; celle du poste ne
- * sert qu'à vérifier que la chaîne fait ce qu'on croit, et à retrouver un
- * point manuellement si le CAT lâche.
+ * What the rig actually shows, under the sky frequency. Indented and smaller:
+ * it only serves to check the chain, or to tune by hand if CAT drops out.
  */
 @Composable
 private fun LignePoste(posteHz: Long, accent: Color) {
@@ -1494,20 +1368,10 @@ private fun SatConfigDialog(ui: UiState, vm: MainViewModel, sat: TleEntry) {
         Surface(color = SpaceSurface, shape = RoundedCornerShape(20.dp),
             modifier = Modifier.fillMaxWidth(0.96f).fillMaxHeight(0.92f)) {
             Column(Modifier.padding(16.dp)) {
-            // **Un seul défilement pour toute la boîte.**
-            //
-            // La liste des transpondeurs avait `weight(1f)` : elle n'obtenait
-            // que ce que le reste laissait, et le reste — sens, mode, deux
-            // calibrations, mémorisation — occupe presque toute la hauteur.
-            // Il restait deux lignes de liste, dans lesquelles il fallait
-            // faire défiler à part, sur un satellite qui peut en offrir
-            // quinze. On ne voyait donc jamais ce qu'on venait choisir.
-            //
-            // Une liste paresseuse ne sert à rien pour quinze entrées : elle
-            // ne coûtait que ce conflit de hauteur. Tout défile désormais
-            // ensemble, la liste s'affiche entière, et le bouton
-            // d'enregistrement reste épinglé — c'est le seul élément qu'on
-            // doit pouvoir atteindre sans chercher.
+            // **One scroll for the whole dialog.** A `weight(1f)` transponder
+            // list only got what the rest left: two visible rows out of up to
+            // fifteen. A lazy list is pointless for fifteen entries, so all
+            // scrolls together; only the save button stays pinned.
             Column(
                 Modifier.weight(1f)
                     .verticalScroll(androidx.compose.foundation.rememberScrollState())
@@ -1539,13 +1403,11 @@ private fun SatConfigDialog(ui: UiState, vm: MainViewModel, sat: TleEntry) {
                                         maxLines = 2)
                                     Row(Modifier.padding(top = 2.dp),
                                         horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                        // Le mode de SatNOGS n'est montré que
-                                        // là où il veut dire quelque chose :
-                                        // sur une balise. Un transpondeur
-                                        // linéaire n'a pas de mode, et celui
-                                        // que porte la base est faux sur
-                                        // QO-100 — « FM » sur des segments
-                                        // réservés à la BLU.
+                                        // SatNOGS mode only where it means
+                                        // something (beacons). A linear
+                                        // transponder has no mode, and the
+                                        // database says "FM" on QO-100's
+                                        // SSB-only segments.
                                         if (t.modeSignifiant) t.mode?.let { Badge2(it, Aurora) }
                                         if (t.isTransponder) Badge2(if (t.invert) fr.f4ioz.satcombo.i18n.t("inverting") else "NORMAL",
                                             if (t.invert) Magenta else Aurora)
@@ -1558,12 +1420,9 @@ private fun SatConfigDialog(ui: UiState, vm: MainViewModel, sat: TleEntry) {
                 }
 
                 Spacer(Modifier.height(12.dp))
-                // Sens du transpondeur et mode d'exploitation.
-                //
-                // Ils occupaient deux cartes pleine largeur sur la fiche du
-                // passage, pour deux choix qu'on fait une fois en arrivant. Ils
-                // rejoignent la boîte où l'on choisit déjà le transpondeur : le
-                // sens et le mode font partie du même geste.
+                // Transponder sense and operating mode: set once, as part of
+                // choosing the transponder, so they live here rather than as
+                // two full-width cards on the pass page.
                 val txChoisi = active.getOrNull(ui.selectedTxIndex)
                 val effT = ui.invertOverride ?: (txChoisi?.invert == true)
                 Row(verticalAlignment = Alignment.CenterVertically,
@@ -1629,19 +1488,10 @@ private fun SatConfigDialog(ui: UiState, vm: MainViewModel, sat: TleEntry) {
                     }
                 }
 
-                // --- la moitié qui manquait ---
-                //
-                // Cette boîte annonçait « le décalage propre au satellite » et
-                // n'en montrait qu'un sur deux : la correction de réception.
-                // Celle d'émission, mémorisée sous la même clé de satellite,
-                // n'apparaissait nulle part ailleurs que dans la page du
-                // passage — au point qu'un opérateur pouvait y lire +480 Hz en
-                // voyant 0 ici, et conclure à un défaut.
-                //
-                // Elle mérite d'autant plus sa place que la molette d'émission
-                // la modifie désormais sans qu'on appuie sur rien : un chiffre
-                // peut grimper sans qu'on s'en aperçoive, et il faut un endroit
-                // pour le consulter et le remettre à zéro hors passage.
+                // TX shift, stored under the same satellite key as the RX one.
+                // Showing only RX here made +480 Hz on the pass page look like
+                // a fault. The TX knob now changes it silently, so it needs a
+                // place to check and reset it outside a pass.
                 Spacer(Modifier.height(12.dp))
                 Text(t("calibration_tx_title"), color = TextLo,
                     fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp, fontSize = 11.sp)
@@ -1667,20 +1517,11 @@ private fun SatConfigDialog(ui: UiState, vm: MainViewModel, sat: TleEntry) {
                     }) { Text(t("reset"), color = TextLo) }
                 }
 
-                // La référence : le décalage qui marchait.
-                //
-                // Un décalage se règle à l'oreille pendant un passage, et il
-                // finit par être juste. Puis un doigt glisse sur la molette
-                // d'émission — qui tient lieu de commande de décalage — et la
-                // valeur patiemment trouvée est perdue sans que rien ne
-                // l'annonce. Il n'y avait alors aucun retour en arrière : la
-                // seule sauvegarde était celle de toute la configuration, et
-                // la restaurer pour un nombre écraserait tout le reste.
-                //
-                // La mémorisation est **explicite**. Un enregistrement
-                // automatique ne saurait pas distinguer le réglage qui
-                // converge de la fausse manœuvre, et retiendrait l'un pour
-                // l'autre.
+                // Reference: the shift that worked. A shift tuned by ear is
+                // lost silently when a finger slips on the TX knob, and the
+                // only other backup is the whole configuration. Saving is
+                // **explicit**: auto-save cannot tell a converging adjustment
+                // from a slip.
                 Spacer(Modifier.height(10.dp))
                 val refRx = ui.catUi.refCalibShiftHz
                 val refTx = ui.catUi.refTxShiftHz
@@ -1699,11 +1540,8 @@ private fun SatConfigDialog(ui: UiState, vm: MainViewModel, sat: TleEntry) {
                             txShiftText = (refTx ?: 0L).toString()
                         }) { Text(t("shift_recall"), color = Amber, fontSize = 12.sp) }
                     }
-                    // Le filet pour qui n'a rien mémorisé.
-                    //
-                    // Il n'apparaît que si quelque chose a bougé depuis
-                    // l'ouverture du satellite : un bouton qui ne ferait rien
-                    // n'aurait pas à occuper la rangée.
+                    // Safety net without a saved reference: back to the values
+                    // on arrival, shown only if something changed since.
                     val arrRx = ui.catUi.arriveeCalibShiftHz
                     val arrTx = ui.catUi.arriveeTxShiftHz
                     if (arrRx != null &&
@@ -1718,8 +1556,7 @@ private fun SatConfigDialog(ui: UiState, vm: MainViewModel, sat: TleEntry) {
 
             }
 
-                // Épinglé sous la zone défilante : quelle que soit la longueur
-                // de la liste, on n'a jamais à faire défiler pour valider.
+                // Pinned below the scrolling area: never scroll to save.
                 Spacer(Modifier.height(8.dp))
                 Row {
                     Spacer(Modifier.weight(1f))
@@ -1737,9 +1574,8 @@ private fun SatConfigDialog(ui: UiState, vm: MainViewModel, sat: TleEntry) {
 }
 
 /**
- * « HH:MM » ramené à un instant, le jour du contact conservé.
- *
- * On corrige une heure, pas une date : le jour vient de l'entrée d'origine.
+ * "HH:MM" to an instant, keeping the contact's day: this corrects a time, not
+ * a date.
  */
 internal fun heureVersMs(txt: String, refMs: Long, useUtc: Boolean): Long? {
     val m = Regex("^(\\d{1,2}):(\\d{2})$").find(txt.trim()) ?: return null
@@ -1768,19 +1604,14 @@ internal fun LogEditDialog(entry: fr.f4ioz.satcombo.data.LogEntry, useUtc: Boole
                           onSave: (String, String, String, String, String, String) -> Unit,
                           onDismiss: () -> Unit,
                           /**
-                           * Les satellites disponibles et la correction.
-                           * Corriger le satellite recalcule l'azimut et
-                           * l'élévation : ils décrivent où pointait l'antenne
-                           * à cet instant, pas une donnée saisie.
+                           * Available satellites and the correction callback.
+                           * Changing the satellite recomputes az/el: they
+                           * describe where the antenna pointed, not user input.
                            */
                           satellites: List<fr.f4ioz.satcombo.data.TleEntry> = emptyList(),
                           onCorrigeSat: ((fr.f4ioz.satcombo.data.TleEntry, Long?) -> Unit)? = null) {
-    // Le satellite et l'heure retenus, **pas encore écrits**.
-    //
-    // L'appui sur un satellite corrigeait l'entrée immédiatement : « Annuler »
-    // n'annulait rien et une fausse manœuvre était définitive. Une boîte de
-    // dialogue n'écrit qu'à sa validation — c'est ce que ses deux boutons
-    // promettent.
+    // Chosen satellite and time, **not yet written**. Writing on tap made
+    // "Cancel" a lie; a dialog writes only on confirm.
     var satChoisi by remember(entry.timeMs) {
         mutableStateOf<fr.f4ioz.satcombo.data.TleEntry?>(null)
     }
@@ -1793,9 +1624,7 @@ internal fun LogEditDialog(entry: fr.f4ioz.satcombo.data.LogEntry, useUtc: Boole
     var grid by remember { mutableStateOf(entry.theirLocator) }
     var note by remember { mutableStateOf(entry.note) }
     var mode by remember { mutableStateOf(entry.mode) }
-    // Le report par defaut suit le mode : 599 en telegraphie, 59 partout
-    // ailleurs. C'est ce que l'operateur aurait ecrit de toute facon, et il
-    // reste libre de le corriger avant d'enregistrer.
+    // Default report follows the mode: 599 in CW, 59 otherwise. Editable.
     val defaultRst = if (entry.mode.uppercase().contains("CW")) "599" else "59"
     var rstS by remember { mutableStateOf(entry.rstSent.ifBlank { defaultRst }) }
     var rstR by remember { mutableStateOf(entry.rstRcvd.ifBlank { defaultRst }) }
@@ -1808,9 +1637,8 @@ internal fun LogEditDialog(entry: fr.f4ioz.satcombo.data.LogEntry, useUtc: Boole
         onDismissRequest = onDismiss,
         confirmButton = {
             TextButton(onClick = {
-                // La correction du satellite et de l'heure part d'abord :
-                // elle change la clé de l'entrée (`timeMs`), et `onSave`
-                // travaille dessus.
+                // Satellite/time correction first: it changes the entry key
+                // (`timeMs`) that `onSave` works on.
                 val nouvelleHeure = heureVersMs(heure, entry.timeMs, useUtc)
                     ?.takeIf { it != entry.timeMs }
                 val sa = satChoisi
@@ -1831,8 +1659,8 @@ internal fun LogEditDialog(entry: fr.f4ioz.satcombo.data.LogEntry, useUtc: Boole
         title = { Text(t("contact_logged2"), color = TextHi) },
         text = {
             Column {
-                // Le satellite et l'heure se corrigent ici : un contact mal
-                // attribué fausse le carnet, l'ADIF et les carrés travaillés.
+                // Satellite and time are fixable here: a misattributed contact
+                // corrupts the log, the ADIF and the worked grid squares.
                 var choixSat by remember(entry.timeMs) { mutableStateOf(false) }
                 if (choixSat && onCorrigeSat != null) {
                     AlertDialog(
@@ -1861,7 +1689,7 @@ internal fun LogEditDialog(entry: fr.f4ioz.satcombo.data.LogEntry, useUtc: Boole
                     Spacer(Modifier.width(10.dp))
                     if (onCorrigeSat != null) {
                         TextButton(onClick = { choixSat = true }) {
-                            // Le nom montré est celui qu'on enregistrera.
+                            // The name shown is the one that will be saved.
                             Text((satChoisi?.name ?: entry.satName) + " ▾",
                                 color = if (satChoisi != null) Amber else Cyan,
                                 fontWeight = FontWeight.Bold)

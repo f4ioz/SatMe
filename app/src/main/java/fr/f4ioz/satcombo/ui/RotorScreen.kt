@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.ui
 
@@ -46,22 +46,17 @@ import fr.f4ioz.satcombo.ui.theme.*
 import java.util.Locale
 
 /**
- * Le pilotage du mât.
+ * Mast control.
  *
- * C'est le premier écran de SatMe qui déplace quelque chose de lourd, et il est
- * construit autour de cette idée. L'état vient en premier — la consigne, la
- * position relue, et l'écart entre les deux —, parce que c'est la seule chose
- * qu'on regarde quand le mât ne fait pas ce qu'on attendait. L'arrêt immédiat
- * est en haut, en rouge, atteignable sans faire défiler : un bouton d'arrêt
- * qu'il faut chercher n'est pas un bouton d'arrêt.
+ * The first SatMe screen that moves something heavy, and it is built around
+ * that. State comes first — target, read-back position and the gap between
+ * them — because that is all you look at when the mast misbehaves. Emergency
+ * stop is at the top, red, reachable without scrolling: a stop button you have
+ * to look for is not a stop button.
  *
- * Les réglages viennent ensuite, dans l'ordre où l'on s'en occupe : la liaison
- * une fois pour toutes, puis la mécanique du mât, qui ne changera plus.
- *
- * La position affichée est celle que le contrôleur rend, pas celle qu'on lui a
- * demandée. La distinction est tout l'intérêt de l'écran : un mât qui n'a pas
- * reçu l'ordre et un mât qui n'a pas fini de tourner se ressemblent exactement,
- * et seule la position relue les sépare.
+ * The position shown is what the controller reports, not what was requested.
+ * A mast that never got the command and one still turning look identical;
+ * only the read-back tells them apart.
  */
 @Composable
 fun RotorScreen(ui: UiState, vm: MainViewModel) {
@@ -70,13 +65,12 @@ fun RotorScreen(ui: UiState, vm: MainViewModel) {
             .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        // ---- avertissement -------------------------------------------------
+        // ---- warning -------------------------------------------------------
         Surface(color = SpaceCard, shape = RoundedCornerShape(14.dp)) {
             Column(Modifier.fillMaxWidth().padding(14.dp)) {
-                // Le bandeau de rodage est retiré : le rotor a tourné sur un
-                // vrai pylône. Reste la consigne de sécurité, qui elle ne
-                // dépend d'aucun essai — un moteur en haut d'un mât mérite
-                // qu'on garde l'arrêt d'urgence à portée, éprouvé ou non.
+                // The break-in banner is gone (the rotor has run on a real tower).
+                // The safety note stays: a motor on top of a mast deserves the
+                // emergency stop within reach, proven or not.
                 Text(t("rotor_safety"), color = Amber,
                     fontWeight = FontWeight.Bold, fontSize = 13.sp)
                 Spacer(Modifier.height(6.dp))
@@ -84,7 +78,7 @@ fun RotorScreen(ui: UiState, vm: MainViewModel) {
             }
         }
 
-        // ---- état ----------------------------------------------------------
+        // ---- state ---------------------------------------------------------
         Surface(color = SpaceCard, shape = RoundedCornerShape(14.dp)) {
             Column(Modifier.fillMaxWidth().padding(14.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -128,9 +122,8 @@ fun RotorScreen(ui: UiState, vm: MainViewModel) {
                     }
                 }
                 Spacer(Modifier.height(8.dp))
-                // L'arrêt d'urgence : pleine largeur, rouge, toujours au même
-                // endroit. Il coupe aussi la poursuite — sinon ce ne serait
-                // qu'une pause d'une seconde.
+                // Emergency stop: full width, red, always in the same place. It
+                // also stops tracking — otherwise it would only pause for a second.
                 Button(onClick = vm::rotorStopNow, modifier = Modifier.fillMaxWidth(),
                     colors = ButtonDefaults.buttonColors(containerColor = Magenta)) {
                     Icon(Icons.Default.Stop, null, tint = Color.Black,
@@ -142,13 +135,10 @@ fun RotorScreen(ui: UiState, vm: MainViewModel) {
             }
         }
 
-        // ---- essai a la main -----------------------------------------------
-        // « Est-il possible de forcer le rotor a tourner vers des angles,
-        // afficher l'endroit reel du rotor, pour tester sans satellite. »
-        //
-        // Cette carte ne sert qu'a cela, et elle est placee haut expres : c'est
-        // le premier geste de qui vient de brancher un cable. Un passage arrive
-        // quand il veut ; l'essai, lui, doit pouvoir se faire tout de suite.
+        // ---- manual test ---------------------------------------------------
+        // Drive the rotor to given angles and show its real position, to test
+        // without a satellite. Placed high on purpose: it is the first thing
+        // you do after plugging in a cable, and it must work right away.
         Surface(color = SpaceCard, shape = RoundedCornerShape(14.dp)) {
             Column(Modifier.fillMaxWidth().padding(14.dp)) {
                 Text(t("rotor_manual_title"), color = TextHi,
@@ -196,10 +186,9 @@ fun RotorScreen(ui: UiState, vm: MainViewModel) {
                 Spacer(Modifier.height(10.dp))
                 HorizontalDivider(color = SpaceSurface)
                 Spacer(Modifier.height(10.dp))
-                // Les deux trames brutes. Elles ne servent a rien quand tout
-                // marche, et elles sont la seule chose utile quand rien ne
-                // marche : un port qui s'ouvre sans que personne ne reponde
-                // ressemble en tout point a un mat qui n'a pas fini de tourner.
+                // Raw TX/RX frames. Useless when everything works, the only useful
+                // thing when nothing does: a port that opens with nobody answering
+                // looks exactly like a mast still turning.
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(t("rotor_frames"), color = TextHi,
                         fontWeight = FontWeight.Bold, fontSize = 13.sp,
@@ -218,7 +207,7 @@ fun RotorScreen(ui: UiState, vm: MainViewModel) {
             }
         }
 
-        // ---- poursuite -----------------------------------------------------
+        // ---- tracking ------------------------------------------------------
         Surface(color = SpaceCard, shape = RoundedCornerShape(14.dp)) {
             Column(Modifier.fillMaxWidth().padding(14.dp)) {
                 RotorToggle(t("rotor_enable"), ui.rotorEnabled, vm::setRotorEnabled)
@@ -229,7 +218,7 @@ fun RotorScreen(ui: UiState, vm: MainViewModel) {
             }
         }
 
-        // ---- liaison -------------------------------------------------------
+        // ---- link ----------------------------------------------------------
         Surface(color = SpaceCard, shape = RoundedCornerShape(14.dp)) {
             Column(Modifier.fillMaxWidth().padding(14.dp)) {
                 Text(t("rotor_link"), color = TextHi,
@@ -307,7 +296,7 @@ fun RotorScreen(ui: UiState, vm: MainViewModel) {
             }
         }
 
-        // ---- mécanique du mât ----------------------------------------------
+        // ---- mast mechanics ------------------------------------------------
         Surface(color = SpaceCard, shape = RoundedCornerShape(14.dp)) {
             Column(Modifier.fillMaxWidth().padding(14.dp)) {
                 Text(t("rotor_title"), color = TextHi,
@@ -339,10 +328,8 @@ fun RotorScreen(ui: UiState, vm: MainViewModel) {
                 RotorNumber(t("rotor_park_az"), ui.rotorParkAz, 5, "°") { vm.setRotorParkAz(it) }
                 RotorNumber(t("rotor_park_el"), ui.rotorParkEl, 5, "°") { vm.setRotorParkEl(it) }
                 HorizontalDivider(Modifier.padding(vertical = 8.dp), color = SpaceSurface)
-                // « Il faut qu'il soit positionné avant le début du passage,
-                // x minutes en paramètre. » Le mât part attendre le satellite
-                // là où il se lèvera, au lieu de rentrer au garage pour en
-                // repartir aussitôt.
+                // Pre-positioning: the mast goes to wait where the satellite will
+                // rise, instead of parking and setting off again.
                 RotorNumber(t("rotor_pre_aos"), ui.rotorPreAos, 1, " min") {
                     vm.setRotorPreAos(it)
                 }
@@ -353,7 +340,7 @@ fun RotorScreen(ui: UiState, vm: MainViewModel) {
     }
 }
 
-/** Une consigne ou une position, en gros chiffres à chasse fixe. */
+/** A target or position in large monospaced digits. */
 @Composable
 private fun AimLine(label: String, az: Double?, el: Double?, tint: Color) {
     Row(Modifier.fillMaxWidth().padding(vertical = 2.dp),
@@ -392,12 +379,11 @@ private fun RotorChip(label: String, on: Boolean, onClick: () -> Unit) {
 }
 
 /**
- * Un réglage numérique par pas.
+ * A stepped numeric setting.
  *
- * Sans clavier, volontairement : ces valeurs se règlent une fois, elles se
- * comptent en dizaines, et le bornage vit dans les réglages — taper 5000 dans
- * un champ libre pour le voir revenir à 540 sans explication ne renseigne
- * personne.
+ * No keyboard on purpose: set once, counted in tens, and clamping lives in
+ * the settings — typing 5000 and seeing it silently turn into 540 teaches
+ * nobody anything.
  */
 @Composable
 private fun RotorNumber(label: String, value: Int, step: Int, unit: String,

@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.ui
 
@@ -103,15 +103,10 @@ fun PhotoScreen(ui: UiState, vm: MainViewModel) {
     var toast by remember { mutableStateOf("") }
     var error by remember { mutableStateOf("") }
 
-    // Destination of the camera shot. A NEW file for every capture: reusing the
-    // same one meant the second shot could land on a leftover, and some camera
-    // apps refuse to overwrite an existing file altogether.
-    //
-    // It is NOT a remember{}: the camera app runs in its own process and ours
-    // can be recreated — or killed outright — while it is on top. Turning the
-    // phone to shoot in landscape did exactly that, the destination was lost,
-    // and the picture came back to a page that no longer knew where to read it.
-    // The path now lives in the ViewModel/preferences.
+    // Camera destination: a NEW file per capture (some camera apps refuse to
+    // overwrite). NOT a remember{}: our process can be recreated or killed
+    // while the camera is on top (rotating to landscape does it), so the path
+    // lives in the ViewModel/preferences.
 
     /** Accepts a decoded shot, or reports why it could not be decoded. */
     fun accept(bmp: Bitmap?, why: String, fallback: (() -> Unit)? = null) {
@@ -142,23 +137,23 @@ fun PhotoScreen(ui: UiState, vm: MainViewModel) {
         busy = true; toast = ""; error = ""
         scope.launch {
             val r = withContext(Dispatchers.IO) { runCatching { QthPhoto.load(ctx, uri) } }
-            // The exception class is appended on purpose: it is the only way to
-            // tell a permission refusal from a codec failure on a user's phone.
+            // Exception class appended on purpose: the only way to tell a
+            // permission refusal from a codec failure on a user's phone.
             val why = t("photo_err_read") + " · " + tag +
                 (r.exceptionOrNull()?.let { " " + it.javaClass.simpleName } ?: "")
             accept(r.getOrNull(), why, fallback)
         }
     }
 
-    // Last-resort picker: ACTION_OPEN_DOCUMENT always comes back with a readable
-    // URI, even on the ROMs whose gallery hands out media URIs we may not read.
+    // Last resort: ACTION_OPEN_DOCUMENT always returns a readable URI, even on
+    // ROMs whose gallery hands out unreadable media URIs.
     val openDoc = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument()
     ) { uri -> if (uri != null) ingest(uri, "DOC") else error = t("photo_err_none") }
 
-    // Custom contract instead of TakePicture(): the intent must carry the URI
-    // write grant, and some camera apps report CANCELED while having written the
-    // file anyway — so the file itself is what decides, not the result code.
+    // Not TakePicture(): the intent must carry the URI write grant, and some
+    // camera apps report CANCELED after writing the file. The file decides,
+    // not the result code.
     val takePicture = rememberLauncherForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) { res ->
@@ -181,22 +176,20 @@ fun PhotoScreen(ui: UiState, vm: MainViewModel) {
         }
     }
 
-    // NO automatic fallback here: chaining the document picker behind the gallery
-    // opened a second picker on top of the first one, and nothing could be
-    // selected any more. A cancel stays a cancel; the file explorer is offered as
-    // an explicit button in the error card instead.
+    // NO automatic fallback: chaining the document picker opened a second
+    // picker over the first and nothing could be selected. A cancel stays a
+    // cancel; the file explorer is an explicit button in the error card.
     val pickPhoto = rememberLauncherForActivityResult(
         ActivityResultContracts.PickVisualMedia()
     ) { uri ->
         if (uri != null) ingest(uri, "GAL")
     }
 
-    // Coming back to the page: reopen the last kept picture instead of a blank
-    // screen — "il faut pouvoir conserver la photo".
+    // Coming back to the page reopens the last kept picture.
     LaunchedEffect(Unit) {
-        // A shot that was taken while the page was being rebuilt has no result
-        // left to deliver: the file on disk is the proof it exists, so it is
-        // picked up here. This is the net under a landscape capture.
+        // A shot taken while the page was being rebuilt has no result to
+        // deliver; the file on disk proves it exists. Safety net for landscape
+        // captures.
         val pend = vm.pendingCaptureFile()
         if (pend != null && QthPhoto.hasContent(pend)) {
             vm.clearCapture()
@@ -204,20 +197,18 @@ fun PhotoScreen(ui: UiState, vm: MainViewModel) {
             return@LaunchedEffect
         }
         vm.clearCapture()
-        // busy means a capture is already being decoded (the result arrived
-        // just before this ran) — reopening the album would drop it.
+        // busy: a capture is already being decoded; reopening would drop it.
         if (source == null && !busy) {
             val last = ui.photoCurrentId ?: ui.qrvPhotos.firstOrNull()?.id
             if (last != null) {
                 busy = true
-                // restoreMeta = false when the page was opened from a satellite:
-                // the picture comes back, its old satellite and pass do not.
+                // restoreMeta = false when opened from a satellite: the picture
+                // comes back, its old satellite and pass do not.
                 vm.openQrvPhoto(last, restoreMeta = !ui.photoPinnedSat) { bmp ->
                     // Never over the picture that has just been shot.
                     if (bmp != null && source == null) { stampMs = last; source = bmp }
-                    // A kept picture that cannot be decoded used to leave the
-                    // page blank without a word, while its satellite name stayed
-                    // on screen — as if the picture had been forgotten.
+                    // Say so: a silent failure left a blank page under the
+                    // old satellite name.
                     if (bmp == null) error = t("photo_err_read") + " · KEPT"
                     busy = false
                 }
@@ -236,9 +227,8 @@ fun PhotoScreen(ui: UiState, vm: MainViewModel) {
         ui.photoNearCount, ui.photoFlag, ui.carte.flagRight,
         ui.extensions, ui.units, ui.carte
     ) {
-        // Sans photo, un fond uni : la carte QRV reste utilisable quand on
-        // n'a rien pris — l'indicatif, le locator, la zone POTA et la carte
-        // suffisent à faire une image présentable depuis un parking.
+        // No photo: plain background. Callsign, locator, POTA and map still
+        // make a usable QRV card.
         val src = source ?: Bitmap.createBitmap(1600, 1200, Bitmap.Config.ARGB_8888)
             .also { android.graphics.Canvas(it).drawColor(ui.carte.fondUni) }
         busy = true
@@ -297,8 +287,7 @@ fun PhotoScreen(ui: UiState, vm: MainViewModel) {
                 modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(error, color = Magenta, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-                    // The ROMs whose gallery hands out unreadable URIs still have a
-                    // working document picker — but only when the operator asks for it.
+                    // Document picker, only on explicit request.
                     OutlinedButton(
                         onClick = { error = ""; openDoc.launch(arrayOf("image/*")) },
                         modifier = Modifier.fillMaxWidth()
@@ -316,9 +305,8 @@ fun PhotoScreen(ui: UiState, vm: MainViewModel) {
         // ---- station line + satellite picker ----
         Surface(color = SpaceCard, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
             Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                // Callsign first, locators underneath: on a four-square corner
-                // the locator line fills the width on its own, and the callsign
-                // used to be cut to its first letters at the end of the row.
+                // Callsign above the locators: on a four-square corner the
+                // locator line fills the width and truncated the callsign.
                 Text(
                     if (ui.callsign.isBlank()) t("photo_no_callsign") else ui.callsign.uppercase(),
                     color = if (ui.callsign.isBlank()) Amber else TextHi,
@@ -334,13 +322,12 @@ fun PhotoScreen(ui: UiState, vm: MainViewModel) {
             }
         }
 
-        // Les gestes lisent la carte ici : `pointerInput` ne redémarre pas à
-        // chaque recomposition, donc un accès direct à `ui.carte` y serait
-        // périmé dès le premier mouvement.
+        // Gestures read the map through this: `pointerInput` does not restart
+        // on recomposition, so reading `ui.carte` directly would be stale.
         val carteMaj = rememberUpdatedState(ui.carte)
 
-        // Le QTH peut changer pendant que l'écran est ouvert — locator manuel
-        // saisi, point GPS arrivé. La carte suit, sans geste de l'opérateur.
+        // The QTH can change while the screen is open (manual locator, GPS
+        // fix); the map follows.
         LaunchedEffect(ui.observer?.latDeg, ui.observer?.lonDeg, ui.carte.affichee) {
             if (ui.carte.affichee) vm.chargeCartePays()
         }
@@ -358,28 +345,17 @@ fun PhotoScreen(ui: UiState, vm: MainViewModel) {
                         contentScale = ContentScale.FillWidth,
                         modifier = Modifier.fillMaxWidth()
                             .aspectRatio(bmp.width.toFloat() / bmp.height.coerceAtLeast(1))
-                            // Les doigts déplacent et redimensionnent la carte,
-                            // directement sur l'aperçu. Les curseurs restent
-                            // en dessous pour l'ajustement fin — le pouce sur
-                            // une image cadre vite mais jamais au pour cent.
+                            // Drag and pinch the map on the preview; sliders
+                            // below remain for fine adjustment.
                             .pointerInput(ui.carte.affichee) {
                                 if (!ui.carte.affichee) return@pointerInput
-                                // Deux précautions, et la seconde est celle qui
-                                // manquait.
-                                //
-                                // 1. On consomme dès la passe initiale, sinon
-                                //    la colonne défilante emporte le
-                                //    glissement et la carte paraît morte.
-                                //
-                                // 2. **On cumule le déplacement localement.**
-                                //    Lire `ui.carte.x` à chaque mouvement ne
-                                //    marche pas : le bloc de geste capture
-                                //    l'état de la composition où il a été
-                                //    installé, et ce `ui` ne change plus. On
-                                //    repartait donc à chaque fois de la même
-                                //    position de départ, d'où le tremblement
-                                //    et les sauts en arrière. Un accumulateur
-                                //    local ne dépend d'aucun retour d'état.
+                                // 1. Consume in the Initial pass, or the
+                                //    scrolling column steals the drag.
+                                // 2. **Accumulate locally.** The gesture block
+                                //    captures the `ui` of the composition that
+                                //    installed it, so re-reading `ui.carte.x`
+                                //    restarted from the same point each time
+                                //    (jitter, jumps back).
                                 awaitEachGesture {
                                     val premier = awaitFirstDown(
                                         requireUnconsumed = false,
@@ -555,9 +531,8 @@ fun PhotoScreen(ui: UiState, vm: MainViewModel) {
                 Text(t("photo_options"), color = TextLo, fontSize = 11.sp,
                     fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp,
                     modifier = Modifier.padding(start = 14.dp, top = 8.dp, bottom = 4.dp))
-                // How the locator itself is spelled on the picture. Some
-                // operators only ever announce the big square, and "JN18" alone
-                // is readable much further away than "JN18fv".
+                // Locator length: "JN18" alone reads from much further away
+                // than "JN18fv".
                 Column(Modifier.padding(horizontal = 14.dp, vertical = 4.dp)) {
                     Text(t("photo_opt_loc"), color = TextHi, fontSize = 13.sp)
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -578,9 +553,8 @@ fun PhotoScreen(ui: UiState, vm: MainViewModel) {
                     }
                 }
                 PhotoToggle(t("photo_opt_call"), ui.photoShowCallsign) { vm.setPhotoOption("call", it) }
-                // Couleur et taille de l’indicatif : l’ambre d’origine se perd
-                // sur un ciel de coucher de soleil ou sur la neige, et la photo
-                // part sur l’air avec une signature que personne ne lit.
+                // Callsign colour and size: the original amber vanishes on a
+                // sunset sky or on snow.
                 if (ui.photoShowCallsign) {
                     Column(Modifier.padding(start = 14.dp, end = 14.dp, top = 2.dp, bottom = 6.dp)) {
                         Text(t("photo_opt_call_color"), color = TextLo, fontSize = 12.sp)
@@ -614,16 +588,9 @@ fun PhotoScreen(ui: UiState, vm: MainViewModel) {
                                 thumbColor = Cyan, activeTrackColor = Cyan,
                                 inactiveTrackColor = SpaceSurface)
                         )
-                        // Les drapeaux autour de l’indicatif : sur une photo
-                        // qui part à l’autre bout du monde, ils disent d’où
-                        // l’on émet avant même qu’on ait lu le préfixe.
-                        //
-                        // Celui de gauche est ouvert à tout le monde, sans mot
-                        // de passe : afficher son pays est le geste le plus
-                        // ordinaire qui soit, et le réserver à un mot-clé
-                        // n’avait plus de sens. Le second, à droite, reste dans
-                        // les extensions — c’est la place de la région, de
-                        // l’expédition ou du pays d’origine.
+                        // Flags beside the callsign. The left one is open to
+                        // everyone; the right one (region, expedition, home
+                        // country) stays behind an extension.
                         val catalogue = Flags.catalogue(Extensions.BZH in ui.extensions)
                         FlagPicker(t("photo_opt_flag"), ui.photoFlag, catalogue) {
                             vm.setPhotoFlag(it)
@@ -640,10 +607,8 @@ fun PhotoScreen(ui: UiState, vm: MainViewModel) {
                     modifier = Modifier.padding(top = 10.dp, bottom = 2.dp))
                 PhotoToggle(t("photo_opt_date"), ui.photoShowDate) { vm.setPhotoOption("date", it) }
                 PhotoToggle(t("photo_opt_grids"), ui.photoShowGrids) { vm.setPhotoOption("grids", it) }
-                // Combien de carrés voisins on écrit, du plus proche au plus
-                // lointain. Quatre correspond à ce que faisait l’application
-                // avant ; un opérateur planté au coin de quatre carrés en veut
-                // plus, un opérateur en plein centre n’en veut aucun.
+                // How many neighbouring squares to print, nearest first. Four
+                // was the old fixed value; a corner wants more, a centre none.
                 if (ui.photoShowGrids) {
                     Column(Modifier.padding(horizontal = 14.dp, vertical = 2.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -664,9 +629,8 @@ fun PhotoScreen(ui: UiState, vm: MainViewModel) {
                     }
                 }
                 PhotoToggle(t("photo_opt_coords"), ui.photoShowCoords) { vm.setPhotoOption("coords", it) }
-                // Grisé tant que le téléphone n’a pas d’altitude : en position
-                // saisie à la main il n’y a rien à écrire, et proposer la case
-                // ferait croire à un réglage cassé.
+                // Disabled without an altitude (manual position): an active
+                // switch that prints nothing looks broken.
                 PhotoToggle(t("photo_opt_alt"), ui.photoShowAlt,
                     enabled = ui.observer?.altMeters?.let { it != 0.0 } == true) {
                     vm.setPhotoOption("alt", it)
@@ -674,10 +638,8 @@ fun PhotoScreen(ui: UiState, vm: MainViewModel) {
                 PhotoToggle(t("photo_opt_sat"), ui.photoShowSat) { vm.setPhotoOption("sat", it) }
                 PhotoToggle(t("photo_opt_pass"), ui.photoShowPass,
                     enabled = ui.photoPassAosMs > 0L) { vm.setPhotoOption("pass", it) }
-                // La fréquence annoncée : texte libre, à côté de l'heure du
-                // passage. On prépare une sortie, on écrit « 145.950 FM » ou
-                // « TX 435.100 » — l'application ne sait pas d'avance sur quoi
-                // on sera, et le champ vide n'écrit rien.
+                // Announced frequency, free text next to the pass time
+                // ("145.950 FM", "TX 435.100"). Empty prints nothing.
                 Column(Modifier.padding(horizontal = 14.dp, vertical = 4.dp)) {
                     OutlinedTextField(
                         value = ui.carte.qrgTexte,
@@ -698,8 +660,7 @@ fun PhotoScreen(ui: UiState, vm: MainViewModel) {
                 PhotoToggle(t("photo_opt_polar"), ui.photoShowPolar,
                     enabled = ui.photoTrack.size > 1) { vm.setPhotoOption("polar", it) }
 
-                // Size of the polar plot: a 400 dp phone and a tablet do not want
-                // the same disc over the picture.
+                // Polar plot size: a phone and a tablet want different discs.
                 if (ui.photoShowPolar && ui.photoTrack.size > 1) {
                     Column(Modifier.padding(horizontal = 14.dp, vertical = 2.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -718,9 +679,8 @@ fun PhotoScreen(ui: UiState, vm: MainViewModel) {
                                 inactiveTrackColor = SpaceSurface)
                         )
                     }
-                    // Le nom du satellite écrit sous le tracé : sur une photo
-                    // partagée en petit il faut le grossir, en pleine page il
-                    // vaut mieux le laisser discret.
+                    // Satellite name under the plot: bigger for small shared
+                    // images, discreet full page.
                     Column(Modifier.padding(horizontal = 14.dp, vertical = 2.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(t("photo_opt_satlabel_size"), color = TextHi, fontSize = 13.sp,
@@ -739,17 +699,10 @@ fun PhotoScreen(ui: UiState, vm: MainViewModel) {
                         )
                     }
                 }
-                // **La section « Lieu » est ouverte à tout le monde.**
-                //
-                // Elle était réservée à l'auteur le temps d'éprouver
-                // l'incrustation POTA, qui se déclarait activateur dès qu'un
-                // parc passait à trois kilomètres. Ce défaut corrigé — le parc
-                // proche est désormais proposé, jamais affirmé — plus rien ne
-                // justifiait de la garder fermée.
+                // **The "Place" section is open to everyone** now that a
+                // nearby park is only proposed, never asserted.
                 run {
-                // La silhouette du pays : une surimpression comme les autres,
-                // au même endroit que l'indicatif, le drapeau et le tracé
-                // polaire. Elle se pose sur la photo qu'on vient de prendre.
+                // Country outline: an overlay like the others.
                 Text(t("photo_sec_place"), color = Cyan, fontSize = 11.sp,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.padding(top = 10.dp, bottom = 2.dp))
@@ -763,12 +716,10 @@ fun PhotoScreen(ui: UiState, vm: MainViewModel) {
                         fontSize = 11.sp,
                         modifier = Modifier.padding(horizontal = 14.dp))
 
-                    // **Un parc proche se propose, il ne s'impose pas.**
-                    //
-                    // Hors de tout contour connu, SatMe ne peut que constater
-                    // un parc à moins de trois kilomètres. C'est à l'opérateur
-                    // de dire s'il a franchi la limite — lui seul le sait, et
-                    // c'est son indicatif qui figurera sur la photo.
+                    // **A nearby park is proposed, not imposed.** Outside any
+                    // known boundary SatMe only knows a park is within 3 km;
+                    // the operator, whose callsign goes on the photo, decides
+                    // whether he is inside.
                     if (ui.carte.potaRef.isBlank() && ui.carte.potaPropose.isNotBlank()) {
                         OutlinedButton(
                             onClick = { vm.accepteParcPropose() },
@@ -825,8 +776,8 @@ fun PhotoScreen(ui: UiState, vm: MainViewModel) {
                             colors = SliderDefaults.colors(
                                 thumbColor = Cyan, activeTrackColor = Cyan,
                                 inactiveTrackColor = SpaceSurface))
-                        // Ce que la silhouette montre : le pays, ou l'emprise
-                        // du parc POTA — un zoom sur la zone, point compris.
+                        // Outline content: the country, or the POTA park area
+                        // zoomed in, position included.
                         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             listOf("PAYS" to t("qrv_map_country"),
                                    "ZONE" to t("qrv_map_zone"),
@@ -840,8 +791,8 @@ fun PhotoScreen(ui: UiState, vm: MainViewModel) {
                                         selectedLabelColor = Cyan))
                             }
                         }
-                        // L'aplat : six couleurs franches, choisies pour
-                        // rester lisibles sur une photo, claire ou sombre.
+                        // Plain fill: six bold colours, readable on light or
+                        // dark photos.
                         if (ui.carte.remplissage == "UNI") {
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp),
                                 modifier = Modifier.padding(top = 4.dp)) {
@@ -878,11 +829,8 @@ fun PhotoScreen(ui: UiState, vm: MainViewModel) {
                     }
                 }
 
-                    // L'interrupteur du logo vivait ici, sous un titre de
-                    // section qui ne servait qu'à lui. Il est retiré : la marque
-                    // SatMe signe chaque photo partagée. Il s'affichait en outre
-                    // à tout le monde, alors que le rendu forçait le logo pour
-                    // quiconque n'était pas l'auteur — un bouton sans effet.
+                    // No logo switch: the SatMe mark signs every shared photo
+                    // (the old switch had no effect for anyone but the author).
                 }
             }
         }
@@ -892,9 +840,8 @@ fun PhotoScreen(ui: UiState, vm: MainViewModel) {
 
 /**
  * Which satellite the picture is about. The page is reachable from the global
- * menu, where nothing is selected, so the choice is made here — favourites
- * first, then everything else — and it drives both the printed name and the
- * polar plot.
+ * menu with nothing selected, so the choice is made here; it drives both the
+ * printed name and the polar plot.
  */
 @Composable
 private fun SatPicker(ui: UiState, vm: MainViewModel) {
@@ -926,12 +873,10 @@ private fun SatPicker(ui: UiState, vm: MainViewModel) {
             DropdownMenuItem(
                 text = { Text(t("photo_sat_none")) },
                 onClick = { open = false; vm.setPhotoSat(null) })
-            // FAVOURITES ONLY, deliberately. The whole satellite list was tried
-            // in v16.3 and rolled back in v16.4: a picture is taken on a bird
-            // being worked, and that bird is in the favourites. Hundreds of
-            // entries to scroll through only get in the way. A satellite named
-            // by a kept picture but absent from the favourites keeps its name
-            // and its passes — it just cannot be picked here.
+            // FAVOURITES ONLY, deliberately (the full list was tried and
+            // rolled back): the bird being worked is in the favourites. A
+            // non-favourite named by a kept picture keeps its name and passes;
+            // it just cannot be picked here.
             favs.forEach { s ->
                 DropdownMenuItem(
                     text = { Text(s.name, color = Cyan, fontWeight = FontWeight.Bold) },
@@ -942,27 +887,23 @@ private fun SatPicker(ui: UiState, vm: MainViewModel) {
 }
 
 /**
- * Which pass of that satellite the picture is about. A photo is rarely taken
- * exactly during the pass — it is shot while packing up, or prepared before the
- * sked — so the operator picks the pass instead of the app guessing one. Past
- * passes are listed too: the picture that goes with a QSO is the picture of the
- * pass that QSO was made on.
+ * Which pass the picture is about. Photos are rarely shot during the pass
+ * itself, so the operator picks it rather than the app guessing. Past passes
+ * are listed too.
  */
 @Composable
 private fun PassPicker(ui: UiState, vm: MainViewModel) {
-    // The box goes away only when NO satellite is named. It used to be tied to
-    // the catalogue number alone, so a page that named a satellite it could not
-    // identify — a picture reopened from its name, a satellite list not loaded
-    // yet — lost its pass selector altogether, with no way to get it back.
+    // Hidden only when NO satellite is named. Keying on the catalogue number
+    // alone lost the selector when a name could not be resolved yet (picture
+    // reopened by name, list not loaded).
     if (ui.photoSatCat == null && ui.photoSatName.isBlank()) return
-    // Naming a satellite without knowing which one it is: find it back, the
-    // passes come with it.
+    // Named but unidentified: resolve it, the passes follow.
     LaunchedEffect(ui.photoSatCat, ui.photoSatName, ui.satellites.size) {
         if (ui.photoSatCat == null && ui.photoSatName.isNotBlank()) vm.rebindPhotoSatByName()
     }
     var open by remember { mutableStateOf(false) }
     val now = System.currentTimeMillis()
-    // Around the working point: what has just been worked, and what is coming.
+    // Recent past passes and upcoming ones.
     val list = remember(ui.photoPasses, ui.photoPassAosMs) {
         val past = ui.photoPasses.filter { it.losEpochMs < now }.takeLast(6)
         val rest = ui.photoPasses.filter { it.losEpochMs >= now }.take(8)
@@ -1021,8 +962,7 @@ private fun KeptThumb(
     photo: fr.f4ioz.satcombo.data.QrvPhoto, selected: Boolean, useUtc: Boolean,
     file: File, onOpen: () -> Unit, onDelete: () -> Unit
 ) {
-    // Thumbnails are decoded 1/8th size: sixty full-size shots would not fit in
-    // memory, and the strip only needs a postage stamp.
+    // Decoded at 1/8 size: sixty full-size shots would not fit in memory.
     val thumb by produceState<Bitmap?>(initialValue = null, file.absolutePath) {
         value = withContext(Dispatchers.IO) {
             runCatching {
@@ -1089,28 +1029,21 @@ private fun PhotoToggle(
 }
 
 /**
- * Les couleurs proposées pour l’indicatif.
- *
- * Six, pas trente : le choix sert à retrouver du contraste sur une photo qui
- * n’en laisse pas, pas à assortir la signature au paysage. Toutes opaques et
- * toutes franches — l’ambre d’origine, le blanc et le noir qui passent partout
- * l’un ou l’autre, et trois couleurs vives pour les fonds neutres.
+ * Callsign colours. Six, not thirty: the point is to recover contrast, not to
+ * match the landscape. All opaque and bold.
  */
 private val CALL_COLORS = listOf(
-    0xFFFFC65C.toInt(),   // ambre — la couleur d’origine
-    0xFFFFFFFF.toInt(),   // blanc
-    0xFF101418.toInt(),   // noir — sur neige et ciel clair
+    0xFFFFC65C.toInt(),   // amber, the original
+    0xFFFFFFFF.toInt(),   // white
+    0xFF101418.toInt(),   // black, for snow and bright sky
     0xFF38E1D4.toInt(),   // cyan
-    0xFF49D17F.toInt(),   // vert
+    0xFF49D17F.toInt(),   // green
     0xFFFF4D8D.toInt()    // magenta
 )
 
 /**
- * Une bande de vignettes de drapeaux, précédée d’un « Aucun ».
- *
- * Les vignettes sont dessinées par le code même qui imprimera la photo : ce
- * qu’on choisit dans la liste est exactement ce qu’on aura sur l’image, sans
- * la mauvaise surprise du partage.
+ * Strip of flag thumbnails, preceded by "None". Drawn by the same code that
+ * renders the photo, so what you pick is exactly what gets printed.
  */
 @Composable
 private fun FlagPicker(

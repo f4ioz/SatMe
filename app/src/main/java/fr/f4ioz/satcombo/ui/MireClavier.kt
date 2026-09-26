@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.ui
 
@@ -29,17 +29,10 @@ import fr.f4ioz.satcombo.ui.theme.*
 import kotlin.math.*
 
 /**
- * Azimut et élévation, en une ligne, pour l'écran du clavier.
- *
- * La boussole de la page du passage prend la moitié d'un écran : ici, chaque
- * point de hauteur est disputé par le clavier, et l'écran ne défile pas. On
- * garde donc ce qui sert à pointer une antenne pendant qu'on écrit : la
- * direction, et la hauteur au-dessus de l'horizon.
- *
- * Un cadran de quatre centimètres pour l'azimut — un cercle se lit d'un coup
- * d'œil là où trois chiffres demandent à être interprétés — et une réglette
- * verticale pour l'élévation, qui est une hauteur et se lit donc de bas en
- * haut.
+ * Azimuth and elevation on one line, for the keyboard screen, where the
+ * keyboard claims every pixel and nothing scrolls. A small azimuth dial (a
+ * circle reads at a glance, three digits need interpreting) and a vertical
+ * elevation bar, read bottom to top.
  */
 @Composable
 fun MireClavier(pos: SatPosition?, modifier: Modifier = Modifier) {
@@ -47,22 +40,17 @@ fun MireClavier(pos: SatPosition?, modifier: Modifier = Modifier) {
     val az = pos.azimuthDeg
     val el = pos.elevationDeg
 
-    // Le cadran suit le téléphone, comme celui de la page du passage.
-    //
-    // L'aiguille reste dans l'axe de l'appareil et c'est le satellite qui
-    // tourne autour : on vise en tournant sur soi-même jusqu'à superposer les
-    // deux. Un cadran nord en haut obligerait à faire la conversion de tête,
-    // ce que personne ne fait avec une antenne dans une main.
+    // The dial follows the phone, like on the pass page: the needle stays on
+    // the device axis and the satellite moves around it; you turn until they
+    // overlap. North-up would force mental conversion, antenna in hand.
     val orient = rememberDeviceOrientation()
     val cap = orient.value.azimuthDeg.toDouble()
     val ecart = ((az - cap + 540.0) % 360.0) - 180.0
     val dansLAxe = orient.value.available && kotlin.math.abs(ecart) <= 10.0 && el >= 0
-    // Un vert franc plutôt qu'un vert d'eau : ce signal se lit du coin
-    // de l'œil, en plein soleil, une antenne dans une main.
+    // Saturated green: read from the corner of the eye, in full sun.
     val teinte = if (dansLAxe) Color(0xFF00C853) else Cyan
 
-    // Le fond passe au vert quand on est dans l'axe : c'est ce qu'on voit du
-    // coin de l'œil en tournant, sans lire les chiffres.
+    // Background turns green when on axis: visible while turning, no reading needed.
     Row(
         modifier
             .background(
@@ -72,22 +60,22 @@ fun MireClavier(pos: SatPosition?, modifier: Modifier = Modifier) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
 
-        // ---- le cadran d'azimut ----
+        // ---- azimuth dial ----
         Canvas(Modifier.size(52.dp)) {
             val r = size.minDimension / 2f - 2f
             val c = Offset(size.width / 2f, size.height / 2f)
             drawCircle(SpaceSurface, r, c)
             drawCircle(TextLo.copy(alpha = 0.35f), r, c,
                 style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.5f))
-            // Le nord, seul repère nommé : le reste se déduit.
+            // North: the only labelled mark.
             drawCircle(TextLo, 1.6f, Offset(c.x, c.y - r + 3f))
-            // L'axe du téléphone : le trait qu'on doit amener sur le satellite.
+            // Phone axis: the line to bring onto the satellite.
             if (orient.value.available) {
                 drawLine(teinte.copy(alpha = 0.45f),
                     Offset(c.x, c.y), Offset(c.x, c.y - r + 3f), strokeWidth = 1.5f)
             }
-            // L'aiguille : dans l'axe du téléphone, donc vers le haut. Le
-            // satellite se place à son écart de cap.
+            // Needle: satellite bearing relative to the phone heading (plain
+            // azimuth when no orientation is available).
             val a = Math.toRadians((if (orient.value.available) ecart else az) - 90.0)
             val bout = Offset(
                 c.x + (r - 4f) * cos(a).toFloat(),
@@ -107,18 +95,17 @@ fun MireClavier(pos: SatPosition?, modifier: Modifier = Modifier) {
 
         Spacer(Modifier.width(14.dp))
 
-        // ---- la réglette d'élévation ----
+        // ---- elevation bar ----
         //
-        // De −10° à +90° : le passage se prépare avant l'horizon, et voir le
-        // repère monter vers le trait de l'horizon vaut mieux que de le voir
-        // apparaître d'un coup.
+        // −10° to +90°: you prepare before AOS, and seeing the mark rise toward
+        // the horizon line beats having it pop up.
         Canvas(Modifier.width(10.dp).height(44.dp)) {
             val h = size.height
             drawRoundRect(color = SpaceSurface,
                 cornerRadius = androidx.compose.ui.geometry.CornerRadius(size.width / 2))
             val part = ((el + 10.0) / 100.0).coerceIn(0.0, 1.0).toFloat()
             val y = h - h * part
-            // L'horizon, trait de référence.
+            // Horizon reference line.
             val yH = h - h * 0.1f
             drawLine(TextLo.copy(alpha = 0.5f),
                 Offset(0f, yH), Offset(size.width, yH), strokeWidth = 1f)

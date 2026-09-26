@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.ui
 
@@ -63,14 +63,12 @@ import java.util.Date
 import java.util.Locale
 
 /**
- * APT : les images météo des NOAA, reçues pendant l'enregistrement d'un passage.
+ * APT: NOAA weather images received while recording a pass.
  *
- * Rien à guetter ici, contrairement à la SSTV : un NOAA émet en continu tant
- * qu'il est en vue, l'image est simplement ce qui a été reçu entre le lever et
- * le coucher. L'écran montre donc l'image qui se construit ligne à ligne, avec
- * un bouton pour la mettre à l'abri sans couper l'écoute — un quart d'heure
- * dehors, c'est long, et le système peut décider de tuer l'application avant la
- * fin du passage.
+ * Unlike SSTV there is nothing to wait for: NOAA transmits continuously while in
+ * view. The screen shows the image building line by line, with a button to save
+ * it without stopping reception — the system may kill the app before a
+ * 15-minute pass ends.
  */
 @Composable
 fun AptScreen(ui: UiState, vm: MainViewModel) {
@@ -96,7 +94,7 @@ fun AptScreen(ui: UiState, vm: MainViewModel) {
     ) {
         item { Spacer(Modifier.height(4.dp)) }
 
-        // ------------------------------------------------------------ direct
+        // ------------------------------------------------------------ live
         item {
             Surface(color = SpaceCard, shape = RoundedCornerShape(14.dp)) {
                 Column(Modifier.fillMaxWidth().padding(14.dp)) {
@@ -169,7 +167,7 @@ fun AptScreen(ui: UiState, vm: MainViewModel) {
             }
         }
 
-        // ---------------------------------------------------------- relecture
+        // ------------------------------------------------------------ replay
         item {
             Surface(color = SpaceCard, shape = RoundedCornerShape(14.dp)) {
                 Column(Modifier.fillMaxWidth().padding(14.dp)) {
@@ -212,7 +210,7 @@ fun AptScreen(ui: UiState, vm: MainViewModel) {
             }
         }
 
-        // ------------------------------------------------------------ galerie
+        // ------------------------------------------------------------ gallery
         item {
             Row(verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.fillMaxWidth().padding(top = 4.dp)) {
@@ -275,7 +273,7 @@ fun AptScreen(ui: UiState, vm: MainViewModel) {
     viewing?.let { f -> AptViewer(f) { viewing = null } }
 }
 
-/** Une image enregistrée : vignette, ce qu'on en sait, partage et suppression. */
+/** A saved image: thumbnail, metadata, share and delete. */
 @Composable
 private fun AptThumb(file: File, shot: SstvMeta.SstvShot, useUtc: Boolean,
                      onOpen: () -> Unit, onDeleted: () -> Unit) {
@@ -320,9 +318,8 @@ private fun AptThumb(file: File, shot: SstvMeta.SstvShot, useUtc: Boolean,
                     (if (shot.source == "file") "  ·  " + t("sstv_from_file") else ""),
                     color = TextLo, fontSize = 10.sp)
             }
-            // Partager répond à « à qui », enregistrer à « où ». En portable,
-            // sans réseau, le sélecteur de partage n'a souvent rien à proposer
-            // et l'image décodée n'a nulle part où aller.
+            // Share answers "to whom", save answers "where". Portable with no
+            // network, the share sheet often has nothing to offer.
             val enregistreImage = rememberEnregistrer()
             IconButton(onClick = {
                 runCatching {
@@ -349,11 +346,8 @@ private fun AptThumb(file: File, shot: SstvMeta.SstvShot, useUtc: Boolean,
 }
 
 /**
- * L'image en grand.
- *
- * Une image APT fait deux mille lignes sur deux mille quatre-vingts colonnes :
- * la charger entière pour un écran de téléphone remplirait la mémoire sans rien
- * montrer de plus, donc on la relit réduite de moitié.
+ * Full-size view. An APT image is ~2000 × 2080 px; it is loaded at half size,
+ * since full resolution would fill memory and show nothing more on a phone.
  */
 @Composable
 private fun AptViewer(file: File, onClose: () -> Unit) {
@@ -384,7 +378,7 @@ private fun AptViewer(file: File, onClose: () -> Unit) {
     }
 }
 
-/** Choisir l'enregistrement à repasser dans le décodeur. */
+/** Pick the recording to replay through the decoder. */
 @Composable
 private fun AptRecordingPicker(onDismiss: () -> Unit, onPick: (File) -> Unit) {
     val ctx = LocalContext.current

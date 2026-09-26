@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.ui
 
@@ -20,13 +20,9 @@ import fr.f4ioz.satcombo.ui.theme.Cyan
 import fr.f4ioz.satcombo.ui.theme.SpaceSurface
 
 /**
- * Où l'on se trouve dans le transpondeur, sans rien pouvoir toucher.
- *
- * L'écran du clavier sert à écrire un indicatif pendant que le passage
- * défile : y mettre le curseur réglable de la page du passage inviterait à
- * déplacer la fréquence d'un doigt qui visait une lettre. Une bande et un
- * repère suffisent — on veut savoir si l'on est en bas, au milieu ou en haut,
- * pas régler.
+ * Read-only position within the transponder passband, for the keyboard screen.
+ * A tunable slider there would get nudged by a finger aiming at a letter; you
+ * only need to know low, middle or high.
  */
 @Composable
 fun BandePassante(
@@ -40,17 +36,16 @@ fun BandePassante(
 
     Canvas(modifier.fillMaxWidth().height(10.dp).padding(vertical = 2.dp)) {
         val h = size.height
-        // La bande.
+        // The band.
         drawRoundRect(
             color = SpaceSurface,
             cornerRadius = androidx.compose.ui.geometry.CornerRadius(h / 2))
-        // La portion parcourue, pour situer d'un coup d'œil.
+        // Filled portion, readable at a glance.
         drawRoundRect(
             color = Cyan.copy(alpha = 0.35f),
             size = Size(size.width * part, h),
             cornerRadius = androidx.compose.ui.geometry.CornerRadius(h / 2))
-        // Le repère : un trait franc, plus lisible qu'une pastille sur une
-        // barre haute de dix points.
+        // Marker: a solid line reads better than a dot on a 10-pt bar.
         val x = (size.width * part).coerceIn(1.5f, size.width - 1.5f)
         drawRect(Cyan, topLeft = Offset(x - 1.5f, 0f), size = Size(3f, h))
     }

@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.ui
 
@@ -36,12 +36,11 @@ import fr.f4ioz.satcombo.i18n.t
 import fr.f4ioz.satcombo.ui.theme.*
 
 /**
- * L'écoute FT8 et FT4.
+ * FT8 and FT4 listening.
  *
- * Rien n'est émis depuis cet écran, et ce n'est pas un oubli : décoder se
- * vérifie tout seul — on lit ce que d'autres envoient — tandis qu'émettre
- * engage l'indicatif de l'opérateur sur l'air. L'émission viendra quand la
- * réception aura fait ses preuves au terrain.
+ * Nothing is transmitted from this screen, on purpose: decoding checks itself
+ * (you read what others send), while transmitting puts the operator's callsign
+ * on the air. TX will come once reception has proven itself in the field.
  */
 @Composable
 fun Ft8Screen(ui: UiState, vm: MainViewModel) {
@@ -51,15 +50,15 @@ fun Ft8Screen(ui: UiState, vm: MainViewModel) {
     val demandeMicro = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { accorde ->
-        // Un refus doit se voir : sinon le bouton semble ne rien faire.
+        // A refusal must be visible, or the button seems to do nothing.
         if (accorde) Ft8Hub.demarre(ctx, st.mode)
     }
 
     fun micOk() = ContextCompat.checkSelfPermission(ctx, Manifest.permission.RECORD_AUDIO) ==
         android.content.pm.PackageManager.PERMISSION_GRANTED
 
-    // Un appel général est ce qu'on cherche quand on veut contacter quelqu'un ;
-    // le reste du trafic est du bavardage entre deux stations déjà en contact.
+    // A CQ is what you look for when you want a contact; the rest is
+    // traffic between two stations already in QSO.
     var seulementCq by remember { mutableStateOf(false) }
     val visibles = remember(st.entendus, seulementCq) {
         if (seulementCq) st.entendus.filter { it.texte.startsWith("CQ") } else st.entendus
@@ -67,15 +66,14 @@ fun Ft8Screen(ui: UiState, vm: MainViewModel) {
 
     Column(Modifier.fillMaxSize().padding(12.dp)) {
 
-        // --- le mode ---
+        // --- mode ---
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically) {
             listOf("FT8", "FT4").forEach { m ->
                 FilterChip(
                     selected = st.mode == m,
-                    // Changer de mode en pleine écoute n'aurait pas de sens :
-                    // les tranches n'ont pas la même durée, et l'on décoderait
-                    // du FT4 dans une fenêtre de quinze secondes.
+                    // No mode change while listening: slots differ in length, and FT4
+                    // would be decoded in a 15-second window.
                     onClick = { Ft8Hub.choisitMode(ctx, m) },
                     label = { Text(m, fontSize = 13.sp) },
                     colors = FilterChipDefaults.filterChipColors(
@@ -88,7 +86,7 @@ fun Ft8Screen(ui: UiState, vm: MainViewModel) {
 
         Spacer(Modifier.height(10.dp))
 
-        // --- la marche ---
+        // --- run ---
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically) {
             Button(
@@ -104,7 +102,7 @@ fun Ft8Screen(ui: UiState, vm: MainViewModel) {
             OutlinedButton(onClick = { Ft8Hub.vide() }) { Text(t("ft8_effacer")) }
         }
 
-        // --- où l'on en est dans la tranche ---
+        // --- position within the slot ---
         if (st.enMarche) {
             Spacer(Modifier.height(10.dp))
             LinearProgressIndicator(
@@ -115,7 +113,7 @@ fun Ft8Screen(ui: UiState, vm: MainViewModel) {
                 "${t("ft8_niveau")} ${Math.round(st.niveau * 100)} %",
                 color = if (st.niveau < 0.01f) Amber else TextLo, fontSize = 11.sp,
                 modifier = Modifier.padding(top = 4.dp))
-            // Un micro muet ressemble à une bande vide : on le dit.
+            // A silent microphone looks like an empty band: say so.
             if (st.niveau < 0.01f) {
                 Text(t("ft8_muet"), color = Amber, fontSize = 11.sp)
             }
@@ -127,28 +125,26 @@ fun Ft8Screen(ui: UiState, vm: MainViewModel) {
                 fontWeight = FontWeight.SemiBold)
         }
 
-        // --- le rappel qui compte ---
+        // --- the reminder that matters ---
         Spacer(Modifier.height(10.dp))
         Surface(color = Amber.copy(alpha = 0.13f), shape = RoundedCornerShape(8.dp)) {
             Text(t("ft8_limite"), color = Amber, fontSize = 11.sp,
                 modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp))
         }
 
-        // --- la cascade ---
+        // --- waterfall ---
         //
-        // C'est ce qui manque le plus à une liste seule : voir la bande. Un
-        // opérateur y lit d'un coup d'œil si le poste est accordé, si la bande
-        // est chargée, et si le signal qu'il attend est bien là — trois
-        // questions auxquelles une colonne de texte ne répond pas.
+        // What a bare list lacks most: seeing the band. At a glance the operator
+        // sees whether the rig is tuned, whether the band is busy, and whether
+        // the expected signal is there.
         if (st.cascade.isNotEmpty()) {
             Spacer(Modifier.height(10.dp))
 
-            // Le spectre de l'instant, au-dessus de l'histoire.
+            // Instant spectrum above the history.
             //
-            // Les deux ne servent pas à la même chose : la cascade dit qui a
-            // émis et quand, le spectre dit ce qui entre **maintenant**. C'est
-            // le second qu'on regarde en accordant le poste, quand rien ne
-            // décode encore et que la cascade est vide.
+            // The waterfall says who transmitted and when; the spectrum says what
+            // comes in **now**. That is what you watch while tuning, when nothing
+            // decodes yet and the waterfall is empty.
             if (st.spectre.isNotEmpty()) {
                 Canvas(Modifier.fillMaxWidth().height(46.dp)) {
                     val pas = size.width / st.spectre.size
@@ -178,8 +174,8 @@ fun Ft8Screen(ui: UiState, vm: MainViewModel) {
                                 largeur + 1f, hauteur + 1f))
                     }
                 }
-                // Les stations décodées de la dernière tranche, marquées sur
-                // l'axe : c'est ce qui relie la cascade à la liste.
+                // Stations decoded in the last slot, marked on the axis: this links
+                // the waterfall to the list.
                 st.entendus.take(12).forEach { e ->
                     val x = (e.frequenceHz - st.basseHz).toFloat() /
                         (st.hauteHz - st.basseHz) * size.width
@@ -200,7 +196,7 @@ fun Ft8Screen(ui: UiState, vm: MainViewModel) {
 
         Spacer(Modifier.height(10.dp))
 
-        // --- le filtre ---
+        // --- filter ---
         Row(verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             FilterChip(
@@ -240,8 +236,7 @@ fun Ft8Screen(ui: UiState, vm: MainViewModel) {
                     Text("${e.frequenceHz}", color = TextLo, fontSize = 11.sp,
                         fontFamily = FontFamily.Monospace)
                     Spacer(Modifier.width(10.dp))
-                    // Un appel général se repère d'un coup d'œil : c'est la
-                    // seule ligne sur laquelle on peut agir.
+                    // A CQ stands out at a glance: it is the only line you can act on.
                     val estCq = e.texte.startsWith("CQ")
                     Text(e.texte,
                         color = if (estCq) Amber else TextHi, fontSize = 13.sp,
@@ -255,12 +250,11 @@ fun Ft8Screen(ui: UiState, vm: MainViewModel) {
 }
 
 /**
- * La teinte d'un point de cascade.
+ * Colour of a waterfall point.
  *
- * Du noir au cyan puis au jaune : une échelle qui monte en luminosité autant
- * qu'en teinte, pour rester lisible en plein soleil comme de nuit — et pour
- * qu'un daltonien y voie encore quelque chose, la luminosité portant déjà
- * l'information.
+ * Black to cyan to yellow: brightness rises along with hue, so it stays
+ * readable in sunlight and at night, and for colour-blind users, since
+ * brightness alone carries the information.
  */
 private fun teinteCascade(v: Float): Color = when {
     v < 0.35f -> Color(0xFF05080F).let {
@@ -270,7 +264,7 @@ private fun teinteCascade(v: Float): Color = when {
     else -> Color(red = (v - 0.7f) * 3f, green = 0.9f, blue = 0.8f - (v - 0.7f) * 2.5f)
 }
 
-/** Chaque panne a son mot : un écran muet n'apprend rien. */
+/** Each failure has its own message: a silent screen teaches nothing. */
 private fun messagePanne(quoi: String): String = when (quoi) {
     "permission" -> t("ft8_err_permission")
     "micro" -> t("ft8_err_micro")

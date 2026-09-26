@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.ui
 
@@ -54,25 +54,22 @@ import fr.f4ioz.satcombo.ui.theme.*
 import kotlinx.coroutines.delay
 
 /**
- * L'écran de la clé RTL-SDR.
+ * RTL-SDR dongle screen.
  *
- * Brancher, démarrer, voir que ça reçoit — puis choisir son mode, sa largeur de
- * canal, son silencieux, et poser le doigt sur la cascade pour s'accorder. La
- * FM étroite suffit aux transpondeurs FM, mais les transpondeurs linéaires
- * (RS-44, les FO) ne parlent qu'en bande latérale unique : sans BLU on entend
- * du canard, avec la BLU on entend un correspondant.
+ * Plug in, start, see it receive — then pick mode, channel width, squelch,
+ * and tap the waterfall to tune. NFM covers FM transponders, but linear
+ * transponders (RS-44, FO-xx) are SSB only: without SSB you hear Donald Duck.
  *
- * Tout ce qui est réglable ici agit à chaud, sans redémarrer la réception :
- * l'accord fin passe par l'oscillateur logiciel de la chaîne, pas par la PLL du
- * tuner, donc il est instantané et ne fait pas décrocher le flux.
+ * Everything here applies live: fine tuning goes through the chain's software
+ * oscillator, not the tuner PLL, so it's instant and never drops the stream.
  */
 @Composable
 fun SdrScreen(ui: UiState, vm: MainViewModel) {
     val ctx = LocalContext.current
     val st by SdrHub.state.collectAsState()
 
-    // La clé peut être branchée après l'ouverture de l'écran : on regarde
-    // régulièrement plutôt que d'attendre un événement système.
+    // The dongle may be plugged in after the screen opens: poll rather than
+    // wait for a system event.
     var present by remember { mutableStateOf(SdrHub.devicePresent(ctx) != null) }
     var volumeZero by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
@@ -89,9 +86,7 @@ fun SdrScreen(ui: UiState, vm: MainViewModel) {
     ) {
         item { Spacer(Modifier.height(4.dp)) }
 
-        // -------------------------------------------------- de quoi il s'agit
-        // 18.33 : le bandeau « bêta — non testé en l'air » a disparu, la clé
-        // ayant servi pour de vrai. Il ne reste que la présentation.
+        // -------------------------------------------------- intro
         item {
             Surface(color = SpaceCard, shape = RoundedCornerShape(14.dp)) {
                 Column(Modifier.fillMaxWidth().padding(14.dp)) {
@@ -100,7 +95,7 @@ fun SdrScreen(ui: UiState, vm: MainViewModel) {
             }
         }
 
-        // --------------------------------------------------------- la clé
+        // --------------------------------------------------------- dongle
         item {
             Surface(color = SpaceCard, shape = RoundedCornerShape(14.dp)) {
                 Column(Modifier.fillMaxWidth().padding(14.dp)) {
@@ -160,7 +155,7 @@ fun SdrScreen(ui: UiState, vm: MainViewModel) {
             }
         }
 
-        // ------------------------------------------------------- réception
+        // ------------------------------------------------------- reception
         if (st.running) {
             item {
                 Surface(color = SpaceCard, shape = RoundedCornerShape(14.dp)) {
@@ -169,10 +164,9 @@ fun SdrScreen(ui: UiState, vm: MainViewModel) {
                             Icon(Icons.Default.SettingsInputAntenna, null,
                                 tint = Aurora, modifier = Modifier.size(20.dp))
                             Spacer(Modifier.width(8.dp))
-                            // Avec un LNB, la clé est accordée sur 739 MHz et
-                            // le satellite sur 10 489 : c'est le ciel qu'on
-                            // affiche en grand, la FI seulement en dessous.
-                            // L'inverse ferait chercher longtemps.
+                            // With an LNB the dongle sits at 739 MHz and the
+                            // satellite at 10 489: show the sky frequency big,
+                            // the IF only below.
                             Text(mhz(vm.cleVersSat(st.centerHz + st.offsetHz)), color = Aurora,
                                 fontWeight = FontWeight.Bold, fontSize = 22.sp,
                                 fontFamily = FontFamily.Monospace)
@@ -186,17 +180,16 @@ fun SdrScreen(ui: UiState, vm: MainViewModel) {
                             InfoLine(t("sdr_offset"),
                                 (if (st.offsetHz > 0) "+" else "") + "${st.offsetHz} Hz")
                         }
-                        // La correction réellement en vigueur, et non le
-                        // dernier chiffre écrit dans la clé : depuis que le
-                        // suivi glisse le décalage logiciel au lieu de
-                        // reprogrammer la PLL, la fréquence de la clé ne bouge
-                        // presque plus et l'afficher seule mentirait.
+                        // The correction actually in effect, not the last value
+                        // written to the dongle: tracking slides the software
+                        // offset instead of reprogramming the PLL, so the dongle
+                        // frequency alone would lie.
                         val dop = st.centerHz + st.dopplerFineHz - st.restHz
                         InfoLine(t("sdr_doppler"),
                             (if (dop >= 0) "+" else "") + "$dop Hz")
                         if (ui.sdrDopplerTrack) {
-                            // Le compteur de recentrages est le juge de paix :
-                            // un passage entier doit tenir à zéro ou à un.
+                            // The PLL recentre count is the real test: a whole
+                            // pass should stay at zero or one.
                             InfoLine(
                                 t("sdr_track"),
                                 tf("sdr_track_val", st.dopplerFineHz, st.pllWrites))
@@ -211,9 +204,8 @@ fun SdrScreen(ui: UiState, vm: MainViewModel) {
                         Spacer(Modifier.height(4.dp))
                         LevelBar(st.levelDb)
 
-                        // Vu-mètre de la modulation démodulée. Une barre HF
-                        // haute avec une barre BF plate, c'est une porteuse
-                        // sans modulation — ou un étage d'entrée saturé.
+                        // Demodulated audio meter. High RF with flat AF means an
+                        // unmodulated carrier — or a saturated front end.
                         Spacer(Modifier.height(8.dp))
                         Text(t("sdr_af_level"), color = TextLo, fontSize = 11.sp)
                         Spacer(Modifier.height(4.dp))
@@ -244,7 +236,7 @@ fun SdrScreen(ui: UiState, vm: MainViewModel) {
             }
         }
 
-        // ---------------------------------------------- spectre et cascade
+        // ---------------------------------------------- spectrum and waterfall
         if (st.running) {
             item {
                 val spec by SdrHub.spectrum.collectAsState()
@@ -263,10 +255,9 @@ fun SdrScreen(ui: UiState, vm: MainViewModel) {
                         Spacer(Modifier.height(6.dp))
                         Text(t("sdr_tune_hint"), color = TextLo, fontSize = 11.sp)
 
-                        // ---------------------------------- l'accord fin
-                        // Sous la cascade et non à côté : on regarde d'abord
-                        // large pour trouver, puis étroit pour se poser, et
-                        // l'ordre à l'écran est celui du geste.
+                        // ---------------------------------- fine tuning
+                        // Below the waterfall: look wide to find, then narrow to
+                        // settle; screen order follows the gesture.
                         if (ui.accord.loupe) {
                             Spacer(Modifier.height(10.dp))
                             Text(t("accord_loupe"), color = TextHi, fontSize = 12.sp,
@@ -352,7 +343,7 @@ fun SdrScreen(ui: UiState, vm: MainViewModel) {
             }
         }
 
-        // --------------------------------------------------------- réglages
+        // --------------------------------------------------------- settings
         item {
             Surface(color = SpaceCard, shape = RoundedCornerShape(14.dp)) {
                 Column(Modifier.fillMaxWidth().padding(14.dp)) {
@@ -475,16 +466,16 @@ fun SdrScreen(ui: UiState, vm: MainViewModel) {
 
 private fun mhz(hz: Long): String = "%.4f MHz".format(hz / 1_000_000.0)
 
-/** Largeurs proposées pour l'affichage du spectre. */
+/** Spectrum display spans offered. */
 private val SPANS = listOf(6_000, 12_000, 24_000, 48_000, 96_000, 176_400)
 
 /**
- * Largeurs de canal proposées. Zéro laisse le mode décider, ce qui est le bon
- * réflexe : 2,4 kHz en BLU, 16 kHz en FM étroite.
+ * Channel widths offered. Zero lets the mode decide, usually the right
+ * choice: 2.4 kHz SSB, 16 kHz NFM.
  */
 internal val BANDWIDTHS = listOf(0, 1_200, 1_800, 2_400, 3_000, 6_000, 9_000, 12_000, 16_000, 24_000)
 
-/** Seuils de silencieux, en dBFS ; le premier le désarme. */
+/** Squelch thresholds in dBFS; the first one disables it. */
 private val SQUELCHES = listOf(-120, -60, -55, -50, -45, -40, -35, -30, -25, -20)
 
 private fun khz(hz: Int): String =
@@ -499,8 +490,8 @@ internal fun modeLabel(m: RxMode): String = when (m) {
 }
 
 /**
- * Largeur réellement utilisée par la chaîne, pour dessiner le bandeau de canal
- * au-dessus de la cascade. Doit rester alignée sur RxChain.effectiveBandwidthHz.
+ * Width actually used by the chain, for the channel band over the waterfall.
+ * Must stay in sync with RxChain.effectiveBandwidthHz.
  */
 internal fun effectiveBw(mode: String, bandwidthHz: Int): Double {
     if (bandwidthHz > 0) return bandwidthHz.coerceIn(500, 24_000).toDouble()
@@ -532,12 +523,9 @@ private fun ToggleLine(label: String, checked: Boolean, onChange: (Boolean) -> U
 }
 
 /**
- * Vu-mètre de la modulation démodulée, échelle linéaire de 0 à pleine échelle.
- *
- * Il répond à la question que le niveau HF ne sait pas trancher : « le signal
- * est fort, mais y a-t-il quelque chose dedans ? » Sur une porteuse pure, ou
- * quand l'étage d'entrée de la clé est saturé, la barre reste au plancher
- * pendant que celle du haut est au maximum.
+ * Demodulated audio meter, linear 0 to full scale. Answers what the RF level
+ * can't: "strong, but is there anything in it?" On a bare carrier or a
+ * saturated front end it stays at the floor while the RF bar is maxed.
  */
 @Composable
 private fun AfBar(level: Float) {
@@ -554,7 +542,7 @@ private fun AfBar(level: Float) {
     }
 }
 
-/** Barre de niveau simple : -80 dBFS à gauche, 0 dBFS à droite. */
+/** Simple level bar: -80 dBFS left, 0 dBFS right. */
 @Composable
 private fun LevelBar(levelDb: Float) {
     val frac = ((levelDb + 80f) / 80f).coerceIn(0f, 1f)
