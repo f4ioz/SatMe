@@ -203,8 +203,8 @@ object Flags {
 
     /**
      * The catalogue as offered to this operator. The two Breton flags are not
-     * national flags: they only appear with BZH in the Extensions field — for
-     * anyone, not just the author's station.
+     * national flags, hence their own [Extensions.BZH] key. That key is in
+     * [Extensions.OPEN] by the author's choice, so everyone sees them today.
      */
     fun catalogue(bzh: Boolean): List<Flag> =
         if (bzh) ALL else ALL.filter { it.code != BZH && it.code != BIGOUDEN }

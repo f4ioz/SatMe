@@ -51,9 +51,8 @@ object Extensions {
 
     /**
      * The two Breton flags in the QRV photo lists. A matter of relevance, not
-     * maturity: they do not belong at the top of a national flag catalogue for
-     * non-Breton operators. Whoever wants them types BZH.
-     * (Note: currently part of [OPEN], so shown to everyone.)
+     * maturity: they are not national flags. In [OPEN] by the author's choice,
+     * so shown to everyone; removing it from [OPEN] would restore the key.
      */
     const val BZH = "bzh"
 

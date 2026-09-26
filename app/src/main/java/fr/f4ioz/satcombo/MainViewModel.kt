@@ -3545,9 +3545,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     /**
      * The flag code, if the unlocked extensions allow it. [gated]: whether this
      * slot still needs the "flag" keyword (left: no, right: yes). The BZH filter
-     * stays on both sides — Breton and Bigouden are not national flags, and an
-     * inherited setting must not show up on the photo of someone who did not
-     * ask for them.
+     * applies to both sides. BZH is in `Extensions.OPEN` by the author's choice,
+     * so it currently passes everything; it stays so that closing BZH again
+     * takes one line in `Extensions`.
      */
     private fun photoFlagOrNothing(s: UiState, code: String, gated: Boolean): String {
         if (gated && fr.f4ioz.satcombo.data.Extensions.FLAG !in s.extensions) return ""
@@ -3889,9 +3889,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             callScale = s.photoCallScale,
             nearCount = s.photoNearCount,
             units = s.units,
-            // Flags are an extension: without the keyword they are not printed,
-            // even if the setting remains; the Breton ones also need BZH (see
-            // photoFlagOrNothing).
+            // Flags go through the extension filter (see photoFlagOrNothing);
+            // FLAG and BZH are in OPEN today, so it lets everything through.
             flagLeft = photoFlagOrNothing(s, s.photoFlag, gated = false),
             flagsRight = listOfNotNull(
                 photoFlagOrNothing(s, s.carte.flagRight, gated = true)
