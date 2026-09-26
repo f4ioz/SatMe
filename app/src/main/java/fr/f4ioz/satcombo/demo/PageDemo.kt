@@ -258,16 +258,14 @@ function qsos(l) {
 // tag, removed along with MP3: `getElementById` returned `null`, the next line
 // threw, and **the whole script stopped there**. No plot, no event stream, no
 // audio — a whole page frozen on "connecting…" for one dead line. Deleted code
-// must be deleted everywhere, not only at
-// l'endroit qu'on regarde.
+// must be deleted everywhere, not only where one is looking.
 
 // --- audio, through the Web Audio API ---
 //
 // **No `<audio>` tag, no MP3.** The browser decoder refused the encoded
 // stream, while the app counters showed everything going out: one hundred and
 // eighty-eight kilobytes encoded, one hundred and eighty-seven sent, and
-// nothing buffered on the page. The fault was entirely in the
-// lecture.
+// nothing buffered on the page. The fault was entirely in the playback.
 //
 // So we receive raw PCM and play it ourselves: no format to negotiate, no
 // length header, no bit reservoir. And the button is no ornament — a browser

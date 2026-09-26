@@ -448,8 +448,7 @@ function planifieQrz() {
   clearTimeout(minuteurQrz);
   const call = g('call').value.trim().toUpperCase();
   // Three characters and a digit: the minimum shape of a callsign. Below
-  // that we would be querying for fragments that designate
-  // personne.
+  // that we would be querying for fragments that designate nobody.
   if (call.length < 4 || !/[0-9]/.test(call)) return;
   if (g('qui').dataset.pour === call) return;
   minuteurQrz = setTimeout(async () => {
