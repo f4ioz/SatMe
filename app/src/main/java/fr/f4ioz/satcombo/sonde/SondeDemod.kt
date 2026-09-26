@@ -38,7 +38,7 @@ class SondeDemod(
     val samplesPerBit: Double = sampleRate / baud
 
     /** True if the sample rate is too low for this bit rate. */
-    val marginal: Boolean get() = samplesPerBit < 3.0
+    val marginal: Boolean get() = samplesPerBit < SondeModel.MIN_SAMPLES_PER_SYMBOL
 
     private var dcLevel = 0.0
     private var smooth = 0.0

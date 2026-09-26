@@ -63,9 +63,16 @@ object SondeModel {
          */
         fun marginal(sampleRate: Int): Boolean {
             val s = samplesPerChip(sampleRate)
-            return s > 0.0 && s < 2.0
+            return s > 0.0 && s < MIN_SAMPLES_PER_SYMBOL
         }
     }
+
+    /**
+     * Below this many samples per symbol, the sound card is too slow for the
+     * model (see [Profile.marginal]). The one threshold: [SondeDemod] reads it
+     * too.
+     */
+    const val MIN_SAMPLES_PER_SYMBOL = 2.0
 
     /** Auto mode: wide filter, all decoders in parallel. */
     const val AUTO = "AUTO"

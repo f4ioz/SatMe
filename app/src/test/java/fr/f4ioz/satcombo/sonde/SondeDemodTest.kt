@@ -42,6 +42,23 @@ class SondeDemodTest {
         assertTrue(SondeDemod(8_000.0, Meteomodem.M10_CHIP_RATE).marginal)
     }
 
+    /**
+     * One threshold for one question. The demodulator used to say "marginal"
+     * below 3 samples per symbol while the screen warned below 2: at 2.5
+     * (an RS41 at 12 kHz, auto_rx's working point) they disagreed.
+     */
+    @Test
+    fun `le demodulateur et le modele disent la meme chose`() {
+        for (rate in listOf(8_000, 9_000, 9_600, 12_000, 14_400, 44_100)) {
+            assertEquals("RS41 à $rate Hz",
+                SondeModel.RS41.marginal(rate),
+                SondeDemod(rate.toDouble(), Rs41.BAUD).marginal)
+            assertEquals("M10 à $rate Hz",
+                SondeModel.M10.marginal(rate),
+                SondeDemod(rate.toDouble(), Meteomodem.M10_CHIP_RATE).marginal)
+        }
+    }
+
     @Test
     fun `l amplitude cretes a cretes mesure la presence`() {
         val d = SondeDemod(RATE, Rs41.BAUD)
