@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.domain
 
@@ -16,39 +16,34 @@ import kotlin.math.sin
 import kotlin.math.sqrt
 
 /**
- * Le pointage de l'antenne, tiré de l'attitude du module.
+ * Antenna pointing, derived from the module attitude.
  *
- * **Pourquoi ce fichier existe.** La première version lisait le lacet comme un
- * azimut et une inclinaison comme une élévation, chacun pris à part. Cela
- * marche tant que l'antenne reste en polarisation horizontale, et se défait dès
- * qu'on tourne la flèche sur son axe : les angles d'Euler ne sont pas trois
- * mesures indépendantes, ce sont trois étapes d'une même rotation, et elles se
- * mélangent. À 90° de polarisation, le tangage et le lacet ont échangé leurs
- * rôles — d'où les inversions constatées au terrain.
+ * **Why this file exists.** The first version read yaw as azimuth and one
+ * tilt as elevation, each on its own. That works in horizontal polarisation
+ * and falls apart as soon as the boom rotates on its axis: Euler angles are
+ * not three independent measurements but three steps of one rotation, and
+ * they mix. At 90° of polarisation pitch and yaw swap roles — hence the
+ * inversions seen in the field.
  *
- * **Ce qui ne se mélange pas**, c'est la direction dans laquelle la flèche
- * pointe. Une rotation de polarisation se fait *autour* de la flèche : elle
- * laisse donc cette direction rigoureusement inchangée. On reconstitue la
- * rotation complète du boîtier, on lui applique le vecteur de la flèche, et on
- * lit l'azimut et l'élévation sur le vecteur obtenu. La polarisation n'a plus
- * aucune prise : ce n'est pas un réglage qui la neutralise, c'est la géométrie.
+ * **What does not mix** is the direction the boom points. A polarisation
+ * rotation happens *around* the boom, so it leaves that direction unchanged.
+ * We rebuild the full box rotation, apply it to the boom vector, and read
+ * azimuth and elevation off the result. Polarisation has no hold: geometry
+ * cancels it, not a setting.
  *
- * **Repère** : X vers le nord, Y vers l'est, Z vers le bas, et les angles
- * composés dans l'ordre lacet-tangage-roulis. Ce choix a une vertu de contrôle
- * : quand la flèche est portée par l'axe X du boîtier et la polarisation
- * horizontale, il redonne exactement azimut = lacet et élévation = tangage,
- * c'est-à-dire le comportement qui marchait déjà. Un essai le vérifie, plutôt
- * que d'en faire une promesse.
+ * **Frame**: X north, Y east, Z down, yaw-pitch-roll. With the boom along
+ * box X and horizontal polarisation it gives exactly azimuth = yaw and
+ * elevation = pitch (checked by a test).
  */
 
-/** Un vecteur à trois composantes. Rien de plus qu'un triplet nommé. */
+/** A three-component vector. Nothing more than a named triplet. */
 data class Vec3(val x: Float, val y: Float, val z: Float) {
     val norme: Float get() = sqrt(x * x + y * y + z * z)
 
     fun normalise(): Vec3 {
         val n = norme
-        // Un vecteur nul n'a pas de direction. Le rendre tel quel plutôt que de
-        // diviser par zéro : l'appelant a une branche pour ça.
+        // A null vector has no direction. Return it as is rather than divide
+        // by zero: the caller has a branch for it.
         return if (n < 1e-6f) this else Vec3(x / n, y / n, z / n)
     }
 
@@ -56,17 +51,14 @@ data class Vec3(val x: Float, val y: Float, val z: Float) {
     operator fun unaryMinus(): Vec3 = Vec3(-x, -y, -z)
 }
 
-/** Où pointe la flèche : azimut 0..360, élévation −90..90. */
+/** Where the boom points: azimuth 0..360, elevation −90..90. */
 data class Pointage(val azimutDeg: Float, val elevationDeg: Float)
 
 object PointageAntenne {
 
     /**
-     * La matrice de rotation du boîtier, du repère du boîtier vers celui du sol.
-     *
-     * Rendue à plat en neuf flottants, rangés par ligne. Une classe de matrice
-     * complète ne servirait à rien ici : on n'en fait que deux choses, appliquer
-     * et composer.
+     * Box rotation matrix, box frame to ground frame, as nine floats in row
+     * order. Only applied and composed, so no matrix class.
      */
     fun matrice(a: AttitudeWit, ordre: Ordre = Ordre.ZYX): FloatArray {
         if (ordre == Ordre.ZXY) return matriceZXY(a)
@@ -84,14 +76,14 @@ object PointageAntenne {
         )
     }
 
-    /** Applique une matrice à un vecteur. */
+    /** Applies a matrix to a vector. */
     fun applique(m: FloatArray, v: Vec3): Vec3 = Vec3(
         m[0] * v.x + m[1] * v.y + m[2] * v.z,
         m[3] * v.x + m[4] * v.y + m[5] * v.z,
         m[6] * v.x + m[7] * v.y + m[8] * v.z
     )
 
-    /** Le produit `aᵀ · b`, qui sert à comparer deux attitudes. */
+    /** The product `aᵀ · b`, used to compare two attitudes. */
     fun transposeePuis(a: FloatArray, b: FloatArray): FloatArray {
         val r = FloatArray(9)
         for (i in 0..2) for (j in 0..2) {
@@ -103,42 +95,27 @@ object PointageAntenne {
     }
 
     /**
-     * L'azimut et l'élévation d'une direction exprimée au sol.
+     * The world frame the module counts in.
      *
-     * Z pointe vers le bas, donc la composante verticale vers le ciel est `−z`.
-     */
-    /**
-     * Le repère du monde dans lequel le module compte.
-     *
-     * **C'est la seule chose qu'un calage ne peut pas rattraper.** Si l'est et
-     * l'ouest sont échangés alors que le nord reste bon, ce n'est pas un
-     * décalage mais un **miroir** — et un miroir ne vient pas d'un mauvais
-     * réglage, il vient de la main du repère. Une visée ne corrige alors que la
-     * pose où on l'a faite : dès qu'on s'en éloigne, le miroir reprend.
-     *
-     * Les modules d'attitude ne s'accordent pas là-dessus : les uns comptent en
-     * nord-est-bas avec un lacet horaire, les autres en est-nord-haut avec un
-     * lacet trigonométrique. La notice ne le dit pas toujours, et le deviner
-     * serait un tirage au sort. On le **mesure**, avec une seconde visée.
+     * **The one thing an offset cannot fix.** East and west swapped with
+     * north right is a **mirror** (frame handedness), not an offset: a
+     * sighting fixes only the pose it was taken at. Modules disagree (NED
+     * with clockwise yaw, or ENU counter-clockwise) and datasheets do not
+     * always say, so it is **measured** with a second sighting.
      */
     enum class Repere { NED, ENU }
 
-    /**
-     * Les conventions candidates, essayées et **départagées par la mesure**.
-     *
-     * Deux ne suffisaient pas. Lire dans l'autre repère échange les deux
-     * premiers axes — mais cet échange retourne aussi le tangage et le roulis,
-     * si bien qu'il ne décrit **pas** le cas simple d'un module dont le seul
-     * lacet tourne à l'envers. Le banc l'a réfuté, après que j'eus cru le
-     * contraire par un raisonnement de conjugaison incomplet.
-     *
-     * Plutôt que de chercher laquelle est la bonne — trois tentatives, trois
-     * erreurs — on les propose toutes et la seconde visée tranche. C'est le
-     * principe même d'un calibre : on ne suppose pas la pièce, on la mesure.
-     */
-    /** L'ordre dans lequel les trois rotations se composent. */
+    /** The order in which the three rotations compose. */
     enum class Ordre { ZYX, ZXY }
 
+    /**
+     * Candidate conventions, tried and **decided by measurement**.
+     *
+     * Reading in the other frame swaps the first two axes, which also flips
+     * pitch and roll: it does **not** describe a module whose yaw alone runs
+     * backwards (disproved on the bench). So all candidates are offered and
+     * the sightings decide.
+     */
     enum class Convention(
         val repere: Repere,
         val lacetOppose: Boolean,
@@ -148,19 +125,12 @@ object PointageAntenne {
         LACET_OPPOSE(Repere.NED, true),
         AXES_ECHANGES(Repere.ENU, false),
         AXES_ET_LACET(Repere.ENU, true),
-        // **L'ordre de composition est la dimension qui manquait.**
+        // **Composition order is the missing dimension.**
         //
-        // Les quatre premières ne diffèrent que par le traitement du lacet.
-        // Or deux visées à l'horizontale ont le même roulis et le même
-        // tangage : elles ne contraignent **que** le lacet. Plusieurs
-        // conventions les satisfont donc également, et deux étalonnages
-        // successifs en retenaient deux différentes — la campagne de mesure
-        // d'Olivier le montre sans appel.
-        //
-        // Ce qui les départage se joue hors de l'horizontale, donc dans la
-        // façon dont tangage et roulis se composent. D'où ces quatre-là, et
-        // d'où la troisième visée antenne levée : sans elle, elles restent
-        // indiscernables.
+        // The first four differ only in yaw handling, and level sightings
+        // constrain only yaw. What separates them is how pitch and roll
+        // compose, off the level — hence these four, and the third, raised
+        // sighting without which they are indistinguishable.
         DIRECTE_ZXY(Repere.NED, false, Ordre.ZXY),
         LACET_OPPOSE_ZXY(Repere.NED, true, Ordre.ZXY),
         AXES_ECHANGES_ZXY(Repere.ENU, false, Ordre.ZXY),
@@ -172,16 +142,19 @@ object PointageAntenne {
         }
     }
 
-    /** L'attitude telle que la convention la fait lire. */
+    /** The attitude as the convention reads it. */
     fun selon(a: AttitudeWit, c: Convention): AttitudeWit =
         if (c.lacetOppose) AttitudeWit(a.roulis, a.tangage, -a.lacet) else a
 
+    /**
+     * Azimuth and elevation of a ground-frame direction. In NED, Z points
+     * down, so the upward component is `−z`.
+     */
     fun lis(direction: Vec3, repere: Repere = Repere.NED): Pointage {
         val v = direction.normalise()
-        // Nord-est-bas : l'azimut tourne de x vers y, l'élévation monte quand z
-        // descend. Est-nord-haut : les deux premiers axes sont échangés et le
-        // troisième pointe vers le ciel. Rien d'autre ne distingue les deux, et
-        // c'est bien assez pour échanger l'est et l'ouest.
+        // NED: azimuth turns from x to y, elevation rises as z goes down.
+        // ENU: first two axes swapped, third points up. Nothing else differs,
+        // and that is enough to swap east and west.
         var az = if (repere == Repere.NED)
             Math.toDegrees(atan2(v.y.toDouble(), v.x.toDouble())).toFloat()
         else
@@ -193,13 +166,11 @@ object PointageAntenne {
     }
 
     /**
-     * La même attitude, composée dans l'ordre z-x-y.
+     * The same attitude, composed z-x-y: `R = Rz(lacet) · Rx(roulis) · Ry(tangage)`.
      *
-     * `R = Rz(lacet) · Rx(roulis) · Ry(tangage)`. Certains micrologiciels
-     * publient leurs angles dans cet ordre-là, et la différence ne se voit
-     * **jamais** tant qu'on reste à l'horizontale : à roulis et tangage nuls,
-     * les deux formules donnent la même matrice. C'est précisément pourquoi
-     * elle a échappé à tous les essais faits à plat.
+     * Some firmwares publish their angles in this order, and the difference
+     * **never** shows while level: with zero roll and pitch both formulas give
+     * the same matrix. That is why every flat test missed it.
      */
     private fun matriceZXY(a: AttitudeWit): FloatArray {
         val r = Math.toRadians(a.roulis.toDouble()).toFloat()
@@ -215,7 +186,7 @@ object PointageAntenne {
         )
     }
 
-    /** Le vecteur monde d'un azimut et d'une élévation, dans le repère donné. */
+    /** World vector of an azimuth and elevation, in the given frame. */
     fun direction(azimutDeg: Float, elevationDeg: Float, repere: Repere = Repere.NED): Vec3 {
         val a = Math.toRadians(azimutDeg.toDouble())
         val e = Math.toRadians(elevationDeg.toDouble())
@@ -228,44 +199,32 @@ object PointageAntenne {
     }
 
     /**
-     * Le pointage complet, invariant à la polarisation.
+     * Full pointing, invariant to polarisation.
      *
-     * [fleche] est la direction de la flèche **dans le repère du boîtier** : ce
-     * que l'apprentissage détermine. [calageAzimut] recale le nord — une
-     * rotation, sans danger pour l'invariance.
+     * [fleche] is the boom direction **in the box frame**, what calibration
+     * learns. [calageAzimut] re-aligns north: a rotation, safe for invariance.
      */
     fun pointage(
         a: AttitudeWit,
         fleche: Vec3,
         calageAzimut: Float = 0f,
         /**
-         * Le repère du module, **mesuré et non deviné**.
+         * The module frame, **measured, not guessed**.
          *
-         * Il remplace l'ancien drapeau « sens inverse ». Celui-ci négiait le
-         * lacet avant de construire la matrice, ce qui paraît équivalent et ne
-         * l'est pas : passer d'un repère à l'autre change aussi l'ordre des
-         * rotations, et le banc l'a réfuté. Le repère, lui, ne touche qu'à la
-         * lecture du vecteur de sortie — un simple échange d'axes, qui préserve
-         * l'invariance à la polarisation.
+         * Replaces the old "reverse" flag (yaw negated before the matrix),
+         * which is not equivalent: switching frames also changes the rotation
+         * order. The frame only affects how the output vector is read — an
+         * axis swap, which keeps polarisation invariance.
          */
         convention: Convention = Convention.DIRECTE
     ): Pointage {
-        // **Il n'y a pas d'inversion ici, et c'est délibéré.**
+        // **No inversion here, on purpose.**
         //
-        // Le drapeau « sens inverse » appartient à l'ancienne méthode, celle
-        // qui lisait le cap sur le seul lacet : là, il fallait bien choisir un
-        // sens. Avec la flèche, le cap absolu est **entièrement déterminé** par
-        // la matrice et le vecteur — il n'y a plus rien à choisir.
-        //
-        // Le garder revenait à poser deux corrections pour la même question. La
-        // seconde, appliquée en sortie, retournait un azimut : une symétrie, pas
-        // une rotation. Or l'invariance à la polarisation n'existe que pour les
-        // rotations. D'où les deux défauts vus au terrain — les points cardinaux
-        // à l'envers, et le calage qui se décale dès qu'on passe en
-        // polarisation verticale.
-        //
-        // Si le cap sort à l'envers, c'est un calage cardinal qu'il faut
-        // refaire, pas un sens à cocher.
+        // With the boom vector, heading is **fully determined** by matrix and
+        // vector. The old output flip was a reflection, not a rotation, and
+        // polarisation invariance holds only for rotations: cardinal points
+        // came out reversed and the offset shifted in vertical polarisation.
+        // If heading is reversed, redo a cardinal calibration.
         val brut = lis(
             applique(matrice(selon(a, convention), convention.ordre), fleche),
             convention.repere)
@@ -274,47 +233,20 @@ object PointageAntenne {
         return Pointage(az, brut.elevationDeg)
     }
 
-    /** Ce que deux visées déterminent : la flèche, et le repère du module. */
+    /** What the sightings determine: the boom, and the module frame. */
     data class Calibration(val fleche: Vec3, val convention: Convention, val ecartDeg: Float)
 
     /**
-     * Établit la calibration complète à partir de **deux visées connues**.
+     * Full calibration: **three sightings**, one with the antenna raised.
      *
-     * **Pourquoi deux, et pas une.** Une seule visée fixe la flèche, mais elle
-     * ne dit rien du repère dans lequel le module compte : les deux hypothèses
-     * la satisfont exactement, puisque la flèche apprise absorbe la différence
-     * *à cette pose-là*. C'est ce qui laissait l'est ressortir à l'ouest — le
-     * nord tombait juste, parce que c'était sur lui qu'on avait calé, et seule
-     * une seconde direction révélait le miroir.
+     * **Why three.** Level sightings constrain only yaw: successive
+     * calibrations picked different conventions, all right when flat and
+     * wrong once tilted (absurd elevation, drift in vertical polarisation).
+     * Only the raised sighting tests how pitch and roll compose.
      *
-     * **Comment on tranche.** On apprend la flèche sur la première visée, sous
-     * chacun des deux repères, puis on relit la **seconde** visée. Celui qui la
-     * retrouve gagne. C'est une mesure, pas un choix : le repère n'est pas une
-     * préférence de l'opérateur mais une propriété du micrologiciel, que la
-     * notice ne donne pas toujours.
-     *
-     * Les deux visées doivent être franchement différentes — au moins
-     * [ECART_VISEES] degrés — sans quoi les deux hypothèses restent également
-     * plausibles et l'on ne tranche rien. Rend alors `null` : un calage tiré au
-     * sort est pire que pas de calage.
-     */
-    /**
-     * L'étalonnage complet : **trois visées**, dont une antenne levée.
-     *
-     * **Pourquoi trois.** Deux visées à l'horizontale partagent le même roulis
-     * et le même tangage : elles ne contraignent que le lacet, et plusieurs
-     * conventions les satisfont également. Deux étalonnages successifs en
-     * retenaient alors deux différentes, toutes deux justes à plat et fausses
-     * dès qu'on inclinait — d'où l'élévation aberrante et la dérive en
-     * polarisation verticale.
-     *
-     * La troisième visée sort de l'horizontale. C'est elle, et elle seule, qui
-     * met à l'épreuve la composition du tangage et du roulis.
-     *
-     * [elevationC] n'a pas besoin d'être précise : il suffit que l'antenne soit
-     * franchement levée. On ne juge pas l'élévation rendue, on juge que
-     * l'**azimut tienne** malgré elle — c'est ce que la mauvaise convention ne
-     * sait pas faire.
+     * [elevationC] need not be precise, only clearly raised. What is judged is
+     * that the **azimuth holds** despite it, which the wrong convention cannot
+     * do.
      */
     fun calibreDepuisTroisVisees(
         poseA: AttitudeWit, azimutA: Float,
@@ -335,9 +267,9 @@ object PointageAntenne {
                 if (e > 180f) e = 360f - e
                 return e
             }
-            // Le pire des deux contrôles, pas leur moyenne : une convention qui
-            // réussit l'horizontale et rate l'antenne levée doit être écartée,
-            // non rattrapée par sa bonne moitié.
+            // Worst of the two checks, not the mean: a convention that passes
+            // level and fails raised must be rejected, not rescued by its good
+            // half.
             val ecart = maxOf(ecartA(poseB, azimutB), ecartA(poseC, azimutC))
             if (meilleure == null || ecart < meilleure!!.ecartDeg) {
                 meilleure = Calibration(f, convention, ecart)
@@ -347,6 +279,18 @@ object PointageAntenne {
         return if (c.ecartDeg > TOLERANCE_VISEES) null else c
     }
 
+    /**
+     * Calibration from **two known sightings**.
+     *
+     * **Why two.** One sighting fixes the boom but not the frame: the learned
+     * boom absorbs the difference *at that pose*, so north was right and east
+     * came out west. The boom is learned on the first sighting under each
+     * convention; the one that reads the **second** back wins.
+     *
+     * The sightings must be at least [ECART_VISEES] degrees apart, otherwise
+     * both hypotheses stay plausible: returns `null`. A random offset is worse
+     * than none.
+     */
     fun calibreDepuisDeuxVisees(
         poseA: AttitudeWit, azimutA: Float,
         poseB: AttitudeWit, azimutB: Float
@@ -366,64 +310,57 @@ object PointageAntenne {
                 meilleure = Calibration(f, convention, ecart)
             }
         }
-        // Une hypothèse qui se trompe de plus d'un quart de tour sur la seconde
-        // visée n'en est pas une : c'est que les relevés eux-mêmes sont
-        // incohérents, et il vaut mieux le dire que caler sur du vent.
+        // Off by more than a quarter turn on the second sighting is no
+        // hypothesis: the readings themselves are inconsistent. Say so rather
+        // than calibrate on noise.
         val c = meilleure ?: return null
         return if (c.ecartDeg > TOLERANCE_VISEES) null else c
     }
 
-    /** En deçà, les deux visées ne permettent pas de mesurer le sens. */
+    /** Below this, the two sightings cannot measure the direction. */
     const val ECART_VISEES = 45f
 
-    /** Au-delà, même la meilleure hypothèse ne colle pas : on refuse. */
+    /** Above this, even the best hypothesis does not fit: refuse. */
     const val TOLERANCE_VISEES = 25f
 
-    // ---- le calage du cap : deux directions connues ----
+    // ---- heading offset: two known directions ----
 
-    /** Ce que deux relevés déterminent : de combien décaler, et dans quel sens. */
+    /** What two readings determine: how much to offset, and which way. */
     data class CalageCap(val calageDeg: Float, val inverse: Boolean)
 
     /**
-     * Déduit le calage du cap de deux visées connues : le **nord**, puis
-     * l'**ouest**.
-     *
-     * **Pourquoi deux et pas une.** Un seul relevé ne distingue pas un décalage
-     * de 180° d'un sens de rotation retourné : dans les deux cas, viser le nord
-     * affiche le sud. Il faut une seconde direction pour lever le doute — et
-     * l'ouest est la plus commode, parce qu'on la trouve sans instrument dès
-     * qu'on sait où est le nord.
-     *
-     * Le raisonnement est court. Entre le nord et l'ouest, un azimut décroît de
-     * 90° dans le sens trigonométrique, donc **croît de 270°** en azimut de
-     * boussole. Si les deux relevés bruts montrent un écart de 270°, le module
-     * compte dans le bon sens ; s'ils montrent 90°, il compte à l'envers. Le
-     * décalage se lit ensuite sur le seul relevé du nord.
-     *
-     * Rend `null` quand l'écart ne ressemble ni à l'un ni à l'autre — antenne
-     * mal orientée, ou relevé pris pendant que le module bougeait encore.
-     * **Mieux vaut ne rien écrire que d'écrire un calage tiré au sort** : un
-     * cadran faux qu'on croit réglé est pire qu'un cadran qu'on sait faux.
-     */
-    /**
-     * L'écart toléré entre les deux visées et ce qu'on en attend.
-     *
-     * Quarante-cinq degrés : on vise une antenne à la main, pas au théodolite,
-     * et un quart de tour approximatif reste sans ambiguïté. Au-delà, les deux
-     * hypothèses redeviennent également plausibles et trancher serait un
-     * tirage au sort.
+     * Tolerance between the two sightings and what is expected. 45°: an
+     * antenna is aimed by hand, not with a theodolite, and a rough quarter
+     * turn stays unambiguous. Beyond, both hypotheses become equally
+     * plausible.
      */
     const val TOLERANCE_CAP = 45f
 
+    /**
+     * Heading offset from two known sightings: **north**, then **west**.
+     *
+     * **Why two.** One reading cannot tell a 180° offset from a reversed
+     * direction of rotation: either way, aiming north shows south. West is
+     * the handiest second direction, found without instruments once north is
+     * known.
+     *
+     * From north to west, compass azimuth **increases by 270°**. If the two
+     * raw readings differ by 270° the module counts the right way; by 90°, it
+     * counts backwards. The offset is then read on the north reading alone.
+     *
+     * Returns `null` when the difference looks like neither (antenna badly
+     * aimed, or module still moving). **Better write nothing than a random
+     * offset**: a wrong dial believed calibrated is worse than one known to be
+     * wrong.
+     */
     fun calageCapDepuisNordOuest(brutNordDeg: Float, brutOuestDeg: Float): CalageCap? {
         var ecart = (brutOuestDeg - brutNordDeg) % 360f
         if (ecart < 0f) ecart += 360f
 
-        // **La distance doit être circulaire.** Une soustraction nue ignore le
-        // passage par zéro : pour deux visées identiques, l'écart vaut 0, et
-        // `|0 - 90|` faisait croire que l'hypothèse inversée n'était qu'à
-        // quatre-vingt-dix degrés de la vérité. La garde laissait alors écrire
-        // un calage tiré de rien.
+        // **The distance must be circular.** A bare subtraction ignores
+        // wrap-around: for two identical sightings the difference is 0, and
+        // `|0 - 90|` made the reversed hypothesis look only 90° off. The guard
+        // then let an offset be written from nothing.
         fun distance(a: Float, b: Float): Float {
             var d = kotlin.math.abs(a - b) % 360f
             if (d > 180f) d = 360f - d
@@ -432,11 +369,9 @@ object PointageAntenne {
         val versDirect = distance(ecart, 270f)
         val versInverse = distance(ecart, 90f)
 
-        // Les deux hypothèses sont à cent quatre-vingts degrés l'une de
-        // l'autre : elles ne peuvent pas être proches toutes les deux. Mais
-        // elles peuvent être **loin toutes les deux** — c'est le cas de deux
-        // visées identiques ou opposées, et il faut alors refuser plutôt que
-        // de retenir la moins mauvaise.
+        // The two hypotheses are 180° apart, so they cannot both be close.
+        // But they can **both be far** (identical or opposite sightings): then
+        // refuse rather than keep the less bad one.
         if (minOf(versDirect, versInverse) > TOLERANCE_CAP) return null
         val inverse = versInverse < versDirect
         val signe = if (inverse) -brutNordDeg else brutNordDeg
@@ -446,48 +381,43 @@ object PointageAntenne {
         return CalageCap(calage, inverse)
     }
 
-    // ---- l'apprentissage de l'axe de la flèche ----
+    // ---- learning the boom axis ----
 
     /**
-     * En deçà de cet angle entre les deux polarisations, l'axe ne se lit pas.
+     * Below this angle between the two polarisations, the axis cannot be read.
      *
-     * Ce n'est pas une précaution de confort : l'axe d'une rotation se déduit de
-     * la partie antisymétrique de sa matrice, dont l'amplitude vaut `2 sin θ`.
-     * Près de zéro, elle disparaît dans le bruit et l'axe devient n'importe
-     * quelle direction.
+     * Not a comfort margin: a rotation axis comes from the antisymmetric part
+     * of its matrix, whose magnitude is `2 sin θ`. Near zero it drowns in
+     * noise and the axis becomes any direction.
      */
     const val ROTATION_MINIMALE = 25f
 
-    /** Au-delà, `sin θ` redescend et l'axe redevient mal conditionné. */
+    /** Above this, `sin θ` drops again and the axis is ill-conditioned. */
     const val ROTATION_MAXIMALE = 155f
 
     /**
-     * La direction de la flèche, déduite de deux relevés pris **au même
-     * pointage** mais à deux polarisations différentes.
+     * Boom direction from two readings at **the same pointing** but two
+     * polarisations.
      *
-     * Le geste est celui qu'un opérateur fait déjà sans y penser : viser
-     * quelque part, relever, tourner la flèche d'un quart de tour sur elle-même
-     * sans bouger le pointage, relever à nouveau. Entre les deux, la seule
-     * chose qui n'a pas bougé est l'axe de la flèche — c'est donc l'axe de la
-     * rotation qui sépare les deux attitudes, et il se lit directement.
+     * The only thing that did not move between the two readings is the boom,
+     * so it is the axis of the rotation between the two attitudes.
      *
-     * Rend `null` quand la rotation est trop faible ou trop proche du demi-tour
-     * : dans ces deux cas l'axe est mal déterminé, et **le dire vaut mieux que
-     * rendre une direction tirée du bruit**, qui donnerait un pointage faux
-     * d'apparence soignée.
+     * Returns `null` when the rotation is too small or near a half turn: the
+     * axis is ill-determined, and **saying so beats a direction drawn from
+     * noise** that looks neat.
      *
-     * Le signe reste indéterminé — une flèche et son opposé ont le même axe de
-     * rotation. C'est [resoutSens] qui tranche.
+     * The sign stays undetermined (a boom and its opposite share an axis);
+     * [resoutSens] decides.
      */
     fun apprendFleche(pol1: AttitudeWit, pol2: AttitudeWit): Vec3? {
         val m = transposeePuis(matrice(pol2), matrice(pol1))
-        // L'axe se lit dans la partie antisymétrique ; sa norme vaut 2 sin θ.
+        // Axis from the antisymmetric part; its norm is 2 sin θ.
         val axe = Vec3(m[7] - m[5], m[2] - m[6], m[3] - m[1])
         val deuxSinus = axe.norme
         val minimum = 2f * sin(Math.toRadians(ROTATION_MINIMALE.toDouble())).toFloat()
         if (deuxSinus < minimum) return null
-        // La trace donne l'angle : 1 + 2 cos θ. Au-delà du seuil haut, le même
-        // `2 sin θ` correspond à une rotation presque complète, mal posée.
+        // Trace gives the angle: 1 + 2 cos θ. Past the upper bound the same
+        // `2 sin θ` means a near-full rotation, ill-posed.
         val cosinus = ((m[0] + m[4] + m[8]) - 1f) / 2f
         val angle = Math.toDegrees(
             atan2(deuxSinus.toDouble() / 2.0, cosinus.toDouble())).toFloat()
@@ -496,54 +426,39 @@ object PointageAntenne {
     }
 
     /**
-     * Lève l'ambiguïté de signe, avec le geste déjà en place : antenne levée.
+     * Learns the boom from **a single** reading at a known azimuth.
      *
-     * Si la flèche apprise donne une élévation négative alors que l'antenne
-     * pointe le ciel, c'est qu'elle décrit l'arrière du boîtier. On la
-     * retourne.
+     * **Better than the two polarisation poses.** Rotating around the boom
+     * gives the rotation axis, i.e. a *line*, and a line has two ends. The end
+     * was then guessed from a raised pose, which can be wrong: the antenna
+     * then points exactly opposite, north and south swapped (seen in the
+     * field).
      *
-     * Rend `null` si l'antenne n'était pas assez levée pour trancher — une
-     * antenne à l'horizontale ne dit rien de son propre sens.
-     */
-    /**
-     * Apprend la flèche à partir d'**un seul** relevé sur un azimut connu.
+     * A known azimuth removes the ambiguity: world direction known, box
+     * rotation known, so the box-frame boom follows exactly, `b = Rᵀ · p`.
      *
-     * **Pourquoi c'est meilleur que les deux poses de polarisation.** Faire
-     * tourner l'antenne autour de sa flèche donne l'axe de rotation, donc une
-     * *droite* — et une droite a deux bouts. Le sens est ensuite deviné par une
-     * pose levée, qui peut se tromper : l'antenne pointe alors exactement à
-     * l'opposé, nord et sud échangés. C'est ce qu'Olivier a constaté.
+     * The default reading is **level**, the pose one can hold without
+     * instruments. The current polarisation does not matter.
      *
-     * Un azimut connu lève l'ambiguïté d'un coup : on sait où la flèche pointe
-     * dans le monde, on sait comment le boîtier est tourné, la flèche dans le
-     * repère du boîtier s'en déduit exactement — `b = Rᵀ · p`. Trois inconnues,
-     * une équation vectorielle, aucun bout à choisir.
-     *
-     * L'antenne doit être **à l'horizontale** pour le relevé par défaut : c'est
-     * la pose qu'on sait tenir sans instrument. Et la polarisation du moment
-     * n'a aucune importance, l'invariance s'en charge.
-     *
-     * L'azimut attendu est celui du **nord magnétique**, comme tout ce que rend
-     * le module ; SatMe applique la déclinaison en aval. Sous nos latitudes
-     * l'écart est de l'ordre du degré, bien en deçà de ce qu'on sait pointer à
-     * la main.
+     * The expected azimuth is **magnetic**, like everything the module
+     * returns; SatMe applies declination downstream.
      */
     fun apprendFlecheDepuisAzimut(
         pose: AttitudeWit,
         azimutDeg: Float,
         elevationDeg: Float = 0f,
-        /** Le calage est retiré de la visée : le vecteur ne doit pas le porter. */
+        /** The offset is removed from the sighting: the vector must not carry it. */
         calageAzimut: Float = 0f,
-        /** Le même repère qu'à la lecture, sans quoi rien ne se relit. */
+        /** Same frame as when reading, otherwise nothing reads back. */
         convention: Convention = Convention.DIRECTE
     ): Vec3? {
         val m = matrice(selon(pose, convention), convention.ordre)
-        // La visée doit être bâtie **dans le repère de la convention**, sinon
-        // l'apprentissage compense un monde et la lecture en décrit un autre :
-        // c'est précisément ce qui faisait ressortir l'est à l'ouest.
+        // The sighting must be built **in the convention's frame**, otherwise
+        // learning compensates one world and reading describes another — this
+        // is exactly what made east come out west.
         val p = direction(azimutDeg - calageAzimut, elevationDeg, convention.repere)
-        // La transposée d'une rotation est son inverse : on ramène la visée du
-        // monde vers le boîtier.
+        // A rotation's transpose is its inverse: bring the sighting from world
+        // to box.
         val b = Vec3(
             m[0] * p.x + m[3] * p.y + m[6] * p.z,
             m[1] * p.x + m[4] * p.y + m[7] * p.z,
@@ -555,14 +470,19 @@ object PointageAntenne {
     }
 
     /**
-     * Retourne la flèche bout pour bout.
-     *
-     * Le remède en un geste quand l'étalonnage a choisi le mauvais bout et que
-     * tout se retrouve à cent quatre-vingts degrés. Plus rapide que de tout
-     * recommencer, et sans instrument.
+     * Flips the boom end for end: the one-gesture fix when calibration picked
+     * the wrong end and everything is 180° off.
      */
     fun retourne(fleche: Vec3): Vec3 = Vec3(-fleche.x, -fleche.y, -fleche.z)
 
+    /**
+     * Resolves the sign ambiguity with the antenna raised: if the learned boom
+     * gives a negative elevation while the antenna points skyward, it
+     * describes the back of the box, so flip it.
+     *
+     * Returns `null` if the antenna was not raised enough: a level antenna
+     * says nothing about its own direction.
+     */
     fun resoutSens(fleche: Vec3, leveeFranche: AttitudeWit, seuilDeg: Float = 10f): Vec3? {
         val el = lis(applique(matrice(leveeFranche), fleche)).elevationDeg
         if (abs(el) < seuilDeg) return null
@@ -570,13 +490,11 @@ object PointageAntenne {
     }
 
     /**
-     * La flèche ramenée à l'axe canonique le plus proche, quand elle en est
-     * très près.
+     * Snaps the boom to the nearest canonical axis when very close.
      *
-     * Un boîtier se visse à plat sur un tube : sa flèche tombe presque toujours
-     * sur ±X, ±Y ou ±Z. Coller à l'axe exact quand on en est à moins de huit
-     * degrés enlève le bruit d'un relevé unique, sans rien imposer à un montage
-     * réellement de biais.
+     * A box is screwed flat onto a tube, so the boom nearly always falls on
+     * ±X, ±Y or ±Z. Snapping within eight degrees removes the noise of a
+     * single reading without forcing a genuinely skewed mount.
      */
     fun rangeSurAxe(fleche: Vec3, toleranceDeg: Float = 8f): Vec3 {
         val candidats = listOf(
@@ -589,12 +507,12 @@ object PointageAntenne {
         return candidats.firstOrNull { v.produitScalaire(it) >= seuil } ?: v
     }
 
-    /** Écrit une flèche pour la ranger dans les préférences. */
+    /** Writes a boom vector for storage in preferences. */
     fun enTexte(v: Vec3): String = "%.6f,%.6f,%.6f".format(java.util.Locale.US, v.x, v.y, v.z)
 
     /**
-     * Relit une flèche rangée. Rend `null` sur tout ce qui n'est pas lisible —
-     * y compris la chaîne vide, qui est l'état « pas encore appris ».
+     * Reads a stored boom back. `null` on anything unreadable, including the
+     * empty string, which means "not learned yet".
      */
     fun depuisTexte(s: String?): Vec3? {
         val p = s?.split(",") ?: return null
@@ -606,30 +524,20 @@ object PointageAntenne {
         return if (v.norme < 1e-3f) null else v.normalise()
     }
 
-    // ---- la convention mesurée, et non plus supposée ----
+    // ---- the convention, measured instead of assumed ----
 
     /**
-     * Une convention quelconque de la famille des angles d'Euler.
+     * Any convention of the Euler-angle family.
      *
-     * **Pourquoi si général.** Sept versions ont tenté de deviner comment ce
-     * module compose ses trois angles : miroir en sortie, lacet négié, repère
-     * échangé, ordre z-y-x contre z-x-y… Chaque hypothèse tenait à
-     * l'horizontale et tombait ailleurs, et aucune n'était la bonne. La
-     * véritable convention du WT901BLE, mesurée sur neuf poses, est
-     * `Rx(roulis) · Ry(−tangage) · Rz(lacet)` lue en est-nord-haut : un ordre
-     * que je n'avais pas envisagé, avec un signe que je n'avais pas essayé.
+     * **Why so general.** Seven versions guessed how this module composes its
+     * angles (output mirror, negated yaw, swapped frame, z-y-x vs z-x-y…);
+     * each held when level and failed elsewhere. So the **whole family** is
+     * described — orders, assignments, signs, frames — and the reading picks.
      *
-     * Plutôt que d'ajouter cette huitième hypothèse à la liste, on décrit
-     * **toute la famille** — six ordres, six affectations, huit combinaisons de
-     * signes, deux repères — et on laisse le relevé désigner la bonne. Cinq
-     * cent soixante-seize candidates, neuf poses : le téléphone tranche en
-     * quelques millisecondes ce que le raisonnement n'a pas su trouver en sept
-     * tentatives.
-     *
-     * [ordre] : les trois axes dans l'ordre de composition, par exemple "xyz".
-     * [assign] : quel angle porte chaque axe — 0 roulis, 1 tangage, 2 lacet.
-     * [signes] : +1 ou −1 pour chacun.
-     * [enu] : vrai pour est-nord-haut, faux pour nord-est-bas.
+     * [ordre]: the three axes in composition order, e.g. "xyz".
+     * [assign]: which angle each axis carries — 0 roll, 1 pitch, 2 yaw.
+     * [signes]: +1 or −1 for each.
+     * [enu]: true for east-north-up, false for north-east-down.
      */
     data class ConventionLibre(
         val ordre: String,
@@ -637,7 +545,7 @@ object PointageAntenne {
         val signes: IntArray,
         val enu: Boolean
     ) {
-        /** Rangée en texte : l'ordre, les rôles, les signes, le repère. */
+        /** Text form: order, roles, signs, frame. */
         fun encode(): String =
             "$ordre|${assign.joinToString("")}|" +
                 signes.joinToString("") { if (it > 0) "+" else "-" } +
@@ -649,11 +557,8 @@ object PointageAntenne {
 
         companion object {
             /**
-             * Celle du WT901BLE, mesurée sur un relevé complet.
-             *
-             * Elle sert de valeur par défaut : la plupart de ces modules
-             * partagent le même micrologiciel, et repartir d'une convention
-             * juste vaut mieux que d'une convention arbitraire.
+             * The WT901BLE convention, measured on a full reading. Default,
+             * since most of these modules share the same firmware.
              */
             val PAR_DEFAUT = ConventionLibre("xyz", intArrayOf(0, 1, 2),
                 intArrayOf(1, -1, 1), true)
@@ -672,20 +577,18 @@ object PointageAntenne {
             }
 
             /**
-             * Les candidates — **le lacet composé en premier**, toujours.
+             * The candidates — **yaw composed first**, always.
              *
-             * Ce n'est pas une hypothèse de plus : c'est une propriété de tout
-             * capteur d'attitude. Le cap s'applique à l'extérieur, et
-             * l'inclinaison se prend dans le repère déjà tourné. Une convention
-             * où le roulis vient en premier applique l'inclinaison autour d'un
-             * axe **fixe du monde** : elle est juste au nord par coïncidence,
-             * et l'élévation s'évanouit dès qu'on vise ailleurs.
+             * Not one more guess: a property of any attitude sensor. Heading
+             * applies on the outside, tilt is taken in the already-turned
+             * frame. A roll-first convention tilts around a **fixed world
+             * axis**: right at north by coincidence, and elevation vanishes as
+             * soon as you aim elsewhere.
              *
-             * C'est précisément ce qui est arrivé. Deux conventions à roulis
-             * extérieur passaient tous les contrôles — parce qu'ils étaient
-             * tous faits au nord — et donnaient une élévation de un degré au
-             * lieu de cinquante-six dès qu'on pointait l'est. La contrainte les
-             * élimine d'emblée, et divise le champ par trois.
+             * It happened: two outer-roll conventions passed every check —
+             * all done facing north — and gave 1° of elevation instead of 56°
+             * when aiming east. The constraint removes them and divides the
+             * field by three.
              */
             fun toutes(): List<ConventionLibre> {
                 val axes = listOf("xyz", "xzy", "yxz", "yzx", "zxy", "zyx")
@@ -693,7 +596,7 @@ object PointageAntenne {
                     intArrayOf(0, 1, 2), intArrayOf(0, 2, 1), intArrayOf(1, 0, 2),
                     intArrayOf(1, 2, 0), intArrayOf(2, 0, 1), intArrayOf(2, 1, 0))
                 val out = ArrayList<ConventionLibre>(576)
-                // `r[0] == 2` : le lacet en tête. Voir plus haut.
+                // `r[0] == 2`: yaw first. See above.
                 for (a in axes) for (r in roles.filter { it[0] == 2 })
                     for (s0 in intArrayOf(1, -1)) for (s1 in intArrayOf(1, -1))
                         for (s2 in intArrayOf(1, -1)) for (enu in listOf(true, false))
@@ -724,7 +627,7 @@ object PointageAntenne {
         return r
     }
 
-    /** La matrice corps → monde, selon la convention donnée. */
+    /** Body → world matrix under the given convention. */
     fun matriceLibre(a: AttitudeWit, c: ConventionLibre): FloatArray {
         val angles = floatArrayOf(a.roulis, a.tangage, a.lacet)
         var m = floatArrayOf(1f, 0f, 0f, 0f, 1f, 0f, 0f, 0f, 1f)
@@ -744,12 +647,12 @@ object PointageAntenne {
         m[1] * v.x + m[4] * v.y + m[7] * v.z,
         m[2] * v.x + m[5] * v.y + m[8] * v.z)
 
-    /** Le pointage, selon une convention mesurée. */
+    /** Pointing under a measured convention. */
     fun pointageLibre(a: AttitudeWit, fleche: Vec3, c: ConventionLibre): Pointage =
         lis(appliqueM(matriceLibre(a, c), fleche),
             if (c.enu) Repere.ENU else Repere.NED)
 
-    /** La flèche qu'implique une visée connue, selon une convention. */
+    /** The boom implied by a known sighting, under a convention. */
     fun flecheLibre(pose: AttitudeWit, azimutDeg: Float, elevationDeg: Float,
                     c: ConventionLibre): Vec3? {
         val p = direction(azimutDeg, elevationDeg,

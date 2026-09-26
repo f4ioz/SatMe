@@ -1,26 +1,21 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.domain
 
 /**
- * Ce qu'on rapatrie du carnet en ligne pour nourrir le clavier.
+ * What is pulled from the online log to feed the callsign keypad.
  *
- * L'API de Wavelog impose la forme de cette règle plus qu'on ne le voudrait :
- * son filtre `band` n'accepte **qu'une seule bande**, et il n'existe **aucun
- * filtre par mode**. Seul le cas satellite peut donc être trié par le serveur ;
- * tout le reste doit être rapatrié puis trié ici.
- *
- * Cette asymétrie n'est pas un détail d'implémentation. En satellite, le
- * serveur n'envoie que ce qui sert. Dans les autres cas il envoie le journal
- * entier, et c'est le téléphone qui écarte — donc une première moisson bien
- * plus lourde. L'écran doit le dire, faute de quoi l'opérateur croira à une
- * panne devant une attente qu'il n'a pas demandée.
+ * The Wavelog API shapes this rule: its `band` filter takes **a single band**
+ * and there is **no mode filter**. Only the satellite case can be filtered
+ * server-side; everything else is downloaded whole and filtered here. That
+ * first harvest is much heavier, and the screen must say so or the operator
+ * will think it has hung.
  */
 object FiltreMoisson {
 
@@ -32,15 +27,12 @@ object FiltreMoisson {
     val toutes: List<String> = listOf(SAT, PHONIE_HF, CW, TOUT)
 
     /**
-     * La bande à demander au serveur, ou `null` pour tout demander.
-     *
-     * Seul `SAT` est une valeur que le filtre de Wavelog comprend. « HF » n'en
-     * est pas une — c'est une famille de bandes, et le filtre n'en prend
-     * qu'une.
+     * Band to request from the server, or `null` for everything. Only `SAT`
+     * works: "HF" is a family of bands and the filter takes one.
      */
     fun bandeServeur(filtre: String): String? = if (filtre == SAT) "SAT" else null
 
-    /** Le tri se fait-il ici plutôt que chez le serveur ? */
+    /** Is filtering done here rather than by the server? */
     fun triLocal(filtre: String): Boolean = filtre != SAT && filtre != TOUT
 
     private val BANDES_HF = setOf(
@@ -49,24 +41,18 @@ object FiltreMoisson {
     )
 
     /**
-     * Les modes de phonie.
-     *
-     * Le but énoncé est d'écarter le numérique — FT8, FT4 et leurs cousins.
-     * On reconnaît donc ce qui est de la voix et l'on rejette le reste, plutôt
-     * que d'énumérer les modes numériques : leur liste s'allonge à chaque
-     * mode nouveau, et un mode inconnu passerait au travers. Une liste
-     * fermée du côté qu'on veut garder vieillit mieux qu'une liste ouverte
-     * du côté qu'on veut exclure.
+     * Voice modes. The goal is to exclude digital (FT8, FT4…), so we list what
+     * is voice and reject the rest: the digital list grows with every new mode
+     * and an unknown one would slip through.
      */
     private val PHONIE = setOf("SSB", "USB", "LSB", "AM", "FM", "DIGITALVOICE")
 
     /**
-     * Ce contact a-t-il sa place dans la mémoire du clavier ?
+     * Does this contact belong in the keypad memory?
      *
-     * `propMode`, `mode` et `bande` sont ceux de l'enregistrement ADIF, tels
-     * quels. Un champ absent vaut chaîne vide, et ne doit jamais faire retenir
-     * un contact par défaut : mieux vaut une mémoire un peu courte qu'une
-     * mémoire pleine de ce qu'on avait demandé d'écarter.
+     * `propMode`, `mode` and `bande` are the raw ADIF fields. A missing field
+     * is an empty string and must never make a contact pass by default: a
+     * slightly short memory beats one full of what was meant to be excluded.
      */
     fun retient(filtre: String, propMode: String, mode: String, bande: String): Boolean {
         val sat = propMode.trim().equals("SAT", ignoreCase = true)
@@ -74,9 +60,7 @@ object FiltreMoisson {
         val b = bande.trim().lowercase()
         return when (filtre) {
             SAT -> sat
-            // La phonie HF exclut le satellite : il a son propre choix, et
-            // les mélanger priverait l'opérateur de la distinction qu'il a
-            // justement demandée.
+            // HF voice excludes satellite, which has its own choice.
             PHONIE_HF -> !sat && b in BANDES_HF && m in PHONIE
             CW -> !sat && m == "CW"
             TOUT -> true

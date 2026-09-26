@@ -1,62 +1,50 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.domain
 
 /**
- * Les raccourcis de fréquence du transpondeur étroit.
+ * Frequency shortcuts for the QO-100 narrowband transponder (no Doppler, fixed
+ * dish: finding the right spot in 492 kHz is the whole job).
  *
- * Se poser au bon endroit dans 492 kHz est tout le travail sur QO-100 : le
- * satellite ne bouge pas, il n'y a pas de Doppler, et l'antenne est calée une
- * fois pour toutes. Reste à savoir où aller — et taper huit chiffres à chaque
- * fois pour retrouver la balise ou le coin FT8 n'est pas une façon de
- * travailler.
+ * Two kinds, and the distinction matters:
  *
- * Deux sortes de mémoires, et la distinction compte :
- *
- * - Les **repères du plan de bande**, déduits de [Qo100.SEGMENTS]. Ils ne se
- *   modifient pas et ne se suppriment pas : ce sont des faits publiés par
- *   AMSAT-DL, pas des préférences. Les laisser effaçables inviterait à
- *   reconstruire à la main ce que le domaine sait déjà.
- * - Les **mémoires de l'opérateur**, qu'il pose où il veut. Un rendez-vous
- *   hebdomadaire, le coin où l'on retrouve les copains, la fréquence d'un
- *   réseau.
+ * - **Band plan markers**, derived from [Qo100.SEGMENTS]. Not editable, not
+ *   deletable: they are facts published by AMSAT-DL, not preferences.
+ * - **Operator memories**, placed anywhere (weekly sked, a net frequency...).
  */
 object MemoiresQo100 {
 
-    /** Un raccourci. [cle] renvoie au libellé traduit pour les repères. */
+    /** A shortcut. [cle] points to the translated label for markers. */
     data class Memoire(
         val cle: String,
         val hz: Long,
-        /** Vrai pour un repère du plan de bande, faux pour une mémoire posée. */
+        /** True for a band plan marker, false for an operator memory. */
         val fixe: Boolean,
-        /** Le nom donné par l'opérateur. Vide pour un repère. */
+        /** Name given by the operator. Empty for a marker. */
         val nom: String = "",
     ) {
-        /** Ce qui s'affiche sur la touche. */
+        /** Text shown on the key. */
         fun libelle(traduit: (String) -> String): String =
             if (fixe) traduit("qo100_mem_$cle") else nom
     }
 
     /**
-     * Les repères déduits du plan de bande.
+     * Markers derived from the band plan.
      *
-     * Un segment fournit un repère quand il en porte un explicitement — les
-     * balises, la diffusion, l'urgence. Les autres donnent leur **début**,
-     * qui est l'endroit où l'on entre dans le segment ; se poser au milieu
-     * d'un segment n'aurait pas de sens, sa largeur n'ayant rien à voir avec
-     * l'activité qu'on y trouve.
+     * A segment with an explicit marker (beacons, broadcast, emergency) gives
+     * that; the others give their **start**, where you enter the segment. The
+     * middle of a segment means nothing about where the activity is.
      */
     fun reperes(): List<Memoire> = Qo100.SEGMENTS.mapNotNull { s ->
         when {
             s.repereHz != null -> Memoire(s.cle, s.repereHz, fixe = true)
-            // Les segments de travail : on entre par le bas, avec un petit
-            // retrait pour ne pas se coller à la limite.
+            // Working segments: enter from the bottom, slightly inset from the edge.
             s.usage == Qo100.Usage.CW ||
                 s.usage == Qo100.Usage.NUMERIQUE ||
                 s.usage == Qo100.Usage.PHONIE ||
@@ -66,20 +54,16 @@ object MemoiresQo100 {
         }
     }
 
-    /**
-     * Toutes les mémoires, repères puis mémoires posées, dans l'ordre des
-     * fréquences à l'intérieur de chaque groupe.
-     */
+    /** Markers then operator memories, each group sorted by frequency. */
     fun toutes(posees: List<Memoire>): List<Memoire> =
         reperes().sortedBy { it.hz } + posees.sortedBy { it.hz }
 
     /**
-     * Range une mémoire nouvelle, ou remplace celle qui occupe déjà la place.
+     * Stores a new memory, or replaces the one already in its place.
      *
-     * **Deux mémoires à moins d'un kilohertz l'une de l'autre sont la même.**
-     * Sur un transpondeur de 492 kHz avec des signaux de 2,7 kHz, deux
-     * raccourcis distants de 300 Hz ne se distinguent pas à l'usage : ils
-     * encombreraient la liste sans jamais rendre service.
+     * **Two memories less than 1 kHz apart are the same one.** With 2.7 kHz
+     * signals, shortcuts 300 Hz apart are indistinguishable in use and would
+     * only clutter the list.
      */
     fun pose(posees: List<Memoire>, hz: Long, nom: String): List<Memoire> {
         val propre = nom.trim().ifBlank { qoLibelleAuto(hz) }
@@ -91,7 +75,7 @@ object MemoiresQo100 {
     fun retire(posees: List<Memoire>, hz: Long): List<Memoire> =
         posees.filterNot { it.hz == hz }
 
-    /** Un nom par défaut quand l'opérateur n'en donne pas : « .688 ». */
+    /** Default name when the operator gives none: ".688". */
     private fun qoLibelleAuto(hz: Long): String =
         "." + ((hz / 1_000L) % 1_000L).toString().padStart(3, '0')
 }

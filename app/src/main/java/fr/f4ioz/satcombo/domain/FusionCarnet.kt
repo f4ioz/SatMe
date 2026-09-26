@@ -1,51 +1,39 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.domain
 
 /**
- * Fusionner deux carnets sans rien perdre.
+ * Merging two logs without losing anything (e.g. between two phones).
  *
- * Olivier trafique avec deux téléphones. Il veut envoyer de l'un à l'autre les
- * contacts qu'il choisit, et qu'à la fin les deux disent la même chose. La
- * difficulté n'est pas le transport — un fichier suffit — mais ce qui se passe
- * quand une entrée est déjà là.
+ * **A merge never overwrites.** The log is the only data in the app that
+ * cannot be rebuilt; an import that replaces turns a wrong file or wrong
+ * direction into permanent loss, while one that adds can at worst add noise.
  *
- * **Une fusion n'écrase jamais.** C'est la règle, et elle n'a rien d'un excès
- * de prudence : le carnet est la seule donnée de l'application qui ne se
- * reconstitue pas. Un import qui remplace transforme une erreur de manipulation
- * — le mauvais fichier, le mauvais sens — en perte définitive. Un import qui
- * ajoute ne peut, au pire, que faire du bruit.
+ * - **Absent: add.**
+ * - **Present but incomplete: fill in.** A field empty locally and set on the
+ *   other side is filled, so a name typed on one phone shows on the other.
+ * - **Present and different: keep local, and report it.** Nothing in an
+ *   entry says which value was corrected last; the disagreement count lets
+ *   the operator go and check.
  *
- * De cette règle découlent trois comportements :
- *
- * - **Absent : on ajoute.** C'est le cas ordinaire.
- * - **Présent et incomplet : on complète.** Un champ vide localement et rempli
- *   en face se remplit. C'est ce qui permet de nommer un contact sur un
- *   téléphone et de retrouver le nom sur l'autre.
- * - **Présent et différent : on garde le local, et on le dit.** Deux valeurs
- *   contradictoires ne se départagent pas toutes seules : rien dans une entrée
- *   ne dit laquelle a été corrigée en dernier. Le compte des désaccords est
- *   rendu pour que l'opérateur aille voir.
- *
- * L'identité d'un contact est **l'heure à la seconde, l'indicatif et le
- * satellite**. Deux stations ne se travaillent pas deux fois dans la même
- * seconde sur le même satellite ; et l'heure seule ne suffirait pas, puisque
- * deux téléphones peuvent enregistrer des contacts différents au même instant.
+ * A contact's identity is **time to the second, callsign and satellite**.
+ * Time alone is not enough: two phones can log different contacts at the
+ * same instant.
  */
 object FusionCarnet {
 
-    /** Ce qu'il faut d'une entrée pour la fusionner. */
+    /** What a merge needs from an entry. */
     data class Fiche(
         val timeMs: Long,
         val indicatif: String,
         val catnum: Int,
-        /** Les champs remplissables, par nom. Un champ absent ou vide est un trou. */
+        /** Fillable fields by name. Absent or empty means a gap. */
         val champs: Map<String, String> = emptyMap(),
     )
 
@@ -57,7 +45,7 @@ object FusionCarnet {
         val desaccords: Int,
     )
 
-    /** L'identité d'un contact : l'heure à la seconde, l'indicatif, le satellite. */
+    /** Contact identity: time to the second, callsign, satellite. */
     private fun cle(f: Fiche): Triple<Long, String, Int> =
         Triple(f.timeMs / 1000L, f.indicatif.trim().uppercase(), f.catnum)
 

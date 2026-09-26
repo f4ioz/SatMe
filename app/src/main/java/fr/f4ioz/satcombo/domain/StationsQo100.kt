@@ -1,83 +1,73 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.domain
 
 /**
- * Les chaînes de conversion de QO-100, et la façon de les étalonner.
+ * QO-100 converter chains and how to calibrate them. These settings belong to
+ * QO-100 only (no other satellite needs converters), so they are not in a
+ * general menu.
  *
- * Ces réglages n'appartiennent qu'à QO-100 : aucun autre satellite ne demande
- * de convertisseur. Les ranger dans un menu général obligeait à sortir de
- * l'écran pour y revenir, et laissait croire qu'ils s'appliquaient partout.
+ * **Calibration uses two frequencies read, not an oscillator typed.** Nobody
+ * knows their chain's LO; everyone can read a WebSDR and their own radio. The
+ * subtraction is the machine's job.
  *
- * Deux idées portent ce fichier.
- *
- * **L'étalonnage se fait par deux fréquences lues, pas par un oscillateur
- * saisi.** Personne ne connaît l'OL de sa chaîne ; tout le monde sait lire ce
- * qu'affiche un WebSDR et ce qu'affiche son poste. La soustraction est le
- * travail de la machine.
- *
- * **Une station est un tout, et l'on en a plusieurs.** Le montage fixe et le
- * montage portable n'ont pas le même LNB, donc pas le même OL, donc pas le
- * même étalonnage. Confondre les deux ferait chercher ses correspondants à
- * côté chaque fois qu'on change de montage — et l'on croirait à une dérive.
+ * **A station is a whole, and there are several.** Home and portable setups
+ * have different LNBs, hence different LOs. Mixing them up puts every contact
+ * off-frequency after a setup change — and looks like drift.
  */
 object StationsQo100 {
 
     /**
-     * Une chaîne complète, nommée.
+     * A complete, named chain.
      *
-     * [descenteOlHz] et [monteeOlHz] valent zéro quand l'étage n'existe pas :
-     * une clé SDR branchée derrière le LNB n'a pas d'upconverter, et une
-     * écoute directe en 10 GHz n'a pas de downconverter.
+     * [descenteOlHz] and [monteeOlHz] are zero when the stage does not exist
+     * (SDR dongle behind the LNB: no upconverter; direct 10 GHz: no
+     * downconverter).
      */
     data class Station(
         val nom: String,
         val descenteOlHz: Long = 0L,
         val monteeOlHz: Long = 0L,
-        /** Ce qu'on a mesuré, pour pouvoir le relire : ciel et poste. */
+        /** The measurement (sky and radio), kept so it can be reviewed. */
         val mesureCielHz: Long = 0L,
         val mesurePosteHz: Long = 0L,
     ) {
         val descenteReglee: Boolean get() = descenteOlHz > 0L
         val monteeReglee: Boolean get() = monteeOlHz > 0L
 
-        /** La FI de descente pour une fréquence du ciel donnée. */
+        /** Downlink IF for a given sky frequency. */
         fun posteRx(cielHz: Long): Long =
             if (descenteReglee) cielHz - descenteOlHz else cielHz
 
-        /** La FI de montée pour une fréquence du ciel donnée. */
+        /** Uplink IF for a given sky frequency. */
         fun posteTx(cielHz: Long): Long =
             if (monteeReglee) cielHz - monteeOlHz else cielHz
     }
 
-    /** Ce que rend un étalonnage : l'oscillateur, ou la raison du refus. */
+    /** Result of a calibration: the oscillator, or why it was refused. */
     sealed class Etalonnage {
         data class Trouve(val olHz: Long) : Etalonnage()
-        /** [motif] est une clé de traduction, pas une phrase. */
+        /** [motif] is a translation key, not a sentence. */
         data class Refuse(val motif: String) : Etalonnage()
     }
 
-    /** Les bornes du crédible pour un oscillateur de descente, en hertz. */
+    /** Credible bounds for a downlink oscillator, in Hz. */
     private const val OL_MIN = 100_000_000L
     private const val OL_MAX = 12_000_000_000L
 
     /**
-     * L'oscillateur local, déduit de deux fréquences lues.
+     * Local oscillator from two frequencies read: `LO = sky − radio`.
      *
-     * `OL = ciel − poste`. C'est tout, et c'est le calcul que fait l'opérateur
-     * sur un coin de table — sauf qu'ici il ne se trompe pas de sens.
-     *
-     * Les deux gardes ne sont pas décoratives. **Intervertir les deux champs
-     * est l'erreur naturelle** : on lit d'abord son poste, qui est devant soi,
-     * puis le WebSDR. Une différence négative le trahit immédiatement, et le
-     * dire vaut mieux que d'enregistrer un oscillateur absurde qui ne se
-     * verrait qu'à la première écoute ratée.
+     * The guards matter. **Swapping the two fields is the natural mistake**
+     * (you read your radio first, it is in front of you). A negative difference
+     * gives it away at once; saying so beats storing an absurd LO that would
+     * only show on the first failed listen.
      */
     fun etalonne(cielHz: Long, posteHz: Long): Etalonnage {
         if (cielHz <= 0L || posteHz <= 0L) return Etalonnage.Refuse("qo100_cal_vide")
@@ -88,27 +78,21 @@ object StationsQo100 {
     }
 
     /**
-     * L'écart entre l'oscillateur mesuré et sa valeur nominale, en hertz.
-     *
-     * C'est ce chiffre qui dit si la chaîne est saine. Quelques dizaines de
-     * kilohertz sur un LNB de télévision sont normales — c'est son TCXO, et
-     * un GPSDO n'y changera rien puisqu'il ne touche pas au LNB. Quelques
-     * mégahertz désignent autre chose : mauvais LNB, mauvaise bande, ou champs
-     * intervertis.
+     * Measured LO minus nominal, in Hz: this tells whether the chain is sane.
+     * A few tens of kHz on a TV LNB is normal (its TCXO; a GPSDO does not help,
+     * it does not drive the LNB). A few MHz means something else: wrong LNB,
+     * wrong band, or swapped fields.
      */
     fun ecartAuNominal(olHz: Long, nominalHz: Long): Long = olHz - nominalHz
 
-    /** Le même écart en parties par million, rapporté à l'oscillateur. */
+    /** The same offset in ppm of the oscillator. */
     fun ecartPpm(olHz: Long, nominalHz: Long): Double =
         if (nominalHz <= 0L) 0.0
         else (olHz - nominalHz) * 1_000_000.0 / nominalHz
 
     /**
-     * Les deux montages qu'on a par défaut.
-     *
-     * Ils ne portent aucun oscillateur : une station non étalonnée doit se
-     * dire telle, plutôt que de proposer une valeur nominale qui aurait l'air
-     * juste et ne le serait pas.
+     * Default setups, with no oscillator: an uncalibrated station must say so,
+     * not offer a nominal value that looks right and is not.
      */
     fun parDefaut(): List<Station> = listOf(
         Station(nom = "fixe"),
@@ -116,10 +100,8 @@ object StationsQo100 {
     )
 
     /**
-     * Range une station modifiée dans la liste, sans la réordonner.
-     *
-     * L'ordre est celui que l'opérateur voit ; le changer sous ses yeux parce
-     * qu'il vient d'étalonner serait déroutant.
+     * Replaces a station in the list without reordering: reshuffling under the
+     * operator's eyes after a calibration would be confusing.
      */
     fun remplace(liste: List<Station>, index: Int, station: Station): List<Station> =
         if (index !in liste.indices) liste

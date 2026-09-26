@@ -1,27 +1,23 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.domain
 
 /**
- * Le désignateur AMSAT, à partir du nom brut d'un jeu d'éléments.
+ * The AMSAT designator, from the raw name in an element set.
  *
- * Un TLE nomme parfois le satellite avec le corps de fusée qui l'accompagne :
- * « RS-44 & BREEZE-KM R/B ». LoTW et Wavelog apparient sur `SAT_NAME`, et un
- * contact déclaré sous le nom long ne rencontrera jamais celui que l'autre
- * station a déclaré sous « RS-44 ».
+ * A TLE sometimes names the satellite together with its rocket body:
+ * "RS-44 & BREEZE-KM R/B". LoTW and Wavelog match on `SAT_NAME`, so a contact
+ * logged under the long name never matches the other station's "RS-44". Both
+ * forms turn up in real logs depending on the TLE source.
  *
- * L'export d'Olivier du 28 août porte les deux formes pour le même satellite,
- * selon la source des éléments : la moitié de ses contacts RS-44 ne
- * s'apparieraient pas.
- *
- * La correction ne se fait pas à l'insu de l'opérateur — un nom de satellite
- * est une donnée qu'il a peut-être voulue telle quelle. Elle se demande.
+ * The fix is never applied behind the operator's back — they may want the
+ * name as is. It is offered.
  */
 object NomSatellite {
 
@@ -38,16 +34,16 @@ object NomSatellite {
     fun propre(nom: String): String {
         val brut = nom.trim()
         CONNUS[brut]?.let { return it }
-        // « MACHIN (AO-XX) » : le désignateur est entre parenthèses.
+        // "NAME (AO-XX)": the designator is in parentheses.
         if (brut.endsWith(")") && brut.contains("(")) {
             val dedans = brut.substringAfterLast("(").dropLast(1).trim()
             if (dedans.isNotEmpty()) return dedans
         }
-        // « RS-44 & QUELQUE CHOSE » : ce qui précède l'esperluette.
+        // "RS-44 & SOMETHING": what precedes the ampersand.
         if (brut.contains("&")) return brut.substringBefore("&").trim()
         return brut
     }
 
-    /** Vrai si ce nom gagnerait à être nettoyé. */
+    /** True when this name would benefit from cleaning. */
     fun aNettoyer(nom: String): Boolean = propre(nom) != nom.trim()
 }

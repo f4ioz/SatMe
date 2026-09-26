@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.domain
 
@@ -36,14 +36,13 @@ class PassPredictor {
          * Are these elements usable by predict4java?
          *
          * **Why the check exists.** The library parses its numeric fields with
-         * `Integer.parseInt` and throws on anything else. A truncated download,
-         * a stray character in a bulletin, and the exception surfaces deep
-         * inside a coroutine computing passes — taking every satellite down
-         * with it, not only the faulty one. Seen in production on 20.47.
+         * `Integer.parseInt` and throws on anything else. A truncated download
+         * or a stray character, and the exception surfaces deep inside the
+         * pass coroutine — taking every satellite down, not only the faulty
+         * one. Seen in production on 20.47.
          *
-         * The cheapest honest test is to build the object and see: reproducing
-         * the library's own field-by-field parsing here would be a second
-         * implementation to keep in step with the first.
+         * We build the object and see, rather than duplicate the library's
+         * field-by-field parsing.
          */
         fun elementsUtilisables(e: TleEntry): Boolean {
             if (e.line1.length < 69 || e.line2.length < 69) return false
@@ -57,20 +56,18 @@ class PassPredictor {
          * Rewrites an Alpha-5 catalog field into digits, for the library alone.
          *
          * **Why it is needed.** Catalog numbers above 99999 are written
-         * "A0057" — a letter for the leading digits, the convention CelesTrak
-         * and 18 SPCS use. predict4java reads that field with
-         * `Integer.parseInt` and throws. In production on 20.47 this took down
-         * the whole pass computation for anyone tracking SOYUZ-MS 29 or
-         * PROGRESS-MS 35.
+         * "A0057" (a letter for the leading digits, CelesTrak / 18 SPCS
+         * convention). predict4java reads that field with `Integer.parseInt`
+         * and throws: on 20.47 this took down the whole pass computation for
+         * anyone tracking SOYUZ-MS 29 or PROGRESS-MS 35.
          *
-         * **Why rewrite rather than drop.** Every new satellite now gets a
-         * six-digit number, amateur ones included: dropping them would quietly
-         * hide more and more birds each year.
+         * **Rewrite, do not drop.** Every new satellite, amateur ones
+         * included, now gets a six-digit number.
          *
-         * The number is only an identifier to the library — the orbital maths
-         * never touch it. The true catalog number stays in [TleEntry], which is
-         * what favourites and AMSAT status match on. Only the copy handed to
-         * predict4java is altered, so nothing is written back to the cache.
+         * The library uses the number only as an identifier; the orbital maths
+         * never touch it. The true number stays in [TleEntry] (favourites and
+         * AMSAT status match on it). Only the copy handed to predict4java is
+         * altered; nothing is written back to the cache.
          */
         internal fun lisible(ligne: String): String {
             if (ligne.length < 7) return ligne
@@ -195,19 +192,11 @@ class PassPredictor {
 
 
     /**
-     * Timed look-angle samples between [fromMs] and [toMs] (inclusive), one
-     * every 1/[steps] of the span. Each triple is (timeMs, azDeg, elDeg) with
-     * elevation kept even when below the horizon so the caller can decide how to
-     * draw the rise/set. Used by the sked page animation and export.
-     */
-    /**
-     * Positions complètes à une liste d'instants, satellite construit une
-     * seule fois.
+     * Full positions at a list of instants, satellite built once.
      *
-     * [positionAt] refabrique le satellite à chaque appel : c'est sans
-     * conséquence pour la boussole, qui n'en demande qu'une par seconde, mais
-     * la table de Doppler d'un passage en demande une cinquantaine d'un coup.
-     * D'où ce passage groupé.
+     * [positionAt] rebuilds the satellite on every call: harmless for the
+     * compass (one per second), not for a pass Doppler table (about fifty at
+     * once).
      */
     fun samplePositions(e: TleEntry, o: Observer, timesMs: List<Long>): List<SatPosition> {
         if (timesMs.isEmpty()) return emptyList()
@@ -231,6 +220,12 @@ class PassPredictor {
         }
     }
 
+    /**
+     * Timed look-angle samples between [fromMs] and [toMs] (inclusive), one
+     * every 1/[steps] of the span. Each triple is (timeMs, azDeg, elDeg) with
+     * elevation kept even when below the horizon so the caller can decide how to
+     * draw the rise/set. Used by the sked page animation and export.
+     */
     fun sampleTrack(
         e: TleEntry, o: Observer, fromMs: Long, toMs: Long, steps: Int = 96
     ): List<Triple<Long, Double, Double>> {
@@ -248,17 +243,15 @@ class PassPredictor {
     }
 
     /**
-     * Échantillonne un passage entre [fromMs] et [toMs] au pas [stepMs], en
-     * gardant l'élévation et la vitesse radiale.
+     * Samples a pass from [fromMs] to [toMs] every [stepMs], keeping elevation
+     * and range rate.
      *
-     * Un échantillonneur par lots, et non un appel par point : le satellite
-     * n'est construit qu'une fois. Cela compte, parce que le tableau du Doppler
-     * demande deux balayages — la demi-minute sur tout le passage, puis les
-     * deux secondes autour du sommet — soit une centaine de points pour un
-     * seul affichage.
+     * Batched, satellite built once: the Doppler table makes two sweeps (30 s
+     * over the pass, then 2 s around the peak), about a hundred points per
+     * display.
      *
-     * La borne de fin est toujours rendue, même quand le pas ne tombe pas
-     * juste : sans elle, la ligne LOS manquerait au tableau.
+     * The end bound is always returned, even when the step does not land on
+     * it: without it the table would miss its LOS row.
      */
     fun samplePositions(
         e: TleEntry, o: Observer, fromMs: Long, toMs: Long, stepMs: Long
@@ -296,25 +289,19 @@ class PassPredictor {
         return out
     }
 
-    /** Bisect a horizon crossing between [tLow] (below/above) and [tHigh] to ~1 s. */
     /**
-     * Le passage en cours : la période continue autour de [nowMs] pendant
-     * laquelle le satellite est au-dessus de l'horizon. Nul s'il est couché.
+     * The current pass: the continuous span around [nowMs] with the satellite
+     * above the horizon. Null when it is down.
      *
-     * La liste des passages ne suffit pas à répondre. Elle est balayée à partir
-     * de « maintenant moins vingt minutes » : quand on ouvre un satellite déjà
-     * levé, son premier passage commence donc à l'instant du balayage et non à
-     * l'acquisition réelle. Sur une orbite basse cela ne se voit pas — le
-     * passage dure dix minutes. Sur RS-44, dont un passage dure des heures, la
-     * fenêtre serait tronquée et les contacts du début du passage sortiraient
-     * de leur propre passage. C'est le défaut de la règle « moins d'une
-     * heure », revenu par la porte d'à côté.
+     * **The pass list cannot answer this.** It is scanned from "now minus
+     * twenty minutes", so for a satellite already up its first pass starts at
+     * the scan time, not the real AOS. Invisible on LEO (ten-minute passes);
+     * on RS-44, whose passes last hours, the window would be truncated and
+     * early contacts would fall out of their own pass.
      *
-     * On remonte donc le temps depuis maintenant, pas d'une minute, jusqu'à
-     * repasser sous l'horizon, puis on affine le franchissement à la seconde.
-     * [maxHeures] borne la recherche : au-delà, ce n'est plus un passage, c'est
-     * un satellite géostationnaire, et la question de « ce passage » ne se pose
-     * plus dans les mêmes termes.
+     * So we walk back from now in one-minute steps until below the horizon,
+     * then refine the crossing to the second (same forward). [maxHeures]
+     * bounds the search: beyond that it is a geostationary bird, not a pass.
      */
     fun currentPass(
         e: TleEntry, o: Observer, nowMs: Long, maxHeures: Int = 12,
@@ -336,6 +323,7 @@ class PassPredictor {
         return aos to los
     }
 
+    /** Bisect a horizon crossing between [tLow] (below/above) and [tHigh] to ~1 s. */
     private fun refineCrossing(
         sat: com.github.amsacode.predict4java.Satellite,
         station: GroundStationPosition,
@@ -366,18 +354,15 @@ object SunCalc {
         azElDeg(latDeg, lonDeg, date)[1]
 
     /**
-     * Azimut et élévation du Soleil, en degrés, dans cet ordre.
+     * Sun azimuth and elevation, in degrees, in that order.
      *
-     * L'azimut est vrai, compté depuis le nord dans le sens des aiguilles
-     * d'une montre — la même convention que partout ailleurs dans
-     * l'application, et notamment que [fr.f4ioz.satcombo.domain.Qo100.pointage],
-     * sans quoi comparer les deux directions n'aurait aucun sens.
+     * True azimuth, clockwise from north — the convention used everywhere in
+     * the app, notably by [fr.f4ioz.satcombo.domain.Qo100.pointage]; the two
+     * directions are compared.
      *
-     * Le modèle est celui de l'élévation, inchangé : une approximation NOAA à
-     * quelques centièmes de degré près. C'est très en dessous du demi-degré
-     * que fait le disque solaire, donc largement assez pour dire à quelle
-     * minute le Soleil passe devant le satellite — et beaucoup trop grossier
-     * pour prétendre à autre chose.
+     * NOAA approximation, a few hundredths of a degree: well under the 0.5°
+     * solar disc, enough to tell the minute the Sun crosses the satellite, and
+     * too coarse for anything more.
      */
     fun azElDeg(latDeg: Double, lonDeg: Double, date: Date): DoubleArray {
         val jd = date.time / 86400000.0 + 2440587.5
@@ -393,7 +378,7 @@ object SunCalc {
         val ha = lst - ra
         val latR = Math.toRadians(latDeg)
 
-        // Le trièdre local, comme pour le pointage : est, nord, haut.
+        // Local frame, as for pointing: east, north, up.
         val est = -Math.cos(decl) * Math.sin(ha)
         val nord = Math.cos(latR) * Math.sin(decl) -
                 Math.sin(latR) * Math.cos(decl) * Math.cos(ha)

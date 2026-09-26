@@ -1,59 +1,56 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.domain
 
 /**
- * Le protocole des modules d'attitude WitMotion, réduit à ce dont une boussole
- * d'antenne a besoin.
+ * The WitMotion attitude module protocol, reduced to what an antenna compass
+ * needs.
  *
- * Le module — un WT9011DCL-BT50 — fusionne gyroscope, accéléromètre et
- * magnétomètre dans sa propre puce et rend une attitude déjà compensée en
- * inclinaison. C'est tout l'intérêt : un magnétomètre nu ne donne un cap juste
- * que posé à plat, et une flèche d'antenne ne l'est jamais.
+ * The module (WT9011DCL-BT50) fuses gyro, accelerometer and magnetometer on
+ * chip and returns a tilt-compensated attitude. That is the point: a bare
+ * magnetometer is only right when flat, and an antenna boom never is.
  *
- * Cette partie-ci ne connaît ni Bluetooth ni Android. Elle prend des octets et
- * rend des angles, ce qui la rend éprouvable à la table.
+ * No Bluetooth, no Android here: bytes in, angles out, testable on the bench.
  */
 
-/** Les identifiants GATT du module. Relevés sur la notice, pas devinés. */
+/** GATT identifiers of the module, taken from the datasheet. */
 object GattWit {
     /**
-     * Attention à la base : WitMotion publie `...-00805f9a34fb`, avec un **9a**
-     * là où la base Bluetooth normalisée porte un **9b**. Ce n'est pas une
-     * coquille de leur documentation — c'est bien ce que le module annonce, et
-     * une base normalisée ne trouverait rien.
+     * Mind the base: WitMotion uses `...-00805f9a34fb`, with **9a** where the
+     * standard Bluetooth base has **9b**. Not a typo in their docs — it is
+     * what the module advertises, and the standard base would find nothing.
      */
     const val SERVICE = "0000ffe5-0000-1000-8000-00805f9a34fb"
     const val NOTIFICATION = "0000ffe4-0000-1000-8000-00805f9a34fb"
     const val ECRITURE = "0000ffe9-0000-1000-8000-00805f9a34fb"
 
-    /** Le descripteur d'abonnement, celui-ci parfaitement normalisé. */
+    /** Subscription descriptor, this one fully standard. */
     const val CCCD = "00002902-0000-1000-8000-00805f9b34fb"
 
-    /** Les noms diffusés par la famille : WT901BLE, WT9011DCL… */
+    /** Names advertised by the family: WT901BLE, WT9011DCL… */
     fun nomPlausible(nom: String?): Boolean {
         val n = nom?.uppercase() ?: return false
         return n.startsWith("WT") || n.contains("WITMOTION") || n.contains("HWT")
     }
 }
 
-/** Une attitude, en degrés. Le lacet est le seul qui nous serve. */
+/** An attitude, in degrees. Only yaw is used. */
 data class AttitudeWit(
     val roulis: Float,
     val tangage: Float,
     val lacet: Float
 )
 
-/** Ce qu'une trame reçue peut être. */
+/** What a received frame can be. */
 sealed class TrameWit {
     data class Attitude(val valeur: AttitudeWit) : TrameWit()
-    /** Une trame connue mais sans intérêt ici (champ magnétique, quaternion…). */
+    /** A known frame of no use here (magnetic field, quaternion…). */
     data class Ignoree(val drapeau: Int) : TrameWit()
 }
 
@@ -64,9 +61,8 @@ object BoussoleWit {
     const val LONGUEUR = 20
 
     /**
-     * Les autres drapeaux que le module peut émettre. Ils font la même
-     * longueur ; les reconnaître évite de les prendre pour du bruit et de
-     * resynchroniser inutilement au milieu d'une trame valide.
+     * Other flags the module may send. Same length; recognising them avoids
+     * taking them for noise and resyncing in the middle of a valid frame.
      */
     private val DRAPEAUX_CONNUS = setOf(0x51, 0x52, 0x53, 0x59, 0x61, 0x71)
 
@@ -75,23 +71,22 @@ object BoussoleWit {
         return if (v >= 32768) v - 65536 else v
     }
 
-    /** `angle = brut / 32768 × 180°`, la formule de la notice. */
+    /** `angle = raw / 32768 × 180°`, per the datasheet. */
     private fun angle(bas: Byte, haut: Byte): Float =
         entier16(bas, haut) / 32768f * 180f
 
     /**
-     * Lit **une** trame d'attitude posée à l'indice [debut].
+     * Reads **one** attitude frame at index [debut]; `null` on a bad header or
+     * missing bytes.
      *
-     * Rend `null` si l'entête ne colle pas ou s'il manque des octets. La trame
-     * 0x61 ne porte **aucune somme de contrôle** — contrairement à la 0x53 —
-     * donc la seule garde possible est l'entête et la longueur. C'est la raison
-     * pour laquelle [Accumulateur] resynchronise plutôt que d'insister.
+     * Frame 0x61 has **no checksum** (unlike 0x53), so header and length are
+     * the only guard. That is why [Accumulateur] resyncs rather than insists.
      */
     fun litAttitude(octets: ByteArray, debut: Int = 0): AttitudeWit? {
         if (debut + LONGUEUR > octets.size) return null
         if ((octets[debut].toInt() and 0xFF) != ENTETE) return null
         if ((octets[debut + 1].toInt() and 0xFF) != DRAPEAU_ATTITUDE) return null
-        // 2..7 accélération, 8..13 vitesse angulaire, 14..19 les angles.
+        // 2..7 acceleration, 8..13 angular rate, 14..19 angles.
         return AttitudeWit(
             roulis = angle(octets[debut + 14], octets[debut + 15]),
             tangage = angle(octets[debut + 16], octets[debut + 17]),
@@ -100,26 +95,20 @@ object BoussoleWit {
     }
 
     /**
-     * Le lacet du module, ramené à un azimut de boussole : 0 à 360°, le nord
-     * en tête.
+     * Module yaw as a compass azimuth: 0–360°, north up.
      *
-     * Deux corrections, et elles ont chacune leur raison d'exister :
+     * **Offset** [offsetDeg]: the module's zero is not the antenna's north.
+     * It depends on how the box is fixed on the boom and changes whenever it
+     * is remounted (the datasheet requires a calibration on every mount).
      *
-     * **Le calage** [offsetDeg] — le zéro du module n'est pas forcément le nord
-     * de l'antenne. Il dépend de la façon dont le boîtier est fixé sur la
-     * flèche, et il change dès qu'on démonte. La notice impose d'ailleurs un
-     * étalonnage à chaque changement de monture ; ce réglage-ci en est le
-     * pendant logiciel.
+     * **Direction** [inverse]: the module counts in ENU, positive
+     * counter-clockwise, while azimuth runs clockwise. Depending on firmware
+     * and box orientation, yaw may follow azimuth or oppose it. **Do not
+     * guess**: the operator turns the antenna a quarter turn right, and if the
+     * number drops, he ticks the box.
      *
-     * **Le sens** [inverse] — le module compte dans le repère nord-est-ciel,
-     * où les rotations positives tournent dans le sens trigonométrique, tandis
-     * qu'un azimut tourne dans le sens des aiguilles. Selon le micrologiciel et
-     * l'orientation du boîtier, le lacet peut donc suivre l'azimut ou lui être
-     * opposé. **On ne devine pas** : l'opérateur tourne l'antenne d'un quart de
-     * tour vers la droite, et si le nombre descend, il coche la case.
-     *
-     * La déclinaison n'entre pas ici : SatMe l'applique déjà en aval, et la
-     * poser deux fois la doublerait.
+     * Declination is not applied here: SatMe applies it downstream, doing it
+     * twice would double it.
      */
     fun azimutDepuisLacet(lacetDeg: Float, offsetDeg: Float = 0f, inverse: Boolean = false): Float {
         val signe = if (inverse) -lacetDeg else lacetDeg
@@ -129,11 +118,11 @@ object BoussoleWit {
     }
 
     /**
-     * Le calage à déduire d'un relevé : l'antenne pointe un azimut connu
-     * [azimutVrai], le module dit [lacetDeg] ; voici ce qu'il faut ajouter.
+     * Offset from a reading: the antenna points at known azimuth
+     * [azimutVrai], the module says [lacetDeg]; this is what to add.
      *
-     * Rendu dans −180..180 plutôt que 0..360, pour qu'un petit écart s'affiche
-     * comme un petit nombre — un « −3° » se relit, un « 357° » se conteste.
+     * Returned in −180..180 so a small error reads as a small number: "−3°"
+     * is checked at a glance, "357°" gets argued with.
      */
     fun calageDepuisReleve(lacetDeg: Float, azimutVrai: Float, inverse: Boolean = false): Float {
         val signe = if (inverse) -lacetDeg else lacetDeg
@@ -143,43 +132,36 @@ object BoussoleWit {
         return d
     }
 
-    // ---- L'ancienne lecture par angles séparés : retirée ----
+    // ---- Old per-angle reading: removed ----
     //
-    // Elle prenait le lacet pour l'azimut et l'un des deux autres angles pour
-    // l'élévation, avec un sélecteur d'axe, un calage et un sens à régler à la
-    // main. Juste en polarisation horizontale, fausse partout ailleurs : dès
-    // qu'on tourne la flèche sur son axe, l'élévation migre d'un angle vers
-    // l'autre, et à mi-chemin elle est partagée entre les deux.
-    //
-    // `PointageAntenne` répond à la même question par le vecteur de visée, et
-    // la polarisation n'a plus de prise. Garder les deux aurait laissé deux
-    // réponses divergentes à une seule question.
+    // It took yaw as azimuth and one of the other two angles as elevation.
+    // Right in horizontal polarisation only: as soon as the boom rotates on
+    // its axis, elevation migrates from one angle to the other. `PointageAntenne`
+    // answers the same question from the boresight vector, immune to
+    // polarisation. Do not bring back a second, diverging answer.
 
     /**
-     * Le tampon qui recolle les trames.
+     * Buffer that reassembles frames.
      *
-     * Une notification BLE ne porte pas forcément une trame entière et une seule
-     * : selon la MTU négociée, elle peut en couper une en deux ou en livrer deux
-     * d'un coup. Accumuler puis découper est la seule façon sûre.
+     * A BLE notification does not carry exactly one frame: depending on the
+     * negotiated MTU it may split one or deliver two. Accumulate, then cut.
      *
-     * Sans somme de contrôle, un octet 0x55 tombé au milieu du bruit peut faire
-     * croire à un entête. On avance donc d'**un seul octet** quand l'entête ne
-     * mène nulle part, au lieu de sauter vingt octets — un faux départ coûte
-     * alors une trame, pas la synchronisation.
+     * With no checksum, a stray 0x55 in noise can look like a header. So we
+     * advance by **one byte** when a header leads nowhere, not twenty: a false
+     * start costs one frame, not the sync.
      */
     class Accumulateur(private val plafond: Int = 256) {
         private val tampon = ArrayList<Byte>(plafond)
 
-        /** Ce que le tampon retient, pour les essais. */
+        /** What the buffer holds, for tests. */
         val enAttente: Int get() = tampon.size
 
         fun vide() { tampon.clear() }
 
-        /** Verse [morceau] et rend les attitudes complètes qu'il a permis de lire. */
+        /** Pours [morceau] in and returns the complete attitudes it yielded. */
         fun verse(morceau: ByteArray): List<AttitudeWit> {
             for (b in morceau) tampon.add(b)
-            // Un tampon qui enfle est un tampon qui ne se resynchronise pas :
-            // on ne garde que de quoi reconstituer deux trames.
+            // A growing buffer is one that fails to resync: cap it.
             while (tampon.size > plafond) tampon.removeAt(0)
 
             val sorties = ArrayList<AttitudeWit>()
@@ -196,19 +178,18 @@ object BoussoleWit {
                 }
                 i += LONGUEUR
             }
-            // Ce qui reste est soit une trame incomplète, soit des miettes.
+            // What remains is an incomplete frame or crumbs.
             repeat(i) { tampon.removeAt(0) }
             return sorties
         }
     }
 
     /**
-     * Le lissage du cap.
+     * Heading smoothing.
      *
-     * Le module annonce 0,2° et il les tient, mais une antenne tenue à bout de
-     * bras tremble. On applique le même filtre du premier ordre que les
-     * capteurs du téléphone, avec le passage par le plus court chemin pour que
-     * 359° → 1° ne fasse pas faire un tour complet à l'aiguille.
+     * The module claims 0.2° and holds it, but a hand-held antenna shakes.
+     * Same first-order filter as the phone sensors, along the shortest arc so
+     * 359° → 1° does not spin the needle a full turn.
      */
     fun lisse(precedent: Float, nouveau: Float, k: Float = 0.25f): Float {
         if (precedent.isNaN()) return nouveau

@@ -1,69 +1,56 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.domain
 
 /**
- * Le codage des messages FT8, sans la partie radio.
+ * FT8 message coding, without the radio part.
  *
- * FT8 envoie **79 symboles** de 8-FSK, à 6,25 bauds et 6,25 Hz d'écartement :
- * 12,64 secondes de transmission dans une fenêtre de quinze. Trois groupes de
- * sept symboles — les réseaux de Costas — servent de repères de synchronisation
- * au début, au milieu et à la fin. Restent 58 symboles utiles, soit 174 bits.
+ * FT8 sends **79 symbols** of 8-FSK at 6.25 baud and 6.25 Hz spacing: 12.64 s
+ * of transmission in a 15 s slot. Three 7-symbol Costas arrays (start, middle,
+ * end) are the sync markers. The remaining 58 symbols carry 174 bits: 77
+ * message bits, 14 CRC bits, 83 parity bits.
  *
- * Ces 174 bits sont un mot de code correcteur : 77 bits de message, 14 bits de
- * contrôle, 83 bits de parité. **Ce fichier ignore les 83 bits de parité.**
- *
- * C'est un choix, et il faut le comprendre. Le décodage complet emploie un
- * code LDPC (174,91) dont les tables font plusieurs centaines de valeurs ; mal
- * recopiées, elles ne corrigent rien tout en donnant l'illusion de travailler.
- * On s'en passe donc, et l'on s'appuie sur le CRC-14 : si les 91 premiers bits
- * sont lus sans erreur, le contrôle tombe juste et le message est vrai ; si un
- * seul bit est faux, le contrôle échoue et l'on n'affiche rien.
- *
- * La conséquence est nette et assumée : **les signaux forts se décodent, les
- * faibles ne se décodent pas**. Sur QO-100, où le rapport signal sur bruit
- * dépasse couramment vingt décibels, la plupart des stations passent. En
- * troposphérique marginal, presque aucune. Un décodeur qui rate n'a jamais
- * trompé personne ; un décodeur qui invente, si.
+ * This file handles symbols, CRC and message unpacking. The 83 parity bits
+ * are left to [Ldpc]. The rule for the whole chain: a message is shown only
+ * when the CRC checks. A decoder that misses never fooled anyone; a decoder
+ * that invents does.
  */
 object Ft8 {
 
-    /** Sept symboles de repère, au début, au milieu et à la fin. */
+    /** Seven sync symbols, at the start, middle and end. */
     val COSTAS = intArrayOf(3, 1, 4, 0, 6, 5, 2)
 
     const val SYMBOLES = 79
     const val SYMBOLES_DONNEES = 58
     const val BITS = 174
-    /** Message utile + contrôle, avant les bits de parité. */
+    /** Message + CRC, before the parity bits. */
     const val BITS_UTILES = 91
     const val BITS_MESSAGE = 77
 
-    /** 6,25 Hz d'écartement, 6,25 bauds : la durée d'un symbole vaut 0,16 s. */
+    /** 6.25 Hz spacing, 6.25 baud: a symbol lasts 0.16 s. */
     const val ECART_HZ = 6.25
     const val DUREE_SYMBOLE_S = 0.16
-    /** Une transmission dure 12,64 s dans une fenêtre de 15. */
+    /** A transmission lasts 12.64 s in a 15 s slot. */
     const val DUREE_S = SYMBOLES * DUREE_SYMBOLE_S
 
     /**
-     * Le code de Gray, dans le sens ton → valeur.
+     * Gray code, value → tone (used as `GRAY[v]` when encoding).
      *
-     * FT8 range les tons de sorte que deux tons voisins ne diffèrent que d'un
-     * bit : une erreur d'un demi-écartement ne fausse alors qu'un bit sur
-     * trois, au lieu de trois sur trois. Sans code correcteur c'est ce qui
-     * sauve le plus de messages.
+     * Neighbouring tones differ by a single bit, so landing one tone off
+     * corrupts one bit out of three instead of up to three.
      */
     private val GRAY = intArrayOf(0, 1, 3, 2, 5, 6, 4, 7)
     private val GRAY_INVERSE = IntArray(8).also { inv ->
         GRAY.forEachIndexed { valeur, ton -> inv[ton] = valeur }
     }
 
-    /** Les 58 symboles de données deviennent 174 bits. */
+    /** The 58 data symbols to 174 bits. */
     fun symbolesVersBits(tons: IntArray): BooleanArray {
         val bits = BooleanArray(BITS)
         var i = 0
@@ -76,7 +63,7 @@ object Ft8 {
         return bits
     }
 
-    /** Les 79 symboles reçus, débarrassés des trois réseaux de Costas. */
+    /** The 79 received symbols, minus the three Costas arrays. */
     fun donnees(tons: IntArray): IntArray {
         require(tons.size == SYMBOLES) { "il faut $SYMBOLES symboles" }
         val out = IntArray(SYMBOLES_DONNEES)
@@ -88,7 +75,7 @@ object Ft8 {
         return out
     }
 
-    /** Les 174 bits redeviennent 79 symboles, Costas compris. */
+    /** 174 bits back to 79 symbols, Costas included. */
     fun bitsVersSymboles(bits: BooleanArray): IntArray {
         require(bits.size == BITS) { "il faut $BITS bits" }
         val tons = IntArray(SYMBOLES)
@@ -113,12 +100,10 @@ object Ft8 {
     }
 
     /**
-     * Combien de symboles de Costas tombent juste, sur les vingt et un.
+     * How many of the 21 Costas symbols match: the sync criterion.
      *
-     * C'est le critère de synchronisation : on essaie chaque instant et chaque
-     * fréquence plausibles, et l'on retient les candidats dont les repères
-     * concordent. Vingt et un sur vingt et un est le cas idéal ; on accepte
-     * plus bas, quitte à ce que le CRC écarte ensuite.
+     * 21/21 is ideal; lower scores are accepted and the CRC weeds them out
+     * later.
      */
     fun scoreCostas(tons: IntArray): Int {
         require(tons.size == SYMBOLES) { "il faut $SYMBOLES symboles" }
@@ -134,17 +119,16 @@ object Ft8 {
     // ------------------------------------------------------------------ CRC
 
     /**
-     * Le contrôle sur quatorze bits, polynôme 0x2757.
+     * 14-bit CRC, polynomial 0x2757, over the 77 message bits followed by five
+     * zeros.
      *
-     * **C'est lui qui remplace le code correcteur.** Il porte sur les 77 bits
-     * du message suivis de cinq zéros, et sa probabilité de tomber juste par
-     * hasard est de une sur seize mille : un message affiché est un message
-     * vrai, à cela près.
+     * The odds of passing by chance are one in 16 384: that is the last guard
+     * before a message is shown.
      */
     fun crc14(message: BooleanArray): Int {
         require(message.size >= BITS_MESSAGE) { "message trop court" }
         var reg = 0
-        // 77 bits de message, puis cinq zéros : 82 bits en tout.
+        // 77 message bits, then five zeros: 82 bits.
         for (i in 0 until BITS_MESSAGE + 5) {
             val bit = if (i < BITS_MESSAGE && message[i]) 1 else 0
             reg = reg shl 1
@@ -154,7 +138,7 @@ object Ft8 {
         return reg
     }
 
-    /** Les 91 bits utiles portent-ils un contrôle cohérent ? */
+    /** Do the 91 payload bits carry a matching CRC? */
     fun controleJuste(utiles: BooleanArray): Boolean {
         if (utiles.size < BITS_UTILES) return false
         var lu = 0
@@ -164,7 +148,7 @@ object Ft8 {
         return lu == crc14(utiles)
     }
 
-    /** Pose le contrôle derrière le message : l'inverse de [controleJuste]. */
+    /** Appends the CRC to the message: the inverse of [controleJuste]. */
     fun avecControle(message: BooleanArray): BooleanArray {
         val out = BooleanArray(BITS_UTILES)
         message.copyInto(out, 0, 0, BITS_MESSAGE)
@@ -175,29 +159,27 @@ object Ft8 {
         return out
     }
 
-    // ------------------------------------------------------- les indicatifs
+    // ------------------------------------------------------------ callsigns
 
     private const val A1 = " 0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
     private const val A2 = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
     private const val A3 = "0123456789"
     private const val A4 = " ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
-    /** Au-dessous, ce sont des jetons — CQ, DE, QRZ — et non des indicatifs. */
+    /** Below this come tokens (CQ, DE, QRZ), not callsigns. */
     private const val JETONS = 2_063_592L
     private const val HACHES = 4_194_304L
 
     /**
-     * Un indicatif standard, rangé sur vingt-huit bits.
+     * A standard callsign packed in 28 bits.
      *
-     * Le codage n'est pas alphabétique : il découpe l'indicatif en six cases
-     * de natures différentes — lettre ou chiffre, chiffre seul, lettres — et
-     * les combine en base mixte. C'est ce qui permet de tenir un indicatif
-     * dans moins de quatre octets.
+     * Six slots of different kinds (letter or digit, digit, letters) combined
+     * in mixed radix.
      *
-     * Rend `null` pour ce qui n'entre pas dans ce moule : indicatifs composés,
-     * préfixes, suffixes. Ceux-là voyagent hachés sur vingt-deux bits, et l'on
-     * ne peut pas les retrouver sans avoir déjà entendu l'indicatif en clair —
-     * raison pour laquelle on n'affiche rien plutôt qu'une approximation.
+     * Returns `null` for anything else: compound callsigns, prefixes,
+     * suffixes. Those travel as 22-bit hashes, which cannot be resolved
+     * without having heard the callsign in clear — so nothing is shown rather
+     * than a guess.
      */
     fun indicatifDepuis28(n: Long): String? {
         if (n < JETONS + HACHES) return null
@@ -212,7 +194,7 @@ object Ft8 {
         return String(c).trim().ifBlank { null }
     }
 
-    /** L'inverse : un indicatif standard vers ses vingt-huit bits. */
+    /** The inverse: a standard callsign to its 28 bits. */
     fun indicatifVers28(indicatif: String): Long? {
         val s = cadre(indicatif.trim().uppercase()) ?: return null
         val i1 = A1.indexOf(s[0]); val i2 = A2.indexOf(s[1])
@@ -226,12 +208,11 @@ object Ft8 {
     }
 
     /**
-     * Aligne un indicatif sur les six cases du moule.
+     * Aligns a callsign on the six slots.
      *
-     * Le chiffre doit tomber en troisième position. « F4IOZ » y va tel quel une
-     * fois complété ; « G0ABC » aussi ; « 2E0XYZ » également. Un indicatif dont
-     * le chiffre n'est ni en deuxième ni en troisième place n'entre pas dans le
-     * moule, et c'est le cas de tous les composés.
+     * The digit must land in third position once padded ("F4IOZ" → " F4IOZ",
+     * "G0ABC" likewise). A callsign whose first digit is neither second nor
+     * third does not fit, which covers every compound callsign.
      */
     private fun cadre(s: String): String? {
         if (s.length !in 3..6) return null
@@ -243,9 +224,9 @@ object Ft8 {
         }.takeIf { it?.length == 6 }
     }
 
-    // ------------------------------------------------------------ le message
+    // -------------------------------------------------------------- message
 
-    /** Ce qu'un message décodé contient, une fois déplié. */
+    /** Contents of a decoded message, unpacked. */
     data class Message(
         val brut: String,
         val appelant: String?,
@@ -255,13 +236,12 @@ object Ft8 {
     )
 
     /**
-     * Déplie les 77 bits d'un message ordinaire.
+     * Unpacks the 77 bits of an ordinary message.
      *
-     * On ne traite que le **type 1**, celui des contacts courants : deux
-     * indicatifs standard et un carré ou un rapport. Les autres types — appels
-     * de concours, messages libres, indicatifs composés — sont reconnus et
-     * écartés plutôt que devinés. Afficher un indicatif approché serait pire
-     * que de n'afficher personne : il finirait dans un carnet.
+     * Only **type 1** is handled: two standard callsigns and a grid square or
+     * report. Other types (contest, free text, compound callsigns) are
+     * rejected rather than guessed. An approximate callsign is worse than none:
+     * it would end up in a log.
      */
     fun deplie(message: BooleanArray): Message? {
         if (message.size < BITS_MESSAGE) return null
@@ -270,13 +250,12 @@ object Ft8 {
 
         val c1 = lisEntier(message, 0, 28)
         val c2 = lisEntier(message, 29, 28)
-        // Bit 59 et non 58. La disposition du type 1 est
+        // Bit 59, not 58. Type 1 layout is
         // c28 r1 c28 r1 R1 g15 i3 : 0-27, 28, 29-56, 57, **58**, 59-73, 74-76.
-        // Lu un bit trop tôt, le champ avalait le bit « roger » qui le précède
-        // et rendait très exactement la moitié de la vraie valeur — KO02, qui
-        // vaut 19402, sortait en FH01, qui vaut 9701. Le défaut ne s'est vu
-        // qu'en décodant de vraies stations : le banc ne l'a pas attrapé parce
-        // qu'il écrivait et relisait au même mauvais endroit.
+        // Read one bit early, the field swallows the "roger" bit and yields
+        // exactly half the value (KO02 = 19402 came out as FH01 = 9701). Only
+        // real stations showed it: a bench that writes and reads at the same
+        // wrong offset cannot catch this.
         val g15 = lisEntier(message, 59, 15).toInt()
 
         val appele = jetonOuIndicatif(c1)
@@ -287,18 +266,17 @@ object Ft8 {
         var rapport: Int? = null
         var accuse: String? = null
         if (g15 < 32_400) {
-            // Un carré à quatre caractères, rangé en base mixte.
+            // Four-character grid square, mixed radix.
             val j = g15
             carre = "" + ('A' + j / (10 * 10 * 18)) +
                 ('A' + (j / (10 * 10)) % 18) +
                 ('0' + (j / 10) % 10) + ('0' + j % 10)
         } else {
-            // Au-delà des carrés, le champ porte les accusés de réception et
-            // les rapports. Tout se compte à partir de 32 400, et c'est ce
-            // retranchement qui manquait : « g15 − 35 » affichait +32 367 là
-            // où il fallait lire −33.
+            // Above the grid squares: acknowledgements and reports, all
+            // counted from 32 400. Forgetting that offset shows +32 367
+            // instead of -33.
             when (val code = g15 - 32_400) {
-                1 -> Unit                       // rien : ni carré, ni rapport
+                1 -> Unit                       // nothing: no grid, no report
                 2 -> accuse = "RRR"
                 3 -> accuse = "RR73"
                 4 -> accuse = "73"
@@ -317,7 +295,7 @@ object Ft8 {
             rapportDb = rapport)
     }
 
-    /** Les trois jetons réservés, puis les indicatifs proprement dits. */
+    /** The three reserved tokens, then actual callsigns. */
     private fun jetonOuIndicatif(n: Long): String? = when (n) {
         0L -> "DE"
         1L -> "QRZ"
@@ -333,7 +311,7 @@ object Ft8 {
         return v
     }
 
-    /** Range un entier sur `longueur` bits, pour le banc d'essai. */
+    /** Writes an integer on `longueur` bits, for the test bench. */
     fun ecritEntier(bits: BooleanArray, debut: Int, longueur: Int, valeur: Long) {
         for (i in 0 until longueur) {
             bits[debut + i] = (valeur shr (longueur - 1 - i)) and 1L == 1L

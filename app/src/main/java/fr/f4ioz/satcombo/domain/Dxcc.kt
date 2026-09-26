@@ -1,35 +1,31 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.domain
 
 /**
- * Le pays d'un indicatif, d'après son préfixe.
+ * The country of a callsign, from its prefix.
  *
- * La table vient de la liste ARRL des entités DXCC fournie par Olivier,
- * resserrée sur ce qu'un préfixe seul peut dire : les entités qui exigent de
- * connaître le suffixe numérique fin (Kaliningrad, les bases anglaises de
- * Chypre) sont traitées quand la règle tient en une ligne, ignorées sinon —
- * mieux vaut pas de pays qu'un pays faux.
+ * Built from the ARRL DXCC entity list, cut down to what a prefix alone can
+ * tell. Entities that need finer knowledge of the callsign (Kaliningrad, the
+ * UK bases on Cyprus) are only handled when the rule fits in one line — no
+ * country is better than a wrong one.
  *
- * Le second champ est le code du drapeau dans [fr.f4ioz.satcombo.data.Flags]
- * quand il y est dessiné, vide sinon : on affiche alors le nom seul.
- *
- * L'appel se fait sur le préfixe efficace : pour EA5/F4IOZ c'est EA5 qui
- * compte — l'opérateur est en Espagne, c'est tout le sens du préfixe pays.
+ * The second field is the flag code in [fr.f4ioz.satcombo.data.Flags] when
+ * drawn there, empty otherwise (name shown alone).
  */
 object Dxcc {
 
     class Entite(val nom: String, val drapeau: String)
 
     /**
-     * Préfixe → entité. Les clés sont essayées de la plus longue à la plus
-     * courte, donc « EA8 » (Canaries) gagne sur « EA » (Espagne).
+     * Prefix → entity. Keys are tried longest first, so "EA8" (Canaries) wins
+     * over "EA" (Spain).
      */
     private val table: Map<String, Entite> = buildMap {
         fun p(prefixes: String, nom: String, drapeau: String = "") {
@@ -102,7 +98,7 @@ object Dxcc {
         p("T7", "Saint-Marin", "IT")
         p("JW", "Svalbard", "NO")
         p("JX", "Jan Mayen", "NO")
-        // Amériques
+        // Americas
         p("K W N AA AB AC AD AE AF AG AH AI AJ AK", "États-Unis", "US")
         p("KL AL NL WL", "Alaska", "US")
         p("KH6 AH6 NH6 WH6 KH7", "Hawaï", "US")
@@ -134,7 +130,7 @@ object Dxcc {
         p("VP9", "Bermudes", "GB")
         p("8P", "Barbade")
         p("6Y", "Jamaïque")
-        // Afrique
+        // Africa
         p("CN", "Maroc", "MA")
         p("7X 7T 7U 7V 7W 7Y", "Algérie")
         p("3V", "Tunisie")
@@ -151,7 +147,7 @@ object Dxcc {
         p("D4", "Cap-Vert")
         p("S7", "Seychelles")
         p("ZD7", "Sainte-Hélène", "GB")
-        // Asie
+        // Asia
         p("JA JE JF JG JH JI JJ JK JL JM JN JO JP JQ JR JS 7J 7K 7L 7M 7N 8J 8N", "Japon", "JP")
         p("HL DS DT 6K 6L 6M 6N", "Corée du Sud")
         p("BA BB BC BD BG BH BI BJ BL BM BT BY BZ", "Chine")
@@ -187,7 +183,7 @@ object Dxcc {
         p("EZ", "Turkménistan")
         p("UJ UK UL UM", "Ouzbékistan")
         p("JT JU JV", "Mongolie")
-        // Océanie
+        // Oceania
         p("VK AX", "Australie", "AU")
         p("ZL ZM", "Nouvelle-Zélande", "NZ")
         p("FK", "Nouvelle-Calédonie", "FR")
@@ -200,16 +196,16 @@ object Dxcc {
         p("A3", "Tonga")
     }
 
-    /** Les longueurs de préfixe présentes, de la plus longue à la plus courte. */
+    /** Prefix lengths present in the table, longest first. */
     private val longueurs: List<Int> =
         table.keys.map { it.length }.distinct().sortedDescending()
 
     /**
-     * L'entité DXCC d'un indicatif, ou nulle si le préfixe n'est pas connu.
+     * DXCC entity of a callsign, or null when the prefix is unknown.
      *
-     * Le préfixe efficace est le préfixe pays s'il y en a un (EA5/F4IOZ → EA5) :
-     * l'opérateur est là où le préfixe le met, c'est tout son sens. Un suffixe
-     * d'exploitation (/P, /M) ne change rien au pays.
+     * A country prefix wins (EA5/F4IOZ → EA5): the operator is where the
+     * prefix puts them. An operating suffix (/P, /M) does not change the
+     * country.
      */
     fun entite(indicatif: String): Entite? {
         val brut = indicatif.trim().uppercase()
@@ -217,8 +213,8 @@ object Dxcc {
         val morceaux = brut.split("/").filter { it.isNotEmpty() }
         val efficace = when {
             morceaux.isEmpty() -> return null
-            // EA5/F4IOZ : le premier morceau est un préfixe pays s'il est plus
-            // court que le corps et n'est pas un simple suffixe d'exploitation.
+            // EA5/F4IOZ: the first piece is a country prefix when shorter than
+            // the body.
             morceaux.size >= 2 && morceaux[0].length in 1..4 &&
                 morceaux[0].length < morceaux[1].length -> morceaux[0]
             else -> morceaux[0]

@@ -1,58 +1,52 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.domain
 
 /**
- * Faut-il écrire la montée pendant que l'opérateur tourne la réception ?
+ * Should the uplink be written while the operator turns the receive dial?
  *
- * **La question n'a pas la même réponse selon le poste**, et c'est tout
- * l'objet de ce fichier.
+ * **The answer depends on the rig.**
  *
- * Sur une paire de FT-817, les deux postes sont indépendants : personne ne
- * recale la montée à notre place, et la laisser en arrière ferait émettre à
- * côté du correspondant qu'on vient de trouver. Il faut écrire.
+ * On a pair of FT-817s the two rigs are independent: nobody retunes the
+ * uplink for us, and leaving it behind would transmit off the station just
+ * found. We must write.
  *
- * Sur un IC-9700 **en mode satellite**, le poste fait lui-même le suivi
- * inversé : bouger SUB déplace MAIN dans l'autre sens. Écrire la montée
- * pendant que l'opérateur tourne crée alors une boucle — il descend, nous
- * écrivons une montée plus haute, le poste remonte sa réception, il descend
- * encore. C'est exactement ce qui a été filmé sur RS-44 et FO-29 : la somme
- * des deux VFO restait rigoureusement constante, preuve que c'était le poste,
- * et non SatMe, qui tenait le couple.
+ * An IC-9700 **in satellite mode** does reverse tracking itself: moving SUB
+ * moves MAIN the other way. Writing the uplink while the operator turns then
+ * makes a loop — he tunes down, we write a higher uplink, the rig raises its
+ * downlink, he tunes down again. Seen on RS-44 and FO-29: the sum of both
+ * VFOs stayed exactly constant, proof that the rig, not SatMe, held the pair.
+ * "The operator does not touch the transmit side" is false on a dual-VFO rig
+ * driven by one knob: touching one moves the other.
  *
- * La règle précédente supposait que « l'opérateur ne touche pas l'émission ».
- * Sur un poste à double VFO commandé par un seul bouton, cette phrase est
- * fausse : toucher l'une déplace l'autre.
- *
- * **Pas de réglage pour arbitrer cela.** Un interrupteur ne ferait que
- * déplacer le piège sur l'opérateur, qui n'a aucun moyen de deviner que son
- * poste et l'application se disputent le même VFO.
+ * **No setting for this.** A switch would only move the trap onto the
+ * operator, who cannot guess that the rig and the app fight over one VFO.
  */
 object SuiviMontee {
 
-    /** Les postes qui tiennent eux-mêmes le couple en mode satellite. */
+    /** Rigs that hold the uplink/downlink pair themselves in satellite mode. */
     private val SUIVI_INTERNE = setOf("IC9700")
 
-    /** Vrai si ce poste recale la montée tout seul quand la descente bouge. */
+    /** True when this rig retunes the uplink by itself as the downlink moves. */
     fun posteSuitSeul(rigModel: String): Boolean = rigModel in SUIVI_INTERNE
 
     /**
-     * L'écart minimal qui justifie une écriture, en hertz.
+     * Minimum offset worth a write, in hertz.
      *
-     * Plus fin quand l'émission doit suivre vite : sans cela on entendrait le
-     * correspondant sans pouvoir lui répondre au même endroit.
+     * Finer when the uplink must follow fast: otherwise you would hear the
+     * station without being able to answer on the same spot.
      */
     fun seuilHz(txSuitVite: Boolean): Long = if (txSuitVite) 20L else 50L
 
     /**
-     * @param operateurTourne vrai tant que l'arbitre voit la molette bouger,
-     *   c'est-à-dire tant que la réception n'est pas rendue au pilotage.
+     * @param operateurTourne true while the arbiter sees the dial move, i.e.
+     *   until receive is handed back to automatic tracking.
      */
     fun doitEcrire(
         rigModel: String,
@@ -61,15 +55,14 @@ object SuiviMontee {
         maintienDoppler: Boolean,
         ecartHz: Long
     ): Boolean {
-        // Le maintien passe avant tout : c'est la demande explicite de ne plus
-        // rien écrire, et rien ne doit pouvoir la contourner.
+        // Hold comes first: it is an explicit request to write nothing, and
+        // nothing may bypass it.
         if (maintienDoppler) return false
-        // Le poste s'en charge : se taire est la seule façon de ne pas se
-        // battre avec lui.
+        // The rig handles it: staying silent is the only way not to fight it.
         if (operateurTourne && posteSuitSeul(rigModel)) return false
         if (ecartHz < seuilHz(txSuitVite)) return false
-        // Hors de ce cas, la montée suit vite si on le lui a demandé, et
-        // attend la fin du délai de reprise sinon.
+        // Otherwise the uplink follows fast if asked to, and waits for the
+        // resume delay if not.
         return txSuitVite || !operateurTourne
     }
 }

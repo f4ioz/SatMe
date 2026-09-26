@@ -1,39 +1,36 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.domain
 
 /**
- * Ce qui part au carnet en ligne, et ce qui n'y repart pas.
+ * What goes to the online log, and what must not go again.
  *
- * Wavelog — comme Cloudlog — accepte ce qu'on lui donne : il ne dédoublonne
- * pas. Repousser le carnet entier à chaque envoi y ferait donc un doublon par
- * contact et par tentative, et le ménage se ferait à la main, contact par
- * contact, sur une interface web.
+ * Wavelog, like Cloudlog, does not deduplicate: re-sending the whole log
+ * would create one duplicate per contact per attempt, to be cleaned by hand.
  *
- * La marque est donc **locale et posée après coup** : un contact n'est réputé
- * déposé que si le serveur a répondu qu'il l'avait pris. Un échec réseau, une
- * clé refusée, une coupure au milieu du lot — rien de tout cela ne marque, et
- * la tentative suivante reprend là où elle en était.
+ * So the mark is **local and set afterwards**: a contact counts as uploaded
+ * only once the server said it took it. Network failure, rejected key, cut
+ * mid-batch — none of these mark, and the next attempt resumes.
  *
- * L'ordre compte aussi : du plus ancien au plus récent. Si l'envoi s'arrête en
- * chemin, ce qui est parti forme un bloc continu, et non un carnet troué.
+ * Oldest first: if the upload stops midway, what went is a continuous block,
+ * not a log with holes.
  */
 object EnvoiCarnet {
 
-    /** Un contact, réduit à ce que la règle regarde. */
+    /** A contact, reduced to what the rule looks at. */
     data class Fiche(
         val timeMs: Long,
         val indicatif: String,
         val envoyeMs: Long,
     )
 
-    /** Ce que l'envoi a donné. */
+    /** Outcome of an upload. */
     data class Bilan(
         val deposes: Int,
         val refuses: Int,
@@ -41,28 +38,23 @@ object EnvoiCarnet {
     )
 
     /**
-     * Les contacts qui n'ont pas encore été déposés, du plus ancien au plus
-     * récent.
+     * Contacts not yet uploaded, oldest first.
      *
-     * Un contact sans indicatif n'en est pas un et ne part jamais : c'est la
-     * même règle que pour le fichier ADIF, et elle vaut ici pour la même
-     * raison — un enregistrement sans CALL n'est pas un trafic incomplet, le
-     * carnet d'en face le refusera ou le rangera de travers.
+     * A contact without a callsign never goes, same rule as the ADIF export:
+     * the receiving log would reject or misfile a record with no CALL.
      */
     fun aDeposer(journal: List<Fiche>): List<Fiche> =
         journal
             .filter { it.indicatif.isNotBlank() && it.envoyeMs <= 0L }
             .sortedBy { it.timeMs }
 
-    /** Combien de contacts attendent, pour l'annoncer sur le bouton. */
+    /** How many contacts are waiting, for the button label. */
     fun combienAttendent(journal: List<Fiche>): Int = aDeposer(journal).size
 
     /**
-     * Le bilan d'un envoi.
-     *
-     * [acceptes] sont les instants que le serveur a pris. Ce qui reste
-     * n'inclut pas les refusés : ils repartiront au prochain essai, et les
-     * compter deux fois donnerait un total qui ne veut rien dire.
+     * Outcome of an upload. [acceptes] holds the timestamps the server took.
+     * [Bilan.restants] is everything not accepted, rejected ones included:
+     * they go again on the next attempt.
      */
     fun bilan(journal: List<Fiche>, acceptes: Set<Long>, refuses: Int): Bilan {
         val attendaient = aDeposer(journal)

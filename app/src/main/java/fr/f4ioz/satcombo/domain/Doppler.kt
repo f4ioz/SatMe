@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.domain
 
@@ -12,7 +12,7 @@ package fr.f4ioz.satcombo.domain
 object Doppler {
     private const val C = 299_792.458 // km/s
 
-    /** La même constante, pour qui en a besoin ailleurs. */
+    /** The same constant, for use elsewhere. */
     const val C_KM_S = C
 
     /**
@@ -60,10 +60,9 @@ object Doppler {
     fun formatMHz(hz: Long): String = "%.6f MHz".format(hz / 1_000_000.0)
 
     /**
-     * Same figure without the trailing zeros — "436,795 MHz" instead of
-     * "436,795000 MHz". Channel frequencies are round numbers, and the six
-     * decimals only matter while chasing Doppler: in lists they were long
-     * enough to burst the card on a narrow screen.
+     * Same figure without trailing zeros ("436,795 MHz"). The six decimals
+     * only matter while chasing Doppler; in lists they overflowed the card
+     * on narrow screens.
      */
     fun formatMHzShort(hz: Long): String {
         val s = "%.6f".format(hz / 1_000_000.0)

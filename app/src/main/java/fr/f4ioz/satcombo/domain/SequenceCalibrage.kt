@@ -1,65 +1,51 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.domain
 
 /**
- * La séquence de calibrage : une suite de poses à prendre, et le relevé brut
- * qu'on en tire.
+ * The calibration sequence: a series of poses to take, and the raw reading it
+ * yields.
  *
- * **Pourquoi une séquence, et pas une visée de plus.** Six versions ont tenté
- * de deviner la convention du module à partir d'une ou deux poses. Chaque
- * hypothèse tenait à l'horizontale et tombait ailleurs, parce qu'une pose
- * unique ne contraint qu'une partie de la rotation. Deux visées à plat ne
- * disent rien du tangage ; aucune ne dit dans quel sens le roulis compte.
+ * **Why a sequence rather than one more sighting.** Six versions tried to
+ * guess the module convention from one or two poses. Each guess held when
+ * level and failed elsewhere: a single pose constrains only part of the
+ * rotation. Two flat sightings say nothing about pitch; none says which way
+ * roll counts.
  *
- * Ici on ne devine plus rien : **on prend toutes les poses**, on note les trois
- * angles bruts à chaque fois, et le tableau obtenu détermine la convention sans
- * ambiguïté — quel axe porte quoi, dans quel sens, où il sature, et dans quel
- * ordre les rotations se composent.
+ * Nothing is guessed any more: **take every pose**, record the three raw
+ * angles each time, and the table settles the convention — which axis carries
+ * what, in which direction, where it saturates, and in which order rotations
+ * compose.
  *
- * Le relevé est exportable. C'est délibéré : personne ne peut analyser neuf
- * triplets de tête, et les recopier à la main les corromprait.
+ * The reading is exportable on purpose: nobody analyses these triplets in
+ * their head, and copying them by hand would corrupt them.
  */
 object SequenceCalibrage {
 
     /**
-     * Une étape : ce qu'on demande à l'opérateur, et pourquoi.
-     *
-     * [aide] dit ce que l'étape sert à mesurer. Un opérateur qui comprend le
-     * but d'un geste le fait mieux — et il remarque quand quelque chose cloche.
+     * A step: what the operator is asked to do, and why. [aide] says what the
+     * step measures: an operator who understands the goal of a gesture does
+     * it better, and notices when something is off.
      */
     data class Etape(val cle: String, val titre: String, val aide: String)
 
     /**
-     * Les neuf poses.
+     * The poses.
      *
-     * Les quatre premières balaient le lacet sur un tour complet : elles
-     * révèlent son sens et son origine. Les deux suivantes roulent le boîtier
-     * dans un sens puis dans l'autre, ce qu'aucune visée à plat ne fait — c'est
-     * là que se cachait le défaut d'élévation. Les trois dernières montent en
-     * tangage jusqu'à la verticale, où les décompositions d'Euler se
-     * distinguent enfin et où certaines saturent.
-     */
-    /**
-     * Les neuf poses.
+     * **All use the same edge of the box** — the lesson of the first reading:
+     * flat poses referred to one edge, raised poses to another. Each set was
+     * self-consistent and they described two axes 107° apart. No convention
+     * could reconcile them, and elevation topped out at 53° instead of 90°.
      *
-     * **Toutes portent sur la même arête**, et c'est la leçon du premier
-     * relevé : les quatre poses à plat y désignaient une arête du boîtier, les
-     * poses levées une autre. Les deux jeux étaient cohérents entre eux et
-     * décrivaient deux axes à cent sept degrés l'un de l'autre. Aucune
-     * convention ne pouvait les concilier, et l'élévation plafonnait à
-     * cinquante-trois degrés au lieu de quatre-vingt-dix.
-     *
-     * Les quatre premières établissent la flèche : l'azimut y est connu et
-     * l'élévation nulle, donc chacune la détermine exactement. Les cinq
-     * suivantes ne servent qu'à **contrôler** — on n'y connaît pas l'angle au
-     * degré près, mais on sait ce qui doit rester constant.
+     * The four flat poses establish the arrow: azimuth known, elevation zero,
+     * so each determines it exactly. The rest are only **checks**: the angle
+     * is not known to the degree, but we know what must stay constant.
      */
     val ETAPES: List<Etape> = listOf(
         Etape("plat_n", "1 · À plat, arête vers le NORD",
@@ -90,15 +76,15 @@ object SequenceCalibrage {
                 "donner quatre-vingt-dix degrés d'élévation.")
     )
 
-    /** Les quatre poses à plat, celles qui déterminent la flèche. */
+    /** The four flat poses, which determine the arrow. */
     val AZIMUTS_A_PLAT = mapOf("plat_n" to 0f, "plat_e" to 90f, "plat_s" to 180f,
         "plat_o" to 270f)
 
-    /** Les poses de contrôle et ce qu'on attend d'elles. */
+    /** The check poses. */
     val CONTROLES = listOf("pol_h", "pol_a", "leve_bas", "leve_haut", "leve_est",
         "vertical")
 
-    /** Un relevé : l'étape, et les trois angles bruts du module. */
+    /** A reading: the step and the module's three raw angles. */
     data class Releve(
         val cle: String,
         val roulis: Float,
@@ -107,11 +93,9 @@ object SequenceCalibrage {
     )
 
     /**
-     * Range les relevés en une ligne par pose.
-     *
-     * Un format texte et non binaire : il se relit à l'œil, se recopie dans un
-     * message, et survit à tout. Séparateur point-virgule, décimales à deux
-     * chiffres — au-delà, on noterait le bruit du capteur.
+     * One line per pose. Text, not binary: readable by eye, pasteable into a
+     * message. Semicolon separator, two decimals — more would record sensor
+     * noise.
      */
     fun encode(releves: List<Releve>): String =
         releves.joinToString("\n") {
@@ -119,11 +103,9 @@ object SequenceCalibrage {
         }
 
     /**
-     * Relit ce que [encode] a écrit.
-     *
-     * Les lignes abîmées sont ignorées plutôt que de faire échouer la lecture
-     * entière : un relevé de huit poses sur neuf vaut mieux que rien, et
-     * l'opérateur verra tout de suite laquelle manque.
+     * Reads back what [encode] wrote. Damaged lines are skipped rather than
+     * failing the whole read: a partial reading beats nothing, and the
+     * operator sees at once which pose is missing.
      */
     fun decode(texte: String): List<Releve> =
         texte.lineSequence().mapNotNull { ligne ->
@@ -136,17 +118,16 @@ object SequenceCalibrage {
             Releve(p[0], r, t, l)
         }.toList()
 
-    /** L'étape suivante à faire, ou `null` quand le relevé est complet. */
+    /** Next step to do, or `null` when the reading is complete. */
     fun prochaine(releves: List<Releve>): Etape? =
         ETAPES.firstOrNull { e -> releves.none { it.cle == e.cle } }
 
     fun complete(releves: List<Releve>): Boolean = prochaine(releves) == null
 
     /**
-     * Le rapport lisible, celui qu'on envoie.
-     *
-     * Il porte son propre entête : un tableau de chiffres sans légende, reçu
-     * trois jours plus tard, ne veut plus rien dire.
+     * The readable report, the one that gets sent. It carries its own header:
+     * a table of numbers without a legend, received three days later, means
+     * nothing.
      */
     fun rapport(releves: List<Releve>, module: String, version: String): String {
         val b = StringBuilder()
@@ -170,47 +151,44 @@ object SequenceCalibrage {
         return b.toString()
     }
 
-    // ---- l'analyse du relevé ----
+    // ---- analysing the reading ----
 
     /**
-     * Ce que le relevé établit, et à quel point on peut s'y fier.
+     * What the reading establishes, and how far to trust it.
      *
-     * [dispersionDeg] est l'écart angulaire maximal entre les quatre flèches
-     * déduites des quatre poses à plat. C'est **la** mesure de confiance : si
-     * les quatre gestes désignaient bien la même arête, elles se superposent à
-     * quelques degrés. Si elles divergent, c'est que l'arête a changé en cours
-     * de route, et aucun calcul ne rattrapera cela.
+     * [dispersionDeg] is the largest angle between the four arrows derived
+     * from the four flat poses. It is **the** confidence measure: if the four
+     * gestures used the same edge, they overlap within a few degrees. If they
+     * diverge, the edge changed along the way and no maths will fix it.
      */
     data class Analyse(
         val fleche: Vec3?,
-        /** Le décalage d'azimut à compenser, en degrés. */
+        /** Azimuth offset to compensate, in degrees. */
         val calageDeg: Float = 0f,
         val convention: PointageAntenne.ConventionLibre?,
         val dispersionDeg: Float,
-        /** Le pire écart, tous contrôles confondus. C'est lui le verdict. */
+        /** The worst error over all checks. This is the verdict. */
         val scoreDeg: Float,
         val controles: List<Controle>
     )
 
-    /** Un contrôle : ce qu'on attend, ce qu'on a lu, et le verdict. */
+    /** A check: what was expected, what was read, and the verdict. */
     data class Controle(val cle: String, val attendu: String, val lu: String,
                         val bon: Boolean)
 
     /**
-     * Analyse le relevé : **cherche la convention** plutôt que de la supposer.
+     * Analyses the reading: **searches for the convention** instead of
+     * assuming it.
      *
-     * Les quatre poses à plat donnent la flèche pour chaque convention
-     * candidate — l'azimut y est connu, l'élévation nulle. La dispersion entre
-     * ces quatre flèches élimine d'emblée les conventions incohérentes.
+     * The flat poses give the arrow for each candidate convention (azimuth
+     * known, elevation zero); their spread eliminates inconsistent ones. The
+     * other poses separate the rest: exact angles are unknown, but rolling
+     * about the edge changes neither azimuth nor elevation, raising lifts
+     * elevation without leaving north, and vertical gives 90°.
      *
-     * Les cinq autres poses départagent celles qui restent. On n'y connaît pas
-     * l'angle au degré près, mais on sait ce qui doit être vrai : rouler autour
-     * de l'arête ne change ni l'azimut ni l'élévation, lever fait monter
-     * l'élévation sans quitter le nord, et la verticale donne quatre-vingt-dix.
-     *
-     * On retient la convention dont le **pire** écart est le plus faible. Le
-     * pire et non la moyenne : une convention qui réussit quatre contrôles et
-     * en rate un cinquième est fausse, pas « plutôt bonne ».
+     * The convention with the lowest **worst** error wins. Worst, not mean: a
+     * convention that passes four checks and fails the fifth is wrong, not
+     * "fairly good".
      */
     fun analyse(releves: List<Releve>): Analyse {
         var meilleure: Analyse? = null
@@ -247,20 +225,17 @@ object SequenceCalibrage {
                 Math.toDegrees(kotlin.math.acos(cos).toDouble()).toFloat())
         }
 
-        // **Le reliquat d'étalonnage magnétique, mesuré et annulé.**
+        // **Residual magnetic calibration error, measured and cancelled.**
         //
-        // Le lacet du module garde une erreur d'origine après son étalonnage —
-        // quinze degrés sur le relevé qui a servi à écrire ceci. Elle n'abîme
-        // pas l'azimut, qui l'absorbe : elle fait pivoter la flèche déduite
-        // **dans le plan du boîtier**, si bien qu'elle n'est plus perpendiculaire
-        // à l'axe autour duquel on lève. L'élévation s'en trouve bridée — à
-        // quatre-vingt-douze degrés de roulis elle ne rendait que soixante-
-        // quatorze.
+        // The module yaw keeps an origin error after its own calibration (15°
+        // on the reading used to write this). Azimuth absorbs it, but it
+        // rotates the derived arrow **in the box plane**, so the arrow is no
+        // longer perpendicular to the raising axis and elevation is capped: at
+        // 92° of roll it gave only 74°.
         //
-        // La pose verticale la mesure : on fait tourner la flèche dans ce plan
-        // jusqu'à ce que la verticale donne bien quatre-vingt-dix. Le décalage
-        // d'azimut qui en résulte est constant, donc compensable — et c'est ce
-        // que rend `calageDeg`.
+        // The vertical pose measures it: rotate the arrow in that plane until
+        // vertical reads 90°. The resulting azimuth offset is constant, hence
+        // compensable — that is `calageDeg`.
         val vert = releves.firstOrNull { it.cle == "vertical" }
         var m = m0
         var correction = 0f
@@ -277,8 +252,8 @@ object SequenceCalibrage {
             }
         }
 
-        // Le décalage d'azimut que la correction introduit, moyenné sur les
-        // quatre poses à plat dont on connaît l'azimut exact.
+        // Azimuth offset introduced by the correction, averaged over the four
+        // flat poses whose azimuth is known exactly.
         var somme = 0f
         var combien = 0
         for ((cle, az) in AZIMUTS_A_PLAT) {
@@ -292,17 +267,14 @@ object SequenceCalibrage {
         }
         val calage = if (combien == 0) 0f else -somme / combien
 
-        // **Les contrôles sont relatifs, jamais rapportés à la pose nord.**
+        // **Checks are relative, never referred to the north pose.**
         //
-        // Ils l'étaient, et ils mesuraient alors la dérive de l'opérateur au
-        // lieu du calcul : entre les poses à plat et les poses levées, le lacet
-        // d'un relevé avait bougé de trente-deux degrés — on ne repose pas une
-        // petite boîte au nord près quand on la tient en l'air. Le verdict
-        // condamnait un étalonnage juste.
-        //
-        // Comparer chaque groupe **à lui-même** supprime la question : rouler
-        // dans un sens puis dans l'autre doit donner le même azimut, quel qu'il
-        // soit ; lever ne doit pas déplacer l'azimut, quel qu'il soit.
+        // They were, and then measured the operator's drift instead of the
+        // maths: between flat and raised poses, yaw had moved by 32° on one
+        // reading — nobody puts a small box back on north while holding it up.
+        // The verdict condemned a correct calibration. Each group is compared
+        // with itself: both roll directions give the same azimuth, whatever
+        // it is; raising does not move the azimuth, whatever it is.
         fun pointe(cle: String) = releves.firstOrNull { it.cle == cle }?.let {
             PointageAntenne.pointageLibre(
                 AttitudeWit(it.roulis, it.tangage, it.lacet), m, conv)
@@ -313,17 +285,14 @@ object SequenceCalibrage {
 
         val ph = pointe("pol_h"); val pa = pointe("pol_a")
         if (ph != null && pa != null) {
-            // Rouler autour de l'arête ne doit rien changer. Les deux sens sont
-            // comparés l'un à l'autre : c'est la même propriété, sans référence
-            // extérieure.
+            // Rolling about the edge must change nothing; both directions are
+            // compared with each other.
             val e = maxOf(ecartAzimut(ph.azimutDeg, pa.azimutDeg),
                 kotlin.math.abs(ph.elevationDeg), kotlin.math.abs(pa.elevationDeg))
-            // **Ce contrôle n'entre pas dans le verdict**, et c'est délibéré :
-            // rouler autour de l'arête met le tangage à ±88°, donc en plein
-            // blocage de cardan. Le roulis et le lacet n'y sont plus déterminés
-            // séparément, et les nombres rapportés y sont ininterprétables —
-            // quelle que soit la convention. Le mesurer serait mesurer une
-            // singularité, pas un étalonnage.
+            // **Deliberately left out of the verdict**: rolling about the edge
+            // puts pitch at ±88°, in gimbal lock. Roll and yaw are no longer
+            // separable there and the numbers mean nothing, whatever the
+            // convention. That would measure a singularity, not a calibration.
             controles.add(Controle("polarisation", "indicatif — proche du blocage",
                 "écart %.0f°, élévations %.0f° et %.0f°".format(
                     ecartAzimut(ph.azimutDeg, pa.azimutDeg),
@@ -343,15 +312,11 @@ object SequenceCalibrage {
                 e < 20f))
         }
 
-        // **Le contrôle qui manquait.** Lever au nord puis lever à l'est : si
-        // l'inclinaison suit bien le cap, l'élévation est la même aux deux
-        // endroits et les azimuts diffèrent d'un quart de tour. Sinon
-        // l'élévation s'effondre à l'est, et la convention est fausse — même
-        // si tout le reste passait.
-        //
-        // Le contrôle est relatif : on compare les deux poses levées entre
-        // elles, jamais à une référence extérieure que l'opérateur devrait
-        // reproduire.
+        // **The missing check.** Raise to the north, then to the east: if tilt
+        // follows heading, elevation is the same at both and azimuths differ
+        // by a quarter turn. Otherwise elevation collapses in the east and the
+        // convention is wrong, even if everything else passed. Relative again:
+        // the two raised poses are compared with each other.
         val le = pointe("leve_est")
         if (le != null && lh != null) {
             val ecartAz = ecartAzimut(ecartAzimut(le.azimutDeg, lh.azimutDeg), 90f)
@@ -367,7 +332,7 @@ object SequenceCalibrage {
         }
 
         pointe("vertical")?.let { v ->
-            // L'azimut n'a plus de sens au zénith : seule l'élévation compte.
+            // Azimuth is meaningless at the zenith: only elevation counts.
             val e = kotlin.math.abs(v.elevationDeg - 90f)
             pire = maxOf(pire, e)
             controles.add(Controle("verticale", "élévation 90°",
@@ -378,10 +343,8 @@ object SequenceCalibrage {
     }
 
     /**
-     * Fait tourner la flèche de [deg] dans le plan XY du boîtier.
-     *
-     * C'est le plan dans lequel un reliquat de lacet la déporte, et donc le
-     * seul dans lequel il faut la ramener.
+     * Rotates the arrow by [deg] in the box XY plane: the plane a residual yaw
+     * error pushes it into, so the only one to bring it back in.
      */
     private fun tourneDansLePlan(v: Vec3, deg: Float): Vec3 {
         val a = Math.toRadians(deg.toDouble())

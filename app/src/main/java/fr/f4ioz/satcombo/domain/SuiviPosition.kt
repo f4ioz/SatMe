@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.domain
 
@@ -15,91 +15,65 @@ import kotlin.math.sin
 import kotlin.math.sqrt
 
 /**
- * Suivre l'opérateur qui se déplace.
+ * Following an operator on the move.
  *
- * Le défaut corrigé ici était discret et coûteux : le suivi de position n'était
- * lancé qu'à l'ouverture de la carte, et arrêté en la quittant. Sur la page des
- * passages — celle qu'on regarde pendant qu'on trafique — la position restait
- * celle du démarrage de l'application. Un opérateur qui monte sur une colline,
- * qui sort en portable ou qui roule voyait ses azimuts calculés pour l'endroit
- * d'où il était parti, sans qu'aucun message ne le lui dise.
+ * Location tracking used to run only while the map was open. On the passes
+ * page — the one watched while operating — the position stayed where the app
+ * started, and a portable or mobile operator got azimuths for the place he
+ * left, with no warning.
  *
- * Deux questions se posent alors, et elles n'ont pas la même réponse :
+ * Two questions, two answers:
  *
- *  - **Faut-il redessiner ?** Oui, à chaque point. Le carré Maidenhead affiché,
- *    le marqueur, les coordonnées : cela ne coûte rien et l'opérateur doit voir
- *    sa position bouger quand il bouge.
- *  - **Faut-il recalculer les passages ?** Non, pas à chaque point. Une
- *    prédiction SGP4 sur quarante-huit heures pour tous les satellites suivis
- *    est un travail réel, et la relancer toutes les deux secondes parce que le
- *    GPS a frémi de trois mètres viderait la batterie sans rien changer aux
- *    horaires.
+ *  - **Redraw?** Yes, on every fix. Grid square, marker, coordinates cost
+ *    nothing, and the operator must see his position move.
+ *  - **Recompute passes?** Not on every fix. A 48-hour SGP4 prediction for
+ *    every tracked satellite is real work; rerunning it every two seconds
+ *    because the GPS jittered by three metres drains the battery for nothing.
  *
- * D'où un seuil. Ce fichier ne contient que son arithmétique — vérifiable au
- * banc, contrairement à un déplacement.
+ * Hence a threshold. This file holds only its arithmetic, testable on the
+ * bench.
  */
 object SuiviPosition {
 
     /**
-     * Distance à partir de laquelle les passages méritent d'être recalculés.
-     *
-     * Trois kilomètres. En dessous, l'azimut d'un satellite en orbite basse
-     * bouge de moins d'un dixième de degré et les heures d'AOS ne bougent pas
-     * d'une seconde : recalculer serait dépenser sans rien gagner. Au-dessus,
-     * un opérateur qui s'est vraiment déplacé — une colline, un autre carré,
-     * une sortie en portable — mérite des chiffres qui parlent d'où il est.
+     * Distance beyond which passes are recomputed: 3 km. Below that a LEO
+     * azimuth moves by less than 0.1° and AOS times not by a second.
      */
     const val SEUIL_M: Double = 3_000.0
 
     /**
-     * Délai minimal entre deux recalculs, en millisecondes.
-     *
-     * Le seuil de distance ne suffit pas seul : en voiture on le franchit
-     * toutes les deux minutes, et sur autoroute toutes les quatre-vingt-dix
-     * secondes. Ce plancher de temps garantit qu'on ne passe pas la journée à
-     * prédire au lieu d'afficher.
+     * Minimum delay between two recomputes, in ms. Distance alone is not
+     * enough: by car the threshold is crossed every two minutes, on the
+     * motorway every ninety seconds.
      */
     const val DELAI_MIN_MS: Long = 120_000L
 
-    /** Cadence des points quand la carte est ouverte : le marqueur doit suivre. */
+    /** Fix rate while the map is open: the marker must follow. */
     const val CADENCE_CARTE_MS: Long = 2_000L
 
     /**
-     * Cadence ailleurs dans l'application.
-     *
-     * Vingt secondes, et non deux. Le suivi tourne désormais en permanence —
-     * c'est tout l'objet du correctif — donc sa cadence n'est plus un détail
-     * d'affichage mais une ligne du bilan de batterie. Vingt secondes suffisent
-     * amplement à voir un carré changer, et divisent par dix le nombre de
-     * réveils du récepteur.
+     * Fix rate elsewhere in the app. Tracking now runs all the time, so this
+     * rate is a battery item: twenty seconds is plenty to see a square change
+     * and wakes the receiver ten times less.
      */
     const val CADENCE_FOND_MS: Long = 20_000L
 
     /**
-     * Silence au-delà duquel on considère que le suivi ne suit plus rien.
-     *
-     * Quatre-vingt-dix secondes : plus de quatre fois la cadence de fond, donc
-     * un point manqué ou deux ne déclenchent rien, mais un fournisseur muet se
-     * fait remplacer avant qu'on ait eu le temps de s'en apercevoir à l'écran.
+     * Silence after which tracking is considered dead. More than four times
+     * the background rate: one or two missed fixes trigger nothing, but a
+     * mute provider is replaced before anyone notices on screen.
      */
     const val SILENCE_MAX_MS: Long = 90_000L
 
     /**
-     * Faut-il relancer le suivi ?
+     * Should tracking be restarted?
      *
-     * La seconde condition est celle qui manquait, et c'est elle qui explique
-     * le défaut observé : « je reste sur JN28FT, il faut aller sur une carte
-     * pour la mise à jour ». Le suivi était bien démarré au lancement, mais
-     * l'ancienne garde se contentait de vérifier que la tâche **existait** —
-     * `if (job.isActive) return`. Or une demande de position adressée aux
-     * services Google avant qu'ils ne soient prêts laisse une tâche
-     * parfaitement vivante qui ne délivre jamais rien. La tâche existait, donc
-     * on ne la relançait pas, donc plus rien n'arrivait jusqu'à ce qu'ouvrir la
-     * carte demande une **autre cadence** — ce qui annulait et relançait la
-     * tâche, et tout se remettait à marcher.
-     *
-     * Une tâche vivante n'est donc pas une preuve de fonctionnement. La preuve,
-     * c'est un point reçu récemment.
+     * **A live job is no proof of work; a recent fix is.** The old guard only
+     * checked that the job existed (`if (job.isActive) return`). A location
+     * request made to Google services before they are ready leaves a job that
+     * is alive but never delivers. So nothing was restarted, and the position
+     * stuck ("I stay on JN28FT until I open a map") until opening the map
+     * asked for another rate, which cancelled and restarted the job.
      */
     fun doitRelancer(
         auto: Boolean,
@@ -111,13 +85,13 @@ object SuiviPosition {
     ): Boolean {
         if (!auto) return false
         if (!tacheActive) return true
-        // On laisse au fournisseur le temps du premier point avant de le
-        // déclarer muet : un démarrage à froid met parfois une minute.
+        // Give the provider time for its first fix before calling it mute:
+        // a cold start sometimes takes a minute.
         if (maintenantMs - demarreDepuisMs < silenceMaxMs) return false
         return maintenantMs - dernierPointMs > silenceMaxMs
     }
 
-    /** Distance entre deux points du globe, en mètres. */
+    /** Great-circle distance between two points, in metres. */
     fun distanceM(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
         val r = 6_371_000.0
         val dLat = Math.toRadians(lat2 - lat1)
@@ -129,11 +103,10 @@ object SuiviPosition {
     }
 
     /**
-     * Faut-il relancer la prédiction ?
+     * Should the prediction be rerun?
      *
-     * [depuisLat]/[depuisLon] valent le point où le dernier calcul a été fait.
-     * Un premier point — aucun calcul antérieur — déclenche toujours : c'est le
-     * cas d'une application qui vient de démarrer sans position connue.
+     * [depuisLat]/[depuisLon] are where the last computation was made. With
+     * no earlier computation (app just started) it always triggers.
      */
     fun doitRecalculer(
         depuisLat: Double?, depuisLon: Double?,
@@ -147,15 +120,13 @@ object SuiviPosition {
     }
 
     /**
-     * Un point est-il vraisemblable ?
+     * Is a fix plausible?
      *
-     * Un récepteur GPS rend parfois un point aberrant — coordonnées nulles au
-     * démarrage à froid, ou saut de plusieurs centaines de kilomètres sur une
-     * mauvaise éphéméride. Le laisser passer déplacerait le QTH, donc les
-     * azimuts, donc l'antenne, sur la foi d'un accident. Le zéro absolu mérite
-     * une mention à part : c'est la valeur que rend un récepteur qui n'a pas
-     * encore de position, et elle tombe dans le golfe de Guinée — un endroit
-     * parfaitement valide, ce qui la rend d'autant plus traître.
+     * GPS receivers sometimes return junk — zero coordinates on a cold start,
+     * or a jump of hundreds of km on a bad ephemeris — which would move the
+     * QTH, the azimuths and the antenna. (0, 0) is what a receiver with no
+     * position returns; it lies in the Gulf of Guinea, a perfectly valid
+     * place, which makes it all the more treacherous.
      */
     fun vraisemblable(lat: Double, lon: Double): Boolean {
         if (abs(lat) > 90.0 || abs(lon) > 180.0) return false

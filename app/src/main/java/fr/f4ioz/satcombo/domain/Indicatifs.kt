@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.domain
 
@@ -12,53 +12,41 @@ import kotlin.math.exp
 import kotlin.math.ln
 
 /**
- * Les indicatifs : les reconnaître, les deviner, ne jamais les refuser.
+ * Callsigns: recognise them, guess them, never refuse them.
  *
- * Le calcul qui commande tout le reste : sur un gros passage de RS-44, dix
- * contacts en douze minutes font un correspondant toutes les soixante-dix
- * secondes. Nommer avec le clavier système coûte quinze à vingt secondes,
- * fautes de frappe comprises, et ces secondes-là tombent pendant qu'on appelle
- * le suivant — d'où les validations à vide, c'est-à-dire des indicatifs connus
- * à l'instant et perdus pour toujours. Avec trois caractères et une proposition,
- * on tombe à quatre appuis et trois secondes. Le temps existait ; c'est la
- * saisie qui le mangeait.
+ * A busy RS-44 pass gives a contact every seventy seconds. Typing a callsign
+ * on the system keyboard takes fifteen to twenty, so entries got validated
+ * empty and callsigns were lost. Three characters and a suggestion: four taps.
  *
- * Un principe traverse tout le fichier et ne souffre aucune exception : **rien
- * ici ne bloque une saisie**. La plausibilité est une couleur, pas une barrière.
- * L'indicatif que le format rejette est justement le DX rare pour lequel on a
- * sorti l'antenne, et une application qui l'empêche de rentrer dans le carnet
- * n'a pas compris à quoi sert un carnet.
+ * **Nothing here blocks an entry.** Plausibility is a colour, not a gate. The
+ * callsign the format rejects is exactly the rare DX you put the antenna up
+ * for, and a logbook that refuses it has missed the point.
  */
 object Indicatifs {
 
-    /** Les suffixes que fait défiler la touche unique du clavier. */
+    /** Suffixes cycled by the single suffix key. */
     val SUFFIXES: List<String> = listOf("", "/P", "/M", "/MM")
 
-    /** Suffixe suivant dans le cycle, pour la touche « / ». */
+    /** Next suffix in the cycle, for the "/" key. */
     fun suffixeSuivant(actuel: String): String {
         val i = SUFFIXES.indexOf(actuel.uppercase())
         return if (i < 0) SUFFIXES[1] else SUFFIXES[(i + 1) % SUFFIXES.size]
     }
 
     /**
-     * Sépare l'indicatif de son suffixe d'exploitation.
+     * Splits a callsign from its operating suffix.
      *
-     * Seuls les suffixes d'exploitation sont détachés. `FG/F4IOZ` a un préfixe,
-     * pas un suffixe : c'est un autre pays, donc un autre indicatif, et le
-     * fondre avec `F4IOZ` mélangerait deux entités dans les statistiques.
+     * Only operating suffixes are detached. `FG/F4IOZ` has a prefix, not a
+     * suffix: another country, so another callsign, and merging it with
+     * `F4IOZ` would mix two entities in the statistics.
      */
     fun separe(brut: String): Pair<String, String> {
         val net = brut.trim().uppercase()
         if (net.isEmpty()) return "" to ""
-        // On regarde la DERNIÈRE barre, et non le nombre de morceaux.
-        //
-        // L'ancienne lecture exigeait exactement deux morceaux, et laissait donc
-        // passer `LA/DF2ET/P` en bloc : préfixe de pays **et** suffixe
-        // d'exploitation à la fois. Le carnet d'Olivier en compte dix-huit —
-        // `TF/M0NKC/P`, `EA6/DF2ET/P`, `F/DF2ET/P` — et pour chacun le `/P`
-        // passait inaperçu. Conséquence directe : le carré de la station fixe
-        // était hérité par la station portable, c'est-à-dire précisément le seul
-        // carré dont on sait qu'il est faux.
+        // Look at the LAST slash, not the number of pieces. Requiring exactly
+        // two pieces let `LA/DF2ET/P` (country prefix AND suffix) through
+        // whole: the /P went unnoticed and the portable station inherited the
+        // home grid square — the one square known to be wrong.
         val i = net.lastIndexOf('/')
         if (i <= 0) return net to ""
         val queue = net.substring(i)
@@ -66,34 +54,26 @@ object Indicatifs {
     }
 
     /**
-     * Où se pose une lettre frappée au clavier.
+     * Where a typed letter goes.
      *
-     * Deux gestes produisent une barre, et ils veulent dire le contraire l'un
-     * de l'autre :
+     * Two gestures produce a slash, with opposite meanings:
      *
-     * - La touche `/P /M` **pose un suffixe d'exploitation**. Ce suffixe reste
-     *   collé au bout, et les lettres tapées ensuite complètent l'indicatif
-     *   devant lui : sur `F4IOZ/P`, un `X` donne `F4IOZX/P`. C'est ce qui
-     *   permet de poser le portable dès qu'on l'entend, sans attendre la fin
-     *   de l'indicatif.
-     * - La touche `/` **ouvre un préfixe de pays**. Ce qui suit appartient à
-     *   l'indicatif lui-même et s'écrit dans l'ordre où on l'entend.
+     * - The `/P /M` key **sets an operating suffix**. It stays at the end and
+     *   later letters complete the callsign in front of it: on `F4IOZ/P`, an
+     *   `X` gives `F4IOZX/P`. This lets you set portable as soon as you hear
+     *   it.
+     * - The `/` key **opens a country prefix**. What follows is part of the
+     *   callsign and is written in the order heard.
      *
-     * Sans [suffixePose] pour les distinguer, la seule lecture disponible est
-     * celle du texte — et `DL/P` s'y lit comme `DL` en portable. Toutes les
-     * lettres suivantes passaient alors devant : `DL/PA3GAN`, tapé dans le bon
-     * ordre, s'écrivait `DLA3GAN/P`. Le texte ne peut pas trancher, parce que
-     * les deux gestes produisent exactement le même texte ; seul le geste le
-     * sait.
+     * Both produce the same text, so only [suffixePose] can tell them apart.
+     * Reading the text alone, `DL/P` looks like `DL` portable, and typing
+     * `DL/PA3GAN` gave `DLA3GAN/P`.
      */
     fun ajoute(saisie: String, lettre: Char, suffixePose: Boolean): String {
         if (!suffixePose) return saisie + lettre
-        // Le suffixe posé sur un champ vide se retrouve seul, et `separe` le
-        // rend alors comme base : un indicatif ne commence pas par une barre,
-        // et cette lecture est la bonne pour un texte qu'on découvre. Mais ici
-        // on ne découvre rien — la touche vient de poser ce suffixe. Sans ce
-        // cas, poser le portable dès qu'on l'entend puis taper l'indicatif
-        // donnait `/PF4IOZ`.
+        // A suffix set on an empty field is alone, and `separe` returns it as
+        // the base (right for text read cold). Here the key just set it, so
+        // without this case you got `/PF4IOZ`.
         if (saisie.uppercase() in SUFFIXES) return lettre + saisie
         val (b, suf) = separe(saisie)
         return b + lettre + suf
@@ -104,23 +84,21 @@ object Indicatifs {
     fun suffixe(brut: String): String = separe(brut).second
 
     /**
-     * La clé sous laquelle un indicatif est mémorisé.
+     * The key a callsign is stored under.
      *
-     * On range sous la base : c'est ainsi qu'on retrouve `F4HRJ` en tapant
-     * `F4H` alors que le contact d'hier était `F4HRJ/P`.
+     * Base plus operating suffix (a country prefix stays in the base), so home
+     * and /P each get their own entry. Typing `F4H` still finds `F4HRJ/P`.
      */
     fun cle(brut: String): String = separe(brut).let { it.first + it.second }
 
     /**
-     * Le préfixe, au sens où on l'entend en radio : tout ce qui précède le
-     * dernier chiffre, celui-ci compris.
+     * The prefix in the radio sense: everything up to and including the last
+     * digit.
      *
-     * La lecture naïve — « les lettres, puis les chiffres » — se trompe sur
-     * tous les préfixes qui commencent par un chiffre : 9A pour la Croatie, 2E
-     * pour l'Angleterre, 3DA pour l'Eswatini. Elle rendait « 9 » pour 9A3XYZ.
-     * Le dernier chiffre est le seul repère qui tienne dans les deux cas.
+     * "Letters then digits" fails on prefixes starting with a digit (9A, 2E,
+     * 3DA): it returned "9" for 9A3XYZ. The last digit works in both cases.
      *
-     * Sert à deviner l'entité et à juger la plausibilité, jamais à interdire.
+     * Used to guess the entity and judge plausibility, never to forbid.
      */
     fun prefixe(brut: String): String {
         val b = base(brut)
@@ -129,14 +107,8 @@ object Indicatifs {
     }
 
     /**
-     * Structure plausible d'un indicatif amateur : au moins une lettre, au
-     * moins un chiffre, un suffixe d'au moins une lettre après le dernier
-     * chiffre, et rien qui ne soit lettre, chiffre ou barre.
-     *
-     * Volontairement large. Un jugement plus serré rejetterait des indicatifs
-     * parfaitement réguliers — les indicatifs spéciaux d'événement, les
-     * préfixes à deux chiffres — et l'on aurait gagné une rigueur inutile
-     * contre une porte fermée au mauvais moment.
+     * Plausible callsign shape. Deliberately loose: a stricter rule would
+     * reject valid callsigns (special event calls, two-digit prefixes).
      */
     fun plausible(brut: String): Boolean {
         val b = base(brut)
@@ -148,43 +120,32 @@ object Indicatifs {
         return b.drop(dernierChiffre + 1).all { it.isLetter() }
     }
 
-    /** Un carré vu chez un correspondant, avec ce qu'on en sait. */
+    /** A grid square seen for a station, with what we know about it. */
     class LocatorVu(
         val locator: String,
         val contacts: Int,
         val dernierMs: Long,
     )
 
-    /** Ce que la mémoire retient d'un correspondant. */
+    /** What memory keeps about a station (one entry per base + suffix). */
     class Connu(
         val indicatif: String,
         val contacts: Int,
         val dernierMs: Long,
         val locators: List<LocatorVu> = emptyList(),
         val dernierSat: String = "",
-        /**
-         * Le nom du correspondant, quand le carnet importé le connaît.
-         *
-         * Il ne sert à rien au calcul et à tout à l'usage : reconnaître
-         * « Olivier » d'un coup d'œil vaut mieux que relire cinq caractères, et
-         * c'est ce qui permet de valider sans hésiter pendant un passage.
-         */
+        /** Operator name from the imported log: faster to recognise mid-pass. */
         val nom: String = "",
     ) {
         /**
-         * Le carré à proposer : **le plus fréquent**, la date ne départageant
-         * qu'à égalité.
+         * The grid square to suggest: **the most frequent**, date only as a
+         * tie-breaker.
          *
-         * C'était l'inverse — le plus récent gagnait — et une poignée de
-         * contacts fautifs suffisait à évincer une vérité établie. Cas réel :
-         * F5RRO, dix-sept contacts en JN18FR au journal, quelques-uns écrits
-         * par erreur en JN33AF pendant que la suggestion fuyait entre l'entrée
-         * de base et l'exploitation portable — l'application proposait JN33AF
-         * à chaque nouveau contact, et l'erreur se recopiait d'elle-même.
-         *
-         * La fréquence résiste à l'accident ; la date ne résiste à rien. Une
-         * station qui déménage vraiment finira par l'emporter, contact après
-         * contact, ce qui est le bon rythme pour un changement rare.
+         * It used to be the most recent, and a handful of wrong entries was
+         * enough to displace an established square (F5RRO: seventeen contacts
+         * in JN18FR, a few mistyped JN33AF, and JN33AF was then suggested and
+         * copied into every new contact). Frequency resists accidents; a
+         * station that really moves wins over time.
          */
         val locatorPrincipal: String
             get() = locators.maxWithOrNull(
@@ -193,48 +154,43 @@ object Indicatifs {
     }
 
     /**
-     * D'où vient le carré inscrit dans un contact.
+     * Where the grid square in a contact came from.
      *
-     * Enregistré au moment de la validation, et impossible à reconstituer après
-     * coup. Le jour où un correspondant dit « je n'étais pas en JN18 », c'est ce
-     * champ qui dit si c'est la base qui a menti ou la frappe qui a fauté.
+     * Recorded at validation and impossible to rebuild later. When a station
+     * says "I wasn't in JN18", this tells whether the memory lied or the
+     * typing did.
      */
     enum class OrigineLocator { SAISI, PROPOSE, INCONNU }
 
     /**
-     * Le carré à pré-remplir, ou vide s'il ne faut rien proposer.
+     * Grid square to prefill, or empty when nothing should be suggested.
      *
-     * Le cas du suffixe est le seul qui compte vraiment : `F4HRJ/P` ne doit
-     * **jamais** hériter du carré de `F4HRJ`. Le `/P` dit précisément que le
-     * correspondant s'est déplacé ; hériter reviendrait à inscrire avec
-     * assurance le seul carré dont on sait qu'il est faux.
+     * `F4HRJ/P` must **never** inherit the square of `F4HRJ`: the /P says the
+     * station has moved, so inheriting would log the one square known to be
+     * wrong.
      */
     fun locatorPropose(connu: Connu?, brutSaisi: String): String {
         if (connu == null) return ""
-        // L'entrée est désormais celle du suffixe exact : F5RRO/P connu
-        // propose SON carré — celui de ses sorties — et un /P jamais vu ne
-        // propose rien. Le carré de la base ne fuit plus vers le portable,
-        // ni l'inverse.
+        // The entry is the one for the exact suffix: a known F5RRO/P suggests
+        // its own portable square, an unseen /P suggests nothing. Home and
+        // portable squares no longer leak into each other.
         return connu.locatorPrincipal
     }
 
-    // ------------------------------------------------------------ prédiction
+    // ------------------------------------------------------------ prediction
 
-    /** Demi-vie de la récence, en jours. */
+    /** Half-life of recency, in days. */
     private const val DEMI_VIE_JOURS = 120.0
 
     private const val JOUR_MS = 86_400_000.0
 
     /**
-     * Note d'une proposition. Plus c'est haut, plus ça remonte.
+     * Score of a suggestion; higher ranks first.
      *
-     * Trois termes, dans cet ordre d'importance : la fréquence des contacts
-     * (en logarithme — le vingtième QSO avec le même correspondant apprend
-     * moins que le deuxième), la récence (décroissance exponentielle : un
-     * correspondant d'il y a trois ans compte, mais pas autant que celui de
-     * la semaine dernière), et une prime au correspondant déjà entendu sur le
-     * même satellite, qui est le meilleur indice court dont on dispose pendant
-     * un passage.
+     * Three terms: contact count (logarithmic — the twentieth QSO with a
+     * station says less than the second), recency (exponential decay), and a
+     * bonus for a station last heard on the same satellite, the best
+     * short-term hint during a pass.
      */
     fun note(connu: Connu, maintenantMs: Long, satActif: String = ""): Double {
         val frequence = ln(1.0 + connu.contacts)
@@ -246,12 +202,10 @@ object Indicatifs {
     }
 
     /**
-     * Les propositions pour une saisie en cours.
+     * Suggestions for the text being typed.
      *
-     * Trois au maximum : au-delà, la ligne de suggestions demande une lecture
-     * au lieu d'un coup d'œil, et l'on a reperdu les secondes qu'on venait
-     * gagner. Rien n'est proposé sous deux caractères — sur une seule lettre,
-     * tout ressemble à tout.
+     * Three at most: beyond that the row needs reading instead of a glance.
+     * Nothing under two characters — on one letter everything matches.
      */
     fun suggestions(
         saisie: String,
@@ -273,12 +227,10 @@ object Indicatifs {
     }
 
     /**
-     * Les lettres et chiffres qui prolongent réellement quelque chose de connu.
+     * Characters that actually extend a known callsign.
      *
-     * Le clavier s'en sert pour **mettre en valeur**, jamais pour retirer. La
-     * distinction n'est pas cosmétique : un clavier qui supprime les touches
-     * improbables interdit de noter le DX rare jamais contacté, c'est-à-dire
-     * exactement celui qu'on avait sorti l'antenne pour attraper.
+     * The keypad uses this to **highlight**, never to remove keys. A keypad
+     * that hides unlikely keys forbids logging the never-worked rare DX.
      */
     fun suitesConnues(saisie: String, memoire: List<Connu>): Set<Char> {
         val debut = base(saisie)
@@ -291,28 +243,27 @@ object Indicatifs {
         return out
     }
 
-    /** État d'un indicatif saisi, pour la pastille affichée à côté du champ. */
+    /** State of a typed callsign, for the badge next to the field. */
     enum class Etat { DEJA_CONTACTE, PLAUSIBLE, INHABITUEL, VIDE }
 
     fun etat(saisie: String, memoire: List<Connu>): Etat {
         if (saisie.isBlank()) return Etat.VIDE
-        // La pastille verte parle de l'opérateur, pas de son carré : F4HRJ est
-        // déjà contacté même si on ne l'a travaillé qu'en F4HRJ/P. La mémoire
-        // sépare désormais les exploitations, la comparaison se fait donc sur
-        // la base.
+        // The green badge is about the operator, not the location: F4HRJ is
+        // already worked even if only as F4HRJ/P. Memory keys carry the
+        // suffix, so compare on the base.
         val b = base(saisie)
         if (memoire.any { base(it.indicatif) == b }) return Etat.DEJA_CONTACTE
         return if (plausible(saisie)) Etat.PLAUSIBLE else Etat.INHABITUEL
     }
 
-    // ------------------------------------------------------------- la mémoire
+    // ---------------------------------------------------------------- memory
 
     /**
-     * Construit la mémoire à partir d'une liste de contacts.
+     * Builds the memory from a list of contacts.
      *
-     * Les couples indicatif + carré sont conservés, et non un carré unique par
-     * indicatif : un correspondant en portable change de carré, et proposer
-     * celui de l'an dernier est pire que ne rien proposer.
+     * Keeps callsign + grid square pairs, not one square per callsign: a
+     * portable station changes square, and suggesting last year's is worse
+     * than suggesting nothing.
      */
     fun memoire(contacts: List<Contact>): List<Connu> {
         class Acc {
@@ -334,14 +285,11 @@ object Indicatifs {
                 a.dernier = c.quandMs
                 if (c.satellite.isNotBlank()) a.sat = c.satellite
             }
-            // Le nom se garde dès qu'on en voit un, même sur un contact plus
-            // ancien : un carnet n'en porte pas à chaque ligne, et le plus
-            // récent est parfois justement celui qui n'en a pas.
+            // Keep the first name seen, even on an older contact: logs don't
+            // carry it on every line, and the latest often lacks it.
             if (a.nom.isBlank() && c.nom.isNotBlank()) a.nom = c.nom
-            // Chaque entrée possède ses carrés en propre : la clé porte le
-            // suffixe, donc F5RRO/P accumule les siens sans jamais toucher à
-            // ceux de F5RRO. L'ancienne règle — jeter le carré des suffixés —
-            // les rendait invisibles ; celle-ci les montre à leur place.
+            // The key carries the suffix, so F5RRO/P accumulates its own
+            // squares without touching those of F5RRO.
             val g = c.locator.trim().uppercase()
             if (g.isNotEmpty()) {
                 a.carres.getOrPut(g) { IntArray(1) }[0]++
@@ -363,7 +311,7 @@ object Indicatifs {
         }
     }
 
-    /** Le minimum qu'un contact doit porter pour alimenter la mémoire. */
+    /** The minimum a contact must carry to feed the memory. */
     class Contact(
         val indicatif: String,
         val locator: String,

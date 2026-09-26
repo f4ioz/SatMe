@@ -1,27 +1,25 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.domain
 
 /**
- * Simplification de tracés — Douglas-Peucker.
+ * Douglas-Peucker line simplification.
  *
- * Sortie du domaine pour être partagée : les contours de parcs POTA
- * téléchargés arrivent bruts (des centaines de points pour une dune) et
- * doivent être ramenés au même grain que ceux embarqués, une dizaine de
- * mètres. Le calcul est le même que celui qui a préparé les fichiers hors
- * ligne — un seul algorithme, deux usages.
+ * Downloaded POTA park outlines arrive raw (hundreds of points for a dune)
+ * and must be brought to the grain of the bundled ones, about ten metres.
+ * Same algorithm that prepared the offline files.
  */
 object Simplifie {
 
     /**
-     * Simplifie une polyligne ouverte. [eps] est la tolérance, en degrés
-     * (0.0001 ≈ 11 m en latitude).
+     * Simplifies an open polyline. [eps] is the tolerance in degrees
+     * (0.0001 ≈ 11 m in latitude).
      */
     fun ligne(pts: List<DoubleArray>, eps: Double): List<DoubleArray> {
         if (pts.size < 3) return pts
@@ -32,9 +30,8 @@ object Simplifie {
     }
 
     /**
-     * Simplifie un anneau fermé. L'anneau est coupé au sommet le plus éloigné
-     * du premier point — couper n'importe où pourrait effacer un cap réel qui
-     * tombe sur la couture.
+     * Simplifies a closed ring, split at the vertex farthest from the first
+     * point: splitting anywhere could erase a real headland lying on the seam.
      */
     fun anneau(pts: List<DoubleArray>, eps: Double): List<DoubleArray> {
         val ouvert = if (pts.size > 1 &&

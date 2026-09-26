@@ -1,27 +1,25 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.domain
 
 /**
- * Ce que QRZ.com répond, dépouillé.
+ * The QRZ.com answer, stripped down.
  *
- * L'interface XML de QRZ demande un **abonnement séparé** de l'inscription :
- * sans lui la connexion réussit et les recherches échouent. On rend donc le
- * message du serveur tel quel plutôt que de le traduire en « introuvable » —
- * confondre les deux ferait chercher un défaut là où il n'y a qu'un
- * abonnement à prendre.
+ * The QRZ XML interface needs a **separate subscription**: without it login
+ * succeeds and lookups fail. The server message is passed on unchanged rather
+ * than turned into "not found", so nobody hunts for a bug where there is only
+ * a subscription missing.
  *
- * L'analyse est volontairement grossière : QRZ déclare un espace de noms
- * (`xmlns="http://xmldata.qrz.com"`) qu'un analyseur strict impose de
- * qualifier, et la réponse tient en quelques balises sans imbrication. Une
- * expression régulière sur le nom local suffit, et ne casse pas le jour où
- * QRZ ajoute un champ.
+ * Parsing is deliberately crude: QRZ declares a namespace
+ * (`xmlns="http://xmldata.qrz.com"`) that a strict parser forces you to
+ * qualify, and the answer is a few flat tags. A regex on the local name is
+ * enough and survives QRZ adding fields.
  */
 object QrzReponse {
 
@@ -30,15 +28,12 @@ object QrzReponse {
         val carre: String = "",
         val nom: String = "",
         /**
-         * Le prénom seul.
-         *
-         * QRZ le rend séparément et on le fusionnait aussitôt dans [nom]. Or
-         * c'est le prénom qu'on lance à la radio — « bonjour Jean » — et le
-         * redécouper après coup se trompe dès que le nom de famille arrive
-         * seul, ou que le prénom est composé.
+         * First name alone. It is what you say on air ("hello Jean"), and
+         * splitting it back out of [nom] fails when the surname comes alone or
+         * the first name is compound.
          */
         val prenom: String = "",
-        /** La ville du correspondant : QRZ la met dans `addr2`. */
+        /** The station's town: QRZ puts it in `addr2`. */
         val qth: String = "",
         val courriel: String = "",
         val pays: String = "",

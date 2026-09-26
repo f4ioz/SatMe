@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.domain
 
@@ -17,72 +17,61 @@ import kotlin.math.sin
 import kotlin.math.sqrt
 
 /**
- * La partie radio : aller de l'audio aux symboles.
+ * The radio part: from audio to symbols — finding the signal in the noise,
+ * its start time and frequency, and reading its tones.
  *
- * `Ft8.kt` savait déjà passer des symboles aux bits et des bits au message.
- * Il manquait tout l'amont — trouver le signal dans le bruit, savoir quand il
- * commence et sur quelle fréquence, et lire ses tons. C'est ce fichier.
+ * **All of it is testable without a radio.** Synthesize a signal from known
+ * symbols, shift it in time and frequency, add noise, check the same symbols
+ * come out. For this part the bench is stricter than the field, because the
+ * truth is known.
  *
- * **Ce qu'on peut éprouver sans radio.** Tout, ici. On fabrique le signal
- * soi-même à partir de symboles connus, on le décale dans le temps et en
- * fréquence, on y verse du bruit, et l'on regarde si les mêmes symboles
- * ressortent. Le banc n'est pas une imitation du terrain : pour cette
- * partie-là, il est plus sévère, parce qu'on connaît la vérité.
+ * **Internal sample rate.** Audio is resampled so one symbol is exactly a
+ * power of two: 2048 samples for FT8, 512 for FT4. Two gains:
  *
- * **Le choix de la cadence interne.** On rééchantillonne vers une cadence où un
- * symbole fait exactement une puissance de deux : 2048 points pour FT8, 512
- * pour FT4. Deux choses en découlent, et elles valent la conversion :
+ * - a plain radix-2 FFT;
+ * - tones land **exactly** on bins, with no leakage. Adjacent tones are
+ *   strictly orthogonal only if the analysis spans exactly one symbol.
  *
- * - la transformée de Fourier est une radix-2 ordinaire, courte à écrire et
- *   rapide à exécuter ;
- * - les tons tombent **exactement** sur des raies, sans fuite spectrale. À
- *   6,25 Hz d'écartement et 6,25 Hz de résolution, deux tons voisins sont
- *   rigoureusement orthogonaux — ce qui n'est vrai que si la durée d'analyse
- *   fait exactement un symbole.
- *
- * La cadence du micro n'a donc plus d'importance : 44 100, 48 000 ou 16 000,
- * on ramène. C'est aussi ce qui évite de dépendre de ce qu'Android voudra bien
- * accorder à `AudioRecord` selon le téléphone.
+ * The capture rate no longer matters (44 100, 48 000, 16 000), nor what
+ * Android grants `AudioRecord` on a given phone.
  */
 object Ft8Signal {
 
     /**
-     * Ce qui distingue FT8 de FT4, rassemblé pour que la chaîne soit commune.
+     * What differs between FT8 and FT4, gathered so the chain is shared.
      *
-     * Les deux modes partagent le même format de message, le même CRC et le
-     * même code correcteur : seule la couche physique diffère. Écrire deux
-     * démodulateurs serait écrire deux fois le même, et les faire diverger.
+     * Only the physical layer differs; two demodulators would be the same one
+     * written twice, and they would drift apart.
      */
     data class Mode(
         val nom: String,
-        /** Nombre de tons : 8 pour FT8, 4 pour FT4. */
+        /** Number of tones: 8 for FT8, 4 for FT4. */
         val tons: Int,
-        /** Échantillons par symbole — une puissance de deux, par construction. */
+        /** Samples per symbol — a power of two, by design. */
         val parSymbole: Int,
-        /** Durée d'un symbole, en secondes. */
+        /** Symbol duration, seconds. */
         val dureeSymbole: Double,
-        /** Nombre total de symboles de canal. */
+        /** Total channel symbols. */
         val symboles: Int,
-        /** Les positions des symboles de synchronisation et le ton attendu. */
+        /** Sync symbol positions and expected tone. */
         val synchro: List<Pair<Int, Int>>,
         /**
-         * Le produit largeur-durée de la mise en forme gaussienne.
+         * Bandwidth-time product of the Gaussian shaping.
          *
-         * Il n'est **pas** le même pour les deux modes, et je l'avais supposé
-         * tel : l'article de K1JT, K9AN et G4WJS donne BT = 2 pour FT8 et
-         * BT = 1 pour FT4, dont l'impulsion est plus fortement lissée. Un FT4
-         * synthétisé à BT = 2 serait trop large et gênerait ses voisins.
+         * **Not** the same for both modes: the K1JT/K9AN/G4WJS article gives
+         * BT = 2 for FT8 and BT = 1 for FT4. FT4 synthesized at BT = 2 would be
+         * too wide and disturb its neighbours.
          */
         val lissageBT: Double = 2.0
     ) {
-        /** La cadence interne : celle qui rend [parSymbole] exact. */
+        /** Internal rate: the one that makes [parSymbole] exact. */
         val cadenceHz: Double get() = parSymbole / dureeSymbole
-        /** L'écartement des tons, égal à la rapidité de modulation. */
+        /** Tone spacing, equal to the symbol rate. */
         val ecartHz: Double get() = 1.0 / dureeSymbole
         val dureeS: Double get() = symboles * dureeSymbole
     }
 
-    /** Les positions de synchronisation de FT8 : trois réseaux de sept. */
+    /** FT8 sync positions: three arrays of seven. */
     private fun synchroFt8(): List<Pair<Int, Int>> {
         val l = ArrayList<Pair<Int, Int>>(21)
         for (depart in intArrayOf(0, 36, 72)) {
@@ -102,15 +91,11 @@ object Ft8Signal {
     )
 
     /**
-     * FT4, désormais complet.
+     * FT4.
      *
-     * Les paramètres et les quatre réseaux de Costas viennent de la description
-     * du protocole publiée par K9AN, G4WJS et K1JT dans QEX — que les auteurs
-     * placent dans le domaine public. Rien n'est repris du code de WSJT-X, qui
-     * lui reste sous GPL.
-     *
-     * BT = 1 et non 2 : l'impulsion de FT4 est plus fortement lissée que celle
-     * de FT8. Synthétisée à 2, elle serait trop large et gênerait ses voisins.
+     * Parameters and the four Costas arrays come from the public-domain QEX
+     * protocol description (K9AN, G4WJS, K1JT). Nothing is taken from the
+     * GPL WSJT-X code. BT = 1, see [Mode.lissageBT].
      */
     val FT4 = Mode(
         nom = "FT4",
@@ -122,15 +107,14 @@ object Ft8Signal {
         lissageBT = 1.0
     )
 
-    // ------------------------------------------------------- rééchantillonnage
+    // ------------------------------------------------------------ resampling
 
     /**
-     * Ramène un bloc audio à la cadence voulue, par interpolation cubique.
+     * Resamples an audio block by cubic interpolation.
      *
-     * Cubique et non linéaire : l'interpolation linéaire d'un signal à 3 kHz
-     * échantillonné à 12 kHz introduit une distorsion de l'ordre du pour cent,
-     * qui se traduit par de la fuite entre tons voisins. Ce sont précisément
-     * les tons voisins qu'on cherche à distinguer.
+     * Not linear: linear interpolation of a 3 kHz signal sampled at 12 kHz
+     * gives about 1 % distortion, which leaks between adjacent tones — exactly
+     * what we are trying to tell apart.
      */
     fun reechantillonne(entree: FloatArray, deHz: Double, versHz: Double): FloatArray {
         if (entree.isEmpty()) return FloatArray(0)
@@ -141,9 +125,8 @@ object Ft8Signal {
             val x = n * pas
             val i = x.toInt()
             val f = (x - i).toFloat()
-            // Catmull-Rom, avec les bords tenus par répétition plutôt que par
-            // des zéros : un zéro au bord est une marche, et une marche est un
-            // large étalement spectral.
+            // Catmull-Rom, edges held by repetition rather than zeros: a zero
+            // at the edge is a step, and a step spreads across the spectrum.
             val p0 = entree[(i - 1).coerceIn(0, entree.size - 1)]
             val p1 = entree[i.coerceIn(0, entree.size - 1)]
             val p2 = entree[(i + 1).coerceIn(0, entree.size - 1)]
@@ -157,14 +140,11 @@ object Ft8Signal {
 
     // ------------------------------------------------------------------- FFT
 
-    /**
-     * Transformée de Fourier en place, radix-2, sur des tableaux de même
-     * longueur — une puissance de deux.
-     */
+    /** In-place radix-2 FFT; both arrays the same power-of-two length. */
     fun fft(re: FloatArray, im: FloatArray) {
         val n = re.size
         require(n and (n - 1) == 0) { "la longueur doit être une puissance de deux" }
-        // Renversement de bits.
+        // Bit reversal.
         var j = 0
         for (i in 1 until n) {
             var bit = n shr 1
@@ -200,34 +180,32 @@ object Ft8Signal {
         }
     }
 
-    // ---------------------------------------------------------- spectrogramme
+    // ------------------------------------------------------------ spectrogram
 
     /**
-     * Les puissances par instant et par raie.
+     * Power per time step and per bin.
      *
-     * Le pas de temps vaut un demi-symbole et le pas de fréquence un demi-écart
-     * de tons : c'est le compromis habituel. Un pas plus fin coûte de la mémoire
-     * et du temps sans rien apporter, un pas plus grossier laisse passer les
-     * signaux mal centrés — et sur un satellite, **rien n'est jamais bien
-     * centré** : le décalage Doppler d'un passage bas déplace la porteuse de
-     * plusieurs kilohertz en douze secondes.
+     * Half a symbol in time, half a tone spacing in frequency: the usual
+     * trade-off. Finer costs memory and time for nothing; coarser misses
+     * off-centre signals — and on a satellite **nothing is ever centred**,
+     * Doppler keeps moving the carrier during a pass.
      *
-     * Le demi-écart en fréquence s'obtient en complétant la transformée de
-     * zéros sur le double de sa longueur. Cela n'invente pas de résolution :
-     * cela interpole, ce qui suffit à retrouver un ton posé entre deux raies.
+     * The half-spacing comes from zero-padding the transform to twice its
+     * length. That interpolates, it does not add resolution, but it is enough
+     * to find a tone sitting between two bins.
      */
     class Spectrogramme(
         val mode: Mode,
-        /** Puissances, rangées par pas de temps puis par demi-raie. */
+        /** Powers, indexed by time step then half-bin. */
         val puissances: Array<FloatArray>,
-        /** Pas de temps, en échantillons. */
+        /** Time step, samples. */
         val pasTemps: Int,
-        /** Fréquence de la demi-raie 0, en hertz. */
+        /** Frequency of half-bin 0, Hz. */
         val basseHz: Double
     ) {
         val nbPas: Int get() = puissances.size
         val nbRaies: Int get() = if (puissances.isEmpty()) 0 else puissances[0].size
-        /** Deux demi-raies séparent deux tons voisins. */
+        /** Two half-bins between adjacent tones. */
         val raieParTon: Int get() = 2
         fun puissance(pas: Int, raie: Int): Float {
             if (pas < 0 || pas >= nbPas) return 0f
@@ -237,11 +215,10 @@ object Ft8Signal {
     }
 
     /**
-     * Calcule le spectrogramme d'un bloc audio déjà ramené à la bonne cadence.
+     * Spectrogram of an audio block already at the internal rate.
      *
-     * [basseHz] et [hauteHz] bornent la bande explorée : inutile de porter des
-     * raies où aucune station ne se pose, et cela divise d'autant le temps de
-     * recherche.
+     * [basseHz] and [hauteHz] bound the searched band, which cuts search time
+     * accordingly.
      */
     fun spectrogramme(
         audio: FloatArray,
@@ -250,9 +227,9 @@ object Ft8Signal {
         hauteHz: Double = 3000.0
     ): Spectrogramme {
         val n = mode.parSymbole
-        val nfft = n * 2                       // complété de zéros : demi-raies
-        val pasTemps = n / 2                   // demi-symbole
-        val binHz = mode.cadenceHz / nfft      // = écart / 2
+        val nfft = n * 2                       // zero-padded: half-bins
+        val pasTemps = n / 2                   // half a symbol
+        val binHz = mode.cadenceHz / nfft      // = spacing / 2
         val raieBasse = (basseHz / binHz).toInt().coerceAtLeast(0)
         val raieHaute = (hauteHz / binHz).toInt().coerceAtMost(nfft / 2 - 1)
         val nbRaies = (raieHaute - raieBasse + 1).coerceAtLeast(1)
@@ -266,10 +243,9 @@ object Ft8Signal {
             val debut = p * pasTemps
             java.util.Arrays.fill(re, 0f)
             java.util.Arrays.fill(im, 0f)
-            // Fenêtre rectangulaire, volontairement. Sur exactement un symbole,
-            // deux tons voisins sont orthogonaux ; une fenêtre en cloche
-            // détruirait cette orthogonalité pour gagner sur des fuites qui
-            // n'existent pas ici.
+            // Rectangular window, on purpose. Over exactly one symbol adjacent
+            // tones are orthogonal; a tapered window would destroy that to
+            // fight leakage that does not exist here.
             for (k in 0 until n) re[k] = audio[debut + k]
             fft(re, im)
             val ligne = sortie[p]
@@ -281,16 +257,13 @@ object Ft8Signal {
         return Spectrogramme(mode, sortie, pasTemps, raieBasse * binHz)
     }
 
-    // ------------------------------------------------------- synchronisation
+    // ------------------------------------------------------------------ sync
 
-    /**
-     * Un signal repéré : quand il commence, sur quelle raie, et à quel point les
-     * repères concordent.
-     */
+    /** A detected signal: start, bin, and how well the sync symbols match. */
     data class Candidat(
-        /** Décalage en pas de temps depuis le début du bloc. */
+        /** Offset in time steps from the start of the block. */
         val pas: Int,
-        /** Raie du ton 0, en demi-raies. */
+        /** Bin of tone 0, in half-bins. */
         val raie: Int,
         val score: Float
     ) {
@@ -301,17 +274,15 @@ object Ft8Signal {
     }
 
     /**
-     * Cherche les signaux par leurs réseaux de Costas.
+     * Finds signals by their Costas arrays.
      *
-     * **Le score est doux, pas un décompte.** On pourrait compter les repères
-     * qui tombent juste ; on additionne plutôt, pour chaque repère, l'écart
-     * entre la puissance du ton attendu et la puissance moyenne des autres
-     * tons. Un décompte jette l'information la plus utile — de combien le bon
-     * ton l'emporte — et c'est justement celle qui permet de distinguer un
-     * signal faible d'une coïncidence. Le tout est divisé par la puissance
-     * moyenne, pour qu'un signal fort et un signal faible se comparent.
+     * **The score is soft, not a count.** For each sync symbol we add the
+     * expected tone's power minus the mean of the other tones. A count throws
+     * away by how much the right tone wins — exactly what tells a weak signal
+     * from a coincidence. The sum is divided by the mean power of the whole
+     * spectrogram (see below).
      *
-     * Rend les candidats du meilleur au moins bon, au plus [maximum].
+     * Returns candidates best first, at most [maximum].
      */
     fun candidats(
         spec: Spectrogramme,
@@ -325,14 +296,12 @@ object Ft8Signal {
         val pasMaximum = spec.nbPas - mode.symboles * pasParSymbole
         if (pasMaximum < 0) return emptyList()
 
-        // Le plancher de bruit, mesuré une fois sur tout le spectrogramme.
+        // Noise floor, measured once over the whole spectrogram.
         //
-        // **C'est lui la référence, et non la puissance du candidat.** Diviser
-        // par sa propre puissance paraît élégant — cela rend les signaux forts
-        // et faibles comparables — mais c'est un piège : un candidat mal aligné
-        // n'attrape presque rien, donc divise peu par peu, et ressort avec un
-        // score énorme. Le banc l'a montré sans détour, seize places prises par
-        // des fantômes du même signal.
+        // **This is the reference, not the candidate's own power.** Dividing by
+        // its own power looks neat, but a misaligned candidate catches almost
+        // nothing, divides by almost nothing and comes out with a huge score:
+        // on the bench, sixteen slots went to ghosts of one signal.
         var reference = 0.0
         var comptes = 0L
         for (ligne in spec.puissances) for (v in ligne) { reference += v; comptes++ }
@@ -359,23 +328,18 @@ object Ft8Signal {
         }
         trouves.sortByDescending { it.score }
 
-        // On ne garde qu'un candidat par fréquence, **quel que soit l'instant**.
+        // Keep one candidate per frequency, **whatever the time offset**.
         //
-        // Le premier réflexe est d'écarter les voisins proches en temps et en
-        // fréquence. Il ne suffit pas : un réseau de Costas décalé de plusieurs
-        // symboles retombe encore partiellement juste, et le banc a vu seize
-        // fantômes bien séparés nés d'un seul signal. Or deux stations sur la
-        // même fréquence dans la même tranche de quinze secondes se brouillent
-        // de toute façon ; n'en retenir que la plus forte ne perd rien et rend
-        // les trente-deux places à de vraies stations.
+        // Rejecting only near neighbours in time and frequency is not enough:
+        // a Costas array shifted by several symbols still partly matches, and
+        // the bench saw sixteen well-separated ghosts of one signal. Two
+        // stations on the same frequency in the same slot interfere anyway, so
+        // keeping the strongest loses nothing.
         //
-        // La tolérance est la **largeur du signal**, pas un nombre choisi au
-        // jugé : un candidat décalé d'un seul ton lit encore les tons du vrai
-        // signal et son réseau de Costas retombe partiellement juste. Deux
-        // candidats dont les bandes se recouvrent sont donc soit le même
-        // signal, soit deux signaux que ce démodulateur ne saurait de toute
-        // façon pas séparer. Quarante-quatre hertz pour FT8, vingt et un
-        // pour FT4 — la formule s'adapte au mode.
+        // The tolerance is the **signal width**: a candidate one tone off
+        // still reads the real signal's tones. Overlapping candidates are
+        // either the same signal or two this demodulator cannot separate.
+        // About 44 Hz for FT8, 62.5 Hz for FT4.
         val gardes = ArrayList<Candidat>(maximum)
         for (c in trouves) {
             if (gardes.none { kotlin.math.abs(it.raie - c.raie) <= raieDernierTon }) {
@@ -386,7 +350,7 @@ object Ft8Signal {
         return gardes
     }
 
-    /** Lit les symboles d'un candidat : le ton le plus fort à chaque position. */
+    /** Reads a candidate's symbols: the strongest tone at each position. */
     fun tons(spec: Spectrogramme, c: Candidat): IntArray {
         val mode = spec.mode
         val pasParSymbole = mode.parSymbole / spec.pasTemps
@@ -403,14 +367,10 @@ object Ft8Signal {
     }
 
     /**
-     * La vraisemblance de chaque bit, en logarithme de rapport.
+     * Per-bit log-likelihood ratios, the input of [Ldpc.decode].
      *
-     * Le décodage actuel s'arrête aux décisions dures et au CRC — une erreur et
-     * le message est perdu. Ces valeurs douces sont ce qu'attend un décodeur
-     * LDPC le jour où il sera écrit : positives pour un zéro probable,
-     * négatives pour un un, et d'autant plus grandes que le ton l'emporte
-     * nettement. Les produire maintenant coûte dix lignes et évitera de
-     * reprendre toute la chaîne ensuite.
+     * Positive for a likely zero, negative for a one, larger when the tone
+     * wins clearly. The sign convention must match [Ldpc].
      */
     fun vraisemblances(spec: Spectrogramme, c: Candidat): FloatArray {
         val mode = spec.mode
@@ -422,8 +382,8 @@ object Ft8Signal {
         var indice = 0
         for (s in positionsDonnees) {
             val t = c.pas + s * pasParSymbole
-            // Puissances converties en amplitudes : le logarithme d'une
-            // vraisemblance gaussienne est en amplitude, pas en puissance.
+            // Powers converted to amplitudes: a Gaussian log-likelihood is in
+            // amplitude, not power.
             val amp = FloatArray(mode.tons) {
                 sqrt(spec.puissance(t, c.raie + it * spec.raieParTon))
             }
@@ -442,27 +402,24 @@ object Ft8Signal {
         return sortie
     }
 
-    /** Le code de Gray inverse, pour 4 ou 8 tons. */
+    /** Inverse Gray code, for 4 or 8 tones. */
     private fun grayInverse(ton: Int, tons: Int): Int {
         val table = if (tons == 8) intArrayOf(0, 1, 3, 2, 5, 6, 4, 7)
         else intArrayOf(0, 1, 3, 2)
         return table.indexOf(ton).coerceAtLeast(0)
     }
 
-    // ------------------------------------------------------------- synthèse
+    // -------------------------------------------------------------- synthesis
 
     /**
-     * Fabrique le signal d'une suite de symboles.
+     * Synthesizes the signal for a symbol sequence.
      *
-     * Sert d'abord au banc : sans signal connu, on ne peut rien prouver du
-     * démodulateur. Mais c'est aussi, tel quel, de quoi **émettre** — une
-     * balise FT8 depuis le téléphone ne demanderait plus que de l'envoyer à la
-     * carte son.
+     * First for the bench (without a known signal nothing can be proven about
+     * the demodulator), but it is also what transmit would use as is.
      *
-     * La phase est continue et la trajectoire de fréquence lissée par une
-     * gaussienne, comme le fait WSJT-X : sans ce lissage, chaque changement de
-     * ton produit des claquements qui s'étalent bien au-delà des 50 Hz du
-     * signal, et gênent les voisins de bande.
+     * Continuous phase, Gaussian-smoothed frequency trajectory as in WSJT-X:
+     * without smoothing, each tone change clicks far beyond the 50 Hz of the
+     * signal and disturbs neighbours.
      */
     fun synthetise(
         tons: IntArray,
@@ -478,14 +435,14 @@ object Ft8Signal {
         val sortie = FloatArray(total)
         val debut = (decalageS * cadence).roundToInt()
 
-        // Trajectoire de fréquence, un point par échantillon de symbole.
+        // Frequency trajectory, one point per sample.
         val nSignal = tons.size * mode.parSymbole
         val freq = DoubleArray(nSignal)
         for (i in 0 until nSignal) {
             val s = i / mode.parSymbole
             freq[i] = frequenceBasseHz + tons[s] * mode.ecartHz
         }
-        // Lissage gaussien de la trajectoire.
+        // Gaussian smoothing of the trajectory.
         if (lissageBT > 0.0) {
             val sigma = mode.parSymbole / (2.0 * PI * lissageBT) * sqrt(ln(2.0))
             val demi = (3 * sigma).toInt().coerceAtLeast(1)
@@ -518,11 +475,8 @@ object Ft8Signal {
     }
 
     /**
-     * Ajoute un bruit gaussien au rapport signal sur bruit demandé.
-     *
-     * La référence est celle des modes numériques : la puissance de bruit dans
-     * 2500 Hz. C'est ainsi que se lisent les « −21 dB » d'un report FT8, et
-     * c'est donc dans cette unité que le banc doit parler.
+     * Adds Gaussian noise at the requested SNR, referred to 2500 Hz like an FT8
+     * report ("−21 dB"), so the bench speaks the same unit.
      */
     fun avecBruit(
         signal: FloatArray,
@@ -535,8 +489,9 @@ object Ft8Signal {
         for (v in signal) if (v != 0f) { puissanceSignal += v * v.toDouble(); comptes++ }
         if (comptes == 0) return signal.copyOf()
         puissanceSignal /= comptes
-        // Le bruit est réparti sur toute la bande ; le rapport est donné dans
-        // 2500 Hz, d'où la mise à l'échelle par la largeur réellement occupée.
+        // Noise fills the whole band while the SNR is given in 2500 Hz, hence
+        // the scaling by the actual analysis bandwidth.
+
         val largeurAnalyse = mode.cadenceHz / 2.0
         val puissanceBruit = puissanceSignal / Math.pow(10.0, rapportDb / 10.0) *
             (largeurAnalyse / 2500.0)

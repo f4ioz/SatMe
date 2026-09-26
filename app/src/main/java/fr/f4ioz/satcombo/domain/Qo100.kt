@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.domain
 
@@ -16,140 +16,99 @@ import kotlin.math.sin
 import kotlin.math.tan
 
 /**
- * QO-100 : le satellite qui ne bouge pas.
+ * QO-100: the satellite that does not move.
  *
- * Tout le reste de SatMe est bâti sur l'idée qu'un satellite passe. On calcule
- * une orbite, on en tire une acquisition et une perte de signal, une trace au
- * sol, un Doppler qui balaie plusieurs kilohertz en dix minutes, et un mât qui
- * court derrière. Es'hail-2 ne fait rien de tout cela : il est géostationnaire
- * par 25,9° est, à 36 000 km, et depuis l'Europe il est simplement *là*, au
- * même azimut et à la même élévation, jour et nuit.
+ * The rest of SatMe assumes satellites pass. Es'hail-2 is geostationary at
+ * 25.9° E and from Europe simply sits at the same azimuth and elevation, day
+ * and night. That removes three things:
  *
- * Cela retire trois choses d'un coup, et il vaut mieux les nommer :
+ * - **No Doppler.** Range rate is zero by construction. It is zeroed through
+ *   the range rate rather than a switch, so the existing chain stays intact
+ *   with no special branch.
+ * - **No pass.** No AOS, LOS, countdown or ground track. SGP4 on a
+ *   geostationary gives nothing usable; do not ask it.
+ * - **Nothing for the mast to track.** The dish is pointed once.
  *
- * - **Le Doppler n'existe pas.** La vitesse radiale est nulle par
- *   construction. Ce n'est pas « un Doppler qu'on met en pause », c'est un
- *   Doppler qui n'a pas lieu d'être calculé. Le mettre à zéro par la vitesse
- *   radiale plutôt que par un interrupteur laisse toute la chaîne existante
- *   intacte, sans branche particulière.
- * - **Il n'y a pas de passage.** Pas d'AOS, pas de LOS, pas de compte à
- *   rebours, pas de trace. Un prédicteur SGP4 sur un géostationnaire ne rend
- *   rien d'exploitable, et il ne faut pas lui demander.
- * - **Le mât n'a rien à suivre.** La parabole se pointe une fois, à la
- *   boussole et à l'inclinomètre, et on n'y touche plus.
+ * What is new: downlink at 10 489 MHz and uplink at 2 400 MHz, out of reach
+ * of amateur radios, hence converters (see [Convertisseur]).
  *
- * Ce qui reste, en revanche, est nouveau : la descente est à 10 489 MHz et la
- * montée à 2 400 MHz, deux bandes qu'aucun poste d'amateur n'atteint. Il faut
- * donc des convertisseurs — voir [Convertisseur] —, et c'est là que se joue
- * l'essentiel du travail.
+ * Pure domain: no Android, no radio, no settings, no converters. Everything
+ * is in sky frequencies; translation to radio frequencies happens elsewhere,
+ * at the last moment.
  *
- * ### Ce que cette pièce ne fait pas
- *
- * Elle ne connaît ni Android, ni le poste, ni les réglages : elle se juge au
- * banc. Elle ne sait rien des convertisseurs — elle raisonne uniquement en
- * fréquences du ciel, comme tout le reste du domaine, et la traduction vers le
- * poste se fait ailleurs, au dernier moment.
- *
- * Sources : AMSAT-DL, plan de fréquences du transpondeur étroit.
+ * Source: AMSAT-DL narrowband transponder band plan.
  */
 object Qo100 {
 
-    /** Le numéro du catalogue, pour retrouver l'étalonnage déjà rangé par satellite. */
+    /** Catalogue number, used to find the per-satellite calibration. */
     const val NORAD = 43700
 
-    /** Ce qui s'affiche en tête d'écran. Les deux noms sont d'usage courant. */
+    /** Header text. Both names are in common use. */
     const val NOM = "QO-100 / Es'hail-2"
 
-    /** Sa position sur l'arc géostationnaire, en degrés est. */
+    /** Position on the geostationary arc, degrees east. */
     const val LONGITUDE_DEG = 25.9
 
     /**
-     * Le décalage montée/descente, fixe et garanti par le transpondeur.
-     *
-     * `descente = montée + 8 089,5 MHz`, toujours, sans inversion de spectre.
-     * C'est ce qui rend QO-100 si confortable : une fois la montée réglée, la
-     * descente s'en déduit exactement, et réciproquement. Sur un transpondeur
-     * inverseur ordinaire il faut se souvenir que monter d'un kilohertz fait
-     * descendre d'autant ; ici, non.
+     * Fixed uplink/downlink offset: `downlink = uplink + 8 089.5 MHz`, always,
+     * no spectrum inversion. Unlike an inverting transponder, one kHz up on
+     * the uplink is one kHz up on the downlink.
      */
     const val DECALAGE_HZ = 8_089_500_000L
 
-    /** Les trois balises du transpondeur étroit, dans le ciel. */
+    /** The three narrowband beacons, sky frequencies. */
     const val BALISE_BASSE_HZ = 10_489_500_000L
 
     /**
-     * La balise du milieu, en BPSK 400 bit/s.
-     *
-     * C'est la référence d'étalonnage : elle est tenue par une horloge au sol,
-     * donc sa fréquence est juste. Tout écart mesuré sur elle est la dérive de
-     * l'oscillateur du convertisseur de descente, et se range dans le décalage
-     * d'étalonnage du satellite. Un LNB de télévision ordinaire dérive de
-     * plusieurs dizaines de kilohertz à la mise sous tension, puis se stabilise
-     * en une demi-heure : sans elle, on chercherait ses correspondants à côté.
+     * Middle beacon, BPSK 400 bit/s: the calibration reference. It is
+     * clock-disciplined on the ground, so any offset measured on it is
+     * downconverter LO drift, stored in the satellite's calibration offset. A
+     * TV LNB drifts tens of kHz at power-up and settles in half an hour.
      */
     const val BALISE_MEDIANE_HZ = 10_489_750_000L
 
     const val BALISE_HAUTE_HZ = 10_490_000_000L
 
     /**
-     * Un transpondeur de QO-100.
+     * A QO-100 transponder. Bounds are sky frequencies; uplink bounds are
+     * spelled out rather than computed so the band plan reads at a glance.
      *
-     * Les bornes sont dans le ciel, et la montée s'en déduit par [DECALAGE_HZ]
-     * — elles sont redites ici plutôt que calculées pour que le plan de
-     * fréquences reste lisible d'un coup d'œil.
+     * **The 7 kHz at the top edge.** AMSAT-DL gives uplink 2 400.005–2 400.490
+     * and downlink 10 489.505–10 489.997. The bottom edges match the
+     * 8 089.5 MHz offset; the top ones do not (the uplink edge gives
+     * 10 489.990). Those 7 kHz are **the multimedia beacon** (8APSK
+     * 7 200 bit/s, see [SEGMENTS]): received, but nobody transmits there. The
+     * uplink edge is the last frequency you *transmit* on, the downlink edge
+     * the last you *receive* anything on.
      *
-     * ### Les sept kilohertz du bord haut, et ce qu'ils sont vraiment
-     *
-     * Le plan de fréquences d'AMSAT-DL donne la montée en 2 400,005 – 2 400,490
-     * et la descente en 10 489,505 – 10 489,997. Le bord bas concorde
-     * exactement avec le décalage de 8 089,5 MHz ; le bord haut, non : la
-     * montée annoncée donnerait 10 489,990, soit 7 kHz de moins que la descente
-     * annoncée.
-     *
-     * L'explication tenait dans une ligne du tableau détaillé, et elle est
-     * rassurante : **10 489,990 – 10 489,997 est la balise multimédia**, en
-     * 8APSK à 7 200 bit/s — voir [SEGMENTS]. Ces sept kilohertz font bien
-     * partie de la descente du transpondeur, puisqu'une balise y est reçue,
-     * mais personne n'y émet depuis le sol. Les deux bords du tableau sont
-     * donc justes : ils ne décrivent simplement pas la même chose. Le bord de
-     * montée 2 400,490 est la dernière fréquence sur laquelle *on transmet*,
-     * le bord de descente 10 489,997 la dernière fréquence sur laquelle *on
-     * reçoit quelque chose*. Le tableau publié n'était pas incohérent, il
-     * était incomplet.
-     *
-     * Il reste que l'application ne doit jamais déduire une montée du bord
-     * haut de la descente : elle la calcule toujours par
-     * [monteeDepuisDescente], et vérifie [emissionAutorisee] avant de la
-     * pousser vers le poste. Sept kilohertz suffisent à poser une porteuse sur
-     * une balise.
+     * So never derive an uplink from the downlink top edge: always use
+     * [monteeDepuisDescente] and check [emissionAutorisee] before sending it to
+     * the radio. 7 kHz is enough to put a carrier on a beacon.
      */
     data class Transpondeur(
-        /** Sert à retrouver le libellé traduit : `qo100_tp_nb`, `qo100_tp_wb`. */
+        /** Translation key suffix: `qo100_tp_nb`, `qo100_tp_wb`. */
         val cle: String,
         val monteeBasHz: Long,
         val monteeHautHz: Long,
         val descenteBasHz: Long,
         val descenteHautHz: Long,
     ) {
-        /** Le milieu de la bande passante, point de départ raisonnable. */
+        /** Middle of the passband, a reasonable starting point. */
         val centreDescenteHz: Long get() = (descenteBasHz + descenteHautHz) / 2
 
-        /** Cette descente est-elle dans le transpondeur ? */
+        /** Is this downlink inside the transponder? */
         fun contientDescente(hz: Long): Boolean = hz in descenteBasHz..descenteHautHz
 
-        /** Ramène une descente dans les bornes, sans jamais sortir du transpondeur. */
+        /** Clamps a downlink into the transponder. */
         fun brideDescente(hz: Long): Long = hz.coerceIn(descenteBasHz, descenteHautHz)
 
-        /** La largeur utile, pour l'afficher. */
+        /** Usable width, for display. */
         val largeurHz: Long get() = descenteHautHz - descenteBasHz
     }
 
     /**
-     * Le transpondeur étroit : la phonie, la CW, les modes numériques lents.
-     *
-     * Montée en 2 400,005 – 2 400,490 polarisée circulaire droite, descente en
-     * 10 489,505 – 10 489,997 polarisée linéaire verticale. C'est celui-ci qui
-     * intéresse une station de radioamateur ordinaire.
+     * Narrowband transponder: SSB, CW, slow digital modes. Uplink RHCP,
+     * downlink linear vertical. The one an ordinary amateur station uses.
      */
     val NB = Transpondeur(
         cle = "nb",
@@ -157,12 +116,8 @@ object Qo100 {
         descenteBasHz = 10_489_505_000L, descenteHautHz = 10_489_997_000L)
 
     /**
-     * Le transpondeur large : la télévision numérique d'amateur.
-     *
-     * Il demande une puissance et une parabole d'un autre ordre, et un
-     * modulateur DVB-S2 que SatMe ne pilote pas. Il est là pour que l'écran
-     * puisse l'afficher et pour que le plan de fréquences soit complet, pas
-     * pour être exploité.
+     * Wideband transponder: amateur DVB-S2 TV. Needs a DVB-S2 modulator SatMe
+     * does not drive; listed for display and completeness only.
      */
     val WB = Transpondeur(
         cle = "wb",
@@ -171,117 +126,101 @@ object Qo100 {
 
     val TRANSPONDEURS: List<Transpondeur> = listOf(NB, WB)
 
-    // --- Le plan de bande du transpondeur étroit -------------------------
+    // --- Narrowband transponder band plan --------------------------------
 
     /**
-     * Ce qu'on a le droit de faire dans un segment.
-     *
-     * Sert à deux choses et à rien d'autre : choisir la couleur du segment sur
-     * la réglette, et choisir le ton de l'avertissement quand le curseur s'y
-     * pose. La finesse du plan de bande — largeur maximale, fréquence repère —
-     * vit dans [Segment], pas ici.
+     * What a segment allows. Used only for the segment colour on the scale and
+     * the warning tone when the cursor lands there; the details (max width,
+     * marker) live in [Segment].
      */
     enum class Usage {
-        /** Une balise. On l'écoute, on ne transmet pas dessus. */
+        /** A beacon. Listen, never transmit on it. */
         BALISE,
 
-        /** Télégraphie seule. Une porteuse modulée en phonie y est un abus. */
+        /** CW only. */
         CW,
 
-        /** Modes numériques. La largeur permise est dans [Segment.largeurMaxHz]. */
+        /** Digital modes. Allowed width is in [Segment.largeurMaxHz]. */
         NUMERIQUE,
 
-        /** Phonie seule — en pratique la BLU. Le gros de l'activité. */
+        /** Voice only, in practice SSB. Most of the activity. */
         PHONIE,
 
-        /** La fréquence de diffusion, réservée aux émissions de club. */
+        /** Broadcast frequency, reserved for club transmissions. */
         DIFFUSION,
 
-        /** La fréquence d'urgence. À laisser libre. */
+        /** Emergency frequency. Keep it clear. */
         URGENCE,
 
-        /** Modes mixtes et usages particuliers. Tout y est toléré, à 2,7 kHz. */
+        /** Mixed modes and special uses; anything up to 2.7 kHz. */
         MIXTE,
         ;
 
-        /** Peut-on émettre dans un segment de cet usage ? */
+        /** May one transmit in a segment of this kind? */
         val emissionPermise: Boolean get() = this != BALISE
 
         /**
-         * Le suffixe de la clé d'avertissement : l'écran compose
-         * `"qo100_warn_" + cleAvertissement`.
+         * Warning key suffix: the screen builds `"qo100_warn_" + cleAvertissement`.
          *
-         * Il est dérivé du nom plutôt que recopié pour qu'un usage ajouté un
-         * jour n'ait aucune chance d'arriver sans son texte : l'essai des
-         * textes parcourt [entries] et réclame la clé de chacun.
+         * Derived from the name rather than copied, so a new usage cannot ship
+         * without its text: the strings test walks [entries] and asks for each key.
          */
         val cleAvertissement: String get() = name.lowercase()
     }
 
     /**
-     * Une tranche du transpondeur étroit, telle qu'AMSAT-DL la publie.
+     * A slice of the narrowband transponder, as published by AMSAT-DL.
      *
-     * Les bornes sont des fréquences du ciel, en descente, et l'intervalle est
-     * fermé en bas, ouvert en haut : `basHz <= f < hautHz`. C'est ce qui permet
-     * de recoller les douze segments bout à bout sans trou ni recouvrement, et
-     * l'essai de couverture y veille.
+     * Bounds are downlink sky frequencies, closed below and open above
+     * (`basHz <= f < hautHz`), so the twelve segments join end to end with no
+     * gap or overlap; the coverage test checks it.
      */
     data class Segment(
         /**
-         * Le suffixe de la clé de traduction : l'écran compose
-         * `"qo100_seg_" + cle`. Un renommage ici vide donc un libellé, et
-         * l'essai des textes le dit.
+         * Translation key suffix: the screen builds `"qo100_seg_" + cle`.
+         * Renaming here empties a label, and the strings test says so.
          */
         val cle: String,
         val basHz: Long,
         val hautHz: Long,
         val usage: Usage,
-        /**
-         * La largeur d'émission maximale admise, en hertz, ou zéro quand le
-         * plan n'en fixe pas — le cas de la CW, où l'usage suffit.
-         */
+        /** Max transmit width in Hz, or zero when the plan sets none (CW). */
         val largeurMaxHz: Int = 0,
         /**
-         * La fréquence qui donne son sens au segment, quand il y en a une :
-         * le cœur d'une balise, la fréquence de diffusion, celle d'urgence.
-         * Nulle pour les segments qui sont de simples plages.
+         * The frequency that gives the segment its meaning, if any (beacon
+         * centre, broadcast, emergency). Null for plain ranges.
          */
         val repereHz: Long? = null,
     ) {
         val largeurHz: Long get() = hautHz - basHz
 
-        /** Cette descente tombe-t-elle dans ce segment ? */
+        /** Does this downlink fall in this segment? */
         operator fun contains(hz: Long): Boolean = hz >= basHz && hz < hautHz
 
-        /** Raccourci de lecture : peut-on émettre ici ? */
+        /** Shortcut: may one transmit here? */
         val emissionPermise: Boolean get() = usage.emissionPermise
     }
 
     /**
-     * Les douze segments du transpondeur étroit, de balise à balise.
+     * The twelve narrowband segments, beacon to beacon.
      *
-     * Source : AMSAT-DL, plan de bande détaillé du transpondeur étroit. La
-     * liste couvre 10 489,500 à 10 490,000, soit 500 kHz — un peu plus que les
-     * 492 kHz de [NB], parce qu'elle inclut les deux balises CW qui encadrent
-     * la bande passante utile. C'est voulu : sur la réglette, ce sont ces deux
-     * balises qui servent de butées visibles, et une réglette qui s'arrêterait
-     * aux bornes de [NB] les couperait en deux.
+     * Source: AMSAT-DL detailed band plan. Covers 10 489.500 to 10 490.000
+     * (500 kHz), a bit more than the 492 kHz of [NB], because it includes the
+     * two CW beacons framing the passband: they are the visible end stops on
+     * the scale.
      *
-     * Trois choses méritent d'être signalées à qui relit ce tableau :
+     * Worth noting when re-reading this table:
      *
-     * - **Les quatre balises ne sont pas trois.** À la basse, la médiane et la
-     *   haute s'ajoute la balise multimédia en 10 489,990 – 10 489,997, en
-     *   8APSK à 7 200 bit/s. C'est elle qui explique les sept kilohertz du bord
-     *   haut — voir la note de [Transpondeur]. On ne lui donne pas de constante
-     *   au même titre que les trois autres parce qu'elle ne sert de repère à
-     *   personne : elle sert de garde-fou.
-     * - **La dernière fréquence sur laquelle on émet est 10 489,990**, pas
-     *   10 489,997. C'est [DERNIERE_DESCENTE_EMISSIBLE_HZ], et c'est la seule
-     *   valeur de ce fichier qui protège d'un vrai brouillage.
-     * - **Diffusion et urgence font 7,5 kHz chacune**, ce qui place leur
-     *   frontière commune sur un demi-kilohertz, 10 489,857 5. Ce n'est pas une
-     *   coquille : le tableau publié donne bien deux tranches de 7,5 kHz autour
-     *   de 10 489,855 et 10 489,860.
+     * - **There are four beacons, not three.** The multimedia beacon at
+     *   10 489.990–10 489.997 (8APSK 7 200 bit/s) explains the 7 kHz at the
+     *   top edge (see [Transpondeur]). It has no constant: it is a guard, not
+     *   a marker.
+     * - **The last transmit frequency is 10 489.990**, not 10 489.997. That is
+     *   [DERNIERE_DESCENTE_EMISSIBLE_HZ], the one value here that prevents real
+     *   interference.
+     * - **Broadcast and emergency are 7.5 kHz each**, so their shared edge is
+     *   at 10 489.8575. Not a typo: the published table does give two 7.5 kHz
+     *   slices around 10 489.855 and 10 489.860.
      */
     val SEGMENTS: List<Segment> = listOf(
         Segment("balise_basse", 10_489_500_000L, 10_489_505_000L, Usage.BALISE,
@@ -309,111 +248,96 @@ object Qo100 {
             repereHz = BALISE_HAUTE_HZ),
     )
 
-    /** Le bas de la réglette : le début de la balise basse. */
+    /** Bottom of the scale: start of the low beacon. */
     val REGLETTE_BAS_HZ: Long get() = SEGMENTS.first().basHz
 
-    /** Le haut de la réglette : la balise haute, qui est incluse. */
+    /** Top of the scale: the high beacon, included. */
     val REGLETTE_HAUT_HZ: Long get() = SEGMENTS.last().hautHz
 
     /**
-     * La dernière descente sur laquelle il est permis d'émettre.
-     *
-     * Au-dessus commence la balise multimédia, puis la balise CW haute. Le
-     * bord publié de la descente, 10 489,997, est *au-delà* de cette valeur :
-     * c'est tout le piège, et c'est pour cela que la constante est ici et pas
-     * déduite de [NB].
+     * Last downlink one may transmit on. Above it: multimedia beacon, then the
+     * high CW beacon. The published downlink edge (10 489.997) is *beyond*
+     * this value — that is the trap, and why this constant is not derived
+     * from [NB].
      */
     const val DERNIERE_DESCENTE_EMISSIBLE_HZ = 10_489_990_000L
 
     /**
-     * Le segment qui contient cette descente, ou `null` hors de la réglette.
+     * Segment containing this downlink, or `null` outside the scale.
      *
-     * Les intervalles sont ouverts en haut pour que les douze se recollent
-     * sans recouvrement ; il faut donc rattraper la toute dernière fréquence à
-     * la main, sans quoi la balise haute serait exactement le seul point de la
-     * réglette à n'appartenir à rien.
+     * Intervals are open above, so the very last frequency is caught by hand;
+     * otherwise the high beacon edge would be the one point belonging to nothing.
      */
     fun segment(descenteHz: Long): Segment? =
         SEGMENTS.firstOrNull { descenteHz in it }
             ?: SEGMENTS.last().takeIf { descenteHz == it.hautHz }
 
     /**
-     * A-t-on le droit d'émettre sur cette descente ?
-     *
-     * Faux hors de la réglette, et faux sur les quatre balises. C'est la
-     * question que l'écran pose avant de pousser une fréquence d'émission vers
-     * le poste, et la seule réponse qui vaille est celle-ci : on ne la déduit
-     * ni des bornes de [NB], ni du bord du tableau publié.
+     * May one transmit on this downlink? False outside the scale and on all
+     * four beacons. The screen asks this before sending a TX frequency to the
+     * radio; never derive it from [NB] bounds or the published table edge.
      */
     fun emissionAutorisee(descenteHz: Long): Boolean =
         segment(descenteHz)?.emissionPermise == true
 
-    /** La descente qui correspond à une montée. Sans inversion : une addition. */
+    /** Downlink for an uplink. No inversion: an addition. */
     fun descenteDepuisMontee(monteeHz: Long): Long = monteeHz + DECALAGE_HZ
 
-    /** La montée qui correspond à une descente. */
+    /** Uplink for a downlink. */
     fun monteeDepuisDescente(descenteHz: Long): Long = descenteHz - DECALAGE_HZ
 
     /**
-     * Où pointer la parabole, et de combien la tourner sur elle-même.
+     * Where to point the dish, and how far to rotate the feed.
      *
-     * [azDeg] est l'azimut vrai, compté depuis le nord géographique dans le
-     * sens des aiguilles d'une montre — pas le nord magnétique : la
-     * déclinaison est ajoutée à l'affichage, comme partout ailleurs dans
-     * l'application.
+     * [azDeg] is true azimuth, clockwise from geographic north — not magnetic
+     * north: declination is added at display time, as everywhere in the app.
      */
     data class Pointage(
         val azDeg: Double,
         val elDeg: Double,
         /**
-         * L'angle de rotation de la source, en degrés, compté positivement
-         * dans le sens des aiguilles d'une montre vu de derrière la parabole.
+         * Feed rotation in degrees, positive clockwise seen from behind the dish.
          *
-         * La descente du transpondeur étroit est polarisée linéairement, donc
-         * la source doit être tournée pour s'y aligner. Depuis la France
-         * l'angle vaut une vingtaine de degrés : l'ignorer coûte quelques
-         * décibels et laisse croire à un problème d'antenne.
+         * The narrowband downlink is linearly polarised, so the feed must be
+         * rotated to match. From France it is about twenty degrees; ignoring it
+         * costs a few dB and looks like an antenna problem.
          */
         val skewDeg: Double,
     ) {
-        /** Le satellite est-il au-dessus de l'horizon depuis ce point ? */
+        /** Is the satellite above the horizon from here? */
         val visible: Boolean get() = elDeg > 0.0
     }
 
     /**
-     * Le pointage depuis un point du globe, sans propagation d'orbite.
+     * Pointing from a point on Earth, no orbit propagation.
      *
-     * Le calcul est géométrique et tient en quelques lignes : on place
-     * l'observateur et le satellite dans un repère lié à la Terre, on prend le
-     * vecteur de l'un vers l'autre, et on le projette sur le trièdre local est
-     * / nord / haut. C'est plus long à écrire que la formule fermée qu'on
-     * trouve dans les manuels, mais c'est juste dans les deux hémisphères et
-     * aux longitudes extrêmes, là où la formule fermée change de branche sans
-     * prévenir.
+     * Observer and satellite are placed in an Earth-fixed frame and the vector
+     * between them is projected onto local east/north/up. Longer than the
+     * textbook closed form, but correct in both hemispheres and at extreme
+     * longitudes, where the closed form silently switches branch.
      *
-     * La Terre est prise sphérique. L'écart avec l'ellipsoïde est de l'ordre
-     * du dixième de degré, très en dessous de ce qu'on sait pointer avec une
-     * boussole de téléphone et un niveau à bulle.
+     * Spherical Earth: about a tenth of a degree off the ellipsoid, far below
+     * what a phone compass and a spirit level can achieve.
      */
     fun pointage(latDeg: Double, lonDeg: Double): Pointage {
         val phi = Math.toRadians(latDeg)
         val lam = Math.toRadians(lonDeg)
         val lamSat = Math.toRadians(LONGITUDE_DEG)
 
-        // Observateur et satellite, en rayons terrestres.
+        // Observer and satellite, in Earth radii.
         val ox = cos(phi) * cos(lam)
         val oy = cos(phi) * sin(lam)
         val oz = sin(phi)
         val sx = RAPPORT_ORBITE * cos(lamSat)
         val sy = RAPPORT_ORBITE * sin(lamSat)
 
-        // Le vecteur qui va de l'antenne au satellite.
+        // Vector from antenna to satellite.
         val vx = sx - ox
         val vy = sy - oy
         val vz = -oz
 
-        // Trièdre local. Le « haut » est la verticale du lieu, qui est aussi
-        // la direction de l'observateur depuis le centre de la Terre.
+        // Local frame. "Up" is the local vertical, i.e. the observer's
+        // direction from the Earth's centre.
         val est = -sin(lam) * vx + cos(lam) * vy
         val nord = -sin(phi) * cos(lam) * vx - sin(phi) * sin(lam) * vy + cos(phi) * vz
         val haut = ox * vx + oy * vy + oz * vz
@@ -425,17 +349,13 @@ object Qo100 {
     }
 
     /**
-     * La rotation de la source, ramenée dans le quadrant utile.
-     *
-     * Une polarisation linéaire est la même à 180° près : tourner de 170°
-     * revient à tourner de −10°, et personne ne visse une source à l'envers
-     * pour rien. On ramène donc toujours l'angle dans ±90°.
+     * Feed rotation, wrapped to ±90°: linear polarisation repeats every 180°,
+     * so 170° is the same as −10°.
      */
     private fun skew(latDeg: Double, lonDeg: Double): Double {
         val phi = Math.toRadians(latDeg)
         val delta = Math.toRadians(LONGITUDE_DEG - lonDeg)
-        // Pile sur l'équateur, la tangente s'envole et l'angle n'a plus de
-        // sens : la source est alors alignée, point.
+        // Exactly on the equator the angle is undefined: the feed is aligned.
         if (abs(latDeg) < 1e-9) return 0.0
         var s = Math.toDegrees(atan2(sin(delta), tan(phi)))
         while (s > 90.0) s -= 180.0
@@ -444,14 +364,13 @@ object Qo100 {
     }
 
     /**
-     * Rayon de l'orbite géostationnaire divisé par le rayon terrestre :
-     * 42 164 / 6 378,137, soit 6,6107. Tout le calcul se fait en rayons
-     * terrestres, donc c'est la seule constante de distance nécessaire.
+     * Geostationary orbit radius over Earth radius: 42 164 / 6 378.137 =
+     * 6.6107. The only distance constant needed, since everything is in Earth
+     * radii.
      *
-     * Attention au sens : les manuels donnent souvent le rapport inverse,
-     * 0,15127, parce qu'il apparaît tel quel dans la formule fermée de
-     * l'élévation. Ici on place réellement le satellite dans le repère, il
-     * faut donc sa distance au centre de la Terre, pas son inverse.
+     * Mind the direction: textbooks often give the inverse, 0.15127, because
+     * it appears in the closed-form elevation formula. Here the satellite is
+     * actually placed in the frame, so we need its distance, not the inverse.
      */
     private const val RAPPORT_ORBITE = 42_164.0 / 6_378.137
 }

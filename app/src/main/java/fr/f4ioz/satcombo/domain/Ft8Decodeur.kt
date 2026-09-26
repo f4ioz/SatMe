@@ -1,69 +1,62 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.domain
 
 import kotlin.math.log10
 
 /**
- * Le décodage complet d'une tranche d'écoute : de l'audio aux messages.
+ * Full decode of one listening slot: from audio to messages.
  *
- * C'est la pièce qui manquait entre `Ft8Signal`, qui sait lire des tons, et
- * `Ft8`, qui sait lire un message. Elle enchaîne les deux et **tranche** : un
- * candidat dont le contrôle ne tombe pas juste n'est pas affiché, pas même
- * signalé.
+ * Chains `Ft8Signal` (reads tones) and `Ft8` (reads messages), and **decides**:
+ * a candidate whose CRC fails is not shown, not even flagged.
  *
- * **Le contrôle est la seule barrière, et il faut savoir ce qu'elle vaut.**
- * Sans code correcteur, les 83 bits de parité sont ignorés et un seul bit faux
- * condamne le message. Ce qui protège de l'invention est le CRC sur quatorze
- * bits : une suite de bits tirée du bruit a une chance sur seize mille de le
- * satisfaire. Avec trente-deux candidats par tranche et quatre tranches par
- * minute, cela fait un faux message toutes les deux heures environ — rare, mais
- * pas jamais. C'est pourquoi [Decode] porte le rapport signal sur bruit :
- * un message correct à −20 dB alors que ce décodeur ne descend pas sous zéro
- * est un message à ne pas croire.
+ * **The CRC is the last barrier; know what it is worth.** Random bits pass
+ * the 14-bit CRC once in 16 384. At 32 candidates per slot and four slots a
+ * minute, that is a false message about every two hours — rare, not never.
+ * That is why [Decode] carries the SNR: a "valid" message at −20 dB from a
+ * decoder that does not go below zero is not to be believed.
  */
 object Ft8Decodeur {
 
     /**
-     * Un message décodé, avec de quoi juger s'il faut le croire.
+     * A decoded message, with what is needed to judge whether to trust it.
      */
     data class Decode(
         val message: Ft8.Message,
-        /** Fréquence audio du ton le plus bas, en hertz. */
+        /** Audio frequency of the lowest tone, Hz. */
         val frequenceHz: Double,
-        /** Instant du début de la transmission dans la tranche, en secondes. */
+        /** Start of the transmission within the slot, seconds. */
         val instantS: Double,
-        /** Rapport signal sur bruit rapporté à 2500 Hz, comme un report FT8. */
+        /** SNR referred to 2500 Hz, like an FT8 report. */
         val rapportDb: Int,
-        /** Le score de synchronisation, pour trier et pour diagnostiquer. */
+        /** Sync score, for sorting and diagnostics. */
         val scoreSynchro: Float
     )
 
     /**
-     * La largeur de bruit d'une analyse d'un symbole.
+     * Noise bandwidth correction.
      *
-     * Une transformée sur exactement un symbole a une bande de bruit égale à
-     * l'inverse de sa durée — 6,25 Hz pour FT8. Le report FT8 se réfère lui à
-     * 2500 Hz, d'où l'écart constant entre les deux mesures.
+     * A transform over exactly one symbol has a noise bandwidth equal to the
+     * inverse of its duration (6.25 Hz for FT8); FT8 reports are referred to
+     * 2500 Hz, hence a constant offset.
      */
     private fun correctionDb(mode: Ft8Signal.Mode): Double =
         10.0 * log10(2500.0 / mode.ecartHz)
 
     /**
-     * Décode une tranche d'audio.
+     * Decodes one slot of audio.
      *
-     * [cadenceHz] est celle de la capture, quelle qu'elle soit : on ramène
-     * nous-mêmes à la cadence interne du mode.
+     * [cadenceHz] is the capture rate, whatever it is; resampling to the
+     * mode's internal rate is done here.
      *
-     * Rend les messages du plus franc au plus faible. La liste est vide quand
-     * rien ne passe le contrôle — ce qui est le cas le plus fréquent, et
-     * normal.
+     * Returns messages strongest first. An empty list — nothing passed the
+     * CRC — is the most common and normal case.
      */
     fun decode(
         audio: FloatArray,
@@ -83,32 +76,29 @@ object Ft8Decodeur {
         val sortie = ArrayList<Decode>()
         val dejaVus = HashSet<String>()
         for (c in candidats) {
-            // --- le code correcteur d'abord ---
+            // --- error correction first ---
             //
-            // On lui donne les vraisemblances douces et on prend ce qu'il rend.
-            // S'il ne converge pas, on retombe sur la décision dure : elle ne
-            // coûte rien et sauve les signaux très forts que le décodeur
-            // pourrait bouder si le graphe oscille.
+            // If LDPC does not converge, fall back to hard decisions: free, and
+            // it saves very strong signals the decoder may reject when the
+            // graph oscillates.
             val douces = Ft8Signal.vraisemblances(spec, c)
             val corrige = if (douces.size >= LdpcTables.N) Ldpc.decode(douces).bits else null
 
             val tons = Ft8Signal.tons(spec, c)
-            // Les deux modes divergent ici et nulle part ailleurs : FT4 range
-            // deux bits par symbole au lieu de trois, et brouille les 77 bits
-            // du message avant le contrôle. Au-delà, même contrôle, même
-            // format, même dépliage.
+            // The only place the two modes differ: FT4 packs two bits per
+            // symbol instead of three and scrambles the 77 message bits before
+            // the CRC. Past that, same CRC, format and unpacking.
             val quatreTons = mode.tons == 4
             val bits = corrige ?: (if (quatreTons) Ft4.symbolesVersBits(tons)
                        else Ft8.symbolesVersBits(tons))
             val utiles = bits.copyOf(Ft8.BITS_UTILES)
-            // Le contrôle d'abord : inutile de déplier ce qui est faux.
+            // CRC first: no point unpacking what is wrong.
             if (!Ft8.controleJuste(utiles)) continue
             val brut = if (quatreTons) Ft4.message(utiles)
                        else utiles.copyOf(Ft8.BITS_MESSAGE)
             val message = Ft8.deplie(brut) ?: continue
-            // Deux candidats voisins peuvent livrer le même message ; on ne
-            // l'écrit qu'une fois, en gardant le plus franc — la liste arrive
-            // déjà triée par score.
+            // Neighbouring candidates can yield the same message; keep only
+            // the first, the list is already sorted by score.
             if (!dejaVus.add(message.brut)) continue
             sortie.add(Decode(
                 message = message,
@@ -122,22 +112,17 @@ object Ft8Decodeur {
     }
 
     /**
-     * Estime le rapport signal sur bruit d'un candidat, en décibels dans
-     * 2500 Hz.
+     * Estimates a candidate's SNR, in dB in 2500 Hz.
      *
-     * Aux positions de synchronisation, le ton attendu porte le signal **et** le
-     * bruit, tandis que les autres tons ne portent que le bruit. Leur différence
-     * donne le signal, leur moyenne donne le bruit, et le rapport se ramène
-     * ensuite à la largeur de référence.
+     * At the sync positions the expected tone carries signal plus noise; noise
+     * is measured beside the signal band (see below). The difference gives
+     * the signal, then the ratio is referred to the reference bandwidth.
      *
-     * **Elle sature vers le haut, et il faut le savoir.** Un signal n'a jamais
-     * un spectre parfaitement net : le lissage gaussien de ses transitions
-     * étale un peu d'énergie de part et d'autre, et cette jupe est
-     * indiscernable d'un bruit ambiant. Au-delà d'une quinzaine de décibels,
-     * l'estimation cesse donc de monter. Cela ne gêne pas son office — dire si
-     * un message mérite d'être cru se joue vers le bas, pas vers le haut — mais
-     * un report de SatMe ne se compare pas à celui de WSJT-X pour les stations
-     * fortes.
+     * **It saturates at the top.** The Gaussian smoothing of the transitions
+     * spreads a little energy either side, indistinguishable from noise, so
+     * above about 15 dB the estimate stops rising. That does not hurt its job
+     * (trust is decided at the bottom end), but SatMe reports are not
+     * comparable with WSJT-X for strong stations.
      */
     fun rapportDb(
         spec: Ft8Signal.Spectrogramme,
@@ -153,13 +138,11 @@ object Ft8Decodeur {
         for ((position, tonAttendu) in mode.synchro) {
             val t = c.pas + position * pasParSymbole
             attendu += spec.puissance(t, c.raie + tonAttendu * spec.raieParTon).toDouble()
-            // Le bruit se mesure **hors** de la bande du signal, et non sur ses
-            // autres tons. Le lissage gaussien des transitions y bave, et
-            // prendre cette bave pour du bruit plafonnait l'estimation autour de
-            // −9 dB : un signal parfaitement propre s'annonçait alors aussi
-            // médiocre qu'un signal noyé. On s'écarte donc franchement : la
-            // jupe du lissage gaussien décroît vite, et six raies de garde la
-            // laissent derrière.
+            // Noise is measured **outside** the signal band, not on its other
+            // tones. The Gaussian smoothing leaks into those, and taking the
+            // leak for noise capped the estimate near −9 dB: a clean signal
+            // looked as poor as a buried one. Six guard bins leave the skirt
+            // behind.
             for (d in 6..24) {
                 val bas = c.raie - d
                 val haut = c.raie + largeur + d
@@ -175,8 +158,9 @@ object Ft8Decodeur {
         val signal = (attendu / n) - bruit
         if (bruit <= 0.0 || signal <= 0.0) return -99
         val brut = 10.0 * log10(signal / bruit) - correctionDb(mode)
-        // Les reports FT8 vont de −24 à +30 ; au-delà, la mesure ne veut plus
-        // rien dire et un nombre extravagant ferait douter du reste.
+        // FT8 reports span −24 to +30; beyond that the number means nothing
+        // and a wild value would cast doubt on the rest.
+
         return brut.coerceIn(-30.0, 30.0).toInt()
     }
 }

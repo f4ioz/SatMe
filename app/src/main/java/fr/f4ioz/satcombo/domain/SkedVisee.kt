@@ -1,39 +1,34 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.domain
 
 /**
- * Quelle fenêtre mutuelle présenter en premier.
+ * Which mutual window to show first.
  *
- * Le calcul du sked balaie quarante-huit heures et rend toutes les fenêtres où
- * le satellite est visible des deux stations. Ouvert par la porte — on choisit
- * un satellite, on tape un carré — le premier créneau venu est le bon : c'est
- * le prochain.
+ * The sked search sweeps 48 hours and returns every window where the satellite
+ * is visible from both stations. Opened directly, the first window (the next
+ * one) is the right one.
  *
- * Ouvert **depuis une annonce**, il ne l'est plus. hams.at a dit à quelle heure
- * le rendez-vous a lieu ; présenter le créneau de ce soir alors qu'on vient
- * d'appuyer sur une annonce de mercredi matin oblige à faire défiler une liste
- * pour retrouver ce qu'on avait déjà sous les yeux.
+ * Opened **from a hams.at announcement**, it is not: the announcement names a
+ * time, and showing tonight's window after tapping a Wednesday-morning
+ * announcement forces the operator to scroll for what they already saw.
  *
- * D'où la visée : l'instant annoncé désigne la fenêtre qui le contient. S'il
- * n'y en a pas — les éléments orbitaux ont vieilli, le créneau local a glissé
- * de quelques minutes, ou la station annoncée n'est pas visible d'ici pendant
- * tout son passage — on prend la plus proche plutôt que rien. Une fenêtre
- * voisine se reconnaît d'un coup d'œil ; la première de la liste, non.
+ * So the announced instant selects the window containing it. If none does
+ * (stale elements, the local window drifted a few minutes, or the announced
+ * station is not visible from here for the whole pass), take the nearest one
+ * rather than nothing: a neighbouring window is recognisable at a glance.
  */
 object SkedVisee {
 
     /**
-     * L'indice de la fenêtre à présenter parmi [fenetres], jamais hors bornes.
-     *
-     * Sans [visee], c'est la première : l'ordre est chronologique, donc la
-     * première est la prochaine.
+     * Index of the window to show in [fenetres], never out of bounds.
+     * Without [visee], the first one (the list is chronological).
      */
     fun index(fenetres: List<LongRange>, visee: Long?): Int {
         if (fenetres.isEmpty() || visee == null) return 0

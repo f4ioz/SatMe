@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.domain
 
@@ -15,89 +15,73 @@ import kotlin.math.max
 import kotlin.math.min
 
 /**
- * Retrouver une balise dans un spectre, et dire de combien elle a bougé.
+ * Finds a beacon in a spectrum and says how far it has moved. The most useful
+ * measurement of the QO-100 station, in two numbers.
  *
- * C'est la mesure la plus utile de toute la station QO-100, et elle tient en
- * deux nombres.
+ * **The offset** is the downconverter LO drift and nothing else: the middle
+ * beacon is clock-disciplined on the ground, its sky frequency is right. So
+ * any error comes from the LNB, which typically starts tens of kHz off at
+ * power-up and settles in half an hour. Without this you look for contacts in
+ * the wrong place and think the transponder is empty.
  *
- * **L'écart** est la dérive de l'oscillateur du convertisseur de descente, et
- * rien d'autre. La balise médiane est tenue au sol par une horloge : sa
- * fréquence dans le ciel est juste, définitivement. Tout ce qu'on mesure de
- * travers vient donc du LNB, qui part typiquement de plusieurs dizaines de
- * kilohertz à la mise sous tension puis se stabilise en une demi-heure. Sans
- * cette mesure on cherche ses correspondants à côté et on croit que le
- * transpondeur est vide.
+ * **The ratio to the noise floor** is pointing quality. The beacon is
+ * constant-level: if the figure rises when you move the dish half a degree,
+ * that half degree was good. The only way to fine-tune pointing alone.
  *
- * **Le rapport au plancher** est la qualité du pointage. La balise émet en
- * permanence à niveau constant : si le chiffre monte quand on tourne la
- * parabole d'un demi-degré, c'est que le demi-degré était bon. C'est le seul
- * indicateur qui permette de peaufiner un pointage tout seul, sans
- * correspondant en face pour dire « là c'est mieux ».
- *
- * ### Ce que cette pièce ne fait pas
- *
- * Elle ne sait ni d'où vient le spectre, ni ce qu'est un convertisseur, ni ce
- * qu'est une clé SDR. On lui donne un tableau de décibels et l'échelle qui va
- * avec, en fréquences du ciel, et elle rend une mesure. Cela la rend jugeable
- * au banc sur un spectre fabriqué à la main, ce qui est exactement ce qu'on
- * veut d'une pièce dont la sortie sert à corriger un étalonnage.
+ * This object knows nothing about where the spectrum comes from, converters or
+ * dongles: it takes dB values and a scale in sky frequencies, so it can be
+ * tested on a hand-made spectrum — which is what you want from something whose
+ * output corrects a calibration.
  */
 object MesureBalise {
 
     /**
-     * Ce qu'on a trouvé là où la balise devait être.
-     *
-     * Toutes les fréquences sont dans le ciel : l'appelant a déjà défait les
-     * conversions, sans quoi l'écart mesuré n'aurait pas de sens.
+     * What was found where the beacon should be. All frequencies are sky
+     * frequencies: the caller has already undone the conversions.
      */
     data class Mesure(
         /**
-         * Mesuré moins théorique, en hertz. Positif quand la balise est
-         * entendue trop haut, c'est-à-dire quand l'oscillateur du
-         * convertisseur est trop bas.
+         * Measured minus expected, in Hz. Positive when the beacon is heard too
+         * high, i.e. the converter LO is too low.
          */
         val ecartHz: Double,
-        /** Le sommet de la raie, en dB pleine échelle. */
+        /** Peak of the line, dBFS. */
         val niveauDb: Float,
-        /** Le bruit autour, en dB pleine échelle : la médiane de la fenêtre. */
+        /** Surrounding noise, dBFS: the window median. */
         val plancherDb: Float,
     ) {
         /**
-         * Ce qui dépasse du bruit, en décibels. C'est le chiffre à regarder
-         * pendant qu'on tourne la parabole — l'autre, le niveau absolu, bouge
-         * aussi avec le gain de la clé et ne veut donc rien dire tout seul.
+         * Height above noise, in dB. The figure to watch while turning the
+         * dish; the absolute level also moves with dongle gain and means
+         * nothing alone.
          */
         val rapportDb: Float get() = niveauDb - plancherDb
 
-        /** L'écart arrondi au hertz, pour l'écrire dans l'étalonnage. */
+        /** Offset rounded to the Hz, for writing into the calibration. */
         val ecartArrondiHz: Long get() = Math.round(ecartHz)
     }
 
     /**
-     * La balise médiane, mesurée dans [magDb].
+     * The middle beacon, measured in [magDb].
      *
-     * @param magDb puissance par raie, en dB pleine échelle, rangée de la
-     *   fréquence la plus basse à la plus haute (spectre déjà recentré).
-     * @param centreHz la fréquence du ciel qui tombe au milieu du tableau,
-     *   c'est-à-dire à la raie `magDb.size / 2`.
-     * @param etendueHz la largeur couverte par tout le tableau, en hertz du
-     *   ciel. **Signée** : négative derrière un convertisseur à injection
-     *   haute, qui retourne le spectre. C'est la seule façon de faire entrer
-     *   un montage inverseur sans que cette pièce ait à savoir ce qu'est un
-     *   convertisseur.
-     * @param cibleHz où la balise devrait être, dans le ciel.
-     * @param fenetreHz de combien on accepte de la chercher de part et
-     *   d'autre. Vingt kilohertz par défaut : la dérive d'un LNB de
-     *   télévision ordinaire à froid, et pas davantage — au-delà on
-     *   attraperait la station SSB voisine plutôt que la balise.
-     * @param seuilDb ce que la raie doit dépasser le plancher pour qu'on la
-     *   déclare trouvée. En dessous, on rend `null` plutôt qu'un chiffre :
-     *   une mesure de bruit écrite dans l'étalonnage ferait plus de dégâts
-     *   qu'une absence de mesure.
+     * @param magDb power per bin, dBFS, lowest to highest frequency (spectrum
+     *   already centred).
+     * @param centreHz sky frequency at the middle of the array (bin
+     *   `magDb.size / 2`).
+     * @param etendueHz sky width covered by the whole array. **Signed**:
+     *   negative behind a high-side injection converter, which flips the
+     *   spectrum. That is how an inverting setup gets in without this object
+     *   knowing about converters.
+     * @param cibleHz where the beacon should be, in the sky.
+     * @param fenetreHz search half-width. 20 kHz by default: cold drift of an
+     *   ordinary TV LNB, no more — wider would catch the neighbouring SSB
+     *   station instead of the beacon.
+     * @param seuilDb how far the line must rise above the floor to count. Below
+     *   it, return `null`: a noise measurement written into the calibration
+     *   does more harm than no measurement.
      *
-     * Rend `null` quand la fenêtre tombe hors du tableau, quand elle est trop
-     * étroite pour qu'on y interpole quoi que ce soit, ou quand rien n'y
-     * dépasse le bruit.
+     * Returns `null` when the window falls outside the array, is too narrow to
+     * interpolate, or nothing rises above the noise.
      */
     fun mesurer(
         magDb: FloatArray,
@@ -113,15 +97,13 @@ object MesureBalise {
         val hzParRaie = etendueHz / n
         fun raie(f: Double): Double = n / 2.0 + (f - centreHz) / hzParRaie
 
-        // Les deux bords de la fenêtre. Ils sont dans cet ordre-là en
-        // fréquence, mais pas forcément en indice : derrière un inverseur, le
-        // tableau est parcouru à l'envers.
+        // Ordered in frequency, not necessarily in index: behind an inverting
+        // converter the array runs backwards.
         val a = raie(cibleHz - fenetreHz)
         val b = raie(cibleHz + fenetreHz)
 
-        // On garde une raie de marge de chaque côté : l'interpolation
-        // parabolique lit le voisin de gauche et celui de droite du sommet, et
-        // un sommet collé au bord du tableau n'en a pas.
+        // One bin of margin on each side: the parabolic fit reads both
+        // neighbours of the peak.
         val bas = max(1.0, ceil(min(a, b))).toInt()
         val haut = min((n - 2).toDouble(), floor(max(a, b))).toInt()
         if (haut - bas < 4) return null
@@ -132,20 +114,18 @@ object MesureBalise {
             if (magDb[i] > valeur) { valeur = magDb[i]; sommet = i }
         }
 
-        // Le plancher est la médiane de la fenêtre, pas sa moyenne. Une
-        // moyenne se laisse tirer vers le haut par la balise elle-même et par
-        // le premier correspondant qui passe ; la médiane, non, tant que le
-        // signal n'occupe pas la moitié de la fenêtre — ce qu'une balise de
-        // quelques centaines de hertz dans vingt kilohertz ne fait jamais.
+        // Median, not mean: a mean gets pulled up by the beacon itself and by
+        // any passing station; the median does not, as long as the signal
+        // fills less than half the window (a beacon of a few hundred Hz in
+        // 20 kHz never does).
         val copie = magDb.copyOfRange(bas, haut + 1)
         copie.sort()
         val plancher = copie[copie.size / 2]
         if (valeur - plancher < seuilDb) return null
 
-        // Interpolation parabolique sur les trois raies du sommet. Sans elle
-        // la mesure est quantifiée au pas de la FFT — soixante-cinq hertz sur
-        // le panorama —, ce qui est déjà du même ordre que la dérive qu'on
-        // cherche à suivre une fois le LNB chaud.
+        // Parabolic interpolation on the three peak bins. Without it the
+        // measurement is quantised to the FFT step (65 Hz on the panorama),
+        // the same order as the warm-LNB drift we want to follow.
         val gauche = magDb[sommet - 1]
         val milieu = magDb[sommet]
         val droite = magDb[sommet + 1]
@@ -162,12 +142,9 @@ object MesureBalise {
     }
 
     /**
-     * Le calage est-il assez propre pour qu'on n'y touche plus ?
-     *
-     * Cent hertz sur une descente à 10 GHz, c'est un dixième de millionième :
-     * bien au-delà de ce qu'un LNB à quartz ordinaire tient, mais c'est aussi
-     * la largeur d'une note de télégraphie. En dessous, personne ne s'aperçoit
-     * de rien à l'oreille, et il n'y a plus rien à gagner à corriger.
+     * Is the alignment clean enough to leave alone? 100 Hz at 10 GHz is
+     * 0.01 ppm — better than an ordinary crystal LNB holds, and about the
+     * width of a CW note. Below it nobody hears a difference.
      */
     fun calageSuffisant(m: Mesure?, toleranceHz: Long = 100L): Boolean =
         m != null && abs(m.ecartHz) < toleranceHz
