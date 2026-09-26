@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.update
 
@@ -39,16 +39,8 @@ import fr.f4ioz.satcombo.ui.theme.TextHi
 import fr.f4ioz.satcombo.ui.theme.TextLo
 
 /**
- * Un seul moment, une seule fenêtre, refusable : « il y a du neuf sur le
- * Store ». Un bouton pour y aller, un pour plus tard, et c'est tout.
- *
- * Il y en avait deux avant — une pour lancer le téléchargement, une pour
- * réclamer le redémarrage — et c'est la seconde qui coinçait. Une fenêtre qui
- * demande de redémarrer alors que rien ne se termine au redémarrage est pire
- * qu'aucune fenêtre du tout.
- *
- * Le bandeau du bas reste, mais il n'a plus de barre de progression : il ne
- * sert qu'à porter un message quand quelque chose n'a pas marché.
+ * One dismissable dialog: "there is an update on the Store", with Go and
+ * Later. The bottom banner only carries a message when something failed.
  */
 @Composable
 fun UpdatePrompt(vm: MainViewModel, updater: PlayUpdater) {
@@ -76,9 +68,8 @@ fun UpdatePrompt(vm: MainViewModel, updater: PlayUpdater) {
 }
 
 /**
- * Bande d'état en bas de l'écran, qui ne bloque rien : la raison pour laquelle
- * la mise à jour n'a pas pu se faire. Le message reste tant qu'on ne l'a pas
- * touché — une erreur qui disparaît toute seule n'a pas été lue.
+ * Non-blocking bottom banner: why the update could not happen. Stays until
+ * tapped — an error that vanishes by itself was never read.
  */
 @Composable
 private fun UpdateBanner(vm: MainViewModel) {

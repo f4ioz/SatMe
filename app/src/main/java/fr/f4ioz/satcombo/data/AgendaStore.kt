@@ -1,116 +1,102 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.data
 
 import android.content.Context
 
 /**
- * L'agenda de l'opérateur : les rendez-vous qu'aucun calcul d'orbite ne peut
- * deviner.
+ * The operator's agenda: appointments no orbit computation can guess — a sked
+ * on a given pass, an announced SSTV event — which arrive via forums or
+ * mailing lists and get lost before they are needed.
  *
- * SatMe sait déjà quand un satellite passe. Ce qu'il ne sait pas, c'est qu'un
- * correspondant a donné rendez-vous sur tel passage, ou qu'une station annonce
- * de la SSTV tel jour à telle heure. Ces informations-là arrivent par un forum,
- * un réseau, une liste de diffusion, et elles se perdent entre le moment où on
- * les lit et le moment où elles servent.
+ * An appointment has a time (an instant or a start–end window), a title, a
+ * reminder lead time, and optionally satellite, emission kind and frequency.
+ * The window matters: "SSTV from QMR-KWT-2, 1 Aug 06:30 to 2 Aug 19:30 UTC"
+ * means every pass in those two days, not one.
  *
- * Un rendez-vous porte donc : quand — un instant, ou un créneau du début à la
- * fin —, quoi, combien de temps avant il faut le rappeler, et de quoi il
- * s'agit techniquement : le satellite, le genre d'émission, la fréquence.
- *
- * Le créneau n'est pas un détail de confort. Une annonce comme « SSTV depuis
- * QMR-KWT-2 du 1er août 06:30 UTC au 2 août 19:30 UTC » ne désigne pas un
- * passage mais tous les passages de ces deux jours-là : c'est justement ce
- * qu'un agenda à instant unique ne savait pas dire.
- *
- * Le stockage tient en une chaîne, une ligne par rendez-vous, champs séparés
- * par des tabulations. Pas de JSON : une base de données pour une poignée de
- * lignes coûterait plus cher en migrations qu'elle ne rapporte, et un format
- * lisible se répare à la main. Les champs s'ajoutent en fin de ligne et
- * [decode] accepte les lignes courtes, donc un agenda écrit par une version
- * précédente se relit sans rien perdre. [encode] et [decode] ne touchent pas à
- * Android, donc ils se vérifient sur machine.
+ * Stored as one string, one tab-separated line per appointment. No database:
+ * migrations would cost more than a handful of lines is worth, and plain text
+ * can be fixed by hand. Fields are only appended at line end and [decode]
+ * accepts short lines, so older agendas read back intact. [encode] and
+ * [decode] are Android-free and tested on the JVM.
  */
 object AgendaStore {
 
     data class AgendaEvent(
-        /** Identifiant, l'instant de création — sert aussi de clé d'alarme. */
+        /** Id = creation time; also the alarm key. */
         val id: Long,
-        /** Ce dont il s'agit : « SSTV ISS », « sked F6KMX »… */
+        /** What it is: "SSTV ISS", "sked F6KMX"… */
         val title: String,
-        /** Début du rendez-vous, en millisecondes UTC. */
+        /** Start, UTC epoch millis. */
         val timeMs: Long,
-        /** Satellite concerné, facultatif. */
+        /** Satellite, optional. */
         val satName: String = "",
-        /** Rappel combien de minutes avant. 0 = au moment même. */
+        /** Reminder lead time in minutes. 0 = at the time itself. */
         val leadMin: Int = 60,
-        /** Note libre. */
+        /** Free note. */
         val note: String = "",
-        /** Faux quand le rappel est désactivé sans supprimer le rendez-vous. */
+        /** False when the reminder is off but the appointment kept. */
         val enabled: Boolean = true,
         /**
-         * Fin du créneau. 0 — ou toute valeur qui ne dépasse pas le début —
-         * signifie « pas de créneau » : le rendez-vous est un instant, comme
-         * il l'était avant que les créneaux existent.
+         * Window end. 0, or anything not after the start, means no window:
+         * the appointment is an instant.
          */
         val endMs: Long = 0L,
         /**
-         * Le genre d'émission attendue : SSTV, NOAA, SKED, BEACON… Vide quand
-         * ça n'a pas de sens. Ces mots sont les mêmes dans toutes les langues
-         * du trafic amateur, donc ils ne se traduisent pas.
+         * Expected emission kind: SSTV, NOAA, SKED, BEACON… Empty when
+         * meaningless. Ham jargon, same in every language: not translated.
          */
         val kind: String = "",
-        /** Fréquence annoncée, en hertz. 0 = aucune. */
+        /** Announced frequency in Hz. 0 = none. */
         val freqHz: Long = 0L
     ) {
-        /** Instant où le rappel doit sonner. */
+        /** When the reminder fires. */
         val alertMs: Long get() = timeMs - leadMin * 60_000L
 
-        /** Vrai quand le rendez-vous couvre une durée et non un instant. */
+        /** True when the appointment spans a window rather than an instant. */
         val isWindow: Boolean get() = endMs > timeMs
 
-        /** La fin réelle : celle qui a été saisie, ou le début à défaut. */
+        /** Effective end: the one entered, else the start. */
         val endOrStartMs: Long get() = if (endMs > timeMs) endMs else timeMs
 
         /**
-         * Ce rendez-vous concerne-t-il le passage qui va de [aosMs] à [losMs] ?
+         * Does this appointment concern the pass from [aosMs] to [losMs]?
          *
-         * C'est un recouvrement, pas une inclusion : un créneau de trente-sept
-         * heures contient des dizaines de passages entiers, et un instant noté
-         * à 14 h 30 vaut pour le passage qui commence à 14 h 32. Le battement
-         * de cinq minutes de part et d'autre existe parce que personne ne note
-         * un rendez-vous à la seconde près.
+         * Overlap, not inclusion: a 37-hour window holds dozens of passes, and
+         * an instant noted at 14:30 applies to the pass starting at 14:32. The
+         * five-minute slack on each side is because nobody notes a sked to the
+         * second.
          */
         fun covers(aosMs: Long, losMs: Long, slackMs: Long = 5 * 60_000L): Boolean =
             aosMs - slackMs <= endOrStartMs && losMs + slackMs >= timeMs
 
-        /** Le rendez-vous est-il en cours à l'instant [ms] ? */
+        /** Is the appointment in progress at [ms]? */
         fun activeAt(ms: Long, slackMs: Long = 5 * 60_000L): Boolean =
             ms >= timeMs - slackMs && ms <= endOrStartMs + slackMs
 
-        /** Le créneau recouvre-t-il la période [fromMs] – [toMs] ? */
+        /** Does the window overlap [fromMs]–[toMs]? */
         fun overlaps(fromMs: Long, toMs: Long): Boolean =
             fromMs <= endOrStartMs && toMs >= timeMs
 
-        /** La fréquence en MHz, ou null quand il n'y en a pas. */
+        /** Frequency in MHz, or null. */
         val freqMhz: Double? get() = if (freqHz > 0L) freqHz / 1e6 else null
     }
 
     private const val PREFS = "satcombo_agenda"
     private const val KEY = "events"
 
-    /** Les genres proposés. Le premier, vide, veut dire « sans précision ». */
+    /** Offered kinds. The first, empty, means "unspecified". */
     val KINDS: List<String> = listOf("", "SSTV", "NOAA", "SKED", "BEACON", "CONTEST")
 
-    // ------------------------------------------------------------ sérialisation
+    // -------------------------------------------------------------- serialising
 
-    /** Un champ ne peut contenir ni tabulation ni retour à la ligne. */
+    /** A field may contain neither tab nor newline. */
     private fun clean(s: String) = s.replace('\t', ' ').replace('\n', ' ').trim()
 
     fun encode(list: List<AgendaEvent>): String = list.joinToString("\n") { e ->
@@ -118,18 +104,16 @@ object AgendaStore {
             e.id.toString(), e.timeMs.toString(), e.leadMin.toString(),
             if (e.enabled) "1" else "0",
             clean(e.title), clean(e.satName), clean(e.note),
-            // À partir d'ici, les champs ajoutés après coup. Ils vont en fin de
-            // ligne et jamais ailleurs : c'est ce qui permet à une version
-            // ancienne de relire un agenda récent sans le casser.
+            // Fields added later. Always at line end, never elsewhere, so an
+            // older version can read a newer agenda without breaking it.
             e.endMs.toString(), clean(e.kind).uppercase(), e.freqHz.toString()
         ).joinToString("\t")
     }
 
     /**
-     * Relit la liste. Une ligne abîmée est ignorée et ne fait pas perdre les
-     * autres : c'est tout l'intérêt d'un format ligne par ligne. Une ligne
-     * courte — écrite avant les créneaux — se relit avec les valeurs par
-     * défaut, c'est-à-dire exactement comme un rendez-vous instantané.
+     * Reads the list back. A damaged line is skipped without losing the
+     * others. A short line (written before windows existed) takes the
+     * defaults, i.e. an instant appointment.
      */
     fun decode(text: String?): List<AgendaEvent> {
         if (text.isNullOrBlank()) return emptyList()
@@ -156,7 +140,7 @@ object AgendaStore {
         return out.sortedBy { it.timeMs }
     }
 
-    // ------------------------------------------------------------------ disque
+    // -------------------------------------------------------------------- disk
 
     fun load(ctx: Context): List<AgendaEvent> =
         decode(ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(KEY, ""))
@@ -166,7 +150,7 @@ object AgendaStore {
             .putString(KEY, encode(list.sortedBy { it.timeMs })).apply()
     }
 
-    /** Ajoute ou remplace un rendez-vous, selon que son identifiant existe. */
+    /** Adds or replaces an appointment, depending on whether its id exists. */
     fun put(ctx: Context, e: AgendaEvent): List<AgendaEvent> {
         val list = load(ctx).filter { it.id != e.id } + e
         val sorted = list.sortedBy { it.timeMs }
@@ -181,13 +165,9 @@ object AgendaStore {
     }
 
     /**
-     * Efface les rendez-vous terminés depuis plus de [days] jours.
-     *
-     * Un agenda qui ne se vide jamais devient une liste d'archives que
-     * personne ne lit ; mais effacer dès l'heure passée priverait l'opérateur
-     * de la trace de ce qu'il vient de faire. Le compte part de la fin du
-     * créneau : un événement de deux jours ne doit pas s'effacer pendant qu'il
-     * a encore lieu.
+     * Deletes appointments that ended more than [days] days ago: keep a
+     * recent trace, not an archive. Counted from the window end, so a
+     * two-day event is not deleted while it is still running.
      */
     fun purge(ctx: Context, days: Int = 30, nowMs: Long = System.currentTimeMillis()):
         List<AgendaEvent> {

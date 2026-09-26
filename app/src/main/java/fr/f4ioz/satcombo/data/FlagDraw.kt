@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.data
 
@@ -14,23 +14,19 @@ import android.graphics.Paint
 import android.graphics.Path
 
 /**
- * Le trace des drapeaux decrits par [Flags], au Canvas.
+ * Draws the flags described by [Flags] on a Canvas.
  *
- * Tout est vectoriel et calcule a partir de la hauteur demandee : le meme code
- * sert au selecteur (une vignette de vingt-huit points) et a la photo QRV (un
- * drapeau haut comme l'indicatif, soit deux cents pixels sur un cliche de
- * telephone). Le selecteur montre donc exactement ce qui sera imprime, ce qui
- * evite la mauvaise surprise au moment du partage.
- *
- * A cette taille, un drapeau est une silhouette : on garde les bandes, les
- * croix, les cantons, et on renonce aux armoiries qui ne feraient qu'une tache.
+ * All vector, scaled from the requested height: the same code serves the
+ * picker thumbnail and the QRV photo, so the picker shows exactly what will
+ * be printed. At this size a flag is a silhouette: stripes, crosses and
+ * cantons stay, coats of arms go.
  */
 object FlagDraw {
 
-    /** La largeur qu'occupera ce drapeau dessine a la hauteur [h]. */
+    /** Width of this flag drawn at height [h]. */
     fun widthFor(f: Flags.Flag, h: Float): Float = h * f.ratio
 
-    /** Trace le drapeau dans le rectangle ([left], [top], largeur deduite, [h]). */
+    /** Draws the flag in ([left], [top], derived width, [h]). */
     fun draw(c: Canvas, f: Flags.Flag, left: Float, top: Float, h: Float) {
         val w = widthFor(f, h)
         val p = Paint(Paint.ANTI_ALIAS_FLAG)
@@ -57,9 +53,7 @@ object FlagDraw {
             else -> fill(c, p, left, top, w, h, f.colors.firstOrNull() ?: 0xFF808080.toInt())
         }
         c.restoreToCount(save)
-        // Un filet sombre autour : un drapeau a bande blanche pose sur un ciel
-        // clair se dissoudrait sans lui, et le bord du drapeau fait partie du
-        // dessin autant que ses couleurs.
+        // Dark outline: a flag with a white stripe would dissolve into a light sky.
         p.style = Paint.Style.STROKE
         p.strokeWidth = (h * 0.05f).coerceAtLeast(1f)
         p.color = 0x77000000
@@ -67,7 +61,7 @@ object FlagDraw {
         p.style = Paint.Style.FILL
     }
 
-    /** Une vignette isolee, pour le selecteur. */
+    /** A standalone thumbnail, for the picker. */
     fun bitmap(f: Flags.Flag, h: Int): Bitmap {
         val hh = h.coerceAtLeast(4)
         val ww = Math.max(4, Math.round(hh * f.ratio))
@@ -99,7 +93,7 @@ object FlagDraw {
         }
     }
 
-    /** Croix scandinave : le montant est decale vers le guindant. */
+    /** Nordic cross: the upright is offset towards the hoist. */
     private fun nordic(c: Canvas, p: Paint, l: Float, t: Float, w: Float, h: Float, f: Flags.Flag) {
         fill(c, p, l, t, w, h, f.colors[0])
         val bar = h * 0.222f
@@ -147,13 +141,13 @@ object FlagDraw {
         c.drawPath(path, p)
     }
 
-    /** Union Jack simplifie : les sautoirs ne sont pas contre-ecartelees. */
+    /** Simplified Union Jack: the saltires are not counterchanged. */
     private fun union(c: Canvas, p: Paint, l: Float, t: Float, w: Float, h: Float,
                       blue: Int, white: Int, red: Int) {
         fill(c, p, l, t, w, h, blue)
         p.style = Paint.Style.STROKE
         p.strokeCap = Paint.Cap.BUTT
-        // sautoirs blancs puis rouges
+        // white saltires, then red
         p.color = white
         p.strokeWidth = h * 0.20f
         c.drawLine(l, t, l + w, t + h, p)
@@ -162,7 +156,7 @@ object FlagDraw {
         p.strokeWidth = h * 0.085f
         c.drawLine(l, t, l + w, t + h, p)
         c.drawLine(l, t + h, l + w, t, p)
-        // croix droite, blanche bordant le rouge
+        // upright cross, white fimbriation around the red
         p.style = Paint.Style.FILL
         val cw = h * 0.33f
         val cr = h * 0.20f
@@ -235,8 +229,8 @@ object FlagDraw {
         c.drawRect(l + w * 0.75f, t, l + w, t + h, p)
         p.color = f.colors[1]
         c.drawRect(l + w * 0.25f, t, l + w * 0.75f, t + h, p)
-        // Une feuille stylisee : a cette taille, une silhouette a trois lobes
-        // dit "Canada" bien mieux que onze pointes ecrasees en bouillie.
+        // Stylised leaf: at this size three lobes say "Canada" better than eleven
+        // squashed points.
         p.color = f.colors[0]
         val cx = l + w / 2f
         val cy = t + h / 2f
@@ -273,12 +267,11 @@ object FlagDraw {
         c.drawCircle(cx, cy, h * 0.19f, p)
     }
 
-    // --------------------------------------------------------------- hermines
+    // ---------------------------------------------------------------- ermine
 
     /**
-     * Gwenn ha Du et Melen ha Ruz : des bandes alternees et un canton
-     * d'hermines au guindant. Le canton mesure 0,44 de la hauteur et environ
-     * 0,32 de la largeur, comme sur le drapeau breton d'usage.
+     * Gwenn ha Du: alternating stripes and an ermine canton at the hoist,
+     * 0.44 of the height and about 0.32 of the width, as on the usual flag.
      */
     private fun ermineFlag(c: Canvas, p: Paint, l: Float, t: Float, w: Float, h: Float,
                            f: Flags.Flag) {
@@ -307,11 +300,9 @@ object FlagDraw {
     }
 
     /**
-     * Melen ha Ruz, le drapeau du Pays bigouden : cinq bandes rouge et jaune,
-     * et au guindant un panneau jaune sur toute la hauteur seme d'hermines
-     * rouges. La difference avec le Gwenn ha Du n'est pas cosmetique -- le
-     * canton breton est haut de moins de la moitie du drapeau, celui-ci
-     * descend jusqu'en bas.
+     * Melen ha Ruz (Pays bigouden): five red and yellow stripes and a
+     * full-height yellow hoist panel with red ermine. Unlike the Gwenn ha Du,
+     * whose canton is under half the height, this panel reaches the bottom.
      */
     private fun ermineHoist(c: Canvas, p: Paint, l: Float, t: Float, w: Float, h: Float,
                             f: Flags.Flag) {
@@ -338,7 +329,7 @@ object FlagDraw {
         }
     }
 
-    /** Fond plein et etoile a cinq branches au centre. */
+    /** Plain field, five-pointed star in the centre. */
     private fun star(c: Canvas, p: Paint, l: Float, t: Float, w: Float, h: Float,
                      f: Flags.Flag) {
         fill(c, p, l, t, w, h, f.colors[0])
@@ -347,9 +338,9 @@ object FlagDraw {
     }
 
     /**
-     * Fond plein, croissant et petite etoile : la silhouette turque. Le
-     * croissant se creuse en repeignant un disque decale avec la couleur du
-     * fond, ce qui evite un trace de croissant en Bezier a trente pixels.
+     * Plain field, crescent and small star (Turkish style). The crescent is
+     * carved by repainting an offset disc in the field colour, which avoids a
+     * Bézier crescent at thirty pixels.
      */
     private fun crescent(c: Canvas, p: Paint, l: Float, t: Float, w: Float, h: Float,
                          f: Flags.Flag) {
@@ -365,7 +356,7 @@ object FlagDraw {
         drawStar(c, p, l + w * 0.60f, cy, h * 0.15f)
     }
 
-    /** Une etoile a cinq branches, pointe en haut, de rayon exterieur [r]. */
+    /** A five-pointed star, point up, outer radius [r]. */
     private fun drawStar(c: Canvas, p: Paint, cx: Float, cy: Float, r: Float) {
         val path = Path()
         val inner = r * 0.382f
@@ -380,7 +371,7 @@ object FlagDraw {
         c.drawPath(path, p)
     }
 
-    /** Une moucheture : le fer de lance et ses trois mouchets. */
+    /** An ermine spot: the spearhead and its three dots. */
     private fun ermine(c: Canvas, p: Paint, cx: Float, cy: Float, s: Float) {
         val path = Path()
         path.moveTo(cx, cy + s * 0.52f)

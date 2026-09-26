@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.data
 
@@ -18,23 +18,14 @@ data class SatConfig(
     val rxOffsetVoiceHz: Long = 0L,     // linear RX offset in Voice (SSB) mode
     val rxOffsetCwHz: Long = 0L,        // linear RX offset in CW mode
     /**
-     * Les décalages de référence : ceux qui marchaient.
+     * Reference shifts: the ones that worked.
      *
-     * Un décalage se règle à l'oreille, pendant un passage, et il finit par
-     * être juste. Puis un doigt glisse sur la molette d'émission — qui tient
-     * lieu de commande de décalage — ou sur les boutons, et la valeur
-     * patiemment trouvée est perdue sans que rien ne l'ait annoncé. Il n'y
-     * avait alors aucun moyen de revenir en arrière : la seule sauvegarde
-     * était celle de toute la configuration, et la restaurer pour un nombre
-     * écraserait tout le reste.
+     * A shift is tuned by ear during a pass; then a finger slips on the TX dial
+     * (which doubles as shift control) and the value is silently lost. This gives
+     * a way back without restoring the whole configuration.
      *
-     * La référence est posée **explicitement** par l'opérateur, quand il juge
-     * que c'est bon. Un enregistrement automatique se tromperait : il ne peut
-     * pas distinguer le réglage qui converge de la fausse manœuvre, et
-     * mémoriserait l'un pour l'autre.
-     *
-     * `null` tant que rien n'a été mémorisé — et zéro est une référence
-     * valable, ce qu'un `0L` par défaut ne saurait pas dire.
+     * Set **explicitly** by the operator: automatic saving cannot tell converging
+     * tuning from a slip. `null` until set — zero is a valid reference.
      */
     val refCalibShiftHz: Long? = null,
     val refTxShiftHz: Long? = null,
@@ -76,7 +67,7 @@ class SatConfigStore(context: Context) {
         prefs.edit().putLong("rxoff_cw_$catnum", hz).apply()
     }
 
-    /** Mémorise les décalages courants comme référence pour ce satellite. */
+    /** Stores the current shifts as this satellite's reference. */
     fun memoriseReference(catnum: Int, calibHz: Long, txHz: Long) {
         prefs.edit()
             .putLong("refshift_$catnum", calibHz)
@@ -84,9 +75,7 @@ class SatConfigStore(context: Context) {
             .apply()
     }
 
-    // Il n'y a pas d'« oublier la référence » : mémoriser à nouveau la
-    // remplace, et c'est le seul geste dont l'opérateur ait besoin. Un bouton
-    // de plus dans un panneau déjà chargé, pour un cas qui ne se présente pas,
-    // se paie en attention à chaque passage.
+    // No "forget reference": storing again replaces it, which is all that is
+    // needed. An extra button in a busy panel costs attention on every pass.
 
 }

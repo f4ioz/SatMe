@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.ble
 
@@ -17,16 +17,11 @@ import fr.f4ioz.satcombo.MainViewModel
 import kotlinx.coroutines.delay
 
 /**
- * Ce qui tient la liaison de la boussole ouverte, d'un bout à l'autre de
- * l'application.
+ * Keeps the compass link open across the whole app. Draws nothing.
  *
- * Il est posé au `Box` racine et non dans l'écran de pointage, pour la raison
- * habituelle : un élément global vissé dans un écran meurt avec lui. Ici, cela
- * voudrait dire perdre le cap chaque fois que l'opérateur consulte son carnet
- * en plein passage, et le retrouver dix secondes plus tard — dix secondes
- * qu'un passage à 90° d'élévation ne rend pas.
- *
- * Il ne dessine rien.
+ * Placed in the root `Box`, not the pointing screen: a global element inside a
+ * screen dies with it — here, losing the heading whenever the operator opens
+ * the log mid-pass, for ten seconds a 90° pass does not give back.
  */
 @Composable
 fun TenueBoussole(vm: MainViewModel) {
@@ -34,8 +29,8 @@ fun TenueBoussole(vm: MainViewModel) {
     val ui by vm.ui.collectAsState()
     val r = ui.rotor
 
-    // Le calage et le sens suivent les réglages sans passer par la liaison :
-    // les changer ne doit pas couper le module.
+    // Offset and convention follow the settings without touching the link:
+    // changing them must not drop the module.
     LaunchedEffect(r.boussoleCalage, r.boussoleConvention, r.boussoleFleche) {
         BoussoleBle.calage = r.boussoleCalage
         BoussoleBle.convention = r.boussoleConvention
@@ -50,13 +45,10 @@ fun TenueBoussole(vm: MainViewModel) {
             BoussoleBle.coupe()
             return@LaunchedEffect
         }
-        // On retente tant que la source reste le module. Un module qu'on allume
-        // après avoir ouvert l'application, ou qui sort d'un trou de portée,
-        // doit se rattraper tout seul : sans cela l'opérateur doit revenir dans
-        // les réglages, ce qu'il ne fera pas une antenne dans chaque main.
-        //
-        // Quinze secondes entre deux essais : assez rare pour ne pas manger la
-        // batterie, assez fréquent pour qu'on ne s'en aperçoive pas.
+        // Retry while the module is the source: one switched on late, or back
+        // in range, must reconnect by itself — the operator will not go back to
+        // the settings with an antenna in hand. Every 15 s: cheap on battery,
+        // quick enough to go unnoticed.
         while (true) {
             val e = BoussoleBle.etat.value
             if (e == BoussoleBle.Etat.ARRET || e == BoussoleBle.Etat.ECHEC) {

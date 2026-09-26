@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.data
 
@@ -29,13 +29,11 @@ class ConfigBackup(private val context: Context) {
 
     companion object {
         /**
-         * 2 : ajout de l'agenda, des activations et de l'index de prédiction.
+         * 2: adds the agenda, activations and prediction index.
          *
-         * Le numéro monte, mais la relecture reste compatible dans les deux
-         * sens : une sauvegarde de version 1 n'a pas de bloc « fichiers » et
-         * l'import s'en passe ; une sauvegarde de version 2 relue par une
-         * ancienne application voit son bloc ignoré. Personne ne perd son
-         * carnet parce qu'il a mis à jour dans le mauvais ordre.
+         * Compatible both ways: a v1 backup has no "files" block and import does
+         * without; an older app ignores the v2 block. Nobody loses their log by
+         * updating in the wrong order.
          */
         const val VERSION = 2
         // Stores worth backing up (name -> included).
@@ -44,24 +42,20 @@ class ConfigBackup(private val context: Context) {
             "satcombo_favorites",
             "satcombo_satconfig",
             "satcombo_sources",
-            // Ajouté : l'agenda des passages retenus. C'est un choix de
-            // l'opérateur, que rien ne permet de reconstituer — contrairement
-            // au cache orbital ou à la base POTA, qui se retéléchargent.
+            // The agenda of chosen passes: an operator choice nothing can rebuild,
+            // unlike the orbital cache or POTA database.
             "satcombo_agenda"
         )
 
         /**
-         * Les fichiers de données à emporter, avec leur nature.
+         * Data files to carry along.
          *
-         * `qso_log.json` est le carnet : la donnée la plus irremplaçable de
-         * l'application. `activations.json` porte les activations POTA, qui ne
-         * se reconstituent pas non plus. `index_indicatifs.json` est l'index de
-         * prédiction importé d'un ADIF — reconstituable par un nouvel import,
-         * mais l'emporter évite à l'opérateur de retrouver son fichier.
+         * `qso_log.json` is the log, the most irreplaceable data; `activations.json`
+         * cannot be rebuilt either; `index_indicatifs.json` could be re-imported from
+         * ADIF, but carrying it saves finding the file again.
          *
-         * Volontairement absents : `tle_cache.txt` et `pota_region.json`, qui se
-         * retéléchargent, et le dossier `qrv/` des photos, qui pèse trop lourd
-         * pour un fichier de configuration destiné à voyager par courrier.
+         * Left out on purpose: `tle_cache.txt` and `pota_region.json` (re-downloaded)
+         * and the `qrv/` photos (too heavy for a file meant to travel by email).
          */
         private val FICHIERS = listOf(
             "qso_log.json",
@@ -85,15 +79,14 @@ class ConfigBackup(private val context: Context) {
         }
         root.put("stores", stores)
 
-        // Le carnet garde sa clé historique « log », pour qu'une sauvegarde
-        // faite aujourd'hui se relise par une version d'hier.
+        // The log keeps its historic "log" key so older versions can read it.
         runCatching {
             val f = context.filesDir.resolve(LOG_FILE)
             if (f.exists()) root.put("log", JSONArray(f.readText()))
         }
 
-        // Les autres fichiers vont dans un bloc à part, indexé par nom : un
-        // nouveau fichier s'ajoute à la liste sans toucher au format.
+        // Other files go in a separate block keyed by name: a new file needs no
+        // format change.
         val fichiers = JSONObject()
         for (nom in FICHIERS) {
             if (nom == LOG_FILE) continue
@@ -126,8 +119,7 @@ class ConfigBackup(private val context: Context) {
             if (name == "satcombo_settings") settingsCount = n
         }
 
-        // Les fichiers annexes d'abord : si l'un d'eux est illisible, on veut
-        // quand même que le carnet passe.
+        // Side files first: if one is unreadable, the log must still go through.
         root.optJSONObject("fichiers")?.let { obj ->
             for (nom in FICHIERS) {
                 if (nom == LOG_FILE) continue

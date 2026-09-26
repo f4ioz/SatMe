@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.data
 
@@ -15,36 +15,31 @@ import java.net.HttpURLConnection
 import java.net.URL
 
 /**
- * Le carnet en ligne : Wavelog ou Cloudlog, sans distinction.
+ * Online log: Wavelog or Cloudlog, indifferently.
  *
- * Wavelog est un dérivé de Cloudlog et l'API a suivi : la vérification d'un
- * carré prend les mêmes paramètres des deux côtés — clé, *slug* public du
- * carnet, et une bande facultative où « SAT » restreint aux contacts
- * satellite. Un seul connecteur suffit donc, et l'on ne demande pas à
- * l'opérateur de déclarer lequel il utilise : la question est la même, le
- * chemin doit l'être aussi.
+ * Wavelog forked Cloudlog and kept the API: a grid check takes the same
+ * parameters on both (key, public logbook *slug*, optional band where "SAT"
+ * restricts to satellite contacts). One connector, and the operator need not
+ * say which one they run.
  *
- * Toutes les réponses sont mises en cache. La documentation demande
- * explicitement de n'appeler ces routes qu'en cas de besoin : un carré déjà
- * demandé ne se redemande pas.
+ * Every answer is cached: the docs ask to call these routes only when needed.
  */
 object CarnetEnLigne {
 
-    /** Ce que le serveur sait d'un carré. */
+    /** What the server knows about a grid square. */
     enum class Etat { INCONNU, TRAVAILLE, CONFIRME, JAMAIS }
 
     private val cache = HashMap<String, Etat>()
 
-    /** Vide le cache — après un changement de réglages, ou à la demande. */
+    /** Clears the cache — after a settings change, or on request. */
     fun oublie() { synchronized(cache) { cache.clear() }; prefixe = null }
 
     fun enCache(carre: String): Etat? = synchronized(cache) { cache[carre.uppercase()] }
 
     /**
-     * Le carré a-t-il déjà été travaillé ?
-     *
-     * [base] est l'URL du serveur (« https://log.exemple.fr »), [cle] une clé
-     * en lecture seule, [slug] le *slug* public du carnet.
+     * Has the grid square been worked? [base] is the server URL
+     * ("https://log.example.org"), [cle] a read-only key, [slug] the public
+     * logbook slug.
      */
     suspend fun carre(
         base: String, cle: String, slug: String, carre: String, satellite: Boolean = true,
@@ -61,13 +56,13 @@ object CarnetEnLigne {
             .getOrNull()
             ?.let { lis(it) }
             ?: Etat.INCONNU
-        // Un échec réseau n'est pas une réponse : on ne le met pas en cache,
-        // sinon une coupure passagère fige l'écran sur « inconnu ».
+        // A network failure is not an answer: not cached, or a brief outage
+        // freezes the screen on "unknown".
         if (etat != Etat.INCONNU) synchronized(cache) { cache[k] = etat }
         etat
     }
 
-    /** Vérifie que les réglages fonctionnent, et rend un message lisible. */
+    /** Checks that the settings work; returns a readable message. */
     suspend fun essai(base: String, cle: String, slug: String): String =
         withContext(Dispatchers.IO) {
             runCatching {
@@ -76,7 +71,7 @@ object CarnetEnLigne {
                     .put("grid", "JN18").toString())
                 when {
                     r.contains("\"result\"", true) -> "OK"
-                    // Une page HTML n'apprend rien : on dit ce qu'elle est.
+                    // An HTML page tells nothing: say that is what came back.
                     r.trimStart().startsWith("<") ->
                         "le serveur répond une page, pas du JSON — vérifier l'adresse"
                     r.startsWith("HTTP 500") ->
@@ -90,18 +85,15 @@ object CarnetEnLigne {
         }
 
     /**
-     * Dépose un contact au carnet, et dit si le serveur l'a pris.
+     * Uploads a contact and says whether the server took it.
      *
-     * [profil] est l'identifiant du profil de station Wavelog. Il n'est pas
-     * facultatif côté serveur : sans lui le contact est refusé, ou pire, rangé
-     * sous le mauvais indicatif de station — ce qui ne se voit qu'au moment où
-     * LoTW refuse d'apparier.
+     * [profil] is the Wavelog station profile id. Required server-side: without
+     * it the contact is refused or, worse, filed under the wrong station
+     * callsign — which only shows when LoTW fails to match.
      *
-     * La clé de lecture qui suffit pour interroger les carrés **ne suffit pas
-     * ici** : déposer demande une clé en écriture. Un opérateur qui a rempli
-     * ses réglages pour la peinture des carrés se croira configuré ; c'est la
-     * réponse du serveur qui le détrompera, et elle doit donc être rendue
-     * telle quelle plutôt que résumée en « échec ».
+     * The read key used for grid checks **is not enough here**: uploading needs
+     * a write key. The server's answer is what tells the operator, so it is
+     * returned verbatim rather than reduced to "failed".
      */
     suspend fun depose(
         base: String, cle: String, profil: String, adif: String,
@@ -118,21 +110,18 @@ object CarnetEnLigne {
     }
 
     /**
-     * Les emplacements de station déclarés chez Wavelog.
-     *
-     * Rend la liste, ou lève. Sert à rattacher chaque contact au profil de
-     * son carré : **Wavelog range d'après le profil et ignore le
-     * `MY_GRIDSQUARE` du fichier.**
+     * Station locations declared in Wavelog; returns the list or throws. Used
+     * to attach each contact to the profile of its grid square: **Wavelog files
+     * by profile and ignores `MY_GRIDSQUARE` in the ADIF.**
      */
     suspend fun profils(base: String, cle: String):
         List<fr.f4ioz.satcombo.domain.ProfilsStation.Profil> = withContext(Dispatchers.IO) {
-        // **La clé va dans l'adresse, pas dans un corps JSON.**
+        // **The key goes in the URL, not a JSON body.**
         //
-        // `station_info` et `statistics` se lisent en GET, la clé posée sur
-        // l'URL ; seuls `qso` et `create_station` prennent un corps. Un POST
-        // avec `{"key": …}` rend un 401 — donc « clé refusée », alors que la
-        // clé est bonne et que c'est l'adresse qui est mal formée. Le message
-        // désigne la mauvaise cause, et l'on va vérifier ses droits pour rien.
+        // `station_info` and `statistics` are GET with the key in the URL;
+        // only `qso` and `create_station` take a body. A POST with
+        // `{"key": …}` returns 401 — "key refused" while the key is fine and
+        // the request is malformed, which sends you checking the wrong thing.
         val reponse = lit(base, "api/station_info/" + cle.trim())
         val tableau = runCatching { org.json.JSONArray(reponse) }.getOrElse {
             throw IllegalStateException(reponse.take(200))
@@ -148,12 +137,11 @@ object CarnetEnLigne {
     }
 
     /**
-     * Crée un emplacement de station.
+     * Creates a station location.
      *
-     * **La zone ITU n'est pas facultative.** Wavelog crée volontiers le profil
-     * sans elle, puis refuse ensuite tous les contacts qui s'y rattachent — un
-     * défaut qui ne se voit qu'au dépôt suivant, loin de sa cause. On refuse
-     * donc ici plutôt que de fabriquer un profil mort-né.
+     * **The ITU zone is not optional.** Wavelog creates the profile without it,
+     * then refuses every contact attached to it — far from the cause. So we
+     * refuse here rather than create a dead profile.
      */
     suspend fun creeProfil(
         base: String, cle: String, nom: String, carre: String, indicatif: String,
@@ -176,10 +164,8 @@ object CarnetEnLigne {
     }
 
     /**
-     * Le profil est-il en place ?
-     *
-     * « dupe » compte comme un succès : il existait déjà, ce qui est le
-     * résultat voulu quand on rejoue une création.
+     * Is the profile in place? "dupe" counts as success: it already existed,
+     * which is what a replayed creation wants.
      */
     fun profilEnPlace(reponse: String): Boolean {
         val r = reponse.lowercase()
@@ -187,32 +173,25 @@ object CarnetEnLigne {
     }
 
     /**
-     * Le serveur a-t-il pris le contact ?
-     *
-     * Les installations ne répondent pas toutes la même chose : les unes un
-     * JSON avec « created », les autres une phrase. On reconnaît donc ce qui
-     * marque l'acceptation, et **on refuse tout le reste** — un envoi dont on
-     * n'est pas sûr ne doit pas être marqué comme déposé, faute de quoi le
-     * contact ne repartira jamais.
+     * Did the server take the contact? Installations answer differently (JSON
+     * with "created", or a sentence). We recognise acceptance and **reject
+     * everything else**: an uncertain upload must not be marked as done, or the
+     * contact is never sent again.
      */
-    /** Ce que le serveur a fait du contact. */
+    /** What the server did with the contact. */
     enum class Issue { PRIS, REFUS, DOUTE }
 
     /**
-     * Pris, refusé, ou on ne sait pas — **trois issues, et non deux**.
+     * Accepted, refused, or unknown — **three outcomes, not two**.
      *
-     * Une lecture qui expire n'est pas un refus : la requête est partie, le
-     * serveur l'a peut-être traitée, et c'est sa réponse qui s'est perdue.
-     * C'est ce qui est arrivé le 29 août — délai dépassé annoncé, contact
-     * pourtant enregistré dans Wavelog.
+     * A read timeout is not a refusal: the request left, the server may have
+     * processed it, only the answer was lost (seen: timeout reported, contact
+     * recorded in Wavelog). Treating doubt as refusal re-uploads and **aborts
+     * the batch** on the first slow server; treating it as success loses the
+     * contact when the request really failed.
      *
-     * Confondre les deux coûte des deux côtés. Compter le doute pour un refus
-     * fait redéposer ce qui est déjà pris, et surtout **abandonner le lot** au
-     * premier serveur un peu lent. Le compter pour un succès ferait perdre le
-     * contact quand la requête n'est réellement pas passée.
-     *
-     * On ne marque donc comme déposé que ce qui est acquitté, on n'arrête que
-     * sur un refus franc, et le doute se dit pour ce qu'il est.
+     * So: mark uploaded only on acknowledgement, stop only on a clear refusal,
+     * and report doubt as doubt.
      */
     fun issue(reponse: String): Issue {
         val r = reponse.lowercase()
@@ -223,12 +202,12 @@ object CarnetEnLigne {
             r.contains("auth error")) return Issue.REFUS
         if (r.contains("created") || r.contains("\"status\":\"ok\"") ||
             r.contains("qso added") || r.contains("success")) return Issue.PRIS
-        // Le serveur a répondu quelque chose, et l'on ne sait pas quoi : ce
-        // n'est pas davantage un refus qu'un succès.
+        // The server answered something unrecognised: neither refusal nor
+        // success.
         return Issue.DOUTE
     }
 
-    /** Le contact est-il acquitté, sans ambiguïté ? */
+    /** Is the contact unambiguously acknowledged? */
     fun accepte(reponse: String): Boolean = issue(reponse) == Issue.PRIS
 
     private fun lis(reponse: String): Etat? = runCatching {
@@ -242,14 +221,10 @@ object CarnetEnLigne {
     }.getOrNull()
 
     /**
-     * Envoie la requête, en essayant les deux formes d'adresse.
-     *
-     * La documentation donne « base/api/qso », mais ses propres exemples en
-     * ligne de commande écrivent « base/index.php/api/qso » : selon la façon
-     * dont le serveur réécrit les adresses, l'une des deux échoue — souvent
-     * par une erreur 500 plutôt qu'un franc 404, ce qui n'aide personne. On
-     * essaie donc la forme courte, puis l'autre, et l'on retient celle qui
-     * répond.
+     * Sends the request, trying both URL forms. The docs say "base/api/qso"
+     * but their own curl examples use "base/index.php/api/qso"; depending on
+     * URL rewriting one fails — often with a 500 rather than a 404. Try the
+     * short form, then the other.
      */
     @Volatile private var prefixe: String? = null
 
@@ -266,21 +241,15 @@ object CarnetEnLigne {
     }
 
     /**
-     * Rapatrie l'ADIF du carnet en ligne pour nourrir le clavier.
+     * Fetches the online log's ADIF to feed the callsign keypad.
      *
-     * Wavelog rend un JSON qui **enveloppe** l'ADIF, avec deux champs qui
-     * comptent autant que lui : le nombre de contacts et l'identifiant du
-     * dernier exporté. Ce dernier est la clé du chargement différentiel — on
-     * le garde, et l'appel suivant repart de là. Le point d'entrée est conçu
-     * pour cela, et la documentation demande de ne pas ratisser tout le
-     * journal à chaque fois : les instances limitent le débit.
+     * Wavelog returns JSON **wrapping** the ADIF, with the contact count and the
+     * id of the last exported contact. That id drives incremental loading: keep
+     * it and resume from there. The docs ask not to pull the whole log every
+     * time; instances rate-limit.
      *
-     * Une clé **en lecture seule suffit** ici, contrairement au dépôt. C'est
-     * l'occasion d'en employer une autre que celle qui écrit.
-     *
-     * On ne rapatrie que l'index de prédiction — indicatif, carré, date,
-     * satellite. Ramener les contacts entiers donnerait une seconde source de
-     * vérité à réconcilier avec le carnet local, pour aucun bénéfice.
+     * A **read-only key is enough** here, unlike uploading. Only the prediction
+     * index is kept (callsign, grid square, date, satellite), not full contacts.
      */
     data class Moisson(val adif: String, val nombre: Int, val dernierId: Long,
                        val message: String)
@@ -293,18 +262,16 @@ object CarnetEnLigne {
             .put("key", cle.trim())
             .put("fetchfromid", depuisId)
             .apply {
-                // Depuis la 2.5.1 le point d'entrée accepte un tableau de
-                // profils : les sept emplacements d'un rover en un seul appel.
-                // Un profil unique reste accepté seul, pour les versions
-                // antérieures.
+                // Since 2.5.1 the endpoint accepts an array of profiles (all of a
+                // rover's locations in one call); a single profile still works
+                // for older versions.
                 if (profils.size == 1) put("station_id", profils.first())
                 else put("station_id", org.json.JSONArray(profils))
             }
             .apply {
-                // Le serveur ne sait trier que la bande satellite : son filtre
-                // n'accepte qu'une bande, et aucun mode. Pour les autres choix
-                // on rapatrie tout et l'on trie ici — donc bien plus lourd, et
-                // l'écran doit le dire.
+                // The server filter takes one band and no mode: for other choices
+                // fetch everything and filter here — much heavier, and the screen
+                // must say so.
                 fr.f4ioz.satcombo.domain.FiltreMoisson.bandeServeur(filtre)
                     ?.let { put("band", it) }
             }
@@ -316,14 +283,13 @@ object CarnetEnLigne {
         Moisson(
             adif = o.optString("adif"),
             nombre = o.optInt("exported_qsos"),
-            // Sans identifiant rendu, on **garde le précédent** : repartir de
-            // zéro rechargerait tout le journal au prochain appel, ce que le
-            // serveur nous demande précisément d'éviter.
+            // No id returned: **keep the previous one**, or the next call
+            // reloads the whole log.
             dernierId = o.optLong("lastfetchedid", depuisId),
             message = o.optString("message"))
     }
 
-    /** Une lecture simple, en essayant les deux formes d'adresse. */
+    /** A plain GET, trying both URL forms. */
     private fun lit(base: String, route: String): String {
         val racine = base.trim().trimEnd('/')
         val formes = prefixe?.let { listOf(it) } ?: listOf("", "index.php/")
@@ -356,8 +322,7 @@ object CarnetEnLigne {
         co.readTimeout = 90000
         co.doOutput = true
         co.setRequestProperty("Content-Type", "application/json")
-        // La documentation demande explicitement cet en-tête : sans lui,
-        // certaines installations rendent du HTML et se plaignent ensuite.
+        // Required by the docs: without it some installations return HTML.
         co.setRequestProperty("Accept", "application/json")
         co.setRequestProperty("User-Agent", "SatMe (f4ioz.fr)")
         co.outputStream.use { it.write(corps.toByteArray()) }

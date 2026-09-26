@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.i18n
 
@@ -49,14 +49,12 @@ object I18n {
     }
 
     /**
-     * Les deux écritures de trous acceptées : {0} et %s.
+     * Both placeholder styles are accepted: {0} and %s.
      *
-     * Historiquement la table n'utilisait que {0}, {1}… puis des clés en %s/%d
-     * s'y sont glissées et s'affichaient telles quelles à l'écran — le « bug
-     * des % » vu dans l'agenda. Plutôt que de traquer chaque clé, on accepte
-     * les deux : substitution des {n} d'abord, puis String.format si un motif
-     * printf subsiste. Le runCatching est indispensable, certaines clés
-     * contiennent un % littéral (doublé ou non) qui ferait lever le format.
+     * Some keys use %s/%d and were once shown raw on screen (the agenda "%
+     * bug"). So {n} is substituted first, then String.format runs if a printf
+     * pattern remains. The runCatching is required: some keys contain a
+     * literal % (doubled or not) that would make format throw.
      */
     private val PRINTF = Regex("%[-#+ 0,(]*\\d*(?:\\.\\d+)?[sSdfxX]")
 

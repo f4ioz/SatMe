@@ -52,17 +52,8 @@ object ServeurDemo {
         val ssid: String = "",
         val motDePasse: String = ""
     ) {
-        /**
-         * The Wi-Fi join QR code, in the format Android and iOS read from the
-         * camera.
-         *
-         * Escaping is not optional: a semicolon or comma in the password would
-         * cut the string in half, and the scanned code would join a network
-         * with a truncated name.
-         */
-        // `wifiQr` was removed: `qrWifi()` already did the same work, and two
-        // paths to one string end up disagreeing — that is what once drew two
-        // QR codes on screen.
+        // No Wi-Fi QR payload here: `qrWifi()` builds it. Two paths to one
+        // string end up disagreeing — that once drew two QR codes on screen.
 
         /** The control desk address, for the operator alone. */
         val urlCommande: String get() =
@@ -75,39 +66,29 @@ object ServeurDemo {
     }
 
     /**
-     * The name announced on the network: the operator's callsign.
-     *
-     * Set by the ViewModel, the only one knowing the settings. Without it every
-     * station in a room would be called "SatMe".
+     * The name announced on the network: the operator's callsign, set by the
+     * ViewModel. Without it every station in a room would be called "SatMe".
      */
     @Volatile var nomStation: String = "SatMe"
 
     /**
-     * The app version, announced to API clients.
-     *
-     * Set by the ViewModel, which has the context: `BuildConfig` is not
-     * generated in this project, and enabling it for one string would have
-     * changed the whole build.
+     * The app version, announced to API clients. Set by the ViewModel:
+     * `BuildConfig` is not generated in this project.
      */
     @Volatile var versionApp: String = "?"
 
     private val _etat = MutableStateFlow(Etat())
     val etat = _etat.asStateFlow()
 
-    /**
-     * Hotspot credentials, held here rather than in the UI state: they serve
-     * the server only, and `UiState` is already close to the register limit
-     * the virtual machine can write.
-     */
+    // Hotspot credentials live in `Etat`, not in `UiState`: only the server
+    // needs them, and `UiState` is already close to the JVM register limit.
 
 
     /**
-     * The payload of the QR code that joins the network.
-     *
-     * Standard format, read by the camera on both Android and iOS. The
-     * characters `\`, `;`, `,`, `:` and `"` must be escaped, otherwise a
-     * password containing one would cut the string in half and the
-     * code serait illisible — ou pire, lisible et faux.
+     * The payload of the QR code that joins the network, in the standard
+     * format both Android and iOS cameras read. `\`, `;`, `,`, `:` and `"`
+     * must be escaped, or a password containing one cuts the string in half
+     * and the code is unreadable — or worse, readable and wrong.
      */
     fun qrWifi(): String {
         val ssid = _etat.value.ssid
@@ -118,12 +99,9 @@ object ServeurDemo {
     }
 
     /**
-     * Escapes the five characters the format reserves.
-     *
-     * Written character by character rather than with a regex: the backslashes
-     * of a regex escaping backslashes are easy to miscount, and a badly escaped
-     * password gives a readable but wrong code — the worst case, since it fails
-     * silently in front of the audience.
+     * Escapes the five characters the format reserves. Character by character
+     * rather than with a regex: backslashes escaping backslashes are easy to
+     * miscount, and a wrong escape fails silently in front of the audience.
      */
     private fun echappe(t: String): String {
         val b = StringBuilder(t.length + 8)
@@ -141,20 +119,9 @@ object ServeurDemo {
     private var fil: Thread? = null
     private val clients = CopyOnWriteArrayList<Client>()
 
-    /** A connected viewer, and what is sent to them. */
     /**
-     * A connected viewer, **with their own encoder**.
-     *
-     * **Why one encoder each.** MP3 has a bit reservoir: a frame may refer to
-     * bytes of the previous one. With a shared encoder, a viewer joining
-     * mid-stream receives frames referencing a reservoir they never had — and
-     * the decoder calls the stream malformed. This is word for word what the
-     * browser reported:
-     * « malformed stream : invalid audio buffer signal spec for packet ».
-     *
-     * One encoder per viewer starts at frame zero: the stream is valid from
-     * the first byte to the last. The cost is negligible — a few percent of a
-     * core per listener, at twenty-two kilohertz mono.
+     * A connected viewer: either the state stream (`son` false) or the raw
+     * audio stream (`son` true). Each page opens one of each.
      */
     private class Client(val sortie: OutputStream, val son: Boolean) {
         @Volatile var vivant = true
@@ -168,8 +135,8 @@ object ServeurDemo {
         val s = try {
             ServerSocket(port)
         } catch (e: Exception) {
-            // Another application may hold the port. Saying so beats a screen
-            // that never fills.
+            // Another app may hold the port: say so rather than leave a
+            // screen that never fills.
             _etat.value = _etat.value.copy(panne = "port_occupe", actif = false)
             return
         }
@@ -187,7 +154,6 @@ object ServeurDemo {
         }
     }
 
-    /** Starts our own capture, if the microphone is free. */
 
     fun arrete() {
         AnnonceReseau.tais()
@@ -203,10 +169,9 @@ object ServeurDemo {
     /**
      * The phone's address on the network it carries.
      *
-     * As a hotspot the interface is not `wlan0` but something like `ap0` or
-     * `swlan0` depending on the vendor: so we name none of them, and take the
-     * first non-loopback IPv4 address, preferring the private ranges Android
-     * gives its hotspots.
+     * As a hotspot the interface is `ap0`, `swlan0` or else depending on the
+     * vendor, so none is named: take the first non-loopback IPv4 address,
+     * preferring the private ranges Android gives its hotspots.
      */
     fun adresseLocale(): String {
         var repli = ""
@@ -225,21 +190,16 @@ object ServeurDemo {
     }
 
     /**
-     * Remembers the hotspot to announce.
-     *
-     * Since Android 10 an app can no longer read the password of its own
-     * hotspot: it has to be typed once. A stopgap, but it beats dictating a
-     * password aloud to a room.
+     * Remembers the hotspot to announce. Since Android 10 an app cannot read
+     * its own hotspot password, so it has to be typed once.
      */
     fun configureWifi(ssid: String, motDePasse: String) {
         _etat.value = _etat.value.copy(ssid = ssid, motDePasse = motDePasse)
     }
 
     /**
-     * Today's contacts, most recent first.
-     *
-     * Capped at twelve: beyond that the page becomes a shopping list, and it
-     * is the current pass we came to show, not the history.
+     * Today's contacts, most recent first. Capped at twelve: it is the current
+     * pass we came to show, not the history.
      */
     private val _contacts = java.util.concurrent.ConcurrentLinkedDeque<String>()
 
@@ -248,11 +208,8 @@ object ServeurDemo {
     @Volatile private var imageVersion: Int = 0
 
     /**
-     * Adds a contact to the list shown to the audience.
-     *
-     * The grid square is there because it makes the demonstration speak: "we
-     * have just talked to someone in that square" says far more than a
-     * callsign to an audience that knows none.
+     * Adds a contact to the list shown to the audience. The grid square is
+     * there because it means more to an audience than a callsign.
      */
     fun ajouteContact(indicatif: String, locator: String, satellite: String) {
         val h = java.text.SimpleDateFormat("HH:mm", java.util.Locale.US).apply {
@@ -287,11 +244,8 @@ object ServeurDemo {
     // --------------------------------------------------------- control desk
 
     /**
-     * Les sessions ouvertes depuis un PC.
-     *
-     * A random key per session, handed out once the code is accepted. The code
-     * itself travels only once; afterwards the key does, and the operator can
-     * switch the control desk off without changing the code.
+     * Sessions opened from a PC: a random key handed out once the code is
+     * accepted. The code travels only once; afterwards the key does.
      */
     private val sessions = java.util.concurrent.ConcurrentHashMap<String, Long>()
 
@@ -323,27 +277,24 @@ object ServeurDemo {
      * The version of the contract exposed to clients.
      *
      * **It only moves when an existing client breaks.** Adding a route or a
-     * field does not change it: a program written for version 1 keeps working.
-     * Removing a field or changing its meaning does — and serving both versions
-     * for a while beats silencing a client you do not control.
+     * field does not change it; removing a field or changing its meaning does
+     * — and then serve both versions for a while.
      */
     const val API = 1
 
     private fun servCommande(sortie: OutputStream, route: String) {
         val chemin = route.substringBefore('?')
 
-        // The page itself asks for no code: the form does. Serving a blank
-        // page to a stranger costs nothing; letting them write to the log
-        // would.
+        // The page itself needs no code, the form does: serving a blank page
+        // to a stranger costs nothing.
         if (chemin == "" || chemin == "/") {
             envoie(sortie, "200 OK", "text/html; charset=utf-8",
                 PageCommande.HTML.toByteArray(Charsets.UTF_8))
             return
         }
 
-        // Announced without authentication: a client must be able to know who
-        // it is talking to before presenting a code, and this answer reveals
-        // nothing the address did not.
+        // No authentication: a client must know who it talks to before
+        // presenting a code, and this reveals nothing the address did not.
         if (chemin == "/api") {
             jsonCourt(sortie, "{\"api\":$API,\"satme\":\"$versionApp\"}")
             return
@@ -455,14 +406,13 @@ object ServeurDemo {
         val ligne = try { entree.readLine() } catch (e: Exception) { null } ?: return
         val chemin = ligne.split(' ').getOrNull(1) ?: "/"
 
-        // **Deux portes, deux jetons.**
+        // **Two doors, two tokens.**
         //
-        // `/d/…` is the public door: read-only, and its token is meant to be
-        // shown as a QR code. `/c/…` is the control desk: it writes to the log
-        // and drives the recorder, so its token never leaves the phone and a
-        // six-digit code is added. Routing control through the public token
-        // would have handed the keys to everyone who scanned the code — which
-        // is the whole point of the QR.
+        // `/d/…` is the public door: read-only, its token shown as a QR code.
+        // `/c/…` is the control desk: it writes to the log and drives the
+        // recorder, so its token never leaves the phone and a six-digit code
+        // is added. Control through the public token would hand the keys to
+        // everyone who scanned the QR.
         val e = _etat.value
         if (e.commandeActive && e.jetonCommande.isNotBlank() &&
             chemin.startsWith("/c/${e.jetonCommande}")) {
@@ -471,9 +421,8 @@ object ServeurDemo {
             return
         }
 
-        // The token is not serious security: it keeps a curious neighbour from
-        // stumbling on the page. On a hotspot open for the length of a
-        // demonstration, that is the right measure.
+        // The token is not real security, just enough to keep a curious
+        // neighbour off a hotspot open for the length of a demonstration.
         if (!chemin.startsWith("/d/$jeton")) {
             envoie(sortie, "404 Not Found", "text/plain", "non".toByteArray())
             runCatching { socket.close() }
@@ -487,8 +436,7 @@ object ServeurDemo {
                     PageDemo.HTML.toByteArray(Charsets.UTF_8))
 
             route.startsWith("/etat") -> {
-                // A stream that never closes: write, wait, repeat. A
-                // disconnection shows up as a failed write.
+                // Never closes; a disconnection shows up as a failed write.
                 entete(sortie, "text/event-stream")
                 val c = Client(sortie, false)
                 clients.add(c); majSpectateurs()
@@ -531,23 +479,19 @@ object ServeurDemo {
 
     private fun majSpectateurs() {
         clientsSon = clients.count { it.son }
-        // We count pages, not connections: each viewer opens two, one for the
-        // state and one for the audio.
+        // Count pages, not connections: each viewer opens two (state, audio).
         _etat.value = _etat.value.copy(spectateurs = clients.count { !it.son })
     }
 
     /**
      * The header of a stream that never closes.
      *
-     * **`Connection: close`, not `keep-alive`.** With neither a declared
-     * length nor chunked encoding, `keep-alive` is invalid in HTTP/1.1: the
-     * browser waits for a size that never comes. The event stream survived it
-     * because its type needs no length; the audio stayed silent without saying
-     * why. Close at the end of the body is the convention for continuous audio
-     * streams.
+     * **`Connection: close`, not `keep-alive`.** With neither a length nor
+     * chunked encoding, `keep-alive` is invalid in HTTP/1.1 and the browser
+     * waits for a size that never comes. The event stream got away with it;
+     * the audio stayed silent without saying why.
      *
-     * `Accept-Ranges: none` tells the browser not to ask for a range: an
-     * endless stream has no byte number one thousand.
+     * `Accept-Ranges: none`: an endless stream cannot serve byte ranges.
      */
     private fun entete(sortie: OutputStream, type: String) {
         sortie.write(
@@ -571,11 +515,9 @@ object ServeurDemo {
     // ---------------------------------------------------------------- audio
 
     /**
-     * Le son circule-t-il en ce moment ?
-     *
-     * Three seconds without a single encoded frame means no recording is
-     * running. The page says so, rather than leaving a silent player the viewer
-     * cannot tell from a broken one.
+     * Is audio flowing right now? Three seconds without a frame means no
+     * recording is running, and the page says so rather than leave a silent
+     * player that looks broken.
      */
     fun sonDisponible(): Boolean =
         derniereTrameSonMs > 0L &&
@@ -584,13 +526,9 @@ object ServeurDemo {
     @Volatile private var derniereTrameSonMs = 0L
 
     /**
-     * Les compteurs de diagnostic.
-     *
-     * Three versions hunted the audio fault by reasoning, measuring nothing.
-     * These counters state it without guessing: how many bytes were encoded,
-     * how many written, to how many viewers, and what failed
-     * last. Four integers, read from the operator's own screen — who has no
-     * browser console at hand.
+     * Audio diagnostic counters: bytes produced, bytes written, to how many
+     * viewers, and the last failure. Shown on the operator's screen, who has
+     * no browser console at hand. Measure audio faults, do not guess them.
      */
     @Volatile var octetsEncodes = 0L; private set
     @Volatile var octetsEnvoyes = 0L; private set
@@ -602,38 +540,22 @@ object ServeurDemo {
         octetsEncodes = 0; octetsEnvoyes = 0; tramesSon = 0; dernierePanneSon = ""
     }
 
-    // **Le son vient de l'enregistrement, et de lui seul.**
+    // **Audio comes from the recording, and from it alone.**
     //
-    // A capture of our own was once written for demonstration mode: it took
-    // the microphone for want of better, had to yield it to the recorder, then
-    // take it back. Three mechanisms for one convenience, and as many chances
-    // to contradict each other — including a race that stopped it starting at
-    // all. It is gone: the broadcast audio is what the recorder already
-    // captures and feeds to the monitor. With no recording, the page says so.
-    //
-    // There is no shared encoder either: each viewer has their own, for the
-    // reason given on `Client`.
+    // A separate capture for demonstration mode used to borrow the microphone
+    // and hand it back to the recorder; the handovers raced and it sometimes
+    // never started. The broadcast audio is now what the recorder already
+    // feeds to the monitor. With no recording, the page says so.
 
     /**
-     * Pours captured audio out to the viewers.
+     * **One sample rate for the whole broadcast.**
      *
-     * **Called from the capture thread: nothing here may block.** Encode and
-     * write; if a viewer cannot keep up, their write fails and they are
-     * dropped — rather than holding back the capture, which would spoil the
-     * decoding for everyone.
-     */
-    /**
-     * **One sample rate, for the whole broadcast.**
-     *
-     * The stream served to the browser is a single MP3 that never closes. An
-     * MP3 already under way **does not change rate**: when the recorder took
-     * over with its 48 kHz capture, the encoder was rebuilt mid-stream and the
-     * browser fell silent without a word.
-     *
-     * Everything is therefore brought to 22 050 Hz, whatever the source.
-     * Resampling is the simplest there is — nearest sample — and that is enough
-     * for speech and SSB on a phone speaker. A proper filter would cost
-     * computation on the capture thread, which must never wait.
+     * The stream never closes and the page plays it at a fixed rate (the
+     * `CADENCE` constant in `PageDemo`): a mid-stream rate change, e.g. the
+     * recorder's 48 kHz capture, used to silence the browser. So everything
+     * is brought to 22 050 Hz. Nearest-sample resampling is enough for speech
+     * and SSB on a phone speaker; a proper filter would cost time on the
+     * capture thread, which must never wait.
      */
     private const val CADENCE_DIFFUSION = 22050
     private var reechantillon = ShortArray(4096)
@@ -641,17 +563,16 @@ object ServeurDemo {
     private val verrouSon = Any()
 
     /**
-     * **One thread at a time inside the encoder.**
+     * Pours captured audio out to the viewers.
      *
-     * While the microphone changed hands, two threads called it at once: ours
-     * stopping and the recorder's starting. Neither LAME nor its output buffer
-     * can be shared — the internal state is corrupted and the stream dies for
-     * good. That was exactly the symptom: audio worked once, then never again,
-     * counter frozen.
+     * **Called from the capture thread: nothing here may block.** If a viewer
+     * cannot keep up, their write fails and they are dropped, rather than
+     * holding back the capture for everyone.
      *
-     * Le verrou ne retient personne en pratique : l'encodage d'un bloc dure
-     * quelques centaines de microsecondes, et hors passation il n'y a qu'un
-     * seul fournisseur.
+     * **One thread at a time.** When the microphone changed hands, two threads
+     * called in at once and corrupted the shared buffers: audio worked once,
+     * then never again. The lock costs nothing in practice: a block takes a
+     * few hundred microseconds, and outside a handover there is one supplier.
      */
     fun verseAudio(pcm: ShortArray, n: Int, cadence: Int = CADENCE_DIFFUSION) =
         synchronized(verrouSon) { verseAudioInterne(pcm, n, cadence) }

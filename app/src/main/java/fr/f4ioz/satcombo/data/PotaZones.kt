@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.data
 
@@ -14,31 +14,24 @@ import fr.f4ioz.satcombo.domain.Pays
 import org.json.JSONObject
 
 /**
- * Les contours des parcs POTA — l'emprise réelle, pas le point central.
+ * POTA park outlines — the real extent, not the centre point.
  *
- * Être « au parc » se juge au polygone : à deux kilomètres du centre on peut
- * être dehors, et dans un grand parc on peut être dedans à cinq. Les contours
- * viennent de pota-map.fr (merci à son auteur), récupérés un par un avec une
- * seconde et demie de pause, simplifiés à une dizaine de mètres — assez fin
- * pour dire dedans/dehors, assez court pour être embarqués.
+ * Being "in the park" is decided by the polygon: two km from the centre can be
+ * outside, five km inside a large park. Outlines come from pota-map.fr (thanks
+ * to its author), simplified to about ten metres.
  *
- * Trois étages, du plus rapide au plus lent : l'embarqué (les parcs autour du
- * pays de l'auteur pour cette première version), le cache disque (ce qu'on a
- * déjà été chercher), le réseau (pota-map.fr, à la demande, mis en cache
- * aussitôt). Sans réseau et sans contour, l'application retombe sur le rayon
- * de trois kilomètres autour du point central — un plus quand il est là,
- * jamais une condition.
+ * Three tiers, fastest first: the file imported by the operator, the disk
+ * cache, then the network (pota-map.fr, on demand, cached at once). With no
+ * outline, the app falls back to a 3 km radius around the centre — outlines
+ * are a bonus, never a requirement.
  */
 object PotaZones {
 
     class Zone(val ref: String, val nom: String, val anneaux: List<DoubleArray>) {
         /**
-         * La boîte englobante de chaque anneau, calculée une fois au
-         * chargement. Le test « suis-je dedans » compare d'abord quatre
-         * bornes — moins d'une microseconde — et ne parcourt le polygone que
-         * si le point est dans la boîte : mesuré à 0,03 ms pour 158 parcs au
-         * lieu de 1,2 ms en parcours complet, et la marge tient la France
-         * entière.
+         * Bounding box of each ring, computed once on load. The inside test
+         * compares four bounds first and walks the polygon only inside the box:
+         * 0.03 ms for 158 parks instead of 1.2 ms.
          */
         val boites: List<DoubleArray> = anneaux.map { a ->
             var la = Double.MAX_VALUE; var La = -Double.MAX_VALUE
@@ -64,29 +57,24 @@ object PotaZones {
 
     @Volatile private var embarque: Map<String, Zone>? = null
 
-    /** Le fichier importé par l'opérateur, s'il en a posé un. */
+    /** The file imported by the operator, if any. */
     fun fichierImporte(context: Context) = java.io.File(context.filesDir, "pota_zones.json")
 
-    /** Combien de parcs dans le fichier importé, 0 s'il n'y en a pas. */
+    /** Number of parks in the imported file, 0 if none. */
     fun compteImporte(context: Context): Int =
         if (fichierImporte(context).exists()) charge(context).size else 0
 
-    /** Oublie ce qui est chargé : à appeler après un import. */
+    /** Forgets what is loaded: call after an import. */
     fun rafraichis() { embarque = null }
 
     private fun charge(context: Context): Map<String, Zone> {
         embarque?.let { return it }
         val lu = runCatching {
-            // Le fichier posé par l'opérateur prime sur l'embarqué : il couvre
-            // plus large, et c'est tout son intérêt. L'embarqué reste le
-            // filet — 158 parcs autour du QTH d'origine, pour que
-            // l'application marche sans rien faire.
-            // **Plus rien d'embarqué.** Les contours de parcs venaient d'un
-            // relevé personnel sur pota-map.fr : les redistribuer dans une
-            // source publique supposerait que leurs conditions l'autorisent,
-            // ce qui n'est pas acquis. L'opérateur charge son propre fichier,
-            // et à défaut les contours se demandent un par un au réseau — ce
-            // que l'application savait déjà faire.
+            // **Nothing bundled any more** (`embarque` now holds the imported
+            // file). The outlines came from a personal scrape of pota-map.fr,
+            // and redistributing them publicly is not clearly allowed. The
+            // operator imports their own file; otherwise outlines are fetched
+            // one by one from the network.
             val f = fichierImporte(context)
             val txt = if (f.exists() && f.length() > 100) f.readText() else ""
             if (txt.isBlank()) return emptyMap<String, Zone>().also { embarque = it }
@@ -112,18 +100,18 @@ object PotaZones {
         return lu
     }
 
-    /** Le contour d'un parc, embarqué ou en cache disque, sinon rien. */
+    /** A park's outline, from the imported file or disk cache, else null. */
     fun zone(context: Context, ref: String): Zone? {
         charge(context)[ref]?.let { return it }
         return litCache(context, ref)
     }
 
-    /** Le parc dont l'emprise contient le point, s'il y en a un. */
+    /** The park whose outline contains the point, if any. */
     fun zoneContenant(context: Context, lat: Double, lon: Double): Zone? =
         charge(context).values.firstOrNull { it.contient(lat, lon) }
             ?: cacheContenant(context, lat, lon)
 
-    // ---- cache disque : un fichier par parc, jamais expiré -----------------
+    // ---- disk cache: one file per park, never expires ----------------------
 
     private fun dossier(context: Context) =
         java.io.File(context.filesDir, "pota_zones").apply { mkdirs() }
@@ -158,11 +146,10 @@ object PotaZones {
     }
 
     /**
-     * Va chercher un contour sur pota-map.fr et le met en cache.
+     * Fetches an outline from pota-map.fr and caches it.
      *
-     * Appelé hors du fil principal, pour un parc à la fois — jamais de
-     * rafale : le site est celui d'un radioamateur, pas un CDN. Le contour
-     * est simplifié à la volée au même grain que l'embarqué.
+     * Off the main thread, one park at a time — never in bursts: the site is
+     * a fellow ham's, not a CDN. Simplified on the fly to the usual grain.
      */
     fun telecharge(context: Context, ref: String): Zone? {
         litCache(context, ref)?.let { return it }
@@ -194,7 +181,7 @@ object PotaZones {
             if (ann.isEmpty()) return null
             ann.sortByDescending { it.size }
             val z = Zone(ref, "", ann)
-            // En cache, au format de l'embarqué.
+            // Cached in the same format as the imported file.
             val o = JSONObject().put("n", "").put("r", org.json.JSONArray(ann.map {
                 org.json.JSONArray(it.toList())
             }))

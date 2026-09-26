@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.data
 
@@ -14,22 +14,15 @@ import fr.f4ioz.satcombo.domain.Pays
 import org.json.JSONObject
 
 /**
- * Le catalogue des contours de pays.
+ * Country outline catalogue: 196 countries, 463 KB, bundled in the APK.
  *
- * 196 pays, 463 Ko, embarqués dans l'application. Le choix d'embarquer plutôt
- * que de télécharger est délibéré : sur un APK de sept méga-octets, c'est six
- * pour cent, et cela évite un serveur, un cache, un mode dégradé et une panne de
- * plus le jour où l'on est en portable sans réseau — c'est-à-dire précisément
- * quand on compose une carte QRV.
+ * Bundled on purpose: about 6 % of the APK, and no server, cache or degraded
+ * mode to fail when portable without network — exactly when a QRV card is
+ * made.
  *
- * Les contours viennent de Natural Earth au 1:50 M, simplifiés par
- * Douglas-Peucker : la France métropolitaine tient en 211 points, la Corse en
- * 41. Assez fin pour que la silhouette soit juste à l'œil, assez grossier pour
- * ne pas peser.
- *
- * Le catalogue se charge une fois et reste en mémoire : quelques centaines de
- * milliers de doubles, et l'analyse du JSON coûte trop cher pour être refaite à
- * chaque ouverture de l'écran.
+ * Natural Earth 1:50M, Douglas-Peucker simplified (mainland France: 211
+ * points). Loaded once and kept in memory: parsing the JSON is too costly to
+ * redo on every screen open.
  */
 object PaysStore {
 
@@ -61,12 +54,12 @@ object PaysStore {
             }
             out.add(Pays.Contour(code, o.optString("n", code), anneaux))
         }
-        // Du plus grand au plus petit : les pays vastes d'abord, ce qui rend le
-        // premier résultat pertinent quand un point tombe dans deux boîtes.
+        // Largest first, so the first hit is right when a point falls in two
+        // bounding boxes.
         return out.sortedByDescending { c -> c.anneaux.sumOf { Pays.aire(it) } }
     }
 
-    /** Le pays où se trouve l'opérateur, et les morceaux à dessiner autour. */
+    /** The operator's country, and the pieces to draw around it. */
     fun autour(context: Context, lat: Double, lon: Double): Pair<Pays.Contour, List<DoubleArray>>? {
         val c = Pays.trouve(tous(context), lat, lon) ?: return null
         return c to Pays.morceauxAutour(c, lat, lon)

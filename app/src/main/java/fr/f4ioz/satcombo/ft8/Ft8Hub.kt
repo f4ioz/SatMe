@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.ft8
 
@@ -24,56 +24,47 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 /**
- * L'écoute FT8 et FT4 : le micro, les tranches, le décodage.
+ * FT8 and FT4 listening: microphone, time slots, decoding.
  *
- * **Le découpage en tranches est tout le problème.** FT8 émet dans des fenêtres
- * de quinze secondes calées sur l'heure UTC, FT4 dans des fenêtres de sept et
- * demie. Une transmission commence une demi-seconde après le début de sa
- * fenêtre et dure 12,64 s pour FT8, 5,04 s pour FT4. Le récepteur doit donc
- * savoir *quand* il est, à mieux qu'une seconde près — ce qui repose entièrement
- * sur l'horloge du téléphone.
+ * **Slot timing is the whole problem.** FT8 transmits in 15 s windows aligned
+ * on UTC, FT4 in 7.5 s windows. A transmission starts 0.5 s into its window
+ * and lasts 12.64 s (FT8) or 5.04 s (FT4), so the receiver must know the time
+ * to better than a second — which rests entirely on the phone clock.
  *
- * Un concentrateur unique et non un état par écran : l'écoute doit survivre au
- * passage dans le carnet ou dans les réglages. Perdre quinze secondes parce
- * qu'on a consulté autre chose serait perdre un cycle entier.
+ * A single hub, not per-screen state: listening must survive a visit to the
+ * log or settings, or a whole cycle is lost.
  */
 object Ft8Hub {
 
-    /** Ce que l'écran observe. */
+    /** What the screen observes. */
     data class Etat(
         val enMarche: Boolean = false,
         val mode: String = "FT8",
-        /** Ce qui a été entendu, le plus récent en tête. */
+        /** Decoded messages, most recent first. */
         val entendus: List<Entendu> = emptyList(),
-        /** Seconde courante dans la tranche, pour la barre de progression. */
+        /** Progress through the current slot, for the progress bar. */
         val avancement: Float = 0f,
-        /** Niveau d'entrée, pour savoir si le micro reçoit quelque chose. */
+        /** Input level: is the microphone hearing anything? */
         val niveau: Float = 0f,
-        /** Combien de tranches analysées depuis le départ. */
+        /** Slots analysed since start. */
         val tranches: Int = 0,
         /**
-         * La cascade : une ligne par pas d'analyse, la plus récente en tête,
-         * chaque octet étant un niveau de 0 à 255 sur la bande explorée.
-         *
-         * Des octets et non des flottants : une cascade de trente lignes sur
-         * deux cent cinquante-six colonnes tient ainsi dans huit kilooctets, et
-         * l'écran n'a de toute façon pas plus de nuances à montrer.
+         * The waterfall: one row per analysis step, most recent first, each
+         * byte a level 0–255 across the band. Bytes, not floats: a few KB, and
+         * the screen has no more shades to show anyway.
          */
         val cascade: List<ByteArray> = emptyList(),
 
         /**
-         * Le spectre de l'instant, une valeur par colonne, de 0 à 1.
-         *
-         * Il répond à une autre question que la cascade. La cascade montre
-         * l'histoire — qui a émis, quand, pendant combien de temps. Le spectre
-         * montre le présent, et c'est lui qu'on regarde en tournant le bouton
-         * d'accord ou en cherchant si le poste sort quelque chose.
+         * The instant spectrum, one value per column, 0 to 1. The waterfall
+         * shows history; this shows the present — what you watch while tuning
+         * or checking the rig outputs anything.
          */
         val spectre: FloatArray = FloatArray(0),
-        /** Bornes de la bande affichée, pour graduer l'axe. */
+        /** Displayed band edges, for the axis. */
         val basseHz: Int = 200,
         val hauteHz: Int = 3000,
-        /** Vide quand tout va bien. */
+        /** Empty when all is well. */
         val panne: String = ""
     )
 
@@ -92,7 +83,7 @@ object Ft8Hub {
     private var boucle: Job? = null
     private const val CADENCE = 12000
 
-    /** Les deux modes, avec la durée de leur tranche. */
+    /** The two modes and their slot length. */
     private fun modeDe(nom: String) =
         if (nom == "FT4") Ft8Signal.FT4 else Ft8Signal.FT8
 
@@ -111,10 +102,7 @@ object Ft8Hub {
     }
 
     /**
-     * Change de mode.
-     *
-     * En pleine écoute, cela relance : les tranches n'ont pas la même durée, et
-     * chercher du FT4 dans une fenêtre de quinze secondes ne donnerait rien.
+     * Changes mode. Restarts listening if running: slot lengths differ.
      */
     fun choisitMode(ctx: Context, nom: String) {
         if (nom == _state.value.mode) return
@@ -130,9 +118,9 @@ object Ft8Hub {
     }
 
     private fun panne(quoi: String) {
-        // Une écoute qui ne décode rien et une écoute qui n'a jamais démarré se
-        // ressemblent à l'écran : le micro refusé, l'appareil occupé par une
-        // autre application, une cadence non accordée. Chacune a son mot.
+        // Listening that decodes nothing looks like listening that never
+        // started: permission refused, mic held by another app, unsupported
+        // rate. Each gets its own word.
         _state.value = _state.value.copy(enMarche = false, panne = quoi)
     }
 
@@ -163,14 +151,13 @@ object Ft8Hub {
         }
 
         val parTranche = (tranche * CADENCE).toInt()
-        // Des blocs courts : à 4096 échantillons, soit un tiers de seconde, la
-        // cascade avancerait par saccades de trois lignes d'un coup.
+        // Short blocks: at 4096 samples (a third of a second) the waterfall
+        // would jump three rows at a time.
         val bloc = ShortArray(1024)
         val analyseur = Analyseur(BASSE_HZ, HAUTE_HZ, COLONNES)
         var tampon = FloatArray(parTranche)
         var ecrit = 0
-        // On jette la première tranche : elle commence au milieu de nulle part
-        // et ne contiendrait qu'un morceau de transmission.
+        // Drop the first slot: it starts mid-transmission.
         var premiere = true
         var trancheCourante = numeroTranche(tranche)
 
@@ -218,34 +205,29 @@ object Ft8Hub {
         }
     }
 
-    /** Le numéro de la tranche courante, depuis l'époque UTC. */
+    /** Current slot number since the UTC epoch. */
     private fun numeroTranche(dureeS: Double): Long =
         (System.currentTimeMillis() / (dureeS * 1000).toLong())
 
     private const val COLONNES = 256
-    /** La bande explorée, en hertz — celle des états et de l'analyseur. */
+    /** The analysed band, in Hz. */
     private const val BASSE_HZ = 200
     private const val HAUTE_HZ = 3000
     private const val LIGNES_CASCADE = 60
 
     /**
-     * L'analyseur en direct.
+     * Live analyser.
      *
-     * **Pourquoi il est séparé du décodage.** La cascade était fabriquée à la
-     * fin de chaque tranche, à partir du spectrogramme du décodeur : elle
-     * n'avançait donc que toutes les quinze secondes, et pas du tout quand une
-     * tranche échouait. Or c'est précisément en accordant le poste — quand
-     * rien ne décode encore — qu'on a le plus besoin de voir la bande.
+     * **Separate from decoding.** Built from the decoder's spectrogram, the
+     * waterfall only moved every slot, and not at all when a slot failed —
+     * yet tuning, before anything decodes, is when you most need to see the
+     * band. So it runs on the input stream and never waits for the decoder.
      *
-     * Il tourne donc sur le flux d'entrée, sans rien attendre du décodeur, et
-     * continue de couler même si aucune tranche ne donne quoi que ce soit.
-     *
-     * La fenêtre fait 2048 points à 12 000 Hz, soit 171 ms et 5,9 Hz par raie.
-     * Un signal FT8 occupe huit raies : assez pour se distinguer nettement,
-     * sans la finesse inutile qui coûterait du calcul à chaque image.
+     * 2048 points at 12 kHz: 171 ms, 5.9 Hz per bin. An FT8 signal spans
+     * eight bins — clear enough, without resolution that costs CPU per frame.
      */
     private const val FENETRE = 2048
-    /** Un huitième de seconde entre deux lignes : l'œil n'en demande pas plus. */
+    /** About 1/8 s between rows: enough for the eye. */
     private const val PAS_ANALYSE = 1536
 
     private class Analyseur(val basseHz: Int, val hauteHz: Int, val colonnes: Int) {
@@ -254,18 +236,18 @@ object Ft8Hub {
         private var depuisDerniere = 0
         private val re = FloatArray(FENETRE)
         private val im = FloatArray(FENETRE)
-        /** La fenêtre de Hann, calculée une fois. */
+        /** Hann window, computed once. */
         private val fenetre = FloatArray(FENETRE) {
             (0.5 - 0.5 * kotlin.math.cos(2.0 * Math.PI * it / (FENETRE - 1))).toFloat()
         }
-        /** Le plancher de bruit, lissé — sans quoi l'image clignoterait. */
+        /** Smoothed noise floor — otherwise the image flickers. */
         private var plancher = -1.0
 
         val lignes = ArrayDeque<ByteArray>()
         var dernierSpectre = FloatArray(colonnes)
             private set
 
-        /** Verse des échantillons ; rend vrai quand une nouvelle ligne est prête. */
+        /** Feeds samples; true when a new row is ready. */
         fun verse(bloc: ShortArray, combien: Int): Boolean {
             var pret = false
             for (i in 0 until combien) {
@@ -277,9 +259,8 @@ object Ft8Hub {
         }
 
         private fun analyse(): Boolean {
-            // L'anneau est déroulé du plus ancien au plus récent, fenêtré au
-            // passage : sans fenêtre, chaque ton déborderait sur ses voisins et
-            // la cascade serait une bouillie.
+            // Unroll the ring oldest first, windowed: without a window each
+            // tone leaks into its neighbours.
             for (k in 0 until FENETRE) {
                 re[k] = anneau[(ecrit + k) % FENETRE] * fenetre[k]
                 im[k] = 0f
@@ -297,9 +278,8 @@ object Ft8Hub {
             for (c in 0 until colonnes) {
                 val a = r0 + c * (r1 - r0) / colonnes
                 val b = (r0 + (c + 1) * (r1 - r0) / colonnes).coerceAtLeast(a + 1)
-                // Par maximum et non par moyenne : une station étroite et forte
-                // se perdrait dans une moyenne avec le bruit qui l'entoure, et
-                // c'est justement elle qu'on cherche.
+                // Max, not mean: a narrow strong station would drown in an
+                // average with the surrounding noise.
                 var pic = 0f
                 for (r in a until minOf(b, r1)) {
                     val v = re[r] * re[r] + im[r] * im[r]
@@ -325,10 +305,8 @@ object Ft8Hub {
         }
     }
 
-    // La cascade par tranche a été retirée ici : elle répondait à la même
-    // question que l'analyseur en direct, et moins bien — une image toutes les
-    // quinze secondes, et aucune quand la tranche ne décodait pas. Garder les
-    // deux aurait donné deux vérités qui se contredisent à l'écran.
+    // The per-slot waterfall was removed: the live analyser answers the same
+    // question better, and two versions would contradict each other on screen.
 
     private fun decodeTranche(audio: FloatArray, mode: Ft8Signal.Mode, nom: String) {
         val entendus = try {
@@ -352,8 +330,8 @@ object Ft8Hub {
         }
         val avant = _state.value
         _state.value = avant.copy(
-            // Les plus récents en tête, et on borne la liste : une soirée
-            // d'écoute ferait autrement des milliers de lignes en mémoire.
+            // Newest first, capped: an evening of listening would otherwise
+            // hold thousands of lines.
             entendus = (nouveaux + avant.entendus).take(300),
             tranches = avant.tranches + 1)
     }

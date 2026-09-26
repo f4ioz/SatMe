@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.i18n
 
@@ -298,10 +298,9 @@ val FR: Map<String, String> = mapOf(
     "aim_slab" to "📱 Tranche",
     "aim_back" to "📷 Dos",
     "aim_chips_desc" to "Afficher Tranche/Dos sur l'écran du passage (sinon réglé ici).",
-    // --- La boussole déportée ---
-    // Trois messages d'échec employés dans le code mais jamais traduits :
-    // ils affichaient leur propre nom à l'écran. Invisibles tant que rien ne
-    // rate, ce qui est précisément pourquoi ils avaient échappé au contrôle.
+    // --- Remote compass ---
+    // Failure messages: untranslated keys show their own name on screen, and
+    // only when something fails — which is why they slip through review.
     "nommage_no_sat" to "Aucun satellite sélectionné",
     "mp3_occupe" to "Encodage MP3 déjà en cours",
     "mire_export_echec" to "L'export de la mire a échoué",
@@ -311,10 +310,8 @@ val FR: Map<String, String> = mapOf(
     "bouss_nordouest_desc" to "Pointe l'antenne au nord et touche « Nord », puis pointe à l'ouest et touche « Ouest ». Deux visées sont nécessaires : une seule ne distingue pas un décalage de 180° d'un sens inversé.",
     "bouss_viser_nord" to "1 · Nord",
     "bouss_viser_ouest" to "2 · Ouest",
-    // Renommée : « bouss_nord_ok » servait déjà au calage de la flèche, plus
-    // bas dans ce même fichier. Deux clés identiques dans une `mapOf` : la
-    // seconde gagne en silence, et le premier calage affichait le message du
-    // second, gabarit « %s » non rempli compris.
+    // Renamed: "bouss_nord_ok" is already used further down for the boom
+    // calibration. Duplicate keys in a `mapOf`: the second silently wins.
     "bouss_nord_releve" to "Nord relevé — pointe maintenant à l'ouest.",
     "bouss_ambigu" to "Les deux visées ne se distinguent pas. Reprends au nord, puis vise franchement l'ouest.",
     "bouss_cale_ok" to "Cap calé. Fais tourner l'antenne : l'aiguille doit suivre.",
@@ -869,13 +866,13 @@ val FR: Map<String, String> = mapOf(
     "src_amsat_gp" to "AMSAT GP (bulletin officiel)",
     "src_weather" to "Celestrak Météo (NOAA)",
     "clear_filter" to "Effacer le filtre",
-    // ---- Timeline (courbes d'élévation) ----
+    // ---- Timeline (elevation curves) ----
     "timeline_title" to "Timeline",
     "timeline_header" to "PROCHAINES {0} H · {1}",
     "timeline_empty" to "Aucun passage au-dessus de l'élévation minimale sur la fenêtre.",
     "timeline_quiet" to "Sous l'horizon ou trop bas : {0}",
 
-    // ---- Photo QRV ----
+    // ---- QRV photo ----
     "photo_title" to "Photo QRV",
     "photo_intro" to "Prenez le site en photo : le locator, l'indicatif et les options choisies sont incrustés sur l'image.",
     "photo_take" to "Photo",
@@ -901,7 +898,7 @@ val FR: Map<String, String> = mapOf(
     "callsign_label" to "Votre indicatif",
     "more" to "Plus",
 
-    // ---- Activations (sorties terrain) ----
+    // ---- Activations (field sessions) ----
     "act_title" to "Activation",
     "act_title_running" to "Activation en cours",
     "act_intro" to "Démarrez une activation en arrivant sur site : tous les QSO enregistrés pendant la session lui sont rattachés.",
@@ -919,7 +916,7 @@ val FR: Map<String, String> = mapOf(
     "act_delete" to "Supprimer",
     "act_confirm_delete" to "Supprimer cette activation ? Les QSO du journal sont conservés.",
 
-    // ---- Fiche PDF d'activation ----
+    // ---- Activation PDF sheet ----
     "act_pdf_title" to "Fiche d'activation",
     "act_pdf_period" to "PÉRIODE",
     "act_pdf_station" to "STATION",
@@ -1006,7 +1003,7 @@ val FR: Map<String, String> = mapOf(
     "rec_unprocessed_desc" to "Désactive la correction automatique de gain et la réduction de bruit du téléphone. La radio a déjà fait le travail : on garde le souffle et les évanouissements tels quels.",
     "rec_unprocessed_unavailable" to "Non pris en charge par ce téléphone.",
 
-    // --- Moniteur audio : le spectre à l'œil, le son à l'oreille ---
+    // --- Audio monitor: spectrum on screen, sound in the speaker ---
     "monitor_title" to "Contrôle du son",
     "monitor_spectre" to "Spectre audio",
     "monitor_spectre_desc" to "Affiche le spectre du son pendant l'enregistrement, sur la page du passage. Montre d'un coup d'œil si la modulation entre, si elle sature, et où sont les tonalités SSTV.",
@@ -1015,7 +1012,7 @@ val FR: Map<String, String> = mapOf(
     "monitor_speaker_mic" to "Indisponible sur le micro du téléphone : le son est déjà dans la pièce, et le renvoyer ne ferait qu'un effet Larsen. Choisissez la source USB ou Bluetooth.",
     "monitor_scale" to "0 à 3,5 kHz",
 
-    // --- Pause Doppler : le suivi continue, le poste ne bouge plus ---
+    // --- Doppler hold: tracking carries on, the rig stops moving ---
     "doppler_hold_badge" to "DOPPLER EN PAUSE",
     "doppler_hold_on" to "Pause : le poste n'est plus mis à jour, le suivi continue.",
     "doppler_hold_toggle" to "Suspendre ou reprendre le Doppler",
@@ -1092,7 +1089,7 @@ val FR: Map<String, String> = mapOf(
     "sstv_inline_title" to "Image SSTV",
     "sdr_spectrum" to "Spectre et cascade",
     "sdr_tune_hint" to "Pose le doigt sur la cascade pour t'accorder ; glisse pour suivre.",
-    // --- accord fin : loupe, vernier, calage sur la voix ---
+    // --- fine tuning: magnifier, vernier, voice netting ---
     "menu_partage" to "Partage et écoute",
     "partage_diffuser" to "Partage",
     "partage_ecouter" to "Écoute",
@@ -1158,7 +1155,7 @@ val FR: Map<String, String> = mapOf(
     "macro_pas" to "Pas de la molette",
     "macro_pas_desc" to "Un appui sur la molette, si elle envoie « Sourdine », fait défiler les pas.",
     "macro_piege" to "Ne programme pas de touche « volume » sur les trois boutons : elle serait prise pour un sélecteur de cible et la molette cesserait de tourner le VFO. Trois lettres distinctes suffisent.",
-    // --- carnet express : file d'attente et clavier des indicatifs ---
+    // --- express log: pending queue and callsign keyboard ---
     "menu_express" to "Carnet express",
     "menu_gps" to "État du GPS",
     "sun" to "Soleil",
@@ -1494,7 +1491,7 @@ val FR: Map<String, String> = mapOf(
     "doppler_pass_span" to "Excursion : RX %.1f kHz  ·  TX %.1f kHz",
     "doppler_pass_span_rx" to "Excursion : RX %.1f kHz",
     "world_map_cd" to "Carte du monde",
-    // --- QO-100 (18.31) : le géostationnaire ---------------------------
+    // --- QO-100 (18.31): the geostationary bird ------------------------
     "menu_qo100" to "QO-100",
     "qo100_title" to "QO-100 géostationnaire",
     "qo100_sous_titre" to "Géostationnaire · 25,9° est · transpondeur étroit",
@@ -1566,7 +1563,7 @@ val FR: Map<String, String> = mapOf(
     "qo100_aim_el" to "Élévation",
     "qo100_aim_skew" to "Skew (LNB)",
     "qo100_aim_skew_desc" to "Rotation du LNB dans son collier, vue de derrière la parabole ; positif dans le sens des aiguilles d'une montre. Quelques degrés d'erreur se paient surtout en polarisation croisée.",
-    // --- QO-100 (18.32) : la réglette du transpondeur ------------------
+    // --- QO-100 (18.32): the transponder ruler -------------------------
     "qo100_ruler" to "Réglette du transpondeur",
     "qo100_ruler_desc" to "Les 500 kHz du transpondeur étroit, d'une balise CW à l'autre, dans l'ordre du plan de bande d'AMSAT-DL. Poser le doigt dessus pour s'y déplacer.",
     "qo100_ruler_here" to "Ici",
@@ -1594,7 +1591,7 @@ val FR: Map<String, String> = mapOf(
     "qo100_warn_urgence" to "Fréquence d'urgence : à laisser libre.",
     "qo100_warn_mixte" to "Modes mixtes et usages particuliers.",
     "qo100_warn_hors" to "Hors du transpondeur : rien n'est reçu et rien ne doit être émis.",
-    // --- QO-100 (18.32) : l'alignement par le Soleil --------------------
+    // --- QO-100 (18.32): aiming by the Sun ------------------------------
     "qo100_sun" to "Alignement par le Soleil",
     "qo100_sun_desc" to "Le satellite est invisible et immobile : le Soleil est la seule mire qui donne la direction sans boussole.",
     "qo100_sun_az" to "Passage en azimut",
@@ -1675,7 +1672,7 @@ val FR: Map<String, String> = mapOf(
     "rotor_connected" to "Connecté : {0}",
     "rotor_offline" to "Rotor déconnecté",
     "rotor_sim_on" to "Contrôleur simulé — rien ne bouge sur le toit",
-    // --- Convertisseurs (LNB, transverter) : QO-100 et compagnie ---
+    // --- Converters (LNB, transverter): QO-100 and friends ---
     "menu_conv" to "Convertisseurs",
     "conv_title" to "Convertisseurs de fréquence",
     "conv_intro" to "Un LNB ou un transverter décale toute une bande d'un coup. Réglé ici, il se glisse au dernier moment entre le calcul et le poste : le Doppler, les bords du transpondeur et l'inversion continuent de se calculer sur la vraie fréquence du satellite, et seule l'écriture change. Hors de sa bande, le convertisseur se retire tout seul — le laisser coché ne gêne aucun autre satellite.",

@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.data
 
@@ -26,7 +26,7 @@ class TleRepository(
         .build()
 ) {
     companion object {
-        /** Les satellites du dernier bulletin dont les éléments ne se lisent pas. */
+        /** Satellites of the last bulletin whose elements could not be used. */
         @Volatile var ecartes: List<String> = emptyList()
             internal set
 
@@ -108,9 +108,8 @@ class TleRepository(
         val bons = brut.filter {
             fr.f4ioz.satcombo.domain.PassPredictor.elementsUtilisables(it)
         }
-        // Ce qui a été écarté est retenu pour l'écran des sources. Sans cette
-        // liste, un satellite disparu reste un mystère : on sait que quelque
-        // chose manque, jamais quoi ni pourquoi.
+        // Kept for the sources screen: otherwise a vanished satellite is a
+        // mystery — you know something is missing, never what or why.
         ecartes = (brut - bons.toSet()).map {
             it.name.ifBlank { "#" + it.catalogNumber }
         }

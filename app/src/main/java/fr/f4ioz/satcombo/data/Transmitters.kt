@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.data
 
@@ -34,23 +34,16 @@ data class Transmitter(
         get() = (downlinkHighHz != null && downlinkLowHz != null && downlinkHighHz != downlinkLowHz)
 
     /**
-     * Le mode a-t-il un sens à afficher pour cet émetteur ?
+     * Is the mode worth showing for this transmitter?
      *
-     * SatNOGS ne porte qu'**un seul mode par entrée**. Pour une balise c'est
-     * exact et utile — BPSK, CW — mais un transpondeur linéaire n'a pas de
-     * mode : il retransmet ce qu'on lui envoie, et c'est l'opérateur qui
-     * choisit. Le champ y contient alors ce que le premier contributeur a bien
-     * voulu mettre.
+     * SatNOGS stores **one mode per entry**. Right for a beacon (BPSK, CW),
+     * meaningless for a linear transponder, which relays whatever the operator
+     * chooses: the field holds whatever the first contributor typed. On QO-100
+     * the narrowband segments are labelled "FM" although reserved for SSB and
+     * CW — a wrong instruction, not an imprecision.
      *
-     * Sur QO-100, les trois segments du transpondeur étroit sont ainsi
-     * étiquetés « FM » alors qu'ils sont réservés à la BLU et à la
-     * télégraphie. Le montrer n'est pas une imprécision : c'est une
-     * instruction fausse, et un opérateur qui la suivrait passerait en FM sur
-     * un segment où c'est proscrit.
-     *
-     * On ne corrige pas la donnée — nous ne sommes pas mieux placés que
-     * SatNOGS pour savoir. On s'abstient de l'afficher là où elle ne veut rien
-     * dire, ce qui est différent et défendable.
+     * We do not correct SatNOGS data; we just do not show it where it means
+     * nothing.
      */
     val modeSignifiant: Boolean get() = !isTransponder
 }
@@ -123,7 +116,7 @@ class TransmittersRepository(
                 type = o.optString("type", "Transmitter")
             )
         }
-            // actives d'abord, puis celles qui ont un downlink
+            // active first, then those with a downlink
             .sortedWith(compareByDescending<Transmitter> { it.alive }
                 .thenByDescending { it.downlinkLowHz != null })
     }.getOrDefault(emptyList())

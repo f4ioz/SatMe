@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.data
 
@@ -54,57 +54,52 @@ object QthPhoto {
         val showSat: Boolean = false,
         val showPolar: Boolean = false,
         /**
-         * La silhouette du pays, posée sur la photo.
-         *
-         * Elle vit ici et non dans un écran séparé : une carte QRV est une
-         * photo avec des choses dessus, et la carte est une chose de plus — au
-         * même titre que l'indicatif, le drapeau ou le tracé polaire. Un second
-         * module aurait produit deux images concurrentes là où l'opérateur n'en
-         * veut qu'une.
+         * The country silhouette on the photo. Lives here, not in a separate
+         * screen: the map is one more thing on the QRV photo, like the callsign
+         * or polar plot. A second module would produce two competing images.
          */
         val showCarte: Boolean = false,
-        /** La ligne POTA : écusson, référence, nom du parc. */
+        /** The POTA line: badge, reference, park name. */
         val showPota: Boolean = false,
         val potaRef: String = "",
         val potaNom: String = "",
-        /** Le nom du parc sous la référence — on peut n'en garder que le numéro. */
+        /** Park name under the reference — may be hidden to keep the number only. */
         val potaNomAffiche: Boolean = true,
-        /** Les fréquences du passage, en MHz. 0 = rien à écrire. */
+        /** Pass frequencies in MHz. 0 = nothing to print. */
         val showQrg: Boolean = false,
         val upMHz: Double = 0.0,
         val downMHz: Double = 0.0,
         val qrgScale: Float = 1f,
-        /** La fréquence annoncée, saisie à la main. Facultative. */
+        /** Announced frequency, typed by hand. Optional. */
         val qrgTexte: String = "",
-        /** Taille de la ligne date + fréquence. */
+        /** Size of the date + frequency line. */
         val passScale: Float = 1f,
-        /** Taille de la ligne POTA (1 = référence) et hauteur au-dessus du bas. */
+        /** POTA line size (1 = reference) and height above the bottom. */
         val potaTaille: Float = 1f,
         val potaMonte: Float = 0f,
-        /** Les anneaux à tracer, en lat, lon aplatis. Vides = rien à dessiner. */
+        /** Rings to draw, flattened lat, lon. Empty = nothing to draw. */
         val carteAnneaux: List<DoubleArray> = emptyList(),
-        /** Part de la largeur occupée par la carte, 0,15 à 0,9. */
+        /** Map width as a fraction of the image, 0.15 to 0.9. */
         val carteTaille: Float = 0.42f,
-        /** Position du centre de la carte, en part de l'image. */
+        /** Map centre position, as a fraction of the image. */
         val carteX: Float = 0.5f,
         val carteY: Float = 0.52f,
-        /** Ce qu'on met dedans : "DRAPEAU", "UNI", ou vide pour translucide. */
+        /** Fill: "DRAPEAU" (flag), "UNI" (plain), or empty for translucent. */
         val carteRemplissage: String = "DRAPEAU",
         val carteCouleur: Int = 0x66FFFFFF,
         /**
-         * La zone POTA en silhouette : mêmes réglages de taille et de
-         * position que la carte du pays, mais l'emprise est celle du parc —
-         * comme un zoom sur la zone. « ZONE » dans [carteContenu] la choisit,
-         * « PAYS » (défaut) garde le pays.
+         * The POTA zone as a silhouette: same size and position settings as
+         * the country map, zoomed on the park. "ZONE" in [carteContenu]
+         * selects it, "PAYS" (default) keeps the country.
          */
         val carteContenu: String = "PAYS",
         val zoneAnneaux: List<DoubleArray> = emptyList(),
         /**
-         * Les villes à écrire autour de la zone, avec leur position. Un
-         * contour seul ne dit pas où l'on est ; trois noms de communes, si.
+         * Towns to print around the zone, with positions: an outline alone
+         * does not say where you are, three town names do.
          */
         val villes: List<Triple<String, Double, Double>> = emptyList(),
-        /** Le bord de la carte se fond dans la photo au lieu de s'y découper. */
+        /** The map edge fades into the photo instead of cutting it. */
         val carteFondu: Boolean = true,
         /** Pass arc (az, el) sampled AOS→LOS — drawn top-right when [showPolar]. */
         val track: List<Pair<Double, Double>> = emptyList(),
@@ -118,35 +113,35 @@ object QthPhoto {
         val showPass: Boolean = true,
         /** Size of the polar plot, 1.0 = reference size. */
         val polarScale: Float = 1f,
-        /** Taille du nom du satellite écrit sous le tracé, 1.0 = taille de référence. */
+        /** Size of the satellite name under the plot, 1.0 = reference size. */
         val satLabelScale: Float = 1f,
         /** True = print the 4-character square only ("JN18"). */
         val loc4: Boolean = false,
         /** Altitude of the spot in metres. Null = unknown, nothing printed. */
         val altM: Double? = null,
         /** Colour of the callsign, ARGB. Defaults to the amber used elsewhere. */
-        /** Combien des huit carrés voisins sont écrits, du plus proche. */
+        /** How many of the eight neighbouring squares to print, nearest first. */
         val nearCount: Int = 4,
-        /** Code du drapeau placé devant l'indicatif, vide = aucun. */
+        /** Flag code before the callsign, empty = none. */
         val flagLeft: String = "",
-        /** Codes des drapeaux placés à droite de l'indicatif. */
+        /** Flag codes placed right of the callsign. */
         val flagsRight: List<String> = emptyList(),
         val callColor: Int = 0xFFFFC65C.toInt(),
         /** Size of the callsign, 1.0 = reference size. */
         val callScale: Float = 1f,
         /** The app icon, used as the SatMe mark. Null = drawn glyph. */
         val logoIcon: Bitmap? = null,
-        /** Système d'unités des distances et de l'altitude imprimées. */
+        /** Unit system for printed distances and altitude. */
         val units: String = Units.METRIC
     )
 
-    /** Hauteur d'un drapeau, en fraction de la taille de l'indicatif. */
+    /** Flag height, as a fraction of the callsign size. */
     private const val FLAG_H = 0.72f
 
-    /** Blanc entre un drapeau et l'indicatif, même unité. */
+    /** Gap between a flag and the callsign, same unit. */
     private const val FLAG_GAP = 0.22f
 
-    /** Une flèche par direction, pour lire le voisinage sans légende. */
+    /** One arrow per direction, so neighbours read without a legend. */
     private val ARROWS = mapOf(
         "N" to "\u2191", "S" to "\u2193", "E" to "\u2192", "W" to "\u2190",
         "NE" to "\u2197", "NW" to "\u2196", "SE" to "\u2198", "SW" to "\u2199")
@@ -336,18 +331,15 @@ object QthPhoto {
         if (o.showPass && o.passMs > 0L) {
             val pf = SimpleDateFormat("dd/MM/yyyy HH:mm", I18n.locale())
                 .apply { timeZone = TimeZone.getTimeZone("UTC") }
-            // L'angle d'élévation a disparu : sur une annonce de passage à
-            // venir, il n'apprend rien à celui qui lit — c'est l'heure et la
-            // fréquence qu'il note. La fréquence, saisie à la main, tient sur
-            // la même ligne : les deux informations d'un rendez-vous.
+            // No elevation: for an upcoming pass the reader notes time and
+            // frequency — the two facts of a sked, on one line.
             lines += "AOS " + pf.format(Date(o.passMs)) + " UTC" +
                 (if (o.qrgTexte.isNotBlank()) "   " + o.qrgTexte else "")
         }
         if (o.showGrids && o.nearCount > 0) {
-            // Les carrés voisins, du plus proche au plus lointain : sur l'air on
-            // annonce d'abord celui qu'on touche du pied. Le nombre se règle,
-            // parce qu'un coin de quatre carrés en vaut quatre et qu'un plein
-            // centre de carré n'en vaut aucun.
+            // Neighbouring squares, nearest first, as announced on the air. The
+            // count is a setting: a four-square corner is worth four, a square's
+            // centre none.
             val near = runCatching { Maidenhead.aroundSquares(o.latDeg, o.lonDeg) }
                 .getOrNull().orEmpty().take(o.nearCount.coerceIn(0, 8))
             near.chunked(2).forEach { pair ->
@@ -390,12 +382,11 @@ object QthPhoto {
         }
         val nearTxt = near.joinToString("") { " / " + it }
         val subGap = if (sub.isEmpty()) 0f else 0.6f * u
-        // Le second drapeau accompagne le locator, pas l'indicatif : sur l'air on
-        // annonce « JN18 » et la région d'où l'on émet dans la même phrase. Il se
-        // pose donc juste à gauche du carré, à hauteur de lettre, et sa largeur
-        // entre dans le calcul de rétrécissement pour que toute la ligne tienne.
+        // The second flag goes with the locator, not the callsign ("JN18" and
+        // the region are said in one breath): left of the square, at letter
+        // height, and its width counts when shrinking the line to fit.
         val fLoc = o.flagsRight.mapNotNull { Flags.byCode(it) }
-        var locFlagUnit = 0f       // largeur des drapeaux, par unité de textSize
+        var locFlagUnit = 0f       // flag width per textSize unit
         fLoc.forEach { locFlagUnit += FLAG_H * it.ratio + FLAG_GAP }
         val naturalW = locFlagUnit * pLoc.textSize +
             pLoc.measureText(square) + subGap + pSub.measureText(sub) +
@@ -425,9 +416,8 @@ object QthPhoto {
         var y = h - pad
         val tailleLigne = pLine.textSize
         for (line in lines.asReversed()) {
-            // La ligne du passage — heure et fréquence annoncée — porte le
-            // rendez-vous : elle se grossit seule, les autres gardent leur
-            // taille.
+            // The pass line (time and announced frequency) carries the sked:
+            // it alone is enlarged.
             val estPassage = line.startsWith("AOS ")
             val kp = if (estPassage) o.passScale.coerceIn(0.6f, 2.5f) else 1f
             pLine.textSize = tailleLigne * kp
@@ -437,7 +427,7 @@ object QthPhoto {
         }
         y -= 1.5f * u
         // Locator: bright 4-char square + dimmer subsquare, on one baseline,
-        // précédé s'il existe du drapeau choisi en second.
+        // preceded by the second flag if any.
         var lx = pad
         if (fLoc.isNotEmpty()) {
             val lfh = pLoc.textSize * FLAG_H
@@ -462,12 +452,10 @@ object QthPhoto {
             // A callsign enlarged past the frame would be clipped to its first
             // letters, which is exactly the failure the top-left move fixed.
             // So the chosen size is a wish, and the frame has the last word.
-            // Les drapeaux se posent à hauteur de lettre, pas en vignette
-            // collée dans un coin : c'est une signature, elle se lit d'un bloc.
-            // On mesure donc l'ensemble indicatif + drapeaux, et c'est ce bloc
-            // entier qu'on rétrécit s'il déborde du cadre.
+            // Flags sit at letter height, read as one signature block: callsign
+            // + flags is measured and shrunk as a whole if it overflows.
             val fLeft = Flags.byCode(o.flagLeft)
-            var flagUnit = 0f          // largeur des drapeaux, par unité de textSize
+            var flagUnit = 0f          // flag width per textSize unit
             if (fLeft != null) flagUnit += FLAG_H * fLeft.ratio + FLAG_GAP
             val maxW = w - 2f * pad
             val callW = pCall.measureText(call) + flagUnit * pCall.textSize
@@ -499,13 +487,12 @@ object QthPhoto {
                 labelScale = o.satLabelScale.coerceIn(0.5f, 2.5f))
         }
 
-        // ---- la silhouette du pays ----
+        // ---- country silhouette ----
         //
-        // Dessinée avant le logo et après les textes : elle ne doit masquer ni
-        // l'indicatif ni le locator, qui sont la raison d'être de la photo.
-        // « PAYS », « ZONE » ou « LES_DEUX » : le pays donne le repère large,
-        // la zone le lieu exact. Les deux ensemble se dessinent l'un après
-        // l'autre, la zone par-dessus — chacune avec son propre cadrage.
+        // Drawn after the texts and before the logo: it must hide neither
+        // callsign nor locator. "PAYS", "ZONE" or "LES_DEUX": country for the
+        // broad picture, zone for the exact place; both are drawn in turn,
+        // zone on top, each with its own framing.
         if (o.showCarte) {
             when (o.carteContenu) {
                 "ZONE" -> if (o.zoneAnneaux.isNotEmpty())
@@ -523,16 +510,15 @@ object QthPhoto {
             }
         }
 
-        // ---- la ligne POTA, en bas à droite au-dessus du logo ----
+        // ---- POTA line, bottom-right above the logo ----
         if (o.showPota && o.potaRef.isNotBlank()) {
             dessinePota(c, w, h, u, o)
         }
 
-        // ---- les fréquences du passage, sous l'indicatif ----
+        // ---- pass frequencies, under the callsign ----
         //
-        // Montée et descente : ce que le correspondant cherche à lire sur une
-        // photo d'activation, avec le satellite. Elles suivent l'indicatif en
-        // haut à gauche, là où l'œil va en premier.
+        // Uplink and downlink are what the other station looks for on an
+        // activation photo: top-left, where the eye goes first.
         if (o.showQrg && (o.upMHz > 0.0 || o.downMHz > 0.0)) {
             val kq = o.qrgScale.coerceIn(0.5f, 2.5f)
             val pq = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -625,8 +611,8 @@ object QthPhoto {
             }
             val txt = label.take(18)
             val tw = pLabel.measureText(txt)
-            // Le tracé est collé au bord droit : grossi, le nom en déborderait.
-            // On recentre donc l'étiquette dans le cadre plutôt que de la couper.
+            // The plot hugs the right edge: an enlarged name would overflow, so
+            // the label is kept inside the frame rather than clipped.
             val half = tw / 2f + 1.4f * u
             val cw = c.width.toFloat()
             val lcx = if (cw > 2f * (half + 1.5f * u))
@@ -648,52 +634,44 @@ object QthPhoto {
      * the icon cannot be loaded.
      */
     /**
-     * La silhouette du pays et le point du QTH.
-     *
-     * Le calcul de placement vient de [fr.f4ioz.satcombo.domain.Pays], éprouvé
-     * au banc : longitude comprimée par le cosinus de la latitude, même échelle
-     * dans les deux sens. Ici on ne fait que tracer.
+     * Country silhouette and QTH dot. Placement comes from
+     * [fr.f4ioz.satcombo.domain.Pays] (tested): longitude scaled by cos(lat),
+     * same scale both ways. This only draws.
      */
     /**
-     * L'écusson POTA : un arbre stylisé sur pastille verte, la référence en
-     * gras, le nom du parc en dessous.
-     *
-     * L'arbre est dessiné, pas copié : le logo officiel POTA est une marque,
-     * et un pictogramme tracé s'agrandit sans pixeliser — même règle que les
-     * drapeaux. Le nom est tronqué à trente caractères : « PLAGES, DUNES ET
-     * LAGUNES DE LÉHAN À KERSAUZ » déborderait de la photo.
+     * POTA badge: a stylised tree on a green disc, reference in bold, park name
+     * below. The tree is drawn, not copied: the official POTA logo is a
+     * trademark, and vectors scale cleanly. The name is trimmed to fit.
      */
     private fun dessinePota(c: Canvas, w: Float, h: Float, u: Float, o: Options) {
         val p = Paint(Paint.ANTI_ALIAS_FLAG)
         val pad = 4f * u
         val k = o.potaTaille.coerceIn(0.6f, 2.5f)
-        // La ligne monte d'autant de hauteurs d'écran que demandé : au-dessus
-        // du logo par défaut, plus haut si la photo est chargée en bas.
+        // Raised by the requested height: above the logo by default, higher
+        // if the bottom of the photo is busy.
         //
-        // La ligne se pose AU-DESSUS du logo par construction. Le bloc POTA
-        // descend jusqu'à `bas + 3,2 u·k` (le nom du parc) ; le logo monte
-        // jusqu'à `h - pad - 4,6 u`. Sans soustraire la hauteur du nom, les
-        // deux se chevauchaient — le nom du parc passait derrière « SatMe »,
-        // et un curseur de réglage ne répare pas un défaut de construction.
+        // It sits ABOVE the logo by construction: the POTA block reaches down
+        // to `bas + 3.2 u·k` (park name), the logo up to `h - pad - 4.6 u`.
+        // Without subtracting the name height, the name ran behind "SatMe".
         val hautLogo = if (o.showLogo) 4.6f * u else 0f
         val hNom = if (o.potaNom.isNotBlank() && o.potaNomAffiche) 3.2f * u * k else 0f
         val bas = h - pad - hautLogo - hNom - 1.2f * u -
             h * o.potaMonte.coerceIn(0f, 0.6f)
 
-        // La pastille et son arbre.
+        // The disc and its tree.
         val r = 3.4f * u * k
         val cx = w - pad - r
         val cy = bas - r
         p.color = 0xFF2E7D32.toInt()
         c.drawCircle(cx, cy, r, p)
         p.color = android.graphics.Color.WHITE
-        // Houppier : trois disques ; tronc : un rectangle.
+        // Crown: three discs; trunk: a rectangle.
         c.drawCircle(cx, cy - 0.7f * u * k, 1.1f * u * k, p)
         c.drawCircle(cx - 0.9f * u * k, cy + 0.1f * u * k, 0.9f * u * k, p)
         c.drawCircle(cx + 0.9f * u * k, cy + 0.1f * u * k, 0.9f * u * k, p)
         c.drawRect(cx - 0.25f * u * k, cy + 0.3f * u * k, cx + 0.25f * u * k, cy + 1.9f * u * k, p)
 
-        // La référence, à gauche de la pastille.
+        // The reference, left of the disc.
         fun texte(t: String, x: Float, y: Float, taille: Float, gras: Boolean) {
             p.textSize = taille
             p.typeface = android.graphics.Typeface.create(
@@ -710,11 +688,8 @@ object QthPhoto {
         }
         texte(o.potaRef, cx - r - 1.5f * u, cy + 1.1f * u * k, 3.4f * u * k, true)
         if (o.potaNom.isNotBlank() && o.potaNomAffiche) {
-            // Le nom tenait sur trente caractères, quelle que soit la taille
-            // de la photo et du texte : « PLAGES, DUNES ET LAGUNES DE LE »,
-            // coupé au milieu d'un mot. On mesure la largeur réelle et l'on
-            // rogne sur le dernier mot entier, avec une ellipse pour dire que
-            // la suite existe.
+            // Measure the real width and cut at the last whole word, with an
+            // ellipsis: a fixed character count cut words in half.
             val tailleNom = 2.2f * u * k
             val large = w - 2f * pad
             p.textSize = tailleNom
@@ -764,9 +739,8 @@ object QthPhoto {
         val bornes = android.graphics.RectF()
         chemin.computeBounds(bornes, true)
 
-        // Le fondu : au lieu d'un bord net qui découpe la photo, le
-        // remplissage s'efface vers les bords du cadre. Le calque séparé est
-        // nécessaire — un dégradé appliqué directement mangerait la photo.
+        // Fade: the fill vanishes towards the frame edges. A separate layer
+        // is required — a gradient applied directly would eat the photo.
         val calqueBitmap = if (o.carteFondu)
             Bitmap.createBitmap(w.toInt(), h.toInt(), Bitmap.Config.ARGB_8888) else null
         val calque = calqueBitmap?.let { Canvas(it) }
@@ -779,26 +753,11 @@ object QthPhoto {
                 val f = fr.f4ioz.satcombo.data.Flags.ALL.firstOrNull { it.code == o.flagLeft }
                     ?: fr.f4ioz.satcombo.data.Flags.ALL.firstOrNull()
                 if (f != null) {
-                    // Le drapeau est tracé et non photographié : il s'agrandit
-                    // sans pixeliser et ne coûte aucun fichier.
-                    //
-                    // Il est ajusté pour **couvrir** la silhouette, une seule
-                    // fois et centré, comme une photo recadrée. Le répéter
-                    // côte à côte donnait deux ou trois drapeaux dans un même
-                    // pays, ce qui ne ressemble à rien ; l'étirer aux bornes
-                    // aurait faussé ses proportions, qui font justement qu'on
-                    // le reconnaît.
-                    // Le drapeau épouse EXACTEMENT la boîte du pays.
-                    //
-                    // En le dimensionnant pour « couvrir », il débordait
-                    // largement : un tricolore au format 3:2 posé sur une
-                    // France presque carrée sortait du cadre de chaque côté, et
-                    // l'on ne voyait plus que sa bande centrale — d'où une
-                    // France toute blanche avec un filet de bleu et de rouge.
-                    //
-                    // Ajusté aux bornes, les trois bandes tombent sur les trois
-                    // tiers de la largeur du pays, ce qui est ce qu'on attend
-                    // d'un drapeau versé dans une silhouette.
+                    // The flag is drawn once and fits the country box EXACTLY
+                    // (stretched horizontally). Scaled to "cover", a 3:2
+                    // tricolour over a near-square France overflowed on both
+                    // sides and only its white band showed. Tiling gave two or
+                    // three flags per country.
                     val h = bornes.height()
                     val naturel = FlagDraw.widthFor(f, h)
                     cible.save()
@@ -822,18 +781,15 @@ object QthPhoto {
 
 
 
-        // Les noms de villes, posés à leur vraie position dans le cadre. Ils
-        // sont ce qui rend la carte lisible : un contour sans nom est une
-        // tache, avec trois communes c'est un endroit.
+        // Town names at their real position: they make the map readable.
         if (villes && o.villes.isNotEmpty()) {
             val pv = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 textSize = 2.6f * u
                 typeface = android.graphics.Typeface.DEFAULT_BOLD
                 textAlign = Paint.Align.CENTER
             }
-            // Les étiquettes déjà posées : on saute celles qui viendraient se
-            // superposer. Deux noms l'un sur l'autre ne se lisent ni l'un ni
-            // l'autre — mieux vaut en montrer trois lisibles que six empilés.
+            // Labels already placed: skip any that would overlap. Three readable
+            // names beat six stacked ones.
             val posees = ArrayList<android.graphics.RectF>()
             for ((nom, vlat, vlon) in o.villes) {
                 val vx = pl.x(vlon).toFloat()
@@ -856,7 +812,7 @@ object QthPhoto {
             }
         }
 
-        // Le point du QTH, à la position exacte.
+        // The QTH dot, at its exact position.
         val px = pl.x(o.lonDeg).toFloat()
         val py = pl.y(o.latDeg).toFloat()
         p.style = Paint.Style.FILL
@@ -865,10 +821,9 @@ object QthPhoto {
         p.color = 0xFFE02020.toInt()
         cible.drawCircle(px, py, 1.25f * u, p)
 
-        // Tout est dessiné : le calque revient sur la photo à travers un
-        // dégradé, plein au centre et transparent aux bords du cadre. Le
-        // reversement DOIT venir en dernier — placé plus haut, il laissait les
-        // villes et le point hors du fondu, donc découpés sur l'image.
+        // Composite the layer back through a gradient, opaque at the centre,
+        // transparent at the edges. This MUST come last, or towns and dot
+        // escape the fade and look cut out.
         if (calque != null && calqueBitmap != null) {
             val degrade = Paint(Paint.ANTI_ALIAS_FLAG)
             degrade.shader = android.graphics.RadialGradient(

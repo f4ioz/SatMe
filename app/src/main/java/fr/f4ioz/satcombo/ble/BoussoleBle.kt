@@ -38,18 +38,15 @@ import java.util.UUID
  * The remote compass: a WitMotion attitude module over Bluetooth Low Energy,
  * clamped to the antenna boom.
  *
- * **Why move it off the phone.** A phone is a poor place for a magnetometer
- * on satellite work: it is hand-held, rarely aligned with the boom, and inches
- * from an FT-817 whose speaker carries a permanent magnet. On the boom the
- * module is aligned by construction — and aluminium disturbs nothing.
+ * **Why off the phone.** A hand-held phone is rarely aligned with the boom and
+ * sits inches from an FT-817 speaker magnet. On the boom the module is aligned
+ * by construction, and aluminium disturbs nothing.
  *
- * **What the datasheet demands**, and no software works around: at least
- * twenty centimetres from any magnet, speaker or electronics, and calibration
- * redone after every remount.
+ * **Datasheet rules no software works around:** at least 20 cm from any
+ * magnet, speaker or electronics; recalibrate after every remount.
  *
- * This object is a singleton because the link must outlive screen changes:
- * reconnecting on every recomposition would make the heading flicker exactly
- * when the operator needs it.
+ * A singleton because the link must outlive screen changes: reconnecting on
+ * recomposition would make the heading flicker when it is needed.
  */
 object BoussoleBle {
 
@@ -61,42 +58,35 @@ object BoussoleBle {
     // --- what the interface observes ---
 
     /**
-     * The module's raw heading in degrees, or `null` until something arrives.
+     * The module's heading in degrees, or `null` until something arrives.
      *
-     * A Compose state rather than an `UiState` field: the module pushes up to
-     * two hundred frames per second, and routing that through the global state
-     * would redraw the whole screen on each one. The dial reads it
-     * directement.
+     * Compose state, not a `UiState` field: up to 200 frames per second would
+     * redraw the whole screen each time. The dial reads it directly.
      */
     val cap = mutableStateOf<Float?>(null)
 
     /**
-     * Offset and sign, held here rather than passed on every read.
-     *
-     * Le cadran lit `cap` deux cents fois par seconde ; lui faire porter en
-     * plus two settings that change once per outing would be chatter.
-     * They are set at startup and whenever the operator changes them.
+     * Offset, held here rather than passed on every read: the dial reads `cap`
+     * 200 times a second, and this changes once per outing. Set at startup
+     * and whenever the operator changes it.
      */
     var calage: Float = 0f
         set(v) { field = v; lisse = Float.NaN }
 
     /**
-     * Does the module count in east-north-up rather than north-east-down?
-     *
-     * Measured by the two calibration sightings, never guessed. This is what
-     * swapped east and west: a mirror, not an offset.
+     * The module's axis convention (e.g. east-north-up vs north-east-down),
+     * by name. Measured by the two calibration sightings, never guessed: a
+     * wrong one swaps east and west — a mirror, not an offset.
      */
-    /** The measured convention, by name. */
     var convention: String = "DIRECTE"
         set(v) { field = v; lisse = Float.NaN }
 
     /**
      * The boom direction in the case's frame, or `null` until learned.
      *
-     * When known, heading and elevation are both read from the
-     * vecteur de pointage, et tourner l'antenne sur son axe n'y change rien.
-     * Until then we fall back on yaw alone — with no elevation, because there
-     * is then no honest way to derive it.
+     * When known, heading and elevation both come from the pointing vector,
+     * and rotating the antenna on its axis changes nothing. Until then, yaw
+     * alone and no elevation: there is no honest way to derive it.
      */
     var fleche: fr.f4ioz.satcombo.domain.Vec3? = null
         set(v) { field = v; lisse = Float.NaN }
@@ -115,10 +105,8 @@ object BoussoleBle {
     val trames = mutableStateOf(0)
 
     /**
-     * Yaw as the module gives it, before offset and before inversion.
-     *
-     * Used only for calibration readings: deriving an offset needs the raw
-     * figure, not one already corrected — otherwise you correct the correction.
+     * Yaw as the module gives it, before offset and inversion. For calibration
+     * only: an offset derived from a corrected figure corrects the correction.
      */
     val lacetBrut = mutableStateOf<Float?>(null)
 
@@ -167,11 +155,9 @@ object BoussoleBle {
         (ctx.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager)?.adapter
 
     /**
-     * Records an **explicit** failure.
-     *
-     * A fault without a message is a fault nobody fixes: the operator sees a
-     * frozen dial and cannot tell whether to switch the module on, grant a
-     * permission or step closer. Every error path goes through here.
+     * Records an **explicit** failure. Every error path goes through here: a
+     * frozen dial does not tell the operator whether to switch the module on,
+     * grant a permission or step closer.
      */
     private fun echoue(pourquoi: String) {
         raison.value = pourquoi
@@ -201,14 +187,12 @@ object BoussoleBle {
             override fun onScanResult(type: Int, r: ScanResult?) {
                 val d = r?.device ?: return
                 val nom = try { d.name } catch (_: SecurityException) { null }
-                // Everything with a name is shown: filtering on "WT" alone
-                // would hide a renamed module, and the advertisement carries no
-                // service to rely on.
+                // Show everything named: filtering on "WT" would hide a renamed
+                // module, and the advertisement carries no service UUID.
                 val etiquette = nom ?: return
                 if (trouves.none { it.adresse == d.address }) {
                     trouves.add(Appareil(etiquette, d.address, r.rssi))
-                    // Modules of the family float to the top: that is almost
-                    // always the one being looked for.
+                    // WitMotion modules first.
                     trouves.sortByDescending { GattWit.nomPlausible(it.nom) }
                 }
             }
@@ -231,8 +215,8 @@ object BoussoleBle {
             echoue("recherche_refusee"); return
         }
 
-        // A scan that never stops drains the battery and, since Android 7,
-        // gets cut by the system without a word.
+        // An endless scan drains the battery and, since Android 7, is cut by
+        // the system silently.
         main.postDelayed({
             if (etat.value == Etat.RECHERCHE) {
                 arreteRecherche()
@@ -245,7 +229,7 @@ object BoussoleBle {
     fun arreteRecherche() {
         val s = scanneur; val r = rappelScan
         if (s != null && r != null) {
-            try { s.stopScan(r) } catch (_: Exception) { /* déjà arrêté */ }
+            try { s.stopScan(r) } catch (_: Exception) { /* already stopped */ }
         }
         scanneur = null; rappelScan = null
     }
@@ -288,7 +272,7 @@ object BoussoleBle {
         val g = gatt
         gatt = null
         if (g != null) {
-            try { g.disconnect(); g.close() } catch (_: Exception) { /* déjà fermé */ }
+            try { g.disconnect(); g.close() } catch (_: Exception) { /* already closed */ }
         }
         cap.value = null
         elevation.value = null
@@ -304,17 +288,15 @@ object BoussoleBle {
     }
 
     /**
-     * Le veilleur du silence.
+     * Silence watchdog.
      *
-     * A silent module looks exactly like a working one: the GATT link stays
-     * open, no error arrives, and the dial simply shows the last value
-     * received. **Silence deserves its own branch** — otherwise the operator
-     * aims the antenna on a two-minute-old heading without knowing it.
+     * A silent module looks like a working one: the GATT link stays open, no
+     * error arrives, the dial shows the last value. **Silence needs its own
+     * branch**, or the operator aims on a two-minute-old heading.
      */
-    // The quaternion was removed here: read and requested ten times a second,
-    // it served no purpose once the module was magnetically calibrated. The
-    // verified protocol is in the handover notes, ready to come back in one
-    // step should the ninety-degree dropout reappear.
+    // Quaternion reads were removed: useless once the module is magnetically
+    // calibrated. The verified protocol is in the handover notes, should the
+    // ninety-degree dropout reappear.
 
     private val veilleur = object : Runnable {
         override fun run() {
@@ -322,8 +304,7 @@ object BoussoleBle {
                 val silence = System.currentTimeMillis() - derniereTrameMs
                 if (silence > SILENCE_MS) {
                     etat.value = Etat.MUET
-                    // And the dial falls back to the phone, heading and
-                    // elevation alike.
+                    // The dial falls back to the phone, elevation included.
                     cap.value = null
                     elevation.value = null
                 } else if (etat.value == Etat.MUET) {
@@ -346,8 +327,7 @@ object BoussoleBle {
                     main.removeCallbacks(veilleur)
                     cap.value = null
                     elevation.value = null
-                    // A deliberate disconnect has already nulled `gatt`; any
-                    // other is a lost link, and it is announced.
+                    // A deliberate disconnect has already nulled `gatt`.
                     if (gatt != null) echoue("liaison_perdue_$status")
                     try { g.close() } catch (_: Exception) { }
                 }
@@ -368,9 +348,9 @@ object BoussoleBle {
                 catch (e: Exception) { false }
             if (!pris) { echoue("notification_refusee"); return }
 
-            // The subscription only takes once the descriptor is written:
-            // sans cela, `setCharacteristicNotification` rend `true` et rien
-            // n'arrive jamais.
+            // The subscription only takes once the CCCD is written: without
+            // it, `setCharacteristicNotification` returns `true` and nothing
+            // ever arrives.
             val d: BluetoothGattDescriptor? = carac.getDescriptor(UUID.fromString(GattWit.CCCD))
             if (d == null) { echoue("descripteur_absent"); return }
 
@@ -413,37 +393,32 @@ object BoussoleBle {
         val derniere = lues.last()
         val f = fleche
         // With the boom known, pointing reads off a vector and polarisation
-        // has no grip. Without it, yaw alone: degraded but honest, and only
-        // reached for want of better.
+        // rotation does not matter. Without it, yaw alone: degraded but honest.
         val el: Float?
         if (f != null) {
-            // **Neither offset nor sign correction here.** With the boom, the
-            // absolute heading is fully determined by the matrix and the
-            // vector: adding a correction means having two for one question. A
-            // leftover offset of a hundred and seventy-five degrees, inherited
-            // from the old method, sent east to west.
-            //
-            // The convention is the one **measured** by the two sightings, not
-            // a preference. The offset now serves only the scalar fallback.
+            // **No offset or sign correction here.** Matrix and vector fully
+            // determine the heading; an extra correction is a second answer to
+            // one question (a leftover 175° offset once sent east to west).
+            // The convention is the **measured** one. The offset serves only
+            // the scalar fallback.
             val p = fr.f4ioz.satcombo.domain.PointageAntenne.pointageLibre(
                 derniere, f, conventionActuelle())
             lisse = BoussoleWit.lisse(lisse, p.azimutDeg)
             el = p.elevationDeg
         } else {
             lisse = BoussoleWit.lisse(
-                // Le repli scalaire n'a qu'un lacet : faute de vecteur sur
-                // to swap axes in, only the yaw sign means anything there.
                 lisse, BoussoleWit.azimutDepuisLacet(
-                    // The scalar fallback has only a yaw: the sign follows the
-                    // one the measured convention applies to yaw.
+                    // The scalar fallback has only a yaw: with no vector to
+                    // swap axes in, only the sign the measured convention
+                    // applies to yaw means anything.
                     derniere.lacet, calage,
                     conventionActuelle().let { c ->
                         c.signes[c.assign.indexOf(2)] < 0
                     }))
             el = null
         }
-        // Published on the main thread: this is Compose state, and the
-        // BLE appelle depuis un fil de service.
+        // Compose state: publish on the main thread, BLE calls from a binder
+        // thread.
         val v = lisse
         val brut = derniere.lacet
         main.post {
@@ -454,7 +429,6 @@ object BoussoleBle {
         }
     }
 
-    /** What the view must be able to say: a state readable without a decoder. */
     /** The frame handed to the vector computation. */
     private fun conventionActuelle() =
         fr.f4ioz.satcombo.domain.PointageAntenne.ConventionLibre.decode(convention)

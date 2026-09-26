@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.data
 
@@ -13,24 +13,20 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 /**
- * Un lot de contacts, à porter d'un téléphone à l'autre.
+ * A batch of contacts, carried from one phone to another.
  *
- * Le format est celui du carnet lui-même, dans une enveloppe qui le nomme :
- * pas de conversion, donc pas de perte. L'ADIF aurait été plus universel mais
- * il ne sait pas dire d'où vient un carré, ni distinguer un carré saisi d'un
- * carré proposé — et c'est précisément ce genre de détail qu'on veut retrouver
- * sur l'autre téléphone.
+ * The log's own format in a named envelope: no conversion, no loss. ADIF
+ * cannot say where a grid square came from, or tell a typed square from a
+ * suggested one — exactly the detail we want on the other phone.
  *
- * L'enveloppe porte un numéro de version. Un lot d'aujourd'hui doit se lire
- * par une version d'hier : les champs inconnus sont ignorés, les champs
- * absents prennent leur valeur par défaut. C'est ce qui permet de mettre à
- * jour un téléphone avant l'autre sans que l'échange s'arrête.
+ * The envelope is versioned; unknown fields are ignored and missing ones take
+ * their default, so one phone can be updated before the other.
  */
 object LotContacts {
 
     const val VERSION = 1
 
-    /** Sérialise les entrées choisies. */
+    /** Serialises the chosen entries. */
     fun ecrit(entries: List<LogEntry>, station: String = ""): String {
         val racine = JSONObject()
         racine.put("app", "SatMe")
@@ -53,7 +49,7 @@ object LotContacts {
         return racine.toString(2)
     }
 
-    /** Relit un lot ; rend `null` si ce n'en est pas un. */
+    /** Reads a batch back; `null` if it is not one. */
     fun lit(json: String): List<LogEntry>? = runCatching {
         val racine = JSONObject(json)
         if (!racine.has("contacts")) return null
@@ -80,7 +76,7 @@ object LotContacts {
         }
     }.getOrNull()
 
-    /** Les champs qu'une fusion sait compléter. */
+    /** The fields a merge can fill in. */
     private fun champs(e: LogEntry): Map<String, String> = mapOf(
         "sat" to e.satName,
         "ml" to e.myLocator,
@@ -104,17 +100,15 @@ object LotContacts {
                      val completes: Int, val identiques: Int, val desaccords: Int)
 
     /**
-     * Fond [entrant] dans [local] sans rien écraser.
-     *
-     * La règle est au domaine, avec son banc ; ici on ne fait que traduire les
-     * entrées en fiches, puis recomposer les entrées complétées.
+     * Merges [entrant] into [local] without overwriting anything. The rule and its
+     * tests live in the domain layer; this only converts entries back and forth.
      */
     fun fusionne(local: List<LogEntry>, entrant: List<LogEntry>): Bilan {
         val b = FusionCarnet.fusionne(local.map(::fiche), entrant.map(::fiche))
         val parCle = HashMap<Triple<Long, String, Int>, LogEntry>()
         (local + entrant).forEach {
             val k = Triple(it.timeMs / 1000L, it.callsign.trim().uppercase(), it.catnum)
-            // Le local d'abord : il ne doit jamais être remplacé par l'entrant.
+            // Local first: it must never be replaced by the incoming entry.
             if (!parCle.containsKey(k)) parCle[k] = it
         }
         local.forEach {

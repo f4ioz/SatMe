@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.data
 
@@ -13,28 +13,20 @@ import java.util.Calendar
 import java.util.TimeZone
 
 /**
- * Lire un ADIF, et n'en garder que ce qui sert à deviner.
+ * Reads an ADIF file and keeps only what helps guessing.
  *
- * C'est la moitié « depuis Wavelog » du va-et-vient, et elle est délibérément
- * maigre : **on ne rapatrie pas les QSO**. On rapatrie un index de prédiction —
- * indicatif, carré, nombre de contacts, date du dernier. Dix mille contacts y
- * tiennent en quelques centaines de kilo-octets, se chargent en mémoire au
- * démarrage et se cherchent en microsecondes.
+ * The "from Wavelog" half of the round trip, deliberately thin: **QSOs are
+ * not imported**, only a prediction index — callsign, grid square, contact
+ * count, last date. Full contacts would be a second source of truth to
+ * reconcile; the reference log stays local.
  *
- * Rapatrier les contacts entiers donnerait une seconde source de vérité à
- * réconcilier avec la première, pour aucun bénéfice : le carnet de référence
- * reste local, et ceci n'est qu'un cache de ce que le serveur sait de plus que
- * lui.
- *
- * L'analyseur est volontairement tolérant. Un ADIF sorti d'un carnet tiers
- * comporte toujours quelque chose d'inattendu — un champ de longueur fausse,
- * un en-tête bavard, une casse improbable — et un import qui échoue en entier
- * sur un enregistrement bancal ne sert personne. Ce qui ne se lit pas est
- * compté et sauté.
+ * The parser is deliberately tolerant: third-party ADIF always has something
+ * odd (wrong field length, chatty header, odd case). What cannot be read is
+ * counted and skipped, never fatal.
  */
 object AdifImport {
 
-    /** Ce qu'un import a donné, et ce qu'il a laissé de côté. */
+    /** What an import produced, and what it left out. */
     class Bilan(
         val contacts: List<Indicatifs.Contact>,
         val enregistrementsLus: Int,
@@ -44,27 +36,22 @@ object AdifImport {
         val retenus: Int get() = contacts.size
 
         /**
-         * Le nombre d'**indicatifs distincts**, et non de contacts.
-         *
-         * C'est le seul chiffre qui décrive ce que le clavier a gagné : trente-
-         * huit QSO avec le même correspondant n'ajoutent qu'une entrée à sa
-         * mémoire. Annoncer les contacts laisserait croire à un enrichissement
-         * qui n'a pas eu lieu.
+         * Number of **distinct callsigns**, not contacts: the only figure that
+         * says what the keypad gained. 38 QSOs with one station add one entry.
          */
         val indicatifs: Int get() = contacts.distinctBy { it.indicatif }.size
 
-        /** Écartés faute d'indicatif ou de date : ce qui est perdu, et pourquoi. */
+        /** Dropped for lack of callsign or date: what was lost, and why. */
         val ecartes: Int get() = sansIndicatif + sansDate
     }
 
     /**
-     * Un champ ADIF : `<TAG:longueur>valeur`, avec un type facultatif que l'on
-     * ignore. La longueur fait foi, y compris quand la valeur contient des
-     * espaces ou des chevrons.
+     * An ADIF field: `<TAG:length>value`, optional type ignored. The length is
+     * authoritative, even when the value contains spaces or angle brackets.
      */
     private val CHAMP = Regex("<([A-Za-z0-9_]+):(\\d+)(?::[A-Za-z])?>", RegexOption.IGNORE_CASE)
 
-    /** Découpe un enregistrement en couples étiquette → valeur. */
+    /** Splits a record into tag → value pairs. */
     fun champs(enregistrement: String): Map<String, String> {
         val out = HashMap<String, String>()
         var i = 0
@@ -73,9 +60,8 @@ object AdifImport {
             val nom = m.groupValues[1].uppercase()
             val longueur = m.groupValues[2].toIntOrNull() ?: 0
             val debut = m.range.last + 1
-            // Une longueur qui déborde du texte : on prend ce qui reste plutôt
-            // que de lever. Le champ est probablement tronqué, mais un
-            // indicatif tronqué vaut mieux qu'un import perdu.
+            // Length past the end of text: take what remains rather than throw.
+            // A truncated callsign beats a lost import.
             val fin = (debut + longueur).coerceAtMost(enregistrement.length)
             if (longueur > 0) out[nom] = enregistrement.substring(debut, fin)
             i = fin
@@ -84,12 +70,9 @@ object AdifImport {
     }
 
     /**
-     * Date et heure ADIF vers un instant.
-     *
-     * `QSO_DATE` fait huit chiffres, `TIME_ON` six ou quatre. Tout est en temps
-     * universel par définition du format, et c'est la seule lecture correcte :
-     * interpréter dans le fuseau du téléphone décalerait tout l'historique d'une
-     * ou deux heures selon la saison.
+     * ADIF date and time to an instant. `QSO_DATE` has eight digits, `TIME_ON`
+     * six or four. Always UTC by definition: the phone's time zone would shift
+     * the whole history by an hour or two.
      */
     fun instant(date: String, heure: String): Long? {
         val d = date.trim()
@@ -112,19 +95,17 @@ object AdifImport {
     }
 
     /**
-     * Lit un fichier entier.
+     * Reads a whole file.
      *
-     * @param satellitesSeulement ne garder que les contacts marqués
-     *   `PROP_MODE=SAT`. Vrai par défaut : la mémoire prédictive sert pendant un
-     *   passage, et les correspondants d'un contest VHF n'y ont rien à faire —
-     *   ils ne feraient que pousser vers le bas ceux qu'on va vraiment entendre.
+     * @param satellitesSeulement keep only `PROP_MODE=SAT` contacts. True by
+     *   default: the index serves during a pass, and VHF contest stations would
+     *   only push down the ones you will actually hear.
      */
     fun lit(
         texte: String,
         filtre: String = fr.f4ioz.satcombo.domain.FiltreMoisson.SAT,
     ): Bilan {
-        // L'en-tête se termine par <EOH> quand il existe ; sans en-tête, tout
-        // le fichier est du corps.
+        // The header ends with <EOH> when present; without one, it is all body.
         val corps = texte.split(Regex("<EOH>", RegexOption.IGNORE_CASE)).let {
             if (it.size > 1) it.drop(1).joinToString("<EOH>") else it[0]
         }
@@ -140,8 +121,8 @@ object AdifImport {
             if (f.isEmpty()) return@forEach
             lus++
 
-            // Le tri retenu par l'opérateur. Wavelog ne sait filtrer que la
-            // bande satellite chez lui ; tout le reste se trie ici.
+            // The operator's filter. Wavelog can only filter the satellite band
+            // on its side; everything else is filtered here.
             if (!fr.f4ioz.satcombo.domain.FiltreMoisson.retient(
                     filtre, f["PROP_MODE"].orEmpty(),
                     f["MODE"].orEmpty(), f["BAND"].orEmpty())
@@ -159,10 +140,8 @@ object AdifImport {
                     locator = f["GRIDSQUARE"].orEmpty().trim().uppercase(),
                     quandMs = quand,
                     satellite = f["SAT_NAME"].orEmpty().trim(),
-                    // 3668 des 3763 contacts du carnet d'Olivier portent un
-                    // nom. C'est le champ le plus rentable de l'import après le
-                    // carré : il ne coûte rien à garder et se lit d'un coup
-                    // d'œil pendant un passage.
+                    // Nearly every contact in a real log carries a name: the most
+                    // useful field after the grid square, read at a glance mid-pass.
                     nom = f["NAME"].orEmpty().trim(),
                 )
             )

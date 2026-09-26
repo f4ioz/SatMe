@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.data
 
@@ -13,16 +13,12 @@ import fr.f4ioz.satcombo.R
 import org.json.JSONArray
 
 /**
- * Les lieux habités de France : de quoi se repérer sur une carte.
+ * Populated places of France, to find one's bearings on a map: a park outline
+ * alone is unrecognisable, three town names around it place it at a glance.
  *
- * Un contour de parc dit où sont les limites, jamais où l'on est : posé sur
- * une photo, il ne ressemble à rien de reconnaissable. Trois noms de communes
- * autour suffisent à situer la zone d'un coup d'œil.
- *
- * Source GeoNames (licence CC BY), lieux habités de 200 habitants et plus,
- * **triés par population décroissante** — l'ordre du fichier fait tout le
- * travail : les premiers trouvés dans une fenêtre sont les plus importants,
- * donc ceux qu'on écrit. 25 187 entrées, 727 Ko.
+ * GeoNames (CC BY), places of 200+ inhabitants, **sorted by decreasing
+ * population** — the file order does the work: the first found in a window
+ * are the most important. 25,187 entries, 727 KB.
  */
 object Villes {
 
@@ -46,11 +42,8 @@ object Villes {
     }
 
     /**
-     * Les [max] villes les plus importantes dans la fenêtre donnée.
-     *
-     * Le fichier étant trié par population, on prend les premières qui
-     * tombent dans la fenêtre et on s'arrête : pas de tri, pas de calcul de
-     * distance, une seule passe.
+     * The [max] largest towns in the window: the file is sorted by population,
+     * so take the first that fall inside and stop. One pass, no sorting.
      */
     fun dansFenetre(
         context: Context,

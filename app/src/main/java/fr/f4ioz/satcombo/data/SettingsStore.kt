@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.data
 
@@ -17,23 +17,18 @@ class SettingsStore(context: Context) {
     private val prefs = context.getSharedPreferences("satcombo_settings", Context.MODE_PRIVATE)
 
     /**
-     * Les reprises ponctuelles de réglages déjà écrits.
+     * One-off migrations of settings already written.
      *
-     * Changer un défaut ne touche que les installations neuves : un réglage
-     * déjà posé dans les préférences est relu tel quel, et l'opérateur qui a
-     * l'application depuis six mois garde l'ancien comportement sans savoir
-     * qu'un autre existe. Il faut donc réécrire la valeur — une fois, et une
-     * seule, faute de quoi on écraserait à chaque démarrage le choix que
-     * l'opérateur vient de faire.
-     *
-     * Le compteur retient jusqu'où on est allé. Une reprise neuve s'ajoute à
-     * la suite et incrémente `reprises`.
+     * Changing a default only affects new installs: an existing value is read
+     * as is. So the value must be rewritten — once only, or the operator's new
+     * choice would be overwritten at every start. `reprises` counts how far we
+     * got; a new migration is appended and increments it.
      */
     init {
         val faites = prefs.getInt("reprises", 0)
         if (faites < 1) {
-            // 19.13 — le double appui ouvre le clavier. Le geste n'écrit plus
-            // rien depuis la 19.11 : trois appuis n'ont plus rien à protéger.
+            // 19.13: double tap opens the keypad. The gesture no longer writes
+            // anything since 19.11, so three taps protect nothing.
             prefs.edit().putInt("log_taps", 2).putInt("reprises", 1).apply()
         }
     }
@@ -76,7 +71,6 @@ class SettingsStore(context: Context) {
         get() = prefs.getBoolean("recorder_enabled", true)
         set(v) { prefs.edit().putBoolean("recorder_enabled", v).apply() }
 
-    /** Recorder audio source: "MIC" (phone mic) or "BT" (Bluetooth HFP headset link). */
     /** Capture route for the pass recorder: "MIC", "BT" (HFP/SCO) or "USB". */
     var recorderSource: String
         get() = prefs.getString("recorder_source", "MIC") ?: "MIC"
@@ -84,12 +78,12 @@ class SettingsStore(context: Context) {
 
     /** Capture with AudioSource.UNPROCESSED when the device supports it: no AGC
      *  and no noise suppression on audio the rig has already processed. */
-    /** Afficher le spectre du son pendant l'enregistrement. */
+    /** Show the audio spectrum while recording. */
     var monitorSpectre: Boolean
         get() = prefs.getBoolean("monitor_spectre", false)
         set(v) { prefs.edit().putBoolean("monitor_spectre", v).apply() }
 
-    /** Renvoyer le son capté vers le haut-parleur du téléphone (contrôle). */
+    /** Loop captured audio back to the phone speaker (monitoring). */
     var monitorSpeaker: Boolean
         get() = prefs.getBoolean("monitor_speaker", false)
         set(v) { prefs.edit().putBoolean("monitor_speaker", v).apply() }
@@ -112,96 +106,87 @@ class SettingsStore(context: Context) {
         set(v) { prefs.edit().putBoolean("sstv_enabled", v).apply() }
 
     /**
-     * Mode SSTV imposé au décodeur, ou vide pour suivre l'en-tête VIS.
-     *
-     * L'en-tête d'un signal faible se lit parfois de travers : la parité
-     * passe, le code ne correspond pas au mode émis, et l'image sort
-     * mélangée. Quand l'opérateur sait ce qui est émis, il peut le dire.
+     * SSTV mode forced on the decoder, or empty to follow the VIS header. A
+     * weak signal's header can be misread with valid parity, giving a
+     * scrambled picture; an operator who knows the mode can say so.
      */
     var sstvForcedMode: String
         get() = prefs.getString("sstv_forced_mode", "") ?: ""
         set(v) { prefs.edit().putString("sstv_forced_mode", v).apply() }
 
-    /** Surveiller le son reçu pour y trouver une image APT (NOAA, 137 MHz).
-     *  Contrairement à la SSTV, le décodage APT tourne en permanence dès qu'il
-     *  est actif : il n'y a pas d'en-tête à attendre, l'image commence dès que
-     *  la synchronisation de ligne s'accroche. On le laisse donc éteint par
-     *  défaut, et l'opérateur l'allume avant un passage NOAA. */
+    /** Watch received audio for an APT picture (NOAA, 137 MHz). Unlike SSTV
+     *  there is no header to wait for, so APT decodes continuously once on:
+     *  off by default, switched on before a NOAA pass. */
     var aptEnabled: Boolean
         get() = prefs.getBoolean("apt_enabled", false)
         set(v) { prefs.edit().putBoolean("apt_enabled", v).apply() }
 
     /**
-     * Ce que la bande image de la page du passage montre : "SSTV" ou "NOAA".
-     *
-     * Les deux décodeurs peuvent tourner ensemble, mais on ne suit qu'un
-     * satellite à la fois et l'écran du passage n'a pas la place d'afficher
-     * deux images. Le choix se fait d'une touche sur la puce, et il est retenu :
-     * celui qui fait du NOAA en fait plusieurs passages de suite.
+     * What the pass page's picture strip shows: "SSTV" or "NOAA". Both
+     * decoders may run, but there is room for one picture. Remembered: NOAA
+     * sessions span several passes.
      */
     var rxImageMode: String
         get() = prefs.getString("rx_image_mode", "SSTV") ?: "SSTV"
         set(v) { prefs.edit().putString("rx_image_mode", v).apply() }
 
-    // --- Clé RTL-SDR (bêta) -------------------------------------------------
+    // --- RTL-SDR dongle (beta) ----------------------------------------------
 
-    /** Gain du tuner en dixièmes de dB ; -1 = gain automatique. */
+    /** Tuner gain in tenths of dB; -1 = automatic. */
     var sdrGainTenthDb: Int
         get() = prefs.getInt("sdr_gain", -1)
         set(v) { prefs.edit().putInt("sdr_gain", v).apply() }
 
-    /** AGC numérique du RTL2832U, en plus du gain du tuner. */
+    /** RTL2832U digital AGC, on top of tuner gain. */
     var sdrAgc: Boolean
         get() = prefs.getBoolean("sdr_agc", false)
         set(v) { prefs.edit().putBoolean("sdr_agc", v).apply() }
 
-    /** Erreur du quartz de la clé, en ppm. Les clés bon marché dérivent de
-     *  quelques dizaines de ppm, soit plusieurs kilohertz en UHF. */
+    /** Dongle crystal error in ppm. Cheap dongles are off by tens of ppm,
+     *  several kHz at UHF. */
     var sdrPpm: Int
         get() = prefs.getInt("sdr_ppm", 0)
         set(v) { prefs.edit().putInt("sdr_ppm", v).apply() }
 
-    /** Décoder le SSTV directement depuis la clé. */
+    /** Decode SSTV straight from the dongle. */
     var sdrSstv: Boolean
         get() = prefs.getBoolean("sdr_sstv", true)
         set(v) { prefs.edit().putBoolean("sdr_sstv", v).apply() }
 
-    /** Enregistrer un MP3 pendant la réception SDR. */
+    /** Record an MP3 during SDR reception. */
     var sdrRecord: Boolean
         get() = prefs.getBoolean("sdr_record", true)
         set(v) { prefs.edit().putBoolean("sdr_record", v).apply() }
 
-    /** Sortir l'audio démodulé sur le casque / le haut-parleur. */
+    /** Play demodulated audio on headphones / speaker. */
     var sdrAudio: Boolean
         get() = prefs.getBoolean("sdr_audio", true)
         set(v) { prefs.edit().putBoolean("sdr_audio", v).apply() }
 
-    /** Mode de démodulation : NFM, USB, LSB ou AM. */
+    /** Demodulation mode: NFM, USB, LSB or AM. */
     var sdrMode: String
         get() = prefs.getString("sdr_mode", "NFM") ?: "NFM"
         set(v) { prefs.edit().putString("sdr_mode", v).apply() }
 
-    /** Largeur de canal en hertz ; 0 laisse le mode décider. */
+    /** Channel width in Hz; 0 lets the mode decide. */
     var sdrBandwidthHz: Int
         get() = prefs.getInt("sdr_bw", 0)
         set(v) { prefs.edit().putInt("sdr_bw", v).apply() }
 
-    /** Seuil du silencieux en dBFS ; -120 le coupe. */
+    /** Squelch threshold in dBFS; -120 disables it. */
     var sdrSquelchDb: Int
         get() = prefs.getInt("sdr_squelch", -120)
         set(v) { prefs.edit().putInt("sdr_squelch", v).apply() }
 
-    /** Largeur affichée par le spectre, en hertz. */
-    /** Petite cascade sous la boussole, sur la page du passage. */
+    /** Spectrum display span, in Hz. */
+    /** Small waterfall under the compass on the pass page. */
     var sdrInlineWaterfall: Boolean
         get() = prefs.getBoolean("sdr_inline_wf", true)
         set(v) { prefs.edit().putBoolean("sdr_inline_wf", v).apply() }
 
     /**
-     * Dernière fréquence écoutée pour les radiosondes, en hertz.
-     *
-     * Elle est bornée à la bande météo : un réglage abîmé ne doit pas envoyer
-     * la clé se promener sur les balises de détresse.
+     * Last radiosonde frequency in Hz. Clamped to the meteo band: a corrupt
+     * setting must not send the dongle onto distress beacons.
      */
     var sondeFreqHz: Long
         get() {
@@ -218,69 +203,62 @@ class SettingsStore(context: Context) {
         get() = prefs.getInt("sdr_span", 48_000)
         set(v) { prefs.edit().putInt("sdr_span", v).apply() }
 
-    // ------------------------------------------------------------ accord fin
-    // Trois aides indépendantes plutôt qu'un choix unique : elles n'occupent
-    // pas la même place et ne répondent pas à la même question. La loupe
-    // montre, le vernier déplace, le calage décide. On peut vouloir la loupe
-    // sans le vernier — voir le spectre et se poser au doigt — comme le
-    // vernier sans la loupe, sur un écran étroit où la place manque.
+    // ------------------------------------------------------------ fine tuning
+    // Three independent aids rather than one choice: the magnifier shows,
+    // the vernier moves, voice netting decides. Each can be wanted without
+    // the others (e.g. vernier alone on a narrow screen).
 
-    /** Loupe : seconde vue du spectre, large de quelques kilohertz. */
+    /** Magnifier: a second spectrum view a few kHz wide. */
     var sdrLoupe: Boolean
         get() = prefs.getBoolean("sdr_loupe", true)
         set(v) { prefs.edit().putBoolean("sdr_loupe", v).apply() }
 
-    /** Largeur de la loupe, en hertz. */
+    /** Magnifier span, in Hz. */
     var sdrLoupeSpanHz: Int
         get() = prefs.getInt("sdr_loupe_span", 5_000)
         set(v) { prefs.edit().putInt("sdr_loupe_span", v).apply() }
 
-    /** Vernier : cadran à défilement, accord relatif au doigt. */
+    /** Vernier: scrolling dial for relative tuning by finger. */
     var sdrVernier: Boolean
         get() = prefs.getBoolean("sdr_vernier", true)
         set(v) { prefs.edit().putBoolean("sdr_vernier", v).apply() }
 
-    /** Rapport du vernier, en hertz par centimètre de glissement. */
+    /** Vernier ratio, Hz per centimetre of swipe. */
     var sdrVernierHzParCm: Int
         get() = prefs.getInt("sdr_vernier_ratio", 200)
         set(v) { prefs.edit().putInt("sdr_vernier_ratio", v).apply() }
 
-    /** Bouton de calage sur la voix reçue (bande latérale seulement). */
+    /** Voice netting button (sideband only). */
     var sdrCalageVoix: Boolean
         get() = prefs.getBoolean("sdr_calage_voix", true)
         set(v) { prefs.edit().putBoolean("sdr_calage_voix", v).apply() }
 
     /**
-     * Clavier des indicatifs tenu de la main gauche.
-     *
-     * Trois lignes de code qui décident de l'utilisabilité réelle à une main :
-     * sur un écran tenu d'une main, le pouce atteint bien son propre bord et
-     * mal celui d'en face. Validation et effacement doivent tomber du côté de
-     * la main qui tient, pas du côté choisi par le développeur.
+     * Callsign keypad for left-hand use. One-handed, the thumb reaches its own
+     * edge easily and the far one poorly: Enter and Delete must sit on the
+     * holding hand's side.
      */
-    /** Silence exigé avant que le logiciel ne reprenne la molette, en ms. */
+    /** Idle time before the software takes the dial back, in ms. */
     /**
-     * Le liseré d'émission, et donc le sondage CAT qui l'alimente.
-     *
-     * Il partage la liaison série avec le Doppler : qui cherche la réactivité
-     * maximale du suivi le coupe, qui veut voir qu'il émet le garde. Le choix
-     * appartient à l'opérateur, il ne se devine pas.
+     * TX border indicator, and the CAT polling behind it. It shares the serial
+     * link with Doppler tracking: off for the most responsive tracking, on to
+     * see when you transmit. The operator's call.
      */
     var liseréEmission: Boolean
         get() = prefs.getBoolean("cat_liseret_tx", true)
         set(v) { prefs.edit().putBoolean("cat_liseret_tx", v).apply() }
 
-    /** Cadence du sondage d'émission, en millisecondes. */
+    /** TX polling interval, in ms. */
     var sondeTxMs: Int
         get() = prefs.getInt("cat_sonde_tx_ms", 500)
         set(v) { prefs.edit().putInt("cat_sonde_tx_ms", v.coerceIn(250, 3000)).apply() }
 
-    /** L'émission se recale sans attendre la fin du délai de reprise. */
+    /** TX re-syncs without waiting for the takeover delay. */
     var txSuitVite: Boolean
         get() = prefs.getBoolean("cat_tx_suit_vite", true)
         set(v) { prefs.edit().putBoolean("cat_tx_suit_vite", v).apply() }
 
-    /** Le carnet en ligne : Wavelog ou Cloudlog, même API. */
+    /** Online log: Wavelog or Cloudlog, same API. */
     var carnetUrl: String
         get() = prefs.getString("carnet_url", "") ?: ""
         set(v) { prefs.edit().putString("carnet_url", v.trim()).apply() }
@@ -294,30 +272,19 @@ class SettingsStore(context: Context) {
         set(v) { prefs.edit().putString("carnet_slug", v.trim()).apply() }
 
     /**
-     * L'identifiant du profil de station Wavelog, pour déposer les contacts.
-     *
-     * Séparé de la clé et du *slug* parce qu'il sert à autre chose : ceux-là
-     * interrogent, celui-ci écrit. Un opérateur peut vouloir la peinture des
-     * carrés sans jamais déposer, et l'inverse n'a pas de sens — d'où un champ
-     * de plus plutôt qu'un réglage obligatoire de plus.
+     * Wavelog station profile id, for uploading contacts. Separate from key
+     * and slug, which only query: grid painting works without uploading.
      */
     var carnetProfil: String
         get() = prefs.getString("carnet_profil", "") ?: ""
         set(v) { prefs.edit().putString("carnet_profil", v.trim()).apply() }
 
     /**
-     * Le dernier contact rapatrié du carnet en ligne.
-     *
-     * C'est ce qui rend la moisson différentielle : l'appel suivant repart de
-     * là plutôt que de redemander tout le journal. Le serveur le demande
-     * expressément — les instances limitent le débit, et un carnet de
-     * plusieurs milliers de contacts n'a pas à traverser le réseau chaque
-     * fois qu'on veut les dix derniers.
-     *
-     * Remis à zéro, on recharge tout : c'est la sortie de secours quand
-     * l'index paraît incomplet.
+     * Last contact fetched from the online log: makes fetching incremental,
+     * as the server asks (instances rate-limit). Reset to zero to reload
+     * everything when the index looks incomplete.
      */
-    /** L'ensemble de profils auquel se rapporte le curseur de moisson. */
+    /** The set of profiles the fetch cursor refers to. */
     var carnetProfilsVus: String
         get() = prefs.getString("carnet_profils_vus", "") ?: ""
         set(v) { prefs.edit().putString("carnet_profils_vus", v).apply() }
@@ -327,23 +294,16 @@ class SettingsStore(context: Context) {
         set(v) { prefs.edit().putLong("carnet_dernier_id", v).apply() }
 
     /**
-     * Ce qu'on moissonne : « sat », « phonie », « cw » ou « tout ».
+     * What to fetch: "sat", "phonie" (phone), "cw" or "tout" (all). Satellite
+     * by default: a station met once on 40 m does not belong in the keypad.
      *
-     * Satellite par défaut : c'est ce à quoi sert le clavier, et un
-     * correspondant croisé une fois en quarante mètres n'a rien à faire dans
-     * ses suggestions.
-     *
-     * **Changer ce réglage remet le compteur différentiel à zéro.** Sans cela,
-     * passer de « sat » à « tout » ne rapporterait que les contacts postérieurs
-     * au dernier appel : tout l'historique HF resterait invisible, et l'on
-     * croirait le filtre inopérant. Le défaut serait silencieux et durable.
+     * **Changing it resets the incremental cursor.** Otherwise switching from
+     * "sat" to "tout" would only bring contacts newer than the last fetch, and
+     * the HF history would silently stay missing.
      */
     /**
-     * Les mémoires QO-100 posées par l'opérateur.
-     *
-     * Rangées en JSON plutôt qu'en champs séparés : leur nombre n'est pas
-     * borné, et une liste de préférences numérotées se corrompt dès qu'on en
-     * retire une du milieu.
+     * Operator's QO-100 memories, as JSON: unbounded count, and numbered
+     * preference keys break when one is removed from the middle.
      */
     var qo100Memoires: List<fr.f4ioz.satcombo.domain.MemoiresQo100.Memoire>
         get() = runCatching {
@@ -364,11 +324,8 @@ class SettingsStore(context: Context) {
         }
 
     /**
-     * Les chaînes de conversion QO-100, nommées.
-     *
-     * Elles vivent avec les réglages QO-100 et non dans les convertisseurs
-     * généraux : un oscillateur à 10 345 MHz n'a aucun sens sur RS-44, et le
-     * réglage traînait dans un écran où personne n'allait le chercher.
+     * Named QO-100 conversion chains. Kept with the QO-100 settings, not the
+     * general converters: a 10 345 MHz LO means nothing on RS-44.
      */
     var qo100Chaines: List<fr.f4ioz.satcombo.domain.ChaineQo100.Chaine>
         get() = runCatching {
@@ -391,8 +348,8 @@ class SettingsStore(context: Context) {
             prefs.edit().putString("qo100_chaines", a.toString()).apply()
         }
 
-    /** Le nom de la chaîne en service. */
-    /** Les appareils de réception et leur écart, en texte simple. */
+    /** Name of the active chain. */
+    /** Receive devices and their offset, as plain text. */
     var materielsRx: String
         get() = prefs.getString("materiels_rx", "") ?: ""
         set(v) { prefs.edit().putString("materiels_rx", v).apply() }
@@ -410,15 +367,10 @@ class SettingsStore(context: Context) {
         set(v) { prefs.edit().putString("qo100_chaine", v).apply() }
 
     /**
-     * Balayer tout QO-100 plutôt que le seul transpondeur choisi.
-     *
-     * La bride est une garde utile : au-delà des bords, la montée
-     * correspondante sort du transpondeur et la porteuse part chez le voisin.
-     * Mais elle empêche aussi d'**écouter** ce qu'il y a ailleurs — chercher
-     * une balise, voir si le transpondeur large travaille, retrouver quelqu'un
-     * qui s'est déplacé.
-     *
-     * Décochée par défaut : celui qui n'a rien demandé garde la garde.
+     * Sweep all of QO-100 rather than the chosen transponder only. The clamp
+     * keeps the uplink inside the transponder, but also prevents **listening**
+     * elsewhere (a beacon, the wideband transponder). Off by default: the
+     * guard stays unless asked.
      */
     var qo100SansBride: Boolean
         get() = prefs.getBoolean("qo100_sans_bride", false)
@@ -431,8 +383,8 @@ class SettingsStore(context: Context) {
             prefs.edit().putString("carnet_filtre", v).apply()
         }
 
-    /** LoTW : indicatif et mot de passe du compte ARRL. */
-    /** Peindre les carrés travaillés et activés sur les cartes. */
+    /** LoTW: ARRL account callsign and password. */
+    /** Paint worked and activated grid squares on the maps. */
     var peindreCarres: Boolean
         get() = prefs.getBoolean("peindre_carres", true)
         set(v) { prefs.edit().putBoolean("peindre_carres", v).apply() }
@@ -449,7 +401,7 @@ class SettingsStore(context: Context) {
         get() = prefs.getInt("cat_hold_ms", 2_000)
         set(v) { prefs.edit().putInt("cat_hold_ms", v).apply() }
 
-    /** La molette d'émission tient lieu de commande de décalage. */
+    /** The TX dial acts as the shift control. */
     var catTxVfoShift: Boolean
         get() = prefs.getBoolean("cat_tx_vfo_shift", false)
         set(v) { prefs.edit().putBoolean("cat_tx_vfo_shift", v).apply() }
@@ -459,27 +411,20 @@ class SettingsStore(context: Context) {
         set(v) { prefs.edit().putBoolean("clavier_main_gauche", v).apply() }
 
     /**
-     * La disposition des touches : « abc », « azerty » ou « qwerty ».
-     *
-     * L'alphabétique reste le défaut : il ne demande aucune habitude, ce qui
-     * est ce qu'il faut à qui découvre l'application. Les deux autres rendent
-     * aux rangées leur vraie largeur — dix touches — et donc l'habitude du
-     * clavier de tous les jours, au prix de touches plus étroites.
+     * Keypad layout: "abc", "azerty" or "qwerty". Alphabetical by default (no
+     * habit needed); the others give familiar ten-key rows at the cost of
+     * narrower keys.
      */
     /**
-     * La molette USB pilote-t-elle le VFO ?
-     *
-     * Fermé par défaut : ces molettes sont des touches de volume, et
-     * quelqu'un qui n'en a pas ne doit rien perdre.
+     * Does the USB knob drive the VFO? Off by default: these knobs send volume
+     * keys, and users without one must lose nothing.
      */
-    // ---- Le boîtier à trois touches ----
+    // ---- The three-button box ----
 
     /**
-     * Les codes des trois touches, appris et non saisis.
-     *
-     * Zéro veut dire « pas encore apprise », et une touche à zéro ne déclenche
-     * jamais rien : sans cette garde, trois touches non apprises répondraient
-     * toutes au même code et la molette changerait de cible à chaque frappe.
+     * The three key codes, learned rather than typed. Zero means "not learned"
+     * and never triggers: otherwise three unlearned keys would share one code
+     * and the knob would switch target on every press.
      */
     var macroCodeA: Int
         get() = prefs.getInt("macro_code_a", 0)
@@ -491,7 +436,7 @@ class SettingsStore(context: Context) {
         get() = prefs.getInt("macro_code_c", 0)
         set(v) { prefs.edit().putInt("macro_code_c", v).apply() }
 
-    /** Ce que chaque touche sélectionne : VFO, SHIFT_RX ou SHIFT_TX. */
+    /** What each key selects: VFO, SHIFT_RX or SHIFT_TX. */
     var macroCibleA: String
         get() = prefs.getString("macro_cible_a", "SHIFT_RX") ?: "SHIFT_RX"
         set(v) { prefs.edit().putString("macro_cible_a", v).apply() }
@@ -503,21 +448,19 @@ class SettingsStore(context: Context) {
         set(v) { prefs.edit().putString("macro_cible_c", v).apply() }
 
     /**
-     * Le poussoir de la molette et ce qu'il fait.
-     *
-     * Le code vaut 164 — « Sourdine » — par défaut : c'est ce qu'envoient la
-     * plupart de ces boîtiers, et c'était le comportement figé d'avant.
+     * The knob push button and its action. Code 164 (Mute) by default: what
+     * most of these boxes send, and the former fixed behaviour.
      */
     var macroCodeD: Int
         get() = prefs.getInt("macro_code_d", 164)
         set(v) { prefs.edit().putInt("macro_code_d", v).apply() }
 
-    /** « PAS », « CIBLE » ou « ZERO ». */
+    /** "PAS" (step), "CIBLE" (target) or "ZERO". */
     var macroActionD: String
         get() = prefs.getString("macro_action_d", "PAS") ?: "PAS"
         set(v) { prefs.edit().putString("macro_action_d", v).apply() }
 
-    /** La cible courante, retenue d'une session à l'autre. */
+    /** Current target, kept across sessions. */
     var moletteCible: String
         get() = prefs.getString("molette_cible", "VFO") ?: "VFO"
         set(v) { prefs.edit().putString("molette_cible", v).apply() }
@@ -526,7 +469,7 @@ class SettingsStore(context: Context) {
         get() = prefs.getBoolean("molette_vfo", false)
         set(v) { prefs.edit().putBoolean("molette_vfo", v).apply() }
 
-    /** Le pas de la molette, en hertz : 10, 100 ou 1000. */
+    /** Knob step in Hz: 10, 100 or 1000. */
     var molettePasHz: Long
         get() = prefs.getLong("molette_pas", 100L)
         set(v) { prefs.edit().putLong("molette_pas", v).apply() }
@@ -536,22 +479,18 @@ class SettingsStore(context: Context) {
         set(v) { prefs.edit().putString("clavier_disposition", v).apply() }
 
     /**
-     * Suivi Doppler automatique de la clé pendant le passage.
-     *
-     * Ouvert par défaut : sans lui, le signal d'un satellite en orbite basse
-     * sort du canal en une minute et demie sur 435 MHz. On le ferme pour
-     * écouter une balise fixe, ou pour vérifier à l'oreille de combien le
-     * satellite dérive tout seul.
+     * Automatic Doppler tracking on the dongle during a pass. On by default:
+     * without it a LEO signal leaves the channel in about 90 s at 435 MHz.
+     * Turn off for a fixed beacon or to hear the drift by ear.
      */
     var sdrDopplerTrack: Boolean
         get() = prefs.getBoolean("sdr_doppler_track", true)
         set(v) { prefs.edit().putBoolean("sdr_doppler_track", v).apply() }
 
     /**
-     * Désaccentuation FM. Fermée par défaut : elle n'a de sens qu'en FM à
-     * large bande, et sur les fréquences amateurs elle ne fait qu'étouffer les
-     * aigus — une tonalité d'appel à 1 750 Hz en ressortait onze décibels trop
-     * bas.
+     * FM de-emphasis. Off by default: it only makes sense for wideband FM; on
+     * amateur narrow FM it muffles the highs (a 1750 Hz tone came out 11 dB
+     * low).
      */
     var sdrDeemph: Boolean
         get() = prefs.getBoolean("sdr_deemph", false)
@@ -619,17 +558,10 @@ class SettingsStore(context: Context) {
         set(v) { prefs.edit().putString("skeds_token", v.trim()).apply() }
 
     /**
-     * Combien d'appuis rapides sur la boussole ouvrent la saisie : **2 par
-     * défaut**, 3 pour qui préfère un geste plus délibéré. Rien d'autre n'est
-     * permis : un appui simple ouvrirait l'écran chaque fois qu'on touche la
-     * boussole.
-     *
-     * Le défaut était à 3 du temps où le geste **écrivait** un contact : trois
-     * appuis ne sont jamais un accident, et un contact posé par mégarde est
-     * une ligne à retrouver et à effacer. Depuis la 19.11 le geste n'écrit
-     * plus, il ouvre le clavier — se tromper ne coûte plus qu'une flèche de
-     * retour. La prudence n'avait plus d'objet, et elle coûtait un appui à
-     * chaque contact.
+     * Quick taps on the compass that open logging: **2 by default**, 3 for a
+     * more deliberate gesture. Nothing else: a single tap would open it on
+     * every touch. (It was 3 when the gesture wrote a contact; since 19.11 it
+     * only opens the keypad, so a mistake costs one back press.)
      */
     var logTaps: Int
         get() = prefs.getInt("log_taps", 2).coerceIn(2, 3)
@@ -670,23 +602,19 @@ class SettingsStore(context: Context) {
         set(v) { prefs.edit().putBoolean("notify_on", v).apply() }
 
     /**
-     * D'où vient le son des radiosondes : "SDR" (clé RTL), "MIC" (micro du
-     * téléphone devant le haut-parleur du poste) ou "USB" (carte son câblée
-     * sur la sortie discriminateur). Le Bluetooth est volontairement absent :
-     * son canal mains-libres ne passe pas une modulation à 4800 bauds.
+     * Radiosonde audio source: "SDR" (RTL dongle), "MIC" (phone mic by the rig
+     * speaker) or "USB" (sound card on the discriminator output). No
+     * Bluetooth: the hands-free channel cannot carry 4800 baud.
      */
     var sondeSource: String
         get() = prefs.getString("sonde_source", "SDR") ?: "SDR"
         set(v) { prefs.edit().putString("sonde_source", v).apply() }
 
     /**
-     * Modèle de sonde écouté : "AUTO", "RS41", "M20" ou "M10".
-     *
-     * En automatique les trois décodeurs tournent en parallèle et le filtre FM
-     * reste ouvert au plus large. Nommer le modèle éteint les décodeurs
-     * inutiles et resserre le filtre sur la largeur exacte du modèle, ce qui
-     * vaut deux à trois décibels — la différence entre une sonde décodée à cent
-     * kilomètres et une sonde perdue.
+     * Sonde model: "AUTO", "RS41", "M20" or "M10". AUTO runs all three
+     * decoders with the widest FM filter; naming the model narrows the filter
+     * to its exact width — worth 2–3 dB, the difference between decoding at
+     * 100 km and losing the sonde.
      */
     var sondeModel: String
         get() = prefs.getString("sonde_model", "AUTO") ?: "AUTO"
@@ -744,47 +672,36 @@ class SettingsStore(context: Context) {
         set(v) { prefs.edit().putInt("civ_baud", v).apply() }
 
     /**
-     * Lequel des adaptateurs USB-série reconnus est le poste.
-     *
-     * Zéro par défaut, c'est-à-dire le premier, ce qui suffit tant qu'il n'y en
-     * a qu'un. Mais une clé SDR branchée en même temps se présente elle aussi
-     * comme un adaptateur série : selon l'ordre de branchement, le « premier »
-     * n'est plus le poste, et la connexion CAT s'ouvrait sur la clé.
+     * Which recognised USB-serial adapter is the rig. Zero (the first) is fine
+     * with one adapter, but an SDR dongle also shows up as serial: depending on
+     * plug order, CAT could open on the dongle.
      */
     var civUsbIndex: Int
         get() = prefs.getInt("civ_usb_index", 0)
         set(v) { prefs.edit().putInt("civ_usb_index", v.coerceIn(0, 15)).apply() }
 
     /**
-     * Balayage automatique des ports a la connexion.
-     *
-     * Le port designe est essaye en premier, puis ses voisins. Cela evite a
-     * l'operateur d'avoir a savoir lequel des deux ports de son poste porte le
-     * CI-V — il ne le sait generalement pas, et rien sur l'appareil ne le dit.
-     * Se desactive pour ceux qui veulent maitriser exactement ce qui est ouvert.
+     * Automatic port scan on connect: the chosen port first, then its
+     * neighbours, so the operator need not know which of the rig's two ports
+     * carries CI-V (nothing on the rig says). Can be disabled for full control.
      */
     var civUsbAuto: Boolean
         get() = prefs.getBoolean("civ_usb_auto", true)
         set(v) { prefs.edit().putBoolean("civ_usb_auto", v).apply() }
 
     /**
-     * Poste simulé : le CAT tourne sur une radio qui n'existe pas.
-     *
-     * Toute la chaîne s'exécute — armement, mode satellite, écriture de la
-     * paire, suivi Doppler — mais au bout du fil il y a un IC-9700 en mémoire au
-     * lieu d'un câble. C'est fait pour apprendre l'application avant d'avoir la
-     * radio devant soi, et pour montrer le suivi en démonstration.
+     * Simulated rig: the whole CAT chain runs (arming, satellite mode, frequency
+     * pair, Doppler) against an in-memory IC-9700. For learning the app without
+     * the radio, and for demonstrations.
      */
     var catSimulated: Boolean
         get() = prefs.getBoolean("cat_simulated", false)
         set(v) { prefs.edit().putBoolean("cat_simulated", v).apply() }
 
     /**
-     * Journal des trames CAT.
-     *
-     * Fermé, il ne coûte rien. Ouvert, il garde les deux cents dernières trames
-     * avec leur traduction en clair, ce qui permet de trancher entre « la trame
-     * n'est pas partie », « elle est partie fausse » et « la radio l'a refusée ».
+     * CAT frame log. Free when off; when on, keeps the last 200 frames with a
+     * plain-language decode, to tell "not sent" from "sent wrong" from
+     * "refused by the radio".
      */
     var catMonitor: Boolean
         get() = prefs.getBoolean("cat_monitor", false)
@@ -796,11 +713,8 @@ class SettingsStore(context: Context) {
         set(v) { prefs.edit().putString("language", v).apply() }
 
     /**
-     * Thème choisi : 0 sombre, 1 clair, 2 soleil.
-     *
-     * Distinct de [darkTheme], conservé pour ne pas perdre le choix des
-     * installations existantes : au premier lancement après mise à jour, on
-     * retombe sur l'ancien réglage.
+     * Theme: 0 dark, 1 light, 2 sunlight. Separate from [darkTheme], which is
+     * kept so existing installs fall back on their old choice after updating.
      */
     var themeIndex: Int
         get() = prefs.getInt("theme_index", if (darkTheme) 0 else 1)
@@ -814,14 +728,10 @@ class SettingsStore(context: Context) {
         set(v) { prefs.edit().putBoolean("dark_theme", v).apply() }
 
     /**
-     * D’où vient l’état affiché à côté du satellite : "AMSAT", "SATNOGS" ou
-     * les deux.
-     *
-     * AMSAT par défaut, et seul. Les deux pastilles côte à côte disaient
-     * souvent la même chose deux fois et parfois le contraire l’une de
-     * l’autre : SatNOGS décrit l’état administratif du satellite, AMSAT dit
-     * s’il a été entendu cette semaine. C’est la seconde qui décide si l’on
-     * sort l’antenne, et c’est celle-là qu’on garde.
+     * Source of the status shown next to the satellite: "AMSAT", "SATNOGS" or
+     * both. AMSAT alone by default: SatNOGS gives the administrative status,
+     * AMSAT whether it was heard this week — which is what decides whether to
+     * take the antenna out. Side by side they often disagreed.
      */
     var statusSource: String
         get() = prefs.getString("status_source", "AMSAT") ?: "AMSAT"
@@ -874,21 +784,18 @@ class SettingsStore(context: Context) {
         get() = prefs.getString("aim_mode", "EDGE") ?: "EDGE"
         set(v) { prefs.edit().putString("aim_mode", v).apply() }
 
-    // ---- La boussole déportée (module WitMotion en Bluetooth) ----
+    // ---- Remote compass (WitMotion module over Bluetooth) ----
 
     /**
-     * D'où vient le cap : « TEL » pour les capteurs du téléphone, « BLE » pour
-     * le module posé sur la flèche de l'antenne.
-     *
-     * Le téléphone reste le défaut, et le restera : c'est le seul qui marche
-     * sans rien acheter, et une bascule automatique sur un module absent
-     * laisserait un cadran muet sans explication.
+     * Heading source: "TEL" (phone sensors) or "BLE" (module on the boom).
+     * The phone stays the default: it needs no purchase, and auto-switching to
+     * an absent module would leave a silent dial.
      */
     var boussoleSource: String
         get() = prefs.getString("boussole_source", "TEL") ?: "TEL"
         set(v) { prefs.edit().putString("boussole_source", v).apply() }
 
-    /** L'adresse du dernier module, pour se rebrancher sans rechercher. */
+    /** Address of the last module, to reconnect without scanning. */
     var boussoleAdresse: String
         get() = prefs.getString("boussole_adresse", "") ?: ""
         set(v) { prefs.edit().putString("boussole_adresse", v.trim()).apply() }
@@ -898,49 +805,34 @@ class SettingsStore(context: Context) {
         set(v) { prefs.edit().putString("boussole_nom", v).apply() }
 
     /**
-     * Le calage du module, en degrés, à ajouter à son lacet.
-     *
-     * Le zéro du module dépend de la façon dont le boîtier est vissé sur la
-     * flèche. Il change à chaque démontage, exactement comme l'étalonnage que
-     * la notice réclame — et il se relève en pointant un azimut connu.
+     * Module offset in degrees, added to its yaw. Depends on how the case is
+     * mounted, so it changes at every remount; measured by pointing at a known
+     * azimuth.
      */
     var boussoleCalage: Float
         get() = prefs.getFloat("boussole_calage", 0f)
         set(v) { prefs.edit().putFloat("boussole_calage", v).apply() }
 
     /**
-     * Le module compte-t-il à l'envers ?
-     *
-     * Le repère nord-est-ciel tourne dans le sens trigonométrique, un azimut
-     * dans celui des aiguilles. Selon le micrologiciel et l'orientation du
-     * boîtier, les deux peuvent coïncider ou s'opposer. On ne le devine pas :
-     * l'opérateur tourne d'un quart de tour à droite et regarde si le nombre
-     * monte.
+     * Does the module count backwards? Its frame may turn counter-clockwise
+     * while azimuth turns clockwise, depending on firmware and mounting. Not
+     * guessed: turn a quarter right and see whether the number rises.
      */
     /**
-     * La convention du module, **mesurée** par le calibrage à deux visées.
+     * Module axis convention, **measured** by the two-sighting calibration.
+     * There are four possible frame errors, not two, so a boolean is not
+     * enough; the second sighting decides.
      *
-     * Un booléen ne suffisait plus : il n'y a pas deux façons de se tromper de
-     * repère mais quatre, et laquelle est la bonne dépend du micrologiciel.
-     * On les essaie toutes et la seconde visée tranche.
-     *
-     * Nouvelle clé : l'ancienne rangeait un booléen, et la relire en texte
-     * lèverait une exception au premier lancement.
+     * New key: the old one held a boolean, and reading it as text would throw.
      */
     /**
-     * Le relevé de calibrage, une ligne par pose.
-     *
-     * Rangé plutôt que gardé en mémoire d'écran : la séquence demande neuf
-     * poses, donc de se lever, tourner l'antenne, revenir. Perdre le relevé
-     * parce qu'on a changé d'écran entre deux gestes serait insupportable.
+     * Calibration readings, one line per pose. Persisted, not screen state:
+     * nine poses mean walking to the antenna and back, and a screen change
+     * must not lose them.
      */
     /**
-     * Le nom et le mot de passe du partage de connexion, pour le QR code qui
-     * fait rejoindre le Wi-Fi d'un scan.
-     *
-     * Saisis à la main, et il n'y a pas d'alternative : depuis Android 10, une
-     * application ne peut plus lire la configuration de son propre point
-     * d'accès. Ils changent rarement, on les saisit une fois.
+     * Hotspot name and password, for the Wi-Fi join QR code. Typed by hand:
+     * since Android 10 an app cannot read its own hotspot configuration.
      */
     var demoSsid: String
         get() = prefs.getString("demo_ssid", "") ?: ""
@@ -951,15 +843,12 @@ class SettingsStore(context: Context) {
         set(v) { prefs.edit().putString("demo_mdp", v).apply() }
 
     /**
-     * Le point d'accès annoncé en mode démonstration.
-     *
-     * Le mot de passe est rangé en clair, comme tout ce que contiennent les
-     * préférences d'une application : ce n'est pas un secret durable mais celui
-     * d'un partage de connexion ouvert le temps d'une démonstration, et qui
-     * sera de toute façon affiché en QR code à toute la salle.
+     * Hotspot announced in demonstration mode. The password is stored in
+     * clear: it is a temporary hotspot's, shown as a QR code to the whole room
+     * anyway.
      */
 
-    /** La dernière station écoutée à distance : on ne la retape pas. */
+    /** Last remote station listened to, so it need not be retyped. */
     var ecouteAdresse: String
         get() = prefs.getString("ecoute_adresse", "") ?: ""
         set(v) { prefs.edit().putString("ecoute_adresse", v).apply() }
@@ -973,26 +862,18 @@ class SettingsStore(context: Context) {
         set(v) { prefs.edit().putString("boussole_convention", v).apply() }
 
     /**
-     * Sur quel axe du module se lit l'élévation : « TANGAGE », « ROULIS », ou
-     * « AUCUN ».
-     *
-     * « AUCUN » par défaut, et ce n'est pas de la timidité : tant que
-     * l'opérateur n'a pas dit comment le boîtier est vissé, la seule élévation
-     * dont on soit sûr est celle du téléphone. Choisir un axe au hasard
-     * donnerait une aiguille qui bouge — donc crédible — et fausse.
+     * Module axis for elevation: "TANGAGE" (pitch), "ROULIS" (roll) or
+     * "AUCUN" (none, default). Until the mounting is known only the phone's
+     * elevation is trustworthy; a guessed axis gives a moving — so credible —
+     * but wrong needle.
      */
     /**
-     * La direction de la flèche **dans le repère du boîtier**, écrite « x,y,z ».
-     * Vide tant qu'elle n'a pas été apprise.
+     * Boom direction **in the case frame**, as "x,y,z". Empty until learned.
      *
-     * Elle remplace l'ancien trio axe/calage/sens, qui lisait le lacet et une
-     * inclinaison séparément. Cette lecture-là se défaisait dès qu'on tournait
-     * l'antenne sur son axe pour changer de polarisation : les angles d'Euler
-     * ne sont pas trois mesures indépendantes. Une direction, elle, ne bouge
-     * pas quand on tourne autour d'elle.
-     *
-     * L'ancien réglage n'est pas conservé à côté : deux façons de répondre à la
-     * même question, dont une fausse, n'en font pas une de rechange.
+     * Replaces the old axis/offset/sign trio, which read yaw and tilt
+     * separately and broke as soon as the antenna was rotated for
+     * polarisation: Euler angles are not independent. A direction does not
+     * move when you rotate around it. The old setting is not kept alongside.
      */
     var boussoleFleche: String
         get() = prefs.getString("boussole_fleche", "") ?: ""
@@ -1007,9 +888,9 @@ class SettingsStore(context: Context) {
         set(v) { prefs.edit().putString("callsign", v.trim().uppercase()).apply() }
 
     /**
-     * Le champ « Extensions » : les mots-clés qui déverrouillent les fonctions
-     * en bêta (voir [fr.f4ioz.satcombo.data.Extensions]). Vide par défaut ; un
-     * indicatif contenant F4IOZ ouvre tout sans rien taper.
+     * The "Extensions" field: keywords unlocking beta features (see
+     * [fr.f4ioz.satcombo.data.Extensions]). Empty by default. The callsign no
+     * longer unlocks anything.
      */
     var extensionsCode: String
         get() = prefs.getString("extensions_code", "") ?: ""
@@ -1070,35 +951,27 @@ class SettingsStore(context: Context) {
         set(v) { prefs.edit().putFloat("photo_sat_label_scale", v.coerceIn(0.5f, 2.5f)).apply() }
 
     /**
-     * L’altitude du point de vue sur la photo QRV, quand on la connaît.
-     *
-     * Le GPS la rend avec la position ; en position saisie à la main il n’y a
-     * rien à écrire et la ligne disparaît d’elle-même. Elle vaut surtout pour
-     * les activations en altitude, où le mètre au-dessus de la mer fait partie
-     * de l’annonce au même titre que le locator.
+     * Altitude on the QRV photo, when known (from GPS; nothing for a typed
+     * position). Matters for summit activations, where it is part of the
+     * announcement like the locator.
      */
     var photoShowAlt: Boolean
         get() = prefs.getBoolean("photo_alt", false)
         set(v) { prefs.edit().putBoolean("photo_alt", v).apply() }
 
     /**
-     * La couleur de l’indicatif sur la photo QRV, en ARGB.
-     *
-     * L’ambre d’origine se lit sur presque tout, et presque n’est pas tout :
-     * sur un coucher de soleil il disparaît. L’opérateur choisit donc parmi
-     * quelques couleurs franches, toutes opaques — une couleur translucide sur
-     * une photo claire ne donnerait rien de lisible.
+     * Callsign colour on the QRV photo, ARGB. Amber vanishes on a sunset, so a
+     * few solid colours are offered — all opaque, translucent would be
+     * unreadable on a bright photo.
      */
     var photoCallColor: Int
         get() = prefs.getInt("photo_call_color", 0xFFFFC65C.toInt())
         set(v) { prefs.edit().putInt("photo_call_color", v).apply() }
 
     /**
-     * La taille de l’indicatif sur la photo QRV, 1.0 = la taille de référence.
-     *
-     * Bornée : en dessous de 60 % l’indicatif n’est plus lisible une fois la
-     * photo réduite par une messagerie, au-dessus de 250 % il mange la moitié
-     * du haut de l’image. Le rendu le rétrécit encore s’il dépasse la largeur.
+     * Callsign size on the QRV photo, 1.0 = reference. Clamped: below 60 % it
+     * is unreadable once a messenger shrinks the photo, above 250 % it eats the
+     * top half. Rendering shrinks it further if it overflows.
      */
     var photoCallScale: Float
         get() = prefs.getFloat("photo_call_scale", 1f)
@@ -1113,34 +986,31 @@ class SettingsStore(context: Context) {
         set(v) { prefs.edit().putInt("near_grid_m", v.coerceIn(0, 5000)).apply() }
 
     /**
-     * Combien des huit carrés qui touchent le nôtre sont imprimés sur la photo
-     * QRV, du plus proche au plus lointain. Zéro n'en écrit aucun, huit les
-     * écrit tous ; quatre reprend le nord / sud / est / ouest d'origine.
+     * How many of the eight touching squares are printed on the QRV photo,
+     * nearest first. Four matches the original N/S/E/W.
      */
     var photoNearCount: Int
         get() = prefs.getInt("photo_near_count", 4)
         set(v) { prefs.edit().putInt("photo_near_count", v.coerceIn(0, 8)).apply() }
 
     /**
-     * Le système d'unités des distances, altitudes et vitesses : métrique,
-     * anglo-saxon ou nautique. Voir [fr.f4ioz.satcombo.data.Units].
+     * Unit system for distances, altitudes and speeds: metric, imperial or
+     * nautical. See [fr.f4ioz.satcombo.data.Units].
      */
     var units: String
         get() = Units.normalize(prefs.getString("units", Units.METRIC))
         set(v) { prefs.edit().putString("units", Units.normalize(v)).apply() }
 
-    /** Code du drapeau placé devant l'indicatif sur la photo QRV, vide = aucun. */
-    /** La silhouette du pays sur la photo QRV. */
-    /**
-     * Forcée à l'affichage une fois, à la mise à jour qui l'a rendue fiable :
-     * qui l'avait éteinte pendant qu'elle ne suivait pas la position l'a
-     * éteinte pour une raison qui n'existe plus. Le choix reste libre ensuite,
-     * le drapeau `carte_forcee_1` n'étant posé qu'une fois.
-     */
+    /** POTA line on the QRV photo. */
     var photoShowPota: Boolean
         get() = prefs.getBoolean("photo_show_pota", false)
         set(v) { prefs.edit().putBoolean("photo_show_pota", v).apply() }
 
+    /**
+     * Country silhouette on the QRV photo. Forced on once, by the update that
+     * made it follow the position: whoever turned it off earlier did so for a
+     * reason that no longer exists. `carte_forcee_1` makes it one-time only.
+     */
     var photoShowCarte: Boolean
         get() {
             if (!prefs.getBoolean("carte_forcee_1", false)) {
@@ -1163,27 +1033,27 @@ class SettingsStore(context: Context) {
         get() = prefs.getFloat("photo_carte_y", 0.52f)
         set(v) { prefs.edit().putFloat("photo_carte_y", v.coerceIn(0.1f, 0.9f)).apply() }
 
-    /** Taille de la ligne POTA sur la photo, 0,6 à 2,5. */
+    /** POTA line size on the photo, 0.6 to 2.5. */
     var photoPotaTaille: Float
         get() = prefs.getFloat("photo_pota_taille", 1f)
         set(v) { prefs.edit().putFloat("photo_pota_taille", v.coerceIn(0.6f, 2.5f)).apply() }
 
-    /** De combien la ligne POTA remonte, en part de la hauteur. */
+    /** How far the POTA line is raised, as a fraction of the height. */
     var photoPotaMonte: Float
         get() = prefs.getFloat("photo_pota_monte", 0f)
         set(v) { prefs.edit().putFloat("photo_pota_monte", v.coerceIn(0f, 0.6f)).apply() }
 
-    /** Les fréquences montée/descente sur la photo QRV. */
+    /** Uplink/downlink frequencies on the QRV photo. */
     var photoShowQrg: Boolean
         get() = prefs.getBoolean("photo_show_qrg", false)
         set(v) { prefs.edit().putBoolean("photo_show_qrg", v).apply() }
 
-    /** La fréquence annoncée, saisie à la main (texte libre). */
+    /** Announced frequency, typed by hand (free text). */
     var photoQrgTexte: String
         get() = prefs.getString("photo_qrg_texte", "") ?: ""
         set(v) { prefs.edit().putString("photo_qrg_texte", v.trim().take(24)).apply() }
 
-    /** Taille de la ligne date + fréquence. */
+    /** Size of the date + frequency line. */
     var photoPassScale: Float
         get() = prefs.getFloat("photo_pass_scale", 1f)
         set(v) { prefs.edit().putFloat("photo_pass_scale", v.coerceIn(0.6f, 2.5f)).apply() }
@@ -1192,54 +1062,49 @@ class SettingsStore(context: Context) {
         get() = prefs.getFloat("photo_qrg_scale", 1f)
         set(v) { prefs.edit().putFloat("photo_qrg_scale", v.coerceIn(0.5f, 2.5f)).apply() }
 
-    /** Le nom du parc sous la référence POTA (le numéro reste). */
+    /** Park name under the POTA reference (the number always stays). */
     var photoPotaNom: Boolean
         get() = prefs.getBoolean("photo_pota_nom", true)
         set(v) { prefs.edit().putBoolean("photo_pota_nom", v).apply() }
 
-    /** Sans photo, le fond de la carte QRV : couleur unie (ARGB). */
+    /** QRV card background without a photo: plain colour (ARGB). */
     var photoFondUni: Int
         get() = prefs.getInt("photo_fond_uni", 0xFF102030.toInt())
         set(v) { prefs.edit().putInt("photo_fond_uni", v).apply() }
 
-    /** Le bord de la carte se fond dans la photo. */
+    /** The map edge fades into the photo. */
     var photoCarteFondu: Boolean
         get() = prefs.getBoolean("photo_carte_fondu", true)
         set(v) { prefs.edit().putBoolean("photo_carte_fondu", v).apply() }
 
-    /** Couleur de l'aplat de la carte (ARGB). */
+    /** Map fill colour (ARGB). */
     var photoCarteCouleur: Int
         get() = prefs.getInt("photo_carte_couleur", 0x66FFFFFF)
         set(v) { prefs.edit().putInt("photo_carte_couleur", v).apply() }
 
-    /** Le bandeau « Dans la zone POTA » sur la page d'accueil. */
+    /** The "In POTA zone" banner on the home page. */
     var potaBandeauAccueil: Boolean
         get() = prefs.getBoolean("pota_bandeau_accueil", true)
         set(v) { prefs.edit().putBoolean("pota_bandeau_accueil", v).apply() }
 
-    /** « PAYS » ou « ZONE » : la silhouette du pays, ou l'emprise du parc POTA. */
+    /** "PAYS" (country silhouette) or "ZONE" (POTA park outline). */
     var photoCarteContenu: String
         get() = prefs.getString("photo_carte_contenu", "PAYS") ?: "PAYS"
         set(v) { prefs.edit().putString("photo_carte_contenu", v).apply() }
 
-    /** « DRAPEAU » ou « UNI ». */
+    /** "DRAPEAU" (flag) or "UNI" (plain). */
     var photoCarteRemplissage: String
         get() = prefs.getString("photo_carte_remp", "DRAPEAU") ?: "DRAPEAU"
         set(v) { prefs.edit().putString("photo_carte_remp", v).apply() }
 
-    /**
-     * La base interne d'indicatifs : le carnet satellite de F4IOZ, embarqué
-     * pour que le clavier propose noms et carrés dès la première installation.
-     * Désactivable — notamment quand on importe son propre ADIF et qu'on ne
-     * veut que lui.
-     */
-    // `baseInterneIndicatifs` a été retiré avec la base embarquée.
+    // `baseInterneIndicatifs` was removed with the bundled callsign database.
 
+    /** Flag code before the callsign on the QRV photo, empty = none. */
     var photoFlag: String
         get() = prefs.getString("photo_flag", "") ?: ""
         set(v) { prefs.edit().putString("photo_flag", v.trim().uppercase()).apply() }
 
-    /** Code du drapeau placé à droite de l'indicatif, vide = aucun. */
+    /** Flag code right of the callsign, empty = none. */
     var photoFlagRight: String
         get() = prefs.getString("photo_flag_right", "") ?: ""
         set(v) { prefs.edit().putString("photo_flag_right", v.trim().uppercase()).apply() }
@@ -1278,19 +1143,18 @@ class SettingsStore(context: Context) {
         get() = prefs.getInt("past_pass_hours", 0)
         set(v) { prefs.edit().putInt("past_pass_hours", v.coerceIn(0, 12)).apply() }
 
-    // ===================== rotor azimut / élévation =====================
+    // ===================== azimuth / elevation rotor =====================
     //
-    // Le rotor est la seule fonction de SatMe qui déplace physiquement quelque
-    // chose. Chacun de ces réglages décrit une limite mécanique, et un réglage
-    // faux ne donne pas un affichage bizarre : il donne un câble arraché. D'où
-    // les bornes posées ici, à l'écriture, plutôt que dans l'écran.
+    // The only SatMe feature that physically moves something. These settings
+    // describe mechanical limits: a wrong one does not give an odd display, it
+    // rips a cable. Hence the bounds are enforced here, on write, not in the UI.
 
-    /** Pilotage du rotor demandé par l'opérateur. */
+    /** Rotor control requested by the operator. */
     var rotorEnabled: Boolean
         get() = prefs.getBoolean("rotor_enabled", false)
         set(v) { prefs.edit().putBoolean("rotor_enabled", v).apply() }
 
-    /** Type de liaison : "GS232" (série USB) ou "ROTCTLD" (réseau, Hamlib). */
+    /** Link type: "GS232" (USB serial) or "ROTCTLD" (network, Hamlib). */
     var rotorLink: String
         get() = prefs.getString("rotor_link", "GS232") ?: "GS232"
         set(v) { prefs.edit().putString("rotor_link", v).apply() }
@@ -1316,12 +1180,9 @@ class SettingsStore(context: Context) {
         set(v) { prefs.edit().putInt("rotor_max_az", v.coerceIn(360, 540)).apply() }
 
     /**
-     * Où se trouve la butée mécanique du mât : « NORTH » ou « SOUTH ».
-     *
-     * Un G-5500 sorti du carton bute au nord, et c'est le pire endroit possible
-     * pour un satellite en orbite polaire : la moitié des passages traversent
-     * précisément là. Beaucoup de stations remontent le mât butée au sud, et
-     * l'application n'a aucun moyen de le deviner — d'où ce réglage.
+     * Where the mast's mechanical stop is: "NORTH" or "SOUTH". A G-5500 out of
+     * the box stops at north, the worst place for polar orbits (half the passes
+     * cross it), so many stations remount it south. The app cannot guess.
      */
     var rotorAzStop: String
         get() = prefs.getString("rotor_az_stop", "NORTH") ?: "NORTH"
@@ -1330,17 +1191,15 @@ class SettingsStore(context: Context) {
         }
 
     /**
-     * Le contrôleur compte-t-il ses azimuts depuis sa butée plutôt que du nord ?
-     *
-     * Certains boîtiers affichent zéro à la butée. La conversion ne se fait que
-     * sur la trame qui part et sur celle qui revient : partout ailleurs, dans
-     * les calculs comme à l'écran, un azimut est un azimut vrai.
+     * Does the controller count azimuth from its stop rather than north? Some
+     * show zero at the stop. Converted only on frames in and out: everywhere
+     * else an azimuth is a true azimuth.
      */
     var rotorAzFromStop: Boolean
         get() = prefs.getBoolean("rotor_az_from_stop", false)
         set(v) { prefs.edit().putBoolean("rotor_az_from_stop", v).apply() }
 
-    /** Écart de pointage toléré avant que le bandeau ne le dise, en degrés. */
+    /** Pointing error tolerated before the banner reports it, in degrees. */
     var rotorMaxError: Int
         get() = prefs.getInt("rotor_max_error", 15)
         set(v) { prefs.edit().putInt("rotor_max_error", v.coerceIn(1, 60)).apply() }
@@ -1355,24 +1214,18 @@ class SettingsStore(context: Context) {
         set(v) { prefs.edit().putInt("rotor_deadband", v.coerceIn(1, 15)).apply() }
 
     /**
-     * Le mât n'a pas d'axe d'élévation.
-     *
-     * Cela ne change rien au pilotage — un rotor d'azimut seul ignore
-     * simplement la seconde consigne — mais cela change la boussole : c'est le
-     * téléphone qui continue de donner l'élévation, puisque personne d'autre ne
-     * la connaît.
+     * The mast has no elevation axis. Control is unchanged (an azimuth-only
+     * rotor ignores the second value), but the compass keeps taking elevation
+     * from the phone.
      */
     var rotorAzOnly: Boolean
         get() = prefs.getBoolean("rotor_az_only", false)
         set(v) { prefs.edit().putBoolean("rotor_az_only", v).apply() }
 
     /**
-     * Suivre le Doppler en réception, et pas seulement en émission.
-     *
-     * Allumé par défaut : c'est ce qu'on attend d'un logiciel de satellite, et
-     * son absence était un défaut, non un choix. Le réglage existe pour
-     * l'opérateur qui préfère garder la molette de réception entièrement à
-     * lui — en CW étroite, par exemple, où le moindre saut se remarque.
+     * Doppler-correct the receive side too, not only transmit. On by default,
+     * as expected of satellite software; off for operators who want the RX
+     * dial to themselves (narrow CW, where every jump shows).
      */
     var catRxDoppler: Boolean
         get() = prefs.getBoolean("cat_rx_doppler", true)
@@ -1391,50 +1244,46 @@ class SettingsStore(context: Context) {
         get() = prefs.getInt("rotor_park_el", 0)
         set(v) { prefs.edit().putInt("rotor_park_el", v.coerceIn(0, 180)).apply() }
 
-    /** En dessous de cette élévation, le mât rentre au garage. */
+    /** Below this elevation, the mast goes to its park position. */
     var rotorMinEl: Int
         get() = prefs.getInt("rotor_min_el", 0)
         set(v) { prefs.edit().putInt("rotor_min_el", v.coerceIn(0, 30)).apply() }
 
     /**
-     * Combien de minutes avant l'acquisition le mât va attendre le satellite.
-     *
-     * « Il faut qu'il soit positionné avant le début du passage, x minutes en
-     * paramètre. » Un mât met une bonne minute à faire un demi-tour ; parti au
-     * moment du lever, il arrive quand le satellite est déjà haut. Zéro
-     * désactive le pré-pointage.
+     * Minutes before AOS at which the mast goes to wait for the satellite. A
+     * half-turn takes over a minute; starting at AOS arrives when the bird is
+     * already high. Zero disables pre-positioning.
      */
     var rotorPreAos: Int
         get() = prefs.getInt("rotor_pre_aos", 3)
         set(v) { prefs.edit().putInt("rotor_pre_aos", v.coerceIn(0, 30)).apply() }
 
-    /** Rotor simulé : tout marche, sauf que rien ne tourne. */
+    /** Simulated rotor: everything works, nothing turns. */
     var rotorSim: Boolean
         get() = prefs.getBoolean("rotor_sim", false)
         set(v) { prefs.edit().putBoolean("rotor_sim", v).apply() }
 
     // ------------------------------------------------------------------
-    // Convertisseurs (LNB en descente, transverter en montée)
+    // Converters (LNB on downlink, transverter on uplink)
     //
-    // Deux boîtiers indépendants, parce que c'est ainsi qu'ils sont câblés :
-    // le LNB devant le récepteur, le transverter derrière l'émetteur. Sur
-    // QO-100 le montage courant les fait servir en même temps sur deux
-    // appareils différents — la descente 10 GHz dans une clé SDR, la montée
-    // 13 cm depuis le 432 d'un IC-9700 — d'où l'aiguillage [convRxPoste] /
-    // [convRxCle], qui dit à quelle chaîne la descente s'applique.
+    // Two independent boxes, as they are wired: LNB before the receiver,
+    // transverter after the transmitter. On QO-100 they often serve two
+    // devices at once (10 GHz downlink into an SDR dongle, 13 cm uplink from
+    // an IC-9700 on 432), hence [convRxPoste] / [convRxCle] saying which
+    // chain the downlink applies to.
     // ------------------------------------------------------------------
 
-    /** Convertisseur de descente en service. */
+    /** Downlink converter enabled. */
     var convRxActif: Boolean
         get() = prefs.getBoolean("conv_rx_actif", false)
         set(v) { prefs.edit().putBoolean("conv_rx_actif", v).apply() }
 
-    /** Oscillateur local de la descente, en hertz. */
+    /** Downlink local oscillator, in Hz. */
     var convRxOlHz: Long
         get() = prefs.getLong("conv_rx_ol", 9_750_000_000L)
         set(v) { prefs.edit().putLong("conv_rx_ol", v.coerceIn(0L, 30_000_000_000L)).apply() }
 
-    /** Injection haute en descente : le spectre reçu est retourné. */
+    /** High-side injection on downlink: the received spectrum is inverted. */
     var convRxInverseur: Boolean
         get() = prefs.getBoolean("conv_rx_inv", false)
         set(v) { prefs.edit().putBoolean("conv_rx_inv", v).apply() }
@@ -1447,22 +1296,22 @@ class SettingsStore(context: Context) {
         get() = prefs.getLong("conv_rx_haut", 10_800_000_000L)
         set(v) { prefs.edit().putLong("conv_rx_haut", v.coerceAtLeast(0L)).apply() }
 
-    /** La descente passe par le poste piloté en CAT. */
+    /** Downlink goes through the CAT-controlled rig. */
     var convRxPoste: Boolean
         get() = prefs.getBoolean("conv_rx_poste", false)
         set(v) { prefs.edit().putBoolean("conv_rx_poste", v).apply() }
 
-    /** La descente passe par la clé SDR. C'est le cas courant sur QO-100. */
+    /** Downlink goes through the SDR dongle (the usual QO-100 setup). */
     var convRxCle: Boolean
         get() = prefs.getBoolean("conv_rx_cle", true)
         set(v) { prefs.edit().putBoolean("conv_rx_cle", v).apply() }
 
-    /** Convertisseur de montée en service. */
+    /** Uplink converter enabled. */
     var convTxActif: Boolean
         get() = prefs.getBoolean("conv_tx_actif", false)
         set(v) { prefs.edit().putBoolean("conv_tx_actif", v).apply() }
 
-    /** Oscillateur local de la montée, en hertz. */
+    /** Uplink local oscillator, in Hz. */
     var convTxOlHz: Long
         get() = prefs.getLong("conv_tx_ol", 1_968_000_000L)
         set(v) { prefs.edit().putLong("conv_tx_ol", v.coerceIn(0L, 30_000_000_000L)).apply() }

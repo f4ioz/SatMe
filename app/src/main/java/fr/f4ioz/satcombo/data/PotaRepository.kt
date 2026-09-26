@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.data
 
@@ -59,9 +59,8 @@ class PotaRepository(private val context: Context) {
         parks?.let { return it }
         return withContext(Dispatchers.Default) {
             val loaded = runCatching {
-                // Le catalogue régional n'est plus embarqué : il se télécharge
-                // depuis pota.app au premier besoin, ou s'importe. Voir
-                // PotaZones pour la raison.
+                // The regional catalogue is no longer bundled: it is downloaded from
+                // pota.app when first needed, or imported. See PotaZones for why.
                 val text = if (regionFile.exists()) regionFile.readText() else ""
                 if (text.isBlank()) emptyList() else parseArray(text)
             }.getOrDefault(emptyList())
@@ -159,18 +158,15 @@ class PotaRepository(private val context: Context) {
      * fetching their OSM boundary (cached). Sorted: inside first, then distance.
      */
     /**
-     * Les parcs proches — distance mesurée à la **limite**, pas au centre.
+     * Nearby parks — distance measured to the **boundary**, not the centre.
      *
-     * Le point central d'un parc ne dit rien de son emprise : la réserve de
-     * Léhan s'étire sur cinq kilomètres de côte, on peut être dedans à
-     * plusieurs kilomètres de son centre et dehors à quelques centaines de
-     * mètres. Quand le contour est connu (embarqué ou en cache), la distance
-     * retournée est celle au bord le plus proche — zéro si l'on est dedans.
-     * Sans contour, on retombe sur la distance au centre, faute de mieux.
+     * A park's centre says nothing of its extent: a coastal reserve can stretch
+     * for kilometres, so you can be inside far from the centre and outside close
+     * to it. With a known outline (bundled or cached) the distance is to the
+     * nearest edge, zero when inside; otherwise to the centre.
      *
-     * Le pré-filtre reste centré, avec une marge de 25 km : un parc dont le
-     * centre est très loin n'a aucune chance d'avoir un bord près de nous, et
-     * la marge couvre les plus étendus.
+     * The pre-filter stays centre-based with a 25 km margin, which covers the
+     * largest parks.
      */
     suspend fun near(
         lat: Double, lon: Double, radiusKm: Double = 8.0, context: Context? = null
@@ -205,12 +201,9 @@ class PotaRepository(private val context: Context) {
         }
 
     /**
-     * Distance au bord le plus proche d'une zone, en kilomètres.
-     *
-     * Le calcul est fait sur les sommets du contour, simplifié à une dizaine
-     * de mètres : la distance à un segment serait plus juste, mais l'écart est
-     * inférieur au grain du contour lui-même — inutile de calculer plus fin
-     * que la donnée.
+     * Distance to the nearest edge of a zone, in km. Computed on vertices only:
+     * the outline is simplified to about ten metres, so point-to-segment distance
+     * would be finer than the data.
      */
     private fun distanceAuBordKm(
         lat: Double, lon: Double, zone: PotaZones.Zone

@@ -15,9 +15,8 @@ package fr.f4ioz.satcombo.demo
  * downloaded font, no library, no image. The phone's hotspot has no internet —
  * anything not inside this string would simply never appear.
  *
- * The polar plot is drawn by hand on a canvas rather than imported: a charting
- * library would weigh a hundred times this page to draw one
- * cercle et un point.
+ * The polar plot is drawn by hand on a canvas: a charting library would weigh
+ * a hundred times this page to draw one circle and a dot.
  */
 object PageDemo {
 

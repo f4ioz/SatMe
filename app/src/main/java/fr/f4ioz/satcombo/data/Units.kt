@@ -1,66 +1,59 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.data
 
 /**
- * Le système d'unités dans lequel l'application écrit les distances, les
- * altitudes et les vitesses.
+ * The unit system for distances, altitudes and speeds: metric, imperial
+ * (miles, feet) or nautical (nautical miles, knots). Nobody converts in their
+ * head during a three-minute pass.
  *
- * Un radioamateur français annonce « 412 km » et « 180 m d'altitude », un
- * américain « 256 miles » et « 590 feet », et celui qui suit un ballon ou un
- * bateau raisonne en milles nautiques et en nœuds. Ce sont les mêmes chiffres,
- * mais personne ne fait la conversion de tête pendant un passage de trois
- * minutes.
- *
- * Tout est ici, en Kotlin pur, sans le moindre import Android : les facteurs de
- * conversion et les seuils de bascule (au-dessous d'un kilomètre on écrit des
- * mètres, au-dessous d'un mille des pieds) sont exactement le genre de détail
- * qui se retourne silencieusement, donc ils se testent sur la JVM.
+ * Pure Kotlin, no Android import: conversion factors and switch-over
+ * thresholds (metres below 1 km, feet below 1 mile) are the kind of detail
+ * that breaks silently, so they are tested on the JVM.
  */
 object Units {
 
-    /** Mètres, kilomètres, km/h — le système du reste du monde. */
+    /** Metres, kilometres, km/h. */
     const val METRIC = "metric"
 
-    /** Pieds, miles, mph — le système anglo-saxon. */
+    /** Feet, miles, mph. */
     const val IMPERIAL = "imperial"
 
-    /** Milles nautiques, nœuds, pieds — la marine et l'aéronautique. */
+    /** Nautical miles, knots, feet — marine and aviation. */
     const val NAUTICAL = "nautical"
 
-    /** Les trois systèmes, dans l'ordre du sélecteur. */
+    /** The three systems, in picker order. */
     val ALL: List<String> = listOf(METRIC, IMPERIAL, NAUTICAL)
 
-    // ---- facteurs exacts ---------------------------------------------------
-    /** Un mètre en pieds internationaux (exactement 1 / 0,3048). */
+    // ---- exact factors -----------------------------------------------------
+    /** One metre in international feet (exactly 1 / 0.3048). */
     const val FEET_PER_METER = 3.2808398950131235
 
-    /** Un kilomètre en miles terrestres. */
+    /** One kilometre in statute miles. */
     const val MILES_PER_KM = 0.621371192237334
 
-    /** Un kilomètre en milles nautiques (le mille vaut 1852 m, exactement). */
+    /** One kilometre in nautical miles (exactly 1852 m each). */
     const val NM_PER_KM = 1000.0 / 1852.0
 
-    /** Un mètre par seconde en nœuds. */
+    /** One metre per second in knots. */
     const val KNOTS_PER_MPS = 3600.0 / 1852.0
 
     /**
-     * Ramène ce qui est enregistré dans les réglages à un système connu.
-     * Une valeur absente, vide ou devenue inconnue retombe sur le métrique
-     * plutôt que de faire disparaître les distances de l'écran.
+     * Maps the stored setting to a known system. Missing, empty or unknown
+     * falls back to metric rather than making distances vanish.
      */
     fun normalize(v: String?): String {
         val k = v?.trim()?.lowercase().orEmpty()
         return if (k in ALL) k else METRIC
     }
 
-    /** Le nom court de l'unité de distance, pour un en-tête de colonne. */
+    /** Short distance unit name, for a column header. */
     fun distanceUnit(sys: String): String = when (normalize(sys)) {
         IMPERIAL -> "mi"
         NAUTICAL -> "NM"
@@ -68,9 +61,8 @@ object Units {
     }
 
     /**
-     * Une distance donnée en kilomètres, écrite au dixième près, avec bascule
-     * vers l'unité courte quand elle devient plus lisible : 900 mètres se lit
-     * mieux que 0,9 km, et 1200 pieds mieux que 0,23 mile.
+     * A distance given in km, to one decimal, switching to the short unit when
+     * more readable: 900 m beats 0.9 km, 1200 ft beats 0.23 mi.
      */
     fun distance(km: Double, sys: String): String = when (normalize(sys)) {
         IMPERIAL -> {
@@ -80,16 +72,14 @@ object Units {
         }
         NAUTICAL -> {
             val nm = km * NM_PER_KM
-            // En mer on ne descend pas sous le mille en fractions : sous un
-            // demi-mille on annonce des mètres, comme sur une passerelle.
+            // At sea, below half a nautical mile, metres — as on a ship's bridge.
             if (nm < 0.5) "%.0f m".format(km * 1000.0) else "%.1f NM".format(nm)
         }
         else -> if (km < 1.0) "%.0f m".format(km * 1000.0) else "%.1f km".format(km)
     }
 
     /**
-     * La même distance sans décimale : pour les grands nombres d'un tableau de
-     * passages, où le dixième de kilomètre n'apprend rien.
+     * The same distance without decimals, for large numbers in pass tables.
      */
     fun distanceRound(km: Double, sys: String): String = when (normalize(sys)) {
         IMPERIAL -> "%.0f mi".format(km * MILES_PER_KM)
@@ -97,7 +87,7 @@ object Units {
         else -> "%.0f km".format(km)
     }
 
-    /** Le nombre seul, sans unité, pour qui écrit son unité lui-même. */
+    /** The number alone, for callers that write the unit themselves. */
     fun distanceValue(km: Double, sys: String): Double = when (normalize(sys)) {
         IMPERIAL -> km * MILES_PER_KM
         NAUTICAL -> km * NM_PER_KM
@@ -105,23 +95,22 @@ object Units {
     }
 
     /**
-     * Une hauteur en mètres. Le nautique se lit en pieds comme l'aéronautique :
-     * c'est ce qui figure sur les cartes et dans les bulletins.
+     * A height given in metres. Nautical uses feet, as aviation charts and
+     * bulletins do.
      */
     fun altitude(m: Double, sys: String): String = when (normalize(sys)) {
         METRIC -> "%.0f m".format(m)
         else -> "%.0f ft".format(m * FEET_PER_METER)
     }
 
-    /** Une petite longueur, donnée en mètres (rayon, marge, précision GPS). */
+    /** A short length in metres (radius, margin, GPS accuracy). */
     fun shortDistance(m: Double, sys: String): String = when (normalize(sys)) {
         METRIC -> "%.0f m".format(m)
         else -> "%.0f ft".format(m * FEET_PER_METER)
     }
 
     /**
-     * Une vitesse au sol, donnée en mètres par seconde : kilomètres-heure,
-     * miles-heure ou nœuds selon le système.
+     * A ground speed given in m/s: km/h, mph or knots depending on the system.
      */
     fun speed(mps: Double, sys: String): String = when (normalize(sys)) {
         IMPERIAL -> "%.0f mph".format(mps * 3.6 * MILES_PER_KM)
@@ -130,8 +119,8 @@ object Units {
     }
 
     /**
-     * Une vitesse verticale, donnée en mètres par seconde. Elle garde son signe
-     * : c'est lui qui dit qu'un ballon vient d'éclater.
+     * A vertical speed given in m/s. Keeps its sign: that is what says a balloon
+     * has just burst.
      */
     fun vertical(mps: Double, sys: String): String = when (normalize(sys)) {
         METRIC -> "%+.1f m/s".format(mps)

@@ -1,81 +1,78 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.data
 
 /**
- * Le catalogue des petits drapeaux que l'on pose devant l'indicatif sur la
- * photo QRV.
+ * Catalogue of the small flags placed before the callsign on the QRV photo.
  *
- * Aucune image n'est embarquee : un drapeau est decrit ici par sa geometrie
- * (des bandes, une croix, un disque...) et [FlagDraw] le trace au Canvas a la
- * hauteur voulue. Un PNG de plus par pays aurait pese lourd pour un dessin de
- * trente pixels, et se serait crenele des que l'indicatif grossit ; un trace
- * vectoriel reste net a n'importe quelle taille de photo.
+ * No bundled images: a flag is described by its geometry (stripes, cross,
+ * disc…) and [FlagDraw] draws it at the wanted height. A PNG per country
+ * would be heavy and pixelate as the callsign grows; vectors stay sharp.
  *
- * Ce fichier ne depend pas d'Android : il se teste sur la JVM, et c'est la
- * qu'on verifie que les codes sont uniques et les proportions plausibles.
+ * No Android dependency: JVM tests check codes are unique and proportions
+ * plausible.
  */
 object Flags {
 
-    /** Aucun drapeau. */
+    /** No flag. */
     const val NONE = ""
 
-    /** Gwenn ha Du, le drapeau breton. */
+    /** Gwenn ha Du, the Breton flag. */
     const val BZH = "BZH"
 
-    /** Melen ha Ruz, le drapeau du Pays bigouden. */
+    /** Melen ha Ruz, the Pays bigouden flag. */
     const val BIGOUDEN = "BIG"
 
-    // ---- familles de trace ------------------------------------------------
-    /** Bandes verticales, du guindant vers le battant. */
+    // ---- drawing families -------------------------------------------------
+    /** Vertical stripes, hoist to fly. */
     const val STRIPES_V = "STRIPES_V"
-    /** Bandes horizontales, de haut en bas. */
+    /** Horizontal stripes, top to bottom. */
     const val STRIPES_H = "STRIPES_H"
-    /** Croix scandinave : fond, croix, et eventuellement liseré interieur. */
+    /** Nordic cross: field, cross, optional inner fimbriation. */
     const val NORDIC = "NORDIC"
-    /** Croix centree pleine largeur (Suisse). */
+    /** Centred cross (Switzerland). */
     const val CROSS = "CROSS"
-    /** Disque centre (Japon). */
+    /** Centred disc (Japan). */
     const val DISC = "DISC"
-    /** Deux bandes horizontales et un triangle au guindant (Tchequie). */
+    /** Two horizontal stripes and a hoist triangle (Czechia). */
     const val TRIANGLE = "TRIANGLE"
     /** Union Jack. */
     const val UNION = "UNION"
-    /** Bandes et canton etoile (Etats-Unis). */
+    /** Stripes and starred canton (USA). */
     const val USA = "USA"
-    /** Neuf bandes et canton a croix (Grece). */
+    /** Nine stripes and a cross canton (Greece). */
     const val GREECE = "GREECE"
-    /** Trois bandes et feuille centrale (Canada). */
+    /** Three bands and a central leaf (Canada). */
     const val CANADA = "CANADA"
-    /** Bandes alternees et canton d'hermines (Bretagne). */
+    /** Alternating stripes and an ermine canton (Brittany). */
     const val ERMINE = "ERMINE"
-    /** Bandes alternees et panneau d'hermines sur toute la hauteur (Pays bigouden). */
+    /** Alternating stripes and a full-height ermine panel (Pays bigouden). */
     const val ERMINE_HOIST = "ERMINE_HOIST"
-    /** Fond plein et etoile centrale (Viet Nam, Maroc). */
+    /** Plain field and central star (Viet Nam, Morocco). */
     const val STAR = "STAR"
-    /** Fond plein, croissant et etoile (Turquie). */
+    /** Plain field, crescent and star (Turkey). */
     const val CRESCENT = "CRESCENT"
-    /** Union Jack au canton et etoiles (Australie, Nouvelle-Zelande). */
+    /** Union Jack canton and stars (Australia, New Zealand). */
     const val CANTON_UNION = "CANTON_UNION"
-    /** Losange et disque sur fond plein (Bresil). */
+    /** Lozenge and disc on a plain field (Brazil). */
     const val LOZENGE = "LOZENGE"
 
     /**
-     * Un drapeau du catalogue.
+     * A catalogue flag.
      *
-     * @param code identifiant court, celui qu'on enregistre dans les reglages
-     * @param label nom affiche dans le selecteur
-     * @param ratio largeur / hauteur
-     * @param kind famille de trace, une des constantes ci-dessus
-     * @param colors couleurs ARGB, leur sens depend de [kind]
-     * @param weights poids relatifs des bandes, vide = bandes egales
-     * @param spots nombre de mouchetures d'hermine, pour [ERMINE] seulement
+     * @param code short id, the one stored in settings
+     * @param label name shown in the picker
+     * @param ratio width / height
+     * @param kind drawing family, one of the constants above
+     * @param colors ARGB colours, meaning depends on [kind]
+     * @param weights relative stripe weights, empty = equal
+     * @param spots number of ermine spots, [ERMINE] only
      */
     data class Flag(
         val code: String,
@@ -93,17 +90,15 @@ object Flags {
     private val BLACK = c(0xFF000000)
 
     /**
-     * Les drapeaux proposes. L'ordre est celui du selecteur : les deux
-     * drapeaux bretons d'abord parce que l'application est ecrite en Bretagne,
-     * puis la France, puis le reste par voisinage radio.
+     * The offered flags, in picker order: the two Breton flags first (the app
+     * is written in Brittany), then France, then the rest by radio proximity.
      */
     val ALL: List<Flag> = listOf(
         Flag(BZH, "Gwenn ha Du", 1.5f, ERMINE,
             listOf(BLACK, WHITE, WHITE, BLACK), List(9) { 1f }, 11),
-        // Le drapeau bigouden : cinq bandes rouge et jaune, et un panneau
-        // jaune au guindant qui prend toute la hauteur, seme d'hermines rouges
-        // -- une par commune du Pays bigouden. Ce n'est pas un canton haut
-        // comme sur le Gwenn ha Du, c'est bien un tiers de drapeau debout.
+        // Bigouden flag: five red/yellow stripes and a full-height yellow hoist
+        // panel with red ermine, one per commune — not a canton as on the
+        // Gwenn ha Du.
         Flag(BIGOUDEN, "Bigouden", 1.5f, ERMINE_HOIST,
             listOf(c(0xFFD3232F), c(0xFFF2B233), c(0xFFF2B233), c(0xFFD3232F)),
             List(5) { 1f }, 22),
@@ -150,10 +145,9 @@ object Flags {
             listOf(c(0xFF00008B), WHITE, c(0xFFC8102E))),
         Flag("BR", "Brasil", 1.43f, LOZENGE,
             listOf(c(0xFF009C3B), c(0xFFFEDF00), c(0xFF002776))),
-        // ---- le reste de l'Europe, puis le monde. Les armoiries et les
-        // emblemes centraux sont volontairement omis : a la hauteur d'un
-        // indicatif ils ne feraient qu'une tache, et la silhouette suffit a
-        // reconnaitre un drapeau.
+        // ---- the rest of Europe, then the world. Coats of arms and central
+        // emblems are omitted on purpose: at callsign height they would be a
+        // blot, and the silhouette is enough.
         Flag("RU", "Rossiya", 1.5f, STRIPES_H,
             listOf(WHITE, c(0xFF0039A6), c(0xFFD52B1E))),
         Flag("EE", "Eesti", 1.57f, STRIPES_H,
@@ -208,27 +202,23 @@ object Flags {
     )
 
     /**
-     * Le catalogue tel qu'on le propose a cet operateur.
-     *
-     * Les deux drapeaux bretons ne sont pas des drapeaux de pays : ils ne
-     * parlent qu'a qui les revendique, et personne d'autre n'a envie de les
-     * voir en tete de liste. Ils n'apparaissent donc qu'avec le mot BZH dans
-     * le champ Extensions -- et pas seulement pour la station qui ecrit le
-     * logiciel, ce qui n'aurait aucune raison d'etre.
+     * The catalogue as offered to this operator. The two Breton flags are not
+     * national flags: they only appear with BZH in the Extensions field — for
+     * anyone, not just the author's station.
      */
     fun catalogue(bzh: Boolean): List<Flag> =
         if (bzh) ALL else ALL.filter { it.code != BZH && it.code != BIGOUDEN }
 
-    /** Vrai si ce code peut etre affiche avec ce trousseau. */
+    /** True if this code may be shown with these extensions. */
     fun allowed(code: String?, bzh: Boolean): Boolean {
         val f = byCode(code) ?: return false
         return bzh || (f.code != BZH && f.code != BIGOUDEN)
     }
 
-    /** Les codes utilisables, dans l'ordre du selecteur. */
+    /** Usable codes, in picker order. */
     val CODES: List<String> get() = ALL.map { it.code }
 
-    /** Le drapeau portant ce code, ou null si le code est vide ou inconnu. */
+    /** The flag with this code, or null if empty or unknown. */
     fun byCode(code: String?): Flag? {
         val k = code?.trim()?.uppercase().orEmpty()
         if (k.isEmpty()) return null
@@ -236,14 +226,13 @@ object Flags {
     }
 
     /**
-     * Les mouchetures d'hermine par rangee. Onze pour le Gwenn ha Du (4-3-4,
-     * la disposition la plus courante), vingt-deux pour le Pays bigouden --
-     * une par commune. Le nombre n'a rien d'officiel dans les deux cas.
+     * Ermine spots per row: eleven for the Gwenn ha Du (4-3-4, the common
+     * layout), twenty-two for Pays bigouden, one per commune. Neither count
+     * is official.
      */
     /**
-     * Les mouchetures d'un panneau debout, [cols] par rangee au plus. Le reste
-     * se repartit sur les premieres rangees plutot que de laisser une derniere
-     * rangee d'une seule hermine, qui se verrait tout de suite.
+     * Spots of a standing panel, at most [cols] per row. The remainder goes to
+     * the first rows rather than leaving a lone spot on the last row.
      */
     fun ermineRowsOf(n: Int, cols: Int): List<Int> {
         if (n <= 0 || cols <= 0) return emptyList()

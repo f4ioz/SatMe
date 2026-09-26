@@ -24,23 +24,15 @@ import kotlin.coroutines.resume
  * [UsbManager.requestPermission] returns once the user has answered the system
  * dialog.
  *
- * Pourquoi un endroit unique : depuis Android 14 (API 34), un PendingIntent
- * MUTABLE carrying an *implicit* intent — one naming neither package nor
- * component — is refused outright by the platform:
- *
- *     java.lang.IllegalArgumentException: fr.f4ioz.satcombo: Targeting U+
- *     (version 34 and above) disallows creating or retrieving a PendingIntent
- *     with FLAG_MUTABLE, an implicit Intent within and without FLAG_NO_CREATE
- *     and FLAG_ALLOW_UNSAFE_IMPLICIT_INTENT for security reasons.
- *
- * The exception comes from `PendingIntent.getBroadcast`, before a single CAT
- * frame moves: the app dies the instant the switch is flipped. On a phone
- * still on Android 13 the same code passes without a murmur, which makes the
- * fault invisible until you try a recent device (seen on a Pixel 8 in 18.5).
+ * **Why one place.** Since Android 14 (API 34), a MUTABLE PendingIntent
+ * carrying an *implicit* intent (no package, no component) throws
+ * `IllegalArgumentException` in `PendingIntent.getBroadcast`: the app dies the
+ * instant CAT is switched on. Android 13 accepts the same code silently, so
+ * the fault only shows on a recent device.
  *
  * The PendingIntent must stay MUTABLE — the system writes
  * [UsbManager.EXTRA_DEVICE] and [UsbManager.EXTRA_PERMISSION_GRANTED] into it —
- * so the only way out is making the intent explicit with [Intent.setPackage].
+ * so the intent is made explicit with [Intent.setPackage].
  */
 object UsbPermission {
 
@@ -48,12 +40,11 @@ object UsbPermission {
     const val ACTION_CAT = "fr.f4ioz.satcombo.USB_PERMISSION"
 
     /**
-     * Builds the reply PendingIntent: always explicit (limited to our
-     * package), MUTABLE where the platform demands it.
+     * Builds the reply PendingIntent: always explicit, MUTABLE where needed.
      *
      * [requestCode] tells simultaneous requests apart — the FT-817 pair fires
-     * one per adapter, and two PendingIntents sharing a code would
-     * recouvriraient.
+     * one per adapter, and two PendingIntents sharing a code would overwrite
+     * each other.
      */
     fun pendingIntent(ctx: Context, action: String, requestCode: Int = 0): PendingIntent {
         val intent = Intent(action).setPackage(ctx.packageName)
@@ -64,11 +55,10 @@ object UsbPermission {
 
     /**
      * Requests permission for [dev] when missing, never letting an exception
-     * escape: a refused permission, a missing driver or a vendor quirk must
-     * come out as "it does not open", never as a crash.
+     * escape: a vendor quirk must come out as "it does not open", not a crash.
      *
-     * Returns `true` when permission is already held, `false` otherwise (the
-     * system dialog is then shown, and the answer comes later).
+     * True when permission is already held; false otherwise (the system
+     * dialog is shown and the answer comes later).
      */
     fun ensure(ctx: Context, um: UsbManager, dev: UsbDevice,
                action: String, requestCode: Int = 0): Boolean {
@@ -80,21 +70,13 @@ object UsbPermission {
     /**
      * Requests permission **and waits for the answer**.
      *
-     * This was the missing half, and it explains the ritual the operator had
-     * worked out on his own: "I plug the SDR dongle in, go to the SDR menu,
-     * unplug and connect the IC-9700, and then it works". [ensure] only shows
-     * the system dialog; it returns at once, and the port opening that followed
-     * failed while the user still had a finger in the air. The second attempt
-     * worked — permission having been granted meanwhile — hence a connection
-     * that never succeeded on the first try and always on the second.
+     * [ensure] returns at once, so a port opened right after it fails while
+     * the dialog is still up — the connection failed on the first try and
+     * worked on the second. Hence waiting for the answer. The receiver is
+     * non-exported (API 33+): another app's USB intent has no business here.
      *
-     * So we listen for the answer. The receiver is declared non-exported where
-     * the platform requires it (API 33+): a USB permission intent from another
-     * app has no business here.
-     *
-     * True when permission is held — just granted, or already there.
-     * A timeout returns false without breaking anything: the user may simply
-     * have put the phone down.
+     * True when permission is held. A timeout returns false harmlessly: the
+     * user may simply have put the phone down.
      */
     suspend fun await(ctx: Context, um: UsbManager, dev: UsbDevice,
                       action: String, requestCode: Int = 0,
@@ -121,9 +103,8 @@ object UsbPermission {
                     .onFailure { if (cont.isActive) cont.resume(false) }
             }
         }
-        // The safety net: on some phones the broadcast is lost while the
-        // permission is in fact granted. Asking the system beats trusting our
-        // own receiver.
+        // On some phones the broadcast is lost although permission was
+        // granted: ask the system rather than trust our receiver.
         return accorde ?: runCatching { um.hasPermission(dev) }.getOrDefault(false)
     }
 }

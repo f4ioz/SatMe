@@ -30,13 +30,11 @@ import java.util.TimeZone
 import java.util.concurrent.TimeUnit
 
 /**
- * Le rappel d'un rendez-vous de l'agenda.
+ * Reminder for an agenda appointment.
  *
- * Same mechanism as pass alerts: WorkManager, not AlarmManager.
- * Minute-accurate reminders add nothing here — we warn an hour or a day
- * ahead, not thirty seconds — and exact alarms need a permission the Play
- * Store grants only to alarm clocks and calendars. WorkManager also survives a
- * reboot without a boot receiver to maintain.
+ * WorkManager, not AlarmManager, as for pass alerts: we warn an hour or a day
+ * ahead, exact alarms need a permission the Play Store grants only to clocks
+ * and calendars, and WorkManager survives a reboot without a boot receiver.
  */
 class AgendaAlertWorker(ctx: Context, params: WorkerParameters) : Worker(ctx, params) {
 

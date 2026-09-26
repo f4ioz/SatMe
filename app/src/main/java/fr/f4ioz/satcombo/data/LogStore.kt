@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.data
 
@@ -31,38 +31,33 @@ data class LogEntry(
     val theirLocator: String = "",
     val note: String = "",
     /**
-     * Ce que l'annuaire apprend du correspondant : nom, ville, courriel.
-     *
-     * Ces trois-là ne se retrouvent pas dans la géométrie du passage — ils
-     * viennent de QRZ ou de la main. Wavelog a un champ pour chacun, et sans
-     * eux il faut aller les remplir un par un dans son écran, alors que
-     * l'information était déjà connue au moment du dépôt.
+     * What the directory tells about the other station: name, city, email.
+     * From QRZ or typed; Wavelog has a field for each, otherwise they must be
+     * filled in one by one on its screen.
      */
     val nom: String = "",
     val qth: String = "",
     val courriel: String = "",
-    /** Mode tel qu'annoncé par le transpondeur ou choisi à la main : FM, USB… */
+    /** Mode as given by the transponder or chosen by hand: FM, USB… */
     val mode: String = "",
-    /** Report envoyé et reçu. Vides tant que l'opérateur ne les a pas saisis. */
+    /** Sent and received reports. Empty until the operator enters them. */
     val rstSent: String = "",
     val rstRcvd: String = "",
-    /** Descente et montée au repos, en mégahertz, pour BAND et SAT_MODE. */
+    /** Nominal downlink and uplink in MHz, for BAND and SAT_MODE. */
     val downlinkMhz: Double = 0.0,
     val uplinkMhz: Double = 0.0,
     /**
-     * Quand ce contact est parti au carnet en ligne, ou 0 s'il n'y est pas.
+     * When this contact was uploaded to the online log, or 0.
      *
-     * Sans cette marque, chaque envoi repousserait tout le carnet et Wavelog
-     * accumulerait les doublons — il accepte ce qu'on lui donne, il ne
-     * dédoublonne pas. L'instant plutôt qu'un simple oui : c'est ce qui permet
-     * de dire « déposé hier » et de retrouver l'ordre des choses si le carnet
-     * d'en face perd quelque chose.
+     * Without it every upload would resend the whole log, and Wavelog does not
+     * deduplicate. A timestamp rather than a flag: it can say "uploaded
+     * yesterday" and restore order if the remote log loses something.
      */
     val envoyeMs: Long = 0L,
     /**
-     * D'où vient [theirLocator] : saisi à la main, proposé par la mémoire, ou
-     * inconnu. Impossible à reconstituer après coup, et c'est ce qui dira un
-     * jour si c'est la base qui a menti ou la frappe qui a fauté.
+     * Where [theirLocator] came from: typed, suggested from memory, or unknown.
+     * Cannot be rebuilt later, and tells whether the database or the typing
+     * was wrong.
      */
     val locatorOrigine: String = ""
 )
@@ -142,18 +137,13 @@ class LogStore(context: Context) {
     }
 
     /**
-     * Nomme une entrée en attente et la fait sortir de la file.
-     *
-     * [origine] dit d'où vient le carré, et n'est écrit qu'ici : c'est le seul
-     * moment où l'information existe encore.
+     * Names a pending entry and takes it out of the queue. [origine] is written
+     * only here: the only moment that information still exists.
      */
     /**
-     * Change le satellite d'un contact.
-     *
-     * Le nom est figé à la création, d'après le satellite alors sélectionné.
-     * Quand il se trouve faux — sélection changée par mégarde, contact d'un
-     * passage voisin — l'opérateur doit pouvoir le corriger : une entrée mal
-     * attribuée fausse le carnet, l'ADIF et les carrés travaillés.
+     * Changes a contact's satellite. The name is fixed at creation from the
+     * selected satellite; when wrong (selection changed by mistake, contact
+     * from a neighbouring pass) it skews the log, ADIF and worked squares.
      */
     fun changeSatellite(
         timeMs: Long, satName: String, catnum: Int,
@@ -162,9 +152,8 @@ class LogStore(context: Context) {
         val list = load().map {
             if (it.timeMs == timeMs) it.copy(
                 satName = satName, catnum = catnum,
-                // L'azimut et l'élévation appartiennent au couple
-                // satellite + instant : changer l'un sans recalculer l'autre
-                // laisserait des chiffres qui ne veulent plus rien dire.
+                // Azimuth and elevation belong to satellite + time: recompute
+                // them, or they mean nothing.
                 azimuthDeg = az ?: it.azimuthDeg,
                 elevationDeg = el ?: it.elevationDeg,
                 timeMs = nouvelleHeure ?: it.timeMs)
@@ -182,9 +171,8 @@ class LogStore(context: Context) {
             if (it.timeMs == timeMs) it.copy(
                 callsign = callsign, theirLocator = theirLocator,
                 locatorOrigine = origine,
-                // Un champ vide ne détruit pas un report déjà saisi : nommer
-                // et coter sont deux gestes qui peuvent venir dans les deux
-                // ordres.
+                // An empty field does not erase an existing report: naming and
+                // reporting can come in either order.
                 rstSent = rstSent.ifBlank { it.rstSent },
                 rstRcvd = rstRcvd.ifBlank { it.rstRcvd }) else it
         }
@@ -193,12 +181,9 @@ class LogStore(context: Context) {
     }
 
     /**
-     * Redate une entrée et remet à jour sa géométrie.
-     *
-     * L'heure d'un contact est sa clé : la changer suppose de réécrire
-     * l'entrée. Et l'azimut comme l'élévation doivent suivre, sinon on
-     * décrirait la position du satellite à un instant qui n'est plus celui du
-     * contact — un instantané qui mentirait sur sa propre date.
+     * Changes an entry's time and recomputes its geometry. The time is the
+     * entry's key, so the entry is rewritten; azimuth and elevation must
+     * follow, or they describe another moment.
      */
     fun redate(ancienMs: Long, nouveauMs: Long, azDeg: Double, elDeg: Double): List<LogEntry> {
         val list = load().map {
@@ -217,11 +202,9 @@ class LogStore(context: Context) {
     }
 
     /**
-     * Marque un contact comme déposé au carnet en ligne.
-     *
-     * Écrit tout de suite plutôt qu'à la fin du lot : une coupure au milieu
-     * laisse alors le travail déjà fait, au lieu de le refaire — et de créer
-     * autant de doublons chez Wavelog, qui ne dédoublonne pas.
+     * Marks a contact as uploaded. Written at once, not at the end of the
+     * batch: an interruption keeps the work done instead of redoing it — and
+     * creating duplicates in Wavelog, which does not deduplicate.
      */
     fun marqueEnvoye(timeMs: Long, quandMs: Long): List<LogEntry> {
         val list = load().map { if (it.timeMs == timeMs) it.copy(envoyeMs = quandMs) else it }
@@ -230,17 +213,12 @@ class LogStore(context: Context) {
     }
 
     /**
-     * ADIF de tout le carnet ; [station] part dans STATION_CALLSIGN.
+     * ADIF of the whole log; [station] goes into STATION_CALLSIGN.
      *
-     * **Une entrée sans indicatif n'est pas un contact.** Un enregistrement
-     * ADIF sans CALL n'est pas un trafic, c'est un trou : le carnet d'en face
-     * le refuse ou le range de travers, et LoTW ne saura jamais quoi en faire.
-     *
-     * La règle portait autrefois sur un drapeau — l'entrée « à nommer » de la
-     * file — et laissait donc passer les relevés anonymes posés d'un appui sur
-     * la boussole. Quatre d'entre eux sont partis à l'export le 25 août. C'est
-     * l'indicatif qui décide, et lui seul : il est le fait, le drapeau n'était
-     * qu'une intention.
+     * **An entry without a callsign is not a contact.** The remote log rejects
+     * or misfiles it, and LoTW can do nothing with it. The rule used to test the
+     * "to be named" queue flag, which let anonymous compass marks through. The
+     * callsign decides, and only it.
      */
     fun toAdif(station: String = ""): String =
         Adif.export(load().filter { it.callsign.isNotBlank() }, station)
@@ -248,9 +226,8 @@ class LogStore(context: Context) {
     companion object {
 
         /**
-         * ADIF d'une sélection d'entrées — carnet complet ou activation. La
-         * fabrication elle-même vit dans [Adif], qui ne dépend pas d'Android
-         * et se vérifie donc sur machine.
+         * ADIF of a selection of entries (whole log or activation). Built by
+         * [Adif], which has no Android dependency and is tested on the JVM.
          */
         fun toAdif(entries: List<LogEntry>, station: String = ""): String =
             Adif.export(entries, station)

@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.data
 
@@ -14,16 +14,12 @@ import java.net.URL
 import java.net.URLEncoder
 
 /**
- * L'annuaire QRZ.com, par son interface XML.
+ * QRZ.com lookup through its XML interface, to fill in after the pass the
+ * grid square that was not given or not heard.
  *
- * Sert à combler après le passage ce qu'on n'a pas pu noter pendant : le
- * carré du correspondant, quand il ne l'a pas donné ou qu'on ne l'a pas
- * entendu.
- *
- * **Seuls les carrés absents sont comblés.** Un carré noté à l'oreille
- * pendant le contact vaut mieux qu'un carré d'annuaire : l'autre était
- * peut-être portable, et QRZ donne son domicile. Écraser reviendrait à
- * remplacer un fait par une présomption.
+ * **Only missing grid squares are filled.** A square heard during the contact
+ * beats the directory: the station may have been portable, and QRZ gives the
+ * home address. Overwriting would replace a fact with a guess.
  */
 class Qrz {
 
@@ -47,7 +43,7 @@ class Qrz {
 
     private fun encode(v: String) = URLEncoder.encode(v, "UTF-8")
 
-    /** Ouvre une session. Rend l'erreur du serveur, ou une chaîne vide. */
+    /** Opens a session. Returns the server error, or an empty string. */
     fun connecte(utilisateur: String, motDePasse: String): String {
         val f = runCatching {
             QrzReponse.lis(demande("username=${encode(utilisateur)};password=${encode(motDePasse)}"))
@@ -62,8 +58,8 @@ class Qrz {
     fun oublie() { cle = null; cache.clear() }
 
     /**
-     * La fiche d'un indicatif. Le cache évite de redemander deux fois le même
-     * appel — QRZ compte les requêtes, et un passage chargé en répète.
+     * The record for a callsign. Cached: QRZ counts queries, and a busy pass
+     * repeats callsigns.
      */
     fun cherche(indicatif: String): QrzReponse.Fiche {
         val ind = indicatif.trim().uppercase()
@@ -73,8 +69,7 @@ class Qrz {
         val f = runCatching {
             QrzReponse.lis(demande("s=$k;callsign=${encode(ind)}"))
         }.getOrElse { return QrzReponse.Fiche(erreur = "réseau : " + it.javaClass.simpleName) }
-        // Une session perdue ne se met pas en cache : elle se rejoue après
-        // reconnexion.
+        // A lost session is not cached: it is retried after reconnecting.
         if (f.erreur.contains("session", ignoreCase = true)) {
             cle = null
             return f

@@ -1,10 +1,10 @@
 /*
- * SatMe — poursuite de satellites radioamateurs
+ * SatMe — amateur radio satellite tracking
  * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- * Logiciel libre sous GNU GPL, version 2 ou ultérieure. Sans aucune garantie.
- * Le texte complet de la licence se trouve dans le fichier LICENSE.
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
  */
 package fr.f4ioz.satcombo.data
 
@@ -19,12 +19,8 @@ data class TleEntry(
     val mode: String? = null
 ) {
     /**
-     * Le nombre de tours par jour, colonnes 53 à 63 de la ligne 2.
-     *
-     * C'est ce qui distingue un satellite qui passe d'un satellite qui ne
-     * passe pas, sans avoir à connaître son numéro : la donnée est dans le
-     * TLE, et elle vaut pour tous les géostationnaires, pas seulement pour
-     * celui qu'on a pensé à inscrire dans une liste.
+     * Mean motion (revolutions per day), columns 53–63 of line 2. Tells a
+     * passing satellite from a stationary one without a hard-coded list.
      */
     val toursParJour: Double?
         get() = runCatching {
@@ -32,16 +28,14 @@ data class TleEntry(
         }.getOrNull()
 
     /**
-     * Ce satellite reste-t-il immobile dans le ciel ?
+     * Does this satellite stay still in the sky?
      *
-     * Un géostationnaire fait un tour par jour sidéral, soit 1,0027 tour.
-     * La fourchette est large — de 0,9 à 1,1 — pour englober les
-     * géosynchrones un peu inclinés, qui décrivent un huit mais restent
-     * dans la même région du ciel : pour l'opérateur, la conséquence est la
-     * même, la parabole ne bouge pas.
+     * Geostationary is 1.0027 rev/day. The 0.9–1.1 range also covers slightly
+     * inclined geosynchronous birds: they trace a figure eight but the dish
+     * does not move.
      *
-     * Sans ligne 2 lisible on répond « non ». Mieux vaut afficher une
-     * boussole inutile que la cacher sur un satellite qui passe.
+     * No readable line 2 → false: better a useless compass than a hidden one
+     * on a passing satellite.
      */
     val estImmobile: Boolean
         get() = toursParJour?.let { it in 0.9..1.1 } ?: false
