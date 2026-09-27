@@ -26,6 +26,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.OpenInNew
+import androidx.compose.material.icons.filled.Language
+import androidx.compose.material.icons.filled.Dialpad
+import androidx.compose.material.icons.filled.GpsFixed
 import androidx.compose.material.icons.filled.FiberManualRecord
 import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material.icons.filled.Stop
@@ -180,10 +184,10 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
                     // The rotor is a pointing setting, so it sits here, but it
                     // opens its own screen: link, end stops, park, pre-pointing.
                     if (fr.f4ioz.satcombo.data.Extensions.ROTOR in ui.extensions) {
-                        SettingsMenuRow(Icons.Default.Sync, t("menu_rotor")) { vm.openRotor() }
+                        SettingsMenuRow(Icons.Default.Sync, t("menu_rotor"), page = true) { vm.openRotor() }
                     }
                     SettingsMenuRow(Icons.Default.Palette, t("menu_colors")) { vm.setSettingsSection("colors") }
-                    SettingsMenuRow(Icons.Default.Palette, t("menu_look")) { vm.setSettingsSection("look") }
+                    SettingsMenuRow(Icons.Default.Language, t("menu_look")) { vm.setSettingsSection("look") }
 
                     MenuGroupLabel("🎙 " + t("grp_traffic"))
                     SettingsMenuRow(Icons.Default.SettingsInputAntenna, t("menu_cat")) { vm.setSettingsSection("cat") }
@@ -192,14 +196,14 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
                     // once, while frequency, radio and converters change per
                     // session. Its neighbours are the settings it depends on.
                     if (fr.f4ioz.satcombo.data.Extensions.QO100 in ui.extensions) {
-                        SettingsMenuRow(Icons.Default.SatelliteAlt, t("menu_qo100")) { vm.openQo100() }
+                        SettingsMenuRow(Icons.Default.SatelliteAlt, t("menu_qo100"), page = true) { vm.openQo100() }
                     }
                     SettingsMenuRow(Icons.Default.Mic, t("menu_recordings")) { vm.setSettingsSection("recordings") }
                     SettingsMenuRow(Icons.Default.Tune, t("menu_accord")) { vm.setSettingsSection("accord") }
                     SettingsMenuRow(Icons.Default.Keyboard, t("menu_express")) { vm.setSettingsSection("express") }
-                    SettingsMenuRow(Icons.Default.Tune, t("menu_macro")) { vm.setSettingsSection("macro") }
+                    SettingsMenuRow(Icons.Default.Dialpad, t("menu_macro")) { vm.setSettingsSection("macro") }
                     SettingsMenuRow(Icons.Default.Cast, t("menu_partage")) { vm.setSettingsSection("partage") }
-                    SettingsMenuRow(Icons.Default.MyLocation, t("menu_gps")) { vm.setSettingsSection("gps") }
+                    SettingsMenuRow(Icons.Default.GpsFixed, t("menu_gps")) { vm.setSettingsSection("gps") }
                     if (fr.f4ioz.satcombo.data.Extensions.SSTV in ui.extensions) {
                         SettingsMenuRow(Icons.Default.GraphicEq, t("menu_mire")) { vm.setSettingsSection("mire") }
                     }
@@ -210,8 +214,8 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
                     SettingsMenuRow(Icons.Default.Notifications, t("menu_notif")) { vm.setSettingsSection("notif") }
 
                     MenuGroupLabel("🤝 " + t("grp_activities"))
-                    SettingsMenuRow(Icons.Default.Groups, t("sked_page_title")) { vm.openSked() }
-                    SettingsMenuRow(Icons.Default.EventNote, t("menu_agenda")) { vm.openAgenda() }
+                    // Mutual sked and Agenda hold no setting: they are pages,
+                    // reached from the ⋮ menu like every other page.
                     SettingsMenuRow(Icons.Default.Groups, t("menu_skeds")) { vm.setSettingsSection("skeds") }
                     SettingsMenuRow(Icons.Default.Park, t("menu_pota")) { vm.setSettingsSection("pota") }
 
@@ -226,7 +230,7 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
             item {
                 Row(verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp))
-                        .clickable { vm.setSettingsSection(null) }
+                        .clickable { vm.closeSettingsSection() }
                         .padding(vertical = 6.dp, horizontal = 2.dp)) {
                     Icon(Icons.Default.ArrowBack, null, tint = Cyan, modifier = Modifier.size(20.dp))
                     Spacer(Modifier.width(8.dp))
@@ -235,7 +239,12 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
             }
         }
         if (sec == "docs") { item { DocsContent() } }
-        if (sec == "accord") { item { AccordFinCard(ui, vm) } }
+        if (sec == "accord") {
+            if (fr.f4ioz.satcombo.data.Extensions.SDR in ui.extensions) {
+                item { OuvrirPage(t("sdr_title")) { vm.openSdr() } }
+            }
+            item { AccordFinCard(ui, vm) }
+        }
         if (sec == "macro") { item { ClavierMacroCarte(ui, vm) } }
         // **One menu for both ends.** Broadcasting and listening are the same
         // mechanism; two entries forced you to remember which side you were on.
@@ -900,9 +909,7 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
                             }
                             if (ui.sstvEnabled) {
                                 Spacer(Modifier.height(8.dp))
-                                OutlinedButton(onClick = { vm.openSstv() }) {
-                                    Text(t("sstv_open"), fontSize = 12.sp)
-                                }
+                                OuvrirPage(t("sstv_title")) { vm.openSstv() }
                             }
                         }
                         // APT uses the same capture but has no header to wait
@@ -920,9 +927,7 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
                                     colors = SwitchDefaults.colors(checkedTrackColor = Cyan))
                             }
                             Spacer(Modifier.height(8.dp))
-                            OutlinedButton(onClick = { vm.openApt() }) {
-                                Text(t("apt_title"), fontSize = 12.sp)
-                            }
+                            OuvrirPage(t("apt_title")) { vm.openApt() }
                         }
                     }
                 }
@@ -1058,6 +1063,7 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
         // --- hams.at skeds ---
         }
         if (sec == "skeds") {
+        item { OuvrirPage(t("sked_page_title")) { vm.openSked() } }
         item { SectionHeader(t("skeds_hamsat")) }
         item {
             Surface(color = SpaceCard, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
@@ -1824,6 +1830,7 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
             item { MireSection(ui, vm) }
         }
         if (sec == "sondemire") {
+            item { OuvrirPage(t("sonde_title")) { vm.openSonde() } }
             item { SondeMireSection(ui, vm) }
         }
         if (sec == "cat") {
@@ -3252,7 +3259,7 @@ private fun LigneRecap(titre: String, valeur: String) {
 
 @Composable
 private fun SettingsMenuRow(icon: androidx.compose.ui.graphics.vector.ImageVector,
-                            title: String, onClick: () -> Unit) {
+                            title: String, page: Boolean = false, onClick: () -> Unit) {
     Surface(color = SpaceCard, shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth()) {
         Row(Modifier.clickable(onClick = onClick).padding(horizontal = 14.dp, vertical = 13.dp),
             verticalAlignment = Alignment.CenterVertically) {
@@ -3263,8 +3270,25 @@ private fun SettingsMenuRow(icon: androidx.compose.ui.graphics.vector.ImageVecto
             Spacer(Modifier.width(12.dp))
             Text(title, color = TextHi, fontWeight = FontWeight.SemiBold,
                 fontSize = 14.sp, modifier = Modifier.weight(1f))
-            Icon(Icons.Default.ChevronRight, null, tint = TextLo)
+            // A row opening a whole page does not look like one opening a
+            // section: the arrow promised settings, and a screen came up.
+            if (page) Icon(Icons.Default.OpenInNew, t("ouvre_ecran"), tint = TextLo,
+                modifier = Modifier.size(20.dp))
+            else Icon(Icons.Default.ChevronRight, null, tint = TextLo)
         }
+    }
+}
+
+/**
+ * Top of a settings section whose feature has its own page: one way there,
+ * the same in every section.
+ */
+@Composable
+private fun OuvrirPage(titre: String, onClick: () -> Unit) {
+    OutlinedButton(onClick = onClick, modifier = Modifier.fillMaxWidth()) {
+        Icon(Icons.Default.OpenInNew, null, modifier = Modifier.size(16.dp))
+        Spacer(Modifier.width(8.dp))
+        Text(tf("ouvrir_page", titre), fontSize = 13.sp)
     }
 }
 

@@ -141,8 +141,7 @@ fun NommageScreen(ui: UiState, vm: MainViewModel) {
             // `supprimeEntree` with the current time, a key that never
             // existed, so it deleted nothing. The back arrow is enough.
             IconButton(onClick = {
-                vm.setSettingsSection("express")
-                vm.openSettings()
+                vm.openSettings("express")
             }) {
                 Icon(Icons.Default.Keyboard, t("menu_express"),
                     tint = TextLo, modifier = Modifier.size(20.dp))

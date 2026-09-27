@@ -788,8 +788,6 @@ data class UiState(
      * otherwise the choice just made on the previous screen is undone.
      */
     val photoPinnedSat: Boolean = false,
-    /** Screen to go back to when leaving the photo page. */
-    val photoReturn: Screen = Screen.PASSES,
     // --- Play Store update ---
     /** versionCode waiting on the Store, 0 when there is nothing to propose. */
     val updateCode: Int = 0,
@@ -1442,15 +1440,44 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     // ---------- settings ----------
 
-    fun openSettings() { _ui.value = _ui.value.copy(screen = Screen.SETTINGS) }
+    // ---------- the way back ----------
+
+    /** Pages to return to, out of `UiState` (255-register limit). */
+    private val chemin = fr.f4ioz.satcombo.ui.Chemin()
+
+    /** Records the page being left before opening [vers]. */
+    private fun va(vers: Screen, section: String? = null) =
+        chemin.va(_ui.value.screen, _ui.value.settingsSection, vers, section)
+
+    /** State after closing the current page: the one it was opened from. */
+    private fun retour(): UiState {
+        val e = chemin.retour()
+        return _ui.value.copy(screen = e.ecran, settingsSection = e.section)
+    }
+
+    /**
+     * Opens the settings, on [section] when given: a screen's gear opens its
+     * own settings, and back returns to that screen.
+     */
+    fun openSettings(section: String? = null) {
+        va(Screen.SETTINGS, section)
+        _ui.value = _ui.value.copy(screen = Screen.SETTINGS, settingsSection = section)
+    }
     fun closeSettings() {
-        _ui.value = _ui.value.copy(screen = Screen.PASSES, query = "", settingsSection = null)
+        _ui.value = retour().copy(query = "")
         computeFavoritePasses()
+    }
+
+    /** Back inside the settings: a section reached from a gear leaves them. */
+    fun closeSettingsSection() {
+        if (chemin.fermeReglages(_ui.value.settingsSection)) closeSettings()
+        else setSettingsSection(null)
     }
 
     private var locationUpdatesJob: kotlinx.coroutines.Job? = null
 
     fun openLocator() {
+        va(Screen.LOCATOR)
         _ui.value = _ui.value.copy(screen = Screen.LOCATOR)
         startLiveLocation(SuiviPosition.CADENCE_CARTE_MS)
     }
@@ -1685,9 +1712,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             ?: _ui.value.satellites.firstOrNull()?.catalogNumber
         val carre = depuis?.grids?.firstOrNull { it.isNotBlank() }.orEmpty()
         skedViseeMs = depuis?.let { it.workableStartMs ?: it.aosMs }
+        va(Screen.SKED)
         _ui.value = _ui.value.copy(
             screen = Screen.SKED,
-            settingsSection = null,
             skedSatCat = cat,
             skedOtherLoc = carre.ifBlank {
                 _ui.value.skedOtherLoc.ifBlank { settings.skedOtherLoc }
@@ -1707,7 +1734,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      */
     private var skedViseeMs: Long? = null
 
-    fun closeSked() { _ui.value = _ui.value.copy(screen = Screen.PASSES) }
+    fun closeSked() { _ui.value = retour() }
 
     fun setSkedSat(cat: Int) {
         _ui.value = _ui.value.copy(
@@ -1793,12 +1820,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         return r * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
     }
 
-    fun setSettingsSection(id: String?) { _ui.value = _ui.value.copy(settingsSection = id) }
+    fun setSettingsSection(id: String?) {
+        chemin.choixSection()
+        _ui.value = _ui.value.copy(settingsSection = id)
+    }
     fun closeLocator() {
         // Do not stop tracking when leaving the map, drop to the background
         // period: stopping it froze the position until the next visit.
         startLiveLocation(SuiviPosition.CADENCE_FOND_MS)
-        _ui.value = _ui.value.copy(screen = Screen.PASSES)
+        _ui.value = retour()
     }
 
     fun setLocationMode(mode: LocationMode) {
@@ -2095,6 +2125,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      * confirming writes.** Nothing reaches the log until a callsign is typed.
      */
     fun ouvreSaisie() {
+        va(Screen.NOMMAGE)
         _ui.value = _ui.value.copy(screen = Screen.NOMMAGE)
     }
 
@@ -2777,16 +2808,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      * The globe reuses `groundTrack`, already computed for the pass map: two
      * views of the same data read the same variable.
      */
-    fun ouvreGlobe() { _ui.value = _ui.value.copy(screen = Screen.GLOBE) }
+    fun ouvreGlobe() { va(Screen.GLOBE); _ui.value = _ui.value.copy(screen = Screen.GLOBE) }
 
-    fun ouvreFt8() { _ui.value = _ui.value.copy(screen = Screen.FT8) }
+    fun ouvreFt8() { va(Screen.FT8); _ui.value = _ui.value.copy(screen = Screen.FT8) }
     /**
      * Leaving the screen does not stop listening: a slot lasts fifteen seconds
      * and cutting it to check the log would lose a cycle. Only the screen's
      * button stops it.
      */
-    fun fermeFt8() { _ui.value = _ui.value.copy(screen = Screen.PASSES) }
-    fun fermeGlobe() { _ui.value = _ui.value.copy(screen = Screen.PASSES) }
+    fun fermeFt8() { _ui.value = retour() }
+    fun fermeGlobe() { _ui.value = retour() }
 
     fun setLotwCall(v: String) {
         settings.lotwCall = v
@@ -3123,7 +3154,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun fermeNommage() {
-        _ui.value = _ui.value.copy(screen = Screen.PASSES)
+        _ui.value = retour()
     }
 
     /**
@@ -3562,16 +3593,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      * opened from the global menu (the operator then picks it on the page).
      */
     fun openPhoto(catnum: Int? = null, passAosMs: Long? = null) {
-        val from = _ui.value.screen
         // Arriving with a satellite in hand — tapped in the header, or simply
         // the one open behind the menu — the page is about THAT satellite. The
         // kept picture reopens as a background, but it no longer drags its own
         // satellite and pass back in on top of the choice just made.
         val pinned = catnum != null || _ui.value.selected != null
+        va(Screen.PHOTO)
         _ui.value = _ui.value.copy(
             screen = Screen.PHOTO,
-            photoPinnedSat = pinned,
-            photoReturn = if (from == Screen.PHOTO) _ui.value.photoReturn else from)
+            photoPinnedSat = pinned)
         // The satellite the operator is looking at wins over whatever the photo
         // page was left on: coming from a satellite screen, the picture is about
         // THAT satellite, not the one used the last time the page was opened.
@@ -3627,10 +3657,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _ui.value = _ui.value.copy(updateCode = 0)
     }
 
-    fun closePhoto() {
-        val back = _ui.value.photoReturn
-        _ui.value = _ui.value.copy(screen = if (back == Screen.PHOTO) Screen.PASSES else back)
-    }
+    fun closePhoto() { _ui.value = retour() }
 
     /**
      * Finds the satellite back from the name alone and rebinds the photo to it,
@@ -3902,8 +3929,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     // ================= activations (field sessions) =================
 
-    fun openActivation() { _ui.value = _ui.value.copy(screen = Screen.ACTIVATION) }
-    fun closeActivation() { _ui.value = _ui.value.copy(screen = Screen.PASSES) }
+    fun openActivation() { va(Screen.ACTIVATION); _ui.value = _ui.value.copy(screen = Screen.ACTIVATION) }
+    fun closeActivation() { _ui.value = retour() }
 
     // ================= Agenda (personal appointments) =================
 
@@ -3911,8 +3938,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      * Not a beta extension: a time reminder depends on no hardware and cannot
      * break anything, so it is open to all.
      */
-    fun openAgenda() { _ui.value = _ui.value.copy(screen = Screen.AGENDA) }
-    fun closeAgenda() { _ui.value = _ui.value.copy(screen = Screen.PASSES) }
+    fun openAgenda() { va(Screen.AGENDA); _ui.value = _ui.value.copy(screen = Screen.AGENDA) }
+    fun closeAgenda() { _ui.value = retour() }
 
     /**
      * Re-reads the agenda from disk, at startup and after every change on the
@@ -3997,38 +4024,42 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         // Beta lock: the menu already hides it, but a future shortcut or a
         // restored state must not get through.
         if (!hasExtension(fr.f4ioz.satcombo.data.Extensions.SSTV)) return
+        va(Screen.SSTV)
         _ui.value = _ui.value.copy(screen = Screen.SSTV)
     }
-    fun closeSstv() { _ui.value = _ui.value.copy(screen = Screen.PASSES) }
+    fun closeSstv() { _ui.value = retour() }
 
     // ================= APT (NOAA images, beta) =================
 
     fun openApt() {
         if (!hasExtension(fr.f4ioz.satcombo.data.Extensions.APT)) return
         fr.f4ioz.satcombo.apt.AptHub.qthLocator = myLocator()
+        va(Screen.APT)
         _ui.value = _ui.value.copy(screen = Screen.APT)
     }
-    fun closeApt() { _ui.value = _ui.value.copy(screen = Screen.PASSES) }
+    fun closeApt() { _ui.value = retour() }
 
     // ================= SDR (RTL-SDR dongle, beta) =================
 
     fun openSdr() {
         if (!hasExtension(fr.f4ioz.satcombo.data.Extensions.SDR)) return
         fr.f4ioz.satcombo.sdr.SdrHub.attach(getApplication())
+        va(Screen.SDR)
         _ui.value = _ui.value.copy(screen = Screen.SDR)
     }
 
-    fun closeSdr() { _ui.value = _ui.value.copy(screen = Screen.PASSES) }
+    fun closeSdr() { _ui.value = retour() }
 
     // ===================== weather radiosondes =====================
 
     fun openSonde() {
         if (!hasExtension(fr.f4ioz.satcombo.data.Extensions.SONDE)) return
+        va(Screen.SONDE)
         _ui.value = _ui.value.copy(screen = Screen.SONDE)
     }
 
     /** Leaving the screen does not stop listening: a flight lasts three hours. */
-    fun closeSonde() { _ui.value = _ui.value.copy(screen = Screen.PASSES) }
+    fun closeSonde() { _ui.value = retour() }
 
     /** Tunes to a frequency, live if reception is already running. */
     fun setSondeFreq(hz: Long) {
@@ -4842,11 +4873,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     // ================= timeline =================
 
     fun openTimeline() {
+        va(Screen.TIMELINE)
         _ui.value = _ui.value.copy(screen = Screen.TIMELINE)
         computeTimeline()
     }
 
-    fun closeTimeline() { _ui.value = _ui.value.copy(screen = Screen.PASSES) }
+    fun closeTimeline() { _ui.value = retour() }
 
     fun setTimelineHours(h: Int) {
         _ui.value = _ui.value.copy(timelineHours = h.coerceIn(1, 24))
@@ -7602,6 +7634,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun openQo100() {
         if (!hasExtension(fr.f4ioz.satcombo.data.Extensions.QO100)) return
+        va(Screen.QO100)
         _ui.value = _ui.value.copy(screen = Screen.QO100)
         // Calibration and dish pointing do not change while operating: read
         // once on opening.
@@ -7728,7 +7761,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      */
     fun closeQo100() {
         qo100Panorama(false)
-        _ui.value = _ui.value.copy(screen = Screen.PASSES)
+        _ui.value = retour()
     }
 
     fun setQo100Transpondeur(cle: String) {
@@ -8029,11 +8062,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun openRotor() {
         if (!hasExtension(fr.f4ioz.satcombo.data.Extensions.ROTOR)) return
         refreshRotorDevices()
+        va(Screen.ROTOR)
         _ui.value = _ui.value.copy(screen = Screen.ROTOR)
     }
 
     /** Leaving the screen does not stop the mast: a pass lasts ten minutes. */
-    fun closeRotor() { _ui.value = _ui.value.copy(screen = Screen.PASSES) }
+    fun closeRotor() { _ui.value = retour() }
 
     /**
      * Same safety net as for CAT, with one weighty difference: a failure also

@@ -30,6 +30,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.Science
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.SatelliteAlt
 import androidx.compose.material.icons.filled.FiberManualRecord
@@ -82,6 +84,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.style.TextAlign
@@ -159,9 +163,10 @@ fun SatComboApp(vm: MainViewModel) {
             else android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
     }
 
-    // System back navigates within the app instead of quitting:
-    // detail -> list, settings -> main, selection mode -> off. Only the
-    // top-level passes screen lets back fall through to leave the app.
+    // System back navigates within the app instead of quitting: a page
+    // returns to the page it was opened from (Chemin), detail -> list,
+    // selection mode -> off. Only the top-level passes screen lets back fall
+    // through to leave the app.
     //
     // Branch order is RetourArriere's and it matters: close what is visible.
     // With the detail sheet first, back from the Rotor screen cleared the
@@ -172,7 +177,7 @@ fun SatComboApp(vm: MainViewModel) {
     androidx.activity.compose.BackHandler(enabled = canHandleBack) {
         when (RetourArriere.geste(
             ui.screen, sectionReglages, ui.selected != null, ui.selectionMode)) {
-            RetourArriere.Geste.SECTION_REGLAGES -> vm.setSettingsSection(null)
+            RetourArriere.Geste.SECTION_REGLAGES -> vm.closeSettingsSection()
             RetourArriere.Geste.FERMER_REGLAGES -> vm.closeSettings()
             RetourArriere.Geste.FERMER_LOCATOR -> vm.closeLocator()
             RetourArriere.Geste.FERMER_FT8 -> vm.fermeFt8()
@@ -460,7 +465,7 @@ private fun TopBar(ui: UiState, vm: MainViewModel) {
                 OverflowMenu(ui, vm)
             }
             if (ui.screen != Screen.SETTINGS) {
-                IconButton(onClick = vm::openSettings) {
+                IconButton(onClick = { vm.openSettings(Chemin.sectionDe(ui.screen)) }) {
                     Icon(Icons.Default.Settings, t("settings_title"), tint = TextLo)
                 }
             }
@@ -493,19 +498,24 @@ private fun OverflowMenu(ui: UiState, vm: MainViewModel) {
                 tint = if (running) Amber else TextLo)
         }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            // Three kinds of entries, three groups: pages to get ready before
+            // a pass, pages used on the air, and what changes the list behind.
+            MenuHeader(t("menu_grp_preparer"))
             // Globe: in the menu, the top bar is full.
             DropdownMenuItem(
                 text = { Text(t("globe_title")) },
                 leadingIcon = { Icon(Icons.Default.Public, null, tint = Cyan) },
                 onClick = { open = false; vm.ouvreGlobe() })
             DropdownMenuItem(
+                text = { Text(t("agenda_title")) },
+                leadingIcon = { Icon(Icons.Default.EventNote, null, tint = Cyan) },
+                onClick = { open = false; vm.openAgenda() })
+            DropdownMenuItem(
                 text = { Text(t("sked_page_title")) },
                 leadingIcon = { Icon(Icons.Default.Groups, null, tint = Cyan) },
                 onClick = { open = false; vm.openSked() })
-            DropdownMenuItem(
-                text = { Text(t("photo_title")) },
-                leadingIcon = { Icon(Icons.Default.PhotoCamera, null, tint = Cyan) },
-                onClick = { open = false; vm.openPhoto() })
+            HorizontalDivider()
+            MenuHeader(t("grp_traffic"))
             DropdownMenuItem(
                 text = { Text(if (running) t("act_title_running") else t("act_title")) },
                 leadingIcon = {
@@ -514,9 +524,9 @@ private fun OverflowMenu(ui: UiState, vm: MainViewModel) {
                 },
                 onClick = { open = false; vm.openActivation() })
             DropdownMenuItem(
-                text = { Text(t("agenda_title")) },
-                leadingIcon = { Icon(Icons.Default.EventNote, null, tint = Cyan) },
-                onClick = { open = false; vm.openAgenda() })
+                text = { Text(t("photo_title")) },
+                leadingIcon = { Icon(Icons.Default.PhotoCamera, null, tint = Cyan) },
+                onClick = { open = false; vm.openPhoto() })
             DropdownMenuItem(
                 text = { Text(t("ft8_titre")) },
                 leadingIcon = { Icon(Icons.Default.GraphicEq, null, tint = Cyan) },
@@ -527,19 +537,10 @@ private fun OverflowMenu(ui: UiState, vm: MainViewModel) {
                 DropdownMenuItem(
                     text = { Text(t("sstv_title")) },
                     leadingIcon = {
-                        Icon(Icons.Default.GraphicEq, null,
+                        Icon(Icons.Default.Image, null,
                             tint = if (sstvOn) Aurora else Cyan)
                     },
                     onClick = { open = false; vm.openSstv() })
-            }
-            if (fr.f4ioz.satcombo.data.Extensions.SDR in ui.extensions) {
-                DropdownMenuItem(
-                    text = { Text(t("sdr_menu")) },
-                    leadingIcon = {
-                        Icon(Icons.Default.Usb, null,
-                            tint = if (sdrOn) Aurora else Cyan)
-                    },
-                    onClick = { open = false; vm.openSdr() })
             }
             if (fr.f4ioz.satcombo.data.Extensions.APT in ui.extensions) {
                 DropdownMenuItem(
@@ -550,23 +551,23 @@ private fun OverflowMenu(ui: UiState, vm: MainViewModel) {
                     },
                     onClick = { open = false; vm.openApt() })
             }
+            if (fr.f4ioz.satcombo.data.Extensions.SDR in ui.extensions) {
+                DropdownMenuItem(
+                    text = { Text(t("sdr_menu")) },
+                    leadingIcon = {
+                        Icon(Icons.Default.Usb, null,
+                            tint = if (sdrOn) Aurora else Cyan)
+                    },
+                    onClick = { open = false; vm.openSdr() })
+            }
             if (fr.f4ioz.satcombo.data.Extensions.SONDE in ui.extensions) {
                 DropdownMenuItem(
                     text = { Text(t("sonde_title")) },
                     leadingIcon = {
-                        Icon(Icons.Default.Explore, null,
+                        Icon(Icons.Default.Science, null,
                             tint = if (sondeOn) Aurora else Cyan)
                     },
                     onClick = { open = false; vm.openSonde() })
-            }
-            if (fr.f4ioz.satcombo.data.Extensions.ROTOR in ui.extensions) {
-                DropdownMenuItem(
-                    text = { Text(t("menu_rotor")) },
-                    leadingIcon = {
-                        Icon(Icons.Default.Sync, null,
-                            tint = if (ui.rotorConnected) Aurora else Cyan)
-                    },
-                    onClick = { open = false; vm.openRotor() })
             }
             if (fr.f4ioz.satcombo.data.Extensions.QO100 in ui.extensions) {
                 DropdownMenuItem(
@@ -577,7 +578,17 @@ private fun OverflowMenu(ui: UiState, vm: MainViewModel) {
                     },
                     onClick = { open = false; vm.openQo100() })
             }
+            if (fr.f4ioz.satcombo.data.Extensions.ROTOR in ui.extensions) {
+                DropdownMenuItem(
+                    text = { Text(t("menu_rotor")) },
+                    leadingIcon = {
+                        Icon(Icons.Default.Sync, null,
+                            tint = if (ui.rotorConnected) Aurora else Cyan)
+                    },
+                    onClick = { open = false; vm.openRotor() })
+            }
             HorizontalDivider()
+            MenuHeader(t("menu_grp_liste"))
             DropdownMenuItem(
                 text = { Text(t("selection_export")) },
                 leadingIcon = {
@@ -594,6 +605,15 @@ private fun OverflowMenu(ui: UiState, vm: MainViewModel) {
                 onClick = { open = false; vm.requestDatePicker() })
         }
     }
+}
+
+/** Group title in the ⋮ menu: not clickable, read by TalkBack as a heading. */
+@Composable
+private fun MenuHeader(text: String) {
+    Text(text, color = TextLo, fontSize = 11.sp, fontWeight = FontWeight.Bold,
+        letterSpacing = 1.2.sp,
+        modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 2.dp)
+            .semantics { heading() })
 }
 
 /**
@@ -679,7 +699,7 @@ private fun PassesScreen(ui: UiState, vm: MainViewModel) {
                 Text(t("pick_sats_hint"),
                     color = TextLo, textAlign = TextAlign.Center)
                 Spacer(Modifier.height(16.dp))
-                Button(onClick = vm::openSettings,
+                Button(onClick = { vm.openSettings() },
                     colors = ButtonDefaults.buttonColors(containerColor = Cyan)) {
                     Text(t("open_settings"), color = Color(0xFF00201D))
                 }
