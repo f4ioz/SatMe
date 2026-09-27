@@ -308,13 +308,14 @@ private fun CallsignPromptDialog(vm: MainViewModel) {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun TopBar(ui: UiState, vm: MainViewModel) {
+    val fiche = if (ui.screen == Screen.PASSES) ui.selected else null
+    Column {
     TopAppBar(
         colors = TopAppBarDefaults.topAppBarColors(
             containerColor = Color.Transparent, titleContentColor = TextHi
         ),
         title = {
-            val fiche = if (ui.screen == Screen.PASSES) ui.selected else null
-            if (fiche != null) EnteteSatellite(ui, vm, fiche)
+            if (fiche != null) TitreSatellite(fiche)
             else Column {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(Modifier.size(10.dp).clip(CircleShape).background(Cyan))
@@ -478,6 +479,10 @@ private fun TopBar(ui: UiState, vm: MainViewModel) {
             }
         }
     )
+    // The satellite's badges under the bar, on the full width.
+    if (fiche != null) BadgesSatellite(ui, vm, fiche,
+        Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 4.dp))
+    }
 }
 
 /**

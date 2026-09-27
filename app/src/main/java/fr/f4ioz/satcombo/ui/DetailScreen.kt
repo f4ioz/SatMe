@@ -1718,22 +1718,28 @@ private fun AmsatStatusDialog(
 }
 
 /**
- * The satellite page's header, drawn in the top bar: name on the first line,
- * badges on the second, where "SatMe" and the locator sit on the list.
+ * The satellite page's header: the name is the top bar's title, the badges
+ * run on a line of their own right under the bar (BadgesSatellite).
  *
  * It used to be a row of its own under the bar, plus a full-width banner for
  * old elements: two headers stacked, and the RX/TX frequencies pushed below
- * the fold during the pass.
+ * the fold during the pass. The badges then sat under the name, squeezed
+ * between the arrow and five icons: on a narrow phone the AMSAT badge was cut.
  */
 @Composable
-internal fun EnteteSatellite(ui: UiState, vm: MainViewModel, sat: TleEntry) {
-    Column {
-        Text(sat.name, fontWeight = FontWeight.Black, color = TextHi, fontSize = 18.sp,
-            maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
-        // Badges + NORAD share the width, horizontally scrollable.
+internal fun TitreSatellite(sat: TleEntry) {
+    Text(sat.name, fontWeight = FontWeight.Black, color = TextHi, fontSize = 18.sp,
+        maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
+}
+
+/** Age of the elements, rig, rotor, status and NORAD: the full screen width. */
+@Composable
+internal fun BadgesSatellite(ui: UiState, vm: MainViewModel, sat: TleEntry, modifier: Modifier = Modifier) {
+    Column(modifier) {
+        // Horizontally scrollable, should a phone still be too narrow.
         Row(verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp),
-            modifier = Modifier.padding(top = 2.dp).horizontalScroll(rememberScrollState())) {
+            modifier = Modifier.horizontalScroll(rememberScrollState())) {
             ElementsAges(ui, vm, sat)
             if (ui.catConnected) {
                 Surface(color = Cyan.copy(alpha = 0.18f), shape = RoundedCornerShape(6.dp)) {
@@ -1785,9 +1791,13 @@ private fun ElementsAges(ui: UiState, vm: MainViewModel, sat: TleEntry) {
     val jours = (kotlin.math.abs(shownPass.aosEpochMs - epochMs) / 86_400_000.0).toInt()
     if (jours <= 3) return
     val libelle = tf("stale_elements", jours) + " " + t("refresh")
+    // A badge like the others, not a 48 dp button: Surface(onClick) enforces
+    // that height and the chip towered over its neighbours. Compose still
+    // widens the touch area around it.
     Surface(color = Amber.copy(alpha = 0.18f), shape = RoundedCornerShape(6.dp),
-        onClick = { vm.refreshTleFor(sat.catalogNumber, annonce = true) },
-        modifier = Modifier.semantics { contentDescription = libelle }) {
+        modifier = Modifier.clip(RoundedCornerShape(6.dp))
+            .clickable { vm.refreshTleFor(sat.catalogNumber, annonce = true) }
+            .semantics { contentDescription = libelle }) {
         Text(tf("stale_chip", jours), color = Amber, fontSize = 10.sp,
             fontWeight = FontWeight.Bold,
             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
