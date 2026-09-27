@@ -8,6 +8,8 @@
  */
 package fr.f4ioz.satcombo.ui
 
+import androidx.compose.material.icons.filled.FiberManualRecord
+import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.Checkbox
 import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.selection.toggleable
@@ -132,7 +134,29 @@ fun SstvScreen(ui: UiState, vm: MainViewModel) {
                         Text(t("sstv_live_title"), color = TextHi,
                             fontWeight = FontWeight.Bold, fontSize = 15.sp)
                     }
-                    Spacer(Modifier.height(6.dp))
+                    Spacer(Modifier.height(10.dp))
+                    // Listen from here: a recording with SSTV decoding, the
+                    // same as ⏺ on the pass page.
+                    val ecoute = rememberDemarrageEnregistrement(ui) { vm.ecouteSstv() }
+                    if (ui.recording) {
+                        val secs = ((ui.nowMs - ui.recordStartMs) / 1000).coerceAtLeast(0)
+                        Button(onClick = { vm.stopRecording() },
+                            colors = ButtonDefaults.buttonColors(containerColor = Magenta),
+                            modifier = Modifier.fillMaxWidth()) {
+                            Icon(Icons.Default.Stop, null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text(t("sstv_ecoute_stop") + "  %d:%02d".format(secs / 60, secs % 60))
+                        }
+                    } else {
+                        Button(onClick = ecoute,
+                            colors = ButtonDefaults.buttonColors(containerColor = Cyan),
+                            modifier = Modifier.fillMaxWidth()) {
+                            Icon(Icons.Default.FiberManualRecord, null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text(t("sstv_ecoute_start"))
+                        }
+                    }
+                    Spacer(Modifier.height(8.dp))
                     Text(sstvStatusLine(st),
                         color = if (st.modeName != null) Aurora
                                 else if (st.listening) Cyan else TextLo,
@@ -191,10 +215,6 @@ fun SstvScreen(ui: UiState, vm: MainViewModel) {
                     Text(t("sstv_audio_hint"), color = TextLo, fontSize = 11.sp,
                         modifier = Modifier.padding(top = 4.dp))
                     Spacer(Modifier.height(10.dp))
-                    if (!st.listening) {
-                        Spacer(Modifier.height(8.dp))
-                        Text(t("sstv_live_hint"), color = TextLo, fontSize = 11.sp)
-                    }
                 }
             }
         }

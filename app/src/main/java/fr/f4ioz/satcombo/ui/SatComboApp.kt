@@ -631,23 +631,8 @@ private fun MenuHeader(text: String) {
  */
 @Composable
 private fun RecButton(ui: UiState, vm: MainViewModel) {
-    val ctx = LocalContext.current
     val recColor = Color(0xFFE5484D)
-    // RECORD_AUDIO always; BLUETOOTH_CONNECT too when the BT source is chosen
-    // (runtime permission on Android 12+, needed to open the HFP/SCO link).
-    fun neededPerms(): List<String> {
-        val perms = mutableListOf(android.Manifest.permission.RECORD_AUDIO)
-        if (ui.recorderSource == "BT" && android.os.Build.VERSION.SDK_INT >= 31)
-            perms.add(android.Manifest.permission.BLUETOOTH_CONNECT)
-        return perms.filter {
-            androidx.core.content.ContextCompat.checkSelfPermission(ctx, it) !=
-                android.content.pm.PackageManager.PERMISSION_GRANTED
-        }
-    }
-    val launcher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestMultiplePermissions()) { results ->
-        if (results[android.Manifest.permission.RECORD_AUDIO] == true) vm.startRecording()
-    }
+    val demarre = rememberDemarrageEnregistrement(ui) { vm.startRecording() }
     if (ui.recording) {
         val secs = ((ui.nowMs - ui.recordStartMs) / 1000).coerceAtLeast(0)
         Row(verticalAlignment = Alignment.CenterVertically,
@@ -660,14 +645,35 @@ private fun RecButton(ui: UiState, vm: MainViewModel) {
                 fontFamily = FontFamily.Monospace, fontSize = 12.sp, fontWeight = FontWeight.Bold)
         }
     } else {
-        IconButton(onClick = {
-            val missing = neededPerms()
-            if (missing.isEmpty()) vm.startRecording()
-            else launcher.launch(missing.toTypedArray())
-        }) {
+        IconButton(onClick = demarre) {
             Icon(Icons.Default.FiberManualRecord, t("rec_start"), tint = recColor,
                 modifier = Modifier.size(20.dp))
         }
+    }
+}
+
+/**
+ * Starts a recording once the permissions are there: RECORD_AUDIO always,
+ * BLUETOOTH_CONNECT too when the BT source is chosen (runtime permission on
+ * Android 12+, needed to open the HFP/SCO link). Shared by every button that
+ * records, so none of them fails silently on a first use.
+ */
+@Composable
+internal fun rememberDemarrageEnregistrement(ui: UiState, demarre: () -> Unit): () -> Unit {
+    val ctx = LocalContext.current
+    val launcher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()) { results ->
+        if (results[android.Manifest.permission.RECORD_AUDIO] == true) demarre()
+    }
+    return {
+        val perms = mutableListOf(android.Manifest.permission.RECORD_AUDIO)
+        if (ui.recorderSource == "BT" && android.os.Build.VERSION.SDK_INT >= 31)
+            perms.add(android.Manifest.permission.BLUETOOTH_CONNECT)
+        val missing = perms.filter {
+            androidx.core.content.ContextCompat.checkSelfPermission(ctx, it) !=
+                android.content.pm.PackageManager.PERMISSION_GRANTED
+        }
+        if (missing.isEmpty()) demarre() else launcher.launch(missing.toTypedArray())
     }
 }
 

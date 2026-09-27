@@ -2050,6 +2050,17 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _ui.value = _ui.value.copy(recordingsTreeUri = uri)
     }
 
+    /**
+     * Listening from the SSTV page: a recording with SSTV decoding on, as the
+     * ⏺ of the pass page does, without leaving the page. The page used to
+     * only say where to go.
+     */
+    fun ecouteSstv() {
+        if (!_ui.value.recorderEnabled) setRecorderEnabled(true)
+        if (!_ui.value.sstvEnabled) setSstvEnabled(true)
+        startRecording()
+    }
+
     fun toggleUiLock() { _ui.value = _ui.value.copy(uiLocked = !_ui.value.uiLocked) }
 
     fun toggleRecording() { if (_ui.value.recording) stopRecording() else startRecording() }
