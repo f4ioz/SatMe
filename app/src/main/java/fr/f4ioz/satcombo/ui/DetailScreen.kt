@@ -301,10 +301,16 @@ internal fun DetailScreen(ui: UiState, vm: MainViewModel, onBack: () -> Unit) {
                             // pushed "LOC" onto a second line on a phone. The
                             // countdown and the pass list keep them.
                             val hmCourt = tzFormat("HH:mm", ui.useUtc)
+                            var taille by remember(shownPass.aosEpochMs) { mutableStateOf(14.sp) }
                             Text("${dfull.format(Date(shownPass.aosEpochMs)).replaceFirstChar { it.uppercase() }} · " +
                                     "${hmCourt.format(Date(shownPass.aosEpochMs))} → ${hmCourt.format(Date(shownPass.losEpochMs))} ${tzTag(ui.useUtc)}",
-                                color = TextHi, fontWeight = FontWeight.Bold, fontSize = 14.sp,
-                                maxLines = 2, modifier = Modifier.weight(1f, fill = false))
+                                color = TextHi, fontWeight = FontWeight.Bold, fontSize = taille,
+                                maxLines = 1, softWrap = false,
+                                // Too long for the row (large display size in
+                                // Appearance): a step smaller, down to 11 sp,
+                                // rather than "LOC" alone on a second line.
+                                onTextLayout = { if (it.hasVisualOverflow && taille > 11.sp) taille *= 0.93f },
+                                modifier = Modifier.weight(1f, fill = false))
                             // The phone's calendar, pre-filled: SatMe writes
                             // nothing, the operator saves there.
                             IconButton(onClick = {
