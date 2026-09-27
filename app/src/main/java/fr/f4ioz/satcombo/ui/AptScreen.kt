@@ -106,7 +106,7 @@ fun AptScreen(ui: UiState, vm: MainViewModel) {
                         Text(t("apt_live_title"), color = TextHi,
                             fontWeight = FontWeight.Bold, fontSize = 15.sp)
                         Spacer(Modifier.weight(1f))
-                        IconButton(onClick = { help = true }, modifier = Modifier.size(28.dp)) {
+                        IconButton(onClick = { help = true }) {
                             Icon(Icons.Default.Info, t("apt_help_title"), tint = TextLo,
                                 modifier = Modifier.size(18.dp))
                         }

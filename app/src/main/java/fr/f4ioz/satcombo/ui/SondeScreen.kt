@@ -126,7 +126,7 @@ fun SondeScreen(ui: UiState, vm: MainViewModel) {
                         Text(t("sonde_beta"), color = Amber,
                             fontWeight = FontWeight.Bold, fontSize = 13.sp,
                             modifier = Modifier.weight(1f))
-                        IconButton(onClick = { help = true }, modifier = Modifier.size(28.dp)) {
+                        IconButton(onClick = { help = true }) {
                             Icon(Icons.Default.Info, t("sonde_help_title"), tint = TextLo,
                                 modifier = Modifier.size(18.dp))
                         }
@@ -148,7 +148,7 @@ fun SondeScreen(ui: UiState, vm: MainViewModel) {
                         OutlinedButton(
                             onClick = { vm.stepSondeFreq(-1) },
                             contentPadding = PaddingValues(horizontal = 10.dp)
-                        ) { Icon(Icons.Default.Remove, null, Modifier.size(18.dp)) }
+                        ) { Icon(Icons.Default.Remove, t("freq_moins"), Modifier.size(18.dp)) }
                         Spacer(Modifier.width(10.dp))
                         Text("%.3f MHz".format(Locale.US, ui.sondeFreqHz / 1e6),
                             color = Cyan, fontWeight = FontWeight.Black, fontSize = 22.sp,
@@ -157,7 +157,7 @@ fun SondeScreen(ui: UiState, vm: MainViewModel) {
                         OutlinedButton(
                             onClick = { vm.stepSondeFreq(+1) },
                             contentPadding = PaddingValues(horizontal = 10.dp)
-                        ) { Icon(Icons.Default.Add, null, Modifier.size(18.dp)) }
+                        ) { Icon(Icons.Default.Add, t("freq_plus"), Modifier.size(18.dp)) }
                     }
                     Spacer(Modifier.height(6.dp))
                     Text(t("sonde_band_note"), color = TextLo, fontSize = 11.sp)

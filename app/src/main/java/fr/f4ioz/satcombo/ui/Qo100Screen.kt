@@ -8,6 +8,8 @@
  */
 package fr.f4ioz.satcombo.ui
 
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.FilterChip
 import androidx.compose.material.icons.filled.Tune
@@ -1076,9 +1078,10 @@ private fun libellePas(hz: Long): String =
 @Composable
 private fun Interrupteur(titre: String, coche: Boolean, sur: (Boolean) -> Unit) {
     Row(verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
+        modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp).toggleable(value = coche, role = Role.Switch,
+            onValueChange = sur)) {
         Text(titre, color = TextHi, fontSize = 13.sp, modifier = Modifier.weight(1f))
-        Switch(checked = coche, onCheckedChange = sur,
+        Switch(checked = coche, onCheckedChange = null,
             colors = SwitchDefaults.colors(checkedTrackColor = Cyan))
     }
 }

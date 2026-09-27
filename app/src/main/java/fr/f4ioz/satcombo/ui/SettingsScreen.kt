@@ -8,6 +8,9 @@
  */
 package fr.f4ioz.satcombo.ui
 
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.background
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.rememberScrollState
@@ -319,12 +322,13 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
         item {
             Surface(color = SpaceCard, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(modifier = Modifier.toggleable(value = ui.uniformUi, role = Role.Switch,
+                            onValueChange = { vm.setUniformUi(it) }), verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
                             Text(t("ui_uniform"), color = TextHi, fontWeight = FontWeight.Bold)
                             Text(t("ui_uniform_desc"), color = TextLo, fontSize = 11.sp)
                         }
-                        Switch(checked = ui.uniformUi, onCheckedChange = { vm.setUniformUi(it) })
+                        Switch(checked = ui.uniformUi, onCheckedChange = null)
                     }
                     Spacer(Modifier.height(12.dp))
                     Text(t("ui_size"), color = TextHi, fontWeight = FontWeight.Bold)
@@ -336,13 +340,14 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
                         onSelect = { vm.setUiScaleStep(it - 1) }
                     )
                     Spacer(Modifier.height(14.dp))
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(modifier = Modifier.toggleable(value = ui.uiFollowSystemFont, role = Role.Switch,
+                            onValueChange = { vm.setUiFollowSystemFont(it) }), verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
                             Text(t("ui_system_font"), color = TextHi, fontWeight = FontWeight.Bold)
                             Text(t("ui_system_font_desc"), color = TextLo, fontSize = 11.sp)
                         }
                         Switch(checked = ui.uiFollowSystemFont,
-                            onCheckedChange = { vm.setUiFollowSystemFont(it) })
+                            onCheckedChange = null)
                     }
                 }
             }
@@ -356,16 +361,18 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
             Surface(color = SpaceCard, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.clickable { vm.setLocationMode(LocationMode.AUTO) }) {
+                        modifier = Modifier.selectable(selected = ui.locationMode == LocationMode.AUTO,
+                            role = Role.RadioButton, onClick = { vm.setLocationMode(LocationMode.AUTO) })) {
                         RadioButton(selected = ui.locationMode == LocationMode.AUTO,
-                            onClick = { vm.setLocationMode(LocationMode.AUTO) },
+                            onClick = null,
                             colors = RadioButtonDefaults.colors(selectedColor = Cyan))
                         Text(t("auto_gps"), color = TextHi)
                     }
                     Row(verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.clickable { vm.setLocationMode(LocationMode.MANUAL) }) {
+                        modifier = Modifier.selectable(selected = ui.locationMode == LocationMode.MANUAL,
+                            role = Role.RadioButton, onClick = { vm.setLocationMode(LocationMode.MANUAL) })) {
                         RadioButton(selected = ui.locationMode == LocationMode.MANUAL,
-                            onClick = { vm.setLocationMode(LocationMode.MANUAL) },
+                            onClick = null,
                             colors = RadioButtonDefaults.colors(selectedColor = Cyan))
                         Text(t("manual_maidenhead"), color = TextHi)
                     }
@@ -452,12 +459,13 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
         }
         item {
             Surface(color = SpaceCard, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
-                Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.padding(16.dp).toggleable(value = ui.locatorDetails, role = Role.Switch,
+                        onValueChange = vm::setLocatorDetails), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Text(t("locator_details"), color = TextHi)
                         Text(t("locator_details_desc"), color = TextLo, fontSize = 11.sp)
                     }
-                    Switch(checked = ui.locatorDetails, onCheckedChange = vm::setLocatorDetails,
+                    Switch(checked = ui.locatorDetails, onCheckedChange = null,
                         colors = SwitchDefaults.colors(checkedTrackColor = Cyan))
                 }
             }
@@ -547,10 +555,11 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
                         Triple("sat", t("photo_opt_sat"), ui.photoShowSat),
                         Triple("pass", t("photo_opt_pass"), ui.photoShowPass)
                     ).forEach { (key, label, on) ->
-                        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 2.dp),
+                        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 2.dp).toggleable(value = on, role = Role.Switch,
+                                onValueChange = { vm.setPhotoOption(key, it) }),
                             verticalAlignment = Alignment.CenterVertically) {
                             Text(label, color = TextHi, fontSize = 13.sp, modifier = Modifier.weight(1f))
-                            Switch(checked = on, onCheckedChange = { vm.setPhotoOption(key, it) },
+                            Switch(checked = on, onCheckedChange = null,
                                 colors = SwitchDefaults.colors(checkedTrackColor = Cyan))
                         }
                     }
@@ -569,14 +578,15 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
         item { SectionHeader(t("time_display")) }
         item {
             Surface(color = SpaceCard, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
-                Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.padding(16.dp).toggleable(value = ui.useUtc, role = Role.Switch,
+                        onValueChange = vm::setUseUtc), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Text(t("utc_time"), color = TextHi)
                         Text(if (ui.useUtc) t("utc_all")
                              else t("local_time"),
                             color = TextLo, fontSize = 11.sp)
                     }
-                    Switch(checked = ui.useUtc, onCheckedChange = vm::setUseUtc,
+                    Switch(checked = ui.useUtc, onCheckedChange = null,
                         colors = SwitchDefaults.colors(checkedTrackColor = Cyan))
                 }
             }
@@ -760,22 +770,24 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
                             colors = FilterChipDefaults.filterChipColors(
                                 selectedContainerColor = Cyan.copy(alpha = 0.25f), selectedLabelColor = Cyan))
                     }
-                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 10.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 10.dp).toggleable(value = ui.showAimModeChips, role = Role.Switch,
+                            onValueChange = vm::setShowAimModeChips)) {
                         Column(Modifier.weight(1f)) {
                             Text(t("aim_mode_chips"), color = TextHi)
                             Text(t("aim_chips_desc"),
                                 color = TextLo, fontSize = 11.sp)
                         }
-                        Switch(checked = ui.showAimModeChips, onCheckedChange = vm::setShowAimModeChips,
+                        Switch(checked = ui.showAimModeChips, onCheckedChange = null,
                             colors = SwitchDefaults.colors(checkedTrackColor = Cyan))
                     }
-                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 10.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 10.dp).toggleable(value = ui.compassHeadUp, role = Role.Switch,
+                            onValueChange = vm::setCompassHeadUp)) {
                         Column(Modifier.weight(1f)) {
                             Text(t("compass_headup"), color = TextHi)
                             Text(t("compass_headup_desc"),
                                 color = TextLo, fontSize = 11.sp)
                         }
-                        Switch(checked = ui.compassHeadUp, onCheckedChange = vm::setCompassHeadUp,
+                        Switch(checked = ui.compassHeadUp, onCheckedChange = null,
                             colors = SwitchDefaults.colors(checkedTrackColor = Cyan))
                     }
                 }
@@ -791,12 +803,13 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
         item {
             Surface(color = SpaceCard, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(modifier = Modifier.toggleable(value = ui.recorderEnabled, role = Role.Switch,
+                            onValueChange = vm::setRecorderEnabled), verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
                             Text(t("recorder_enable"), color = TextHi)
                             Text(t("recorder_enable_desc"), color = TextLo, fontSize = 11.sp)
                         }
-                        Switch(checked = ui.recorderEnabled, onCheckedChange = vm::setRecorderEnabled,
+                        Switch(checked = ui.recorderEnabled, onCheckedChange = null,
                             colors = SwitchDefaults.colors(checkedTrackColor = Cyan))
                     }
                     if (ui.recorderEnabled) {
@@ -850,7 +863,8 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
                         }
                         if (ui.recorderSource != "BT") {
                             Spacer(Modifier.height(10.dp))
-                            Row(verticalAlignment = Alignment.CenterVertically) {
+                            Row(modifier = Modifier.toggleable(value = ui.recorderUnprocessed && unpOk, enabled = unpOk, role = Role.Switch,
+                                    onValueChange = vm::setRecorderUnprocessed), verticalAlignment = Alignment.CenterVertically) {
                                 Column(Modifier.weight(1f)) {
                                     Text(t("rec_unprocessed"), color = TextHi, fontSize = 13.sp)
                                     Text(if (unpOk) t("rec_unprocessed_desc")
@@ -859,7 +873,7 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
                                 }
                                 Switch(checked = ui.recorderUnprocessed && unpOk,
                                     enabled = unpOk,
-                                    onCheckedChange = vm::setRecorderUnprocessed,
+                                    onCheckedChange = null,
                                     colors = SwitchDefaults.colors(checkedTrackColor = Cyan))
                             }
                         }
@@ -870,17 +884,19 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
                         Text(t("monitor_title"), color = TextHi,
                             fontWeight = FontWeight.Bold, fontSize = 13.sp)
                         Row(verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(top = 6.dp)) {
+                            modifier = Modifier.padding(top = 6.dp).toggleable(value = ui.monitorSpectre, role = Role.Switch,
+                                onValueChange = vm::setMonitorSpectre)) {
                             Column(Modifier.weight(1f)) {
                                 Text(t("monitor_spectre"), color = TextHi, fontSize = 13.sp)
                                 Text(t("monitor_spectre_desc"), color = TextLo, fontSize = 11.sp)
                             }
                             Switch(checked = ui.monitorSpectre,
-                                onCheckedChange = vm::setMonitorSpectre,
+                                onCheckedChange = null,
                                 colors = SwitchDefaults.colors(checkedTrackColor = Cyan))
                         }
                         Row(verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(top = 8.dp)) {
+                            modifier = Modifier.padding(top = 8.dp).toggleable(value = ui.monitorSpeaker && ui.recorderSource != "MIC", enabled = ui.recorderSource != "MIC", role = Role.Switch,
+                                onValueChange = vm::setMonitorSpeaker)) {
                             Column(Modifier.weight(1f)) {
                                 Text(t("monitor_speaker"), color = TextHi, fontSize = 13.sp)
                                 Text(if (ui.recorderSource == "MIC") t("monitor_speaker_mic")
@@ -890,7 +906,7 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
                             }
                             Switch(checked = ui.monitorSpeaker && ui.recorderSource != "MIC",
                                 enabled = ui.recorderSource != "MIC",
-                                onCheckedChange = vm::setMonitorSpeaker,
+                                onCheckedChange = null,
                                 colors = SwitchDefaults.colors(checkedTrackColor = Cyan))
                         }
                         // SSTV rides on the same capture: no extra recording,
@@ -898,13 +914,14 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
                         // Beta: hidden without the extension key.
                         if (fr.f4ioz.satcombo.data.Extensions.SSTV in ui.extensions) {
                             Spacer(Modifier.height(10.dp))
-                            Row(verticalAlignment = Alignment.CenterVertically) {
+                            Row(modifier = Modifier.toggleable(value = ui.sstvEnabled, role = Role.Switch,
+                                    onValueChange = vm::setSstvEnabled), verticalAlignment = Alignment.CenterVertically) {
                                 Column(Modifier.weight(1f)) {
                                     Text(t("sstv_enable"), color = TextHi, fontSize = 13.sp)
                                     Text(t("sstv_enable_desc"), color = TextLo, fontSize = 11.sp)
                                 }
                                 Switch(checked = ui.sstvEnabled,
-                                    onCheckedChange = vm::setSstvEnabled,
+                                    onCheckedChange = null,
                                     colors = SwitchDefaults.colors(checkedTrackColor = Cyan))
                             }
                             if (ui.sstvEnabled) {
@@ -917,13 +934,14 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
                         // is armed by hand before a NOAA pass, off by default.
                         if (fr.f4ioz.satcombo.data.Extensions.APT in ui.extensions) {
                             Spacer(Modifier.height(10.dp))
-                            Row(verticalAlignment = Alignment.CenterVertically) {
+                            Row(modifier = Modifier.toggleable(value = ui.aptEnabled, role = Role.Switch,
+                                    onValueChange = vm::setAptEnabled), verticalAlignment = Alignment.CenterVertically) {
                                 Column(Modifier.weight(1f)) {
                                     Text(t("apt_setting"), color = TextHi, fontSize = 13.sp)
                                     Text(t("apt_setting_hint"), color = TextLo, fontSize = 11.sp)
                                 }
                                 Switch(checked = ui.aptEnabled,
-                                    onCheckedChange = vm::setAptEnabled,
+                                    onCheckedChange = null,
                                     colors = SwitchDefaults.colors(checkedTrackColor = Cyan))
                             }
                             Spacer(Modifier.height(8.dp))
@@ -999,10 +1017,11 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
         item {
             Surface(color = SpaceCard, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(modifier = Modifier.toggleable(value = ui.notifyEnabled, role = Role.Switch,
+                            onValueChange = vm::setNotifyEnabled), verticalAlignment = Alignment.CenterVertically) {
                         Text(t("notify_passes"),
                             color = TextHi, modifier = Modifier.weight(1f))
-                        Switch(checked = ui.notifyEnabled, onCheckedChange = vm::setNotifyEnabled,
+                        Switch(checked = ui.notifyEnabled, onCheckedChange = null,
                             colors = SwitchDefaults.colors(checkedTrackColor = Cyan))
                     }
                     if (ui.notifyEnabled) {
@@ -1026,16 +1045,18 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
                         Spacer(Modifier.height(6.dp))
                         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             Row(verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.fillMaxWidth().clickable { vm.setNotifyMode("FAV") }) {
+                                modifier = Modifier.fillMaxWidth().selectable(selected = ui.notifyMode == "FAV",
+                                    role = Role.RadioButton, onClick = { vm.setNotifyMode("FAV") })) {
                                 RadioButton(selected = ui.notifyMode == "FAV",
-                                    onClick = { vm.setNotifyMode("FAV") },
+                                    onClick = null,
                                     colors = RadioButtonDefaults.colors(selectedColor = Cyan))
                                 Text(t("all_followed"), color = TextHi, fontSize = 14.sp)
                             }
                             Row(verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.fillMaxWidth().clickable { vm.setNotifyMode("TARGET") }) {
+                                modifier = Modifier.fillMaxWidth().selectable(selected = ui.notifyMode == "TARGET",
+                                    role = Role.RadioButton, onClick = { vm.setNotifyMode("TARGET") })) {
                                 RadioButton(selected = ui.notifyMode == "TARGET",
-                                    onClick = { vm.setNotifyMode("TARGET") },
+                                    onClick = null,
                                     colors = RadioButtonDefaults.colors(selectedColor = Cyan))
                                 Column {
                                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1068,10 +1089,11 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
         item {
             Surface(color = SpaceCard, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(modifier = Modifier.toggleable(value = ui.skedsEnabled, role = Role.Switch,
+                            onValueChange = vm::setSkedsEnabled), verticalAlignment = Alignment.CenterVertically) {
                         Text(t("show_skeds"),
                             color = TextHi, modifier = Modifier.weight(1f))
-                        Switch(checked = ui.skedsEnabled, onCheckedChange = vm::setSkedsEnabled,
+                        Switch(checked = ui.skedsEnabled, onCheckedChange = null,
                             colors = SwitchDefaults.colors(checkedTrackColor = Amber))
                     }
                     if (ui.skedsEnabled) {
@@ -1080,13 +1102,14 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
                              else tf("n_skeds_announced_desc", ui.skeds.size),
                             color = TextLo, fontSize = 12.sp)
                         Spacer(Modifier.height(8.dp))
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                        Row(modifier = Modifier.toggleable(value = ui.skedsMutualOnly, role = Role.Switch,
+                                onValueChange = vm::setSkedsMutualOnly), verticalAlignment = Alignment.CenterVertically) {
                             Column(Modifier.weight(1f)) {
                                 Text(t("skeds_workable_only"), color = TextHi, fontSize = 14.sp)
                                 Text(t("skeds_workable_desc"),
                                     color = TextLo, fontSize = 11.sp)
                             }
-                            Switch(checked = ui.skedsMutualOnly, onCheckedChange = vm::setSkedsMutualOnly,
+                            Switch(checked = ui.skedsMutualOnly, onCheckedChange = null,
                                 colors = SwitchDefaults.colors(checkedTrackColor = Amber))
                         }
                     }
@@ -1132,10 +1155,11 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
         item {
             Surface(color = SpaceCard, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(modifier = Modifier.toggleable(value = ui.potaEnabled, role = Role.Switch,
+                            onValueChange = vm::setPotaEnabled), verticalAlignment = Alignment.CenterVertically) {
                         Text(t("pota_show"),
                             color = TextHi, modifier = Modifier.weight(1f))
-                        Switch(checked = ui.potaEnabled, onCheckedChange = vm::setPotaEnabled,
+                        Switch(checked = ui.potaEnabled, onCheckedChange = null,
                             colors = SwitchDefaults.colors(checkedTrackColor = Color(0xFF7FE3A0)))
                     }
                     if (ui.potaEnabled) {
@@ -1200,11 +1224,12 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
                         // The welcome banner is set here with the rest of
                         // POTA: it is about parks, not the photo.
                         Spacer(Modifier.height(10.dp))
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                        Row(modifier = Modifier.toggleable(value = ui.carte.bandeauAccueil, role = Role.Switch,
+                                onValueChange = vm::setPotaBandeauAccueil), verticalAlignment = Alignment.CenterVertically) {
                             Text(t("pota_home_banner"), color = TextHi,
                                 modifier = Modifier.weight(1f), fontSize = 14.sp)
                             Switch(checked = ui.carte.bandeauAccueil,
-                                onCheckedChange = vm::setPotaBandeauAccueil,
+                                onCheckedChange = null,
                                 colors = SwitchDefaults.colors(
                                     checkedTrackColor = Color(0xFF7FE3A0)))
                         }
@@ -1840,13 +1865,14 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
         item {
             Surface(color = SpaceCard, shape = RoundedCornerShape(16.dp),
                 modifier = Modifier.fillMaxWidth()) {
-                Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.padding(16.dp).toggleable(value = ui.catEnabled, role = Role.Switch,
+                        onValueChange = vm::setCatEnabled), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Text(t("enable_cat"), color = TextHi, fontWeight = FontWeight.Bold)
                         Text(t("cat_send_desc"), color = TextLo, fontSize = 11.sp)
                     }
                     Spacer(Modifier.width(10.dp))
-                    Switch(checked = ui.catEnabled, onCheckedChange = vm::setCatEnabled,
+                    Switch(checked = ui.catEnabled, onCheckedChange = null,
                         colors = SwitchDefaults.colors(checkedTrackColor = Cyan))
                 }
             }
@@ -1867,10 +1893,11 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
                     rigs.forEach { (id, label, ready) ->
                         Row(verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier.fillMaxWidth()
-                                .clickable(enabled = ready) { if (ready) vm.setRigModel(id) }
+                                .selectable(selected = ui.rigModel == id, enabled = ready,
+                                    role = Role.RadioButton, onClick = { vm.setRigModel(id) })
                                 .padding(vertical = 6.dp)) {
                             RadioButton(selected = ui.rigModel == id, enabled = ready,
-                                onClick = { if (ready) vm.setRigModel(id) },
+                                onClick = null,
                                 colors = RadioButtonDefaults.colors(selectedColor = Cyan))
                             Spacer(Modifier.width(4.dp))
                             Text(label, color = if (ready) TextHi else TextLo,
@@ -2026,14 +2053,15 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
                         }
                     }
                     Spacer(Modifier.height(12.dp))
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(modifier = Modifier.toggleable(value = ui.catUi.txSuitVite, role = Role.Switch,
+                            onValueChange = vm::setTxSuitVite), verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
                             Text(t("cat_tx_fast"), color = TextHi,
                                 fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
                             Text(t("cat_tx_fast_desc"), color = TextLo, fontSize = 11.sp)
                         }
                         Switch(checked = ui.catUi.txSuitVite,
-                            onCheckedChange = vm::setTxSuitVite,
+                            onCheckedChange = null,
                             colors = SwitchDefaults.colors(
                                 checkedTrackColor = Color(0xFF7FE3A0)))
                     }
@@ -2041,14 +2069,15 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
                     // TX indicator and its cost: polling shares the link with
                     // Doppler, so the trade-off is a setting.
                     Spacer(Modifier.height(12.dp))
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(modifier = Modifier.toggleable(value = ui.catUi.liseret, role = Role.Switch,
+                            onValueChange = vm::setLiseretEmission), verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
                             Text(t("cat_tx_border"), color = TextHi,
                                 fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
                             Text(t("cat_tx_border_desc"), color = TextLo, fontSize = 11.sp)
                         }
                         Switch(checked = ui.catUi.liseret,
-                            onCheckedChange = vm::setLiseretEmission,
+                            onCheckedChange = null,
                             colors = SwitchDefaults.colors(
                                 checkedTrackColor = Color(0xFFFF7A7A)))
                     }
@@ -2095,7 +2124,8 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
                     Spacer(Modifier.height(12.dp))
                     val duplex = ui.rigModel == "FT817x2" || ui.rigModel == "FT817TX"
                     Row(verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.fillMaxWidth()) {
+                        modifier = Modifier.fillMaxWidth().toggleable(value = ui.catUi.txVfoShift && duplex, enabled = duplex, role = Role.Switch,
+                            onValueChange = { vm.setCatTxVfoShift(it) })) {
                         Column(Modifier.weight(1f)) {
                             Text(t("cat_tx_vfo"), color = if (duplex) TextHi else TextLo,
                                 fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
@@ -2104,7 +2134,7 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
                         }
                         Spacer(Modifier.width(10.dp))
                         Switch(checked = ui.catUi.txVfoShift && duplex, enabled = duplex,
-                            onCheckedChange = { vm.setCatTxVfoShift(it) })
+                            onCheckedChange = null)
                     }
 
                     if (ui.ft817RxSerial.isNotBlank() || ui.ft817TxSerial.isNotBlank()) {
@@ -2139,20 +2169,22 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
                             Text(t("cat_bench"), color = Amber, fontSize = 13.sp)
                             Text(t("cat_bench_desc"), color = TextLo, fontSize = 11.sp)
                             Row(verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.padding(top = 6.dp)) {
+                                modifier = Modifier.padding(top = 6.dp).toggleable(value = ui.catSimulated, role = Role.Switch,
+                                    onValueChange = vm::setCatSimulated)) {
                                 Column(Modifier.weight(1f)) {
                                     Text(t("cat_sim"), color = TextHi, fontSize = 13.sp)
                                     Text(t("cat_sim_desc"), color = TextLo, fontSize = 11.sp)
                                 }
-                                Switch(checked = ui.catSimulated, onCheckedChange = vm::setCatSimulated,
+                                Switch(checked = ui.catSimulated, onCheckedChange = null,
                                     colors = SwitchDefaults.colors(checkedTrackColor = Amber))
                             }
-                            Row(verticalAlignment = Alignment.CenterVertically) {
+                            Row(modifier = Modifier.toggleable(value = ui.catMonitor, role = Role.Switch,
+                                    onValueChange = vm::setCatMonitor), verticalAlignment = Alignment.CenterVertically) {
                                 Column(Modifier.weight(1f)) {
                                     Text(t("cat_mon"), color = TextHi, fontSize = 13.sp)
                                     Text(t("cat_mon_desc"), color = TextLo, fontSize = 11.sp)
                                 }
-                                Switch(checked = ui.catMonitor, onCheckedChange = vm::setCatMonitor,
+                                Switch(checked = ui.catMonitor, onCheckedChange = null,
                                     colors = SwitchDefaults.colors(checkedTrackColor = Amber))
                             }
                             if (ui.catMonitor) {
@@ -2218,22 +2250,24 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
                                 Text(t("send_test_freq"), color = Cyan, fontSize = 13.sp)
                             }
                         }
-                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 6.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 6.dp).toggleable(value = ui.catTestSendAlways, role = Role.Switch,
+                                onValueChange = vm::setCatTestSendAlways)) {
                             Column(Modifier.weight(1f)) {
                                 Text(t("send_below_horizon"), color = TextHi, fontSize = 13.sp)
                                 Text(t("cat_test_desc"),
                                     color = TextLo, fontSize = 11.sp)
                             }
-                            Switch(checked = ui.catTestSendAlways, onCheckedChange = vm::setCatTestSendAlways,
+                            Switch(checked = ui.catTestSendAlways, onCheckedChange = null,
                                 colors = SwitchDefaults.colors(checkedTrackColor = Amber))
                         }
                         // Who owns the RX dial during the pass.
-                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 6.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 6.dp).toggleable(value = ui.catRxDoppler, role = Role.Switch,
+                                onValueChange = vm::setCatRxDoppler)) {
                             Column(Modifier.weight(1f)) {
                                 Text(t("cat_rx_doppler"), color = TextHi, fontSize = 13.sp)
                                 Text(t("cat_rx_doppler_desc"), color = TextLo, fontSize = 11.sp)
                             }
-                            Switch(checked = ui.catRxDoppler, onCheckedChange = vm::setCatRxDoppler,
+                            Switch(checked = ui.catRxDoppler, onCheckedChange = null,
                                 colors = SwitchDefaults.colors(checkedTrackColor = Cyan))
                         }
                         // ------------------------------------------------
@@ -2305,12 +2339,13 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
                             // which of its two ports carries CI-V, so try the other
                             // one before giving up and remember whichever answered.
                             Row(verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.padding(top = 6.dp)) {
+                                modifier = Modifier.padding(top = 6.dp).toggleable(value = ui.civUsbAuto, role = Role.Switch,
+                                    onValueChange = vm::setCivUsbAuto)) {
                                 Column(Modifier.weight(1f)) {
                                     Text(t("cat_usb_auto"), color = TextHi, fontSize = 13.sp)
                                     Text(t("cat_usb_auto_hint"), color = TextLo, fontSize = 11.sp)
                                 }
-                                Switch(checked = ui.civUsbAuto, onCheckedChange = vm::setCivUsbAuto,
+                                Switch(checked = ui.civUsbAuto, onCheckedChange = null,
                                     colors = SwitchDefaults.colors(checkedTrackColor = Cyan))
                             }
                             // Report of the last attempt: without it, "I can't
@@ -2341,13 +2376,14 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
                         Text(t("ctcss_tone"), color = TextHi, fontSize = 13.sp)
                         Text(t("ctcss_fm_desc"),
                             color = TextLo, fontSize = 11.sp, modifier = Modifier.padding(bottom = 4.dp))
-                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 4.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 4.dp).toggleable(value = ui.ctcssAuto, role = Role.Switch,
+                                onValueChange = vm::setCtcssAuto)) {
                             Column(Modifier.weight(1f)) {
                                 Text(t("ctcss_auto_title"), color = TextHi, fontSize = 13.sp)
                                 Text(t("ctcss_auto_desc"),
                                     color = TextLo, fontSize = 11.sp)
                             }
-                            Switch(checked = ui.ctcssAuto, onCheckedChange = vm::setCtcssAuto,
+                            Switch(checked = ui.ctcssAuto, onCheckedChange = null,
                                 colors = SwitchDefaults.colors(checkedTrackColor = Cyan))
                         }
                         Text(if (ui.ctcssAuto) t("manual_tone_auto") else t("manual_tone"),
@@ -2395,14 +2431,15 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
 
                         // ---- Frame log ----
                         Spacer(Modifier.height(12.dp))
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                        Row(modifier = Modifier.toggleable(value = ui.catJournalOn, role = Role.Switch,
+                                onValueChange = vm::setCatJournal), verticalAlignment = Alignment.CenterVertically) {
                             Column(Modifier.weight(1f)) {
                                 Text(t("journal_title"), color = TextHi, fontSize = 13.sp)
                                 Text(tf("journal_desc",
                                     fr.f4ioz.satcombo.cat.CatJournal.DEPTH),
                                     color = TextLo, fontSize = 11.sp)
                             }
-                            Switch(checked = ui.catJournalOn, onCheckedChange = vm::setCatJournal,
+                            Switch(checked = ui.catJournalOn, onCheckedChange = null,
                                 colors = SwitchDefaults.colors(checkedTrackColor = Amber))
                         }
                         if (ui.catJournalOn) {
@@ -3095,10 +3132,11 @@ private fun CarnetExpressCard(ui: UiState, vm: MainViewModel) {
                             ui.carnet.profilsListe.forEach { p ->
                                 val pris = p.id in coches
                                 Row(verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
-                                    Checkbox(checked = pris, onCheckedChange = {
+                                    modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp).toggleable(value = pris, role = Role.Checkbox,
+                                        onValueChange = {
                                         if (pris) coches.remove(p.id) else coches.add(p.id)
-                                    })
+                                    })) {
+                                    Checkbox(checked = pris, onCheckedChange = null)
                                     Text(
                                         listOf(p.carre, p.indicatif, p.nom)
                                             .filter { it.isNotBlank() }
@@ -3236,13 +3274,14 @@ private fun AccordFinCard(ui: UiState, vm: MainViewModel) {
 
 @Composable
 private fun SettingSwitch(titre: String, desc: String, coche: Boolean, sur: (Boolean) -> Unit) {
-    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().toggleable(value = coche, role = Role.Switch,
+            onValueChange = sur)) {
         Column(Modifier.weight(1f)) {
             Text(titre, color = TextHi, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
             Text(desc, color = TextLo, fontSize = 11.sp)
         }
         Spacer(Modifier.width(10.dp))
-        Switch(checked = coche, onCheckedChange = sur)
+        Switch(checked = coche, onCheckedChange = null)
     }
 }
 
@@ -3655,7 +3694,8 @@ private fun ConvCard(ui: UiState, vm: MainViewModel, descente: Boolean) {
     Surface(color = SpaceCard, shape = RoundedCornerShape(16.dp),
         modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(modifier = Modifier.toggleable(value = c.actif, role = Role.Switch,
+                    onValueChange = { if (descente) vm.setConvRxActif(it) else vm.setConvTxActif(it) }), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Text(t(if (descente) "conv_rx_title" else "conv_tx_title"),
                         color = TextHi, fontWeight = FontWeight.Bold)
@@ -3663,7 +3703,7 @@ private fun ConvCard(ui: UiState, vm: MainViewModel, descente: Boolean) {
                         color = TextLo, fontSize = 11.sp)
                 }
                 Switch(checked = c.actif,
-                    onCheckedChange = { if (descente) vm.setConvRxActif(it) else vm.setConvTxActif(it) },
+                    onCheckedChange = null,
                     colors = SwitchDefaults.colors(checkedTrackColor = Cyan))
             }
 
@@ -3688,34 +3728,37 @@ private fun ConvCard(ui: UiState, vm: MainViewModel, descente: Boolean) {
                 }
 
                 Spacer(Modifier.height(8.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(modifier = Modifier.toggleable(value = c.inverseur, role = Role.Switch,
+                        onValueChange = {
+                            if (descente) vm.setConvRxInverseur(it) else vm.setConvTxInverseur(it)
+                        }), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Text(t("conv_invert"), color = TextHi, fontSize = 13.sp)
                         Text(t("conv_invert_desc"), color = TextLo, fontSize = 11.sp)
                     }
                     Switch(checked = c.inverseur,
-                        onCheckedChange = {
-                            if (descente) vm.setConvRxInverseur(it) else vm.setConvTxInverseur(it)
-                        },
+                        onCheckedChange = null,
                         colors = SwitchDefaults.colors(checkedTrackColor = Cyan))
                 }
 
                 if (descente) {
                     Spacer(Modifier.height(8.dp))
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(modifier = Modifier.toggleable(value = ui.convRxPoste, role = Role.Switch,
+                            onValueChange = vm::setConvRxPoste), verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
                             Text(t("conv_to_rig"), color = TextHi, fontSize = 13.sp)
                             Text(t("conv_to_rig_desc"), color = TextLo, fontSize = 11.sp)
                         }
-                        Switch(checked = ui.convRxPoste, onCheckedChange = vm::setConvRxPoste,
+                        Switch(checked = ui.convRxPoste, onCheckedChange = null,
                             colors = SwitchDefaults.colors(checkedTrackColor = Cyan))
                     }
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(modifier = Modifier.toggleable(value = ui.convRxCle, role = Role.Switch,
+                            onValueChange = vm::setConvRxCle), verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
                             Text(t("conv_to_sdr"), color = TextHi, fontSize = 13.sp)
                             Text(t("conv_to_sdr_desc"), color = TextLo, fontSize = 11.sp)
                         }
-                        Switch(checked = ui.convRxCle, onCheckedChange = vm::setConvRxCle,
+                        Switch(checked = ui.convRxCle, onCheckedChange = null,
                             colors = SwitchDefaults.colors(checkedTrackColor = Cyan))
                     }
                 }

@@ -8,6 +8,8 @@
  */
 package fr.f4ioz.satcombo.ui
 
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -128,12 +130,13 @@ fun ClavierMacroCarte(ui: UiState, vm: MainViewModel) {
             // Switch written inline: the settings-screen one is private and
             // not worth widening for a single use.
             Row(verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth()) {
+                modifier = Modifier.fillMaxWidth().toggleable(value = ui.moletteVfo, role = Role.Switch,
+                    onValueChange = vm::setMoletteVfo)) {
                 Column(Modifier.weight(1f)) {
                     Text(t("molette"), color = TextHi, fontSize = 13.sp)
                     Text(t("molette_desc"), color = TextLo, fontSize = 11.sp)
                 }
-                Switch(checked = ui.moletteVfo, onCheckedChange = vm::setMoletteVfo,
+                Switch(checked = ui.moletteVfo, onCheckedChange = null,
                     colors = SwitchDefaults.colors(checkedTrackColor = Cyan))
             }
 

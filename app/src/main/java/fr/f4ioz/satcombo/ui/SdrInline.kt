@@ -326,13 +326,12 @@ fun SdrInline(ui: UiState, vm: MainViewModel) {
                         modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
                 }
                 Spacer(Modifier.weight(1f))
-                IconButton(onClick = { vm.openSdr() }, modifier = Modifier.size(32.dp)) {
+                IconButton(onClick = { vm.openSdr() }) {
                     Icon(Icons.Default.Tune, t("sdr_full"), tint = TextLo,
                         modifier = Modifier.size(18.dp))
                 }
                 IconButton(
-                    onClick = { if (rx) vm.stopSdr() else vm.startSdr() },
-                    modifier = Modifier.size(32.dp)
+                    onClick = { if (rx) vm.stopSdr() else vm.startSdr() }
                 ) {
                     Icon(
                         if (rx) Icons.Default.Stop else Icons.Default.PlayArrow,

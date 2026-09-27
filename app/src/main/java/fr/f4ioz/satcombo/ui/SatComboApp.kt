@@ -8,6 +8,8 @@
  */
 package fr.f4ioz.satcombo.ui
 
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.ui.semantics.Role
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -290,8 +292,9 @@ private fun CallsignPromptDialog(vm: MainViewModel) {
                     modifier = Modifier.fillMaxWidth()
                 )
                 Row(verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.clickable { never = !never }) {
-                    Checkbox(checked = never, onCheckedChange = { never = it },
+                    modifier = Modifier.toggleable(value = never, role = Role.Checkbox,
+                        onValueChange = { never = it })) {
+                    Checkbox(checked = never, onCheckedChange = null,
                         colors = CheckboxDefaults.colors(checkedColor = Cyan))
                     Text(t("callsign_ask_never"), color = TextLo, fontSize = 12.sp)
                 }
@@ -1344,7 +1347,7 @@ internal fun PassCard(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         if (p.visualPass) Text("👁", fontSize = 16.sp)
                         if (showBell && onBell != null) {
-                            IconButton(onClick = onBell, modifier = Modifier.size(34.dp)) {
+                            IconButton(onClick = onBell) {
                                 Icon(
                                     if (bellOn) Icons.Default.Notifications else Icons.Outlined.NotificationsNone,
                                     contentDescription = if (bellOn) t("unnotify_this_pass") else t("notify_this_pass"),

@@ -8,6 +8,8 @@
  */
 package fr.f4ioz.satcombo.ui
 
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -156,11 +158,12 @@ fun SondeMireSection(ui: UiState, vm: MainViewModel) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.fillMaxWidth()
-                        .clickable(enabled = !busy) { ambiance = !ambiance }
+                        .toggleable(value = ambiance, enabled = !busy, role = Role.Checkbox,
+                            onValueChange = { ambiance = it })
                 ) {
                     Checkbox(
                         checked = ambiance,
-                        onCheckedChange = { ambiance = it },
+                        onCheckedChange = null,
                         enabled = !busy,
                         colors = CheckboxDefaults.colors(checkedColor = Amber))
                     Column {

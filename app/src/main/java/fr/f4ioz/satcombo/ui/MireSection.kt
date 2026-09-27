@@ -8,6 +8,8 @@
  */
 package fr.f4ioz.satcombo.ui
 
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -271,8 +273,9 @@ private fun CondRow(label: String, choices: List<String>, selected: Int, enabled
 @Composable
 private fun CondCheck(label: String, checked: Boolean, enabled: Boolean, onChange: (Boolean) -> Unit) {
     Row(verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.fillMaxWidth().clickable(enabled = enabled) { onChange(!checked) }) {
-        Checkbox(checked = checked, enabled = enabled, onCheckedChange = onChange)
+        modifier = Modifier.fillMaxWidth().toggleable(value = checked, enabled = enabled, role = Role.Checkbox,
+            onValueChange = onChange)) {
+        Checkbox(checked = checked, enabled = enabled, onCheckedChange = null)
         Text(label, color = TextHi, fontSize = 12.sp)
     }
 }

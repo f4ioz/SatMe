@@ -8,6 +8,8 @@
  */
 package fr.f4ioz.satcombo.ui
 
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -59,7 +61,10 @@ fun DemoCarte(vm: fr.f4ioz.satcombo.MainViewModel) {
             Text(t("demo_desc"), color = TextLo, fontSize = 11.sp,
                 modifier = Modifier.padding(top = 4.dp, bottom = 10.dp))
 
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(modifier = Modifier.toggleable(value = etat.actif, role = Role.Switch,
+                    onValueChange = {
+                        if (it) ServeurDemo.demarre() else ServeurDemo.arrete()
+                    }), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Text(t("demo_activer"), color = TextHi, fontSize = 13.sp)
                     Text(
@@ -69,9 +74,7 @@ fun DemoCarte(vm: fr.f4ioz.satcombo.MainViewModel) {
                 }
                 Switch(checked = etat.actif, colors = SwitchDefaults.colors(
                     checkedTrackColor = Cyan),
-                    onCheckedChange = {
-                        if (it) ServeurDemo.demarre() else ServeurDemo.arrete()
-                    })
+                    onCheckedChange = null)
             }
 
             if (etat.panne == "port_occupe") {
@@ -162,16 +165,17 @@ fun DemoCarte(vm: fr.f4ioz.satcombo.MainViewModel) {
                 Spacer(Modifier.height(14.dp))
                 HorizontalDivider(color = SpaceBg)
                 Spacer(Modifier.height(10.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(modifier = Modifier.toggleable(value = etat.commandeActive, role = Role.Switch,
+                        onValueChange = {
+                            if (it && !etat.actif) ServeurDemo.demarre()
+                            ServeurDemo.commande(it)
+                        }), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Text(t("cmd_titre"), color = TextHi, fontWeight = FontWeight.Bold)
                         Text(t("cmd_desc"), color = TextLo, fontSize = 11.sp)
                     }
                     Switch(checked = etat.commandeActive,
-                        onCheckedChange = {
-                            if (it && !etat.actif) ServeurDemo.demarre()
-                            ServeurDemo.commande(it)
-                        })
+                        onCheckedChange = null)
                 }
                 if (etat.commandeActive && etat.urlCommande.isNotBlank()) {
                     Spacer(Modifier.height(8.dp))

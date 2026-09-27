@@ -8,6 +8,8 @@
  */
 package fr.f4ioz.satcombo.ui
 
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
@@ -513,11 +515,12 @@ private fun InfoLine(label: String, value: String) {
 
 @Composable
 private fun ToggleLine(label: String, checked: Boolean, onChange: (Boolean) -> Unit) {
-    Row(Modifier.fillMaxWidth().padding(vertical = 2.dp),
+    Row(Modifier.fillMaxWidth().padding(vertical = 2.dp).toggleable(value = checked, role = Role.Switch,
+            onValueChange = onChange),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween) {
         Text(label, color = TextHi, fontSize = 13.sp)
-        Switch(checked = checked, onCheckedChange = onChange,
+        Switch(checked = checked, onCheckedChange = null,
             colors = SwitchDefaults.colors(checkedTrackColor = Cyan))
     }
 }

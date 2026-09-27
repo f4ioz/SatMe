@@ -181,7 +181,7 @@ internal fun DetailScreen(ui: UiState, vm: MainViewModel, onBack: () -> Unit) {
             val shownPass = ui.focusedPassAos?.let { f -> ui.passes.minByOrNull { kotlin.math.abs(it.aosEpochMs - f) } }
                 ?: ui.passes.firstOrNull { it.losEpochMs > ui.nowMs }
             Row(verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = onBack, modifier = Modifier.size(36.dp)) {
+                IconButton(onClick = onBack) {
                     Icon(Icons.Default.ArrowBack, t("back"), tint = Cyan)
                 }
                 Spacer(Modifier.width(4.dp))
@@ -226,11 +226,10 @@ internal fun DetailScreen(ui: UiState, vm: MainViewModel, onBack: () -> Unit) {
                     // button, so it moves here next to the status badges.
                     if (sat.estImmobile && ui.callsign.isNotBlank()) {
                         IconButton(
-                            onClick = { vm.clearAmsatSubmitState(); statusOpen = true },
-                            modifier = Modifier.size(28.dp)
+                            onClick = { vm.clearAmsatSubmitState(); statusOpen = true }
                         ) {
                             Icon(painterResource(fr.f4ioz.satcombo.R.drawable.ic_amsat),
-                                null, tint = Color.Unspecified,
+                                t("status_btn"), tint = Color.Unspecified,
                                 modifier = Modifier.size(18.dp))
                         }
                     }
@@ -399,8 +398,7 @@ internal fun DetailScreen(ui: UiState, vm: MainViewModel, onBack: () -> Unit) {
                         if (ui.callsign.isNotBlank()) {
                             Spacer(Modifier.width(6.dp))
                             IconButton(
-                                onClick = { vm.clearAmsatSubmitState(); statusOpen = true },
-                                modifier = Modifier.size(30.dp)
+                                onClick = { vm.clearAmsatSubmitState(); statusOpen = true }
                             ) {
                                 // Untinted: the logo is red and white.
                                 Icon(
@@ -952,7 +950,7 @@ private fun TransmittersSection(ui: UiState, vm: MainViewModel, sat: TleEntry, r
                 Text("${active.size} " + t("transponders_tap"),
                     color = TextLo, fontSize = 11.sp)
             }
-            Icon(Icons.Default.Settings, "Configurer", tint = Cyan)
+            Icon(Icons.Default.Settings, t("configurer"), tint = Cyan)
         }
     }
 

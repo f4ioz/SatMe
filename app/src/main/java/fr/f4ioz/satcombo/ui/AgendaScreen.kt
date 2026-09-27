@@ -8,6 +8,8 @@
  */
 package fr.f4ioz.satcombo.ui
 
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -232,7 +234,7 @@ private fun AgendaRow(
                     Text(tf("agenda_lead_at", leadLabel(e.leadMin)),
                         color = if (e.enabled) Aurora else TextLo, fontSize = 10.sp)
             }
-            IconButton(onClick = onToggle, modifier = Modifier.size(34.dp)) {
+            IconButton(onClick = onToggle) {
                 Icon(
                     if (e.enabled) Icons.Default.NotificationsActive
                     else Icons.Default.NotificationsOff,
@@ -240,11 +242,11 @@ private fun AgendaRow(
                     tint = if (e.enabled) Aurora else TextLo,
                     modifier = Modifier.size(18.dp))
             }
-            IconButton(onClick = onEdit, modifier = Modifier.size(34.dp)) {
+            IconButton(onClick = onEdit) {
                 Icon(Icons.Default.Edit, t("edit"), tint = Cyan,
                     modifier = Modifier.size(18.dp))
             }
-            IconButton(onClick = onDelete, modifier = Modifier.size(34.dp)) {
+            IconButton(onClick = onDelete) {
                 Icon(Icons.Default.Delete, t("delete"), tint = Magenta,
                     modifier = Modifier.size(18.dp))
             }
@@ -423,10 +425,11 @@ private fun AgendaEditDialog(
 
                 // Window optional: a sked is an instant, a two-day SSTV event
                 // needs a start and an end.
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(modifier = Modifier.toggleable(value = window, role = Role.Switch,
+                        onValueChange = { window = it }), verticalAlignment = Alignment.CenterVertically) {
                     Text(t("agenda_window"), color = TextHi, fontSize = 13.sp,
                         modifier = Modifier.weight(1f))
-                    Switch(checked = window, onCheckedChange = { window = it },
+                    Switch(checked = window, onCheckedChange = null,
                         colors = SwitchDefaults.colors(
                             checkedThumbColor = Cyan,
                             checkedTrackColor = Cyan.copy(alpha = 0.4f)))

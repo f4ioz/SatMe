@@ -8,6 +8,8 @@
  */
 package fr.f4ioz.satcombo.ui
 
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -124,9 +126,10 @@ fun SstvModeControls(
     // who prefer to decide.
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.clickable { SstvHub.setContinu(ctx, !st.continu) }
+        modifier = Modifier.toggleable(value = st.continu, role = Role.Checkbox,
+            onValueChange = { SstvHub.setContinu(ctx, it) })
     ) {
-        Checkbox(checked = st.continu, onCheckedChange = { SstvHub.setContinu(ctx, it) })
+        Checkbox(checked = st.continu, onCheckedChange = null)
         Column {
             Text(t("sstv_continu"), color = TextHi, fontSize = if (compact) 11.sp else 12.sp)
             if (!compact) Text(t("sstv_continu_desc"), color = TextLo, fontSize = 10.sp)

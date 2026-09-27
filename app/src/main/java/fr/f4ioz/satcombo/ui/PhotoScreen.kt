@@ -8,6 +8,8 @@
  */
 package fr.f4ioz.satcombo.ui
 
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.ui.semantics.Role
 import android.graphics.Bitmap
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -1014,13 +1016,15 @@ private fun PhotoToggle(
     label: String, checked: Boolean, enabled: Boolean = true, onChange: (Boolean) -> Unit
 ) {
     Row(
-        Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 4.dp),
+        Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 4.dp)
+            .toggleable(value = checked && enabled, enabled = enabled, role = Role.Switch,
+                onValueChange = onChange),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(label, color = if (enabled) TextHi else TextLo, fontSize = 13.sp,
             modifier = Modifier.weight(1f))
         Switch(
-            checked = checked && enabled, onCheckedChange = onChange, enabled = enabled,
+            checked = checked && enabled, onCheckedChange = null, enabled = enabled,
             colors = SwitchDefaults.colors(
                 checkedThumbColor = Cyan,
                 checkedTrackColor = Cyan.copy(alpha = 0.35f))
