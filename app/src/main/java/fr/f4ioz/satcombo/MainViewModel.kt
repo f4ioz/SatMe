@@ -4029,6 +4029,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
     fun closeSstv() { _ui.value = retour() }
 
+    /**
+     * Whether the SSTV page explains how to start decoding. Read straight from
+     * the settings, not `UiState` (255-register limit): asked once per visit.
+     */
+    fun sstvAideAMontrer(): Boolean = !settings.sstvAideMasquee
+    fun masqueAideSstv() { settings.sstvAideMasquee = true }
+
     // ================= APT (NOAA images, beta) =================
 
     fun openApt() {

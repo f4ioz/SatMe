@@ -8,6 +8,9 @@
  */
 package fr.f4ioz.satcombo.ui
 
+import androidx.compose.material3.Checkbox
+import androidx.compose.ui.semantics.Role
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -93,6 +96,15 @@ fun SstvScreen(ui: UiState, vm: MainViewModel) {
     // And once a second while decoding, so a long re-decode fills in live.
     LaunchedEffect(st.fileProgress >= 0f) {
         while (st.fileProgress >= 0f) { delay(1000); gallery = SstvHub.shots(ctx) }
+    }
+
+    // **The page has no start button, and that surprises.** Decoding runs
+    // inside a recording, started from the pass page. Said once per visit,
+    // until the operator ticks "don't show again"; not while already listening.
+    var aide by remember { mutableStateOf(!st.listening && vm.sstvAideAMontrer()) }
+    if (aide) AideDecodageSstv(ui.sstvEnabled) { plusJamais ->
+        if (plusJamais) vm.masqueAideSstv()
+        aide = false
     }
 
     val sats = remember(gallery) {
@@ -432,4 +444,38 @@ private fun RecordingPicker(onDismiss: () -> Unit, onPick: (File) -> Unit) {
             }
         }
     }
+}
+
+/**
+ * How decoding starts: a recording from the pass page. Nothing is written
+ * before OK: the box only takes effect when the dialog is confirmed.
+ */
+@Composable
+private fun AideDecodageSstv(sstvActif: Boolean, onFerme: (Boolean) -> Unit) {
+    var plusJamais by remember { mutableStateOf(false) }
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = { onFerme(false) },
+        confirmButton = {
+            androidx.compose.material3.TextButton(onClick = { onFerme(plusJamais) }) {
+                Text(t("ok"), color = Cyan)
+            }
+        },
+        title = { Text(t("sstv_aide_titre"), color = TextHi) },
+        text = {
+            Column {
+                Text(t("sstv_aide_texte"), color = TextHi, fontSize = 13.sp)
+                if (!sstvActif) {
+                    Spacer(Modifier.height(8.dp))
+                    Text(t("sstv_aide_inactif"), color = Amber, fontSize = 12.sp)
+                }
+                Spacer(Modifier.height(10.dp))
+                Row(verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth().toggleable(value = plusJamais,
+                        role = Role.Checkbox, onValueChange = { plusJamais = it })) {
+                    Checkbox(checked = plusJamais, onCheckedChange = null)
+                    Spacer(Modifier.width(8.dp))
+                    Text(t("callsign_ask_never"), color = TextHi, fontSize = 13.sp)
+                }
+            }
+        })
 }

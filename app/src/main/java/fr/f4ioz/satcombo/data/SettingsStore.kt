@@ -119,6 +119,11 @@ class SettingsStore(context: Context) {
         get() = prefs.getBoolean("sstv_continu", false)
         set(v) { prefs.edit().putBoolean("sstv_continu", v).apply() }
 
+    /** The SSTV page's "decoding needs a recording" note was dismissed for good. */
+    var sstvAideMasquee: Boolean
+        get() = prefs.getBoolean("sstv_aide_masquee", false)
+        set(v) { prefs.edit().putBoolean("sstv_aide_masquee", v).apply() }
+
     /** Watch received audio for an APT picture (NOAA, 137 MHz). Unlike SSTV
      *  there is no header to wait for, so APT decodes continuously once on:
      *  off by default, switched on before a NOAA pass. */
