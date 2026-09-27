@@ -32,6 +32,9 @@ import java.util.concurrent.TimeUnit
  */
 object AnnonceVocale {
 
+    /** The recorder's name for a recording with no satellite chosen. */
+    const val SANS_SATELLITE = "SAT"
+
     private val PHONETIQUE = mapOf(
         'A' to "Alfa", 'B' to "Bravo", 'C' to "Charlie", 'D' to "Delta", 'E' to "Echo",
         'F' to "Foxtrot", 'G' to "Golf", 'H' to "Hotel", 'I' to "India", 'J' to "Juliett",
@@ -64,8 +67,13 @@ object AnnonceVocale {
             }
         }
 
-    /** The whole sentence, in the app's language. */
+    /**
+     * The whole sentence, in the app's language. No satellite chosen (the
+     * recorder then names the file "SAT") means no satellite said: "Satellite
+     * S A T" announced a satellite that does not exist.
+     */
     fun texte(sat: String, debutMs: Long, locator: String, fr: Boolean): String {
+        val nom = if (sat.isBlank() || sat == SANS_SATELLITE) "" else nomEpele(sat)
         val cal = java.util.Calendar.getInstance(TimeZone.getTimeZone("UTC")).apply { timeInMillis = debutMs }
         val jour = cal.get(java.util.Calendar.DAY_OF_MONTH)
         val mois = java.text.SimpleDateFormat("MMMM", if (fr) Locale.FRENCH else Locale.ENGLISH)
@@ -74,12 +82,13 @@ object AnnonceVocale {
         val h = cal.get(java.util.Calendar.HOUR_OF_DAY)
         val m = cal.get(java.util.Calendar.MINUTE)
         val loc = locatorEpele(locator)
+        // Straight to the facts: an app name read out lengthened every file.
         return if (fr) buildString {
-            append("Enregistrement SatMe. Satellite ${nomEpele(sat)}. ")
+            if (nom.isNotEmpty()) append("Satellite $nom. ")
             append("Le $jour $mois $an, $h heures $m UTC.")
             if (loc.isNotEmpty()) append(" Locator $loc.")
         } else buildString {
-            append("SatMe recording. Satellite ${nomEpele(sat)}. ")
+            if (nom.isNotEmpty()) append("Satellite $nom. ")
             append("$mois $jour, $an, ${"%02d".format(h)} ${"%02d".format(m)} UTC.")
             if (loc.isNotEmpty()) append(" Locator $loc.")
         }

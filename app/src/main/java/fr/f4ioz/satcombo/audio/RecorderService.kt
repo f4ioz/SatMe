@@ -122,7 +122,7 @@ class RecorderService : Service() {
     private val handler = Handler(Looper.getMainLooper())
     private val autoStop = Runnable { finishRecording() }
     private var scoActive = false
-    private var lastSat = "SAT"
+    private var lastSat = AnnonceVocale.SANS_SATELLITE
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -130,7 +130,7 @@ class RecorderService : Service() {
         when (intent?.action) {
             ACTION_START -> {
                 if (_state.value.recording) return START_NOT_STICKY
-                val sat = intent.getStringExtra(EXTRA_SAT) ?: "SAT"
+                val sat = intent.getStringExtra(EXTRA_SAT) ?: AnnonceVocale.SANS_SATELLITE
                 val auto = intent.getLongExtra(EXTRA_AUTOSTOP, 0L).takeIf { it > 0L }
                 val src = intent.getStringExtra(EXTRA_SOURCE) ?: "MIC"
                 val unproc = intent.getBooleanExtra(EXTRA_UNPROC, false)

@@ -35,11 +35,19 @@ class AnnonceVocaleTest {
     @Test
     fun la_phrase_en_francais_et_en_anglais() {
         val t = 1_790_549_308_000L   // 2026-09-27 22:48:28 UTC
-        assertEquals("Enregistrement SatMe. Satellite S O 50. Le 27 septembre 2026, 22 heures 48 UTC. " +
+        assertEquals("Satellite S O 50. Le 27 septembre 2026, 22 heures 48 UTC. " +
             "Locator Juliett November 1 8 Foxtrot Tango.",
             AnnonceVocale.texte("SO-50", t, "JN18FT", fr = true))
-        assertEquals("SatMe recording. Satellite S O 50. September 27, 2026, 22 48 UTC.",
+        assertEquals("Satellite S O 50. September 27, 2026, 22 48 UTC.",
             AnnonceVocale.texte("SO-50", t, "", fr = false))
+    }
+
+    @Test
+    fun sans_satellite_choisi_on_n_annonce_pas_de_satellite() {
+        // The recorder names such a file "SAT": "Satellite S A T" was said.
+        val t = 1_790_549_308_000L
+        assertEquals("Le 27 septembre 2026, 22 heures 48 UTC. Locator Juliett November 1 8 Foxtrot Tango.",
+            AnnonceVocale.texte("SAT", t, "JN18FT", fr = true))
     }
 
     private fun wav(canaux: Int, taux: Int, echantillons: ShortArray, lgData: Int? = null): ByteArray {

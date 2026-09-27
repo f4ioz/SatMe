@@ -2090,7 +2090,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun startRecording() {
         if (_ui.value.recording) return
         val sel = _ui.value.selected
-        val satName = sel?.name ?: "SAT"
+        val satName = sel?.name ?: fr.f4ioz.satcombo.audio.AnnonceVocale.SANS_SATELLITE
         val now = System.currentTimeMillis()
         // Auto-stop target: LOS (+5 s) of the pass in progress for the selected
         // satellite, else its next pass. Null -> record until stopped manually.
