@@ -8,6 +8,9 @@
  */
 package fr.f4ioz.satcombo.ui
 
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.foundation.background
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.rememberScrollState
@@ -96,8 +99,7 @@ import java.util.Locale
 @Composable
 internal fun DetailScreen(ui: UiState, vm: MainViewModel, onBack: () -> Unit) {
     val sat = ui.selected ?: return
-    // One state for both AMSAT button locations (header for a stationary sat,
-    // pass row otherwise): same dialog, declared at their common scope.
+    // AMSAT report dialog, opened from the pass row.
     var statusOpen by remember { mutableStateOf(false) }
     // Keep the screen awake while tracking (field use with gloves/antenna).
     val view = androidx.compose.ui.platform.LocalView.current
@@ -176,106 +178,9 @@ internal fun DetailScreen(ui: UiState, vm: MainViewModel, onBack: () -> Unit) {
         // (taps, triple-tap logging and buttons keep working).
         userScrollEnabled = !ui.uiLocked
     ) {
-        item {
-            // Compact header: back, sat name + status + countdown inline, favorite.
-            val shownPass = ui.focusedPassAos?.let { f -> ui.passes.minByOrNull { kotlin.math.abs(it.aosEpochMs - f) } }
-                ?: ui.passes.firstOrNull { it.losEpochMs > ui.nowMs }
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = onBack) {
-                    Icon(Icons.Default.ArrowBack, t("back"), tint = Cyan)
-                }
-                Spacer(Modifier.width(4.dp))
-                Text(sat.name, fontWeight = FontWeight.Black, color = TextHi, fontSize = 20.sp)
-                Spacer(Modifier.width(8.dp))
-                // Badges + NORAD share the remaining width, horizontally scrollable.
-                Row(verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    modifier = Modifier.weight(1f).horizontalScroll(rememberScrollState())) {
-                    if (ui.catConnected) {
-                        Surface(color = Cyan.copy(alpha = 0.18f), shape = RoundedCornerShape(6.dp)) {
-                            Text("CAT", color = Cyan, fontSize = 10.sp, fontWeight = FontWeight.Bold,
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
-                        }
-                    }
-                    // A forgotten Doppler hold alone can ruin a whole pass, so
-                    // it shows next to the CAT badge, in amber.
-                    if (ui.catConnected && ui.dopplerHold) {
-                        Surface(color = Amber.copy(alpha = 0.20f), shape = RoundedCornerShape(6.dp)) {
-                            Text(t("doppler_hold_badge"), color = Amber, fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold,
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
-                        }
-                    }
-                    // Rotor badge: the mast is the only thing that physically
-                    // moves, so show at a glance that it is connected and
-                    // whether it is pre-positioning for the pass.
-                    if (ui.rotorConnected) {
-                        val teinte = if (ui.rotorPrePositioning) Amber else Aurora
-                        Surface(color = teinte.copy(alpha = 0.18f), shape = RoundedCornerShape(6.dp)) {
-                            Text(if (ui.rotorPrePositioning) t("rotor_badge_pre") else t("rotor_badge"),
-                                color = teinte, fontSize = 10.sp, fontWeight = FontWeight.Bold,
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
-                        }
-                    }
-                    val showSatnogs = ui.statusSource != "AMSAT"
-                    val showAmsat = ui.statusSource != "SATNOGS"
-                    val amsat = if (showAmsat) vm.amsatFor(sat.name) else null
-                    if (showSatnogs && ui.satStatus != null) SatStatusBadge(ui.satStatus)
-                    if (amsat != null) AmsatBadge(amsat)
-                    // Geostationary: there is no pass row to host the AMSAT
-                    // button, so it moves here next to the status badges.
-                    if (sat.estImmobile && ui.callsign.isNotBlank()) {
-                        IconButton(
-                            onClick = { vm.clearAmsatSubmitState(); statusOpen = true }
-                        ) {
-                            Icon(painterResource(fr.f4ioz.satcombo.R.drawable.ic_amsat),
-                                t("status_btn"), tint = Color.Unspecified,
-                                modifier = Modifier.size(18.dp))
-                        }
-                    }
-                    Text("#${sat.catalogNumber}", color = TextLo, fontSize = 11.sp,
-                        maxLines = 1, modifier = Modifier.align(Alignment.CenterVertically))
-                }
-                // QRV photo, satellite already attached: the photo screen then
-                // knows which pass to draw as a polar plot.
-                IconButton(onClick = { vm.openPhoto(sat.catalogNumber, shownPass?.aosEpochMs) },
-                    modifier = Modifier.size(36.dp)) {
-                    Icon(Icons.Default.PhotoCamera, t("photo_title"), tint = Cyan,
-                        modifier = Modifier.size(20.dp))
-                }
-                // The "?" used to live here; the header row is crowded and the
-                // same help now reads better in Settings -> Documentation.
-                val isFav = sat.catalogNumber in ui.favorites
-                IconButton(onClick = { vm.toggleFavorite(sat.catalogNumber) }, modifier = Modifier.size(36.dp)) {
-                    if (isFav) Icon(Icons.Default.Star, t("favorite"), tint = Amber)
-                    else Icon(Icons.Outlined.StarBorder, t("favorite"), tint = TextLo)
-                }
-            }
-        }
-
-        // Stale-TLE warning (kept, but compact).
-        run {
-            val shownPass = ui.focusedPassAos?.let { f -> ui.passes.minByOrNull { kotlin.math.abs(it.aosEpochMs - f) } }
-                ?: ui.passes.firstOrNull { it.losEpochMs > ui.nowMs }
-            val epochMs = sat.epochMs
-            if (shownPass != null && epochMs != null) {
-                val daysOut = kotlin.math.abs(shownPass.aosEpochMs - epochMs) / 86_400_000.0
-                if (daysOut > 3) {
-                    item {
-                        Surface(color = Amber.copy(alpha = 0.15f), shape = RoundedCornerShape(10.dp),
-                            modifier = Modifier.fillMaxWidth()) {
-                            Row(Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                                Text("⚠ " + tf("stale_elements", daysOut.toInt()),
-                                    color = Amber, fontSize = 11.sp, modifier = Modifier.weight(1f))
-                                TextButton(onClick = { vm.refreshTleFor(sat.catalogNumber, annonce = true) }) {
-                                    Text(t("refresh"), color = Cyan, fontSize = 12.sp)
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
+        // Name, badges, favourite and photo live in the top bar
+        // (EnteteSatellite): one header instead of two stacked ones, and the
+        // frequencies come up into the first screen.
 
         // Sked marker, high on the page. The full sked card sits far below (map,
         // telemetry, log...) and the user could not tell a sked was announced
@@ -381,9 +286,8 @@ internal fun DetailScreen(ui: UiState, vm: MainViewModel, onBack: () -> Unit) {
                     val hm = tzFormat("HH:mm:ss", ui.useUtc)
                     // One line: day, AOS→LOS, time zone, small AMSAT globe. A
                     // full-width button used to push the compass off-screen on
-                    // small phones. On a stationary sat the button lives in the
-                    // header and this row disappears.
-                    if (shownPass != null || !sat.estImmobile)
+                    // small phones. On a stationary sat only the globe remains.
+                    if (shownPass != null || ui.callsign.isNotBlank())
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.Center
@@ -919,20 +823,18 @@ private fun LiveTelemetry(ui: UiState, vm: MainViewModel, sat: TleEntry) {
 private fun TransmittersSection(ui: UiState, vm: MainViewModel, sat: TleEntry, rangeRateKmS: Double?) {
     val active = ui.transmitters.filter { it.alive && (it.downlinkLowHz != null || it.uplinkLowHz != null) }
 
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Text(t("vfo_satellite"), color = TextLo, fontWeight = FontWeight.Bold,
-            letterSpacing = 1.5.sp, fontSize = 11.sp)
-        Spacer(Modifier.width(8.dp))
-        if (ui.transmittersLoading)
-            CircularProgressIndicator(Modifier.size(12.dp), color = Cyan, strokeWidth = 2.dp)
-        else Text(if (rangeRateKmS != null) "· " + t("doppler_live") else "· " + t("at_rest"),
-            color = TextLo, fontSize = 11.sp)
-        Spacer(Modifier.weight(1f))
-        Text("SatNOGS", color = TextLo.copy(alpha = 0.6f), fontSize = 10.sp)
-    }
-    Spacer(Modifier.height(8.dp))
+    // Doppler state and source: the second line of the transponder card.
+    // They had a title row of their own above it.
+    val etat = if (rangeRateKmS != null) t("doppler_live") else t("at_rest")
 
     if (active.isEmpty()) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(t("vfo_satellite"), color = TextLo, fontWeight = FontWeight.Bold,
+                letterSpacing = 1.5.sp, fontSize = 11.sp)
+            Spacer(Modifier.width(8.dp))
+            if (ui.transmittersLoading)
+                CircularProgressIndicator(Modifier.size(12.dp), color = Cyan, strokeWidth = 2.dp)
+        }
         if (!ui.transmittersLoading) Text(t("no_active_transmitter"), color = TextLo, fontSize = 13.sp)
         return
     }
@@ -940,35 +842,46 @@ private fun TransmittersSection(ui: UiState, vm: MainViewModel, sat: TleEntry, r
     val idx = ui.selectedTxIndex.coerceIn(0, active.size - 1)
     val tx = active[idx]
 
-    // Transponder chooser opens a config window (clearer when many FM channels).
-    Surface(color = SpaceSurface, shape = RoundedCornerShape(10.dp),
-        modifier = Modifier.fillMaxWidth().clickable { vm.openSatConfig() }) {
-        Row(Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text(tx.description, color = TextHi, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
-                Text("${active.size} " + t("transponders_tap"),
-                    color = TextLo, fontSize = 11.sp)
-            }
-            Icon(Icons.Default.Settings, t("configurer"), tint = Cyan)
-        }
-    }
-
     // Band limits + normal/reverse.
     val dlLow = tx.downlinkLowHz; val dlHigh = tx.downlinkHighHz ?: dlLow
     val ulLow = tx.uplinkLowHz; val ulHigh = tx.uplinkHighHz ?: ulLow
-    Row(Modifier.fillMaxWidth().padding(top = 4.dp)) {
-        Surface(color = if (tx.invert) Magenta.copy(alpha = 0.18f) else Aurora.copy(alpha = 0.16f),
-            shape = RoundedCornerShape(6.dp)) {
-            Text(if (tx.invert) "INVERSE" else "NORMAL",
-                color = if (tx.invert) Magenta else Aurora, fontSize = 10.sp,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
+
+    // Transponder chooser opens a config window (clearer when many FM channels).
+    // One card holds the mode, normal/reverse, the Doppler state and the source:
+    // the three rows it took pushed RX and TX below the fold.
+    Surface(color = SpaceSurface, shape = RoundedCornerShape(10.dp),
+        modifier = Modifier.fillMaxWidth().clickable { vm.openSatConfig() }) {
+        Row(Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(tx.description, color = TextHi, fontWeight = FontWeight.SemiBold,
+                        fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false))
+                    Spacer(Modifier.width(6.dp))
+                    Surface(color = if (tx.invert) Magenta.copy(alpha = 0.18f) else Aurora.copy(alpha = 0.16f),
+                        shape = RoundedCornerShape(6.dp)) {
+                        Text(if (tx.invert) "INVERSE" else "NORMAL",
+                            color = if (tx.invert) Magenta else Aurora, fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
+                    }
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("${active.size} " + t("transponders_tap") + " · " + etat + " · SatNOGS",
+                        color = TextLo, fontSize = 11.sp, maxLines = 1,
+                        overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                    if (ui.transmittersLoading) {
+                        Spacer(Modifier.width(6.dp))
+                        CircularProgressIndicator(Modifier.size(12.dp), color = Cyan, strokeWidth = 2.dp)
+                    }
+                }
+                if (tx.isTransponder && dlLow != null && dlHigh != null)
+                    Text(tf("vfo_bande_rx", Doppler.formatMHz(dlLow), Doppler.formatMHz(dlHigh)),
+                        color = TextLo, fontSize = 10.sp, fontFamily = FontFamily.Monospace)
+            }
+            Icon(Icons.Default.Settings, t("configurer"), tint = Cyan)
         }
-        Spacer(Modifier.weight(1f))
-        if (tx.isTransponder && dlLow != null && dlHigh != null)
-            Text("Bande RX ${Doppler.formatMHz(dlLow)} – ${Doppler.formatMHz(dlHigh)}",
-                color = TextLo, fontSize = 10.sp, fontFamily = FontFamily.Monospace)
     }
 
     // When an agenda event imposes the downlink, say so, or the gap with the
@@ -1802,4 +1715,81 @@ private fun AmsatStatusDialog(
         },
         containerColor = SpaceCard
     )
+}
+
+/**
+ * The satellite page's header, drawn in the top bar: name on the first line,
+ * badges on the second, where "SatMe" and the locator sit on the list.
+ *
+ * It used to be a row of its own under the bar, plus a full-width banner for
+ * old elements: two headers stacked, and the RX/TX frequencies pushed below
+ * the fold during the pass.
+ */
+@Composable
+internal fun EnteteSatellite(ui: UiState, vm: MainViewModel, sat: TleEntry) {
+    Column {
+        Text(sat.name, fontWeight = FontWeight.Black, color = TextHi, fontSize = 18.sp,
+            maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
+        // Badges + NORAD share the width, horizontally scrollable.
+        Row(verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            modifier = Modifier.padding(top = 2.dp).horizontalScroll(rememberScrollState())) {
+            ElementsAges(ui, vm, sat)
+            if (ui.catConnected) {
+                Surface(color = Cyan.copy(alpha = 0.18f), shape = RoundedCornerShape(6.dp)) {
+                    Text("CAT", color = Cyan, fontSize = 10.sp, fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
+                }
+            }
+            // A forgotten Doppler hold alone can ruin a whole pass, so
+            // it shows next to the CAT badge, in amber.
+            if (ui.catConnected && ui.dopplerHold) {
+                Surface(color = Amber.copy(alpha = 0.20f), shape = RoundedCornerShape(6.dp)) {
+                    Text(t("doppler_hold_badge"), color = Amber, fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
+                }
+            }
+            // Rotor badge: the mast is the only thing that physically
+            // moves, so show at a glance that it is connected and
+            // whether it is pre-positioning for the pass.
+            if (ui.rotorConnected) {
+                val teinte = if (ui.rotorPrePositioning) Amber else Aurora
+                Surface(color = teinte.copy(alpha = 0.18f), shape = RoundedCornerShape(6.dp)) {
+                    Text(if (ui.rotorPrePositioning) t("rotor_badge_pre") else t("rotor_badge"),
+                        color = teinte, fontSize = 10.sp, fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
+                }
+            }
+            val showSatnogs = ui.statusSource != "AMSAT"
+            val showAmsat = ui.statusSource != "SATNOGS"
+            val amsat = if (showAmsat) vm.amsatFor(sat.name) else null
+            if (showSatnogs && ui.satStatus != null) SatStatusBadge(ui.satStatus)
+            if (amsat != null) AmsatBadge(amsat)
+            Text("#${sat.catalogNumber}", color = TextLo, fontSize = 11.sp,
+                maxLines = 1, modifier = Modifier.align(Alignment.CenterVertically))
+        }
+    }
+}
+
+/**
+ * Old elements, as a chip: "⚠ 5 d". A tap fetches fresh ones. It was a
+ * full-width banner above the compass; the warning matters, its size did not.
+ */
+@Composable
+private fun ElementsAges(ui: UiState, vm: MainViewModel, sat: TleEntry) {
+    val shownPass = ui.focusedPassAos?.let { f -> ui.passes.minByOrNull { kotlin.math.abs(it.aosEpochMs - f) } }
+        ?: ui.passes.firstOrNull { it.losEpochMs > ui.nowMs }
+    val epochMs = sat.epochMs ?: return
+    if (shownPass == null) return
+    val jours = (kotlin.math.abs(shownPass.aosEpochMs - epochMs) / 86_400_000.0).toInt()
+    if (jours <= 3) return
+    val libelle = tf("stale_elements", jours) + " " + t("refresh")
+    Surface(color = Amber.copy(alpha = 0.18f), shape = RoundedCornerShape(6.dp),
+        onClick = { vm.refreshTleFor(sat.catalogNumber, annonce = true) },
+        modifier = Modifier.semantics { contentDescription = libelle }) {
+        Text(tf("stale_chip", jours), color = Amber, fontSize = 10.sp,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
+    }
 }

@@ -3821,7 +3821,7 @@ private fun SettingsSats(ui: UiState, vm: MainViewModel) {
                     selectedContainerColor = Color(0xFF49D17F).copy(alpha = 0.20f),
                     selectedLabelColor = Color(0xFF49D17F)))
             Spacer(Modifier.width(4.dp))
-            IconButton(onClick = { vm.refreshAmsatStatus(force = true) }, modifier = Modifier.size(32.dp)) {
+            IconButton(onClick = { vm.refreshAmsatStatus(force = true) }) {
                 Icon(Icons.Default.Refresh, t("refresh_amsat"), tint = Cyan,
                     modifier = Modifier.size(18.dp))
             }

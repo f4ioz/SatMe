@@ -313,7 +313,9 @@ private fun TopBar(ui: UiState, vm: MainViewModel) {
             containerColor = Color.Transparent, titleContentColor = TextHi
         ),
         title = {
-            Column {
+            val fiche = if (ui.screen == Screen.PASSES) ui.selected else null
+            if (fiche != null) EnteteSatellite(ui, vm, fiche)
+            else Column {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(Modifier.size(10.dp).clip(CircleShape).background(Cyan))
                     Spacer(Modifier.width(8.dp))
@@ -417,7 +419,8 @@ private fun TopBar(ui: UiState, vm: MainViewModel) {
                 RetourArriere.Geste.FERMER_QO100 -> vm::closeQo100
                 RetourArriere.Geste.FERMER_AGENDA -> vm::closeAgenda
                 RetourArriere.Geste.FERMER_NOMMAGE -> vm::fermeNommage
-                else -> null
+                // The satellite page: its header is the bar, so is its way back.
+                else -> if (ui.screen == Screen.PASSES && ui.selected != null) vm::backToList else null
             }
             if (fermeture != null) {
                 IconButton(onClick = fermeture) {
@@ -429,6 +432,20 @@ private fun TopBar(ui: UiState, vm: MainViewModel) {
             // Scroll padlock — detail screen only: open = free, closed = the
             // page stays where you put it (no accidental scrolls in the field).
 
+            ui.selected?.takeIf { ui.screen == Screen.PASSES }?.let { sat ->
+                // QRV photo, satellite already attached: the photo screen then
+                // knows which pass to draw as a polar plot.
+                val shownPass = ui.focusedPassAos?.let { f -> ui.passes.minByOrNull { kotlin.math.abs(it.aosEpochMs - f) } }
+                    ?: ui.passes.firstOrNull { it.losEpochMs > ui.nowMs }
+                IconButton(onClick = { vm.openPhoto(sat.catalogNumber, shownPass?.aosEpochMs) }) {
+                    Icon(Icons.Default.PhotoCamera, t("photo_title"), tint = Cyan)
+                }
+                val isFav = sat.catalogNumber in ui.favorites
+                IconButton(onClick = { vm.toggleFavorite(sat.catalogNumber) }) {
+                    if (isFav) Icon(Icons.Default.Star, t("favorite"), tint = Amber)
+                    else Icon(Icons.Outlined.StarBorder, t("favorite"), tint = TextLo)
+                }
+            }
             if (ui.screen == Screen.PASSES && ui.selected != null) {
                 IconButton(onClick = { vm.toggleUiLock() }) {
                     Icon(if (ui.uiLocked) Icons.Default.Lock else Icons.Default.LockOpen,

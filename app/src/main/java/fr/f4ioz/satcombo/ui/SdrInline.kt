@@ -87,6 +87,13 @@ fun RxImageInline(ui: UiState, vm: MainViewModel) {
     }
     var chooser by remember { mutableStateOf(false) }
 
+    // Idle SSTV strip hidden when the top bar has its own REC: it said
+    // "engine idle" all pass long, above the frequencies. It comes back as
+    // soon as a recording runs. NOAA keeps its strip: it is armed by hand
+    // before the pass.
+    val sstv by SstvHub.state.collectAsState()
+    if (!noaa && ui.recorderEnabled && !ui.recording && !sstv.listening) return
+
     if (noaa) AptInlineCard(ui, vm) { chooser = true }
     else SstvInlineCard(ui, vm) { chooser = true }
 
@@ -137,7 +144,7 @@ private fun RxModeDialog(
 @Composable
 private fun RxRecordButton(ui: UiState, vm: MainViewModel) {
     val rec = ui.recording
-    IconButton(onClick = { vm.toggleRxRecording() }, modifier = Modifier.size(34.dp)) {
+    IconButton(onClick = { vm.toggleRxRecording() }) {
         Icon(
             if (rec) Icons.Default.Stop else Icons.Default.FiberManualRecord,
             if (rec) t("rx_rec_stop") else t("rx_rec_start"),
