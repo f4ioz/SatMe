@@ -15,6 +15,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.clickable
+import androidx.compose.material.icons.filled.EventAvailable
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -284,9 +285,11 @@ internal fun DetailScreen(ui: UiState, vm: MainViewModel, onBack: () -> Unit) {
                             ?: ui.passes.firstOrNull { it.losEpochMs > ui.nowMs }
                     }
                     val hm = tzFormat("HH:mm:ss", ui.useUtc)
-                    // One line: day, AOS→LOS, time zone, small AMSAT globe. A
-                    // full-width button used to push the compass off-screen on
-                    // small phones. On a stationary sat only the globe remains.
+                    // One line: day, AOS→LOS, time zone, calendar, small AMSAT
+                    // globe. A full-width button used to push the compass
+                    // off-screen on small phones. On a stationary sat only the
+                    // globe remains. Too narrow a phone wraps the date rather
+                    // than cutting a time.
                     if (shownPass != null || ui.callsign.isNotBlank())
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
@@ -294,9 +297,20 @@ internal fun DetailScreen(ui: UiState, vm: MainViewModel, onBack: () -> Unit) {
                     ) {
                         if (shownPass != null) {
                             val dfull = tzFormat("EEE dd MMM", ui.useUtc)
-                            Text("${dfull.format(Date(shownPass.aosEpochMs)).replaceFirstChar { it.uppercase() }}  ·  " +
+                            Text("${dfull.format(Date(shownPass.aosEpochMs)).replaceFirstChar { it.uppercase() }} · " +
                                     "${hm.format(Date(shownPass.aosEpochMs))} → ${hm.format(Date(shownPass.losEpochMs))} ${tzTag(ui.useUtc)}",
-                                color = TextHi, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                color = TextHi, fontWeight = FontWeight.Bold, fontSize = 14.sp,
+                                maxLines = 2, modifier = Modifier.weight(1f, fill = false))
+                            // The phone's calendar, pre-filled: SatMe writes
+                            // nothing, the operator saves there.
+                            IconButton(onClick = {
+                                if (!fr.f4ioz.satcombo.data.AgendaTelephone.ouvre(ctxDetail, shownPass, vm.myLocator()))
+                                    android.widget.Toast.makeText(ctxDetail, t("cal_aucun"),
+                                        android.widget.Toast.LENGTH_SHORT).show()
+                            }) {
+                                Icon(Icons.Default.EventAvailable, t("cal_ajouter"), tint = Cyan,
+                                    modifier = Modifier.size(21.dp))
+                            }
                         }
                         // AMSAT rejects anonymous reports: no callsign, no button.
                         if (ui.callsign.isNotBlank()) {

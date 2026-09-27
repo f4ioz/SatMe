@@ -119,6 +119,16 @@ class SettingsStore(context: Context) {
         get() = prefs.getBoolean("sstv_continu", false)
         set(v) { prefs.edit().putBoolean("sstv_continu", v).apply() }
 
+    /** Spoken header (satellite, date, locator) at the start of pass recordings. */
+    var annonceVocale: Boolean
+        get() = prefs.getBoolean("annonce_vocale", true)
+        set(v) { prefs.edit().putBoolean("annonce_vocale", v).apply() }
+
+    /** List satellites whose transmitters are all dead (hidden by default). */
+    var montreInactifs: Boolean
+        get() = prefs.getBoolean("montre_inactifs", false)
+        set(v) { prefs.edit().putBoolean("montre_inactifs", v).apply() }
+
     /** The SSTV page's "decoding needs a recording" note was dismissed for good. */
     var sstvAideMasquee: Boolean
         get() = prefs.getBoolean("sstv_aide_masquee", false)

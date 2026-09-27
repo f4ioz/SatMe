@@ -1012,6 +1012,17 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val geocoder = Geocoder()
     private val tleCache = TleCache(app)
     private val txRepo = TransmittersRepository(app)
+
+    /**
+     * Silent satellites (every SatNOGS transmitter dead) and whether the
+     * satellite list shows them anyway. Flows of their own, out of `UiState`
+     * (255-register limit): only the satellite list reads them.
+     */
+    private val _satInactifs = MutableStateFlow<Set<Int>>(emptySet())
+    val satInactifs: StateFlow<Set<Int>> = _satInactifs
+    private val _montreInactifs = MutableStateFlow(settings.montreInactifs)
+    val montreInactifs: StateFlow<Boolean> = _montreInactifs
+
     private val amsatRepo = fr.f4ioz.satcombo.data.AmsatStatusRepository(app)
 
     private val _ui = MutableStateFlow(
@@ -1339,6 +1350,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             }
         }
         refreshAmsatStatus()
+        chargeInactifs()
+    }
+
+    fun setMontreInactifs(on: Boolean) {
+        settings.montreInactifs = on
+        _montreInactifs.value = on
+    }
+
+    private fun chargeInactifs() {
+        viewModelScope.launch { txRepo.inactifs()?.let { _satInactifs.value = it } }
     }
 
     /** Fetch the AMSAT operator-reported status (who's actually being heard). */
@@ -2080,7 +2101,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val autoStop = (active ?: next)?.losEpochMs?.let { it + 5_000L }
         fr.f4ioz.satcombo.audio.RecorderService.start(
             getApplication(), satName, autoStop,
-            _ui.value.recorderSource, _ui.value.recorderUnprocessed)
+            _ui.value.recorderSource, _ui.value.recorderUnprocessed, myLocator())
     }
 
     fun stopRecording() {
@@ -4045,6 +4066,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      * the settings, not `UiState` (255-register limit): asked once per visit.
      */
     fun sstvAideAMontrer(): Boolean = !settings.sstvAideMasquee
+
+    /** Spoken header at the start of recordings. Read from the settings, not
+     *  `UiState` (255-register limit): only its switch shows it. */
+    fun annonceVocale(): Boolean = settings.annonceVocale
+    fun setAnnonceVocale(on: Boolean) { settings.annonceVocale = on }
     fun masqueAideSstv() { settings.sstvAideMasquee = true }
 
     // ================= APT (NOAA images, beta) =================

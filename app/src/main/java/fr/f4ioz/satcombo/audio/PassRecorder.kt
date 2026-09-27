@@ -27,6 +27,11 @@ import kotlin.concurrent.thread
  */
 class PassRecorder {
 
+    companion object {
+        /** Longest wait for the spoken header before recording without it. */
+        const val ATTENTE_ANNONCE_MS = 12_000L
+    }
+
     @Volatile private var running = false
     private var worker: Thread? = null
     var currentFile: File? = null
@@ -67,7 +72,12 @@ class PassRecorder {
          *  untouched samples rather than from the re-read MP3. It must return
          *  quickly: anything slow here would starve the AudioRecord buffer and
          *  put a gap in the recording. */
-        pcmSink: ((ShortArray, Int) -> Unit)? = null
+        pcmSink: ((ShortArray, Int) -> Unit)? = null,
+        /** Spoken header being synthesised ([AnnonceVocale]), written before
+         *  the pass audio. The microphone does not wait for it: what it hears
+         *  meanwhile is kept in memory and follows the header, so nothing of
+         *  the AOS is lost. Given up after [ATTENTE_ANNONCE_MS]. */
+        annonce: java.util.concurrent.Future<ShortArray?>? = null
     ): Boolean {
         if (running) return false
         val minBuf = AudioRecord.getMinBufferSize(
@@ -106,6 +116,7 @@ class PassRecorder {
             .build()
 
         currentFile = outFile
+        annonceMs = 0L
         running = true
         worker = thread(name = "PassRecorder", isDaemon = true) {
             val pcm = ShortArray(bufSize)
@@ -116,18 +127,55 @@ class PassRecorder {
                           EncodeurMp3.rend(EncodeurMp3.ENREGISTREUR)
                           return@thread
                       }
+            // Encodes [n] samples of [p], in slices the MP3 buffer can hold.
+            fun encode(p: ShortArray, n: Int) {
+                var i = 0
+                while (i < n) {
+                    val k = minOf(pcm.size, n - i)
+                    val tranche = if (i == 0 && k == p.size) p else p.copyOfRange(i, i + k)
+                    val enc = lame.encode(tranche, tranche, k, mp3)
+                    if (enc > 0) out.write(mp3, 0, enc)
+                    i += k
+                }
+            }
+            var enAttente = annonce
+            val enMemoire = ArrayDeque<ShortArray>()
+            val limite = System.currentTimeMillis() + ATTENTE_ANNONCE_MS
+            // The header, then what the microphone heard while it was spoken.
+            fun videAttente(prete: Boolean) {
+                val voix = if (prete) runCatching { enAttente?.get() }.getOrNull() else null
+                if (!prete) enAttente?.cancel(true)
+                if (voix != null && voix.isNotEmpty()) {
+                    encode(voix, voix.size)
+                    annonceMs = voix.size * 1000L / sampleRate
+                }
+                while (enMemoire.isNotEmpty()) enMemoire.removeFirst().let { encode(it, it.size) }
+                enAttente = null
+            }
             try {
                 recorder.startRecording()
                 while (running) {
                     val read = recorder.read(pcm, 0, pcm.size)
                     if (read > 0) {
+                        // The decoders get the live sound at once, header or not.
                         if (pcmSink != null) runCatching { pcmSink(pcm, read) }
-                        val enc = lame.encode(pcm, pcm, read, mp3)
-                        if (enc > 0) out.write(mp3, 0, enc)
+                        val attente = enAttente
+                        if (attente != null) {
+                            enMemoire.addLast(pcm.copyOf(read))
+                            when {
+                                attente.isDone -> videAttente(true)
+                                System.currentTimeMillis() > limite -> videAttente(false)
+                            }
+                        } else {
+                            val enc = lame.encode(pcm, pcm, read, mp3)
+                            if (enc > 0) out.write(mp3, 0, enc)
+                        }
                     } else if (read < 0) {
                         break // read error
                     }
                 }
+                // Stopped before the header was ready: keep the sound anyway.
+                if (enAttente != null) videAttente(enAttente?.isDone == true)
                 val flushed = lame.flush(mp3)
                 if (flushed > 0) out.write(mp3, 0, flushed)
             } catch (e: Exception) {
@@ -145,6 +193,10 @@ class PassRecorder {
         }
         return true
     }
+
+    /** Length of the spoken header at the start of the current file, ms. */
+    @Volatile var annonceMs = 0L
+        private set
 
     /** Stop and finalise the current recording (blocks briefly for the flush). */
     fun stop() {

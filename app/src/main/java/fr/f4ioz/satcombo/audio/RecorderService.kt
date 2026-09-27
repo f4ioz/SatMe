@@ -55,6 +55,7 @@ class RecorderService : Service() {
         const val EXTRA_AUTOSTOP = "autoStopMs"   // 0 = manual only
         const val EXTRA_SOURCE = "recSource"      // "MIC" | "BT" | "USB"
         const val EXTRA_UNPROC = "unprocessed"
+        const val EXTRA_LOC = "locator"
         private const val CHANNEL = "recording"
         private const val NOTIF_ID = 4217
 
@@ -74,7 +75,8 @@ class RecorderService : Service() {
 
         fun start(
             context: Context, satName: String, autoStopMs: Long?,
-            source: String = "MIC", unprocessed: Boolean = false
+            source: String = "MIC", unprocessed: Boolean = false,
+            locator: String = ""
         ) {
             val i = Intent(context, RecorderService::class.java)
                 .setAction(ACTION_START)
@@ -82,6 +84,7 @@ class RecorderService : Service() {
                 .putExtra(EXTRA_AUTOSTOP, autoStopMs ?: 0L)
                 .putExtra(EXTRA_SOURCE, source)
                 .putExtra(EXTRA_UNPROC, unprocessed)
+                .putExtra(EXTRA_LOC, locator)
             context.startForegroundService(i)
         }
 
@@ -131,6 +134,7 @@ class RecorderService : Service() {
                 val auto = intent.getLongExtra(EXTRA_AUTOSTOP, 0L).takeIf { it > 0L }
                 val src = intent.getStringExtra(EXTRA_SOURCE) ?: "MIC"
                 val unproc = intent.getBooleanExtra(EXTRA_UNPROC, false)
+                val loc = intent.getStringExtra(EXTRA_LOC).orEmpty()
                 val now = System.currentTimeMillis()
                 val fmt = SimpleDateFormat("yyyyMMdd'_'HHmmss'Z'", Locale.US)
                     .apply { timeZone = TimeZone.getTimeZone("UTC") }
@@ -206,11 +210,21 @@ class RecorderService : Service() {
                         if (sstv) fr.f4ioz.satcombo.sstv.SstvHub.feedLive(p, n)
                         if (apt) fr.f4ioz.satcombo.apt.AptHub.feedLive(p, n)
                     }
+                    // Spoken header (satellite, date, locator), synthesised
+                    // while the microphone already listens: see PassRecorder.
+                    val annonce = if (reg?.annonceVocale != false) {
+                        val fr = fr.f4ioz.satcombo.i18n.I18n.current() == fr.f4ioz.satcombo.i18n.Lang.FR
+                        val texte = AnnonceVocale.texte(sat, now, loc, fr)
+                        java.util.concurrent.FutureTask {
+                            AnnonceVocale.synthetise(this, texte,
+                                if (fr) Locale.FRENCH else Locale.ENGLISH, rate)
+                        }.also { Thread(it, "AnnonceVocale").start() }
+                    } else null
                     val ok = runCatching {
                         if (btDev != null) recorder.start(file, sat, rate, 64, btDev,
                             android.media.MediaRecorder.AudioSource.VOICE_COMMUNICATION,
-                            sink)
-                        else recorder.start(file, sat, rate, 128, usbDev, baseSrc, sink)
+                            sink, annonce)
+                        else recorder.start(file, sat, rate, 128, usbDev, baseSrc, sink, annonce)
                     }.getOrDefault(false)
                     handler.post {
                         if (!ok) {
@@ -364,8 +378,10 @@ class RecorderService : Service() {
                 append(t("sidecar_header") + "\n")
                 append(tf("sidecar_file", mp3.name) + "\n")
                 append(tf("sidecar_sat_start", lastSat, dUtc.format(Date(startMs))) + "\n\n")
+                // The spoken header shifts the pass audio by its length.
+                val decalage = recorder.annonceMs
                 for ((wall, label) in marks) {
-                    val off = ((wall - startMs) / 1000).coerceAtLeast(0)
+                    val off = ((wall - startMs + decalage) / 1000).coerceAtLeast(0)
                     append("%02d:%02d".format(off / 60, off % 60))
                     append("  (${utc.format(Date(wall))})  $label\n")
                 }

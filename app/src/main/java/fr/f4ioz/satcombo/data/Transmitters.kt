@@ -77,6 +77,59 @@ class TransmittersRepository(
         }.getOrNull()
     }
 
+    /**
+     * Satellites with every transmitter dead ([Inactifs]). Read from the cache
+     * when it is less than a week old, else fetched: the whole SatNOGS list is
+     * about 4 MB, so it is read as a stream and only the numbers are kept.
+     * Null when there is neither a cache nor a network.
+     */
+    suspend fun inactifs(maintenant: Long = System.currentTimeMillis()): Set<Int>? =
+        withContext(Dispatchers.IO) {
+            val cache = File(dir, "inactifs.txt")
+            val connu = runCatching { Inactifs.depuisTexte(cache.readText()) }.getOrNull()
+            if (connu != null && maintenant - connu.first < Inactifs.VALIDITE_MS) return@withContext connu.second
+            val frais = runCatching { telechargeInactifs() }.getOrNull()
+            if (frais != null) {
+                runCatching { cache.writeText(Inactifs.versTexte(maintenant, frais)) }
+                frais
+            } else connu?.second
+        }
+
+    /** The whole transmitter list, streamed: number and alive flag only. */
+    private fun telechargeInactifs(): Set<Int>? {
+        val req = Request.Builder().url("https://db.satnogs.org/api/transmitters/?format=json")
+            .header("User-Agent", "SatMe amateur-radio app (F4IOZ)").build()
+        val lent = client.newBuilder().readTimeout(60, TimeUnit.SECONDS).build()
+        lent.newCall(req).execute().use { r ->
+            if (!r.isSuccessful) return null
+            val corps = r.body ?: return null
+            val paires = ArrayList<Pair<Int, Boolean>>(6000)
+            android.util.JsonReader(corps.charStream()).use { j ->
+                j.beginArray()
+                while (j.hasNext()) {
+                    var norad: Int? = null
+                    var alive = false
+                    j.beginObject()
+                    while (j.hasNext()) {
+                        when (j.nextName()) {
+                            "norad_cat_id" ->
+                                if (j.peek() == android.util.JsonToken.NULL) j.nextNull() else norad = j.nextInt()
+                            "alive" ->
+                                if (j.peek() == android.util.JsonToken.BOOLEAN) alive = j.nextBoolean() else j.skipValue()
+                            else -> j.skipValue()
+                        }
+                    }
+                    j.endObject()
+                    norad?.let { paires.add(it to alive) }
+                }
+                j.endArray()
+            }
+            // An empty answer is a broken answer, not "everything is alive".
+            if (paires.isEmpty()) return null
+            return Inactifs.calcule(paires.asSequence())
+        }
+    }
+
     suspend fun forSatellite(catnum: Int): List<Transmitter> = withContext(Dispatchers.IO) {
         memory[catnum]?.let { return@withContext it }
         val net = runCatching { fetch(catnum) }.getOrNull()

@@ -814,6 +814,13 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
                     }
                     if (ui.recorderEnabled) {
                         Spacer(Modifier.height(10.dp))
+                        // Satellite, date and locator spoken at the start of
+                        // each file: a recording found later says what it is.
+                        var annonce by remember { mutableStateOf(vm.annonceVocale()) }
+                        SettingSwitch(t("annonce_vocale"), t("annonce_vocale_desc"), annonce) {
+                            annonce = it; vm.setAnnonceVocale(it)
+                        }
+                        Spacer(Modifier.height(10.dp))
                         Text(t("rec_source"), color = TextHi, fontWeight = FontWeight.Bold, fontSize = 13.sp)
                         Spacer(Modifier.height(6.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -3794,6 +3801,14 @@ private fun ConvCard(ui: UiState, vm: MainViewModel, descente: Boolean) {
 
 @Composable
 private fun SettingsSats(ui: UiState, vm: MainViewModel) {
+    // Silent satellites hidden unless asked for; a followed one always stays,
+    // since the operator chose it.
+    val inactifs by vm.satInactifs.collectAsState()
+    val montreInactifs by vm.montreInactifs.collectAsState()
+    val caches = if (montreInactifs) 0 else
+        ui.filteredSatellites.count { it.catalogNumber in inactifs && it.catalogNumber !in ui.favorites }
+    val liste = if (montreInactifs) ui.filteredSatellites else
+        ui.filteredSatellites.filter { it.catalogNumber !in inactifs || it.catalogNumber in ui.favorites }
     Column(Modifier.fillMaxSize()) {
         OutlinedTextField(
             value = ui.query, onValueChange = vm::setQuery,
@@ -3838,18 +3853,29 @@ private fun SettingsSats(ui: UiState, vm: MainViewModel) {
             contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            items(ui.filteredSatellites, key = { it.catalogNumber }) { sat ->
+            items(liste, key = { it.catalogNumber }) { sat ->
                 SatRow(sat, isFav = sat.catalogNumber in ui.favorites,
                     amsatStatus = if (ui.statusSource != "SATNOGS") vm.amsatFor(sat.name)?.recent else null,
                     agenda = vm.agendaForSat(sat.name)) {
                     vm.toggleFavorite(sat.catalogNumber)
                 }
             }
-            if (ui.filteredSatellites.isEmpty()) {
+            if (liste.isEmpty()) {
                 item { Text(
                     if (ui.satActiveOnly) t("no_active_sats")
                     else tf("no_sat_for_query", ui.query),
                     color = TextLo, modifier = Modifier.padding(16.dp)) }
+            }
+            // At the end of the list, where one looks for the missing one.
+            if (caches > 0 || montreInactifs && inactifs.isNotEmpty()) {
+                item {
+                    TextButton(onClick = { vm.setMontreInactifs(!montreInactifs) },
+                        modifier = Modifier.fillMaxWidth()) {
+                        Text(if (montreInactifs) t("inactifs_masquer")
+                             else tf("inactifs_montrer", caches),
+                            color = Cyan, fontSize = 13.sp)
+                    }
+                }
             }
         }
     }
