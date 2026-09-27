@@ -1377,7 +1377,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 else locationProvider.defaultObserver
             }
         } else {
-            runCatching { locationProvider.current() }.getOrDefault(locationProvider.defaultObserver)
+            runCatching { locationProvider.startup() }.getOrDefault(locationProvider.defaultObserver)
                 .let { it.copy(name = "GPS · " + Maidenhead.fromLatLon(it.latDeg, it.lonDeg)) }
         }
 

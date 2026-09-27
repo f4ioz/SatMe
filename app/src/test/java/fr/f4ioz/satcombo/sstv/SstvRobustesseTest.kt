@@ -275,6 +275,15 @@ class SstvRobustesseTest {
     }
 
     @Test
+    fun l_en_tete_est_reconnu_a_6_dB() {
+        // Read on the narrow reading, whose edge sits on the 1100/1300 Hz bits,
+        // the header was lost below about 8 dB and the picture never started.
+        val r = decode(bandNoise(pd120().render(fs), 6.0, 5))
+        assertEquals("PD 120", r.mode)
+        assertTrue("${r.lines}/${r.h}", r.complete)
+    }
+
+    @Test
     fun un_pd120_a_8_dB_reste_lisible() {
         // The weakest usable ISS picture. Longest-run sync search lost 190 of
         // 248 pulses here and the frame ran on false wide relocks; the matched

@@ -59,7 +59,10 @@ object SstvPlayer {
     val playing: Boolean get() = thread != null
 
     /** Plays the [mode] test card. Stops any running one first: two overlaid SSTV signals decode to nothing. */
-    fun play(ctx: Context, mode: SstvMode, callsign: String, locator: String) {
+    fun play(
+        ctx: Context, mode: SstvMode, callsign: String, locator: String,
+        cond: SstvConditions = SstvConditions.CLEAN
+    ) {
         stop()
         val app = ctx.applicationContext
         val total = SstvEncoder.seconds(mode).toInt()
@@ -72,6 +75,7 @@ object SstvPlayer {
                 val pixels = SstvPattern.pixels(
                     SstvPattern.render(app, mode, callsign, locator))
                 val src = SstvEncoder.Source(mode, pixels, RATE)
+                val sim = ReceptionSim(cond, RATE, src.totalSamples)
                 val min = AudioTrack.getMinBufferSize(
                     RATE, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_16BIT)
                 val bufBytes = maxOf(min, RATE / 2 * 2)      // at least half a second
@@ -95,6 +99,7 @@ object SstvPlayer {
                 while (!stopping) {
                     val n = src.read(chunk)
                     if (n <= 0) break
+                    sim.apply(chunk, n)
                     var off = 0
                     while (off < n && !stopping) {
                         val w = track.write(chunk, off, n - off)
@@ -130,6 +135,15 @@ object SstvPlayer {
 
     // ---------------------------------------------------------------- export
 
+    /**
+     * Export name. A degraded card says so ("_sim"): opened later, a noisy
+     * file must not pass for a faulty chain.
+     */
+    private fun fileName(mode: SstvMode, cond: SstvConditions, ext: String): String {
+        val safe = mode.name.replace(Regex("[^A-Za-z0-9]"), "")
+        return "SatMe_MIRE_${safe}${if (cond.active) "_sim" else ""}_${stamp()}.$ext"
+    }
+
     /** Folder for exported test cards. */
     fun dir(ctx: Context): File =
         File(ctx.getExternalFilesDir(null), "mires").apply { mkdirs() }
@@ -139,12 +153,13 @@ object SstvPlayer {
      * or over a radio. Streamed to disk, never held in memory.
      */
     fun exportWav(
-        ctx: Context, mode: SstvMode, callsign: String, locator: String
+        ctx: Context, mode: SstvMode, callsign: String, locator: String,
+        cond: SstvConditions = SstvConditions.CLEAN
     ): File? = runCatching {
         val pixels = SstvPattern.pixels(SstvPattern.render(ctx, mode, callsign, locator))
         val src = SstvEncoder.Source(mode, pixels, RATE)
-        val safe = mode.name.replace(Regex("[^A-Za-z0-9]"), "")
-        val f = File(dir(ctx), "SatMe_MIRE_${safe}_${stamp()}.wav")
+        val sim = ReceptionSim(cond, RATE, src.totalSamples)
+        val f = File(dir(ctx), fileName(mode, cond, "wav"))
         FileOutputStream(f).use { out ->
             out.write(wavHeader(src.totalSamples))
             val chunk = ShortArray(8192)
@@ -152,6 +167,7 @@ object SstvPlayer {
             while (true) {
                 val n = src.read(chunk)
                 if (n <= 0) break
+                sim.apply(chunk, n)
                 for (i in 0 until n) {
                     val v = chunk[i].toInt()
                     bytes[2 * i] = (v and 0xFF).toByte()
@@ -171,12 +187,13 @@ object SstvPlayer {
      * MP3. Uses the recorder's embedded LAME, streamed chunk by chunk.
      */
     fun exportMp3(
-        ctx: Context, mode: SstvMode, callsign: String, locator: String
+        ctx: Context, mode: SstvMode, callsign: String, locator: String,
+        cond: SstvConditions = SstvConditions.CLEAN
     ): File? = EncodeurMp3.avec(EncodeurMp3.MIRE_SSTV) { runCatching {
         val pixels = SstvPattern.pixels(SstvPattern.render(ctx, mode, callsign, locator))
         val src = SstvEncoder.Source(mode, pixels, RATE)
-        val safe = mode.name.replace(Regex("[^A-Za-z0-9]"), "")
-        val f = File(dir(ctx), "SatMe_MIRE_${safe}_${stamp()}.mp3")
+        val sim = ReceptionSim(cond, RATE, src.totalSamples)
+        val f = File(dir(ctx), fileName(mode, cond, "mp3"))
         val chunkSize = 8192
         val lame = LameBuilder()
             .setInSampleRate(RATE)
@@ -195,6 +212,7 @@ object SstvPlayer {
                 while (true) {
                     val n = src.read(chunk)
                     if (n <= 0) break
+                    sim.apply(chunk, n)
                     // LAME wants both channels even in mono: pass the same buffer twice.
                     val enc = lame.encode(chunk, chunk, n, mp3)
                     if (enc > 0) out.write(mp3, 0, enc)

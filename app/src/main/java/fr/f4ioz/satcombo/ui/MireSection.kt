@@ -9,6 +9,10 @@
 package fr.f4ioz.satcombo.ui
 
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -31,6 +35,7 @@ import fr.f4ioz.satcombo.MainViewModel
 import fr.f4ioz.satcombo.UiState
 import fr.f4ioz.satcombo.i18n.t
 import fr.f4ioz.satcombo.i18n.tf
+import fr.f4ioz.satcombo.sstv.SstvConditions
 import fr.f4ioz.satcombo.sstv.SstvEncoder
 import fr.f4ioz.satcombo.sstv.SstvMode
 import fr.f4ioz.satcombo.sstv.SstvPattern
@@ -63,6 +68,12 @@ fun MireSection(ui: UiState, vm: MainViewModel) {
     }
     var open by remember { mutableStateOf(false) }
     var saved by remember { mutableStateOf<String?>(null) }
+    // Reception conditions: kept across screen rotations, reset with the app.
+    var bruit by rememberSaveable { mutableStateOf(0) }
+    var fading by rememberSaveable { mutableStateOf(0) }
+    var coupures by rememberSaveable { mutableStateOf(false) }
+    var profil by rememberSaveable { mutableStateOf(false) }
+    val cond = SstvConditions(BRUITS[bruit], SstvConditions.Fading.values()[fading], coupures, profil)
     var saving by remember { mutableStateOf(false) }
 
     val call = ui.callsign
@@ -76,8 +87,8 @@ fun MireSection(ui: UiState, vm: MainViewModel) {
         saving = true
         scope.launch {
             val f = withContext(Dispatchers.IO) {
-                if (mp3) SstvPlayer.exportMp3(ctx, mode, call, loc)
-                else SstvPlayer.exportWav(ctx, mode, call, loc)
+                if (mp3) SstvPlayer.exportMp3(ctx, mode, call, loc, cond)
+                else SstvPlayer.exportWav(ctx, mode, call, loc, cond)
             }
             saving = false
             // Never fail silently. The likely cause is the encoder being busy:
@@ -152,6 +163,33 @@ fun MireSection(ui: UiState, vm: MainViewModel) {
                         modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)))
                 }
 
+                // --- reception conditions ------------------------------------
+                // To try the whole chain as a real pass would: hiss, fading,
+                // dropouts, a pass profile. Applied to playback and exports.
+                Spacer(Modifier.height(14.dp))
+                Text(t("mire_cond_title"), color = TextHi, fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold)
+                Text(t("mire_cond_desc"), color = TextLo, fontSize = 11.sp,
+                    modifier = Modifier.padding(top = 2.dp, bottom = 6.dp))
+                CondRow(t("mire_cond_bruit"),
+                    listOf(t("mire_cond_aucun")) + BRUITS.drop(1).map { "%.0f dB".format(it) },
+                    bruit, !st.playing) { bruit = it }
+                CondRow(t("mire_cond_fading"),
+                    listOf(t("mire_cond_aucun"), t("mire_cond_leger"), t("mire_cond_fort")),
+                    fading, !st.playing) { fading = it }
+                CondCheck(t("mire_cond_coupures"), coupures, !st.playing) { coupures = it }
+                CondCheck(t("mire_cond_passage"), profil, !st.playing) { profil = it }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TextButton(enabled = !st.playing, onClick = {
+                        val c = SstvConditions.ISS_TYPICAL
+                        bruit = BRUITS.indexOf(c.snrDb); fading = c.fading.ordinal
+                        coupures = c.dropouts; profil = c.passProfile
+                    }) { Text(t("mire_cond_iss"), color = Cyan, fontSize = 12.sp) }
+                    TextButton(enabled = !st.playing, onClick = {
+                        bruit = 0; fading = 0; coupures = false; profil = false
+                    }) { Text(t("mire_cond_propre"), color = TextLo, fontSize = 12.sp) }
+                }
+
                 // --- transmit ------------------------------------------------
                 Spacer(Modifier.height(14.dp))
                 if (st.playing) {
@@ -176,7 +214,7 @@ fun MireSection(ui: UiState, vm: MainViewModel) {
                 } else {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Button(
-                            onClick = { SstvPlayer.play(ctx, mode, call, loc) },
+                            onClick = { SstvPlayer.play(ctx, mode, call, loc, cond) },
                             colors = ButtonDefaults.buttonColors(containerColor = Cyan)
                         ) {
                             Icon(Icons.Default.PlayArrow, null, Modifier.size(18.dp),
@@ -207,6 +245,35 @@ fun MireSection(ui: UiState, vm: MainViewModel) {
                 Text(t("mire_hint"), color = TextLo.copy(alpha = 0.8f), fontSize = 10.sp)
             }
         }
+    }
+}
+
+/** Hiss choices: none, then SNR in the receiver's audio band, dB. */
+private val BRUITS = listOf(null, 20.0, 15.0, 12.0, 8.0)
+
+/** One labelled row of exclusive choices. */
+@Composable
+private fun CondRow(label: String, choices: List<String>, selected: Int, enabled: Boolean, onPick: (Int) -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
+        Text(label, color = TextLo, fontSize = 12.sp, modifier = Modifier.width(110.dp))
+        choices.forEachIndexed { i, c ->
+            FilterChip(selected = i == selected, enabled = enabled, onClick = { onPick(i) },
+                label = { Text(c, fontSize = 12.sp) },
+                modifier = Modifier.padding(end = 6.dp),
+                colors = FilterChipDefaults.filterChipColors(
+                    selectedContainerColor = Cyan.copy(alpha = 0.25f), selectedLabelColor = Cyan))
+        }
+    }
+}
+
+/** A labelled check box, the whole row clickable. */
+@Composable
+private fun CondCheck(label: String, checked: Boolean, enabled: Boolean, onChange: (Boolean) -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.fillMaxWidth().clickable(enabled = enabled) { onChange(!checked) }) {
+        Checkbox(checked = checked, enabled = enabled, onCheckedChange = onChange)
+        Text(label, color = TextHi, fontSize = 12.sp)
     }
 }
 

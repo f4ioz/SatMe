@@ -21,12 +21,47 @@ import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.coroutines.resume
 
 class LocationProvider(private val context: Context) {
 
     /** Default QTH = F6KMX, Saint-Maur-des-Fossés (JN18FS) if no fix yet. */
     val defaultObserver = Observer(48.8049, 2.4836, 45.0, "F6KMX JN18FS")
+
+    /** Last fix the system already holds, without waiting for a new one; null if none. */
+    @SuppressLint("MissingPermission")
+    suspend fun lastKnown(): Observer? = suspendCancellableCoroutine { cont ->
+        LocationServices.getFusedLocationProviderClient(context).lastLocation
+            .addOnSuccessListener { loc ->
+                cont.resume(loc?.let { Observer(it.latitude, it.longitude, it.altitude, "Live GPS") })
+            }
+            .addOnFailureListener { cont.resume(null) }
+    }
+
+    /**
+     * A position for startup, **never waiting forever**. [current] asks for a
+     * fresh fix with no time limit: indoors, GPS only, or with no recent fix,
+     * it never answered and the app sat on "Downloading orbital elements…"
+     * although nothing was downloading. A fresh fix for 10 s, else the last
+     * known one, else the default QTH; live tracking takes over when a fix
+     * comes.
+     */
+    suspend fun startup(): Observer = attendreFix(
+        { current().takeIf { it !== defaultObserver } }, { lastKnown() }, defaultObserver)
+
+    companion object {
+        const val FIX_WAIT_MS = 10_000L
+        const val LAST_WAIT_MS = 2_000L
+
+        /** [fresh] for at most [freshMs], else [last] for at most [lastMs], else [fallback]. */
+        suspend fun <T : Any> attendreFix(
+            fresh: suspend () -> T?, last: suspend () -> T?, fallback: T,
+            freshMs: Long = FIX_WAIT_MS, lastMs: Long = LAST_WAIT_MS
+        ): T = withTimeoutOrNull(freshMs) { fresh() }
+            ?: withTimeoutOrNull(lastMs) { last() }
+            ?: fallback
+    }
 
     @SuppressLint("MissingPermission")
     suspend fun current(): Observer = suspendCancellableCoroutine { cont ->

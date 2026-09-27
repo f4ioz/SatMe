@@ -59,7 +59,7 @@ class Demodulator(private val sampleRate: Int) {
     private var primed = false
 
     // **A second, narrow reading of the same signal**, for everything that has
-    // to survive noise: header, sync pulses, tuning, and the pixels of a weak
+    // to survive noise: sync pulses, tuning, and the pixels of a weak
     // picture: 2 ms, ±900 Hz around 1900. The wide one above stays for the
     // pixels of a good signal, where it is sharper; alone, it let full-band
     // noise (a phone microphone in a room) break the syncs of a PD 120 at

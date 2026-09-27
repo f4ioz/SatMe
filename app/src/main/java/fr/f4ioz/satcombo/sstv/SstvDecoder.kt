@@ -381,7 +381,11 @@ class SstvDecoder(
         while ((msProduced + 1) * spms <= total.toDouble()) {
             val a = (msProduced * spms)
             val b = ((msProduced + 1) * spms)
-            val v = meanFreq(a, b, freqN)
+            // The header on the wide reading: the narrow one is centred on
+            // 1900 Hz and its edge sits on the 1100/1300 Hz bits, which noise
+            // then outweighs — no header below about 8 dB SNR. Unclamped too:
+            // holding samples to a range skewed the bit means upwards.
+            val v = meanFreq(a, b, freq)
             if (msLen >= msCap) {
                 val drop = msCap / 2
                 System.arraycopy(msBuf, drop, msBuf, 0, msLen - drop)
