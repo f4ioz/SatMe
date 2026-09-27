@@ -297,8 +297,12 @@ internal fun DetailScreen(ui: UiState, vm: MainViewModel, onBack: () -> Unit) {
                     ) {
                         if (shownPass != null) {
                             val dfull = tzFormat("EEE dd MMM", ui.useUtc)
+                            // Minutes only: with the calendar icon, the seconds
+                            // pushed "LOC" onto a second line on a phone. The
+                            // countdown and the pass list keep them.
+                            val hmCourt = tzFormat("HH:mm", ui.useUtc)
                             Text("${dfull.format(Date(shownPass.aosEpochMs)).replaceFirstChar { it.uppercase() }} · " +
-                                    "${hm.format(Date(shownPass.aosEpochMs))} → ${hm.format(Date(shownPass.losEpochMs))} ${tzTag(ui.useUtc)}",
+                                    "${hmCourt.format(Date(shownPass.aosEpochMs))} → ${hmCourt.format(Date(shownPass.losEpochMs))} ${tzTag(ui.useUtc)}",
                                 color = TextHi, fontWeight = FontWeight.Bold, fontSize = 14.sp,
                                 maxLines = 2, modifier = Modifier.weight(1f, fill = false))
                             // The phone's calendar, pre-filled: SatMe writes
