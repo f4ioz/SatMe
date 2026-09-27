@@ -1273,48 +1273,82 @@ internal fun PassCard(
         shape = RoundedCornerShape(14.dp), modifier = mod,
         border = if (highlight) androidx.compose.foundation.BorderStroke(1.5.dp, Cyan) else null) {
         Column {
-            Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+            // **Three lines, not five.** The countdown shares the first line,
+            // the bell stands alone on the right: the pass line gets the whole
+            // width and no longer wraps, so six passes fit where four did.
+            Row(Modifier.padding(start = 12.dp, end = 4.dp, top = 10.dp, bottom = 10.dp),
+                verticalAlignment = Alignment.CenterVertically) {
                 if (selectable) {
                     Checkbox(checked = checked, onCheckedChange = { onCheck?.invoke() },
                         colors = CheckboxDefaults.colors(checkedColor = Cyan))
                     Spacer(Modifier.width(4.dp))
                 }
                 if (p.track.size > 1) {
-                    MiniPolarPlot(p.track, elColor, Modifier.size(56.dp))
+                    MiniPolarPlot(p.track, elColor, Modifier.size(48.dp))
                 } else {
-                    Box(Modifier.size(56.dp).clip(CircleShape).background(elColor.copy(alpha = 0.15f)),
+                    Box(Modifier.size(48.dp).clip(CircleShape).background(elColor.copy(alpha = 0.15f)),
                         Alignment.Center) {
                         Text("${p.maxElevationDeg.toInt()}°", color = elColor, fontWeight = FontWeight.Bold)
                     }
                 }
-                Spacer(Modifier.width(14.dp))
-                Column(Modifier.weight(1f)) {
-                    if (showSat) Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(Modifier.size(8.dp).clip(CircleShape)
-                                .background(couleurStatut(amsatStatus)))
-                            Spacer(Modifier.width(6.dp))
-                        Text(p.satName, color = TextHi, fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                        // Agenda badge on the satellite name: that is what the
-                        // eye scans while scrolling.
-                        if (agendaTitle != null) {
-                            Spacer(Modifier.width(6.dp))
-                            Icon(Icons.Default.EventNote, contentDescription = t("agenda_on_pass_cd"),
-                                tint = Amber, modifier = Modifier.size(15.dp))
-                        }
-                    }
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f).padding(end = if (showBell && onBell != null) 0.dp else 10.dp)) {
+                    val date = "${day.format(Date(p.aosEpochMs))} · ${hm.format(Date(p.aosEpochMs))} ${tzTag(useUtc)}"
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("${day.format(Date(p.aosEpochMs))} · ${hm.format(Date(p.aosEpochMs))} ${tzTag(useUtc)}",
-                            color = if (showSat) TextLo else TextHi,
-                            fontWeight = if (showSat) FontWeight.Normal else FontWeight.SemiBold,
-                            fontSize = if (showSat) 13.sp else 16.sp)
-                        if (agendaTitle != null && !showSat) {
-                            Spacer(Modifier.width(6.dp))
-                            Icon(Icons.Default.EventNote, contentDescription = t("agenda_on_pass_cd"),
-                                tint = Amber, modifier = Modifier.size(15.dp))
+                        // Name (or date) and agenda badge take what the
+                        // countdown leaves; only one weight in the row, or
+                        // Compose splits the width in halves.
+                        Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+                            if (showSat) {
+                                Box(Modifier.size(8.dp).clip(CircleShape)
+                                        .background(couleurStatut(amsatStatus)))
+                                Spacer(Modifier.width(6.dp))
+                                Text(p.satName, color = TextHi, fontWeight = FontWeight.Bold, fontSize = 14.sp,
+                                    maxLines = 1, overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f, fill = false))
+                            } else {
+                                Text(date, color = TextHi, fontWeight = FontWeight.SemiBold, fontSize = 15.sp,
+                                    maxLines = 1, overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f, fill = false))
+                            }
+                            // Agenda badge on the first line: that is what the
+                            // eye scans while scrolling.
+                            if (agendaTitle != null) {
+                                Spacer(Modifier.width(6.dp))
+                                Icon(Icons.Default.EventNote, contentDescription = t("agenda_on_pass_cd"),
+                                    tint = Amber, modifier = Modifier.size(15.dp))
+                            }
+                        }
+                        Spacer(Modifier.width(8.dp))
+                        when (phase) {
+                            is PassPhase.Upcoming -> Text(fmtCountdown(phase.inMs), color = Amber,
+                                fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                            is PassPhase.Active -> Text(t("in_pass"), color = Cyan,
+                                fontWeight = FontWeight.Black, fontSize = 12.sp)
+                            // A finished pass stays visible (past-pass window) but is
+                            // clearly tagged so it is never mistaken for an upcoming one.
+                            else -> Surface(color = TextLo.copy(alpha = 0.18f),
+                                shape = RoundedCornerShape(6.dp)) {
+                                Text(t("pass_done"), color = TextLo, fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
+                            }
                         }
                     }
-                    Text(tf("pass_card_line", hm.format(Date(p.losEpochMs)), p.durationSec, p.maxElevationDeg.toInt(), p.aosAzimuthDeg.toInt(), p.losAzimuthDeg.toInt()),
-                        color = TextLo, style = MaterialTheme.typography.bodySmall)
+                    val ligne = tf("pass_card_line", hm.format(Date(p.losEpochMs)), p.durationSec,
+                        p.maxElevationDeg.toInt(), p.aosAzimuthDeg.toInt(), p.losAzimuthDeg.toInt())
+                    // Second line: the date when the name took the first one,
+                    // else the pass line. The eye (visible pass) closes it.
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (showSat) Text(date, color = TextLo, fontSize = 13.sp, maxLines = 1,
+                            overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                        else Text(ligne, color = TextLo, style = MaterialTheme.typography.bodySmall,
+                            maxLines = 1, overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f))
+                        if (p.visualPass) Text("👁", fontSize = 14.sp)
+                    }
+                    if (showSat) Text(ligne, color = TextLo, style = MaterialTheme.typography.bodySmall,
+                        maxLines = 1, overflow = TextOverflow.Ellipsis)
                     // Event title under the pass line: the badge says there is
                     // something, the title says what.
                     if (agendaTitle != null) {
@@ -1339,33 +1373,14 @@ internal fun PassCard(
                         }
                     }
                 }
-                Column(horizontalAlignment = Alignment.End) {
-                    when (phase) {
-                        is PassPhase.Upcoming -> Text(fmtCountdown(phase.inMs), color = Amber,
-                            fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                        is PassPhase.Active -> Text(t("in_pass"), color = Cyan,
-                            fontWeight = FontWeight.Black, fontSize = 12.sp)
-                        // A finished pass stays visible (past-pass window) but is
-                        // clearly tagged so it is never mistaken for an upcoming one.
-                        else -> Surface(color = TextLo.copy(alpha = 0.18f),
-                            shape = RoundedCornerShape(6.dp)) {
-                            Text(t("pass_done"), color = TextLo, fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold,
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
-                        }
-                    }
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        if (p.visualPass) Text("👁", fontSize = 16.sp)
-                        if (showBell && onBell != null) {
-                            IconButton(onClick = onBell) {
-                                Icon(
-                                    if (bellOn) Icons.Default.Notifications else Icons.Outlined.NotificationsNone,
-                                    contentDescription = if (bellOn) t("unnotify_this_pass") else t("notify_this_pass"),
-                                    tint = if (bellOn) Amber else TextLo,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            }
-                        }
+                if (showBell && onBell != null) {
+                    IconButton(onClick = onBell) {
+                        Icon(
+                            if (bellOn) Icons.Default.Notifications else Icons.Outlined.NotificationsNone,
+                            contentDescription = if (bellOn) t("unnotify_this_pass") else t("notify_this_pass"),
+                            tint = if (bellOn) Amber else TextLo,
+                            modifier = Modifier.size(20.dp)
+                        )
                     }
                 }
             }

@@ -50,7 +50,7 @@ private val DarkPalette = Palette(
 // Light theme — Météo & Marées inspired.
 private val LightPalette = Palette(
     bg = Color(0xFFEEF2F7), surface = Color(0xFFFFFFFF), card = Color(0xFFFFFFFF),
-    cyan = Color(0xFF1F6FEB), aurora = Color(0xFF3B5BDB), amber = Color(0xFFD9870B),
+    cyan = Color(0xFF1F6FEB), aurora = Color(0xFF3B5BDB), amber = Color(0xFF9A5B00),
     magenta = Color(0xFFD6336C), textHi = Color(0xFF1E293B), textLo = Color(0xFF64748B),
     outline = Color(0xFFD7DEE8), onPrimary = Color(0xFFFFFFFF),
     gradient = Brush.verticalGradient(listOf(Color(0xFFEEF2F7), Color(0xFFE7EEF6), Color(0xFFEEF2F7))),

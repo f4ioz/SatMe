@@ -8,6 +8,8 @@
  */
 package fr.f4ioz.satcombo.ui
 
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.heading
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.ui.semantics.Role
@@ -3567,7 +3569,8 @@ private fun RecordingsSection(ui: UiState, vm: MainViewModel) {
 private fun MenuGroupLabel(text: String) {
     Text(text, color = TextLo, fontSize = 11.sp, fontWeight = FontWeight.Bold,
         letterSpacing = 1.2.sp,
-        modifier = Modifier.padding(start = 4.dp, top = 12.dp, bottom = 2.dp))
+        modifier = Modifier.padding(start = 4.dp, top = 12.dp, bottom = 2.dp)
+            .semantics { heading() })
 }
 
 private fun settingsMenuTitle(id: String): String = when (id) {
@@ -3867,9 +3870,10 @@ private fun dateHeureVersMs(txt: String, useUtc: Boolean): Long? = runCatching {
 
 @Composable
 private fun SectionHeader(text: String) {
+    // A heading for TalkBack: it can jump from one to the next.
     Text(text, color = TextLo, fontWeight = FontWeight.Bold,
         letterSpacing = 1.5.sp, fontSize = 12.sp,
-        modifier = Modifier.padding(top = 8.dp, bottom = 2.dp))
+        modifier = Modifier.padding(top = 8.dp, bottom = 2.dp).semantics { heading() })
 }
 
 @Composable
