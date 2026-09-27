@@ -172,7 +172,11 @@ fun SstvScreen(ui: UiState, vm: MainViewModel) {
                             modifier = Modifier.fillMaxWidth().height(4.dp),
                             color = Aurora, trackColor = SpaceSurface)
                     }
-                    st.preview?.let { bmp ->
+                    // Only while listening, as under the compass: at rest a
+                    // leftover frame (often a false start on noise) looked
+                    // like a reception in progress. Finished pictures are in
+                    // the gallery below.
+                    st.preview?.takeIf { st.listening }?.let { bmp ->
                         Spacer(Modifier.height(10.dp))
                         Image(
                             bitmap = bmp.asImageBitmap(), contentDescription = null,
