@@ -8,6 +8,8 @@
  */
 package fr.f4ioz.satcombo.sstv
 
+import kotlin.math.roundToInt
+
 /**
  * The SSTV mode table.
  *
@@ -199,17 +201,50 @@ object SstvTone {
     const val VIS_ONE = 1100.0
     const val VIS_ZERO = 1300.0
 
-    /** Maps a scan tone to a 0..255 level. */
+    /**
+     * Maps a scan tone to a 0..255 level — rounded: truncating put every level
+     * half a step low.
+     */
     fun level(freq: Double): Int {
         val v = (freq - BLACK) * 255.0 / (WHITE - BLACK)
         return when {
             v < 0.0 -> 0
             v > 255.0 -> 255
-            else -> v.toInt()
+            else -> v.roundToInt()
         }
     }
 
     /** Inverse of [level] — used by the test signal generator. */
     fun tone(level: Int): Double =
         BLACK + level.coerceIn(0, 255) * (WHITE - BLACK) / 255.0
+
+    // ---- colour, for the Robot and PD modes ----
+    //
+    // **Studio range, as the rest of the world sends it.** MMSSTV (used for the
+    // ISS images) puts black at Y = 16 and white at Y = 235, BT.601.
+    // SatMe once used full-range JPEG formulas on both ends: consistent with
+    // itself, so its own tests passed, but every received picture came out
+    // washed out (white light grey, black dark grey). One place for both ends.
+
+    /** Luma of an RGB pixel, 16..235. */
+    fun luma(r: Int, g: Int, b: Int): Int =
+        (16.0 + (65.738 * r + 129.057 * g + 25.064 * b) / 256.0).roundToInt().coerceIn(0, 255)
+
+    /** R-Y of an RGB pixel, 16..240 around 128. */
+    fun cr(r: Int, g: Int, b: Int): Int =
+        (128.0 + (112.439 * r - 94.154 * g - 18.285 * b) / 256.0).roundToInt().coerceIn(0, 255)
+
+    /** B-Y of an RGB pixel, 16..240 around 128. */
+    fun cb(r: Int, g: Int, b: Int): Int =
+        (128.0 + (-37.945 * r - 74.494 * g + 112.439 * b) / 256.0).roundToInt().coerceIn(0, 255)
+
+    /** Opaque ARGB pixel from studio-range Y, R-Y, B-Y. */
+    fun rgb(y: Int, cr: Int, cb: Int): Int {
+        val yy = 298.082 * (y - 16)
+        val v = cr - 128.0; val u = cb - 128.0
+        val r = ((yy + 408.583 * v) / 256.0).roundToInt().coerceIn(0, 255)
+        val g = ((yy - 100.291 * u - 208.120 * v) / 256.0).roundToInt().coerceIn(0, 255)
+        val b = ((yy + 516.412 * u) / 256.0).roundToInt().coerceIn(0, 255)
+        return (0xFF shl 24) or (r shl 16) or (g shl 8) or b
+    }
 }

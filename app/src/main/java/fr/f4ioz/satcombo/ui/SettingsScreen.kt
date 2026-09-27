@@ -1855,7 +1855,7 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
                     val rigs = listOf(
                         Triple("IC9700", "Icom IC-9700", true),
                         Triple("FT817x2", "2× Yaesu FT-817", true),
-                        Triple("FT817TX", "FT-817 en émission + clé SDR", true)
+                        Triple("FT817TX", t("qo100_poste_sdr"), true)
                     )
                     rigs.forEach { (id, label, ready) ->
                         Row(verticalAlignment = Alignment.CenterVertically,
@@ -2106,11 +2106,13 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
             }
         }
         }
-        item {
+        // Only when CAT is on: its whole content is CAT, and an empty card
+        // was left under the rig list otherwise.
+        if (ui.catEnabled) item {
             Surface(color = SpaceCard, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp)) {
                     var bancDeplie by rememberSaveable { mutableStateOf(false) }
-                    if (ui.catEnabled) {
+                    run {
                         // The test bench (simulated radio, frame log) folds
                         // away: used only when something breaks, it pushed the
                         // everyday settings down.

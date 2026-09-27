@@ -114,6 +114,11 @@ class SettingsStore(context: Context) {
         get() = prefs.getString("sstv_forced_mode", "") ?: ""
         set(v) { prefs.edit().putString("sstv_forced_mode", v).apply() }
 
+    /** SSTV continuous decoding: start on a train of sync pulses, header or not. */
+    var sstvContinu: Boolean
+        get() = prefs.getBoolean("sstv_continu", false)
+        set(v) { prefs.edit().putBoolean("sstv_continu", v).apply() }
+
     /** Watch received audio for an APT picture (NOAA, 137 MHz). Unlike SSTV
      *  there is no header to wait for, so APT decodes continuously once on:
      *  off by default, switched on before a NOAA pass. */

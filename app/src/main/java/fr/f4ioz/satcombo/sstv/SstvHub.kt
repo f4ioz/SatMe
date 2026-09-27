@@ -49,6 +49,8 @@ object SstvHub {
         val fileImages: Int = 0,
         /** Mode forced by the operator, or null to follow the VIS header. */
         val forcedMode: String? = null,
+        /** Continuous decoding: a train of sync pulses starts a picture. */
+        val continu: Boolean = false,
         /** Last engine failure — shown, not hidden. */
         val erreur: String? = null,
         /** True once a frame is under way (header received or forced start). */
@@ -76,12 +78,34 @@ object SstvHub {
      */
     @Volatile private var forced: SstvMode? = null
 
-    /** Loads the forced mode from settings. */
+    /** Continuous decoding, kept here for the same reason as [forced]. */
+    @Volatile private var continu = false
+
+    @Volatile private var loaded = false
+
+    /**
+     * Loads the settings once, for the screen: before any capture had started,
+     * the controls showed the defaults, not what the operator had chosen.
+     */
+    fun ensureLoaded(ctx: Context) { if (!loaded) loadForced(ctx) }
+
+    /** Loads the forced mode and continuous decoding from settings. */
     fun loadForced(ctx: Context) {
+        loaded = true
         val name = runCatching { SettingsStore(ctx).sstvForcedMode }.getOrDefault("")
         forced = if (name.isBlank()) null else SstvMode.byName(name)
+        continu = runCatching { SettingsStore(ctx).sstvContinu }.getOrDefault(false)
         live?.forcedMode = forced
-        _state.value = _state.value.copy(forcedMode = forced?.name)
+        live?.continuous = continu
+        _state.value = _state.value.copy(forcedMode = forced?.name, continu = continu)
+    }
+
+    /** Turns continuous decoding on or off. Persisted. */
+    fun setContinu(ctx: Context, on: Boolean) {
+        continu = on
+        live?.continuous = on
+        runCatching { SettingsStore(ctx).sstvContinu = on }
+        _state.value = _state.value.copy(continu = on)
     }
 
     /**
@@ -148,7 +172,7 @@ object SstvHub {
         lastPreviewMs = 0L
         pannes = 0
         if (forced == null) loadForced(ctx)
-        live = SstvDecoder(sampleRate, liveListener).also { it.forcedMode = forced }
+        live = SstvDecoder(sampleRate, liveListener).also { it.forcedMode = forced; it.continuous = continu }
         _state.value = _state.value.copy(
             listening = true, modeName = null, progress = 0f,
             preview = null, savedCount = 0, decoding = false, erreur = null,
@@ -272,7 +296,7 @@ object SstvHub {
         runCatching {
             Mp3Pcm.decode(mp3) { pcm, n, rate, fraction ->
                 if (decoder == null) decoder =
-                    SstvDecoder(rate, listener).also { it.forcedMode = forced }
+                    SstvDecoder(rate, listener).also { it.forcedMode = forced; it.continuous = continu }
                 decoder?.feed(pcm, n)
                 _state.value = _state.value.copy(fileProgress = fraction)
                 !cancelFile

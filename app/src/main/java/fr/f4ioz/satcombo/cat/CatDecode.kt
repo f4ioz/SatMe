@@ -8,6 +8,9 @@
  */
 package fr.f4ioz.satcombo.cat
 
+import fr.f4ioz.satcombo.i18n.t
+import fr.f4ioz.satcombo.i18n.tf
+
 /**
  * The two CAT dialects as pure functions, so framing can be unit-tested with
  * hand-written bytes instead of a radio.
@@ -222,50 +225,50 @@ object CatDecode {
     }
 
     /**
-     * A CI-V frame described in French, for the log. Not exhaustive: covers
+     * A CI-V frame described in the app language, for the log. Not exhaustive: covers
      * the handful of commands the app actually sends.
      */
     fun describeCiv(f: ByteArray): String {
-        if (f.size < 6) return "trame incomplète"
+        if (f.size < 6) return t("catj_incomplete")
         val cmd = command(f)
         val d = f.copyOfRange(5, f.size - 1)
         fun sub(i: Int) = if (d.size > i) d[i].toInt() and 0xFF else -1
         return when (cmd) {
-            ACK -> "accusé de réception"
-            NAK -> "refus"
-            0x03 -> bcdLeToFreq(d)?.let { "fréquence : ${mhz(it)}" } ?: "lecture de la fréquence"
-            0x04 -> "lecture du mode"
-            0x05 -> bcdLeToFreq(d)?.let { "fréquence ← ${mhz(it)}" } ?: "réglage de fréquence"
-            0x06 -> if (d.isEmpty()) "réglage du mode" else "mode ← ${civModeName(sub(0))}"
+            ACK -> t("catj_ack")
+            NAK -> t("catj_nak")
+            0x03 -> bcdLeToFreq(d)?.let { tf("catj_freq_is", mhz(it)) } ?: t("catj_read_freq")
+            0x04 -> t("catj_read_mode")
+            0x05 -> bcdLeToFreq(d)?.let { tf("catj_freq_set", mhz(it)) } ?: t("catj_set_freq")
+            0x06 -> if (d.isEmpty()) t("catj_set_mode") else tf("catj_mode_set", civModeName(sub(0)))
             0x07 -> when (sub(0)) {
                 0x00 -> "VFO A"
                 0x01 -> "VFO B"
-                0xD0 -> "bande principale (descente)"
-                0xD1 -> "bande secondaire (montée)"
-                else -> "choix du VFO"
+                0xD0 -> t("catj_main_band")
+                0xD1 -> t("catj_sub_band")
+                else -> t("catj_vfo_choice")
             }
             0x0F -> when (sub(0)) {
-                0x00 -> "split coupé"; 0x01 -> "split activé"; else -> "état du split"
+                0x00 -> t("catj_split_off"); 0x01 -> t("catj_split_on"); else -> t("catj_split_state")
             }
             0x16 -> when (sub(0)) {
-                0x5A -> if (sub(1) == 1) "mode satellite activé" else "mode satellite coupé"
-                0x42 -> if (sub(1) == 1) "ton d'accès activé" else "ton d'accès coupé"
-                else -> "réglage %02X".format(sub(0))
+                0x5A -> if (sub(1) == 1) t("catj_sat_on") else t("catj_sat_off")
+                0x42 -> if (sub(1) == 1) t("catj_tone_on") else t("catj_tone_off")
+                else -> tf("catj_setting", "%02X".format(sub(0)))
             }
             0x1B -> if (d.size >= 4) {
-                val t = bcdBeToTone(d, 1)
-                if (t != null) "ton d'accès ← %.1f Hz".format(java.util.Locale.US, t / 10.0) else "ton d'accès"
-            } else "lecture du ton d'accès"
+                val ton = bcdBeToTone(d, 1)
+                if (ton != null) tf("catj_tone_set", "%.1f".format(java.util.Locale.US, ton / 10.0)) else t("catj_tone")
+            } else t("catj_read_tone")
             0x25 -> {
-                val which = if (sub(0) == 0x01) "VFO non sélectionné" else "VFO sélectionné"
+                val which = if (sub(0) == 0x01) t("catj_vfo_unsel") else t("catj_vfo_sel")
                 val fq = if (d.size >= 6) bcdLeToFreq(d, 1) else null
-                if (fq != null) "$which ← ${mhz(fq)}" else "$which : fréquence"
+                if (fq != null) "$which ← ${mhz(fq)}" else tf("catj_vfo_freq", which)
             }
             0x26 -> {
-                val which = if (sub(0) == 0x01) "VFO non sélectionné" else "VFO sélectionné"
-                if (d.size >= 2) "$which ← ${civModeName(sub(1))}" else "$which : mode"
+                val which = if (sub(0) == 0x01) t("catj_vfo_unsel") else t("catj_vfo_sel")
+                if (d.size >= 2) "$which ← ${civModeName(sub(1))}" else tf("catj_vfo_mode", which)
             }
-            else -> "commande %02X".format(cmd)
+            else -> tf("catj_command", "%02X".format(cmd))
         }
     }
 
@@ -276,45 +279,45 @@ object CatDecode {
     }
 
     /**
-     * A Yaesu frame described in French. FT-817 CAT has no address or
+     * A Yaesu frame described in the app language. FT-817 CAT has no address or
      * delimiter, and reply length depends on the question: [fromRig] gives the
      * direction, [lastOp] the question when describing a reply.
      */
     fun describeYaesu(f: ByteArray, fromRig: Boolean, lastOp: Int = -1): String {
         if (!fromRig) {
-            if (f.size < 5) return "trame incomplète"
+            if (f.size < 5) return t("catj_incomplete")
             return when (f[4].toInt() and 0xFF) {
-                0x00 -> "PTT fermé"
-                0x01 -> yaesuFreqOf(f)?.let { "fréquence ← ${mhz(it)}" } ?: "réglage de fréquence"
-                0x03 -> "lecture fréquence et mode"
-                0x07 -> "mode ← ${yaesuMode(f[0].toInt() and 0xFF)}"
+                0x00 -> t("catj_ptt_closed")
+                0x01 -> yaesuFreqOf(f)?.let { tf("catj_freq_set", mhz(it)) } ?: t("catj_set_freq")
+                0x03 -> t("catj_read_freq_mode")
+                0x07 -> tf("catj_mode_set", yaesuMode(f[0].toInt() and 0xFF))
                 0x0A -> when (f[0].toInt() and 0xFF) {
-                    0x8A -> "ton d'accès coupé"
-                    0x4A -> "ton d'accès en émission"
-                    0x2A -> "ton d'accès en émission et réception"
-                    else -> "réglage du ton"
+                    0x8A -> t("catj_tone_off")
+                    0x4A -> t("catj_tone_tx")
+                    0x2A -> t("catj_tone_txrx")
+                    else -> t("catj_set_tone")
                 }
                 0x0B -> {
-                    val t = ((f[0].toInt() shr 4 and 0x0F) * 1000 + (f[0].toInt() and 0x0F) * 100 +
+                    val ton = ((f[0].toInt() shr 4 and 0x0F) * 1000 + (f[0].toInt() and 0x0F) * 100 +
                         (f[1].toInt() shr 4 and 0x0F) * 10 + (f[1].toInt() and 0x0F))
-                    "ton d'accès ← %.1f Hz".format(java.util.Locale.US, t / 10.0)
+                    tf("catj_tone_set", "%.1f".format(java.util.Locale.US, ton / 10.0))
                 }
-                0x81 -> "PTT ouvert"
-                0xF7 -> "lecture de l'état d'émission"
-                else -> "commande %02X".format(f[4].toInt() and 0xFF)
+                0x81 -> t("catj_ptt_open")
+                0xF7 -> t("catj_read_tx")
+                else -> tf("catj_command", "%02X".format(f[4].toInt() and 0xFF))
             }
         }
         return when {
             lastOp == 0xF7 && f.size >= 1 ->
-                if ((f[0].toInt() and 0x80) == 0) "le poste émet" else "le poste reçoit"
+                if ((f[0].toInt() and 0x80) == 0) t("catj_rig_tx") else t("catj_rig_rx")
             f.size >= 5 -> {
                 val fq = yaesuFreqOf(f)
-                if (fq != null) "fréquence : ${mhz(fq)}, ${yaesuMode(f[4].toInt() and 0xFF)}"
-                else "réponse de cinq octets"
+                if (fq != null) tf("catj_freq_mode", mhz(fq), yaesuMode(f[4].toInt() and 0xFF))
+                else t("catj_reply5")
             }
-            f.size == 1 -> if (f[0].toInt() and 0xFF == 0x00) "accusé de réception" else
-                "réponse d'un octet"
-            else -> "réponse de ${f.size} octets"
+            f.size == 1 -> if (f[0].toInt() and 0xFF == 0x00) t("catj_ack") else
+                t("catj_reply1")
+            else -> tf("catj_reply_n", f.size)
         }
     }
 }

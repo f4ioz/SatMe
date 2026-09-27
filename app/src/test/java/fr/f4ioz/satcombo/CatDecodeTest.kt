@@ -9,6 +9,7 @@
 package fr.f4ioz.satcombo
 
 import fr.f4ioz.satcombo.cat.CatDecode
+import fr.f4ioz.satcombo.i18n.I18n
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -150,5 +151,27 @@ class CatDecodeTest {
             b(0x00, 0x00, 0x00, 0x00, 0xF7), fromRig = false).contains("émission"))
         assertTrue(CatDecode.describeYaesu(
             b(0x80), fromRig = true, lastOp = 0xF7).contains("reçoit"))
+    }
+
+    /**
+     * The frame journal follows the app language. It used to be French
+     * whatever the setting; the numbers keep their decimal point either way.
+     */
+    @Test
+    fun le_journal_suit_la_langue_de_l_application() {
+        val envoi = b(0xFE, 0xFE, 0xA2, 0xE0, 0x05, 0x00, 0x00, 0x90, 0x45, 0x01, 0xFD)
+        val accuse = b(0xFE, 0xFE, 0xE0, 0xA2, 0xFB, 0xFD)
+        try {
+            I18n.apply("en", "")
+            assertEquals("frequency ← 145.90000 MHz", CatDecode.describeCiv(envoi))
+            assertEquals("acknowledged", CatDecode.describeCiv(accuse))
+            assertEquals("rig receiving",
+                CatDecode.describeYaesu(b(0x80), fromRig = true, lastOp = 0xF7))
+            I18n.apply("fr", "")
+            assertEquals("fréquence ← 145.90000 MHz", CatDecode.describeCiv(envoi))
+            assertEquals("accusé de réception", CatDecode.describeCiv(accuse))
+        } finally {
+            I18n.apply("fr", "")
+        }
     }
 }

@@ -8,6 +8,9 @@
  */
 package fr.f4ioz.satcombo.cat
 
+import fr.f4ioz.satcombo.i18n.t
+import fr.f4ioz.satcombo.i18n.tf
+
 /**
  * Test bench: the full start-of-pass sequence, played against a simulated rig.
  *
@@ -23,8 +26,8 @@ object CatBench {
         val ok: Boolean
     ) {
         val summary: String
-            get() = if (ok) "Séquence complète, aucun refus du poste simulé."
-            else "$refusals refus du poste simulé — voir le journal des trames."
+            get() = if (ok) t("catb_ok")
+            else tf("catb_refusals", refusals)
     }
 
     /**
@@ -42,12 +45,12 @@ object CatBench {
         cat.attach(sim)
         val steps = ArrayList<String>()
 
-        cat.enterSatelliteMode(); steps += "mode satellite"
+        cat.enterSatelliteMode(); steps += t("catb_sat_mode")
         cat.setModes("FM", "FM"); steps += "modes FM / FM"
-        cat.setPair(downlinkHz, uplinkHz); steps += "descente et montée"
+        cat.setPair(downlinkHz, uplinkHz); steps += t("catb_pair")
         val back = cat.readDownlink()
-        steps += "relecture : " + (back?.let { "%.5f MHz".format(java.util.Locale.US, it / 1e6) } ?: "aucune réponse")
-        cat.setCtcss(toneTenthHz); steps += "ton d'accès %.1f Hz".format(java.util.Locale.US, toneTenthHz / 10.0)
+        steps += tf("catb_readback", back?.let { "%.5f MHz".format(java.util.Locale.US, it / 1e6) } ?: t("catb_no_reply"))
+        cat.setCtcss(toneTenthHz); steps += tf("catb_tone", "%.1f".format(java.util.Locale.US, toneTenthHz / 10.0))
 
         val ok = sim.refusals == 0 && back == downlinkHz &&
             sim.subHz == uplinkHz && sim.toneTenthHz == toneTenthHz
@@ -68,10 +71,10 @@ object CatBench {
         val steps = ArrayList<String>()
 
         pair.setModes("FM", "FM"); steps += "modes FM / FM"
-        pair.setPair(downlinkHz, uplinkHz); steps += "descente et montée"
+        pair.setPair(downlinkHz, uplinkHz); steps += t("catb_pair")
         val back = pair.readDownlink()
-        steps += "relecture : " + (back?.let { "%.5f MHz".format(java.util.Locale.US, it / 1e6) } ?: "aucune réponse")
-        pair.setCtcss(toneTenthHz); steps += "ton d'accès %.1f Hz".format(java.util.Locale.US, toneTenthHz / 10.0)
+        steps += tf("catb_readback", back?.let { "%.5f MHz".format(java.util.Locale.US, it / 1e6) } ?: t("catb_no_reply"))
+        pair.setCtcss(toneTenthHz); steps += tf("catb_tone", "%.1f".format(java.util.Locale.US, toneTenthHz / 10.0))
 
         val refusals = rxSim.refusals + txSim.refusals
         val ok = refusals == 0 && back == downlinkHz &&

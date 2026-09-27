@@ -22,6 +22,8 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
+import androidx.compose.foundation.clickable
+import androidx.compose.material3.Checkbox
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -51,6 +53,7 @@ fun SstvModeControls(
     modifier: Modifier = Modifier
 ) {
     val ctx = LocalContext.current
+    LaunchedEffect(Unit) { SstvHub.ensureLoaded(ctx) }
     var open by remember { mutableStateOf(false) }
     val label = st.forcedMode ?: t("sstv_mode_auto")
 
@@ -116,6 +119,19 @@ fun SstvModeControls(
             }
         }
     }
+    // Continuous decoding: a header lost at AOS no longer costs the
+    // picture. Off by default, as before; the manual Start stays for those
+    // who prefer to decide.
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.clickable { SstvHub.setContinu(ctx, !st.continu) }
+    ) {
+        Checkbox(checked = st.continu, onCheckedChange = { SstvHub.setContinu(ctx, it) })
+        Column {
+            Text(t("sstv_continu"), color = TextHi, fontSize = if (compact) 11.sp else 12.sp)
+            if (!compact) Text(t("sstv_continu_desc"), color = TextLo, fontSize = 10.sp)
+        }
+    }
     // Show failures: a dead engine behind a "listening" label is the worst case.
     st.erreur?.let {
         Text(it, color = Amber, fontSize = 10.sp,
@@ -132,6 +148,7 @@ fun sstvStatusLine(st: SstvHub.SstvState): String = when {
         tf("sstv_receiving", st.modeName!!) + "  ·  " + (st.progress * 100).toInt() + " %"
     st.modeName != null -> tf("sstv_receiving", st.modeName!!)
     st.listening && st.forcedMode != null -> tf("sstv_listening_forced", st.forcedMode!!)
+    st.listening && st.continu -> t("sstv_listening_continu")
     st.listening -> t("sstv_listening")
     else -> t("sstv_idle")
 }

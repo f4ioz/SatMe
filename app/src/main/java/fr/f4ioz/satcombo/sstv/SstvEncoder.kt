@@ -200,21 +200,12 @@ object SstvEncoder {
         return (img[r * m.width + x] shr shift) and 0xFF
     }
 
-    private fun luma(m: SstvMode, img: IntArray, row: Int, x: Int): Int {
-        val r = comp(m, img, row, x, 16); val g = comp(m, img, row, x, 8)
-        val b = comp(m, img, row, x, 0)
-        return (0.299 * r + 0.587 * g + 0.114 * b).roundToInt().coerceIn(0, 255)
-    }
+    private fun luma(m: SstvMode, img: IntArray, row: Int, x: Int): Int =
+        SstvTone.luma(comp(m, img, row, x, 16), comp(m, img, row, x, 8), comp(m, img, row, x, 0))
 
-    private fun cb(m: SstvMode, img: IntArray, row: Int, x: Int): Int {
-        val r = comp(m, img, row, x, 16); val g = comp(m, img, row, x, 8)
-        val b = comp(m, img, row, x, 0)
-        return (128.0 - 0.168736 * r - 0.331264 * g + 0.5 * b).roundToInt().coerceIn(0, 255)
-    }
+    private fun cb(m: SstvMode, img: IntArray, row: Int, x: Int): Int =
+        SstvTone.cb(comp(m, img, row, x, 16), comp(m, img, row, x, 8), comp(m, img, row, x, 0))
 
-    private fun cr(m: SstvMode, img: IntArray, row: Int, x: Int): Int {
-        val r = comp(m, img, row, x, 16); val g = comp(m, img, row, x, 8)
-        val b = comp(m, img, row, x, 0)
-        return (128.0 + 0.5 * r - 0.418688 * g - 0.081312 * b).roundToInt().coerceIn(0, 255)
-    }
+    private fun cr(m: SstvMode, img: IntArray, row: Int, x: Int): Int =
+        SstvTone.cr(comp(m, img, row, x, 16), comp(m, img, row, x, 8), comp(m, img, row, x, 0))
 }

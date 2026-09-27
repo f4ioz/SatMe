@@ -44,6 +44,12 @@ class Demodulator(private val sampleRate: Int) {
         n = (sampleRate / 850).coerceAtLeast(19).let { if (it % 2 == 0) it + 1 else it },
         cutoff = 1450.0, sampleRate = sampleRate)
 
+    /** Samples on each side of the filter's centre: how far a tone bleeds. */
+    val halfLength: Int get() = taps.size / 2
+
+    /** Same for the narrow reading — also its extra delay over the wide one. */
+    val halfLengthNarrow: Int get() = tapsN.size / 2
+
     private val delayI = DoubleArray(taps.size)
     private val delayQ = DoubleArray(taps.size)
     private var delayPos = 0
@@ -51,6 +57,21 @@ class Demodulator(private val sampleRate: Int) {
     private var prevI = 0.0
     private var prevQ = 0.0
     private var primed = false
+
+    // **A second, narrow reading of the same signal**, for everything that has
+    // to survive noise: header, sync pulses, tuning, and the pixels of a weak
+    // picture: 2 ms, ±900 Hz around 1900. The wide one above stays for the
+    // pixels of a good signal, where it is sharper; alone, it let full-band
+    // noise (a phone microphone in a room) break the syncs of a PD 120 at
+    // 10 dB SNR, a signal still readable.
+    private val tapsN: DoubleArray = lowPass(
+        n = (sampleRate / 500).coerceAtLeast(19).let { if (it % 2 == 0) it + 1 else it },
+        cutoff = 900.0, sampleRate = sampleRate)
+    private val delayNI = DoubleArray(tapsN.size)
+    private val delayNQ = DoubleArray(tapsN.size)
+    private var delayNPos = 0
+    private var prevNI = 0.0
+    private var prevNQ = 0.0
 
     private val hzPerRad = sampleRate / (2.0 * PI)
 
@@ -62,6 +83,8 @@ class Demodulator(private val sampleRate: Int) {
         phase = 0.0
         delayI.fill(0.0); delayQ.fill(0.0); delayPos = 0
         prevI = 0.0; prevQ = 0.0; primed = false; level = 0.0
+        delayNI.fill(0.0); delayNQ.fill(0.0); delayNPos = 0
+        prevNI = 0.0; prevNQ = 0.0
     }
 
     /**
@@ -69,7 +92,7 @@ class Demodulator(private val sampleRate: Int) {
      * [count] entries. Returns the number of frequency samples written (always
      * [count] — the very first one after a reset is simply 1900 Hz).
      */
-    fun process(pcm: ShortArray, count: Int, out: FloatArray): Int {
+    fun process(pcm: ShortArray, count: Int, out: FloatArray, outNarrow: FloatArray? = null): Int {
         for (n in 0 until count) {
             val s = pcm[n] / 32768.0
 
@@ -81,6 +104,27 @@ class Demodulator(private val sampleRate: Int) {
             // Push into the FIR delay lines.
             delayI[delayPos] = s * c
             delayQ[delayPos] = -s * sn
+            if (outNarrow != null) {
+                delayNI[delayNPos] = s * c
+                delayNQ[delayNPos] = -s * sn
+                delayNPos = if (delayNPos == 0) tapsN.size - 1 else delayNPos - 1
+                var ni = 0.0; var nq = 0.0
+                var kk = delayNPos + 1
+                if (kk >= tapsN.size) kk = 0
+                for (t in tapsN.indices) {
+                    ni += tapsN[t] * delayNI[kk]
+                    nq += tapsN[t] * delayNQ[kk]
+                    kk++
+                    if (kk >= tapsN.size) kk = 0
+                }
+                outNarrow[n] = if (!primed) SstvTone.CARRIER.toFloat() else {
+                    val re = ni * prevNI + nq * prevNQ
+                    val im = nq * prevNI - ni * prevNQ
+                    val d = if (re == 0.0 && im == 0.0) 0.0 else atan2(im, re)
+                    (SstvTone.CARRIER + d * hzPerRad).toFloat()
+                }
+                prevNI = ni; prevNQ = nq
+            }
             delayPos = if (delayPos == 0) taps.size - 1 else delayPos - 1
 
             var i = 0.0; var q = 0.0
