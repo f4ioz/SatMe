@@ -29,6 +29,14 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Backup
+import androidx.compose.material.icons.filled.Campaign
+import androidx.compose.material.icons.filled.Air
+import androidx.compose.material.icons.filled.LiveTv
+import androidx.compose.material.icons.filled.EditNote
+import androidx.compose.material.icons.filled.Cable
+import androidx.compose.material.icons.filled.Radar
+import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Dialpad
@@ -45,30 +53,20 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material.icons.filled.Schedule
-import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Explore
-import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.Park
 import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.Mic
-import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Tune
-import androidx.compose.material.icons.filled.Keyboard
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.material.icons.filled.MyLocation
-import androidx.compose.material.icons.filled.Science
 import androidx.compose.material.icons.filled.Cast
 import androidx.compose.material.icons.filled.Headphones
 import androidx.compose.material.icons.filled.EventNote
 import androidx.compose.material.icons.filled.SatelliteAlt
-import androidx.compose.material.icons.filled.SettingsInputAntenna
 import androidx.compose.material.icons.filled.SwapVert
-import androidx.compose.material.icons.filled.Sync
-import androidx.compose.material.icons.filled.Sync
-import androidx.compose.material.icons.filled.Sync
-import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.HelpOutline
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.ChevronRight
@@ -180,20 +178,20 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
                     MenuGroupLabel("📡 " + t("grp_station"))
                     SettingsMenuRow(Icons.Default.MyLocation, t("menu_qth")) { vm.setSettingsSection("qth") }
                     SettingsMenuRow(Icons.Default.Schedule, t("menu_time")) { vm.setSettingsSection("time") }
-                    SettingsMenuRow(Icons.Default.Public, t("menu_sources")) { vm.setSettingsSection("sources") }
+                    SettingsMenuRow(Icons.Default.CloudDownload, t("menu_sources")) { vm.setSettingsSection("sources") }
 
                     MenuGroupLabel("🧭 " + t("grp_aiming"))
                     SettingsMenuRow(Icons.Default.Explore, t("menu_aim")) { vm.setSettingsSection("aim") }
                     // The rotor is a pointing setting, so it sits here, but it
                     // opens its own screen: link, end stops, park, pre-pointing.
                     if (fr.f4ioz.satcombo.data.Extensions.ROTOR in ui.extensions) {
-                        SettingsMenuRow(Icons.Default.Sync, t("menu_rotor"), page = true) { vm.openRotor() }
+                        SettingsMenuRow(Icons.Default.Radar, t("menu_rotor"), page = true) { vm.openRotor() }
                     }
                     SettingsMenuRow(Icons.Default.Palette, t("menu_colors")) { vm.setSettingsSection("colors") }
                     SettingsMenuRow(Icons.Default.Language, t("menu_look")) { vm.setSettingsSection("look") }
 
                     MenuGroupLabel("🎙 " + t("grp_traffic"))
-                    SettingsMenuRow(Icons.Default.SettingsInputAntenna, t("menu_cat")) { vm.setSettingsSection("cat") }
+                    SettingsMenuRow(Icons.Default.Cable, t("menu_cat")) { vm.setSettingsSection("cat") }
                     SettingsMenuRow(Icons.Default.SwapVert, t("menu_conv")) { vm.setSettingsSection("conv") }
                     // QO-100 lives here, not under pointing: the dish is aimed
                     // once, while frequency, radio and converters change per
@@ -203,15 +201,15 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
                     }
                     SettingsMenuRow(Icons.Default.Mic, t("menu_recordings")) { vm.setSettingsSection("recordings") }
                     SettingsMenuRow(Icons.Default.Tune, t("menu_accord")) { vm.setSettingsSection("accord") }
-                    SettingsMenuRow(Icons.Default.Keyboard, t("menu_express")) { vm.setSettingsSection("express") }
+                    SettingsMenuRow(Icons.Default.EditNote, t("menu_express")) { vm.setSettingsSection("express") }
                     SettingsMenuRow(Icons.Default.Dialpad, t("menu_macro")) { vm.setSettingsSection("macro") }
                     SettingsMenuRow(Icons.Default.Cast, t("menu_partage")) { vm.setSettingsSection("partage") }
                     SettingsMenuRow(Icons.Default.GpsFixed, t("menu_gps")) { vm.setSettingsSection("gps") }
                     if (fr.f4ioz.satcombo.data.Extensions.SSTV in ui.extensions) {
-                        SettingsMenuRow(Icons.Default.GraphicEq, t("menu_mire")) { vm.setSettingsSection("mire") }
+                        SettingsMenuRow(Icons.Default.LiveTv, t("menu_mire")) { vm.setSettingsSection("mire") }
                     }
                     if (fr.f4ioz.satcombo.data.Extensions.SONDE in ui.extensions) {
-                        SettingsMenuRow(Icons.Default.Science, t("menu_sondemire")) { vm.setSettingsSection("sondemire") }
+                        SettingsMenuRow(Icons.Default.Air, t("menu_sondemire")) { vm.setSettingsSection("sondemire") }
                     }
                     SettingsMenuRow(Icons.Default.MenuBook, t("menu_log")) { vm.setSettingsSection("log") }
                     SettingsMenuRow(Icons.Default.Notifications, t("menu_notif")) { vm.setSettingsSection("notif") }
@@ -219,12 +217,12 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
                     MenuGroupLabel("🤝 " + t("grp_activities"))
                     // Mutual sked and Agenda hold no setting: they are pages,
                     // reached from the ⋮ menu like every other page.
-                    SettingsMenuRow(Icons.Default.Groups, t("menu_skeds")) { vm.setSettingsSection("skeds") }
+                    SettingsMenuRow(Icons.Default.Campaign, t("menu_skeds")) { vm.setSettingsSection("skeds") }
                     SettingsMenuRow(Icons.Default.Park, t("menu_pota")) { vm.setSettingsSection("pota") }
 
                     MenuGroupLabel("🗂 " + t("grp_data"))
                     SettingsMenuRow(Icons.Default.PictureAsPdf, t("menu_pdf")) { vm.setSettingsSection("pdf") }
-                    SettingsMenuRow(Icons.Default.Save, t("menu_backup")) { vm.setSettingsSection("backup") }
+                    SettingsMenuRow(Icons.Default.Backup, t("menu_backup")) { vm.setSettingsSection("backup") }
                     SettingsMenuRow(Icons.Default.HelpOutline, t("menu_docs")) { vm.setSettingsSection("docs") }
                     SettingsMenuRow(Icons.Default.Info, t("menu_about")) { vm.setSettingsSection("about") }
                 }

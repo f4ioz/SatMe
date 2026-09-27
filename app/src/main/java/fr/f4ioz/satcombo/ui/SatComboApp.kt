@@ -32,9 +32,15 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Image
-import androidx.compose.material.icons.filled.Science
-import androidx.compose.material.icons.filled.Sync
+import androidx.compose.material.icons.filled.FilterAlt
+import androidx.compose.material.icons.filled.Timeline
+import androidx.compose.material.icons.filled.Radar
+import androidx.compose.material.icons.filled.Air
+import androidx.compose.material.icons.filled.WbCloudy
+import androidx.compose.material.icons.filled.LiveTv
+import androidx.compose.material.icons.filled.Tour
+import androidx.compose.material.icons.filled.Handshake
+import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.SatelliteAlt
 import androidx.compose.material.icons.filled.FiberManualRecord
 import androidx.compose.material.icons.filled.EventNote
@@ -51,29 +57,22 @@ import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Explore
-import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Park
 import androidx.compose.material.icons.filled.MenuBook
-import androidx.compose.material.icons.filled.SettingsInputAntenna
-import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.HelpOutline
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.outlined.NotificationsNone
 import androidx.compose.material.icons.filled.Notifications
-import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Checklist
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PhotoCamera
-import androidx.compose.material.icons.filled.PlayCircleOutline
-import androidx.compose.material.icons.filled.ShowChart
 import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Star
-import androidx.compose.material.icons.filled.Satellite
 import androidx.compose.material.icons.filled.Usb
 import androidx.compose.material.icons.outlined.StarBorder
 import androidx.compose.material3.*
@@ -152,18 +151,6 @@ private fun passPhase(p: SatPass, now: Long): PassPhase = when {
 fun SatComboApp(vm: MainViewModel) {
     val ui by vm.ui.collectAsState()
     LaunchedEffect(Unit) { vm.bootstrap() }
-
-    // Padlock also freezes the screen ORIENTATION: locked = stay in the current
-    // orientation (no accidental landscape flip while tracking), unlocked = free.
-    val ctxRoot = LocalContext.current
-    LaunchedEffect(ui.uiLocked) {
-        val activity = generateSequence(ctxRoot) {
-            (it as? android.content.ContextWrapper)?.baseContext
-        }.filterIsInstance<android.app.Activity>().firstOrNull()
-        activity?.requestedOrientation =
-            if (ui.uiLocked) android.content.pm.ActivityInfo.SCREEN_ORIENTATION_LOCKED
-            else android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
-    }
 
     // System back navigates within the app instead of quitting: a page
     // returns to the page it was opened from (Chemin), detail -> list,
@@ -458,7 +445,7 @@ private fun TopBar(ui: UiState, vm: MainViewModel) {
                 // Timeline stays a one-tap icon (it is the "what's coming" view);
                 // the rarer pages moved to the overflow so the title keeps room.
                 IconButton(onClick = { vm.openTimeline() }) {
-                    Icon(Icons.Default.ShowChart, t("timeline_title"), tint = TextLo)
+                    Icon(Icons.Default.Timeline, t("timeline_title"), tint = TextLo)
                 }
                 // (LOC/UTC selector lives in Settings > Time: the bar was
                 // crushing the title.)
@@ -511,18 +498,18 @@ private fun OverflowMenu(ui: UiState, vm: MainViewModel) {
                 onClick = { open = false; vm.ouvreGlobe() })
             DropdownMenuItem(
                 text = { Text(t("agenda_title")) },
-                leadingIcon = { Icon(Icons.Default.EventNote, null, tint = Cyan) },
+                leadingIcon = { Icon(Icons.Default.CalendarMonth, null, tint = Cyan) },
                 onClick = { open = false; vm.openAgenda() })
             DropdownMenuItem(
                 text = { Text(t("sked_page_title")) },
-                leadingIcon = { Icon(Icons.Default.Groups, null, tint = Cyan) },
+                leadingIcon = { Icon(Icons.Default.Handshake, null, tint = Cyan) },
                 onClick = { open = false; vm.openSked() })
             HorizontalDivider()
             MenuHeader(t("grp_traffic"))
             DropdownMenuItem(
                 text = { Text(if (running) t("act_title_running") else t("act_title")) },
                 leadingIcon = {
-                    Icon(Icons.Default.PlayCircleOutline, null,
+                    Icon(Icons.Default.Tour, null,
                         tint = if (running) Amber else Cyan)
                 },
                 onClick = { open = false; vm.openActivation() })
@@ -540,7 +527,7 @@ private fun OverflowMenu(ui: UiState, vm: MainViewModel) {
                 DropdownMenuItem(
                     text = { Text(t("sstv_title")) },
                     leadingIcon = {
-                        Icon(Icons.Default.Image, null,
+                        Icon(Icons.Default.LiveTv, null,
                             tint = if (sstvOn) Aurora else Cyan)
                     },
                     onClick = { open = false; vm.openSstv() })
@@ -549,7 +536,7 @@ private fun OverflowMenu(ui: UiState, vm: MainViewModel) {
                 DropdownMenuItem(
                     text = { Text(t("apt_title")) },
                     leadingIcon = {
-                        Icon(Icons.Default.Satellite, null,
+                        Icon(Icons.Default.WbCloudy, null,
                             tint = if (aptOn) Aurora else Cyan)
                     },
                     onClick = { open = false; vm.openApt() })
@@ -567,7 +554,7 @@ private fun OverflowMenu(ui: UiState, vm: MainViewModel) {
                 DropdownMenuItem(
                     text = { Text(t("sonde_title")) },
                     leadingIcon = {
-                        Icon(Icons.Default.Science, null,
+                        Icon(Icons.Default.Air, null,
                             tint = if (sondeOn) Aurora else Cyan)
                     },
                     onClick = { open = false; vm.openSonde() })
@@ -585,7 +572,7 @@ private fun OverflowMenu(ui: UiState, vm: MainViewModel) {
                 DropdownMenuItem(
                     text = { Text(t("menu_rotor")) },
                     leadingIcon = {
-                        Icon(Icons.Default.Sync, null,
+                        Icon(Icons.Default.Radar, null,
                             tint = if (ui.rotorConnected) Aurora else Cyan)
                     },
                     onClick = { open = false; vm.openRotor() })
@@ -602,7 +589,7 @@ private fun OverflowMenu(ui: UiState, vm: MainViewModel) {
             DropdownMenuItem(
                 text = { Text(t("filter_by_dates")) },
                 leadingIcon = {
-                    Icon(Icons.Default.DateRange, null,
+                    Icon(Icons.Default.FilterAlt, null,
                         tint = if (ui.dateFilter != null) Amber else TextLo)
                 },
                 onClick = { open = false; vm.requestDatePicker() })
