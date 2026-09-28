@@ -207,6 +207,34 @@ object CarnetEnLigne {
         return Issue.DOUTE
     }
 
+    /**
+     * Why the server refused, in a line: Wavelog's "messages" (its ADIF
+     * import errors), else "reason" or "message", else the text without HTML.
+     * Its answer also echoes the whole ADIF sent, which drowned the reason.
+     */
+    fun raison(reponse: String): String {
+        val code = Regex("^HTTP (\\d{3})").find(reponse)?.groupValues?.get(1)
+        val corps = reponse.substringAfter('{', "").let { if (it.isEmpty()) "" else "{$it" }
+        val texte = runCatching {
+            val o = JSONObject(corps)
+            val m = o.optJSONArray("messages")
+            val messages = if (m == null) "" else
+                (0 until m.length()).map { m.optString(it).trim() }.filter { it.isNotEmpty() }.joinToString(" · ")
+            messages.ifBlank { o.optString("reason").ifBlank { o.optString("message") } }
+        }.getOrDefault("").ifBlank {
+            reponse.removePrefix("HTTP ${code ?: ""}").replace(Regex("<[^>]*>"), " ")
+                .replace(Regex("\\s+"), " ").trim()
+        }
+        return listOfNotNull(code?.let { "HTTP $it" }, texte.take(160).ifBlank { null }).joinToString(" : ")
+    }
+
+    /**
+     * Wavelog refused the contact because it already has it: then it is in
+     * the online log, which is all the upload wanted.
+     */
+    fun doublon(reponse: String): Boolean = reponse.startsWith("HTTP 400") &&
+        raison(reponse).contains("duplicate", ignoreCase = true)
+
     /** Is the contact unambiguously acknowledged? */
     fun accepte(reponse: String): Boolean = issue(reponse) == Issue.PRIS
 
@@ -251,7 +279,11 @@ object CarnetEnLigne {
         for (f in formes) {
             val r = runCatching { envoie("$racine/$f$route", corps) }.getOrNull()
             if (r != null && r.second in 200..299) { prefixe = f; return r.first }
-            if (r != null) derniere = "HTTP ${r.second}"
+            // **The body with the code.** Wavelog says why in it ("messages"):
+            // a bare "HTTP 400" left the operator guessing. A 404 is only the
+            // wrong URL form; the other form's answer is the one that counts.
+            if (r != null && (derniere.isEmpty() || r.second != 404))
+                derniere = "HTTP ${r.second} ${r.first}".trimEnd()
         }
         return derniere.ifBlank { "aucune réponse" }
     }

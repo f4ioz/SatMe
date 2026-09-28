@@ -2641,19 +2641,27 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 val profil = fr.f4ioz.satcombo.domain.ProfilsStation.profilPourEmplacement(
                     e.myLocator, e.myGrids, c.profils, c.profil, c.maille)
                 val r = fr.f4ioz.satcombo.data.CarnetEnLigne.depose(c.url, c.cle, profil, adif)
-                val etat = when (fr.f4ioz.satcombo.data.CarnetEnLigne.issue(r)) {
-                    fr.f4ioz.satcombo.data.CarnetEnLigne.Issue.PRIS -> {
+                val issue = fr.f4ioz.satcombo.data.CarnetEnLigne.issue(r)
+                val etat = when {
+                    // Already in Wavelog: the upload's aim is met.
+                    fr.f4ioz.satcombo.data.CarnetEnLigne.doublon(r) -> {
+                        _ui.value = _ui.value.copy(
+                            log = logStore.marqueEnvoye(e.timeMs, System.currentTimeMillis()))
+                        tf("auto_doublon", e.callsign)
+                    }
+                    issue == fr.f4ioz.satcombo.data.CarnetEnLigne.Issue.PRIS -> {
                         _ui.value = _ui.value.copy(
                             log = logStore.marqueEnvoye(e.timeMs, System.currentTimeMillis()))
                         tf("auto_envoye", e.callsign)
                     }
-                    fr.f4ioz.satcombo.data.CarnetEnLigne.Issue.REFUS -> {
+                    issue == fr.f4ioz.satcombo.data.CarnetEnLigne.Issue.REFUS -> {
                         // Held back: sending it again would be refused again.
-                        refusAuto[e.timeMs] = r.take(90)
+                        val pourquoi = fr.f4ioz.satcombo.data.CarnetEnLigne.raison(r)
+                        refusAuto[e.timeMs] = pourquoi
                         _ui.value = _ui.value.copy(log = logStore.retiens(e.timeMs, true))
-                        tf("auto_refus", e.callsign, r.take(90))
+                        tf("auto_refus", e.callsign, pourquoi)
                     }
-                    fr.f4ioz.satcombo.data.CarnetEnLigne.Issue.DOUTE -> {
+                    else -> {
                         // The request may have arrived: wait before trying again.
                         reessai[e.timeMs] = System.currentTimeMillis() + fr.f4ioz.satcombo.domain.EnvoiAuto.DELAI_MS
                         tf("auto_doute", e.callsign)
@@ -3015,7 +3023,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 e.myLocator, e.myGrids, c.profils, c.profil, c.maille)
             val r = if (adif.isBlank()) ""
                     else fr.f4ioz.satcombo.data.CarnetEnLigne.depose(c.url, c.cle, profil, adif)
-            val pris = fr.f4ioz.satcombo.data.CarnetEnLigne.accepte(r)
+            // A duplicate is already in Wavelog: as good as accepted.
+            val pris = fr.f4ioz.satcombo.data.CarnetEnLigne.accepte(r) ||
+                fr.f4ioz.satcombo.data.CarnetEnLigne.doublon(r)
             if (pris) {
                 _ui.value = _ui.value.copy(
                     log = logStore.marqueEnvoye(timeMs, System.currentTimeMillis()))
@@ -3024,7 +3034,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 depotEnCours = false,
                 // Server reply shown verbatim: it is what says the key is
                 // read-only or the profile is missing; a bare "failed" would not.
-                depot = if (pris) tf("carnet_depot_un", e.callsign) else r.take(160)))
+                depot = if (pris) tf("carnet_depot_un", e.callsign)
+                        else fr.f4ioz.satcombo.data.CarnetEnLigne.raison(r)))
         }
     }
 
@@ -3071,13 +3082,19 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         _ui.value = _ui.value.copy(
                             log = logStore.marqueEnvoye(fiche.timeMs, System.currentTimeMillis()))
                     }
-                    fr.f4ioz.satcombo.data.CarnetEnLigne.Issue.REFUS -> {
-                        refuses++
-                        dernier = r.take(90)
-                        // Three refusals with no success: it is the setup or
-                        // the server, not this contact. Stop.
-                        if (refuses >= 3 && acceptes.isEmpty()) break
-                    }
+                    fr.f4ioz.satcombo.data.CarnetEnLigne.Issue.REFUS ->
+                        if (fr.f4ioz.satcombo.data.CarnetEnLigne.doublon(r)) {
+                            // Already in Wavelog: marked, not counted as refused.
+                            acceptes.add(fiche.timeMs)
+                            _ui.value = _ui.value.copy(
+                                log = logStore.marqueEnvoye(fiche.timeMs, System.currentTimeMillis()))
+                        } else {
+                            refuses++
+                            dernier = fr.f4ioz.satcombo.data.CarnetEnLigne.raison(r)
+                            // Three refusals with no success: it is the setup
+                            // or the server, not this contact. Stop.
+                            if (refuses >= 3 && acceptes.isEmpty()) break
+                        }
                     fr.f4ioz.satcombo.data.CarnetEnLigne.Issue.DOUTE -> {
                         // **Doubt does not stop the batch.** The request left;
                         // only the reply is missing. The contact stays pending
