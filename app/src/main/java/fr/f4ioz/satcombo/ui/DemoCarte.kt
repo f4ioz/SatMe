@@ -212,7 +212,7 @@ fun DemoCarte(vm: fr.f4ioz.satcombo.MainViewModel) {
                 }
                 @Suppress("UNUSED_EXPRESSION") tic
                 Text(
-                    "écoutes %d · trames %d · encodé %d ko · envoyé %d ko".format(
+                    tf("demo_diag_ligne",
                         ServeurDemo.clientsSon, ServeurDemo.tramesSon,
                         ServeurDemo.octetsEncodes / 1024,
                         ServeurDemo.octetsEnvoyes / 1024),

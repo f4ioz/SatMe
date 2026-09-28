@@ -59,7 +59,12 @@ data class LogEntry(
      * Cannot be rebuilt later, and tells whether the database or the typing
      * was wrong.
      */
-    val locatorOrigine: String = ""
+    val locatorOrigine: String = "",
+    /**
+     * Held back from the automatic upload: the operator saw something wrong
+     * and wants to fix it before it reaches the online log (EnvoiAuto).
+     */
+    val retenu: Boolean = false
 )
 
 /** Persists quick log entries to disk (filesDir/qso_log.json). */
@@ -92,7 +97,8 @@ class LogStore(context: Context) {
                     locatorOrigine = o.optString("lo"),
                     nom = o.optString("nm"),
                     qth = o.optString("qt"),
-                    courriel = o.optString("em")
+                    courriel = o.optString("em"),
+                    retenu = o.optBoolean("rt", false)
                 )
             }
         }.getOrDefault(emptyList())
@@ -111,6 +117,7 @@ class LogStore(context: Context) {
                 put("ev", e.envoyeMs)
                 put("lo", e.locatorOrigine)
                 put("nm", e.nom); put("qt", e.qth); put("em", e.courriel)
+                if (e.retenu) put("rt", true)
             })
         }
         runCatching { file.writeText(arr.toString()) }
@@ -206,6 +213,13 @@ class LogStore(context: Context) {
      * batch: an interruption keeps the work done instead of redoing it — and
      * creating duplicates in Wavelog, which does not deduplicate.
      */
+    /** Holds a contact back from the automatic upload, or releases it. */
+    fun retiens(timeMs: Long, retenu: Boolean): List<LogEntry> {
+        val list = load().map { if (it.timeMs == timeMs) it.copy(retenu = retenu) else it }
+        save(list)
+        return list
+    }
+
     fun marqueEnvoye(timeMs: Long, quandMs: Long): List<LogEntry> {
         val list = load().map { if (it.timeMs == timeMs) it.copy(envoyeMs = quandMs) else it }
         save(list)

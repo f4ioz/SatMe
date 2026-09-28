@@ -299,6 +299,16 @@ class SettingsStore(context: Context) {
         get() = prefs.getString("carnet_profil", "") ?: ""
         set(v) { prefs.edit().putString("carnet_profil", v.trim()).apply() }
 
+    /** Each new contact sent on to the online log after a minute (EnvoiAuto). */
+    var carnetAuto: Boolean
+        get() = prefs.getBoolean("carnet_auto", false)
+        set(v) { prefs.edit().putBoolean("carnet_auto", v).apply() }
+
+    /** When the automatic upload was turned on: older contacts never leave by it. */
+    var carnetAutoDepuisMs: Long
+        get() = prefs.getLong("carnet_auto_depuis", 0L)
+        set(v) { prefs.edit().putLong("carnet_auto_depuis", v).apply() }
+
     /** SatMe as a radio in the online log (satellite and frequencies). */
     var carnetRadio: Boolean
         get() = prefs.getBoolean("carnet_radio", false)

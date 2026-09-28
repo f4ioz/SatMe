@@ -31,6 +31,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.Backup
 import androidx.compose.material.icons.filled.Campaign
 import androidx.compose.material.icons.filled.Air
@@ -1476,6 +1478,37 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
                                     color = Amber, fontSize = 11.sp,
                                     fontWeight = FontWeight.Bold)
                             }
+                            // Automatic upload: the same states as on the PC
+                            // control desk. `ui.nowMs` ticks every second, so
+                            // the countdown moves.
+                            val envoi = vm.etatEnvoi(e, ui.nowMs)
+                            val texteEnvoi = when (envoi) {
+                                fr.f4ioz.satcombo.domain.EnvoiAuto.Etat.ATTENTE ->
+                                    tf("auto_attente", vm.resteEnvoiS(e, ui.nowMs))
+                                fr.f4ioz.satcombo.domain.EnvoiAuto.Etat.PRET -> t("auto_pret")
+                                fr.f4ioz.satcombo.domain.EnvoiAuto.Etat.PAUSE ->
+                                    vm.refusEnvoi(e.timeMs).let { r ->
+                                        if (r.isBlank()) t("auto_pause") else tf("auto_pause_refus", r)
+                                    }
+                                else -> ""
+                            }
+                            if (texteEnvoi.isNotBlank()) {
+                                Text(texteEnvoi, color = Amber, fontSize = 11.sp)
+                            }
+                        }
+                        // Hold back or release, as on the control desk: the
+                        // minute is the time to see a mistake before Wavelog,
+                        // whose API cannot change a contact, gets it.
+                        val envoiLigne = vm.etatEnvoi(e, ui.nowMs)
+                        if (envoiLigne == fr.f4ioz.satcombo.domain.EnvoiAuto.Etat.ATTENTE ||
+                            envoiLigne == fr.f4ioz.satcombo.domain.EnvoiAuto.Etat.PRET) {
+                            IconButton(onClick = { vm.retiensContact(e.timeMs, true) }) {
+                                Icon(Icons.Default.Pause, t("auto_mettre_pause"), tint = Amber)
+                            }
+                        } else if (envoiLigne == fr.f4ioz.satcombo.domain.EnvoiAuto.Etat.PAUSE) {
+                            IconButton(onClick = { vm.retiensContact(e.timeMs, false) }) {
+                                Icon(Icons.Default.PlayArrow, t("auto_reprendre"), tint = Cyan)
+                            }
                         }
                         // Upload **this** contact to the online log. The first
                         // try is where a wrong write key or station profile
@@ -1756,6 +1789,16 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
                     }
                     if (ui.carnet.depot.isNotBlank()) {
                         Text(ui.carnet.depot, color = Amber, fontSize = 12.sp,
+                            modifier = Modifier.padding(top = 4.dp))
+                    }
+                    // Each contact on its own, a minute after it is logged:
+                    // time to hold it back from the PC control desk.
+                    Spacer(Modifier.height(10.dp))
+                    SettingSwitch(t("auto_titre"), t("auto_desc"), ui.carnet.auto) {
+                        vm.setCarnetAuto(it)
+                    }
+                    if (ui.carnet.auto && ui.carnet.autoEtat.isNotBlank()) {
+                        Text(ui.carnet.autoEtat, color = TextLo, fontSize = 11.sp,
                             modifier = Modifier.padding(top = 4.dp))
                     }
                 }

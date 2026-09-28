@@ -194,6 +194,10 @@ data class CarnetUi(
     val profil: String = "",
     /** What to harvest: "sat", "phonie", "cw" or "tout". */
     val filtre: String = "sat",
+    /** Each new contact sent on after a minute (EnvoiAuto). */
+    val auto: Boolean = false,
+    /** Last automatic upload, or why it stopped. */
+    val autoEtat: String = "",
     /** SatMe acts as a radio in the online log (RelaisRadio). */
     val radio: Boolean = false,
     val radioNom: String = "SatMe",
@@ -952,6 +956,24 @@ data class UiState(
         }
 }
 
+/**
+ * Square status across all sources. A LoTW confirmation wins (the only one
+ * valid for awards), then the online log, then LoTW worked-only squares.
+ * One rule for the square map and the PC control desk.
+ */
+fun etatCarre(ui: UiState, carre: String): fr.f4ioz.satcombo.data.CarnetEnLigne.Etat? {
+    val k = carre.uppercase().take(4)
+    if (k in ui.carnet.lotwConfirmes)
+        return fr.f4ioz.satcombo.data.CarnetEnLigne.Etat.CONFIRME
+    ui.carnet.carres[carre.uppercase()]?.let { return it }
+    if (k in ui.carnet.lotwTravailles)
+        return fr.f4ioz.satcombo.data.CarnetEnLigne.Etat.TRAVAILLE
+    // LoTW answered and does not know this square: still needed.
+    if (ui.carnet.lotwTravailles.isNotEmpty())
+        return fr.f4ioz.satcombo.data.CarnetEnLigne.Etat.JAMAIS
+    return null
+}
+
 /** Normalize a designator so AO-07 == AO-7, FO-029 == FO-29. */
 fun normalizeDesignator(s: String): String {
     val up = s.uppercase().trim().substringBefore(" (").substringBefore("_").trim()
@@ -1077,7 +1099,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 profil = settings.carnetProfil,
                 filtre = settings.carnetFiltre,
                 radio = settings.carnetRadio,
-                radioNom = settings.carnetRadioNom),
+                radioNom = settings.carnetRadioNom,
+                auto = settings.carnetAuto),
             catUi = CatUi(
                 liseret = settings.liseréEmission,
                 txSuitVite = settings.txSuitVite,
@@ -1305,6 +1328,38 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             val t = _ui.value.satellites.firstOrNull { it.name.equals(nom, true) }
             if (t == null) false else { select(t); true }
         }
+        // The last 24 hours of the log: what may still need fixing, and the
+        // automatic upload's state for each contact.
+        fr.f4ioz.satcombo.demo.PontCommande.journal = {
+            val maintenant = System.currentTimeMillis()
+            val hm = java.text.SimpleDateFormat("HH:mm", java.util.Locale.US)
+                .apply { timeZone = java.util.TimeZone.getTimeZone("UTC") }
+            _ui.value.log.filter { it.callsign.isNotBlank() && maintenant - it.timeMs < 86_400_000L }
+                .take(40).map { e ->
+                    val etat = etatEnvoi(e, maintenant)
+                    fr.f4ioz.satcombo.demo.PontCommande.Ligne(
+                        e.timeMs, hm.format(java.util.Date(e.timeMs)), e.callsign, e.theirLocator,
+                        e.satName, e.rstSent, e.rstRcvd, etat.name.lowercase(),
+                        if (etat == fr.f4ioz.satcombo.domain.EnvoiAuto.Etat.ATTENTE) resteEnvoiS(e) else 0L,
+                        refusEnvoi(e.timeMs))
+                }
+        }
+        fr.f4ioz.satcombo.demo.PontCommande.modifie = { t, call, loc, rse, rsr ->
+            val e = _ui.value.log.firstOrNull { it.timeMs == t }
+            if (e == null || call.isBlank()) false
+            else { updateLogEntry(t, call, loc, e.note, e.mode, rse, rsr); true }
+        }
+        fr.f4ioz.satcombo.demo.PontCommande.supprime = { t ->
+            if (_ui.value.log.none { it.timeMs == t }) false
+            else {
+                modifies.remove(t); refusAuto.remove(t); reessai.remove(t)
+                deleteLogEntry(t); true
+            }
+        }
+        fr.f4ioz.satcombo.demo.PontCommande.retiens = { t, on ->
+            if (_ui.value.log.none { it.timeMs == t }) false else { retiensContact(t, on); true }
+        }
+        fr.f4ioz.satcombo.demo.PontCommande.infos = { call, loc -> infosSaisie(call, loc) }
 
         // The monitor needs the context to pick its output: without it, it
         // cannot force the speaker when a USB sound card is present.
@@ -1335,6 +1390,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     runCatching { publieDemo() }
                 }
                 runCatching { relaieRadio() }
+                runCatching { envoieAuto() }
                 kotlinx.coroutines.delay(1000)
             }
         }
@@ -2484,6 +2540,132 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _ui.value = _ui.value.copy(carnet = _ui.value.carnet.copy(profil = settings.carnetProfil))
     }
 
+    fun setCarnetAuto(on: Boolean) {
+        settings.carnetAuto = on
+        // Only what is logged from now on: an older log may already be in
+        // Wavelog through an ADIF import, and Wavelog does not deduplicate.
+        if (on) settings.carnetAutoDepuisMs = System.currentTimeMillis()
+        _ui.value = _ui.value.copy(carnet = _ui.value.carnet.copy(auto = on, autoEtat = ""))
+    }
+
+    /**
+     * What the control desk shows while typing: is the square new, and was
+     * this callsign already worked on this satellite in the last 24 hours.
+     * Called from the desk's server thread, so the online-log check may wait
+     * (three seconds at most, cached afterwards).
+     */
+    private fun infosSaisie(call: String, loc: String): fr.f4ioz.satcombo.demo.PontCommande.Infos {
+        val u = _ui.value
+        val k = loc.trim().uppercase().take(4)
+        val carre = if (!Regex("[A-R]{2}[0-9]{2}").matches(k)) "" else {
+            var etat = etatCarre(u, k)
+            val c = u.carnet
+            if ((etat == null || etat == fr.f4ioz.satcombo.data.CarnetEnLigne.Etat.JAMAIS) &&
+                c.configure && c.slug.isNotBlank()) {
+                val enLigne = runCatching {
+                    kotlinx.coroutines.runBlocking {
+                        kotlinx.coroutines.withTimeoutOrNull(3_000) {
+                            fr.f4ioz.satcombo.data.CarnetEnLigne.carre(c.url, c.cle, c.slug, k)
+                        }
+                    }
+                }.getOrNull()
+                if (enLigne != null && enLigne != fr.f4ioz.satcombo.data.CarnetEnLigne.Etat.INCONNU) etat = enLigne
+            }
+            val dansJournal = u.log.any { it.callsign.isNotBlank() && it.theirLocator.uppercase().startsWith(k) }
+            when {
+                etat == fr.f4ioz.satcombo.data.CarnetEnLigne.Etat.CONFIRME -> "confirme"
+                etat == fr.f4ioz.satcombo.data.CarnetEnLigne.Etat.TRAVAILLE || dansJournal -> "travaille"
+                etat == fr.f4ioz.satcombo.data.CarnetEnLigne.Etat.JAMAIS -> "nouveau"
+                // Nothing but SatMe's own log to go by: say so.
+                else -> "nouveau_journal"
+            }
+        }
+        val indicatif = call.trim().uppercase()
+        val sat = u.selected?.name.orEmpty()
+        val maintenant = System.currentTimeMillis()
+        val avant = if (indicatif.isBlank() || sat.isBlank()) null else u.log.firstOrNull {
+            it.callsign.equals(indicatif, true) && it.satName == sat && maintenant - it.timeMs < 86_400_000L
+        }
+        val doublon = avant?.let {
+            java.text.SimpleDateFormat("HH:mm", java.util.Locale.US)
+                .apply { timeZone = java.util.TimeZone.getTimeZone("UTC") }.format(java.util.Date(it.timeMs))
+        }.orEmpty()
+        return fr.f4ioz.satcombo.demo.PontCommande.Infos(carre, doublon)
+    }
+
+    // ---- automatic upload of each contact ----
+
+    /** Last change of each contact, which restarts its minute. In memory only. */
+    private val modifies = java.util.concurrent.ConcurrentHashMap<Long, Long>()
+    /** Why the server refused a contact (it is then held back). */
+    private val refusAuto = java.util.concurrent.ConcurrentHashMap<Long, String>()
+    /** No reply: not before this time (the request may have gone through). */
+    private val reessai = java.util.concurrent.ConcurrentHashMap<Long, Long>()
+    @Volatile private var envoiAutoEnCours = false
+
+    /** State of a contact for the automatic upload. */
+    fun etatEnvoi(e: fr.f4ioz.satcombo.data.LogEntry, maintenant: Long = System.currentTimeMillis()) =
+        fr.f4ioz.satcombo.domain.EnvoiAuto.etat(e.timeMs, e.callsign, e.envoyeMs, e.retenu,
+            if (settings.carnetAuto) settings.carnetAutoDepuisMs else null,
+            modifies[e.timeMs], maintenant)
+
+    fun resteEnvoiS(e: fr.f4ioz.satcombo.data.LogEntry, maintenant: Long = System.currentTimeMillis()): Long =
+        fr.f4ioz.satcombo.domain.EnvoiAuto.resteS(e.timeMs, modifies[e.timeMs], maintenant)
+
+    fun refusEnvoi(timeMs: Long): String = refusAuto[timeMs].orEmpty()
+
+    /** Holds a contact back, or releases it (a refusal is then forgotten). */
+    fun retiensContact(timeMs: Long, retenu: Boolean) {
+        if (!retenu) { refusAuto.remove(timeMs); reessai.remove(timeMs) }
+        _ui.value = _ui.value.copy(log = logStore.retiens(timeMs, retenu))
+    }
+
+    /**
+     * Sends the oldest contact whose minute is over. One at a time, from the
+     * one-second loop; marked only once the server took it, as for the batch.
+     */
+    private fun envoieAuto() {
+        val c = _ui.value.carnet
+        if (!c.auto || envoiAutoEnCours || c.depotEnCours) return
+        if (c.url.isBlank() || c.cle.isBlank() || c.profil.isBlank()) return
+        val maintenant = System.currentTimeMillis()
+        val e = _ui.value.log.filter {
+            etatEnvoi(it, maintenant) == fr.f4ioz.satcombo.domain.EnvoiAuto.Etat.PRET &&
+                (reessai[it.timeMs] ?: 0L) <= maintenant
+        }.minByOrNull { it.timeMs } ?: return
+        envoiAutoEnCours = true
+        viewModelScope.launch {
+            try {
+                val adif = fr.f4ioz.satcombo.data.Adif.enregistrement(e, settings.callsign)
+                if (adif.isBlank()) return@launch
+                val profil = fr.f4ioz.satcombo.domain.ProfilsStation.profilPourEmplacement(
+                    e.myLocator, e.myGrids, c.profils, c.profil, c.maille)
+                val r = fr.f4ioz.satcombo.data.CarnetEnLigne.depose(c.url, c.cle, profil, adif)
+                val etat = when (fr.f4ioz.satcombo.data.CarnetEnLigne.issue(r)) {
+                    fr.f4ioz.satcombo.data.CarnetEnLigne.Issue.PRIS -> {
+                        _ui.value = _ui.value.copy(
+                            log = logStore.marqueEnvoye(e.timeMs, System.currentTimeMillis()))
+                        tf("auto_envoye", e.callsign)
+                    }
+                    fr.f4ioz.satcombo.data.CarnetEnLigne.Issue.REFUS -> {
+                        // Held back: sending it again would be refused again.
+                        refusAuto[e.timeMs] = r.take(90)
+                        _ui.value = _ui.value.copy(log = logStore.retiens(e.timeMs, true))
+                        tf("auto_refus", e.callsign, r.take(90))
+                    }
+                    fr.f4ioz.satcombo.data.CarnetEnLigne.Issue.DOUTE -> {
+                        // The request may have arrived: wait before trying again.
+                        reessai[e.timeMs] = System.currentTimeMillis() + fr.f4ioz.satcombo.domain.EnvoiAuto.DELAI_MS
+                        tf("auto_doute", e.callsign)
+                    }
+                }
+                _ui.value = _ui.value.copy(carnet = _ui.value.carnet.copy(autoEtat = etat))
+            } finally {
+                envoiAutoEnCours = false
+            }
+        }
+    }
+
     fun setCarnetRadio(on: Boolean) {
         settings.carnetRadio = on
         relais.oublie()
@@ -2864,8 +3046,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
         _ui.value = _ui.value.copy(carnet = c.copy(depotEnCours = true, depot = ""))
         viewModelScope.launch {
+            // A contact held back is being fixed: the batch leaves it too.
             val fiches = fr.f4ioz.satcombo.domain.EnvoiCarnet.aDeposer(
-                _ui.value.log.map {
+                _ui.value.log.filter { !it.retenu }.map {
                     fr.f4ioz.satcombo.domain.EnvoiCarnet.Fiche(it.timeMs, it.callsign, it.envoyeMs)
                 })
             val station = settings.callsign
@@ -3449,6 +3632,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         timeMs: Long, callsign: String, theirLocator: String, note: String,
         mode: String = "", rstSent: String = "", rstRcvd: String = ""
     ) {
+        // A contact waiting for the automatic upload gets its minute again.
+        modifies[timeMs] = System.currentTimeMillis()
         _ui.value = _ui.value.copy(
             log = logStore.update(timeMs, callsign.trim().uppercase(),
                 theirLocator.trim().uppercase(), note.trim(),

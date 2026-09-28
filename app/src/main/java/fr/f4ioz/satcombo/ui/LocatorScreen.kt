@@ -8,6 +8,7 @@
  */
 package fr.f4ioz.satcombo.ui
 
+import fr.f4ioz.satcombo.etatCarre
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -189,24 +190,6 @@ private fun BorderRow(arrow: String, dir: String, km: Double, square: String,
     }
 }
 
-/**
- * Square status across all sources. A LoTW confirmation wins (the only one
- * valid for awards), then the online log, then LoTW worked-only squares.
- */
-private fun etatCarre(
-    ui: UiState, carre: String
-): fr.f4ioz.satcombo.data.CarnetEnLigne.Etat? {
-    val k = carre.uppercase().take(4)
-    if (k in ui.carnet.lotwConfirmes)
-        return fr.f4ioz.satcombo.data.CarnetEnLigne.Etat.CONFIRME
-    ui.carnet.carres[carre.uppercase()]?.let { return it }
-    if (k in ui.carnet.lotwTravailles)
-        return fr.f4ioz.satcombo.data.CarnetEnLigne.Etat.TRAVAILLE
-    // LoTW answered and does not know this square: still needed.
-    if (ui.carnet.lotwTravailles.isNotEmpty())
-        return fr.f4ioz.satcombo.data.CarnetEnLigne.Etat.JAMAIS
-    return null
-}
 
 /** The arrow drawn in front of a neighbour, one per compass direction. */
 private fun arrowOf(dir: String): String = when (dir) {

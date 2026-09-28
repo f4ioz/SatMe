@@ -381,7 +381,53 @@ object ServeurDemo {
                 jsonCourt(sortie, "{\"ok\":$ok}")
             }
 
+            "/journal" -> {
+                val l = PontCommande.journal?.invoke().orEmpty()
+                jsonCourt(sortie, l.joinToString(",", "[", "]") { q ->
+                    "{\"t\":${q.timeMs},\"h\":\"${js(q.heure)}\",\"c\":\"${js(q.indicatif)}\"," +
+                        "\"l\":\"${js(q.locator)}\",\"s\":\"${js(q.satellite)}\"," +
+                        "\"rse\":\"${js(q.rstEnvoye)}\",\"rsr\":\"${js(q.rstRecu)}\"," +
+                        "\"e\":\"${js(q.envoi)}\",\"r\":${q.resteS},\"x\":\"${js(q.refus)}\"}"
+                })
+            }
+
+            "/modifie" -> {
+                val ok = PontCommande.modifie?.invoke(
+                    parametre(route, "t").toLongOrNull() ?: 0L,
+                    parametre(route, "call"), parametre(route, "loc"),
+                    parametre(route, "rse").ifBlank { "59" },
+                    parametre(route, "rsr").ifBlank { "59" }) ?: false
+                jsonCourt(sortie, "{\"ok\":$ok}")
+            }
+
+            "/supprime" -> {
+                val ok = PontCommande.supprime?.invoke(parametre(route, "t").toLongOrNull() ?: 0L) ?: false
+                jsonCourt(sortie, "{\"ok\":$ok}")
+            }
+
+            "/pause" -> {
+                val ok = PontCommande.retiens?.invoke(
+                    parametre(route, "t").toLongOrNull() ?: 0L, parametre(route, "on") == "1") ?: false
+                jsonCourt(sortie, "{\"ok\":$ok}")
+            }
+
+            "/infos" -> {
+                val i = PontCommande.infos?.invoke(parametre(route, "call"), parametre(route, "loc"))
+                jsonCourt(sortie, if (i == null) "{}"
+                    else "{\"carre\":\"${js(i.carre)}\",\"doublon\":\"${js(i.doublon)}\"}")
+            }
+
             else -> envoie(sortie, "404 Not Found", "text/plain", "non".toByteArray())
+        }
+    }
+
+    /** A string made safe inside JSON quotes. */
+    private fun js(t: String): String = buildString {
+        for (ch in t) when {
+            ch == '"' -> append("\\\"")
+            ch == '\\' -> append("\\\\")
+            ch < ' ' -> append(' ')
+            else -> append(ch)
         }
     }
 

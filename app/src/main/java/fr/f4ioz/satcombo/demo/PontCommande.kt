@@ -72,6 +72,40 @@ object PontCommande {
      */
     @Volatile var chercheQrz: ((String) -> Fiche)? = null
 
+    /** One log line as the control desk lists it. */
+    class Ligne(
+        val timeMs: Long, val heure: String, val indicatif: String, val locator: String,
+        val satellite: String, val rstEnvoye: String, val rstRecu: String,
+        /** "hors", "attente", "pause", "envoye" (EnvoiAuto). */
+        val envoi: String,
+        /** Seconds before a waiting contact leaves. */
+        val resteS: Long,
+        /** Why the online log refused it, if it did. */
+        val refus: String,
+    )
+
+    /** The latest contacts, newest first: what the operator may want to fix. */
+    @Volatile var journal: (() -> List<Ligne>)? = null
+
+    /** Changes a contact. False when it no longer exists. */
+    @Volatile var modifie: ((timeMs: Long, call: String, locator: String,
+                             rstEnvoye: String, rstRecu: String) -> Boolean)? = null
+
+    /** Deletes a contact from SatMe's log (not from the online log). */
+    @Volatile var supprime: ((Long) -> Boolean)? = null
+
+    /** Holds a contact back from the automatic upload, or releases it. */
+    @Volatile var retiens: ((timeMs: Long, retenu: Boolean) -> Boolean)? = null
+
+    /**
+     * What is known while typing: the square's status ("nouveau",
+     * "travaille", "confirme", or "" when nothing can tell) and, for a
+     * callsign already worked on this satellite in the last 24 hours, the
+     * time of that contact.
+     */
+    class Infos(val carre: String, val doublon: String)
+    @Volatile var infos: ((call: String, locator: String) -> Infos)? = null
+
     /**
      * Is the bridge up?
      *

@@ -76,6 +76,15 @@ object PageCommande {
   .prop b { font-size:17px; letter-spacing:1px; }
   .prop span { color:var(--gris); font-size:12px; margin-left:8px; }
   .ok { color:var(--cyan); } .ko { color:var(--rose); }
+  #infos { min-height:22px; font-size:14px; margin-top:6px; }
+  #infos .nouveau { color:#49D17F; font-weight:800; letter-spacing:1px; }
+  #infos .doublon { color:var(--ambre); font-weight:700; }
+  #edition { display:none; margin-top:10px; padding:8px 12px; border-radius:10px;
+             background:rgba(255,180,84,.12); color:var(--ambre); font-size:14px; }
+  #liste td.envoi { font-size:12px; color:var(--gris); }
+  #liste td.envoi .ok { color:var(--cyan); } #liste td.envoi .ambre { color:var(--ambre); }
+  #liste td.act { white-space:nowrap; text-align:right; }
+  #liste td.act button { font-size:14px; padding:4px 9px; margin-left:4px; }
   #porte { max-width:420px; margin:12vh auto; }
 </style>
 
@@ -132,16 +141,19 @@ object PageCommande {
            radio, et le chercher dans une ligne de détails coûte le temps qu'on
            n'a pas pendant un passage. -->
       <div id="qui"></div>
+      <!-- Nouveau carré, doublon : ce qu'il faut savoir avant d'enregistrer. -->
+      <div id="infos"></div>
       <div id="props"></div>
       <div class="ligne">
         <input id="loc" placeholder="Locator" autocomplete="off" spellcheck="false">
         <input id="rse" value="59" title="RST envoyé">
         <input id="rsr" value="59" title="RST reçu">
         <button onclick="qrz()" title="Chercher sur QRZ.com">QRZ</button>
-        <button class="primaire" onclick="qso()">Enregistrer</button>
+        <button class="primaire" id="valider" onclick="qso()">Enregistrer</button>
       </div>
+      <div id="edition"></div>
       <div class="etat" id="etat-qso">Tab complète et interroge QRZ, Entrée enregistre, Échap efface.</div>
-      <div class="t" style="margin-top:18px">Contacts du passage</div>
+      <div class="t" style="margin-top:18px">Journal des dernières 24 h (UTC)</div>
       <table id="liste"><tbody></tbody></table>
     </div>
   </div>
@@ -179,6 +191,7 @@ function ouvre() {
   chargeSats();
   dessineCadran(null);
   tic();
+  chargeJournal();
   setInterval(tic, 1000);
 }
 
@@ -246,15 +259,17 @@ function dessineCadran(e) {
   }
 }
 
-/** Countdown, from the timestamp and the phone's clock. */
-function rebours(cible, maintenant) {
+/**
+ * Countdown, from the timestamp and the phone's clock, said in words:
+ * "AOS dans 9 h 19", "LOS dans 3:12". A bare "-9:19:09" had to be decoded.
+ */
+function rebours(quoi, cible, maintenant) {
   if (!cible || !maintenant) return '—';
   let s = Math.round((cible - maintenant) / 1000);
-  const signe = s < 0 ? '+' : '-';
-  s = Math.abs(s);
+  if (s < 0) return quoi + ' passé';
   const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60);
-  return signe + (h ? h + ':' + String(m).padStart(2, '0') : m) +
-         ':' + String(s % 60).padStart(2, '0');
+  return quoi + ' dans ' + (h ? h + ' h ' + String(m).padStart(2, '0')
+                              : m + ':' + String(s % 60).padStart(2, '0'));
 }
 
 async function tic() {
@@ -275,7 +290,7 @@ async function tic() {
   // 1970: showing them raw tells nobody anything. Before the rise we count to
   // AOS, afterwards to LOS — the question you ask yourself throughout a pass.
   const leve = e.el !== null && e.el !== undefined && e.el > 0;
-  g('aos').textContent = rebours(leve ? e.los : e.aos, e.now);
+  g('aos').textContent = rebours(leve ? 'LOS' : 'AOS', leve ? e.los : e.aos, e.now);
   g('ant').textContent = (e.antaz === null || e.antaz === undefined) ? '—'
     : Math.round(e.antaz) + '° · ' + Math.round(e.antel || 0) + '°';
   // Pointing error: the one value that says whether to move the antenna.
@@ -291,15 +306,140 @@ async function tic() {
   dessineCadran(e);
   g('rx').textContent = mhz(e.rx);
   g('tx').textContent = mhz(e.tx);
-  const t = g('liste').querySelector('tbody');
-  t.innerHTML = '';
-  (e.qso || []).forEach(q => {
-    const tr = document.createElement('tr');
-    tr.innerHTML = '<td>' + (q.h || '') + '</td><td class="c">' + (q.c || '') +
-                   '</td><td>' + (q.l || '') + '</td>';
-    t.appendChild(tr);
-  });
+  // The log every two seconds: its waiting times count down in seconds.
+  if (++tours % 2 === 0) chargeJournal();
 }
+
+// --- the log: fix, hold back, delete ---
+//
+// The last 24 hours, not only this pass: a typo is often seen after LOS.
+let tours = 0, lignes = [];
+
+function echappe(t) {
+  return String(t || '').replace(/[&<>"]/g, c =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+}
+
+/** What the automatic upload does with this contact, in words. */
+function envoiTexte(q) {
+  switch (q.e) {
+    case 'envoye': return '<span class="ok">✓ Wavelog</span>';
+    case 'attente': return 'part dans ' + q.r + ' s';
+    case 'pret': return 'envoi…';
+    case 'pause': return '<span class="ambre">en pause' +
+                         (q.x ? ' — refusé : ' + echappe(q.x) : '') + '</span>';
+    default: return '';
+  }
+}
+
+async function chargeJournal() {
+  let l;
+  try { l = await appel('/journal'); } catch (x) { return; }
+  if (!Array.isArray(l)) return;
+  lignes = l;
+  const t = g('liste').querySelector('tbody');
+  t.innerHTML = l.map((q, i) => {
+    const attend = q.e === 'attente' || q.e === 'pret';
+    const pause = q.e === 'pause'
+      ? '<button data-i="' + i + '" data-a="reprend" title="Reprendre l\'envoi">▶</button>'
+      : (attend ? '<button data-i="' + i + '" data-a="pause" title="Mettre en pause">⏸</button>' : '');
+    return '<tr' + (q.t === edite ? ' style="background:rgba(255,180,84,.10)"' : '') + '>' +
+      '<td>' + echappe(q.h) + '</td><td class="c">' + echappe(q.c) + '</td>' +
+      '<td>' + echappe(q.l) + '</td><td>' + echappe(q.s) + '</td>' +
+      '<td class="envoi">' + envoiTexte(q) + '</td>' +
+      '<td class="act">' + pause +
+      '<button data-i="' + i + '" data-a="modifie" title="Modifier">✎</button>' +
+      '<button data-i="' + i + '" data-a="supprime" title="Supprimer">✕</button></td></tr>';
+  }).join('');
+}
+
+g('liste').addEventListener('click', async ev => {
+  const b = ev.target.closest('button');
+  if (!b) return;
+  const q = lignes[+b.dataset.i];
+  if (!q) return;
+  if (b.dataset.a === 'pause' || b.dataset.a === 'reprend') {
+    await appel('/pause', { t: q.t, on: b.dataset.a === 'pause' ? '1' : '0' });
+  } else if (b.dataset.a === 'modifie') {
+    commenceEdition(q);
+  } else if (b.dataset.a === 'supprime') {
+    // Deleting here does not reach Wavelog: its API cannot delete.
+    const deja = q.e === 'envoye'
+      ? '\n\nIl est déjà dans Wavelog : supprimez-le aussi là-bas.' : '';
+    if (!confirm('Supprimer ' + q.c + ' (' + q.h + ' UTC, ' + q.s + ') ?' + deja)) return;
+    await appel('/supprime', { t: q.t });
+    if (edite === q.t) finEdition();
+  }
+  chargeJournal();
+});
+
+// --- fixing a contact ---
+//
+// The fields take the contact; Enter saves the change. A contact still
+// waiting for Wavelog is held back meanwhile, or its minute could run out
+// before the fix — and Wavelog's API cannot change a contact once it has it.
+let edite = null, repriseApres = false;
+
+async function commenceEdition(q) {
+  edite = q.t;
+  repriseApres = q.e === 'attente' || q.e === 'pret';
+  if (repriseApres) await appel('/pause', { t: q.t, on: '1' });
+  g('call').value = q.c; g('loc').value = q.l || '';
+  g('rse').value = q.rse || '59'; g('rsr').value = q.rsr || '59';
+  props = []; choisi = -1; dessineProps();
+  montreQui('', '', ''); g('qui').dataset.pour = q.c;
+  g('valider').textContent = 'Modifier';
+  g('edition').style.display = 'block';
+  g('edition').textContent = 'Modification de ' + q.c + ' (' + q.h + ' UTC, ' + q.s + ')' +
+    (q.e === 'envoye' ? ' — déjà dans Wavelog : corrigez-le aussi là-bas.' : '') +
+    ' Échap annule.';
+  planifieInfos();
+  g('call').focus();
+  chargeJournal();
+}
+
+async function finEdition(annule) {
+  if (edite !== null && repriseApres) await appel('/pause', { t: edite, on: '0' });
+  edite = null; repriseApres = false;
+  g('valider').textContent = 'Enregistrer';
+  g('edition').style.display = 'none';
+  if (annule) {
+    g('call').value = ''; g('loc').value = '';
+    g('rse').value = '59'; g('rsr').value = '59';
+    g('infos').innerHTML = '';
+  }
+  chargeJournal();
+}
+
+// --- new square, duplicate ---
+//
+// Asked after a pause in typing, like QRZ: the phone may have to ask the
+// online log, and one question per letter would be too many.
+let minuteurInfos = 0;
+
+function planifieInfos() {
+  clearTimeout(minuteurInfos);
+  minuteurInfos = setTimeout(async () => {
+    const call = g('call').value.trim().toUpperCase();
+    const loc = g('loc').value.trim().toUpperCase();
+    if (!call && loc.length < 4) { g('infos').innerHTML = ''; return; }
+    let i;
+    try { i = await appel('/infos', { call: call, loc: loc }); } catch (x) { return; }
+    if (g('call').value.trim().toUpperCase() !== call) return;
+    const k = loc.slice(0, 4);
+    const morceaux = [];
+    if (i.carre === 'nouveau') morceaux.push('<span class="nouveau">NOUVEAU CARRÉ ' + k + '</span>');
+    else if (i.carre === 'nouveau_journal') morceaux.push(k + ' : absent du journal SatMe');
+    else if (i.carre === 'travaille') morceaux.push(k + ' déjà travaillé');
+    else if (i.carre === 'confirme') morceaux.push(k + ' confirmé');
+    // In edit mode the contact being fixed is its own duplicate.
+    if (i.doublon && edite === null)
+      morceaux.push('<span class="doublon">Doublon : ' + echappe(call) +
+                    ' déjà contacté sur ce satellite à ' + i.doublon + ' UTC</span>');
+    g('infos').innerHTML = morceaux.join(' · ');
+  }, 500);
+}
+g('loc').addEventListener('input', planifieInfos);
 
 async function chargeSats() {
   const l = await appel('/sats');
@@ -342,7 +482,7 @@ async function qrz(auto) {
     dis('etat-qso', 'QRZ : ' + ((f && f.e) || 'pas de réponse'), false);
     return;
   }
-  if (f.l && !g('loc').value.trim()) g('loc').value = f.l;
+  if (f.l && !g('loc').value.trim()) { g('loc').value = f.l; planifieInfos(); }
   g('qui').dataset.pour = call;
   montreQui(f.f || prenomDe(f.n), f.n, [f.v, f.p].filter(Boolean).join(' · '));
   dis('etat-qso', [f.c, f.n, f.v, f.p].filter(Boolean).join(' · '), true);
@@ -366,6 +506,15 @@ function apresTab() {
 async function qso() {
   const call = g('call').value.trim().toUpperCase();
   if (!call) { g('call').focus(); return; }
+  if (edite !== null) {
+    const m = await appel('/modifie', {
+      t: edite, call: call, loc: g('loc').value.trim().toUpperCase(),
+      rse: g('rse').value.trim(), rsr: g('rsr').value.trim()
+    });
+    dis('etat-qso', m.ok ? call + ' modifié.' : 'Modification refusée.', m.ok);
+    if (m.ok) { await finEdition(true); g('call').focus(); }
+    return;
+  }
   const j = await appel('/qso', {
     call: call, loc: g('loc').value.trim().toUpperCase(),
     rse: g('rse').value.trim(), rsr: g('rsr').value.trim()
@@ -378,8 +527,9 @@ async function qso() {
     g('rse').value = '59'; g('rsr').value = '59';
     props = []; choisi = -1; dernierQ = ''; dessineProps();
     montreQui('', '', ''); g('qui').dataset.pour = '';
+    g('infos').innerHTML = '';
     g('call').focus();
-    tic();
+    chargeJournal();
   }
 }
 
@@ -412,6 +562,7 @@ function prend() {
   if (p.l) g('loc').value = p.l;
   props = []; choisi = -1; dessineProps();
   if (p.n) { g('qui').dataset.pour = p.c; montreQui(prenomDe(p.n), p.n, p.l || ''); }
+  planifieInfos();
   g('call').focus();
 }
 
@@ -460,7 +611,7 @@ function planifieQrz() {
     g('qui').dataset.pour = call;
     montreQui(f.f || prenomDe(f.n), f.n,
               [f.v, f.p].filter(Boolean).join(' · '));
-    if (f.l && !g('loc').value.trim()) g('loc').value = f.l;
+    if (f.l && !g('loc').value.trim()) { g('loc').value = f.l; planifieInfos(); }
   }, 600);
 }
 
@@ -491,6 +642,7 @@ async function cherche() {
 }
 
 g('call').addEventListener('input', cherche);
+g('call').addEventListener('input', planifieInfos);
 
 document.addEventListener('keydown', ev => {
   if (g('poste').style.display === 'none') {
@@ -525,7 +677,9 @@ document.addEventListener('keydown', ev => {
     return;
   }
   if (ev.key === 'Escape') {
+    if (edite !== null) { finEdition(true); g('call').focus(); return; }
     props = []; choisi = -1; dessineProps();
+    g('infos').innerHTML = '';
     g('call').value = ''; g('loc').value = ''; g('call').focus();
   }
 });
