@@ -22,8 +22,9 @@
     <usb-device vendor-id="1659" />
     <!-- WCH CH340 / CH341 / CH9102 0x1A86 — Arduino clones -->
     <usb-device vendor-id="6790" />
-    <!-- Icom (generic) 0x0BC2 -->
-    <usb-device vendor-id="3018" />
+    <!-- No "Icom" vendor entry: Icom rigs (IC-9700, IC-705) enumerate with
+         their Silicon Labs bridge, 0x10C4, listed above. The line once here,
+         0x0BC2, is Seagate: plugging a hard drive offered to open SatMe. -->
     <!-- Microchip MCP2200 / MCP2221 0x04D8 -->
     <usb-device vendor-id="1240" />
 

@@ -974,6 +974,10 @@ fun etatCarre(ui: UiState, carre: String): fr.f4ioz.satcombo.data.CarnetEnLigne.
     return null
 }
 
+/** Rig models of the FT-817 + IC-705 pair: which one receives. */
+const val FT817_IC705 = "FT817_IC705"   // IC-705 receives, FT-817 transmits
+const val IC705_FT817 = "IC705_FT817"   // IC-705 transmits, FT-817 receives
+
 /** Normalize a designator so AO-07 == AO-7, FO-029 == FO-29. */
 fun normalizeDesignator(s: String): String {
     val up = s.uppercase().trim().substringBefore(" (").substringBefore("_").trim()
@@ -1021,7 +1025,29 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private var rotorDriver: fr.f4ioz.satcombo.rotor.RotorDriver? = null
     /** Control goes through the FT-817 pair — two rigs, or one for TX only. */
     private val isPairRig: Boolean
-        get() = _ui.value.rigModel == "FT817x2" || _ui.value.rigModel == "FT817TX"
+        get() = _ui.value.rigModel in setOf("FT817x2", "FT817TX", FT817_IC705, IC705_FT817)
+
+    /** FT-817 + IC-705: the pair whose two rigs speak different protocols. */
+    private val isPaireMixte: Boolean
+        get() = _ui.value.rigModel == FT817_IC705 || _ui.value.rigModel == IC705_FT817
+
+    /** Gives each side of the pair its protocol, from the rig model. */
+    private fun configurePaire() = ft817.configure(
+        rxIc705 = _ui.value.rigModel == FT817_IC705,
+        txIc705 = _ui.value.rigModel == IC705_FT817)
+
+    /**
+     * A mixed pair assigns its cables by itself: the one answering in CI-V is
+     * the IC-705, the other the FT-817. Nothing to pick, nothing to swap.
+     */
+    private suspend fun attribuePaireMixte() {
+        val cles = ft817.listDevices().filter { it.hasPermission }.map { it.cle }
+        val icom = ft817.repereIc705(cles) ?: return
+        val yaesu = cles.firstOrNull { it != icom }
+        val icomRecoit = _ui.value.rigModel == FT817_IC705
+        poseRoleFt817(icom, if (icomRecoit) "RX" else "TX")
+        if (yaesu != null) poseRoleFt817(yaesu, if (icomRecoit) "TX" else "RX")
+    }
 
     /**
      * A single FT-817 on TX, receiving on the SDR dongle.
@@ -6590,8 +6616,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     return@runCatching
                 }
 
-                // 3. Assign roles by querying the rigs.
-                detecteFt817RolesEtAttend()
+                // 3. Assign roles by querying the rigs: by band for two
+                //    FT-817s, by protocol for an FT-817 with an IC-705.
+                configurePaire()
+                if (isPaireMixte) attribuePaireMixte() else detecteFt817RolesEtAttend()
 
                 // 4. Connect and **wait until done**. `setCatEnabled` and
                 //    `rouvreSiOuvert` return at once, so step 5 probed the
@@ -6685,6 +6713,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun setRigModel(model: String) {
         settings.rigModel = model
+        _ui.value = _ui.value.copy(rigModel = model)
+        configurePaire()
         // Default CI-V address per Icom model.
         val addr = when (model) {
             "IC910" -> 0x60
@@ -6799,8 +6829,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             _ui.value = _ui.value.copy(benchRunning = true, benchOk = false,
                 benchReport = "", benchSteps = emptyList())
             val r = runCatching {
-                if (isPairRig) fr.f4ioz.satcombo.cat.CatBench.runFt817Pair()
-                else fr.f4ioz.satcombo.cat.CatBench.runIc9700()
+                when {
+                    // The IC-705 side, receiving or transmitting, has its own run.
+                    _ui.value.rigModel == FT817_IC705 -> fr.f4ioz.satcombo.cat.CatBench.runFt817Ic705()
+                    _ui.value.rigModel == IC705_FT817 ->
+                        fr.f4ioz.satcombo.cat.CatBench.runFt817Ic705(ic705Emet = true)
+                    isPairRig -> fr.f4ioz.satcombo.cat.CatBench.runFt817Pair()
+                    else -> fr.f4ioz.satcombo.cat.CatBench.runIc9700()
+                }
             }.getOrNull()
             _ui.value = _ui.value.copy(
                 benchRunning = false,
@@ -6842,8 +6878,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     /** The current simulated rig, if any, kept so it can be closed cleanly. */
     private var civSim: fr.f4ioz.satcombo.cat.Ic9700Sim? = null
-    private var ft817Sims: Pair<fr.f4ioz.satcombo.cat.Ft817Sim,
-            fr.f4ioz.satcombo.cat.Ft817Sim>? = null
+    private var ft817Sims: Pair<fr.f4ioz.satcombo.cat.SerialLink,
+            fr.f4ioz.satcombo.cat.SerialLink>? = null
 
     fun setCatSimulated(on: Boolean) {
         settings.catSimulated = on
@@ -6865,8 +6901,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      */
     private fun connectSimulated() {
         if (isPairRig) {
-            val r = fr.f4ioz.satcombo.cat.Ft817Sim()
-            val x = fr.f4ioz.satcombo.cat.Ft817Sim()
+            configurePaire()
+            // Each side gets the simulator of the rig it stands for.
+            val r: fr.f4ioz.satcombo.cat.SerialLink =
+                if (_ui.value.rigModel == FT817_IC705) fr.f4ioz.satcombo.cat.Ic705Sim()
+                else fr.f4ioz.satcombo.cat.Ft817Sim()
+            val x: fr.f4ioz.satcombo.cat.SerialLink =
+                if (_ui.value.rigModel == IC705_FT817) fr.f4ioz.satcombo.cat.Ic705Sim()
+                else fr.f4ioz.satcombo.cat.Ft817Sim()
             ft817Sims = r to x
             ft817.rx.attach(r)
             ft817.tx.attach(x)
@@ -7049,6 +7091,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             fr.f4ioz.satcombo.cat.CatJournal.enabled = _ui.value.catMonitor
             if (_ui.value.catSimulated) { connectSimulated(); return@run }
             if (isPairRig) {
+                configurePaire()
+                if (isPaireMixte) {
+                    ft817.requestPermissions()
+                    attribuePaireMixte()
+                }
                 // Dual FT-817: open both adapters by their remembered FTDI serials.
                 if (_ui.value.ft817RxSerial.isBlank() && _ui.value.ft817TxSerial.isBlank()) {
                     _ui.value = _ui.value.copy(catConnected = false, catStatus = t("ft817_assign_first"))
@@ -7060,7 +7107,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 // between plug-ins**, so yesterday's assignment may name the
                 // other cable today. Don't guess better; ask each rig its
                 // frequency, and its answer gives its role.
-                verifieRolesFt817SiSansNumero()
+                // A mixed pair was assigned by protocol just above.
+                if (!isPaireMixte) verifieRolesFt817SiSansNumero()
 
                 val (rxOk, txOk) = if (isTxOnlyRig)
                     // Single cable: open TX only; the one adapter present will
@@ -7070,7 +7118,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     }, _ui.value.ft817Baud)
                 else ft817.open(
                     _ui.value.ft817RxSerial, _ui.value.ft817TxSerial, _ui.value.ft817Baud)
-                        .also { (r, t) -> if (r && t) verifieRolesOuverts() }
+                        .also { (r, t) -> if (r && t && !isPaireMixte) verifieRolesOuverts() }
                 val ok = rxOk || txOk
                 _ui.value = _ui.value.copy(catConnected = ok,
                     catStatus = if (ok) tf("ft817_connected",

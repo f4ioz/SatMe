@@ -81,4 +81,38 @@ object CatBench {
             txSim.hz == uplinkHz && txSim.toneTenthHz == toneTenthHz
         return Report(steps, refusals, ok)
     }
+
+    /**
+     * FT-817 + IC-705, each speaking its own protocol on its own cable: the
+     * IC-705 on the downlink, or on the uplink when [ic705Emet]. Passes only
+     * with no refusal on either side: a single IC-9700 command slipped to the
+     * IC-705 (satellite mode, MAIN/SUB) would show here.
+     */
+    suspend fun runFt817Ic705(
+        icom: Ic705Sim = Ic705Sim(),
+        yaesu: Ft817Sim = Ft817Sim(),
+        ic705Emet: Boolean = false,
+        downlinkHz: Long = 145_800_000L,
+        uplinkHz: Long = 437_800_000L,
+        toneTenthHz: Int = 670
+    ): Report {
+        val pair = Ft817Pair()
+        pair.configure(rxIc705 = !ic705Emet, txIc705 = ic705Emet)
+        if (ic705Emet) pair.attach(yaesu, icom) else pair.attach(icom, yaesu)
+        pair.pacingMs = 0L
+        val steps = ArrayList<String>()
+
+        pair.setModes("FM", "FM"); steps += "modes FM / FM"
+        pair.setPair(downlinkHz, uplinkHz); steps += t("catb_pair")
+        val back = pair.readDownlink()
+        steps += tf("catb_readback", back?.let { "%.5f MHz".format(java.util.Locale.US, it / 1e6) } ?: t("catb_no_reply"))
+        pair.setCtcss(toneTenthHz); steps += tf("catb_tone", "%.1f".format(java.util.Locale.US, toneTenthHz / 10.0))
+
+        val refusals = icom.refusals + yaesu.refusals
+        val (hzMontee, tonMontee) =
+            if (ic705Emet) icom.hz to icom.toneTenthHz else yaesu.hz to yaesu.toneTenthHz
+        val ok = refusals == 0 && back == downlinkHz &&
+            hzMontee == uplinkHz && tonMontee == toneTenthHz
+        return Report(steps, refusals, ok)
+    }
 }

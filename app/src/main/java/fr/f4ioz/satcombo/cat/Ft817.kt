@@ -61,12 +61,12 @@ data class UsbSerialInfo(
  *
  * Talks to a [SerialLink], so [attach] can plug in an [Ft817Sim].
  */
-class Ft817Cat(private val context: Context? = null) {
+class Ft817Cat(private val context: Context? = null) : PosteSimple {
 
     private var link: SerialLink? = null
     var boundSerial: String? = null
         private set
-    val isOpen: Boolean get() = link != null
+    override val isOpen: Boolean get() = link != null
 
     /**
      * One conversation at a time on the line.
@@ -86,13 +86,13 @@ class Ft817Cat(private val context: Context? = null) {
     private val fil = kotlinx.coroutines.sync.Mutex()
 
     /** Gap between frames: 25 ms on a real rig. */
-    var pacingMs: Long = 25L
+    override var pacingMs: Long = 25L
 
     /** Plugs in any serial line — a real cable or a simulated rig. */
-    fun attach(l: SerialLink) { link = l }
+    override fun attach(l: SerialLink) { link = l }
 
     /** Opens the adapter matching key [deviceSerial] (see [IdentiteUsb]) at [baud], 8N2. */
-    suspend fun open(deviceSerial: String?, baud: Int): Boolean = withContext(Dispatchers.IO) {
+    override suspend fun open(deviceSerial: String?, baud: Int): Boolean = withContext(Dispatchers.IO) {
         val ctx = context ?: return@withContext false
         val um = ctx.getSystemService(Context.USB_SERVICE) as UsbManager
         val drivers = UsbSerialProber.getDefaultProber().findAllDrivers(um)
@@ -113,7 +113,7 @@ class Ft817Cat(private val context: Context? = null) {
         }.isSuccess
     }
 
-    fun close() {
+    override fun close() {
         runCatching { link?.close() }
         link = null; boundSerial = null
     }
@@ -209,7 +209,7 @@ class Ft817Cat(private val context: Context? = null) {
     }
 
     /** Set frequency (Hz). FT-817 resolution is 10 Hz, 8 BCD digits big-endian. */
-    suspend fun setFrequency(hz: Long): Boolean {
+    override suspend fun setFrequency(hz: Long): Boolean {
         val b = CatDecode.yaesuFreq(hz)
         return cmd(b[0].toInt() and 0xFF, b[1].toInt() and 0xFF,
             b[2].toInt() and 0xFF, b[3].toInt() and 0xFF, 0x01)
@@ -224,16 +224,16 @@ class Ft817Cat(private val context: Context? = null) {
         hz to (acc[4].toInt() and 0xFF)
     } }
 
-    suspend fun readFrequency(): Long? = readFrequencyAndMode()?.first
+    override suspend fun readFrequency(): Long? = readFrequencyAndMode()?.first
 
     /** Set operating mode: LSB/USB/CW/CWR/AM/FM/DIG/PKT. */
-    suspend fun setMode(mode: String): Boolean = cmd(modeByte(mode), 0, 0, 0, 0x07)
+    override suspend fun setMode(mode: String): Boolean = cmd(modeByte(mode), 0, 0, 0, 0x07)
 
     /**
      * TX access tone in tenths of Hz (670 = 67.0 Hz), zero to turn it off.
      * Two big-endian BCD bytes: 88.5 Hz gives `08 85`.
      */
-    suspend fun setCtcss(tenthHz: Int): Boolean {
+    override suspend fun setCtcss(tenthHz: Int): Boolean {
         // The two tone frames form one command: split apart, a frequency write
         // could slip between tone mode and tone value.
         return if (tenthHz > 0) {
@@ -251,12 +251,12 @@ class Ft817Cat(private val context: Context? = null) {
      * seeing the raw byte cost several versions: three possible causes needed
      * three opposite fixes, and this one byte tells them apart.
      */
-    @Volatile var dernierEtatTx: Int? = null
+    @Volatile override var dernierEtatTx: Int? = null
         private set
 
     /** True while the rig is TRANSMITTING (PTT down), false while receiving,
      *  null if unknown. Bit 7 of the 0xF7 status byte is SET during RX. */
-    suspend fun isTransmitting(): Boolean? = withContext(Dispatchers.IO) { fil.withLock {
+    override suspend fun isTransmitting(): Boolean? = withContext(Dispatchers.IO) { fil.withLock {
         val l = link ?: return@withLock null
         val acc = ask(l, frameOf(0, 0, 0, 0, 0xF7), 1, 300)
         if (acc == null) { dernierEtatTx = null; return@withLock null }
@@ -274,15 +274,28 @@ class Ft817Cat(private val context: Context? = null) {
 }
 
 /**
- * The classic portable full-duplex satellite station: TWO FT-817s, one fixed on
- * RX (downlink) and one on TX (uplink), each on its own USB-serial cable.
+ * The classic portable full-duplex satellite station: two rigs, one fixed on
+ * RX (downlink) and one on TX (uplink), each on its own USB-serial cable —
+ * two FT-817s, or an FT-817 with an IC-705 ([configure]).
  * Assignment is remembered by adapter key (see [IdentiteUsb]): the serial number
  * survives replugging; the fallback identity only while nothing is moved.
  */
 class Ft817Pair(private val context: Context? = null) {
 
-    val rx = Ft817Cat(context)
-    val tx = Ft817Cat(context)
+    var rx: PosteSimple = Ft817Cat(context)
+        private set
+    var tx: PosteSimple = Ft817Cat(context)
+        private set
+
+    /**
+     * Which side is an IC-705, the other being an FT-817. Only while both are
+     * closed: swapping a driver under an open line would leak the port.
+     */
+    fun configure(rxIc705: Boolean, txIc705: Boolean) {
+        if (isOpen) return
+        if ((rx is Ic705Cat) != rxIc705) rx = if (rxIc705) Ic705Cat(context) else Ft817Cat(context)
+        if ((tx is Ic705Cat) != txIc705) tx = if (txIc705) Ic705Cat(context) else Ft817Cat(context)
+    }
     val isOpen: Boolean get() = rx.isOpen || tx.isOpen
     val bothOpen: Boolean get() = rx.isOpen && tx.isOpen
 
@@ -327,11 +340,33 @@ class Ft817Pair(private val context: Context? = null) {
      * two copies of the same protocol would drift apart.
      */
     suspend fun sonde(cle: String, baud: Int): Long? {
-        val poste = Ft817Cat(context)
-        if (!poste.open(cle, baud)) return null
-        val hz = runCatching { poste.readFrequency() }.getOrNull()
-        poste.close()
-        return hz?.takeIf { IdentiteUsb.freqPlausible(it) }
+        // Yaesu first, then Icom: with an IC-705 in the pair, the adapter may
+        // speak either, and each protocol ignores the other's frames.
+        for (poste in listOf<PosteSimple>(Ft817Cat(context), Ic705Cat(context))) {
+            if (!poste.open(cle, baud)) continue
+            val hz = runCatching { poste.readFrequency() }.getOrNull()
+            poste.close()
+            if (hz != null && IdentiteUsb.freqPlausible(hz)) return hz
+        }
+        return null
+    }
+
+    /**
+     * Which of [cles] is the IC-705: the adapter that answers in CI-V.
+     *
+     * For an FT-817 + IC-705 pair the protocol tells the rigs apart, so no
+     * serial number or band guess is needed: the FT-817 ignores CI-V frames,
+     * the IC-705 answers them.
+     */
+    suspend fun repereIc705(cles: List<String>): String? {
+        for (cle in cles) {
+            val icom = Ic705Cat(context)
+            if (!icom.open(cle, Ic705Cat.VITESSE)) continue
+            val hz = runCatching { icom.readFrequency() }.getOrNull()
+            icom.close()
+            if (hz != null && IdentiteUsb.freqPlausible(hz)) return cle
+        }
+        return null
     }
 
     /** Ask permission for every recognized adapter that lacks it. */

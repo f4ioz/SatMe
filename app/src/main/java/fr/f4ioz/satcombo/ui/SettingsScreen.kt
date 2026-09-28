@@ -1955,6 +1955,8 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
                     val rigs = listOf(
                         Triple("IC9700", "Icom IC-9700", true),
                         Triple("FT817x2", "2× Yaesu FT-817", true),
+                        Triple(fr.f4ioz.satcombo.FT817_IC705, t("rig_ft817_ic705"), true),
+                        Triple(fr.f4ioz.satcombo.IC705_FT817, t("rig_ic705_ft817"), true),
                         Triple("FT817TX", t("qo100_poste_sdr"), true)
                     )
                     rigs.forEach { (id, label, ready) ->
@@ -1982,14 +1984,24 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
             }
         }
         // --- Dual FT-817: RX/TX adapter assignment (by FTDI serial) + baud ---
-        if (ui.rigModel == "FT817x2" || ui.rigModel == "FT817TX") {
+        val paireMixte = ui.rigModel == fr.f4ioz.satcombo.FT817_IC705 ||
+            ui.rigModel == fr.f4ioz.satcombo.IC705_FT817
+        if (ui.rigModel == "FT817x2" || ui.rigModel == "FT817TX" || paireMixte) {
         item {
             LaunchedEffect(Unit) { vm.refreshUsbDevices() }
             Surface(color = SpaceCard, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp)) {
-                    Text(t("ft817_pair_title"), color = TextHi, fontWeight = FontWeight.Bold)
+                    Text(if (paireMixte) t("paire_mixte_titre") else t("ft817_pair_title"),
+                        color = TextHi, fontWeight = FontWeight.Bold)
                     Text(t("ft817_pair_desc"), color = TextLo, fontSize = 11.sp,
                         modifier = Modifier.padding(top = 2.dp, bottom = 8.dp))
+                    // FT-817 + IC-705: the protocols tell the rigs apart, so
+                    // the cables are assigned at connection; the IC-705 side
+                    // needs its CI-V set to USB, address A4.
+                    if (paireMixte) {
+                        Text(t("paire_mixte_desc"), color = Amber, fontSize = 11.sp,
+                            modifier = Modifier.padding(bottom = 8.dp))
+                    }
 
                     Text(t("ft817_baud"), color = TextHi, fontSize = 13.sp, fontWeight = FontWeight.Bold)
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -2189,7 +2201,8 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
                     }
 
                     Spacer(Modifier.height(12.dp))
-                    val duplex = ui.rigModel == "FT817x2" || ui.rigModel == "FT817TX"
+                    val duplex = ui.rigModel in setOf("FT817x2", "FT817TX",
+                        fr.f4ioz.satcombo.FT817_IC705, fr.f4ioz.satcombo.IC705_FT817)
                     Row(verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier.fillMaxWidth().toggleable(value = ui.catUi.txVfoShift && duplex, enabled = duplex, role = Role.Switch,
                             onValueChange = { vm.setCatTxVfoShift(it) })) {
@@ -2341,7 +2354,8 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
                         // What follows is for Icom CI-V radios ONLY. Left
                         // unconditioned, it showed in Yaesu dual mode too, with
                         // two competing "USB adapter" sections.
-                        if (ui.rigModel != "FT817x2") {
+                        if (ui.rigModel !in setOf("FT817x2",
+                                fr.f4ioz.satcombo.FT817_IC705, fr.f4ioz.satcombo.IC705_FT817)) {
                             // CI-V address + baud.
                             Spacer(Modifier.height(8.dp))
                             Text(t("civ_address"), color = TextHi, fontSize = 13.sp)

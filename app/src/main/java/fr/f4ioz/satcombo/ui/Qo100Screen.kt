@@ -839,6 +839,8 @@ private fun ChoixPoste(ui: UiState, vm: MainViewModel) {
     listOf(
         "IC9700" to "Icom IC-9700",
         "FT817x2" to "2× Yaesu FT-817",
+        fr.f4ioz.satcombo.FT817_IC705 to t("rig_ft817_ic705"),
+        fr.f4ioz.satcombo.IC705_FT817 to t("rig_ic705_ft817"),
         "FT817TX" to t("qo100_poste_sdr"),
     ).forEach { (id, libelle) ->
         LigneChoix(

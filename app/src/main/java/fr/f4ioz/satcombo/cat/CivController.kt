@@ -156,6 +156,49 @@ class CivController(private val context: Context? = null) : RigDriver {
         }
     }
 
+    /**
+     * Opens the adapter with key [cle] (see [IdentiteUsb]), first port, 8N1.
+     *
+     * For a rig paired with an FT-817 on a hub: opening "port N" could land
+     * on the FT-817's cable; the key names the Icom's own adapter.
+     */
+    suspend fun openParCle(cle: String?, baud: Int, port: Int = 0): Boolean = withContext(Dispatchers.IO) {
+        val ctx = context ?: return@withContext false
+        val um = ctx.getSystemService(Context.USB_SERVICE) as UsbManager
+        val drivers = UsbSerialProber.getDefaultProber().findAllDrivers(um)
+            .filter { um.hasPermission(it.device) }
+        val cles = drivers.map { cleDe(it.device) }
+        val choisie = IdentiteUsb.resout(cle, cles)
+        if (choisie == null) { lastError = t("cat_err_no_device"); return@withContext false }
+        val driver = drivers.getOrNull(cles.indexOf(choisie)) ?: return@withContext false
+        val connection = um.openDevice(driver.device)
+        if (connection == null) { lastError = t("cat_err_open_device"); return@withContext false }
+        val p = driver.ports.getOrNull(port)
+        if (p == null) { lastError = t("cat_err_no_port"); connection.close(); return@withContext false }
+        runCatching {
+            p.open(connection)
+            p.setParameters(baud, 8, UsbSerialPort.STOPBITS_1, UsbSerialPort.PARITY_NONE)
+            runCatching { p.setDTR(true); p.setRTS(true) }
+            link = UsbSerialLink(p)
+            lastError = ""
+            true
+        }.getOrElse {
+            lastError = tf("cat_err_open_port", it.message ?: "?")
+            runCatching { p.close() }
+            false
+        }
+    }
+
+    /** Serial ports of the adapter with key [cle] (an Icom shows two). */
+    fun nombrePorts(cle: String?): Int {
+        val ctx = context ?: return 0
+        val um = ctx.getSystemService(Context.USB_SERVICE) as UsbManager
+        val drivers = UsbSerialProber.getDefaultProber().findAllDrivers(um)
+        val cles = drivers.map { cleDe(it.device) }
+        val choisie = IdentiteUsb.resout(cle, cles) ?: return 0
+        return drivers.getOrNull(cles.indexOf(choisie))?.ports?.size ?: 0
+    }
+
     override fun close() {
         runCatching { link?.close() }
         link = null
@@ -516,8 +559,11 @@ class CivController(private val context: Context? = null) : RigDriver {
         if (tenthHz > 0) { setToneOn(true); setToneFreq(tenthHz) } else setToneOn(false)
     }
 
-    private fun modeByte(m: String): Int = when (m.uppercase()) {
-        "LSB" -> 0x00; "USB" -> 0x01; "AM" -> 0x02; "CW" -> 0x03; "FM" -> 0x05
-        else -> 0x01
-    }
+    private fun modeByte(m: String): Int = modeCiv(m)
+}
+
+/** CI-V mode byte for a mode name (0x00 LSB, 0x01 USB, 0x02 AM, 0x03 CW, 0x05 FM). */
+internal fun modeCiv(m: String): Int = when (m.uppercase()) {
+    "LSB" -> 0x00; "USB" -> 0x01; "AM" -> 0x02; "CW" -> 0x03; "FM" -> 0x05
+    else -> 0x01
 }

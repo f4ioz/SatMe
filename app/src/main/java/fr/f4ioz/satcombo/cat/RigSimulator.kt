@@ -204,6 +204,91 @@ class Ic9700Sim(
 }
 
 /**
+ * An in-memory IC-705: **one** receiver, a mode, a tone and a TX state, at
+ * CI-V address 0xA4.
+ *
+ * It refuses what only an IC-9700 understands — satellite mode (0x16 0x5A),
+ * MAIN/SUB selection (0x07 D0/D1), unselected-VFO writes (0x25/0x26) — and
+ * counts those refusals: a pair driver that slipped one in would show up in
+ * [refusals], as it would on the real rig.
+ */
+class Ic705Sim(
+    val radioAddr: Int = 0xA4,
+    val ctrlAddr: Int = 0xE0
+) : SerialLink {
+
+    /** Starts on HF, far from any satellite: a read-back that matches was written. */
+    var hz: Long = 14_074_000L; private set
+    var mode: Int = 0x01; private set
+    var toneOn: Boolean = false; private set
+    var toneTenthHz: Int = 0; private set
+    /** Set by a test to play the operator pressing PTT. */
+    var transmitting: Boolean = false
+    var refusals: Int = 0; private set
+    /** "CI-V USB Echo Back": the rig repeats each frame before answering. */
+    var echo: Boolean = false
+
+    private val outbox = ArrayDeque<Byte>()
+    private val inbox = ArrayList<Byte>()
+    private var closed = false
+
+    override fun write(bytes: ByteArray, timeoutMs: Int): Boolean {
+        if (closed) return false
+        bytes.forEach { inbox += it }
+        val buf = inbox.toByteArray()
+        val frames = CatDecode.splitCiv(buf)
+        if (frames.isNotEmpty()) {
+            val lastEnd = buf.indexOfLast { (it.toInt() and 0xFF) == CatDecode.END } + 1
+            val keep = if (lastEnd in 1..buf.size) buf.copyOfRange(lastEnd, buf.size) else ByteArray(0)
+            inbox.clear(); keep.forEach { inbox += it }
+            frames.forEach { handle(it) }
+        }
+        return true
+    }
+
+    override fun read(buf: ByteArray, timeoutMs: Int): Int {
+        var n = 0
+        while (n < buf.size && outbox.isNotEmpty()) { buf[n++] = outbox.removeFirst() }
+        return n
+    }
+
+    override fun close() { closed = true; outbox.clear(); inbox.clear() }
+
+    private fun emit(f: ByteArray) { f.forEach { outbox.addLast(it) } }
+    private fun frameToCtrl(cmd: Int, data: ByteArray = ByteArray(0)): ByteArray =
+        byteArrayOf(0xFE.toByte(), 0xFE.toByte(), ctrlAddr.toByte(), radioAddr.toByte(),
+            cmd.toByte()) + data + byteArrayOf(CatDecode.END.toByte())
+    private fun ack() = emit(frameToCtrl(CatDecode.ACK))
+    private fun nak() { refusals++; emit(frameToCtrl(CatDecode.NAK)) }
+
+    private fun handle(f: ByteArray) {
+        if (f.size < 6) return
+        if ((f[2].toInt() and 0xFF) != radioAddr) return
+        if (echo) emit(f)
+        val cmd = f[4].toInt() and 0xFF
+        val d = f.copyOfRange(5, f.size - 1)
+        fun at(i: Int) = if (d.size > i) d[i].toInt() and 0xFF else -1
+        when (cmd) {
+            0x03 -> emit(frameToCtrl(0x03, CatDecode.freqToBcdLe(hz)))
+            0x04 -> emit(frameToCtrl(0x04, byteArrayOf(mode.toByte(), 0x01)))
+            0x05 -> CatDecode.bcdLeToFreq(d)?.let { hz = it; ack() } ?: nak()
+            0x06 -> if (d.isEmpty()) nak() else { mode = at(0); ack() }
+            0x07 -> if (at(0) == 0x00 || at(0) == 0x01) ack() else nak()
+            0x16 -> if (at(0) == 0x42) { toneOn = at(1) == 1; ack() } else nak()
+            0x1B -> {
+                if (at(0) != 0x00) { nak(); return }
+                if (d.size < 4) { emit(frameToCtrl(0x1B, byteArrayOf(0x00) + CatDecode.toneToBcdBe(toneTenthHz))); return }
+                val t = CatDecode.bcdBeToTone(d, 1)
+                if (t == null || !CatDecode.toneInRange(t)) nak() else { toneTenthHz = t; ack() }
+            }
+            0x1C -> if (at(0) == 0x00)
+                emit(frameToCtrl(0x1C, byteArrayOf(0x00, if (transmitting) 0x01 else 0x00))) else nak()
+            else -> nak()
+        }
+    }
+}
+
+/**
  * An in-memory FT-817: one frequency, a mode, a tone, and the inverted status
  * bit that catches everyone once.
  *
