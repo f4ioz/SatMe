@@ -1360,6 +1360,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             if (_ui.value.log.none { it.timeMs == t }) false else { retiensContact(t, on); true }
         }
         fr.f4ioz.satcombo.demo.PontCommande.infos = { call, loc -> infosSaisie(call, loc) }
+        fr.f4ioz.satcombo.demo.PontCommande.station = { stationPourPupitre() }
+        fr.f4ioz.satcombo.demo.PontCommande.choisitProfil = { id ->
+            if (_ui.value.carnet.profilsListe.none { it.id == id }) false
+            else { setCarnetProfil(id); true }
+        }
+        fr.f4ioz.satcombo.demo.PontCommande.releveProfils = { relevProfils() }
 
         // The monitor needs the context to pick its output: without it, it
         // cannot force the speaker when a USB sound card is present.
@@ -2593,6 +2599,40 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         return fr.f4ioz.satcombo.demo.PontCommande.Infos(carre, doublon)
     }
 
+    /** What the PC control desk shows beside the pass: see PontCommande.Station. */
+    private fun stationPourPupitre(): fr.f4ioz.satcombo.demo.PontCommande.Station {
+        val u = _ui.value
+        val c = u.carnet
+        val obs = u.observer
+        val ici = obs?.let { Maidenhead.fromLatLon(it.latDeg, it.lonDeg) } ?: u.manualLocator
+        val profilIci = if (c.profil.isBlank() && c.profils.isEmpty()) "" else
+            fr.f4ioz.satcombo.domain.ProfilsStation.profilPourEmplacement(
+                ici, myGridsCsv(), c.profils, c.profil, c.maille)
+        val maintenant = System.currentTimeMillis()
+        // The followed satellites' next passes, the one in progress first.
+        val passages = u.favoritePasses.filter { it.losEpochMs > maintenant }
+            .sortedBy { it.aosEpochMs }.take(8).map {
+                fr.f4ioz.satcombo.demo.PontCommande.PassageWeb(
+                    it.satName, it.aosEpochMs, it.losEpochMs, it.maxElevationDeg.toInt())
+            }
+        val actifs = activeTransmitters()
+        val tp = actifs.getOrNull(u.selectedTxIndex.coerceIn(0, (actifs.size - 1).coerceAtLeast(0)))
+        return fr.f4ioz.satcombo.demo.PontCommande.Station(
+            indicatif = settings.callsign, locator = ici,
+            profils = c.profilsListe.map {
+                fr.f4ioz.satcombo.demo.PontCommande.ProfilWeb(it.id, it.nom, it.indicatif, it.carre)
+            },
+            profilDefaut = c.profil, profilIci = profilIci, profilsEtat = c.profilsEtat,
+            passages = passages,
+            cat = if (u.catConnected) u.rigModel else "",
+            rotor = u.rotorConnected, enregistre = u.recording,
+            radio = if (c.radio) c.radioEtat.ifBlank { t("radio_attente") } else "",
+            auto = if (c.auto) c.autoEtat.ifBlank { t("auto_actif") } else "",
+            transpondeur = tp?.let {
+                it.description + " · " + (if (u.invertOverride ?: it.invert) "INVERSE" else "NORMAL")
+            }.orEmpty())
+    }
+
     // ---- automatic upload of each contact ----
 
     /** Last change of each contact, which restarts its minute. In memory only. */
@@ -2602,6 +2642,17 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     /** No reply: not before this time (the request may have gone through). */
     private val reessai = java.util.concurrent.ConcurrentHashMap<Long, Long>()
     @Volatile private var envoiAutoEnCours = false
+    @Volatile private var profilsDemandes = false
+
+    /**
+     * Station callsign of a Wavelog profile ("F4IOZ/M"), else the settings
+     * callsign. Wavelog skips a contact whose STATION_CALLSIGN differs from
+     * the profile's: "Differing station callsign … SKIPPED".
+     */
+    private fun stationDuProfil(profilId: String): String =
+        _ui.value.carnet.profilsListe.firstOrNull { it.id == profilId }
+            ?.indicatif?.trim()?.uppercase()?.ifBlank { null }
+            ?: settings.callsign
 
     /** State of a contact for the automatic upload. */
     fun etatEnvoi(e: fr.f4ioz.satcombo.data.LogEntry, maintenant: Long = System.currentTimeMillis()) =
@@ -2628,6 +2679,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val c = _ui.value.carnet
         if (!c.auto || envoiAutoEnCours || c.depotEnCours) return
         if (c.url.isBlank() || c.cle.isBlank() || c.profil.isBlank()) return
+        // The profile list is not kept across restarts: fetched once before
+        // the first automatic upload, or every contact would go to the
+        // settings profile whatever the square it was made from.
+        if (c.profilsListe.isEmpty() && !profilsDemandes) {
+            profilsDemandes = true
+            relevProfils()
+            return
+        }
         val maintenant = System.currentTimeMillis()
         val e = _ui.value.log.filter {
             etatEnvoi(it, maintenant) == fr.f4ioz.satcombo.domain.EnvoiAuto.Etat.PRET &&
@@ -2636,10 +2695,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         envoiAutoEnCours = true
         viewModelScope.launch {
             try {
-                val adif = fr.f4ioz.satcombo.data.Adif.enregistrement(e, settings.callsign)
-                if (adif.isBlank()) return@launch
                 val profil = fr.f4ioz.satcombo.domain.ProfilsStation.profilPourEmplacement(
                     e.myLocator, e.myGrids, c.profils, c.profil, c.maille)
+                val adif = fr.f4ioz.satcombo.data.Adif.enregistrement(
+                    e, stationDuProfil(profil), settings.callsign)
+                if (adif.isBlank()) return@launch
                 val r = fr.f4ioz.satcombo.data.CarnetEnLigne.depose(c.url, c.cle, profil, adif)
                 val issue = fr.f4ioz.satcombo.data.CarnetEnLigne.issue(r)
                 val etat = when {
@@ -3018,9 +3078,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         if (e.callsign.isBlank()) return
         _ui.value = _ui.value.copy(carnet = c.copy(depotEnCours = true, depot = ""))
         viewModelScope.launch {
-            val adif = fr.f4ioz.satcombo.data.Adif.enregistrement(e, settings.callsign)
             val profil = fr.f4ioz.satcombo.domain.ProfilsStation.profilPourEmplacement(
                 e.myLocator, e.myGrids, c.profils, c.profil, c.maille)
+            val adif = fr.f4ioz.satcombo.data.Adif.enregistrement(
+                e, stationDuProfil(profil), settings.callsign)
             val r = if (adif.isBlank()) ""
                     else fr.f4ioz.satcombo.data.CarnetEnLigne.depose(c.url, c.cle, profil, adif)
             // A duplicate is already in Wavelog: as good as accepted.
@@ -3069,12 +3130,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             var doutes = 0
             for (fiche in fiches) {
                 val e = _ui.value.log.firstOrNull { it.timeMs == fiche.timeMs } ?: continue
-                val adif = fr.f4ioz.satcombo.data.Adif.enregistrement(e, station)
-                if (adif.isBlank()) continue
                 // Profile follows the contact's location (lines of squares
                 // included); without a fetched table, the single settings profile.
                 val profil = fr.f4ioz.satcombo.domain.ProfilsStation.profilPourEmplacement(
                     e.myLocator, e.myGrids, c.profils, c.profil, c.maille)
+                val adif = fr.f4ioz.satcombo.data.Adif.enregistrement(
+                    e, stationDuProfil(profil), station)
+                if (adif.isBlank()) continue
                 val r = fr.f4ioz.satcombo.data.CarnetEnLigne.depose(c.url, c.cle, profil, adif)
                 when (fr.f4ioz.satcombo.data.CarnetEnLigne.issue(r)) {
                     fr.f4ioz.satcombo.data.CarnetEnLigne.Issue.PRIS -> {

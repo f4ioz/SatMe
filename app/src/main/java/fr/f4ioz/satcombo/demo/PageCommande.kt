@@ -85,6 +85,24 @@ object PageCommande {
   #liste td.envoi .ok { color:var(--cyan); } #liste td.envoi .ambre { color:var(--ambre); }
   #liste td.act { white-space:nowrap; text-align:right; }
   #liste td.act button { font-size:14px; padding:4px 9px; margin-left:4px; }
+  .grille2 { margin-top:16px; }
+  .puces { display:flex; flex-wrap:wrap; gap:8px; margin:10px 0; }
+  .puce { border:1px solid var(--bord); border-radius:8px; padding:4px 10px;
+          font-size:13px; color:var(--gris); }
+  .puce.on { border-color:var(--cyan); color:var(--cyan); }
+  .puce.rec { border-color:var(--rose); color:var(--rose); }
+  .info { font-size:13px; color:var(--gris); margin-top:4px; }
+  .info b { color:var(--clair); font-weight:600; }
+  #ici { margin-top:12px; padding:10px 12px; border-radius:10px;
+         background:rgba(63,224,200,.10); font-size:15px; }
+  #profils, #passages { width:100%; border-collapse:collapse; margin-top:8px; }
+  #profils td, #passages td { padding:7px 6px; border-bottom:1px solid var(--bord); font-size:14px; }
+  #profils tr { cursor:pointer; }
+  #profils tr:hover { background:rgba(255,255,255,.04); }
+  #profils tr.defaut td:first-child { color:var(--cyan); font-weight:800; }
+  #profils .marque { font-size:11px; color:var(--cyan); letter-spacing:1px; }
+  #passages .encours { color:var(--cyan); font-weight:800; }
+  #passages button { font-size:13px; padding:5px 10px; }
   #porte { max-width:420px; margin:12vh auto; }
 </style>
 
@@ -157,6 +175,28 @@ object PageCommande {
       <table id="liste"><tbody></tbody></table>
     </div>
   </div>
+
+  <!-- Ce qu'on irait sinon vérifier sur le téléphone : où partent les
+       contacts, l'état du poste, et les prochains passages. -->
+  <div class="grille grille2">
+    <div class="carte">
+      <div class="t">Station</div>
+      <div class="gros" id="st-ind" style="font-size:26px">—</div>
+      <div class="puces" id="puces"></div>
+      <div class="info" id="st-tp"></div>
+      <div class="info" id="st-radio"></div>
+      <div class="info" id="st-auto"></div>
+      <div id="ici"></div>
+      <div class="t" style="margin-top:14px">Profils Wavelog — un clic le met par défaut</div>
+      <table id="profils"><tbody></tbody></table>
+      <div class="ligne"><button onclick="releve()">Récupérer les profils</button></div>
+      <div class="etat" id="etat-profils"></div>
+    </div>
+    <div class="carte">
+      <div class="t">Prochains passages (satellites suivis, UTC)</div>
+      <table id="passages"><tbody></tbody></table>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -192,6 +232,7 @@ function ouvre() {
   dessineCadran(null);
   tic();
   chargeJournal();
+  chargeStation();
   setInterval(tic, 1000);
 }
 
@@ -308,6 +349,90 @@ async function tic() {
   g('tx').textContent = mhz(e.tx);
   // The log every two seconds: its waiting times count down in seconds.
   if (++tours % 2 === 0) chargeJournal();
+  if (tours % 5 === 0) chargeStation(); else dessinePassages();
+}
+
+// --- station, Wavelog profiles, coming passes ---
+//
+// Every five seconds: none of it moves fast, and the countdowns are
+// recomputed each second from the phone's clock offset.
+let station = null, decalage = 0;
+
+function hm(ms) {
+  const d = new Date(ms);
+  return String(d.getUTCHours()).padStart(2, '0') + ':' + String(d.getUTCMinutes()).padStart(2, '0');
+}
+
+async function chargeStation() {
+  let st;
+  try { st = await appel('/station'); } catch (x) { return; }
+  if (!st || !st.indicatif && !st.profils) return;
+  station = st;
+  decalage = st.now - Date.now();
+  g('st-ind').textContent = (st.indicatif || '—') + ' · ' + (st.locator || '');
+  g('puces').innerHTML =
+    '<span class="puce' + (st.cat ? ' on' : '') + '">CAT ' + (st.cat ? echappe(st.cat) : 'non connecté') + '</span>' +
+    '<span class="puce' + (st.rotor ? ' on' : '') + '">Rotor ' + (st.rotor ? 'connecté' : '—') + '</span>' +
+    '<span class="puce' + (st.rec ? ' rec' : '') + '">' + (st.rec ? '● Enregistrement' : 'Pas d\'enregistrement') + '</span>';
+  g('st-tp').innerHTML = st.tp ? 'Transpondeur : <b>' + echappe(st.tp) + '</b>' : '';
+  g('st-radio').innerHTML = st.radio ? 'Radio Wavelog : ' + echappe(st.radio) : 'Radio Wavelog : désactivée';
+  g('st-auto').innerHTML = st.auto ? 'Envoi automatique : ' + echappe(st.auto) : 'Envoi automatique : désactivé';
+  const parId = {};
+  (st.profils || []).forEach(p => parId[p.id] = p);
+  const ici = parId[st.ici];
+  // Where the next contact goes, with the callsign it will carry: the one
+  // thing that makes Wavelog accept or skip it.
+  g('ici').innerHTML = !st.ici ? 'Aucun profil de station réglé : les contacts ne peuvent pas partir.'
+    : 'Prochain contact → profil <b>' + echappe(st.ici) + '</b>' +
+      (ici ? ' · ' + echappe(ici.nom) + ' · <b>' + echappe(ici.indicatif) + '</b> · ' + echappe(ici.carre)
+           : ' (liste des profils non chargée)') +
+      (st.ici !== st.defaut ? ' <span class="info">— choisi d\'après votre carré, le défaut est ' + echappe(st.defaut) + '</span>' : '');
+  g('profils').querySelector('tbody').innerHTML = (st.profils || []).map(p =>
+    '<tr data-id="' + echappe(p.id) + '" class="' + (p.id === st.defaut ? 'defaut' : '') + '">' +
+    '<td>' + echappe(p.id) + '</td><td>' + echappe(p.nom) + '</td>' +
+    '<td><b>' + echappe(p.indicatif) + '</b></td><td>' + echappe(p.carre) + '</td>' +
+    '<td class="marque">' + (p.id === st.defaut ? 'PAR DÉFAUT' : '') +
+      (p.id === st.ici ? (p.id === st.defaut ? ' · ' : '') + 'UTILISÉ ICI' : '') + '</td></tr>').join('');
+  if (!(st.profils || []).length && st.profilsEtat) g('etat-profils').textContent = st.profilsEtat;
+  dessinePassages();
+}
+
+function dessinePassages() {
+  if (!station) return;
+  const maintenant = Date.now() + decalage;
+  g('passages').querySelector('tbody').innerHTML = (station.passages || []).map(p => {
+    const encours = maintenant >= p.aos && maintenant < p.los;
+    const quand = encours ? '<span class="encours">en cours · ' + rebours('LOS', p.los, maintenant) + '</span>'
+                          : rebours('AOS', p.aos, maintenant);
+    return '<tr><td><b>' + echappe(p.s) + '</b></td><td>' + hm(p.aos) + '–' + hm(p.los) + '</td>' +
+      '<td>' + quand + '</td><td>él. ' + p.el + '°</td>' +
+      '<td style="text-align:right"><button data-s="' + echappe(p.s) + '">Suivre</button></td></tr>';
+  }).join('') || '<tr><td class="info">Aucun passage prévu pour les satellites suivis.</td></tr>';
+}
+
+g('profils').addEventListener('click', async ev => {
+  const tr = ev.target.closest('tr');
+  if (!tr || !station || tr.dataset.id === station.defaut) return;
+  const j = await appel('/profil', { id: tr.dataset.id });
+  dis('etat-profils', j.ok ? 'Profil ' + tr.dataset.id + ' mis par défaut.' : 'Profil inconnu.', j.ok);
+  chargeStation();
+});
+
+g('passages').addEventListener('click', async ev => {
+  const b = ev.target.closest('button');
+  if (!b) return;
+  const j = await appel('/sat', { nom: b.dataset.s });
+  dis('etat-cmd', j.ok ? b.dataset.s + ' suivi.' : 'Satellite introuvable.', j.ok);
+});
+
+async function releve() {
+  dis('etat-profils', 'Récupération…', true);
+  await appel('/releve');
+  setTimeout(async () => {
+    await chargeStation();
+    const n = station && station.profils ? station.profils.length : 0;
+    dis('etat-profils', n ? n + ' profils récupérés.' : (station && station.profilsEtat) || 'Aucun profil reçu.', n > 0);
+  }, 3000);
 }
 
 // --- the log: fix, hold back, delete ---

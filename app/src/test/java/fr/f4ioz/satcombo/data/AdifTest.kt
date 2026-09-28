@@ -223,4 +223,14 @@ class AdifTest {
         assertFalse(out.contains("STATION_CALLSIGN"))
         assertTrue(out.contains("<EOR>"))
     }
+
+    @Test
+    fun indicatif_de_station_du_profil_et_operateur_distincts() {
+        // Wavelog skips a contact whose STATION_CALLSIGN is not the profile's
+        // ("Differing station callsign F4IOZ … for F4IOZ/M: SKIPPED").
+        val out = Adif.enregistrement(
+            LogEntry(0L, "SO-50", 27607, 0.0, 0.0, callsign = "F5RRO"), "F4IOZ/M", "F4IOZ")
+        assertTrue(out, out.contains("<STATION_CALLSIGN:7>F4IOZ/M"))
+        assertTrue(out, out.contains("<OPERATOR:5>F4IOZ"))
+    }
 }

@@ -106,6 +106,45 @@ object PontCommande {
     class Infos(val carre: String, val doublon: String)
     @Volatile var infos: ((call: String, locator: String) -> Infos)? = null
 
+    /** A Wavelog station profile as the desk lists it. */
+    class ProfilWeb(val id: String, val nom: String, val indicatif: String, val carre: String)
+
+    /** A coming pass of a followed satellite. */
+    class PassageWeb(val satellite: String, val aosMs: Long, val losMs: Long, val elMax: Int)
+
+    /**
+     * What the operator would otherwise pick the phone up for: where contacts
+     * go (Wavelog profile and its callsign), the coming passes, and the state
+     * of rig, rotor, recording and online log.
+     */
+    class Station(
+        val indicatif: String, val locator: String,
+        val profils: List<ProfilWeb>,
+        /** Profile set in the settings. */
+        val profilDefaut: String,
+        /** Profile the next contact goes to, from the square transmitted from. */
+        val profilIci: String,
+        val profilsEtat: String,
+        val passages: List<PassageWeb>,
+        /** Rig model when CAT is connected, else "". */
+        val cat: String,
+        val rotor: Boolean,
+        val enregistre: Boolean,
+        /** Radio relay to the online log: last result, "" when off. */
+        val radio: String,
+        /** Automatic upload: last result or "actif", "" when off. */
+        val auto: String,
+        /** Chosen transponder, with NORMAL/INVERSE. */
+        val transpondeur: String,
+    )
+    @Volatile var station: (() -> Station)? = null
+
+    /** Makes a profile the default for contacts. False when it is unknown. */
+    @Volatile var choisitProfil: ((String) -> Boolean)? = null
+
+    /** Fetches the profile list from the online log. */
+    @Volatile var releveProfils: (() -> Unit)? = null
+
     /**
      * Is the bridge up?
      *

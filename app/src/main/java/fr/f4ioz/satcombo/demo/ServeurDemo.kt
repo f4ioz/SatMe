@@ -411,6 +411,35 @@ object ServeurDemo {
                 jsonCourt(sortie, "{\"ok\":$ok}")
             }
 
+            "/station" -> {
+                val st = PontCommande.station?.invoke()
+                if (st == null) { jsonCourt(sortie, "{}"); return }
+                jsonCourt(sortie, "{\"indicatif\":\"${js(st.indicatif)}\",\"locator\":\"${js(st.locator)}\"," +
+                    "\"profils\":" + st.profils.joinToString(",", "[", "]") { p ->
+                        "{\"id\":\"${js(p.id)}\",\"nom\":\"${js(p.nom)}\"," +
+                            "\"indicatif\":\"${js(p.indicatif)}\",\"carre\":\"${js(p.carre)}\"}"
+                    } + "," +
+                    "\"defaut\":\"${js(st.profilDefaut)}\",\"ici\":\"${js(st.profilIci)}\"," +
+                    "\"profilsEtat\":\"${js(st.profilsEtat)}\"," +
+                    "\"passages\":" + st.passages.joinToString(",", "[", "]") { p ->
+                        "{\"s\":\"${js(p.satellite)}\",\"aos\":${p.aosMs},\"los\":${p.losMs},\"el\":${p.elMax}}"
+                    } + "," +
+                    "\"now\":${System.currentTimeMillis()}," +
+                    "\"cat\":\"${js(st.cat)}\",\"rotor\":${st.rotor},\"rec\":${st.enregistre}," +
+                    "\"radio\":\"${js(st.radio)}\",\"auto\":\"${js(st.auto)}\"," +
+                    "\"tp\":\"${js(st.transpondeur)}\"}")
+            }
+
+            "/profil" -> {
+                val ok = PontCommande.choisitProfil?.invoke(parametre(route, "id")) ?: false
+                jsonCourt(sortie, "{\"ok\":$ok}")
+            }
+
+            "/releve" -> {
+                PontCommande.releveProfils?.invoke()
+                jsonCourt(sortie, "{\"ok\":true}")
+            }
+
             "/infos" -> {
                 val i = PontCommande.infos?.invoke(parametre(route, "call"), parametre(route, "loc"))
                 jsonCourt(sortie, if (i == null) "{}"

@@ -141,8 +141,12 @@ object Adif {
      * would drift — that is how FREQ and FREQ_RX stayed swapped unnoticed.
      *
      * Empty without a callsign: same rule everywhere.
+     *
+     * [station] is the station callsign as the online log's profile has it
+     * ("F4IOZ/M"): Wavelog skips a contact whose STATION_CALLSIGN differs.
+     * [operateur] is who operated, the plain callsign.
      */
-    fun enregistrement(e: LogEntry, station: String = ""): String {
+    fun enregistrement(e: LogEntry, station: String = "", operateur: String = station): String {
         if (e.callsign.isBlank()) return ""
         val sb = StringBuilder()
         val df = SimpleDateFormat("yyyyMMdd", Locale.US)
@@ -156,7 +160,7 @@ object Adif {
             sb.append(field("PROP_MODE", "SAT"))
             if (station.isNotBlank()) {
                 sb.append(field("STATION_CALLSIGN", station.uppercase()))
-                sb.append(field("OPERATOR", station.uppercase()))
+                sb.append(field("OPERATOR", operateur.ifBlank { station }.uppercase()))
             }
             sb.append(field("CALL", e.callsign))
             val (mode, sub) = modeOf(e.mode)
