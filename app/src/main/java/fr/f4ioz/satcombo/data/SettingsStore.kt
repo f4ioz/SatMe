@@ -299,6 +299,16 @@ class SettingsStore(context: Context) {
         get() = prefs.getString("carnet_profil", "") ?: ""
         set(v) { prefs.edit().putString("carnet_profil", v.trim()).apply() }
 
+    /** SatMe as a radio in the online log (satellite and frequencies). */
+    var carnetRadio: Boolean
+        get() = prefs.getBoolean("carnet_radio", false)
+        set(v) { prefs.edit().putBoolean("carnet_radio", v).apply() }
+
+    /** The radio's name as chosen in the online log's contact entry. */
+    var carnetRadioNom: String
+        get() = prefs.getString("carnet_radio_nom", "SatMe") ?: "SatMe"
+        set(v) { prefs.edit().putString("carnet_radio_nom", v.trim()).apply() }
+
     /**
      * Last contact fetched from the online log: makes fetching incremental,
      * as the server asks (instances rate-limit). Reset to zero to reload

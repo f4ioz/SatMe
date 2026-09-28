@@ -1574,6 +1574,23 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
                         }
                     }
 
+                    // SatMe as the radio of the online log: at home, contacts
+                    // are typed on the PC in Wavelog, the phone describes the rig.
+                    Spacer(Modifier.height(10.dp))
+                    SettingSwitch(t("radio_titre"), t("radio_desc"), ui.carnet.radio) {
+                        vm.setCarnetRadio(it)
+                    }
+                    if (ui.carnet.radio) {
+                        OutlinedTextField(
+                            value = ui.carnet.radioNom, onValueChange = vm::setCarnetRadioNom,
+                            label = { Text(t("radio_nom"), fontSize = 12.sp) },
+                            singleLine = true, modifier = Modifier.fillMaxWidth().padding(top = 6.dp))
+                        Text(ui.carnet.radioEtat.ifBlank { t("radio_attente") },
+                            color = if (ui.carnet.radioEtat.startsWith(t("radio_refus").substringBefore("{"))) Amber
+                                    else TextLo,
+                            fontSize = 11.sp, modifier = Modifier.padding(top = 4.dp))
+                    }
+
                     // Upload, below the settings it needs. The profile id is
                     // asked here, not above: it is only used for writing, and
                     // someone who only wants the square map need not dig it up.

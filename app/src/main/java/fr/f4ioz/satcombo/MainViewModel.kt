@@ -194,6 +194,11 @@ data class CarnetUi(
     val profil: String = "",
     /** What to harvest: "sat", "phonie", "cw" or "tout". */
     val filtre: String = "sat",
+    /** SatMe acts as a radio in the online log (RelaisRadio). */
+    val radio: Boolean = false,
+    val radioNom: String = "SatMe",
+    /** Last radio message: time sent, or the reason it was refused. */
+    val radioEtat: String = "",
     /** Result of the last upload. */
     val depot: String = "",
     /** Upload in progress: the button cannot be pressed again. */
@@ -1070,7 +1075,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 cle = settings.carnetCle,
                 slug = settings.carnetSlug,
                 profil = settings.carnetProfil,
-                filtre = settings.carnetFiltre),
+                filtre = settings.carnetFiltre,
+                radio = settings.carnetRadio,
+                radioNom = settings.carnetRadioNom),
             catUi = CatUi(
                 liseret = settings.liseréEmission,
                 txSuitVite = settings.txSuitVite,
@@ -1326,6 +1333,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 if (fr.f4ioz.satcombo.demo.ServeurDemo.etat.value.actif) {
                     runCatching { publieDemo() }
                 }
+                runCatching { relaieRadio() }
                 kotlinx.coroutines.delay(1000)
             }
         }
@@ -2473,6 +2481,78 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun setCarnetProfil(v: String) {
         settings.carnetProfil = v
         _ui.value = _ui.value.copy(carnet = _ui.value.carnet.copy(profil = settings.carnetProfil))
+    }
+
+    fun setCarnetRadio(on: Boolean) {
+        settings.carnetRadio = on
+        relais.oublie()
+        _ui.value = _ui.value.copy(carnet = _ui.value.carnet.copy(radio = on, radioEtat = ""))
+    }
+
+    fun setCarnetRadioNom(v: String) {
+        settings.carnetRadioNom = v
+        relais.oublie()
+        _ui.value = _ui.value.copy(carnet = _ui.value.carnet.copy(radioNom = v))
+    }
+
+    // ---- SatMe as a radio in the online log ----
+
+    private val relais = fr.f4ioz.satcombo.data.RelaisRadio()
+    @Volatile private var relaisEnCours = false
+
+    /**
+     * Sends the worked satellite and the RX/TX box frequencies to Wavelog or
+     * Cloudlog when they deserve it ([RelaisRadio.aEnvoyer]). Called every
+     * second; nothing leaves while no satellite page is open, since there is
+     * then no transponder chosen to describe.
+     */
+    private fun relaieRadio() {
+        val u = _ui.value
+        val c = u.carnet
+        if (!c.radio || c.url.isBlank() || c.cle.isBlank() || relaisEnCours) return
+        val sat = u.selected ?: return
+        val actifs = activeTransmitters()
+        if (actifs.isEmpty()) return
+        val t = actifs[u.selectedTxIndex.coerceIn(0, actifs.size - 1)]
+        val (rx, tx) = freqAffichees()
+        if (rx == null && tx == null) return
+        val e = fr.f4ioz.satcombo.data.RelaisRadio.Etat(
+            satellite = sat.name, montantHz = tx, descendantHz = rx,
+            modeMontant = modeJambe(t, montant = true), modeDescendant = modeJambe(t, montant = false))
+        val maintenant = System.currentTimeMillis()
+        if (!relais.aEnvoyer(e, maintenant)) return
+        // Marked before the answer: a slow or failing server must not get a
+        // message every second.
+        relais.envoye(e, maintenant)
+        relaisEnCours = true
+        val corps = fr.f4ioz.satcombo.data.RelaisRadio.json(c.cle, c.radioNom.ifBlank { "SatMe" }, e)
+        viewModelScope.launch {
+            val refus = fr.f4ioz.satcombo.data.CarnetEnLigne.radio(c.url, corps)
+            relaisEnCours = false
+            val heure = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.US)
+                .apply { timeZone = java.util.TimeZone.getTimeZone("UTC") }.format(java.util.Date(maintenant))
+            _ui.value = _ui.value.copy(carnet = _ui.value.carnet.copy(
+                radioEtat = if (refus == null) tf("radio_envoye", heure, e.satellite, e.modeSat)
+                            else tf("radio_refus", refus)))
+        }
+    }
+
+    /**
+     * Mode of one leg, as the rig is set: FM, CW, or on a linear transponder
+     * USB down and LSB up when inverting — the same convention as CAT, so the
+     * log never records a mode the VFO did not have.
+     */
+    private fun modeJambe(t: fr.f4ioz.satcombo.data.Transmitter, montant: Boolean): String {
+        val m = t.mode.orEmpty().uppercase()
+        return when {
+            m.contains("FM") -> "FM"
+            t.isTransponder && _ui.value.opMode == "CW" -> "CW"
+            m.contains("CW") -> "CW"
+            t.isTransponder -> if (montant && effectiveInvert(t)) "LSB" else "USB"
+            m.contains("LSB") -> "LSB"
+            m.contains("USB") -> "USB"
+            else -> m.ifBlank { "FM" }
+        }
     }
 
     /** How many contacts are waiting to be uploaded to the online log. */

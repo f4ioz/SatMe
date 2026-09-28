@@ -221,6 +221,22 @@ object CarnetEnLigne {
     }.getOrNull()
 
     /**
+     * The radio's state for the log ([RelaisRadio.json]). Returns null when
+     * accepted, else a short reason for the settings screen.
+     */
+    suspend fun radio(base: String, corps: String): String? = withContext(Dispatchers.IO) {
+        runCatching {
+            val r = poste(base, "api/radio", corps)
+            when {
+                r.startsWith("HTTP ") || r == "aucune réponse" -> r
+                r.contains("\"status\":\"failed\"", true) || r.contains("\"reason\"", true) ->
+                    runCatching { JSONObject(r).optString("reason").ifBlank { r.take(80) } }.getOrDefault(r.take(80))
+                else -> null
+            }
+        }.getOrElse { it.javaClass.simpleName }
+    }
+
+    /**
      * Sends the request, trying both URL forms. The docs say "base/api/qso"
      * but their own curl examples use "base/index.php/api/qso"; depending on
      * URL rewriting one fails — often with a 500 rather than a 404. Try the
