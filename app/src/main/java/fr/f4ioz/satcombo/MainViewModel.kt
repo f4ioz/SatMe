@@ -860,7 +860,7 @@ data class UiState(
     val usbDevices: List<fr.f4ioz.satcombo.cat.UsbSerialInfo> = emptyList(),
     val ctcssTenthHz: Int = 0,
     val ctcssAuto: Boolean = true,
-    val catTestSendAlways: Boolean = false,  // send even below horizon (diagnostics)
+    val catTestSendAlways: Boolean = true,   // CAT tunes even below the horizon (setting, on by default)
     // Test bench: the start-of-pass sequence played against an in-memory rig
     // (to assert something without a radio), and the frame journal (to see
     // what preceded a refusal when a pass goes wrong).
@@ -1119,6 +1119,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             catSimulated = settings.catSimulated,
             catMonitor = settings.catMonitor,
             catRxDoppler = settings.catRxDoppler,
+            catTestSendAlways = settings.catSousHorizon,
             ft817RxSerial = settings.ft817RxSerial,
             ft817TxSerial = settings.ft817TxSerial,
             ft817Baud = settings.ft817Baud,
@@ -5083,6 +5084,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             catSimulated = settings.catSimulated,
             catMonitor = settings.catMonitor,
             catRxDoppler = settings.catRxDoppler,
+            catTestSendAlways = settings.catSousHorizon,
             rigModel = settings.rigModel,
             ctcssTenthHz = settings.ctcssTenthHz,
             ctcssAuto = settings.ctcssAuto,
@@ -6518,6 +6520,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun setCatTestSendAlways(on: Boolean) {
+        settings.catSousHorizon = on
         _ui.value = _ui.value.copy(catTestSendAlways = on)
     }
 

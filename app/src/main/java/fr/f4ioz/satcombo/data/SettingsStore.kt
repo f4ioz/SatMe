@@ -1261,6 +1261,15 @@ class SettingsStore(context: Context) {
         get() = prefs.getBoolean("cat_rx_doppler", true)
         set(v) { prefs.edit().putBoolean("cat_rx_doppler", v).apply() }
 
+    /**
+     * CAT tunes the rig even with the satellite below the horizon. On by
+     * default: the rig is set before AOS, and the first seconds of the pass
+     * are not spent waiting for it.
+     */
+    var catSousHorizon: Boolean
+        get() = prefs.getBoolean("cat_sous_horizon", true)
+        set(v) { prefs.edit().putBoolean("cat_sous_horizon", v).apply() }
+
 
     var rotorFlip: Boolean
         get() = prefs.getBoolean("rotor_flip", false)
