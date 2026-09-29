@@ -831,6 +831,7 @@ private fun ChoixMateriel(ui: UiState, vm: MainViewModel) {
  */
 @Composable
 private fun ChoixPoste(ui: UiState, vm: MainViewModel) {
+    var avertirIc705 by remember { mutableStateOf(false) }
     Text(t("qo100_poste"), color = TextHi,
         fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
     Spacer(Modifier.height(2.dp))
@@ -847,8 +848,12 @@ private fun ChoixPoste(ui: UiState, vm: MainViewModel) {
             actif = ui.rigModel == id,
             titre = libelle,
             detail = "",
-            onClick = { vm.setRigModel(id) })
+            onClick = {
+                vm.setRigModel(id)
+                if (id == fr.f4ioz.satcombo.FT817_IC705 || id == fr.f4ioz.satcombo.IC705_FT817) avertirIc705 = true
+            })
     }
+    if (avertirIc705) AvertissementIc705 { avertirIc705 = false }
 }
 
 /**

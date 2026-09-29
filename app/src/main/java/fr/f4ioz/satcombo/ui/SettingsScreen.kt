@@ -1959,11 +1959,17 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
                         Triple(fr.f4ioz.satcombo.IC705_FT817, t("rig_ic705_ft817"), true),
                         Triple("FT817TX", t("qo100_poste_sdr"), true)
                     )
+                    var avertirIc705 by remember { mutableStateOf(false) }
+                    if (avertirIc705) AvertissementIc705 { avertirIc705 = false }
                     rigs.forEach { (id, label, ready) ->
                         Row(verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier.fillMaxWidth()
                                 .selectable(selected = ui.rigModel == id, enabled = ready,
-                                    role = Role.RadioButton, onClick = { vm.setRigModel(id) })
+                                    role = Role.RadioButton, onClick = {
+                                        vm.setRigModel(id)
+                                        if (id == fr.f4ioz.satcombo.FT817_IC705 ||
+                                            id == fr.f4ioz.satcombo.IC705_FT817) avertirIc705 = true
+                                    })
                                 .padding(vertical = 6.dp)) {
                             RadioButton(selected = ui.rigModel == id, enabled = ready,
                                 onClick = null,
@@ -1993,7 +1999,10 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
                 Column(Modifier.padding(16.dp)) {
                     Text(if (paireMixte) t("paire_mixte_titre") else t("ft817_pair_title"),
                         color = TextHi, fontWeight = FontWeight.Bold)
-                    Text(t("ft817_pair_desc"), color = TextLo, fontSize = 11.sp,
+                    // The FT-817's line settings (8N2, menu #14) do not apply
+                    // to the IC-705 (CI-V, 8N1): each rig's are said apart.
+                    Text(if (paireMixte) t("paire_mixte_liaison") else t("ft817_pair_desc"),
+                        color = TextLo, fontSize = 11.sp,
                         modifier = Modifier.padding(top = 2.dp, bottom = 8.dp))
                     // FT-817 + IC-705: the protocols tell the rigs apart, so
                     // the cables are assigned at connection; the IC-705 side
@@ -2003,7 +2012,8 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
                             modifier = Modifier.padding(bottom = 8.dp))
                     }
 
-                    Text(t("ft817_baud"), color = TextHi, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                    Text(if (paireMixte) t("ft817_baud_seul") else t("ft817_baud"),
+                        color = TextHi, fontSize = 13.sp, fontWeight = FontWeight.Bold)
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp),
                         modifier = Modifier.padding(top = 4.dp, bottom = 10.dp)) {
                         listOf(4800, 9600, 38400).forEach { b ->
@@ -2013,6 +2023,23 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
                                 colors = FilterChipDefaults.filterChipColors(
                                     selectedContainerColor = Cyan.copy(alpha = 0.25f),
                                     selectedLabelColor = Cyan))
+                        }
+                    }
+                    // The IC-705 has its own speed: its "CI-V USB Baud Rate".
+                    if (paireMixte) {
+                        Text(t("ic705_baud"), color = TextHi, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                        Text(t("ic705_baud_desc"), color = TextLo, fontSize = 11.sp)
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            modifier = Modifier.padding(top = 4.dp, bottom = 10.dp)
+                                .horizontalScroll(rememberScrollState())) {
+                            listOf(9600, 19200, 38400, 57600, 115200).forEach { b ->
+                                FilterChip(selected = ui.catUi.ic705Baud == b,
+                                    onClick = { vm.setIc705Baud(b) },
+                                    label = { Text("$b", fontSize = 12.sp) },
+                                    colors = FilterChipDefaults.filterChipColors(
+                                        selectedContainerColor = Cyan.copy(alpha = 0.25f),
+                                        selectedLabelColor = Cyan))
+                            }
                         }
                     }
 
@@ -4031,4 +4058,17 @@ private fun nomCible(id: String): String = when (id) {
     "SHIFT_RX" -> t("macro_rx")
     "SHIFT_TX" -> t("macro_tx")
     else -> t("macro_vfo")
+}
+
+/**
+ * The IC-705 has only been driven through a simulated rig so far: said once
+ * per choice, so a failure on the air is not taken for the operator's own.
+ */
+@Composable
+internal fun AvertissementIc705(onFerme: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onFerme,
+        confirmButton = { TextButton(onClick = onFerme) { Text(t("ok"), color = Cyan) } },
+        title = { Text(t("ic705_non_teste_titre"), color = TextHi) },
+        text = { Text(t("ic705_non_teste"), color = TextHi, fontSize = 13.sp) })
 }

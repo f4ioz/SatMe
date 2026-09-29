@@ -693,6 +693,11 @@ class SettingsStore(context: Context) {
         get() = prefs.getInt("ft817_baud", 4800)
         set(v) { prefs.edit().putInt("ft817_baud", v).apply() }
 
+    /** IC-705 CI-V speed over USB: its "CI-V USB Baud Rate" (any on Auto). */
+    var ic705Baud: Int
+        get() = prefs.getInt("ic705_baud", 115_200)
+        set(v) { prefs.edit().putInt("ic705_baud", v).apply() }
+
     var civAddress: Int
         get() = prefs.getInt("civ_addr", 0xA2)
         set(v) { prefs.edit().putInt("civ_addr", v).apply() }

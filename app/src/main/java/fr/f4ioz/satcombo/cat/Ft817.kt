@@ -339,11 +339,11 @@ class Ft817Pair(private val context: Context? = null) {
      * Goes through a single [Ft817Cat] rather than re-implementing framing:
      * two copies of the same protocol would drift apart.
      */
-    suspend fun sonde(cle: String, baud: Int): Long? {
+    suspend fun sonde(cle: String, baud: Int, baudIc705: Int = Ic705Cat.VITESSE): Long? {
         // Yaesu first, then Icom: with an IC-705 in the pair, the adapter may
         // speak either, and each protocol ignores the other's frames.
         for (poste in listOf<PosteSimple>(Ft817Cat(context), Ic705Cat(context))) {
-            if (!poste.open(cle, baud)) continue
+            if (!poste.open(cle, if (poste is Ic705Cat) baudIc705 else baud)) continue
             val hz = runCatching { poste.readFrequency() }.getOrNull()
             poste.close()
             if (hz != null && IdentiteUsb.freqPlausible(hz)) return hz
@@ -358,10 +358,10 @@ class Ft817Pair(private val context: Context? = null) {
      * serial number or band guess is needed: the FT-817 ignores CI-V frames,
      * the IC-705 answers them.
      */
-    suspend fun repereIc705(cles: List<String>): String? {
+    suspend fun repereIc705(cles: List<String>, baud: Int = Ic705Cat.VITESSE): String? {
         for (cle in cles) {
             val icom = Ic705Cat(context)
-            if (!icom.open(cle, Ic705Cat.VITESSE)) continue
+            if (!icom.open(cle, baud)) continue
             val hz = runCatching { icom.readFrequency() }.getOrNull()
             icom.close()
             if (hz != null && IdentiteUsb.freqPlausible(hz)) return cle
@@ -380,10 +380,17 @@ class Ft817Pair(private val context: Context? = null) {
         }
     }
 
-    /** Open both rigs by their remembered serials. Returns rxOk to txOk. */
-    suspend fun open(rxSerial: String?, txSerial: String?, baud: Int): Pair<Boolean, Boolean> {
-        val a = if (!rxSerial.isNullOrBlank()) rx.open(rxSerial, baud) else false
-        val b = if (!txSerial.isNullOrBlank()) tx.open(txSerial, baud) else false
+    /**
+     * Open both rigs by their remembered serials. Returns rxOk to txOk.
+     * [baud] is the FT-817's CAT rate, [baudIc705] the IC-705's CI-V speed:
+     * each rig has its own setting.
+     */
+    suspend fun open(
+        rxSerial: String?, txSerial: String?, baud: Int, baudIc705: Int = Ic705Cat.VITESSE,
+    ): Pair<Boolean, Boolean> {
+        fun vitesse(p: PosteSimple) = if (p is Ic705Cat) baudIc705 else baud
+        val a = if (!rxSerial.isNullOrBlank()) rx.open(rxSerial, vitesse(rx)) else false
+        val b = if (!txSerial.isNullOrBlank()) tx.open(txSerial, vitesse(tx)) else false
         return a to b
     }
 

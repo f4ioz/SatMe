@@ -101,6 +101,8 @@ data class AccordUi(
  * [RotorUi]).
  */
 data class CatUi(
+    /** IC-705 CI-V speed in an FT-817 + IC-705 pair; the FT-817 has its own. */
+    val ic705Baud: Int = 115_200,
     /**
      * Is the rig transmitting? Read over CAT, so also true when VOX keyed it —
      * precisely the case where the operator commanded nothing and the warning
@@ -1042,7 +1044,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      */
     private suspend fun attribuePaireMixte() {
         val cles = ft817.listDevices().filter { it.hasPermission }.map { it.cle }
-        val icom = ft817.repereIc705(cles) ?: return
+        val icom = ft817.repereIc705(cles, _ui.value.catUi.ic705Baud) ?: return
         val yaesu = cles.firstOrNull { it != icom }
         val icomRecoit = _ui.value.rigModel == FT817_IC705
         poseRoleFt817(icom, if (icomRecoit) "RX" else "TX")
@@ -1128,6 +1130,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 radioNom = settings.carnetRadioNom,
                 auto = settings.carnetAuto),
             catUi = CatUi(
+                ic705Baud = settings.ic705Baud,
                 liseret = settings.liseréEmission,
                 txSuitVite = settings.txSuitVite,
                 sondeMs = settings.sondeTxMs,
@@ -6413,7 +6416,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             val baud = _ui.value.ft817Baud
             _ui.value.usbDevices.forEach { d ->
                 if (!d.hasPermission) return@forEach
-                val hz = runCatching { ft817.sonde(d.cle, baud) }.getOrNull()
+                val hz = runCatching { ft817.sonde(d.cle, baud, _ui.value.catUi.ic705Baud) }.getOrNull()
                 _ui.value = _ui.value.copy(usbDevices = _ui.value.usbDevices.map {
                     if (it.cle == d.cle) it.copy(freqLueHz = hz, sonde = true) else it
                 })
@@ -6443,7 +6446,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val baud = _ui.value.ft817Baud
         val sondes = ft817.listDevices().filter { it.hasPermission }.map { d ->
             fr.f4ioz.satcombo.cat.IdentiteUsb.Sonde(
-                d.cle, runCatching { ft817.sonde(d.cle, baud) }.getOrNull())
+                d.cle, runCatching { ft817.sonde(d.cle, baud, _ui.value.catUi.ic705Baud) }.getOrNull())
         }
         if (sondes.size < 2) return
 
@@ -6494,7 +6497,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         poseRoleFt817(cleRx, "TX")
         _ui.value = _ui.value.copy(catStatus = t("ft817_roles_swapped"))
         ft817.close()
-        ft817.open(_ui.value.ft817RxSerial, _ui.value.ft817TxSerial, _ui.value.ft817Baud)
+        ft817.open(_ui.value.ft817RxSerial, _ui.value.ft817TxSerial, _ui.value.ft817Baud,
+            _ui.value.catUi.ic705Baud)
         // The links were closed and reopened under the PTT poll, which was
         // querying a dead port: restarting it is part of reopening.
         surveilleEmission()
@@ -6522,7 +6526,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             val baud = _ui.value.ft817Baud
             val sondes = adaptateurs.map { d ->
                 fr.f4ioz.satcombo.cat.IdentiteUsb.Sonde(
-                    d.cle, runCatching { ft817.sonde(d.cle, baud) }.getOrNull())
+                    d.cle, runCatching { ft817.sonde(d.cle, baud, _ui.value.catUi.ic705Baud) }.getOrNull())
             }
             val t0 = activeTransmitters().getOrNull(_ui.value.selectedTxIndex)
             val a = fr.f4ioz.satcombo.cat.IdentiteUsb.attribue(
@@ -6704,6 +6708,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun setFt817Baud(baud: Int) {
         settings.ft817Baud = baud
         _ui.value = _ui.value.copy(ft817Baud = baud)
+    }
+
+    /** IC-705 CI-V speed, apart from the FT-817's; reopens the pair if open. */
+    fun setIc705Baud(baud: Int) {
+        settings.ic705Baud = baud
+        _ui.value = _ui.value.copy(catUi = _ui.value.catUi.copy(ic705Baud = baud))
+        rouvreSiOuvert()
     }
 
     fun setCatEnabled(on: Boolean) {
@@ -7115,9 +7126,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     // do without assignment.
                     ft817.open("", _ui.value.ft817TxSerial.ifBlank {
                         ft817.listDevices().firstOrNull { it.hasPermission }?.cle.orEmpty()
-                    }, _ui.value.ft817Baud)
+                    }, _ui.value.ft817Baud, _ui.value.catUi.ic705Baud)
                 else ft817.open(
-                    _ui.value.ft817RxSerial, _ui.value.ft817TxSerial, _ui.value.ft817Baud)
+                    _ui.value.ft817RxSerial, _ui.value.ft817TxSerial, _ui.value.ft817Baud,
+                    _ui.value.catUi.ic705Baud)
                         .also { (r, t) -> if (r && t && !isPaireMixte) verifieRolesOuverts() }
                 val ok = rxOk || txOk
                 _ui.value = _ui.value.copy(catConnected = ok,

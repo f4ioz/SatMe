@@ -36,9 +36,9 @@ class Ic705Cat(context: Context? = null) : PosteSimple {
     override fun attach(l: SerialLink) = civ.attach(l)
 
     /**
-     * The USB CI-V port is a virtual serial line: the rig follows any speed
-     * with its "CI-V USB Baud Rate" on Auto. The FT-817's setting (4800 to
-     * 38400) does not apply here, so [baud] is ignored.
+     * [baud] must match the rig's "CI-V USB Baud Rate". On Auto the rig
+     * follows any speed; set to a fixed rate, it hears only that one — hence
+     * a setting of its own, apart from the FT-817's.
      */
     override suspend fun open(cle: String?, baud: Int): Boolean {
         // Like the IC-9700, the IC-705 shows more than one serial port over
@@ -46,7 +46,7 @@ class Ic705Cat(context: Context? = null) : PosteSimple {
         // read, rather than assume which one it is.
         val n = civ.nombrePorts(cle).coerceAtLeast(1)
         for (port in 0 until n) {
-            if (!civ.openParCle(cle, VITESSE, port)) continue
+            if (!civ.openParCle(cle, baud, port)) continue
             if (n == 1 || civ.readFrequency() != null) return true
             civ.close()
         }
@@ -73,6 +73,7 @@ class Ic705Cat(context: Context? = null) : PosteSimple {
     companion object {
         /** IC-705 factory CI-V address. */
         const val ADRESSE = 0xA4
+        /** Default speed: fine with the rig's CI-V USB Baud Rate on Auto. */
         const val VITESSE = 115_200
     }
 }
