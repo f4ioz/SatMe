@@ -35,6 +35,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.foundation.text.appendInlineContent
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -52,6 +53,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import fr.f4ioz.satcombo.MainViewModel
 import fr.f4ioz.satcombo.UiState
@@ -151,7 +153,8 @@ fun SstvScreen(ui: UiState, vm: MainViewModel) {
                         Button(onClick = ecoute,
                             colors = ButtonDefaults.buttonColors(containerColor = Cyan),
                             modifier = Modifier.fillMaxWidth()) {
-                            Icon(Icons.Default.FiberManualRecord, null, modifier = Modifier.size(18.dp))
+                            Icon(Icons.Default.FiberManualRecord, null, tint = Color(0xFFE5484D),
+                                modifier = Modifier.size(18.dp))
                             Spacer(Modifier.width(8.dp))
                             Text(t("sstv_ecoute_start"))
                         }
@@ -487,7 +490,22 @@ private fun AideDecodageSstv(sstvActif: Boolean, onFerme: (Boolean) -> Unit) {
         title = { Text(t("sstv_aide_titre"), color = TextHi) },
         text = {
             Column {
-                Text(t("sstv_aide_texte"), color = TextHi, fontSize = 13.sp)
+                // "⏺" is drawn by Android as an orange emoji: the real record
+                // button's red dot goes in its place, as in the top bar.
+                val morceaux = t("sstv_aide_texte").split("⏺")
+                val texte = androidx.compose.ui.text.buildAnnotatedString {
+                    morceaux.forEachIndexed { i, m ->
+                        if (i > 0) appendInlineContent("rec", "⏺")
+                        append(m)
+                    }
+                }
+                val point = mapOf("rec" to androidx.compose.foundation.text.InlineTextContent(
+                    androidx.compose.ui.text.Placeholder(1.1.em, 1.1.em,
+                        androidx.compose.ui.text.PlaceholderVerticalAlign.TextCenter)) {
+                    Icon(Icons.Default.FiberManualRecord, t("rec_start"),
+                        tint = Color(0xFFE5484D), modifier = Modifier.fillMaxSize())
+                })
+                Text(texte, color = TextHi, fontSize = 13.sp, inlineContent = point)
                 if (!sstvActif) {
                     Spacer(Modifier.height(8.dp))
                     Text(t("sstv_aide_inactif"), color = Amber, fontSize = 12.sp)
