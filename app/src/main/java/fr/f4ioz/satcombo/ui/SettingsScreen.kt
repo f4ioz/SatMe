@@ -8,6 +8,7 @@
  */
 package fr.f4ioz.satcombo.ui
 
+import kotlinx.coroutines.launch
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.heading
 import androidx.compose.foundation.selection.selectable
@@ -103,6 +104,7 @@ import fr.f4ioz.satcombo.Screen
 import fr.f4ioz.satcombo.UiState
 import fr.f4ioz.satcombo.data.LocationMode
 import fr.f4ioz.satcombo.data.SatPass
+import fr.f4ioz.satcombo.data.ServeurGp
 import fr.f4ioz.satcombo.data.Sources
 import fr.f4ioz.satcombo.data.TleEntry
 import fr.f4ioz.satcombo.data.Transmitter
@@ -641,6 +643,38 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
         }
         if (sec == "sources") {
         item { SectionHeader(t("sources_gp")) }
+
+        // A SatMe GP server: one machine asks AMSAT and CelesTrak for every
+        // phone, and each source's own address stays as the fallback.
+        item {
+            var adresse by remember { mutableStateOf(vm.serveurGp()) }
+            var essai by remember { mutableStateOf("") }
+            val portee = rememberCoroutineScope()
+            Surface(color = SpaceCard, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(16.dp)) {
+                    Text(t("serveur_gp_titre"), color = TextHi, fontWeight = FontWeight.SemiBold)
+                    Text(t("serveur_gp_desc"), color = TextLo, fontSize = 11.sp,
+                        modifier = Modifier.padding(top = 2.dp, bottom = 6.dp))
+                    OutlinedTextField(value = adresse,
+                        onValueChange = { adresse = it; vm.setServeurGp(it); essai = "" },
+                        label = { Text(t("serveur_gp_adresse"), fontSize = 12.sp) },
+                        placeholder = { Text("https://gp.exemple.org", color = TextLo) },
+                        singleLine = true, modifier = Modifier.fillMaxWidth())
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        TextButton(enabled = adresse.isNotBlank(), onClick = {
+                            essai = t("serveur_gp_essai")
+                            portee.launch { essai = vm.testeServeurGp(adresse) }
+                        }) { Text(t("carnet_test"), color = Cyan, fontSize = 13.sp) }
+                        if (adresse != ServeurGp.DEFAUT) {
+                            TextButton(onClick = {
+                                adresse = ServeurGp.DEFAUT; vm.setServeurGp(adresse); essai = ""
+                            }) { Text(t("serveur_gp_defaut"), color = Cyan, fontSize = 13.sp) }
+                        }
+                        Text(essai, color = TextLo, fontSize = 12.sp, modifier = Modifier.weight(1f))
+                    }
+                }
+            }
+        }
 
         // Satellites rejected from the last bulletin. Shows nothing in the usual
         // case, so it still gets read when it does speak.

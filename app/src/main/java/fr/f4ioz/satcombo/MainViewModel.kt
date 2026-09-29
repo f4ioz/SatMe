@@ -1516,7 +1516,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             _ui.value = _ui.value.copy(loading = true, error = null)
             val obs = resolveObserver()
-            val urls = Sources.byIds(ids).map { it.url }
+            // Through the SatMe GP server when one is set, each source's own
+            // address as the fallback.
+            val groupes = Sources.byIds(ids).map {
+                fr.f4ioz.satcombo.data.ServeurGp.adresses(settings.serveurGp, it)
+            }
             var sats = emptyList<TleEntry>()
             var cacheAge: Long? = null
             var err: String? = null
@@ -1526,7 +1530,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 if (raw != null) sats = runCatching { repo.parse(raw) }.getOrDefault(emptyList())
             }
             if (sats.isEmpty()) {
-                sats = runCatching { repo.fetchGroups(urls) }.getOrDefault(emptyList())
+                sats = runCatching { repo.fetchGroupesSecours(groupes) }.getOrDefault(emptyList())
                 if (sats.isNotEmpty()) {
                     tleCache.save(sats, ids)
                 } else {
@@ -7892,9 +7896,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      * [annonce]: say what happened (the button). Automatic refreshes stay
      * silent; a button that answers nothing looks broken.
      */
+    /** SatMe GP server, from the settings: not in `UiState` (255-register limit). */
+    fun serveurGp(): String = settings.serveurGp
+    fun setServeurGp(v: String) { settings.serveurGp = v }
+    suspend fun testeServeurGp(base: String): String = repo.testeServeur(base)
+
     fun refreshTleFor(catnum: Int, annonce: Boolean = false) {
         viewModelScope.launch {
-            val r = repo.plusRecent(catnum, Sources.byIds(srcStore.load()))
+            val r = repo.plusRecent(catnum, Sources.byIds(srcStore.load()), settings.serveurGp)
             val ancienne = _ui.value.satellites.firstOrNull { it.catalogNumber == catnum }
             if (annonce) {
                 val date = { e: TleEntry? -> e?.epochMs?.let {

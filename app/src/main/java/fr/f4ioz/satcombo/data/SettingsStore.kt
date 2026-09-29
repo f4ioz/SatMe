@@ -823,6 +823,14 @@ class SettingsStore(context: Context) {
         get() = prefs.getInt("tle_cache_hours", 24)
         set(v) { prefs.edit().putInt("tle_cache_hours", v.coerceIn(0, 96)).apply() }
 
+    /**
+     * SatMe GP server address ([ServeurGp]), the author's by default; emptied
+     * by the user = ask the sources directly.
+     */
+    var serveurGp: String
+        get() = prefs.getString("serveur_gp", ServeurGp.DEFAUT) ?: ServeurGp.DEFAUT
+        set(v) { prefs.edit().putString("serveur_gp", v.trim()).apply() }
+
     /** Aiming dial style: "CLASSIC" (bubble+arrow) or "NEEDLE" (big golden needle). */
     var compassStyle: String
         get() = prefs.getString("compass_style", "NEEDLE") ?: "NEEDLE"

@@ -60,22 +60,56 @@ class TleRepository(
     )
 
     suspend fun fetchGroups(urls: List<String>): List<TleEntry> =
+        fetchGroupesSecours(urls.map { listOf(it) })
+
+    /**
+     * One entry per group, each a list of addresses tried in order until one
+     * answers with elements: the SatMe GP server first, the source itself as
+     * a fallback ([ServeurGp]).
+     */
+    suspend fun fetchGroupesSecours(groupes: List<List<String>>): List<TleEntry> =
         withContext(Dispatchers.IO) {
             val seen = LinkedHashMap<Int, TleEntry>()
-            for (url in urls) {
-                runCatching { fetchOne(url) }.getOrDefault(emptyList()).forEach { e ->
-                    seen.putIfAbsent(e.catalogNumber, e)
-                }
+            for (adresses in groupes) {
+                val lus = adresses.asSequence()
+                    .map { runCatching { fetchOne(it) }.getOrDefault(emptyList()) }
+                    .firstOrNull { it.isNotEmpty() }.orEmpty()
+                lus.forEach { e -> seen.putIfAbsent(e.catalogNumber, e) }
             }
             seen.values.toList()
         }
 
-    /** Freshest elements for one satellite, from the enabled [sources]. */
-    suspend fun plusRecent(catnum: Int, sources: List<TleSource>): RafraichissementTle.Resultat =
+    /**
+     * Freshest elements for one satellite, from the enabled [sources] — or
+     * from the SatMe GP server at [serveur] when set, the sources themselves
+     * only if it cannot be reached.
+     */
+    suspend fun plusRecent(catnum: Int, sources: List<TleSource>, serveur: String = ""): RafraichissementTle.Resultat =
         withContext(Dispatchers.IO) {
+            if (ServeurGp.normalise(serveur).isNotEmpty()) {
+                val r = RafraichissementTle.plusRecent(catnum,
+                    listOf(ServeurGp.catnr(serveur, catnum)), ::fetchOne)
+                if (r !is RafraichissementTle.Resultat.Injoignable) return@withContext r
+            }
             RafraichissementTle.plusRecent(catnum,
                 RafraichissementTle.adresses(catnum, sources), ::fetchOne)
         }
+
+    /** The server's groups and satellite counts, or the reason it failed. */
+    suspend fun testeServeur(base: String): String = withContext(Dispatchers.IO) {
+        runCatching {
+            val req = Request.Builder().url(ServeurGp.index(base))
+                .header("User-Agent", "SatCombo/1.0 (F4IOZ)").build()
+            client.newCall(req).execute().use { resp ->
+                if (!resp.isSuccessful) return@withContext "HTTP ${resp.code}"
+                val o = org.json.JSONObject(resp.body?.string().orEmpty())
+                val g = o.getJSONArray("groupes")
+                (0 until g.length()).joinToString(" · ") {
+                    val x = g.getJSONObject(it); "${x.getString("id")} ${x.optInt("nombre")}"
+                }.ifBlank { "aucun groupe" }
+            }
+        }.getOrElse { it.javaClass.simpleName }
+    }
 
     private fun fetchOne(url: String): List<TleEntry> {
         val req = Request.Builder().url(url).header("User-Agent", "SatCombo/1.0 (F4IOZ)").build()
