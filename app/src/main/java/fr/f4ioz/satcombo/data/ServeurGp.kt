@@ -33,10 +33,17 @@ object ServeurGp {
         return if (b.startsWith("http://") || b.startsWith("https://")) b else "https://$b"
     }
 
-    /** Addresses to try for one source: the server first, then the source itself. */
-    fun adresses(base: String, s: TleSource): List<String> {
+    /**
+     * Addresses to try for one source: the server first, then the source
+     * itself — unless [seul]: the server only, the source never asked.
+     */
+    fun adresses(base: String, s: TleSource, seul: Boolean = false): List<String> {
         val b = normalise(base)
-        return if (b.isEmpty()) listOf(s.url) else listOf("$b/gp/${groupe(s.id)}.json", s.url)
+        return when {
+            b.isEmpty() -> listOf(s.url)
+            seul -> listOf("$b/gp/${groupe(s.id)}.json")
+            else -> listOf("$b/gp/${groupe(s.id)}.json", s.url)
+        }
     }
 
     /** One satellite by catalogue number on the server. */

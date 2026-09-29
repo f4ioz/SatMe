@@ -11,6 +11,7 @@ package fr.f4ioz.satcombo
 import fr.f4ioz.satcombo.data.ServeurGp
 import fr.f4ioz.satcombo.data.TleSource
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /** The SatMe GP server's addresses, and the source kept as a fallback. */
@@ -37,5 +38,19 @@ class ServeurGpTest {
     fun adresse_saisie_sans_schema_ou_en_http() {
         assertEquals("https://gp.exemple.org/gp/catnr/25544.json", ServeurGp.catnr("gp.exemple.org", 25544))
         assertEquals("http://192.168.1.50:8080/gp/index.json", ServeurGp.index("http://192.168.1.50:8080/"))
+    }
+
+    @Test
+    fun serveur_seul_jamais_la_source() {
+        assertEquals(listOf("https://gp.f4ioz.fr/gp/amateur.json"),
+            ServeurGp.adresses("https://gp.f4ioz.fr", amateur, seul = true))
+        // No server set: the box means nothing, the source stays.
+        assertEquals(listOf(amateur.url), ServeurGp.adresses("", amateur, seul = true))
+    }
+
+    @Test
+    fun user_agent_dit_satme_et_sa_version() {
+        fr.f4ioz.satcombo.data.TleRepository.version = "20.74"
+        assertTrue(fr.f4ioz.satcombo.data.TleRepository.USER_AGENT.startsWith("SatMe/20.74 (Android "))
     }
 }

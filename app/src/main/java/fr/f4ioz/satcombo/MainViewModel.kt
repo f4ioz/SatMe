@@ -1519,7 +1519,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             // Through the SatMe GP server when one is set, each source's own
             // address as the fallback.
             val groupes = Sources.byIds(ids).map {
-                fr.f4ioz.satcombo.data.ServeurGp.adresses(settings.serveurGp, it)
+                fr.f4ioz.satcombo.data.ServeurGp.adresses(settings.serveurGp, it, settings.serveurGpSeul)
             }
             var sats = emptyList<TleEntry>()
             var cacheAge: Long? = null
@@ -7899,11 +7899,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     /** SatMe GP server, from the settings: not in `UiState` (255-register limit). */
     fun serveurGp(): String = settings.serveurGp
     fun setServeurGp(v: String) { settings.serveurGp = v }
+    fun serveurGpSeul(): Boolean = settings.serveurGpSeul
+    fun setServeurGpSeul(v: Boolean) { settings.serveurGpSeul = v }
     suspend fun testeServeurGp(base: String): String = repo.testeServeur(base)
 
     fun refreshTleFor(catnum: Int, annonce: Boolean = false) {
         viewModelScope.launch {
-            val r = repo.plusRecent(catnum, Sources.byIds(srcStore.load()), settings.serveurGp)
+            val r = repo.plusRecent(catnum, Sources.byIds(srcStore.load()), settings.serveurGp,
+                settings.serveurGpSeul)
             val ancienne = _ui.value.satellites.firstOrNull { it.catalogNumber == catnum }
             if (annonce) {
                 val date = { e: TleEntry? -> e?.epochMs?.let {

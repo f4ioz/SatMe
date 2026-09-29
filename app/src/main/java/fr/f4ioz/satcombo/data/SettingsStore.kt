@@ -831,6 +831,11 @@ class SettingsStore(context: Context) {
         get() = prefs.getString("serveur_gp", ServeurGp.DEFAUT) ?: ServeurGp.DEFAUT
         set(v) { prefs.edit().putString("serveur_gp", v.trim()).apply() }
 
+    /** Elements from the SatMe GP server only: never AMSAT, CelesTrak or SatNOGS directly. */
+    var serveurGpSeul: Boolean
+        get() = prefs.getBoolean("serveur_gp_seul", false)
+        set(v) { prefs.edit().putBoolean("serveur_gp_seul", v).apply() }
+
     /** Aiming dial style: "CLASSIC" (bubble+arrow) or "NEEDLE" (big golden needle). */
     var compassStyle: String
         get() = prefs.getString("compass_style", "NEEDLE") ?: "NEEDLE"

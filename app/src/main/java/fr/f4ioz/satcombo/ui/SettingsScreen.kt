@@ -648,6 +648,7 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
         // phone, and each source's own address stays as the fallback.
         item {
             var adresse by remember { mutableStateOf(vm.serveurGp()) }
+            var seul by remember { mutableStateOf(vm.serveurGpSeul()) }
             var essai by remember { mutableStateOf("") }
             val portee = rememberCoroutineScope()
             Surface(color = SpaceCard, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
@@ -671,6 +672,18 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
                             }) { Text(t("serveur_gp_defaut"), color = Cyan, fontSize = 13.sp) }
                         }
                         Text(essai, color = TextLo, fontSize = 12.sp, modifier = Modifier.weight(1f))
+                    }
+                    // The whole row is the checkbox, read with its label.
+                    Row(Modifier.fillMaxWidth().toggleable(value = seul && adresse.isNotBlank(),
+                            enabled = adresse.isNotBlank(), role = Role.Checkbox,
+                            onValueChange = { seul = it; vm.setServeurGpSeul(it) }),
+                        verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(checked = seul && adresse.isNotBlank(), onCheckedChange = null,
+                            enabled = adresse.isNotBlank())
+                        Column(Modifier.padding(start = 8.dp)) {
+                            Text(t("serveur_gp_seul"), color = TextHi, fontSize = 13.sp)
+                            Text(t("serveur_gp_seul_desc"), color = TextLo, fontSize = 11.sp)
+                        }
                     }
                 }
             }

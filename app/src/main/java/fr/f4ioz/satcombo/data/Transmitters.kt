@@ -146,7 +146,7 @@ class TransmittersRepository(
 
     private fun fetch(catnum: Int): String? {
         val url = "https://db.satnogs.org/api/transmitters/?satellite__norad_cat_id=$catnum&format=json"
-        val req = Request.Builder().url(url).header("User-Agent", "SatCombo/1.0 (F4IOZ)").build()
+        val req = Request.Builder().url(url).header("User-Agent", TleRepository.USER_AGENT).build()
         client.newCall(req).execute().use { resp ->
             if (!resp.isSuccessful) return null
             return resp.body?.string()

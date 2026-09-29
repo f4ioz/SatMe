@@ -35,7 +35,14 @@ object Sources {
             "https://celestrak.org/NORAD/elements/gp.php?GROUP=weather&FORMAT=json"),
         TleSource("cubesat", "Celestrak CubeSat",
             "https://celestrak.org/NORAD/elements/gp.php?GROUP=cubesat&FORMAT=json"),
+        // Every satellite SatNOGS follows (~1700), as TLE in JSON: read by
+        // TleRepository.parse. On the SatMe GP server, the same, as OMM.
+        TleSource(SATNOGS, t("src_satnogs"), "https://db.satnogs.org/api/tle/?format=json"),
     )
+    const val SATNOGS = "satnogs"
+
+    /** One satellite from SatNOGS DB, rather than its whole list. */
+    fun satnogsNumero(catnum: Int) = "https://db.satnogs.org/api/tle/?norad_cat_id=$catnum&format=json"
     // AMSAT only by default: one small curated download → much faster first
     // startup. Users can enable the Celestrak groups in Settings → Sources.
     val DEFAULT_IDS = setOf("amsat_gp")

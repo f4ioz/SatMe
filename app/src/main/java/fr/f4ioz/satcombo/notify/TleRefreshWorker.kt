@@ -14,6 +14,8 @@ import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
+import fr.f4ioz.satcombo.data.ServeurGp
+import fr.f4ioz.satcombo.data.SettingsStore
 import fr.f4ioz.satcombo.data.Sources
 import fr.f4ioz.satcombo.data.SourcesStore
 import fr.f4ioz.satcombo.data.TleCache
@@ -24,9 +26,13 @@ import java.util.concurrent.TimeUnit
 class TleRefreshWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx, params) {
     override suspend fun doWork(): Result {
         val ids = SourcesStore(applicationContext).load()
-        val urls = Sources.byIds(ids).map { it.url }
-        if (urls.isEmpty()) return Result.success()
-        val sats = runCatching { TleRepository().fetchGroups(urls) }.getOrDefault(emptyList())
+        // Same path as the app: the SatMe GP server first (or only), when set.
+        val reglages = SettingsStore(applicationContext)
+        val groupes = Sources.byIds(ids).map {
+            ServeurGp.adresses(reglages.serveurGp, it, reglages.serveurGpSeul)
+        }
+        if (groupes.isEmpty()) return Result.success()
+        val sats = runCatching { TleRepository().fetchGroupesSecours(groupes) }.getOrDefault(emptyList())
         if (sats.isNotEmpty()) {
             TleCache(applicationContext).save(sats, ids)
             return Result.success()

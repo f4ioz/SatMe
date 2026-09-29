@@ -31,4 +31,13 @@ class SatMeApp : Application() {
         super.attachBaseContext(base)
         runCatching { PlantageGarde.installe(this) }
     }
+
+    override fun onCreate() {
+        super.onCreate()
+        // Before any download, the background refresh included: the version
+        // goes in the User-Agent.
+        fr.f4ioz.satcombo.data.TleRepository.version = runCatching {
+            packageManager.getPackageInfo(packageName, 0).versionName ?: "?"
+        }.getOrDefault("?")
+    }
 }

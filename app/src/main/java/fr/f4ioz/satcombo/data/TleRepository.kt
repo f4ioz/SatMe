@@ -26,6 +26,16 @@ class TleRepository(
         .build()
 ) {
     companion object {
+        /**
+         * Says which app and version asks: the SatMe GP server's connection
+         * page tells SatMe from robots with it. Up to 20.72: "SatCombo/1.0".
+         */
+        val USER_AGENT: String
+            get() = "SatMe/$version (Android ${android.os.Build.VERSION.RELEASE ?: "?"})"
+
+        /** Set at startup by [fr.f4ioz.satcombo.SatMeApp] (no BuildConfig here). */
+        @Volatile var version: String = "?"
+
         /** Satellites of the last bulletin whose elements could not be used. */
         @Volatile var ecartes: List<String> = emptyList()
             internal set
@@ -84,12 +94,14 @@ class TleRepository(
      * from the SatMe GP server at [serveur] when set, the sources themselves
      * only if it cannot be reached.
      */
-    suspend fun plusRecent(catnum: Int, sources: List<TleSource>, serveur: String = ""): RafraichissementTle.Resultat =
+    suspend fun plusRecent(catnum: Int, sources: List<TleSource>, serveur: String = "",
+                           seul: Boolean = false): RafraichissementTle.Resultat =
         withContext(Dispatchers.IO) {
             if (ServeurGp.normalise(serveur).isNotEmpty()) {
                 val r = RafraichissementTle.plusRecent(catnum,
                     listOf(ServeurGp.catnr(serveur, catnum)), ::fetchOne)
-                if (r !is RafraichissementTle.Resultat.Injoignable) return@withContext r
+                // Server only: its silence is the answer, the sources are never asked.
+                if (seul || r !is RafraichissementTle.Resultat.Injoignable) return@withContext r
             }
             RafraichissementTle.plusRecent(catnum,
                 RafraichissementTle.adresses(catnum, sources), ::fetchOne)
@@ -99,7 +111,7 @@ class TleRepository(
     suspend fun testeServeur(base: String): String = withContext(Dispatchers.IO) {
         runCatching {
             val req = Request.Builder().url(ServeurGp.index(base))
-                .header("User-Agent", "SatCombo/1.0 (F4IOZ)").build()
+                .header("User-Agent", USER_AGENT).build()
             client.newCall(req).execute().use { resp ->
                 if (!resp.isSuccessful) return@withContext "HTTP ${resp.code}"
                 val o = org.json.JSONObject(resp.body?.string().orEmpty())
@@ -112,7 +124,7 @@ class TleRepository(
     }
 
     private fun fetchOne(url: String): List<TleEntry> {
-        val req = Request.Builder().url(url).header("User-Agent", "SatCombo/1.0 (F4IOZ)").build()
+        val req = Request.Builder().url(url).header("User-Agent", USER_AGENT).build()
         client.newCall(req).execute().use { resp ->
             // An error status is a failure, not an empty answer: a blocked
             // address must not read as "no such satellite".
@@ -140,8 +152,12 @@ class TleRepository(
      */
     fun parse(text: String): List<TleEntry> {
         val t = text.trimStart()
-        val brut = if (t.startsWith("[") || t.startsWith("{"))
-            OmmParser.parse(text, freqPlan) else parseTle(text)
+        val brut = when {
+            // SatNOGS DB: [{"tle0": name, "tle1": …, "tle2": …}, …]
+            t.startsWith("[") && t.contains("\"tle1\"") -> parseTle(satnogsEnTle(text))
+            t.startsWith("[") || t.startsWith("{") -> OmmParser.parse(text, freqPlan)
+            else -> parseTle(text)
+        }
         val bons = brut.filter {
             fr.f4ioz.satcombo.domain.PassPredictor.elementsUtilisables(it)
         }
@@ -154,6 +170,20 @@ class TleRepository(
     }
 
     /** Legacy 3-line element parser (kept for cached data and fallback). */
+    /** SatNOGS DB's JSON as plain 3LE text (name, line 1, line 2). */
+    fun satnogsEnTle(json: String): String = runCatching {
+        val a = org.json.JSONArray(json)
+        buildString {
+            for (i in 0 until a.length()) {
+                val o = a.optJSONObject(i) ?: continue
+                val l1 = o.optString("tle1"); val l2 = o.optString("tle2")
+                if (l1.isEmpty() || l2.isEmpty()) continue
+                append(o.optString("tle0").ifBlank { l1.drop(2).take(5).trim() }).append('\n')
+                append(l1).append('\n').append(l2).append('\n')
+            }
+        }
+    }.getOrDefault("")
+
     fun parseTle(text: String): List<TleEntry> {
         val lines = text.lines().map { it.trimEnd() }.filter { it.isNotBlank() }
         val out = ArrayList<TleEntry>()

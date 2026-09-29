@@ -932,6 +932,7 @@ val FR: Map<String, String> = mapOf(
     "pass_notif_title" to "Passage {0}",
     "src_amsat_gp" to "AMSAT GP (bulletin officiel)",
     "src_weather" to "Celestrak Météo (NOAA)",
+    "src_satnogs" to "SatNOGS DB (≈ 1 700 satellites)",
     "clear_filter" to "Effacer le filtre",
     // ---- Timeline (elevation curves) ----
     "timeline_title" to "Timeline",
@@ -1117,6 +1118,8 @@ val FR: Map<String, String> = mapOf(
     "serveur_gp_adresse" to "Adresse du serveur",
     "serveur_gp_essai" to "Essai…",
     "serveur_gp_defaut" to "Par défaut",
+    "serveur_gp_seul" to "Uniquement ce serveur",
+    "serveur_gp_seul_desc" to "Ne jamais interroger AMSAT, CelesTrak ou SatNOGS directement. Si le serveur ne répond pas, les éléments déjà en mémoire restent.",
     "paire_mixte_liaison" to "Un poste en réception (descente), l'autre en émission (montée), chacun sur son câble. FT-817 : liaison 8N2, débit du menu n°14. IC-705 : CI-V en 8N1, vitesse réglée ci-dessous.",
     "ft817_baud_seul" to "Débit CAT du FT-817 (menu n°14)",
     "ic705_baud" to "Vitesse CI-V de l'IC-705",
@@ -2760,6 +2763,7 @@ val EN: Map<String, String> = mapOf(
     "pass_notif_title" to "{0} pass",
     "src_amsat_gp" to "AMSAT GP (official bulletin)",
     "src_weather" to "Celestrak Weather (NOAA)",
+    "src_satnogs" to "SatNOGS DB (≈ 1,700 satellites)",
     "clear_filter" to "Clear the filter",
     // ---- Timeline ----
     "timeline_title" to "Timeline",
@@ -2945,6 +2949,8 @@ val EN: Map<String, String> = mapOf(
     "serveur_gp_adresse" to "Server address",
     "serveur_gp_essai" to "Testing…",
     "serveur_gp_defaut" to "Default",
+    "serveur_gp_seul" to "This server only",
+    "serveur_gp_seul_desc" to "Never ask AMSAT, CelesTrak or SatNOGS directly. If the server does not answer, the elements already stored stay.",
     "paire_mixte_liaison" to "One rig receives (downlink), the other transmits (uplink), each on its own cable. FT-817: 8N2 line, rate from menu #14. IC-705: CI-V at 8N1, speed set below.",
     "ft817_baud_seul" to "FT-817 CAT rate (menu #14)",
     "ic705_baud" to "IC-705 CI-V speed",
