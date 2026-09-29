@@ -1121,6 +1121,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 lotwCall = settings.lotwCall,
                 peindre = settings.peindreCarres,
                 lotwMdp = settings.lotwMdp,
+                qrzUser = settings.qrzUser,
+                qrzMdp = settings.qrzMdp,
                 url = settings.carnetUrl,
                 cle = settings.carnetCle,
                 slug = settings.carnetSlug,
@@ -2869,10 +2871,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun setQrzUser(v: String) {
+        settings.qrzUser = v
         _ui.value = _ui.value.copy(carnet = _ui.value.carnet.copy(qrzUser = v))
     }
 
     fun setQrzMdp(v: String) {
+        settings.qrzMdp = v
         _ui.value = _ui.value.copy(carnet = _ui.value.carnet.copy(qrzMdp = v))
     }
 

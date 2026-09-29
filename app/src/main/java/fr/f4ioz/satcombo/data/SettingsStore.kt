@@ -437,6 +437,18 @@ class SettingsStore(context: Context) {
         get() = prefs.getString("lotw_mdp", "") ?: ""
         set(v) { prefs.edit().putString("lotw_mdp", v).apply() }
 
+    /**
+     * QRZ.com login, kept like LoTW's. It lived only in memory: lost at every
+     * restart of the app, which every update causes.
+     */
+    var qrzUser: String
+        get() = prefs.getString("qrz_user", "") ?: ""
+        set(v) { prefs.edit().putString("qrz_user", v.trim()).apply() }
+
+    var qrzMdp: String
+        get() = prefs.getString("qrz_mdp", "") ?: ""
+        set(v) { prefs.edit().putString("qrz_mdp", v).apply() }
+
     var catHoldMs: Int
         get() = prefs.getInt("cat_hold_ms", 2_000)
         set(v) { prefs.edit().putInt("cat_hold_ms", v).apply() }
