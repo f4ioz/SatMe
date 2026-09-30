@@ -41,6 +41,10 @@ class Ic9700Sim(
     var subMode: Int = 0x01; private set
     var toneOn: Boolean = false; private set
     var toneTenthHz: Int = 0; private set
+    /** Keyed over CI-V (0x1C 0x00 0x01), or set by a test. */
+    var transmitting: Boolean = false
+    /** Every key/unkey command, in order: a test reads the sequence back. */
+    val commandesPtt = ArrayList<Boolean>()
 
     /** Number of commands refused so far. */
     var refusals: Int = 0; private set
@@ -161,9 +165,15 @@ class Ic9700Sim(
                 else -> nak()
             }
             0x16 -> when (at(0)) {
-                0x5A -> { satMode = at(1) == 1; ack() }
+                0x5A -> if (d.size < 2) reply(0x16, byteArrayOf(0x5A, if (satMode) 0x01 else 0x00))
+                        else { satMode = at(1) == 1; ack() }
                 0x42 -> { toneOn = at(1) == 1; ack() }
                 else -> nak()
+            }
+            0x1C -> when {
+                at(0) != 0x00 -> nak()
+                d.size < 2 -> reply(0x1C, byteArrayOf(0x00, if (transmitting) 0x01 else 0x00))
+                else -> { transmitting = at(1) == 1; commandesPtt += transmitting; ack() }
             }
             0x1B -> {
                 if (at(0) != 0x00) { nak(); return }

@@ -67,7 +67,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-enum class Screen { PASSES, SETTINGS, LOCATOR, SKED, TIMELINE, PHOTO, ACTIVATION, SSTV, SDR, APT, AGENDA, SONDE, ROTOR, QO100, NOMMAGE, GLOBE, FT8 }
+enum class Screen { PASSES, SETTINGS, LOCATOR, SKED, TIMELINE, PHOTO, ACTIVATION, SSTV, SDR, APT, AGENDA, SONDE, ROTOR, QO100, NOMMAGE, GLOBE, FT8, APRS }
 
 /**
  * Fine-tuning settings, kept out of [UiState] because of the 255-register
@@ -3824,6 +3824,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val u = _ui.value
         val lost =
             (u.screen == Screen.SSTV && fr.f4ioz.satcombo.data.Extensions.SSTV !in ext) ||
+            (u.screen == Screen.APRS && fr.f4ioz.satcombo.data.Extensions.APRS !in ext) ||
             (u.screen == Screen.SDR && fr.f4ioz.satcombo.data.Extensions.SDR !in ext)
         if (u.screen == Screen.SDR && fr.f4ioz.satcombo.data.Extensions.SDR !in ext) stopSdr()
         _ui.value = u.copy(
@@ -4461,6 +4462,132 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _ui.value = _ui.value.copy(screen = Screen.SSTV)
     }
     fun closeSstv() { _ui.value = retour() }
+
+    fun openAprs() {
+        if (!hasExtension(fr.f4ioz.satcombo.data.Extensions.APRS)) return
+        va(Screen.APRS)
+        _ui.value = _ui.value.copy(screen = Screen.APRS)
+    }
+    fun closeAprs() { _ui.value = retour() }
+
+    /** APRS decoding while recording: read from the settings, not `UiState` (255-register limit). */
+    fun aprsActif(): Boolean = settings.aprsEnabled
+    fun setAprsActif(v: Boolean) { settings.aprsEnabled = v }
+
+    // ------------------------------------------------------ APRS transmit
+
+    /** What the last transmit or test gave, for the APRS page (not in `UiState`). */
+    val aprsEnvoi = kotlinx.coroutines.flow.MutableStateFlow("")
+    /** A frame is on its way: the Doppler loop leaves the rig alone meanwhile. */
+    @Volatile private var aprsEnEmission = false
+    private var aprsDerniereMs = 0L
+
+    fun aprsSsid(): Int = settings.aprsSsid
+    fun setAprsSsid(v: Int) { settings.aprsSsid = v }
+    fun aprsNiveau(): Float = settings.aprsNiveau
+    fun setAprsNiveau(v: Float) { settings.aprsNiveau = v }
+
+    /** The sender: the callsign from the settings, with the chosen SSID. */
+    fun aprsSource(): String = settings.callsign.trim().uppercase().let {
+        if (settings.aprsSsid > 0 && it.isNotEmpty()) "$it-${settings.aprsSsid}" else it
+    }
+
+    /** Next message number (1..999), so an ack can be matched. */
+    fun aprsNumeroSuivant(): String {
+        val n = settings.aprsNumero % 999 + 1
+        settings.aprsNumero = n
+        return n.toString()
+    }
+
+    /**
+     * The frame's audio, checked by decoding it back before anything is
+     * played: a frame that does not come out of our own decoder does not go
+     * on the air either.
+     */
+    private fun aprsAudio(t: fr.f4ioz.satcombo.aprs.Trame): ShortArray? {
+        val octets = fr.f4ioz.satcombo.aprs.Ax25.encode(t)
+        val pcm = fr.f4ioz.satcombo.aprs.Afsk.module(listOf(octets),
+            fr.f4ioz.satcombo.aprs.SortieAudio.FREQUENCE, settings.aprsNiveau.toDouble(), drapeauxAvant = 40)
+        // 150 ms of silence on each side: a glitch as playback starts or stops
+        // (common on Android) falls there, not in the frame.
+        val marge = ShortArray(fr.f4ioz.satcombo.aprs.SortieAudio.FREQUENCE * 15 / 100)
+        val complet = marge + pcm + marge
+        val relues = ArrayList<fr.f4ioz.satcombo.aprs.Trame>()
+        fr.f4ioz.satcombo.aprs.AfskDemodulateur(fr.f4ioz.satcombo.aprs.SortieAudio.FREQUENCE) { relues += it }.traite(complet)
+        return complet.takeIf { relues.singleOrNull() == t }
+    }
+
+    /** Test without transmitting: on the phone's speaker, or as a WAV to share. */
+    fun aprsEssai(trame: fr.f4ioz.satcombo.aprs.Trame, fichier: Boolean, partage: (java.io.File) -> Unit) {
+        viewModelScope.launch {
+            val pcm = withContext(Dispatchers.Default) { aprsAudio(trame) }
+            if (pcm == null) { aprsEnvoi.value = t("aprs_tx_controle"); return@launch }
+            if (fichier) {
+                // With the SSTV test cards (shared the same way, reachable over USB).
+                val f = withContext(Dispatchers.IO) {
+                    val d = getApplication<android.app.Application>().getExternalFilesDir("mires")!!.apply { mkdirs() }
+                    fr.f4ioz.satcombo.aprs.SortieAudio.wav(pcm, java.io.File(d, "SatMe_APRS_essai.wav"))
+                }
+                aprsEnvoi.value = t("aprs_tx_wav")
+                partage(f)
+            } else {
+                aprsEnvoi.value = t("aprs_tx_hp_en_cours")
+                val ok = fr.f4ioz.satcombo.aprs.SortieAudio.joue(pcm, null)
+                aprsEnvoi.value = if (ok) t("aprs_tx_hp_fini") else t("aprs_tx_audio")
+            }
+        }
+    }
+
+    /** The IC-9700 as seen by APRS transmit. */
+    private val posteAprs = object : fr.f4ioz.satcombo.aprs.PosteAprs {
+        override suspend fun frequence() = cat.readFrequency()
+        override suspend fun mode() = cat.readMode()
+        override suspend fun modeSatellite() = cat.readSatelliteMode()
+        override suspend fun emission(on: Boolean) = cat.setTransmit(on)
+        override suspend fun enEmission() = cat.isTransmitting()
+    }
+
+    /**
+     * Sends one frame through the IC-9700: checks, key, audio on the rig's USB
+     * sound card, unkey. Everything that can go wrong is said on the page.
+     */
+    fun aprsEmet(trame: fr.f4ioz.satcombo.aprs.Trame) {
+        if (aprsEnEmission) return
+        viewModelScope.launch {
+            val app = getApplication<android.app.Application>()
+            val u = _ui.value
+            if (!u.catConnected) { aprsEnvoi.value = t("aprs_tx_cat"); return@launch }
+            if (u.rigModel != "IC9700" || isPairRig) { aprsEnvoi.value = t("aprs_tx_ic9700"); return@launch }
+            val carte = fr.f4ioz.satcombo.aprs.SortieAudio.carteDuPoste(app)
+                ?: run { aprsEnvoi.value = t("aprs_tx_carte_son"); return@launch }
+            aprsEnEmission = true
+            try {
+                val hz = posteAprs.frequence()
+                val raison = fr.f4ioz.satcombo.aprs.AprsEmission.refus(
+                    trame.source.indicatif, System.currentTimeMillis(), aprsDerniereMs,
+                    hz, posteAprs.mode(), posteAprs.modeSatellite(), posteAprs.enEmission())
+                if (raison != null) {
+                    aprsEnvoi.value = if (raison == "frequence") tf("aprs_tx_refus_frequence",
+                        "%.4f".format(java.util.Locale.US, (hz ?: 0L) / 1e6)) else t("aprs_tx_refus_$raison")
+                    return@launch
+                }
+                val pcm = withContext(Dispatchers.Default) { aprsAudio(trame) }
+                    ?: run { aprsEnvoi.value = t("aprs_tx_controle"); return@launch }
+                aprsEnvoi.value = t("aprs_tx_en_cours")
+                val duree = pcm.size * 1000L / fr.f4ioz.satcombo.aprs.SortieAudio.FREQUENCE
+                val r = fr.f4ioz.satcombo.aprs.AprsEmission.emet(posteAprs, duree) {
+                    fr.f4ioz.satcombo.aprs.SortieAudio.joue(pcm, carte)
+                }
+                if (r == null) {
+                    aprsDerniereMs = System.currentTimeMillis()
+                    fr.f4ioz.satcombo.aprs.AprsHub.ajouteEmis(app, trame)
+                    aprsEnvoi.value = tf("aprs_tx_ok", "%.4f".format(java.util.Locale.US, (hz ?: 0L) / 1e6))
+                } else aprsEnvoi.value = t("aprs_tx_echec_$r")
+            } finally {
+                aprsEnEmission = false
+            }
+        }
+    }
 
     /**
      * Whether the SSTV page explains how to start decoding. Read straight from
@@ -7435,6 +7562,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      */
     private suspend fun catTick() {
         if (!_ui.value.catConnected) return
+        // An APRS frame is going out: no frequency write for that second or two.
+        if (aprsEnEmission) return
         val pos = _ui.value.livePosition
         val belowHorizon = pos == null || pos.elevationDeg < 0
         if (belowHorizon && !_ui.value.catTestSendAlways) {

@@ -43,6 +43,7 @@ import androidx.compose.material.icons.filled.Handshake
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.SatelliteAlt
 import androidx.compose.material.icons.filled.FiberManualRecord
+import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.EventNote
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
@@ -176,6 +177,7 @@ fun SatComboApp(vm: MainViewModel) {
             RetourArriere.Geste.FERMER_PHOTO -> vm.closePhoto()
             RetourArriere.Geste.FERMER_ACTIVATION -> vm.closeActivation()
             RetourArriere.Geste.FERMER_SSTV -> vm.closeSstv()
+            RetourArriere.Geste.FERMER_APRS -> vm.closeAprs()
             RetourArriere.Geste.FERMER_SDR -> vm.closeSdr()
             RetourArriere.Geste.FERMER_APT -> vm.closeApt()
             RetourArriere.Geste.FERMER_SONDE -> vm.closeSonde()
@@ -202,6 +204,7 @@ fun SatComboApp(vm: MainViewModel) {
                     ui.screen == Screen.PHOTO -> PhotoScreen(ui, vm)
                     ui.screen == Screen.ACTIVATION -> ActivationScreen(ui, vm)
                     ui.screen == Screen.SSTV -> SstvScreen(ui, vm)
+                    ui.screen == Screen.APRS -> AprsScreen(ui, vm)
                     ui.screen == Screen.SDR -> SdrScreen(ui, vm)
                     ui.screen == Screen.APT -> AptScreen(ui, vm)
                     ui.screen == Screen.SONDE -> SondeScreen(ui, vm)
@@ -329,6 +332,7 @@ private fun TopBar(ui: UiState, vm: MainViewModel) {
                             Screen.PHOTO -> t("photo_title")
                             Screen.ACTIVATION -> t("act_title")
                             Screen.SSTV -> t("sstv_title")
+                            Screen.APRS -> t("aprs_titre")
                             Screen.SDR -> t("sdr_title")
                             Screen.APT -> t("apt_title")
                             Screen.SONDE -> t("sonde_title")
@@ -413,6 +417,7 @@ private fun TopBar(ui: UiState, vm: MainViewModel) {
                 RetourArriere.Geste.FERMER_PHOTO -> vm::closePhoto
                 RetourArriere.Geste.FERMER_ACTIVATION -> vm::closeActivation
                 RetourArriere.Geste.FERMER_SSTV -> vm::closeSstv
+                RetourArriere.Geste.FERMER_APRS -> vm::closeAprs
                 RetourArriere.Geste.FERMER_SDR -> vm::closeSdr
                 RetourArriere.Geste.FERMER_APT -> vm::closeApt
                 RetourArriere.Geste.FERMER_SONDE -> vm::closeSonde
@@ -553,6 +558,12 @@ private fun OverflowMenu(ui: UiState, vm: MainViewModel) {
                             tint = if (sstvOn) Aurora else Cyan)
                     },
                     onClick = { open = false; vm.openSstv() })
+            }
+            if (fr.f4ioz.satcombo.data.Extensions.APRS in ui.extensions) {
+                DropdownMenuItem(
+                    text = { Text(t("aprs_titre")) },
+                    leadingIcon = { Icon(Icons.Default.Place, null, tint = Cyan) },
+                    onClick = { open = false; vm.openAprs() })
             }
             if (fr.f4ioz.satcombo.data.Extensions.APT in ui.extensions) {
                 DropdownMenuItem(

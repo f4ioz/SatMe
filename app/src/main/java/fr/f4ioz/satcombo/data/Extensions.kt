@@ -83,8 +83,15 @@ object Extensions {
      */
     const val QO100 = "qo100"
 
+    /**
+     * APRS reception: AFSK 1200 frames (ISS digipeater, 145.825 MHz) decoded
+     * while recording. Checked on the WA8LMF reference recordings, not yet
+     * on a real ISS pass: its page says so.
+     */
+    const val APRS = "aprs"
+
     /** Every known extension, in display order. */
-    val ALL: List<String> = listOf(SSTV, SDR, APT, FLAG, BZH, SONDE, ROTOR, QO100)
+    val ALL: List<String> = listOf(SSTV, SDR, APT, FLAG, BZH, SONDE, ROTOR, QO100, APRS)
 
     /**
      * Open to everyone, no key needed.

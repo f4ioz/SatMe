@@ -72,7 +72,7 @@ class Chemin(private val max: Int = 8) {
          * and QO-100 keep their settings on their own screen.
          */
         fun sectionDe(ecran: Screen): String? = when (ecran) {
-            Screen.SSTV, Screen.APT -> "recordings"
+            Screen.SSTV, Screen.APT, Screen.APRS -> "recordings"
             Screen.SDR -> "accord"
             Screen.SONDE -> "sondemire"
             Screen.SKED -> "skeds"

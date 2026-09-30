@@ -436,7 +436,8 @@ private fun SstvViewer(file: File, onClose: () -> Unit) {
 
 /** Pick one of the MP3 recordings to push back through the decoder. */
 @Composable
-private fun RecordingPicker(onDismiss: () -> Unit, onPick: (File) -> Unit) {
+internal fun RecordingPicker(onDismiss: () -> Unit, onPick: (File) -> Unit,
+                             titre: String = t("sstv_pick_recording")) {
     val ctx = LocalContext.current
     val files = remember {
         File(ctx.getExternalFilesDir(null), "recordings")
@@ -446,7 +447,7 @@ private fun RecordingPicker(onDismiss: () -> Unit, onPick: (File) -> Unit) {
     androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
         Surface(color = SpaceCard, shape = RoundedCornerShape(14.dp)) {
             Column(Modifier.padding(14.dp)) {
-                Text(t("sstv_pick_recording"), color = TextHi,
+                Text(titre, color = TextHi,
                     fontWeight = FontWeight.Bold, fontSize = 15.sp)
                 Spacer(Modifier.height(8.dp))
                 if (files.isEmpty()) {

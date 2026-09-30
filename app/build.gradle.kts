@@ -114,8 +114,11 @@ android {
 tasks.withType<Test>().configureEach {
     val bench = System.getProperty("satme.bench") ?: ""
     systemProperty("satme.bench", bench)
+    // APRS decoder against real recordings: `-Dsatme.aprs=file1.wav,file2.wav`.
+    val aprs = System.getProperty("satme.aprs") ?: ""
+    systemProperty("satme.aprs", aprs)
     maxHeapSize = "2g"
-    if (bench.isNotEmpty()) {
+    if (bench.isNotEmpty() || aprs.isNotEmpty()) {
         testLogging { showStandardStreams = true }
     }
 }

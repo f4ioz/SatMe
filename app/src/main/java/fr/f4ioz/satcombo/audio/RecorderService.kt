@@ -192,7 +192,13 @@ class RecorderService : Service() {
                         st.aptEnabled && fr.f4ioz.satcombo.data.Extensions.isUnlocked(
                             fr.f4ioz.satcombo.data.Extensions.APT, st.callsign, st.extensionsCode)
                     }.getOrDefault(false)
+                    val aprs = runCatching {
+                        val st = fr.f4ioz.satcombo.data.SettingsStore(this)
+                        st.aprsEnabled && fr.f4ioz.satcombo.data.Extensions.isUnlocked(
+                            fr.f4ioz.satcombo.data.Extensions.APRS, st.callsign, st.extensionsCode)
+                    }.getOrDefault(false)
                     if (sstv) fr.f4ioz.satcombo.sstv.SstvHub.startLive(this, rate, sat)
+                    if (aprs) fr.f4ioz.satcombo.aprs.AprsHub.startLive(this, rate, sat)
                     if (apt) fr.f4ioz.satcombo.apt.AptHub.startLive(this, rate, sat)
                     // Monitor (spectrum + speaker playback). Opened even with
                     // both options off, so they can be turned on mid-pass
@@ -209,6 +215,7 @@ class RecorderService : Service() {
                         MoniteurAudio.alimenter(p, n)
                         if (sstv) fr.f4ioz.satcombo.sstv.SstvHub.feedLive(p, n)
                         if (apt) fr.f4ioz.satcombo.apt.AptHub.feedLive(p, n)
+                        if (aprs) fr.f4ioz.satcombo.aprs.AprsHub.feedLive(p, n)
                     }
                     // Spoken header (satellite, date, locator), synthesised
                     // while the microphone already listens: see PassRecorder.
@@ -231,6 +238,7 @@ class RecorderService : Service() {
                             MoniteurAudio.arreter()
                             fr.f4ioz.satcombo.sstv.SstvHub.stopLive()
                             fr.f4ioz.satcombo.apt.AptHub.stopLive()
+                            fr.f4ioz.satcombo.aprs.AprsHub.stopLive()
                             tearDownBluetooth()
                             stopForeground(STOP_FOREGROUND_REMOVE); stopSelf()
                             return@post
@@ -347,6 +355,7 @@ class RecorderService : Service() {
             // APT is written at the same point: the image is the whole pass,
             // so it only exists once the pass is over.
             fr.f4ioz.satcombo.apt.AptHub.stopLive()
+            fr.f4ioz.satcombo.aprs.AprsHub.stopLive()
             val startMs = _state.value.startMs
             _state.value = _state.value.copy(recording = false, autoStopMs = null)
             // Sidecar with QSO markers + export copy, off the main thread.
@@ -415,6 +424,7 @@ class RecorderService : Service() {
             recorder.stop()
             fr.f4ioz.satcombo.sstv.SstvHub.stopLive()
             fr.f4ioz.satcombo.apt.AptHub.stopLive()
+            fr.f4ioz.satcombo.aprs.AprsHub.stopLive()
             _state.value = _state.value.copy(recording = false, autoStopMs = null)
         }
         tearDownBluetooth()

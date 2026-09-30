@@ -358,12 +358,16 @@ object SdrHub {
      * stale flag left true here is what made reception misbehave after a
      * replug.
      */
+    /** APRS decoding hooked to the dongle's audio for this run. */
+    @Volatile private var aprsSdr = false
+
     @Synchronized
     fun onDeviceDetached() {
         val wasRunning = running || workerAlive
         if (wasRunning) {
             stopWorker()
             if (_state.value.sstv) runCatching { SstvHub.stopLive() }
+            if (aprsSdr) { runCatching { fr.f4ioz.satcombo.aprs.AprsHub.stopLive() }; aprsSdr = false }
             _spectrum.value = FloatArray(0)
             _panorama.value = FloatArray(0)
         }
@@ -485,6 +489,13 @@ object SdrHub {
             spanHz = Dsp.RTL_RATE.toDouble() / Dsp.DECIM_1)
 
         if (sstv) runCatching { SstvHub.startLive(app, Dsp.AUDIO_RATE, satName) }
+        // APRS from the dongle's audio too (ISS digipeater), when turned on.
+        aprsSdr = runCatching {
+            val st = fr.f4ioz.satcombo.data.SettingsStore(app)
+            st.aprsEnabled && fr.f4ioz.satcombo.data.Extensions.isUnlocked(
+                fr.f4ioz.satcombo.data.Extensions.APRS, st.callsign, st.extensionsCode)
+        }.getOrDefault(false)
+        if (aprsSdr) runCatching { fr.f4ioz.satcombo.aprs.AprsHub.startLive(app, Dsp.AUDIO_RATE, satName) }
 
         val recFile: File? = if (record) newRecordFile(app, satName) else null
         if (recFile != null) {
@@ -696,6 +707,7 @@ object SdrHub {
                         }
                     }
                     if (mine()) runCatching { SstvHub.feedLive(pcm, produced) }
+                    if (aprsSdr && mine()) runCatching { fr.f4ioz.satcombo.aprs.AprsHub.feedLive(pcm, produced) }
                     if (SondeHub.active && mine()) {
                         runCatching { SondeHub.feedLive(pcm, produced) }
                     }
@@ -963,6 +975,7 @@ object SdrHub {
         if (!running && !workerAlive) return
         stopWorker()
         if (_state.value.sstv) runCatching { SstvHub.stopLive() }
+        if (aprsSdr) { runCatching { fr.f4ioz.satcombo.aprs.AprsHub.stopLive() }; aprsSdr = false }
         _spectrum.value = FloatArray(0)
         _panorama.value = FloatArray(0)
         val present = appCtx?.let { devicePresent(it) != null } ?: false

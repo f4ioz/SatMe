@@ -38,6 +38,7 @@ object RetourArriere {
         FERMER_PHOTO,
         FERMER_ACTIVATION,
         FERMER_SSTV,
+        FERMER_APRS,
         FERMER_SDR,
         FERMER_APT,
         FERMER_SONDE,
@@ -73,6 +74,7 @@ object RetourArriere {
         ecran == Screen.PHOTO -> Geste.FERMER_PHOTO
         ecran == Screen.ACTIVATION -> Geste.FERMER_ACTIVATION
         ecran == Screen.SSTV -> Geste.FERMER_SSTV
+        ecran == Screen.APRS -> Geste.FERMER_APRS
         ecran == Screen.SDR -> Geste.FERMER_SDR
         ecran == Screen.APT -> Geste.FERMER_APT
         ecran == Screen.SONDE -> Geste.FERMER_SONDE

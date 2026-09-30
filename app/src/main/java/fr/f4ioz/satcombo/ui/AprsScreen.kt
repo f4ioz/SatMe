@@ -1,0 +1,386 @@
+/*
+ * SatMe — amateur radio satellite tracking
+ * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
+ * SPDX-License-Identifier: GPL-2.0-or-later
+ *
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
+ */
+package fr.f4ioz.satcombo.ui
+
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import fr.f4ioz.satcombo.MainViewModel
+import fr.f4ioz.satcombo.UiState
+import fr.f4ioz.satcombo.aprs.AprsHub
+import fr.f4ioz.satcombo.aprs.Paquet
+import fr.f4ioz.satcombo.aprs.TypeAprs
+import fr.f4ioz.satcombo.i18n.t
+import fr.f4ioz.satcombo.i18n.tf
+import fr.f4ioz.satcombo.ui.theme.*
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import java.util.TimeZone
+
+/**
+ * What the recorder heard in APRS: the ISS digipeater's traffic, messages,
+ * APRS Thursday's CQ HOTG. Reception only.
+ */
+@Composable
+fun AprsScreen(ui: UiState, vm: MainViewModel) {
+    val ctx = LocalContext.current
+    val portee = rememberCoroutineScope()
+    val st by AprsHub.etat.collectAsState()
+    LaunchedEffect(Unit) { withContext(Dispatchers.IO) { AprsHub.charge(ctx) } }
+    var actif by remember { mutableStateOf(vm.aprsActif()) }
+    var choix by remember { mutableStateOf(false) }
+    var filtre by remember { mutableStateOf("TOUT") }
+    var ouvert by remember { mutableStateOf<Paquet?>(null) }
+    var effacer by remember { mutableStateOf(false) }
+
+    val liste = remember(st.paquets, filtre) {
+        when (filtre) {
+            "ISS" -> st.paquets.filter { it.viaIss }
+            "MSG" -> st.paquets.filter { it.type == TypeAprs.MESSAGE || it.type == TypeAprs.ACCUSE }
+            "HOTG" -> st.paquets.filter { it.hotg }
+            else -> st.paquets
+        }
+    }
+
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(12.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        item {
+            // Proven on reference recordings, not yet on a real pass: said here.
+            Text(t("aprs_banniere"), color = Amber, fontSize = 11.sp)
+        }
+        item {
+            Surface(color = SpaceCard, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(16.dp)) {
+                    Row(Modifier.fillMaxWidth().toggleable(value = actif, role = Role.Switch,
+                            onValueChange = { actif = it; vm.setAprsActif(it) }),
+                        verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text(t("aprs_actif"), color = TextHi, fontWeight = FontWeight.Bold)
+                            Text(t("aprs_actif_desc"), color = TextLo, fontSize = 11.sp)
+                        }
+                        Switch(checked = actif, onCheckedChange = null,
+                            colors = SwitchDefaults.colors(checkedTrackColor = Cyan))
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        when {
+                            st.ecoute -> tf("aprs_ecoute", st.sat, st.nouveaux)
+                            actif -> t("aprs_pret")
+                            else -> t("aprs_arrete")
+                        },
+                        color = if (st.ecoute) Aurora else TextLo, fontSize = 12.sp)
+                    st.erreur?.let { Text(tf("aprs_erreur", it), color = Amber, fontSize = 11.sp) }
+                }
+            }
+        }
+        item { CarteEmission(ui, vm) }
+        item {
+            Surface(color = SpaceCard, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(16.dp)) {
+                    Text(t("aprs_relire"), color = TextHi, fontWeight = FontWeight.Bold)
+                    Text(t("aprs_relire_desc"), color = TextLo, fontSize = 11.sp)
+                    Spacer(Modifier.height(8.dp))
+                    if (st.progression >= 0f) {
+                        LinearProgressIndicator(progress = { st.progression }, color = Cyan,
+                            modifier = Modifier.fillMaxWidth())
+                        Text(tf("aprs_relire_en_cours", st.fichier ?: "", st.trouves),
+                            color = TextLo, fontSize = 11.sp)
+                        TextButton(onClick = { AprsHub.annuleFichier() }) { Text(t("cancel"), color = Cyan) }
+                    } else {
+                        Button(onClick = { choix = true },
+                            colors = ButtonDefaults.buttonColors(containerColor = Cyan)) {
+                            Text(t("sstv_pick_recording"), color = Color.Black)
+                        }
+                        st.fichier?.let {
+                            Text(tf("aprs_relire_fini", it, st.trouves), color = TextLo, fontSize = 11.sp)
+                        }
+                    }
+                }
+            }
+        }
+        item {
+            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                listOf("TOUT" to t("aprs_filtre_tout"), "ISS" to t("aprs_filtre_iss"),
+                    "MSG" to t("aprs_filtre_msg"), "HOTG" to "HOTG").forEach { (cle, nom) ->
+                    FilterChip(selected = filtre == cle, onClick = { filtre = cle },
+                        label = { Text(nom, fontSize = 12.sp) },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = Cyan.copy(alpha = 0.2f), selectedLabelColor = Cyan))
+                }
+            }
+        }
+        if (liste.isEmpty()) {
+            item { Text(t("aprs_vide"), color = TextLo, fontSize = 12.sp, modifier = Modifier.padding(8.dp)) }
+        }
+        items(liste, key = { "${it.quand}-${it.trame.hashCode()}-${it.emis}" }) { p ->
+            // A sent message is acknowledged when an "ack<number>" comes back to us.
+            val accuse = p.emis && p.idMessage != null && st.paquets.any {
+                it.type == TypeAprs.ACCUSE && it.idMessage == p.idMessage &&
+                    it.destinataire?.substringBefore('-') == p.trame.source.indicatif
+            }
+            LignePaquet(p, ui, ouvert == p, accuse) { ouvert = if (ouvert == p) null else p }
+        }
+        if (st.paquets.isNotEmpty()) {
+            item {
+                TextButton(onClick = { effacer = true }, modifier = Modifier.fillMaxWidth()) {
+                    Text(t("aprs_effacer"), color = Magenta, fontSize = 13.sp)
+                }
+            }
+        }
+    }
+
+    if (choix) {
+        RecordingPicker(onDismiss = { choix = false }, titre = t("sstv_pick_recording"), onPick = { f ->
+            choix = false
+            portee.launch { withContext(Dispatchers.IO) { AprsHub.decodeFichier(ctx, f) } }
+        })
+    }
+    if (effacer) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { effacer = false },
+            confirmButton = {
+                TextButton(onClick = { effacer = false; AprsHub.efface(ctx) }) { Text(t("aprs_effacer"), color = Magenta) }
+            },
+            dismissButton = { TextButton(onClick = { effacer = false }) { Text(t("cancel"), color = Cyan) } },
+            text = { Text(t("aprs_effacer_confirme"), color = TextHi) })
+    }
+}
+
+private val heureUtc = SimpleDateFormat("dd/MM HH:mm:ss", Locale.US).apply { timeZone = TimeZone.getTimeZone("UTC") }
+
+/** One frame: when, who, how it came, what it says; tapped, the raw frame. */
+@Composable
+private fun LignePaquet(p: Paquet, ui: UiState, ouvert: Boolean, accuse: Boolean, onClic: () -> Unit) {
+    Surface(color = SpaceCard, shape = RoundedCornerShape(12.dp),
+        modifier = Modifier.fillMaxWidth().clickable { onClic() }) {
+        Column(Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(p.source, color = TextHi, fontWeight = FontWeight.Bold, fontSize = 14.sp,
+                    fontFamily = FontFamily.Monospace)
+                if (p.emis) {
+                    Spacer(Modifier.width(6.dp))
+                    Text("↑ " + t("aprs_emis"), color = Color(0xFFE5484D), fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    if (accuse) {
+                        Spacer(Modifier.width(6.dp))
+                        Text(t("aprs_accuse"), color = Aurora, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+                if (p.viaIss) {
+                    Spacer(Modifier.width(6.dp))
+                    Text(t("aprs_via_iss"), color = Aurora, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                }
+                if (p.hotg) {
+                    Spacer(Modifier.width(6.dp))
+                    Text("HOTG", color = Amber, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                }
+                Spacer(Modifier.weight(1f))
+                Text(heureUtc.format(Date(p.quand)) + " UTC", color = TextLo, fontSize = 10.sp,
+                    fontFamily = FontFamily.Monospace)
+            }
+            val lignes = buildList {
+                when (p.type) {
+                    TypeAprs.MESSAGE -> add("✉ → ${p.destinataire} : ${p.message}")
+                    TypeAprs.ACCUSE -> add("✓ → ${p.destinataire} : ${p.message}")
+                    TypeAprs.OBJET -> add("◆ ${p.nom}")
+                    TypeAprs.STATUT -> add("» ${p.commentaire}")
+                    else -> {}
+                }
+                if (p.lat != null && p.lon != null) {
+                    val obs = ui.observer
+                    val km = obs?.let {
+                        fr.f4ioz.satcombo.sonde.Geo.distanceKm(it.latDeg, it.lonDeg, p.lat, p.lon)
+                    }
+                    val loc = fr.f4ioz.satcombo.location.Maidenhead.fromLatLon(p.lat, p.lon)
+                    add("📍 $loc · %.4f %.4f".format(Locale.US, p.lat, p.lon) +
+                        (km?.let { " · %d km".format(it.toInt()) } ?: "") +
+                        (p.vitesseKmh?.let { " · $it km/h" } ?: "") +
+                        (p.altitudeM?.let { " · $it m" } ?: ""))
+                }
+                if (p.type != TypeAprs.STATUT && p.commentaire.isNotBlank()) add(p.commentaire)
+            }
+            lignes.forEach { Text(it, color = TextLo, fontSize = 12.sp) }
+            if (ouvert) {
+                Text(p.trame.tnc2().map { if (it.code < 32 || it.code == 127) '·' else it }.joinToString(""),
+                    color = TextLo, fontSize = 10.sp, fontFamily = FontFamily.Monospace,
+                    modifier = Modifier.padding(top = 4.dp))
+            }
+        }
+    }
+}
+
+/**
+ * Transmit: what to send (APRS Thursday, APRSPH, message, position, status),
+ * how (path, SSID, level), a preview of the frame, tests without transmitting,
+ * and the IC-9700 button.
+ */
+@Composable
+private fun CarteEmission(ui: UiState, vm: MainViewModel) {
+    val ctx = LocalContext.current
+    val resultat by vm.aprsEnvoi.collectAsState()
+    var type by remember { mutableStateOf("JEUDI") }
+    var texte by remember { mutableStateOf("") }
+    var destinataire by remember { mutableStateOf("") }
+    var chemin by remember { mutableStateOf("ARISS") }
+    var ssid by remember { mutableStateOf(vm.aprsSsid()) }
+    var niveau by remember { mutableStateOf(vm.aprsNiveau()) }
+    var aide by remember { mutableStateOf(false) }
+    // The message number is drawn when sending, so the preview shows a placeholder.
+    val source = remember(ssid, ui.callsign) { vm.aprsSource() }
+    val obs = ui.observer
+    fun info(id: String?): String? = when (type) {
+        "JEUDI" -> fr.f4ioz.satcombo.aprs.AprsEmission.message("ANSRVR",
+            texte.ifBlank { "CQ HOTG" }.let { if (it.uppercase().let { u -> u.startsWith("CQ HOTG") || u.startsWith("K HOTG") || u.startsWith("U HOTG") }) it else "CQ HOTG $it" }, id)
+        "APRSPH" -> fr.f4ioz.satcombo.aprs.AprsEmission.message("APRSPH",
+            texte.ifBlank { "HOTG" }.let { if (it.uppercase().startsWith("HOTG")) it else "HOTG $it" }, id)
+        "MSG" -> if (destinataire.isBlank()) null else fr.f4ioz.satcombo.aprs.AprsEmission.message(destinataire, texte, id)
+        "POS" -> obs?.let { fr.f4ioz.satcombo.aprs.AprsEmission.position(it.latDeg, it.lonDeg, "/-", texte) }
+        else -> fr.f4ioz.satcombo.aprs.AprsEmission.statut(texte)
+    }
+    val cheminListe = when (chemin) { "ARISS" -> listOf("ARISS"); "WIDE" -> listOf("WIDE2-1"); else -> emptyList() }
+    val avecNumero = type in setOf("JEUDI", "APRSPH", "MSG")
+    val apercu = info(if (avecNumero) "n" else null)?.let {
+        fr.f4ioz.satcombo.aprs.AprsEmission.trame(source.ifBlank { "N0CALL" }, cheminListe, it).tnc2()
+    }
+    fun trame(): fr.f4ioz.satcombo.aprs.Trame? {
+        val i = info(if (avecNumero) vm.aprsNumeroSuivant() else null) ?: return null
+        return fr.f4ioz.satcombo.aprs.AprsEmission.trame(source, cheminListe, i)
+    }
+    val partage: (java.io.File) -> Unit = { f ->
+        runCatching {
+            val uri = androidx.core.content.FileProvider.getUriForFile(ctx, "${ctx.packageName}.fileprovider", f)
+            ctx.startActivity(android.content.Intent.createChooser(
+                android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                    this.type = "audio/wav"
+                    putExtra(android.content.Intent.EXTRA_STREAM, uri)
+                    addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }, t("aprs_tx_essai_wav")))
+        }
+    }
+
+    Surface(color = SpaceCard, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp)) {
+            Text(t("aprs_tx_titre"), color = TextHi, fontWeight = FontWeight.Bold)
+            Text(t("aprs_tx_banniere"), color = Amber, fontSize = 11.sp)
+            Spacer(Modifier.height(8.dp))
+            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                listOf("JEUDI" to "APRS Thursday", "APRSPH" to "APRSPH", "MSG" to t("aprs_tx_type_msg"),
+                    "POS" to t("aprs_tx_type_pos"), "STATUT" to t("aprs_tx_type_statut")).forEach { (cle, nom) ->
+                    FilterChip(selected = type == cle, onClick = { type = cle; texte = "" },
+                        label = { Text(nom, fontSize = 12.sp) },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = Cyan.copy(alpha = 0.2f), selectedLabelColor = Cyan))
+                }
+            }
+            when (type) {
+                "JEUDI" -> Text(t("aprs_tx_jeudi_aide"), color = TextLo, fontSize = 11.sp)
+                "APRSPH" -> Text(t("aprs_tx_aprsph_aide"), color = TextLo, fontSize = 11.sp)
+                "POS" -> if (obs == null) Text(t("aprs_tx_sans_position"), color = Amber, fontSize = 11.sp)
+                else -> {}
+            }
+            if (type == "JEUDI") {
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    listOf("K HOTG", "U HOTG").forEach { c ->
+                        TextButton(onClick = { texte = c }) { Text(c, color = Cyan, fontSize = 12.sp) }
+                    }
+                }
+            }
+            if (type == "MSG") {
+                androidx.compose.material3.OutlinedTextField(value = destinataire,
+                    onValueChange = { destinataire = it.uppercase().take(9) },
+                    label = { Text(t("aprs_tx_destinataire"), fontSize = 12.sp) }, singleLine = true,
+                    modifier = Modifier.fillMaxWidth())
+            }
+            androidx.compose.material3.OutlinedTextField(value = texte,
+                onValueChange = { texte = it.take(fr.f4ioz.satcombo.aprs.AprsEmission.LONGUEUR_MESSAGE) },
+                label = { Text(if (type == "POS") t("aprs_tx_commentaire") else t("aprs_tx_texte"), fontSize = 12.sp) },
+                placeholder = { Text(when (type) { "JEUDI" -> "CQ HOTG 73 de JN18"; "APRSPH" -> "HOTG 73"; else -> "" }, color = TextLo) },
+                singleLine = true, modifier = Modifier.fillMaxWidth())
+            Spacer(Modifier.height(6.dp))
+            Text(t("aprs_tx_chemin"), color = TextLo, fontSize = 11.sp)
+            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                listOf("ARISS" to t("aprs_tx_chemin_iss"), "WIDE" to t("aprs_tx_chemin_terre"),
+                    "AUCUN" to t("aprs_tx_chemin_aucun")).forEach { (cle, nom) ->
+                    FilterChip(selected = chemin == cle, onClick = { chemin = cle },
+                        label = { Text(nom, fontSize = 12.sp) },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = Cyan.copy(alpha = 0.2f), selectedLabelColor = Cyan))
+                }
+            }
+            Text(t("aprs_tx_ssid"), color = TextLo, fontSize = 11.sp)
+            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                listOf(0, 6, 7, 9, 10).forEach { n ->
+                    FilterChip(selected = ssid == n, onClick = { ssid = n; vm.setAprsSsid(n) },
+                        label = { Text(if (n == 0) "—" else "-$n", fontSize = 12.sp) },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = Cyan.copy(alpha = 0.2f), selectedLabelColor = Cyan))
+                }
+            }
+            Text(tf("aprs_tx_niveau", (niveau * 100).toInt()), color = TextLo, fontSize = 11.sp)
+            androidx.compose.material3.Slider(value = niveau, valueRange = 0.05f..1f,
+                onValueChange = { niveau = it }, onValueChangeFinished = { vm.setAprsNiveau(niveau) })
+            if (source.isBlank()) Text(t("aprs_tx_sans_indicatif"), color = Amber, fontSize = 11.sp)
+            apercu?.let {
+                Text(t("aprs_tx_apercu"), color = TextLo, fontSize = 11.sp)
+                Text(it, color = TextHi, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
+            }
+            Spacer(Modifier.height(8.dp))
+            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically) {
+                androidx.compose.material3.OutlinedButton(enabled = apercu != null && source.isNotBlank(),
+                    onClick = { trame()?.let { vm.aprsEssai(it, fichier = false, partage = partage) } }) {
+                    Text(t("aprs_tx_essai_hp"), color = Cyan, fontSize = 12.sp)
+                }
+                androidx.compose.material3.OutlinedButton(enabled = apercu != null && source.isNotBlank(),
+                    onClick = { trame()?.let { vm.aprsEssai(it, fichier = true, partage = partage) } }) {
+                    Text(t("aprs_tx_essai_wav"), color = Cyan, fontSize = 12.sp)
+                }
+            }
+            Spacer(Modifier.height(6.dp))
+            Button(enabled = apercu != null && source.isNotBlank(),
+                onClick = { trame()?.let { vm.aprsEmet(it) } },
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE5484D)),
+                modifier = Modifier.fillMaxWidth()) {
+                Text(t("aprs_tx_emettre"), color = Color.White, fontWeight = FontWeight.Bold)
+            }
+            if (resultat.isNotBlank()) Text(resultat, color = TextHi, fontSize = 12.sp,
+                modifier = Modifier.padding(top = 6.dp))
+            TextButton(onClick = { aide = !aide }) { Text(t("aprs_tx_aide_titre"), color = Cyan, fontSize = 12.sp) }
+            if (aide) Text(t("aprs_tx_aide"), color = TextLo, fontSize = 11.sp)
+        }
+    }
+}

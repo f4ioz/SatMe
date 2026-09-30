@@ -98,6 +98,25 @@ class SettingsStore(context: Context) {
         get() = prefs.getString("rec_tree_uri", "") ?: ""
         set(v) { prefs.edit().putString("rec_tree_uri", v).apply() }
 
+    /**
+     * Decode APRS (AFSK 1200) in the recorded audio. Off by default, like
+     * SSTV: the operator who listens to the ISS digipeater turns it on.
+     */
+    var aprsEnabled: Boolean
+        get() = prefs.getBoolean("aprs_enabled", false)
+        set(v) { prefs.edit().putBoolean("aprs_enabled", v).apply() }
+
+    /** APRS transmit: SSID after the callsign (0 = none), audio level 0..1, last message number. */
+    var aprsSsid: Int
+        get() = prefs.getInt("aprs_ssid", 0)
+        set(v) { prefs.edit().putInt("aprs_ssid", v.coerceIn(0, 15)).apply() }
+    var aprsNiveau: Float
+        get() = prefs.getFloat("aprs_niveau", 0.5f)
+        set(v) { prefs.edit().putFloat("aprs_niveau", v.coerceIn(0.05f, 1f)).apply() }
+    var aprsNumero: Int
+        get() = prefs.getInt("aprs_numero", 0)
+        set(v) { prefs.edit().putInt("aprs_numero", v).apply() }
+
     /** Watch the recorded audio for an SSTV header and decode pictures live.
      *  Off by default: most passes carry no SSTV, and the operator who wants
      *  pictures turns it on knowingly. */

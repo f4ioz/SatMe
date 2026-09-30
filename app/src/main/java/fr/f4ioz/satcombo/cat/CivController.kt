@@ -352,6 +352,21 @@ class CivController(private val context: Context? = null) : RigDriver {
     suspend fun setSplitOn(on: Boolean): Boolean =
         send(frame(0x0F, byteArrayOf(if (on) 0x01 else 0x00)))
 
+    /**
+     * Keys (true) or unkeys the transmitter: CI-V 0x1C 0x00 01/00. Used only
+     * by APRS transmission, one frame at a time, always unkeyed after.
+     */
+    suspend fun setTransmit(on: Boolean): Boolean =
+        send(frame(0x1C, byteArrayOf(0x00, if (on) 0x01 else 0x00)))
+
+    /** Satellite mode on? (IC-9700: 0x16 0x5A read), null when unknown. */
+    suspend fun readSatelliteMode(): Boolean? {
+        if (link == null) return null
+        val frames = exchange(0x16, byteArrayOf(0x5A), expect = 0x16, expectSub = 0x5A)
+        val p = CatDecode.payload(frames, radioAddr, controllerAddr, 0x16, 0x5A) ?: return null
+        return p.lastOrNull()?.let { (it.toInt() and 0xFF) == 1 }
+    }
+
     /** Enable/disable satellite mode (IC-9700: cmd 0x16 0x5A, 01=on/00=off). */
     suspend fun setSatelliteMode(on: Boolean): Boolean =
         send(frame(0x16, byteArrayOf(0x5A, if (on) 0x01 else 0x00)))
