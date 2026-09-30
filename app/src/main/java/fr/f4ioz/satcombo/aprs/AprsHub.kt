@@ -179,6 +179,13 @@ object AprsHub {
         return trouves
     }
 
+    /** A frame a KISS radio (TH-D72…) received and passed on, already decoded. */
+    fun recuDuTnc(ctx: Context, t: Trame) {
+        val app = ctx.applicationContext
+        charge(app)
+        ajoute(app, t, System.currentTimeMillis(), "TNC")
+    }
+
     /** A frame this phone has just sent: shown and kept with the others. */
     @Synchronized
     fun ajouteEmis(ctx: Context, t: Trame) {

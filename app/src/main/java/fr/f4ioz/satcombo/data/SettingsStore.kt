@@ -113,6 +113,13 @@ class SettingsStore(context: Context) {
     var aprsNiveau: Float
         get() = prefs.getFloat("aprs_niveau", 0.5f)
         set(v) { prefs.edit().putFloat("aprs_niveau", v.coerceIn(0.05f, 1f)).apply() }
+    /** KISS radio (TH-D72…): the USB adapter's key and the serial speed. */
+    var aprsKissCle: String
+        get() = prefs.getString("aprs_kiss_cle", "") ?: ""
+        set(v) { prefs.edit().putString("aprs_kiss_cle", v).apply() }
+    var aprsKissVitesse: Int
+        get() = prefs.getInt("aprs_kiss_vitesse", 9600)
+        set(v) { prefs.edit().putInt("aprs_kiss_vitesse", v).apply() }
     var aprsNumero: Int
         get() = prefs.getInt("aprs_numero", 0)
         set(v) { prefs.edit().putInt("aprs_numero", v).apply() }

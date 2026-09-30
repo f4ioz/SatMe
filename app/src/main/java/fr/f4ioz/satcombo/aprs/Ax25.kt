@@ -115,6 +115,15 @@ object Ax25 {
         return Adresse(sb.toString(), (dernier ushr 1) and 0x0F) to dernier
     }
 
+    /** A frame without its FCS, as a KISS TNC passes it (the radio checked it already). */
+    fun decodeSansFcs(octets: ByteArray): Trame? {
+        val c = crc(octets)
+        return decode(octets + byteArrayOf((c and 0xFF).toByte(), (c ushr 8).toByte()))
+    }
+
+    /** The bytes of a frame without FCS: what a KISS TNC expects (it adds the FCS). */
+    fun encodeSansFcs(t: Trame): ByteArray = encode(t).let { it.copyOf(it.size - 2) }
+
     /** The bytes of a frame, FCS included: what goes between the flags. */
     fun encode(t: Trame): ByteArray {
         val out = java.io.ByteArrayOutputStream()

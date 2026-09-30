@@ -117,6 +117,9 @@ tasks.withType<Test>().configureEach {
     // APRS decoder against real recordings: `-Dsatme.aprs=file1.wav,file2.wav`.
     val aprs = System.getProperty("satme.aprs") ?: ""
     systemProperty("satme.aprs", aprs)
+    // KISS radio on the PC's serial port: `-Dsatme.kiss=/dev/ttyUSB0` (receive only).
+    systemProperty("satme.kiss", System.getProperty("satme.kiss") ?: "")
+    systemProperty("satme.kissbrut", System.getProperty("satme.kissbrut") ?: "")
     maxHeapSize = "2g"
     if (bench.isNotEmpty() || aprs.isNotEmpty()) {
         testLogging { showStandardStreams = true }

@@ -4538,6 +4538,53 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    // ------------------------------------------------ KISS radio (TH-D72…)
+
+    fun aprsKissCle(): String = settings.aprsKissCle
+    fun aprsKissVitesse(): Int = settings.aprsKissVitesse
+
+    fun kissConnecte(cle: String, vitesse: Int) {
+        settings.aprsKissCle = cle
+        settings.aprsKissVitesse = vitesse
+        viewModelScope.launch {
+            fr.f4ioz.satcombo.aprs.TncKiss.connecte(getApplication(), cle, vitesse)
+        }
+    }
+
+    fun kissPasseEnKiss() { viewModelScope.launch { fr.f4ioz.satcombo.aprs.TncKiss.passeEnKiss() } }
+
+    fun kissDeconnecte() {
+        viewModelScope.launch(Dispatchers.IO) { fr.f4ioz.satcombo.aprs.TncKiss.deconnecte() }
+    }
+
+    /**
+     * One frame to the KISS radio, which keys and returns to receive by
+     * itself. SatMe cannot read its frequency in KISS mode: the operator
+     * confirms it; the rest of the checks are the same as for the IC-9700.
+     */
+    fun aprsEmetKiss(trame: fr.f4ioz.satcombo.aprs.Trame, frequenceConfirmee: Boolean) {
+        viewModelScope.launch {
+            if (!fr.f4ioz.satcombo.aprs.TncKiss.etat.value.connecte) {
+                aprsEnvoi.value = t("aprs_kiss_non_connecte"); return@launch
+            }
+            if (!frequenceConfirmee) { aprsEnvoi.value = t("aprs_kiss_confirmer"); return@launch }
+            // Frequency read before KISS (TH-D72 "FO"), when there is one: it must be right too.
+            val lue = fr.f4ioz.satcombo.aprs.TncKiss.etat.value.frequenceHz
+            val raison = fr.f4ioz.satcombo.aprs.AprsEmission.refus(trame.source.indicatif,
+                System.currentTimeMillis(), aprsDerniereMs, lue ?: 145_825_000L, 0x05, false, false)
+            if (raison != null) {
+                aprsEnvoi.value = if (raison == "frequence") tf("aprs_tx_refus_frequence",
+                    "%.4f".format(java.util.Locale.US, (lue ?: 0L) / 1e6)) else t("aprs_tx_refus_$raison")
+                return@launch
+            }
+            if (fr.f4ioz.satcombo.aprs.TncKiss.envoie(trame)) {
+                aprsDerniereMs = System.currentTimeMillis()
+                fr.f4ioz.satcombo.aprs.AprsHub.ajouteEmis(getApplication(), trame)
+                aprsEnvoi.value = t("aprs_kiss_ok")
+            } else aprsEnvoi.value = t("aprs_kiss_echec")
+        }
+    }
+
     /** The IC-9700 as seen by APRS transmit. */
     private val posteAprs = object : fr.f4ioz.satcombo.aprs.PosteAprs {
         override suspend fun frequence() = cat.readFrequency()
