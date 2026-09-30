@@ -979,6 +979,7 @@ fun etatCarre(ui: UiState, carre: String): fr.f4ioz.satcombo.data.CarnetEnLigne.
 /** Rig models of the FT-817 + IC-705 pair: which one receives. */
 const val FT817_IC705 = "FT817_IC705"   // IC-705 receives, FT-817 transmits
 const val IC705_FT817 = "IC705_FT817"   // IC-705 transmits, FT-817 receives
+const val THD72 = "THD72"               // Kenwood TH-D72, full duplex: one band RX, the other TX
 
 /** Normalize a designator so AO-07 == AO-7, FO-029 == FO-29. */
 private val DESIGNATEUR = Regex("""([A-Z]+)-0*(\d+)""")
@@ -1046,16 +1047,22 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private var rotorDriver: fr.f4ioz.satcombo.rotor.RotorDriver? = null
     /** Control goes through the FT-817 pair — two rigs, or one for TX only. */
     private val isPairRig: Boolean
-        get() = _ui.value.rigModel in setOf("FT817x2", "FT817TX", FT817_IC705, IC705_FT817)
+        get() = _ui.value.rigModel in setOf("FT817x2", "FT817TX", FT817_IC705, IC705_FT817, THD72)
+
+    /** The pair is a TH-D72: its two bands on one cable. */
+    private val isThd72: Boolean get() = _ui.value.rigModel == THD72
 
     /** FT-817 + IC-705: the pair whose two rigs speak different protocols. */
     private val isPaireMixte: Boolean
         get() = _ui.value.rigModel == FT817_IC705 || _ui.value.rigModel == IC705_FT817
 
     /** Gives each side of the pair its protocol, from the rig model. */
-    private fun configurePaire() = ft817.configure(
-        rxIc705 = _ui.value.rigModel == FT817_IC705,
-        txIc705 = _ui.value.rigModel == IC705_FT817)
+    private fun configurePaire() {
+        if (isThd72) ft817.configureThd72(settings.thd72BandeTx)
+        else ft817.configure(
+            rxIc705 = _ui.value.rigModel == FT817_IC705,
+            txIc705 = _ui.value.rigModel == IC705_FT817)
+    }
 
     /**
      * A mixed pair assigns its cables by itself: the one answering in CI-V is
@@ -7112,7 +7119,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      * as much as a test bench.
      */
     private fun connectSimulated() {
-        if (isPairRig) {
+        if (isThd72) {
+            configurePaire()
+            ft817.rx.attach(fr.f4ioz.satcombo.cat.Thd72Sim())  // one line for both bands
+            ft817.rx.pacingMs = 0
+        } else if (isPairRig) {
             configurePaire()
             // Each side gets the simulator of the rig it stands for.
             val r: fr.f4ioz.satcombo.cat.SerialLink =
@@ -7135,6 +7146,97 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _ui.value = _ui.value.copy(catConnected = true, catStatus = t("cat_sim_on"))
         surveilleEmission()
         startCatLoop()
+    }
+
+    /**
+     * Connects a TH-D72: finds its adapter (the one answering "FV 0"), opens it
+     * once for both bands, and makes the uplink band the one PTT keys.
+     */
+    private suspend fun ouvreThd72() {
+        configurePaire()
+        ft817.requestPermissions()
+        val app = getApplication<android.app.Application>()
+        val cle = ft817.listDevices().filter { it.hasPermission }.map { it.cle }.firstOrNull { c ->
+            val essai = fr.f4ioz.satcombo.cat.Thd72Lien(app)
+            val oui = essai.open(c, 9600) && essai.estUnThd72()
+            essai.close()
+            oui
+        }
+        if (cle == null) {
+            _ui.value = _ui.value.copy(catConnected = false, catStatus = t("thd72_introuvable"))
+            return
+        }
+        val (ok, _) = ft817.open(cle, cle, 9600)
+        val lien = ft817.lienThd72
+        if (!ok || lien == null) {
+            _ui.value = _ui.value.copy(catConnected = false, catStatus = t("open_failed_usb"))
+            return
+        }
+        lien.choisitBande(settings.thd72BandeTx)
+        _ui.value = _ui.value.copy(catConnected = true,
+            catStatus = tf("thd72_connecte", if (settings.thd72BandeTx == 0) "A" else "B",
+                if (settings.thd72BandeTx == 0) "B" else "A"))
+        surveilleEmission(); startCatLoop()
+        thd72Lire()
+    }
+
+    // ------------------------------------------------------- TH-D72 panel
+
+    /** What the TH-D72 panel shows (not in `UiState`): each band's frequency and power, PTT band. */
+    data class Thd72Etat(
+        val hz: List<Long?> = listOf(null, null),
+        val puissance: List<Int?> = listOf(null, null),
+        val bandePtt: Int? = null,
+        val message: String = "",
+    )
+    val thd72Etat = MutableStateFlow(Thd72Etat())
+
+    fun thd72BandeTx(): Int = settings.thd72BandeTx
+
+    /** Transmit band: saved, applied at once when connected (roles swap, PTT follows). */
+    fun setThd72BandeTx(b: Int) {
+        settings.thd72BandeTx = b
+        if (!isThd72) return
+        viewModelScope.launch {
+            if (_ui.value.catConnected) {
+                // Bands are sides of the pair: reconnect with the new roles.
+                disconnectCat()
+                connectCat()
+            } else configurePaire()
+        }
+    }
+
+    fun thd72Lire() {
+        val lien = ft817.lienThd72 ?: return
+        viewModelScope.launch {
+            val hz = (0..1).map { b -> lien.etatBande(b)?.let { fr.f4ioz.satcombo.cat.Thd72.frequence(it) } }
+            val p = (0..1).map { b -> lien.puissance(b) }
+            thd72Etat.value = Thd72Etat(hz, p, lien.bandeCourante())
+        }
+    }
+
+    /** Sets band [b]'s frequency (put on its step); refused ones are said. */
+    fun thd72Frequence(b: Int, hz: Long) {
+        val lien = ft817.lienThd72 ?: return
+        viewModelScope.launch {
+            val ok = fr.f4ioz.satcombo.cat.Thd72Bande(lien, b).setFrequency(hz)
+            thd72Lire()
+            if (!ok) thd72Etat.value = thd72Etat.value.copy(message = t("thd72_refuse"))
+        }
+    }
+
+    /** One step up or down on band [b]. */
+    fun thd72Pas(b: Int, sens: Int) {
+        val lien = ft817.lienThd72 ?: return
+        viewModelScope.launch {
+            val c = lien.etatBande(b) ?: return@launch
+            thd72Frequence(b, fr.f4ioz.satcombo.cat.Thd72.frequence(c) + sens * fr.f4ioz.satcombo.cat.Thd72.pas(c))
+        }
+    }
+
+    fun thd72Puissance(b: Int, p: Int) {
+        val lien = ft817.lienThd72 ?: return
+        viewModelScope.launch { lien.reglePuissance(b, p); thd72Lire() }
     }
 
     private var sondeTxJob: Job? = null
@@ -7302,6 +7404,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             // driver decides whether to wrap itself in it.
             fr.f4ioz.satcombo.cat.CatJournal.enabled = _ui.value.catMonitor
             if (_ui.value.catSimulated) { connectSimulated(); return@run }
+            if (isThd72) { ouvreThd72(); return@run }
             if (isPairRig) {
                 configurePaire()
                 if (isPaireMixte) {

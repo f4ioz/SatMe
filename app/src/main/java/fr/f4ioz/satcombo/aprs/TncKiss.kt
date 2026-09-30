@@ -56,6 +56,9 @@ object TncKiss {
     @Volatile private var lien: SerialLink? = null
     private var lecteur: Thread? = null
 
+    /** Also told of each frame received (tests, diagnostics). */
+    @Volatile var observateur: ((Trame) -> Unit)? = null
+
     /** What the radio said in text (PC commands, TNC prompts), for the switch to KISS. */
     private val texte = StringBuilder()
 
@@ -99,6 +102,7 @@ object TncKiss {
         val decodeur = KissDecodeur { octets ->
             val t = Ax25.decodeSansFcs(octets) ?: return@KissDecodeur
             _etat.value = _etat.value.copy(recues = _etat.value.recues + 1)
+            observateur?.invoke(t)
             if (ctx != null) AprsHub.recuDuTnc(ctx, t)
         }
         lecteur = Thread({

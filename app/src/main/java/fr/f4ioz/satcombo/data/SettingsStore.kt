@@ -113,6 +113,11 @@ class SettingsStore(context: Context) {
     var aprsNiveau: Float
         get() = prefs.getFloat("aprs_niveau", 0.5f)
         set(v) { prefs.edit().putFloat("aprs_niveau", v.coerceIn(0.05f, 1f)).apply() }
+    /** TH-D72 as the satellite rig: its transmit (uplink) band, 0 = A, 1 = B. */
+    var thd72BandeTx: Int
+        get() = prefs.getInt("thd72_bande_tx", 0)
+        set(v) { prefs.edit().putInt("thd72_bande_tx", v.coerceIn(0, 1)).apply() }
+
     /** KISS radio (TH-D72…): the USB adapter's key and the serial speed. */
     var aprsKissCle: String
         get() = prefs.getString("aprs_kiss_cle", "") ?: ""

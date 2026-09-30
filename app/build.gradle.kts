@@ -119,7 +119,17 @@ tasks.withType<Test>().configureEach {
     systemProperty("satme.aprs", aprs)
     // KISS radio on the PC's serial port: `-Dsatme.kiss=/dev/ttyUSB0` (receive only).
     systemProperty("satme.kiss", System.getProperty("satme.kiss") ?: "")
+    // TH-D72 as the CAT rig on the PC's serial port: `-Dsatme.thd72=/dev/ttyUSB0` (no transmit).
+    systemProperty("satme.thd72", System.getProperty("satme.thd72") ?: "")
     systemProperty("satme.kissbrut", System.getProperty("satme.kissbrut") ?: "")
+    // Transmits one frame through the KISS radio: only with `-Dsatme.kiss.emission=OUI` too.
+    systemProperty("satme.kiss.emission", System.getProperty("satme.kiss.emission") ?: "")
+    systemProperty("satme.kiss.chemin", System.getProperty("satme.kiss.chemin") ?: "")
+    systemProperty("satme.kiss.numero", System.getProperty("satme.kiss.numero") ?: "1")
+    systemProperty("satme.kiss.puissance", System.getProperty("satme.kiss.puissance") ?: "1")
+    systemProperty("satme.kiss.ecoute", System.getProperty("satme.kiss.ecoute") ?: "30")
+    systemProperty("satme.kiss.position", System.getProperty("satme.kiss.position") ?: "")
+    systemProperty("satme.kiss.dest", System.getProperty("satme.kiss.dest") ?: "F4IOZ")
     maxHeapSize = "2g"
     if (bench.isNotEmpty() || aprs.isNotEmpty()) {
         testLogging { showStandardStreams = true }

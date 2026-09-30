@@ -293,9 +293,27 @@ class Ft817Pair(private val context: Context? = null) {
      */
     fun configure(rxIc705: Boolean, txIc705: Boolean) {
         if (isOpen) return
-        if ((rx is Ic705Cat) != rxIc705) rx = if (rxIc705) Ic705Cat(context) else Ft817Cat(context)
-        if ((tx is Ic705Cat) != txIc705) tx = if (txIc705) Ic705Cat(context) else Ft817Cat(context)
+        // A TH-D72 band left from before is replaced too, not kept by default.
+        if (rx is Thd72Bande || (rx is Ic705Cat) != rxIc705) rx = if (rxIc705) Ic705Cat(context) else Ft817Cat(context)
+        if (tx is Thd72Bande || (tx is Ic705Cat) != txIc705) tx = if (txIc705) Ic705Cat(context) else Ft817Cat(context)
     }
+
+    /**
+     * Kenwood TH-D72 in full duplex: one radio, one cable, its two bands as
+     * the pair's two sides — uplink on band [bandeTx] (0 = A, 1 = B),
+     * downlink on the other. Both sides share one serial line.
+     */
+    fun configureThd72(bandeTx: Int) {
+        if (isOpen) return
+        val actuel = (tx as? Thd72Bande)
+        if (actuel != null && actuel.bande == bandeTx && (rx as? Thd72Bande)?.lien === actuel.lien) return
+        val lien = Thd72Lien(context)
+        tx = Thd72Bande(lien, bandeTx)
+        rx = Thd72Bande(lien, 1 - bandeTx)
+    }
+
+    /** The shared line when the pair is a TH-D72, else null. */
+    val lienThd72: Thd72Lien? get() = (tx as? Thd72Bande)?.lien
     val isOpen: Boolean get() = rx.isOpen || tx.isOpen
     val bothOpen: Boolean get() = rx.isOpen && tx.isOpen
 

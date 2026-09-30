@@ -2005,7 +2005,8 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
                         Triple("FT817x2", "2× Yaesu FT-817", true),
                         Triple(fr.f4ioz.satcombo.FT817_IC705, t("rig_ft817_ic705"), true),
                         Triple(fr.f4ioz.satcombo.IC705_FT817, t("rig_ic705_ft817"), true),
-                        Triple("FT817TX", t("qo100_poste_sdr"), true)
+                        Triple("FT817TX", t("qo100_poste_sdr"), true),
+                        Triple(fr.f4ioz.satcombo.THD72, t("rig_thd72"), true)
                     )
                     var avertirIc705 by remember { mutableStateOf(false) }
                     if (avertirIc705) AvertissementIc705 { avertirIc705 = false }
@@ -2036,6 +2037,10 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
                     }
                 }
             }
+        }
+        // --- Kenwood TH-D72: transmit band, and a panel for both bands ---
+        if (ui.rigModel == fr.f4ioz.satcombo.THD72) {
+            item { CarteThd72(ui, vm) }
         }
         // --- Dual FT-817: RX/TX adapter assignment (by FTDI serial) + baud ---
         val paireMixte = ui.rigModel == fr.f4ioz.satcombo.FT817_IC705 ||
@@ -2277,7 +2282,7 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
 
                     Spacer(Modifier.height(12.dp))
                     val duplex = ui.rigModel in setOf("FT817x2", "FT817TX",
-                        fr.f4ioz.satcombo.FT817_IC705, fr.f4ioz.satcombo.IC705_FT817)
+                        fr.f4ioz.satcombo.FT817_IC705, fr.f4ioz.satcombo.IC705_FT817, fr.f4ioz.satcombo.THD72)
                     Row(verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier.fillMaxWidth().toggleable(value = ui.catUi.txVfoShift && duplex, enabled = duplex, role = Role.Switch,
                             onValueChange = { vm.setCatTxVfoShift(it) })) {
@@ -2430,7 +2435,7 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
                         // unconditioned, it showed in Yaesu dual mode too, with
                         // two competing "USB adapter" sections.
                         if (ui.rigModel !in setOf("FT817x2",
-                                fr.f4ioz.satcombo.FT817_IC705, fr.f4ioz.satcombo.IC705_FT817)) {
+                                fr.f4ioz.satcombo.FT817_IC705, fr.f4ioz.satcombo.IC705_FT817, fr.f4ioz.satcombo.THD72)) {
                             // CI-V address + baud.
                             Spacer(Modifier.height(8.dp))
                             Text(t("civ_address"), color = TextHi, fontSize = 13.sp)
@@ -4126,4 +4131,77 @@ internal fun AvertissementIc705(onFerme: () -> Unit) {
         confirmButton = { TextButton(onClick = onFerme) { Text(t("ok"), color = Cyan) } },
         title = { Text(t("ic705_non_teste_titre"), color = TextHi) },
         text = { Text(t("ic705_non_teste"), color = TextHi, fontSize = 13.sp) })
+}
+
+
+/**
+ * Kenwood TH-D72 as the satellite rig: which band transmits (the other
+ * receives, full duplex), then — connected — each band's frequency, a step
+ * up or down, a frequency typed in, and its power.
+ */
+@Composable
+private fun CarteThd72(ui: UiState, vm: MainViewModel) {
+    val etat by vm.thd72Etat.collectAsState()
+    var bandeTx by remember { mutableStateOf(vm.thd72BandeTx()) }
+    LaunchedEffect(ui.catConnected) { if (ui.catConnected) vm.thd72Lire() }
+    Surface(color = SpaceCard, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp)) {
+            Text("Kenwood TH-D72", color = TextHi, fontWeight = FontWeight.Bold)
+            Text(t("thd72_desc"), color = TextLo, fontSize = 11.sp, modifier = Modifier.padding(top = 2.dp, bottom = 8.dp))
+            Text(t("thd72_bande_tx"), color = TextHi, fontSize = 13.sp)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf(0 to "A", 1 to "B").forEach { (b, nom) ->
+                    FilterChip(selected = bandeTx == b, onClick = { bandeTx = b; vm.setThd72BandeTx(b) },
+                        label = { Text(tf("thd72_tx_rx", nom, if (b == 0) "B" else "A"), fontSize = 12.sp) },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = Cyan.copy(alpha = 0.2f), selectedLabelColor = Cyan))
+                }
+            }
+            if (!ui.catConnected) {
+                Text(t("thd72_connecter"), color = TextLo, fontSize = 11.sp, modifier = Modifier.padding(top = 6.dp))
+                return@Column
+            }
+            Spacer(Modifier.height(8.dp))
+            (0..1).forEach { b ->
+                val nom = if (b == 0) "A" else "B"
+                val role = if (b == bandeTx) t("thd72_role_tx") else t("thd72_role_rx")
+                var saisie by remember(etat.hz[b]) { mutableStateOf(etat.hz[b]?.let { "%.4f".format(java.util.Locale.US, it / 1e6) } ?: "") }
+                Surface(color = SpaceBg, shape = RoundedCornerShape(10.dp), modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+                    Column(Modifier.padding(10.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(tf("thd72_bande", nom, role), color = TextLo, fontSize = 11.sp, modifier = Modifier.weight(1f))
+                            if (etat.bandePtt == b) Text("PTT", color = Color(0xFFE5484D), fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            IconButton(onClick = { vm.thd72Pas(b, -1) }) { Text("−", color = Cyan, fontSize = 20.sp) }
+                            Text(etat.hz[b]?.let { "%.4f MHz".format(java.util.Locale.US, it / 1e6) } ?: "—",
+                                color = TextHi, fontSize = 20.sp, fontFamily = FontFamily.Monospace,
+                                modifier = Modifier.weight(1f), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                            IconButton(onClick = { vm.thd72Pas(b, +1) }) { Text("+", color = Cyan, fontSize = 20.sp) }
+                        }
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            OutlinedTextField(value = saisie, onValueChange = { saisie = it.replace(',', '.') },
+                                label = { Text("MHz", fontSize = 11.sp) }, singleLine = true,
+                                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                                    keyboardType = androidx.compose.ui.text.input.KeyboardType.Decimal),
+                                modifier = Modifier.weight(1f))
+                            TextButton(onClick = {
+                                saisie.toDoubleOrNull()?.let { vm.thd72Frequence(b, (it * 1e6).toLong()) }
+                            }) { Text(t("thd72_regler"), color = Cyan) }
+                        }
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            listOf(0 to "5 W", 1 to "0,5 W", 2 to "50 mW").forEach { (p, nomP) ->
+                                FilterChip(selected = etat.puissance[b] == p, onClick = { vm.thd72Puissance(b, p) },
+                                    label = { Text(nomP, fontSize = 11.sp) },
+                                    colors = FilterChipDefaults.filterChipColors(
+                                        selectedContainerColor = Cyan.copy(alpha = 0.2f), selectedLabelColor = Cyan))
+                            }
+                        }
+                    }
+                }
+            }
+            if (etat.message.isNotBlank()) Text(etat.message, color = Amber, fontSize = 11.sp)
+            TextButton(onClick = { vm.thd72Lire() }) { Text(t("thd72_relire"), color = Cyan, fontSize = 12.sp) }
+        }
+    }
 }
