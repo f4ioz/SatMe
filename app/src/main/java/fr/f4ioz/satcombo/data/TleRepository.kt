@@ -36,6 +36,14 @@ class TleRepository(
         /** Set at startup by [fr.f4ioz.satcombo.SatMeApp] (no BuildConfig here). */
         @Volatile var version: String = "?"
 
+        /**
+         * A request says which app, which version, which Android: public
+         * markers only. No number, no callsign: nothing that follows one
+         * phone from one day to the next.
+         */
+        fun requete(url: String): Request =
+            Request.Builder().url(url).header("User-Agent", USER_AGENT).build()
+
         /** Satellites of the last bulletin whose elements could not be used. */
         @Volatile var ecartes: List<String> = emptyList()
             internal set
@@ -110,8 +118,7 @@ class TleRepository(
     /** The server's groups and satellite counts, or the reason it failed. */
     suspend fun testeServeur(base: String): String = withContext(Dispatchers.IO) {
         runCatching {
-            val req = Request.Builder().url(ServeurGp.index(base))
-                .header("User-Agent", USER_AGENT).build()
+            val req = requete(ServeurGp.index(base))
             client.newCall(req).execute().use { resp ->
                 if (!resp.isSuccessful) return@withContext "HTTP ${resp.code}"
                 val o = org.json.JSONObject(resp.body?.string().orEmpty())
@@ -124,7 +131,7 @@ class TleRepository(
     }
 
     private fun fetchOne(url: String): List<TleEntry> {
-        val req = Request.Builder().url(url).header("User-Agent", USER_AGENT).build()
+        val req = requete(url)
         client.newCall(req).execute().use { resp ->
             // An error status is a failure, not an empty answer: a blocked
             // address must not read as "no such satellite".

@@ -981,12 +981,31 @@ const val FT817_IC705 = "FT817_IC705"   // IC-705 receives, FT-817 transmits
 const val IC705_FT817 = "IC705_FT817"   // IC-705 transmits, FT-817 receives
 
 /** Normalize a designator so AO-07 == AO-7, FO-029 == FO-29. */
+private val DESIGNATEUR = Regex("""([A-Z]+)-0*(\d+)""")
+
 fun normalizeDesignator(s: String): String {
     val up = s.uppercase().trim().substringBefore(" (").substringBefore("_").trim()
-    return Regex("""([A-Z]+)-0*(\d+)""").replace(up) { m ->
+    return DESIGNATEUR.replace(up) { m ->
         "${m.groupValues[1]}-${m.groupValues[2]}"
     }
 }
+
+/**
+ * AMSAT reports by normalized name, built once per report list. Matching
+ * ~1700 satellites (SatNOGS) by scanning the reports and normalizing each
+ * one every time made the satellite list crawl with « Active today ».
+ */
+private class IndexAmsat(val source: Map<String, fr.f4ioz.satcombo.data.AmsatReport>) {
+    val parNom = LinkedHashMap<String, fr.f4ioz.satcombo.data.AmsatReport>().also { m ->
+        source.values.forEach { m.putIfAbsent(normalizeDesignator(it.name), it) }
+    }
+    val iss = source.values.firstOrNull { it.name.uppercase().contains("ISS") }
+}
+
+@Volatile private var indexAmsat: IndexAmsat? = null
+
+private fun indexDe(reports: Map<String, fr.f4ioz.satcombo.data.AmsatReport>): IndexAmsat =
+    indexAmsat?.takeIf { it.source === reports } ?: IndexAmsat(reports).also { indexAmsat = it }
 
 /** Match a satellite name against AMSAT reports (shared by VM and UiState). */
 fun amsatMatch(
@@ -995,10 +1014,10 @@ fun amsatMatch(
     if (reports.isEmpty()) return null
     val key = satName.uppercase().trim()
     reports[key]?.let { return it }
+    val index = indexDe(reports)
     val norm = normalizeDesignator(satName)
-    reports.values.firstOrNull { normalizeDesignator(it.name) == norm }?.let { return it }
-    if (norm.contains("ISS"))
-        reports.values.firstOrNull { it.name.uppercase().contains("ISS") }?.let { return it }
+    index.parNom[norm]?.let { return it }
+    if (norm.contains("ISS")) index.iss?.let { return it }
     return null
 }
 

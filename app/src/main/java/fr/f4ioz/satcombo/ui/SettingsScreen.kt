@@ -685,6 +685,7 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
                             Text(t("serveur_gp_seul_desc"), color = TextLo, fontSize = 11.sp)
                         }
                     }
+
                 }
             }
         }
@@ -3953,10 +3954,17 @@ private fun SettingsSats(ui: UiState, vm: MainViewModel) {
     // since the operator chose it.
     val inactifs by vm.satInactifs.collectAsState()
     val montreInactifs by vm.montreInactifs.collectAsState()
-    val caches = if (montreInactifs) 0 else
-        ui.filteredSatellites.count { it.catalogNumber in inactifs && it.catalogNumber !in ui.favorites }
-    val liste = if (montreInactifs) ui.filteredSatellites else
-        ui.filteredSatellites.filter { it.catalogNumber !in inactifs || it.catalogNumber in ui.favorites }
+    // Computed once per change of what it depends on, not at every screen
+    // refresh (the clock ticks every second): with SatNOGS, ~1700 satellites.
+    val filtres = remember(ui.satellites, ui.query, ui.satActiveOnly, ui.amsatReports) {
+        ui.filteredSatellites
+    }
+    val (liste, caches) = remember(filtres, inactifs, montreInactifs, ui.favorites) {
+        if (montreInactifs) filtres to 0 else {
+            val gardes = filtres.filter { it.catalogNumber !in inactifs || it.catalogNumber in ui.favorites }
+            gardes to (filtres.size - gardes.size)
+        }
+    }
     Column(Modifier.fillMaxSize()) {
         OutlinedTextField(
             value = ui.query, onValueChange = vm::setQuery,
