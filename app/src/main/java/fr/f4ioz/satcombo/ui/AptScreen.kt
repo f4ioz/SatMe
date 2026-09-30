@@ -34,6 +34,8 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -410,9 +412,29 @@ private fun AptRecordingPicker(onDismiss: () -> Unit, onPick: (File) -> Unit) {
                     }
                 }
                 Spacer(Modifier.height(10.dp))
-                Button(onClick = onDismiss, modifier = Modifier.align(Alignment.End),
-                    colors = ButtonDefaults.buttonColors(containerColor = SpaceSurface)) {
-                    Text(t("cancel"), color = TextHi)
+                // A file from outside: the rig's SD card through a USB reader (IC-9700 WAV…).
+                val portee = rememberCoroutineScope()
+                var echec by remember { mutableStateOf(false) }
+                val importe = rememberLauncherForActivityResult(
+                    androidx.activity.result.contract.ActivityResultContracts.OpenDocument()) { uri ->
+                    if (uri != null) portee.launch {
+                        val f = withContext(Dispatchers.IO) {
+                            fr.f4ioz.satcombo.audio.ImportAudio.copie(ctx, uri)
+                        }
+                        if (f != null) onPick(f) else echec = true
+                    }
+                }
+                Text(t("import_audio_desc"), color = TextLo, fontSize = 11.sp)
+                if (echec) Text(t("import_audio_echec"), color = Amber, fontSize = 11.sp)
+                Row(Modifier.fillMaxWidth().padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    TextButton(onClick = { importe.launch(arrayOf("audio/*")) }) {
+                        Text(t("import_audio"), color = Cyan)
+                    }
+                    Spacer(Modifier.weight(1f))
+                    Button(onClick = onDismiss,
+                        colors = ButtonDefaults.buttonColors(containerColor = SpaceSurface)) {
+                        Text(t("cancel"), color = TextHi)
+                    }
                 }
             }
         }
