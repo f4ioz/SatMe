@@ -23,16 +23,41 @@ Poursuite de satellites radioamateurs sur Android — passages, pointage, Dopple
 
 ## Fonctions
 
-| | |
-|---|---|
-| **Passages** | Prévisions SGP4 hors ligne, AOS/LOS, élévation max, tracé polaire, alertes. Statut AMSAT et SatNOGS. Éléments orbitaux d'AMSAT, de CelesTrak et de SatNOGS, ou par un [serveur GP SatMe](https://github.com/f4ioz/SatMe-serveur). |
-| **Pointage** | Boussole du téléphone ou module Bluetooth WitMotion sur la flèche, calibrage guidé. Rotors GS-232 et rotctld. |
-| **Fréquences** | Correction Doppler RX/TX, transpondeurs linéaires et FM, pilotage CAT. QO-100. |
-| **Carnet** | Clavier d'indicatifs à une main, synchro Wavelog / Cloudlog, QRZ, LoTW, ADIF, QSL PDF. SatMe apparaît aussi comme une radio dans Wavelog / Cloudlog : satellite, mode et fréquences corrigées du Doppler remplis. |
-| **APRS** | Trames décodées pendant l'enregistrement (digipeater de l'ISS, 145,825 MHz) ou par un poste KISS. Émission par l'IC-9700 (CAT et sa carte son USB) ou par un poste KISS en USB : messages, position, statut, APRS Thursday (HOTG), accusés affichés. |
-| **Partage** | Page web en direct pour le public, écoute déportée entre deux téléphones. |
-| **Poste de commande** | Page servie par le téléphone, utilisée depuis un PC : saisie au clavier, cadran polaire, enregistrement. Voir l'[API v1](docs/API-v1.fr.md). |
-| **En plus** | Carte des carrés locator, photo QRV, SSTV (aussi depuis un WAV, par exemple la carte SD du poste), radiosondes, FT8/FT4. |
+### Passages et prévisions
+- Prévisions SGP4/SDP4 hors ligne : AOS, LOS, élévation maximale, azimuts, durée, et un tracé polaire pour chaque passage.
+- Alerte avant l'AOS, et un passage ajouté à l'agenda du téléphone d'un appui.
+- Suivi en direct : élévation, azimut, Doppler et compte à rebours, lisibles à bout de bras.
+- Globe avec les traces au sol, timeline des prochains passages, et skeds mutuels — les fenêtres où un satellite est visible à la fois chez vous et chez une autre station.
+- État AMSAT et SatNOGS de chaque satellite, rapport AMSAT en quelques appuis ; les satellites muets restent hors de la liste.
+- Éléments orbitaux d'AMSAT, de CelesTrak et de SatNOGS (environ 1 700 satellites), ou par un [serveur GP SatMe](https://github.com/f4ioz/SatMe-serveur) ; gardés sur le téléphone pour servir hors ligne.
+
+### Pointage
+- Boussole du téléphone avec calibrage guidé, ou module Bluetooth WitMotion fixé sur la flèche d'antenne.
+- Rotors : Yaesu GS-232 en série USB, Hamlib rotctld par le réseau. Retournement au zénith, rangement après le passage, et un mât simulé pour regarder le suivi avant de faire tourner le vrai.
+
+### Poste et Doppler
+- Correction Doppler en réception et en émission, transpondeurs linéaires (inverseurs ou non) et FM, avec un calibrage mémorisé par satellite.
+- CAT : Icom IC-9700 en mode satellite, Kenwood TH-D72 en full duplex avec son pupitre, deux Yaesu FT-817, FT-817 + IC-705, ou un FT-817 en émission pendant qu'une clé RTL-SDR reçoit.
+- Le poste est réglé avant l'AOS, prêt dès le lever du satellite. Une molette ou un clavier USB peut le piloter, ses touches apprises en les pressant.
+- QO-100 : le transpondeur géostationnaire à bande étroite avec vos convertisseurs, et l'erreur de chaque oscillateur mesurée sur une référence.
+
+### Carnet
+- Clavier d'indicatifs à une main, recherche QRZ.com, nouveau carré et doublon signalés pendant la saisie.
+- Wavelog et Cloudlog : contacts envoyés, au besoin tout seuls une minute après la saisie, avec vos profils de station. SatMe apparaît aussi comme une radio dans Wavelog et Cloudlog : satellite, mode et fréquences corrigées du Doppler se remplissent.
+- Confirmations LoTW, carte des carrés locator, export ADIF, QSL et fiches d'activation en PDF.
+
+### Enregistrement et décodage
+- Chaque passage enregistré en MP3 — micro du téléphone, Bluetooth mains-libres ou carte son USB du poste — avec une annonce vocale au début (satellite, heure UTC, locator) et une copie dans le dossier de votre choix.
+- SSTV décodée en direct pendant l'enregistrement (Robot, Martin, Scottie, PD), ou après coup depuis un enregistrement ou un WAV de la carte SD du poste. Une mire SSTV à émettre, avec des évanouissements simulés pour éprouver un décodeur.
+- APRS (bêta) : trames AFSK 1200 décodées pendant l'enregistrement — le digipeater de l'ISS sur 145,825 MHz — ou reçues par un poste KISS. Positions (Mic-E compris), messages, statuts. Émission par l'IC-9700 ou par un poste KISS comme le Kenwood TH-D72 : APRS Thursday (HOTG) prêt, accusés affichés.
+- Décodage FT8 / FT4, radiosondes météo, et clé RTL-SDR avec son spectre.
+
+### Partage
+- Démonstration en direct : le public suit le passage sur son propre téléphone, en scannant un QR code.
+- Écoute déportée depuis un second téléphone sur le même réseau.
+- Poste de commande sur PC : une page servie par le téléphone — saisie au clavier, cadran polaire, enregistrement, votre station et les prochains passages — et une [API HTTP](docs/API-v1.fr.md) pour d'autres clients.
+
+Français et anglais. Commandes lisibles par les lecteurs d'écran.
 
 ## Matériel pris en charge
 

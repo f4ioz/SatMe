@@ -23,16 +23,41 @@ Amateur radio satellite tracking for Android — passes, pointing, Doppler, logg
 
 ## Features
 
-| | |
-|---|---|
-| **Passes** | Offline SGP4 predictions, AOS/LOS, max elevation, polar plot, alerts. AMSAT and SatNOGS status. Orbital elements from AMSAT, CelesTrak and SatNOGS, or through a [SatMe GP server](https://github.com/f4ioz/SatMe-serveur). |
-| **Pointing** | Phone compass or WitMotion Bluetooth module on the boom, guided calibration. GS-232 and rotctld rotators. |
-| **Frequencies** | RX/TX Doppler correction, linear and FM transponders, CAT control. QO-100. |
-| **Log** | One-handed callsign keypad, Wavelog / Cloudlog sync, QRZ lookup, LoTW, ADIF, PDF QSL. SatMe also shows up as a radio in Wavelog / Cloudlog: satellite, mode and Doppler-corrected frequencies filled in. |
-| **APRS** | Frames decoded while recording (ISS digipeater, 145.825 MHz) or from a KISS radio. Transmit through the IC-9700 (CAT and its USB sound card) or a KISS radio over USB: messages, position, status, APRS Thursday (HOTG), acks shown. |
-| **Sharing** | Live web page for the audience, remote listening between two phones. |
-| **Control desk** | Web page served by the phone, used from a PC: keyboard entry, polar dial, recording. See [API v1](docs/API-v1.md). |
-| **Extras** | Grid squares map, QRV photo, SSTV (also from a WAV, e.g. the rig's SD card), radiosondes, FT8/FT4. |
+### Passes and prediction
+- Offline SGP4/SDP4 predictions: AOS, LOS, maximum elevation, azimuths, duration, and a polar plot of every pass.
+- Alerts before AOS, and a pass added to the phone's calendar in one tap.
+- Live tracking: elevation, azimuth, Doppler and countdown, on a screen readable at arm's length.
+- Globe with ground tracks, timeline of the coming passes, and mutual skeds — the windows when a satellite is visible both from you and from another station.
+- AMSAT and SatNOGS status for each satellite, AMSAT report in a few taps; silent satellites kept out of the list.
+- Orbital elements from AMSAT, CelesTrak and SatNOGS (about 1,700 satellites), or through a [SatMe GP server](https://github.com/f4ioz/SatMe-serveur); kept on the phone for use offline.
+
+### Pointing
+- Phone compass with guided calibration, or a WitMotion Bluetooth module fixed on the antenna boom.
+- Rotators: Yaesu GS-232 over USB serial, Hamlib rotctld over the network. Flip over the zenith, park after the pass, and a simulated mast to watch the tracking before moving the real one.
+
+### Rig control and Doppler
+- RX and TX Doppler correction, linear transponders (inverting or not) and FM, with a calibration kept per satellite.
+- CAT: Icom IC-9700 in satellite mode, Kenwood TH-D72 in full duplex with its own panel, two Yaesu FT-817, FT-817 + IC-705, or an FT-817 transmitting while an RTL-SDR dongle receives.
+- The rig is tuned before AOS, ready as the satellite rises. A USB knob or keypad can drive it, its keys learned by pressing them.
+- QO-100: the geostationary narrowband transponder with your converters, and the error of each oscillator measured against a reference.
+
+### Logging
+- One-handed callsign keypad, QRZ.com lookup, new grid square and duplicate flagged while typing.
+- Wavelog and Cloudlog: contacts uploaded, optionally by themselves a minute after entry, with your station profiles. SatMe also shows up as a radio in Wavelog and Cloudlog: satellite, mode and Doppler-corrected frequencies are filled in.
+- LoTW confirmations, grid squares map, ADIF export, PDF QSL cards and activation sheets.
+
+### Recording and decoding
+- Every pass recorded to MP3 — phone microphone, Bluetooth hands-free or the rig's USB sound card — with a spoken header (satellite, UTC time, locator) and a copy in the folder of your choice.
+- SSTV decoded live while recording (Robot, Martin, Scottie, PD), or later from a recording or a WAV from the rig's SD card. An SSTV test card to send, with simulated fading to check a decoder.
+- APRS (beta): AFSK 1200 frames decoded while recording — the ISS digipeater on 145.825 MHz — or received through a KISS radio. Positions (Mic-E included), messages, status. Transmit through the IC-9700 or a KISS radio such as the Kenwood TH-D72: APRS Thursday (HOTG) ready, acks shown.
+- FT8 / FT4 decoding, weather radiosondes, and an RTL-SDR dongle with its spectrum.
+
+### Sharing
+- Live demonstration: the audience follows the pass on their own phones, joining with a QR code.
+- Remote listening from a second phone on the same network.
+- PC control desk: a web page served by the phone — keyboard entry, polar dial, recording, your station and the coming passes — and an [HTTP API](docs/API-v1.md) for other clients.
+
+French and English. Controls readable by screen readers.
 
 ## Supported hardware
 
