@@ -53,8 +53,9 @@ import java.util.Locale
 import java.util.TimeZone
 
 /**
- * What the recorder heard in APRS: the ISS digipeater's traffic, messages,
- * APRS Thursday's CQ HOTG. Reception only.
+ * APRS: the radio is chosen once at the top — the phone's recordings with the
+ * IC-9700 to transmit, or a KISS radio (TH-D72…) for both — and the reception
+ * and transmission zones follow it. Then what was heard and sent.
  */
 @Composable
 fun AprsScreen(ui: UiState, vm: MainViewModel) {
@@ -63,6 +64,7 @@ fun AprsScreen(ui: UiState, vm: MainViewModel) {
     val st by AprsHub.etat.collectAsState()
     LaunchedEffect(Unit) { withContext(Dispatchers.IO) { AprsHub.charge(ctx) } }
     var actif by remember { mutableStateOf(vm.aprsActif()) }
+    var mode by remember { mutableStateOf(vm.aprsMode()) }
     var choix by remember { mutableStateOf(false) }
     var filtre by remember { mutableStateOf("TOUT") }
     var ouvert by remember { mutableStateOf<Paquet?>(null) }
@@ -79,53 +81,75 @@ fun AprsScreen(ui: UiState, vm: MainViewModel) {
 
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(12.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        item {
-            // Proven on reference recordings, not yet on a real pass: said here.
-            Text(t("aprs_banniere"), color = Amber, fontSize = 11.sp)
-        }
+        // The radio, chosen once: reception and transmission both follow it.
         item {
             Surface(color = SpaceCard, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(t("aprs_mode_titre"), color = TextHi, fontWeight = FontWeight.Bold,
+                            modifier = Modifier.weight(1f))
+                        Surface(color = Amber.copy(alpha = 0.18f), shape = RoundedCornerShape(6.dp)) {
+                            Text(t("aprs_beta"), color = Amber, fontSize = 11.sp, fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp))
+                        }
+                    }
+                    Spacer(Modifier.height(6.dp))
+                    listOf("AUDIO" to t("aprs_mode_audio"), "KISS" to t("aprs_mode_kiss")).forEach { (cle, nom) ->
+                        Row(Modifier.fillMaxWidth().toggleable(value = mode == cle, role = Role.RadioButton,
+                                onValueChange = { mode = cle; vm.setAprsMode(cle) }).padding(vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically) {
+                            androidx.compose.material3.RadioButton(selected = mode == cle, onClick = null)
+                            Text(nom, color = TextHi, fontSize = 14.sp,
+                                fontWeight = if (mode == cle) FontWeight.Bold else FontWeight.Normal,
+                                modifier = Modifier.padding(start = 6.dp))
+                        }
+                    }
+                    Text(if (mode == "KISS") t("aprs_mode_kiss_desc") else t("aprs_mode_audio_desc"),
+                        color = TextLo, fontSize = 11.sp, modifier = Modifier.padding(top = 4.dp))
+                }
+            }
+        }
+        // Reception, for the radio chosen above.
+        if (mode == "KISS") {
+            item { CarteTnc(vm) }
+        } else item {
+            Surface(color = SpaceCard, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(16.dp)) {
+                    Text(t("aprs_reception"), color = TextHi, fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.height(4.dp))
                     Row(Modifier.fillMaxWidth().toggleable(value = actif, role = Role.Switch,
                             onValueChange = { actif = it; vm.setAprsActif(it) }),
                         verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
-                            Text(t("aprs_actif"), color = TextHi, fontWeight = FontWeight.Bold)
+                            Text(t("aprs_actif"), color = TextHi, fontSize = 13.sp)
                             Text(t("aprs_actif_desc"), color = TextLo, fontSize = 11.sp)
                         }
                         Switch(checked = actif, onCheckedChange = null,
                             colors = SwitchDefaults.colors(checkedTrackColor = Cyan))
                     }
-                    Spacer(Modifier.height(8.dp))
                     Text(
                         when {
                             st.ecoute -> tf("aprs_ecoute", st.sat, st.nouveaux)
                             actif -> t("aprs_pret")
                             else -> t("aprs_arrete")
                         },
-                        color = if (st.ecoute) Aurora else TextLo, fontSize = 12.sp)
+                        color = if (st.ecoute) Aurora else TextLo, fontSize = 12.sp,
+                        modifier = Modifier.padding(top = 6.dp))
                     st.erreur?.let { Text(tf("aprs_erreur", it), color = Amber, fontSize = 11.sp) }
-                }
-            }
-        }
-        item { CarteTnc(vm) }
-        item { CarteEmission(ui, vm) }
-        item {
-            Surface(color = SpaceCard, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(16.dp)) {
-                    Text(t("aprs_relire"), color = TextHi, fontWeight = FontWeight.Bold)
+                    // An older recording, or a WAV from the rig's SD card.
+                    Spacer(Modifier.height(10.dp))
+                    Text(t("aprs_relire"), color = TextHi, fontSize = 13.sp)
                     Text(t("aprs_relire_desc"), color = TextLo, fontSize = 11.sp)
-                    Spacer(Modifier.height(8.dp))
                     if (st.progression >= 0f) {
                         LinearProgressIndicator(progress = { st.progression }, color = Cyan,
-                            modifier = Modifier.fillMaxWidth())
+                            modifier = Modifier.fillMaxWidth().padding(top = 6.dp))
                         Text(tf("aprs_relire_en_cours", st.fichier ?: "", st.trouves),
                             color = TextLo, fontSize = 11.sp)
                         TextButton(onClick = { AprsHub.annuleFichier() }) { Text(t("cancel"), color = Cyan) }
                     } else {
-                        Button(onClick = { choix = true },
-                            colors = ButtonDefaults.buttonColors(containerColor = Cyan)) {
-                            Text(t("sstv_pick_recording"), color = Color.Black)
+                        androidx.compose.material3.OutlinedButton(onClick = { choix = true },
+                            modifier = Modifier.padding(top = 6.dp)) {
+                            Text(t("sstv_pick_recording"), color = Cyan, fontSize = 12.sp)
                         }
                         st.fichier?.let {
                             Text(tf("aprs_relire_fini", it, st.trouves), color = TextLo, fontSize = 11.sp)
@@ -134,6 +158,8 @@ fun AprsScreen(ui: UiState, vm: MainViewModel) {
                 }
             }
         }
+        // Transmission, through the same radio.
+        item { CarteEmission(ui, vm, mode) }
         item {
             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 listOf("TOUT" to t("aprs_filtre_tout"), "ISS" to t("aprs_filtre_iss"),
@@ -250,7 +276,7 @@ private fun LignePaquet(p: Paquet, ui: UiState, ouvert: Boolean, accuse: Boolean
  * and the IC-9700 button.
  */
 @Composable
-private fun CarteEmission(ui: UiState, vm: MainViewModel) {
+private fun CarteEmission(ui: UiState, vm: MainViewModel, mode: String) {
     val ctx = LocalContext.current
     val resultat by vm.aprsEnvoi.collectAsState()
     var type by remember { mutableStateOf("JEUDI") }
@@ -261,7 +287,7 @@ private fun CarteEmission(ui: UiState, vm: MainViewModel) {
     var niveau by remember { mutableStateOf(vm.aprsNiveau()) }
     var aide by remember { mutableStateOf(false) }
     val kiss by fr.f4ioz.satcombo.aprs.TncKiss.etat.collectAsState()
-    var par by remember { mutableStateOf(if (kiss.connecte) "KISS" else "CAT") }
+    val par = if (mode == "KISS") "KISS" else "CAT"
     var frequenceOk by remember { mutableStateOf(false) }
     // The message number is drawn when sending, so the preview shows a placeholder.
     val source = remember(ssid, ui.callsign) { vm.aprsSource() }
@@ -299,7 +325,7 @@ private fun CarteEmission(ui: UiState, vm: MainViewModel) {
     Surface(color = SpaceCard, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp)) {
             Text(t("aprs_tx_titre"), color = TextHi, fontWeight = FontWeight.Bold)
-            Text(t("aprs_tx_banniere"), color = Amber, fontSize = 11.sp)
+            Text(t("aprs_tx_banniere"), color = TextLo, fontSize = 11.sp)
             Spacer(Modifier.height(8.dp))
             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 listOf("JEUDI" to "APRS Thursday", "APRSPH" to "APRSPH", "MSG" to t("aprs_tx_type_msg"),
@@ -354,16 +380,20 @@ private fun CarteEmission(ui: UiState, vm: MainViewModel) {
                             selectedContainerColor = Cyan.copy(alpha = 0.2f), selectedLabelColor = Cyan))
                 }
             }
-            Text(tf("aprs_tx_niveau", (niveau * 100).toInt()), color = TextLo, fontSize = 11.sp)
-            androidx.compose.material3.Slider(value = niveau, valueRange = 0.05f..1f,
-                onValueChange = { niveau = it }, onValueChangeFinished = { vm.setAprsNiveau(niveau) })
+            // The audio level is the IC-9700's business; a KISS radio sets its own.
+            if (par == "CAT") {
+                Text(tf("aprs_tx_niveau", (niveau * 100).toInt()), color = TextLo, fontSize = 11.sp)
+                androidx.compose.material3.Slider(value = niveau, valueRange = 0.05f..1f,
+                    onValueChange = { niveau = it }, onValueChangeFinished = { vm.setAprsNiveau(niveau) })
+            }
             if (source.isBlank()) Text(t("aprs_tx_sans_indicatif"), color = Amber, fontSize = 11.sp)
             apercu?.let {
                 Text(t("aprs_tx_apercu"), color = TextLo, fontSize = 11.sp)
                 Text(it, color = TextHi, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
             }
             Spacer(Modifier.height(8.dp))
-            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp),
+            // Tests without transmitting: the audio the IC-9700 would get. A KISS radio modulates by itself.
+            if (par == "CAT") Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically) {
                 androidx.compose.material3.OutlinedButton(enabled = apercu != null && source.isNotBlank(),
                     onClick = { trame()?.let { vm.aprsEssai(it, fichier = false, partage = partage) } }) {
@@ -375,15 +405,6 @@ private fun CarteEmission(ui: UiState, vm: MainViewModel) {
                 }
             }
             Spacer(Modifier.height(6.dp))
-            Text(t("aprs_tx_par"), color = TextLo, fontSize = 11.sp)
-            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                listOf("CAT" to "IC-9700", "KISS" to t("aprs_tx_par_kiss")).forEach { (cle, nom) ->
-                    FilterChip(selected = par == cle, onClick = { par = cle },
-                        label = { Text(nom, fontSize = 12.sp) },
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = Cyan.copy(alpha = 0.2f), selectedLabelColor = Cyan))
-                }
-            }
             if (par == "KISS") {
                 // In KISS mode the radio's frequency cannot be read: the operator vouches for it.
                 Row(Modifier.fillMaxWidth().toggleable(value = frequenceOk, role = Role.Checkbox,
@@ -404,8 +425,10 @@ private fun CarteEmission(ui: UiState, vm: MainViewModel) {
             }
             if (resultat.isNotBlank()) Text(resultat, color = TextHi, fontSize = 12.sp,
                 modifier = Modifier.padding(top = 6.dp))
-            TextButton(onClick = { aide = !aide }) { Text(t("aprs_tx_aide_titre"), color = Cyan, fontSize = 12.sp) }
-            if (aide) Text(t("aprs_tx_aide"), color = TextLo, fontSize = 11.sp)
+            if (par == "CAT") {
+                TextButton(onClick = { aide = !aide }) { Text(t("aprs_tx_aide_titre"), color = Cyan, fontSize = 12.sp) }
+                if (aide) Text(t("aprs_tx_aide"), color = TextLo, fontSize = 11.sp)
+            }
         }
     }
 }
@@ -424,7 +447,7 @@ private fun CarteTnc(vm: MainViewModel) {
     var aide by remember { mutableStateOf(false) }
     Surface(color = SpaceCard, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp)) {
-            Text(t("aprs_kiss_titre"), color = TextHi, fontWeight = FontWeight.Bold)
+            Text(t("aprs_reception"), color = TextHi, fontWeight = FontWeight.Bold)
             Text(t("aprs_kiss_desc"), color = TextLo, fontSize = 11.sp)
             Spacer(Modifier.height(8.dp))
             if (etat.connecte) {

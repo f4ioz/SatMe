@@ -113,6 +113,11 @@ class SettingsStore(context: Context) {
     var aprsNiveau: Float
         get() = prefs.getFloat("aprs_niveau", 0.5f)
         set(v) { prefs.edit().putFloat("aprs_niveau", v.coerceIn(0.05f, 1f)).apply() }
+    /** APRS page: the radio used, "AUDIO" (recordings + IC-9700) or "KISS" (TH-D72…). */
+    var aprsMode: String
+        get() = prefs.getString("aprs_mode", "AUDIO") ?: "AUDIO"
+        set(v) { prefs.edit().putString("aprs_mode", v).apply() }
+
     /** TH-D72 as the satellite rig: its transmit (uplink) band, 0 = A, 1 = B. */
     var thd72BandeTx: Int
         get() = prefs.getInt("thd72_bande_tx", 0)

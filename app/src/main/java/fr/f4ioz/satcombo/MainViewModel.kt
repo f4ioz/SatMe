@@ -4489,6 +4489,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     @Volatile private var aprsEnEmission = false
     private var aprsDerniereMs = 0L
 
+    fun aprsMode(): String = settings.aprsMode
+    fun setAprsMode(m: String) { settings.aprsMode = m }
+
     fun aprsSsid(): Int = settings.aprsSsid
     fun setAprsSsid(v: Int) { settings.aprsSsid = v }
     fun aprsNiveau(): Float = settings.aprsNiveau
