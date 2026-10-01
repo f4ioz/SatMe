@@ -39,6 +39,8 @@ Poursuite de satellites radioamateurs sur Android — passages, pointage, Dopple
 - Correction Doppler en réception et en émission, transpondeurs linéaires (inverseurs ou non) et FM, avec un calibrage mémorisé par satellite.
 - CAT : Icom IC-9700 en mode satellite, Kenwood TH-D72 en full duplex avec son pupitre, un Yaesu FT-817 ou un Icom IC-705 de chaque côté (deux FT-817, deux IC-705 ou un de chaque), ou l'un d'eux en émission pendant qu'une clé RTL-SDR reçoit.
 - Le poste est réglé avant l'AOS, prêt dès le lever du satellite. Une molette ou un clavier USB peut le piloter, ses touches apprises en les pressant.
+- Le ton CTCSS est pris dans le nom du transpondeur (SO-50, ISS…), ou réglé à la main.
+- Un banc d'essai dans les réglages CAT : un poste simulé qui refuse ce que le vrai refuse, les trames échangées traduites en clair, et la séquence de début de passage rejouée sans aucune radio branchée.
 - QO-100 : le transpondeur géostationnaire à bande étroite avec vos convertisseurs, et l'erreur de chaque oscillateur mesurée sur une référence.
 
 ### Carnet
