@@ -2320,126 +2320,9 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
                 Column(Modifier.padding(16.dp)) {
                     var bancDeplie by rememberSaveable { mutableStateOf(false) }
                     run {
-                        // The test bench (simulated radio, frame log) folds
-                        // away: used only when something breaks, it pushed the
-                        // everyday settings down.
-                        Spacer(Modifier.height(10.dp))
-                        Row(Modifier.fillMaxWidth().clickable { bancDeplie = !bancDeplie },
-                            verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                if (bancDeplie) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                                contentDescription = null, tint = Amber,
-                                modifier = Modifier.size(18.dp))
-                            Spacer(Modifier.width(4.dp))
-                            Text(t("cat_bench"), color = Amber, fontSize = 13.sp)
-                        }
-                        if (bancDeplie) {
-                            // --- Test bench: simulated radio and frame log ---
-                            Spacer(Modifier.height(10.dp))
-                            Text(t("cat_bench"), color = Amber, fontSize = 13.sp)
-                            Text(t("cat_bench_desc"), color = TextLo, fontSize = 11.sp)
-                            Row(verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.padding(top = 6.dp).toggleable(value = ui.catSimulated, role = Role.Switch,
-                                    onValueChange = vm::setCatSimulated)) {
-                                Column(Modifier.weight(1f)) {
-                                    Text(t("cat_sim"), color = TextHi, fontSize = 13.sp)
-                                    Text(t("cat_sim_desc"), color = TextLo, fontSize = 11.sp)
-                                }
-                                Switch(checked = ui.catSimulated, onCheckedChange = null,
-                                    colors = SwitchDefaults.colors(checkedTrackColor = Amber))
-                            }
-                            Row(modifier = Modifier.toggleable(value = ui.catMonitor, role = Role.Switch,
-                                    onValueChange = vm::setCatMonitor), verticalAlignment = Alignment.CenterVertically) {
-                                Column(Modifier.weight(1f)) {
-                                    Text(t("cat_mon"), color = TextHi, fontSize = 13.sp)
-                                    Text(t("cat_mon_desc"), color = TextLo, fontSize = 11.sp)
-                                }
-                                Switch(checked = ui.catMonitor, onCheckedChange = null,
-                                    colors = SwitchDefaults.colors(checkedTrackColor = Amber))
-                            }
-                            if (ui.catMonitor) {
-                                val trames by fr.f4ioz.satcombo.cat.CatJournal.entries.collectAsState()
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Text(tf("cat_mon_count", trames.size),
-                                        color = TextLo, fontSize = 11.sp, modifier = Modifier.weight(1f))
-                                    TextButton(onClick = { fr.f4ioz.satcombo.cat.CatJournal.clear() }) {
-                                        Text(t("clear"), color = Cyan, fontSize = 12.sp)
-                                    }
-                                }
-                                if (trames.isEmpty()) {
-                                    Text(t("cat_mon_empty"), color = TextLo.copy(alpha = 0.7f), fontSize = 11.sp)
-                                } else {
-                                    val fmt = remember {
-                                        java.text.SimpleDateFormat("HH:mm:ss.SSS", java.util.Locale.US)
-                                    }
-                                    Column(
-                                        Modifier
-                                            .heightIn(max = 240.dp)
-                                            .verticalScroll(rememberScrollState())
-                                            .background(SpaceBg, RoundedCornerShape(8.dp))
-                                            .padding(8.dp)
-                                    ) {
-                                        // Newest first: at the bench you look at
-                                        // what was just sent.
-                                        trames.asReversed().forEach { trame ->
-                                            Text(
-                                                (if (trame.out) "▶ " else "◀ ") +
-                                                    fmt.format(java.util.Date(trame.tMs)) + "  " + trame.hex,
-                                                color = if (trame.out) Cyan else Aurora,
-                                                fontSize = 10.sp,
-                                                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
-                                            )
-                                            Text("    " + trame.text, color = TextLo, fontSize = 10.sp)
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        Spacer(Modifier.height(10.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Button(onClick = { vm.connectCat() },
-                                colors = ButtonDefaults.buttonColors(containerColor = Cyan)) {
-                                Text(t("connect"), color = Color(0xFF00201D))
-                            }
-                            OutlinedButton(onClick = { vm.disconnectCat() }) {
-                                Text(t("disconnect"), color = TextLo)
-                            }
-                        }
-                        if (ui.catStatus.isNotBlank()) {
-                            Text(ui.catStatus, fontSize = 12.sp,
-                                color = if (ui.catConnected) Color(0xFF49D17F) else Amber,
-                                modifier = Modifier.padding(top = 6.dp))
-                        }
-                        // Diagnostics row.
-                        Spacer(Modifier.height(8.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            OutlinedButton(onClick = { vm.testCat() }) {
-                                Text(t("test_link"), color = Cyan, fontSize = 13.sp)
-                            }
-                            OutlinedButton(onClick = { vm.catSendTestFreq() }) {
-                                Text(t("send_test_freq"), color = Cyan, fontSize = 13.sp)
-                            }
-                        }
-                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 6.dp).toggleable(value = ui.catTestSendAlways, role = Role.Switch,
-                                onValueChange = vm::setCatTestSendAlways)) {
-                            Column(Modifier.weight(1f)) {
-                                Text(t("send_below_horizon"), color = TextHi, fontSize = 13.sp)
-                                Text(t("cat_test_desc"),
-                                    color = TextLo, fontSize = 11.sp)
-                            }
-                            Switch(checked = ui.catTestSendAlways, onCheckedChange = null,
-                                colors = SwitchDefaults.colors(checkedTrackColor = Amber))
-                        }
-                        // Who owns the RX dial during the pass.
-                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 6.dp).toggleable(value = ui.catRxDoppler, role = Role.Switch,
-                                onValueChange = vm::setCatRxDoppler)) {
-                            Column(Modifier.weight(1f)) {
-                                Text(t("cat_rx_doppler"), color = TextHi, fontSize = 13.sp)
-                                Text(t("cat_rx_doppler_desc"), color = TextLo, fontSize = 11.sp)
-                            }
-                            Switch(checked = ui.catRxDoppler, onCheckedChange = null,
-                                colors = SwitchDefaults.colors(checkedTrackColor = Cyan))
-                        }
+                        // Link first: the rig's own settings (Icom only), connect, check.
+                        Text(t("cat_sec_liaison"), color = Cyan, fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
                         // ------------------------------------------------
                         // What follows is for Icom CI-V radios ONLY. Left
                         // unconditioned, it showed in Yaesu dual mode too, with
@@ -2540,7 +2423,55 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
                                 modifier = Modifier.padding(top = 8.dp))
 
                         }
-
+                        Spacer(Modifier.height(10.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Button(onClick = { vm.connectCat() },
+                                colors = ButtonDefaults.buttonColors(containerColor = Cyan)) {
+                                Text(t("connect"), color = Color(0xFF00201D))
+                            }
+                            OutlinedButton(onClick = { vm.disconnectCat() }) {
+                                Text(t("disconnect"), color = TextLo)
+                            }
+                        }
+                        if (ui.catStatus.isNotBlank()) {
+                            Text(ui.catStatus, fontSize = 12.sp,
+                                color = if (ui.catConnected) Color(0xFF49D17F) else Amber,
+                                modifier = Modifier.padding(top = 6.dp))
+                        }
+                        // Diagnostics row.
+                        Spacer(Modifier.height(8.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedButton(onClick = { vm.testCat() }) {
+                                Text(t("test_link"), color = Cyan, fontSize = 13.sp)
+                            }
+                            OutlinedButton(onClick = { vm.catSendTestFreq() }) {
+                                Text(t("send_test_freq"), color = Cyan, fontSize = 13.sp)
+                            }
+                        }
+                        // What CAT does during a pass.
+                        Spacer(Modifier.height(14.dp))
+                        Text(t("cat_sec_passage"), color = Cyan, fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 6.dp).toggleable(value = ui.catTestSendAlways, role = Role.Switch,
+                                onValueChange = vm::setCatTestSendAlways)) {
+                            Column(Modifier.weight(1f)) {
+                                Text(t("send_below_horizon"), color = TextHi, fontSize = 13.sp)
+                                Text(t("cat_test_desc"),
+                                    color = TextLo, fontSize = 11.sp)
+                            }
+                            Switch(checked = ui.catTestSendAlways, onCheckedChange = null,
+                                colors = SwitchDefaults.colors(checkedTrackColor = Amber))
+                        }
+                        // Who owns the RX dial during the pass.
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 6.dp).toggleable(value = ui.catRxDoppler, role = Role.Switch,
+                                onValueChange = vm::setCatRxDoppler)) {
+                            Column(Modifier.weight(1f)) {
+                                Text(t("cat_rx_doppler"), color = TextHi, fontSize = 13.sp)
+                                Text(t("cat_rx_doppler_desc"), color = TextLo, fontSize = 11.sp)
+                            }
+                            Switch(checked = ui.catRxDoppler, onCheckedChange = null,
+                                colors = SwitchDefaults.colors(checkedTrackColor = Cyan))
+                        }
                         // CTCSS tone for FM birds (e.g. SO-50 uses 67.0; PSAT etc.).
                         Spacer(Modifier.height(10.dp))
                         Text(t("ctcss_tone"), color = TextHi, fontSize = 13.sp)
@@ -2569,72 +2500,98 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
                                         selectedContainerColor = Cyan.copy(alpha = 0.25f), selectedLabelColor = Cyan))
                             }
                         }
-
-                        // ---- Test bench ----
-                        // The simulated radio is not a demo: without a radio
-                        // attached, it is the only way to check that commands
-                        // were understood, not just acknowledged.
                         Spacer(Modifier.height(14.dp))
                         HorizontalDivider(color = Color(0xFF2A3647))
+                        // The test bench (simulated radio, frame log) folds
+                        // away: used only when something breaks, it pushed the
+                        // everyday settings down.
                         Spacer(Modifier.height(10.dp))
-                        Text(t("bench_title"), color = Cyan, fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
-                        Text(t("bench_sim_desc"), color = TextLo, fontSize = 11.sp,
-                            modifier = Modifier.padding(top = 4.dp, bottom = 8.dp))
-                        Row(verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            OutlinedButton(onClick = { vm.runCatBench() }, enabled = !ui.benchRunning) {
-                                Text(if (ui.benchRunning) t("bench_running") else t("bench_run"),
-                                    color = Cyan, fontSize = 13.sp)
-                            }
-                            Text(t("bench_sim"), color = TextLo, fontSize = 11.sp)
+                        Row(Modifier.fillMaxWidth().clickable { bancDeplie = !bancDeplie },
+                            verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                if (bancDeplie) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                contentDescription = null, tint = Amber,
+                                modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text(t("cat_bench"), color = Amber, fontSize = 13.sp)
                         }
-                        if (ui.benchReport.isNotBlank()) {
-                            Text(ui.benchReport, fontSize = 12.sp,
-                                color = if (ui.benchOk) Color(0xFF49D17F) else Amber,
-                                modifier = Modifier.padding(top = 6.dp))
-                            ui.benchSteps.forEach { st ->
-                                Text("· " + st, color = TextLo, fontSize = 11.sp,
-                                    fontFamily = FontFamily.Monospace)
+                        if (bancDeplie) {
+                            Text(t("cat_bench_desc"), color = TextLo, fontSize = 11.sp)
+                            Row(verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(top = 6.dp).toggleable(value = ui.catSimulated, role = Role.Switch,
+                                    onValueChange = vm::setCatSimulated)) {
+                                Column(Modifier.weight(1f)) {
+                                    Text(t("cat_sim"), color = TextHi, fontSize = 13.sp)
+                                    Text(t("cat_sim_desc"), color = TextLo, fontSize = 11.sp)
+                                }
+                                Switch(checked = ui.catSimulated, onCheckedChange = null,
+                                    colors = SwitchDefaults.colors(checkedTrackColor = Amber))
                             }
-                        }
-
-                        // ---- Frame log ----
-                        Spacer(Modifier.height(12.dp))
-                        Row(modifier = Modifier.toggleable(value = ui.catJournalOn, role = Role.Switch,
-                                onValueChange = vm::setCatJournal), verticalAlignment = Alignment.CenterVertically) {
-                            Column(Modifier.weight(1f)) {
-                                Text(t("journal_title"), color = TextHi, fontSize = 13.sp)
-                                Text(tf("journal_desc",
-                                    fr.f4ioz.satcombo.cat.CatJournal.DEPTH),
-                                    color = TextLo, fontSize = 11.sp)
+                            Row(modifier = Modifier.toggleable(value = ui.catMonitor, role = Role.Switch,
+                                    onValueChange = vm::setCatMonitor), verticalAlignment = Alignment.CenterVertically) {
+                                Column(Modifier.weight(1f)) {
+                                    Text(t("cat_mon"), color = TextHi, fontSize = 13.sp)
+                                    Text(t("cat_mon_desc"), color = TextLo, fontSize = 11.sp)
+                                }
+                                Switch(checked = ui.catMonitor, onCheckedChange = null,
+                                    colors = SwitchDefaults.colors(checkedTrackColor = Amber))
                             }
-                            Switch(checked = ui.catJournalOn, onCheckedChange = null,
-                                colors = SwitchDefaults.colors(checkedTrackColor = Amber))
-                        }
-                        if (ui.catJournalOn) {
-                            val entries by fr.f4ioz.satcombo.cat.CatJournal.entries.collectAsState()
-                            TextButton(onClick = { vm.clearCatJournal() }) {
-                                Text(t("journal_clear"), color = Cyan, fontSize = 12.sp)
-                            }
-                            if (entries.isEmpty()) {
-                                Text(t("journal_empty"), color = TextLo, fontSize = 11.sp)
-                            } else {
-                                val hms = remember { SimpleDateFormat("HH:mm:ss.SSS", Locale.US) }
-                                Column(Modifier.padding(top = 4.dp)) {
-                                    // Newest first.
-                                    entries.asReversed().take(60).forEach { e ->
-                                        Text(
-                                            (if (e.out) "▶ " else "◀ ") + hms.format(Date(e.tMs)) +
-                                                "  " + e.hex,
-                                            color = if (e.out) Cyan else TextHi,
-                                            fontSize = 10.sp, fontFamily = FontFamily.Monospace,
-                                            modifier = Modifier.padding(top = 4.dp))
-                                        Text(
-                                            "    " + e.text + "  (" +
-                                                (if (e.out) t("journal_out") else t("journal_in")) + ")",
-                                            color = TextLo, fontSize = 10.sp)
+                            if (ui.catMonitor) {
+                                val trames by fr.f4ioz.satcombo.cat.CatJournal.entries.collectAsState()
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(tf("cat_mon_count", trames.size),
+                                        color = TextLo, fontSize = 11.sp, modifier = Modifier.weight(1f))
+                                    TextButton(onClick = { fr.f4ioz.satcombo.cat.CatJournal.clear() }) {
+                                        Text(t("clear"), color = Cyan, fontSize = 12.sp)
                                     }
+                                }
+                                if (trames.isEmpty()) {
+                                    Text(t("cat_mon_empty"), color = TextLo.copy(alpha = 0.7f), fontSize = 11.sp)
+                                } else {
+                                    val fmt = remember {
+                                        java.text.SimpleDateFormat("HH:mm:ss.SSS", java.util.Locale.US)
+                                    }
+                                    Column(
+                                        Modifier
+                                            .heightIn(max = 240.dp)
+                                            .verticalScroll(rememberScrollState())
+                                            .background(SpaceBg, RoundedCornerShape(8.dp))
+                                            .padding(8.dp)
+                                    ) {
+                                        // Newest first: at the bench you look at
+                                        // what was just sent.
+                                        trames.asReversed().forEach { trame ->
+                                            Text(
+                                                (if (trame.out) "▶ " else "◀ ") +
+                                                    fmt.format(java.util.Date(trame.tMs)) + "  " + trame.hex,
+                                                color = if (trame.out) Cyan else Aurora,
+                                                fontSize = 10.sp,
+                                                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
+                                            )
+                                            Text("    " + trame.text, color = TextLo, fontSize = 10.sp)
+                                        }
+                                    }
+                                }
+                            }
+                            Spacer(Modifier.height(10.dp))
+                            // Replays the pass-start sequence against the simulated rig.
+                            Text(t("bench_sim_desc"), color = TextLo, fontSize = 11.sp,
+                                modifier = Modifier.padding(top = 4.dp, bottom = 8.dp))
+                            Row(verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                OutlinedButton(onClick = { vm.runCatBench() }, enabled = !ui.benchRunning) {
+                                    Text(if (ui.benchRunning) t("bench_running") else t("bench_run"),
+                                        color = Cyan, fontSize = 13.sp)
+                                }
+                                Text(t("bench_sim"), color = TextLo, fontSize = 11.sp)
+                            }
+                            if (ui.benchReport.isNotBlank()) {
+                                Text(ui.benchReport, fontSize = 12.sp,
+                                    color = if (ui.benchOk) Color(0xFF49D17F) else Amber,
+                                    modifier = Modifier.padding(top = 6.dp))
+                                ui.benchSteps.forEach { st ->
+                                    Text("· " + st, color = TextLo, fontSize = 11.sp,
+                                        fontFamily = FontFamily.Monospace)
                                 }
                             }
                         }

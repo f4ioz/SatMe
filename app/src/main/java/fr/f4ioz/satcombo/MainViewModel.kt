@@ -874,7 +874,6 @@ data class UiState(
     val benchReport: String = "",
     val benchOk: Boolean = false,
     val benchSteps: List<String> = emptyList(),
-    val catJournalOn: Boolean = false,
     val trail: List<Pair<Double, Double>> = emptyList(),
     val nowMs: Long = System.currentTimeMillis(),
     val tleCacheAgeMs: Long? = null,
@@ -7080,13 +7079,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    fun setCatJournal(on: Boolean) {
-        fr.f4ioz.satcombo.cat.CatJournal.enabled = on
-        if (!on) fr.f4ioz.satcombo.cat.CatJournal.clear()
-        _ui.value = _ui.value.copy(catJournalOn = on)
-    }
-
-    fun clearCatJournal() { fr.f4ioz.satcombo.cat.CatJournal.clear() }
 
     fun testCat() {
         viewModelScope.launch {
