@@ -37,6 +37,8 @@ data class Paquet(
     val altitudeM: Int? = null,
     /** Sent by this phone, not heard. */
     val emis: Boolean = false,
+    /** A weather station's report: wind, temperature, rain, pressure. */
+    val meteo: Meteo? = null,
 ) {
     val source: String get() = trame.source.toString()
 
@@ -52,6 +54,67 @@ data class Paquet(
 
     companion object {
         val RELAIS_ISS = setOf("RS0ISS", "ARISS", "NA1SS", "APRSAT")
+    }
+}
+
+/**
+ * A weather report (APRS 1.01 chapter 12), in metric units. Each field is
+ * null when the station does not send it ("..." in the frame).
+ */
+data class Meteo(
+    val ventDeg: Int? = null,
+    val ventKmh: Int? = null,
+    val rafaleKmh: Int? = null,
+    val temperatureC: Double? = null,
+    val pluie1hMm: Double? = null,
+    val humidite: Int? = null,
+    val pressionHpa: Double? = null,
+) {
+    val vide: Boolean get() = this == Meteo()
+
+    companion object {
+        private fun mph(v: Int) = (v * 1.609344).toInt()
+
+        /**
+         * The weather fields at the start of [s]: "ddd/sss" (after a position)
+         * or "cddd" + "sddd" (positionless), then gGGG tTTT rRRR hHH bBBBBB.
+         * Returns the report and the comment left after it.
+         */
+        fun lit(s: String): Pair<Meteo, String> {
+            var m = Meteo()
+            var i = 0
+            fun nombre(n: Int): Int? {
+                if (i + n > s.length) return null
+                val v = s.substring(i, i + n)
+                i += n
+                return v.trim().toIntOrNull()
+            }
+            if (s.length >= 7 && s[3] == '/' && s.substring(0, 3).all { it.isDigit() || it == '.' || it == ' ' }) {
+                val d = nombre(3); i++
+                val v = nombre(3)
+                m = m.copy(ventDeg = d?.takeIf { it in 1..360 } ?: d?.let { 0 }, ventKmh = v?.let(::mph))
+            }
+            while (i < s.length) {
+                val c = s[i]
+                val n = when (c) { 'c', 's', 'g', 't', 'r', 'p', 'P' -> 3; 'h' -> 2; 'b' -> 5; 'L', 'l' -> 3; else -> break }
+                if (i + 1 + n > s.length) break
+                val brut = s.substring(i + 1, i + 1 + n)
+                if (!brut.all { it.isDigit() || it == '.' || it == ' ' || it == '-' }) break
+                i += 1 + n
+                val v = brut.trim().toIntOrNull()
+                m = when (c) {
+                    'c' -> m.copy(ventDeg = v)
+                    's' -> m.copy(ventKmh = v?.let(::mph))
+                    'g' -> m.copy(rafaleKmh = v?.let(::mph))
+                    't' -> m.copy(temperatureC = v?.let { Math.round((it - 32) * 50 / 9.0) / 10.0 })
+                    'r' -> m.copy(pluie1hMm = v?.let { Math.round(it * 2.54) / 10.0 })
+                    'h' -> m.copy(humidite = v?.let { if (it == 0) 100 else it })
+                    'b' -> m.copy(pressionHpa = v?.let { it / 10.0 })
+                    else -> m
+                }
+            }
+            return m to s.substring(i).trim()
+        }
     }
 }
 
@@ -72,7 +135,11 @@ object Aprs {
                 '>' -> base.copy(type = TypeAprs.STATUT, commentaire = s.substring(1).trimEnd('\r', '\n'))
                 ';' -> objet(base, s)
                 ')' -> item(base, s)
-                '_' -> base.copy(type = TypeAprs.METEO)
+                '_' -> {
+                    // Positionless: "_MMDDhhmm" then the fields.
+                    val (m, reste) = Meteo.lit(s.drop(9).trimEnd('\r', '\n'))
+                    base.copy(type = TypeAprs.METEO, meteo = m.takeUnless { it.vide }, commentaire = reste)
+                }
                 'T' -> base.copy(type = TypeAprs.TELEMETRIE)
                 '}' -> base.copy(type = TypeAprs.TIERS, commentaire = s.substring(1).trimEnd('\r', '\n'))
                 '$' -> nmea(base, s)
@@ -89,9 +156,14 @@ object Aprs {
             ?: return null
         val (lat, lon, symbole, fin) = p
         val type = if (symbole.endsWith("_")) TypeAprs.METEO else TypeAprs.POSITION
-        val (alt, reste) = altitudePieds(s.substring(minOf(fin, s.length)).trimEnd('\r', '\n'))
+        var (alt, reste) = altitudePieds(s.substring(minOf(fin, s.length)).trimEnd('\r', '\n'))
+        var meteo: Meteo? = null
+        if (type == TypeAprs.METEO) {
+            val (m, r) = Meteo.lit(reste)
+            meteo = m.takeUnless { it.vide }; reste = r
+        }
         return base.copy(type = type, lat = lat, lon = lon, symbole = symbole,
-            commentaire = reste, altitudeM = alt)
+            commentaire = reste, altitudeM = alt, meteo = meteo)
     }
 
     /** "/A=001234" (feet) anywhere in a comment: taken out, in metres. */

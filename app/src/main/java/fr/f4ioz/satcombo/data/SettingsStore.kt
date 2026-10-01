@@ -142,6 +142,16 @@ class SettingsStore(context: Context) {
         get() = prefs.getInt("aprs_numero", 0)
         set(v) { prefs.edit().putInt("aprs_numero", v).apply() }
 
+    /** One position sent by itself as the ISS rises (off unless switched on: it transmits). */
+    var aprsBaliseIss: Boolean
+        get() = prefs.getBoolean("aprs_balise_iss", false)
+        set(v) { prefs.edit().putBoolean("aprs_balise_iss", v).apply() }
+
+    /** A sound and a notification for our frame back from the ISS, a contact, a badge. */
+    var aprsFetes: Boolean
+        get() = prefs.getBoolean("aprs_fetes", true)
+        set(v) { prefs.edit().putBoolean("aprs_fetes", v).apply() }
+
     /** Watch the recorded audio for an SSTV header and decode pictures live.
      *  Off by default: most passes carry no SSTV, and the operator who wants
      *  pictures turns it on knowingly. */

@@ -1327,6 +1327,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         // before each session.
         fr.f4ioz.satcombo.demo.ServeurDemo.configureWifi(
             settings.demoSsid, settings.demoMotDePasse)
+        // --- APRS, the fun side: who we are for the trophies, the cheers, the ISS beacon ---
+        fr.f4ioz.satcombo.aprs.AprsHub.joueur = {
+            Triple(settings.callsign, _ui.value.observer?.latDeg, _ui.value.observer?.lonDeg)
+        }
+        viewModelScope.launch {
+            fr.f4ioz.satcombo.aprs.AprsHub.evenements.collect { runCatching { aprsFete(it) } }
+        }
+        viewModelScope.launch {
+            while (true) { runCatching { aprsBaliseTic() }; delay(10_000) }
+        }
         // --- control desk ---
         // The only gestures a PC can trigger are placed here; the server can
         // call nothing else, so the surface exposed to the LAN reads at a glance.
@@ -4651,6 +4661,120 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 aprsEnEmission = false
             }
         }
+    }
+
+    // ----------------------------------------------------- APRS, the fun side
+
+    /** The ISS among the loaded satellites (NORAD 25544), or null. */
+    private fun iss(): TleEntry? = _ui.value.satellites.firstOrNull { it.catalogNumber == 25544 }
+
+    /** The point under the ISS at [ms], for the APRS map. */
+    fun aprsSousIss(ms: Long): Pair<Double, Double>? {
+        val e = iss() ?: return null
+        return runCatching {
+            predictor.positionAt(e, _ui.value.observer ?: fr.f4ioz.satcombo.data.Observer(0.0, 0.0), ms)
+        }.getOrNull()?.let { it.latDeg to it.lonDeg }
+    }
+
+    /** The ISS ground track from [depuisMs], one orbit. */
+    fun aprsTraceIss(depuisMs: Long): List<Pair<Double, Double>> {
+        val e = iss() ?: return emptyList()
+        return runCatching { predictor.groundTrack(e, depuisMs) }.getOrDefault(emptyList())
+    }
+
+    fun aprsBaliseIss(): Boolean = settings.aprsBaliseIss
+    fun setAprsBaliseIss(v: Boolean) { settings.aprsBaliseIss = v }
+    fun aprsFetes(): Boolean = settings.aprsFetes
+    fun setAprsFetes(v: Boolean) { settings.aprsFetes = v }
+
+    /** The radio chosen on the APRS page sends [trame] (FT3D: it transmits from its own menu). */
+    fun aprsEmetSelonMode(trame: fr.f4ioz.satcombo.aprs.Trame, frequenceConfirmee: Boolean) {
+        when (settings.aprsMode) {
+            "KISS" -> aprsEmetKiss(trame, frequenceConfirmee)
+            "FT3D" -> aprsEnvoi.value = t("aprs_ft3d_tx")
+            else -> aprsEmet(trame)
+        }
+    }
+
+    /**
+     * An APRS contact through the ISS into the log: mode PKT on 145.825 MHz,
+     * at the time of the ack, the other station's square when it sent a
+     * position. Not twice the same station on the same pass.
+     * @return a message for the page.
+     */
+    fun aprsAuCarnet(c: fr.f4ioz.satcombo.aprs.AprsJeu.Contact): String {
+        val sat = iss() ?: return t("aprs_carnet_sans_iss")
+        val call = fr.f4ioz.satcombo.aprs.AprsJeu.base(c.indicatif)
+        val deja = _ui.value.log.any {
+            it.callsign.uppercase().substringBefore('/') == call && it.satName == sat.name &&
+                kotlin.math.abs(it.timeMs - c.quand) <= fr.f4ioz.satcombo.aprs.AprsJeu.PASSAGE_MS
+        }
+        if (deja) return tf("aprs_carnet_deja", call)
+        val obs = _ui.value.observer
+        val pos = obs?.let { runCatching { predictor.positionAt(sat, it, c.quand) }.getOrNull() }
+        val e = fr.f4ioz.satcombo.data.LogEntry(
+            timeMs = c.quand, satName = sat.name, catnum = sat.catalogNumber,
+            azimuthDeg = pos?.azimuthDeg ?: 0.0, elevationDeg = pos?.elevationDeg ?: 0.0,
+            myLocator = obs?.let { Maidenhead.fromLatLon(it.latDeg, it.lonDeg) } ?: _ui.value.manualLocator,
+            myGrids = myGridsCsv(),
+            callsign = call, theirLocator = c.carre.orEmpty(),
+            mode = "PKT", note = "APRS",
+            downlinkMhz = 145.825, uplinkMhz = 145.825)
+        _ui.value = _ui.value.copy(log = logStore.add(e),
+            express = _ui.value.express.copy(memoire = construitMemoire()))
+        return tf("aprs_carnet_ok", call)
+    }
+
+    /** AOS of the ISS pass already beaconed: one position per pass, never more. */
+    private var aprsBaliseAos = 0L
+
+    /**
+     * The ISS beacon: once the ISS is 15° up, one position through the radio
+     * chosen on the APRS page — only when that radio can be checked (IC-9700
+     * on CAT, or a KISS radio whose frequency was read on 145.825 MHz). Every
+     * transmit check still applies.
+     */
+    private fun aprsBaliseTic() {
+        if (!settings.aprsBaliseIss) return
+        val sat = iss() ?: return
+        val obs = _ui.value.observer ?: return
+        val now = System.currentTimeMillis()
+        val el = runCatching { predictor.positionAt(sat, obs, now).elevationDeg }.getOrNull() ?: return
+        if (el < 15.0) return
+        val aos = runCatching { predictor.currentPass(sat, obs, now) }.getOrNull()?.first ?: return
+        if (aos == aprsBaliseAos) return
+        val source = aprsSource()
+        if (source.isBlank()) return
+        val prete = when (settings.aprsMode) {
+            "KISS" -> fr.f4ioz.satcombo.aprs.TncKiss.etat.value.let { k ->
+                k.connecte && k.frequenceHz != null && k.frequenceHz in fr.f4ioz.satcombo.aprs.AprsEmission.FENETRES[0]
+            }
+            "AUDIO" -> _ui.value.catConnected && _ui.value.rigModel == "IC9700" && !aprsEnEmission
+            else -> false
+        }
+        if (!prete) return
+        aprsBaliseAos = aos
+        val info = fr.f4ioz.satcombo.aprs.AprsEmission.position(obs.latDeg, obs.lonDeg, "/-",
+            "SatMe " + Maidenhead.fromLatLon(obs.latDeg, obs.lonDeg).take(4))
+        val trame = fr.f4ioz.satcombo.aprs.AprsEmission.trame(source, listOf("ARISS"), info)
+        aprsEmetSelonMode(trame, frequenceConfirmee = true)
+    }
+
+    /** What a trophy event says, as a notification title and text. */
+    private fun aprsFete(ev: fr.f4ioz.satcombo.aprs.Trophees.Evenement) {
+        if (!settings.aprsFetes) return
+        val app = getApplication<android.app.Application>()
+        val (titre, texte) = when (ev) {
+            is fr.f4ioz.satcombo.aprs.Trophees.Evenement.RepeteIss -> t("aprs_fete_iss") to
+                (if (ev.autres.isEmpty()) t("aprs_fete_iss_seul")
+                 else tf("aprs_fete_iss_autres", ev.autres.take(8).joinToString(", ")))
+            is fr.f4ioz.satcombo.aprs.Trophees.Evenement.Contact ->
+                tf("aprs_fete_contact", ev.contact.indicatif) to t("aprs_fete_contact_texte")
+            is fr.f4ioz.satcombo.aprs.Trophees.Evenement.NouveauBadge ->
+                tf("aprs_fete_badge", t("aprs_badge_" + ev.badge.cle)) to t("aprs_badge_" + ev.badge.cle + "_desc")
+            else -> return
+        }
+        fr.f4ioz.satcombo.notify.AprsNotifier.notifie(app, titre, texte)
     }
 
     /**

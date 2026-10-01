@@ -27,6 +27,7 @@ import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -69,6 +70,9 @@ fun AprsScreen(ui: UiState, vm: MainViewModel) {
     var filtre by remember { mutableStateOf("TOUT") }
     var ouvert by remember { mutableStateOf<Paquet?>(null) }
     var effacer by remember { mutableStateOf(false) }
+    var onglet by rememberSaveable { mutableStateOf("TRAFIC") }
+    // In KISS mode the operator vouches for the frequency; shared by every tab that transmits.
+    var frequenceOk by rememberSaveable { mutableStateOf(false) }
 
     val liste = remember(st.paquets, filtre) {
         when (filtre) {
@@ -79,6 +83,21 @@ fun AprsScreen(ui: UiState, vm: MainViewModel) {
         }
     }
 
+    Column(Modifier.fillMaxSize()) {
+    BanniereFete()
+    // Traffic (the radio, reception, transmit, the list), then the fun: map, messages, trophies.
+    androidx.compose.material3.ScrollableTabRow(selectedTabIndex = ONGLETS.indexOf(onglet).coerceAtLeast(0),
+        containerColor = SpaceBg, contentColor = Cyan, edgePadding = 8.dp) {
+        ONGLETS.forEach { o ->
+            androidx.compose.material3.Tab(selected = onglet == o, onClick = { onglet = o },
+                text = { Text(t("aprs_onglet_" + o.lowercase()), fontSize = 13.sp) })
+        }
+    }
+    when (onglet) {
+        "CARTE" -> OngletCarte(ui, vm, st.paquets)
+        "MESSAGES" -> OngletMessages(ui, vm, st.paquets, mode, frequenceOk) { frequenceOk = it }
+        "TROPHEES" -> OngletTrophees(ui, vm, st.paquets)
+        else ->
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(12.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)) {
         // The radio, chosen once: reception and transmission both follow it.
@@ -170,7 +189,7 @@ fun AprsScreen(ui: UiState, vm: MainViewModel) {
                     Text(t("aprs_ft3d_tx"), color = TextLo, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
                 }
             }
-        } else item { CarteEmission(ui, vm, mode) }
+        } else item { CarteEmission(ui, vm, mode, frequenceOk) { frequenceOk = it } }
         item {
             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 listOf("TOUT" to t("aprs_filtre_tout"), "ISS" to t("aprs_filtre_iss"),
@@ -187,10 +206,7 @@ fun AprsScreen(ui: UiState, vm: MainViewModel) {
         }
         items(liste, key = { "${it.quand}-${it.trame.hashCode()}-${it.emis}" }) { p ->
             // A sent message is acknowledged when an "ack<number>" comes back to us.
-            val accuse = p.emis && p.idMessage != null && st.paquets.any {
-                it.type == TypeAprs.ACCUSE && it.idMessage == p.idMessage &&
-                    it.destinataire?.substringBefore('-') == p.trame.source.indicatif
-            }
+            val accuse = fr.f4ioz.satcombo.aprs.AprsJeu.estAccuse(p, st.paquets)
             LignePaquet(p, ui, ouvert == p, accuse) { ouvert = if (ouvert == p) null else p }
         }
         if (st.paquets.isNotEmpty()) {
@@ -200,6 +216,8 @@ fun AprsScreen(ui: UiState, vm: MainViewModel) {
                 }
             }
         }
+    }
+    }
     }
 
     if (choix) {
@@ -218,6 +236,8 @@ fun AprsScreen(ui: UiState, vm: MainViewModel) {
             text = { Text(t("aprs_effacer_confirme"), color = TextHi) })
     }
 }
+
+private val ONGLETS = listOf("TRAFIC", "CARTE", "MESSAGES", "TROPHEES")
 
 private val heureUtc = SimpleDateFormat("dd/MM HH:mm:ss", Locale.US).apply { timeZone = TimeZone.getTimeZone("UTC") }
 
@@ -269,6 +289,7 @@ private fun LignePaquet(p: Paquet, ui: UiState, ouvert: Boolean, accuse: Boolean
                         (p.vitesseKmh?.let { " · $it km/h" } ?: "") +
                         (p.altitudeM?.let { " · $it m" } ?: ""))
                 }
+                p.meteo?.let { add(ligneMeteo(it)) }
                 if (p.type != TypeAprs.STATUT && p.commentaire.isNotBlank()) add(p.commentaire)
             }
             lignes.forEach { Text(it, color = TextLo, fontSize = 12.sp) }
@@ -287,7 +308,8 @@ private fun LignePaquet(p: Paquet, ui: UiState, ouvert: Boolean, accuse: Boolean
  * and the IC-9700 button.
  */
 @Composable
-private fun CarteEmission(ui: UiState, vm: MainViewModel, mode: String) {
+private fun CarteEmission(ui: UiState, vm: MainViewModel, mode: String,
+                          frequenceOk: Boolean, onFrequenceOk: (Boolean) -> Unit) {
     val ctx = LocalContext.current
     val resultat by vm.aprsEnvoi.collectAsState()
     var type by remember { mutableStateOf("JEUDI") }
@@ -299,7 +321,7 @@ private fun CarteEmission(ui: UiState, vm: MainViewModel, mode: String) {
     var aide by remember { mutableStateOf(false) }
     val kiss by fr.f4ioz.satcombo.aprs.TncKiss.etat.collectAsState()
     val par = if (mode == "KISS") "KISS" else "CAT"
-    var frequenceOk by remember { mutableStateOf(false) }
+    var balise by remember { mutableStateOf(vm.aprsBaliseIss()) }
     // The message number is drawn when sending, so the preview shows a placeholder.
     val source = remember(ssid, ui.callsign) { vm.aprsSource() }
     val obs = ui.observer
@@ -416,15 +438,7 @@ private fun CarteEmission(ui: UiState, vm: MainViewModel, mode: String) {
                 }
             }
             Spacer(Modifier.height(6.dp))
-            if (par == "KISS") {
-                // In KISS mode the radio's frequency cannot be read: the operator vouches for it.
-                Row(Modifier.fillMaxWidth().toggleable(value = frequenceOk, role = Role.Checkbox,
-                        onValueChange = { frequenceOk = it }), verticalAlignment = Alignment.CenterVertically) {
-                    androidx.compose.material3.Checkbox(checked = frequenceOk, onCheckedChange = null)
-                    Text(t("aprs_kiss_frequence_ok"), color = TextHi, fontSize = 12.sp,
-                        modifier = Modifier.padding(start = 6.dp))
-                }
-            }
+            if (par == "KISS") ConfirmeFrequenceKiss(frequenceOk, onFrequenceOk)
             Button(enabled = apercu != null && source.isNotBlank() && (par == "CAT" || (kiss.connecte && frequenceOk)),
                 onClick = {
                     trame()?.let { if (par == "KISS") vm.aprsEmetKiss(it, frequenceOk) else vm.aprsEmet(it) }
@@ -436,6 +450,17 @@ private fun CarteEmission(ui: UiState, vm: MainViewModel, mode: String) {
             }
             if (resultat.isNotBlank()) Text(resultat, color = TextHi, fontSize = 12.sp,
                 modifier = Modifier.padding(top = 6.dp))
+            // One position by itself as the ISS rises: off unless switched on, as it transmits.
+            Row(Modifier.fillMaxWidth().padding(top = 8.dp).toggleable(value = balise, role = Role.Switch,
+                    onValueChange = { balise = it; vm.setAprsBaliseIss(it) }),
+                verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(t("aprs_balise_titre"), color = TextHi, fontSize = 13.sp)
+                    Text(if (par == "KISS") t("aprs_balise_desc_kiss") else t("aprs_balise_desc"), color = TextLo, fontSize = 11.sp)
+                }
+                Switch(checked = balise, onCheckedChange = null,
+                    colors = SwitchDefaults.colors(checkedTrackColor = Color(0xFFE5484D)))
+            }
             if (par == "CAT") {
                 TextButton(onClick = { aide = !aide }) { Text(t("aprs_tx_aide_titre"), color = Cyan, fontSize = 12.sp) }
                 if (aide) Text(t("aprs_tx_aide"), color = TextLo, fontSize = 11.sp)

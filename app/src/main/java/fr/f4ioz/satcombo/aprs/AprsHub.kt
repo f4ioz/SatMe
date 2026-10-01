@@ -11,8 +11,11 @@ package fr.f4ioz.satcombo.aprs
 import android.content.Context
 import android.util.Base64
 import fr.f4ioz.satcombo.sstv.Mp3Pcm
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import java.io.File
 import java.text.SimpleDateFormat
@@ -75,6 +78,7 @@ object AprsHub {
         }
         _etat.value = _etat.value.copy(paquets = (lus + _etat.value.paquets)
             .distinctBy { it.quand to it.trame }.sortedByDescending { it.quand }.take(MAX))
+        chargeTrophees(ctx, lus)
     }
 
     private fun ligneVersPaquet(ligne: String): Paquet? = runCatching {
@@ -100,7 +104,57 @@ object AprsHub {
         ecrit(ctx, p, sat)
         _etat.value = _etat.value.copy(paquets = (listOf(p) + _etat.value.paquets)
             .sortedByDescending { it.quand }.take(MAX))
+        note(ctx, p)
         return true
+    }
+
+    // ------------------------------------------------------------ trophies
+
+    /** Who we are and where (callsign, latitude, longitude): set by the view model. */
+    @Volatile var joueur: () -> Triple<String, Double?, Double?> = { Triple("", null, null) }
+
+    private val _trophees = MutableStateFlow(Trophees.Etat())
+    val trophees: StateFlow<Trophees.Etat> = _trophees.asStateFlow()
+
+    /** What deserves a cheer, as it happens (our frame back from the ISS, a new square…). */
+    private val _evenements = MutableSharedFlow<Trophees.Evenement>(extraBufferCapacity = 32)
+    val evenements: SharedFlow<Trophees.Evenement> = _evenements.asSharedFlow()
+
+    /** Kept apart from the 7-day history: clearing the list does not take the trophies away. */
+    private fun fichierTrophees(ctx: Context) = File(ctx.filesDir, "aprs-trophees.txt")
+
+    private val pays: (String) -> String? = { c -> fr.f4ioz.satcombo.domain.Dxcc.entite(AprsJeu.base(c))?.nom }
+
+    /**
+     * Reads the trophies; the first time, works them out from the history
+     * already on disk, silently (nothing to cheer about frames from last week).
+     */
+    private fun chargeTrophees(ctx: Context, historique: List<Paquet>) {
+        val f = fichierTrophees(ctx)
+        if (f.exists()) {
+            _trophees.value = runCatching { Trophees.lit(f.readText()) }.getOrDefault(Trophees.Etat())
+            return
+        }
+        val (moi, lat, lon) = joueur()
+        var e = Trophees.Etat()
+        val vus = ArrayList<Paquet>()
+        historique.sortedBy { it.quand }.forEach { p ->
+            vus += p
+            e = Trophees.avec(e, p, vus, moi, lat, lon, pays).first
+        }
+        _trophees.value = e
+        runCatching { f.writeText(Trophees.ecrit(e)) }
+    }
+
+    @Synchronized
+    private fun note(ctx: Context, p: Paquet) {
+        val (moi, lat, lon) = joueur()
+        val (e, ev) = Trophees.avec(_trophees.value, p, _etat.value.paquets, moi, lat, lon, pays)
+        if (e != _trophees.value) {
+            _trophees.value = e
+            runCatching { fichierTrophees(ctx).writeText(Trophees.ecrit(e)) }
+        }
+        ev.forEach { _evenements.tryEmit(it) }
     }
 
     // ---------------------------------------------------------------- live
@@ -196,6 +250,7 @@ object AprsHub {
         val p = Aprs.lit(t, System.currentTimeMillis()).copy(emis = true)
         ecrit(ctx, p, EMIS)
         _etat.value = _etat.value.copy(paquets = (listOf(p) + _etat.value.paquets).take(MAX))
+        note(ctx, p)
     }
 
     /** Clears the history (disk and screen). */
