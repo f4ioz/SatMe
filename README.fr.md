@@ -49,7 +49,7 @@ Poursuite de satellites radioamateurs sur Android — passages, pointage, Dopple
 ### Enregistrement et décodage
 - Chaque passage enregistré en MP3 — micro du téléphone, Bluetooth mains-libres ou carte son USB du poste — avec une annonce vocale au début (satellite, heure UTC, locator) et une copie dans le dossier de votre choix.
 - SSTV décodée en direct pendant l'enregistrement (Robot, Martin, Scottie, PD), ou après coup depuis un enregistrement ou un WAV de la carte SD du poste. Une mire SSTV à émettre, avec des évanouissements simulés pour éprouver un décodeur.
-- APRS (bêta) : trames AFSK 1200 décodées pendant l'enregistrement — le digipeater de l'ISS sur 145,825 MHz — ou reçues par un poste KISS. Positions (Mic-E compris), messages, statuts. Émission par l'IC-9700 ou par un poste KISS comme le Kenwood TH-D72 : APRS Thursday (HOTG) prêt, accusés affichés.
+- APRS (bêta) : trames AFSK 1200 décodées pendant l'enregistrement — le digipeater de l'ISS sur 145,825 MHz — ou reçues par un poste KISS, et les stations décodées par un Yaesu FT3D. Positions (Mic-E compris), messages, statuts. Émission par l'IC-9700 ou par un poste KISS comme le Kenwood TH-D72 : APRS Thursday (HOTG) prêt, accusés affichés.
 - Décodage FT8 / FT4, radiosondes météo, et clé RTL-SDR avec son spectre.
 
 ### Partage
@@ -64,7 +64,7 @@ Français et anglais. Commandes lisibles par les lecteurs d'écran.
 | Type | Modèles |
 |---|---|
 | Postes | Icom IC-9700 · Kenwood TH-D72 (FM, full duplex) · paire de Yaesu FT-817 · FT-817 + Icom IC-705¹ · FT-817 + clé SDR |
-| APRS | Poste KISS en USB : Kenwood TH-D72 (essayé) ; autres TNC KISS sur une ligne série USB¹ |
+| APRS | Poste KISS en USB : Kenwood TH-D72 (essayé) ; autres TNC KISS sur une ligne série USB¹ · Yaesu FT3D : les stations qu'il décode (positions, sortie WAY.P) |
 | SDR | RTL2832U |
 | Boussole | WitMotion WT901BLE, WT9011DCL-BT50 |
 | Rotors | Yaesu GS-232 · Hamlib rotctld (réseau) |

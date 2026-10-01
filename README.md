@@ -49,7 +49,7 @@ Amateur radio satellite tracking for Android — passes, pointing, Doppler, logg
 ### Recording and decoding
 - Every pass recorded to MP3 — phone microphone, Bluetooth hands-free or the rig's USB sound card — with a spoken header (satellite, UTC time, locator) and a copy in the folder of your choice.
 - SSTV decoded live while recording (Robot, Martin, Scottie, PD), or later from a recording or a WAV from the rig's SD card. An SSTV test card to send, with simulated fading to check a decoder.
-- APRS (beta): AFSK 1200 frames decoded while recording — the ISS digipeater on 145.825 MHz — or received through a KISS radio. Positions (Mic-E included), messages, status. Transmit through the IC-9700 or a KISS radio such as the Kenwood TH-D72: APRS Thursday (HOTG) ready, acks shown.
+- APRS (beta): AFSK 1200 frames decoded while recording — the ISS digipeater on 145.825 MHz — or received through a KISS radio, and the stations a Yaesu FT3D decodes. Positions (Mic-E included), messages, status. Transmit through the IC-9700 or a KISS radio such as the Kenwood TH-D72: APRS Thursday (HOTG) ready, acks shown.
 - FT8 / FT4 decoding, weather radiosondes, and an RTL-SDR dongle with its spectrum.
 
 ### Sharing
@@ -64,7 +64,7 @@ French and English. Controls readable by screen readers.
 | Type | Models |
 |---|---|
 | Radios | Icom IC-9700 · Kenwood TH-D72 (FM, full duplex) · pair of Yaesu FT-817 · FT-817 + Icom IC-705¹ · FT-817 + SDR dongle |
-| APRS | KISS radio over USB: Kenwood TH-D72 (tried); other KISS TNCs on a USB serial line¹ |
+| APRS | KISS radio over USB: Kenwood TH-D72 (tried); other KISS TNCs on a USB serial line¹ · Yaesu FT3D: stations it decodes (positions, WAY.P output) |
 | SDR | RTL2832U |
 | Compass | WitMotion WT901BLE, WT9011DCL-BT50 |
 | Rotators | Yaesu GS-232 · Hamlib rotctld (network) |

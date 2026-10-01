@@ -121,6 +121,9 @@ tasks.withType<Test>().configureEach {
     systemProperty("satme.kiss", System.getProperty("satme.kiss") ?: "")
     // TH-D72 as the CAT rig on the PC's serial port: `-Dsatme.thd72=/dev/ttyUSB0` (no transmit).
     systemProperty("satme.thd72", System.getProperty("satme.thd72") ?: "")
+    // FT3D waypoint output on the PC's serial port: `-Dsatme.ft3d=/dev/ttyUSB1` (listening only).
+    systemProperty("satme.ft3d", System.getProperty("satme.ft3d") ?: "")
+    systemProperty("satme.ft3d.ecoute", System.getProperty("satme.ft3d.ecoute") ?: "120")
     systemProperty("satme.kissbrut", System.getProperty("satme.kissbrut") ?: "")
     // Transmits one frame through the KISS radio: only with `-Dsatme.kiss.emission=OUI` too.
     systemProperty("satme.kiss.emission", System.getProperty("satme.kiss.emission") ?: "")

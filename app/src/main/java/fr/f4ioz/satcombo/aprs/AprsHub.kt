@@ -180,10 +180,13 @@ object AprsHub {
     }
 
     /** A frame a KISS radio (TH-D72…) received and passed on, already decoded. */
-    fun recuDuTnc(ctx: Context, t: Trame) {
+    fun recuDuTnc(ctx: Context, t: Trame) = recuDuPoste(ctx, t, "TNC")
+
+    /** A station a radio decoded itself (KISS, or an FT3D's waypoint), labelled [etiquette]. */
+    fun recuDuPoste(ctx: Context, t: Trame, etiquette: String) {
         val app = ctx.applicationContext
         charge(app)
-        ajoute(app, t, System.currentTimeMillis(), "TNC")
+        ajoute(app, t, System.currentTimeMillis(), etiquette)
     }
 
     /** A frame this phone has just sent: shown and kept with the others. */

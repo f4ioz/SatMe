@@ -4489,6 +4489,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     @Volatile private var aprsEnEmission = false
     private var aprsDerniereMs = 0L
 
+    fun aprsFt3dCle(): String = settings.aprsFt3dCle
+    fun aprsFt3dVitesse(): Int = settings.aprsFt3dVitesse
+    fun ft3dConnecte(cle: String, vitesse: Int) {
+        settings.aprsFt3dCle = cle; settings.aprsFt3dVitesse = vitesse
+        viewModelScope.launch { fr.f4ioz.satcombo.aprs.RecepteurWaypoints.connecte(getApplication(), cle, vitesse) }
+    }
+    fun ft3dDeconnecte() { fr.f4ioz.satcombo.aprs.RecepteurWaypoints.deconnecte() }
+
     fun aprsMode(): String = settings.aprsMode
     fun setAprsMode(m: String) { settings.aprsMode = m }
 

@@ -113,7 +113,15 @@ class SettingsStore(context: Context) {
     var aprsNiveau: Float
         get() = prefs.getFloat("aprs_niveau", 0.5f)
         set(v) { prefs.edit().putFloat("aprs_niveau", v.coerceIn(0.05f, 1f)).apply() }
-    /** APRS page: the radio used, "AUDIO" (recordings + IC-9700) or "KISS" (TH-D72…). */
+    /** FT3D on the APRS page: its USB adapter's key and the port speed (COM PORT SETTING). */
+    var aprsFt3dCle: String
+        get() = prefs.getString("aprs_ft3d_cle", "") ?: ""
+        set(v) { prefs.edit().putString("aprs_ft3d_cle", v).apply() }
+    var aprsFt3dVitesse: Int
+        get() = prefs.getInt("aprs_ft3d_vitesse", 9600)
+        set(v) { prefs.edit().putInt("aprs_ft3d_vitesse", v).apply() }
+
+    /** APRS page: the radio used, "AUDIO" (recordings + IC-9700), "KISS" (TH-D72…) or "FT3D" (positions). */
     var aprsMode: String
         get() = prefs.getString("aprs_mode", "AUDIO") ?: "AUDIO"
         set(v) { prefs.edit().putString("aprs_mode", v).apply() }

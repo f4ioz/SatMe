@@ -94,7 +94,8 @@ fun AprsScreen(ui: UiState, vm: MainViewModel) {
                         }
                     }
                     Spacer(Modifier.height(6.dp))
-                    listOf("AUDIO" to t("aprs_mode_audio"), "KISS" to t("aprs_mode_kiss")).forEach { (cle, nom) ->
+                    listOf("AUDIO" to t("aprs_mode_audio"), "KISS" to t("aprs_mode_kiss"),
+                        "FT3D" to t("aprs_mode_ft3d")).forEach { (cle, nom) ->
                         Row(Modifier.fillMaxWidth().toggleable(value = mode == cle, role = Role.RadioButton,
                                 onValueChange = { mode = cle; vm.setAprsMode(cle) }).padding(vertical = 4.dp),
                             verticalAlignment = Alignment.CenterVertically) {
@@ -104,7 +105,8 @@ fun AprsScreen(ui: UiState, vm: MainViewModel) {
                                 modifier = Modifier.padding(start = 6.dp))
                         }
                     }
-                    Text(if (mode == "KISS") t("aprs_mode_kiss_desc") else t("aprs_mode_audio_desc"),
+                    Text(when (mode) { "KISS" -> t("aprs_mode_kiss_desc"); "FT3D" -> t("aprs_mode_ft3d_desc")
+                            else -> t("aprs_mode_audio_desc") },
                         color = TextLo, fontSize = 11.sp, modifier = Modifier.padding(top = 4.dp))
                 }
             }
@@ -112,6 +114,8 @@ fun AprsScreen(ui: UiState, vm: MainViewModel) {
         // Reception, for the radio chosen above.
         if (mode == "KISS") {
             item { CarteTnc(vm) }
+        } else if (mode == "FT3D") {
+            item { CarteFt3d(vm) }
         } else item {
             Surface(color = SpaceCard, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp)) {
@@ -158,8 +162,15 @@ fun AprsScreen(ui: UiState, vm: MainViewModel) {
                 }
             }
         }
-        // Transmission, through the same radio.
-        item { CarteEmission(ui, vm, mode) }
+        // Transmission, through the same radio — the FT3D transmits from its own menu.
+        if (mode == "FT3D") item {
+            Surface(color = SpaceCard, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(16.dp)) {
+                    Text(t("aprs_tx_titre"), color = TextHi, fontWeight = FontWeight.Bold)
+                    Text(t("aprs_ft3d_tx"), color = TextLo, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
+                }
+            }
+        } else item { CarteEmission(ui, vm, mode) }
         item {
             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 listOf("TOUT" to t("aprs_filtre_tout"), "ISS" to t("aprs_filtre_iss"),
@@ -497,6 +508,64 @@ private fun CarteTnc(vm: MainViewModel) {
             }
             TextButton(onClick = { aide = !aide }) { Text(t("aprs_kiss_aide_titre"), color = Cyan, fontSize = 12.sp) }
             if (aide) Text(t("aprs_kiss_aide"), color = TextLo, fontSize = 11.sp)
+        }
+    }
+}
+
+/**
+ * Reception from a Yaesu FT3D: it writes each APRS station it decodes as a
+ * waypoint line on its USB port (OUTPUT = WAY.P). Adapter, speed, connect.
+ */
+@Composable
+private fun CarteFt3d(vm: MainViewModel) {
+    val ctx = LocalContext.current
+    val etat by fr.f4ioz.satcombo.aprs.RecepteurWaypoints.etat.collectAsState()
+    var appareils by remember { mutableStateOf(fr.f4ioz.satcombo.aprs.TncKiss.appareils(ctx)) }
+    var cle by remember { mutableStateOf(vm.aprsFt3dCle()) }
+    var vitesse by remember { mutableStateOf(vm.aprsFt3dVitesse()) }
+    var aide by remember { mutableStateOf(false) }
+    Surface(color = SpaceCard, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp)) {
+            Text(t("aprs_reception"), color = TextHi, fontWeight = FontWeight.Bold)
+            Text(t("aprs_ft3d_desc"), color = TextLo, fontSize = 11.sp)
+            Spacer(Modifier.height(8.dp))
+            if (etat.connecte) {
+                Text(tf("aprs_ft3d_connecte", etat.nom, etat.vitesse, etat.recues), color = Aurora, fontSize = 12.sp)
+                if (etat.illisibles > 0 && etat.recues == 0)
+                    Text(t("aprs_ft3d_illisibles"), color = Amber, fontSize = 11.sp)
+                TextButton(onClick = { vm.ft3dDeconnecte() }) {
+                    Text(t("aprs_kiss_deconnecter"), color = Magenta, fontSize = 12.sp)
+                }
+            } else {
+                if (appareils.isEmpty()) Text(t("aprs_kiss_aucun"), color = Amber, fontSize = 11.sp)
+                appareils.forEach { a ->
+                    Row(Modifier.fillMaxWidth().toggleable(value = cle == a.cle, role = Role.RadioButton,
+                            onValueChange = { cle = a.cle }), verticalAlignment = Alignment.CenterVertically) {
+                        androidx.compose.material3.RadioButton(selected = cle == a.cle, onClick = null)
+                        Text(a.nom, color = TextHi, fontSize = 12.sp, modifier = Modifier.padding(start = 6.dp))
+                    }
+                }
+                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    listOf(4800, 9600, 19200, 38400).forEach { v ->
+                        FilterChip(selected = vitesse == v, onClick = { vitesse = v },
+                            label = { Text("$v", fontSize = 12.sp) },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = Cyan.copy(alpha = 0.2f), selectedLabelColor = Cyan))
+                    }
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Button(enabled = appareils.any { it.cle == cle }, onClick = { vm.ft3dConnecte(cle, vitesse) },
+                        colors = ButtonDefaults.buttonColors(containerColor = Cyan)) {
+                        Text(t("aprs_kiss_connecter"), color = Color.Black)
+                    }
+                    TextButton(onClick = { appareils = fr.f4ioz.satcombo.aprs.TncKiss.appareils(ctx) }) {
+                        Text(t("aprs_kiss_rechercher"), color = Cyan, fontSize = 12.sp)
+                    }
+                }
+                etat.erreur?.let { Text(t("aprs_kiss_erreur_$it"), color = Amber, fontSize = 11.sp) }
+            }
+            TextButton(onClick = { aide = !aide }) { Text(t("aprs_ft3d_aide_titre"), color = Cyan, fontSize = 12.sp) }
+            if (aide) Text(t("aprs_ft3d_aide"), color = TextLo, fontSize = 11.sp)
         }
     }
 }
