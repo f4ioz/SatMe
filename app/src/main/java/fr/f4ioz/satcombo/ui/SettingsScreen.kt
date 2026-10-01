@@ -99,6 +99,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import fr.f4ioz.satcombo.MainViewModel
+import fr.f4ioz.satcombo.cat.Postes
 import fr.f4ioz.satcombo.SkedWindow
 import fr.f4ioz.satcombo.Screen
 import fr.f4ioz.satcombo.UiState
@@ -2002,30 +2003,28 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
                     // on a screen usually opened three minutes before AOS.
                     val rigs = listOf(
                         Triple("IC9700", "Icom IC-9700", true),
-                        Triple("FT817x2", "2× Yaesu FT-817", true),
-                        Triple(fr.f4ioz.satcombo.FT817_IC705, t("rig_ft817_ic705"), true),
-                        Triple(fr.f4ioz.satcombo.IC705_FT817, t("rig_ic705_ft817"), true),
-                        Triple("FT817TX", t("qo100_poste_sdr"), true),
+                        // FT-817 and IC-705, one rig per side: one entry, the
+                        // sides chosen underneath.
+                        Triple(PAIRE, t("rig_ft817_ic705_cotes"), true),
                         Triple(fr.f4ioz.satcombo.THD72, t("rig_thd72"), true)
                     )
                     var avertirIc705 by remember { mutableStateOf(false) }
                     if (avertirIc705) AvertissementIc705 { avertirIc705 = false }
+                    val choisi = if (ui.rigModel in Postes.MODELES) PAIRE else ui.rigModel
                     rigs.forEach { (id, label, ready) ->
                         Row(verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier.fillMaxWidth()
-                                .selectable(selected = ui.rigModel == id, enabled = ready,
+                                .selectable(selected = choisi == id, enabled = ready,
                                     role = Role.RadioButton, onClick = {
-                                        vm.setRigModel(id)
-                                        if (id == fr.f4ioz.satcombo.FT817_IC705 ||
-                                            id == fr.f4ioz.satcombo.IC705_FT817) avertirIc705 = true
+                                        if (id != choisi) vm.setRigModel(if (id == PAIRE) Postes.FT817_X2 else id)
                                     })
                                 .padding(vertical = 6.dp)) {
-                            RadioButton(selected = ui.rigModel == id, enabled = ready,
+                            RadioButton(selected = choisi == id, enabled = ready,
                                 onClick = null,
                                 colors = RadioButtonDefaults.colors(selectedColor = Cyan))
                             Spacer(Modifier.width(4.dp))
                             Text(label, color = if (ready) TextHi else TextLo,
-                                fontWeight = if (ui.rigModel == id) FontWeight.Bold else FontWeight.Normal)
+                                fontWeight = if (choisi == id) FontWeight.Bold else FontWeight.Normal)
                             if (!ready) {
                                 Spacer(Modifier.width(8.dp))
                                 Surface(color = TextLo.copy(alpha = 0.15f), shape = RoundedCornerShape(6.dp)) {
@@ -2033,6 +2032,11 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
                                         modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp))
                                 }
                             }
+                        }
+                        // Its sides right under it, not after the whole list.
+                        if (id == PAIRE && choisi == PAIRE) ChoixCotes(ui.rigModel) { m ->
+                            vm.setRigModel(m)
+                            if (Postes.avecIc705(m) && !Postes.avecIc705(ui.rigModel)) avertirIc705 = true
                         }
                     }
                 }
@@ -2043,18 +2047,23 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
             item { CarteThd72(ui, vm) }
         }
         // --- Dual FT-817: RX/TX adapter assignment (by FTDI serial) + baud ---
-        val paireMixte = ui.rigModel == fr.f4ioz.satcombo.FT817_IC705 ||
-            ui.rigModel == fr.f4ioz.satcombo.IC705_FT817
-        if (ui.rigModel == "FT817x2" || ui.rigModel == "FT817TX" || paireMixte) {
+        val paireMixte = Postes.mixte(ui.rigModel)
+        val avecIc705 = Postes.avecIc705(ui.rigModel)
+        val avecFt817 = Postes.avecFt817(ui.rigModel)
+        if (ui.rigModel in Postes.MODELES) {
         item {
             LaunchedEffect(Unit) { vm.refreshUsbDevices() }
             Surface(color = SpaceCard, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp)) {
-                    Text(if (paireMixte) t("paire_mixte_titre") else t("ft817_pair_title"),
-                        color = TextHi, fontWeight = FontWeight.Bold)
+                    Text(libellePostes(ui.rigModel), color = TextHi, fontWeight = FontWeight.Bold)
                     // The FT-817's line settings (8N2, menu #14) do not apply
                     // to the IC-705 (CI-V, 8N1): each rig's are said apart.
-                    Text(if (paireMixte) t("paire_mixte_liaison") else t("ft817_pair_desc"),
+                    Text(when {
+                            paireMixte -> t("paire_mixte_liaison")
+                            !avecIc705 -> t("ft817_pair_desc")
+                            Postes.emetSeul(ui.rigModel) -> t("ic705_seul_desc")
+                            else -> t("ic705_paire_desc")
+                        },
                         color = TextLo, fontSize = 11.sp,
                         modifier = Modifier.padding(top = 2.dp, bottom = 8.dp))
                     // FT-817 + IC-705: the protocols tell the rigs apart, so
@@ -2065,7 +2074,8 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
                             modifier = Modifier.padding(bottom = 8.dp))
                     }
 
-                    Text(if (paireMixte) t("ft817_baud_seul") else t("ft817_baud"),
+                    if (avecFt817) {
+                    Text(if (avecIc705) t("ft817_baud_seul") else t("ft817_baud"),
                         color = TextHi, fontSize = 13.sp, fontWeight = FontWeight.Bold)
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp),
                         modifier = Modifier.padding(top = 4.dp, bottom = 10.dp)) {
@@ -2078,8 +2088,9 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
                                     selectedLabelColor = Cyan))
                         }
                     }
+                    }
                     // The IC-705 has its own speed: its "CI-V USB Baud Rate".
-                    if (paireMixte) {
+                    if (avecIc705) {
                         Text(t("ic705_baud"), color = TextHi, fontSize = 13.sp, fontWeight = FontWeight.Bold)
                         Text(t("ic705_baud_desc"), color = TextLo, fontSize = 11.sp)
                         Row(horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -2281,8 +2292,7 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
                     }
 
                     Spacer(Modifier.height(12.dp))
-                    val duplex = ui.rigModel in setOf("FT817x2", "FT817TX",
-                        fr.f4ioz.satcombo.FT817_IC705, fr.f4ioz.satcombo.IC705_FT817, fr.f4ioz.satcombo.THD72)
+                    val duplex = ui.rigModel in Postes.MODELES || ui.rigModel == fr.f4ioz.satcombo.THD72
                     Row(verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier.fillMaxWidth().toggleable(value = ui.catUi.txVfoShift && duplex, enabled = duplex, role = Role.Switch,
                             onValueChange = { vm.setCatTxVfoShift(it) })) {
@@ -2434,8 +2444,7 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
                         // What follows is for Icom CI-V radios ONLY. Left
                         // unconditioned, it showed in Yaesu dual mode too, with
                         // two competing "USB adapter" sections.
-                        if (ui.rigModel !in setOf("FT817x2",
-                                fr.f4ioz.satcombo.FT817_IC705, fr.f4ioz.satcombo.IC705_FT817, fr.f4ioz.satcombo.THD72)) {
+                        if (ui.rigModel !in Postes.MODELES && ui.rigModel != fr.f4ioz.satcombo.THD72) {
                             // CI-V address + baud.
                             Spacer(Modifier.height(8.dp))
                             Text(t("civ_address"), color = TextHi, fontSize = 13.sp)
@@ -4124,6 +4133,49 @@ private fun nomCible(id: String): String = when (id) {
  * The IC-705 has only been driven through a simulated rig so far: said once
  * per choice, so a failure on the air is not taken for the operator's own.
  */
+/** The rig list's entry for "FT-817 / IC-705, one rig per side". */
+private const val PAIRE = "PAIRE"
+
+/** "IC-705 (TX) + FT-817 (RX)", "FT-817 (TX) + SDR dongle (RX)"… */
+internal fun libellePostes(modele: String): String {
+    fun nom(c: String?) = when (c) {
+        Postes.IC705 -> "Icom IC-705"
+        Postes.SDR -> t("poste_cle_sdr")
+        else -> "Yaesu FT-817"
+    }
+    return "${nom(Postes.tx(modele))} (TX) + ${nom(Postes.rx(modele))} (RX)"
+}
+
+/**
+ * FT-817 or IC-705, one rig per side: what receives (or the SDR dongle, the
+ * rig then alone on TX) and what transmits. Each pick gives a rig model.
+ */
+@Composable
+internal fun ChoixCotes(modele: String, onChoix: (String) -> Unit) {
+    val rx = Postes.rx(modele) ?: Postes.FT817
+    val tx = Postes.tx(modele) ?: Postes.FT817
+    @Composable
+    fun Ligne(titre: String, options: List<Pair<String, String>>, actuel: String, choisit: (String) -> Unit) {
+        Text(titre, color = TextHi, fontSize = 13.sp, modifier = Modifier.padding(top = 6.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp),
+            modifier = Modifier.padding(top = 2.dp).horizontalScroll(rememberScrollState())) {
+            options.forEach { (id, nom) ->
+                FilterChip(selected = actuel == id, onClick = { if (actuel != id) choisit(id) },
+                    label = { Text(nom, fontSize = 12.sp) },
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = Cyan.copy(alpha = 0.25f),
+                        selectedLabelColor = Cyan))
+            }
+        }
+    }
+    Column(Modifier.padding(start = 40.dp, bottom = 4.dp)) {
+        Ligne(t("poste_cote_rx"), listOf(Postes.FT817 to "FT-817", Postes.IC705 to "IC-705",
+            Postes.SDR to t("poste_cle_sdr")), rx) { onChoix(Postes.modele(it, tx)) }
+        Ligne(t("poste_cote_tx"), listOf(Postes.FT817 to "FT-817", Postes.IC705 to "IC-705"),
+            tx) { onChoix(Postes.modele(rx, it)) }
+    }
+}
+
 @Composable
 internal fun AvertissementIc705(onFerme: () -> Unit) {
     AlertDialog(

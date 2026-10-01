@@ -837,21 +837,17 @@ private fun ChoixPoste(ui: UiState, vm: MainViewModel) {
     Spacer(Modifier.height(2.dp))
     Text(t("qo100_poste_desc"), color = TextLo, fontSize = 10.sp)
     Spacer(Modifier.height(6.dp))
-    listOf(
-        "IC9700" to "Icom IC-9700",
-        "FT817x2" to "2× Yaesu FT-817",
-        fr.f4ioz.satcombo.FT817_IC705 to t("rig_ft817_ic705"),
-        fr.f4ioz.satcombo.IC705_FT817 to t("rig_ic705_ft817"),
-        "FT817TX" to t("qo100_poste_sdr"),
-    ).forEach { (id, libelle) ->
-        LigneChoix(
-            actif = ui.rigModel == id,
-            titre = libelle,
-            detail = "",
-            onClick = {
-                vm.setRigModel(id)
-                if (id == fr.f4ioz.satcombo.FT817_IC705 || id == fr.f4ioz.satcombo.IC705_FT817) avertirIc705 = true
-            })
+    val paire = ui.rigModel in fr.f4ioz.satcombo.cat.Postes.MODELES
+    LigneChoix(actif = ui.rigModel == "IC9700", titre = "Icom IC-9700", detail = "",
+        onClick = { vm.setRigModel("IC9700") })
+    // FT-817 or IC-705 on each side, or the SDR dongle receiving.
+    LigneChoix(actif = paire, titre = t("rig_ft817_ic705_cotes"),
+        detail = if (paire) libellePostes(ui.rigModel) else "",
+        onClick = { if (!paire) vm.setRigModel(fr.f4ioz.satcombo.cat.Postes.FT817_X2) })
+    if (paire) ChoixCotes(ui.rigModel) { m ->
+        vm.setRigModel(m)
+        if (fr.f4ioz.satcombo.cat.Postes.avecIc705(m) &&
+            !fr.f4ioz.satcombo.cat.Postes.avecIc705(ui.rigModel)) avertirIc705 = true
     }
     if (avertirIc705) AvertissementIc705 { avertirIc705 = false }
 }

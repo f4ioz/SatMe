@@ -37,7 +37,7 @@ Amateur radio satellite tracking for Android — passes, pointing, Doppler, logg
 
 ### Rig control and Doppler
 - RX and TX Doppler correction, linear transponders (inverting or not) and FM, with a calibration kept per satellite.
-- CAT: Icom IC-9700 in satellite mode, Kenwood TH-D72 in full duplex with its own panel, two Yaesu FT-817, FT-817 + IC-705, or an FT-817 transmitting while an RTL-SDR dongle receives.
+- CAT: Icom IC-9700 in satellite mode, Kenwood TH-D72 in full duplex with its own panel, a Yaesu FT-817 or Icom IC-705 on each side (two FT-817, two IC-705, or one of each), or one of them transmitting while an RTL-SDR dongle receives.
 - The rig is tuned before AOS, ready as the satellite rises. A USB knob or keypad can drive it, its keys learned by pressing them.
 - QO-100: the geostationary narrowband transponder with your converters, and the error of each oscillator measured against a reference.
 
@@ -63,7 +63,7 @@ French and English. Controls readable by screen readers.
 
 | Type | Models |
 |---|---|
-| Radios | Icom IC-9700 · Kenwood TH-D72 (FM, full duplex) · pair of Yaesu FT-817 · FT-817 + Icom IC-705¹ · FT-817 + SDR dongle |
+| Radios | Icom IC-9700 · Kenwood TH-D72 (FM, full duplex) · Yaesu FT-817 or Icom IC-705¹ on each side · FT-817 or IC-705¹ + SDR dongle |
 | APRS | KISS radio over USB: Kenwood TH-D72 (tried); other KISS TNCs on a USB serial line¹ · Yaesu FT3D: stations it decodes (positions, WAY.P output) |
 | SDR | RTL2832U |
 | Compass | WitMotion WT901BLE, WT9011DCL-BT50 |

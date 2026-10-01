@@ -37,7 +37,7 @@ Poursuite de satellites radioamateurs sur Android — passages, pointage, Dopple
 
 ### Poste et Doppler
 - Correction Doppler en réception et en émission, transpondeurs linéaires (inverseurs ou non) et FM, avec un calibrage mémorisé par satellite.
-- CAT : Icom IC-9700 en mode satellite, Kenwood TH-D72 en full duplex avec son pupitre, deux Yaesu FT-817, FT-817 + IC-705, ou un FT-817 en émission pendant qu'une clé RTL-SDR reçoit.
+- CAT : Icom IC-9700 en mode satellite, Kenwood TH-D72 en full duplex avec son pupitre, un Yaesu FT-817 ou un Icom IC-705 de chaque côté (deux FT-817, deux IC-705 ou un de chaque), ou l'un d'eux en émission pendant qu'une clé RTL-SDR reçoit.
 - Le poste est réglé avant l'AOS, prêt dès le lever du satellite. Une molette ou un clavier USB peut le piloter, ses touches apprises en les pressant.
 - QO-100 : le transpondeur géostationnaire à bande étroite avec vos convertisseurs, et l'erreur de chaque oscillateur mesurée sur une référence.
 
@@ -63,7 +63,7 @@ Français et anglais. Commandes lisibles par les lecteurs d'écran.
 
 | Type | Modèles |
 |---|---|
-| Postes | Icom IC-9700 · Kenwood TH-D72 (FM, full duplex) · paire de Yaesu FT-817 · FT-817 + Icom IC-705¹ · FT-817 + clé SDR |
+| Postes | Icom IC-9700 · Kenwood TH-D72 (FM, full duplex) · Yaesu FT-817 ou Icom IC-705¹ de chaque côté · FT-817 ou IC-705¹ + clé SDR |
 | APRS | Poste KISS en USB : Kenwood TH-D72 (essayé) ; autres TNC KISS sur une ligne série USB¹ · Yaesu FT3D : les stations qu'il décode (positions, sortie WAY.P) |
 | SDR | RTL2832U |
 | Boussole | WitMotion WT901BLE, WT9011DCL-BT50 |

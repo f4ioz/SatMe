@@ -438,9 +438,9 @@ internal fun DetailScreen(ui: UiState, vm: MainViewModel, onBack: () -> Unit) {
                     MoniteurAudioCard(ui, vm)
                     // **Say why the waterfall is missing.** The SDR panel hides
                     // silently when the extension is off. Fine in general, but
-                    // an operator who chose "FT-817 + SDR dongle" expects a
+                    // an operator who chose a rig + SDR dongle expects a
                     // waterfall and would hunt for a fault. Only in that case.
-                    val recoitParCle = ui.rigModel == "FT817TX"
+                    val recoitParCle = fr.f4ioz.satcombo.cat.Postes.emetSeul(ui.rigModel)
                     val sdrOuvert = fr.f4ioz.satcombo.data.Extensions.SDR in ui.extensions
                     if (sdrOuvert) SdrInline(ui, vm)
                     if (recoitParCle && !sdrOuvert) {

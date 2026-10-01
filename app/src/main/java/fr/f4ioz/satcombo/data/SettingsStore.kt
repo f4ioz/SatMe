@@ -732,7 +732,7 @@ class SettingsStore(context: Context) {
         get() = prefs.getInt("notify_lead", 5)
         set(v) { prefs.edit().putInt("notify_lead", v).apply() }
 
-    /** Selected rig model: "IC9700" or "FT817x2" (dual FT-817 full duplex). */
+    /** Selected rig model: "IC9700", "THD72", or one of [fr.f4ioz.satcombo.cat.Postes.MODELES]. */
     var rigModel: String
         get() = prefs.getString("rig_model", "IC9700") ?: "IC9700"
         set(v) { prefs.edit().putString("rig_model", v).apply() }

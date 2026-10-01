@@ -304,11 +304,11 @@ fun SdrInline(ui: UiState, vm: MainViewModel) {
         }
     }
     // **Say the dongle is missing when it was expected.** Staying silent is
-    // right when the dongle has no role. But with "FT-817 + SDR dongle" the
+    // right when the dongle has no role. But with "FT-817 or IC-705 + SDR dongle" the
     // operator expects a waterfall, and its absence looks like a software bug
     // when it's a cable. Name the missing condition.
     if (!present && !st.running) {
-        if (ui.rigModel == "FT817TX") {
+        if (fr.f4ioz.satcombo.cat.Postes.emetSeul(ui.rigModel)) {
             Text(t("sdr_absente"), color = Amber, fontSize = 11.sp,
                 modifier = Modifier.padding(bottom = 8.dp))
         }

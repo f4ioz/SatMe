@@ -115,4 +115,34 @@ object CatBench {
             hzMontee == uplinkHz && tonMontee == toneTenthHz
         return Report(steps, refusals, ok)
     }
+
+    /**
+     * Two IC-705s, one per cable: same protocol on both sides, so the
+     * downlink must land on the receiving one and the uplink with its tone on
+     * the other, with no refusal from either.
+     */
+    suspend fun runIc705Pair(
+        rxSim: Ic705Sim = Ic705Sim(),
+        txSim: Ic705Sim = Ic705Sim(),
+        downlinkHz: Long = 145_800_000L,
+        uplinkHz: Long = 437_800_000L,
+        toneTenthHz: Int = 670
+    ): Report {
+        val pair = Ft817Pair()
+        pair.configure(rxIc705 = true, txIc705 = true)
+        pair.attach(rxSim, txSim)
+        pair.pacingMs = 0L
+        val steps = ArrayList<String>()
+
+        pair.setModes("FM", "FM"); steps += "modes FM / FM"
+        pair.setPair(downlinkHz, uplinkHz); steps += t("catb_pair")
+        val back = pair.readDownlink()
+        steps += tf("catb_readback", back?.let { "%.5f MHz".format(java.util.Locale.US, it / 1e6) } ?: t("catb_no_reply"))
+        pair.setCtcss(toneTenthHz); steps += tf("catb_tone", "%.1f".format(java.util.Locale.US, toneTenthHz / 10.0))
+
+        val refusals = rxSim.refusals + txSim.refusals
+        val ok = refusals == 0 && back == downlinkHz && rxSim.hz == downlinkHz &&
+            txSim.hz == uplinkHz && txSim.toneTenthHz == toneTenthHz
+        return Report(steps, refusals, ok)
+    }
 }

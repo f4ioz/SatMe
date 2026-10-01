@@ -1047,21 +1047,21 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private var rotorDriver: fr.f4ioz.satcombo.rotor.RotorDriver? = null
     /** Control goes through the FT-817 pair — two rigs, or one for TX only. */
     private val isPairRig: Boolean
-        get() = _ui.value.rigModel in setOf("FT817x2", "FT817TX", FT817_IC705, IC705_FT817, THD72)
+        get() = _ui.value.rigModel in fr.f4ioz.satcombo.cat.Postes.MODELES || _ui.value.rigModel == THD72
 
     /** The pair is a TH-D72: its two bands on one cable. */
     private val isThd72: Boolean get() = _ui.value.rigModel == THD72
 
     /** FT-817 + IC-705: the pair whose two rigs speak different protocols. */
     private val isPaireMixte: Boolean
-        get() = _ui.value.rigModel == FT817_IC705 || _ui.value.rigModel == IC705_FT817
+        get() = fr.f4ioz.satcombo.cat.Postes.mixte(_ui.value.rigModel)
 
     /** Gives each side of the pair its protocol, from the rig model. */
     private fun configurePaire() {
         if (isThd72) ft817.configureThd72(settings.thd72BandeTx)
         else ft817.configure(
-            rxIc705 = _ui.value.rigModel == FT817_IC705,
-            txIc705 = _ui.value.rigModel == IC705_FT817)
+            rxIc705 = fr.f4ioz.satcombo.cat.Postes.rxIc705(_ui.value.rigModel),
+            txIc705 = fr.f4ioz.satcombo.cat.Postes.txIc705(_ui.value.rigModel))
     }
 
     /**
@@ -1078,15 +1078,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * A single FT-817 on TX, receiving on the SDR dongle.
+     * A single rig on TX (FT-817 or IC-705), receiving on the SDR dongle.
      *
      * The loop already knows how to drive one chain when the other is out of
      * reach (that is how QO-100 works). `descenteAuPoste` answers no by
      * construction, so the listening point picked on the waterfall drives TX:
-     * tuning is done by finger on the spectrum and the 817 mirrors it —
+     * tuning is done by finger on the spectrum and the rig mirrors it —
      * reversed on an inverting transponder.
      */
-    private val isTxOnlyRig: Boolean get() = _ui.value.rigModel == "FT817TX"
+    private val isTxOnlyRig: Boolean get() = fr.f4ioz.satcombo.cat.Postes.emetSeul(_ui.value.rigModel)
     private val satConfigStore = SatConfigStore(app)
     private val skedRepo = SkedRepository()
     private val potaRepo = PotaRepository(app)
@@ -7064,6 +7064,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     _ui.value.rigModel == FT817_IC705 -> fr.f4ioz.satcombo.cat.CatBench.runFt817Ic705()
                     _ui.value.rigModel == IC705_FT817 ->
                         fr.f4ioz.satcombo.cat.CatBench.runFt817Ic705(ic705Emet = true)
+                    _ui.value.rigModel == fr.f4ioz.satcombo.cat.Postes.IC705_X2 ->
+                        fr.f4ioz.satcombo.cat.CatBench.runIc705Pair()
+                    _ui.value.rigModel == fr.f4ioz.satcombo.cat.Postes.IC705_TX ->
+                        fr.f4ioz.satcombo.cat.CatBench.runFt817Ic705(ic705Emet = true)
                     isPairRig -> fr.f4ioz.satcombo.cat.CatBench.runFt817Pair()
                     else -> fr.f4ioz.satcombo.cat.CatBench.runIc9700()
                 }
@@ -7138,10 +7142,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             configurePaire()
             // Each side gets the simulator of the rig it stands for.
             val r: fr.f4ioz.satcombo.cat.SerialLink =
-                if (_ui.value.rigModel == FT817_IC705) fr.f4ioz.satcombo.cat.Ic705Sim()
+                if (fr.f4ioz.satcombo.cat.Postes.rxIc705(_ui.value.rigModel)) fr.f4ioz.satcombo.cat.Ic705Sim()
                 else fr.f4ioz.satcombo.cat.Ft817Sim()
             val x: fr.f4ioz.satcombo.cat.SerialLink =
-                if (_ui.value.rigModel == IC705_FT817) fr.f4ioz.satcombo.cat.Ic705Sim()
+                if (fr.f4ioz.satcombo.cat.Postes.txIc705(_ui.value.rigModel)) fr.f4ioz.satcombo.cat.Ic705Sim()
                 else fr.f4ioz.satcombo.cat.Ft817Sim()
             ft817Sims = r to x
             ft817.rx.attach(r)
