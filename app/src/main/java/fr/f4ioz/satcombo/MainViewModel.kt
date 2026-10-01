@@ -1335,7 +1335,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             fr.f4ioz.satcombo.aprs.AprsHub.evenements.collect { runCatching { aprsFete(it) } }
         }
         viewModelScope.launch {
-            while (true) { runCatching { aprsBaliseTic() }; delay(10_000) }
+            while (true) { runCatching { aprsBaliseTic() }; runCatching { aprsKissTic() }; delay(10_000) }
         }
         // --- control desk ---
         // The only gestures a PC can trigger are placed here; the server can
@@ -4570,15 +4570,71 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun aprsKissCle(): String = settings.aprsKissCle
     fun aprsKissVitesse(): Int = settings.aprsKissVitesse
 
+    /**
+     * Connects and switches straight to KISS, tuned as chosen: without KISS
+     * the radio decodes for itself and nothing reaches the phone.
+     */
     fun kissConnecte(cle: String, vitesse: Int) {
         settings.aprsKissCle = cle
         settings.aprsKissVitesse = vitesse
         viewModelScope.launch {
-            fr.f4ioz.satcombo.aprs.TncKiss.connecte(getApplication(), cle, vitesse)
+            if (fr.f4ioz.satcombo.aprs.TncKiss.connecte(getApplication(), cle, vitesse)) {
+                fr.f4ioz.satcombo.aprs.TncKiss.passeEnKiss(aprsKissFrequenceVoulue())
+                aprsKissChangeMs = System.currentTimeMillis()
+            }
         }
     }
 
-    fun kissPasseEnKiss() { viewModelScope.launch { fr.f4ioz.satcombo.aprs.TncKiss.passeEnKiss() } }
+    fun kissPasseEnKiss() {
+        viewModelScope.launch { fr.f4ioz.satcombo.aprs.TncKiss.passeEnKiss(aprsKissFrequenceVoulue()) }
+    }
+
+    fun aprsKissFrequence(): String = settings.aprsKissFrequence
+    /** A new choice is applied at once when the radio is connected. */
+    fun setAprsKissFrequence(v: String) {
+        settings.aprsKissFrequence = v
+        val hz = aprsKissFrequenceVoulue() ?: return
+        if (!fr.f4ioz.satcombo.aprs.TncKiss.etat.value.connecte) return
+        viewModelScope.launch {
+            fr.f4ioz.satcombo.aprs.TncKiss.regleFrequence(hz)
+            aprsKissChangeMs = System.currentTimeMillis()
+        }
+    }
+
+    /** The ISS is up, or rises within a minute. */
+    private fun issEnVue(): Boolean {
+        val sat = iss() ?: return false
+        val obs = _ui.value.observer ?: return false
+        val now = System.currentTimeMillis()
+        return listOf(now, now + 60_000L).any {
+            (runCatching { predictor.positionAt(sat, obs, it).elevationDeg }.getOrNull() ?: -90.0) > 0.0
+        }
+    }
+
+    /** Where the KISS radio should be now, or null to leave it. */
+    private fun aprsKissFrequenceVoulue(): Long? = when (settings.aprsKissFrequence) {
+        "144800" -> 144_800_000L
+        "145825" -> 145_825_000L
+        "AUTO" -> if (issEnVue()) 145_825_000L else 144_800_000L
+        else -> null
+    }
+
+    private var aprsKissChangeMs = 0L
+
+    /**
+     * Automatic frequency: 145.825 MHz while the ISS is up, 144.800 MHz
+     * otherwise. A switch costs some 5 s of deafness, so at most one a minute.
+     */
+    private suspend fun aprsKissTic() {
+        if (settings.aprsMode != "KISS" || settings.aprsKissFrequence != "AUTO") return
+        val k = fr.f4ioz.satcombo.aprs.TncKiss.etat.value
+        if (!k.connecte || !k.initialise || k.frequenceHz == null) return
+        val hz = aprsKissFrequenceVoulue() ?: return
+        if (k.frequenceHz == hz) return
+        if (System.currentTimeMillis() - aprsKissChangeMs < 60_000L) return
+        aprsKissChangeMs = System.currentTimeMillis()
+        fr.f4ioz.satcombo.aprs.TncKiss.regleFrequence(hz)
+    }
 
     fun kissDeconnecte() {
         viewModelScope.launch(Dispatchers.IO) { fr.f4ioz.satcombo.aprs.TncKiss.deconnecte() }
@@ -4594,9 +4650,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             if (!fr.f4ioz.satcombo.aprs.TncKiss.etat.value.connecte) {
                 aprsEnvoi.value = t("aprs_kiss_non_connecte"); return@launch
             }
-            if (!frequenceConfirmee) { aprsEnvoi.value = t("aprs_kiss_confirmer"); return@launch }
-            // Frequency read before KISS (TH-D72 "FO"), when there is one: it must be right too.
+            // Frequency read (or set) before KISS (TH-D72 "FO"), when there is one: it must be right too.
             val lue = fr.f4ioz.satcombo.aprs.TncKiss.etat.value.frequenceHz
+            // Set by SatMe itself on an APRS frequency: no need for the operator to vouch for it.
+            val connue = lue != null && fr.f4ioz.satcombo.aprs.AprsEmission.FENETRES.any { lue in it }
+            if (!frequenceConfirmee && !connue) { aprsEnvoi.value = t("aprs_kiss_confirmer"); return@launch }
             val raison = fr.f4ioz.satcombo.aprs.AprsEmission.refus(trame.source.indicatif,
                 System.currentTimeMillis(), aprsDerniereMs, lue ?: 145_825_000L, 0x05, false, false)
             if (raison != null) {

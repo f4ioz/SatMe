@@ -389,7 +389,8 @@ internal fun OngletMessages(ui: UiState, vm: MainViewModel, paquets: List<Paquet
     var chemin by rememberSaveable { mutableStateOf("ARISS") }
     val cheminListe = if (chemin == "ARISS") listOf("ARISS") else listOf("WIDE2-1")
     val kiss by fr.f4ioz.satcombo.aprs.TncKiss.etat.collectAsState()
-    val peutEmettre = moi.isNotBlank() && mode != "FT3D" && (mode != "KISS" || (kiss.connecte && frequenceOk))
+    val connue = kiss.frequenceHz?.let { hz -> AprsEmission.FENETRES.any { hz in it } } == true
+    val peutEmettre = moi.isNotBlank() && mode != "FT3D" && (mode != "KISS" || (kiss.connecte && (frequenceOk || connue)))
     fun envoie(dest: String, texte: String, avecNumero: Boolean = true) {
         val info = AprsEmission.message(dest, texte, if (avecNumero) vm.aprsNumeroSuivant() else null)
         vm.aprsEmetSelonMode(AprsEmission.trame(moi, cheminListe, info), frequenceOk)
@@ -425,7 +426,7 @@ internal fun OngletMessages(ui: UiState, vm: MainViewModel, paquets: List<Paquet
                     Puce(chemin == "ARISS", t("aprs_tx_chemin_iss")) { chemin = "ARISS" }
                     Puce(chemin == "WIDE", t("aprs_tx_chemin_terre")) { chemin = "WIDE" }
                 }
-                if (mode == "KISS") ConfirmeFrequenceKiss(frequenceOk, onFrequenceOk)
+                if (mode == "KISS" && !connue) ConfirmeFrequenceKiss(frequenceOk, onFrequenceOk)
                 if (moi.isBlank()) Text(t("aprs_tx_sans_indicatif"), color = Amber, fontSize = 11.sp)
                 if (mode == "FT3D") Text(t("aprs_ft3d_tx"), color = Amber, fontSize = 11.sp)
                 if (resultat.isNotBlank()) Text(resultat, color = TextHi, fontSize = 12.sp)

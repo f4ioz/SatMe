@@ -438,8 +438,10 @@ private fun CarteEmission(ui: UiState, vm: MainViewModel, mode: String,
                 }
             }
             Spacer(Modifier.height(6.dp))
-            if (par == "KISS") ConfirmeFrequenceKiss(frequenceOk, onFrequenceOk)
-            Button(enabled = apercu != null && source.isNotBlank() && (par == "CAT" || (kiss.connecte && frequenceOk)),
+            // Set by SatMe on an APRS frequency: nothing to vouch for.
+            val connue = kiss.frequenceHz?.let { hz -> fr.f4ioz.satcombo.aprs.AprsEmission.FENETRES.any { hz in it } } == true
+            if (par == "KISS" && !connue) ConfirmeFrequenceKiss(frequenceOk, onFrequenceOk)
+            Button(enabled = apercu != null && source.isNotBlank() && (par == "CAT" || (kiss.connecte && (frequenceOk || connue))),
                 onClick = {
                     trame()?.let { if (par == "KISS") vm.aprsEmetKiss(it, frequenceOk) else vm.aprsEmet(it) }
                 },
@@ -481,15 +483,31 @@ private fun CarteTnc(vm: MainViewModel) {
     var cle by remember { mutableStateOf(vm.aprsKissCle()) }
     var vitesse by remember { mutableStateOf(vm.aprsKissVitesse()) }
     var aide by remember { mutableStateOf(false) }
+    var frequence by remember { mutableStateOf(vm.aprsKissFrequence()) }
     Surface(color = SpaceCard, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp)) {
             Text(t("aprs_reception"), color = TextHi, fontWeight = FontWeight.Bold)
             Text(t("aprs_kiss_desc"), color = TextLo, fontSize = 11.sp)
             Spacer(Modifier.height(8.dp))
+            // Where SatMe tunes the radio (Kenwood): set before KISS, changed by itself in Auto.
+            Text(t("aprs_kiss_freq_titre"), color = TextHi, fontSize = 13.sp)
+            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                listOf("AUTO" to t("aprs_kiss_freq_auto"), "144800" to "144,800", "145825" to "145,825",
+                    "POSTE" to t("aprs_kiss_freq_poste")).forEach { (c, n) ->
+                    FilterChip(selected = frequence == c, onClick = { frequence = c; vm.setAprsKissFrequence(c) },
+                        label = { Text(n, fontSize = 12.sp) },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = Cyan.copy(alpha = 0.2f), selectedLabelColor = Cyan))
+                }
+            }
+            Text(when (frequence) { "AUTO" -> t("aprs_kiss_freq_auto_desc"); "POSTE" -> t("aprs_kiss_freq_poste_desc")
+                    else -> t("aprs_kiss_freq_fixe_desc") }, color = TextLo, fontSize = 11.sp)
+            Spacer(Modifier.height(8.dp))
             if (etat.connecte) {
                 Text(tf("aprs_kiss_connecte", etat.nom, etat.vitesse, etat.recues, etat.envoyees),
                     color = Aurora, fontSize = 12.sp)
                 if (etat.initialise) Text(t("aprs_kiss_init_envoye"), color = TextLo, fontSize = 11.sp)
+                else Text(t("aprs_kiss_pas_en_kiss"), color = Amber, fontSize = 11.sp)
                 etat.frequenceHz?.let { hz ->
                     Text(tf("aprs_kiss_frequence_lue", "%.4f".format(java.util.Locale.US, hz / 1e6),
                         if (etat.bande == 1) "B" else "A"), color = TextHi, fontSize = 12.sp)

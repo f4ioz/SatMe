@@ -142,6 +142,14 @@ class SettingsStore(context: Context) {
         get() = prefs.getInt("aprs_numero", 0)
         set(v) { prefs.edit().putInt("aprs_numero", v).apply() }
 
+    /**
+     * What SatMe tunes a Kenwood KISS radio to: "AUTO" (145.825 during ISS
+     * passes, 144.800 otherwise), "144800", "145825", or "POSTE" (left alone).
+     */
+    var aprsKissFrequence: String
+        get() = prefs.getString("aprs_kiss_frequence", "AUTO") ?: "AUTO"
+        set(v) { prefs.edit().putString("aprs_kiss_frequence", v).apply() }
+
     /** One position sent by itself as the ISS rises (off unless switched on: it transmits). */
     var aprsBaliseIss: Boolean
         get() = prefs.getBoolean("aprs_balise_iss", false)

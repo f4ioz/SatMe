@@ -140,19 +140,30 @@ object TncKiss {
     /**
      * Puts the radio in KISS, whatever state it is in (checked on a TH-D72):
      * - normal mode (a CR gets "?"): reads the band in use (BC) and its
-     *   frequency (FO), starts the TNC in packet mode on that band (TN 2,b),
-     *   then KISS ON / RESTART;
+     *   frequency (FO) — and tunes it to [frequenceHz] for APRS (FM,
+     *   simplex, no tone) when given — starts the TNC in packet mode on that
+     *   band (TN 2,b), then KISS ON / RESTART;
      * - TNC in packet mode ("cmd:"): KISS ON / RESTART;
      * - silence: already in KISS.
      * Nothing here makes the radio transmit.
      */
-    suspend fun passeEnKiss(): Boolean = withContext(Dispatchers.IO) {
+    suspend fun passeEnKiss(frequenceHz: Long? = null): Boolean = withContext(Dispatchers.IO) {
         val l = lien ?: return@withContext false
         val r = commande(l, "\r", 1500) { it.contains("?") || it.contains("cmd:") }
         if (r != null && !r.contains("cmd:")) {
             val bande = commande(l, "BC\r", 1000) { it.contains("BC ") }
                 ?.let { Regex("BC (\\d)").find(it)?.groupValues?.get(1)?.toIntOrNull() } ?: 0
-            val hz = commande(l, "FO $bande\r", 1000) { Kiss.frequenceFo(it) != null }?.let { Kiss.frequenceFo(it) }
+            // The whole line, up to its CR: the radio's answer may come in several pieces.
+            fun ligneFo(t: String) = Regex("FO [^\r]*\r").find(t)?.value?.trim()
+            val fo = commande(l, "FO $bande\r", 1000) { ligneFo(it) != null }?.let(::ligneFo)
+            var hz = fo?.let { Kiss.frequenceFo(it) }
+            val champs = fr.f4ioz.satcombo.cat.Thd72.champs(fo, bande)
+            if (frequenceHz != null && champs != null && hz != frequenceHz) {
+                val cmd = fr.f4ioz.satcombo.cat.Thd72.commande(fr.f4ioz.satcombo.cat.Thd72.pourAprs(champs, frequenceHz))
+                // The radio answers the new state, or "N" when it refuses.
+                commande(l, cmd + "\r", 1500) { ligneFo(it) != null || it.contains("N\r") }
+                    ?.let(::ligneFo)?.let { Kiss.frequenceFo(it) }?.let { hz = it }
+            }
             _etat.value = _etat.value.copy(frequenceHz = hz, bande = bande)
             if (commande(l, "TN 2,$bande\r", 6000) { it.contains("cmd:") } == null) {
                 _etat.value = _etat.value.copy(erreur = "tnc")
@@ -178,21 +189,42 @@ object TncKiss {
     }
 
     /**
-     * Closes the line. By default puts the radio back as it was (checked on a
-     * TH-D72): leaves KISS (the TNC returns to its "cmd:" prompt), gives
-     * control back to the radio ("TC 1"), switches the TNC off ("TN 0,b").
-     * Blocking for about a second: call it off the main thread.
+     * Back to the radio's normal mode (checked on a TH-D72): leaves KISS (the
+     * TNC returns to its "cmd:" prompt), gives control back to the radio
+     * ("TC 1"), switches the TNC off ("TN 0,b"). About a second, blocking.
      */
-    fun deconnecte(sortirDuKiss: Boolean = true) {
-        val l = lien ?: return
-        if (sortirDuKiss) runCatching {
+    private fun quitteKiss(l: SerialLink) {
+        runCatching {
             l.write(Kiss.SORTIE, 500)
             Thread.sleep(400)
             l.write("\rTC 1\r".toByteArray(Charsets.US_ASCII), 500)
             Thread.sleep(400)
             l.write("TN 0,${_etat.value.bande ?: 0}\r".toByteArray(Charsets.US_ASCII), 500)
-            Thread.sleep(200)
+            Thread.sleep(300)
         }
+        _etat.value = _etat.value.copy(initialise = false)
+    }
+
+    /**
+     * Moves a Kenwood radio already in KISS to [hz]: out of KISS, tuned, back
+     * in. Some 5 seconds without reception. Only for a radio whose frequency
+     * was read (a Kenwood answering "FO"): another TNC is left alone.
+     */
+    suspend fun regleFrequence(hz: Long): Boolean = withContext(Dispatchers.IO) {
+        val l = lien ?: return@withContext false
+        if (_etat.value.frequenceHz == null) return@withContext false
+        if (_etat.value.frequenceHz == hz && _etat.value.initialise) return@withContext true
+        quitteKiss(l)
+        passeEnKiss(hz) && _etat.value.frequenceHz == hz
+    }
+
+    /**
+     * Closes the line. By default puts the radio back as it was ([quitteKiss]).
+     * Blocking for about a second: call it off the main thread.
+     */
+    fun deconnecte(sortirDuKiss: Boolean = true) {
+        val l = lien ?: return
+        if (sortirDuKiss) quitteKiss(l)
         lien = null
         runCatching { l.close() }
         lecteur = null

@@ -71,6 +71,19 @@ object Thd72 {
     }
 
     fun commande(c: List<String>): String = "FO " + c.joinToString(",")
+
+    /**
+     * The band set for APRS on [hz]: FM, simplex (no shift, no reverse), no
+     * tone. A step that does not land on [hz] is replaced by 5 kHz, which
+     * divides every APRS frequency (144.800, 145.825, 144.390…).
+     */
+    fun pourAprs(c: List<String>, hz: Long): List<String> = c.toMutableList().also {
+        if (hz % pas(c) != 0L) it[2] = "0"
+        it[1] = "%010d".format(hz)
+        it[3] = "0"; it[4] = "0"
+        it[5] = "0"; it[6] = "0"; it[7] = "0"
+        it[14] = "0"
+    }
 }
 
 /**
