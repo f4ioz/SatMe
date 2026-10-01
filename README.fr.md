@@ -25,28 +25,33 @@ Poursuite de satellites radioamateurs sur Android — passages, pointage, Dopple
 
 | | |
 |---|---|
-| **Passages** | Prévisions SGP4 hors ligne, AOS/LOS, élévation max, tracé polaire, alertes. Statut AMSAT et SatNOGS. |
+| **Passages** | Prévisions SGP4 hors ligne, AOS/LOS, élévation max, tracé polaire, alertes. Statut AMSAT et SatNOGS. Éléments orbitaux d'AMSAT, de CelesTrak et de SatNOGS, ou par un [serveur GP SatMe](https://github.com/f4ioz/SatMe-serveur). |
 | **Pointage** | Boussole du téléphone ou module Bluetooth WitMotion sur la flèche, calibrage guidé. Rotors GS-232 et rotctld. |
 | **Fréquences** | Correction Doppler RX/TX, transpondeurs linéaires et FM, pilotage CAT. QO-100. |
-| **Carnet** | Clavier d'indicatifs à une main, synchro Wavelog / Cloudlog, QRZ, LoTW, ADIF, QSL PDF. |
+| **Carnet** | Clavier d'indicatifs à une main, synchro Wavelog / Cloudlog, QRZ, LoTW, ADIF, QSL PDF. SatMe apparaît aussi comme une radio dans Wavelog / Cloudlog : satellite, mode et fréquences corrigées du Doppler remplis. |
+| **APRS** | Trames décodées pendant l'enregistrement (digipeater de l'ISS, 145,825 MHz) ou par un poste KISS. Émission par l'IC-9700 (CAT et sa carte son USB) ou par un poste KISS en USB : messages, position, statut, APRS Thursday (HOTG), accusés affichés. |
 | **Partage** | Page web en direct pour le public, écoute déportée entre deux téléphones. |
 | **Poste de commande** | Page servie par le téléphone, utilisée depuis un PC : saisie au clavier, cadran polaire, enregistrement. Voir l'[API v1](docs/API-v1.fr.md). |
-| **En plus** | Carte des carrés locator, photo QRV, SSTV, radiosondes, FT8/FT4. |
+| **En plus** | Carte des carrés locator, photo QRV, SSTV (aussi depuis un WAV, par exemple la carte SD du poste), radiosondes, FT8/FT4. |
 
 ## Matériel pris en charge
 
 | Type | Modèles |
 |---|---|
-| Postes | Icom IC-9700 · paire de Yaesu FT-817 · FT-817 + clé SDR |
+| Postes | Icom IC-9700 · Kenwood TH-D72 (FM, full duplex) · paire de Yaesu FT-817 · FT-817 + Icom IC-705¹ · FT-817 + clé SDR |
+| APRS | Poste KISS en USB : Kenwood TH-D72 (essayé) ; autres TNC KISS sur une ligne série USB¹ |
 | SDR | RTL2832U |
 | Boussole | WitMotion WT901BLE, WT9011DCL-BT50 |
 | Rotors | Yaesu GS-232 · Hamlib rotctld (réseau) |
 | Série USB | CP210x, FTDI, PL2303, CH340/341/9102, MCP2200/2221, CDC |
 | Divers | Cartes son USB · molette/clavier USB (touches apprises par appui) |
 
+¹ Écrit et testé au banc, pas encore essayé sur le matériel réel.
+
 ## Documentation
 
 - [API du poste de commande v1](docs/API-v1.fr.md) : protocole HTTP pour d'autres clients
+- [Serveur GP SatMe](https://github.com/f4ioz/SatMe-serveur) : relais d'éléments orbitaux (OMM/GP) pour SatMe, à installer sur un Raspberry Pi, un serveur Linux ou Proxmox
 - [Composants tiers](THIRD-PARTY.fr.md)
 - [Politique de confidentialité](docs/privacy-policy.html)
 
@@ -76,7 +81,9 @@ La signature de publication lit `keystore.properties` à la racine (non versionn
 - L'équipe Wavelog — Wavelog, fork de Cloudlog
 - IS0GRB — WebSDR QO-100 (référence de fréquence)
 - John Morris G4ANB — carrés locateurs Maidenhead
-- AMSAT et SatNOGS — état des satellites
+- AMSAT et SatNOGS — état des satellites ; SatNOGS DB — éléments orbitaux
+- Bob Bruninga WB4APR (SK) — APRS
+- Stephen Smith WA8LMF — CD de test des TNC (essais du décodeur APRS)
 - radio-club F6KMX
 
 73 de **F4IOZ**
