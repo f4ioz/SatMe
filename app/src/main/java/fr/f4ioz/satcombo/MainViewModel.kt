@@ -8581,6 +8581,41 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    fun pdfNbPassages(): Int = settings.pdfNbPassages
+
+    /** Names of the satellites that have selected passes, for the PDF question. */
+    fun satellitesSelectionnes(): List<String> {
+        val cats = _ui.value.selectedPassKeys.mapNotNull { it.substringBefore('@').toIntOrNull() }.toSet()
+        return _ui.value.satellites.filter { it.catalogNumber in cats }.map { it.name }.sorted()
+    }
+
+    /**
+     * The PDF of the selection with [nombre] coming passes for each selected
+     * satellite (0: only the passes ticked). Passes are looked for up to two
+     * weeks ahead; a satellite seldom up gives fewer.
+     */
+    fun exportSelectionPdf(nombre: Int, onReady: (android.net.Uri) -> Unit) {
+        settings.pdfNbPassages = nombre
+        if (nombre <= 0) { exportSelectedSheets(onReady); return }
+        val cats = _ui.value.selectedPassKeys.mapNotNull { it.substringBefore('@').toIntOrNull() }.toSet()
+        val sats = _ui.value.satellites.filter { it.catalogNumber in cats }
+        if (sats.isEmpty()) return
+        viewModelScope.launch {
+            val passes = withContext(Dispatchers.Default) {
+                val now = System.currentTimeMillis()
+                val obs = _ui.value.observer ?: locationProvider.defaultObserver
+                sats.flatMap { sat ->
+                    runCatching {
+                        predictor.upcomingPasses(sat, obs, fromMs = now - 20 * 60_000L,
+                            hours = 14 * 24, minElDeg = settings.minElevDeg.toDouble())
+                            .filter { it.losEpochMs > now }.take(nombre)
+                    }.getOrDefault(emptyList())
+                }.sortedBy { it.aosEpochMs }
+            }
+            if (passes.isNotEmpty()) buildSheets(passes, onReady)
+        }
+    }
+
     /**
      * Build a rich PDF from the SELECTED passes: one sheet per satellite that
      * has selected passes, showing its polar plot (from the earliest selected

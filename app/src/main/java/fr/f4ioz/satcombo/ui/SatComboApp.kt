@@ -920,28 +920,34 @@ private fun PassesScreen(ui: UiState, vm: MainViewModel) {
                             Text(t("none_sel"), color = TextLo, fontSize = 12.sp)
                         }
                         val enregistreFiches = rememberEnregistrer()
-                        TextButton(
-                            onClick = {
-                                vm.exportSelectedSheets { uri ->
-                                    enregistreFiches(nomDate("SatMe-fiches", "pdf"),
+                        // Save or share: first, how many coming passes per satellite.
+                        var demande by remember { mutableStateOf<String?>(null) }
+                        demande?.let { quoi ->
+                            QuestionPassagesPdf(vm.satellitesSelectionnes(), vm.pdfNbPassages(),
+                                onAnnule = { demande = null }) { n ->
+                                demande = null
+                                vm.exportSelectionPdf(n) { uri ->
+                                    if (quoi == "SAVE") enregistreFiches(nomDate("SatMe-fiches", "pdf"),
                                         "application/pdf", depuisUri(ctx, uri))
+                                    else {
+                                        val share = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                                            type = "application/pdf"
+                                            putExtra(android.content.Intent.EXTRA_STREAM, uri)
+                                            addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                        }
+                                        ctx.startActivity(android.content.Intent.createChooser(share, t("pdf_sheets")))
+                                    }
                                 }
-                            },
+                            }
+                        }
+                        TextButton(
+                            onClick = { demande = "SAVE" },
                             enabled = ui.selectedPassKeys.isNotEmpty()
                         ) {
                             Text(t("export_save"), color = Cyan, fontSize = 12.sp)
                         }
                         Button(
-                            onClick = {
-                                vm.exportSelectedSheets { uri ->
-                                    val share = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
-                                        type = "application/pdf"
-                                        putExtra(android.content.Intent.EXTRA_STREAM, uri)
-                                        addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                                    }
-                                    ctx.startActivity(android.content.Intent.createChooser(share, t("pdf_sheets")))
-                                }
-                            },
+                            onClick = { demande = "SHARE" },
                             enabled = ui.selectedPassKeys.isNotEmpty(),
                             colors = ButtonDefaults.buttonColors(containerColor = Cyan)
                         ) {
@@ -1445,4 +1451,35 @@ fun couleurStatut(st: fr.f4ioz.satcombo.data.AmsatStatus?): Color = when (st) {
     fr.f4ioz.satcombo.data.AmsatStatus.NOT_HEARD -> Magenta
     fr.f4ioz.satcombo.data.AmsatStatus.CONFLICT -> Color(0xFFFE6100)
     else -> TextLo.copy(alpha = 0.45f)
+}
+
+/**
+ * Before the PDF of the selection: how many coming passes for the selected
+ * satellite(s) — or only the passes ticked. The last answer is offered again.
+ */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@Composable
+private fun QuestionPassagesPdf(satellites: List<String>, dernier: Int, onAnnule: () -> Unit, onChoix: (Int) -> Unit) {
+    var n by remember { mutableStateOf(dernier) }
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onAnnule,
+        title = { Text(t("pdf_passages_titre")) },
+        text = {
+            Column {
+                Text(tf("pdf_passages_question", satellites.joinToString(", ")), fontSize = 13.sp)
+                Spacer(Modifier.height(8.dp))
+                androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    listOf(0, 1, 2, 3, 5, 10, 20).forEach { k ->
+                        androidx.compose.material3.FilterChip(selected = n == k, onClick = { n = k },
+                            label = { Text(if (k == 0) t("pdf_passages_coches") else "$k", fontSize = 12.sp) },
+                            colors = androidx.compose.material3.FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = Cyan.copy(alpha = 0.25f), selectedLabelColor = Cyan))
+                    }
+                }
+                Text(if (n == 0) t("pdf_passages_coches_desc") else tf("pdf_passages_n_desc", n),
+                    color = TextLo, fontSize = 11.sp, modifier = Modifier.padding(top = 4.dp))
+            }
+        },
+        confirmButton = { TextButton(onClick = { onChoix(n) }) { Text(t("pdf_passages_creer"), color = Cyan) } },
+        dismissButton = { TextButton(onClick = onAnnule) { Text(t("cancel"), color = TextLo) } })
 }

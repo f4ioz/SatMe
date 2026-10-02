@@ -195,6 +195,11 @@ class SettingsStore(context: Context) {
         get() = prefs.getString("sstv_auto_tx", "") ?: ""
         set(v) { prefs.edit().putString("sstv_auto_tx", v).apply() }
 
+    /** PDF of the selection: how many coming passes per satellite (0 = only the passes ticked). */
+    var pdfNbPassages: Int
+        get() = prefs.getInt("pdf_nb_passages", 0)
+        set(v) { prefs.edit().putInt("pdf_nb_passages", v.coerceIn(0, 50)).apply() }
+
     /** One position sent by itself as the ISS rises (off unless switched on: it transmits). */
     var aprsBaliseIss: Boolean
         get() = prefs.getBoolean("aprs_balise_iss", false)
