@@ -16,6 +16,12 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.automirrored.filled.ViewList
+import androidx.compose.material.icons.filled.EmojiEvents
+import androidx.compose.material.icons.filled.Forum
+import androidx.compose.material.icons.filled.Map
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilterChip
@@ -75,11 +81,20 @@ fun AprsScreen(ui: UiState, vm: MainViewModel) {
     Column(Modifier.fillMaxSize()) {
         BanniereFete()
         BandeauAprs(ui, vm, mode, travail, st) { onglet = "REGLAGES" }
-        androidx.compose.material3.ScrollableTabRow(selectedTabIndex = ONGLETS.indexOf(onglet).coerceAtLeast(0),
-            containerColor = SpaceBg, contentColor = Cyan, edgePadding = 8.dp) {
+        // Six tabs that all fit: an icon and a short name each, no sideways scrolling.
+        androidx.compose.material3.TabRow(selectedTabIndex = ONGLETS.indexOf(onglet).coerceAtLeast(0),
+            containerColor = SpaceBg, contentColor = Cyan) {
             ONGLETS.forEach { o ->
+                // Content drawn here, without the tab's side padding that cut the names short.
                 androidx.compose.material3.Tab(selected = onglet == o, onClick = { onglet = o },
-                    text = { Text(t("aprs_onglet_" + o.lowercase()), fontSize = 13.sp) })
+                    selectedContentColor = Cyan, unselectedContentColor = TextLo) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.padding(vertical = 6.dp)) {
+                        androidx.compose.material3.Icon(ICONES.getValue(o), contentDescription = null,
+                            modifier = Modifier.size(22.dp))
+                        Text(t("aprs_onglet_" + o.lowercase()), fontSize = 10.sp, maxLines = 1, softWrap = false)
+                    }
+                }
             }
         }
         when (onglet) {
@@ -95,6 +110,15 @@ fun AprsScreen(ui: UiState, vm: MainViewModel) {
 }
 
 private val ONGLETS = listOf("CARTE", "MESSAGES", "EMETTRE", "PAQUETS", "TROPHEES", "REGLAGES")
+
+private val ICONES = mapOf(
+    "CARTE" to androidx.compose.material.icons.Icons.Default.Map,
+    "MESSAGES" to androidx.compose.material.icons.Icons.Default.Forum,
+    "EMETTRE" to androidx.compose.material.icons.Icons.AutoMirrored.Filled.Send,
+    "PAQUETS" to androidx.compose.material.icons.Icons.AutoMirrored.Filled.ViewList,
+    "TROPHEES" to androidx.compose.material.icons.Icons.Default.EmojiEvents,
+    "REGLAGES" to androidx.compose.material.icons.Icons.Default.Settings,
+)
 
 /** "Auto", "ISS · 145,825", "Terrestre · 144,800"… */
 private fun nomTravail(travail: String): String = when (travail) {
