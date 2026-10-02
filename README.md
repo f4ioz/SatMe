@@ -39,6 +39,7 @@ Amateur radio satellite tracking for Android — passes, pointing, Doppler, logg
 - **Automatic SSTV**: pick the ISS or a favourite satellite and its transmitter, tick once, and every pass is recorded and decoded by itself, from 10 s before AOS to 5 s after LOS, up to the pass you choose — even with the screen off.
 - **APRS (beta)**, a full page: map over OpenStreetMap, messages, APRS Thursday, trophies; on the ISS or on the terrestrial network (144.800 MHz); IC-9700, Kenwood TH-D72 over KISS, Yaesu FT3D.
 - **New rigs**: Kenwood TH-D72 in full duplex; a Yaesu FT-817 or an Icom IC-705 on each side, or with an SDR dongle.
+- **PDF of the selection**: choose how many coming passes of each selected satellite go into the PDF.
 - **ISS on time**: the freshest elements win across sources (never a prediction for later); short AMSAT names and AMSAT status whatever the source.
 
 Full guide in the **[wiki](https://github.com/f4ioz/SatMe/wiki)**.
@@ -48,6 +49,7 @@ Full guide in the **[wiki](https://github.com/f4ioz/SatMe/wiki)**.
 ### Passes and prediction
 - Offline SGP4/SDP4 predictions: AOS, LOS, maximum elevation, azimuths, duration, and a polar plot of every pass.
 - Alerts before AOS, and a pass added to the phone's calendar in one tap.
+- Printable PDF pass sheets: tick the satellites' passes, then choose how many coming passes of each to print (up to 20, two weeks ahead).
 - Live tracking: elevation, azimuth, Doppler and countdown, on a screen readable at arm's length.
 - Globe with ground tracks, timeline of the coming passes, and mutual skeds — the windows when a satellite is visible both from you and from another station.
 - AMSAT and SatNOGS status for each satellite, AMSAT report in a few taps; silent satellites kept out of the list. Satellites carry their short AMSAT name ("AO-07", "ISS") and their AMSAT status whatever the element source.

@@ -39,6 +39,7 @@ Poursuite de satellites radioamateurs sur Android — passages, pointage, Dopple
 - **SSTV automatique** : l'ISS ou un satellite favori et son transpondeur, une case à cocher, et chaque passage est enregistré et décodé tout seul, de 10 s avant le lever à 5 s après le coucher, jusqu'au passage choisi — même écran éteint.
 - **APRS (bêta)**, une page complète : carte OpenStreetMap, messages, APRS Thursday, trophées ; sur l'ISS ou en terrestre (144,800 MHz) ; IC-9700, Kenwood TH-D72 en KISS, Yaesu FT3D.
 - **Nouveaux postes** : Kenwood TH-D72 en full duplex ; un Yaesu FT-817 ou un Icom IC-705 de chaque côté, ou avec une clé SDR.
+- **PDF de la sélection** : choisis combien de prochains passages de chaque satellite sélectionné mettre dans le PDF.
 - **ISS à l'heure** : les éléments les plus frais l'emportent d'une source à l'autre (jamais une prévision pour plus tard) ; noms courts et statuts AMSAT quelle que soit la source.
 
 Guide complet dans le **[wiki](https://github.com/f4ioz/SatMe/wiki/Accueil)**.
@@ -48,6 +49,7 @@ Guide complet dans le **[wiki](https://github.com/f4ioz/SatMe/wiki/Accueil)**.
 ### Passages et prévisions
 - Prévisions SGP4/SDP4 hors ligne : AOS, LOS, élévation maximale, azimuts, durée, et un tracé polaire pour chaque passage.
 - Alerte avant l'AOS, et un passage ajouté à l'agenda du téléphone d'un appui.
+- Fiches de passages en PDF à imprimer : coche les passages des satellites, puis choisis combien de prochains passages de chacun imprimer (jusqu'à 20, sur deux semaines).
 - Suivi en direct : élévation, azimut, Doppler et compte à rebours, lisibles à bout de bras.
 - Globe avec les traces au sol, timeline des prochains passages, et skeds mutuels — les fenêtres où un satellite est visible à la fois chez vous et chez une autre station.
 - État AMSAT et SatNOGS de chaque satellite, rapport AMSAT en quelques appuis ; les satellites muets restent hors de la liste. Les satellites portent leur nom court AMSAT (« AO-07 », « ISS ») et leur statut AMSAT, quelle que soit la source des éléments.

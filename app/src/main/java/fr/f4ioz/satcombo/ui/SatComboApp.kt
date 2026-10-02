@@ -908,8 +908,9 @@ private fun PassesScreen(ui: UiState, vm: MainViewModel) {
                 val ctx = androidx.compose.ui.platform.LocalContext.current
                 Surface(color = Cyan.copy(alpha = 0.12f), shape = RoundedCornerShape(12.dp),
                     modifier = Modifier.fillMaxWidth()) {
-                    Row(Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically) {
+                    // Two lines: the French labels squeezed the PDF button to nothing on one.
+                    Column(Modifier.padding(horizontal = 12.dp, vertical = 6.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(tf("n_selected", ui.selectedPassKeys.size),
                             color = Cyan, fontSize = 13.sp, fontWeight = FontWeight.Bold)
                         Spacer(Modifier.weight(1f))
@@ -919,6 +920,9 @@ private fun PassesScreen(ui: UiState, vm: MainViewModel) {
                         TextButton(onClick = { vm.clearPassSelection() }) {
                             Text(t("none_sel"), color = TextLo, fontSize = 12.sp)
                         }
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Spacer(Modifier.weight(1f))
                         val enregistreFiches = rememberEnregistrer()
                         // Save or share: first, how many coming passes per satellite.
                         var demande by remember { mutableStateOf<String?>(null) }
@@ -955,6 +959,7 @@ private fun PassesScreen(ui: UiState, vm: MainViewModel) {
                             Spacer(Modifier.width(4.dp))
                             Text("PDF", color = Color(0xFF00201D), fontSize = 13.sp)
                         }
+                    }
                     }
                 }
             }
