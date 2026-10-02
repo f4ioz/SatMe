@@ -33,6 +33,14 @@ class SstvIssTest {
         assertEquals(2, SstvIss.fenetres(passes, 606_000L, 4 * h).size)
     }
 
+    @Test
+    fun le_passage_choisi_compte_meme_recalcule_quelques_secondes_plus_tard() {
+        // Chosen at its AOS 0; computed again, the same pass rises 3 s later.
+        val recalcules = passes.map { (it.first + 3_000L) to (it.second + 3_000L) }
+        assertEquals(1, SstvIss.fenetres(recalcules, -h, dernierAos = 0L).size)
+        assertEquals(2, SstvIss.fenetres(recalcules, -h, dernierAos = 2 * h).size)
+    }
+
     private fun tx(desc: String, mode: String?, dl: Long?) = Transmitter(desc, mode, null, null, dl, dl, false, true, "Transmitter")
 
     @Test

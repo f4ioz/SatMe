@@ -20,11 +20,20 @@ object SstvIss {
     const val APRES_MS = 5_000L
 
     /**
+     * The chosen pass is known by its AOS, but passes are computed again when
+     * the switch is ticked, and the AOS can come out a few seconds later: a
+     * strict comparison left the chosen pass out ("no coming pass" when it
+     * was the first). ISS passes are 90 minutes apart at least: 10 minutes
+     * cannot reach the next one.
+     */
+    const val MARGE_AOS_MS = 10 * 60_000L
+
+    /**
      * The recording windows for [passes] (AOS, LOS) not over yet at
      * [maintenant], up to the pass starting at [dernierAos] included.
      */
     fun fenetres(passes: List<Pair<Long, Long>>, maintenant: Long, dernierAos: Long): List<Pair<Long, Long>> =
-        passes.filter { it.first <= dernierAos && it.second + APRES_MS > maintenant }
+        passes.filter { it.first <= dernierAos + MARGE_AOS_MS && it.second + APRES_MS > maintenant }
             .sortedBy { it.first }
             .map { (it.first - AVANCE_MS) to (it.second + APRES_MS) }
 
