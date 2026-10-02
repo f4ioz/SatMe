@@ -5,6 +5,7 @@
 <p align="center">
 Amateur radio satellite tracking for Android — passes, pointing, Doppler, logging.<br>
 <a href="https://play.google.com/store/apps/details?id=fr.f4ioz.satcombo">Google Play</a> ·
+<a href="https://github.com/f4ioz/SatMe/wiki">Documentation (wiki)</a> ·
 <a href="README.fr.md">Français</a> ·
 <a href="docs/API-v1.md">API</a>
 </p>
@@ -20,6 +21,27 @@ Amateur radio satellite tracking for Android — passes, pointing, Doppler, logg
 <img src="docs/images/amsat-report.webp" width="24%" alt="AMSAT status report">
 <img src="docs/images/usb-knob.webp" width="24%" alt="USB knob">
 </p>
+<p align="center">
+<img src="docs/images/en-pass.webp" width="24%" alt="Pass page with Doppler">
+<img src="docs/images/en-cat-sides.webp" width="24%" alt="Choose your rigs">
+<img src="docs/images/en-sstv-auto.webp" width="24%" alt="Automatic ISS SSTV">
+<img src="docs/images/en-log.webp" width="24%" alt="Logbook">
+</p>
+<p align="center">
+<img src="docs/images/en-aprs-map.webp" width="24%" alt="APRS map">
+<img src="docs/images/en-aprs-hunt.webp" width="24%" alt="APRS station hunt">
+<img src="docs/images/en-aprs-messages.webp" width="24%" alt="APRS messages">
+<img src="docs/images/en-aprs-badges.webp" width="24%" alt="APRS trophies">
+</p>
+
+## What's new in 20.74
+
+- **Automatic ISS SSTV**: tick once, and every ISS pass is recorded and decoded by itself, from 10 s before AOS to 5 s after LOS, up to the pass you choose — even with the screen off.
+- **APRS (beta)**, a full page: map over OpenStreetMap, messages, APRS Thursday, trophies; on the ISS or on the terrestrial network (144.800 MHz); IC-9700, Kenwood TH-D72 over KISS, Yaesu FT3D.
+- **New rigs**: Kenwood TH-D72 in full duplex; a Yaesu FT-817 or an Icom IC-705 on each side, or with an SDR dongle.
+- **ISS on time**: the freshest elements win across sources (never a prediction for later); short AMSAT names and AMSAT status whatever the source.
+
+Full guide in the **[wiki](https://github.com/f4ioz/SatMe/wiki)**.
 
 ## Features
 
@@ -28,8 +50,8 @@ Amateur radio satellite tracking for Android — passes, pointing, Doppler, logg
 - Alerts before AOS, and a pass added to the phone's calendar in one tap.
 - Live tracking: elevation, azimuth, Doppler and countdown, on a screen readable at arm's length.
 - Globe with ground tracks, timeline of the coming passes, and mutual skeds — the windows when a satellite is visible both from you and from another station.
-- AMSAT and SatNOGS status for each satellite, AMSAT report in a few taps; silent satellites kept out of the list.
-- Orbital elements from AMSAT, CelesTrak and SatNOGS (about 1,700 satellites), or through a [SatMe GP server](https://github.com/f4ioz/SatMe-serveur); kept on the phone for use offline.
+- AMSAT and SatNOGS status for each satellite, AMSAT report in a few taps; silent satellites kept out of the list. Satellites carry their short AMSAT name ("AO-07", "ISS") and their AMSAT status whatever the element source.
+- Orbital elements from AMSAT, CelesTrak and SatNOGS (about 1,700 satellites), or through a [SatMe GP server](https://github.com/f4ioz/SatMe-serveur); kept on the phone for use offline. When sources disagree, the freshest elements for now win.
 
 ### Pointing
 - Phone compass with guided calibration, or a WitMotion Bluetooth module fixed on the antenna boom.
@@ -50,7 +72,7 @@ Amateur radio satellite tracking for Android — passes, pointing, Doppler, logg
 
 ### Recording and decoding
 - Every pass recorded to MP3 — phone microphone, Bluetooth hands-free or the rig's USB sound card — with a spoken header (satellite, UTC time, locator) and a copy in the folder of your choice.
-- SSTV decoded live while recording (Robot, Martin, Scottie, PD), or later from a recording or a WAV from the rig's SD card. An SSTV test card to send, with simulated fading to check a decoder.
+- SSTV decoded live while recording (Robot, Martin, Scottie, PD), or later from a recording or a WAV from the rig's SD card. Automatic ISS SSTV: the ISS and its SSTV transmitter picked, each pass recorded and decoded by itself up to the pass you choose, screen off included. An SSTV test card to send, with simulated fading to check a decoder.
 - APRS (beta): AFSK 1200 frames decoded while recording — the ISS digipeater on 145.825 MHz — or received through a KISS radio, and the stations a Yaesu FT3D decodes. Positions (Mic-E included), messages, status. Transmit through the IC-9700 or a KISS radio such as the Kenwood TH-D72: APRS Thursday (HOTG) ready, acks shown. Works on the ISS (145.825 MHz, Doppler tracked) or on the terrestrial network (144.800 MHz, WIDE1-1,WIDE2-1) — or both, the ISS during its passes and terrestrial the rest of the time. One "Listen" button sets the IC-9700 up over CAT; a Kenwood is switched to KISS and tuned by SatMe itself. Your position can go out approximate (a fixed offset under 500 m).
 - APRS for fun: when the ISS repeats your own frame, SatMe cheers (banner, buzz, notification) and tells who else was on that pass. A map over OpenStreetMap tiles (pinch and drag) with the stations heard, the ISS track, and each station linked to where the ISS was when it was heard. Messages as conversations, acked both ways, with one-tap APRS Thursday buttons and today's participants. Hunt a station with distance, course and an arrow that follows the phone. The day's tally as a picture to share, APRS contacts through the ISS straight into the log, records and 14 badges. Weather stations decoded, and an optional beacon as the ISS passes (off by default).
 - FT8 / FT4 decoding, weather radiosondes, and an RTL-SDR dongle with its spectrum.
@@ -78,6 +100,7 @@ French and English. Controls readable by screen readers.
 
 ## Documentation
 
+- **[SatMe wiki](https://github.com/f4ioz/SatMe/wiki)**: the full guide, step by step, with screenshots — installation, passes, CAT, recording, SSTV, APRS, logbook, FAQ
 - [Control desk API v1](docs/API-v1.md): HTTP protocol for third-party clients
 - [SatMe GP server](https://github.com/f4ioz/SatMe-serveur): relays orbital elements (OMM/GP) to SatMe, to install on a Raspberry Pi, a Linux server or Proxmox
 - [Third-party components](THIRD-PARTY.md)
