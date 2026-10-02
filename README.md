@@ -34,7 +34,7 @@ Amateur radio satellite tracking for Android — passes, pointing, Doppler, logg
 <img src="docs/images/en-aprs-badges.webp" width="24%" alt="APRS trophies">
 </p>
 
-## What's new in 20.74
+## What's new in 20.74 – 20.75
 
 - **Automatic SSTV**: pick the ISS or a favourite satellite and its transmitter, tick once, and every pass is recorded and decoded by itself, from 10 s before AOS to 5 s after LOS, up to the pass you choose — even with the screen off.
 - **APRS (beta)**, a full page: map over OpenStreetMap, messages, APRS Thursday, trophies; on the ISS or on the terrestrial network (144.800 MHz); IC-9700, Kenwood TH-D72 over KISS, Yaesu FT3D.

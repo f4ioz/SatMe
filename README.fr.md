@@ -34,7 +34,7 @@ Poursuite de satellites radioamateurs sur Android — passages, pointage, Dopple
 <img src="docs/images/fr-aprs-badges.webp" width="24%" alt="Trophées APRS">
 </p>
 
-## Nouveautés de la 20.74
+## Nouveautés des 20.74 et 20.75
 
 - **SSTV automatique** : l'ISS ou un satellite favori et son transpondeur, une case à cocher, et chaque passage est enregistré et décodé tout seul, de 10 s avant le lever à 5 s après le coucher, jusqu'au passage choisi — même écran éteint.
 - **APRS (bêta)**, une page complète : carte OpenStreetMap, messages, APRS Thursday, trophées ; sur l'ISS ou en terrestre (144,800 MHz) ; IC-9700, Kenwood TH-D72 en KISS, Yaesu FT3D.
