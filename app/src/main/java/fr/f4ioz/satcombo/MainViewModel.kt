@@ -1602,10 +1602,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         // only hit when the cache is stale, missing, from a different source
         // set, or the user forces a refresh. 0 h = always re-download.
         val ids = _ui.value.enabledSources
+        // The cache is tagged with what was downloaded (AMSAT's TLE with its
+        // JSON): a cache written before that companion existed is redone once.
+        val idsCache = Sources.aTelecharger(ids).map { it.id }.toSet()
         val maxAgeMs = settings.tleCacheHours * 3600_000L
         val age = tleCache.ageMs()
         val cacheFresh = age != null && maxAgeMs > 0 && age <= maxAgeMs &&
-            tleCache.cachedSources() == ids
+            tleCache.cachedSources() == idsCache
         if (!force && cacheFresh && _ui.value.satellites.isNotEmpty()) return
         viewModelScope.launch {
             _ui.value = _ui.value.copy(loading = true, error = null)
@@ -1626,14 +1629,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             if (sats.isEmpty()) {
                 sats = runCatching { repo.fetchGroupesSecours(groupes) }.getOrDefault(emptyList())
                 if (sats.isNotEmpty()) {
-                    tleCache.save(sats, ids)
+                    tleCache.save(sats, idsCache)
                 } else {
                     // Download failed: fall back to the cache whatever its age.
                     val raw = withContext(Dispatchers.IO) { tleCache.loadRaw() }
                     if (raw != null) {
                         sats = repo.parse(raw)
                         cacheAge = tleCache.ageMs()
-                        if (tleCache.cachedSources() != ids)
+                        if (tleCache.cachedSources() != idsCache)
                             err = t("offline_other_sources")
                     } else {
                         err = t("tle_download_failed")

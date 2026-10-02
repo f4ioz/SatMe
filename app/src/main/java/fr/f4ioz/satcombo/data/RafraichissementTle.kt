@@ -44,8 +44,9 @@ object RafraichissementTle {
     }
 
     /**
-     * Queries every address and keeps the most recent epoch. A source that
-     * fails does not stop the others.
+     * Queries every address and keeps the elements for now (most recent epoch
+     * not in the future, [TleRepository.prefere]). A source that fails does
+     * not stop the others.
      */
     fun plusRecent(catnum: Int, adresses: List<String>,
                    lire: (String) -> List<TleEntry>): Resultat {
@@ -54,8 +55,9 @@ object RafraichissementTle {
         for (u in adresses) {
             val lus = runCatching { lire(u) }.getOrNull() ?: continue
             repondu = true
-            val e = lus.firstOrNull { it.catalogNumber == catnum } ?: continue
-            if (meilleur == null || (e.epochMs ?: 0L) > (meilleur.epochMs ?: 0L)) meilleur = e
+            // Every set for this satellite: a file may hold several (SupGP segments).
+            for (e in lus.filter { it.catalogNumber == catnum })
+                meilleur = meilleur?.let { TleRepository.prefere(it, e) } ?: e
         }
         return when {
             meilleur != null -> Resultat.Trouve(meilleur)

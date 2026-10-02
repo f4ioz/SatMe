@@ -71,18 +71,38 @@ class TleRepository(
          * first source's elements put the ISS five minutes off with a
          * nine-day-old bulletin while a fresh one sat right next to it.
          */
-        fun fusionne(listes: List<List<TleEntry>>): List<TleEntry> {
+        fun fusionne(listes: List<List<TleEntry>>, maintenant: Long = System.currentTimeMillis()): List<TleEntry> {
             val vus = LinkedHashMap<Int, TleEntry>()
             for (liste in listes) for (e in liste) {
                 val avant = vus[e.catalogNumber]
                 if (avant == null) { vus[e.catalogNumber] = e; continue }
-                if ((e.epochMs ?: 0L) > (avant.epochMs ?: 0L)) {
+                if (prefere(avant, e, maintenant) === e) {
                     vus[e.catalogNumber] = e.copy(name = avant.name,
                         uplinkHz = avant.uplinkHz ?: e.uplinkHz, downlinkHz = avant.downlinkHz ?: e.downlinkHz,
                         mode = avant.mode ?: e.mode)
                 }
             }
             return vus.values.toList()
+        }
+
+        /** Elements dated more than an hour ahead are predictions for later (SupGP segments come every six hours). */
+        const val AVANCE_MAX_MS = 3_600_000L
+
+        /**
+         * Of two element sets for one satellite, the one for now: the most
+         * recent epoch **not in the future**. CelesTrak's SupGP gives the ISS
+         * as sixty six-hour segments reaching two weeks ahead; "most recent"
+         * picked the last one, valid in a fortnight, not today. When both are
+         * ahead, the nearest.
+         */
+        fun prefere(a: TleEntry, b: TleEntry, maintenant: Long = System.currentTimeMillis()): TleEntry {
+            val ea = a.epochMs ?: 0L; val eb = b.epochMs ?: 0L
+            val futurA = ea > maintenant + AVANCE_MAX_MS; val futurB = eb > maintenant + AVANCE_MAX_MS
+            return when {
+                futurA != futurB -> if (futurA) b else a
+                futurA -> if (eb < ea) b else a
+                else -> if (eb > ea) b else a
+            }
         }
     }
 

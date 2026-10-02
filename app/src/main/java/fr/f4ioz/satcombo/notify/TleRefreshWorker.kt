@@ -34,7 +34,7 @@ class TleRefreshWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker
         if (groupes.isEmpty()) return Result.success()
         val sats = runCatching { TleRepository().fetchGroupesSecours(groupes) }.getOrDefault(emptyList())
         if (sats.isNotEmpty()) {
-            TleCache(applicationContext).save(sats, ids)
+            TleCache(applicationContext).save(sats, Sources.aTelecharger(ids).map { it.id }.toSet())
             return Result.success()
         }
         return Result.retry()

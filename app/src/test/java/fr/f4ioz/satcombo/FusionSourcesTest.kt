@@ -42,6 +42,31 @@ class FusionSourcesTest {
         assertEquals(fraiche.line1, r.single().line1)
     }
 
+    // A SupGP segment for 15/10: a prediction for later, not the ISS of today.
+    private val futur = TleEntry("ISS [Segment 60]", "1 25544U 98067A   26288.25000000  .00003738  00000-0  76743-4 0  9993", l2)
+    private val maintenant = fraiche.epochMs!! + 3_600_000L
+
+    @Test
+    fun des_elements_du_futur_ne_l_emportent_pas() {
+        val r = TleRepository.fusionne(listOf(listOf(fraiche), listOf(futur)), maintenant)
+        assertEquals(fraiche.line1, r.single().line1)
+        // Even against older ones: the old set is for now, the future one is not.
+        assertEquals(ancienne.line1, TleRepository.fusionne(listOf(listOf(futur), listOf(ancienne)), maintenant).single().line1)
+    }
+
+    @Test
+    fun le_segment_supgp_en_cours_est_choisi() {
+        val segments = (0..20).map { k ->
+            val jour = 275.0 + k * 0.25   // every six hours from 02/10
+            TleEntry("ISS [Segment $k]", "1 25544U 98067A   26%012.8f  .00003738  00000-0  76743-4 0  9993".format(java.util.Locale.US, jour), l2)
+        }
+        val r = fr.f4ioz.satcombo.data.RafraichissementTle.plusRecent(25544, listOf("supgp")) { segments }
+        val e = (r as fr.f4ioz.satcombo.data.RafraichissementTle.Resultat.Trouve).entree.epochMs!!
+        // Not the last segment (07/10): one no further ahead than an hour.
+        assertTrue(e <= System.currentTimeMillis() + TleRepository.AVANCE_MAX_MS ||
+            segments.all { (it.epochMs ?: 0L) > System.currentTimeMillis() })
+    }
+
     @Test
     fun le_bulletin_tle_d_amsat_accompagne_son_json() {
         val s = Sources.aTelecharger(setOf("amsat_gp"))
