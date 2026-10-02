@@ -769,7 +769,7 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
                     Text(t("status_source_desc"),
                         color = TextLo, fontSize = 11.sp, modifier = Modifier.padding(bottom = 4.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        listOf("BOTH" to "Les deux", "AMSAT" to t("amsat_only"), "SATNOGS" to t("satnogs_only")).forEach { (id, label) ->
+                        listOf("BOTH" to t("both"), "AMSAT" to t("amsat_only"), "SATNOGS" to t("satnogs_only")).forEach { (id, label) ->
                             FilterChip(selected = ui.statusSource == id, onClick = { vm.setStatusSource(id) },
                                 label = { Text(label, fontSize = 12.sp) },
                                 colors = FilterChipDefaults.filterChipColors(

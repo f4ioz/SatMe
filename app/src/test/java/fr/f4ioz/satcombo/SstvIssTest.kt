@@ -44,6 +44,15 @@ class SstvIssTest {
     private fun tx(desc: String, mode: String?, dl: Long?) = Transmitter(desc, mode, null, null, dl, dl, false, true, "Transmitter")
 
     @Test
+    fun les_transpondeurs_proposes_sstv_d_abord() {
+        val liste = listOf(tx("Telemetry", "BPSK", 435_100_000L), tx("FM Voice", "FM", 145_900_000L),
+            tx("SSTV downlink", "FM", 145_800_000L), tx("Uplink only", "FM", null))
+        val c = SstvIss.candidats(liste)
+        assertEquals("SSTV downlink", c.first().description)
+        assertEquals(3, c.size)   // without a downlink, nothing to listen to
+    }
+
+    @Test
     fun le_transpondeur_sstv_de_l_iss() {
         val liste = listOf(tx("Mode V APRS", "AFSK", 145_825_000L), tx("FM Voice Repeater", "FM", 437_800_000L),
             tx("SSTV", "FM", 145_800_000L))

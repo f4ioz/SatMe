@@ -37,6 +37,18 @@ object SstvIss {
             .sortedBy { it.first }
             .map { (it.first - AVANCE_MS) to (it.second + APRES_MS) }
 
+    /** True for a transmitter that carries SSTV by its mode or its name. */
+    fun estSstv(t: Transmitter): Boolean =
+        t.mode.orEmpty().uppercase().contains("SSTV") || t.description.uppercase().contains("SSTV")
+
+    /**
+     * The transmitters to offer for automatic SSTV: those named SSTV first,
+     * then the others with a downlink (a satellite may send SSTV on a
+     * transmitter SatNOGS lists as plain FM).
+     */
+    fun candidats(liste: List<Transmitter>): List<Transmitter> =
+        liste.filter { it.downlinkLowHz != null }.sortedByDescending { estSstv(it) }
+
     /** The SSTV transmitter among [liste]: named SSTV, else the 145.800 MHz downlink. −1 if none. */
     fun indexSstv(liste: List<Transmitter>): Int {
         val i = liste.indexOfFirst {

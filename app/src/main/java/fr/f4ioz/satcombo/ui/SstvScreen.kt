@@ -551,24 +551,41 @@ private fun AideDecodageSstv(sstvActif: Boolean, onFerme: (Boolean) -> Unit) {
 
 
 /**
- * ISS SSTV on its own: the ISS and its SSTV transmitter chosen, each pass
- * recorded and decoded from 10 s before AOS to 5 s after LOS, up to the pass
- * chosen here. Unticked, the ISS gets back the transmitter it had.
+ * Automatic SSTV: a satellite chosen among the favourites (the ISS by
+ * default) and its transmitter, each pass recorded and decoded from 10 s
+ * before AOS to 5 s after LOS, up to the pass chosen here. Unticked, the
+ * satellite gets back the transmitter it had.
  */
 @Composable
 private fun CarteSstvIss(ui: fr.f4ioz.satcombo.UiState, vm: fr.f4ioz.satcombo.MainViewModel) {
     val fenetres by fr.f4ioz.satcombo.audio.RecorderService.fenetres.collectAsState()
     val message by vm.sstvIssMessage.collectAsState()
     val actif = fenetres.isNotEmpty()
-    val passages = remember(ui.nowMs / 60_000L, ui.satellites.size, ui.observer) { vm.sstvIssPassages() }
+    var catnum by rememberSaveable { mutableStateOf(vm.sstvAutoCatnum()) }
+    var tx by rememberSaveable { mutableStateOf(vm.sstvAutoTx()) }
+    val satellites = remember(ui.satellites, ui.favorites) { vm.sstvAutoSatellites() }
+    val sat = satellites.firstOrNull { it.catalogNumber == catnum }
+    // The chosen satellite's transmitters, SSTV ones first (fetched when it changes).
+    var transmetteurs by remember { mutableStateOf<List<fr.f4ioz.satcombo.data.Transmitter>>(emptyList()) }
+    LaunchedEffect(catnum) { transmetteurs = vm.sstvAutoTransmetteurs(catnum) }
+    // Shown as chosen: the one picked, else the one SatMe would take by itself.
+    val txAffiche = tx.takeIf { d -> transmetteurs.any { it.description == d } }
+        ?: transmetteurs.getOrNull(fr.f4ioz.satcombo.domain.SstvIss.indexSstv(transmetteurs))?.description
+    val passages = remember(ui.nowMs / 60_000L, ui.satellites.size, ui.observer, catnum) { vm.sstvIssPassages(catnum) }
     var dernier by rememberSaveable { mutableStateOf(0L) }
     val choisi = passages.firstOrNull { it.aosEpochMs == dernier } ?: passages.firstOrNull()
-    val hm = remember { java.text.SimpleDateFormat("EEE HH:mm", java.util.Locale.getDefault()) }
+    // Day names in the app language, not the phone's.
+    val hm = remember(fr.f4ioz.satcombo.i18n.I18n.current()) { java.text.SimpleDateFormat("EEE HH:mm", fr.f4ioz.satcombo.i18n.I18n.locale()) }
     // Arming starts a microphone service: the permission first, while the app is in front.
     val active = rememberDemarrageEnregistrement(ui) { choisi?.let { vm.sstvIssActive(it.aosEpochMs) } }
+    @Composable
+    fun Puce(choisie: Boolean, nom: String, onClic: () -> Unit) {
+        FilterChip(selected = choisie, onClick = onClic, label = { Text(nom, fontSize = 12.sp) },
+            colors = FilterChipDefaults.filterChipColors(selectedContainerColor = Cyan.copy(alpha = 0.2f), selectedLabelColor = Cyan))
+    }
     Surface(color = SpaceCard, shape = RoundedCornerShape(14.dp)) {
         Column(Modifier.fillMaxWidth().padding(14.dp)) {
-            Row(Modifier.fillMaxWidth().toggleable(value = actif, role = Role.Switch,
+            Row(Modifier.fillMaxWidth().toggleable(value = actif, role = Role.Switch, enabled = sat != null || actif,
                     onValueChange = { if (it) active() else vm.sstvIssDesactive() }),
                 verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
@@ -581,22 +598,48 @@ private fun CarteSstvIss(ui: fr.f4ioz.satcombo.UiState, vm: fr.f4ioz.satcombo.Ma
             if (actif) {
                 val prochain = fenetres.first()
                 val enCours = ui.nowMs >= prochain.first
+                Text((sat?.name ?: "") + (txAffiche?.let { " · $it" } ?: ""), color = TextHi, fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 6.dp))
                 Text(if (enCours) t("sstv_iss_en_cours")
                     else tf("sstv_iss_prochain", hm.format(java.util.Date(prochain.first + 10_000L))),
-                    color = Aurora, fontSize = 13.sp, modifier = Modifier.padding(top = 6.dp))
+                    color = Aurora, fontSize = 13.sp)
                 Text(tf("sstv_iss_jusqua", hm.format(java.util.Date(fenetres.last().first + 10_000L)), fenetres.size),
                     color = TextLo, fontSize = 12.sp)
                 Text(t("sstv_iss_garder_ouvert"), color = TextLo, fontSize = 11.sp, modifier = Modifier.padding(top = 4.dp))
             } else {
-                if (passages.isEmpty()) Text(t("sstv_iss_aucun"), color = Amber, fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp))
-                else {
+                Text(t("sstv_auto_satellite"), color = TextHi, fontSize = 13.sp, modifier = Modifier.padding(top = 8.dp))
+                if (satellites.isEmpty()) Text(t("sstv_auto_aucun_favori"), color = Amber, fontSize = 12.sp)
+                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    satellites.forEach { e ->
+                        Puce(catnum == e.catalogNumber, e.name) {
+                            if (catnum != e.catalogNumber) { catnum = e.catalogNumber; tx = ""; dernier = 0L; vm.setSstvAutoCatnum(e.catalogNumber) }
+                        }
+                    }
+                }
+                if (sat != null) {
+                    Text(t("sstv_auto_transpondeur"), color = TextHi, fontSize = 13.sp, modifier = Modifier.padding(top = 8.dp))
+                    if (transmetteurs.isEmpty()) Text(t("sstv_auto_transpondeurs_attente"), color = TextLo, fontSize = 12.sp)
+                    else {
+                        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            transmetteurs.forEach { x ->
+                                val mhz = x.downlinkLowHz?.let { "  %.3f".format(java.util.Locale.US, it / 1e6) } ?: ""
+                                Puce(txAffiche == x.description, (if (fr.f4ioz.satcombo.domain.SstvIss.estSstv(x)) "🖼 " else "") + x.description + mhz) {
+                                    tx = x.description; vm.setSstvAutoTx(x.description)
+                                }
+                            }
+                        }
+                        if (transmetteurs.none { fr.f4ioz.satcombo.domain.SstvIss.estSstv(it) })
+                            Text(t("sstv_auto_pas_de_sstv"), color = TextLo, fontSize = 11.sp)
+                    }
+                }
+                if (sat != null && passages.isEmpty()) Text(t("sstv_iss_aucun"), color = Amber, fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp))
+                else if (passages.isNotEmpty()) {
                     Text(t("sstv_iss_choisir"), color = TextHi, fontSize = 13.sp, modifier = Modifier.padding(top = 8.dp))
                     Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         passages.take(12).forEach { p ->
-                            FilterChip(selected = choisi?.aosEpochMs == p.aosEpochMs, onClick = { dernier = p.aosEpochMs },
-                                label = { Text(hm.format(java.util.Date(p.aosEpochMs)) + " · " + p.maxElevationDeg.toInt() + "°", fontSize = 12.sp) },
-                                colors = FilterChipDefaults.filterChipColors(
-                                    selectedContainerColor = Cyan.copy(alpha = 0.2f), selectedLabelColor = Cyan))
+                            Puce(choisi?.aosEpochMs == p.aosEpochMs, hm.format(java.util.Date(p.aosEpochMs)) + " · " + p.maxElevationDeg.toInt() + "°") {
+                                dernier = p.aosEpochMs
+                            }
                         }
                     }
                     choisi?.let { c ->

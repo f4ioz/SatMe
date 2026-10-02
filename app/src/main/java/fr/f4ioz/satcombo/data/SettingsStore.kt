@@ -175,10 +175,25 @@ class SettingsStore(context: Context) {
         get() = prefs.getBoolean("aprs_kiss_doppler", false)
         set(v) { prefs.edit().putBoolean("aprs_kiss_doppler", v).apply() }
 
-    /** The ISS transmitter chosen before SSTV ISS took over, to give back afterwards ("" when none). */
+    /**
+     * The transmitter the automatic SSTV satellite had before it took over,
+     * to give back afterwards ("" when none). Read with [sstvAutoCatnumAvant].
+     */
     var sstvIssTxAvant: String
         get() = prefs.getString("sstv_iss_tx_avant", "") ?: ""
         set(v) { prefs.edit().putString("sstv_iss_tx_avant", v).apply() }
+    /** Which satellite that transmitter belongs to (the ISS for settings saved before the choice existed). */
+    var sstvAutoCatnumAvant: Int
+        get() = prefs.getInt("sstv_auto_catnum_avant", 25544)
+        set(v) { prefs.edit().putInt("sstv_auto_catnum_avant", v).apply() }
+
+    /** Automatic SSTV: the satellite (NORAD number, the ISS by default) and its transmitter ("" = found by itself). */
+    var sstvAutoCatnum: Int
+        get() = prefs.getInt("sstv_auto_catnum", 25544)
+        set(v) { prefs.edit().putInt("sstv_auto_catnum", v).apply() }
+    var sstvAutoTx: String
+        get() = prefs.getString("sstv_auto_tx", "") ?: ""
+        set(v) { prefs.edit().putString("sstv_auto_tx", v).apply() }
 
     /** One position sent by itself as the ISS rises (off unless switched on: it transmits). */
     var aprsBaliseIss: Boolean
