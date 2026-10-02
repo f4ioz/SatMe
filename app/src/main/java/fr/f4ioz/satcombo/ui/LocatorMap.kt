@@ -357,7 +357,8 @@ private fun rememberPolysPath(resId: Int): Path? {
 
 // ---------- OSM tile loader (LRU, async) ----------
 
-private class TileStore(private val scope: CoroutineScope) {
+/** Map tiles, shared by the locator map and the APRS map. */
+internal class TileStore(private val scope: CoroutineScope) {
     val tiles = androidx.compose.runtime.mutableStateMapOf<String, ImageBitmap?>()
     private val order = ArrayDeque<String>()
     private val client = OkHttpClient()
@@ -376,7 +377,7 @@ private class TileStore(private val scope: CoroutineScope) {
         scope.launch(Dispatchers.IO) {
             val bmp = runCatching {
                 val req = Request.Builder().url(url)
-                    .header("User-Agent", "SatCombo/2.8 amateur-radio app (F4IOZ)")
+                    .header("User-Agent", fr.f4ioz.satcombo.data.TleRepository.USER_AGENT)
                     .build()
                 client.newCall(req).execute().use { r ->
                     if (!r.isSuccessful) null

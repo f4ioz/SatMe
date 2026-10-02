@@ -143,12 +143,37 @@ class SettingsStore(context: Context) {
         set(v) { prefs.edit().putInt("aprs_numero", v).apply() }
 
     /**
-     * What SatMe tunes a Kenwood KISS radio to: "AUTO" (145.825 during ISS
-     * passes, 144.800 otherwise), "144800", "145825", or "POSTE" (left alone).
+     * Where APRS works: "AUTO" (the ISS during its passes, terrestrial
+     * 144.800 otherwise), "ISS" (145.825), "TERRE" (144.800), or "POSTE"
+     * (a KISS radio left on its own frequency). Read from the old KISS key,
+     * whose "144800"/"145825" values mean the same.
      */
-    var aprsKissFrequence: String
-        get() = prefs.getString("aprs_kiss_frequence", "AUTO") ?: "AUTO"
+    var aprsTravail: String
+        get() = when (val v = prefs.getString("aprs_kiss_frequence", "AUTO") ?: "AUTO") {
+            "144800" -> "TERRE"; "145825" -> "ISS"; else -> v
+        }
         set(v) { prefs.edit().putString("aprs_kiss_frequence", v).apply() }
+
+    /** Positions sent shifted by a fixed random offset under 500 m. */
+    var aprsPositionFloue: Boolean
+        get() = prefs.getBoolean("aprs_position_floue", false)
+        set(v) { prefs.edit().putBoolean("aprs_position_floue", v).apply() }
+
+    /** That offset, north and east in metres: drawn once, kept (a new one per frame would average out). */
+    var aprsFlouNordM: Float
+        get() = prefs.getFloat("aprs_flou_nord", Float.NaN)
+        set(v) { prefs.edit().putFloat("aprs_flou_nord", v).apply() }
+    var aprsFlouEstM: Float
+        get() = prefs.getFloat("aprs_flou_est", Float.NaN)
+        set(v) { prefs.edit().putFloat("aprs_flou_est", v).apply() }
+
+    /**
+     * KISS radio on 145.825 during an ISS pass: follow the Doppler in 5 kHz
+     * steps (the radio leaves KISS for ~5 s at each step). Off by default.
+     */
+    var aprsKissDoppler: Boolean
+        get() = prefs.getBoolean("aprs_kiss_doppler", false)
+        set(v) { prefs.edit().putBoolean("aprs_kiss_doppler", v).apply() }
 
     /** One position sent by itself as the ISS rises (off unless switched on: it transmits). */
     var aprsBaliseIss: Boolean

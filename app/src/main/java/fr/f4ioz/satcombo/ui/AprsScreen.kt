@@ -21,6 +21,8 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
@@ -54,170 +56,413 @@ import java.util.Locale
 import java.util.TimeZone
 
 /**
- * APRS: the radio is chosen once at the top — the phone's recordings with the
- * IC-9700 to transmit, or a KISS radio (TH-D72…) for both — and the reception
- * and transmission zones follow it. Then what was heard and sent.
+ * APRS, laid out like the APRS apps people know: a status strip on top (the
+ * radio, where it works, the one button that matters), then tabs — the map
+ * and stations, messages, sending, the raw packets, trophies, and the
+ * settings, kept apart from what is sent.
  */
 @Composable
 fun AprsScreen(ui: UiState, vm: MainViewModel) {
     val ctx = LocalContext.current
-    val portee = rememberCoroutineScope()
     val st by AprsHub.etat.collectAsState()
     LaunchedEffect(Unit) { withContext(Dispatchers.IO) { AprsHub.charge(ctx) } }
-    var actif by remember { mutableStateOf(vm.aprsActif()) }
     var mode by remember { mutableStateOf(vm.aprsMode()) }
-    var choix by remember { mutableStateOf(false) }
-    var filtre by remember { mutableStateOf("TOUT") }
-    var ouvert by remember { mutableStateOf<Paquet?>(null) }
-    var effacer by remember { mutableStateOf(false) }
-    var onglet by rememberSaveable { mutableStateOf("TRAFIC") }
-    // In KISS mode the operator vouches for the frequency; shared by every tab that transmits.
+    var travail by remember { mutableStateOf(vm.aprsTravail()) }
+    var onglet by rememberSaveable { mutableStateOf("CARTE") }
+    // In KISS mode the operator vouches for an unknown frequency; shared by every tab that transmits.
     var frequenceOk by rememberSaveable { mutableStateOf(false) }
 
+    Column(Modifier.fillMaxSize()) {
+        BanniereFete()
+        BandeauAprs(ui, vm, mode, travail, st) { onglet = "REGLAGES" }
+        androidx.compose.material3.ScrollableTabRow(selectedTabIndex = ONGLETS.indexOf(onglet).coerceAtLeast(0),
+            containerColor = SpaceBg, contentColor = Cyan, edgePadding = 8.dp) {
+            ONGLETS.forEach { o ->
+                androidx.compose.material3.Tab(selected = onglet == o, onClick = { onglet = o },
+                    text = { Text(t("aprs_onglet_" + o.lowercase()), fontSize = 13.sp) })
+            }
+        }
+        when (onglet) {
+            "CARTE" -> OngletCarte(ui, vm, st.paquets)
+            "MESSAGES" -> OngletMessages(ui, vm, st.paquets, mode, frequenceOk) { frequenceOk = it }
+            "EMETTRE" -> OngletEmettre(ui, vm, mode, frequenceOk) { frequenceOk = it }
+            "PAQUETS" -> OngletPaquets(ui, st)
+            "TROPHEES" -> OngletTrophees(ui, vm, st.paquets)
+            else -> OngletReglages(ui, vm, mode, { mode = it; vm.setAprsMode(it) }, travail,
+                { travail = it; vm.setAprsTravail(it) }, st)
+        }
+    }
+}
+
+private val ONGLETS = listOf("CARTE", "MESSAGES", "EMETTRE", "PAQUETS", "TROPHEES", "REGLAGES")
+
+/** "Auto", "ISS · 145,825", "Terrestre · 144,800"… */
+private fun nomTravail(travail: String): String = when (travail) {
+    "ISS" -> t("aprs_travail_iss"); "TERRE" -> t("aprs_travail_terre"); "POSTE" -> t("aprs_kiss_freq_poste")
+    else -> t("aprs_travail_auto")
+}
+
+/**
+ * Always on top: which radio, where it works, how it is doing, and the
+ * button that starts it — listen (phone + IC-9700) or connect (KISS, FT3D).
+ */
+@Composable
+private fun BandeauAprs(ui: UiState, vm: MainViewModel, mode: String, travail: String,
+                        st: AprsHub.Etat, versReglages: () -> Unit) {
+    val ctx = LocalContext.current
+    val kiss by fr.f4ioz.satcombo.aprs.TncKiss.etat.collectAsState()
+    val ft3d by fr.f4ioz.satcombo.aprs.RecepteurWaypoints.etat.collectAsState()
+    val retour by vm.aprsEnvoi.collectAsState()
+    Surface(color = SpaceCard, modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(horizontal = 14.dp, vertical = 8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(when (mode) { "KISS" -> t("aprs_mode_kiss"); "FT3D" -> t("aprs_mode_ft3d"); else -> t("aprs_mode_audio") },
+                            color = TextHi, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                        Spacer(Modifier.width(6.dp))
+                        Surface(color = Amber.copy(alpha = 0.18f), shape = RoundedCornerShape(6.dp)) {
+                            Text(t("aprs_beta"), color = Amber, fontSize = 10.sp, fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp))
+                        }
+                    }
+                    val etat = when (mode) {
+                        "KISS" -> if (kiss.connecte) tf("aprs_bandeau_kiss", kiss.nom.substringBefore(" ·"),
+                                kiss.frequenceHz?.let { "%.3f".format(Locale.US, it / 1e6) } ?: "—", kiss.recues) +
+                                (if (!kiss.initialise) " · " + t("aprs_bandeau_pas_kiss") else "")
+                            else t("aprs_bandeau_deconnecte")
+                        "FT3D" -> if (ft3d.connecte) tf("aprs_bandeau_ft3d", ft3d.recues) else t("aprs_bandeau_deconnecte")
+                        else -> if (st.ecoute) tf("aprs_ecoute", st.sat, st.nouveaux) else t("aprs_bandeau_arrete")
+                    }
+                    val vivant = (mode == "KISS" && kiss.connecte && kiss.initialise) || (mode == "FT3D" && ft3d.connecte) ||
+                        (mode == "AUDIO" && st.ecoute)
+                    Text(nomTravail(travail) + " · " + etat, color = if (vivant) Aurora else TextLo, fontSize = 12.sp)
+                }
+                when (mode) {
+                    "KISS" -> if (kiss.connecte) TextButton(onClick = { vm.kissDeconnecte() }) {
+                        Text(t("aprs_kiss_deconnecter"), color = Magenta, fontSize = 12.sp)
+                    } else Button(onClick = {
+                        val app = fr.f4ioz.satcombo.aprs.TncKiss.appareils(ctx)
+                        val cle = vm.aprsKissCle().takeIf { c -> app.any { it.cle == c } } ?: app.singleOrNull()?.cle
+                        if (cle != null) vm.kissConnecte(cle, vm.aprsKissVitesse()) else versReglages()
+                    }, colors = ButtonDefaults.buttonColors(containerColor = Cyan)) {
+                        Text(t("aprs_kiss_connecter"), color = Color(0xFF00201D), fontWeight = FontWeight.Bold)
+                    }
+                    "FT3D" -> if (ft3d.connecte) TextButton(onClick = { vm.ft3dDeconnecte() }) {
+                        Text(t("aprs_kiss_deconnecter"), color = Magenta, fontSize = 12.sp)
+                    } else Button(onClick = {
+                        val app = fr.f4ioz.satcombo.aprs.TncKiss.appareils(ctx)
+                        val cle = vm.aprsFt3dCle().takeIf { c -> app.any { it.cle == c } } ?: app.singleOrNull()?.cle
+                        if (cle != null) vm.ft3dConnecte(cle, vm.aprsFt3dVitesse()) else versReglages()
+                    }, colors = ButtonDefaults.buttonColors(containerColor = Cyan)) {
+                        Text(t("aprs_kiss_connecter"), color = Color(0xFF00201D), fontWeight = FontWeight.Bold)
+                    }
+                    else -> if (ui.recording) OutlinedButton(onClick = { vm.aprsEcouteArrete() }) {
+                        Text("■ " + t("aprs_iss_arreter"), color = Magenta, fontSize = 12.sp)
+                    } else Button(onClick = { vm.aprsEcouteDemarre() },
+                        colors = ButtonDefaults.buttonColors(containerColor = Cyan)) {
+                        Text("▶ " + t("aprs_ecouter"), color = Color(0xFF00201D), fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+            if (retour.isNotBlank()) Text(retour, color = TextLo, fontSize = 11.sp)
+        }
+    }
+}
+
+@Composable
+private fun PuceA(choisie: Boolean, nom: String, onClic: () -> Unit) {
+    FilterChip(selected = choisie, onClick = onClic, label = { Text(nom, fontSize = 12.sp) },
+        colors = FilterChipDefaults.filterChipColors(selectedContainerColor = Cyan.copy(alpha = 0.2f), selectedLabelColor = Cyan))
+}
+
+@Composable
+private fun Carte(titre: String, contenu: @Composable ColumnScope.() -> Unit) {
+    Surface(color = SpaceCard, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp)) {
+            Text(titre, color = TextHi, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(4.dp))
+            contenu()
+        }
+    }
+}
+
+@Composable
+private fun Interrupteur(titre: String, desc: String, valeur: Boolean, rouge: Boolean = false, onChange: (Boolean) -> Unit) {
+    Row(Modifier.fillMaxWidth().padding(top = 6.dp).toggleable(value = valeur, role = Role.Switch, onValueChange = onChange),
+        verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text(titre, color = TextHi, fontSize = 13.sp)
+            Text(desc, color = TextLo, fontSize = 11.sp)
+        }
+        Switch(checked = valeur, onCheckedChange = null,
+            colors = SwitchDefaults.colors(checkedTrackColor = if (rouge) Color(0xFFE5484D) else Cyan))
+    }
+}
+
+// ------------------------------------------------------------------ send
+
+/**
+ * What to send — position, status, a message to a station or a server —
+ * by which path, with the frame shown before it goes. Messages to stations
+ * are easier from the Messages tab; this is the full set.
+ */
+@Composable
+private fun OngletEmettre(ui: UiState, vm: MainViewModel, mode: String, frequenceOk: Boolean, onFrequenceOk: (Boolean) -> Unit) {
+    val resultat by vm.aprsEnvoi.collectAsState()
+    val kiss by fr.f4ioz.satcombo.aprs.TncKiss.etat.collectAsState()
+    var type by rememberSaveable { mutableStateOf("POS") }
+    var texte by rememberSaveable { mutableStateOf("") }
+    var destinataire by rememberSaveable { mutableStateOf("") }
+    val defaut = remember { vm.aprsCheminParDefaut() }
+    var chemin by rememberSaveable { mutableStateOf(if (defaut == listOf("ARISS")) "ARISS" else "WIDE") }
+    val source = remember(ui.callsign) { vm.aprsSource() }
+    val pos = remember(ui.observer, vm.aprsPositionFloue()) { vm.aprsPositionEmise() }
+    val E = fr.f4ioz.satcombo.aprs.AprsEmission
+    fun info(id: String?): String? = when (type) {
+        "POS" -> pos?.let { (la, lo) -> E.position(la, lo, "/-", texte) }
+        "STATUT" -> E.statut(texte)
+        "APRSPH" -> E.message("APRSPH", texte.ifBlank { "HOTG" }.let { if (it.uppercase().startsWith("HOTG")) it else "HOTG $it" }, id)
+        else -> if (destinataire.isBlank()) null else E.message(destinataire, texte, id)
+    }
+    val cheminListe = when (chemin) { "ARISS" -> listOf("ARISS"); "WIDE" -> listOf("WIDE1-1", "WIDE2-1"); else -> emptyList() }
+    val avecNumero = type == "APRSPH" || type == "MSG"
+    val apercu = info(if (avecNumero) "n" else null)?.let { E.trame(source.ifBlank { "N0CALL" }, cheminListe, it).tnc2() }
+    val connue = kiss.frequenceHz?.let { hz -> E.FENETRES.any { hz in it } } == true
+    val pret = apercu != null && source.isNotBlank() && when (mode) {
+        "KISS" -> kiss.connecte && (frequenceOk || connue)
+        "FT3D" -> false
+        else -> true
+    }
+
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        item {
+            Carte(t("aprs_emettre_quoi")) {
+                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    listOf("POS" to t("aprs_tx_type_pos"), "STATUT" to t("aprs_tx_type_statut"),
+                        "MSG" to t("aprs_tx_type_msg"), "APRSPH" to "APRSPH").forEach { (c, n) ->
+                        PuceA(type == c, n) { type = c; texte = "" }
+                    }
+                }
+                when (type) {
+                    "POS" -> Text(if (pos == null) t("aprs_tx_sans_position")
+                        else if (vm.aprsPositionFloue()) t("aprs_emettre_pos_floue") else t("aprs_emettre_pos_exacte"),
+                        color = if (pos == null) Amber else TextLo, fontSize = 11.sp)
+                    "APRSPH" -> Text(t("aprs_tx_aprsph_aide"), color = TextLo, fontSize = 11.sp)
+                    "MSG" -> Text(t("aprs_emettre_msg_aide"), color = TextLo, fontSize = 11.sp)
+                    else -> {}
+                }
+                if (type == "MSG") OutlinedTextField(value = destinataire, onValueChange = { destinataire = it.uppercase().take(9) },
+                    label = { Text(t("aprs_tx_destinataire"), fontSize = 12.sp) }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(value = texte, onValueChange = { texte = it.take(E.LONGUEUR_MESSAGE) },
+                    label = { Text(if (type == "POS") t("aprs_tx_commentaire") else t("aprs_tx_texte"), fontSize = 12.sp) },
+                    singleLine = true, modifier = Modifier.fillMaxWidth())
+            }
+        }
+        item {
+            Carte(t("aprs_tx_chemin")) {
+                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    PuceA(chemin == "ARISS", t("aprs_tx_chemin_iss")) { chemin = "ARISS" }
+                    PuceA(chemin == "WIDE", "WIDE1-1,WIDE2-1 (" + t("aprs_travail_terre_court") + ")") { chemin = "WIDE" }
+                    PuceA(chemin == "AUCUN", t("aprs_tx_chemin_aucun")) { chemin = "AUCUN" }
+                }
+                if (source.isBlank()) Text(t("aprs_tx_sans_indicatif"), color = Amber, fontSize = 11.sp)
+                apercu?.let {
+                    Text(t("aprs_tx_apercu"), color = TextLo, fontSize = 11.sp, modifier = Modifier.padding(top = 6.dp))
+                    Text(it, color = TextHi, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
+                }
+                if (mode == "KISS" && !connue) ConfirmeFrequenceKiss(frequenceOk, onFrequenceOk)
+                if (mode == "FT3D") Text(t("aprs_ft3d_tx"), color = Amber, fontSize = 11.sp)
+                Button(enabled = pret, onClick = {
+                    val i = info(if (avecNumero) vm.aprsNumeroSuivant() else null) ?: return@Button
+                    vm.aprsEmetSelonMode(E.trame(source, cheminListe, i), frequenceOk)
+                }, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE5484D)),
+                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
+                    Text(if (mode == "KISS") t("aprs_kiss_emettre") else t("aprs_tx_emettre"), color = Color.White, fontWeight = FontWeight.Bold)
+                }
+                Text(t("aprs_tx_banniere"), color = TextLo, fontSize = 11.sp)
+                if (resultat.isNotBlank()) Text(resultat, color = TextHi, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------- packets
+
+/** Every frame heard and sent, newest first, with filters; tapped, the raw frame. */
+@Composable
+private fun OngletPaquets(ui: UiState, st: AprsHub.Etat) {
+    var filtre by rememberSaveable { mutableStateOf("TOUT") }
+    var ouvert by remember { mutableStateOf<Paquet?>(null) }
     val liste = remember(st.paquets, filtre) {
         when (filtre) {
             "ISS" -> st.paquets.filter { it.viaIss }
             "MSG" -> st.paquets.filter { it.type == TypeAprs.MESSAGE || it.type == TypeAprs.ACCUSE }
+            "METEO" -> st.paquets.filter { it.meteo != null }
             "HOTG" -> st.paquets.filter { it.hotg }
+            "EMIS" -> st.paquets.filter { it.emis }
             else -> st.paquets
         }
     }
-
-    Column(Modifier.fillMaxSize()) {
-    BanniereFete()
-    // Traffic (the radio, reception, transmit, the list), then the fun: map, messages, trophies.
-    androidx.compose.material3.ScrollableTabRow(selectedTabIndex = ONGLETS.indexOf(onglet).coerceAtLeast(0),
-        containerColor = SpaceBg, contentColor = Cyan, edgePadding = 8.dp) {
-        ONGLETS.forEach { o ->
-            androidx.compose.material3.Tab(selected = onglet == o, onClick = { onglet = o },
-                text = { Text(t("aprs_onglet_" + o.lowercase()), fontSize = 13.sp) })
-        }
-    }
-    when (onglet) {
-        "CARTE" -> OngletCarte(ui, vm, st.paquets)
-        "MESSAGES" -> OngletMessages(ui, vm, st.paquets, mode, frequenceOk) { frequenceOk = it }
-        "TROPHEES" -> OngletTrophees(ui, vm, st.paquets)
-        else ->
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(12.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        // The radio, chosen once: reception and transmission both follow it.
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         item {
-            Surface(color = SpaceCard, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(16.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(t("aprs_mode_titre"), color = TextHi, fontWeight = FontWeight.Bold,
-                            modifier = Modifier.weight(1f))
-                        Surface(color = Amber.copy(alpha = 0.18f), shape = RoundedCornerShape(6.dp)) {
-                            Text(t("aprs_beta"), color = Amber, fontSize = 11.sp, fontWeight = FontWeight.Bold,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp))
-                        }
-                    }
-                    Spacer(Modifier.height(6.dp))
-                    listOf("AUDIO" to t("aprs_mode_audio"), "KISS" to t("aprs_mode_kiss"),
-                        "FT3D" to t("aprs_mode_ft3d")).forEach { (cle, nom) ->
-                        Row(Modifier.fillMaxWidth().toggleable(value = mode == cle, role = Role.RadioButton,
-                                onValueChange = { mode = cle; vm.setAprsMode(cle) }).padding(vertical = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically) {
-                            androidx.compose.material3.RadioButton(selected = mode == cle, onClick = null)
-                            Text(nom, color = TextHi, fontSize = 14.sp,
-                                fontWeight = if (mode == cle) FontWeight.Bold else FontWeight.Normal,
-                                modifier = Modifier.padding(start = 6.dp))
-                        }
-                    }
-                    Text(when (mode) { "KISS" -> t("aprs_mode_kiss_desc"); "FT3D" -> t("aprs_mode_ft3d_desc")
-                            else -> t("aprs_mode_audio_desc") },
-                        color = TextLo, fontSize = 11.sp, modifier = Modifier.padding(top = 4.dp))
+            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                listOf("TOUT" to t("aprs_filtre_tout"), "ISS" to t("aprs_filtre_iss"), "MSG" to t("aprs_filtre_msg"),
+                    "METEO" to t("aprs_filtre_meteo"), "HOTG" to "HOTG", "EMIS" to t("aprs_filtre_emis")).forEach { (c, n) ->
+                    PuceA(filtre == c, n) { filtre = c }
                 }
             }
         }
-        // Reception, for the radio chosen above.
-        if (mode == "KISS") {
-            item { CarteTnc(vm) }
-        } else if (mode == "FT3D") {
-            item { CarteFt3d(vm) }
-        } else item {
-            Surface(color = SpaceCard, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(16.dp)) {
-                    Text(t("aprs_reception"), color = TextHi, fontWeight = FontWeight.Bold)
-                    Spacer(Modifier.height(4.dp))
-                    Row(Modifier.fillMaxWidth().toggleable(value = actif, role = Role.Switch,
-                            onValueChange = { actif = it; vm.setAprsActif(it) }),
-                        verticalAlignment = Alignment.CenterVertically) {
-                        Column(Modifier.weight(1f)) {
-                            Text(t("aprs_actif"), color = TextHi, fontSize = 13.sp)
-                            Text(t("aprs_actif_desc"), color = TextLo, fontSize = 11.sp)
-                        }
-                        Switch(checked = actif, onCheckedChange = null,
-                            colors = SwitchDefaults.colors(checkedTrackColor = Cyan))
+        item { Text(tf("aprs_paquets_compte", liste.size), color = TextLo, fontSize = 11.sp) }
+        if (liste.isEmpty()) item { Text(t("aprs_vide"), color = TextLo, fontSize = 12.sp, modifier = Modifier.padding(8.dp)) }
+        items(liste, key = { "${it.quand}-${it.trame.hashCode()}-${it.emis}" }) { p ->
+            LignePaquet(p, ui, ouvert == p, fr.f4ioz.satcombo.aprs.AprsJeu.estAccuse(p, st.paquets)) { ouvert = if (ouvert == p) null else p }
+        }
+    }
+}
+
+// --------------------------------------------------------------- settings
+
+/**
+ * Everything that is set once, apart from what is sent: the radio and its
+ * connection, where APRS works, the station (SSID, approximate position,
+ * beacon), the IC-9700 audio and its tests, cheers, the history.
+ */
+@Composable
+private fun OngletReglages(ui: UiState, vm: MainViewModel, mode: String, onMode: (String) -> Unit,
+                           travail: String, onTravail: (String) -> Unit, st: AprsHub.Etat) {
+    val ctx = LocalContext.current
+    val portee = rememberCoroutineScope()
+    var choix by remember { mutableStateOf(false) }
+    var effacer by remember { mutableStateOf(false) }
+    var actif by remember { mutableStateOf(vm.aprsActif()) }
+    var ssid by remember { mutableStateOf(vm.aprsSsid()) }
+    var floue by remember { mutableStateOf(vm.aprsPositionFloue()) }
+    var balise by remember { mutableStateOf(vm.aprsBaliseIss()) }
+    var fetes by remember { mutableStateOf(vm.aprsFetes()) }
+    var niveau by remember { mutableStateOf(vm.aprsNiveau()) }
+    var doppler by remember { mutableStateOf(vm.aprsKissDoppler()) }
+    var aide by remember { mutableStateOf(false) }
+    val partage: (java.io.File) -> Unit = { f ->
+        runCatching {
+            val uri = androidx.core.content.FileProvider.getUriForFile(ctx, "${ctx.packageName}.fileprovider", f)
+            ctx.startActivity(android.content.Intent.createChooser(
+                android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                    type = "audio/wav"
+                    putExtra(android.content.Intent.EXTRA_STREAM, uri)
+                    addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }, t("aprs_tx_essai_wav")))
+        }
+    }
+
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        item {
+            Carte(t("aprs_mode_titre")) {
+                listOf("AUDIO" to t("aprs_mode_audio"), "KISS" to t("aprs_mode_kiss"), "FT3D" to t("aprs_mode_ft3d")).forEach { (c, n) ->
+                    Row(Modifier.fillMaxWidth().toggleable(value = mode == c, role = Role.RadioButton, onValueChange = { onMode(c) })
+                        .padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
+                        androidx.compose.material3.RadioButton(selected = mode == c, onClick = null)
+                        Text(n, color = TextHi, fontSize = 14.sp, fontWeight = if (mode == c) FontWeight.Bold else FontWeight.Normal,
+                            modifier = Modifier.padding(start = 6.dp))
                     }
-                    Text(
-                        when {
-                            st.ecoute -> tf("aprs_ecoute", st.sat, st.nouveaux)
-                            actif -> t("aprs_pret")
-                            else -> t("aprs_arrete")
-                        },
-                        color = if (st.ecoute) Aurora else TextLo, fontSize = 12.sp,
-                        modifier = Modifier.padding(top = 6.dp))
+                }
+                Text(when (mode) { "KISS" -> t("aprs_mode_kiss_desc"); "FT3D" -> t("aprs_mode_ft3d_desc"); else -> t("aprs_mode_audio_desc") },
+                    color = TextLo, fontSize = 11.sp)
+            }
+        }
+        if (mode != "FT3D") item {
+            Carte(t("aprs_travail_titre")) {
+                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    (listOf("AUTO", "ISS", "TERRE") + if (mode == "KISS") listOf("POSTE") else emptyList()).forEach { c ->
+                        PuceA(travail == c, nomTravail(c)) { onTravail(c) }
+                    }
+                }
+                Text(when (travail) {
+                    "ISS" -> t("aprs_travail_iss_desc"); "TERRE" -> t("aprs_travail_terre_desc")
+                    "POSTE" -> t("aprs_kiss_freq_poste_desc"); else -> t("aprs_travail_auto_desc")
+                }, color = TextLo, fontSize = 11.sp)
+                if (mode == "KISS" && (travail == "AUTO" || travail == "ISS")) {
+                    Row(Modifier.fillMaxWidth().padding(top = 4.dp).toggleable(value = doppler, role = Role.Checkbox,
+                            onValueChange = { doppler = it; vm.setAprsKissDoppler(it) }), verticalAlignment = Alignment.CenterVertically) {
+                        androidx.compose.material3.Checkbox(checked = doppler, onCheckedChange = null)
+                        Column(Modifier.padding(start = 6.dp)) {
+                            Text(t("aprs_kiss_doppler"), color = TextHi, fontSize = 12.sp)
+                            Text(t("aprs_kiss_doppler_desc"), color = TextLo, fontSize = 11.sp)
+                        }
+                    }
+                }
+            }
+        }
+        item {
+            when (mode) {
+                "KISS" -> Connexion(vm, kiss = true)
+                "FT3D" -> Connexion(vm, kiss = false)
+                else -> Carte(t("aprs_reception")) {
+                    Text(t("aprs_iss_ecouter_desc"), color = TextLo, fontSize = 11.sp)
+                    if (ui.recorderSource != "USB") Text(t("aprs_iss_source_usb"), color = Amber, fontSize = 11.sp)
+                    Interrupteur(t("aprs_actif"), t("aprs_actif_desc"), actif) { actif = it; vm.setAprsActif(it) }
                     st.erreur?.let { Text(tf("aprs_erreur", it), color = Amber, fontSize = 11.sp) }
-                    // An older recording, or a WAV from the rig's SD card.
-                    Spacer(Modifier.height(10.dp))
+                    Spacer(Modifier.height(8.dp))
                     Text(t("aprs_relire"), color = TextHi, fontSize = 13.sp)
                     Text(t("aprs_relire_desc"), color = TextLo, fontSize = 11.sp)
                     if (st.progression >= 0f) {
-                        LinearProgressIndicator(progress = { st.progression }, color = Cyan,
-                            modifier = Modifier.fillMaxWidth().padding(top = 6.dp))
-                        Text(tf("aprs_relire_en_cours", st.fichier ?: "", st.trouves),
-                            color = TextLo, fontSize = 11.sp)
+                        LinearProgressIndicator(progress = { st.progression }, color = Cyan, modifier = Modifier.fillMaxWidth().padding(top = 6.dp))
+                        Text(tf("aprs_relire_en_cours", st.fichier ?: "", st.trouves), color = TextLo, fontSize = 11.sp)
                         TextButton(onClick = { AprsHub.annuleFichier() }) { Text(t("cancel"), color = Cyan) }
                     } else {
-                        androidx.compose.material3.OutlinedButton(onClick = { choix = true },
-                            modifier = Modifier.padding(top = 6.dp)) {
+                        OutlinedButton(onClick = { choix = true }, modifier = Modifier.padding(top = 6.dp)) {
                             Text(t("sstv_pick_recording"), color = Cyan, fontSize = 12.sp)
                         }
-                        st.fichier?.let {
-                            Text(tf("aprs_relire_fini", it, st.trouves), color = TextLo, fontSize = 11.sp)
-                        }
+                        st.fichier?.let { Text(tf("aprs_relire_fini", it, st.trouves), color = TextLo, fontSize = 11.sp) }
                     }
                 }
             }
         }
-        // Transmission, through the same radio — the FT3D transmits from its own menu.
-        if (mode == "FT3D") item {
-            Surface(color = SpaceCard, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(16.dp)) {
-                    Text(t("aprs_tx_titre"), color = TextHi, fontWeight = FontWeight.Bold)
-                    Text(t("aprs_ft3d_tx"), color = TextLo, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
-                }
-            }
-        } else item { CarteEmission(ui, vm, mode, frequenceOk) { frequenceOk = it } }
         item {
-            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                listOf("TOUT" to t("aprs_filtre_tout"), "ISS" to t("aprs_filtre_iss"),
-                    "MSG" to t("aprs_filtre_msg"), "HOTG" to "HOTG").forEach { (cle, nom) ->
-                    FilterChip(selected = filtre == cle, onClick = { filtre = cle },
-                        label = { Text(nom, fontSize = 12.sp) },
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = Cyan.copy(alpha = 0.2f), selectedLabelColor = Cyan))
+            Carte(t("aprs_station_titre")) {
+                Text(t("aprs_tx_ssid"), color = TextLo, fontSize = 11.sp)
+                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    listOf(0, 6, 7, 9, 10).forEach { n -> PuceA(ssid == n, if (n == 0) "—" else "-$n") { ssid = n; vm.setAprsSsid(n) } }
+                }
+                Text(tf("aprs_station_indicatif", vm.aprsSource().ifBlank { "—" }), color = TextLo, fontSize = 11.sp)
+                Interrupteur(t("aprs_floue_titre"), t("aprs_floue_desc"), floue) { floue = it; vm.setAprsPositionFloue(it) }
+                if (floue) TextButton(onClick = { vm.aprsNouveauFlou() }) { Text(t("aprs_floue_nouveau"), color = Cyan, fontSize = 12.sp) }
+                if (mode != "FT3D") Interrupteur(t("aprs_balise_titre"),
+                    if (mode == "KISS") t("aprs_balise_desc_kiss") else t("aprs_balise_desc"), balise, rouge = true) {
+                    balise = it; vm.setAprsBaliseIss(it)
                 }
             }
         }
-        if (liste.isEmpty()) {
-            item { Text(t("aprs_vide"), color = TextLo, fontSize = 12.sp, modifier = Modifier.padding(8.dp)) }
+        if (mode == "AUDIO") item {
+            Carte(t("aprs_audio_titre")) {
+                Text(tf("aprs_tx_niveau", (niveau * 100).toInt()), color = TextLo, fontSize = 11.sp)
+                androidx.compose.material3.Slider(value = niveau, valueRange = 0.05f..1f,
+                    onValueChange = { niveau = it }, onValueChangeFinished = { vm.setAprsNiveau(niveau) })
+                // The audio the IC-9700 would get, without transmitting.
+                val essai = remember(ui.callsign) {
+                    fr.f4ioz.satcombo.aprs.AprsEmission.trame(vm.aprsSource().ifBlank { "N0CALL" }, listOf("ARISS"),
+                        fr.f4ioz.satcombo.aprs.AprsEmission.statut("SatMe test"))
+                }
+                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(onClick = { vm.aprsEssai(essai, fichier = false, partage = partage) }) {
+                        Text(t("aprs_tx_essai_hp"), color = Cyan, fontSize = 12.sp)
+                    }
+                    OutlinedButton(onClick = { vm.aprsEssai(essai, fichier = true, partage = partage) }) {
+                        Text(t("aprs_tx_essai_wav"), color = Cyan, fontSize = 12.sp)
+                    }
+                }
+                TextButton(onClick = { aide = !aide }) { Text(t("aprs_tx_aide_titre"), color = Cyan, fontSize = 12.sp) }
+                if (aide) Text(t("aprs_tx_aide"), color = TextLo, fontSize = 11.sp)
+            }
         }
-        items(liste, key = { "${it.quand}-${it.trame.hashCode()}-${it.emis}" }) { p ->
-            // A sent message is acknowledged when an "ack<number>" comes back to us.
-            val accuse = fr.f4ioz.satcombo.aprs.AprsJeu.estAccuse(p, st.paquets)
-            LignePaquet(p, ui, ouvert == p, accuse) { ouvert = if (ouvert == p) null else p }
-        }
-        if (st.paquets.isNotEmpty()) {
-            item {
-                TextButton(onClick = { effacer = true }, modifier = Modifier.fillMaxWidth()) {
+        item {
+            Carte(t("aprs_divers_titre")) {
+                Interrupteur(t("aprs_fetes_titre"), t("aprs_fetes_desc"), fetes) { fetes = it; vm.setAprsFetes(it) }
+                if (st.paquets.isNotEmpty()) TextButton(onClick = { effacer = true }, modifier = Modifier.padding(top = 4.dp)) {
                     Text(t("aprs_effacer"), color = Magenta, fontSize = 13.sp)
                 }
             }
         }
-    }
-    }
     }
 
     if (choix) {
@@ -229,15 +474,80 @@ fun AprsScreen(ui: UiState, vm: MainViewModel) {
     if (effacer) {
         androidx.compose.material3.AlertDialog(
             onDismissRequest = { effacer = false },
-            confirmButton = {
-                TextButton(onClick = { effacer = false; AprsHub.efface(ctx) }) { Text(t("aprs_effacer"), color = Magenta) }
-            },
+            confirmButton = { TextButton(onClick = { effacer = false; AprsHub.efface(ctx) }) { Text(t("aprs_effacer"), color = Magenta) } },
             dismissButton = { TextButton(onClick = { effacer = false }) { Text(t("cancel"), color = Cyan) } },
             text = { Text(t("aprs_effacer_confirme"), color = TextHi) })
     }
 }
 
-private val ONGLETS = listOf("TRAFIC", "CARTE", "MESSAGES", "TROPHEES")
+/**
+ * The USB link to a KISS radio (TH-D72…) or an FT3D: adapter, speed,
+ * connect; once connected, what the radio says. The strip on top connects too.
+ */
+@Composable
+private fun Connexion(vm: MainViewModel, kiss: Boolean) {
+    val ctx = LocalContext.current
+    val k by fr.f4ioz.satcombo.aprs.TncKiss.etat.collectAsState()
+    val f by fr.f4ioz.satcombo.aprs.RecepteurWaypoints.etat.collectAsState()
+    var appareils by remember { mutableStateOf(fr.f4ioz.satcombo.aprs.TncKiss.appareils(ctx)) }
+    var cle by remember { mutableStateOf(if (kiss) vm.aprsKissCle() else vm.aprsFt3dCle()) }
+    var vitesse by remember { mutableStateOf(if (kiss) vm.aprsKissVitesse() else vm.aprsFt3dVitesse()) }
+    var aide by remember { mutableStateOf(false) }
+    val connecte = if (kiss) k.connecte else f.connecte
+    Carte(t("aprs_connexion_titre")) {
+        Text(if (kiss) t("aprs_kiss_desc") else t("aprs_ft3d_desc"), color = TextLo, fontSize = 11.sp)
+        if (connecte) {
+            if (kiss) {
+                Text(tf("aprs_kiss_connecte", k.nom, k.vitesse, k.recues, k.envoyees), color = Aurora, fontSize = 12.sp)
+                k.frequenceHz?.let { hz ->
+                    Text(tf("aprs_kiss_frequence_lue", "%.4f".format(Locale.US, hz / 1e6), if (k.bande == 1) "B" else "A"),
+                        color = TextHi, fontSize = 12.sp)
+                }
+                if (k.initialise) Text(t("aprs_kiss_init_envoye"), color = TextLo, fontSize = 11.sp)
+                else {
+                    Text(t("aprs_kiss_pas_en_kiss"), color = Amber, fontSize = 11.sp)
+                    OutlinedButton(onClick = { vm.kissPasseEnKiss() }) { Text(t("aprs_kiss_passer"), color = Cyan, fontSize = 12.sp) }
+                }
+                k.erreur?.let { Text(t("aprs_kiss_erreur_$it"), color = Amber, fontSize = 11.sp) }
+            } else {
+                Text(tf("aprs_ft3d_connecte", f.nom, f.vitesse, f.recues), color = Aurora, fontSize = 12.sp)
+                if (f.illisibles > 0 && f.recues == 0) Text(t("aprs_ft3d_illisibles"), color = Amber, fontSize = 11.sp)
+            }
+            TextButton(onClick = { if (kiss) vm.kissDeconnecte() else vm.ft3dDeconnecte() }) {
+                Text(t("aprs_kiss_deconnecter"), color = Magenta, fontSize = 12.sp)
+            }
+        } else {
+            if (appareils.isEmpty()) Text(t("aprs_kiss_aucun"), color = Amber, fontSize = 11.sp)
+            appareils.forEach { a ->
+                Row(Modifier.fillMaxWidth().toggleable(value = cle == a.cle, role = Role.RadioButton, onValueChange = { cle = a.cle }),
+                    verticalAlignment = Alignment.CenterVertically) {
+                    androidx.compose.material3.RadioButton(selected = cle == a.cle, onClick = null)
+                    Text(a.nom, color = TextHi, fontSize = 12.sp, modifier = Modifier.padding(start = 6.dp))
+                }
+            }
+            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                (if (kiss) listOf(9600, 19200, 38400, 57600) else listOf(4800, 9600, 19200, 38400)).forEach { v ->
+                    PuceA(vitesse == v, "$v") { vitesse = v }
+                }
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Button(enabled = appareils.any { it.cle == cle }, onClick = {
+                    if (kiss) vm.kissConnecte(cle, vitesse) else vm.ft3dConnecte(cle, vitesse)
+                }, colors = ButtonDefaults.buttonColors(containerColor = Cyan)) {
+                    Text(t("aprs_kiss_connecter"), color = Color.Black)
+                }
+                TextButton(onClick = { appareils = fr.f4ioz.satcombo.aprs.TncKiss.appareils(ctx) }) {
+                    Text(t("aprs_kiss_rechercher"), color = Cyan, fontSize = 12.sp)
+                }
+            }
+            (if (kiss) k.erreur else f.erreur)?.let { Text(t("aprs_kiss_erreur_$it"), color = Amber, fontSize = 11.sp) }
+        }
+        TextButton(onClick = { aide = !aide }) {
+            Text(if (kiss) t("aprs_kiss_aide_titre") else t("aprs_ft3d_aide_titre"), color = Cyan, fontSize = 12.sp)
+        }
+        if (aide) Text(if (kiss) t("aprs_kiss_aide") else t("aprs_ft3d_aide"), color = TextLo, fontSize = 11.sp)
+    }
+}
 
 private val heureUtc = SimpleDateFormat("dd/MM HH:mm:ss", Locale.US).apply { timeZone = TimeZone.getTimeZone("UTC") }
 
@@ -298,317 +608,6 @@ private fun LignePaquet(p: Paquet, ui: UiState, ouvert: Boolean, accuse: Boolean
                     color = TextLo, fontSize = 10.sp, fontFamily = FontFamily.Monospace,
                     modifier = Modifier.padding(top = 4.dp))
             }
-        }
-    }
-}
-
-/**
- * Transmit: what to send (APRS Thursday, APRSPH, message, position, status),
- * how (path, SSID, level), a preview of the frame, tests without transmitting,
- * and the IC-9700 button.
- */
-@Composable
-private fun CarteEmission(ui: UiState, vm: MainViewModel, mode: String,
-                          frequenceOk: Boolean, onFrequenceOk: (Boolean) -> Unit) {
-    val ctx = LocalContext.current
-    val resultat by vm.aprsEnvoi.collectAsState()
-    var type by remember { mutableStateOf("JEUDI") }
-    var texte by remember { mutableStateOf("") }
-    var destinataire by remember { mutableStateOf("") }
-    var chemin by remember { mutableStateOf("ARISS") }
-    var ssid by remember { mutableStateOf(vm.aprsSsid()) }
-    var niveau by remember { mutableStateOf(vm.aprsNiveau()) }
-    var aide by remember { mutableStateOf(false) }
-    val kiss by fr.f4ioz.satcombo.aprs.TncKiss.etat.collectAsState()
-    val par = if (mode == "KISS") "KISS" else "CAT"
-    var balise by remember { mutableStateOf(vm.aprsBaliseIss()) }
-    // The message number is drawn when sending, so the preview shows a placeholder.
-    val source = remember(ssid, ui.callsign) { vm.aprsSource() }
-    val obs = ui.observer
-    fun info(id: String?): String? = when (type) {
-        "JEUDI" -> fr.f4ioz.satcombo.aprs.AprsEmission.message("ANSRVR",
-            texte.ifBlank { "CQ HOTG" }.let { if (it.uppercase().let { u -> u.startsWith("CQ HOTG") || u.startsWith("K HOTG") || u.startsWith("U HOTG") }) it else "CQ HOTG $it" }, id)
-        "APRSPH" -> fr.f4ioz.satcombo.aprs.AprsEmission.message("APRSPH",
-            texte.ifBlank { "HOTG" }.let { if (it.uppercase().startsWith("HOTG")) it else "HOTG $it" }, id)
-        "MSG" -> if (destinataire.isBlank()) null else fr.f4ioz.satcombo.aprs.AprsEmission.message(destinataire, texte, id)
-        "POS" -> obs?.let { fr.f4ioz.satcombo.aprs.AprsEmission.position(it.latDeg, it.lonDeg, "/-", texte) }
-        else -> fr.f4ioz.satcombo.aprs.AprsEmission.statut(texte)
-    }
-    val cheminListe = when (chemin) { "ARISS" -> listOf("ARISS"); "WIDE" -> listOf("WIDE2-1"); else -> emptyList() }
-    val avecNumero = type in setOf("JEUDI", "APRSPH", "MSG")
-    val apercu = info(if (avecNumero) "n" else null)?.let {
-        fr.f4ioz.satcombo.aprs.AprsEmission.trame(source.ifBlank { "N0CALL" }, cheminListe, it).tnc2()
-    }
-    fun trame(): fr.f4ioz.satcombo.aprs.Trame? {
-        val i = info(if (avecNumero) vm.aprsNumeroSuivant() else null) ?: return null
-        return fr.f4ioz.satcombo.aprs.AprsEmission.trame(source, cheminListe, i)
-    }
-    val partage: (java.io.File) -> Unit = { f ->
-        runCatching {
-            val uri = androidx.core.content.FileProvider.getUriForFile(ctx, "${ctx.packageName}.fileprovider", f)
-            ctx.startActivity(android.content.Intent.createChooser(
-                android.content.Intent(android.content.Intent.ACTION_SEND).apply {
-                    this.type = "audio/wav"
-                    putExtra(android.content.Intent.EXTRA_STREAM, uri)
-                    addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                }, t("aprs_tx_essai_wav")))
-        }
-    }
-
-    Surface(color = SpaceCard, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp)) {
-            Text(t("aprs_tx_titre"), color = TextHi, fontWeight = FontWeight.Bold)
-            Text(t("aprs_tx_banniere"), color = TextLo, fontSize = 11.sp)
-            Spacer(Modifier.height(8.dp))
-            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                listOf("JEUDI" to "APRS Thursday", "APRSPH" to "APRSPH", "MSG" to t("aprs_tx_type_msg"),
-                    "POS" to t("aprs_tx_type_pos"), "STATUT" to t("aprs_tx_type_statut")).forEach { (cle, nom) ->
-                    FilterChip(selected = type == cle, onClick = { type = cle; texte = "" },
-                        label = { Text(nom, fontSize = 12.sp) },
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = Cyan.copy(alpha = 0.2f), selectedLabelColor = Cyan))
-                }
-            }
-            when (type) {
-                "JEUDI" -> Text(t("aprs_tx_jeudi_aide"), color = TextLo, fontSize = 11.sp)
-                "APRSPH" -> Text(t("aprs_tx_aprsph_aide"), color = TextLo, fontSize = 11.sp)
-                "POS" -> if (obs == null) Text(t("aprs_tx_sans_position"), color = Amber, fontSize = 11.sp)
-                else -> {}
-            }
-            if (type == "JEUDI") {
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    listOf("K HOTG", "U HOTG").forEach { c ->
-                        TextButton(onClick = { texte = c }) { Text(c, color = Cyan, fontSize = 12.sp) }
-                    }
-                }
-            }
-            if (type == "MSG") {
-                androidx.compose.material3.OutlinedTextField(value = destinataire,
-                    onValueChange = { destinataire = it.uppercase().take(9) },
-                    label = { Text(t("aprs_tx_destinataire"), fontSize = 12.sp) }, singleLine = true,
-                    modifier = Modifier.fillMaxWidth())
-            }
-            androidx.compose.material3.OutlinedTextField(value = texte,
-                onValueChange = { texte = it.take(fr.f4ioz.satcombo.aprs.AprsEmission.LONGUEUR_MESSAGE) },
-                label = { Text(if (type == "POS") t("aprs_tx_commentaire") else t("aprs_tx_texte"), fontSize = 12.sp) },
-                placeholder = { Text(when (type) { "JEUDI" -> "CQ HOTG 73 de JN18"; "APRSPH" -> "HOTG 73"; else -> "" }, color = TextLo) },
-                singleLine = true, modifier = Modifier.fillMaxWidth())
-            Spacer(Modifier.height(6.dp))
-            Text(t("aprs_tx_chemin"), color = TextLo, fontSize = 11.sp)
-            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                listOf("ARISS" to t("aprs_tx_chemin_iss"), "WIDE" to t("aprs_tx_chemin_terre"),
-                    "AUCUN" to t("aprs_tx_chemin_aucun")).forEach { (cle, nom) ->
-                    FilterChip(selected = chemin == cle, onClick = { chemin = cle },
-                        label = { Text(nom, fontSize = 12.sp) },
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = Cyan.copy(alpha = 0.2f), selectedLabelColor = Cyan))
-                }
-            }
-            Text(t("aprs_tx_ssid"), color = TextLo, fontSize = 11.sp)
-            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                listOf(0, 6, 7, 9, 10).forEach { n ->
-                    FilterChip(selected = ssid == n, onClick = { ssid = n; vm.setAprsSsid(n) },
-                        label = { Text(if (n == 0) "—" else "-$n", fontSize = 12.sp) },
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = Cyan.copy(alpha = 0.2f), selectedLabelColor = Cyan))
-                }
-            }
-            // The audio level is the IC-9700's business; a KISS radio sets its own.
-            if (par == "CAT") {
-                Text(tf("aprs_tx_niveau", (niveau * 100).toInt()), color = TextLo, fontSize = 11.sp)
-                androidx.compose.material3.Slider(value = niveau, valueRange = 0.05f..1f,
-                    onValueChange = { niveau = it }, onValueChangeFinished = { vm.setAprsNiveau(niveau) })
-            }
-            if (source.isBlank()) Text(t("aprs_tx_sans_indicatif"), color = Amber, fontSize = 11.sp)
-            apercu?.let {
-                Text(t("aprs_tx_apercu"), color = TextLo, fontSize = 11.sp)
-                Text(it, color = TextHi, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
-            }
-            Spacer(Modifier.height(8.dp))
-            // Tests without transmitting: the audio the IC-9700 would get. A KISS radio modulates by itself.
-            if (par == "CAT") Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically) {
-                androidx.compose.material3.OutlinedButton(enabled = apercu != null && source.isNotBlank(),
-                    onClick = { trame()?.let { vm.aprsEssai(it, fichier = false, partage = partage) } }) {
-                    Text(t("aprs_tx_essai_hp"), color = Cyan, fontSize = 12.sp)
-                }
-                androidx.compose.material3.OutlinedButton(enabled = apercu != null && source.isNotBlank(),
-                    onClick = { trame()?.let { vm.aprsEssai(it, fichier = true, partage = partage) } }) {
-                    Text(t("aprs_tx_essai_wav"), color = Cyan, fontSize = 12.sp)
-                }
-            }
-            Spacer(Modifier.height(6.dp))
-            // Set by SatMe on an APRS frequency: nothing to vouch for.
-            val connue = kiss.frequenceHz?.let { hz -> fr.f4ioz.satcombo.aprs.AprsEmission.FENETRES.any { hz in it } } == true
-            if (par == "KISS" && !connue) ConfirmeFrequenceKiss(frequenceOk, onFrequenceOk)
-            Button(enabled = apercu != null && source.isNotBlank() && (par == "CAT" || (kiss.connecte && (frequenceOk || connue))),
-                onClick = {
-                    trame()?.let { if (par == "KISS") vm.aprsEmetKiss(it, frequenceOk) else vm.aprsEmet(it) }
-                },
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE5484D)),
-                modifier = Modifier.fillMaxWidth()) {
-                Text(if (par == "KISS") t("aprs_kiss_emettre") else t("aprs_tx_emettre"),
-                    color = Color.White, fontWeight = FontWeight.Bold)
-            }
-            if (resultat.isNotBlank()) Text(resultat, color = TextHi, fontSize = 12.sp,
-                modifier = Modifier.padding(top = 6.dp))
-            // One position by itself as the ISS rises: off unless switched on, as it transmits.
-            Row(Modifier.fillMaxWidth().padding(top = 8.dp).toggleable(value = balise, role = Role.Switch,
-                    onValueChange = { balise = it; vm.setAprsBaliseIss(it) }),
-                verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text(t("aprs_balise_titre"), color = TextHi, fontSize = 13.sp)
-                    Text(if (par == "KISS") t("aprs_balise_desc_kiss") else t("aprs_balise_desc"), color = TextLo, fontSize = 11.sp)
-                }
-                Switch(checked = balise, onCheckedChange = null,
-                    colors = SwitchDefaults.colors(checkedTrackColor = Color(0xFFE5484D)))
-            }
-            if (par == "CAT") {
-                TextButton(onClick = { aide = !aide }) { Text(t("aprs_tx_aide_titre"), color = Cyan, fontSize = 12.sp) }
-                if (aide) Text(t("aprs_tx_aide"), color = TextLo, fontSize = 11.sp)
-            }
-        }
-    }
-}
-
-/**
- * A radio with a KISS TNC on USB (TH-D72…): choose the adapter and speed,
- * connect, switch it to KISS; frames it receives join the list.
- */
-@Composable
-private fun CarteTnc(vm: MainViewModel) {
-    val ctx = LocalContext.current
-    val etat by fr.f4ioz.satcombo.aprs.TncKiss.etat.collectAsState()
-    var appareils by remember { mutableStateOf(fr.f4ioz.satcombo.aprs.TncKiss.appareils(ctx)) }
-    var cle by remember { mutableStateOf(vm.aprsKissCle()) }
-    var vitesse by remember { mutableStateOf(vm.aprsKissVitesse()) }
-    var aide by remember { mutableStateOf(false) }
-    var frequence by remember { mutableStateOf(vm.aprsKissFrequence()) }
-    Surface(color = SpaceCard, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp)) {
-            Text(t("aprs_reception"), color = TextHi, fontWeight = FontWeight.Bold)
-            Text(t("aprs_kiss_desc"), color = TextLo, fontSize = 11.sp)
-            Spacer(Modifier.height(8.dp))
-            // Where SatMe tunes the radio (Kenwood): set before KISS, changed by itself in Auto.
-            Text(t("aprs_kiss_freq_titre"), color = TextHi, fontSize = 13.sp)
-            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                listOf("AUTO" to t("aprs_kiss_freq_auto"), "144800" to "144,800", "145825" to "145,825",
-                    "POSTE" to t("aprs_kiss_freq_poste")).forEach { (c, n) ->
-                    FilterChip(selected = frequence == c, onClick = { frequence = c; vm.setAprsKissFrequence(c) },
-                        label = { Text(n, fontSize = 12.sp) },
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = Cyan.copy(alpha = 0.2f), selectedLabelColor = Cyan))
-                }
-            }
-            Text(when (frequence) { "AUTO" -> t("aprs_kiss_freq_auto_desc"); "POSTE" -> t("aprs_kiss_freq_poste_desc")
-                    else -> t("aprs_kiss_freq_fixe_desc") }, color = TextLo, fontSize = 11.sp)
-            Spacer(Modifier.height(8.dp))
-            if (etat.connecte) {
-                Text(tf("aprs_kiss_connecte", etat.nom, etat.vitesse, etat.recues, etat.envoyees),
-                    color = Aurora, fontSize = 12.sp)
-                if (etat.initialise) Text(t("aprs_kiss_init_envoye"), color = TextLo, fontSize = 11.sp)
-                else Text(t("aprs_kiss_pas_en_kiss"), color = Amber, fontSize = 11.sp)
-                etat.frequenceHz?.let { hz ->
-                    Text(tf("aprs_kiss_frequence_lue", "%.4f".format(java.util.Locale.US, hz / 1e6),
-                        if (etat.bande == 1) "B" else "A"), color = TextHi, fontSize = 12.sp)
-                }
-                etat.erreur?.let { Text(t("aprs_kiss_erreur_$it"), color = Amber, fontSize = 11.sp) }
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    androidx.compose.material3.OutlinedButton(onClick = { vm.kissPasseEnKiss() }) {
-                        Text(t("aprs_kiss_passer"), color = Cyan, fontSize = 12.sp)
-                    }
-                    TextButton(onClick = { vm.kissDeconnecte() }) {
-                        Text(t("aprs_kiss_deconnecter"), color = Magenta, fontSize = 12.sp)
-                    }
-                }
-            } else {
-                if (appareils.isEmpty()) Text(t("aprs_kiss_aucun"), color = Amber, fontSize = 11.sp)
-                appareils.forEach { a ->
-                    Row(Modifier.fillMaxWidth().toggleable(value = cle == a.cle, role = Role.RadioButton,
-                            onValueChange = { cle = a.cle }), verticalAlignment = Alignment.CenterVertically) {
-                        androidx.compose.material3.RadioButton(selected = cle == a.cle, onClick = null)
-                        Text(a.nom, color = TextHi, fontSize = 12.sp, modifier = Modifier.padding(start = 6.dp))
-                    }
-                }
-                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    listOf(9600, 19200, 38400, 57600).forEach { v ->
-                        FilterChip(selected = vitesse == v, onClick = { vitesse = v },
-                            label = { Text("$v", fontSize = 12.sp) },
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = Cyan.copy(alpha = 0.2f), selectedLabelColor = Cyan))
-                    }
-                }
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Button(enabled = appareils.any { it.cle == cle }, onClick = { vm.kissConnecte(cle, vitesse) },
-                        colors = ButtonDefaults.buttonColors(containerColor = Cyan)) {
-                        Text(t("aprs_kiss_connecter"), color = Color.Black)
-                    }
-                    TextButton(onClick = { appareils = fr.f4ioz.satcombo.aprs.TncKiss.appareils(ctx) }) {
-                        Text(t("aprs_kiss_rechercher"), color = Cyan, fontSize = 12.sp)
-                    }
-                }
-                etat.erreur?.let { Text(t("aprs_kiss_erreur_$it"), color = Amber, fontSize = 11.sp) }
-            }
-            TextButton(onClick = { aide = !aide }) { Text(t("aprs_kiss_aide_titre"), color = Cyan, fontSize = 12.sp) }
-            if (aide) Text(t("aprs_kiss_aide"), color = TextLo, fontSize = 11.sp)
-        }
-    }
-}
-
-/**
- * Reception from a Yaesu FT3D: it writes each APRS station it decodes as a
- * waypoint line on its USB port (OUTPUT = WAY.P). Adapter, speed, connect.
- */
-@Composable
-private fun CarteFt3d(vm: MainViewModel) {
-    val ctx = LocalContext.current
-    val etat by fr.f4ioz.satcombo.aprs.RecepteurWaypoints.etat.collectAsState()
-    var appareils by remember { mutableStateOf(fr.f4ioz.satcombo.aprs.TncKiss.appareils(ctx)) }
-    var cle by remember { mutableStateOf(vm.aprsFt3dCle()) }
-    var vitesse by remember { mutableStateOf(vm.aprsFt3dVitesse()) }
-    var aide by remember { mutableStateOf(false) }
-    Surface(color = SpaceCard, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp)) {
-            Text(t("aprs_reception"), color = TextHi, fontWeight = FontWeight.Bold)
-            Text(t("aprs_ft3d_desc"), color = TextLo, fontSize = 11.sp)
-            Spacer(Modifier.height(8.dp))
-            if (etat.connecte) {
-                Text(tf("aprs_ft3d_connecte", etat.nom, etat.vitesse, etat.recues), color = Aurora, fontSize = 12.sp)
-                if (etat.illisibles > 0 && etat.recues == 0)
-                    Text(t("aprs_ft3d_illisibles"), color = Amber, fontSize = 11.sp)
-                TextButton(onClick = { vm.ft3dDeconnecte() }) {
-                    Text(t("aprs_kiss_deconnecter"), color = Magenta, fontSize = 12.sp)
-                }
-            } else {
-                if (appareils.isEmpty()) Text(t("aprs_kiss_aucun"), color = Amber, fontSize = 11.sp)
-                appareils.forEach { a ->
-                    Row(Modifier.fillMaxWidth().toggleable(value = cle == a.cle, role = Role.RadioButton,
-                            onValueChange = { cle = a.cle }), verticalAlignment = Alignment.CenterVertically) {
-                        androidx.compose.material3.RadioButton(selected = cle == a.cle, onClick = null)
-                        Text(a.nom, color = TextHi, fontSize = 12.sp, modifier = Modifier.padding(start = 6.dp))
-                    }
-                }
-                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    listOf(4800, 9600, 19200, 38400).forEach { v ->
-                        FilterChip(selected = vitesse == v, onClick = { vitesse = v },
-                            label = { Text("$v", fontSize = 12.sp) },
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = Cyan.copy(alpha = 0.2f), selectedLabelColor = Cyan))
-                    }
-                }
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Button(enabled = appareils.any { it.cle == cle }, onClick = { vm.ft3dConnecte(cle, vitesse) },
-                        colors = ButtonDefaults.buttonColors(containerColor = Cyan)) {
-                        Text(t("aprs_kiss_connecter"), color = Color.Black)
-                    }
-                    TextButton(onClick = { appareils = fr.f4ioz.satcombo.aprs.TncKiss.appareils(ctx) }) {
-                        Text(t("aprs_kiss_rechercher"), color = Cyan, fontSize = 12.sp)
-                    }
-                }
-                etat.erreur?.let { Text(t("aprs_kiss_erreur_$it"), color = Amber, fontSize = 11.sp) }
-            }
-            TextButton(onClick = { aide = !aide }) { Text(t("aprs_ft3d_aide_titre"), color = Cyan, fontSize = 12.sp) }
-            if (aide) Text(t("aprs_ft3d_aide"), color = TextLo, fontSize = 11.sp)
         }
     }
 }

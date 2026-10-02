@@ -13,6 +13,9 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -152,6 +155,8 @@ internal fun OngletCarte(ui: UiState, vm: MainViewModel, paquets: List<Paquet>) 
     val obs = ui.observer
     var periode by rememberSaveable { mutableStateOf("JOUR") }
     var monde by rememberSaveable { mutableStateOf(false) }
+    // OpenStreetMap by default; the offline drawing needs no network.
+    var fond by rememberSaveable { mutableStateOf("OSM") }
     var choisie by rememberSaveable { mutableStateOf<String?>(null) }
     val depuis = if (periode == "JOUR") debutDuJourUtc(ui.nowMs.takeIf { it > 0 } ?: System.currentTimeMillis()) else 0L
     val vus = remember(paquets, depuis) { paquets.filter { it.quand >= depuis } }
@@ -182,9 +187,18 @@ internal fun OngletCarte(ui: UiState, vm: MainViewModel, paquets: List<Paquet>) 
             }
         }
         item {
-            CarteStations(stations, obs?.let { it.latDeg to it.lonDeg }, trace, issIci, liens, carres, choisie, monde) {
-                choisie = it
+            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                listOf("OSM" to "OpenStreetMap", "TOPO" to "Topo", "DARK" to t("dark"), "VECTOR" to t("map_offline"))
+                    .forEach { (c, n) -> Puce(fond == c, n) { fond = c } }
             }
+        }
+        item {
+            val qth = obs?.let { it.latDeg to it.lonDeg }
+            val fournisseur = MapProviders.byId(fond)
+            if (fournisseur.template == null)
+                CarteStations(stations, qth, trace, issIci, liens, carres, choisie, monde) { choisie = it }
+            else
+                CarteTuiles(fournisseur, stations, qth, trace, issIci, liens, carres, choisie, monde) { choisie = it }
         }
         item {
             Text(tf("aprs_carte_legende", stations.size, carres.size, liens.size), color = TextLo, fontSize = 11.sp)
@@ -300,6 +314,118 @@ private fun CarteStations(
 }
 
 /**
+ * The same layers over map tiles (OpenStreetMap, Topo, dark): Web Mercator,
+ * pinch to zoom, drag to pan, tap a station. Starts framed on what was
+ * heard (or the whole world); the tile source is credited on the map.
+ */
+@Composable
+private fun CarteTuiles(
+    fournisseur: MapProvider, stations: List<AprsJeu.Station>, qth: Pair<Double, Double>?,
+    trace: List<Pair<Double, Double>>, iss: Pair<Double, Double>?,
+    liens: List<Pair<Pair<Double, Double>, Pair<Double, Double>>>,
+    carres: Set<String>, choisie: String?, monde: Boolean, onChoisit: (String?) -> Unit,
+) {
+    val portee = rememberCoroutineScope()
+    val tuiles = remember { TileStore(portee) }
+    var taille by remember { mutableStateOf(androidx.compose.ui.geometry.Size.Zero) }
+    // Centre in world units (0..1 both ways) and zoom level (world = 256·2^zoom px).
+    var cx by remember { mutableStateOf(0.5) }
+    var cy by remember { mutableStateOf(0.5) }
+    var zoom by remember { mutableStateOf(2.0) }
+    fun wx(lon: Double) = (lon + 180.0) / 360.0
+    fun wy(lat: Double): Double {
+        val l = Math.toRadians(lat.coerceIn(-85.05, 85.05))
+        return (1 - kotlin.math.ln(kotlin.math.tan(l) + 1 / kotlin.math.cos(l)) / Math.PI) / 2
+    }
+    val points = remember(stations, qth) { stations.map { it.lat to it.lon } + listOfNotNull(qth) }
+    // Frame what was heard (or the world) once the size is known, and again when asked.
+    LaunchedEffect(points.size, monde, taille) {
+        if (taille.width <= 0f) return@LaunchedEffect
+        if (monde || points.isEmpty()) { cx = 0.5; cy = 0.5; zoom = kotlin.math.log2(taille.width / 256.0).coerceAtLeast(0.0); return@LaunchedEffect }
+        val xs = points.map { wx(it.second) }; val ys = points.map { wy(it.first) }
+        val dx = (xs.max() - xs.min()).coerceAtLeast(1e-4); val dy = (ys.max() - ys.min()).coerceAtLeast(1e-4)
+        cx = (xs.max() + xs.min()) / 2; cy = (ys.max() + ys.min()) / 2
+        zoom = minOf(kotlin.math.log2(taille.width * 0.8 / (256 * dx)), kotlin.math.log2(taille.height * 0.8 / (256 * dy)))
+            .coerceIn(1.0, 14.0)
+    }
+    val dark = isDarkTheme()
+    Box(Modifier.fillMaxWidth().height(340.dp).clip(RoundedCornerShape(14.dp))
+        .background(if (dark) Color(0xFF0B1018) else Color(0xFFDDE6F1))) {
+        Canvas(Modifier.matchParentSize()
+            .onSizeChanged { taille = androidx.compose.ui.geometry.Size(it.width.toFloat(), it.height.toFloat()) }
+            .pointerInput(Unit) {
+                detectTransformGestures { centre, deplacement, facteur, _ ->
+                    val w = 256.0 * Math.pow(2.0, zoom)
+                    // The point under the fingers stays put while zooming.
+                    val px = cx + (centre.x - size.width / 2) / w
+                    val py = cy + (centre.y - size.height / 2) / w
+                    zoom = (zoom + kotlin.math.log2(facteur.toDouble())).coerceIn(0.0, fournisseur.maxZ.toDouble())
+                    val w2 = 256.0 * Math.pow(2.0, zoom)
+                    cx = (px - (centre.x - size.width / 2) / w2 - deplacement.x / w2 + 1) % 1.0
+                    cy = (py - (centre.y - size.height / 2) / w2 - deplacement.y / w2).coerceIn(0.0, 1.0)
+                }
+            }
+            .pointerInput(stations) {
+                detectTapGestures { o ->
+                    val w = 256.0 * Math.pow(2.0, zoom)
+                    val proche = stations.minByOrNull { s ->
+                        val x = (wx(s.lon) - cx) * w + size.width / 2; val y = (wy(s.lat) - cy) * w + size.height / 2
+                        (x - o.x) * (x - o.x) + (y - o.y) * (y - o.y)
+                    }
+                    onChoisit(proche?.indicatif)
+                }
+            }) {
+            val w = 256.0 * Math.pow(2.0, zoom)
+            fun xy(lat: Double, lon: Double) = Offset(((wx(lon) - cx) * w + size.width / 2).toFloat(),
+                ((wy(lat) - cy) * w + size.height / 2).toFloat())
+            // Tiles at the nearest whole level, scaled to the current zoom.
+            val z = kotlin.math.floor(zoom).toInt().coerceIn(0, fournisseur.maxZ)
+            val n = 1 shl z
+            val cote = (w / n).toFloat()
+            val x0 = kotlin.math.floor((cx * w - size.width / 2) / cote).toInt()
+            val x1 = kotlin.math.floor((cx * w + size.width / 2) / cote).toInt()
+            val y0 = kotlin.math.floor((cy * w - size.height / 2) / cote).toInt().coerceAtLeast(0)
+            val y1 = kotlin.math.floor((cy * w + size.height / 2) / cote).toInt().coerceAtMost(n - 1)
+            for (tx in x0..x1) for (ty in y0..y1) {
+                val o = Offset((tx * cote - cx * w + size.width / 2).toFloat(), (ty * cote - cy * w + size.height / 2).toFloat())
+                val img = tuiles.get(fournisseur, z, tx, ty)
+                if (img != null) drawImage(img, dstOffset = androidx.compose.ui.unit.IntOffset(o.x.toInt(), o.y.toInt()),
+                    dstSize = androidx.compose.ui.unit.IntSize(cote.toInt() + 1, cote.toInt() + 1))
+            }
+            carres.forEach { c ->
+                // bounds = latMin, lonMin, latSpan, lonSpan.
+                val b = fr.f4ioz.satcombo.location.Maidenhead.bounds(c) ?: return@forEach
+                val a = xy(b[0] + b[2], b[1]); val e = xy(b[0], b[1] + b[3])
+                drawRect(Aurora.copy(alpha = 0.16f), a, androidx.compose.ui.geometry.Size(e.x - a.x, e.y - a.y))
+            }
+            for (i in 1 until trace.size) {
+                val (la1, lo1) = trace[i - 1]; val (la2, lo2) = trace[i]
+                if (abs(lo2 - lo1) > 180.0) continue
+                drawLine(Color(0xFFE0A100), xy(la1, lo1), xy(la2, lo2), 3f)
+            }
+            liens.forEach { (st, sat) -> drawLine(Color(0xFF3B6FD8).copy(alpha = 0.6f), xy(st.first, st.second), xy(sat.first, sat.second), 2f) }
+            val texte = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+                textSize = 28f; color = android.graphics.Color.BLACK; isFakeBoldText = true
+                setShadowLayer(5f, 0f, 0f, android.graphics.Color.WHITE)
+            }
+            stations.forEach { s ->
+                val c = when { s.meteo != null -> Color(0xFFE08A00); s.viaIss -> Color(0xFF3B6FD8); else -> Color(0xFF00897B) }
+                val p = xy(s.lat, s.lon)
+                if (p.x < -20 || p.y < -20 || p.x > size.width + 20 || p.y > size.height + 20) return@forEach
+                if (s.indicatif == choisie) drawCircle(Color(0xFFE5484D), 13f, p, style = Stroke(3.5f))
+                drawCircle(Color.White, 8f, p); drawCircle(c, 6f, p)
+                // Names once zoomed in enough to read them.
+                if (zoom >= 6 || s.indicatif == choisie) drawContext.canvas.nativeCanvas.drawText(s.indicatif, p.x + 10f, p.y - 8f, texte)
+            }
+            iss?.let { (la, lo) -> val p = xy(la, lo); drawCircle(Color(0xFFE0A100).copy(alpha = 0.35f), 16f, p); drawCircle(Color(0xFFE0A100), 7f, p) }
+            qth?.let { (la, lo) -> val p = xy(la, lo); drawCircle(Color.White, 9f, p); drawCircle(Magenta, 7f, p) }
+        }
+        Text(fournisseur.attribution, color = Color(0xFF333333), fontSize = 9.sp,
+            modifier = Modifier.align(Alignment.BottomEnd).background(Color.White.copy(alpha = 0.7f)).padding(horizontal = 4.dp))
+    }
+}
+
+/**
  * The hunt: distance and course to the station picked, and an arrow that
  * turns with the phone held flat — walk where it points. With a handheld
  * (FT3D, TH-D72) it is a little fox hunt.
@@ -386,8 +512,9 @@ internal fun OngletMessages(ui: UiState, vm: MainViewModel, paquets: List<Paquet
     }
     var ouvert by rememberSaveable { mutableStateOf<String?>(null) }
     var nouveau by rememberSaveable { mutableStateOf("") }
-    var chemin by rememberSaveable { mutableStateOf("ARISS") }
-    val cheminListe = if (chemin == "ARISS") listOf("ARISS") else listOf("WIDE2-1")
+    // The ISS digipeater, or the terrestrial network: by default where APRS works now.
+    var chemin by rememberSaveable { mutableStateOf(if (vm.aprsCheminParDefaut() == listOf("ARISS")) "ARISS" else "WIDE") }
+    val cheminListe = if (chemin == "ARISS") listOf("ARISS") else listOf("WIDE1-1", "WIDE2-1")
     val kiss by fr.f4ioz.satcombo.aprs.TncKiss.etat.collectAsState()
     val connue = kiss.frequenceHz?.let { hz -> AprsEmission.FENETRES.any { hz in it } } == true
     val peutEmettre = moi.isNotBlank() && mode != "FT3D" && (mode != "KISS" || (kiss.connecte && (frequenceOk || connue)))
@@ -424,7 +551,7 @@ internal fun OngletMessages(ui: UiState, vm: MainViewModel, paquets: List<Paquet
             Column {
                 Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     Puce(chemin == "ARISS", t("aprs_tx_chemin_iss")) { chemin = "ARISS" }
-                    Puce(chemin == "WIDE", t("aprs_tx_chemin_terre")) { chemin = "WIDE" }
+                    Puce(chemin == "WIDE", "WIDE1-1,WIDE2-1 (" + t("aprs_travail_terre_court") + ")") { chemin = "WIDE" }
                 }
                 if (mode == "KISS" && !connue) ConfirmeFrequenceKiss(frequenceOk, onFrequenceOk)
                 if (moi.isBlank()) Text(t("aprs_tx_sans_indicatif"), color = Amber, fontSize = 11.sp)
@@ -518,7 +645,6 @@ internal fun OngletTrophees(ui: UiState, vm: MainViewModel, paquets: List<Paquet
     val bilan = remember(paquets, moi, depuis) { AprsJeu.bilan(paquets, depuis, moi, obs?.latDeg, obs?.lonDeg, pays) }
     val contacts = remember(paquets, moi) { AprsJeu.contacts(paquets, moi) }
     var retour by remember { mutableStateOf("") }
-    var fetes by remember { mutableStateOf(vm.aprsFetes()) }
 
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         item {
@@ -596,17 +722,6 @@ internal fun OngletTrophees(ui: UiState, vm: MainViewModel, paquets: List<Paquet
                     paire.forEach { b -> CarteBadge(b, tr.badges[b], Modifier.weight(1f)) }
                     if (paire.size == 1) Spacer(Modifier.weight(1f))
                 }
-            }
-        }
-        item {
-            Row(Modifier.fillMaxWidth().toggleable(value = fetes, role = Role.Switch,
-                    onValueChange = { fetes = it; vm.setAprsFetes(it) }).padding(vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text(t("aprs_fetes_titre"), color = TextHi, fontSize = 13.sp)
-                    Text(t("aprs_fetes_desc"), color = TextLo, fontSize = 11.sp)
-                }
-                Switch(checked = fetes, onCheckedChange = null, colors = SwitchDefaults.colors(checkedTrackColor = Cyan))
             }
         }
     }

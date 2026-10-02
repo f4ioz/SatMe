@@ -1335,7 +1335,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             fr.f4ioz.satcombo.aprs.AprsHub.evenements.collect { runCatching { aprsFete(it) } }
         }
         viewModelScope.launch {
-            while (true) { runCatching { aprsBaliseTic() }; runCatching { aprsKissTic() }; delay(10_000) }
+            while (true) {
+                runCatching { aprsBaliseTic() }; runCatching { aprsKissTic() }; runCatching { aprsAudioTic() }
+                delay(10_000)
+            }
         }
         // --- control desk ---
         // The only gestures a PC can trigger are placed here; the server can
@@ -4589,10 +4592,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch { fr.f4ioz.satcombo.aprs.TncKiss.passeEnKiss(aprsKissFrequenceVoulue()) }
     }
 
-    fun aprsKissFrequence(): String = settings.aprsKissFrequence
-    /** A new choice is applied at once when the radio is connected. */
-    fun setAprsKissFrequence(v: String) {
-        settings.aprsKissFrequence = v
+    fun aprsTravail(): String = settings.aprsTravail
+    /** A new choice is applied at once: KISS radio retuned, IC-9700 listening moved. */
+    fun setAprsTravail(v: String) {
+        settings.aprsTravail = v
+        if (aprsEcouteEnCours) viewModelScope.launch { runCatching { aprsAudioTic(force = true) } }
         val hz = aprsKissFrequenceVoulue() ?: return
         if (!fr.f4ioz.satcombo.aprs.TncKiss.etat.value.connecte) return
         viewModelScope.launch {
@@ -4612,12 +4616,32 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** Where the KISS radio should be now, or null to leave it. */
-    private fun aprsKissFrequenceVoulue(): Long? = when (settings.aprsKissFrequence) {
-        "144800" -> 144_800_000L
-        "145825" -> 145_825_000L
-        "AUTO" -> if (issEnVue()) 145_825_000L else 144_800_000L
-        else -> null
+    private fun aprsKissFrequenceVoulue(): Long? {
+        val base = when (settings.aprsTravail) {
+            "TERRE" -> 144_800_000L
+            "ISS" -> 145_825_000L
+            "AUTO" -> if (issEnVue()) 145_825_000L else 144_800_000L
+            else -> return null
+        }
+        return if (base == 145_825_000L && settings.aprsKissDoppler) base + aprsPalierDoppler(base) else base
     }
+
+    /**
+     * The ISS Doppler at [hz], in whole 5 kHz steps (the TH-D72's finest
+     * grid for 145.825): +5 kHz early in the pass, 0 around its highest
+     * point, −5 kHz at the end. Zero when the ISS is down.
+     */
+    private fun aprsPalierDoppler(hz: Long): Long {
+        val sat = iss() ?: return 0L
+        val obs = _ui.value.observer ?: return 0L
+        val p = runCatching { predictor.positionAt(sat, obs, System.currentTimeMillis()) }.getOrNull() ?: return 0L
+        if (p.elevationDeg <= 0.0) return 0L
+        val decalage = -hz * p.rangeRateKmS / 299_792.458
+        return kotlin.math.round(decalage / 5_000.0).toLong() * 5_000L
+    }
+
+    fun aprsKissDoppler(): Boolean = settings.aprsKissDoppler
+    fun setAprsKissDoppler(v: Boolean) { settings.aprsKissDoppler = v }
 
     private var aprsKissChangeMs = 0L
 
@@ -4626,7 +4650,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      * otherwise. A switch costs some 5 s of deafness, so at most one a minute.
      */
     private suspend fun aprsKissTic() {
-        if (settings.aprsMode != "KISS" || settings.aprsKissFrequence != "AUTO") return
+        if (settings.aprsMode != "KISS") return
+        if (settings.aprsTravail != "AUTO" && !(settings.aprsTravail == "ISS" && settings.aprsKissDoppler)) return
         val k = fr.f4ioz.satcombo.aprs.TncKiss.etat.value
         if (!k.connecte || !k.initialise || k.frequenceHz == null) return
         val hz = aprsKissFrequenceVoulue() ?: return
@@ -4721,6 +4746,143 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /** The phone is listening for APRS (button on the APRS page), until the recording stops. */
+    @Volatile private var aprsEcouteEnCours = false
+    /** The IC-9700 was put on 144.800 by APRS (Doppler held): to undo when done. */
+    @Volatile private var aprsTerreActive = false
+
+    /** Listening right now (for the APRS page). */
+    fun aprsEcoute(): Boolean = aprsEcouteEnCours && _ui.value.recording
+
+    /** The path for what we send now: the ISS digipeater, or the terrestrial network. */
+    fun aprsCheminParDefaut(): List<String> = when (settings.aprsTravail) {
+        "ISS" -> listOf("ARISS")
+        "TERRE" -> listOf("WIDE1-1", "WIDE2-1")
+        else -> if (issEnVue()) listOf("ARISS") else listOf("WIDE1-1", "WIDE2-1")
+    }
+
+    /** Working the ISS right now (by choice, or in Auto while it is up). */
+    private fun aprsSurIss(): Boolean = when (settings.aprsTravail) {
+        "ISS" -> true; "TERRE" -> false; else -> issEnVue()
+    }
+
+    /**
+     * APRS with the phone and the IC-9700, in one tap. On the ISS: the ISS
+     * and its APRS transmitter chosen, CAT connected (145.825 MHz FM,
+     * Doppler). Terrestrial: CAT connected, Doppler held, the rig on 144.800
+     * MHz FM out of satellite mode. Auto moves between the two as the ISS
+     * rises and sets. Then decoding on and the recording started — the
+     * decoder listens to what is recorded.
+     */
+    fun aprsEcouteDemarre() {
+        viewModelScope.launch {
+            settings.aprsEnabled = true
+            aprsEcouteEnCours = true
+            val app = getApplication<android.app.Application>()
+            // The TH-D72's one cable carries KISS here: its CAT is left alone.
+            if (_ui.value.rigModel != THD72) {
+                if (!_ui.value.catEnabled) setCatEnabled(true)
+                else if (!_ui.value.catConnected) connectCat()
+                kotlinx.coroutines.withTimeoutOrNull(6_000) { while (!_ui.value.catConnected) delay(200) }
+            }
+            aprsAudioTic(force = true)
+            if (!_ui.value.recording) {
+                if (settings.aprsTravail == "ISS") startRecording()   // stops by itself after the pass
+                else fr.f4ioz.satcombo.audio.RecorderService.start(app, "APRS", null,
+                    _ui.value.recorderSource, _ui.value.recorderUnprocessed, myLocator())
+            }
+        }
+    }
+
+    fun aprsEcouteArrete() {
+        stopRecording()
+        aprsEcouteEnCours = false
+        viewModelScope.launch { aprsLibereTerre() }
+    }
+
+    /** Gives the IC-9700 back to satellite tracking (Doppler released). */
+    private fun aprsLibereTerre() {
+        if (!aprsTerreActive) return
+        aprsTerreActive = false
+        if (_ui.value.dopplerHold) toggleDopplerHold()
+    }
+
+    /** Picks the ISS and its APRS transmitter (the Doppler loop then tunes 145.825 FM). */
+    private suspend fun aprsChoisitIss(): Boolean {
+        val sat = iss() ?: run { aprsEnvoi.value = t("aprs_iss_absente"); return false }
+        if (_ui.value.selected?.catalogNumber != sat.catalogNumber) select(sat)
+        kotlinx.coroutines.withTimeoutOrNull(8_000) {
+            while (_ui.value.transmittersLoading || _ui.value.selected?.catalogNumber != sat.catalogNumber) delay(100)
+        }
+        val i = activeTransmitters().indexOfFirst { t ->
+            val m = t.mode.orEmpty().uppercase()
+            m.contains("AFSK") || m.contains("APRS") || t.description.uppercase().contains("APRS") ||
+                t.downlinkLowHz?.let { it in 145_815_000L..145_835_000L } == true
+        }
+        if (i < 0) { aprsEnvoi.value = t("aprs_iss_sans_transpondeur"); return false }
+        if (i != _ui.value.selectedTxIndex) selectTransmitter(i)
+        return true
+    }
+
+    /** The IC-9700 on terrestrial APRS: Doppler held, out of satellite mode, 144.800 MHz FM. */
+    private suspend fun aprsIc9700Terre(): Boolean {
+        if (!_ui.value.catConnected || _ui.value.rigModel != "IC9700" || isPairRig) return false
+        if (!_ui.value.dopplerHold) toggleDopplerHold()
+        aprsTerreActive = true
+        catArmedFor = null; catArmedTxDesc = null
+        return runCatching {
+            cat.setSatelliteMode(false)
+            cat.setSplitOn(false)
+            cat.selectVfo(false)
+            cat.setFrequency(144_800_000L)
+            cat.setMode(0x05)
+        }.getOrDefault(false)
+    }
+
+    /**
+     * Keeps the phone + IC-9700 listening where the work mode says: the ISS
+     * while it is up, 144.800 otherwise (Auto), or always one of the two.
+     */
+    private suspend fun aprsAudioTic(force: Boolean = false) {
+        if (!aprsEcouteEnCours) return
+        if (!_ui.value.recording && !force) { aprsEcouteEnCours = false; aprsLibereTerre(); return }
+        if (settings.aprsMode != "AUDIO") return
+        val surIss = aprsSurIss()
+        if (surIss) {
+            if (aprsTerreActive || force) { aprsLibereTerre(); aprsChoisitIss() }
+            aprsEnvoi.value = t("aprs_ecoute_iss_ok")
+        } else if (!aprsTerreActive || force) {
+            aprsEnvoi.value = if (aprsIc9700Terre()) t("aprs_ecoute_terre_ok")
+                else if (_ui.value.rigModel == "IC9700") t("aprs_ecoute_terre_sans_cat")
+                else t("aprs_ecoute_terre_autre")
+        }
+    }
+
+    /**
+     * Where a position is sent from: the QTH, or — with the approximate
+     * position option — the QTH shifted by a fixed random offset under 500 m.
+     */
+    fun aprsPositionEmise(): Pair<Double, Double>? {
+        val o = _ui.value.observer ?: return null
+        if (!settings.aprsPositionFloue) return o.latDeg to o.lonDeg
+        var n = settings.aprsFlouNordM; var e = settings.aprsFlouEstM
+        if (n.isNaN() || e.isNaN()) {
+            // Uniform over the disc: radius from the square root, so the centre is not favoured.
+            val r = 500.0 * kotlin.math.sqrt(kotlin.random.Random.nextDouble())
+            val a = kotlin.random.Random.nextDouble(0.0, 2 * Math.PI)
+            n = (r * kotlin.math.cos(a)).toFloat(); e = (r * kotlin.math.sin(a)).toFloat()
+            settings.aprsFlouNordM = n; settings.aprsFlouEstM = e
+        }
+        val lat = o.latDeg + n / 111_320.0
+        val lon = o.lonDeg + e / (111_320.0 * kotlin.math.cos(Math.toRadians(o.latDeg)).coerceAtLeast(0.01))
+        return lat to lon
+    }
+
+    fun aprsPositionFloue(): Boolean = settings.aprsPositionFloue
+    fun setAprsPositionFloue(v: Boolean) { settings.aprsPositionFloue = v }
+    /** Draws a new offset (the next position sent uses it). */
+    fun aprsNouveauFlou() { settings.aprsFlouNordM = Float.NaN; settings.aprsFlouEstM = Float.NaN }
+
     // ----------------------------------------------------- APRS, the fun side
 
     /** The ISS among the loaded satellites (NORAD 25544), or null. */
@@ -4812,7 +4974,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
         if (!prete) return
         aprsBaliseAos = aos
-        val info = fr.f4ioz.satcombo.aprs.AprsEmission.position(obs.latDeg, obs.lonDeg, "/-",
+        val (la, lo) = aprsPositionEmise() ?: return
+        val info = fr.f4ioz.satcombo.aprs.AprsEmission.position(la, lo, "/-",
             "SatMe " + Maidenhead.fromLatLon(obs.latDeg, obs.lonDeg).take(4))
         val trame = fr.f4ioz.satcombo.aprs.AprsEmission.trame(source, listOf("ARISS"), info)
         aprsEmetSelonMode(trame, frequenceConfirmee = true)
@@ -7716,8 +7879,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     /** True if the chosen transmitter is FM (fixed channels) vs linear transponder. */
     private fun isFmMode(t: fr.f4ioz.satcombo.data.Transmitter): Boolean {
         if (t.isTransponder) return false
-        val m = t.mode?.uppercase() ?: ""
-        return m.contains("FM") || m.contains("NFM")
+        return fr.f4ioz.satcombo.domain.ModeRadio.surFm(t.mode)
     }
 
     /** Satellite RF layout, OscarWatch-style. */
@@ -7737,7 +7899,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private fun civModeFor(t: fr.f4ioz.satcombo.data.Transmitter, isUplink: Boolean): Int {
         val m = t.mode?.uppercase() ?: ""
         return when {
-            m.contains("FM") -> 0x05
+            // FM, and the digital modes heard in FM (ISS APRS is "AFSK").
+            fr.f4ioz.satcombo.domain.ModeRadio.surFm(m) -> 0x05
             // Linear in CW op-mode: use CW both sides.
             t.isTransponder && _ui.value.opMode == "CW" -> 0x03
             m.contains("CW") -> 0x03
@@ -7995,7 +8158,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private fun ft817ModeFor(t: fr.f4ioz.satcombo.data.Transmitter, isUplink: Boolean): String {
         val m = (t.mode ?: "").uppercase()
         return when {
-            m.contains("FM") -> "FM"
+            fr.f4ioz.satcombo.domain.ModeRadio.surFm(m) -> "FM"
             m.contains("CW") && !isUplink -> "CW"
             t.isTransponder && effectiveInvert(t) -> if (isUplink) "LSB" else "USB"
             m.contains("LSB") -> "LSB"

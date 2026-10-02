@@ -64,7 +64,7 @@ interface RigDriver {
 fun normalizeMode(mode: String?, isUplink: Boolean, invert: Boolean, isTransponder: Boolean): String {
     val m = mode?.uppercase() ?: ""
     return when {
-        m.contains("FM") -> "FM"
+        fr.f4ioz.satcombo.domain.ModeRadio.surFm(m) -> "FM"
         m.contains("CW") -> "CW"
         isTransponder && invert -> if (isUplink) "LSB" else "USB"
         m.contains("LSB") -> "LSB"
