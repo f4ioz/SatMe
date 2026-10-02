@@ -1119,6 +1119,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val amsatRepo = fr.f4ioz.satcombo.data.AmsatStatusRepository(app)
     /** Catalogue number → AMSAT name, for the status whatever the source (declared before `init`, which reads it). */
     private val nomsAmsatStore = fr.f4ioz.satcombo.data.NomsAmsat(app)
+    /** A satellite other than the ISS was picked while SSTV ISS is armed: the screen warns (before `init`: `select` reads it). */
+    val sstvIssAvertissement = kotlinx.coroutines.flow.MutableStateFlow(false)
+    /** A word for the SSTV page (no ISS, no pass…), not in `UiState`. */
+    val sstvIssMessage = kotlinx.coroutines.flow.MutableStateFlow("")
 
     private val _ui = MutableStateFlow(
         UiState(
@@ -1342,6 +1346,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         // before each session.
         fr.f4ioz.satcombo.demo.ServeurDemo.configureWifi(
             settings.demoSsid, settings.demoMotDePasse)
+        // --- SSTV ISS: when the recorder disarms (unticked, or past the last pass), the ISS gets its transmitter back ---
+        viewModelScope.launch {
+            var arme = false
+            fr.f4ioz.satcombo.audio.RecorderService.fenetres.collect { f ->
+                if (arme && f.isEmpty()) runCatching { sstvIssRendTransmetteur() }
+                arme = f.isNotEmpty()
+            }
+        }
         // --- APRS, the fun side: who we are for the trophies, the cheers, the ISS beacon ---
         fr.f4ioz.satcombo.aprs.AprsHub.joueur = {
             Triple(settings.callsign, _ui.value.observer?.latDeg, _ui.value.observer?.lonDeg)
@@ -4926,6 +4938,64 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun setAprsPositionFloue(v: Boolean) { settings.aprsPositionFloue = v }
     /** Draws a new offset (the next position sent uses it). */
     fun aprsNouveauFlou() { settings.aprsFlouNordM = Float.NaN; settings.aprsFlouEstM = Float.NaN }
+
+    // ------------------------------------------------------------ SSTV ISS
+
+    fun fermeAvertissementSstvIss() { sstvIssAvertissement.value = false }
+
+    /** The coming ISS passes (72 h), for the "until" choice. */
+    fun sstvIssPassages(): List<fr.f4ioz.satcombo.data.SatPass> {
+        val sat = iss() ?: return emptyList()
+        val obs = _ui.value.observer ?: return emptyList()
+        return runCatching {
+            predictor.upcomingPasses(sat, obs, System.currentTimeMillis() - 15 * 60_000L, 72,
+                _ui.value.minElevDeg.toDouble())
+        }.getOrDefault(emptyList()).filter { it.losEpochMs + fr.f4ioz.satcombo.domain.SstvIss.APRES_MS > System.currentTimeMillis() }
+    }
+
+    /**
+     * SSTV ISS on its own until the pass starting at [dernierAos]: the ISS and
+     * its SSTV transmitter chosen (the one in use kept to give it back),
+     * recording and SSTV decoding on, the recorder armed for every window.
+     */
+    fun sstvIssActive(dernierAos: Long) {
+        viewModelScope.launch {
+            val sat = iss() ?: run { sstvIssMessage.value = t("sstv_iss_absente"); return@launch }
+            if (_ui.value.selected?.catalogNumber != sat.catalogNumber) select(sat)
+            kotlinx.coroutines.withTimeoutOrNull(8_000) {
+                while (_ui.value.transmittersLoading || _ui.value.selected?.catalogNumber != sat.catalogNumber) delay(100)
+            }
+            val actifs = activeTransmitters()
+            if (settings.sstvIssTxAvant.isBlank())
+                settings.sstvIssTxAvant = actifs.getOrNull(_ui.value.selectedTxIndex)?.description ?: ""
+            val i = fr.f4ioz.satcombo.domain.SstvIss.indexSstv(actifs)
+            if (i >= 0 && i != _ui.value.selectedTxIndex) selectTransmitter(i)
+            if (!_ui.value.recorderEnabled) setRecorderEnabled(true)
+            if (!_ui.value.sstvEnabled) setSstvEnabled(true)
+            val f = fr.f4ioz.satcombo.domain.SstvIss.fenetres(
+                sstvIssPassages().map { it.aosEpochMs to it.losEpochMs }, System.currentTimeMillis(), dernierAos)
+            if (f.isEmpty()) { sstvIssMessage.value = t("sstv_iss_aucun"); return@launch }
+            fr.f4ioz.satcombo.audio.RecorderService.arme(getApplication(), sat.name, f,
+                _ui.value.recorderSource, _ui.value.recorderUnprocessed, myLocator())
+            sstvIssMessage.value = if (i < 0) t("sstv_iss_sans_transpondeur") else ""
+        }
+    }
+
+    /** Stops SSTV ISS (and a recording in progress); the transmitter comes back when the recorder disarms. */
+    fun sstvIssDesactive() {
+        fr.f4ioz.satcombo.audio.RecorderService.desarme(getApplication())
+    }
+
+    /** Gives the ISS back the transmitter it had before SSTV ISS. */
+    private fun sstvIssRendTransmetteur() {
+        val avant = settings.sstvIssTxAvant
+        if (avant.isBlank()) return
+        settings.sstvIssTxAvant = ""
+        if (_ui.value.selected?.catalogNumber == 25544) {
+            val i = activeTransmitters().indexOfFirst { it.description == avant }
+            if (i >= 0) selectTransmitter(i)
+        } else satConfigStore.saveTransmitter(25544, avant)
+    }
 
     // ----------------------------------------------------- APRS, the fun side
 
@@ -8641,6 +8711,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun select(sat: TleEntry, focusPassAos: Long? = null) {
+        // SSTV ISS keeps recording the ISS: say so when another satellite is picked.
+        if (sat.catalogNumber != 25544 && fr.f4ioz.satcombo.audio.RecorderService.fenetres.value.isNotEmpty())
+            sstvIssAvertissement.value = true
         val obs = _ui.value.observer ?: locationProvider.defaultObserver
         // Everything belonging to the previous satellite goes with it —
         // especially the hand-tuned rest, or the old satellite's frequencies

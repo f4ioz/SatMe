@@ -153,6 +153,23 @@ fun SatComboApp(vm: MainViewModel) {
     val ui by vm.ui.collectAsState()
     LaunchedEffect(Unit) { vm.bootstrap() }
 
+    // SSTV ISS keeps recording the ISS whatever satellite is shown: say so when another one is picked.
+    val avertSstvIss by vm.sstvIssAvertissement.collectAsState()
+    if (avertSstvIss) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { vm.fermeAvertissementSstvIss() },
+            title = { Text(t("sstv_iss_avert_titre")) },
+            text = { Text(t("sstv_iss_avert_texte")) },
+            confirmButton = {
+                androidx.compose.material3.TextButton(onClick = { vm.fermeAvertissementSstvIss() }) { Text(t("sstv_iss_avert_garder")) }
+            },
+            dismissButton = {
+                androidx.compose.material3.TextButton(onClick = { vm.fermeAvertissementSstvIss(); vm.sstvIssDesactive() }) {
+                    Text(t("sstv_iss_avert_arreter"))
+                }
+            })
+    }
+
     // System back navigates within the app instead of quitting: a page
     // returns to the page it was opened from (Chemin), detail -> list,
     // selection mode -> off. Only the top-level passes screen lets back fall

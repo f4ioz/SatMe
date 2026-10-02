@@ -175,6 +175,11 @@ class SettingsStore(context: Context) {
         get() = prefs.getBoolean("aprs_kiss_doppler", false)
         set(v) { prefs.edit().putBoolean("aprs_kiss_doppler", v).apply() }
 
+    /** The ISS transmitter chosen before SSTV ISS took over, to give back afterwards ("" when none). */
+    var sstvIssTxAvant: String
+        get() = prefs.getString("sstv_iss_tx_avant", "") ?: ""
+        set(v) { prefs.edit().putString("sstv_iss_tx_avant", v).apply() }
+
     /** One position sent by itself as the ISS rises (off unless switched on: it transmits). */
     var aprsBaliseIss: Boolean
         get() = prefs.getBoolean("aprs_balise_iss", false)

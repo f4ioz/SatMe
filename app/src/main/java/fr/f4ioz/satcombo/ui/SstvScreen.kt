@@ -45,6 +45,7 @@ import androidx.compose.material3.Text
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -229,6 +230,9 @@ fun SstvScreen(ui: UiState, vm: MainViewModel) {
         }
 
         // -------------------------------------------------------- re-decode
+        // ISS SSTV on its own, pass after pass.
+        item { CarteSstvIss(ui, vm) }
+
         item {
             Surface(color = SpaceCard, shape = RoundedCornerShape(14.dp)) {
                 Column(Modifier.fillMaxWidth().padding(14.dp)) {
@@ -543,4 +547,65 @@ private fun AideDecodageSstv(sstvActif: Boolean, onFerme: (Boolean) -> Unit) {
                 }
             }
         })
+}
+
+
+/**
+ * ISS SSTV on its own: the ISS and its SSTV transmitter chosen, each pass
+ * recorded and decoded from 10 s before AOS to 5 s after LOS, up to the pass
+ * chosen here. Unticked, the ISS gets back the transmitter it had.
+ */
+@Composable
+private fun CarteSstvIss(ui: fr.f4ioz.satcombo.UiState, vm: fr.f4ioz.satcombo.MainViewModel) {
+    val fenetres by fr.f4ioz.satcombo.audio.RecorderService.fenetres.collectAsState()
+    val message by vm.sstvIssMessage.collectAsState()
+    val actif = fenetres.isNotEmpty()
+    val passages = remember(ui.nowMs / 60_000L, ui.satellites.size, ui.observer) { vm.sstvIssPassages() }
+    var dernier by rememberSaveable { mutableStateOf(0L) }
+    val choisi = passages.firstOrNull { it.aosEpochMs == dernier } ?: passages.firstOrNull()
+    val hm = remember { java.text.SimpleDateFormat("EEE HH:mm", java.util.Locale.getDefault()) }
+    // Arming starts a microphone service: the permission first, while the app is in front.
+    val active = rememberDemarrageEnregistrement(ui) { choisi?.let { vm.sstvIssActive(it.aosEpochMs) } }
+    Surface(color = SpaceCard, shape = RoundedCornerShape(14.dp)) {
+        Column(Modifier.fillMaxWidth().padding(14.dp)) {
+            Row(Modifier.fillMaxWidth().toggleable(value = actif, role = Role.Switch,
+                    onValueChange = { if (it) active() else vm.sstvIssDesactive() }),
+                verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(t("sstv_iss_titre"), color = TextHi, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                    Text(t("sstv_iss_desc"), color = TextLo, fontSize = 11.sp)
+                }
+                androidx.compose.material3.Switch(checked = actif, onCheckedChange = null,
+                    colors = androidx.compose.material3.SwitchDefaults.colors(checkedTrackColor = Cyan))
+            }
+            if (actif) {
+                val prochain = fenetres.first()
+                val enCours = ui.nowMs >= prochain.first
+                Text(if (enCours) t("sstv_iss_en_cours")
+                    else tf("sstv_iss_prochain", hm.format(java.util.Date(prochain.first + 10_000L))),
+                    color = Aurora, fontSize = 13.sp, modifier = Modifier.padding(top = 6.dp))
+                Text(tf("sstv_iss_jusqua", hm.format(java.util.Date(fenetres.last().first + 10_000L)), fenetres.size),
+                    color = TextLo, fontSize = 12.sp)
+                Text(t("sstv_iss_garder_ouvert"), color = TextLo, fontSize = 11.sp, modifier = Modifier.padding(top = 4.dp))
+            } else {
+                if (passages.isEmpty()) Text(t("sstv_iss_aucun"), color = Amber, fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp))
+                else {
+                    Text(t("sstv_iss_choisir"), color = TextHi, fontSize = 13.sp, modifier = Modifier.padding(top = 8.dp))
+                    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        passages.take(12).forEach { p ->
+                            FilterChip(selected = choisi?.aosEpochMs == p.aosEpochMs, onClick = { dernier = p.aosEpochMs },
+                                label = { Text(hm.format(java.util.Date(p.aosEpochMs)) + " · " + p.maxElevationDeg.toInt() + "°", fontSize = 12.sp) },
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = Cyan.copy(alpha = 0.2f), selectedLabelColor = Cyan))
+                        }
+                    }
+                    choisi?.let { c ->
+                        val n = passages.count { it.aosEpochMs <= c.aosEpochMs }
+                        Text(tf("sstv_iss_resume", n), color = TextLo, fontSize = 11.sp)
+                    }
+                }
+            }
+            if (message.isNotBlank()) Text(message, color = Amber, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
+        }
+    }
 }

@@ -56,7 +56,42 @@ class RecorderService : Service() {
         const val EXTRA_SOURCE = "recSource"      // "MIC" | "BT" | "USB"
         const val EXTRA_UNPROC = "unprocessed"
         const val EXTRA_LOC = "locator"
+        /** Armed: stays in the foreground between passes and records each window by itself. */
+        const val ACTION_ARM = "fr.f4ioz.satcombo.REC_ARM"
+        const val ACTION_DISARM = "fr.f4ioz.satcombo.REC_DISARM"
+        const val EXTRA_FENETRES = "fenetres"     // start, stop, start, stop… (epoch ms)
         private const val CHANNEL = "recording"
+
+        /**
+         * Windows still to record while armed (start = AOS − 10 s, stop =
+         * LOS + 5 s), the current one first; empty when not armed.
+         */
+        private val _fenetres = MutableStateFlow<List<Pair<Long, Long>>>(emptyList())
+        val fenetres: StateFlow<List<Pair<Long, Long>>> = _fenetres
+
+        /**
+         * Arms the recorder for [fenetres]: started now, while the app is in
+         * front (Android lets a microphone service start only then), it keeps
+         * its notification between passes and starts each recording itself —
+         * nothing has to start it again from the background.
+         */
+        fun arme(context: Context, satName: String, fenetres: List<Pair<Long, Long>>,
+                 source: String, unprocessed: Boolean, locator: String) {
+            val i = Intent(context, RecorderService::class.java)
+                .setAction(ACTION_ARM)
+                .putExtra(EXTRA_SAT, satName)
+                .putExtra(EXTRA_FENETRES, fenetres.flatMap { listOf(it.first, it.second) }.toLongArray())
+                .putExtra(EXTRA_SOURCE, source)
+                .putExtra(EXTRA_UNPROC, unprocessed)
+                .putExtra(EXTRA_LOC, locator)
+            context.startForegroundService(i)
+        }
+
+        /** Disarms, and stops a recording in progress. */
+        fun desarme(context: Context) {
+            if (_fenetres.value.isEmpty() && !_state.value.recording) return
+            runCatching { context.startService(Intent(context, RecorderService::class.java).setAction(ACTION_DISARM)) }
+        }
         private const val NOTIF_ID = 4217
 
         private val _state = MutableStateFlow(RecorderState())
@@ -126,10 +161,70 @@ class RecorderService : Service() {
 
     override fun onBind(intent: Intent?): IBinder? = null
 
+    /** What the armed recorder records with. */
+    private var armeIntent: Intent? = null
+
+    /** Starts the next armed window when its time comes. */
+    private val demarrageArme = Runnable {
+        val f = _fenetres.value.firstOrNull() ?: return@Runnable
+        val i = armeIntent ?: return@Runnable
+        if (_state.value.recording) return@Runnable
+        demarre(Intent(i).setAction(ACTION_START).putExtra(EXTRA_AUTOSTOP, f.second))
+    }
+
+    /** Waits for the next window (or stops when there is none left). */
+    private fun attendFenetreSuivante() {
+        handler.removeCallbacks(demarrageArme)
+        val maintenant = System.currentTimeMillis()
+        _fenetres.value = _fenetres.value.filter { it.second > maintenant }
+        val f = _fenetres.value.firstOrNull()
+        if (f == null) {
+            armeIntent = null
+            stopForeground(STOP_FOREGROUND_REMOVE); stopSelf()
+            return
+        }
+        afficheArme(f.first)
+        handler.postDelayed(demarrageArme, (f.first - maintenant).coerceAtLeast(0L))
+    }
+
+    /** The notification while armed: the next window's start. */
+    private fun afficheArme(debut: Long) {
+        val heure = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(debut + 10_000L))
+        val sat = armeIntent?.getStringExtra(EXTRA_SAT) ?: ""
+        notifie(tf("rec_arme_titre", sat), tf("rec_arme_texte", heure, _fenetres.value.size))
+    }
+
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
-            ACTION_START -> {
-                if (_state.value.recording) return START_NOT_STICKY
+            ACTION_ARM -> {
+                val v = intent.getLongArrayExtra(EXTRA_FENETRES) ?: LongArray(0)
+                _fenetres.value = (0 until v.size / 2).map { v[2 * it] to v[2 * it + 1] }.sortedBy { it.first }
+                armeIntent = Intent(intent)
+                // Foreground at once (5 s rule), with the armed notification.
+                afficheArme(_fenetres.value.firstOrNull()?.first ?: System.currentTimeMillis())
+                if (!_state.value.recording) attendFenetreSuivante()
+            }
+            ACTION_DISARM -> {
+                handler.removeCallbacks(demarrageArme)
+                _fenetres.value = emptyList()
+                armeIntent = null
+                finishRecording()
+            }
+            ACTION_START -> demarre(intent)
+            ACTION_STOP -> {
+                // Stopped by hand during an armed pass: that pass is over, the next ones stay.
+                val f = _fenetres.value.firstOrNull()
+                if (armeIntent != null && f != null && System.currentTimeMillis() >= f.first)
+                    _fenetres.value = _fenetres.value.drop(1)
+                finishRecording()
+            }
+        }
+        return START_NOT_STICKY
+    }
+
+    private fun demarre(intent: Intent) {
+        run {
+                if (_state.value.recording) return
                 val sat = intent.getStringExtra(EXTRA_SAT) ?: AnnonceVocale.SANS_SATELLITE
                 val auto = intent.getLongExtra(EXTRA_AUTOSTOP, 0L).takeIf { it > 0L }
                 val src = intent.getStringExtra(EXTRA_SOURCE) ?: "MIC"
@@ -240,7 +335,9 @@ class RecorderService : Service() {
                             fr.f4ioz.satcombo.apt.AptHub.stopLive()
                             fr.f4ioz.satcombo.aprs.AprsHub.stopLive()
                             tearDownBluetooth()
-                            stopForeground(STOP_FOREGROUND_REMOVE); stopSelf()
+                            // Armed: this window is lost, the next ones are not.
+                            if (armeIntent != null) { _fenetres.value = _fenetres.value.drop(1); attendFenetreSuivante() }
+                            else { stopForeground(STOP_FOREGROUND_REMOVE); stopSelf() }
                             return@post
                         }
                         _state.value = RecorderState(true, now, file.name, auto)
@@ -250,10 +347,7 @@ class RecorderService : Service() {
                         }
                     }
                 }.start()
-            }
-            ACTION_STOP -> finishRecording()
         }
-        return START_NOT_STICKY
     }
 
     /**
@@ -313,6 +407,14 @@ class RecorderService : Service() {
     }
 
     private fun startInForeground(sat: String, src: String = "MIC") {
+        notifie(t("rec_notif_title"), tf("rec_notif_text", sat) + when (src) {
+            "BT" -> " · Bluetooth"
+            "USB" -> " · USB"
+            else -> ""
+        })
+    }
+
+    private fun notifie(titre: String, texte: String) {
         val nm = getSystemService(NotificationManager::class.java)
         if (nm.getNotificationChannel(CHANNEL) == null) {
             nm.createNotificationChannel(
@@ -326,12 +428,8 @@ class RecorderService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val notif: Notification = Notification.Builder(this, CHANNEL)
             .setSmallIcon(android.R.drawable.ic_btn_speak_now)
-            .setContentTitle(t("rec_notif_title"))
-            .setContentText(tf("rec_notif_text", sat) + when (src) {
-                "BT" -> " · Bluetooth"
-                "USB" -> " · USB"
-                else -> ""
-            })
+            .setContentTitle(titre)
+            .setContentText(texte)
             .setOngoing(true)
             .setContentIntent(tap)
             .build()
@@ -366,6 +464,8 @@ class RecorderService : Service() {
             }.start()
         }
         tearDownBluetooth()
+        // Armed: back to waiting for the next pass instead of stopping.
+        if (armeIntent != null) { attendFenetreSuivante(); return }
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
     }
@@ -420,6 +520,8 @@ class RecorderService : Service() {
 
     override fun onDestroy() {
         handler.removeCallbacks(autoStop)
+        handler.removeCallbacks(demarrageArme)
+        _fenetres.value = emptyList()
         if (_state.value.recording) {
             recorder.stop()
             fr.f4ioz.satcombo.sstv.SstvHub.stopLive()
