@@ -34,15 +34,18 @@ Poursuite de satellites radioamateurs sur Android — passages, pointage, Dopple
 <img src="docs/images/fr-aprs-badges.webp" width="24%" alt="Trophées APRS">
 </p>
 
-## Nouveautés des 20.74 et 20.75
+## Nouveautés de la 20.75
 
-- **SSTV automatique** : l'ISS ou un satellite favori et son transpondeur, une case à cocher, et chaque passage est enregistré et décodé tout seul, de 10 s avant le lever à 5 s après le coucher, jusqu'au passage choisi — même écran éteint.
+- **SSTV automatique sur n'importe quel satellite favori**, plus seulement l'ISS : choisis le satellite et son transpondeur, une case à cocher, et chaque passage est enregistré et décodé tout seul, de 10 s avant le lever à 5 s après le coucher, jusqu'au passage choisi — même écran éteint.
+- **PDF de la sélection** : choisis combien de prochains passages de chaque satellite sélectionné mettre dans le PDF (jusqu'à 20, sur deux semaines).
+
+### Et dans la 20.74
+
 - **APRS (bêta)**, une page complète : carte OpenStreetMap, messages, APRS Thursday, trophées ; sur l'ISS ou en terrestre (144,800 MHz) ; IC-9700, Kenwood TH-D72 en KISS, Yaesu FT3D.
 - **Nouveaux postes** : Kenwood TH-D72 en full duplex ; un Yaesu FT-817 ou un Icom IC-705 de chaque côté, ou avec une clé SDR.
-- **PDF de la sélection** : choisis combien de prochains passages de chaque satellite sélectionné mettre dans le PDF.
 - **ISS à l'heure** : les éléments les plus frais l'emportent d'une source à l'autre (jamais une prévision pour plus tard) ; noms courts et statuts AMSAT quelle que soit la source.
 
-Guide complet dans le **[wiki](https://github.com/f4ioz/SatMe/wiki/Accueil)**.
+Toutes les versions dans le [wiki](https://github.com/f4ioz/SatMe/wiki/Nouveautes). Guide complet dans le **[wiki](https://github.com/f4ioz/SatMe/wiki/Accueil)**.
 
 ## Fonctions
 
