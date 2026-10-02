@@ -28,7 +28,7 @@ class TleRefreshWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker
         val ids = SourcesStore(applicationContext).load()
         // Same path as the app: the SatMe GP server first (or only), when set.
         val reglages = SettingsStore(applicationContext)
-        val groupes = Sources.byIds(ids).map {
+        val groupes = Sources.aTelecharger(ids).map {
             ServeurGp.adresses(reglages.serveurGp, it, reglages.serveurGpSeul)
         }
         if (groupes.isEmpty()) return Result.success()

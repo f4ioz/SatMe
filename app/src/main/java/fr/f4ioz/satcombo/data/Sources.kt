@@ -47,6 +47,17 @@ object Sources {
     // startup. Users can enable the Celestrak groups in Settings → Sources.
     val DEFAULT_IDS = setOf("amsat_gp")
     fun byIds(ids: Set<String>) = ALL.filter { it.id in ids }
+
+    /**
+     * AMSAT's TLE bulletin, read along with its JSON one: the JSON carried
+     * ISS elements nine days old (23/09) while the TLE file had those of the
+     * day (02/10) — five minutes off on the ISS. Same satellites, same names.
+     */
+    val AMSAT_TLE = TleSource("amsat_tle", "AMSAT (TLE)", "https://www.amsat.org/tle/current/nasabare.txt")
+
+    /** What to download for [ids]: the sources, and AMSAT's TLE with its JSON. */
+    fun aTelecharger(ids: Set<String>): List<TleSource> =
+        byIds(ids).flatMap { if (it.id == "amsat_gp") listOf(it, AMSAT_TLE) else listOf(it) }
 }
 
 /** Persists the user's enabled TLE source ids. */

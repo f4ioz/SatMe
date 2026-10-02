@@ -803,7 +803,7 @@ private fun PassesScreen(ui: UiState, vm: MainViewModel) {
                     pastPasses.forEach { p ->
                         PassCard(p, ui.nowMs, showSat = true, useUtc = ui.useUtc,
                             agendaTitle = vm.agendaForPass(p)?.title,
-                            amsatStatus = if (ui.statusSource != "SATNOGS") vm.amsatFor(p.satName)?.recent else null
+                            amsatStatus = if (ui.statusSource != "SATNOGS") vm.amsatFor(p.satName, p.catalogNumber)?.recent else null
                         ) { vm.selectByCatnum(p.catalogNumber, p.aosEpochMs) }
                     }
                     Box(Modifier.fillMaxWidth().height(1.dp).background(Color(0xFF2A3647)))
@@ -946,7 +946,7 @@ private fun PassesScreen(ui: UiState, vm: MainViewModel) {
                     else emptyList(),
                     agenda = vm.agendaForPass(np),
                     amsatStatus = if (ui.statusSource != "SATNOGS")
-                        vm.amsatFor(np.satName)?.recent else null
+                        vm.amsatFor(np.satName, np.catalogNumber)?.recent else null
                 ) { vm.selectByCatnum(np.catalogNumber, np.aosEpochMs) }
             }
         }
@@ -1114,7 +1114,7 @@ private fun PassesScreen(ui: UiState, vm: MainViewModel) {
                     skedCount = if (ui.skedsEnabled) vm.skedCountForPass(p.catalogNumber, p.aosEpochMs, p.losEpochMs) else 0,
                     agendaTitle = vm.agendaForPass(p)?.title,
                     useUtc = ui.useUtc,
-                    amsatStatus = if (ui.statusSource != "SATNOGS") vm.amsatFor(p.satName)?.recent else null,
+                    amsatStatus = if (ui.statusSource != "SATNOGS") vm.amsatFor(p.satName, p.catalogNumber)?.recent else null,
                     showBell = ui.notifyEnabled && ui.notifyMode == "TARGET",
                     bellOn = vm.isPassNotified(p),
                     onBell = { vm.togglePassNotify(p) }

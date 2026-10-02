@@ -3982,7 +3982,7 @@ private fun SettingsSats(ui: UiState, vm: MainViewModel) {
         ) {
             items(liste, key = { it.catalogNumber }) { sat ->
                 SatRow(sat, isFav = sat.catalogNumber in ui.favorites,
-                    amsatStatus = if (ui.statusSource != "SATNOGS") vm.amsatFor(sat.name)?.recent else null,
+                    amsatStatus = if (ui.statusSource != "SATNOGS") vm.amsatFor(sat.name, sat.catalogNumber)?.recent else null,
                     agenda = vm.agendaForSat(sat.name)) {
                     vm.toggleFavorite(sat.catalogNumber)
                 }

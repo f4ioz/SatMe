@@ -950,7 +950,7 @@ data class UiState(
             }
             if (satActiveOnly && amsatReports.isNotEmpty()) {
                 list = list.filter { sat ->
-                    amsatMatch(sat.name, amsatReports)?.recent == fr.f4ioz.satcombo.data.AmsatStatus.ACTIVE
+                    amsatMatch(sat.name, amsatReports, sat.catalogNumber)?.recent == fr.f4ioz.satcombo.data.AmsatStatus.ACTIVE
                 }
             }
             return list
@@ -1007,11 +1007,24 @@ private class IndexAmsat(val source: Map<String, fr.f4ioz.satcombo.data.AmsatRep
 private fun indexDe(reports: Map<String, fr.f4ioz.satcombo.data.AmsatReport>): IndexAmsat =
     indexAmsat?.takeIf { it.source === reports } ?: IndexAmsat(reports).also { indexAmsat = it }
 
-/** Match a satellite name against AMSAT reports (shared by VM and UiState). */
+/**
+ * Catalogue number → AMSAT name, from AMSAT's bulletin ([fr.f4ioz.satcombo.data.NomsAmsat]).
+ * Set by the view model; read by [amsatMatch], also from [UiState].
+ */
+@Volatile var nomsAmsat: Map<Int, String> = emptyMap()
+
+/**
+ * Match a satellite against AMSAT reports (shared by VM and UiState). By its
+ * catalogue number first, through its AMSAT name — the source may call it
+ * "OSCAR 7" or "ISS (ZARYA)" — then by the name it has here.
+ */
 fun amsatMatch(
-    satName: String, reports: Map<String, fr.f4ioz.satcombo.data.AmsatReport>
+    satName: String, reports: Map<String, fr.f4ioz.satcombo.data.AmsatReport>, catnum: Int? = null
 ): fr.f4ioz.satcombo.data.AmsatReport? {
     if (reports.isEmpty()) return null
+    catnum?.let { nomsAmsat[it] }?.takeIf { it != satName }?.let { alias ->
+        amsatMatch(alias, reports)?.let { return it }
+    }
     val key = satName.uppercase().trim()
     reports[key]?.let { return it }
     val index = indexDe(reports)
@@ -1104,6 +1117,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     val montreInactifs: StateFlow<Boolean> = _montreInactifs
 
     private val amsatRepo = fr.f4ioz.satcombo.data.AmsatStatusRepository(app)
+    /** Catalogue number → AMSAT name, for the status whatever the source (declared before `init`, which reads it). */
+    private val nomsAmsatStore = fr.f4ioz.satcombo.data.NomsAmsat(app)
 
     private val _ui = MutableStateFlow(
         UiState(
@@ -1489,6 +1504,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 }
             }
         }
+        chargeNomsAmsat()
         refreshAmsatStatus()
         chargeInactifs()
     }
@@ -1514,12 +1530,40 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** Operator-reported status for a satellite name, matched loosely. */
-    fun amsatFor(satName: String): fr.f4ioz.satcombo.data.AmsatReport? {
+    /** Operator-reported status for a satellite, by its number when known, else its name. */
+    fun amsatFor(satName: String, catnum: Int? = null): fr.f4ioz.satcombo.data.AmsatReport? {
         val reports = _ui.value.amsatReports
         if (reports.isEmpty()) return null
-        return amsatMatch(satName, reports)
+        return amsatMatch(satName, reports, catnum)
     }
+
+    /**
+     * The AMSAT names table: from disk at once, downloaded again when a week
+     * old. The reports map is replaced afterwards so lists match again.
+     */
+    private fun chargeNomsAmsat() {
+        nomsAmsat = nomsAmsatStore.charge()
+        if (nomsAmsatStore.aJour() && nomsAmsat.isNotEmpty()) return
+        viewModelScope.launch(Dispatchers.IO) {
+            nomsAmsat = nomsAmsatStore.rafraichit(settings.serveurGp, settings.serveurGpSeul)
+            // Satellites already loaded take their short name too, and their passes with it.
+            val avant = _ui.value.satellites
+            val renommes = avant.map(::nomCourt)
+            _ui.value = _ui.value.copy(amsatReports = HashMap(_ui.value.amsatReports))
+            if (renommes != avant) {
+                _ui.value = _ui.value.copy(satellites = renommes.sortedBy { it.name })
+                withContext(Dispatchers.Main) { computeFavoritePasses() }
+            }
+        }
+    }
+
+    /**
+     * The short AMSAT name when known ("AO-07", "ISS"), whatever the source
+     * called it ("OSCAR 7", "ISS (ZARYA)"): shorter on screen, and the same
+     * name from one source to another.
+     */
+    private fun nomCourt(e: TleEntry): TleEntry =
+        nomsAmsat[e.catalogNumber]?.takeIf { it != e.name }?.let { e.copy(name = it) } ?: e
 
     private suspend fun resolveObserver(): Observer =
         if (_ui.value.locationMode == LocationMode.MANUAL) {
@@ -1556,7 +1600,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             val obs = resolveObserver()
             // Through the SatMe GP server when one is set, each source's own
             // address as the fallback.
-            val groupes = Sources.byIds(ids).map {
+            val groupes = Sources.aTelecharger(ids).map {
                 fr.f4ioz.satcombo.data.ServeurGp.adresses(settings.serveurGp, it, settings.serveurGpSeul)
             }
             var sats = emptyList<TleEntry>()
@@ -1587,7 +1631,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             _ui.value = _ui.value.copy(
                 loading = false,
                 observer = obs,
-                satellites = sats.sortedBy { it.name },
+                satellites = sats.map(::nomCourt).sortedBy { it.name },
                 tleCacheAgeMs = cacheAge,
                 error = err
             )
@@ -3984,12 +4028,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      * called with a callsign set: an anonymous report is worthless to the page
      * and would pollute the table.
      */
-    fun submitAmsatStatus(satName: String, heard: Boolean) {
+    fun submitAmsatStatus(satName: String, heard: Boolean, catnum: Int? = null) {
         val s = _ui.value
         if (s.callsign.isBlank() || satName.isBlank()) return
         // Use the name AMSAT itself publishes when we can match it, so the
         // report lands on the right row ("RS-44", "AO-91"…).
-        val amsatName = amsatMatch(satName, s.amsatReports)?.name ?: satName
+        val amsatName = amsatMatch(satName, s.amsatReports, catnum)?.name ?: catnum?.let { nomsAmsat[it] } ?: satName
         _ui.value = _ui.value.copy(amsatSubmitState = "busy")
         viewModelScope.launch {
             val ok = fr.f4ioz.satcombo.data.AmsatSubmit.send(
@@ -8578,7 +8622,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             // Never step back to older elements than those loaded.
             if ((fresh.epochMs ?: 0L) < (ancienne?.epochMs ?: 0L)) return@launch
             val updated = _ui.value.satellites.map {
-                if (it.catalogNumber == catnum) fresh.copy(
+                if (it.catalogNumber == catnum) fresh.copy(name = it.name,
                     uplinkHz = it.uplinkHz, downlinkHz = it.downlinkHz, mode = it.mode) else it
             }
             // Unchanged elements: nothing to recompute. `select()` clears the

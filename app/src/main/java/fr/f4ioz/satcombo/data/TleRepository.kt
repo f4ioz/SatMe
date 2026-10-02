@@ -63,6 +63,27 @@ class TleRepository(
          * name ("OSCAR 7"). Same OMM keys as CelesTrak, so it parses identically.
          */
         const val AMSAT_GP = "https://newark192.amsat.org/gpdata/current/daily-bulletin.json"
+
+        /**
+         * One satellite per catalogue number across the sources: the
+         * **freshest elements** win, but the name (AMSAT's "AO-07"…) and the
+         * frequencies come from the first source that had it. Keeping the
+         * first source's elements put the ISS five minutes off with a
+         * nine-day-old bulletin while a fresh one sat right next to it.
+         */
+        fun fusionne(listes: List<List<TleEntry>>): List<TleEntry> {
+            val vus = LinkedHashMap<Int, TleEntry>()
+            for (liste in listes) for (e in liste) {
+                val avant = vus[e.catalogNumber]
+                if (avant == null) { vus[e.catalogNumber] = e; continue }
+                if ((e.epochMs ?: 0L) > (avant.epochMs ?: 0L)) {
+                    vus[e.catalogNumber] = e.copy(name = avant.name,
+                        uplinkHz = avant.uplinkHz ?: e.uplinkHz, downlinkHz = avant.downlinkHz ?: e.downlinkHz,
+                        mode = avant.mode ?: e.mode)
+                }
+            }
+            return vus.values.toList()
+        }
     }
 
     /** Minimal frequency plan keyed by NORAD catalog number (uplink/downlink in Hz). */
@@ -87,14 +108,11 @@ class TleRepository(
      */
     suspend fun fetchGroupesSecours(groupes: List<List<String>>): List<TleEntry> =
         withContext(Dispatchers.IO) {
-            val seen = LinkedHashMap<Int, TleEntry>()
-            for (adresses in groupes) {
-                val lus = adresses.asSequence()
+            fusionne(groupes.map { adresses ->
+                adresses.asSequence()
                     .map { runCatching { fetchOne(it) }.getOrDefault(emptyList()) }
                     .firstOrNull { it.isNotEmpty() }.orEmpty()
-                lus.forEach { e -> seen.putIfAbsent(e.catalogNumber, e) }
-            }
-            seen.values.toList()
+            })
         }
 
     /**

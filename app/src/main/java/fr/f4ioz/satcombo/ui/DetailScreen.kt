@@ -339,7 +339,7 @@ internal fun DetailScreen(ui: UiState, vm: MainViewModel, onBack: () -> Unit) {
                     }
                     if (statusOpen) {
                         AmsatStatusDialog(ui, sat.name,
-                            onSend = { heard -> vm.submitAmsatStatus(sat.name, heard) },
+                            onSend = { heard -> vm.submitAmsatStatus(sat.name, heard, sat.catalogNumber) },
                             onDismiss = { statusOpen = false; vm.clearAmsatSubmitState() })
                     }
                     val decl = remember(ui.observer) {
@@ -1793,7 +1793,7 @@ internal fun BadgesSatellite(ui: UiState, vm: MainViewModel, sat: TleEntry, modi
             }
             val showSatnogs = ui.statusSource != "AMSAT"
             val showAmsat = ui.statusSource != "SATNOGS"
-            val amsat = if (showAmsat) vm.amsatFor(sat.name) else null
+            val amsat = if (showAmsat) vm.amsatFor(sat.name, sat.catalogNumber) else null
             if (showSatnogs && ui.satStatus != null) SatStatusBadge(ui.satStatus)
             if (amsat != null) AmsatBadge(amsat)
             Text("#${sat.catalogNumber}", color = TextLo, fontSize = 11.sp,
