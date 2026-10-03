@@ -66,6 +66,8 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.outlined.NotificationsNone
 import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.RocketLaunch
+import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Checklist
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PhotoCamera
@@ -979,14 +981,9 @@ private fun PassesScreen(ui: UiState, vm: MainViewModel) {
                     else emptyList(),
                     agenda = vm.agendaForPass(np),
                     amsatStatus = if (ui.statusSource != "SATNOGS")
-                        vm.amsatFor(np.satName, np.catalogNumber)?.recent else null
+                        vm.amsatFor(np.satName, np.catalogNumber)?.recent else null,
+                    onPrepare = { vm.ouvrePreparation(np.catalogNumber, np.aosEpochMs) }
                 ) { vm.selectByCatnum(np.catalogNumber, np.aosEpochMs) }
-            }
-            // Before the pass: is the station ready? (SatMe 21)
-            item {
-                OutlinedButton(onClick = { vm.ouvrePreparation(np.catalogNumber) }, modifier = Modifier.fillMaxWidth()) {
-                    Text("✓ " + t("rd_preparer"), color = Cyan, fontWeight = FontWeight.Bold)
-                }
             }
         }
 
@@ -1156,7 +1153,8 @@ private fun PassesScreen(ui: UiState, vm: MainViewModel) {
                     amsatStatus = if (ui.statusSource != "SATNOGS") vm.amsatFor(p.satName, p.catalogNumber)?.recent else null,
                     showBell = ui.notifyEnabled && ui.notifyMode == "TARGET",
                     bellOn = vm.isPassNotified(p),
-                    onBell = { vm.togglePassNotify(p) }
+                    onBell = { vm.togglePassNotify(p) },
+                    onPrepare = if (ui.selectionMode) null else ({ vm.ouvrePreparation(p.catalogNumber, p.aosEpochMs) })
                 ) {
                     if (ui.selectionMode) vm.togglePassSelected(p) else vm.selectByCatnum(p.catalogNumber, p.aosEpochMs)
                 }
@@ -1196,6 +1194,8 @@ private fun HeroNextPass(
     agenda: fr.f4ioz.satcombo.data.AgendaStore.AgendaEvent? = null,
     /** AMSAT status, for the badge next to the name. */
     amsatStatus: fr.f4ioz.satcombo.data.AmsatStatus? = null,
+    /** Opens "Prepare the pass" for this pass. */
+    onPrepare: (() -> Unit)? = null,
     onClick: () -> Unit
 ) {
     val phase = passPhase(p, now)
@@ -1265,6 +1265,7 @@ private fun HeroNextPass(
                             Spacer(Modifier.width(8.dp))
                         Text(p.satName, color = TextHi, fontWeight = FontWeight.Black,
                             fontSize = 20.sp)
+                        if (onPrepare != null) IconButton(onClick = onPrepare) { IconePreparer(Cyan) }
                     }
                     val hm = tzFormat("HH:mm:ss", useUtc)
                     Text(tf("aos_elmax_line", hm.format(Date(p.aosEpochMs)), tzTag(useUtc), p.maxElevationDeg.toInt()) +
@@ -1312,6 +1313,8 @@ internal fun PassCard(
     agendaTitle: String? = null,
     amsatStatus: fr.f4ioz.satcombo.data.AmsatStatus? = null,
     showBell: Boolean = false, bellOn: Boolean = false, onBell: (() -> Unit)? = null,
+    /** Opens "Prepare the pass" for this very pass. */
+    onPrepare: (() -> Unit)? = null,
     onClick: (() -> Unit)? = null
 ) {
     val day = tzFormat("EEE dd/MM", useUtc)
@@ -1428,6 +1431,9 @@ internal fun PassCard(
                         }
                     }
                 }
+                if (onPrepare != null) {
+                    IconButton(onClick = onPrepare) { IconePreparer(TextLo) }
+                }
                 if (showBell && onBell != null) {
                     IconButton(onClick = onBell) {
                         Icon(
@@ -1498,4 +1504,18 @@ private fun QuestionPassagesPdf(satellites: List<String>, dernier: Int, onAnnule
         },
         confirmButton = { TextButton(onClick = { onChoix(n) }) { Text(t("pdf_passages_creer"), color = Cyan) } },
         dismissButton = { TextButton(onClick = onAnnule) { Text(t("cancel"), color = TextLo) } })
+}
+
+/**
+ * "Prepare the pass": a rocket with a wrench, next to the bell on every pass,
+ * so that preparing is clearly for any pass, not only the next one.
+ */
+@Composable
+internal fun IconePreparer(teinte: Color) {
+    Box(Modifier.size(24.dp)) {
+        Icon(Icons.Default.RocketLaunch, contentDescription = t("rd_preparer"), tint = teinte,
+            modifier = Modifier.size(20.dp).align(Alignment.TopStart))
+        Icon(Icons.Default.Build, contentDescription = null, tint = Cyan,
+            modifier = Modifier.size(11.dp).align(Alignment.BottomEnd))
+    }
 }

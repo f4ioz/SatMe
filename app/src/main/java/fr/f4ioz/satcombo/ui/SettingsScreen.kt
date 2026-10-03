@@ -3682,7 +3682,8 @@ private fun RecordingsSection(ui: UiState, vm: MainViewModel) {
                         }) { Text(t("export_save"), color = Cyan, fontSize = 12.sp) }
                         Spacer(Modifier.weight(1f))
                         TextButton(onClick = {
-                            f.delete(); sidecar.delete(); refresh++
+                            f.delete(); sidecar.delete()
+                            fr.f4ioz.satcombo.audio.InfoEnregistrement.fichier(f).delete(); refresh++
                         }) { Text(t("rec_delete"), color = Magenta, fontSize = 12.sp) }
                     }
                 }

@@ -55,6 +55,16 @@ class SstvDecoder(
     private var freqLen = 0
     private var freqBase = 0L                          // abs index of freq[0]
     private var total = 0L                             // samples fed so far
+
+    /** Samples fed so far. */
+    val echantillons: Long get() = total
+
+    /**
+     * Where the current picture's sound starts, in samples fed: its header,
+     * or the sync pulses it was recognised on. For keeping just that sound.
+     */
+    @Volatile var debutTrame: Long = 0L
+        private set
     private var scratch = FloatArray(4096)
 
     // The narrow reading (see [Demodulator]), stored aligned with [freq]: its
@@ -286,6 +296,7 @@ class SstvDecoder(
         if (state != State.IDLE) emitPartial()
         prepare(m)
         forcedAnchor = true
+        debutTrame = (total - (300 * spms).toLong()).coerceAtLeast(0L)
         huntFrom = total
         huntLimit = total + ((m.blockMs + 40.0) * spms).toLong()
         state = State.SYNC_HUNT
@@ -605,6 +616,7 @@ class SstvDecoder(
         val period = m.blockMs * spms
         val syncLen = m.syncMs * spms
         val lastStart = pulseEnd[PULSES - 1] - syncLen
+        debutTrame = (pulseEnd[PULSES - TRAIN] - syncLen - 500 * spms).toLong().coerceAtLeast(0L)
         var k = 0
         remember(0, lastStart)
         for (j in PULSES - 2 downTo PULSES - TRAIN) {
@@ -640,6 +652,8 @@ class SstvDecoder(
     private fun startImage(m: SstvMode, visEndAbs: Long) {
         prepare(m)
         forcedAnchor = false
+        // Leader, break, leader and VIS: 910 ms before its end; and a margin.
+        debutTrame = (visEndAbs - (1_300 * spms).toLong()).coerceAtLeast(0L)
         blockStart = visEndAbs.toDouble()
         // The VIS stop bit is itself 30 ms of 1200 Hz and runs straight into the
         // first sync pulse, so the hunt starts inside it and works from the

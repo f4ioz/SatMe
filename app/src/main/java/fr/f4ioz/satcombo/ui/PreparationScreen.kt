@@ -51,6 +51,7 @@ import fr.f4ioz.satcombo.i18n.t
 import fr.f4ioz.satcombo.i18n.tf
 import fr.f4ioz.satcombo.ui.theme.*
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 private val Rouge = Color(0xFFE5484D)
 private val Vert = Color(0xFF49D17F)
@@ -77,16 +78,27 @@ private fun duree(ms: Long): String {
  * from going to the pass.
  */
 @Composable
-fun PreparationScreen(ui: UiState, vm: MainViewModel, catnum: Int) {
-    val (sat, passage) = remember(catnum, ui.nowMs / 30_000L, ui.satellites.size) { vm.passagePreparation(catnum) }
+fun PreparationScreen(ui: UiState, vm: MainViewModel, prep: MainViewModel.Preparation) {
+    val catnum = prep.catnum
+    val (sat, passage) = remember(prep, ui.nowMs / 30_000L, ui.satellites.size) { vm.passagePreparation(catnum, prep.aosMs) }
     var profils by remember { mutableStateOf(vm.profilsStation()) }
     var actif by remember { mutableStateOf(vm.profilActif().id) }
     var voyants by remember { mutableStateOf<List<StationReadiness.Voyant>>(emptyList()) }
     var edite by remember { mutableStateOf<StationReadiness.ProfilNomme?>(null) }
     var tour by remember { mutableStateOf(0) }
+    // The station check: null = not run yet; the time it ran.
+    var test by remember(catnum) { mutableStateOf<List<StationReadiness.Voyant>?>(null) }
+    var testEnCours by remember { mutableStateOf(false) }
+    var testHeure by remember { mutableStateOf(0L) }
+    val portee = rememberCoroutineScope()
     // Refreshed every two seconds: the rig connects, the GPS gets a fix, the lights follow.
     LaunchedEffect(catnum, actif, tour) {
         while (true) { voyants = vm.stationReadiness(catnum); delay(2_000) }
+    }
+    // CAT connected: the rig goes to the satellite being prepared (and comes
+    // back to it when the rig connects while the screen is open).
+    LaunchedEffect(catnum, passage?.aosEpochMs, ui.catConnected) {
+        vm.accordePreparation(catnum, passage?.aosEpochMs)
     }
     val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { tour++ }
     val global = StationReadiness.global(voyants)
@@ -119,7 +131,7 @@ fun PreparationScreen(ui: UiState, vm: MainViewModel, catnum: Int) {
                                 // Overlaps the pass being prepared: both up at the same time.
                                 val ensemble = passage != null && p.catalogNumber != catnum &&
                                     p.aosEpochMs < passage.losEpochMs && p.losEpochMs > passage.aosEpochMs
-                                FilterChip(selected = p.catalogNumber == catnum, onClick = { vm.ouvrePreparation(p.catalogNumber) },
+                                FilterChip(selected = p.catalogNumber == catnum && (passage == null || kotlin.math.abs(p.aosEpochMs - passage.aosEpochMs) < 10 * 60_000L), onClick = { vm.ouvrePreparation(p.catalogNumber, p.aosEpochMs) },
                                     label = {
                                         Text(p.satName + " · " + (if (enCours) t("rd_en_cours") else heure.format(java.util.Date(p.aosEpochMs))) +
                                             (if (ensemble) " ⇄" else ""), fontSize = 12.sp)
@@ -199,6 +211,44 @@ fun PreparationScreen(ui: UiState, vm: MainViewModel, catnum: Int) {
                     Surface(color = c.copy(alpha = 0.16f), shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth()) {
                         Text(if (voyants.isEmpty()) "…" else texte, color = c, fontWeight = FontWeight.Bold, fontSize = 16.sp,
                             modifier = Modifier.padding(12.dp))
+                    }
+                }
+                // The station check: ask the equipment itself.
+                item {
+                    OutlinedButton(enabled = !testEnCours, onClick = {
+                        testEnCours = true
+                        portee.launch {
+                            // On the satellite first, so that the rig reads back its frequency.
+                            if (ui.catConnected) { vm.accordePreparation(catnum, passage?.aosEpochMs); delay(1_500) }
+                            test = runCatching { vm.testeStation() }.getOrNull()
+                            testHeure = System.currentTimeMillis(); testEnCours = false; tour++
+                        }
+                    }, modifier = Modifier.fillMaxWidth()) {
+                        Text(if (testEnCours) t("rd_test_en_cours") else "⚙ " + t("rd_tester"), color = Cyan, fontWeight = FontWeight.Bold)
+                    }
+                    Text(t("rd_tester_desc"), color = TextLo, fontSize = 11.sp, modifier = Modifier.padding(top = 2.dp))
+                }
+                test?.let { r ->
+                    item {
+                        Surface(color = SpaceCard, shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth()) {
+                            Column(Modifier.padding(12.dp)) {
+                                Text(tf("rd_test_resultat", heure.format(java.util.Date(testHeure))), color = TextHi,
+                                    fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                r.forEach { v ->
+                                    Row(Modifier.fillMaxWidth().padding(top = 6.dp).clickable(enabled = v.action != StationReadiness.Action.AUCUNE) {
+                                        if (v.action == StationReadiness.Action.PERMISSION_MICRO) permission.launch(arrayOf(android.Manifest.permission.RECORD_AUDIO))
+                                        else vm.actionReadiness(v.action, catnum)
+                                    }, verticalAlignment = Alignment.CenterVertically) {
+                                        Text(badge(v.niveau), color = couleur(v.niveau), fontWeight = FontWeight.Bold, fontSize = 13.sp,
+                                            modifier = Modifier.width(28.dp))
+                                        Column(Modifier.weight(1f)) {
+                                            Text(t("rd_dom_" + v.domaine.name.lowercase()), color = TextHi, fontSize = 12.sp)
+                                            Text(tf(v.raison, *v.args.toTypedArray()), color = TextLo, fontSize = 12.sp)
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
                 // One line per domain, the whole line a shortcut.

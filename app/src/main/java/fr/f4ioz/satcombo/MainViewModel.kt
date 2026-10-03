@@ -1342,6 +1342,19 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     val ui: StateFlow<UiState> = _ui.asStateFlow()
 
     init {
+        // The SSTV and APT decoders run in a service with no GPS of their own:
+        // they get the station's locator as soon as it is known, and each
+        // time it changes — not only when a screen happens to ask for it.
+        viewModelScope.launch {
+            _ui.collect { u ->
+                val loc = u.observer?.let { Maidenhead.fromLatLon(it.latDeg, it.lonDeg) }
+                    ?: u.manualLocator.uppercase()
+                if (loc.isNotBlank() && fr.f4ioz.satcombo.sstv.SstvHub.qthLocator != loc) {
+                    fr.f4ioz.satcombo.sstv.SstvHub.qthLocator = loc
+                    fr.f4ioz.satcombo.apt.AptHub.qthLocator = loc
+                }
+            }
+        }
         // The demo access point survives a restart, so it need not be retyped
         // before each session.
         fr.f4ioz.satcombo.demo.ServeurDemo.configureWifi(
@@ -5042,9 +5055,23 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     // --- the "Prepare the pass" screen: which satellite (null = closed), out of UiState
 
-    val preparation = kotlinx.coroutines.flow.MutableStateFlow<Int?>(null)
-    fun ouvrePreparation(catnum: Int) { preparation.value = catnum }
+    /** The satellite being prepared and the pass chosen (its AOS; null = its next one). */
+    data class Preparation(val catnum: Int, val aosMs: Long? = null)
+    val preparation = kotlinx.coroutines.flow.MutableStateFlow<Preparation?>(null)
+    fun ouvrePreparation(catnum: Int, aosMs: Long? = null) { preparation.value = Preparation(catnum, aosMs) }
     fun fermePreparation() { preparation.value = null }
+
+    /**
+     * With CAT connected, preparing a satellite puts the rig on it: the
+     * satellite and the pass chosen become the selected ones, and the CAT
+     * loop tunes the rig to its transmitter (before AOS too, by default).
+     * An explicit gesture of the operator — the check itself stays read only.
+     */
+    fun accordePreparation(catnum: Int, aosMs: Long?) {
+        if (!_ui.value.catConnected) return
+        if (_ui.value.selected?.catalogNumber == catnum && (aosMs == null || _ui.value.focusedPassAos == aosMs)) return
+        selectByCatnum(catnum, aosMs)
+    }
 
     /**
      * The coming passes of the followed satellites, one per satellite, the
@@ -5057,14 +5084,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             .sortedBy { it.aosEpochMs }.distinctBy { it.catalogNumber }.take(8)
     }
 
-    /** The satellite and its next pass (or the one in progress), for the screen's header. */
-    fun passagePreparation(catnum: Int): Pair<TleEntry?, fr.f4ioz.satcombo.data.SatPass?> {
+    /** The satellite and the pass chosen (else its next one, or the one in progress), for the screen's header. */
+    fun passagePreparation(catnum: Int, aosMs: Long? = null): Pair<TleEntry?, fr.f4ioz.satcombo.data.SatPass?> {
         val sat = _ui.value.satellites.firstOrNull { it.catalogNumber == catnum }
         val obs = _ui.value.observer
         val now = System.currentTimeMillis()
         val p = if (sat != null && obs != null) runCatching {
-            predictor.upcomingPasses(sat, obs, now - 20 * 60_000L, 72, _ui.value.minElevDeg.toDouble())
-                .firstOrNull { it.losEpochMs > now }
+            val l = predictor.upcomingPasses(sat, obs, now - 20 * 60_000L, 72, _ui.value.minElevDeg.toDouble())
+                .filter { it.losEpochMs > now }
+            // The pass asked for (a few minutes' tolerance: passes are computed again), else the next one.
+            aosMs?.let { a -> l.firstOrNull { kotlin.math.abs(it.aosEpochMs - a) < 10 * 60_000L } } ?: l.firstOrNull()
         }.getOrNull() else null
         return sat to p
     }
@@ -5128,10 +5157,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val d = locationProvider.defaultObserver
         val parDefaut = obs != null && kotlin.math.abs(obs.latDeg - d.latDeg) < 1e-6 && kotlin.math.abs(obs.lonDeg - d.lonDeg) < 1e-6
         // The PTT poll's last word (fixed French texts in surveilleEmission).
+        // "pas de réponse du poste" only means no transmit state came back:
+        // some rigs never give one (TH-D72, a simulated FT-817) while
+        // answering everything else — unknown, not dead. The station check
+        // (testeStation) reads the frequency to tell for sure.
         val diag = u.catUi.txDiag
         val sante = when {
-            !u.catConnected || diag.isBlank() -> fr.f4ioz.satcombo.domain.StationReadiness.SanteCat.INCONNUE
-            diag.startsWith("pas de réponse") || diag.startsWith("erreur") || diag.startsWith("poste d'émission non ouvert") -> fr.f4ioz.satcombo.domain.StationReadiness.SanteCat.MUETTE
+            !u.catConnected || diag.isBlank() || diag.startsWith("pas de réponse") -> fr.f4ioz.satcombo.domain.StationReadiness.SanteCat.INCONNUE
+            diag.startsWith("erreur") || diag.startsWith("poste d'émission non ouvert") -> fr.f4ioz.satcombo.domain.StationReadiness.SanteCat.MUETTE
             else -> fr.f4ioz.satcombo.domain.StationReadiness.SanteCat.OK
         }
         val boussole = if (u.rotor.boussoleSource != "BLE") fr.f4ioz.satcombo.domain.StationReadiness.Boussole.TELEPHONE
@@ -5174,6 +5207,107 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             contactsEnAttente = contactsADeposer(),
             contactsRefuses = u.log.count { refusEnvoi(it.timeMs).isNotBlank() },
         )
+    }
+
+    /**
+     * The station check (Alpha 3): asks the equipment itself, read only —
+     * the rig's frequency, the mast's position, two seconds of the audio
+     * input, the last GPS fix, the online log. Nothing transmits, nothing
+     * moves, nothing is written to a rig. About three seconds.
+     */
+    suspend fun testeStation(): List<fr.f4ioz.satcombo.domain.StationReadiness.Voyant> {
+        val C = fr.f4ioz.satcombo.domain.StationCheck
+        val u = _ui.value
+        val profil = profilStation()
+        val resultats = ArrayList<fr.f4ioz.satcombo.domain.StationReadiness.Voyant>()
+
+        // Rig: one frequency read per side.
+        resultats += if (!u.catConnected) C.cat(false, false, null, null)
+        else if (isPairRig) {
+            val rx = if (isTxOnlyRig) null else lectureCat { ft817.rx.readFrequency() }
+            val tx = lectureCat { ft817.tx.readFrequency() }
+            if (isTxOnlyRig) C.cat(true, false, tx, null) else C.cat(true, true, rx, tx)
+        } else C.cat(true, false, lectureCat { cat.readFrequency() }, null)
+
+        // Mast: its position, read now.
+        resultats += if (profil.pointage == fr.f4ioz.satcombo.domain.StationReadiness.Pointage.MANUEL && !u.rotorConnected)
+            fr.f4ioz.satcombo.domain.StationReadiness.Voyant(fr.f4ioz.satcombo.domain.StationReadiness.Domaine.POINTAGE,
+                fr.f4ioz.satcombo.domain.StationReadiness.Niveau.NOT_REQUIRED, "rd_test_rotor_non_requis")
+        else {
+            val pos = if (u.rotorConnected) kotlinx.coroutines.withTimeoutOrNull(3_000) {
+                runCatching { rotorDriver?.readPosition() }.getOrNull()
+            } else null
+            C.rotor(u.rotorConnected, pos?.azDeg, pos?.elDeg)
+        }
+
+        // Audio input: two seconds, as the recorder would hear it.
+        val (niveaux, raison) = mesureAudio()
+        resultats += C.audio(niveaux, raison)
+
+        // GPS: age of the last fix.
+        resultats += C.gps(u.locationMode == LocationMode.MANUAL,
+            dernierPointMs.takeIf { it > 0 }?.let { System.currentTimeMillis() - it })
+
+        // Online log: a harmless query (is grid JN18 worked?).
+        resultats += if (!u.carnet.configure) C.carnet(false, null)
+            else C.carnet(true, runCatching { fr.f4ioz.satcombo.data.CarnetEnLigne.essai(u.carnet.url, u.carnet.cle, u.carnet.slug) }
+                .getOrElse { it.javaClass.simpleName })
+        return resultats
+    }
+
+    /** One read from the rig, with a time limit: a silent rig must not hang the check. */
+    private suspend fun lectureCat(lire: suspend () -> Long?): Long? =
+        kotlinx.coroutines.withTimeoutOrNull(3_000) { runCatching { lire() }.getOrNull() }
+
+    /**
+     * Listens two seconds to the chosen audio input, as the recorder would
+     * (phone microphone, or the USB sound card). Not while a recording runs
+     * (the input is taken), not on Bluetooth (its link is brought up only by
+     * a recording). Returns the levels, or the reason it could not listen.
+     */
+    @android.annotation.SuppressLint("MissingPermission")
+    private suspend fun mesureAudio(): Pair<fr.f4ioz.satcombo.domain.StationCheck.Niveaux?, String?> = withContext(Dispatchers.IO) {
+        val app = getApplication<android.app.Application>()
+        val u = _ui.value
+        if (u.recording) return@withContext null to "rd_test_audio_en_cours"
+        if (androidx.core.content.ContextCompat.checkSelfPermission(app, android.Manifest.permission.RECORD_AUDIO) !=
+            android.content.pm.PackageManager.PERMISSION_GRANTED) return@withContext null to "rd_test_audio_permission"
+        if (u.recorderSource == "BT") return@withContext null to "rd_test_audio_bt"
+        val frequence = 44_100
+        val min = android.media.AudioRecord.getMinBufferSize(frequence, android.media.AudioFormat.CHANNEL_IN_MONO,
+            android.media.AudioFormat.ENCODING_PCM_16BIT)
+        if (min <= 0) return@withContext null to "rd_test_audio_impossible"
+        val r = runCatching {
+            android.media.AudioRecord(android.media.MediaRecorder.AudioSource.MIC, frequence,
+                android.media.AudioFormat.CHANNEL_IN_MONO, android.media.AudioFormat.ENCODING_PCM_16BIT, maxOf(min, 4096) * 2)
+        }.getOrNull()?.takeIf { it.state == android.media.AudioRecord.STATE_INITIALIZED }
+            ?: return@withContext null to "rd_test_audio_impossible"
+        try {
+            if (u.recorderSource == "USB") {
+                val usb = app.getSystemService(android.media.AudioManager::class.java)
+                    ?.getDevices(android.media.AudioManager.GET_DEVICES_INPUTS)
+                    ?.firstOrNull { it.type == android.media.AudioDeviceInfo.TYPE_USB_DEVICE ||
+                        it.type == android.media.AudioDeviceInfo.TYPE_USB_HEADSET ||
+                        it.type == android.media.AudioDeviceInfo.TYPE_USB_ACCESSORY }
+                    ?: return@withContext null to "rd_test_audio_usb_absente"
+                r.preferredDevice = usb
+            }
+            r.startRecording()
+            // The first quarter second is the input settling: left out.
+            val total = ShortArray(frequence * 2)
+            var lu = 0
+            while (lu < total.size) {
+                val n = r.read(total, lu, minOf(4096, total.size - lu))
+                if (n <= 0) break
+                lu += n
+            }
+            r.stop()
+            val debut = frequence / 4
+            if (lu <= debut) return@withContext null to "rd_test_audio_impossible"
+            fr.f4ioz.satcombo.domain.StationCheck.niveaux(total.copyOfRange(debut, lu)) to null
+        } finally {
+            r.release()
+        }
     }
 
     // ------------------------------------------------------- automatic SSTV

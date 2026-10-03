@@ -31,8 +31,13 @@ object SstvMeta {
         val fileName: String,
         /** Satellite tracked at reception time, e.g. "ISS". */
         val satName: String = "",
-        /** Reception time, UTC ms; 0 if unreadable. */
+        /**
+         * Reception time, UTC ms; 0 if unreadable. For a picture decoded again
+         * from a recording, still when it was received, not decoded.
+         */
         val timeMs: Long = 0L,
+        /** When it was decoded again from a recording, UTC ms; 0 if never. */
+        val redecodeMs: Long = 0L,
         /** Decoded mode, e.g. PD120, Robot36. */
         val mode: String = "",
         /** False when the frame stopped early (signal loss). */
@@ -66,14 +71,14 @@ object SstvMeta {
      */
     fun fileName(
         satName: String, timeMs: Long, mode: String, complete: Boolean,
-        kind: String = "SSTV"
+        kind: String = "SSTV", variante: Int = 0
     ): String {
         val safeKind = if (kind in KINDS) kind else "SSTV"
         val safeSat = satName.replace(Regex("[^A-Za-z0-9-]"), "-")
             .trim('-').ifBlank { "SAT" }
         val safeMode = mode.replace(Regex("[^A-Za-z0-9-]"), "").ifBlank { safeKind }
         return "SatMe_" + safeKind + "_" + safeSat + "_" + stamp(timeMs) + "_" + safeMode +
-            (if (complete) "" else "_partiel") + ".png"
+            (if (complete) "" else "_partiel") + (if (variante > 0) "_r$variante" else "") + ".png"
     }
 
     private fun stamp(timeMs: Long): String =
@@ -95,6 +100,8 @@ object SstvMeta {
             return SstvShot(fileName = pngName)
         }
         var complete = true
+        // A second decoding of the same picture: "_r2", "_r3"…
+        if (parts.size > 5 && Regex("^r\\d+$").matches(parts.last())) parts.removeAt(parts.size - 1)
         if (parts.last() == "partiel" || parts.last() == "partial") {
             complete = false
             parts.removeAt(parts.size - 1)
@@ -113,6 +120,15 @@ object SstvMeta {
             timeMs = parseStamp(date, time),
             mode = mode,
             complete = complete)
+    }
+
+    /**
+     * The UTC start written in a recording's name ("SatMe_ISS_20261002_053005Z.mp3"),
+     * or 0 when it has none.
+     */
+    fun debutEnregistrement(nom: String): Long {
+        val m = Regex("_(\\d{8})_(\\d{6})Z").find(nom) ?: return 0L
+        return parseStamp(m.groupValues[1], m.groupValues[2] + "Z")
     }
 
     private fun parseStamp(date: String, time: String): Long = runCatching {
@@ -135,6 +151,7 @@ object SstvMeta {
         }
         put("sat", shot.satName)
         if (shot.timeMs > 0L) put("time", shot.timeMs.toString())
+        if (shot.redecodeMs > 0L) put("redecode", shot.redecodeMs.toString())
         put("mode", shot.mode)
         put("complete", if (shot.complete) "1" else "0")
         put("locator", shot.locator)
@@ -162,6 +179,7 @@ object SstvMeta {
             shot = when (k) {
                 "sat" -> shot.copy(satName = v)
                 "time" -> v.toLongOrNull()?.let { shot.copy(timeMs = it) } ?: shot
+                "redecode" -> v.toLongOrNull()?.let { shot.copy(redecodeMs = it) } ?: shot
                 "mode" -> shot.copy(mode = v)
                 "complete" -> shot.copy(complete = v != "0")
                 "locator" -> shot.copy(locator = v)

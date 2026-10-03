@@ -253,6 +253,16 @@ class SettingsStore(context: Context) {
         get() = prefs.getString("sstv_forced_mode", "") ?: ""
         set(v) { prefs.edit().putString("sstv_forced_mode", v).apply() }
 
+    /** SSTV sheet: the operator's name, written under the callsign ("Olivier @ JN18FS"). */
+    var plancheNom: String
+        get() = prefs.getString("planche_nom", "") ?: ""
+        set(v) { prefs.edit().putString("planche_nom", v).apply() }
+
+    /** SSTV: clean the decoded pictures (lines lost to noise, dashes). On by default. */
+    var sstvNettoyage: Boolean
+        get() = prefs.getBoolean("sstv_nettoyage", true)
+        set(v) { prefs.edit().putBoolean("sstv_nettoyage", v).apply() }
+
     /** SSTV continuous decoding: start on a train of sync pulses, header or not. */
     var sstvContinu: Boolean
         get() = prefs.getBoolean("sstv_continu", false)

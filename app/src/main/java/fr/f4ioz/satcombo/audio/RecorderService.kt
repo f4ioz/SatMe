@@ -158,6 +158,8 @@ class RecorderService : Service() {
     private val autoStop = Runnable { finishRecording() }
     private var scoActive = false
     private var lastSat = AnnonceVocale.SANS_SATELLITE
+    /** Where the current recording is made. */
+    private var lastLoc = ""
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -239,6 +241,9 @@ class RecorderService : Service() {
 
                 synchronized(markers) { markers.clear() }
                 lastSat = sat
+                lastLoc = loc
+                // Kept from the start: a recording cut short still says where it was made.
+                InfoEnregistrement.ecrit(file, InfoEnregistrement.Info(loc))
                 // Foreground FIRST (5 s rule for startForegroundService), then the
                 // possibly-slow Bluetooth SCO bring-up on a worker thread.
                 startInForeground(sat, src)
@@ -458,6 +463,7 @@ class RecorderService : Service() {
             _state.value = _state.value.copy(recording = false, autoStopMs = null)
             // Sidecar with QSO markers + export copy, off the main thread.
             val mp3 = recorder.currentFile
+            mp3?.let { InfoEnregistrement.ecrit(it, InfoEnregistrement.Info(lastLoc, recorder.annonceMs)) }
             Thread {
                 val sidecar = writeSidecar(mp3, startMs)
                 exportCopies(listOfNotNull(mp3, sidecar))

@@ -135,6 +135,18 @@ fun SstvModeControls(
             if (!compact) Text(t("sstv_continu_desc"), color = TextLo, fontSize = 10.sp)
         }
     }
+    // Picture cleaning: lines and dashes lost to noise, mended from their neighbours.
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.toggleable(value = st.nettoyage, role = Role.Checkbox,
+            onValueChange = { SstvHub.setNettoyage(ctx, it) })
+    ) {
+        Checkbox(checked = st.nettoyage, onCheckedChange = null)
+        Column {
+            Text(t("sstv_nettoyage"), color = TextHi, fontSize = if (compact) 11.sp else 12.sp)
+            if (!compact) Text(t("sstv_nettoyage_desc"), color = TextLo, fontSize = 10.sp)
+        }
+    }
     // Show failures: a dead engine behind a "listening" label is the worst case.
     st.erreur?.let {
         Text(it, color = Amber, fontSize = 10.sp,

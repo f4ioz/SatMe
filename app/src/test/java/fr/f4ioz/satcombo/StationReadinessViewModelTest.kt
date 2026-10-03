@@ -61,16 +61,20 @@ class StationReadinessViewModelTest {
     @Test
     fun le_controle_n_appelle_rien_qui_agisse() {
         val src = File("src/main/java/fr/f4ioz/satcombo/MainViewModel.kt").readText()
+        // The snapshot and the station check (Alpha 3), down to the automatic SSTV block.
         val debut = src.indexOf("private suspend fun instantaneReadiness(")
         val fin = src.indexOf("// ------------------------------------------------------- automatic SSTV", debut)
         assertTrue(debut > 0 && fin > debut)
         val corps = src.substring(debut, fin)
+        assertTrue(corps.contains("suspend fun testeStation("))
         val interdits = listOf("setTransmit", "aprsEmet", "emet(", "aprsBaliseTic", "SortieAudio", "rotorGotoManual",
             "rotorJog", "rotorParkNow", "rotorStopNow", "setRotorEnabled", "connectRotor", "connectCat", "setCatEnabled",
             "catSendTestFreq", "armSo50", "thd72Frequence", "thd72Pas", "thd72Puissance", "setThd72BandeTx",
-            "setFt817Role", "setIc705Baud", "aprsEcouteDemarre", "runCatBench", "startRecording", "toggleDopplerHold",
+            "setFt817Role", "setIc705Baud", "aprsEcouteDemarre", "runCatBench", "toggleDopplerHold",
             "setFrequency", "setMode(", "deposeAuCarnet")
         interdits.forEach { assertFalse("instantaneReadiness calls $it", corps.contains(it)) }
+        // The view model's own recording start (not the 2-second AudioRecord of the audio check).
+        assertFalse("the check starts a pass recording", Regex("""(?<![.\w])startRecording\(""").containsMatchIn(corps))
         // The domain is pure Kotlin: no Android, no view model.
         val domaine = File("src/main/java/fr/f4ioz/satcombo/domain/StationReadiness.kt").readText()
         assertFalse(domaine.contains("import android"))

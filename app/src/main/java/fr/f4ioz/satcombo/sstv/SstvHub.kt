@@ -51,6 +51,8 @@ object SstvHub {
         val forcedMode: String? = null,
         /** Continuous decoding: a train of sync pulses starts a picture. */
         val continu: Boolean = false,
+        /** Pictures cleaned before they are saved (see [SstvNettoyage]). */
+        val nettoyage: Boolean = true,
         /** Last engine failure — shown, not hidden. */
         val erreur: String? = null,
         /** True once a frame is under way (header received or forced start). */
@@ -81,6 +83,9 @@ object SstvHub {
     /** Continuous decoding, kept here for the same reason as [forced]. */
     @Volatile private var continu = false
 
+    /** Picture cleaning, kept here for the same reason as [forced]. */
+    @Volatile private var nettoyage = true
+
     @Volatile private var loaded = false
 
     /**
@@ -95,10 +100,23 @@ object SstvHub {
         val name = runCatching { SettingsStore(ctx).sstvForcedMode }.getOrDefault("")
         forced = if (name.isBlank()) null else SstvMode.byName(name)
         continu = runCatching { SettingsStore(ctx).sstvContinu }.getOrDefault(false)
+        nettoyage = runCatching { SettingsStore(ctx).sstvNettoyage }.getOrDefault(true)
         live?.forcedMode = forced
         live?.continuous = continu
-        _state.value = _state.value.copy(forcedMode = forced?.name, continu = continu)
+        _state.value = _state.value.copy(forcedMode = forced?.name, continu = continu, nettoyage = nettoyage)
     }
+
+    /** Turns picture cleaning on or off. Persisted. */
+    fun setNettoyage(ctx: Context, on: Boolean) {
+        nettoyage = on
+        runCatching { SettingsStore(ctx).sstvNettoyage = on }
+        _state.value = _state.value.copy(nettoyage = on)
+    }
+
+    /** The picture as it will be saved: cleaned when that is on. */
+    private fun finale(mode: SstvMode, pixels: IntArray, linesDone: Int): IntArray =
+        if (nettoyage) runCatching { SstvNettoyage.nettoie(pixels, mode.width, mode.height, linesDone) }.getOrDefault(pixels)
+        else pixels
 
     /** Turns continuous decoding on or off. Persisted. */
     fun setContinu(ctx: Context, on: Boolean) {
@@ -160,6 +178,8 @@ object SstvHub {
     // ------------------------------------------------------------- live decode
 
     private var live: SstvDecoder? = null
+    /** The sound just heard, to keep each picture's own. */
+    private var liveSon: SstvSon.Memoire? = null
     private var liveCtx: Context? = null
     private var liveSat: String = "SAT"
     private var lastPreviewMs = 0L
@@ -173,6 +193,7 @@ object SstvHub {
         pannes = 0
         if (forced == null) loadForced(ctx)
         live = SstvDecoder(sampleRate, liveListener).also { it.forcedMode = forced; it.continuous = continu }
+        liveSon = SstvSon.Memoire(sampleRate)
         _state.value = _state.value.copy(
             listening = true, modeName = null, progress = 0f,
             preview = null, savedCount = 0, decoding = false, erreur = null,
@@ -186,6 +207,8 @@ object SstvHub {
      */
     fun feedLive(pcm: ShortArray, count: Int) {
         val d = live ?: return
+        // Kept before decoding: a picture ending in this buffer takes it all.
+        runCatching { liveSon?.ajoute(pcm, count) }
         runCatching { d.feed(pcm, count) }.onFailure { e ->
             val n = ++pannes
             _state.value = _state.value.copy(
@@ -203,6 +226,7 @@ object SstvHub {
         }
         runCatching { d.finish() }
         live = null
+        liveSon = null
         _state.value = _state.value.copy(
             listening = false, modeName = null, progress = 0f, decoding = false)
     }
@@ -230,12 +254,12 @@ object SstvHub {
         ) {
             // A picture cut short by the end of the pass is still worth keeping;
             // a couple of lines of noise is not.
-            val bmp = toBitmap(mode, pixels)
+            val bmp = toBitmap(mode, finale(mode, pixels, linesDone))
             val ctx = liveCtx
             var saved: String? = _state.value.lastSaved
             var count = _state.value.savedCount
             if (ctx != null && linesDone >= mode.height / 8) {
-                saved = save(ctx, bmp, mode, liveSat, complete, "live")
+                saved = save(ctx, bmp, mode, liveSat, complete, "live", son = sonDe(live, liveSon))
                 count++
             }
             _state.value = _state.value.copy(
@@ -259,10 +283,30 @@ object SstvHub {
      * recording that was made before SSTV decoding was even switched on can
      * still be mined for images.
      */
-    fun decodeFile(ctx: Context, mp3: File): Int {
+    fun decodeFile(ctx: Context, mp3: File, origine: SstvMeta.SstvShot? = null): Int {
         cancelFile = false
         val app = ctx.applicationContext
-        val sat = mp3.name.removePrefix("SatMe_").substringBefore("_").ifBlank { "SAT" }
+        val sat = origine?.satName?.ifBlank { null }
+            ?: mp3.name.removePrefix("SatMe_").substringBefore("_").ifBlank { "SAT" }
+        var son: SstvSon.Memoire? = null
+        var rateFichier = 0
+        // When the sound starts, UTC: a picture keeps the time it was received.
+        //  - a picture's own sound: it ends half a second after the picture;
+        //  - a recording: its start is in its name.
+        //    The spoken header before the pass shifts it by its length.
+        val info = if (origine == null) fr.f4ioz.satcombo.audio.InfoEnregistrement.lit(mp3) else null
+        fun debutMs(): Long? {
+            if (origine != null && origine.timeMs > 0L && rateFichier > 0)
+                return origine.timeMs - ((mp3.length() - 44) / 2 * 1000 / rateFichier - 500)
+            return SstvMeta.debutEnregistrement(mp3.name).takeIf { it > 0L }?.let { it - (info?.annonceMs ?: 0L) }
+        }
+        // The same pictures received live during that pass: their exact time and place.
+        val enDirect = if (origine == null) runCatching {
+            shots(app).map { it.second }.filter { it.source == "live" && it.satName == sat }
+        }.getOrDefault(emptyList()) else emptyList()
+        fun memeImage(mode: SstvMode, recu: Long): SstvMeta.SstvShot? =
+            enDirect.filter { it.mode == mode.name && it.timeMs in (recu - 30_000L)..(recu + 10_000L) }
+                .minByOrNull { kotlin.math.abs(it.timeMs - recu) }
         var found = 0
         _state.value = _state.value.copy(
             fileProgress = 0f, fileName = mp3.name, fileImages = 0)
@@ -284,8 +328,14 @@ object SstvHub {
                 mode: SstvMode, pixels: IntArray, linesDone: Int, complete: Boolean
             ) {
                 if (linesDone < mode.height / 8) return
-                val bmp = toBitmap(mode, pixels)
-                val name = save(app, bmp, mode, sat, complete, "file", mp3.name)
+                val bmp = toBitmap(mode, finale(mode, pixels, linesDone))
+                var recu = debutMs()?.let { d -> d + (decoder?.echantillons ?: 0L) * 1000 / rateFichier.coerceAtLeast(1) }
+                val direct = recu?.let { memeImage(mode, it) }
+                if (direct != null) recu = direct.timeMs
+                // Where it was received: never where the phone happens to be today.
+                val lieu = origine?.locator ?: direct?.locator?.ifBlank { null } ?: info?.locator ?: ""
+                val name = save(app, bmp, mode, sat, complete, "file", origine?.recording?.ifBlank { null } ?: mp3.name,
+                    sonDe(decoder, son), recuMs = recu, origine = origine, locatorRecu = lieu)
                 found++
                 _state.value = _state.value.copy(
                     modeName = null, progress = 0f, preview = bmp,
@@ -295,8 +345,12 @@ object SstvHub {
 
         runCatching {
             Mp3Pcm.decode(mp3) { pcm, n, rate, fraction ->
-                if (decoder == null) decoder =
-                    SstvDecoder(rate, listener).also { it.forcedMode = forced; it.continuous = continu }
+                if (decoder == null) {
+                    decoder = SstvDecoder(rate, listener).also { it.forcedMode = forced; it.continuous = continu }
+                    son = SstvSon.Memoire(rate)
+                    rateFichier = rate
+                }
+                son?.ajoute(pcm, n)
                 decoder?.feed(pcm, n)
                 _state.value = _state.value.copy(fileProgress = fraction)
                 !cancelFile
@@ -310,6 +364,16 @@ object SstvHub {
 
     // ------------------------------------------------------------------ output
 
+    /**
+     * The sound of the picture just finished: from its header (or its first
+     * sync pulses) to now, and half a second more when already received.
+     */
+    private fun sonDe(d: SstvDecoder?, m: SstvSon.Memoire?): Pair<ShortArray, Int>? {
+        if (d == null || m == null) return null
+        val rateEntree = m.rate * m.facteur
+        return runCatching { m.extrait(d.debutTrame, d.echantillons + rateEntree / 2) to m.rate }.getOrNull()
+    }
+
     private fun toBitmap(mode: SstvMode, pixels: IntArray): Bitmap =
         Bitmap.createBitmap(pixels, mode.width, mode.height, Bitmap.Config.ARGB_8888)
 
@@ -319,10 +383,19 @@ object SstvHub {
      */
     private fun save(
         ctx: Context, bmp: Bitmap, mode: SstvMode, sat: String, complete: Boolean,
-        source: String, recording: String = ""
+        source: String, recording: String = "", son: Pair<ShortArray, Int>? = null,
+        /** Decoded again: when it was received (null if unknown), and where from. */
+        recuMs: Long? = null, origine: SstvMeta.SstvShot? = null,
+        /** Where it was received, when decoded again ("" = unknown); null = here, now. */
+        locatorRecu: String? = null
     ): String? {
         val now = System.currentTimeMillis()
-        val name = SstvMeta.fileName(sat, now, mode.name, complete)
+        val quand = recuMs ?: now
+        // Named after its reception; a second decoding of it does not overwrite the first.
+        var variante = 0
+        var name = SstvMeta.fileName(sat, quand, mode.name, complete)
+        while (File(dir(ctx), name).exists() && variante < 99)
+            name = SstvMeta.fileName(sat, quand, mode.name, complete, variante = ++variante + 1)
         val out = File(dir(ctx), name)
         val ok = runCatching {
             out.outputStream().use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
@@ -331,13 +404,17 @@ object SstvHub {
         runCatching {
             val st = SettingsStore(ctx)
             val shot = SstvMeta.SstvShot(
-                fileName = name, satName = sat, timeMs = now, mode = mode.name,
+                fileName = name, satName = sat, timeMs = quand, mode = mode.name,
                 complete = complete,
-                locator = qthLocator.ifBlank { st.manualLocator }, callsign = st.callsign,
+                redecodeMs = if (source == "file") now else 0L,
+                locator = locatorRecu ?: qthLocator.ifBlank { st.manualLocator },
+                callsign = origine?.callsign?.ifBlank { null } ?: st.callsign,
                 source = source, recording = recording)
             File(dir(ctx), SstvMeta.sidecarName(name))
                 .writeText(SstvMeta.encode(shot), Charsets.UTF_8)
         }
+        // The picture's own sound, to hear it again or make a video of it.
+        son?.let { (pcm, rate) -> if (pcm.isNotEmpty()) runCatching { SstvSon.ecritWav(SstvSon.fichier(out), pcm, rate) } }
         exportCopy(ctx, out)
         return name
     }
@@ -357,6 +434,9 @@ object SstvHub {
     /** Removes a picture and its sidecar together. */
     fun delete(file: File): Boolean {
         runCatching { File(file.parentFile, SstvMeta.sidecarName(file.name)).delete() }
+        runCatching { SstvSon.fichier(file).delete() }
+        runCatching { SstvSon.video(file).delete() }
+        runCatching { SstvSon.video(file, hd = true).delete() }
         return runCatching { file.delete() }.getOrDefault(false)
     }
 

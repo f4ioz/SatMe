@@ -23,6 +23,7 @@ import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.Button
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
@@ -380,6 +381,19 @@ private fun SkedPlanPanel(plan: SkedPlan, ui: UiState, ctx: android.content.Cont
                     Spacer(Modifier.width(8.dp))
                     Text(t("sked_share"), color = Color.White, fontWeight = FontWeight.Bold)
                 }
+                // Or kept on the phone.
+                val enregistreCarte = rememberEnregistrer()
+                OutlinedButton(
+                    onClick = {
+                        scope.launch {
+                            val file = withContext(Dispatchers.IO) {
+                                SkedCard.build(ctx, plan, ui.useUtc, ui.callsign, ui.units)
+                            }
+                            enregistreCarte(file.name, "image/png", depuisFichier(file))
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth().padding(top = 6.dp)
+                ) { Text(t("export_save"), color = Cyan, fontWeight = FontWeight.Bold) }
             }
         }
     }

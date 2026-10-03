@@ -92,6 +92,7 @@ fun SstvScreen(ui: UiState, vm: MainViewModel) {
     var gallery by remember { mutableStateOf(SstvHub.shots(ctx)) }
     var pickRecording by remember { mutableStateOf(false) }
     var viewing by remember { mutableStateOf<File?>(null) }
+    var planche by remember { mutableStateOf(false) }
     // Filter by satellite: a season mixes ISS, repeaters and tests, and
     // you almost always want "the ISS pictures".
     var satFilter by remember { mutableStateOf("") }
@@ -283,7 +284,11 @@ fun SstvScreen(ui: UiState, vm: MainViewModel) {
                     modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(8.dp))
                 Text(tf("sstv_gallery", shown.size), color = TextHi,
-                    fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                    fontWeight = FontWeight.Bold, fontSize = 14.sp, modifier = Modifier.weight(1f))
+                // The pictures of a series on one sheet, as diplomas are made.
+                OutlinedButton(onClick = { planche = true }) {
+                    Text("▦ " + t("planche_bouton"), color = Cyan, fontSize = 12.sp)
+                }
             }
         }
 
@@ -338,7 +343,11 @@ fun SstvScreen(ui: UiState, vm: MainViewModel) {
             })
     }
 
-    viewing?.let { f -> SstvViewer(f) { viewing = null } }
+    if (planche) PlancheScreen { planche = false }
+    viewing?.let { f ->
+        SstvViewer(f, gallery.firstOrNull { it.first == f }?.second ?: SstvMeta.parseName(f.name),
+            onNouvelle = { gallery = SstvHub.shots(ctx) }) { viewing = null }
+    }
 }
 
 /** One saved picture: thumbnail, what is known about it, share and delete. */
@@ -381,26 +390,50 @@ private fun SstvThumb(file: File, shot: SstvMeta.SstvShot, useUtc: Boolean,
                 }
                 Text(tfmt.format(Date(if (shot.timeMs > 0L) shot.timeMs else file.lastModified())) +
                     (if (useUtc) " UTC" else "") +
-                    (if (shot.source == "file") "  ·  " + t("sstv_from_file") else ""),
+                    (if (fr.f4ioz.satcombo.sstv.SstvSon.fichier(file).isFile) "  ·  ♪" else "") +
+                    (if (shot.source == "file") "  ·  " + (if (shot.redecodeMs > 0L)
+                        tf("sstv_redecode_le", tfmt.format(Date(shot.redecodeMs))) else t("sstv_from_file")) else ""),
                     color = TextLo, fontSize = 10.sp)
             }
             // Share answers "to whom", save answers "where". Portable and
             // offline, the share sheet often has nothing to offer.
             val enregistreImage = rememberEnregistrer()
-            IconButton(onClick = {
-                runCatching {
+            // Either way, asked first: the picture alone, or with the caption the video has.
+            var exporte by remember { mutableStateOf<String?>(null) }
+            fun exporteVraiment(action: String, bandeau: Boolean) {
+                val f = if (bandeau) fr.f4ioz.satcombo.sstv.SstvVideo.imageAvecBandeau(ctx, file, shot) ?: file else file
+                if (action == "save") enregistreImage(f.name, "image/png", depuisFichier(f))
+                else runCatching {
                     val uri = androidx.core.content.FileProvider.getUriForFile(
-                        ctx, "${ctx.packageName}.fileprovider", file)
+                        ctx, "${ctx.packageName}.fileprovider", f)
                     val i = android.content.Intent(android.content.Intent.ACTION_SEND)
                         .setType("image/png")
                         .putExtra(android.content.Intent.EXTRA_STREAM, uri)
                         .addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                    ctx.startActivity(android.content.Intent.createChooser(i, file.name))
+                    ctx.startActivity(android.content.Intent.createChooser(i, f.name))
                 }
-            }) { Icon(Icons.Default.Share, t("rec_share"), tint = Cyan,
+            }
+            exporte?.let { action ->
+                androidx.compose.material3.AlertDialog(
+                    onDismissRequest = { exporte = null },
+                    containerColor = SpaceCard,
+                    title = { Text(t("sstv_export_titre"), color = TextHi, fontSize = 16.sp) },
+                    text = { Text(t("sstv_export_desc"), color = TextLo, fontSize = 13.sp) },
+                    confirmButton = {
+                        TextButton(onClick = { exporte = null; exporteVraiment(action, true) }) {
+                            Text(t("sstv_export_bandeau"), color = Cyan)
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { exporte = null; exporteVraiment(action, false) }) {
+                            Text(t("sstv_export_seule"), color = Cyan)
+                        }
+                    })
+            }
+            IconButton(onClick = { exporte = "share" }) { Icon(Icons.Default.Share, t("rec_share"), tint = Cyan,
                     modifier = Modifier.size(20.dp)) }
             IconButton(onClick = {
-                enregistreImage(file.name, "image/png", depuisFichier(file))
+                exporte = "save"
             }) { Icon(Icons.Default.SaveAlt, t("export_save"), tint = Cyan,
                     modifier = Modifier.size(20.dp)) }
             IconButton(onClick = onDeleted) {
@@ -411,12 +444,29 @@ private fun SstvThumb(file: File, shot: SstvMeta.SstvShot, useUtc: Boolean,
     }
 }
 
-/** Full-screen look at one picture. */
+/** Full-screen look at one picture, and its own sound when kept. */
 @Composable
-private fun SstvViewer(file: File, onClose: () -> Unit) {
+private fun SstvViewer(file: File, shot: SstvMeta.SstvShot, onNouvelle: () -> Unit, onClose: () -> Unit) {
     val bmp = remember(file.absolutePath) {
         runCatching { android.graphics.BitmapFactory.decodeFile(file.absolutePath) }
             .getOrNull()
+    }
+    val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val son = remember(file.absolutePath) { fr.f4ioz.satcombo.sstv.SstvSon.fichier(file) }
+    var lecteur by remember { mutableStateOf<android.media.MediaPlayer?>(null) }
+    var video by remember { mutableStateOf<Float?>(null) }
+    var message by remember { mutableStateOf<String?>(null) }
+    // The video just made: shared or saved, as the operator chooses.
+    var pret by remember { mutableStateOf<File?>(null) }
+    val enregistre = rememberEnregistrer()
+    DisposableEffect(file.absolutePath) { onDispose { runCatching { lecteur?.release() }; lecteur = null } }
+    fun partage(f: File, type: String) = runCatching {
+        val uri = androidx.core.content.FileProvider.getUriForFile(ctx, "${ctx.packageName}.fileprovider", f)
+        val i = android.content.Intent(android.content.Intent.ACTION_SEND).setType(type)
+            .putExtra(android.content.Intent.EXTRA_STREAM, uri)
+            .addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        ctx.startActivity(android.content.Intent.createChooser(i, f.name))
     }
     androidx.compose.ui.window.Dialog(onDismissRequest = onClose) {
         Surface(color = SpaceCard, shape = RoundedCornerShape(14.dp)) {
@@ -428,6 +478,70 @@ private fun SstvViewer(file: File, onClose: () -> Unit) {
                     Image(bmp.asImageBitmap(), null, contentScale = ContentScale.FillWidth,
                         modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)))
                 }
+                Spacer(Modifier.height(8.dp))
+                if (son.isFile) {
+                    // Just this picture's sound: hear it, decode it again, share it, or as a video.
+                    Text(t("sstv_son_image"), color = TextLo, fontSize = 11.sp)
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        OutlinedButton(modifier = Modifier.weight(1f), onClick = {
+                            val l = lecteur
+                            if (l != null) { runCatching { l.release() }; lecteur = null }
+                            else lecteur = runCatching {
+                                android.media.MediaPlayer().apply {
+                                    setDataSource(son.absolutePath); prepare()
+                                    setOnCompletionListener { runCatching { it.release() }; lecteur = null }
+                                    start()
+                                }
+                            }.getOrNull()
+                        }) { Text(if (lecteur != null) "■ " + t("sstv_son_stop") else "▶ " + t("sstv_son_ecouter"), color = Cyan, fontSize = 12.sp) }
+                        OutlinedButton(modifier = Modifier.weight(1f), enabled = video == null, onClick = {
+                            message = t("sstv_son_redecode_en_cours")
+                            scope.launch {
+                                val n = withContext(Dispatchers.IO) { SstvHub.decodeFile(ctx, son, shot) }
+                                onNouvelle()
+                                message = tf("sstv_son_redecode_fait", n)
+                            }
+                        }) { Text("⟳ " + t("sstv_son_redecoder"), color = Cyan, fontSize = 12.sp) }
+                    }
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        OutlinedButton(modifier = Modifier.weight(1f), onClick = { partage(son, "audio/wav") }) {
+                            Text("♪ " + t("sstv_son_partager"), color = Cyan, fontSize = 12.sp)
+                        }
+                        OutlinedButton(modifier = Modifier.weight(1f), onClick = {
+                            enregistre(son.name, "audio/wav", depuisFichier(son))
+                        }) { Text("♪ " + t("sstv_son_enregistrer"), color = Cyan, fontSize = 12.sp) }
+                    }
+                    // Two videos: light to send by message, HD for a sharper picture.
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        for (hd in listOf(false, true)) OutlinedButton(modifier = Modifier.weight(1f), enabled = video == null, onClick = {
+                            video = 0f; message = null; pret = null
+                            scope.launch {
+                                val f = withContext(Dispatchers.IO) {
+                                    fr.f4ioz.satcombo.sstv.SstvVideo.fabrique(ctx, file, shot, hd) { p -> video = p }
+                                }
+                                video = null
+                                if (f != null) pret = f else message = t("sstv_video_echec")
+                            }
+                        }) { Text("🎬 " + t(if (hd) "sstv_video_hd" else "sstv_video_legere"), color = Cyan, fontSize = 12.sp) }
+                    }
+                    pret?.let { f ->
+                        Text(tf("sstv_video_taille", "%.1f".format(f.length() / 1_048_576.0)), color = TextHi, fontSize = 11.sp,
+                            modifier = Modifier.padding(top = 4.dp))
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Button(modifier = Modifier.weight(1f), onClick = { partage(f, "video/mp4") }) { Text(t("rec_share"), fontSize = 12.sp) }
+                            OutlinedButton(modifier = Modifier.weight(1f), onClick = { enregistre(f.name, "video/mp4", depuisFichier(f)) }) {
+                                Text(t("export_save"), color = Cyan, fontSize = 12.sp)
+                            }
+                        }
+                    }
+                    video?.let {
+                        Text(t("sstv_video_en_cours"), color = TextLo, fontSize = 11.sp)
+                        LinearProgressIndicator(progress = { it }, modifier = Modifier.fillMaxWidth().padding(top = 4.dp))
+                    }
+                } else {
+                    Text(t("sstv_son_absent"), color = TextLo, fontSize = 11.sp)
+                }
+                message?.let { Text(it, color = Amber, fontSize = 11.sp, modifier = Modifier.padding(top = 4.dp)) }
                 Spacer(Modifier.height(10.dp))
                 Button(onClick = onClose, modifier = Modifier.align(Alignment.End),
                     colors = ButtonDefaults.buttonColors(containerColor = SpaceSurface)) {

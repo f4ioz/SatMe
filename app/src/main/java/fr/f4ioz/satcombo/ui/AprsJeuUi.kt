@@ -670,8 +670,14 @@ internal fun OngletTrophees(ui: UiState, vm: MainViewModel, paquets: List<Paquet
                             modifier = Modifier.padding(top = 8.dp))
                     }
                     if (bilan.pays.isNotEmpty()) Text(bilan.pays.sorted().joinToString(" · "), color = TextLo, fontSize = 11.sp)
-                    OutlinedButton(onClick = { partageBilan(ctx, bilan, moi, depuis, obs) }, modifier = Modifier.padding(top = 8.dp)) {
-                        Text(t("aprs_bilan_partager"), color = Cyan, fontSize = 12.sp)
+                    val enregistreBilan = rememberEnregistrer()
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 8.dp)) {
+                        OutlinedButton(onClick = { partageBilan(ctx, bilan, moi, depuis, obs) }) {
+                            Text(t("aprs_bilan_partager"), color = Cyan, fontSize = 12.sp)
+                        }
+                        OutlinedButton(onClick = {
+                            imageBilan(ctx, bilan, moi, depuis, obs)?.let { enregistreBilan(it.name, "image/png", depuisFichier(it)) }
+                        }) { Text(t("export_save"), color = Cyan, fontSize = 12.sp) }
                     }
                 }
             }
@@ -759,8 +765,8 @@ private fun CarteBadge(b: Trophees.Badge, gagne: Long?, modifier: Modifier) {
 }
 
 /** The evening's tally as a picture, to post after APRS Thursday. */
-private fun partageBilan(ctx: android.content.Context, b: AprsJeu.Bilan, moi: String, jour: Long,
-                         obs: fr.f4ioz.satcombo.data.Observer?) {
+private fun imageBilan(ctx: android.content.Context, b: AprsJeu.Bilan, moi: String, jour: Long,
+                       obs: fr.f4ioz.satcombo.data.Observer?): java.io.File? =
     runCatching {
         val w = 1080; val h = 1080
         val bmp = android.graphics.Bitmap.createBitmap(w, h, android.graphics.Bitmap.Config.ARGB_8888)
@@ -794,6 +800,14 @@ private fun partageBilan(ctx: android.content.Context, b: AprsJeu.Bilan, moi: St
         val f = java.io.File(dossier, "SatMe_APRS_" + SimpleDateFormat("yyyyMMdd", Locale.US)
             .apply { timeZone = TimeZone.getTimeZone("UTC") }.format(Date(jour)) + ".png")
         f.outputStream().use { bmp.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+        f
+    }.getOrNull()
+
+/** The day's card, to whom the operator chooses. */
+private fun partageBilan(ctx: android.content.Context, b: AprsJeu.Bilan, moi: String, jour: Long,
+                         obs: fr.f4ioz.satcombo.data.Observer?) {
+    val f = imageBilan(ctx, b, moi, jour, obs) ?: return
+    runCatching {
         val uri = androidx.core.content.FileProvider.getUriForFile(ctx, "${ctx.packageName}.fileprovider", f)
         ctx.startActivity(android.content.Intent.createChooser(
             android.content.Intent(android.content.Intent.ACTION_SEND).apply {
