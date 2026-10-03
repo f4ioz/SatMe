@@ -33,17 +33,24 @@ Poursuite de satellites radioamateurs sur Android — passages, pointage, Dopple
 <img src="docs/images/fr-aprs-messages.webp" width="24%" alt="Messages APRS">
 <img src="docs/images/fr-aprs-badges.webp" width="24%" alt="Trophées APRS">
 </p>
+<p align="center">
+<img src="docs/images/fr-passes-prepare.webp" width="24%" alt="Préparer n'importe quel passage">
+<img src="docs/images/fr-prepare.webp" width="24%" alt="Préparer le passage">
+<img src="docs/images/fr-sstv-sound.webp" width="24%" alt="Image SSTV avec son son et sa vidéo">
+<img src="docs/images/fr-sstv-sheet.webp" width="24%" alt="Planche SSTV">
+</p>
 
-## Nouveautés de la 20.75
+## Nouveautés de la 20.76
 
-- **SSTV automatique sur n'importe quel satellite favori**, plus seulement l'ISS : choisis le satellite et son transpondeur, une case à cocher, et chaque passage est enregistré et décodé tout seul, de 10 s avant le lever à 5 s après le coucher, jusqu'au passage choisi — même écran éteint.
-- **PDF de la sélection** : choisis combien de prochains passages de chaque satellite sélectionné mettre dans le PDF (jusqu'à 20, sur deux semaines).
+- **Préparer n'importe quel passage** : une icône fusée + clé à côté de la cloche, sur chaque passage, ouvre la vérification de la station pour ce passage-là ; avec le CAT connecté, le poste se met sur le satellite préparé. Un test interroge le matériel lui-même — poste, rotor, niveau audio, GPS, carnet en ligne — sans rien émettre.
+- **SSTV, chaque image avec son propre son** : la réécouter, la re-décoder seule, la partager ou l'enregistrer. Images nettoyées des lignes et traits perdus dans le bruit. Une **vidéo de l'image qui arrive** avec son son (légère ou HD), et des images exportées avec ou sans bandeau. Re-décoder un enregistrement garde l'heure et le lieu de réception.
+- **Planche SSTV** : vos images placées dans l'ordre choisi sur le modèle d'une série ARISS (ses cases et ses cadres d'indicatif trouvés tout seuls) ou sur un fond SatMe, avec indicatif et logo, nom @ locator et dates.
+- Vidéos, sons et cartes : **partager ou enregistrer** sur le téléphone.
 
-### Et dans la 20.74
+### Et dans la 20.75
 
-- **APRS (bêta)**, une page complète : carte OpenStreetMap, messages, APRS Thursday, trophées ; sur l'ISS ou en terrestre (144,800 MHz) ; IC-9700, Kenwood TH-D72 en KISS, Yaesu FT3D.
-- **Nouveaux postes** : Kenwood TH-D72 en full duplex ; un Yaesu FT-817 ou un Icom IC-705 de chaque côté, ou avec une clé SDR.
-- **ISS à l'heure** : les éléments les plus frais l'emportent d'une source à l'autre (jamais une prévision pour plus tard) ; noms courts et statuts AMSAT quelle que soit la source.
+- **SSTV automatique sur n'importe quel satellite favori**, plus seulement l'ISS, et un PDF avec autant de prochains passages qu'on veut.
+- **Préparer le passage** : neuf voyants (satellite, position, CAT, Doppler, pointage, audio, enregistrement, carnet, carnet en ligne) selon tes profils de station — Fixe, Portable…, chacun avec ses postes, sa boussole et sa source du son.
 
 Toutes les versions dans le [wiki](https://github.com/f4ioz/SatMe/wiki/Nouveautes). Guide complet dans le **[wiki](https://github.com/f4ioz/SatMe/wiki/Accueil)**.
 
@@ -54,6 +61,7 @@ Toutes les versions dans le [wiki](https://github.com/f4ioz/SatMe/wiki/Nouveaute
 - Alerte avant l'AOS, et un passage ajouté à l'agenda du téléphone d'un appui.
 - Fiches de passages en PDF à imprimer : coche les passages des satellites, puis choisis combien de prochains passages de chacun imprimer (jusqu'à 20, sur deux semaines).
 - Suivi en direct : élévation, azimut, Doppler et compte à rebours, lisibles à bout de bras.
+- Préparer le passage : depuis l'icône de n'importe quel passage, neuf voyants vérifient la station selon tes profils (Fixe, Portable…, chacun avec ses postes, sa boussole et sa source du son), chacun menant à ce qui le corrige. Un test en lecture seule interroge le matériel ; avec le CAT connecté, le poste se met sur le satellite préparé. Les passages simultanés sont signalés.
 - Globe avec les traces au sol, timeline des prochains passages, et skeds mutuels — les fenêtres où un satellite est visible à la fois chez vous et chez une autre station.
 - État AMSAT et SatNOGS de chaque satellite, rapport AMSAT en quelques appuis ; les satellites muets restent hors de la liste. Les satellites portent leur nom court AMSAT (« AO-07 », « ISS ») et leur statut AMSAT, quelle que soit la source des éléments.
 - Éléments orbitaux d'AMSAT, de CelesTrak et de SatNOGS (environ 1 700 satellites), ou par un [serveur GP SatMe](https://github.com/f4ioz/SatMe-serveur) ; gardés sur le téléphone pour servir hors ligne. Quand les sources diffèrent, les éléments du moment les plus frais l'emportent.
@@ -78,6 +86,7 @@ Toutes les versions dans le [wiki](https://github.com/f4ioz/SatMe/wiki/Nouveaute
 ### Enregistrement et décodage
 - Chaque passage enregistré en MP3 — micro du téléphone, Bluetooth mains-libres ou carte son USB du poste — avec une annonce vocale au début (satellite, heure UTC, locator) et une copie dans le dossier de votre choix.
 - SSTV décodée en direct pendant l'enregistrement (Robot, Martin, Scottie, PD), ou après coup depuis un enregistrement ou un WAV de la carte SD du poste. SSTV automatique : l'ISS ou un satellite favori et son transpondeur choisis, chaque passage enregistré et décodé tout seul jusqu'au passage choisi, écran éteint compris. Une mire SSTV à émettre, avec des évanouissements simulés pour éprouver un décodeur.
+- Chaque image SSTV garde son propre son : l'écouter, la re-décoder seule, la partager ou l'enregistrer ; une vidéo de l'image qui arrive avec son son, légère ou HD ; images nettoyées des lignes perdues dans le bruit, exportées avec ou sans bandeau ; le re-décodage garde l'heure et le lieu de réception. Une planche SSTV place les images d'une série, dans l'ordre choisi, sur un modèle importé (ARISS…) ou un fond SatMe, avec indicatif, logo, nom @ locator et dates.
 - APRS (bêta) : trames AFSK 1200 décodées pendant l'enregistrement — le digipeater de l'ISS sur 145,825 MHz — ou reçues par un poste KISS, et les stations décodées par un Yaesu FT3D. Positions (Mic-E compris), messages, statuts. Émission par l'IC-9700 ou par un poste KISS comme le Kenwood TH-D72 : APRS Thursday (HOTG) prêt, accusés affichés. On travaille sur l'ISS (145,825 MHz, Doppler suivi) ou sur le réseau terrestre (144,800 MHz, WIDE1-1,WIDE2-1) — ou les deux, l'ISS pendant ses passages et le terrestre le reste du temps. Un bouton « Écouter » règle l'IC-9700 par le CAT ; un Kenwood est passé en KISS et réglé par SatMe lui-même. La position émise peut être approximative (décalage fixe de moins de 500 m).
 - L'APRS pour le plaisir : quand l'ISS répète ta propre trame, SatMe le fête (bannière, vibration, notification) et dit qui d'autre était sur le passage. Une carte sur fond OpenStreetMap (zoom et déplacement au doigt) avec les stations entendues, la trace de l'ISS, et chaque station reliée à l'endroit où était l'ISS quand on l'a entendue. Les messages en conversations, accusés dans les deux sens, avec les boutons APRS Thursday et les participants du jour. La chasse à une station : distance, cap et flèche qui suit le téléphone. Le bilan du jour en image à partager, les contacts APRS par l'ISS directement au carnet, des records et 14 badges. Les stations météo décodées, et une balise au passage de l'ISS (désactivée par défaut).
 - Décodage FT8 / FT4, radiosondes météo, et clé RTL-SDR avec son spectre.
@@ -85,6 +94,7 @@ Toutes les versions dans le [wiki](https://github.com/f4ioz/SatMe/wiki/Nouveaute
 ### Partage
 - Démonstration en direct : le public suit le passage sur son propre téléphone, en scannant un QR code.
 - Écoute déportée depuis un second téléphone sur le même réseau.
+- Images, vidéos, sons, planches et cartes : partagés, ou enregistrés sur le téléphone.
 - Poste de commande sur PC : une page servie par le téléphone — saisie au clavier, cadran polaire, enregistrement, votre station et les prochains passages — et une [API HTTP](docs/API-v1.fr.md) pour d'autres clients.
 
 Français et anglais. Commandes lisibles par les lecteurs d'écran.
