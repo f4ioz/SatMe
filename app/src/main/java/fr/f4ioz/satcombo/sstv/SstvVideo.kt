@@ -192,6 +192,55 @@ object SstvVideo {
         f
     }.getOrNull()
 
+    /** Rows revealed at each frame of the GIF: [images] steps, as the picture really arrived. */
+    fun etapesGif(cal: List<Pair<Long, Int>>, total: Long, hauteur: Int, images: Int = 60): List<Int> =
+        (1..images).map { i -> if (i == images) hauteur else lignesA(cal, total * i / images, total, hauteur) }
+
+    /**
+     * An animated GIF of the picture arriving — no sound, sped up: the
+     * picture comes in about [secondes] s, following the pace it was really
+     * received at, holds 4 s, and loops. For the networks that loop GIFs.
+     * Made from the picture's sound when kept, else at an even pace.
+     */
+    fun fabriqueGif(ctx: Context, png: File, shot: SstvMeta.SstvShot, secondes: Int = 12,
+                    progres: (Float) -> Unit = {}): File? = runCatching {
+        val image = BitmapFactory.decodeFile(png.absolutePath) ?: return null
+        val son = SstvSon.litWav(SstvSon.fichier(png))
+        val cal = son?.let { calendrier(it.first, it.second) } ?: emptyList()
+        val total = son?.first?.size?.toLong() ?: 0L
+        val w = LARGEUR
+        val hImage = (image.height * w / image.width + 1) and 1.inv()
+        val h = hImage + BANDEAU
+        val logo = runCatching { ctx.packageManager.getApplicationIcon(ctx.applicationInfo) }.getOrNull()
+        fun px(b: Bitmap) = IntArray(w * h).also { b.getPixels(it, 0, w, 0, 0, w, h) }
+        val pleine = px(cadre(image, shot, w, h, hImage, true, logo, 1f))
+        val vide = px(cadre(image, shot, w, h, hImage, false, logo, 1f))
+        val pal = Gif.palette(pleine, listOf(vide[0], 0xEBEBEB))
+        val sortie = SstvSon.gif(png)
+        val etapes = etapesGif(cal, total, image.height)
+        val delai = (secondes * 100 / etapes.size).coerceAtLeast(2)
+        val trame = vide.copyOf()
+        sortie.outputStream().buffered().use { o ->
+            val g = Gif.Ecrivain(o, w, h, pal)
+            g.trame(vide, 0, h, delai)
+            var avant = 0
+            etapes.forEachIndexed { i, lignes ->
+                val coupe = hImage * lignes / image.height
+                if (coupe > avant || i == etapes.lastIndex) {
+                    System.arraycopy(pleine, avant * w, trame, avant * w, (coupe - avant) * w)
+                    // A bright line where the picture is being drawn, covered by the next rows.
+                    val fin = if (coupe < hImage) minOf(coupe + 2, hImage) else coupe
+                    for (y in coupe until fin) java.util.Arrays.fill(trame, y * w, y * w + w, 0xFFEBEBEB.toInt())
+                    g.trame(trame, avant, maxOf(fin, avant + 1), if (i == etapes.lastIndex) 400 else delai)
+                    avant = coupe
+                }
+                progres((i + 1f) / etapes.size)
+            }
+            g.fin()
+        }
+        sortie.takeIf { it.length() > 0 }
+    }.getOrNull()
+
     /** An AVC encoder taking NV12 or I420 frames, the simplest to fill. */
     private fun encodeurVideo(): Triple<String, Int, Boolean>? {
         val voulus = listOf(MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420SemiPlanar,

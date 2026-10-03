@@ -25,6 +25,9 @@ object SstvSon {
     fun fichier(png: File): File = File(png.parentFile, png.name.removeSuffix(".png") + ".wav")
 
     /** Its video, once made. */
+    /** Its animated GIF, once made. */
+    fun gif(png: File): File = File(png.parentFile, png.name.removeSuffix(".png") + ".gif")
+
     fun video(png: File, hd: Boolean = false): File =
         File(png.parentFile, png.name.removeSuffix(".png") + (if (hd) "_HD" else "") + ".mp4")
 

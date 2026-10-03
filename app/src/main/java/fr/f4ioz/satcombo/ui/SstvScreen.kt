@@ -459,6 +459,7 @@ private fun SstvViewer(file: File, shot: SstvMeta.SstvShot, onNouvelle: () -> Un
     var message by remember { mutableStateOf<String?>(null) }
     // The video just made: shared or saved, as the operator chooses.
     var pret by remember { mutableStateOf<File?>(null) }
+    fun typeDe(f: File) = if (f.name.endsWith(".gif")) "image/gif" else "video/mp4"
     val enregistre = rememberEnregistrer()
     DisposableEffect(file.absolutePath) { onDispose { runCatching { lecteur?.release() }; lecteur = null } }
     fun partage(f: File, type: String) = runCatching {
@@ -524,22 +525,35 @@ private fun SstvViewer(file: File, shot: SstvMeta.SstvShot, onNouvelle: () -> Un
                             }
                         }) { Text("🎬 " + t(if (hd) "sstv_video_hd" else "sstv_video_legere"), color = Cyan, fontSize = 12.sp) }
                     }
-                    pret?.let { f ->
-                        Text(tf("sstv_video_taille", "%.1f".format(f.length() / 1_048_576.0)), color = TextHi, fontSize = 11.sp,
-                            modifier = Modifier.padding(top = 4.dp))
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Button(modifier = Modifier.weight(1f), onClick = { partage(f, "video/mp4") }) { Text(t("rec_share"), fontSize = 12.sp) }
-                            OutlinedButton(modifier = Modifier.weight(1f), onClick = { enregistre(f.name, "video/mp4", depuisFichier(f)) }) {
-                                Text(t("export_save"), color = Cyan, fontSize = 12.sp)
-                            }
-                        }
-                    }
-                    video?.let {
-                        Text(t("sstv_video_en_cours"), color = TextLo, fontSize = 11.sp)
-                        LinearProgressIndicator(progress = { it }, modifier = Modifier.fillMaxWidth().padding(top = 4.dp))
-                    }
                 } else {
                     Text(t("sstv_son_absent"), color = TextLo, fontSize = 11.sp)
+                }
+                // An animated GIF, for the networks that loop them: no sound, sped up.
+                // Any picture can have one; with its sound, it follows the pace it arrived at.
+                OutlinedButton(modifier = Modifier.fillMaxWidth(), enabled = video == null, onClick = {
+                    video = 0f; message = null; pret = null
+                    scope.launch {
+                        val f = withContext(Dispatchers.IO) {
+                            fr.f4ioz.satcombo.sstv.SstvVideo.fabriqueGif(ctx, file, shot) { p -> video = p }
+                        }
+                        video = null
+                        if (f != null) pret = f else message = t("sstv_video_echec")
+                    }
+                }) { Text("🎞 " + t("sstv_gif"), color = Cyan, fontSize = 12.sp) }
+                Text(t("sstv_gif_desc"), color = TextLo, fontSize = 10.sp)
+                pret?.let { f ->
+                    Text(tf("sstv_video_taille", "%.1f".format(f.length() / 1_048_576.0)), color = TextHi, fontSize = 11.sp,
+                        modifier = Modifier.padding(top = 4.dp))
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Button(modifier = Modifier.weight(1f), onClick = { partage(f, typeDe(f)) }) { Text(t("rec_share"), fontSize = 12.sp) }
+                        OutlinedButton(modifier = Modifier.weight(1f), onClick = { enregistre(f.name, typeDe(f), depuisFichier(f)) }) {
+                            Text(t("export_save"), color = Cyan, fontSize = 12.sp)
+                        }
+                    }
+                }
+                video?.let {
+                    Text(t("sstv_video_en_cours"), color = TextLo, fontSize = 11.sp)
+                    LinearProgressIndicator(progress = { it }, modifier = Modifier.fillMaxWidth().padding(top = 4.dp))
                 }
                 message?.let { Text(it, color = Amber, fontSize = 11.sp, modifier = Modifier.padding(top = 4.dp)) }
                 Spacer(Modifier.height(10.dp))

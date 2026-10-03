@@ -437,6 +437,7 @@ object SstvHub {
         runCatching { SstvSon.fichier(file).delete() }
         runCatching { SstvSon.video(file).delete() }
         runCatching { SstvSon.video(file, hd = true).delete() }
+        runCatching { SstvSon.gif(file).delete() }
         return runCatching { file.delete() }.getOrDefault(false)
     }
 
