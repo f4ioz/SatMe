@@ -214,6 +214,14 @@ class SettingsStore(context: Context) {
         get() = prefs.getBoolean("profil_synchro_requise", false)
         set(v) { prefs.edit().putBoolean("profil_synchro_requise", v).apply() }
 
+    /** The named station profiles ("Fixe", "Portable"…), as text; "" before the first use. */
+    var profilsStation: String
+        get() = prefs.getString("profils_station", "") ?: ""
+        set(v) { prefs.edit().putString("profils_station", v).apply() }
+    var profilActif: String
+        get() = prefs.getString("profil_actif", "fixe") ?: "fixe"
+        set(v) { prefs.edit().putString("profil_actif", v).apply() }
+
     /** PDF of the selection: how many coming passes per satellite (0 = only the passes ticked). */
     var pdfNbPassages: Int
         get() = prefs.getInt("pdf_nb_passages", 0)

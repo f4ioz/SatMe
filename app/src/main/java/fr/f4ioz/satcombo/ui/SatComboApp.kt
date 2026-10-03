@@ -76,6 +76,7 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Usb
 import androidx.compose.material.icons.outlined.StarBorder
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -152,6 +153,10 @@ private fun passPhase(p: SatPass, now: Long): PassPhase = when {
 fun SatComboApp(vm: MainViewModel) {
     val ui by vm.ui.collectAsState()
     LaunchedEffect(Unit) { vm.bootstrap() }
+
+    // "Prepare the pass": over everything else while open.
+    val preparation by vm.preparation.collectAsState()
+    preparation?.let { PreparationScreen(ui, vm, it) }
 
     // SSTV ISS keeps recording the ISS whatever satellite is shown: say so when another one is picked.
     val avertSstvIss by vm.sstvIssAvertissement.collectAsState()
@@ -976,6 +981,12 @@ private fun PassesScreen(ui: UiState, vm: MainViewModel) {
                     amsatStatus = if (ui.statusSource != "SATNOGS")
                         vm.amsatFor(np.satName, np.catalogNumber)?.recent else null
                 ) { vm.selectByCatnum(np.catalogNumber, np.aosEpochMs) }
+            }
+            // Before the pass: is the station ready? (SatMe 21)
+            item {
+                OutlinedButton(onClick = { vm.ouvrePreparation(np.catalogNumber) }, modifier = Modifier.fillMaxWidth()) {
+                    Text("✓ " + t("rd_preparer"), color = Cyan, fontWeight = FontWeight.Bold)
+                }
             }
         }
 

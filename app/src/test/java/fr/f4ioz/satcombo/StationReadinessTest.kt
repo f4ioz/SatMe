@@ -188,4 +188,38 @@ class StationReadinessTest {
         assertEquals(Niveau.OK, StationReadiness.global(l))
         assertEquals(Niveau.ERROR, StationReadiness.global(StationReadiness.evalue(pret.copy(indicatif = ""), complet, maintenant)))
     }
+
+    // ------------------------------------------------------------- profiles
+
+    @Test
+    fun profils_fixe_et_portable_relus_a_l_identique() {
+        val l = StationReadiness.profilsDeDepart("Fixe", "Portable", complet) +
+            StationReadiness.ProfilNomme("p3", "SOTA\tsommet", Profil(false, Pointage.MANUEL, false, false))
+        val relus = StationReadiness.litProfils(StationReadiness.ecritProfils(l))
+        assertEquals(3, relus.size)
+        assertEquals(l[0], relus[0]); assertEquals(l[1], relus[1])
+        assertEquals("SOTA sommet", relus[2].nom)   // a tab in a name cannot break the line
+        assertEquals(false, relus[1].profil.catRequis)
+        assertEquals("p4", StationReadiness.nouvelId(relus))
+        // A damaged line is dropped, the others kept.
+        assertEquals(1, StationReadiness.litProfils("x\tY\n" + StationReadiness.ecritProfils(l.take(1))).size)
+    }
+
+    @Test
+    fun le_profil_portable_ne_reclame_ni_cat_ni_rotor() {
+        val portable = StationReadiness.profilsDeDepart("F", "P")[1].profil
+        val sans = pret.copy(catActive = false, catConnecte = false, rotorDisponible = false, rotorConnecte = false,
+            rotorSuivi = false, rotorRelu = false, carnetConfigure = false)
+        assertEquals(Niveau.OK, StationReadiness.global(StationReadiness.evalue(sans, portable, maintenant)))
+    }
+
+    @Test
+    fun le_poste_la_boussole_et_l_audio_sont_gardes() {
+        val p = StationReadiness.ProfilNomme("p3", "Portable 817", Profil(true, Pointage.MANUEL, true, false),
+            poste = "FT817x2", boussole = "BLE", audio = "USB")
+        assertEquals(p, StationReadiness.litProfils(StationReadiness.ecritProfils(listOf(p))).single())
+        // A line of the first format (six fields) still reads, with nothing to apply.
+        val ancien = StationReadiness.litProfils("fixe\tFixe\ttrue\tROTOR\ttrue\tfalse").single()
+        assertEquals(null, ancien.poste); assertEquals(Pointage.ROTOR, ancien.profil.pointage)
+    }
 }

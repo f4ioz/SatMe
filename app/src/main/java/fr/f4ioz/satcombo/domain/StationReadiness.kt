@@ -59,6 +59,61 @@ object StationReadiness {
         val synchroRequise: Boolean = false,
     )
 
+    /**
+     * A profile with a name the operator recognises: "Fixe", "Portable",
+     * "SOTA"… and the station it stands for, applied when it is chosen:
+     * the rig or rigs ([poste]: "IC9700", "FT817x2", "THD72"…), the compass
+     * ("TEL" or "BLE") and the audio source ("MIC", "BT", "USB"). Null keeps
+     * what is set.
+     */
+    data class ProfilNomme(
+        val id: String,
+        val nom: String,
+        val profil: Profil,
+        val poste: String? = null,
+        val boussole: String? = null,
+        val audio: String? = null,
+    )
+
+    /**
+     * The two profiles a new install starts with: at home (rig on CAT, rotor
+     * or not) and portable (rig by hand, no CAT expected). Names come from
+     * the caller, in the app language.
+     */
+    fun profilsDeDepart(nomFixe: String, nomPortable: String, fixe: Profil = Profil()): List<ProfilNomme> = listOf(
+        ProfilNomme("fixe", nomFixe, fixe),
+        ProfilNomme("portable", nomPortable, Profil(catRequis = false, pointage = Pointage.MANUEL,
+            enregistrementRequis = true, synchroRequise = false), boussole = "TEL", audio = "MIC"),
+    )
+
+    /**
+     * One profile per line, tab-separated: id, name, CAT, pointing,
+     * recording, sync, then rig, compass, audio ("" = keep what is set).
+     */
+    fun ecritProfils(l: List<ProfilNomme>): String = l.joinToString("\n") { n ->
+        listOf(n.id, n.nom.replace('\t', ' ').replace('\n', ' '), n.profil.catRequis, n.profil.pointage.name,
+            n.profil.enregistrementRequis, n.profil.synchroRequise,
+            n.poste.orEmpty(), n.boussole.orEmpty(), n.audio.orEmpty()).joinToString("\t")
+    }
+
+    /** Reads profiles; lines saved before the station fields existed keep them null. */
+    fun litProfils(texte: String): List<ProfilNomme> = texte.lineSequence().mapNotNull { l ->
+        val f = l.split('\t')
+        if (f.size < 6 || f[0].isBlank()) return@mapNotNull null
+        runCatching {
+            ProfilNomme(f[0], f[1], Profil(f[2].toBoolean(), Pointage.valueOf(f[3]), f[4].toBoolean(), f[5].toBoolean()),
+                poste = f.getOrNull(6)?.ifBlank { null }, boussole = f.getOrNull(7)?.ifBlank { null },
+                audio = f.getOrNull(8)?.ifBlank { null })
+        }.getOrNull()
+    }.toList()
+
+    /** A new profile's id, unlike the others. */
+    fun nouvelId(l: List<ProfilNomme>): String {
+        var n = l.size + 1
+        while (l.any { it.id == "p$n" }) n++
+        return "p$n"
+    }
+
     /** CAT link health, read from the PTT poll that runs while connected. */
     enum class SanteCat { INCONNUE, OK, MUETTE }
 

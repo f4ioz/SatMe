@@ -4944,19 +4944,153 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     // ------------------------------------------------------- station readiness
 
-    fun profilStation(): fr.f4ioz.satcombo.domain.StationReadiness.Profil =
-        fr.f4ioz.satcombo.domain.StationReadiness.Profil(
+    /**
+     * The station profiles ("Fixe", "Portable", and those the operator adds).
+     * The first time, "Fixe" takes the single profile saved by Alpha 1.
+     */
+    fun profilsStation(): List<fr.f4ioz.satcombo.domain.StationReadiness.ProfilNomme> {
+        fr.f4ioz.satcombo.domain.StationReadiness.litProfils(settings.profilsStation).takeIf { it.isNotEmpty() }?.let { return it }
+        val ancien = fr.f4ioz.satcombo.domain.StationReadiness.Profil(
             catRequis = settings.profilCatRequis,
-            pointage = if (settings.profilPointage == "ROTOR") fr.f4ioz.satcombo.domain.StationReadiness.Pointage.ROTOR
-                else fr.f4ioz.satcombo.domain.StationReadiness.Pointage.MANUEL,
+            pointage = if (settings.profilPointage == "ROTOR") fr.f4ioz.satcombo.domain.StationReadiness.Pointage.ROTOR else fr.f4ioz.satcombo.domain.StationReadiness.Pointage.MANUEL,
             enregistrementRequis = settings.profilEnregistrementRequis,
             synchroRequise = settings.profilSynchroRequise)
+        val l = fr.f4ioz.satcombo.domain.StationReadiness.profilsDeDepart(t("profil_fixe"), t("profil_portable"), ancien)
+        settings.profilsStation = fr.f4ioz.satcombo.domain.StationReadiness.ecritProfils(l)
+        return l
+    }
 
+    fun profilActif(): fr.f4ioz.satcombo.domain.StationReadiness.ProfilNomme {
+        val l = profilsStation()
+        return l.firstOrNull { it.id == settings.profilActif } ?: l.first()
+    }
+
+    /** Chooses a profile and puts the station as it says (rig, compass, audio source). */
+    fun setProfilActif(id: String) {
+        settings.profilActif = id
+        appliqueProfil(profilActif())
+    }
+
+    /**
+     * Sets the station as [p] describes it. A rig change while CAT is
+     * connected disconnects it first (the pair driver cannot be swapped under
+     * an open line); connecting again is left to the operator.
+     */
+    private fun appliqueProfil(p: fr.f4ioz.satcombo.domain.StationReadiness.ProfilNomme) {
+        p.poste?.takeIf { it != _ui.value.rigModel }?.let { poste ->
+            if (_ui.value.catConnected) disconnectCat()
+            setRigModel(poste)
+        }
+        p.boussole?.takeIf { it != _ui.value.rotor.boussoleSource }?.let { setBoussoleSource(it) }
+        p.audio?.takeIf { it != _ui.value.recorderSource }?.let { setRecorderSource(it) }
+    }
+
+    /** A new profile holding the station as it is now: rig, compass, audio, and what it expects. */
+    fun profilDepuisConfiguration(nom: String): fr.f4ioz.satcombo.domain.StationReadiness.ProfilNomme {
+        val u = _ui.value
+        val l = profilsStation()
+        val p = fr.f4ioz.satcombo.domain.StationReadiness.ProfilNomme(
+            id = fr.f4ioz.satcombo.domain.StationReadiness.nouvelId(l),
+            nom = nom.ifBlank { t("profil_nouveau") },
+            profil = fr.f4ioz.satcombo.domain.StationReadiness.Profil(
+                catRequis = u.catEnabled || u.catConnected,
+                pointage = if (u.rotorConnected && !u.rotorSim) fr.f4ioz.satcombo.domain.StationReadiness.Pointage.ROTOR
+                    else fr.f4ioz.satcombo.domain.StationReadiness.Pointage.MANUEL,
+                enregistrementRequis = u.recorderEnabled,
+                synchroRequise = u.carnet.auto),
+            poste = u.rigModel, boussole = u.rotor.boussoleSource, audio = u.recorderSource)
+        enregistreProfil(p); settings.profilActif = p.id
+        return p
+    }
+
+    /** The rigs a profile can name, with their labels. */
+    fun postesProposes(): List<Pair<String, String>> =
+        listOf("IC9700" to "Icom IC-9700") +
+            fr.f4ioz.satcombo.cat.Postes.MODELES.map { it to fr.f4ioz.satcombo.ui.libellePostes(it) } +
+            listOf(THD72 to t("rig_thd72"))
+
+    /** Adds or replaces [p] (same id). */
+    fun enregistreProfil(p: fr.f4ioz.satcombo.domain.StationReadiness.ProfilNomme) {
+        val l = profilsStation()
+        val n = if (l.any { it.id == p.id }) l.map { if (it.id == p.id) p else it } else l + p
+        settings.profilsStation = fr.f4ioz.satcombo.domain.StationReadiness.ecritProfils(n)
+    }
+
+    /** A new profile copied from the active one, made active. */
+    fun nouveauProfil(nom: String): fr.f4ioz.satcombo.domain.StationReadiness.ProfilNomme {
+        val l = profilsStation()
+        val p = fr.f4ioz.satcombo.domain.StationReadiness.ProfilNomme(
+            fr.f4ioz.satcombo.domain.StationReadiness.nouvelId(l), nom.ifBlank { t("profil_nouveau") }, profilActif().profil)
+        enregistreProfil(p); setProfilActif(p.id)
+        return p
+    }
+
+    /** Removes a profile; the last one stays. */
+    fun supprimeProfil(id: String) {
+        val l = profilsStation().filter { it.id != id }
+        if (l.isEmpty()) return
+        settings.profilsStation = fr.f4ioz.satcombo.domain.StationReadiness.ecritProfils(l)
+        if (settings.profilActif == id) settings.profilActif = l.first().id
+    }
+
+    fun profilStation(): fr.f4ioz.satcombo.domain.StationReadiness.Profil = profilActif().profil
+
+    /** Changes what the active profile expects. */
     fun setProfilStation(p: fr.f4ioz.satcombo.domain.StationReadiness.Profil) {
-        settings.profilCatRequis = p.catRequis
-        settings.profilPointage = p.pointage.name
-        settings.profilEnregistrementRequis = p.enregistrementRequis
-        settings.profilSynchroRequise = p.synchroRequise
+        enregistreProfil(profilActif().copy(profil = p))
+    }
+
+    // --- the "Prepare the pass" screen: which satellite (null = closed), out of UiState
+
+    val preparation = kotlinx.coroutines.flow.MutableStateFlow<Int?>(null)
+    fun ouvrePreparation(catnum: Int) { preparation.value = catnum }
+    fun fermePreparation() { preparation.value = null }
+
+    /**
+     * The coming passes of the followed satellites, one per satellite, the
+     * nearest first: several can rise at once (ISS and JO-97), each one is
+     * prepared from the same screen.
+     */
+    fun passagesAPreparer(): List<fr.f4ioz.satcombo.data.SatPass> {
+        val now = System.currentTimeMillis()
+        return _ui.value.favoritePasses.filter { it.losEpochMs > now }
+            .sortedBy { it.aosEpochMs }.distinctBy { it.catalogNumber }.take(8)
+    }
+
+    /** The satellite and its next pass (or the one in progress), for the screen's header. */
+    fun passagePreparation(catnum: Int): Pair<TleEntry?, fr.f4ioz.satcombo.data.SatPass?> {
+        val sat = _ui.value.satellites.firstOrNull { it.catalogNumber == catnum }
+        val obs = _ui.value.observer
+        val now = System.currentTimeMillis()
+        val p = if (sat != null && obs != null) runCatching {
+            predictor.upcomingPasses(sat, obs, now - 20 * 60_000L, 72, _ui.value.minElevDeg.toDouble())
+                .firstOrNull { it.losEpochMs > now }
+        }.getOrNull() else null
+        return sat to p
+    }
+
+    /**
+     * What a tap on a light does: an explicit operator gesture, so it may
+     * connect the rig or the mast — never transmit. Opening another place
+     * closes the screen; the microphone permission is asked by the screen.
+     */
+    fun actionReadiness(a: fr.f4ioz.satcombo.domain.StationReadiness.Action, catnum: Int) {
+        fun ailleurs(f: () -> Unit) { fermePreparation(); f() }
+        when (a) {
+            fr.f4ioz.satcombo.domain.StationReadiness.Action.AUCUNE, fr.f4ioz.satcombo.domain.StationReadiness.Action.PERMISSION_MICRO -> {}
+            fr.f4ioz.satcombo.domain.StationReadiness.Action.RAFRAICHIR_ELEMENTS -> refreshTleFor(catnum, annonce = true)
+            fr.f4ioz.satcombo.domain.StationReadiness.Action.CHOISIR_TRANSPONDEUR -> ailleurs { selectByCatnum(catnum); openSatConfig() }
+            fr.f4ioz.satcombo.domain.StationReadiness.Action.REGLAGES_QTH -> ailleurs { openSettings("qth") }
+            fr.f4ioz.satcombo.domain.StationReadiness.Action.REGLAGES_GPS -> ailleurs { openSettings("gps") }
+            fr.f4ioz.satcombo.domain.StationReadiness.Action.CONNECTER_CAT -> if (!_ui.value.catEnabled) setCatEnabled(true) else connectCat()
+            fr.f4ioz.satcombo.domain.StationReadiness.Action.REGLAGES_CAT -> ailleurs { openSettings("cat") }
+            fr.f4ioz.satcombo.domain.StationReadiness.Action.REPRENDRE_DOPPLER -> if (_ui.value.dopplerHold) toggleDopplerHold()
+            fr.f4ioz.satcombo.domain.StationReadiness.Action.OUVRIR_ROTOR -> ailleurs { openRotor() }
+            fr.f4ioz.satcombo.domain.StationReadiness.Action.REGLAGES_POINTAGE -> ailleurs { openSettings("aim") }
+            fr.f4ioz.satcombo.domain.StationReadiness.Action.REGLAGES_ENREGISTREMENT -> ailleurs { openSettings("recordings") }
+            fr.f4ioz.satcombo.domain.StationReadiness.Action.REGLAGES_CARNET -> ailleurs { openSettings("log") }
+            fr.f4ioz.satcombo.domain.StationReadiness.Action.DEPOSER_CARNET -> deposeAuCarnet()
+        }
     }
 
     /**
