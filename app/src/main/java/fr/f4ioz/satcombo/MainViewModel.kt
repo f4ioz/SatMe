@@ -4942,6 +4942,106 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     /** Draws a new offset (the next position sent uses it). */
     fun aprsNouveauFlou() { settings.aprsFlouNordM = Float.NaN; settings.aprsFlouEstM = Float.NaN }
 
+    // ------------------------------------------------------- station readiness
+
+    fun profilStation(): fr.f4ioz.satcombo.domain.StationReadiness.Profil =
+        fr.f4ioz.satcombo.domain.StationReadiness.Profil(
+            catRequis = settings.profilCatRequis,
+            pointage = if (settings.profilPointage == "ROTOR") fr.f4ioz.satcombo.domain.StationReadiness.Pointage.ROTOR
+                else fr.f4ioz.satcombo.domain.StationReadiness.Pointage.MANUEL,
+            enregistrementRequis = settings.profilEnregistrementRequis,
+            synchroRequise = settings.profilSynchroRequise)
+
+    fun setProfilStation(p: fr.f4ioz.satcombo.domain.StationReadiness.Profil) {
+        settings.profilCatRequis = p.catRequis
+        settings.profilPointage = p.pointage.name
+        settings.profilEnregistrementRequis = p.enregistrementRequis
+        settings.profilSynchroRequise = p.synchroRequise
+    }
+
+    /**
+     * The readiness lights for [catnum] (the selected satellite by default):
+     * a snapshot of what the app already holds, read only — no call that
+     * could key a rig, move a mast or write to a radio.
+     */
+    suspend fun stationReadiness(catnum: Int? = null): List<fr.f4ioz.satcombo.domain.StationReadiness.Voyant> {
+        val i = instantaneReadiness(catnum)
+        return fr.f4ioz.satcombo.domain.StationReadiness.evalue(i, profilStation())
+    }
+
+    private suspend fun instantaneReadiness(catnum: Int?): fr.f4ioz.satcombo.domain.StationReadiness.Instantane {
+        val u = _ui.value
+        val app = getApplication<android.app.Application>()
+        val now = System.currentTimeMillis()
+        val sat = (catnum ?: u.selected?.catalogNumber)?.let { n -> u.satellites.firstOrNull { it.catalogNumber == n } }
+        val obs = u.observer
+        val pass = if (sat != null && obs != null) withContext(Dispatchers.Default) {
+            runCatching {
+                predictor.upcomingPasses(sat, obs, now - 20 * 60_000L, 72, u.minElevDeg.toDouble())
+                    .firstOrNull { it.losEpochMs > now }
+            }.getOrNull()
+        } else null
+        // Transmitters: those already loaded for the selected satellite, else the repository's.
+        val selectionne = sat != null && u.selected?.catalogNumber == sat.catalogNumber
+        val tx = when {
+            sat == null -> emptyList()
+            selectionne -> activeTransmitters()
+            else -> runCatching { txRepo.forSatellite(sat.catalogNumber) }.getOrDefault(emptyList())
+                .filter { it.alive && (it.downlinkLowHz != null || it.uplinkLowHz != null) }
+        }
+        fun permis(p: String) = androidx.core.content.ContextCompat.checkSelfPermission(app, p) ==
+            android.content.pm.PackageManager.PERMISSION_GRANTED
+        val d = locationProvider.defaultObserver
+        val parDefaut = obs != null && kotlin.math.abs(obs.latDeg - d.latDeg) < 1e-6 && kotlin.math.abs(obs.lonDeg - d.lonDeg) < 1e-6
+        // The PTT poll's last word (fixed French texts in surveilleEmission).
+        val diag = u.catUi.txDiag
+        val sante = when {
+            !u.catConnected || diag.isBlank() -> fr.f4ioz.satcombo.domain.StationReadiness.SanteCat.INCONNUE
+            diag.startsWith("pas de réponse") || diag.startsWith("erreur") || diag.startsWith("poste d'émission non ouvert") -> fr.f4ioz.satcombo.domain.StationReadiness.SanteCat.MUETTE
+            else -> fr.f4ioz.satcombo.domain.StationReadiness.SanteCat.OK
+        }
+        val boussole = if (u.rotor.boussoleSource != "BLE") fr.f4ioz.satcombo.domain.StationReadiness.Boussole.TELEPHONE
+            else when (fr.f4ioz.satcombo.ble.BoussoleBle.etat.value) {
+                fr.f4ioz.satcombo.ble.BoussoleBle.Etat.CONNECTE -> fr.f4ioz.satcombo.domain.StationReadiness.Boussole.CONNECTEE
+                fr.f4ioz.satcombo.ble.BoussoleBle.Etat.ECHEC, fr.f4ioz.satcombo.ble.BoussoleBle.Etat.ARRET -> fr.f4ioz.satcombo.domain.StationReadiness.Boussole.ECHEC
+                else -> fr.f4ioz.satcombo.domain.StationReadiness.Boussole.EN_COURS
+            }
+        val leve = sat != null && obs != null &&
+            (runCatching { predictor.positionAt(sat, obs, now).elevationDeg }.getOrNull() ?: -90.0) > 0.0
+        return fr.f4ioz.satcombo.domain.StationReadiness.Instantane(
+            satNom = sat?.name, epochMs = sat?.epochMs,
+            prochainAosMs = pass?.aosEpochMs, prochainLosMs = pass?.losEpochMs,
+            transpondeurs = tx.size, transpondeursEnCours = selectionne && u.transmittersLoading,
+            satMuet = sat != null && sat.catalogNumber in _satInactifs.value,
+            amsatPasEntendu = sat != null && u.statusSource != "SATNOGS" &&
+                amsatFor(sat.name, sat.catalogNumber)?.recent == fr.f4ioz.satcombo.data.AmsatStatus.NOT_HEARD,
+            cacheHorsLigne = u.tleCacheAgeMs != null,
+            observateur = obs != null, manuel = u.locationMode == LocationMode.MANUAL,
+            locatorInvalide = u.locatorError != null, gpsPermission = u.suivi.permission,
+            gpsPoints = u.suivi.points, positionParDefaut = parDefaut,
+            indicatif = settings.callsign.trim(), locator = myLocator(),
+            catActive = u.catEnabled, catConnecte = u.catConnected, catSimule = u.catSimulated,
+            catSante = sante, catPaireIncomplete = u.catConnected && isPairRig && u.catStatus.contains("✗"),
+            catModeDifferent = u.catModeMismatch,
+            dopplerEnPause = u.dopplerHold, dopplerRx = u.catRxDoppler,
+            relectureRx = u.catRadioDownlinkHz != null, satLeve = leve,
+            rotorDisponible = fr.f4ioz.satcombo.data.Extensions.ROTOR in u.extensions,
+            rotorConnecte = u.rotorConnected, rotorSimule = u.rotorSim, rotorSuivi = u.rotorEnabled,
+            rotorRelu = u.rotorActualAz != null, rotorHorsCourse = u.rotorOutOfRange,
+            boussole = boussole,
+            enregistreurActif = u.recorderEnabled, source = u.recorderSource,
+            permissionMicro = permis(android.Manifest.permission.RECORD_AUDIO),
+            permissionBluetooth = android.os.Build.VERSION.SDK_INT < 31 || permis(android.Manifest.permission.BLUETOOTH_CONNECT),
+            carteUsbPresente = fr.f4ioz.satcombo.audio.RecorderService.usbInputs(app).isNotEmpty(),
+            enregistrementEnCours = u.recording,
+            enregistrementArme = fr.f4ioz.satcombo.audio.RecorderService.fenetres.value.isNotEmpty(),
+            carnetConfigure = u.carnet.url.isNotBlank() && u.carnet.cle.isNotBlank(),
+            carnetAuto = u.carnet.auto, carnetProfil = u.carnet.profil.isNotBlank(),
+            contactsEnAttente = contactsADeposer(),
+            contactsRefuses = u.log.count { refusEnvoi(it.timeMs).isNotBlank() },
+        )
+    }
+
     // ------------------------------------------------------- automatic SSTV
 
     fun fermeAvertissementSstvIss() { sstvIssAvertissement.value = false }

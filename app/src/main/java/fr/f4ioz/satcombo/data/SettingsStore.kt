@@ -195,6 +195,25 @@ class SettingsStore(context: Context) {
         get() = prefs.getString("sstv_auto_tx", "") ?: ""
         set(v) { prefs.edit().putString("sstv_auto_tx", v).apply() }
 
+    /**
+     * Station profile for the readiness check: what this station expects,
+     * so what may be missing. Defaults: CAT expected, pointing by hand,
+     * recording expected, online log optional.
+     */
+    var profilCatRequis: Boolean
+        get() = prefs.getBoolean("profil_cat_requis", true)
+        set(v) { prefs.edit().putBoolean("profil_cat_requis", v).apply() }
+    /** "ROTOR" or "MANUEL" (antenna by hand, phone or BLE compass). */
+    var profilPointage: String
+        get() = prefs.getString("profil_pointage", "MANUEL") ?: "MANUEL"
+        set(v) { prefs.edit().putString("profil_pointage", v).apply() }
+    var profilEnregistrementRequis: Boolean
+        get() = prefs.getBoolean("profil_enregistrement_requis", true)
+        set(v) { prefs.edit().putBoolean("profil_enregistrement_requis", v).apply() }
+    var profilSynchroRequise: Boolean
+        get() = prefs.getBoolean("profil_synchro_requise", false)
+        set(v) { prefs.edit().putBoolean("profil_synchro_requise", v).apply() }
+
     /** PDF of the selection: how many coming passes per satellite (0 = only the passes ticked). */
     var pdfNbPassages: Int
         get() = prefs.getInt("pdf_nb_passages", 0)
