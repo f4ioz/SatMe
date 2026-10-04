@@ -5320,8 +5320,33 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     @Volatile private var enregAutoCatArme: Int = 0
     private var enregAutoCatJob: kotlinx.coroutines.Job? = null
 
+    /**
+     * CAT connected by itself when it is wanted: automatic SSTV armed, a pass
+     * about to be recorded, the rig's cable plugged in. Opening only reads and
+     * sets frequencies (nothing transmits); at most one try every 45 s, so a
+     * station with no rig is not asked again and again.
+     */
+    @Volatile private var dernierEssaiCat = 0L
+    private fun catSiBesoin() {
+        if (_ui.value.catConnected) return
+        val maintenant = System.currentTimeMillis()
+        if (maintenant - dernierEssaiCat < 45_000L) return
+        dernierEssaiCat = maintenant
+        viewModelScope.launch { runCatching { ouvreCat() } }
+    }
+
     // After its fields: a collector started in the first init ran before they existed (crash at start, 04/10).
     init {
+        // A pass armed is about to be recorded (a minute before its window) or is being:
+        // the rig under CAT for it, connected again if it dropped.
+        viewModelScope.launch {
+            while (true) {
+                delay(20_000)
+                val f = fr.f4ioz.satcombo.audio.RecorderService.fenetres.value.firstOrNull() ?: continue
+                val maintenant = System.currentTimeMillis()
+                if (maintenant >= f.first - 60_000L && maintenant <= f.second) runCatching { catSiBesoin() }
+            }
+        }
         // Follows the rig being connected and the satellite chosen.
         viewModelScope.launch {
             var avant: Pair<Boolean, Int?>? = null
@@ -5477,6 +5502,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             sstvAutoArme = catnum
             fr.f4ioz.satcombo.audio.RecorderService.arme(getApplication(), sat.name, f,
                 _ui.value.recorderSource, _ui.value.recorderUnprocessed, myLocator())
+            // The rig tuned and Doppler followed for the passes armed.
+            catSiBesoin()
             sstvIssMessage.value = if (i < 0) t("sstv_iss_sans_transpondeur") else ""
         }
     }
@@ -5801,6 +5828,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         if (!d.recognises(dev)) return
         refreshRotorDevices()
         refreshCatDevices()
+        // The rig's cable plugged in: CAT connected by itself, a moment after the rotor
+        // has taken its own port (CAT opens only a port whose rig answers).
+        viewModelScope.launch { delay(3_000); refreshCatDevices(); catSiBesoin() }
         val u = _ui.value
         if (u.rotorConnected || u.rotorSim || u.rotorLink != "GS232") return
         val nom = dev?.productName ?: dev?.deviceName ?: ""
