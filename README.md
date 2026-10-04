@@ -46,11 +46,18 @@ Amateur radio satellite tracking for Android — passes, pointing, Doppler, logg
 <img src="docs/images/en-sstv-sheet-iss.webp" width="24%" alt="A sheet of the ISS pictures">
 </p>
 
-## What's new in 20.77
+## What's new in 20.78
+
+- **Record every pass under CAT** no longer passes for automatic SSTV: no warning on changing satellite, the transmitter left alone, a notification in its own name.
+- **Continuous SSTV decoding** on by default: a picture starts even when its header was lost as the satellite rose.
+
+### And in 20.77
 
 - **Pass journal**: every pass you followed, kept on the phone — the real trajectory, the rig's frequencies, the mast, the recording. Seen on the sky or on an OpenStreetMap map with the satellite's footprint, the contacts and APRS stations as points with their callsign, each SSTV picture as the stretch of trajectory it took to arrive. **Replay it with its sound**: the picture is drawn as it arrives, a card tells who each station is. **Export** what is shown as a picture, a video or a GIF, opening on a title and ending on a summary. Past passes are found again from the log, the pictures and the recordings.
 - **Record every pass under CAT** (option): 5 s before AOS to 5 s after LOS, the rig's audio input checked when arming.
 - SSTV page in tabs; a simpler sheet for the pictures of a series.
+
+- **CAT connected by itself** when automatic SSTV is armed, a minute before each pass armed, and when the rig's cable is plugged in.
 
 ### And in 20.76
 

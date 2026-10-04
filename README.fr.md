@@ -46,11 +46,18 @@ Poursuite de satellites radioamateurs sur Android — passages, pointage, Dopple
 <img src="docs/images/fr-sstv-sheet-iss.webp" width="24%" alt="Une planche des images de l'ISS">
 </p>
 
-## Nouveautés de la 20.77
+## Nouveautés de la 20.78
+
+- **Enregistrer chaque passage en CAT** ne passe plus pour la SSTV automatique : plus d'avertissement en changeant de satellite, transpondeur laissé tel quel, notification à son nom.
+- **Décodage SSTV continu** activé par défaut : une image démarre même si son en-tête a été perdu au lever du satellite.
+
+### Et dans la 20.77
 
 - **Journal des passages** : chaque passage suivi, gardé sur le téléphone — la trajectoire réelle, les fréquences du poste, le mât, l'enregistrement. Vu sur le ciel ou sur une carte OpenStreetMap avec l'empreinte du satellite, les contacts et les stations APRS en points avec leur indicatif, chaque image SSTV en tronçon de trajectoire. **Rejoué avec son son** : l'image se dessine en arrivant, une fiche dit qui est chaque station. **Export** de ce qui est affiché en image, vidéo ou GIF, avec un titre d'ouverture et un récapitulatif de fin. Les anciens passages se retrouvent d'après le carnet, les images et les enregistrements.
 - **Enregistrer chaque passage en CAT** (option) : de 5 s avant l'AOS à 5 s après le LOS, l'entrée audio du poste vérifiée à l'armement.
 - Page SSTV en onglets ; une planche plus simple pour les images d'une série.
+
+- **CAT connecté tout seul** à l'armement de la SSTV automatique, une minute avant chaque passage armé, et au branchement du câble du poste.
 
 ### Et dans la 20.76
 
