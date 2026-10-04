@@ -300,7 +300,11 @@ object SstvHub {
         fun debutMs(): Long? {
             if (origine != null && origine.timeMs > 0L && rateFichier > 0)
                 return origine.timeMs - ((mp3.length() - 44) / 2 * 1000 / rateFichier - 500)
-            return SstvMeta.debutEnregistrement(mp3.name).takeIf { it > 0L }?.let { it - annonce }
+            // The file ends when the capture stopped: its start is known exactly from there.
+            return SstvMeta.debutEnregistrement(mp3.name).takeIf { it > 0L }?.let { nom ->
+                fr.f4ioz.satcombo.audio.InfoEnregistrement.origine(nom, mp3.lastModified(),
+                    fr.f4ioz.satcombo.audio.InfoEnregistrement.dureeMs(mp3), annonce)
+            }
         }
         // The same pictures received live during that pass: their exact time and place.
         val enDirect = if (origine == null) runCatching {

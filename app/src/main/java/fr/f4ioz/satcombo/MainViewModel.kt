@@ -10631,6 +10631,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     /** The spoken header of a recording (kept, else estimated), to put its sound in step. */
     fun annonceDe(f: java.io.File): Long = fr.f4ioz.satcombo.audio.InfoEnregistrement.annonceMs(f, dureeEnregistrement(f))
 
+    /** When the start of a recording's file was (the header's first sample), to put its sound at the right time. */
+    fun origineSon(f: java.io.File): Long = fr.f4ioz.satcombo.audio.InfoEnregistrement.origine(
+        fr.f4ioz.satcombo.sstv.SstvMeta.debutEnregistrement(f.name), f.lastModified(), dureeEnregistrement(f), annonceDe(f))
+
     /** A pass of the journal changed (pictures set aside…): written again. */
     fun majJournal(e: fr.f4ioz.satcombo.domain.JournalPassage.Entree) {
         // A small file: written at once, so the list read just after sees it.

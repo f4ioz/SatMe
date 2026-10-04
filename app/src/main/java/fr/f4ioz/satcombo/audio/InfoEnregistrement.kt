@@ -39,6 +39,21 @@ object InfoEnregistrement {
         return if (a in 0L..20_000L) a else 0L
     }
 
+    /**
+     * When the start of the file was, as if it had been heard live: the file
+     * ends when the capture stopped (its last write), so a position p in it
+     * is [finFichierMs] − [dureeMs] + p. Exact whatever the delay between the
+     * time in its name and the microphone actually opening (a USB card, a
+     * Bluetooth link take a moment). Kept only if the capture so found starts
+     * near the name's time; else the name's time less the header.
+     */
+    fun origine(debutNomMs: Long, finFichierMs: Long, dureeMs: Long, annonceMs: Long): Long {
+        val parFin = finFichierMs - dureeMs
+        val capture = parFin + annonceMs
+        if (debutNomMs <= 0L) return parFin
+        return if (dureeMs > 0 && capture in (debutNomMs - 3_000L)..(debutNomMs + 60_000L)) parFin else debutNomMs - annonceMs
+    }
+
     /** Length of a recording (ms), from its header. */
     fun dureeMs(f: File): Long = runCatching {
         val r = android.media.MediaMetadataRetriever()

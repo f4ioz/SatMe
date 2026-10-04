@@ -275,4 +275,22 @@ class JournalPassageTest {
         assertNull(R.indicatifA(m, t0 + 3_500L, 3_000L, JournalPassage.TypeMarque.QSO))
         assertNull(R.indicatifA(m, null, 3_000L, JournalPassage.TypeMarque.APRS))
     }
+
+    @Test
+    fun le_son_se_cale_sur_la_fin_du_fichier() {
+        val I = fr.f4ioz.satcombo.audio.InfoEnregistrement
+        val nom = 1_791_041_165_000L      // the name's time: the recording asked for
+        // The ISS recording of 03/10: 678.5 s long, last written 668 s after its name, no header kept.
+        val a = I.estimeAnnonce(nom, nom + 668_000L, 678_500L)
+        assertEquals(nom - 10_500L, I.origine(nom, nom + 668_000L, 678_500L, a))
+        // A recording whose microphone opened 3 s late (a USB card): header 9 s kept,
+        // capture 600 s from nom + 3 s. The file's start is found from its end, not its name.
+        val fin = nom + 3_000L + 600_000L
+        val o = I.origine(nom, fin, 9_000L + 600_000L, 9_000L)
+        assertEquals(nom + 3_000L - 9_000L, o)
+        // Position of a moment heard at nom + 100 s: in the pass audio, past the header.
+        assertEquals(9_000L + 97_000L, nom + 100_000L - o)
+        // A file copied since (its date no longer its end): back to the name's time.
+        assertEquals(nom - 9_000L, I.origine(nom, nom + 5 * 86_400_000L, 609_000L, 9_000L))
+    }
 }

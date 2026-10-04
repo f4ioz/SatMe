@@ -161,9 +161,10 @@ private fun FichePassage(
     // The recording of the pass, if still there, and where the pass starts in it.
     // Its own recording, or one that covers the pass (a pass found again, an older one).
     val son = remember(e.id) { e.enregistrements.firstNotNullOfOrNull { vm.enregistrementJournal(it) } ?: vm.sonDuPassage(e) }
-    val debutSon = remember(son) { son?.let { SstvMeta.debutEnregistrement(it.name) }?.takeIf { it > 0L } }
-    // The spoken header before the pass audio: kept with the recording, else estimated.
+    // When the file's start was (its header), and the header's length: the pass's
+    // sound begins at debutSon + annonce; before that, the replay goes on silent.
     val annonce = remember(son) { son?.let { vm.annonceDe(it) } ?: 0L }
+    val debutSon = remember(son) { son?.let { vm.origineSon(it) }?.takeIf { it > 0L } }
     // Replay: the moment shown (null = the whole pass).
     var instant by remember(e.id) { mutableStateOf<Long?>(null) }
     var joue by remember(e.id) { mutableStateOf(false) }
@@ -176,9 +177,15 @@ private fun FichePassage(
     LaunchedEffect(joue) {
         while (joue) {
             val p = lecteur
-            instant = if (p != null && debutSon != null) {
-                JournalPassage.heureDuSon(debutSon, annonce, runCatching { p.currentPosition.toLong() }.getOrDefault(0L))
-            } else (instant ?: e.debutMs) + 2_000L
+            instant = when {
+                p != null && debutSon != null && runCatching { p.isPlaying }.getOrDefault(false) ->
+                    debutSon + runCatching { p.currentPosition.toLong() }.getOrDefault(0L)
+                // Before the recording's sound: on at real speed, silent, then the sound from its first sample.
+                p != null && debutSon != null -> ((instant ?: e.debutMs) + 200L).also { t ->
+                    if (t >= debutSon + annonce) runCatching { p.seekTo((t - debutSon).toInt()); p.start() }
+                }
+                else -> (instant ?: e.debutMs) + 2_000L
+            }
             if ((instant ?: 0L) > e.finMs) { joue = false; runCatching { lecteur?.pause() } }
             delay(200)
         }
@@ -191,7 +198,8 @@ private fun FichePassage(
                 android.media.MediaPlayer().apply { setDataSource(son.absolutePath); prepare() }
             }.getOrNull()
             lecteur = p
-            p?.let { runCatching { it.seekTo(JournalPassage.posDuSon(debutSon, annonce, t0).toInt().coerceAtLeast(0)); it.start() } }
+            // Never the spoken header: before the sound, the loop waits for it.
+            if (t0 >= debutSon + annonce) p?.let { runCatching { it.seekTo((t0 - debutSon).toInt()); it.start() } }
         }
         joue = true
     }
@@ -307,7 +315,10 @@ private fun FichePassage(
                 val t = e.debutMs + (f * e.dureeMs).toLong()
                 instant = t
                 val p = lecteur
-                if (p != null && debutSon != null) runCatching { p.seekTo(JournalPassage.posDuSon(debutSon, annonce, t).toInt().coerceAtLeast(0)) }
+                if (p != null && debutSon != null) runCatching {
+                    if (t >= debutSon + annonce) { p.seekTo((t - debutSon).toInt()); if (joue && !p.isPlaying) p.start() }
+                    else if (p.isPlaying) p.pause()
+                }
             })
         pt?.let { p ->
             Text(buildList {

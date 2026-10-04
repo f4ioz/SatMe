@@ -552,8 +552,8 @@ object JournalRendu {
         // Very light (480×640, 0.4 Mbit/s), light (720×960, 1 Mbit/s) or HD (1080×1440, 2.5 Mbit/s).
         val (w, h, debit) = when (sc.resolution) { "XS" -> Triple(480, 640, 400_000); "HD" -> Triple(1080, 1440, 2_500_000); else -> Triple(720, 960, 1_000_000) }
         val fps = 5
-        val pcm = if (son != null && debutSon != null) extraitSon(son, JournalPassage.posDuSon(debutSon, annonceMs, e.debutMs),
-            JournalPassage.posDuSon(debutSon, annonceMs, e.finMs)) else null
+        // debutSon: when the file's start was; the pass's sound begins after the header.
+        val pcm = if (son != null && debutSon != null) extraitSon(son, e.debutMs - debutSon, e.finMs - debutSon, annonceMs) else null
         val vitesse = if (pcm != null) 1 else 10
         val nb = (e.dureeMs * fps / 1000 / vitesse).toInt().coerceAtLeast(2)
         // The opening title first (3 s): the sound waits for it, to stay with the replay.
@@ -644,8 +644,19 @@ object JournalRendu {
         return true
     }
 
-    /** The sound of the pass from its recording, about 22 kHz, mono. */
-    private fun extraitSon(f: File, deMs: Long, aMs: Long): Pair<ShortArray, Int>? {
+    /**
+     * The sound of the pass from its recording, about 22 kHz, mono: silence
+     * for the part before the sound (the spoken header is never heard).
+     */
+    private fun extraitSon(f: File, de0: Long, aMs: Long, annonceMs: Long): Pair<ShortArray, Int>? {
+        val deMs = maxOf(de0, annonceMs)
+        val silenceMs = deMs - de0
+        val s = extraitSonBrut(f, deMs, aMs) ?: return null
+        if (silenceMs <= 0) return s
+        return (ShortArray((silenceMs * s.second / 1000).toInt()) + s.first) to s.second
+    }
+
+    private fun extraitSonBrut(f: File, deMs: Long, aMs: Long): Pair<ShortArray, Int>? {
         var out: ShortArray? = null; var n = 0; var rateSortie = 22050
         var lus = 0L; var facteur = 1; var debut = 0L; var fin = 0L
         var somme = 0; var dansSomme = 0
