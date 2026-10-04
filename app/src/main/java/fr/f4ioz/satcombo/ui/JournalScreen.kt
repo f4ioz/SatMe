@@ -44,6 +44,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import fr.f4ioz.satcombo.JournalDesPassages
 import fr.f4ioz.satcombo.MainViewModel
 import fr.f4ioz.satcombo.UiState
 import fr.f4ioz.satcombo.audio.InfoEnregistrement
@@ -69,22 +70,22 @@ import java.util.TimeZone
  */
 @Composable
 fun JournalScreen(ui: UiState, vm: MainViewModel, onClose: () -> Unit) {
-    var passages by remember { mutableStateOf(vm.passagesJournal()) }
-    var liens by remember { mutableStateOf<Map<String, MainViewModel.LiensJournal>>(emptyMap()) }
+    var passages by remember { mutableStateOf(vm.journal.passages()) }
+    var liens by remember { mutableStateOf<Map<String, JournalDesPassages.Liens>>(emptyMap()) }
     var choisi by remember { mutableStateOf<JournalPassage.Entree?>(null) }
-    LaunchedEffect(passages) { liens = withContext(Dispatchers.IO) { vm.liensJournal(passages) } }
+    LaunchedEffect(passages) { liens = withContext(Dispatchers.IO) { vm.journal.liens(passages) } }
 
     Dialog(onDismissRequest = { if (choisi != null) choisi = null else onClose() },
         properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Surface(color = SpaceBg, modifier = Modifier.fillMaxSize()) {
             val c = choisi
             var importe by remember { mutableStateOf(false) }
-            if (importe) ImportJournal(ui, vm, onFini = { n -> importe = false; if (n > 0) passages = vm.passagesJournal() })
+            if (importe) ImportJournal(ui, vm, onFini = { n -> importe = false; if (n > 0) passages = vm.journal.passages() })
             if (c == null) ListeJournal(ui, passages, liens, onChoix = { choisi = it }, onClose = onClose,
                 onImport = { importe = true })
-            else FichePassage(ui, vm, c, liens[c.id] ?: MainViewModel.LiensJournal(),
-                onRetour = { choisi = null; passages = vm.passagesJournal() },
-                onSupprime = { vm.supprimeJournal(c); passages = vm.passagesJournal(); choisi = null })
+            else FichePassage(ui, vm, c, liens[c.id] ?: JournalDesPassages.Liens(),
+                onRetour = { choisi = null; passages = vm.journal.passages() },
+                onSupprime = { vm.journal.supprime(c); passages = vm.journal.passages(); choisi = null })
         }
     }
 }
@@ -96,7 +97,7 @@ private fun duree(ms: Long): String { val s = ms / 1000; return "%d:%02d".format
 
 @Composable
 private fun ListeJournal(
-    ui: UiState, passages: List<JournalPassage.Entree>, liens: Map<String, MainViewModel.LiensJournal>,
+    ui: UiState, passages: List<JournalPassage.Entree>, liens: Map<String, JournalDesPassages.Liens>,
     onChoix: (JournalPassage.Entree) -> Unit, onClose: () -> Unit, onImport: () -> Unit
 ) {
     val jour = remember(ui.useUtc) { formatDate(ui.useUtc, "EEE dd/MM HH:mm") }
@@ -150,21 +151,21 @@ private fun ListeJournal(
 
 @Composable
 private fun FichePassage(
-    ui: UiState, vm: MainViewModel, e: JournalPassage.Entree, l: MainViewModel.LiensJournal,
+    ui: UiState, vm: MainViewModel, e: JournalPassage.Entree, l: JournalDesPassages.Liens,
     onRetour: () -> Unit, onSupprime: () -> Unit
 ) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
-    val prevue = remember(e.id) { vm.prevueJournal(e) }
+    val prevue = remember(e.id) { vm.journal.prevue(e) }
     val heure = remember(ui.useUtc) { formatDate(ui.useUtc, "HH:mm:ss") }
     val jour = remember(ui.useUtc) { formatDate(ui.useUtc, "EEEE dd/MM/yyyy HH:mm") }
     // The recording of the pass, if still there, and where the pass starts in it.
     // Its own recording, or one that covers the pass (a pass found again, an older one).
-    val son = remember(e.id) { e.enregistrements.firstNotNullOfOrNull { vm.enregistrementJournal(it) } ?: vm.sonDuPassage(e) }
+    val son = remember(e.id) { e.enregistrements.firstNotNullOfOrNull { vm.journal.enregistrement(it) } ?: vm.journal.sonDuPassage(e) }
     // When the file's start was (its header), and the header's length: the pass's
     // sound begins at debutSon + annonce; before that, the replay goes on silent.
-    val annonce = remember(son) { son?.let { vm.annonceDe(it) } ?: 0L }
-    val debutSon = remember(son) { son?.let { vm.origineSon(it) }?.takeIf { it > 0L } }
+    val annonce = remember(son) { son?.let { vm.journal.annonceDe(it) } ?: 0L }
+    val debutSon = remember(son) { son?.let { vm.journal.origineSon(it) }?.takeIf { it > 0L } }
     // Replay: the moment shown (null = the whole pass).
     var instant by remember(e.id) { mutableStateOf<Long?>(null) }
     var joue by remember(e.id) { mutableStateOf(false) }
@@ -226,12 +227,12 @@ private fun FichePassage(
         }
         val lv = remember(parSource, masquees) { l.copy(images = parSource.filter { it.first.name !in masquees }) }
         // The sky (zoomable) or the map, with what happened on the trajectory.
-        var decalageQso by remember { mutableStateOf(vm.journalDecalageQsoS()) }
-        val marques = remember(lv, decalageQso) { vm.marquesJournal(lv, decalageQso) }
+        var decalageQso by remember { mutableStateOf(vm.journal.decalageQsoS()) }
+        val marques = remember(lv, decalageQso) { vm.journal.marques(lv, decalageQso) }
         // Who the stations are (log, APRS, QRZ.com), for their cards.
         var fiches by remember(e.id) { mutableStateOf<Map<String, JournalPassage.Fiche>>(emptyMap()) }
-        LaunchedEffect(marques) { fiches = vm.fichesJournal(marques) }
-        val sol = remember(e.id) { vm.traceSolJournal(e) }
+        LaunchedEffect(marques) { fiches = vm.journal.fiches(marques) }
+        val sol = remember(e.id) { vm.journal.traceSol(e) }
         var surCarte by remember { mutableStateOf(false) }
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(top = 4.dp)) {
             FilterChip(selected = !surCarte, onClick = { surCarte = false }, label = { Text(t("journal_vue_ciel"), fontSize = 12.sp) })
@@ -239,10 +240,10 @@ private fun FichePassage(
         }
         // An SSTV picture shows from its first line, drawn as it arrives, then
         // stays the time chosen once complete (×10 when replayed without sound).
-        var flashS by remember { mutableStateOf(vm.journalFlashS()) }
-        var affSstv by remember { mutableStateOf(vm.journalAffSstv()) }
-        var affFiches by remember { mutableStateOf(vm.journalAffFiches()) }
-        var tailleFlash by remember { mutableStateOf(vm.journalFlashTaille()) }
+        var flashS by remember { mutableStateOf(vm.journal.flashS()) }
+        var affSstv by remember { mutableStateOf(vm.journal.affSstv()) }
+        var affFiches by remember { mutableStateOf(vm.journal.affFiches()) }
+        var tailleFlash by remember { mutableStateOf(vm.journal.flashTaille()) }
         var apercuJusqua by remember { mutableStateOf(0L) }
         val vitesseRejeu = if (son != null && debutSon != null) 1 else 10
         val arrivee = if (affSstv) JournalRendu.imageA(marques, instant, flashS * 1000L * vitesseRejeu) else null
@@ -271,22 +272,22 @@ private fun FichePassage(
             // Logged after the contact ended: put back to where it was heard, in step with the sound.
             Text(t("journal_decalage_qso"), color = TextLo, fontSize = 11.sp)
             Slider(value = decalageQso.toFloat(), valueRange = 0f..120f, steps = 23, modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
-                onValueChange = { decalageQso = it.toInt() }, onValueChangeFinished = { vm.setJournalDecalageQsoS(decalageQso) })
+                onValueChange = { decalageQso = it.toInt() }, onValueChangeFinished = { vm.journal.setDecalageQsoS(decalageQso) })
             Text("−$decalageQso s", color = TextHi, fontSize = 11.sp)
         }
         if (marques.isNotEmpty()) {
             // What shows during the replay, each on or off; then for how long.
             Text(t("journal_pendant_rejeu"), color = TextLo, fontSize = 11.sp, modifier = Modifier.padding(top = 4.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                FilterChip(selected = affSstv, onClick = { affSstv = !affSstv; vm.setJournalAffSstv(affSstv) },
+                FilterChip(selected = affSstv, onClick = { affSstv = !affSstv; vm.journal.setAffSstv(affSstv) },
                     label = { Text((if (affSstv) "✓ " else "") + t("journal_aff_sstv") + " : " + t(if (affSstv) "journal_oui" else "journal_flash_non"), fontSize = 11.sp) })
-                FilterChip(selected = affFiches, onClick = { affFiches = !affFiches; vm.setJournalAffFiches(affFiches) },
+                FilterChip(selected = affFiches, onClick = { affFiches = !affFiches; vm.journal.setAffFiches(affFiches) },
                     label = { Text((if (affFiches) "✓ " else "") + t("journal_aff_fiches") + " : " + t(if (affFiches) "journal_oui" else "journal_flash_non"), fontSize = 11.sp) })
             }
             if (affSstv || affFiches) Text(t("journal_garde"), color = TextLo, fontSize = 11.sp, modifier = Modifier.padding(top = 2.dp))
             if (affSstv || affFiches) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 listOf(3, 5, 10).forEach { n ->
-                    FilterChip(selected = flashS == n, onClick = { flashS = n; vm.setJournalFlashS(n) },
+                    FilterChip(selected = flashS == n, onClick = { flashS = n; vm.journal.setFlashS(n) },
                         label = { Text("$n s", fontSize = 11.sp) })
                 }
             }
@@ -297,7 +298,7 @@ private fun FichePassage(
                 Text(t("journal_flash_taille"), color = TextLo, fontSize = 11.sp)
                 Slider(value = tailleFlash, valueRange = 0.15f..0.7f, modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
                     onValueChange = { v -> tailleFlash = v; apercuJusqua = System.currentTimeMillis() + 2_000L },
-                    onValueChangeFinished = { vm.setJournalFlashTaille(tailleFlash) })
+                    onValueChangeFinished = { vm.journal.setFlashTaille(tailleFlash) })
                 Text("%d %%".format((tailleFlash * 100).toInt()), color = TextHi, fontSize = 11.sp)
             }
         }
@@ -370,7 +371,7 @@ private fun FichePassage(
                     val vu = instant == null || s.timeMs <= instant!!
                     Column(Modifier.width(120.dp).alpha(if (!garde) 0.3f else if (vu) 1f else 0.15f).clickable {
                         masquees = if (garde) masquees + f.name else masquees - f.name
-                        vm.majJournal(e.copy(masquees = masquees))
+                        vm.journal.maj(e.copy(masquees = masquees))
                     }) {
                         Box {
                             if (b != null) Image(b.asImageBitmap(), null, contentScale = ContentScale.Crop,
@@ -413,28 +414,28 @@ private fun FichePassage(
             Checkbox(checked = avecSon, onCheckedChange = null)
             Text(t("journal_avec_son"), color = TextHi, fontSize = 12.sp)
         }
-        var resolution by remember { mutableStateOf(vm.journalVideoRes()) }
+        var resolution by remember { mutableStateOf(vm.journal.videoRes()) }
         if (format == "video") {
             Text(t("journal_resolution"), color = TextLo, fontSize = 11.sp)
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 listOf("XS" to "journal_res_tres_legere", "M" to "journal_res_legere", "HD" to "journal_res_hd").forEach { (k, cle) ->
-                    FilterChip(selected = resolution == k, onClick = { resolution = k; vm.setJournalVideoRes(k); pret = null },
+                    FilterChip(selected = resolution == k, onClick = { resolution = k; vm.journal.setVideoRes(k); pret = null },
                         label = { Text(t(cle), fontSize = 11.sp) })
                 }
             }
         }
-        var ouverture by remember { mutableStateOf(vm.journalOuverture()) }
+        var ouverture by remember { mutableStateOf(vm.journal.ouverture()) }
         if (format != "image") Row(verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.clickable { ouverture = !ouverture; vm.setJournalOuverture(ouverture); pret = null }) {
+            modifier = Modifier.clickable { ouverture = !ouverture; vm.journal.setOuverture(ouverture); pret = null }) {
             Checkbox(checked = ouverture, onCheckedChange = null)
             Column {
                 Text(t("journal_ouverture"), color = TextHi, fontSize = 12.sp)
                 Text(t("journal_ouverture_desc"), color = TextLo, fontSize = 10.sp)
             }
         }
-        var recap by remember { mutableStateOf(vm.journalRecap()) }
+        var recap by remember { mutableStateOf(vm.journal.recap()) }
         if (format != "image") Row(verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.clickable { recap = !recap; vm.setJournalRecap(recap); pret = null }) {
+            modifier = Modifier.clickable { recap = !recap; vm.journal.setRecap(recap); pret = null }) {
             Checkbox(checked = recap, onCheckedChange = null)
             Column {
                 Text(t("journal_recap"), color = TextHi, fontSize = 12.sp)
@@ -693,7 +694,7 @@ private fun ImportJournal(ui: UiState, vm: MainViewModel, onFini: (Int) -> Unit)
     var candidats by remember { mutableStateOf<Pair<List<JournalPassage.Candidat>, Int>?>(null) }
     var gardes by remember { mutableStateOf<Set<Int>>(emptySet()) }
     var occupe by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) { evts = withContext(Dispatchers.IO) { vm.evenementsImport() } }
+    LaunchedEffect(Unit) { evts = withContext(Dispatchers.IO) { vm.journal.evenementsImport() } }
     val jour = remember(ui.useUtc) { formatDate(ui.useUtc, "EEE dd/MM/yy HH:mm") }
     fun nomSource(s: JournalPassage.Source) = t(when (s) {
         JournalPassage.Source.CARNET -> "journal_src_carnet"; JournalPassage.Source.SSTV -> "journal_src_sstv"
@@ -718,7 +719,7 @@ private fun ImportJournal(ui: UiState, vm: MainViewModel, onFini: (Int) -> Unit)
                     Button(enabled = !occupe && choisies.any { e[it].orEmpty().isNotEmpty() }, onClick = {
                         occupe = true
                         scope.launch {
-                            val r = withContext(Dispatchers.Default) { vm.candidatsImport(choisies.flatMap { e[it].orEmpty() }) }
+                            val r = withContext(Dispatchers.Default) { vm.journal.candidatsImport(choisies.flatMap { e[it].orEmpty() }) }
                             candidats = r; gardes = r.first.indices.toSet(); occupe = false
                         }
                     }, modifier = Modifier.padding(top = 8.dp)) { Text(t("journal_chercher")) }
@@ -747,7 +748,7 @@ private fun ImportJournal(ui: UiState, vm: MainViewModel, onFini: (Int) -> Unit)
                         Button(enabled = !occupe && gardes.isNotEmpty(), onClick = {
                             occupe = true
                             scope.launch {
-                                val n = withContext(Dispatchers.IO) { vm.importeJournal(gardes.sorted().map { liste[it] }) }
+                                val n = withContext(Dispatchers.IO) { vm.journal.importe(gardes.sorted().map { liste[it] }) }
                                 occupe = false; onFini(n)
                             }
                         }) { Text(tf("journal_importer_n", gardes.size)) }

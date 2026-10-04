@@ -3529,10 +3529,10 @@ private fun RecordingsSection(ui: UiState, vm: MainViewModel) {
         // --- automatic recording under CAT ---
         Surface(color = SpaceCard, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
             Column(Modifier.padding(14.dp)) {
-                var actif by remember { mutableStateOf(vm.enregAutoCat()) }
-                val etat by vm.enregAutoCatEtat.collectAsState()
+                var actif by remember { mutableStateOf(vm.enregAutoCat.actif()) }
+                val etat by vm.enregAutoCat.etat.collectAsState()
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()
-                    .toggleable(value = actif, role = Role.Switch, onValueChange = { actif = it; vm.setEnregAutoCat(it) })) {
+                    .toggleable(value = actif, role = Role.Switch, onValueChange = { actif = it; vm.enregAutoCat.setActif(it) })) {
                     Column(Modifier.weight(1f)) {
                         Text(t("enreg_auto_titre"), color = TextHi, fontWeight = FontWeight.Bold)
                         Text(t("enreg_auto_desc"), color = TextLo, fontSize = 11.sp)
@@ -3543,7 +3543,7 @@ private fun RecordingsSection(ui: UiState, vm: MainViewModel) {
                     if (ui.recorderSource != "USB") Text(t("enreg_auto_source"), color = Amber, fontSize = 11.sp,
                         modifier = Modifier.padding(top = 4.dp))
                     if (etat.isNotBlank()) Text(etat, color = Cyan, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
-                    OutlinedButton(onClick = { vm.verifieEnregAutoCat(force = true) }, modifier = Modifier.padding(top = 6.dp)) {
+                    OutlinedButton(onClick = { vm.enregAutoCat.verifie(force = true) }, modifier = Modifier.padding(top = 6.dp)) {
                         Text(t("enreg_auto_tester"), color = Cyan, fontSize = 12.sp)
                     }
                 }

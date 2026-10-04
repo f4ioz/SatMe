@@ -133,6 +133,23 @@ object JournalPassage {
         }
         private var testEnAttente: Pair<Map<String, String>, Long>? = null
 
+        /**
+         * Hands the pass being gathered to [autre] (its page closed, or opened,
+         * mid-pass), so the piece is not lost to the minimum length. False when
+         * [autre] follows another satellite: then close it as usual.
+         */
+        fun cedeA(autre: Collecte): Boolean {
+            val c = en ?: return true
+            val o = autre.en
+            if (o != null && o.catnum != c.catnum) return false
+            autre.en = if (o == null) c else fusionne(o, c)
+            autre.dernierPoint = autre.en?.points?.lastOrNull()
+            autre.sousHorizonDepuis = 0L
+            if (autre.testEnAttente == null) autre.testEnAttente = testEnAttente
+            en = null; dernierPoint = null; sousHorizonDepuis = 0L; testEnAttente = null
+            return true
+        }
+
         /** Ends the pass followed; the entry if it is worth keeping. */
         fun ferme(): Entree? {
             val c = en
@@ -467,9 +484,36 @@ object JournalPassage {
     }.getOrNull()
 
     /** The passes kept, one file each ("<catnum>_<start>.passage"), the newest [GARDE] only. */
+    /** Two pieces of the same pass are one: the same satellite, overlapping (2 min of slack). */
+    fun memePassage(a: Entree, b: Entree): Boolean =
+        a.catnum == b.catnum && a.debutMs <= b.finMs + 120_000L && b.debutMs <= a.finMs + 120_000L
+
+    /**
+     * Two pieces of one pass (followed on its page, then in the background
+     * when the page was left — or the other way round) made one: all their
+     * points in time order, their recordings, what each knew.
+     */
+    fun fusionne(a: Entree, b: Entree): Entree {
+        val points = (a.points + b.points).sortedBy { it.tMs }.distinctBy { it.tMs / 1000 }
+        val test = if (a.testMs >= b.testMs) a else b
+        return a.copy(
+            debutMs = minOf(a.debutMs, b.debutMs), finMs = maxOf(a.finMs, b.finMs),
+            locator = a.locator.ifBlank { b.locator }, profil = a.profil.ifBlank { b.profil },
+            transpondeur = a.transpondeur.ifBlank { b.transpondeur },
+            enregistrements = (a.enregistrements + b.enregistrements).distinct(),
+            test = test.test, testMs = test.testMs, points = points,
+            reconstitue = a.reconstitue && b.reconstitue, masquees = a.masquees + b.masquees)
+    }
+
     class Rangement(val dossier: File) {
         init { dossier.mkdirs() }
-        fun enregistre(e: Entree) {
+        /** Kept, merged with what is already kept of the same pass. */
+        fun enregistre(e0: Entree) {
+            var e = e0
+            for (f in fichiers()) {
+                val autre = lit(runCatching { f.readText() }.getOrDefault("")) ?: continue
+                if (autre.id != e0.id && memePassage(autre, e)) { e = fusionne(e, autre); f.delete() }
+            }
             File(dossier, e.id + ".passage").writeText(ecrit(e))
             val tous = fichiers()
             if (tous.size > GARDE) tous.take(tous.size - GARDE).forEach { it.delete() }

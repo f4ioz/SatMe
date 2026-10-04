@@ -51,8 +51,8 @@ class StationReadinessViewModelTest {
         fr.f4ioz.satcombo.data.SettingsStore(app()).enregAutoCat = true
         try {
             val vm = MainViewModel(app())
-            org.junit.Assert.assertTrue(vm.enregAutoCat())
-            vm.verifieEnregAutoCat(force = true)
+            org.junit.Assert.assertTrue(vm.enregAutoCat.actif())
+            vm.enregAutoCat.verifie(force = true)
         } finally {
             fr.f4ioz.satcombo.data.SettingsStore(app()).enregAutoCat = false
         }

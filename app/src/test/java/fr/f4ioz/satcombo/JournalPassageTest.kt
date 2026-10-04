@@ -12,6 +12,7 @@ import fr.f4ioz.satcombo.domain.JournalPassage
 import fr.f4ioz.satcombo.domain.JournalPassage.Etat
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -292,5 +293,46 @@ class JournalPassageTest {
         assertEquals(9_000L + 97_000L, nom + 100_000L - o)
         // A file copied since (its date no longer its end): back to the name's time.
         assertEquals(nom - 9_000L, I.origine(nom, nom + 5 * 86_400_000L, 609_000L, 9_000L))
+    }
+
+    @Test
+    fun deux_morceaux_d_un_passage_n_en_font_qu_un() {
+        val e = passage(JournalPassage.Collecte())!!
+        // Followed on its page for the first half, in the background for the rest.
+        val moitie = e.points[e.points.size / 2].tMs
+        val a = e.copy(finMs = moitie, points = e.points.filter { it.tMs <= moitie }, enregistrements = emptyList())
+        val b = e.copy(debutMs = moitie + 5_000L, points = e.points.filter { it.tMs > moitie }, profil = "", transpondeur = "")
+        assertTrue(JournalPassage.memePassage(a, b))
+        val f = JournalPassage.fusionne(a, b)
+        assertEquals(e.debutMs, f.debutMs); assertEquals(e.finMs, f.finMs)
+        assertEquals(e.points.size, f.points.size)
+        assertEquals(listOf("SatMe_ISS_x.mp3"), f.enregistrements)
+        assertEquals("Fixe", f.profil)
+        assertFalse(JournalPassage.memePassage(a, b.copy(catnum = 1)))
+        // Kept one after the other: one file.
+        val dir = kotlin.io.path.createTempDirectory().toFile()
+        val r = JournalPassage.Rangement(dir)
+        r.enregistre(a); r.enregistre(b)
+        val l = r.passages()
+        assertEquals(1, l.size); assertEquals(e.points.size, l.single().points.size)
+        dir.deleteRecursively()
+    }
+
+    @Test
+    fun la_page_quittee_en_plein_passage_le_fond_reprend() {
+        val page = JournalPassage.Collecte(); val fond = JournalPassage.Collecte()
+        // 30 s on its page: too short alone, handed to the background.
+        for (s in 0..30) page.suit(1, "SO-50", t0 + s * 1000L, 100.0 + s * 0.5, 30.0, Etat(transpondeur = "FM"))
+        assertTrue(page.cedeA(fond)); assertNull(page.enCours)
+        for (s in 31..90) fond.suit(1, "SO-50", t0 + s * 1000L, 100.0 + s * 0.5, 30.0, Etat(enregistrement = "r.mp3"))
+        // Back on its page: the background hands it back.
+        assertTrue(fond.cedeA(page))
+        val e = page.ferme()!!
+        assertEquals(t0, e.debutMs); assertEquals(t0 + 90_000L, e.finMs)
+        assertEquals("FM", e.transpondeur); assertEquals(listOf("r.mp3"), e.enregistrements)
+        // The other side follows another satellite: no hand-over.
+        for (s in 0..30) page.suit(1, "SO-50", t0 + s * 1000L, 100.0, 30.0, Etat())
+        for (s in 0..30) fond.suit(2, "AO-73", t0 + s * 1000L, 100.0, 30.0, Etat())
+        assertFalse(page.cedeA(fond)); assertNotNull(page.enCours)
     }
 }

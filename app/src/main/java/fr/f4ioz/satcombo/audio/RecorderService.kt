@@ -36,7 +36,9 @@ data class RecorderState(
     val recording: Boolean = false,
     val startMs: Long = 0L,
     val fileName: String? = null,
-    val autoStopMs: Long? = null
+    val autoStopMs: Long? = null,
+    /** The satellite being recorded (its name, as given when starting). */
+    val satName: String = ""
 )
 
 /**
@@ -364,7 +366,7 @@ class RecorderService : Service() {
                             else { stopForeground(STOP_FOREGROUND_REMOVE); stopSelf() }
                             return@post
                         }
-                        _state.value = RecorderState(true, now, file.name, auto)
+                        _state.value = RecorderState(true, now, file.name, auto, sat)
                         if (auto != null) {
                             val wait = auto - System.currentTimeMillis()
                             if (wait > 0) handler.postDelayed(autoStop, wait) else finishRecording()
