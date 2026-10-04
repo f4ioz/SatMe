@@ -374,11 +374,12 @@ object JournalRendu {
         }
         c.restore()
         c.drawRect(0f, haut.toFloat(), w.toFloat(), h.toFloat(), Paint().apply { color = Color.rgb(10, 15, 24) })
-        val fmt = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).apply { if (sc.utc) timeZone = TimeZone.getTimeZone("UTC") }
+        val fmt = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).apply { timeZone = TimeZone.getTimeZone("UTC") }
         val titre = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE; textSize = 20f * dp; isFakeBoldText = true }
         val gris = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(160, 175, 195); textSize = 13f * dp }
         c.drawText(e.satName, 14f * dp, haut + 30f * dp, titre)
-        c.drawText(fmt.format(Date(instant)) + if (sc.utc) " UTC" else "", 14f * dp, haut + 50f * dp, gris)
+        // Always UTC in what is shared: the time radio amateurs compare.
+        c.drawText(fmt.format(Date(instant)) + " UTC", 14f * dp, haut + 50f * dp, gris)
         JournalPassage.pointA(e, instant)?.let { p ->
             c.drawText("Az %.0f°  El %.0f°".format(p.az, p.el) + (p.dlHz?.let { "  ↓ %.4f MHz".format(it / 1e6) } ?: ""),
                 14f * dp, haut + 68f * dp, gris)
@@ -454,11 +455,11 @@ object JournalRendu {
         val ih = w * b.height.toFloat() / b.width
         val top = (h - 70 * dp - ih) / 2
         c.drawBitmap(b, null, android.graphics.RectF(0f, top, w.toFloat(), top + ih), Paint(Paint.FILTER_BITMAP_FLAG))
-        val fmt = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).apply { if (sc.utc) timeZone = TimeZone.getTimeZone("UTC") }
+        val fmt = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).apply { timeZone = TimeZone.getTimeZone("UTC") }
         val t1 = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE; textSize = 18f * dp; isFakeBoldText = true }
         val t2 = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(160, 175, 195); textSize = 13f * dp }
         c.drawText(sc.e.satName + " · " + m.texte, 14 * dp, h - 44 * dp, t1)
-        c.drawText(fmt.format(Date(m.finMs)) + (if (sc.utc) " UTC" else "") + "  ·  " +
+        c.drawText(fmt.format(Date(m.finMs)) + " UTC" + "  ·  " +
             listOf(sc.indicatif, sc.e.locator).filter { it.isNotBlank() }.joinToString(" · "), 14 * dp, h - 22 * dp, t2)
         return out
     }
@@ -473,10 +474,10 @@ object JournalRendu {
         val titre = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE; textSize = 24f * dp; isFakeBoldText = true }
         val gris = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(160, 175, 195); textSize = 13f * dp }
         val texte = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE; textSize = 14f * dp }
-        val fmt = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US).apply { if (sc.utc) timeZone = TimeZone.getTimeZone("UTC") }
+        val fmt = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US).apply { timeZone = TimeZone.getTimeZone("UTC") }
         var y = 40f * dp
         c.drawText(e.satName, 16 * dp, y, titre); y += 22 * dp
-        c.drawText(fmt.format(Date(e.debutMs)) + (if (sc.utc) " UTC" else "") + " · " +
+        c.drawText(fmt.format(Date(e.debutMs)) + " UTC" + " · " +
             "%.0f° · %d min".format(e.elMax, (e.dureeMs / 60_000).toInt()), 16 * dp, y, gris); y += 18 * dp
         c.drawText(listOf(sc.indicatif, e.locator).filter { it.isNotBlank() }.joinToString(" · "), 16 * dp, y,
             Paint(gris).apply { color = CYAN; isFakeBoldText = true }); y += 16 * dp
