@@ -1363,8 +1363,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             var arme = false
             fr.f4ioz.satcombo.audio.RecorderService.fenetres.collect { f ->
+                // Only when automatic SSTV had armed it (not the recording of every pass under CAT).
                 if (arme && f.isEmpty()) runCatching { sstvIssRendTransmetteur() }
-                arme = f.isNotEmpty()
+                arme = f.isNotEmpty() && fr.f4ioz.satcombo.audio.RecorderService.armePar == fr.f4ioz.satcombo.audio.RecorderService.PAR_SSTV
             }
         }
         // --- APRS, the fun side: who we are for the trophies, the cheers, the ISS beacon ---
@@ -5392,7 +5393,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             val ctx = getApplication<Application>()
             val R = fr.f4ioz.satcombo.audio.RecorderService
             val u = _ui.value
-            if (R.fenetres.value.isNotEmpty() && enregAutoCatArme == 0) {
+            if (R.sstvArmee) {
                 enregAutoCatEtat.value = t("enreg_auto_sstv"); return@launch
             }
             if (!u.catConnected) {
@@ -5427,7 +5428,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             if (!_ui.value.recorderEnabled) setRecorderEnabled(true)
             enregAutoCatArme = sat.catalogNumber
             R.arme(ctx, sat.name, f, _ui.value.recorderSource, _ui.value.recorderUnprocessed, myLocator(),
-                avanceMs = fr.f4ioz.satcombo.domain.EnregistrementAuto.AVANT_MS)
+                avanceMs = fr.f4ioz.satcombo.domain.EnregistrementAuto.AVANT_MS, par = R.PAR_CAT)
             val h = java.text.SimpleDateFormat("EEE HH:mm", java.util.Locale.getDefault()).apply {
                 if (_ui.value.useUtc) timeZone = java.util.TimeZone.getTimeZone("UTC") }
             enregAutoCatEtat.value = tf("enreg_auto_arme", f.size, sat.name, h.format(java.util.Date(f.first().first + fr.f4ioz.satcombo.domain.EnregistrementAuto.AVANT_MS))) +
@@ -5500,6 +5501,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 sstvIssPassages(catnum).map { it.aosEpochMs to it.losEpochMs }, System.currentTimeMillis(), dernierAos)
             if (f.isEmpty()) { sstvIssMessage.value = t("sstv_iss_aucun"); return@launch }
             sstvAutoArme = catnum
+            // Automatic SSTV takes the recorder over from the recording of every pass under CAT.
+            enregAutoCatArme = 0
             fr.f4ioz.satcombo.audio.RecorderService.arme(getApplication(), sat.name, f,
                 _ui.value.recorderSource, _ui.value.recorderUnprocessed, myLocator())
             // The rig tuned and Doppler followed for the passes armed.
@@ -9284,7 +9287,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun select(sat: TleEntry, focusPassAos: Long? = null) {
         // Automatic SSTV keeps recording its satellite: say so when another one is picked.
         val arme = sstvAutoArme.takeIf { it != 0 } ?: settings.sstvAutoCatnum
-        if (sat.catalogNumber != arme && fr.f4ioz.satcombo.audio.RecorderService.fenetres.value.isNotEmpty())
+        if (sat.catalogNumber != arme && fr.f4ioz.satcombo.audio.RecorderService.sstvArmee)
             sstvIssAvertissement.value = true
         val obs = _ui.value.observer ?: locationProvider.defaultObserver
         // Everything belonging to the previous satellite goes with it —

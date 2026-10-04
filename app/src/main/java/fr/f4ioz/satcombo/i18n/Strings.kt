@@ -1752,6 +1752,7 @@ val FR: Map<String, String> = mapOf(
     "sstv_iss_avert_garder" to "Garder l'automatisme",
     "sstv_iss_avert_arreter" to "L'arrêter",
     "rec_arme_titre" to "%s : SSTV automatique",
+    "rec_arme_titre_cat" to "%s : enregistrement de chaque passage (CAT)",
     "rec_arme_texte" to "Prochain passage %s · %d à enregistrer",
     "sstv_ecoute_stop" to "Arrêter l'écoute",
     "sstv_aide_inactif" to "« Décodage SSTV » est désactivé : activez-le dans Réglages › Enregistrement / SSTV & NOAA.",

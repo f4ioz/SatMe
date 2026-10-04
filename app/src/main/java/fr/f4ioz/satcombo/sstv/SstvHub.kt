@@ -50,7 +50,7 @@ object SstvHub {
         /** Mode forced by the operator, or null to follow the VIS header. */
         val forcedMode: String? = null,
         /** Continuous decoding: a train of sync pulses starts a picture. */
-        val continu: Boolean = false,
+        val continu: Boolean = true,
         /** Pictures cleaned before they are saved (see [SstvNettoyage]). */
         val nettoyage: Boolean = true,
         /** Last engine failure — shown, not hidden. */
@@ -81,7 +81,7 @@ object SstvHub {
     @Volatile private var forced: SstvMode? = null
 
     /** Continuous decoding, kept here for the same reason as [forced]. */
-    @Volatile private var continu = false
+    @Volatile private var continu = true
 
     /** Picture cleaning, kept here for the same reason as [forced]. */
     @Volatile private var nettoyage = true
@@ -99,7 +99,7 @@ object SstvHub {
         loaded = true
         val name = runCatching { SettingsStore(ctx).sstvForcedMode }.getOrDefault("")
         forced = if (name.isBlank()) null else SstvMode.byName(name)
-        continu = runCatching { SettingsStore(ctx).sstvContinu }.getOrDefault(false)
+        continu = runCatching { SettingsStore(ctx).sstvContinu }.getOrDefault(true)
         nettoyage = runCatching { SettingsStore(ctx).sstvNettoyage }.getOrDefault(true)
         live?.forcedMode = forced
         live?.continuous = continu

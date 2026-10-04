@@ -122,7 +122,7 @@ fun SstvModeControls(
         }
     }
     // Continuous decoding: a header lost at AOS no longer costs the
-    // picture. Off by default, as before; the manual Start stays for those
+    // picture. On by default since 20.78; the manual Start stays for those
     // who prefer to decide.
     Row(
         verticalAlignment = Alignment.CenterVertically,

@@ -309,9 +309,11 @@ class SettingsStore(context: Context) {
         set(v) { prefs.edit().putBoolean("sstv_nettoyage", v).apply() }
 
     /** SSTV continuous decoding: start on a train of sync pulses, header or not. */
+    // On by default from 20.78, and turned on once for everyone (a new key: the
+    // old "sstv_continu", off by default, is no longer read). Unticking is kept.
     var sstvContinu: Boolean
-        get() = prefs.getBoolean("sstv_continu", false)
-        set(v) { prefs.edit().putBoolean("sstv_continu", v).apply() }
+        get() = prefs.getBoolean("sstv_continu_2078", true)
+        set(v) { prefs.edit().putBoolean("sstv_continu_2078", v).apply() }
 
     /** Spoken header (satellite, date, locator) at the start of pass recordings. */
     var annonceVocale: Boolean

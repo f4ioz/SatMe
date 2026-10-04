@@ -712,7 +712,8 @@ private fun AideDecodageSstv(sstvActif: Boolean, onFerme: (Boolean) -> Unit) {
 private fun CarteSstvIss(ui: fr.f4ioz.satcombo.UiState, vm: fr.f4ioz.satcombo.MainViewModel) {
     val fenetres by fr.f4ioz.satcombo.audio.RecorderService.fenetres.collectAsState()
     val message by vm.sstvIssMessage.collectAsState()
-    val actif = fenetres.isNotEmpty()
+    // Armed by automatic SSTV itself, not by the recording of every pass under CAT.
+    val actif = fenetres.isNotEmpty() && fr.f4ioz.satcombo.audio.RecorderService.armePar == fr.f4ioz.satcombo.audio.RecorderService.PAR_SSTV
     var catnum by rememberSaveable { mutableStateOf(vm.sstvAutoCatnum()) }
     var tx by rememberSaveable { mutableStateOf(vm.sstvAutoTx()) }
     val satellites = remember(ui.satellites, ui.favorites) { vm.sstvAutoSatellites() }

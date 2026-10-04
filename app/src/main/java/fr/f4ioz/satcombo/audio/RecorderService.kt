@@ -71,6 +71,16 @@ class RecorderService : Service() {
         private val _fenetres = MutableStateFlow<List<Pair<Long, Long>>>(emptyList())
         val fenetres: StateFlow<List<Pair<Long, Long>>> = _fenetres
 
+        /** Who armed it: [PAR_SSTV] (automatic SSTV) or [PAR_CAT] (every pass under CAT). */
+        @Volatile var armePar: String = ""
+            private set
+        const val PAR_SSTV = "SSTV"
+        const val PAR_CAT = "CAT"
+        const val EXTRA_PAR = "par"
+
+        /** Armed by automatic SSTV (not by the recording of every pass under CAT). */
+        val sstvArmee: Boolean get() = _fenetres.value.isNotEmpty() && armePar == PAR_SSTV
+
         /**
          * Arms the recorder for [fenetres]: started now, while the app is in
          * front (Android lets a microphone service start only then), it keeps
@@ -78,9 +88,11 @@ class RecorderService : Service() {
          * nothing has to start it again from the background.
          */
         fun arme(context: Context, satName: String, fenetres: List<Pair<Long, Long>>,
-                 source: String, unprocessed: Boolean, locator: String, avanceMs: Long = 10_000L) {
+                 source: String, unprocessed: Boolean, locator: String, avanceMs: Long = 10_000L,
+                 par: String = PAR_SSTV) {
             val i = Intent(context, RecorderService::class.java)
                 .setAction(ACTION_ARM)
+                .putExtra(EXTRA_PAR, par)
                 .putExtra(EXTRA_AVANCE, avanceMs)
                 .putExtra(EXTRA_SAT, satName)
                 .putExtra(EXTRA_FENETRES, fenetres.flatMap { listOf(it.first, it.second) }.toLongArray())
@@ -198,13 +210,15 @@ class RecorderService : Service() {
         val avance = armeIntent?.getLongExtra(EXTRA_AVANCE, 10_000L) ?: 10_000L
         val heure = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(debut + avance))
         val sat = armeIntent?.getStringExtra(EXTRA_SAT) ?: ""
-        notifie(tf("rec_arme_titre", sat), tf("rec_arme_texte", heure, _fenetres.value.size))
+        // Said as what armed it: automatic SSTV, or every pass recorded under CAT.
+        notifie(tf(if (armePar == PAR_CAT) "rec_arme_titre_cat" else "rec_arme_titre", sat), tf("rec_arme_texte", heure, _fenetres.value.size))
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_ARM -> {
                 val v = intent.getLongArrayExtra(EXTRA_FENETRES) ?: LongArray(0)
+                armePar = intent.getStringExtra(EXTRA_PAR) ?: PAR_SSTV
                 _fenetres.value = (0 until v.size / 2).map { v[2 * it] to v[2 * it + 1] }.sortedBy { it.first }
                 armeIntent = Intent(intent)
                 // Foreground at once (5 s rule), with the armed notification.

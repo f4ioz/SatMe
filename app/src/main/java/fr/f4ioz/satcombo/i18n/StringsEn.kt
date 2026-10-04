@@ -1728,6 +1728,7 @@ val EN: Map<String, String> = mapOf(
     "sstv_iss_avert_garder" to "Keep it on",
     "sstv_iss_avert_arreter" to "Stop it",
     "rec_arme_titre" to "%s: automatic SSTV",
+    "rec_arme_titre_cat" to "%s: every pass recorded (CAT)",
     "rec_arme_texte" to "Next pass %s · %d to record",
     "sstv_ecoute_stop" to "Stop listening",
     "sstv_aide_inactif" to "\"SSTV decoding\" is off: turn it on in Settings › Recording / SSTV & NOAA.",
