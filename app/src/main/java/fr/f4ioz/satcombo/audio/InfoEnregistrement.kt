@@ -28,6 +28,31 @@ object InfoEnregistrement {
         }
     }
 
+    /**
+     * The spoken header of a recording made before its length was kept: the
+     * file lasts the header plus the capture, and the capture ran from the
+     * time in its name to when the file was last written. Seconds at most.
+     */
+    fun estimeAnnonce(debutNomMs: Long, finFichierMs: Long, dureeMs: Long): Long {
+        if (debutNomMs <= 0 || finFichierMs <= debutNomMs || dureeMs <= 0) return 0L
+        val a = dureeMs - (finFichierMs - debutNomMs)
+        return if (a in 0L..20_000L) a else 0L
+    }
+
+    /** Length of a recording (ms), from its header. */
+    fun dureeMs(f: File): Long = runCatching {
+        val r = android.media.MediaMetadataRetriever()
+        try { r.setDataSource(f.absolutePath); r.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLong() ?: 0L }
+        finally { runCatching { r.release() } }
+    }.getOrDefault(0L)
+
+    /** The spoken header's length: kept with the recording, else estimated. */
+    fun annonceMs(mp3: File, dureeMs: Long = -1L): Long {
+        lit(mp3)?.let { if (it.annonceMs > 0L) return it.annonceMs }
+        val debut = fr.f4ioz.satcombo.sstv.SstvMeta.debutEnregistrement(mp3.name)
+        return estimeAnnonce(debut, mp3.lastModified(), if (dureeMs >= 0) dureeMs else dureeMs(mp3))
+    }
+
     fun lit(mp3: File): Info? = runCatching {
         val f = fichier(mp3)
         if (!f.isFile) return null

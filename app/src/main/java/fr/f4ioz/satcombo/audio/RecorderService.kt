@@ -56,6 +56,8 @@ class RecorderService : Service() {
         const val EXTRA_SOURCE = "recSource"      // "MIC" | "BT" | "USB"
         const val EXTRA_UNPROC = "unprocessed"
         const val EXTRA_LOC = "locator"
+        /** How long before AOS each window opens (ms): the notification shows the AOS. */
+        const val EXTRA_AVANCE = "avance"
         /** Armed: stays in the foreground between passes and records each window by itself. */
         const val ACTION_ARM = "fr.f4ioz.satcombo.REC_ARM"
         const val ACTION_DISARM = "fr.f4ioz.satcombo.REC_DISARM"
@@ -76,9 +78,10 @@ class RecorderService : Service() {
          * nothing has to start it again from the background.
          */
         fun arme(context: Context, satName: String, fenetres: List<Pair<Long, Long>>,
-                 source: String, unprocessed: Boolean, locator: String) {
+                 source: String, unprocessed: Boolean, locator: String, avanceMs: Long = 10_000L) {
             val i = Intent(context, RecorderService::class.java)
                 .setAction(ACTION_ARM)
+                .putExtra(EXTRA_AVANCE, avanceMs)
                 .putExtra(EXTRA_SAT, satName)
                 .putExtra(EXTRA_FENETRES, fenetres.flatMap { listOf(it.first, it.second) }.toLongArray())
                 .putExtra(EXTRA_SOURCE, source)
@@ -191,7 +194,9 @@ class RecorderService : Service() {
 
     /** The notification while armed: the next window's start. */
     private fun afficheArme(debut: Long) {
-        val heure = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(debut + 10_000L))
+        // The window opens a little before AOS; the AOS is what the operator expects.
+        val avance = armeIntent?.getLongExtra(EXTRA_AVANCE, 10_000L) ?: 10_000L
+        val heure = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(debut + avance))
         val sat = armeIntent?.getStringExtra(EXTRA_SAT) ?: ""
         notifie(tf("rec_arme_titre", sat), tf("rec_arme_texte", heure, _fenetres.value.size))
     }

@@ -34,7 +34,7 @@ class Qrz {
         return try {
             c.connectTimeout = 15000
             c.readTimeout = 20000
-            c.setRequestProperty("User-Agent", "SatMe")
+            c.setRequestProperty("User-Agent", TleRepository.USER_AGENT)
             c.inputStream.bufferedReader().use { it.readText() }
         } finally {
             runCatching { c.disconnect() }

@@ -356,7 +356,7 @@ object CarnetEnLigne {
         co.connectTimeout = 8000
         co.readTimeout = 90000
         co.setRequestProperty("Accept", "application/json")
-        co.setRequestProperty("User-Agent", "SatMe (f4ioz.fr)")
+        co.setRequestProperty("User-Agent", TleRepository.USER_AGENT)
         val code = co.responseCode
         val flux = if (code in 200..299) co.inputStream else co.errorStream
         return (flux?.bufferedReader()?.use { it.readText() } ?: "") to code
@@ -372,7 +372,7 @@ object CarnetEnLigne {
         co.setRequestProperty("Content-Type", "application/json")
         // Required by the docs: without it some installations return HTML.
         co.setRequestProperty("Accept", "application/json")
-        co.setRequestProperty("User-Agent", "SatMe (f4ioz.fr)")
+        co.setRequestProperty("User-Agent", TleRepository.USER_AGENT)
         co.outputStream.use { it.write(corps.toByteArray()) }
         val code = co.responseCode
         val flux = if (code in 200..299) co.inputStream else co.errorStream

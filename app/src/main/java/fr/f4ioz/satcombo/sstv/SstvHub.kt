@@ -295,10 +295,12 @@ object SstvHub {
         //  - a recording: its start is in its name.
         //    The spoken header before the pass shifts it by its length.
         val info = if (origine == null) fr.f4ioz.satcombo.audio.InfoEnregistrement.lit(mp3) else null
+        // Older recordings did not keep it: estimated from the file's length and end.
+        val annonce = if (origine == null) fr.f4ioz.satcombo.audio.InfoEnregistrement.annonceMs(mp3) else 0L
         fun debutMs(): Long? {
             if (origine != null && origine.timeMs > 0L && rateFichier > 0)
                 return origine.timeMs - ((mp3.length() - 44) / 2 * 1000 / rateFichier - 500)
-            return SstvMeta.debutEnregistrement(mp3.name).takeIf { it > 0L }?.let { it - (info?.annonceMs ?: 0L) }
+            return SstvMeta.debutEnregistrement(mp3.name).takeIf { it > 0L }?.let { it - annonce }
         }
         // The same pictures received live during that pass: their exact time and place.
         val enDirect = if (origine == null) runCatching {
@@ -407,6 +409,7 @@ object SstvHub {
                 fileName = name, satName = sat, timeMs = quand, mode = mode.name,
                 complete = complete,
                 redecodeMs = if (source == "file") now else 0L,
+                recale = source == "file" && recuMs != null,
                 locator = locatorRecu ?: qthLocator.ifBlank { st.manualLocator },
                 callsign = origine?.callsign?.ifBlank { null } ?: st.callsign,
                 source = source, recording = recording)

@@ -68,8 +68,10 @@ propriété de son auteur.
 **`domain/LdpcTables.kt`** — tables MIT de Kārlis Goba, avec leur mention de
 provenance.
 
-**`i18n/Strings.kt`** — les textes de l'interface sont déjà bilingues. Seuls
-les commentaires du fichier sont concernés, pas les chaînes.
+**`i18n/Strings.kt`** (français) et **`i18n/StringsEn.kt`** (anglais) — les
+textes de l'interface sont déjà bilingues. Seuls les commentaires des fichiers
+sont concernés, pas les chaînes. Une table par fichier : réunies, elles
+dépassaient la limite de 64 Ko d'une méthode de la JVM.
 
 ---
 

@@ -31,7 +31,8 @@ class StringsTest {
         )
         val f = chemins.map { File(it) }.firstOrNull { it.exists() }
         assertTrue("Strings.kt introuvable depuis ${File(".").absolutePath}", f != null)
-        return f!!.readText()
+        // English has its own file (one table per file: the JVM's 64 KB method limit).
+        return f!!.readText() + "\n" + File(f.parentFile, "StringsEn.kt").readText()
     }
 
     private val cle = Regex("""^\s+"([a-z0-9_]+)" to """, RegexOption.MULTILINE)

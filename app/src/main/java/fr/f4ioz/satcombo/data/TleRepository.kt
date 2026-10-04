@@ -29,9 +29,12 @@ class TleRepository(
         /**
          * Says which app and version asks: the SatMe GP server's connection
          * page tells SatMe from robots with it. Up to 20.72: "SatCombo/1.0".
+         * The same for every service SatMe asks (AMSAT, SatNOGS, QRZ, hams.at,
+         * OpenStreetMap…), with the project's public page as contact — never
+         * a callsign. The server reads "SatMe/<v>" and "(Android <n>)".
          */
         val USER_AGENT: String
-            get() = "SatMe/$version (Android ${android.os.Build.VERSION.RELEASE ?: "?"})"
+            get() = "SatMe/$version (Android ${android.os.Build.VERSION.RELEASE ?: "?"}) +https://github.com/f4ioz/SatMe"
 
         /** Set at startup by [fr.f4ioz.satcombo.SatMeApp] (no BuildConfig here). */
         @Volatile var version: String = "?"

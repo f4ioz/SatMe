@@ -93,7 +93,7 @@ object Lotw {
                     // The full report is several MB and takes minutes: a short
                     // timeout silently yields a truncated file.
                     co.readTimeout = 420000
-                    co.setRequestProperty("User-Agent", "SatMe (f4ioz.fr)")
+                    co.setRequestProperty("User-Agent", TleRepository.USER_AGENT)
                     return co.inputStream.bufferedReader().use { it.readText() }
                 }
                 // The dates force the full period. **The parameter is

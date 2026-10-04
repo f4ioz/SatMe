@@ -55,7 +55,7 @@ class SkedRepository(
         runCatching {
             val builder = Request.Builder()
                 .url("https://hams.at/api/alerts/upcoming")
-                .header("User-Agent", "SatMe/5.9 amateur-radio app (F4IOZ)")
+                .header("User-Agent", TleRepository.USER_AGENT)
                 .header("Accept", "application/json")
             if (token.isNotBlank()) builder.header("Authorization", "Bearer $token")
             val req = builder.build()

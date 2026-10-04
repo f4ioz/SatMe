@@ -258,7 +258,8 @@ class StringsTest {
             .map { File(it) }.firstOrNull { it.isFile }
         assumeTrue("Strings.kt introuvable depuis " + File(".").absolutePath, src != null)
 
-        val lignes = src!!.readLines()
+        // English has its own file (one table per file: the JVM's 64 KB method limit).
+        val lignes = src!!.readLines() + File(src.parentFile, "StringsEn.kt").readLines()
         val debutFr = lignes.indexOfFirst { it.startsWith("val FR") }
         val debutEn = lignes.indexOfFirst { it.startsWith("val EN") }
         assertTrue("blocs FR/EN introuvables", debutFr >= 0 && debutEn > debutFr)

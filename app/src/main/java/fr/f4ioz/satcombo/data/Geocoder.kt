@@ -28,7 +28,7 @@ class Geocoder(
             val url = "https://nominatim.openstreetmap.org/search?q=" +
                     java.net.URLEncoder.encode(query, "UTF-8") + "&format=json&limit=6"
             val req = Request.Builder().url(url)
-                .header("User-Agent", "SatCombo/3.4 amateur-radio app (F4IOZ)")
+                .header("User-Agent", TleRepository.USER_AGENT)
                 .header("Accept-Language", "fr").build()
             client.newCall(req).execute().use { r ->
                 if (!r.isSuccessful) return@withContext emptyList()

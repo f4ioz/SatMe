@@ -77,7 +77,8 @@ fun PlancheScreen(onClose: () -> Unit) {
     val parNom = remember(galerie) { galerie.associate { it.first.name to it } }
     // Selection: a box (>= 0) or a text (-1 - index).
     var choix by remember { mutableStateOf<Int?>(null) }
-    var onglet by remember { mutableStateOf(1) }
+    // Opens on the pictures: choosing them is what a sheet is made of.
+    var onglet by remember { mutableStateOf(0) }
     var filtreSat by remember { mutableStateOf("") }
     var indicatif by remember { mutableStateOf(reglages.callsign) }
     var nom by remember { mutableStateOf(reglages.plancheNom) }
@@ -196,9 +197,22 @@ fun PlancheScreen(onClose: () -> Unit) {
                 Spacer(Modifier.height(8.dp))
                 val ratio = fondApercu?.let { it.width.toFloat() / it.height } ?: x.ratio
                 ApercuPlanche(x, apercu, ratio, choix, onChoix = { choix = it }, onChange = { change(it) })
+                // Where the series stands: what is still to receive.
+                val (recues, manquent) = Planche.suivi(x) { it in parNom }
+                Text(if (manquent.isEmpty() && recues > 0) tf("planche_serie_complete", recues)
+                    else tf("planche_serie", recues, x.cases.size, manquent.joinToString(", ")),
+                    color = if (manquent.isEmpty() && recues > 0) Cyan else TextHi, fontSize = 13.sp, fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(top = 4.dp))
                 Text(t("planche_geste"), color = TextLo, fontSize = 10.sp, modifier = Modifier.padding(top = 2.dp))
                 Spacer(Modifier.height(8.dp))
 
+                // Share and save just above the tabs: at hand whichever tab is open.
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(bottom = 8.dp)) {
+                    Button(onClick = { exporte(true) }, enabled = !occupe, modifier = Modifier.weight(1f)) { Text(t("rec_share")) }
+                    OutlinedButton(onClick = { exporte(false) }, enabled = !occupe, modifier = Modifier.weight(1f)) {
+                        Text(t("export_save"), color = Cyan)
+                    }
+                }
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     listOf("planche_images", "planche_disposition", "planche_textes").forEachIndexed { i, cle ->
                         FilterChip(selected = onglet == i, onClick = { onglet = i }, label = { Text(t(cle), fontSize = 12.sp) })
@@ -217,12 +231,6 @@ fun PlancheScreen(onClose: () -> Unit) {
                 }
 
                 Spacer(Modifier.height(12.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(onClick = { exporte(true) }, enabled = !occupe, modifier = Modifier.weight(1f)) { Text(t("rec_share")) }
-                    OutlinedButton(onClick = { exporte(false) }, enabled = !occupe, modifier = Modifier.weight(1f)) {
-                        Text(t("export_save"), color = Cyan)
-                    }
-                }
                 TextButton(onClick = {
                     rangement.supprime(x); modeles = rangement.modeles(); m = modeles.lastOrNull(); choix = null
                 }) { Text(t("planche_supprimer_modele"), color = Magenta, fontSize = 12.sp) }
@@ -327,15 +335,18 @@ private fun OngletImages(
     }
     Text(t("planche_ordre_aide"), color = TextLo, fontSize = 10.sp, modifier = Modifier.padding(vertical = 4.dp))
     val utilise = m.images.entries.associate { it.value to it.key }
-    liste.chunked(3).forEach { rang ->
-        Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+    // Large, two a row: here a picture is only chosen, so it gets the room to be seen.
+    val heure = remember { java.text.SimpleDateFormat("dd/MM/yy HH:mm", java.util.Locale.getDefault()) }
+    liste.chunked(2).forEach { rang ->
+        Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             rang.forEach { (f, s) ->
-                val b = remember(f.name) { vignettes[f.name] ?: PlancheRendu.charge(f, 400)?.also { vignettes[f.name] = it } }
+                val b = remember(f.name) { vignettes[f.name] ?: PlancheRendu.charge(f, 500)?.also { vignettes[f.name] = it } }
                 val place = utilise[f.name]
-                Column(Modifier.weight(1f).clip(RoundedCornerShape(6.dp))
-                    .border(2.dp, if (place != null) Cyan else Color.Transparent, RoundedCornerShape(6.dp))
-                    .clickable(enabled = choix != null && choix >= 0) {
-                        val c = choix ?: return@clickable
+                Column(Modifier.weight(1f).clip(RoundedCornerShape(8.dp)).background(SpaceCard)
+                    .border(3.dp, if (place != null) Cyan else Color.Transparent, RoundedCornerShape(8.dp))
+                    .clickable {
+                        // Into the box chosen, else the first empty one.
+                        val c = choix?.takeIf { it >= 0 } ?: m.cases.indices.firstOrNull { it !in m.images.keys } ?: return@clickable
                         // One picture per box: taken from where it was before.
                         val im = m.images.filterValues { it != f.name } + (c to f.name)
                         onChange(m.copy(images = im))
@@ -344,15 +355,20 @@ private fun OngletImages(
                     Box {
                         if (b != null) Image(b.asImageBitmap(), null, contentScale = ContentScale.Crop,
                             modifier = Modifier.fillMaxWidth().aspectRatio(4f / 3f))
-                        if (place != null) Text("${place + 1}", color = Color.Black, fontSize = 11.sp, fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(3.dp).background(Cyan, CircleShape).padding(horizontal = 6.dp))
+                        if (place != null) Text("${place + 1}/${m.cases.size}", color = Color.Black, fontSize = 13.sp, fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(4.dp).background(Cyan, RoundedCornerShape(6.dp)).padding(horizontal = 6.dp, vertical = 1.dp))
                     }
-                    Text(java.text.SimpleDateFormat("dd/MM HH:mm", java.util.Locale.getDefault()).format(java.util.Date(s.timeMs)) +
-                        (if (!s.complete) " · " + t("sstv_partial") else ""),
-                        color = if (s.complete) TextLo else Amber, fontSize = 9.sp, modifier = Modifier.padding(2.dp))
+                    Column(Modifier.padding(horizontal = 6.dp, vertical = 4.dp)) {
+                        Text(s.satName.ifBlank { "SSTV" } + " · " + s.mode, color = TextHi, fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                        Text(heure.format(java.util.Date(s.timeMs)), color = TextLo, fontSize = 11.sp)
+                        val marques = listOfNotNull(
+                            if (s.source == "live") t("planche_en_direct") else t("planche_redecodee"),
+                            if (!s.complete) t("sstv_partial") else null)
+                        Text(marques.joinToString(" · "), color = if (s.complete) TextLo else Amber, fontSize = 10.sp)
+                    }
                 }
             }
-            repeat(3 - rang.size) { Spacer(Modifier.weight(1f)) }
+            repeat(2 - rang.size) { Spacer(Modifier.weight(1f)) }
         }
     }
 }

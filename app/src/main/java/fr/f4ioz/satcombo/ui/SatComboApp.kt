@@ -70,6 +70,7 @@ import androidx.compose.material.icons.filled.RocketLaunch
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Checklist
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.Refresh
@@ -159,6 +160,8 @@ fun SatComboApp(vm: MainViewModel) {
     // "Prepare the pass": over everything else while open.
     val preparation by vm.preparation.collectAsState()
     preparation?.let { PreparationScreen(ui, vm, it) }
+    val journalOuvert by vm.journalOuvert.collectAsState()
+    if (journalOuvert) JournalScreen(ui, vm) { vm.fermeJournalPage() }
 
     // SSTV ISS keeps recording the ISS whatever satellite is shown: say so when another one is picked.
     val avertSstvIss by vm.sstvIssAvertissement.collectAsState()
@@ -564,6 +567,11 @@ private fun OverflowMenu(ui: UiState, vm: MainViewModel) {
                         tint = if (running) Amber else Cyan)
                 },
                 onClick = { open = false; vm.openActivation() })
+            // What each pass followed came to, and its replay (SatMe 21).
+            DropdownMenuItem(
+                text = { Text(t("journal_titre")) },
+                leadingIcon = { Icon(Icons.Default.History, null, tint = Cyan) },
+                onClick = { open = false; vm.ouvreJournal() })
             DropdownMenuItem(
                 text = { Text(t("photo_title")) },
                 leadingIcon = { Icon(Icons.Default.PhotoCamera, null, tint = Cyan) },

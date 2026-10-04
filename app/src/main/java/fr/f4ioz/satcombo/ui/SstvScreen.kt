@@ -24,6 +24,10 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.PhotoLibrary
+import androidx.compose.material.icons.filled.Replay
+import androidx.compose.material.icons.filled.AutoMode
+import androidx.compose.material.icons.filled.Podcasts
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Image as ImageIcon
@@ -122,6 +126,25 @@ fun SstvScreen(ui: UiState, vm: MainViewModel) {
         if (satFilter.isBlank()) gallery else gallery.filter { it.second.satName == satFilter }
     }
 
+    // Four tabs, as on the APRS page: live reception, automatic SSTV, decoding
+    // a recording again, the pictures received.
+    var onglet by rememberSaveable { mutableStateOf("DIRECT") }
+    Column(Modifier.fillMaxSize()) {
+    androidx.compose.material3.TabRow(selectedTabIndex = ONGLETS_SSTV.indexOf(onglet).coerceAtLeast(0),
+        containerColor = SpaceBg, contentColor = Cyan) {
+        ONGLETS_SSTV.forEach { o ->
+            androidx.compose.material3.Tab(selected = onglet == o, onClick = { onglet = o },
+                selectedContentColor = Cyan, unselectedContentColor = TextLo) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(vertical = 6.dp)) {
+                    Icon(ICONES_SSTV.getValue(o), contentDescription = null, modifier = Modifier.size(22.dp),
+                        // The live tab lights up while listening.
+                        tint = if (o == "DIRECT" && st.listening) Aurora else androidx.compose.material3.LocalContentColor.current)
+                    Text(if (o == "IMAGES") tf("sstv_onglet_images", gallery.size) else t("sstv_onglet_" + o.lowercase()),
+                        fontSize = 10.sp, maxLines = 1, softWrap = false)
+                }
+            }
+        }
+    }
     LazyColumn(
         modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
@@ -129,7 +152,7 @@ fun SstvScreen(ui: UiState, vm: MainViewModel) {
         item { Spacer(Modifier.height(4.dp)) }
 
         // ------------------------------------------------------------- live
-        item {
+        if (onglet == "DIRECT") item {
             Surface(color = SpaceCard, shape = RoundedCornerShape(14.dp)) {
                 Column(Modifier.fillMaxWidth().padding(14.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -232,9 +255,9 @@ fun SstvScreen(ui: UiState, vm: MainViewModel) {
 
         // -------------------------------------------------------- re-decode
         // ISS SSTV on its own, pass after pass.
-        item { CarteSstvIss(ui, vm) }
+        if (onglet == "AUTO") item { CarteSstvIss(ui, vm) }
 
-        item {
+        if (onglet == "REDECODE") item {
             Surface(color = SpaceCard, shape = RoundedCornerShape(14.dp)) {
                 Column(Modifier.fillMaxWidth().padding(14.dp)) {
                     Text(t("sstv_file_title"), color = TextHi,
@@ -277,7 +300,7 @@ fun SstvScreen(ui: UiState, vm: MainViewModel) {
         }
 
         // ---------------------------------------------------------- gallery
-        item {
+        if (onglet == "IMAGES") item {
             Row(verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.fillMaxWidth().padding(top = 4.dp)) {
                 Icon(Icons.Default.ImageIcon, null, tint = TextLo,
@@ -292,7 +315,7 @@ fun SstvScreen(ui: UiState, vm: MainViewModel) {
             }
         }
 
-        if (sats.size > 1) {
+        if (onglet == "IMAGES" && sats.size > 1) {
             item {
                 Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                     horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -314,14 +337,14 @@ fun SstvScreen(ui: UiState, vm: MainViewModel) {
             }
         }
 
-        if (shown.isEmpty()) {
+        if (onglet == "IMAGES" && shown.isEmpty()) {
             item {
                 Text(t("sstv_gallery_empty"), color = TextLo, fontSize = 12.sp,
                     modifier = Modifier.padding(vertical = 8.dp))
             }
         }
 
-        items(shown, key = { it.first.absolutePath }) { (f, shot) ->
+        if (onglet == "IMAGES") items(shown, key = { it.first.absolutePath }) { (f, shot) ->
             SstvThumb(f, shot, ui.useUtc, onOpen = { viewing = f }, onDeleted = {
                 SstvHub.delete(f)
                 gallery = SstvHub.shots(ctx)
@@ -329,6 +352,7 @@ fun SstvScreen(ui: UiState, vm: MainViewModel) {
         }
 
         item { Spacer(Modifier.height(24.dp)) }
+    }
     }
 
     if (pickRecording) {
@@ -780,3 +804,12 @@ private fun CarteSstvIss(ui: fr.f4ioz.satcombo.UiState, vm: fr.f4ioz.satcombo.Ma
         }
     }
 }
+
+private val ONGLETS_SSTV = listOf("DIRECT", "AUTO", "REDECODE", "IMAGES")
+
+private val ICONES_SSTV = mapOf(
+    "DIRECT" to Icons.Default.Podcasts,
+    "AUTO" to Icons.Default.AutoMode,
+    "REDECODE" to Icons.Default.Replay,
+    "IMAGES" to Icons.Default.PhotoLibrary,
+)

@@ -109,7 +109,7 @@ class AmsatStatusRepository(
     /** Fetch and parse the status table. Returns reports keyed by upper-case name. */
     suspend fun fetch(): Map<String, AmsatReport> = withContext(Dispatchers.IO) {
         val req = Request.Builder().url(URL)
-            .header("User-Agent", "SatMe/1.0 (amateur radio satellite app)")
+            .header("User-Agent", TleRepository.USER_AGENT)
             .build()
         val body = client.newCall(req).execute().use { resp ->
             if (!resp.isSuccessful) return@withContext emptyMap()

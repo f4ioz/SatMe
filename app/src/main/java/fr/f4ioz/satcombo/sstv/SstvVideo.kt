@@ -104,73 +104,15 @@ object SstvVideo {
         val pleine = cadre(image, shot, w, h, hImage, true, logo, k.toFloat())
         val vide = cadre(image, shot, w, h, hImage, false, logo, k.toFloat())
 
-        val (nomCodec, couleur, cbr) = encodeurVideo() ?: return null
-        val nv12 = couleur == MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420SemiPlanar
+        val nv12 = nv12() ?: return null
         val yuvPleine = yuv(pleine, nv12)
         val yuvVide = yuv(vide, nv12)
-
-        // The sound first, in memory: the muxer wants every track before it starts.
-        val audio = encodeAudio(SstvSon.reechantillonne(pcm, rate, RATE_AAC))
-        progres(0.1f)
-
-        val mux = MediaMuxer(sortie.absolutePath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
-        val fmt = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, w, h).apply {
-            setInteger(MediaFormat.KEY_COLOR_FORMAT, couleur)
-            setInteger(MediaFormat.KEY_BIT_RATE, if (hd) DEBIT_HD else DEBIT_LEGER)
-            setInteger(MediaFormat.KEY_FRAME_RATE, FPS)
-            setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 1)
-            // A steady rate keeps the file small enough to send by message.
-            if (cbr) setInteger(MediaFormat.KEY_BITRATE_MODE, MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_CBR)
-        }
-        val enc = MediaCodec.createByCodecName(nomCodec)
-        enc.configure(fmt, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
-        enc.start()
-        val trame = ByteArray(w * h * 3 / 2)
         val images = ((pcm.size.toLong() * FPS + rate - 1) / rate).toInt().coerceAtLeast(1)
-        var piste = -1
-        var enCours = true
-        var envoyees = 0
-        val info = MediaCodec.BufferInfo()
-        try {
-            while (enCours) {
-                if (envoyees <= images) {
-                    val ib = enc.dequeueInputBuffer(ATTENTE_US)
-                    if (ib >= 0) {
-                        val t = envoyees * 1_000_000L / FPS
-                        if (envoyees == images) {
-                            enc.queueInputBuffer(ib, 0, 0, t, MediaCodec.BUFFER_FLAG_END_OF_STREAM)
-                        } else {
-                            val lignes = lignesA(cal, envoyees.toLong() * rate / FPS, pcm.size.toLong(), image.height)
-                            compose(trame, yuvPleine, yuvVide, w, h, hImage * lignes / image.height,
-                                lignes < image.height, nv12)
-                            enc.getInputBuffer(ib)!!.apply { clear(); put(trame) }
-                            enc.queueInputBuffer(ib, 0, trame.size, t, 0)
-                            progres(0.1f + 0.9f * envoyees / images)
-                        }
-                        envoyees++
-                    }
-                }
-                when (val ob = enc.dequeueOutputBuffer(info, ATTENTE_US)) {
-                    MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> {
-                        piste = mux.addTrack(enc.outputFormat)
-                        val pisteSon = audio?.let { mux.addTrack(it.first) }
-                        mux.start()
-                        if (pisteSon != null) for ((donnees, i) in audio!!.second)
-                            mux.writeSampleData(pisteSon, ByteBuffer.wrap(donnees), i)
-                    }
-                    else -> if (ob >= 0) {
-                        val buf = enc.getOutputBuffer(ob)!!
-                        if (info.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG == 0 && info.size > 0 && piste >= 0)
-                            mux.writeSampleData(piste, buf, info)
-                        enc.releaseOutputBuffer(ob, false)
-                        if (info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0) enCours = false
-                    }
-                }
-            }
-        } finally {
-            runCatching { enc.stop() }; runCatching { enc.release() }
-            runCatching { mux.stop() }; runCatching { mux.release() }
-        }
+        if (!encodeMp4(sortie, w, h, FPS, images, SstvSon.reechantillonne(pcm, rate, RATE_AAC), RATE_AAC,
+                if (hd) DEBIT_HD else DEBIT_LEGER, progres) { n, trame ->
+                val lignes = lignesA(cal, n.toLong() * rate / FPS, pcm.size.toLong(), image.height)
+                compose(trame, yuvPleine, yuvVide, w, h, hImage * lignes / image.height, lignes < image.height, nv12)
+            }) return null
         progres(1f)
         sortie.takeIf { it.length() > 0 }
     }.getOrNull()
@@ -241,6 +183,81 @@ object SstvVideo {
         sortie.takeIf { it.length() > 0 }
     }.getOrNull()
 
+    /** True for NV12 frames, false for I420; null when no encoder takes either. */
+    internal fun nv12(): Boolean? = encodeurVideo()?.let { it.second == MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420SemiPlanar }
+
+    /**
+     * An MP4: [images] frames at [fps], each filled by [remplit] (YUV 4:2:0,
+     * NV12 or I420 as [nv12] said), and the sound [pcm] at [ratePcm] if any.
+     * Shared by the SSTV video and the pass journal's.
+     */
+    internal fun encodeMp4(
+        sortie: File, w: Int, h: Int, fps: Int, images: Int, pcm: ShortArray?, ratePcm: Int, debit: Int,
+        progres: (Float) -> Unit, remplit: (Int, ByteArray) -> Unit
+    ): Boolean = runCatching {
+        val (nomCodec, couleur, cbr) = encodeurVideo() ?: return false
+        // The sound first, in memory: the muxer wants every track before it starts.
+        val audio = pcm?.takeIf { it.isNotEmpty() }?.let { encodeAudio(it, ratePcm) }
+        progres(0.05f)
+        val mux = MediaMuxer(sortie.absolutePath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
+        val fmt = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, w, h).apply {
+            setInteger(MediaFormat.KEY_COLOR_FORMAT, couleur)
+            setInteger(MediaFormat.KEY_BIT_RATE, debit)
+            setInteger(MediaFormat.KEY_FRAME_RATE, fps)
+            setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 1)
+            // A steady rate keeps the file small enough to send by message.
+            if (cbr) setInteger(MediaFormat.KEY_BITRATE_MODE, MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_CBR)
+        }
+        val enc = MediaCodec.createByCodecName(nomCodec)
+        enc.configure(fmt, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
+        enc.start()
+        val trame = ByteArray(w * h * 3 / 2)
+        var piste = -1
+        var enCours = true
+        var envoyees = 0
+        val info = MediaCodec.BufferInfo()
+        try {
+            while (enCours) {
+                if (envoyees <= images) {
+                    val ib = enc.dequeueInputBuffer(ATTENTE_US)
+                    if (ib >= 0) {
+                        val t = envoyees * 1_000_000L / fps
+                        if (envoyees == images) {
+                            enc.queueInputBuffer(ib, 0, 0, t, MediaCodec.BUFFER_FLAG_END_OF_STREAM)
+                        } else {
+                            remplit(envoyees, trame)
+                            enc.getInputBuffer(ib)!!.apply { clear(); put(trame) }
+                            enc.queueInputBuffer(ib, 0, trame.size, t, 0)
+                            progres(0.05f + 0.95f * envoyees / images)
+                        }
+                        envoyees++
+                    }
+                }
+                when (val ob = enc.dequeueOutputBuffer(info, ATTENTE_US)) {
+                    MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> {
+                        piste = mux.addTrack(enc.outputFormat)
+                        val pisteSon = audio?.let { mux.addTrack(it.first) }
+                        mux.start()
+                        if (pisteSon != null) for ((donnees, i) in audio!!.second)
+                            mux.writeSampleData(pisteSon, ByteBuffer.wrap(donnees), i)
+                    }
+                    else -> if (ob >= 0) {
+                        val buf = enc.getOutputBuffer(ob)!!
+                        if (info.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG == 0 && info.size > 0 && piste >= 0)
+                            mux.writeSampleData(piste, buf, info)
+                        enc.releaseOutputBuffer(ob, false)
+                        if (info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0) enCours = false
+                    }
+                }
+            }
+        } finally {
+            runCatching { enc.stop() }; runCatching { enc.release() }
+            runCatching { mux.stop() }; runCatching { mux.release() }
+        }
+        progres(1f)
+        sortie.length() > 0
+    }.getOrDefault(false)
+
     /** An AVC encoder taking NV12 or I420 frames, the simplest to fill. */
     private fun encodeurVideo(): Triple<String, Int, Boolean>? {
         val voulus = listOf(MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420SemiPlanar,
@@ -257,8 +274,8 @@ object SstvVideo {
     }
 
     /** The whole sound as AAC: its format and its samples. */
-    private fun encodeAudio(pcm: ShortArray): Pair<MediaFormat, List<Pair<ByteArray, MediaCodec.BufferInfo>>>? = runCatching {
-        val fmt = MediaFormat.createAudioFormat(MediaFormat.MIMETYPE_AUDIO_AAC, RATE_AAC, 1).apply {
+    private fun encodeAudio(pcm: ShortArray, rate: Int = RATE_AAC): Pair<MediaFormat, List<Pair<ByteArray, MediaCodec.BufferInfo>>>? = runCatching {
+        val fmt = MediaFormat.createAudioFormat(MediaFormat.MIMETYPE_AUDIO_AAC, rate, 1).apply {
             setInteger(MediaFormat.KEY_AAC_PROFILE, MediaCodecInfo.CodecProfileLevel.AACObjectLC)
             setInteger(MediaFormat.KEY_BIT_RATE, 96_000)
         }
@@ -278,7 +295,7 @@ object SstvVideo {
                         val buf = enc.getInputBuffer(ib)!!
                         buf.clear()
                         val n = minOf(buf.remaining() / 2, pcm.size - pos, 4096)
-                        val t = pos * 1_000_000L / RATE_AAC
+                        val t = pos * 1_000_000L / rate
                         if (n <= 0) {
                             enc.queueInputBuffer(ib, 0, 0, t, MediaCodec.BUFFER_FLAG_END_OF_STREAM)
                             finEnvoyee = true
@@ -340,7 +357,7 @@ object SstvVideo {
     }
 
     /** ARGB to YUV 4:2:0, NV12 or I420. */
-    private fun yuv(b: Bitmap, nv12: Boolean): ByteArray {
+    internal fun yuv(b: Bitmap, nv12: Boolean): ByteArray {
         val w = b.width; val h = b.height
         val px = IntArray(w * h); b.getPixels(px, 0, w, 0, 0, w, h)
         val out = ByteArray(w * h * 3 / 2)

@@ -38,6 +38,8 @@ object SstvMeta {
         val timeMs: Long = 0L,
         /** When it was decoded again from a recording, UTC ms; 0 if never. */
         val redecodeMs: Long = 0L,
+        /** Its time already takes off the recording's spoken header (decoded again from 20.77 on). */
+        val recale: Boolean = false,
         /** Decoded mode, e.g. PD120, Robot36. */
         val mode: String = "",
         /** False when the frame stopped early (signal loss). */
@@ -123,6 +125,20 @@ object SstvMeta {
     }
 
     /**
+     * When a picture was really received. A live one: its time. One decoded
+     * again from a recording: the same picture received live at that moment
+     * if there is one (same mode, up to 30 s before or 10 s after); else its
+     * time less the recording's spoken header ([annonceMs], when the decoding
+     * did not already take it off — before 20.77, or with no length kept).
+     */
+    fun heureOrigine(s: SstvShot, directs: List<SstvShot>, annonceMs: Long): Long {
+        if (s.source != "file") return s.timeMs
+        directs.filter { it.source == "live" && it.mode == s.mode && it.timeMs in (s.timeMs - 30_000L)..(s.timeMs + 10_000L) }
+            .minByOrNull { kotlin.math.abs(it.timeMs - s.timeMs) }?.let { return it.timeMs }
+        return if (s.recale) s.timeMs else s.timeMs - annonceMs
+    }
+
+    /**
      * The UTC start written in a recording's name ("SatMe_ISS_20261002_053005Z.mp3"),
      * or 0 when it has none.
      */
@@ -152,6 +168,7 @@ object SstvMeta {
         put("sat", shot.satName)
         if (shot.timeMs > 0L) put("time", shot.timeMs.toString())
         if (shot.redecodeMs > 0L) put("redecode", shot.redecodeMs.toString())
+        if (shot.recale) put("recale", "1")
         put("mode", shot.mode)
         put("complete", if (shot.complete) "1" else "0")
         put("locator", shot.locator)
@@ -180,6 +197,7 @@ object SstvMeta {
                 "sat" -> shot.copy(satName = v)
                 "time" -> v.toLongOrNull()?.let { shot.copy(timeMs = it) } ?: shot
                 "redecode" -> v.toLongOrNull()?.let { shot.copy(redecodeMs = it) } ?: shot
+                "recale" -> shot.copy(recale = v == "1")
                 "mode" -> shot.copy(mode = v)
                 "complete" -> shot.copy(complete = v != "0")
                 "locator" -> shot.copy(locator = v)

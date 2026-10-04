@@ -176,6 +176,15 @@ object Planche {
         return tri.mapIndexed { i, s -> i to s.fileName }.toMap()
     }
 
+    /**
+     * Where a series stands: the boxes filled, and the numbers (1-based) of
+     * those still empty — during an ARISS week, what is left to receive.
+     */
+    fun suivi(m: Modele, existe: (String) -> Boolean = { true }): Pair<Int, List<Int>> {
+        val pleines = m.cases.indices.filter { i -> m.images[i]?.let(existe) == true }
+        return pleines.size to m.cases.indices.filter { it !in pleines }.map { it + 1 }
+    }
+
     // ------------------------------------------------------- finding boxes
 
     /**

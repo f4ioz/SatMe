@@ -46,7 +46,7 @@ class StringsSourceTest {
     fun aucune_cle_nest_declaree_deux_fois() {
         val f = source()
         assumeTrue("Strings.kt introuvable depuis " + File(".").absolutePath, f != null)
-        val lignes = f!!.readLines()
+        val lignes = f!!.readLines() + File(f.parentFile, "StringsEn.kt").readLines()
         assertEquals("clés françaises en double", emptyList<String>(),
             doublons(cles(lignes, "val FR")))
         assertEquals("clés anglaises en double", emptyList<String>(),
@@ -62,7 +62,7 @@ class StringsSourceTest {
     fun les_deux_tables_sont_bien_reperees() {
         val f = source()
         assumeTrue("Strings.kt introuvable", f != null)
-        val lignes = f!!.readLines()
+        val lignes = f!!.readLines() + File(f.parentFile, "StringsEn.kt").readLines()
         val fr = cles(lignes, "val FR")
         val en = cles(lignes, "val EN")
         assertEquals("la table FR de la source doit valoir la table compilée",

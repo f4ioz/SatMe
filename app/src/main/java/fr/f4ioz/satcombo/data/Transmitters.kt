@@ -67,7 +67,7 @@ class TransmittersRepository(
         runCatching {
             val url = "https://db.satnogs.org/api/satellites/?norad_cat_id=$catnum&format=json"
             val req = Request.Builder().url(url)
-                .header("User-Agent", "SatCombo/4.4 amateur-radio app (F4IOZ)").build()
+                .header("User-Agent", TleRepository.USER_AGENT).build()
             client.newCall(req).execute().use { r ->
                 if (!r.isSuccessful) return@withContext null
                 val arr = org.json.JSONArray(r.body?.string().orEmpty())
@@ -98,7 +98,7 @@ class TransmittersRepository(
     /** The whole transmitter list, streamed: number and alive flag only. */
     private fun telechargeInactifs(): Set<Int>? {
         val req = Request.Builder().url("https://db.satnogs.org/api/transmitters/?format=json")
-            .header("User-Agent", "SatMe amateur-radio app (F4IOZ)").build()
+            .header("User-Agent", TleRepository.USER_AGENT).build()
         val lent = client.newBuilder().readTimeout(60, TimeUnit.SECONDS).build()
         lent.newCall(req).execute().use { r ->
             if (!r.isSuccessful) return null

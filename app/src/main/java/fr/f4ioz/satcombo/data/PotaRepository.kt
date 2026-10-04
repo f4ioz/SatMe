@@ -88,7 +88,7 @@ class PotaRepository(private val context: Context) {
     suspend fun updateRegion(region: PotaRegion): Int? = withContext(Dispatchers.IO) {
         val req = Request.Builder()
             .url("https://pota.app/all_parks_ext.csv")
-            .header("User-Agent", "SatCombo/3.6 amateur-radio app (F4IOZ)")
+            .header("User-Agent", TleRepository.USER_AGENT)
             .build()
         runCatching {
             client.newCall(req).execute().use { r ->
@@ -235,7 +235,7 @@ class PotaRepository(private val context: Context) {
         val req = Request.Builder()
             .url("https://overpass-api.de/api/interpreter")
             .post(okhttp3.FormBody.Builder().add("data", query).build())
-            .header("User-Agent", "SatCombo/3.5 amateur-radio app (F4IOZ)")
+            .header("User-Agent", TleRepository.USER_AGENT)
             .build()
         return runCatching {
             client.newCall(req).execute().use { r ->

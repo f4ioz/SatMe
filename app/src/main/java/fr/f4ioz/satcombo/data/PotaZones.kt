@@ -157,7 +157,7 @@ object PotaZones {
             val url = java.net.URL("https://pota-map.fr/api/boundary/$ref")
             val co = url.openConnection() as java.net.HttpURLConnection
             co.connectTimeout = 8000; co.readTimeout = 12000
-            co.setRequestProperty("User-Agent", "SatMe (f4ioz.fr)")
+            co.setRequestProperty("User-Agent", TleRepository.USER_AGENT)
             val txt = co.inputStream.bufferedReader().use { it.readText() }
             val b = JSONObject(txt).optJSONObject("boundary") ?: return null
             val coords = b.getJSONArray("coordinates")

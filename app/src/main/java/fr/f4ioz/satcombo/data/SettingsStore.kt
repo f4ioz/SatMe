@@ -253,6 +253,51 @@ class SettingsStore(context: Context) {
         get() = prefs.getString("sstv_forced_mode", "") ?: ""
         set(v) { prefs.edit().putString("sstv_forced_mode", v).apply() }
 
+    /** Recording: every pass of the satellite followed, recorded by itself while the rig is under CAT. */
+    var enregAutoCat: Boolean
+        get() = prefs.getBoolean("enreg_auto_cat", false)
+        set(v) { prefs.edit().putBoolean("enreg_auto_cat", v).apply() }
+
+    /** Pass journal: seconds the log's contacts are put back (logged after the contact). */
+    var journalDecalageQsoS: Int
+        get() = prefs.getInt("journal_decalage_qso_s", 0)
+        set(v) { prefs.edit().putInt("journal_decalage_qso_s", v).apply() }
+
+    /** Pass journal: the video's size, XS (480 px), M (720 px) or HD (1080 px); HD kept from the earlier switch. */
+    var journalVideoRes: String
+        get() = prefs.getString("journal_video_res", null) ?: if (prefs.getBoolean("journal_video_hd", false)) "HD" else "M"
+        set(v) { prefs.edit().putString("journal_video_res", v).apply() }
+
+    /** Pass journal: the video opens on a title. */
+    var journalOuverture: Boolean
+        get() = prefs.getBoolean("journal_ouverture", true)
+        set(v) { prefs.edit().putBoolean("journal_ouverture", v).apply() }
+
+    /** Pass journal: the video ends on the pictures and a summary. */
+    var journalRecap: Boolean
+        get() = prefs.getBoolean("journal_recap", true)
+        set(v) { prefs.edit().putBoolean("journal_recap", v).apply() }
+
+    /** Pass journal: the SSTV picture shows during the replay. */
+    var journalAffSstv: Boolean
+        get() = prefs.getBoolean("journal_aff_sstv", true)
+        set(v) { prefs.edit().putBoolean("journal_aff_sstv", v).apply() }
+
+    /** Pass journal: the stations' cards (log, APRS) show during the replay. */
+    var journalAffFiches: Boolean
+        get() = prefs.getBoolean("journal_aff_fiches", true)
+        set(v) { prefs.edit().putBoolean("journal_aff_fiches", v).apply() }
+
+    /** Pass journal: seconds an SSTV picture is shown when it has arrived, in the replay (0 = never). */
+    var journalFlashS: Int
+        get() = prefs.getInt("journal_flash_s", 3)
+        set(v) { prefs.edit().putInt("journal_flash_s", v).apply() }
+
+    /** Pass journal: size of that picture, a share of the view's width. */
+    var journalFlashTaille: Float
+        get() = prefs.getFloat("journal_flash_taille", 0.32f)
+        set(v) { prefs.edit().putFloat("journal_flash_taille", v).apply() }
+
     /** SSTV sheet: the operator's name, written under the callsign ("Olivier @ JN18FS"). */
     var plancheNom: String
         get() = prefs.getString("planche_nom", "") ?: ""

@@ -97,4 +97,13 @@ class PlancheTest {
         assertEquals("PD 120 | 2025/05/05 20:00 UTC | F4IOZ", l)
         assertTrue(abs(Planche.Zone(0.95f, 0.5f, 0.2f, 0.1f).bornee().x - 0.8f) < 1e-5)
     }
+
+    @Test
+    fun le_suivi_dit_ce_qui_manque_a_la_serie() {
+        val m = Planche.genereGrille("p", "s").copy(images = mapOf(0 to "a.png", 2 to "b.png", 3 to "perdue.png"))
+        val (recues, manquent) = Planche.suivi(m) { it != "perdue.png" }
+        assertEquals(2, recues)
+        assertEquals(listOf(2) + (4..12).toList(), manquent)
+        assertEquals(12 to emptyList<Int>(), Planche.suivi(m.copy(images = (0 until 12).associateWith { "x$it" })))
+    }
 }

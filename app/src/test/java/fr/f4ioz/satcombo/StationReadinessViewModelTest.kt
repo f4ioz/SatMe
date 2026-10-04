@@ -45,6 +45,19 @@ class StationReadinessViewModelTest {
         assertEquals(StationReadiness.Niveau.ERROR, l.single { it.domaine == StationReadiness.Domaine.SAT }.niveau)
     }
 
+    /** 04/10: with automatic recording under CAT on, SatMe no longer started (a collector ran before its fields). */
+    @Test
+    fun demarre_avec_l_enregistrement_auto_en_cat_actif() {
+        fr.f4ioz.satcombo.data.SettingsStore(app()).enregAutoCat = true
+        try {
+            val vm = MainViewModel(app())
+            org.junit.Assert.assertTrue(vm.enregAutoCat())
+            vm.verifieEnregAutoCat(force = true)
+        } finally {
+            fr.f4ioz.satcombo.data.SettingsStore(app()).enregAutoCat = false
+        }
+    }
+
     @Test
     fun le_profil_est_garde() {
         val vm = MainViewModel(app())
