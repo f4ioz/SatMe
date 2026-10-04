@@ -7,6 +7,7 @@ import fr.f4ioz.satcombo.data.Qrz
 import fr.f4ioz.satcombo.data.SatPosition
 import fr.f4ioz.satcombo.data.SettingsStore
 import fr.f4ioz.satcombo.data.TleEntry
+import fr.f4ioz.satcombo.domain.JournalPaquet
 import fr.f4ioz.satcombo.domain.JournalPassage
 import fr.f4ioz.satcombo.domain.PassPredictor
 import kotlinx.coroutines.CoroutineScope
@@ -59,17 +60,48 @@ class JournalDesPassages(
 
     /**
      * Every few seconds: [catnum] is the satellite being recorded (null: no
-     * recording), [suivi] the one whose page is open (it collects then).
+     * recording), [suivi] the one whose page is open (it collects then),
+     * [par] who started the recording (see [JournalPassage.Entree.auto]).
      */
-    fun fondTic(catnum: Int?, suivi: Int?, fichier: String?) {
-        if (catnum == null) { garde(fond.ferme()); return }
-        if (catnum == suivi) { if (!fond.cedeA(page)) garde(fond.ferme()); return }
+    fun fondTic(catnum: Int?, suivi: Int?, fichier: String?, par: String) {
+        if (catnum == null) { gardeFond(fond.ferme()); return }
+        if (catnum == suivi) { if (!fond.cedeA(page)) gardeFond(fond.ferme()); return }
         val sat = ui().satellites.firstOrNull { it.catalogNumber == catnum } ?: return
         val now = System.currentTimeMillis()
         val pos = runCatching { predictor.positionAt(sat, observateur(), now) }.getOrNull() ?: return
-        garde(fond.suit(sat.catalogNumber, sat.name, now, pos.azimuthDeg, pos.elevationDeg,
-            etat().copy(enregistrement = fichier, transpondeur = "")))
+        gardeFond(fond.suit(sat.catalogNumber, sat.name, now, pos.azimuthDeg, pos.elevationDeg,
+            etat().copy(enregistrement = fichier, transpondeur = "", auto = par)))
     }
+
+    /** A pass kept by itself: written, then a quiet word if wanted (what it holds). */
+    private fun gardeFond(e: JournalPassage.Entree?) {
+        e ?: return
+        scope.launch(Dispatchers.IO) {
+            runCatching { rangement.enregistre(e) }
+            if (!settings.journalNotif) return@launch
+            runCatching {
+                val l = liens(listOf(e))[e.id] ?: Liens()
+                val h = java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault()).apply {
+                    if (ui().useUtc) timeZone = java.util.TimeZone.getTimeZone("UTC") }
+                val quoi = buildList {
+                    if (e.enregistrements.isNotEmpty()) add(fr.f4ioz.satcombo.i18n.t("journal_b_son"))
+                    l.images.distinctBy { it.second.timeMs / 10_000 }.size.takeIf { it > 0 }
+                        ?.let { add(fr.f4ioz.satcombo.i18n.tf("journal_notif_images", it)) }
+                    l.qsos.size.takeIf { it > 0 }?.let { add(fr.f4ioz.satcombo.i18n.tf("journal_b_qso", it)) }
+                    l.trames.size.takeIf { it > 0 }?.let { add("APRS $it") }
+                }
+                fr.f4ioz.satcombo.notify.JournalNotifier.notifie(app,
+                    fr.f4ioz.satcombo.i18n.tf("journal_notif_titre", e.satName),
+                    h.format(java.util.Date(e.debutMs)) + (if (ui().useUtc) " UTC" else "") +
+                        " · " + fr.f4ioz.satcombo.i18n.tf("journal_elmax", e.elMax.toInt()) +
+                        (if (quoi.isEmpty()) "" else " · " + quoi.joinToString(" · ")))
+            }
+        }
+    }
+
+    /** A word when a pass is kept by itself (on by default). */
+    fun notif(): Boolean = settings.journalNotif
+    fun setNotif(on: Boolean) { settings.journalNotif = on }
 
 
     /** The passes kept, newest first. */
@@ -353,6 +385,67 @@ class JournalDesPassages(
                 val avecSon = if (r.enregistrements.isEmpty()) sonDuPassage(r)?.let { r.copy(enregistrements = listOf(it.name)) } ?: r else r
                 rangement.enregistre(avecSon); n++
             }
+        }
+        return n
+    }
+
+    /**
+     * The pass in one file (see [JournalPaquet]), to keep or give: its
+     * recording, its SSTV pictures (not those set aside). Written in the
+     * cache's export folder, shared or saved from there.
+     */
+    fun paquet(e: JournalPassage.Entree): java.io.File {
+        val rec = java.io.File(app.getExternalFilesDir(null), "recordings")
+        val sons = (e.enregistrements.map { java.io.File(rec, it) } + listOfNotNull(sonDuPassage(e)))
+            .filter { it.isFile }.distinctBy { it.name }
+        val images = (liens(listOf(e))[e.id]?.images ?: emptyList()).map { it.first }
+            .filter { it.name !in e.masquees }.distinctBy { it.name }
+        val fichiers = sons.flatMap { listOf("recordings" to it, "recordings" to fr.f4ioz.satcombo.audio.InfoEnregistrement.fichier(it)) } +
+            images.flatMap { listOf("sstv" to it, "sstv" to java.io.File(it.parentFile, fr.f4ioz.satcombo.sstv.SstvMeta.sidecarName(it.name))) }
+        val sortie = java.io.File(java.io.File(app.cacheDir, "export").apply { mkdirs() }, JournalPaquet.nom(e))
+        // Its recordings named in it: the other phone finds the sound as here.
+        val avecSons = e.copy(enregistrements = (e.enregistrements + sons.map { it.name }).distinct())
+        sortie.outputStream().use { JournalPaquet.emballe(it, avecSons, fichiers) }
+        return sortie
+    }
+
+    /** A pass file opened: its recording and pictures put in place, the pass kept (merged if already here). */
+    fun importePaquet(uri: android.net.Uri): JournalPaquet.Deballage {
+        val ext = app.getExternalFilesDir(null)
+        val d = app.contentResolver.openInputStream(uri)?.use {
+            JournalPaquet.deballe(it, mapOf("recordings" to java.io.File(ext, "recordings"), "sstv" to java.io.File(ext, "sstv")))
+        } ?: return JournalPaquet.Deballage(null)
+        d.entree?.let { rangement.enregistre(it) }
+        return d
+    }
+
+    /**
+     * The room taken by the recordings and the SSTV pictures, and the old
+     * recordings nothing uses (no pass of the journal, no SSTV picture
+     * decoded from it, not the one being written).
+     */
+    fun place(): fr.f4ioz.satcombo.domain.PlaceEnregistrements.Bilan {
+        val P = fr.f4ioz.satcombo.domain.PlaceEnregistrements
+        val ext = app.getExternalFilesDir(null)
+        fun liste(d: String) = (java.io.File(ext, d).listFiles() ?: emptyArray()).filter { it.isFile }
+            .map { fr.f4ioz.satcombo.domain.PlaceEnregistrements.Fichier(it.name, it.length(), it.lastModified()) }
+        val passages = passages()
+        val utilises = HashSet<String>()
+        passages.forEach { utilises += it.enregistrements }
+        passages.forEach { e -> sonDuPassage(e)?.let { utilises += it.name } }
+        runCatching { fr.f4ioz.satcombo.sstv.SstvHub.shots(app) }.getOrDefault(emptyList())
+            .forEach { if (it.second.recording.isNotBlank()) utilises += it.second.recording }
+        val enCours = fr.f4ioz.satcombo.audio.RecorderService.state.value.let { if (it.recording) it.fileName else null }
+        return P.bilan(liste("recordings"), liste("sstv"), utilises, enCours, System.currentTimeMillis())
+    }
+
+    /** The old recordings nothing uses, deleted (with their ".info"), counted again first; how many. */
+    fun supprimeVieux(): Int {
+        val rec = java.io.File(app.getExternalFilesDir(null), "recordings")
+        var n = 0
+        for (nom in place().vieux) {
+            val f = java.io.File(rec, nom)
+            if (f.delete()) { n++; fr.f4ioz.satcombo.audio.InfoEnregistrement.fichier(f).delete() }
         }
         return n
     }

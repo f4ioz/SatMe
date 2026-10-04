@@ -1047,6 +1047,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val favStore = FavoritesStore(app)
     private val srcStore = SourcesStore(app)
     private val settings = SettingsStore(app)
+
+    /**
+     * The APRS station (see [AprsStation]); the IC-9700's listening follows
+     * its work mode. Before every init: their loops call it at once.
+     */
+    val aprs = AprsStation(getApplication(), settings, viewModelScope, predictor, { _ui.value }, { iss() },
+        { if (aprsEcouteEnCours) aprsAudioTic(force = true) })
     private val logStore = LogStore(app)
     private val activationStore = fr.f4ioz.satcombo.data.ActivationStore(app)
     private val qrvPhotoStore = fr.f4ioz.satcombo.data.QrvPhotoStore(app)
@@ -1063,6 +1070,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     /** The pair is a TH-D72: its two bands on one cable. */
     private val isThd72: Boolean get() = _ui.value.rigModel == THD72
+
+    /** The TH-D72 panel (see [Thd72Panneau]). */
+    val thd72 = Thd72Panneau(settings, viewModelScope, { ft817.lienThd72 }, { isThd72 }) {
+        if (_ui.value.catConnected) {
+            // Bands are sides of the pair: reconnect with the new roles.
+            disconnectCat()
+            connectCat()
+        } else configurePaire()
+    }
 
     /** FT-817 + IC-705: the pair whose two rigs speak different protocols. */
     private val isPaireMixte: Boolean
@@ -1377,7 +1393,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
         viewModelScope.launch {
             while (true) {
-                runCatching { aprsBaliseTic() }; runCatching { aprsKissTic() }; runCatching { aprsAudioTic() }
+                runCatching { aprsBaliseTic() }; runCatching { aprs.kissTic() }; runCatching { aprsAudioTic() }
                 delay(10_000)
             }
         }
@@ -4577,205 +4593,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     // ------------------------------------------------------ APRS transmit
 
-    /** What the last transmit or test gave, for the APRS page (not in `UiState`). */
-    val aprsEnvoi = kotlinx.coroutines.flow.MutableStateFlow("")
     /** A frame is on its way: the Doppler loop leaves the rig alone meanwhile. */
     @Volatile private var aprsEnEmission = false
-    private var aprsDerniereMs = 0L
-
-    fun aprsFt3dCle(): String = settings.aprsFt3dCle
-    fun aprsFt3dVitesse(): Int = settings.aprsFt3dVitesse
-    fun ft3dConnecte(cle: String, vitesse: Int) {
-        settings.aprsFt3dCle = cle; settings.aprsFt3dVitesse = vitesse
-        viewModelScope.launch { fr.f4ioz.satcombo.aprs.RecepteurWaypoints.connecte(getApplication(), cle, vitesse) }
-    }
-    fun ft3dDeconnecte() { fr.f4ioz.satcombo.aprs.RecepteurWaypoints.deconnecte() }
-
-    fun aprsMode(): String = settings.aprsMode
-    fun setAprsMode(m: String) { settings.aprsMode = m }
-
-    fun aprsSsid(): Int = settings.aprsSsid
-    fun setAprsSsid(v: Int) { settings.aprsSsid = v }
-    fun aprsNiveau(): Float = settings.aprsNiveau
-    fun setAprsNiveau(v: Float) { settings.aprsNiveau = v }
-
-    /** The sender: the callsign from the settings, with the chosen SSID. */
-    fun aprsSource(): String = settings.callsign.trim().uppercase().let {
-        if (settings.aprsSsid > 0 && it.isNotEmpty()) "$it-${settings.aprsSsid}" else it
-    }
-
-    /** Next message number (1..999), so an ack can be matched. */
-    fun aprsNumeroSuivant(): String {
-        val n = settings.aprsNumero % 999 + 1
-        settings.aprsNumero = n
-        return n.toString()
-    }
-
-    /**
-     * The frame's audio, checked by decoding it back before anything is
-     * played: a frame that does not come out of our own decoder does not go
-     * on the air either.
-     */
-    private fun aprsAudio(t: fr.f4ioz.satcombo.aprs.Trame): ShortArray? {
-        val octets = fr.f4ioz.satcombo.aprs.Ax25.encode(t)
-        val pcm = fr.f4ioz.satcombo.aprs.Afsk.module(listOf(octets),
-            fr.f4ioz.satcombo.aprs.SortieAudio.FREQUENCE, settings.aprsNiveau.toDouble(), drapeauxAvant = 40)
-        // 150 ms of silence on each side: a glitch as playback starts or stops
-        // (common on Android) falls there, not in the frame.
-        val marge = ShortArray(fr.f4ioz.satcombo.aprs.SortieAudio.FREQUENCE * 15 / 100)
-        val complet = marge + pcm + marge
-        val relues = ArrayList<fr.f4ioz.satcombo.aprs.Trame>()
-        fr.f4ioz.satcombo.aprs.AfskDemodulateur(fr.f4ioz.satcombo.aprs.SortieAudio.FREQUENCE) { relues += it }.traite(complet)
-        return complet.takeIf { relues.singleOrNull() == t }
-    }
-
-    /** Test without transmitting: on the phone's speaker, or as a WAV to share. */
-    fun aprsEssai(trame: fr.f4ioz.satcombo.aprs.Trame, fichier: Boolean, partage: (java.io.File) -> Unit) {
-        viewModelScope.launch {
-            val pcm = withContext(Dispatchers.Default) { aprsAudio(trame) }
-            if (pcm == null) { aprsEnvoi.value = t("aprs_tx_controle"); return@launch }
-            if (fichier) {
-                // With the SSTV test cards (shared the same way, reachable over USB).
-                val f = withContext(Dispatchers.IO) {
-                    val d = getApplication<android.app.Application>().getExternalFilesDir("mires")!!.apply { mkdirs() }
-                    fr.f4ioz.satcombo.aprs.SortieAudio.wav(pcm, java.io.File(d, "SatMe_APRS_essai.wav"))
-                }
-                aprsEnvoi.value = t("aprs_tx_wav")
-                partage(f)
-            } else {
-                aprsEnvoi.value = t("aprs_tx_hp_en_cours")
-                val ok = fr.f4ioz.satcombo.aprs.SortieAudio.joue(pcm, null)
-                aprsEnvoi.value = if (ok) t("aprs_tx_hp_fini") else t("aprs_tx_audio")
-            }
-        }
-    }
-
-    // ------------------------------------------------ KISS radio (TH-D72…)
-
-    fun aprsKissCle(): String = settings.aprsKissCle
-    fun aprsKissVitesse(): Int = settings.aprsKissVitesse
-
-    /**
-     * Connects and switches straight to KISS, tuned as chosen: without KISS
-     * the radio decodes for itself and nothing reaches the phone.
-     */
-    fun kissConnecte(cle: String, vitesse: Int) {
-        settings.aprsKissCle = cle
-        settings.aprsKissVitesse = vitesse
-        viewModelScope.launch {
-            if (fr.f4ioz.satcombo.aprs.TncKiss.connecte(getApplication(), cle, vitesse)) {
-                fr.f4ioz.satcombo.aprs.TncKiss.passeEnKiss(aprsKissFrequenceVoulue())
-                aprsKissChangeMs = System.currentTimeMillis()
-            }
-        }
-    }
-
-    fun kissPasseEnKiss() {
-        viewModelScope.launch { fr.f4ioz.satcombo.aprs.TncKiss.passeEnKiss(aprsKissFrequenceVoulue()) }
-    }
-
-    fun aprsTravail(): String = settings.aprsTravail
-    /** A new choice is applied at once: KISS radio retuned, IC-9700 listening moved. */
-    fun setAprsTravail(v: String) {
-        settings.aprsTravail = v
-        if (aprsEcouteEnCours) viewModelScope.launch { runCatching { aprsAudioTic(force = true) } }
-        val hz = aprsKissFrequenceVoulue() ?: return
-        if (!fr.f4ioz.satcombo.aprs.TncKiss.etat.value.connecte) return
-        viewModelScope.launch {
-            fr.f4ioz.satcombo.aprs.TncKiss.regleFrequence(hz)
-            aprsKissChangeMs = System.currentTimeMillis()
-        }
-    }
-
-    /** The ISS is up, or rises within a minute. */
-    private fun issEnVue(): Boolean {
-        val sat = iss() ?: return false
-        val obs = _ui.value.observer ?: return false
-        val now = System.currentTimeMillis()
-        return listOf(now, now + 60_000L).any {
-            (runCatching { predictor.positionAt(sat, obs, it).elevationDeg }.getOrNull() ?: -90.0) > 0.0
-        }
-    }
-
-    /** Where the KISS radio should be now, or null to leave it. */
-    private fun aprsKissFrequenceVoulue(): Long? {
-        val base = when (settings.aprsTravail) {
-            "TERRE" -> 144_800_000L
-            "ISS" -> 145_825_000L
-            "AUTO" -> if (issEnVue()) 145_825_000L else 144_800_000L
-            else -> return null
-        }
-        return if (base == 145_825_000L && settings.aprsKissDoppler) base + aprsPalierDoppler(base) else base
-    }
-
-    /**
-     * The ISS Doppler at [hz], in whole 5 kHz steps (the TH-D72's finest
-     * grid for 145.825): +5 kHz early in the pass, 0 around its highest
-     * point, −5 kHz at the end. Zero when the ISS is down.
-     */
-    private fun aprsPalierDoppler(hz: Long): Long {
-        val sat = iss() ?: return 0L
-        val obs = _ui.value.observer ?: return 0L
-        val p = runCatching { predictor.positionAt(sat, obs, System.currentTimeMillis()) }.getOrNull() ?: return 0L
-        if (p.elevationDeg <= 0.0) return 0L
-        val decalage = -hz * p.rangeRateKmS / 299_792.458
-        return kotlin.math.round(decalage / 5_000.0).toLong() * 5_000L
-    }
-
-    fun aprsKissDoppler(): Boolean = settings.aprsKissDoppler
-    fun setAprsKissDoppler(v: Boolean) { settings.aprsKissDoppler = v }
-
-    private var aprsKissChangeMs = 0L
-
-    /**
-     * Automatic frequency: 145.825 MHz while the ISS is up, 144.800 MHz
-     * otherwise. A switch costs some 5 s of deafness, so at most one a minute.
-     */
-    private suspend fun aprsKissTic() {
-        if (settings.aprsMode != "KISS") return
-        if (settings.aprsTravail != "AUTO" && !(settings.aprsTravail == "ISS" && settings.aprsKissDoppler)) return
-        val k = fr.f4ioz.satcombo.aprs.TncKiss.etat.value
-        if (!k.connecte || !k.initialise || k.frequenceHz == null) return
-        val hz = aprsKissFrequenceVoulue() ?: return
-        if (k.frequenceHz == hz) return
-        if (System.currentTimeMillis() - aprsKissChangeMs < 60_000L) return
-        aprsKissChangeMs = System.currentTimeMillis()
-        fr.f4ioz.satcombo.aprs.TncKiss.regleFrequence(hz)
-    }
-
-    fun kissDeconnecte() {
-        viewModelScope.launch(Dispatchers.IO) { fr.f4ioz.satcombo.aprs.TncKiss.deconnecte() }
-    }
-
-    /**
-     * One frame to the KISS radio, which keys and returns to receive by
-     * itself. SatMe cannot read its frequency in KISS mode: the operator
-     * confirms it; the rest of the checks are the same as for the IC-9700.
-     */
-    fun aprsEmetKiss(trame: fr.f4ioz.satcombo.aprs.Trame, frequenceConfirmee: Boolean) {
-        viewModelScope.launch {
-            if (!fr.f4ioz.satcombo.aprs.TncKiss.etat.value.connecte) {
-                aprsEnvoi.value = t("aprs_kiss_non_connecte"); return@launch
-            }
-            // Frequency read (or set) before KISS (TH-D72 "FO"), when there is one: it must be right too.
-            val lue = fr.f4ioz.satcombo.aprs.TncKiss.etat.value.frequenceHz
-            // Set by SatMe itself on an APRS frequency: no need for the operator to vouch for it.
-            val connue = lue != null && fr.f4ioz.satcombo.aprs.AprsEmission.FENETRES.any { lue in it }
-            if (!frequenceConfirmee && !connue) { aprsEnvoi.value = t("aprs_kiss_confirmer"); return@launch }
-            val raison = fr.f4ioz.satcombo.aprs.AprsEmission.refus(trame.source.indicatif,
-                System.currentTimeMillis(), aprsDerniereMs, lue ?: 145_825_000L, 0x05, false, false)
-            if (raison != null) {
-                aprsEnvoi.value = if (raison == "frequence") tf("aprs_tx_refus_frequence",
-                    "%.4f".format(java.util.Locale.US, (lue ?: 0L) / 1e6)) else t("aprs_tx_refus_$raison")
-                return@launch
-            }
-            if (fr.f4ioz.satcombo.aprs.TncKiss.envoie(trame)) {
-                aprsDerniereMs = System.currentTimeMillis()
-                fr.f4ioz.satcombo.aprs.AprsHub.ajouteEmis(getApplication(), trame)
-                aprsEnvoi.value = t("aprs_kiss_ok")
-            } else aprsEnvoi.value = t("aprs_kiss_echec")
-        }
-    }
+    // The station's settings, the KISS radio, the FT3D, the test: see [AprsStation].
 
     /** The IC-9700 as seen by APRS transmit. */
     private val posteAprs = object : fr.f4ioz.satcombo.aprs.PosteAprs {
@@ -4795,33 +4615,33 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             val app = getApplication<android.app.Application>()
             val u = _ui.value
-            if (!u.catConnected) { aprsEnvoi.value = t("aprs_tx_cat"); return@launch }
-            if (u.rigModel != "IC9700" || isPairRig) { aprsEnvoi.value = t("aprs_tx_ic9700"); return@launch }
+            if (!u.catConnected) { aprs.envoi.value = t("aprs_tx_cat"); return@launch }
+            if (u.rigModel != "IC9700" || isPairRig) { aprs.envoi.value = t("aprs_tx_ic9700"); return@launch }
             val carte = fr.f4ioz.satcombo.aprs.SortieAudio.carteDuPoste(app)
-                ?: run { aprsEnvoi.value = t("aprs_tx_carte_son"); return@launch }
+                ?: run { aprs.envoi.value = t("aprs_tx_carte_son"); return@launch }
             aprsEnEmission = true
             try {
                 val hz = posteAprs.frequence()
                 val raison = fr.f4ioz.satcombo.aprs.AprsEmission.refus(
-                    trame.source.indicatif, System.currentTimeMillis(), aprsDerniereMs,
+                    trame.source.indicatif, System.currentTimeMillis(), aprs.derniereMs,
                     hz, posteAprs.mode(), posteAprs.modeSatellite(), posteAprs.enEmission())
                 if (raison != null) {
-                    aprsEnvoi.value = if (raison == "frequence") tf("aprs_tx_refus_frequence",
+                    aprs.envoi.value = if (raison == "frequence") tf("aprs_tx_refus_frequence",
                         "%.4f".format(java.util.Locale.US, (hz ?: 0L) / 1e6)) else t("aprs_tx_refus_$raison")
                     return@launch
                 }
-                val pcm = withContext(Dispatchers.Default) { aprsAudio(trame) }
-                    ?: run { aprsEnvoi.value = t("aprs_tx_controle"); return@launch }
-                aprsEnvoi.value = t("aprs_tx_en_cours")
+                val pcm = withContext(Dispatchers.Default) { aprs.audio(trame) }
+                    ?: run { aprs.envoi.value = t("aprs_tx_controle"); return@launch }
+                aprs.envoi.value = t("aprs_tx_en_cours")
                 val duree = pcm.size * 1000L / fr.f4ioz.satcombo.aprs.SortieAudio.FREQUENCE
                 val r = fr.f4ioz.satcombo.aprs.AprsEmission.emet(posteAprs, duree) {
                     fr.f4ioz.satcombo.aprs.SortieAudio.joue(pcm, carte)
                 }
                 if (r == null) {
-                    aprsDerniereMs = System.currentTimeMillis()
+                    aprs.derniereMs = System.currentTimeMillis()
                     fr.f4ioz.satcombo.aprs.AprsHub.ajouteEmis(app, trame)
-                    aprsEnvoi.value = tf("aprs_tx_ok", "%.4f".format(java.util.Locale.US, (hz ?: 0L) / 1e6))
-                } else aprsEnvoi.value = t("aprs_tx_echec_$r")
+                    aprs.envoi.value = tf("aprs_tx_ok", "%.4f".format(java.util.Locale.US, (hz ?: 0L) / 1e6))
+                } else aprs.envoi.value = t("aprs_tx_echec_$r")
             } finally {
                 aprsEnEmission = false
             }
@@ -4835,18 +4655,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Listening right now (for the APRS page). */
     fun aprsEcoute(): Boolean = aprsEcouteEnCours && _ui.value.recording
-
-    /** The path for what we send now: the ISS digipeater, or the terrestrial network. */
-    fun aprsCheminParDefaut(): List<String> = when (settings.aprsTravail) {
-        "ISS" -> listOf("ARISS")
-        "TERRE" -> listOf("WIDE1-1", "WIDE2-1")
-        else -> if (issEnVue()) listOf("ARISS") else listOf("WIDE1-1", "WIDE2-1")
-    }
-
-    /** Working the ISS right now (by choice, or in Auto while it is up). */
-    private fun aprsSurIss(): Boolean = when (settings.aprsTravail) {
-        "ISS" -> true; "TERRE" -> false; else -> issEnVue()
-    }
 
     /**
      * APRS with the phone and the IC-9700, in one tap. On the ISS: the ISS
@@ -4891,7 +4699,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Picks the ISS and its APRS transmitter (the Doppler loop then tunes 145.825 FM). */
     private suspend fun aprsChoisitIss(): Boolean {
-        val sat = iss() ?: run { aprsEnvoi.value = t("aprs_iss_absente"); return false }
+        val sat = iss() ?: run { aprs.envoi.value = t("aprs_iss_absente"); return false }
         if (_ui.value.selected?.catalogNumber != sat.catalogNumber) select(sat)
         kotlinx.coroutines.withTimeoutOrNull(8_000) {
             while (_ui.value.transmittersLoading || _ui.value.selected?.catalogNumber != sat.catalogNumber) delay(100)
@@ -4901,7 +4709,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             m.contains("AFSK") || m.contains("APRS") || t.description.uppercase().contains("APRS") ||
                 t.downlinkLowHz?.let { it in 145_815_000L..145_835_000L } == true
         }
-        if (i < 0) { aprsEnvoi.value = t("aprs_iss_sans_transpondeur"); return false }
+        if (i < 0) { aprs.envoi.value = t("aprs_iss_sans_transpondeur"); return false }
         if (i != _ui.value.selectedTxIndex) selectTransmitter(i)
         return true
     }
@@ -4929,41 +4737,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         if (!aprsEcouteEnCours) return
         if (!_ui.value.recording && !force) { aprsEcouteEnCours = false; aprsLibereTerre(); return }
         if (settings.aprsMode != "AUDIO") return
-        val surIss = aprsSurIss()
+        val surIss = aprs.surIss()
         if (surIss) {
             if (aprsTerreActive || force) { aprsLibereTerre(); aprsChoisitIss() }
-            aprsEnvoi.value = t("aprs_ecoute_iss_ok")
+            aprs.envoi.value = t("aprs_ecoute_iss_ok")
         } else if (!aprsTerreActive || force) {
-            aprsEnvoi.value = if (aprsIc9700Terre()) t("aprs_ecoute_terre_ok")
+            aprs.envoi.value = if (aprsIc9700Terre()) t("aprs_ecoute_terre_ok")
                 else if (_ui.value.rigModel == "IC9700") t("aprs_ecoute_terre_sans_cat")
                 else t("aprs_ecoute_terre_autre")
         }
     }
-
-    /**
-     * Where a position is sent from: the QTH, or — with the approximate
-     * position option — the QTH shifted by a fixed random offset under 500 m.
-     */
-    fun aprsPositionEmise(): Pair<Double, Double>? {
-        val o = _ui.value.observer ?: return null
-        if (!settings.aprsPositionFloue) return o.latDeg to o.lonDeg
-        var n = settings.aprsFlouNordM; var e = settings.aprsFlouEstM
-        if (n.isNaN() || e.isNaN()) {
-            // Uniform over the disc: radius from the square root, so the centre is not favoured.
-            val r = 500.0 * kotlin.math.sqrt(kotlin.random.Random.nextDouble())
-            val a = kotlin.random.Random.nextDouble(0.0, 2 * Math.PI)
-            n = (r * kotlin.math.cos(a)).toFloat(); e = (r * kotlin.math.sin(a)).toFloat()
-            settings.aprsFlouNordM = n; settings.aprsFlouEstM = e
-        }
-        val lat = o.latDeg + n / 111_320.0
-        val lon = o.lonDeg + e / (111_320.0 * kotlin.math.cos(Math.toRadians(o.latDeg)).coerceAtLeast(0.01))
-        return lat to lon
-    }
-
-    fun aprsPositionFloue(): Boolean = settings.aprsPositionFloue
-    fun setAprsPositionFloue(v: Boolean) { settings.aprsPositionFloue = v }
-    /** Draws a new offset (the next position sent uses it). */
-    fun aprsNouveauFlou() { settings.aprsFlouNordM = Float.NaN; settings.aprsFlouEstM = Float.NaN }
 
     // ------------------------------------------------------- station readiness
 
@@ -5352,7 +5135,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             // Started by hand: the satellite chosen, else the one the recorder names.
             else -> _ui.value.selected?.catalogNumber ?: journal.satImport(0, rec.satName)?.catalogNumber
         }
-        journal.fondTic(catnum, trackingFor, rec.fileName)
+        val par = when (R.armePar) {
+            R.PAR_SSTV -> fr.f4ioz.satcombo.domain.JournalPassage.AUTO_SSTV
+            R.PAR_CAT -> fr.f4ioz.satcombo.domain.JournalPassage.AUTO_CAT
+            else -> fr.f4ioz.satcombo.domain.JournalPassage.AUTO_FOND
+        }.takeIf { R.fenetres.value.isNotEmpty() } ?: fr.f4ioz.satcombo.domain.JournalPassage.AUTO_FOND
+        journal.fondTic(catnum, trackingFor, rec.fileName, par)
     }
 
     // After its fields: a collector started in the first init ran before they existed (crash at start, 04/10).
@@ -5497,8 +5285,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     /** The radio chosen on the APRS page sends [trame] (FT3D: it transmits from its own menu). */
     fun aprsEmetSelonMode(trame: fr.f4ioz.satcombo.aprs.Trame, frequenceConfirmee: Boolean) {
         when (settings.aprsMode) {
-            "KISS" -> aprsEmetKiss(trame, frequenceConfirmee)
-            "FT3D" -> aprsEnvoi.value = t("aprs_ft3d_tx")
+            "KISS" -> aprs.emetKiss(trame, frequenceConfirmee)
+            "FT3D" -> aprs.envoi.value = t("aprs_ft3d_tx")
             else -> aprsEmet(trame)
         }
     }
@@ -5550,7 +5338,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         if (el < 15.0) return
         val aos = runCatching { predictor.currentPass(sat, obs, now) }.getOrNull()?.first ?: return
         if (aos == aprsBaliseAos) return
-        val source = aprsSource()
+        val source = aprs.source()
         if (source.isBlank()) return
         val prete = when (settings.aprsMode) {
             "KISS" -> fr.f4ioz.satcombo.aprs.TncKiss.etat.value.let { k ->
@@ -5561,7 +5349,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
         if (!prete) return
         aprsBaliseAos = aos
-        val (la, lo) = aprsPositionEmise() ?: return
+        val (la, lo) = aprs.positionEmise() ?: return
         val info = fr.f4ioz.satcombo.aprs.AprsEmission.position(la, lo, "/-",
             "SatMe " + Maidenhead.fromLatLon(obs.latDeg, obs.lonDeg).take(4))
         val trame = fr.f4ioz.satcombo.aprs.AprsEmission.trame(source, listOf("ARISS"), info)
@@ -8119,67 +7907,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             catStatus = tf("thd72_connecte", if (settings.thd72BandeTx == 0) "A" else "B",
                 if (settings.thd72BandeTx == 0) "B" else "A"))
         surveilleEmission(); startCatLoop()
-        thd72Lire()
+        thd72.lire()
     }
 
     // ------------------------------------------------------- TH-D72 panel
 
-    /** What the TH-D72 panel shows (not in `UiState`): each band's frequency and power, PTT band. */
-    data class Thd72Etat(
-        val hz: List<Long?> = listOf(null, null),
-        val puissance: List<Int?> = listOf(null, null),
-        val bandePtt: Int? = null,
-        val message: String = "",
-    )
-    val thd72Etat = MutableStateFlow(Thd72Etat())
-
-    fun thd72BandeTx(): Int = settings.thd72BandeTx
-
-    /** Transmit band: saved, applied at once when connected (roles swap, PTT follows). */
-    fun setThd72BandeTx(b: Int) {
-        settings.thd72BandeTx = b
-        if (!isThd72) return
-        viewModelScope.launch {
-            if (_ui.value.catConnected) {
-                // Bands are sides of the pair: reconnect with the new roles.
-                disconnectCat()
-                connectCat()
-            } else configurePaire()
-        }
-    }
-
-    fun thd72Lire() {
-        val lien = ft817.lienThd72 ?: return
-        viewModelScope.launch {
-            val hz = (0..1).map { b -> lien.etatBande(b)?.let { fr.f4ioz.satcombo.cat.Thd72.frequence(it) } }
-            val p = (0..1).map { b -> lien.puissance(b) }
-            thd72Etat.value = Thd72Etat(hz, p, lien.bandeCourante())
-        }
-    }
-
-    /** Sets band [b]'s frequency (put on its step); refused ones are said. */
-    fun thd72Frequence(b: Int, hz: Long) {
-        val lien = ft817.lienThd72 ?: return
-        viewModelScope.launch {
-            val ok = fr.f4ioz.satcombo.cat.Thd72Bande(lien, b).setFrequency(hz)
-            thd72Lire()
-            if (!ok) thd72Etat.value = thd72Etat.value.copy(message = t("thd72_refuse"))
-        }
-    }
-
-    /** One step up or down on band [b]. */
-    fun thd72Pas(b: Int, sens: Int) {
-        val lien = ft817.lienThd72 ?: return
-        viewModelScope.launch {
-            val c = lien.etatBande(b) ?: return@launch
-            thd72Frequence(b, fr.f4ioz.satcombo.cat.Thd72.frequence(c) + sens * fr.f4ioz.satcombo.cat.Thd72.pas(c))
-        }
-    }
-
-    fun thd72Puissance(b: Int, p: Int) {
-        val lien = ft817.lienThd72 ?: return
-        viewModelScope.launch { lien.reglePuissance(b, p); thd72Lire() }
-    }
+    // The TH-D72 panel (bands, frequencies, power): see [Thd72Panneau].
 
     private var sondeTxJob: Job? = null
 

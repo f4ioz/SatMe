@@ -61,7 +61,13 @@ object JournalPassage {
          */
         val reconstitue: Boolean = false,
         /** SSTV pictures set aside for this pass (file names). */
-        val masquees: Set<String> = emptySet()
+        val masquees: Set<String> = emptySet(),
+        /**
+         * Kept by itself, its page not open: [AUTO_SSTV] (automatic SSTV),
+         * [AUTO_CAT] (every pass under CAT), [AUTO_FOND] (a recording started
+         * by hand, the page left). Empty: followed on its page.
+         */
+        val auto: String = ""
     ) {
         val id: String get() = "${catnum}_$debutMs"
         val elMax: Double get() = points.maxOfOrNull { it.el } ?: 0.0
@@ -77,6 +83,10 @@ object JournalPassage {
     const val PAS_DEG = 3.0
     /** Shorter than this, followed: not a pass worth keeping (a glance at the page). */
     const val DUREE_MIN_MS = 60_000L
+    const val AUTO_SSTV = "SSTV"
+    const val AUTO_CAT = "CAT"
+    const val AUTO_FOND = "FOND"
+
     /** Below the horizon this long: the pass is over. */
     const val FIN_APRES_MS = 30_000L
 
@@ -87,7 +97,9 @@ object JournalPassage {
         val enregistrement: String? = null,
         val transpondeur: String = "",
         val locator: String = "",
-        val profil: String = ""
+        val profil: String = "",
+        /** Recording in the background, by whom (see [Entree.auto]). */
+        val auto: String = ""
     )
 
     /**
@@ -123,6 +135,7 @@ object JournalPassage {
             if (e.enregistrement != null && e.enregistrement !in c.enregistrements)
                 c = c.copy(enregistrements = c.enregistrements + e.enregistrement)
             if (c.transpondeur.isBlank() && e.transpondeur.isNotBlank()) c = c.copy(transpondeur = e.transpondeur)
+            if (c.auto.isBlank() && e.auto.isNotBlank()) c = c.copy(auto = e.auto)
             en = c.copy(finMs = tMs)
             return fini
         }
@@ -441,6 +454,7 @@ object JournalPassage {
         e.enregistrements.forEach { append("enregistrement=").append(esc(it)).append('\n') }
         if (e.reconstitue) append("reconstitue=1\n")
         e.masquees.forEach { append("masquee=").append(esc(it)).append('\n') }
+        if (e.auto.isNotBlank()) append("auto=").append(esc(e.auto)).append('\n')
         if (e.test.isNotEmpty()) {
             append("test=").append(e.testMs).append('\t')
                 .append(e.test.entries.joinToString(",") { it.key + ":" + it.value }).append('\n')
@@ -468,6 +482,7 @@ object JournalPassage {
                 "enregistrement" -> enr += unesc(v)
                 "reconstitue" -> e = e.copy(reconstitue = v == "1")
                 "masquee" -> e = e.copy(masquees = e.masquees + unesc(v))
+                "auto" -> e = e.copy(auto = unesc(v))
                 "test" -> {
                     val (t, r) = v.split('\t', limit = 2).let { it[0] to it.getOrElse(1) { "" } }
                     e = e.copy(testMs = t.toLong(), test = r.split(',').filter { ':' in it }
@@ -502,7 +517,8 @@ object JournalPassage {
             transpondeur = a.transpondeur.ifBlank { b.transpondeur },
             enregistrements = (a.enregistrements + b.enregistrements).distinct(),
             test = test.test, testMs = test.testMs, points = points,
-            reconstitue = a.reconstitue && b.reconstitue, masquees = a.masquees + b.masquees)
+            reconstitue = a.reconstitue && b.reconstitue, masquees = a.masquees + b.masquees,
+            auto = a.auto.ifBlank { b.auto })
     }
 
     class Rangement(val dossier: File) {

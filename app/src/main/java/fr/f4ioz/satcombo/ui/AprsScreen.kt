@@ -72,8 +72,8 @@ fun AprsScreen(ui: UiState, vm: MainViewModel) {
     val ctx = LocalContext.current
     val st by AprsHub.etat.collectAsState()
     LaunchedEffect(Unit) { withContext(Dispatchers.IO) { AprsHub.charge(ctx) } }
-    var mode by remember { mutableStateOf(vm.aprsMode()) }
-    var travail by remember { mutableStateOf(vm.aprsTravail()) }
+    var mode by remember { mutableStateOf(vm.aprs.mode()) }
+    var travail by remember { mutableStateOf(vm.aprs.travail()) }
     var onglet by rememberSaveable { mutableStateOf("CARTE") }
     // In KISS mode the operator vouches for an unknown frequency; shared by every tab that transmits.
     var frequenceOk by rememberSaveable { mutableStateOf(false) }
@@ -103,8 +103,8 @@ fun AprsScreen(ui: UiState, vm: MainViewModel) {
             "EMETTRE" -> OngletEmettre(ui, vm, mode, frequenceOk) { frequenceOk = it }
             "PAQUETS" -> OngletPaquets(ui, st)
             "TROPHEES" -> OngletTrophees(ui, vm, st.paquets)
-            else -> OngletReglages(ui, vm, mode, { mode = it; vm.setAprsMode(it) }, travail,
-                { travail = it; vm.setAprsTravail(it) }, st)
+            else -> OngletReglages(ui, vm, mode, { mode = it; vm.aprs.setMode(it) }, travail,
+                { travail = it; vm.aprs.setTravail(it) }, st)
         }
     }
 }
@@ -136,7 +136,7 @@ private fun BandeauAprs(ui: UiState, vm: MainViewModel, mode: String, travail: S
     val ctx = LocalContext.current
     val kiss by fr.f4ioz.satcombo.aprs.TncKiss.etat.collectAsState()
     val ft3d by fr.f4ioz.satcombo.aprs.RecepteurWaypoints.etat.collectAsState()
-    val retour by vm.aprsEnvoi.collectAsState()
+    val retour by vm.aprs.envoi.collectAsState()
     Surface(color = SpaceCard, modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(horizontal = 14.dp, vertical = 8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -163,21 +163,21 @@ private fun BandeauAprs(ui: UiState, vm: MainViewModel, mode: String, travail: S
                     Text(nomTravail(travail) + " · " + etat, color = if (vivant) Aurora else TextLo, fontSize = 12.sp)
                 }
                 when (mode) {
-                    "KISS" -> if (kiss.connecte) TextButton(onClick = { vm.kissDeconnecte() }) {
+                    "KISS" -> if (kiss.connecte) TextButton(onClick = { vm.aprs.kissDeconnecte() }) {
                         Text(t("aprs_kiss_deconnecter"), color = Magenta, fontSize = 12.sp)
                     } else Button(onClick = {
                         val app = fr.f4ioz.satcombo.aprs.TncKiss.appareils(ctx)
-                        val cle = vm.aprsKissCle().takeIf { c -> app.any { it.cle == c } } ?: app.singleOrNull()?.cle
-                        if (cle != null) vm.kissConnecte(cle, vm.aprsKissVitesse()) else versReglages()
+                        val cle = vm.aprs.kissCle().takeIf { c -> app.any { it.cle == c } } ?: app.singleOrNull()?.cle
+                        if (cle != null) vm.aprs.kissConnecte(cle, vm.aprs.kissVitesse()) else versReglages()
                     }, colors = ButtonDefaults.buttonColors(containerColor = Cyan)) {
                         Text(t("aprs_kiss_connecter"), color = Color(0xFF00201D), fontWeight = FontWeight.Bold)
                     }
-                    "FT3D" -> if (ft3d.connecte) TextButton(onClick = { vm.ft3dDeconnecte() }) {
+                    "FT3D" -> if (ft3d.connecte) TextButton(onClick = { vm.aprs.ft3dDeconnecte() }) {
                         Text(t("aprs_kiss_deconnecter"), color = Magenta, fontSize = 12.sp)
                     } else Button(onClick = {
                         val app = fr.f4ioz.satcombo.aprs.TncKiss.appareils(ctx)
-                        val cle = vm.aprsFt3dCle().takeIf { c -> app.any { it.cle == c } } ?: app.singleOrNull()?.cle
-                        if (cle != null) vm.ft3dConnecte(cle, vm.aprsFt3dVitesse()) else versReglages()
+                        val cle = vm.aprs.ft3dCle().takeIf { c -> app.any { it.cle == c } } ?: app.singleOrNull()?.cle
+                        if (cle != null) vm.aprs.ft3dConnecte(cle, vm.aprs.ft3dVitesse()) else versReglages()
                     }, colors = ButtonDefaults.buttonColors(containerColor = Cyan)) {
                         Text(t("aprs_kiss_connecter"), color = Color(0xFF00201D), fontWeight = FontWeight.Bold)
                     }
@@ -233,15 +233,15 @@ private fun Interrupteur(titre: String, desc: String, valeur: Boolean, rouge: Bo
  */
 @Composable
 private fun OngletEmettre(ui: UiState, vm: MainViewModel, mode: String, frequenceOk: Boolean, onFrequenceOk: (Boolean) -> Unit) {
-    val resultat by vm.aprsEnvoi.collectAsState()
+    val resultat by vm.aprs.envoi.collectAsState()
     val kiss by fr.f4ioz.satcombo.aprs.TncKiss.etat.collectAsState()
     var type by rememberSaveable { mutableStateOf("POS") }
     var texte by rememberSaveable { mutableStateOf("") }
     var destinataire by rememberSaveable { mutableStateOf("") }
-    val defaut = remember { vm.aprsCheminParDefaut() }
+    val defaut = remember { vm.aprs.cheminParDefaut() }
     var chemin by rememberSaveable { mutableStateOf(if (defaut == listOf("ARISS")) "ARISS" else "WIDE") }
-    val source = remember(ui.callsign) { vm.aprsSource() }
-    val pos = remember(ui.observer, vm.aprsPositionFloue()) { vm.aprsPositionEmise() }
+    val source = remember(ui.callsign) { vm.aprs.source() }
+    val pos = remember(ui.observer, vm.aprs.positionFloue()) { vm.aprs.positionEmise() }
     val E = fr.f4ioz.satcombo.aprs.AprsEmission
     fun info(id: String?): String? = when (type) {
         "POS" -> pos?.let { (la, lo) -> E.position(la, lo, "/-", texte) }
@@ -270,7 +270,7 @@ private fun OngletEmettre(ui: UiState, vm: MainViewModel, mode: String, frequenc
                 }
                 when (type) {
                     "POS" -> Text(if (pos == null) t("aprs_tx_sans_position")
-                        else if (vm.aprsPositionFloue()) t("aprs_emettre_pos_floue") else t("aprs_emettre_pos_exacte"),
+                        else if (vm.aprs.positionFloue()) t("aprs_emettre_pos_floue") else t("aprs_emettre_pos_exacte"),
                         color = if (pos == null) Amber else TextLo, fontSize = 11.sp)
                     "APRSPH" -> Text(t("aprs_tx_aprsph_aide"), color = TextLo, fontSize = 11.sp)
                     "MSG" -> Text(t("aprs_emettre_msg_aide"), color = TextLo, fontSize = 11.sp)
@@ -298,7 +298,7 @@ private fun OngletEmettre(ui: UiState, vm: MainViewModel, mode: String, frequenc
                 if (mode == "KISS" && !connue) ConfirmeFrequenceKiss(frequenceOk, onFrequenceOk)
                 if (mode == "FT3D") Text(t("aprs_ft3d_tx"), color = Amber, fontSize = 11.sp)
                 Button(enabled = pret, onClick = {
-                    val i = info(if (avecNumero) vm.aprsNumeroSuivant() else null) ?: return@Button
+                    val i = info(if (avecNumero) vm.aprs.numeroSuivant() else null) ?: return@Button
                     vm.aprsEmetSelonMode(E.trame(source, cheminListe, i), frequenceOk)
                 }, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE5484D)),
                     modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
@@ -360,12 +360,12 @@ private fun OngletReglages(ui: UiState, vm: MainViewModel, mode: String, onMode:
     var choix by remember { mutableStateOf(false) }
     var effacer by remember { mutableStateOf(false) }
     var actif by remember { mutableStateOf(vm.aprsActif()) }
-    var ssid by remember { mutableStateOf(vm.aprsSsid()) }
-    var floue by remember { mutableStateOf(vm.aprsPositionFloue()) }
+    var ssid by remember { mutableStateOf(vm.aprs.ssid()) }
+    var floue by remember { mutableStateOf(vm.aprs.positionFloue()) }
     var balise by remember { mutableStateOf(vm.aprsBaliseIss()) }
     var fetes by remember { mutableStateOf(vm.aprsFetes()) }
-    var niveau by remember { mutableStateOf(vm.aprsNiveau()) }
-    var doppler by remember { mutableStateOf(vm.aprsKissDoppler()) }
+    var niveau by remember { mutableStateOf(vm.aprs.niveau()) }
+    var doppler by remember { mutableStateOf(vm.aprs.kissDoppler()) }
     var aide by remember { mutableStateOf(false) }
     val partage: (java.io.File) -> Unit = { f ->
         runCatching {
@@ -407,7 +407,7 @@ private fun OngletReglages(ui: UiState, vm: MainViewModel, mode: String, onMode:
                 }, color = TextLo, fontSize = 11.sp)
                 if (mode == "KISS" && (travail == "AUTO" || travail == "ISS")) {
                     Row(Modifier.fillMaxWidth().padding(top = 4.dp).toggleable(value = doppler, role = Role.Checkbox,
-                            onValueChange = { doppler = it; vm.setAprsKissDoppler(it) }), verticalAlignment = Alignment.CenterVertically) {
+                            onValueChange = { doppler = it; vm.aprs.setKissDoppler(it) }), verticalAlignment = Alignment.CenterVertically) {
                         androidx.compose.material3.Checkbox(checked = doppler, onCheckedChange = null)
                         Column(Modifier.padding(start = 6.dp)) {
                             Text(t("aprs_kiss_doppler"), color = TextHi, fontSize = 12.sp)
@@ -446,11 +446,11 @@ private fun OngletReglages(ui: UiState, vm: MainViewModel, mode: String, onMode:
             Carte(t("aprs_station_titre")) {
                 Text(t("aprs_tx_ssid"), color = TextLo, fontSize = 11.sp)
                 Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    listOf(0, 6, 7, 9, 10).forEach { n -> PuceA(ssid == n, if (n == 0) "—" else "-$n") { ssid = n; vm.setAprsSsid(n) } }
+                    listOf(0, 6, 7, 9, 10).forEach { n -> PuceA(ssid == n, if (n == 0) "—" else "-$n") { ssid = n; vm.aprs.setSsid(n) } }
                 }
-                Text(tf("aprs_station_indicatif", vm.aprsSource().ifBlank { "—" }), color = TextLo, fontSize = 11.sp)
-                Interrupteur(t("aprs_floue_titre"), t("aprs_floue_desc"), floue) { floue = it; vm.setAprsPositionFloue(it) }
-                if (floue) TextButton(onClick = { vm.aprsNouveauFlou() }) { Text(t("aprs_floue_nouveau"), color = Cyan, fontSize = 12.sp) }
+                Text(tf("aprs_station_indicatif", vm.aprs.source().ifBlank { "—" }), color = TextLo, fontSize = 11.sp)
+                Interrupteur(t("aprs_floue_titre"), t("aprs_floue_desc"), floue) { floue = it; vm.aprs.setPositionFloue(it) }
+                if (floue) TextButton(onClick = { vm.aprs.nouveauFlou() }) { Text(t("aprs_floue_nouveau"), color = Cyan, fontSize = 12.sp) }
                 if (mode != "FT3D") Interrupteur(t("aprs_balise_titre"),
                     if (mode == "KISS") t("aprs_balise_desc_kiss") else t("aprs_balise_desc"), balise, rouge = true) {
                     balise = it; vm.setAprsBaliseIss(it)
@@ -461,17 +461,17 @@ private fun OngletReglages(ui: UiState, vm: MainViewModel, mode: String, onMode:
             Carte(t("aprs_audio_titre")) {
                 Text(tf("aprs_tx_niveau", (niveau * 100).toInt()), color = TextLo, fontSize = 11.sp)
                 androidx.compose.material3.Slider(value = niveau, valueRange = 0.05f..1f,
-                    onValueChange = { niveau = it }, onValueChangeFinished = { vm.setAprsNiveau(niveau) })
+                    onValueChange = { niveau = it }, onValueChangeFinished = { vm.aprs.setNiveau(niveau) })
                 // The audio the IC-9700 would get, without transmitting.
                 val essai = remember(ui.callsign) {
-                    fr.f4ioz.satcombo.aprs.AprsEmission.trame(vm.aprsSource().ifBlank { "N0CALL" }, listOf("ARISS"),
+                    fr.f4ioz.satcombo.aprs.AprsEmission.trame(vm.aprs.source().ifBlank { "N0CALL" }, listOf("ARISS"),
                         fr.f4ioz.satcombo.aprs.AprsEmission.statut("SatMe test"))
                 }
                 Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(onClick = { vm.aprsEssai(essai, fichier = false, partage = partage) }) {
+                    OutlinedButton(onClick = { vm.aprs.essai(essai, fichier = false, partage = partage) }) {
                         Text(t("aprs_tx_essai_hp"), color = Cyan, fontSize = 12.sp)
                     }
-                    OutlinedButton(onClick = { vm.aprsEssai(essai, fichier = true, partage = partage) }) {
+                    OutlinedButton(onClick = { vm.aprs.essai(essai, fichier = true, partage = partage) }) {
                         Text(t("aprs_tx_essai_wav"), color = Cyan, fontSize = 12.sp)
                     }
                 }
@@ -514,8 +514,8 @@ private fun Connexion(vm: MainViewModel, kiss: Boolean) {
     val k by fr.f4ioz.satcombo.aprs.TncKiss.etat.collectAsState()
     val f by fr.f4ioz.satcombo.aprs.RecepteurWaypoints.etat.collectAsState()
     var appareils by remember { mutableStateOf(fr.f4ioz.satcombo.aprs.TncKiss.appareils(ctx)) }
-    var cle by remember { mutableStateOf(if (kiss) vm.aprsKissCle() else vm.aprsFt3dCle()) }
-    var vitesse by remember { mutableStateOf(if (kiss) vm.aprsKissVitesse() else vm.aprsFt3dVitesse()) }
+    var cle by remember { mutableStateOf(if (kiss) vm.aprs.kissCle() else vm.aprs.ft3dCle()) }
+    var vitesse by remember { mutableStateOf(if (kiss) vm.aprs.kissVitesse() else vm.aprs.ft3dVitesse()) }
     var aide by remember { mutableStateOf(false) }
     val connecte = if (kiss) k.connecte else f.connecte
     Carte(t("aprs_connexion_titre")) {
@@ -530,14 +530,14 @@ private fun Connexion(vm: MainViewModel, kiss: Boolean) {
                 if (k.initialise) Text(t("aprs_kiss_init_envoye"), color = TextLo, fontSize = 11.sp)
                 else {
                     Text(t("aprs_kiss_pas_en_kiss"), color = Amber, fontSize = 11.sp)
-                    OutlinedButton(onClick = { vm.kissPasseEnKiss() }) { Text(t("aprs_kiss_passer"), color = Cyan, fontSize = 12.sp) }
+                    OutlinedButton(onClick = { vm.aprs.kissPasseEnKiss() }) { Text(t("aprs_kiss_passer"), color = Cyan, fontSize = 12.sp) }
                 }
                 k.erreur?.let { Text(t("aprs_kiss_erreur_$it"), color = Amber, fontSize = 11.sp) }
             } else {
                 Text(tf("aprs_ft3d_connecte", f.nom, f.vitesse, f.recues), color = Aurora, fontSize = 12.sp)
                 if (f.illisibles > 0 && f.recues == 0) Text(t("aprs_ft3d_illisibles"), color = Amber, fontSize = 11.sp)
             }
-            TextButton(onClick = { if (kiss) vm.kissDeconnecte() else vm.ft3dDeconnecte() }) {
+            TextButton(onClick = { if (kiss) vm.aprs.kissDeconnecte() else vm.aprs.ft3dDeconnecte() }) {
                 Text(t("aprs_kiss_deconnecter"), color = Magenta, fontSize = 12.sp)
             }
         } else {
@@ -556,7 +556,7 @@ private fun Connexion(vm: MainViewModel, kiss: Boolean) {
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Button(enabled = appareils.any { it.cle == cle }, onClick = {
-                    if (kiss) vm.kissConnecte(cle, vitesse) else vm.ft3dConnecte(cle, vitesse)
+                    if (kiss) vm.aprs.kissConnecte(cle, vitesse) else vm.aprs.ft3dConnecte(cle, vitesse)
                 }, colors = ButtonDefaults.buttonColors(containerColor = Cyan)) {
                     Text(t("aprs_kiss_connecter"), color = Color.Black)
                 }

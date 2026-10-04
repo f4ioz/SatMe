@@ -335,4 +335,18 @@ class JournalPassageTest {
         for (s in 0..30) fond.suit(2, "AO-73", t0 + s * 1000L, 100.0, 30.0, Etat())
         assertFalse(page.cedeA(fond)); assertNotNull(page.enCours)
     }
+
+    @Test
+    fun un_passage_garde_tout_seul_le_dit() {
+        val fond = JournalPassage.Collecte()
+        for (s in 0..90) fond.suit(1, "SO-50", t0 + s * 1000L, 100.0 + s * 0.5, 30.0,
+            Etat(enregistrement = "r.mp3", auto = JournalPassage.AUTO_CAT))
+        val e = fond.ferme()!!
+        assertEquals(JournalPassage.AUTO_CAT, e.auto)
+        assertEquals(JournalPassage.AUTO_CAT, JournalPassage.lit(JournalPassage.ecrit(e))!!.auto)
+        // Followed on its page: nothing said; merged with the background piece, it says it.
+        val page = e.copy(auto = "")
+        assertEquals("", JournalPassage.lit(JournalPassage.ecrit(page))!!.auto)
+        assertEquals(JournalPassage.AUTO_CAT, JournalPassage.fusionne(page, e).auto)
+    }
 }

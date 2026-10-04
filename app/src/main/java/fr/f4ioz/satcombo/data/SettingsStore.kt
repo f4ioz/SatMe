@@ -274,6 +274,10 @@ class SettingsStore(context: Context) {
         set(v) { prefs.edit().putBoolean("journal_ouverture", v).apply() }
 
     /** Pass journal: the video ends on the pictures and a summary. */
+    /** A notification when a pass is kept in the journal by itself (SatMe 20.79). */
+    var journalNotif: Boolean
+        get() = prefs.getBoolean("journal_notif", true)
+        set(v) { prefs.edit().putBoolean("journal_notif", v).apply() }
     var journalRecap: Boolean
         get() = prefs.getBoolean("journal_recap", true)
         set(v) { prefs.edit().putBoolean("journal_recap", v).apply() }

@@ -74,6 +74,21 @@ fun JournalScreen(ui: UiState, vm: MainViewModel, onClose: () -> Unit) {
     var liens by remember { mutableStateOf<Map<String, JournalDesPassages.Liens>>(emptyMap()) }
     var choisi by remember { mutableStateOf<JournalPassage.Entree?>(null) }
     LaunchedEffect(passages) { liens = withContext(Dispatchers.IO) { vm.journal.liens(passages) } }
+    // A pass file from another phone (or kept elsewhere): opened, its pass shown.
+    val scope = rememberCoroutineScope()
+    var messagePaquet by remember { mutableStateOf("") }
+    val ouvrePaquet = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        scope.launch {
+            val d = withContext(Dispatchers.IO) { runCatching { vm.journal.importePaquet(uri) }.getOrNull() }
+            val en = d?.entree
+            messagePaquet = if (en == null) t("journal_paquet_illisible")
+                else tf("journal_paquet_ouvert", en.satName, d.poses, d.dejaLa)
+            passages = vm.journal.passages()
+            if (en != null) choisi = passages.firstOrNull { JournalPassage.memePassage(it, en) }
+        }
+    }
 
     Dialog(onDismissRequest = { if (choisi != null) choisi = null else onClose() },
         properties = DialogProperties(usePlatformDefaultWidth = false)) {
@@ -82,7 +97,9 @@ fun JournalScreen(ui: UiState, vm: MainViewModel, onClose: () -> Unit) {
             var importe by remember { mutableStateOf(false) }
             if (importe) ImportJournal(ui, vm, onFini = { n -> importe = false; if (n > 0) passages = vm.journal.passages() })
             if (c == null) ListeJournal(ui, passages, liens, onChoix = { choisi = it }, onClose = onClose,
-                onImport = { importe = true })
+                onImport = { importe = true }, notifOn = { vm.journal.notif() }, setNotif = { vm.journal.setNotif(it) },
+                onOuvrePaquet = { runCatching { ouvrePaquet.launch(arrayOf(fr.f4ioz.satcombo.domain.JournalPaquet.TYPE, "application/octet-stream")) } },
+                messagePaquet = messagePaquet)
             else FichePassage(ui, vm, c, liens[c.id] ?: JournalDesPassages.Liens(),
                 onRetour = { choisi = null; passages = vm.journal.passages() },
                 onSupprime = { vm.journal.supprime(c); passages = vm.journal.passages(); choisi = null })
@@ -93,12 +110,21 @@ fun JournalScreen(ui: UiState, vm: MainViewModel, onClose: () -> Unit) {
 private fun formatDate(utc: Boolean, motif: String) =
     SimpleDateFormat(motif, Locale.getDefault()).apply { if (utc) timeZone = TimeZone.getTimeZone("UTC") }
 
+/** How a pass kept by itself was recorded. */
+private fun autoLib(auto: String): String = when (auto) {
+    JournalPassage.AUTO_SSTV -> t("journal_auto_sstv")
+    JournalPassage.AUTO_CAT -> t("journal_auto_cat")
+    else -> t("journal_auto_fond")
+}
+
 private fun duree(ms: Long): String { val s = ms / 1000; return "%d:%02d".format(s / 60, s % 60) }
 
 @Composable
 private fun ListeJournal(
     ui: UiState, passages: List<JournalPassage.Entree>, liens: Map<String, JournalDesPassages.Liens>,
-    onChoix: (JournalPassage.Entree) -> Unit, onClose: () -> Unit, onImport: () -> Unit
+    onChoix: (JournalPassage.Entree) -> Unit, onClose: () -> Unit, onImport: () -> Unit,
+    notifOn: () -> Boolean, setNotif: (Boolean) -> Unit,
+    onOuvrePaquet: () -> Unit, messagePaquet: String
 ) {
     val jour = remember(ui.useUtc) { formatDate(ui.useUtc, "EEE dd/MM HH:mm") }
     Column(Modifier.fillMaxSize().padding(12.dp)) {
@@ -107,9 +133,19 @@ private fun ListeJournal(
             IconButton(onClick = onClose) { Icon(Icons.Default.Close, t("close"), tint = TextLo) }
         }
         Text(t("journal_desc"), color = TextLo, fontSize = 11.sp)
-        OutlinedButton(onClick = onImport, modifier = Modifier.padding(top = 6.dp)) {
-            Text("⤓ " + t("journal_importer"), color = Cyan, fontSize = 12.sp)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(onClick = onImport, modifier = Modifier.padding(top = 6.dp)) {
+                Text("⤓ " + t("journal_importer"), color = Cyan, fontSize = 12.sp)
+            }
+            OutlinedButton(onClick = onOuvrePaquet, modifier = Modifier.padding(top = 6.dp)) {
+                Text("⤓ " + t("journal_paquet_ouvrir"), color = Cyan, fontSize = 12.sp)
+            }
         }
+        if (messagePaquet.isNotBlank()) Text(messagePaquet, color = Amber, fontSize = 11.sp)
+        // A word when a pass is kept by itself (automatic SSTV, under CAT, its page left).
+        var notif by remember { mutableStateOf(notifOn()) }
+        FilterChip(selected = notif, onClick = { notif = !notif; setNotif(notif) },
+            label = { Text((if (notif) "✓ " else "") + t("journal_notif") + " : " + t(if (notif) "journal_oui" else "journal_flash_non"), fontSize = 11.sp) })
         Spacer(Modifier.height(8.dp))
         if (passages.isEmpty()) {
             Text(t("journal_vide"), color = TextLo, fontSize = 13.sp, modifier = Modifier.padding(vertical = 24.dp))
@@ -141,6 +177,7 @@ private fun ListeJournal(
                             }
                             if (badges.isNotEmpty()) Text(badges.joinToString("  ·  "), color = Cyan, fontSize = 11.sp)
                             if (e.reconstitue) Text(t("journal_reconstitue"), color = Amber, fontSize = 10.sp)
+                            if (e.auto.isNotBlank()) Text(autoLib(e.auto), color = Amber, fontSize = 10.sp)
                         }
                     }
                 }
@@ -335,6 +372,7 @@ private fun FichePassage(
         // What came of it.
         Spacer(Modifier.height(10.dp))
         if (e.reconstitue) Text(t("journal_reconstitue_desc"), color = Amber, fontSize = 11.sp, modifier = Modifier.padding(bottom = 4.dp))
+        if (e.auto.isNotBlank()) Text(autoLib(e.auto) + " — " + t("journal_auto_desc"), color = Amber, fontSize = 11.sp, modifier = Modifier.padding(bottom = 4.dp))
         Text(t("journal_bilan"), color = TextHi, fontWeight = FontWeight.Bold, fontSize = 14.sp)
         val lignes = buildList {
             add(tf("journal_l_duree", duree(e.dureeMs), e.elMax.toInt()))
@@ -479,6 +517,34 @@ private fun FichePassage(
                             .addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION), f.name))
                 } }) { Text(t("rec_share"), fontSize = 12.sp) }
                 OutlinedButton(modifier = Modifier.weight(1f), onClick = { enregistre(f.name, type, depuisFichier(f)) }) {
+                    Text(t("export_save"), color = Cyan, fontSize = 12.sp)
+                }
+            }
+        }
+        // The pass in one file: kept elsewhere, or given to another station.
+        Spacer(Modifier.height(12.dp))
+        Text(t("journal_paquet"), color = TextHi, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+        Text(t("journal_paquet_desc"), color = TextLo, fontSize = 11.sp)
+        var paquet by remember(e.id) { mutableStateOf<java.io.File?>(null) }
+        var emballe by remember(e.id) { mutableStateOf(false) }
+        if (paquet == null) OutlinedButton(enabled = !emballe, onClick = {
+            emballe = true
+            scope.launch {
+                paquet = withContext(Dispatchers.IO) { runCatching { vm.journal.paquet(e) }.getOrNull() }
+                emballe = false
+            }
+        }) { Text(if (emballe) t("journal_paquet_en_cours") else "⤒ " + t("journal_paquet_creer"), color = Cyan, fontSize = 12.sp) }
+        paquet?.let { f ->
+            Text(tf("sstv_video_taille", "%.1f".format(f.length() / 1_048_576.0)), color = TextHi, fontSize = 11.sp)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(modifier = Modifier.weight(1f), onClick = { runCatching {
+                    val u = androidx.core.content.FileProvider.getUriForFile(ctx, "${ctx.packageName}.fileprovider", f)
+                    ctx.startActivity(android.content.Intent.createChooser(
+                        android.content.Intent(android.content.Intent.ACTION_SEND).setType(fr.f4ioz.satcombo.domain.JournalPaquet.TYPE)
+                            .putExtra(android.content.Intent.EXTRA_STREAM, u)
+                            .addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION), f.name))
+                } }) { Text(t("rec_share"), fontSize = 12.sp) }
+                OutlinedButton(modifier = Modifier.weight(1f), onClick = { enregistre(f.name, fr.f4ioz.satcombo.domain.JournalPaquet.TYPE, depuisFichier(f)) }) {
                     Text(t("export_save"), color = Cyan, fontSize = 12.sp)
                 }
             }

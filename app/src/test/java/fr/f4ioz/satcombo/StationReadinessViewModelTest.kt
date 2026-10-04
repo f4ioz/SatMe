@@ -84,7 +84,10 @@ class StationReadinessViewModelTest {
             "rotorJog", "rotorParkNow", "rotorStopNow", "setRotorEnabled", "connectRotor", "connectCat", "setCatEnabled",
             "catSendTestFreq", "armSo50", "thd72Frequence", "thd72Pas", "thd72Puissance", "setThd72BandeTx",
             "setFt817Role", "setIc705Baud", "aprsEcouteDemarre", "runCatBench", "toggleDopplerHold",
-            "setFrequency", "setMode(", "deposeAuCarnet")
+            "setFrequency", "setMode(", "deposeAuCarnet",
+            // Since 20.79, out of the view model under these names.
+            "thd72.frequence", "thd72.pas", "thd72.puissance", "thd72.setBandeTx", "aprs.emetKiss",
+            "aprs.kissConnecte", "aprs.kissPasseEnKiss", "aprs.setTravail", "enregAutoCat.setActif")
         interdits.forEach { assertFalse("instantaneReadiness calls $it", corps.contains(it)) }
         // The view model's own recording start (not the 2-second AudioRecord of the audio check).
         assertFalse("the check starts a pass recording", Regex("""(?<![.\w])startRecording\(""").containsMatchIn(corps))

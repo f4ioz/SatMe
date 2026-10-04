@@ -3549,6 +3549,48 @@ private fun RecordingsSection(ui: UiState, vm: MainViewModel) {
                 }
             }
         }
+        // --- room taken, old recordings nothing uses ---
+        Surface(color = SpaceCard, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(14.dp)) {
+                val P = fr.f4ioz.satcombo.domain.PlaceEnregistrements
+                val u = t("place_unites").split(",")
+                val portee = androidx.compose.runtime.rememberCoroutineScope()
+                var bilan by remember { mutableStateOf<fr.f4ioz.satcombo.domain.PlaceEnregistrements.Bilan?>(null) }
+                var demande by remember { mutableStateOf(false) }
+                var fait by remember { mutableStateOf("") }
+                androidx.compose.runtime.LaunchedEffect(fait) {
+                    bilan = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { runCatching { vm.journal.place() }.getOrNull() }
+                }
+                Text(t("place_titre"), color = TextHi, fontWeight = FontWeight.Bold)
+                val b = bilan
+                if (b == null) Text(t("place_calcul"), color = TextLo, fontSize = 11.sp)
+                else {
+                    Text(tf("place_enreg", b.enregistrements, P.taille(b.octetsEnregistrements, u)), color = TextHi, fontSize = 12.sp)
+                    Text(tf("place_images", b.images, P.taille(b.octetsImages, u)), color = TextHi, fontSize = 12.sp)
+                    if (b.vieux.isEmpty()) Text(t("place_rien_a_liberer"), color = TextLo, fontSize = 11.sp, modifier = Modifier.padding(top = 4.dp))
+                    else {
+                        Text(tf("place_vieux", b.vieux.size, P.taille(b.octetsVieux, u)), color = Amber, fontSize = 11.sp, modifier = Modifier.padding(top = 4.dp))
+                        OutlinedButton(onClick = { demande = true }, modifier = Modifier.padding(top = 6.dp)) {
+                            Text(tf("place_liberer", P.taille(b.octetsVieux, u)), color = Magenta, fontSize = 12.sp)
+                        }
+                    }
+                }
+                if (fait.isNotBlank()) Text(fait, color = Cyan, fontSize = 11.sp, modifier = Modifier.padding(top = 4.dp))
+                if (demande && b != null) androidx.compose.material3.AlertDialog(
+                    onDismissRequest = { demande = false },
+                    title = { Text(t("place_confirme_titre")) },
+                    text = { Text(tf("place_confirme", b.vieux.size, P.taille(b.octetsVieux, u)) + "\n\n" +
+                        b.vieux.take(6).joinToString("\n") + (if (b.vieux.size > 6) "\n…" else ""), fontSize = 12.sp) },
+                    confirmButton = { TextButton(onClick = {
+                        demande = false
+                        portee.launch {
+                            val n = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { runCatching { vm.journal.supprimeVieux() }.getOrDefault(0) }
+                            fait = tf("place_supprimes", n)
+                        }
+                    }) { Text(t("place_supprimer"), color = Magenta) } },
+                    dismissButton = { TextButton(onClick = { demande = false }) { Text(t("cancel")) } })
+            }
+        }
         // --- export folder ---
         Surface(color = SpaceCard, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
             Column(Modifier.padding(14.dp)) {
@@ -4174,9 +4216,9 @@ internal fun AvertissementIc705(onFerme: () -> Unit) {
  */
 @Composable
 private fun CarteThd72(ui: UiState, vm: MainViewModel) {
-    val etat by vm.thd72Etat.collectAsState()
-    var bandeTx by remember { mutableStateOf(vm.thd72BandeTx()) }
-    LaunchedEffect(ui.catConnected) { if (ui.catConnected) vm.thd72Lire() }
+    val etat by vm.thd72.etat.collectAsState()
+    var bandeTx by remember { mutableStateOf(vm.thd72.bandeTx()) }
+    LaunchedEffect(ui.catConnected) { if (ui.catConnected) vm.thd72.lire() }
     Surface(color = SpaceCard, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp)) {
             Text("Kenwood TH-D72", color = TextHi, fontWeight = FontWeight.Bold)
@@ -4184,7 +4226,7 @@ private fun CarteThd72(ui: UiState, vm: MainViewModel) {
             Text(t("thd72_bande_tx"), color = TextHi, fontSize = 13.sp)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 listOf(0 to "A", 1 to "B").forEach { (b, nom) ->
-                    FilterChip(selected = bandeTx == b, onClick = { bandeTx = b; vm.setThd72BandeTx(b) },
+                    FilterChip(selected = bandeTx == b, onClick = { bandeTx = b; vm.thd72.setBandeTx(b) },
                         label = { Text(tf("thd72_tx_rx", nom, if (b == 0) "B" else "A"), fontSize = 12.sp) },
                         colors = FilterChipDefaults.filterChipColors(
                             selectedContainerColor = Cyan.copy(alpha = 0.2f), selectedLabelColor = Cyan))
@@ -4206,11 +4248,11 @@ private fun CarteThd72(ui: UiState, vm: MainViewModel) {
                             if (etat.bandePtt == b) Text("PTT", color = Color(0xFFE5484D), fontSize = 11.sp, fontWeight = FontWeight.Bold)
                         }
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            IconButton(onClick = { vm.thd72Pas(b, -1) }) { Text("−", color = Cyan, fontSize = 20.sp) }
+                            IconButton(onClick = { vm.thd72.pas(b, -1) }) { Text("−", color = Cyan, fontSize = 20.sp) }
                             Text(etat.hz[b]?.let { "%.4f MHz".format(java.util.Locale.US, it / 1e6) } ?: "—",
                                 color = TextHi, fontSize = 20.sp, fontFamily = FontFamily.Monospace,
                                 modifier = Modifier.weight(1f), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
-                            IconButton(onClick = { vm.thd72Pas(b, +1) }) { Text("+", color = Cyan, fontSize = 20.sp) }
+                            IconButton(onClick = { vm.thd72.pas(b, +1) }) { Text("+", color = Cyan, fontSize = 20.sp) }
                         }
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             OutlinedTextField(value = saisie, onValueChange = { saisie = it.replace(',', '.') },
@@ -4219,12 +4261,12 @@ private fun CarteThd72(ui: UiState, vm: MainViewModel) {
                                     keyboardType = androidx.compose.ui.text.input.KeyboardType.Decimal),
                                 modifier = Modifier.weight(1f))
                             TextButton(onClick = {
-                                saisie.toDoubleOrNull()?.let { vm.thd72Frequence(b, (it * 1e6).toLong()) }
+                                saisie.toDoubleOrNull()?.let { vm.thd72.frequence(b, (it * 1e6).toLong()) }
                             }) { Text(t("thd72_regler"), color = Cyan) }
                         }
                         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             listOf(0 to "5 W", 1 to "0,5 W", 2 to "50 mW").forEach { (p, nomP) ->
-                                FilterChip(selected = etat.puissance[b] == p, onClick = { vm.thd72Puissance(b, p) },
+                                FilterChip(selected = etat.puissance[b] == p, onClick = { vm.thd72.puissance(b, p) },
                                     label = { Text(nomP, fontSize = 11.sp) },
                                     colors = FilterChipDefaults.filterChipColors(
                                         selectedContainerColor = Cyan.copy(alpha = 0.2f), selectedLabelColor = Cyan))
@@ -4234,7 +4276,7 @@ private fun CarteThd72(ui: UiState, vm: MainViewModel) {
                 }
             }
             if (etat.message.isNotBlank()) Text(etat.message, color = Amber, fontSize = 11.sp)
-            TextButton(onClick = { vm.thd72Lire() }) { Text(t("thd72_relire"), color = Cyan, fontSize = 12.sp) }
+            TextButton(onClick = { vm.thd72.lire() }) { Text(t("thd72_relire"), color = Cyan, fontSize = 12.sp) }
         }
     }
 }

@@ -161,7 +161,7 @@ internal fun OngletCarte(ui: UiState, vm: MainViewModel, paquets: List<Paquet>) 
     val depuis = if (periode == "JOUR") debutDuJourUtc(ui.nowMs.takeIf { it > 0 } ?: System.currentTimeMillis()) else 0L
     val vus = remember(paquets, depuis) { paquets.filter { it.quand >= depuis } }
     // Our own frames heard back are drawn as a link to the ISS, not listed as a station.
-    val moi = AprsJeu.base(vm.aprsSource())
+    val moi = AprsJeu.base(vm.aprs.source())
     val stations = remember(vus, obs, moi) {
         AprsJeu.stations(vus, obs?.latDeg, obs?.lonDeg).filter { AprsJeu.base(it.indicatif) != moi || moi.isEmpty() }
     }
@@ -504,8 +504,8 @@ internal fun ConfirmeFrequenceKiss(ok: Boolean, onChange: (Boolean) -> Unit) {
 @Composable
 internal fun OngletMessages(ui: UiState, vm: MainViewModel, paquets: List<Paquet>, mode: String,
                             frequenceOk: Boolean, onFrequenceOk: (Boolean) -> Unit) {
-    val moi = vm.aprsSource()
-    val resultat by vm.aprsEnvoi.collectAsState()
+    val moi = vm.aprs.source()
+    val resultat by vm.aprs.envoi.collectAsState()
     val fils = remember(paquets, moi) { AprsJeu.fils(paquets, moi) }
     val participants = remember(paquets, moi, ui.nowMs / 60_000L) {
         AprsJeu.participantsHotg(paquets, debutDuJourUtc(), moi)
@@ -513,13 +513,13 @@ internal fun OngletMessages(ui: UiState, vm: MainViewModel, paquets: List<Paquet
     var ouvert by rememberSaveable { mutableStateOf<String?>(null) }
     var nouveau by rememberSaveable { mutableStateOf("") }
     // The ISS digipeater, or the terrestrial network: by default where APRS works now.
-    var chemin by rememberSaveable { mutableStateOf(if (vm.aprsCheminParDefaut() == listOf("ARISS")) "ARISS" else "WIDE") }
+    var chemin by rememberSaveable { mutableStateOf(if (vm.aprs.cheminParDefaut() == listOf("ARISS")) "ARISS" else "WIDE") }
     val cheminListe = if (chemin == "ARISS") listOf("ARISS") else listOf("WIDE1-1", "WIDE2-1")
     val kiss by fr.f4ioz.satcombo.aprs.TncKiss.etat.collectAsState()
     val connue = kiss.frequenceHz?.let { hz -> AprsEmission.FENETRES.any { hz in it } } == true
     val peutEmettre = moi.isNotBlank() && mode != "FT3D" && (mode != "KISS" || (kiss.connecte && (frequenceOk || connue)))
     fun envoie(dest: String, texte: String, avecNumero: Boolean = true) {
-        val info = AprsEmission.message(dest, texte, if (avecNumero) vm.aprsNumeroSuivant() else null)
+        val info = AprsEmission.message(dest, texte, if (avecNumero) vm.aprs.numeroSuivant() else null)
         vm.aprsEmetSelonMode(AprsEmission.trame(moi, cheminListe, info), frequenceOk)
     }
 
@@ -638,7 +638,7 @@ private fun Bulle(m: Paquet, paquets: List<Paquet>, peutEmettre: Boolean, onAccu
 internal fun OngletTrophees(ui: UiState, vm: MainViewModel, paquets: List<Paquet>) {
     val ctx = LocalContext.current
     val tr by AprsHub.trophees.collectAsState()
-    val moi = vm.aprsSource()
+    val moi = vm.aprs.source()
     val obs = ui.observer
     val pays: (String) -> String? = { c -> fr.f4ioz.satcombo.domain.Dxcc.entite(AprsJeu.base(c))?.nom }
     val depuis = debutDuJourUtc(ui.nowMs.takeIf { it > 0 } ?: System.currentTimeMillis())
