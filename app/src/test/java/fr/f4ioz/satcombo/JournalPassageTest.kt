@@ -349,4 +349,33 @@ class JournalPassageTest {
         assertEquals("", JournalPassage.lit(JournalPassage.ecrit(page))!!.auto)
         assertEquals(JournalPassage.AUTO_CAT, JournalPassage.fusionne(page, e).auto)
     }
+
+    @Test
+    fun la_lecture_acceleree_ralentit_autour_de_ce_qui_s_est_passe() {
+        val J = JournalPassage
+        val d = 0L; val f = 600_000L
+        val m = listOf(
+            JournalPassage.Marque(JournalPassage.TypeMarque.QSO, 100_000L, 100_000L, "F4XYZ"),
+            JournalPassage.Marque(JournalPassage.TypeMarque.QSO, 103_000L, 103_000L, "F5ABC"),    // close: joined
+            JournalPassage.Marque(JournalPassage.TypeMarque.SSTV, 300_000L, 420_000L, "PD120"),   // a picture: its whole reception
+            JournalPassage.Marque(JournalPassage.TypeMarque.APRS, 595_000L, 595_000L, "RS0ISS"))  // near the end
+        // Contacts: 10 s before, 30 s after (the talk goes on); the picture: 1 s before to its end; APRS: 3 s after.
+        val p = J.plagesNormales(m, d, f, 10_000L, 30_000L)
+        assertEquals(listOf(90_000L..133_000L, 299_000L..420_000L, 585_000L..598_000L), p)
+        val s = J.segments(d, f, p, 10)
+        assertEquals(listOf(
+            JournalPassage.Segment(0L, 90_000L, 10), JournalPassage.Segment(90_000L, 133_000L, 1), JournalPassage.Segment(133_000L, 299_000L, 10),
+            JournalPassage.Segment(299_000L, 420_000L, 1), JournalPassage.Segment(420_000L, 585_000L, 10), JournalPassage.Segment(585_000L, 598_000L, 1),
+            JournalPassage.Segment(598_000L, 600_000L, 10)), s)
+        // 9 + 43 + 16.6 + 121 + 16.5 + 13 + 0.2 s of playing.
+        assertEquals(219_300L, J.dureeLecture(s))
+        assertEquals(50_000L, J.instantALecture(s, 5_000L))
+        assertEquals(95_000L, J.instantALecture(s, 14_000L))
+        assertEquals(600_000L, J.instantALecture(s, 1_000_000L))
+        assertEquals(1, J.segmentA(s, 300_000L)!!.vitesse)
+        assertEquals(10, J.segmentA(s, 425_000L)!!.vitesse)
+        assertEquals(10, J.segmentA(s, 200_000L)!!.vitesse)
+        // Nothing logged: all fast.
+        assertEquals(listOf(JournalPassage.Segment(0L, 600_000L, 10)), J.segments(d, f, emptyList(), 10))
+    }
 }

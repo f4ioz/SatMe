@@ -324,7 +324,9 @@ object JournalRendu {
         /** The video opens on a title: satellite, UTC date and time, the receiving station. */
         val ouverture: Boolean = false,
         /** The video's size: "XS" (480 px, the lightest), "M" (720 px), "HD" (1080 px). */
-        val resolution: String = "M"
+        val resolution: String = "M",
+        /** Accelerated: fast and silent where nothing was logged (null: the whole pass alike). */
+        val segments: List<JournalPassage.Segment>? = null
     ) {
         val cadre = cadreVu ?: JournalPassage.cadre(e.points.map { it.az to it.el })
         var vueCarte = JournalPassage.VueCarte()
@@ -554,11 +556,15 @@ object JournalRendu {
         val fps = 5
         // debutSon: when the file's start was; the pass's sound begins after the header.
         val pcm = if (son != null && debutSon != null) extraitSon(son, e.debutMs - debutSon, e.finMs - debutSon, annonceMs) else null
-        val vitesse = if (pcm != null) 1 else 10
-        val nb = (e.dureeMs * fps / 1000 / vitesse).toInt().coerceAtLeast(2)
+        // Accelerated: normal speed (and the sound) around what was logged, fast and silent elsewhere.
+        val segs = sc.segments
+        val vitesse = if (pcm != null || segs != null) 1 else 10
+        val nb = (if (segs != null) JournalPassage.dureeLecture(segs) * fps / 1000
+            else e.dureeMs * fps / 1000 / vitesse).toInt().coerceAtLeast(2)
+        val pcmLu = if (pcm != null && segs != null) sonAccelere(pcm.first, pcm.second, e.debutMs, segs) to pcm.second else pcm
         // The opening title first (3 s): the sound waits for it, to stay with the replay.
         val nbTitre = if (sc.ouverture) 3 * fps else 0
-        val son2 = pcm?.let { (p, r) -> if (nbTitre == 0) p to r else (ShortArray(nbTitre * r / fps) + p) to r }
+        val son2 = pcmLu?.let { (p, r) -> if (nbTitre == 0) p to r else (ShortArray(nbTitre * r / fps) + p) to r }
         prepare(ctx, sc, w)
         // Shown flashS seconds of the video: that much more of the pass at ×10.
         sc.flashMs = sc.flashS * 1000L * vitesse
@@ -576,7 +582,8 @@ object JournalRendu {
             }
             val n = n0 - nbTitre
             if (n < nb) {
-                val tMs = e.debutMs + n.toLong() * 1000 * vitesse / fps
+                val tMs = if (segs != null) JournalPassage.instantALecture(segs, n.toLong() * 1000 / fps)
+                    else e.debutMs + n.toLong() * 1000 * vitesse / fps
                 System.arraycopy(SstvVideo.yuv(image(w, h, sc, tMs), nv12), 0, trame, 0, trame.size)
             } else {
                 // Which still, and drawn once for all its frames.
@@ -642,6 +649,24 @@ object JournalRendu {
         val o = y * w
         for (x in 0 until w) if (a[o + x] != b[o + x]) return false
         return true
+    }
+
+    /**
+     * The pass's sound (from the pass's start) laid out as the accelerated
+     * replay plays it: kept where it plays at normal speed, silence while it rushes.
+     */
+    private fun sonAccelere(pcm: ShortArray, rate: Int, debutMs: Long, segs: List<JournalPassage.Segment>): ShortArray {
+        val out = ShortArray((JournalPassage.dureeLecture(segs) * rate / 1000).toInt() + rate)
+        var n = 0
+        for (s in segs) {
+            val longueur = ((s.aMs - s.deMs) / s.vitesse * rate / 1000).toInt()
+            if (s.vitesse == 1) {
+                val de = ((s.deMs - debutMs) * rate / 1000).toInt()
+                for (i in 0 until longueur) { val k = de + i; if (k in pcm.indices && n + i < out.size) out[n + i] = pcm[k] }
+            }
+            n += longueur
+        }
+        return out.copyOf(n.coerceAtMost(out.size))
     }
 
     /**

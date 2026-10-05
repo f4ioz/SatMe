@@ -219,19 +219,35 @@ private fun FichePassage(
     DisposableEffect(e.id) { onDispose { runCatching { lecteur?.release() }; lecteur = null } }
     val vignettes = remember(e.id) { mutableStateMapOf<String, Bitmap>() }
     val enregistre = rememberEnregistrer()
+    // A jump lands this long before what was tapped; the accelerated replay slows down as long before.
+    var avantS by remember { mutableStateOf(vm.journal.avantS()) }
+    var accelere by remember { mutableStateOf(vm.journal.accelere()) }
+    var apresQsoS by remember { mutableStateOf(vm.journal.apresQsoS()) }
+    var rapide by remember { mutableStateOf(vm.journal.rapide()) }
+    // Accelerated: the stretches, set once the marks are known (null: the whole pass alike).
+    var segs by remember(e.id) { mutableStateOf<List<JournalPassage.Segment>?>(null) }
+    val defil = rememberScrollState()
 
     // While playing: the sound sets the time; without sound, ten times faster.
     LaunchedEffect(joue) {
         while (joue) {
             val p = lecteur
+            val t = instant ?: e.debutMs
+            val seg = segs?.let { JournalPassage.segmentA(it, t) }
             instant = when {
+                // Accelerated, nothing logged here: on fast and silent, up to where the next one begins.
+                seg != null && seg.vitesse > 1 -> {
+                    runCatching { if (p != null && p.isPlaying) p.pause() }
+                    minOf(t + 200L * seg.vitesse, seg.aMs)
+                }
                 p != null && debutSon != null && runCatching { p.isPlaying }.getOrDefault(false) ->
                     debutSon + runCatching { p.currentPosition.toLong() }.getOrDefault(0L)
                 // Before the recording's sound: on at real speed, silent, then the sound from its first sample.
                 p != null && debutSon != null -> ((instant ?: e.debutMs) + 200L).also { t ->
                     if (t >= debutSon + annonce) runCatching { p.seekTo((t - debutSon).toInt()); p.start() }
                 }
-                else -> (instant ?: e.debutMs) + 2_000L
+                // Without sound: ten times faster, or real time around what was logged.
+                else -> t + if (segs != null) 200L else 2_000L
             }
             if ((instant ?: 0L) > e.finMs) { joue = false; runCatching { lecteur?.pause() } }
             delay(200)
@@ -245,17 +261,26 @@ private fun FichePassage(
                 android.media.MediaPlayer().apply { setDataSource(son.absolutePath); prepare() }
             }.getOrNull()
             lecteur = p
-            // Never the spoken header: before the sound, the loop waits for it.
-            if (t0 >= debutSon + annonce) p?.let { runCatching { it.seekTo((t0 - debutSon).toInt()); it.start() } }
+            // Never the spoken header: before the sound, the loop waits for it; nor while rushing.
+            val rapideIci = segs?.let { JournalPassage.segmentA(it, t0) }?.let { it.vitesse > 1 } ?: false
+            if (t0 >= debutSon + annonce && !rapideIci) p?.let { runCatching { it.seekTo((t0 - debutSon).toInt()); it.start() } }
         }
         joue = true
     }
     fun arrete() { joue = false; runCatching { lecteur?.pause() } }
+    /** Straight to what was tapped, [avantMs] before it, playing; the view brought back on screen. */
+    fun allerA(t: Long, avantMs: Long = avantS * 1000L) {
+        runCatching { lecteur?.pause() }
+        joue = false
+        instant = (t - avantMs).coerceIn(e.debutMs, e.finMs - 1)
+        lance()
+        scope.launch { defil.animateScrollTo(0) }
+    }
 
     val pt = instant?.let { JournalPassage.pointA(e, it) }
     val trace = e.points.filter { instant == null || it.tMs <= instant!! }.map { it.az to it.el }
 
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(12.dp)) {
+    Column(Modifier.fillMaxSize().verticalScroll(defil).padding(12.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onRetour) { Icon(Icons.AutoMirrored.Filled.ArrowBack, t("back"), tint = TextLo) }
             Column(Modifier.weight(1f)) {
@@ -275,6 +300,10 @@ private fun FichePassage(
         // The sky (zoomable) or the map, with what happened on the trajectory.
         var decalageQso by remember { mutableStateOf(vm.journal.decalageQsoS()) }
         val marques = remember(lv, decalageQso) { vm.journal.marques(lv, decalageQso) }
+        LaunchedEffect(marques, accelere, rapide, avantS, apresQsoS) {
+            segs = if (!accelere) null else JournalPassage.segments(e.debutMs, e.finMs,
+                JournalPassage.plagesNormales(marques, e.debutMs, e.finMs, avantS * 1000L, apresQsoS * 1000L), rapide)
+        }
         // Who the stations are (log, APRS, QRZ.com), for their cards.
         var fiches by remember(e.id) { mutableStateOf<Map<String, JournalPassage.Fiche>>(emptyMap()) }
         LaunchedEffect(marques) { fiches = vm.journal.fiches(marques) }
@@ -291,7 +320,7 @@ private fun FichePassage(
         var affFiches by remember { mutableStateOf(vm.journal.affFiches()) }
         var tailleFlash by remember { mutableStateOf(vm.journal.flashTaille()) }
         var apercuJusqua by remember { mutableStateOf(0L) }
-        val vitesseRejeu = if (son != null && debutSon != null) 1 else 10
+        val vitesseRejeu = if (accelere || (son != null && debutSon != null)) 1 else 10
         val arrivee = if (affSstv) JournalRendu.imageA(marques, instant, flashS * 1000L * vitesseRejeu) else null
         val apercu = if (System.currentTimeMillis() < apercuJusqua)
             marques.firstOrNull { it.type == JournalPassage.TypeMarque.SSTV && it.fichier != null }?.let { it to 1f } else null
@@ -353,7 +382,8 @@ private fun FichePassage(
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
             modifier = Modifier.padding(top = 6.dp)) {
             Button(onClick = { if (joue) arrete() else lance() }) {
-                Text(if (joue) "⏸ " + t("journal_pause") else "▶ " + t(if (son != null) "journal_rejouer" else "journal_rejouer_x10"))
+                Text(if (joue) "⏸ " + t("journal_pause") else "▶ " + t(when {
+                    accelere -> "journal_rejouer_accelere"; son != null -> "journal_rejouer"; else -> "journal_rejouer_x10" }))
             }
             Text(instant?.let { heure.format(Date(it)) } ?: "", color = TextHi, fontFamily = FontFamily.Monospace, fontSize = 14.sp)
         }
@@ -377,6 +407,32 @@ private fun FichePassage(
         }
         if (son == null) Text(t(if (e.enregistrements.isEmpty()) "journal_sans_son" else "journal_son_absent"),
             color = TextLo, fontSize = 10.sp)
+        // Fast where nothing was logged, normal from a little before each contact, picture or frame.
+        if (marques.isNotEmpty()) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
+                modifier = Modifier.horizontalScroll(rememberScrollState())) {
+                FilterChip(selected = accelere, onClick = { accelere = !accelere; vm.journal.setAccelere(accelere) },
+                    label = { Text((if (accelere) "✓ " else "") + t("journal_accelere") + " : " + t(if (accelere) "journal_oui" else "journal_flash_non"), fontSize = 11.sp) })
+                if (accelere) listOf(5, 10, 20, 50).forEach { x ->
+                    FilterChip(selected = rapide == x, onClick = { rapide = x; vm.journal.setRapide(x) }, label = { Text("×$x", fontSize = 11.sp) })
+                }
+            }
+            if (accelere) Text(tf("journal_accelere_desc", avantS, apresQsoS), color = TextLo, fontSize = 10.sp)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(t("journal_avant"), color = TextLo, fontSize = 11.sp)
+                Slider(value = avantS.toFloat(), valueRange = 0f..60f, steps = 11, modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
+                    onValueChange = { avantS = it.toInt() }, onValueChangeFinished = { vm.journal.setAvantS(avantS) })
+                Text("−$avantS s", color = TextHi, fontSize = 11.sp)
+            }
+            // A voice contact goes on after it was logged: how long to stay at normal speed.
+            if (accelere && marques.any { it.type == JournalPassage.TypeMarque.QSO }) Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(t("journal_apres_qso"), color = TextLo, fontSize = 11.sp)
+                Slider(value = apresQsoS.toFloat(), valueRange = 0f..120f, steps = 23, modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
+                    onValueChange = { apresQsoS = it.toInt() }, onValueChangeFinished = { vm.journal.setApresQsoS(apresQsoS) })
+                Text("+$apresQsoS s", color = TextHi, fontSize = 11.sp)
+            }
+            Text(t("journal_aller_desc"), color = TextLo, fontSize = 10.sp)
+        }
 
         // What came of it.
         Spacer(Modifier.height(10.dp))
@@ -402,8 +458,10 @@ private fun FichePassage(
             Text(tf("journal_qsos", l.qsos.size), color = TextHi, fontWeight = FontWeight.Bold, fontSize = 13.sp)
             l.qsos.forEach { q ->
                 val vu = instant == null || q.timeMs <= instant!!
-                Text(heure.format(Date(q.timeMs)) + "  " + q.callsign + (if (q.theirLocator.isNotBlank()) " · " + q.theirLocator else ""),
-                    color = TextHi, fontSize = 12.sp, fontFamily = FontFamily.Monospace, modifier = Modifier.alpha(if (vu) 1f else 0.3f))
+                Text("▸ " + heure.format(Date(q.timeMs)) + "  " + q.callsign + (if (q.theirLocator.isNotBlank()) " · " + q.theirLocator else ""),
+                    color = TextHi, fontSize = 12.sp, fontFamily = FontFamily.Monospace,
+                    modifier = Modifier.alpha(if (vu) 1f else 0.3f).fillMaxWidth()
+                        .clickable { allerA(q.timeMs - decalageQso * 1000L) }.padding(vertical = 3.dp))
             }
         }
         if (parSource.isNotEmpty()) {
@@ -416,17 +474,21 @@ private fun FichePassage(
                     val garde = f.name !in masquees
                     // During the replay, a picture appears once received; one set aside stays dim.
                     val vu = instant == null || s.timeMs <= instant!!
-                    Column(Modifier.width(120.dp).alpha(if (!garde) 0.3f else if (vu) 1f else 0.15f).clickable {
-                        masquees = if (garde) masquees + f.name else masquees - f.name
-                        vm.journal.maj(e.copy(masquees = masquees))
-                    }) {
+                    // Tapped: to where it started arriving; its ✓ / ✕ keeps or sets it aside.
+                    val debutImage = marques.firstOrNull { it.fichier == f.absolutePath }?.debutMs
+                        ?: (s.timeMs - (fr.f4ioz.satcombo.sstv.SstvMode.byName(s.mode)?.let { (it.frameSeconds * 1000).toLong() } ?: 60_000L))
+                    Column(Modifier.width(120.dp).alpha(if (!garde) 0.3f else if (vu) 1f else 0.15f).clickable { allerA(debutImage, JournalPassage.AVANT_SSTV_MS) }) {
                         Box {
                             if (b != null) Image(b.asImageBitmap(), null, contentScale = ContentScale.Crop,
                                 modifier = Modifier.fillMaxWidth().aspectRatio(4f / 3f).clip(RoundedCornerShape(6.dp)))
-                            Text(if (garde) "✓" else "✕", color = androidx.compose.ui.graphics.Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold,
-                                modifier = Modifier.align(Alignment.TopEnd).padding(3.dp)
+                            Text(if (garde) "✓" else "✕", color = androidx.compose.ui.graphics.Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold,
+                                modifier = Modifier.align(Alignment.TopEnd).padding(2.dp)
                                     .background(if (garde) Cyan.copy(alpha = 0.85f) else Magenta.copy(alpha = 0.85f), RoundedCornerShape(4.dp))
-                                    .padding(horizontal = 4.dp))
+                                    .clickable {
+                                        masquees = if (garde) masquees + f.name else masquees - f.name
+                                        vm.journal.maj(e.copy(masquees = masquees))
+                                    }
+                                    .padding(horizontal = 8.dp, vertical = 2.dp))
                         }
                         Text(heure.format(Date(s.timeMs)) + " · " + s.mode + if (s.source == "live") "" else " · ⟳",
                             color = TextLo, fontSize = 9.sp)
@@ -439,8 +501,9 @@ private fun FichePassage(
             Text(tf("journal_trames", l.trames.size, l.trames.count { it.viaIss }), color = TextHi, fontWeight = FontWeight.Bold, fontSize = 13.sp)
             l.trames.take(30).forEach { p ->
                 val vu = instant == null || p.quand <= instant!!
-                Text(heure.format(Date(p.quand)) + "  " + p.source + if (p.viaIss) "  (ISS)" else "",
-                    color = TextHi, fontSize = 11.sp, fontFamily = FontFamily.Monospace, modifier = Modifier.alpha(if (vu) 1f else 0.3f))
+                Text("▸ " + heure.format(Date(p.quand)) + "  " + p.source + if (p.viaIss) "  (ISS)" else "",
+                    color = TextHi, fontSize = 11.sp, fontFamily = FontFamily.Monospace,
+                    modifier = Modifier.alpha(if (vu) 1f else 0.3f).fillMaxWidth().clickable { allerA(p.quand) }.padding(vertical = 3.dp))
             }
         }
 
@@ -455,6 +518,12 @@ private fun FichePassage(
             listOf("image" to "journal_fmt_image", "video" to "journal_video", "gif" to "sstv_gif").forEach { (k, cle) ->
                 FilterChip(selected = format == k, onClick = { format = k; pret = null }, label = { Text(t(cle), fontSize = 12.sp) })
             }
+        }
+        // The video as the accelerated replay: fast and silent where nothing was logged (the same setting).
+        if (format == "video" && marques.isNotEmpty()) Row(verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.clickable { accelere = !accelere; vm.journal.setAccelere(accelere); pret = null }) {
+            Checkbox(checked = accelere, onCheckedChange = null)
+            Text(tf("journal_export_accelere", rapide), color = TextHi, fontSize = 12.sp)
         }
         if (format == "video" && son != null) Row(verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.clickable { avecSon = !avecSon; pret = null }) {
@@ -503,7 +572,8 @@ private fun FichePassage(
                     val sc = JournalRendu.Scene(e, prevue, marques, sol, qth, surCarte, ui.callsign, ui.useUtc, flashS, tailleFlash,
                         affSstv = affSstv, affFiches = affFiches,
                         cadreVu = if (surCarte) null else cadreVu, vueVue = if (surCarte) vueVue else null,
-                        fiches = fiches, recap = recap && format != "image", ouverture = ouverture && format != "image", resolution = resolution)
+                        fiches = fiches, recap = recap && format != "image", ouverture = ouverture && format != "image", resolution = resolution,
+                        segments = if (format == "video" && accelere) segs else null)
                     when (format) {
                         "image" -> JournalRendu.png(ctx, sc, instant)
                         "gif" -> JournalRendu.gif(ctx, sc) { fabrication = it }

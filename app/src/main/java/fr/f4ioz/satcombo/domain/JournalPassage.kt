@@ -259,6 +259,76 @@ object JournalPassage {
         val details: String = ""
     )
 
+    // ------------------------------------------------------- accelerated replay
+
+    /** A stretch of the replay: pass time [deMs, aMs) played [vitesse] times faster. */
+    data class Segment(val deMs: Long, val aMs: Long, val vitesse: Int)
+
+    /**
+     * Where the replay goes at normal speed, around each mark. A contact (a
+     * voice QSO): from [avantMs] before, to [apresQsoMs] after — the talk goes
+     * on. An SSTV picture: [AVANT_SSTV_MS] before it starts, to its end. An
+     * APRS frame: [avantMs] before, [APRES_APRS_MS] after. Close ones are
+     * joined: a gap shorter than [JOINT_MS] is not worth a rush.
+     */
+    fun plagesNormales(marques: List<Marque>, debutMs: Long, finMs: Long, avantMs: Long, apresQsoMs: Long): List<LongRange> {
+        val brutes = marques.map { m ->
+            val (avant, apres) = when (m.type) {
+                TypeMarque.QSO -> avantMs to apresQsoMs
+                TypeMarque.SSTV -> AVANT_SSTV_MS to 0L
+                TypeMarque.APRS -> avantMs to APRES_APRS_MS
+            }
+            maxOf(debutMs, m.debutMs - avant) to minOf(finMs, m.finMs + apres)
+        }
+            .filter { it.second > it.first }.sortedBy { it.first }
+        val out = ArrayList<LongRange>()
+        var c: Pair<Long, Long>? = null
+        for (b in brutes) {
+            val cc = c
+            c = if (cc != null && b.first <= cc.second + JOINT_MS) cc.first to maxOf(cc.second, b.second) else {
+                cc?.let { out += it.first..it.second }; b
+            }
+        }
+        c?.let { out += it.first..it.second }
+        return out
+    }
+    const val JOINT_MS = 5_000L
+    /** Before an SSTV picture: its header is there already, a second is enough. */
+    const val AVANT_SSTV_MS = 1_000L
+    const val APRES_APRS_MS = 3_000L
+
+    /** The whole pass as stretches: normal speed in [plages], [rapide] times faster elsewhere. */
+    fun segments(debutMs: Long, finMs: Long, plages: List<LongRange>, rapide: Int): List<Segment> {
+        val out = ArrayList<Segment>()
+        var t = debutMs
+        for (p in plages) {
+            val de = p.first.coerceIn(debutMs, finMs); val a = p.last.coerceIn(debutMs, finMs)
+            if (a <= t) continue
+            if (de > t) out += Segment(t, de, rapide)
+            out += Segment(maxOf(t, de), a, 1)
+            t = a
+        }
+        if (t < finMs) out += Segment(t, finMs, rapide)
+        return out
+    }
+
+    /** How long the replay lasts (ms of playing). */
+    fun dureeLecture(segments: List<Segment>): Long = segments.sumOf { (it.aMs - it.deMs) / it.vitesse }
+
+    /** The pass time shown after [lectureMs] of playing. */
+    fun instantALecture(segments: List<Segment>, lectureMs: Long): Long {
+        var reste = lectureMs
+        for (s in segments) {
+            val d = (s.aMs - s.deMs) / s.vitesse
+            if (reste < d) return s.deMs + reste * s.vitesse
+            reste -= d
+        }
+        return segments.lastOrNull()?.aMs ?: 0L
+    }
+
+    /** At pass time [tMs], the stretch being played (null: outside the pass). */
+    fun segmentA(segments: List<Segment>, tMs: Long): Segment? = segments.firstOrNull { tMs >= it.deMs && tMs < it.aMs }
+
     /** Who a station is, for its card during the replay: from the log, the frame, QRZ.com. */
     data class Fiche(
         val indicatif: String, val nom: String = "", val qth: String = "", val pays: String = "",

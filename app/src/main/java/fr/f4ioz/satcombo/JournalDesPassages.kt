@@ -217,6 +217,16 @@ class JournalDesPassages(
     fun setAffFiches(on: Boolean) { settings.journalAffFiches = on }
     /** Its size, a share of the view's width. */
     fun flashTaille(): Float = settings.journalFlashTaille
+    /** Seconds before what was logged: where a jump lands, where the accelerated replay slows down. */
+    fun avantS(): Int = settings.journalAvantS
+    fun setAvantS(s: Int) { settings.journalAvantS = s }
+    /** Fast where nothing was logged, normal around it; how many times faster. */
+    fun apresQsoS(): Int = settings.journalApresQsoS
+    fun setApresQsoS(s: Int) { settings.journalApresQsoS = s }
+    fun accelere(): Boolean = settings.journalAccelere
+    fun setAccelere(on: Boolean) { settings.journalAccelere = on }
+    fun rapide(): Int = settings.journalRapide
+    fun setRapide(x: Int) { settings.journalRapide = x }
     fun setFlashTaille(v: Float) { settings.journalFlashTaille = v }
 
     /** Length of a recording (ms), read once. */

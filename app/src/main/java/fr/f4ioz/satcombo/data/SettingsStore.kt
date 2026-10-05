@@ -298,6 +298,21 @@ class SettingsStore(context: Context) {
         set(v) { prefs.edit().putInt("journal_flash_s", v).apply() }
 
     /** Pass journal: size of that picture, a share of the view's width. */
+    /** Journal replay: seconds before a contact, a picture or a frame (a jump, the accelerated replay). */
+    var journalAvantS: Int
+        get() = prefs.getInt("journal_avant_s", 10)
+        set(v) { prefs.edit().putInt("journal_avant_s", v).apply() }
+    /** Journal replay accelerated where nothing was logged, and how fast. */
+    /** After a contact of the log (voice), how long the replay stays at normal speed: the talk goes on. */
+    var journalApresQsoS: Int
+        get() = prefs.getInt("journal_apres_qso_s", 30)
+        set(v) { prefs.edit().putInt("journal_apres_qso_s", v).apply() }
+    var journalAccelere: Boolean
+        get() = prefs.getBoolean("journal_accelere", false)
+        set(v) { prefs.edit().putBoolean("journal_accelere", v).apply() }
+    var journalRapide: Int
+        get() = prefs.getInt("journal_rapide", 10)
+        set(v) { prefs.edit().putInt("journal_rapide", v).apply() }
     var journalFlashTaille: Float
         get() = prefs.getFloat("journal_flash_taille", 0.32f)
         set(v) { prefs.edit().putFloat("journal_flash_taille", v).apply() }
