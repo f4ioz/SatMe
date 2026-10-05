@@ -53,7 +53,7 @@ Amateur radio satellite tracking for Android — passes, pointing, Doppler, logg
 
 ### And in 20.77
 
-- **Pass journal**: every pass you followed, kept on the phone — the real trajectory, the rig's frequencies, the mast, the recording. Seen on the sky or on an OpenStreetMap map with the satellite's footprint, the contacts and APRS stations as points with their callsign, each SSTV picture as the stretch of trajectory it took to arrive. **Replay it with its sound**: the picture is drawn as it arrives, a card tells who each station is. **Export** what is shown as a picture, a video or a GIF, opening on a title and ending on a summary. Past passes are found again from the log, the pictures and the recordings.
+- **Pass journal**: every pass you followed, kept on the phone — the real trajectory, the rig's frequencies, the antennas, the recording. Seen on the sky or on an OpenStreetMap map with the satellite's footprint, the contacts and APRS stations as points with their callsign, each SSTV picture as the stretch of trajectory it took to arrive. **Replay it with its sound**: the picture is drawn as it arrives, a card tells who each station is. **Export** what is shown as a picture, a video or a GIF, opening on a title and ending on a summary. Past passes are found again from the log, the pictures and the recordings.
 - **Record every pass under CAT** (option): 5 s before AOS to 5 s after LOS, the rig's audio input checked when arming.
 - SSTV page in tabs; a simpler sheet for the pictures of a series.
 
@@ -72,7 +72,7 @@ Every version in the [wiki](https://github.com/f4ioz/SatMe/wiki/Release-notes). 
 - Alerts before AOS, and a pass added to the phone's calendar in one tap.
 - Printable PDF pass sheets: tick the satellites' passes, then choose how many coming passes of each to print (up to 20, two weeks ahead).
 - Live tracking: elevation, azimuth, Doppler and countdown, on a screen readable at arm's length.
-- Pass journal: every pass followed kept on the phone (real trajectory, rig frequencies, mast, recording), on the sky or an OpenStreetMap map with the footprint; contacts, APRS stations and SSTV pictures in place; replayed with its sound, with cards for the stations; exported as a picture, a video or a GIF. Past passes found again from the log, the pictures and the recordings.
+- Pass journal: every pass followed kept on the phone (real trajectory, rig frequencies, antennas, recording), on the sky or an OpenStreetMap map with the footprint; contacts, APRS stations and SSTV pictures in place; replayed with its sound, with cards for the stations; exported as a picture, a video or a GIF. Past passes found again from the log, the pictures and the recordings.
 - Prepare the pass: from the icon on any pass, nine lights check the station against your profiles (Home, Portable…, each with its rigs, compass and audio source), each leading to what fixes it. A read-only station test asks the equipment itself; with CAT connected, the rig goes to the satellite prepared. Simultaneous passes are marked.
 - Globe with ground tracks, timeline of the coming passes, and mutual skeds — the windows when a satellite is visible both from you and from another station.
 - AMSAT and SatNOGS status for each satellite, AMSAT report in a few taps; silent satellites kept out of the list. Satellites carry their short AMSAT name ("AO-07", "ISS") and their AMSAT status whatever the element source.
@@ -80,7 +80,7 @@ Every version in the [wiki](https://github.com/f4ioz/SatMe/wiki/Release-notes). 
 
 ### Pointing
 - Phone compass with guided calibration, or a WitMotion Bluetooth module fixed on the antenna boom.
-- Rotators: Yaesu GS-232 over USB serial, Hamlib rotctld over the network. Flip over the zenith, park after the pass, and a simulated mast to watch the tracking before moving the real one.
+- Rotators: Yaesu GS-232 over USB serial, Hamlib rotctld over the network. Flip over the zenith, park after the pass, and simulated antennas to watch the tracking before moving the real ones.
 
 ### Rig control and Doppler
 - RX and TX Doppler correction, linear transponders (inverting or not) and FM, with a calibration kept per satellite.

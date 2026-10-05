@@ -31,12 +31,17 @@ class EnregistrementAutoCat(
     /** Two seconds of the audio input: its levels, or why it could not listen. */
     private val mesureAudio: suspend () -> Pair<StationCheck.Niveaux?, String?>,
     private val activeEnregistreur: () -> Unit,
-    private val locator: () -> String
+    private val locator: () -> String,
+    /** The transmitter chosen for the satellite on its page. */
+    private val transpondeurChoisi: () -> String
 ) {
     /** Where the automatic recording stands, for its card in the settings. */
     val etat = MutableStateFlow("")
     /** The satellite it is armed for; 0 = not armed by it. */
     @Volatile var arme: Int = 0
+        private set
+    /** The transmitter chosen when it armed (for the journal). */
+    @Volatile var transpondeur: String = ""
         private set
     private var job: kotlinx.coroutines.Job? = null
 
@@ -123,6 +128,7 @@ class EnregistrementAutoCat(
             }
             if (!ui().recorderEnabled) activeEnregistreur()
             arme = sat.catalogNumber
+            transpondeur = transpondeurChoisi()
             R.arme(ctx, sat.name, f, ui().recorderSource, ui().recorderUnprocessed, locator(),
                 avanceMs = fr.f4ioz.satcombo.domain.EnregistrementAuto.AVANT_MS, par = R.PAR_CAT)
             val h = java.text.SimpleDateFormat("EEE HH:mm", java.util.Locale.getDefault()).apply {

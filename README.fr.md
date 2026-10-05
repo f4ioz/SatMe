@@ -53,7 +53,7 @@ Poursuite de satellites radioamateurs sur Android — passages, pointage, Dopple
 
 ### Et dans la 20.77
 
-- **Journal des passages** : chaque passage suivi, gardé sur le téléphone — la trajectoire réelle, les fréquences du poste, le mât, l'enregistrement. Vu sur le ciel ou sur une carte OpenStreetMap avec l'empreinte du satellite, les contacts et les stations APRS en points avec leur indicatif, chaque image SSTV en tronçon de trajectoire. **Rejoué avec son son** : l'image se dessine en arrivant, une fiche dit qui est chaque station. **Export** de ce qui est affiché en image, vidéo ou GIF, avec un titre d'ouverture et un récapitulatif de fin. Les anciens passages se retrouvent d'après le carnet, les images et les enregistrements.
+- **Journal des passages** : chaque passage suivi, gardé sur le téléphone — la trajectoire réelle, les fréquences du poste, les antennes, l'enregistrement. Vu sur le ciel ou sur une carte OpenStreetMap avec l'empreinte du satellite, les contacts et les stations APRS en points avec leur indicatif, chaque image SSTV en tronçon de trajectoire. **Rejoué avec son son** : l'image se dessine en arrivant, une fiche dit qui est chaque station. **Export** de ce qui est affiché en image, vidéo ou GIF, avec un titre d'ouverture et un récapitulatif de fin. Les anciens passages se retrouvent d'après le carnet, les images et les enregistrements.
 - **Enregistrer chaque passage en CAT** (option) : de 5 s avant l'AOS à 5 s après le LOS, l'entrée audio du poste vérifiée à l'armement.
 - Page SSTV en onglets ; une planche plus simple pour les images d'une série.
 
@@ -72,7 +72,7 @@ Toutes les versions dans le [wiki](https://github.com/f4ioz/SatMe/wiki/Nouveaute
 - Alerte avant l'AOS, et un passage ajouté à l'agenda du téléphone d'un appui.
 - Fiches de passages en PDF à imprimer : coche les passages des satellites, puis choisis combien de prochains passages de chacun imprimer (jusqu'à 20, sur deux semaines).
 - Suivi en direct : élévation, azimut, Doppler et compte à rebours, lisibles à bout de bras.
-- Journal des passages : chaque passage suivi gardé sur le téléphone (trajectoire réelle, fréquences du poste, mât, enregistrement), sur le ciel ou une carte OpenStreetMap avec l'empreinte ; contacts, stations APRS et images SSTV à leur place ; rejoué avec son son, avec les fiches des stations ; exporté en image, vidéo ou GIF. Anciens passages retrouvés d'après le carnet, les images et les enregistrements.
+- Journal des passages : chaque passage suivi gardé sur le téléphone (trajectoire réelle, fréquences du poste, antennes, enregistrement), sur le ciel ou une carte OpenStreetMap avec l'empreinte ; contacts, stations APRS et images SSTV à leur place ; rejoué avec son son, avec les fiches des stations ; exporté en image, vidéo ou GIF. Anciens passages retrouvés d'après le carnet, les images et les enregistrements.
 - Préparer le passage : depuis l'icône de n'importe quel passage, neuf voyants vérifient la station selon tes profils (Fixe, Portable…, chacun avec ses postes, sa boussole et sa source du son), chacun menant à ce qui le corrige. Un test en lecture seule interroge le matériel ; avec le CAT connecté, le poste se met sur le satellite préparé. Les passages simultanés sont signalés.
 - Globe avec les traces au sol, timeline des prochains passages, et skeds mutuels — les fenêtres où un satellite est visible à la fois chez vous et chez une autre station.
 - État AMSAT et SatNOGS de chaque satellite, rapport AMSAT en quelques appuis ; les satellites muets restent hors de la liste. Les satellites portent leur nom court AMSAT (« AO-07 », « ISS ») et leur statut AMSAT, quelle que soit la source des éléments.
@@ -80,7 +80,7 @@ Toutes les versions dans le [wiki](https://github.com/f4ioz/SatMe/wiki/Nouveaute
 
 ### Pointage
 - Boussole du téléphone avec calibrage guidé, ou module Bluetooth WitMotion fixé sur la flèche d'antenne.
-- Rotors : Yaesu GS-232 en série USB, Hamlib rotctld par le réseau. Retournement au zénith, rangement après le passage, et un mât simulé pour regarder le suivi avant de faire tourner le vrai.
+- Rotors : Yaesu GS-232 en série USB, Hamlib rotctld par le réseau. Retournement au zénith, rangement après le passage, et des antennes simulées pour regarder le suivi avant de faire tourner les vraies.
 
 ### Poste et Doppler
 - Correction Doppler en réception et en émission, transpondeurs linéaires (inverseurs ou non) et FM, avec un calibrage mémorisé par satellite.

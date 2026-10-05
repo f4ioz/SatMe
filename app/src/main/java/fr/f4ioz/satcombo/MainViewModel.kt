@@ -2984,7 +2984,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     /** Every pass recorded under CAT (option, see [EnregistrementAutoCat]); before the init that starts it. */
     val enregAutoCat = EnregistrementAutoCat(getApplication(), settings, viewModelScope, predictor,
         { _ui.value }, { _ui.value.observer ?: locationProvider.defaultObserver },
-        { mesureAudio() }, { setRecorderEnabled(true) }, { myLocator() })
+        { mesureAudio() }, { setRecorderEnabled(true) }, { myLocator() },
+        { runCatching { activeTransmitters().getOrNull(_ui.value.selectedTxIndex)?.description }.getOrNull().orEmpty() })
 
     fun setMaille(n: Int) {
         _ui.value = _ui.value.copy(carnet = _ui.value.carnet.copy(maille = n))
@@ -5140,7 +5141,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             R.PAR_CAT -> fr.f4ioz.satcombo.domain.JournalPassage.AUTO_CAT
             else -> fr.f4ioz.satcombo.domain.JournalPassage.AUTO_FOND
         }.takeIf { R.fenetres.value.isNotEmpty() } ?: fr.f4ioz.satcombo.domain.JournalPassage.AUTO_FOND
-        journal.fondTic(catnum, trackingFor, rec.fileName, par)
+        // The transmitter it was armed with; by hand, the one chosen if it is that satellite's.
+        val transpondeur = when (par) {
+            fr.f4ioz.satcombo.domain.JournalPassage.AUTO_SSTV -> sstvAutoTx.ifBlank { settings.sstvAutoTx }
+            fr.f4ioz.satcombo.domain.JournalPassage.AUTO_CAT -> enregAutoCat.transpondeur
+            else -> if (_ui.value.selected?.catalogNumber == catnum)
+                runCatching { activeTransmitters().getOrNull(_ui.value.selectedTxIndex)?.description }.getOrNull().orEmpty() else ""
+        }
+        journal.fondTic(catnum, trackingFor, rec.fileName, par, transpondeur)
     }
 
     // After its fields: a collector started in the first init ran before they existed (crash at start, 04/10).
@@ -5228,6 +5236,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 sstvIssPassages(catnum).map { it.aosEpochMs to it.losEpochMs }, System.currentTimeMillis(), dernierAos)
             if (f.isEmpty()) { sstvIssMessage.value = t("sstv_iss_aucun"); return@launch }
             sstvAutoArme = catnum
+            sstvAutoTx = actifs.getOrNull(i)?.description.orEmpty()
             // Automatic SSTV takes the recorder over from the recording of every pass under CAT.
             enregAutoCat.cedeASstv()
             fr.f4ioz.satcombo.audio.RecorderService.arme(getApplication(), sat.name, f,
@@ -5240,6 +5249,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     /** The satellite automatic SSTV is armed for (for the warning on changing satellite). */
     @Volatile private var sstvAutoArme: Int = 0
+    /** The transmitter automatic SSTV tuned when it armed (for the journal). */
+    @Volatile private var sstvAutoTx: String = ""
 
     /** Stops automatic SSTV (and a recording in progress); the transmitter comes back when the recorder disarms. */
     fun sstvIssDesactive() {

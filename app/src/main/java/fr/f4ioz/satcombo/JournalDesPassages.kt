@@ -61,16 +61,17 @@ class JournalDesPassages(
     /**
      * Every few seconds: [catnum] is the satellite being recorded (null: no
      * recording), [suivi] the one whose page is open (it collects then),
-     * [par] who started the recording (see [JournalPassage.Entree.auto]).
+     * [par] who started the recording (see [JournalPassage.Entree.auto]),
+     * [transpondeur] the transmitter it was armed with.
      */
-    fun fondTic(catnum: Int?, suivi: Int?, fichier: String?, par: String) {
+    fun fondTic(catnum: Int?, suivi: Int?, fichier: String?, par: String, transpondeur: String) {
         if (catnum == null) { gardeFond(fond.ferme()); return }
         if (catnum == suivi) { if (!fond.cedeA(page)) gardeFond(fond.ferme()); return }
         val sat = ui().satellites.firstOrNull { it.catalogNumber == catnum } ?: return
         val now = System.currentTimeMillis()
         val pos = runCatching { predictor.positionAt(sat, observateur(), now) }.getOrNull() ?: return
         gardeFond(fond.suit(sat.catalogNumber, sat.name, now, pos.azimuthDeg, pos.elevationDeg,
-            etat().copy(enregistrement = fichier, transpondeur = "", auto = par)))
+            etat().copy(enregistrement = fichier, transpondeur = transpondeur, auto = par)))
     }
 
     /** A pass kept by itself: written, then a quiet word if wanted (what it holds). */
