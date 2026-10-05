@@ -10104,6 +10104,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     /** The journal page is open. */
     val journalOuvert = kotlinx.coroutines.flow.MutableStateFlow(false)
     fun ouvreJournal() { journalOuvert.value = true }
+    /** ★ A moment of the pass marked now, for the satellite shown; its time (null: none shown). */
+    fun signetIci(): Long? {
+        val sat = _ui.value.selected ?: return null
+        return journal.signet(sat.catalogNumber).tMs
+    }
     /** The pass to show when the journal opens (from its notification), then cleared. */
     val journalAOuvrir = kotlinx.coroutines.flow.MutableStateFlow<fr.f4ioz.satcombo.domain.JournalPassage.Entree?>(null)
     fun ouvreJournalSur(catnum: Int, debutMs: Long, finMs: Long) {

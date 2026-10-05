@@ -42,6 +42,8 @@ object JournalRendu {
     const val QSO = 0xFFFF4FA3.toInt()
     const val APRS = 0xFF4C8DFF.toInt()
     const val ISS = 0xFFFFC21A.toInt()
+    /** A moment marked (★). */
+    const val SIGNET = 0xFFB98CFF.toInt()
     /**
      * The SSTV pictures' colour, the same for all on a pass — none of the
      * contacts' pink, the APRS blue, the ISS yellow nor the trajectory's cyan.
@@ -90,7 +92,7 @@ object JournalRendu {
         val h = 26f * dp + lignes.size * 15f * dp + 6f * dp
         val r = android.graphics.RectF(x, y, x + largeur, y + h)
         c.drawRoundRect(r, 8 * dp, 8 * dp, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.argb(225, 12, 18, 28) })
-        val coul = when { m.type == TypeMarque.QSO -> QSO; m.viaIss -> ISS; else -> APRS }
+        val coul = when { m.type == TypeMarque.QSO -> QSO; m.type == TypeMarque.SIGNET -> SIGNET; m.viaIss -> ISS; else -> APRS }
         c.drawRoundRect(r, 8 * dp, 8 * dp, Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeWidth = 2f * dp; color = coul })
         c.drawText((if (m.type == TypeMarque.QSO) "QSO  " else "APRS  ") + m.texte, x + 10 * dp, y + 20 * dp, titre)
         var yy = y + 38 * dp
@@ -175,10 +177,11 @@ object JournalRendu {
             val (x, y) = xy(p.az, p.el)
             val dejaEcrit = ecrits.any { it.first == m.texte && kotlin.math.hypot(it.second - x, it.third - y) < 40 * dp }
             if (!dejaEcrit) ecrits += Triple(m.texte, x, y)
-            val coul = when { m.type == TypeMarque.QSO -> QSO; m.viaIss -> ISS; else -> APRS }
+            val coul = when { m.type == TypeMarque.QSO -> QSO; m.type == TypeMarque.SIGNET -> SIGNET; m.viaIss -> ISS; else -> APRS }
             c.drawCircle(x, y, 6f * dp, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE })
             c.drawCircle(x, y, 4.5f * dp, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = coul })
-            if (!dejaEcrit) c.drawText(m.texte, x + 8 * dp, y - 6 * dp, etiquette)
+            // A bookmark's flag below the point: a contact at the same moment keeps its callsign readable.
+            if (!dejaEcrit) c.drawText(m.texte, x + 8 * dp, y + (if (m.type == TypeMarque.SIGNET) 16 else -6) * dp, etiquette)
         }
         // Where the satellite is at the moment replayed; the highest point otherwise.
         val ici = instant?.let { JournalPassage.pointA(e, it) } ?: e.points.maxByOrNull { it.el }
@@ -252,7 +255,7 @@ object JournalRendu {
         for (m in marques.filter { it.type != TypeMarque.SSTV }) {
             if (instant != null && m.debutMs > instant) continue
             val s = JournalPassage.solA(sol, m.debutMs) ?: continue
-            val coul = when { m.type == TypeMarque.QSO -> QSO; m.viaIss -> ISS; else -> APRS }
+            val coul = when { m.type == TypeMarque.QSO -> QSO; m.type == TypeMarque.SIGNET -> SIGNET; m.viaIss -> ISS; else -> APRS }
             val (sx, sy) = xy(s.lat, s.lon)
             // The station where it is, in grey, linked to the satellite at that moment.
             if (m.lat != null && m.lon != null) {
@@ -262,7 +265,7 @@ object JournalRendu {
                 if (ecrire("@" + m.texte, lx, ly)) c.drawText(m.texte, lx + 7 * dp, ly + 14 * dp, grisTexte)
             }
             c.drawCircle(sx, sy, 6f * dp, blanc); c.drawCircle(sx, sy, 4.5f * dp, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = coul })
-            if (ecrire(m.texte, sx, sy)) c.drawText(m.texte, sx + 8 * dp, sy - 6 * dp, noir)
+            if (ecrire(m.texte, sx, sy)) c.drawText(m.texte, sx + 8 * dp, sy + (if (m.type == TypeMarque.SIGNET) 16 else -6) * dp, noir)
         }
         // Home: not to be taken for a contact.
         qth?.let { (la, lo) -> val (x, y) = xy(la, lo)
@@ -326,7 +329,9 @@ object JournalRendu {
         /** The video's size: "XS" (480 px, the lightest), "M" (720 px), "HD" (1080 px). */
         val resolution: String = "M",
         /** Accelerated: fast and silent where nothing was logged (null: the whole pass alike). */
-        val segments: List<JournalPassage.Segment>? = null
+        val segments: List<JournalPassage.Segment>? = null,
+        /** The file's name without extension (null: the pass's own). */
+        val nomFichier: String? = null
     ) {
         val cadre = cadreVu ?: JournalPassage.cadre(e.points.map { it.az to it.el })
         var vueCarte = JournalPassage.VueCarte()
@@ -555,20 +560,22 @@ object JournalRendu {
         val (w, h, debit) = when (sc.resolution) { "XS" -> Triple(480, 640, 400_000); "HD" -> Triple(1080, 1440, 2_500_000); else -> Triple(720, 960, 1_000_000) }
         val fps = 5
         // debutSon: when the file's start was; the pass's sound begins after the header.
-        val pcm = if (son != null && debutSon != null) extraitSon(son, e.debutMs - debutSon, e.finMs - debutSon, annonceMs) else null
-        // Accelerated: normal speed (and the sound) around what was logged, fast and silent elsewhere.
+        // Accelerated or an extract: its stretches may reach past the pass followed (a contact logged after it).
         val segs = sc.segments
+        val deSon = minOf(e.debutMs, segs?.firstOrNull()?.deMs ?: e.debutMs)
+        val aSon = maxOf(e.finMs, segs?.lastOrNull()?.aMs ?: e.finMs)
+        val pcm = if (son != null && debutSon != null) extraitSon(son, deSon - debutSon, aSon - debutSon, annonceMs) else null
         val vitesse = if (pcm != null || segs != null) 1 else 10
         val nb = (if (segs != null) JournalPassage.dureeLecture(segs) * fps / 1000
             else e.dureeMs * fps / 1000 / vitesse).toInt().coerceAtLeast(2)
-        val pcmLu = if (pcm != null && segs != null) sonAccelere(pcm.first, pcm.second, e.debutMs, segs) to pcm.second else pcm
+        val pcmLu = if (pcm != null && segs != null) sonAccelere(pcm.first, pcm.second, deSon, segs) to pcm.second else pcm
         // The opening title first (3 s): the sound waits for it, to stay with the replay.
         val nbTitre = if (sc.ouverture) 3 * fps else 0
         val son2 = pcmLu?.let { (p, r) -> if (nbTitre == 0) p to r else (ShortArray(nbTitre * r / fps) + p) to r }
         prepare(ctx, sc, w)
         // Shown flashS seconds of the video: that much more of the pass at ×10.
         sc.flashMs = sc.flashS * 1000L * vitesse
-        val sortie = File(File(ctx.cacheDir, "export").apply { mkdirs() }, nom(e, ".mp4"))
+        val sortie = File(File(ctx.cacheDir, "export").apply { mkdirs() }, sc.nomFichier?.plus(".mp4") ?: nom(e, ".mp4"))
         // Then, if asked, each picture 3 s and the summary 6 s.
         val fin = finVideo(w, h, sc, 3 * fps, 6 * fps)
         val total = nbTitre + nb + fin.sumOf { it.second }
@@ -650,6 +657,69 @@ object JournalRendu {
         for (x in 0 until w) if (a[o + x] != b[o + x]) return false
         return true
     }
+
+    /**
+     * The summary's map: every station worked (at its locator) or heard on
+     * APRS (where it said it was), and home, on OpenStreetMap, with a caption.
+     */
+    fun carteStations(ctx: Context, stations: List<fr.f4ioz.satcombo.JournalDesPassages.StationBilan>, qth: Pair<Double, Double>?,
+                      legende: String): File? = runCatching {
+        val w = 1080; val h = 1080; val bas = 150
+        val pts = stations.map { it.lat to it.lon } + listOfNotNull(qth)
+        val vue = JournalPassage.cadreCarte(pts, w.toDouble(), (h - bas).toDouble(), 0.85, 9.0)
+        val b = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+        val c = Canvas(b)
+        c.drawColor(Color.rgb(10, 15, 24))
+        fondCarte(w, h - bas, vue)?.let { c.drawBitmap(it, 0f, 0f, null) }
+        val monde = 256.0 * Math.pow(2.0, vue.zoom)
+        fun xy(la: Double, lo: Double) = ((JournalPassage.mercX(lo) - vue.cx) * monde + w / 2.0).toFloat() to
+            ((JournalPassage.mercY(la) - vue.cy) * monde + (h - bas) / 2.0).toFloat()
+        val dp = w / 360f
+        val blanc = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE }
+        val noir = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(20, 24, 32); textSize = 9.5f * dp; typeface = Typeface.DEFAULT_BOLD }
+        // APRS first, the contacts over them.
+        for (s in stations.sortedBy { it.qso }) {
+            val (x, y) = xy(s.lat, s.lon)
+            c.drawCircle(x, y, 5.5f * dp, blanc)
+            c.drawCircle(x, y, 4f * dp, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = if (s.qso) QSO else APRS })
+            if (s.qso || stations.size <= 40) c.drawText(s.indicatif, x + 7 * dp, y - 5 * dp, noir)
+        }
+        qth?.let { (la, lo) -> val (x, y) = xy(la, lo)
+            c.drawCircle(x, y, 7.5f * dp, blanc); c.drawCircle(x, y, 5f * dp, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(25, 30, 40) }) }
+        // The caption, and the map's credit.
+        c.drawRect(0f, (h - bas).toFloat(), w.toFloat(), h.toFloat(), Paint().apply { color = Color.rgb(10, 15, 24) })
+        val t1 = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE; textSize = 13f * dp; typeface = Typeface.DEFAULT_BOLD }
+        val t2 = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(160, 175, 195); textSize = 9f * dp }
+        c.drawText(legende, 12 * dp, h - bas + 22 * dp, t1)
+        c.drawText("SatMe · © OpenStreetMap", 12 * dp, h - 12 * dp, t2)
+        val f = File(File(ctx.cacheDir, "export").apply { mkdirs() }, "SatMe_Stations_" +
+            SimpleDateFormat("yyyyMMdd", Locale.US).format(Date()) + ".png")
+        f.outputStream().use { b.compress(Bitmap.CompressFormat.PNG, 100, it) }
+        f
+    }.getOrNull()
+
+    /** The name of an extract: satellite, what it is about, its UTC time. */
+    fun nomExtrait(e: JournalPassage.Entree, quoi: String, tMs: Long) = "SatMe_" + e.satName.replace(Regex("[^A-Za-z0-9-]"), "-") + "_" +
+        quoi.replace(Regex("[^A-Za-z0-9-]"), "-") + "_" +
+        SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).apply { timeZone = TimeZone.getTimeZone("UTC") }.format(Date(tMs)) + "Z"
+
+    /**
+     * A moment's sound, [deMs] to [aMs] of the pass, as a WAV (mono, about
+     * 22 kHz): what anyone can play. Silence where the recording has none.
+     */
+    fun extraitWav(ctx: Context, son: File, debutSon: Long, annonceMs: Long, deMs: Long, aMs: Long, nom: String): File? = runCatching {
+        val (pcm, rate) = extraitSon(son, deMs - debutSon, aMs - debutSon, annonceMs) ?: return null
+        val f = File(File(ctx.cacheDir, "export").apply { mkdirs() }, "$nom.wav")
+        java.io.DataOutputStream(f.outputStream().buffered()).use { o ->
+            fun i32(v: Int) { o.writeByte(v); o.writeByte(v shr 8); o.writeByte(v shr 16); o.writeByte(v shr 24) }
+            fun i16(v: Int) { o.writeByte(v); o.writeByte(v shr 8) }
+            o.writeBytes("RIFF"); i32(36 + pcm.size * 2); o.writeBytes("WAVE")
+            o.writeBytes("fmt "); i32(16); i16(1); i16(1); i32(rate); i32(rate * 2); i16(2); i16(16)
+            o.writeBytes("data"); i32(pcm.size * 2)
+            for (x in pcm) i16(x.toInt())
+        }
+        f
+    }.getOrNull()
 
     /**
      * The pass's sound (from the pass's start) laid out as the accelerated

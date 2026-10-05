@@ -378,4 +378,14 @@ class JournalPassageTest {
         // Nothing logged: all fast.
         assertEquals(listOf(JournalPassage.Segment(0L, 600_000L, 10)), J.segments(d, f, emptyList(), 10))
     }
+
+    @Test
+    fun un_signet_s_ecrit_se_relit_et_ralentit_comme_un_contact() {
+        val sg = JournalPassage.Signet(1_791_000_000_000L, 25544, "voix \tfaible\n")
+        val lu = JournalPassage.litSignet(JournalPassage.ecritSignet(sg))!!
+        assertEquals(sg.tMs, lu.tMs); assertEquals(25544, lu.catnum); assertEquals("voix  faible ", lu.note)
+        assertNull(JournalPassage.litSignet("n'importe quoi"))
+        val m = listOf(JournalPassage.Marque(JournalPassage.TypeMarque.SIGNET, 200_000L, 200_000L, "★"))
+        assertEquals(listOf(190_000L..230_000L), JournalPassage.plagesNormales(m, 0L, 600_000L, 10_000L, 30_000L))
+    }
 }

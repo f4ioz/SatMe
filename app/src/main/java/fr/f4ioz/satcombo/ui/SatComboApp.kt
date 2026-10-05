@@ -34,6 +34,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.FilterAlt
 import androidx.compose.material.icons.filled.Timeline
+import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.Radar
 import androidx.compose.material.icons.filled.Air
 import androidx.compose.material.icons.filled.WbCloudy
@@ -677,6 +678,22 @@ private fun MenuHeader(text: String) {
  * first time. Recording itself (mic -> MP3) and the LOS+5s auto-stop live in the
  * ViewModel, so it keeps going across screen changes within the app.
  */
+/** ⚑ Marks this moment of the pass in the journal; a word says when. */
+@Composable
+internal fun BoutonSignet(ui: UiState, vm: MainViewModel) {
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    IconButton(onClick = {
+        vm.signetIci()?.let { t0 ->
+            val h = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault()).apply {
+                if (ui.useUtc) timeZone = java.util.TimeZone.getTimeZone("UTC") }
+            android.widget.Toast.makeText(ctx, tf("signet_note", h.format(java.util.Date(t0))) + if (ui.useUtc) " UTC" else "",
+                android.widget.Toast.LENGTH_SHORT).show()
+        }
+    }) {
+        Icon(Icons.Default.Flag, t("signet_desc"), tint = Color(JournalRendu.SIGNET), modifier = Modifier.size(22.dp))
+    }
+}
+
 @Composable
 private fun RecButton(ui: UiState, vm: MainViewModel) {
     val recColor = Color(0xFFE5484D)

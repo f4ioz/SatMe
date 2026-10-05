@@ -82,4 +82,20 @@ class JournalPaquetTest {
             assertNull(JournalPaquet.deballe(ByteArrayInputStream("pas un zip".toByteArray()), dossiers(la)).entree)
         } finally { la.deleteRecursively() }
     }
+
+    @Test
+    fun les_signets_voyagent_avec_le_passage() {
+        val la = kotlin.io.path.createTempDirectory().toFile()
+        try {
+            val o = ByteArrayOutputStream()
+            val sg = listOf(JournalPassage.Signet(e.debutMs + 30_000L, e.catnum, "F4XYZ ?"))
+            JournalPaquet.emballe(o, e, emptyList(), sg)
+            val d = JournalPaquet.deballe(ByteArrayInputStream(o.toByteArray()), dossiers(la))
+            assertEquals(sg, d.signets)
+            // Those of another satellite are not taken.
+            val o2 = ByteArrayOutputStream()
+            JournalPaquet.emballe(o2, e, emptyList(), sg + JournalPassage.Signet(e.debutMs, 1, ""))
+            assertEquals(sg, JournalPaquet.deballe(ByteArrayInputStream(o2.toByteArray()), dossiers(la)).signets)
+        } finally { la.deleteRecursively() }
+    }
 }

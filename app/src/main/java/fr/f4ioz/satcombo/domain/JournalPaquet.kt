@@ -27,6 +27,8 @@ import java.util.zip.ZipOutputStream
  */
 object JournalPaquet {
     const val NOM_PASSAGE = "passage.passage"
+    /** The moments marked (⚑) during the pass, one per line. */
+    const val NOM_SIGNETS = "signets.tsv"
     const val MAX_OCTETS = 300L * 1024 * 1024
     const val TYPE = "application/zip"
     /** A pass file is a few hundred kB at most. */
@@ -52,11 +54,17 @@ object JournalPaquet {
     }
 
     /** Writes the pack: the pass, then each file under its folder (missing ones left out). */
-    fun emballe(sortie: OutputStream, e: JournalPassage.Entree, fichiers: List<Pair<String, File>>) {
+    fun emballe(sortie: OutputStream, e: JournalPassage.Entree, fichiers: List<Pair<String, File>>,
+                signets: List<JournalPassage.Signet> = emptyList()) {
         ZipOutputStream(sortie).use { z ->
             z.putNextEntry(ZipEntry(NOM_PASSAGE))
             z.write(JournalPassage.ecrit(e).toByteArray(Charsets.UTF_8))
             z.closeEntry()
+            if (signets.isNotEmpty()) {
+                z.putNextEntry(ZipEntry(NOM_SIGNETS))
+                z.write(signets.joinToString("") { JournalPassage.ecritSignet(it) + "\n" }.toByteArray(Charsets.UTF_8))
+                z.closeEntry()
+            }
             val vus = HashSet<String>()
             for ((dossier, f) in fichiers) {
                 if (!f.isFile || !nomPermis(dossier, f.name) || !vus.add("$dossier/${f.name}")) continue
@@ -72,12 +80,14 @@ object JournalPaquet {
         val entree: JournalPassage.Entree?,
         val poses: Int = 0,
         val dejaLa: Int = 0,
-        val refuses: Int = 0
+        val refuses: Int = 0,
+        val signets: List<JournalPassage.Signet> = emptyList()
     )
 
     /** Opens a pack: its files into [dossiers] (by folder name), its pass returned (not yet kept). */
     fun deballe(entree: InputStream, dossiers: Map<String, File>): Deballage {
         var passage: JournalPassage.Entree? = null
+        var signets: List<JournalPassage.Signet> = emptyList()
         var poses = 0; var deja = 0; var refuses = 0
         var total = 0L
         val tampon = ByteArray(64 * 1024)
@@ -88,7 +98,7 @@ object JournalPaquet {
                     val en = z.nextEntry ?: break
                     if (en.isDirectory) continue
                     val nom = en.name
-                    if (nom == NOM_PASSAGE) {
+                    if (nom == NOM_PASSAGE || nom == NOM_SIGNETS) {
                         val texte = java.io.ByteArrayOutputStream()
                         while (true) {
                             val n = z.read(tampon)
@@ -97,7 +107,9 @@ object JournalPaquet {
                             texte.write(tampon, 0, n)
                         }
                         total += texte.size()
-                        passage = JournalPassage.lit(texte.toByteArray().toString(Charsets.UTF_8))
+                        val lu = texte.toByteArray().toString(Charsets.UTF_8)
+                        if (nom == NOM_SIGNETS) signets = lu.lines().mapNotNull { JournalPassage.litSignet(it) }
+                        else passage = JournalPassage.lit(lu)
                         continue
                     }
                     val dossier = nom.substringBefore('/', "")
@@ -127,7 +139,9 @@ object JournalPaquet {
         }
         // A pack without a pass is not one: what it brought is taken back.
         if (passage == null) { faits.forEach { it.delete() }; return Deballage(null, 0, deja, refuses) }
-        return Deballage(passage, poses, deja, refuses)
+        // Only the signets of that pass's satellite.
+        val p = passage!!
+        return Deballage(p, poses, deja, refuses, signets.filter { it.catnum == p.catnum })
     }
 
     private class TropGros : RuntimeException()

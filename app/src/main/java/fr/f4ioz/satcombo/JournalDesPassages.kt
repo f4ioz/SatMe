@@ -114,7 +114,9 @@ class JournalDesPassages(
     data class Liens(
         val qsos: List<LogEntry> = emptyList(),
         val images: List<Pair<java.io.File, fr.f4ioz.satcombo.sstv.SstvMeta.SstvShot>> = emptyList(),
-        val trames: List<fr.f4ioz.satcombo.aprs.Paquet> = emptyList()
+        val trames: List<fr.f4ioz.satcombo.aprs.Paquet> = emptyList(),
+        /** The moments marked (⚑) during the pass. */
+        val signets: List<JournalPassage.Signet> = emptyList()
     )
 
     /** Read once for many passes: the gallery and the APRS days are files. */
@@ -125,14 +127,74 @@ class JournalDesPassages(
         val images = imagesALHeure()
         runCatching { fr.f4ioz.satcombo.aprs.AprsHub.charge(ctx) }
         val trames = fr.f4ioz.satcombo.aprs.AprsHub.etat.value.paquets
+        val signets = signets()
         return passages.associate { e ->
             val f = J.fenetre(e)
             e.id to Liens(
                 qsos = log.filter { it.timeMs in f && (it.catnum == e.catnum || J.memeSatellite(it.satName, e.satName)) }
                     .sortedBy { it.timeMs },
                 images = images.filter { it.second.timeMs in f }.sortedBy { it.second.timeMs },
-                trames = trames.filter { it.quand in f && !it.emis }.sortedBy { it.quand })
+                trames = trames.filter { it.quand in f && !it.emis }.sortedBy { it.quand },
+                signets = signets.filter { it.tMs in f && it.catnum == e.catnum }.sortedBy { it.tMs })
         }
+    }
+
+    // ---------------------------------------------------------- the summary
+
+    /** One satellite's line of the summary (or the total). */
+    data class LigneBilan(val sat: String, val passages: Int = 0, val qsos: Int = 0, val images: Int = 0,
+                          val aprs: Int = 0, val signets: Int = 0)
+    /** A station on the summary's map: a contact at its locator, or an APRS station where it said it was. */
+    data class StationBilan(val lat: Double, val lon: Double, val indicatif: String, val qso: Boolean)
+    data class Bilan(val lignes: List<LigneBilan>, val total: LigneBilan, val indicatifs: Int,
+                     val stationsAprs: Int, val stations: List<StationBilan>)
+
+    /** All the journal at a glance: by satellite, the stations worked and heard, where they are. */
+    fun bilan(passages: List<JournalPassage.Entree>, liens: Map<String, Liens>): Bilan {
+        val J = JournalPassage
+        fun ligne(sat: String, l: List<JournalPassage.Entree>) = LigneBilan(sat, l.size,
+            l.sumOf { liens[it.id]?.qsos?.size ?: 0 },
+            l.sumOf { e -> liens[e.id]?.images?.distinctBy { it.second.timeMs / 10_000 }?.size ?: 0 },
+            l.sumOf { e -> liens[e.id]?.trames?.map { J.indicatifDeBase(it.source) }?.distinct()?.size ?: 0 },
+            l.sumOf { liens[it.id]?.signets?.size ?: 0 })
+        val lignes = passages.groupBy { it.satName }.map { (s, l) -> ligne(s, l) }.sortedByDescending { it.passages }
+        val tous = passages.mapNotNull { liens[it.id] }
+        val qsos = tous.flatMap { it.qsos }
+        val trames = tous.flatMap { it.trames }.filter { !J.estLeSatellite(it.source) }
+        val stations = qsos.groupBy { J.indicatifDeBase(it.callsign) }.mapNotNull { (_, l) ->
+            val q = l.firstOrNull { it.theirLocator.length >= 4 } ?: return@mapNotNull null
+            fr.f4ioz.satcombo.location.Maidenhead.toLatLon(q.theirLocator)?.let { (la, lo) -> StationBilan(la, lo, q.callsign, true) }
+        } + trames.groupBy { J.indicatifDeBase(it.source) }.mapNotNull { (_, l) ->
+            val p = l.firstOrNull { it.lat != null && it.lon != null } ?: return@mapNotNull null
+            StationBilan(p.lat!!, p.lon!!, p.source, false)
+        }
+        return Bilan(lignes, ligne("", passages), qsos.map { J.indicatifDeBase(it.callsign) }.distinct().size,
+            trames.map { J.indicatifDeBase(it.source) }.distinct().size, stations)
+    }
+
+    // ------------------------------------------------------------- signets
+
+    private val fichierSignets get() = java.io.File(java.io.File(app.filesDir, "journal").apply { mkdirs() }, "signets.tsv")
+
+    /** A moment marked now (⚑) for [catnum]: kept at once, found by its time in the pass. */
+    fun signet(catnum: Int, tMs: Long = System.currentTimeMillis(), note: String = ""): JournalPassage.Signet {
+        val s = JournalPassage.Signet(tMs, catnum, note)
+        synchronized(this) { runCatching { fichierSignets.appendText(JournalPassage.ecritSignet(s) + "\n") } }
+        return s
+    }
+
+    fun signets(): List<JournalPassage.Signet> = synchronized(this) {
+        runCatching { fichierSignets.readLines().mapNotNull { JournalPassage.litSignet(it) } }.getOrDefault(emptyList())
+    }
+
+    fun supprimeSignet(s: JournalPassage.Signet) = synchronized(this) {
+        runCatching { fichierSignets.writeText(signets().filter { it != s }.joinToString("") { JournalPassage.ecritSignet(it) + "\n" }) }
+    }
+
+    /** Signets brought by a pass file: kept, without doubles. */
+    fun ajouteSignets(l: List<JournalPassage.Signet>) = synchronized(this) {
+        val deja = signets().toSet()
+        l.filter { it !in deja }.forEach { runCatching { fichierSignets.appendText(JournalPassage.ecritSignet(it) + "\n") } }
     }
 
     /** The pass as predicted, AOS to LOS, for the real one to be drawn against. */
@@ -181,7 +243,7 @@ class JournalDesPassages(
             val c = ui().carnet
             val out = HashMap<String, JournalPassage.Fiche>()
             var recherches = 0
-            for (m in marques.filter { it.type != JournalPassage.TypeMarque.SSTV }.distinctBy { it.texte }) {
+            for (m in marques.filter { it.type == JournalPassage.TypeMarque.QSO || it.type == JournalPassage.TypeMarque.APRS }.distinctBy { it.texte }) {
                 val base = J.indicatifDeBase(m.texte)
                 if (base.isBlank() || J.estLeSatellite(base)) continue
                 val q = log.filter { J.indicatifDeBase(it.callsign) == base }.maxByOrNull { it.timeMs }
@@ -289,7 +351,11 @@ class JournalDesPassages(
             JournalPassage.Marque(JournalPassage.TypeMarque.SSTV, s.timeMs - duree, s.timeMs, s.mode,
                 fichier = f.absolutePath)
         }
-        return (qso + aprs + sstv).sortedBy { it.debutMs }
+        // The moments marked (⚑): on the trajectory, the note as what was said.
+        val signets = l.signets.map { s ->
+            JournalPassage.Marque(JournalPassage.TypeMarque.SIGNET, s.tMs, s.tMs, "⚑", details = s.note)
+        }
+        return (qso + aprs + sstv + signets).sortedBy { it.debutMs }
     }
 
     /**
@@ -417,7 +483,8 @@ class JournalDesPassages(
         val sortie = java.io.File(java.io.File(app.cacheDir, "export").apply { mkdirs() }, JournalPaquet.nom(e))
         // Its recordings named in it: the other phone finds the sound as here.
         val avecSons = e.copy(enregistrements = (e.enregistrements + sons.map { it.name }).distinct())
-        sortie.outputStream().use { JournalPaquet.emballe(it, avecSons, fichiers) }
+        val sesSignets = liens(listOf(e))[e.id]?.signets ?: emptyList()
+        sortie.outputStream().use { JournalPaquet.emballe(it, avecSons, fichiers, sesSignets) }
         return sortie
     }
 
@@ -428,6 +495,7 @@ class JournalDesPassages(
             JournalPaquet.deballe(it, mapOf("recordings" to java.io.File(ext, "recordings"), "sstv" to java.io.File(ext, "sstv")))
         } ?: return JournalPaquet.Deballage(null)
         d.entree?.let { rangement.enregistre(it) }
+        if (d.signets.isNotEmpty()) ajouteSignets(d.signets)
         return d
     }
 

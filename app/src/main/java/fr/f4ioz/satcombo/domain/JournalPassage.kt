@@ -242,7 +242,17 @@ object JournalPassage {
 
     // ---------------------------------------------------- marks on the pass
 
-    enum class TypeMarque { QSO, APRS, SSTV }
+    /** SIGNET: a moment marked during the pass (⚑), something heard, nothing logged. */
+    enum class TypeMarque { QSO, APRS, SSTV, SIGNET }
+
+    /** A moment marked during a pass (⚑ on the satellite's page or while logging), kept apart, found by its time. */
+    data class Signet(val tMs: Long, val catnum: Int, val note: String = "")
+
+    fun ecritSignet(s: Signet): String = "${s.tMs}\t${s.catnum}\t" + s.note.replace('\t', ' ').replace('\n', ' ')
+    fun litSignet(l: String): Signet? = runCatching {
+        val c = l.split('\t', limit = 3)
+        Signet(c[0].trim().toLong(), c[1].trim().toInt(), c.getOrElse(2) { "" })
+    }.getOrNull()
 
     /**
      * Something that happened during the pass, to put on its trajectory: a
@@ -277,6 +287,8 @@ object JournalPassage {
                 TypeMarque.QSO -> avantMs to apresQsoMs
                 TypeMarque.SSTV -> AVANT_SSTV_MS to 0L
                 TypeMarque.APRS -> avantMs to APRES_APRS_MS
+                // Something heard: as a contact, the talk goes on.
+                TypeMarque.SIGNET -> avantMs to apresQsoMs
             }
             maxOf(debutMs, m.debutMs - avant) to minOf(finMs, m.finMs + apres)
         }

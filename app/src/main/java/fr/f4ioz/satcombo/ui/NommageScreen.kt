@@ -140,6 +140,8 @@ fun NommageScreen(ui: UiState, vm: MainViewModel) {
             // No queue counter or discard cross: the cross called
             // `supprimeEntree` with the current time, a key that never
             // existed, so it deleted nothing. The back arrow is enough.
+            // ⚑ Something heard, not (yet) logged: the moment kept for the journal.
+            BoutonSignet(ui, vm)
             IconButton(onClick = {
                 vm.openSettings("express")
             }) {

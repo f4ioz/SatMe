@@ -321,6 +321,8 @@ internal fun DetailScreen(ui: UiState, vm: MainViewModel, onBack: () -> Unit) {
                                 Icon(Icons.Default.EventAvailable, t("cal_ajouter"), tint = Cyan,
                                     modifier = Modifier.size(21.dp))
                             }
+                            // ⚑ During the pass: a moment marked for the journal (heard, not logged).
+                            if (ui.nowMs in (shownPass.aosEpochMs - 120_000L)..(shownPass.losEpochMs + 120_000L)) BoutonSignet(ui, vm)
                         }
                         // AMSAT rejects anonymous reports: no callsign, no button.
                         if (ui.callsign.isNotBlank()) {
