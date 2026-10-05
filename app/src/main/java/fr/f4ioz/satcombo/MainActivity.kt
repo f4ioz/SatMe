@@ -153,6 +153,10 @@ class MainActivity : ComponentActivity() {
         }
         // An appointment reminder opens the agenda, not a satellite.
         if (intent?.getBooleanExtra("open_agenda", false) == true) vm.openAgenda()
+        // A pass kept by itself: the journal opened on it.
+        val N = fr.f4ioz.satcombo.notify.JournalNotifier
+        val jc = intent?.getIntExtra(N.EXTRA_CATNUM, -1) ?: -1
+        if (jc > 0) vm.ouvreJournalSur(jc, intent!!.getLongExtra(N.EXTRA_DEBUT, 0L), intent.getLongExtra(N.EXTRA_FIN, 0L))
 
         // A USB device was plugged in. In singleTop this arrives via
         // onNewIntent, so the current screen is kept. Just record the device —

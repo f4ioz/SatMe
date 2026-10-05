@@ -27,8 +27,12 @@ import fr.f4ioz.satcombo.i18n.t
 object JournalNotifier {
     const val CHANNEL_ID = "journal_passages"
     private var suivant = 7400
+    const val EXTRA_CATNUM = "open_journal_catnum"
+    const val EXTRA_DEBUT = "open_journal_debut"
+    const val EXTRA_FIN = "open_journal_fin"
 
-    fun notifie(ctx: Context, titre: String, texte: String) {
+    /** Tapped, it opens the journal on that pass ([catnum], its start and end). */
+    fun notifie(ctx: Context, titre: String, texte: String, catnum: Int, debutMs: Long, finMs: Long) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
             ContextCompat.checkSelfPermission(ctx, Manifest.permission.POST_NOTIFICATIONS)
             != PackageManager.PERMISSION_GRANTED) return
@@ -37,10 +41,15 @@ object JournalNotifier {
             ch.description = t("journal_notif_canal_desc")
             ctx.getSystemService(NotificationManager::class.java).createNotificationChannel(ch)
         }
+        val id = suivant++
         val ouvre = ctx.packageManager.getLaunchIntentForPackage(ctx.packageName)?.apply {
             addFlags(android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP)
+            putExtra(EXTRA_CATNUM, catnum)
+            putExtra(EXTRA_DEBUT, debutMs)
+            putExtra(EXTRA_FIN, finMs)
         }
-        val pi = android.app.PendingIntent.getActivity(ctx, 7400, ouvre,
+        // One request code per pass: each notification keeps its own pass.
+        val pi = android.app.PendingIntent.getActivity(ctx, id, ouvre,
             android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE)
         val n = NotificationCompat.Builder(ctx, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_menu_agenda)
@@ -51,6 +60,6 @@ object JournalNotifier {
             .setContentIntent(pi)
             .setAutoCancel(true)
             .build()
-        NotificationManagerCompat.from(ctx).notify(suivant++, n)
+        NotificationManagerCompat.from(ctx).notify(id, n)
     }
 }

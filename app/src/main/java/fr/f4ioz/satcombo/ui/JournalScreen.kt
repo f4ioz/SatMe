@@ -74,6 +74,15 @@ fun JournalScreen(ui: UiState, vm: MainViewModel, onClose: () -> Unit) {
     var liens by remember { mutableStateOf<Map<String, JournalDesPassages.Liens>>(emptyMap()) }
     var choisi by remember { mutableStateOf<JournalPassage.Entree?>(null) }
     LaunchedEffect(passages) { liens = withContext(Dispatchers.IO) { vm.journal.liens(passages) } }
+    // Opened from a notification: straight on that pass (merged with another piece, its start may differ).
+    val aOuvrir by vm.journalAOuvrir.collectAsState()
+    LaunchedEffect(aOuvrir) {
+        val v = aOuvrir ?: return@LaunchedEffect
+        passages = vm.journal.passages()
+        (passages.firstOrNull { it.id == v.id } ?: passages.firstOrNull { JournalPassage.memePassage(it, v) })
+            ?.let { choisi = it }
+        vm.journalAOuvrir.value = null
+    }
     // A pass file from another phone (or kept elsewhere): opened, its pass shown.
     val scope = rememberCoroutineScope()
     var messagePaquet by remember { mutableStateOf("") }

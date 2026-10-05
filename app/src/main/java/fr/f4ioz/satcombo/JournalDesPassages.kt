@@ -95,7 +95,8 @@ class JournalDesPassages(
                     fr.f4ioz.satcombo.i18n.tf("journal_notif_titre", e.satName),
                     h.format(java.util.Date(e.debutMs)) + (if (ui().useUtc) " UTC" else "") +
                         " · " + fr.f4ioz.satcombo.i18n.tf("journal_elmax", e.elMax.toInt()) +
-                        (if (quoi.isEmpty()) "" else " · " + quoi.joinToString(" · ")))
+                        (if (quoi.isEmpty()) "" else " · " + quoi.joinToString(" · ")),
+                    e.catnum, e.debutMs, e.finMs)
             }
         }
     }

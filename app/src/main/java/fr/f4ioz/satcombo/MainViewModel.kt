@@ -10104,6 +10104,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     /** The journal page is open. */
     val journalOuvert = kotlinx.coroutines.flow.MutableStateFlow(false)
     fun ouvreJournal() { journalOuvert.value = true }
+    /** The pass to show when the journal opens (from its notification), then cleared. */
+    val journalAOuvrir = kotlinx.coroutines.flow.MutableStateFlow<fr.f4ioz.satcombo.domain.JournalPassage.Entree?>(null)
+    fun ouvreJournalSur(catnum: Int, debutMs: Long, finMs: Long) {
+        closeSettings()
+        journalAOuvrir.value = fr.f4ioz.satcombo.domain.JournalPassage.Entree(catnum, "", debutMs, finMs)
+        journalOuvert.value = true
+    }
     fun fermeJournalPage() { journalOuvert.value = false }
 
     private fun trackLive(sat: TleEntry, obs: Observer) {
