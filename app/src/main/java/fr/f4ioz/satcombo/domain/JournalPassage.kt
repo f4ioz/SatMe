@@ -83,6 +83,8 @@ object JournalPassage {
     /** A point every [PAS_MS], or sooner when the satellite moved more than [PAS_DEG]. */
     const val PAS_MS = 5_000L
     const val PAS_DEG = 3.0
+    /** The rig retuned by more than this (Hz, through the passband): a point at once. */
+    const val PAS_HZ = 1_000L
     /** Shorter than this, followed: not a pass worth keeping (a glance at the page). */
     const val DUREE_MIN_MS = 60_000L
     const val AUTO_SSTV = "SSTV"
@@ -149,7 +151,9 @@ object JournalPassage {
             var c = en ?: Entree(catnum, satName, tMs, tMs, e.locator, e.profil, e.transpondeur)
             val p = Point(tMs, az, el, e.dlHz, e.ulHz, e.rotorAz, e.rotorEl)
             val d = dernierPoint
-            val garde = d == null || tMs - d.tMs >= PAS_MS ||
+            // Retuned (a linear transponder, the knob through the passband): kept at once.
+            val accorde = d != null && e.dlHz != null && d.dlHz != null && abs(e.dlHz - d.dlHz) > PAS_HZ
+            val garde = d == null || tMs - d.tMs >= PAS_MS || accorde ||
                 abs(az - d.az).let { minOf(it, 360 - it) } >= PAS_DEG || abs(el - d.el) >= PAS_DEG
             if (garde) { c = c.copy(points = c.points + p); dernierPoint = p }
             if (e.enregistrement != null && e.enregistrement !in c.enregistrements)

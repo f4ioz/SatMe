@@ -3512,8 +3512,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         // The current transponder gives mode and both frequencies (MODE, BAND,
         // SAT_MODE), and now is when that information is still reliable.
         val tx = activeTransmitters().getOrNull(_ui.value.selectedTxIndex)
+        // Who it is, as already known: a past contact (one imported from the online log has
+        // name and town), else the correspondents' memory.
+        val base = fr.f4ioz.satcombo.domain.JournalPassage.indicatifDeBase(call)
+        val passes = _ui.value.log.filter { fr.f4ioz.satcombo.domain.JournalPassage.indicatifDeBase(it.callsign) == base }
+            .sortedByDescending { it.timeMs }
+        val nomConnu = passes.firstOrNull { it.nom.isNotBlank() }?.nom
+            ?: _ui.value.express.memoire.firstOrNull { it.indicatif == base && it.nom.isNotBlank() }?.nom.orEmpty()
+        val qthConnu = passes.firstOrNull { it.qth.isNotBlank() }?.qth.orEmpty()
         val e = fr.f4ioz.satcombo.data.LogEntry(
-            timeMs = maintenant,
+            timeMs = maintenant, nom = nomConnu, qth = qthConnu,
             satName = sat.name, catnum = sat.catalogNumber,
             azimuthDeg = pos?.azimuthDeg ?: 0.0,
             elevationDeg = pos?.elevationDeg ?: 0.0,
@@ -10199,16 +10207,33 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      * the frequencies are needed to rebuild a pass. Read only. The message
      * when nothing could be read.
      */
-    suspend fun contactsEnLigne(): Pair<List<fr.f4ioz.satcombo.data.AdifImport.ContactEnLigne>, String?> {
+    suspend fun contactsEnLigne(profils: List<fr.f4ioz.satcombo.domain.ProfilsStation.Profil>):
+        Pair<List<fr.f4ioz.satcombo.data.AdifImport.ContactEnLigne>, String?> {
         val c = _ui.value.carnet
         if (c.url.isBlank() || c.cle.isBlank()) return emptyList<fr.f4ioz.satcombo.data.AdifImport.ContactEnLigne>() to t("carnet_reglages")
-        val profils = c.profils.values.filterNotNull().distinct().ifEmpty { listOf(c.profil).filter { it.isNotBlank() } }
         if (profils.isEmpty()) return emptyList<fr.f4ioz.satcombo.data.AdifImport.ContactEnLigne>() to t("carnet_sans_profil")
-        val m = runCatching {
-            fr.f4ioz.satcombo.data.CarnetEnLigne.moissonne(c.url, c.cle, profils, 0L, fr.f4ioz.satcombo.domain.FiltreMoisson.SAT)
-        }.getOrElse { return emptyList<fr.f4ioz.satcombo.data.AdifImport.ContactEnLigne>() to (it.message ?: it.javaClass.simpleName) }
-        if (m.adif.isBlank()) return emptyList<fr.f4ioz.satcombo.data.AdifImport.ContactEnLigne>() to m.message.ifBlank { t("carnet_moisson_rien") }
-        return fr.f4ioz.satcombo.data.AdifImport.contactsEnLigne(m.adif) to null
+        // One station location at a time: a contact without its own square takes its location's.
+        val out = ArrayList<fr.f4ioz.satcombo.data.AdifImport.ContactEnLigne>()
+        var message: String? = null
+        for (p in profils) {
+            val r = runCatching {
+                fr.f4ioz.satcombo.data.CarnetEnLigne.moissonne(c.url, c.cle, listOf(p.id), 0L, fr.f4ioz.satcombo.domain.FiltreMoisson.SAT)
+            }
+            r.exceptionOrNull()?.let { message = it.message ?: it.javaClass.simpleName }
+            val m = r.getOrNull() ?: continue
+            if (m.adif.isBlank()) continue
+            out += fr.f4ioz.satcombo.data.AdifImport.contactsEnLigne(m.adif).map { q ->
+                if (q.monLocator.isBlank()) q.copy(monLocator = p.carre.trim().uppercase()) else q }
+        }
+        return out.sortedBy { it.quandMs } to (if (out.isEmpty()) message ?: t("carnet_moisson_rien") else null)
+    }
+
+    /** The station locations declared in the online log (Wavelog), each with its square. */
+    suspend fun profilsEnLigne(): Pair<List<fr.f4ioz.satcombo.domain.ProfilsStation.Profil>, String?> {
+        val c = _ui.value.carnet
+        if (c.url.isBlank() || c.cle.isBlank()) return emptyList<fr.f4ioz.satcombo.domain.ProfilsStation.Profil>() to t("carnet_reglages")
+        return runCatching { fr.f4ioz.satcombo.data.CarnetEnLigne.profils(c.url, c.cle) to null }
+            .getOrElse { emptyList<fr.f4ioz.satcombo.domain.ProfilsStation.Profil>() to (it.message ?: it.javaClass.simpleName) }
     }
 
     /** Those contacts as events to find their passes by (from the station's square of the time). */

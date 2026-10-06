@@ -421,4 +421,17 @@ class JournalPassageTest {
         assertNull(JournalPassage.signalA(lu, e.signal.last().tMs + 10_000))
         assertEquals(91, JournalPassage.fusionne(e, e.copy(signal = e.signal.take(5))).signal.size)
     }
+
+    @Test
+    fun un_coup_de_bouton_dans_la_bande_passante_fait_un_point() {
+        val c = JournalPassage.Collecte()
+        // Same place in the sky, one second apart: only the first is kept…
+        c.suit(1, "RS-44", t0, 100.0, 30.0, Etat(dlHz = 435_640_000L))
+        c.suit(1, "RS-44", t0 + 1_000L, 100.0, 30.0, Etat(dlHz = 435_640_300L))
+        assertEquals(1, c.enCours!!.points.size)
+        // …unless the rig was retuned through the passband.
+        c.suit(1, "RS-44", t0 + 2_000L, 100.0, 30.0, Etat(dlHz = 435_652_000L))
+        assertEquals(2, c.enCours!!.points.size)
+        assertEquals(435_652_000L, c.enCours!!.points.last().dlHz)
+    }
 }

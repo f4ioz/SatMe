@@ -201,7 +201,9 @@ object JournalRendu {
      */
     fun carte(
         c: Canvas, w: Float, h: Float, e: JournalPassage.Entree, sol: List<JournalPassage.Sol>, marques: List<Marque>,
-        instant: Long?, qth: Pair<Double, Double>?, vue: JournalPassage.VueCarte, dp: Float
+        instant: Long?, qth: Pair<Double, Double>?, vue: JournalPassage.VueCarte, dp: Float,
+        /** Written next to home ("F4IOZ · IN88"), null: the point alone. */
+        etiquetteQth: String? = null
     ): Float {
         val monde = 256.0 * Math.pow(2.0, vue.zoom)
         fun xy(lat: Double, lon: Double): Pair<Float, Float> =
@@ -252,6 +254,17 @@ object JournalRendu {
             if (ecrits.any { it.first == t && kotlin.math.hypot(it.second - x, it.third - y) < 40 * dp }) return false
             ecrits += Triple(t, x, y); return true
         }
+        // Home first (under the stations: its label never hides one), not to be taken for a contact.
+        qth?.let { (la, lo) -> val (x, y) = xy(la, lo)
+            c.drawCircle(x, y, 7.5f * dp, blanc); c.drawCircle(x, y, 5f * dp, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(25, 30, 40) })
+            etiquetteQth?.takeIf { it.isNotBlank() }?.let { tx ->
+                val p = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(20, 24, 32); textSize = 11f * dp; typeface = Typeface.DEFAULT_BOLD }
+                val fond = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.argb(215, 255, 255, 255) }
+                val l = p.measureText(tx)
+                // On the left of home: the stations write theirs on the right of their points.
+                c.drawRoundRect(x - 15 * dp - l, y - 9 * dp, x - 9 * dp, y + 7 * dp, 4 * dp, 4 * dp, fond)
+                c.drawText(tx, x - 12 * dp - l, y + 3 * dp, p)
+            } }
         for (m in marques.filter { it.type != TypeMarque.SSTV }) {
             if (instant != null && m.debutMs > instant) continue
             val s = JournalPassage.solA(sol, m.debutMs) ?: continue
@@ -267,9 +280,6 @@ object JournalRendu {
             c.drawCircle(sx, sy, 6f * dp, blanc); c.drawCircle(sx, sy, 4.5f * dp, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = coul })
             if (ecrire(m.texte, sx, sy)) c.drawText(m.texte, sx + 8 * dp, sy + (if (m.type == TypeMarque.SIGNET) 30 else -6) * dp, noir)
         }
-        // Home: not to be taken for a contact.
-        qth?.let { (la, lo) -> val (x, y) = xy(la, lo)
-            c.drawCircle(x, y, 7.5f * dp, blanc); c.drawCircle(x, y, 5f * dp, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(25, 30, 40) }) }
         var satX = 0.5f
         ici?.let { s -> val (x, y) = xy(s.lat, s.lon)
             satX = x / w
@@ -333,7 +343,11 @@ object JournalRendu {
         /** The file's name without extension (null: the pass's own). */
         val nomFichier: String? = null,
         /** An extract's own title on the opening page ("QSO EA4XYZ", "APRS RS0ISS"). */
-        val titreExtrait: String? = null
+        val titreExtrait: String? = null,
+        /** Shown: the S-meter, the RX frequency (rest, see [frequences]), the station's label on the map. */
+        val affSmetre: Boolean = true, val affFreq: Boolean = true, val etiquetteQth: String? = null,
+        /** The RX frequency at rest, moment by moment (where the rig was in the passband). */
+        val frequences: List<Pair<Long, Long>> = emptyList()
     ) {
         val cadre = cadreVu ?: JournalPassage.cadre(e.points.map { it.az to it.el })
         var vueCarte = JournalPassage.VueCarte()
@@ -354,7 +368,7 @@ object JournalRendu {
         c.save(); c.clipRect(0f, 0f, w.toFloat(), haut.toFloat())
         val satX = if (sc.surCarte) {
             sc.fond?.let { c.drawBitmap(it, 0f, 0f, null) } ?: c.drawColor(Color.rgb(221, 230, 241))
-            carte(c, w.toFloat(), haut.toFloat(), e, sc.sol, sc.marques, instant, sc.qth, sc.vueCarte, dp)
+            carte(c, w.toFloat(), haut.toFloat(), e, sc.sol, sc.marques, instant, sc.qth, sc.vueCarte, dp, sc.etiquetteQth)
         } else {
             ciel(c, w.toFloat(), haut.toFloat(), e, sc.prevue, sc.marques, instant, sc.cadre, true, dp)
             val p = JournalPassage.pointA(e, instant)
@@ -390,11 +404,13 @@ object JournalRendu {
         // Always UTC in what is shared: the time radio amateurs compare.
         c.drawText(fmt.format(Date(instant)) + " UTC", 14f * dp, haut + 50f * dp, gris)
         JournalPassage.pointA(e, instant)?.let { p ->
-            c.drawText("Az %.0f°  El %.0f°".format(p.az, p.el) + (p.dlHz?.let { "  ↓ %.4f MHz".format(it / 1e6) } ?: ""),
+            // RX where the rig was in the passband (rest frequency), when asked.
+            val rx = if (!sc.affFreq) null else sc.frequences.lastOrNull { it.first <= instant + 2_000L }?.second
+            c.drawText("Az %.0f°  El %.0f°".format(p.az, p.el) + (rx?.let { "  RX %.4f MHz".format(it / 1e6) } ?: ""),
                 14f * dp, haut + 68f * dp, gris)
         }
         // The rig's S-meter at the moments of reception (an SSTV picture, a contact, a frame).
-        JournalPassage.signalA(e, instant)?.takeIf { momentDeReception(sc.marques, instant, sc.flashMs) }?.let { v ->
+        JournalPassage.signalA(e, instant)?.takeIf { sc.affSmetre && momentDeReception(sc.marques, instant, sc.flashMs) }?.let { v ->
             // Clear of the logo at the bottom right.
             dessineSMetre(c, 14f * dp, haut + 72f * dp, w - 70f * dp, 22f * dp, v, JournalPassage.crete(e, instant), dp)
         }

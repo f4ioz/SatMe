@@ -311,6 +311,16 @@ class SettingsStore(context: Context) {
     var journalActivite: Boolean
         get() = prefs.getBoolean("journal_activite", true)
         set(v) { prefs.edit().putBoolean("journal_activite", v).apply() }
+    /** Shown during the replay and in the video: the S-meter, the RX frequency, the station's square on the map. */
+    var journalAffSmetre: Boolean
+        get() = prefs.getBoolean("journal_aff_smetre", true)
+        set(v) { prefs.edit().putBoolean("journal_aff_smetre", v).apply() }
+    var journalAffFreq: Boolean
+        get() = prefs.getBoolean("journal_aff_freq", true)
+        set(v) { prefs.edit().putBoolean("journal_aff_freq", v).apply() }
+    var journalAffLocator: Boolean
+        get() = prefs.getBoolean("journal_aff_locator", true)
+        set(v) { prefs.edit().putBoolean("journal_aff_locator", v).apply() }
     var journalAccelere: Boolean
         get() = prefs.getBoolean("journal_accelere", false)
         set(v) { prefs.edit().putBoolean("journal_accelere", v).apply() }

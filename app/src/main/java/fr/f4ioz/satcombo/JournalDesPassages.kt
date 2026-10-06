@@ -252,8 +252,13 @@ class JournalDesPassages(
             for (m in marques.filter { it.type == JournalPassage.TypeMarque.QSO || it.type == JournalPassage.TypeMarque.APRS }.distinctBy { it.texte }) {
                 val base = J.indicatifDeBase(m.texte)
                 if (base.isBlank() || J.estLeSatellite(base)) continue
-                val q = log.filter { J.indicatifDeBase(it.callsign) == base }.maxByOrNull { it.timeMs }
-                var f = JournalPassage.Fiche(m.texte, nom = q?.nom.orEmpty(), qth = q?.qth.orEmpty(),
+                // Name and town from any contact with that station (one imported from the online log
+                // has them, one typed during a pass not), then the correspondents' memory.
+                val avec = log.filter { J.indicatifDeBase(it.callsign) == base }.sortedByDescending { it.timeMs }
+                val q = avec.firstOrNull()
+                val nomConnu = avec.firstOrNull { it.nom.isNotBlank() }?.nom
+                    ?: ui().express.memoire.firstOrNull { J.indicatifDeBase(it.indicatif) == base && it.nom.isNotBlank() }?.nom.orEmpty()
+                var f = JournalPassage.Fiche(m.texte, nom = nomConnu, qth = avec.firstOrNull { it.qth.isNotBlank() }?.qth.orEmpty(),
                     locator = q?.theirLocator?.ifBlank { null }
                         ?: if (m.lat != null && m.lon != null) fr.f4ioz.satcombo.location.Maidenhead.fromLatLon(m.lat, m.lon) else "")
                 ficheQrzCache[base]?.let { r -> f = f.copy(nom = f.nom.ifBlank { r.nom }, qth = f.qth.ifBlank { r.qth },
@@ -295,6 +300,27 @@ class JournalDesPassages(
     /** Fast where nothing was logged, normal around it; how many times faster. */
     fun apresQsoS(): Int = settings.journalApresQsoS
     fun setApresQsoS(s: Int) { settings.journalApresQsoS = s }
+    fun affSmetre(): Boolean = settings.journalAffSmetre
+    fun setAffSmetre(on: Boolean) { settings.journalAffSmetre = on }
+    fun affFreq(): Boolean = settings.journalAffFreq
+    fun setAffFreq(on: Boolean) { settings.journalAffFreq = on }
+    fun affLocator(): Boolean = settings.journalAffLocator
+    fun setAffLocator(on: Boolean) { settings.journalAffLocator = on }
+
+    /**
+     * Where the rig was in the passband, second by second: the RX frequency
+     * read under CAT with that moment's Doppler taken off (rest frequency, as
+     * the log has it) — on a linear transponder, the spot actually listened to.
+     */
+    fun frequencesRepos(e: JournalPassage.Entree): List<Pair<Long, Long>> = runCatching {
+        val sat = ui().satellites.firstOrNull { it.catalogNumber == e.catnum } ?: return emptyList()
+        val obs = e.locator.takeIf { it.length >= 4 }?.let { fr.f4ioz.satcombo.location.Maidenhead.toLatLon(it) }
+            ?.let { (la, lo) -> Observer(la, lo) } ?: observateur()
+        e.points.mapNotNull { p -> p.dlHz?.let { dl ->
+            val rr = runCatching { predictor.positionAt(sat, obs, p.tMs).rangeRateKmS }.getOrDefault(0.0)
+            p.tMs to fr.f4ioz.satcombo.domain.Doppler.restFromDownlink(dl, rr) } }
+    }.getOrDefault(emptyList())
+
     fun accelere(): Boolean = settings.journalAccelere
     fun setAccelere(on: Boolean) { settings.journalAccelere = on }
     fun rapide(): Int = settings.journalRapide
