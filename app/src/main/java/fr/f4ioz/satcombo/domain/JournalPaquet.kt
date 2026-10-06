@@ -29,6 +29,11 @@ object JournalPaquet {
     const val NOM_PASSAGE = "passage.passage"
     /** The moments marked (⚑) during the pass, one per line. */
     const val NOM_SIGNETS = "signets.tsv"
+    /**
+     * Each file's last write ("folder/name<TAB>ms"): a recording's sound is placed
+     * by its end, and opening a pack would otherwise date every file "now".
+     */
+    const val NOM_DATES = "dates.tsv"
     const val MAX_OCTETS = 300L * 1024 * 1024
     const val TYPE = "application/zip"
     /** A pass file is a few hundred kB at most. */
@@ -66,10 +71,17 @@ object JournalPaquet {
                 z.closeEntry()
             }
             val vus = HashSet<String>()
+            val dates = StringBuilder()
             for ((dossier, f) in fichiers) {
                 if (!f.isFile || !nomPermis(dossier, f.name) || !vus.add("$dossier/${f.name}")) continue
                 z.putNextEntry(ZipEntry("$dossier/${f.name}"))
                 f.inputStream().use { it.copyTo(z) }
+                z.closeEntry()
+                dates.append(dossier).append('/').append(f.name).append('\t').append(f.lastModified()).append('\n')
+            }
+            if (dates.isNotEmpty()) {
+                z.putNextEntry(ZipEntry(NOM_DATES))
+                z.write(dates.toString().toByteArray(Charsets.UTF_8))
                 z.closeEntry()
             }
         }
@@ -81,24 +93,28 @@ object JournalPaquet {
         val poses: Int = 0,
         val dejaLa: Int = 0,
         val refuses: Int = 0,
-        val signets: List<JournalPassage.Signet> = emptyList()
+        val signets: List<JournalPassage.Signet> = emptyList(),
+        /** Files put in place without their time (a pack made before it was kept). */
+        val sansDate: List<File> = emptyList()
     )
 
     /** Opens a pack: its files into [dossiers] (by folder name), its pass returned (not yet kept). */
     fun deballe(entree: InputStream, dossiers: Map<String, File>): Deballage {
         var passage: JournalPassage.Entree? = null
         var signets: List<JournalPassage.Signet> = emptyList()
+        val dates = HashMap<String, Long>()
         var poses = 0; var deja = 0; var refuses = 0
         var total = 0L
         val tampon = ByteArray(64 * 1024)
         val faits = ArrayList<File>()
+        val posesNoms = HashMap<File, String>()
         try {
             ZipInputStream(entree).use { z ->
                 while (true) {
                     val en = z.nextEntry ?: break
                     if (en.isDirectory) continue
                     val nom = en.name
-                    if (nom == NOM_PASSAGE || nom == NOM_SIGNETS) {
+                    if (nom == NOM_PASSAGE || nom == NOM_SIGNETS || nom == NOM_DATES) {
                         val texte = java.io.ByteArrayOutputStream()
                         while (true) {
                             val n = z.read(tampon)
@@ -109,6 +125,8 @@ object JournalPaquet {
                         total += texte.size()
                         val lu = texte.toByteArray().toString(Charsets.UTF_8)
                         if (nom == NOM_SIGNETS) signets = lu.lines().mapNotNull { JournalPassage.litSignet(it) }
+                        else if (nom == NOM_DATES) lu.lines().forEach { l ->
+                            val c = l.split('\t'); if (c.size == 2) c[1].trim().toLongOrNull()?.let { dates[c[0]] = it } }
                         else passage = JournalPassage.lit(lu)
                         continue
                     }
@@ -129,7 +147,7 @@ object JournalPaquet {
                             o.write(tampon, 0, n)
                         }
                     }
-                    if (tmp.renameTo(f)) { poses++; faits += f } else tmp.delete()
+                    if (tmp.renameTo(f)) { poses++; faits += f; posesNoms[f] = "$dossier/$fichier" } else tmp.delete()
                 }
             }
         } catch (e: TropGros) {
@@ -139,9 +157,12 @@ object JournalPaquet {
         }
         // A pack without a pass is not one: what it brought is taken back.
         if (passage == null) { faits.forEach { it.delete() }; return Deballage(null, 0, deja, refuses) }
+        // Each file back to its own time (the dates may come after the files in the pack).
+        val sansDate = ArrayList<File>()
+        for ((f, cle) in posesNoms) dates[cle]?.let { f.setLastModified(it) } ?: sansDate.add(f)
         // Only the signets of that pass's satellite.
         val p = passage!!
-        return Deballage(p, poses, deja, refuses, signets.filter { it.catnum == p.catnum })
+        return Deballage(p, poses, deja, refuses, signets.filter { it.catnum == p.catnum }, sansDate)
     }
 
     private class TropGros : RuntimeException()

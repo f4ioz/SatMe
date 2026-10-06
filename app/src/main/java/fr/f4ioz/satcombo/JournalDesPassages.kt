@@ -316,9 +316,9 @@ class JournalDesPassages(
         val sat = ui().satellites.firstOrNull { it.catalogNumber == e.catnum } ?: return emptyList()
         val obs = e.locator.takeIf { it.length >= 4 }?.let { fr.f4ioz.satcombo.location.Maidenhead.toLatLon(it) }
             ?.let { (la, lo) -> Observer(la, lo) } ?: observateur()
-        e.points.mapNotNull { p -> p.dlHz?.let { dl ->
-            val rr = runCatching { predictor.positionAt(sat, obs, p.tMs).rangeRateKmS }.getOrDefault(0.0)
-            p.tMs to fr.f4ioz.satcombo.domain.Doppler.restFromDownlink(dl, rr) } }
+        val lus = e.points.filter { it.dlHz != null }
+        val rr = predictor.rangeRates(sat, obs, lus.map { it.tMs })
+        lus.mapIndexed { i, p -> p.tMs to fr.f4ioz.satcombo.domain.Doppler.restFromDownlink(p.dlHz!!, rr[i]) }
     }.getOrDefault(emptyList())
 
     fun accelere(): Boolean = settings.journalAccelere
@@ -577,6 +577,12 @@ class JournalDesPassages(
         val d = app.contentResolver.openInputStream(uri)?.use {
             JournalPaquet.deballe(it, mapOf("recordings" to java.io.File(ext, "recordings"), "sstv" to java.io.File(ext, "sstv")))
         } ?: return JournalPaquet.Deballage(null)
+        // An older pack (no times kept): each recording's end from its name (its start) and its length.
+        d.sansDate.filter { it.name.endsWith(".mp3") }.forEach { f ->
+            val debut = fr.f4ioz.satcombo.sstv.SstvMeta.debutEnregistrement(f.name)
+            val duree = dureeEnregistrement(f)
+            if (debut > 0L && duree > 0L) f.setLastModified(debut + duree)
+        }
         d.entree?.let { rangement.enregistre(it) }
         if (d.signets.isNotEmpty()) ajouteSignets(d.signets)
         return d

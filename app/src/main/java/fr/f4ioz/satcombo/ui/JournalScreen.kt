@@ -277,9 +277,12 @@ private fun FichePassage(
     // Where the rig was in the passband, at rest (Doppler taken off), moment by moment.
     // Without a frequency read under CAT (a pass rebuilt, imported, or followed without CAT):
     // each contact's own (the log keeps where the rig was), from its time on.
-    val frequences = remember(e.id, e.points.size, l) {
-        vm.journal.frequencesRepos(e).ifEmpty {
-            l.qsos.filter { it.downlinkMhz > 0 }.map { it.timeMs to Math.round(it.downlinkMhz * 1e6) }.sortedBy { it.first }
+    // Worked out aside (an orbit to compute at each point): nothing shown until then.
+    val frequences by produceState(emptyList<Pair<Long, Long>>(), e.id, e.points.size, l.qsos) {
+        value = withContext(Dispatchers.Default) {
+            vm.journal.frequencesRepos(e).ifEmpty {
+                l.qsos.filter { it.downlinkMhz > 0 }.map { it.timeMs to Math.round(it.downlinkMhz * 1e6) }.sortedBy { it.first }
+            }
         }
     }
     val etiquetteQth = if (affLocator) listOf(ui.callsign, e.locator).filter { it.isNotBlank() }.joinToString(" · ").ifBlank { null } else null
@@ -306,15 +309,31 @@ private fun FichePassage(
     // A contact being entered for the log: its time, a note, the bookmark it comes from.
     var contactA by remember(e.id) { mutableStateOf<Triple<Long, String, JournalPassage.Signet?>?>(null) }
 
+    // The slider being dragged (the time shown only), a seek under way (a long MP3 on a phone takes its time):
+    // meanwhile the loop waits — re-seeking every 200 ms left the sound dead and the time stuck.
+    var glisse by remember(e.id) { mutableStateOf(false) }
+    var enRecherche by remember(e.id) { mutableStateOf(false) }
+    var rechercheDepuis by remember(e.id) { mutableStateOf(0L) }
+    fun cherche(p: android.media.MediaPlayer, posMs: Long) {
+        enRecherche = true; rechercheDepuis = System.currentTimeMillis()
+        runCatching { p.seekTo(posMs.toInt()) }.onFailure { enRecherche = false }
+    }
+
     // While playing: the sound sets the time; without sound, ten times faster.
     LaunchedEffect(joue, courant) {
         while (joue) {
+            // A seek that never says it ended (a player error): not waited for more than 2 s.
+            if (enRecherche && System.currentTimeMillis() - rechercheDepuis > 2_000L) enRecherche = false
+            if (glisse || enRecherche) { delay(100); continue }
             val t = instant ?: e.debutMs
             // Another piece of recording at this moment: the player follows it (the loop starts again with it).
             val m = morceauA(t)
             if (m != null && m != courant) { runCatching { lecteur?.release() }; lecteur = null; courant = m; break }
             if (lecteur == null && son != null) lecteur = runCatching {
-                android.media.MediaPlayer().apply { setDataSource(son.absolutePath); prepare() } }.getOrNull()
+                android.media.MediaPlayer().apply {
+                    setDataSource(son.absolutePath); prepare()
+                    setOnSeekCompleteListener { enRecherche = false }
+                } }.getOrNull()
             val p = lecteur
             val seg = segs?.let { JournalPassage.segmentA(it, t) }
             instant = when {
@@ -327,7 +346,10 @@ private fun FichePassage(
                     debutSon + runCatching { p.currentPosition.toLong() }.getOrDefault(0L)
                 // Before the recording's sound: on at real speed, silent, then the sound from its first sample.
                 p != null && debutSon != null -> ((instant ?: e.debutMs) + 200L).also { t ->
-                    if (t >= debutSon + annonce) runCatching { p.seekTo((t - debutSon).toInt()); p.start() }
+                    // Once: the seek, then the sound from there (the loop waits for the seek to end).
+                    if (t >= debutSon + annonce && t < debutSon + (courant?.dureeMs ?: 0L)) {
+                        cherche(p, t - debutSon); runCatching { p.start() }
+                    }
                 }
                 // Without sound: ten times faster, or real time around what was logged.
                 else -> t + if (segs != null) 200L else 2_000L
@@ -362,9 +384,6 @@ private fun FichePassage(
         lance()
         scope.launch { defil.animateScrollTo(0) }
     }
-
-    val pt = instant?.let { JournalPassage.pointA(e, it) }
-    val trace = e.points.filter { instant == null || it.tMs <= instant!! }.map { it.az to it.el }
 
     Column(Modifier.fillMaxSize().verticalScroll(defil).padding(12.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -437,14 +456,17 @@ private fun FichePassage(
         var affFiches by remember { mutableStateOf(vm.journal.affFiches()) }
         var tailleFlash by remember { mutableStateOf(vm.journal.flashTaille()) }
         var apercuJusqua by remember { mutableStateOf(0L) }
+        // The view as shown, for the export.
+        var cadreVu by remember(e.id) { mutableStateOf<JournalPassage.Cadre?>(null) }
+        var vueVue by remember(e.id) { mutableStateOf<Pair<JournalPassage.VueCarte, Float>?>(null) }
+        // What moves with the replay (the view, its controls) is drawn apart: the rest of the
+        // fiche is not redrawn ten times a second (and a phone keeps up).
+        Bloc {
         val vitesseRejeu = if (accelere || (son != null && debutSon != null)) 1 else 10
         val arrivee = if (affSstv) JournalRendu.imageA(marques, instant, flashS * 1000L * vitesseRejeu) else null
         val apercu = if (System.currentTimeMillis() < apercuJusqua)
             marques.firstOrNull { it.type == JournalPassage.TypeMarque.SSTV && it.fichier != null }?.let { it to 1f } else null
         LaunchedEffect(apercuJusqua) { if (apercuJusqua > 0) { delay(2_100); apercuJusqua = 0L } }
-        // The view as shown, for the export.
-        var cadreVu by remember(e.id) { mutableStateOf<JournalPassage.Cadre?>(null) }
-        var vueVue by remember(e.id) { mutableStateOf<Pair<JournalPassage.VueCarte, Float>?>(null) }
         // The station worked or heard: its card, the same time as a picture.
         // A card for the last contact, another for the last APRS frame: both may show at once.
         val encarts = if (!affFiches) emptyList() else listOf(JournalPassage.TypeMarque.QSO, JournalPassage.TypeMarque.APRS)
@@ -455,10 +477,12 @@ private fun FichePassage(
         val creteIci = if (sIci != null) instant?.let { JournalPassage.crete(e, it) } else null
         if (!surCarte) CielJournal(e, prevue, marques, instant, apercu ?: arrivee, tailleFlash, encarts, rxIci, sIci, creteIci) { cadreVu = it }
         else CarteJournal(e, sol, marques, instant, e.locator, apercu ?: arrivee, tailleFlash, encarts, etiquetteQth, rxIci, sIci, creteIci) { v, w -> vueVue = v to w }
+        }
         Text(t(if (surCarte) "journal_legende_sol" else "journal_legende_carte"), color = TextLo, fontSize = 10.sp)
         LegendeMarques()
         // The replay itself stays in view; the rest by theme, behind icons.
         // Replay controls.
+        Bloc {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
             modifier = Modifier.padding(top = 6.dp)) {
             Button(onClick = { if (joue) arrete() else lance() }) {
@@ -471,15 +495,23 @@ private fun FichePassage(
                 contentPadding = PaddingValues(horizontal = 10.dp)) { Text("+ " + t("journal_contact_ici"), color = Cyan, fontSize = 12.sp) } }
         }
         Slider(value = ((instant ?: e.debutMs) - e.debutMs).toFloat() / e.dureeMs.coerceAtLeast(1),
+            // While dragging, the time shown only; the sound moves once, when the slider is let go.
             onValueChange = { f ->
-                val t = e.debutMs + (f * e.dureeMs).toLong()
-                instant = t
+                glisse = true
+                instant = e.debutMs + (f * e.dureeMs).toLong()
+            },
+            onValueChangeFinished = {
+                glisse = false
+                val t = instant ?: e.debutMs
                 val m = morceauA(t)
-                if (m != courant) { runCatching { lecteur?.release() }; lecteur = null; courant = m }
-                val p = lecteur
-                if (p != null && debutSon != null && m == courant) runCatching {
-                    if (t >= debutSon + annonce) { p.seekTo((t - debutSon).toInt()); if (joue && !p.isPlaying) p.start() }
-                    else if (p.isPlaying) p.pause()
+                if (m != courant) { runCatching { lecteur?.release() }; lecteur = null; enRecherche = false; courant = m }
+                else {
+                    val p = lecteur
+                    if (p != null && debutSon != null) runCatching {
+                        if (t >= debutSon + annonce && t < debutSon + (m?.dureeMs ?: 0L)) {
+                            cherche(p, t - debutSon); if (joue && !p.isPlaying) p.start()
+                        } else if (p.isPlaying) p.pause()
+                    }
                 }
             })
         // Under the slider: where the sound shows activity (light grey), and each mark, in its colour.
@@ -499,7 +531,7 @@ private fun FichePassage(
                     size = androidx.compose.ui.geometry.Size((x(m.finMs) - x(m.debutMs)).coerceAtLeast(3f), size.height))
             }
         }
-        pt?.let { p ->
+        instant?.let { JournalPassage.pointA(e, it) }?.let { p ->
             Text(buildList {
                 add("Az %.0f° · El %.0f°".format(p.az, p.el))
                 // RX where the rig was in the passband (rest frequency, as the log has it).
@@ -507,6 +539,7 @@ private fun FichePassage(
                 p.ulHz?.let { add("↑ %.4f MHz".format(it / 1e6)) }
                 if (p.rotorAz != null && p.rotorEl != null) add(tf("journal_mat_a", p.rotorAz.toInt(), p.rotorEl.toInt()))
             }.joinToString(" · "), color = TextHi, fontSize = 12.sp, fontFamily = FontFamily.Monospace)
+        }
         }
         if (son == null) Text(t(if (e.enregistrements.isEmpty()) "journal_sans_son" else "journal_son_absent"),
             color = TextLo, fontSize = 10.sp)
@@ -524,7 +557,7 @@ private fun FichePassage(
         }
         Spacer(Modifier.height(6.dp))
         when (onglet) {
-            "MOMENTS" -> {
+            "MOMENTS" -> Bloc {
             if (l.qsos.isNotEmpty()) {
                 Spacer(Modifier.height(8.dp))
                 Text(tf("journal_qsos", l.qsos.size), color = TextHi, fontWeight = FontWeight.Bold, fontSize = 13.sp)
@@ -641,7 +674,7 @@ private fun FichePassage(
         if (l.qsos.isEmpty() && l.images.isEmpty() && l.trames.isEmpty() && l.signets.isEmpty())
                 Text(t("journal_moments_vide"), color = TextLo, fontSize = 12.sp, modifier = Modifier.padding(vertical = 8.dp))
             }
-            "REJEU" -> {
+            "REJEU" -> Bloc {
             // Fast where nothing was logged, normal from a little before each contact, picture or frame.
             if (marques.isNotEmpty()) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -724,7 +757,7 @@ private fun FichePassage(
                 }
             }
             }
-            "BILAN" -> {
+            "BILAN" -> Bloc {
             // The recordings of the pass: several pieces may make one; attached or detached by hand.
             Text(tf("journal_enreg_titre", morceaux.size), color = TextHi, fontWeight = FontWeight.Bold, fontSize = 14.sp)
             morceaux.forEach { m ->
@@ -769,7 +802,7 @@ private fun FichePassage(
             }
             lignes.forEach { Text("• $it", color = TextLo, fontSize = 12.sp) }
             }
-            else -> {
+            else -> Bloc {
             // One path: what (the whole pass, or a moment of it), in which form, one button, one result.
             Text(t("journal_creer_titre"), color = TextHi, fontWeight = FontWeight.Bold, fontSize = 14.sp)
             Text(t("journal_quoi"), color = TextLo, fontSize = 11.sp, modifier = Modifier.padding(top = 4.dp))
@@ -1351,6 +1384,13 @@ private fun CarteJournal(
 
 /** Height of the signal band at the bottom of the view. */
 private val HAUT_BANDE = 38.dp
+
+/**
+ * A part of a long screen set apart: its own function (one the phone compiles, where a
+ * screen too long is only interpreted) and its own redraw (only what it reads).
+ */
+@Composable
+private fun androidx.compose.foundation.layout.ColumnScope.Bloc(contenu: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit) = contenu()
 
 /**
  * At the bottom of the sky or the map, during the replay: the RX frequency

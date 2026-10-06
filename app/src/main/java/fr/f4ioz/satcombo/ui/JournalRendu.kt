@@ -429,11 +429,19 @@ object JournalRendu {
      * peak-hold block, the reading at the right. [v] and [crete] on Icom's
      * scale (0 = S0, 120 = S9, 241 = S9+60).
      */
+    // Drawn ten times a second during the replay: the same brushes each time (one set per thread,
+    // a video may be made meanwhile).
+    private val pinceauxS = object : ThreadLocal<Array<Paint>>() {
+        override fun initialValue() = Array(4) { Paint(Paint.ANTI_ALIAS_FLAG) }
+    }
+
     fun dessineSMetre(c: Canvas, x: Float, y: Float, w: Float, h: Float, v: Int, crete: Int?, dp: Float) {
         fun part(n: Int) = (if (n <= 120) n / 120f * 0.6f else 0.6f + (n - 120) / 121f * 0.4f).coerceIn(0f, 1f)
         val l = w - 34 * dp
-        val echelle = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE; textSize = 8.5f * dp; textAlign = Paint.Align.CENTER }
-        val rouge = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(255, 80, 70); textSize = 8.5f * dp; textAlign = Paint.Align.CENTER }
+        val pinceaux = pinceauxS.get()!!
+        val echelle = pinceaux[0].apply { color = Color.WHITE; textSize = 8.5f * dp; textAlign = Paint.Align.CENTER }
+        val rouge = pinceaux[1].apply { color = Color.rgb(255, 80, 70); textSize = 8.5f * dp; textAlign = Paint.Align.CENTER }
+        val bloc = pinceaux[2]
         c.drawText("S", x + 3 * dp, y + 8 * dp, echelle)
         for (n in listOf(1, 3, 5, 7, 9)) c.drawText(n.toString(), x + l * (n / 9f * 0.6f), y + 8 * dp, echelle)
         for (db in listOf(20, 40, 60)) c.drawText("+$db", x + l * (0.6f + db / 60f * 0.4f) - (if (db == 60) 6 * dp else 0f), y + 8 * dp, rouge)
@@ -453,9 +461,9 @@ object JournalRendu {
                 sur -> Color.argb(70, 255, 70, 60)
                 else -> Color.argb(55, 235, 240, 245)
             }
-            c.drawRect(x + i * pas + 0.6f * dp, haut, x + (i + 1) * pas - 0.6f * dp, bas, Paint().apply { color = coul })
+            c.drawRect(x + i * pas + 0.6f * dp, haut, x + (i + 1) * pas - 0.6f * dp, bas, bloc.apply { color = coul })
         }
-        val lecture = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = if (v > 120) Color.rgb(255, 90, 80) else Color.WHITE
+        val lecture = pinceaux[3].apply { color = if (v > 120) Color.rgb(255, 90, 80) else Color.WHITE
             textSize = 11f * dp; isFakeBoldText = true; textAlign = Paint.Align.RIGHT }
         c.drawText(JournalPassage.libelleS(v), x + w, bas, lecture)
     }

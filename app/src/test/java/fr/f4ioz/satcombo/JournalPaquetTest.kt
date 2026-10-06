@@ -98,4 +98,44 @@ class JournalPaquetTest {
             assertEquals(sg, JournalPaquet.deballe(ByteArrayInputStream(o2.toByteArray()), dossiers(la)).signets)
         } finally { la.deleteRecursively() }
     }
+
+    @Test
+    fun les_fichiers_gardent_leur_heure_d_origine() {
+        val ici = kotlin.io.path.createTempDirectory().toFile()
+        val la = kotlin.io.path.createTempDirectory().toFile()
+        try {
+            val mp3 = File(ici, "SatMe_RS-44_20261006_193124Z.mp3").apply { writeBytes(ByteArray(1000)) }
+            mp3.setLastModified(1_791_315_485_000L)
+            val o = ByteArrayOutputStream()
+            JournalPaquet.emballe(o, e, listOf("recordings" to mp3))
+            JournalPaquet.deballe(ByteArrayInputStream(o.toByteArray()), dossiers(la))
+            assertEquals(1_791_315_485_000L, File(la, "recordings/${mp3.name}").lastModified())
+        } finally { ici.deleteRecursively(); la.deleteRecursively() }
+    }
+
+    /** Pass files shared by Olivier (~/SatMe-atelier/essais-passages), when present on this PC. */
+    @Test
+    fun les_fichiers_de_passage_reels_s_ouvrent_en_entier() {
+        val dossier = File(System.getProperty("user.home"), "SatMe-atelier/essais-passages")
+        val zips = dossier.listFiles { f -> f.name.endsWith(".zip") }?.sortedBy { it.name } ?: emptyList()
+        org.junit.Assume.assumeTrue("pas de fichier de passage réel", zips.isNotEmpty())
+        for (z in zips) {
+            val la = kotlin.io.path.createTempDirectory().toFile()
+            try {
+                val d = JournalPaquet.deballe(z.inputStream(), dossiers(la))
+                val e = d.entree
+                assertTrue("${z.name} : pas de passage", e != null)
+                // Every recording the pass names came with it.
+                e!!.enregistrements.forEach { assertTrue("${z.name} : $it absent", File(la, "recordings/$it").isFile) }
+                // A pack that kept its files' times gives them back (the older ones are dated on opening, in the app).
+                val dates = java.util.zip.ZipFile(z).use { zf -> zf.getEntry(JournalPaquet.NOM_DATES)?.let { zf.getInputStream(it).readBytes().toString(Charsets.UTF_8) } }
+                if (dates != null) dates.lines().filter { '\t' in it }.forEach { l ->
+                    val (nom, ms) = l.split('\t')
+                    assertEquals("${z.name} : $nom", ms.trim().toLong() / 1000, File(la, nom).lastModified() / 1000)
+                } else assertTrue(d.sansDate.isNotEmpty())
+                println("${z.name} : ${e.satName}, ${e.points.size} points, ${e.signal.size} S-mètre, ${d.poses} fichiers, dates " +
+                    (if (dates != null) "gardées" else "à refaire"))
+            } finally { la.deleteRecursively() }
+        }
+    }
 }

@@ -83,6 +83,13 @@ class PassPredictor {
         }
     }
 
+    /** The range rate (km/s) at each of [times], the orbit set up once for them all. */
+    fun rangeRates(e: TleEntry, o: Observer, times: List<Long>): List<Double> {
+        val sat = SatelliteFactory.createSatellite(tle(e))
+        val g = gs(o)
+        return times.map { t -> runCatching { sat.getPosition(g, Date(t)).rangeRate }.getOrDefault(0.0) }
+    }
+
     /** Instantaneous position/look-angles at [whenMs]. */
     fun positionAt(e: TleEntry, o: Observer, whenMs: Long): SatPosition {
         val sat = SatelliteFactory.createSatellite(tle(e))
