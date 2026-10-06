@@ -411,6 +411,16 @@ class CivController(private val context: Context? = null) : RigDriver {
     }
 
     /**
+     * The S-meter (CI-V 0x15 0x02): 0 = S0, 120 = S9, 241 = S9+60 dB; null if
+     * not answered. Read only; on the main band (the downlink in satellite mode).
+     */
+    suspend fun readSMeter(): Int? {
+        if (link == null) return null
+        val frames = exchange(0x15, byteArrayOf(0x02), expect = 0x15, expectSub = 0x02)
+        return CatDecode.niveauMetre(CatDecode.payload(frames, radioAddr, controllerAddr, 0x15, 0x02))
+    }
+
+    /**
      * Reads the current VFO mode (0x00 LSB, 0x01 USB, 0x05 FM…), or null.
      * Reply is `04 <mode> <filter>`. Must be read back: the mode can also be
      * changed by hand.

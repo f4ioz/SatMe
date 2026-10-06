@@ -96,6 +96,14 @@ object CatDecode {
         return null
     }
 
+    /** A meter level (CI-V 0x15 0x02 S-meter…): two big-endian BCD bytes, 0000 to 0255. */
+    fun niveauMetre(p: ByteArray?): Int? {
+        if (p == null || p.size < 2) return null
+        val d = IntArray(4) { i -> ((p[i / 2].toInt() and 0xFF) shr (if (i % 2 == 0) 4 else 0)) and 0x0F }
+        if (d.any { it > 9 }) return null
+        return (d[0] * 1000 + d[1] * 100 + d[2] * 10 + d[3]).takeIf { it in 0..255 }
+    }
+
     /** Did the rig acknowledge (0xFB)? */
     fun isAck(frames: List<ByteArray>, radioAddr: Int, ctrlAddr: Int): Boolean =
         frames.any { isFromRadio(it, radioAddr, ctrlAddr) && command(it) == ACK }

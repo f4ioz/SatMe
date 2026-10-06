@@ -60,6 +60,8 @@ object JournalPassage {
          * not one followed — no rig, no mast.
          */
         val reconstitue: Boolean = false,
+        /** The rig's S-meter, once a second (see [Signal]); empty without CAT. */
+        val signal: List<Signal> = emptyList(),
         /** SSTV pictures set aside for this pass (file names). */
         val masquees: Set<String> = emptySet(),
         /**
@@ -87,7 +89,23 @@ object JournalPassage {
     const val AUTO_CAT = "CAT"
     const val AUTO_FOND = "FOND"
 
-    /** Below the horizon this long: the pass is over. */
+    // ------------------------------------------------------------- the S-meter
+
+    /** The rig's S-meter at [tMs]: 0 = S0, 120 = S9, 241 = S9+60 dB (Icom's scale). */
+    data class Signal(val tMs: Long, val s: Int)
+
+    /** The S-meter at [tMs] (the last reading, up to 3 s before), null without one. */
+    fun signalA(e: Entree, tMs: Long): Int? = e.signal.lastOrNull { it.tMs <= tMs }?.takeIf { tMs - it.tMs <= 3_000L }?.s
+
+    /** The highest reading over the last [ms] (the peak hold of a real meter). */
+    fun crete(e: Entree, tMs: Long, ms: Long = 2_000L): Int? =
+        e.signal.filter { it.tMs in (tMs - ms)..tMs }.maxOfOrNull { it.s }
+
+    /** "S7", "S9", "S9+20": Icom's scale, S0..S9 in 0..120, then 60 dB in 120..241. */
+    fun libelleS(v: Int): String = if (v <= 120) "S" + Math.round(v * 9.0 / 120).toInt()
+        else "S9+" + (Math.round((v - 120) * 60.0 / 121 / 10).toInt() * 10).coerceIn(10, 60)
+
+        /** Below the horizon this long: the pass is over. */
     const val FIN_APRES_MS = 30_000L
 
     /** What the station is doing at that second, read from the ViewModel. */
@@ -98,6 +116,8 @@ object JournalPassage {
         val transpondeur: String = "",
         val locator: String = "",
         val profil: String = "",
+        /** The rig's S-meter now (0..255, see [Signal]), null if not read. */
+        val smetre: Int? = null,
         /** Recording in the background, by whom (see [Entree.auto]). */
         val auto: String = ""
     )
@@ -136,6 +156,9 @@ object JournalPassage {
                 c = c.copy(enregistrements = c.enregistrements + e.enregistrement)
             if (c.transpondeur.isBlank() && e.transpondeur.isNotBlank()) c = c.copy(transpondeur = e.transpondeur)
             if (c.auto.isBlank() && e.auto.isNotBlank()) c = c.copy(auto = e.auto)
+            // The S-meter once a second at most.
+            if (e.smetre != null && c.signal.lastOrNull()?.let { it.tMs / 1000 == tMs / 1000 } != true)
+                c = c.copy(signal = c.signal + Signal(tMs, e.smetre))
             en = c.copy(finMs = tMs)
             return fini
         }
@@ -542,6 +565,7 @@ object JournalPassage {
         if (e.reconstitue) append("reconstitue=1\n")
         e.masquees.forEach { append("masquee=").append(esc(it)).append('\n') }
         if (e.auto.isNotBlank()) append("auto=").append(esc(e.auto)).append('\n')
+        for (g in e.signal) append("s=").append(g.tMs).append('\t').append(g.s).append('\n')
         if (e.test.isNotEmpty()) {
             append("test=").append(e.testMs).append('\t')
                 .append(e.test.entries.joinToString(",") { it.key + ":" + it.value }).append('\n')
@@ -556,6 +580,7 @@ object JournalPassage {
     fun lit(texte: String): Entree? = runCatching {
         var e = Entree(0, "", 0L, 0L)
         val pts = ArrayList<Point>(); val enr = ArrayList<String>()
+        val sig = ArrayList<Signal>()
         for (l in texte.lineSequence()) {
             val k = l.substringBefore('=', ""); val v = l.substringAfter('=', "")
             when (k) {
@@ -570,6 +595,7 @@ object JournalPassage {
                 "reconstitue" -> e = e.copy(reconstitue = v == "1")
                 "masquee" -> e = e.copy(masquees = e.masquees + unesc(v))
                 "auto" -> e = e.copy(auto = unesc(v))
+                "s" -> runCatching { val c = v.split('\t'); sig += Signal(c[0].toLong(), c[1].toInt()) }
                 "test" -> {
                     val (t, r) = v.split('\t', limit = 2).let { it[0] to it.getOrElse(1) { "" } }
                     e = e.copy(testMs = t.toLong(), test = r.split(',').filter { ':' in it }
@@ -582,7 +608,7 @@ object JournalPassage {
                 }
             }
         }
-        if (e.catnum == 0 || e.debutMs == 0L) null else e.copy(points = pts, enregistrements = enr)
+        if (e.catnum == 0 || e.debutMs == 0L) null else e.copy(points = pts, enregistrements = enr, signal = sig)
     }.getOrNull()
 
     /** The passes kept, one file each ("<catnum>_<start>.passage"), the newest [GARDE] only. */
@@ -605,7 +631,8 @@ object JournalPassage {
             enregistrements = (a.enregistrements + b.enregistrements).distinct(),
             test = test.test, testMs = test.testMs, points = points,
             reconstitue = a.reconstitue && b.reconstitue, masquees = a.masquees + b.masquees,
-            auto = a.auto.ifBlank { b.auto })
+            auto = a.auto.ifBlank { b.auto },
+            signal = (a.signal + b.signal).sortedBy { it.tMs }.distinctBy { it.tMs / 1000 })
     }
 
     class Rangement(val dossier: File) {

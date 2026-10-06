@@ -115,11 +115,13 @@ fun JournalScreen(ui: UiState, vm: MainViewModel, onClose: () -> Unit) {
             if (c == null) ListeJournal(ui, passages, liens, onChoix = { choisi = it }, onClose = onClose,
                 onImport = { importe = true }, notifOn = { vm.journal.notif() }, setNotif = { vm.journal.setNotif(it) },
                 onOuvrePaquet = { runCatching { ouvrePaquet.launch(arrayOf(fr.f4ioz.satcombo.domain.JournalPaquet.TYPE, "application/octet-stream")) } },
-                messagePaquet = messagePaquet, vm = vm)
+                messagePaquet = messagePaquet, vm = vm,
+                onRelire = { msg -> if (msg != null) messagePaquet = msg; passages = vm.journal.passages() })
             else FichePassage(ui, vm, c, liens[c.id] ?: JournalDesPassages.Liens(),
                 onRetour = { choisi = null; passages = vm.journal.passages() },
                 onSupprime = { vm.journal.supprime(c); passages = vm.journal.passages(); choisi = null },
-                onSignets = { scope.launch { liens = withContext(Dispatchers.IO) { vm.journal.liens(passages) } } })
+                onSignets = { scope.launch { liens = withContext(Dispatchers.IO) { vm.journal.liens(passages) } } },
+                onChange = { ne -> vm.journal.maj(ne); passages = vm.journal.passages(); choisi = passages.firstOrNull { it.id == ne.id } ?: ne })
         }
     }
 }
@@ -141,7 +143,8 @@ private fun ListeJournal(
     ui: UiState, passages: List<JournalPassage.Entree>, liens: Map<String, JournalDesPassages.Liens>,
     onChoix: (JournalPassage.Entree) -> Unit, onClose: () -> Unit, onImport: () -> Unit,
     notifOn: () -> Boolean, setNotif: (Boolean) -> Unit,
-    onOuvrePaquet: () -> Unit, messagePaquet: String, vm: MainViewModel
+    onOuvrePaquet: () -> Unit, messagePaquet: String, vm: MainViewModel,
+    onRelire: (String?) -> Unit = {}
 ) {
     val jour = remember(ui.useUtc) { formatDate(ui.useUtc, "EEE dd/MM HH:mm") }
     // By theme: the passes, the summary, finding passes again.
@@ -172,6 +175,12 @@ private fun ListeJournal(
                     Text("⤓ " + t("journal_importer"), color = Cyan, fontSize = 12.sp)
                 }
                 Text(t("journal_importer_court"), color = TextLo, fontSize = 10.sp)
+                var enLigne by remember { mutableStateOf(false) }
+                OutlinedButton(onClick = { enLigne = true }, modifier = Modifier.fillMaxWidth()) {
+                    Text("⤓ " + t("journal_enligne"), color = Cyan, fontSize = 12.sp)
+                }
+                Text(t("journal_enligne_court"), color = TextLo, fontSize = 10.sp)
+                if (enLigne) ImportEnLigne(ui, vm) { msg -> enLigne = false; onRelire(msg) }
                 OutlinedButton(onClick = onOuvrePaquet, modifier = Modifier.fillMaxWidth()) {
                     Text("⤓ " + t("journal_paquet_ouvrir"), color = Cyan, fontSize = 12.sp)
                 }
@@ -226,20 +235,26 @@ private fun ListeJournal(
 @Composable
 private fun FichePassage(
     ui: UiState, vm: MainViewModel, e: JournalPassage.Entree, l: JournalDesPassages.Liens,
-    onRetour: () -> Unit, onSupprime: () -> Unit, onSignets: () -> Unit = {}
+    onRetour: () -> Unit, onSupprime: () -> Unit, onSignets: () -> Unit = {},
+    onChange: (JournalPassage.Entree) -> Unit = {}
 ) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
     val prevue = remember(e.id) { vm.journal.prevue(e) }
     val heure = remember(ui.useUtc) { formatDate(ui.useUtc, "HH:mm:ss") }
     val jour = remember(ui.useUtc) { formatDate(ui.useUtc, "EEEE dd/MM/yyyy HH:mm") }
-    // The recording of the pass, if still there, and where the pass starts in it.
-    // Its own recording, or one that covers the pass (a pass found again, an older one).
-    val son = remember(e.id) { e.enregistrements.firstNotNullOfOrNull { vm.journal.enregistrement(it) } ?: vm.journal.sonDuPassage(e) }
-    // When the file's start was (its header), and the header's length: the pass's
-    // sound begins at debutSon + annonce; before that, the replay goes on silent.
-    val annonce = remember(son) { son?.let { vm.journal.annonceDe(it) } ?: 0L }
-    val debutSon = remember(son) { son?.let { vm.journal.origineSon(it) }?.takeIf { it > 0L } }
+    // The recordings of the pass, in order (several pieces may make one pass): those it names,
+    // else one that covers it. The replay plays the piece of the moment (the current one).
+    val morceaux = remember(e.id, e.enregistrements) { vm.journal.morceaux(e) }
+    var courant by remember(e.id) { mutableStateOf(morceaux.firstOrNull()) }
+    LaunchedEffect(morceaux) { if (courant !in morceaux) courant = morceaux.firstOrNull() }
+    /** The piece playing at [t], or the next one to come; the last one after them all. */
+    fun morceauA(t: Long) = morceaux.firstOrNull { t < it.origine + it.dureeMs } ?: morceaux.lastOrNull()
+    // The current piece: its file, when its start was heard (its header), the header's length:
+    // its sound begins at debutSon + annonce; before that, the replay goes on silent.
+    val son = courant?.f
+    val annonce = courant?.annonce ?: 0L
+    val debutSon = courant?.origine
     // Replay: the moment shown (null = the whole pass).
     var instant by remember(e.id) { mutableStateOf<Long?>(null) }
     var joue by remember(e.id) { mutableStateOf(false) }
@@ -267,12 +282,23 @@ private fun FichePassage(
     var extraitEchec by remember(e.id) { mutableStateOf(false) }
     // A bookmark being written on (note) or made a contact.
     var signetEdite by remember(e.id) { mutableStateOf<JournalPassage.Signet?>(null) }
+    // A cut of the pass: its start, its end (taken on the replay), its title.
+    var decoupeDe by remember(e.id) { mutableStateOf<Long?>(null) }
+    var decoupeA by remember(e.id) { mutableStateOf<Long?>(null) }
+    var titreDecoupe by remember(e.id) { mutableStateOf("") }
+    // A contact being entered for the log: its time, a note, the bookmark it comes from.
+    var contactA by remember(e.id) { mutableStateOf<Triple<Long, String, JournalPassage.Signet?>?>(null) }
 
     // While playing: the sound sets the time; without sound, ten times faster.
-    LaunchedEffect(joue) {
+    LaunchedEffect(joue, courant) {
         while (joue) {
-            val p = lecteur
             val t = instant ?: e.debutMs
+            // Another piece of recording at this moment: the player follows it (the loop starts again with it).
+            val m = morceauA(t)
+            if (m != null && m != courant) { runCatching { lecteur?.release() }; lecteur = null; courant = m; break }
+            if (lecteur == null && son != null) lecteur = runCatching {
+                android.media.MediaPlayer().apply { setDataSource(son.absolutePath); prepare() } }.getOrNull()
+            val p = lecteur
             val seg = segs?.let { JournalPassage.segmentA(it, t) }
             instant = when {
                 // Accelerated, nothing logged here: on fast and silent, up to where the next one begins.
@@ -296,15 +322,10 @@ private fun FichePassage(
     fun lance() {
         val t0 = (instant ?: e.debutMs).let { if (it >= e.finMs) e.debutMs else it }
         instant = t0
-        if (son != null && debutSon != null) {
-            val p = lecteur ?: runCatching {
-                android.media.MediaPlayer().apply { setDataSource(son.absolutePath); prepare() }
-            }.getOrNull()
-            lecteur = p
-            // Never the spoken header: before the sound, the loop waits for it; nor while rushing.
-            val rapideIci = segs?.let { JournalPassage.segmentA(it, t0) }?.let { it.vitesse > 1 } ?: false
-            if (t0 >= debutSon + annonce && !rapideIci) p?.let { runCatching { it.seekTo((t0 - debutSon).toInt()); it.start() } }
-        }
+        // The piece of that moment; the loop opens it and starts its sound when it begins
+        // (never the spoken header, nor while rushing).
+        val m = morceauA(t0)
+        if (m != courant) { runCatching { lecteur?.release() }; lecteur = null; courant = m }
         joue = true
     }
     fun arrete() { joue = false; runCatching { lecteur?.pause() } }
@@ -340,7 +361,7 @@ private fun FichePassage(
         // The sky (zoomable) or the map, with what happened on the trajectory.
         var decalageQso by remember { mutableStateOf(vm.journal.decalageQsoS()) }
         val marques = remember(lv, decalageQso) { vm.journal.marques(lv, decalageQso) }
-        LaunchedEffect(son) { activite = son?.let { f -> withContext(Dispatchers.IO) { vm.journal.activite(f) } } ?: emptyList() }
+        LaunchedEffect(morceaux) { activite = withContext(Dispatchers.IO) { morceaux.flatMap { vm.journal.activite(it.f) } } }
         LaunchedEffect(marques, accelere, rapide, avantS, apresQsoS, activite, surActivite) {
             segs = if (!accelere) null else JournalPassage.segments(e.debutMs, e.finMs,
                 JournalPassage.plagesNormales(marques, e.debutMs, e.finMs, avantS * 1000L, apresQsoS * 1000L,
@@ -374,10 +395,50 @@ private fun FichePassage(
         // A card for the last contact, another for the last APRS frame: both may show at once.
         val encarts = if (!affFiches) emptyList() else listOf(JournalPassage.TypeMarque.QSO, JournalPassage.TypeMarque.APRS)
             .mapNotNull { ty -> JournalRendu.indicatifA(marques, instant, flashS * 1000L * vitesseRejeu, ty)?.let { it to fiches[it.texte] } }
+        /** Makes an extract of [de]..[a]: its sound (WAV), a video or a GIF, under [titre]. */
+        val fabrique: (String, Long, Long, String, String, Long) -> Unit = { fmt, de, a, quoi, titre, t0 ->
+            extraitPret = null; extraitEchec = false; extraitEnCours = true
+            scope.launch {
+                val nomX = JournalRendu.nomExtrait(e, quoi, t0)
+                extraitPret = withContext(Dispatchers.IO) {
+                    if (fmt == "son") JournalRendu.extraitWav(ctx, morceaux, de, a, nomX)
+                    else {
+                        val sc = JournalRendu.Scene(e, prevue, marques, sol, e.locator.takeIf { it.length >= 4 }?.let { fr.f4ioz.satcombo.location.Maidenhead.toLatLon(it) },
+                            surCarte, ui.callsign, ui.useUtc, flashS, tailleFlash, affSstv = affSstv, affFiches = affFiches,
+                            cadreVu = if (surCarte) null else cadreVu, vueVue = if (surCarte) vueVue else null, fiches = fiches,
+                            ouverture = true, resolution = "M", segments = listOf(JournalPassage.Segment(de, a, 1)), nomFichier = nomX,
+                            titreExtrait = titre.trim())
+                        if (fmt == "gif") JournalRendu.gif(ctx, sc) { } else JournalRendu.video(ctx, sc, morceaux) { }
+                    }
+                }
+                extraitEnCours = false
+                if (extraitPret == null) extraitEchec = true
+            }
+        }
         if (!surCarte) CielJournal(e, prevue, marques, instant, apercu ?: arrivee, tailleFlash, encarts) { cadreVu = it }
         else CarteJournal(e, sol, marques, instant, e.locator, apercu ?: arrivee, tailleFlash, encarts) { v, w -> vueVue = v to w }
         Text(t(if (surCarte) "journal_legende_sol" else "journal_legende_carte"), color = TextLo, fontSize = 10.sp)
         LegendeMarques()
+        // An extract being made, or made: shared or saved, whatever the tab.
+        if (extraitEnCours) LinearProgressIndicator(modifier = Modifier.fillMaxWidth().padding(top = 6.dp))
+        if (extraitEchec) Text(t("journal_extrait_echec"), color = Amber, fontSize = 11.sp, modifier = Modifier.padding(top = 6.dp))
+        extraitPret?.let { f ->
+            val type = when { f.name.endsWith(".wav") -> "audio/wav"; f.name.endsWith(".gif") -> "image/gif"; else -> "video/mp4" }
+            Text(f.name + " · " + "%.1f".format(f.length() / 1_048_576.0) + " " + t("place_unites").split(",")[1], color = TextHi, fontSize = 11.sp,
+                modifier = Modifier.padding(top = 6.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(modifier = Modifier.weight(1f), onClick = { runCatching {
+                    val u = androidx.core.content.FileProvider.getUriForFile(ctx, "${ctx.packageName}.fileprovider", f)
+                    ctx.startActivity(android.content.Intent.createChooser(
+                        android.content.Intent(android.content.Intent.ACTION_SEND).setType(type)
+                            .putExtra(android.content.Intent.EXTRA_STREAM, u)
+                            .addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION), f.name))
+                } }) { Text(t("rec_share"), fontSize = 12.sp) }
+                OutlinedButton(modifier = Modifier.weight(1f), onClick = { enregistre(f.name, type, depuisFichier(f)) }) {
+                    Text(t("export_save"), color = Cyan, fontSize = 12.sp)
+                }
+            }
+        }
         // The replay itself stays in view; the rest by theme, behind icons.
         // Replay controls.
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -387,13 +448,18 @@ private fun FichePassage(
                     accelere -> "journal_rejouer_accelere"; son != null -> "journal_rejouer"; else -> "journal_rejouer_x10" }))
             }
             Text(instant?.let { heure.format(Date(it)) } ?: "", color = TextHi, fontFamily = FontFamily.Monospace, fontSize = 14.sp)
+            // A contact heard here, into the log with all the pass knew at this second.
+            instant?.let { t0 -> OutlinedButton(onClick = { arrete(); contactA = Triple(t0, "", null); onglet = "MOMENTS" },
+                contentPadding = PaddingValues(horizontal = 10.dp)) { Text("+ " + t("journal_contact_ici"), color = Cyan, fontSize = 12.sp) } }
         }
         Slider(value = ((instant ?: e.debutMs) - e.debutMs).toFloat() / e.dureeMs.coerceAtLeast(1),
             onValueChange = { f ->
                 val t = e.debutMs + (f * e.dureeMs).toLong()
                 instant = t
+                val m = morceauA(t)
+                if (m != courant) { runCatching { lecteur?.release() }; lecteur = null; courant = m }
                 val p = lecteur
-                if (p != null && debutSon != null) runCatching {
+                if (p != null && debutSon != null && m == courant) runCatching {
                     if (t >= debutSon + annonce) { p.seekTo((t - debutSon).toInt()); if (joue && !p.isPlaying) p.start() }
                     else if (p.isPlaying) p.pause()
                 }
@@ -423,6 +489,14 @@ private fun FichePassage(
                 if (p.rotorAz != null && p.rotorEl != null) add(tf("journal_mat_a", p.rotorAz.toInt(), p.rotorEl.toInt()))
             }.joinToString(" · "), color = TextHi, fontSize = 12.sp, fontFamily = FontFamily.Monospace)
         }
+        // The rig's S-meter, as the IC-9700 shows it, at the moment replayed (passes followed under CAT).
+        instant?.let { t0 -> JournalPassage.signalA(e, t0)?.let { v ->
+            val dpx = androidx.compose.ui.platform.LocalDensity.current.density
+            androidx.compose.foundation.Canvas(Modifier.fillMaxWidth().height(30.dp).padding(top = 4.dp)) {
+                drawIntoCanvas { c -> JournalRendu.dessineSMetre(c.nativeCanvas, 0f, 0f, size.width, size.height, v,
+                    JournalPassage.crete(e, t0), dpx) }
+            }
+        } }
         if (son == null) Text(t(if (e.enregistrements.isEmpty()) "journal_sans_son" else "journal_son_absent"),
             color = TextLo, fontSize = 10.sp)
         androidx.compose.material3.TabRow(selectedTabIndex = ONGLETS_FICHE.indexOf(onglet).coerceAtLeast(0),
@@ -494,9 +568,14 @@ private fun FichePassage(
                 Text(tf("journal_trames", l.trames.size, l.trames.count { it.viaIss }), color = TextHi, fontWeight = FontWeight.Bold, fontSize = 13.sp)
                 l.trames.take(30).forEach { p ->
                     val vu = instant == null || p.quand <= instant!!
-                    Text("▸ " + heure.format(Date(p.quand)) + "  " + p.source + if (p.viaIss) "  (ISS)" else "",
-                        color = TextHi, fontSize = 11.sp, fontFamily = FontFamily.Monospace,
-                        modifier = Modifier.alpha(if (vu) 1f else 0.3f).fillMaxWidth().clickable { allerA(p.quand) }.padding(vertical = 3.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.alpha(if (vu) 1f else 0.3f)) {
+                        Text("▸ " + heure.format(Date(p.quand)) + "  " + p.source + if (p.viaIss) "  (ISS)" else "",
+                            color = TextHi, fontSize = 11.sp, fontFamily = FontFamily.Monospace,
+                            modifier = Modifier.weight(1f).clickable { allerA(p.quand) }.padding(vertical = 3.dp))
+                        IconButton(onClick = { extraitDe = ("APRS " + p.source) to p.quand }, modifier = Modifier.size(32.dp)) {
+                            Icon(Icons.Default.Share, t("journal_extrait"), tint = Cyan, modifier = Modifier.size(18.dp))
+                        }
+                    }
                 }
             }
 
@@ -524,85 +603,52 @@ private fun FichePassage(
             }
             signetEdite?.let { sg ->
             var note by remember(sg) { mutableStateOf(sg.note) }
-            var indicatif by remember(sg) { mutableStateOf("") }
-            var carre by remember(sg) { mutableStateOf("") }
             androidx.compose.material3.AlertDialog(onDismissRequest = { signetEdite = null },
                 title = { Text(tf("journal_signet_titre", heure.format(Date(sg.tMs)))) },
                 text = { Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     androidx.compose.material3.OutlinedTextField(note, { note = it.take(120) }, singleLine = true,
                         label = { Text(t("journal_signet_note")) }, modifier = Modifier.fillMaxWidth())
                     Text(t("journal_signet_carnet_desc"), color = TextLo, fontSize = 11.sp)
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        androidx.compose.material3.OutlinedTextField(indicatif, { indicatif = it.uppercase().filter { c -> c.isLetterOrDigit() || c == '/' }.take(14) },
-                            singleLine = true, label = { Text(t("journal_signet_indicatif")) }, modifier = Modifier.weight(1.3f))
-                        androidx.compose.material3.OutlinedTextField(carre, { carre = it.uppercase().filter { c -> c.isLetterOrDigit() }.take(6) },
-                            singleLine = true, label = { Text("Locator") }, modifier = Modifier.weight(1f))
-                    }
                 } },
                 confirmButton = { Row {
-                    TextButton(enabled = indicatif.isNotBlank(), onClick = {
-                        vm.signetAuCarnet(sg, indicatif, carre); signetEdite = null; onSignets()
+                    TextButton(onClick = {
+                        vm.journal.noteSignet(sg, note); signetEdite = null
+                        contactA = Triple(sg.tMs, note, sg)
                     }) { Text(t("journal_signet_au_carnet")) }
                     TextButton(onClick = { vm.journal.noteSignet(sg, note); signetEdite = null; onSignets() }) {
                         Text(t("journal_signet_garder_note")) }
                 } },
                 dismissButton = { TextButton(onClick = { signetEdite = null }) { Text(t("cancel")) } })
         }
+        // A contact for the log at a moment of the pass (a bookmark's, or the one replayed).
+        contactA?.let { (t0, note, sg) ->
+            ContactDuJournal(ui, vm, e, t0, note, onFini = { ajoute ->
+                if (ajoute && sg != null) vm.journal.supprimeSignet(sg)
+                contactA = null; onSignets()
+            })
+        }
         if (l.qsos.isEmpty() && l.images.isEmpty() && l.trames.isEmpty() && l.signets.isEmpty())
                 Text(t("journal_moments_vide"), color = TextLo, fontSize = 12.sp, modifier = Modifier.padding(vertical = 8.dp))
-            // The extract asked for: its sound (WAV) or a short video, then shared or saved.
+            // The extract asked for: its sound (WAV), a short video or a GIF, under a title of its own.
             extraitDe?.let { (quoi, t0) ->
                 // From the recording, not the trajectory: a contact may be logged after the pass followed ends.
                 val de = t0 - avantS * 1000L
                 val a = maxOf(t0 + apresQsoS * 1000L, de + 5_000L)
+                var titreX by remember(quoi, t0) { mutableStateOf(when {
+                    quoi == "signet" -> "⚑ " + heure.format(Date(t0)); quoi.startsWith("APRS ") -> quoi; else -> "QSO $quoi" }) }
                 androidx.compose.material3.AlertDialog(onDismissRequest = { extraitDe = null },
                     title = { Text(tf("journal_extrait_titre", if (quoi == "signet") "⚑" else quoi)) },
-                    text = { Text(tf("journal_extrait_desc", heure.format(Date(de)), heure.format(Date(a)), avantS, apresQsoS), fontSize = 12.sp) },
+                    text = { Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text(tf("journal_extrait_desc", heure.format(Date(de)), heure.format(Date(a)), avantS, apresQsoS), fontSize = 12.sp)
+                        OutlinedTextField(titreX, { titreX = it.take(40) }, singleLine = true,
+                            label = { Text(t("journal_extrait_titre_video")) }, modifier = Modifier.fillMaxWidth())
+                    } },
                     confirmButton = { Row {
-                        TextButton(onClick = {
-                            extraitDe = null; extraitPret = null; extraitEchec = false; extraitEnCours = true
-                            scope.launch {
-                                extraitPret = withContext(Dispatchers.IO) { son?.let { f -> debutSon?.let { d ->
-                                    JournalRendu.extraitWav(ctx, f, d, annonce, de, a, JournalRendu.nomExtrait(e, quoi, t0)) } } }
-                                extraitEnCours = false
-                                if (extraitPret == null) extraitEchec = true
-                            }
-                        }) { Text(t("journal_extrait_son")) }
-                        TextButton(onClick = {
-                            extraitDe = null; extraitPret = null; extraitEchec = false; extraitEnCours = true
-                            scope.launch {
-                                extraitPret = withContext(Dispatchers.IO) {
-                                    val sc = JournalRendu.Scene(e, prevue, marques, sol, e.locator.takeIf { it.length >= 4 }?.let { fr.f4ioz.satcombo.location.Maidenhead.toLatLon(it) }, surCarte, ui.callsign, ui.useUtc, flashS, tailleFlash,
-                                        affSstv = affSstv, affFiches = affFiches, cadreVu = if (surCarte) null else cadreVu,
-                                        vueVue = if (surCarte) vueVue else null, fiches = fiches, ouverture = true, resolution = "M",
-                                        segments = listOf(JournalPassage.Segment(de, a, 1)), nomFichier = JournalRendu.nomExtrait(e, quoi, t0))
-                                    JournalRendu.video(ctx, sc, son, debutSon, annonce) { }
-                                }
-                                extraitEnCours = false
-                                if (extraitPret == null) extraitEchec = true
-                            }
-                        }) { Text(t("journal_extrait_video")) }
+                        listOf("son" to "journal_extrait_son", "video" to "journal_extrait_video", "gif" to "sstv_gif").forEach { (fmt, cle) ->
+                            TextButton(onClick = { extraitDe = null; fabrique(fmt, de, a, quoi.replace(' ', '-'), titreX, t0) }) { Text(t(cle)) }
+                        }
                     } },
                     dismissButton = { TextButton(onClick = { extraitDe = null }) { Text(t("cancel")) } })
-            }
-            if (extraitEnCours) LinearProgressIndicator(modifier = Modifier.fillMaxWidth().padding(top = 6.dp))
-            if (extraitEchec) Text(t("journal_extrait_echec"), color = Amber, fontSize = 11.sp, modifier = Modifier.padding(top = 6.dp))
-            extraitPret?.let { f ->
-                val type = if (f.name.endsWith(".wav")) "audio/wav" else "video/mp4"
-                Text(f.name + " · " + "%.1f".format(f.length() / 1_048_576.0) + " " + t("place_unites").split(",")[1], color = TextHi, fontSize = 11.sp,
-                    modifier = Modifier.padding(top = 6.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(modifier = Modifier.weight(1f), onClick = { runCatching {
-                        val u = androidx.core.content.FileProvider.getUriForFile(ctx, "${ctx.packageName}.fileprovider", f)
-                        ctx.startActivity(android.content.Intent.createChooser(
-                            android.content.Intent(android.content.Intent.ACTION_SEND).setType(type)
-                                .putExtra(android.content.Intent.EXTRA_STREAM, u)
-                                .addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION), f.name))
-                    } }) { Text(t("rec_share"), fontSize = 12.sp) }
-                    OutlinedButton(modifier = Modifier.weight(1f), onClick = { enregistre(f.name, type, depuisFichier(f)) }) {
-                        Text(t("export_save"), color = Cyan, fontSize = 12.sp)
-                    }
-                }
             }
             }
             "REJEU" -> {
@@ -678,6 +724,31 @@ private fun FichePassage(
             }
             }
             "BILAN" -> {
+            // The recordings of the pass: several pieces may make one; attached or detached by hand.
+            Text(tf("journal_enreg_titre", morceaux.size), color = TextHi, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+            morceaux.forEach { m ->
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text((if (m == courant) "▶ " else "• ") + m.f.name.removePrefix("SatMe_").removeSuffix(".mp3") + "  " +
+                        heure.format(Date(m.origine + m.annonce)) + " · " + duree(m.dureeMs - m.annonce),
+                        color = TextHi, fontSize = 11.sp, fontFamily = FontFamily.Monospace, modifier = Modifier.weight(1f))
+                    if (m.f.name in e.enregistrements) IconButton(onClick = {
+                        onChange(e.copy(enregistrements = e.enregistrements - m.f.name))
+                    }, modifier = Modifier.size(32.dp)) { Icon(Icons.Default.Close, t("journal_enreg_detacher"), tint = TextLo, modifier = Modifier.size(16.dp)) }
+                }
+            }
+            var rattache by remember(e.id) { mutableStateOf(false) }
+            TextButton(onClick = { rattache = !rattache }) { Text("+ " + t("journal_enreg_rattacher"), color = Cyan, fontSize = 12.sp) }
+            if (rattache) {
+                val proches = remember(e.id, e.enregistrements) { vm.journal.enregistrementsProches(e) }
+                if (proches.isEmpty()) Text(t("journal_enreg_aucun"), color = TextLo, fontSize = 11.sp)
+                proches.forEach { f ->
+                    Text("⤓ " + f.name.removePrefix("SatMe_").removeSuffix(".mp3"), color = Cyan, fontSize = 11.sp, fontFamily = FontFamily.Monospace,
+                        modifier = Modifier.fillMaxWidth().clickable {
+                            onChange(e.copy(enregistrements = (e.enregistrements + f.name).distinct())); rattache = false
+                        }.padding(vertical = 4.dp))
+                }
+            }
+            Spacer(Modifier.height(10.dp))
             // What came of it.
             Spacer(Modifier.height(10.dp))
             if (e.reconstitue) Text(t("journal_reconstitue_desc"), color = Amber, fontSize = 11.sp, modifier = Modifier.padding(bottom = 4.dp))
@@ -698,6 +769,34 @@ private fun FichePassage(
             lignes.forEach { Text("• $it", color = TextLo, fontSize = 12.sp) }
             }
             else -> {
+            // A cut: start and end taken on the replay, a title (a callsign), then its sound, a video or a GIF.
+            Text(t("journal_decoupe"), color = TextHi, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+            Text(t("journal_decoupe_desc"), color = TextLo, fontSize = 11.sp)
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                OutlinedButton(onClick = { decoupeDe = instant ?: e.debutMs }) { Text("⇤ " + t("journal_decoupe_debut"), color = Cyan, fontSize = 12.sp) }
+                Text(decoupeDe?.let { heure.format(Date(it)) } ?: "—", color = TextHi, fontFamily = FontFamily.Monospace, fontSize = 12.sp)
+                OutlinedButton(onClick = { decoupeA = instant ?: e.finMs }) { Text(t("journal_decoupe_fin") + " ⇥", color = Cyan, fontSize = 12.sp) }
+                Text(decoupeA?.let { heure.format(Date(it)) } ?: "—", color = TextHi, fontFamily = FontFamily.Monospace, fontSize = 12.sp)
+            }
+            // Who it is about: the stations of the pass, one tap for the title.
+            val qui = remember(l) { (l.qsos.map { "QSO " + it.callsign } + l.trames.map { "APRS " + it.source }).distinct() }
+            if (qui.isNotEmpty()) Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                qui.forEach { q -> FilterChip(selected = titreDecoupe == q, onClick = { titreDecoupe = q }, label = { Text(q, fontSize = 11.sp) }) }
+            }
+            OutlinedTextField(titreDecoupe, { titreDecoupe = it.take(40) }, singleLine = true,
+                label = { Text(t("journal_extrait_titre_video")) }, modifier = Modifier.fillMaxWidth())
+            val dX = decoupeDe; val aX = decoupeA
+            val valide = dX != null && aX != null && aX - dX >= 3_000L
+            if (dX != null && aX != null && !valide) Text(t("journal_decoupe_invalide"), color = Amber, fontSize = 11.sp)
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                listOf("son" to "journal_extrait_son", "video" to "journal_extrait_video", "gif" to "sstv_gif").forEach { (fmt, cle) ->
+                    OutlinedButton(enabled = valide && !extraitEnCours && (fmt != "son" || son != null), onClick = {
+                        val quoi = titreDecoupe.substringAfter(' ').ifBlank { "decoupe" }
+                        fabrique(fmt, dX!!, aX!!, quoi, titreDecoupe, dX)
+                    }) { Text(t(cle), fontSize = 12.sp) }
+                }
+            }
+            Spacer(Modifier.height(12.dp))
             // Export: the view shown (sky or map, as framed), as a picture, a video or a GIF; then shared or saved.
             Spacer(Modifier.height(12.dp))
             Text(t("journal_exporter"), color = TextHi, fontWeight = FontWeight.Bold, fontSize = 14.sp)
@@ -768,7 +867,7 @@ private fun FichePassage(
                         when (format) {
                             "image" -> JournalRendu.png(ctx, sc, instant)
                             "gif" -> JournalRendu.gif(ctx, sc) { fabrication = it }
-                            else -> JournalRendu.video(ctx, sc, if (avecSon) son else null, debutSon, annonce) { fabrication = it }
+                            else -> JournalRendu.video(ctx, sc, if (avecSon) morceaux else emptyList()) { fabrication = it }
                         }
                     }
                     fabrication = null; pret = f
@@ -824,6 +923,173 @@ private fun FichePassage(
         }
         Spacer(Modifier.height(24.dp))
     }
+}
+
+/**
+ * Passes found again from the online log (Wavelog / Cloudlog): its satellite
+ * contacts read in full, kept by period, satellite and the station's square
+ * of the time, their passes rebuilt; the contacts not on this phone yet come
+ * into its log, marked as already online.
+ */
+@Composable
+private fun ImportEnLigne(ui: UiState, vm: MainViewModel, onFini: (String?) -> Unit) {
+    val scope = rememberCoroutineScope()
+    var lus by remember { mutableStateOf<List<fr.f4ioz.satcombo.data.AdifImport.ContactEnLigne>?>(null) }
+    var erreur by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(Unit) { val (l, m) = withContext(Dispatchers.IO) { vm.contactsEnLigne() }; lus = l; erreur = m }
+    var jours by remember { mutableStateOf(30) }
+    var sat by remember { mutableStateOf("") }
+    var loc by remember { mutableStateOf("") }
+    var candidats by remember { mutableStateOf<Pair<List<JournalPassage.Candidat>, Int>?>(null) }
+    var gardes by remember { mutableStateOf<Set<Int>>(emptySet()) }
+    var occupe by remember { mutableStateOf(false) }
+    val jour = remember(ui.useUtc) { formatDate(ui.useUtc, "EEE dd/MM/yy HH:mm") }
+    val maintenant = remember { System.currentTimeMillis() }
+    val retenus = remember(lus, jours, sat, loc) {
+        lus.orEmpty().filter { q -> (jours == 0 || q.quandMs >= maintenant - jours * 86_400_000L) &&
+            (sat.isBlank() || q.satellite == sat) && (loc.isBlank() || q.monLocator.startsWith(loc)) }
+    }
+    Dialog(onDismissRequest = { onFini(null) }) {
+        Surface(color = SpaceCard, shape = RoundedCornerShape(14.dp)) {
+            Column(Modifier.padding(14.dp).heightIn(max = 620.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(t("journal_enligne"), color = TextHi, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                Text(t("journal_enligne_desc"), color = TextLo, fontSize = 11.sp)
+                val l = lus
+                if (l == null) { LinearProgressIndicator(Modifier.fillMaxWidth()); return@Column }
+                erreur?.let { Text(it, color = Amber, fontSize = 12.sp) }
+                if (l.isEmpty()) { TextButton(onClick = { onFini(null) }) { Text(t("close")) }; return@Column }
+                val c = candidats
+                if (c == null) {
+                    Text(tf("journal_enligne_lus", l.size), color = TextHi, fontSize = 12.sp)
+                    Text(t("journal_enligne_periode"), color = TextLo, fontSize = 11.sp)
+                    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        listOf(7 to "7 j", 30 to "30 j", 90 to "90 j", 365 to "1 an", 0 to t("journal_f_toutes")).forEach { (n, lib) ->
+                            FilterChip(selected = jours == n, onClick = { jours = n }, label = { Text(lib, fontSize = 11.sp) }) }
+                    }
+                    Text(t("journal_enligne_sat"), color = TextLo, fontSize = 11.sp)
+                    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        FilterChip(selected = sat.isBlank(), onClick = { sat = "" }, label = { Text(t("journal_f_toutes"), fontSize = 11.sp) })
+                        l.groupingBy { it.satellite }.eachCount().entries.sortedByDescending { it.value }.forEach { (n, k) ->
+                            FilterChip(selected = sat == n, onClick = { sat = n }, label = { Text("$n ($k)", fontSize = 11.sp) }) }
+                    }
+                    Text(t("journal_enligne_loc"), color = TextLo, fontSize = 11.sp)
+                    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        FilterChip(selected = loc.isBlank(), onClick = { loc = "" }, label = { Text(t("journal_f_toutes"), fontSize = 11.sp) })
+                        l.map { it.monLocator.take(6) }.filter { it.length >= 4 }.groupingBy { it }.eachCount().entries.sortedByDescending { it.value }.forEach { (n, k) ->
+                            FilterChip(selected = loc == n, onClick = { loc = n }, label = { Text("$n ($k)", fontSize = 11.sp) }) }
+                    }
+                    Button(enabled = !occupe && retenus.isNotEmpty(), onClick = {
+                        occupe = true
+                        scope.launch {
+                            val r = withContext(Dispatchers.Default) { vm.journal.candidatsImport(vm.evenementsEnLigne(retenus)) }
+                            candidats = r; gardes = r.first.indices.toSet(); occupe = false
+                        }
+                    }) { Text(tf("journal_enligne_chercher", retenus.size)) }
+                    if (occupe) LinearProgressIndicator(Modifier.fillMaxWidth())
+                } else {
+                    val (liste, perdus) = c
+                    Text(tf("journal_trouves", liste.size) + if (perdus > 0) " " + tf("journal_non_places", perdus) else "", color = TextHi, fontSize = 12.sp)
+                    if (liste.isEmpty()) Text(t("journal_rien"), color = TextLo, fontSize = 12.sp)
+                    liste.forEachIndexed { i, x ->
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()
+                            .clickable { gardes = if (i in gardes) gardes - i else gardes + i }) {
+                            Checkbox(checked = i in gardes, onCheckedChange = null)
+                            Column {
+                                Text(x.satName + " · " + jour.format(Date(x.aosMs)) + (if (ui.useUtc) " UTC" else ""), color = TextHi, fontSize = 13.sp)
+                                Text(tf("journal_src_nb", x.nb) + (if (x.locator.isNotBlank()) " · " + x.locator else ""), color = TextLo, fontSize = 10.sp)
+                            }
+                        }
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        TextButton(onClick = { candidats = null }) { Text(t("back"), color = TextLo) }
+                        Button(enabled = !occupe && gardes.isNotEmpty(), onClick = {
+                            occupe = true
+                            scope.launch {
+                                val (p, q) = withContext(Dispatchers.IO) { vm.importeEnLigne(gardes.sorted().map { liste[it] }, retenus) }
+                                occupe = false; onFini(tf("journal_enligne_fait", p, q))
+                            }
+                        }) { Text(tf("journal_importer_n", gardes.size)) }
+                    }
+                    if (occupe) LinearProgressIndicator(Modifier.fillMaxWidth())
+                }
+            }
+        }
+    }
+}
+
+/**
+ * A contact for the log at [tMs] of pass [e]: drafted with what the pass knew
+ * (frequencies at rest, mode, az/el, locator), the callsign from the
+ * correspondents already worked or looked up (log, QRZ.com), then written.
+ */
+@Composable
+private fun ContactDuJournal(ui: UiState, vm: MainViewModel, e: JournalPassage.Entree, tMs: Long, note0: String,
+                             onFini: (Boolean) -> Unit) {
+    val scope = rememberCoroutineScope()
+    var brouillon by remember(tMs) { mutableStateOf<fr.f4ioz.satcombo.data.LogEntry?>(null) }
+    LaunchedEffect(tMs) { brouillon = vm.brouillonContact(e, tMs) }
+    var indicatif by remember(tMs) { mutableStateOf("") }
+    var carre by remember(tMs) { mutableStateOf("") }
+    var rstE by remember(tMs) { mutableStateOf("59") }
+    var rstR by remember(tMs) { mutableStateOf("59") }
+    var nom by remember(tMs) { mutableStateOf("") }
+    var qth by remember(tMs) { mutableStateOf("") }
+    var note by remember(tMs) { mutableStateOf(note0) }
+    var cherche by remember(tMs) { mutableStateOf(false) }
+    val heure = remember(ui.useUtc) { formatDate(ui.useUtc, "HH:mm:ss") }
+    androidx.compose.material3.AlertDialog(onDismissRequest = { onFini(false) },
+        title = { Text(tf("journal_contact_titre", heure.format(Date(tMs)) + if (ui.useUtc) " UTC" else "")) },
+        text = { Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            val b = brouillon
+            if (b == null) Text(t("journal_paquet_en_cours"), color = TextLo, fontSize = 11.sp)
+            else Text(listOf(b.satName, b.mode.ifBlank { null },
+                if (b.downlinkMhz > 0) "↓ %.4f".format(b.downlinkMhz) else null,
+                if (b.uplinkMhz > 0) "↑ %.4f MHz".format(b.uplinkMhz) else null,
+                "Az %.0f° El %.0f°".format(b.azimuthDeg, b.elevationDeg)).filterNotNull().joinToString(" · "),
+                color = TextLo, fontSize = 11.sp)
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                OutlinedTextField(indicatif, { indicatif = it.uppercase().filter { c -> c.isLetterOrDigit() || c == '/' }.take(14) },
+                    singleLine = true, label = { Text(t("journal_signet_indicatif")) }, modifier = Modifier.weight(1f))
+                // Who it is: the log first, then QRZ.com.
+                TextButton(enabled = indicatif.length >= 3 && !cherche, onClick = {
+                    cherche = true
+                    scope.launch {
+                        vm.journal.ficheIndicatif(indicatif)?.let { f ->
+                            if (carre.isBlank()) carre = f.locator
+                            if (nom.isBlank()) nom = f.nom
+                            if (qth.isBlank()) qth = listOf(f.qth, f.pays).filter { it.isNotBlank() }.joinToString(", ")
+                        }
+                        cherche = false
+                    }
+                }) { Text(if (cherche) "…" else t("journal_contact_chercher"), fontSize = 12.sp) }
+            }
+            // Already worked: one tap fills the callsign, its square and its name.
+            val connus = remember(indicatif) { vm.suggestionsIndicatif(indicatif) }
+            if (connus.isNotEmpty()) Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                connus.forEach { k -> FilterChip(selected = false, onClick = {
+                    indicatif = k.indicatif
+                    if (carre.isBlank()) carre = k.locators.maxByOrNull { it.contacts }?.locator.orEmpty()
+                    if (nom.isBlank()) nom = k.nom
+                }, label = { Text(k.indicatif + if (k.nom.isNotBlank()) " · " + k.nom else "", fontSize = 11.sp) }) }
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                OutlinedTextField(carre, { carre = it.uppercase().filter { c -> c.isLetterOrDigit() }.take(6) },
+                    singleLine = true, label = { Text("Locator") }, modifier = Modifier.weight(1.4f))
+                OutlinedTextField(rstE, { rstE = it.filter { c -> c.isDigit() }.take(3) }, singleLine = true,
+                    label = { Text("RS ↑") }, modifier = Modifier.weight(1f))
+                OutlinedTextField(rstR, { rstR = it.filter { c -> c.isDigit() }.take(3) }, singleLine = true,
+                    label = { Text("RS ↓") }, modifier = Modifier.weight(1f))
+            }
+            OutlinedTextField(nom, { nom = it.take(40) }, singleLine = true, label = { Text(t("journal_contact_nom")) }, modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(qth, { qth = it.take(60) }, singleLine = true, label = { Text("QTH") }, modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(note, { note = it.take(120) }, singleLine = true, label = { Text(t("journal_contact_note")) }, modifier = Modifier.fillMaxWidth())
+        } },
+        confirmButton = { TextButton(enabled = brouillon != null && indicatif.isNotBlank(), onClick = {
+            val b = brouillon ?: return@TextButton
+            onFini(vm.ajouteAuCarnet(b.copy(callsign = indicatif, theirLocator = carre, rstSent = rstE, rstRcvd = rstR,
+                nom = nom.trim(), qth = qth.trim(), note = note.trim())))
+        }) { Text(t("journal_signet_au_carnet")) } },
+        dismissButton = { TextButton(onClick = { onFini(false) }) { Text(t("cancel")) } })
 }
 
 private val ONGLETS_LISTE = listOf("PASSAGES", "BILAN", "RETROUVER")

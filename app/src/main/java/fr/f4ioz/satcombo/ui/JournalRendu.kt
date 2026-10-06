@@ -181,7 +181,7 @@ object JournalRendu {
             c.drawCircle(x, y, 6f * dp, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE })
             c.drawCircle(x, y, 4.5f * dp, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = coul })
             // A bookmark's flag below the point: a contact at the same moment keeps its callsign readable.
-            if (!dejaEcrit) c.drawText(m.texte, x + 8 * dp, y + (if (m.type == TypeMarque.SIGNET) 16 else -6) * dp, etiquette)
+            if (!dejaEcrit) c.drawText(m.texte, x + 8 * dp, y + (if (m.type == TypeMarque.SIGNET) 30 else -6) * dp, etiquette)
         }
         // Where the satellite is at the moment replayed; the highest point otherwise.
         val ici = instant?.let { JournalPassage.pointA(e, it) } ?: e.points.maxByOrNull { it.el }
@@ -265,7 +265,7 @@ object JournalRendu {
                 if (ecrire("@" + m.texte, lx, ly)) c.drawText(m.texte, lx + 7 * dp, ly + 14 * dp, grisTexte)
             }
             c.drawCircle(sx, sy, 6f * dp, blanc); c.drawCircle(sx, sy, 4.5f * dp, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = coul })
-            if (ecrire(m.texte, sx, sy)) c.drawText(m.texte, sx + 8 * dp, sy + (if (m.type == TypeMarque.SIGNET) 16 else -6) * dp, noir)
+            if (ecrire(m.texte, sx, sy)) c.drawText(m.texte, sx + 8 * dp, sy + (if (m.type == TypeMarque.SIGNET) 30 else -6) * dp, noir)
         }
         // Home: not to be taken for a contact.
         qth?.let { (la, lo) -> val (x, y) = xy(la, lo)
@@ -331,7 +331,9 @@ object JournalRendu {
         /** Accelerated: fast and silent where nothing was logged (null: the whole pass alike). */
         val segments: List<JournalPassage.Segment>? = null,
         /** The file's name without extension (null: the pass's own). */
-        val nomFichier: String? = null
+        val nomFichier: String? = null,
+        /** An extract's own title on the opening page ("QSO EA4XYZ", "APRS RS0ISS"). */
+        val titreExtrait: String? = null
     ) {
         val cadre = cadreVu ?: JournalPassage.cadre(e.points.map { it.az to it.el })
         var vueCarte = JournalPassage.VueCarte()
@@ -391,6 +393,11 @@ object JournalRendu {
             c.drawText("Az %.0f°  El %.0f°".format(p.az, p.el) + (p.dlHz?.let { "  ↓ %.4f MHz".format(it / 1e6) } ?: ""),
                 14f * dp, haut + 68f * dp, gris)
         }
+        // The rig's S-meter at the moments of reception (an SSTV picture, a contact, a frame).
+        JournalPassage.signalA(e, instant)?.takeIf { momentDeReception(sc.marques, instant, sc.flashMs) }?.let { v ->
+            // Clear of the logo at the bottom right.
+            dessineSMetre(c, 14f * dp, haut + 72f * dp, w - 70f * dp, 22f * dp, v, JournalPassage.crete(e, instant), dp)
+        }
         val bas = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = CYAN; textSize = 15f * dp; isFakeBoldText = true; textAlign = Paint.Align.RIGHT }
         c.drawText(listOf(sc.indicatif, e.locator).filter { it.isNotBlank() }.joinToString(" · "), 14f * dp, h - 10f * dp, gris)
         val logo = sc.logo
@@ -399,6 +406,47 @@ object JournalRendu {
         logo?.let { it.setBounds((w - 40 * dp).toInt(), (h - 34 * dp).toInt(), (w - 12 * dp).toInt(), (h - 6 * dp).toInt()); it.draw(c) }
         return b
     }
+
+    /**
+     * The S-meter as an IC-9700 shows it: a horizontal bar of blocks under its
+     * scale (S 1 3 5 7 9, then +20 +40 +60 dB), white to S9 and red beyond, a
+     * peak-hold block, the reading at the right. [v] and [crete] on Icom's
+     * scale (0 = S0, 120 = S9, 241 = S9+60).
+     */
+    fun dessineSMetre(c: Canvas, x: Float, y: Float, w: Float, h: Float, v: Int, crete: Int?, dp: Float) {
+        fun part(n: Int) = (if (n <= 120) n / 120f * 0.6f else 0.6f + (n - 120) / 121f * 0.4f).coerceIn(0f, 1f)
+        val l = w - 34 * dp
+        val echelle = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE; textSize = 8.5f * dp; textAlign = Paint.Align.CENTER }
+        val rouge = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(255, 80, 70); textSize = 8.5f * dp; textAlign = Paint.Align.CENTER }
+        c.drawText("S", x + 3 * dp, y + 8 * dp, echelle)
+        for (n in listOf(1, 3, 5, 7, 9)) c.drawText(n.toString(), x + l * (n / 9f * 0.6f), y + 8 * dp, echelle)
+        for (db in listOf(20, 40, 60)) c.drawText("+$db", x + l * (0.6f + db / 60f * 0.4f) - (if (db == 60) 6 * dp else 0f), y + 8 * dp, rouge)
+        // The blocks.
+        val n = 46
+        val haut = y + 11 * dp; val bas = y + h
+        val pas = l / n
+        val lu = part(v); val pic = crete?.let { part(it) }
+        for (i in 0 until n) {
+            val f = (i + 0.5f) / n
+            val sur = f > 0.6f
+            val allume = f <= lu
+            val coul = when {
+                pic != null && pic > lu && kotlin.math.abs(f - pic) < 0.5f / n -> Color.rgb(255, 220, 90)
+                allume && sur -> Color.rgb(255, 70, 60)
+                allume -> Color.rgb(235, 240, 245)
+                sur -> Color.argb(70, 255, 70, 60)
+                else -> Color.argb(55, 235, 240, 245)
+            }
+            c.drawRect(x + i * pas + 0.6f * dp, haut, x + (i + 1) * pas - 0.6f * dp, bas, Paint().apply { color = coul })
+        }
+        val lecture = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = if (v > 120) Color.rgb(255, 90, 80) else Color.WHITE
+            textSize = 11f * dp; isFakeBoldText = true; textAlign = Paint.Align.RIGHT }
+        c.drawText(JournalPassage.libelleS(v), x + w, bas, lecture)
+    }
+
+    /** A moment of reception: an SSTV picture arriving, a contact, a frame or a bookmark, for as long as its card shows. */
+    fun momentDeReception(marques: List<Marque>, instant: Long, garde: Long): Boolean =
+        marques.any { instant in (it.debutMs - 2_000L)..(it.finMs + garde) }
 
     /** Prepares a scene for frames [w] wide: logo, pictures, and for the map its view and tiles. */
     private fun prepare(ctx: Context, sc: Scene, w: Int) {
@@ -434,12 +482,21 @@ object JournalRendu {
         val utc = TimeZone.getTimeZone("UTC")
         val jour = SimpleDateFormat("yyyy-MM-dd", Locale.US).apply { timeZone = utc }
         val heure = SimpleDateFormat("HH:mm:ss", Locale.US).apply { timeZone = utc }
-        var y = h * 0.30f
+        // An extract: its own title and times; else the whole pass.
+        val de = sc.segments?.firstOrNull()?.deMs ?: e.debutMs
+        val a = sc.segments?.lastOrNull()?.aMs ?: e.finMs
+        var y = h * (if (sc.titreExtrait != null) 0.24f else 0.30f)
         c.drawText(e.satName, w / 2f, y, sat); y += 34 * dp
-        c.drawText(jour.format(Date(e.debutMs)), w / 2f, y, clair); y += 24 * dp
-        c.drawText(heure.format(Date(e.debutMs)) + " → " + heure.format(Date(e.finMs)) + " UTC", w / 2f, y, clair); y += 22 * dp
-        c.drawText("%.0f°".format(e.elMax) + " · " + "%d:%02d".format(e.dureeMs / 60_000, e.dureeMs / 1000 % 60), w / 2f, y,
-            Paint(clair).apply { color = Color.rgb(150, 165, 185); textSize = 14f * dp }); y += 46 * dp
+        sc.titreExtrait?.takeIf { it.isNotBlank() }?.let { tx ->
+            val p = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(255, 79, 163); textSize = 28f * dp; isFakeBoldText = true; textAlign = centre }
+            while (p.measureText(tx) > w - 24 * dp && p.textSize > 12 * dp) p.textSize -= 2 * dp
+            c.drawText(tx, w / 2f, y + 8 * dp, p); y += 44 * dp
+        }
+        c.drawText(jour.format(Date(de)), w / 2f, y, clair); y += 24 * dp
+        c.drawText(heure.format(Date(de)) + " → " + heure.format(Date(a)) + " UTC", w / 2f, y, clair); y += 22 * dp
+        if (sc.titreExtrait == null) c.drawText("%.0f°".format(e.elMax) + " · " + "%d:%02d".format(e.dureeMs / 60_000, e.dureeMs / 1000 % 60), w / 2f, y,
+            Paint(clair).apply { color = Color.rgb(150, 165, 185); textSize = 14f * dp })
+        y += 46 * dp
         // The receiving station.
         listOf(sc.indicatif, e.locator).filter { it.isNotBlank() }.joinToString(" · ").takeIf { it.isNotBlank() }?.let {
             c.drawText(t("journal_station_rx"), w / 2f, y, Paint(clair).apply { textSize = 12f * dp; color = Color.rgb(150, 165, 185) }); y += 26 * dp
@@ -553,7 +610,33 @@ object JournalRendu {
         f
     }.getOrNull()
 
-    fun video(ctx: Context, sc: Scene, son: File?, debutSon: Long?, annonceMs: Long, progres: (Float) -> Unit): File? = runCatching {
+    /** One recording of a pass: its file, when its start was heard, its spoken header, its length. */
+    data class Morceau(val f: File, val origine: Long, val annonce: Long, val dureeMs: Long)
+
+    /** One recording only (the older calls). */
+    fun video(ctx: Context, sc: Scene, son: File?, debutSon: Long?, annonceMs: Long, progres: (Float) -> Unit): File? =
+        video(ctx, sc, if (son != null && debutSon != null) listOf(Morceau(son, debutSon, annonceMs, Long.MAX_VALUE / 4)) else emptyList(), progres)
+
+    /** The sound of [de]..[a] from every piece covering it, in one track (silence between them). */
+    fun sonMorceaux(morceaux: List<Morceau>, de: Long, a: Long): Pair<ShortArray, Int>? {
+        var rate = 0
+        var out: ShortArray? = null
+        for (m in morceaux.sortedBy { it.origine }) {
+            if (m.origine + m.annonce >= a || m.origine + m.dureeMs <= de) continue
+            val (p, r) = extraitSon(m.f, de - m.origine, minOf(a, m.origine + m.dureeMs) - m.origine, m.annonce) ?: continue
+            if (out == null) { rate = r; out = ShortArray(((a - de) * r / 1000).toInt()) }
+            val o = out!!
+            // Same place in time, whatever each file's rate.
+            for (i in o.indices) {
+                val k = (i.toLong() * r / rate).toInt()
+                if (k >= p.size) break
+                if (p[k].toInt() != 0) o[i] = p[k]
+            }
+        }
+        return out?.let { it to rate }
+    }
+
+    fun video(ctx: Context, sc: Scene, morceaux: List<Morceau>, progres: (Float) -> Unit): File? = runCatching {
         val e = sc.e
         val nv12 = SstvVideo.nv12() ?: return null
         // Very light (480×640, 0.4 Mbit/s), light (720×960, 1 Mbit/s) or HD (1080×1440, 2.5 Mbit/s).
@@ -564,7 +647,7 @@ object JournalRendu {
         val segs = sc.segments
         val deSon = minOf(e.debutMs, segs?.firstOrNull()?.deMs ?: e.debutMs)
         val aSon = maxOf(e.finMs, segs?.lastOrNull()?.aMs ?: e.finMs)
-        val pcm = if (son != null && debutSon != null) extraitSon(son, deSon - debutSon, aSon - debutSon, annonceMs) else null
+        val pcm = if (morceaux.isNotEmpty()) sonMorceaux(morceaux, deSon, aSon) else null
         val vitesse = if (pcm != null || segs != null) 1 else 10
         val nb = (if (segs != null) JournalPassage.dureeLecture(segs) * fps / 1000
             else e.dureeMs * fps / 1000 / vitesse).toInt().coerceAtLeast(2)
@@ -610,23 +693,26 @@ object JournalRendu {
         val w = 480; val h = 640
         val n = 75
         prepare(ctx, sc, w)
-        // The pass in 15 s: flashS seconds of the GIF is that share of the pass.
-        sc.flashMs = sc.flashS * 1000L * e.dureeMs / 15_000L
+        // The pass (or the extract) in 15 s: flashS seconds of the GIF is that share of it.
+        val de = sc.segments?.firstOrNull()?.deMs ?: e.debutMs
+        val a = sc.segments?.lastOrNull()?.aMs ?: e.finMs
+        val duree = (a - de).coerceAtLeast(1)
+        sc.flashMs = sc.flashS * 1000L * duree / 15_000L
         fun px(tMs: Long) = IntArray(w * h).also { image(w, h, sc, tMs).getPixels(it, 0, w, 0, 0, w, h) }
-        val fin = px(e.finMs)
+        val fin = px(a)
         // The summary's pictures need their colours too.
         var pourPalette = if (sc.recap) fin + IntArray(w * h).also { resume(w, h, sc).getPixels(it, 0, w, 0, 0, w, h) } else fin
         val titrePx = if (sc.ouverture) IntArray(w * h).also { titre(w, h, sc).getPixels(it, 0, w, 0, 0, w, h) } else null
         if (titrePx != null) pourPalette = pourPalette + titrePx
         val pal = Gif.palette(pourPalette, listOf(0x0A0F18, 0x111B29, 0xFFFFFF, CYAN and 0xFFFFFF, QSO and 0xFFFFFF, APRS and 0xFFFFFF, ISS and 0xFFFFFF))
-        val sortie = File(File(ctx.cacheDir, "export").apply { mkdirs() }, nom(e, ".gif"))
+        val sortie = File(File(ctx.cacheDir, "export").apply { mkdirs() }, sc.nomFichier?.plus(".gif") ?: nom(e, ".gif"))
         sortie.outputStream().buffered().use { o ->
             val g = Gif.Ecrivain(o, w, h, pal)
             // The opening title, 2 s.
             titrePx?.let { g.trame(it, 0, h, 200) }
             var avant: IntArray? = null
             for (i in 0..n) {
-                val cur = if (i == n) fin else px(e.debutMs + e.dureeMs * i / n)
+                val cur = if (i == n) fin else px(de + duree * i / n)
                 // Only the rows that changed since the previous frame.
                 val prev = avant
                 var y0 = 0; var y1 = h
@@ -707,8 +793,9 @@ object JournalRendu {
      * A moment's sound, [deMs] to [aMs] of the pass, as a WAV (mono, about
      * 22 kHz): what anyone can play. Silence where the recording has none.
      */
-    fun extraitWav(ctx: Context, son: File, debutSon: Long, annonceMs: Long, deMs: Long, aMs: Long, nom: String): File? = runCatching {
-        val (pcm, rate) = extraitSon(son, deMs - debutSon, aMs - debutSon, annonceMs) ?: return null
+    fun extraitWav(ctx: Context, morceaux: List<Morceau>, deMs: Long, aMs: Long, nom: String): File? = runCatching {
+        val (pcm, rate) = sonMorceaux(morceaux, deMs, aMs) ?: return null
+        if (pcm.none { it.toInt() != 0 }) return null
         val f = File(File(ctx.cacheDir, "export").apply { mkdirs() }, "$nom.wav")
         java.io.DataOutputStream(f.outputStream().buffered()).use { o ->
             fun i32(v: Int) { o.writeByte(v); o.writeByte(v shr 8); o.writeByte(v shr 16); o.writeByte(v shr 24) }

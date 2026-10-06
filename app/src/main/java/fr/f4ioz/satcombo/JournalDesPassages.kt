@@ -274,6 +274,10 @@ class JournalDesPassages(
             }
             out
         }
+    /** Who [indicatif] is: the log first, then QRZ.com when its credentials are set (kept for the session). */
+    suspend fun ficheIndicatif(indicatif: String): JournalPassage.Fiche? =
+        fiches(listOf(JournalPassage.Marque(JournalPassage.TypeMarque.QSO, 0L, 0L, indicatif.trim().uppercase())))[indicatif.trim().uppercase()]
+
     private val ficheQrzCache = java.util.concurrent.ConcurrentHashMap<String, JournalPassage.Fiche>()
 
     /** How long an SSTV picture is shown when it has arrived, during the replay (s; 0 = never). */
@@ -409,6 +413,25 @@ class JournalDesPassages(
         if (origine <= 0L) return emptyList()
         dansFichier.filter { it.last > annonce }.map { (origine + maxOf(it.first, annonce))..(origine + it.last) }
     }.getOrDefault(emptyList())
+
+    /**
+     * The recordings of a pass, in order (each with when its start was heard,
+     * its spoken header, its length): those it names, else one found covering it.
+     */
+    fun morceaux(e: JournalPassage.Entree): List<fr.f4ioz.satcombo.ui.JournalRendu.Morceau> =
+        (e.enregistrements.mapNotNull { enregistrement(it) }.ifEmpty { listOfNotNull(sonDuPassage(e)) })
+            .distinctBy { it.name }
+            .map { fr.f4ioz.satcombo.ui.JournalRendu.Morceau(it, origineSon(it), annonceDe(it), dureeEnregistrement(it)) }
+            .filter { it.origine > 0L }.sortedBy { it.origine }
+
+    /** Recordings of the same day near a pass (3 h either side), not yet attached: to attach by hand. */
+    fun enregistrementsProches(e: JournalPassage.Entree): List<java.io.File> {
+        val dossier = java.io.File(app.getExternalFilesDir(null), "recordings")
+        return (dossier.listFiles { f -> f.name.endsWith(".mp3") } ?: emptyArray()).filter { f ->
+            val d = fr.f4ioz.satcombo.sstv.SstvMeta.debutEnregistrement(f.name)
+            d > 0L && d in (e.debutMs - 3 * 3_600_000L)..(e.finMs + 3 * 3_600_000L) && f.name !in e.enregistrements
+        }.sortedBy { it.name }
+    }
 
     /** Slow down too where the sound shows activity (on by default). */
     fun surActivite(): Boolean = settings.journalActivite

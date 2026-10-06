@@ -148,4 +148,36 @@ object AdifImport {
         }
         return Bilan(out, lus, sansIndicatif, sansDate)
     }
+
+    /** A satellite contact of the online log, all it says (to rebuild its pass and log it here). */
+    data class ContactEnLigne(
+        val indicatif: String, val quandMs: Long, val satellite: String,
+        val locator: String = "", val monLocator: String = "", val mode: String = "",
+        val freqMhz: Double = 0.0, val freqRxMhz: Double = 0.0,
+        val rstEnvoye: String = "", val rstRecu: String = "", val nom: String = "", val qth: String = ""
+    )
+
+    /** Every satellite contact (PROP_MODE=SAT, or a SAT_NAME) of an ADIF, in full. */
+    fun contactsEnLigne(texte: String): List<ContactEnLigne> {
+        val corps = texte.split(Regex("<EOH>", RegexOption.IGNORE_CASE), 2).let { if (it.size == 2) it[1] else texte }
+        val out = ArrayList<ContactEnLigne>()
+        corps.split(Regex("<EOR>", RegexOption.IGNORE_CASE)).forEach { bloc ->
+            if (!bloc.contains('<')) return@forEach
+            val f = champs(bloc)
+            val sat = f["SAT_NAME"].orEmpty().trim()
+            if (sat.isEmpty() && !f["PROP_MODE"].orEmpty().equals("SAT", true)) return@forEach
+            val call = f["CALL"].orEmpty().trim().uppercase()
+            val quand = instant(f["QSO_DATE"].orEmpty(), f["TIME_ON"].orEmpty()) ?: return@forEach
+            if (call.isEmpty() || sat.isEmpty()) return@forEach
+            out += ContactEnLigne(call, quand, sat,
+                locator = f["GRIDSQUARE"].orEmpty().trim().uppercase(),
+                monLocator = f["MY_GRIDSQUARE"].orEmpty().trim().uppercase(),
+                mode = f["SUBMODE"].orEmpty().ifBlank { f["MODE"].orEmpty() }.trim().uppercase(),
+                freqMhz = f["FREQ"]?.trim()?.toDoubleOrNull() ?: 0.0,
+                freqRxMhz = f["FREQ_RX"]?.trim()?.toDoubleOrNull() ?: 0.0,
+                rstEnvoye = f["RST_SENT"].orEmpty().trim(), rstRecu = f["RST_RCVD"].orEmpty().trim(),
+                nom = f["NAME"].orEmpty().trim(), qth = f["QTH"].orEmpty().trim())
+        }
+        return out.sortedBy { it.quandMs }
+    }
 }

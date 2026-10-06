@@ -399,4 +399,26 @@ class JournalPassageTest {
         assertEquals(listOf(99_000L..145_000L),
             JournalPassage.plagesNormales(m, 0L, 600_000L, 10_000L, 30_000L, listOf(100_000L..110_000L)))
     }
+
+    @Test
+    fun le_s_metre_de_l_icom_se_lit_se_garde_et_se_dit() {
+        // CI-V 0x15 0x02: two big-endian BCD bytes.
+        assertEquals(241, fr.f4ioz.satcombo.cat.CatDecode.niveauMetre(byteArrayOf(0x02, 0x41)))
+        assertEquals(120, fr.f4ioz.satcombo.cat.CatDecode.niveauMetre(byteArrayOf(0x01, 0x20)))
+        assertNull(fr.f4ioz.satcombo.cat.CatDecode.niveauMetre(byteArrayOf(0x0A, 0x00)))
+        assertNull(fr.f4ioz.satcombo.cat.CatDecode.niveauMetre(byteArrayOf(0x01)))
+        assertEquals("S0", JournalPassage.libelleS(0)); assertEquals("S5", JournalPassage.libelleS(67))
+        assertEquals("S9", JournalPassage.libelleS(120)); assertEquals("S9+20", JournalPassage.libelleS(160))
+        assertEquals("S9+60", JournalPassage.libelleS(241))
+        // Gathered once a second at most, kept, read back, merged.
+        val c = JournalPassage.Collecte()
+        for (k in 0..180) c.suit(1, "SO-50", t0 + k * 500L, 100.0 + k * 0.2, 30.0, Etat(smetre = 60 + k % 50))
+        val e = c.ferme()!!
+        assertEquals(91, e.signal.size)
+        val lu = JournalPassage.lit(JournalPassage.ecrit(e))!!
+        assertEquals(e.signal, lu.signal)
+        assertEquals(e.signal[10].s, JournalPassage.signalA(lu, e.signal[10].tMs + 400))
+        assertNull(JournalPassage.signalA(lu, e.signal.last().tMs + 10_000))
+        assertEquals(91, JournalPassage.fusionne(e, e.copy(signal = e.signal.take(5))).signal.size)
+    }
 }

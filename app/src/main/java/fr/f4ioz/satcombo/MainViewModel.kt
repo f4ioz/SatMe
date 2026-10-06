@@ -816,6 +816,9 @@ data class UiState(
 
     val catStatus: String = "",           // human-readable status/last error
     val catRadioDownlinkHz: Long? = null, // frequency actually read from the rig
+    /** The rig's S-meter (Icom 0..255, see JournalPassage.libelleS) and when it was read. */
+    val catSMetre: Int? = null,
+    val catSMetreMs: Long = 0L,
     val catRadioUplinkHz: Long? = null,
     /** True when the software holds the rig's RX VFO. */
     val catRxDriven: Boolean = false,
@@ -8203,6 +8206,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 runCatching { catTick() }
                 kotlinx.coroutines.delay(100)
                 runCatching { gardeCat() }
+                runCatching { lisSMetre() }
             }
         }
     }
@@ -8213,6 +8217,21 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      * CAT state says so. Not the pair rigs nor the simulated one; never while
      * a frame is going out.
      */
+    /**
+     * The S-meter, once a second, for the journal: an Icom alone (not a
+     * pair, not the simulated rig), a satellite up, never while transmitting
+     * (the meter shows power then). Read only.
+     */
+    private suspend fun lisSMetre() {
+        val u = _ui.value
+        if (isPairRig || isThd72 || u.catSimulated || !u.catConnected || aprsEnEmission || u.catUi.enEmission) return
+        if ((u.livePosition?.elevationDeg ?: -1.0) < 0) return
+        val maintenant = System.currentTimeMillis()
+        if (maintenant - u.catSMetreMs < 1_000L) return
+        val s = cat.readSMeter()
+        _ui.value = _ui.value.copy(catSMetre = s, catSMetreMs = maintenant)
+    }
+
     @Volatile private var derniereRelanceCat = 0L
     private fun gardeCat() {
         if (isPairRig || isThd72 || _ui.value.catSimulated || aprsEnEmission || !_ui.value.catConnected) return
@@ -8240,7 +8259,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         toursDepuisLeMode = 0
         _ui.value = _ui.value.copy(catConnected = false, catStatus = t("cat_disconnected"),
             catRadioDownlinkHz = null, catRadioUplinkHz = null, catRxDriven = false,
-            catRadioMode = null, catModeMismatch = false)
+            catRadioMode = null, catModeMismatch = false, catSMetre = null, catSMetreMs = 0L)
     }
 
     /** True if the chosen transmitter is FM (fixed channels) vs linear transponder. */
@@ -10131,23 +10150,121 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             enregistrement = if (u.recording) u.recordFileName else null,
             transpondeur = runCatching { activeTransmitters().getOrNull(u.selectedTxIndex)?.description }.getOrNull().orEmpty(),
             locator = runCatching { myLocator() }.getOrDefault(""),
-            profil = runCatching { profilActif().nom }.getOrDefault(""))
+            profil = runCatching { profilActif().nom }.getOrDefault(""),
+            // Fresh only: a reading older than 3 s says nothing of now.
+            smetre = u.catSMetre?.takeIf { u.catConnected && System.currentTimeMillis() - u.catSMetreMs <= 3_000L })
     }
 
     /** The journal page is open. */
     val journalOuvert = kotlinx.coroutines.flow.MutableStateFlow(false)
     fun ouvreJournal() { journalOuvert.value = true }
     /**
-     * A bookmark made a contact of the log, at its time (az recomputed for it),
-     * then removed: the same moment twice would be one too many.
+     * A contact of the log drafted from the journal at [tMs] of pass [e], with
+     * what the pass knew then: the satellite's az/el, the pass's locator, its
+     * transmitter (mode), the rig's frequencies read under CAT brought back to
+     * rest (Doppler of that second taken off) — else the transmitter's. Only
+     * the callsign and reports are left to fill. Null if the satellite is unknown.
      */
-    fun signetAuCarnet(s: fr.f4ioz.satcombo.domain.JournalPassage.Signet, indicatif: String, locator: String): Boolean {
-        val sat = _ui.value.satellites.firstOrNull { it.catalogNumber == s.catnum } ?: return false
-        if (indicatif.isBlank()) return false
-        ajouteContact(s.tMs, sat, indicatif.trim().uppercase(), locator.trim().uppercase())
-        journal.supprimeSignet(s)
+    suspend fun brouillonContact(e: fr.f4ioz.satcombo.domain.JournalPassage.Entree, tMs: Long): fr.f4ioz.satcombo.data.LogEntry? {
+        val sat = _ui.value.satellites.firstOrNull { it.catalogNumber == e.catnum } ?: return null
+        val obs = e.locator.takeIf { it.length >= 4 }?.let { Maidenhead.toLatLon(it) }?.let { (la, lo) -> Observer(la, lo) }
+            ?: _ui.value.observer ?: locationProvider.defaultObserver
+        val pos = runCatching { predictor.positionAt(sat, obs, tMs) }.getOrNull()
+        val rr = pos?.rangeRateKmS ?: 0.0
+        val txs = runCatching { txRepo.forSatellite(sat.catalogNumber) }.getOrDefault(emptyList())
+        val tx = txs.firstOrNull { e.transpondeur.isNotBlank() && it.description == e.transpondeur }
+        // What the rig was on, within a few seconds of that moment.
+        val p = e.points.filter { it.dlHz != null || it.ulHz != null }.minByOrNull { kotlin.math.abs(it.tMs - tMs) }
+            ?.takeIf { kotlin.math.abs(it.tMs - tMs) <= 20_000L }
+        val dl = p?.dlHz?.let { Doppler.restFromDownlink(it, rr) } ?: tx?.let { centreRx(it) ?: it.downlinkLowHz }
+        val ul = p?.ulHz?.let { Math.round(it / (1.0 + rr / 299_792.458)) } ?: tx?.let { t ->
+            val rx = dl ?: return@let t.uplinkLowHz
+            if (t.isTransponder && t.downlinkLowHz != null && t.uplinkLowHz != null)
+                Doppler.transponderUplinkRest(rx, t.downlinkLowHz!!, t.downlinkHighHz ?: t.downlinkLowHz!!,
+                    t.uplinkLowHz!!, t.uplinkHighHz ?: t.uplinkLowHz!!, effectiveInvert(t))
+            else t.uplinkLowHz
+        }
+        return fr.f4ioz.satcombo.data.LogEntry(
+            timeMs = tMs, satName = sat.name, catnum = sat.catalogNumber,
+            azimuthDeg = pos?.azimuthDeg ?: 0.0, elevationDeg = pos?.elevationDeg ?: 0.0,
+            myLocator = e.locator.ifBlank { myLocator() },
+            mode = if (tx != null) modeEmission(tx) else "",
+            rstSent = "59", rstRcvd = "59",
+            downlinkMhz = (dl ?: 0L) / 1_000_000.0, uplinkMhz = (ul ?: 0L) / 1_000_000.0)
+    }
+
+    /**
+     * The satellite contacts of the online log (Wavelog / Cloudlog), read in
+     * full now — not the keypad's index: the station's own square, the mode,
+     * the frequencies are needed to rebuild a pass. Read only. The message
+     * when nothing could be read.
+     */
+    suspend fun contactsEnLigne(): Pair<List<fr.f4ioz.satcombo.data.AdifImport.ContactEnLigne>, String?> {
+        val c = _ui.value.carnet
+        if (c.url.isBlank() || c.cle.isBlank()) return emptyList<fr.f4ioz.satcombo.data.AdifImport.ContactEnLigne>() to t("carnet_reglages")
+        val profils = c.profils.values.filterNotNull().distinct().ifEmpty { listOf(c.profil).filter { it.isNotBlank() } }
+        if (profils.isEmpty()) return emptyList<fr.f4ioz.satcombo.data.AdifImport.ContactEnLigne>() to t("carnet_sans_profil")
+        val m = runCatching {
+            fr.f4ioz.satcombo.data.CarnetEnLigne.moissonne(c.url, c.cle, profils, 0L, fr.f4ioz.satcombo.domain.FiltreMoisson.SAT)
+        }.getOrElse { return emptyList<fr.f4ioz.satcombo.data.AdifImport.ContactEnLigne>() to (it.message ?: it.javaClass.simpleName) }
+        if (m.adif.isBlank()) return emptyList<fr.f4ioz.satcombo.data.AdifImport.ContactEnLigne>() to m.message.ifBlank { t("carnet_moisson_rien") }
+        return fr.f4ioz.satcombo.data.AdifImport.contactsEnLigne(m.adif) to null
+    }
+
+    /** Those contacts as events to find their passes by (from the station's square of the time). */
+    fun evenementsEnLigne(l: List<fr.f4ioz.satcombo.data.AdifImport.ContactEnLigne>): List<fr.f4ioz.satcombo.domain.JournalPassage.Evenement> =
+        l.mapNotNull { q -> journal.satImport(0, q.satellite)?.let { s ->
+            fr.f4ioz.satcombo.domain.JournalPassage.Evenement(fr.f4ioz.satcombo.domain.JournalPassage.Source.CARNET,
+                q.quandMs, s.catalogNumber, s.name, q.monLocator) } }
+
+    /**
+     * The passes chosen, rebuilt into the journal; and their contacts not in
+     * this phone's log yet, added to it (az/el for their time, from the
+     * station's square of the time) — marked as already in the online log,
+     * never sent back. How many passes, how many contacts.
+     */
+    fun importeEnLigne(cands: List<fr.f4ioz.satcombo.domain.JournalPassage.Candidat>,
+                       contacts: List<fr.f4ioz.satcombo.data.AdifImport.ContactEnLigne>): Pair<Int, Int> {
+        val J = fr.f4ioz.satcombo.domain.JournalPassage
+        val locaux = _ui.value.log
+        val maintenant = System.currentTimeMillis()
+        var ajoutes = 0
+        var l = locaux
+        for (q in contacts) {
+            val sat = journal.satImport(0, q.satellite) ?: continue
+            if (cands.none { it.catnum == sat.catalogNumber && q.quandMs in (it.aosMs - 120_000L)..(it.losMs + 300_000L) }) continue
+            val deja = l.any { J.indicatifDeBase(it.callsign) == J.indicatifDeBase(q.indicatif) &&
+                kotlin.math.abs(it.timeMs - q.quandMs) <= 120_000L && (it.catnum == sat.catalogNumber || J.memeSatellite(it.satName, sat.name)) }
+            if (deja) continue
+            val obs = q.monLocator.takeIf { it.length >= 4 }?.let { Maidenhead.toLatLon(it) }?.let { (la, lo) -> Observer(la, lo) }
+                ?: _ui.value.observer ?: locationProvider.defaultObserver
+            val pos = runCatching { predictor.positionAt(sat, obs, q.quandMs) }.getOrNull()
+            l = logStore.add(fr.f4ioz.satcombo.data.LogEntry(
+                timeMs = q.quandMs, satName = sat.name, catnum = sat.catalogNumber,
+                azimuthDeg = pos?.azimuthDeg ?: 0.0, elevationDeg = pos?.elevationDeg ?: 0.0,
+                myLocator = q.monLocator, callsign = q.indicatif, theirLocator = q.locator,
+                nom = q.nom, qth = q.qth, mode = q.mode, rstSent = q.rstEnvoye, rstRcvd = q.rstRecu,
+                downlinkMhz = q.freqRxMhz, uplinkMhz = q.freqMhz,
+                // Already in the online log: never sent there again.
+                envoyeMs = maintenant))
+            ajoutes++
+        }
+        if (ajoutes > 0) _ui.value = _ui.value.copy(log = l, express = _ui.value.express.copy(memoire = construitMemoire()))
+        return journal.importe(cands) to ajoutes
+    }
+
+    /** A contact drafted from the journal, completed, into the log (online log follows by itself). */
+    fun ajouteAuCarnet(c: fr.f4ioz.satcombo.data.LogEntry): Boolean {
+        if (c.callsign.isBlank()) return false
+        _ui.value = _ui.value.copy(log = logStore.add(c.copy(callsign = c.callsign.trim().uppercase(),
+            theirLocator = c.theirLocator.trim().uppercase())),
+            express = _ui.value.express.copy(memoire = construitMemoire()))
         return true
     }
+
+    /** Callsigns known for [debut] (worked before, their name), for the entry from the journal. */
+    fun suggestionsIndicatif(debut: String): List<fr.f4ioz.satcombo.domain.Indicatifs.Connu> =
+        fr.f4ioz.satcombo.domain.Indicatifs.suggestions(debut, _ui.value.express.memoire, System.currentTimeMillis(), max = 4)
 
     /** ⚑ A moment of the pass marked now, for the satellite shown; its time (null: none shown). */
     fun signetIci(): Long? {
