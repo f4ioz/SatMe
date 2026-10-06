@@ -36,6 +36,22 @@ object Maidenhead {
     }
 
     /**
+     * Where a station was, from what a log keeps: one locator, or several for a
+     * station on a line or a corner between squares ("JN06,JN16", "JN06/JN16",
+     * as Wavelog and VUCC give them): the middle of the squares named. Null if
+     * none can be read.
+     */
+    fun centre(texte: String): Pair<Double, Double>? {
+        val l = texte.split(',', '/', ';', ' ').mapNotNull { toLatLon(it) }
+        if (l.isEmpty()) return null
+        if (l.size == 1) return l[0]
+        // Longitudes taken next to the first one (squares either side of 180°).
+        val lon0 = l[0].second
+        val lon = l.map { (_, lo) -> lon0 + ((lo - lon0 + 540.0) % 360.0 - 180.0) }.average()
+        return l.map { it.first }.average() to ((lon + 540.0) % 360.0 - 180.0)
+    }
+
+    /**
      * Bounds of a 2/4/6-char locator: [latMin, lonMin, latSpan, lonSpan] in degrees.
      */
     fun bounds(locator: String): DoubleArray? {

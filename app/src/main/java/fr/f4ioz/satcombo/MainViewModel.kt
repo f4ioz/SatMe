@@ -10175,7 +10175,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      */
     suspend fun brouillonContact(e: fr.f4ioz.satcombo.domain.JournalPassage.Entree, tMs: Long): fr.f4ioz.satcombo.data.LogEntry? {
         val sat = _ui.value.satellites.firstOrNull { it.catalogNumber == e.catnum } ?: return null
-        val obs = e.locator.takeIf { it.length >= 4 }?.let { Maidenhead.toLatLon(it) }?.let { (la, lo) -> Observer(la, lo) }
+        val obs = fr.f4ioz.satcombo.location.Maidenhead.centre(e.locator)?.let { (la, lo) -> Observer(la, lo) }
             ?: _ui.value.observer ?: locationProvider.defaultObserver
         val pos = runCatching { predictor.positionAt(sat, obs, tMs) }.getOrNull()
         val rr = pos?.rangeRateKmS ?: 0.0
@@ -10261,7 +10261,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             val deja = l.any { J.indicatifDeBase(it.callsign) == J.indicatifDeBase(q.indicatif) &&
                 kotlin.math.abs(it.timeMs - q.quandMs) <= 120_000L && (it.catnum == sat.catalogNumber || J.memeSatellite(it.satName, sat.name)) }
             if (deja) continue
-            val obs = q.monLocator.takeIf { it.length >= 4 }?.let { Maidenhead.toLatLon(it) }?.let { (la, lo) -> Observer(la, lo) }
+            val obs = fr.f4ioz.satcombo.location.Maidenhead.centre(q.monLocator)?.let { (la, lo) -> Observer(la, lo) }
                 ?: _ui.value.observer ?: locationProvider.defaultObserver
             val pos = runCatching { predictor.positionAt(sat, obs, q.quandMs) }.getOrNull()
             l = logStore.add(fr.f4ioz.satcombo.data.LogEntry(

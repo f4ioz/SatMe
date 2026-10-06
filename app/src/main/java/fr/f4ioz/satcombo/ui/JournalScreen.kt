@@ -896,7 +896,7 @@ private fun FichePassage(
                         val nomX = if (moment) JournalRendu.nomExtrait(e, titreDecoupe.substringAfter(' ').ifBlank { "moment" }, de) else null
                         if (fmt == "son") JournalRendu.extraitWav(ctx, morceaux, de, a, nomX ?: JournalRendu.nomExtrait(e, "passage", de))
                         else {
-                            val qth = e.locator.takeIf { it.length >= 4 }?.let { fr.f4ioz.satcombo.location.Maidenhead.toLatLon(it) }
+                            val qth = fr.f4ioz.satcombo.location.Maidenhead.centre(e.locator)
                             val sc = JournalRendu.Scene(e, prevue, marques, sol, qth, surCarte, ui.callsign, ui.useUtc, flashS, tailleFlash,
                                 affSstv = affSstv, affFiches = affFiches,
                                 cadreVu = if (surCarte) null else cadreVu, vueVue = if (surCarte) vueVue else null,
@@ -1183,8 +1183,7 @@ private fun BilanJournalVue(ui: UiState, vm: MainViewModel, passages: List<Journ
         Button(enabled = !enCours && b.stations.isNotEmpty(), onClick = {
             enCours = true
             scope.launch {
-                val qth = runCatching { vm.myLocator() }.getOrNull()?.takeIf { it.length >= 4 }
-                    ?.let { fr.f4ioz.satcombo.location.Maidenhead.toLatLon(it) }
+                val qth = runCatching { vm.myLocator() }.getOrNull()?.let { fr.f4ioz.satcombo.location.Maidenhead.centre(it) }
                 carte = withContext(Dispatchers.IO) {
                     JournalRendu.carteStations(ctx, b.stations, qth,
                         tf("journal_bilan_legende", ui.callsign.ifBlank { "SatMe" }, b.stations.count { it.qso }, b.stations.count { !it.qso }))
@@ -1321,7 +1320,7 @@ private fun CarteJournal(
         val l = Math.toRadians(lat.coerceIn(-85.05, 85.05))
         return (1 - kotlin.math.ln(kotlin.math.tan(l) + 1 / kotlin.math.cos(l)) / Math.PI) / 2
     }
-    val qth = remember(locator) { locator.takeIf { it.length >= 4 }?.let { fr.f4ioz.satcombo.location.Maidenhead.toLatLon(it) } }
+    val qth = remember(locator) { fr.f4ioz.satcombo.location.Maidenhead.centre(locator) }
     // The satellite now (replay), else at the top of the pass.
     val haut = remember(e.id) { e.points.maxByOrNull { it.el }?.tMs }
     val ici = (instant ?: haut)?.let { JournalPassage.solA(sol, it) }

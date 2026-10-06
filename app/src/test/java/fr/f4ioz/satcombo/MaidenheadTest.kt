@@ -64,4 +64,16 @@ class MaidenheadTest {
         assertEquals(1.0 / 24, sub[2], 1e-9)
         assertEquals(2.0 / 24, sub[3], 1e-9)
     }
+
+    @Test fun `a station on a grid line sits on the line`() {
+        // Wavelog gives both squares: "JN06,JN16" is on the line 2° E between them, in the middle of the band 46–47° N.
+        val (la, lo) = Maidenhead.centre("JN06,JN16")!!
+        assertEquals(46.5, la, 1e-9); assertEquals(2.0, lo, 1e-9)
+        val (la4, lo4) = Maidenhead.centre("JN06/JN07 JN16 JN17")!!
+        assertEquals(47.0, la4, 1e-9); assertEquals(2.0, lo4, 1e-9)
+        assertEquals(Maidenhead.toLatLon("JN18FS"), Maidenhead.centre(" jn18fs "))
+        assertNull(Maidenhead.centre("")); assertNull(Maidenhead.centre("XX,?"))
+        // Either side of 180°: the line, not the other side of the world.
+        assertEquals(180.0, kotlin.math.abs(Maidenhead.centre("RB90,AB00")!!.second), 1e-9)
+    }
 }

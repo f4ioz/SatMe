@@ -384,8 +384,8 @@ object JournalPassage {
 
     /** Great-circle distance between two locators, km; null if either is unknown. */
     fun distanceKm(a: String, b: String): Int? {
-        val p = fr.f4ioz.satcombo.location.Maidenhead.toLatLon(a.takeIf { it.length >= 4 } ?: return null) ?: return null
-        val q = fr.f4ioz.satcombo.location.Maidenhead.toLatLon(b.takeIf { it.length >= 4 } ?: return null) ?: return null
+        val p = fr.f4ioz.satcombo.location.Maidenhead.centre(a) ?: return null
+        val q = fr.f4ioz.satcombo.location.Maidenhead.centre(b) ?: return null
         val la1 = Math.toRadians(p.first); val la2 = Math.toRadians(q.first); val dl = Math.toRadians(q.second - p.second)
         val c = kotlin.math.sin(la1) * kotlin.math.sin(la2) + kotlin.math.cos(la1) * kotlin.math.cos(la2) * kotlin.math.cos(dl)
         return (6371.0 * kotlin.math.acos(c.coerceIn(-1.0, 1.0))).toInt()

@@ -163,7 +163,7 @@ class JournalDesPassages(
         val trames = tous.flatMap { it.trames }.filter { !J.estLeSatellite(it.source) }
         val stations = qsos.groupBy { J.indicatifDeBase(it.callsign) }.mapNotNull { (_, l) ->
             val q = l.firstOrNull { it.theirLocator.length >= 4 } ?: return@mapNotNull null
-            fr.f4ioz.satcombo.location.Maidenhead.toLatLon(q.theirLocator)?.let { (la, lo) -> StationBilan(la, lo, q.callsign, true) }
+            fr.f4ioz.satcombo.location.Maidenhead.centre(q.theirLocator)?.let { (la, lo) -> StationBilan(la, lo, q.callsign, true) }
         } + trames.groupBy { J.indicatifDeBase(it.source) }.mapNotNull { (_, l) ->
             val p = l.firstOrNull { it.lat != null && it.lon != null } ?: return@mapNotNull null
             StationBilan(p.lat!!, p.lon!!, p.source, false)
@@ -314,7 +314,7 @@ class JournalDesPassages(
      */
     fun frequencesRepos(e: JournalPassage.Entree): List<Pair<Long, Long>> = runCatching {
         val sat = ui().satellites.firstOrNull { it.catalogNumber == e.catnum } ?: return emptyList()
-        val obs = e.locator.takeIf { it.length >= 4 }?.let { fr.f4ioz.satcombo.location.Maidenhead.toLatLon(it) }
+        val obs = fr.f4ioz.satcombo.location.Maidenhead.centre(e.locator)
             ?.let { (la, lo) -> Observer(la, lo) } ?: observateur()
         val lus = e.points.filter { it.dlHz != null }
         val rr = predictor.rangeRates(sat, obs, lus.map { it.tMs })
@@ -369,7 +369,7 @@ class JournalDesPassages(
         // A contact is logged a few seconds after it ended: put back where it was heard.
         val avance = decalageQsoS * 1000L
         val qso = l.qsos.map { q ->
-            val ll = q.theirLocator.takeIf { it.length >= 4 }?.let { fr.f4ioz.satcombo.location.Maidenhead.toLatLon(it) }
+            val ll = fr.f4ioz.satcombo.location.Maidenhead.centre(q.theirLocator)
             val rst = listOf(q.rstSent, q.rstRcvd).filter { it.isNotBlank() }.joinToString(" / ")
             JournalPassage.Marque(JournalPassage.TypeMarque.QSO,
                 q.timeMs - avance, q.timeMs - avance, q.callsign, ll?.first, ll?.second,
@@ -523,7 +523,7 @@ class JournalDesPassages(
         val defaut = observateur()
         return JournalPassage.regroupe(evts, { ev ->
             val sat = ui().satellites.firstOrNull { it.catalogNumber == ev.catnum } ?: return@regroupe null
-            val obs = ev.locator.takeIf { it.length >= 4 }?.let { fr.f4ioz.satcombo.location.Maidenhead.toLatLon(it) }
+            val obs = fr.f4ioz.satcombo.location.Maidenhead.centre(ev.locator)
                 ?.let { (la, lo) -> Observer(la, lo) } ?: defaut
             // Elements drift and clocks too: looked for up to 15 minutes either side.
             val ecarts = listOf(0) + (1..15).flatMap { listOf(it, -it) }
@@ -537,7 +537,7 @@ class JournalDesPassages(
         var n = 0
         for (x in c) runCatching {
             val sat = ui().satellites.firstOrNull { it.catalogNumber == x.catnum } ?: return@runCatching
-            val obs = x.locator.takeIf { it.length >= 4 }?.let { fr.f4ioz.satcombo.location.Maidenhead.toLatLon(it) }
+            val obs = fr.f4ioz.satcombo.location.Maidenhead.centre(x.locator)
                 ?.let { (la, lo) -> Observer(la, lo) } ?: defaut
             val pas = ((x.losMs - x.aosMs) / JournalPassage.PAS_MS).toInt().coerceIn(10, 400)
             val piste = predictor.sampleTrack(sat, obs, x.aosMs - 5_000L, x.losMs + 5_000L, pas)
