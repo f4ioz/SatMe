@@ -5122,7 +5122,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val maintenant = System.currentTimeMillis()
         if (maintenant - dernierEssaiCat < 45_000L) return
         dernierEssaiCat = maintenant
-        viewModelScope.launch { runCatching { ouvreCat() } }
+        viewModelScope.launch {
+            // Connected by itself, it drives the rig: CAT shows as on (its card, its state), as if
+            // switched on by hand — and switching it on again does not open the port a second time.
+            val avant = _ui.value.catEnabled
+            if (!avant) _ui.value = _ui.value.copy(catEnabled = true)
+            runCatching { ouvreCat() }
+            if (!_ui.value.catConnected && !avant) _ui.value = _ui.value.copy(catEnabled = false)
+        }
     }
 
     /** The pass being recorded when its page is not open (see [JournalDesPassages.fondTic]). */
@@ -7670,7 +7677,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun setCatEnabled(on: Boolean) {
+        val dejaConnecte = on && _ui.value.catConnected
         _ui.value = _ui.value.copy(catEnabled = on)
+        // Already connected (by itself): nothing to open again.
+        if (dejaConnecte) return
         if (on) connectCat() else { cat.close(); _ui.value = _ui.value.copy(catConnected = false, catStatus = t("cat_disconnected")) }
     }
 
@@ -8192,6 +8202,29 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             while (_ui.value.catConnected) {
                 runCatching { catTick() }
                 kotlinx.coroutines.delay(100)
+                runCatching { gardeCat() }
+            }
+        }
+    }
+
+    /**
+     * Watchdog: connected, the Icom writes but no longer answers reads (15 s)
+     * — the link is closed and opened again, at most once a minute, and the
+     * CAT state says so. Not the pair rigs nor the simulated one; never while
+     * a frame is going out.
+     */
+    @Volatile private var derniereRelanceCat = 0L
+    private fun gardeCat() {
+        if (isPairRig || isThd72 || _ui.value.catSimulated || aprsEnEmission || !_ui.value.catConnected) return
+        val maintenant = System.currentTimeMillis()
+        if (!fr.f4ioz.satcombo.domain.CatGarde.relancer(maintenant, cat.ouvertMs, cat.derniereReponseMs, derniereRelanceCat)) return
+        derniereRelanceCat = maintenant
+        viewModelScope.launch {
+            runCatching {
+                disconnectCat()
+                delay(300)
+                ouvreCat()
+                if (_ui.value.catConnected) _ui.value = _ui.value.copy(catStatus = _ui.value.catStatus + " · " + t("cat_relance"))
             }
         }
     }
@@ -10104,7 +10137,19 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     /** The journal page is open. */
     val journalOuvert = kotlinx.coroutines.flow.MutableStateFlow(false)
     fun ouvreJournal() { journalOuvert.value = true }
-    /** ★ A moment of the pass marked now, for the satellite shown; its time (null: none shown). */
+    /**
+     * A bookmark made a contact of the log, at its time (az recomputed for it),
+     * then removed: the same moment twice would be one too many.
+     */
+    fun signetAuCarnet(s: fr.f4ioz.satcombo.domain.JournalPassage.Signet, indicatif: String, locator: String): Boolean {
+        val sat = _ui.value.satellites.firstOrNull { it.catalogNumber == s.catnum } ?: return false
+        if (indicatif.isBlank()) return false
+        ajouteContact(s.tMs, sat, indicatif.trim().uppercase(), locator.trim().uppercase())
+        journal.supprimeSignet(s)
+        return true
+    }
+
+    /** ⚑ A moment of the pass marked now, for the satellite shown; its time (null: none shown). */
     fun signetIci(): Long? {
         val sat = _ui.value.selected ?: return null
         return journal.signet(sat.catalogNumber).tMs

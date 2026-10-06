@@ -281,8 +281,11 @@ object JournalPassage {
      * APRS frame: [avantMs] before, [APRES_APRS_MS] after. Close ones are
      * joined: a gap shorter than [JOINT_MS] is not worth a rush.
      */
-    fun plagesNormales(marques: List<Marque>, debutMs: Long, finMs: Long, avantMs: Long, apresQsoMs: Long): List<LongRange> {
-        val brutes = marques.map { m ->
+    fun plagesNormales(marques: List<Marque>, debutMs: Long, finMs: Long, avantMs: Long, apresQsoMs: Long,
+                       activite: List<LongRange> = emptyList()): List<LongRange> {
+        // Also what the sound shows (see [ActiviteSon]): a little before, a little after.
+        val entendues = activite.map { maxOf(debutMs, it.first - AVANT_ACTIVITE_MS) to minOf(finMs, it.last + APRES_ACTIVITE_MS) }
+        val brutes = entendues + marques.map { m ->
             val (avant, apres) = when (m.type) {
                 TypeMarque.QSO -> avantMs to apresQsoMs
                 TypeMarque.SSTV -> AVANT_SSTV_MS to 0L
@@ -308,6 +311,8 @@ object JournalPassage {
     /** Before an SSTV picture: its header is there already, a second is enough. */
     const val AVANT_SSTV_MS = 1_000L
     const val APRES_APRS_MS = 3_000L
+    const val AVANT_ACTIVITE_MS = 1_000L
+    const val APRES_ACTIVITE_MS = 2_000L
 
     /** The whole pass as stretches: normal speed in [plages], [rapide] times faster elsewhere. */
     fun segments(debutMs: Long, finMs: Long, plages: List<LongRange>, rapide: Int): List<Segment> {

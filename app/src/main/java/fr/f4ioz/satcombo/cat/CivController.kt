@@ -66,6 +66,11 @@ class CivController(private val context: Context? = null) : RigDriver {
      * four causes that used to share one "cannot open" message.
      */
     var lastError: String = ""
+
+    /** When the rig last answered a read (ms; 0 = never): a link that writes but no longer hears shows here. */
+    @Volatile var derniereReponseMs: Long = 0L
+    /** When the link was opened (ms). */
+    @Volatile var ouvertMs: Long = 0L
         private set
 
     /**
@@ -126,6 +131,8 @@ class CivController(private val context: Context? = null) : RigDriver {
      */
     suspend fun open(index: Int, baud: Int): Boolean = withContext(Dispatchers.IO) {
         val ctx = context ?: return@withContext false
+        // Never two openings of one port: the first, left open, keeps its claim on the USB device.
+        close()
         val um = ctx.getSystemService(Context.USB_SERVICE) as UsbManager
         val drivers = UsbSerialProber.getDefaultProber().findAllDrivers(um)
         val refs = availablePorts()
@@ -148,6 +155,7 @@ class CivController(private val context: Context? = null) : RigDriver {
             runCatching { p.setDTR(true); p.setRTS(true) }
             link = UsbSerialLink(p)
             lastError = ""
+            ouvertMs = System.currentTimeMillis(); derniereReponseMs = ouvertMs
             true
         }.getOrElse {
             lastError = tf("cat_err_open_port", it.message ?: "?")
@@ -164,6 +172,7 @@ class CivController(private val context: Context? = null) : RigDriver {
      */
     suspend fun openParCle(cle: String?, baud: Int, port: Int = 0): Boolean = withContext(Dispatchers.IO) {
         val ctx = context ?: return@withContext false
+        close()
         val um = ctx.getSystemService(Context.USB_SERVICE) as UsbManager
         val drivers = UsbSerialProber.getDefaultProber().findAllDrivers(um)
             .filter { um.hasPermission(it.device) }
@@ -181,6 +190,7 @@ class CivController(private val context: Context? = null) : RigDriver {
             runCatching { p.setDTR(true); p.setRTS(true) }
             link = UsbSerialLink(p)
             lastError = ""
+            ouvertMs = System.currentTimeMillis(); derniereReponseMs = ouvertMs
             true
         }.getOrElse {
             lastError = tf("cat_err_open_port", it.message ?: "?")
@@ -270,6 +280,9 @@ class CivController(private val context: Context? = null) : RigDriver {
             CatDecode.isAck(f, radioAddr, controllerAddr) ||
                 CatDecode.isNak(f, radioAddr, controllerAddr)
         }
+        if (CatDecode.isAck(frames, radioAddr, controllerAddr) || CatDecode.isNak(frames, radioAddr, controllerAddr))
+            derniereReponseMs = System.currentTimeMillis()
+        // A write counts as done unless refused: the rig may take it without being heard back.
         !CatDecode.isNak(frames, radioAddr, controllerAddr)
     } }
 
@@ -301,6 +314,10 @@ class CivController(private val context: Context? = null) : RigDriver {
                 CatDecode.isAck(f, radioAddr, controllerAddr) ||
                     CatDecode.isNak(f, radioAddr, controllerAddr)
         }
+        // Any frame from the rig itself (answer, ack, refusal): it hears us.
+        if (CatDecode.isAck(frames, radioAddr, controllerAddr) || CatDecode.isNak(frames, radioAddr, controllerAddr) ||
+                (expect >= 0 && CatDecode.payload(frames, radioAddr, controllerAddr, expect, expectSub) != null))
+            derniereReponseMs = System.currentTimeMillis()
         if (pacingMs > 0) kotlinx.coroutines.delay(pacingMs)
         frames
     } }

@@ -307,6 +307,10 @@ class SettingsStore(context: Context) {
     var journalApresQsoS: Int
         get() = prefs.getInt("journal_apres_qso_s", 30)
         set(v) { prefs.edit().putInt("journal_apres_qso_s", v).apply() }
+    /** The accelerated replay slows down where the sound shows activity, logged or not. */
+    var journalActivite: Boolean
+        get() = prefs.getBoolean("journal_activite", true)
+        set(v) { prefs.edit().putBoolean("journal_activite", v).apply() }
     var journalAccelere: Boolean
         get() = prefs.getBoolean("journal_accelere", false)
         set(v) { prefs.edit().putBoolean("journal_accelere", v).apply() }

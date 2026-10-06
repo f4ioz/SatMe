@@ -25,6 +25,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Assessment
 import androidx.compose.material.icons.filled.Search
@@ -251,6 +252,9 @@ private fun FichePassage(
     var accelere by remember { mutableStateOf(vm.journal.accelere()) }
     var apresQsoS by remember { mutableStateOf(vm.journal.apresQsoS()) }
     var rapide by remember { mutableStateOf(vm.journal.rapide()) }
+    // Where the sound shows activity (voices, carriers, SSTV), worked out from the recording.
+    var surActivite by remember { mutableStateOf(vm.journal.surActivite()) }
+    var activite by remember(e.id) { mutableStateOf<List<LongRange>>(emptyList()) }
     // Accelerated: the stretches, set once the marks are known (null: the whole pass alike).
     var segs by remember(e.id) { mutableStateOf<List<JournalPassage.Segment>?>(null) }
     val defil = rememberScrollState()
@@ -261,6 +265,8 @@ private fun FichePassage(
     var extraitEnCours by remember(e.id) { mutableStateOf(false) }
     var extraitPret by remember(e.id) { mutableStateOf<java.io.File?>(null) }
     var extraitEchec by remember(e.id) { mutableStateOf(false) }
+    // A bookmark being written on (note) or made a contact.
+    var signetEdite by remember(e.id) { mutableStateOf<JournalPassage.Signet?>(null) }
 
     // While playing: the sound sets the time; without sound, ten times faster.
     LaunchedEffect(joue) {
@@ -334,9 +340,11 @@ private fun FichePassage(
         // The sky (zoomable) or the map, with what happened on the trajectory.
         var decalageQso by remember { mutableStateOf(vm.journal.decalageQsoS()) }
         val marques = remember(lv, decalageQso) { vm.journal.marques(lv, decalageQso) }
-        LaunchedEffect(marques, accelere, rapide, avantS, apresQsoS) {
+        LaunchedEffect(son) { activite = son?.let { f -> withContext(Dispatchers.IO) { vm.journal.activite(f) } } ?: emptyList() }
+        LaunchedEffect(marques, accelere, rapide, avantS, apresQsoS, activite, surActivite) {
             segs = if (!accelere) null else JournalPassage.segments(e.debutMs, e.finMs,
-                JournalPassage.plagesNormales(marques, e.debutMs, e.finMs, avantS * 1000L, apresQsoS * 1000L), rapide)
+                JournalPassage.plagesNormales(marques, e.debutMs, e.finMs, avantS * 1000L, apresQsoS * 1000L,
+                    if (surActivite) activite else emptyList()), rapide)
         }
         // Who the stations are (log, APRS, QRZ.com), for their cards.
         var fiches by remember(e.id) { mutableStateOf<Map<String, JournalPassage.Fiche>>(emptyMap()) }
@@ -390,6 +398,23 @@ private fun FichePassage(
                     else if (p.isPlaying) p.pause()
                 }
             })
+        // Under the slider: where the sound shows activity (light grey), and each mark, in its colour.
+        if (activite.isNotEmpty() || marques.isNotEmpty()) androidx.compose.foundation.Canvas(
+            Modifier.fillMaxWidth().height(8.dp).padding(horizontal = 10.dp)) {
+            val d = e.dureeMs.coerceAtLeast(1).toFloat()
+            fun x(t: Long) = ((t - e.debutMs) / d).coerceIn(0f, 1f) * size.width
+            activite.forEach { r ->
+                drawRect(androidx.compose.ui.graphics.Color(0x66CDD7E6), topLeft = androidx.compose.ui.geometry.Offset(x(r.first), 0f),
+                    size = androidx.compose.ui.geometry.Size((x(r.last) - x(r.first)).coerceAtLeast(2f), size.height))
+            }
+            marques.forEach { m ->
+                val c = androidx.compose.ui.graphics.Color(when (m.type) {
+                    JournalPassage.TypeMarque.QSO -> JournalRendu.QSO; JournalPassage.TypeMarque.SSTV -> JournalRendu.SSTV[0]
+                    JournalPassage.TypeMarque.SIGNET -> JournalRendu.SIGNET; else -> if (m.viaIss) JournalRendu.ISS else JournalRendu.APRS })
+                drawRect(c, topLeft = androidx.compose.ui.geometry.Offset(x(m.debutMs), 0f),
+                    size = androidx.compose.ui.geometry.Size((x(m.finMs) - x(m.debutMs)).coerceAtLeast(3f), size.height))
+            }
+        }
         pt?.let { p ->
             Text(buildList {
                 add("Az %.0f° · El %.0f°".format(p.az, p.el))
@@ -487,13 +512,43 @@ private fun FichePassage(
                         if (son != null && debutSon != null) IconButton(onClick = { extraitDe = "signet" to sg.tMs }, modifier = Modifier.size(32.dp)) {
                             Icon(Icons.Default.Share, t("journal_extrait"), tint = Cyan, modifier = Modifier.size(18.dp))
                         }
-                        IconButton(onClick = { vm.journal.supprimeSignet(sg); onSignets() }, modifier = Modifier.size(32.dp)) {
+                        // What was heard, written afterwards; or the contact it was, to the log.
+                    IconButton(onClick = { signetEdite = sg }, modifier = Modifier.size(32.dp)) {
+                        Icon(Icons.Default.Edit, t("journal_signet_editer"), tint = Cyan, modifier = Modifier.size(17.dp))
+                    }
+                    IconButton(onClick = { vm.journal.supprimeSignet(sg); onSignets() }, modifier = Modifier.size(32.dp)) {
                             Icon(Icons.Default.Close, t("journal_signet_supprimer"), tint = TextLo, modifier = Modifier.size(16.dp))
                         }
                     }
                 }
             }
-            if (l.qsos.isEmpty() && l.images.isEmpty() && l.trames.isEmpty() && l.signets.isEmpty())
+            signetEdite?.let { sg ->
+            var note by remember(sg) { mutableStateOf(sg.note) }
+            var indicatif by remember(sg) { mutableStateOf("") }
+            var carre by remember(sg) { mutableStateOf("") }
+            androidx.compose.material3.AlertDialog(onDismissRequest = { signetEdite = null },
+                title = { Text(tf("journal_signet_titre", heure.format(Date(sg.tMs)))) },
+                text = { Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    androidx.compose.material3.OutlinedTextField(note, { note = it.take(120) }, singleLine = true,
+                        label = { Text(t("journal_signet_note")) }, modifier = Modifier.fillMaxWidth())
+                    Text(t("journal_signet_carnet_desc"), color = TextLo, fontSize = 11.sp)
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        androidx.compose.material3.OutlinedTextField(indicatif, { indicatif = it.uppercase().filter { c -> c.isLetterOrDigit() || c == '/' }.take(14) },
+                            singleLine = true, label = { Text(t("journal_signet_indicatif")) }, modifier = Modifier.weight(1.3f))
+                        androidx.compose.material3.OutlinedTextField(carre, { carre = it.uppercase().filter { c -> c.isLetterOrDigit() }.take(6) },
+                            singleLine = true, label = { Text("Locator") }, modifier = Modifier.weight(1f))
+                    }
+                } },
+                confirmButton = { Row {
+                    TextButton(enabled = indicatif.isNotBlank(), onClick = {
+                        vm.signetAuCarnet(sg, indicatif, carre); signetEdite = null; onSignets()
+                    }) { Text(t("journal_signet_au_carnet")) }
+                    TextButton(onClick = { vm.journal.noteSignet(sg, note); signetEdite = null; onSignets() }) {
+                        Text(t("journal_signet_garder_note")) }
+                } },
+                dismissButton = { TextButton(onClick = { signetEdite = null }) { Text(t("cancel")) } })
+        }
+        if (l.qsos.isEmpty() && l.images.isEmpty() && l.trames.isEmpty() && l.signets.isEmpty())
                 Text(t("journal_moments_vide"), color = TextLo, fontSize = 12.sp, modifier = Modifier.padding(vertical = 8.dp))
             // The extract asked for: its sound (WAV) or a short video, then shared or saved.
             extraitDe?.let { (quoi, t0) ->
@@ -562,6 +617,9 @@ private fun FichePassage(
                     }
                 }
                 if (accelere) Text(tf("journal_accelere_desc", avantS, apresQsoS), color = TextLo, fontSize = 10.sp)
+            if (accelere && son != null) FilterChip(selected = surActivite, onClick = { surActivite = !surActivite; vm.journal.setSurActivite(surActivite) },
+                label = { Text((if (surActivite) "✓ " else "") + t("journal_activite") + " : " + t(if (surActivite) "journal_oui" else "journal_flash_non"), fontSize = 11.sp) })
+            if (accelere && son != null && surActivite) Text(tf("journal_activite_desc", activite.count { it.last >= e.debutMs && it.first <= e.finMs }), color = TextLo, fontSize = 10.sp)
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(t("journal_avant"), color = TextLo, fontSize = 11.sp)
                     Slider(value = avantS.toFloat(), valueRange = 0f..60f, steps = 11, modifier = Modifier.weight(1f).padding(horizontal = 8.dp),

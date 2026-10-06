@@ -388,4 +388,15 @@ class JournalPassageTest {
         val m = listOf(JournalPassage.Marque(JournalPassage.TypeMarque.SIGNET, 200_000L, 200_000L, "★"))
         assertEquals(listOf(190_000L..230_000L), JournalPassage.plagesNormales(m, 0L, 600_000L, 10_000L, 30_000L))
     }
+
+    @Test
+    fun l_activite_entendue_ralentit_aussi() {
+        // Nothing logged, a voice heard from 100 s to 110 s: normal from 1 s before to 2 s after.
+        val p = JournalPassage.plagesNormales(emptyList(), 0L, 600_000L, 10_000L, 30_000L, listOf(100_000L..110_000L))
+        assertEquals(listOf(99_000L..112_000L), p)
+        // With a contact close by: one stretch.
+        val m = listOf(JournalPassage.Marque(JournalPassage.TypeMarque.QSO, 115_000L, 115_000L, "F4XYZ"))
+        assertEquals(listOf(99_000L..145_000L),
+            JournalPassage.plagesNormales(m, 0L, 600_000L, 10_000L, 30_000L, listOf(100_000L..110_000L)))
+    }
 }

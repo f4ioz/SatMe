@@ -191,6 +191,12 @@ class JournalDesPassages(
         runCatching { fichierSignets.writeText(signets().filter { it != s }.joinToString("") { JournalPassage.ecritSignet(it) + "\n" }) }
     }
 
+    /** What was heard, written on a bookmark afterwards. */
+    fun noteSignet(s: JournalPassage.Signet, note: String) = synchronized(this) {
+        runCatching { fichierSignets.writeText(signets().joinToString("") {
+            JournalPassage.ecritSignet(if (it == s) it.copy(note = note.trim()) else it) + "\n" }) }
+    }
+
     /** Signets brought by a pass file: kept, without doubles. */
     fun ajouteSignets(l: List<JournalPassage.Signet>) = synchronized(this) {
         val deja = signets().toSet()
@@ -353,7 +359,8 @@ class JournalDesPassages(
         }
         // The moments marked (⚑): on the trajectory, the note as what was said.
         val signets = l.signets.map { s ->
-            JournalPassage.Marque(JournalPassage.TypeMarque.SIGNET, s.tMs, s.tMs, "⚑", details = s.note)
+            JournalPassage.Marque(JournalPassage.TypeMarque.SIGNET, s.tMs, s.tMs,
+                "⚑" + if (s.note.isBlank()) "" else " " + s.note.take(18), details = s.note)
         }
         return (qso + aprs + sstv + signets).sortedBy { it.debutMs }
     }
@@ -379,6 +386,33 @@ class JournalDesPassages(
             f to s.copy(timeMs = fr.f4ioz.satcombo.sstv.SstvMeta.heureOrigine(s, directs, annonce))
         }
     }
+
+    /**
+     * Where something was heard in a recording (see [fr.f4ioz.satcombo.domain.ActiviteSon]),
+     * as pass times; the spoken header left out. Worked out once, kept next to
+     * the recording ("<name>.activite").
+     */
+    fun activite(f: java.io.File): List<LongRange> = runCatching {
+        val A = fr.f4ioz.satcombo.domain.ActiviteSon
+        val garde = java.io.File(f.parentFile, f.name.substringBeforeLast('.') + ".activite")
+        val dansFichier = if (garde.isFile && garde.lastModified() >= f.lastModified()) A.lit(garde.readText()) else {
+            var m: fr.f4ioz.satcombo.domain.ActiviteSon.Mesure? = null
+            fr.f4ioz.satcombo.sstv.Mp3Pcm.decode(f) { pcm, count, rate, _ ->
+                (m ?: fr.f4ioz.satcombo.domain.ActiviteSon.Mesure(rate).also { m = it }).ajoute(pcm, count); true
+            }
+            val p = m?.let { A.plages(it.fenetres) } ?: emptyList()
+            runCatching { garde.writeText(A.ecrit(p)) }
+            p
+        }
+        val annonce = annonceDe(f)
+        val origine = origineSon(f)
+        if (origine <= 0L) return emptyList()
+        dansFichier.filter { it.last > annonce }.map { (origine + maxOf(it.first, annonce))..(origine + it.last) }
+    }.getOrDefault(emptyList())
+
+    /** Slow down too where the sound shows activity (on by default). */
+    fun surActivite(): Boolean = settings.journalActivite
+    fun setSurActivite(on: Boolean) { settings.journalActivite = on }
 
     /** The spoken header of a recording (kept, else estimated), to put its sound in step. */
     fun annonceDe(f: java.io.File): Long = fr.f4ioz.satcombo.audio.InfoEnregistrement.annonceMs(f, dureeEnregistrement(f))
@@ -525,7 +559,10 @@ class JournalDesPassages(
         var n = 0
         for (nom in place().vieux) {
             val f = java.io.File(rec, nom)
-            if (f.delete()) { n++; fr.f4ioz.satcombo.audio.InfoEnregistrement.fichier(f).delete() }
+            if (f.delete()) {
+                n++; fr.f4ioz.satcombo.audio.InfoEnregistrement.fichier(f).delete()
+                java.io.File(rec, nom.substringBeforeLast('.') + ".activite").delete()
+            }
         }
         return n
     }
