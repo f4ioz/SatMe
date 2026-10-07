@@ -18,7 +18,8 @@ import java.io.InputStream
  */
 object RequeteHttp {
 
-    class Requete(val methode: String, val chemin: String, val longueur: Long)
+    /** [plage]: the `Range` header, when the browser asks for a part of a file (a sound it seeks in). */
+    class Requete(val methode: String, val chemin: String, val longueur: Long, val plage: String? = null)
 
     /** A head larger than this is not a browser asking for a page. */
     private const val TETE_MAX = 16 * 1024
@@ -41,7 +42,24 @@ object RequeteHttp {
         if (premiere.size < 2 || premiere[0].isBlank()) return null
         val longueur = lignes.drop(1).firstOrNull { it.startsWith("content-length:", ignoreCase = true) }
             ?.substringAfter(':')?.trim()?.toLongOrNull() ?: 0L
-        return Requete(premiere[0].uppercase(), premiere[1], longueur.coerceAtLeast(0L))
+        val plage = lignes.drop(1).firstOrNull { it.startsWith("range:", ignoreCase = true) }?.substringAfter(':')?.trim()
+        return Requete(premiere[0].uppercase(), premiere[1], longueur.coerceAtLeast(0L), plage)
+    }
+
+    /**
+     * The bytes asked for by a `Range` header ("bytes=a-b", "bytes=a-", "bytes=-n") in a file of
+     * [taille] bytes, first and last included; null when there is none or it cannot be served.
+     */
+    fun plage(entete: String?, taille: Long): LongRange? {
+        if (entete == null || taille <= 0) return null
+        val v = entete.trim().removePrefix("bytes=").substringBefore(',').trim()
+        if (!v.contains('-')) return null
+        val a = v.substringBefore('-').trim(); val b = v.substringAfter('-').trim()
+        val (de, jusqua) = when {
+            a.isEmpty() -> (taille - (b.toLongOrNull() ?: return null)).coerceAtLeast(0L) to taille - 1
+            else -> (a.toLongOrNull() ?: return null) to (b.toLongOrNull()?.coerceAtMost(taille - 1) ?: (taille - 1))
+        }
+        return if (de in 0..jusqua && jusqua < taille) de..jusqua else null
     }
 
     /** The body announced by [r], read whole; null when larger than [max] or cut short. */
@@ -57,3 +75,12 @@ object RequeteHttp {
         return out
     }
 }
+
+/**
+ * What a page of the control desk answers: bytes, or a file (a sound, a video,
+ * a pass file) served as it is on disk, by parts when the browser asks.
+ */
+class ReponseWeb(
+    val statut: String, val type: String, val corps: ByteArray = ByteArray(0),
+    val entetes: String = "", val fichier: java.io.File? = null
+)

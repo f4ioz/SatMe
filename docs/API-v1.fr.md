@@ -189,6 +189,33 @@ faire pointer vers un autre fichier. `vignette` ne sert que les images de la
 galerie. L'aperçu et la planche sont dessinés par le téléphone, avec le dessin
 de son propre écran.
 
+### Journal des passages
+
+La page `<base>/journal` rejoue les passages gardés par le téléphone. Ses
+routes (en lecture seule, hormis ce que le téléphone fabrique) :
+
+```
+GET <base>/journal/liste?cle=…          → {"utc","indicatif","passages":[{"id","sat","de","a","el","son","q","i","r","s","cat","sm","rec","auto"}…]}
+GET <base>/journal/passage?cle=…&id=…   → {"id","sat","de","a","loc","tp","el","pts":[[t,az,el]…],"prevue":[[az,el]…],
+                                           "marques":[{"k","de","a","t","d","iss","f"}…],"sons":[{"n","nom","o","an","du"}…],
+                                           "sig":[[t,s]…],"freq":[[t,hz]…]}
+GET <base>/journal/activite?cle=…&id=…  → [[de,a]…]   (activité entendue dans le son)
+GET <base>/journal/fiches?cle=…&id=…    → {"EA4XYZ":{"nom","qth","pays","loc"}…}   (qui sont les stations)
+GET <base>/journal/segments?cle=…&id=…[&avant&apres&rapide&surActivite=1]  → [[de,a,vitesse]…]   (lecture accélérée)
+GET <base>/journal/reglages?cle=…       → les réglages de rejeu et d'export du téléphone (lecture seule)
+GET <base>/journal/tuile?cle=…&z=…&x=…&y=…  → image/png, un fond OpenStreetMap chargé et gardé par le téléphone
+GET <base>/journal/son?cle=…&id=…&n=0   → audio/mpeg, servi par morceaux (Range)
+GET <base>/journal/image?cle=…&f=…      → image/png (une image de la galerie)
+GET <base>/journal/fabrique?cle=…&id=…&quoi=son|image|video|gif|paquet[&de&a&titre&carte=1&t]  → {"ok":true,"travail":"…"}
+    options, "1"/"0" (sinon les réglages du téléphone) : res=XS|M|HD, ouverture, recap, avecSon, accelere, sstv, fiches, smetre, freq, locator
+GET <base>/journal/travail?cle=…&n=…    → {"fini","progres","ok","nom","taille"}
+GET <base>/journal/fichier?cle=…&n=…    → le fichier fabriqué (pièce jointe)
+```
+
+Les heures sont en millisecondes UTC. La position 0 d'un fichier son est à
+`o` ; son annonce parlée finit à `o + an`. Ce qui est fabriqué sort de
+l'onglet Partager du téléphone lui-même.
+
 ---
 
 ## 5. Ce que l'API ne fait pas
@@ -206,8 +233,9 @@ sur les planches SSTV), ni le carnet au-delà de l'ajout d'un contact. Rien ne s
 page du public — `/d/<jeton>/son.pcm`, PCM 16 bits mono à 22 050 Hz — et
 seulement pendant un enregistrement de passage.
 
-La surface exposée tient dans deux fichiers, `demo/PontCommande.kt` et, pour
-les planches SSTV, `demo/PlancheWeb.kt` : relisibles d'un coup. Une surface qu'on peut lire est une surface
+La surface exposée tient dans trois fichiers, `demo/PontCommande.kt`, et pour
+les planches SSTV et le journal des passages, `demo/PlancheWeb.kt` et
+`demo/JournalWeb.kt` : relisibles d'un coup. Une surface qu'on peut lire est une surface
 qu'on peut défendre.
 
 ---

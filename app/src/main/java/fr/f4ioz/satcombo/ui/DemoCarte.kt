@@ -196,6 +196,14 @@ fun DemoCarte(vm: fr.f4ioz.satcombo.MainViewModel) {
                         fontFamily = FontFamily.Monospace,
                         modifier = Modifier.fillMaxWidth(),
                         textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                    // The pass journal on the PC: "journal" after it, the same code.
+                    Text(t("cmd_journal"), color = TextLo, fontSize = 11.sp,
+                        modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                    Text(etat.urlCommande + "journal", color = Cyan, fontSize = 12.sp,
+                        fontFamily = FontFamily.Monospace,
+                        modifier = Modifier.fillMaxWidth(),
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center)
                     Spacer(Modifier.height(6.dp))
                     Text(t("cmd_code"), color = TextLo, fontSize = 11.sp,
                         modifier = Modifier.fillMaxWidth(),

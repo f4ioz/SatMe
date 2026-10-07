@@ -33,45 +33,46 @@ object PageCommande {
   :root { --fond:#0B1016; --carte:#131C24; --bord:#22303B; --cyan:#3FE0C8;
           --ambre:#FFB454; --rose:#E5484D; --gris:#9AA7B4; --clair:#E8F0F7; }
   * { box-sizing:border-box; }
-  body { margin:0; background:var(--fond); color:var(--clair); font-size:16px;
+  body { margin:0; background:var(--fond); color:var(--clair); font-size:14px;
          font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif; }
-  .page { max-width:1100px; margin:0 auto; padding:24px; }
-  h1 { font-size:20px; margin:0 0 4px; letter-spacing:.5px; }
-  .sub { color:var(--gris); font-size:13px; margin-bottom:20px; }
-  .grille { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+  /* Compact: the whole desk on a laptop screen, without scrolling. */
+  .page { max-width:1240px; margin:0 auto; padding:12px 16px; }
+  h1 { font-size:17px; margin:0 0 2px; letter-spacing:.5px; }
+  .sub { color:var(--gris); font-size:12px; margin-bottom:10px; }
+  .grille { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
   @media (max-width:820px) { .grille { grid-template-columns:1fr; } }
   .carte { background:var(--carte); border:1px solid var(--bord);
-           border-radius:14px; padding:18px; }
+           border-radius:12px; padding:12px 14px; }
   .t { color:var(--gris); font-size:11px; letter-spacing:1.6px;
-       text-transform:uppercase; margin-bottom:10px; }
-  .gros { font-size:34px; font-weight:800; letter-spacing:1px; }
+       text-transform:uppercase; margin-bottom:6px; }
+  .gros { font-size:26px; font-weight:800; letter-spacing:1px; }
   .cyan { color:var(--cyan); } .ambre { color:var(--ambre); }
-  .paire { display:flex; gap:24px; flex-wrap:wrap; }
-  .val { font-family:ui-monospace,Consolas,monospace; font-size:22px; }
-  input, select, button { font-size:18px; font-family:inherit; border-radius:10px;
+  .paire { display:flex; gap:18px; flex-wrap:wrap; }
+  .val { font-family:ui-monospace,Consolas,monospace; font-size:18px; }
+  input, select, button { font-size:15px; font-family:inherit; border-radius:8px;
          border:1px solid var(--bord); background:#0E1720; color:var(--clair);
-         padding:12px; }
+         padding:8px 10px; }
   input:focus, select:focus { outline:2px solid var(--cyan); }
-  #call { font-size:30px; font-weight:800; letter-spacing:3px;
+  #call { font-size:24px; font-weight:800; letter-spacing:3px;
           text-transform:uppercase; width:100%; }
-  .ligne { display:flex; gap:10px; margin-top:10px; flex-wrap:wrap; }
+  .ligne { display:flex; gap:8px; margin-top:8px; flex-wrap:wrap; }
   .ligne input { flex:1; min-width:90px; }
   button { cursor:pointer; font-weight:700; }
-  .primaire { background:var(--cyan); color:#06131A; border:none; padding:14px 22px; }
+  .primaire { background:var(--cyan); color:#06131A; border:none; padding:9px 18px; }
   .rouge { background:var(--rose); color:#fff; border:none; }
-  table { width:100%; border-collapse:collapse; font-size:14px; }
-  td { padding:6px 4px; border-bottom:1px solid var(--bord); }
-  td.c { font-weight:800; font-size:17px; }
-  .etat { margin-top:10px; font-size:14px; min-height:22px; }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  td { padding:4px 4px; border-bottom:1px solid var(--bord); }
+  td.c { font-weight:800; font-size:15px; }
+  .etat { margin-top:6px; font-size:13px; min-height:18px; }
   /* Suggestions: three at most, one line each. Beyond that you read instead
      of glancing, and the seconds saved on typing are lost on choosing. */
-  #qui { min-height:52px; margin-top:6px; }
-  #qui .p { font-size:34px; font-weight:800; color:var(--cyan); line-height:1.1; }
+  #qui { min-height:40px; margin-top:4px; }
+  #qui .p { font-size:26px; font-weight:800; color:var(--cyan); line-height:1.1; }
   #qui .d { color:var(--gris); font-size:13px; }
   #qui .att { color:var(--gris); font-size:13px; }
-  #props { display:flex; gap:8px; margin-top:8px; flex-wrap:wrap; min-height:44px; }
+  #props { display:flex; gap:6px; margin-top:6px; flex-wrap:wrap; min-height:34px; }
   .prop { background:#0E1720; border:1px solid var(--bord); border-radius:10px;
-          padding:8px 12px; cursor:pointer; font-size:15px; }
+          padding:5px 10px; cursor:pointer; font-size:14px; }
   .prop.sel { border-color:var(--cyan); background:rgba(63,224,200,.12); }
   .prop b { font-size:17px; letter-spacing:1px; }
   .prop span { color:var(--gris); font-size:12px; margin-left:8px; }
@@ -85,24 +86,24 @@ object PageCommande {
   #liste td.envoi .ok { color:var(--cyan); } #liste td.envoi .ambre { color:var(--ambre); }
   #liste td.act { white-space:nowrap; text-align:right; }
   #liste td.act button { font-size:14px; padding:4px 9px; margin-left:4px; }
-  .grille2 { margin-top:16px; }
-  .puces { display:flex; flex-wrap:wrap; gap:8px; margin:10px 0; }
+  .grille2 { margin-top:10px; }
+  .puces { display:flex; flex-wrap:wrap; gap:6px; margin:6px 0; }
   .puce { border:1px solid var(--bord); border-radius:8px; padding:4px 10px;
           font-size:13px; color:var(--gris); }
   .puce.on { border-color:var(--cyan); color:var(--cyan); }
   .puce.rec { border-color:var(--rose); color:var(--rose); }
   .info { font-size:13px; color:var(--gris); margin-top:4px; }
   .info b { color:var(--clair); font-weight:600; }
-  #ici { margin-top:12px; padding:10px 12px; border-radius:10px;
-         background:rgba(63,224,200,.10); font-size:15px; }
+  #ici { margin-top:8px; padding:7px 10px; border-radius:8px;
+         background:rgba(63,224,200,.10); font-size:14px; }
   #profils, #passages { width:100%; border-collapse:collapse; margin-top:8px; }
-  #profils td, #passages td { padding:7px 6px; border-bottom:1px solid var(--bord); font-size:14px; }
+  #profils td, #passages td { padding:4px 6px; border-bottom:1px solid var(--bord); font-size:13px; }
   #profils tr { cursor:pointer; }
   #profils tr:hover { background:rgba(255,255,255,.04); }
   #profils tr.defaut td:first-child { color:var(--cyan); font-weight:800; }
   #profils .marque { font-size:11px; color:var(--cyan); letter-spacing:1px; }
   #passages .encours { color:var(--cyan); font-weight:800; }
-  #passages button { font-size:13px; padding:5px 10px; }
+  #passages button { font-size:12px; padding:3px 8px; }
   #porte { max-width:420px; margin:12vh auto; }
 </style>
 
@@ -120,7 +121,7 @@ object PageCommande {
 
 <div class="page" id="poste" style="display:none">
   <h1>SatMe — poste de commande</h1>
-  <div class="sub"><span id="station">—</span> · <a id="lienPlanche" href="planche" style="color:var(--cyan)">Planche SSTV</a></div>
+  <div class="sub"><span id="station">—</span> · <a id="lienPlanche" href="planche" style="color:var(--cyan)">Planche SSTV</a> · <a id="lienJournal" href="journal" style="color:var(--cyan)">Journal des passages</a></div>
 
   <div class="grille">
     <div class="carte">
@@ -129,7 +130,7 @@ object PageCommande {
       <!-- Le cadran : trace du passage, position du satellite en cyan, et le
            trait ambre de l'antenne quand la boussole est branchée. Tracé en
            SVG, redessiné à chaque seconde — aucune image à charger. -->
-      <svg id="cadran" viewBox="0 0 220 220" width="220" height="220"
+      <svg id="cadran" viewBox="0 0 220 220" width="170" height="170"
            style="display:block;margin:10px auto"></svg>
       <div class="paire" style="margin-top:12px">
         <div><div class="t">Azimut</div><div class="val" id="az">—</div></div>
@@ -205,6 +206,7 @@ let cle = localStorage.getItem('satme-cle') || '';
 const g = id => document.getElementById(id);
 // From the address itself: typed without its final slash, a relative link would lose the token.
 g('lienPlanche').href = base + '/planche';
+g('lienJournal').href = base + '/journal';
 
 async function appel(route, params) {
   const p = new URLSearchParams(params || {});

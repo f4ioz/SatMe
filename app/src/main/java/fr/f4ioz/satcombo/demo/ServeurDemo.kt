@@ -289,6 +289,11 @@ object ServeurDemo {
             envoie(sortie, "200 OK", "text/html; charset=utf-8", PagePlanche.html().toByteArray(Charsets.UTF_8))
             return
         }
+        // The pass journal on the PC: the same.
+        if (chemin == "/journal" || chemin == "/journal/") {
+            envoie(sortie, "200 OK", "text/html; charset=utf-8", PageJournal.html().toByteArray(Charsets.UTF_8))
+            return
+        }
 
         // The page itself needs no code, the form does: serving a blank page
         // to a stranger costs nothing.
@@ -337,7 +342,11 @@ object ServeurDemo {
             val r = PlancheWeb.sert(route.removePrefix("/planche"), requete?.methode ?: "GET",
                 { parametre(route, it) },
                 { if (requete != null && entree != null) RequeteHttp.corps(entree, requete, PlancheWeb.IMPORT_MAX) else null })
-            envoie(sortie, r.statut, r.type, r.corps, r.entetes)
+            envoieReponse(sortie, r, requete)
+            return
+        }
+        if (chemin.startsWith("/journal/")) {
+            envoieReponse(sortie, JournalWeb.sert(route.removePrefix("/journal")) { parametre(route, it) }, requete)
             return
         }
 
@@ -589,6 +598,35 @@ object ServeurDemo {
                 "Accept-Ranges: none\r\nConnection: close\r\n" +
                 "Access-Control-Allow-Origin: *\r\n\r\n").toByteArray())
         sortie.flush()
+    }
+
+    /**
+     * A page's answer: its bytes, or its file — whole, or the part the browser asks for
+     * (`Range`): a sound can only be sought in when it is served by parts.
+     */
+    private fun envoieReponse(sortie: OutputStream, r: ReponseWeb, requete: RequeteHttp.Requete?) {
+        val f = r.fichier
+        if (f == null) { envoie(sortie, r.statut, r.type, r.corps, r.entetes); return }
+        runCatching {
+            val taille = f.length()
+            val p = RequeteHttp.plage(requete?.plage, taille)
+            val de = p?.first ?: 0L; val n = if (p != null) p.last - p.first + 1 else taille
+            sortie.write(
+                ((if (p != null) "HTTP/1.1 206 Partial Content\r\nContent-Range: bytes ${p.first}-${p.last}/$taille\r\n"
+                    else "HTTP/1.1 200 OK\r\n") +
+                    "Content-Type: ${r.type}\r\nContent-Length: $n\r\nAccept-Ranges: bytes\r\n" + r.entetes +
+                    "Connection: close\r\n\r\n").toByteArray())
+            java.io.RandomAccessFile(f, "r").use { raf ->
+                raf.seek(de)
+                val tampon = ByteArray(64 * 1024); var reste = n
+                while (reste > 0) {
+                    val lu = raf.read(tampon, 0, minOf(tampon.size.toLong(), reste).toInt())
+                    if (lu < 0) break
+                    sortie.write(tampon, 0, lu); reste -= lu
+                }
+            }
+            sortie.flush()
+        }
     }
 
     private fun envoie(sortie: OutputStream, statut: String, type: String, corps: ByteArray, entetes: String = "") {

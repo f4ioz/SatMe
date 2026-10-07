@@ -36,14 +36,12 @@ object PlancheWeb {
     /** The application, set by the ViewModel. */
     @Volatile var app: Context? = null
 
-    class Reponse(val statut: String, val type: String, val corps: ByteArray, val entetes: String = "")
-
     /** A template sent from the PC: a picture, 25 MB at most. */
     const val IMPORT_MAX = 25L * 1024 * 1024
 
-    private fun json(s: String) = Reponse("200 OK", "application/json; charset=utf-8", s.toByteArray(Charsets.UTF_8))
-    private val NON = Reponse("404 Not Found", "text/plain", "non".toByteArray())
-    private val REFUS = Reponse("400 Bad Request", "application/json", "{\"ok\":false}".toByteArray())
+    private fun json(s: String) = ReponseWeb("200 OK", "application/json; charset=utf-8", s.toByteArray(Charsets.UTF_8))
+    private val NON = ReponseWeb("404 Not Found", "text/plain", "non".toByteArray())
+    private val REFUS = ReponseWeb("400 Bad Request", "application/json", "{\"ok\":false}".toByteArray())
 
     private fun js(t: String): String = buildString {
         for (ch in t) when {
@@ -109,7 +107,7 @@ object PlancheWeb {
      * One request of the sheet page. [route] is what follows `/planche`;
      * [p] reads a parameter; [corps] reads the body (a template sent).
      */
-    fun sert(route: String, methode: String, p: (String) -> String, corps: () -> ByteArray?): Reponse {
+    fun sert(route: String, methode: String, p: (String) -> String, corps: () -> ByteArray?): ReponseWeb {
         val ctx = app ?: return json("{\"ok\":false,\"raison\":\"pasPret\"}")
         val r = rangement(ctx)
         val chemin = route.substringBefore('?')
@@ -202,7 +200,7 @@ object PlancheWeb {
                 "/vignette" -> {
                     val f = galerie(ctx).firstOrNull { it.first.name == p("f") }?.first ?: return NON
                     val b = vignette(f, p("w").toIntOrNull()?.coerceIn(80, 800) ?: 320) ?: return NON
-                    Reponse("200 OK", "image/jpeg", jpeg(b, 85), "Cache-Control: max-age=3600\r\n")
+                    ReponseWeb("200 OK", "image/jpeg", jpeg(b, 85), "Cache-Control: max-age=3600\r\n")
                 }
 
                 // The sheet as the phone draws it: the preview (light), or the sheet itself to download.
@@ -214,7 +212,7 @@ object PlancheWeb {
                     if (chemin == "/apercu") {
                         val imgs = places.mapNotNull { (i, x) -> vignette(x.first, 400)?.let { i to (it to x.second) } }.toMap()
                         val b = PlancheRendu.dessine(m, fondApercu(r, m), p("w").toIntOrNull()?.coerceIn(400, 1800) ?: 1400, imgs, v, logo)
-                        Reponse("200 OK", "image/jpeg", jpeg(b), "Cache-Control: no-store\r\n")
+                        ReponseWeb("200 OK", "image/jpeg", jpeg(b), "Cache-Control: no-store\r\n")
                     } else {
                         val fond = r.fond(m)?.let { PlancheRendu.charge(it, 4000) }
                         val imgs = places.mapNotNull { (i, x) -> PlancheRendu.charge(x.first, 2000)?.let { i to (it to x.second) } }.toMap()
@@ -222,7 +220,7 @@ object PlancheWeb {
                         val sat = imgs.values.firstOrNull()?.second?.satName?.replace(Regex("[^A-Za-z0-9-]"), "-") ?: "SSTV"
                         val jour = v.dates.take(10).replace("-", "").ifBlank { "planche" }
                         val png = ByteArrayOutputStream().also { b.compress(Bitmap.CompressFormat.PNG, 100, it) }.toByteArray()
-                        Reponse("200 OK", "image/png", png,
+                        ReponseWeb("200 OK", "image/png", png,
                             "Content-Disposition: attachment; filename=\"SatMe_Planche_${sat}_$jour.png\"\r\n")
                     }
                 }

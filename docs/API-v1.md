@@ -194,6 +194,32 @@ point it at another file. `vignette` serves only pictures of the gallery.
 The preview and the sheet are drawn by the phone, with the drawing of its
 own screen.
 
+### Pass journal
+
+The page `<base>/journal` replays the passes kept by the phone. Its routes
+(read only, apart from what the phone makes):
+
+```
+GET <base>/journal/liste?cle=…          → {"utc","indicatif","passages":[{"id","sat","de","a","el","son","q","i","r","s","cat","sm","rec","auto"}…]}
+GET <base>/journal/passage?cle=…&id=…   → {"id","sat","de","a","loc","tp","el","pts":[[t,az,el]…],"prevue":[[az,el]…],
+                                           "marques":[{"k","de","a","t","d","iss","f"}…],"sons":[{"n","nom","o","an","du"}…],
+                                           "sig":[[t,s]…],"freq":[[t,hz]…]}
+GET <base>/journal/activite?cle=…&id=…  → [[de,a]…]   (activity heard in the sound)
+GET <base>/journal/fiches?cle=…&id=…    → {"EA4XYZ":{"nom","qth","pays","loc"}…}   (who the stations are)
+GET <base>/journal/segments?cle=…&id=…[&avant&apres&rapide&surActivite=1]  → [[de,a,speed]…]   (accelerated replay)
+GET <base>/journal/reglages?cle=…       → the phone's replay and export settings (read only)
+GET <base>/journal/tuile?cle=…&z=…&x=…&y=…  → image/png, an OpenStreetMap tile fetched and kept by the phone
+GET <base>/journal/son?cle=…&id=…&n=0   → audio/mpeg, served by parts (Range)
+GET <base>/journal/image?cle=…&f=…      → image/png (a picture of the gallery)
+GET <base>/journal/fabrique?cle=…&id=…&quoi=son|image|video|gif|paquet[&de&a&titre&carte=1&t]  → {"ok":true,"travail":"…"}
+    options, "1"/"0" (else the phone's settings): res=XS|M|HD, ouverture, recap, avecSon, accelere, sstv, fiches, smetre, freq, locator
+GET <base>/journal/travail?cle=…&n=…    → {"fini","progres","ok","nom","taille"}
+GET <base>/journal/fichier?cle=…&n=…    → the file made (attachment)
+```
+
+Times are UTC milliseconds. A sound file's position 0 is at `o`; its spoken
+header ends at `o + an`. What is made comes from the phone's own Share tab.
+
 ---
 
 ## 5. What the API doesn't do
@@ -211,8 +237,9 @@ sheets), nor the log beyond adding a contact. Nothing can be deleted over the ne
 through the public page — `/d/<jeton>/son.pcm`, 16-bit mono PCM at
 22,050 Hz — and only while a pass is being recorded.
 
-The exposed surface fits in two files, `demo/PontCommande.kt` and, for the
-SSTV sheets, `demo/PlancheWeb.kt`: readable in one sitting. A surface you can read is a surface you can
+The exposed surface fits in three files, `demo/PontCommande.kt`, and for the
+SSTV sheets and the pass journal, `demo/PlancheWeb.kt` and `demo/JournalWeb.kt`:
+readable in one sitting. A surface you can read is a surface you can
 defend.
 
 ---

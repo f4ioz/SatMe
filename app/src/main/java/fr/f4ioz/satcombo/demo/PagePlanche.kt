@@ -32,7 +32,7 @@ object PagePlanche {
         "titre_planche", "ajouter_texte", "retirer_texte", "texte_choisi", "couleur", "fond", "sans", "voile_blanc",
         "voile_noir", "libre", "champ_indicatif", "champ_nom_locator", "champ_dates", "champ_titre", "champ_libre",
         "telecharger", "fabrication", "enregistre", "hors_ligne", "aucun_modele", "aucune_image", "choisir_case",
-        "par_defaut", "pupitre")
+        "par_defaut", "pupitre", "journal")
 
     private fun js(s: String): String = buildString {
         for (ch in s) when {
@@ -135,6 +135,7 @@ object PagePlanche {
 <header>
   <h1 id="tTitre"></h1>
   <a id="pupitre" href="./" style="color:var(--cyan)"></a>
+  <a id="journal" href="journal" style="color:var(--cyan)"></a>
   <label id="tModele"></label><select id="modeles"></select>
   <button class="discret" id="grille"></button>
   <button class="discret" id="tour"></button>
@@ -473,7 +474,7 @@ async function nouveau(type) { await sauveMaintenant(); const j = await lire('/n
 g('tPorte').textContent = T.titre; g('tCode').textContent = T.code; g('entrer').textContent = T.entrer;
 g('tTitre').textContent = 'SatMe · ' + T.titre; g('tModele').textContent = T.modele; g('tSous').textContent = T.sous;
 g('grille').textContent = T.grille; g('tour').textContent = T.tour; g('importer').textContent = T.importer;
-g('telecharger').textContent = T.telecharger; g('pupitre').textContent = T.pupitre; g('pupitre').href = base + '/';
+g('telecharger').textContent = T.telecharger; g('pupitre').textContent = T.pupitre; g('pupitre').href = base + '/'; g('journal').textContent = T.journal; g('journal').href = base + '/journal';
 g('oImages').textContent = T.images; g('oDispo').textContent = T.disposition; g('oTextes').textContent = T.textes;
 g('oImages').onclick = () => { onglet = 'images'; panneau(); };
 g('oDispo').onclick = () => { onglet = 'dispo'; panneau(); };

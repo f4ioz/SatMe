@@ -45,4 +45,17 @@ class RequeteHttpTest {
         assertNull(RequeteHttp.lit(ByteArrayInputStream(ByteArray(0))))
         assertNull(RequeteHttp.lit(ByteArrayInputStream(ByteArray(20_000) { 'a'.code.toByte() })))
     }
+
+    @Test
+    fun un_son_demande_par_morceaux() {
+        val r = RequeteHttp.lit(ByteArrayInputStream("GET /c/x/journal/son?n=0 HTTP/1.1\r\nRange: bytes=1000-\r\n\r\n".toByteArray()))!!
+        assertEquals("bytes=1000-", r.plage)
+        assertEquals(1000L..4999L, RequeteHttp.plage(r.plage, 5000L))
+        assertEquals(0L..99L, RequeteHttp.plage("bytes=0-99", 5000L))
+        assertEquals(4900L..4999L, RequeteHttp.plage("bytes=-100", 5000L))
+        assertEquals(10L..4999L, RequeteHttp.plage("bytes=10-999999", 5000L))
+        assertNull(RequeteHttp.plage("bytes=6000-", 5000L))
+        assertNull(RequeteHttp.plage(null, 5000L))
+        assertNull(RequeteHttp.plage("bytes=abc", 5000L))
+    }
 }

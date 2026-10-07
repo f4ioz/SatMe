@@ -2985,6 +2985,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     /** The pass journal (see [JournalDesPassages]); before any init that could follow a pass. */
     val journal = JournalDesPassages(getApplication(), settings, viewModelScope, predictor, qrz,
         { _ui.value }, { _ui.value.observer ?: locationProvider.defaultObserver }, { etatJournal() })
+        // The pass journal on the PC (same door, same code).
+        .also { fr.f4ioz.satcombo.demo.JournalWeb.app = getApplication(); fr.f4ioz.satcombo.demo.JournalWeb.journal = it }
 
     /** Every pass recorded under CAT (option, see [EnregistrementAutoCat]); before the init that starts it. */
     val enregAutoCat = EnregistrementAutoCat(getApplication(), settings, viewModelScope, predictor,
