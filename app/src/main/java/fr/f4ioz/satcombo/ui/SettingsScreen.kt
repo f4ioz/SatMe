@@ -2006,7 +2006,8 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
                         // FT-817 and IC-705, one rig per side: one entry, the
                         // sides chosen underneath.
                         Triple(PAIRE, t("rig_ft817_ic705_cotes"), true),
-                        Triple(fr.f4ioz.satcombo.THD72, t("rig_thd72"), true)
+                        Triple(fr.f4ioz.satcombo.THD72, t("rig_thd72"), true),
+                        Triple(fr.f4ioz.satcombo.TS2000, t("rig_ts2000"), true)
                     )
                     var avertirIc705 by remember { mutableStateOf(false) }
                     if (avertirIc705) AvertissementIc705 { avertirIc705 = false }
@@ -2292,7 +2293,8 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
                     }
 
                     Spacer(Modifier.height(12.dp))
-                    val duplex = ui.rigModel in Postes.MODELES || ui.rigModel == fr.f4ioz.satcombo.THD72
+                    val duplex = ui.rigModel in Postes.MODELES || ui.rigModel == fr.f4ioz.satcombo.THD72 ||
+                        ui.rigModel == fr.f4ioz.satcombo.TS2000
                     Row(verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier.fillMaxWidth().toggleable(value = ui.catUi.txVfoShift && duplex, enabled = duplex, role = Role.Switch,
                             onValueChange = { vm.setCatTxVfoShift(it) })) {
@@ -2327,7 +2329,8 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
                         // What follows is for Icom CI-V radios ONLY. Left
                         // unconditioned, it showed in Yaesu dual mode too, with
                         // two competing "USB adapter" sections.
-                        if (ui.rigModel !in Postes.MODELES && ui.rigModel != fr.f4ioz.satcombo.THD72) {
+                        if (ui.rigModel !in Postes.MODELES && ui.rigModel != fr.f4ioz.satcombo.THD72 &&
+                            ui.rigModel != fr.f4ioz.satcombo.TS2000) {
                             // CI-V address + baud.
                             Spacer(Modifier.height(8.dp))
                             Text(t("civ_address"), color = TextHi, fontSize = 13.sp)

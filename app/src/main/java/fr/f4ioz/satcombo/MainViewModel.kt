@@ -982,6 +982,7 @@ fun etatCarre(ui: UiState, carre: String): fr.f4ioz.satcombo.data.CarnetEnLigne.
 const val FT817_IC705 = "FT817_IC705"   // IC-705 receives, FT-817 transmits
 const val IC705_FT817 = "IC705_FT817"   // IC-705 transmits, FT-817 receives
 const val THD72 = "THD72"               // Kenwood TH-D72, full duplex: one band RX, the other TX
+const val TS2000 = "TS2000"             // Kenwood TS-2000 in SAT mode: VFO A downlink, VFO B uplink
 
 /** Normalize a designator so AO-07 == AO-7, FO-029 == FO-29. */
 private val DESIGNATEUR = Regex("""([A-Z]+)-0*(\d+)""")
@@ -1069,10 +1070,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private var rotorDriver: fr.f4ioz.satcombo.rotor.RotorDriver? = null
     /** Control goes through the FT-817 pair — two rigs, or one for TX only. */
     private val isPairRig: Boolean
-        get() = _ui.value.rigModel in fr.f4ioz.satcombo.cat.Postes.MODELES || _ui.value.rigModel == THD72
+        get() = _ui.value.rigModel in fr.f4ioz.satcombo.cat.Postes.MODELES || _ui.value.rigModel == THD72 ||
+            _ui.value.rigModel == TS2000
 
     /** The pair is a TH-D72: its two bands on one cable. */
     private val isThd72: Boolean get() = _ui.value.rigModel == THD72
+
+    /** The pair is a TS-2000 in SAT mode: its two VFOs on one cable (see [fr.f4ioz.satcombo.cat.Ts2000]). */
+    private val isTs2000: Boolean get() = _ui.value.rigModel == TS2000
 
     /** The TH-D72 panel (see [Thd72Panneau]). */
     val thd72 = Thd72Panneau(settings, viewModelScope, { ft817.lienThd72 }, { isThd72 }) {
@@ -1090,6 +1095,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     /** Gives each side of the pair its protocol, from the rig model. */
     private fun configurePaire() {
         if (isThd72) ft817.configureThd72(settings.thd72BandeTx)
+        else if (isTs2000) ft817.configureTs2000()
         else ft817.configure(
             rxIc705 = fr.f4ioz.satcombo.cat.Postes.rxIc705(_ui.value.rigModel),
             txIc705 = fr.f4ioz.satcombo.cat.Postes.txIc705(_ui.value.rigModel))
@@ -4829,7 +4835,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun postesProposes(): List<Pair<String, String>> =
         listOf("IC9700" to "Icom IC-9700") +
             fr.f4ioz.satcombo.cat.Postes.MODELES.map { it to fr.f4ioz.satcombo.ui.libellePostes(it) } +
-            listOf(THD72 to t("rig_thd72"))
+            listOf(THD72 to t("rig_thd72"), TS2000 to t("rig_ts2000"))
 
     /** Adds or replaces [p] (same id). */
     fun enregistreProfil(p: fr.f4ioz.satcombo.domain.StationReadiness.ProfilNomme) {
@@ -5596,6 +5602,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch { delay(3_000); refreshCatDevices(); catSiBesoin() }
         val u = _ui.value
         if (u.rotorConnected || u.rotorSim || u.rotorLink != "GS232") return
+        // Only the adapter the rotor answered on before: opening any other raises its RTS/DTR,
+        // and on a rig interface that keys the transmitter (see RotorRecherche).
+        val cle = dev?.let { fr.f4ioz.satcombo.cat.cleDe(it) }
+        if (!fr.f4ioz.satcombo.domain.RotorRecherche.auBranchement(cle, settings.rotorUsbCle)) return
         val nom = dev?.productName ?: dev?.deviceName ?: ""
         _ui.value = _ui.value.rot { copy(rotorStatus = tf("rotor_usb_attached", nom)) }
         connectRotor()
@@ -7826,6 +7836,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         fr.f4ioz.satcombo.cat.CatBench.runIc705Pair()
                     _ui.value.rigModel == fr.f4ioz.satcombo.cat.Postes.IC705_TX ->
                         fr.f4ioz.satcombo.cat.CatBench.runFt817Ic705(ic705Emet = true)
+                    isTs2000 -> fr.f4ioz.satcombo.cat.CatBench.runTs2000()
                     isPairRig -> fr.f4ioz.satcombo.cat.CatBench.runFt817Pair()
                     else -> fr.f4ioz.satcombo.cat.CatBench.runIc9700()
                 }
@@ -7889,6 +7900,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             configurePaire()
             ft817.rx.attach(fr.f4ioz.satcombo.cat.Thd72Sim())  // one line for both bands
             ft817.rx.pacingMs = 0
+        } else if (isTs2000) {
+            configurePaire()
+            ft817.rx.attach(fr.f4ioz.satcombo.cat.Ts2000Sim())  // one line for both VFOs
+            ft817.rx.pacingMs = 0
         } else if (isPairRig) {
             configurePaire()
             // Each side gets the simulator of the rig it stands for.
@@ -7944,6 +7959,37 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 if (settings.thd72BandeTx == 0) "B" else "A"))
         surveilleEmission(); startCatLoop()
         thd72.lire()
+    }
+
+    /**
+     * Connects a TS-2000: finds the adapter and the port and speed it answers
+     * `ID019;` on (RTS and DTR low), and says whether it is in SAT mode — the
+     * only mode where VFO A is the downlink and VFO B the uplink.
+     */
+    private suspend fun ouvreTs2000() {
+        configurePaire()
+        ft817.requestPermissions()
+        // Never the rotor's adapter: "ID;" sent there would read as "D", down, on a GS-232.
+        val rotorUsb = rotorSerial?.takeIf { it.isOpen }?.cleUsb
+        val cles = ft817.listDevices().filter { it.hasPermission }.map { it.cle }.filter { it != rotorUsb }
+        var ouvert = false
+        // One search for both sides: they share the line (opening one opens the other).
+        for (c in cles) {
+            if (ft817.lienTs2000?.open(c, fr.f4ioz.satcombo.cat.Ts2000.VITESSES.first()) == true) { ouvert = true; break }
+        }
+        val lien = ft817.lienTs2000
+        if (!ouvert || lien == null) {
+            _ui.value = _ui.value.copy(catConnected = false, catStatus = t("ts2000_introuvable"))
+            return
+        }
+        // Remembered: the rotor's search will never open this adapter (its RTS/DTR may key the rig).
+        lien.cle?.let { settings.ts2000Cle = it }
+        val sa = lien.satellite()
+        val statut = if (fr.f4ioz.satcombo.cat.Ts2000.enSatellite(sa))
+            tf("ts2000_connecte", lien.vitesse, fr.f4ioz.satcombo.cat.Ts2000.nomSatellite(sa))
+        else tf("ts2000_pas_sat", lien.vitesse)
+        _ui.value = _ui.value.copy(catConnected = true, catStatus = statut)
+        surveilleEmission(); startCatLoop()
     }
 
     // ------------------------------------------------------- TH-D72 panel
@@ -8116,6 +8162,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             fr.f4ioz.satcombo.cat.CatJournal.enabled = _ui.value.catMonitor
             if (_ui.value.catSimulated) { connectSimulated(); return@run }
             if (isThd72) { ouvreThd72(); return@run }
+            if (isTs2000) { ouvreTs2000(); return@run }
             if (isPairRig) {
                 configurePaire()
                 if (isPaireMixte) {
@@ -8230,17 +8277,17 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      * a frame is going out.
      */
     /**
-     * The S-meter, once a second, for the journal: an Icom alone (not a
-     * pair, not the simulated rig), a satellite up, never while transmitting
-     * (the meter shows power then). Read only.
+     * The S-meter, once a second, for the journal: an Icom alone or a TS-2000
+     * (not a pair of two rigs, not the simulated rig), a satellite up, never
+     * while transmitting (the meter shows power then). Read only.
      */
     private suspend fun lisSMetre() {
         val u = _ui.value
-        if (isPairRig || isThd72 || u.catSimulated || !u.catConnected || aprsEnEmission || u.catUi.enEmission) return
+        if ((isPairRig && !isTs2000) || isThd72 || u.catSimulated || !u.catConnected || aprsEnEmission || u.catUi.enEmission) return
         if ((u.livePosition?.elevationDeg ?: -1.0) < 0) return
         val maintenant = System.currentTimeMillis()
         if (maintenant - u.catSMetreMs < 1_000L) return
-        val s = cat.readSMeter()
+        val s = if (isTs2000) ft817.lienTs2000?.smetre() else cat.readSMeter()
         _ui.value = _ui.value.copy(catSMetre = s, catSMetreMs = maintenant)
     }
 
@@ -9814,8 +9861,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         // access" whatever the failure, sending the operator after a
         // permission already granted.
         var echec = ""
+        // The adapters the rigs use: never opened by an automatic search (RTS/DTR may key them).
+        val clesPostes = listOf(settings.ft817RxSerial, settings.ft817TxSerial, settings.ts2000Cle,
+            ft817.lienTs2000?.cle ?: "").filter { it.isNotBlank() }
         for (i in ordre) {
             trace.add(tf("cat_diag_try", refs[i].label))
+            val id = d.identitePort(i)
+            if (u.rotorAutoPort && !fr.f4ioz.satcombo.domain.RotorRecherche.permis(id?.first, id?.second, clesPostes, settings.rotorUsbCle)) {
+                trace.add(t("rotor_diag_poste")); continue
+            }
             if (!d.ensurePermission(i)) {
                 trace.add(t("cat_diag_line_denied")); echec = t("rotor_fail_denied"); continue
             }
@@ -9846,6 +9900,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             // The port that answered is remembered.
             settings.rotorUsbIndex = gagnant
         }
+        if (ok) d.identitePort(gagnant)?.first?.let { settings.rotorUsbCle = it }
         rotorDriver = if (ok) d else null
         rotorSerial = if (ok) d else null
         _ui.value = _ui.value.rot { copy(rotorConnected = ok,

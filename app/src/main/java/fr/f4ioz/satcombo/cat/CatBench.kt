@@ -57,6 +57,32 @@ object CatBench {
         return Report(steps, sim.refusals, ok)
     }
 
+    /**
+     * Start of a linear pass on a TS-2000 in SAT mode: modes, the pair (VFO A
+     * downlink, VFO B uplink), read-back, no tone. Passes only with no refusal
+     * and not one command that would key the transmitter.
+     */
+    suspend fun runTs2000(
+        sim: Ts2000Sim = Ts2000Sim(),
+        downlinkHz: Long = 435_640_000L,
+        uplinkHz: Long = 145_965_000L
+    ): Report {
+        val pair = Ft817Pair()
+        pair.configureTs2000()
+        pair.rx.attach(sim)
+        pair.pacingMs = 0L
+        val steps = ArrayList<String>()
+
+        pair.setModes("USB", "LSB"); steps += "modes USB / LSB"
+        pair.setPair(downlinkHz, uplinkHz); steps += t("catb_pair")
+        val back = pair.readDownlink()
+        steps += tf("catb_readback", back?.let { "%.5f MHz".format(java.util.Locale.US, it / 1e6) } ?: t("catb_no_reply"))
+        pair.setCtcss(0)
+
+        val ok = sim.refus == 0 && sim.tentativesEmission == 0 && back == downlinkHz && sim.fb == uplinkHz
+        return Report(steps, sim.refus + sim.tentativesEmission, ok)
+    }
+
     /** Same on a pair of FT-817s: one on the downlink, one on the uplink, each on its own cable. */
     suspend fun runFt817Pair(
         rxSim: Ft817Sim = Ft817Sim(),

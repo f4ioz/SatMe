@@ -1463,6 +1463,16 @@ class SettingsStore(context: Context) {
         get() = prefs.getString("rotor_link", "GS232") ?: "GS232"
         set(v) { prefs.edit().putString("rotor_link", v).apply() }
 
+    /** The adapter the GS-232 answered on (its key): the only one plugging in starts the rotor by itself. */
+    var rotorUsbCle: String
+        get() = prefs.getString("rotor_usb_cle", "") ?: ""
+        set(v) { prefs.edit().putString("rotor_usb_cle", v).apply() }
+
+    /** The adapter a TS-2000 answered on: never opened by the rotor's search. */
+    var ts2000Cle: String
+        get() = prefs.getString("ts2000_cle", "") ?: ""
+        set(v) { prefs.edit().putString("ts2000_cle", v).apply() }
+
     var rotorUsbIndex: Int
         get() = prefs.getInt("rotor_usb_index", 0)
         set(v) { prefs.edit().putInt("rotor_usb_index", v.coerceIn(0, 7)).apply() }

@@ -294,8 +294,8 @@ class Ft817Pair(private val context: Context? = null) {
     fun configure(rxIc705: Boolean, txIc705: Boolean) {
         if (isOpen) return
         // A TH-D72 band left from before is replaced too, not kept by default.
-        if (rx is Thd72Bande || (rx is Ic705Cat) != rxIc705) rx = if (rxIc705) Ic705Cat(context) else Ft817Cat(context)
-        if (tx is Thd72Bande || (tx is Ic705Cat) != txIc705) tx = if (txIc705) Ic705Cat(context) else Ft817Cat(context)
+        if (rx is Thd72Bande || rx is Ts2000Cote || (rx is Ic705Cat) != rxIc705) rx = if (rxIc705) Ic705Cat(context) else Ft817Cat(context)
+        if (tx is Thd72Bande || tx is Ts2000Cote || (tx is Ic705Cat) != txIc705) tx = if (txIc705) Ic705Cat(context) else Ft817Cat(context)
     }
 
     /**
@@ -311,6 +311,21 @@ class Ft817Pair(private val context: Context? = null) {
         tx = Thd72Bande(lien, bandeTx)
         rx = Thd72Bande(lien, 1 - bandeTx)
     }
+
+    /**
+     * Kenwood TS-2000 in SAT mode: one rig, one cable, its two VFOs as the
+     * pair's two sides — downlink on VFO A, uplink on VFO B (see [Ts2000]).
+     */
+    fun configureTs2000() {
+        if (isOpen) return
+        if (rx is Ts2000Cote && (tx as? Ts2000Cote)?.lien === (rx as Ts2000Cote).lien) return
+        val lien = Ts2000Lien(context)
+        rx = Ts2000Cote(lien, descente = true)
+        tx = Ts2000Cote(lien, descente = false)
+    }
+
+    /** The shared line when the pair is a TS-2000, else null. */
+    val lienTs2000: Ts2000Lien? get() = (rx as? Ts2000Cote)?.lien
 
     /** The shared line when the pair is a TH-D72, else null. */
     val lienThd72: Thd72Lien? get() = (tx as? Thd72Bande)?.lien

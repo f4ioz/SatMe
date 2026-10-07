@@ -181,6 +181,15 @@ class Gs232Rotor(private val context: Context? = null) : RotorDriver {
         return out
     }
 
+    /** The key and product name of port [index]'s adapter (the rotor search checks it is not a rig's). */
+    fun identitePort(index: Int): Pair<String, String?>? {
+        val ctx = context ?: return null
+        val um = ctx.getSystemService(Context.USB_SERVICE) as UsbManager
+        val ref = availablePorts().getOrNull(index) ?: return null
+        val dev = UsbSerialProber.getDefaultProber().findAllDrivers(um).getOrNull(ref.deviceIndex)?.device ?: return null
+        return fr.f4ioz.satcombo.cat.cleDe(dev) to dev.productName
+    }
+
     /**
      * Requests permission for port [index] **and waits for the answer**.
      *
@@ -235,6 +244,7 @@ class Gs232Rotor(private val context: Context? = null) : RotorDriver {
                 vide(l)
             }
             link = l
+            cleUsb = fr.f4ioz.satcombo.cat.cleDe(driver.device)
             lastError = ""
             true
         }.getOrElse {
@@ -247,7 +257,15 @@ class Gs232Rotor(private val context: Context? = null) : RotorDriver {
     override fun close() {
         runCatching { link?.close() }
         link = null
+        cleUsb = null
     }
+
+    /**
+     * The adapter open now (its key, as the rig side names adapters): a rig
+     * search must not send its questions there — "D" moves a GS-232 down.
+     */
+    @Volatile var cleUsb: String? = null
+        private set
 
     /** Recognised ports, in index order. */
     fun listDevices(): List<String> = availablePorts().map { it.label }
