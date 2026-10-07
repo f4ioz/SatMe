@@ -22,6 +22,15 @@ L'ISS le 4 octobre : quatre images d'écoles en Robot 36, décodées pendant qu'
 <img src="docs/images/fr-journal-export-iss.webp" width="24%" alt="L'image que SatMe fabrique pour partager le moment">
 </p>
 
+### Sur le PC aussi
+
+Le téléphone sert des pages au navigateur du PC (câble USB ou Wi-Fi, rien à installer) : le journal des passages rejoué en grand sur une carte avec son son, et la planche SSTV faite à la souris.
+
+<p align="center">
+<img src="docs/images/fr-journal-pc.webp" width="49%" alt="Le journal des passages sur le PC : le passage de l'ISS sur la carte, une image SSTV qui arrive, la frise">
+<img src="docs/images/fr-planche-pc.webp" width="49%" alt="La planche SSTV sur le PC : le modèle en grand, les images de l'ISS à glisser">
+</p>
+
 <p align="center"><a href="https://play.google.com/store/apps/details?id=fr.f4ioz.satcombo"><b>▶ SatMe sur Google Play</b></a> — gratuit, sans compte, sans publicité</p>
 
 <p align="center">
@@ -59,6 +68,12 @@ L'ISS le 4 octobre : quatre images d'écoles en Robot 36, décodées pendant qu'
 <img src="docs/images/fr-journal-export.webp" width="24%" alt="Journal des passages : export en image, vidéo ou GIF">
 <img src="docs/images/fr-sstv-sheet-iss.webp" width="24%" alt="Une planche des images de l'ISS">
 </p>
+
+## Bientôt dans la 20.80
+
+- **Le journal des passages sur le PC** : les passages rejoués en grand avec leur son, sur le ciel ou une carte OpenStreetMap (empreinte, ta station, les stations contactées ou entendues), le S-mètre et l'image SSTV qui arrive, une frise à cliquer, glisser (un QSO entier) et zoomer, la lecture accélérée ; le téléphone fabrique le son, l'image, la vidéo, le GIF ou le fichier du passage, et le PC le télécharge.
+- **La planche SSTV sur le PC** : le modèle en grand, cases et textes déplacés à la souris, images glissées dans les cases, modèle importé depuis le PC, planche téléchargée en pleine résolution.
+- Une page du poste de commande plus compacte ; les trois pages reliées, sous un seul code.
 
 ## Nouveautés de la 20.79
 
@@ -124,7 +139,7 @@ Toutes les versions dans le [wiki](https://github.com/f4ioz/SatMe/wiki/Nouveaute
 - Démonstration en direct : le public suit le passage sur son propre téléphone, en scannant un QR code.
 - Écoute déportée depuis un second téléphone sur le même réseau.
 - Images, vidéos, sons, planches et cartes : partagés, ou enregistrés sur le téléphone.
-- Poste de commande sur PC : une page servie par le téléphone — saisie au clavier, cadran polaire, enregistrement, votre station et les prochains passages — et une [API HTTP](docs/API-v1.fr.md) pour d'autres clients.
+- Poste de commande sur PC : des pages servies par le téléphone, par câble USB ou Wi-Fi — saisie au clavier, cadran polaire, enregistrement, votre station et les prochains passages ; le journal des passages rejoué en grand (carte, S-mètre, frise, lecture accélérée, vidéos fabriquées par le téléphone) ; la planche SSTV faite à la souris — et une [API HTTP](docs/API-v1.fr.md) pour d'autres clients.
 
 Français et anglais. Commandes lisibles par les lecteurs d'écran.
 

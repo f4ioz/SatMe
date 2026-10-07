@@ -22,6 +22,15 @@ The ISS on 4 October: four school pictures in Robot 36, decoded as they arrived,
 <img src="docs/images/en-journal-export-iss.webp" width="24%" alt="The picture SatMe makes to share the moment">
 </p>
 
+### On the PC too
+
+The phone serves pages to the PC's browser (USB cable or Wi-Fi, nothing to install): the pass journal replayed large on a map with its sound, and the SSTV sheet laid out with the mouse.
+
+<p align="center">
+<img src="docs/images/en-journal-pc.webp" width="49%" alt="The pass journal on the PC: the ISS pass on the map, an SSTV picture arriving, the timeline">
+<img src="docs/images/en-planche-pc.webp" width="49%" alt="The SSTV sheet on the PC: the template large, the ISS pictures to drag in">
+</p>
+
 <p align="center"><a href="https://play.google.com/store/apps/details?id=fr.f4ioz.satcombo"><b>▶ Get SatMe on Google Play</b></a> — free, no account, no ads</p>
 
 <p align="center">
@@ -59,6 +68,12 @@ The ISS on 4 October: four school pictures in Robot 36, decoded as they arrived,
 <img src="docs/images/en-journal-export.webp" width="24%" alt="Pass journal: export as a picture, video or GIF">
 <img src="docs/images/en-sstv-sheet-iss.webp" width="24%" alt="A sheet of the ISS pictures">
 </p>
+
+## Coming in 20.80
+
+- **The pass journal on the PC**: the passes replayed large with their sound, on the sky or an OpenStreetMap map (footprint, your station, the stations worked or heard), the S-meter and the SSTV picture arriving, a timeline to click, drag (a whole QSO) and zoom, accelerated replay; the phone makes the sound, the picture, the video, the GIF or the pass file, and the PC downloads it.
+- **The SSTV sheet on the PC**: the template large, boxes and texts moved with the mouse, pictures dragged into the boxes, a template imported from the PC, the sheet downloaded at full resolution.
+- A tighter control desk page; the three pages linked, under one code.
 
 ## What's new in 20.79
 
@@ -124,7 +139,7 @@ Every version in the [wiki](https://github.com/f4ioz/SatMe/wiki/Release-notes). 
 - Live demonstration: the audience follows the pass on their own phones, joining with a QR code.
 - Remote listening from a second phone on the same network.
 - Pictures, videos, sounds, sheets and cards: shared, or saved on the phone.
-- PC control desk: a web page served by the phone — keyboard entry, polar dial, recording, your station and the coming passes — and an [HTTP API](docs/API-v1.md) for other clients.
+- PC control desk: web pages served by the phone, by USB cable or Wi-Fi — keyboard entry, polar dial, recording, your station and the coming passes; the pass journal replayed large (map, S-meter, timeline, accelerated replay, videos made by the phone); the SSTV sheet laid out with the mouse — and an [HTTP API](docs/API-v1.md) for other clients.
 
 French and English. Controls readable by screen readers.
 
