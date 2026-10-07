@@ -69,13 +69,13 @@ Le téléphone sert des pages au navigateur du PC (câble USB ou Wi-Fi, rien à 
 <img src="docs/images/fr-sstv-sheet-iss.webp" width="24%" alt="Une planche des images de l'ISS">
 </p>
 
-## Bientôt dans la 20.80
+## Nouveautés de la 20.80
 
 - **Le journal des passages sur le PC** : les passages rejoués en grand avec leur son, sur le ciel ou une carte OpenStreetMap (empreinte, ta station, les stations contactées ou entendues), le S-mètre et l'image SSTV qui arrive, une frise à cliquer, glisser (un QSO entier) et zoomer, la lecture accélérée ; le téléphone fabrique le son, l'image, la vidéo, le GIF ou le fichier du passage, et le PC le télécharge.
 - **La planche SSTV sur le PC** : le modèle en grand, cases et textes déplacés à la souris, images glissées dans les cases, modèle importé depuis le PC, planche téléchargée en pleine résolution.
 - Une page du poste de commande plus compacte ; les trois pages reliées, sous un seul code.
 
-## Nouveautés de la 20.79
+### Et dans la 20.79
 
 - **Journal des passages**, bien plus riche : signets pendant le passage, S-mètre de l'IC-9700 et fréquence RX au rejeu, lecture accélérée qui ralentit là où quelque chose a été entendu, un contact saisi à n'importe quel moment du passage, plusieurs enregistrements pour un passage, un bilan avec la carte de toutes les stations contactées et entendues.
 - **Passages retrouvés depuis Wavelog / Cloudlog** par date, satellite et locator — une station sur une ligne de carrés (« JN06,JN16 ») comprise.
@@ -85,14 +85,6 @@ Le téléphone sert des pages au navigateur du PC (câble USB ou Wi-Fi, rien à 
 
 - **Enregistrer chaque passage en CAT** ne passe plus pour la SSTV automatique : plus d'avertissement en changeant de satellite, transpondeur laissé tel quel, notification à son nom.
 - **Décodage SSTV continu** activé par défaut : une image démarre même si son en-tête a été perdu au lever du satellite.
-
-### Et dans la 20.77
-
-- **Journal des passages** : chaque passage suivi, gardé sur le téléphone — la trajectoire réelle, les fréquences du poste, les antennes, l'enregistrement. Vu sur le ciel ou sur une carte OpenStreetMap avec l'empreinte du satellite, les contacts et les stations APRS en points avec leur indicatif, chaque image SSTV en tronçon de trajectoire. **Rejoué avec son son** : l'image se dessine en arrivant, une fiche dit qui est chaque station. **Export** de ce qui est affiché en image, vidéo ou GIF, avec un titre d'ouverture et un récapitulatif de fin. Les anciens passages se retrouvent d'après le carnet, les images et les enregistrements.
-- **Enregistrer chaque passage en CAT** (option) : de 5 s avant l'AOS à 5 s après le LOS, l'entrée audio du poste vérifiée à l'armement.
-- Page SSTV en onglets ; une planche plus simple pour les images d'une série.
-
-- **CAT connecté tout seul** à l'armement de la SSTV automatique, une minute avant chaque passage armé, et au branchement du câble du poste.
 
 Toutes les versions dans le [wiki](https://github.com/f4ioz/SatMe/wiki/Nouveautes). Guide complet dans le **[wiki](https://github.com/f4ioz/SatMe/wiki/Accueil)**.
 

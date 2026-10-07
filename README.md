@@ -69,13 +69,13 @@ The phone serves pages to the PC's browser (USB cable or Wi-Fi, nothing to insta
 <img src="docs/images/en-sstv-sheet-iss.webp" width="24%" alt="A sheet of the ISS pictures">
 </p>
 
-## Coming in 20.80
+## What's new in 20.80
 
 - **The pass journal on the PC**: the passes replayed large with their sound, on the sky or an OpenStreetMap map (footprint, your station, the stations worked or heard), the S-meter and the SSTV picture arriving, a timeline to click, drag (a whole QSO) and zoom, accelerated replay; the phone makes the sound, the picture, the video, the GIF or the pass file, and the PC downloads it.
 - **The SSTV sheet on the PC**: the template large, boxes and texts moved with the mouse, pictures dragged into the boxes, a template imported from the PC, the sheet downloaded at full resolution.
 - A tighter control desk page; the three pages linked, under one code.
 
-## What's new in 20.79
+### And in 20.79
 
 - **Pass journal**, much richer: bookmarks during the pass, the IC-9700's S-meter and the RX frequency on the replay, an accelerated replay that slows down where something was heard, a contact entered from any moment of the pass, several recordings for one pass, a summary with a map of every station worked and heard.
 - **Passes found from Wavelog / Cloudlog** by date, satellite and station square — a station on a grid line ("JN06,JN16") included.
@@ -85,14 +85,6 @@ The phone serves pages to the PC's browser (USB cable or Wi-Fi, nothing to insta
 
 - **Record every pass under CAT** no longer passes for automatic SSTV: no warning on changing satellite, the transmitter left alone, a notification in its own name.
 - **Continuous SSTV decoding** on by default: a picture starts even when its header was lost as the satellite rose.
-
-### And in 20.77
-
-- **Pass journal**: every pass you followed, kept on the phone — the real trajectory, the rig's frequencies, the antennas, the recording. Seen on the sky or on an OpenStreetMap map with the satellite's footprint, the contacts and APRS stations as points with their callsign, each SSTV picture as the stretch of trajectory it took to arrive. **Replay it with its sound**: the picture is drawn as it arrives, a card tells who each station is. **Export** what is shown as a picture, a video or a GIF, opening on a title and ending on a summary. Past passes are found again from the log, the pictures and the recordings.
-- **Record every pass under CAT** (option): 5 s before AOS to 5 s after LOS, the rig's audio input checked when arming.
-- SSTV page in tabs; a simpler sheet for the pictures of a series.
-
-- **CAT connected by itself** when automatic SSTV is armed, a minute before each pass armed, and when the rig's cable is plugged in.
 
 Every version in the [wiki](https://github.com/f4ioz/SatMe/wiki/Release-notes). Full guide in the **[wiki](https://github.com/f4ioz/SatMe/wiki)**.
 
