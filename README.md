@@ -60,13 +60,13 @@ The ISS on 4 October: four school pictures in Robot 36, decoded as they arrived,
 <img src="docs/images/en-sstv-sheet-iss.webp" width="24%" alt="A sheet of the ISS pictures">
 </p>
 
-## Coming in 20.79
+## What's new in 20.79
 
 - **Pass journal**, much richer: bookmarks during the pass, the IC-9700's S-meter and the RX frequency on the replay, an accelerated replay that slows down where something was heard, a contact entered from any moment of the pass, several recordings for one pass, a summary with a map of every station worked and heard.
 - **Passes found from Wavelog / Cloudlog** by date, satellite and station square — a station on a grid line ("JN06,JN16") included.
 - **Share** a whole pass or a moment (a whole QSO) as a picture, a video with its sound, a GIF or a sound; or the **pass in one file**, with its contacts if you wish, for another SatMe station to replay.
 
-## What's new in 20.78
+### And in 20.78
 
 - **Record every pass under CAT** no longer passes for automatic SSTV: no warning on changing satellite, the transmitter left alone, a notification in its own name.
 - **Continuous SSTV decoding** on by default: a picture starts even when its header was lost as the satellite rose.
@@ -78,10 +78,6 @@ The ISS on 4 October: four school pictures in Robot 36, decoded as they arrived,
 - SSTV page in tabs; a simpler sheet for the pictures of a series.
 
 - **CAT connected by itself** when automatic SSTV is armed, a minute before each pass armed, and when the rig's cable is plugged in.
-
-### And in 20.76
-
-- Prepare any pass from its icon, the rig tuned to the satellite; each SSTV picture with its own sound, as a video or a GIF; the SSTV sheet; share or save everywhere.
 
 Every version in the [wiki](https://github.com/f4ioz/SatMe/wiki/Release-notes). Full guide in the **[wiki](https://github.com/f4ioz/SatMe/wiki)**.
 

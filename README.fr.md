@@ -60,13 +60,13 @@ L'ISS le 4 octobre : quatre images d'écoles en Robot 36, décodées pendant qu'
 <img src="docs/images/fr-sstv-sheet-iss.webp" width="24%" alt="Une planche des images de l'ISS">
 </p>
 
-## Bientôt dans la 20.79
+## Nouveautés de la 20.79
 
 - **Journal des passages**, bien plus riche : signets pendant le passage, S-mètre de l'IC-9700 et fréquence RX au rejeu, lecture accélérée qui ralentit là où quelque chose a été entendu, un contact saisi à n'importe quel moment du passage, plusieurs enregistrements pour un passage, un bilan avec la carte de toutes les stations contactées et entendues.
 - **Passages retrouvés depuis Wavelog / Cloudlog** par date, satellite et locator — une station sur une ligne de carrés (« JN06,JN16 ») comprise.
 - **Partager** un passage entier ou un moment (un QSO entier) en image, vidéo avec son son, GIF ou son ; ou le **passage en un fichier**, avec ses contacts si tu le veux, pour qu'une autre station SatMe le rejoue.
 
-## Nouveautés de la 20.78
+### Et dans la 20.78
 
 - **Enregistrer chaque passage en CAT** ne passe plus pour la SSTV automatique : plus d'avertissement en changeant de satellite, transpondeur laissé tel quel, notification à son nom.
 - **Décodage SSTV continu** activé par défaut : une image démarre même si son en-tête a été perdu au lever du satellite.
@@ -78,10 +78,6 @@ L'ISS le 4 octobre : quatre images d'écoles en Robot 36, décodées pendant qu'
 - Page SSTV en onglets ; une planche plus simple pour les images d'une série.
 
 - **CAT connecté tout seul** à l'armement de la SSTV automatique, une minute avant chaque passage armé, et au branchement du câble du poste.
-
-### Et dans la 20.76
-
-- Préparer n'importe quel passage depuis son icône, le poste accordé sur le satellite ; chaque image SSTV avec son propre son, en vidéo ou en GIF ; la planche SSTV ; partager ou enregistrer partout.
 
 Toutes les versions dans le [wiki](https://github.com/f4ioz/SatMe/wiki/Nouveautes). Guide complet dans le **[wiki](https://github.com/f4ioz/SatMe/wiki/Accueil)**.
 
