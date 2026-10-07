@@ -128,10 +128,12 @@ class JournalDesPassages(
         runCatching { fr.f4ioz.satcombo.aprs.AprsHub.charge(ctx) }
         val trames = fr.f4ioz.satcombo.aprs.AprsHub.etat.value.paquets
         val signets = signets()
+        // The contacts received with pass files, those the log does not have already (same station, within 2 min).
+        val recus = contactsRecus().filter { r -> log.none { it.callsign.equals(r.callsign, true) && kotlin.math.abs(it.timeMs - r.timeMs) < 120_000L } }
         return passages.associate { e ->
             val f = J.fenetre(e)
             e.id to Liens(
-                qsos = log.filter { it.timeMs in f && (it.catnum == e.catnum || J.memeSatellite(it.satName, e.satName)) }
+                qsos = (log + recus).filter { it.timeMs in f && (it.catnum == e.catnum || J.memeSatellite(it.satName, e.satName)) }
                     .sortedBy { it.timeMs },
                 images = images.filter { it.second.timeMs in f }.sortedBy { it.second.timeMs },
                 trames = trames.filter { it.quand in f && !it.emis }.sortedBy { it.quand },
@@ -195,6 +197,19 @@ class JournalDesPassages(
     fun noteSignet(s: JournalPassage.Signet, note: String) = synchronized(this) {
         runCatching { fichierSignets.writeText(signets().joinToString("") {
             JournalPassage.ecritSignet(if (it == s) it.copy(note = note.trim()) else it) + "\n" }) }
+    }
+
+    // Contacts brought by pass files: shown with their pass, never in the log (not this station's own).
+    private val fichierContactsRecus get() = java.io.File(java.io.File(app.filesDir, "journal").apply { mkdirs() }, "contacts.tsv")
+
+    fun contactsRecus(): List<LogEntry> = synchronized(this) {
+        runCatching { fichierContactsRecus.readLines().mapNotNull { JournalPaquet.litContact(it) } }.getOrDefault(emptyList())
+    }
+
+    fun ajouteContactsRecus(l: List<LogEntry>) = synchronized(this) {
+        val deja = contactsRecus().map { it.callsign to it.timeMs }.toSet()
+        l.filter { (it.callsign to it.timeMs) !in deja }
+            .forEach { runCatching { fichierContactsRecus.appendText(JournalPaquet.ecritContact(it) + "\n") } }
     }
 
     /** Signets brought by a pass file: kept, without doubles. */
@@ -555,7 +570,11 @@ class JournalDesPassages(
      * recording, its SSTV pictures (not those set aside). Written in the
      * cache's export folder, shared or saved from there.
      */
-    fun paquet(e: JournalPassage.Entree): java.io.File {
+    fun paquetQsos(): Boolean = settings.journalPaquetQsos
+    fun setPaquetQsos(on: Boolean) { settings.journalPaquetQsos = on }
+
+    /** The pass in one file; with its contacts when [avecContacts] (the pass's, without their email). */
+    fun paquet(e: JournalPassage.Entree, avecContacts: Boolean = paquetQsos()): java.io.File {
         val rec = java.io.File(app.getExternalFilesDir(null), "recordings")
         val sons = (e.enregistrements.map { java.io.File(rec, it) } + listOfNotNull(sonDuPassage(e)))
             .filter { it.isFile }.distinctBy { it.name }
@@ -566,8 +585,10 @@ class JournalDesPassages(
         val sortie = java.io.File(java.io.File(app.cacheDir, "export").apply { mkdirs() }, JournalPaquet.nom(e))
         // Its recordings named in it: the other phone finds the sound as here.
         val avecSons = e.copy(enregistrements = (e.enregistrements + sons.map { it.name }).distinct())
-        val sesSignets = liens(listOf(e))[e.id]?.signets ?: emptyList()
-        sortie.outputStream().use { JournalPaquet.emballe(it, avecSons, fichiers, sesSignets) }
+        val l = liens(listOf(e))[e.id]
+        val sesSignets = l?.signets ?: emptyList()
+        val sesContacts = if (avecContacts) l?.qsos.orEmpty().filter { it.callsign.isNotBlank() } else emptyList()
+        sortie.outputStream().use { JournalPaquet.emballe(it, avecSons, fichiers, sesSignets, sesContacts) }
         return sortie
     }
 
@@ -585,6 +606,7 @@ class JournalDesPassages(
         }
         d.entree?.let { rangement.enregistre(it) }
         if (d.signets.isNotEmpty()) ajouteSignets(d.signets)
+        if (d.contacts.isNotEmpty()) ajouteContactsRecus(d.contacts)
         return d
     }
 

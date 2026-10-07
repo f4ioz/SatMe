@@ -49,6 +49,33 @@ class JournalPaquetTest {
         } finally { ici.deleteRecursively(); la.deleteRecursively() }
     }
 
+    @Test
+    fun les_contacts_voyagent_quand_on_le_demande() {
+        val la = kotlin.io.path.createTempDirectory().toFile()
+        try {
+            val t = e.debutMs + 60_000L
+            val q = fr.f4ioz.satcombo.data.LogEntry(t, e.satName, e.catnum, 120.5, 30.25, myLocator = "JN18FS",
+                callsign = "ea4xyz", theirLocator = "IN80", nom = "Juan\tPedro", qth = "Madrid", mode = "FM",
+                rstSent = "59", rstRcvd = "57", downlinkMhz = 436.795, uplinkMhz = 145.85, note = "deux\nlignes",
+                courriel = "juan@example.org")
+            val ailleurs = q.copy(satName = "ISS", catnum = 25544, callsign = "F1AAA")
+            val o = ByteArrayOutputStream()
+            JournalPaquet.emballe(o, e, emptyList(), contacts = listOf(q, ailleurs))
+            val d = JournalPaquet.deballe(ByteArrayInputStream(o.toByteArray()), dossiers(la))
+            // Only the pass's own (its satellite), everything but the email.
+            assertEquals(1, d.contacts.size)
+            val r = d.contacts[0]
+            assertEquals("EA4XYZ", r.callsign); assertEquals(t, r.timeMs); assertEquals("Juan Pedro", r.nom)
+            assertEquals("Madrid", r.qth); assertEquals("IN80", r.theirLocator); assertEquals(436.795, r.downlinkMhz, 1e-9)
+            assertEquals("deux lignes", r.note); assertEquals("", r.courriel); assertEquals(30.25, r.elevationDeg, 1e-9)
+            // Without the option, no contact in the file.
+            val o2 = ByteArrayOutputStream()
+            JournalPaquet.emballe(o2, e, emptyList())
+            assertTrue(JournalPaquet.deballe(ByteArrayInputStream(o2.toByteArray()), dossiers(la)).contacts.isEmpty())
+            assertNull(JournalPaquet.litContact("pas un contact"))
+        } finally { la.deleteRecursively() }
+    }
+
     private fun zip(vararg entrees: Pair<String, ByteArray>): ByteArray {
         val o = ByteArrayOutputStream()
         ZipOutputStream(o).use { z -> for ((n, b) in entrees) { z.putNextEntry(ZipEntry(n)); z.write(b); z.closeEntry() } }
@@ -132,7 +159,7 @@ class JournalPaquetTest {
                 if (dates != null) dates.lines().filter { '\t' in it }.forEach { l ->
                     val (nom, ms) = l.split('\t')
                     assertEquals("${z.name} : $nom", ms.trim().toLong() / 1000, File(la, nom).lastModified() / 1000)
-                } else assertTrue(d.sansDate.isNotEmpty())
+                } else assertEquals(d.poses, d.sansDate.size)
                 println("${z.name} : ${e.satName}, ${e.points.size} points, ${e.signal.size} S-mètre, ${d.poses} fichiers, dates " +
                     (if (dates != null) "gardées" else "à refaire"))
             } finally { la.deleteRecursively() }

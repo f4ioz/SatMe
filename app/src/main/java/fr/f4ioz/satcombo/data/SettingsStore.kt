@@ -318,6 +318,11 @@ class SettingsStore(context: Context) {
     var journalAffFreq: Boolean
         get() = prefs.getBoolean("journal_aff_freq", true)
         set(v) { prefs.edit().putBoolean("journal_aff_freq", v).apply() }
+    /** Pass files (.zip) carry the pass's contacts too; off by default (other stations' names and towns). */
+    var journalPaquetQsos: Boolean
+        get() = prefs.getBoolean("journal_paquet_qsos", false)
+        set(v) { prefs.edit().putBoolean("journal_paquet_qsos", v).apply() }
+
     var journalAffLocator: Boolean
         get() = prefs.getBoolean("journal_aff_locator", true)
         set(v) { prefs.edit().putBoolean("journal_aff_locator", v).apply() }

@@ -5,10 +5,24 @@
 <p align="center">
 Poursuite de satellites radioamateurs sur Android — passages, pointage, Doppler, carnet.<br>
 <a href="https://play.google.com/store/apps/details?id=fr.f4ioz.satcombo">Google Play</a> ·
+<a href="https://github.com/f4ioz/SatMe/wiki/Pourquoi-SatMe">Pourquoi SatMe ?</a> ·
 <a href="https://github.com/f4ioz/SatMe/wiki/Accueil">Documentation (wiki)</a> ·
 <a href="README.md">English</a> ·
 <a href="docs/API-v1.fr.md">API</a>
 </p>
+
+### Un vrai passage, tel que SatMe l'a gardé
+
+L'ISS le 4 octobre : quatre images d'écoles en Robot 36, décodées pendant qu'elles arrivaient, chacune à sa place sur la trajectoire — puis RS-44 rejoué avec son S-mètre et la fréquence où était le poste, et l'image que SatMe fabrique pour partager le moment.
+
+<p align="center">
+<img src="docs/images/fr-journal-iss-moments.webp" width="24%" alt="Le passage de l'ISS : une image Robot 36 qui arrive sur le ciel, les quatre images en dessous">
+<img src="docs/images/fr-journal-iss-map.webp" width="24%" alt="Le même passage de l'ISS sur la carte, l'empreinte sur l'Europe">
+<img src="docs/images/fr-journal-smeter-sky.webp" width="24%" alt="RS-44 rejoué : le S-mètre et la fréquence RX">
+<img src="docs/images/fr-journal-export-iss.webp" width="24%" alt="L'image que SatMe fabrique pour partager le moment">
+</p>
+
+<p align="center"><a href="https://play.google.com/store/apps/details?id=fr.f4ioz.satcombo"><b>▶ SatMe sur Google Play</b></a> — gratuit, sans compte, sans publicité</p>
 
 <p align="center">
 <img src="docs/images/passes.webp" width="24%" alt="Passages">
@@ -46,6 +60,12 @@ Poursuite de satellites radioamateurs sur Android — passages, pointage, Dopple
 <img src="docs/images/fr-sstv-sheet-iss.webp" width="24%" alt="Une planche des images de l'ISS">
 </p>
 
+## Bientôt dans la 20.79
+
+- **Journal des passages**, bien plus riche : signets pendant le passage, S-mètre de l'IC-9700 et fréquence RX au rejeu, lecture accélérée qui ralentit là où quelque chose a été entendu, un contact saisi à n'importe quel moment du passage, plusieurs enregistrements pour un passage, un bilan avec la carte de toutes les stations contactées et entendues.
+- **Passages retrouvés depuis Wavelog / Cloudlog** par date, satellite et locator — une station sur une ligne de carrés (« JN06,JN16 ») comprise.
+- **Partager** un passage entier ou un moment (un QSO entier) en image, vidéo avec son son, GIF ou son ; ou le **passage en un fichier**, avec ses contacts si tu le veux, pour qu'une autre station SatMe le rejoue.
+
 ## Nouveautés de la 20.78
 
 - **Enregistrer chaque passage en CAT** ne passe plus pour la SSTV automatique : plus d'avertissement en changeant de satellite, transpondeur laissé tel quel, notification à son nom.
@@ -72,7 +92,7 @@ Toutes les versions dans le [wiki](https://github.com/f4ioz/SatMe/wiki/Nouveaute
 - Alerte avant l'AOS, et un passage ajouté à l'agenda du téléphone d'un appui.
 - Fiches de passages en PDF à imprimer : coche les passages des satellites, puis choisis combien de prochains passages de chacun imprimer (jusqu'à 20, sur deux semaines).
 - Suivi en direct : élévation, azimut, Doppler et compte à rebours, lisibles à bout de bras.
-- Journal des passages : chaque passage suivi gardé sur le téléphone (trajectoire réelle, fréquences du poste, antennes, enregistrement), sur le ciel ou une carte OpenStreetMap avec l'empreinte ; contacts, stations APRS et images SSTV à leur place ; rejoué avec son son, avec les fiches des stations ; exporté en image, vidéo ou GIF. Anciens passages retrouvés d'après le carnet, les images et les enregistrements.
+- Journal des passages : chaque passage suivi gardé sur le téléphone (trajectoire réelle, fréquences du poste, antennes, enregistrement), sur le ciel ou une carte OpenStreetMap avec l'empreinte ; contacts, stations APRS et images SSTV à leur place ; rejoué avec son son, avec les fiches des stations ; exporté en image, vidéo, GIF ou son. Signets, S-mètre de l'IC-9700, lecture accélérée, contacts saisis depuis le rejeu. Anciens passages retrouvés d'après le carnet, les images, les enregistrements et Wavelog / Cloudlog ; un passage donné à une autre station en un fichier.
 - Préparer le passage : depuis l'icône de n'importe quel passage, neuf voyants vérifient la station selon tes profils (Fixe, Portable…, chacun avec ses postes, sa boussole et sa source du son), chacun menant à ce qui le corrige. Un test en lecture seule interroge le matériel ; avec le CAT connecté, le poste se met sur le satellite préparé. Les passages simultanés sont signalés.
 - Globe avec les traces au sol, timeline des prochains passages, et skeds mutuels — les fenêtres où un satellite est visible à la fois chez vous et chez une autre station.
 - État AMSAT et SatNOGS de chaque satellite, rapport AMSAT en quelques appuis ; les satellites muets restent hors de la liste. Les satellites portent leur nom court AMSAT (« AO-07 », « ISS ») et leur statut AMSAT, quelle que soit la source des éléments.

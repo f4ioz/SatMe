@@ -34,6 +34,30 @@ object JournalPaquet {
      * by its end, and opening a pack would otherwise date every file "now".
      */
     const val NOM_DATES = "dates.tsv"
+
+    /**
+     * The pass's contacts, when the one who made the file chose to add them:
+     * shown with the pass on the other phone, never put into its log (they are
+     * not its own). Without their email.
+     */
+    const val NOM_CONTACTS = "contacts.tsv"
+
+    /** A contact on one line (tabs and line breaks of its texts made spaces). */
+    fun ecritContact(q: fr.f4ioz.satcombo.data.LogEntry): String {
+        fun t(x: String) = x.replace('\t', ' ').replace('\n', ' ').replace('\r', ' ')
+        return listOf(q.timeMs.toString(), t(q.satName), q.catnum.toString(), q.azimuthDeg.toString(), q.elevationDeg.toString(),
+            t(q.myLocator), t(q.myGrids), t(q.callsign), t(q.theirLocator), t(q.nom), t(q.qth), t(q.mode),
+            t(q.rstSent), t(q.rstRcvd), q.downlinkMhz.toString(), q.uplinkMhz.toString(), t(q.note)).joinToString("\t")
+    }
+
+    fun litContact(l: String): fr.f4ioz.satcombo.data.LogEntry? = runCatching {
+        val c = l.split('\t')
+        if (c.size < 17 || c[7].isBlank()) return null
+        fr.f4ioz.satcombo.data.LogEntry(timeMs = c[0].toLong(), satName = c[1], catnum = c[2].toInt(),
+            azimuthDeg = c[3].toDouble(), elevationDeg = c[4].toDouble(), myLocator = c[5], myGrids = c[6],
+            callsign = c[7].trim().uppercase(), theirLocator = c[8], nom = c[9], qth = c[10], mode = c[11],
+            rstSent = c[12], rstRcvd = c[13], downlinkMhz = c[14].toDouble(), uplinkMhz = c[15].toDouble(), note = c[16])
+    }.getOrNull()
     const val MAX_OCTETS = 300L * 1024 * 1024
     const val TYPE = "application/zip"
     /** A pass file is a few hundred kB at most. */
@@ -60,7 +84,8 @@ object JournalPaquet {
 
     /** Writes the pack: the pass, then each file under its folder (missing ones left out). */
     fun emballe(sortie: OutputStream, e: JournalPassage.Entree, fichiers: List<Pair<String, File>>,
-                signets: List<JournalPassage.Signet> = emptyList()) {
+                signets: List<JournalPassage.Signet> = emptyList(),
+                contacts: List<fr.f4ioz.satcombo.data.LogEntry> = emptyList()) {
         ZipOutputStream(sortie).use { z ->
             z.putNextEntry(ZipEntry(NOM_PASSAGE))
             z.write(JournalPassage.ecrit(e).toByteArray(Charsets.UTF_8))
@@ -68,6 +93,11 @@ object JournalPaquet {
             if (signets.isNotEmpty()) {
                 z.putNextEntry(ZipEntry(NOM_SIGNETS))
                 z.write(signets.joinToString("") { JournalPassage.ecritSignet(it) + "\n" }.toByteArray(Charsets.UTF_8))
+                z.closeEntry()
+            }
+            if (contacts.isNotEmpty()) {
+                z.putNextEntry(ZipEntry(NOM_CONTACTS))
+                z.write(contacts.joinToString("") { ecritContact(it) + "\n" }.toByteArray(Charsets.UTF_8))
                 z.closeEntry()
             }
             val vus = HashSet<String>()
@@ -95,13 +125,16 @@ object JournalPaquet {
         val refuses: Int = 0,
         val signets: List<JournalPassage.Signet> = emptyList(),
         /** Files put in place without their time (a pack made before it was kept). */
-        val sansDate: List<File> = emptyList()
+        val sansDate: List<File> = emptyList(),
+        /** The pass's contacts, when the file has them. */
+        val contacts: List<fr.f4ioz.satcombo.data.LogEntry> = emptyList()
     )
 
     /** Opens a pack: its files into [dossiers] (by folder name), its pass returned (not yet kept). */
     fun deballe(entree: InputStream, dossiers: Map<String, File>): Deballage {
         var passage: JournalPassage.Entree? = null
         var signets: List<JournalPassage.Signet> = emptyList()
+        var contacts: List<fr.f4ioz.satcombo.data.LogEntry> = emptyList()
         val dates = HashMap<String, Long>()
         var poses = 0; var deja = 0; var refuses = 0
         var total = 0L
@@ -114,7 +147,7 @@ object JournalPaquet {
                     val en = z.nextEntry ?: break
                     if (en.isDirectory) continue
                     val nom = en.name
-                    if (nom == NOM_PASSAGE || nom == NOM_SIGNETS || nom == NOM_DATES) {
+                    if (nom == NOM_PASSAGE || nom == NOM_SIGNETS || nom == NOM_DATES || nom == NOM_CONTACTS) {
                         val texte = java.io.ByteArrayOutputStream()
                         while (true) {
                             val n = z.read(tampon)
@@ -124,7 +157,8 @@ object JournalPaquet {
                         }
                         total += texte.size()
                         val lu = texte.toByteArray().toString(Charsets.UTF_8)
-                        if (nom == NOM_SIGNETS) signets = lu.lines().mapNotNull { JournalPassage.litSignet(it) }
+                        if (nom == NOM_CONTACTS) contacts = lu.lines().mapNotNull { litContact(it) }
+                        else if (nom == NOM_SIGNETS) signets = lu.lines().mapNotNull { JournalPassage.litSignet(it) }
                         else if (nom == NOM_DATES) lu.lines().forEach { l ->
                             val c = l.split('\t'); if (c.size == 2) c[1].trim().toLongOrNull()?.let { dates[c[0]] = it } }
                         else passage = JournalPassage.lit(lu)
@@ -162,7 +196,10 @@ object JournalPaquet {
         for ((f, cle) in posesNoms) dates[cle]?.let { f.setLastModified(it) } ?: sansDate.add(f)
         // Only the signets of that pass's satellite.
         val p = passage!!
-        return Deballage(p, poses, deja, refuses, signets.filter { it.catnum == p.catnum }, sansDate)
+        // Only the contacts of that pass (its time, its satellite).
+        val f = JournalPassage.fenetre(p)
+        return Deballage(p, poses, deja, refuses, signets.filter { it.catnum == p.catnum }, sansDate,
+            contacts.filter { it.timeMs in f && (it.catnum == p.catnum || JournalPassage.memeSatellite(it.satName, p.satName)) })
     }
 
     private class TropGros : RuntimeException()

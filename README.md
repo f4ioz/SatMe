@@ -5,10 +5,24 @@
 <p align="center">
 Amateur radio satellite tracking for Android — passes, pointing, Doppler, logging.<br>
 <a href="https://play.google.com/store/apps/details?id=fr.f4ioz.satcombo">Google Play</a> ·
+<a href="https://github.com/f4ioz/SatMe/wiki/Why-SatMe">Why SatMe?</a> ·
 <a href="https://github.com/f4ioz/SatMe/wiki">Documentation (wiki)</a> ·
 <a href="README.fr.md">Français</a> ·
 <a href="docs/API-v1.md">API</a>
 </p>
+
+### A real pass, as SatMe kept it
+
+The ISS on 4 October: four school pictures in Robot 36, decoded as they arrived, each in its place on the trajectory — then RS-44 replayed with its S-meter and the frequency the rig was on, and the picture SatMe makes to share the moment.
+
+<p align="center">
+<img src="docs/images/en-journal-iss-moments.webp" width="24%" alt="The ISS pass: a Robot 36 picture arriving on the sky, the four pictures below">
+<img src="docs/images/en-journal-iss-map.webp" width="24%" alt="The same ISS pass on the map, the footprint over Europe">
+<img src="docs/images/en-journal-smeter-sky.webp" width="24%" alt="RS-44 replayed: the S-meter and the RX frequency">
+<img src="docs/images/en-journal-export-iss.webp" width="24%" alt="The picture SatMe makes to share the moment">
+</p>
+
+<p align="center"><a href="https://play.google.com/store/apps/details?id=fr.f4ioz.satcombo"><b>▶ Get SatMe on Google Play</b></a> — free, no account, no ads</p>
 
 <p align="center">
 <img src="docs/images/passes.webp" width="24%" alt="Passes">
@@ -46,6 +60,12 @@ Amateur radio satellite tracking for Android — passes, pointing, Doppler, logg
 <img src="docs/images/en-sstv-sheet-iss.webp" width="24%" alt="A sheet of the ISS pictures">
 </p>
 
+## Coming in 20.79
+
+- **Pass journal**, much richer: bookmarks during the pass, the IC-9700's S-meter and the RX frequency on the replay, an accelerated replay that slows down where something was heard, a contact entered from any moment of the pass, several recordings for one pass, a summary with a map of every station worked and heard.
+- **Passes found from Wavelog / Cloudlog** by date, satellite and station square — a station on a grid line ("JN06,JN16") included.
+- **Share** a whole pass or a moment (a whole QSO) as a picture, a video with its sound, a GIF or a sound; or the **pass in one file**, with its contacts if you wish, for another SatMe station to replay.
+
 ## What's new in 20.78
 
 - **Record every pass under CAT** no longer passes for automatic SSTV: no warning on changing satellite, the transmitter left alone, a notification in its own name.
@@ -72,7 +92,7 @@ Every version in the [wiki](https://github.com/f4ioz/SatMe/wiki/Release-notes). 
 - Alerts before AOS, and a pass added to the phone's calendar in one tap.
 - Printable PDF pass sheets: tick the satellites' passes, then choose how many coming passes of each to print (up to 20, two weeks ahead).
 - Live tracking: elevation, azimuth, Doppler and countdown, on a screen readable at arm's length.
-- Pass journal: every pass followed kept on the phone (real trajectory, rig frequencies, antennas, recording), on the sky or an OpenStreetMap map with the footprint; contacts, APRS stations and SSTV pictures in place; replayed with its sound, with cards for the stations; exported as a picture, a video or a GIF. Past passes found again from the log, the pictures and the recordings.
+- Pass journal: every pass followed kept on the phone (real trajectory, rig frequencies, antennas, recording), on the sky or an OpenStreetMap map with the footprint; contacts, APRS stations and SSTV pictures in place; replayed with its sound, with cards for the stations; exported as a picture, a video, a GIF or a sound. Bookmarks, the IC-9700's S-meter, an accelerated replay, contacts entered from the replay. Past passes found again from the log, the pictures, the recordings and Wavelog / Cloudlog; a pass given to another station in one file.
 - Prepare the pass: from the icon on any pass, nine lights check the station against your profiles (Home, Portable…, each with its rigs, compass and audio source), each leading to what fixes it. A read-only station test asks the equipment itself; with CAT connected, the rig goes to the satellite prepared. Simultaneous passes are marked.
 - Globe with ground tracks, timeline of the coming passes, and mutual skeds — the windows when a satellite is visible both from you and from another station.
 - AMSAT and SatNOGS status for each satellite, AMSAT report in a few taps; silent satellites kept out of the list. Satellites carry their short AMSAT name ("AO-07", "ISS") and their AMSAT status whatever the element source.

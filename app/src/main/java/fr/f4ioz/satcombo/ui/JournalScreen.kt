@@ -397,12 +397,22 @@ private fun FichePassage(
         }
         if (sauvegarde) {
             var paquet by remember(e.id) { mutableStateOf<java.io.File?>(null) }
-            LaunchedEffect(e.id) { paquet = withContext(Dispatchers.IO) { runCatching { vm.journal.paquet(e) }.getOrNull() } }
+            // With the pass's contacts, when asked (off by default: other stations' names and towns).
+            var avecQsos by remember { mutableStateOf(vm.journal.paquetQsos()) }
+            LaunchedEffect(e.id, avecQsos) {
+                paquet = null
+                paquet = withContext(Dispatchers.IO) { runCatching { vm.journal.paquet(e, avecQsos) }.getOrNull() }
+            }
             androidx.compose.material3.AlertDialog(onDismissRequest = { sauvegarde = false },
                 icon = { Icon(Icons.Default.Save, null, tint = Cyan) },
                 title = { Text(t("journal_paquet")) },
                 text = { Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(t("journal_paquet_desc"), fontSize = 12.sp)
+                    if (l.qsos.isNotEmpty()) Row(verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth().clickable { avecQsos = !avecQsos; vm.journal.setPaquetQsos(avecQsos) }) {
+                        androidx.compose.material3.Checkbox(checked = avecQsos, onCheckedChange = { avecQsos = it; vm.journal.setPaquetQsos(it) })
+                        Text(tf("journal_paquet_qsos", l.qsos.size), fontSize = 12.sp)
+                    }
                     val f = paquet
                     if (f == null) LinearProgressIndicator(Modifier.fillMaxWidth())
                     else {
