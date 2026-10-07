@@ -163,6 +163,32 @@ GET <base>/sat?cle=…&nom=SO-50
 
 Le nom doit correspondre à l'un de ceux rendus par `/sats`, casse indifférente.
 
+### Planches SSTV
+
+La page `<base>/planche` (servie sans code ; ses requêtes demandent `cle`)
+met en planche les images SSTV reçues par le téléphone. Ses routes :
+
+```
+GET  <base>/planche/liste?cle=…            → {"modeles":[{"id","nom"}…],"indicatif","nom"}
+GET  <base>/planche/modele?cle=…&id=…      → {"texte":"planche=1\n…","ratio","fond","recues","manquent":[…],
+                                               "locator","dates","titre"}
+POST <base>/planche/enregistre?cle=…&id=…  (corps : le texte du modèle)  → {"ok":true}
+GET  <base>/planche/nouveau?cle=…&type=grille|tour                       → {"ok":true,"id":"…"}
+POST <base>/planche/importe?cle=…&nom=…    (corps : un JPEG ou un PNG, 25 Mo au plus) → {"ok":true,"id","cases"}
+GET  <base>/planche/remplit?cle=…&id=…&sat=ISS                           → {"ok":true}
+GET  <base>/planche/galerie?cle=…          → [{"f","s","m","t","c","d"}…]   (fichier, satellite, mode, heure, complète, en direct)
+GET  <base>/planche/vignette?cle=…&f=…&w=320                             → image/jpeg
+GET  <base>/planche/apercu?cle=…&id=…&w=1400[&ind&nom&loc&dates]         → image/jpeg
+GET  <base>/planche/exporte?cle=…&id=…[&ind&nom&loc&dates]               → image/png (pièce jointe)
+```
+
+Le modèle voyage sous la forme texte où le téléphone le garde (`planche=1`,
+`case=x;y;w;h`, `texte=…`, `image=case;fichier`, positions en fractions de la
+planche). Un modèle renvoyé garde son propre fond : le client ne peut pas le
+faire pointer vers un autre fichier. `vignette` ne sert que les images de la
+galerie. L'aperçu et la planche sont dessinés par le téléphone, avec le dessin
+de son propre écran.
+
 ---
 
 ## 5. Ce que l'API ne fait pas
@@ -173,15 +199,15 @@ C'est délibéré, et la liste est aussi importante que le reste.
 engage la responsabilité de l'opérateur devant sa licence, et elle ne doit pas
 partir d'une requête HTTP sur un réseau local partagé.
 
-**Elle ne modifie pas les réglages** de l'application, ni le carnet au-delà de
-l'ajout d'un contact. Rien ne s'efface depuis le réseau.
+**Elle ne modifie pas les réglages** de l'application (seulement le nom écrit
+sur les planches SSTV), ni le carnet au-delà de l'ajout d'un contact. Rien ne s'efface depuis le réseau.
 
 **Elle n'expose pas le flux audio du poste de commande.** Le son passe par la
 page du public — `/d/<jeton>/son.pcm`, PCM 16 bits mono à 22 050 Hz — et
 seulement pendant un enregistrement de passage.
 
-La surface exposée tient dans un seul fichier, `demo/PontCommande.kt` : six
-gestes, relisibles d'un coup. Une surface qu'on peut lire est une surface
+La surface exposée tient dans deux fichiers, `demo/PontCommande.kt` et, pour
+les planches SSTV, `demo/PlancheWeb.kt` : relisibles d'un coup. Une surface qu'on peut lire est une surface
 qu'on peut défendre.
 
 ---

@@ -120,7 +120,7 @@ object PageCommande {
 
 <div class="page" id="poste" style="display:none">
   <h1>SatMe — poste de commande</h1>
-  <div class="sub" id="station">—</div>
+  <div class="sub"><span id="station">—</span> · <a id="lienPlanche" href="planche" style="color:var(--cyan)">Planche SSTV</a></div>
 
   <div class="grille">
     <div class="carte">
@@ -203,6 +203,8 @@ object PageCommande {
 const base = location.pathname.replace(/\/$/, '');
 let cle = localStorage.getItem('satme-cle') || '';
 const g = id => document.getElementById(id);
+// From the address itself: typed without its final slash, a relative link would lose the token.
+g('lienPlanche').href = base + '/planche';
 
 async function appel(route, params) {
   const p = new URLSearchParams(params || {});

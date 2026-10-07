@@ -10,8 +10,6 @@ package fr.f4ioz.satcombo.demo
 
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import java.io.BufferedReader
-import java.io.InputStreamReader
 import java.io.OutputStream
 import java.net.Inet4Address
 import java.net.NetworkInterface
@@ -282,8 +280,15 @@ object ServeurDemo {
      */
     const val API = 1
 
-    private fun servCommande(sortie: OutputStream, route: String) {
+    private fun servCommande(sortie: OutputStream, route: String,
+                             requete: RequeteHttp.Requete? = null, entree: java.io.InputStream? = null) {
         val chemin = route.substringBefore('?')
+
+        // The SSTV sheet on the PC: its page, like the desk's, needs no code; its routes do.
+        if (chemin == "/planche" || chemin == "/planche/") {
+            envoie(sortie, "200 OK", "text/html; charset=utf-8", PagePlanche.html().toByteArray(Charsets.UTF_8))
+            return
+        }
 
         // The page itself needs no code, the form does: serving a blank page
         // to a stranger costs nothing.
@@ -325,6 +330,14 @@ object ServeurDemo {
         }
         if (!PontCommande.pret) {
             jsonCourt(sortie, "{\"ok\":false,\"raison\":\"pasPret\"}")
+            return
+        }
+
+        if (chemin.startsWith("/planche/")) {
+            val r = PlancheWeb.sert(route.removePrefix("/planche"), requete?.methode ?: "GET",
+                { parametre(route, it) },
+                { if (requete != null && entree != null) RequeteHttp.corps(entree, requete, PlancheWeb.IMPORT_MAX) else null })
+            envoie(sortie, r.statut, r.type, r.corps, r.entetes)
             return
         }
 
@@ -476,10 +489,11 @@ object ServeurDemo {
 
     private fun sert(socket: Socket, jeton: String) {
         socket.soTimeout = 0
-        val entree = BufferedReader(InputStreamReader(socket.getInputStream()))
+        // Read byte by byte up to the blank line: a template sent from the PC follows, whole.
+        val entree = java.io.BufferedInputStream(socket.getInputStream())
         val sortie = socket.getOutputStream()
-        val ligne = try { entree.readLine() } catch (e: Exception) { null } ?: return
-        val chemin = ligne.split(' ').getOrNull(1) ?: "/"
+        val requete = try { RequeteHttp.lit(entree) } catch (e: Exception) { null } ?: return
+        val chemin = requete.chemin
 
         // **Two doors, two tokens.**
         //
@@ -491,7 +505,7 @@ object ServeurDemo {
         val e = _etat.value
         if (e.commandeActive && e.jetonCommande.isNotBlank() &&
             chemin.startsWith("/c/${e.jetonCommande}")) {
-            servCommande(sortie, chemin.removePrefix("/c/${e.jetonCommande}"))
+            servCommande(sortie, chemin.removePrefix("/c/${e.jetonCommande}"), requete, entree)
             runCatching { socket.close() }
             return
         }
@@ -577,11 +591,11 @@ object ServeurDemo {
         sortie.flush()
     }
 
-    private fun envoie(sortie: OutputStream, statut: String, type: String, corps: ByteArray) {
+    private fun envoie(sortie: OutputStream, statut: String, type: String, corps: ByteArray, entetes: String = "") {
         runCatching {
             sortie.write(
                 ("HTTP/1.1 $statut\r\nContent-Type: $type\r\n" +
-                    "Content-Length: ${corps.size}\r\nConnection: close\r\n\r\n").toByteArray())
+                    "Content-Length: ${corps.size}\r\n" + entetes + "Connection: close\r\n\r\n").toByteArray())
             sortie.write(corps)
             sortie.flush()
         }

@@ -188,6 +188,15 @@ fun DemoCarte(vm: fr.f4ioz.satcombo.MainViewModel) {
                     }, modifier = Modifier.fillMaxWidth()) {
                         Text(t("demo_copier"), color = Cyan, fontSize = 13.sp)
                     }
+                    // The SSTV sheet on the PC: the same address, "planche" after it, the same code.
+                    Text(t("cmd_planche"), color = TextLo, fontSize = 11.sp,
+                        modifier = Modifier.fillMaxWidth(),
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                    Text(etat.urlCommande + "planche", color = Cyan, fontSize = 12.sp,
+                        fontFamily = FontFamily.Monospace,
+                        modifier = Modifier.fillMaxWidth(),
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                    Spacer(Modifier.height(6.dp))
                     Text(t("cmd_code"), color = TextLo, fontSize = 11.sp,
                         modifier = Modifier.fillMaxWidth(),
                         textAlign = androidx.compose.ui.text.style.TextAlign.Center)

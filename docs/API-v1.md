@@ -168,6 +168,32 @@ GET <base>/sat?cle=…&nom=SO-50
 `{"ok":false}` means the name isn't among the tracked satellites. The name
 must match one of those returned by `/sats`, case-insensitive.
 
+### SSTV sheets
+
+The page `<base>/planche` (no code to serve it; its requests need `cle`)
+lays out the SSTV pictures received by the phone. Its routes:
+
+```
+GET  <base>/planche/liste?cle=…            → {"modeles":[{"id","nom"}…],"indicatif","nom"}
+GET  <base>/planche/modele?cle=…&id=…      → {"texte":"planche=1\n…","ratio","fond","recues","manquent":[…],
+                                               "locator","dates","titre"}
+POST <base>/planche/enregistre?cle=…&id=…  (body: the template's text)  → {"ok":true}
+GET  <base>/planche/nouveau?cle=…&type=grille|tour                      → {"ok":true,"id":"…"}
+POST <base>/planche/importe?cle=…&nom=…    (body: a JPEG or PNG, 25 MB at most) → {"ok":true,"id","cases"}
+GET  <base>/planche/remplit?cle=…&id=…&sat=ISS                          → {"ok":true}
+GET  <base>/planche/galerie?cle=…          → [{"f","s","m","t","c","d"}…]   (file, satellite, mode, time, complete, live)
+GET  <base>/planche/vignette?cle=…&f=…&w=320                            → image/jpeg
+GET  <base>/planche/apercu?cle=…&id=…&w=1400[&ind&nom&loc&dates]        → image/jpeg
+GET  <base>/planche/exporte?cle=…&id=…[&ind&nom&loc&dates]              → image/png (attachment)
+```
+
+The template travels in the text form the phone keeps it in (`planche=1`,
+`case=x;y;w;h`, `texte=…`, `image=box;file`, positions in fractions of the
+sheet). A template sent back keeps its own background: the client cannot
+point it at another file. `vignette` serves only pictures of the gallery.
+The preview and the sheet are drawn by the phone, with the drawing of its
+own screen.
+
 ---
 
 ## 5. What the API doesn't do
@@ -178,15 +204,15 @@ This is deliberate, and the list matters as much as the rest.
 Transmitting puts the operator's license on the line, and it must not be
 triggered by an HTTP request on a shared local network.
 
-**It doesn't change the app's settings**, nor the log beyond adding a
-contact. Nothing can be deleted over the network.
+**It doesn't change the app's settings** (only the name written on SSTV
+sheets), nor the log beyond adding a contact. Nothing can be deleted over the network.
 
 **It doesn't expose an audio stream on the control station.** Audio goes
 through the public page — `/d/<jeton>/son.pcm`, 16-bit mono PCM at
 22,050 Hz — and only while a pass is being recorded.
 
-The exposed surface fits in a single file, `demo/PontCommande.kt`: six
-actions, readable in one sitting. A surface you can read is a surface you can
+The exposed surface fits in two files, `demo/PontCommande.kt` and, for the
+SSTV sheets, `demo/PlancheWeb.kt`: readable in one sitting. A surface you can read is a surface you can
 defend.
 
 ---

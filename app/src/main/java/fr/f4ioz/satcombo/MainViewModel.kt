@@ -1403,6 +1403,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         // --- control desk ---
         // The only gestures a PC can trigger are placed here; the server can
         // call nothing else, so the surface exposed to the LAN reads at a glance.
+        // The SSTV sheet on the PC (same door, same code): it reads the gallery and the sheets' folder.
+        fr.f4ioz.satcombo.demo.PlancheWeb.app = getApplication()
         fr.f4ioz.satcombo.demo.PontCommande.ajouteQso = { call, loc, rse, rsr ->
             val sat = _ui.value.selected
             if (sat == null || call.isBlank()) false
