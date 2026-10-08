@@ -69,6 +69,11 @@ The phone serves pages to the PC's browser (USB cable or Wi-Fi, nothing to insta
 <img src="docs/images/en-sstv-sheet-iss.webp" width="24%" alt="A sheet of the ISS pictures">
 </p>
 
+## Coming in the next version
+
+- **Rotator: a pass over the end stop is planned** — the antennas go round the far side of the zenith, or tilt over the top with 180° of elevation, instead of turning back at the stop; a full turn only when worth it, never during an expected SSTV picture nor while transmitting. A dial with the stop, the dead zone, the cable and the planned path; the path also drawn in white on the satellite's compass.
+- **Kenwood TS-2000** in SAT mode: Doppler on both VFOs, mode of each side, CTCSS, S-meter.
+
 ## What's new in 20.80
 
 - **The pass journal on the PC**: the passes replayed large with their sound, on the sky or an OpenStreetMap map (footprint, your station, the stations worked or heard), the S-meter and the SSTV picture arriving, a timeline to click, drag (a whole QSO) and zoom, accelerated replay; the phone makes the sound, the picture, the video, the GIF or the pass file, and the PC downloads it.
@@ -103,11 +108,11 @@ Every version in the [wiki](https://github.com/f4ioz/SatMe/wiki/Release-notes). 
 
 ### Pointing
 - Phone compass with guided calibration, or a WitMotion Bluetooth module fixed on the antenna boom.
-- Rotators: Yaesu GS-232 over USB serial, Hamlib rotctld over the network. Flip over the zenith, park after the pass, and simulated antennas to watch the tracking before moving the real ones.
+- Rotators: Yaesu GS-232 over USB serial, Hamlib rotctld over the network. A pass over the end stop planned before it (far side of the zenith, over the top, a turn only when worth it), the path shown on the compass. Flip over the zenith, park after the pass, and simulated antennas to watch the tracking before moving the real ones.
 
 ### Rig control and Doppler
 - RX and TX Doppler correction, linear transponders (inverting or not) and FM, with a calibration kept per satellite.
-- CAT: Icom IC-9700 in satellite mode, Kenwood TH-D72 in full duplex with its own panel, a Yaesu FT-817 or Icom IC-705 on each side (two FT-817, two IC-705, or one of each), or one of them transmitting while an RTL-SDR dongle receives.
+- CAT: Icom IC-9700 in satellite mode, Kenwood TS-2000 in SAT mode, Kenwood TH-D72 in full duplex with its own panel, a Yaesu FT-817 or Icom IC-705 on each side (two FT-817, two IC-705, or one of each), or one of them transmitting while an RTL-SDR dongle receives.
 - The rig is tuned before AOS, ready as the satellite rises. A USB knob or keypad can drive it, its keys learned by pressing them.
 - The CTCSS tone is picked from the transponder's name (SO-50, ISS…), or set by hand.
 - A test bench in the CAT settings: a simulated rig that refuses what the real one refuses, the frames exchanged decoded in plain words, and the pass-start sequence replayed with no radio plugged in.
@@ -139,7 +144,7 @@ French and English. Controls readable by screen readers.
 
 | Type | Models |
 |---|---|
-| Radios | Icom IC-9700 · Kenwood TH-D72 (FM, full duplex) · Yaesu FT-817 or Icom IC-705¹ on each side · FT-817 or IC-705¹ + SDR dongle |
+| Radios | Icom IC-9700 · Kenwood TS-2000 (SAT mode; RigExpert Tiny tried) · Kenwood TH-D72 (FM, full duplex) · Yaesu FT-817 or Icom IC-705¹ on each side · FT-817 or IC-705¹ + SDR dongle |
 | APRS | KISS radio over USB: Kenwood TH-D72 (tried); other KISS TNCs on a USB serial line¹ · Yaesu FT3D: stations it decodes (positions, WAY.P output) |
 | SDR | RTL2832U |
 | Compass | WitMotion WT901BLE, WT9011DCL-BT50 |

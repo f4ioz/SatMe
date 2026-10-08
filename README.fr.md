@@ -69,6 +69,11 @@ Le téléphone sert des pages au navigateur du PC (câble USB ou Wi-Fi, rien à 
 <img src="docs/images/fr-sstv-sheet-iss.webp" width="24%" alt="Une planche des images de l'ISS">
 </p>
 
+## Dans la prochaine version
+
+- **Rotor : un passage par la butée est planifié** — les antennes passent de l'autre côté du zénith, ou basculent par-dessus avec 180° d'élévation, au lieu de repartir à la butée ; un tour seulement s'il vaut la peine, jamais pendant une image SSTV attendue ni en émission. Un cadran avec la butée, la zone morte, le câble et le chemin prévu ; le trajet aussi dessiné en blanc sur la boussole du satellite.
+- **Kenwood TS-2000** en mode SAT : Doppler sur les deux VFO, mode de chaque côté, CTCSS, S-mètre.
+
 ## Nouveautés de la 20.80
 
 - **Le journal des passages sur le PC** : les passages rejoués en grand avec leur son, sur le ciel ou une carte OpenStreetMap (empreinte, ta station, les stations contactées ou entendues), le S-mètre et l'image SSTV qui arrive, une frise à cliquer, glisser (un QSO entier) et zoomer, la lecture accélérée ; le téléphone fabrique le son, l'image, la vidéo, le GIF ou le fichier du passage, et le PC le télécharge.
@@ -103,11 +108,11 @@ Toutes les versions dans le [wiki](https://github.com/f4ioz/SatMe/wiki/Nouveaute
 
 ### Pointage
 - Boussole du téléphone avec calibrage guidé, ou module Bluetooth WitMotion fixé sur la flèche d'antenne.
-- Rotors : Yaesu GS-232 en série USB, Hamlib rotctld par le réseau. Retournement au zénith, rangement après le passage, et des antennes simulées pour regarder le suivi avant de faire tourner les vraies.
+- Rotors : Yaesu GS-232 en série USB, Hamlib rotctld par le réseau. Un passage par la butée planifié avant lui (autre côté du zénith, par-dessus, un tour seulement s'il vaut la peine), le trajet montré sur la boussole. Retournement au zénith, rangement après le passage, et des antennes simulées pour regarder le suivi avant de faire tourner les vraies.
 
 ### Poste et Doppler
 - Correction Doppler en réception et en émission, transpondeurs linéaires (inverseurs ou non) et FM, avec un calibrage mémorisé par satellite.
-- CAT : Icom IC-9700 en mode satellite, Kenwood TH-D72 en full duplex avec son pupitre, un Yaesu FT-817 ou un Icom IC-705 de chaque côté (deux FT-817, deux IC-705 ou un de chaque), ou l'un d'eux en émission pendant qu'une clé RTL-SDR reçoit.
+- CAT : Icom IC-9700 en mode satellite, Kenwood TS-2000 en mode SAT, Kenwood TH-D72 en full duplex avec son pupitre, un Yaesu FT-817 ou un Icom IC-705 de chaque côté (deux FT-817, deux IC-705 ou un de chaque), ou l'un d'eux en émission pendant qu'une clé RTL-SDR reçoit.
 - Le poste est réglé avant l'AOS, prêt dès le lever du satellite. Une molette ou un clavier USB peut le piloter, ses touches apprises en les pressant.
 - Le ton CTCSS est pris dans le nom du transpondeur (SO-50, ISS…), ou réglé à la main.
 - Un banc d'essai dans les réglages CAT : un poste simulé qui refuse ce que le vrai refuse, les trames échangées traduites en clair, et la séquence de début de passage rejouée sans aucune radio branchée.
@@ -139,7 +144,7 @@ Français et anglais. Commandes lisibles par les lecteurs d'écran.
 
 | Type | Modèles |
 |---|---|
-| Postes | Icom IC-9700 · Kenwood TH-D72 (FM, full duplex) · Yaesu FT-817 ou Icom IC-705¹ de chaque côté · FT-817 ou IC-705¹ + clé SDR |
+| Postes | Icom IC-9700 · Kenwood TS-2000 (mode SAT ; RigExpert Tiny essayé) · Kenwood TH-D72 (FM, full duplex) · Yaesu FT-817 ou Icom IC-705¹ de chaque côté · FT-817 ou IC-705¹ + clé SDR |
 | APRS | Poste KISS en USB : Kenwood TH-D72 (essayé) ; autres TNC KISS sur une ligne série USB¹ · Yaesu FT3D : les stations qu'il décode (positions, sortie WAY.P) |
 | SDR | RTL2832U |
 | Boussole | WitMotion WT901BLE, WT9011DCL-BT50 |
