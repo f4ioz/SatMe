@@ -69,12 +69,12 @@ Le téléphone sert des pages au navigateur du PC (câble USB ou Wi-Fi, rien à 
 <img src="docs/images/fr-sstv-sheet-iss.webp" width="24%" alt="Une planche des images de l'ISS">
 </p>
 
-## Dans la prochaine version
+## Nouveautés de la 20.81
 
 - **Rotor : un passage par la butée est planifié** — les antennes passent de l'autre côté du zénith, ou basculent par-dessus avec 180° d'élévation, au lieu de repartir à la butée ; un tour seulement s'il vaut la peine, jamais pendant une image SSTV attendue ni en émission. Un cadran avec la butée, la zone morte, le câble et le chemin prévu ; le trajet aussi dessiné en blanc sur la boussole du satellite.
 - **Kenwood TS-2000** en mode SAT : Doppler sur les deux VFO, mode de chaque côté, CTCSS, S-mètre.
 
-## Nouveautés de la 20.80
+### Et dans la 20.80
 
 - **Le journal des passages sur le PC** : les passages rejoués en grand avec leur son, sur le ciel ou une carte OpenStreetMap (empreinte, ta station, les stations contactées ou entendues), le S-mètre et l'image SSTV qui arrive, une frise à cliquer, glisser (un QSO entier) et zoomer, la lecture accélérée ; le téléphone fabrique le son, l'image, la vidéo, le GIF ou le fichier du passage, et le PC le télécharge.
 - **La planche SSTV sur le PC** : le modèle en grand, cases et textes déplacés à la souris, images glissées dans les cases, modèle importé depuis le PC, planche téléchargée en pleine résolution.
@@ -85,11 +85,6 @@ Le téléphone sert des pages au navigateur du PC (câble USB ou Wi-Fi, rien à 
 - **Journal des passages**, bien plus riche : signets pendant le passage, S-mètre de l'IC-9700 et fréquence RX au rejeu, lecture accélérée qui ralentit là où quelque chose a été entendu, un contact saisi à n'importe quel moment du passage, plusieurs enregistrements pour un passage, un bilan avec la carte de toutes les stations contactées et entendues.
 - **Passages retrouvés depuis Wavelog / Cloudlog** par date, satellite et locator — une station sur une ligne de carrés (« JN06,JN16 ») comprise.
 - **Partager** un passage entier ou un moment (un QSO entier) en image, vidéo avec son son, GIF ou son ; ou le **passage en un fichier**, avec ses contacts si tu le veux, pour qu'une autre station SatMe le rejoue.
-
-### Et dans la 20.78
-
-- **Enregistrer chaque passage en CAT** ne passe plus pour la SSTV automatique : plus d'avertissement en changeant de satellite, transpondeur laissé tel quel, notification à son nom.
-- **Décodage SSTV continu** activé par défaut : une image démarre même si son en-tête a été perdu au lever du satellite.
 
 Toutes les versions dans le [wiki](https://github.com/f4ioz/SatMe/wiki/Nouveautes). Guide complet dans le **[wiki](https://github.com/f4ioz/SatMe/wiki/Accueil)**.
 

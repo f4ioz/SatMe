@@ -69,12 +69,12 @@ The phone serves pages to the PC's browser (USB cable or Wi-Fi, nothing to insta
 <img src="docs/images/en-sstv-sheet-iss.webp" width="24%" alt="A sheet of the ISS pictures">
 </p>
 
-## Coming in the next version
+## What's new in 20.81
 
 - **Rotator: a pass over the end stop is planned** — the antennas go round the far side of the zenith, or tilt over the top with 180° of elevation, instead of turning back at the stop; a full turn only when worth it, never during an expected SSTV picture nor while transmitting. A dial with the stop, the dead zone, the cable and the planned path; the path also drawn in white on the satellite's compass.
 - **Kenwood TS-2000** in SAT mode: Doppler on both VFOs, mode of each side, CTCSS, S-meter.
 
-## What's new in 20.80
+### And in 20.80
 
 - **The pass journal on the PC**: the passes replayed large with their sound, on the sky or an OpenStreetMap map (footprint, your station, the stations worked or heard), the S-meter and the SSTV picture arriving, a timeline to click, drag (a whole QSO) and zoom, accelerated replay; the phone makes the sound, the picture, the video, the GIF or the pass file, and the PC downloads it.
 - **The SSTV sheet on the PC**: the template large, boxes and texts moved with the mouse, pictures dragged into the boxes, a template imported from the PC, the sheet downloaded at full resolution.
@@ -85,11 +85,6 @@ The phone serves pages to the PC's browser (USB cable or Wi-Fi, nothing to insta
 - **Pass journal**, much richer: bookmarks during the pass, the IC-9700's S-meter and the RX frequency on the replay, an accelerated replay that slows down where something was heard, a contact entered from any moment of the pass, several recordings for one pass, a summary with a map of every station worked and heard.
 - **Passes found from Wavelog / Cloudlog** by date, satellite and station square — a station on a grid line ("JN06,JN16") included.
 - **Share** a whole pass or a moment (a whole QSO) as a picture, a video with its sound, a GIF or a sound; or the **pass in one file**, with its contacts if you wish, for another SatMe station to replay.
-
-### And in 20.78
-
-- **Record every pass under CAT** no longer passes for automatic SSTV: no warning on changing satellite, the transmitter left alone, a notification in its own name.
-- **Continuous SSTV decoding** on by default: a picture starts even when its header was lost as the satellite rose.
 
 Every version in the [wiki](https://github.com/f4ioz/SatMe/wiki/Release-notes). Full guide in the **[wiki](https://github.com/f4ioz/SatMe/wiki)**.
 
