@@ -1075,6 +1075,10 @@ class SettingsStore(context: Context) {
         get() = prefs.getString("compass_style", "NEEDLE") ?: "NEEDLE"
         set(v) { prefs.edit().putString("compass_style", v).apply() }
 
+    var compassRotorPath: Boolean
+        get() = prefs.getBoolean("compass_rotor_path", false)
+        set(v) { prefs.edit().putBoolean("compass_rotor_path", v).apply() }
+
     var compassHeadUp: Boolean
         get() = prefs.getBoolean("compass_head_up", true)
         set(v) { prefs.edit().putBoolean("compass_head_up", v).apply() }
@@ -1512,6 +1516,11 @@ class SettingsStore(context: Context) {
     var rotorAzFromStop: Boolean
         get() = prefs.getBoolean("rotor_az_from_stop", false)
         set(v) { prefs.edit().putBoolean("rotor_az_from_stop", v).apply() }
+
+    /** The rotator's azimuth speed, degrees a second, as measured while it turns. */
+    var rotorVitesse: Float
+        get() = prefs.getFloat("rotor_vitesse", fr.f4ioz.satcombo.rotor.RotorDeroule.VITESSE_DEFAUT.toFloat())
+        set(v) { prefs.edit().putFloat("rotor_vitesse", v.coerceIn(0.5f, 30f)).apply() }
 
     /** Pointing error tolerated before the banner reports it, in degrees. */
     var rotorMaxError: Int

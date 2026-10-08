@@ -36,6 +36,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -98,6 +100,14 @@ fun RotorScreen(ui: UiState, vm: MainViewModel) {
                 AimLine(t("rotor_target"), ui.rotorTargetAz, ui.rotorTargetEl,
                     if (ui.rotorFlipped) Magenta else Cyan)
                 AimLine(t("rotor_actual"), ui.rotorActualAz, ui.rotorActualEl, TextHi)
+                // The dial: the stop, the dead zone, the overlap, the pass, where the cable is.
+                Spacer(Modifier.height(10.dp))
+                CadranRotor(ui)
+                if (ui.rotorDeroule.isNotBlank()) {
+                    Spacer(Modifier.height(6.dp))
+                    Text(ui.rotorDeroule, color = if (ui.rotorDerouleAlerte) Magenta else Amber,
+                        fontWeight = if (ui.rotorDerouleAlerte) FontWeight.Bold else FontWeight.Normal, fontSize = 13.sp)
+                }
                 if (ui.rotorOutOfRange) {
                     Spacer(Modifier.height(6.dp))
                     Text(t("rotor_out_of_range"), color = Amber, fontSize = 12.sp)
@@ -301,7 +311,8 @@ fun RotorScreen(ui: UiState, vm: MainViewModel) {
         // ---- mast mechanics ------------------------------------------------
         Surface(color = SpaceCard, shape = RoundedCornerShape(14.dp)) {
             Column(Modifier.fillMaxWidth().padding(14.dp)) {
-                Text(t("rotor_title"), color = TextHi,
+                // Its own title: the screen is already "Az/el rotator".
+                Text(t("rotor_mecanique"), color = TextHi,
                     fontWeight = FontWeight.Bold, fontSize = 15.sp)
                 Spacer(Modifier.height(8.dp))
                 Text(t("rotor_max_az"), color = TextHi, fontSize = 13.sp)
@@ -312,6 +323,22 @@ fun RotorScreen(ui: UiState, vm: MainViewModel) {
                     }
                 }
                 Text(t("rotor_max_az_hint"), color = TextLo, fontSize = 11.sp)
+                HorizontalDivider(Modifier.padding(vertical = 8.dp), color = SpaceSurface)
+                // The end stop: where the antennas cannot turn further (a G-5400 / G-5500 often south).
+                Text(t("rotor_az_stop"), color = TextHi, fontSize = 13.sp)
+                Spacer(Modifier.height(4.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    RotorChip(t("rotor_az_stop_north"), ui.rotorAzStop != "SOUTH") { vm.setRotorAzStop("NORTH") }
+                    RotorChip(t("rotor_az_stop_south"), ui.rotorAzStop == "SOUTH") { vm.setRotorAzStop("SOUTH") }
+                }
+                Text(t("rotor_az_stop_hint"), color = TextLo, fontSize = 11.sp)
+                Spacer(Modifier.height(4.dp))
+                RotorToggle(t("rotor_az_from_stop"), ui.rotorAzFromStop, vm::setRotorAzFromStop)
+                Text(t("rotor_az_from_stop_hint"), color = TextLo, fontSize = 11.sp)
+                HorizontalDivider(Modifier.padding(vertical = 8.dp), color = SpaceSurface)
+                // The dead zone: within it behind the stop the antennas wait rather than go round.
+                RotorNumber(t("rotor_max_error"), ui.rotorMaxError, 1, "°") { vm.setRotorMaxError(it) }
+                Text(t("rotor_max_error_hint"), color = TextLo, fontSize = 11.sp)
                 HorizontalDivider(Modifier.padding(vertical = 8.dp), color = SpaceSurface)
                 RotorNumber(t("rotor_max_el"), ui.rotorMaxEl, 5, "°") { vm.setRotorMaxEl(it) }
                 RotorNumber(t("rotor_deadband"), ui.rotorDeadband, 1, "°") {
@@ -343,6 +370,167 @@ fun RotorScreen(ui: UiState, vm: MainViewModel) {
 }
 
 /** A target or position in large monospaced digits. */
+/**
+ * The rotor seen from above: its end stop (red), the dead zone around it
+ * (orange: within it the antennas wait rather than go round), the overlap of
+ * a 450° rotator, the pass (cyan, elevation inward), the antennas (white) and
+ * the target (dashed), and how far the cable has turned from the stop.
+ */
+@Composable
+private fun CadranRotor(ui: UiState) {
+    val butee = if (ui.rotorAzStop == "SOUTH") 180.0 else 0.0
+    val zone = ui.rotorMaxError.toDouble()
+    val course = ui.rotorMaxAz.toDouble()
+    val dens = androidx.compose.ui.platform.LocalDensity.current.density
+    androidx.compose.foundation.Canvas(Modifier.fillMaxWidth().aspectRatio(1f).padding(horizontal = 24.dp)) {
+        val cx = size.width / 2; val cy = size.height / 2
+        val r = kotlin.math.min(cx, cy) * 0.78f
+        fun pt(az: Double, rr: Float) = androidx.compose.ui.geometry.Offset(
+            cx + rr * kotlin.math.sin(Math.toRadians(az)).toFloat(), cy - rr * kotlin.math.cos(Math.toRadians(az)).toFloat())
+        val boite = androidx.compose.ui.geometry.Rect(cx - r, cy - r, cx + r, cy + r)
+        drawCircle(Color(0xFF101A23), r, androidx.compose.ui.geometry.Offset(cx, cy))
+        for (e in listOf(30.0, 60.0)) drawCircle(Color(0xFF22303B), r * ((90 - e) / 90).toFloat(),
+            androidx.compose.ui.geometry.Offset(cx, cy), style = androidx.compose.ui.graphics.drawscope.Stroke(1f * dens))
+        drawCircle(Color(0xFF3A4A57), r, androidx.compose.ui.geometry.Offset(cx, cy), style = androidx.compose.ui.graphics.drawscope.Stroke(1.5f * dens))
+        // The dead zone, each side of the stop.
+        drawArc(Amber.copy(alpha = 0.28f), (butee - zone - 90).toFloat(), (2 * zone).toFloat(), true, boite.topLeft, boite.size)
+        // The overlap of a 450° (or 540°) rotator: the azimuths it can reach twice.
+        if (course > 360.0) {
+            val rr = r * 1.10f
+            drawArc(Cyan.copy(alpha = 0.55f), (butee - 90).toFloat(), (course - 360.0).toFloat(), false,
+                androidx.compose.ui.geometry.Offset(cx - rr, cy - rr), androidx.compose.ui.geometry.Size(2 * rr, 2 * rr),
+                style = androidx.compose.ui.graphics.drawscope.Stroke(5f * dens))
+        }
+        // How far the cable has turned from the stop (0 to the rotor's travel).
+        ui.rotorCmdAz?.let { cmd ->
+            val fait = (cmd - butee).coerceIn(0.0, course)
+            val rr = r * 1.20f
+            drawArc(Magenta.copy(alpha = 0.7f), (butee - 90).toFloat(), fait.toFloat(), false,
+                androidx.compose.ui.geometry.Offset(cx - rr, cy - rr), androidx.compose.ui.geometry.Size(2 * rr, 2 * rr),
+                style = androidx.compose.ui.graphics.drawscope.Stroke(3f * dens))
+        }
+        // The pass, elevation inward.
+        if (ui.passTrack.size > 1) {
+            val chemin = androidx.compose.ui.graphics.Path()
+            ui.passTrack.forEachIndexed { i, (az, el) ->
+                val p = pt(az, r * ((90 - el.coerceIn(0.0, 90.0)) / 90).toFloat())
+                if (i == 0) chemin.moveTo(p.x, p.y) else chemin.lineTo(p.x, p.y)
+            }
+            drawPath(chemin, Cyan, style = androidx.compose.ui.graphics.drawscope.Stroke(3f * dens))
+            val (az0, el0) = ui.passTrack.first()
+            drawCircle(Cyan, 5f * dens, pt(az0, r * ((90 - el0.coerceIn(0.0, 90.0)) / 90).toFloat()))
+        }
+        // The antennas' planned path, when the pass crosses the stop (white, dotted).
+        if (ui.rotorChemin.size > 1) {
+            val chemin = androidx.compose.ui.graphics.Path()
+            ui.rotorChemin.forEachIndexed { i, (az, el) ->
+                val p = pt(az, r * ((90 - el.coerceIn(0.0, 90.0)) / 90).toFloat())
+                if (i == 0) chemin.moveTo(p.x, p.y) else chemin.lineTo(p.x, p.y)
+            }
+            drawPath(chemin, Color.White.copy(alpha = 0.85f), style = androidx.compose.ui.graphics.drawscope.Stroke(2.5f * dens,
+                pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(3f * dens, 5f * dens))))
+        }
+        // The stop.
+        // Outside the circle, and thin inside: the cardinal letter stays readable.
+        drawLine(Color(0xFFE5484D), pt(butee, r * 0.97f), pt(butee, r * 1.16f), 5f * dens)
+        drawLine(Color(0xFFE5484D).copy(alpha = 0.6f), androidx.compose.ui.geometry.Offset(cx, cy), pt(butee, r * 0.80f), 1.5f * dens)
+        // The target (dashed) and the antennas (white).
+        // At their elevation, as the pass: the centre is the zenith (a flipped mast shown where it really aims).
+        fun rEl(el: Double?) = r * ((90 - ((if ((el ?: 0.0) > 90.0) 180.0 - el!! else el ?: 0.0)).coerceIn(0.0, 90.0)) / 90).toFloat()
+        fun azVu(az: Double, el: Double?) = if ((el ?: 0.0) > 90.0) az + 180.0 else az
+        ui.rotorTargetAz?.let { a ->
+            val p = pt(azVu(a, ui.rotorTargetEl), rEl(ui.rotorTargetEl))
+            drawLine(Cyan, androidx.compose.ui.geometry.Offset(cx, cy), p, 2f * dens,
+                pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(8f * dens, 6f * dens)))
+            drawCircle(Cyan, 7f * dens, p, style = androidx.compose.ui.graphics.drawscope.Stroke(2f * dens))
+        }
+        ui.rotorActualAz?.let { a ->
+            val p = pt(azVu(a, ui.rotorActualEl), rEl(ui.rotorActualEl))
+            drawLine(Color.White, androidx.compose.ui.geometry.Offset(cx, cy), p, 3f * dens)
+            drawCircle(Color.White, 6f * dens, p)
+        }
+        drawIntoCanvasTexte(this, cx, cy, r, butee, dens)
+    }
+    JaugeElevation(ui)
+    Spacer(Modifier.height(4.dp))
+    Text(t("rotor_cadran_legende"), color = TextLo, fontSize = 11.sp)
+    ui.rotorCmdAz?.let { cmd ->
+        Text(tf("rotor_cadran_cable", ((cmd - butee).coerceIn(0.0, course)).roundToInt(), course.roundToInt()), color = TextLo, fontSize = 11.sp)
+    }
+    // Only once the plan is made (rotor connected): before, nothing is known of this pass's turn.
+    if (ui.passTrack.isNotEmpty() && ui.rotorConnected && ui.rotorCoverage != null) {
+        val heure = remember { java.text.SimpleDateFormat("HH:mm:ss", Locale.getDefault()) }
+        val texte = when {
+            ui.rotorChemin.isEmpty() -> tf("rotor_cadran_pas_de_tour", ui.rotorMaxError)
+            ui.rotorDerouleAt != null -> tf("rotor_chemin_tour", heure.format(java.util.Date(ui.rotorDerouleAt ?: 0L)), ui.rotorTourS)
+            else -> tf("rotor_chemin_sans_tour", (ui.rotorEcartMax ?: 0.0).roundToInt(),
+                ui.rotorEcartMaxAt?.let { heure.format(java.util.Date(it)) } ?: "—")
+        }
+        Text(texte, color = if (ui.rotorChemin.isEmpty()) TextLo else Amber, fontSize = 12.sp)
+    }
+}
+
+/**
+ * The elevation, seen from the side: the horizon at the bottom, the zenith up
+ * (and the far horizon on a rotator that flips, 0 to 180°); the antennas in
+ * white, the target dashed.
+ */
+@Composable
+private fun JaugeElevation(ui: UiState) {
+    val max = if (ui.rotorFlip) 180.0 else ui.rotorMaxEl.toDouble().coerceIn(90.0, 180.0)
+    val dens = androidx.compose.ui.platform.LocalDensity.current.density
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(top = 6.dp)) {
+        androidx.compose.foundation.Canvas(Modifier.weight(1f).height(if (max > 90.0) 90.dp else 110.dp)) {
+            // Pivot bottom-left for 0..90, bottom-centre for 0..180.
+            val r = if (max > 90.0) kotlin.math.min(size.width / 2, size.height) * 0.92f else kotlin.math.min(size.width * 0.8f, size.height) * 0.92f
+            val ox = if (max > 90.0) size.width / 2 else size.width * 0.12f
+            val oy = size.height - 4f * dens
+            fun pt(el: Double, rr: Float) = androidx.compose.ui.geometry.Offset(
+                ox + rr * kotlin.math.cos(Math.toRadians(el)).toFloat(), oy - rr * kotlin.math.sin(Math.toRadians(el)).toFloat())
+            // The scale: an arc from the horizon to the zenith (and beyond when flipping), every 30°.
+            val chemin = androidx.compose.ui.graphics.Path()
+            var e = 0.0
+            while (e <= max + 1e-9) { val p = pt(e, r); if (e == 0.0) chemin.moveTo(p.x, p.y) else chemin.lineTo(p.x, p.y); e += 2.0 }
+            drawPath(chemin, Color(0xFF3A4A57), style = androidx.compose.ui.graphics.drawscope.Stroke(2f * dens))
+            drawLine(Color(0xFF3A4A57), pt(0.0, r), pt(if (max > 90.0) 180.0 else 0.0, if (max > 90.0) r else 0f), 1.5f * dens)
+            var g = 0.0
+            while (g <= max + 1e-9) { drawLine(Color(0xFF5A6A77), pt(g, r * 0.92f), pt(g, r), 1.5f * dens); g += 30.0 }
+            ui.rotorTargetEl?.let { el ->
+                drawLine(Cyan, androidx.compose.ui.geometry.Offset(ox, oy), pt(el.coerceIn(0.0, max), r), 2f * dens,
+                    pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(8f * dens, 6f * dens)))
+            }
+            ui.rotorActualEl?.let { el ->
+                drawLine(Color.White, androidx.compose.ui.geometry.Offset(ox, oy), pt(el.coerceIn(0.0, max), r), 3f * dens)
+                drawCircle(Color.White, 5f * dens, pt(el.coerceIn(0.0, max), r))
+            }
+        }
+        Column(Modifier.padding(start = 8.dp)) {
+            Text(t("rotor_elevation"), color = TextLo, fontSize = 11.sp)
+            Text(ui.rotorActualEl?.let { "%.0f°".format(Locale.US, it) } ?: "—", color = TextHi,
+                fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, fontSize = 20.sp)
+            Text(ui.rotorTargetEl?.let { "→ %.0f°".format(Locale.US, it) } ?: "", color = Cyan,
+                fontFamily = FontFamily.Monospace, fontSize = 14.sp)
+        }
+    }
+}
+
+/** N, E, S, W and the stop's name, in the dial. */
+private fun drawIntoCanvasTexte(d: androidx.compose.ui.graphics.drawscope.DrawScope, cx: Float, cy: Float, r: Float, butee: Double, dens: Float) {
+    d.drawIntoCanvas { c ->
+        val p = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+            color = android.graphics.Color.rgb(154, 167, 180); textSize = 13f * dens; textAlign = android.graphics.Paint.Align.CENTER }
+        for ((n, a) in listOf("N" to 0.0, "E" to 90.0, "S" to 180.0, if (fr.f4ioz.satcombo.i18n.I18n.current() == fr.f4ioz.satcombo.i18n.Lang.FR) "O" to 270.0 else "W" to 270.0)) {
+            val rr = r * 0.88f
+            c.nativeCanvas.drawText(n, cx + rr * kotlin.math.sin(Math.toRadians(a)).toFloat(),
+                cy - rr * kotlin.math.cos(Math.toRadians(a)).toFloat() + 5f * dens, p)
+        }
+        p.color = android.graphics.Color.rgb(229, 72, 77); p.textSize = 11f * dens
+        val rr = r * 1.30f
+        c.nativeCanvas.drawText(t("rotor_cadran_butee"), cx + rr * kotlin.math.sin(Math.toRadians(butee)).toFloat(),
+            cy - rr * kotlin.math.cos(Math.toRadians(butee)).toFloat() + 4f * dens, p)
+    }
+}
+
 @Composable
 private fun AimLine(label: String, az: Double?, el: Double?, tint: Color) {
     Row(Modifier.fillMaxWidth().padding(vertical = 2.dp),

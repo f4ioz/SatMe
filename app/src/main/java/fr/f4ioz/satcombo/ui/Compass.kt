@@ -33,6 +33,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.platform.LocalContext
@@ -222,6 +223,12 @@ fun CompassAim(
     // When a rotor holds the antenna, the rotor knows where it points.
     rotorAzDeg: Double? = null,
     rotorElDeg: Double? = null,
+    /**
+     * The rotor's mechanical path for the pass (az, el as seen on the sky),
+     * drawn in white over the satellite's: where the antennas will really
+     * point, the other side of the zenith or a turn included. Empty: not shown.
+     */
+    rotorPath: List<Pair<Double, Double>> = emptyList(),
     modifier: Modifier = Modifier
 ) {
     val sensor by rememberDeviceOrientation(declinationDeg, aimMode)
@@ -408,6 +415,22 @@ fun CompassAim(
                     val mb = azElToXy(passTrack[i].first, passTrack[i].second, c, r, rot)
                     drawArrowTriangle(ma, mb, traceColor, 16f * tw)
                 }
+            }
+
+            // --- the rotor's mechanical path (white; near-black on a light background) ---
+            if (rotorPath.size > 1) {
+                val blanc = if (fr.f4ioz.satcombo.ui.theme.isDarkTheme()) Color.White else Color(0xFF1B1F24)
+                val path = Path()
+                rotorPath.forEachIndexed { i, (az, el) ->
+                    val pt = azElToXy(az, el, c, r, rot)
+                    if (i == 0) path.moveTo(pt.x, pt.y) else path.lineTo(pt.x, pt.y)
+                }
+                drawPath(path, blanc.copy(alpha = 0.9f),
+                    style = Stroke(2.5f, cap = StrokeCap.Round,
+                        pathEffect = PathEffect.dashPathEffect(floatArrayOf(2f, 9f))))
+                drawCircle(blanc, 6f, azElToXy(rotorPath.first().first, rotorPath.first().second, c, r, rot))
+                drawCircle(blanc, 6f, azElToXy(rotorPath.last().first, rotorPath.last().second, c, r, rot),
+                    style = Stroke(2.5f))
             }
 
             // --- live trail (where the satellite actually went) ---

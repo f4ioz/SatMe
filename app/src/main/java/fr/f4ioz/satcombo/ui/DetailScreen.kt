@@ -16,6 +16,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.clickable
 import androidx.compose.material.icons.filled.EventAvailable
+import androidx.compose.material.icons.filled.Route
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -156,6 +157,7 @@ internal fun DetailScreen(ui: UiState, vm: MainViewModel, onBack: () -> Unit) {
                     ringElNear = Color(ui.ringElNearColor), ringElClose = Color(ui.ringElCloseColor),
                     rotorAzDeg = if (ui.rotorConnected) ui.rotorAimAz else null,
                     rotorElDeg = if (ui.rotorConnected) ui.rotorAimEl else null,
+                    rotorPath = if (ui.rotorConnected && ui.compassRotorPath) ui.rotorTrajet else emptyList(),
                     modifier = Modifier.fillMaxWidth().weight(1f))
                 if (aboveFs) {
                     Text(tf("az_el_big", liveFs!!.azimuthDeg.toInt(), liveFs.elevationDeg.toInt()),
@@ -321,6 +323,15 @@ internal fun DetailScreen(ui: UiState, vm: MainViewModel, onBack: () -> Unit) {
                                 Icon(Icons.Default.EventAvailable, t("cal_ajouter"), tint = Cyan,
                                     modifier = Modifier.size(21.dp))
                             }
+                            // The rotor's mechanical path on the compass, in white: shown or not.
+                            if (ui.rotorConnected) {
+                                IconButton(onClick = { vm.setCompassRotorPath(!ui.compassRotorPath) }) {
+                                    Icon(Icons.Default.Route,
+                                        t(if (ui.compassRotorPath) "trajet_rotor_masquer" else "trajet_rotor_montrer"),
+                                        tint = if (ui.compassRotorPath) TextHi else TextLo,
+                                        modifier = Modifier.size(21.dp))
+                                }
+                            }
                             // ⚑ During the pass: a moment marked for the journal (heard, not logged).
                             if (ui.nowMs in (shownPass.aosEpochMs - 120_000L)..(shownPass.losEpochMs + 120_000L)) BoutonSignet(ui, vm)
                         }
@@ -423,6 +434,7 @@ internal fun DetailScreen(ui: UiState, vm: MainViewModel, onBack: () -> Unit) {
                         ringElNear = Color(ui.ringElNearColor), ringElClose = Color(ui.ringElCloseColor),
                         rotorAzDeg = if (ui.rotorConnected) ui.rotorAimAz else null,
                         rotorElDeg = if (ui.rotorConnected) ui.rotorAimEl else null,
+                    rotorPath = if (ui.rotorConnected && ui.compassRotorPath) ui.rotorTrajet else emptyList(),
                         modifier = Modifier.fillMaxWidth())
                     // The compass tap is the keypad's only entry on this
                     // screen, so a collapsed compass gets a button instead.
