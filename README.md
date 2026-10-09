@@ -71,7 +71,8 @@ The phone serves pages to the PC's browser (USB cable or Wi-Fi, nothing to insta
 
 ## Coming in the next version
 
-- **METEOR weather pictures (LRPT)**, beta: METEOR-M2-3 and M2-4 decoded on the phone from an RTL-SDR dongle and a 137 MHz antenna — colour by day and infrared, north up, a preview while the pass comes in; started by hand or by itself before each pass; a raw I/Q WAV recording decoded too. Checked on the recording of a real pass, not yet live.
+- **METEOR weather pictures (LRPT)**, beta: METEOR-M2-3 and M2-4 decoded on the phone from an RTL-SDR dongle and a 137 MHz antenna — colour by day and infrared, north up, a preview while the pass comes in; started by hand or by itself before each pass; a raw I/Q WAV recording decoded too. On the satellite's page, one button: **Receive the pictures**. Checked on the recording of a real pass, not yet live.
+- **Rotator: fewer relay clicks** — one axis at a time, the mast a little ahead of the satellite, at most one command every 6 s.
 
 <p align="center"><img src="docs/images/meteor-lrpt.webp" width="600" alt="A METEOR-M2-4 pass decoded by SatMe: Alaska and the Bering Sea in colour"></p>
 
