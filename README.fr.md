@@ -69,6 +69,12 @@ Le téléphone sert des pages au navigateur du PC (câble USB ou Wi-Fi, rien à 
 <img src="docs/images/fr-sstv-sheet-iss.webp" width="24%" alt="Une planche des images de l'ISS">
 </p>
 
+## Dans la prochaine version
+
+- **Images météo METEOR (LRPT)**, en bêta : METEOR-M2-3 et M2-4 décodés sur le téléphone depuis une clé RTL-SDR et une antenne 137 MHz — couleur de jour et infrarouge, nord en haut, un aperçu pendant le passage ; démarrage à la main ou tout seul avant chaque passage ; un enregistrement WAV I/Q brut décodé aussi. Vérifié sur l'enregistrement d'un vrai passage, pas encore en direct.
+
+<p align="center"><img src="docs/images/meteor-lrpt.webp" width="600" alt="Un passage de METEOR-M2-4 décodé par SatMe : l'Alaska et la mer de Béring en couleur"></p>
+
 ## Nouveautés de la 20.81
 
 - **Rotor : un passage par la butée est planifié** — les antennes passent de l'autre côté du zénith, ou basculent par-dessus avec 180° d'élévation, au lieu de repartir à la butée ; un tour seulement s'il vaut la peine, jamais pendant une image SSTV attendue ni en émission. Un cadran avec la butée, la zone morte, le câble et le chemin prévu ; le trajet aussi dessiné en blanc sur la boussole du satellite.
@@ -125,6 +131,7 @@ Toutes les versions dans le [wiki](https://github.com/f4ioz/SatMe/wiki/Nouveaute
 - Chaque image SSTV garde son propre son : l'écouter, la re-décoder seule, la partager ou l'enregistrer ; une vidéo de l'image qui arrive avec son son, légère ou HD ; images nettoyées des lignes perdues dans le bruit, exportées avec ou sans bandeau ; le re-décodage garde l'heure et le lieu de réception. Une planche SSTV place les images d'une série, dans l'ordre choisi, sur un modèle importé (ARISS…) ou un fond SatMe, avec indicatif, logo, nom @ locator et dates.
 - APRS (bêta) : trames AFSK 1200 décodées pendant l'enregistrement — le digipeater de l'ISS sur 145,825 MHz — ou reçues par un poste KISS, et les stations décodées par un Yaesu FT3D. Positions (Mic-E compris), messages, statuts. Émission par l'IC-9700 ou par un poste KISS comme le Kenwood TH-D72 : APRS Thursday (HOTG) prêt, accusés affichés. On travaille sur l'ISS (145,825 MHz, Doppler suivi) ou sur le réseau terrestre (144,800 MHz, WIDE1-1,WIDE2-1) — ou les deux, l'ISS pendant ses passages et le terrestre le reste du temps. Un bouton « Écouter » règle l'IC-9700 par le CAT ; un Kenwood est passé en KISS et réglé par SatMe lui-même. La position émise peut être approximative (décalage fixe de moins de 500 m).
 - L'APRS pour le plaisir : quand l'ISS répète ta propre trame, SatMe le fête (bannière, vibration, notification) et dit qui d'autre était sur le passage. Une carte sur fond OpenStreetMap (zoom et déplacement au doigt) avec les stations entendues, la trace de l'ISS, et chaque station reliée à l'endroit où était l'ISS quand on l'a entendue. Les messages en conversations, accusés dans les deux sens, avec les boutons APRS Thursday et les participants du jour. La chasse à une station : distance, cap et flèche qui suit le téléphone. Le bilan du jour en image à partager, les contacts APRS par l'ISS directement au carnet, des records et 14 badges. Les stations météo décodées, et une balise au passage de l'ISS (désactivée par défaut).
+- Images météo METEOR-M2-3 / M2-4 (LRPT, bêta) depuis une clé RTL-SDR : couleur et infrarouge, en direct, toutes seules à chaque passage, ou depuis un enregistrement I/Q brut.
 - Décodage FT8 / FT4, radiosondes météo, et clé RTL-SDR avec son spectre.
 
 ### Partage
@@ -141,7 +148,7 @@ Français et anglais. Commandes lisibles par les lecteurs d'écran.
 |---|---|
 | Postes | Icom IC-9700 · Kenwood TS-2000 (mode SAT ; RigExpert Tiny essayé) · Kenwood TH-D72 (FM, full duplex) · Yaesu FT-817 ou Icom IC-705¹ de chaque côté · FT-817 ou IC-705¹ + clé SDR |
 | APRS | Poste KISS en USB : Kenwood TH-D72 (essayé) ; autres TNC KISS sur une ligne série USB¹ · Yaesu FT3D : les stations qu'il décode (positions, sortie WAY.P) |
-| SDR | RTL2832U |
+| SDR | RTL2832U (phonie, SSTV, images METEOR avec une antenne 137 MHz) |
 | Boussole | WitMotion WT901BLE, WT9011DCL-BT50 |
 | Rotors | Yaesu GS-232 · Hamlib rotctld (réseau) |
 | Série USB | CP210x, FTDI, PL2303, CH340/341/9102, MCP2200/2221, CDC |
