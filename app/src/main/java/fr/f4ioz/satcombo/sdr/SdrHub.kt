@@ -639,6 +639,11 @@ object SdrHub {
                 errors = 0
                 idle = 0
                 bytes += n
+                // METEOR pictures: the raw samples, before any audio chain (120 kHz wide,
+                // nothing to listen to). Handed over, decoded on their own thread.
+                if (fr.f4ioz.satcombo.meteor.MeteorHub.actif && mine()) {
+                    fr.f4ioz.satcombo.meteor.MeteorHub.iq(iq, n, (fineHz + wantOffset).toDouble())
+                }
 
                 val nowSpec = System.currentTimeMillis()
                 val wantSpec = nowSpec - lastSpec >= 90L
@@ -762,6 +767,11 @@ object SdrHub {
             runCatching { track?.release() }
             runCatching { s.stopStream() }
             runCatching { s.close() }
+            // METEOR pictures are written when the dongle stops, off this thread
+            // (a full pass is several megapixels to compress).
+            if (fr.f4ioz.satcombo.meteor.MeteorHub.actif) {
+                Thread({ runCatching { fr.f4ioz.satcombo.meteor.MeteorHub.arrete() } }, "meteor-fin").start()
+            }
             // Last act: announce the dongle is released. [stop] and [start]
             // wait for this.
             workerAlive = false

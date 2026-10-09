@@ -61,7 +61,7 @@ object SstvMeta {
      * the tag differs: APT and SSTV images raise the same question later —
      * which satellite, when, from where.
      */
-    private val KINDS = setOf("SSTV", "APT")
+    private val KINDS = setOf("SSTV", "APT", "LRPT")
 
     /** Sidecar file name for an image. */
     fun sidecarName(pngName: String): String = pngName.removeSuffix(".png") + ".meta"

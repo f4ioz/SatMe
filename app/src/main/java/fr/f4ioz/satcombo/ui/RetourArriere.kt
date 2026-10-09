@@ -41,6 +41,7 @@ object RetourArriere {
         FERMER_APRS,
         FERMER_SDR,
         FERMER_APT,
+        FERMER_METEOR,
         FERMER_SONDE,
         FERMER_ROTOR,
         FERMER_QO100,
@@ -77,6 +78,7 @@ object RetourArriere {
         ecran == Screen.APRS -> Geste.FERMER_APRS
         ecran == Screen.SDR -> Geste.FERMER_SDR
         ecran == Screen.APT -> Geste.FERMER_APT
+        ecran == Screen.METEOR -> Geste.FERMER_METEOR
         ecran == Screen.SONDE -> Geste.FERMER_SONDE
         ecran == Screen.ROTOR -> Geste.FERMER_ROTOR
         ecran == Screen.QO100 -> Geste.FERMER_QO100

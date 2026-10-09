@@ -67,7 +67,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-enum class Screen { PASSES, SETTINGS, LOCATOR, SKED, TIMELINE, PHOTO, ACTIVATION, SSTV, SDR, APT, AGENDA, SONDE, ROTOR, QO100, NOMMAGE, GLOBE, FT8, APRS }
+enum class Screen { PASSES, SETTINGS, LOCATOR, SKED, TIMELINE, PHOTO, ACTIVATION, SSTV, SDR, APT, METEOR, AGENDA, SONDE, ROTOR, QO100, NOMMAGE, GLOBE, FT8, APRS }
 
 /**
  * Fine-tuning settings, kept out of [UiState] because of the 255-register
@@ -5864,7 +5864,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      */
     fun startSdr() {
         val sat = _ui.value.selected?.name ?: "SAT"
-        val rest = sdrRestHz()
+        // METEOR: 120 kHz of digital signal, nothing to hear, record or decode as SSTV.
+        val meteor = estMeteor() && hasExtension(fr.f4ioz.satcombo.data.Extensions.METEOR)
+        val rest = if (meteor) meteorFrequence() else sdrRestHz()
         val gain = settings.sdrGainTenthDb.takeIf { it >= 0 }
         val ok = fr.f4ioz.satcombo.sdr.SdrHub.start(
             ctx = getApplication(),
@@ -5875,9 +5877,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             gainTenthDb = gain,
             agc = settings.sdrAgc,
             ppm = settings.sdrPpm,
-            sstv = settings.sdrSstv,
-            record = settings.sdrRecord,
-            audio = settings.sdrAudio,
+            sstv = settings.sdrSstv && !meteor,
+            record = settings.sdrRecord && !meteor,
+            audio = settings.sdrAudio && !meteor,
             mode = sdrMode(),
             bandwidthHz = settings.sdrBandwidthHz,
             squelchDb = settings.sdrSquelchDb,
@@ -5885,6 +5887,114 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         fr.f4ioz.satcombo.sdr.SdrHub.setDeemphasis(settings.sdrDeemph)
         if (ok) startSdrLoop(rest)
     }
+
+    /**
+     * The METEOR downlink: the transmitter chosen if it is on 137 MHz, else
+     * the one named LRPT, else 137.900 MHz (METEOR-M2-3 and M2-4's usual one).
+     */
+    fun meteorFrequence(): Long {
+        val tx = activeTransmitters()
+        val choisi = tx.getOrNull(_ui.value.selectedTxIndex)?.downlinkLowHz
+        if (choisi != null && choisi in 137_000_000L..138_000_000L) return choisi
+        return tx.firstOrNull { it.description.contains("LRPT", true) && (it.downlinkLowHz ?: 0) in 137_000_000L..138_000_000L }
+            ?.downlinkLowHz ?: 137_900_000L
+    }
+
+    /**
+     * A METEOR-M satellite sending LRPT pictures (137.9 or 137.1 MHz):
+     * METEOR-M2-3 (57166), M2-4 (59051) and those after them. Not METEOR-M2
+     * (2014) nor M2-2: silent, a pass armed for them would receive nothing.
+     */
+    fun estMeteor(sat: TleEntry? = _ui.value.selected): Boolean =
+        sat != null && fr.f4ioz.satcombo.meteor.MeteorHub.emetLrpt(sat.catalogNumber, sat.name)
+
+    /**
+     * Decodes METEOR pictures alongside the dongle, when the satellite is one.
+     * The direction of the pass, from the orbit: going north, the picture is
+     * turned so that north is up.
+     */
+    private fun demarreMeteur() {
+        val sat = _ui.value.selected ?: return
+        if (!estMeteor(sat) || !hasExtension(fr.f4ioz.satcombo.data.Extensions.METEOR)) return
+        val obs = _ui.value.observer
+        val t = System.currentTimeMillis()
+        val montant = obs != null && runCatching {
+            predictor.positionAt(sat, obs, t + 60_000).latDeg > predictor.positionAt(sat, obs, t).latDeg
+        }.getOrDefault(false)
+        fr.f4ioz.satcombo.meteor.MeteorHub.qthLocator = myLocator()
+        fr.f4ioz.satcombo.meteor.MeteorHub.demarre(getApplication(),
+            fr.f4ioz.satcombo.sdr.Dsp.RTL_RATE.toDouble(), sat.name, montant)
+    }
+
+    // ------------------------------------------------------- METEOR, automatic
+
+    fun meteorAuto(): Boolean = settings.meteorAuto
+    fun setMeteorAuto(on: Boolean) { settings.meteorAuto = on; if (!on) meteorAutoArme = 0 }
+
+    /** The METEOR satellites known (in the satellite list). */
+    fun meteorSatellites(): List<TleEntry> = _ui.value.satellites.filter { estMeteor(it) }
+
+    /** The next METEOR pass (or the one under way): satellite and pass. */
+    fun meteorProchainPassage(heures: Int = 24): Pair<TleEntry, fr.f4ioz.satcombo.data.SatPass>? {
+        val obs = _ui.value.observer ?: return null
+        val now = System.currentTimeMillis()
+        return meteorSatellites().mapNotNull { sat ->
+            runCatching {
+                predictor.upcomingPasses(sat, obs, now - 20 * 60_000L, heures, _ui.value.minElevDeg.toDouble())
+                    .firstOrNull { it.losEpochMs > now }?.let { sat to it }
+            }.getOrNull()
+        }.minByOrNull { it.second.aosEpochMs }
+    }
+
+    /** The satellite the automatic start is receiving (0: none), and until when. */
+    @Volatile private var meteorAutoArme = 0
+    private var meteorAutoLos = 0L
+
+    /**
+     * A minute before a METEOR pass, the dongle starts on it; after LOS it
+     * stops (the pictures are written then). Only when the dongle is free:
+     * reception started by hand is never taken over.
+     */
+    private fun meteorAutoTic() {
+        if (!settings.meteorAuto || !hasExtension(fr.f4ioz.satcombo.data.Extensions.METEOR)) return
+        val now = System.currentTimeMillis()
+        val sdr = fr.f4ioz.satcombo.sdr.SdrHub
+        if (meteorAutoArme != 0) {
+            if (!sdr.isRunning) { meteorAutoArme = 0; return }
+            if (now > meteorAutoLos + 30_000L) { meteorAutoArme = 0; stopSdr() }
+            return
+        }
+        if (sdr.isRunning || sdr.devicePresent(getApplication()) == null) return
+        val (sat, pass) = meteorProchainPassage(2) ?: return
+        if (now < pass.aosEpochMs - 60_000L || now >= pass.losEpochMs) return
+        meteorAutoArme = sat.catalogNumber
+        meteorAutoLos = pass.losEpochMs
+        viewModelScope.launch {
+            if (_ui.value.selected?.catalogNumber != sat.catalogNumber) select(sat)
+            kotlinx.coroutines.withTimeoutOrNull(8_000) {
+                while (_ui.value.transmittersLoading || _ui.value.selected?.catalogNumber != sat.catalogNumber) delay(100)
+            }
+            val tx = activeTransmitters()
+            val i = tx.indexOfFirst { it.description.contains("LRPT", true) && (it.downlinkLowHz ?: 0) in 137_000_000L..138_000_000L }
+            if (i >= 0 && i != _ui.value.selectedTxIndex) selectTransmitter(i)
+            startSdr()
+            if (!fr.f4ioz.satcombo.sdr.SdrHub.isRunning) meteorAutoArme = 0
+        }
+    }
+
+    init {
+        viewModelScope.launch {
+            while (true) { delay(15_000); runCatching { meteorAutoTic() } }
+        }
+    }
+
+    fun openMeteor() {
+        if (!hasExtension(fr.f4ioz.satcombo.data.Extensions.METEOR)) return
+        fr.f4ioz.satcombo.meteor.MeteorHub.qthLocator = myLocator()
+        va(Screen.METEOR)
+        _ui.value = _ui.value.copy(screen = Screen.METEOR)
+    }
+    fun closeMeteor() { _ui.value = retour() }
 
     /**
      * Dongle Doppler tracking, four times a second.
@@ -5904,6 +6014,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         sdrLoopJob?.cancel()
         sdrLoopJob = viewModelScope.launch {
             while (fr.f4ioz.satcombo.sdr.SdrHub.isRunning) {
+                if (!fr.f4ioz.satcombo.meteor.MeteorHub.actif) runCatching { demarreMeteur() }
                 runCatching {
                     val rest = _ui.value.rxRestHz ?: restHz
                     if (!_ui.value.sdrDopplerTrack) {

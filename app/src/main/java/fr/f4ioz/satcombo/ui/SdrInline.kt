@@ -10,6 +10,7 @@ package fr.f4ioz.satcombo.ui
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -317,6 +318,22 @@ fun SdrInline(ui: UiState, vm: MainViewModel) {
 
     val rx = st.running
     val accent = if (rx) Aurora else Cyan
+
+    // METEOR pictures being decoded alongside: where they stand, one tap to the page.
+    val meteor by fr.f4ioz.satcombo.meteor.MeteorHub.etat.collectAsState()
+    if (meteor.actif) {
+        Surface(color = SpaceCard, shape = RoundedCornerShape(12.dp),
+            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp).clickable { vm.openMeteor() }) {
+            Row(Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    if (meteor.verrou) tf("meteor_verrou", meteor.lignes, meteor.trames)
+                    else tf("meteor_cherche", "%.1f".format(meteor.qualiteDb)),
+                    color = if (meteor.verrou) Aurora else Cyan, fontSize = 12.sp,
+                    modifier = Modifier.weight(1f))
+                Text(t("meteor_titre"), color = TextLo, fontSize = 10.sp)
+            }
+        }
+    }
 
     Surface(color = accent.copy(alpha = 0.10f), shape = RoundedCornerShape(12.dp),
         modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)) {

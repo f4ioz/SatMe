@@ -277,7 +277,7 @@ fun AptScreen(ui: UiState, vm: MainViewModel) {
 
 /** A saved image: thumbnail, metadata, share and delete. */
 @Composable
-private fun AptThumb(file: File, shot: SstvMeta.SstvShot, useUtc: Boolean,
+internal fun AptThumb(file: File, shot: SstvMeta.SstvShot, useUtc: Boolean,
                      onOpen: () -> Unit, onDeleted: () -> Unit) {
     val ctx = LocalContext.current
     val bmp = remember(file.absolutePath) {
@@ -352,7 +352,7 @@ private fun AptThumb(file: File, shot: SstvMeta.SstvShot, useUtc: Boolean,
  * since full resolution would fill memory and show nothing more on a phone.
  */
 @Composable
-private fun AptViewer(file: File, onClose: () -> Unit) {
+internal fun AptViewer(file: File, onClose: () -> Unit) {
     val bmp = remember(file.absolutePath) {
         runCatching {
             val o = android.graphics.BitmapFactory.Options().apply { inSampleSize = 2 }

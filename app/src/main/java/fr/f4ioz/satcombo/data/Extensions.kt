@@ -90,8 +90,14 @@ object Extensions {
      */
     const val APRS = "aprs"
 
+    /**
+     * METEOR-M pictures (LRPT) through the SDR dongle. Checked on a recording
+     * of a real METEOR-M2-4 pass, not yet live: its page says so.
+     */
+    const val METEOR = "meteor"
+
     /** Every known extension, in display order. */
-    val ALL: List<String> = listOf(SSTV, SDR, APT, FLAG, BZH, SONDE, ROTOR, QO100, APRS)
+    val ALL: List<String> = listOf(SSTV, SDR, APT, METEOR, FLAG, BZH, SONDE, ROTOR, QO100, APRS)
 
     /**
      * Open to everyone, no key needed.

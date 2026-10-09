@@ -73,6 +73,7 @@ class Chemin(private val max: Int = 8) {
          */
         fun sectionDe(ecran: Screen): String? = when (ecran) {
             Screen.SSTV, Screen.APT, Screen.APRS -> "recordings"
+            Screen.METEOR -> "accord"
             Screen.SDR -> "accord"
             Screen.SONDE -> "sondemire"
             Screen.SKED -> "skeds"

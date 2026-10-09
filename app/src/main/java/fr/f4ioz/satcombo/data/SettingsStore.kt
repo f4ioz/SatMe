@@ -413,6 +413,11 @@ class SettingsStore(context: Context) {
         set(v) { prefs.edit().putBoolean("sdr_record", v).apply() }
 
     /** Play demodulated audio on headphones / speaker. */
+    /** METEOR pictures started by themselves on each pass (dongle plugged in, app open). */
+    var meteorAuto: Boolean
+        get() = prefs.getBoolean("meteor_auto", false)
+        set(v) { prefs.edit().putBoolean("meteor_auto", v).apply() }
+
     var sdrAudio: Boolean
         get() = prefs.getBoolean("sdr_audio", true)
         set(v) { prefs.edit().putBoolean("sdr_audio", v).apply() }

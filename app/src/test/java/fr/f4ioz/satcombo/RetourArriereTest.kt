@@ -52,6 +52,7 @@ class RetourArriereTest {
             Screen.SSTV to RetourArriere.Geste.FERMER_SSTV,
             Screen.SDR to RetourArriere.Geste.FERMER_SDR,
             Screen.APT to RetourArriere.Geste.FERMER_APT,
+            Screen.METEOR to RetourArriere.Geste.FERMER_METEOR,
             Screen.SONDE to RetourArriere.Geste.FERMER_SONDE,
             Screen.ROTOR to RetourArriere.Geste.FERMER_ROTOR,
             Screen.QO100 to RetourArriere.Geste.FERMER_QO100,
@@ -68,7 +69,7 @@ class RetourArriereTest {
         }
         // If the enum grows, this test must be revisited, not bypassed.
         assertEquals("un écran a été ajouté sans passer par ici",
-            18, Screen.entries.size)
+            19, Screen.entries.size)
     }
 
     /**
