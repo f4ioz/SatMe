@@ -25,6 +25,9 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.ui.graphics.Color
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -73,6 +76,11 @@ import kotlinx.coroutines.delay
  */
 @Composable
 fun RxImageInline(ui: UiState, vm: MainViewModel) {
+    // A METEOR satellite: its pictures come through the dongle, not SSTV.
+    if (fr.f4ioz.satcombo.data.Extensions.METEOR in ui.extensions && vm.estMeteor()) {
+        MeteorInlineCard(ui, vm)
+        return
+    }
     // Shown only if the matching decoder is enabled in settings: an operator
     // who unchecked SSTV and NOAA doesn't want the top of the screen taken by
     // a feature they turned down.
@@ -319,22 +327,6 @@ fun SdrInline(ui: UiState, vm: MainViewModel) {
     val rx = st.running
     val accent = if (rx) Aurora else Cyan
 
-    // METEOR pictures being decoded alongside: where they stand, one tap to the page.
-    val meteor by fr.f4ioz.satcombo.meteor.MeteorHub.etat.collectAsState()
-    if (meteor.actif) {
-        Surface(color = SpaceCard, shape = RoundedCornerShape(12.dp),
-            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp).clickable { vm.openMeteor() }) {
-            Row(Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    if (meteor.verrou) tf("meteor_verrou", meteor.lignes, meteor.trames)
-                    else tf("meteor_cherche", "%.1f".format(meteor.qualiteDb)),
-                    color = if (meteor.verrou) Aurora else Cyan, fontSize = 12.sp,
-                    modifier = Modifier.weight(1f))
-                Text(t("meteor_titre"), color = TextLo, fontSize = 10.sp)
-            }
-        }
-    }
-
     Surface(color = accent.copy(alpha = 0.10f), shape = RoundedCornerShape(12.dp),
         modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
         Column(Modifier.padding(10.dp)) {
@@ -522,3 +514,66 @@ private fun InlineLevelBar(levelDb: Float) {
             .clip(RoundedCornerShape(3.dp)).background(color))
     }
 }
+
+/**
+ * On a METEOR satellite's page: one button to receive its pictures (the
+ * dongle started on the LRPT channel, the decoder with it), then where the
+ * decoding stands and its preview; a tap opens the METEOR page.
+ */
+@Composable
+private fun MeteorInlineCard(ui: UiState, vm: MainViewModel) {
+    val ctx = LocalContext.current
+    val m by fr.f4ioz.satcombo.meteor.MeteorHub.etat.collectAsState()
+    val sdr by SdrHub.state.collectAsState()
+    var cle by remember { mutableStateOf(SdrHub.devicePresent(ctx) != null) }
+    LaunchedEffect(Unit) { while (true) { cle = SdrHub.devicePresent(ctx) != null; delay(2000) } }
+    val actif = m.actif && sdr.running
+    val accent = if (m.verrou) Aurora else if (actif) Cyan else TextLo
+    Surface(color = SpaceCard, shape = RoundedCornerShape(12.dp),
+        modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
+        Column(Modifier.padding(10.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(t("meteor_titre"), color = TextHi, fontWeight = FontWeight.Bold, fontSize = 13.sp,
+                    modifier = Modifier.weight(1f).clickable { vm.openMeteor() })
+                if (actif) {
+                    IconButton(onClick = { vm.stopSdr() }) {
+                        Icon(Icons.Default.Stop, t("sdr_stop"), tint = Magenta, modifier = Modifier.size(22.dp))
+                    }
+                }
+            }
+            when {
+                actif -> {
+                    Text(
+                        if (m.verrou) tf("meteor_verrou", m.lignes, m.trames)
+                        else tf("meteor_cherche", "%.1f".format(m.qualiteDb)),
+                        color = accent, fontSize = 12.sp)
+                    Text("%.3f MHz".format(vm.cleVersSat(sdr.centerHz) / 1_000_000.0) + "  ·  " +
+                        tf("meteor_mesures", "%.1f".format(m.qualiteDb), m.frequenceHz, m.tramesRatees, m.canaux.joinToString(" ")),
+                        color = TextLo, fontSize = 10.sp, fontFamily = FontFamily.Monospace)
+                    m.apercu?.let { bmp ->
+                        Spacer(Modifier.height(6.dp))
+                        Image(bmp.asImageBitmap(), null, contentScale = ContentScale.FillWidth,
+                            modifier = Modifier.fillMaxWidth().heightIn(max = 220.dp)
+                                .clip(RoundedCornerShape(8.dp)).clickable { vm.openMeteor() })
+                    }
+                }
+                !cle -> Text(t("meteor_branche_cle"), color = Amber, fontSize = 12.sp)
+                else -> {
+                    Text(t("meteor_inline_aide"), color = TextLo, fontSize = 11.sp)
+                    Spacer(Modifier.height(6.dp))
+                    Button(onClick = { vm.startSdr() }, colors = ButtonDefaults.buttonColors(containerColor = Cyan)) {
+                        Icon(Icons.Default.PlayArrow, null, Modifier.size(18.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text(t("meteor_recevoir"), color = Color.Black, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+            if (!actif && m.dernierEnregistre != null) {
+                Spacer(Modifier.height(4.dp))
+                Text(tf("apt_saved", m.dernierEnregistre!!), color = TextLo, fontSize = 10.sp,
+                    fontFamily = FontFamily.Monospace, modifier = Modifier.clickable { vm.openMeteor() })
+            }
+        }
+    }
+}
+

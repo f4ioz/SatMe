@@ -378,7 +378,7 @@ data class RotorUi(
     val rotorCoverage: Double? = null,
     val rotorLink: String = "GS232",
     val rotorHost: String = "192.168.1.10",
-    val rotorDeadband: Int = 2,
+    val rotorDeadband: Int = 4,
     val rotorSim: Boolean = false,
     val rotorTargetAz: Double? = null,
     val rotorTargetEl: Double? = null,
@@ -5889,15 +5889,17 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * The METEOR downlink: the transmitter chosen if it is on 137 MHz, else
-     * the one named LRPT, else 137.900 MHz (METEOR-M2-3 and M2-4's usual one).
+     * The METEOR downlink: the transmitter chosen if SatMe can decode it (LRPT
+     * 72 kbps on 137.9 or 137.1 MHz), else the best one of the list (see
+     * [fr.f4ioz.satcombo.meteor.MeteorHub.choisitVoie]), else 137.900 MHz.
      */
     fun meteorFrequence(): Long {
         val tx = activeTransmitters()
-        val choisi = tx.getOrNull(_ui.value.selectedTxIndex)?.downlinkLowHz
-        if (choisi != null && choisi in 137_000_000L..138_000_000L) return choisi
-        return tx.firstOrNull { it.description.contains("LRPT", true) && (it.downlinkLowHz ?: 0) in 137_000_000L..138_000_000L }
-            ?.downlinkLowHz ?: 137_900_000L
+        val choisi = tx.getOrNull(_ui.value.selectedTxIndex)
+        if (choisi != null && fr.f4ioz.satcombo.meteor.MeteorHub.voieDecodable(choisi.description, choisi.downlinkLowHz))
+            return choisi.downlinkLowHz!!
+        val i = fr.f4ioz.satcombo.meteor.MeteorHub.choisitVoie(tx.map { it.description to it.downlinkLowHz })
+        return tx.getOrNull(i)?.downlinkLowHz ?: 137_900_000L
     }
 
     /**
@@ -5975,7 +5977,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 while (_ui.value.transmittersLoading || _ui.value.selected?.catalogNumber != sat.catalogNumber) delay(100)
             }
             val tx = activeTransmitters()
-            val i = tx.indexOfFirst { it.description.contains("LRPT", true) && (it.downlinkLowHz ?: 0) in 137_000_000L..138_000_000L }
+            val i = fr.f4ioz.satcombo.meteor.MeteorHub.choisitVoie(tx.map { it.description to it.downlinkLowHz })
             if (i >= 0 && i != _ui.value.selectedTxIndex) selectTransmitter(i)
             startSdr()
             if (!fr.f4ioz.satcombo.sdr.SdrHub.isRunning) meteorAutoArme = 0
@@ -9254,6 +9256,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 // uplink and downlink** — something you can work. Index zero
                 // was the CW beacon on FO-29: listen-only.
                 var idx = active.indexOfFirst { it.description == cfg.txDescription }
+                // A METEOR: its pictures, the LRPT 72 kbps channel — not the first of a list
+                // that starts with SARSAT on 1.5 GHz.
+                if (idx < 0 && fr.f4ioz.satcombo.meteor.MeteorHub.emetLrpt(sat.catalogNumber, sat.name))
+                    idx = fr.f4ioz.satcombo.meteor.MeteorHub.choisitVoie(active.map { it.description to it.downlinkLowHz })
                 if (idx < 0) idx = active.indexOfFirst {
                     it.downlinkLowHz != null && it.uplinkLowHz != null
                 }
@@ -10402,15 +10408,37 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             rotorTargetAz = aim.azDeg, rotorTargetEl = aim.elDeg, rotorFlipped = aim.flipped) }
         if (!garage) rotorCmd = fr.f4ioz.satcombo.rotor.RotorPos(aim.azDeg, aim.elDeg)
         _ui.value = _ui.value.rot { copy(rotorCmdAz = aim.azDeg) }
-        if (!fr.f4ioz.satcombo.rotor.RotorMath.needsMove(aim, rotorAt, u.rotorDeadband.toDouble()))
-            return
+        // How fast the aim moves (°/s, smoothed): the mast goes that way ahead of it.
+        val ici = System.currentTimeMillis()
+        val avant = rotorVisePrec
+        val dt = (ici - rotorVisePrecMs) / 1000.0
+        if (avant != null && dt in 0.3..5.0) {
+            rotorVitesseAz = 0.7 * rotorVitesseAz + 0.3 * (aim.azDeg - avant.azDeg) / dt
+            rotorVitesseEl = 0.7 * rotorVitesseEl + 0.3 * (aim.elDeg - avant.elDeg) / dt
+        } else if (avant == null || dt > 5.0) { rotorVitesseAz = 0.0; rotorVitesseEl = 0.0 }
+        rotorVisePrec = fr.f4ioz.satcombo.rotor.RotorPos(aim.azDeg, aim.elDeg)
+        rotorVisePrecMs = ici
+        // Parked: no lead (the aim stands still anyway).
+        val c = fr.f4ioz.satcombo.rotor.RotorPas.commande(
+            fr.f4ioz.satcombo.rotor.RotorPos(aim.azDeg, aim.elDeg), rotorAt,
+            if (garage && !avance) 0.0 else rotorVitesseAz, if (garage && !avance) 0.0 else rotorVitesseEl,
+            u.rotorDeadband.toDouble(), limits, ici, rotorDernierEnvoiMs, u.rotorAzOnly) ?: return
         rotorWasFlipped = aim.flipped
-        val cmd = fr.f4ioz.satcombo.rotor.RotorMath.commandAz(aim.azDeg, limits, u.rotorAzFromStop)
+        val cmd = fr.f4ioz.satcombo.rotor.RotorMath.commandAz(c.azDeg, limits, u.rotorAzFromStop)
         // `lu` may be a held position three seconds old — not a reading.
         // Without a real read, assume the mast went where it was told.
-        if (d.moveTo(cmd, aim.elDeg) && frais == null)
-            rotorAt = fr.f4ioz.satcombo.rotor.RotorPos(aim.azDeg, aim.elDeg)
+        if (d.moveTo(cmd, c.elDeg)) {
+            rotorDernierEnvoiMs = ici
+            if (frais == null) rotorAt = c
+        }
     }
+
+    /** The aim at the last tick, its speed, and when the last command left (see RotorPas). */
+    private var rotorVisePrec: fr.f4ioz.satcombo.rotor.RotorPos? = null
+    private var rotorVisePrecMs = 0L
+    private var rotorVitesseAz = 0.0
+    private var rotorVitesseEl = 0.0
+    private var rotorDernierEnvoiMs = 0L
 
     /**
      * Following the satellite, and going round to the other side of the end

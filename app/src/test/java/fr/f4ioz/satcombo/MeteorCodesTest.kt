@@ -101,4 +101,30 @@ class MeteorCodesTest {
         assertEquals(1772668800000L, h.dateDuNom("meteor-m2-4-20260305-cf32.wav"))
         assertEquals(null, h.dateDuNom("passage.wav"))
     }
+
+    /** The SatNOGS lists of 09/10/2026, in their order. */
+    @Test
+    fun la_voie_lrpt_72_kbps_est_choisie() {
+        val h = fr.f4ioz.satcombo.meteor.MeteorHub
+        val m23 = listOf(
+            "SARSAT L-Band" to 1_544_500_000L, "Raw X-Band" to 8_320_000_000L, "S-Band TLM" to 3_405_235_000L,
+            "Raw X-Band" to 8_128_000_000L, "LRPT S-E RHCP D 80 kbps" to 137_912_500L,
+            "LRPT S-E RHCP D 72 kbps" to 137_900_000L, "LRPT S-E RHCP D 72 kbps" to 137_100_000L,
+            "LRPT S-E RHCP D 80 kbps" to 137_100_000L, "LRPT S-E RHCP D 80 kbps" to 137_900_000L,
+            "LRPT IQ recording usage" to 137_900_000L, "LRPT IQ recording usage" to 137_100_000L, "HRPT" to 1_700_000_000L)
+        assertEquals(5, h.choisitVoie(m23))
+        val m24 = listOf(
+            "LRPT S-E RHCP D 80 kbps" to 137_912_500L, "LRPT S-E RHCP D 80 kbps" to 137_900_000L,
+            "LRPT S-E RHCP D 80 kbps" to 137_100_000L, "HRPT" to 1_705_000_000L, "HRPT" to 1_700_000_000L,
+            "LRPT IQ recording usage" to 137_100_000L, "SARSAT L-band" to 1_544_500_000L,
+            "LRPT S-E RHCP D 72 kbps" to 137_100_000L, "LRPT S-E RHCP D 72 kbps" to 137_900_000L,
+            "LRPT IQ recording usage" to 137_900_000L)
+        assertEquals(8, h.choisitVoie(m24))
+        // Only 137.1 at 72 kbps: that one.
+        assertEquals(1, h.choisitVoie(listOf("LRPT S-E RHCP D 80 kbps" to 137_900_000L, "LRPT S-E RHCP D 72 kbps" to 137_100_000L)))
+        // Nothing decodable: none (the caller falls back on 137.900 MHz).
+        assertEquals(-1, h.choisitVoie(listOf("HRPT" to 1_700_000_000L, "LRPT S-E RHCP D 80 kbps" to 137_912_500L)))
+        org.junit.Assert.assertFalse(h.voieDecodable("LRPT S-E RHCP D 80 kbps", 137_900_000L))
+        org.junit.Assert.assertTrue(h.voieDecodable("LRPT S-E RHCP D 72 kbps", 137_100_000L))
+    }
 }

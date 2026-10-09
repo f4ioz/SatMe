@@ -70,6 +70,34 @@ object MeteorHub {
         return suite in '3'..'9'
     }
 
+    /**
+     * Which transmitter to receive, among [voies] (description, downlink Hz):
+     * the index, or -1. SatMe decodes the 72 kbps LRPT; the lists also carry
+     * 80 kbps variants (one of them at 137.9125 MHz, 12.5 kHz off the
+     * signal), an "IQ recording" entry, HRPT and L/S/X bands. Best: LRPT
+     * 72 kbps on 137.900 MHz, then on 137.100; then any LRPT on one of those
+     * two frequencies that is not 80 kbps.
+     */
+    fun choisitVoie(voies: List<Pair<String, Long?>>): Int {
+        fun sur(hz: Long?, f: Long) = hz != null && kotlin.math.abs(hz - f) <= 2_000L
+        fun lrpt(d: String) = d.contains("LRPT", true) && !d.contains("IQ", true)
+        fun en72(d: String) = Regex("\\b72\\s*k").containsMatchIn(d.lowercase())
+        fun en80(d: String) = Regex("\\b80\\s*k").containsMatchIn(d.lowercase())
+        val ordre = listOf<(String, Long?) -> Boolean>(
+            { d, hz -> lrpt(d) && en72(d) && sur(hz, 137_900_000L) },
+            { d, hz -> lrpt(d) && en72(d) && sur(hz, 137_100_000L) },
+            { d, hz -> lrpt(d) && !en80(d) && sur(hz, 137_900_000L) },
+            { d, hz -> lrpt(d) && !en80(d) && sur(hz, 137_100_000L) })
+        for (test in ordre) {
+            val i = voies.indexOfFirst { (d, hz) -> test(d, hz) }
+            if (i >= 0) return i
+        }
+        return -1
+    }
+
+    /** A transmitter SatMe can decode as it is: LRPT 72 kbps (or not stated 80) on 137.9 or 137.1 MHz. */
+    fun voieDecodable(description: String, hz: Long?): Boolean = choisitVoie(listOf(description to hz)) == 0
+
     private val _etat = MutableStateFlow(Etat())
     val etat: StateFlow<Etat> = _etat
 

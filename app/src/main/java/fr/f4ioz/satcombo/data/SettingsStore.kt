@@ -1538,7 +1538,7 @@ class SettingsStore(context: Context) {
         set(v) { prefs.edit().putInt("rotor_max_el", v.coerceIn(90, 180)).apply() }
 
     var rotorDeadband: Int
-        get() = prefs.getInt("rotor_deadband", 2)
+        get() = prefs.getInt("rotor_deadband", 4)
         set(v) { prefs.edit().putInt("rotor_deadband", v.coerceIn(1, 15)).apply() }
 
     /**
