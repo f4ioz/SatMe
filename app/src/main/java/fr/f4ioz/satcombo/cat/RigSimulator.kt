@@ -26,7 +26,9 @@ package fr.f4ioz.satcombo.cat
  */
 class Ic9700Sim(
     val radioAddr: Int = 0xA2,
-    val ctrlAddr: Int = 0xE0
+    val ctrlAddr: Int = 0xE0,
+    /** The rig simulated: the IC-910 takes its satellite mode on 0x1A 0x07, and none but the IC-9700 knows 0x25/0x26. */
+    val modele: ModeleIcom = ModeleIcom.IC9700
 ) : SerialLink {
 
     var satMode: Boolean = false; private set
@@ -164,8 +166,15 @@ class Ic9700Sim(
                 0x01 -> { split = true; ack() }
                 else -> nak()
             }
+            0x1A -> when {
+                modele.commandeSat == 0x1A && at(0) == modele.sousCommandeSat ->
+                    if (d.size < 2) reply(0x1A, byteArrayOf(modele.sousCommandeSat.toByte(), if (satMode) 0x01 else 0x00))
+                    else { satMode = at(1) == 1; ack() }
+                else -> nak()
+            }
             0x16 -> when (at(0)) {
-                0x5A -> if (d.size < 2) reply(0x16, byteArrayOf(0x5A, if (satMode) 0x01 else 0x00))
+                0x5A -> if (modele.commandeSat != 0x16) nak()
+                        else if (d.size < 2) reply(0x16, byteArrayOf(0x5A, if (satMode) 0x01 else 0x00))
                         else { satMode = at(1) == 1; ack() }
                 0x42 -> { toneOn = at(1) == 1; ack() }
                 else -> nak()
@@ -187,6 +196,7 @@ class Ic9700Sim(
                 if (t == null || !CatDecode.toneInRange(t)) nak() else { toneTenthHz = t; ack() }
             }
             0x25, 0x26 -> {
+                if (!modele.vfoDirect) { nak(); return }
                 // In satellite mode these can't reach SUB on an IC-9700. They
                 // are refused, not silently applied to MAIN (much worse).
                 val unselected = at(0) == 0x01

@@ -1035,7 +1035,7 @@ val FR: Map<String, String> = mapOf(
     "usb_permission_denied" to "Autorisation USB refusée ou sans réponse. Rebranche le poste et accepte la demande.",
     "rotor_badge" to "ROTOR",
     "rotor_badge_pre" to "ROTOR ▸",
-    "civ_default" to "IC-9700 par défaut : A2. (IC-910 : 2A)",
+    "civ_default" to "Adresse par défaut : IC-9700 A2, IC-9100 7C, IC-910H 60. Vitesse : 115 200 sur l'IC-9700, 19 200 au plus sur l'IC-9100 et l'IC-910H.",
     "bench_sim" to "Poste simulé",
     "bench_sim_desc" to "Rejoue la séquence de début de passage contre un poste en mémoire, sans radio branchée. Un poste simulé refuse ce que le vrai refuse : une séquence saine ne doit produire aucun refus.",
     "bench_run" to "Lancer le banc",

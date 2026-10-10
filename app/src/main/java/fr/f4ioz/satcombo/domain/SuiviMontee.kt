@@ -17,7 +17,7 @@ package fr.f4ioz.satcombo.domain
  * uplink for us, and leaving it behind would transmit off the station just
  * found. We must write.
  *
- * An IC-9700 **in satellite mode** does reverse tracking itself: moving SUB
+ * An IC-9700 **in satellite mode** (and an IC-910H or IC-9100, tracking on) does reverse tracking itself: moving SUB
  * moves MAIN the other way. Writing the uplink while the operator turns then
  * makes a loop — he tunes down, we write a higher uplink, the rig raises its
  * downlink, he tunes down again. Seen on RS-44 and FO-29: the sum of both
@@ -31,7 +31,7 @@ package fr.f4ioz.satcombo.domain
 object SuiviMontee {
 
     /** Rigs that hold the uplink/downlink pair themselves in satellite mode. */
-    private val SUIVI_INTERNE = setOf("IC9700")
+    private val SUIVI_INTERNE = setOf("IC9700", "IC910", "IC9100")
 
     /** True when this rig retunes the uplink by itself as the downlink moves. */
     fun posteSuitSeul(rigModel: String): Boolean = rigModel in SUIVI_INTERNE

@@ -38,10 +38,13 @@ object CatBench {
         sim: Ic9700Sim = Ic9700Sim(),
         downlinkHz: Long = 435_500_000L,
         uplinkHz: Long = 145_900_000L,
-        toneTenthHz: Int = 670
+        toneTenthHz: Int = 670,
+        modele: ModeleIcom = sim.modele
     ): Report {
         val cat = CivController()
         cat.pacingMs = 0L
+        cat.modele = modele
+        cat.radioAddr = sim.radioAddr
         cat.attach(sim)
         val steps = ArrayList<String>()
 

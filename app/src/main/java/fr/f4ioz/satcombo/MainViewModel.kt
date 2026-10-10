@@ -4866,7 +4866,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     /** The rigs a profile can name, with their labels. */
     fun postesProposes(): List<Pair<String, String>> =
-        listOf("IC9700" to "Icom IC-9700") +
+        fr.f4ioz.satcombo.cat.ModeleIcom.entries.map { it.id to it.libelle } +
             fr.f4ioz.satcombo.cat.Postes.MODELES.map { it to fr.f4ioz.satcombo.ui.libellePostes(it) } +
             listOf(THD72 to t("rig_thd72"), TS2000 to t("rig_ts2000"))
 
@@ -7871,15 +7871,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         settings.rigModel = model
         _ui.value = _ui.value.copy(rigModel = model)
         configurePaire()
-        // Default CI-V address per Icom model.
-        val addr = when (model) {
-            "IC910" -> 0x60
-            "IC9100" -> 0x7C
-            else -> 0xA2  // IC9700
-        }
+        // Default CI-V address and speed per Icom model: the IC-910H and
+        // IC-9100 stop at 19 200 baud, where the IC-9700 runs at 115 200.
+        val m = fr.f4ioz.satcombo.cat.ModeleIcom.de(model)
+        cat.modele = m
+        val addr = m.adresse
         settings.civAddress = addr
         cat.radioAddr = addr
         _ui.value = _ui.value.copy(rigModel = model, civAddress = addr)
+        if (model in fr.f4ioz.satcombo.cat.ModeleIcom.IDS) setCivBaud(m.baud)
     }
 
     fun setCivAddress(addr: Int) {
@@ -7996,7 +7996,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         fr.f4ioz.satcombo.cat.CatBench.runFt817Ic705(ic705Emet = true)
                     isTs2000 -> fr.f4ioz.satcombo.cat.CatBench.runTs2000()
                     isPairRig -> fr.f4ioz.satcombo.cat.CatBench.runFt817Pair()
-                    else -> fr.f4ioz.satcombo.cat.CatBench.runIc9700()
+                    else -> fr.f4ioz.satcombo.cat.ModeleIcom.de(_ui.value.rigModel).let { m ->
+                        fr.f4ioz.satcombo.cat.CatBench.runIc9700(fr.f4ioz.satcombo.cat.Ic9700Sim(radioAddr = m.adresse, modele = m))
+                    }
                 }
             }.getOrNull()
             _ui.value = _ui.value.copy(
@@ -8076,8 +8078,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             ft817.tx.attach(x)
             ft817.rx.pacingMs = 0; ft817.tx.pacingMs = 0
         } else {
-            val sim = fr.f4ioz.satcombo.cat.Ic9700Sim(radioAddr = _ui.value.civAddress)
+            val m = fr.f4ioz.satcombo.cat.ModeleIcom.de(_ui.value.rigModel)
+            val sim = fr.f4ioz.satcombo.cat.Ic9700Sim(radioAddr = _ui.value.civAddress, modele = m)
             civSim = sim
+            cat.modele = m
             cat.radioAddr = _ui.value.civAddress
             cat.attach(sim)
             cat.pacingMs = 0
@@ -8361,6 +8365,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 if (ok) { surveilleEmission(); startCatLoop() }
                 return@run
             }
+            cat.modele = fr.f4ioz.satcombo.cat.ModeleIcom.de(_ui.value.rigModel)
             cat.radioAddr = _ui.value.civAddress
             val refs = cat.availablePorts()
             _ui.value = _ui.value.copy(catDevices = refs.map { it.label })

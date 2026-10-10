@@ -2003,6 +2003,8 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
                     // on a screen usually opened three minutes before AOS.
                     val rigs = listOf(
                         Triple("IC9700", "Icom IC-9700", true),
+                        Triple("IC9100", "Icom IC-9100", true),
+                        Triple("IC910", "Icom IC-910H", true),
                         // FT-817 and IC-705, one rig per side: one entry, the
                         // sides chosen underneath.
                         Triple(PAIRE, t("rig_ft817_ic705_cotes"), true),

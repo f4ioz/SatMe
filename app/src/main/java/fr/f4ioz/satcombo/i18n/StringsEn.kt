@@ -1011,7 +1011,7 @@ val EN: Map<String, String> = mapOf(
     "usb_permission_denied" to "USB permission denied or unanswered. Re-plug the rig and accept the prompt.",
     "rotor_badge" to "ROTOR",
     "rotor_badge_pre" to "ROTOR ▸",
-    "civ_default" to "IC-9700 default: A2. (IC-910: 2A)",
+    "civ_default" to "Default address: IC-9700 A2, IC-9100 7C, IC-910H 60. Speed: 115,200 on the IC-9700, 19,200 at most on the IC-9100 and IC-910H.",
     "bench_sim" to "Simulated rig",
     "bench_sim_desc" to "Replays the pass-start sequence against an in-memory rig, with no radio plugged in. A simulated rig refuses what a real one refuses: a healthy sequence must produce no refusal at all.",
     "bench_run" to "Run the bench",

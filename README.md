@@ -72,6 +72,7 @@ The phone serves pages to the PC's browser (USB cable or Wi-Fi, nothing to insta
 ## Coming in the next version
 
 - **METEOR weather pictures (LRPT)**, beta: METEOR-M2-3 and M2-4 decoded on the phone from an RTL-SDR dongle and a 137 MHz antenna — colour by day and infrared, north up, a preview while the pass comes in; started by hand or by itself before each pass; a raw I/Q WAV recording decoded too. Coastlines and borders drawn from the orbit. On the satellite's page, one button: **Receive the pictures**. Checked on the recording of a real pass, not yet live.
+- **Icom IC-910H and IC-9100** in satellite mode, beside the IC-9700: their own CI-V address and speed (19,200 baud), and the IC-910H's own satellite-mode command. Bench-tested, not yet on the real rigs.
 - **Rotator: fewer relay clicks** — one axis at a time, the mast a little ahead of the satellite, at most one command every 6 s.
 
 <p align="center"><img src="docs/images/meteor-lrpt.webp" width="600" alt="A METEOR-M2-4 pass decoded by SatMe: Alaska and the Bering Sea in colour"></p>
@@ -147,7 +148,7 @@ French and English. Controls readable by screen readers.
 
 | Type | Models |
 |---|---|
-| Radios | Icom IC-9700 · Kenwood TS-2000 (SAT mode; RigExpert Tiny tried) · Kenwood TH-D72 (FM, full duplex) · Yaesu FT-817 or Icom IC-705¹ on each side · FT-817 or IC-705¹ + SDR dongle |
+| Radios | Icom IC-9700 · Icom IC-910H¹ · Icom IC-9100¹ · Kenwood TS-2000 (SAT mode; RigExpert Tiny tried) · Kenwood TH-D72 (FM, full duplex) · Yaesu FT-817 or Icom IC-705¹ on each side · FT-817 or IC-705¹ + SDR dongle |
 | APRS | KISS radio over USB: Kenwood TH-D72 (tried); other KISS TNCs on a USB serial line¹ · Yaesu FT3D: stations it decodes (positions, WAY.P output) |
 | SDR | RTL2832U (voice, SSTV, METEOR pictures with a 137 MHz antenna) |
 | Compass | WitMotion WT901BLE, WT9011DCL-BT50 |

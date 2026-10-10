@@ -30,7 +30,10 @@ import kotlinx.coroutines.withContext
  */
 class CivController(private val context: Context? = null) : RigDriver {
 
-    override val name: String = "Icom IC-9700 (CI-V)"
+    /** Which Icom satellite rig: changes the satellite-mode command and what may be sent. */
+    var modele: ModeleIcom = ModeleIcom.IC9700
+
+    override val name: String get() = "${modele.libelle} (CI-V)"
     private var link: SerialLink? = null
 
     /**
@@ -376,17 +379,18 @@ class CivController(private val context: Context? = null) : RigDriver {
     suspend fun setTransmit(on: Boolean): Boolean =
         send(frame(0x1C, byteArrayOf(0x00, if (on) 0x01 else 0x00)))
 
-    /** Satellite mode on? (IC-9700: 0x16 0x5A read), null when unknown. */
+    /** Satellite mode on? (IC-9700 and IC-9100: 0x16 0x5A; IC-910: 0x1A 0x07), null when unknown. */
     suspend fun readSatelliteMode(): Boolean? {
         if (link == null) return null
-        val frames = exchange(0x16, byteArrayOf(0x5A), expect = 0x16, expectSub = 0x5A)
-        val p = CatDecode.payload(frames, radioAddr, controllerAddr, 0x16, 0x5A) ?: return null
+        val c = modele.commandeSat; val s = modele.sousCommandeSat
+        val frames = exchange(c, byteArrayOf(s.toByte()), expect = c, expectSub = s)
+        val p = CatDecode.payload(frames, radioAddr, controllerAddr, c, s) ?: return null
         return p.lastOrNull()?.let { (it.toInt() and 0xFF) == 1 }
     }
 
-    /** Enable/disable satellite mode (IC-9700: cmd 0x16 0x5A, 01=on/00=off). */
+    /** Enable/disable satellite mode, 01 = on / 00 = off, with the model's command. */
     suspend fun setSatelliteMode(on: Boolean): Boolean =
-        send(frame(0x16, byteArrayOf(0x5A, if (on) 0x01 else 0x00)))
+        send(frame(modele.commandeSat, byteArrayOf(modele.sousCommandeSat.toByte(), if (on) 0x01 else 0x00)))
 
     /** Select MAIN or SUB band in satellite mode (cmd 0x07 0xD0=main / 0xD1=sub). */
     suspend fun selectMainSub(sub: Boolean): Boolean {
@@ -437,7 +441,7 @@ class CivController(private val context: Context? = null) : RigDriver {
      * This does NOT change which VFO is active (unlike 0x03 + band select).
      */
     suspend fun readVfoFreq(unselected: Boolean): Long? {
-        if (link == null) return null
+        if (link == null || !modele.vfoDirect) return null
         val sub = if (unselected) 0x01 else 0x00
         val frames = exchange(0x25, byteArrayOf(sub.toByte()), expect = 0x25, expectSub = sub)
         val p = CatDecode.payload(frames, radioAddr, controllerAddr, 0x25, sub) ?: return null
@@ -452,11 +456,11 @@ class CivController(private val context: Context? = null) : RigDriver {
      * unselected VFO — see [setSatellitePair].
      */
     suspend fun setVfoFreq(hz: Long, unselected: Boolean): Boolean =
-        send(frame(0x25, byteArrayOf(if (unselected) 0x01 else 0x00) + freqToBcd(hz)))
+        modele.vfoDirect && send(frame(0x25, byteArrayOf(if (unselected) 0x01 else 0x00) + freqToBcd(hz)))
 
     /** Set the SELECTED/UNSELECTED VFO mode via cmd 0x26 (no band swap). */
     suspend fun setVfoMode(mode: Int, unselected: Boolean, filter: Int = 0x01, dataMode: Int = 0x00): Boolean =
-        send(frame(0x26, byteArrayOf(if (unselected) 0x01 else 0x00, mode.toByte(), dataMode.toByte(), filter.toByte())))
+        modele.vfoDirect && send(frame(0x26, byteArrayOf(if (unselected) 0x01 else 0x00, mode.toByte(), dataMode.toByte(), filter.toByte())))
 
     /** Enable/disable repeater tone (CTCSS) on TX. cmd 0x16 0x42. */
     suspend fun setToneOn(on: Boolean): Boolean =
@@ -608,4 +612,28 @@ class CivController(private val context: Context? = null) : RigDriver {
 internal fun modeCiv(m: String): Int = when (m.uppercase()) {
     "LSB" -> 0x00; "USB" -> 0x01; "AM" -> 0x02; "CW" -> 0x03; "FM" -> 0x05
     else -> 0x01
+}
+
+/**
+ * The Icom satellite rigs SatMe drives over CI-V, and what differs between
+ * them. Same frames, same MAIN/SUB selection (0x07 D0/D1), same tone; but:
+ *
+ *  - **address** by default: A2, 7C, 60;
+ *  - **speed**: the IC-9700's USB goes to 115 200, the IC-9100's USB and the
+ *    IC-910's CI-V jack stop at 19 200;
+ *  - **satellite mode**: 0x16 0x5A, except on the IC-910, which only knows
+ *    0x1A 0x07 (and refuses the other);
+ *  - **0x25/0x26** (unselected VFO): IC-9700 only.
+ */
+enum class ModeleIcom(val id: String, val libelle: String, val adresse: Int, val baud: Int,
+                      val commandeSat: Int, val sousCommandeSat: Int, val vfoDirect: Boolean) {
+    IC9700("IC9700", "Icom IC-9700", 0xA2, 115_200, 0x16, 0x5A, true),
+    IC9100("IC9100", "Icom IC-9100", 0x7C, 19_200, 0x16, 0x5A, false),
+    IC910("IC910", "Icom IC-910H", 0x60, 19_200, 0x1A, 0x07, false);
+
+    companion object {
+        /** The model of a rig setting ("IC910"…); anything else is driven as an IC-9700. */
+        fun de(id: String): ModeleIcom = entries.firstOrNull { it.id == id } ?: IC9700
+        val IDS: Set<String> = entries.map { it.id }.toSet()
+    }
 }

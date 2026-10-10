@@ -72,6 +72,7 @@ Le téléphone sert des pages au navigateur du PC (câble USB ou Wi-Fi, rien à 
 ## Dans la prochaine version
 
 - **Images météo METEOR (LRPT)**, en bêta : METEOR-M2-3 et M2-4 décodés sur le téléphone depuis une clé RTL-SDR et une antenne 137 MHz — couleur de jour et infrarouge, nord en haut, un aperçu pendant le passage ; démarrage à la main ou tout seul avant chaque passage ; un enregistrement WAV I/Q brut décodé aussi. Côtes et frontières tracées d'après l'orbite. Sur la page du satellite, un bouton : **Recevoir les images**. Vérifié sur l'enregistrement d'un vrai passage, pas encore en direct.
+- **Icom IC-910H et IC-9100** en mode satellite, à côté de l'IC-9700 : leur adresse CI-V et leur vitesse (19 200 bauds), et la commande de mode satellite propre à l'IC-910H. Éprouvés au banc, pas encore sur les vrais postes.
 - **Rotor : moins de claquements de relais** — un axe à la fois, le mât un peu en avance du satellite, au plus une consigne toutes les 6 s.
 
 <p align="center"><img src="docs/images/meteor-lrpt.webp" width="600" alt="Un passage de METEOR-M2-4 décodé par SatMe : l'Alaska et la mer de Béring en couleur"></p>
@@ -147,7 +148,7 @@ Français et anglais. Commandes lisibles par les lecteurs d'écran.
 
 | Type | Modèles |
 |---|---|
-| Postes | Icom IC-9700 · Kenwood TS-2000 (mode SAT ; RigExpert Tiny essayé) · Kenwood TH-D72 (FM, full duplex) · Yaesu FT-817 ou Icom IC-705¹ de chaque côté · FT-817 ou IC-705¹ + clé SDR |
+| Postes | Icom IC-9700 · Icom IC-910H¹ · Icom IC-9100¹ · Kenwood TS-2000 (mode SAT ; RigExpert Tiny essayé) · Kenwood TH-D72 (FM, full duplex) · Yaesu FT-817 ou Icom IC-705¹ de chaque côté · FT-817 ou IC-705¹ + clé SDR |
 | APRS | Poste KISS en USB : Kenwood TH-D72 (essayé) ; autres TNC KISS sur une ligne série USB¹ · Yaesu FT3D : les stations qu'il décode (positions, sortie WAY.P) |
 | SDR | RTL2832U (phonie, SSTV, images METEOR avec une antenne 137 MHz) |
 | Boussole | WitMotion WT901BLE, WT9011DCL-BT50 |
