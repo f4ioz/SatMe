@@ -38,6 +38,12 @@ import kotlin.math.abs
  *   but the noise. The reading only counts for the first command, and to
  *   catch a mast really lost (more than [PERDU_DEG] from its command), which
  *   gets it again once a minute at most.
+ *
+ * - **A command not taken.** Right after the port opens, an Arduino that has
+ *   just rebooted answers `C2` but may drop a move (seen on 10/10: the mast
+ *   stood still 80° away for a minute). A mast more than twice the margin
+ *   from its command that has not moved since it ([matImmobileMs]) gets it
+ *   again after [RELANCE_IMMOBILE_MS].
  */
 object RotorPas {
 
@@ -52,6 +58,12 @@ object RotorPas {
 
     /** Least time between two sendings of the same command to a lost mast, ms. */
     const val RELANCE_MS = 60_000L
+
+    /** The same, when the mast has not moved at all since the command: it was not taken, ms. */
+    const val RELANCE_IMMOBILE_MS = 10_000L
+
+    /** Least move of the reading that counts as the mast moving (it wanders by one), degrees. */
+    const val BOUGE_DEG = 2.0
 
     /** The command for one axis: to [vise] plus a lead in its direction of travel, or null (stays). */
     fun axe(vise: Double, actuel: Double, vitesseDegS: Double, marge: Double): Double? {
@@ -68,21 +80,25 @@ object RotorPas {
      * The command (unwrapped azimuth, elevation), or null when nothing needs
      * to move. [vitesseAz]/[vitesseEl]: how fast the aim moves, °/s.
      * [dernierEnvoiMs]: when the last command left; [derniere]: that command
-     * (null before the first one, or once it is no longer known).
+     * (null before the first one, or once it is no longer known);
+     * [matImmobileMs]: how long the mast has not moved since that command (0: unknown).
      */
     fun commande(
         vise: RotorPos, actuel: RotorPos, vitesseAz: Double, vitesseEl: Double, marge: Double,
         limits: RotorMath.Limits, maintenantMs: Long, dernierEnvoiMs: Long, azSeul: Boolean = false,
-        derniere: RotorPos? = null
+        derniere: RotorPos? = null, matImmobileMs: Long = 0L
     ): RotorPos? {
         val ref = derniere ?: actuel
         val ecartAz = abs(vise.azDeg - ref.azDeg)
         val ecartEl = if (azSeul) 0.0 else abs(vise.elDeg - ref.elDeg)
         if (ecartAz < marge && ecartEl < marge) {
             if (derniere == null) return null
-            val perdu = abs(actuel.azDeg - derniere.azDeg) > PERDU_DEG ||
-                (!azSeul && abs(actuel.elDeg - derniere.elDeg) > PERDU_DEG)
-            return if (perdu && maintenantMs - dernierEnvoiMs >= RELANCE_MS) derniere else null
+            val loin = { lim: Double -> abs(actuel.azDeg - derniere.azDeg) > lim ||
+                (!azSeul && abs(actuel.elDeg - derniere.elDeg) > lim) }
+            val depuis = maintenantMs - dernierEnvoiMs
+            val pasPrise = loin(2 * marge) && matImmobileMs >= RELANCE_IMMOBILE_MS / 2 && depuis >= RELANCE_IMMOBILE_MS
+            val perdu = loin(PERDU_DEG) && depuis >= RELANCE_MS
+            return if (pasPrise || perdu) derniere else null
         }
         val urgent = ecartAz >= 2 * marge || ecartEl >= 2 * marge
         if (!urgent && maintenantMs - dernierEnvoiMs < INTERVALLE_MS) return null

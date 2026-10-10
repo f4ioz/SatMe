@@ -10208,7 +10208,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         // A disconnected mast has no position to hold: forget the last read,
         // or it would outlive the disconnection by four seconds.
         rotorLu = null; rotorLuMs = 0L
-        rotorDerniereCmd = null
+        rotorDerniereCmd = null; rotorBougeRef = null; rotorBougeMs = 0L
         _ui.value = _ui.value.rot { copy(rotorConnected = false, rotorStatus = t("rotor_offline"),
             rotorTargetAz = null, rotorTargetEl = null,
             rotorActualAz = null, rotorActualEl = null, rotorOutOfRange = false,
@@ -10360,6 +10360,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             fr.f4ioz.satcombo.rotor.RotorDeroule.mesureVitesse(avantLu.azDeg, rotorLuMs, frais.azDeg, maintenant,
                 settings.rotorVitesse.toDouble())?.let { settings.rotorVitesse = it.toFloat() }
         if (frais != null) { rotorLu = frais; rotorLuMs = maintenant }
+        // Whether the mast moves: by more than the reading's own wander.
+        if (frais != null) {
+            val r = rotorBougeRef
+            if (r == null || kotlin.math.abs(frais.azDeg - r.azDeg) >= fr.f4ioz.satcombo.rotor.RotorPas.BOUGE_DEG ||
+                kotlin.math.abs(frais.elDeg - r.elDeg) >= fr.f4ioz.satcombo.rotor.RotorPas.BOUGE_DEG) {
+                rotorBougeRef = frais; rotorBougeMs = maintenant
+            }
+        }
         // If it still stays silent, hold its last answer a few seconds rather
         // than make the compass flicker between mast and satellite. See
         // RotorTenue: holding serves the display, never the command.
@@ -10439,7 +10447,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             fr.f4ioz.satcombo.rotor.RotorPos(aim.azDeg, aim.elDeg), rotorAt,
             if (garage && !avance) 0.0 else rotorVitesseAz, if (garage && !avance) 0.0 else rotorVitesseEl,
             u.rotorDeadband.toDouble(), limits, ici, rotorDernierEnvoiMs, u.rotorAzOnly,
-            derniere = rotorDerniereCmd) ?: return
+            derniere = rotorDerniereCmd,
+            matImmobileMs = ici - maxOf(rotorBougeMs, rotorDernierEnvoiMs)) ?: return
         rotorWasFlipped = aim.flipped
         val cmd = fr.f4ioz.satcombo.rotor.RotorMath.commandAz(c.azDeg, limits, u.rotorAzFromStop)
         // `lu` may be a held position three seconds old — not a reading.
@@ -10457,6 +10466,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private var rotorVitesseAz = 0.0
     private var rotorVitesseEl = 0.0
     private var rotorDernierEnvoiMs = 0L
+    /** Where the mast was last seen moving from, and when (see RotorPas: a command not taken). */
+    private var rotorBougeRef: fr.f4ioz.satcombo.rotor.RotorPos? = null
+    private var rotorBougeMs = 0L
     /** The last command the controller holds (true azimuth), null when unknown: see RotorPas. */
     private var rotorDerniereCmd: fr.f4ioz.satcombo.rotor.RotorPos? = null
 

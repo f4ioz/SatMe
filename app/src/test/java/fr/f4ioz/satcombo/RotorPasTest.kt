@@ -128,4 +128,24 @@ class RotorPasTest {
         // A few degrees off is a settled mast, never resent.
         assertNull(RotorPas.commande(d, RotorPos(207.0, 26.0), 0.0, 0.0, 4.0, lim, 600_000, 0, derniere = d))
     }
+
+    /**
+     * Measured on a real controller (Arduino GS-232, 10/10): the first command
+     * after opening the port was ignored, the board having just rebooted.
+     * The mast stood still 80° away for a minute before it was sent again.
+     */
+    @Test
+    fun une_consigne_ignoree_repart_des_que_le_mat_reste_immobile() {
+        val d = RotorPos(40.0, 0.0)
+        val lu = RotorPos(118.0, 49.0)
+        // Ten seconds on, the mast has not moved since the command: sent again.
+        assertEquals(d, RotorPas.commande(d, lu, 0.0, 0.0, 4.0, lim, 11_000, 0, derniere = d, matImmobileMs = 11_000))
+        // Still turning towards it: nothing.
+        assertNull(RotorPas.commande(d, lu, 0.0, 0.0, 4.0, lim, 11_000, 0, derniere = d, matImmobileMs = 1_000))
+        // Not before ten seconds since the command.
+        assertNull(RotorPas.commande(d, lu, 0.0, 0.0, 4.0, lim, 8_000, 0, derniere = d, matImmobileMs = 8_000))
+        // Settled 6° short (the controller's own tolerance): never.
+        assertNull(RotorPas.commande(d, RotorPos(46.0, 3.0), 0.0, 0.0, 4.0, lim, 600_000, 0, derniere = d,
+            matImmobileMs = 600_000))
+    }
 }
