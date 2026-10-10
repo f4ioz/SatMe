@@ -157,6 +157,12 @@ Français et anglais. Commandes lisibles par les lecteurs d'écran.
 
 ¹ Écrit et testé au banc, pas encore essayé sur le matériel réel.
 
+### Câblage
+
+Le téléphone n'a qu'un port USB-C. Un hub alimenté branché dessus porte tout : postes, carte son, clé SDR, interface du rotor, molette. Par son entrée USB-C PD, il peut aussi recharger le téléphone pendant le passage. Une clé RTL-SDR tire à elle seule environ 300 mA : le hub doit donc être alimenté. Le pupitre PC passe alors par le Wi-Fi.
+
+<p align="center"><img src="docs/images/station-wiring-fr.svg" width="760" alt="Câblage d'une station SatMe : le téléphone sur un hub USB alimenté, avec les postes, la carte son, la clé SDR, l'interface du rotor et la molette USB"></p>
+
 ## Documentation
 
 - **[Wiki SatMe](https://github.com/f4ioz/SatMe/wiki/Accueil)** : le guide complet, pas à pas, avec captures — installation, passages, CAT, enregistrement, SSTV, APRS, carnet, FAQ

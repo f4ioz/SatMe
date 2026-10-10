@@ -157,6 +157,12 @@ French and English. Controls readable by screen readers.
 
 ¹ Built and bench-tested, not yet tried on the real hardware.
 
+### Wiring
+
+The phone has a single USB-C port. A powered hub behind it carries everything: rigs, sound card, SDR dongle, rotator interface, knob. Through its USB-C PD input it can also charge the phone during the pass. An RTL-SDR dongle alone draws about 300 mA, which is why the hub must be powered. The PC control desk then works over Wi-Fi.
+
+<p align="center"><img src="docs/images/station-wiring-en.svg" width="760" alt="SatMe station wiring: the phone on a powered USB hub, with the rigs, sound card, SDR dongle, rotator interface and USB knob"></p>
+
 ## Documentation
 
 - **[SatMe wiki](https://github.com/f4ioz/SatMe/wiki)**: the full guide, step by step, with screenshots — installation, passes, CAT, recording, SSTV, APRS, logbook, FAQ
