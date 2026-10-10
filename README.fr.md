@@ -71,7 +71,7 @@ Le téléphone sert des pages au navigateur du PC (câble USB ou Wi-Fi, rien à 
 
 ## Dans la prochaine version
 
-- **Images météo METEOR (LRPT)**, en bêta : METEOR-M2-3 et M2-4 décodés sur le téléphone depuis une clé RTL-SDR et une antenne 137 MHz — couleur de jour et infrarouge, nord en haut, un aperçu pendant le passage ; démarrage à la main ou tout seul avant chaque passage ; un enregistrement WAV I/Q brut décodé aussi. Sur la page du satellite, un bouton : **Recevoir les images**. Vérifié sur l'enregistrement d'un vrai passage, pas encore en direct.
+- **Images météo METEOR (LRPT)**, en bêta : METEOR-M2-3 et M2-4 décodés sur le téléphone depuis une clé RTL-SDR et une antenne 137 MHz — couleur de jour et infrarouge, nord en haut, un aperçu pendant le passage ; démarrage à la main ou tout seul avant chaque passage ; un enregistrement WAV I/Q brut décodé aussi. Côtes et frontières tracées d'après l'orbite. Sur la page du satellite, un bouton : **Recevoir les images**. Vérifié sur l'enregistrement d'un vrai passage, pas encore en direct.
 - **Rotor : moins de claquements de relais** — un axe à la fois, le mât un peu en avance du satellite, au plus une consigne toutes les 6 s.
 
 <p align="center"><img src="docs/images/meteor-lrpt.webp" width="600" alt="Un passage de METEOR-M2-4 décodé par SatMe : l'Alaska et la mer de Béring en couleur"></p>

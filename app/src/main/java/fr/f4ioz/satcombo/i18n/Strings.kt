@@ -2290,6 +2290,8 @@ val FR: Map<String, String> = mapOf(
     "meteor_note_couleur" to "Couleur · {0} lignes",
     "meteor_note_ir" to "Infrarouge · {0} lignes",
     "meteor_auto" to "Démarrer tout seul à chaque passage",
+    "meteor_cotes" to "Côtes et frontières sur les images",
+    "meteor_cotes_aide" to "Tracées d'après l'orbite du satellite, sur l'aperçu et sur les images enregistrées. Il faut les éléments orbitaux du satellite, à jour.",
     "meteor_auto_aide" to "Une minute avant chaque passage de METEOR, la clé SDR démarre sur la voie LRPT ; elle s'arrête après la fin du passage et les images sont écrites. Il faut la clé branchée et SatMe ouvert. Une réception lancée à la main n'est jamais interrompue.",
     "meteor_prochain" to "Prochain : {0}, {1}, élévation max {2}°",
     "meteor_aucun_satellite" to "Aucun satellite METEOR dans la liste : ajoute METEOR-M2-3 ou M2-4 (Réglages › Satellites).",

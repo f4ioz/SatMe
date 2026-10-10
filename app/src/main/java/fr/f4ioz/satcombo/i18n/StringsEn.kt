@@ -2266,6 +2266,8 @@ val EN: Map<String, String> = mapOf(
     "meteor_note_couleur" to "Colour · {0} lines",
     "meteor_note_ir" to "Infrared · {0} lines",
     "meteor_auto" to "Start by itself on every pass",
+    "meteor_cotes" to "Coastlines and borders on the pictures",
+    "meteor_cotes_aide" to "Drawn from the satellite's orbit, on the preview and on the saved pictures. The satellite's orbital elements are needed, up to date.",
     "meteor_auto_aide" to "A minute before each METEOR pass, the SDR dongle starts on the LRPT channel; it stops after the pass and the pictures are written. The dongle must be plugged in and SatMe open. Reception started by hand is never interrupted.",
     "meteor_prochain" to "Next: {0}, {1}, max elevation {2}°",
     "meteor_aucun_satellite" to "No METEOR satellite in the list: add METEOR-M2-3 or M2-4 (Settings › Satellites).",

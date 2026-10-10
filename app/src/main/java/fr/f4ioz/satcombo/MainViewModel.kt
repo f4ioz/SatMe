@@ -5924,14 +5924,18 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             predictor.positionAt(sat, obs, t + 60_000).latDeg > predictor.positionAt(sat, obs, t).latDeg
         }.getOrDefault(false)
         fr.f4ioz.satcombo.meteor.MeteorHub.qthLocator = myLocator()
+        fr.f4ioz.satcombo.meteor.MeteorHub.cotes = settings.meteorCotes
         fr.f4ioz.satcombo.meteor.MeteorHub.demarre(getApplication(),
-            fr.f4ioz.satcombo.sdr.Dsp.RTL_RATE.toDouble(), sat.name, montant)
+            fr.f4ioz.satcombo.sdr.Dsp.RTL_RATE.toDouble(), sat.name, montant, sat)
     }
 
     // ------------------------------------------------------- METEOR, automatic
 
     fun meteorAuto(): Boolean = settings.meteorAuto
     fun setMeteorAuto(on: Boolean) { settings.meteorAuto = on; if (!on) meteorAutoArme = 0 }
+
+    fun meteorCotes(): Boolean = settings.meteorCotes
+    fun setMeteorCotes(on: Boolean) { settings.meteorCotes = on; fr.f4ioz.satcombo.meteor.MeteorHub.cotes = on }
 
     /** The METEOR satellites known (in the satellite list). */
     fun meteorSatellites(): List<TleEntry> = _ui.value.satellites.filter { estMeteor(it) }
@@ -5993,6 +5997,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun openMeteor() {
         if (!hasExtension(fr.f4ioz.satcombo.data.Extensions.METEOR)) return
         fr.f4ioz.satcombo.meteor.MeteorHub.qthLocator = myLocator()
+        fr.f4ioz.satcombo.meteor.MeteorHub.cotes = settings.meteorCotes
+        fr.f4ioz.satcombo.meteor.MeteorHub.elementsConnus = meteorSatellites()
         va(Screen.METEOR)
         _ui.value = _ui.value.copy(screen = Screen.METEOR)
     }

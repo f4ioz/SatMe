@@ -169,6 +169,21 @@ fun MeteorScreen(ui: UiState, vm: MainViewModel) {
             }
         }
 
+        // ------------------------------------------------------------ coastlines
+        item {
+            var cotes by remember { mutableStateOf(vm.meteorCotes()) }
+            Surface(color = SpaceCard, shape = RoundedCornerShape(14.dp)) {
+                Column(Modifier.fillMaxWidth().padding(14.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(t("meteor_cotes"), color = TextHi, fontWeight = FontWeight.Bold, fontSize = 14.sp,
+                            modifier = Modifier.weight(1f))
+                        Switch(checked = cotes, onCheckedChange = { cotes = it; vm.setMeteorCotes(it) })
+                    }
+                    Text(t("meteor_cotes_aide"), color = TextLo, fontSize = 11.sp)
+                }
+            }
+        }
+
         // ------------------------------------------------------------ replay
         item {
             Surface(color = SpaceCard, shape = RoundedCornerShape(14.dp)) {

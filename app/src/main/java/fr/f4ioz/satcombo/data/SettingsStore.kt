@@ -418,6 +418,11 @@ class SettingsStore(context: Context) {
         get() = prefs.getBoolean("meteor_auto", false)
         set(v) { prefs.edit().putBoolean("meteor_auto", v).apply() }
 
+    /** Coastlines and borders drawn on the METEOR pictures (from the orbit). */
+    var meteorCotes: Boolean
+        get() = prefs.getBoolean("meteor_cotes", true)
+        set(v) { prefs.edit().putBoolean("meteor_cotes", v).apply() }
+
     var sdrAudio: Boolean
         get() = prefs.getBoolean("sdr_audio", true)
         set(v) { prefs.edit().putBoolean("sdr_audio", v).apply() }

@@ -103,6 +103,66 @@ object MeteorHub {
 
     @Volatile var qthLocator: String = ""
 
+    /** The METEOR satellites' elements known to the app (for the coasts of a replayed recording). */
+    @Volatile var elementsConnus: List<fr.f4ioz.satcombo.data.TleEntry> = emptyList()
+
+    /** Coastlines and borders on the pictures. */
+    @Volatile var cotes: Boolean = true
+
+    /** Coastlines (land outlines) and borders, `lon, lat…`, read once. */
+    @Volatile private var traitsCotes: List<FloatArray>? = null
+    @Volatile private var traitsFrontieres: List<FloatArray>? = null
+
+    private fun litTraits(ctx: Context, res: Int): List<FloatArray> = runCatching {
+        val arr = org.json.JSONArray(ctx.resources.openRawResource(res).bufferedReader().use { it.readText() })
+        List(arr.length()) { i -> arr.getJSONArray(i).let { a -> FloatArray(a.length()) { a.getDouble(it).toFloat() } } }
+    }.getOrDefault(emptyList())
+
+    /** The elements of [sat] (a name such as "METEOR-M2-4", from a file name), among those known. */
+    fun elementsPour(sat: String): fr.f4ioz.satcombo.data.TleEntry? {
+        fun cle(s: String) = s.uppercase().replace(Regex("[^A-Z0-9]"), "").removePrefix("METEORM")
+        val c = cle(sat)
+        if (c.isEmpty()) return null
+        return elementsConnus.firstOrNull { cle(it.name) == c }
+    }
+
+    /** The orbit over the scans received so far, from the session's elements. */
+    private fun orbite(s: Session): MeteorCarte.Orbite? {
+        val el = s.elements ?: return null
+        val (periode, t0, scans) = s.msu.periodeEtOrigine() ?: return null
+        s.orbite?.takeIf { it.scans == scans + 1 }?.let { return it }
+        return MeteorCarte.orbite(el.line1, el.line2, MeteorCarte.utc(t0), periode, scans)?.also { s.orbite = it }
+    }
+
+    /** A recording's direction, from the orbit: going north if the satellite ends further north. */
+    private fun sensSelonOrbite(s: Session) {
+        if (s.sensConnu) return
+        val o = orbite(s) ?: return
+        if (o.scans < 20) return
+        s.montant = o.pos.last()[2] > o.pos.first()[2]
+        s.sensConnu = true
+    }
+
+    /**
+     * Coastlines and borders drawn on [img] (made with [pas], north up when
+     * [montant]), from the orbit of the session's elements. Untouched without
+     * elements or with the setting off.
+     */
+    private fun avecCotes(s: Session, img: MeteorImage.Image, pas: Int): MeteorImage.Image {
+        val el = s.elements ?: return img
+        val ctx = ctxApp ?: return img
+        if (!cotes) return img
+        val (_, _, scans) = s.msu.periodeEtOrigine() ?: return img
+        val o = orbite(s) ?: return img
+        val c = traitsCotes ?: litTraits(ctx, fr.f4ioz.satcombo.R.raw.land).also { traitsCotes = it }
+        val f = traitsFrontieres ?: litTraits(ctx, fr.f4ioz.satcombo.R.raw.borders).also { traitsFrontieres = it }
+        runCatching {
+            MeteorCarte.trace(img, o, f, scans * 8, s.montant, pas, 0xFFFFFF, 150)
+            MeteorCarte.trace(img, o, c, scans * 8, s.montant, pas, 0xFFE040, 230)
+        }
+        return img
+    }
+
     fun dir(ctx: Context): File = File(ctx.getExternalFilesDir(null), "meteor").apply { mkdirs() }
 
     fun images(ctx: Context): List<File> =
@@ -125,8 +185,15 @@ object MeteorHub {
     }
 
     // --- one reception at a time
-    private class Session(fs: Double, val montant: Boolean) {
+    /**
+     * [montant]: the pass goes north. A recording does not say: [sensConnu]
+     * false, and the orbit decides as soon as there is one.
+     */
+    private class Session(fs: Double, var montant: Boolean, val elements: fr.f4ioz.satcombo.data.TleEntry? = null,
+                          var sensConnu: Boolean = true) {
         val msu = MsuMr()
+        /** The orbit over the scans received so far (rebuilt when more come). */
+        var orbite: MeteorCarte.Orbite? = null
         val paquets = Paquets { apid, _, d -> msu.paquet(apid, d) }
         val trames = Trames { paquets.trame(it) }
         val demod = DemodOqpsk(fs)
@@ -163,14 +230,16 @@ object MeteorHub {
     /**
      * Starts decoding the dongle's samples ([fsDongle] S/s). [montant]: the
      * pass goes north (the picture is turned so that north is up).
+     * [elements]: the satellite's, for the coastlines.
      */
     @Synchronized
-    fun demarre(ctx: Context, fsDongle: Double, satName: String, montant: Boolean) {
+    fun demarre(ctx: Context, fsDongle: Double, satName: String, montant: Boolean,
+                elements: fr.f4ioz.satcombo.data.TleEntry? = null) {
         if (enMarche) return
         ctxApp = ctx.applicationContext
         val d = Decimateur(fsDongle, 4)
         decimateur = d
-        session = Session(d.fsSortie, montant)
+        session = Session(d.fsSortie, montant, elements)
         file.clear(); perdus = 0
         debutMs = System.currentTimeMillis()
         _etat.value = Etat(actif = true, source = "sdr", satName = satName,
@@ -210,12 +279,13 @@ object MeteorHub {
         dernierEtat = now
         // The preview costs a whole picture's worth of work: every five seconds is plenty.
         val apercuDu = force || now - dernierApercu > 5000
+        if (apercuDu) runCatching { sensSelonOrbite(s) }
         val canaux = MeteorImage.canaux(s.msu).sorted()
         val lignes = s.msu.periodeEtOrigine()?.third?.times(8) ?: 0
         var ap = _etat.value.apercu
         if (apercuDu) {
             dernierApercu = now
-            ap = runCatching { MeteorImage.meilleure(s.msu, s.montant, 4)?.let { bitmap(it) } }.getOrNull() ?: ap
+            ap = runCatching { MeteorImage.meilleure(s.msu, s.montant, 4)?.let { bitmap(avecCotes(s, it, 4)) } }.getOrNull() ?: ap
         }
         _etat.value = _etat.value.copy(
             qualiteDb = s.demod.qualiteDb.toFloat(), verrou = s.trames.verrouille,
@@ -251,8 +321,8 @@ object MeteorHub {
         if (lignes < 80) return null
         var premier: String? = null
         val t = if (debutMs > 0) debutMs else System.currentTimeMillis()
-        val couleur = runCatching { MeteorImage.couleur(s.msu, s.montant) }.getOrNull()
-        val ir = MeteorImage.infrarouge(s.msu)?.let { runCatching { MeteorImage.gris(s.msu, it, s.montant) }.getOrNull() }
+        val couleur = runCatching { MeteorImage.couleur(s.msu, s.montant)?.let { avecCotes(s, it, 1) } }.getOrNull()
+        val ir = MeteorImage.infrarouge(s.msu)?.let { runCatching { MeteorImage.gris(s.msu, it, s.montant)?.let { i -> avecCotes(s, i, 1) } }.getOrNull() }
         var n = 0
         for ((img, mode) in listOf(couleur to "LRPT-221", ir to "LRPT-IR")) {
             if (img == null) continue
@@ -321,9 +391,11 @@ object MeteorHub {
         // Down to at most ~300 kS/s: the demodulator needs no more.
         val facteur = maxOf(1, (w.fs / 300_000).toInt())
         val fsDemod = w.fs / facteur
-        val s = Session(fsDemod, montant)
         val sat = Regex("(?i)meteor[-_ ]?m?[-_ ]?\\d?[-_ ]?\\d?").find(nom)?.value
             ?.uppercase()?.replace('_', '-')?.trim('-') ?: "METEOR"
+        ctxApp = app
+        val elements = elementsPour(sat)
+        val s = Session(fsDemod, montant, elements, sensConnu = elements == null)
         debutMs = dateMs
         _etat.value = _etat.value.copy(actif = false, source = "fichier", satName = sat, fichier = nom,
             progression = 0f, erreur = null, trames = 0, tramesRatees = 0, lignes = 0, apercu = null)
