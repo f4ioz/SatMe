@@ -66,4 +66,66 @@ class RotorPasTest {
         println("consignes sans avance $sans, avec $avec")
         assertTrue("sans $sans, avec $avec", avec * 1.6 <= sans)
     }
+
+    /**
+     * A real controller: whole degrees in the command (GS-232), a mast that
+     * stops a few degrees off it (pot calibration, overrun) and a reading
+     * that wanders by a degree. Commands sent while [vise] moves for [s] s.
+     */
+    private fun compteReel(s: Int, vise: (Int) -> RotorPos, avecDerniere: Boolean): Int {
+        val alea = java.util.Random(7)
+        var cible = RotorPos(200.0, 10.0)
+        var derniere: RotorPos? = null
+        var dernier = -100_000L
+        var n = 0
+        for (t in 0..s) {
+            val lu = RotorPos(cible.azDeg + 6.0 + alea.nextInt(3) - 1, cible.elDeg - 3.0 + alea.nextInt(3) - 1)
+            val v = vise(t)
+            val c = RotorPas.commande(v, lu, 0.0, 0.0, 4.0, lim, t * 1000L, dernier,
+                derniere = if (avecDerniere) derniere else null) ?: continue
+            n++; dernier = t * 1000L
+            cible = RotorPos(Math.round(c.azDeg).toDouble(), Math.round(c.elDeg).toDouble())
+            derniere = c
+        }
+        return n
+    }
+
+    @Test
+    fun au_garage_un_mat_qui_s_arrete_a_cote_ne_fait_plus_claquer_les_relais() {
+        // Parked for ten minutes: the mast settles 6° beside its command.
+        val avant = compteReel(600, { RotorPos(180.0, 0.0) }, avecDerniere = false)
+        val apres = compteReel(600, { RotorPos(180.0, 0.0) }, avecDerniere = true)
+        println("garage : $avant consignes avant, $apres après")
+        assertTrue("avant $avant", avant > 50)     // the bug: a command every 6 s
+        assertEquals(1, apres)                      // one, to go there
+    }
+
+    @Test
+    fun pendant_un_passage_un_mat_decale_ne_recoit_que_les_consignes_utiles() {
+        val passe = { t: Int -> RotorPos(150.0 + 0.3 * t, 10.0 + 0.1 * t) }
+        val avant = compteReel(600, passe, avecDerniere = false)
+        val apres = compteReel(600, passe, avecDerniere = true)
+        println("passage : $avant consignes avant, $apres après")
+        // 180° and 60° at 4° a step: about 45 + 15 moves, not one every 6 s.
+        assertTrue("après $apres", apres <= 60)
+        assertTrue("avant $avant, après $apres", apres * 1.5 < avant)
+    }
+
+    @Test
+    fun l_axe_immobile_recoit_sa_derniere_consigne_pas_la_lecture() {
+        val c = RotorPas.commande(RotorPos(210.0, 30.0), RotorPos(203.0, 27.0), 0.0, 0.0, 4.0, lim, 100_000, 0,
+            derniere = RotorPos(200.0, 30.0))!!
+        assertEquals(30.0, c.elDeg, 1e-9)
+    }
+
+    @Test
+    fun un_mat_perdu_recoit_sa_consigne_au_plus_une_fois_par_minute() {
+        // The controller ignored the command (switched off, cable): the mast reads 90° away.
+        val d = RotorPos(200.0, 30.0)
+        val lu = RotorPos(110.0, 30.0)
+        assertNull(RotorPas.commande(d, lu, 0.0, 0.0, 4.0, lim, 30_000, 0, derniere = d))
+        assertEquals(d, RotorPas.commande(d, lu, 0.0, 0.0, 4.0, lim, 61_000, 0, derniere = d))
+        // A few degrees off is a settled mast, never resent.
+        assertNull(RotorPas.commande(d, RotorPos(207.0, 26.0), 0.0, 0.0, 4.0, lim, 600_000, 0, derniere = d))
+    }
 }

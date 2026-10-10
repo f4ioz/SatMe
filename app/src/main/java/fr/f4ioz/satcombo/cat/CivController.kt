@@ -94,6 +94,15 @@ class CivController(private val context: Context? = null) : RigDriver {
         return out
     }
 
+    /** Port [index]'s USB key and vendor id, or null. */
+    fun identite(index: Int): Pair<String, Int>? {
+        val ctx = context ?: return null
+        val um = ctx.getSystemService(Context.USB_SERVICE) as UsbManager
+        val ref = availablePorts().getOrNull(index) ?: return null
+        val dev = UsbSerialProber.getDefaultProber().findAllDrivers(um).getOrNull(ref.deviceIndex)?.device ?: return null
+        return cleDe(dev) to dev.vendorId
+    }
+
     /** Port labels, in selectable order. */
     fun availableDeviceNames(): List<String> = availablePorts().map { it.label }
 

@@ -76,4 +76,19 @@ class CatScanTest {
         assertEquals("/dev/bus/usb/001/004",
             CatScan.etiquette("   ", "/dev/bus/usb/001/004", 0, 1))
     }
+
+    /**
+     * The rotor's Arduino is never tried as a rig: opening it raises DTR,
+     * which reboots the board (its relays click) and takes the port from
+     * the rotor. Nor any Arduino board, known or not.
+     */
+    @Test
+    fun le_cat_n_essaie_jamais_le_port_du_rotor() {
+        val ids = mapOf(0 to ("IC9700-A" to 0x10C4), 1 to ("ROTOR" to 0x1A86), 2 to ("8523" to 0x2341), 3 to ("X" to 0x2A03))
+        assertEquals(listOf(0), CatScan.sansRotor(listOf(1, 0, 2, 3), { ids[it] }, "ROTOR"))
+        // Not known yet: only the Arduinos are left out.
+        assertEquals(listOf(1, 0), CatScan.sansRotor(listOf(1, 0, 2, 3), { ids[it] }, null))
+        // A port that cannot be identified is still tried.
+        assertEquals(listOf(5), CatScan.sansRotor(listOf(5), { null }, "ROTOR"))
+    }
 }

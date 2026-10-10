@@ -37,6 +37,24 @@ object CatScan {
         return listOf(c) + freres + autres
     }
 
+    /** Arduino boards (Arduino SA, Arduino.org): a rotator controller here, never a rig. */
+    val VENDEURS_ARDUINO = setOf(0x2341, 0x2A03)
+
+    /**
+     * [ordre] without the rotor's port, nor any Arduino board.
+     *
+     * Trying a port opens it with DTR raised: on an Arduino that **reboots the
+     * board** — a GS-232 controller's relays click — and takes the port away
+     * from the rotor that holds it. The automatic CAT search tried every port
+     * every 45 s around an armed pass. [identite]: a port's USB key and vendor
+     * id, null when unknown (kept); [cleRotor]: the rotor's key, if known.
+     */
+    fun sansRotor(ordre: List<Int>, identite: (Int) -> Pair<String, Int>?, cleRotor: String?): List<Int> =
+        ordre.filter { i ->
+            val id = identite(i) ?: return@filter true
+            id.second !in VENDEURS_ARDUINO && (cleRotor.isNullOrEmpty() || id.first != cleRotor)
+        }
+
     /**
      * Label shown to the operator: "IC-9700 · port A".
      *

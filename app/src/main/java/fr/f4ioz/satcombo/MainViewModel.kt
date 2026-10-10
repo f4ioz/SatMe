@@ -8379,9 +8379,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             // answers before claiming success. (It used to request permission
             // without waiting, then open device 0 port 0 whatever the choice.)
             val trace = ArrayList<String>()
-            val ordre =
+            // Never the rotor's port (nor an Arduino): opening it reboots the board.
+            val ordre = fr.f4ioz.satcombo.cat.CatScan.sansRotor(
                 if (_ui.value.civUsbAuto) fr.f4ioz.satcombo.cat.CatScan.ordre(refs, _ui.value.civUsbIndex)
-                else listOf(_ui.value.civUsbIndex.coerceIn(0, refs.size - 1))
+                else listOf(_ui.value.civUsbIndex.coerceIn(0, refs.size - 1)),
+                { cat.identite(it) }, rotorSerial?.cleUsb ?: settings.rotorUsbCle)
             var gagnant = -1
             for (i in ordre) {
                 trace.add(tf("cat_diag_try", refs[i].label))
@@ -8415,7 +8417,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private var catLoopJob: kotlinx.coroutines.Job? = null
 
     /**
-     * Dedicated CAT loop, faster than the 1 Hz tracking loop (OscarWatch-style).
+     * Dedicated CAT loop, faster than the 1 Hz tracking loop.
      * Runs every 100 ms plus tick time: reads the MAIN (downlink) every cycle so the display and
      * VFO-follow stay responsive; writes the uplink (SUB) only when needed, and
      * for linear leaves the dial to the operator until RxArbiter takes over
@@ -8490,7 +8492,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         return fr.f4ioz.satcombo.domain.ModeRadio.surFm(t.mode)
     }
 
-    /** Satellite RF layout, OscarWatch-style. */
+    /** Satellite RF layout. */
     private enum class SatLayout { CROSS_BAND, SAME_BAND, BEACON }
 
     private fun layoutFor(t: fr.f4ioz.satcombo.data.Transmitter): SatLayout {
@@ -8661,7 +8663,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private var catLayout: SatLayout = SatLayout.CROSS_BAND
 
     /**
-     * One CAT cycle (~100 ms), OscarWatch-style.
+     * One CAT cycle (~100 ms).
      *  - FM cross-band (V/U): both legs Doppler-tuned (MAIN downlink, SUB uplink).
      *  - FM same-band (V/V, ISS): split A/B; RX on VFO A, TX on VFO B.
      *  - Linear: read the operator's RX dial; pause Doppler while it moves; resume
@@ -10143,6 +10145,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         aim.azDeg, limits, u.rotorAzFromStop)
                     val parti = rotorDriver?.moveTo(cmdAz, aim.elDeg) ?: false
                     rotorAt = fr.f4ioz.satcombo.rotor.RotorPos(aim.azDeg, aim.elDeg)
+                    rotorDerniereCmd = if (parti) rotorAt else null
                     rotorCmd = rotorAt
                     rotorWasFlipped = false
                     _ui.value = _ui.value.rot { copy(
@@ -10205,6 +10208,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         // A disconnected mast has no position to hold: forget the last read,
         // or it would outlive the disconnection by four seconds.
         rotorLu = null; rotorLuMs = 0L
+        rotorDerniereCmd = null
         _ui.value = _ui.value.rot { copy(rotorConnected = false, rotorStatus = t("rotor_offline"),
             rotorTargetAz = null, rotorTargetEl = null,
             rotorActualAz = null, rotorActualEl = null, rotorOutOfRange = false,
@@ -10219,7 +10223,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             rotorGuard("rotor_stop") {
                 setRotorEnabled(false)
-                launch { rotorDriver?.stop() }
+                launch { rotorDriver?.stop(); rotorDerniereCmd = null }
             }
         }
     }
@@ -10235,11 +10239,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     _ui.value = _ui.value.rot { copy(rotorOutOfRange = true) }
                 } else {
                     launch {
-                        rotorDriver?.moveTo(
+                        val parti = rotorDriver?.moveTo(
                             fr.f4ioz.satcombo.rotor.RotorMath.commandAz(
                                 aim.azDeg, rotorLimits(u), u.rotorAzFromStop),
-                            aim.elDeg)
+                            aim.elDeg) ?: false
                         rotorAt = fr.f4ioz.satcombo.rotor.RotorPos(aim.azDeg, aim.elDeg)
+                        rotorDerniereCmd = if (parti) rotorAt else null
                         rotorCmd = rotorAt
                         rotorWasFlipped = false
                         _ui.value = _ui.value.rot { copy(rotorTargetAz = aim.azDeg,
@@ -10433,13 +10438,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val c = fr.f4ioz.satcombo.rotor.RotorPas.commande(
             fr.f4ioz.satcombo.rotor.RotorPos(aim.azDeg, aim.elDeg), rotorAt,
             if (garage && !avance) 0.0 else rotorVitesseAz, if (garage && !avance) 0.0 else rotorVitesseEl,
-            u.rotorDeadband.toDouble(), limits, ici, rotorDernierEnvoiMs, u.rotorAzOnly) ?: return
+            u.rotorDeadband.toDouble(), limits, ici, rotorDernierEnvoiMs, u.rotorAzOnly,
+            derniere = rotorDerniereCmd) ?: return
         rotorWasFlipped = aim.flipped
         val cmd = fr.f4ioz.satcombo.rotor.RotorMath.commandAz(c.azDeg, limits, u.rotorAzFromStop)
         // `lu` may be a held position three seconds old — not a reading.
         // Without a real read, assume the mast went where it was told.
         if (d.moveTo(cmd, c.elDeg)) {
             rotorDernierEnvoiMs = ici
+            rotorDerniereCmd = c
             if (frais == null) rotorAt = c
         }
     }
@@ -10450,6 +10457,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private var rotorVitesseAz = 0.0
     private var rotorVitesseEl = 0.0
     private var rotorDernierEnvoiMs = 0L
+    /** The last command the controller holds (true azimuth), null when unknown: see RotorPas. */
+    private var rotorDerniereCmd: fr.f4ioz.satcombo.rotor.RotorPos? = null
 
     /**
      * Following the satellite, and going round to the other side of the end

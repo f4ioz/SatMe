@@ -530,7 +530,7 @@ internal fun DetailScreen(ui: UiState, vm: MainViewModel, onBack: () -> Unit) {
                     }
                     val activeTx = vm.activeTransmitters().getOrNull(ui.selectedTxIndex)
                     if (activeTx?.isTransponder == true) {
-                        // Voice / CW op-mode + per-mode RX offset (OscarWatch-style).
+                        // Voice / CW op-mode + per-mode RX offset.
                         Surface(color = SpaceSurface, shape = RoundedCornerShape(12.dp),
                             modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
                             Column(Modifier.padding(10.dp)) {
