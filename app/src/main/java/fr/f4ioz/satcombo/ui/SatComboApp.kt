@@ -263,9 +263,8 @@ fun SatComboApp(vm: MainViewModel) {
                 LogEditDialog(e, ui.useUtc,
                     satellites = ui.satellites,
                     onCorrigeSat = { sa, quand -> vm.corrigeSatellite(e.timeMs, sa, quand) },
-                    onSave = { c, g, n, m, rs, rr ->
-                        vm.updateLogEntry(tEdit, c, g, n, m, rs, rr); vm.dismissLogEdit()
-                    },
+                    onSave = { m -> vm.updateLogEntry(tEdit, m); vm.dismissLogEdit() },
+                    onQrz = vm::ficheQrz,
                     onDismiss = vm::dismissLogEdit)
             }
         }

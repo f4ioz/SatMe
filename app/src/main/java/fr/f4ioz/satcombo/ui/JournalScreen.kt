@@ -81,7 +81,8 @@ fun JournalScreen(ui: UiState, vm: MainViewModel, onClose: () -> Unit) {
     var passages by remember { mutableStateOf(vm.journal.passages()) }
     var liens by remember { mutableStateOf<Map<String, JournalDesPassages.Liens>>(emptyMap()) }
     var choisi by remember { mutableStateOf<JournalPassage.Entree?>(null) }
-    LaunchedEffect(passages) { liens = withContext(Dispatchers.IO) { vm.journal.liens(passages) } }
+    // Again when the log changes (a contact edited from here): its callsign and square as they are now.
+    LaunchedEffect(passages, ui.log) { liens = withContext(Dispatchers.IO) { vm.journal.liens(passages) } }
     // Opened from a notification: straight on that pass (merged with another piece, its start may differ).
     val aOuvrir by vm.journalAOuvrir.collectAsState()
     LaunchedEffect(aOuvrir) {
@@ -589,6 +590,10 @@ private fun FichePassage(
                         Text("▸ " + heure.format(Date(q.timeMs)) + "  " + q.callsign + (if (q.theirLocator.isNotBlank()) " · " + q.theirLocator else ""),
                             color = TextHi, fontSize = 12.sp, fontFamily = FontFamily.Monospace,
                             modifier = Modifier.weight(1f).clickable { allerA(q.timeMs - decalageQso * 1000L) }.padding(vertical = 3.dp))
+                        // Edited here as in the log (QRZ included); a contact only received with a pass file is not in the log.
+                        if (ui.log.any { it.timeMs == q.timeMs }) IconButton(onClick = { vm.editLogEntry(q.timeMs) }, modifier = Modifier.size(32.dp)) {
+                            Icon(Icons.Default.Edit, t("journal_modifier_contact"), tint = Cyan, modifier = Modifier.size(18.dp))
+                        }
                         // Its sound or a short video, from "Start before" to "Go on after".
                         if (son != null && debutSon != null) IconButton(onClick = { versMoment("QSO " + q.callsign, q.timeMs - decalageQso * 1000L) },
                             modifier = Modifier.size(32.dp)) {
