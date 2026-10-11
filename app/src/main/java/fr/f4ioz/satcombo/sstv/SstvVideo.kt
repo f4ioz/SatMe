@@ -194,10 +194,20 @@ object SstvVideo {
     internal fun encodeMp4(
         sortie: File, w: Int, h: Int, fps: Int, images: Int, pcm: ShortArray?, ratePcm: Int, debit: Int,
         progres: (Float) -> Unit, remplit: (Int, ByteArray) -> Unit
+    ): Boolean = encodeMp4(sortie, w, h, fps, images, pcm?.takeIf { it.isNotEmpty() }?.let { fr.f4ioz.satcombo.domain.SourcePcm.de(it) },
+        ratePcm, debit, progres, remplit)
+
+    /**
+     * The same, the sound handed out in blocks ([son]): a pass's sound is read
+     * from a file as it is encoded, never held whole in memory.
+     */
+    internal fun encodeMp4(
+        sortie: File, w: Int, h: Int, fps: Int, images: Int, son: fr.f4ioz.satcombo.domain.SourcePcm?, ratePcm: Int, debit: Int,
+        progres: (Float) -> Unit, remplit: (Int, ByteArray) -> Unit
     ): Boolean = runCatching {
         val (nomCodec, couleur, cbr) = encodeurVideo() ?: return false
-        // The sound first, in memory: the muxer wants every track before it starts.
-        val audio = pcm?.takeIf { it.isNotEmpty() }?.let { encodeAudio(it, ratePcm) }
+        // The sound first, encoded (AAC is small): the muxer wants every track before it starts.
+        val audio = son?.let { encodeAudio(it, ratePcm) }?.takeIf { it.second.isNotEmpty() }
         progres(0.05f)
         val mux = MediaMuxer(sortie.absolutePath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
         val fmt = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, w, h).apply {
@@ -274,7 +284,7 @@ object SstvVideo {
     }
 
     /** The whole sound as AAC: its format and its samples. */
-    private fun encodeAudio(pcm: ShortArray, rate: Int = RATE_AAC): Pair<MediaFormat, List<Pair<ByteArray, MediaCodec.BufferInfo>>>? = runCatching {
+    private fun encodeAudio(son: fr.f4ioz.satcombo.domain.SourcePcm, rate: Int = RATE_AAC): Pair<MediaFormat, List<Pair<ByteArray, MediaCodec.BufferInfo>>>? = runCatching {
         val fmt = MediaFormat.createAudioFormat(MediaFormat.MIMETYPE_AUDIO_AAC, rate, 1).apply {
             setInteger(MediaFormat.KEY_AAC_PROFILE, MediaCodecInfo.CodecProfileLevel.AACObjectLC)
             setInteger(MediaFormat.KEY_BIT_RATE, 96_000)
@@ -284,9 +294,13 @@ object SstvVideo {
         enc.start()
         val sorties = ArrayList<Pair<ByteArray, MediaCodec.BufferInfo>>()
         var format: MediaFormat? = null
-        var pos = 0
+        var pos = 0L
         var finEnvoyee = false
         val info = MediaCodec.BufferInfo()
+        val bloc = ShortArray(4096)
+        val octets = ByteBuffer.allocate(4096 * 2).order(java.nio.ByteOrder.nativeOrder())
+        // What is left of the block read, when the encoder's buffer took less.
+        var reste = 0; var debutReste = 0
         try {
             while (true) {
                 if (!finEnvoyee) {
@@ -294,17 +308,18 @@ object SstvVideo {
                     if (ib >= 0) {
                         val buf = enc.getInputBuffer(ib)!!
                         buf.clear()
-                        val n = minOf(buf.remaining() / 2, pcm.size - pos, 4096)
+                        if (reste == 0) { reste = son.lis(bloc); debutReste = 0 }
+                        val n = minOf(buf.remaining() / 2, reste)
                         val t = pos * 1_000_000L / rate
                         if (n <= 0) {
                             enc.queueInputBuffer(ib, 0, 0, t, MediaCodec.BUFFER_FLAG_END_OF_STREAM)
                             finEnvoyee = true
                         } else {
-                            val bb = ByteBuffer.allocate(n * 2).order(java.nio.ByteOrder.nativeOrder())
-                            for (k in 0 until n) bb.putShort(pcm[pos + k])
-                            buf.put(bb.array())
+                            octets.clear()
+                            for (k in 0 until n) octets.putShort(bloc[debutReste + k])
+                            buf.put(octets.array(), 0, n * 2)
                             enc.queueInputBuffer(ib, 0, n * 2, t, 0)
-                            pos += n
+                            pos += n; debutReste += n; reste -= n
                         }
                     }
                 }

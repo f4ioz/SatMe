@@ -642,6 +642,11 @@ object JournalRendu {
     fun video(ctx: Context, sc: Scene, son: File?, debutSon: Long?, annonceMs: Long, progres: (Float) -> Unit): File? =
         video(ctx, sc, if (son != null && debutSon != null) listOf(Morceau(son, debutSon, annonceMs, Long.MAX_VALUE / 4)) else emptyList(), progres)
 
+    /** The phone's MP3 decoder, for [fr.f4ioz.satcombo.domain.SonPassage]. */
+    private val decodeurMp3 = fr.f4ioz.satcombo.domain.SonPassage.Decodeur { f, sortie ->
+        Mp3Pcm.decode(f) { pcm, count, rate, _ -> sortie(pcm, count, rate) }
+    }
+
     /** The sound of [de]..[a] from every piece covering it, in one track (silence between them). */
     fun sonMorceaux(morceaux: List<Morceau>, de: Long, a: Long): Pair<ShortArray, Int>? {
         var rate = 0
@@ -672,14 +677,18 @@ object JournalRendu {
         val segs = sc.segments
         val deSon = minOf(e.debutMs, segs?.firstOrNull()?.deMs ?: e.debutMs)
         val aSon = maxOf(e.finMs, segs?.lastOrNull()?.aMs ?: e.finMs)
-        val pcm = if (morceaux.isNotEmpty()) sonMorceaux(morceaux, deSon, aSon) else null
-        val vitesse = if (pcm != null || segs != null) 1 else 10
+        // The pass's sound decoded into a file, read back as it is encoded: never held whole
+        // in memory (≈ +95 MB for ten minutes when it was, see docs/performances-journal.md).
+        val son = if (morceaux.isNotEmpty()) fr.f4ioz.satcombo.domain.SonPassage.fabrique(
+            morceaux.map { fr.f4ioz.satcombo.domain.SonPassage.Morceau(it.f, it.origine, it.annonce, it.dureeMs) },
+            deSon, aSon, File(ctx.cacheDir, "export"), decodeurMp3) else null
+        try {
+        val vitesse = if (son != null || segs != null) 1 else 10
         val nb = (if (segs != null) JournalPassage.dureeLecture(segs) * fps / 1000
             else e.dureeMs * fps / 1000 / vitesse).toInt().coerceAtLeast(2)
-        val pcmLu = if (pcm != null && segs != null) sonAccelere(pcm.first, pcm.second, deSon, segs) to pcm.second else pcm
         // The opening title first (3 s): the sound waits for it, to stay with the replay.
         val nbTitre = if (sc.ouverture) 3 * fps else 0
-        val son2 = pcmLu?.let { (p, r) -> if (nbTitre == 0) p to r else (ShortArray(nbTitre * r / fps) + p) to r }
+        val sourceSon = son?.source(deSon, segs, titre = nbTitre * son.rate / fps)
         prepare(ctx, sc, w)
         // Shown flashS seconds of the video: that much more of the pass at ×10.
         sc.flashMs = sc.flashS * 1000L * vitesse
@@ -689,7 +698,7 @@ object JournalRendu {
         val total = nbTitre + nb + fin.sumOf { it.second }
         var courante: Pair<Int, ByteArray>? = null
         var titreYuv: ByteArray? = null
-        val ok = SstvVideo.encodeMp4(sortie, w, h, fps, total, son2?.first, son2?.second ?: 22050, debit, progres) { n0, trame ->
+        val ok = SstvVideo.encodeMp4(sortie, w, h, fps, total, sourceSon, son?.rate ?: 22050, debit, progres) { n0, trame ->
             if (n0 < nbTitre) {
                 val y = titreYuv ?: SstvVideo.yuv(titre(w, h, sc), nv12).also { titreYuv = it }
                 System.arraycopy(y, 0, trame, 0, trame.size)
@@ -710,6 +719,9 @@ object JournalRendu {
             }
         }
         if (ok) sortie else null
+        } finally {
+            son?.close()
+        }
     }.getOrNull()
 
     /** The replay as an animated GIF: the pass in about fifteen seconds, then held, looping. */
@@ -833,23 +845,6 @@ object JournalRendu {
         f
     }.getOrNull()
 
-    /**
-     * The pass's sound (from the pass's start) laid out as the accelerated
-     * replay plays it: kept where it plays at normal speed, silence while it rushes.
-     */
-    private fun sonAccelere(pcm: ShortArray, rate: Int, debutMs: Long, segs: List<JournalPassage.Segment>): ShortArray {
-        val out = ShortArray((JournalPassage.dureeLecture(segs) * rate / 1000).toInt() + rate)
-        var n = 0
-        for (s in segs) {
-            val longueur = ((s.aMs - s.deMs) / s.vitesse * rate / 1000).toInt()
-            if (s.vitesse == 1) {
-                val de = ((s.deMs - debutMs) * rate / 1000).toInt()
-                for (i in 0 until longueur) { val k = de + i; if (k in pcm.indices && n + i < out.size) out[n + i] = pcm[k] }
-            }
-            n += longueur
-        }
-        return out.copyOf(n.coerceAtMost(out.size))
-    }
 
     /**
      * The sound of the pass from its recording, about 22 kHz, mono: silence
