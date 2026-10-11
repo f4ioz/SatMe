@@ -1535,7 +1535,7 @@ internal fun heureVersMs(txt: String, refMs: Long, useUtc: Boolean): Long? {
     cal.timeInMillis = refMs
     cal.set(java.util.Calendar.HOUR_OF_DAY, h)
     cal.set(java.util.Calendar.MINUTE, mi)
-    cal.set(java.util.Calendar.SECOND, 0)
+    // The contact's seconds stay: the field shows hours and minutes only.
     return cal.timeInMillis
 }
 
@@ -1566,11 +1566,12 @@ internal fun LogEditDialog(entry: fr.f4ioz.satcombo.data.LogEntry, useUtc: Boole
     var satChoisi by remember(entry.timeMs) {
         mutableStateOf<fr.f4ioz.satcombo.data.TleEntry?>(null)
     }
-    var heure by remember(entry.timeMs) {
-        mutableStateOf(java.text.SimpleDateFormat("HH:mm", java.util.Locale.US)
+    val heureInitiale = remember(entry.timeMs, useUtc) {
+        java.text.SimpleDateFormat("HH:mm", java.util.Locale.US)
             .apply { if (useUtc) timeZone = java.util.TimeZone.getTimeZone("UTC") }
-            .format(Date(entry.timeMs)))
+            .format(Date(entry.timeMs))
     }
+    var heure by remember(entry.timeMs) { mutableStateOf(heureInitiale) }
     var call by remember { mutableStateOf(entry.callsign) }
     var grid by remember { mutableStateOf(entry.theirLocator) }
     var note by remember { mutableStateOf(entry.note) }
@@ -1596,20 +1597,22 @@ internal fun LogEditDialog(entry: fr.f4ioz.satcombo.data.LogEntry, useUtc: Boole
         onDismissRequest = onDismiss,
         confirmButton = {
             TextButton(onClick = {
-                // Satellite/time correction first: it changes the entry key
-                // (`timeMs`) that `onSave` works on.
-                val nouvelleHeure = heureVersMs(heure, entry.timeMs, useUtc)
-                    ?.takeIf { it != entry.timeMs }
+                // **A time only when it was changed.** The field shows hours and
+                // minutes: read back, it dropped the seconds, so every save
+                // "moved" the contact to the start of its minute — and the
+                // fields, saved afterwards under the old time, were lost (it
+                // took a second save; 11/10).
+                val nouvelleHeure = heure.trim().takeIf { it != heureInitiale }
+                    ?.let { heureVersMs(it, entry.timeMs, useUtc) }?.takeIf { it != entry.timeMs }
                 val sa = satChoisi
-                if (onCorrigeSat != null && (sa != null || nouvelleHeure != null)) {
-                    onCorrigeSat(
-                        sa ?: satellites.firstOrNull { it.name == entry.satName }
-                            ?: return@TextButton,
-                        nouvelleHeure)
-                }
+                // **The fields first, under the contact's present time**; then
+                // the satellite/time correction, which changes that key.
                 onSave(entry.copy(callsign = call, theirLocator = grid, note = note, mode = mode,
                     rstSent = rstS, rstRcvd = rstR, nom = nom, qth = qth, courriel = courriel,
                     locatorOrigine = if (grid.trim().uppercase() == entry.theirLocator) entry.locatorOrigine else origineCarre))
+                if (onCorrigeSat != null && (sa != null || nouvelleHeure != null)) {
+                    (sa ?: satellites.firstOrNull { it.name == entry.satName })?.let { onCorrigeSat(it, nouvelleHeure) }
+                }
             }) {
                 Text(t("save"), color = Cyan, fontWeight = FontWeight.Bold)
             }
