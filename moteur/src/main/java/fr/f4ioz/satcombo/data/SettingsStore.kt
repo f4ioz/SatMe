@@ -328,6 +328,17 @@ class SettingsStore(private val prefs: Stockage) {
     var journalAffLocator: Boolean
         get() = prefs.getBoolean("journal_aff_locator", true)
         set(v) { prefs.edit().putBoolean("journal_aff_locator", v).apply() }
+    /** Shown during the replay and in the video: "TX" while the station transmitted. */
+    var journalAffTx: Boolean
+        get() = prefs.getBoolean("journal_aff_tx", true)
+        set(v) { prefs.edit().putBoolean("journal_aff_tx", v).apply() }
+    /** A contact with my transmitting about then: normal speed this long before the first word, after the last. */
+    var journalAvantTxS: Int
+        get() = prefs.getInt("journal_avant_tx_s", 10)
+        set(v) { prefs.edit().putInt("journal_avant_tx_s", v).apply() }
+    var journalApresTxS: Int
+        get() = prefs.getInt("journal_apres_tx_s", 10)
+        set(v) { prefs.edit().putInt("journal_apres_tx_s", v).apply() }
     var journalAccelere: Boolean
         get() = prefs.getBoolean("journal_accelere", false)
         set(v) { prefs.edit().putBoolean("journal_accelere", v).apply() }

@@ -62,6 +62,8 @@ object JournalPassage {
         val reconstitue: Boolean = false,
         /** The rig's S-meter, once a second (see [Signal]); empty without CAT. */
         val signal: List<Signal> = emptyList(),
+        /** When the station transmitted (the rig's PTT read under CAT, an APRS frame sent); empty without. */
+        val emissions: List<Emission> = emptyList(),
         /** SSTV pictures set aside for this pass (file names). */
         val masquees: Set<String> = emptySet(),
         /**
@@ -96,6 +98,12 @@ object JournalPassage {
     /** The rig's S-meter at [tMs]: 0 = S0, 120 = S9, 241 = S9+60 dB (Icom's scale). */
     data class Signal(val tMs: Long, val s: Int)
 
+    /** The station transmitting from [deMs] to [aMs] (read once a second: a short press is one second). */
+    data class Emission(val deMs: Long, val aMs: Long)
+
+    /** Transmitting at [tMs]? (the second read covers the second after it) */
+    fun enEmissionA(e: Entree, tMs: Long): Boolean = e.emissions.any { tMs >= it.deMs && tMs < it.aMs + 1_000L }
+
     /** The S-meter at [tMs] (the last reading, up to 3 s before), null without one. */
     fun signalA(e: Entree, tMs: Long): Int? = e.signal.lastOrNull { it.tMs <= tMs }?.takeIf { tMs - it.tMs <= 3_000L }?.s
 
@@ -109,6 +117,8 @@ object JournalPassage {
 
         /** Below the horizon this long: the pass is over. */
     const val FIN_APRES_MS = 30_000L
+    /** Two readings "transmitting" this close: one period (a reading missed is not a release). */
+    const val JOINT_EMISSION_MS = 2_500L
 
     /** What the station is doing at that second, read from the ViewModel. */
     data class Etat(
@@ -120,6 +130,8 @@ object JournalPassage {
         val profil: String = "",
         /** The rig's S-meter now (0..255, see [Signal]), null if not read. */
         val smetre: Int? = null,
+        /** The station is transmitting (or was, since the last second). */
+        val emission: Boolean = false,
         /** Recording in the background, by whom (see [Entree.auto]). */
         val auto: String = ""
     )
@@ -163,6 +175,12 @@ object JournalPassage {
             // The S-meter once a second at most.
             if (e.smetre != null && c.signal.lastOrNull()?.let { it.tMs / 1000 == tMs / 1000 } != true)
                 c = c.copy(signal = c.signal + Signal(tMs, e.smetre))
+            // Transmitting: the same period while the readings follow each other, a new one after a pause.
+            if (e.emission) {
+                val d = c.emissions.lastOrNull()
+                c = c.copy(emissions = if (d != null && tMs - d.aMs <= JOINT_EMISSION_MS)
+                    c.emissions.dropLast(1) + d.copy(aMs = tMs) else c.emissions + Emission(tMs, tMs))
+            }
             en = c.copy(finMs = tMs)
             return fini
         }
@@ -308,10 +326,14 @@ object JournalPassage {
      * [apresSstvMs] beyond — the time it stays shown, so that it is seen that
      * long and not a tenth of it. An
      * APRS frame: [avantMs] before, [APRES_APRS_MS] after. Close ones are
-     * joined: a gap shorter than [JOINT_MS] is not worth a rush.
+     * joined: a gap shorter than [JOINT_MS] is not worth a rush. A contact
+     * with my own transmitting within [PROCHE_TX_MS] of it ([emissions]): from
+     * [avantTxMs] before the first of the two to [apresTxMs] after the last —
+     * both sides of the exchange heard.
      */
     fun plagesNormales(marques: List<Marque>, debutMs: Long, finMs: Long, avantMs: Long, apresQsoMs: Long,
-                       activite: List<LongRange> = emptyList(), apresSstvMs: Long = 0L): List<LongRange> {
+                       activite: List<LongRange> = emptyList(), apresSstvMs: Long = 0L,
+                       emissions: List<Emission> = emptyList(), avantTxMs: Long = 0L, apresTxMs: Long = 0L): List<LongRange> {
         // Also what the sound shows (see [ActiviteSon]): a little before, a little after.
         val entendues = activite.map { maxOf(debutMs, it.first - AVANT_ACTIVITE_MS) to minOf(finMs, it.last + APRES_ACTIVITE_MS) }
         val brutes = entendues + marques.map { m ->
@@ -322,7 +344,15 @@ object JournalPassage {
                 // Something heard: as a contact, the talk goes on.
                 TypeMarque.SIGNET -> avantMs to apresQsoMs
             }
-            maxOf(debutMs, m.debutMs - avant) to minOf(finMs, m.finMs + apres)
+            var de = m.debutMs - avant; var a = m.finMs + apres
+            // A contact with my own transmitting about then: the whole exchange, heard from
+            // [avantTxMs] before the first word to [apresTxMs] after the last.
+            if (m.type == TypeMarque.QSO) for (x in emissions) {
+                if (x.aMs < m.debutMs - PROCHE_TX_MS || x.deMs > m.finMs + PROCHE_TX_MS) continue
+                de = minOf(de, minOf(x.deMs, m.debutMs) - avantTxMs)
+                a = maxOf(a, maxOf(x.aMs + 1_000L, m.finMs) + apresTxMs)
+            }
+            maxOf(debutMs, de) to minOf(finMs, a)
         }
             .filter { it.second > it.first }.sortedBy { it.first }
         val out = ArrayList<LongRange>()
@@ -337,6 +367,8 @@ object JournalPassage {
         return out
     }
     const val JOINT_MS = 5_000L
+    /** A transmission this close to a contact logged belongs to it. */
+    const val PROCHE_TX_MS = 60_000L
     /** Before an SSTV picture: its header is there already, a second is enough. */
     const val AVANT_SSTV_MS = 1_000L
     const val APRES_APRS_MS = 3_000L
@@ -357,6 +389,14 @@ object JournalPassage {
         if (t < finMs) out += Segment(t, finMs, rapide)
         return out
     }
+
+    /**
+     * The stretches at normal speed (with their sound) the user kept: one
+     * left out holds a moment of [ecartes] (a time it covered when it was
+     * left out, so the choice survives a stretch growing or shrinking).
+     */
+    fun gardees(plages: List<LongRange>, ecartes: Set<Long>): List<LongRange> =
+        plages.filter { p -> ecartes.none { it in p } }
 
     /** How long the replay lasts (ms of playing). */
     fun dureeLecture(segments: List<Segment>): Long = segments.sumOf { (it.aMs - it.deMs) / it.vitesse }
@@ -572,6 +612,7 @@ object JournalPassage {
         e.masquees.forEach { append("masquee=").append(esc(it)).append('\n') }
         if (e.auto.isNotBlank()) append("auto=").append(esc(e.auto)).append('\n')
         for (g in e.signal) append("s=").append(g.tMs).append('\t').append(g.s).append('\n')
+        for (x in e.emissions) append("tx=").append(x.deMs).append('\t').append(x.aMs).append('\n')
         if (e.test.isNotEmpty()) {
             append("test=").append(e.testMs).append('\t')
                 .append(e.test.entries.joinToString(",") { it.key + ":" + it.value }).append('\n')
@@ -587,6 +628,7 @@ object JournalPassage {
         var e = Entree(0, "", 0L, 0L)
         val pts = ArrayList<Point>(); val enr = ArrayList<String>()
         val sig = ArrayList<Signal>()
+        val tx = ArrayList<Emission>()
         for (l in texte.lineSequence()) {
             val k = l.substringBefore('=', ""); val v = l.substringAfter('=', "")
             when (k) {
@@ -602,6 +644,7 @@ object JournalPassage {
                 "masquee" -> e = e.copy(masquees = e.masquees + unesc(v))
                 "auto" -> e = e.copy(auto = unesc(v))
                 "s" -> runCatching { val c = v.split('\t'); sig += Signal(c[0].toLong(), c[1].toInt()) }
+                "tx" -> runCatching { val c = v.split('\t'); tx += Emission(c[0].toLong(), c[1].toLong()) }
                 "test" -> {
                     val (t, r) = v.split('\t', limit = 2).let { it[0] to it.getOrElse(1) { "" } }
                     e = e.copy(testMs = t.toLong(), test = r.split(',').filter { ':' in it }
@@ -614,7 +657,7 @@ object JournalPassage {
                 }
             }
         }
-        if (e.catnum == 0 || e.debutMs == 0L) null else e.copy(points = pts, enregistrements = enr, signal = sig)
+        if (e.catnum == 0 || e.debutMs == 0L) null else e.copy(points = pts, enregistrements = enr, signal = sig, emissions = tx)
     }.getOrNull()
 
     /** The passes kept, one file each ("<catnum>_<start>.passage"), the newest [GARDE] only. */
@@ -638,7 +681,19 @@ object JournalPassage {
             test = test.test, testMs = test.testMs, points = points,
             reconstitue = a.reconstitue && b.reconstitue, masquees = a.masquees + b.masquees,
             auto = a.auto.ifBlank { b.auto },
-            signal = (a.signal + b.signal).sortedBy { it.tMs }.distinctBy { it.tMs / 1000 })
+            signal = (a.signal + b.signal).sortedBy { it.tMs }.distinctBy { it.tMs / 1000 },
+            emissions = joint(a.emissions + b.emissions))
+    }
+
+    /** Periods of transmitting in time order, those overlapping or touching made one. */
+    fun joint(l: List<Emission>): List<Emission> {
+        val out = ArrayList<Emission>()
+        for (x in l.sortedBy { it.deMs }) {
+            val d = out.lastOrNull()
+            if (d != null && x.deMs - d.aMs <= JOINT_EMISSION_MS) out[out.size - 1] = d.copy(aMs = maxOf(d.aMs, x.aMs))
+            else out += x
+        }
+        return out
     }
 
     class Rangement(val dossier: File) {

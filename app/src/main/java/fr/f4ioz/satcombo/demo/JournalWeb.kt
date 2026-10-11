@@ -87,7 +87,8 @@ object JournalWeb {
         val activite = if (opt(p, "surActivite", j.surActivite())) j.morceaux(e).flatMap { j.activite(it.f) } else emptyList()
         return JournalPassage.segments(e.debutMs, e.finMs,
             JournalPassage.plagesNormales(marques, e.debutMs, e.finMs, avant * 1000L, apres * 1000L, activite,
-                apresSstvMs = if (opt(p, "sstv", j.affSstv())) j.flashS() * 1000L else 0L), rapide)
+                apresSstvMs = if (opt(p, "sstv", j.affSstv())) j.flashS() * 1000L else 0L,
+                emissions = e.emissions, avantTxMs = j.avantTxS() * 1000L, apresTxMs = j.apresTxS() * 1000L), rapide)
     }
 
     private fun scene(ctx: Context, j: JournalDesPassages, e: JournalPassage.Entree, surCarte: Boolean,
@@ -108,7 +109,7 @@ object JournalWeb {
             nomFichier = moment?.let { JournalRendu.nomExtrait(e, titre?.substringAfter(' ')?.ifBlank { null } ?: "moment", it.first) },
             titreExtrait = if (moment != null) titre?.trim()?.ifBlank { null } else null,
             affSmetre = opt(p, "smetre", j.affSmetre()), affFreq = opt(p, "freq", j.affFreq()), etiquetteQth = etiquette,
-            frequences = frequences(j, e, l))
+            frequences = frequences(j, e, l), affTx = opt(p, "tx", j.affTx()))
     }
 
     private fun fabrique(ctx: Context, j: JournalDesPassages, e: JournalPassage.Entree, quoi: String,
@@ -239,7 +240,7 @@ object JournalWeb {
                 "/reglages" -> json("{\"avant\":${j.avantS()},\"apres\":${j.apresQsoS()},\"rapide\":${j.rapide()}," +
                     "\"accelere\":${j.accelere()},\"surActivite\":${j.surActivite()},\"sstv\":${j.affSstv()}," +
                     "\"fiches\":${j.affFiches()},\"smetre\":${j.affSmetre()},\"freq\":${j.affFreq()}," +
-                    "\"locator\":${j.affLocator()},\"res\":\"${js(j.videoRes())}\",\"ouverture\":${j.ouverture()},\"recap\":${j.recap()}}")
+                    "\"locator\":${j.affLocator()},\"tx\":${j.affTx()},\"res\":\"${js(j.videoRes())}\",\"ouverture\":${j.ouverture()},\"recap\":${j.recap()}}")
 
                 // A map tile, fetched by the phone (as for its own map) and kept: the PC asks nothing outside.
                 "/tuile" -> {

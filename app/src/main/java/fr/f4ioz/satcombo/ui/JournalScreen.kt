@@ -274,6 +274,13 @@ private fun FichePassage(
     var affSmetre by remember { mutableStateOf(vm.journal.affSmetre()) }
     var affFreq by remember { mutableStateOf(vm.journal.affFreq()) }
     var affLocator by remember { mutableStateOf(vm.journal.affLocator()) }
+    var affTx by remember { mutableStateOf(vm.journal.affTx()) }
+    // A contact with my transmitting about then: normal speed this long before the first word, after the last.
+    var avantTxS by remember { mutableStateOf(vm.journal.avantTxS()) }
+    var apresTxS by remember { mutableStateOf(vm.journal.apresTxS()) }
+    // The stretches at normal speed, and those left out (fast and silent): a moment each covered.
+    var plages by remember(e.id) { mutableStateOf<List<LongRange>>(emptyList()) }
+    var ecartes by remember(e.id) { mutableStateOf<Set<Long>>(emptySet()) }
     // Where the rig was in the passband, at rest (Doppler taken off), moment by moment.
     // Without a frequency read under CAT (a pass rebuilt, imported, or followed without CAT):
     // each contact's own (the log keeps where the rig was), from its time on.
@@ -448,12 +455,13 @@ private fun FichePassage(
         // How long an SSTV picture stays shown, once complete (and whether it shows at all).
         var flashS by remember { mutableStateOf(vm.journal.flashS()) }
         var affSstv by remember { mutableStateOf(vm.journal.affSstv()) }
-        LaunchedEffect(marques, accelere, rapide, avantS, apresQsoS, activite, surActivite, flashS, affSstv) {
-            segs = if (!accelere) null else JournalPassage.segments(e.debutMs, e.finMs,
-                JournalPassage.plagesNormales(marques, e.debutMs, e.finMs, avantS * 1000L, apresQsoS * 1000L,
-                    if (surActivite) activite else emptyList(),
-                    // A picture stays at normal speed the time it is shown: seen, not glimpsed.
-                    apresSstvMs = if (affSstv) flashS * 1000L else 0L), rapide)
+        LaunchedEffect(marques, accelere, rapide, avantS, apresQsoS, activite, surActivite, flashS, affSstv, avantTxS, apresTxS, ecartes) {
+            plages = JournalPassage.plagesNormales(marques, e.debutMs, e.finMs, avantS * 1000L, apresQsoS * 1000L,
+                if (surActivite) activite else emptyList(),
+                // A picture stays at normal speed the time it is shown: seen, not glimpsed.
+                apresSstvMs = if (affSstv) flashS * 1000L else 0L,
+                emissions = e.emissions, avantTxMs = avantTxS * 1000L, apresTxMs = apresTxS * 1000L)
+            segs = if (!accelere) null else JournalPassage.segments(e.debutMs, e.finMs, JournalPassage.gardees(plages, ecartes), rapide)
         }
         // Who the stations are (log, APRS, QRZ.com), for their cards.
         var fiches by remember(e.id) { mutableStateOf<Map<String, JournalPassage.Fiche>>(emptyMap()) }
@@ -488,8 +496,9 @@ private fun FichePassage(
         val rxIci = if (affFreq) instant?.let { t0 -> frequences.lastOrNull { it.first <= t0 + 2_000L }?.second } else null
         val sIci = if (affSmetre) instant?.let { JournalPassage.signalA(e, it) } else null
         val creteIci = if (sIci != null) instant?.let { JournalPassage.crete(e, it) } else null
-        if (!surCarte) CielJournal(e, prevue, marques, instant, apercu ?: arrivee, tailleFlash, encarts, rxIci, sIci, creteIci) { cadreVu = it }
-        else CarteJournal(e, sol, marques, instant, e.locator, apercu ?: arrivee, tailleFlash, encarts, etiquetteQth, rxIci, sIci, creteIci) { v, w -> vueVue = v to w }
+        val txIci = affTx && instant?.let { JournalPassage.enEmissionA(e, it) } == true
+        if (!surCarte) CielJournal(e, prevue, marques, instant, apercu ?: arrivee, tailleFlash, encarts, rxIci, sIci, creteIci, txIci) { cadreVu = it }
+        else CarteJournal(e, sol, marques, instant, e.locator, apercu ?: arrivee, tailleFlash, encarts, etiquetteQth, rxIci, sIci, creteIci, txIci) { v, w -> vueVue = v to w }
         }
         Text(t(if (surCarte) "journal_legende_sol" else "journal_legende_carte"), color = TextLo, fontSize = 10.sp)
         LegendeMarques()
@@ -715,6 +724,47 @@ private fun FichePassage(
                         onValueChange = { apresQsoS = it.toInt() }, onValueChangeFinished = { vm.journal.setApresQsoS(apresQsoS) })
                     Text("+$apresQsoS s", color = TextHi, fontSize = 11.sp)
                 }
+                // A contact with my transmitting about then: both sides of the exchange heard.
+                if (accelere && e.emissions.isNotEmpty() && marques.any { it.type == JournalPassage.TypeMarque.QSO }) {
+                    Text(t("journal_tx_qso"), color = TextLo, fontSize = 11.sp, modifier = Modifier.padding(top = 2.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(t("journal_avant_tx"), color = TextLo, fontSize = 11.sp)
+                        Slider(value = avantTxS.toFloat(), valueRange = 0f..60f, steps = 11, modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
+                            onValueChange = { avantTxS = it.toInt() }, onValueChangeFinished = { vm.journal.setAvantTxS(avantTxS) })
+                        Text("−$avantTxS s", color = TextHi, fontSize = 11.sp)
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(t("journal_apres_tx"), color = TextLo, fontSize = 11.sp)
+                        Slider(value = apresTxS.toFloat(), valueRange = 0f..60f, steps = 11, modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
+                            onValueChange = { apresTxS = it.toInt() }, onValueChangeFinished = { vm.journal.setApresTxS(apresTxS) })
+                        Text("+$apresTxS s", color = TextHi, fontSize = 11.sp)
+                    }
+                }
+                // The stretches at normal speed, with their sound: each kept or left out (then fast and silent).
+                if (accelere && plages.isNotEmpty()) {
+                    Text(t("journal_plages"), color = TextLo, fontSize = 11.sp, modifier = Modifier.padding(top = 4.dp))
+                    plages.forEach { p ->
+                        val garde = ecartes.none { it in p }
+                        val quoi = buildList {
+                            marques.filter { it.debutMs <= p.last && it.finMs >= p.first }.forEach { m ->
+                                add(when (m.type) {
+                                    JournalPassage.TypeMarque.QSO -> "QSO " + m.texte
+                                    JournalPassage.TypeMarque.APRS -> "APRS " + m.texte
+                                    JournalPassage.TypeMarque.SSTV -> "SSTV"
+                                    JournalPassage.TypeMarque.SIGNET -> "⚑"
+                                })
+                            }
+                            if (e.emissions.any { it.deMs <= p.last && it.aMs >= p.first }) add("TX")
+                        }.distinct().joinToString(" · ").ifBlank { t("journal_plage_son") }
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().clickable {
+                            ecartes = if (garde) ecartes + (p.first + p.last) / 2 else ecartes.filterNot { it in p }.toSet()
+                        }) {
+                            androidx.compose.material3.Checkbox(checked = garde, onCheckedChange = null)
+                            Text(heure.format(Date(p.first)) + " · " + ((p.last - p.first + 999) / 1000) + " s · " + quoi,
+                                color = if (garde) TextHi else TextLo, fontSize = 11.sp, maxLines = 2)
+                        }
+                    }
+                }
                 Text(t("journal_aller_desc"), color = TextLo, fontSize = 10.sp)
             }
             if (l.images.isNotEmpty()) Row(Modifier.horizontalScroll(rememberScrollState()), verticalAlignment = Alignment.CenterVertically,
@@ -736,7 +786,8 @@ private fun FichePassage(
             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 listOf(Triple("journal_aff_smetre", affSmetre) { v: Boolean -> affSmetre = v; vm.journal.setAffSmetre(v) },
                     Triple("journal_aff_freq", affFreq) { v: Boolean -> affFreq = v; vm.journal.setAffFreq(v) },
-                    Triple("journal_aff_locator", affLocator) { v: Boolean -> affLocator = v; vm.journal.setAffLocator(v) }
+                    Triple("journal_aff_locator", affLocator) { v: Boolean -> affLocator = v; vm.journal.setAffLocator(v) },
+                    Triple("journal_aff_tx", affTx) { v: Boolean -> affTx = v; vm.journal.setAffTx(v) }
                 ).forEach { (cle, on, change) ->
                     FilterChip(selected = on, onClick = { change(!on) },
                         label = { Text((if (on) "✓ " else "") + t(cle) + " : " + t(if (on) "journal_oui" else "journal_flash_non"), fontSize = 11.sp) })
@@ -917,7 +968,8 @@ private fun FichePassage(
                                 resolution = resolution,
                                 segments = if (moment) listOf(JournalPassage.Segment(de, a, 1)) else if (fmt == "video" && accelere) segs else null,
                                 nomFichier = nomX, titreExtrait = if (moment) titreDecoupe.trim() else null,
-                                affSmetre = affSmetre, affFreq = affFreq, etiquetteQth = etiquetteQth, frequences = frequences)
+                                affSmetre = affSmetre, affFreq = affFreq, etiquetteQth = etiquetteQth, frequences = frequences,
+                                affTx = affTx)
                             when (fmt) {
                                 "image" -> JournalRendu.png(ctx, sc, instant)
                                 "gif" -> JournalRendu.gif(ctx, sc) { fabrication = it }
@@ -1256,10 +1308,10 @@ private fun CielJournal(
     e: JournalPassage.Entree, prevue: List<Pair<Double, Double>>, marques: List<JournalPassage.Marque>, instant: Long?,
     arrivee: Pair<JournalPassage.Marque, Float>?, tailleFlash: Float,
     encarts: List<Pair<JournalPassage.Marque, JournalPassage.Fiche?>>,
-    rx: Long? = null, smetre: Int? = null, crete: Int? = null,
+    rx: Long? = null, smetre: Int? = null, crete: Int? = null, tx: Boolean = false,
     onCadre: (JournalPassage.Cadre) -> Unit
 ) {
-    val bande = if (rx != null || smetre != null) HAUT_BANDE else 0.dp
+    val bande = if (rx != null || smetre != null || tx) HAUT_BANDE else 0.dp
     val base = remember(e.id) { JournalPassage.cadre(e.points.map { it.az to it.el }) }
     var toutLeCiel by remember(e.id) { mutableStateOf(false) }
     var zoom by remember(e.id) { mutableStateOf(1.0) }
@@ -1298,7 +1350,7 @@ private fun CielJournal(
             val adroite = p != null && JournalPassage.ciel(p.az, p.el).first >= cadre.cx
             EncartsStations(encarts, e.locator, if (adroite) Alignment.TopStart else Alignment.TopEnd, haut = 40.dp)
         }
-        BandeSignal(rx, smetre, crete)
+        BandeSignal(rx, smetre, crete, tx)
         TextButton(onClick = { toutLeCiel = !toutLeCiel; zoom = 1.0; px = 0.0; py = 0.0 },
             modifier = Modifier.align(Alignment.TopEnd)) {
             Text(t(if (toutLeCiel) "journal_vue_passage" else "journal_tout_ciel"), color = Cyan, fontSize = 11.sp)
@@ -1317,10 +1369,10 @@ private fun CarteJournal(
     e: JournalPassage.Entree, sol: List<JournalPassage.Sol>, marques: List<JournalPassage.Marque>,
     instant: Long?, locator: String, arrivee: Pair<JournalPassage.Marque, Float>?, tailleFlash: Float,
     encarts: List<Pair<JournalPassage.Marque, JournalPassage.Fiche?>>, etiquetteQth: String?,
-    rx: Long? = null, smetre: Int? = null, crete: Int? = null,
+    rx: Long? = null, smetre: Int? = null, crete: Int? = null, tx: Boolean = false,
     onVue: (JournalPassage.VueCarte, Float) -> Unit
 ) {
-    val bande = if (rx != null || smetre != null) HAUT_BANDE else 0.dp
+    val bande = if (rx != null || smetre != null || tx) HAUT_BANDE else 0.dp
     val fournisseur = remember { MapProviders.byId("OSM") }
     val portee = rememberCoroutineScope()
     val tuiles = remember { TileStore(portee) }
@@ -1390,7 +1442,7 @@ private fun CarteJournal(
             modifier = Modifier.align(Alignment.BottomEnd).padding(bottom = bande).background(androidx.compose.ui.graphics.Color.White.copy(alpha = 0.7f)).padding(horizontal = 4.dp))
         arrivee?.let { FlashImage(it, if (satEcranX < 0.5f) Alignment.TopEnd else Alignment.TopStart, tailleFlash) }
         if (encarts.isNotEmpty()) EncartsStations(encarts, locator, if (satEcranX < 0.5f) Alignment.BottomEnd else Alignment.BottomStart, bas = bande)
-        BandeSignal(rx, smetre, crete)
+        BandeSignal(rx, smetre, crete, tx)
     }
 }
 
@@ -1410,12 +1462,15 @@ private fun androidx.compose.foundation.layout.ColumnScope.Bloc(contenu: @Compos
  * shows it — what was asked shown, when known.
  */
 @Composable
-private fun androidx.compose.foundation.layout.BoxScope.BandeSignal(rx: Long?, s: Int?, crete: Int?) {
-    if (rx == null && s == null) return
+private fun androidx.compose.foundation.layout.BoxScope.BandeSignal(rx: Long?, s: Int?, crete: Int?, tx: Boolean = false) {
+    if (rx == null && s == null && !tx) return
     val dpx = androidx.compose.ui.platform.LocalDensity.current.density
     Row(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(HAUT_BANDE)
         .background(androidx.compose.ui.graphics.Color(0xD00A0F18)).padding(horizontal = 8.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        // The station transmitting at that moment.
+        if (tx) Text(" TX ", color = androidx.compose.ui.graphics.Color.White, fontFamily = FontFamily.Monospace, fontSize = 13.sp,
+            fontWeight = FontWeight.Bold, modifier = Modifier.background(androidx.compose.ui.graphics.Color(0xFFE53935), RoundedCornerShape(4.dp)))
         rx?.let { Text("RX %.4f".format(it / 1e6), color = Cyan, fontFamily = FontFamily.Monospace, fontSize = 13.sp, fontWeight = FontWeight.Bold) }
         if (s != null) androidx.compose.foundation.Canvas(Modifier.weight(1f).fillMaxHeight()) {
             drawIntoCanvas { c -> JournalRendu.dessineSMetre(c.nativeCanvas, 0f, 0f, size.width, size.height, s, crete, dpx) }

@@ -439,6 +439,54 @@ class JournalPassageTest {
     }
 
     @Test
+    fun l_emission_se_note_se_garde_et_se_fusionne() {
+        // Transmitting from 60 s to 75 s (one reading missed at 70 s: still one period), then at 200 s.
+        val c = JournalPassage.Collecte()
+        for (k in 0..300) {
+            val tx = k in 60..69 || k in 71..75 || k == 200
+            c.suit(1, "SO-50", t0 + k * 1000L, 100.0 + k * 0.2, 30.0, Etat(emission = tx))
+        }
+        val e = c.ferme()!!
+        assertEquals(listOf(JournalPassage.Emission(t0 + 60_000L, t0 + 75_000L),
+            JournalPassage.Emission(t0 + 200_000L, t0 + 200_000L)), e.emissions)
+        assertTrue(JournalPassage.enEmissionA(e, t0 + 70_500L))
+        assertTrue(JournalPassage.enEmissionA(e, t0 + 200_900L))
+        assertFalse(JournalPassage.enEmissionA(e, t0 + 77_000L))
+        assertEquals(e.emissions, JournalPassage.lit(JournalPassage.ecrit(e))!!.emissions)
+        // Two pieces of the pass: their periods, those touching made one.
+        val f = JournalPassage.fusionne(e.copy(emissions = e.emissions.take(1)),
+            e.copy(emissions = listOf(JournalPassage.Emission(t0 + 76_000L, t0 + 80_000L), e.emissions[1])))
+        assertEquals(listOf(JournalPassage.Emission(t0 + 60_000L, t0 + 80_000L), e.emissions[1]), f.emissions)
+    }
+
+    @Test
+    fun un_contact_avec_mon_emission_s_entend_en_entier() {
+        val qso = listOf(JournalPassage.Marque(JournalPassage.TypeMarque.QSO, 200_000L, 200_000L, "F4XYZ"))
+        // Without my transmitting: 10 s before, 30 s after.
+        assertEquals(listOf(190_000L..230_000L), JournalPassage.plagesNormales(qso, 0L, 600_000L, 10_000L, 30_000L))
+        // I called from 150 s to 165 s, then answered at 240..250 s: the whole exchange, 20 s around it.
+        val tx = listOf(JournalPassage.Emission(150_000L, 165_000L), JournalPassage.Emission(240_000L, 250_000L))
+        assertEquals(listOf(130_000L..271_000L), JournalPassage.plagesNormales(qso, 0L, 600_000L, 10_000L, 30_000L,
+            emissions = tx, avantTxMs = 20_000L, apresTxMs = 20_000L))
+        // Transmitting far from any contact (more than a minute): nothing changes.
+        assertEquals(listOf(190_000L..230_000L), JournalPassage.plagesNormales(qso, 0L, 600_000L, 10_000L, 30_000L,
+            emissions = listOf(JournalPassage.Emission(400_000L, 410_000L)), avantTxMs = 20_000L, apresTxMs = 20_000L))
+    }
+
+    @Test
+    fun un_passage_ecarte_reste_ecarte_quand_il_change_de_taille() {
+        val plages = listOf(100_000L..140_000L, 300_000L..330_000L)
+        val ecartes = setOf((300_000L + 330_000L) / 2)
+        assertEquals(listOf(100_000L..140_000L), JournalPassage.gardees(plages, ecartes))
+        // Longer after the setting changed: still left out.
+        assertEquals(listOf(90_000L..150_000L), JournalPassage.gardees(listOf(90_000L..150_000L, 290_000L..360_000L), ecartes))
+        // Left out, it plays fast and silent.
+        val s = JournalPassage.segments(0L, 600_000L, JournalPassage.gardees(plages, ecartes), 10)
+        assertEquals(10, JournalPassage.segmentA(s, 310_000L)!!.vitesse)
+        assertEquals(1, JournalPassage.segmentA(s, 110_000L)!!.vitesse)
+    }
+
+    @Test
     fun un_coup_de_bouton_dans_la_bande_passante_fait_un_point() {
         val c = JournalPassage.Collecte()
         // Same place in the sky, one second apart: only the first is kept…
