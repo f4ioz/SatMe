@@ -95,6 +95,7 @@ import fr.f4ioz.satcombo.i18n.tf
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlinx.coroutines.launch
 
 // Satellite detail screen & dialogs — extracted from SatComboApp.kt.
 
@@ -1548,8 +1549,11 @@ private fun Badge2(text: String, color: Color) {
 
 @Composable
 internal fun LogEditDialog(entry: fr.f4ioz.satcombo.data.LogEntry, useUtc: Boolean,
-                          onSave: (String, String, String, String, String, String) -> Unit,
+                          /** The contact as edited (the satellite and time apart: see [onCorrigeSat]). */
+                          onSave: (fr.f4ioz.satcombo.data.LogEntry) -> Unit,
                           onDismiss: () -> Unit,
+                          /** Looks the callsign up on QRZ (null: no credentials, or no network). */
+                          onQrz: (suspend (String) -> fr.f4ioz.satcombo.domain.QrzReponse.Fiche?)? = null,
                           /**
                            * Available satellites and the correction callback.
                            * Changing the satellite recomputes az/el: they
@@ -1575,6 +1579,14 @@ internal fun LogEditDialog(entry: fr.f4ioz.satcombo.data.LogEntry, useUtc: Boole
     val defaultRst = if (entry.mode.uppercase().contains("CW")) "599" else "59"
     var rstS by remember { mutableStateOf(entry.rstSent.ifBlank { defaultRst }) }
     var rstR by remember { mutableStateOf(entry.rstRcvd.ifBlank { defaultRst }) }
+    var nom by remember { mutableStateOf(entry.nom) }
+    var qth by remember { mutableStateOf(entry.qth) }
+    var courriel by remember { mutableStateOf(entry.courriel) }
+    var origineCarre by remember { mutableStateOf(entry.locatorOrigine) }
+    // QRZ asked by hand: what it said (or why not), and whether it is on its way.
+    var qrzDit by remember { mutableStateOf("") }
+    var qrzCours by remember { mutableStateOf(false) }
+    val portee = androidx.compose.runtime.rememberCoroutineScope()
     val heureFmt = remember(useUtc) {
         SimpleDateFormat("dd/MM HH:mm:ss", Locale.getDefault()).apply {
             if (useUtc) timeZone = java.util.TimeZone.getTimeZone("UTC")
@@ -1595,7 +1607,9 @@ internal fun LogEditDialog(entry: fr.f4ioz.satcombo.data.LogEntry, useUtc: Boole
                             ?: return@TextButton,
                         nouvelleHeure)
                 }
-                onSave(call, grid, note, mode, rstS, rstR)
+                onSave(entry.copy(callsign = call, theirLocator = grid, note = note, mode = mode,
+                    rstSent = rstS, rstRcvd = rstR, nom = nom, qth = qth, courriel = courriel,
+                    locatorOrigine = if (grid.trim().uppercase() == entry.theirLocator) entry.locatorOrigine else origineCarre))
             }) {
                 Text(t("save"), color = Cyan, fontWeight = FontWeight.Bold)
             }
@@ -1660,6 +1674,50 @@ internal fun LogEditDialog(entry: fr.f4ioz.satcombo.data.LogEntry, useUtc: Boole
                         focusedBorderColor = Cyan, unfocusedBorderColor = Color(0xFF2A3647),
                         focusedTextColor = TextHi, unfocusedTextColor = TextHi, cursorColor = Cyan),
                     modifier = Modifier.fillMaxWidth())
+                Spacer(Modifier.height(6.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    OutlinedTextField(value = nom, onValueChange = { nom = it },
+                        label = { Text(t("journal_contact_nom")) }, singleLine = true,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = Cyan, unfocusedBorderColor = Color(0xFF2A3647),
+                            focusedTextColor = TextHi, unfocusedTextColor = TextHi, cursorColor = Cyan),
+                        modifier = Modifier.weight(1f))
+                    Spacer(Modifier.width(6.dp))
+                    OutlinedTextField(value = qth, onValueChange = { qth = it },
+                        label = { Text("QTH") }, singleLine = true,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = Cyan, unfocusedBorderColor = Color(0xFF2A3647),
+                            focusedTextColor = TextHi, unfocusedTextColor = TextHi, cursorColor = Cyan),
+                        modifier = Modifier.weight(1f))
+                }
+                // QRZ on demand: fills what is empty (a square noted during the contact beats
+                // the directory's home address), and says what it found.
+                if (onQrz != null) Row(verticalAlignment = Alignment.CenterVertically) {
+                    TextButton(enabled = !qrzCours && call.isNotBlank(), onClick = {
+                        qrzCours = true; qrzDit = t("qrz_connexion")
+                        portee.launch {
+                            val (base, suffixe) = fr.f4ioz.satcombo.domain.Indicatifs.separe(call)
+                            val f = onQrz(base)
+                            qrzCours = false
+                            qrzDit = when {
+                                f == null -> t("qrz_identifiants")
+                                f.erreur.isNotBlank() -> f.erreur.take(90)
+                                f.vide -> t("qrz_rien")
+                                else -> {
+                                    if (nom.isBlank()) nom = f.nom
+                                    if (qth.isBlank()) qth = f.qth
+                                    if (courriel.isBlank()) courriel = f.courriel
+                                    // Never a home square for a /P or /M.
+                                    if (grid.isBlank() && suffixe.isEmpty() && f.carre.isNotBlank()) {
+                                        grid = f.carre.uppercase(); origineCarre = "QRZ"
+                                    }
+                                    listOf(f.nom, f.qth, f.carre, f.pays).filter { it.isNotBlank() }.joinToString(" · ")
+                                }
+                            }
+                        }
+                    }) { Text("QRZ", color = Cyan, fontWeight = FontWeight.Bold) }
+                    if (qrzDit.isNotBlank()) Text(qrzDit, color = TextLo, fontSize = 11.sp, maxLines = 2)
+                }
                 Spacer(Modifier.height(6.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     OutlinedTextField(value = mode, onValueChange = { mode = it.uppercase() },

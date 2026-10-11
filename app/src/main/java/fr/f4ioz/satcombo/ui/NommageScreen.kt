@@ -41,6 +41,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Keyboard
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -116,6 +117,28 @@ fun NommageScreen(ui: UiState, vm: MainViewModel) {
     var carreTouche by remember { mutableStateOf(false) }
 
     val memoire = ui.express.memoire
+
+    // **QRZ for a callsign the memory does not know by name.** Asked after
+    // 0.6 s without a key, as on the PC's desk: on every letter it would be
+    // ten queries for one callsign, and QRZ counts them. The operating suffix
+    // is left out of the query (QRZ knows the home callsign).
+    var fiche by remember { mutableStateOf<fr.f4ioz.satcombo.domain.QrzReponse.Fiche?>(null) }
+    var ficheDe by remember { mutableStateOf("") }
+    var carreQrz by remember { mutableStateOf(false) }
+    val baseQrz = Indicatifs.separe(saisie).first.trimEnd('/')
+    val nomConnu = memoire.firstOrNull { it.indicatif == Indicatifs.cle(saisie) }?.nom.orEmpty()
+    LaunchedEffect(baseQrz, nomConnu.isBlank()) {
+        if (baseQrz != ficheDe) { fiche = null; ficheDe = "" }
+        if (baseQrz.length < 4 || baseQrz.none { it.isDigit() } || nomConnu.isNotBlank()) return@LaunchedEffect
+        kotlinx.coroutines.delay(600)
+        val f = vm.ficheQrz(baseQrz) ?: return@LaunchedEffect
+        if (f.erreur.isNotBlank() || f.vide) return@LaunchedEffect
+        fiche = f; ficheDe = baseQrz
+        // Its square where none was typed nor known — never for a /P or /M: QRZ gives the home address.
+        if (!carreTouche && carre.isEmpty() && Indicatifs.suffixe(saisie).isEmpty() && f.carre.isNotBlank()) {
+            carre = f.carre.uppercase(); carreQrz = true
+        }
+    }
 
     // TX border, **here too**. The root Box already draws one around the
     // screen, but here the eyes are on the keys and a thin edge line goes
@@ -296,7 +319,8 @@ fun NommageScreen(ui: UiState, vm: MainViewModel) {
             }
             rstActif = null
         }) {
-            ChampIndicatif(saisie, Indicatifs.etat(saisie, memoire), nom = connu?.nom.orEmpty())
+            ChampIndicatif(saisie, Indicatifs.etat(saisie, memoire), nom = connu?.nom?.takeIf { it.isNotBlank() }
+                ?: fiche?.takeIf { ficheDe == baseQrz }?.let { f -> listOf(f.nom, f.qth).filter { it.isNotBlank() }.joinToString(" · ") }.orEmpty())
 
             // Flag and country drawn **over** the callsign field, not below:
             // the saved row goes to the keyboard.
@@ -498,14 +522,16 @@ fun NommageScreen(ui: UiState, vm: MainViewModel) {
             },
             onValide = {
                 val origine = when {
-                    carre.isBlank() -> Indicatifs.OrigineLocator.INCONNU
-                    carreTouche -> Indicatifs.OrigineLocator.SAISI
-                    else -> Indicatifs.OrigineLocator.PROPOSE
+                    carre.isBlank() -> Indicatifs.OrigineLocator.INCONNU.name
+                    carreTouche -> Indicatifs.OrigineLocator.SAISI.name
+                    carreQrz && carre == fiche?.carre?.uppercase() -> "QRZ"
+                    else -> Indicatifs.OrigineLocator.PROPOSE.name
                 }
                 // New contact **at the current time**, on the displayed
                 // satellite: you validate at the end of the contact.
                 vm.ajouteContactDirect(satCourant, saisie, carre,
-                    rstEnvoye, rstRecu, origine.name)
+                    rstEnvoye, rstRecu, origine, fiche?.takeIf { ficheDe == baseQrz })
+                fiche = null; ficheDe = ""; carreQrz = false
                 // Everything is cleared here and only here, focus included,
                 // or the next report would go into the field left open.
                 saisie = ""; carre = ""; carreTouche = false

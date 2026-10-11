@@ -1282,6 +1282,8 @@ val FR: Map<String, String> = mapOf(
     "qrz_titre" to "QRZ.com",
     "qrz_identifiants" to "Renseigne l'identifiant et le mot de passe QRZ.",
     "qrz_connexion" to "Connexion à QRZ…",
+    "qrz_rien" to "QRZ ne connaît pas cet indicatif.",
+    "journal_modifier_contact" to "Modifier le contact",
     "qrz_bilan" to "{0} carré(s) comblé(s) sur {1}.",
     "qrz_test" to "Tester la connexion QRZ",
     "qrz_test_cours" to "Connexion à QRZ…",

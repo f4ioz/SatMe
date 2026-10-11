@@ -143,6 +143,13 @@ class LogStore(context: Context) {
         return list
     }
 
+    /** A contact changed as [change] says (all its fields, name and town included). */
+    fun update(timeMs: Long, change: (LogEntry) -> LogEntry): List<LogEntry> {
+        val list = load().map { if (it.timeMs == timeMs) change(it) else it }
+        save(list)
+        return list
+    }
+
     /**
      * Names a pending entry and takes it out of the queue. [origine] is written
      * only here: the only moment that information still exists.

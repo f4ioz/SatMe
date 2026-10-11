@@ -3463,6 +3463,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun ajouteContactDirect(
         sat: TleEntry, indicatif: String, locator: String,
         rstEnvoye: String, rstRecu: String, origine: String,
+        /** What QRZ said of this callsign while it was typed: name, town, e-mail where nothing is known. */
+        fiche: fr.f4ioz.satcombo.domain.QrzReponse.Fiche? = null,
     ) {
         val call = indicatif.trim().uppercase()
         if (call.isEmpty()) return
@@ -3488,7 +3490,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             ?: _ui.value.express.memoire.firstOrNull { it.indicatif == base && it.nom.isNotBlank() }?.nom.orEmpty()
         val qthConnu = passes.firstOrNull { it.qth.isNotBlank() }?.qth.orEmpty()
         val e = fr.f4ioz.satcombo.data.LogEntry(
-            timeMs = maintenant, nom = nomConnu, qth = qthConnu,
+            timeMs = maintenant, nom = nomConnu.ifBlank { fiche?.nom.orEmpty() },
+            qth = qthConnu.ifBlank { fiche?.qth.orEmpty() }, courriel = fiche?.courriel.orEmpty(),
             satName = sat.name, catnum = sat.catalogNumber,
             azimuthDeg = pos?.azimuthDeg ?: 0.0,
             elevationDeg = pos?.elevationDeg ?: 0.0,
@@ -3869,6 +3872,37 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             log = logStore.update(timeMs, callsign.trim().uppercase(),
                 theirLocator.trim().uppercase(), note.trim(),
                 mode.trim(), rstSent.trim(), rstRcvd.trim()))
+    }
+
+    /** A contact as the editor left it: callsign, square, reports, note, name, town, e-mail. */
+    fun updateLogEntry(timeMs: Long, m: LogEntry) {
+        modifies[timeMs] = System.currentTimeMillis()
+        _ui.value = _ui.value.copy(log = logStore.update(timeMs) {
+            it.copy(callsign = m.callsign.trim().uppercase(), theirLocator = m.theirLocator.trim().uppercase(),
+                note = m.note.trim(), mode = m.mode.trim(), rstSent = m.rstSent.trim(), rstRcvd = m.rstRcvd.trim(),
+                nom = m.nom.trim(), qth = m.qth.trim(), courriel = m.courriel.trim(),
+                locatorOrigine = m.locatorOrigine)
+        }, express = _ui.value.express.copy(memoire = construitMemoire()))
+    }
+
+    /**
+     * A callsign's QRZ record, the session opened when needed (QRZ counts
+     * logins: only then). Null without credentials, or when the network
+     * fails; the record's own error otherwise (no subscription, not found).
+     */
+    suspend fun ficheQrz(indicatif: String): fr.f4ioz.satcombo.domain.QrzReponse.Fiche? = withContext(Dispatchers.IO) {
+        val c = _ui.value.carnet
+        if (c.qrzUser.isBlank() || c.qrzMdp.isBlank()) return@withContext null
+        val ind = indicatif.trim().uppercase()
+        runCatching {
+            synchronized(qrz) {
+                var f = qrz.cherche(ind)
+                if (f.erreur.contains("connect", true) || f.erreur.contains("session", true)) {
+                    if (qrz.connecte(c.qrzUser, c.qrzMdp).isBlank()) f = qrz.cherche(ind)
+                }
+                f
+            }
+        }.getOrNull()
     }
 
     fun deleteLogEntry(timeMs: Long) {

@@ -1258,6 +1258,8 @@ val EN: Map<String, String> = mapOf(
     "qrz_titre" to "QRZ.com",
     "qrz_identifiants" to "Enter your QRZ username and password.",
     "qrz_connexion" to "Connecting to QRZ…",
+    "qrz_rien" to "QRZ does not know this callsign.",
+    "journal_modifier_contact" to "Edit the contact",
     "qrz_bilan" to "{0} grid(s) filled out of {1}.",
     "qrz_test" to "Test the QRZ connection",
     "qrz_test_cours" to "Connecting to QRZ…",
