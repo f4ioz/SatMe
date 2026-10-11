@@ -17,36 +17,6 @@ import org.json.JSONArray
 import java.io.File
 import java.util.concurrent.TimeUnit
 
-/** One SatNOGS transmitter/transceiver/transponder entry. */
-data class Transmitter(
-    val description: String,
-    val mode: String?,
-    val uplinkLowHz: Long?,
-    val uplinkHighHz: Long?,
-    val downlinkLowHz: Long?,
-    val downlinkHighHz: Long?,
-    val invert: Boolean,
-    val alive: Boolean,
-    val type: String
-) {
-    /** A linear/inverting transponder spans a passband (high != low). */
-    val isTransponder: Boolean
-        get() = (downlinkHighHz != null && downlinkLowHz != null && downlinkHighHz != downlinkLowHz)
-
-    /**
-     * Is the mode worth showing for this transmitter?
-     *
-     * SatNOGS stores **one mode per entry**. Right for a beacon (BPSK, CW),
-     * meaningless for a linear transponder, which relays whatever the operator
-     * chooses: the field holds whatever the first contributor typed. On QO-100
-     * the narrowband segments are labelled "FM" although reserved for SSB and
-     * CW — a wrong instruction, not an imprecision.
-     *
-     * We do not correct SatNOGS data; we just do not show it where it means
-     * nothing.
-     */
-    val modeSignifiant: Boolean get() = !isTransponder
-}
 
 /**
  * Fetches transmitter data from the SatNOGS DB per NORAD catnum, with a disk

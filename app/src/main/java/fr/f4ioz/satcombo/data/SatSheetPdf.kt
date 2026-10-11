@@ -220,7 +220,7 @@ object SatSheetPdf {
             val modeBw = when {
                 tx.isTransponder && tx.downlinkLowHz != null && tx.downlinkHighHz != null ->
                     "%.0f kHz · ${if (tx.invert) "REV" else "NOR"} · ${tx.mode ?: ""}".format(
-                        (tx.downlinkHighHz - tx.downlinkLowHz) / 1000.0)
+                        ((tx.downlinkHighHz ?: 0L) - (tx.downlinkLowHz ?: 0L)) / 1000.0)
                 else -> {
                     val ct = Regex("""CTCSS\s*([0-9.]+)""").find(tx.description)?.groupValues?.get(1)
                     (tx.mode ?: "FM") + (if (ct != null) " · CTCSS $ct Hz" else " · simplex")

@@ -1000,6 +1000,43 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val activationStore = fr.f4ioz.satcombo.data.ActivationStore(app)
     private val qrvPhotoStore = fr.f4ioz.satcombo.data.QrvPhotoStore(app)
     private val cat = fr.f4ioz.satcombo.cat.CivController(app)
+
+    /**
+     * The CAT Doppler loop, kept by the engine (shared with the PC version).
+     * It reads the operator's settings and the rest frequency here, and its
+     * state (the rig's frequencies, who holds the dial) is copied to the screen.
+     */
+    private val posteCiv = fr.f4ioz.satcombo.cat.PosteCatCiv(cat)
+    private val postePaire by lazy { fr.f4ioz.satcombo.cat.PosteCatPaire(ft817) }
+    private val stationCat = fr.f4ioz.satcombo.station.StationCat(object : fr.f4ioz.satcombo.station.MondeCat {
+        override fun connecte(): Boolean = _ui.value.catConnected
+        override fun poste(): fr.f4ioz.satcombo.cat.PosteCat = if (isPairRig) postePaire else posteCiv
+        override fun emetSeul(): Boolean = isTxOnlyRig
+        override fun aprsEnEmission(): Boolean = aprsEnEmission
+        override fun satellite(): SatPosition? = _ui.value.livePosition
+        override fun catnum(): Int? = _ui.value.selected?.catalogNumber
+        override fun transpondeur(): Transmitter? = activeTransmitters().getOrNull(_ui.value.selectedTxIndex)
+        override fun sousHorizonAussi(): Boolean = _ui.value.catTestSendAlways
+        override fun calibrationHz(): Long = _ui.value.calibShiftHz
+        override fun decalageTxHz(): Long = _ui.value.txShiftHz
+        override fun poseDecalageTx(hz: Long) = setTxShift(hz)
+        override fun decalageRxHz(): Long = activeRxOffset()
+        override fun modeCw(): Boolean = _ui.value.opMode == "CW"
+        override fun maintienDoppler(): Boolean = _ui.value.dopplerHold
+        override fun dopplerRx(): Boolean = _ui.value.catRxDoppler
+        override fun moletteTxDecalage(): Boolean = _ui.value.catUi.txVfoShift
+        override fun txSuitVite(): Boolean = _ui.value.catUi.txSuitVite
+        override fun modelePoste(): String = _ui.value.rigModel
+        override fun inversionForcee(): Boolean? = _ui.value.invertOverride
+        override fun ctcssChoisi(): Int = _ui.value.ctcssTenthHz
+        override fun ctcssAuto(): Boolean = _ui.value.ctcssAuto
+        override fun repos(): Long? = _ui.value.rxRestHz
+        override fun poseRepos(hz: Long) = _ui.update { it.copy(rxRestHz = hz) }
+        override fun posteRx(satHz: Long): Long = this@MainViewModel.posteRx(satHz)
+        override fun satDepuisPoste(posteHz: Long): Long = this@MainViewModel.satDepuisPoste(posteHz)
+        override fun posteTx(satHz: Long): Long = this@MainViewModel.posteTx(satHz)
+        override fun satDepuisPosteTx(posteHz: Long): Long = this@MainViewModel.satDepuisPosteTx(posteHz)
+    })
     private val ft817 = fr.f4ioz.satcombo.cat.Ft817Pair(app)
     /**
      * Rotor driver, chosen on connect. Null while nothing is connected: the
@@ -1319,6 +1356,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         // The mast's state, as the station keeps it, onto the screens.
         viewModelScope.launch {
             stationRotor.etat.collect { e -> _ui.update { it.copy(rotor = it.rotor.copy(mat = e)) } }
+        }
+        // What the CAT loop shows: the rig's frequencies, who holds the dial, its mode.
+        viewModelScope.launch {
+            stationCat.etat.collect { e -> _ui.update { it.copy(catRadioDownlinkHz = e.descenteHz,
+                catRadioUplinkHz = e.monteeHz, catRxDriven = e.rxPilote, catRadioMode = e.mode,
+                catModeMismatch = e.modeEcart) } }
         }
         // The SSTV and APT decoders run in a service with no GPS of their own:
         // they get the station's locator as soon as it is known, and each
@@ -2201,11 +2244,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun toggleDopplerHold() {
         val on = !_ui.value.dopplerHold
         _ui.value = _ui.value.copy(dopplerHold = on)
-        if (!on) {
-            lastSentDl = 0L; lastSentUl = 0L
-            catArmedFor = null; catArmedTxDesc = null
-            rxArbiter.reset(); fmArbiter.reset()
-        }
+        if (!on) stationCat.relache()
     }
 
     /**
@@ -4698,7 +4737,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         if (!_ui.value.catConnected || _ui.value.rigModel != "IC9700" || isPairRig) return false
         if (!_ui.value.dopplerHold) toggleDopplerHold()
         aprsTerreActive = true
-        catArmedFor = null; catArmedTxDesc = null
+        stationCat.oublieArmement()
         return runCatching {
             cat.setSatelliteMode(false)
             cat.setSplitOn(false)
@@ -7112,7 +7151,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     satConfigStore.saveTransmitter(it.catalogNumber, t.description)
                 }
             }
-            catArmedFor = null
+            stationCat.oublieArmement()
             _ui.value = _ui.value.copy(selectedTxIndex = i)
         }
         // No clamping: the ruler is the whole band plan.
@@ -7122,7 +7161,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun selectTransmitter(index: Int) {
         val t = activeTransmitters().getOrNull(index) ?: return
         _ui.value.selected?.let { satConfigStore.saveTransmitter(it.catalogNumber, t.description) }
-        catArmedFor = null
+        stationCat.oublieArmement()
         _ui.value = _ui.value.copy(selectedTxIndex = index, rxRestHz = centreRx(t),
             rxFromAgendaHz = null)
     }
@@ -7262,9 +7301,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun setCatHold(ms: Int) {
         val v = ms.coerceIn(200, 5_000)
         settings.catHoldMs = v
-        rxArbiter.regle(v.toLong())
-        fmArbiter.regle(v.toLong())
-        txArbiter.regle(v.toLong())
+        stationCat.regleMaintien(v.toLong())
         _ui.value = _ui.value.copy(catUi = _ui.value.catUi.copy(holdMs = v))
     }
 
@@ -7275,15 +7312,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      */
     fun setCatTxVfoShift(on: Boolean) {
         settings.catTxVfoShift = on
-        txArbiter.reset()
-        mainSurMoletteTx = false
+        stationCat.moletteTxChange()
         _ui.value = _ui.value.copy(catUi = _ui.value.catUi.copy(txVfoShift = on))
     }
 
     /** Operating sub-mode for linear birds: VOICE (SSB) or CW. */
     fun setOpMode(mode: String) {
         _ui.value = _ui.value.copy(opMode = mode)
-        catArmedFor = null  // re-arm so the rig mode (USB/LSB/CW) updates
+        stationCat.oublieArmement()  // re-arm so the rig mode (USB/LSB/CW) updates
     }
 
     /** Per-mode RX offset, persisted per satellite. */
@@ -7822,7 +7858,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun setCtcssAuto(on: Boolean) {
         settings.ctcssAuto = on
         _ui.value = _ui.value.copy(ctcssAuto = on)
-        catArmedFor = null
+        stationCat.oublieArmement()
     }
 
     /**
@@ -7847,7 +7883,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             kotlinx.coroutines.delay(3000)        // window for the operator to key up
             // Restore the working tone (auto-detected or 67.0).
             val t = activeTransmitters().getOrNull(_ui.value.selectedTxIndex)
-            val work = t?.let { effectiveCtcss(it) }?.takeIf { it > 0 } ?: 670
+            val work = t?.let { stationCat.effectiveCtcss(it) }?.takeIf { it > 0 } ?: 670
             runCatching {
                 if (isPairRig) ft817.setCtcss(work)
                 else {
@@ -7862,7 +7898,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun setCtcssTenthHz(tenth: Int) {
         settings.ctcssTenthHz = tenth
         _ui.value = _ui.value.copy(ctcssTenthHz = tenth)
-        catArmedFor = null  // re-arm so the new tone is applied
+        stationCat.oublieArmement()  // re-arm so the new tone is applied
     }
 
     /**
@@ -7872,7 +7908,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      */
     fun setCatRxDoppler(on: Boolean) {
         settings.catRxDoppler = on
-        rxArbiter.reset()
+        stationCat.dopplerRxChange(on)
         _ui.value = _ui.value.copy(catRxDoppler = on,
             catRxDriven = if (on) _ui.value.catRxDriven else false)
     }
@@ -8335,7 +8371,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         catLoopJob?.cancel()
         catLoopJob = viewModelScope.launch {
             while (_ui.value.catConnected) {
-                runCatching { catTick() }
+                runCatching { stationCat.tour() }
                 kotlinx.coroutines.delay(100)
                 runCatching { gardeCat() }
                 runCatching { lisSMetre() }
@@ -8386,344 +8422,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         ft817.close()
         cat.pacingMs = 40; ft817.rx.pacingMs = 25; ft817.tx.pacingMs = 25
         civSim = null; ft817Sims = null
-        catArmedFor = null
-        rxArbiter.reset(); fmArbiter.reset()
-        toursDepuisLeMode = 0
+        stationCat.deconnecte()
         _ui.value = _ui.value.copy(catConnected = false, catStatus = t("cat_disconnected"),
             catRadioDownlinkHz = null, catRadioUplinkHz = null, catRxDriven = false,
             catRadioMode = null, catModeMismatch = false, catSMetre = null, catSMetreMs = 0L)
     }
 
-    /** True if the chosen transmitter is FM (fixed channels) vs linear transponder. */
-    private fun isFmMode(t: fr.f4ioz.satcombo.data.Transmitter): Boolean {
-        if (t.isTransponder) return false
-        return fr.f4ioz.satcombo.domain.ModeRadio.surFm(t.mode)
-    }
-
-    /** Satellite RF layout. */
-    private enum class SatLayout { CROSS_BAND, SAME_BAND, BEACON }
-
-    private fun layoutFor(t: fr.f4ioz.satcombo.data.Transmitter): SatLayout {
-        val dl = t.downlinkLowHz ?: centreRx(t) ?: 0L
-        val ul = t.uplinkLowHz ?: 0L
-        return when {
-            ul <= 0L -> SatLayout.BEACON
-            kotlin.math.abs(dl - ul) > 10_000_000L -> SatLayout.CROSS_BAND
-            else -> SatLayout.SAME_BAND   // V/V or U/U, e.g. ISS FM
-        }
-    }
-
-    /** Map a transmitter mode string to an IC-9700 CI-V mode byte. */
-    private fun civModeFor(t: fr.f4ioz.satcombo.data.Transmitter, isUplink: Boolean): Int {
-        val m = t.mode?.uppercase() ?: ""
-        return when {
-            // FM, and the digital modes heard in FM (ISS APRS is "AFSK").
-            fr.f4ioz.satcombo.domain.ModeRadio.surFm(m) -> 0x05
-            // Linear in CW op-mode: use CW both sides.
-            t.isTransponder && _ui.value.opMode == "CW" -> 0x03
-            m.contains("CW") -> 0x03
-            // Linear SSB: by convention downlink USB; uplink mirror is LSB if inverting.
-            t.isTransponder && effectiveInvert(t) -> if (isUplink) 0x00 else 0x01  // LSB up / USB down
-            m.contains("LSB") -> 0x00
-            else -> 0x01  // USB default
-        }
-    }
-
-    // ------------------------------------------------------------------
-    // The boundary between sky and rig.
-    //
-    // These are the only places in the CAT loop where a frequency changes
-    // domain. Everywhere else — Doppler, inversion, knob arbitration, write
-    // thresholds — everything is in satellite frequencies and must stay so:
-    // a `lastSentDl` mixing both domains would break the 20 Hz threshold, and
-    // the arbiter would take our own command for an operator gesture.
-    // ------------------------------------------------------------------
-
     /**
-     * What the rig can do. A frequency outside its bands is not a computation
-     * error but a path that does not go through it: on a typical QO-100
-     * station the downlink leaves the LNB at 739 MHz for the dongle, and the
-     * rig only transmits on 144 or 432. Sending it 10 GHz would just get a
-     * silent NAK ten times a second. Hence this guard, right where the
-     * frequency becomes a frame.
-     */
-    private fun atteignableParLePoste(posteHz: Long): Boolean =
-        fr.f4ioz.satcombo.cat.BandPlan.band(posteHz) != fr.f4ioz.satcombo.cat.BandPlan.Band.AUTRE
-
-    /**
-     * Does the downlink reach the rig? Asked before reading it back: otherwise
-     * what we read would be the TX frequency, and the arbiter would see an
-     * operator gesture on every round.
-     */
-    private fun descenteAuPoste(dlSat: Long): Boolean =
-        !isTxOnlyRig && atteignableParLePoste(posteRx(dlSat))
-
-    /** Writes the downlink/uplink pair, each through its converter. */
-    private suspend fun ecrireCouple(dlSat: Long, ulSat: Long, sameBand: Boolean) {
-        if (isTxOnlyRig) { ecrireMontee(ulSat, sameBand); return }
-        val dl = posteRx(dlSat)
-        if (!atteignableParLePoste(dl)) { ecrireMontee(ulSat, sameBand); return }
-        val ul = posteTx(ulSat)
-        if (!atteignableParLePoste(ul)) {
-            // The uplink goes elsewhere: keep only the downlink.
-            if (isPairRig) ft817.rx.setFrequency(dl)
-            else { cat.readMainFrequency(); cat.setFrequency(dl) }
-            return
-        }
-        if (isPairRig) ft817.setPair(dl, ul)
-        else if (sameBand) cat.setSplitPair(dl, ul) else cat.setSatellitePair(dl, ul)
-    }
-
-    /** Writes the uplink only — when the operator holds the receive side. */
-    private suspend fun ecrireMontee(ulSat: Long, sameBand: Boolean) {
-        val ul = posteTx(ulSat)
-        if (!atteignableParLePoste(ul)) return
-        if (isPairRig) ft817.setUplink(ul)
-        else if (sameBand) cat.setSplitUplink(ul) else cat.setUplink(ul)
-    }
-
-    /** Reads the downlink back and converts it straight to sky frequency. */
-    private suspend fun lireDescente(sameBand: Boolean): Long? =
-        runCatching {
-            if (isPairRig) ft817.readDownlink()
-            else if (sameBand) cat.readVfoAFrequency() else cat.readMainFrequency()
-        }.getOrNull()?.let { satDepuisPoste(it) }
-
-    // CAT session state (set up once when SAT mode armed for a transmitter).
-    private var catArmedFor: Int? = null      // catnum currently armed
-    private var catArmedTxDesc: String? = null
-    private var lastSentDl = 0L
-    private var lastSentUl = 0L
-
-    /** Arm the radio for the current satellite according to its RF layout. */
-    private suspend fun armCatForCurrent() {
-        // Doppler hold: arming writes mode, split and tone — that is touching
-        // the rig. Return before the "already armed" test so nothing is
-        // recorded as done: full arming happens on release.
-        if (_ui.value.dopplerHold) return
-        val sat = _ui.value.selected ?: return
-        val t = activeTransmitters().getOrNull(_ui.value.selectedTxIndex) ?: return
-        if (catArmedFor == sat.catalogNumber && catArmedTxDesc == t.description) return
-        val layout = layoutFor(t)
-        if (isPairRig) {
-            // Two dedicated rigs: no band/split gymnastics — just modes + tone.
-            runCatching {
-                ft817.setModes(
-                    downlink = ft817ModeFor(t, isUplink = false),
-                    uplink = ft817ModeFor(t, isUplink = true))
-                val tone = effectiveCtcss(t)
-                ft817.setCtcss(if (isFmMode(t) && tone > 0) tone else 0)
-            }
-            catArmedFor = sat.catalogNumber
-            catArmedTxDesc = t.description
-            catLayout = layout
-            lastSentDl = 0L; lastSentUl = 0L
-            rxArbiter.reset(); fmArbiter.reset()
-            return
-        }
-        runCatching {
-            when (layout) {
-                SatLayout.CROSS_BAND -> {
-                    cat.setSatelliteMode(true)
-                    cat.setSplitOn(false)
-                    // SUB = uplink: mode + CTCSS while selected.
-                    cat.selectMainSub(true)
-                    cat.setMode(civModeFor(t, isUplink = true))
-                    val tone = effectiveCtcss(t)
-                    if (isFmMode(t) && tone > 0) {
-                        cat.setToneFreq(tone); cat.setToneOn(true)
-                    } else cat.setToneOn(false)
-                    // MAIN = downlink: mode; finish on MAIN.
-                    cat.selectMainSub(false)
-                    cat.setMode(civModeFor(t, isUplink = false))
-                }
-                SatLayout.SAME_BAND -> {
-                    // ISS V/V etc.: sat mode OFF, split ON, RX=VFO A, TX=VFO B.
-                    cat.armSameBandSplit()
-                    cat.selectVfo(true)
-                    cat.setMode(civModeFor(t, isUplink = true))
-                    val toneSB = effectiveCtcss(t)
-                    if (isFmMode(t) && toneSB > 0) {
-                        cat.setToneFreq(toneSB); cat.setToneOn(true)
-                    } else cat.setToneOn(false)
-                    cat.selectVfo(false)
-                    cat.setMode(civModeFor(t, isUplink = false))
-                }
-                SatLayout.BEACON -> {
-                    // Receive-only: sat mode off, tune downlink on MAIN only.
-                    cat.setSatelliteMode(false)
-                    cat.setSplitOn(false)
-                    cat.setToneOn(false)
-                    cat.selectMainSub(false)
-                    cat.setMode(civModeFor(t, isUplink = false))
-                }
-            }
-        }
-        catArmedFor = sat.catalogNumber
-        catArmedTxDesc = t.description
-        catLayout = layout
-        lastSentDl = 0L; lastSentUl = 0L
-        rxArbiter.reset(); fmArbiter.reset()
-        // New satellite, new bands: what the driver knew about the rig is
-        // void, and this is exactly when the order of the two writes is decided.
-        cat.forgetBands()
-    }
-    private var catLayout: SatLayout = SatLayout.CROSS_BAND
-
-    /**
-     * One CAT cycle (~100 ms).
-     *  - FM cross-band (V/U): both legs Doppler-tuned (MAIN downlink, SUB uplink).
-     *  - FM same-band (V/V, ISS): split A/B; RX on VFO A, TX on VFO B.
-     *  - Linear: read the operator's RX dial; pause Doppler while it moves; resume
-     *    after RxArbiter.holdMs of quiet (setting, 2 s by default). While the
-     *    dial turns, SuiviMontee decides whether the uplink follows (at once,
-     *    except on single-knob rigs such as the IC-9700).
-     *  - Beacon: receive-only, Doppler on downlink only.
-     */
-    private suspend fun catTick() {
-        if (!_ui.value.catConnected) return
-        // An APRS frame is going out: no frequency write for that second or two.
-        if (aprsEnEmission) return
-        val pos = _ui.value.livePosition
-        val belowHorizon = pos == null || pos.elevationDeg < 0
-        if (belowHorizon && !_ui.value.catTestSendAlways) {
-            val dlNow = runCatching {
-                if (isPairRig) ft817.readDownlink() else cat.readMainFrequency()
-            }.getOrNull()?.let { satDepuisPoste(it) }
-            // Below the horizon nobody drives: the hold countdown restarts
-            // from zero at AOS.
-            rxArbiter.reset(); fmArbiter.reset()
-            if (dlNow != null) _ui.value = _ui.value.copy(catRadioDownlinkHz = dlNow,
-                catRxDriven = false)
-            return
-        }
-        val rr = pos?.rangeRateKmS ?: 0.0
-        val t = activeTransmitters().getOrNull(_ui.value.selectedTxIndex) ?: return
-        armCatForCurrent()
-        val shift = _ui.value.calibShiftHz
-        val txShift = _ui.value.txShiftHz
-
-        when (catLayout) {
-            SatLayout.BEACON -> {
-                val dlRest = _ui.value.rxRestHz ?: centreRx(t) ?: return
-                val dl = Doppler.downlink(dlRest, rr) + shift
-                if (_ui.value.dopplerHold) {
-                    // On hold, show the rig as it is, not the command we do not
-                    // send (that would fake tracking). Read via `lireDescente`,
-                    // so already a sky frequency, never the LNB IF.
-                    val lu = lireDescente(sameBand = false)
-                    _ui.value = _ui.value.copy(catRadioDownlinkHz = lu ?: dl,
-                        catRadioUplinkHz = null, catRxDriven = false)
-                } else {
-                    if (kotlin.math.abs(dl - lastSentDl) >= dopplerThreshold(t)) {
-                        lastSentDl = dl
-                        runCatching {
-                            val dlPoste = posteRx(dl)
-                            if (isPairRig) ft817.rx.setFrequency(dlPoste)
-                            else { cat.readMainFrequency(); cat.setFrequency(dlPoste) }
-                        }
-                    }
-                    _ui.value = _ui.value.copy(catRadioDownlinkHz = dl, catRadioUplinkHz = null)
-                }
-            }
-
-            SatLayout.SAME_BAND -> {
-                // ISS-type V/V. FM: fixed both sides + Doppler via split A/B.
-                if (isFmMode(t)) interactiveFm(t, rr, shift, txShift, sameBand = true)
-                else interactiveLinear(t, rr, shift, txShift, sameBand = true)
-            }
-
-            SatLayout.CROSS_BAND -> {
-                if (isFmMode(t)) interactiveFm(t, rr, shift, txShift, sameBand = false)
-                else interactiveLinear(t, rr, shift, txShift, sameBand = false)
-            }
-        }
-
-        surveillerLeMode(t)
-    }
-
-    /** Loop rounds since the rig's mode was last asked. */
-    private var toursDepuisLeMode = 0
-
-    /**
-     * Checks and shows the rig's mode. Set once at arming, nobody looked at it
-     * again: if the operator switched to LSB or the rig reverted to its band
-     * memory, the screen still said USB and the other station became
-     * inaudible with no explanation. So read it back, show it, and restore it
-     * when it moved. One round in twenty (~2 s): the mode does not change ten
-     * times a second, and the CI-V bus is busy with Doppler.
-     */
-    private suspend fun surveillerLeMode(t: fr.f4ioz.satcombo.data.Transmitter) {
-        if (isPairRig) return
-        if (++toursDepuisLeMode < 20) return
-        toursDepuisLeMode = 0
-        val lu = runCatching { cat.readMode() }.getOrNull() ?: return
-        val attendu = civModeFor(t, isUplink = false)
-        val ecart = lu != attendu
-        _ui.value = _ui.value.copy(
-            catRadioMode = fr.f4ioz.satcombo.cat.CatDecode.civModeName(lu),
-            catModeMismatch = ecart)
-        // Restoring the mode is a write like any other: on Doppler hold, only
-        // report the mismatch.
-        if (ecart && !_ui.value.dopplerHold) runCatching { cat.setMode(attendu) }
-    }
-
-    /** Doppler threshold... (kept below). */
-    private fun dopplerThreshold(t: fr.f4ioz.satcombo.data.Transmitter): Long =
-        if (isFmMode(t)) 200L else 20L
-
-    /** FT-817 mode string for a transmitter leg (same policy as civModeFor). */
-    private fun ft817ModeFor(t: fr.f4ioz.satcombo.data.Transmitter, isUplink: Boolean): String {
-        val m = (t.mode ?: "").uppercase()
-        return when {
-            fr.f4ioz.satcombo.domain.ModeRadio.surFm(m) -> "FM"
-            m.contains("CW") && !isUplink -> "CW"
-            t.isTransponder && effectiveInvert(t) -> if (isUplink) "LSB" else "USB"
-            m.contains("LSB") -> "LSB"
-            else -> "USB"
-        }
-    }
-
-    /**
-     * Extract a CTCSS tone (tenths of Hz) from a transmitter description such as
-     * "Mode V/U FM - Voice Repeater CTCSS 67.0". Returns 0 if none found.
-     */
-    private fun autoCtcssTenthHz(t: fr.f4ioz.satcombo.data.Transmitter): Int {
-        val d = t.description
-        val m = Regex("""(?:CTCSS|TONE|PL)\s*:?\s*(\d{2,3}(?:[.,]\d)?)""", RegexOption.IGNORE_CASE)
-            .find(d) ?: return 0
-        val hz = m.groupValues[1].replace(',', '.').toDoubleOrNull() ?: return 0.0.toInt()
-        return Math.round(hz * 10).toInt()
-    }
-
-    /** Effective CTCSS: explicit user setting wins; else auto-detected from name. */
-    private fun effectiveCtcss(t: fr.f4ioz.satcombo.data.Transmitter): Int {
-        if (_ui.value.ctcssTenthHz > 0) return _ui.value.ctcssTenthHz
-        return if (_ui.value.ctcssAuto) autoCtcssTenthHz(t) else 0
-    }
-
-    // Who holds the RX VFO: the operator, or us.
-    private val rxArbiter = fr.f4ioz.satcombo.cat.RxArbiter()
-
-    /**
-     * Same arbitration for FM, with a much coarser hand. 20 Hz recognises a
-     * gesture on a linear transponder; in FM the rig rounds what we write to
-     * its tuning step, and that rounding, read back, would look like an
-     * operator gesture — control released every 100 ms with nobody touching
-     * anything. A real FM channel change is at least 5 kHz; 1.5 kHz is wide
-     * for one and out of reach for the other.
-     */
-    private val fmArbiter = fr.f4ioz.satcombo.cat.RxArbiter(moveHz = 1_500L)
-
-    /**
-     * TX knob arbiter. Same class as RX on purpose: the problem is identical —
-     * the rig does not say *who* turned the knob, and what we read after
-     * writing looks exactly like a gesture. A separate arbiter would drift.
-     */
-    private val txArbiter = fr.f4ioz.satcombo.cat.RxArbiter()
-
-    /**
-     * Applies the stored hold delay as soon as the arbiters exist. `regle()`
+     * Applies the stored hold delay as soon as the loop exists. `regle()`
      * used to be called only from the settings picker, so arbiters restarted
      * at their factory 2 s on every launch and the setting seemed useless.
      */
@@ -8732,183 +8438,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         // stays empty until first typed, even when stored.
         fr.f4ioz.satcombo.demo.ServeurDemo.configureWifi(
             settings.demoSsid, settings.demoMotDePasse)
-        val v = settings.catHoldMs.toLong()
-        rxArbiter.regle(v)
-        fmArbiter.regle(v)
-        txArbiter.regle(v)
-    }
-
-    /**
-     * A TX knob gesture was seen and not yet absorbed. Without this flag,
-     * absorption would fire on every round while the arbiter holds control —
-     * i.e. always — and every rig rounding would drift into the shift.
-     */
-    @Volatile private var mainSurMoletteTx = false
-
-    /**
-     * FM: Doppler drives both legs, and lets go of the knob when the operator
-     * touches it. It used to write both frequencies every round without
-     * looking, so any manual RX touch was erased 100 ms later.
-     *
-     * Now the downlink is read back. A gap explained by none of our commands
-     * is a gesture: go quiet, and the chosen channel becomes the new rest —
-     * with the instant Doppler removed, or it would apply twice. After the
-     * hold time, tracking resumes from that rest. The uplink never changes
-     * channel: a satellite repeater input is fixed, only its Doppler varies.
-     */
-    private suspend fun interactiveFm(
-        t: fr.f4ioz.satcombo.data.Transmitter, rr: Double, shift: Long, txShift: Long,
-        sameBand: Boolean
-    ) {
-        val ulRest = t.uplinkLowHz ?: return
-        val dlObserved = lireDescente(sameBand)
-
-        if (dlObserved != null) {
-            val geste = fmArbiter.observe(dlObserved, System.currentTimeMillis())
-            if (geste) {
-                lastSentDl = 0L
-                // The hand-picked channel is a rig frequency; rest is a
-                // satellite frequency. Removing instant Doppler converts.
-                _ui.value = _ui.value.copy(
-                    rxRestHz = Doppler.restFromDownlink(dlObserved - shift, rr))
-            }
-        }
-
-        val rest = _ui.value.rxRestHz ?: centreRx(t) ?: return
-        val dl = Doppler.downlink(rest, rr) + shift
-        val ul = Doppler.uplink(ulRest, rr) + txShift
-
-        // No readback possible: always write — a mute rig must not lose
-        // Doppler. On Doppler hold, never drive, whatever the arbiter says.
-        val pilote = (dlObserved == null || fmArbiter.driven) && !_ui.value.dopplerHold
-        if (pilote) {
-            if (kotlin.math.abs(dl - lastSentDl) >= 200 || kotlin.math.abs(ul - lastSentUl) >= 200) {
-                lastSentDl = dl; lastSentUl = ul
-                fmArbiter.commanded(dl)
-                runCatching { ecrireCouple(dl, ul, sameBand) }
-            }
-            _ui.value = _ui.value.copy(catRadioDownlinkHz = dl, catRadioUplinkHz = ul,
-                catRxDriven = true)
-        } else {
-            // No readback (mute rig and hold): show the computed command
-            // rather than nothing.
-            _ui.value = _ui.value.copy(catRadioDownlinkHz = dlObserved ?: dl,
-                catRadioUplinkHz = ul, catRxDriven = false)
-        }
-    }
-
-    /**
-     * Linear transponder: the operator leads, then the software takes over.
-     *
-     * While the knob moves, read it and derive the rest frequency: the operator
-     * chooses where to listen, and we touch nothing. After the hold time that
-     * choice becomes a satellite frequency, and the phone tunes RX **and** TX,
-     * both derived from the same frozen rest.
-     *
-     * **The frozen rest is the key.** Recomputing it on every read asked the rig
-     * where it was only to tell it it was right: RX never moved, and TX drifted
-     * with the Doppler we had just re-injected by mistake.
-     */
-    private suspend fun interactiveLinear(
-        t: fr.f4ioz.satcombo.data.Transmitter, rr: Double, shift: Long, txShift: Long,
-        sameBand: Boolean
-    ) {
-        // The downlink comes back to the rig only if it can receive it. On a
-        // QO-100 station it is heard on the dongle: nothing to read back or
-        // arbitrate, and the rest chosen elsewhere drives TX.
-        val auPoste = descenteAuPoste(_ui.value.rxRestHz ?: centreRx(t) ?: return)
-        val dlObserved = if (auPoste) lireDescente(sameBand) else null
-        if (auPoste && dlObserved == null) return
-        val now = System.currentTimeMillis()
-        val geste = dlObserved != null && rxArbiter.observe(dlObserved, now)
-        if (geste) lastSentDl = 0L
-        val pilote = (!auPoste || rxArbiter.driven) && _ui.value.catRxDoppler &&
-            !_ui.value.dopplerHold
-
-        // While not driving, rest is read from the rig, with calibration and
-        // mode (voice/CW) offsets removed since they are re-added on write.
-        val lu = if (dlObserved != null)
-            Doppler.restFromDownlink(dlObserved - shift - activeRxOffset(), rr)
-        else _ui.value.rxRestHz ?: centreRx(t) ?: return
-        val lo = t.downlinkLowHz ?: lu
-        val hi = t.downlinkHighHz ?: lu
-        if (!pilote) {
-            val clamped = lu.coerceIn(minOf(lo, hi), maxOf(lo, hi))
-            if (_ui.value.rxRestHz == null || kotlin.math.abs((_ui.value.rxRestHz ?: 0) - clamped) >= 20) {
-                _ui.value = _ui.value.copy(rxRestHz = clamped)
-            }
-        }
-        val rest = _ui.value.rxRestHz ?: lu
-
-        val ulRest = Doppler.transponderUplinkRest(
-            rest, t.downlinkLowHz ?: rest, t.downlinkHighHz ?: rest,
-            t.uplinkLowHz!!, t.uplinkHighHz ?: t.uplinkLowHz!!, effectiveInvert(t))
-        val ul = Doppler.uplink(ulRest, rr) + txShift
-        val dl = Doppler.downlink(rest, rr) + shift + activeRxOffset()
-
-        // --- TX knob as shift control ---
-        // `ul` = `Doppler.uplink(ulRest, rr) + txShift`; if the operator turned
-        // the knob to `ulLu`, the shift expressed is `ulLu - (ul - txShift)`.
-        // Two-rig duplex only, and only while driving — otherwise we would take
-        // the drift of a rig not yet commanded for a gesture.
-        if (_ui.value.catUi.txVfoShift && isPairRig && !sameBand && pilote) {
-            val ulLu = runCatching { ft817.readUplink() }.getOrNull()
-                ?.let { satDepuisPosteTx(it) }
-            if (ulLu != null) {
-                // The computation lives in `MoletteTx`: it was wrong twice here,
-                // untestable amid serial reads and writes. Isolated, it is
-                // tested, including the Doppler drift that made the shift
-                // oscillate between two values.
-                if (txArbiter.observe(ulLu, now)) mainSurMoletteTx = true
-                val d = fr.f4ioz.satcombo.domain.MoletteTx.decide(
-                    shiftHz = txShift,
-                    referenceHz = lastSentUl,
-                    lueHz = ulLu,
-                    gesteVu = mainSurMoletteTx,
-                    moletteTranquille = txArbiter.driven)
-                if (d.absorbe) {
-                    setTxShift(d.shiftHz)
-                    lastSentUl = d.referenceHz
-                }
-                if (d.gesteConsomme) mainSurMoletteTx = false
-            }
-        }
-
-        if (pilote) {
-            // 20 Hz: below that the gap is inaudible and writing only loads
-            // the CI-V bus.
-            if (kotlin.math.abs(dl - lastSentDl) >= 20 || kotlin.math.abs(ul - lastSentUl) >= 20) {
-                lastSentDl = dl; lastSentUl = ul
-                // Recognise ourselves on readback, or our own command would
-                // look like an operator gesture and we would let go every round.
-                rxArbiter.commanded(dl)
-                // Same for our own uplink.
-                txArbiter.commanded(ul)
-                runCatching { ecrireCouple(dl, ul, sameBand) }
-            }
-            _ui.value = _ui.value.copy(catRadioDownlinkHz = dl, catRadioUplinkHz = ul,
-                catRxDriven = true)
-        } else {
-            // The uplink follows the RX knob — but not on every rig. "The hold
-            // protects the RX knob, no reason to hold back TX" is false on a
-            // dual-VFO rig with one knob: on an IC-9700 in satellite mode,
-            // writing the uplink moves RX back, and the operator fights us
-            // (filmed on RS-44 and FO-29: the sum of both VFOs stayed constant,
-            // proof the rig held the pair). The decision is in `SuiviMontee`,
-            // dependency-free and tested.
-            if (fr.f4ioz.satcombo.domain.SuiviMontee.doitEcrire(
-                    rigModel = _ui.value.rigModel,
-                    operateurTourne = !rxArbiter.driven,
-                    txSuitVite = _ui.value.catUi.txSuitVite,
-                    maintienDoppler = _ui.value.dopplerHold,
-                    ecartHz = kotlin.math.abs(ul - lastSentUl))) {
-                lastSentUl = ul
-                txArbiter.commanded(ul)
-                runCatching { ecrireMontee(ul, sameBand) }
-            }
-            _ui.value = _ui.value.copy(catRadioDownlinkHz = dlObserved, catRadioUplinkHz = ul,
-                catRxDriven = false)
-        }
+        stationCat.regleMaintien(settings.catHoldMs.toLong())
     }
 
     fun toggleSelectionMode() {
@@ -9167,6 +8697,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             logEditTimeMs = null, invertOverride = null,
             rxRestHz = null, selectedTxIndex = 0,
             catRadioDownlinkHz = null, catRadioUplinkHz = null)
+        stationCat.nouveauSatellite()
         viewModelScope.launch {
             val tx = txRepo.forSatellite(sat.catalogNumber)
             val status = txRepo.statusOf(sat.catalogNumber)
@@ -9270,7 +8801,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     // ==================================================================
     // QO-100 — the satellite that does not move
     //
-    // This screen uses none of the usual loops, on purpose. `catTick()` starts
+    // This screen uses none of the usual loops, on purpose. The CAT loop (`StationCat.tour`) starts
     // from `livePosition` (SGP4); a geostationary has no usable propagated
     // position and the pass predictor would return nothing. Rather than
     // sprinkle exceptions in those loops — each a chance to break other
@@ -9675,7 +9206,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _ui.value = _ui.value.qo {
             copy(
                 posteRxHz = rx, posteTxHz = tx, cleRxHz = cle,
-                posteAtteignable = atteignableParLePoste(rx) && atteignableParLePoste(tx),
+                posteAtteignable = stationCat.atteignableParLePoste(rx) && stationCat.atteignableParLePoste(tx),
                 cleAtteignable = cle in 24_000_000L..1_766_000_000L,
                 surBalise = kotlin.math.abs(descenteHz - Qo100.BALISE_MEDIANE_HZ) < 100L)
         }
@@ -9702,7 +9233,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         if (q.auPoste && peutEmettre) viewModelScope.launch {
             // sameBand = false: 145 RX / 432 TX is the rig's satellite mode,
             // not a plain split.
-            runCatching { ecrireCouple(dlSat, ulSat, sameBand = false) }
+            runCatching { stationCat.ecrireCouple(dlSat, ulSat, sameBand = false) }
                 .onFailure { e ->
                     _ui.value = _ui.value.qo { copy(statut = e.message ?: "CAT ?") }
                 }
