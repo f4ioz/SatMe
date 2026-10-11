@@ -616,8 +616,9 @@ private fun Bulle(m: Paquet, paquets: List<Paquet>, peutEmettre: Boolean, onAccu
                         modifier = Modifier.weight(1f))
                     if (m.emis) Text(if (accuse) "✓ " + t("aprs_accuse") else "…", color = if (accuse) Aurora else TextLo, fontSize = 11.sp)
                     else if (m.idMessage != null) {
+                        val id = m.idMessage
                         if (dejaAccuse) Text("✓", color = Aurora, fontSize = 11.sp)
-                        else TextButton(enabled = peutEmettre, onClick = { onAccuse(m.idMessage) },
+                        else TextButton(enabled = peutEmettre, onClick = { id?.let(onAccuse) },
                             contentPadding = PaddingValues(horizontal = 8.dp)) {
                             Text(t("aprs_msg_accuser"), color = Cyan, fontSize = 11.sp)
                         }

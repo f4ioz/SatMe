@@ -612,13 +612,14 @@ private fun LignePaquet(p: Paquet, ui: UiState, ouvert: Boolean, accuse: Boolean
                     TypeAprs.STATUT -> add("» ${p.commentaire}")
                     else -> {}
                 }
-                if (p.lat != null && p.lon != null) {
+                val pLat = p.lat; val pLon = p.lon
+                if (pLat != null && pLon != null) {
                     val obs = ui.observer
                     val km = obs?.let {
-                        fr.f4ioz.satcombo.sonde.Geo.distanceKm(it.latDeg, it.lonDeg, p.lat, p.lon)
+                        fr.f4ioz.satcombo.sonde.Geo.distanceKm(it.latDeg, it.lonDeg, pLat, pLon)
                     }
-                    val loc = fr.f4ioz.satcombo.location.Maidenhead.fromLatLon(p.lat, p.lon)
-                    add("📍 $loc · %.4f %.4f".format(Locale.US, p.lat, p.lon) +
+                    val loc = fr.f4ioz.satcombo.location.Maidenhead.fromLatLon(pLat, pLon)
+                    add("📍 $loc · %.4f %.4f".format(Locale.US, pLat, pLon) +
                         (km?.let { " · %d km".format(it.toInt()) } ?: "") +
                         (p.vitesseKmh?.let { " · $it km/h" } ?: "") +
                         (p.altitudeM?.let { " · $it m" } ?: ""))

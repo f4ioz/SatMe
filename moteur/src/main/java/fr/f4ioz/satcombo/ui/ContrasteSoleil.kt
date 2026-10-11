@@ -17,7 +17,7 @@ import kotlin.math.pow
  * be linearised before weighting: weighting them directly left magenta at
  * 3.1:1 and darkened orange to 10:1.
  */
-internal object ContrasteSoleil {
+object ContrasteSoleil {
 
     /** WCAG AA for normal text. */
     const val CIBLE = 4.5f

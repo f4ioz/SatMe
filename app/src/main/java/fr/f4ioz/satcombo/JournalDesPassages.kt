@@ -275,7 +275,7 @@ class JournalDesPassages(
                     ?: ui().express.memoire.firstOrNull { J.indicatifDeBase(it.indicatif) == base && it.nom.isNotBlank() }?.nom.orEmpty()
                 var f = JournalPassage.Fiche(m.texte, nom = nomConnu, qth = avec.firstOrNull { it.qth.isNotBlank() }?.qth.orEmpty(),
                     locator = q?.theirLocator?.ifBlank { null }
-                        ?: if (m.lat != null && m.lon != null) fr.f4ioz.satcombo.location.Maidenhead.fromLatLon(m.lat, m.lon) else "")
+                        ?: m.lat?.let { la -> m.lon?.let { lo -> fr.f4ioz.satcombo.location.Maidenhead.fromLatLon(la, lo) } } ?: "")
                 ficheQrzCache[base]?.let { r -> f = f.copy(nom = f.nom.ifBlank { r.nom }, qth = f.qth.ifBlank { r.qth },
                     pays = r.pays, locator = f.locator.ifBlank { r.locator }) }
                 if (f.nom.isBlank() && !ficheQrzCache.containsKey(base) && recherches < 20 && c.qrzUser.isNotBlank() && c.qrzMdp.isNotBlank()) {

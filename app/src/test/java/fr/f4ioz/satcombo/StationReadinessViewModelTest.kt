@@ -92,7 +92,7 @@ class StationReadinessViewModelTest {
         // The view model's own recording start (not the 2-second AudioRecord of the audio check).
         assertFalse("the check starts a pass recording", Regex("""(?<![.\w])startRecording\(""").containsMatchIn(corps))
         // The domain is pure Kotlin: no Android, no view model.
-        val domaine = File("src/main/java/fr/f4ioz/satcombo/domain/StationReadiness.kt").readText()
+        val domaine = File("../moteur/src/main/java/fr/f4ioz/satcombo/domain/StationReadiness.kt").readText()
         assertFalse(domaine.contains("import android"))
         assertFalse(domaine.contains("MainViewModel"))
     }

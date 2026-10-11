@@ -7598,9 +7598,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
         val a = fr.f4ioz.satcombo.cat.IdentiteUsb.attribue(sondes, descente, montee)
         if (!a.certaine) return
-        if (a.rx != null && a.tx != null && (a.rx != cleRx || a.tx != cleTx)) {
-            setFt817Role(a.rx, "RX")
-            setFt817Role(a.tx, "TX")
+        val rx = a.rx; val tx = a.tx
+        if (rx != null && tx != null && (rx != cleRx || tx != cleTx)) {
+            setFt817Role(rx, "RX")
+            setFt817Role(tx, "TX")
         }
     }
 
@@ -7684,7 +7685,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             a.tx?.let { setFt817Role(it, "TX") }
 
             val lues = sondes.joinToString("  ") {
-                if (it.freqHz == null) "—" else "%.4f".format(it.freqHz / 1_000_000.0)
+                it.freqHz?.let { f -> "%.4f".format(f / 1_000_000.0) } ?: "—"
             }
             _ui.value = _ui.value.copy(
                 catStatus = if (a.certaine) tf("ft817_probe_ok", lues)

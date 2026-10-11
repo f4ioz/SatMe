@@ -140,6 +140,8 @@ tasks.withType<Test>().configureEach {
 }
 
 dependencies {
+    // What SatMe does without Android: shared with the PC version.
+    implementation(project(":moteur"))
     // QR codes for demo mode (Apache 2.0). Core only: the Android module would
     // pull in a camera dependency we don't need.
     implementation("com.google.zxing:core:3.5.3")
@@ -187,6 +189,7 @@ dependencies {
 
     // Unit tests (JVM): orbital maths, grid conversions, sked interpolation.
     testImplementation("junit:junit:4.13.2")
+    testImplementation(testFixtures(project(":moteur")))
     // Robolectric: an in-memory Android on the JVM. Domain tests don't cover
     // startup, where the last three shipped regressions came from (e.g. the
     // keypad memory lost in 19.11). The ViewModel needs SharedPreferences, an

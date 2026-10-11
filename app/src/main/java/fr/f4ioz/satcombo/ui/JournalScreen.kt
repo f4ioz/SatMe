@@ -547,7 +547,7 @@ private fun FichePassage(
                 // RX where the rig was in the passband (rest frequency, as the log has it).
                 frequences.lastOrNull { it.first <= (instant ?: 0L) + 2_000L }?.let { add("RX %.4f MHz".format(it.second / 1e6)) }
                 p.ulHz?.let { add("↑ %.4f MHz".format(it / 1e6)) }
-                if (p.rotorAz != null && p.rotorEl != null) add(tf("journal_mat_a", p.rotorAz.toInt(), p.rotorEl.toInt()))
+                p.rotorAz?.let { az -> p.rotorEl?.let { el -> add(tf("journal_mat_a", az.toInt(), el.toInt())) } }
             }.joinToString(" · "), color = TextHi, fontSize = 12.sp, fontFamily = FontFamily.Monospace)
         }
         }

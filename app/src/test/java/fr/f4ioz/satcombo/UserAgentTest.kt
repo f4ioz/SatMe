@@ -35,7 +35,9 @@ class UserAgentTest {
 
     @Test
     fun plus_aucun_user_agent_fige_dans_le_code() {
-        val src = File("src/main/java").walkTopDown().filter { it.name.endsWith(".kt") }.toList()
+        // The app's sources and the engine's, where the network code now lives.
+        val src = listOf(File("src/main/java"), File("../moteur/src/main/java"))
+            .flatMap { d -> d.walkTopDown().filter { it.name.endsWith(".kt") }.toList() }
         assertTrue(src.size > 50)
         val figes = src.flatMap { f ->
             f.readLines().filter { l -> l.contains("\"User-Agent\"") && !l.contains("USER_AGENT") }

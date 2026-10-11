@@ -271,8 +271,9 @@ object JournalRendu {
             val coul = when { m.type == TypeMarque.QSO -> QSO; m.type == TypeMarque.SIGNET -> SIGNET; m.viaIss -> ISS; else -> APRS }
             val (sx, sy) = xy(s.lat, s.lon)
             // The station where it is, in grey, linked to the satellite at that moment.
-            if (m.lat != null && m.lon != null) {
-                val (lx, ly) = xy(m.lat, m.lon)
+            val mLat = m.lat; val mLon = m.lon
+            if (mLat != null && mLon != null) {
+                val (lx, ly) = xy(mLat, mLon)
                 c.drawLine(lx, ly, sx, sy, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = gris; alpha = 180; strokeWidth = 1.2f * dp })
                 c.drawCircle(lx, ly, 5f * dp, blanc); c.drawCircle(lx, ly, 3.5f * dp, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = gris })
                 if (ecrire("@" + m.texte, lx, ly)) c.drawText(m.texte, lx + 7 * dp, ly + 14 * dp, grisTexte)
