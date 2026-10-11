@@ -389,6 +389,22 @@ class JournalPassageTest {
         assertEquals(listOf(190_000L..230_000L), JournalPassage.plagesNormales(m, 0L, 600_000L, 10_000L, 30_000L))
     }
 
+    /**
+     * Accelerated, a picture stayed on screen its few seconds of *pass* time:
+     * at ×10, 3 s became 0.3 s (11/10). The normal stretch now goes on that
+     * long after the picture, so it is seen for that long.
+     */
+    @Test
+    fun une_image_reste_a_vitesse_normale_le_temps_de_la_voir() {
+        val m = listOf(JournalPassage.Marque(JournalPassage.TypeMarque.SSTV, 300_000L, 420_000L, "PD120"))
+        assertEquals(listOf(299_000L..420_000L), JournalPassage.plagesNormales(m, 0L, 600_000L, 10_000L, 30_000L))
+        val p = JournalPassage.plagesNormales(m, 0L, 600_000L, 10_000L, 30_000L, apresSstvMs = 5_000L)
+        assertEquals(listOf(299_000L..425_000L), p)
+        // In the replay, those 5 s after the picture are played at normal speed.
+        val s = JournalPassage.segments(0L, 600_000L, p, 10)
+        assertEquals(1, JournalPassage.segmentA(s, 424_000L)!!.vitesse)
+    }
+
     @Test
     fun l_activite_entendue_ralentit_aussi() {
         // Nothing logged, a voice heard from 100 s to 110 s: normal from 1 s before to 2 s after.

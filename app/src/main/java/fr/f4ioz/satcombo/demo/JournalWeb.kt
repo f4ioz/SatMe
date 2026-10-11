@@ -86,7 +86,8 @@ object JournalWeb {
         val rapide = (p("rapide").toIntOrNull() ?: j.rapide()).coerceIn(2, 100)
         val activite = if (opt(p, "surActivite", j.surActivite())) j.morceaux(e).flatMap { j.activite(it.f) } else emptyList()
         return JournalPassage.segments(e.debutMs, e.finMs,
-            JournalPassage.plagesNormales(marques, e.debutMs, e.finMs, avant * 1000L, apres * 1000L, activite), rapide)
+            JournalPassage.plagesNormales(marques, e.debutMs, e.finMs, avant * 1000L, apres * 1000L, activite,
+                apresSstvMs = if (opt(p, "sstv", j.affSstv())) j.flashS() * 1000L else 0L), rapide)
     }
 
     private fun scene(ctx: Context, j: JournalDesPassages, e: JournalPassage.Entree, surCarte: Boolean,

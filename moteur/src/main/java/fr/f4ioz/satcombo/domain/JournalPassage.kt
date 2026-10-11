@@ -304,18 +304,20 @@ object JournalPassage {
     /**
      * Where the replay goes at normal speed, around each mark. A contact (a
      * voice QSO): from [avantMs] before, to [apresQsoMs] after — the talk goes
-     * on. An SSTV picture: [AVANT_SSTV_MS] before it starts, to its end. An
+     * on. An SSTV picture: [AVANT_SSTV_MS] before it starts, to its end and
+     * [apresSstvMs] beyond — the time it stays shown, so that it is seen that
+     * long and not a tenth of it. An
      * APRS frame: [avantMs] before, [APRES_APRS_MS] after. Close ones are
      * joined: a gap shorter than [JOINT_MS] is not worth a rush.
      */
     fun plagesNormales(marques: List<Marque>, debutMs: Long, finMs: Long, avantMs: Long, apresQsoMs: Long,
-                       activite: List<LongRange> = emptyList()): List<LongRange> {
+                       activite: List<LongRange> = emptyList(), apresSstvMs: Long = 0L): List<LongRange> {
         // Also what the sound shows (see [ActiviteSon]): a little before, a little after.
         val entendues = activite.map { maxOf(debutMs, it.first - AVANT_ACTIVITE_MS) to minOf(finMs, it.last + APRES_ACTIVITE_MS) }
         val brutes = entendues + marques.map { m ->
             val (avant, apres) = when (m.type) {
                 TypeMarque.QSO -> avantMs to apresQsoMs
-                TypeMarque.SSTV -> AVANT_SSTV_MS to 0L
+                TypeMarque.SSTV -> AVANT_SSTV_MS to apresSstvMs
                 TypeMarque.APRS -> avantMs to APRES_APRS_MS
                 // Something heard: as a contact, the talk goes on.
                 TypeMarque.SIGNET -> avantMs to apresQsoMs

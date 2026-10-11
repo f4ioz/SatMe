@@ -445,10 +445,15 @@ private fun FichePassage(
         var decalageQso by remember { mutableStateOf(vm.journal.decalageQsoS()) }
         val marques = remember(lv, decalageQso) { vm.journal.marques(lv, decalageQso) }
         LaunchedEffect(morceaux) { activite = withContext(Dispatchers.IO) { morceaux.flatMap { vm.journal.activite(it.f) } } }
-        LaunchedEffect(marques, accelere, rapide, avantS, apresQsoS, activite, surActivite) {
+        // How long an SSTV picture stays shown, once complete (and whether it shows at all).
+        var flashS by remember { mutableStateOf(vm.journal.flashS()) }
+        var affSstv by remember { mutableStateOf(vm.journal.affSstv()) }
+        LaunchedEffect(marques, accelere, rapide, avantS, apresQsoS, activite, surActivite, flashS, affSstv) {
             segs = if (!accelere) null else JournalPassage.segments(e.debutMs, e.finMs,
                 JournalPassage.plagesNormales(marques, e.debutMs, e.finMs, avantS * 1000L, apresQsoS * 1000L,
-                    if (surActivite) activite else emptyList()), rapide)
+                    if (surActivite) activite else emptyList(),
+                    // A picture stays at normal speed the time it is shown: seen, not glimpsed.
+                    apresSstvMs = if (affSstv) flashS * 1000L else 0L), rapide)
         }
         // Who the stations are (log, APRS, QRZ.com), for their cards.
         var fiches by remember(e.id) { mutableStateOf<Map<String, JournalPassage.Fiche>>(emptyMap()) }
@@ -461,8 +466,6 @@ private fun FichePassage(
         }
         // An SSTV picture shows from its first line, drawn as it arrives, then
         // stays the time chosen once complete (×10 when replayed without sound).
-        var flashS by remember { mutableStateOf(vm.journal.flashS()) }
-        var affSstv by remember { mutableStateOf(vm.journal.affSstv()) }
         var affFiches by remember { mutableStateOf(vm.journal.affFiches()) }
         var tailleFlash by remember { mutableStateOf(vm.journal.flashTaille()) }
         var apercuJusqua by remember { mutableStateOf(0L) }
