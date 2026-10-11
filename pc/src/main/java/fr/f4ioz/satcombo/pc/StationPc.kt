@@ -272,6 +272,20 @@ class StationPc(
         change { copy(indicatif = settings.callsign) }
     }
 
+    /** The phone's settings (its backup file), then everything that reads them again. */
+    fun importeTelephone(json: String): Result<Int> {
+        val r = ImportTelephone.importe(json, stockage)
+        if (r.isSuccess) {
+            stationRotor.rechargeReglages()
+            stationRotor.setRotorAutoPort(false)
+            stationCat.regleMaintien(settings.catHoldMs.toLong())
+            change { copy(locator = settings.manualLocator, indicatif = settings.callsign, observateur = observateur(),
+                catModele = if (catConnecte) catModele else modeleDe(settings.rigModel), passage = null) }
+            portee.launch { recalcule() }
+        }
+        return r
+    }
+
     fun rafraichisCatalogue() {
         portee.launch(Dispatchers.IO) {
             change { copy(catalogue = "téléchargement des éléments AMSAT…") }

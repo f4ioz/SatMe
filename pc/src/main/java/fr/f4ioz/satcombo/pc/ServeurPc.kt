@@ -53,6 +53,16 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
         val chemin = r.chemin.substringBefore('?')
         val q = parametres(r.chemin.substringAfter('?', ""))
         val sortie = c.getOutputStream()
+        if (r.methode == "POST" && chemin == "/api/import") {
+            // The phone's backup, sent as the request's body (a few hundred kilobytes with the log).
+            val corps = RequeteHttp.corps(c.getInputStream(), r, 20L * 1024 * 1024)
+            val res = if (corps == null) JSONObject().put("ok", false).put("erreur", "fichier trop gros ou coupé")
+                else station.importeTelephone(String(corps, Charsets.UTF_8)).fold(
+                    { JSONObject().put("ok", true).put("n", it) },
+                    { JSONObject().put("ok", false).put("erreur", it.message ?: "fichier illisible") })
+            envoie(sortie, "200 OK", "application/json; charset=utf-8", res.toString().toByteArray())
+            return
+        }
         if (r.methode == "POST") {
             val res = runCatching { action(chemin, q) }.getOrElse { JSONObject().put("ok", false).put("erreur", it.message ?: "erreur") }
             envoie(sortie, "200 OK", "application/json; charset=utf-8", res.toString().toByteArray())
@@ -98,6 +108,19 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
             "/api/rotor/suivre" -> rotor.setRotorEnabled(q["on"] == "1")
             "/api/rotor/parquer" -> rotor.rotorParkNow()
             "/api/rotor/stop" -> rotor.rotorStopNow()
+            "/api/rotor/reglages" -> {
+                entier("maxAz")?.let { rotor.setRotorMaxAz(it) }
+                entier("maxEl")?.let { rotor.setRotorMaxEl(it) }
+                q["butee"]?.takeIf { it == "NORTH" || it == "SOUTH" }?.let { rotor.setRotorAzStop(it) }
+                q["depuisButee"]?.let { rotor.setRotorAzFromStop(it == "1") }
+                q["flip"]?.let { rotor.setRotorFlip(it == "1") }
+                q["azSeul"]?.let { rotor.setRotorAzOnly(it == "1") }
+                entier("parkAz")?.let { rotor.setRotorParkAz(it) }
+                entier("parkEl")?.let { rotor.setRotorParkEl(it) }
+                entier("minEl")?.let { rotor.setRotorMinEl(it) }
+                entier("ecart")?.let { rotor.setRotorDeadband(it) }
+                entier("avantAos")?.let { rotor.setRotorPreAos(it) }
+            }
             "/api/rotor/aller" -> {
                 entier("az")?.let { rotor.setRotorManualAz(it) }
                 entier("el")?.let { rotor.setRotorManualEl(it) }
@@ -150,7 +173,7 @@ object JsonPc {
         o.put("emetteur", e.emetteur)
         o.put("repos", e.repos ?: JSONObject.NULL)
         o.put("ciel", JSONObject().put("dl", dl ?: JSONObject.NULL).put("ul", ul ?: JSONObject.NULL))
-        o.put("cat", JSONObject().put("modele", e.catModele).put("connecte", e.catConnecte).put("simule", e.catSimule)
+        o.put("cat", JSONObject().put("modele", e.catModele).put("port", st.settings.civUsbIndex).put("connecte", e.catConnecte).put("simule", e.catSimule)
             .put("statut", e.catStatut).put("maintien", e.maintienDoppler)
             .put("dl", c.descenteHz ?: JSONObject.NULL).put("ul", c.monteeHz ?: JSONObject.NULL)
             .put("pilote", c.rxPilote).put("mode", c.mode ?: "").put("modeEcart", c.modeEcart))
@@ -160,6 +183,10 @@ object JsonPc {
             .put("azCible", r.rotorTargetAz ?: JSONObject.NULL).put("elCible", r.rotorTargetEl ?: JSONObject.NULL)
             .put("port", r.rotorUsbIndex).put("baud", r.rotorBaud).put("hote", r.rotorHost).put("tcp", r.rotorPort)
             .put("attente", r.rotorPrePositioning)
+            .put("reglages", JSONObject().put("maxAz", r.rotorMaxAz).put("maxEl", r.rotorMaxEl).put("butee", r.rotorAzStop)
+                .put("depuisButee", r.rotorAzFromStop).put("flip", r.rotorFlip).put("azSeul", r.rotorAzOnly)
+                .put("parkAz", r.rotorParkAz).put("parkEl", r.rotorParkEl).put("minEl", r.rotorMinEl)
+                .put("ecart", r.rotorDeadband).put("avantAos", r.rotorPreAos))
             .put("diag", JSONArray(r.rotorDiag)))
         return o
     }

@@ -172,6 +172,19 @@ object PagePc {
       </div>
       <div class="etat" id="rot-statut"></div>
       <div class="diag" id="rot-diag"></div>
+      <details id="rot-reg" style="margin-top:8px"><summary class="petit" style="cursor:pointer">Réglages du rotor</summary>
+        <div class="ligne"><span class="petit" style="min-width:120px">Azimut max</span><select id="r-maxAz"><option>360</option><option>450</option><option>540</option></select>
+          <span class="petit">Élévation max</span><select id="r-maxEl"><option>90</option><option>180</option></select></div>
+        <div class="ligne"><span class="petit" style="min-width:120px">Butée</span><select id="r-butee"><option value="NORTH">au nord</option><option value="SOUTH">au sud</option></select>
+          <label class="petit"><input type="checkbox" id="r-depuisButee"> compte depuis la butée</label></div>
+        <div class="ligne"><label class="petit"><input type="checkbox" id="r-flip"> retournement (flip)</label>
+          <label class="petit"><input type="checkbox" id="r-azSeul"> azimut seul</label></div>
+        <div class="ligne"><span class="petit" style="min-width:120px">Parking az / el</span><input id="r-parkAz" style="max-width:70px"><input id="r-parkEl" style="max-width:70px"></div>
+        <div class="ligne"><span class="petit" style="min-width:120px">Élévation min</span><input id="r-minEl" style="max-width:70px">
+          <span class="petit">Écart avant de bouger</span><input id="r-ecart" style="max-width:60px"></div>
+        <div class="ligne"><span class="petit" style="min-width:120px">Attente avant AOS (min)</span><input id="r-avantAos" style="max-width:60px">
+          <button onclick="reglagesRotor()">Appliquer</button></div>
+      </details>
     </div>
 
     <div class="carte">
@@ -182,6 +195,8 @@ object PagePc {
         <button onclick="station()">Enregistrer</button>
       </div>
       <div class="ligne"><button onclick="post('/api/catalogue')">Retélécharger les éléments AMSAT</button></div>
+      <div class="petit" style="margin-top:10px">Reprendre les réglages du téléphone (Réglages → Sauvegarde, fichier .json) :</div>
+      <input type="file" id="import" accept=".json,application/json" onchange="importe(this)" style="width:100%;margin-top:4px">
       <div class="etat" id="catalogue"></div>
     </div>
   </div>
@@ -309,6 +324,42 @@ function dessine() {
   txt('rot-cible', r.azCible == null ? '—' : Math.round(r.azCible) + '° / ' + Math.round(r.elCible || 0) + '°');
   txt('rot-diag', (r.diag || []).join('\n'));
   if (document.activeElement !== g('rot-suit')) g('rot-suit').checked = r.suit;
+  // The mast's settings: filled from the station while the panel is closed (never under the fingers).
+  if (!g('rot-reg').open && r.reglages) {
+    const s = r.reglages;
+    g('r-maxAz').value = String(s.maxAz); g('r-maxEl').value = String(s.maxEl); g('r-butee').value = s.butee;
+    g('r-depuisButee').checked = s.depuisButee; g('r-flip').checked = s.flip; g('r-azSeul').checked = s.azSeul;
+    g('r-parkAz').value = s.parkAz; g('r-parkEl').value = s.parkEl; g('r-minEl').value = s.minEl;
+    g('r-ecart').value = s.ecart; g('r-avantAos').value = s.avantAos;
+  }
+  // The rig's model and port as last used, until the operator picks others.
+  if (!catTouche) {
+    g('cat-modele').value = c.simule ? (c.modele === 'TS2000' ? 'TS2000SIM' : 'SIM') : c.modele;
+    if (ports.length && c.port >= 0 && c.port < ports.length) g('cat-port').value = String(c.port);
+    avertCat();
+  }
+  if (!rotTouche && ports.length && r.port >= 0 && r.port < ports.length) g('rot-port').value = String(r.port);
+}
+let catTouche = false, rotTouche = false;
+['cat-modele', 'cat-port', 'cat-baud'].forEach(i => g(i).addEventListener('change', () => catTouche = true));
+['rot-port', 'rot-baud', 'rot-lien'].forEach(i => g(i).addEventListener('change', () => rotTouche = true));
+function reglagesRotor() {
+  const b = id => g(id).checked ? 1 : 0;
+  post('/api/rotor/reglages?maxAz=' + g('r-maxAz').value + '&maxEl=' + g('r-maxEl').value + '&butee=' + g('r-butee').value +
+       '&depuisButee=' + b('r-depuisButee') + '&flip=' + b('r-flip') + '&azSeul=' + b('r-azSeul') +
+       '&parkAz=' + enc(v('r-parkAz')) + '&parkEl=' + enc(v('r-parkEl')) + '&minEl=' + enc(v('r-minEl')) +
+       '&ecart=' + enc(v('r-ecart')) + '&avantAos=' + enc(v('r-avantAos')));
+  g('rot-reg').open = false;
+}
+async function importe(input) {
+  const f = input.files[0]; if (!f) return;
+  try {
+    const r = await fetch('/api/import', { method:'POST', body: await f.text() });
+    const j = await r.json();
+    alert(j.ok ? j.n + ' réglages repris du téléphone (ports USB exceptés ; le rotor attend que tu coches « Suivre »).' : 'Import impossible : ' + j.erreur);
+  } catch (x) { alert('Import impossible.'); }
+  input.value = ''; g('indicatif').value = ''; g('locator').value = '';
+  setTimeout(() => { tic(); chargeListe(); }, 1500);
 }
 
 async function tic() {
