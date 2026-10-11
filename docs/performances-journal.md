@@ -11,6 +11,7 @@ A journal video is made on the phone: each frame (5 a second) is drawn by the pr
 | GIF | **2 to 4 s** | ¾ of a core, briefly | ≈ 30 MB | none | ≈ 3 MB |
 | Video 480 px | **≈ 37 s** | 1 core, 2 at the end | ≈ 95 MB | none | ≈ 7 MB |
 | Video 720 px | **≈ 45 s** | 1 to 2 cores | ≈ 100 MB | +1 °C | ≈ 15 MB |
+| Video 720 px, from 20.83 (sound streamed) | **≈ 30 s** | 1 to 2 cores | **≈ 70 MB** | — | ≈ 15 MB |
 
 "Extra memory": above what the app already holds, given back at the end. Of 8 cores, more than half always stay free.
 
@@ -28,11 +29,11 @@ Model drawn from the measurements: ≈ 1 s of preparation per minute of pass (th
 | 15 min | video 480 / 720 / 1080 px real time | 3.9 / 4.9 / 7.1 min | 56 / 123 / 292 MB |
 | any | GIF | a few seconds | 2 to 4 MB |
 
-**Memory**: the pass's sound is loaded in one block today, in several copies: ≈ +10 MB per minute of pass while a video is made (≈ 50 MB for 5 min, ≈ 150 MB for 15 min), whatever the resolution. The GIF has no sound: ≈ +30 MB.
+**Memory**: up to 20.82 the pass's sound was loaded in one block, in several copies: ≈ +10 MB per minute of pass while a video is made (≈ 50 MB for 5 min, ≈ 150 MB for 15 min). **From 20.83** it is decoded into a temporary file and read back in blocks while encoding: memory no longer depends on the pass's length (≈ +70 MB at 720 px, taken by the pictures, not the sound), and making is ≈ ⅓ faster — the times estimated above, made before, are upper bounds. The GIF has no sound: ≈ +30 MB.
 
 ## What to take from it
 
 - The **GIF** costs next to nothing.
 - The **480 px video** is the best choice to share: half the size of 720 px, barely faster to make (the cost is mostly the number of frames and the sound, not the size).
 - The **real-time video** is the heaviest: several minutes and tens of megabytes.
-- On an older phone (2 to 3 GB), a long pass as a video may run short of memory: the sound loaded in one block is what weighs.
+- On an older phone (2 to 3 GB), a long pass as a video could run short of memory because of the sound loaded in one block; from 20.83 the pass's length no longer matters.

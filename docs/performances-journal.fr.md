@@ -11,6 +11,7 @@ Une vidéo du journal se fabrique sur le téléphone : chaque image (5 par secon
 | GIF | **2 à 4 s** | ¾ de cœur, un instant | ≈ 30 Mo | aucune | ≈ 3 Mo |
 | Vidéo 480 px | **≈ 37 s** | 1 cœur, 2 à la fin | ≈ 95 Mo | aucune | ≈ 7 Mo |
 | Vidéo 720 px | **≈ 45 s** | 1 à 2 cœurs | ≈ 100 Mo | +1 °C | ≈ 15 Mo |
+| Vidéo 720 px, depuis la 20.83 (son au fil de l'eau) | **≈ 30 s** | 1 à 2 cœurs | **≈ 70 Mo** | — | ≈ 15 Mo |
 
 « Mémoire en plus » : au-dessus de ce que l'appli occupe déjà, rendue à la fin. Sur 8 cœurs, il en reste toujours plus de la moitié de libre.
 
@@ -28,11 +29,11 @@ Modèle tiré des mesures : ≈ 1 s de préparation par minute de passage (le so
 | 15 min | vidéo 480 / 720 / 1080 px temps réel | 3,9 / 4,9 / 7,1 min | 56 / 123 / 292 Mo |
 | toute durée | GIF | quelques secondes | 2 à 4 Mo |
 
-**Mémoire** : le son du passage est aujourd'hui chargé d'un bloc, en plusieurs copies : ≈ +10 Mo par minute de passage pendant une vidéo (≈ 50 Mo pour 5 min, ≈ 150 Mo pour 15 min), quelle que soit la résolution. Le GIF n'a pas de son : ≈ +30 Mo.
+**Mémoire** : jusqu'à la 20.82, le son du passage était chargé d'un bloc, en plusieurs copies : ≈ +10 Mo par minute de passage pendant une vidéo (≈ 50 Mo pour 5 min, ≈ 150 Mo pour 15 min). **Depuis la 20.83**, il est décodé dans un fichier temporaire et relu par blocs pendant l'encodage : la mémoire ne dépend plus de la durée du passage (≈ +70 Mo en 720 px, pris par les images, pas par le son), et la fabrication est ≈ ⅓ plus rapide — les temps estimés ci-dessus, faits avant, sont donc des majorants. Le GIF n'a pas de son : ≈ +30 Mo.
 
 ## Ce qu'on en retient
 
 - Le **GIF** est quasi gratuit.
 - La **vidéo 480 px** est le meilleur choix pour partager : deux fois plus légère que 720 px, à peine plus rapide à fabriquer (le coût vient surtout du nombre d'images et du son, pas de la taille).
 - La **vidéo en temps réel** est la plus lourde : plusieurs minutes et plusieurs dizaines de mégaoctets.
-- Sur un téléphone ancien (2 à 3 Go), un long passage en vidéo peut manquer de mémoire : c'est le son chargé d'un bloc qui pèse.
+- Sur un téléphone ancien (2 à 3 Go), un long passage en vidéo pouvait manquer de mémoire à cause du son chargé d'un bloc ; depuis la 20.83, la durée du passage n'y change plus rien.
