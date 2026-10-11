@@ -75,8 +75,12 @@ class RegistresTest {
         val racine = racine()
         assumeTrue("source introuvable depuis " + File(".").absolutePath, racine != null)
 
-        val toutes = racine!!.walkTopDown().filter { it.isFile && it.name.endsWith(".kt") }
-            .flatMap { mesures(it).asSequence() }.toList()
+        // The app's sources and the engine's: its data classes reach the phone too.
+        val moteur = File(racine!!.path.replace("app/src/main", "moteur/src/main")
+            .replace(Regex("^src/main"), "../moteur/src/main"))
+        val toutes = listOf(racine, moteur).filter { it.isDirectory }
+            .flatMap { d -> d.walkTopDown().filter { it.isFile && it.name.endsWith(".kt") }.toList() }
+            .flatMap { mesures(it) }
         assertTrue("aucun data class trouve : le lecteur de source est casse",
             toutes.size > 5)
 
@@ -98,7 +102,7 @@ class RegistresTest {
      * and useless.
      */
     @Test
-    fun le_compteur_voit_bien_UiState_et_RotorUi() {
+    fun le_compteur_voit_bien_UiState_et_EtatRotor() {
         val racine = racine()
         assumeTrue("source introuvable", racine != null)
         val vm = File(racine, "MainViewModel.kt")
@@ -106,10 +110,13 @@ class RegistresTest {
 
         val m = mesures(vm).associateBy { it.nom }
         assertTrue("UiState non vu par le compteur", m.containsKey("UiState"))
-        assertTrue("RotorUi non vu par le compteur", m.containsKey("RotorUi"))
         assertTrue("UiState devrait avoir plus de 150 champs, vu " + m["UiState"]!!.champs,
             m["UiState"]!!.champs > 150)
-        assertTrue("RotorUi devrait avoir plus de 40 champs, vu " + m["RotorUi"]!!.champs,
-            m["RotorUi"]!!.champs > 40)
+        // The mast's fields, which moved from RotorUi to the engine.
+        val etat = File("../moteur/src/main/java/fr/f4ioz/satcombo/station/EtatRotor.kt")
+        assumeTrue("EtatRotor.kt introuvable", etat.isFile)
+        val r = mesures(etat).associateBy { it.nom }["EtatRotor"]
+        assertTrue("EtatRotor non vu par le compteur", r != null)
+        assertTrue("EtatRotor devrait avoir plus de 40 champs, vu " + r!!.champs, r.champs > 40)
     }
 }

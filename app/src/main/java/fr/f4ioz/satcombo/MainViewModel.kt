@@ -63,6 +63,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -342,105 +343,10 @@ data class TimelineTrack(
  * of [UiState]; only writes go through [UiState.rot].
  */
 data class RotorUi(
-    // --- rotor az/el ---
-    val rotorEnabled: Boolean = false,
-    val rotorConnected: Boolean = false,
-    val rotorStatus: String = "",
-    val rotorType: String = "GS232",
-    val rotorBaud: Int = 9600,
-    val rotorUsbIndex: Int = 0,
-    val rotorPort: Int = 4533,
-    val rotorMaxAz: Int = 450,
-    val rotorMaxEl: Int = 90,
-    /** Where the mast's end stop is: "NORTH" or "SOUTH". */
-    val rotorAzStop: String = "NORTH",
-    /** Does the controller count from its end stop rather than true north? */
-    val rotorAzFromStop: Boolean = false,
-    /** Pointing error tolerated before the satellite is considered lost. */
-    val rotorMaxError: Int = 15,
-    val rotorMinEl: Int = 0,
-    val rotorFlip: Boolean = false,
-    val rotorAzOnly: Boolean = false,
-    /** Minutes before AOS at which the mast goes to wait at the rise point. */
-    val rotorPreAos: Int = 3,
-    /** True while the mast waits for the satellite at its rise point. */
-    val rotorPrePositioning: Boolean = false,
-    val rotorPark: Boolean = true,
-    val rotorParkAz: Int = 0,
-    val rotorParkEl: Int = 0,
-    val rotorSimulated: Boolean = false,
-    val rotorPosAz: Double? = null,
-    val rotorPosEl: Double? = null,
-    val rotorFlipped: Boolean = false,
-    val rotorMoves: Int = 0,
-    val rotorDevices: List<String> = emptyList(),
-    /** Share of the current pass actually reachable, 0 to 1. */
-    val rotorCoverage: Double? = null,
-    val rotorLink: String = "GS232",
-    val rotorHost: String = "192.168.1.10",
-    val rotorDeadband: Int = 4,
-    val rotorSim: Boolean = false,
-    val rotorTargetAz: Double? = null,
-    val rotorTargetEl: Double? = null,
-    val rotorActualAz: Double? = null,
-    val rotorActualEl: Double? = null,
-    /**
-     * Where the antenna points, as the compass must show it: azimuth wrapped
-     * into one turn, elevation flip undone. Null when the mast says nothing —
-     * the compass falls back to the phone. [rotorAimEl] stays null on an
-     * azimuth-only rotor.
-     */
-    val rotorAimAz: Double? = null,
-    val rotorAimEl: Double? = null,
-    val rotorOutOfRange: Boolean = false,
-
-    /**
-     * Log of the last connection attempt, line by line: which port was tried,
-     * which refused permission, which opened and never answered.
-     */
-    val rotorDiag: List<String> = emptyList(),
-
-    /**
-     * Try the other ports when the chosen one does not answer: as for the rig,
-     * the port index depends on plug-in order, which nobody controls.
-     */
-    val rotorAutoPort: Boolean = true,
-
-    /** Manual azimuth, for testing without a satellite. */
-    val rotorManualAz: Int = 0,
-
-    /** Manual elevation, for testing without a satellite. */
-    val rotorManualEl: Int = 0,
-
-    /** Last frame received from the controller, verbatim — empty if silent. */
-    val rotorLastReply: String = "",
-
-    /** Last frame sent to the controller, verbatim. */
-    val rotorLastSent: String = "",
-    /** Gap between the target and the reachable point, degrees. */
-    val rotorErrorDeg: Double = 0.0,
-    /** Going round the end stop: what is happening or waited for ("" when nothing). */
-    val rotorDeroule: String = "",
-    /** Held by a transmission: shown as a warning. */
-    val rotorDerouleAlerte: Boolean = false,
-    /** When this pass will cross the stop beyond the dead zone (a turn), null when it will not. */
-    val rotorDerouleAt: Long? = null,
-    /** The last command, unwrapped (420 = 60 on the overlap): where the cable is, for the dial. */
-    val rotorCmdAz: Double? = null,
-    /**
-     * The antennas' planned path (az 0..360, el 0..90 as seen on the sky) when the pass
-     * crosses the stop; empty otherwise (they follow the satellite).
-     */
-    val rotorChemin: List<Pair<Double, Double>> = emptyList(),
-    /** The mast's path over the pass, as sky points: the planned path, or the plain follow. */
-    val rotorTrajet: List<Pair<Double, Double>> = emptyList(),
+    /** The mast: kept by the station (see [fr.f4ioz.satcombo.station.StationRotor]). */
+    val mat: fr.f4ioz.satcombo.station.EtatRotor = fr.f4ioz.satcombo.station.EtatRotor(),
     /** That path drawn in white on the satellite's compass (rotor connected). */
     val compassRotorPath: Boolean = false,
-    /** The largest miss on that path, and when; null without a path. */
-    val rotorEcartMax: Double? = null,
-    val rotorEcartMaxAt: Long? = null,
-    /** How long a full turn takes at the measured speed, seconds. */
-    val rotorTourS: Int = 0,
 
     // ---- Remote compass ----
     // Here rather than flat in UiState (register limit). The rotor is the
@@ -910,61 +816,61 @@ data class UiState(
     // --- The 45 rotor fields, read under their original names. See
     //     [RotorUi]: stored elsewhere to stay under the 255-register limit.
     // ---------------------------------------------------------------
-    val rotorEnabled: Boolean get() = rotor.rotorEnabled
-    val rotorConnected: Boolean get() = rotor.rotorConnected
-    val rotorStatus: String get() = rotor.rotorStatus
-    val rotorType: String get() = rotor.rotorType
-    val rotorBaud: Int get() = rotor.rotorBaud
-    val rotorUsbIndex: Int get() = rotor.rotorUsbIndex
-    val rotorPort: Int get() = rotor.rotorPort
-    val rotorMaxAz: Int get() = rotor.rotorMaxAz
-    val rotorMaxEl: Int get() = rotor.rotorMaxEl
-    val rotorAzStop: String get() = rotor.rotorAzStop
-    val rotorAzFromStop: Boolean get() = rotor.rotorAzFromStop
-    val rotorMaxError: Int get() = rotor.rotorMaxError
-    val rotorMinEl: Int get() = rotor.rotorMinEl
-    val rotorFlip: Boolean get() = rotor.rotorFlip
-    val rotorAzOnly: Boolean get() = rotor.rotorAzOnly
-    val rotorPreAos: Int get() = rotor.rotorPreAos
-    val rotorPrePositioning: Boolean get() = rotor.rotorPrePositioning
-    val rotorPark: Boolean get() = rotor.rotorPark
-    val rotorParkAz: Int get() = rotor.rotorParkAz
-    val rotorParkEl: Int get() = rotor.rotorParkEl
-    val rotorSimulated: Boolean get() = rotor.rotorSimulated
-    val rotorPosAz: Double? get() = rotor.rotorPosAz
-    val rotorPosEl: Double? get() = rotor.rotorPosEl
-    val rotorFlipped: Boolean get() = rotor.rotorFlipped
-    val rotorMoves: Int get() = rotor.rotorMoves
-    val rotorDevices: List<String> get() = rotor.rotorDevices
-    val rotorCoverage: Double? get() = rotor.rotorCoverage
-    val rotorLink: String get() = rotor.rotorLink
-    val rotorHost: String get() = rotor.rotorHost
-    val rotorDeadband: Int get() = rotor.rotorDeadband
-    val rotorSim: Boolean get() = rotor.rotorSim
-    val rotorTargetAz: Double? get() = rotor.rotorTargetAz
-    val rotorTargetEl: Double? get() = rotor.rotorTargetEl
-    val rotorActualAz: Double? get() = rotor.rotorActualAz
-    val rotorActualEl: Double? get() = rotor.rotorActualEl
-    val rotorAimAz: Double? get() = rotor.rotorAimAz
-    val rotorAimEl: Double? get() = rotor.rotorAimEl
-    val rotorOutOfRange: Boolean get() = rotor.rotorOutOfRange
-    val rotorDiag: List<String> get() = rotor.rotorDiag
-    val rotorAutoPort: Boolean get() = rotor.rotorAutoPort
-    val rotorManualAz: Int get() = rotor.rotorManualAz
-    val rotorManualEl: Int get() = rotor.rotorManualEl
-    val rotorLastReply: String get() = rotor.rotorLastReply
-    val rotorLastSent: String get() = rotor.rotorLastSent
-    val rotorErrorDeg: Double get() = rotor.rotorErrorDeg
-    val rotorDeroule: String get() = rotor.rotorDeroule
-    val rotorDerouleAlerte: Boolean get() = rotor.rotorDerouleAlerte
-    val rotorCmdAz: Double? get() = rotor.rotorCmdAz
-    val rotorDerouleAt: Long? get() = rotor.rotorDerouleAt
-    val rotorTourS: Int get() = rotor.rotorTourS
-    val rotorChemin: List<Pair<Double, Double>> get() = rotor.rotorChemin
-    val rotorTrajet: List<Pair<Double, Double>> get() = rotor.rotorTrajet
+    val rotorEnabled: Boolean get() = rotor.mat.rotorEnabled
+    val rotorConnected: Boolean get() = rotor.mat.rotorConnected
+    val rotorStatus: String get() = rotor.mat.rotorStatus
+    val rotorType: String get() = rotor.mat.rotorType
+    val rotorBaud: Int get() = rotor.mat.rotorBaud
+    val rotorUsbIndex: Int get() = rotor.mat.rotorUsbIndex
+    val rotorPort: Int get() = rotor.mat.rotorPort
+    val rotorMaxAz: Int get() = rotor.mat.rotorMaxAz
+    val rotorMaxEl: Int get() = rotor.mat.rotorMaxEl
+    val rotorAzStop: String get() = rotor.mat.rotorAzStop
+    val rotorAzFromStop: Boolean get() = rotor.mat.rotorAzFromStop
+    val rotorMaxError: Int get() = rotor.mat.rotorMaxError
+    val rotorMinEl: Int get() = rotor.mat.rotorMinEl
+    val rotorFlip: Boolean get() = rotor.mat.rotorFlip
+    val rotorAzOnly: Boolean get() = rotor.mat.rotorAzOnly
+    val rotorPreAos: Int get() = rotor.mat.rotorPreAos
+    val rotorPrePositioning: Boolean get() = rotor.mat.rotorPrePositioning
+    val rotorPark: Boolean get() = rotor.mat.rotorPark
+    val rotorParkAz: Int get() = rotor.mat.rotorParkAz
+    val rotorParkEl: Int get() = rotor.mat.rotorParkEl
+    val rotorSimulated: Boolean get() = rotor.mat.rotorSimulated
+    val rotorPosAz: Double? get() = rotor.mat.rotorPosAz
+    val rotorPosEl: Double? get() = rotor.mat.rotorPosEl
+    val rotorFlipped: Boolean get() = rotor.mat.rotorFlipped
+    val rotorMoves: Int get() = rotor.mat.rotorMoves
+    val rotorDevices: List<String> get() = rotor.mat.rotorDevices
+    val rotorCoverage: Double? get() = rotor.mat.rotorCoverage
+    val rotorLink: String get() = rotor.mat.rotorLink
+    val rotorHost: String get() = rotor.mat.rotorHost
+    val rotorDeadband: Int get() = rotor.mat.rotorDeadband
+    val rotorSim: Boolean get() = rotor.mat.rotorSim
+    val rotorTargetAz: Double? get() = rotor.mat.rotorTargetAz
+    val rotorTargetEl: Double? get() = rotor.mat.rotorTargetEl
+    val rotorActualAz: Double? get() = rotor.mat.rotorActualAz
+    val rotorActualEl: Double? get() = rotor.mat.rotorActualEl
+    val rotorAimAz: Double? get() = rotor.mat.rotorAimAz
+    val rotorAimEl: Double? get() = rotor.mat.rotorAimEl
+    val rotorOutOfRange: Boolean get() = rotor.mat.rotorOutOfRange
+    val rotorDiag: List<String> get() = rotor.mat.rotorDiag
+    val rotorAutoPort: Boolean get() = rotor.mat.rotorAutoPort
+    val rotorManualAz: Int get() = rotor.mat.rotorManualAz
+    val rotorManualEl: Int get() = rotor.mat.rotorManualEl
+    val rotorLastReply: String get() = rotor.mat.rotorLastReply
+    val rotorLastSent: String get() = rotor.mat.rotorLastSent
+    val rotorErrorDeg: Double get() = rotor.mat.rotorErrorDeg
+    val rotorDeroule: String get() = rotor.mat.rotorDeroule
+    val rotorDerouleAlerte: Boolean get() = rotor.mat.rotorDerouleAlerte
+    val rotorCmdAz: Double? get() = rotor.mat.rotorCmdAz
+    val rotorDerouleAt: Long? get() = rotor.mat.rotorDerouleAt
+    val rotorTourS: Int get() = rotor.mat.rotorTourS
+    val rotorChemin: List<Pair<Double, Double>> get() = rotor.mat.rotorChemin
+    val rotorTrajet: List<Pair<Double, Double>> get() = rotor.mat.rotorTrajet
     val compassRotorPath: Boolean get() = rotor.compassRotorPath
-    val rotorEcartMax: Double? get() = rotor.rotorEcartMax
-    val rotorEcartMaxAt: Long? get() = rotor.rotorEcartMaxAt
+    val rotorEcartMax: Double? get() = rotor.mat.rotorEcartMax
+    val rotorEcartMaxAt: Long? get() = rotor.mat.rotorEcartMaxAt
 
     /** Copies the state, changing only the rotor block. */
     fun rot(f: RotorUi.() -> RotorUi): UiState = copy(rotor = rotor.f())
@@ -1099,7 +1005,35 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      * Rotor driver, chosen on connect. Null while nothing is connected: the
      * only way to be sure no command reaches a mast we have not opened.
      */
-    private var rotorDriver: fr.f4ioz.satcombo.rotor.RotorDriver? = null
+    /**
+     * The mast, kept by the engine (shared with the PC version). Its state is
+     * copied into [RotorUi.mat] for the screens; what it needs to know of the
+     * rest of the station is answered here.
+     */
+    private val stationRotor = fr.f4ioz.satcombo.station.StationRotor(settings,
+        fr.f4ioz.satcombo.usb.PortsSerieAndroid(app), viewModelScope,
+        object : fr.f4ioz.satcombo.station.MondeRotor {
+            override fun satellite(): SatPosition? = _ui.value.livePosition
+            override fun nomSatellite(): String = _ui.value.selected?.name.orEmpty()
+            override fun arcDuPassage(): List<Pair<Double, Double>> = _ui.value.passTrack
+            override fun aosDuPassage(): Long = trackedPassAos
+            override fun enEmission(): Boolean = _ui.value.catUi.enEmission || aprsEnEmission
+            override fun imageEnCours(maintenant: Long): LongRange? {
+                val st = fr.f4ioz.satcombo.sstv.SstvHub.state.value
+                if (!st.decoding) return null
+                val m = st.modeName?.let { fr.f4ioz.satcombo.sstv.SstvMode.byName(it) } ?: return null
+                val dur = (m.frameSeconds * 1000).toLong()
+                val debut = maintenant - (st.progress * dur).toLong()
+                return debut..(debut + dur)
+            }
+            override fun imagesRecues(nomSatellite: String, depuisMs: Long): List<LongRange> =
+                fr.f4ioz.satcombo.sstv.SstvHub.shots(getApplication<android.app.Application>()).map { it.second }
+                    .filter { it.timeMs > depuisMs && (nomSatellite.isBlank() || fr.f4ioz.satcombo.domain.JournalPassage.memeSatellite(it.satName, nomSatellite)) }
+                    .mapNotNull { s -> fr.f4ioz.satcombo.sstv.SstvMode.byName(s.mode)?.let { (s.timeMs - (it.frameSeconds * 1000).toLong())..s.timeMs } }
+            override fun adaptateursDesPostes(): List<String> = listOf(settings.ft817RxSerial, settings.ft817TxSerial, settings.ts2000Cle,
+                ft817.lienTs2000?.cle ?: "")
+            override fun signale(ou: String, e: Throwable) { android.util.Log.w("SatMe/ROTOR", "echec " + ou, e) }
+        })
     /** Control goes through the FT-817 pair — two rigs, or one for TX only. */
     private val isPairRig: Boolean
         get() = _ui.value.rigModel in fr.f4ioz.satcombo.cat.Postes.MODELES || _ui.value.rigModel == THD72 ||
@@ -1181,7 +1115,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     /** A word for the SSTV page (no ISS, no pass…), not in `UiState`. */
     val sstvIssMessage = kotlinx.coroutines.flow.MutableStateFlow("")
 
-    private val _ui = MutableStateFlow(
+    private val _ui: MutableStateFlow<UiState> = MutableStateFlow(
         UiState(
             favorites = favStore.load(),
             enabledSources = srcStore.load(),
@@ -1368,6 +1302,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             notifyMode = settings.notifyMode,
             notifiedPassKeys = settings.notifiedPassKeys,
             rotor = RotorUi(
+                mat = stationRotor.etat.value,
                 boussoleSource = settings.boussoleSource,
                 boussoleAdresse = settings.boussoleAdresse,
                 boussoleNom = settings.boussoleNom,
@@ -1375,31 +1310,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 boussoleConvention = settings.boussoleConvention,
                 boussoleReleves = settings.boussoleReleves,
                 boussoleFleche = settings.boussoleFleche,
-                rotorEnabled = settings.rotorEnabled,
-                rotorLink = settings.rotorLink,
-                rotorUsbIndex = settings.rotorUsbIndex,
-                rotorBaud = settings.rotorBaud,
-                rotorHost = settings.rotorHost,
-                rotorPort = settings.rotorPort,
-                rotorMaxAz = settings.rotorMaxAz,
-                rotorMaxEl = settings.rotorMaxEl,
-                rotorDeadband = settings.rotorDeadband,
-                rotorFlip = settings.rotorFlip,
-                rotorAzOnly = settings.rotorAzOnly,
-                rotorParkAz = settings.rotorParkAz,
-                rotorParkEl = settings.rotorParkEl,
-                rotorMinEl = settings.rotorMinEl,
-                rotorPreAos = settings.rotorPreAos,
-                rotorSim = settings.rotorSim,
-                rotorAzStop = settings.rotorAzStop,
-                compassRotorPath = settings.compassRotorPath,
-                rotorAzFromStop = settings.rotorAzFromStop,
-                rotorMaxError = settings.rotorMaxError)
+                compassRotorPath = settings.compassRotorPath)
         )
     )
     val ui: StateFlow<UiState> = _ui.asStateFlow()
 
     init {
+        // The mast's state, as the station keeps it, onto the screens.
+        viewModelScope.launch {
+            stationRotor.etat.collect { e -> _ui.update { it.copy(rotor = it.rotor.copy(mat = e)) } }
+        }
         // The SSTV and APT decoders run in a service with no GPS of their own:
         // they get the station's locator as soon as it is known, and each
         // time it changes — not only when a screen happens to ask for it.
@@ -5087,7 +5007,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 fr.f4ioz.satcombo.domain.StationReadiness.Niveau.NOT_REQUIRED, "rd_test_rotor_non_requis")
         else {
             val pos = if (u.rotorConnected) kotlinx.coroutines.withTimeoutOrNull(3_000) {
-                runCatching { rotorDriver?.readPosition() }.getOrNull()
+                stationRotor.lisPosition()
             } else null
             C.rotor(u.rotorConnected, pos?.azDeg, pos?.elDeg)
         }
@@ -5642,7 +5562,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val cle = dev?.let { fr.f4ioz.satcombo.cat.cleDe(it) }
         if (!fr.f4ioz.satcombo.domain.RotorRecherche.auBranchement(cle, settings.rotorUsbCle)) return
         val nom = dev?.productName ?: dev?.deviceName ?: ""
-        _ui.value = _ui.value.rot { copy(rotorStatus = tf("rotor_usb_attached", nom)) }
+        stationRotor.annonce(tf("rotor_usb_attached", nom))
         connectRotor()
     }
 
@@ -6524,6 +6444,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             log = logStore.load(),
             error = null,
             rotor = _ui.value.rotor.copy(
+                mat = stationRotor.rechargeReglages(),
                 boussoleSource = settings.boussoleSource,
                 boussoleAdresse = settings.boussoleAdresse,
                 boussoleNom = settings.boussoleNom,
@@ -6531,23 +6452,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 boussoleConvention = settings.boussoleConvention,
                 boussoleReleves = settings.boussoleReleves,
                 boussoleFleche = settings.boussoleFleche,
-                rotorEnabled = settings.rotorEnabled,
-                rotorBaud = settings.rotorBaud,
-                rotorUsbIndex = settings.rotorUsbIndex,
-                rotorHost = settings.rotorHost,
-                rotorPort = settings.rotorPort,
-                rotorMaxAz = settings.rotorMaxAz,
-                rotorMaxEl = settings.rotorMaxEl,
-                rotorAzStop = settings.rotorAzStop,
-                compassRotorPath = settings.compassRotorPath,
-                rotorAzFromStop = settings.rotorAzFromStop,
-                rotorMaxError = settings.rotorMaxError,
-                rotorMinEl = settings.rotorMinEl,
-                rotorDeadband = settings.rotorDeadband,
-                rotorFlip = settings.rotorFlip,
-                rotorAzOnly = settings.rotorAzOnly,
-                rotorParkAz = settings.rotorParkAz,
-                rotorParkEl = settings.rotorParkEl)
+                compassRotorPath = settings.compassRotorPath)
         )
         fr.f4ioz.satcombo.ui.theme.applyTheme(settings.themeIndex)
         fr.f4ioz.satcombo.ui.theme.applyUiScale(
@@ -8135,7 +8040,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         configurePaire()
         ft817.requestPermissions()
         // Never the rotor's adapter: "ID;" sent there would read as "D", down, on a GS-232.
-        val rotorUsb = rotorSerial?.takeIf { it.isOpen }?.cleUsb
+        val rotorUsb = stationRotor.cleUsb
         val cles = ft817.listDevices().filter { it.hasPermission }.map { it.cle }.filter { it != rotorUsb }
         var ouvert = false
         // One search for both sides: they share the line (opening one opens the other).
@@ -8386,7 +8291,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             val ordre = fr.f4ioz.satcombo.cat.CatScan.sansRotor(
                 if (_ui.value.civUsbAuto) fr.f4ioz.satcombo.cat.CatScan.ordre(refs, _ui.value.civUsbIndex)
                 else listOf(_ui.value.civUsbIndex.coerceIn(0, refs.size - 1)),
-                { cat.identite(it) }, rotorSerial?.cleUsb ?: settings.rotorUsbCle)
+                { cat.identite(it) }, stationRotor.cleUsb ?: settings.rotorUsbCle)
             var gagnant = -1
             for (i in ordre) {
                 trace.add(tf("cat_diag_try", refs[i].label))
@@ -9346,7 +9251,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             predictor.passTrack(sat, obs, pass.aosEpochMs, pass.losEpochMs)
         }
         // The same track with its times, for the rotor (where the satellite will be when a picture comes).
-        rotorTrackTemps = withContext(Dispatchers.Default) {
+        stationRotor.traceTemps = withContext(Dispatchers.Default) {
             runCatching {
                 // Every 5 s: the mast's path is planned on these samples.
                 val n = ((pass.losEpochMs - pass.aosEpochMs) / 5_000L).toInt().coerceIn(2, 400)
@@ -9361,58 +9266,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     // ===================== az/el rotor =====================
 
-    /**
-     * The mast's mechanical state as the app believes it. Not the command:
-     * a minute of rotation lies between them, which is what makes overlap
-     * useful. When the controller reports its position it is authoritative;
-     * when silent (cable torn, mute controller) we fall back on the last
-     * command, and the banner says so.
-     */
-    private var rotorAt = fr.f4ioz.satcombo.rotor.RotorPos(0.0, 0.0)
-
-    /**
-     * Last position **actually read**, and when. Display only, to hold a few
-     * seconds when the controller skips a reply (see [RotorTenue]); a held
-     * position must never decide pointing.
-     */
-    private var rotorLu: fr.f4ioz.satcombo.rotor.RotorPos? = null
-    private var rotorLuMs: Long = 0L
-    /**
-     * The mast's path over a pass crossing the stop (see [fr.f4ioz.satcombo.rotor.RotorChemin]),
-     * empty when the pass does not cross it; the expected pictures it was planned with; a turn
-     * held (transmission, picture coming in) that calls for a new plan from where the mast is.
-     */
-    private var rotorChemin: List<fr.f4ioz.satcombo.rotor.RotorChemin.Point> = emptyList()
-    private var rotorCheminImages: List<LongRange> = emptyList()
-    private var rotorCheminARefaire = false
-    /** The pass's track with its times (AOS to LOS): where the satellite will be when a picture comes. */
-    private var rotorTrackTemps: List<Triple<Long, Double, Double>> = emptyList()
-    /** SSTV pictures of the last half hour (start..end), read from the gallery now and then. */
-    private var rotorImages: List<LongRange> = emptyList()
-    private var rotorImagesMs = 0L
-
-    /**
-     * Last command sent — not the mast position. The next azimuth is unwrapped
-     * near it, not near the read position: while the mast climbs towards 540°
-     * the controller answers 380, 400, 420; unwrapping near those would send
-     * the command back to the branch we came from, and the mast would turn
-     * round mid-pass — exactly what the plan avoided.
-     */
-    private var rotorCmd = fr.f4ioz.satcombo.rotor.RotorPos(0.0, 0.0)
-
-    /** Mast turn chosen for the current pass, at AOS. */
-    private var rotorPlan: fr.f4ioz.satcombo.rotor.RotorMath.Plan? = null
-    private var rotorPlanKey: String? = null
-    private var rotorLoopJob: kotlinx.coroutines.Job? = null
-    private var rotorWasFlipped = false
-    private var rotorSimLink: fr.f4ioz.satcombo.rotor.Gs232Simulator? = null
-
-    /**
-     * Same driver as [rotorDriver] when it speaks GS-232. The concrete type is
-     * needed for raw frames: the common interface knows only "position" and
-     * "go", enough to track, not to understand why nothing moves.
-     */
-    private var rotorSerial: fr.f4ioz.satcombo.rotor.Gs232Rotor? = null
 
     // ==================================================================
     // QO-100 — the satellite that does not move
@@ -9869,750 +9722,39 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     /** Leaving the screen does not stop the mast: a pass lasts ten minutes. */
     fun closeRotor() { _ui.value = retour() }
 
-    /**
-     * Same safety net as for CAT, with one weighty difference: a failure also
-     * stops tracking. After an exception we no longer know what the driver
-     * sent; a loop still pushing commands would turn a mast who knows where.
-     */
-    private inline fun rotorGuard(where: String, body: () -> Unit) {
-        try {
-            body()
-        } catch (e: Throwable) {
-            val what = e::class.java.simpleName + (e.message?.let { ": " + it } ?: "")
-            _ui.value = _ui.value.rot { copy(rotorConnected = false, rotorStatus = tf("rotor_error", what)) }
-            android.util.Log.w("SatMe/ROTOR", "echec " + where, e)
-        }
-    }
+    // The mast's commands, carried out by the station (see StationRotor).
+    fun setRotorEnabled(v: Boolean) = stationRotor.setRotorEnabled(v)
+    fun setRotorLink(v: String) = stationRotor.setRotorLink(v)
+    fun setRotorUsbIndex(v: Int) = stationRotor.setRotorUsbIndex(v)
+    fun setRotorBaud(v: Int) = stationRotor.setRotorBaud(v)
+    fun setRotorHost(v: String) = stationRotor.setRotorHost(v)
+    fun setRotorPort(v: Int) = stationRotor.setRotorPort(v)
+    fun setRotorMaxAz(v: Int) = stationRotor.setRotorMaxAz(v)
+    fun setRotorAzStop(v: String) = stationRotor.setRotorAzStop(v)
+    fun setRotorAzFromStop(v: Boolean) = stationRotor.setRotorAzFromStop(v)
+    fun setRotorAzOnly(v: Boolean) = stationRotor.setRotorAzOnly(v)
+    fun setRotorMaxError(v: Int) = stationRotor.setRotorMaxError(v)
+    fun setRotorMaxEl(v: Int) = stationRotor.setRotorMaxEl(v)
+    fun setRotorDeadband(v: Int) = stationRotor.setRotorDeadband(v)
+    fun setRotorFlip(v: Boolean) = stationRotor.setRotorFlip(v)
+    fun setRotorParkAz(v: Int) = stationRotor.setRotorParkAz(v)
+    fun setRotorParkEl(v: Int) = stationRotor.setRotorParkEl(v)
+    fun setRotorMinEl(v: Int) = stationRotor.setRotorMinEl(v)
+    fun setRotorPreAos(v: Int) = stationRotor.setRotorPreAos(v)
+    fun setRotorSim(v: Boolean) = stationRotor.setRotorSim(v)
+    fun setRotorAutoPort(v: Boolean) = stationRotor.setRotorAutoPort(v)
+    fun setRotorManualAz(v: Int) = stationRotor.setRotorManualAz(v)
+    fun setRotorManualEl(v: Int) = stationRotor.setRotorManualEl(v)
+    fun refreshRotorDevices() = stationRotor.refreshRotorDevices()
+    fun rotorRequestPermissions() = stationRotor.rotorRequestPermissions()
+    fun connectRotor() = stationRotor.connectRotor()
+    fun disconnectRotor() = stationRotor.disconnectRotor()
+    fun rotorGotoManual() = stationRotor.rotorGotoManual()
+    fun rotorJog(dAz: Int, dEl: Int) = stationRotor.rotorJog(dAz, dEl)
+    fun rotorReadNow() = stationRotor.rotorReadNow()
+    fun rotorStopNow() = stationRotor.rotorStopNow()
+    fun rotorParkNow() = stationRotor.rotorParkNow()
 
-    fun setRotorEnabled(v: Boolean) {
-        settings.rotorEnabled = v
-        _ui.value = _ui.value.rot { copy(rotorEnabled = v) }
-    }
-
-    fun setRotorLink(v: String) {
-        settings.rotorLink = v
-        _ui.value = _ui.value.rot { copy(rotorLink = settings.rotorLink) }
-    }
-
-    fun setRotorUsbIndex(v: Int) {
-        settings.rotorUsbIndex = v
-        _ui.value = _ui.value.rot { copy(rotorUsbIndex = settings.rotorUsbIndex) }
-    }
-
-    fun setRotorBaud(v: Int) {
-        settings.rotorBaud = v
-        _ui.value = _ui.value.rot { copy(rotorBaud = settings.rotorBaud) }
-    }
-
-    fun setRotorHost(v: String) {
-        settings.rotorHost = v
-        _ui.value = _ui.value.rot { copy(rotorHost = settings.rotorHost) }
-    }
-
-    fun setRotorPort(v: Int) {
-        settings.rotorPort = v
-        _ui.value = _ui.value.rot { copy(rotorPort = settings.rotorPort) }
-    }
-
-    fun setRotorMaxAz(v: Int) {
-        settings.rotorMaxAz = v
-        _ui.value = _ui.value.rot { copy(rotorMaxAz = settings.rotorMaxAz) }
-    }
-
-    /**
-     * Changing the end stop discards the current plan: it was computed for one
-     * stop and means nothing for another. Keeping it until the next pass would
-     * point the mast 180° off.
-     */
-    fun setRotorAzStop(v: String) {
-        settings.rotorAzStop = v
-        rotorPlan = null; rotorPlanKey = null
-        _ui.value = _ui.value.rot { copy(rotorAzStop = settings.rotorAzStop, rotorCoverage = null) }
-    }
-
-    fun setRotorAzFromStop(v: Boolean) {
-        settings.rotorAzFromStop = v
-        _ui.value = _ui.value.rot { copy(rotorAzFromStop = settings.rotorAzFromStop) }
-    }
-
-    fun setRotorAzOnly(v: Boolean) {
-        settings.rotorAzOnly = v
-        _ui.value = _ui.value.rot { copy(rotorAzOnly = settings.rotorAzOnly,
-            rotorAimEl = if (v) null else _ui.value.rotorAimEl) }
-    }
-
-    fun setRotorMaxError(v: Int) {
-        settings.rotorMaxError = v
-        rotorPlan = null; rotorPlanKey = null
-        _ui.value = _ui.value.rot { copy(rotorMaxError = settings.rotorMaxError, rotorCoverage = null) }
-    }
-
-    fun setRotorMaxEl(v: Int) {
-        settings.rotorMaxEl = v
-        _ui.value = _ui.value.rot { copy(rotorMaxEl = settings.rotorMaxEl) }
-    }
-
-    fun setRotorDeadband(v: Int) {
-        settings.rotorDeadband = v
-        _ui.value = _ui.value.rot { copy(rotorDeadband = settings.rotorDeadband) }
-    }
-
-    fun setRotorFlip(v: Boolean) {
-        settings.rotorFlip = v
-        rotorWasFlipped = false
-        _ui.value = _ui.value.rot { copy(rotorFlip = v) }
-    }
-
-    fun setRotorParkAz(v: Int) {
-        settings.rotorParkAz = v
-        _ui.value = _ui.value.rot { copy(rotorParkAz = settings.rotorParkAz) }
-    }
-
-    fun setRotorParkEl(v: Int) {
-        settings.rotorParkEl = v
-        _ui.value = _ui.value.rot { copy(rotorParkEl = settings.rotorParkEl) }
-    }
-
-    fun setRotorMinEl(v: Int) {
-        settings.rotorMinEl = v
-        _ui.value = _ui.value.rot { copy(rotorMinEl = settings.rotorMinEl) }
-    }
-
-    /** Minutes before AOS at which the mast goes to wait for the satellite. */
-    fun setRotorPreAos(v: Int) {
-        settings.rotorPreAos = v
-        _ui.value = _ui.value.rot { copy(rotorPreAos = settings.rotorPreAos) }
-    }
-
-    fun setRotorSim(v: Boolean) {
-        settings.rotorSim = v
-        _ui.value = _ui.value.rot { copy(rotorSim = v) }
-    }
-
-    /** Visible USB adapters, so the index means something. */
-    fun refreshRotorDevices() {
-        rotorGuard("rotor_devices") {
-            _ui.value = _ui.value.rot { copy(
-                rotorDevices = fr.f4ioz.satcombo.rotor.Gs232Rotor(getApplication<android.app.Application>()).listDevices()) }
-        }
-    }
-
-    fun rotorRequestPermissions() {
-        rotorGuard("rotor_perm") {
-            fr.f4ioz.satcombo.rotor.Gs232Rotor(getApplication<android.app.Application>()).requestPermissions()
-            refreshRotorDevices()
-        }
-    }
-
-    fun connectRotor() {
-        viewModelScope.launch { rotorGuard("rotor_connect") { connectRotorInner() } }
-    }
-
-    private suspend fun connectRotorInner() {
-        disconnectRotor()
-        val u = _ui.value
-        if (u.rotorSim) {
-            // A mast that does not exist: everything shows, nothing moves.
-            val sim = fr.f4ioz.satcombo.rotor.Gs232Simulator(
-                azMaxDeg = u.rotorMaxAz.toDouble(),
-                elMaxDeg = if (u.rotorFlip) 180.0 else u.rotorMaxEl.toDouble())
-            val d = fr.f4ioz.satcombo.rotor.Gs232Rotor(getApplication<android.app.Application>())
-            d.pacingMs = 0L
-            d.attach(sim)
-            rotorSimLink = sim
-            rotorDriver = d
-            rotorSerial = d
-            rotorAt = fr.f4ioz.satcombo.rotor.RotorPos(0.0, 0.0)
-            rotorWasFlipped = false
-            _ui.value = _ui.value.rot { copy(rotorConnected = true, rotorStatus = t("rotor_sim_on")) }
-            startRotorLoop()
-            return
-        }
-        if (u.rotorLink == "ROTCTLD") {
-            val d = fr.f4ioz.satcombo.rotor.RotctldRotor()
-            val ok = d.open(u.rotorHost, u.rotorPort)
-            rotorDriver = if (ok) d else null
-            _ui.value = _ui.value.rot { copy(rotorConnected = ok,
-                rotorStatus = if (ok) tf("rotor_connected", u.rotorHost + ":" + u.rotorPort)
-                else tf("rotor_error", u.rotorHost + ":" + u.rotorPort)) }
-            if (ok) { rotorWasFlipped = false; startRotorLoop() }
-            return
-        }
-        val d = fr.f4ioz.satcombo.rotor.Gs232Rotor(getApplication<android.app.Application>())
-        val refs = d.availablePorts()
-        if (refs.isEmpty()) {
-            _ui.value = _ui.value.rot { copy(rotorConnected = false, rotorStatus = t("rotor_none"),
-                rotorDiag = listOf(t("cat_err_no_device"))) }
-            return
-        }
-        // Same sequence as for the rig: wait for permission, open the chosen
-        // port, raise DTR/RTS. An Arduino GS-232 emulator forgives none of
-        // these.
-        val trace = ArrayList<String>()
-        val ordre = if (u.rotorAutoPort)
-            fr.f4ioz.satcombo.cat.CatScan.ordre(refs, u.rotorUsbIndex)
-        else listOf(u.rotorUsbIndex.coerceIn(0, refs.size - 1))
-        var gagnant = -1
-        // Why the last port tried failed. Otherwise the screen said "allow USB
-        // access" whatever the failure, sending the operator after a
-        // permission already granted.
-        var echec = ""
-        // The adapters the rigs use: never opened by an automatic search (RTS/DTR may key them).
-        val clesPostes = listOf(settings.ft817RxSerial, settings.ft817TxSerial, settings.ts2000Cle,
-            ft817.lienTs2000?.cle ?: "").filter { it.isNotBlank() }
-        for (i in ordre) {
-            trace.add(tf("cat_diag_try", refs[i].label))
-            val id = d.identitePort(i)
-            if (u.rotorAutoPort && !fr.f4ioz.satcombo.domain.RotorRecherche.permis(id?.first, id?.second, clesPostes, settings.rotorUsbCle)) {
-                trace.add(t("rotor_diag_poste")); continue
-            }
-            if (!d.ensurePermission(i)) {
-                trace.add(t("cat_diag_line_denied")); echec = t("rotor_fail_denied"); continue
-            }
-            if (!d.open(i, u.rotorBaud)) {
-                trace.add(tf("cat_diag_line_open", d.lastError))
-                echec = tf("rotor_fail_open", d.lastError); continue
-            }
-            // A port always opens. The reply to `C2` tells the rotor
-            // controller from an SDR dongle or a rig — asked several times:
-            // raising DTR resets an Arduino, and the first query goes out
-            // during boot.
-            trace.add(t("rotor_diag_settle"))
-            val pos = runCatching { d.probePosition() }.getOrNull()
-            if (pos == null) {
-                val muet = d.lastReply.isBlank()
-                trace.add(if (muet) tf("rotor_diag_mute_tries", d.lastTries.toString())
-                          else tf("rotor_diag_garbled", d.lastReply))
-                echec = if (muet) t("rotor_fail_mute") else tf("rotor_fail_garbled", d.lastReply)
-                d.close(); continue
-            }
-            trace.add(tf("rotor_diag_ok",
-                String.format(java.util.Locale.US, "%.0f", pos.azDeg),
-                String.format(java.util.Locale.US, "%.0f", pos.elDeg)))
-            gagnant = i; break
-        }
-        val ok = gagnant >= 0
-        if (ok && gagnant != u.rotorUsbIndex) {
-            // The port that answered is remembered.
-            settings.rotorUsbIndex = gagnant
-        }
-        if (ok) d.identitePort(gagnant)?.first?.let { settings.rotorUsbCle = it }
-        rotorDriver = if (ok) d else null
-        rotorSerial = if (ok) d else null
-        _ui.value = _ui.value.rot { copy(rotorConnected = ok,
-            rotorDevices = refs.map { it.label }, rotorDiag = trace,
-            rotorUsbIndex = if (ok) gagnant else u.rotorUsbIndex,
-            rotorLastSent = d.lastSent, rotorLastReply = d.lastReply,
-            rotorStatus = if (ok) tf("rotor_connected", refs[gagnant].label)
-            else if (echec.isNotBlank()) echec
-            else t("open_failed_usb")) }
-        if (ok) { rotorWasFlipped = false; startRotorLoop() }
-    }
-
-    fun setRotorAutoPort(v: Boolean) { _ui.value = _ui.value.rot { copy(rotorAutoPort = v) } }
-
-    fun setRotorManualAz(v: Int) {
-        _ui.value = _ui.value.rot { copy(rotorManualAz = v.coerceIn(0, _ui.value.rotorMaxAz)) }
-    }
-
-    fun setRotorManualEl(v: Int) {
-        _ui.value = _ui.value.rot { copy(rotorManualEl = v.coerceIn(0, if (_ui.value.rotorFlip) 180 else _ui.value.rotorMaxEl)) }
-    }
-
-    /**
-     * Sends the hand-entered command, without satellite or tracking — the
-     * honest way to test a whole chain: a pass comes when it wants and does
-     * not wait for a cable to be sorted out.
-     *
-     * It stops tracking first: two masters commanding one mast a second apart
-     * contradict each other and the mast shakes between them. The angle is in
-     * **true** azimuth like everything displayed; conversion to the
-     * controller's origin happens on the outgoing frame, as for park and
-     * tracking.
-     */
-    fun rotorGotoManual() {
-        viewModelScope.launch {
-            rotorGuard("rotor_goto") {
-                setRotorEnabled(false)
-                val u = _ui.value
-                val limits = rotorLimits(u)
-                val aim = fr.f4ioz.satcombo.rotor.RotorMath.manual(
-                    u.rotorManualAz.toDouble(), u.rotorManualEl.toDouble(), limits)
-                if (aim == null) {
-                    _ui.value = _ui.value.rot { copy(rotorOutOfRange = true,
-                        rotorStatus = t("rotor_manual_refused")) }
-                    return@rotorGuard
-                }
-                launch {
-                    val cmdAz = fr.f4ioz.satcombo.rotor.RotorMath.commandAz(
-                        aim.azDeg, limits, u.rotorAzFromStop)
-                    val parti = rotorDriver?.moveTo(cmdAz, aim.elDeg) ?: false
-                    rotorAt = fr.f4ioz.satcombo.rotor.RotorPos(aim.azDeg, aim.elDeg)
-                    rotorDerniereCmd = if (parti) rotorAt else null
-                    rotorCmd = rotorAt
-                    rotorWasFlipped = false
-                    _ui.value = _ui.value.rot { copy(
-                        rotorTargetAz = aim.azDeg, rotorTargetEl = aim.elDeg,
-                        rotorOutOfRange = false,
-                        rotorLastSent = rotorSerial?.lastSent ?: "",
-                        rotorStatus = if (parti)
-                            tf("rotor_manual_sent",
-                                String.format(java.util.Locale.US, "%.0f", cmdAz),
-                                String.format(java.util.Locale.US, "%.0f", aim.elDeg))
-                        else t("rotor_send_failed")) }
-                }
-            }
-        }
-    }
-
-    /**
-     * One step more or less from where we think we are: the **read** position
-     * when available, else the previous command. Handy for rough end-stop
-     * setup: step ten degrees, look at the antenna, repeat.
-     */
-    fun rotorJog(dAz: Int, dEl: Int) {
-        val u = _ui.value
-        val baseAz = u.rotorActualAz ?: u.rotorManualAz.toDouble()
-        val baseEl = u.rotorActualEl ?: u.rotorManualEl.toDouble()
-        setRotorManualAz((baseAz.toInt() + dAz))
-        setRotorManualEl((baseEl.toInt() + dEl))
-        rotorGotoManual()
-    }
-
-    /**
-     * A single query outside the loop, for when nothing is wired right yet:
-     * shows the reply as it arrives — or its absence, which is an answer too.
-     */
-    fun rotorReadNow() {
-        viewModelScope.launch {
-            rotorGuard("rotor_read") {
-                launch {
-                    val d = rotorDriver
-                    val pos = runCatching { d?.readPosition() }.getOrNull()
-                    val ser = rotorSerial
-                    _ui.value = _ui.value.rot { copy(
-                        rotorLastSent = ser?.lastSent ?: "",
-                        rotorLastReply = ser?.lastReply ?: "",
-                        rotorStatus = if (pos == null) t("rotor_diag_mute")
-                        else tf("rotor_diag_ok",
-                            String.format(java.util.Locale.US, "%.0f", pos.azDeg),
-                            String.format(java.util.Locale.US, "%.0f", pos.elDeg))) }
-                }
-            }
-        }
-    }
-
-    fun disconnectRotor() {
-        rotorLoopJob?.cancel(); rotorLoopJob = null
-        runCatching { rotorDriver?.close() }
-        rotorDriver = null
-        rotorSimLink = null
-        rotorSerial = null
-        // A disconnected mast has no position to hold: forget the last read,
-        // or it would outlive the disconnection by four seconds.
-        rotorLu = null; rotorLuMs = 0L
-        rotorDerniereCmd = null; rotorBougeRef = null; rotorBougeMs = 0L
-        _ui.value = _ui.value.rot { copy(rotorConnected = false, rotorStatus = t("rotor_offline"),
-            rotorTargetAz = null, rotorTargetEl = null,
-            rotorActualAz = null, rotorActualEl = null, rotorOutOfRange = false,
-            rotorAimAz = null, rotorAimEl = null) }
-    }
-
-    /**
-     * Immediate stop. It also stops tracking: a stop followed by a command a
-     * second later is not a stop, it is a pause.
-     */
-    fun rotorStopNow() {
-        viewModelScope.launch {
-            rotorGuard("rotor_stop") {
-                setRotorEnabled(false)
-                launch { rotorDriver?.stop(); rotorDerniereCmd = null }
-            }
-        }
-    }
-
-    fun rotorParkNow() {
-        viewModelScope.launch {
-            rotorGuard("rotor_park") {
-                setRotorEnabled(false)
-                val u = _ui.value
-                val aim = fr.f4ioz.satcombo.rotor.RotorMath.park(
-                    u.rotorParkAz.toDouble(), u.rotorParkEl.toDouble(), rotorLimits(u))
-                if (aim == null) {
-                    _ui.value = _ui.value.rot { copy(rotorOutOfRange = true) }
-                } else {
-                    launch {
-                        val parti = rotorDriver?.moveTo(
-                            fr.f4ioz.satcombo.rotor.RotorMath.commandAz(
-                                aim.azDeg, rotorLimits(u), u.rotorAzFromStop),
-                            aim.elDeg) ?: false
-                        rotorAt = fr.f4ioz.satcombo.rotor.RotorPos(aim.azDeg, aim.elDeg)
-                        rotorDerniereCmd = if (parti) rotorAt else null
-                        rotorCmd = rotorAt
-                        rotorWasFlipped = false
-                        _ui.value = _ui.value.rot { copy(rotorTargetAz = aim.azDeg,
-                            rotorTargetEl = aim.elDeg, rotorOutOfRange = false) }
-                    }
-                }
-            }
-        }
-    }
-
-    private fun rotorLimits(u: UiState) = fr.f4ioz.satcombo.rotor.RotorMath.Limits(
-        azMaxDeg = u.rotorMaxAz.toDouble(),
-        elMaxDeg = if (u.rotorFlip) 180.0 else u.rotorMaxEl.toDouble(),
-        deadbandDeg = u.rotorDeadband.toDouble(),
-        azStopDeg = if (u.rotorAzStop == "SOUTH") 180.0 else 0.0)
-
-    /**
-     * The pass plan: chosen once, held to the end. Recomputed only when pass,
-     * end stop, travel or tolerance change; recomputing every second would
-     * give a mast changing its mind mid-pass, with two minutes of rotation to
-     * reach a place the satellite has already left.
-     */
-    private fun ensureRotorPlan(
-        u: UiState,
-        limits: fr.f4ioz.satcombo.rotor.RotorMath.Limits
-    ): fr.f4ioz.satcombo.rotor.RotorMath.Plan? {
-        val track = u.passTrack
-        if (track.isEmpty()) {
-            rotorPlan = null; rotorPlanKey = null
-            if (u.rotorTrajet.isNotEmpty()) _ui.value = _ui.value.rot { copy(rotorTrajet = emptyList()) }
-            return null
-        }
-        val key = "${track.size}|${track.first()}|${track.last()}|" +
-            "${limits.azStopDeg}|${limits.azMaxDeg}|${u.rotorMaxError}"
-        if (key == rotorPlanKey) return rotorPlan
-        val p = fr.f4ioz.satcombo.rotor.RotorMath.plan(
-            track, limits, toleranceDeg = u.rotorMaxError.toDouble())
-        rotorPlanKey = key
-        rotorPlan = p
-        if (p != null) {
-            rotorCmd = fr.f4ioz.satcombo.rotor.RotorPos(
-                fr.f4ioz.satcombo.rotor.RotorMath.clampAz(p.startAzDeg, limits), rotorCmd.elDeg)
-            rotorWasFlipped = false
-        }
-        // Does this pass cross the stop? Followed directly, would the mast miss it beyond the
-        // dead zone somewhere? If not, nothing to think about: it follows. If so, the whole
-        // path is planned (other side of the zenith, a turn only when worth it).
-        var traverse = false
-        // Where the antennas point along the way, as seen on the sky (the compass's white path).
-        val suivi = ArrayList<Pair<Double, Double>>()
-        if (p != null) {
-            var pres = fr.f4ioz.satcombo.rotor.RotorMath.clampAz(p.startAzDeg, limits)
-            for ((_, az, el) in rotorTrackTemps) {
-                val a = fr.f4ioz.satcombo.rotor.RotorMath.follow(az, el, fr.f4ioz.satcombo.rotor.RotorPos(pres, el), limits)
-                if (a.errorDeg > u.rotorMaxError + 1e-9) { traverse = true; break }
-                pres = a.azDeg
-                suivi += versCiel(a.azDeg, a.elDeg)
-            }
-        }
-        rotorChemin = emptyList(); rotorCheminARefaire = false
-        if (traverse) planifieChemin(u, limits, depuis = null)
-        val derouleAt = fr.f4ioz.satcombo.rotor.RotorChemin.tours(rotorChemin).firstOrNull()?.first
-        val tourS = fr.f4ioz.satcombo.rotor.RotorChemin.tours(rotorChemin).firstOrNull()?.let { ((it.last - it.first) / 1000).toInt() }
-            ?: ((fr.f4ioz.satcombo.rotor.RotorDeroule.dureeMs(360.0, settings.rotorVitesse.toDouble()) -
-                fr.f4ioz.satcombo.rotor.RotorDeroule.MARGE_MS) / 1000).toInt()
-        // No crossing: the mast follows the pass itself, the last pass's path must not linger.
-        _ui.value = _ui.value.rot { copy(rotorCoverage = p?.coverage, rotorDerouleAt = derouleAt, rotorTourS = tourS,
-            rotorChemin = if (traverse) this.rotorChemin else emptyList(),
-            rotorTrajet = if (traverse) this.rotorChemin else suivi) }
-        return p
-    }
-
-    /**
-     * Mast tracking loop: one command per second, no more. A rotor gains
-     * nothing from faster commands — it turns at ~6°/s and every start wears a
-     * relay.
-     */
-    private fun startRotorLoop() {
-        rotorLoopJob?.cancel()
-        rotorLoopJob = viewModelScope.launch {
-            while (_ui.value.rotorConnected) {
-                runCatching { rotorTick() }
-                delay(1000)
-            }
-        }
-    }
-
-    private suspend fun rotorTick() {
-        val d = rotorDriver ?: return
-        // The simulated mast only moves when advanced.
-        rotorSimLink?.advance(1000)
-        val u = _ui.value
-        val limits = rotorLimits(u)
-        // Ask twice if the first query got no answer: an emulator busy driving
-        // two motors skips a reply now and then; asking again 300 ms later
-        // costs two bytes and recovers nearly all of those gaps.
-        var brut = runCatching { d.readPosition() }.getOrNull()
-        if (brut == null) {
-            delay(300)
-            brut = runCatching { d.readPosition() }.getOrNull()
-        }
-        // The controller answers in its own origin; from here on it is true
-        // azimuth until the next outgoing frame.
-        val frais = brut?.let {
-            fr.f4ioz.satcombo.rotor.RotorPos(
-                fr.f4ioz.satcombo.rotor.RotorMath.trueAz(it.azDeg, limits, u.rotorAzFromStop),
-                it.elDeg)
-        }
-        val maintenant = System.currentTimeMillis()
-        // The rotator's speed, measured while it turns (simulated mast excepted): the time a turn takes.
-        val avantLu = rotorLu
-        if (frais != null && avantLu != null && !u.rotorSim)
-            fr.f4ioz.satcombo.rotor.RotorDeroule.mesureVitesse(avantLu.azDeg, rotorLuMs, frais.azDeg, maintenant,
-                settings.rotorVitesse.toDouble())?.let { settings.rotorVitesse = it.toFloat() }
-        if (frais != null) { rotorLu = frais; rotorLuMs = maintenant }
-        // Whether the mast moves: by more than the reading's own wander.
-        if (frais != null) {
-            val r = rotorBougeRef
-            if (r == null || kotlin.math.abs(frais.azDeg - r.azDeg) >= fr.f4ioz.satcombo.rotor.RotorPas.BOUGE_DEG ||
-                kotlin.math.abs(frais.elDeg - r.elDeg) >= fr.f4ioz.satcombo.rotor.RotorPas.BOUGE_DEG) {
-                rotorBougeRef = frais; rotorBougeMs = maintenant
-            }
-        }
-        // If it still stays silent, hold its last answer a few seconds rather
-        // than make the compass flicker between mast and satellite. See
-        // RotorTenue: holding serves the display, never the command.
-        val lu = fr.f4ioz.satcombo.rotor.RotorTenue.montrer(
-            frais, rotorLu, rotorLuMs, maintenant)
-        if (frais != null) rotorAt = frais
-        // A connected mast holds the antenna: the compass shows it, not the
-        // phone. Only the aim source changes — same colours, trace, error.
-        val visee = lu?.let { fr.f4ioz.satcombo.rotor.RotorMath.antennaAim(it) }
-        // The fresh state, not `u`: reading the mast took a few hundred ms over the
-        // serial line, and writing back the snapshot taken before it undid whatever
-        // changed meanwhile — a recording stopped by hand stayed "recording" (11/10).
-        _ui.value = _ui.value.rot { copy(rotorActualAz = lu?.azDeg, rotorActualEl = lu?.elDeg,
-            rotorAimAz = visee?.azDeg,
-            rotorAimEl = if (u.rotorAzOnly) null else visee?.elDeg,
-            rotorLastSent = rotorSerial?.lastSent ?: u.rotorLastSent,
-            rotorLastReply = rotorSerial?.lastReply ?: u.rotorLastReply) }
-        if (!u.rotorEnabled) return
-        val pos = u.livePosition
-        if (pos == null) {
-            _ui.value = _ui.value.rot { copy(rotorTargetAz = null, rotorTargetEl = null,
-                rotorStatus = t("rotor_no_target")) }
-            return
-        }
-        val plan = ensureRotorPlan(u, limits)
-        // Below minimum elevation the satellite is behind the hill: park
-        // rather than follow a point we cannot hear…
-        val garage = pos.elevationDeg < u.rotorMinEl.toDouble()
-        // …except in the last minutes before AOS: better wait where it will
-        // rise than park and leave again. The waiting point is the start of
-        // the mast turn already chosen for this pass, end stop included, so
-        // nothing is left to unwind at AOS.
-        val avance = garage && plan != null &&
-            fr.f4ioz.satcombo.rotor.RotorMath.prePositionDue(
-                System.currentTimeMillis(), trackedPassAos.takeIf { it > 0L }, u.rotorPreAos)
-        if (avance != u.rotorPrePositioning) {
-            _ui.value = _ui.value.rot { copy(rotorPrePositioning = avance) }
-        }
-        val aim = if (avance && rotorChemin.isNotEmpty())
-            // Waiting where the planned path starts.
-            fr.f4ioz.satcombo.rotor.RotorMath.park(rotorChemin.first().azDeg,
-                maxOf(0.0, u.rotorMinEl.toDouble()), limits)
-        else if (avance)
-            fr.f4ioz.satcombo.rotor.RotorMath.park(
-                fr.f4ioz.satcombo.rotor.RotorMath.clampAz(plan!!.startAzDeg, limits),
-                maxOf(0.0, u.rotorMinEl.toDouble()), limits)
-        else if (garage)
-            fr.f4ioz.satcombo.rotor.RotorMath.park(
-                u.rotorParkAz.toDouble(), u.rotorParkEl.toDouble(), limits)
-        else if (rotorChemin.isNotEmpty()) viseeSurChemin(u, limits)
-        else viseeAvecDeroule(u, pos, limits)
-        if (garage && (_ui.value.rotorDeroule.isNotBlank() || _ui.value.rotorDerouleAlerte))
-            _ui.value = _ui.value.rot { copy(rotorDeroule = "", rotorDerouleAlerte = false) }
-        if (aim == null) {
-            // An impossible park stays impossible: do not clamp a position the
-            // operator chose, tell him.
-            _ui.value = _ui.value.rot { copy(rotorOutOfRange = true,
-                rotorTargetAz = null, rotorTargetEl = null) }
-            return
-        }
-        // Beyond the end stop the mast does not unwind: it waits as close as
-        // possible and the error is shown in degrees. A mast pointing elsewhere
-        // silently is worse than one that did not move.
-        _ui.value = _ui.value.rot { copy(rotorOutOfRange = false, rotorErrorDeg = aim.errorDeg,
-            rotorTargetAz = aim.azDeg, rotorTargetEl = aim.elDeg, rotorFlipped = aim.flipped) }
-        if (!garage) rotorCmd = fr.f4ioz.satcombo.rotor.RotorPos(aim.azDeg, aim.elDeg)
-        _ui.value = _ui.value.rot { copy(rotorCmdAz = aim.azDeg) }
-        // How fast the aim moves (°/s, smoothed): the mast goes that way ahead of it.
-        val ici = System.currentTimeMillis()
-        val avant = rotorVisePrec
-        val dt = (ici - rotorVisePrecMs) / 1000.0
-        if (avant != null && dt in 0.3..5.0) {
-            rotorVitesseAz = 0.7 * rotorVitesseAz + 0.3 * (aim.azDeg - avant.azDeg) / dt
-            rotorVitesseEl = 0.7 * rotorVitesseEl + 0.3 * (aim.elDeg - avant.elDeg) / dt
-        } else if (avant == null || dt > 5.0) { rotorVitesseAz = 0.0; rotorVitesseEl = 0.0 }
-        rotorVisePrec = fr.f4ioz.satcombo.rotor.RotorPos(aim.azDeg, aim.elDeg)
-        rotorVisePrecMs = ici
-        // Parked: no lead (the aim stands still anyway).
-        val c = fr.f4ioz.satcombo.rotor.RotorPas.commande(
-            fr.f4ioz.satcombo.rotor.RotorPos(aim.azDeg, aim.elDeg), rotorAt,
-            if (garage && !avance) 0.0 else rotorVitesseAz, if (garage && !avance) 0.0 else rotorVitesseEl,
-            u.rotorDeadband.toDouble(), limits, ici, rotorDernierEnvoiMs, u.rotorAzOnly,
-            derniere = rotorDerniereCmd,
-            matImmobileMs = ici - maxOf(rotorBougeMs, rotorDernierEnvoiMs)) ?: return
-        rotorWasFlipped = aim.flipped
-        val cmd = fr.f4ioz.satcombo.rotor.RotorMath.commandAz(c.azDeg, limits, u.rotorAzFromStop)
-        // `lu` may be a held position three seconds old — not a reading.
-        // Without a real read, assume the mast went where it was told.
-        if (d.moveTo(cmd, c.elDeg)) {
-            rotorDernierEnvoiMs = ici
-            rotorDerniereCmd = c
-            if (frais == null) rotorAt = c
-        }
-    }
-
-    /** The aim at the last tick, its speed, and when the last command left (see RotorPas). */
-    private var rotorVisePrec: fr.f4ioz.satcombo.rotor.RotorPos? = null
-    private var rotorVisePrecMs = 0L
-    private var rotorVitesseAz = 0.0
-    private var rotorVitesseEl = 0.0
-    private var rotorDernierEnvoiMs = 0L
-    /** Where the mast was last seen moving from, and when (see RotorPas: a command not taken). */
-    private var rotorBougeRef: fr.f4ioz.satcombo.rotor.RotorPos? = null
-    private var rotorBougeMs = 0L
-    /** The last command the controller holds (true azimuth), null when unknown: see RotorPas. */
-    private var rotorDerniereCmd: fr.f4ioz.satcombo.rotor.RotorPos? = null
-
-    /**
-     * Following the satellite, and going round to the other side of the end
-     * stop when it is worth it (see [fr.f4ioz.satcombo.rotor.RotorDeroule]):
-     * beyond the dead zone, or before an SSTV picture due beyond it; never
-     * while transmitting, never into a picture. The side chosen is carried by
-     * [rotorCmd]: returning the other side's aim makes the turn.
-     */
-    private fun viseeAvecDeroule(
-        u: UiState, pos: SatPosition, limits: fr.f4ioz.satcombo.rotor.RotorMath.Limits
-    ): fr.f4ioz.satcombo.rotor.RotorMath.Aim {
-        val maintenant = System.currentTimeMillis()
-        val v = fr.f4ioz.satcombo.rotor.RotorDeroule.vise(pos.azimuthDeg, pos.elevationDeg, rotorCmd, limits, rotorWasFlipped,
-            u.rotorMaxError.toDouble(), maintenant, imagesSstv(u, maintenant), _ui.value.catUi.enEmission || aprsEnEmission,
-            settings.rotorVitesse.toDouble()) { positionPrevue(it) }
-        val heure = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault())
-        fun h(ms: Long?) = heure.format(java.util.Date(ms ?: maintenant))
-        val m = when (v.etat) {
-            fr.f4ioz.satcombo.rotor.RotorDeroule.Etat.SUIT -> ""
-            fr.f4ioz.satcombo.rotor.RotorDeroule.Etat.TOUR -> tf("rotor_deroule_tour", v.dureeS)
-            fr.f4ioz.satcombo.rotor.RotorDeroule.Etat.TOUR_ANTICIPE -> tf("rotor_deroule_anticipe", h(v.imageMs), v.dureeS)
-            fr.f4ioz.satcombo.rotor.RotorDeroule.Etat.ATTEND_EMISSION -> t("rotor_deroule_emission")
-            fr.f4ioz.satcombo.rotor.RotorDeroule.Etat.ATTEND_IMAGE -> tf("rotor_deroule_image", h(v.jusquaMs))
-            fr.f4ioz.satcombo.rotor.RotorDeroule.Etat.ATTEND_IMAGE_PROCHE -> tf("rotor_deroule_image_proche", h(v.jusquaMs))
-        }
-        val alerte = v.etat == fr.f4ioz.satcombo.rotor.RotorDeroule.Etat.ATTEND_EMISSION
-        if (_ui.value.rotorDeroule != m || _ui.value.rotorDerouleAlerte != alerte)
-            _ui.value = _ui.value.rot { copy(rotorDeroule = m, rotorDerouleAlerte = alerte) }
-        return v.aim
-    }
-
-    /**
-     * Plans the mast's path over the rest of the pass, from now (or the whole pass before
-     * AOS), with the expected SSTV pictures; from [depuis] (the mast's unwrapped azimuth)
-     * when redone during the pass. Shown on the dial.
-     */
-    /** A mast command (unwrapped azimuth, elevation up to 180) as the sky point it aims at. */
-    private fun versCiel(azDeg: Double, elDeg: Double): Pair<Double, Double> =
-        if (elDeg > 90.0) fr.f4ioz.satcombo.rotor.RotorMath.norm360(azDeg + 180.0) to 180.0 - elDeg
-        else fr.f4ioz.satcombo.rotor.RotorMath.norm360(azDeg) to elDeg
-
-    private fun planifieChemin(u: UiState, limits: fr.f4ioz.satcombo.rotor.RotorMath.Limits, depuis: Double?) {
-        val maintenant = System.currentTimeMillis()
-        val trace = rotorTrackTemps.filter { depuis == null || it.first >= maintenant - 5_000L }
-        val images = imagesSstv(u, maintenant)
-        rotorCheminImages = images
-        rotorChemin = fr.f4ioz.satcombo.rotor.RotorChemin.plan(trace, limits, settings.rotorVitesse.toDouble(),
-            u.rotorMaxError.toDouble(), images, depuisAz = depuis, imposeDepart = depuis != null)
-        val chemin = rotorChemin
-        val pire = chemin.maxByOrNull { if (it.tour) -1.0 else it.erreurDeg }
-        val premierTour = fr.f4ioz.satcombo.rotor.RotorChemin.tours(chemin).firstOrNull()?.first
-        _ui.value = _ui.value.rot { copy(
-            rotorChemin = chemin.map { p -> versCiel(p.azDeg, p.elDeg) },
-            rotorTrajet = chemin.map { p -> versCiel(p.azDeg, p.elDeg) },
-            rotorEcartMax = pire?.erreurDeg, rotorEcartMaxAt = pire?.tMs,
-            rotorDerouleAt = premierTour) }
-    }
-
-    /**
-     * Following the planned path: the command a little ahead (the rotator lags). A turn
-     * is held while transmitting or while a picture comes in — the mast stays — and the
-     * path is planned again from where it is once that is over. A new picture received
-     * changes the pictures to expect: planned again too.
-     */
-    private fun viseeSurChemin(u: UiState, limits: fr.f4ioz.satcombo.rotor.RotorMath.Limits): fr.f4ioz.satcombo.rotor.RotorMath.Aim {
-        val maintenant = System.currentTimeMillis()
-        val images = imagesSstv(u, maintenant)
-        val imageEnCours = fr.f4ioz.satcombo.sstv.SstvHub.state.value.decoding
-        val emission = _ui.value.catUi.enEmission || aprsEnEmission
-        val pt = fr.f4ioz.satcombo.rotor.RotorChemin.a(rotorChemin, maintenant + 2_000L)
-            ?: return fr.f4ioz.satcombo.rotor.RotorMath.Aim(rotorCmd.azDeg, rotorCmd.elDeg, rotorCmd.elDeg > 90.0)
-        fun dit(m: String, alerte: Boolean = false) {
-            if (_ui.value.rotorDeroule != m || _ui.value.rotorDerouleAlerte != alerte)
-                _ui.value = _ui.value.rot { copy(rotorDeroule = m, rotorDerouleAlerte = alerte) }
-        }
-        if (pt.tour && (emission || imageEnCours)) {
-            rotorCheminARefaire = true
-            if (emission) dit(t("rotor_deroule_emission"), alerte = true)
-            else dit(tf("rotor_deroule_image", java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault())
-                .format(java.util.Date(images.firstOrNull { maintenant in it }?.last ?: maintenant))))
-            return fr.f4ioz.satcombo.rotor.RotorMath.Aim(rotorCmd.azDeg, rotorCmd.elDeg, rotorCmd.elDeg > 90.0)
-        }
-        // Planned again from the mast: after a held turn, or when the pictures to expect changed.
-        val imagesChangees = images.map { it.first / 10_000 } != rotorCheminImages.map { it.first / 10_000 }
-        if ((rotorCheminARefaire && !emission && !imageEnCours) || (imagesChangees && !pt.tour)) {
-            rotorCheminARefaire = false
-            planifieChemin(u, limits, depuis = rotorCmd.azDeg)
-            val p2 = fr.f4ioz.satcombo.rotor.RotorChemin.a(rotorChemin, maintenant + 2_000L)
-            if (p2 != null) return fr.f4ioz.satcombo.rotor.RotorMath.Aim(p2.azDeg, p2.elDeg.coerceIn(0.0, limits.elMaxDeg), p2.elDeg > 90.0, p2.erreurDeg)
-        }
-        val tour = fr.f4ioz.satcombo.rotor.RotorChemin.tours(rotorChemin).firstOrNull { maintenant + 2_000L in it }
-        dit(if (tour != null) tf("rotor_deroule_tour", ((tour.last - tour.first) / 1000).coerceAtLeast(1)) else "")
-        return fr.f4ioz.satcombo.rotor.RotorMath.Aim(pt.azDeg, pt.elDeg.coerceIn(0.0, limits.elMaxDeg), pt.elDeg > 90.0, pt.erreurDeg)
-    }
-
-    /** Where the satellite will be at [tMs] on the tracked pass (az, el), null outside it. */
-    private fun positionPrevue(tMs: Long): Pair<Double, Double>? {
-        val l = rotorTrackTemps
-        if (l.size < 2 || tMs < l.first().first || tMs > l.last().first) return null
-        val i = l.indexOfFirst { it.first >= tMs }.coerceAtLeast(1)
-        val a = l[i - 1]; val b = l[i]
-        val f = (tMs - a.first).toDouble() / (b.first - a.first).coerceAtLeast(1)
-        var daz = b.second - a.second
-        if (daz > 180) daz -= 360.0; if (daz < -180) daz += 360.0
-        return fr.f4ioz.satcombo.rotor.RotorMath.norm360(a.second + daz * f) to (a.third + (b.third - a.third) * f)
-    }
-
-    /**
-     * The SSTV pictures that matter to the mast: the one being received now
-     * (from the decoder), the ones of the last half hour on this satellite
-     * (from the gallery, read every 20 s), and those to come at their pace.
-     */
-    private fun imagesSstv(u: UiState, maintenant: Long): List<LongRange> {
-        val app = getApplication<android.app.Application>()
-        if (maintenant - rotorImagesMs > 20_000L) {
-            rotorImagesMs = maintenant
-            val sat = u.selected?.name.orEmpty()
-            rotorImages = runCatching {
-                fr.f4ioz.satcombo.sstv.SstvHub.shots(app).map { it.second }
-                    .filter { it.timeMs > maintenant - 30 * 60_000L && (sat.isBlank() || fr.f4ioz.satcombo.domain.JournalPassage.memeSatellite(it.satName, sat)) }
-                    .mapNotNull { s -> fr.f4ioz.satcombo.sstv.SstvMode.byName(s.mode)?.let { (s.timeMs - (it.frameSeconds * 1000).toLong())..s.timeMs } }
-            }.getOrDefault(emptyList())
-        }
-        val st = fr.f4ioz.satcombo.sstv.SstvHub.state.value
-        val enCours = if (st.decoding) st.modeName?.let { fr.f4ioz.satcombo.sstv.SstvMode.byName(it) }?.let { m ->
-            val dur = (m.frameSeconds * 1000).toLong()
-            val debut = maintenant - (st.progress * dur).toLong()
-            debut..(debut + dur)
-        } else null
-        val recues = (rotorImages + listOfNotNull(enCours)).sortedBy { it.first }
-        val los = rotorTrackTemps.lastOrNull()?.first ?: (maintenant + 15 * 60_000L)
-        return listOfNotNull(enCours) + D_imagesAVenir(recues, maintenant, los)
-    }
-
-    private fun D_imagesAVenir(recues: List<LongRange>, depuis: Long, jusqua: Long) =
-        fr.f4ioz.satcombo.rotor.RotorDeroule.imagesAVenir(recues, depuis, jusqua)
 
     // ===================== live satellite position =====================
 
