@@ -4662,6 +4662,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 } else aprs.envoi.value = t("aprs_tx_echec_$r")
             } finally {
                 aprsEnEmission = false
+                derniereEmissionMs = System.currentTimeMillis()
             }
         }
     }
@@ -8242,6 +8243,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 }
                 val allume = if (tx == null) _ui.value.catUi.enEmission
                              else confirmationsTx >= 2
+                if (allume) derniereEmissionMs = System.currentTimeMillis()
                 if (allume != _ui.value.catUi.enEmission) {
                     _ui.value = _ui.value.copy(
                         catUi = _ui.value.catUi.copy(enEmission = allume))
@@ -9305,8 +9307,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             locator = runCatching { myLocator() }.getOrDefault(""),
             profil = runCatching { profilActif().nom }.getOrDefault(""),
             // Fresh only: a reading older than 3 s says nothing of now.
-            smetre = u.catSMetre?.takeIf { u.catConnected && System.currentTimeMillis() - u.catSMetreMs <= 3_000L })
+            smetre = u.catSMetre?.takeIf { u.catConnected && System.currentTimeMillis() - u.catSMetreMs <= 3_000L },
+            // Also a press shorter than the journal's second, seen by the TX watch in between.
+            emission = u.catUi.enEmission || aprsEnEmission || System.currentTimeMillis() - derniereEmissionMs <= 1_200L)
     }
+    /** The last moment the station was seen transmitting (rig's PTT, an APRS frame sent). */
+    @Volatile private var derniereEmissionMs = 0L
 
     /** The journal page is open. */
     val journalOuvert = kotlinx.coroutines.flow.MutableStateFlow(false)

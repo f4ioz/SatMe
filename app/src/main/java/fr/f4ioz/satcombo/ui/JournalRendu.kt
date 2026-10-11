@@ -348,7 +348,9 @@ object JournalRendu {
         /** Shown: the S-meter, the RX frequency (rest, see [frequences]), the station's label on the map. */
         val affSmetre: Boolean = true, val affFreq: Boolean = true, val etiquetteQth: String? = null,
         /** The RX frequency at rest, moment by moment (where the rig was in the passband). */
-        val frequences: List<Pair<Long, Long>> = emptyList()
+        val frequences: List<Pair<Long, Long>> = emptyList(),
+        /** "TX" while the station transmitted. */
+        val affTx: Boolean = true
     ) {
         val cadre = cadreVu ?: JournalPassage.cadre(e.points.map { it.az to it.el })
         var vueCarte = JournalPassage.VueCarte()
@@ -402,6 +404,14 @@ object JournalRendu {
         val titre = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE; textSize = 20f * dp; isFakeBoldText = true }
         val gris = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(160, 175, 195); textSize = 13f * dp }
         c.drawText(e.satName, 14f * dp, haut + 30f * dp, titre)
+        // The station transmitting at that moment: a red "TX" at the right of the title.
+        if (sc.affTx && JournalPassage.enEmissionA(e, instant)) {
+            val tx = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE; textSize = 15f * dp; isFakeBoldText = true; textAlign = Paint.Align.CENTER }
+            val x1 = w - 14f * dp; val x0 = x1 - 40f * dp
+            c.drawRoundRect(android.graphics.RectF(x0, haut + 13f * dp, x1, haut + 35f * dp), 4f * dp, 4f * dp,
+                Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(229, 57, 53) })
+            c.drawText("TX", (x0 + x1) / 2, haut + 30f * dp, tx)
+        }
         // Always UTC in what is shared: the time radio amateurs compare.
         c.drawText(fmt.format(Date(instant)) + " UTC", 14f * dp, haut + 50f * dp, gris)
         JournalPassage.pointA(e, instant)?.let { p ->

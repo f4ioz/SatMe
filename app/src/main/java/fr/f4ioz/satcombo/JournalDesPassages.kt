@@ -321,6 +321,13 @@ class JournalDesPassages(
     fun setAffFreq(on: Boolean) { settings.journalAffFreq = on }
     fun affLocator(): Boolean = settings.journalAffLocator
     fun setAffLocator(on: Boolean) { settings.journalAffLocator = on }
+    fun affTx(): Boolean = settings.journalAffTx
+    fun setAffTx(on: Boolean) { settings.journalAffTx = on }
+    /** Around a contact with my transmitting about then: seconds before the first word, after the last. */
+    fun avantTxS(): Int = settings.journalAvantTxS
+    fun setAvantTxS(s: Int) { settings.journalAvantTxS = s }
+    fun apresTxS(): Int = settings.journalApresTxS
+    fun setApresTxS(s: Int) { settings.journalApresTxS = s }
 
     /**
      * Where the rig was in the passband, second by second: the RX frequency
