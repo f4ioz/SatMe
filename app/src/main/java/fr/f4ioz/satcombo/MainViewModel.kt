@@ -5629,9 +5629,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      * does not answer `C2` is closed at once, so the rig is never left held.
      */
     private fun onSerialAttached(dev: android.hardware.usb.UsbDevice?) {
-        val d = runCatching { fr.f4ioz.satcombo.rotor.Gs232Rotor(getApplication()) }.getOrNull()
-            ?: return
-        if (!d.recognises(dev)) return
+        if (!fr.f4ioz.satcombo.usb.PortsSerieAndroid.estSerie(dev)) return
         refreshRotorDevices()
         refreshCatDevices()
         // The rig's cable plugged in: CAT connected by itself, a moment after the rotor
@@ -9995,13 +9993,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun refreshRotorDevices() {
         rotorGuard("rotor_devices") {
             _ui.value = _ui.value.rot { copy(
-                rotorDevices = fr.f4ioz.satcombo.rotor.Gs232Rotor(getApplication()).listDevices()) }
+                rotorDevices = fr.f4ioz.satcombo.rotor.Gs232Rotor(getApplication<android.app.Application>()).listDevices()) }
         }
     }
 
     fun rotorRequestPermissions() {
         rotorGuard("rotor_perm") {
-            fr.f4ioz.satcombo.rotor.Gs232Rotor(getApplication()).requestPermissions()
+            fr.f4ioz.satcombo.rotor.Gs232Rotor(getApplication<android.app.Application>()).requestPermissions()
             refreshRotorDevices()
         }
     }
@@ -10018,7 +10016,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             val sim = fr.f4ioz.satcombo.rotor.Gs232Simulator(
                 azMaxDeg = u.rotorMaxAz.toDouble(),
                 elMaxDeg = if (u.rotorFlip) 180.0 else u.rotorMaxEl.toDouble())
-            val d = fr.f4ioz.satcombo.rotor.Gs232Rotor(getApplication())
+            val d = fr.f4ioz.satcombo.rotor.Gs232Rotor(getApplication<android.app.Application>())
             d.pacingMs = 0L
             d.attach(sim)
             rotorSimLink = sim
@@ -10040,7 +10038,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             if (ok) { rotorWasFlipped = false; startRotorLoop() }
             return
         }
-        val d = fr.f4ioz.satcombo.rotor.Gs232Rotor(getApplication())
+        val d = fr.f4ioz.satcombo.rotor.Gs232Rotor(getApplication<android.app.Application>())
         val refs = d.availablePorts()
         if (refs.isEmpty()) {
             _ui.value = _ui.value.rot { copy(rotorConnected = false, rotorStatus = t("rotor_none"),

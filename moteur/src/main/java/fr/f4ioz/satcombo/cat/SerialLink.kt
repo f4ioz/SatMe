@@ -8,7 +8,6 @@
  */
 package fr.f4ioz.satcombo.cat
 
-import com.hoho.android.usbserial.driver.UsbSerialPort
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 
@@ -27,17 +26,6 @@ interface SerialLink {
     fun read(buf: ByteArray, timeoutMs: Int = 300): Int
 
     fun close()
-}
-
-/** The real serial line, over the USB cable. */
-class UsbSerialLink(private val port: UsbSerialPort) : SerialLink {
-    override fun write(bytes: ByteArray, timeoutMs: Int): Boolean =
-        runCatching { port.write(bytes, timeoutMs) }.isSuccess
-
-    override fun read(buf: ByteArray, timeoutMs: Int): Int =
-        runCatching { port.read(buf, timeoutMs) }.getOrDefault(0)
-
-    override fun close() { runCatching { port.close() } }
 }
 
 /**

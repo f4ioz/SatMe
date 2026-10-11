@@ -8,12 +8,10 @@
  */
 package fr.f4ioz.satcombo.cat
 
-import android.content.Context
-import android.hardware.usb.UsbManager
-import fr.f4ioz.satcombo.usb.UsbPermission
-import com.hoho.android.usbserial.driver.UsbSerialPort
-import com.hoho.android.usbserial.driver.UsbSerialProber
 import fr.f4ioz.satcombo.i18n.t
+import fr.f4ioz.satcombo.plateforme.Lignes
+import fr.f4ioz.satcombo.plateforme.Ouverture
+import fr.f4ioz.satcombo.plateforme.PortsSerie
 import fr.f4ioz.satcombo.i18n.tf
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.withLock
@@ -28,7 +26,7 @@ import kotlinx.coroutines.withContext
  *
  * [open] plugs in the real cable, [attach] an [Ic9700Sim] for bench tests.
  */
-class CivController(private val context: Context? = null) : RigDriver {
+class CivController(private val ports: PortsSerie? = null) : RigDriver {
 
     /** Which Icom satellite rig: changes the satellite-mode command and what may be sent. */
     var modele: ModeleIcom = ModeleIcom.IC9700
@@ -57,7 +55,11 @@ class CivController(private val context: Context? = null) : RigDriver {
     override val isOpen: Boolean get() = link != null
 
     companion object {
-        private const val ACTION_USB_PERMISSION = UsbPermission.ACTION_CAT
+        /**
+         * Many CDC bridges (Icom's included) stay silent until the host
+         * raises DTR/RTS: the port opens, writes succeed, nothing comes back.
+         */
+        private val LIGNES = Lignes.LEVEES
     }
 
     /** Plugs in any serial line — a real cable or a simulated rig. */
@@ -80,38 +82,20 @@ class CivController(private val context: Context? = null) : RigDriver {
      * All visible serial ports, device by device, flattened.
      * An IC-9700 alone gives two entries, not one.
      */
-    fun availablePorts(): List<PortRef> {
-        val ctx = context ?: return emptyList()
-        val um = ctx.getSystemService(Context.USB_SERVICE) as UsbManager
-        val out = ArrayList<PortRef>()
-        UsbSerialProber.getDefaultProber().findAllDrivers(um).forEachIndexed { d, drv ->
-            val n = drv.ports.size.coerceAtLeast(1)
-            for (i in 0 until n) {
-                out.add(PortRef(d, i, CatScan.etiquette(
-                    drv.device.productName, drv.device.deviceName, i, n)))
-            }
-        }
-        return out
-    }
+    fun availablePorts(): List<PortRef> =
+        ports?.liste()?.map { PortRef(it.appareil, it.port, it.libelle) } ?: emptyList()
 
     /** Port [index]'s USB key and vendor id, or null. */
-    fun identite(index: Int): Pair<String, Int>? {
-        val ctx = context ?: return null
-        val um = ctx.getSystemService(Context.USB_SERVICE) as UsbManager
-        val ref = availablePorts().getOrNull(index) ?: return null
-        val dev = UsbSerialProber.getDefaultProber().findAllDrivers(um).getOrNull(ref.deviceIndex)?.device ?: return null
-        return cleDe(dev) to dev.vendorId
-    }
+    fun identite(index: Int): Pair<String, Int>? =
+        ports?.liste()?.getOrNull(index)?.let { it.cle to it.vendorId }
 
     /** Port labels, in selectable order. */
     fun availableDeviceNames(): List<String> = availablePorts().map { it.label }
 
     /** Request permission for the first recognized device (async; user prompt). */
     fun requestPermission() {
-        val ctx = context ?: return
-        val um = ctx.getSystemService(Context.USB_SERVICE) as UsbManager
-        val driver = UsbSerialProber.getDefaultProber().findAllDrivers(um).firstOrNull() ?: return
-        UsbPermission.ensure(ctx, um, driver.device, ACTION_USB_PERMISSION)
+        val pp = ports ?: return
+        pp.liste().firstOrNull()?.let { pp.demande(it) }
     }
 
     /**
@@ -121,15 +105,11 @@ class CivController(private val context: Context? = null) : RigDriver {
      * permission wasn't granted yet; only a second attempt worked.
      */
     suspend fun ensurePermission(index: Int = 0): Boolean {
-        val ctx = context ?: return false
-        val um = ctx.getSystemService(Context.USB_SERVICE) as UsbManager
+        val pp = ports ?: return false
         // Index is a port, but permission is per device: both IC-9700 ports
         // share one grant and one dialog.
-        val ref = availablePorts().getOrNull(index) ?: return false
-        val driver = UsbSerialProber.getDefaultProber().findAllDrivers(um)
-            .getOrNull(ref.deviceIndex) ?: return false
-        if (um.hasPermission(driver.device)) return true
-        return UsbPermission.await(ctx, um, driver.device, ACTION_USB_PERMISSION)
+        val p = pp.liste().getOrNull(index) ?: return false
+        return pp.autorise(p) || pp.demandeEtAttends(p)
     }
 
     /** Open the first recognized device at the given baud rate. */
@@ -141,39 +121,14 @@ class CivController(private val context: Context? = null) : RigDriver {
      * The first one found isn't necessarily the rig: an SDR dongle also shows
      * up as a serial adapter, and depending on plug order we opened it.
      */
-    suspend fun open(index: Int, baud: Int): Boolean = withContext(Dispatchers.IO) {
-        val ctx = context ?: return@withContext false
+    suspend fun open(index: Int, baud: Int): Boolean {
+        val pp = ports ?: return false
         // Never two openings of one port: the first, left open, keeps its claim on the USB device.
         close()
-        val um = ctx.getSystemService(Context.USB_SERVICE) as UsbManager
-        val drivers = UsbSerialProber.getDefaultProber().findAllDrivers(um)
-        val refs = availablePorts()
-        val ref = refs.getOrNull(index) ?: refs.firstOrNull()
-        if (ref == null) { lastError = t("cat_err_no_device"); return@withContext false }
-        val driver = drivers.getOrNull(ref.deviceIndex)
-        if (driver == null) { lastError = t("cat_err_no_device"); return@withContext false }
-        if (!um.hasPermission(driver.device)) {
-            lastError = t("cat_err_denied"); return@withContext false
-        }
-        val connection = um.openDevice(driver.device)
-        if (connection == null) { lastError = t("cat_err_open_device"); return@withContext false }
-        val p = driver.ports.getOrNull(ref.portIndex)
-        if (p == null) { lastError = t("cat_err_no_port"); return@withContext false }
-        runCatching {
-            p.open(connection)
-            p.setParameters(baud, 8, UsbSerialPort.STOPBITS_1, UsbSerialPort.PARITY_NONE)
-            // Many CDC bridges (Icom's included) stay silent until the host
-            // raises DTR/RTS: the port opens, writes succeed, nothing comes back.
-            runCatching { p.setDTR(true); p.setRTS(true) }
-            link = UsbSerialLink(p)
-            lastError = ""
-            ouvertMs = System.currentTimeMillis(); derniereReponseMs = ouvertMs
-            true
-        }.getOrElse {
-            lastError = tf("cat_err_open_port", it.message ?: "?")
-            runCatching { p.close() }
-            false
-        }
+        val liste = pp.liste()
+        val p = liste.getOrNull(index) ?: liste.firstOrNull()
+        if (p == null) { lastError = t("cat_err_no_device"); return false }
+        return branche(pp.ouvre(p, baud, LIGNES))
     }
 
     /**
@@ -182,43 +137,32 @@ class CivController(private val context: Context? = null) : RigDriver {
      * For a rig paired with an FT-817 on a hub: opening "port N" could land
      * on the FT-817's cable; the key names the Icom's own adapter.
      */
-    suspend fun openParCle(cle: String?, baud: Int, port: Int = 0): Boolean = withContext(Dispatchers.IO) {
-        val ctx = context ?: return@withContext false
+    suspend fun openParCle(cle: String?, baud: Int, port: Int = 0): Boolean {
+        val pp = ports ?: return false
         close()
-        val um = ctx.getSystemService(Context.USB_SERVICE) as UsbManager
-        val drivers = UsbSerialProber.getDefaultProber().findAllDrivers(um)
-            .filter { um.hasPermission(it.device) }
-        val cles = drivers.map { cleDe(it.device) }
-        val choisie = IdentiteUsb.resout(cle, cles)
-        if (choisie == null) { lastError = t("cat_err_no_device"); return@withContext false }
-        val driver = drivers.getOrNull(cles.indexOf(choisie)) ?: return@withContext false
-        val connection = um.openDevice(driver.device)
-        if (connection == null) { lastError = t("cat_err_open_device"); return@withContext false }
-        val p = driver.ports.getOrNull(port)
-        if (p == null) { lastError = t("cat_err_no_port"); connection.close(); return@withContext false }
-        runCatching {
-            p.open(connection)
-            p.setParameters(baud, 8, UsbSerialPort.STOPBITS_1, UsbSerialPort.PARITY_NONE)
-            runCatching { p.setDTR(true); p.setRTS(true) }
-            link = UsbSerialLink(p)
-            lastError = ""
-            ouvertMs = System.currentTimeMillis(); derniereReponseMs = ouvertMs
-            true
-        }.getOrElse {
-            lastError = tf("cat_err_open_port", it.message ?: "?")
-            runCatching { p.close() }
-            false
-        }
+        val permis = pp.liste().filter { pp.autorise(it) }
+        val choisie = IdentiteUsb.resout(cle, permis.map { it.cle }.distinct())
+        if (choisie == null) { lastError = t("cat_err_no_device"); return false }
+        val p = permis.firstOrNull { it.cle == choisie && it.port == port }
+        if (p == null) { lastError = t("cat_err_no_port"); return false }
+        return branche(pp.ouvre(p, baud, LIGNES))
+    }
+
+    /** Takes the line just opened, or keeps the reason it was not. */
+    private fun branche(o: Ouverture): Boolean {
+        val l = o.lien
+        if (l == null) { lastError = o.erreur; return false }
+        link = l
+        lastError = ""
+        ouvertMs = System.currentTimeMillis(); derniereReponseMs = ouvertMs
+        return true
     }
 
     /** Serial ports of the adapter with key [cle] (an Icom shows two). */
     fun nombrePorts(cle: String?): Int {
-        val ctx = context ?: return 0
-        val um = ctx.getSystemService(Context.USB_SERVICE) as UsbManager
-        val drivers = UsbSerialProber.getDefaultProber().findAllDrivers(um)
-        val cles = drivers.map { cleDe(it.device) }
-        val choisie = IdentiteUsb.resout(cle, cles) ?: return 0
-        return drivers.getOrNull(cles.indexOf(choisie))?.ports?.size ?: 0
+        val liste = ports?.liste() ?: return 0
+        val choisie = IdentiteUsb.resout(cle, liste.map { it.cle }.distinct()) ?: return 0
+        return liste.count { it.cle == choisie }
     }
 
     override fun close() {
@@ -618,7 +562,7 @@ class CivController(private val context: Context? = null) : RigDriver {
 }
 
 /** CI-V mode byte for a mode name (0x00 LSB, 0x01 USB, 0x02 AM, 0x03 CW, 0x05 FM). */
-internal fun modeCiv(m: String): Int = when (m.uppercase()) {
+fun modeCiv(m: String): Int = when (m.uppercase()) {
     "LSB" -> 0x00; "USB" -> 0x01; "AM" -> 0x02; "CW" -> 0x03; "FM" -> 0x05
     else -> 0x01
 }

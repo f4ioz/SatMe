@@ -8,18 +8,14 @@
  */
 package fr.f4ioz.satcombo.rotor
 
-import android.content.Context
-import android.hardware.usb.UsbManager
-import com.hoho.android.usbserial.driver.UsbSerialPort
-import com.hoho.android.usbserial.driver.UsbSerialProber
 import fr.f4ioz.satcombo.cat.CatJournal
 import fr.f4ioz.satcombo.cat.CatScan
 import fr.f4ioz.satcombo.cat.PortRef
 import fr.f4ioz.satcombo.cat.SerialLink
-import fr.f4ioz.satcombo.cat.UsbSerialLink
 import fr.f4ioz.satcombo.i18n.t
 import fr.f4ioz.satcombo.i18n.tf
-import fr.f4ioz.satcombo.usb.UsbPermission
+import fr.f4ioz.satcombo.plateforme.Lignes
+import fr.f4ioz.satcombo.plateforme.PortsSerie
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
@@ -123,7 +119,7 @@ object Gs232Codec {
  * two identical adapters, one to the rig, one to the rotator. Taking "the
  * first" eventually sends `W180 045` to an IC-9700.
  */
-class Gs232Rotor(private val context: Context? = null) : RotorDriver {
+class Gs232Rotor(private val ports: PortsSerie? = null) : RotorDriver {
 
     private var link: SerialLink? = null
     override val isOpen: Boolean get() = link != null
@@ -167,28 +163,12 @@ class Gs232Rotor(private val context: Context? = null) : RotorDriver {
      * Every visible serial port, flattened across devices. A dual-channel
      * adapter has two ports and the rotator is not always on port 0.
      */
-    fun availablePorts(): List<PortRef> {
-        val ctx = context ?: return emptyList()
-        val um = ctx.getSystemService(Context.USB_SERVICE) as UsbManager
-        val out = ArrayList<PortRef>()
-        UsbSerialProber.getDefaultProber().findAllDrivers(um).forEachIndexed { d, drv ->
-            val n = drv.ports.size.coerceAtLeast(1)
-            for (i in 0 until n) {
-                out.add(PortRef(d, i, CatScan.etiquette(
-                    drv.device.productName, drv.device.deviceName, i, n)))
-            }
-        }
-        return out
-    }
+    fun availablePorts(): List<PortRef> =
+        ports?.liste()?.map { PortRef(it.appareil, it.port, it.libelle) } ?: emptyList()
 
     /** The key and product name of port [index]'s adapter (the rotor search checks it is not a rig's). */
-    fun identitePort(index: Int): Pair<String, String?>? {
-        val ctx = context ?: return null
-        val um = ctx.getSystemService(Context.USB_SERVICE) as UsbManager
-        val ref = availablePorts().getOrNull(index) ?: return null
-        val dev = UsbSerialProber.getDefaultProber().findAllDrivers(um).getOrNull(ref.deviceIndex)?.device ?: return null
-        return fr.f4ioz.satcombo.cat.cleDe(dev) to dev.productName
-    }
+    fun identitePort(index: Int): Pair<String, String?>? =
+        ports?.liste()?.getOrNull(index)?.let { it.cle to it.produit }
 
     /**
      * Requests permission for port [index] **and waits for the answer**.
@@ -198,60 +178,38 @@ class Gs232Rotor(private val context: Context? = null) : RotorDriver {
      * the one that made the rig unreachable before 18.20.
      */
     suspend fun ensurePermission(index: Int): Boolean {
-        val ctx = context ?: return false
-        val um = ctx.getSystemService(Context.USB_SERVICE) as UsbManager
-        val ref = availablePorts().getOrNull(index) ?: return false
-        val driver = UsbSerialProber.getDefaultProber().findAllDrivers(um)
-            .getOrNull(ref.deviceIndex) ?: return false
-        if (um.hasPermission(driver.device)) return true
-        return UsbPermission.await(ctx, um, driver.device, UsbPermission.ACTION_CAT,
-            driver.device.deviceId)
+        val pp = ports ?: return false
+        val p = pp.liste().getOrNull(index) ?: return false
+        return pp.autorise(p) || pp.demandeEtAttends(p)
     }
 
     /**
      * Opens port [index] at [baud] baud, 8N1. GS-232 ships at 9600 but jumpers
      * allow 1200/2400/4800, so the operator chooses.
+     *
+     * RTS/DTR raised. An Arduino resets on DTR rising, but many sketches stay
+     * silent until the host has asserted them: without this the port opens,
+     * the command goes out, and nothing ever comes back.
      */
-    suspend fun open(index: Int, baud: Int): Boolean = withContext(Dispatchers.IO) {
-        val ctx = context ?: return@withContext false
-        val um = ctx.getSystemService(Context.USB_SERVICE) as UsbManager
-        val drivers = UsbSerialProber.getDefaultProber().findAllDrivers(um)
-        val refs = availablePorts()
-        val ref = refs.getOrNull(index) ?: refs.firstOrNull()
-        if (ref == null) { lastError = t("cat_err_no_device"); return@withContext false }
-        val driver = drivers.getOrNull(ref.deviceIndex)
-        if (driver == null) { lastError = t("cat_err_no_device"); return@withContext false }
-        if (!um.hasPermission(driver.device)) {
-            lastError = t("cat_err_denied"); return@withContext false
+    suspend fun open(index: Int, baud: Int): Boolean {
+        val pp = ports ?: return false
+        val liste = pp.liste()
+        val p = liste.getOrNull(index) ?: liste.firstOrNull()
+        if (p == null) { lastError = t("cat_err_no_device"); return false }
+        val o = pp.ouvre(p, baud, Lignes.LEVEES)
+        val l = o.lien
+        if (l == null) { lastError = o.erreur; return false }
+        // The board may have just rebooted: let it finish booting, then
+        // discard what the bootloader spat out (banner, zeros, echo) so
+        // the first line read really answers our question.
+        if (settleMs > 0L) withContext(Dispatchers.IO) {
+            delay(settleMs)
+            vide(l)
         }
-        val conn = um.openDevice(driver.device)
-        if (conn == null) { lastError = t("cat_err_open_device"); return@withContext false }
-        val p = driver.ports.getOrNull(ref.portIndex)
-        if (p == null) { lastError = t("cat_err_no_port"); return@withContext false }
-        runCatching {
-            p.open(conn)
-            p.setParameters(baud, 8, UsbSerialPort.STOPBITS_1, UsbSerialPort.PARITY_NONE)
-            // Raise DTR/RTS. An Arduino resets on DTR rising, but many sketches
-            // stay silent until the host has asserted them: without this the
-            // port opens, the command goes out, and nothing ever comes back.
-            runCatching { p.setDTR(true); p.setRTS(true) }
-            val l = UsbSerialLink(p)
-            // The board may have just rebooted: let it finish booting, then
-            // discard what the bootloader spat out (banner, zeros, echo) so
-            // the first line read really answers our question.
-            if (settleMs > 0L) {
-                delay(settleMs)
-                vide(l)
-            }
-            link = l
-            cleUsb = fr.f4ioz.satcombo.cat.cleDe(driver.device)
-            lastError = ""
-            true
-        }.getOrElse {
-            lastError = tf("cat_err_open_port", it.message ?: "?")
-            runCatching { p.close() }
-            false
-        }
+        link = l
+        cleUsb = p.cle
+        lastError = ""
+        return true
     }
 
     override fun close() {
@@ -270,24 +228,10 @@ class Gs232Rotor(private val context: Context? = null) : RotorDriver {
     /** Recognised ports, in index order. */
     fun listDevices(): List<String> = availablePorts().map { it.label }
 
-    /**
-     * Is this newly plugged device a serial bridge? The same intent fires for
-     * SDR dongles; don't ask a receiver for its position.
-     */
-    fun recognises(dev: android.hardware.usb.UsbDevice?): Boolean {
-        if (dev == null) return false
-        return runCatching {
-            UsbSerialProber.getDefaultProber().probeDevice(dev) != null
-        }.getOrDefault(false)
-    }
-
     /** Requests permission for every device lacking it, without waiting. */
     fun requestPermissions() {
-        val ctx = context ?: return
-        val um = ctx.getSystemService(Context.USB_SERVICE) as UsbManager
-        UsbSerialProber.getDefaultProber().findAllDrivers(um).forEach { d ->
-            UsbPermission.ensure(ctx, um, d.device, UsbPermission.ACTION_CAT, d.device.deviceId)
-        }
+        val pp = ports ?: return
+        pp.liste().distinctBy { it.appareil }.forEach { pp.demande(it) }
     }
 
     private fun send(l: SerialLink, s: String): Boolean {

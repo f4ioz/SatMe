@@ -25,7 +25,7 @@ import android.content.Context
  */
 class Ic705Cat(context: Context? = null) : PosteSimple {
 
-    private val civ = CivController(context).apply { radioAddr = ADRESSE }
+    private val civ = CivController(context?.let { fr.f4ioz.satcombo.usb.PortsSerieAndroid(it) }).apply { radioAddr = ADRESSE }
 
     override val isOpen: Boolean get() = civ.isOpen
 
