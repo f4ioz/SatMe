@@ -84,6 +84,18 @@ class StationPcTest {
     }
 
     @Test
+    fun le_ts2000_simule_suit_aussi_le_doppler() {
+        val st = station()
+        assertTrue(st.suis(25544))
+        attends { st.etat.value.position != null && st.etat.value.emetteurs.isNotEmpty() }
+        st.connecteCat("TS2000SIM", 0, 0)
+        attends { st.stationCat.etat.value.descenteHz.let { it != null && it != 435_659_600L } }
+        val (dl, _) = st.frequencesDuCiel()
+        assertEquals(dl!!.toDouble(), st.stationCat.etat.value.descenteHz!!.toDouble(), 500.0)
+        assertEquals("TS2000", st.etat.value.catModele)
+    }
+
+    @Test
     fun le_mat_simule_vise_le_satellite() {
         val st = station()
         st.suis(25544)

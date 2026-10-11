@@ -125,9 +125,10 @@ object PagePc {
       <div class="ligne" style="margin-top:0">
         <select id="cat-modele">
           <option value="IC9700">Icom IC-9700</option><option value="IC9100">Icom IC-9100</option>
-          <option value="IC910">Icom IC-910H</option><option value="SIM">IC-9700 simulé (rien n'est ouvert)</option>
+          <option value="IC910">Icom IC-910H</option><option value="TS2000">Kenwood TS-2000</option>
+          <option value="SIM">IC-9700 simulé (rien n'est ouvert)</option><option value="TS2000SIM">TS-2000 simulé (rien n'est ouvert)</option>
         </select>
-        <select id="cat-baud"><option value="0">vitesse du poste</option><option>115200</option><option>19200</option><option>9600</option><option>4800</option></select>
+        <select id="cat-baud"><option value="0">vitesse du poste</option><option>115200</option><option>57600</option><option>38400</option><option>19200</option><option>9600</option><option>4800</option></select>
       </div>
       <div class="ligne"><select id="cat-port"></select><button onclick="chargePorts()" title="Relire les ports">↻</button></div>
       <div class="ligne">
@@ -135,7 +136,7 @@ object PagePc {
         <button id="cat-deco" onclick="post('/api/cat/deconnecter')">Déconnecter</button>
         <label class="petit"><input type="checkbox" id="maintien" onchange="post('/api/maintien?on='+(this.checked?1:0))"> Doppler en pause</label>
       </div>
-      <div class="avert">Le CAT Icom lève RTS/DTR : choisis bien le port du poste (jamais celui d'un autre poste).</div>
+      <div class="avert" id="cat-avert"></div>
       <div class="paire" style="margin-top:8px">
         <span class="petit">Poste RX <span class="val" id="cat-dl">—</span></span>
         <span class="petit">TX <span class="val" id="cat-ul">—</span></span>
@@ -325,9 +326,15 @@ async function chargePorts() {
   if (a) g('cat-port').value = a;
   if (b) g('rot-port').value = b; else if (E && E.rotor) g('rot-port').value = String(E.rotor.port);
 }
+function avertCat() {
+  const m = g('cat-modele').value;
+  txt('cat-avert', m === 'TS2000' ? 'TS-2000 : RTS/DTR tenus bas, aucun ordre d’émission. RigExpert : le port A (CAT), jamais le B (PTT). Vitesse : menu 56 (57600 par défaut ici).'
+    : m.indexOf('SIM') >= 0 ? '' : 'Le CAT Icom lève RTS/DTR : choisis bien le port du poste, jamais celui d’un autre poste.');
+}
+g('cat-modele').onchange = avertCat;
 function catConnecte() {
   const m = g('cat-modele').value;
-  if (m !== 'SIM' && (!ports.length || g('cat-port').value === '-1')) { alert('Aucun port série choisi.'); return; }
+  if (m.indexOf('SIM') < 0 && (!ports.length || g('cat-port').value === '-1')) { alert('Aucun port série choisi.'); return; }
   post('/api/cat/connecter?modele=' + m + '&port=' + enc(g('cat-port').value) + '&baud=' + g('cat-baud').value);
 }
 function lienRotor() {
@@ -348,7 +355,7 @@ async function station() {
   setTimeout(chargeListe, 1500);
 }
 g('emetteur').onchange = () => post('/api/emetteur?i=' + g('emetteur').value);
-lienRotor();
+lienRotor(); avertCat();
 tic(); chargeListe(); chargePorts();
 setInterval(tic, 1000);
 setInterval(chargeListe, 30000);

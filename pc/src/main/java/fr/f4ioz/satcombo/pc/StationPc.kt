@@ -96,6 +96,8 @@ class StationPc(
 
     private val civ = CivController(ports)
     private val posteCiv = PosteCatCiv(civ)
+    private val ts2000 = LienTs2000Pc(ports)
+    private val posteTs2000 = PosteTs2000Pc(ts2000)
     private val fil = Mutex()
     private var boucleCat: Job? = null
     /** The adapter the rig is on: the mast's search never opens it. */
@@ -103,7 +105,7 @@ class StationPc(
 
     val stationCat = StationCat(object : MondeCat {
         override fun connecte() = _etat.value.catConnecte
-        override fun poste(): PosteCat = posteCiv
+        override fun poste(): PosteCat = if (_etat.value.catModele == "TS2000") posteTs2000 else posteCiv
         override fun emetSeul() = false
         override fun aprsEnEmission() = false
         override fun satellite() = _etat.value.position
@@ -316,7 +318,19 @@ class StationPc(
                 deconnecteCatDedans()
                 val m = modeleDe(modele)
                 settings.rigModel = if (m == "SIM") settings.rigModel else m
-                if (m == "SIM") {
+                if (m == "TS2000" || m == "TS2000SIM") {
+                    ts2000.pacingMs = if (m == "TS2000SIM") 0L else 20L
+                    val p = ports.liste().getOrNull(index)
+                    val ok = if (m == "TS2000SIM") { ts2000.attach(fr.f4ioz.satcombo.cat.Ts2000Sim()); true }
+                             else p != null && ts2000.ouvre(p, if (baud > 0) baud else 57_600)
+                    if (ok && p != null && m == "TS2000") clePoste = p.cle
+                    change { copy(catModele = "TS2000", catConnecte = ok, catSimule = m == "TS2000SIM",
+                        catStatut = when {
+                            m == "TS2000SIM" -> "TS-2000 simulé : rien n'est ouvert"
+                            ok -> "Kenwood TS-2000 sur ${p!!.libelle}"
+                            else -> "échec : ${ts2000.lastError.ifBlank { "port introuvable" }}"
+                        }) }
+                } else if (m == "SIM") {
                     civ.modele = ModeleIcom.IC9700
                     civ.radioAddr = ModeleIcom.IC9700.adresse
                     civ.pacingMs = 0L
@@ -347,6 +361,7 @@ class StationPc(
     private fun deconnecteCatDedans() {
         boucleCat?.cancel(); boucleCat = null
         civ.close()
+        ts2000.close()
         stationCat.deconnecte()
         change { copy(catConnecte = false, catSimule = false, catStatut = "poste déconnecté") }
     }
@@ -363,8 +378,8 @@ class StationPc(
     }
 
     companion object {
-        /** The rigs the PC drives tonight: the Icom family on CI-V, and the simulator. */
-        val MODELES = listOf("IC9700", "IC9100", "IC910", "SIM")
+        /** The rigs the PC drives: the Icom family on CI-V, the TS-2000, and their simulators. */
+        val MODELES = listOf("IC9700", "IC9100", "IC910", "TS2000", "SIM", "TS2000SIM")
         /** The satellite followed, kept between two starts. */
         const val CLE_SATELLITE = "pc_satellite"
         fun modeleDe(id: String): String = id.takeIf { it in MODELES } ?: "IC9700"
