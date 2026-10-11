@@ -69,15 +69,16 @@ Le téléphone sert des pages au navigateur du PC (câble USB ou Wi-Fi, rien à 
 <img src="docs/images/fr-sstv-sheet-iss.webp" width="24%" alt="Une planche des images de l'ISS">
 </p>
 
-## Dans la prochaine version
+## Nouveautés de la 20.82
 
 - **Images météo METEOR (LRPT)**, en bêta : METEOR-M2-3 et M2-4 décodés sur le téléphone depuis une clé RTL-SDR et une antenne 137 MHz — couleur de jour et infrarouge, nord en haut, un aperçu pendant le passage ; démarrage à la main ou tout seul avant chaque passage ; un enregistrement WAV I/Q brut décodé aussi. Côtes et frontières tracées d'après l'orbite. Sur la page du satellite, un bouton : **Recevoir les images**. Vérifié sur l'enregistrement d'un vrai passage, pas encore en direct.
 - **Icom IC-910H et IC-9100** en mode satellite, à côté de l'IC-9700 : leur adresse CI-V et leur vitesse (19 200 bauds), et la commande de mode satellite propre à l'IC-910H. Éprouvés au banc, pas encore sur les vrais postes.
-- **Rotor : moins de claquements de relais** — un axe à la fois, le mât un peu en avance du satellite, au plus une consigne toutes les 6 s, et jamais deux fois la même tant que le mât reste où le contrôleur l'a laissé.
+- **Rotor : plus de claquements de relais en continu** — un axe à la fois, le mât un peu en avance du satellite, au plus une consigne toutes les 6 s, et jamais deux fois la même tant que le mât reste où le contrôleur l'a laissé ; une consigne que le contrôleur n'a pas prise repart au bout de 10 s.
+- Corrigé : un enregistrement arrêté à la main pendant que le rotor était connecté pouvait rester affiché en cours.
 
 <p align="center"><img src="docs/images/meteor-lrpt.webp" width="600" alt="Un passage de METEOR-M2-4 décodé par SatMe : l'Alaska et la mer de Béring en couleur"></p>
 
-## Nouveautés de la 20.81
+### Et dans la 20.81
 
 - **Rotor : un passage par la butée est planifié** — les antennes passent de l'autre côté du zénith, ou basculent par-dessus avec 180° d'élévation, au lieu de repartir à la butée ; un tour seulement s'il vaut la peine, jamais pendant une image SSTV attendue ni en émission. Un cadran avec la butée, la zone morte, le câble et le chemin prévu ; le trajet aussi dessiné en blanc sur la boussole du satellite.
 - **Kenwood TS-2000** en mode SAT : Doppler sur les deux VFO, mode de chaque côté, CTCSS, S-mètre.
@@ -87,14 +88,6 @@ Le téléphone sert des pages au navigateur du PC (câble USB ou Wi-Fi, rien à 
 - **Le journal des passages sur le PC** : les passages rejoués en grand avec leur son, sur le ciel ou une carte OpenStreetMap (empreinte, ta station, les stations contactées ou entendues), le S-mètre et l'image SSTV qui arrive, une frise à cliquer, glisser (un QSO entier) et zoomer, la lecture accélérée ; le téléphone fabrique le son, l'image, la vidéo, le GIF ou le fichier du passage, et le PC le télécharge.
 - **La planche SSTV sur le PC** : le modèle en grand, cases et textes déplacés à la souris, images glissées dans les cases, modèle importé depuis le PC, planche téléchargée en pleine résolution.
 - Une page du poste de commande plus compacte ; les trois pages reliées, sous un seul code.
-
-### Et dans la 20.79
-
-- **Journal des passages**, bien plus riche : signets pendant le passage, S-mètre de l'IC-9700 et fréquence RX au rejeu, lecture accélérée qui ralentit là où quelque chose a été entendu, un contact saisi à n'importe quel moment du passage, plusieurs enregistrements pour un passage, un bilan avec la carte de toutes les stations contactées et entendues.
-- **Passages retrouvés depuis Wavelog / Cloudlog** par date, satellite et locator — une station sur une ligne de carrés (« JN06,JN16 ») comprise.
-- **Partager** un passage entier ou un moment (un QSO entier) en image, vidéo avec son son, GIF ou son ; ou le **passage en un fichier**, avec ses contacts si tu le veux, pour qu'une autre station SatMe le rejoue.
-
-Toutes les versions dans le [wiki](https://github.com/f4ioz/SatMe/wiki/Nouveautes). Guide complet dans le **[wiki](https://github.com/f4ioz/SatMe/wiki/Accueil)**.
 
 ## Fonctions
 

@@ -69,15 +69,16 @@ The phone serves pages to the PC's browser (USB cable or Wi-Fi, nothing to insta
 <img src="docs/images/en-sstv-sheet-iss.webp" width="24%" alt="A sheet of the ISS pictures">
 </p>
 
-## Coming in the next version
+## What's new in 20.82
 
 - **METEOR weather pictures (LRPT)**, beta: METEOR-M2-3 and M2-4 decoded on the phone from an RTL-SDR dongle and a 137 MHz antenna — colour by day and infrared, north up, a preview while the pass comes in; started by hand or by itself before each pass; a raw I/Q WAV recording decoded too. Coastlines and borders drawn from the orbit. On the satellite's page, one button: **Receive the pictures**. Checked on the recording of a real pass, not yet live.
 - **Icom IC-910H and IC-9100** in satellite mode, beside the IC-9700: their own CI-V address and speed (19,200 baud), and the IC-910H's own satellite-mode command. Bench-tested, not yet on the real rigs.
-- **Rotator: fewer relay clicks** — one axis at a time, the mast a little ahead of the satellite, at most one command every 6 s, and never the same one again while the mast stays where the controller left it.
+- **Rotator: no more endless relay clicking** — one axis at a time, the mast a little ahead of the satellite, at most one command every 6 s, and never the same one again while the mast stays where the controller left it; a command the controller did not take goes out again after 10 s.
+- Fixed: a recording stopped by hand while the rotator was connected could stay shown as running.
 
 <p align="center"><img src="docs/images/meteor-lrpt.webp" width="600" alt="A METEOR-M2-4 pass decoded by SatMe: Alaska and the Bering Sea in colour"></p>
 
-## What's new in 20.81
+### And in 20.81
 
 - **Rotator: a pass over the end stop is planned** — the antennas go round the far side of the zenith, or tilt over the top with 180° of elevation, instead of turning back at the stop; a full turn only when worth it, never during an expected SSTV picture nor while transmitting. A dial with the stop, the dead zone, the cable and the planned path; the path also drawn in white on the satellite's compass.
 - **Kenwood TS-2000** in SAT mode: Doppler on both VFOs, mode of each side, CTCSS, S-meter.
@@ -87,14 +88,6 @@ The phone serves pages to the PC's browser (USB cable or Wi-Fi, nothing to insta
 - **The pass journal on the PC**: the passes replayed large with their sound, on the sky or an OpenStreetMap map (footprint, your station, the stations worked or heard), the S-meter and the SSTV picture arriving, a timeline to click, drag (a whole QSO) and zoom, accelerated replay; the phone makes the sound, the picture, the video, the GIF or the pass file, and the PC downloads it.
 - **The SSTV sheet on the PC**: the template large, boxes and texts moved with the mouse, pictures dragged into the boxes, a template imported from the PC, the sheet downloaded at full resolution.
 - A tighter control desk page; the three pages linked, under one code.
-
-### And in 20.79
-
-- **Pass journal**, much richer: bookmarks during the pass, the IC-9700's S-meter and the RX frequency on the replay, an accelerated replay that slows down where something was heard, a contact entered from any moment of the pass, several recordings for one pass, a summary with a map of every station worked and heard.
-- **Passes found from Wavelog / Cloudlog** by date, satellite and station square — a station on a grid line ("JN06,JN16") included.
-- **Share** a whole pass or a moment (a whole QSO) as a picture, a video with its sound, a GIF or a sound; or the **pass in one file**, with its contacts if you wish, for another SatMe station to replay.
-
-Every version in the [wiki](https://github.com/f4ioz/SatMe/wiki/Release-notes). Full guide in the **[wiki](https://github.com/f4ioz/SatMe/wiki)**.
 
 ## Features
 
