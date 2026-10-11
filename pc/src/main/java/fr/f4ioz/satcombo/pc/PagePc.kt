@@ -199,6 +199,14 @@ object PagePc {
         <input id="locator" placeholder="Locator (JN18FS)" style="text-transform:uppercase">
         <button onclick="station()">Enregistrer</button>
       </div>
+      <details id="conv" style="margin-top:8px"><summary class="petit" style="cursor:pointer">Convertisseurs (LNB, transverter)</summary>
+        <div class="ligne"><span class="petit" style="min-width:150px">Réception : OL (MHz)</span><input id="c-rxOl" placeholder="9750 ; 0 = aucun" style="max-width:130px">
+          <label class="petit"><input type="checkbox" id="c-rxInv"> inverseur</label></div>
+        <div class="ligne"><span class="petit" style="min-width:150px">Émission : OL (MHz)</span><input id="c-txOl" placeholder="0 = aucun" style="max-width:130px">
+          <label class="petit"><input type="checkbox" id="c-txInv"> inverseur</label>
+          <button onclick="convertisseurs()">Appliquer</button></div>
+        <div class="petit">Le poste reçoit et émet sur la fréquence intermédiaire ; l'affichage reste celle du satellite.</div>
+      </details>
       <div class="ligne"><button onclick="post('/api/catalogue')">Retélécharger les éléments AMSAT</button></div>
       <div class="petit" style="margin-top:10px">Reprendre les réglages du téléphone (Réglages → Sauvegarde, fichier .json) :</div>
       <input type="file" id="import" accept=".json,application/json" onchange="importe(this)" style="width:100%;margin-top:4px">
@@ -352,6 +360,11 @@ function dessine() {
     g('r-parkAz').value = s.parkAz; g('r-parkEl').value = s.parkEl; g('r-minEl').value = s.minEl;
     g('r-ecart').value = s.ecart; g('r-avantAos').value = s.avantAos;
   }
+  if (!g('conv').open && E.convertisseurs) {
+    const k = E.convertisseurs, mhzOl = x => x ? String(x / 1e6) : '0';
+    g('c-rxOl').value = mhzOl(k.rxOl); g('c-rxInv').checked = k.rxInv;
+    g('c-txOl').value = mhzOl(k.txOl); g('c-txInv').checked = k.txInv;
+  }
   // The rig's model and port as last used, until the operator picks others.
   if (!catTouche) {
     g('cat-modele').value = c.simule ? (c.modele === 'TS2000' ? 'TS2000SIM' : 'SIM') : c.modele;
@@ -363,6 +376,11 @@ function dessine() {
 let catTouche = false, rotTouche = false;
 ['cat-modele', 'cat-port', 'cat-baud'].forEach(i => g(i).addEventListener('change', () => catTouche = true));
 ['rot-port', 'rot-baud', 'rot-lien'].forEach(i => g(i).addEventListener('change', () => rotTouche = true));
+function convertisseurs() {
+  post('/api/convertisseurs?rxOl=' + enc(v('c-rxOl')) + '&rxInv=' + (g('c-rxInv').checked ? 1 : 0) +
+       '&txOl=' + enc(v('c-txOl')) + '&txInv=' + (g('c-txInv').checked ? 1 : 0));
+  g('conv').open = false;
+}
 function reglagesRotor() {
   const b = id => g(id).checked ? 1 : 0;
   post('/api/rotor/reglages?maxAz=' + g('r-maxAz').value + '&maxEl=' + g('r-maxEl').value + '&butee=' + g('r-butee').value +

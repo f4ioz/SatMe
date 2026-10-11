@@ -19,6 +19,7 @@ import fr.f4ioz.satcombo.data.SatPosition
 import fr.f4ioz.satcombo.data.SettingsStore
 import fr.f4ioz.satcombo.data.TleEntry
 import fr.f4ioz.satcombo.data.Transmitter
+import fr.f4ioz.satcombo.domain.Convertisseur
 import fr.f4ioz.satcombo.domain.Doppler
 import fr.f4ioz.satcombo.domain.PassPredictor
 import fr.f4ioz.satcombo.location.Maidenhead
@@ -127,11 +128,39 @@ class StationPc(
         override fun ctcssAuto() = true
         override fun repos() = _etat.value.repos
         override fun poseRepos(hz: Long) = change { copy(repos = hz) }
-        override fun posteRx(satHz: Long) = satHz
-        override fun satDepuisPoste(posteHz: Long) = posteHz
-        override fun posteTx(satHz: Long) = satHz
-        override fun satDepuisPosteTx(posteHz: Long) = posteHz
+        // The converters (LNB, transverter) as on the phone, from the same settings.
+        override fun posteRx(satHz: Long) = if (settings.convRxPoste) convRx().versPoste(satHz) else satHz
+        override fun satDepuisPoste(posteHz: Long) = if (convRxDansLaChaine()) convRx().versSatellite(posteHz) else posteHz
+        override fun posteTx(satHz: Long) = convTx().versPoste(satHz)
+        override fun satDepuisPosteTx(posteHz: Long) = if (convTxDansLaChaine()) convTx().versSatellite(posteHz) else posteHz
     }, horloge)
+
+    fun convRx() = Convertisseur(actif = settings.convRxActif, olHz = settings.convRxOlHz,
+        inverseur = settings.convRxInverseur, basHz = settings.convRxBasHz, hautHz = settings.convRxHautHz)
+    fun convTx() = Convertisseur(actif = settings.convTxActif, olHz = settings.convTxOlHz,
+        inverseur = settings.convTxInverseur, basHz = settings.convTxBasHz, hautHz = settings.convTxHautHz)
+
+    /** Is the RX converter in the rig's chain? The satellite decides: its downlink in the converter's band. */
+    private fun convRxDansLaChaine(): Boolean {
+        val c = convRx()
+        if (!settings.convRxPoste || !c.configure) return false
+        return emetteurChoisi()?.downlinkLowHz?.let { c.couvre(it) } == true
+    }
+
+    private fun convTxDansLaChaine(): Boolean {
+        val c = convTx()
+        if (!c.configure) return false
+        return emetteurChoisi()?.uplinkLowHz?.let { c.couvre(it) } == true
+    }
+
+    /** The converters, set on the page (Hz; an LO of 0 turns one off). */
+    fun poseConvertisseurs(rxOl: Long?, rxInverseur: Boolean?, txOl: Long?, txInverseur: Boolean?) {
+        rxOl?.let { settings.convRxOlHz = it; settings.convRxActif = it > 0; settings.convRxPoste = it > 0 }
+        rxInverseur?.let { settings.convRxInverseur = it }
+        txOl?.let { settings.convTxOlHz = it; settings.convTxActif = it > 0 }
+        txInverseur?.let { settings.convTxInverseur = it }
+        stationCat.oublieArmement()
+    }
 
     // ---------------------------------------------------------------- rotor
 

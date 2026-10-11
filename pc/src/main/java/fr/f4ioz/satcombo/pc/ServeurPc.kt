@@ -108,6 +108,11 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
             "/api/rotor/suivre" -> rotor.setRotorEnabled(q["on"] == "1")
             "/api/rotor/parquer" -> rotor.rotorParkNow()
             "/api/rotor/stop" -> rotor.rotorStopNow()
+            "/api/convertisseurs" -> {
+                // MHz on the page, Hz here; an empty field leaves it as it is.
+                fun hz(k: String) = q[k]?.trim()?.replace(',', '.')?.takeIf { it.isNotEmpty() }?.toDoubleOrNull()?.let { Math.round(it * 1e6) }
+                station.poseConvertisseurs(hz("rxOl"), q["rxInv"]?.let { it == "1" }, hz("txOl"), q["txInv"]?.let { it == "1" })
+            }
             "/api/rotor/reglages" -> {
                 entier("maxAz")?.let { rotor.setRotorMaxAz(it) }
                 entier("maxEl")?.let { rotor.setRotorMaxEl(it) }
@@ -173,6 +178,10 @@ object JsonPc {
         o.put("emetteur", e.emetteur)
         o.put("repos", e.repos ?: JSONObject.NULL)
         o.put("ciel", JSONObject().put("dl", dl ?: JSONObject.NULL).put("ul", ul ?: JSONObject.NULL))
+        val rx = st.convRx(); val tx = st.convTx()
+        o.put("convertisseurs", JSONObject()
+            .put("rxOl", if (rx.configure) rx.olHz else 0).put("rxInv", rx.inverseur)
+            .put("txOl", if (tx.configure) tx.olHz else 0).put("txInv", tx.inverseur))
         o.put("cat", JSONObject().put("modele", e.catModele).put("port", st.settings.civUsbIndex).put("connecte", e.catConnecte).put("simule", e.catSimule)
             .put("statut", e.catStatut).put("maintien", e.maintienDoppler)
             .put("dl", c.descenteHz ?: JSONObject.NULL).put("ul", c.monteeHz ?: JSONObject.NULL)

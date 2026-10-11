@@ -96,6 +96,24 @@ class StationPcTest {
     }
 
     @Test
+    fun avec_un_convertisseur_le_poste_recoit_la_frequence_intermediaire() {
+        val st = station()
+        assertTrue(st.suis(25544))
+        attends { st.etat.value.position != null && st.etat.value.emetteurs.isNotEmpty() }
+        // A 437 MHz downlink through a 400 MHz converter (as a 10 GHz LNB on QO-100): 37 MHz on the rig.
+        st.poseConvertisseurs(400_000_000L, false, null, null)
+        // Its band: by default 10.4–10.8 GHz (an LNB), never a 437 MHz satellite by mistake.
+        assertEquals(437_800_000L, st.convRx().versPoste(437_800_000L))
+        st.settings.convRxBasHz = 430_000_000L; st.settings.convRxHautHz = 440_000_000L
+        st.connecteCat("SIM", 0, 0)
+        attends { st.stationCat.etat.value.descenteHz.let { it != null && it != 435_000_000L } }
+        val (dl, _) = st.frequencesDuCiel()
+        // What is shown is the sky; what the rig got was the IF, read back into the sky.
+        assertEquals(dl!!.toDouble(), st.stationCat.etat.value.descenteHz!!.toDouble(), 500.0)
+        assertEquals(dl - 400_000_000L, st.convRx().versPoste(dl))
+    }
+
+    @Test
     fun le_mat_simule_vise_le_satellite() {
         val st = station()
         st.suis(25544)
