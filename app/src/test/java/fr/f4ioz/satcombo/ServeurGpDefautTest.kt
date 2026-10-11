@@ -24,11 +24,11 @@ class ServeurGpDefautTest {
 
     @Test
     fun serveur_par_defaut_puis_vide_si_choisi() {
-        val s = SettingsStore(ApplicationProvider.getApplicationContext())
+        val s = SettingsStore(ApplicationProvider.getApplicationContext<android.content.Context>())
         assertEquals("https://gp.f4ioz.fr", s.serveurGp)
         assertEquals("https://gp.f4ioz.fr/gp/amsat.json", ServeurGp.adresses(s.serveurGp,
             fr.f4ioz.satcombo.data.TleSource("amsat_gp", "AMSAT", "https://x/a.json"))[0])
         s.serveurGp = ""
-        assertEquals("", SettingsStore(ApplicationProvider.getApplicationContext()).serveurGp)
+        assertEquals("", SettingsStore(ApplicationProvider.getApplicationContext<android.content.Context>()).serveurGp)
     }
 }

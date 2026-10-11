@@ -8,13 +8,15 @@
  */
 package fr.f4ioz.satcombo.data
 
-import android.content.Context
+import fr.f4ioz.satcombo.plateforme.Stockage
 
 enum class LocationMode { AUTO, MANUAL }
 
-/** Persists QTH settings: auto GPS or manual Maidenhead locator. */
-class SettingsStore(context: Context) {
-    private val prefs = context.getSharedPreferences("satcombo_settings", Context.MODE_PRIVATE)
+/**
+ * The station's settings. Where they are kept is the platform's business
+ * ([Stockage]): the phone's preferences ("satcombo_settings"), a file on a PC.
+ */
+class SettingsStore(private val prefs: Stockage) {
 
     /**
      * One-off migrations of settings already written.

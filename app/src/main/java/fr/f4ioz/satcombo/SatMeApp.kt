@@ -34,6 +34,8 @@ class SatMeApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        // Screens follow a language change live (the translations live in the engine).
+        fr.f4ioz.satcombo.i18n.I18nCompose.installe()
         // Before any download, the background refresh included: the version
         // goes in the User-Agent.
         fr.f4ioz.satcombo.data.TleRepository.version = runCatching {

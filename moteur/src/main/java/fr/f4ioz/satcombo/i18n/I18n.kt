@@ -8,10 +8,6 @@
  */
 package fr.f4ioz.satcombo.i18n
 
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
-
 /**
  * Lightweight in-app localization. Kotlin-based (not res/values) so that:
  *  - interpolated strings ("T-${countdown}") stay type-safe,
@@ -19,13 +15,21 @@ import androidx.compose.runtime.setValue
  *  - it mirrors the dynamic theme approach already used in the app.
  *
  * Language resolution: "auto" follows the phone locale; "fr"/"en" force it.
- * Reading [t] / [tf] inside a @Composable recomposes on change because the
- * active language is backed by mutableStateOf.
+ *
+ * The language switches live: every read calls [surLecture] and every change
+ * [surChangement]. The phone ties both to a Compose state, so a screen reading
+ * [t] / [tf] is redrawn when the language changes; elsewhere they do nothing.
  */
 enum class Lang { FR, EN }
 
 object I18n {
-    private var active by mutableStateOf(Lang.FR)
+    @Volatile private var active = Lang.FR
+
+    /** Called on every read of the language (see the class comment). */
+    @Volatile var surLecture: () -> Unit = {}
+
+    /** Called when the language changes. */
+    @Volatile var surChangement: () -> Unit = {}
 
     /** Apply a language preference: "auto", "fr" or "en". */
     fun apply(pref: String, phoneLang: String) {
@@ -34,17 +38,18 @@ object I18n {
             "en" -> Lang.EN
             else -> if (phoneLang.lowercase().startsWith("fr")) Lang.FR else Lang.EN
         }
+        surChangement()
     }
 
-    fun current(): Lang = active
+    fun current(): Lang { surLecture(); return active }
 
     /** Java locale matching the active app language, for date/number formatting. */
     fun locale(): java.util.Locale =
-        if (active == Lang.EN) java.util.Locale.ENGLISH else java.util.Locale.FRENCH
+        if (current() == Lang.EN) java.util.Locale.ENGLISH else java.util.Locale.FRENCH
 
     /** Translate a key. Falls back to the French value, then the key itself. */
     fun t(key: String): String {
-        val table = if (active == Lang.EN) EN else FR
+        val table = if (current() == Lang.EN) EN else FR
         return table[key] ?: FR[key] ?: key
     }
 

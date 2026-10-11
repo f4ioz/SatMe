@@ -69,7 +69,7 @@ class PassPredictor {
          * AMSAT status match on it). Only the copy handed to predict4java is
          * altered; nothing is written back to the cache.
          */
-        internal fun lisible(ligne: String): String {
+        fun lisible(ligne: String): String {
             if (ligne.length < 7) return ligne
             val champ = ligne.substring(2, 7)
             if (champ.all { it.isDigit() }) return ligne

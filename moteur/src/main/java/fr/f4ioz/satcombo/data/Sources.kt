@@ -8,7 +8,7 @@
  */
 package fr.f4ioz.satcombo.data
 
-import android.content.Context
+import fr.f4ioz.satcombo.plateforme.Stockage
 import fr.f4ioz.satcombo.i18n.t
 
 /** A selectable GP/TLE source. */
@@ -61,8 +61,7 @@ object Sources {
 }
 
 /** Persists the user's enabled TLE source ids. */
-class SourcesStore(context: Context) {
-    private val prefs = context.getSharedPreferences("satcombo_sources", Context.MODE_PRIVATE)
+class SourcesStore(private val prefs: Stockage) {
     private val key = "enabled_ids"
 
     fun load(): Set<String> =

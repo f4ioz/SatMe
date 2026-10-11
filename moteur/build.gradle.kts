@@ -25,7 +25,11 @@ dependencies {
     api("com.github.davidmoten:predict4java:1.3.1")
     api("com.squareup.okhttp3:okhttp:4.12.0")
     api("com.google.zxing:core:3.5.3")
+    // Built into Android: compiled against here, never shipped in the app
+    // (a second copy would clash with the platform's). The PC adds it.
+    compileOnly("org.json:json:20240303")
 
     testImplementation("junit:junit:4.13.2")
+    testImplementation("org.json:json:20240303")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.8.1")
 }
