@@ -90,6 +90,11 @@ object PagePc {
   <div class="col2">
     <div class="carte">
       <div class="t">Satellite suivi</div>
+      <div class="ligne" style="margin:0 0 8px">
+        <input id="cherche" list="tous" placeholder="Suivre un satellite : QO-100, AO-7…">
+        <datalist id="tous"></datalist>
+        <button onclick="choisitParNom()">Suivre</button>
+      </div>
       <div class="paire"><span class="gros" id="nom">—</span><span id="compte" class="val ambre"></span></div>
       <div class="paire" style="margin-top:6px">
         <span>Az <span class="val cyan" id="az">—</span></span>
@@ -242,6 +247,21 @@ function dessinePassages() {
   g('passages').innerHTML = lignes.join('') || '<tr><td colspan="5" class="petit">' + (E && E.locator ? 'aucun passage' : 'renseigne ton locator') + '</td></tr>';
 }
 async function suivre(n) { await post('/api/suivre?catnum=' + n); }
+let tous = [];
+async function chargeSatellites() {
+  try { tous = await (await fetch('/api/satellites')).json(); } catch (x) { tous = []; }
+  g('tous').innerHTML = tous.map(s => '<option value="' + s.nom.replace(/"/g, '&quot;') + '">').join('');
+}
+function choisitParNom() {
+  const q = v('cherche').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  const s = tous.find(x => x.nom.toUpperCase().replace(/[^A-Z0-9]/g, '') === q) ||
+            tous.find(x => x.nom.toUpperCase().replace(/[^A-Z0-9]/g, '').includes(q)) ||
+            tous.find(x => String(x.catnum) === v('cherche'));
+  if (!s) { alert('Satellite inconnu du bulletin AMSAT.'); return; }
+  g('cherche').value = '';
+  suivre(s.catnum);
+}
+g('cherche').addEventListener('keydown', e => { if (e.key === 'Enter') choisitParNom(); });
 async function repos(d) { await post('/api/repos?d=' + d); }
 
 function polaire(az, el) {
@@ -407,7 +427,8 @@ async function station() {
 }
 g('emetteur').onchange = () => post('/api/emetteur?i=' + g('emetteur').value);
 lienRotor(); avertCat();
-tic(); chargeListe(); chargePorts();
+tic(); chargeListe(); chargePorts(); chargeSatellites();
+setInterval(chargeSatellites, 600000);
 setInterval(tic, 1000);
 setInterval(chargeListe, 30000);
 setInterval(dessinePassages, 5000);

@@ -180,6 +180,8 @@ class StationPc(
         }
     }
 
+    @Volatile private var derniereRecherche = 0L
+
     /** The satellite followed, now: where it is, its pass. */
     private suspend fun tic() {
         val maintenant = horloge()
@@ -191,7 +193,11 @@ class StationPc(
         } else null
         // The pass followed: the one under way, else the next; its arc for the mast and the sky.
         var passage = e.passage
-        if (sat != null && obs != null && (passage == null || passage.losEpochMs < maintenant)) {
+        // Searched again when over, and at most once a minute when there is none (a satellite
+        // that never rises, or never sets — QO-100): 48 hours of orbit each second would be a waste.
+        val aChercher = passage?.let { it.losEpochMs < maintenant } ?: (maintenant - derniereRecherche >= 60_000L)
+        if (sat != null && obs != null && aChercher) {
+            derniereRecherche = maintenant
             passage = withContext(Dispatchers.Default) {
                 runCatching { predicteur.upcomingPasses(sat, obs, maintenant - 30 * 60_000L, 48, 0.0) }.getOrNull()
                     ?.firstOrNull { it.losEpochMs >= maintenant }
@@ -225,6 +231,7 @@ class StationPc(
         stockage.edit().putInt(CLE_SATELLITE, sat.catalogNumber).apply()
         stationCat.nouveauSatellite()
         stationCat.oublieArmement()
+        derniereRecherche = 0L
         change { copy(suivi = sat, position = null, passage = null, arc = emptyList(), emetteurs = emptyList(),
             emetteur = 0, repos = null) }
         portee.launch(Dispatchers.IO) {

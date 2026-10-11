@@ -21,6 +21,8 @@ kotlin {
 application {
     mainClass.set("fr.f4ioz.satcombo.pc.MainKt")
     applicationName = "satme"
+    // Enough for the passes of a hundred satellites; small enough for a Raspberry Pi.
+    applicationDefaultJvmArgs = listOf("-Xmx256m")
 }
 
 dependencies {
