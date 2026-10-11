@@ -16,3 +16,4 @@ dependencyResolutionManagement {
 rootProject.name = "SatCombo"
 include(":app")
 include(":moteur")
+include(":pc")
