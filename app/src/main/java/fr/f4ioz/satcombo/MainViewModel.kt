@@ -2383,6 +2383,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun stopRecording() {
         fr.f4ioz.satcombo.audio.RecorderService.stop(getApplication())
+        // Already stopped (the screen missed it): the screen follows the recorder again.
+        val rs = fr.f4ioz.satcombo.audio.RecorderService.state.value
+        if (!rs.recording && _ui.value.recording)
+            _ui.value = _ui.value.copy(recording = false, recordAutoStopMs = null)
     }
 
     /** 0, 3, 6 or 12 h of already-finished passes kept in the lists. */
@@ -10377,7 +10381,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         // A connected mast holds the antenna: the compass shows it, not the
         // phone. Only the aim source changes — same colours, trace, error.
         val visee = lu?.let { fr.f4ioz.satcombo.rotor.RotorMath.antennaAim(it) }
-        _ui.value = u.rot { copy(rotorActualAz = lu?.azDeg, rotorActualEl = lu?.elDeg,
+        // The fresh state, not `u`: reading the mast took a few hundred ms over the
+        // serial line, and writing back the snapshot taken before it undid whatever
+        // changed meanwhile — a recording stopped by hand stayed "recording" (11/10).
+        _ui.value = _ui.value.rot { copy(rotorActualAz = lu?.azDeg, rotorActualEl = lu?.elDeg,
             rotorAimAz = visee?.azDeg,
             rotorAimEl = if (u.rotorAzOnly) null else visee?.elDeg,
             rotorLastSent = rotorSerial?.lastSent ?: u.rotorLastSent,
