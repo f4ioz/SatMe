@@ -419,9 +419,26 @@ object PagePc {
   </div>
   <div>
     <div class="carte">
-      <table><thead><tr><th>Début</th><th>Fin</th><th>Durée</th><th>Moi</th><th>Lui</th><th></th></tr></thead><tbody id="k-liste"></tbody></table>
+      <div style="max-height:300px;overflow:auto"><table><thead><tr><th>Début</th><th>Fin</th><th>Durée</th><th>Moi</th><th>Lui</th><th></th></tr></thead><tbody id="k-liste"></tbody></table></div>
     </div>
   </div>
+</div>
+<div class="carte" id="k-anim" hidden style="margin-top:14px">
+  <div class="ligne" style="margin-top:0;flex-wrap:wrap">
+    <span class="t" id="k-titre" style="margin:0"></span>
+    <button id="k-joue" onclick="basculeSked()" style="min-width:44px">⏸</button>
+    <input type="range" id="k-curseur" min="0" max="1000" value="0" style="flex:1;min-width:200px">
+    <span id="k-heure" style="font-variant-numeric:tabular-nums;min-width:70px"></span>
+    <span id="k-ensemble" class="petit"></span>
+  </div>
+  <div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:10px">
+    <canvas id="k-carte" style="flex:3;min-width:320px;height:540px;border-radius:8px;cursor:grab;touch-action:none" title="Glisser pour déplacer, molette pour zoomer, double-clic pour recadrer"></canvas>
+    <div style="flex:1;min-width:220px;display:flex;flex-direction:column;gap:8px">
+      <div><div class="petit" id="k-lmoi">Moi</div><svg id="k-cmoi" viewBox="-112 -112 224 224" style="width:100%;max-width:240px"></svg></div>
+      <div><div class="petit" id="k-llui">Lui</div><svg id="k-clui" viewBox="-112 -112 224 224" style="width:100%;max-width:240px"></svg></div>
+    </div>
+  </div>
+  <div class="petit" style="margin-top:6px">En vert, la fenêtre où vous voyez tous deux le satellite ; la zone claire autour du satellite est la partie de la Terre qui le voit à cet instant.</div>
 </div>
 </div>
 <div class="vue" id="v-ft8" hidden>
@@ -811,7 +828,7 @@ function vue(n) {
   if (n === 'ft8') ticFt8();
   if (n === 'carres') chargeCarres();
   if (n === 'frise') chargeFrise();
-  if (n === 'sked') prepareSked();
+  if (n === 'sked') { prepareSked(); setTimeout(dessineSked); }
 }
 document.querySelectorAll('#onglets button[data-v]').forEach(b => b.onclick = () => vue(b.dataset.v));
 
@@ -1055,7 +1072,7 @@ function centreSur(k) { const [lo, la] = coin(k); qcx = wxq(lo + 1); qcy = wyq(l
 function qTuile(z, x, y) {
   const n = 1 << z, xw = ((x % n) + n) % n, k = z + '/' + xw + '/' + y;
   let i = qTuiles.get(k);
-  if (!i) { i = new Image(); i.onload = () => dessineCarres(); i.src = '/journal/tuile?z=' + z + '&x=' + xw + '&y=' + y; qTuiles.set(k, i);
+  if (!i) { i = new Image(); i.onload = () => { dessineCarres(); dessineSked(); }; i.src = '/journal/tuile?z=' + z + '&x=' + xw + '&y=' + y; qTuiles.set(k, i);
     if (qTuiles.size > 500) qTuiles.delete(qTuiles.keys().next().value); }
   return i.complete && i.naturalWidth ? i : null;
 }
@@ -1181,9 +1198,160 @@ async function calculeSked() {
   K = j.fenetres;
   txt('k-etat', K.length + ' fenêtre(s) commune(s)');
   g('k-liste').innerHTML = K.map((w, i) => '<tr><td>' + jourHeure(w.de) + '</td><td>' + hm(w.a) + '</td><td>' + duree(w.a - w.de) +
-    '</td><td>' + w.elMoi + '° · az ' + w.azMoi + '°</td><td>' + w.elAutre + '° · az ' + w.azAutre + '°</td><td><button title="Mettre à l’agenda" onclick="skedAgenda(' + i + ')">📅</button></td></tr>').join('') ||
+    '</td><td>' + w.elMoi + '° · az ' + w.azMoi + '°</td><td>' + w.elAutre + '° · az ' + w.azAutre + '°</td><td style="white-space:nowrap"><button title="Rejouer sur la carte" onclick="rejoueSked(' + i + ')">▶</button> ' +
+    '<button title="Mettre à l’agenda" onclick="skedAgenda(' + i + ')">📅</button></td></tr>').join('') ||
     '<tr><td colspan="6" class="petit">aucune fenêtre commune en 48 h</td></tr>';
+  if (K.length) rejoueSked(0); else { g('k-anim').hidden = true; KT = null; }
 }
+// The sked replayed: both skies and the map, as on the phone.
+let KT = null, kF = 0, kJoue = false, kAvant = 0, kz = 3, kcx = 0.5, kcy = 0.35;
+const K_DUREE = 15000;   // one full replay, ms
+async function rejoueSked(i) {
+  const w = K[i];
+  let j = null;
+  try { j = await (await fetch('/api/sked/trace?catnum=' + g('k-sat').value + '&loc=' + enc(v('k-loc')) + '&de=' + w.debutTrace + '&a=' + w.finTrace)).json(); } catch (x) {}
+  if (!j || !j.ok || !j.points.length) return;
+  // Longitudes made continuous (from mine), so a track over the date line stays one line.
+  let ref = j.moi.lon;
+  j.points.forEach(p => { while (p[6] - ref > 180) p[6] -= 360; while (p[6] - ref < -180) p[6] += 360; ref = p[6]; });
+  while (j.autre.lon - j.moi.lon > 180) j.autre.lon -= 360; while (j.autre.lon - j.moi.lon < -180) j.autre.lon += 360;
+  KT = j; KT.w = w; KT.loc = v('k-loc').toUpperCase(); KT.nom = g('k-sat').selectedOptions[0].textContent;
+  [...g('k-liste').rows].forEach((r, k) => r.classList.toggle('choisi', k === i));
+  txt('k-titre', KT.nom + ' · ' + jourHeure(w.de) + ' → ' + hm(w.a));
+  txt('k-lmoi', 'Moi' + (E && E.locator ? ' (' + E.locator + ')' : '') + ' · max ' + w.elMoi + '°');
+  txt('k-llui', KT.loc + ' · max ' + w.elAutre + '°');
+  g('k-anim').hidden = false;
+  kF = 0; kJoue = true; kAvant = 0; txt('k-joue', '⏸');
+  cadreSked(); dessineSked();
+  requestAnimationFrame(boucleSked);
+}
+function basculeSked() { kJoue = !kJoue; txt('k-joue', kJoue ? '⏸' : '▶'); if (kJoue) { kAvant = 0; if (kF >= 1) kF = 0; requestAnimationFrame(boucleSked); } }
+function boucleSked(ts) {
+  if (!kJoue || !KT) return;
+  if (!g('v-sked').hidden) {
+    if (kAvant) kF += (ts - kAvant) / K_DUREE;
+    if (kF >= 1) kF = 0;
+    dessineSked();
+  }
+  kAvant = ts;
+  requestAnimationFrame(boucleSked);
+}
+g('k-curseur').oninput = () => { kF = (+g('k-curseur').value) / 1000; kJoue = false; txt('k-joue', '▶'); dessineSked(); };
+/** The instant at [f] (0..1): time, my az/el, his az/el, lat, lon, altitude — interpolated. */
+function instantSked(f) {
+  const P = KT.points, t = P[0][0] + f * (P[P.length - 1][0] - P[0][0]);
+  let k = 0; while (k < P.length - 2 && P[k + 1][0] <= t) k++;
+  const a = P[k], b = P[Math.min(k + 1, P.length - 1)], u = b[0] > a[0] ? Math.max(0, Math.min(1, (t - a[0]) / (b[0] - a[0]))) : 0;
+  const az = (x, y) => { let d = y - x; if (d > 180) d -= 360; if (d < -180) d += 360; return ((x + d * u) % 360 + 360) % 360; };
+  const li = (x, y) => x + (y - x) * u;
+  return [t, az(a[1], b[1]), li(a[2], b[2]), az(a[3], b[3]), li(a[4], b[4]), li(a[5], b[5]), li(a[6], b[6]), li(a[7], b[7])];
+}
+function cielSked(id, iAz, iEl, cour) {
+  let s = '';
+  for (const el of [0, 30, 60]) s += '<circle r="' + (100 * (1 - el / 90)) + '" fill="none" stroke="#22303B"/>';
+  s += '<line x1="-100" y1="0" x2="100" y2="0" stroke="#22303B"/><line x1="0" y1="-100" x2="0" y2="100" stroke="#22303B"/>';
+  for (const [t, x, y] of [['N', 0, -103], ['E', 104, 4], ['S', 0, 110], ['O', -104, 4]])
+    s += '<text x="' + x + '" y="' + y + '" fill="#9AA7B4" font-size="8" text-anchor="middle">' + t + '</text>';
+  const pts = KT.points.filter(p => p[iEl] >= 0), com = pts.filter(p => p[0] >= KT.w.de && p[0] <= KT.w.a);
+  const ligne = (l, c, w, o) => l.length > 1 ? '<polyline fill="none" stroke="' + c + '" stroke-opacity="' + o + '" stroke-width="' + w + '" points="' +
+    l.map(p => polaire(p[iAz], p[iEl]).map(x => x.toFixed(1)).join(',')).join(' ') + '"/>' : '';
+  s += ligne(pts, '#3FE0C8', 1.4, .45) + ligne(com, '#5BD68A', 3, .9);
+  if (pts.length) { const a = polaire(pts[0][iAz], pts[0][iEl]);
+    s += '<text x="' + a[0].toFixed(1) + '" y="' + (a[1] - 4).toFixed(1) + '" fill="#3FE0C8" font-size="7" text-anchor="middle">AOS</text>'; }
+  const az = cour[iAz], el = cour[iEl];
+  if (el >= 0) { const p = polaire(az, el); s += '<circle cx="' + p[0].toFixed(1) + '" cy="' + p[1].toFixed(1) + '" r="5" fill="#FFB454" stroke="#06131A"/>'; }
+  s += '<text x="-110" y="108" fill="' + (el >= 0 ? '#E8F0F7' : '#9AA7B4') + '" font-size="9">' + (el >= 0 ? 'az ' + Math.round(az) + '° · él ' + Math.round(el) + '°' : 'sous l’horizon (' + Math.round(el) + '°)') + '</text>';
+  g(id).innerHTML = s;
+}
+function wxk(lon) { return (lon + 180) / 360; }
+function cadreSked() {
+  const c = g('k-carte'); if (!c.clientWidth || !KT) return;
+  const pts = KT.points.filter(p => p[2] >= 0 || p[4] >= 0).map(p => [p[5], p[6]]);
+  pts.push([KT.moi.lat, KT.moi.lon], [KT.autre.lat, KT.autre.lon]);
+  const xs = pts.map(p => wxk(p[1])), ys = pts.map(p => wyq(p[0]));
+  const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+  kcx = (x0 + x1) / 2; kcy = (y0 + y1) / 2;
+  kz = Math.max(1, Math.min(8, Math.log2(Math.min(c.clientWidth / 256 / Math.max(x1 - x0, 0.005), c.clientHeight / 256 / Math.max(y1 - y0, 0.005)) * 0.8)));
+}
+/** The points [lat, lon] at an angular radius [rho] (rad) around [lat0, lon0]: the footprint. */
+function cercle(lat0, lon0, rho) {
+  const f0 = lat0 * Math.PI / 180, out = [];
+  for (let b = 0; b <= 360; b += 4) {
+    const br = b * Math.PI / 180;
+    const f = Math.asin(Math.sin(f0) * Math.cos(rho) + Math.cos(f0) * Math.sin(rho) * Math.cos(br));
+    const dl = Math.atan2(Math.sin(br) * Math.sin(rho) * Math.cos(f0), Math.cos(rho) - Math.sin(f0) * Math.sin(f));
+    let lon = lon0 + dl * 180 / Math.PI;
+    // Continuous from the previous point: a footprint over a pole goes round the whole map.
+    if (out.length) { const pr = out[out.length - 1][1]; while (lon - pr > 180) lon -= 360; while (lon - pr < -180) lon += 360; }
+    out.push([f * 180 / Math.PI, lon]);
+  }
+  // Round the pole: closed along the map's top (or bottom) edge.
+  const fin = out[out.length - 1][1], debut = out[0][1];
+  if (Math.abs(fin - debut) > 180) { const pole = lat0 >= 0 ? 85 : -85; out.push([pole, fin], [pole, debut]); }
+  return out;
+}
+function dessineSked() {
+  if (!KT || g('v-sked').hidden) return;
+  const cour = instantSked(kF);
+  if (document.activeElement !== g('k-curseur')) g('k-curseur').value = Math.round(kF * 1000);
+  txt('k-heure', hm(cour[0], true) + (utc() ? ' UTC' : ''));
+  const moi = cour[2] >= 0, lui = cour[4] >= 0;
+  g('k-ensemble').innerHTML = moi && lui ? '<b style="color:#5BD68A">vous le voyez tous deux</b>' : moi ? 'vous seul le voyez' : lui ? KT.loc + ' seul le voit' : 'personne ne le voit';
+  cielSked('k-cmoi', 1, 2, cour); cielSked('k-clui', 3, 4, cour);
+  // The map.
+  const c = g('k-carte');
+  const w = c.clientWidth, h = c.clientHeight, dpr = window.devicePixelRatio || 1;
+  if (c.width !== Math.round(w * dpr) || c.height !== Math.round(h * dpr)) { c.width = Math.round(w * dpr); c.height = Math.round(h * dpr); }
+  const x = c.getContext('2d'); x.setTransform(dpr, 0, 0, dpr, 0, 0);
+  x.fillStyle = '#AAD3DF'; x.fillRect(0, 0, w, h);
+  const z = Math.max(0, Math.min(16, Math.floor(kz))), ts = 256 * Math.pow(2, kz - z), s = 256 * Math.pow(2, kz);
+  const n = 1 << z, ox = w / 2 - kcx * s, oy = h / 2 - kcy * s;
+  for (let ty = Math.max(0, Math.floor(-oy / ts)); ty <= Math.min(n - 1, Math.floor((h - oy) / ts)); ty++)
+    for (let tx = Math.floor(-ox / ts); tx <= Math.floor((w - ox) / ts); tx++) { const i = qTuile(z, tx, ty); if (i) x.drawImage(i, ox + tx * ts, oy + ty * ts, ts + 0.5, ts + 0.5); }
+  const px = lon => ox + wxk(lon) * s, py = lat => oy + wyq(lat) * s;
+  const trace = (l, couleur, larg, tirets) => { if (l.length < 2) return; x.strokeStyle = couleur; x.lineWidth = larg; x.setLineDash(tirets || []);
+    x.beginPath(); l.forEach((p, k) => k ? x.lineTo(px(p[1]), py(p[0])) : x.moveTo(px(p[1]), py(p[0]))); x.stroke(); x.setLineDash([]); };
+  // The footprint: where the earth sees the satellite now.
+  const rho = Math.acos(6371 / (6371 + Math.max(150, cour[7])));
+  const fp = cercle(cour[5], cour[6], rho), bord = fp.slice(0, 91);
+  // Drawn once more a turn on each side: around a pole it spans the whole map.
+  for (const d of [-360, 0, 360]) {
+    x.fillStyle = 'rgba(63,224,200,.16)'; x.beginPath(); fp.forEach((p, k) => k ? x.lineTo(px(p[1] + d), py(p[0])) : x.moveTo(px(p[1] + d), py(p[0]))); x.closePath(); x.fill();
+    trace(bord.map(p => [p[0], p[1] + d]), 'rgba(20,120,110,.8)', 1.2);
+  }
+  // The ground track, the common window in green, the part already flown darker.
+  const P = KT.points.map(p => [p[5], p[6], p[0]]);
+  trace(P, 'rgba(30,40,55,.55)', 1.5, [5, 4]);
+  trace(P.filter(p => p[2] >= KT.w.de && p[2] <= KT.w.a), '#2E9E5B', 4);
+  trace(P.filter(p => p[2] <= cour[0]).concat([[cour[5], cour[6]]]), '#0B6E63', 2);
+  // Each station, its line to the satellite when it sees it.
+  const station = (st, vu, couleur, nom) => {
+    if (vu) { x.strokeStyle = couleur; x.lineWidth = 1.5; x.beginPath(); x.moveTo(px(st.lon), py(st.lat)); x.lineTo(px(cour[6]), py(cour[5])); x.stroke(); }
+    x.fillStyle = couleur; x.strokeStyle = '#06131A'; x.lineWidth = 1.5; x.beginPath(); x.arc(px(st.lon), py(st.lat), 6, 0, 7); x.fill(); x.stroke();
+    x.font = 'bold 12px system-ui'; x.textAlign = 'left'; x.lineWidth = 3; x.strokeStyle = 'rgba(255,255,255,.85)';
+    x.strokeText(nom, px(st.lon) + 9, py(st.lat) + 4); x.fillStyle = '#06131A'; x.fillText(nom, px(st.lon) + 9, py(st.lat) + 4);
+  };
+  station(KT.moi, moi, '#FFB454', E && E.indicatif ? E.indicatif : 'Moi');
+  station(KT.autre, lui, '#E86FA8', KT.loc);
+  // The satellite.
+  x.fillStyle = moi && lui ? '#5BD68A' : '#3FE0C8'; x.strokeStyle = '#06131A'; x.lineWidth = 2;
+  x.beginPath(); x.arc(px(cour[6]), py(cour[5]), 7, 0, 7); x.fill(); x.stroke();
+  x.font = 'bold 12px system-ui'; x.lineWidth = 3; x.strokeStyle = 'rgba(255,255,255,.85)';
+  x.strokeText(KT.nom, px(cour[6]) + 10, py(cour[5]) - 8); x.fillStyle = '#06131A'; x.fillText(KT.nom, px(cour[6]) + 10, py(cour[5]) - 8);
+}
+(function () {
+  const c = g('k-carte'); let pres = null;
+  c.addEventListener('pointerdown', ev => { c.setPointerCapture(ev.pointerId); pres = { x: ev.clientX, y: ev.clientY, cx: kcx, cy: kcy }; c.style.cursor = 'grabbing'; });
+  c.addEventListener('pointermove', ev => { if (!pres) return; const s = 256 * Math.pow(2, kz);
+    kcx = pres.cx - (ev.clientX - pres.x) / s; kcy = Math.max(0, Math.min(1, pres.cy - (ev.clientY - pres.y) / s)); dessineSked(); });
+  c.addEventListener('pointerup', () => { pres = null; c.style.cursor = 'grab'; });
+  c.addEventListener('wheel', ev => { ev.preventDefault(); const r = c.getBoundingClientRect(), s = 256 * Math.pow(2, kz);
+    const mx = kcx + (ev.clientX - r.left - r.width / 2) / s, my = kcy + (ev.clientY - r.top - r.height / 2) / s;
+    kz = Math.max(1, Math.min(12, kz + (ev.deltaY > 0 ? -0.35 : 0.35))); const s2 = 256 * Math.pow(2, kz);
+    kcx = mx - (ev.clientX - r.left - r.width / 2) / s2; kcy = my - (ev.clientY - r.top - r.height / 2) / s2; dessineSked(); }, { passive: false });
+  c.addEventListener('dblclick', () => { cadreSked(); dessineSked(); });
+  window.addEventListener('resize', dessineSked);
+})()
 async function skedAgenda(i) { const w = K[i]; await post('/api/agenda/sked?catnum=' + g('k-sat').value + '&loc=' + enc(v('k-loc')) + '&de=' + w.de + '&a=' + w.a); alert('Sked mis à l’agenda.'); }
 
 // ------------------------------------------------------------------ FT8

@@ -401,7 +401,8 @@ class StationPc(
     // ---------------------------------------------------------------- skeds
 
     /** A window both stations see the satellite: when, and how high for each. */
-    class FenetreSked(val deMs: Long, val aMs: Long, val elMoi: Int, val elAutre: Int, val azMoi: Double, val azAutre: Double)
+    class FenetreSked(val deMs: Long, val aMs: Long, val elMoi: Int, val elAutre: Int, val azMoi: Double, val azAutre: Double,
+                      val debutTrace: Long, val finTrace: Long)
 
     /**
      * The windows of the next 48 hours in which I and the station in square
@@ -424,9 +425,41 @@ class StationPc(
             val mi = (de + fin) / 2
             val pA = runCatching { predicteur.positionAt(sat, a, mi) }.getOrNull()
             val pB = runCatching { predicteur.positionAt(sat, b, mi) }.getOrNull()
-            out += FenetreSked(de, fin, x.maxElevationDeg.toInt(), y.maxElevationDeg.toInt(), pA?.azimuthDeg ?: 0.0, pB?.azimuthDeg ?: 0.0)
+            out += FenetreSked(de, fin, x.maxElevationDeg.toInt(), y.maxElevationDeg.toInt(), pA?.azimuthDeg ?: 0.0, pB?.azimuthDeg ?: 0.0,
+                minOf(x.aosEpochMs, y.aosEpochMs), maxOf(x.losEpochMs, y.losEpochMs))
         }
         out.sortedBy { it.deMs }
+    }
+
+    /** One instant of a sked replayed: each side's look angles, where the satellite is over. */
+    class PointSked(val t: Long, val azMoi: Double, val elMoi: Double, val azAutre: Double, val elAutre: Double,
+                    val lat: Double, val lon: Double, val altKm: Double)
+
+    /** Both stations and the instants from [deMs] to [aMs] (both passes), a few hundred at most. */
+    class TraceSked(val moi: Observer, val autre: Observer, val points: List<PointSked>)
+
+    /**
+     * The sked replayed, as the phone's animation: from the first station's
+     * rise to the last one's set, every few seconds, both skies and the
+     * satellite's place over the earth.
+     */
+    suspend fun traceSked(catnum: Int, locator: String, deMs: Long, aMs: Long): TraceSked? = withContext(Dispatchers.Default) {
+        val e = _etat.value
+        val sat = e.satellites.firstOrNull { it.catalogNumber == catnum } ?: return@withContext null
+        val ll = Maidenhead.centre(locator.trim()) ?: return@withContext null
+        val a = e.observateur ?: return@withContext null
+        val b = Observer(ll.first, ll.second, 0.0, locator.trim().uppercase())
+        if (aMs <= deMs || aMs - deMs > 6 * 3_600_000L) return@withContext null
+        val pas = maxOf(2_000L, (aMs - deMs) / 400)
+        val pts = ArrayList<PointSked>()
+        var t = deMs
+        while (t <= aMs) {
+            val pA = runCatching { predicteur.positionAt(sat, a, t) }.getOrNull()
+            val pB = runCatching { predicteur.positionAt(sat, b, t) }.getOrNull()
+            if (pA != null && pB != null) pts += PointSked(t, pA.azimuthDeg, pA.elevationDeg, pB.azimuthDeg, pB.elevationDeg, pA.latDeg, pA.lonDeg, pA.altKm)
+            t += pas
+        }
+        TraceSked(a, b, pts)
     }
 
     /** A sked into the agenda (its window), as an appointment of kind SKED. */

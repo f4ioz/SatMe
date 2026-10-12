@@ -103,7 +103,20 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 val f = kotlinx.coroutines.runBlocking { station.sked(q["catnum"]?.toIntOrNull() ?: 0, q["loc"].orEmpty(), q["minEl"]?.toDoubleOrNull() ?: 0.0) }
                 val o = if (f == null) JSONObject().put("ok", false).put("erreur", "carré non reconnu")
                     else JSONObject().put("ok", true).put("fenetres", JSONArray(f.map { w -> JSONObject().put("de", w.deMs).put("a", w.aMs)
-                        .put("elMoi", w.elMoi).put("elAutre", w.elAutre).put("azMoi", Math.round(w.azMoi)).put("azAutre", Math.round(w.azAutre)) }))
+                        .put("elMoi", w.elMoi).put("elAutre", w.elAutre).put("azMoi", Math.round(w.azMoi)).put("azAutre", Math.round(w.azAutre))
+                        .put("debutTrace", w.debutTrace).put("finTrace", w.finTrace) }))
+                envoie(sortie, "200 OK", "application/json; charset=utf-8", o.toString().toByteArray())
+            }
+            "/api/sked/trace" -> {
+                val tr = kotlinx.coroutines.runBlocking { station.traceSked(q["catnum"]?.toIntOrNull() ?: 0, q["loc"].orEmpty(),
+                    q["de"]?.toLongOrNull() ?: 0L, q["a"]?.toLongOrNull() ?: 0L) }
+                fun r(x: Double, n: Int) = Math.round(x * n) / n.toDouble()
+                val o = if (tr == null) JSONObject().put("ok", false)
+                    else JSONObject().put("ok", true)
+                        .put("moi", JSONObject().put("lat", tr.moi.latDeg).put("lon", tr.moi.lonDeg))
+                        .put("autre", JSONObject().put("lat", tr.autre.latDeg).put("lon", tr.autre.lonDeg))
+                        .put("points", JSONArray(tr.points.map { p -> JSONArray(listOf(p.t, r(p.azMoi, 10), r(p.elMoi, 10), r(p.azAutre, 10), r(p.elAutre, 10),
+                            r(p.lat, 100), r(p.lon, 100), Math.round(p.altKm))) }))
                 envoie(sortie, "200 OK", "application/json; charset=utf-8", o.toString().toByteArray())
             }
             "/api/wavelog/profils" -> {

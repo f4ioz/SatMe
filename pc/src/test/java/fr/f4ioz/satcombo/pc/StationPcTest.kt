@@ -204,6 +204,30 @@ class StationPcTest {
     }
 
     @Test
+    fun un_sked_se_trouve_puis_se_rejoue_des_deux_cotes() = kotlinx.coroutines.runBlocking {
+        val st = station()
+        attends { st.etat.value.satellites.isNotEmpty() && st.etat.value.observateur != null }
+        // Madrid (IN80): close enough to share most ISS passes with Paris.
+        val f = st.sked(25544, "IN80", 0.0)!!
+        assertTrue(f.isNotEmpty())
+        // (The first may be the pass under way, the clock being in the middle of one.)
+        val w = f.first { it.debutTrace > milieu }
+        assertTrue(w.debutTrace <= w.deMs && w.aMs <= w.finTrace)
+        val tr = st.traceSked(25544, "IN80", w.debutTrace, w.finTrace)!!
+        assertEquals(40.0, tr.autre.latDeg, 1.0)
+        assertTrue(tr.points.size in 100..401)
+        // Inside the common window both see it; at its two ends, one at least is at the horizon.
+        val centre = tr.points.minByOrNull { Math.abs(it.t - (w.deMs + w.aMs) / 2) }!!
+        assertTrue(centre.elMoi > 0 && centre.elAutre > 0)
+        assertTrue(tr.points.first().let { it.elMoi < 0.5 || it.elAutre < 0.5 })
+        // The satellite is near both stations then: within the ISS's footprint (~2,300 km).
+        assertTrue(Math.abs(centre.lat - 44.0) < 25)
+        // An unreadable square, a window upside down: nothing.
+        assertEquals(null, st.sked(25544, "ZZ", 0.0))
+        assertEquals(null, st.traceSked(25544, "IN80", w.finTrace, w.debutTrace))
+    }
+
+    @Test
     fun le_mat_simule_vise_le_satellite() {
         val st = station()
         st.suis(25544)
