@@ -23,8 +23,15 @@ object ServeurGp {
     /** The author's server, used until the user sets another or empties the field. */
     const val DEFAUT = "https://gp.f4ioz.fr"
 
-    /** Group name on the server for a SatMe source id. */
-    fun groupe(sourceId: String): String = if (sourceId == "amsat_gp") "amsat" else sourceId
+    /**
+     * Group name on the server for a SatMe source id; a single satellite
+     * ("images:64890") is the server's lookup by number.
+     */
+    fun groupe(sourceId: String): String = when {
+        sourceId == "amsat_gp" -> "amsat"
+        ':' in sourceId -> "catnr/" + sourceId.substringAfter(':')
+        else -> sourceId
+    }
 
     /** "https://gp.exemple.org/" or "gp.exemple.org" → "https://gp.exemple.org". */
     fun normalise(base: String): String {

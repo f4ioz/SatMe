@@ -1388,6 +1388,7 @@ val FR: Map<String, String> = mapOf(
     "src_amsat_gp" to "AMSAT GP (bulletin officiel)",
     "src_weather" to "Celestrak Météo (NOAA)",
     "src_satnogs" to "SatNOGS DB (≈ 1 700 satellites)",
+    "src_images" to "Satellites d'images (SSTV, SSDV)",
     "clear_filter" to "Effacer le filtre",
     // ---- Timeline (elevation curves) ----
     "timeline_title" to "Timeline",

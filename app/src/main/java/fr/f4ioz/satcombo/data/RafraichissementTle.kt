@@ -34,9 +34,14 @@ object RafraichissementTle {
      * them for one satellite is how an address gets blocked.
      */
     fun adresses(catnum: Int, sources: List<TleSource>): List<String> {
-        val autres = sources.filterNot(::estCelestrak).map {
-            if (it.id == Sources.SATNOGS) Sources.satnogsNumero(catnum) else it.url
-        }
+        val autres = sources.filterNot(::estCelestrak).mapNotNull {
+            when (it.id) {
+                Sources.SATNOGS -> Sources.satnogsNumero(catnum)
+                // The picture satellites: SatNOGS DB, for those of the list only.
+                Sources.IMAGES -> if (SatellitesImages.de(catnum) != null) Sources.satnogsNumero(catnum) else null
+                else -> it.url
+            }
+        }.distinct()
         val celestrak = if (sources.any(::estCelestrak))
             listOf("https://celestrak.org/NORAD/elements/gp.php?CATNR=$catnum&FORMAT=json")
         else emptyList()

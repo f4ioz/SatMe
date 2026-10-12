@@ -336,16 +336,17 @@ class StationPc(
         stationCat.regleMaintien(settings.catHoldMs.toLong())
         change { copy(agenda = AgendaStore.purge(stockageAgenda, nowMs = horloge()),
             agendaSuivi = stockage.getBoolean(CLE_AGENDA_SUIVI, true)) }
+        catalogue.choix = choixSources()
         change { copy(favoris = lisFavoris(), satellites = this@StationPc.catalogue.satellites(), locator = settings.manualLocator,
             indicatif = settings.callsign, observateur = observateur(), catModele = modeleDe(settings.rigModel)) }
         stockage.getInt(CLE_SATELLITE, 0).takeIf { it > 0 }?.let { n -> _etat.value.satellites.firstOrNull { it.catalogNumber == n }?.let { suis(it) } }
         portee.launch(Dispatchers.IO) {
             val age = catalogue.age(horloge())
-            if (age == null || age > 12 * 3_600_000L) {
-                change { copy(catalogue = "téléchargement des éléments AMSAT…") }
+            if (age == null || age > 12 * 3_600_000L || catalogue.choixChange()) {
+                change { copy(catalogue = "téléchargement des éléments…") }
                 val dit = catalogue.rafraichis()
                 change { copy(catalogue = dit, satellites = this@StationPc.catalogue.satellites()) }
-            } else change { copy(catalogue = "éléments AMSAT du disque (${age / 3_600_000L} h)") }
+            } else change { copy(catalogue = "éléments du disque (${age / 3_600_000L} h)") }
             recalcule()
         }
         portee.launch {
@@ -710,9 +711,23 @@ class StationPc(
         return r
     }
 
+    /** The orbital elements' choice, as on the phone: its sources, the SatMe GP server, the server only. */
+    val sourcesStore = fr.f4ioz.satcombo.data.SourcesStore(stockage)
+
+    fun choixSources() = Catalogue.Choix(sourcesStore.load(), settings.serveurGp, settings.serveurGpSeul)
+
+    /** A new choice of sources: kept, then the elements downloaded again with it. */
+    fun regleSources(ids: Set<String>?, serveur: String?, seul: Boolean?) {
+        ids?.let { l -> sourcesStore.save(l.filter { id -> fr.f4ioz.satcombo.data.Sources.ALL.any { it.id == id } }.toSet()) }
+        serveur?.let { settings.serveurGp = it }
+        seul?.let { settings.serveurGpSeul = it }
+        catalogue.choix = choixSources()
+        rafraichisCatalogue()
+    }
+
     fun rafraichisCatalogue() {
         portee.launch(Dispatchers.IO) {
-            change { copy(catalogue = "téléchargement des éléments AMSAT…") }
+            change { copy(catalogue = "téléchargement des éléments…") }
             val dit = catalogue.rafraichis()
             change { copy(catalogue = dit, satellites = this@StationPc.catalogue.satellites()) }
             recalcule()

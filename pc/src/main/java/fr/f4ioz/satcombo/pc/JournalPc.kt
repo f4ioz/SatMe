@@ -72,12 +72,25 @@ class JournalPc(
         val trames: List<fr.f4ioz.satcombo.aprs.Paquet> = emptyList(),
     )
 
-    fun liens(e: JournalPassage.Entree): Liens {
+    fun liens(e: JournalPassage.Entree): Liens = liens(e, carnet.contacts(), son.images())
+
+    /**
+     * The links of many passes at once (the journal's list): the log and the
+     * pictures read once, not once per pass — five hundred passes read the
+     * log five hundred times, twelve seconds before the list showed.
+     */
+    fun liens(l: List<JournalPassage.Entree>): Map<String, Liens> {
+        val contacts = carnet.contacts(); val images = son.images()
+        return l.associate { it.id to liens(it, contacts, images) }
+    }
+
+    private fun liens(e: JournalPassage.Entree, contacts: List<fr.f4ioz.satcombo.data.LogEntry>,
+                      lesImages: List<fr.f4ioz.satcombo.sstv.SstvMeta.SstvShot>): Liens {
         val f = JournalPassage.fenetre(e)
         return Liens(
-            qsos = carnet.contacts().filter { it.timeMs in f && (it.catnum == e.catnum || JournalPassage.memeSatellite(it.satName, e.satName)) }
+            qsos = contacts.filter { it.timeMs in f && (it.catnum == e.catnum || JournalPassage.memeSatellite(it.satName, e.satName)) }
                 .sortedBy { it.timeMs },
-            images = son.images().filter { it.timeMs in f }.mapNotNull { s -> son.fichierImage(s.fileName)?.let { it to s } }
+            images = lesImages.filter { it.timeMs in f }.mapNotNull { s -> son.fichierImage(s.fileName)?.let { it to s } }
                 .sortedBy { it.second.timeMs },
             trames = son.aprs.paquets.filter { it.quand in f && !it.emis }.sortedBy { it.quand })
     }

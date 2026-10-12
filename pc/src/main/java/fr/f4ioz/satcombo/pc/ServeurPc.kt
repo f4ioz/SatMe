@@ -219,6 +219,19 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
             }
             "/api/carnet" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JsonPc.carnet(carnet).toString().toByteArray())
             "/api/reglages" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JsonPc.reglages(station).toString().toByteArray())
+            "/api/sources" -> {
+                // The orbital elements' choice, as on the phone.
+                val c = station.choixSources()
+                val o = JSONObject().put("serveur", c.serveur).put("seul", c.seul).put("defaut", fr.f4ioz.satcombo.data.ServeurGp.DEFAUT)
+                    .put("etat", station.etat.value.catalogue).put("nombre", station.etat.value.satellites.size)
+                    .put("sources", JSONArray(fr.f4ioz.satcombo.data.Sources.ALL.map { s ->
+                        JSONObject().put("id", s.id).put("nom", s.label).put("actif", s.id in c.sources)
+                            // CelesTrak: from this PC through the server only.
+                            .put("celestrak", s.url.contains("celestrak", true))
+                            .put("detail", if (s.id == fr.f4ioz.satcombo.data.Sources.IMAGES) fr.f4ioz.satcombo.data.SatellitesImages.LISTE.joinToString(", ") { it.nom + " (" + it.images + ")" } else "")
+                    }))
+                envoie(sortie, "200 OK", "application/json; charset=utf-8", o.toString().toByteArray())
+            }
             "/api/qrz" -> {
                 // Read only (a directory lookup), so a GET; nothing changes in the station.
                 val f = carnet?.let { kotlinx.coroutines.runBlocking { it.ficheQrz(q["c"].orEmpty()) } }
@@ -504,6 +517,22 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 q["fiche"]?.let { station.ficheQrz = it == "1" }
                 q["carnetDelai"]?.toIntOrNull()?.let { s.carnetAutoDelaiS = it }
                 q["carnetAuto"]?.let { carnet?.setAuto(it == "1") }
+            }
+            "/api/sources" -> station.regleSources(q["ids"]?.split(',')?.map { it.trim() }?.filter { it.isNotEmpty() }?.toSet(),
+                q["serveur"], q["seul"]?.let { it == "1" })
+            "/api/sources/essai" -> {
+                // The server's groups and their counts, or why it does not answer.
+                val base = fr.f4ioz.satcombo.data.ServeurGp.normalise(q["serveur"].orEmpty().ifBlank { station.settings.serveurGp })
+                if (base.isEmpty()) return JSONObject().put("ok", false).put("erreur", "aucune adresse")
+                val r = runCatching {
+                    val c = okhttp3.OkHttpClient.Builder().connectTimeout(8, java.util.concurrent.TimeUnit.SECONDS).readTimeout(15, java.util.concurrent.TimeUnit.SECONDS).build()
+                    c.newCall(okhttp3.Request.Builder().url(fr.f4ioz.satcombo.data.ServeurGp.index(base)).header("User-Agent", fr.f4ioz.satcombo.data.AgentHttp.USER_AGENT).build()).execute().use { rep ->
+                        if (!rep.isSuccessful) return JSONObject().put("ok", false).put("erreur", "HTTP " + rep.code)
+                        val g = JSONObject(rep.body?.string().orEmpty()).getJSONArray("groupes")
+                        (0 until g.length()).joinToString(" · ") { val x = g.getJSONObject(it); x.getString("id") + " " + x.optInt("nombre") }
+                    }
+                }.getOrElse { return JSONObject().put("ok", false).put("erreur", "pas de réponse (" + it.javaClass.simpleName + ")") }
+                return ok.put("groupes", r)
             }
             "/api/carnet/retiens" -> {
                 val t = q["t"]?.toLongOrNull() ?: return JSONObject().put("ok", false)

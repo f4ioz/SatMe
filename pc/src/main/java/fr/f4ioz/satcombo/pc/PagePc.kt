@@ -27,12 +27,37 @@ object PagePc {
     }
 
     /**
-     * The same tabs at the top of the journal's page: links back to this
-     * page, opened on the tab (#carnet), the journal shown as the one open.
+     * The same header at the top of the journal's page, a page of its own:
+     * the same title, station, tabs and clock, the same look (its styles
+     * scoped under #pcBar, the journal's own left alone). The tabs are links
+     * back to this page, opened on the tab (#carnet).
      */
-    fun barreJournal(): String = "<nav class=\"pc\">" + ONGLETS.joinToString("") { (v, nom) ->
-        if (v == "journal") "<a class=\"actif\">$nom</a>" else "<a href=\"/#$v\">$nom</a>"
-    } + "</nav>"
+    fun barreJournal(): String = "<header id=\"pcBar\"><h1>SatMe <span class=\"c\">PC</span></h1><span class=\"g\" id=\"pc-info\"></span><nav>" +
+        ONGLETS.joinToString("") { (v, nom) ->
+            if (v == "journal") "<button class=\"actif\">$nom</button>" else "<a href=\"/#$v\"><button>$nom</button></a>"
+        } + "</nav><span id=\"pc-heure\"></span></header>"
+
+    /** The header's look, as on this page (sizes, gaps, the narrower screens). */
+    const val STYLE_BARRE = "#tTitre,#lienPlanche,#lienPupitre,#tSous{display:none}" +
+        "#pcBar{display:flex;align-items:baseline;gap:16px;flex-wrap:wrap;padding:10px 16px;border-bottom:1px solid var(--bord);font-size:14px}" +
+        "#pcBar h1{font-size:18px;margin:0;letter-spacing:.5px}#pcBar h1 .c{color:var(--cyan)}#pcBar .g{color:var(--gris);font-size:13px}" +
+        "#pc-heure{font-family:ui-monospace,Consolas,monospace;font-size:16px;margin-left:auto}" +
+        "#pcBar nav{display:flex;gap:4px}#pcBar nav a{text-decoration:none}" +
+        "#pcBar nav button{font-size:14px;font-family:inherit;font-weight:700;border-radius:8px;background:transparent;border:1px solid transparent;color:var(--gris);padding:6px 14px;cursor:pointer}" +
+        "#pcBar nav button.actif{color:var(--cyan);border-color:var(--bord);background:var(--carte)}" +
+        "@media (max-width:1900px){#pcBar nav button{padding:5px 8px;font-size:13px}#pcBar{gap:10px}#pcBar nav{gap:2px}}" +
+        "@media (max-width:1500px){#pcBar nav button{padding:4px 6px;font-size:12.5px}#pcBar h1{font-size:16px}#pc-info{display:none}}" +
+        // The journal's own bar below, only its filter now: lighter.
+        "#page>header:not(#pcBar){padding:5px 16px;border-bottom:none}"
+
+    /** Fills the header: the station from /api/etat, the clock each second (UTC as chosen on the station page). */
+    const val SCRIPT_BARRE = "(function(){let E=null;const p2=n=>String(n).padStart(2,'0');" +
+        "function utc(){try{return localStorage.getItem('utc')==='1'}catch(x){return false}}" +
+        "async function etat(){try{E=await(await fetch('/api/etat')).json();const i=document.getElementById('pc-info');" +
+        "if(i)i.textContent=[E.indicatif,E.locator].filter(x=>x).join(' · ')+' · '+E.nbSatellites+' satellites'}catch(x){}}" +
+        "function heure(){const d=new Date(),u=utc(),h=document.getElementById('pc-heure');if(!h)return;" +
+        "h.textContent=(u?[d.getUTCHours(),d.getUTCMinutes(),d.getUTCSeconds()]:[d.getHours(),d.getMinutes(),d.getSeconds()]).map(p2).join(':')+(u?' UTC':'')}" +
+        "etat();setInterval(etat,30000);heure();setInterval(heure,1000)})();"
 
     val HTML = """<!doctype html>
 <html lang="fr"><head><meta charset="utf-8">
@@ -47,6 +72,7 @@ object PagePc {
   #c-liste td.act button { padding:3px 5px; }
   #c-liste .c-nm { max-width:96px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--gris); font-size:11px; font-weight:400; }
   #c-liste td.act { white-space:nowrap; }
+  .gp-ct { color:var(--gris); font-size:11px; }
   #t-qr svg { width:100%; height:100%; display:block; border-radius:8px; }
   #visionneuse::backdrop { background:rgba(0,0,0,.75); }
   #vi-img { display:block; max-width:min(92vw,1280px); max-height:calc(92vh - 60px); min-width:320px; image-rendering:auto; border-radius:6px; cursor:zoom-out; background:#0E1720; }
@@ -910,11 +936,20 @@ object PagePc {
       <div class="etat" id="reg-etat"></div>
     </div>
     <div class="carte">
-      <div class="t">Éléments et téléphone</div>
-      <div class="ligne"><button onclick="post('/api/catalogue')">Retélécharger les éléments AMSAT</button></div>
-      <div class="petit" style="margin-top:10px">Reprendre les réglages du téléphone (Réglages → Sauvegarde, fichier .json) :</div>
-      <input type="file" id="import" accept=".json,application/json" onchange="importe(this)" style="width:100%;margin-top:4px">
+      <div class="t">Éléments orbitaux</div>
+      <div class="petit">Serveur GP SatMe : il interroge AMSAT, CelesTrak et SatNOGS pour tout le monde, et ce PC lui demande tout. Comme sur le téléphone.</div>
+      <div class="ligne"><input id="gpServeur" placeholder="https://gp.f4ioz.fr"><button onclick="essaiGp()">Essayer</button><button onclick="g('gpServeur').value = SRC.defaut; majSources()" id="gpDefaut">Par défaut</button></div>
+      <div class="petit" id="gp-essai"></div>
+      <label class="petit" style="display:block;margin-top:8px"><input type="checkbox" id="gpSeul" onchange="majSources()"> Uniquement ce serveur : jamais AMSAT ni SatNOGS directement</label>
+      <div class="petit" style="margin-top:10px">Sources :</div>
+      <div id="gpSources" style="display:grid;grid-template-columns:1fr 1fr;gap:2px 12px;margin-top:4px"></div>
+      <div class="ligne"><button class="primaire" onclick="enregistreSources()">Enregistrer et télécharger</button></div>
       <div class="etat" id="catalogue"></div>
+    </div>
+    <div class="carte">
+      <div class="t">Téléphone</div>
+      <div class="petit">Reprendre les réglages du téléphone (Réglages → Sauvegarde, fichier .json) :</div>
+      <input type="file" id="import" accept=".json,application/json" onchange="importe(this)" style="width:100%;margin-top:4px">
     </div>
   </div>
   <div>
@@ -1275,7 +1310,7 @@ function vue(n) {
   document.querySelectorAll('#onglets button').forEach(b => b.classList.toggle('actif', b.dataset.v === n));
   try { localStorage.setItem('vue', n); } catch (x) {}
   if (n === 'carnet') { chargeCarnet(); g('c-call').focus(); vueCarnet(vueC); }
-  if (n === 'reglages') chargeReglages();
+  if (n === 'reglages') { chargeReglages(); chargeSources(); }
   if (n === 'son' || n === 'sstv') ticSon();
   if (n === 'aprs') ticAprs();
   if (n === 'ft8') ticFt8();
@@ -1750,6 +1785,35 @@ async function enregistreReglages() {
     txt('reg-etat', 'enregistré'); g('qrzMdp').value = ''; g('carnetCle').value = '';
     chargeReglages(); setTimeout(chargeListe, 1500);
   }
+}
+// ------------------------------------------------------------------ orbital elements
+let SRC = null;
+async function chargeSources() {
+  try { SRC = await (await fetch('/api/sources')).json(); } catch (x) { return; }
+  g('gpServeur').value = SRC.serveur; g('gpSeul').checked = SRC.seul;
+  g('gpSources').innerHTML = SRC.sources.map(s => '<label class="petit" title="' + esc(s.detail).replace(/"/g, '&quot;') + '"><input type="checkbox" class="gp-src" value="' + s.id + '"' +
+    (s.actif ? ' checked' : '') + ' data-celestrak="' + (s.celestrak ? 1 : 0) + '"> ' + esc(s.nom) + (s.celestrak ? ' <span class="gp-ct">(par le serveur)</span>' : '') + '</label>').join('');
+  majSources();
+}
+// CelesTrak refuses this PC: its groups only through the server, so without one they cannot be ticked.
+function majSources() {
+  const sans = !v('gpServeur');
+  g('gpSeul').disabled = sans; if (sans) g('gpSeul').checked = false;
+  document.querySelectorAll('.gp-src').forEach(c => { if (c.dataset.celestrak === '1') { c.disabled = sans; if (sans) c.checked = false; } });
+  g('gpDefaut').hidden = !SRC || v('gpServeur') === SRC.defaut;
+}
+g('gpServeur').addEventListener('input', majSources);
+async function enregistreSources() {
+  const ids = [...document.querySelectorAll('.gp-src')].filter(c => c.checked).map(c => c.value);
+  if (!ids.length) { alert('Au moins une source.'); return; }
+  await post('/api/sources?ids=' + enc(ids.join(',')) + '&serveur=' + enc(v('gpServeur')) + '&seul=' + (g('gpSeul').checked ? 1 : 0));
+  txt('gp-essai', '');
+}
+async function essaiGp() {
+  txt('gp-essai', 'serveur…');
+  let j = null;
+  try { j = await (await fetch('/api/sources/essai?serveur=' + enc(v('gpServeur')), { method: 'POST' })).json(); } catch (x) {}
+  txt('gp-essai', j && j.ok ? 'il répond : ' + j.groupes : (j && j.erreur ? j.erreur : 'pas de réponse'));
 }
 async function essaiCarnet() {
   txt('carnet-essai', 'carnet en ligne…');

@@ -8,7 +8,11 @@
  */
 package fr.f4ioz.satcombo.pc
 
+import fr.f4ioz.satcombo.data.FusionGp
 import fr.f4ioz.satcombo.data.OmmParser
+import fr.f4ioz.satcombo.data.ServeurGp
+import fr.f4ioz.satcombo.data.Sources
+import fr.f4ioz.satcombo.data.TleSource
 import fr.f4ioz.satcombo.data.TleEntry
 import fr.f4ioz.satcombo.data.Transmitter
 import okhttp3.OkHttpClient
@@ -42,8 +46,33 @@ class Catalogue(
     private val dossierEmetteurs = File(dossier, "emetteurs")
     private val emetteurs = java.util.concurrent.ConcurrentHashMap<Int, List<Transmitter>>()
 
+    /**
+     * What to download, as on the phone: the sources ticked (AMSAT's bulletin
+     * alone by default), through the SatMe GP server first (gp.f4ioz.fr), or
+     * through it only. CelesTrak is never asked from here, the server only.
+     */
+    data class Choix(val sources: Set<String> = Sources.DEFAULT_IDS, val serveur: String = ServeurGp.DEFAUT, val seul: Boolean = false)
+
+    @Volatile var choix = Choix()
+
+    /** Each source's last good answer, as it came. */
+    private val dossierSources = File(dossier, "sources")
+    private fun fichierSource(id: String) = File(dossierSources, id.replace(':', '_') + ".txt")
+    private val fait = File(dossierSources, "fait")
+
+    /** The sources wanted now: those chosen, then the METEOR-M AMSAT lacks (their LRPT pictures). */
+    private fun voulues(c: Choix): List<TleSource> =
+        Sources.aTelecharger(c.sources) + SATNOGS_EN_PLUS.map { TleSource("plus:$it", "METEOR #$it", Sources.satnogsNumero(it)) }
+
     /** The satellites known now, from the disk (empty before the first download). */
     fun satellites(): List<TleEntry> {
+        val listes = voulues(choix).mapNotNull { s -> fichierSource(s.id).takeIf { it.isFile }?.let { f -> runCatching { lis(f.readText()) }.getOrNull() } }
+        if (listes.isNotEmpty()) return FusionGp.fusionne(listes).sortedBy { it.name.uppercase() }
+        return ancien()
+    }
+
+    /** What a version before the sources' choice kept (AMSAT's two files, SatNOGS' METEOR). */
+    private fun ancien(): List<TleEntry> {
         val amsat = fusionne(
             runCatching { OmmParser.parse(fichierGp.readText()) }.getOrDefault(emptyList()),
             runCatching { lisTle(fichierTle.readText()) }.getOrDefault(emptyList()))
@@ -55,25 +84,48 @@ class Catalogue(
 
     /** Age of the elements on disk (ms), null when there are none. */
     fun age(maintenant: Long = System.currentTimeMillis()): Long? =
-        fichierGp.takeIf { it.isFile }?.let { maintenant - it.lastModified() }
+        (fait.takeIf { it.isFile } ?: fichierGp.takeIf { it.isFile })?.let { maintenant - it.lastModified() }
+
+    /** The sources chosen are not those on disk (a source ticked since): download again. */
+    fun choixChange(): Boolean = runCatching { fait.readText().trim() }.getOrDefault("") != signature(choix)
+
+    private fun signature(c: Choix) = (c.sources.sorted() + ServeurGp.normalise(c.serveur) + c.seul.toString()).joinToString(",")
 
     /**
-     * Downloads both AMSAT files; what was on disk stays when the network
-     * fails. Returns a word for the operator.
+     * Downloads each source chosen, the SatMe GP server first, the source
+     * itself next unless the server only is wanted; what was on disk stays
+     * for a source that does not answer. Returns a word for the operator.
      */
     fun rafraichis(): String {
-        dossier.mkdirs()
-        val gp = runCatching { telecharge(AMSAT_GP) }.getOrNull()
-        val tle = runCatching { telecharge(AMSAT_TLE) }.getOrNull()
-        if (gp != null && OmmParser.parse(gp).isNotEmpty()) fichierGp.writeText(gp)
-        if (tle != null && lisTle(tle).isNotEmpty()) fichierTle.writeText(tle)
-        // The METEOR-M sending LRPT pictures, which AMSAT's bulletin does not carry: one small request each.
-        val sn = SATNOGS_EN_PLUS.mapNotNull { n -> runCatching { lisTleSatnogs(telecharge("https://db.satnogs.org/api/tle/?norad_cat_id=$n&format=json")) }.getOrNull() }.flatten()
-        if (sn.isNotEmpty()) fichierSatnogs.writeText(sn.joinToString("") { it.name + "\n" + it.line1 + "\n" + it.line2 + "\n" })
-        return when {
-            gp == null && tle == null -> "AMSAT injoignable : éléments du disque gardés"
-            else -> "éléments AMSAT à jour (${satellites().size} satellites)"
+        val c = choix
+        dossierSources.mkdirs()
+        val serveur = ServeurGp.normalise(c.serveur)
+        var parServeur = 0; var directes = 0
+        val muettes = ArrayList<String>()
+        for (s in voulues(c)) {
+            val adresses = ServeurGp.adresses(c.serveur, s, c.seul).filterNot(::interdit)
+            var lu: Pair<String, String>? = null
+            for (a in adresses) {
+                val t = runCatching { telecharge(a) }.getOrNull() ?: continue
+                if (lis(t).isNotEmpty()) { lu = a to t; break }
+            }
+            if (lu == null) {
+                // A picture satellite the server does not know yet is not worth a word each.
+                if (':' !in s.id || s.id.startsWith("plus:")) muettes += s.label
+                continue
+            }
+            fichierSource(s.id).writeText(lu.second)
+            if (serveur.isNotEmpty() && lu.first.startsWith(serveur)) parServeur++ else directes++
         }
+        if (parServeur + directes > 0) fait.writeText(signature(c))
+        val n = satellites().size
+        val ou = when {
+            parServeur + directes == 0 -> return "aucune source ne répond : éléments du disque gardés" + (if (muettes.isEmpty()) "" else " (" + muettes.joinToString(", ") + ")")
+            directes == 0 -> serveur.removePrefix("https://").removePrefix("http://")
+            parServeur == 0 -> "les sources elles-mêmes"
+            else -> serveur.removePrefix("https://").removePrefix("http://") + " et les sources"
+        }
+        return "éléments à jour : $n satellites ($ou)" + (if (muettes.isEmpty()) "" else " · sans réponse : " + muettes.joinToString(", "))
     }
 
     /** The transmitters of a satellite, from SatNOGS DB (then from disk). */
@@ -114,6 +166,17 @@ class Catalogue(
                 runCatching { TleEntry(o.optString("tle0").removePrefix("0 ").trim(), o.getString("tle1"), o.getString("tle2")) }.getOrNull()
             }
         }.getOrDefault(emptyList())
+
+        /** Elements of any source, the format recognised: OMM JSON, SatNOGS' TLE in JSON, or TLE; usable ones only. */
+        fun lis(texte: String): List<TleEntry> {
+            val t = texte.trimStart()
+            val brut = when {
+                t.startsWith("[") && t.contains("\"tle1\"") -> lisTleSatnogs(texte)
+                t.startsWith("[") || t.startsWith("{") -> runCatching { OmmParser.parse(texte) }.getOrDefault(emptyList())
+                else -> lisTle(texte)
+            }
+            return brut.filter { fr.f4ioz.satcombo.domain.PassPredictor.elementsUtilisables(it) }
+        }
 
         /** CelesTrak refuses this station's address: never asked from the PC. */
         fun interdit(url: String): Boolean = url.contains("celestrak", ignoreCase = true)

@@ -80,6 +80,7 @@ object PageJournal {
   .p.actif { border-color:var(--cyan); background:#13262A; }
   .p .s { font-weight:700; } .p .d { color:var(--gris); font-size:11px; }
   .p .m { font-size:11px; margin-top:1px; display:flex; gap:7px; flex-wrap:wrap; }
+  .p .m .note { font-size:18px; line-height:12px; color:var(--cyan); font-weight:700; }
   .pastille { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:3px; vertical-align:middle; }
   .vue { background:var(--carte); border:1px solid var(--bord); border-radius:10px; padding:8px 10px; min-width:0; }
   .entete { display:flex; gap:10px; align-items:baseline; flex-wrap:wrap; }
@@ -237,7 +238,8 @@ function dessineListe() {
   l.forEach(p => {
     const m = el('div', { class: 'm' });
     const tag = (k, n, lib) => { if (n) m.appendChild(el('span', {}, [el('span', { class: 'pastille', style: 'background:' + COUL[k] }), document.createTextNode(n + ' ' + lib)])); };
-    if (p.son) m.appendChild(el('span', { text: '♪' }));
+    // The sound: a note big enough to see at a glance in the list.
+    if (p.son) m.appendChild(el('span', { class: 'note', text: '♪', title: T.sons }));
     tag('QSO', p.q, T.qso); tag('SSTV', p.i, 'SSTV'); tag('APRS', p.r, T.aprs); tag('SIGNET', p.s, '⚑');
     if (p.sm) m.appendChild(el('span', { text: T.smetre }));
     if (p.rec) m.appendChild(el('span', { style: 'color:var(--gris)', text: T.reconstitue }));

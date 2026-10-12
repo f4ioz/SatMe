@@ -25,6 +25,9 @@ object Sources {
     val ALL get() = listOf(
         TleSource("amsat_gp", t("src_amsat_gp"),
             "https://newark192.amsat.org/gpdata/current/daily-bulletin.json"),
+        // The satellites sending pictures (SSTV, SSDV), most not in AMSAT's
+        // bulletin: asked one by one ([SatellitesImages]), no address of its own.
+        TleSource(IMAGES, t("src_images"), ""),
         TleSource("amateur", "Celestrak Amateur",
             "https://celestrak.org/NORAD/elements/gp.php?GROUP=amateur&FORMAT=json"),
         TleSource("stations", "Celestrak Stations (ISS)",
@@ -40,6 +43,7 @@ object Sources {
         TleSource(SATNOGS, t("src_satnogs"), "https://db.satnogs.org/api/tle/?format=json"),
     )
     const val SATNOGS = "satnogs"
+    const val IMAGES = "images"
 
     /** One satellite from SatNOGS DB, rather than its whole list. */
     fun satnogsNumero(catnum: Int) = "https://db.satnogs.org/api/tle/?norad_cat_id=$catnum&format=json"
@@ -55,9 +59,15 @@ object Sources {
      */
     val AMSAT_TLE = TleSource("amsat_tle", "AMSAT (TLE)", "https://www.amsat.org/tle/current/nasabare.txt")
 
-    /** What to download for [ids]: the sources, and AMSAT's TLE with its JSON. */
+    /** What to download for [ids]: the sources, AMSAT's TLE with its JSON, each picture satellite on its own. */
     fun aTelecharger(ids: Set<String>): List<TleSource> =
-        byIds(ids).flatMap { if (it.id == "amsat_gp") listOf(it, AMSAT_TLE) else listOf(it) }
+        byIds(ids).flatMap {
+            when (it.id) {
+                "amsat_gp" -> listOf(it, AMSAT_TLE)
+                IMAGES -> SatellitesImages.sources()
+                else -> listOf(it)
+            }
+        }
 }
 
 /** Persists the user's enabled TLE source ids. */
