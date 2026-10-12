@@ -64,6 +64,7 @@ fun main(args: Array<String>) {
         while (true) {
             runCatching { son.tic() }
             runCatching { journal.tic() }
+            runCatching { carnet.ticEnvoi() }
             runCatching { sdr.ticMeteor() }
             kotlinx.coroutines.delay(1000)
         }
@@ -73,7 +74,9 @@ fun main(args: Array<String>) {
     val videoSked = VideoSked(File(dossier, "exports")) { z, x, y -> journalWeb.tuile(z, x, y)?.let { f -> runCatching { javax.imageio.ImageIO.read(f) }.getOrNull() } }
     // SatMe on the phone: its passes, their contacts and pictures, to the PC.
     val telephone = TelephonePc(carnet, journal, File(dossier, "enregistrements"), File(dossier, "sstv"), File(dossier, "tmp"))
-    val serveur = ServeurPc(station, port, reseau, carnet, son, journalWeb, ImportPc(station, carnet, journal), sdr, videoSked, telephone)
+    // The phone joining by a QR code: a door of its own next to the page's port, open only while the code is shown.
+    val appairage = AppairagePc(telephone, port + 1)
+    val serveur = ServeurPc(station, port, reseau, carnet, son, journalWeb, ImportPc(station, carnet, journal), sdr, videoSked, telephone, appairage)
     serveur.demarre()
     println("SatMe — station PC")
     println("  page      : http://localhost:${serveur.portReel}/" + if (reseau) "  (ouverte au réseau)" else "")

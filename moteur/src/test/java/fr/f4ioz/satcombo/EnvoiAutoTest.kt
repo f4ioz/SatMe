@@ -32,6 +32,14 @@ class EnvoiAutoTest {
     }
 
     @Test
+    fun le_delai_choisi_remplace_la_minute() {
+        val cinq = 5 * 60_000L
+        assertEquals(Etat.ATTENTE, EnvoiAuto.etat(qso, "F4ABC", 0, false, actif, null, qso + 4 * 60_000, cinq))
+        assertEquals(60L, EnvoiAuto.resteS(qso, null, qso + 4 * 60_000, cinq))
+        assertEquals(Etat.PRET, EnvoiAuto.etat(qso, "F4ABC", 0, false, actif, null, qso + cinq, cinq))
+    }
+
+    @Test
     fun en_pause_il_ne_part_pas() {
         assertEquals(Etat.PAUSE, etat(qso + 10 * 60_000, retenu = true))
     }

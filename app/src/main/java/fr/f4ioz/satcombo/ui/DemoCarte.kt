@@ -31,6 +31,7 @@ import androidx.compose.ui.unit.sp
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.qrcode.QRCodeWriter
 import fr.f4ioz.satcombo.demo.ServeurDemo
+import kotlinx.coroutines.launch
 import fr.f4ioz.satcombo.i18n.t
 import fr.f4ioz.satcombo.i18n.tf
 import fr.f4ioz.satcombo.ui.theme.*
@@ -246,6 +247,11 @@ fun DemoCarte(vm: fr.f4ioz.satcombo.MainViewModel) {
                         modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp))
                 }
             }
+            // SatMe PC's QR code, whether sharing is on or not: scanned, the
+            // control desk opens and the PC joins it by itself.
+            Spacer(Modifier.height(12.dp))
+            HorizontalDivider(color = SpaceBg)
+            QrPc()
         }
     }
 }
@@ -278,4 +284,33 @@ private fun QrCode(contenu: String, modifier: Modifier = Modifier) {
             }
         }
     }
+}
+
+/** Scans SatMe PC's QR code (Google's scanner, no camera permission here), then joins the PC. */
+@Composable
+private fun QrPc() {
+    val contexte = androidx.compose.ui.platform.LocalContext.current
+    val portee = rememberCoroutineScope()
+    var etatQr by remember { mutableStateOf("") }
+    var enCours by remember { mutableStateOf(false) }
+    Spacer(Modifier.height(8.dp))
+    OutlinedButton(enabled = !enCours, modifier = Modifier.fillMaxWidth(), onClick = {
+        val options = com.google.mlkit.vision.codescanner.GmsBarcodeScannerOptions.Builder()
+            .setBarcodeFormats(com.google.mlkit.vision.barcode.common.Barcode.FORMAT_QR_CODE).enableAutoZoom().build()
+        runCatching {
+            com.google.mlkit.vision.codescanner.GmsBarcodeScanning.getClient(contexte, options).startScan()
+                .addOnSuccessListener { b ->
+                    val pc = fr.f4ioz.satcombo.demo.RejointPc.lit(b.rawValue.orEmpty())
+                    if (pc == null) { etatQr = t("cmd_qr_pas_satme"); return@addOnSuccessListener }
+                    enCours = true; etatQr = t("cmd_qr_cours")
+                    portee.launch {
+                        val r = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { fr.f4ioz.satcombo.demo.RejointPc.annonce(pc.first, pc.second) }
+                        etatQr = r ?: t("cmd_qr_ok"); enCours = false
+                    }
+                }
+                .addOnFailureListener { etatQr = t("cmd_qr_indispo") }
+        }.onFailure { etatQr = t("cmd_qr_indispo") }
+    }) { Text(t("cmd_qr"), color = Cyan) }
+    Text(etatQr.ifBlank { t("cmd_qr_desc") }, color = if (etatQr.isBlank()) TextLo else Amber, fontSize = 11.sp,
+        modifier = Modifier.fillMaxWidth(), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
 }

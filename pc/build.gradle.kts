@@ -31,6 +31,8 @@ dependencies {
     implementation("org.json:json:20240303")
     // The PC's serial ports, on Linux, Windows and macOS (LGPL-3 / Apache-2).
     implementation("com.fazecast:jSerialComm:2.11.0")
+    // The QR code the phone scans to join the PC (Apache 2.0), as the phone draws its own.
+    implementation("com.google.zxing:core:3.5.3")
 
     testImplementation("junit:junit:4.13.2")
     testImplementation(testFixtures(project(":moteur")))

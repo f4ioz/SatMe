@@ -109,6 +109,13 @@ object PageJournal {
   }
   #ciel { position:absolute; inset:0; width:100%; height:100%; }
   #carte { position:absolute; inset:0; width:100%; height:100%; cursor:grab; display:none; }
+  /* The file's frame over the replay (PC): its view clear, the rest dimmed, its caption below. */
+  #cadreF { position:absolute; inset:0; pointer-events:none; z-index:1; }
+  #cadreF .vueF { position:absolute; outline:2px dashed var(--cyan); box-shadow:0 0 0 9999px rgba(5,10,16,.62); }
+  #cadreF .legF { position:absolute; background:#0A0F18; border-top:1px solid #22303B; padding:6px 10px; overflow:hidden; }
+  #cadreF .legF b { display:block; font-size:15px; color:#fff; }
+  #cadreF .legF span { font-size:11px; color:#A0AFC3; }
+  #cadreF .fmtF { position:absolute; right:8px; top:8px; font-size:11px; color:var(--cyan); background:rgba(5,10,16,.8); padding:2px 6px; border-radius:5px; }
   .bascule { position:absolute; left:8px; top:8px; display:flex; gap:4px; z-index:2; }
   .attrib { position:absolute; right:4px; bottom:2px; font-size:10px; color:#333; background:rgba(255,255,255,.7); padding:0 4px; display:none; }
   .moment { align-self:start; background:#0E1720; border:1px solid var(--bord); border-radius:8px; padding:9px; }
@@ -299,6 +306,32 @@ function construitVue() {
   cote.appendChild(el('div', { class: 'panneau', id: 'panneau' }));
   installeFrise(); installeCarte(); montreVue(O.vue); panneau();
 }
+// ------------------------------------------------------------ the file's frame (PC)
+// Making a file on the PC: where its view and its caption fall on the replay
+// (3:4, the view square above the caption; or 16:9, the caption a fifth of
+// the height), the largest such frame the screen holds. The file shows what
+// is inside: the map's centre and scale are sent from it.
+function cadreFichier() {
+  const e = g('ecran'); if (!window.SATME_PC || !e) return null;
+  const W = e.clientWidth, H = e.clientHeight; if (!W || !H) return null;
+  const portrait = O.format === 'portrait', A = portrait ? 3 / 4 : 16 / 9;
+  const fw = Math.min(W, H * A), fh = fw / A;
+  return { fx: (W - fw) / 2, fy: (H - fh) / 2, fw: fw, fh: fh, vh: portrait ? fw : fh * 380 / 480, W: W, H: H, portrait: portrait };
+}
+function dessineCadre() {
+  let o = g('cadreF'); const c = P && onglet === 'fabriquer' ? cadreFichier() : null;
+  const ciel = g('ciel');
+  if (!c) { if (o) o.remove(); if (ciel) ['left', 'top', 'width', 'height'].forEach(k => ciel.style[k] = ''); return; }
+  if (!o) { o = el('div', { id: 'cadreF' }, [el('div', { class: 'vueF' }), el('div', { class: 'legF' }), el('div', { class: 'fmtF' })]); g('ecran').appendChild(o); }
+  const [v, l, f] = o.children;
+  Object.assign(v.style, { left: c.fx + 'px', top: c.fy + 'px', width: c.fw + 'px', height: c.vh + 'px' });
+  Object.assign(l.style, { left: c.fx + 'px', top: (c.fy + c.vh) + 'px', width: c.fw + 'px', height: (c.fh - c.vh) + 'px' });
+  l.innerHTML = ''; l.appendChild(el('b', { text: P.sat })); l.appendChild(el('span', { text: jour(t) + (P.loc ? ' · ' + P.loc : '') }));
+  f.textContent = c.portrait ? T.format_portrait : T.format_paysage;
+  // The sky as the file draws it: the whole of it, in the view.
+  if (ciel) Object.assign(ciel.style, { left: c.fx + 'px', top: c.fy + 'px', width: c.fw + 'px', height: c.vh + 'px' });
+}
+
 function montreVue(v) {
   O.vue = v; garde();
   g('ciel').style.display = v === 'ciel' ? 'block' : 'none';
@@ -323,6 +356,7 @@ function panneau() {
   ['Moments', 'Rejeu', 'Fabriquer'].forEach(o => g('o' + o).classList.toggle('actif', onglet === o.toLowerCase()));
   const p = g('panneau'); p.innerHTML = '';
   if (onglet === 'moments') panneauMoments(p); else if (onglet === 'rejeu') panneauRejeu(p); else panneauFabriquer(p);
+  dessineCadre();
 }
 function panneauMoments(p) {
   if (!P.marques.length) p.appendChild(el('p', { class: 'aide', text: T.aucun_moment }));
@@ -377,8 +411,8 @@ function panneauFabriquer(p) {
     radio('vueF', 'ciel', T.vue_ciel, O.vue !== 'carte', () => montreVue('ciel')), radio('vueF', 'carte', T.vue_carte, O.vue === 'carte', () => montreVue('carte'))]));
   // On the PC: the screen's format too (the phone's is 3:4, its view square above the caption).
   if (window.SATME_PC) c.appendChild(el('div', { class: 'rangee' }, [el('span', { class: 'aide', text: T.format }),
-    radio('formatF', 'paysage', T.format_paysage, (O.format || 'paysage') === 'paysage', () => { O.format = 'paysage'; garde(); }),
-    radio('formatF', 'portrait', T.format_portrait, O.format === 'portrait', () => { O.format = 'portrait'; garde(); })]));
+    radio('formatF', 'paysage', T.format_paysage, (O.format || 'paysage') === 'paysage', () => { O.format = 'paysage'; garde(); dessineCadre(); }),
+    radio('formatF', 'portrait', T.format_portrait, O.format === 'portrait', () => { O.format = 'portrait'; garde(); dessineCadre(); })]));
   c.appendChild(caseOpt('ouverture', T.ouverture)); c.appendChild(caseOpt('recap', T.recap));
   c.appendChild(caseOpt('avecSon', T.avec_son)); c.appendChild(caseOpt('accelVideo', T.accelere_video));
   p.appendChild(c);
@@ -641,7 +675,7 @@ document.addEventListener('keydown', ev => {
   else if (ev.key === 'ArrowLeft') { ev.preventDefault(); cherche(t - (ev.shiftKey ? 30000 : 5000)); }
   else if (ev.key === 'ArrowRight') { ev.preventDefault(); cherche(t + (ev.shiftKey ? 30000 : 5000)); }
 });
-window.addEventListener('resize', () => { if (P) { dessineFrise(); dessineCarte(); } });
+window.addEventListener('resize', () => { if (P) { dessineFrise(); dessineCarte(); dessineCadre(); } });
 
 // ------------------------------------------------------------ making on the phone
 async function fabrique(quoi) {
@@ -651,7 +685,10 @@ async function fabrique(quoi) {
     sstv: b(O.sstv), fiches: b(O.fiches), smetre: b(O.smetre), freq: b(O.freq), locator: b(O.locator) };
   if (deQuoi === 'sel' && sel && quoi !== 'image' && quoi !== 'paquet') { p.de = Math.round(sel[0]); p.a = Math.round(sel[1]); p.titre = titre; }
   // The map as framed here (centre, zoom, the width it is shown at): the export shows the same.
-  if (O.vue === 'carte') { const c = g('carte'); p.mcx = mcx; p.mcy = mcy; p.zc = zc; p.cw = c.clientWidth; p.ch = c.clientHeight; }
+  if (O.vue === 'carte') { const c = g('carte'); p.mcx = mcx; p.mcy = mcy; p.zc = zc; p.cw = c.clientWidth; p.ch = c.clientHeight;
+    // On the PC, the frame drawn over it: its view's centre and width.
+    const f = cadreFichier();
+    if (f) { const s = 256 * Math.pow(2, zc); p.mcx = mcx + (f.fx + f.fw / 2 - f.W / 2) / s; p.mcy = mcy + (f.fy + f.vh / 2 - f.H / 2) / s; p.cw = f.fw; p.ch = f.vh; } }
   if (window.SATME_PC) p.format = O.format || 'paysage';
   const zone = g('fabrication'); zone.innerHTML = '';
   const barre = el('progress', { max: 100, value: 0 }), mot = el('div', { class: 'aide', text: tf('en_cours', 0) });

@@ -200,6 +200,8 @@ data class CarnetUi(
     val filtre: String = "sat",
     /** Each new contact sent on after a minute (EnvoiAuto). */
     val auto: Boolean = false,
+    /** Its delay, seconds. */
+    val autoDelaiS: Int = 60,
     /** Last automatic upload, or why it stopped. */
     val autoEtat: String = "",
     /** SatMe acts as a radio in the online log (RelaisRadio). */
@@ -1203,7 +1205,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 filtre = settings.carnetFiltre,
                 radio = settings.carnetRadio,
                 radioNom = settings.carnetRadioNom,
-                auto = settings.carnetAuto),
+                auto = settings.carnetAuto, autoDelaiS = settings.carnetAutoDelaiS),
             catUi = CatUi(
                 ic705Baud = settings.ic705Baud,
                 liseret = settings.liseréEmission,
@@ -2729,6 +2731,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _ui.value = _ui.value.copy(carnet = _ui.value.carnet.copy(profil = settings.carnetProfil))
     }
 
+    fun setCarnetAutoDelai(s: Int) {
+        settings.carnetAutoDelaiS = s
+        _ui.value = _ui.value.copy(carnet = _ui.value.carnet.copy(autoDelaiS = settings.carnetAutoDelaiS))
+    }
+
     fun setCarnetAuto(on: Boolean) {
         settings.carnetAuto = on
         // Only what is logged from now on: an older log may already be in
@@ -2841,10 +2848,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun etatEnvoi(e: fr.f4ioz.satcombo.data.LogEntry, maintenant: Long = System.currentTimeMillis()) =
         fr.f4ioz.satcombo.domain.EnvoiAuto.etat(e.timeMs, e.callsign, e.envoyeMs, e.retenu,
             if (settings.carnetAuto) settings.carnetAutoDepuisMs else null,
-            modifies[e.timeMs], maintenant)
+            modifies[e.timeMs], maintenant, settings.carnetAutoDelaiS * 1000L)
 
     fun resteEnvoiS(e: fr.f4ioz.satcombo.data.LogEntry, maintenant: Long = System.currentTimeMillis()): Long =
-        fr.f4ioz.satcombo.domain.EnvoiAuto.resteS(e.timeMs, modifies[e.timeMs], maintenant)
+        fr.f4ioz.satcombo.domain.EnvoiAuto.resteS(e.timeMs, modifies[e.timeMs], maintenant, settings.carnetAutoDelaiS * 1000L)
 
     fun refusEnvoi(timeMs: Long): String = refusAuto[timeMs].orEmpty()
 

@@ -33,7 +33,7 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 private val carnet: CarnetPc? = null, private val son: SonStation? = null,
                 private val journal: JournalWebPc? = null, private val importPc: ImportPc? = null,
                 private val sdr: SdrPc? = null, private val videoSked: VideoSked? = null,
-                private val telephone: TelephonePc? = null) {
+                private val telephone: TelephonePc? = null, private val appairage: AppairagePc? = null) {
 
     private var socket: ServerSocket? = null
     val portReel: Int get() = socket?.localPort ?: port
@@ -147,6 +147,13 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 val o = if (t == null || !t.connecte) JSONObject().put("ok", false)
                     else runCatching { t.liste().put("ok", true).put("adresse", t.adresse).put("version", t.version) }
                         .getOrElse { JSONObject().put("ok", false).put("erreur", "téléphone injoignable") }
+                envoie(sortie, "200 OK", "application/json; charset=utf-8", o.toString().toByteArray())
+            }
+            "/api/telephone/qr" -> {
+                // The QR code's progress: waiting, the phone joined, or why not.
+                val e = appairage?.verifie() ?: AppairagePc.Etat(erreur = "indisponible")
+                val o = JSONObject().put("ouvert", e.ouvert).put("joint", e.joint).put("telephone", e.telephone).put("erreur", e.erreur)
+                    .put("connecte", telephone?.connecte == true).put("adresse", telephone?.adresse.orEmpty()).put("version", telephone?.version.orEmpty())
                 envoie(sortie, "200 OK", "application/json; charset=utf-8", o.toString().toByteArray())
             }
             "/api/telephone/etat" -> {
@@ -402,6 +409,15 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 if (!v.lance(VideoSked.Sked(tr, l("de"), l("a"), sat, station.settings.callsign.ifBlank { station.etat.value.locator }.uppercase(), loc)))
                     return JSONObject().put("ok", false).put("erreur", v.etat.erreur.ifBlank { "une vidéo est déjà en cours" })
             }
+            "/api/telephone/qr" -> {
+                // A QR code for the phone to scan: this PC's address and a fresh token.
+                val a = appairage ?: return JSONObject().put("ok", false).put("erreur", "indisponible")
+                val e = a.ouvre(q["adresse"])
+                if (!e.ouvert) return JSONObject().put("ok", false).put("erreur", e.erreur)
+                return ok.put("url", e.url).put("svg", AppairagePc.svg(e.url)).put("adresses", JSONArray(e.adresses))
+                    .put("ip", e.url.substringAfter("://").substringBefore(':')).put("jusquA", e.jusquA)
+            }
+            "/api/telephone/qr/ferme" -> appairage?.ferme()
             "/api/telephone/connecte" -> {
                 val t = telephone ?: return JSONObject().put("ok", false)
                 t.connecte(q["adresse"].orEmpty(), q["code"].orEmpty())?.let { return JSONObject().put("ok", false).put("erreur", it) }
@@ -464,7 +480,12 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                     mode = q["md"] ?: avant.mode, nom = q["nm"] ?: avant.nom, qth = q["qth"] ?: avant.qth,
                     locatorOrigine = q["lo"] ?: avant.locatorOrigine))
             }
-            "/api/carnet/supprime" -> q["t"]?.toLongOrNull()?.let { carnet?.supprime(it) }
+            "/api/carnet/supprime" -> {
+                // One contact (t=…) or a selection (t=a,b,c).
+                val l = q["t"].orEmpty().split(',').mapNotNull { it.trim().toLongOrNull() }.toSet()
+                val c = carnet ?: return JSONObject().put("ok", false)
+                return ok.put("n", if (l.isEmpty()) 0 else c.supprime(l))
+            }
             "/api/carnet/depose" -> {
                 val c = carnet ?: return JSONObject().put("ok", false)
                 val t = q["t"]?.toLongOrNull()
@@ -481,6 +502,21 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 q["carnetProfil"]?.let { s.carnetProfil = it.trim() }
                 q["minEl"]?.toIntOrNull()?.let { s.minElevDeg = it.coerceIn(0, 45); kotlinx.coroutines.runBlocking { station.recalcule() } }
                 q["fiche"]?.let { station.ficheQrz = it == "1" }
+                q["carnetDelai"]?.toIntOrNull()?.let { s.carnetAutoDelaiS = it }
+                q["carnetAuto"]?.let { carnet?.setAuto(it == "1") }
+            }
+            "/api/carnet/retiens" -> {
+                val t = q["t"]?.toLongOrNull() ?: return JSONObject().put("ok", false)
+                carnet?.retiens(t, q["on"] == "1")
+            }
+            "/api/carnet/profils" -> {
+                // The station profiles the key gives: a connection test, and the id to choose.
+                val s = station.settings
+                if (s.carnetUrl.isBlank() || s.carnetCle.isBlank()) return JSONObject().put("ok", false).put("erreur", "renseigne l'adresse et la clé, puis Enregistrer")
+                val l = runCatching { kotlinx.coroutines.runBlocking { fr.f4ioz.satcombo.data.CarnetEnLigne.profils(s.carnetUrl, s.carnetCle) } }
+                    .getOrElse { return JSONObject().put("ok", false).put("erreur", "pas de réponse : " + (it.message ?: it.javaClass.simpleName)) }
+                if (l.isEmpty()) return JSONObject().put("ok", false).put("erreur", "le carnet en ligne ne donne aucun profil (adresse ou clé ?)")
+                return ok.put("profils", JSONArray(l.map { JSONObject().put("id", it.id).put("indicatif", it.indicatif).put("carre", it.carre).put("nom", it.nom) }))
             }
             "/api/son/carte" -> {
                 val s = son ?: return JSONObject().put("ok", false)
@@ -803,9 +839,16 @@ object JsonPc {
 
     fun carnet(c: CarnetPc?): JSONObject {
         val l = c?.contacts().orEmpty()
+        val maintenant = System.currentTimeMillis()
         return JSONObject().put("carres", c?.carres() ?: 0).put("nonDeposes", l.count { it.envoyeMs == 0L }).put("total", l.size)
+            .put("auto", c?.autoEtat.orEmpty())
             .put("contacts", JSONArray(l.take(6000).map { e ->
-                JSONObject().put("t", e.timeMs).put("c", e.callsign).put("l", e.theirLocator).put("sat", e.satName)
+                // The automatic upload: waiting (seconds left), held back (and why), or nothing to say.
+                val etat = c?.etatEnvoi(e, maintenant)
+                JSONObject().put("ea", etat?.name?.lowercase() ?: "hors")
+                    .also { o -> if (etat == fr.f4ioz.satcombo.domain.EnvoiAuto.Etat.ATTENTE) o.put("reste", c?.resteEnvoiS(e, maintenant) ?: 0L) }
+                    .also { o -> if (e.retenu) o.put("pause", true).put("refus", c?.refusEnvoi(e.timeMs).orEmpty()) }
+                    .put("t", e.timeMs).put("c", e.callsign).put("l", e.theirLocator).put("sat", e.satName)
                     .put("md", e.mode).put("rs", e.rstSent).put("rr", e.rstRcvd).put("n", e.note).put("nm", e.nom)
                     .put("qth", e.qth).put("az", e.azimuthDeg).put("el", e.elevationDeg).put("dl", e.downlinkMhz)
                     .put("ul", e.uplinkMhz).put("envoye", e.envoyeMs > 0).put("ml", e.myLocator)
@@ -838,6 +881,8 @@ object JsonPc {
         return JSONObject().put("c", s.callsign).put("l", s.manualLocator).put("qrzUser", s.qrzUser)
             .put("qrzMdp", s.qrzMdp.isNotEmpty()).put("carnetUrl", s.carnetUrl).put("carnetCle", s.carnetCle.isNotEmpty())
             .put("carnetProfil", s.carnetProfil).put("minEl", s.minElevDeg).put("fiche", st.ficheQrz)
+            .put("carnetAuto", s.carnetAuto).put("carnetDelai", s.carnetAutoDelaiS)
+            .put("delais", JSONArray(fr.f4ioz.satcombo.domain.EnvoiAuto.DELAIS_S))
     }
 
     /**

@@ -145,6 +145,9 @@ dependencies {
     // QR codes for demo mode (Apache 2.0). Core only: the Android module would
     // pull in a camera dependency we don't need.
     implementation("com.google.zxing:core:3.5.3")
+    // Scanning SatMe PC's QR code: Google's scanner, its own screen, no camera
+    // permission for the app (the image never reaches it, only the text read).
+    implementation("com.google.android.gms:play-services-code-scanner:16.1.0")
     val composeBom = platform("androidx.compose:compose-bom:2024.09.00")
     implementation(composeBom)
     implementation("androidx.compose.ui:ui")

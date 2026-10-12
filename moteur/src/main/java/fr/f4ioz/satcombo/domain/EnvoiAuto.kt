@@ -11,10 +11,11 @@ package fr.f4ioz.satcombo.domain
 /**
  * Each contact sent on to the online log by itself — an option.
  *
- * **Not at once: after [DELAI_MS].** Wavelog's API creates contacts but cannot
- * change them; a typo that left is fixed by hand on the server. The minute is
- * the time to see it and hold the contact back (paused), fix it, release it.
- * Changing a waiting contact starts its minute again.
+ * **Not at once: after a delay** ([DELAI_MS] unless the operator chose
+ * another, [DELAIS_S]). Wavelog's API creates contacts but cannot change
+ * them; a typo that left is fixed by hand on the server. The delay is the
+ * time to see it and hold the contact back (paused), fix it, release it.
+ * Changing a waiting contact starts its delay again.
  *
  * Only contacts logged **after the option was turned on** leave: an older
  * log may already be in Wavelog through an ADIF import, and Wavelog does not
@@ -23,6 +24,9 @@ package fr.f4ioz.satcombo.domain
 object EnvoiAuto {
 
     const val DELAI_MS = 60_000L
+
+    /** The delays offered, in seconds: half a minute to half an hour. */
+    val DELAIS_S = listOf(30, 60, 120, 300, 600, 1800)
 
     enum class Etat {
         /** Not concerned: option off, logged before it, or no callsign. */
@@ -43,18 +47,18 @@ object EnvoiAuto {
      */
     fun etat(
         timeMs: Long, callsign: String, envoyeMs: Long, retenu: Boolean,
-        actifDepuisMs: Long?, modifieMs: Long?, maintenantMs: Long,
+        actifDepuisMs: Long?, modifieMs: Long?, maintenantMs: Long, delaiMs: Long = DELAI_MS,
     ): Etat = when {
         envoyeMs > 0 -> Etat.ENVOYE
         callsign.isBlank() || actifDepuisMs == null || timeMs < actifDepuisMs -> Etat.HORS
         retenu -> Etat.PAUSE
-        maintenantMs - depart(timeMs, modifieMs) < DELAI_MS -> Etat.ATTENTE
+        maintenantMs - depart(timeMs, modifieMs) < delaiMs -> Etat.ATTENTE
         else -> Etat.PRET
     }
 
     /** Seconds left before a waiting contact leaves. */
-    fun resteS(timeMs: Long, modifieMs: Long?, maintenantMs: Long): Long =
-        ((DELAI_MS - (maintenantMs - depart(timeMs, modifieMs))) / 1000).coerceAtLeast(0)
+    fun resteS(timeMs: Long, modifieMs: Long?, maintenantMs: Long, delaiMs: Long = DELAI_MS): Long =
+        ((delaiMs - (maintenantMs - depart(timeMs, modifieMs))) / 1000).coerceAtLeast(0)
 
     private fun depart(timeMs: Long, modifieMs: Long?) = maxOf(timeMs, modifieMs ?: 0L)
 }

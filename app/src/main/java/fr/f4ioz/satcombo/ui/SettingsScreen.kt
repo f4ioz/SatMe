@@ -1846,6 +1846,16 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
                     SettingSwitch(t("auto_titre"), t("auto_desc"), ui.carnet.auto) {
                         vm.setCarnetAuto(it)
                     }
+                    if (ui.carnet.auto) {
+                        Text(t("auto_delai"), color = TextLo, fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp))
+                        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            fr.f4ioz.satcombo.domain.EnvoiAuto.DELAIS_S.forEach { d ->
+                                FilterChip(selected = ui.carnet.autoDelaiS == d, onClick = { vm.setCarnetAutoDelai(d) },
+                                    label = { Text(if (d < 60) "$d s" else "${d / 60} min", fontSize = 12.sp) },
+                                    colors = FilterChipDefaults.filterChipColors(selectedContainerColor = Cyan.copy(alpha = 0.25f)))
+                            }
+                        }
+                    }
                     if (ui.carnet.auto && ui.carnet.autoEtat.isNotBlank()) {
                         Text(ui.carnet.autoEtat, color = TextLo, fontSize = 11.sp,
                             modifier = Modifier.padding(top = 4.dp))

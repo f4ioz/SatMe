@@ -213,6 +213,13 @@ class LogStore(private val file: java.io.File) {
         return list
     }
 
+    /** Several contacts at once (a selection), written once. */
+    fun delete(times: Set<Long>): List<LogEntry> {
+        val list = load().filterNot { it.timeMs in times }
+        save(list)
+        return list
+    }
+
     /**
      * Marks a contact as uploaded. Written at once, not at the end of the
      * batch: an interruption keeps the work done instead of redoing it — and

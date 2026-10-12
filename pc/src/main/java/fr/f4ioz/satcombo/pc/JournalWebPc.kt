@@ -28,9 +28,18 @@ class JournalWebPc(private val j: JournalPc, private val station: StationPc, pri
 
     /** The page, opened at once (no code on this PC) and without the phone-only links. */
     fun page(): String = PageJournal.html()
-        .replace("<script>", "<script>window.SATME_PC=true;try{localStorage.setItem('satme-cle','pc')}catch(e){}</script>\n<style>#lienPlanche{display:none}</style>\n<script>")
+        .replace("<script>", "<script>window.SATME_PC=true;try{localStorage.setItem('satme-cle','pc')}catch(e){}</script>\n<style>$STYLE_PC</style>\n<script>")
+        // The PC's tabs above the journal, as on its other pages.
+        .replace("<h1 id=\"tTitre\"></h1>", "<h1 class=\"pc\">SatMe <span>PC</span></h1>" + PagePc.barreJournal() + "<h1 id=\"tTitre\" hidden></h1>")
         // Its words are the phone's: said here of the PC.
         .let { h -> TEXTES_PC.entries.fold(h) { acc, (cle, pc) -> acc.replace(js(fr.f4ioz.satcombo.i18n.t(cle)), js(fr.f4ioz.satcombo.i18n.t(pc))) } }
+
+    /** The tabs' look, the PC page's; the links the PC's tabs already give hidden. */
+    private val STYLE_PC = "#lienPlanche,#lienPupitre,#tSous{display:none}" +
+        "h1.pc{font-size:17px;letter-spacing:.5px}h1.pc span{color:var(--cyan)}" +
+        "nav.pc{display:flex;gap:2px;flex-wrap:wrap}" +
+        "nav.pc a{color:var(--gris);text-decoration:none;font-weight:600;font-size:12.5px;padding:4px 7px;border:1px solid transparent;border-radius:7px}" +
+        "nav.pc a:hover{color:var(--clair)}nav.pc a.actif{color:var(--cyan);border-color:var(--bord);background:var(--carte)}"
 
     /** The page's words that speak of the phone, and the PC's in their place. */
     private val TEXTES_PC = mapOf("pj_sous" to "pc_pj_sous", "pj_aucun" to "pc_pj_aucun", "pw_pupitre" to "pc_pj_station",

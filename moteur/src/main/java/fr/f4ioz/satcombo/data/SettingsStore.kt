@@ -570,6 +570,11 @@ class SettingsStore(private val prefs: Stockage) {
         get() = prefs.getBoolean("carnet_auto", false)
         set(v) { prefs.edit().putBoolean("carnet_auto", v).apply() }
 
+    /** How long a new contact waits before the automatic upload sends it (seconds). */
+    var carnetAutoDelaiS: Int
+        get() = prefs.getInt("carnet_auto_delai_s", 60).coerceIn(10, 3600)
+        set(v) { prefs.edit().putInt("carnet_auto_delai_s", v.coerceIn(10, 3600)).apply() }
+
     /** When the automatic upload was turned on: older contacts never leave by it. */
     var carnetAutoDepuisMs: Long
         get() = prefs.getLong("carnet_auto_depuis", 0L)

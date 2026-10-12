@@ -101,6 +101,8 @@ class CarnetPc(private val station: StationPc, val store: LogStore, private val 
 
     fun modifie(timeMs: Long, m: LogEntry) {
         oublieMemoire()
+        // A contact changed while it waits: its delay starts again.
+        modifies[timeMs] = horloge()
         store.update(timeMs) {
             it.copy(callsign = m.callsign.trim().uppercase(), theirLocator = m.theirLocator.trim().uppercase(),
                 note = m.note.trim(), mode = m.mode.trim(), rstSent = m.rstSent.trim(), rstRcvd = m.rstRcvd.trim(),
@@ -110,6 +112,14 @@ class CarnetPc(private val station: StationPc, val store: LogStore, private val 
     }
 
     fun supprime(timeMs: Long) { store.delete(timeMs); oublieMemoire() }
+
+    /** Several contacts (a selection on the page); how many went. */
+    fun supprime(times: Set<Long>): Int {
+        val avant = store.load().size
+        val n = avant - store.delete(times).size
+        oublieMemoire()
+        return n
+    }
 
     fun adif(): String = store.toAdif(station.settings.callsign)
 
@@ -179,6 +189,85 @@ class CarnetPc(private val station: StationPc, val store: LogStore, private val 
         val pris = CarnetEnLigne.accepte(r) || CarnetEnLigne.doublon(r)
         if (pris) store.marqueEnvoye(timeMs, horloge())
         return if (pris) "${e.callsign} déposé au carnet en ligne" else CarnetEnLigne.raison(r)
+    }
+
+    // ------------------------------------------- each contact on its own, as on the phone
+
+    /** Last change of each contact, which restarts its delay. In memory only. */
+    private val modifies = java.util.concurrent.ConcurrentHashMap<Long, Long>()
+    /** Why the server refused a contact (it is then held back). */
+    private val refus = java.util.concurrent.ConcurrentHashMap<Long, String>()
+    /** No reply: not before this time (the request may have gone through). */
+    private val reessai = java.util.concurrent.ConcurrentHashMap<Long, Long>()
+    @Volatile private var envoiEnCours = false
+    /** The last automatic upload, or why it stopped, in words. */
+    @Volatile var autoEtat = ""; private set
+
+    fun etatEnvoi(e: LogEntry, maintenant: Long = horloge()): fr.f4ioz.satcombo.domain.EnvoiAuto.Etat {
+        val s = station.settings
+        return fr.f4ioz.satcombo.domain.EnvoiAuto.etat(e.timeMs, e.callsign, e.envoyeMs, e.retenu,
+            if (s.carnetAuto) s.carnetAutoDepuisMs else null, modifies[e.timeMs], maintenant, s.carnetAutoDelaiS * 1000L)
+    }
+
+    fun resteEnvoiS(e: LogEntry, maintenant: Long = horloge()): Long =
+        fr.f4ioz.satcombo.domain.EnvoiAuto.resteS(e.timeMs, modifies[e.timeMs], maintenant, station.settings.carnetAutoDelaiS * 1000L)
+
+    fun refusEnvoi(timeMs: Long): String = refus[timeMs].orEmpty()
+
+    /** On or off; only what is logged from now on leaves (an older log may already be online through an ADIF). */
+    fun setAuto(on: Boolean) {
+        val s = station.settings
+        if (on && !s.carnetAuto) s.carnetAutoDepuisMs = horloge()
+        s.carnetAuto = on
+        autoEtat = ""
+    }
+
+    /** Holds a contact back, or releases it (a refusal is then forgotten). */
+    fun retiens(timeMs: Long, retenu: Boolean) {
+        if (!retenu) { refus.remove(timeMs); reessai.remove(timeMs) }
+        store.retiens(timeMs, retenu)
+    }
+
+    /**
+     * Every second: the oldest contact whose delay is over goes to the online
+     * log, one at a time, marked only once the server took it.
+     */
+    fun ticEnvoi() {
+        val s = station.settings
+        if (!s.carnetAuto || envoiEnCours) return
+        if (s.carnetUrl.isBlank() || s.carnetCle.isBlank() || s.carnetProfil.isBlank()) return
+        val maintenant = horloge()
+        val e = store.load().filter {
+            etatEnvoi(it, maintenant) == fr.f4ioz.satcombo.domain.EnvoiAuto.Etat.PRET && (reessai[it.timeMs] ?: 0L) <= maintenant
+        }.minByOrNull { it.timeMs } ?: return
+        envoiEnCours = true
+        kotlin.concurrent.thread(isDaemon = true, name = "satme-envoi") {
+            try {
+                val adif = Adif.enregistrement(e, s.callsign)
+                if (adif.isBlank()) { store.retiens(e.timeMs, true); refus[e.timeMs] = "contact incomplet"; return@thread }
+                val r = kotlinx.coroutines.runBlocking { CarnetEnLigne.depose(s.carnetUrl, s.carnetCle, s.carnetProfil, adif) }
+                val issue = CarnetEnLigne.issue(r)
+                autoEtat = when {
+                    CarnetEnLigne.doublon(r) -> { store.marqueEnvoye(e.timeMs, horloge()); "${e.callsign} déjà dans le carnet en ligne" }
+                    issue == CarnetEnLigne.Issue.PRIS -> { store.marqueEnvoye(e.timeMs, horloge()); "${e.callsign} envoyé au carnet en ligne" }
+                    issue == CarnetEnLigne.Issue.REFUS -> {
+                        // Held back: sent again, it would be refused again.
+                        val pourquoi = CarnetEnLigne.raison(r)
+                        refus[e.timeMs] = pourquoi; store.retiens(e.timeMs, true)
+                        "${e.callsign} refusé : $pourquoi (mis en pause)"
+                    }
+                    else -> {
+                        reessai[e.timeMs] = horloge() + fr.f4ioz.satcombo.domain.EnvoiAuto.DELAI_MS
+                        "${e.callsign} : pas de réponse claire, nouvel essai dans une minute"
+                    }
+                }
+            } catch (x: Exception) {
+                reessai[e.timeMs] = horloge() + fr.f4ioz.satcombo.domain.EnvoiAuto.DELAI_MS
+                autoEtat = "${e.callsign} : " + (x.message ?: "échec")
+            } finally {
+                envoiEnCours = false
+            }
+        }
     }
 
     /** Every contact not yet uploaded, oldest first, stopping at the first refusal. */

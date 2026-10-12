@@ -15,6 +15,25 @@ package fr.f4ioz.satcombo.pc
  * that works without the internet, at the foot of the mast.
  */
 object PagePc {
+    /** The tabs, in their order; the journal is a page of its own between FT8 and the settings. */
+    private val ONGLETS = listOf("station" to "Station", "carnet" to "Carnet", "agenda" to "Agenda", "carres" to "Carrés", "frise" to "Frise",
+        "sked" to "Sked", "qo100" to "QO-100", "sdr" to "SDR", "sondes" to "Sondes", "meteor" to "METEOR", "son" to "Son", "sstv" to "SSTV",
+        "aprs" to "APRS", "ft8" to "FT8", "journal" to "Journal", "reglages" to "Réglages")
+
+    /** The tabs here: buttons, the journal a link. */
+    private fun boutons() = ONGLETS.joinToString("") { (v, nom) ->
+        if (v == "journal") "<a href=\"/journal\" style=\"text-decoration:none\"><button title=\"Les passages enregistrés, rejoués\">Journal</button></a>"
+        else "<button data-v=\"$v\"" + (if (v == "station") " class=\"actif\"" else "") + ">$nom</button>"
+    }
+
+    /**
+     * The same tabs at the top of the journal's page: links back to this
+     * page, opened on the tab (#carnet), the journal shown as the one open.
+     */
+    fun barreJournal(): String = "<nav class=\"pc\">" + ONGLETS.joinToString("") { (v, nom) ->
+        if (v == "journal") "<a class=\"actif\">$nom</a>" else "<a href=\"/#$v\">$nom</a>"
+    } + "</nav>"
+
     val HTML = """<!doctype html>
 <html lang="fr"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -24,6 +43,13 @@ object PagePc {
           --ambre:#FFB454; --rose:#E5484D; --vert:#5BD68A; --gris:#9AA7B4; --clair:#E8F0F7; }
   * { box-sizing:border-box; }
   [hidden] { display:none !important; }
+  #visionneuse { background:var(--carte); color:var(--clair); border:1px solid var(--bord); border-radius:12px; padding:10px; max-width:96vw; }
+  #c-liste td.act button { padding:3px 5px; }
+  #c-liste .c-nm { max-width:96px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--gris); font-size:11px; font-weight:400; }
+  #c-liste td.act { white-space:nowrap; }
+  #t-qr svg { width:100%; height:100%; display:block; border-radius:8px; }
+  #visionneuse::backdrop { background:rgba(0,0,0,.75); }
+  #vi-img { display:block; max-width:min(92vw,1280px); max-height:calc(92vh - 60px); min-width:320px; image-rendering:auto; border-radius:6px; cursor:zoom-out; background:#0E1720; }
   body { margin:0; background:var(--fond); color:var(--clair); font-size:14px;
          font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif; }
   header { display:flex; align-items:baseline; gap:16px; flex-wrap:wrap; padding:10px 16px;
@@ -183,7 +209,7 @@ object PagePc {
   <span class="g" id="info-station"></span>
   <span class="g" id="cat-statut-court"></span>
   <nav id="onglets">
-    <button data-v="station" class="actif">Station</button><button data-v="carnet">Carnet</button><button data-v="agenda">Agenda</button><button data-v="carres">Carrés</button><button data-v="frise">Frise</button><button data-v="sked">Sked</button><button data-v="qo100">QO-100</button><button data-v="sdr">SDR</button><button data-v="sondes">Sondes</button><button data-v="meteor">METEOR</button><button data-v="son">Son</button><button data-v="sstv">SSTV</button><button data-v="aprs">APRS</button><button data-v="ft8">FT8</button><a href="/journal" style="text-decoration:none"><button title="Les passages enregistrés, rejoués">Journal</button></a><button data-v="reglages">Réglages</button>
+    ${boutons()}
   </nav>
   <span id="rec" class="pastille" style="display:none;background:rgba(229,72,77,.2);color:var(--rose)"></span>
   <span id="heure"></span>
@@ -365,6 +391,7 @@ object PagePc {
         <span><span class="val ambre" id="c-attente">0</span> <span class="petit">à déposer</span></span></div>
       <div class="ligne"><a href="/carnet.adi" download><button>Exporter en ADIF</button></a>
         <button onclick="depose()">Déposer au carnet en ligne</button></div>
+      <div class="petit" id="c-auto"></div>
       <div class="etat" id="c-depot"></div>
     </div>
     <details class="carte">
@@ -432,9 +459,10 @@ object PagePc {
         </div>
       </div>
       <div id="cr-contacts" hidden>
-      <div class="ligne"><input id="c-filtre" placeholder="Filtrer : indicatif, carré, satellite…"></div>
+      <div class="ligne"><input id="c-filtre" placeholder="Filtrer : indicatif, carré, satellite…">
+        <button class="rouge" id="c-suppr" hidden onclick="supprimeSelection()"></button></div>
       <div style="max-height:calc(100vh - 170px);overflow:auto;margin-top:6px">
-        <table><thead><tr><th>Date (UTC)</th><th>Indicatif</th><th>Carré</th><th>Satellite</th><th>Mode</th><th>RS</th><th>Nom</th><th></th></tr></thead>
+        <table><thead><tr><th><input type="checkbox" id="c-tout" title="Tout cocher (ce que le filtre montre)" onchange="cocheTout(this.checked)"></th><th>Date (UTC)</th><th>Indicatif</th><th>Carré</th><th>Satellite</th><th>Mode</th><th>RS</th><th></th></tr></thead>
         <tbody id="c-liste"></tbody></table>
       </div>
       </div>
@@ -443,9 +471,21 @@ object PagePc {
 </div>
 <dialog id="t-dlg" style="background:var(--carte);color:var(--clair);border:1px solid var(--bord);border-radius:12px;width:min(760px,94vw)">
   <div class="t">SatMe sur le téléphone</div>
+  <div id="t-qr-boite" style="display:flex;gap:14px;align-items:flex-start">
+    <div id="t-qr" style="width:190px;height:190px;flex:none;background:#fff;border-radius:8px;padding:0"></div>
+    <div style="flex:1">
+      <div><b>Scannez ce QR code avec SatMe</b> sur le téléphone : Réglages → Partage et écoute → Partage → <b>Scanner le QR code du PC</b>.</div>
+      <div class="petit" style="margin-top:6px">Le téléphone et ce PC doivent être sur le même réseau (Wi-Fi). Le téléphone ouvre son poste de commande et le PC s'y connecte tout seul.</div>
+      <div class="ligne"><span class="petit">adresse de ce PC</span><select id="t-ip" onchange="montreQr(this.value)" style="max-width:180px"></select></div>
+      <div class="petit" id="t-qr-etat"></div>
+    </div>
+  </div>
+  <details id="t-main" style="margin-top:8px"><summary class="petit">ou à la main : l'adresse et le code affichés par le téléphone</summary>
   <div class="petit">Sur le téléphone (le même Wi-Fi que ce PC) : Réglages → Partage et écoute → Partage → « Poste de commande sur PC ». Recopiez l'adresse qu'il affiche (http://…/c/…/) et le « code à saisir sur le PC ».</div>
   <div class="ligne"><input id="t-adresse" placeholder="Adresse affichée (http://192.168.1.23:8080/c/…/)" style="flex:3;min-width:300px"><input id="t-code" placeholder="Code" style="max-width:110px">
-    <button class="primaire" onclick="connecteTelephone()">Connecter</button><span class="petit" id="t-cnx"></span></div>
+    <button class="primaire" onclick="connecteTelephone()">Connecter</button></div>
+  </details>
+  <div class="petit" id="t-cnx" style="margin-top:6px"></div>
   <div id="t-liste-boite" hidden>
     <div class="ligne"><label class="petit"><input type="checkbox" id="t-tout" onchange="document.querySelectorAll('.t-coche').forEach(c => c.checked = this.checked)"> tout</label>
       <label class="petit"><input type="checkbox" id="t-enligne" checked> contacts déjà au carnet en ligne (envoyés par le téléphone)</label></div>
@@ -888,8 +928,13 @@ object PagePc {
     <div class="carte">
       <div class="t">Carnet en ligne (Wavelog / Cloudlog)</div>
       <div class="ligne" style="margin-top:0"><input id="carnetUrl" placeholder="https://wavelog.exemple.fr/"></div>
-      <div class="ligne"><input id="carnetCle" type="password" placeholder="Clé d'API (lecture et écriture)"><input id="carnetProfil" placeholder="ID du profil" style="max-width:120px"></div>
-      <div class="ligne"><button onclick="enregistreReglages()">Enregistrer</button></div>
+      <div class="ligne"><input id="carnetCle" type="password" placeholder="Clé d'API (lecture et écriture)"><input id="carnetProfil" placeholder="ID du profil" style="max-width:120px">
+        <select id="carnetProfils" hidden onchange="if (this.value) g('carnetProfil').value = this.value" style="max-width:220px"></select></div>
+      <div class="ligne"><button onclick="enregistreReglages()">Enregistrer</button><button onclick="essaiCarnet()" title="Demande au carnet en ligne ses profils de station">Essayer</button><span class="petit" id="carnet-essai"></span></div>
+      <label class="petit" style="display:block;margin-top:10px"><input type="checkbox" id="carnetAuto" onchange="post('/api/reglages?carnetAuto=' + (this.checked ? 1 : 0)).then(chargeReglages)">
+        Envoyer chaque nouveau contact au carnet en ligne</label>
+      <div class="ligne" id="carnetDelaiL"><span class="petit">après</span><select id="carnetDelai" onchange="post('/api/reglages?carnetDelai=' + this.value)"></select>
+        <span class="petit">le temps de le corriger ou de le mettre en pause (⏸ dans le carnet). Seuls les contacts saisis après l'activation partent.</span></div>
     </div>
     <div class="carte">
       <div class="t">Convertisseurs</div>
@@ -899,6 +944,11 @@ object PagePc {
   </div>
 </div>
 </div>
+<dialog id="visionneuse" onclick="if (event.target === this) this.close()">
+  <img id="vi-img" alt="" onclick="g('visionneuse').close()">
+  <div class="ligne" style="margin-top:6px"><button onclick="voisImage(viN - 1)" title="Précédente (←)">‹</button><button onclick="voisImage(viN + 1)" title="Suivante (→)">›</button>
+    <span class="petit" id="vi-txt" style="flex:1"></span><a id="vi-lien" download><button>⤓ Enregistrer</button></a><button onclick="g('visionneuse').close()">Fermer</button></div>
+</dialog>
 <script>
 const g = id => document.getElementById(id);
 const v = id => g(id).value.trim();
@@ -1247,7 +1297,7 @@ async function chargeCarnet() {
   try {
     const j = await (await fetch('/api/carnet')).json();
     C = j.contacts;
-    txt('c-nb', String(j.total)); txt('c-carres', String(j.carres)); txt('c-attente', String(j.nonDeposes));
+    txt('c-nb', String(j.total)); txt('c-auto', j.auto || ''); txt('c-carres', String(j.carres)); txt('c-attente', String(j.nonDeposes));
     dessineCarnet();
   } catch (x) {}
 }
@@ -1256,13 +1306,47 @@ function dessineCarnet() {
   const tous = C.filter(e => !f || [e.c, e.l, e.sat, e.nm, e.qth].join(' ').toUpperCase().includes(f));
   // A thousand lines at most: beyond that, the filter finds faster than the eye.
   const reste = tous.length > 1000 ? '<tr><td colspan="8" class="petit">… et ' + (tous.length - 1000) + ' autres : filtre pour les voir</td></tr>' : '';
+  vusCarnet = tous.slice(0, 1000).map(e => e.t);
   g('c-liste').innerHTML = tous.slice(0, 1000).map(e =>
-    '<tr><td style="white-space:nowrap">' + new Date(e.t).toISOString().slice(0, 16).replace('T', ' ') + '</td><td><b>' + esc(e.c) + '</b></td><td>' + esc(e.l) +
-    '</td><td>' + esc(e.sat) + '</td><td>' + esc(e.md) + '</td><td>' + esc(e.rs) + '/' + esc(e.rr) + '</td><td>' + esc(e.nm) +
-    '</td><td class="act">' + (e.envoye ? '<span class="vert" title="déposé au carnet en ligne">✓</span> ' : '<button title="Déposer au carnet en ligne" onclick="depose(' + e.t + ')">⬆</button> ') +
-    '<button title="Modifier" onclick="edite(' + e.t + ')">✎</button></td></tr>').join('') + reste ||
+    '<tr><td><input type="checkbox" class="c-coche" data-t="' + e.t + '"' + (coches.has(e.t) ? ' checked' : '') + ' onchange="coche(' + e.t + ', this.checked)"></td><td style="white-space:nowrap">' + new Date(e.t).toISOString().slice(0, 16).replace('T', ' ') + '</td><td><b>' + esc(e.c) + '</b>' + (e.nm ? '<div class="c-nm" title="' + esc(e.nm).replace(/"/g, '&quot;') + '">' + esc(e.nm) + '</div>' : '') + '</td><td>' + esc(e.l) +
+    '</td><td>' + esc(e.sat) + '</td><td>' + esc(e.md) + '</td><td>' + esc(e.rs) + '/' + esc(e.rr) +
+    '</td><td class="act">' + envoiCarnet(e) +
+    '<button title="Modifier" onclick="edite(' + e.t + ')">✎</button> <button title="Supprimer ce contact" onclick="supprimeContacts([' + e.t + '])">🗑</button></td></tr>').join('') + reste ||
     '<tr><td colspan="8" class="petit">aucun contact</td></tr>';
+  majSelection();
 }
+// Online: sent (✓), waiting for its delay (⏱ and the pause), held back (▶ to release), or to send by hand (⬆).
+function envoiCarnet(e) {
+  if (e.envoye) return '<span class="vert" title="déposé au carnet en ligne">✓</span> ';
+  if (e.ea === 'attente') return '<span class="petit" id="ea-' + e.t + '" title="part au carnet en ligne à la fin du décompte">⏱ ' + e.reste + ' s</span> <button title="Mettre en pause : il ne partira pas" onclick="retiens(' + e.t + ', 1)">⏸</button> ';
+  if (e.pause) return '<button title="' + esc(e.refus ? 'Refusé : ' + e.refus + ' — reprendre' : 'En pause — reprendre l’envoi') + '" onclick="retiens(' + e.t + ', 0)" style="color:var(--ambre)">▶</button> ';
+  return '<button title="Déposer au carnet en ligne" onclick="depose(' + e.t + ')">⬆</button> ';
+}
+// The countdowns, each second, without redrawing the list; reloaded once one is over (the contact left).
+setInterval(() => {
+  if (g('v-carnet').hidden || !C.length) return;
+  let fini = false;
+  C.forEach(e => { if (e.ea !== 'attente') return; e.reste = Math.max(0, e.reste - 1); const s = g('ea-' + e.t); if (s) s.textContent = '⏱ ' + e.reste + ' s'; if (e.reste === 0) fini = true; });
+  if (fini) { C.forEach(e => { if (e.ea === 'attente' && e.reste === 0) e.ea = 'pret'; }); setTimeout(chargeCarnet, 3000); }
+}, 1000);
+async function retiens(t, on) { await post('/api/carnet/retiens?t=' + t + '&on=' + on); chargeCarnet(); }
+// The contacts ticked, to delete at once; kept while the filter changes.
+const coches = new Set();
+let vusCarnet = [];
+function coche(t, on) { if (on) coches.add(t); else coches.delete(t); majSelection(); }
+function cocheTout(on) { vusCarnet.forEach(t => on ? coches.add(t) : coches.delete(t)); dessineCarnet(); }
+function majSelection() {
+  [...coches].forEach(t => { if (!C.some(e => e.t === t)) coches.delete(t); });
+  const b = g('c-suppr'); b.hidden = coches.size === 0; b.textContent = 'Supprimer la sélection (' + coches.size + ')';
+  g('c-tout').checked = vusCarnet.length > 0 && vusCarnet.every(t => coches.has(t));
+}
+async function supprimeContacts(l) {
+  const qui = l.length === 1 ? (C.find(e => e.t === l[0]) || {}).c || 'ce contact' : l.length + ' contacts';
+  if (!confirm('Supprimer ' + qui + ' du carnet ?\n\nCeux déjà déposés au carnet en ligne y restent.')) return false;
+  await post('/api/carnet/supprime?t=' + l.join(','));
+  l.forEach(t => coches.delete(t)); chargeCarnet(); return true;
+}
+function supprimeSelection() { if (coches.size) supprimeContacts([...coches]); }
 g('c-filtre').oninput = dessineCarnet;
 // QRZ after 0.6 s without a key, as on the phone and the desk: a callsign the log does not know by name.
 // ------------------------------------------------------------------ SatMe on the phone
@@ -1284,13 +1368,46 @@ async function importeZips(input) {
 }
 function ouvreTelephone() {
   try { g('t-adresse').value = localStorage.getItem('tel-adresse') || ''; } catch (x) {}
+  g('t-qr-boite').hidden = false;
   g('t-dlg').showModal();
+  montreQr();
 }
+// The QR code: drawn by the PC with its address and a fresh token; the phone scanning it joins, and the list comes.
+let minuteurQr = 0, qrDepuis = 0, qrPort = '';
+async function montreQr(ip) {
+  clearTimeout(minuteurQr);
+  let j = null;
+  try { j = await (await fetch('/api/telephone/qr' + (ip ? '?adresse=' + enc(ip) : ''), { method: 'POST' })).json(); } catch (x) {}
+  if (!j || !j.ok) { g('t-qr').innerHTML = ''; txt('t-qr-etat', j && j.erreur ? j.erreur : 'QR code impossible'); g('t-main').open = true; return; }
+  g('t-qr').innerHTML = j.svg;
+  const s = g('t-ip'); s.innerHTML = j.adresses.map(a => '<option>' + esc(a) + '</option>').join(''); s.value = j.ip;
+  s.parentElement.hidden = j.adresses.length < 2;
+  txt('t-qr-etat', 'en attente du téléphone…');
+  qrDepuis = Date.now(); qrPort = j.url.split(':')[2].split('/')[0];
+  suisQr();
+}
+async function suisQr() {
+  if (!g('t-dlg').open) { post('/api/telephone/qr/ferme'); return; }
+  let e = null;
+  try { e = await (await fetch('/api/telephone/qr')).json(); } catch (x) {}
+  if (e && e.joint && e.connecte) { g('t-qr-boite').hidden = true; await listeTelephone(); return; }
+  if (e && e.erreur) txt('t-qr-etat', e.erreur);
+  // Nothing after half a minute: most often this PC's firewall, which the phone cannot get through.
+  else if (Date.now() - qrDepuis > 30000) txt('t-qr-etat', 'toujours rien… Si le téléphone dit « SatMe PC injoignable », le pare-feu de ce PC bloque le port ' + qrPort +
+    ' (Linux avec ufw : sudo ufw allow from 192.168.0.0/16 to any port ' + qrPort + ' proto tcp).');
+  if (e && !e.ouvert) return;
+  minuteurQr = setTimeout(suisQr, 1000);
+}
+g('t-dlg').addEventListener('close', () => { clearTimeout(minuteurQr); post('/api/telephone/qr/ferme'); });
 async function connecteTelephone() {
   txt('t-cnx', 'connexion…');
   try { localStorage.setItem('tel-adresse', v('t-adresse')); } catch (x) {}
   const j = await post('/api/telephone/connecte?adresse=' + enc(v('t-adresse')) + '&code=' + enc(v('t-code')));
   if (!j || j.ok === false) { txt('t-cnx', j && j.erreur ? j.erreur : 'échec'); return; }
+  clearTimeout(minuteurQr); post('/api/telephone/qr/ferme'); g('t-qr-boite').hidden = true;
+  await listeTelephone();
+}
+async function listeTelephone() {
   let l = null;
   try { l = await (await fetch('/api/telephone/liste')).json(); } catch (x) {}
   if (!l || !l.ok) { txt('t-cnx', l && l.erreur ? l.erreur : 'liste illisible'); return; }
@@ -1570,8 +1687,7 @@ async function enregistreEdit() {
   if (j && j.ok !== false) { g('c-edit').close(); chargeCarnet(); }
 }
 async function supprimeEdit() {
-  if (!confirm('Supprimer ce contact du carnet ?')) return;
-  await post('/api/carnet/supprime?t=' + editT); g('c-edit').close(); chargeCarnet();
+  if (await supprimeContacts([editT])) g('c-edit').close();
 }
 function bilanImport(j) {
   if (!j) return 'échec';
@@ -1620,6 +1736,10 @@ async function chargeReglages() {
     g('qrzUser').value = r.qrzUser; g('qrzMdp').placeholder = r.qrzMdp ? 'mot de passe enregistré' : 'Mot de passe';
     g('carnetUrl').value = r.carnetUrl; g('carnetCle').placeholder = r.carnetCle ? 'clé enregistrée' : 'Clé d’API (lecture et écriture)';
     g('carnetProfil').value = r.carnetProfil;
+    g('carnetAuto').checked = r.carnetAuto; g('carnetDelaiL').hidden = !r.carnetAuto;
+    const d = g('carnetDelai');
+    if (d.options.length !== r.delais.length) d.innerHTML = r.delais.map(s => '<option value="' + s + '">' + (s < 60 ? s + ' s' : s / 60 + ' min') + '</option>').join('');
+    d.value = String(r.carnetDelai);
   } catch (x) {}
 }
 async function enregistreReglages() {
@@ -1630,6 +1750,16 @@ async function enregistreReglages() {
     txt('reg-etat', 'enregistré'); g('qrzMdp').value = ''; g('carnetCle').value = '';
     chargeReglages(); setTimeout(chargeListe, 1500);
   }
+}
+async function essaiCarnet() {
+  txt('carnet-essai', 'carnet en ligne…');
+  let j = null;
+  try { j = await (await fetch('/api/carnet/profils', { method: 'POST' })).json(); } catch (x) {}
+  if (!j || !j.ok) { txt('carnet-essai', j && j.erreur ? j.erreur : 'pas de réponse'); g('carnetProfils').hidden = true; return; }
+  txt('carnet-essai', 'il répond : ' + j.profils.length + ' profil(s) de station');
+  const s = g('carnetProfils');
+  s.innerHTML = '<option value="">choisir le profil…</option>' + j.profils.map(p => '<option value="' + esc(p.id) + '">' + esc(p.id + ' · ' + [p.indicatif, p.carre, p.nom].filter(x => x).join(' · ')) + '</option>').join('');
+  s.value = j.profils.some(p => p.id === v('carnetProfil')) ? v('carnetProfil') : ''; s.hidden = false;
 }
 async function essaiQrz() {
   txt('qrz-etat', 'QRZ…');
@@ -1680,12 +1810,29 @@ async function ticSon() {
   const imgs = JSON.stringify(S.images.map(i => i.nom));
   if (imgs !== imagesVus && ouverte('sstv')) {
     imagesVus = imgs;
-    g('i-galerie').innerHTML = S.images.map(i => '<a href="/sstv/' + enc(i.nom) + '" target="_blank" style="text-decoration:none;color:inherit">' +
+    g('i-galerie').innerHTML = S.images.map((i, n) => '<a href="/sstv/' + enc(i.nom) + '" onclick="voisImage(' + n + '); return false" style="text-decoration:none;color:inherit">' +
       '<img src="/sstv/' + enc(i.nom) + '" style="width:100%;border-radius:6px" loading="lazy"><div class="petit">' + esc(i.sat) + ' · ' + esc(i.mode) +
       ' · ' + (i.t ? new Date(i.t).toISOString().slice(0, 16).replace('T', ' ') : '') + (i.complete ? '' : ' · partielle') + '</div></a>').join('') ||
       '<div class="petit">aucune image</div>';
   }
 }
+// A picture opened over the page, not in a tab: the arrows go through the gallery, Escape closes.
+let viN = 0;
+function voisImage(n) {
+  const l = (S && S.images) || []; if (!l.length) return;
+  viN = (n + l.length) % l.length; const i = l[viN];
+  g('vi-img').src = '/sstv/' + enc(i.nom); g('vi-lien').href = '/sstv/' + enc(i.nom); g('vi-lien').download = i.nom;
+  txt('vi-txt', (viN + 1) + '/' + l.length + ' · ' + [i.sat, i.mode, i.t ? new Date(i.t).toISOString().slice(0, 16).replace('T', ' ') + ' UTC' : '', i.complete ? '' : 'partielle'].filter(x => x).join(' · '));
+  if (!g('visionneuse').open) g('visionneuse').showModal();
+}
+g('visionneuse').addEventListener('keydown', e => {
+  if (e.key === 'ArrowLeft') { e.preventDefault(); voisImage(viN - 1); } else if (e.key === 'ArrowRight') { e.preventDefault(); voisImage(viN + 1); }
+});
+g('i-encours').style.cursor = 'zoom-in';
+g('i-encours').onclick = () => {
+  if (!S || S.sstvMode || !S.sstvDerniere) return;
+  const n = (S.images || []).findIndex(i => i.nom === S.sstvDerniere); if (n >= 0) voisImage(n);
+};
 // ------------------------------------------------------------------ squares worked
 let Q = null, qz = 4, qcx = 0.5, qcy = 0.35, qCadre = false;
 const qTuiles = new Map();
