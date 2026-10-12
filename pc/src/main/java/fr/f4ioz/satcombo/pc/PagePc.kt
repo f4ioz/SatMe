@@ -78,8 +78,9 @@ object PagePc {
   <span class="g" id="station"></span>
   <span class="g" id="cat-statut-court"></span>
   <nav id="onglets">
-    <button data-v="station" class="actif">Station</button><button data-v="carnet">Carnet</button><button data-v="reglages">Réglages</button>
+    <button data-v="station" class="actif">Station</button><button data-v="carnet">Carnet</button><button data-v="son">Son</button><button data-v="sstv">SSTV</button><button data-v="reglages">Réglages</button>
   </nav>
+  <span id="rec" class="pastille" style="display:none;background:rgba(229,72,77,.2);color:var(--rose)"></span>
   <span id="heure"></span>
 </header>
 <div class="vue" id="v-station">
@@ -259,6 +260,49 @@ object PagePc {
   <div class="ligne"><button class="primaire" onclick="enregistreEdit()">Enregistrer</button><button onclick="g('c-edit').close()">Annuler</button>
     <button class="rouge" onclick="supprimeEdit()" style="margin-left:auto">Supprimer</button></div>
 </dialog>
+</div>
+<div class="vue" id="v-son" hidden>
+<div class="grille2">
+  <div>
+    <div class="carte">
+      <div class="t">Carte son (le son du poste)</div>
+      <div class="ligne" style="margin-top:0"><select id="s-carte"></select><button onclick="carteSon()">Démarrer</button><button onclick="carteSon(true)">Arrêter</button></div>
+      <div style="height:10px;background:#0E1720;border-radius:5px;margin-top:10px;overflow:hidden"><div id="s-niveau" style="height:100%;width:0;background:var(--vert)"></div></div>
+      <div class="etat" id="s-etat"></div>
+    </div>
+    <div class="carte">
+      <div class="t">Enregistrement</div>
+      <div class="ligne" style="margin-top:0"><button class="rouge" id="s-rec" onclick="enregistre()">● Enregistrer</button><span class="val" id="s-duree"></span></div>
+      <div class="ligne"><label class="petit"><input type="checkbox" id="s-auto" onchange="post('/api/son/options?auto=' + (this.checked ? 1 : 0))"> Enregistrer chaque passage du satellite suivi (de l'AOS à 30 s après le LOS)</label></div>
+      <div class="ligne"><label class="petit"><input type="checkbox" id="s-sstv" onchange="post('/api/son/options?sstv=' + (this.checked ? 1 : 0))"> Décoder la SSTV en direct</label></div>
+      <div class="petit" style="margin-top:6px">WAV 16 bits, à la moitié de la fréquence de la carte (24 ou 22,05 kHz). Même nom que sur le téléphone.</div>
+    </div>
+  </div>
+  <div>
+    <div class="carte">
+      <div class="t">Enregistrements</div>
+      <audio id="s-lecteur" controls style="width:100%;margin-bottom:8px"></audio>
+      <div style="max-height:calc(100vh - 230px);overflow:auto"><table><tbody id="s-liste"></tbody></table></div>
+    </div>
+  </div>
+</div>
+</div>
+<div class="vue" id="v-sstv" hidden>
+<div class="grille2">
+  <div>
+    <div class="carte">
+      <div class="t">En cours <span class="petit" id="i-mode"></span></div>
+      <img id="i-encours" style="width:100%;image-rendering:auto;background:#0E1720;min-height:200px;border-radius:8px" alt="">
+      <div class="etat" id="i-etat"></div>
+    </div>
+  </div>
+  <div>
+    <div class="carte">
+      <div class="t">Images reçues</div>
+      <div id="i-galerie" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px"></div>
+    </div>
+  </div>
+</div>
 </div>
 <div class="vue" id="v-reglages" hidden>
 <div class="grille2">
@@ -553,6 +597,7 @@ function vue(n) {
   try { localStorage.setItem('vue', n); } catch (x) {}
   if (n === 'carnet') { chargeCarnet(); g('c-call').focus(); }
   if (n === 'reglages') chargeReglages();
+  if (n === 'son' || n === 'sstv') ticSon();
 }
 document.querySelectorAll('#onglets button').forEach(b => b.onclick = () => vue(b.dataset.v));
 
@@ -675,9 +720,64 @@ async function essaiQrz() {
   txt('qrz-etat', f && f.ok ? 'QRZ répond : ' + [f.nom, f.qth].filter(x => x).join(' · ') : (f && f.erreur ? f.erreur : 'pas de réponse'));
 }
 
+// ------------------------------------------------------------------ sound and SSTV
+let S = null, versionImage = -1, cartesVues = '', imagesVues = '', enregsVus = '';
+const ouverte = n => !g('v-' + n).hidden;
+async function ticSon() {
+  try { S = await (await fetch('/api/son')).json(); } catch (x) { return; }
+  if (!S.present) return;
+  // The header says it whatever the tab: a recording under way.
+  g('rec').style.display = S.enregistrement ? '' : 'none';
+  txt('rec', S.enregistrement ? '● REC ' + duree(S.secondes * 1000) : '');
+  const cartes = JSON.stringify(S.cartes);
+  if (cartes !== cartesVues) {
+    cartesVues = cartes;
+    g('s-carte').innerHTML = S.cartes.map(c => '<option value="' + esc(c.nom).replace(/"/g, '&quot;') + '">' + esc(c.nom) +
+      (c.desc ? ' — ' + esc(c.desc.slice(0, 60)) : '') + '</option>').join('') || '<option value="">aucune carte son</option>';
+  }
+  if (document.activeElement !== g('s-carte') && S.carte) g('s-carte').value = S.carte;
+  g('s-niveau').style.width = Math.round(Math.min(1, S.niveau) * 100) + '%';
+  g('s-niveau').style.background = S.niveau > 0.9 ? 'var(--rose)' : 'var(--vert)';
+  txt('s-etat', S.erreur || (S.actif ? S.carte + ' · ' + S.rate + ' Hz' : 'arrêtée'));
+  txt('s-rec', S.enregistrement ? '■ Arrêter' : '● Enregistrer');
+  txt('s-duree', S.enregistrement ? duree(S.secondes * 1000) + (S.auto ? ' (passage)' : '') : '');
+  if (document.activeElement !== g('s-auto')) g('s-auto').checked = S.enregAuto;
+  if (document.activeElement !== g('s-sstv')) g('s-sstv').checked = S.sstv;
+  const enregs = JSON.stringify(S.enregistrements.map(e => e.nom + e.taille));
+  if (enregs !== enregsVus && ouverte('son')) {
+    enregsVus = enregs;
+    g('s-liste').innerHTML = S.enregistrements.map(e => '<tr><td><a href="#" onclick="ecoute(\'' + enc(e.nom) + '\');return false">' + esc(e.nom) +
+      '</a></td><td class="petit">' + (e.taille / 1048576).toFixed(1) + ' Mo</td><td><a href="/enregistrements/' + enc(e.nom) + '" download>⤓</a></td></tr>').join('') ||
+      '<tr><td class="petit">aucun enregistrement</td></tr>';
+  }
+  // SSTV: the picture arriving, reloaded only when it moved.
+  txt('i-mode', S.sstvMode ? S.sstvMode + ' · ' + S.sstvLignes + '/' + S.sstvHauteur + ' lignes' : '');
+  txt('i-etat', !S.actif ? 'Démarre la carte son (onglet Son) pour décoder.' : !S.sstv ? 'Décodage SSTV coupé (onglet Son).' : S.sstvMode ? 'réception…' : 'à l’écoute');
+  if (ouverte('sstv') && S.sstvVersion !== versionImage) {
+    versionImage = S.sstvVersion;
+    if (S.sstvMode) g('i-encours').src = '/api/sstv/encours.png?v=' + S.sstvVersion;
+    else if (S.sstvDerniere) g('i-encours').src = '/sstv/' + enc(S.sstvDerniere);
+  }
+  const imgs = JSON.stringify(S.images.map(i => i.nom));
+  if (imgs !== imagesVus && ouverte('sstv')) {
+    imagesVus = imgs;
+    g('i-galerie').innerHTML = S.images.map(i => '<a href="/sstv/' + enc(i.nom) + '" target="_blank" style="text-decoration:none;color:inherit">' +
+      '<img src="/sstv/' + enc(i.nom) + '" style="width:100%;border-radius:6px" loading="lazy"><div class="petit">' + esc(i.sat) + ' · ' + esc(i.mode) +
+      ' · ' + (i.t ? new Date(i.t).toISOString().slice(0, 16).replace('T', ' ') : '') + (i.complete ? '' : ' · partielle') + '</div></a>').join('') ||
+      '<div class="petit">aucune image</div>';
+  }
+}
+function ecoute(nom) { g('s-lecteur').src = '/enregistrements/' + nom; g('s-lecteur').play(); }
+async function carteSon(arret) {
+  const j = await post('/api/son/carte?nom=' + (arret ? '' : enc(g('s-carte').value)));
+  ticSon();
+}
+async function enregistre() { await post('/api/son/enregistrer?on=' + (S && S.enregistrement ? 0 : 1)); ticSon(); }
+setInterval(ticSon, 1000);
+
 lienRotor(); avertCat();
 // The tab from the address (#carnet, a bookmark), else the last one seen.
-if (['station', 'carnet', 'reglages'].includes(location.hash.slice(1))) vue(location.hash.slice(1));
+if (['station', 'carnet', 'son', 'sstv', 'reglages'].includes(location.hash.slice(1))) vue(location.hash.slice(1));
 else try { const n = localStorage.getItem('vue'); if (n) vue(n); } catch (x) {}
 tic(); chargeListe(); chargePorts(); chargeSatellites();
 setInterval(chargeSatellites, 600000);

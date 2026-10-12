@@ -1,0 +1,96 @@
+/*
+ * SatMe — amateur radio satellite tracking
+ * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
+ * SPDX-License-Identifier: GPL-2.0-or-later
+ *
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
+ */
+package fr.f4ioz.satcombo.pc
+
+import fr.f4ioz.satcombo.plateforme.StockageMemoire
+import fr.f4ioz.satcombo.sstv.SstvMeta
+import fr.f4ioz.satcombo.sstv.SstvMode
+import fr.f4ioz.satcombo.sstv.SstvTestSignal
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import org.junit.After
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
+import org.junit.Test
+import java.io.File
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
+import javax.imageio.ImageIO
+
+/** The PC's sound without a sound card: blocks handed out as the card would. */
+class SonStationTest {
+
+    private val dossier = File(System.getProperty("java.io.tmpdir"), "satme-son-" + System.nanoTime()).apply { mkdirs() }
+    private val portee = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    @After fun fin() { portee.cancel(); dossier.deleteRecursively() }
+
+    private fun sonStation(): Pair<SonStation, SonPc> {
+        val st = StationPc(StockageMemoire(), Catalogue(File(dossier, "cache"), enLigne = false), PortsSeriePc(), portee)
+        val son = SonPc()
+        return SonStation(son, st, File(dossier, "enregistrements"), File(dossier, "sstv")) to son
+    }
+
+    /** Feeds [pcm] in blocks of 2048, as the card does. */
+    private fun verse(son: SonPc, pcm: ShortArray, rate: Int) {
+        var i = 0
+        val b = ShortArray(2048)
+        while (i < pcm.size) {
+            val n = minOf(b.size, pcm.size - i)
+            System.arraycopy(pcm, i, b, 0, n)
+            son.distribue(b, n, rate)
+            i += n
+        }
+    }
+
+    @Test
+    fun une_image_sstv_recue_est_gardee_en_png_avec_sa_fiche() {
+        val (s, son) = sonStation()
+        val m = SstvMode.byName("Robot 36")!!
+        val img = IntArray(m.width * m.height) { i -> if (i / m.width < m.height / 2) 0xFF000000.toInt() else 0xFFFFFFFF.toInt() }
+        verse(son, SstvTestSignal.encode(m, img, 48_000), 48_000)
+        val images = s.images()
+        assertEquals(1, images.size)
+        val i = images.single()
+        assertEquals("Robot 36", i.mode)
+        assertEquals("live", i.source)
+        assertTrue(i.complete)
+        val png = ImageIO.read(s.fichierImage(i.fileName)!!)
+        assertEquals(m.width, png.width)
+        // Black on top, white below, as sent.
+        assertTrue((png.getRGB(m.width / 2, 10) and 0xFF) < 60)
+        assertTrue((png.getRGB(m.width / 2, m.height - 10) and 0xFF) > 200)
+        assertTrue(File(dossier, "sstv/" + SstvMeta.sidecarName(i.fileName)).isFile)
+    }
+
+    @Test
+    fun un_enregistrement_est_un_wav_qui_se_lit_meme_avant_d_etre_ferme() {
+        val (s, son) = sonStation()
+        // No card started: refused, in words.
+        assertTrue(s.demarreEnregistrement()!!.contains("carte son"))
+        // As if the card ran at 48 kHz: a 1 kHz tone, 3 s.
+        val f = son.javaClass.getDeclaredField("_etat").apply { isAccessible = true }
+        @Suppress("UNCHECKED_CAST")
+        (f.get(son) as kotlinx.coroutines.flow.MutableStateFlow<SonPc.Etat>).value = SonPc.Etat(actif = true, appareil = "essai", rate = 48_000)
+        assertEquals(null, s.demarreEnregistrement())
+        val ton = ShortArray(3 * 48_000) { i -> (8000 * Math.sin(2 * Math.PI * 1000 * i / 48_000)).toInt().toShort() }
+        verse(son, ton, 48_000)
+        val fichier = s.enregistrements().single()
+        assertTrue(fichier.name.matches(Regex("SatMe_SAT_\\d{8}_\\d{6}Z\\.wav")))
+        // The header already counts what is written (rewritten each second).
+        val tete = ByteBuffer.wrap(fichier.readBytes().copyOf(44)).order(ByteOrder.LITTLE_ENDIAN)
+        assertEquals(24_000, tete.getInt(24))
+        assertTrue(tete.getInt(40) >= 2 * 24_000 * 2)
+        s.arreteEnregistrement()
+        val fin = ByteBuffer.wrap(fichier.readBytes().copyOf(44)).order(ByteOrder.LITTLE_ENDIAN)
+        assertEquals(3 * 24_000 * 2, fin.getInt(40))
+        assertEquals(44L + 3 * 24_000 * 2, fichier.length())
+    }
+}

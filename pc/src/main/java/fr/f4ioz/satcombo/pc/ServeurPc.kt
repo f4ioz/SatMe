@@ -28,7 +28,7 @@ import kotlin.concurrent.thread
  * never a GET a browser could fetch ahead by itself.
  */
 class ServeurPc(private val station: StationPc, private val port: Int, private val reseau: Boolean = false,
-                private val carnet: CarnetPc? = null) {
+                private val carnet: CarnetPc? = null, private val son: SonStation? = null) {
 
     private var socket: ServerSocket? = null
     val portReel: Int get() = socket?.localPort ?: port
@@ -86,12 +86,24 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                         .put("pays", f.pays).put("carre", f.carre)
                 envoie(sortie, "200 OK", "application/json; charset=utf-8", o.toString().toByteArray())
             }
+            "/api/son" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JsonPc.son(son).toString().toByteArray())
+            "/api/sstv/encours.png" -> son?.imageEnCours()?.let { envoie(sortie, "200 OK", "image/png", it) }
+                ?: envoie(sortie, "404 Not Found", "text/plain", ByteArray(0))
             "/carnet.adi" -> {
                 val nom = "SatMe_carnet_" + java.text.SimpleDateFormat("yyyyMMdd_HHmm", java.util.Locale.US).format(java.util.Date()) + ".adi"
                 envoie(sortie, "200 OK", "text/plain; charset=utf-8", (carnet?.adif() ?: "").toByteArray(),
                     "Content-Disposition: attachment; filename=\"$nom\"\r\n")
             }
-            else -> envoie(sortie, "404 Not Found", "text/plain; charset=utf-8", "introuvable".toByteArray())
+            else -> {
+                // A recording (seekable, by parts) or an SSTV picture.
+                val f = when {
+                    chemin.startsWith("/enregistrements/") -> son?.fichierEnregistrement(java.net.URLDecoder.decode(chemin.removePrefix("/enregistrements/"), "UTF-8"))
+                    chemin.startsWith("/sstv/") -> son?.fichierImage(java.net.URLDecoder.decode(chemin.removePrefix("/sstv/"), "UTF-8"))
+                    else -> null
+                }
+                if (f != null) envoieFichier(sortie, r, f)
+                else envoie(sortie, "404 Not Found", "text/plain; charset=utf-8", "introuvable".toByteArray())
+            }
         }
     }
 
@@ -166,6 +178,23 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 q["carnetProfil"]?.let { s.carnetProfil = it.trim() }
                 q["minEl"]?.toIntOrNull()?.let { s.minElevDeg = it.coerceIn(0, 45); kotlinx.coroutines.runBlocking { station.recalcule() } }
             }
+            "/api/son/carte" -> {
+                val s = son ?: return JSONObject().put("ok", false)
+                val nom = q["nom"].orEmpty()
+                if (nom.isBlank()) { s.arreteEnregistrement(); s.son.arrete(); s.carte = "" }
+                else if (s.son.demarre(nom)) s.carte = nom
+                else return JSONObject().put("ok", false).put("erreur", s.son.etat.value.erreur)
+            }
+            "/api/son/enregistrer" -> {
+                val s = son ?: return JSONObject().put("ok", false)
+                if (q["on"] == "1") s.demarreEnregistrement()?.let { return JSONObject().put("ok", false).put("erreur", it) }
+                else s.arreteEnregistrement()
+            }
+            "/api/son/options" -> {
+                val s = son ?: return JSONObject().put("ok", false)
+                q["auto"]?.let { s.enregAuto = it == "1" }
+                q["sstv"]?.let { s.sstvActif = it == "1" }
+            }
             "/api/rotor/reglages" -> {
                 entier("maxAz")?.let { rotor.setRotorMaxAz(it) }
                 entier("maxEl")?.let { rotor.setRotorMaxEl(it) }
@@ -187,6 +216,35 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
             else -> return JSONObject().put("ok", false).put("erreur", "inconnu : $chemin")
         }
         return ok
+    }
+
+    /** A file as it is on disk, by parts when the browser asks (a sound it seeks in). */
+    private fun envoieFichier(s: OutputStream, r: RequeteHttp.Requete, f: java.io.File) {
+        val type = when {
+            f.name.endsWith(".png") -> "image/png"
+            f.name.endsWith(".wav") -> "audio/wav"
+            f.name.endsWith(".mp3") -> "audio/mpeg"
+            else -> "application/octet-stream"
+        }
+        val taille = f.length()
+        val p = RequeteHttp.plage(r.plage, taille)
+        val de = p?.first ?: 0L
+        val n = if (p != null) p.last - p.first + 1 else taille
+        s.write((("HTTP/1.1 " + (if (p != null) "206 Partial Content" else "200 OK")) + "\r\nContent-Type: $type\r\n" +
+            "Content-Length: $n\r\nAccept-Ranges: bytes\r\n" +
+            (if (p != null) "Content-Range: bytes ${p.first}-${p.last}/$taille\r\n" else "") +
+            "Cache-Control: no-store\r\nConnection: close\r\n\r\n").toByteArray())
+        java.io.RandomAccessFile(f, "r").use { raf ->
+            raf.seek(de)
+            val buf = ByteArray(64 * 1024)
+            var reste = n
+            while (reste > 0) {
+                val k = raf.read(buf, 0, minOf(buf.size.toLong(), reste).toInt())
+                if (k <= 0) break
+                s.write(buf, 0, k); reste -= k
+            }
+        }
+        s.flush()
     }
 
     private fun parametres(qs: String): Map<String, String> =
@@ -284,6 +342,25 @@ object JsonPc {
         return JSONObject().put("c", s.callsign).put("l", s.manualLocator).put("qrzUser", s.qrzUser)
             .put("qrzMdp", s.qrzMdp.isNotEmpty()).put("carnetUrl", s.carnetUrl).put("carnetCle", s.carnetCle.isNotEmpty())
             .put("carnetProfil", s.carnetProfil).put("minEl", s.minElevDeg)
+    }
+
+    fun son(s: SonStation?): JSONObject {
+        if (s == null) return JSONObject().put("present", false)
+        val c = s.son.etat.value
+        val e = s.etat.value
+        return JSONObject().put("present", true)
+            .put("cartes", JSONArray(s.son.appareils().map { JSONObject().put("nom", it.nom).put("desc", it.description) }))
+            .put("carte", s.carte).put("actif", c.actif).put("rate", c.rate).put("niveau", c.niveau).put("erreur", c.erreur)
+            .put("enregistrement", e.enregistrement).put("secondes", e.secondes).put("auto", e.auto)
+            .put("enregAuto", s.enregAuto).put("sstv", s.sstvActif)
+            .put("sstvMode", e.sstvMode).put("sstvLignes", e.sstvLignes).put("sstvHauteur", e.sstvHauteur)
+            .put("sstvVersion", e.sstvVersion).put("sstvDerniere", e.sstvDerniere)
+            .put("enregistrements", JSONArray(s.enregistrements().take(50).map {
+                JSONObject().put("nom", it.name).put("taille", it.length()).put("date", it.lastModified())
+            }))
+            .put("images", JSONArray(s.images().take(200).map {
+                JSONObject().put("nom", it.fileName).put("sat", it.satName).put("t", it.timeMs).put("mode", it.mode).put("complete", it.complete)
+            }))
     }
 
     fun ports(st: StationPc) = JSONArray(st.ports.liste().map {

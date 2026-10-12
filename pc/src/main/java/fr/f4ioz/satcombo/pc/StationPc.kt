@@ -80,7 +80,7 @@ data class EtatPc(
  * port chosen. The settings are those of the phone, in a file.
  */
 class StationPc(
-    private val stockage: Stockage,
+    val stockage: Stockage,
     private val catalogue: Catalogue,
     val ports: PortsSerie,
     private val portee: CoroutineScope,

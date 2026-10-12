@@ -12,6 +12,7 @@ import fr.f4ioz.satcombo.i18n.I18n
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import java.io.File
 
 /**
@@ -50,13 +51,18 @@ fun main(args: Array<String>) {
     fr.f4ioz.satcombo.data.AgentHttp.plateforme = System.getProperty("os.name") ?: "PC"
     station.demarre()
     val carnet = CarnetPc(station, fr.f4ioz.satcombo.data.LogStore(File(dossier, "qso_log.json")))
-    val serveur = ServeurPc(station, port, reseau, carnet)
+    val son = SonStation(SonPc(), station, File(dossier, "enregistrements"), File(dossier, "sstv"))
+    // The sound card used last time, started again: listening opens nothing on the rig.
+    son.carte.takeIf { it.isNotBlank() }?.let { son.son.demarre(it) }
+    portee.launch { while (true) { runCatching { son.tic() }; kotlinx.coroutines.delay(1000) } }
+    val serveur = ServeurPc(station, port, reseau, carnet, son)
     serveur.demarre()
     println("SatMe — station PC")
     println("  page      : http://localhost:${serveur.portReel}/" + if (reseau) "  (ouverte au réseau)" else "")
     println("  réglages  : ${dossier.absolutePath}")
     println("  Ctrl+C pour arrêter")
     Runtime.getRuntime().addShutdownHook(Thread {
+        runCatching { son.arreteEnregistrement(); son.son.arrete() }
         runCatching { station.deconnecteCat() }
         runCatching { station.stationRotor.disconnectRotor() }
         serveur.arrete()
