@@ -8,7 +8,6 @@
  */
 package fr.f4ioz.satcombo.data
 
-import android.content.Context
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -67,9 +66,8 @@ data class LogEntry(
     val retenu: Boolean = false
 )
 
-/** Persists quick log entries to disk (filesDir/qso_log.json). */
-class LogStore(context: Context) {
-    private val file = context.filesDir.resolve("qso_log.json")
+/** Persists quick log entries to disk (`qso_log.json`: the phone's files, the PC's folder). */
+class LogStore(private val file: java.io.File) {
 
     fun load(): List<LogEntry> {
         if (!file.exists()) return emptyList()

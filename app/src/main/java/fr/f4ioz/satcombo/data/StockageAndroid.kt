@@ -43,3 +43,6 @@ class StockageAndroid(private val p: SharedPreferences) : Stockage {
         override fun apply() = e.apply()
     }
 }
+
+/** The contact log in the phone's files (`qso_log.json`). */
+fun LogStore(context: Context): LogStore = LogStore(context.filesDir.resolve("qso_log.json"))

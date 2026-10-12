@@ -36,8 +36,10 @@ class TleRepository(
         val USER_AGENT: String
             get() = "SatMe/$version (Android ${android.os.Build.VERSION.RELEASE ?: "?"}) +https://github.com/f4ioz/SatMe"
 
-        /** Set at startup by [fr.f4ioz.satcombo.SatMeApp] (no BuildConfig here). */
-        @Volatile var version: String = "?"
+        /** Set at startup by [fr.f4ioz.satcombo.SatMeApp] (no BuildConfig here); the engine's code says the same. */
+        var version: String
+            get() = AgentHttp.version
+            set(v) { AgentHttp.version = v; AgentHttp.plateforme = "Android ${android.os.Build.VERSION.RELEASE ?: "?"}" }
 
         /**
          * A request says which app, which version, which Android: public
