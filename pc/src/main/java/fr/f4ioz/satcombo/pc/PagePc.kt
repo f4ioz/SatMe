@@ -78,7 +78,7 @@ object PagePc {
   <span class="g" id="station"></span>
   <span class="g" id="cat-statut-court"></span>
   <nav id="onglets">
-    <button data-v="station" class="actif">Station</button><button data-v="carnet">Carnet</button><button data-v="son">Son</button><button data-v="sstv">SSTV</button><button data-v="reglages">Réglages</button>
+    <button data-v="station" class="actif">Station</button><button data-v="carnet">Carnet</button><button data-v="son">Son</button><button data-v="sstv">SSTV</button><a href="/journal" style="text-decoration:none"><button title="Les passages enregistrés, rejoués">Journal</button></a><button data-v="reglages">Réglages</button>
   </nav>
   <span id="rec" class="pastille" style="display:none;background:rgba(229,72,77,.2);color:var(--rose)"></span>
   <span id="heure"></span>
@@ -599,7 +599,7 @@ function vue(n) {
   if (n === 'reglages') chargeReglages();
   if (n === 'son' || n === 'sstv') ticSon();
 }
-document.querySelectorAll('#onglets button').forEach(b => b.onclick = () => vue(b.dataset.v));
+document.querySelectorAll('#onglets button[data-v]').forEach(b => b.onclick = () => vue(b.dataset.v));
 
 // ------------------------------------------------------------------ log
 let C = [], minuteurQrz = 0, quiPour = '', editT = 0;

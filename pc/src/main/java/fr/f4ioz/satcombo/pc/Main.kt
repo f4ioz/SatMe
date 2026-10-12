@@ -54,14 +54,22 @@ fun main(args: Array<String>) {
     val son = SonStation(SonPc(), station, File(dossier, "enregistrements"), File(dossier, "sstv"))
     // The sound card used last time, started again: listening opens nothing on the rig.
     son.carte.takeIf { it.isNotBlank() }?.let { son.son.demarre(it) }
-    portee.launch { while (true) { runCatching { son.tic() }; kotlinx.coroutines.delay(1000) } }
-    val serveur = ServeurPc(station, port, reseau, carnet, son)
+    val journal = JournalPc(station, carnet, son, File(dossier, "journal"))
+    portee.launch {
+        while (true) {
+            runCatching { son.tic() }
+            runCatching { journal.tic() }
+            kotlinx.coroutines.delay(1000)
+        }
+    }
+    val serveur = ServeurPc(station, port, reseau, carnet, son, JournalWebPc(journal, station, dossier))
     serveur.demarre()
     println("SatMe — station PC")
     println("  page      : http://localhost:${serveur.portReel}/" + if (reseau) "  (ouverte au réseau)" else "")
     println("  réglages  : ${dossier.absolutePath}")
     println("  Ctrl+C pour arrêter")
     Runtime.getRuntime().addShutdownHook(Thread {
+        runCatching { journal.ferme() }
         runCatching { son.arreteEnregistrement(); son.son.arrete() }
         runCatching { station.deconnecteCat() }
         runCatching { station.stationRotor.disconnectRotor() }

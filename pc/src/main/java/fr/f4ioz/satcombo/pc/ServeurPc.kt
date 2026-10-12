@@ -28,7 +28,8 @@ import kotlin.concurrent.thread
  * never a GET a browser could fetch ahead by itself.
  */
 class ServeurPc(private val station: StationPc, private val port: Int, private val reseau: Boolean = false,
-                private val carnet: CarnetPc? = null, private val son: SonStation? = null) {
+                private val carnet: CarnetPc? = null, private val son: SonStation? = null,
+                private val journal: JournalWebPc? = null) {
 
     private var socket: ServerSocket? = null
     val portReel: Int get() = socket?.localPort ?: port
@@ -67,6 +68,17 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
         if (r.methode == "POST") {
             val res = runCatching { action(chemin, q) }.getOrElse { JSONObject().put("ok", false).put("erreur", it.message ?: "erreur") }
             envoie(sortie, "200 OK", "application/json; charset=utf-8", res.toString().toByteArray())
+            return
+        }
+        // The phone's journal page, from the PC's passes.
+        if (journal != null && (chemin == "/journal" || chemin == "/journal/")) {
+            envoie(sortie, "200 OK", "text/html; charset=utf-8", journal.page().toByteArray()); return
+        }
+        if (journal != null && chemin.startsWith("/journal/")) {
+            val rep = journal.sert(chemin.removePrefix("/journal")) { q[it].orEmpty() }
+            val f = rep.fichier
+            if (f != null) envoieFichier(sortie, r, f, rep.type, rep.entetes)
+            else envoie(sortie, rep.statut, rep.type, rep.corps, rep.entetes)
             return
         }
         when (chemin) {
@@ -219,8 +231,8 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
     }
 
     /** A file as it is on disk, by parts when the browser asks (a sound it seeks in). */
-    private fun envoieFichier(s: OutputStream, r: RequeteHttp.Requete, f: java.io.File) {
-        val type = when {
+    private fun envoieFichier(s: OutputStream, r: RequeteHttp.Requete, f: java.io.File, typeDonne: String? = null, entetes: String = "") {
+        val type = typeDonne ?: when {
             f.name.endsWith(".png") -> "image/png"
             f.name.endsWith(".wav") -> "audio/wav"
             f.name.endsWith(".mp3") -> "audio/mpeg"
@@ -231,7 +243,7 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
         val de = p?.first ?: 0L
         val n = if (p != null) p.last - p.first + 1 else taille
         s.write((("HTTP/1.1 " + (if (p != null) "206 Partial Content" else "200 OK")) + "\r\nContent-Type: $type\r\n" +
-            "Content-Length: $n\r\nAccept-Ranges: bytes\r\n" +
+            "Content-Length: $n\r\nAccept-Ranges: bytes\r\n" + entetes +
             (if (p != null) "Content-Range: bytes ${p.first}-${p.last}/$taille\r\n" else "") +
             "Cache-Control: no-store\r\nConnection: close\r\n\r\n").toByteArray())
         java.io.RandomAccessFile(f, "r").use { raf ->
