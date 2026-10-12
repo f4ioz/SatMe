@@ -65,7 +65,7 @@ fun main(args: Array<String>) {
         }
     }
     // The SDR dongle: nothing opened until asked (rtl_tcp started then, stopped with it).
-    val sdr = SdrPc(station, son.son, station.stockage, portee)
+    val sdr = SdrPc(station, son.son, station.stockage, portee, dossierSondes = File(dossier, "sondes"))
     val serveur = ServeurPc(station, port, reseau, carnet, son, JournalWebPc(journal, station, dossier), ImportPc(station, carnet, journal), sdr)
     serveur.demarre()
     println("SatMe — station PC")

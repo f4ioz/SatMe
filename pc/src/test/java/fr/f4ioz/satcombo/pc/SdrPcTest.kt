@@ -168,6 +168,65 @@ class SdrPcTest {
         sdr.arrete()
     }
 
+    /** An rtl_tcp whose dongle hears an RS41 (the test pattern) in FM, 5 kHz off the tuning. */
+    private fun fausseSonde() = thread(isDaemon = true) {
+        runCatching {
+            serveur.accept().use { c ->
+                val o = c.getOutputStream()
+                o.write("RTL0".toByteArray() + byteArrayOf(0, 0, 0, 5, 0, 0, 0, 29)); o.flush()
+                thread(isDaemon = true) {
+                    val e = DataInputStream(c.getInputStream())
+                    runCatching { while (true) commandes += e.readUnsignedByte() to e.readInt() }
+                }
+                val src = fr.f4ioz.satcombo.sonde.SondeMire.Source("RS41", 48.2, -4.5, 30, sampleRate = Dsp.AUDIO_RATE)
+                val audio = ShortArray(Dsp.AUDIO_RATE / 20)
+                val facteur = Dsp.RTL_RATE / Dsp.AUDIO_RATE
+                var phase = 0.0
+                val decalage = 2 * Math.PI * 5_000.0 / Dsp.RTL_RATE
+                while (!fini) {
+                    val n = src.read(audio); if (n <= 0) break
+                    val iq = ByteArray(n * facteur * 2)
+                    var k = 0
+                    for (i in 0 until n) {
+                        // ±5 kHz for full scale, as the chain's discriminator reads it.
+                        val pas = decalage + 2 * Math.PI * (audio[i] / 32768.0 * 5_000.0) / Dsp.RTL_RATE
+                        repeat(facteur) {
+                            phase += pas
+                            iq[k++] = (127.5 + 60 * Math.cos(phase)).toInt().toByte()
+                            iq[k++] = (127.5 + 60 * Math.sin(phase)).toInt().toByte()
+                        }
+                    }
+                    o.write(iq); Thread.sleep(25)
+                }
+            }
+        }
+    }
+
+    @Test
+    fun une_sonde_rs41_se_decode_par_la_cle_et_l_accord_se_recentre() {
+        val st = StationPc(StockageMemoire(), Catalogue(dossier, enLigne = false), PortsSeriePc(), portee)
+        st.settings.manualLocator = "IN78"
+        st.demarre()
+        st.settings.sondeFreqHz = 403_000_000L
+        st.settings.sondeModel = "RS41"
+        val son = SonPc()
+        val sdr = SdrPc(st, son, StockageMemoire(), portee, dossierSondes = File(dossier, "sondes"))
+        sdr.lance = false; sdr.port = serveur.localPort
+        fausseSonde()
+        assertTrue(sdr.demarreSondes())
+        // The decoders of sound are not given a sonde's bits.
+        assertFalse(son.etat.value.actif)
+        attends { commandes.any { it.first == 0x01 && it.second == 403_000_000 } }
+        // Re-centred on the signal, 5 kHz off: then the frames come.
+        attends(20_000) { kotlin.math.abs(sdr.etat.value.decalageHz - 5_000) < 1_500 }
+        attends(25_000) { sdr.sondes.etat.trames > 0 }
+        assertEquals("RS41", sdr.sondes.etat.type)
+        assertEquals(403_000_000L, sdr.sondes.etat.derniere!!.freqHz)
+        assertTrue(sdr.sondes.journaux().any { it.name.endsWith(".csv") })
+        sdr.arrete()
+        assertFalse(sdr.sondes.etat.actif)
+    }
+
     @Test
     fun le_mode_d_un_emetteur() {
         assertEquals(fr.f4ioz.satcombo.sdr.RxMode.NFM, SdrPc.modeDe("FM"))

@@ -48,7 +48,44 @@ import kotlin.concurrent.thread
  * port.
  */
 class SdrPc(val station: StationPc, private val son: SonPc, private val stockage: Stockage,
-            private val portee: CoroutineScope, private val horloge: () -> Long = System::currentTimeMillis) {
+            private val portee: CoroutineScope, private val horloge: () -> Long = System::currentTimeMillis,
+            dossierSondes: File? = null) {
+
+    /** The radiosondes: their decoder, fed by the dongle while it listens to one. */
+    val sondes = fr.f4ioz.satcombo.sonde.DecodeurSondes(dossierSondes, horloge)
+
+    /** Listening to a radiosonde rather than a satellite. */
+    @Volatile var pourSonde = false; private set
+
+    /** Re-centring on the sonde (the spectrum's centre of gravity): once asked, or every 2 s. */
+    @Volatile var recentreAuto = true
+    @Volatile private var recentreVoulu = false
+    fun recentre() { recentreVoulu = true }
+
+    /** The dongle for a radiosonde: its frequency, its model's filter, no audio, no squelch, no de-emphasis. */
+    fun demarreSondes(): Boolean {
+        arrete()
+        pourSonde = true
+        decalageHz = 0
+        sondes.demarre(Dsp.AUDIO_RATE, settings.sondeFreqHz, settings.sondeModel)
+        if (!lance()) { pourSonde = false; sondes.arrete(); return false }
+        recentreVoulu = true
+        return true
+    }
+
+    /** Another sonde frequency (a step, a site): the dongle and the frames follow. */
+    fun frequenceSonde(hz: Long) {
+        settings.sondeFreqHz = hz.coerceIn(400_000_000L, 406_000_000L)
+        sondes.frequence(settings.sondeFreqHz)
+        decalageHz = 0
+        if (pourSonde) { recentreVoulu = true; cibleMaintenant() }
+    }
+
+    fun modeleSonde(m: String) {
+        settings.sondeModel = m
+        // The decoders follow the model: armed again on the same frequency.
+        if (pourSonde) sondes.demarre(Dsp.AUDIO_RATE, settings.sondeFreqHz, m)
+    }
 
     data class Etat(
         val actif: Boolean = false,
@@ -160,8 +197,13 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
     @Volatile var spectre: FloatArray? = null; private set
     @Volatile var trames = 0L; private set
 
+    /** The dongle on the satellite (or QO-100, or the manual frequency). */
     fun demarre(): Boolean {
         arrete()
+        return lance()
+    }
+
+    private fun lance(): Boolean {
         val gen = ++generation
         _etat.update { Etat(statut = "connexion…") }
         val r = runCatching { connecte() }.getOrElse { e ->
@@ -179,7 +221,7 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
         }
         cibleMaintenant()
         _etat.update { it.copy(actif = true, statut = "réception", erreur = "", tuner = RtlTcp.nomTuner(r.tuner)) }
-        son.prendPour(NOM_SOURCE, Dsp.AUDIO_RATE)
+        if (!pourSonde) son.prendPour(NOM_SOURCE, Dsp.AUDIO_RATE)
         thread(isDaemon = true, name = "satme-sdr") { boucle(r, gen) }
         suivi = portee.launch {
             while (generation == gen) { runCatching { cibleMaintenant() }; delay(250) }
@@ -188,6 +230,7 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
     }
 
     fun arrete() {
+        if (pourSonde) { sondes.arrete(); pourSonde = false }
         generation++
         suivi?.cancel(); suivi = null
         cle?.let { runCatching { it.close() } }
@@ -239,6 +282,12 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
 
     /** The Doppler loop: where the dongle should be now. */
     private fun cibleMaintenant() {
+        if (pourSonde) {
+            val f = settings.sondeFreqHz
+            voulueHz = f
+            _etat.update { it.copy(cielHz = f, reposHz = f, satellite = "Radiosonde") }
+            return
+        }
         if (pourQo100()) {
             val q = station.qo100.etat.value
             val ciel = q.descenteHz + q.calageHz
@@ -262,6 +311,7 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
         var dernierSpectre = 0L; var dernierEtat = 0L; var dernierOctets = 0L
         var trameVue = 0L
         var dernierPano = 0L; var panoVue = 0L
+        var dernierRecentre = 0L
         val hp = hautParleur()
         try {
             while (generation == gen) {
@@ -271,15 +321,20 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
                     if (plan.retune) { r.setCenterFreq(plan.pllHz); pll = plan.pllHz }
                     if (plan.fineHz != fine) { fine = plan.fineHz; chaine.dopplerFineHz = fine.toDouble() }
                 }
-                val m = mode()
+                val sonde = pourSonde
+                // A sonde modulates bits, not a voice: NFM at its model's width, no squelch
+                // (a distant sonde drops below it long before it stops decoding), and above all
+                // no de-emphasis — it rounds the edges and nothing decodes.
+                val m = if (sonde) RxMode.NFM else mode()
                 if (chaine.mode != m) { chaine.mode = m; chaine.reset() }
-                val bw = settings.sdrBandwidthHz.toDouble()
+                val bw = (if (sonde) fr.f4ioz.satcombo.sonde.SondeModel.bandwidthFor(settings.sondeModel) else settings.sdrBandwidthHz).toDouble()
                 if (chaine.bandwidthHz != bw) chaine.bandwidthHz = bw
-                val sq = settings.sdrSquelchDb.toFloat()
+                val sq = if (sonde) -200f else settings.sdrSquelchDb.toFloat()
                 if (chaine.squelch.thresholdDb != sq) chaine.squelch.thresholdDb = sq
                 val dec = decalageHz.toDouble()
                 if (chaine.offsetHz != dec) chaine.offsetHz = dec
-                if (chaine.deemphasis != settings.sdrDeemph) chaine.deemphasis = settings.sdrDeemph
+                val deemph = !sonde && settings.sdrDeemph
+                if (chaine.deemphasis != deemph) chaine.deemphasis = deemph
 
                 val n = r.read(iq, 200)
                 if (n < 0) { if (generation == gen) _etat.update { it.copy(actif = false, statut = "arrêtée", erreur = "rtl_tcp a coupé la liaison") }; break }
@@ -298,6 +353,13 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
                 if (chaine.spectrum.frames != trameVue) {
                     trameVue = chaine.spectrum.frames
                     spectre = chaine.spectrum.magDb.copyOf(); trames++
+                    // The sonde: the centre of gravity of what stands above the noise, ±25 kHz
+                    // around the tuning; nothing found (silence): the tuning stays.
+                    if (sonde && (recentreVoulu || (recentreAuto && maintenant - dernierRecentre >= 2_000L))) {
+                        recentreVoulu = false; dernierRecentre = maintenant
+                        val c = chaine.centroidOffsetHz(searchHz = 25_000.0)
+                        if (c != 0.0) decalageHz = (fr.f4ioz.satcombo.domain.AccordFin.accordVise(c, 0) - fine).toInt()
+                    }
                     if (vaAuPic) {
                         vaAuPic = false
                         // Around the listened frequency: ±15 kHz, as the phone's button.
@@ -306,7 +368,8 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
                         if (p != 0.0) decalageHz = (Math.round(p) - fine).toInt()
                     }
                 }
-                if (produit > 0) {
+                if (produit > 0 && sonde) sondes.ecoute(pcm, produit)
+                else if (produit > 0) {
                     if (settings.sdrAudio && hp != null) {
                         // Never wait for the speaker: a late block is dropped, the reading goes on.
                         val octets = ByteArray(produit * 2)

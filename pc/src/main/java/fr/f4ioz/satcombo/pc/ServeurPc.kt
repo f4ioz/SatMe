@@ -123,6 +123,7 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
             "/api/sdr" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", (sdr?.let { JsonPc.sdr(it) } ?: JSONObject().put("absent", true)).toString().toByteArray())
             "/api/sdr/spectre" -> envoie(sortie, "200 OK", "application/json; charset=utf-8",
                 (sdr?.let { JsonPc.spectre(it, q["span"]?.toIntOrNull() ?: 48_000, q["n"]?.toIntOrNull() ?: 512) } ?: JSONObject()).toString().toByteArray())
+            "/api/sondes" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", (sdr?.let { JsonPc.sondes(it) } ?: JSONObject().put("absent", true)).toString().toByteArray())
             "/api/frise" -> {
                 val (debut, lignes) = kotlinx.coroutines.runBlocking { station.frise((q["h"]?.toIntOrNull() ?: 12).coerceIn(2, 48)) }
                 envoie(sortie, "200 OK", "application/json; charset=utf-8", JSONObject().put("debut", debut)
@@ -181,9 +182,12 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 val f = when {
                     chemin.startsWith("/enregistrements/") -> son?.fichierEnregistrement(java.net.URLDecoder.decode(chemin.removePrefix("/enregistrements/"), "UTF-8"))
                     chemin.startsWith("/sstv/") -> son?.fichierImage(java.net.URLDecoder.decode(chemin.removePrefix("/sstv/"), "UTF-8"))
+                    // A sonde's log or track: only a plain name, inside its folder.
+                    chemin.startsWith("/sondes/") -> java.net.URLDecoder.decode(chemin.removePrefix("/sondes/"), "UTF-8")
+                        .takeIf { it.matches(Regex("[A-Za-z0-9._-]+")) }?.let { n -> sdr?.sondes?.journaux()?.firstOrNull { it.name == n } }
                     else -> null
                 }
-                if (f != null) envoieFichier(sortie, r, f)
+                if (f != null) envoieFichier(sortie, r, f, entetes = if (chemin.startsWith("/sondes/")) "Content-Disposition: attachment; filename=\"${f.name}\"\r\n" else "")
                 else envoie(sortie, "404 Not Found", "text/plain; charset=utf-8", "introuvable".toByteArray())
             }
         }
@@ -283,6 +287,21 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 q["port"]?.toIntOrNull()?.let { d.port = it }
                 q["lance"]?.let { d.lance = it == "1" }
                 q["bias"]?.let { d.biasTee = it == "1" }
+            }
+            "/api/sondes/demarrer" -> {
+                val d = sdr ?: return JSONObject().put("ok", false)
+                if (!d.demarreSondes()) return JSONObject().put("ok", false).put("erreur", d.etat.value.erreur)
+            }
+            "/api/sondes/arreter" -> sdr?.arrete()
+            "/api/sondes/frequence" -> q["khz"]?.replace(',', '.')?.toDoubleOrNull()?.let { sdr?.frequenceSonde(Math.round(it * 1000)) }
+            "/api/sondes/pas" -> q["n"]?.toIntOrNull()?.let { n -> sdr?.frequenceSonde(station.settings.sondeFreqHz + n * fr.f4ioz.satcombo.sonde.SondeSites.SCAN_STEP_HZ) }
+            "/api/sondes/modele" -> q["m"]?.takeIf { m -> fr.f4ioz.satcombo.sonde.SondeModel.ALL.any { it.id == m } }?.let { sdr?.modeleSonde(it) }
+            "/api/sondes/recentre" -> sdr?.recentre()
+            "/api/sondes/auto" -> sdr?.recentreAuto = q["on"] == "1"
+            "/api/sondes/oublie" -> sdr?.sondes?.oublieVol()
+            "/api/sondes/export" -> {
+                val f = sdr?.sondes?.exporte(q["kml"] == "1") ?: return JSONObject().put("ok", false).put("erreur", "Pas de vol à exporter.")
+                return JSONObject().put("ok", true).put("nom", f.name)
             }
             "/api/qo100/frequence" -> q["hz"]?.toLongOrNull()?.let { station.qo100.descente(it) }
             "/api/qo100/pas" -> q["hz"]?.toLongOrNull()?.let { station.qo100.pas(it) }
@@ -448,6 +467,44 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
 
 /** The station as the page reads it. */
 object JsonPc {
+    /** The radiosondes: the dongle on them, the decoder, the sites around, the flight. */
+    fun sondes(d: SdrPc): JSONObject {
+        val st = d.station.settings
+        val e = d.sondes.etat
+        val obs = d.station.etat.value.observateur
+        val o = JSONObject().put("actif", d.pourSonde && d.etat.value.actif).put("sdrActif", d.etat.value.actif && !d.pourSonde)
+            .put("erreur", d.etat.value.erreur).put("freq", st.sondeFreqHz).put("decalage", d.etat.value.decalageHz)
+            .put("niveau", Math.round(d.etat.value.niveauDb * 10) / 10.0).put("modele", st.sondeModel).put("auto", d.recentreAuto)
+            .put("modeles", JSONArray(fr.f4ioz.satcombo.sonde.SondeModel.ALL.map { JSONObject().put("id", it.id).put("nom", it.label) }))
+            .put("trames", e.trames).put("rejetees", e.rejetees).put("excursion", e.excursion).put("serie", e.serie).put("type", e.type)
+        if (obs != null) o.put("moi", JSONObject().put("lat", obs.latDeg).put("lon", obs.lonDeg))
+            .put("sites", JSONArray(fr.f4ioz.satcombo.sonde.SondeSites.nearest(obs.latDeg, obs.lonDeg, max = 6).map { (s, km) ->
+                JSONObject().put("nom", s.name).put("km", Math.round(km)).put("hz", s.mainHz).put("sonde", s.sonde)
+                    .put("lachers", JSONArray(s.launchesUtc.map { h -> String.format(java.util.Locale.US, "%02d:%02d", h.toInt(), Math.round((h - h.toInt()) * 60).toInt()) }))
+            }))
+        e.derniere?.let { f ->
+            val p = JSONObject().put("lat", f.lat).put("lon", f.lon).put("alt", Math.round(f.altM)).put("vitesse", Math.round(f.speedMps * 3.6))
+                .put("cap", Math.round(f.headingDeg)).put("montee", Math.round(f.climbMps * 10) / 10.0).put("sats", f.sats)
+                .put("heure", f.timeUtcMs).put("freq", f.freqHz).put("sure", f.trusted)
+            if (obs != null) {
+                val km = fr.f4ioz.satcombo.sonde.Geo.distanceKm(obs.latDeg, obs.lonDeg, f.lat, f.lon)
+                val az = fr.f4ioz.satcombo.sonde.Geo.bearingDeg(obs.latDeg, obs.lonDeg, f.lat, f.lon)
+                p.put("km", Math.round(km * 10) / 10.0).put("azimut", Math.round(az)).put("rose", fr.f4ioz.satcombo.sonde.Geo.compass(az))
+            }
+            fr.f4ioz.satcombo.sonde.SondeSites.likelyOrigin(f.lat, f.lon, f.type)?.let { p.put("origine", it.name) }
+            o.put("derniere", p)
+        }
+        d.sondes.vol?.let { v ->
+            val pts = v.track
+            val pas = maxOf(1, pts.size / 600)
+            o.put("trace", JSONArray(pts.filterIndexed { i, _ -> i % pas == 0 || i == pts.size - 1 }.map { JSONArray(listOf(Math.round(it.lat * 1e5) / 1e5, Math.round(it.lon * 1e5) / 1e5)) }))
+            if (v.hasBurst) o.put("eclatement", JSONObject().put("alt", Math.round(v.burstAltM)).put("lat", v.burst!!.lat).put("lon", v.burst!!.lon))
+            v.estimatedLanding()?.let { (la, lo) -> o.put("atterrissage", JSONObject().put("lat", la).put("lon", lo)) }
+        }
+        o.put("journaux", JSONArray(d.sondes.journaux().take(30).map { JSONObject().put("nom", it.name).put("taille", it.length()).put("date", it.lastModified()) }))
+        return o
+    }
+
     /** The dongle: its state and its settings. */
     fun sdr(d: SdrPc): JSONObject {
         val e = d.etat.value

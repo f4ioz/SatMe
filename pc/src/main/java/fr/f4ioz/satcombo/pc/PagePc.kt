@@ -101,6 +101,10 @@ object PagePc {
   .r-cascade { position:relative; height:360px; }
   .r-cascade canvas { position:absolute; inset:0; width:100%; height:100%; display:block; cursor:crosshair; }
   .r-droite { display:flex; flex-direction:column; min-width:0; }
+  .s2-droite { display:flex; flex-direction:column; min-width:0; }
+  .s2-carte { position:relative; height:420px; margin-top:8px; border-radius:8px; overflow:hidden; }
+  .s2-carte canvas { position:absolute; inset:0; width:100%; height:100%; cursor:grab; touch-action:none; }
+  .s2-gros { font-family:ui-monospace,Consolas,monospace; font-size:30px; font-weight:800; }
   /* On a computer's screen each tab fits the window: what is longer scrolls in its own box. */
   @media (min-width:1101px) and (min-height:600px) {
     body { height:100vh; display:flex; flex-direction:column; overflow:hidden; }
@@ -120,6 +124,8 @@ object PagePc {
     .vue > .grille2 > div { min-height:0; overflow:auto; }
     #k-grille { height:100%; }
     .r-droite { height:100%; margin:0; }
+    .s2-droite { height:100%; margin:0; }
+    .s2-carte { flex:1; height:auto; min-height:200px; }
     .r-cascade { flex:1; min-height:120px; height:auto; }
     .k-gauche { display:flex; flex-direction:column; min-height:0; }
     .k-fenetres { flex:1; max-height:none; min-height:0; margin-bottom:0; }
@@ -137,7 +143,7 @@ object PagePc {
   <span class="g" id="info-station"></span>
   <span class="g" id="cat-statut-court"></span>
   <nav id="onglets">
-    <button data-v="station" class="actif">Station</button><button data-v="carnet">Carnet</button><button data-v="agenda">Agenda</button><button data-v="carres">Carrés</button><button data-v="frise">Frise</button><button data-v="sked">Sked</button><button data-v="qo100">QO-100</button><button data-v="sdr">SDR</button><button data-v="son">Son</button><button data-v="sstv">SSTV</button><button data-v="aprs">APRS</button><button data-v="ft8">FT8</button><a href="/journal" style="text-decoration:none"><button title="Les passages enregistrés, rejoués">Journal</button></a><button data-v="reglages">Réglages</button>
+    <button data-v="station" class="actif">Station</button><button data-v="carnet">Carnet</button><button data-v="agenda">Agenda</button><button data-v="carres">Carrés</button><button data-v="frise">Frise</button><button data-v="sked">Sked</button><button data-v="qo100">QO-100</button><button data-v="sdr">SDR</button><button data-v="sondes">Sondes</button><button data-v="son">Son</button><button data-v="sstv">SSTV</button><button data-v="aprs">APRS</button><button data-v="ft8">FT8</button><a href="/journal" style="text-decoration:none"><button title="Les passages enregistrés, rejoués">Journal</button></a><button data-v="reglages">Réglages</button>
   </nav>
   <span id="rec" class="pastille" style="display:none;background:rgba(229,72,77,.2);color:var(--rose)"></span>
   <span id="heure"></span>
@@ -639,6 +645,45 @@ object PagePc {
   </div>
 </div>
 </div>
+<div class="vue" id="v-sondes" hidden>
+<div class="grille2" id="s2-grille">
+  <div>
+    <div class="carte">
+      <div class="t">Radiosondes · clé SDR <span id="s2-pastille" class="pastille off">arrêtée</span></div>
+      <div class="ligne" style="margin-top:0"><span class="o-freq" style="font-size:26px" id="s2-freq">—</span><span class="petit">MHz</span>
+        <button onclick="sPost('pas?n=-1')">−10 k</button><button onclick="sPost('pas?n=1')">+10 k</button></div>
+      <div class="ligne"><input id="s2-khz" placeholder="403 000 (kHz)" style="max-width:150px"><button onclick="sPost('frequence?khz=' + enc(v('s2-khz').replace(/\s/g, '')))">Aller</button>
+        <span class="petit" style="margin-left:auto">Modèle</span><select id="s2-modele" style="flex:none" onchange="sPost('modele?m=' + this.value)"></select></div>
+      <div class="ligne"><button class="primaire" onclick="sPost('demarrer')">Démarrer</button><button onclick="sPost('arreter')">Arrêter</button>
+        <span class="petit" id="s2-info"></span></div>
+      <div class="avert" id="s2-erreur"></div>
+      <div class="petit" style="margin-top:6px">La clé reçoit en FM étroite, à la largeur du modèle, sans désaccentuation ni silencieux. Nommer le modèle resserre le filtre : quelques dB sur une sonde lointaine.</div>
+    </div>
+    <div class="carte">
+      <div class="t">Réception</div>
+      <div class="ligne" style="margin-top:0"><span class="petit" style="min-width:80px">Excursion</span><div class="r-barre"><i id="s2-exc"></i></div>
+        <span class="petit" style="min-width:80px;margin-left:10px">Niveau</span><span class="petit" id="s2-niv"></span></div>
+      <div class="ligne"><span class="petit" id="s2-trames"></span></div>
+      <div class="ligne"><button onclick="sPost('recentre')">Recentrer sur le signal</button>
+        <label class="petit"><input type="checkbox" id="s2-auto" onchange="sPost('auto?on=' + (this.checked ? 1 : 0))"> toutes les 2 s</label><span class="petit" id="s2-dec"></span></div>
+    </div>
+    <div class="carte">
+      <div class="t">Lâchers près d'ici</div>
+      <table><tbody id="s2-sites"></tbody></table>
+      <div class="petit" style="margin-top:4px">Un clic sur une station règle sa fréquence. Heures des lâchers en UTC.</div>
+    </div>
+    <div class="carte">
+      <div class="t">Journaux</div>
+      <div style="max-height:160px;overflow:auto"><table><tbody id="s2-journaux"></tbody></table></div>
+    </div>
+  </div>
+  <div class="carte s2-droite">
+    <div id="s2-fix" class="petit">Aucune trame encore : démarre la réception sur la fréquence d'une sonde en vol.</div>
+    <div class="ligne"><button onclick="sExporte(0)">GPX</button><button onclick="sExporte(1)">KML</button><button onclick="if (confirm('Oublier ce vol ?')) sPost('oublie')">Oublier le vol</button></div>
+    <div class="s2-carte"><canvas id="s2-carte" title="Glisser, molette, double-clic pour recadrer"></canvas></div>
+  </div>
+</div>
+</div>
 <div class="vue" id="v-ft8" hidden>
 <div class="grille2" style="grid-template-columns:minmax(380px,1fr) minmax(500px,1.5fr)">
   <div>
@@ -1018,6 +1063,7 @@ function vue(n) {
   if (n === 'sked') { prepareSked(); setTimeout(dessineSked); }
   if (n === 'qo100') chargeQo100(true);
   if (n === 'sdr') ticSdr();
+  if (n === 'sondes') { SV2.libre = false; ticSondes(); }
 }
 document.querySelectorAll('#onglets button[data-v]').forEach(b => b.onclick = () => vue(b.dataset.v));
 
@@ -1916,6 +1962,81 @@ for (const id of ['r-spectre', 'r-cascade']) g(id).addEventListener('click', ev 
   post('/api/sdr/decalage?hz=' + hz).then(ticSdr);
 });
 
+// ------------------------------------------------------------------ radiosondes
+let S2 = null;
+const SV2 = { cx: 0.5, cy: 0.35, z: 7, libre: false };
+async function sPost(a) { const j = await post('/api/sondes/' + a); ticSondes(); return j; }
+async function sExporte(kml) { const j = await sPost('export?kml=' + kml); if (j && j.ok) location.href = '/sondes/' + encodeURIComponent(j.nom); }
+async function ticSondes() {
+  if (g('v-sondes').hidden) return;
+  try { S2 = await (await fetch('/api/sondes')).json(); } catch (x) { return; }
+  const s = S2;
+  g('s2-pastille').className = 'pastille ' + (s.actif ? 'on' : 'off'); txt('s2-pastille', s.actif ? 'réception' : 'arrêtée');
+  txt('s2-freq', (s.freq / 1e6).toFixed(3).replace('.', ','));
+  const mod = s.modeles.map(m => '<option value="' + m.id + '">' + esc(m.nom) + '</option>').join('');
+  if (g('s2-modele').dataset.vu !== mod) { g('s2-modele').dataset.vu = mod; g('s2-modele').innerHTML = mod; }
+  if (document.activeElement !== g('s2-modele')) g('s2-modele').value = s.modele;
+  txt('s2-info', s.sdrActif ? 'la clé écoute un satellite : Démarrer la passe sur la sonde' : '');
+  txt('s2-erreur', s.erreur || '');
+  g('s2-exc').style.width = (s.actif ? s.excursion : 0) + '%';
+  txt('s2-niv', s.actif ? s.niveau.toFixed(0) + ' dB' : '');
+  txt('s2-trames', s.actif || s.trames ? s.trames + ' trame(s) gardée(s) · ' + s.rejetees + ' rejetée(s)' + (s.type ? ' · ' + s.type + ' ' + s.serie : '') : '');
+  if (document.activeElement !== g('s2-auto')) g('s2-auto').checked = s.auto;
+  txt('s2-dec', s.actif && s.decalage ? 'accord ' + (s.decalage > 0 ? '+' : '') + (s.decalage / 1000).toFixed(1) + ' kHz' : '');
+  const sites = (s.sites || []).map(x => '<tr class="p" onclick="sPost(\'frequence?khz=' + x.hz / 1000 + '\')"><td>' + esc(x.nom) + '</td><td class="petit">' + x.km + ' km</td><td>' +
+    (x.hz / 1e6).toFixed(3) + '</td><td class="petit">' + esc(x.sonde) + '</td><td class="petit">' + x.lachers.join(' · ') + '</td></tr>').join('') ||
+    '<tr><td class="petit">renseigne ton locator (Réglages)</td></tr>';
+  if (g('s2-sites').dataset.vu !== sites) { g('s2-sites').dataset.vu = sites; g('s2-sites').innerHTML = sites; }
+  const jx = s.journaux.map(f => '<tr><td><a style="color:var(--cyan)" href="/sondes/' + encodeURIComponent(f.nom) + '">' + esc(f.nom) + '</a></td><td class="petit">' +
+    Math.max(1, Math.round(f.taille / 1024)) + ' Ko</td></tr>').join('') || '<tr><td class="petit">aucun</td></tr>';
+  if (g('s2-journaux').dataset.vu !== jx) { g('s2-journaux').dataset.vu = jx; g('s2-journaux').innerHTML = jx; }
+  // The last fix: distance and bearing large, what one reads while walking.
+  const f = s.derniere;
+  let h = 'Aucune trame encore : démarre la réception sur la fréquence d’une sonde en vol.';
+  if (f) {
+    const t = new Date(f.heure);
+    h = '<div class="paire"><b style="font-size:16px">' + esc(s.type + ' ' + s.serie) + '</b>' + (f.origine ? '<span class="petit">partie sans doute de ' + esc(f.origine) + '</span>' : '') + '</div>' +
+      (f.km != null ? '<div class="paire" style="margin-top:6px"><span class="s2-gros cyan">' + f.km.toLocaleString('fr-FR') + ' km</span><span class="s2-gros ambre">' + f.azimut + '° ' + f.rose + '</span></div>' : '') +
+      '<div class="paire" style="margin-top:6px"><span>Altitude <b class="val">' + f.alt.toLocaleString('fr-FR') + ' m</b></span><span>Montée <b class="val">' + (f.montee > 0 ? '+' : '') + f.montee + ' m/s</b></span>' +
+      '<span>Vitesse <b class="val">' + f.vitesse + ' km/h</b> vers ' + f.cap + '°</span>' + (f.sats ? '<span>GPS ' + f.sats + ' sat.</span>' : '') + '</div>' +
+      '<div class="petit" style="margin-top:4px">' + f.lat.toFixed(5) + ' ' + f.lon.toFixed(5) + (f.heure ? ' · ' + t.toISOString().slice(11, 19) + ' UTC' : '') + ' · ' + (f.freq / 1e6).toFixed(3) + ' MHz' +
+      (s.eclatement ? ' · éclatement à ' + s.eclatement.alt.toLocaleString('fr-FR') + ' m' : '') + '</div>' +
+      (f.sure ? '' : '<div class="avert">Position incertaine (GPS sans assez de satellites).</div>');
+  }
+  if (g('s2-fix').dataset.vu !== h) { g('s2-fix').dataset.vu = h; g('s2-fix').innerHTML = h; }
+  dessineSondes();
+}
+setInterval(ticSondes, 1000);
+function cadreSondes() {
+  const c = g('s2-carte'); if (!c.clientWidth || !S2) return;
+  const pts = (S2.trace || []).slice();
+  if (S2.moi) pts.push([S2.moi.lat, S2.moi.lon]);
+  if (S2.atterrissage) pts.push([S2.atterrissage.lat, S2.atterrissage.lon]);
+  if (!pts.length) return;
+  const xs = pts.map(p => wxk(p[1])), ys = pts.map(p => wyq(p[0]));
+  const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+  SV2.cx = (x0 + x1) / 2; SV2.cy = (y0 + y1) / 2;
+  // No flight yet: the region around the station (a sonde lands within 100–200 km).
+  if (pts.length < 2) { SV2.z = 8; return; }
+  SV2.z = Math.max(3, Math.min(13, Math.log2(Math.min(c.clientWidth / 256 / Math.max(x1 - x0, 1e-4), c.clientHeight / 256 / Math.max(y1 - y0, 1e-4)) * 0.8)));
+}
+function dessineSondes() {
+  const c = g('s2-carte'); if (!c || g('v-sondes').hidden || !c.clientWidth || !S2) return;
+  if (!SV2.libre) cadreSondes();
+  const m = fondCarte(c, SV2), x = m.x;
+  const t = S2.trace || [];
+  traceCarte(m, t, '#E86FA8', 3);
+  if (S2.atterrissage && t.length) traceCarte(m, [t[t.length - 1], [S2.atterrissage.lat, S2.atterrissage.lon]], '#E86FA8', 2, [5, 4]);
+  if (S2.eclatement) pointCarte(m, S2.eclatement.lat, S2.eclatement.lon, '#FFFFFF', 5, 'éclatement');
+  if (S2.atterrissage) pointCarte(m, S2.atterrissage.lat, S2.atterrissage.lon, '#E5484D', 6, 'atterrissage estimé');
+  if (S2.moi) {
+    if (S2.derniere) { x.strokeStyle = '#FFB454'; x.lineWidth = 1.5; x.setLineDash([3, 3]); x.beginPath(); x.moveTo(m.px(S2.moi.lon), m.py(S2.moi.lat)); x.lineTo(m.px(S2.derniere.lon), m.py(S2.derniere.lat)); x.stroke(); x.setLineDash([]); }
+    pointCarte(m, S2.moi.lat, S2.moi.lon, '#FFB454', 6, E && E.indicatif ? E.indicatif : 'Moi');
+  }
+  if (S2.derniere) pointCarte(m, S2.derniere.lat, S2.derniere.lon, '#3FE0C8', 7, S2.serie || S2.type);
+}
+attacheCarte(g('s2-carte'), SV2, dessineSondes, cadreSondes, 2);
+
 // ------------------------------------------------------------------ FT8
 let H = null, ft8Vu = '';
 async function ticFt8() {
@@ -2006,7 +2127,7 @@ setInterval(ticSon, 1000);
 
 lienRotor(); avertCat();
 // The tab from the address (#carnet, a bookmark), else the last one seen.
-if (['station', 'carnet', 'agenda', 'carres', 'frise', 'sked', 'qo100', 'sdr', 'son', 'sstv', 'aprs', 'ft8', 'reglages'].includes(location.hash.slice(1))) vue(location.hash.slice(1));
+if (['station', 'carnet', 'agenda', 'carres', 'frise', 'sked', 'qo100', 'sdr', 'sondes', 'son', 'sstv', 'aprs', 'ft8', 'reglages'].includes(location.hash.slice(1))) vue(location.hash.slice(1));
 else try { const n = localStorage.getItem('vue'); if (n) vue(n); } catch (x) {}
 tic(); chargeListe(); chargePorts(); chargeSatellites();
 setInterval(chargeSatellites, 600000);
