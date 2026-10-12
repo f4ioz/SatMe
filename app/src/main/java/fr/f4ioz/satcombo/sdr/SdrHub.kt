@@ -716,6 +716,10 @@ object SdrHub {
                     if (SondeHub.active && mine()) {
                         runCatching { SondeHub.feedLive(pcm, produced) }
                     }
+                    // FT8 from the dongle (its screen's source "SDR"): queued, decoded elsewhere.
+                    if (fr.f4ioz.satcombo.ft8.Ft8Hub.ecouteSdr && mine()) {
+                        runCatching { fr.f4ioz.satcombo.ft8.Ft8Hub.feedLive(pcm, produced) }
+                    }
                     val l = lame
                     val b = mp3Buf
                     if (l != null && b != null) {

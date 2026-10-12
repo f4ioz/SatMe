@@ -84,6 +84,21 @@ fun Ft8Screen(ui: UiState, vm: MainViewModel) {
             Text("${st.tranches} ${t("ft8_tranches")}", color = TextLo, fontSize = 11.sp)
         }
 
+        // --- source: the phone's input (the rig's audio), or the SDR dongle's receiver ---
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically) {
+            listOf("MIC" to t("ft8_source_micro"), "SDR" to t("ft8_source_sdr")).forEach { (code, nom) ->
+                FilterChip(
+                    selected = st.source == code,
+                    onClick = { Ft8Hub.choisitSource(ctx, code) },
+                    label = { Text(nom, fontSize = 13.sp) },
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = Cyan.copy(alpha = 0.25f),
+                        selectedLabelColor = Cyan))
+            }
+        }
+        if (st.source == "SDR") Text(t("ft8_sdr_note"), color = TextLo, fontSize = 11.sp)
+
         Spacer(Modifier.height(10.dp))
 
         // --- run ---
@@ -92,7 +107,7 @@ fun Ft8Screen(ui: UiState, vm: MainViewModel) {
             Button(
                 onClick = {
                     if (st.enMarche) Ft8Hub.arrete()
-                    else if (micOk()) Ft8Hub.demarre(ctx, st.mode)
+                    else if (st.source == "SDR" || micOk()) Ft8Hub.demarre(ctx, st.mode)
                     else demandeMicro.launch(Manifest.permission.RECORD_AUDIO)
                 },
                 colors = ButtonDefaults.buttonColors(

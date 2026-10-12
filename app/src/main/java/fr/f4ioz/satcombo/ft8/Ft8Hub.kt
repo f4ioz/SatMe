@@ -65,7 +65,9 @@ object Ft8Hub {
         val basseHz: Int = 200,
         val hauteHz: Int = 3000,
         /** Empty when all is well. */
-        val panne: String = ""
+        val panne: String = "",
+        /** Where the sound comes from: "MIC" (the phone's input) or "SDR" (the dongle's receiver). */
+        val source: String = "MIC"
     )
 
     data class Entendu(
@@ -91,14 +93,78 @@ object Ft8Hub {
 
     fun demarre(ctx: Context, nom: String) {
         arrete()
-        _state.value = Etat(enMarche = true, mode = nom)
-        boucle = CoroutineScope(Dispatchers.Default).launch { tourne(nom, this) }
+        val src = _state.value.source
+        _state.value = Etat(enMarche = true, mode = nom, source = src)
+        boucle = CoroutineScope(Dispatchers.Default).launch {
+            if (src == "SDR") tourneSdr(nom, this) else tourne(nom, this)
+        }
     }
 
     fun arrete() {
+        ecouteSdr = false
         boucle?.cancel()
         boucle = null
+        fileSdr.clear()
         _state.value = _state.value.copy(enMarche = false, avancement = 0f)
+    }
+
+    /** The microphone (the rig's audio into the phone) or the SDR dongle's receiver. */
+    fun choisitSource(ctx: Context, src: String) {
+        if (src == _state.value.source) return
+        val tournait = _state.value.enMarche
+        arrete()
+        _state.value = _state.value.copy(source = src, panne = "")
+        if (tournait) demarre(ctx, _state.value.mode)
+    }
+
+    // ------------------------------------------------------------ from the SDR dongle
+
+    /** The dongle's reader hands its sound over only while true. */
+    @Volatile var ecouteSdr = false
+        private set
+    /** The dongle's audio rate (44 100 Hz) brought to 11 025: FT8 lies under 3 kHz. */
+    private const val CADENCE_SDR = 11_025
+    private const val DECIMATION_SDR = 4
+    private val fileSdr = java.util.concurrent.ArrayBlockingQueue<ShortArray>(256)
+    private var resteSdr = 0; private var sommeSdr = 0
+
+    /**
+     * From the dongle's reading loop: its demodulated sound (44.1 kHz). Kept
+     * short — the reading must never wait: averaged four by four into a
+     * block, queued, decoded elsewhere; a block that finds the queue full is
+     * dropped (the slot just decodes less).
+     */
+    fun feedLive(pcm: ShortArray, n: Int) {
+        if (!ecouteSdr || n <= 0) return
+        val out = ShortArray(n / DECIMATION_SDR + 1)
+        var k = 0
+        for (i in 0 until n) {
+            sommeSdr += pcm[i]
+            if (++resteSdr == DECIMATION_SDR) { out[k++] = (sommeSdr / DECIMATION_SDR).toShort(); sommeSdr = 0; resteSdr = 0 }
+        }
+        if (k > 0) fileSdr.offer(out.copyOf(k))
+    }
+
+    private suspend fun tourneSdr(nom: String, portee: CoroutineScope) {
+        fileSdr.clear(); resteSdr = 0; sommeSdr = 0
+        ecouteSdr = true
+        var courant: ShortArray? = null; var pos = 0
+        try {
+            ecoute(nom, portee, CADENCE_SDR) { bloc ->
+                // Blocks of the reader's size, taken from the queue as they come.
+                var n = 0
+                while (n < bloc.size) {
+                    val c = courant ?: kotlinx.coroutines.withContext(Dispatchers.IO) { fileSdr.poll(200, java.util.concurrent.TimeUnit.MILLISECONDS) }
+                        ?: break
+                    courant = c
+                    val k = minOf(bloc.size - n, c.size - pos)
+                    System.arraycopy(c, pos, bloc, n, k)
+                    n += k; pos += k
+                    if (pos == c.size) { courant = null; pos = 0 }
+                }
+                n
+            }
+        } finally { ecouteSdr = false }
     }
 
     /**
@@ -126,8 +192,6 @@ object Ft8Hub {
 
     @android.annotation.SuppressLint("MissingPermission")
     private suspend fun tourne(nom: String, portee: CoroutineScope) {
-        val mode = modeDe(nom)
-        val tranche = trancheS(nom)
 
         val min = AudioRecord.getMinBufferSize(
             CADENCE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
@@ -150,53 +214,8 @@ object Ft8Hub {
             rec.release(); panne("occupe"); return
         }
 
-        val parTranche = (tranche * CADENCE).toInt()
-        // Short blocks: at 4096 samples (a third of a second) the waterfall
-        // would jump three rows at a time.
-        val bloc = ShortArray(1024)
-        val analyseur = fr.f4ioz.satcombo.domain.Ft8Cascade(BASSE_HZ, HAUTE_HZ, COLONNES, CADENCE)
-        var tampon = FloatArray(parTranche)
-        var ecrit = 0
-        // Drop the first slot: it starts mid-transmission.
-        var premiere = true
-        var trancheCourante = numeroTranche(tranche)
-
         try {
-            while (portee.isActive) {
-                val lus = rec.read(bloc, 0, bloc.size)
-                if (lus <= 0) { delay(20); continue }
-
-                var pic = 0f
-                for (i in 0 until lus) {
-                    val v = bloc[i] / 32768f
-                    if (ecrit < parTranche) tampon[ecrit++] = v
-                    val a = kotlin.math.abs(v)
-                    if (a > pic) pic = a
-                }
-
-                val n = numeroTranche(tranche)
-                if (n != trancheCourante) {
-                    val pleine = tampon
-                    val combien = ecrit
-                    trancheCourante = n
-                    tampon = FloatArray(parTranche)
-                    ecrit = 0
-                    if (premiere) {
-                        premiere = false
-                    } else if (combien > mode.parSymbole * mode.symboles / 4) {
-                        decodeTranche(pleine.copyOf(combien), mode, nom)
-                    }
-                }
-
-                val nouvelleLigne = analyseur.verse(bloc, lus)
-                _state.value = _state.value.copy(
-                    niveau = pic,
-                    avancement = (ecrit.toFloat() / parTranche).coerceIn(0f, 1f),
-                    cascade = if (nouvelleLigne) analyseur.lignes.toList()
-                              else _state.value.cascade,
-                    spectre = if (nouvelleLigne) analyseur.dernierSpectre
-                              else _state.value.spectre)
-            }
+            ecoute(nom, portee, CADENCE) { bloc -> rec.read(bloc, 0, bloc.size) }
         } catch (e: Exception) {
             panne("lecture")
         } finally {
@@ -205,9 +224,67 @@ object Ft8Hub {
         }
     }
 
+    /**
+     * Listening, whatever the source: blocks read by [lis] at [cadence], cut
+     * into UTC slots, each one decoded; the waterfall fed as it comes.
+     */
+    private suspend fun ecoute(nom: String, portee: CoroutineScope, cadence: Int, lis: suspend (ShortArray) -> Int) {
+        val mode = modeDe(nom)
+        val tranche = trancheS(nom)
+        val parTranche = (tranche * cadence).toInt()
+        // Short blocks: at 4096 samples (a third of a second) the waterfall
+        // would jump three rows at a time.
+        val bloc = ShortArray(1024)
+        val analyseur = fr.f4ioz.satcombo.domain.Ft8Cascade(BASSE_HZ, HAUTE_HZ, COLONNES, cadence)
+        var tampon = FloatArray(parTranche)
+        var ecrit = 0
+        // Drop the first slot: it starts mid-transmission.
+        var premiere = true
+        var trancheCourante = numeroTranche(tranche)
+
+        while (portee.isActive) {
+            val lus = lis(bloc)
+            if (lus <= 0) { delay(20); continue }
+
+            var pic = 0f
+            for (i in 0 until lus) {
+                val v = bloc[i] / 32768f
+                if (ecrit < parTranche) tampon[ecrit++] = v
+                val a = kotlin.math.abs(v)
+                if (a > pic) pic = a
+            }
+
+            val n = numeroTranche(tranche)
+            if (n != trancheCourante) {
+                val pleine = tampon
+                val combien = ecrit
+                trancheCourante = n
+                tampon = FloatArray(parTranche)
+                ecrit = 0
+                if (premiere) {
+                    premiere = false
+                } else if (combien > mode.parSymbole * mode.symboles / 4) {
+                    decodeTranche(pleine.copyOf(combien), mode, nom, cadence)
+                }
+            }
+
+            val nouvelleLigne = analyseur.verse(bloc, lus)
+            _state.value = _state.value.copy(
+                niveau = pic,
+                avancement = (ecrit.toFloat() / parTranche).coerceIn(0f, 1f),
+                cascade = if (nouvelleLigne) analyseur.lignes.toList()
+                          else _state.value.cascade,
+                spectre = if (nouvelleLigne) analyseur.dernierSpectre
+                          else _state.value.spectre)
+        }
+    }
+
+    /** The clock the slots are cut by (a test follows the samples it feeds). */
+    @Volatile internal var horloge: () -> Long = System::currentTimeMillis
+
     /** Current slot number since the UTC epoch. */
     private fun numeroTranche(dureeS: Double): Long =
-        (System.currentTimeMillis() / (dureeS * 1000).toLong())
+        (horloge() / (dureeS * 1000).toLong())
 
     private const val COLONNES = 256
     /** The analysed band, in Hz. */
@@ -228,15 +305,15 @@ object Ft8Hub {
     // The per-slot waterfall was removed: the live analyser answers the same
     // question better, and two versions would contradict each other on screen.
 
-    private fun decodeTranche(audio: FloatArray, mode: Ft8Signal.Mode, nom: String) {
+    private fun decodeTranche(audio: FloatArray, mode: Ft8Signal.Mode, nom: String, cadence: Int = CADENCE) {
         val entendus = try {
-            Ft8Decodeur.decode(audio, CADENCE.toDouble(), mode)
+            Ft8Decodeur.decode(audio, cadence.toDouble(), mode)
         } catch (e: Exception) {
             emptyList()
         }
         val heure = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.US).apply {
             timeZone = java.util.TimeZone.getTimeZone("UTC")
-        }.format(java.util.Date())
+        }.format(java.util.Date(horloge()))
 
         val nouveaux = entendus.map {
             Entendu(
