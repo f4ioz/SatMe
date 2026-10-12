@@ -137,6 +137,45 @@ class StationPcTest {
     }
 
     @Test
+    fun chaque_satellite_garde_son_calage_et_sa_reference() {
+        val sat = StockageMemoire()
+        val st = StationPc(StockageMemoire(), Catalogue(dossier, enLigne = false), PortsSeriePc(), portee, horloge = { milieu }, stockageSat = sat)
+        st.settings.manualLocator = "JN18FS"
+        st.demarre()
+        assertTrue(st.suis(25544))
+        attends { st.etat.value.position != null && st.etat.value.emetteurs.isNotEmpty() }
+        val (dl0, _) = st.frequencesDuCiel()
+        st.reglageSat(calibHz = 50L, txHz = -100L)
+        assertEquals(dl0!! + 50L, st.frequencesDuCiel().first)
+        st.reglageSat(memorise = true)
+        st.reglageSat(calibHz = 300L)
+        st.reglageSat(retour = true)
+        assertEquals(50L, st.etat.value.calibHz); assertEquals(-100L, st.etat.value.txShiftHz)
+        // Kept for this satellite, as the phone keeps it ("shift_25544").
+        assertEquals(50L, sat.getLong("shift_25544", 0L))
+        assertEquals(50L, st.stationCat.let { st.etat.value.calibHz })
+    }
+
+    @Test
+    fun un_rendez_vous_fait_suivre_son_satellite_tout_seul() {
+        val agenda = StockageMemoire()
+        fr.f4ioz.satcombo.data.AgendaStore.put(agenda, fr.f4ioz.satcombo.data.AgendaStore.AgendaEvent(
+            id = 1L, title = "SSTV ISS", timeMs = milieu - 60_000L, satName = "ISS", endMs = milieu + 60_000L))
+        val st = StationPc(StockageMemoire(), Catalogue(dossier, enLigne = false), PortsSeriePc(), portee, horloge = { milieu }, stockageAgenda = agenda)
+        st.settings.manualLocator = "JN18FS"
+        st.demarre()
+        // Nothing chosen by hand: the appointment brings the ISS.
+        attends { st.etat.value.suivi?.catalogNumber == 25544 }
+        assertEquals(1, st.etat.value.agenda.size)
+        // Its passes are marked; taken out of the agenda, they are not any more.
+        attends { st.etat.value.passagesSuivi.isNotEmpty() }
+        val p = st.etat.value.passagesSuivi.first { it.aosEpochMs <= milieu }
+        assertTrue(st.auAgenda(p))
+        st.retireAgenda(1L)
+        assertFalse(st.auAgenda(p))
+    }
+
+    @Test
     fun le_mat_simule_vise_le_satellite() {
         val st = station()
         st.suis(25544)

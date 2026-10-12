@@ -129,6 +129,21 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
             "/api/suivre" -> return ok.put("ok", entier("catnum")?.let { station.suis(it) } == true)
             "/api/emetteur" -> station.choisitEmetteur(entier("i") ?: 0)
             "/api/favori" -> entier("catnum")?.let { station.favori(it, q["on"] == "1") }
+            "/api/sat/reglage" -> {
+                val e = station.etat.value
+                station.reglageSat(calibHz = q["calib"]?.toLongOrNull()?.let { e.calibHz + it },
+                    txHz = q["tx"]?.toLongOrNull()?.let { e.txShiftHz + it },
+                    memorise = q["memorise"] == "1", retour = q["retour"] == "1")
+            }
+            "/api/agenda/passage" -> {
+                val n = entier("catnum"); val aos = q["aos"]?.toLongOrNull()
+                val p = station.etat.value.let { e -> (e.passages + e.passagesSuivi).firstOrNull { it.catalogNumber == n && it.aosEpochMs == aos } }
+                    ?: return JSONObject().put("ok", false).put("erreur", "passage inconnu")
+                return ok.put("ajoute", station.basculeAgenda(p))
+            }
+            "/api/agenda/retire" -> q["id"]?.toLongOrNull()?.let { station.retireAgenda(it) }
+            "/api/agenda/active" -> q["id"]?.toLongOrNull()?.let { station.activeAgenda(it) }
+            "/api/agenda/suivi" -> station.agendaSuivi(q["on"] == "1")
             "/api/repos" -> station.deplaceRepos(q["d"]?.toLongOrNull() ?: 0L)
             "/api/maintien" -> station.maintien(q["on"] == "1")
             "/api/locator" -> return ok.put("ok", station.poseLocator(q["l"].orEmpty()))
@@ -304,6 +319,15 @@ object JsonPc {
                 .put("inverse", t.invert).put("lineaire", t.isTransponder)
         }))
         o.put("emetteur", e.emetteur)
+        o.put("reglageSat", JSONObject().put("calib", e.calibHz).put("tx", e.txShiftHz)
+            .put("refCalib", e.refCalibHz ?: JSONObject.NULL).put("refTx", e.refTxHz ?: JSONObject.NULL))
+        o.put("passagesSuivi", JSONArray(e.passagesSuivi.map { passage(it, st) }))
+        o.put("agendaSuivi", e.agendaSuivi)
+        o.put("agenda", JSONArray(e.agenda.filter { it.endOrStartMs >= e.maintenant - 3_600_000L }.take(100).map { a ->
+            JSONObject().put("id", a.id).put("titre", a.title).put("sat", a.satName).put("de", a.timeMs).put("a", a.endOrStartMs)
+                .put("actif", a.enabled).put("type", a.kind).put("note", a.note).put("freq", a.freqHz)
+                .put("enCours", a.activeAt(e.maintenant, 0L))
+        }))
         o.put("repos", e.repos ?: JSONObject.NULL)
         o.put("ciel", JSONObject().put("dl", dl ?: JSONObject.NULL).put("ul", ul ?: JSONObject.NULL))
         val rx = st.convRx(); val tx = st.convTx()
@@ -330,6 +354,7 @@ object JsonPc {
 
     private fun passage(p: fr.f4ioz.satcombo.data.SatPass, st: StationPc? = null) = JSONObject()
         .put("fav", st?.etat?.value?.favoris?.contains(p.catalogNumber) == true)
+        .put("agenda", st?.auAgenda(p) == true)
         .put("amsat", st?.statutAmsat(p.satName)?.recent?.name ?: "")
         .put("nom", p.satName).put("catnum", p.catalogNumber).put("aos", p.aosEpochMs).put("los", p.losEpochMs)
         .put("elMax", p.maxElevationDeg).put("azAos", p.aosAzimuthDeg).put("azLos", p.losAzimuthDeg)

@@ -76,10 +76,10 @@ object PagePc {
 <body>
 <header>
   <h1>SatMe <span class="cyan">PC</span></h1>
-  <span class="g" id="station"></span>
+  <span class="g" id="info-station"></span>
   <span class="g" id="cat-statut-court"></span>
   <nav id="onglets">
-    <button data-v="station" class="actif">Station</button><button data-v="carnet">Carnet</button><button data-v="son">Son</button><button data-v="sstv">SSTV</button><button data-v="aprs">APRS</button><a href="/journal" style="text-decoration:none"><button title="Les passages enregistrés, rejoués">Journal</button></a><button data-v="reglages">Réglages</button>
+    <button data-v="station" class="actif">Station</button><button data-v="carnet">Carnet</button><button data-v="agenda">Agenda</button><button data-v="son">Son</button><button data-v="sstv">SSTV</button><button data-v="aprs">APRS</button><a href="/journal" style="text-decoration:none"><button title="Les passages enregistrés, rejoués">Journal</button></a><button data-v="reglages">Réglages</button>
   </nav>
   <span id="rec" class="pastille" style="display:none;background:rgba(229,72,77,.2);color:var(--rose)"></span>
   <span id="heure"></span>
@@ -97,7 +97,7 @@ object PagePc {
       <div class="ligne"><label class="petit"><input type="checkbox" id="f-fav"> ★ favoris seulement</label>
         <label class="petit"><input type="checkbox" id="f-actifs"> entendus ces jours-ci (AMSAT)</label></div>
       <div class="etat" id="calcul"></div>
-      <div id="liste"><table><thead><tr><th></th><th>Début</th><th>Satellite</th><th>El max</th><th>Durée</th><th></th></tr></thead><tbody id="passages"></tbody></table></div>
+      <div id="liste"><table><thead><tr><th></th><th></th><th>Début</th><th>Satellite</th><th>El max</th><th>Durée</th><th></th></tr></thead><tbody id="passages"></tbody></table></div>
     </div>
   </div>
 
@@ -119,6 +119,8 @@ object PagePc {
       </div>
       <svg id="ciel" viewBox="-110 -110 220 220" style="width:100%;max-width:460px;display:block;margin:10px auto 0" role="img" aria-label="Le ciel : passage et position du satellite"></svg>
       <div class="petit" id="infos-passage" style="text-align:center"></div>
+      <div class="t" style="margin-top:12px">Ses prochains passages</div>
+      <table><tbody id="suivants"></tbody></table>
     </div>
   </div>
 
@@ -131,6 +133,16 @@ object PagePc {
         <span>RX <span class="val cyan" id="dl">—</span></span>
         <span>TX <span class="val ambre" id="ul">—</span></span>
       </div>
+      <div class="ligne"><span class="petit" style="min-width:90px">Calage RX</span>
+        <div class="bouton-gr"><button onclick="regle('calib',-50)">−50</button><button onclick="regle('calib',-10)">−10</button></div>
+        <span class="val" id="r-calib" style="min-width:80px;text-align:center">0</span>
+        <div class="bouton-gr"><button onclick="regle('calib',10)">+10</button><button onclick="regle('calib',50)">+50</button></div></div>
+      <div class="ligne"><span class="petit" style="min-width:90px">Décalage TX</span>
+        <div class="bouton-gr"><button onclick="regle('tx',-50)">−50</button><button onclick="regle('tx',-10)">−10</button></div>
+        <span class="val" id="r-tx" style="min-width:80px;text-align:center">0</span>
+        <div class="bouton-gr"><button onclick="regle('tx',10)">+10</button><button onclick="regle('tx',50)">+50</button></div></div>
+      <div class="ligne"><button onclick="post('/api/sat/reglage?memorise=1')" title="Garder ces deux valeurs comme celles qui marchent pour ce satellite">Mémoriser</button>
+        <button id="r-retour" onclick="post('/api/sat/reglage?retour=1')">Revenir à la référence</button><span class="petit" id="r-ref"></span></div>
       <div class="ligne" id="repos-ligne" style="display:none">
         <span class="petit">Dans le transpondeur</span>
         <div class="bouton-gr">
@@ -328,6 +340,23 @@ object PagePc {
   </div>
 </div>
 </div>
+<div class="vue" id="v-agenda" hidden>
+<div class="grille2">
+  <div>
+    <div class="carte">
+      <div class="t">Agenda</div>
+      <div class="ligne" style="margin-top:0"><label class="petit"><input type="checkbox" id="g-suivi" onchange="post('/api/agenda/suivi?on=' + (this.checked ? 1 : 0))">
+        Suivre tout seul le satellite d'un rendez-vous, 5 min avant (le poste et le rotor suivent)</label></div>
+      <div class="petit" style="margin-top:6px">📅 dans la liste des passages (onglet Station) ajoute ou retire un passage. L'agenda du téléphone arrive avec sa sauvegarde (Réglages).</div>
+    </div>
+  </div>
+  <div>
+    <div class="carte">
+      <table><thead><tr><th>Quand</th><th>Rendez-vous</th><th>Satellite</th><th></th></tr></thead><tbody id="g-liste"></tbody></table>
+    </div>
+  </div>
+</div>
+</div>
 <div class="vue" id="v-reglages" hidden>
 <div class="grille2">
   <div>
@@ -410,6 +439,30 @@ const AMSAT = { ACTIVE: ['var(--vert)', 'entendu'], BEACON: ['var(--ambre)', 'ba
   try { g(i).checked = localStorage.getItem(i) === '1'; } catch (x) {}
   g(i).onchange = () => { try { localStorage.setItem(i, g(i).checked ? '1' : '0'); } catch (x) {} dessinePassages(); };
 });
+function celluleAgenda(p) {
+  return '<td><span title="' + (p.agenda ? 'Retirer de l’agenda' : 'Mettre à l’agenda') + '" style="cursor:pointer;opacity:' + (p.agenda ? 1 : 0.25) +
+    '" onclick="agendaPassage(' + p.catnum + ',' + p.aos + ',event)">📅</span></td>';
+}
+async function agendaPassage(n, aos, ev) { if (ev) ev.stopPropagation(); await post('/api/agenda/passage?catnum=' + n + '&aos=' + aos); chargeListe(); }
+async function regle(k, d) { await post('/api/sat/reglage?' + k + '=' + d); }
+function jourHeure(ms) {
+  const d = new Date(ms);
+  return (utc() ? d.toISOString().slice(5, 10).split('-').reverse().join('/') : d.toLocaleDateString(undefined, { day: '2-digit', month: '2-digit' })) + ' ' + hm(ms);
+}
+let agendaVu = '';
+function dessineAgenda() {
+  if (!E || !E.agenda) return;
+  if (document.activeElement !== g('g-suivi')) g('g-suivi').checked = E.agendaSuivi;
+  const cle = JSON.stringify(E.agenda);
+  if (cle === agendaVu) return;
+  agendaVu = cle;
+  g('g-liste').innerHTML = E.agenda.map(a => '<tr' + (a.enCours ? ' class="encours"' : '') + '><td>' + jourHeure(a.de) + (a.a > a.de ? ' → ' + hm(a.a) : '') +
+    '</td><td>' + esc(a.titre) + (a.type ? ' <span class="pastille off">' + esc(a.type) + '</span>' : '') + (a.note ? '<div class="petit">' + esc(a.note) + '</div>' : '') +
+    '</td><td>' + esc(a.sat) + '</td><td class="act"><label class="petit"><input type="checkbox" ' + (a.actif ? 'checked' : '') +
+    ' onchange="post(\'/api/agenda/active?id=' + a.id + '\')"> actif</label> <button onclick="post(\'/api/agenda/retire?id=' + a.id + '\')">✕</button></td></tr>').join('') ||
+    '<tr><td colspan="4" class="petit">rien de prévu</td></tr>';
+}
+const hz = v => (v > 0 ? '+' : '') + v + ' Hz';
 async function favori(n, on, ev) { if (ev) ev.stopPropagation(); await post('/api/favori?catnum=' + n + '&on=' + (on ? 1 : 0)); chargeListe(); }
 function basculeFavori() { if (E && E.suivi) favori(E.suivi.catnum, !E.suivi.fav); }
 function dessinePassages() {
@@ -423,13 +476,13 @@ function dessinePassages() {
     const enCours = n >= p.aos && n <= p.los;
     const cl = 'p' + (enCours ? ' encours' : '') + (p.catnum === suivi ? ' choisi' : '');
     const quand = enCours ? 'en cours' : 'dans ' + duree(p.aos - n);
-    return '<tr class="' + cl + '" onclick="suivre(' + p.catnum + ')"><td><span title="Favori" style="cursor:pointer;color:' + (p.fav ? 'var(--ambre)' : 'var(--bord)') +
+    return '<tr class="' + cl + '" onclick="suivre(' + p.catnum + ')">' + celluleAgenda(p) + '<td><span title="Favori" style="cursor:pointer;color:' + (p.fav ? 'var(--ambre)' : 'var(--bord)') +
       '" onclick="favori(' + p.catnum + ',' + !p.fav + ',event)">★</span></td><td>' + hm(p.aos) + '</td><td>' +
       (a ? '<span title="AMSAT : ' + a[1] + '" style="display:inline-block;width:8px;height:8px;border-radius:4px;margin-right:6px;background:' + a[0] + '"></span>' : '') +
       p.nom.replace(/</g, '&lt;') +
       '</td><td>' + Math.round(p.elMax) + '°</td><td>' + duree(p.los - p.aos) + '</td><td class="petit">' + quand + '</td></tr>';
   });
-  g('passages').innerHTML = lignes.join('') || '<tr><td colspan="6" class="petit">' + (E && E.locator ? 'aucun passage' : 'renseigne ton locator') + '</td></tr>';
+  g('passages').innerHTML = lignes.join('') || '<tr><td colspan="7" class="petit">' + (E && E.locator ? 'aucun passage' : 'renseigne ton locator') + '</td></tr>';
 }
 async function suivre(n) { await post('/api/suivre?catnum=' + n); }
 let tous = [];
@@ -481,7 +534,7 @@ function dessine() {
   if (!E) return;
   const n = Date.now();
   txt('heure', hm(n, true) + (utc() ? ' UTC' : ''));
-  txt('station', [E.indicatif, E.locator].filter(x => x).join(' · ') + ' · ' + E.nbSatellites + ' satellites');
+  txt('info-station', [E.indicatif, E.locator].filter(x => x).join(' · ') + ' · ' + E.nbSatellites + ' satellites');
   txt('calcul', E.calcul ? 'calcul des passages…' : '');
   txt('catalogue', E.catalogue);
   if (document.activeElement !== g('indicatif') && !g('indicatif').value) g('indicatif').value = E.indicatif || '';
@@ -516,6 +569,19 @@ function dessine() {
   const t = E.emetteurs[E.emetteur];
   g('repos-ligne').style.display = t && t.lineaire ? '' : 'none';
   txt('dl', mhz(E.ciel.dl)); txt('ul', mhz(E.ciel.ul));
+  const rs = E.reglageSat;
+  if (rs) {
+    txt('r-calib', hz(rs.calib)); txt('r-tx', hz(rs.tx));
+    txt('r-ref', rs.refCalib == null ? 'pas de référence' : 'réf. RX ' + hz(rs.refCalib) + ' · TX ' + hz(rs.refTx));
+    g('r-retour').disabled = rs.refCalib == null;
+  }
+  const sv = JSON.stringify(E.passagesSuivi.map(p => [p.aos, p.agenda]));
+  if (sv !== g('suivants').dataset.vu) {
+    g('suivants').dataset.vu = sv;
+    g('suivants').innerHTML = E.passagesSuivi.map(p => '<tr>' + celluleAgenda(p) + '<td>' + jourHeure(p.aos) + '</td><td>' + Math.round(p.elMax) + '°</td><td>' +
+      duree(p.los - p.aos) + '</td><td class="petit">' + Math.round(p.azAos) + '° → ' + Math.round(p.azLos) + '°</td></tr>').join('');
+  }
+  dessineAgenda();
   // CAT
   const c = E.cat;
   g('cat-pastille').className = 'pastille ' + (c.connecte ? 'on' : 'off');
@@ -846,7 +912,7 @@ setInterval(ticSon, 1000);
 
 lienRotor(); avertCat();
 // The tab from the address (#carnet, a bookmark), else the last one seen.
-if (['station', 'carnet', 'son', 'sstv', 'aprs', 'reglages'].includes(location.hash.slice(1))) vue(location.hash.slice(1));
+if (['station', 'carnet', 'agenda', 'son', 'sstv', 'aprs', 'reglages'].includes(location.hash.slice(1))) vue(location.hash.slice(1));
 else try { const n = localStorage.getItem('vue'); if (n) vue(n); } catch (x) {}
 tic(); chargeListe(); chargePorts(); chargeSatellites();
 setInterval(chargeSatellites, 600000);

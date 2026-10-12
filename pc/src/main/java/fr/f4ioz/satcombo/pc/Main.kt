@@ -45,7 +45,9 @@ fun main(args: Array<String>) {
     dossier.mkdirs()
     val portee = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     val station = StationPc(StockageFichier(File(dossier, "reglages.properties")),
-        Catalogue(File(dossier, "cache")), PortsSeriePc(), portee)
+        Catalogue(File(dossier, "cache")), PortsSeriePc(), portee,
+        stockageSat = StockageFichier(File(dossier, "satellites.properties")),
+        stockageAgenda = StockageFichier(File(dossier, "agenda.properties")))
     I18n.apply(station.settings.language, java.util.Locale.getDefault().language)
     fr.f4ioz.satcombo.data.AgentHttp.version = "pc"
     fr.f4ioz.satcombo.data.AgentHttp.plateforme = System.getProperty("os.name") ?: "PC"

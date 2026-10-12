@@ -43,6 +43,27 @@ object ImportTelephone {
         return nouveaux.size
     }
 
+    /**
+     * One of the backup's other stores (each satellite's settings, the
+     * agenda) into [stockage], as it is; how many values were taken.
+     */
+    fun importeStore(json: String, nom: String, stockage: Stockage): Int = runCatching {
+        val o = JSONObject(json).optJSONObject("stores")?.optJSONObject(nom) ?: return 0
+        val ed = stockage.edit()
+        var n = 0
+        for (k in o.keys()) {
+            val e = o.optJSONObject(k) ?: continue
+            when (e.optString("t")) {
+                "b" -> ed.putBoolean(k, e.optBoolean("v")); "i" -> ed.putInt(k, e.optInt("v")); "l" -> ed.putLong(k, e.optLong("v"))
+                "f" -> ed.putFloat(k, e.optDouble("v").toFloat()); "s" -> ed.putString(k, e.optString("v"))
+                else -> continue
+            }
+            n++
+        }
+        ed.apply()
+        n
+    }.getOrDefault(0)
+
     /** The phone's favourites (catalog numbers), from its backup. */
     fun favoris(json: String): Set<Int> = runCatching {
         val a = JSONObject(json).optJSONObject("stores")?.optJSONObject("satcombo_favorites")

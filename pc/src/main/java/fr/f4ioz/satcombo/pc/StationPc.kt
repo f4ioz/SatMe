@@ -13,6 +13,7 @@ import fr.f4ioz.satcombo.cat.Ic9700Sim
 import fr.f4ioz.satcombo.cat.ModeleIcom
 import fr.f4ioz.satcombo.cat.PosteCat
 import fr.f4ioz.satcombo.cat.PosteCatCiv
+import fr.f4ioz.satcombo.data.AgendaStore
 import fr.f4ioz.satcombo.data.Observer
 import fr.f4ioz.satcombo.data.SatPass
 import fr.f4ioz.satcombo.data.SatPosition
@@ -73,6 +74,17 @@ data class EtatPc(
     val favoris: Set<Int> = emptySet(),
     /** amsat.org's status page: is each satellite heard these days (by AMSAT name). */
     val amsat: Map<String, fr.f4ioz.satcombo.data.AmsatReport> = emptyMap(),
+    /** The satellite followed's own settings: RX calibration, TX shift, their reference. */
+    val calibHz: Long = 0L,
+    val txShiftHz: Long = 0L,
+    val refCalibHz: Long? = null,
+    val refTxHz: Long? = null,
+    /** The satellite followed's next passes (3 days). */
+    val passagesSuivi: List<SatPass> = emptyList(),
+    /** The passes chosen ahead, as on the phone. */
+    val agenda: List<fr.f4ioz.satcombo.data.AgendaStore.AgendaEvent> = emptyList(),
+    /** Follow by itself the satellite an appointment names, from 5 min before it. */
+    val agendaSuivi: Boolean = true,
 )
 
 /**
@@ -89,7 +101,12 @@ class StationPc(
     val ports: PortsSerie,
     private val portee: CoroutineScope,
     private val horloge: () -> Long = System::currentTimeMillis,
+    /** Each satellite's settings (the phone's "satcombo_satconfig"). */
+    val stockageSat: Stockage = fr.f4ioz.satcombo.plateforme.StockageMemoire(),
+    /** The agenda (the phone's "satcombo_agenda"). */
+    val stockageAgenda: Stockage = fr.f4ioz.satcombo.plateforme.StockageMemoire(),
 ) {
+    private val satConfig = fr.f4ioz.satcombo.data.SatConfigStore(stockageSat)
     val settings = SettingsStore(stockage)
     private val predicteur = PassPredictor()
 
@@ -119,9 +136,9 @@ class StationPc(
         override fun catnum() = _etat.value.suivi?.catalogNumber
         override fun transpondeur() = emetteurChoisi()
         override fun sousHorizonAussi() = false
-        override fun calibrationHz() = 0L
-        override fun decalageTxHz() = 0L
-        override fun poseDecalageTx(hz: Long) {}
+        override fun calibrationHz() = _etat.value.calibHz
+        override fun decalageTxHz() = _etat.value.txShiftHz
+        override fun poseDecalageTx(hz: Long) = reglageSat(txHz = hz)
         override fun decalageRxHz() = 0L
         override fun modeCw() = false
         override fun maintienDoppler() = _etat.value.maintienDoppler
@@ -189,6 +206,8 @@ class StationPc(
         // On a PC the mast's port is the one chosen, never searched among the others.
         stationRotor.setRotorAutoPort(false)
         stationCat.regleMaintien(settings.catHoldMs.toLong())
+        change { copy(agenda = AgendaStore.purge(stockageAgenda, nowMs = horloge()),
+            agendaSuivi = stockage.getBoolean(CLE_AGENDA_SUIVI, true)) }
         change { copy(favoris = lisFavoris(), satellites = this@StationPc.catalogue.satellites(), locator = settings.manualLocator,
             indicatif = settings.callsign, observateur = observateur(), catModele = modeleDe(settings.rigModel)) }
         stockage.getInt(CLE_SATELLITE, 0).takeIf { it > 0 }?.let { n -> _etat.value.satellites.firstOrNull { it.catalogNumber == n }?.let { suis(it) } }
@@ -258,6 +277,7 @@ class StationPc(
     /** The satellite followed, now: where it is, its pass. */
     private suspend fun tic() {
         val maintenant = horloge()
+        suitAgenda(maintenant)
         val e = _etat.value
         val sat = e.suivi
         val obs = e.observateur
@@ -279,7 +299,97 @@ class StationPc(
         val arc = if (passage != null && passage != e.passage && sat != null && obs != null)
             runCatching { predicteur.passTrack(sat, obs, passage.aosEpochMs, passage.losEpochMs) }.getOrDefault(emptyList())
         else e.arc
-        change { copy(maintenant = maintenant, position = pos, passage = passage, arc = arc) }
+        // Its next passes, again when they move on (one gone) or the satellite changed.
+        val suivants = e.passagesSuivi
+        val aRefaire = sat != null && obs != null && (suivants.isEmpty() || suivants.first().losEpochMs < maintenant ||
+            suivants.first().catalogNumber != sat.catalogNumber) && maintenant - derniereSuite >= 60_000L
+        val nouveaux = if (aRefaire) {
+            derniereSuite = maintenant
+            withContext(Dispatchers.Default) {
+                runCatching { predicteur.upcomingPasses(sat!!, obs!!, maintenant - 30 * 60_000L, 72, settings.minElevDeg.toDouble()) }
+                    .getOrDefault(emptyList()).filter { it.losEpochMs >= maintenant }.take(8)
+            }
+        } else suivants
+        change { copy(maintenant = maintenant, position = pos, passage = passage, arc = arc, passagesSuivi = nouveaux) }
+    }
+    @Volatile private var derniereSuite = 0L
+
+    // --------------------------------------------------------------- agenda
+
+    /** An appointment's satellite among the known ones (names compared on letters and digits). */
+    private fun satDe(nom: String): TleEntry? {
+        fun n(s: String) = s.uppercase().replace(Regex("[^A-Z0-9]"), "")
+        val k = n(nom)
+        if (k.isEmpty()) return null
+        val l = _etat.value.satellites
+        return l.firstOrNull { n(it.name) == k } ?: if (k.contains("ISS")) l.firstOrNull { n(it.name) == "ISS" || it.catalogNumber == 25544 } else null
+    }
+
+    /** The appointments already followed by themselves: each once, the operator free to change after. */
+    private val dejaSuivis = HashSet<Long>()
+
+    /**
+     * With automatic following on: from 5 minutes before an appointment
+     * (the mast's time to go and wait), follow its satellite — once per
+     * appointment, so a hand that picks another satellite is not overruled.
+     */
+    private fun suitAgenda(maintenant: Long) {
+        val e = _etat.value
+        if (!e.agendaSuivi) return
+        val rdv = e.agenda.firstOrNull { it.enabled && it.satName.isNotBlank() && it.id !in dejaSuivis && it.activeAt(maintenant) } ?: return
+        dejaSuivis += rdv.id
+        val sat = satDe(rdv.satName) ?: return
+        if (e.suivi?.catalogNumber != sat.catalogNumber) suis(sat)
+    }
+
+    /** A pass into the agenda (its window, AOS to LOS), or out of it when already there. */
+    fun basculeAgenda(p: SatPass): Boolean {
+        val deja = _etat.value.agenda.firstOrNull { it.satName == p.satName && it.covers(p.aosEpochMs, p.losEpochMs, 0L) }
+        val l = if (deja != null) AgendaStore.remove(stockageAgenda, deja.id)
+        else AgendaStore.put(stockageAgenda, AgendaStore.AgendaEvent(id = horloge(), title = "Passage " + p.satName, timeMs = p.aosEpochMs,
+            satName = p.satName, leadMin = 5, endMs = p.losEpochMs))
+        change { copy(agenda = l) }
+        return deja == null
+    }
+
+    fun retireAgenda(id: Long) { change { copy(agenda = AgendaStore.remove(stockageAgenda, id)) } }
+
+    fun activeAgenda(id: Long) {
+        val e = _etat.value.agenda.firstOrNull { it.id == id } ?: return
+        change { copy(agenda = AgendaStore.put(stockageAgenda, e.copy(enabled = !e.enabled))) }
+    }
+
+    fun agendaSuivi(on: Boolean) {
+        stockage.edit().putBoolean(CLE_AGENDA_SUIVI, on).apply()
+        change { copy(agendaSuivi = on) }
+    }
+
+    /** The agenda read again (the phone's taken from its backup). */
+    fun rechargeAgenda() { change { copy(agenda = AgendaStore.load(stockageAgenda)) } }
+
+    /** Is this pass in the agenda? */
+    fun auAgenda(p: SatPass): Boolean = _etat.value.agenda.any { it.enabled && satDe(it.satName)?.catalogNumber == p.catalogNumber && it.covers(p.aosEpochMs, p.losEpochMs, 0L) }
+
+    // ---------------------------------------------------- each satellite's own
+
+    /**
+     * The followed satellite's calibration and TX shift, changed by hand or
+     * by the TX knob, kept for it; [memorise] keeps them as its reference,
+     * [retour] goes back to it.
+     */
+    fun reglageSat(calibHz: Long? = null, txHz: Long? = null, memorise: Boolean = false, retour: Boolean = false) {
+        val sat = _etat.value.suivi ?: return
+        val n = sat.catalogNumber
+        if (retour) {
+            val c = satConfig.load(n)
+            c.refCalibShiftHz?.let { satConfig.saveShift(n, it) }
+            c.refTxShiftHz?.let { satConfig.saveTxShift(n, it) }
+        }
+        calibHz?.let { satConfig.saveShift(n, it) }
+        txHz?.let { satConfig.saveTxShift(n, it) }
+        if (memorise) satConfig.load(n).let { satConfig.memoriseReference(n, it.calibShiftHz, it.txShiftHz) }
+        val c = satConfig.load(n)
+        change { copy(calibHz = c.calibShiftHz, txShiftHz = c.txShiftHz, refCalibHz = c.refCalibShiftHz, refTxHz = c.refTxShiftHz) }
     }
 
     /** The next passes of every satellite, over 24 h. */
@@ -305,11 +415,16 @@ class StationPc(
         stationCat.nouveauSatellite()
         stationCat.oublieArmement()
         derniereRecherche = 0L
+        val c = satConfig.load(sat.catalogNumber)
+        derniereSuite = 0L
         change { copy(suivi = sat, position = null, passage = null, arc = emptyList(), emetteurs = emptyList(),
-            emetteur = 0, repos = null) }
+            emetteur = 0, repos = null, passagesSuivi = emptyList(),
+            calibHz = c.calibShiftHz, txShiftHz = c.txShiftHz, refCalibHz = c.refCalibShiftHz, refTxHz = c.refTxShiftHz) }
         portee.launch(Dispatchers.IO) {
             val l = catalogue.emetteurs(sat.catalogNumber).filter { it.alive && (it.downlinkLowHz != null || it.uplinkLowHz != null) }
-            change { if (suivi?.catalogNumber == sat.catalogNumber) copy(emetteurs = l, emetteur = 0) else this }
+            // The transmitter chosen last time for this satellite, as on the phone.
+            val i = c.txDescription?.let { d -> l.indexOfFirst { it.description == d } }?.takeIf { it >= 0 } ?: 0
+            change { if (suivi?.catalogNumber == sat.catalogNumber) copy(emetteurs = l, emetteur = i) else this }
         }
     }
 
@@ -321,6 +436,7 @@ class StationPc(
     fun choisitEmetteur(i: Int) {
         stationCat.oublieArmement()
         change { copy(emetteur = i.coerceIn(0, (emetteurs.size - 1).coerceAtLeast(0)), repos = null) }
+        _etat.value.let { e -> e.suivi?.let { s -> satConfig.saveTransmitter(s.catalogNumber, e.emetteurs.getOrNull(e.emetteur)?.description) } }
     }
 
     fun emetteurChoisi(): Transmitter? = _etat.value.let { it.emetteurs.getOrNull(it.emetteur) }
@@ -355,7 +471,15 @@ class StationPc(
     /** The phone's settings (its backup file), then everything that reads them again. */
     fun importeTelephone(json: String, carnet: fr.f4ioz.satcombo.data.LogStore? = null): Result<Pair<Int, Int>> {
         val r = ImportTelephone.importe(json, stockage).map { it to (carnet?.let { c -> ImportTelephone.importeCarnet(json, c) } ?: 0) }
-        if (r.isSuccess) ajouteFavoris(ImportTelephone.favoris(json))
+        if (r.isSuccess) {
+            ajouteFavoris(ImportTelephone.favoris(json))
+            // Each satellite's settings and the agenda, as the phone kept them.
+            ImportTelephone.importeStore(json, fr.f4ioz.satcombo.data.SatConfigStore.PREFS, stockageSat)
+            ImportTelephone.importeStore(json, AgendaStore.PREFS, stockageAgenda)
+            rechargeAgenda()
+            _etat.value.suivi?.let { s -> val c = satConfig.load(s.catalogNumber)
+                change { copy(calibHz = c.calibShiftHz, txShiftHz = c.txShiftHz, refCalibHz = c.refCalibShiftHz, refTxHz = c.refTxShiftHz) } }
+        }
         if (r.isSuccess) {
             stationRotor.rechargeReglages()
             stationRotor.setRotorAutoPort(false)
@@ -397,7 +521,9 @@ class StationPc(
                 if (t.invert) ulHi - Math.round(part * (ulHi - ulLo)) else ulLo + Math.round(part * (ulHi - ulLo))
             } else (ulLo + ulHi) / 2
         }
-        return repos?.let { Doppler.downlink(it, rr) } to ul?.let { Doppler.uplink(it, rr) }
+        // As the rig is set: the calibration after the Doppler, the TX shift on the uplink at rest.
+        val e = _etat.value
+        return repos?.let { Doppler.downlink(it, rr) + e.calibHz } to ul?.let { Doppler.uplink(it + e.txShiftHz, rr) }
     }
 
     // ---------------------------------------------------------- connecting
@@ -539,6 +665,7 @@ class StationPc(
         /** The satellite followed, kept between two starts. */
         const val CLE_SATELLITE = "pc_satellite"
         const val CLE_FAVORIS = "pc_favoris"
+        const val CLE_AGENDA_SUIVI = "pc_agenda_suivi"
         fun modeleDe(id: String): String = id.takeIf { it in MODELES } ?: "IC9700"
     }
 }
