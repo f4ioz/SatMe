@@ -342,6 +342,13 @@ fun NommageScreen(ui: UiState, vm: MainViewModel) {
             }
         }
 
+        // The station typed: the log's figures and how far, its whole card on a tap
+        // (QRZ with its photo, the great circle, every contact and its notes).
+        var ficheOuverte by remember { mutableStateOf(false) }
+        FicheStation.Ligne(saisie, ui.log, ui.observer, fiche?.takeIf { ficheDe == baseQrz }) { ficheOuverte = true }
+        if (ficheOuverte) FicheStation.Carte(saisie, ui.log, ui.observer, ui.callsign.ifBlank { t("sked_you") }.uppercase(),
+            fiche?.takeIf { ficheDe == baseQrz }, vm::ficheQrz) { ficheOuverte = false }
+
         // Position within the transponder: display only. A finger aiming at
         // a letter must not move the VFO.
         BandePassante(
