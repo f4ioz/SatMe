@@ -2018,6 +2018,19 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      * sampled pass tracks so the page can animate the two polar plots and export
      * a shareable card. skedError = "bad" means the locator could not be parsed.
      */
+    /**
+     * A sked window's replay for its video: from the first station's rise to
+     * the last one's set, both skies and the satellite over the earth (the
+     * engine's [fr.f4ioz.satcombo.domain.TraceSked], as on the PC).
+     */
+    fun traceSked(plan: SkedPlan): fr.f4ioz.satcombo.domain.TraceSked? {
+        val sat = _ui.value.satellites.firstOrNull { it.catalogNumber == plan.catnum } ?: return null
+        val obsA = _ui.value.observer ?: locationProvider.defaultObserver
+        val ll = Maidenhead.toLatLon(plan.dx.locator) ?: return null
+        return fr.f4ioz.satcombo.domain.TraceSked.calcule(predictor, sat, obsA,
+            Observer(ll.first, ll.second, 0.0, plan.dx.locator), plan.spanStartMs, plan.spanEndMs)
+    }
+
     fun computeSkedPlans() {
         val cat = _ui.value.skedSatCat ?: return
         val sat = _ui.value.satellites.firstOrNull { it.catalogNumber == cat } ?: return

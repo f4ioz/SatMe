@@ -22,9 +22,6 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 import kotlin.concurrent.thread
-import kotlin.math.acos
-import kotlin.math.asin
-import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.sin
 
@@ -43,7 +40,7 @@ class VideoSked(private val dossier: File, private val tuile: (Int, Int, Int) ->
     @Volatile var etat = Etat(); private set
 
     /** The sked to draw: the trace, the window, who. */
-    class Sked(val trace: StationPc.TraceSked, val deMs: Long, val aMs: Long, val satellite: String, val moi: String, val autre: String)
+    class Sked(val trace: fr.f4ioz.satcombo.domain.TraceSked, val deMs: Long, val aMs: Long, val satellite: String, val moi: String, val autre: String)
 
     /** Starts making it on a thread of its own; false when one is already being made or ffmpeg is missing. */
     fun lance(s: Sked): Boolean {
@@ -105,12 +102,8 @@ class VideoSked(private val dossier: File, private val tuile: (Int, Int, Int) ->
     /** The drawing of one instant; the map's background made once. */
     private class Dessin(val s: Sked, tuile: (Int, Int, Int) -> BufferedImage?) {
         val pts = s.trace.points
-        // Continuous longitudes from mine: a track over the date line stays one line.
-        val lons: DoubleArray = DoubleArray(pts.size).also { l ->
-            var ref = s.trace.moi.lonDeg
-            for (i in pts.indices) { var x = pts[i].lon; while (x - ref > 180) x -= 360; while (x - ref < -180) x += 360; l[i] = x; ref = x }
-        }
-        val lonAutre = s.trace.autre.lonDeg.let { var x = it; while (x - s.trace.moi.lonDeg > 180) x -= 360; while (x - s.trace.moi.lonDeg < -180) x += 360; x }
+        val lons = s.trace.lons
+        val lonAutre = s.trace.lonAutre
         val vue: JournalPassage.VueCarte = run {
             // Framed on what either station sees, and both stations.
             val l = pts.indices.filter { pts[it].elMoi >= 0 || pts[it].elAutre >= 0 }.map { pts[it].lat to lons[it] } +
@@ -124,17 +117,9 @@ class VideoSked(private val dossier: File, private val tuile: (Int, Int, Int) ->
         val heure = SimpleDateFormat("HH:mm:ss", Locale.US).apply { timeZone = TimeZone.getTimeZone("UTC") }
         val date = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.US).apply { timeZone = TimeZone.getTimeZone("UTC") }
 
-        /** The instant [t], interpolated: az/el of each side, lat, lon (continuous), altitude. */
-        fun instant(t: Long): DoubleArray {
-            var k = 0
-            while (k < pts.size - 2 && pts[k + 1].t <= t) k++
-            val a = pts[k]; val b = pts[minOf(k + 1, pts.size - 1)]
-            val u = if (b.t > a.t) ((t - a.t).toDouble() / (b.t - a.t)).coerceIn(0.0, 1.0) else 0.0
-            fun az(p: Double, q: Double): Double { var d = q - p; if (d > 180) d -= 360; if (d < -180) d += 360; return ((p + d * u) % 360 + 360) % 360 }
-            fun li(p: Double, q: Double) = p + (q - p) * u
-            return doubleArrayOf(az(a.azMoi, b.azMoi), li(a.elMoi, b.elMoi), az(a.azAutre, b.azAutre), li(a.elAutre, b.elAutre),
-                li(a.lat, b.lat), li(lons[k], lons[minOf(k + 1, pts.size - 1)]), li(a.altKm, b.altKm))
-        }
+        /** The instant [t]: az/el of each side, lat, lon (continuous), altitude — as the arrays below read it. */
+        fun instant(t: Long): DoubleArray = s.trace.instant(t).let { p ->
+            doubleArrayOf(p.azMoi, p.elMoi, p.azAutre, p.elAutre, p.lat, p.lon, p.altKm) }
 
         fun image(t: Long): BufferedImage {
             val img = BufferedImage(L, H, BufferedImage.TYPE_INT_RGB)
@@ -145,14 +130,12 @@ class VideoSked(private val dossier: File, private val tuile: (Int, Int, Int) ->
             val c = instant(t)
             val moi = c[1] >= 0; val lui = c[3] >= 0
             // The footprint, a turn each side too (around a pole it spans the map).
-            val rho = acos(6371.0 / (6371.0 + maxOf(150.0, c[6])))
-            val cercle = cercle(c[4], c[5], rho)
+            val cercle = fr.f4ioz.satcombo.domain.TraceSked.empreinte(c[4], c[5], c[6])
             for (d in listOf(-360.0, 0.0, 360.0)) {
-                val p = Path2D.Float()
-                cercle.forEachIndexed { i, q -> if (i == 0) p.moveTo(x(q[1] + d), y(q[0])) else p.lineTo(x(q[1] + d), y(q[0])) }
-                p.closePath()
-                g.color = Color(63, 224, 200, 45); g.fill(p)
-                g.color = Color(20, 120, 110, 200); g.stroke = BasicStroke(1.5f); g.draw(p)
+                fun chemin(l: List<DoubleArray>) = Path2D.Float().also { p -> l.forEachIndexed { i, q -> if (i == 0) p.moveTo(x(q[1] + d), y(q[0])) else p.lineTo(x(q[1] + d), y(q[0])) } }
+                g.color = Color(63, 224, 200, 45); g.fill(chemin(cercle).also { it.closePath() })
+                // The circle stroked, not the closing along the map's edge round a pole.
+                g.color = Color(20, 120, 110, 200); g.stroke = BasicStroke(1.5f); g.draw(chemin(cercle.take(fr.f4ioz.satcombo.domain.TraceSked.POINTS_CERCLE)))
             }
             // The track: dashed whole, the common window green, flown so far darker.
             fun trace(filtre: (Int) -> Boolean, couleur: Color, trait: BasicStroke) {
@@ -206,7 +189,7 @@ class VideoSked(private val dossier: File, private val tuile: (Int, Int, Int) ->
             g.font = Font(Font.SANS_SERIF, Font.PLAIN, 13); g.color = Color(154, 167, 180)
             g.drawString("N", cx - 4, cy - r - 4); g.drawString("S", cx - 4, cy + r + 15); g.drawString("E", cx + r + 4, cy + 5); g.drawString("O", cx - r - 14, cy + 5)
             fun xy(az: Double, el: Double): Pair<Float, Float> { val rr = r * (1 - el.coerceIn(0.0, 90.0) / 90).toFloat(); val a = Math.toRadians(az); return (cx + rr * sin(a).toFloat()) to (cy - rr * cos(a).toFloat()) }
-            fun arc(filtre: (StationPc.PointSked) -> Boolean, couleur: Color, w: Float) {
+            fun arc(filtre: (fr.f4ioz.satcombo.domain.PointSked) -> Boolean, couleur: Color, w: Float) {
                 val p = Path2D.Float(); var dedans = false
                 for (q in pts) {
                     val az = if (iAz == 0) q.azMoi else q.azAutre; val el = if (iEl == 1) q.elMoi else q.elAutre
@@ -237,22 +220,6 @@ class VideoSked(private val dossier: File, private val tuile: (Int, Int, Int) ->
             g.color = Color(6, 19, 26); g.drawString(nom, tx, ty)
         }
 
-        /** The points (lat, lon) at an angular radius [rho] around (lat0, lon0); round a pole along the map's edge. */
-        fun cercle(lat0: Double, lon0: Double, rho: Double): List<DoubleArray> {
-            val f0 = Math.toRadians(lat0)
-            val out = ArrayList<DoubleArray>()
-            for (bDeg in 0..360 step 4) {
-                val br = Math.toRadians(bDeg.toDouble())
-                val f = asin(sin(f0) * cos(rho) + cos(f0) * sin(rho) * cos(br))
-                val dl = atan2(sin(br) * sin(rho) * cos(f0), cos(rho) - sin(f0) * sin(f))
-                var lon = lon0 + Math.toDegrees(dl)
-                if (out.isNotEmpty()) { val pr = out.last()[1]; while (lon - pr > 180) lon -= 360; while (lon - pr < -180) lon += 360 }
-                out += doubleArrayOf(Math.toDegrees(f), lon)
-            }
-            val fin = out.last()[1]; val debut = out.first()[1]
-            if (Math.abs(fin - debut) > 180) { val pole = if (lat0 >= 0) 85.0 else -85.0; out += doubleArrayOf(pole, fin); out += doubleArrayOf(pole, debut) }
-            return out
-        }
     }
 
     companion object {

@@ -213,7 +213,7 @@ fun SkedScreen(ui: UiState, vm: MainViewModel) {
         }
 
         // --- Selected plan: polar plots + animation + export ---
-        plan?.let { SkedPlanPanel(it, ui, ctx, scope) }
+        plan?.let { SkedPlanPanel(it, ui, ctx, scope, vm) }
     }
 }
 
@@ -245,7 +245,7 @@ private fun SatDropdown(ui: UiState, vm: MainViewModel, satName: String) {
 }
 
 @Composable
-private fun SkedPlanPanel(plan: SkedPlan, ui: UiState, ctx: android.content.Context, scope: kotlinx.coroutines.CoroutineScope) {
+private fun SkedPlanPanel(plan: SkedPlan, ui: UiState, ctx: android.content.Context, scope: kotlinx.coroutines.CoroutineScope, vm: MainViewModel) {
     // Animation progress across the union of both passes (0..1). Resets per window.
     var progress by remember(plan) { mutableStateOf(0f) }
     var playing by remember(plan) { mutableStateOf(false) }
@@ -394,6 +394,50 @@ private fun SkedPlanPanel(plan: SkedPlan, ui: UiState, ctx: android.content.Cont
                     },
                     modifier = Modifier.fillMaxWidth().padding(top = 6.dp)
                 ) { Text(t("export_save"), color = Cyan, fontWeight = FontWeight.Bold) }
+                // The sked replayed as a video (the map and both skies), to send the other station.
+                var videoProgres by remember(plan) { mutableStateOf<Float?>(null) }
+                var video by remember(plan) { mutableStateOf<java.io.File?>(null) }
+                var videoEchec by remember(plan) { mutableStateOf(false) }
+                val enregistreVideo = rememberEnregistrer()
+                OutlinedButton(
+                    enabled = videoProgres == null,
+                    onClick = {
+                        scope.launch {
+                            videoProgres = 0f; videoEchec = false; video = null
+                            val f = withContext(Dispatchers.Default) {
+                                vm.traceSked(plan)?.let { tr ->
+                                    SkedVideo.fabrique(ctx, tr, plan.mutualStartMs, plan.mutualEndMs, plan.satName, meLabel, plan.dx.locator) { p -> videoProgres = p }
+                                }
+                            }
+                            videoProgres = null; video = f; videoEchec = f == null
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth().padding(top = 6.dp)
+                ) {
+                    val p = videoProgres
+                    Text(if (p != null) tf("sked_video_encours", Math.round(p * 100)) else t("sked_video"), color = Cyan, fontWeight = FontWeight.Bold)
+                }
+                if (videoEchec) Text(t("sked_video_echec"), color = Amber, fontSize = 12.sp)
+                video?.let { f ->
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                        Button(
+                            onClick = {
+                                val send = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                                    type = "video/mp4"
+                                    putExtra(android.content.Intent.EXTRA_STREAM, SkedCard.uri(ctx, f))
+                                    putExtra(android.content.Intent.EXTRA_TEXT, SkedCard.shareText(plan, ui.useUtc, ui.callsign, ui.units))
+                                    addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                }
+                                ctx.startActivity(android.content.Intent.createChooser(send, t("sked_share")))
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Aurora),
+                            modifier = Modifier.weight(1f)
+                        ) { Text(t("sked_share"), color = Color.White, fontWeight = FontWeight.Bold) }
+                        OutlinedButton(onClick = { enregistreVideo(f.name, "video/mp4", depuisFichier(f)) }, modifier = Modifier.weight(1f)) {
+                            Text(t("export_save"), color = Cyan, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
             }
         }
     }
