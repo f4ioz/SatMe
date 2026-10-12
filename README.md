@@ -22,9 +22,20 @@ The ISS on 4 October: four school pictures in Robot 36, decoded as they arrived,
 <img src="docs/images/en-journal-export-iss.webp" width="24%" alt="The picture SatMe makes to share the moment">
 </p>
 
-### On the PC too
+### SatMe PC — the whole station in a browser
 
-The phone serves pages to the PC's browser (USB cable or Wi-Fi, nothing to install): the pass journal replayed large on a map with its sound, and the SSTV sheet laid out with the mouse.
+SatMe also runs on a PC (Linux, Windows, Raspberry Pi), with the phone's own engine: passes, Doppler, rig and rotator, the log with the station live beside it, skeds, QO-100 and **DATV with a MiniTiouner**, SDR dongle, radiosondes, METEOR, SSTV, APRS, FT8, the pass journal — and SatMe on the phone joins it by scanning a QR code, its passes, pictures, sounds and contacts coming over. → [SatMe PC](docs/station-pc.md)
+
+<p align="center">
+<img src="docs/images/pc-station.webp" width="49%" alt="SatMe PC: the next passes, FO-29 followed on the sky, Doppler-corrected frequencies, rig and rotator">
+<img src="docs/images/pc-carnet.webp" width="49%" alt="SatMe PC log: a new contact, and beside it the station live">
+</p>
+<p align="center">
+<img src="docs/images/pc-datv.webp" width="49%" alt="SatMe PC, DATV: a DVB-S2 test signal locked with a MiniTiouner, MER, MODCOD, the constellation">
+<img src="docs/images/pc-journal-cadre.webp" width="49%" alt="SatMe PC, pass journal: a 3:4 video's frame drawn over the map">
+</p>
+
+The phone also serves pages to the PC's browser (USB cable or Wi-Fi, nothing to install): the pass journal replayed large on a map with its sound, and the SSTV sheet laid out with the mouse.
 
 <p align="center">
 <img src="docs/images/en-journal-pc.webp" width="49%" alt="The pass journal on the PC: the ISS pass on the map, an SSTV picture arriving, the timeline">
@@ -134,6 +145,7 @@ The phone serves pages to the PC's browser (USB cable or Wi-Fi, nothing to insta
 - Remote listening from a second phone on the same network.
 - Pictures, videos, sounds, sheets and cards: shared, or saved on the phone.
 - PC control desk: web pages served by the phone, by USB cable or Wi-Fi — keyboard entry, polar dial, recording, your station and the coming passes; the pass journal replayed large (map, S-meter, timeline, accelerated replay, videos made by the phone); the SSTV sheet laid out with the mouse — and an [HTTP API](docs/API-v1.md) for other clients.
+- SatMe PC joined by scanning its QR code: the phone's passes, SSTV pictures, recordings and contacts brought to the PC. Each new contact can go to Wavelog by itself after a delay of your choice, on the phone as on the PC.
 
 French and English. Controls readable by screen readers.
 
