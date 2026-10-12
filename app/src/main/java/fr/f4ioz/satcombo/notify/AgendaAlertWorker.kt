@@ -8,6 +8,7 @@
  */
 package fr.f4ioz.satcombo.notify
 
+import fr.f4ioz.satcombo.data.load
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager

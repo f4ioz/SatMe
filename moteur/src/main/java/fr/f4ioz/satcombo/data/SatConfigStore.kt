@@ -8,7 +8,7 @@
  */
 package fr.f4ioz.satcombo.data
 
-import android.content.Context
+import fr.f4ioz.satcombo.plateforme.Stockage
 
 /** Per-satellite operating config: chosen transponder + manual calibration shift. */
 data class SatConfig(
@@ -32,8 +32,9 @@ data class SatConfig(
 )
 
 /** Persists per-satellite config keyed by NORAD catalog number. */
-class SatConfigStore(context: Context) {
-    private val prefs = context.getSharedPreferences("satcombo_satconfig", Context.MODE_PRIVATE)
+class SatConfigStore(private val prefs: Stockage) {
+    /** A value that may be missing: none read as null (no "contains" in the settings' interface). */
+    private fun peutEtre(cle: String): Long? = prefs.getLong(cle, ABSENT).takeIf { it != ABSENT }
 
     fun load(catnum: Int): SatConfig = SatConfig(
         txDescription = prefs.getString("tx_$catnum", null),
@@ -41,10 +42,8 @@ class SatConfigStore(context: Context) {
         txShiftHz = prefs.getLong("txshift_$catnum", 0L),
         rxOffsetVoiceHz = prefs.getLong("rxoff_voice_$catnum", 0L),
         rxOffsetCwHz = prefs.getLong("rxoff_cw_$catnum", 0L),
-        refCalibShiftHz = if (prefs.contains("refshift_$catnum"))
-            prefs.getLong("refshift_$catnum", 0L) else null,
-        refTxShiftHz = if (prefs.contains("reftxshift_$catnum"))
-            prefs.getLong("reftxshift_$catnum", 0L) else null
+        refCalibShiftHz = peutEtre("refshift_$catnum"),
+        refTxShiftHz = peutEtre("reftxshift_$catnum")
     )
 
     fun saveTransmitter(catnum: Int, description: String?) {
@@ -77,5 +76,11 @@ class SatConfigStore(context: Context) {
 
     // No "forget reference": storing again replaces it, which is all that is
     // needed. An extra button in a busy panel costs attention on every pass.
+
+    companion object {
+        /** Where the phone keeps it (its preferences' name). */
+        const val PREFS = "satcombo_satconfig"
+        private const val ABSENT = Long.MIN_VALUE
+    }
 
 }

@@ -50,3 +50,14 @@ fun LogStore(context: Context): LogStore = LogStore(context.filesDir.resolve("qs
 /** The AMSAT status page, its last answer kept in the phone's files. */
 fun AmsatStatusRepository(context: Context): AmsatStatusRepository =
     AmsatStatusRepository(context.filesDir.resolve(AmsatStatusRepository.CACHE_FILE))
+
+/** Each satellite's operating config, in the phone's preferences. */
+fun SatConfigStore(context: Context): SatConfigStore = SatConfigStore(stockage(context, SatConfigStore.PREFS))
+
+// The agenda, in the phone's preferences: the same calls as before, with a Context.
+fun AgendaStore.load(ctx: Context): List<AgendaStore.AgendaEvent> = load(stockage(ctx, AgendaStore.PREFS))
+fun AgendaStore.save(ctx: Context, list: List<AgendaStore.AgendaEvent>) = save(stockage(ctx, AgendaStore.PREFS), list)
+fun AgendaStore.put(ctx: Context, e: AgendaStore.AgendaEvent): List<AgendaStore.AgendaEvent> = put(stockage(ctx, AgendaStore.PREFS), e)
+fun AgendaStore.remove(ctx: Context, id: Long): List<AgendaStore.AgendaEvent> = remove(stockage(ctx, AgendaStore.PREFS), id)
+fun AgendaStore.purge(ctx: Context, days: Int = 30, nowMs: Long = System.currentTimeMillis()): List<AgendaStore.AgendaEvent> =
+    purge(stockage(ctx, AgendaStore.PREFS), days, nowMs)

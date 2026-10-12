@@ -8,6 +8,7 @@
  */
 package fr.f4ioz.satcombo
 
+import fr.f4ioz.satcombo.data.load
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -1301,7 +1302,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 x = settings.photoCarteX,
                 y = settings.photoCarteY,
                 remplissage = settings.photoCarteRemplissage),
-            agenda = fr.f4ioz.satcombo.data.AgendaStore.load(getApplication()),
+            agenda = fr.f4ioz.satcombo.data.AgendaStore.load(getApplication<android.app.Application>()),
             askCallsign = settings.callsign.isBlank() && !settings.callsignPromptOff,
             qrvPhotos = qrvPhotoStore.load(),
             pastPassHours = settings.pastPassHours,
@@ -4551,7 +4552,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      */
     fun refreshAgenda() {
         _ui.value = _ui.value.copy(
-            agenda = fr.f4ioz.satcombo.data.AgendaStore.load(getApplication()))
+            agenda = fr.f4ioz.satcombo.data.AgendaStore.load(getApplication<android.app.Application>()))
     }
 
     /**

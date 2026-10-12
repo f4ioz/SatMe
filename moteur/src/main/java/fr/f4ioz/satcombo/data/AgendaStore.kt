@@ -8,7 +8,7 @@
  */
 package fr.f4ioz.satcombo.data
 
-import android.content.Context
+import fr.f4ioz.satcombo.plateforme.Stockage
 
 /**
  * The operator's agenda: appointments no orbit computation can guess — a sked
@@ -88,7 +88,8 @@ object AgendaStore {
         val freqMhz: Double? get() = if (freqHz > 0L) freqHz / 1e6 else null
     }
 
-    private const val PREFS = "satcombo_agenda"
+    /** Where the phone keeps it (its preferences' name); the PC, a file of its own. */
+    const val PREFS = "satcombo_agenda"
     private const val KEY = "events"
 
     /** Offered kinds. The first, empty, means "unspecified". */
@@ -142,25 +143,23 @@ object AgendaStore {
 
     // -------------------------------------------------------------------- disk
 
-    fun load(ctx: Context): List<AgendaEvent> =
-        decode(ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(KEY, ""))
+    fun load(s: Stockage): List<AgendaEvent> = decode(s.getString(KEY, ""))
 
-    fun save(ctx: Context, list: List<AgendaEvent>) {
-        ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
-            .putString(KEY, encode(list.sortedBy { it.timeMs })).apply()
+    fun save(s: Stockage, list: List<AgendaEvent>) {
+        s.edit().putString(KEY, encode(list.sortedBy { it.timeMs })).apply()
     }
 
     /** Adds or replaces an appointment, depending on whether its id exists. */
-    fun put(ctx: Context, e: AgendaEvent): List<AgendaEvent> {
-        val list = load(ctx).filter { it.id != e.id } + e
+    fun put(s: Stockage, e: AgendaEvent): List<AgendaEvent> {
+        val list = load(s).filter { it.id != e.id } + e
         val sorted = list.sortedBy { it.timeMs }
-        save(ctx, sorted)
+        save(s, sorted)
         return sorted
     }
 
-    fun remove(ctx: Context, id: Long): List<AgendaEvent> {
-        val list = load(ctx).filter { it.id != id }
-        save(ctx, list)
+    fun remove(s: Stockage, id: Long): List<AgendaEvent> {
+        val list = load(s).filter { it.id != id }
+        save(s, list)
         return list
     }
 
@@ -169,12 +168,12 @@ object AgendaStore {
      * recent trace, not an archive. Counted from the window end, so a
      * two-day event is not deleted while it is still running.
      */
-    fun purge(ctx: Context, days: Int = 30, nowMs: Long = System.currentTimeMillis()):
+    fun purge(s: Stockage, days: Int = 30, nowMs: Long = System.currentTimeMillis()):
         List<AgendaEvent> {
         val cut = nowMs - days * 86_400_000L
-        val list = load(ctx)
+        val list = load(s)
         val kept = list.filter { it.endOrStartMs >= cut }
-        if (kept.size != list.size) save(ctx, kept)
+        if (kept.size != list.size) save(s, kept)
         return kept
     }
 }
