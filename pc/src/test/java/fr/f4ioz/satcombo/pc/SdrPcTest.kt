@@ -107,6 +107,67 @@ class SdrPcTest {
         assertFalse(sdr.etat.value.actif)
     }
 
+    /** The PLL the fake dongle was last tuned to, and the beacon it shows (absolute IF). */
+    @Volatile private var pllFaux = 0L
+    private val baliseFausseHz = 739_750_300L   // 10 489.750 through a 9 750 MHz LNB, 300 Hz off
+
+    private fun fausseParabole() = thread(isDaemon = true) {
+        runCatching {
+            serveur.accept().use { c ->
+                val o = c.getOutputStream()
+                o.write("RTL0".toByteArray() + byteArrayOf(0, 0, 0, 5, 0, 0, 0, 29)); o.flush()
+                thread(isDaemon = true) {
+                    val e = DataInputStream(c.getInputStream())
+                    runCatching { while (true) { val k = e.readUnsignedByte(); val v = e.readInt(); commandes += k to v; if (k == 0x01) pllFaux = v.toLong() and 0xFFFFFFFFL } }
+                }
+                val r = Random(2)
+                var phase = 0.0
+                val bloc = ByteArray(16_384)
+                while (!fini) {
+                    val f = (baliseFausseHz - pllFaux).toDouble()
+                    val pas = 2 * Math.PI * f / Dsp.RTL_RATE
+                    for (i in 0 until bloc.size / 2) {
+                        phase += pas
+                        bloc[2 * i] = (127.5 + 25 * Math.cos(phase) + r.nextDouble(-6.0, 6.0)).toInt().toByte()
+                        bloc[2 * i + 1] = (127.5 + 25 * Math.sin(phase) + r.nextDouble(-6.0, 6.0)).toInt().toByte()
+                    }
+                    o.write(bloc); Thread.sleep(7)
+                }
+            }
+        }
+    }
+
+    @Test
+    fun la_cle_voit_la_balise_qo100_et_le_calage_converge_en_un_coup() {
+        val st = StationPc(StockageMemoire(), Catalogue(dossier, enLigne = false), PortsSeriePc(), portee)
+        st.settings.manualLocator = "JN18FS"
+        st.demarre()
+        st.settings.sdrAudio = false
+        // A 9 750 MHz LNB on the dongle; listening in the voice segment, 50 kHz below the beacon.
+        st.qo100.poseOl(true, 9_750_000_000L)
+        st.qo100.descente(10_489_700_000L)
+        st.qo100.aLaCle(true)
+        val sdr = SdrPc(st, SonPc(), StockageMemoire(), portee)
+        sdr.lance = false; sdr.port = serveur.localPort
+        fausseParabole()
+        assertTrue(sdr.demarre())
+        attends { pllFaux == 739_700_000L }
+        sdr.demandePanorama()
+        attends { sdr.mesureBalise() != null }
+        val m = sdr.mesureBalise()!!
+        assertEquals(300.0, m.ecartHz, 60.0)
+        assertTrue("well above the noise: " + m.rapportDb, m.rapportDb > 15f)
+        // The calibration written: 300 Hz is the software mixer's (the PLL does not move, no click),
+        // and the panorama's axis takes it in — the beacon is then where it should be.
+        st.qo100.calage(st.qo100.etat.value.calageHz + m.ecartArrondiHz)
+        attends { sdr.etat.value.cielHz == 10_489_700_000L + m.ecartArrondiHz }
+        assertEquals(739_700_000L, pllFaux)
+        val avant = sdr.panoramaTrames
+        attends { sdr.demandePanorama(); sdr.panoramaTrames > avant + 2 }
+        assertEquals(0.0, sdr.mesureBalise()!!.ecartHz, 60.0)
+        sdr.arrete()
+    }
+
     @Test
     fun le_mode_d_un_emetteur() {
         assertEquals(fr.f4ioz.satcombo.sdr.RxMode.NFM, SdrPc.modeDe("FM"))

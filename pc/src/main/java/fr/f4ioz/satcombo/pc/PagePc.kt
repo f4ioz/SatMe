@@ -90,6 +90,8 @@ object PagePc {
   .k-ciels { flex:1; min-width:180px; max-width:240px; display:flex; flex-direction:column; gap:6px; }
   .k-ciels svg { width:100%; display:block; }
   .o-freq { font-family:ui-monospace,Consolas,monospace; font-size:34px; font-weight:800; color:var(--cyan); cursor:ns-resize; user-select:none; }
+  .o-balise { font-size:13px; }
+  .o-balise b { font-family:ui-monospace,Consolas,monospace; font-size:16px; }
   .o-puces { display:flex; gap:6px; flex-wrap:wrap; }
   .o-puces button { padding:4px 9px; font-size:12px; font-weight:600; }
   .o-puces button.ici { background:var(--cyan); color:#06131A; border-color:var(--cyan); }
@@ -530,23 +532,29 @@ object PagePc {
       <div class="t">Réglette du transpondeur</div>
       <canvas id="o-reglette" style="width:100%;height:96px;display:block;cursor:crosshair" title="Cliquer ou glisser pour s'y poser · molette ±100 Hz"></canvas>
       <canvas id="o-loupe" style="width:100%;height:70px;display:block;margin-top:6px;cursor:crosshair" title="± 25 kHz autour de l'accord : cliquer pour s'y poser"></canvas>
+      <canvas id="o-pano" style="width:100%;height:130px;display:block;margin-top:6px;cursor:crosshair" title="Le transpondeur vu par la clé SDR, à l'échelle de la réglette : cliquer pour s'y poser"></canvas>
+      <div class="petit" id="o-pano-msg"></div>
       <div class="paire" style="margin-top:8px"><b id="o-seg"></b><span class="petit" id="o-larg"></span><span id="o-interdit" class="rose" style="font-weight:700"></span></div>
       <div class="petit" id="o-avert" style="margin-top:2px"></div>
     </div>
     <div class="carte">
-      <div class="t">Ce que voit le poste</div>
+      <div class="t">Ce que voient le poste et la clé</div>
       <label><input type="checkbox" id="o-poste" onchange="qPost('poste?on=' + (this.checked ? 1 : 0))"> Appliquer au poste</label>
       <div class="paire" style="margin-top:8px">
         <span>Poste RX <span class="val cyan" id="o-prx">—</span></span><span>Poste TX <span class="val ambre" id="o-ptx">—</span></span></div>
       <div class="avert" id="o-hors"></div>
+      <label style="display:block;margin-top:8px"><input type="checkbox" id="o-cle" onchange="qPost('cle?on=' + (this.checked ? 1 : 0))"> Appliquer à la clé SDR</label>
+      <div class="paire" style="margin-top:4px"><span>Clé RX <span class="val cyan" id="o-crx">—</span></span><span class="petit" id="o-cmsg2"></span></div>
       <div class="etat" id="o-statut"></div>
       <div class="petit" style="margin-top:6px">Les fréquences de gauche sont celles du ciel ; le poste travaille en fréquence intermédiaire, après les convertisseurs de la chaîne. Pas de Doppler ici : le poste n'est écrit que quand tu bouges. Tant que la case est cochée, le Doppler du satellite suivi est en pause.</div>
-      <div class="petit" style="margin-top:4px">Pas de clé SDR sur le PC pour l'instant : le panorama et la balise vue par la clé restent sur le téléphone.</div>
+      <div class="petit" style="margin-top:4px">La clé se démarre dans l'onglet SDR ; elle suit alors cette fréquence, en BLU, et montre tout le transpondeur dans le panorama.</div>
     </div>
   </div>
   <div class="col3">
     <div class="carte">
       <div class="t">Calage sur la balise</div>
+      <div id="o-balise" class="o-balise">—</div>
+      <div class="ligne" style="margin-top:4px"><button id="o-bmesure" onclick="qCaleMesure()">Caler sur la mesure</button></div>
       <div class="petit">L'oscillateur d'un LNB dérive, surtout à froid. Accorde la balise médiane, lis où elle tombe vraiment, saisis-le : l'écart s'applique à toute la descente.</div>
       <div class="ligne"><span class="petit">Écart mémorisé</span><span class="val" id="o-calage">0 Hz</span></div>
       <div class="ligne"><input id="o-entendue" placeholder="MHz ciel" title="Où tombe vraiment la balise médiane, en MHz ciel : par exemple 10489,7523" style="max-width:170px"><button onclick="qCale()">Appliquer</button>
@@ -1622,6 +1630,7 @@ function qAller() {
 function qMemoire() { qPost('memoire?nom=' + enc(v('o-nom'))); g('o-nom').value = ''; }
 function qOublie() { qPost('oublie?hz=' + O.descente); }
 function qNouvelle() { const n = v('o-nouvelle'); if (!n) return; g('o-nouvelle').value = ''; qPost('nouvelle?nom=' + enc(n)); }
+async function qCaleMesure() { const j = await qPost('caler-mesure'); if (j && j.ok === false && j.erreur) txt('o-cmsg', j.erreur); }
 function qOl(sens, ol) { qPost('ol?sens=' + sens + '&hz=' + ol); }
 async function qCale() {
   const j = await qPost('balise-entendue?mhz=' + enc(v('o-entendue')));
@@ -1696,7 +1705,59 @@ function dessineQo100() {
       : '<div>Aucun dans l’année qui vient.</div>');
   }
   if (g('o-ciel').dataset.vu !== h) { g('o-ciel').dataset.vu = h; g('o-ciel').innerHTML = h; }
-  dessineReglette(); dessineLoupe();
+  g('o-cle').checked = O.aLaCle;
+  txt('o-crx', mhz(O.cleRx));
+  txt('o-cmsg2', !O.cleAtteignable ? 'hors de la plage de la clé : vérifie le LNB' : O.aLaCle && !(OPan && OPan.sdr) ? 'clé arrêtée (onglet SDR)' : '');
+  dessineReglette(); dessineLoupe(); dessinePano();
+}
+// The panorama: the dongle's whole band on the ruler's scale, newest row on top.
+let OPan = null, oPanHist = [], oPanTrames = -1;
+async function ticPano() {
+  if (g('v-qo100').hidden) return;
+  try { OPan = await (await fetch('/api/qo100/panorama?n=' + Math.max(128, Math.min(1024, g('o-pano').clientWidth)))).json(); } catch (x) { return; }
+  if (OPan.colonnes && OPan.trames !== oPanTrames) {
+    oPanTrames = OPan.trames;
+    if (oPanHist.length && oPanHist[0].length !== OPan.colonnes.length) oPanHist = [];
+    oPanHist.unshift(OPan.colonnes); if (oPanHist.length > 200) oPanHist.length = 200;
+  }
+  const b = OPan.balise;
+  g('o-balise').innerHTML = !OPan.sdr ? 'La clé SDR ne tourne pas : la démarrer (onglet SDR) et cocher « Appliquer à la clé ».'
+    : !b ? 'Balise non vue. Vérifier le pointage, ou attendre quelques secondes.'
+    : 'Balise médiane vue par la clé : écart <b style="color:' + (b.ok ? 'var(--vert)' : 'var(--ambre)') + '">' + (b.ecart > 0 ? '+' : '') + b.ecart + ' Hz</b>, ' +
+      '<b style="color:' + (b.rapport >= 15 ? 'var(--vert)' : 'var(--ambre)') + '">' + b.rapport.toFixed(1) + ' dB</b> au-dessus du bruit' +
+      (b.ok ? ' — le calage est bon.' : ' — le LNB a dérivé : le bouton écrit l’écart dans le calage.');
+  g('o-bmesure').disabled = !b || b.ok;
+  dessinePano();
+}
+setInterval(ticPano, 300);
+function dessinePano() {
+  if (!OP || g('v-qo100').hidden) return;
+  const c = g('o-pano'), w = c.clientWidth, h = c.clientHeight, dpr = window.devicePixelRatio || 1;
+  const [x] = toile(c);
+  x.fillStyle = '#06131A'; x.fillRect(0, 0, w, h);
+  txt('o-pano-msg', oPanHist.length ? '' : (OPan && OPan.sdr ? 'Le panorama arrive…' : 'Le panorama : la clé SDR démarrée (onglet SDR) et réglée sur QO-100 (« Appliquer à la clé »).'));
+  if (!oPanHist.length) return;
+  // The scale: at least 20 dB, or plain noise would paint as a busy transponder.
+  let lo = 1e9, hi = -1e9;
+  for (const r of oPanHist) for (const v of r) if (v != null) { if (v < lo) lo = v; if (v > hi) hi = v; }
+  if (hi < lo + 20) hi = lo + 20;
+  const n = oPanHist[0].length, rows = Math.min(oPanHist.length, h), img = x.createImageData(Math.max(1, Math.round((w - 8) * dpr)), Math.max(1, Math.round(rows * dpr)));
+  const W = img.width, H = img.height;
+  for (let yy = 0; yy < H; yy++) {
+    const r = oPanHist[Math.min(oPanHist.length - 1, Math.floor(yy / dpr))];
+    for (let xx = 0; xx < W; xx++) {
+      const v = r[Math.min(n - 1, Math.floor(xx * n / W))];
+      const k = 4 * (yy * W + xx);
+      const [cr, cg, cb] = v == null ? [40, 40, 44] : rCouleur(v, lo, hi);
+      img.data[k] = cr; img.data[k + 1] = cg; img.data[k + 2] = cb; img.data[k + 3] = 255;
+    }
+  }
+  x.setTransform(1, 0, 0, 1, 0, 0); x.putImageData(img, Math.round(4 * dpr), 0); x.setTransform(dpr, 0, 0, dpr, 0, 0);
+  // The beacons, the frequency listened to.
+  const b = OP.regletteBas, t = OP.regletteHaut, X = f => 4 + (w - 8) * (f - b) / (t - b);
+  x.strokeStyle = 'rgba(229,72,229,.8)'; x.setLineDash([3, 3]);
+  for (const s of OP.segments) if (s.usage === 'BALISE' && s.repere) { x.beginPath(); x.moveTo(X(s.repere), 0); x.lineTo(X(s.repere), h); x.stroke(); }
+  x.setLineDash([]); x.strokeStyle = '#FFFFFF'; x.lineWidth = 1.5; x.beginPath(); x.moveTo(X(O.descente), 0); x.lineTo(X(O.descente), 8); x.stroke(); x.lineWidth = 1;
 }
 /** The canvas at its displayed size; its 2D context. */
 function toile(c) {
@@ -1751,11 +1812,12 @@ function dessineLoupe() {
   r.addEventListener('pointerdown', ev => { if (!OP) return; tire = true; r.setPointerCapture(ev.pointerId); qPost('frequence?hz=' + f(ev)); });
   r.addEventListener('pointermove', ev => { if (!tire || Date.now() - dernier < 120) return; dernier = Date.now(); qPost('frequence?hz=' + f(ev)); });
   r.addEventListener('pointerup', ev => { if (tire) qPost('frequence?hz=' + f(ev)); tire = false; });
+  g('o-pano').addEventListener('click', ev => { if (!OP) return; qPost('frequence?hz=' + f(ev)); });
   const l = g('o-loupe');
   l.addEventListener('click', ev => { if (!O) return; const b = l.getBoundingClientRect();
     qPost('frequence?hz=' + Math.round((O.descente + LOUPE * (ev.clientX - b.left - b.width / 2) / (b.width / 2 - 4)) / 100) * 100); });
   // The wheel: on the frequency, the ruler or the loupe.
-  for (const e of [g('o-dl'), r, l]) e.addEventListener('wheel', ev => { ev.preventDefault(); qPas((ev.deltaY < 0 ? 1 : -1) * (ev.shiftKey ? 1000 : 100)); }, { passive: false });
+  for (const e of [g('o-dl'), r, l, g('o-pano')]) e.addEventListener('wheel', ev => { ev.preventDefault(); qPas((ev.deltaY < 0 ? 1 : -1) * (ev.shiftKey ? 1000 : 100)); }, { passive: false });
   // The arrows, when nothing is being typed.
   document.addEventListener('keydown', ev => {
     if (g('v-qo100').hidden || /INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName)) return;

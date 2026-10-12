@@ -101,6 +101,24 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 .put("ici", 20)
                 .put("points", JSONArray(station.traceAuSol().map { (la, lo) -> JSONArray(listOf(Math.round(la * 100) / 100.0, Math.round(lo * 100) / 100.0)) }))
                 .toString().toByteArray())
+            "/api/qo100/panorama" -> {
+                val d = sdr
+                val o = JSONObject().put("sdr", d?.etat?.value?.actif == true)
+                if (d != null && d.etat.value.actif) {
+                    d.demandePanorama()
+                    val pan = d.panorama; val axe = d.axeQo100()
+                    if (pan != null && axe != null) {
+                        val cols = fr.f4ioz.satcombo.domain.PanoramaQo100.colonnes(pan, axe.first, axe.second, (q["n"]?.toIntOrNull() ?: 512).coerceIn(64, 1024))
+                        o.put("trames", d.panoramaTrames)
+                        o.put("colonnes", cols?.let { c -> JSONArray(c.map { v -> if (v == fr.f4ioz.satcombo.domain.PanoramaQo100.HORS) JSONObject.NULL else Math.round(v) }) } ?: JSONObject.NULL)
+                    }
+                    d.mesureBalise()?.let { m ->
+                        o.put("balise", JSONObject().put("ecart", m.ecartArrondiHz).put("rapport", Math.round(m.rapportDb * 10) / 10.0)
+                            .put("ok", fr.f4ioz.satcombo.domain.MesureBalise.calageSuffisant(m)))
+                    }
+                }
+                envoie(sortie, "200 OK", "application/json; charset=utf-8", o.toString().toByteArray())
+            }
             "/api/qo100" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JsonPc.qo100(station, q["plan"] == "1").toString().toByteArray())
             "/api/sdr" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", (sdr?.let { JsonPc.sdr(it) } ?: JSONObject().put("absent", true)).toString().toByteArray())
             "/api/sdr/spectre" -> envoie(sortie, "200 OK", "application/json; charset=utf-8",
@@ -290,6 +308,12 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                     ?: return JSONObject().put("ok", false).put("message", "Une fréquence près de 10 489,750 MHz, en MHz.")
                 station.qo100.caleSurLaBalise(hz)
             }
+            "/api/qo100/cle" -> station.qo100.aLaCle(q["on"] == "1")
+            "/api/qo100/caler-mesure" -> {
+                // No measurement: nothing done — certainly not a calibration back to zero.
+                val m = sdr?.mesureBalise() ?: return JSONObject().put("ok", false).put("erreur", "La balise n'est pas vue par la clé.")
+                station.qo100.calage(station.qo100.etat.value.calageHz + m.ecartArrondiHz)
+            }
             "/api/qo100/calage-zero" -> station.qo100.annuleCalage()
             "/api/convertisseurs" -> {
                 // MHz on the page, Hz here; an empty field leaves it as it is.
@@ -478,6 +502,8 @@ object JsonPc {
             .put("transpondeur", e.transpondeur).put("sansBride", e.sansBride).put("surBalise", e.surBalise)
             .put("auPoste", e.auPoste).put("posteRx", e.posteRxHz).put("posteTx", e.posteTxHz).put("atteignable", e.posteAtteignable)
             .put("emission", e.emissionPermise).put("statut", e.statut).put("catConnecte", st.etat.value.catConnecte)
+            .put("aLaCle", e.aLaCle).put("cleRx", st.versCle(e.descenteHz + e.calageHz))
+            .put("cleAtteignable", st.versCle(e.descenteHz + e.calageHz) in 24_000_000L..1_766_000_000L)
             .put("tp", JSONObject().put("bas", e.tp.descenteBasHz).put("haut", e.tp.descenteHautHz).put("centre", e.tp.centreDescenteHz))
             .put("segment", seg?.let { JSONObject().put("nom", tr.t("qo100_seg_" + it.cle)).put("largeur", it.largeurMaxHz)
                 .put("avert", tr.t("qo100_warn_" + it.usage.cleAvertissement)).put("emission", it.emissionPermise) }

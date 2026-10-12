@@ -64,6 +64,12 @@ class PiloteQo100(
         /** Where we listen, in the sky (nominal: the calibration is not in it). */
         val descenteHz: Long = Qo100.BALISE_MEDIANE_HZ,
         val auPoste: Boolean = false,
+        /**
+         * Does the SDR dongle follow too? Independent of [auPoste], on purpose:
+         * listening on the dongle while transmitting with the rig is a common
+         * QO-100 station. The dongle reads [descenteHz] + [calageHz] itself.
+         */
+        val aLaCle: Boolean = false,
         /** What the rig should display, after converters: the check before hearing anything. */
         val posteRxHz: Long = 0L,
         val posteTxHz: Long = 0L,
@@ -209,6 +215,8 @@ class PiloteQo100(
         change { copy(auPoste = on, statut = "") }
         if (on) pousse()
     }
+
+    fun aLaCle(on: Boolean) = change { copy(aLaCle = on) }
 
     /** Where the middle beacon was really heard (sky): the gap from 10 489.750 is the LNB's drift. */
     fun caleSurLaBalise(entenduHz: Long) = calage(_etat.value.calageHz + entenduHz - Qo100.BALISE_MEDIANE_HZ)

@@ -122,6 +122,40 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
     /** The dongle frequency wanted (Hz, after converters), set by the Doppler loop. */
     @Volatile private var voulueHz = 0L
 
+    /**
+     * The whole band the dongle sees (16k bins over 1.0584 MHz, around the
+     * PLL), computed only while a page asks for it — a 16k FFT three times a
+     * second has no business running otherwise.
+     */
+    @Volatile var panorama: FloatArray? = null; private set
+    @Volatile var panoramaPllHz = 0L; private set
+    @Volatile var panoramaTrames = 0L; private set
+    @Volatile private var panoramaDemandeMs = 0L
+    fun demandePanorama() { panoramaDemandeMs = horloge() }
+
+    /**
+     * The panorama's axis, in QO-100's nominal sky: its centre and signed
+     * width. The dongle's PLL back through the LNB, minus the calibration
+     * already applied — so the beacon's offset measured on it is exactly what
+     * to add to the calibration (one step), and the band plan lines up.
+     * The same axis for the measurement and the drawing, as on the phone.
+     */
+    fun axeQo100(): Pair<Double, Double>? {
+        val pll = panoramaPllHz.takeIf { it > 0 && _etat.value.actif } ?: return null
+        val q = station.qo100.etat.value
+        val centre = station.depuisCle(pll).toDouble() - q.calageHz
+        val conv = station.convRx()
+        val inverse = conv.configure && conv.inverseur && conv.couvre(q.descenteHz + q.calageHz)
+        return centre to (if (inverse) -Dsp.RTL_RATE.toDouble() else Dsp.RTL_RATE.toDouble())
+    }
+
+    /** The middle beacon in the last panorama: its offset and how far above the noise. */
+    fun mesureBalise(): fr.f4ioz.satcombo.domain.MesureBalise.Mesure? {
+        val pan = panorama ?: return null
+        val (c, e) = axeQo100() ?: return null
+        return fr.f4ioz.satcombo.domain.MesureBalise.mesurer(pan, c, e)
+    }
+
     /** The last spectrum: dB per bin from −88.2 to +88.2 kHz around the PLL. */
     @Volatile var spectre: FloatArray? = null; private set
     @Volatile var trames = 0L; private set
@@ -160,7 +194,7 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
         cle = null
         arreteProcessus()
         son.rendPar(NOM_SOURCE)
-        spectre = null
+        spectre = null; panorama = null
         voulueHz = 0L
         _etat.update { Etat() }
     }
@@ -194,14 +228,24 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
 
     private fun estLocal(h: String) = h == "127.0.0.1" || h == "localhost" || h == "::1"
 
+    /** QO-100's tab has the dongle: its frequency (no Doppler on a geostationary), in USB. */
+    private fun pourQo100(): Boolean = station.qo100.etat.value.aLaCle
+
     /** The mode to demodulate: chosen, or the transmitter's. */
     private fun mode(): RxMode = when (val m = modeChoisi) {
-        "AUTO" -> modeDe(station.ecouteSdr()?.mode.orEmpty())
+        "AUTO" -> if (pourQo100()) RxMode.USB else modeDe(station.ecouteSdr()?.mode.orEmpty())
         else -> runCatching { RxMode.valueOf(m) }.getOrDefault(RxMode.NFM)
     }
 
     /** The Doppler loop: where the dongle should be now. */
     private fun cibleMaintenant() {
+        if (pourQo100()) {
+            val q = station.qo100.etat.value
+            val ciel = q.descenteHz + q.calageHz
+            voulueHz = station.versCle(ciel)
+            _etat.update { it.copy(cielHz = ciel, reposHz = ciel, satellite = "QO-100") }
+            return
+        }
         val e = if (suitSatellite) station.ecouteSdr() else null
         val (repos, ciel) = if (e != null) {
             if (settings.sdrDopplerTrack) e.reposHz to e.cibleHz else e.reposHz to e.reposHz
@@ -217,6 +261,7 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
         var pll = 0L; var fine = 0L
         var dernierSpectre = 0L; var dernierEtat = 0L; var dernierOctets = 0L
         var trameVue = 0L
+        var dernierPano = 0L; var panoVue = 0L
         val hp = hautParleur()
         try {
             while (generation == gen) {
@@ -241,8 +286,15 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
                 if (n == 0) continue
                 val maintenant = horloge()
                 val veutSpectre = maintenant - dernierSpectre >= 90L
-                val produit = chaine.process(iq, n, pcm, feedSpectrum = veutSpectre)
+                val veutPano = maintenant - panoramaDemandeMs < 3000L && maintenant - dernierPano >= 300L
+                val produit = chaine.process(iq, n, pcm, feedSpectrum = veutSpectre, feedPanorama = veutPano)
                 if (veutSpectre) dernierSpectre = maintenant
+                if (veutPano) dernierPano = maintenant
+                if (chaine.panorama.frames != panoVue) {
+                    panoVue = chaine.panorama.frames
+                    panoramaPllHz = pll
+                    panorama = chaine.panorama.magDb.copyOf(); panoramaTrames++
+                }
                 if (chaine.spectrum.frames != trameVue) {
                     trameVue = chaine.spectrum.frames
                     spectre = chaine.spectrum.magDb.copyOf(); trames++
