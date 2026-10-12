@@ -147,7 +147,7 @@ class MainActivity : ComponentActivity() {
     /** A notification tap carries the satellite to open. */
     private fun handleOpenIntent(intent: android.content.Intent?) {
         // Development builds only: open a screen with something to show, for trying it on an emulator
-        // (adb shell am start -n fr.f4ioz.satcombo/.MainActivity --es essai sked|sonde|sdr|saisie [--es loc IN80] [--es reseau 10.0.2.2:1234]).
+        // (adb shell am start -n fr.f4ioz.satcombo/.MainActivity --es essai sked|sonde|sdr|saisie|partage [--es loc IN80] [--es reseau 10.0.2.2:1234]).
         if ((applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0) {
             when (intent?.getStringExtra("essai")) {
                 "sked" -> { vm.openSked(); vm.setSkedSat(intent.getIntExtra("cat", 25544))
@@ -157,6 +157,9 @@ class MainActivity : ComponentActivity() {
                     vm.ouvreSaisie() }
                 "sdr" -> { intent.getStringExtra("reseau")?.let { fr.f4ioz.satcombo.data.SettingsStore(this).sdrReseau = it }
                     vm.openSdr(); vm.startSdr() }
+                "partage" -> { val sd = fr.f4ioz.satcombo.demo.ServeurDemo
+                    sd.demarre(); sd.commande(true)
+                    android.util.Log.i("SatMe", "essai partage " + sd.etat.value.urlCommande + " code " + sd.etat.value.codeCommande) }
             }
         }
         val cat = intent?.getIntExtra("open_catnum", -1) ?: -1

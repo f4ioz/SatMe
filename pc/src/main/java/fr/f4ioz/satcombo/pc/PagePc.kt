@@ -376,6 +376,12 @@ object PagePc {
       <label class="petit"><input type="checkbox" id="i-enligne" checked> ces contacts sont déjà dans le carnet en ligne (ne pas les y redéposer)</label>
       <div class="petit" style="margin-top:6px">Les contacts satellite absents du carnet y entrent, avec la position du satellite à leur heure ; leurs passages sont reconstitués dans le Journal.</div>
       <div class="etat" id="i-etat"></div>
+      <div class="t" style="margin-top:12px">SatMe sur le téléphone</div>
+      <div class="petit">Ses passages viennent au Journal du PC, leurs contacts au carnet, leurs images SSTV aux images.</div>
+      <div class="ligne"><button onclick="ouvreTelephone()">Depuis le téléphone (Wi-Fi)…</button></div>
+      <div class="petit" style="margin-top:6px">Ou ses fichiers de passage (.zip, « Fichier du passage » dans le Journal du téléphone) :</div>
+      <input type="file" id="t-zip" accept=".zip" multiple style="width:100%;margin-top:4px" onchange="importeZips(this)">
+      <div class="etat" id="t-etat"></div>
     </details>
   </div>
   <div>
@@ -435,6 +441,20 @@ object PagePc {
     </div>
   </div>
 </div>
+<dialog id="t-dlg" style="background:var(--carte);color:var(--clair);border:1px solid var(--bord);border-radius:12px;width:min(760px,94vw)">
+  <div class="t">SatMe sur le téléphone</div>
+  <div class="petit">Sur le téléphone (le même Wi-Fi que ce PC) : Réglages → Partage et écoute → Partage → « Poste de commande sur PC ». Recopiez l'adresse qu'il affiche (http://…/c/…/) et le « code à saisir sur le PC ».</div>
+  <div class="ligne"><input id="t-adresse" placeholder="Adresse affichée (http://192.168.1.23:8080/c/…/)" style="flex:3;min-width:300px"><input id="t-code" placeholder="Code" style="max-width:110px">
+    <button class="primaire" onclick="connecteTelephone()">Connecter</button><span class="petit" id="t-cnx"></span></div>
+  <div id="t-liste-boite" hidden>
+    <div class="ligne"><label class="petit"><input type="checkbox" id="t-tout" onchange="document.querySelectorAll('.t-coche').forEach(c => c.checked = this.checked)"> tout</label>
+      <label class="petit"><input type="checkbox" id="t-enligne" checked> contacts déjà au carnet en ligne (envoyés par le téléphone)</label></div>
+    <div style="max-height:46vh;overflow:auto"><table><thead><tr><th></th><th>Début</th><th>Satellite</th><th>El</th><th>Durée</th><th>Contenu</th></tr></thead><tbody id="t-liste"></tbody></table></div>
+    <div class="ligne"><button class="primaire" onclick="rapatrie()">Importer la sélection</button><span class="petit" id="t-prog"></span></div>
+    <div class="petit" id="t-bilan"></div>
+  </div>
+  <div class="ligne"><button onclick="g('t-dlg').close(); chargeCarnet()">Fermer</button></div>
+</dialog>
 <dialog id="c-edit" style="background:var(--carte);color:var(--clair);border:1px solid var(--bord);border-radius:12px;min-width:360px">
   <div class="t">Modifier le contact <span class="petit" id="e-quand"></span></div>
   <div class="ligne"><input id="e-call" placeholder="Indicatif" style="text-transform:uppercase"><input id="e-loc" placeholder="Carré" style="text-transform:uppercase;max-width:110px"></div>
@@ -1245,6 +1265,57 @@ function dessineCarnet() {
 }
 g('c-filtre').oninput = dessineCarnet;
 // QRZ after 0.6 s without a key, as on the phone and the desk: a callsign the log does not know by name.
+// ------------------------------------------------------------------ SatMe on the phone
+function bilanTel(b) {
+  if (!b.ok) return b.erreur || 'échec';
+  return b.sat + ' ' + (b.de ? jourHeure(b.de) : '') + ' : ' + b.contacts + ' contact(s) au carnet' + (b.dejaLa ? ' (' + b.dejaLa + ' déjà là)' : '') +
+    ' · ' + b.images + ' image(s) · ' + (b.sons ? b.sons + ' son(s)' : 'sans son');
+}
+async function importeZips(input) {
+  const l = [...input.files]; if (!l.length) return;
+  const out = [];
+  for (let i = 0; i < l.length; i++) {
+    txt('t-etat', 'import ' + (i + 1) + '/' + l.length + ' : ' + l[i].name + '…');
+    let b = null;
+    try { b = await (await fetch('/api/telephone/zip?enLigne=1', { method: 'POST', body: l[i] })).json(); } catch (x) { b = { ok: false, erreur: 'envoi impossible' }; }
+    out.push(l[i].name + ' — ' + bilanTel(b));
+  }
+  g('t-etat').innerHTML = out.map(esc).join('<br>'); input.value = ''; chargeCarnet();
+}
+function ouvreTelephone() {
+  try { g('t-adresse').value = localStorage.getItem('tel-adresse') || ''; } catch (x) {}
+  g('t-dlg').showModal();
+}
+async function connecteTelephone() {
+  txt('t-cnx', 'connexion…');
+  try { localStorage.setItem('tel-adresse', v('t-adresse')); } catch (x) {}
+  const j = await post('/api/telephone/connecte?adresse=' + enc(v('t-adresse')) + '&code=' + enc(v('t-code')));
+  if (!j || j.ok === false) { txt('t-cnx', j && j.erreur ? j.erreur : 'échec'); return; }
+  let l = null;
+  try { l = await (await fetch('/api/telephone/liste')).json(); } catch (x) {}
+  if (!l || !l.ok) { txt('t-cnx', l && l.erreur ? l.erreur : 'liste illisible'); return; }
+  txt('t-cnx', 'connecté à ' + l.adresse + (l.version ? ' (SatMe ' + l.version + ')' : '') + ' · ' + l.passages.length + ' passage(s)');
+  g('t-liste-boite').hidden = false;
+  g('t-liste').innerHTML = l.passages.map(p => '<tr><td><input type="checkbox" class="t-coche" value="' + esc(p.id).replace(/"/g, '') + '"' + (p.q || p.i ? ' checked' : '') + '></td><td>' +
+    jourHeure(p.de) + '</td><td>' + esc(p.sat) + '</td><td>' + p.el + '°</td><td>' + duree(p.a - p.de) + '</td><td class="petit">' +
+    [p.q ? p.q + ' QSO' : '', p.i ? p.i + ' SSTV' : '', p.r ? p.r + ' APRS' : '', p.son ? '♪' : ''].filter(x => x).join(' · ') + '</td></tr>').join('') ||
+    '<tr><td colspan="6" class="petit">aucun passage dans le journal du téléphone</td></tr>';
+}
+async function rapatrie() {
+  const ids = [...document.querySelectorAll('.t-coche')].filter(c => c.checked).map(c => c.value);
+  if (!ids.length) return;
+  const j = await post('/api/telephone/rapatrie?enLigne=' + (g('t-enligne').checked ? 1 : 0) + '&ids=' + enc(ids.join(',')));
+  if (!j || j.ok === false) return;
+  const suit = async () => {
+    let e = null;
+    try { e = await (await fetch('/api/telephone/etat')).json(); } catch (x) { return; }
+    txt('t-prog', e.enCours ? 'import ' + e.fait + '/' + e.total + '…' : 'terminé : ' + e.total + ' passage(s)');
+    g('t-bilan').innerHTML = e.bilans.map(b => esc(bilanTel(b))).join('<br>');
+    if (e.enCours) setTimeout(suit, 800); else chargeCarnet();
+  };
+  suit();
+}
+
 // ------------------------------------------------------------------ the log's live station
 // While naming the stations of a pass, the pass in sight: where the satellite is, the sky,
 // the frequencies, where in the transponder, the mast, the recording. Contacts on a toggle.

@@ -11,6 +11,7 @@ package fr.f4ioz.satcombo.pc
 import fr.f4ioz.satcombo.demo.RequeteHttp
 import org.json.JSONArray
 import org.json.JSONObject
+import fr.f4ioz.satcombo.domain.JournalPaquet
 import fr.f4ioz.satcombo.sdr.Dsp
 import java.io.OutputStream
 import java.net.InetAddress
@@ -31,7 +32,8 @@ import kotlin.concurrent.thread
 class ServeurPc(private val station: StationPc, private val port: Int, private val reseau: Boolean = false,
                 private val carnet: CarnetPc? = null, private val son: SonStation? = null,
                 private val journal: JournalWebPc? = null, private val importPc: ImportPc? = null,
-                private val sdr: SdrPc? = null, private val videoSked: VideoSked? = null) {
+                private val sdr: SdrPc? = null, private val videoSked: VideoSked? = null,
+                private val telephone: TelephonePc? = null) {
 
     private var socket: ServerSocket? = null
     val portReel: Int get() = socket?.localPort ?: port
@@ -57,6 +59,14 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
         val chemin = r.chemin.substringBefore('?')
         val q = parametres(r.chemin.substringAfter('?', ""))
         val sortie = c.getOutputStream()
+        if (r.methode == "POST" && chemin == "/api/telephone/zip") {
+            // A pass file from the phone (up to 300 MB with its sound): read as it comes, never held whole.
+            val t = telephone
+            val b = if (t == null || r.longueur <= 0 || r.longueur > JournalPaquet.MAX_OCTETS) null
+                else runCatching { t.importeZip(Borne(c.getInputStream(), r.longueur), q["enLigne"] != "0") }.getOrNull()
+            envoie(sortie, "200 OK", "application/json; charset=utf-8", JsonPc.bilanTelephone(b).toString().toByteArray())
+            return
+        }
         if (r.methode == "POST" && chemin == "/api/import/adif") {
             val corps = RequeteHttp.corps(c.getInputStream(), r, 50L * 1024 * 1024)
             val b = if (corps == null || importPc == null) null else importPc.depuisAdif(String(corps, Charsets.UTF_8), q["enLigne"] == "1")
@@ -132,6 +142,19 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
             "/api/sked/video" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", (videoSked?.etat?.let { e ->
                 JSONObject().put("enCours", e.enCours).put("progression", e.progression.toDouble()).put("nom", e.nom).put("erreur", e.erreur) }
                 ?: JSONObject().put("absent", true)).toString().toByteArray())
+            "/api/telephone/liste" -> {
+                val t = telephone
+                val o = if (t == null || !t.connecte) JSONObject().put("ok", false)
+                    else runCatching { t.liste().put("ok", true).put("adresse", t.adresse).put("version", t.version) }
+                        .getOrElse { JSONObject().put("ok", false).put("erreur", "téléphone injoignable") }
+                envoie(sortie, "200 OK", "application/json; charset=utf-8", o.toString().toByteArray())
+            }
+            "/api/telephone/etat" -> {
+                val r2 = telephone?.rapatriement
+                val o = JSONObject().put("enCours", r2?.enCours == true).put("fait", r2?.fait ?: 0).put("total", r2?.total ?: 0)
+                    .put("bilans", JSONArray(r2?.bilans.orEmpty().map { JsonPc.bilanTelephone(it) }))
+                envoie(sortie, "200 OK", "application/json; charset=utf-8", o.toString().toByteArray())
+            }
             "/api/frise" -> {
                 val (debut, lignes) = kotlinx.coroutines.runBlocking { station.frise((q["h"]?.toIntOrNull() ?: 12).coerceIn(2, 48)) }
                 envoie(sortie, "200 OK", "application/json; charset=utf-8", JSONObject().put("debut", debut)
@@ -379,6 +402,15 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 if (!v.lance(VideoSked.Sked(tr, l("de"), l("a"), sat, station.settings.callsign.ifBlank { station.etat.value.locator }.uppercase(), loc)))
                     return JSONObject().put("ok", false).put("erreur", v.etat.erreur.ifBlank { "une vidéo est déjà en cours" })
             }
+            "/api/telephone/connecte" -> {
+                val t = telephone ?: return JSONObject().put("ok", false)
+                t.connecte(q["adresse"].orEmpty(), q["code"].orEmpty())?.let { return JSONObject().put("ok", false).put("erreur", it) }
+            }
+            "/api/telephone/rapatrie" -> {
+                val t = telephone ?: return JSONObject().put("ok", false)
+                val ids = q["ids"].orEmpty().split(',').map { it.trim() }.filter { it.isNotEmpty() }
+                if (!t.lanceRapatriement(ids, q["enLigne"] != "0")) return JSONObject().put("ok", false).put("erreur", "rien à faire, ou déjà en cours")
+            }
             "/api/qo100/frequence" -> q["hz"]?.toLongOrNull()?.let { station.qo100.descente(it) }
             "/api/qo100/pas" -> q["hz"]?.toLongOrNull()?.let { station.qo100.pas(it) }
             "/api/qo100/balise" -> station.qo100.balise()
@@ -544,6 +576,11 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
 
 /** The station as the page reads it. */
 object JsonPc {
+    fun bilanTelephone(b: TelephonePc.Bilan?): JSONObject =
+        if (b == null) JSONObject().put("ok", false).put("erreur", "fichier illisible ou trop gros")
+        else JSONObject().put("ok", b.erreur.isEmpty()).put("erreur", b.erreur).put("sat", b.satellite).put("de", b.debutMs)
+            .put("images", b.images).put("sons", b.sons).put("contacts", b.contacts).put("dejaLa", b.contactsDejaLa)
+
     /** METEOR: the receiver, the next pass, the pictures. */
     fun meteor(d: SdrPc): JSONObject {
         val m = d.meteor ?: return JSONObject().put("absent", true)
@@ -887,4 +924,15 @@ object JsonPc {
     fun ports(st: StationPc) = JSONArray(st.ports.liste().map {
         JSONObject().put("index", it.index).put("libelle", it.libelle).put("vendor", it.vendorId)
     })
+}
+
+/** [n] bytes of [e] at most: a request's body read as a stream. */
+private class Borne(private val e: java.io.InputStream, private var reste: Long) : java.io.InputStream() {
+    override fun read(): Int { if (reste <= 0) return -1; val b = e.read(); if (b >= 0) reste--; return b }
+    override fun read(b: ByteArray, off: Int, len: Int): Int {
+        if (reste <= 0) return -1
+        val n = e.read(b, off, minOf(len.toLong(), reste).toInt())
+        if (n > 0) reste -= n
+        return n
+    }
 }

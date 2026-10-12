@@ -71,7 +71,9 @@ fun main(args: Array<String>) {
     val journalWeb = JournalWebPc(journal, station, dossier)
     // A sked as a video, on the journal's map tiles.
     val videoSked = VideoSked(File(dossier, "exports")) { z, x, y -> journalWeb.tuile(z, x, y)?.let { f -> runCatching { javax.imageio.ImageIO.read(f) }.getOrNull() } }
-    val serveur = ServeurPc(station, port, reseau, carnet, son, journalWeb, ImportPc(station, carnet, journal), sdr, videoSked)
+    // SatMe on the phone: its passes, their contacts and pictures, to the PC.
+    val telephone = TelephonePc(carnet, journal, File(dossier, "enregistrements"), File(dossier, "sstv"), File(dossier, "tmp"))
+    val serveur = ServeurPc(station, port, reseau, carnet, son, journalWeb, ImportPc(station, carnet, journal), sdr, videoSked, telephone)
     serveur.demarre()
     println("SatMe — station PC")
     println("  page      : http://localhost:${serveur.portReel}/" + if (reseau) "  (ouverte au réseau)" else "")

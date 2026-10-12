@@ -60,7 +60,8 @@ class CarnetPc(private val station: StationPc, val store: LogStore, private val 
             fr.f4ioz.satcombo.domain.Indicatifs.suggestions(saisie, m, horloge(), station.etat.value.suivi?.name.orEmpty(), max = 4)
     }
 
-    private fun oublieMemoire() { memoire = null }
+    /** The memory of callsigns made again at the next key (contacts added from elsewhere). */
+    fun oublieMemoire() { memoire = null }
 
     /** Every contact with this station (whatever its suffix: /P, /M…), the newest first. */
     fun historique(indicatif: String): List<LogEntry> {

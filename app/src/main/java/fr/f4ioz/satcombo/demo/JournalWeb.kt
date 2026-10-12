@@ -125,7 +125,8 @@ object JournalWeb {
                 }
                 "image" -> JournalRendu.png(ctx, scene(ctx, j, e, surCarte, null, null, true, p), instant)
                 "gif" -> JournalRendu.gif(ctx, scene(ctx, j, e, surCarte, moment, titre, false, p)) { travail.progres = it }
-                "paquet" -> j.paquet(e)
+                // contacts=1 (the PC's SatMe, the same operator's): the pass's contacts in it whatever the setting.
+                "paquet" -> if (p("contacts") == "1") j.paquet(e, avecContacts = true) else j.paquet(e)
                 else -> JournalRendu.video(ctx, scene(ctx, j, e, surCarte, moment, titre, false, p),
                     if (opt(p, "avecSon", true)) morceaux else emptyList()) { travail.progres = it }
             }
