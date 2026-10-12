@@ -2037,7 +2037,7 @@ val FR: Map<String, String> = mapOf(
     "pc_pj_sous" to "Les passages suivis par la station PC, rejoués avec leur son, leurs contacts et leurs images SSTV.",
     "pc_pj_aucun" to "Aucun passage gardé sur ce PC pour l'instant : suis un satellite pendant son passage.",
     "pc_pj_station" to "Station",
-    "pc_pj_echec" to "Pas fabriqué ici : sur le PC, seul le son d'un moment (WAV) ; images, GIF et vidéos se font sur le téléphone.",
+    "pc_pj_echec" to "Pas fabriqué : rien à entendre dans ce morceau, ou ffmpeg absent de ce PC pour la vidéo. Sur le PC, les images suivent la vue ciel.",
     "pw_journal" to "Journal des passages",
     "pj_titre" to "Journal des passages",
     "pj_sous" to "Les passages gardés par le téléphone, rejoués en grand avec leur son. Le téléphone garde tout et fabrique les fichiers.",

@@ -2013,7 +2013,7 @@ val EN: Map<String, String> = mapOf(
     "pc_pj_sous" to "The passes followed by the PC station, replayed with their sound, contacts and SSTV pictures.",
     "pc_pj_aucun" to "No pass kept on this PC yet: follow a satellite during its pass.",
     "pc_pj_station" to "Station",
-    "pc_pj_echec" to "Not made here: on the PC, only a moment's sound (WAV); pictures, GIFs and videos are made on the phone.",
+    "pc_pj_echec" to "Not made: nothing to hear in this stretch, or no ffmpeg on this PC for the video. On the PC, pictures follow the sky view.",
     "pw_journal" to "Pass journal",
     "pj_titre" to "Pass journal",
     "pj_sous" to "The passes the phone kept, replayed large with their sound. The phone keeps everything and makes the files.",

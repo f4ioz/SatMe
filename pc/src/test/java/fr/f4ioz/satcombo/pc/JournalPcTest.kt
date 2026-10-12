@@ -95,7 +95,27 @@ class JournalPcTest {
         assertTrue(tr.getBoolean("ok"))
         val wav = web.sert("/fichier") { mapOf("n" to f.getString("travail"))[it].orEmpty() }.fichier!!
         assertEquals(20_000L, JournalPc.dureeWav(wav).toDouble().let { Math.round(it / 100) * 100 })
-        // The drawn exports stay the phone's.
-        assertTrue(lit("/fabrique", mapOf("id" to e.id, "quoi" to "video")).contains("\"ok\":false"))
+        // A picture of the moment, a GIF, and (ffmpeg there) a video with the pass's sound.
+        fun fabrique(quoi: String, extra: Map<String, String> = emptyMap()): File? {
+            val r = JSONObject(lit("/fabrique", mapOf("id" to e.id, "quoi" to quoi) + extra))
+            if (!r.getBoolean("ok")) return null
+            var tt: JSONObject
+            do { Thread.sleep(100); tt = JSONObject(lit("/travail", mapOf("n" to r.getString("travail")))) } while (!tt.getBoolean("fini"))
+            return web.sert("/fichier") { mapOf("n" to r.getString("travail"))[it].orEmpty() }.fichier
+        }
+        val png = fabrique("image", mapOf("t" to "${t0 + 125_000L}"))!!
+        val img = javax.imageio.ImageIO.read(png)
+        assertEquals(1080, img.width); assertEquals(1440, img.height)
+        System.getenv("SATME_CAPTURE")?.let { png.copyTo(File(it), overwrite = true) }
+        val gif = fabrique("gif")!!
+        assertTrue(gif.readBytes().copyOf(6).toString(Charsets.US_ASCII) == "GIF89a")
+        if (RenduPc.ffmpeg() != null) {
+            val mp4 = fabrique("video", mapOf("res" to "XS", "de" to "${t0 + 100_000L}", "a" to "${t0 + 130_000L}", "titre" to "QSO F5XYZ"))!!
+            assertTrue(mp4.length() > 10_000)
+            // Video and sound streams both there.
+            val sonde = ProcessBuilder(RenduPc.ffmpeg()!!.replace("ffmpeg", "ffprobe"), "-v", "error", "-show_entries", "stream=codec_type", "-of", "csv=p=0", mp4.path)
+                .redirectErrorStream(true).start().inputStream.bufferedReader().readText()
+            assertTrue(sonde, sonde.contains("video") && sonde.contains("audio"))
+        }
     }
 }

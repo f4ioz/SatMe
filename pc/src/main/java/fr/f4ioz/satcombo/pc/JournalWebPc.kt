@@ -152,19 +152,29 @@ class JournalWebPc(private val j: JournalPc, private val station: StationPc, pri
             }
             "/fabrique" -> {
                 val e = j.passage(p("id")) ?: return NON
-                // A moment's sound, here; the drawn exports are the phone's for now.
-                if (p("quoi") != "son") return json("{\"ok\":false,\"raison\":\"telephone\"}")
+                val quoi = p("quoi").takeIf { it in setOf("son", "image", "gif", "video") }
+                    ?: return json("{\"ok\":false,\"raison\":\"telephone\"}")
+                if (quoi == "video" && RenduPc.ffmpeg() == null) return json("{\"ok\":false,\"raison\":\"ffmpeg\"}")
                 val de = p("de").toLongOrNull(); val a = p("a").toLongOrNull()
-                val r = if (de != null && a != null && a > de) de..a else e.debutMs..e.finMs
+                val moment = if (de != null && a != null && a > de) de..a else null
+                val r = moment ?: (e.debutMs..e.finMs)
                 val n = "t" + System.currentTimeMillis().toString(36) + (100..999).random()
                 val t = Travail(); travaux[n] = t
                 if (travaux.size > 20) travaux.keys.sorted().take(travaux.size - 20).forEach { travaux.remove(it) }
                 kotlin.concurrent.thread(name = "JournalWebPc", isDaemon = true) {
                     val sortie = File(dossier, "exports").apply { mkdirs() }
+                    val ext = when (quoi) { "son" -> ".wav"; "image" -> ".png"; "gif" -> ".gif"; else -> ".mp4" }
                     val nom = "SatMe_" + e.satName.replace(Regex("[^A-Za-z0-9-]"), "-") + "_" +
                         java.text.SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).apply { timeZone = java.util.TimeZone.getTimeZone("UTC") }
-                            .format(java.util.Date(r.first)) + "Z_" + (p("titre").take(30).replace(Regex("[^A-Za-z0-9-]"), "-").ifBlank { "son" }) + ".wav"
-                    t.fichier = runCatching { j.extraitWav(e, r.first, r.last, sortie, nom) }.getOrNull()
+                            .format(java.util.Date(r.first)) + "Z_" + (p("titre").take(30).replace(Regex("[^A-Za-z0-9-]"), "-").ifBlank { if (moment != null) "moment" else "passage" }) + ext
+                    t.fichier = runCatching {
+                        when (quoi) {
+                            "son" -> j.extraitWav(e, r.first, r.last, sortie, nom)
+                            "image" -> RenduPc.png(scene(e, null, null, true, p), p("t").toLongOrNull(), File(sortie, nom))
+                            "gif" -> RenduPc.gif(scene(e, moment, p("titre"), false, p), File(sortie, nom)) { t.progres = it }
+                            else -> video(e, scene(e, moment, p("titre"), false, p), opt(p, "avecSon", true), File(sortie, nom), sortie) { t.progres = it }
+                        }
+                    }.getOrNull()
                     t.progres = 1f; t.fini = true
                 }
                 json("{\"ok\":true,\"travail\":\"$n\"}")
@@ -175,12 +185,41 @@ class JournalWebPc(private val j: JournalPc, private val station: StationPc, pri
             }
             "/fichier" -> {
                 val f = travaux[p("n")]?.fichier ?: return NON
-                ReponseWeb("200 OK", "audio/wav", fichier = f,
+                val type = when (f.extension) { "png" -> "image/png"; "gif" -> "image/gif"; "mp4" -> "video/mp4"; else -> "audio/wav" }
+                ReponseWeb("200 OK", type, fichier = f,
                     entetes = if (p("voir") == "1") "" else "Content-Disposition: attachment; filename=\"${f.name}\"\r\n")
             }
             else -> NON
         }
     }.getOrElse { json("{\"ok\":false,\"raison\":\"${js(it.javaClass.simpleName)}\"}") }
+
+    /** What a picture, a GIF or a video shows, from the page's options (else the settings). */
+    private fun scene(e: JournalPassage.Entree, moment: LongRange?, titre: String?, image: Boolean, p: (String) -> String): RenduPc.Scene {
+        val l = j.liens(e)
+        val marques = j.marques(l)
+        return RenduPc.Scene(e, j.prevue(e), marques, s.callsign, flashS(),
+            affSstv = opt(p, "sstv", affSstv()), affFiches = opt(p, "fiches", s.journalAffFiches),
+            affSmetre = opt(p, "smetre", s.journalAffSmetre), affFreq = opt(p, "freq", s.journalAffFreq), affTx = opt(p, "tx", s.journalAffTx),
+            ouverture = opt(p, "ouverture", s.journalOuverture) && !image, recap = opt(p, "recap", s.journalRecap) && moment == null && !image,
+            fiches = j.fiches(l),
+            segments = moment?.let { listOf(JournalPassage.Segment(it.first, it.last, 1)) }
+                ?: if (!image && opt(p, "accelere", false)) segments(e, marques, p) else null,
+            titreExtrait = if (moment != null) titre?.trim()?.ifBlank { null } else null,
+            frequences = frequences(e, l), resolution = p("res").takeIf { it in setOf("XS", "M", "HD") } ?: s.journalVideoRes)
+    }
+
+    /** The video, with the pass's sound when asked and recorded (the opening title's seconds silent). */
+    private fun video(e: JournalPassage.Entree, sc: RenduPc.Scene, avecSon: Boolean, sortie: File, travail: File, progres: (Float) -> Unit): File? {
+        val morceaux = if (avecSon) j.morceaux(e) else emptyList()
+        val segs = sc.segments
+        val deSon = minOf(e.debutMs, segs?.firstOrNull()?.deMs ?: e.debutMs)
+        val aSon = maxOf(e.finMs, segs?.lastOrNull()?.aMs ?: e.finMs)
+        val son = if (morceaux.isNotEmpty()) fr.f4ioz.satcombo.domain.SonPassage.fabrique(morceaux, deSon, aSon, travail, JournalPc.decodeur) else null
+        return try {
+            val titre = if (sc.ouverture && son != null) 3 * son.rate else 0
+            RenduPc.video(sc, sortie, son?.source(deSon, segs, titre), son?.rate ?: 22_050, travail, progres)
+        } finally { son?.close() }
+    }
 
     private val client by lazy { okhttp3.OkHttpClient() }
 
