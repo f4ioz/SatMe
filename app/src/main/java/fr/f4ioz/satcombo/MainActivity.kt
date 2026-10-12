@@ -147,12 +147,14 @@ class MainActivity : ComponentActivity() {
     /** A notification tap carries the satellite to open. */
     private fun handleOpenIntent(intent: android.content.Intent?) {
         // Development builds only: open a screen with something to show, for trying it on an emulator
-        // (adb shell am start -n fr.f4ioz.satcombo/.MainActivity --es essai sked|sonde [--es loc IN80]).
+        // (adb shell am start -n fr.f4ioz.satcombo/.MainActivity --es essai sked|sonde|sdr [--es loc IN80] [--es reseau 10.0.2.2:1234]).
         if ((applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0) {
             when (intent?.getStringExtra("essai")) {
                 "sked" -> { vm.openSked(); vm.setSkedSat(intent.getIntExtra("cat", 25544))
                     vm.setSkedOtherLoc(intent.getStringExtra("loc") ?: "IN80"); vm.computeSkedPlans() }
                 "sonde" -> { vm.openSonde(); vm.essaiSonde() }
+                "sdr" -> { intent.getStringExtra("reseau")?.let { fr.f4ioz.satcombo.data.SettingsStore(this).sdrReseau = it }
+                    vm.openSdr(); vm.startSdr() }
             }
         }
         val cat = intent?.getIntExtra("open_catnum", -1) ?: -1

@@ -5992,7 +5992,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             if (now > meteorAutoLos + 30_000L) { meteorAutoArme = 0; stopSdr() }
             return
         }
-        if (sdr.isRunning || sdr.devicePresent(getApplication()) == null) return
+        if (sdr.isRunning || !sdr.disponible(getApplication())) return
         val (sat, pass) = meteorProchainPassage(2) ?: return
         if (now < pass.aosEpochMs - 60_000L || now >= pass.losEpochMs) return
         meteorAutoArme = sat.catalogNumber

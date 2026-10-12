@@ -36,7 +36,7 @@ import java.nio.ByteBuffer
  *
  * WARNING: beta. Not validated on hardware in the build environment.
  */
-class RtlSdr(private val ctx: Context) {
+class RtlSdr(private val ctx: Context) : fr.f4ioz.satcombo.sdr.SourceIq {
 
     companion object {
         const val ACTION_USB_PERMISSION = "fr.f4ioz.satcombo.SDR_USB_PERMISSION"
@@ -346,7 +346,7 @@ class RtlSdr(private val ctx: Context) {
         return true
     }
 
-    fun close() {
+    override fun close() {
         val c = conn
         if (c != null) {
             stopStream()
@@ -415,7 +415,7 @@ class RtlSdr(private val ctx: Context) {
     // -------------------------------------------------------------- settings
 
     /** Sets the sample rate; returns the actual rate, or 0 if refused. */
-    fun setSampleRate(rate: Int): Double {
+    override fun setSampleRate(rate: Int): Double {
         if (!RtlTuning.rateSupported(rate)) { lastError = "débit non supporté"; return 0.0 }
         val ratio = RtlTuning.resampRatio(rate)
         demodWriteReg(1, 0x9f, (ratio shr 16) and 0xffff, 2)
@@ -427,14 +427,14 @@ class RtlSdr(private val ctx: Context) {
     }
 
     /** Clock correction, ppm. */
-    fun setFreqCorrection(ppm: Int) {
+    override fun setFreqCorrection(ppm: Int) {
         val r = RtlTuning.freqCorrectionRegs(ppm)
         demodWriteReg(1, 0x3f, r[0], 1)
         demodWriteReg(1, 0x3e, r[1], 1)
     }
 
     /** Sets the centre frequency; returns the achieved one, or 0. */
-    fun setCenterFreq(hz: Long): Long {
+    override fun setCenterFreq(hz: Long): Long {
         if (conn == null) return 0L
         val lo = hz + RtlTuning.IF_FREQ
         i2cRepeater(true)
@@ -450,7 +450,7 @@ class RtlSdr(private val ctx: Context) {
     }
 
     /** Tuner gain in tenths of dB, or null for auto. */
-    fun setGain(tenthDb: Int?) {
+    override fun setGain(tenthDb: Int?) {
         i2cRepeater(true)
         try {
             if (tenthDb == null) {
@@ -471,14 +471,14 @@ class RtlSdr(private val ctx: Context) {
     }
 
     /** RTL2832U digital AGC (independent of tuner gain). */
-    fun setAgc(on: Boolean) {
+    override fun setAgc(on: Boolean) {
         demodWriteReg(0, 0x19, if (on) 0x25 else 0x05, 1)
     }
 
     // ------------------------------------------------------------- IQ stream
 
     /** Flushes USB buffers before reading. */
-    fun resetBuffer() {
+    override fun resetBuffer() {
         writeReg(BLOCK_USB, USB_EPA_CTL, 0x1002, 2)
         writeReg(BLOCK_USB, USB_EPA_CTL, 0x0000, 2)
     }
@@ -491,7 +491,7 @@ class RtlSdr(private val ctx: Context) {
      * overflow. Fine to check a dongle answers, not to decode SSTV. The normal
      * path is [startStream]/[readStream].
      */
-    fun read(buf: ByteArray, timeoutMs: Int = 1000): Int {
+    override fun read(buf: ByteArray, timeoutMs: Int): Int {
         val c = conn ?: return -1
         val e = epIn ?: return -1
         return c.bulkTransfer(e, buf, minOf(buf.size, XFER), timeoutMs)
@@ -511,7 +511,7 @@ class RtlSdr(private val ctx: Context) {
      *
      * Eight 16 KB buffers = 128 KB, ~60 ms of margin: plenty for a load spike.
      */
-    fun startStream(depth: Int = 8): Boolean {
+    override fun startStream(depth: Int): Boolean {
         stopStream()
         val c = conn ?: return false
         val e = epIn ?: return false
@@ -532,7 +532,7 @@ class RtlSdr(private val ctx: Context) {
      * Waits for the next completed transfer, copies it and requeues the request
      * at once. Returns bytes read, 0 on timeout, -1 if the link is dead.
      */
-    fun readStream(out: ByteArray, timeoutMs: Long): Int {
+    override fun readStream(out: ByteArray, timeoutMs: Long): Int {
         val c = conn ?: return -1
         if (inflight.isEmpty()) return -1
         val r = try {
@@ -555,7 +555,7 @@ class RtlSdr(private val ctx: Context) {
     }
 
     /** Cancels in-flight transfers. Call before closing the connection. */
-    fun stopStream() {
+    override fun stopStream() {
         for (r in inflight) {
             runCatching { r.cancel() }
             runCatching { r.close() }

@@ -37,7 +37,7 @@ import kotlin.concurrent.thread
  * as it is, I and Q would swap from then on (the spectrum turned over).
  * The odd byte waits for the next block.
  */
-class RtlTcp private constructor(private val socket: Socket, val tuner: Int, val nbGains: Int) : Closeable {
+class RtlTcp private constructor(private val socket: Socket, val tuner: Int, val nbGains: Int) : SourceIq {
 
     private val sortie: OutputStream = socket.getOutputStream()
     private val file = ArrayBlockingQueue<ByteArray>(PROFONDEUR)
@@ -74,14 +74,14 @@ class RtlTcp private constructor(private val socket: Socket, val tuner: Int, val
         synchronized(sortie) { sortie.write(b); sortie.flush() }
     }
 
-    fun setSampleRate(hz: Int) = commande(0x02, hz)
+    override fun setSampleRate(rate: Int): Double { commande(0x02, rate); return rate.toDouble() }
     /** The centre frequency; rtl_tcp says nothing back, so the request is returned. */
-    fun setCenterFreq(hz: Long): Long { commande(0x01, hz.toInt()); return hz }
-    fun setFreqCorrection(ppm: Int) = commande(0x05, ppm)
+    override fun setCenterFreq(hz: Long): Long { commande(0x01, hz.toInt()); return hz }
+    override fun setFreqCorrection(ppm: Int) = commande(0x05, ppm)
     /** The RTL2832's digital AGC. */
-    fun setAgc(on: Boolean) = commande(0x08, if (on) 1 else 0)
+    override fun setAgc(on: Boolean) = commande(0x08, if (on) 1 else 0)
     /** The tuner's gain in tenths of dB (the nearest of its table), or null: automatic. */
-    fun setGain(tenthDb: Int?) {
+    override fun setGain(tenthDb: Int?) {
         if (tenthDb == null) commande(0x03, 0)
         else { commande(0x03, 1); commande(0x04, tenthDb) }
     }
@@ -92,6 +92,8 @@ class RtlTcp private constructor(private val socket: Socket, val tuner: Int, val
      * The next block of IQ bytes (an even count) into [buf]: its length, 0
      * when nothing came within [attenteMs], -1 once the connection is gone.
      */
+    override fun read(buf: ByteArray, timeoutMs: Int): Int = read(buf, timeoutMs.toLong())
+
     fun read(buf: ByteArray, attenteMs: Long): Int {
         val b = file.poll(attenteMs, TimeUnit.MILLISECONDS) ?: return if (ouvert || file.isNotEmpty()) 0 else -1
         val n = minOf(b.size, buf.size) and 1.inv()

@@ -415,6 +415,15 @@ class SettingsStore(private val prefs: Stockage) {
         get() = prefs.getInt("sdr_ppm", 0)
         set(v) { prefs.edit().putInt("sdr_ppm", v).apply() }
 
+    /**
+     * An RTL-SDR dongle on the network (rtl_tcp, on a PC or a small computer
+     * by the antenna): "host" or "host:port"; empty: the dongle plugged into
+     * the phone.
+     */
+    var sdrReseau: String
+        get() = prefs.getString("sdr_reseau", "") ?: ""
+        set(v) { prefs.edit().putString("sdr_reseau", v.trim()).apply() }
+
     /** Decode SSTV straight from the dongle. */
     var sdrSstv: Boolean
         get() = prefs.getBoolean("sdr_sstv", true)

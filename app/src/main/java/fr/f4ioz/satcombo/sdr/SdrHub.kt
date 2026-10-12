@@ -171,7 +171,7 @@ object SdrHub {
     /** How long [stopWorker] waits before force-closing the dongle. */
     private const val WORKER_JOIN_MS = 1500L
 
-    private var sdr: RtlSdr? = null
+    private var sdr: SourceIq? = null
     private var worker: Thread? = null
     @Volatile private var running = false
     /**
@@ -254,6 +254,13 @@ object SdrHub {
     // ------------------------------------------------------------ detection
 
     /** Is a known dongle plugged in? Says nothing about permission. */
+    /** The dongle on the network set in the settings ("host" or "host:port"), or empty. */
+    fun reseau(ctx: Context): String =
+        runCatching { fr.f4ioz.satcombo.data.SettingsStore(ctx).sdrReseau.trim() }.getOrDefault("")
+
+    /** A dongle to receive with: plugged in, or set on the network. */
+    fun disponible(ctx: Context): Boolean = reseau(ctx).isNotEmpty() || devicePresent(ctx) != null
+
     fun devicePresent(ctx: Context): UsbDevice? {
         val um = ctx.getSystemService(Context.USB_SERVICE) as? UsbManager ?: return null
         return runCatching { RtlSdr.find(um) }.getOrNull()
@@ -387,6 +394,8 @@ object SdrHub {
      * UI think no dongle was there as soon as playback stopped.
      */
     fun refreshPresence(ctx: Context) {
+        val r = reseau(ctx)
+        if (r.isNotEmpty()) { _state.value = _state.value.copy(connected = true, deviceName = "rtl_tcp $r"); return }
         val d = devicePresent(ctx)
         _state.value = _state.value.copy(
             connected = d != null,
@@ -427,6 +436,10 @@ object SdrHub {
         }
         val app = ctx.applicationContext
         appCtx = app
+        // A dongle on the network, when one is set: reached off the main thread.
+        val adresse = reseau(app)
+        if (adresse.isNotEmpty()) return startReseau(app, adresse, satName, restHz, gainTenthDb, agc, ppm, sstv, record, audio,
+            mode, bandwidthHz, squelchDb, offsetHz)
         val um = app.getSystemService(Context.USB_SERVICE) as? UsbManager
         if (um == null) { fail("usb_unavailable"); return false }
         val dev = RtlSdr.find(um)
@@ -454,7 +467,49 @@ object SdrHub {
         val tuned = s.setCenterFreq(restHz)
         // Buffer reset is done right before queuing transfers, not here:
         // meanwhile the RTL2832 FIFO would fill with no reader and overflow.
+        lance(app, s, deviceLabel(dev), rate, tuned, satName, restHz, gainTenthDb, sstv, record, audio, mode, bandwidthHz, squelchDb, offsetHz)
+        return true
+    }
 
+    /**
+     * The dongle on the network (rtl_tcp): connected on a thread of its own —
+     * never the main thread — then reception as for the one plugged in.
+     * Running from now on, so the Doppler loop does not give up while it
+     * connects; a stop meanwhile is kept (the connection closed at once).
+     */
+    private fun startReseau(app: Context, adresse: String, satName: String, restHz: Long, gainTenthDb: Int?, agc: Boolean, ppm: Int,
+                            sstv: Boolean, record: Boolean, audio: Boolean, mode: RxMode, bandwidthHz: Int, squelchDb: Int, offsetHz: Int): Boolean {
+        val hote = adresse.substringBeforeLast(':').ifBlank { adresse }
+        val port = adresse.substringAfterLast(':', "").toIntOrNull() ?: RtlTcp.PORT
+        val nom = "rtl_tcp $adresse"
+        running = true
+        pendingHz = restHz
+        workerAlive = true
+        val g0 = generation
+        _state.value = _state.value.copy(awaitingPermission = false, error = null, deviceName = nom, connected = true)
+        thread(name = "SdrReseau", isDaemon = true) {
+            val s = runCatching { RtlTcp.connecte(hote, port) }.getOrNull()
+            workerAlive = false
+            if (s == null) { running = false; fail("sdr_reseau"); return@thread }
+            runCatching {
+                val rate = s.setSampleRate(Dsp.RTL_RATE)
+                if (ppm != 0) s.setFreqCorrection(ppm)
+                s.setAgc(agc)
+                s.setGain(gainTenthDb)
+                val tuned = s.setCenterFreq(pendingHz.takeIf { it > 0 } ?: restHz)
+                synchronized(this@SdrHub) {
+                    // Stopped while connecting: nothing started.
+                    if (!running || generation != g0) { s.close(); return@thread }
+                    lance(app, s, nom, rate, tuned, satName, restHz, gainTenthDb, sstv, record, audio, mode, bandwidthHz, squelchDb, offsetHz)
+                }
+            }.onFailure { runCatching { s.close() }; running = false; fail("sdr_reseau") }
+        }
+        return true
+    }
+
+    /** Reception on [s], opened and set: the session's state, the decoders, the reading thread. */
+    private fun lance(app: Context, s: SourceIq, nomCle: String, rate: Double, tuned: Long, satName: String, restHz: Long, gainTenthDb: Int?,
+                      sstv: Boolean, record: Boolean, audio: Boolean, mode: RxMode, bandwidthHz: Int, squelchDb: Int, offsetHz: Int) {
         sdr = s
         pendingHz = restHz
         wantAudio = audio
@@ -468,7 +523,7 @@ object SdrHub {
         running = true
         _state.value = SdrState(
             connected = true,
-            deviceName = deviceLabel(dev),
+            deviceName = nomCle,
             running = true,
             restHz = restHz,
             centerHz = if (tuned > 0) tuned else restHz,
@@ -507,7 +562,6 @@ object SdrHub {
         worker = thread(name = "SdrReader", isDaemon = true) {
             runLoop(gen, s, satName, recFile)
         }
-        return true
     }
 
     private fun newRecordFile(ctx: Context, satName: String): File {
@@ -525,7 +579,7 @@ object SdrHub {
 
     // --------------------------------------------------------------- loop
 
-    private fun runLoop(gen: Int, s: RtlSdr, satName: String, recFile: File?) {
+    private fun runLoop(gen: Int, s: SourceIq, satName: String, recFile: File?) {
         /** Is this session still the current one? */
         fun mine() = gen == generation
         val chain = RxChain()
@@ -992,7 +1046,7 @@ object SdrHub {
         if (aprsSdr) { runCatching { fr.f4ioz.satcombo.aprs.AprsHub.stopLive() }; aprsSdr = false }
         _spectrum.value = FloatArray(0)
         _panorama.value = FloatArray(0)
-        val present = appCtx?.let { devicePresent(it) != null } ?: false
+        val present = appCtx?.let { disponible(it) } ?: false
         _state.value = _state.value.copy(
             running = false, connected = present, levelDb = -120f, sstv = false)
     }

@@ -87,10 +87,10 @@ fun SondeScreen(ui: UiState, vm: MainViewModel) {
     val st by SondeHub.state.collectAsState()
     val sdr by SdrHub.state.collectAsState()
 
-    var present by remember { mutableStateOf(SdrHub.devicePresent(ctx) != null) }
+    var present by remember { mutableStateOf(SdrHub.disponible(ctx)) }
     LaunchedEffect(Unit) {
         while (true) {
-            present = SdrHub.devicePresent(ctx) != null
+            present = SdrHub.disponible(ctx)
             kotlinx.coroutines.delay(1500)
         }
     }

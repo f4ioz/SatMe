@@ -305,10 +305,10 @@ fun SdrInline(ui: UiState, vm: MainViewModel) {
 
     // The dongle may be plugged in mid-pass: poll rather than wait for an
     // event, as on the full SDR screen.
-    var present by remember { mutableStateOf(SdrHub.devicePresent(ctx) != null) }
+    var present by remember { mutableStateOf(SdrHub.disponible(ctx)) }
     LaunchedEffect(Unit) {
         while (true) {
-            present = SdrHub.devicePresent(ctx) != null
+            present = SdrHub.disponible(ctx)
             delay(2000)
         }
     }
@@ -525,8 +525,8 @@ private fun MeteorInlineCard(ui: UiState, vm: MainViewModel) {
     val ctx = LocalContext.current
     val m by fr.f4ioz.satcombo.meteor.MeteorHub.etat.collectAsState()
     val sdr by SdrHub.state.collectAsState()
-    var cle by remember { mutableStateOf(SdrHub.devicePresent(ctx) != null) }
-    LaunchedEffect(Unit) { while (true) { cle = SdrHub.devicePresent(ctx) != null; delay(2000) } }
+    var cle by remember { mutableStateOf(SdrHub.disponible(ctx)) }
+    LaunchedEffect(Unit) { while (true) { cle = SdrHub.disponible(ctx); delay(2000) } }
     val actif = m.actif && sdr.running
     val accent = if (m.verrou) Aurora else if (actif) Cyan else TextLo
     Surface(color = SpaceCard, shape = RoundedCornerShape(12.dp),

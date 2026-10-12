@@ -72,11 +72,11 @@ fun SdrScreen(ui: UiState, vm: MainViewModel) {
 
     // The dongle may be plugged in after the screen opens: poll rather than
     // wait for a system event.
-    var present by remember { mutableStateOf(SdrHub.devicePresent(ctx) != null) }
+    var present by remember { mutableStateOf(SdrHub.disponible(ctx)) }
     var volumeZero by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
         while (true) {
-            present = SdrHub.devicePresent(ctx) != null
+            present = SdrHub.disponible(ctx)
             volumeZero = SdrHub.musicVolumeZero(ctx)
             delay(1500)
         }
@@ -458,6 +458,25 @@ fun SdrScreen(ui: UiState, vm: MainViewModel) {
                             ) { Text(if (d > 0) "+$d" else "$d", fontSize = 12.sp) }
                         }
                     }
+
+                    // A dongle on the network: rtl_tcp on a PC or a small computer by the antenna.
+                    Spacer(Modifier.height(14.dp))
+                    Text(t("sdr_reseau"), color = TextHi, fontSize = 13.sp)
+                    Spacer(Modifier.height(4.dp))
+                    var adresse by remember { mutableStateOf(fr.f4ioz.satcombo.data.SettingsStore(ctx).sdrReseau) }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        androidx.compose.material3.OutlinedTextField(
+                            value = adresse, onValueChange = { adresse = it.trim() },
+                            placeholder = { Text("192.168.1.20:1234", fontSize = 13.sp) },
+                            singleLine = true, enabled = !st.running,
+                            modifier = Modifier.weight(1f))
+                        Spacer(Modifier.width(8.dp))
+                        OutlinedButton(enabled = !st.running, onClick = {
+                            fr.f4ioz.satcombo.data.SettingsStore(ctx).sdrReseau = adresse
+                            SdrHub.refreshPresence(ctx)
+                        }) { Text(t("save"), fontSize = 12.sp) }
+                    }
+                    Text(t("sdr_reseau_desc"), color = TextLo, fontSize = 11.sp)
                 }
             }
         }
