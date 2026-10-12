@@ -79,7 +79,7 @@ object PagePc {
   <span class="g" id="info-station"></span>
   <span class="g" id="cat-statut-court"></span>
   <nav id="onglets">
-    <button data-v="station" class="actif">Station</button><button data-v="carnet">Carnet</button><button data-v="agenda">Agenda</button><button data-v="carres">Carrés</button><button data-v="son">Son</button><button data-v="sstv">SSTV</button><button data-v="aprs">APRS</button><a href="/journal" style="text-decoration:none"><button title="Les passages enregistrés, rejoués">Journal</button></a><button data-v="reglages">Réglages</button>
+    <button data-v="station" class="actif">Station</button><button data-v="carnet">Carnet</button><button data-v="agenda">Agenda</button><button data-v="carres">Carrés</button><button data-v="frise">Frise</button><button data-v="sked">Sked</button><button data-v="son">Son</button><button data-v="sstv">SSTV</button><button data-v="aprs">APRS</button><a href="/journal" style="text-decoration:none"><button title="Les passages enregistrés, rejoués">Journal</button></a><button data-v="reglages">Réglages</button>
   </nav>
   <span id="rec" class="pastille" style="display:none;background:rgba(229,72,77,.2);color:var(--rose)"></span>
   <span id="heure"></span>
@@ -380,6 +380,36 @@ object PagePc {
       <canvas id="q-carte" style="width:100%;height:calc(100vh - 110px);display:block;cursor:grab"></canvas>
       <div class="petit" style="position:absolute;right:6px;bottom:4px;background:rgba(255,255,255,.75);color:#333;padding:0 4px;border-radius:3px">© OpenStreetMap</div>
       <div class="petit" style="position:absolute;left:8px;top:6px;background:rgba(11,16,22,.75);padding:2px 8px;border-radius:6px">glisser, molette ; double-clic : recadrer · <span style="color:#3FE0C8">■</span> contacté · <span style="color:#FFB454">■</span> mon carré</div>
+    </div>
+  </div>
+</div>
+</div>
+<div class="vue" id="v-frise" hidden>
+<div style="padding:12px 16px">
+  <div class="carte">
+    <div class="ligne" style="margin-top:0"><span class="t" style="margin:0">Frise des passages</span>
+      <span class="petit">les ★ favoris, le satellite suivi et ceux de l'agenda · clic : le suivre</span>
+      <select id="f-h" style="margin-left:auto;max-width:120px" onchange="chargeFrise()"><option value="6">6 h</option><option value="12" selected>12 h</option><option value="24">24 h</option><option value="48">48 h</option></select></div>
+    <canvas id="f-canvas" style="width:100%;display:block;margin-top:8px;cursor:pointer"></canvas>
+  </div>
+</div>
+</div>
+<div class="vue" id="v-sked" hidden>
+<div class="grille2">
+  <div>
+    <div class="carte">
+      <div class="t">Sked avec une autre station</div>
+      <div class="ligne" style="margin-top:0"><input id="k-loc" placeholder="Son carré (IN80, FN31…)" style="text-transform:uppercase"></div>
+      <div class="ligne"><select id="k-sat"></select></div>
+      <div class="ligne"><span class="petit">Il voit au-dessus de</span><input id="k-min" value="0" style="max-width:60px"><span class="petit">°</span>
+        <button class="primaire" onclick="calculeSked()">Chercher</button></div>
+      <div class="petit" style="margin-top:6px">Les fenêtres des 48 h où vous voyez tous deux le satellite (une minute au moins), avec l'élévation maximale de chaque côté.</div>
+      <div class="etat" id="k-etat"></div>
+    </div>
+  </div>
+  <div>
+    <div class="carte">
+      <table><thead><tr><th>Début</th><th>Fin</th><th>Durée</th><th>Moi</th><th>Lui</th><th></th></tr></thead><tbody id="k-liste"></tbody></table>
     </div>
   </div>
 </div>
@@ -742,6 +772,8 @@ function vue(n) {
   if (n === 'son' || n === 'sstv') ticSon();
   if (n === 'aprs') ticAprs();
   if (n === 'carres') chargeCarres();
+  if (n === 'frise') chargeFrise();
+  if (n === 'sked') prepareSked();
 }
 document.querySelectorAll('#onglets button[data-v]').forEach(b => b.onclick = () => vue(b.dataset.v));
 
@@ -1001,6 +1033,87 @@ function dessineCarres() {
   window.addEventListener('resize', dessineCarres);
 })();
 
+// ------------------------------------------------------------------ timeline
+let F = null;
+async function chargeFrise() {
+  try { F = await (await fetch('/api/frise?h=' + g('f-h').value)).json(); } catch (x) { return; }
+  dessineFrise();
+}
+function dessineFrise() {
+  const c = g('f-canvas'); if (!F || g('v-frise').hidden) return;
+  const ligneH = 44, haut = 26, gauche = 120, n = F.lignes.length;
+  const w = c.clientWidth, h = haut + Math.max(1, n) * ligneH + 6, dpr = window.devicePixelRatio || 1;
+  c.style.height = h + 'px'; c.width = Math.round(w * dpr); c.height = Math.round(h * dpr);
+  const x = c.getContext('2d'); x.setTransform(dpr, 0, 0, dpr, 0, 0);
+  x.fillStyle = '#131C24'; x.fillRect(0, 0, w, h);
+  const minutes = F.lignes.length ? F.lignes[0].el.length : (+g('f-h').value) * 60;
+  const tx = k => gauche + (w - gauche - 8) * k / minutes;
+  // The hours.
+  x.font = '11px system-ui'; x.fillStyle = '#9AA7B4'; x.textAlign = 'center';
+  for (let k = 0; k <= minutes; k++) {
+    const t = F.debut + k * 60000, d = new Date(t), mn = utc() ? d.getUTCMinutes() : d.getMinutes(), hh = utc() ? d.getUTCHours() : d.getHours();
+    if (mn !== 0) continue;
+    const pas = minutes > 1440 ? 6 : minutes > 720 ? 3 : 1;
+    if (hh % pas) continue;
+    x.strokeStyle = '#22303B'; x.beginPath(); x.moveTo(tx(k), haut - 6); x.lineTo(tx(k), h); x.stroke();
+    x.fillText(String(hh).padStart(2, '0') + 'h', tx(k), 14);
+  }
+  if (!n) { x.textAlign = 'left'; x.fillText('Aucun satellite : marque des ★ favoris (onglet Station).', gauche, haut + 24); return; }
+  F.lignes.forEach((l, i) => {
+    const y0 = haut + i * ligneH, base = y0 + ligneH - 6;
+    x.textAlign = 'left'; x.font = (E && E.suivi && E.suivi.catnum === l.catnum ? 'bold ' : '') + '13px system-ui';
+    x.fillStyle = E && E.suivi && E.suivi.catnum === l.catnum ? '#3FE0C8' : '#E8F0F7'; x.fillText(l.nom.slice(0, 16), 8, base - 10);
+    x.strokeStyle = '#22303B'; x.beginPath(); x.moveTo(gauche, base); x.lineTo(w - 8, base); x.stroke();
+    // Each pass as the hill of its elevation, its top written.
+    let k = 0;
+    while (k < l.el.length) {
+      if (l.el[k] <= 0) { k++; continue; }
+      let j = k, top = 0, kTop = k;
+      while (j < l.el.length && l.el[j] > 0) { if (l.el[j] > top) { top = l.el[j]; kTop = j; } j++; }
+      x.beginPath(); x.moveTo(tx(k), base);
+      for (let m = k; m < j; m++) x.lineTo(tx(m), base - (ligneH - 12) * l.el[m] / 90);
+      x.lineTo(tx(j - 1), base); x.closePath();
+      x.fillStyle = top >= 40 ? 'rgba(91,214,138,.75)' : top >= 15 ? 'rgba(63,224,200,.6)' : 'rgba(154,167,180,.45)'; x.fill();
+      x.fillStyle = '#E8F0F7'; x.font = '10px system-ui'; x.textAlign = 'center';
+      if (tx(j) - tx(k) > 18) x.fillText(Math.round(top) + '°', tx(kTop), base - (ligneH - 12) * top / 90 - 2);
+      k = j;
+    }
+  });
+  // Now.
+  x.strokeStyle = '#FFB454'; x.lineWidth = 2; x.beginPath(); x.moveTo(tx((Date.now() - F.debut) / 60000), haut - 6); x.lineTo(tx((Date.now() - F.debut) / 60000), h); x.stroke(); x.lineWidth = 1;
+  c.onclick = ev => { const r = c.getBoundingClientRect(), i = Math.floor((ev.clientY - r.top - haut) / ligneH); if (F.lignes[i]) suivre(F.lignes[i].catnum); };
+}
+setInterval(() => { if (!g('v-frise').hidden) chargeFrise(); }, 60000);
+window.addEventListener('resize', dessineFrise);
+
+// ------------------------------------------------------------------ skeds
+let satsSked = '';
+async function prepareSked() {
+  if (!tous.length) await chargeSatellites();
+  const cle = tous.map(s => s.catnum).join();
+  if (cle !== satsSked) {
+    satsSked = cle;
+    g('k-sat').innerHTML = tous.map(s => '<option value="' + s.catnum + '">' + esc(s.nom) + '</option>').join('');
+    if (E && E.suivi) g('k-sat').value = String(E.suivi.catnum);
+  }
+  try { const l = localStorage.getItem('sked-loc'); if (l && !v('k-loc')) g('k-loc').value = l; } catch (x) {}
+}
+let K = [];
+async function calculeSked() {
+  const loc = v('k-loc').toUpperCase(); if (!loc) return;
+  try { localStorage.setItem('sked-loc', loc); } catch (x) {}
+  txt('k-etat', 'calcul…');
+  let j = null;
+  try { j = await (await fetch('/api/sked?catnum=' + g('k-sat').value + '&loc=' + enc(loc) + '&minEl=' + enc(v('k-min')))).json(); } catch (x) {}
+  if (!j || !j.ok) { txt('k-etat', j && j.erreur ? j.erreur : 'échec'); return; }
+  K = j.fenetres;
+  txt('k-etat', K.length + ' fenêtre(s) commune(s)');
+  g('k-liste').innerHTML = K.map((w, i) => '<tr><td>' + jourHeure(w.de) + '</td><td>' + hm(w.a) + '</td><td>' + duree(w.a - w.de) +
+    '</td><td>' + w.elMoi + '° · az ' + w.azMoi + '°</td><td>' + w.elAutre + '° · az ' + w.azAutre + '°</td><td><button title="Mettre à l’agenda" onclick="skedAgenda(' + i + ')">📅</button></td></tr>').join('') ||
+    '<tr><td colspan="6" class="petit">aucune fenêtre commune en 48 h</td></tr>';
+}
+async function skedAgenda(i) { const w = K[i]; await post('/api/agenda/sked?catnum=' + g('k-sat').value + '&loc=' + enc(v('k-loc')) + '&de=' + w.de + '&a=' + w.a); alert('Sked mis à l’agenda.'); }
+
 // ------------------------------------------------------------------ APRS
 let A = null, aVus = '';
 async function ticAprs() {
@@ -1035,7 +1148,7 @@ setInterval(ticSon, 1000);
 
 lienRotor(); avertCat();
 // The tab from the address (#carnet, a bookmark), else the last one seen.
-if (['station', 'carnet', 'agenda', 'carres', 'son', 'sstv', 'aprs', 'reglages'].includes(location.hash.slice(1))) vue(location.hash.slice(1));
+if (['station', 'carnet', 'agenda', 'carres', 'frise', 'sked', 'son', 'sstv', 'aprs', 'reglages'].includes(location.hash.slice(1))) vue(location.hash.slice(1));
 else try { const n = localStorage.getItem('vue'); if (n) vue(n); } catch (x) {}
 tic(); chargeListe(); chargePorts(); chargeSatellites();
 setInterval(chargeSatellites, 600000);

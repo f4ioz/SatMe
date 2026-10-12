@@ -376,6 +376,66 @@ class StationPc(
     /** Is this pass in the agenda? */
     fun auAgenda(p: SatPass): Boolean = _etat.value.agenda.any { it.enabled && satDe(it.satName)?.catalogNumber == p.catalogNumber && it.covers(p.aosEpochMs, p.losEpochMs, 0L) }
 
+    // ------------------------------------------------------------ timeline
+
+    /** One satellite on the timeline: its elevation each minute (negative: below the horizon). */
+    class LigneFrise(val sat: TleEntry, val elevations: List<Double>)
+
+    /**
+     * The elevation of the favourites (and of the satellite followed, and of
+     * the agenda's) over [heures] hours from now, one value a minute: what is
+     * coming up, how high, which overlap.
+     */
+    suspend fun frise(heures: Int = 12): Pair<Long, List<LigneFrise>> = withContext(Dispatchers.Default) {
+        val e = _etat.value
+        val obs = e.observateur ?: return@withContext horloge() to emptyList()
+        val debut = horloge() / 60_000L * 60_000L
+        val nums = (e.favoris + listOfNotNull(e.suivi?.catalogNumber) +
+            e.agenda.filter { it.endOrStartMs >= debut }.mapNotNull { satDe(it.satName)?.catalogNumber }).distinct()
+        val sats = nums.mapNotNull { n -> e.satellites.firstOrNull { it.catalogNumber == n } }.sortedBy { it.name.uppercase() }.take(30)
+        debut to sats.map { s ->
+            LigneFrise(s, (0 until heures * 60).map { k -> runCatching { predicteur.positionAt(s, obs, debut + k * 60_000L).elevationDeg }.getOrDefault(-90.0) })
+        }
+    }
+
+    // ---------------------------------------------------------------- skeds
+
+    /** A window both stations see the satellite: when, and how high for each. */
+    class FenetreSked(val deMs: Long, val aMs: Long, val elMoi: Int, val elAutre: Int, val azMoi: Double, val azAutre: Double)
+
+    /**
+     * The windows of the next 48 hours in which I and the station in square
+     * [locator] (seeing above [minElAutre]°) both see [catnum], a minute at
+     * least: as the phone's mutual sked.
+     */
+    suspend fun sked(catnum: Int, locator: String, minElAutre: Double): List<FenetreSked>? = withContext(Dispatchers.Default) {
+        val e = _etat.value
+        val sat = e.satellites.firstOrNull { it.catalogNumber == catnum } ?: return@withContext emptyList()
+        val ll = Maidenhead.centre(locator.trim()) ?: return@withContext null
+        val a = e.observateur ?: return@withContext emptyList()
+        val b = Observer(ll.first, ll.second, 0.0, locator.trim().uppercase())
+        val now = horloge()
+        val pa = runCatching { predicteur.upcomingPasses(sat, a, now, 48, settings.minElevDeg.toDouble()) }.getOrDefault(emptyList())
+        val pb = runCatching { predicteur.upcomingPasses(sat, b, now, 48, minElAutre) }.getOrDefault(emptyList())
+        val out = ArrayList<FenetreSked>()
+        for (x in pa) for (y in pb) {
+            val de = maxOf(x.aosEpochMs, y.aosEpochMs); val fin = minOf(x.losEpochMs, y.losEpochMs)
+            if (fin - de < 60_000L) continue
+            val mi = (de + fin) / 2
+            val pA = runCatching { predicteur.positionAt(sat, a, mi) }.getOrNull()
+            val pB = runCatching { predicteur.positionAt(sat, b, mi) }.getOrNull()
+            out += FenetreSked(de, fin, x.maxElevationDeg.toInt(), y.maxElevationDeg.toInt(), pA?.azimuthDeg ?: 0.0, pB?.azimuthDeg ?: 0.0)
+        }
+        out.sortedBy { it.deMs }
+    }
+
+    /** A sked into the agenda (its window), as an appointment of kind SKED. */
+    fun skedAgenda(catnum: Int, locator: String, deMs: Long, aMs: Long) {
+        val sat = _etat.value.satellites.firstOrNull { it.catalogNumber == catnum } ?: return
+        change { copy(agenda = AgendaStore.put(stockageAgenda, AgendaStore.AgendaEvent(id = horloge(), title = "Sked " + locator.trim().uppercase(),
+            timeMs = deMs, satName = sat.name, leadMin = 10, endMs = aMs, kind = "SKED"))) }
+    }
+
     // ---------------------------------------------------- each satellite's own
 
     /**

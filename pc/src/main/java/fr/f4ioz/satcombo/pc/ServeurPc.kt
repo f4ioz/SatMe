@@ -87,6 +87,19 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
             "/api/passages" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JsonPc.passages(station).toString().toByteArray())
             "/api/satellites" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JsonPc.satellites(station).toString().toByteArray())
             "/api/ports" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JsonPc.ports(station).toString().toByteArray())
+            "/api/frise" -> {
+                val (debut, lignes) = kotlinx.coroutines.runBlocking { station.frise((q["h"]?.toIntOrNull() ?: 12).coerceIn(2, 48)) }
+                envoie(sortie, "200 OK", "application/json; charset=utf-8", JSONObject().put("debut", debut)
+                    .put("lignes", JSONArray(lignes.map { l -> JSONObject().put("nom", l.sat.name).put("catnum", l.sat.catalogNumber)
+                        .put("el", JSONArray(l.elevations.map { Math.round(it * 10) / 10.0 })) })).toString().toByteArray())
+            }
+            "/api/sked" -> {
+                val f = kotlinx.coroutines.runBlocking { station.sked(q["catnum"]?.toIntOrNull() ?: 0, q["loc"].orEmpty(), q["minEl"]?.toDoubleOrNull() ?: 0.0) }
+                val o = if (f == null) JSONObject().put("ok", false).put("erreur", "carré non reconnu")
+                    else JSONObject().put("ok", true).put("fenetres", JSONArray(f.map { w -> JSONObject().put("de", w.deMs).put("a", w.aMs)
+                        .put("elMoi", w.elMoi).put("elAutre", w.elAutre).put("azMoi", Math.round(w.azMoi)).put("azAutre", Math.round(w.azAutre)) }))
+                envoie(sortie, "200 OK", "application/json; charset=utf-8", o.toString().toByteArray())
+            }
             "/api/carres" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JsonPc.carres(carnet, station).toString().toByteArray())
             "/api/carnet" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JsonPc.carnet(carnet).toString().toByteArray())
             "/api/reglages" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JsonPc.reglages(station).toString().toByteArray())
@@ -141,6 +154,9 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 val p = station.etat.value.let { e -> (e.passages + e.passagesSuivi).firstOrNull { it.catalogNumber == n && it.aosEpochMs == aos } }
                     ?: return JSONObject().put("ok", false).put("erreur", "passage inconnu")
                 return ok.put("ajoute", station.basculeAgenda(p))
+            }
+            "/api/agenda/sked" -> {
+                station.skedAgenda(entier("catnum") ?: 0, q["loc"].orEmpty(), q["de"]?.toLongOrNull() ?: 0L, q["a"]?.toLongOrNull() ?: 0L)
             }
             "/api/agenda/retire" -> q["id"]?.toLongOrNull()?.let { station.retireAgenda(it) }
             "/api/agenda/active" -> q["id"]?.toLongOrNull()?.let { station.activeAgenda(it) }
