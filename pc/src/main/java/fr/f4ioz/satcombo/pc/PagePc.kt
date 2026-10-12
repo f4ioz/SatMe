@@ -61,6 +61,17 @@ object PagePc {
   .grille3c { display:grid; grid-template-columns:minmax(320px,0.9fr) minmax(360px,1fr) minmax(420px,1.3fr); gap:12px; padding:12px 16px; }
   @media (max-width:1250px) { .grille3c { grid-template-columns:1fr 1fr; } }
   @media (max-width:800px) { .grille3c { grid-template-columns:1fr; } }
+  .bascule-c { display:flex; gap:4px; }
+  .bascule-c button { padding:4px 10px; font-size:12px; }
+  .bascule-c button.actif { background:var(--cyan); color:#06131A; border-color:var(--cyan); }
+  .cr-avance { position:relative; height:34px; margin-top:8px; background:#0E1720; border-radius:6px; overflow:hidden; }
+  .cr-profil { position:absolute; inset:0; }
+  .cr-avance i { position:absolute; top:0; bottom:0; width:2px; background:#FFB454; }
+  .cr-corps { display:flex; gap:14px; margin-top:8px; flex-wrap:wrap; }
+  .cr-ciel { width:min(100%, 280px); flex:none; }
+  .cr-infos { flex:1; min-width:200px; }
+  .cr-bande { position:relative; height:14px; margin-top:6px; background:linear-gradient(90deg, rgba(63,224,200,.15), rgba(63,224,200,.35), rgba(63,224,200,.15)); border-radius:7px; }
+  .cr-bande i { position:absolute; top:-3px; bottom:-3px; width:4px; margin-left:-2px; background:#FFB454; border-radius:2px; }
   .cs-tete { display:flex; gap:12px; align-items:flex-start; }
   .cs-tete img { width:120px; max-height:150px; object-fit:cover; border-radius:8px; flex:none; }
   .cs-call { font-family:ui-monospace,Consolas,monospace; font-size:28px; font-weight:800; letter-spacing:2px; color:var(--cyan); }
@@ -216,7 +227,7 @@ object PagePc {
       <div class="ecran" id="s-ecran">
         <div class="bascule"><button id="b-ciel" onclick="montreEcran('ciel')">Ciel</button><button id="b-carte" onclick="montreEcran('carte')">Carte</button></div>
         <svg id="ciel" viewBox="-110 -110 220 220" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Le ciel : passage et position du satellite"></svg>
-        <canvas id="s-carte" hidden title="Glisser pour déplacer, molette pour zoomer, double-clic pour revoir le monde"></canvas>
+        <canvas id="st-carte" hidden title="Glisser pour déplacer, molette pour zoomer, double-clic pour revoir le monde"></canvas>
       </div>
       <div class="petit" id="infos-passage" style="text-align:center;margin-top:4px"></div>
       <div class="t" style="margin-top:10px">Ses prochains passages</div>
@@ -391,10 +402,35 @@ object PagePc {
   </div>
   <div>
     <div class="carte">
-      <div class="ligne" style="margin-top:0"><input id="c-filtre" placeholder="Filtrer : indicatif, carré, satellite…"></div>
+      <div class="bascule-c"><button id="cv-station" onclick="vueCarnet('station')">Station en direct</button><button id="cv-contacts" onclick="vueCarnet('contacts')">Contacts</button></div>
+      <div id="cr-station">
+        <div class="paire" style="margin-top:8px"><span class="gros" id="cr-sat">—</span><span class="val ambre" id="cr-compte"></span></div>
+        <div class="paire"><span>Az <span class="val cyan" id="cr-az">—</span></span><span>El <span class="val cyan" id="cr-el">—</span></span><span class="petit" id="cr-dist"></span></div>
+        <div class="cr-avance" title="L'avancée du passage, de l'AOS au LOS"><div class="cr-profil" id="cr-profil"></div><i id="cr-curseur"></i></div>
+        <div class="petit" id="cr-passage"></div>
+        <div class="cr-corps">
+          <svg id="cr-ciel" viewBox="-110 -110 220 220" class="cr-ciel" role="img" aria-label="Le ciel : passage et position du satellite"></svg>
+          <div class="cr-infos">
+            <div class="t">Fréquences</div>
+            <div class="petit" id="cr-tx"></div>
+            <div class="paire"><span>RX <span class="val cyan" id="cr-dl">—</span></span></div>
+            <div class="paire"><span>TX <span class="val ambre" id="cr-ul">—</span></span></div>
+            <div class="petit" id="cr-poste"></div>
+            <div id="cr-bande" class="cr-bande" title="Où tu es dans la bande du transpondeur"><i id="cr-repos"></i></div>
+            <div class="petit" id="cr-bande-txt"></div>
+            <div class="t" style="margin-top:10px">Station</div>
+            <div class="petit" id="cr-rotor"></div>
+            <div class="petit" id="cr-son"></div>
+            <div class="petit" id="cr-sdr"></div>
+          </div>
+        </div>
+      </div>
+      <div id="cr-contacts" hidden>
+      <div class="ligne"><input id="c-filtre" placeholder="Filtrer : indicatif, carré, satellite…"></div>
       <div style="max-height:calc(100vh - 170px);overflow:auto;margin-top:6px">
         <table><thead><tr><th>Date (UTC)</th><th>Indicatif</th><th>Carré</th><th>Satellite</th><th>Mode</th><th>RS</th><th>Nom</th><th></th></tr></thead>
         <tbody id="c-liste"></tbody></table>
+      </div>
       </div>
     </div>
   </div>
@@ -443,7 +479,7 @@ object PagePc {
     <div class="carte">
       <div class="t">En cours <span class="petit" id="i-mode"></span></div>
       <img id="i-encours" style="width:100%;image-rendering:auto;background:#0E1720;min-height:200px;border-radius:8px" alt="">
-      <div class="etat" id="i-etat"></div>
+      <div class="etat" id="sstv-etat"></div>
     </div>
   </div>
   <div>
@@ -974,7 +1010,8 @@ function polaire(az, el) {
   const a = az * Math.PI / 180;
   return [r * Math.sin(a), -r * Math.cos(a)];
 }
-function dessineCiel() {
+/** The sky (SVG inside, -110..110): the pass's arc, the rotor, the satellite now. */
+function cielSvg() {
   let s = '';
   for (const el of [0, 30, 60]) s += '<circle r="' + (100 * (1 - el / 90)) + '" fill="none" stroke="#22303B"/>';
   s += '<line x1="-100" y1="0" x2="100" y2="0" stroke="#22303B"/><line x1="0" y1="-100" x2="0" y2="100" stroke="#22303B"/>';
@@ -994,8 +1031,9 @@ function dessineCiel() {
     const p = polaire(E.position.az, E.position.el);
     s += '<circle cx="' + p[0].toFixed(1) + '" cy="' + p[1].toFixed(1) + '" r="4" fill="#3FE0C8"/>';
   }
-  g('ciel').innerHTML = s;
+  return s;
 }
+function dessineCiel() { g('ciel').innerHTML = cielSvg(); dessineStationDirect(); }
 
 function dessine() {
   if (!E) return;
@@ -1166,7 +1204,7 @@ function vue(n) {
   document.querySelectorAll('.vue').forEach(x => x.hidden = x.id !== 'v-' + n);
   document.querySelectorAll('#onglets button').forEach(b => b.classList.toggle('actif', b.dataset.v === n));
   try { localStorage.setItem('vue', n); } catch (x) {}
-  if (n === 'carnet') { chargeCarnet(); g('c-call').focus(); }
+  if (n === 'carnet') { chargeCarnet(); g('c-call').focus(); vueCarnet(vueC); }
   if (n === 'reglages') chargeReglages();
   if (n === 'son' || n === 'sstv') ticSon();
   if (n === 'aprs') ticAprs();
@@ -1207,6 +1245,61 @@ function dessineCarnet() {
 }
 g('c-filtre').oninput = dessineCarnet;
 // QRZ after 0.6 s without a key, as on the phone and the desk: a callsign the log does not know by name.
+// ------------------------------------------------------------------ the log's live station
+// While naming the stations of a pass, the pass in sight: where the satellite is, the sky,
+// the frequencies, where in the transponder, the mast, the recording. Contacts on a toggle.
+let vueC = 'station';
+try { vueC = localStorage.getItem('vue-carnet') === 'contacts' ? 'contacts' : 'station'; } catch (x) {}
+function vueCarnet(q) {
+  vueC = q;
+  try { localStorage.setItem('vue-carnet', q); } catch (x) {}
+  g('cr-station').hidden = q !== 'station'; g('cr-contacts').hidden = q !== 'contacts';
+  g('cv-station').classList.toggle('actif', q === 'station'); g('cv-contacts').classList.toggle('actif', q === 'contacts');
+  if (q === 'station') dessineStationDirect();
+}
+function dessineStationDirect() {
+  if (!E || g('v-carnet').hidden || vueC !== 'station') return;
+  const n = Date.now(), p = E.position, pa = E.passage;
+  txt('cr-sat', E.suivi ? E.suivi.nom : '— aucun satellite suivi (onglet Station)');
+  txt('cr-az', p ? p.az.toFixed(1) + '°' : '—'); txt('cr-el', p ? p.el.toFixed(1) + '°' : '—');
+  g('cr-el').style.color = p && p.el >= 0 ? '' : 'var(--gris)';
+  txt('cr-dist', p ? Math.round(p.distance) + ' km · ' + (p.vitesse > 0 ? 's’éloigne ' : 's’approche ') + Math.abs(p.vitesse).toFixed(2) + ' km/s' : '');
+  const enCours = pa && n >= pa.aos && n <= pa.los;
+  txt('cr-compte', pa ? (enCours ? 'LOS dans ' + duree(pa.los - n) : 'AOS dans ' + duree(pa.aos - n)) : '');
+  txt('cr-passage', pa ? 'AOS ' + hm(pa.aos) + ' (' + Math.round(pa.azAos) + '°) · El max ' + Math.round(pa.elMax) + '° · LOS ' + hm(pa.los) + ' (' + Math.round(pa.azLos) + '°)' : '');
+  // The pass's elevation profile, now on it.
+  const cle = pa ? pa.aos + ':' + pa.los : '';
+  if (g('cr-profil').dataset.vu !== cle) {
+    g('cr-profil').dataset.vu = cle;
+    const t = pa && pa.trace ? pa.trace : [];
+    g('cr-profil').innerHTML = t.length > 1 ? '<svg viewBox="0 0 100 34" preserveAspectRatio="none" style="width:100%;height:100%"><polygon fill="rgba(63,224,200,.25)" stroke="#3FE0C8" stroke-width=".6" points="0,34 ' +
+      t.map((q, i) => (i * 100 / (t.length - 1)).toFixed(2) + ',' + (34 - 32 * Math.max(0, q[1]) / 90).toFixed(2)).join(' ') + ' 100,34"/></svg>' : '';
+  }
+  const f = pa ? Math.max(0, Math.min(1, (n - pa.aos) / (pa.los - pa.aos))) : 0;
+  g('cr-curseur').style.left = (f * 100) + '%'; g('cr-curseur').style.display = pa && enCours ? '' : 'none';
+  g('cr-ciel').innerHTML = cielSvg();
+  // Frequencies: the sky's (Doppler in), the rig's.
+  const tr = E.emetteurs[E.emetteur];
+  txt('cr-tx', tr ? tr.desc + (tr.mode ? ' · ' + tr.mode : '') : 'aucun émetteur connu');
+  txt('cr-dl', mhz(E.ciel.dl)); txt('cr-ul', mhz(E.ciel.ul));
+  const c = E.cat;
+  txt('cr-poste', c.connecte ? 'Poste ' + c.modele + (c.simule ? ' (simulé)' : '') + ' : RX ' + mhz(c.dl) + ' · TX ' + mhz(c.ul) + ' · ' + (c.mode || '') + (c.pilote ? ' · Doppler' : ' · bouton') + (c.maintien ? ' · en pause' : '') : 'Poste non connecté');
+  // Where in a linear transponder: the rest between its edges.
+  const lin = tr && tr.lineaire && tr.dlBas && tr.dlHaut && tr.dlHaut > tr.dlBas;
+  g('cr-bande').hidden = !lin;
+  if (lin) {
+    const repos = E.repos != null ? E.repos : (tr.dlBas + tr.dlHaut) / 2;
+    g('cr-repos').style.left = (100 * Math.max(0, Math.min(1, (repos - tr.dlBas) / (tr.dlHaut - tr.dlBas)))) + '%';
+    txt('cr-bande-txt', 'dans la bande : ' + Math.round((repos - tr.dlBas) / 1000) + ' kHz du bas · ' + Math.round((tr.dlHaut - repos) / 1000) + ' kHz du haut');
+  } else txt('cr-bande-txt', '');
+  // The mast, the recording, the dongle.
+  const r = E.rotor;
+  txt('cr-rotor', r.connecte ? 'Rotor : ' + (r.az == null ? '—' : Math.round(r.az) + '° / ' + Math.round(r.el || 0) + '°') + (r.azCible != null ? ' → ' + Math.round(r.azCible) + '° / ' + Math.round(r.elCible || 0) + '°' : '') + (r.attente ? ' · attend le lever' : '') : 'Rotor non connecté');
+  txt('cr-son', S && S.present ? (S.enregistrement ? '● Enregistrement ' + duree(S.secondes * 1000) : 'Pas d’enregistrement') + (S.actif ? ' · son ' + Math.round((S.niveau || 0) * 100) + ' %' : ' · carte son arrêtée') : '');
+  g('cr-son').style.color = S && S.enregistrement ? 'var(--rose)' : '';
+  txt('cr-sdr', R && R.actif ? 'Clé SDR : ' + qFmt(R.ciel + R.decalage) + ' Hz · ' + (R.niveau || 0).toFixed(0) + ' dB' : '');
+}
+
 // ------------------------------------------------------------------ the station's card
 let ficheVoulue = true, csPour = '', CSH = null, CSQ = null, CSQPour = '', minuteurStation = null;
 const CSV = { cx: 0.5, cy: 0.4, z: 3 };
@@ -1507,7 +1600,7 @@ async function ticSon() {
   }
   // SSTV: the picture arriving, reloaded only when it moved.
   txt('i-mode', S.sstvMode ? S.sstvMode + ' · ' + S.sstvLignes + '/' + S.sstvHauteur + ' lignes' : '');
-  txt('i-etat', !S.actif ? 'Démarre la carte son (onglet Son) pour décoder.' : !S.sstv ? 'Décodage SSTV coupé (onglet Son).' : S.sstvMode ? 'réception…' : 'à l’écoute');
+  txt('sstv-etat', !S.actif ? 'Démarre la carte son (onglet Son) pour décoder.' : !S.sstv ? 'Décodage SSTV coupé (onglet Son).' : S.sstvMode ? 'réception…' : 'à l’écoute');
   if (ouverte('sstv') && S.sstvVersion !== versionImage) {
     versionImage = S.sstvVersion;
     if (S.sstvMode) g('i-encours').src = '/api/sstv/encours.png?v=' + S.sstvVersion;
@@ -1873,7 +1966,7 @@ try { ecranStation = localStorage.getItem('ecran-station') === 'carte' ? 'carte'
 function montreEcran(q) {
   ecranStation = q;
   try { localStorage.setItem('ecran-station', q); } catch (x) {}
-  g('ciel').style.display = q === 'ciel' ? '' : 'none'; g('s-carte').hidden = q !== 'carte';
+  g('ciel').style.display = q === 'ciel' ? '' : 'none'; g('st-carte').hidden = q !== 'carte';
   g('b-ciel').classList.toggle('actif', q === 'ciel'); g('b-carte').classList.toggle('actif', q === 'carte');
   dessineCarteStation();
 }
@@ -1888,14 +1981,14 @@ async function chargeTraceSol() {
   dessineCarteStation();
 }
 function cadreStation() {
-  const c = g('s-carte'); if (!c.clientWidth) return;
+  const c = g('st-carte'); if (!c.clientWidth) return;
   // The whole world in width, the observer in the middle.
   SV.z = Math.max(0, Math.log2(c.clientWidth / 256));
   SV.cx = E && E.observateur ? wxk(E.observateur.lon) : 0.5;
   SV.cy = Math.max(0.5 - (1 - c.clientHeight / (256 * Math.pow(2, SV.z))) / 2, Math.min(0.5, wyq(25)));
 }
 function dessineCarteStation() {
-  const c = g('s-carte'); if (!c || g('v-station').hidden || c.hidden || !c.clientWidth) return;
+  const c = g('st-carte'); if (!c || g('v-station').hidden || c.hidden || !c.clientWidth) return;
   if (!SV.libre) cadreStation();
   const m = fondCarte(c, SV), x = m.x, p = E && E.position;
   const nous = E && E.observateur;
@@ -1918,7 +2011,7 @@ function dessineCarteStation() {
   const n = E && E.suivi ? E.suivi.catnum : 0;
   if (n && (!traceSol || traceSol.catnum !== n || Date.now() - traceVu > 60000) && Date.now() - traceVu > 3000) { traceVu = Date.now(); chargeTraceSol(); }
 }
-attacheCarte(g('s-carte'), SV, dessineCarteStation, cadreStation, 0);
+attacheCarte(g('st-carte'), SV, dessineCarteStation, cadreStation, 0);
 montreEcran(ecranStation)
 async function skedAgenda(i) { const w = K[i]; await post('/api/agenda/sked?catnum=' + g('k-sat').value + '&loc=' + enc(v('k-loc')) + '&de=' + w.de + '&a=' + w.a); alert('Sked mis à l’agenda.'); }
 
@@ -2147,7 +2240,8 @@ const R820T = [0, 9, 14, 27, 37, 77, 87, 125, 144, 157, 166, 197, 207, 229, 254,
 g('r-gain').innerHTML = '<option value="-1">automatique</option>' + R820T.map(x => '<option value="' + x + '">' + (x / 10).toLocaleString('fr-FR') + ' dB</option>').join('');
 async function rRegle(q) { await post('/api/sdr/reglage?' + q); ticSdr(); }
 async function ticSdr() {
-  if (g('v-sdr').hidden) return;
+  // The log's live station shows the dongle too.
+  if (g('v-sdr').hidden && g('v-carnet').hidden) return;
   try { R = await (await fetch('/api/sdr')).json(); } catch (x) { return; }
   const r = R;
   g('r-pastille').className = 'pastille ' + (r.actif ? 'on' : 'off'); txt('r-pastille', r.actif ? 'réception' : 'arrêtée');
