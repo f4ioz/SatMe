@@ -68,7 +68,10 @@ fun main(args: Array<String>) {
             kotlinx.coroutines.delay(1000)
         }
     }
-    val serveur = ServeurPc(station, port, reseau, carnet, son, JournalWebPc(journal, station, dossier), ImportPc(station, carnet, journal), sdr)
+    val journalWeb = JournalWebPc(journal, station, dossier)
+    // A sked as a video, on the journal's map tiles.
+    val videoSked = VideoSked(File(dossier, "exports")) { z, x, y -> journalWeb.tuile(z, x, y)?.let { f -> runCatching { javax.imageio.ImageIO.read(f) }.getOrNull() } }
+    val serveur = ServeurPc(station, port, reseau, carnet, son, journalWeb, ImportPc(station, carnet, journal), sdr, videoSked)
     serveur.demarre()
     println("SatMe — station PC")
     println("  page      : http://localhost:${serveur.portReel}/" + if (reseau) "  (ouverte au réseau)" else "")

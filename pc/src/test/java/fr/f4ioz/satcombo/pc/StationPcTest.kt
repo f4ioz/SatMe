@@ -222,6 +222,15 @@ class StationPcTest {
         assertTrue(tr.points.first().let { it.elMoi < 0.5 || it.elAutre < 0.5 })
         // The satellite is near both stations then: within the ISS's footprint (~2,300 km).
         assertTrue(Math.abs(centre.lat - 44.0) < 25)
+        // As a video to send the other station (when ffmpeg is there): 27 s of MP4.
+        if (RenduPc.ffmpeg() != null) {
+            val v = VideoSked(File(dossier, "exports")) { _, _, _ -> null }
+            assertTrue(v.lance(VideoSked.Sked(tr, w.deMs, w.aMs, "ISS", "F4IOZ", "IN80")))
+            attends(60_000) { !v.etat.enCours }
+            assertEquals("", v.etat.erreur)
+            assertTrue(v.fichier(v.etat.nom)!!.length() > 10_000)
+            assertTrue(v.etat.nom.startsWith("SatMe_Sked_ISS_IN80_"))
+        }
         // An unreadable square, a window upside down: nothing.
         assertEquals(null, st.sked(25544, "ZZ", 0.0))
         assertEquals(null, st.traceSked(25544, "IN80", w.finTrace, w.debutTrace))

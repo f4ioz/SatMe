@@ -506,6 +506,8 @@ object PagePc {
         <input type="range" id="k-curseur" min="0" max="1000" value="0" style="flex:1;min-width:160px">
         <span id="k-heure" style="font-variant-numeric:tabular-nums;min-width:70px"></span>
         <span id="k-ensemble" class="petit"></span>
+        <button id="k-video" onclick="videoSked()" title="Le sked rejoué en vidéo (MP4), à envoyer à l'autre station">Vidéo</button>
+        <span class="petit" id="k-video-etat"></span>
       </div>
       <div class="k-corps">
         <canvas id="k-carte" title="Glisser pour déplacer, molette pour zoomer, double-clic pour recadrer"></canvas>
@@ -1504,6 +1506,20 @@ async function rejoueSked(i) {
   kF = 0; kJoue = true; kAvant = 0; txt('k-joue', '⏸');
   cadreSked(); dessineSked();
   requestAnimationFrame(boucleSked);
+}
+async function videoSked() {
+  if (!KT) return;
+  const w = KT.w;
+  const j = await post('/api/sked/video?catnum=' + g('k-sat').value + '&loc=' + enc(KT.loc) + '&de=' + w.de + '&a=' + w.a + '&debutTrace=' + w.debutTrace + '&finTrace=' + w.finTrace);
+  if (j && j.ok) suisVideoSked();
+}
+async function suisVideoSked() {
+  let e = null;
+  try { e = await (await fetch('/api/sked/video')).json(); } catch (x) { return; }
+  g('k-video').disabled = e.enCours;
+  if (e.enCours) { txt('k-video-etat', 'vidéo ' + Math.round(e.progression * 100) + ' %'); setTimeout(suisVideoSked, 500); return; }
+  if (e.erreur) { txt('k-video-etat', e.erreur); return; }
+  if (e.nom) g('k-video-etat').innerHTML = '<a style="color:var(--cyan)" href="/sked-video/' + encodeURIComponent(e.nom) + '">' + esc(e.nom) + '</a>';
 }
 function basculeSked() { kJoue = !kJoue; txt('k-joue', kJoue ? '⏸' : '▶'); if (kJoue) { kAvant = 0; if (kF >= 1) kF = 0; requestAnimationFrame(boucleSked); } }
 function boucleSked(ts) {

@@ -232,7 +232,7 @@ class JournalWebPc(private val j: JournalPc, private val station: StationPc, pri
     private val client by lazy { okhttp3.OkHttpClient() }
 
     /** An OpenStreetMap tile, kept a month on disk, fetched with SatMe's user agent. */
-    private fun tuile(z: Int, x: Int, y: Int): File? {
+    fun tuile(z: Int, x: Int, y: Int): File? {
         if (z !in 0..16) return null
         val n = 1 shl z
         if (y !in 0 until n) return null

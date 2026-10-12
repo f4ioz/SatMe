@@ -31,7 +31,7 @@ import kotlin.concurrent.thread
 class ServeurPc(private val station: StationPc, private val port: Int, private val reseau: Boolean = false,
                 private val carnet: CarnetPc? = null, private val son: SonStation? = null,
                 private val journal: JournalWebPc? = null, private val importPc: ImportPc? = null,
-                private val sdr: SdrPc? = null) {
+                private val sdr: SdrPc? = null, private val videoSked: VideoSked? = null) {
 
     private var socket: ServerSocket? = null
     val portReel: Int get() = socket?.localPort ?: port
@@ -129,6 +129,9 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 val png = sdr?.meteor?.apercuPng()
                 if (png != null) envoie(sortie, "200 OK", "image/png", png) else envoie(sortie, "404 Not Found", "text/plain; charset=utf-8", "pas d'aperçu".toByteArray())
             }
+            "/api/sked/video" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", (videoSked?.etat?.let { e ->
+                JSONObject().put("enCours", e.enCours).put("progression", e.progression.toDouble()).put("nom", e.nom).put("erreur", e.erreur) }
+                ?: JSONObject().put("absent", true)).toString().toByteArray())
             "/api/frise" -> {
                 val (debut, lignes) = kotlinx.coroutines.runBlocking { station.frise((q["h"]?.toIntOrNull() ?: 12).coerceIn(2, 48)) }
                 envoie(sortie, "200 OK", "application/json; charset=utf-8", JSONObject().put("debut", debut)
@@ -188,12 +191,14 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                     chemin.startsWith("/enregistrements/") -> son?.fichierEnregistrement(java.net.URLDecoder.decode(chemin.removePrefix("/enregistrements/"), "UTF-8"))
                     chemin.startsWith("/sstv/") -> son?.fichierImage(java.net.URLDecoder.decode(chemin.removePrefix("/sstv/"), "UTF-8"))
                     // A sonde's log or track: only a plain name, inside its folder.
+                    chemin.startsWith("/sked-video/") -> videoSked?.fichier(java.net.URLDecoder.decode(chemin.removePrefix("/sked-video/"), "UTF-8"))
                     chemin.startsWith("/meteor/") -> sdr?.meteor?.fichier(java.net.URLDecoder.decode(chemin.removePrefix("/meteor/"), "UTF-8"))
                     chemin.startsWith("/sondes/") -> java.net.URLDecoder.decode(chemin.removePrefix("/sondes/"), "UTF-8")
                         .takeIf { it.matches(Regex("[A-Za-z0-9._-]+")) }?.let { n -> sdr?.sondes?.journaux()?.firstOrNull { it.name == n } }
                     else -> null
                 }
-                if (f != null) envoieFichier(sortie, r, f, entetes = if (chemin.startsWith("/sondes/")) "Content-Disposition: attachment; filename=\"${f.name}\"\r\n" else "")
+                if (f != null) envoieFichier(sortie, r, f, typeDonne = if (f.name.endsWith(".mp4")) "video/mp4" else null,
+                    entetes = if (chemin.startsWith("/sondes/") || chemin.startsWith("/sked-video/")) "Content-Disposition: attachment; filename=\"${f.name}\"\r\n" else "")
                 else envoie(sortie, "404 Not Found", "text/plain; charset=utf-8", "introuvable".toByteArray())
             }
         }
@@ -333,6 +338,17 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
             }
             "/api/meteor/annule" -> sdr?.meteor?.recepteur?.annuleFichier()
             "/api/meteor/supprime" -> sdr?.meteor?.supprime(q["nom"].orEmpty())
+            "/api/sked/video" -> {
+                val v = videoSked ?: return JSONObject().put("ok", false)
+                fun l(k: String) = q[k]?.toLongOrNull() ?: 0L
+                val catnum = entier("catnum") ?: 0
+                val loc = q["loc"].orEmpty().trim().uppercase()
+                val tr = kotlinx.coroutines.runBlocking { station.traceSked(catnum, loc, l("debutTrace"), l("finTrace")) }
+                    ?: return JSONObject().put("ok", false).put("erreur", "sked introuvable")
+                val sat = station.etat.value.satellites.firstOrNull { it.catalogNumber == catnum }?.name ?: "?"
+                if (!v.lance(VideoSked.Sked(tr, l("de"), l("a"), sat, station.settings.callsign.ifBlank { station.etat.value.locator }.uppercase(), loc)))
+                    return JSONObject().put("ok", false).put("erreur", v.etat.erreur.ifBlank { "une vidéo est déjà en cours" })
+            }
             "/api/qo100/frequence" -> q["hz"]?.toLongOrNull()?.let { station.qo100.descente(it) }
             "/api/qo100/pas" -> q["hz"]?.toLongOrNull()?.let { station.qo100.pas(it) }
             "/api/qo100/balise" -> station.qo100.balise()
