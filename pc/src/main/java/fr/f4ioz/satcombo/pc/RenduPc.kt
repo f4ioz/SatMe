@@ -50,8 +50,34 @@ object RenduPc {
         val fiches: Map<String, JournalPassage.Fiche> = emptyMap(),
         val segments: List<JournalPassage.Segment>? = null, val titreExtrait: String? = null,
         val frequences: List<Pair<Long, Long>> = emptyList(), val resolution: String = "M",
+        /** The map rather than the sky: the ground track, the footprint, the stations where they are. */
+        val surCarte: Boolean = false, val sol: List<JournalPassage.Sol> = emptyList(), val qth: Pair<Double, Double>? = null,
+        val etiquetteQth: String? = null,
+        /** The map as framed on the page, and the width (px) it was shown at; null: framed to the pass. */
+        val vueVue: Pair<JournalPassage.VueCarte, Float>? = null,
+        /** The screen's 16:9 rather than the phone's 3:4 (its view square above the caption). */
+        val paysage: Boolean = false,
+        /** The whole sky, as the page shows it; else framed to the pass. */
+        val cielEntier: Boolean = false,
+        /** An OpenStreetMap tile (z, x, y), from the disk or the network; null: none. */
+        val tuile: (Int, Int, Int) -> BufferedImage? = { _, _, _ -> null },
     ) {
-        val cadre = JournalPassage.cadre(e.points.map { it.az to it.el })
+        val cadre = if (cielEntier) JournalPassage.Cadre() else JournalPassage.cadre(e.points.map { it.az to it.el })
+        var vueCarte = JournalPassage.VueCarte()
+        var fond: BufferedImage? = null
+        private var pour: Pair<Int, Int>? = null
+
+        /** The map's view and its tiles for a view [w]×[h], made once per size. */
+        fun prepare(w: Int, h: Int) {
+            if (!surCarte || pour == (w to h)) return
+            pour = w to h
+            val vv = vueVue
+            vueCarte = if (vv != null && vv.second > 0f)
+                vv.first.copy(zoom = vv.first.zoom + kotlin.math.ln(w / vv.second.toDouble()) / kotlin.math.ln(2.0))
+            else JournalPassage.cadreCarte(sol.map { it.lat to it.lon } + listOfNotNull(qth) +
+                marques.mapNotNull { m -> m.lat?.let { la -> m.lon?.let { lo -> la to lo } } }, w.toDouble(), h.toDouble())
+            fond = fondCarte(w, h, vueCarte, tuile)
+        }
         /** The pictures, read once. */
         val images: Map<String, BufferedImage> = marques.mapNotNull { m -> m.fichier?.let { f -> runCatching { ImageIO.read(File(f)) }.getOrNull()?.let { f to it } } }.toMap()
         var flashMs = 0L
@@ -79,9 +105,139 @@ object RenduPc {
     fun indicatifA(marques: List<Marque>, instant: Long, garde: Long, type: TypeMarque): Marque? =
         if (garde <= 0) null else marques.lastOrNull { it.type == type && instant in it.debutMs..(it.debutMs + garde) }
 
+    /**
+     * Where to write a label so it does not cover one already written: lower
+     * by a line while it would (two contacts a few seconds apart).
+     */
+    private class Etiquettes(private val dp: Float) {
+        private val boites = ArrayList<java.awt.geom.Rectangle2D.Float>()
+        fun place(g: Graphics2D, s: String, x: Float, y: Float): Float {
+            val w = g.fontMetrics.stringWidth(s).toFloat(); val h = g.fontMetrics.height.toFloat()
+            var yy = y
+            repeat(6) {
+                val b = java.awt.geom.Rectangle2D.Float(x, yy - h * 0.8f, w, h)
+                if (boites.none { it.intersects(b) }) { boites += b; return yy }
+                yy += h * 0.95f
+            }
+            return yy
+        }
+    }
+
     private fun couleur(m: Marque) = when { m.type == TypeMarque.QSO -> QSO; m.type == TypeMarque.SIGNET -> SIGNET; m.viaIss -> ISS; else -> APRS }
 
     // ------------------------------------------------------------------ the sky
+
+    /** The OpenStreetMap tiles of a fixed view, put together once, with the attribution they ask for. */
+    fun fondCarte(w: Int, h: Int, vue: JournalPassage.VueCarte, tuile: (Int, Int, Int) -> BufferedImage?): BufferedImage {
+        val b = BufferedImage(w, h, BufferedImage.TYPE_INT_RGB)
+        val g = g2(b)
+        g.color = Color(221, 230, 241); g.fillRect(0, 0, w, h)
+        val z = kotlin.math.floor(vue.zoom).toInt().coerceIn(0, 16)
+        val monde = 256.0 * Math.pow(2.0, vue.zoom)
+        val n = 1 shl z
+        val cote = monde / n
+        val x0 = kotlin.math.floor((vue.cx * monde - w / 2) / cote).toInt(); val x1 = kotlin.math.floor((vue.cx * monde + w / 2) / cote).toInt()
+        val y0 = kotlin.math.floor((vue.cy * monde - h / 2) / cote).toInt().coerceAtLeast(0)
+        val y1 = kotlin.math.floor((vue.cy * monde + h / 2) / cote).toInt().coerceAtMost(n - 1)
+        for (tx in x0..x1) for (ty in y0..y1) {
+            val img = tuile(z, ((tx % n) + n) % n, ty) ?: continue
+            val ox = (tx * cote - vue.cx * monde + w / 2); val oy = (ty * cote - vue.cy * monde + h / 2)
+            g.drawImage(img, ox.toInt(), oy.toInt(), (cote + 1).toInt(), (cote + 1).toInt(), null)
+        }
+        val att = "© OpenStreetMap"
+        g.font = police(h / 70f)
+        val lw = g.fontMetrics.stringWidth(att)
+        g.color = Color(255, 255, 255, 180); g.fillRect(w - lw - 12, (h - h / 70f * 1.6f).toInt(), lw + 12, (h / 70f * 1.6f).toInt() + 1)
+        g.texte(att, w - 6f, h - h / 70f * 0.4f, Color(50, 50, 50), police(h / 70f), droite = true)
+        g.dispose()
+        return b
+    }
+
+    /**
+     * The map of the pass over its tiles: the footprint, the ground track,
+     * each SSTV picture as its stretch, each station as a point on the track
+     * and, in grey, where it is; home. Where the satellite is (share of the width).
+     */
+    fun carte(g: Graphics2D, w: Float, h: Float, sc: Scene, instant: Long?, dp: Float): Float {
+        val e = sc.e; val sol = sc.sol; val vue = sc.vueCarte
+        sc.fond?.let { g.drawImage(it, 0, 0, null) }
+        val monde = 256.0 * Math.pow(2.0, vue.zoom)
+        fun xy(lat: Double, lon: Double): Pair<Float, Float> =
+            ((JournalPassage.mercX(lon) - vue.cx) * monde + w / 2).toFloat() to ((JournalPassage.mercY(lat) - vue.cy) * monde + h / 2).toFloat()
+        val haut = e.points.maxByOrNull { it.el }?.tMs
+        val ici = (instant ?: haut)?.let { JournalPassage.solA(sol, it) }
+        ici?.let { s ->
+            val emp = JournalPassage.empreinte(s.lat, s.lon, s.altKm)
+            val coupe = emp.zipWithNext().any { (a, b) -> kotlin.math.abs(b.second - a.second) > 180.0 }
+            g.stroke = BasicStroke(1.5f * dp)
+            if (!coupe) {
+                val p = Path2D.Float()
+                emp.forEachIndexed { k, (la, lo) -> val (x, y) = xy(la, lo); if (k == 0) p.moveTo(x, y) else p.lineTo(x, y) }
+                p.closePath()
+                g.color = Color(ISS.red, ISS.green, ISS.blue, 30); g.fill(p)
+                g.color = Color(ISS.red, ISS.green, ISS.blue, 200); g.draw(p)
+            } else {
+                g.color = Color(ISS.red, ISS.green, ISS.blue, 200)
+                for ((a, b) in emp.zipWithNext()) {
+                    if (kotlin.math.abs(b.second - a.second) > 180.0) continue
+                    val (x1, y1) = xy(a.first, a.second); val (x2, y2) = xy(b.first, b.second)
+                    g.draw(java.awt.geom.Line2D.Float(x1, y1, x2, y2))
+                }
+            }
+        }
+        fun ligne(l: List<JournalPassage.Sol>, c: Color, s: BasicStroke) {
+            g.color = c; g.stroke = s
+            for (k in 1 until l.size) {
+                val a = l[k - 1]; val b = l[k]
+                if (kotlin.math.abs(b.lon - a.lon) > 180.0) continue
+                val (x1, y1) = xy(a.lat, a.lon); val (x2, y2) = xy(b.lat, b.lon)
+                g.draw(java.awt.geom.Line2D.Float(x1, y1, x2, y2))
+            }
+        }
+        val trait = BasicStroke(3.5f * dp, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND)
+        if (instant != null) { ligne(sol, Color(0, 229, 255, 90), trait); ligne(sol.filter { it.tMs <= instant }, CYAN, trait) }
+        else ligne(sol, CYAN, trait)
+        sc.marques.filter { it.type == TypeMarque.SSTV }.forEach { m ->
+            if (instant != null && m.debutMs > instant) return@forEach
+            val fin = if (instant != null) minOf(m.finMs, instant) else m.finMs
+            ligne(listOfNotNull(JournalPassage.solA(sol, m.debutMs)) + sol.filter { it.tMs in m.debutMs..fin }, SSTV,
+                BasicStroke(8f * dp, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND))
+        }
+        val noir = police(12 * dp, true); val gris = Color(122, 130, 142)
+        val ecrits = ArrayList<Triple<String, Float, Float>>()
+        val places = Etiquettes(dp)
+        fun ecrire(t: String, x: Float, y: Float): Boolean {
+            if (ecrits.any { it.first == t && kotlin.math.hypot(it.second - x, it.third - y) < 40 * dp }) return false
+            ecrits += Triple(t, x, y); return true
+        }
+        fun rond(x: Float, y: Float, r: Float, c: Color) { g.color = c; g.fill(java.awt.geom.Ellipse2D.Float(x - r, y - r, 2 * r, 2 * r)) }
+        sc.qth?.let { (la, lo) -> val (x, y) = xy(la, lo)
+            rond(x, y, 7.5f * dp, Color.WHITE); rond(x, y, 5f * dp, Color(25, 30, 40))
+            sc.etiquetteQth?.takeIf { it.isNotBlank() }?.let { tx ->
+                g.font = police(11 * dp, true); val l = g.fontMetrics.stringWidth(tx)
+                g.color = Color(255, 255, 255, 215); g.fill(RoundRectangle2D.Float(x - 15 * dp - l, y - 9 * dp, l + 6 * dp, 16 * dp, 8 * dp, 8 * dp))
+                g.texte(tx, x - 12 * dp - l, y + 3 * dp, Color(20, 24, 32), police(11 * dp, true))
+            } }
+        for (m in sc.marques.filter { it.type != TypeMarque.SSTV }) {
+            if (instant != null && m.debutMs > instant) continue
+            val s = JournalPassage.solA(sol, m.debutMs) ?: continue
+            val (sx, sy) = xy(s.lat, s.lon)
+            val mLat = m.lat; val mLon = m.lon
+            if (mLat != null && mLon != null) {
+                val (lx, ly) = xy(mLat, mLon)
+                g.color = Color(gris.red, gris.green, gris.blue, 180); g.stroke = BasicStroke(1.2f * dp); g.draw(java.awt.geom.Line2D.Float(lx, ly, sx, sy))
+                rond(lx, ly, 5f * dp, Color.WHITE); rond(lx, ly, 3.5f * dp, gris)
+                if (ecrire("@" + m.texte, lx, ly)) { g.font = police(12 * dp); g.texte(m.texte, lx + 7 * dp, places.place(g, m.texte, lx + 7 * dp, ly + 14 * dp), Color(90, 98, 110), police(12 * dp)) }
+            }
+            rond(sx, sy, 6f * dp, Color.WHITE); rond(sx, sy, 4.5f * dp, couleur(m))
+            if (ecrire(m.texte, sx, sy)) { g.font = noir; g.texte(m.texte, sx + 8 * dp, places.place(g, m.texte, sx + 8 * dp, sy + (if (m.type == TypeMarque.SIGNET) 30 else -6) * dp), Color.BLACK, noir) }
+        }
+        var satX = 0.5f
+        ici?.let { s -> val (x, y) = xy(s.lat, s.lon)
+            satX = x / w
+            rond(x, y, 11f * dp, Color(ISS.red, ISS.green, ISS.blue, 90)); rond(x, y, 6f * dp, ISS) }
+        return satX
+    }
 
     fun ciel(g: Graphics2D, w: Float, h: Float, sc: Scene, instant: Long?, dp: Float) {
         val e = sc.e; val cadre = sc.cadre
@@ -123,6 +279,7 @@ object RenduPc {
             seg.lastOrNull()?.let { (az, el) -> val (x, y) = xy(az, el); g.texte("SSTV " + m.texte, x + 8 * dp, y + 16 * dp, Color.WHITE, etiquette) }
         }
         val ecrits = ArrayList<Triple<String, Float, Float>>()
+        val places = Etiquettes(dp)
         for (m in sc.marques.filter { it.type != TypeMarque.SSTV }) {
             if (instant != null && m.debutMs > instant) continue
             val p = JournalPassage.pointA(e, m.debutMs) ?: continue
@@ -131,7 +288,7 @@ object RenduPc {
             if (!deja) ecrits += Triple(m.texte, x, y)
             g.color = Color.WHITE; g.fill(java.awt.geom.Ellipse2D.Float(x - 6 * dp, y - 6 * dp, 12 * dp, 12 * dp))
             g.color = couleur(m); g.fill(java.awt.geom.Ellipse2D.Float(x - 4.5f * dp, y - 4.5f * dp, 9 * dp, 9 * dp))
-            if (!deja) g.texte(m.texte, x + 8 * dp, y + (if (m.type == TypeMarque.SIGNET) 30 else -6) * dp, Color.WHITE, etiquette)
+            if (!deja) { g.font = etiquette; g.texte(m.texte, x + 8 * dp, places.place(g, m.texte, x + 8 * dp, y + (if (m.type == TypeMarque.SIGNET) 30 else -6) * dp), Color.WHITE, etiquette) }
         }
         val ici = instant?.let { JournalPassage.pointA(e, it) } ?: e.points.maxByOrNull { it.el }
         ici?.let { val (x, y) = xy(it.az, it.el)
@@ -206,20 +363,23 @@ object RenduPc {
         val e = sc.e
         val b = BufferedImage(w, h, BufferedImage.TYPE_INT_RGB)
         val g = g2(b)
-        val dp = w / 360f
-        val haut = w
+        val dp = echelle(w, h)
+        // The view: square above the caption (the phone's 3:4), or the width over the caption (16:9).
+        val haut = if (sc.paysage) (h - 100 * dp).toInt() else w
         g.clipRect(0, 0, w, haut)
-        ciel(g, w.toFloat(), haut.toFloat(), sc, instant, dp)
         val p = JournalPassage.pointA(e, instant)
-        val satX = if (p == null) 0.5f else 0.5f + ((JournalPassage.ciel(p.az, p.el).first - sc.cadre.cx) * sc.cadre.echelle).toFloat() / 2
+        val satX = if (sc.surCarte) { sc.prepare(w, haut); carte(g, w.toFloat(), haut.toFloat(), sc, instant, dp) } else {
+            ciel(g, w.toFloat(), haut.toFloat(), sc, instant, dp)
+            if (p == null) 0.5f else 0.5f + ((JournalPassage.ciel(p.az, p.el).first - sc.cadre.cx) * sc.cadre.echelle).toFloat() / 2
+        }
         if (sc.affSstv) imageA(sc.marques, instant, sc.flashMs)?.let { (m, part) ->
             val bm = m.fichier?.let { sc.images[it] } ?: return@let
-            val lw = w * 0.42f; val lh = lw * 3 / 4
+            val lw = minOf(w * 0.42f, haut * 0.5f * 4 / 3); val lh = lw * 3 / 4
             val x = if (satX >= 0.5f) 8 * dp else w - lw - 8 * dp
             arrivee(g, bm, x, 8 * dp, lw, lh, part, dp)
         }
         if (sc.affFiches) {
-            val lw = w * 0.58f
+            val lw = minOf(w * 0.58f, 260 * dp)
             val x = if (satX >= 0.5f) 8 * dp else w - lw - 8 * dp
             var bas = haut - 8 * dp
             for (type in listOf(TypeMarque.QSO, TypeMarque.APRS)) {
@@ -258,7 +418,7 @@ object RenduPc {
         val e = sc.e
         val b = BufferedImage(w, h, BufferedImage.TYPE_INT_RGB)
         val g = g2(b)
-        val dp = w / 360f
+        val dp = echelle(w, h)
         g.color = FOND; g.fillRect(0, 0, w, h)
         val de = sc.segments?.firstOrNull()?.deMs ?: e.debutMs
         val a = sc.segments?.lastOrNull()?.aMs ?: e.finMs
@@ -286,11 +446,13 @@ object RenduPc {
     fun imagePleine(w: Int, h: Int, sc: Scene, m: Marque, bm: BufferedImage): BufferedImage {
         val b = BufferedImage(w, h, BufferedImage.TYPE_INT_RGB)
         val g = g2(b)
-        val dp = w / 360f
+        val dp = echelle(w, h)
         g.color = FOND; g.fillRect(0, 0, w, h)
-        val ih = w * bm.height.toFloat() / bm.width
+        // As large as it goes above its caption, centred.
+        val ih = minOf(w * bm.height.toFloat() / bm.width, h - 80 * dp)
+        val iw = ih * bm.width / bm.height
         val top = (h - 70 * dp - ih) / 2
-        g.drawImage(bm, 0, top.toInt(), w, (top + ih).toInt(), null)
+        g.drawImage(bm, ((w - iw) / 2).toInt(), top.toInt(), iw.toInt(), ih.toInt(), null)
         g.texte(sc.e.satName + " · " + m.texte, 14 * dp, h - 44 * dp, Color.WHITE, police(18 * dp, true))
         g.texte(fmt("yyyy-MM-dd HH:mm:ss").format(Date(m.finMs)) + " UTC  ·  " + listOf(sc.indicatif, sc.e.locator).filter { it.isNotBlank() }.joinToString(" · "),
             14 * dp, h - 22 * dp, Color(160, 175, 195), police(13 * dp))
@@ -303,7 +465,7 @@ object RenduPc {
         val e = sc.e
         val b = BufferedImage(w, h, BufferedImage.TYPE_INT_RGB)
         val g = g2(b)
-        val dp = w / 360f
+        val dp = echelle(w, h)
         g.color = FOND; g.fillRect(0, 0, w, h)
         val gris = Color(160, 175, 195)
         var y = 40f * dp
@@ -313,7 +475,7 @@ object RenduPc {
         val photos = sc.marques.filter { it.type == TypeMarque.SSTV }.mapNotNull { m -> m.fichier?.let { sc.images[it] } }.take(6)
         if (photos.isNotEmpty()) {
             val col = if (photos.size == 1) 1 else 2
-            val pw = (w - 16 * dp * 2 - 8 * dp * (col - 1)) / col; val ph = pw * 3 / 4
+            val pw = minOf((w - 16 * dp * 2 - 8 * dp * (col - 1)) / col, h * 0.22f * 4 / 3); val ph = pw * 3 / 4
             photos.forEachIndexed { i, bm ->
                 val x = 16 * dp + (i % col) * (pw + 8 * dp); val yy = y + (i / col) * (ph + 8 * dp)
                 g.drawImage(bm, x.toInt(), yy.toInt(), pw.toInt(), ph.toInt(), null)
@@ -351,16 +513,21 @@ object RenduPc {
 
     // ---------------------------------------------------------------- files
 
+    /** One size for everything drawn: the phone's 360 dp across a portrait, 540 dp down a landscape. */
+    private fun echelle(w: Int, h: Int) = minOf(w / 360f, h / 480f)
+
     fun png(sc: Scene, instant: Long?, sortie: File): File {
         sc.flashMs = sc.flashS * 1000L
-        ImageIO.write(image(1080, 1440, sc, instant ?: sc.e.finMs), "png", sortie)
+        val (w, h) = if (sc.paysage) 1920 to 1080 else 1080 to 1440
+        ImageIO.write(image(w, h, sc, instant ?: sc.e.finMs), "png", sortie)
         return sortie
     }
 
     /** The replay as an animated GIF: the pass in about fifteen seconds, then held, looping. */
     fun gif(sc: Scene, sortie: File, progres: (Float) -> Unit): File {
         val e = sc.e
-        val w = 480; val h = 640; val n = 75
+        val (w, h) = if (sc.paysage) 640 to 360 else 480 to 640
+        val n = 75
         val de = sc.segments?.firstOrNull()?.deMs ?: e.debutMs
         val a = sc.segments?.lastOrNull()?.aMs ?: e.finMs
         val duree = (a - de).coerceAtLeast(1)
@@ -409,7 +576,8 @@ object RenduPc {
     fun video(sc: Scene, sortie: File, son: SourcePcm?, rate: Int, travail: File, progres: (Float) -> Unit): File? {
         val ff = ffmpeg() ?: return null
         val e = sc.e
-        val (w, h) = when (sc.resolution) { "XS" -> 480 to 640; "HD" -> 1080 to 1440; else -> 720 to 960 }
+        val (w, h) = if (sc.paysage) when (sc.resolution) { "XS" -> 854 to 480; "HD" -> 1920 to 1080; else -> 1280 to 720 }
+            else when (sc.resolution) { "XS" -> 480 to 640; "HD" -> 1080 to 1440; else -> 720 to 960 }
         val fps = 5
         val segs = sc.segments
         val vitesse = if (son != null || segs != null) 1 else 10

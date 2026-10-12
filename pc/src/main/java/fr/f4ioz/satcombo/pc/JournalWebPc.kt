@@ -28,7 +28,7 @@ class JournalWebPc(private val j: JournalPc, private val station: StationPc, pri
 
     /** The page, opened at once (no code on this PC) and without the phone-only links. */
     fun page(): String = PageJournal.html()
-        .replace("<script>", "<script>try{localStorage.setItem('satme-cle','pc')}catch(e){}</script>\n<style>#lienPlanche{display:none}</style>\n<script>")
+        .replace("<script>", "<script>window.SATME_PC=true;try{localStorage.setItem('satme-cle','pc')}catch(e){}</script>\n<style>#lienPlanche{display:none}</style>\n<script>")
         // Its words are the phone's: said here of the PC.
         .let { h -> TEXTES_PC.entries.fold(h) { acc, (cle, pc) -> acc.replace(js(fr.f4ioz.satcombo.i18n.t(cle)), js(fr.f4ioz.satcombo.i18n.t(pc))) } }
 
@@ -205,7 +205,15 @@ class JournalWebPc(private val j: JournalPc, private val station: StationPc, pri
             segments = moment?.let { listOf(JournalPassage.Segment(it.first, it.last, 1)) }
                 ?: if (!image && opt(p, "accelere", false)) segments(e, marques, p) else null,
             titreExtrait = if (moment != null) titre?.trim()?.ifBlank { null } else null,
-            frequences = frequences(e, l), resolution = p("res").takeIf { it in setOf("XS", "M", "HD") } ?: s.journalVideoRes)
+            frequences = frequences(e, l), resolution = p("res").takeIf { it in setOf("XS", "M", "HD") } ?: s.journalVideoRes,
+            surCarte = p("carte") == "1", sol = j.traceSol(e), qth = Maidenhead.centre(e.locator),
+            etiquetteQth = if (opt(p, "locator", s.journalAffLocator)) listOf(s.callsign, e.locator).filter { it.isNotBlank() }.joinToString(" · ").ifBlank { null } else null,
+            vueVue = run {
+                val cx = p("mcx").toDoubleOrNull(); val cy = p("mcy").toDoubleOrNull(); val z = p("zc").toDoubleOrNull(); val cw = p("cw").toFloatOrNull()
+                if (cx != null && cy != null && z != null && cw != null && cw > 0f) JournalPassage.VueCarte(cx, cy, z) to cw else null
+            },
+            paysage = p("format") == "paysage", cielEntier = p("format").isNotEmpty(),
+            tuile = { z, x, y -> tuile(z, x, y)?.let { f -> runCatching { javax.imageio.ImageIO.read(f) }.getOrNull() } })
     }
 
     /** The video, with the pass's sound when asked and recorded (the opening title's seconds silent). */

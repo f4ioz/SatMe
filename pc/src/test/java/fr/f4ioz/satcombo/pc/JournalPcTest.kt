@@ -107,6 +107,10 @@ class JournalPcTest {
         val img = javax.imageio.ImageIO.read(png)
         assertEquals(1080, img.width); assertEquals(1440, img.height)
         System.getenv("SATME_CAPTURE")?.let { png.copyTo(File(it), overwrite = true) }
+        // The screen's format (16:9), on the map as framed on the page.
+        val carte = javax.imageio.ImageIO.read(fabrique("image", mapOf("t" to "${t0 + 125_000L}", "carte" to "1", "format" to "paysage",
+            "mcx" to "0.5067", "mcy" to "0.3523", "zc" to "4", "cw" to "1000"))!!)
+        assertEquals(1920, carte.width); assertEquals(1080, carte.height)
         val gif = fabrique("gif")!!
         assertTrue(gif.readBytes().copyOf(6).toString(Charsets.US_ASCII) == "GIF89a")
         if (RenduPc.ffmpeg() != null) {

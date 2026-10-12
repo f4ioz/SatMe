@@ -34,7 +34,7 @@ object PageJournal {
         "pj_planche", "pj_onglet_rejeu", "pj_onglet_fabriquer", "pj_accelere", "pj_avant", "pj_apres", "pj_activite_opt",
         "pj_afficher", "pj_aff_sstv", "pj_aff_fiche", "pj_aff_smetre", "pj_aff_freq", "pj_aff_locator", "pj_resolution",
         "pj_res_xs", "pj_res_m", "pj_res_hd", "pj_ouverture", "pj_recap", "pj_avec_son", "pj_accelere_video",
-        "pj_options_aide", "pj_accelere_actif", "pw_code", "pw_entrer", "pw_code_faux", "pw_hors_ligne", "pw_pupitre")
+        "pj_options_aide", "pj_accelere_actif", "pj_format", "pj_format_portrait", "pj_format_paysage", "pw_code", "pw_entrer", "pw_code_faux", "pw_hors_ligne", "pw_pupitre")
 
     private fun js(s: String): String = buildString {
         for (ch in s) when {
@@ -354,6 +354,10 @@ function panneauFabriquer(p) {
   c.appendChild(el('label', { class: 'rangee' }, [el('span', { text: T.resolution }), res]));
   c.appendChild(el('div', { class: 'rangee' }, [el('span', { class: 'aide', text: T.vue }),
     radio('vueF', 'ciel', T.vue_ciel, O.vue !== 'carte', () => montreVue('ciel')), radio('vueF', 'carte', T.vue_carte, O.vue === 'carte', () => montreVue('carte'))]));
+  // On the PC: the screen's format too (the phone's is 3:4, its view square above the caption).
+  if (window.SATME_PC) c.appendChild(el('div', { class: 'rangee' }, [el('span', { class: 'aide', text: T.format }),
+    radio('formatF', 'paysage', T.format_paysage, (O.format || 'paysage') === 'paysage', () => { O.format = 'paysage'; garde(); }),
+    radio('formatF', 'portrait', T.format_portrait, O.format === 'portrait', () => { O.format = 'portrait'; garde(); })]));
   c.appendChild(caseOpt('ouverture', T.ouverture)); c.appendChild(caseOpt('recap', T.recap));
   c.appendChild(caseOpt('avecSon', T.avec_son)); c.appendChild(caseOpt('accelVideo', T.accelere_video));
   p.appendChild(c);
@@ -625,6 +629,9 @@ async function fabrique(quoi) {
     avecSon: b(O.avecSon), accelere: b(O.accelVideo), avant: O.avant, apres: O.apres, rapide: O.rapide, surActivite: b(O.surActivite),
     sstv: b(O.sstv), fiches: b(O.fiches), smetre: b(O.smetre), freq: b(O.freq), locator: b(O.locator) };
   if (deQuoi === 'sel' && sel && quoi !== 'image' && quoi !== 'paquet') { p.de = Math.round(sel[0]); p.a = Math.round(sel[1]); p.titre = titre; }
+  // The map as framed here (centre, zoom, the width it is shown at): the export shows the same.
+  if (O.vue === 'carte') { const c = g('carte'); p.mcx = mcx; p.mcy = mcy; p.zc = zc; p.cw = c.clientWidth; p.ch = c.clientHeight; }
+  if (window.SATME_PC) p.format = O.format || 'paysage';
   const zone = g('fabrication'); zone.innerHTML = '';
   const barre = el('progress', { max: 100, value: 0 }), mot = el('div', { class: 'aide', text: tf('en_cours', 0) });
   zone.appendChild(mot); zone.appendChild(barre);
