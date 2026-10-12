@@ -311,8 +311,8 @@ class StationPc(
     }
 
     /** The phone's settings (its backup file), then everything that reads them again. */
-    fun importeTelephone(json: String): Result<Int> {
-        val r = ImportTelephone.importe(json, stockage)
+    fun importeTelephone(json: String, carnet: fr.f4ioz.satcombo.data.LogStore? = null): Result<Pair<Int, Int>> {
+        val r = ImportTelephone.importe(json, stockage).map { it to (carnet?.let { c -> ImportTelephone.importeCarnet(json, c) } ?: 0) }
         if (r.isSuccess) {
             stationRotor.rechargeReglages()
             stationRotor.setRotorAutoPort(false)

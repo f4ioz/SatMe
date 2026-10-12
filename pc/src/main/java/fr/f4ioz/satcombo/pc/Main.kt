@@ -46,8 +46,11 @@ fun main(args: Array<String>) {
     val station = StationPc(StockageFichier(File(dossier, "reglages.properties")),
         Catalogue(File(dossier, "cache")), PortsSeriePc(), portee)
     I18n.apply(station.settings.language, java.util.Locale.getDefault().language)
+    fr.f4ioz.satcombo.data.AgentHttp.version = "pc"
+    fr.f4ioz.satcombo.data.AgentHttp.plateforme = System.getProperty("os.name") ?: "PC"
     station.demarre()
-    val serveur = ServeurPc(station, port, reseau)
+    val carnet = CarnetPc(station, fr.f4ioz.satcombo.data.LogStore(File(dossier, "qso_log.json")))
+    val serveur = ServeurPc(station, port, reseau, carnet)
     serveur.demarre()
     println("SatMe — station PC")
     println("  page      : http://localhost:${serveur.portReel}/" + if (reseau) "  (ouverte au réseau)" else "")

@@ -51,4 +51,23 @@ class ImportTelephoneTest {
         assertTrue(ImportTelephone.importe("""{"app":"Autre"}""", StockageMemoire()).isFailure)
         assertTrue(ImportTelephone.importe("pas du json", StockageMemoire()).isFailure)
     }
+
+    @Test
+    fun le_carnet_du_telephone_s_ajoute_sans_ecraser_celui_du_pc() {
+        val f = java.io.File.createTempFile("satme-carnet-pc", ".json")
+        try {
+            val carnet = fr.f4ioz.satcombo.data.LogStore(f)
+            carnet.add(fr.f4ioz.satcombo.data.LogEntry(1000L, "SO-50", 27607, 10.0, 20.0, callsign = "F4PC", note = "du PC"))
+            val json = """{"app":"SatMe","stores":{"satcombo_settings":{}},"log":[
+                {"t":1000,"s":"SO-50","c":27607,"az":10,"el":20,"cs":"F4PC","n":"du téléphone"},
+                {"t":2000,"s":"RS-44","c":44909,"az":30,"el":40,"cs":"EA4ABC","tl":"IN80"}]}"""
+            assertEquals(1, ImportTelephone.importeCarnet(json, carnet))
+            val l = carnet.load()
+            assertEquals(listOf(1000L, 2000L), l.map { it.timeMs })
+            assertEquals("du PC", l[0].note)
+            assertEquals("IN80", l[1].theirLocator)
+            // Again: nothing new.
+            assertEquals(0, ImportTelephone.importeCarnet(json, carnet))
+        } finally { f.delete() }
+    }
 }

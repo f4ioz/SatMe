@@ -64,14 +64,25 @@ object PagePc {
   .bouton-gr { display:flex; gap:6px; flex-wrap:wrap; }
   .pastille { display:inline-block; padding:2px 8px; border-radius:20px; font-size:12px; font-weight:700; }
   .on { background:rgba(91,214,138,.18); color:var(--vert); } .off { background:rgba(154,167,180,.15); color:var(--gris); }
+  nav { display:flex; gap:4px; }
+  nav button { background:transparent; border:1px solid transparent; color:var(--gris); padding:6px 14px; }
+  nav button.actif { color:var(--cyan); border-color:var(--bord); background:var(--carte); }
+  .grille2 { display:grid; grid-template-columns:minmax(320px,1fr) minmax(420px,1.6fr); gap:12px; padding:12px 16px; }
+  @media (max-width:900px) { .grille2 { grid-template-columns:1fr; } }
+  td.act { white-space:nowrap; text-align:right; }
+  td.act button { padding:3px 8px; font-size:12px; }
 </style></head>
 <body>
 <header>
   <h1>SatMe <span class="cyan">PC</span></h1>
   <span class="g" id="station"></span>
   <span class="g" id="cat-statut-court"></span>
+  <nav id="onglets">
+    <button data-v="station" class="actif">Station</button><button data-v="carnet">Carnet</button><button data-v="reglages">Réglages</button>
+  </nav>
   <span id="heure"></span>
 </header>
+<div class="vue" id="v-station">
 <div class="grille">
   <!-- Passes -->
   <div class="col1">
@@ -199,14 +210,93 @@ object PagePc {
       </details>
     </div>
 
+  </div>
+</div>
+</div>
+<div class="vue" id="v-carnet" hidden>
+<div class="grille2">
+  <div>
+    <div class="carte">
+      <div class="t">Nouveau contact <span class="petit" id="c-sat"></span></div>
+      <input id="c-call" placeholder="INDICATIF" autocomplete="off" style="width:100%;font-size:26px;font-weight:800;letter-spacing:3px;text-transform:uppercase">
+      <div id="c-qui" class="petit" style="min-height:20px;margin-top:4px"></div>
+      <div class="ligne">
+        <input id="c-loc" placeholder="Carré" style="text-transform:uppercase;max-width:120px">
+        <span class="petit">RS ↑</span><input id="c-rs" value="59" style="max-width:60px">
+        <span class="petit">↓</span><input id="c-rr" value="59" style="max-width:60px">
+      </div>
+      <div class="ligne"><input id="c-note" placeholder="Note"></div>
+      <div class="ligne"><button class="primaire" onclick="enregistreContact()">Enregistrer (Entrée)</button><span class="petit" id="c-etat"></span></div>
+      <div class="petit" style="margin-top:6px">Daté à l'enregistrement, sur le satellite suivi, avec son az/el, ton carré, le mode et les fréquences au repos.</div>
+    </div>
+    <div class="carte">
+      <div class="t">Carnet</div>
+      <div class="paire"><span><span class="val" id="c-nb">0</span> <span class="petit">contacts</span></span>
+        <span><span class="val" id="c-carres">0</span> <span class="petit">carrés</span></span>
+        <span><span class="val ambre" id="c-attente">0</span> <span class="petit">à déposer</span></span></div>
+      <div class="ligne"><a href="/carnet.adi" download><button>Exporter en ADIF</button></a>
+        <button onclick="depose()">Déposer au carnet en ligne</button></div>
+      <div class="etat" id="c-depot"></div>
+    </div>
+  </div>
+  <div>
+    <div class="carte">
+      <div class="ligne" style="margin-top:0"><input id="c-filtre" placeholder="Filtrer : indicatif, carré, satellite…"></div>
+      <div style="max-height:calc(100vh - 170px);overflow:auto;margin-top:6px">
+        <table><thead><tr><th>Date (UTC)</th><th>Indicatif</th><th>Carré</th><th>Satellite</th><th>Mode</th><th>RS</th><th>Nom</th><th></th></tr></thead>
+        <tbody id="c-liste"></tbody></table>
+      </div>
+    </div>
+  </div>
+</div>
+<dialog id="c-edit" style="background:var(--carte);color:var(--clair);border:1px solid var(--bord);border-radius:12px;min-width:360px">
+  <div class="t">Modifier le contact <span class="petit" id="e-quand"></span></div>
+  <div class="ligne"><input id="e-call" placeholder="Indicatif" style="text-transform:uppercase"><input id="e-loc" placeholder="Carré" style="text-transform:uppercase;max-width:110px"></div>
+  <div class="ligne"><input id="e-md" placeholder="Mode" style="max-width:80px"><input id="e-rs" placeholder="RS ↑" style="max-width:70px"><input id="e-rr" placeholder="RS ↓" style="max-width:70px"></div>
+  <div class="ligne"><input id="e-nm" placeholder="Nom"><input id="e-qth" placeholder="QTH"></div>
+  <div class="ligne"><input id="e-n" placeholder="Note"></div>
+  <div class="ligne"><button onclick="qrzEdit()">QRZ</button><span class="petit" id="e-qrz"></span></div>
+  <div class="ligne"><button class="primaire" onclick="enregistreEdit()">Enregistrer</button><button onclick="g('c-edit').close()">Annuler</button>
+    <button class="rouge" onclick="supprimeEdit()" style="margin-left:auto">Supprimer</button></div>
+</dialog>
+</div>
+<div class="vue" id="v-reglages" hidden>
+<div class="grille2">
+  <div>
     <div class="carte">
       <div class="t">Station</div>
       <div class="ligne" style="margin-top:0">
         <input id="indicatif" placeholder="Indicatif" style="text-transform:uppercase">
         <input id="locator" placeholder="Locator (JN18FS)" style="text-transform:uppercase">
-        <button onclick="station()">Enregistrer</button>
       </div>
-      <details id="conv" style="margin-top:8px"><summary class="petit" style="cursor:pointer">Convertisseurs (LNB, transverter)</summary>
+      <div class="ligne"><span class="petit">Passages au-dessus de</span><input id="minEl" style="max-width:60px"><span class="petit">° d'élévation</span></div>
+      <div class="ligne"><button class="primaire" onclick="enregistreReglages()">Enregistrer</button></div>
+      <div class="etat" id="reg-etat"></div>
+    </div>
+    <div class="carte">
+      <div class="t">Éléments et téléphone</div>
+      <div class="ligne"><button onclick="post('/api/catalogue')">Retélécharger les éléments AMSAT</button></div>
+      <div class="petit" style="margin-top:10px">Reprendre les réglages du téléphone (Réglages → Sauvegarde, fichier .json) :</div>
+      <input type="file" id="import" accept=".json,application/json" onchange="importe(this)" style="width:100%;margin-top:4px">
+      <div class="etat" id="catalogue"></div>
+    </div>
+  </div>
+  <div>
+    <div class="carte">
+      <div class="t">QRZ.com</div>
+      <div class="ligne" style="margin-top:0"><input id="qrzUser" placeholder="Identifiant QRZ"><input id="qrzMdp" type="password" placeholder="Mot de passe"></div>
+      <div class="petit">Abonnement XML de QRZ nécessaire. Le mot de passe reste sur ce PC et n'est jamais réaffiché.</div>
+      <div class="ligne"><button onclick="enregistreReglages()">Enregistrer</button><button onclick="essaiQrz()">Essayer</button><span class="petit" id="qrz-etat"></span></div>
+    </div>
+    <div class="carte">
+      <div class="t">Carnet en ligne (Wavelog / Cloudlog)</div>
+      <div class="ligne" style="margin-top:0"><input id="carnetUrl" placeholder="https://wavelog.exemple.fr/"></div>
+      <div class="ligne"><input id="carnetCle" type="password" placeholder="Clé d'API (lecture et écriture)"><input id="carnetProfil" placeholder="ID du profil" style="max-width:120px"></div>
+      <div class="ligne"><button onclick="enregistreReglages()">Enregistrer</button></div>
+    </div>
+    <div class="carte">
+      <div class="t">Convertisseurs</div>
+      <details id="conv" open><summary class="petit" style="cursor:pointer">Convertisseurs (LNB, transverter)</summary>
         <div class="ligne"><span class="petit" style="min-width:150px">Réception : OL (MHz)</span><input id="c-rxOl" placeholder="9750 ; 0 = aucun" style="max-width:130px">
           <label class="petit"><input type="checkbox" id="c-rxInv"> inverseur</label></div>
         <div class="ligne"><span class="petit" style="min-width:150px">Émission : OL (MHz)</span><input id="c-txOl" placeholder="0 = aucun" style="max-width:130px">
@@ -214,12 +304,9 @@ object PagePc {
           <button onclick="convertisseurs()">Appliquer</button></div>
         <div class="petit">Le poste reçoit et émet sur la fréquence intermédiaire ; l'affichage reste celle du satellite.</div>
       </details>
-      <div class="ligne"><button onclick="post('/api/catalogue')">Retélécharger les éléments AMSAT</button></div>
-      <div class="petit" style="margin-top:10px">Reprendre les réglages du téléphone (Réglages → Sauvegarde, fichier .json) :</div>
-      <input type="file" id="import" accept=".json,application/json" onchange="importe(this)" style="width:100%;margin-top:4px">
-      <div class="etat" id="catalogue"></div>
     </div>
   </div>
+</div>
 </div>
 <script>
 const g = id => document.getElementById(id);
@@ -317,6 +404,7 @@ function dessine() {
   if (document.activeElement !== g('indicatif') && !g('indicatif').value) g('indicatif').value = E.indicatif || '';
   if (document.activeElement !== g('locator') && !g('locator').value) g('locator').value = E.locator || '';
   txt('nom', E.suivi ? E.suivi.nom : '— choisis un passage');
+  txt('c-sat', E.suivi ? '· ' + E.suivi.nom + (E.position ? ' · El ' + Math.round(E.position.el) + '°' : '') : '· suis d’abord un satellite (onglet Station)');
   const p = E.position;
   txt('az', p ? p.az.toFixed(1) + '°' : '—');
   txt('el', p ? p.el.toFixed(1) + '°' : '—');
@@ -402,7 +490,8 @@ async function importe(input) {
   try {
     const r = await fetch('/api/import', { method:'POST', body: await f.text() });
     const j = await r.json();
-    alert(j.ok ? j.n + ' réglages repris du téléphone (ports USB exceptés ; le rotor attend que tu coches « Suivre »).' : 'Import impossible : ' + j.erreur);
+    alert(j.ok ? j.n + ' réglages repris du téléphone (ports USB exceptés ; le rotor attend que tu coches « Suivre »), ' +
+      j.contacts + ' contact(s) ajouté(s) au carnet.' : 'Import impossible : ' + j.erreur);
   } catch (x) { alert('Import impossible.'); }
   input.value = ''; g('indicatif').value = ''; g('locator').value = '';
   setTimeout(() => { tic(); chargeListe(); }, 1500);
@@ -456,14 +545,140 @@ function rotConnecte() {
   post('/api/rotor/connecter?lien=' + (l === 'ROTCTLD' ? 'ROTCTLD' : 'GS232') + '&sim=' + (l === 'SIM' ? 1 : 0) +
        '&port=' + enc(g('rot-port').value) + '&baud=' + g('rot-baud').value + '&hote=' + enc(v('rot-hote')) + '&tcp=' + enc(v('rot-tcpport')));
 }
-async function station() {
-  await post('/api/indicatif?c=' + enc(v('indicatif')));
-  const j = await post('/api/locator?l=' + enc(v('locator')));
-  if (j && j.ok === false) alert('Locator non reconnu.');
-  setTimeout(chargeListe, 1500);
-}
 g('emetteur').onchange = () => post('/api/emetteur?i=' + g('emetteur').value);
+// ------------------------------------------------------------------ tabs
+function vue(n) {
+  document.querySelectorAll('.vue').forEach(x => x.hidden = x.id !== 'v-' + n);
+  document.querySelectorAll('#onglets button').forEach(b => b.classList.toggle('actif', b.dataset.v === n));
+  try { localStorage.setItem('vue', n); } catch (x) {}
+  if (n === 'carnet') { chargeCarnet(); g('c-call').focus(); }
+  if (n === 'reglages') chargeReglages();
+}
+document.querySelectorAll('#onglets button').forEach(b => b.onclick = () => vue(b.dataset.v));
+
+// ------------------------------------------------------------------ log
+let C = [], minuteurQrz = 0, quiPour = '', editT = 0;
+const esc = x => String(x == null ? '' : x).replace(/&/g, '&amp;').replace(/</g, '&lt;');
+const base = c => c.toUpperCase().split('/')[0];
+async function chargeCarnet() {
+  try {
+    const j = await (await fetch('/api/carnet')).json();
+    C = j.contacts;
+    txt('c-nb', String(C.length)); txt('c-carres', String(j.carres)); txt('c-attente', String(j.nonDeposes));
+    dessineCarnet();
+  } catch (x) {}
+}
+function dessineCarnet() {
+  const f = v('c-filtre').toUpperCase();
+  g('c-liste').innerHTML = C.filter(e => !f || [e.c, e.l, e.sat, e.nm, e.qth].join(' ').toUpperCase().includes(f)).map(e =>
+    '<tr><td>' + new Date(e.t).toISOString().slice(0, 16).replace('T', ' ') + '</td><td><b>' + esc(e.c) + '</b></td><td>' + esc(e.l) +
+    '</td><td>' + esc(e.sat) + '</td><td>' + esc(e.md) + '</td><td>' + esc(e.rs) + '/' + esc(e.rr) + '</td><td>' + esc(e.nm) +
+    '</td><td class="act">' + (e.envoye ? '<span class="vert" title="déposé au carnet en ligne">✓</span> ' : '<button title="Déposer au carnet en ligne" onclick="depose(' + e.t + ')">⬆</button> ') +
+    '<button title="Modifier" onclick="edite(' + e.t + ')">✎</button></td></tr>').join('') ||
+    '<tr><td colspan="8" class="petit">aucun contact</td></tr>';
+}
+g('c-filtre').oninput = dessineCarnet;
+// QRZ after 0.6 s without a key, as on the phone and the desk: a callsign the log does not know by name.
+g('c-call').addEventListener('input', () => {
+  clearTimeout(minuteurQrz);
+  const c = base(v('c-call'));
+  if (c !== quiPour) txt('c-qui', '');
+  if (c.length < 4 || !/[0-9]/.test(c)) return;
+  const connu = C.find(e => base(e.c) === c && e.nm);
+  if (connu) {
+    quiPour = c; txt('c-qui', connu.nm + (connu.qth ? ' · ' + connu.qth : '') + ' (carnet)');
+    if (!v('c-loc') && connu.l && v('c-call').indexOf('/') < 0) g('c-loc').value = connu.l;
+    return;
+  }
+  minuteurQrz = setTimeout(async () => {
+    txt('c-qui', 'QRZ…');
+    let f = null;
+    try { f = await (await fetch('/api/qrz?c=' + enc(c))).json(); } catch (x) {}
+    if (base(v('c-call')) !== c) return;
+    if (!f || !f.ok) { txt('c-qui', f && f.erreur ? f.erreur : ''); return; }
+    quiPour = c;
+    txt('c-qui', [f.nom, f.qth, f.pays].filter(x => x).join(' · '));
+    // Its square where none was typed — never for a /P or /M (QRZ gives the home address).
+    if (!v('c-loc') && f.carre && v('c-call').indexOf('/') < 0) g('c-loc').value = f.carre;
+  }, 600);
+});
+['c-call', 'c-loc', 'c-rs', 'c-rr', 'c-note'].forEach(i => g(i).addEventListener('keydown', e => { if (e.key === 'Enter') enregistreContact(); }));
+async function enregistreContact() {
+  const c = v('c-call'); if (!c) return;
+  const j = await post('/api/carnet/ajoute?c=' + enc(c) + '&l=' + enc(v('c-loc')) + '&rs=' + enc(v('c-rs')) + '&rr=' + enc(v('c-rr')) + '&n=' + enc(v('c-note')));
+  if (j && j.ok) {
+    txt('c-etat', c.toUpperCase() + ' enregistré');
+    ['c-call', 'c-loc', 'c-note'].forEach(i => g(i).value = ''); g('c-rs').value = '59'; g('c-rr').value = '59';
+    txt('c-qui', ''); quiPour = ''; g('c-call').focus(); chargeCarnet();
+  }
+}
+function edite(t) {
+  const e = C.find(x => x.t === t); if (!e) return;
+  editT = t;
+  txt('e-quand', new Date(t).toISOString().slice(0, 19).replace('T', ' ') + ' UTC · ' + e.sat);
+  g('e-call').value = e.c; g('e-loc').value = e.l; g('e-md').value = e.md; g('e-rs').value = e.rs; g('e-rr').value = e.rr;
+  g('e-nm').value = e.nm; g('e-qth').value = e.qth; g('e-n').value = e.n; txt('e-qrz', '');
+  g('c-edit').showModal();
+}
+// QRZ on demand: fills what is empty (a square heard during the contact beats the directory).
+async function qrzEdit() {
+  txt('e-qrz', 'QRZ…');
+  let f = null;
+  try { f = await (await fetch('/api/qrz?c=' + enc(base(v('e-call'))))).json(); } catch (x) {}
+  if (!f || !f.ok) { txt('e-qrz', f && f.erreur ? f.erreur : 'QRZ ne connaît pas cet indicatif.'); return; }
+  if (!v('e-nm')) g('e-nm').value = f.nom;
+  if (!v('e-qth')) g('e-qth').value = f.qth;
+  if (!v('e-loc') && f.carre && v('e-call').indexOf('/') < 0) { g('e-loc').value = f.carre; g('e-loc').dataset.qrz = '1'; }
+  txt('e-qrz', [f.nom, f.qth, f.carre, f.pays].filter(x => x).join(' · '));
+}
+async function enregistreEdit() {
+  const j = await post('/api/carnet/modifie?t=' + editT + '&c=' + enc(v('e-call')) + '&l=' + enc(v('e-loc')) + '&md=' + enc(v('e-md')) +
+    '&rs=' + enc(v('e-rs')) + '&rr=' + enc(v('e-rr')) + '&nm=' + enc(v('e-nm')) + '&qth=' + enc(v('e-qth')) + '&n=' + enc(v('e-n')) +
+    (g('e-loc').dataset.qrz ? '&lo=QRZ' : ''));
+  delete g('e-loc').dataset.qrz;
+  if (j && j.ok !== false) { g('c-edit').close(); chargeCarnet(); }
+}
+async function supprimeEdit() {
+  if (!confirm('Supprimer ce contact du carnet ?')) return;
+  await post('/api/carnet/supprime?t=' + editT); g('c-edit').close(); chargeCarnet();
+}
+async function depose(t) {
+  txt('c-depot', 'envoi…');
+  const j = await post('/api/carnet/depose' + (t ? '?t=' + t : ''));
+  txt('c-depot', j && j.dit ? j.dit : '');
+  chargeCarnet();
+}
+
+// ------------------------------------------------------------------ settings
+async function chargeReglages() {
+  try {
+    const r = await (await fetch('/api/reglages')).json();
+    g('indicatif').value = r.c; g('locator').value = r.l; g('minEl').value = r.minEl;
+    g('qrzUser').value = r.qrzUser; g('qrzMdp').placeholder = r.qrzMdp ? 'mot de passe enregistré' : 'Mot de passe';
+    g('carnetUrl').value = r.carnetUrl; g('carnetCle').placeholder = r.carnetCle ? 'clé enregistrée' : 'Clé d’API (lecture et écriture)';
+    g('carnetProfil').value = r.carnetProfil;
+  } catch (x) {}
+}
+async function enregistreReglages() {
+  const j = await post('/api/reglages?c=' + enc(v('indicatif')) + '&l=' + enc(v('locator')) + '&minEl=' + enc(v('minEl')) +
+    '&qrzUser=' + enc(v('qrzUser')) + '&qrzMdp=' + enc(g('qrzMdp').value) + '&carnetUrl=' + enc(v('carnetUrl')) +
+    '&carnetCle=' + enc(g('carnetCle').value) + '&carnetProfil=' + enc(v('carnetProfil')));
+  if (j && j.ok !== false) {
+    txt('reg-etat', 'enregistré'); g('qrzMdp').value = ''; g('carnetCle').value = '';
+    chargeReglages(); setTimeout(chargeListe, 1500);
+  }
+}
+async function essaiQrz() {
+  txt('qrz-etat', 'QRZ…');
+  let f = null;
+  try { f = await (await fetch('/api/qrz?c=' + enc(v('indicatif') || 'F4IOZ'))).json(); } catch (x) {}
+  txt('qrz-etat', f && f.ok ? 'QRZ répond : ' + [f.nom, f.qth].filter(x => x).join(' · ') : (f && f.erreur ? f.erreur : 'pas de réponse'));
+}
+
 lienRotor(); avertCat();
+// The tab from the address (#carnet, a bookmark), else the last one seen.
+if (['station', 'carnet', 'reglages'].includes(location.hash.slice(1))) vue(location.hash.slice(1));
+else try { const n = localStorage.getItem('vue'); if (n) vue(n); } catch (x) {}
 tic(); chargeListe(); chargePorts(); chargeSatellites();
 setInterval(chargeSatellites, 600000);
 setInterval(tic, 1000);

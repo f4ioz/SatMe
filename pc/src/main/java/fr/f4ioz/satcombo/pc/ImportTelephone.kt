@@ -27,6 +27,22 @@ object ImportTelephone {
         "civ_usb_index", "civ_usb_auto", "rotor_usb_index", "rotor_usb_cle",
         "ft817_rx_serial", "ft817_tx_serial", "ts2000_cle")
 
+    /**
+     * The backup's contact log added to the PC's: the contacts the PC does not
+     * have yet (same moment), the PC's own kept as they are. How many came.
+     */
+    fun importeCarnet(json: String, carnet: fr.f4ioz.satcombo.data.LogStore): Int {
+        val log = runCatching { JSONObject(json).optJSONArray("log") }.getOrNull() ?: return 0
+        // Read with the log's own reader: one format, one parser.
+        val tmp = java.io.File.createTempFile("satme-carnet", ".json")
+        val venus = try { tmp.writeText(log.toString()); fr.f4ioz.satcombo.data.LogStore(tmp).load() } finally { tmp.delete() }
+        val ici = carnet.load()
+        val connus = ici.map { it.timeMs }.toHashSet()
+        val nouveaux = venus.filter { it.timeMs !in connus }
+        if (nouveaux.isNotEmpty()) carnet.save((ici + nouveaux).sortedBy { it.timeMs })
+        return nouveaux.size
+    }
+
     /** Writes the backup's settings into [stockage]; how many were taken, or an error. */
     fun importe(json: String, stockage: Stockage): Result<Int> = runCatching {
         val racine = JSONObject(json)

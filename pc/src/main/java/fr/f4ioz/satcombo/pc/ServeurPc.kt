@@ -27,7 +27,8 @@ import kotlin.concurrent.thread
  * nobody else on the network should. What changes the station is a POST,
  * never a GET a browser could fetch ahead by itself.
  */
-class ServeurPc(private val station: StationPc, private val port: Int, private val reseau: Boolean = false) {
+class ServeurPc(private val station: StationPc, private val port: Int, private val reseau: Boolean = false,
+                private val carnet: CarnetPc? = null) {
 
     private var socket: ServerSocket? = null
     val portReel: Int get() = socket?.localPort ?: port
@@ -57,8 +58,8 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
             // The phone's backup, sent as the request's body (a few hundred kilobytes with the log).
             val corps = RequeteHttp.corps(c.getInputStream(), r, 20L * 1024 * 1024)
             val res = if (corps == null) JSONObject().put("ok", false).put("erreur", "fichier trop gros ou coupé")
-                else station.importeTelephone(String(corps, Charsets.UTF_8)).fold(
-                    { JSONObject().put("ok", true).put("n", it) },
+                else station.importeTelephone(String(corps, Charsets.UTF_8), carnet?.store).fold(
+                    { JSONObject().put("ok", true).put("n", it.first).put("contacts", it.second) },
                     { JSONObject().put("ok", false).put("erreur", it.message ?: "fichier illisible") })
             envoie(sortie, "200 OK", "application/json; charset=utf-8", res.toString().toByteArray())
             return
@@ -74,6 +75,22 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
             "/api/passages" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JsonPc.passages(station).toString().toByteArray())
             "/api/satellites" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JsonPc.satellites(station).toString().toByteArray())
             "/api/ports" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JsonPc.ports(station).toString().toByteArray())
+            "/api/carnet" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JsonPc.carnet(carnet).toString().toByteArray())
+            "/api/reglages" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JsonPc.reglages(station).toString().toByteArray())
+            "/api/qrz" -> {
+                // Read only (a directory lookup), so a GET; nothing changes in the station.
+                val f = carnet?.let { kotlinx.coroutines.runBlocking { it.ficheQrz(q["c"].orEmpty()) } }
+                val o = if (f == null) JSONObject().put("ok", false).put("erreur", "identifiants QRZ absents ou réseau")
+                    else if (f.erreur.isNotBlank()) JSONObject().put("ok", false).put("erreur", f.erreur)
+                    else JSONObject().put("ok", !f.vide).put("nom", f.nom).put("prenom", f.prenom).put("qth", f.qth)
+                        .put("pays", f.pays).put("carre", f.carre)
+                envoie(sortie, "200 OK", "application/json; charset=utf-8", o.toString().toByteArray())
+            }
+            "/carnet.adi" -> {
+                val nom = "SatMe_carnet_" + java.text.SimpleDateFormat("yyyyMMdd_HHmm", java.util.Locale.US).format(java.util.Date()) + ".adi"
+                envoie(sortie, "200 OK", "text/plain; charset=utf-8", (carnet?.adif() ?: "").toByteArray(),
+                    "Content-Disposition: attachment; filename=\"$nom\"\r\n")
+            }
             else -> envoie(sortie, "404 Not Found", "text/plain; charset=utf-8", "introuvable".toByteArray())
         }
     }
@@ -115,6 +132,40 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 fun hz(k: String) = q[k]?.trim()?.replace(',', '.')?.takeIf { it.isNotEmpty() }?.toDoubleOrNull()?.let { Math.round(it * 1e6) }
                 station.poseConvertisseurs(hz("rxOl"), q["rxInv"]?.let { it == "1" }, hz("txOl"), q["txInv"]?.let { it == "1" })
             }
+            "/api/carnet/ajoute" -> {
+                val c = carnet ?: return JSONObject().put("ok", false)
+                val fiche = q["c"]?.takeIf { it.isNotBlank() }?.let { kotlinx.coroutines.runBlocking { c.ficheQrz(it) } }
+                    ?.takeIf { it.erreur.isBlank() && !it.vide }
+                val e = c.ajoute(q["c"].orEmpty(), q["l"].orEmpty(), q["rs"].orEmpty(), q["rr"].orEmpty(), q["n"].orEmpty(), fiche)
+                    ?: return JSONObject().put("ok", false).put("erreur", "il faut un indicatif et un satellite suivi")
+                return ok.put("t", e.timeMs)
+            }
+            "/api/carnet/modifie" -> {
+                val c = carnet ?: return JSONObject().put("ok", false)
+                val t = q["t"]?.toLongOrNull() ?: return JSONObject().put("ok", false)
+                val avant = c.contacts().firstOrNull { it.timeMs == t } ?: return JSONObject().put("ok", false)
+                c.modifie(t, avant.copy(callsign = q["c"] ?: avant.callsign, theirLocator = q["l"] ?: avant.theirLocator,
+                    rstSent = q["rs"] ?: avant.rstSent, rstRcvd = q["rr"] ?: avant.rstRcvd, note = q["n"] ?: avant.note,
+                    mode = q["md"] ?: avant.mode, nom = q["nm"] ?: avant.nom, qth = q["qth"] ?: avant.qth,
+                    locatorOrigine = q["lo"] ?: avant.locatorOrigine))
+            }
+            "/api/carnet/supprime" -> q["t"]?.toLongOrNull()?.let { carnet?.supprime(it) }
+            "/api/carnet/depose" -> {
+                val c = carnet ?: return JSONObject().put("ok", false)
+                val t = q["t"]?.toLongOrNull()
+                return ok.put("dit", kotlinx.coroutines.runBlocking { if (t != null) c.depose(t) else c.deposeTout() })
+            }
+            "/api/reglages" -> {
+                val s = station.settings
+                q["c"]?.let { station.poseIndicatif(it) }
+                q["l"]?.takeIf { it.isNotBlank() }?.let { if (!station.poseLocator(it)) return JSONObject().put("ok", false).put("erreur", "locator non reconnu") }
+                q["qrzUser"]?.let { s.qrzUser = it.trim() }
+                q["qrzMdp"]?.takeIf { it.isNotEmpty() }?.let { s.qrzMdp = it }
+                q["carnetUrl"]?.let { s.carnetUrl = it.trim() }
+                q["carnetCle"]?.takeIf { it.isNotEmpty() }?.let { s.carnetCle = it.trim() }
+                q["carnetProfil"]?.let { s.carnetProfil = it.trim() }
+                q["minEl"]?.toIntOrNull()?.let { s.minElevDeg = it.coerceIn(0, 45); kotlinx.coroutines.runBlocking { station.recalcule() } }
+            }
             "/api/rotor/reglages" -> {
                 entier("maxAz")?.let { rotor.setRotorMaxAz(it) }
                 entier("maxEl")?.let { rotor.setRotorMaxEl(it) }
@@ -143,8 +194,8 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
             URLDecoder.decode(it.substringBefore('='), "UTF-8") to URLDecoder.decode(it.substringAfter('='), "UTF-8")
         }
 
-    private fun envoie(s: OutputStream, statut: String, type: String, corps: ByteArray) {
-        s.write(("HTTP/1.1 $statut\r\nContent-Type: $type\r\nContent-Length: ${corps.size}\r\n" +
+    private fun envoie(s: OutputStream, statut: String, type: String, corps: ByteArray, entetes: String = "") {
+        s.write(("HTTP/1.1 $statut\r\nContent-Type: $type\r\nContent-Length: ${corps.size}\r\n" + entetes +
             "Cache-Control: no-store\r\nConnection: close\r\n\r\n").toByteArray())
         s.write(corps)
         s.flush()
@@ -215,6 +266,25 @@ object JsonPc {
     fun satellites(st: StationPc) = JSONArray(st.etat.value.satellites.map {
         JSONObject().put("nom", it.name).put("catnum", it.catalogNumber)
     })
+
+    fun carnet(c: CarnetPc?): JSONObject {
+        val l = c?.contacts().orEmpty()
+        return JSONObject().put("carres", c?.carres() ?: 0).put("nonDeposes", l.count { it.envoyeMs == 0L })
+            .put("contacts", JSONArray(l.take(500).map { e ->
+                JSONObject().put("t", e.timeMs).put("c", e.callsign).put("l", e.theirLocator).put("sat", e.satName)
+                    .put("md", e.mode).put("rs", e.rstSent).put("rr", e.rstRcvd).put("n", e.note).put("nm", e.nom)
+                    .put("qth", e.qth).put("az", e.azimuthDeg).put("el", e.elevationDeg).put("dl", e.downlinkMhz)
+                    .put("ul", e.uplinkMhz).put("envoye", e.envoyeMs > 0).put("ml", e.myLocator)
+            }))
+    }
+
+    /** The settings shown on the page; passwords and keys never come back, only whether they are set. */
+    fun reglages(st: StationPc): JSONObject {
+        val s = st.settings
+        return JSONObject().put("c", s.callsign).put("l", s.manualLocator).put("qrzUser", s.qrzUser)
+            .put("qrzMdp", s.qrzMdp.isNotEmpty()).put("carnetUrl", s.carnetUrl).put("carnetCle", s.carnetCle.isNotEmpty())
+            .put("carnetProfil", s.carnetProfil).put("minEl", s.minElevDeg)
+    }
 
     fun ports(st: StationPc) = JSONArray(st.ports.liste().map {
         JSONObject().put("index", it.index).put("libelle", it.libelle).put("vendor", it.vendorId)

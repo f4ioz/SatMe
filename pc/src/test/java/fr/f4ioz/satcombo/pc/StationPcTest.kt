@@ -114,6 +114,29 @@ class StationPcTest {
     }
 
     @Test
+    fun un_contact_se_note_avec_le_satellite_sa_position_et_les_frequences_au_repos() {
+        val st = station()
+        val carnet = CarnetPc(st, fr.f4ioz.satcombo.data.LogStore(File(dossier, "qso_log.json")), horloge = { milieu })
+        // No satellite followed: nothing logged.
+        assertEquals(null, carnet.ajoute("F5XYZ", "JN03", "59", "57"))
+        assertTrue(st.suis(25544))
+        attends { st.etat.value.position != null && st.etat.value.emetteurs.isNotEmpty() }
+        val e = carnet.ajoute("f5xyz", "jn03", "59", "57", "essai")!!
+        assertEquals("F5XYZ", e.callsign); assertEquals("JN03", e.theirLocator)
+        assertEquals("ISS", e.satName); assertEquals(milieu, e.timeMs)
+        assertEquals(st.etat.value.position!!.elevationDeg, e.elevationDeg, 0.5)
+        assertEquals("FM", e.mode)
+        assertEquals(437.8, e.downlinkMhz, 1e-6); assertEquals(145.99, e.uplinkMhz, 1e-6)
+        assertEquals("JN18FS", e.myLocator)
+        // Changed, then gone; the ADIF says it.
+        carnet.modifie(e.timeMs, e.copy(callsign = "F5XYZ/P", nom = "Jean"))
+        assertEquals("Jean", carnet.contacts().single().nom)
+        assertTrue(carnet.adif().contains("<CALL:7>F5XYZ/P"))
+        carnet.supprime(e.timeMs)
+        assertTrue(carnet.contacts().isEmpty())
+    }
+
+    @Test
     fun le_mat_simule_vise_le_satellite() {
         val st = station()
         st.suis(25544)

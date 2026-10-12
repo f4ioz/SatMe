@@ -78,7 +78,7 @@ class Catalogue(
     private fun telecharge(url: String): String {
         require(!interdit(url)) { "source interdite : $url" }
         check(enLigne) { "hors ligne" }
-        val req = Request.Builder().url(url).header("User-Agent", AGENT).build()
+        val req = Request.Builder().url(url).header("User-Agent", fr.f4ioz.satcombo.data.AgentHttp.USER_AGENT).build()
         client.newCall(req).execute().use { r ->
             check(r.isSuccessful) { "HTTP ${r.code}" }
             return r.body?.string().orEmpty()
@@ -88,7 +88,6 @@ class Catalogue(
     companion object {
         const val AMSAT_GP = "https://newark192.amsat.org/gpdata/current/daily-bulletin.json"
         const val AMSAT_TLE = "https://www.amsat.org/tle/current/nasabare.txt"
-        const val AGENT = "SatMe-PC (+https://github.com/f4ioz/SatMe)"
 
         /** CelesTrak refuses this station's address: never asked from the PC. */
         fun interdit(url: String): Boolean = url.contains("celestrak", ignoreCase = true)
