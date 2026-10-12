@@ -79,7 +79,7 @@ object PagePc {
   <span class="g" id="info-station"></span>
   <span class="g" id="cat-statut-court"></span>
   <nav id="onglets">
-    <button data-v="station" class="actif">Station</button><button data-v="carnet">Carnet</button><button data-v="agenda">Agenda</button><button data-v="son">Son</button><button data-v="sstv">SSTV</button><button data-v="aprs">APRS</button><a href="/journal" style="text-decoration:none"><button title="Les passages enregistrés, rejoués">Journal</button></a><button data-v="reglages">Réglages</button>
+    <button data-v="station" class="actif">Station</button><button data-v="carnet">Carnet</button><button data-v="agenda">Agenda</button><button data-v="carres">Carrés</button><button data-v="son">Son</button><button data-v="sstv">SSTV</button><button data-v="aprs">APRS</button><a href="/journal" style="text-decoration:none"><button title="Les passages enregistrés, rejoués">Journal</button></a><button data-v="reglages">Réglages</button>
   </nav>
   <span id="rec" class="pastille" style="display:none;background:rgba(229,72,77,.2);color:var(--rose)"></span>
   <span id="heure"></span>
@@ -353,6 +353,30 @@ object PagePc {
   <div>
     <div class="carte">
       <table><thead><tr><th>Quand</th><th>Rendez-vous</th><th>Satellite</th><th></th></tr></thead><tbody id="g-liste"></tbody></table>
+    </div>
+  </div>
+</div>
+</div>
+<div class="vue" id="v-carres" hidden>
+<div class="grille2" style="grid-template-columns:minmax(300px,1fr) minmax(500px,2.2fr)">
+  <div>
+    <div class="carte">
+      <div class="paire">
+        <span><span class="val" id="q-n">0</span> <span class="petit">carrés</span></span>
+        <span><span class="val" id="q-champs">0</span> <span class="petit">champs</span></span>
+        <span><span class="val ambre" id="q-loin">—</span> <span class="petit">km au plus loin</span></span>
+      </div>
+      <div class="ligne"><input id="q-filtre" placeholder="Filtrer : carré, indicatif, satellite…"></div>
+      <div style="max-height:calc(100vh - 230px);overflow:auto;margin-top:6px">
+        <table><thead><tr><th>Carré</th><th>QSO</th><th>km</th><th>Stations</th></tr></thead><tbody id="q-liste"></tbody></table>
+      </div>
+    </div>
+  </div>
+  <div>
+    <div class="carte" style="padding:0;overflow:hidden;position:relative">
+      <canvas id="q-carte" style="width:100%;height:calc(100vh - 110px);display:block;cursor:grab"></canvas>
+      <div class="petit" style="position:absolute;right:6px;bottom:4px;background:rgba(255,255,255,.75);color:#333;padding:0 4px;border-radius:3px">© OpenStreetMap</div>
+      <div class="petit" style="position:absolute;left:8px;top:6px;background:rgba(11,16,22,.75);padding:2px 8px;border-radius:6px">glisser, molette ; double-clic : recadrer · <span style="color:#3FE0C8">■</span> contacté · <span style="color:#FFB454">■</span> mon carré</div>
     </div>
   </div>
 </div>
@@ -708,6 +732,7 @@ function vue(n) {
   if (n === 'reglages') chargeReglages();
   if (n === 'son' || n === 'sstv') ticSon();
   if (n === 'aprs') ticAprs();
+  if (n === 'carres') chargeCarres();
 }
 document.querySelectorAll('#onglets button[data-v]').forEach(b => b.onclick = () => vue(b.dataset.v));
 
@@ -878,6 +903,95 @@ async function ticSon() {
       '<div class="petit">aucune image</div>';
   }
 }
+// ------------------------------------------------------------------ squares worked
+let Q = null, qz = 4, qcx = 0.5, qcy = 0.35, qCadre = false;
+const qTuiles = new Map();
+const wxq = lon => (lon + 180) / 360;
+function wyq(lat) { const l = Math.max(-85, Math.min(85, lat)) * Math.PI / 180; return (1 - Math.log(Math.tan(l) + 1 / Math.cos(l)) / Math.PI) / 2; }
+// A 4-character square: its south-west corner (2° of longitude, 1° of latitude).
+function coin(c) { const A = 'A'.charCodeAt(0); return [(c.charCodeAt(0) - A) * 20 - 180 + (+c[2]) * 2, (c.charCodeAt(1) - A) * 10 - 90 + (+c[3])]; }
+async function chargeCarres() {
+  try { Q = await (await fetch('/api/carres')).json(); } catch (x) { return; }
+  txt('q-n', String(Q.carres.length)); txt('q-champs', String(Q.champs));
+  const kms = Q.carres.map(c => c.km).filter(k => k != null);
+  txt('q-loin', kms.length ? String(Math.max(...kms)) : '—');
+  dessineListeCarres();
+  if (!qCadre) cadreCarres();
+  dessineCarres();
+}
+function dessineListeCarres() {
+  const f = v('q-filtre').toUpperCase();
+  g('q-liste').innerHTML = Q.carres.filter(c => !f || [c.c, c.indicatifs.join(' '), c.sats.join(' ')].join(' ').toUpperCase().includes(f))
+    .sort((a, b) => b.dernier - a.dernier).map(c => '<tr class="p" onclick="centreSur(\'' + c.c + '\')"><td><b>' + c.c + '</b></td><td>' + c.n +
+    '</td><td>' + (c.km == null ? '' : c.km) + '</td><td class="petit">' + esc(c.indicatifs.join(', ')) + '<br>' + esc(c.sats.join(', ')) + '</td></tr>').join('') ||
+    '<tr><td colspan="4" class="petit">aucun carré dans le carnet</td></tr>';
+}
+g('q-filtre').oninput = () => Q && dessineListeCarres();
+function cadreCarres() {
+  const c = g('q-carte'); if (!c.clientWidth) return;
+  const pts = Q.carres.map(q => { const [lo, la] = coin(q.c); return [la + 0.5, lo + 1]; });
+  if (Q.lat != null) pts.push([Q.lat, Q.lon]);
+  if (!pts.length) return;
+  const xs = pts.map(p => wxq(p[1])), ys = pts.map(p => wyq(p[0]));
+  const x0 = Math.min(...xs) - 0.01, x1 = Math.max(...xs) + 0.01, y0 = Math.min(...ys) - 0.01, y1 = Math.max(...ys) + 0.01;
+  qcx = (x0 + x1) / 2; qcy = (y0 + y1) / 2;
+  qz = Math.max(2, Math.min(9, Math.log2(Math.min(c.clientWidth / 256 / (x1 - x0), c.clientHeight / 256 / (y1 - y0)) * 0.9)));
+  qCadre = true;
+}
+function centreSur(k) { const [lo, la] = coin(k); qcx = wxq(lo + 1); qcy = wyq(la + 0.5); qz = Math.max(qz, 6); dessineCarres(); }
+function qTuile(z, x, y) {
+  const n = 1 << z, xw = ((x % n) + n) % n, k = z + '/' + xw + '/' + y;
+  let i = qTuiles.get(k);
+  if (!i) { i = new Image(); i.onload = () => dessineCarres(); i.src = '/journal/tuile?z=' + z + '&x=' + xw + '&y=' + y; qTuiles.set(k, i);
+    if (qTuiles.size > 500) qTuiles.delete(qTuiles.keys().next().value); }
+  return i.complete && i.naturalWidth ? i : null;
+}
+function dessineCarres() {
+  const c = g('q-carte'); if (!c || !Q || g('v-carres').hidden) return;
+  const w = c.clientWidth, h = c.clientHeight, dpr = window.devicePixelRatio || 1;
+  if (c.width !== Math.round(w * dpr) || c.height !== Math.round(h * dpr)) { c.width = Math.round(w * dpr); c.height = Math.round(h * dpr); }
+  const x = c.getContext('2d'); x.setTransform(dpr, 0, 0, dpr, 0, 0);
+  x.fillStyle = '#AAD3DF'; x.fillRect(0, 0, w, h);
+  const z = Math.max(0, Math.min(16, Math.floor(qz))), ts = 256 * Math.pow(2, qz - z), s = 256 * Math.pow(2, qz);
+  const n = 1 << z, ox = w / 2 - qcx * s, oy = h / 2 - qcy * s;
+  for (let ty = Math.max(0, Math.floor(-oy / ts)); ty <= Math.min(n - 1, Math.floor((h - oy) / ts)); ty++)
+    for (let tx = Math.floor(-ox / ts); tx <= Math.floor((w - ox) / ts); tx++) { const i = qTuile(z, tx, ty); if (i) x.drawImage(i, ox + tx * ts, oy + ty * ts, ts + 0.5, ts + 0.5); }
+  const px = lon => ox + wxq(lon) * s, py = lat => oy + wyq(lat) * s;
+  const carre = (k, fond, bord, l) => { const [lo, la] = coin(k); const xa = px(lo), xb = px(lo + 2), ya = py(la + 1), yb = py(la);
+    x.fillStyle = fond; x.fillRect(xa, ya, xb - xa, yb - ya); x.strokeStyle = bord; x.lineWidth = l; x.strokeRect(xa, ya, xb - xa, yb - ya); return [xa, ya, xb, yb]; };
+  // The squares' grid when there is room for it, the fields' always.
+  const pasCarre = px(2) - px(0);
+  x.lineWidth = 1;
+  for (let lon = -180; lon <= 180; lon += pasCarre > 14 ? 2 : 20) {
+    x.strokeStyle = lon % 20 === 0 ? 'rgba(30,40,55,.55)' : 'rgba(30,40,55,.18)'; x.beginPath(); x.moveTo(px(lon), 0); x.lineTo(px(lon), h); x.stroke(); }
+  for (let lat = -80; lat <= 80; lat += pasCarre > 14 ? 1 : 10) {
+    x.strokeStyle = lat % 10 === 0 ? 'rgba(30,40,55,.55)' : 'rgba(30,40,55,.18)'; x.beginPath(); x.moveTo(0, py(lat)); x.lineTo(w, py(lat)); x.stroke(); }
+  // Worked: the more contacts, the deeper the colour.
+  const max = Math.max(1, ...Q.carres.map(q => q.n));
+  x.font = 'bold ' + Math.max(9, Math.min(14, pasCarre / 4)) + 'px system-ui'; x.textAlign = 'center';
+  Q.carres.forEach(q => { const a = 0.25 + 0.5 * Math.log(1 + q.n) / Math.log(1 + max);
+    const [xa, ya, xb, yb] = carre(q.c, 'rgba(63,224,200,' + a.toFixed(2) + ')', 'rgba(20,120,110,.9)', 1);
+    if (pasCarre > 28) { x.fillStyle = '#06131A'; x.fillText(q.c, (xa + xb) / 2, (ya + yb) / 2 + 4); } });
+  if (Q.mon && Q.mon.length === 4) { carre(Q.mon, 'rgba(255,180,84,.45)', '#FFB454', 2.5);
+    if (Q.lat != null) { x.fillStyle = '#1a1f2a'; x.beginPath(); x.arc(px(Q.lon), py(Q.lat), 5, 0, 7); x.fill(); } }
+  if (pasCarre <= 14) { x.fillStyle = 'rgba(20,30,45,.7)'; x.font = '11px system-ui';
+    for (let lon = -180; lon < 180; lon += 20) for (let lat = -90; lat < 90; lat += 10) {
+      const f = String.fromCharCode(65 + (lon + 180) / 20) + String.fromCharCode(65 + (lat + 90) / 10); x.fillText(f, px(lon + 10), py(lat + 5)); } }
+}
+(function () {
+  const c = g('q-carte'); let pres = null;
+  c.addEventListener('pointerdown', ev => { c.setPointerCapture(ev.pointerId); pres = { x: ev.clientX, y: ev.clientY, cx: qcx, cy: qcy }; c.style.cursor = 'grabbing'; });
+  c.addEventListener('pointermove', ev => { if (!pres) return; const s = 256 * Math.pow(2, qz);
+    qcx = pres.cx - (ev.clientX - pres.x) / s; qcy = Math.max(0, Math.min(1, pres.cy - (ev.clientY - pres.y) / s)); dessineCarres(); });
+  c.addEventListener('pointerup', () => { pres = null; c.style.cursor = 'grab'; });
+  c.addEventListener('wheel', ev => { ev.preventDefault(); const r = c.getBoundingClientRect(), s = 256 * Math.pow(2, qz);
+    const mx = qcx + (ev.clientX - r.left - r.width / 2) / s, my = qcy + (ev.clientY - r.top - r.height / 2) / s;
+    qz = Math.max(1, Math.min(12, qz + (ev.deltaY > 0 ? -0.35 : 0.35))); const s2 = 256 * Math.pow(2, qz);
+    qcx = mx - (ev.clientX - r.left - r.width / 2) / s2; qcy = my - (ev.clientY - r.top - r.height / 2) / s2; dessineCarres(); }, { passive: false });
+  c.addEventListener('dblclick', () => { qCadre = false; cadreCarres(); dessineCarres(); });
+  window.addEventListener('resize', dessineCarres);
+})();
+
 // ------------------------------------------------------------------ APRS
 let A = null, aVus = '';
 async function ticAprs() {
@@ -912,7 +1026,7 @@ setInterval(ticSon, 1000);
 
 lienRotor(); avertCat();
 // The tab from the address (#carnet, a bookmark), else the last one seen.
-if (['station', 'carnet', 'agenda', 'son', 'sstv', 'aprs', 'reglages'].includes(location.hash.slice(1))) vue(location.hash.slice(1));
+if (['station', 'carnet', 'agenda', 'carres', 'son', 'sstv', 'aprs', 'reglages'].includes(location.hash.slice(1))) vue(location.hash.slice(1));
 else try { const n = localStorage.getItem('vue'); if (n) vue(n); } catch (x) {}
 tic(); chargeListe(); chargePorts(); chargeSatellites();
 setInterval(chargeSatellites, 600000);

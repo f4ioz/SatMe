@@ -87,6 +87,7 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
             "/api/passages" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JsonPc.passages(station).toString().toByteArray())
             "/api/satellites" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JsonPc.satellites(station).toString().toByteArray())
             "/api/ports" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JsonPc.ports(station).toString().toByteArray())
+            "/api/carres" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JsonPc.carres(carnet, station).toString().toByteArray())
             "/api/carnet" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JsonPc.carnet(carnet).toString().toByteArray())
             "/api/reglages" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JsonPc.reglages(station).toString().toByteArray())
             "/api/qrz" -> {
@@ -377,6 +378,26 @@ object JsonPc {
                     .put("md", e.mode).put("rs", e.rstSent).put("rr", e.rstRcvd).put("n", e.note).put("nm", e.nom)
                     .put("qth", e.qth).put("az", e.azimuthDeg).put("el", e.elevationDeg).put("dl", e.downlinkMhz)
                     .put("ul", e.uplinkMhz).put("envoye", e.envoyeMs > 0).put("ml", e.myLocator)
+            }))
+    }
+
+    /**
+     * The squares worked (4 characters), from the log: how many contacts,
+     * the first one, who, on which satellites; and mine with its neighbours.
+     */
+    fun carres(c: CarnetPc?, st: StationPc): JSONObject {
+        val l = c?.contacts().orEmpty().filter { it.theirLocator.length >= 4 && fr.f4ioz.satcombo.location.Maidenhead.centre(it.theirLocator.take(4)) != null }
+        val parCarre = l.groupBy { it.theirLocator.take(4).uppercase() }
+        val mon = st.etat.value.locator.take(4).uppercase()
+        val obs = st.etat.value.observateur
+        return JSONObject().put("mon", mon).put("lat", obs?.latDeg ?: JSONObject.NULL).put("lon", obs?.lonDeg ?: JSONObject.NULL)
+            .put("champs", parCarre.keys.map { it.take(2) }.distinct().size)
+            .put("carres", JSONArray(parCarre.entries.sortedBy { it.key }.map { (k, q) ->
+                val centre = fr.f4ioz.satcombo.location.Maidenhead.centre(k)
+                JSONObject().put("c", k).put("n", q.size).put("premier", q.minOf { it.timeMs }).put("dernier", q.maxOf { it.timeMs })
+                    .put("indicatifs", JSONArray(q.map { it.callsign }.distinct().take(12)))
+                    .put("sats", JSONArray(q.map { it.satName }.distinct()))
+                    .put("km", if (obs != null && centre != null) Math.round(fr.f4ioz.satcombo.sonde.Geo.distanceKm(obs.latDeg, obs.lonDeg, centre.first, centre.second)) else JSONObject.NULL)
             }))
     }
 
