@@ -351,6 +351,8 @@ class Ft817Pair(
         // Yaesu first, then Icom: with an IC-705 in the pair, the adapter may
         // speak either, and each protocol ignores the other's frames.
         for (poste in listOf<PosteSimple>(Ft817Cat(ports), Ic705Cat(ports))) {
+            // The CI-V raises RTS/DTR: never on a cable named for another rig (a TS-2000's RigExpert).
+            if (poste is Ic705Cat && !civPermis(cle)) continue
             if (!poste.open(cle, if (poste is Ic705Cat) baudIc705 else baud)) continue
             val hz = runCatching { poste.readFrequency() }.getOrNull()
             poste.close()
@@ -368,6 +370,7 @@ class Ft817Pair(
      */
     suspend fun repereIc705(cles: List<String>, baud: Int = Ic705Cat.VITESSE): String? {
         for (cle in cles) {
+            if (!civPermis(cle)) continue
             val icom = Ic705Cat(ports)
             if (!icom.open(cle, baud)) continue
             val hz = runCatching { icom.readFrequency() }.getOrNull()
@@ -376,6 +379,10 @@ class Ft817Pair(
         }
         return null
     }
+
+    /** May a CI-V probe (lines up) open this adapter? Not one named for another rig. */
+    private fun civPermis(cle: String): Boolean =
+        ports?.portsDe(cle)?.firstOrNull()?.let { !CatScan.nomAutrePoste(it.produit) } ?: true
 
     /** Ask permission for every recognized adapter that lacks it. */
     fun requestPermissions() {

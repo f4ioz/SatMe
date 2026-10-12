@@ -8360,10 +8360,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             // without waiting, then open device 0 port 0 whatever the choice.)
             val trace = ArrayList<String>()
             // Never the rotor's port (nor an Arduino): opening it reboots the board.
-            val ordre = fr.f4ioz.satcombo.cat.CatScan.sansRotor(
+            // Nor another rig's cable: the CI-V raises RTS/DTR, which keys a Kenwood or a Yaesu.
+            val ordre = fr.f4ioz.satcombo.cat.CatScan.sansAutresPostes(fr.f4ioz.satcombo.cat.CatScan.sansRotor(
                 if (_ui.value.civUsbAuto) fr.f4ioz.satcombo.cat.CatScan.ordre(refs, _ui.value.civUsbIndex)
                 else listOf(_ui.value.civUsbIndex.coerceIn(0, refs.size - 1)),
-                { cat.identite(it) }, stationRotor.cleUsb ?: settings.rotorUsbCle)
+                { cat.identite(it) }, stationRotor.cleUsb ?: settings.rotorUsbCle),
+                { cat.portSerie(it) },
+                listOf(settings.ts2000Cle, settings.ft817RxSerial, settings.ft817TxSerial).filter { it.isNotBlank() })
             var gagnant = -1
             for (i in ordre) {
                 trace.add(tf("cat_diag_try", refs[i].label))

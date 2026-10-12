@@ -22,6 +22,7 @@ import fr.f4ioz.satcombo.plateforme.Lignes
 import fr.f4ioz.satcombo.plateforme.Ouverture
 import fr.f4ioz.satcombo.plateforme.PortSerie
 import fr.f4ioz.satcombo.plateforme.PortsSerie
+import fr.f4ioz.satcombo.plateforme.portPttRigExpert
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -68,6 +69,7 @@ class PortsSerieAndroid(private val context: Context) : PortsSerie {
     }
 
     override suspend fun ouvre(p: PortSerie, baud: Int, lignes: Lignes, deuxArrets: Boolean): Ouverture = withContext(Dispatchers.IO) {
+        if (p.portPttRigExpert()) return@withContext Ouverture(null, t("cat_err_port_ptt"))
         val drv = pilotes().getOrNull(p.appareil) ?: return@withContext Ouverture(null, t("cat_err_no_device"))
         if (!um.hasPermission(drv.device)) return@withContext Ouverture(null, t("cat_err_denied"))
         val conn = um.openDevice(drv.device) ?: return@withContext Ouverture(null, t("cat_err_open_device"))

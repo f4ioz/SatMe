@@ -1013,6 +1013,7 @@ val EN: Map<String, String> = mapOf(
     "cat_err_denied" to "permission not granted",
     "cat_err_open_device" to "device already held by another app",
     "cat_err_no_port" to "that port does not exist on this device",
+    "cat_err_port_ptt" to "A RigExpert's PTT/CW port: never opened (it would key the rig).",
     "cat_err_open_port" to "{0}",
     "usb_permission_denied" to "USB permission denied or unanswered. Re-plug the rig and accept the prompt.",
     "rotor_badge" to "ROTOR",

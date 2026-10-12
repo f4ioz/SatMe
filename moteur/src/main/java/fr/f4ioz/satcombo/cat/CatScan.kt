@@ -37,6 +37,32 @@ object CatScan {
         return listOf(c) + freres + autres
     }
 
+    /**
+     * The Icom search without the other rigs' cables.
+     *
+     * The CI-V opens a port with RTS and DTR up. Tried on a Kenwood's or a
+     * Yaesu's cable, that keys the transmitter: on 12/10/2026, the IC-9700
+     * search (the IC-9700 unplugged) opened the RigExpert of a TS-2000 and put
+     * it on the air. So never [clesAutres] (the adapters the TS-2000 and the
+     * FT-817s answered on), nor an interface named for another rig
+     * ([nomAutrePoste]) — not even the port "chosen": a remembered number,
+     * which points at another cable as soon as the plugging changes. [port]
+     * describes port `i`; null: unknown (kept, as before).
+     */
+    fun sansAutresPostes(ordre: List<Int>, port: (Int) -> fr.f4ioz.satcombo.plateforme.PortSerie?,
+                         clesAutres: Collection<String>): List<Int> =
+        ordre.filter { i ->
+            val p = port(i) ?: return@filter true
+            p.cle !in clesAutres && !nomAutrePoste(p.produit)
+        }
+
+    /** Names that say "an interface for another rig than an Icom" (product strings, any case). */
+    val AUTRES_POSTES = listOf("RigExpert", "TS-2000", "TS-590", "TS-890", "TH-D72", "TH-D74", "FT-991", "FT-710",
+        "FT-817", "FT-818", "FT-857", "FT-897", "FTDX", "CT-62", "SCU-17")
+
+    fun nomAutrePoste(produit: String?): Boolean =
+        produit != null && AUTRES_POSTES.any { produit.contains(it, ignoreCase = true) }
+
     /** Arduino boards (Arduino SA, Arduino.org): a rotator controller here, never a rig. */
     val VENDEURS_ARDUINO = setOf(0x2341, 0x2A03)
 

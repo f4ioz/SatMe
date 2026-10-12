@@ -1037,6 +1037,7 @@ val FR: Map<String, String> = mapOf(
     "cat_err_denied" to "permission non accordée",
     "cat_err_open_device" to "appareil déjà pris par une autre application",
     "cat_err_no_port" to "ce port n'existe pas sur cet appareil",
+    "cat_err_port_ptt" to "Port PTT/CW d'un RigExpert : jamais ouvert (il ferait émettre le poste).",
     "cat_err_open_port" to "{0}",
     "usb_permission_denied" to "Autorisation USB refusée ou sans réponse. Rebranche le poste et accepte la demande.",
     "rotor_badge" to "ROTOR",

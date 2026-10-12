@@ -15,6 +15,7 @@ import fr.f4ioz.satcombo.plateforme.Lignes
 import fr.f4ioz.satcombo.plateforme.Ouverture
 import fr.f4ioz.satcombo.plateforme.PortSerie
 import fr.f4ioz.satcombo.plateforme.PortsSerie
+import fr.f4ioz.satcombo.plateforme.portPttRigExpert
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -46,6 +47,7 @@ class PortsSeriePc : PortsSerie {
     override suspend fun demandeEtAttends(p: PortSerie): Boolean = true
 
     override suspend fun ouvre(p: PortSerie, baud: Int, lignes: Lignes, deuxArrets: Boolean): Ouverture = withContext(Dispatchers.IO) {
+        if (p.portPttRigExpert()) return@withContext Ouverture(null, "port PTT/CW d'un RigExpert : jamais ouvert")
         val port = decrit(ports()).firstOrNull { it.first.cle == p.cle && it.first.port == p.port }?.second
             ?: return@withContext Ouverture(null, "port introuvable : ${p.libelle}")
         // Before opening: jSerialComm applies them as the port opens.

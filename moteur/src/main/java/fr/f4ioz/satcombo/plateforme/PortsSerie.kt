@@ -51,6 +51,13 @@ enum class Lignes {
     TELLES
 }
 
+/**
+ * A RigExpert's second port: PTT on RTS, CW on DTR. SatMe never needs it,
+ * and opening it with its lines up keys the transmitter — an IC-9700 search
+ * did just that on a TS-2000 (12/10/2026). Never opened, whoever asks.
+ */
+fun PortSerie.portPttRigExpert(): Boolean = port > 0 && produit?.contains("RigExpert", ignoreCase = true) == true
+
 /** What opening gave: the line, or why not, in words for the operator. */
 class Ouverture(val lien: SerialLink?, val erreur: String)
 

@@ -86,6 +86,9 @@ class CivController(private val ports: PortsSerie? = null) : RigDriver {
         ports?.liste()?.map { PortRef(it.appareil, it.port, it.libelle) } ?: emptyList()
 
     /** Port [index]'s USB key and vendor id, or null. */
+    /** Port [index] as the platform describes it (name, adapter, key), null when gone. */
+    fun portSerie(index: Int): fr.f4ioz.satcombo.plateforme.PortSerie? = ports?.liste()?.getOrNull(index)
+
     fun identite(index: Int): Pair<String, Int>? =
         ports?.liste()?.getOrNull(index)?.let { it.cle to it.vendorId }
 

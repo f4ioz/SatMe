@@ -177,4 +177,43 @@ class PortsSerieTest {
         paire.requestPermissions()
         assertEquals(2, pp.demandes)
     }
+
+    // ------------------------------------- the TS-2000 keyed by an Icom search (12/10)
+
+    @Test
+    fun le_port_ptt_d_un_rigexpert_se_reconnait() {
+        val re = adaptateur("RE", "RigExpert Tiny", 2)
+        assertFalse(re[0].portPttRigExpert())
+        assertTrue(re[1].portPttRigExpert())
+        assertFalse(adaptateur("IC", "IC-9700", 2)[1].portPttRigExpert())
+    }
+
+    @Test
+    fun la_recherche_icom_n_ouvre_ni_le_cable_d_un_autre_poste_ni_un_rigexpert() {
+        // The IC-9700 unplugged: a TS-2000's RigExpert (both ports), an FTDI cable of an FT-817, a CP210x.
+        val ports = adaptateur("RE", "RigExpert Tiny", 2) +
+            adaptateur("FT", "FT232R USB UART", 1, appareil = 1, debut = 2) +
+            adaptateur("CP", "CP2102N", 1, appareil = 2, debut = 3)
+        val tous = listOf(0, 1, 2, 3)
+        fun garde(ordre: List<Int>, autres: List<String>) = fr.f4ioz.satcombo.cat.CatScan.sansAutresPostes(ordre, { ports.getOrNull(it) }, autres)
+        // The TS-2000's and the FT-817's adapters known: only the CP210x is tried.
+        assertEquals(listOf(3), garde(tous, listOf("RE", "FT")))
+        // Nothing remembered yet: the RigExpert is still left alone (its name).
+        assertEquals(listOf(2, 3), garde(tous, emptyList()))
+        // Not even when the remembered number points at it.
+        assertEquals(listOf(3), garde(listOf(1, 3), emptyList()))
+        assertEquals(listOf(3), garde(listOf(0, 1, 3), emptyList()))
+    }
+
+    @Test
+    fun la_sonde_ic705_n_essaie_pas_le_ci_v_sur_un_rigexpert() = runBlocking {
+        val sim = fr.f4ioz.satcombo.cat.Ts2000Sim()
+        val pp = FauxPorts(adaptateur("RE", "RigExpert Tiny", 2), { sim })
+        val paire = fr.f4ioz.satcombo.cat.Ft817Pair(pp)
+        assertEquals(null, paire.repereIc705(listOf("RE")))
+        paire.sonde("RE", 9_600)
+        // Only the Yaesu probe (lines as they are), never the CI-V one (lines up).
+        assertTrue(pp.ouverts.none { it.second == Lignes.LEVEES })
+        assertEquals(0, sim.tentativesEmission)
+    }
 }

@@ -445,6 +445,9 @@ class StationPc(
                                 pTx?.let { "TX ${nom(c.txIc705)} sur ${it.libelle}" }).joinToString(" · ")) }
                     }
                     else -> {
+                        // The CI-V raises RTS/DTR: never on a cable named for another rig (a TS-2000's RigExpert).
+                        if (p != null && fr.f4ioz.satcombo.cat.CatScan.nomAutrePoste(p.produit))
+                            { echec("${p.libelle} est l'interface d'un autre poste : le CI-V le ferait émettre"); return@withLock }
                         val mi = ModeleIcom.de(m)
                         civ.modele = mi
                         civ.radioAddr = mi.adresse
