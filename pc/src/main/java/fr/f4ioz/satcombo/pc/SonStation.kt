@@ -60,6 +60,8 @@ class SonStation(
     var aprsActif: Boolean
         get() = station.stockage.getBoolean("pc_aprs", true)
         set(v) { station.stockage.edit().putBoolean("pc_aprs", v).apply() }
+    /** FT8 / FT4 on the card, as the phone's FT8 screen. */
+    val ft8 = Ft8Pc(horloge)
     /** APRS heard on the card, kept as the phone keeps it. */
     val aprs = AprsPc(File(dossierEnregistrements.parentFile, "aprs"), { station.etat.value.suivi?.name ?: "" }, horloge)
     var enregAuto: Boolean
@@ -81,6 +83,7 @@ class SonStation(
             wav?.let { w -> w.ajoute(pcm, n); _etat.update { it.copy(secondes = w.secondes) } }
             if (sstvActif) sstv(pcm, n, rate)
             if (aprsActif) aprs.ecoute(pcm, n, rate)
+            ft8.ecoute(pcm, n, rate)
         }
     }
 

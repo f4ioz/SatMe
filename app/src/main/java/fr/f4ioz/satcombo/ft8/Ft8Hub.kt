@@ -154,7 +154,7 @@ object Ft8Hub {
         // Short blocks: at 4096 samples (a third of a second) the waterfall
         // would jump three rows at a time.
         val bloc = ShortArray(1024)
-        val analyseur = Analyseur(BASSE_HZ, HAUTE_HZ, COLONNES)
+        val analyseur = fr.f4ioz.satcombo.domain.Ft8Cascade(BASSE_HZ, HAUTE_HZ, COLONNES, CADENCE)
         var tampon = FloatArray(parTranche)
         var ecrit = 0
         // Drop the first slot: it starts mid-transmission.
@@ -213,7 +213,6 @@ object Ft8Hub {
     /** The analysed band, in Hz. */
     private const val BASSE_HZ = 200
     private const val HAUTE_HZ = 3000
-    private const val LIGNES_CASCADE = 60
 
     /**
      * Live analyser.
@@ -226,85 +225,6 @@ object Ft8Hub {
      * 2048 points at 12 kHz: 171 ms, 5.9 Hz per bin. An FT8 signal spans
      * eight bins — clear enough, without resolution that costs CPU per frame.
      */
-    private const val FENETRE = 2048
-    /** About 1/8 s between rows: enough for the eye. */
-    private const val PAS_ANALYSE = 1536
-
-    private class Analyseur(val basseHz: Int, val hauteHz: Int, val colonnes: Int) {
-        private val anneau = FloatArray(FENETRE)
-        private var ecrit = 0
-        private var depuisDerniere = 0
-        private val re = FloatArray(FENETRE)
-        private val im = FloatArray(FENETRE)
-        /** Hann window, computed once. */
-        private val fenetre = FloatArray(FENETRE) {
-            (0.5 - 0.5 * kotlin.math.cos(2.0 * Math.PI * it / (FENETRE - 1))).toFloat()
-        }
-        /** Smoothed noise floor — otherwise the image flickers. */
-        private var plancher = -1.0
-
-        val lignes = ArrayDeque<ByteArray>()
-        var dernierSpectre = FloatArray(colonnes)
-            private set
-
-        /** Feeds samples; true when a new row is ready. */
-        fun verse(bloc: ShortArray, combien: Int): Boolean {
-            var pret = false
-            for (i in 0 until combien) {
-                anneau[ecrit] = bloc[i] / 32768f
-                ecrit = (ecrit + 1) % FENETRE
-                if (++depuisDerniere >= PAS_ANALYSE) { depuisDerniere = 0; pret = analyse() }
-            }
-            return pret
-        }
-
-        private fun analyse(): Boolean {
-            // Unroll the ring oldest first, windowed: without a window each
-            // tone leaks into its neighbours.
-            for (k in 0 until FENETRE) {
-                re[k] = anneau[(ecrit + k) % FENETRE] * fenetre[k]
-                im[k] = 0f
-            }
-            Ft8Signal.fft(re, im)
-
-            val binHz = CADENCE.toDouble() / FENETRE
-            val r0 = (basseHz / binHz).toInt().coerceAtLeast(1)
-            val r1 = (hauteHz / binHz).toInt().coerceAtMost(FENETRE / 2 - 1)
-            if (r1 <= r0) return false
-
-            var somme = 0.0
-            val ligne = ByteArray(colonnes)
-            val courbe = FloatArray(colonnes)
-            for (c in 0 until colonnes) {
-                val a = r0 + c * (r1 - r0) / colonnes
-                val b = (r0 + (c + 1) * (r1 - r0) / colonnes).coerceAtLeast(a + 1)
-                // Max, not mean: a narrow strong station would drown in an
-                // average with the surrounding noise.
-                var pic = 0f
-                for (r in a until minOf(b, r1)) {
-                    val v = re[r] * re[r] + im[r] * im[r]
-                    if (v > pic) pic = v
-                    somme += v
-                }
-                courbe[c] = pic
-            }
-            val moyenne = somme / (r1 - r0).coerceAtLeast(1)
-            plancher = if (plancher < 0) moyenne else plancher * 0.9 + moyenne * 0.1
-            val ref = if (plancher <= 0.0) 1e-12 else plancher
-
-            for (c in 0 until colonnes) {
-                val db = 10.0 * kotlin.math.log10((courbe[c] + 1e-12) / ref)
-                val v = ((db / 30.0).coerceIn(0.0, 1.0) * 255).toInt()
-                ligne[c] = v.toByte()
-                courbe[c] = (db / 30.0).coerceIn(0.0, 1.0).toFloat()
-            }
-            dernierSpectre = courbe
-            lignes.addFirst(ligne)
-            while (lignes.size > LIGNES_CASCADE) lignes.removeLast()
-            return true
-        }
-    }
-
     // The per-slot waterfall was removed: the live analyser answers the same
     // question better, and two versions would contradict each other on screen.
 

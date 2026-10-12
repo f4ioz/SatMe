@@ -79,7 +79,7 @@ object PagePc {
   <span class="g" id="info-station"></span>
   <span class="g" id="cat-statut-court"></span>
   <nav id="onglets">
-    <button data-v="station" class="actif">Station</button><button data-v="carnet">Carnet</button><button data-v="agenda">Agenda</button><button data-v="carres">Carrés</button><button data-v="frise">Frise</button><button data-v="sked">Sked</button><button data-v="son">Son</button><button data-v="sstv">SSTV</button><button data-v="aprs">APRS</button><a href="/journal" style="text-decoration:none"><button title="Les passages enregistrés, rejoués">Journal</button></a><button data-v="reglages">Réglages</button>
+    <button data-v="station" class="actif">Station</button><button data-v="carnet">Carnet</button><button data-v="agenda">Agenda</button><button data-v="carres">Carrés</button><button data-v="frise">Frise</button><button data-v="sked">Sked</button><button data-v="son">Son</button><button data-v="sstv">SSTV</button><button data-v="aprs">APRS</button><button data-v="ft8">FT8</button><a href="/journal" style="text-decoration:none"><button title="Les passages enregistrés, rejoués">Journal</button></a><button data-v="reglages">Réglages</button>
   </nav>
   <span id="rec" class="pastille" style="display:none;background:rgba(229,72,77,.2);color:var(--rose)"></span>
   <span id="heure"></span>
@@ -410,6 +410,33 @@ object PagePc {
   <div>
     <div class="carte">
       <table><thead><tr><th>Début</th><th>Fin</th><th>Durée</th><th>Moi</th><th>Lui</th><th></th></tr></thead><tbody id="k-liste"></tbody></table>
+    </div>
+  </div>
+</div>
+</div>
+<div class="vue" id="v-ft8" hidden>
+<div class="grille2" style="grid-template-columns:minmax(380px,1fr) minmax(500px,1.5fr)">
+  <div>
+    <div class="carte">
+      <div class="ligne" style="margin-top:0">
+        <button class="primaire" id="8-marche" onclick="ft8Marche()">Écouter</button>
+        <select id="8-mode" onchange="post('/api/ft8?mode=' + this.value)" style="max-width:90px"><option>FT8</option><option>FT4</option></select>
+        <button onclick="post('/api/ft8?vide=1')">Effacer</button>
+        <span class="petit" id="8-etat" style="margin-left:auto"></span>
+      </div>
+      <div style="height:6px;background:#0E1720;border-radius:3px;margin-top:10px;overflow:hidden"><div id="8-tranche" style="height:100%;width:0;background:var(--cyan)"></div></div>
+      <canvas id="8-cascade" style="width:100%;height:260px;display:block;margin-top:10px;border-radius:6px;background:#06131A"></canvas>
+      <canvas id="8-spectre" style="width:100%;height:60px;display:block;margin-top:2px"></canvas>
+      <div class="petit" style="margin-top:6px">Le son du poste par la carte son (onglet Son). L'horloge du PC doit être à l'heure à la seconde près (NTP).</div>
+    </div>
+  </div>
+  <div>
+    <div class="carte">
+      <div class="ligne" style="margin-top:0"><input id="8-filtre" placeholder="Filtrer : indicatif, carré…">
+        <label class="petit"><input type="checkbox" id="8-cq"> CQ seulement</label></div>
+      <div style="max-height:calc(100vh - 190px);overflow:auto;margin-top:6px">
+        <table><thead><tr><th>UTC</th><th>dB</th><th>DT</th><th>Hz</th><th>Message</th><th>km</th><th></th></tr></thead><tbody id="8-liste"></tbody></table>
+      </div>
     </div>
   </div>
 </div>
@@ -771,6 +798,7 @@ function vue(n) {
   if (n === 'reglages') chargeReglages();
   if (n === 'son' || n === 'sstv') ticSon();
   if (n === 'aprs') ticAprs();
+  if (n === 'ft8') ticFt8();
   if (n === 'carres') chargeCarres();
   if (n === 'frise') chargeFrise();
   if (n === 'sked') prepareSked();
@@ -1114,6 +1142,62 @@ async function calculeSked() {
 }
 async function skedAgenda(i) { const w = K[i]; await post('/api/agenda/sked?catnum=' + g('k-sat').value + '&loc=' + enc(v('k-loc')) + '&de=' + w.de + '&a=' + w.a); alert('Sked mis à l’agenda.'); }
 
+// ------------------------------------------------------------------ FT8
+let H = null, ft8Vu = '';
+async function ticFt8() {
+  if (g('v-ft8').hidden) return;
+  try { H = await (await fetch('/api/ft8')).json(); } catch (x) { return; }
+  if (!H.present) return;
+  txt('8-marche', H.enMarche ? 'Arrêter' : 'Écouter');
+  if (document.activeElement !== g('8-mode')) g('8-mode').value = H.mode;
+  txt('8-etat', !H.carte ? 'carte son arrêtée (onglet Son)' : H.enMarche ? H.tranches + ' créneaux · niveau ' + Math.round(H.niveau * 100) + ' %' : 'à l’arrêt');
+  g('8-tranche').style.width = H.enMarche ? Math.round(H.avancement * 100) + '%' : '0';
+  dessineCascade();
+  const f = v('8-filtre').toUpperCase(), cq = g('8-cq').checked;
+  const l = H.entendus.filter(e => (!cq || e.cq) && (!f || [e.texte, e.loc].join(' ').toUpperCase().includes(f)));
+  const cle = JSON.stringify([f, cq, l.length, l.length ? l[0].t + l[0].texte : '']);
+  if (cle === ft8Vu) return;
+  ft8Vu = cle;
+  let avant = 0;
+  g('8-liste').innerHTML = l.map(e => {
+    // A line between slots, as in a log of the band.
+    const sep = avant && e.t !== avant ? ' style="border-top:2px solid var(--bord)"' : ''; avant = e.t;
+    const coul = e.moi ? 'color:var(--rose);font-weight:800' : e.cq ? 'color:var(--vert);font-weight:700' : '';
+    return '<tr' + sep + '><td>' + new Date(e.t).toISOString().slice(11, 19) + '</td><td>' + e.db + '</td><td>' + e.dt + '</td><td>' + e.hz +
+      '</td><td style="font-family:ui-monospace,Consolas,monospace;' + coul + '">' + esc(e.texte) + (e.fait ? ' <span class="pastille on" title="déjà au carnet">✓</span>' : '') +
+      '</td><td>' + (e.km == null ? '' : e.km) + '</td><td>' + (e.de ? '<button title="Préparer ce contact dans le carnet" onclick="noteFt8(\'' + esc(e.de) + '\',\'' + esc(e.loc) + '\',' + e.db + ')">✎</button>' : '') + '</td></tr>';
+  }).join('') || '<tr><td colspan="7" class="petit">' + (H.enMarche ? 'rien encore décodé' : 'prêt') + '</td></tr>';
+}
+function dessineCascade() {
+  const c = g('8-cascade'), w = c.clientWidth, h = c.clientHeight, dpr = window.devicePixelRatio || 1;
+  if (c.width !== Math.round(w * dpr)) { c.width = Math.round(w * dpr); c.height = Math.round(h * dpr); }
+  const x = c.getContext('2d'); x.setTransform(dpr, 0, 0, dpr, 0, 0);
+  x.fillStyle = '#06131A'; x.fillRect(0, 0, w, h);
+  const rows = H.cascade.map(b => Uint8Array.from(atob(b), ch => ch.charCodeAt(0)));
+  const rh = h / 60;
+  rows.forEach((r, i) => { const cw = w / r.length;
+    for (let k = 0; k < r.length; k++) { const v = r[k]; if (v < 8) continue;
+      x.fillStyle = 'rgb(' + Math.min(255, v * 2) + ',' + Math.min(255, v * 1.4) + ',' + (60 + v / 2) + ')'; x.fillRect(k * cw, i * rh, cw + 0.5, rh + 0.5); } });
+  // The audio frequencies, each 500 Hz.
+  x.fillStyle = 'rgba(232,240,247,.7)'; x.font = '10px system-ui';
+  for (let f = 500; f < H.haute; f += 500) { const px = w * (f - H.basse) / (H.haute - H.basse); x.fillRect(px, 0, 1, 4); x.fillText(f, px + 2, 11); }
+  const s = g('8-spectre'), sw = s.clientWidth, sh = s.clientHeight;
+  if (s.width !== Math.round(sw * dpr)) { s.width = Math.round(sw * dpr); s.height = Math.round(sh * dpr); }
+  const y = s.getContext('2d'); y.setTransform(dpr, 0, 0, dpr, 0, 0); y.clearRect(0, 0, sw, sh);
+  if (H.spectre.length) { y.strokeStyle = '#3FE0C8'; y.beginPath();
+    H.spectre.forEach((v, k) => { const px = sw * k / H.spectre.length, py = sh - 2 - v * (sh - 4); if (k) y.lineTo(px, py); else y.moveTo(px, py); }); y.stroke(); }
+}
+async function ft8Marche() { await post('/api/ft8?on=' + (H && H.enMarche ? 0 : 1) + '&mode=' + g('8-mode').value); ticFt8(); }
+function noteFt8(call, loc, db) {
+  vue('carnet'); g('c-call').value = call; g('c-loc').value = loc || '';
+  // An FT8 report is in dB, as it is said: "-12".
+  g('c-rr').value = (db > 0 ? '+' : '') + db;
+  g('c-call').dispatchEvent(new Event('input')); g('c-call').focus();
+}
+g('8-filtre').oninput = () => { ft8Vu = ''; ticFt8(); };
+g('8-cq').onchange = () => { ft8Vu = ''; ticFt8(); };
+setInterval(ticFt8, 1000);
+
 // ------------------------------------------------------------------ APRS
 let A = null, aVus = '';
 async function ticAprs() {
@@ -1148,7 +1232,7 @@ setInterval(ticSon, 1000);
 
 lienRotor(); avertCat();
 // The tab from the address (#carnet, a bookmark), else the last one seen.
-if (['station', 'carnet', 'agenda', 'carres', 'frise', 'sked', 'son', 'sstv', 'aprs', 'reglages'].includes(location.hash.slice(1))) vue(location.hash.slice(1));
+if (['station', 'carnet', 'agenda', 'carres', 'frise', 'sked', 'son', 'sstv', 'aprs', 'ft8', 'reglages'].includes(location.hash.slice(1))) vue(location.hash.slice(1));
 else try { const n = localStorage.getItem('vue'); if (n) vue(n); } catch (x) {}
 tic(); chargeListe(); chargePorts(); chargeSatellites();
 setInterval(chargeSatellites, 600000);

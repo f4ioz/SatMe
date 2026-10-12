@@ -112,6 +112,7 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                         .put("pays", f.pays).put("carre", f.carre)
                 envoie(sortie, "200 OK", "application/json; charset=utf-8", o.toString().toByteArray())
             }
+            "/api/ft8" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JsonPc.ft8(son, station, carnet).toString().toByteArray())
             "/api/aprs" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JsonPc.aprs(son, station).toString().toByteArray())
             "/api/son" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JsonPc.son(son).toString().toByteArray())
             "/api/sstv/encours.png" -> son?.imageEnCours()?.let { envoie(sortie, "200 OK", "image/png", it) }
@@ -248,6 +249,15 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 val s = son ?: return JSONObject().put("ok", false)
                 if (q["on"] == "1") s.demarreEnregistrement()?.let { return JSONObject().put("ok", false).put("erreur", it) }
                 else s.arreteEnregistrement()
+            }
+            "/api/ft8" -> {
+                val f = son?.ft8 ?: return JSONObject().put("ok", false)
+                when {
+                    q["vide"] == "1" -> f.vide()
+                    q["on"] == "1" -> { if (son.son.etat.value.actif) f.demarre(q["mode"] ?: f.mode) else return JSONObject().put("ok", false).put("erreur", "démarre d'abord la carte son (onglet Son)") }
+                    q["on"] == "0" -> f.arrete()
+                    q["mode"] != null -> if (f.enMarche) f.demarre(q["mode"]!!) else f.demarre(q["mode"]!!).also { f.arrete() }
+                }
             }
             "/api/son/options" -> {
                 val s = son ?: return JSONObject().put("ok", false)
@@ -454,6 +464,29 @@ object JsonPc {
             }))
             .put("images", JSONArray(s.images().take(200).map {
                 JSONObject().put("nom", it.fileName).put("sat", it.satName).put("t", it.timeMs).put("mode", it.mode).put("complete", it.complete)
+            }))
+    }
+
+    /** FT8 heard: the decodes with what they mean here (CQ, for me, how far, already worked), the waterfall. */
+    fun ft8(s: SonStation?, st: StationPc, c: CarnetPc?): JSONObject {
+        val f = s?.ft8 ?: return JSONObject().put("present", false)
+        val moi = st.etat.value.indicatif.uppercase()
+        val obs = st.etat.value.observateur
+        val faits = c?.contacts().orEmpty().map { it.callsign.uppercase().substringBefore('/') }.toHashSet()
+        val k = f.cascade
+        return JSONObject().put("present", true).put("enMarche", f.enMarche).put("mode", f.mode).put("avancement", f.avancement())
+            .put("niveau", f.niveau).put("tranches", f.tranches).put("carte", s.son.etat.value.actif)
+            .put("basse", Ft8Pc.BASSE_HZ).put("haute", Ft8Pc.HAUTE_HZ)
+            .put("cascade", JSONArray(k?.lignes?.toList().orEmpty().map { java.util.Base64.getEncoder().encodeToString(it) }))
+            .put("spectre", JSONArray(k?.dernierSpectre?.map { Math.round(it * 100) / 100.0 }.orEmpty()))
+            .put("entendus", JSONArray(f.entendus.take(400).map { e ->
+                val ll = e.locator?.let { fr.f4ioz.satcombo.location.Maidenhead.centre(it) }
+                JSONObject().put("t", e.tranche).put("texte", e.texte).put("de", e.appelant ?: "").put("a", e.appele ?: "")
+                    .put("loc", e.locator ?: "").put("hz", e.frequenceHz).put("db", e.rapportDb).put("dt", Math.round(e.decalageS * 10) / 10.0)
+                    .put("mode", e.mode).put("cq", e.texte.startsWith("CQ"))
+                    .put("moi", moi.isNotBlank() && e.appele?.uppercase() == moi)
+                    .put("fait", e.appelant?.uppercase()?.substringBefore('/') in faits)
+                    .put("km", if (ll != null && obs != null) Math.round(fr.f4ioz.satcombo.sonde.Geo.distanceKm(obs.latDeg, obs.lonDeg, ll.first, ll.second)) else JSONObject.NULL)
             }))
     }
 
