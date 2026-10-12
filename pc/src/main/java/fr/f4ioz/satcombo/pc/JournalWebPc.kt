@@ -89,7 +89,7 @@ class JournalWebPc(private val j: JournalPc, private val station: StationPc, pri
                     val k = j.liens(e)
                     "{\"id\":\"${js(e.id)}\",\"sat\":\"${js(e.satName)}\",\"de\":${e.debutMs},\"a\":${e.finMs}," +
                         "\"el\":${Math.round(e.elMax)},\"son\":${e.enregistrements.isNotEmpty()}," +
-                        "\"q\":${k.qsos.size},\"i\":${k.images.size},\"r\":0,\"s\":0,\"cat\":${e.avecCat},\"sm\":${e.signal.isNotEmpty()}," +
+                        "\"q\":${k.qsos.size},\"i\":${k.images.size},\"r\":${k.trames.size},\"s\":0,\"cat\":${e.avecCat},\"sm\":${e.signal.isNotEmpty()}," +
                         "\"rec\":${e.reconstitue},\"auto\":\"${js(e.auto)}\"}"
                 } + "}")
             }

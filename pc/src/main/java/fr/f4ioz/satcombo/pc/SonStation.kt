@@ -57,6 +57,11 @@ class SonStation(
     var sstvActif: Boolean
         get() = station.stockage.getBoolean("pc_sstv", true)
         set(v) { station.stockage.edit().putBoolean("pc_sstv", v).apply() }
+    var aprsActif: Boolean
+        get() = station.stockage.getBoolean("pc_aprs", true)
+        set(v) { station.stockage.edit().putBoolean("pc_aprs", v).apply() }
+    /** APRS heard on the card, kept as the phone keeps it. */
+    val aprs = AprsPc(File(dossierEnregistrements.parentFile, "aprs"), { station.etat.value.suivi?.name ?: "" }, horloge)
     var enregAuto: Boolean
         get() = station.stockage.getBoolean("pc_enreg_auto", false)
         set(v) { station.stockage.edit().putBoolean("pc_enreg_auto", v).apply() }
@@ -75,6 +80,7 @@ class SonStation(
         son.auditeurs += { pcm, n, rate ->
             wav?.let { w -> w.ajoute(pcm, n); _etat.update { it.copy(secondes = w.secondes) } }
             if (sstvActif) sstv(pcm, n, rate)
+            if (aprsActif) aprs.ecoute(pcm, n, rate)
         }
     }
 

@@ -78,7 +78,7 @@ object PagePc {
   <span class="g" id="station"></span>
   <span class="g" id="cat-statut-court"></span>
   <nav id="onglets">
-    <button data-v="station" class="actif">Station</button><button data-v="carnet">Carnet</button><button data-v="son">Son</button><button data-v="sstv">SSTV</button><a href="/journal" style="text-decoration:none"><button title="Les passages enregistrés, rejoués">Journal</button></a><button data-v="reglages">Réglages</button>
+    <button data-v="station" class="actif">Station</button><button data-v="carnet">Carnet</button><button data-v="son">Son</button><button data-v="sstv">SSTV</button><button data-v="aprs">APRS</button><a href="/journal" style="text-decoration:none"><button title="Les passages enregistrés, rejoués">Journal</button></a><button data-v="reglages">Réglages</button>
   </nav>
   <span id="rec" class="pastille" style="display:none;background:rgba(229,72,77,.2);color:var(--rose)"></span>
   <span id="heure"></span>
@@ -274,6 +274,7 @@ object PagePc {
       <div class="t">Enregistrement</div>
       <div class="ligne" style="margin-top:0"><button class="rouge" id="s-rec" onclick="enregistre()">● Enregistrer</button><span class="val" id="s-duree"></span></div>
       <div class="ligne"><label class="petit"><input type="checkbox" id="s-auto" onchange="post('/api/son/options?auto=' + (this.checked ? 1 : 0))"> Enregistrer chaque passage du satellite suivi (de l'AOS à 30 s après le LOS)</label></div>
+      <div class="ligne"><label class="petit"><input type="checkbox" id="s-aprs" onchange="post('/api/son/options?aprs=' + (this.checked ? 1 : 0))"> Décoder l'APRS (AFSK 1200 bauds)</label></div>
       <div class="ligne"><label class="petit"><input type="checkbox" id="s-sstv" onchange="post('/api/son/options?sstv=' + (this.checked ? 1 : 0))"> Décoder la SSTV en direct</label></div>
       <div class="petit" style="margin-top:6px">WAV 16 bits, à la moitié de la fréquence de la carte (24 ou 22,05 kHz). Même nom que sur le téléphone.</div>
     </div>
@@ -300,6 +301,25 @@ object PagePc {
     <div class="carte">
       <div class="t">Images reçues</div>
       <div id="i-galerie" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px"></div>
+    </div>
+  </div>
+</div>
+</div>
+<div class="vue" id="v-aprs" hidden>
+<div style="padding:12px 16px">
+  <div class="carte">
+    <div class="paire">
+      <span><span class="val" id="a-n">0</span> <span class="petit">trames</span></span>
+      <span><span class="val" id="a-stations">0</span> <span class="petit">stations</span></span>
+      <span><span class="val ambre" id="a-iss">0</span> <span class="petit">par l'ISS</span></span>
+      <span><span class="val" id="a-loin">—</span> <span class="petit">km au plus loin</span></span>
+      <span class="petit" id="a-etat" style="margin-left:auto"></span>
+    </div>
+    <div class="ligne"><input id="a-filtre" placeholder="Filtrer : indicatif, message…"><label class="petit"><input type="checkbox" id="a-isss"> par l'ISS seulement</label></div>
+  </div>
+  <div class="carte">
+    <div style="max-height:calc(100vh - 250px);overflow:auto">
+      <table><thead><tr><th>Heure</th><th>Station</th><th>Type</th><th>Carré</th><th>km</th><th>Chemin</th><th>Texte</th></tr></thead><tbody id="a-liste"></tbody></table>
     </div>
   </div>
 </div>
@@ -598,6 +618,7 @@ function vue(n) {
   if (n === 'carnet') { chargeCarnet(); g('c-call').focus(); }
   if (n === 'reglages') chargeReglages();
   if (n === 'son' || n === 'sstv') ticSon();
+  if (n === 'aprs') ticAprs();
 }
 document.querySelectorAll('#onglets button[data-v]').forEach(b => b.onclick = () => vue(b.dataset.v));
 
@@ -743,6 +764,7 @@ async function ticSon() {
   txt('s-duree', S.enregistrement ? duree(S.secondes * 1000) + (S.auto ? ' (passage)' : '') : '');
   if (document.activeElement !== g('s-auto')) g('s-auto').checked = S.enregAuto;
   if (document.activeElement !== g('s-sstv')) g('s-sstv').checked = S.sstv;
+  if (document.activeElement !== g('s-aprs')) g('s-aprs').checked = S.aprs;
   const enregs = JSON.stringify(S.enregistrements.map(e => e.nom + e.taille));
   if (enregs !== enregsVus && ouverte('son')) {
     enregsVus = enregs;
@@ -767,6 +789,30 @@ async function ticSon() {
       '<div class="petit">aucune image</div>';
   }
 }
+// ------------------------------------------------------------------ APRS
+let A = null, aVus = '';
+async function ticAprs() {
+  if (!ouverte('aprs')) return;
+  try { A = await (await fetch('/api/aprs')).json(); } catch (x) { return; }
+  if (!A.present) return;
+  txt('a-n', String(A.paquets.length)); txt('a-stations', String(A.nbStations)); txt('a-iss', String(A.viaIss));
+  txt('a-loin', A.loin == null ? '—' : String(Math.round(A.loin)));
+  txt('a-etat', A.actif ? 'à l’écoute' : 'décodage arrêté (onglet Son : carte son et « Décoder l’APRS »)');
+  dessineAprs();
+}
+function dessineAprs() {
+  const f = v('a-filtre').toUpperCase(), iss = g('a-isss').checked;
+  const l = A.paquets.filter(p => (!iss || p.iss) && (!f || [p.src, p.txt, p.dest, p.carre].join(' ').toUpperCase().includes(f)));
+  const cle = JSON.stringify([f, iss, l.length, l.length ? l[0].t : 0]);
+  if (cle === aVus) return;
+  aVus = cle;
+  g('a-liste').innerHTML = l.map(p => '<tr><td>' + hm(p.t, true) + '</td><td><b>' + esc(p.src) + '</b>' + (p.iss ? ' <span class="pastille on">ISS</span>' : '') +
+    '</td><td class="petit">' + esc(p.type) + (p.dest ? ' → ' + esc(p.dest) : '') + '</td><td>' + esc(p.carre) + '</td><td>' + (p.km == null ? '' : p.km) +
+    '</td><td class="petit">' + esc(p.chemin) + '</td><td>' + esc(p.txt) + '</td></tr>').join('') || '<tr><td colspan="7" class="petit">rien entendu</td></tr>';
+}
+g('a-filtre').oninput = () => { aVus = ''; dessineAprs(); };
+g('a-isss').onchange = () => { aVus = ''; dessineAprs(); };
+setInterval(ticAprs, 2000);
 function ecoute(nom) { g('s-lecteur').src = '/enregistrements/' + nom; g('s-lecteur').play(); }
 async function carteSon(arret) {
   const j = await post('/api/son/carte?nom=' + (arret ? '' : enc(g('s-carte').value)));
@@ -777,7 +823,7 @@ setInterval(ticSon, 1000);
 
 lienRotor(); avertCat();
 // The tab from the address (#carnet, a bookmark), else the last one seen.
-if (['station', 'carnet', 'son', 'sstv', 'reglages'].includes(location.hash.slice(1))) vue(location.hash.slice(1));
+if (['station', 'carnet', 'son', 'sstv', 'aprs', 'reglages'].includes(location.hash.slice(1))) vue(location.hash.slice(1));
 else try { const n = localStorage.getItem('vue'); if (n) vue(n); } catch (x) {}
 tic(); chargeListe(); chargePorts(); chargeSatellites();
 setInterval(chargeSatellites, 600000);

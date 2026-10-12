@@ -69,6 +69,7 @@ class JournalPc(
     class Liens(
         val qsos: List<fr.f4ioz.satcombo.data.LogEntry>,
         val images: List<Pair<File, SstvMeta.SstvShot>>,
+        val trames: List<fr.f4ioz.satcombo.aprs.Paquet> = emptyList(),
     )
 
     fun liens(e: JournalPassage.Entree): Liens {
@@ -77,7 +78,8 @@ class JournalPc(
             qsos = carnet.contacts().filter { it.timeMs in f && (it.catnum == e.catnum || JournalPassage.memeSatellite(it.satName, e.satName)) }
                 .sortedBy { it.timeMs },
             images = son.images().filter { it.timeMs in f }.mapNotNull { s -> son.fichierImage(s.fileName)?.let { it to s } }
-                .sortedBy { it.second.timeMs })
+                .sortedBy { it.second.timeMs },
+            trames = son.aprs.paquets.filter { it.quand in f && !it.emis }.sortedBy { it.quand })
     }
 
     /** What happened on the pass, as the phone marks it (contacts put back by the logging delay). */
@@ -93,7 +95,13 @@ class JournalPc(
             val duree = SstvMode.byName(s.mode)?.let { (it.frameSeconds * 1000).toLong() + 1_000L } ?: 60_000L
             JournalPassage.Marque(JournalPassage.TypeMarque.SSTV, s.timeMs - duree, s.timeMs, s.mode, fichier = f.absolutePath)
         }
-        return (qso + sstv).sortedBy { it.debutMs }
+        val aprs = l.trames.distinctBy { it.source to it.quand / 10_000 }.map { p ->
+            // The ISS's own beacon belongs on the trajectory, not where it says it is.
+            val sat = JournalPassage.estLeSatellite(p.source)
+            JournalPassage.Marque(JournalPassage.TypeMarque.APRS, p.quand, p.quand, p.source,
+                if (sat) null else p.lat, if (sat) null else p.lon, p.viaIss, details = p.commentaire.trim().take(70))
+        }
+        return (qso + aprs + sstv).sortedBy { it.debutMs }
     }
 
     /** Who the stations are, from the log (name, town, square). */

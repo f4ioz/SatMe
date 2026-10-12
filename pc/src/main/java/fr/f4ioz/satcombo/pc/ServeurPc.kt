@@ -98,6 +98,7 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                         .put("pays", f.pays).put("carre", f.carre)
                 envoie(sortie, "200 OK", "application/json; charset=utf-8", o.toString().toByteArray())
             }
+            "/api/aprs" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JsonPc.aprs(son, station).toString().toByteArray())
             "/api/son" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JsonPc.son(son).toString().toByteArray())
             "/api/sstv/encours.png" -> son?.imageEnCours()?.let { envoie(sortie, "200 OK", "image/png", it) }
                 ?: envoie(sortie, "404 Not Found", "text/plain", ByteArray(0))
@@ -206,6 +207,7 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 val s = son ?: return JSONObject().put("ok", false)
                 q["auto"]?.let { s.enregAuto = it == "1" }
                 q["sstv"]?.let { s.sstvActif = it == "1" }
+                q["aprs"]?.let { s.aprsActif = it == "1" }
             }
             "/api/rotor/reglages" -> {
                 entier("maxAz")?.let { rotor.setRotorMaxAz(it) }
@@ -364,7 +366,7 @@ object JsonPc {
             .put("cartes", JSONArray(s.son.appareils().map { JSONObject().put("nom", it.nom).put("desc", it.description) }))
             .put("carte", s.carte).put("actif", c.actif).put("rate", c.rate).put("niveau", c.niveau).put("erreur", c.erreur)
             .put("enregistrement", e.enregistrement).put("secondes", e.secondes).put("auto", e.auto)
-            .put("enregAuto", s.enregAuto).put("sstv", s.sstvActif)
+            .put("enregAuto", s.enregAuto).put("sstv", s.sstvActif).put("aprs", s.aprsActif)
             .put("sstvMode", e.sstvMode).put("sstvLignes", e.sstvLignes).put("sstvHauteur", e.sstvHauteur)
             .put("sstvVersion", e.sstvVersion).put("sstvDerniere", e.sstvDerniere)
             .put("enregistrements", JSONArray(s.enregistrements().take(50).map {
@@ -372,6 +374,25 @@ object JsonPc {
             }))
             .put("images", JSONArray(s.images().take(200).map {
                 JSONObject().put("nom", it.fileName).put("sat", it.satName).put("t", it.timeMs).put("mode", it.mode).put("complete", it.complete)
+            }))
+    }
+
+    /** APRS heard: the frames (newest first) and what they add up to. */
+    fun aprs(s: SonStation?, st: StationPc): JSONObject {
+        if (s == null) return JSONObject().put("present", false)
+        val l = s.aprs.paquets
+        val obs = st.etat.value.observateur
+        val stations = fr.f4ioz.satcombo.aprs.AprsJeu.stations(l, obs?.latDeg, obs?.lonDeg)
+        val km = stations.associate { it.indicatif to it }
+        return JSONObject().put("present", true).put("actif", s.aprsActif && s.son.etat.value.actif).put("recues", s.aprs.recues)
+            .put("nbStations", stations.size).put("viaIss", l.count { it.viaIss })
+            .put("loin", stations.mapNotNull { it.km }.maxOrNull() ?: JSONObject.NULL)
+            .put("paquets", JSONArray(l.take(400).map { p ->
+                val stn = km[p.nom ?: p.source]
+                JSONObject().put("t", p.quand).put("src", p.source).put("type", p.type.name).put("iss", p.viaIss)
+                    .put("dest", p.destinataire ?: "").put("txt", (p.message ?: p.commentaire).take(120))
+                    .put("chemin", p.trame.relais.joinToString(",") { it.toString() + if (it.repete) "*" else "" })
+                    .put("carre", stn?.carre ?: "").put("km", stn?.km?.let { Math.round(it) } ?: JSONObject.NULL)
             }))
     }
 
