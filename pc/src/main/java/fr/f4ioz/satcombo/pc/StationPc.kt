@@ -32,6 +32,9 @@ import fr.f4ioz.satcombo.station.StationCat
 import fr.f4ioz.satcombo.station.StationRotor
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import fr.f4ioz.satcombo.domain.Qo100
+import fr.f4ioz.satcombo.domain.SoleilQo100
+import fr.f4ioz.satcombo.station.PiloteQo100
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -141,7 +144,8 @@ class StationPc(
         override fun poseDecalageTx(hz: Long) = reglageSat(txHz = hz)
         override fun decalageRxHz() = 0L
         override fun modeCw() = false
-        override fun maintienDoppler() = _etat.value.maintienDoppler
+        // QO-100 drives the rig itself, when asked: the Doppler loop then holds.
+        override fun maintienDoppler() = _etat.value.maintienDoppler || qo100.etat.value.auPoste
         override fun dopplerRx() = true
         override fun moletteTxDecalage() = false
         override fun txSuitVite() = false
@@ -183,6 +187,67 @@ class StationPc(
         txOl?.let { settings.convTxOlHz = it; settings.convTxActif = it > 0 }
         txInverseur?.let { settings.convTxInverseur = it }
         stationCat.oublieArmement()
+    }
+
+    // ---------------------------------------------------------------- QO-100
+
+    /** QO-100 as the phone's screen drives it: written when moved, never by a loop. */
+    val qo100: PiloteQo100 by lazy {
+        PiloteQo100(settings, satConfig, object : PiloteQo100.Materiel {
+            override fun posteRx(satHz: Long) = if (settings.convRxPoste) convRx().versPoste(satHz) else satHz
+            override fun posteTx(satHz: Long) = convTx().versPoste(satHz)
+            override fun atteignable(posteHz: Long) = stationCat.atteignableParLePoste(posteHz)
+            override fun ecris(dlSat: Long, ulSat: Long) {
+                if (!_etat.value.catConnecte) { qo100.erreur("Poste non connecté (onglet Station)."); return }
+                portee.launch {
+                    runCatching { stationCat.ecrireCouple(dlSat, ulSat, sameBand = false) }
+                        .onFailure { qo100.erreur(it.message ?: "CAT ?") }
+                }
+            }
+            override fun convertisseursChanges() = stationCat.oublieArmement()
+        }).apply { ouvre() }
+    }
+
+    /** The followed satellite's rest, kept while QO-100 has the rig. */
+    @Volatile private var reposAvantQo100: Long? = null
+
+    /**
+     * The rig to QO-100, or back. While held, the loop reads the rig and takes
+     * what it finds as the followed satellite's rest — QO-100's frequency: the
+     * rest is kept on taking, put back on giving, and the satellite armed anew.
+     */
+    fun qo100AuPoste(on: Boolean) {
+        if (on == qo100.etat.value.auPoste) return
+        if (on) reposAvantQo100 = _etat.value.repos
+        qo100.auPoste(on)
+        if (!on) {
+            change { copy(repos = reposAvantQo100) }
+            stationCat.oublieArmement()
+        }
+    }
+
+    /** The dish's aim and the Sun's dates, for a square: computed once (a year of Sun, a second or two). */
+    class CielQo100(val locator: String, val pointage: Qo100.Pointage, val soleilAzimutMs: Long?, val transits: List<SoleilQo100.Transit>)
+    @Volatile private var cielQo100: CielQo100? = null
+    @Volatile private var cielQo100EnCours = false
+
+    fun cielQo100(): CielQo100? {
+        val obs = _etat.value.observateur ?: return null
+        val loc = _etat.value.locator
+        cielQo100?.takeIf { it.locator == loc }?.let { return it }
+        if (!cielQo100EnCours) {
+            cielQo100EnCours = true
+            portee.launch(Dispatchers.Default) {
+                try {
+                    val p = Qo100.pointage(obs.latDeg, obs.lonDeg)
+                    val now = horloge()
+                    val az = if (p.visible) runCatching { SoleilQo100.prochainPassageEnAzimut(obs.latDeg, obs.lonDeg, now) }.getOrNull() else null
+                    val tr = if (p.visible) runCatching { SoleilQo100.prochainsTransits(obs.latDeg, obs.lonDeg, now, maximum = 4) }.getOrDefault(emptyList()) else emptyList()
+                    cielQo100 = CielQo100(loc, p, az, tr)
+                } finally { cielQo100EnCours = false }
+            }
+        }
+        return null
     }
 
     // ---------------------------------------------------------------- rotor

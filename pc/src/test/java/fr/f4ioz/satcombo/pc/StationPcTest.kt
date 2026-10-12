@@ -228,6 +228,28 @@ class StationPcTest {
     }
 
     @Test
+    fun qo100_ecrit_le_poste_et_le_doppler_du_satellite_suivi_se_tait() {
+        val st = station()
+        assertTrue(st.suis(25544))
+        st.connecteCat("SIM", 0, 0)
+        attends { st.etat.value.catConnecte && st.stationCat.etat.value.descenteHz.let { it != null && it > 437_000_000L } }
+        // A 10 GHz → 2 m downconverter, a 432 → 2.4 GHz transverter, the rig given to QO-100.
+        st.qo100.poseOl(true, 10_344_973_000L)
+        st.qo100.poseOl(false, 1_968_000_000L)
+        st.qo100AuPoste(true)
+        // On the beacon: nothing sent, said so.
+        assertTrue(st.qo100.etat.value.statut.isNotEmpty())
+        st.qo100.descente(10_489_700_000L)
+        attends { st.stationCat.etat.value.descenteHz == 144_727_000L }
+        // The ISS's Doppler loop keeps quiet: the rig stays where QO-100 put it.
+        Thread.sleep(800)
+        assertEquals(144_727_000L, st.stationCat.etat.value.descenteHz)
+        // Given back: the followed satellite takes the rig again.
+        st.qo100AuPoste(false)
+        attends { st.stationCat.etat.value.descenteHz.let { it != null && it > 437_000_000L } }
+    }
+
+    @Test
     fun le_mat_simule_vise_le_satellite() {
         val st = station()
         st.suis(25544)

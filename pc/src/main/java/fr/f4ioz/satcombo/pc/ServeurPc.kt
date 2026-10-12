@@ -99,6 +99,7 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 .put("ici", 20)
                 .put("points", JSONArray(station.traceAuSol().map { (la, lo) -> JSONArray(listOf(Math.round(la * 100) / 100.0, Math.round(lo * 100) / 100.0)) }))
                 .toString().toByteArray())
+            "/api/qo100" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JsonPc.qo100(station, q["plan"] == "1").toString().toByteArray())
             "/api/frise" -> {
                 val (debut, lignes) = kotlinx.coroutines.runBlocking { station.frise((q["h"]?.toIntOrNull() ?: 12).coerceIn(2, 48)) }
                 envoie(sortie, "200 OK", "application/json; charset=utf-8", JSONObject().put("debut", debut)
@@ -234,6 +235,31 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
             "/api/rotor/suivre" -> rotor.setRotorEnabled(q["on"] == "1")
             "/api/rotor/parquer" -> rotor.rotorParkNow()
             "/api/rotor/stop" -> rotor.rotorStopNow()
+            "/api/qo100/frequence" -> q["hz"]?.toLongOrNull()?.let { station.qo100.descente(it) }
+            "/api/qo100/pas" -> q["hz"]?.toLongOrNull()?.let { station.qo100.pas(it) }
+            "/api/qo100/balise" -> station.qo100.balise()
+            "/api/qo100/centre" -> station.qo100.centre()
+            "/api/qo100/transpondeur" -> station.qo100.transpondeur(q["cle"].orEmpty())
+            "/api/qo100/balayage" -> station.qo100.sansBride(q["on"] == "1")
+            "/api/qo100/poste" -> station.qo100AuPoste(q["on"] == "1")
+            "/api/qo100/memoire" -> station.qo100.poseMemoire(q["nom"].orEmpty())
+            "/api/qo100/oublie" -> q["hz"]?.toLongOrNull()?.let { station.qo100.retireMemoire(it) }
+            "/api/qo100/chaine" -> station.qo100.chaine(q["nom"].orEmpty())
+            "/api/qo100/nouvelle" -> station.qo100.ajouteChaine(q["nom"].orEmpty())
+            "/api/qo100/ol" -> q["hz"]?.toLongOrNull()?.let { station.qo100.poseOl(q["sens"] == "descente", it) }
+            "/api/qo100/mesure" -> {
+                // MHz on the page.
+                fun hz(k: String) = q[k]?.trim()?.replace(',', '.')?.toDoubleOrNull()?.let { Math.round(it * 1e6) } ?: 0L
+                val (bon, message) = station.qo100.mesure(q["sens"] == "descente", hz("ciel"), hz("poste"))
+                return JSONObject().put("ok", bon).put("message", message)
+            }
+            "/api/qo100/balise-entendue" -> {
+                val hz = q["mhz"]?.trim()?.replace(',', '.')?.toDoubleOrNull()?.let { Math.round(it * 1e6) }
+                    ?.takeIf { Math.abs(it - fr.f4ioz.satcombo.domain.Qo100.BALISE_MEDIANE_HZ) < 2_000_000L }
+                    ?: return JSONObject().put("ok", false).put("message", "Une fréquence près de 10 489,750 MHz, en MHz.")
+                station.qo100.caleSurLaBalise(hz)
+            }
+            "/api/qo100/calage-zero" -> station.qo100.annuleCalage()
             "/api/convertisseurs" -> {
                 // MHz on the page, Hz here; an empty field leaves it as it is.
                 fun hz(k: String) = q[k]?.trim()?.replace(',', '.')?.takeIf { it.isNotEmpty() }?.toDoubleOrNull()?.let { Math.round(it * 1e6) }
@@ -367,6 +393,45 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
 
 /** The station as the page reads it. */
 object JsonPc {
+    /** QO-100: the pilot's state, the dish and the Sun; with [plan], the band plan and the presets (they never change). */
+    fun qo100(st: StationPc, plan: Boolean): JSONObject {
+        val Q = fr.f4ioz.satcombo.domain.Qo100
+        // The tab opened: what is stored read again (the Station tab sets the same calibration).
+        if (plan) st.qo100.ouvre()
+        val e = st.qo100.etat.value
+        val tr = fr.f4ioz.satcombo.i18n.I18n
+        val seg = e.segment
+        val c = e.chaineActive
+        val o = JSONObject()
+            .put("descente", e.descenteHz).put("montee", e.monteeHz).put("calage", e.calageHz)
+            .put("transpondeur", e.transpondeur).put("sansBride", e.sansBride).put("surBalise", e.surBalise)
+            .put("auPoste", e.auPoste).put("posteRx", e.posteRxHz).put("posteTx", e.posteTxHz).put("atteignable", e.posteAtteignable)
+            .put("emission", e.emissionPermise).put("statut", e.statut).put("catConnecte", st.etat.value.catConnecte)
+            .put("tp", JSONObject().put("bas", e.tp.descenteBasHz).put("haut", e.tp.descenteHautHz).put("centre", e.tp.centreDescenteHz))
+            .put("segment", seg?.let { JSONObject().put("nom", tr.t("qo100_seg_" + it.cle)).put("largeur", it.largeurMaxHz)
+                .put("avert", tr.t("qo100_warn_" + it.usage.cleAvertissement)).put("emission", it.emissionPermise) }
+                ?: JSONObject().put("nom", "").put("largeur", 0).put("avert", tr.t("qo100_warn_hors")).put("emission", false))
+            .put("memoires", JSONArray(fr.f4ioz.satcombo.domain.MemoiresQo100.toutes(e.memoires).map { m ->
+                JSONObject().put("hz", m.hz).put("nom", m.libelle { k -> tr.t(k) }).put("fixe", m.fixe) }))
+            .put("chaines", JSONArray(e.chaines.map { it.nom })).put("chaine", c.nom)
+            .put("olRx", c.descenteOlHz).put("olTx", c.monteeOlHz)
+        st.cielQo100()?.let { k ->
+            o.put("ciel", JSONObject().put("az", k.pointage.azDeg).put("el", k.pointage.elDeg).put("skew", k.pointage.skewDeg)
+                .put("visible", k.pointage.visible).put("soleilAz", k.soleilAzimutMs ?: JSONObject.NULL)
+                .put("ombre", fr.f4ioz.satcombo.domain.SoleilQo100.azimutDeLOmbre(k.pointage.azDeg))
+                .put("transits", JSONArray(k.transits.map { t -> JSONObject().put("t", t.instantMs).put("ecart", t.ecartDeg).put("duree", t.dureeS) })))
+        } ?: o.put("ciel", if (st.etat.value.observateur == null) JSONObject().put("inconnu", true) else JSONObject.NULL)
+        if (plan) {
+            o.put("segments", JSONArray(Q.SEGMENTS.map { g -> JSONObject().put("bas", g.basHz).put("haut", g.hautHz)
+                .put("usage", g.usage.name).put("nom", tr.t("qo100_seg_" + g.cle)).put("repere", g.repereHz ?: JSONObject.NULL) }))
+                .put("regletteBas", Q.REGLETTE_BAS_HZ).put("regletteHaut", Q.REGLETTE_HAUT_HZ)
+                .put("transpondeurs", JSONArray(Q.TRANSPONDEURS.map { t -> JSONObject().put("cle", t.cle).put("nom", tr.t("qo100_tp_" + t.cle)) }))
+                .put("presets", JSONArray(fr.f4ioz.satcombo.domain.Convertisseur.PRESETS.map { p ->
+                    JSONObject().put("cle", p.cle).put("nom", tr.t("preset_" + p.cle)).put("ol", p.olHz).put("descente", p.descente) }))
+        }
+        return o
+    }
+
     fun etat(st: StationPc): JSONObject {
         val e = st.etat.value
         val r = st.stationRotor.etat.value

@@ -68,6 +68,7 @@ object PagePc {
   .discret { background:transparent; border:none; }
   nav { display:flex; gap:4px; }
   nav button { background:transparent; border:1px solid transparent; color:var(--gris); padding:6px 14px; }
+  @media (max-width:1500px) { nav button { padding:6px 9px; } header { gap:10px; } }
   nav button.actif { color:var(--cyan); border-color:var(--bord); background:var(--carte); }
   .grille2 { display:grid; grid-template-columns:minmax(320px,1fr) minmax(420px,1.6fr); gap:12px; padding:12px 16px; }
   @media (max-width:900px) { .grille2 { grid-template-columns:1fr; } }
@@ -88,6 +89,11 @@ object PagePc {
   #k-carte { flex:3; min-width:320px; height:460px; border-radius:8px; cursor:grab; touch-action:none; }
   .k-ciels { flex:1; min-width:180px; max-width:240px; display:flex; flex-direction:column; gap:6px; }
   .k-ciels svg { width:100%; display:block; }
+  .o-freq { font-family:ui-monospace,Consolas,monospace; font-size:34px; font-weight:800; color:var(--cyan); cursor:ns-resize; user-select:none; }
+  .o-puces { display:flex; gap:6px; flex-wrap:wrap; }
+  .o-puces button { padding:4px 9px; font-size:12px; font-weight:600; }
+  .o-puces button.ici { background:var(--cyan); color:#06131A; border-color:var(--cyan); }
+  .o-puces button.perso { border-color:var(--ambre); }
   /* On a computer's screen each tab fits the window: what is longer scrolls in its own box. */
   @media (min-width:1101px) and (min-height:600px) {
     body { height:100vh; display:flex; flex-direction:column; overflow:hidden; }
@@ -101,6 +107,8 @@ object PagePc {
     #v-station .ecran { flex:1; height:auto; min-height:220px; }
     #v-station #suivants-boite { flex:none; max-height:24vh; }
     #v-station .col3 .carte { margin-bottom:8px; padding:10px 12px; }
+    #v-qo100 .grille { height:100%; }
+    #v-qo100 .col1, #v-qo100 .col2, #v-qo100 .col3 { min-height:0; overflow:auto; }
     .vue > .grille2 { height:100%; }
     .vue > .grille2 > div { min-height:0; overflow:auto; }
     #k-grille { height:100%; }
@@ -120,7 +128,7 @@ object PagePc {
   <span class="g" id="info-station"></span>
   <span class="g" id="cat-statut-court"></span>
   <nav id="onglets">
-    <button data-v="station" class="actif">Station</button><button data-v="carnet">Carnet</button><button data-v="agenda">Agenda</button><button data-v="carres">Carrés</button><button data-v="frise">Frise</button><button data-v="sked">Sked</button><button data-v="son">Son</button><button data-v="sstv">SSTV</button><button data-v="aprs">APRS</button><button data-v="ft8">FT8</button><a href="/journal" style="text-decoration:none"><button title="Les passages enregistrés, rejoués">Journal</button></a><button data-v="reglages">Réglages</button>
+    <button data-v="station" class="actif">Station</button><button data-v="carnet">Carnet</button><button data-v="agenda">Agenda</button><button data-v="carres">Carrés</button><button data-v="frise">Frise</button><button data-v="sked">Sked</button><button data-v="qo100">QO-100</button><button data-v="son">Son</button><button data-v="sstv">SSTV</button><button data-v="aprs">APRS</button><button data-v="ft8">FT8</button><a href="/journal" style="text-decoration:none"><button title="Les passages enregistrés, rejoués">Journal</button></a><button data-v="reglages">Réglages</button>
   </nav>
   <span id="rec" class="pastille" style="display:none;background:rgba(229,72,77,.2);color:var(--rose)"></span>
   <span id="heure"></span>
@@ -487,6 +495,84 @@ object PagePc {
   </div>
 </div>
 </div>
+<div class="vue" id="v-qo100" hidden>
+<div class="grille">
+  <div class="col1">
+    <div class="carte">
+      <div class="t">QO-100 · géostationnaire, 25,9° est</div>
+      <div class="petit">Descente (ciel)</div>
+      <div id="o-dl" class="o-freq" title="Molette : ±100 Hz (Maj : ±1 kHz) · flèches ← → ±100 Hz, ↑ ↓ ±1 kHz"></div>
+      <div class="petit" style="margin-top:4px">Montée <span id="o-ul" class="val ambre" style="font-size:18px"></span></div>
+      <div class="ligne bouton-gr" style="margin-top:10px">
+        <button onclick="qPas(-10000)">−10 k</button><button onclick="qPas(-1000)">−1 k</button><button onclick="qPas(-100)">−100</button>
+        <button onclick="qPas(100)">+100</button><button onclick="qPas(1000)">+1 k</button><button onclick="qPas(10000)">+10 k</button></div>
+      <div class="ligne"><button id="o-bbalise" onclick="qPost('balise')">Balise médiane</button><button onclick="qPost('centre')">Centre</button>
+        <span class="petit" id="o-bords"></span></div>
+      <div class="ligne"><span class="petit">Aller à (MHz ciel)</span><input id="o-aller" placeholder="10489,688" style="max-width:130px">
+        <button onclick="qAller()">Aller</button></div>
+    </div>
+    <div class="carte">
+      <div class="t">Mémoires</div>
+      <div id="o-memoires" class="o-puces"></div>
+      <div class="ligne"><input id="o-nom" placeholder="Nom (facultatif)" style="max-width:180px"><button onclick="qMemoire()">Mémoriser ici</button>
+        <button id="o-oublie" onclick="qOublie()">Oublier</button></div>
+    </div>
+  </div>
+  <div class="col2">
+    <div class="carte">
+      <div class="t">Réglette du transpondeur</div>
+      <canvas id="o-reglette" style="width:100%;height:96px;display:block;cursor:crosshair" title="Cliquer ou glisser pour s'y poser · molette ±100 Hz"></canvas>
+      <canvas id="o-loupe" style="width:100%;height:70px;display:block;margin-top:6px;cursor:crosshair" title="± 25 kHz autour de l'accord : cliquer pour s'y poser"></canvas>
+      <div class="paire" style="margin-top:8px"><b id="o-seg"></b><span class="petit" id="o-larg"></span><span id="o-interdit" class="rose" style="font-weight:700"></span></div>
+      <div class="petit" id="o-avert" style="margin-top:2px"></div>
+    </div>
+    <div class="carte">
+      <div class="t">Ce que voit le poste</div>
+      <label><input type="checkbox" id="o-poste" onchange="qPost('poste?on=' + (this.checked ? 1 : 0))"> Appliquer au poste</label>
+      <div class="paire" style="margin-top:8px">
+        <span>Poste RX <span class="val cyan" id="o-prx">—</span></span><span>Poste TX <span class="val ambre" id="o-ptx">—</span></span></div>
+      <div class="avert" id="o-hors"></div>
+      <div class="etat" id="o-statut"></div>
+      <div class="petit" style="margin-top:6px">Les fréquences de gauche sont celles du ciel ; le poste travaille en fréquence intermédiaire, après les convertisseurs de la chaîne. Pas de Doppler ici : le poste n'est écrit que quand tu bouges. Tant que la case est cochée, le Doppler du satellite suivi est en pause.</div>
+      <div class="petit" style="margin-top:4px">Pas de clé SDR sur le PC pour l'instant : le panorama et la balise vue par la clé restent sur le téléphone.</div>
+    </div>
+  </div>
+  <div class="col3">
+    <div class="carte">
+      <div class="t">Calage sur la balise</div>
+      <div class="petit">L'oscillateur d'un LNB dérive, surtout à froid. Accorde la balise médiane, lis où elle tombe vraiment, saisis-le : l'écart s'applique à toute la descente.</div>
+      <div class="ligne"><span class="petit">Écart mémorisé</span><span class="val" id="o-calage">0 Hz</span></div>
+      <div class="ligne"><input id="o-entendue" placeholder="MHz ciel" title="Où tombe vraiment la balise médiane, en MHz ciel : par exemple 10489,7523" style="max-width:170px"><button onclick="qCale()">Appliquer</button>
+        <button onclick="qPost('calage-zero')">Remettre à zéro</button></div>
+      <div class="etat" id="o-cmsg"></div>
+    </div>
+    <div class="carte">
+      <div class="t">Transpondeur</div>
+      <div class="ligne" style="margin-top:0" id="o-tps"></div>
+      <label class="petit" style="display:block;margin-top:6px"><input type="checkbox" id="o-balayage" onchange="qPost('balayage?on=' + (this.checked ? 1 : 0))"> Balayer tout QO-100 (écoute ; rien n'est émis là où le plan l'interdit)</label>
+    </div>
+    <div class="carte">
+      <div class="t">Chaîne de station</div>
+      <div class="ligne" style="margin-top:0"><select id="o-chaine" onchange="qPost('chaine?nom=' + enc(this.value))"></select>
+        <input id="o-nouvelle" placeholder="Nouvelle chaîne…" style="max-width:150px"><button onclick="qNouvelle()">Ajouter</button></div>
+      <div class="ligne"><span class="petit" style="min-width:95px">OL descente</span><select id="o-olrx" onchange="qOl('descente', this.value)"></select></div>
+      <div class="ligne"><span class="petit" style="min-width:95px">OL montée</span><select id="o-oltx" onchange="qOl('montee', this.value)"></select></div>
+      <div class="avert" id="o-beta"></div>
+      <details style="margin-top:6px"><summary class="petit" style="cursor:pointer">Mesurer un oscillateur</summary>
+        <div class="petit" style="margin-top:4px">Écoute un même signal sur une référence (WebSDR sur GPSDO) et sur ton poste ; recopie les deux fréquences : l'écart est l'oscillateur.</div>
+        <div class="ligne"><select id="o-msens" style="max-width:120px"><option value="descente">Descente</option><option value="montee">Montée</option></select>
+          <input id="o-mciel" placeholder="Référence (MHz)"><input id="o-mposte" placeholder="Poste (MHz)"><button onclick="qMesure()">Mesurer</button></div>
+        <div class="etat" id="o-mmsg"></div>
+      </details>
+    </div>
+    <div class="carte">
+      <details><summary class="t" style="cursor:pointer;margin:0">Réglage initial · pointage et Soleil</summary>
+        <div id="o-ciel" class="petit" style="margin-top:8px"></div>
+      </details>
+    </div>
+  </div>
+</div>
+</div>
 <div class="vue" id="v-ft8" hidden>
 <div class="grille2" style="grid-template-columns:minmax(380px,1fr) minmax(500px,1.5fr)">
   <div>
@@ -550,14 +636,8 @@ object PagePc {
     </div>
     <div class="carte">
       <div class="t">Convertisseurs</div>
-      <details id="conv" open><summary class="petit" style="cursor:pointer">Convertisseurs (LNB, transverter)</summary>
-        <div class="ligne"><span class="petit" style="min-width:150px">Réception : OL (MHz)</span><input id="c-rxOl" placeholder="9750 ; 0 = aucun" style="max-width:130px">
-          <label class="petit"><input type="checkbox" id="c-rxInv"> inverseur</label></div>
-        <div class="ligne"><span class="petit" style="min-width:150px">Émission : OL (MHz)</span><input id="c-txOl" placeholder="0 = aucun" style="max-width:130px">
-          <label class="petit"><input type="checkbox" id="c-txInv"> inverseur</label>
-          <button onclick="convertisseurs()">Appliquer</button></div>
-        <div class="petit">Le poste reçoit et émet sur la fréquence intermédiaire ; l'affichage reste celle du satellite.</div>
-      </details>
+      <div class="petit" id="conv-lu">—</div>
+      <div class="petit" style="margin-top:6px">Ils se règlent dans l'onglet <a href="#qo100" onclick="vue('qo100')" style="color:var(--cyan)">QO-100</a>, par la chaîne de station : un seul endroit pour chaque oscillateur, comme sur le téléphone.</div>
     </div>
   </div>
 </div>
@@ -772,10 +852,9 @@ function dessine() {
     g('r-parkAz').value = s.parkAz; g('r-parkEl').value = s.parkEl; g('r-minEl').value = s.minEl;
     g('r-ecart').value = s.ecart; g('r-avantAos').value = s.avantAos;
   }
-  if (!g('conv').open && E.convertisseurs) {
-    const k = E.convertisseurs, mhzOl = x => x ? String(x / 1e6) : '0';
-    g('c-rxOl').value = mhzOl(k.rxOl); g('c-rxInv').checked = k.rxInv;
-    g('c-txOl').value = mhzOl(k.txOl); g('c-txInv').checked = k.txInv;
+  if (E.convertisseurs) {
+    const k = E.convertisseurs, ol = x => x ? (x / 1e6).toFixed(3) + ' MHz' : 'aucun';
+    txt('conv-lu', 'Réception : ' + ol(k.rxOl) + (k.rxInv ? ' (inverseur)' : '') + ' · émission : ' + ol(k.txOl) + (k.txInv ? ' (inverseur)' : ''));
   }
   // The rig's model and port as last used, until the operator picks others.
   if (!catTouche) {
@@ -789,11 +868,6 @@ function dessine() {
 let catTouche = false, rotTouche = false;
 ['cat-modele', 'cat-port', 'cat-baud', 'cat-port-tx', 'cat-rx-type', 'cat-tx-type', 'cat-bande'].forEach(i => g(i).addEventListener('change', () => catTouche = true));
 ['rot-port', 'rot-baud', 'rot-lien'].forEach(i => g(i).addEventListener('change', () => rotTouche = true));
-function convertisseurs() {
-  post('/api/convertisseurs?rxOl=' + enc(v('c-rxOl')) + '&rxInv=' + (g('c-rxInv').checked ? 1 : 0) +
-       '&txOl=' + enc(v('c-txOl')) + '&txInv=' + (g('c-txInv').checked ? 1 : 0));
-  g('conv').open = false;
-}
 function reglagesRotor() {
   const b = id => g(id).checked ? 1 : 0;
   post('/api/rotor/reglages?maxAz=' + g('r-maxAz').value + '&maxEl=' + g('r-maxEl').value + '&butee=' + g('r-butee').value +
@@ -876,6 +950,7 @@ function vue(n) {
   if (n === 'carres') chargeCarres();
   if (n === 'frise') chargeFrise();
   if (n === 'sked') { prepareSked(); setTimeout(dessineSked); }
+  if (n === 'qo100') chargeQo100(true);
 }
 document.querySelectorAll('#onglets button[data-v]').forEach(b => b.onclick = () => vue(b.dataset.v));
 
@@ -1466,6 +1541,171 @@ attacheCarte(g('s-carte'), SV, dessineCarteStation, cadreStation, 0);
 montreEcran(ecranStation)
 async function skedAgenda(i) { const w = K[i]; await post('/api/agenda/sked?catnum=' + g('k-sat').value + '&loc=' + enc(v('k-loc')) + '&de=' + w.de + '&a=' + w.a); alert('Sked mis à l’agenda.'); }
 
+// ------------------------------------------------------------------ QO-100
+let O = null, OP = null;
+/** 10 489 750 000 Hz → "10 489,750 000". */
+function qFmt(hz) { const m = Math.floor(hz / 1e6), r = String(hz % 1e6).padStart(6, '0');
+  return String(m).replace(/\B(?=(\d{3})+(?!\d))/g, ' ') + ',' + r.slice(0, 3) + ' ' + r.slice(3); }
+function qKhz(hz) { return (hz / 1000).toLocaleString('fr-FR', { maximumFractionDigits: 1 }) + ' kHz'; }
+async function chargeQo100(plan) {
+  try { const j = await (await fetch('/api/qo100' + (plan || !OP ? '?plan=1' : ''))).json(); if (j.segments) OP = j; O = j; } catch (x) { return; }
+  dessineQo100();
+  // The Sun's dates take a second or two the first time.
+  if (!O.ciel) setTimeout(() => { if (!g('v-qo100').hidden) chargeQo100(); }, 1500);
+}
+async function qPost(a) { const j = await post('/api/qo100/' + a); await chargeQo100(); return j; }
+function qPas(d) { qPost('pas?hz=' + d); }
+function qAller() {
+  const x = parseFloat(v('o-aller').replace(',', '.').replace(/\s/g, ''));
+  if (!x) return;
+  qPost('frequence?hz=' + Math.round(x < 20000 ? x * 1e6 : x));
+}
+function qMemoire() { qPost('memoire?nom=' + enc(v('o-nom'))); g('o-nom').value = ''; }
+function qOublie() { qPost('oublie?hz=' + O.descente); }
+function qNouvelle() { const n = v('o-nouvelle'); if (!n) return; g('o-nouvelle').value = ''; qPost('nouvelle?nom=' + enc(n)); }
+function qOl(sens, ol) { qPost('ol?sens=' + sens + '&hz=' + ol); }
+async function qCale() {
+  const j = await qPost('balise-entendue?mhz=' + enc(v('o-entendue')));
+  txt('o-cmsg', j && j.ok === false ? j.message : '');
+}
+async function qMesure() {
+  const j = await post('/api/qo100/mesure?sens=' + g('o-msens').value + '&ciel=' + enc(v('o-mciel')) + '&poste=' + enc(v('o-mposte')));
+  if (j) { g('o-mmsg').textContent = j.message; g('o-mmsg').style.color = j.ok ? 'var(--vert)' : 'var(--ambre)'; }
+  chargeQo100();
+}
+const COUL_USAGE = { BALISE: '#E5484D', CW: '#6F8CFF', NUMERIQUE: '#B07CFF', PHONIE: '#3FE0C8', DIFFUSION: '#FFB454', URGENCE: '#FF6A60', MIXTE: '#9AA7B4' };
+function dessineQo100() {
+  if (!O || !OP || g('v-qo100').hidden) return;
+  txt('o-dl', qFmt(O.descente)); txt('o-ul', qFmt(O.montee));
+  g('o-bbalise').className = O.surBalise ? 'primaire' : '';
+  txt('o-bords', '↓ ' + qKhz(O.descente - O.tp.bas) + ' · ↑ ' + qKhz(O.tp.haut - O.descente));
+  g('o-bords').style.color = Math.min(O.descente - O.tp.bas, O.tp.haut - O.descente) < 5000 ? 'var(--ambre)' : '';
+  // Memories: the band plan's markers, then mine.
+  const cle = JSON.stringify(O.memoires) + O.descente;
+  if (g('o-memoires').dataset.vu !== cle) {
+    g('o-memoires').dataset.vu = cle;
+    g('o-memoires').innerHTML = O.memoires.map(m => '<button class="' + (Math.abs(m.hz - O.descente) < 500 ? 'ici' : '') + (m.fixe ? '' : ' perso') +
+      '" title="' + qFmt(m.hz) + '" onclick="qPost(\'frequence?hz=' + m.hz + '\')">' + esc(m.nom) + '</button>').join('');
+  }
+  g('o-oublie').disabled = !O.memoires.some(m => !m.fixe && m.hz === O.descente);
+  // Segment.
+  txt('o-seg', O.segment.nom || 'Hors du transpondeur');
+  txt('o-larg', O.segment.largeur ? O.segment.largeur + ' Hz au plus' : '');
+  txt('o-interdit', O.emission ? '' : 'Émission interdite ici');
+  txt('o-avert', O.segment.avert);
+  // The rig.
+  g('o-poste').checked = O.auPoste;
+  txt('o-prx', mhz(O.posteRx)); txt('o-ptx', mhz(O.posteTx));
+  txt('o-hors', O.atteignable ? '' : 'Hors des bandes du poste : vérifie les oscillateurs de la chaîne de station.');
+  txt('o-statut', O.statut || (O.auPoste ? (O.catConnecte ? 'Le poste suit.' : 'Poste non connecté (onglet Station).') : ''));
+  // Calibration.
+  txt('o-calage', (O.calage > 0 ? '+' : '') + O.calage.toLocaleString('fr-FR') + ' Hz');
+  // Transponders.
+  const tps = OP.transpondeurs.map(t => '<label class="petit"><input type="radio" name="o-tp"' + (t.cle === O.transpondeur ? ' checked' : '') +
+    ' onchange="qPost(\'transpondeur?cle=' + t.cle + '\')"> ' + esc(t.nom) + '</label>').join(' ');
+  if (g('o-tps').dataset.vu !== tps) { g('o-tps').dataset.vu = tps; g('o-tps').innerHTML = tps; }
+  g('o-balayage').checked = O.sansBride;
+  // The chain.
+  const ch = O.chaines.map(n => '<option' + (n === O.chaine ? ' selected' : '') + '>' + esc(n) + '</option>').join('');
+  if (g('o-chaine').dataset.vu !== ch && document.activeElement !== g('o-chaine')) { g('o-chaine').dataset.vu = ch; g('o-chaine').innerHTML = ch; }
+  const ols = (desc, ol) => {
+    const l = OP.presets.filter(p => p.descente === desc);
+    const conn = l.some(p => p.ol === ol);
+    return '<option value="0"' + (ol ? '' : ' selected') + '>direct (pas de convertisseur)</option>' +
+      l.map(p => '<option value="' + p.ol + '"' + (p.ol === ol ? ' selected' : '') + '>' + esc(p.nom) + ' · ' + (p.ol / 1e6).toFixed(3) + ' MHz</option>').join('') +
+      (ol && !conn ? '<option value="' + ol + '" selected>mesuré · ' + (ol / 1e6).toFixed(6) + ' MHz</option>' : '');
+  };
+  for (const [id, d, ol] of [['o-olrx', true, O.olRx], ['o-oltx', false, O.olTx]]) {
+    const h = ols(d, ol); if (g(id).dataset.vu !== h && document.activeElement !== g(id)) { g(id).dataset.vu = h; g(id).innerHTML = h; }
+  }
+  txt('o-beta', O.olTx ? 'Oscillateur de montée : vérifie ce que le poste affiche avant d’émettre.' : '');
+  // The dish and the Sun.
+  const k = O.ciel;
+  let h = '';
+  if (!k) h = 'Calcul en cours…';
+  else if (k.inconnu) h = 'Position de la station inconnue : renseigne ton locator (Réglages).';
+  else if (!k.visible) h = 'Le satellite est sous l’horizon depuis cette position.';
+  else {
+    h = '<div class="paire"><span>Azimut <b class="val">' + k.az.toFixed(1) + '°</b></span><span>Élévation <b class="val">' + k.el.toFixed(1) + '°</b></span>' +
+      '<span>Skew (LNB) <b class="val">' + (k.skew > 0 ? '+' : '') + k.skew.toFixed(1) + '°</b></span></div>' +
+      '<div style="margin-top:6px">Rotation du LNB vue de derrière la parabole, positive dans le sens des aiguilles d’une montre.</div>';
+    if (k.soleilAz) h += '<div style="margin-top:8px"><b>Passage du Soleil en azimut</b> : ' + jourHeure(k.soleilAz) + '. À cette heure-là, l’ombre d’un piquet vertical part vers ' +
+      Math.round(k.ombre) + '° : la parabole regarde exactement à l’opposé. Il ne reste que l’élévation, au niveau à bulle.</div>';
+    h += '<div style="margin-top:8px"><b>Passages du Soleil derrière le satellite</b></div>' + (k.transits.length ? k.transits.map(t =>
+      '<div>' + jourHeure(t.t) + ' · à ' + t.ecart.toFixed(2) + '° · pendant ' + Math.max(1, Math.round(t.duree / 60)) + ' min</div>').join('') +
+      '<div style="margin-top:4px">La réception s’effondre pendant ces minutes : ce n’est pas une panne. L’ombre de la source se centre au fond de la parabole quand le pointage est juste.</div>'
+      : '<div>Aucun dans l’année qui vient.</div>');
+  }
+  if (g('o-ciel').dataset.vu !== h) { g('o-ciel').dataset.vu = h; g('o-ciel').innerHTML = h; }
+  dessineReglette(); dessineLoupe();
+}
+/** The canvas at its displayed size; its 2D context. */
+function toile(c) {
+  const w = c.clientWidth, h = c.clientHeight, dpr = window.devicePixelRatio || 1;
+  if (c.width !== Math.round(w * dpr) || c.height !== Math.round(h * dpr)) { c.width = Math.round(w * dpr); c.height = Math.round(h * dpr); }
+  const x = c.getContext('2d'); x.setTransform(dpr, 0, 0, dpr, 0, 0); return [x, w, h];
+}
+function dessineReglette() {
+  const [x, w, h] = toile(g('o-reglette')), b = OP.regletteBas, t = OP.regletteHaut, X = f => 4 + (w - 8) * (f - b) / (t - b);
+  x.fillStyle = '#0E1720'; x.fillRect(0, 0, w, h);
+  // The transponder chosen.
+  x.fillStyle = 'rgba(63,224,200,.07)'; x.fillRect(X(Math.max(b, O.tp.bas)), 0, X(Math.min(t, O.tp.haut)) - X(Math.max(b, O.tp.bas)), h);
+  for (const s of OP.segments) {
+    x.fillStyle = COUL_USAGE[s.usage] || '#9AA7B4'; x.globalAlpha = .75;
+    x.fillRect(X(s.bas), 22, Math.max(1.5, X(s.haut) - X(s.bas) - 1), 26); x.globalAlpha = 1;
+    if (X(s.haut) - X(s.bas) > 44) { x.fillStyle = '#06131A'; x.font = '600 10px system-ui'; x.textAlign = 'center'; x.fillText(s.nom.slice(0, Math.floor((X(s.haut) - X(s.bas)) / 6)), (X(s.bas) + X(s.haut)) / 2, 39); }
+  }
+  // My memories, then the 50 kHz ticks.
+  x.fillStyle = '#FFB454'; O.memoires.filter(m => !m.fixe).forEach(m => { x.beginPath(); x.moveTo(X(m.hz), 50); x.lineTo(X(m.hz) - 4, 57); x.lineTo(X(m.hz) + 4, 57); x.fill(); });
+  x.fillStyle = '#9AA7B4'; x.strokeStyle = '#22303B'; x.font = '10px system-ui'; x.textAlign = 'center';
+  for (let f = Math.ceil(b / 50000) * 50000; f <= t; f += 50000) {
+    x.beginPath(); x.moveTo(X(f), 60); x.lineTo(X(f), f % 100000 === 0 ? 70 : 66); x.stroke();
+    if (f % 100000 === 0 && X(f) > 14 && X(f) < w - 14) x.fillText(((f - 10489000000) / 1000) + '', X(f), 84);
+  }
+  x.textAlign = 'left'; x.fillText('10 489 MHz +kHz', 4, 12);
+  // The cursor.
+  x.strokeStyle = '#FFFFFF'; x.lineWidth = 2; x.beginPath(); x.moveTo(X(O.descente), 16); x.lineTo(X(O.descente), 56); x.stroke(); x.lineWidth = 1;
+  x.fillStyle = '#FFFFFF'; x.beginPath(); x.moveTo(X(O.descente), 16); x.lineTo(X(O.descente) - 5, 8); x.lineTo(X(O.descente) + 5, 8); x.fill();
+}
+const LOUPE = 25000;
+function dessineLoupe() {
+  const [x, w, h] = toile(g('o-loupe')), c = O.descente, X = f => w / 2 + (w / 2 - 4) * (f - c) / LOUPE;
+  x.fillStyle = '#0E1720'; x.fillRect(0, 0, w, h);
+  for (const s of OP.segments) {
+    if (s.haut < c - LOUPE || s.bas > c + LOUPE) continue;
+    x.fillStyle = COUL_USAGE[s.usage] || '#9AA7B4'; x.globalAlpha = .35;
+    x.fillRect(Math.max(0, X(s.bas)), 0, Math.min(w, X(s.haut)) - Math.max(0, X(s.bas)), 30); x.globalAlpha = 1;
+  }
+  x.strokeStyle = '#3B4B58'; x.fillStyle = '#9AA7B4'; x.font = '10px system-ui'; x.textAlign = 'center';
+  for (let f = Math.ceil((c - LOUPE) / 1000) * 1000; f <= c + LOUPE; f += 1000) {
+    const k = f % 5000 === 0; x.beginPath(); x.moveTo(X(f), 30); x.lineTo(X(f), k ? 42 : 36); x.stroke();
+    if (k && X(f) > 12 && X(f) < w - 12) x.fillText(((f % 1e6) / 1000).toFixed(0), X(f), 56);
+  }
+  x.fillStyle = '#FFB454'; O.memoires.forEach(m => { if (Math.abs(m.hz - c) < LOUPE) { x.fillRect(X(m.hz) - 1, 0, 2, 30); } });
+  x.strokeStyle = '#FFFFFF'; x.lineWidth = 2; x.beginPath(); x.moveTo(w / 2, 0); x.lineTo(w / 2, 44); x.stroke(); x.lineWidth = 1;
+  x.fillStyle = '#9AA7B4'; x.textAlign = 'left'; x.fillText('± 25 kHz', 4, 66);
+}
+(function () {
+  // The ruler: a click, a drag, the wheel. Rounded to 100 Hz, as the knob.
+  const r = g('o-reglette'); let tire = false, dernier = 0;
+  const f = ev => { const b = r.getBoundingClientRect(); return Math.round((OP.regletteBas + (OP.regletteHaut - OP.regletteBas) * (ev.clientX - b.left - 4) / (b.width - 8)) / 100) * 100; };
+  r.addEventListener('pointerdown', ev => { if (!OP) return; tire = true; r.setPointerCapture(ev.pointerId); qPost('frequence?hz=' + f(ev)); });
+  r.addEventListener('pointermove', ev => { if (!tire || Date.now() - dernier < 120) return; dernier = Date.now(); qPost('frequence?hz=' + f(ev)); });
+  r.addEventListener('pointerup', ev => { if (tire) qPost('frequence?hz=' + f(ev)); tire = false; });
+  const l = g('o-loupe');
+  l.addEventListener('click', ev => { if (!O) return; const b = l.getBoundingClientRect();
+    qPost('frequence?hz=' + Math.round((O.descente + LOUPE * (ev.clientX - b.left - b.width / 2) / (b.width / 2 - 4)) / 100) * 100); });
+  // The wheel: on the frequency, the ruler or the loupe.
+  for (const e of [g('o-dl'), r, l]) e.addEventListener('wheel', ev => { ev.preventDefault(); qPas((ev.deltaY < 0 ? 1 : -1) * (ev.shiftKey ? 1000 : 100)); }, { passive: false });
+  // The arrows, when nothing is being typed.
+  document.addEventListener('keydown', ev => {
+    if (g('v-qo100').hidden || /INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName)) return;
+    const d = { ArrowLeft: -100, ArrowRight: 100, ArrowDown: -1000, ArrowUp: 1000 }[ev.key];
+    if (d) { ev.preventDefault(); qPas(d); }
+  });
+  window.addEventListener('resize', dessineQo100);
+})();
+
 // ------------------------------------------------------------------ FT8
 let H = null, ft8Vu = '';
 async function ticFt8() {
@@ -1556,7 +1796,7 @@ setInterval(ticSon, 1000);
 
 lienRotor(); avertCat();
 // The tab from the address (#carnet, a bookmark), else the last one seen.
-if (['station', 'carnet', 'agenda', 'carres', 'frise', 'sked', 'son', 'sstv', 'aprs', 'ft8', 'reglages'].includes(location.hash.slice(1))) vue(location.hash.slice(1));
+if (['station', 'carnet', 'agenda', 'carres', 'frise', 'sked', 'qo100', 'son', 'sstv', 'aprs', 'ft8', 'reglages'].includes(location.hash.slice(1))) vue(location.hash.slice(1));
 else try { const n = localStorage.getItem('vue'); if (n) vue(n); } catch (x) {}
 tic(); chargeListe(); chargePorts(); chargeSatellites();
 setInterval(chargeSatellites, 600000);
