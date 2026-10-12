@@ -116,6 +116,10 @@ class JournalPcTest {
             val sonde = ProcessBuilder(RenduPc.ffmpeg()!!.replace("ffmpeg", "ffprobe"), "-v", "error", "-show_entries", "stream=codec_type", "-of", "csv=p=0", mp4.path)
                 .redirectErrorStream(true).start().inputStream.bufferedReader().readText()
             assertTrue(sonde, sonde.contains("video") && sonde.contains("audio"))
+            // The whole pass, accelerated, with its summary: longer than its sound. It came out
+            // with nothing when ffmpeg stopped at the sound's end (-shortest, 12/10).
+            val entier = fabrique("video", mapOf("res" to "XS", "accelere" to "1", "recap" to "1", "ouverture" to "1"))
+            assertTrue("whole pass", entier != null && entier.length() > 10_000)
         }
     }
 }

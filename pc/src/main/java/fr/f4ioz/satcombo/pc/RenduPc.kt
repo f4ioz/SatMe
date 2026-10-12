@@ -424,10 +424,15 @@ object RenduPc {
             val cmd = arrayListOf(ff, "-y", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", "${w}x$h", "-r", "$fps", "-i", "-")
             if (wav != null) cmd += listOf("-i", wav.path)
             cmd += listOf("-c:v", "libx264", "-pix_fmt", "yuv420p", "-preset", "veryfast", "-crf", "26")
-            if (wav != null) cmd += listOf("-c:a", "aac", "-b:a", "64k", "-shortest")
+            // The length is the pictures': the title, the pass, then each picture and the summary,
+            // after the sound has ended. ("-shortest" stopped at the sound's end, the summary cut
+            // off and the frames still coming refused: a whole pass never came out, 12/10.)
+            if (wav != null) cmd += listOf("-c:a", "aac", "-b:a", "64k")
+            cmd += listOf("-t", "%.2f".format(java.util.Locale.US, total.toDouble() / fps))
             cmd += sortie.path
             val p = ProcessBuilder(cmd).redirectErrorStream(true).start()
-            val journal = Thread { runCatching { p.inputStream.readBytes() } }.apply { isDaemon = true; start() }
+            val dit = StringBuilder()
+            val journal = Thread { runCatching { dit.append(String(p.inputStream.readBytes())) } }.apply { isDaemon = true; start() }
             val rgb = ByteArray(w * h * 3)
             fun ecris(img: BufferedImage) {
                 val px = img.getRGB(0, 0, w, h, null, 0, w)
@@ -445,6 +450,7 @@ object RenduPc {
             p.outputStream.close()
             val ok = p.waitFor() == 0
             journal.join(1000)
+            if (!ok) System.err.println("ffmpeg : " + dit.toString().trim().take(800))
             return if (ok && sortie.isFile && sortie.length() > 0) sortie else null
         } finally {
             wav?.delete()

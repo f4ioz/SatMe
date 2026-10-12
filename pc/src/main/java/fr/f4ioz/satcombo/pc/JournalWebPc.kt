@@ -174,7 +174,7 @@ class JournalWebPc(private val j: JournalPc, private val station: StationPc, pri
                             "gif" -> RenduPc.gif(scene(e, moment, p("titre"), false, p), File(sortie, nom)) { t.progres = it }
                             else -> video(e, scene(e, moment, p("titre"), false, p), opt(p, "avecSon", true), File(sortie, nom), sortie) { t.progres = it }
                         }
-                    }.getOrNull()
+                    }.onFailure { System.err.println("journal : $quoi de ${e.id} : $it"); it.printStackTrace() }.getOrNull()
                     t.progres = 1f; t.fini = true
                 }
                 json("{\"ok\":true,\"travail\":\"$n\"}")
