@@ -111,6 +111,44 @@ class JournalPc(
             JournalPassage.Fiche(c, d.nom, d.qth, "", q.lastOrNull { it.theirLocator.isNotBlank() }?.theirLocator.orEmpty())
         }
 
+    // ------------------------------------------------------- past passes rebuilt
+
+    /** A satellite by its number, else by its name as written ("ISS (ZARYA)" = "ISS"). */
+    fun satImport(catnum: Int, nom: String): fr.f4ioz.satcombo.data.TleEntry? {
+        val l = station.etat.value.satellites
+        return l.firstOrNull { catnum > 0 && it.catalogNumber == catnum }
+            ?: JournalPassage.nomNormalise(nom).takeIf { it.length >= 2 }?.let { n -> l.firstOrNull { JournalPassage.nomNormalise(it.name) == n } }
+    }
+
+    /** Events gathered into the passes they belong to (as the phone does), those not in the journal yet. */
+    fun candidats(evts: List<JournalPassage.Evenement>): List<JournalPassage.Candidat> =
+        JournalPassage.regroupe(evts, { ev ->
+            val sat = station.etat.value.satellites.firstOrNull { it.catalogNumber == ev.catnum } ?: return@regroupe null
+            val obs = Maidenhead.centre(ev.locator)?.let { (la, lo) -> Observer(la, lo) } ?: station.etat.value.observateur ?: return@regroupe null
+            // Elements drift and clocks too: looked for up to 15 minutes either side.
+            (listOf(0) + (1..15).flatMap { listOf(it, -it) })
+                .firstNotNullOfOrNull { d -> runCatching { predicteur.currentPass(sat, obs, ev.tMs + d * 60_000L) }.getOrNull() }
+        }, passages(), exige = null).first
+
+    /** Those passes written into the journal (their predicted track), with a recording when one covers them; how many. */
+    fun importe(c: List<JournalPassage.Candidat>): Int {
+        var n = 0
+        for (x in c) runCatching {
+            val sat = station.etat.value.satellites.firstOrNull { it.catalogNumber == x.catnum } ?: return@runCatching
+            val obs = Maidenhead.centre(x.locator)?.let { (la, lo) -> Observer(la, lo) } ?: station.etat.value.observateur ?: return@runCatching
+            val pas = ((x.losMs - x.aosMs) / JournalPassage.PAS_MS).toInt().coerceIn(10, 400)
+            val piste = predicteur.sampleTrack(sat, obs, x.aosMs - 5_000L, x.losMs + 5_000L, pas)
+            JournalPassage.reconstitue(x, piste)?.let { r ->
+                val son = son.enregistrements().firstOrNull { f ->
+                    val d = SstvMeta.debutEnregistrement(f.name)
+                    f.name.endsWith(".wav") && d > 0 && d in (r.debutMs - 600_000L)..r.finMs
+                }
+                rangement.enregistre(if (son != null && r.enregistrements.isEmpty()) r.copy(enregistrements = listOf(son.name)) else r); n++
+            }
+        }
+        return n
+    }
+
     // ------------------------------------------------------------ the sky and the map
 
     private fun observateur(e: JournalPassage.Entree): Observer? =

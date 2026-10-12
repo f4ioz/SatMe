@@ -258,6 +258,16 @@ object PagePc {
         <button onclick="depose()">Déposer au carnet en ligne</button></div>
       <div class="etat" id="c-depot"></div>
     </div>
+    <div class="carte">
+      <div class="t">Importer</div>
+      <div class="ligne" style="margin-top:0"><button onclick="profilsWavelog()">Depuis le carnet en ligne (Wavelog)…</button></div>
+      <div id="w-profils" class="petit"></div>
+      <div class="petit" style="margin-top:10px">Ou un fichier ADIF (export Wavelog, LoTW, autre logiciel) :</div>
+      <input type="file" id="i-adif" accept=".adi,.adif,.txt" style="width:100%;margin-top:4px" onchange="importeAdif(this)">
+      <label class="petit"><input type="checkbox" id="i-enligne" checked> ces contacts sont déjà dans le carnet en ligne (ne pas les y redéposer)</label>
+      <div class="petit" style="margin-top:6px">Les contacts satellite absents du carnet y entrent, avec la position du satellite à leur heure ; leurs passages sont reconstitués dans le Journal.</div>
+      <div class="etat" id="i-etat"></div>
+    </div>
   </div>
   <div>
     <div class="carte">
@@ -813,17 +823,20 @@ async function chargeCarnet() {
   try {
     const j = await (await fetch('/api/carnet')).json();
     C = j.contacts;
-    txt('c-nb', String(C.length)); txt('c-carres', String(j.carres)); txt('c-attente', String(j.nonDeposes));
+    txt('c-nb', String(j.total)); txt('c-carres', String(j.carres)); txt('c-attente', String(j.nonDeposes));
     dessineCarnet();
   } catch (x) {}
 }
 function dessineCarnet() {
   const f = v('c-filtre').toUpperCase();
-  g('c-liste').innerHTML = C.filter(e => !f || [e.c, e.l, e.sat, e.nm, e.qth].join(' ').toUpperCase().includes(f)).map(e =>
+  const tous = C.filter(e => !f || [e.c, e.l, e.sat, e.nm, e.qth].join(' ').toUpperCase().includes(f));
+  // A thousand lines at most: beyond that, the filter finds faster than the eye.
+  const reste = tous.length > 1000 ? '<tr><td colspan="8" class="petit">… et ' + (tous.length - 1000) + ' autres : filtre pour les voir</td></tr>' : '';
+  g('c-liste').innerHTML = tous.slice(0, 1000).map(e =>
     '<tr><td>' + new Date(e.t).toISOString().slice(0, 16).replace('T', ' ') + '</td><td><b>' + esc(e.c) + '</b></td><td>' + esc(e.l) +
     '</td><td>' + esc(e.sat) + '</td><td>' + esc(e.md) + '</td><td>' + esc(e.rs) + '/' + esc(e.rr) + '</td><td>' + esc(e.nm) +
     '</td><td class="act">' + (e.envoye ? '<span class="vert" title="déposé au carnet en ligne">✓</span> ' : '<button title="Déposer au carnet en ligne" onclick="depose(' + e.t + ')">⬆</button> ') +
-    '<button title="Modifier" onclick="edite(' + e.t + ')">✎</button></td></tr>').join('') ||
+    '<button title="Modifier" onclick="edite(' + e.t + ')">✎</button></td></tr>').join('') + reste ||
     '<tr><td colspan="8" class="petit">aucun contact</td></tr>';
 }
 g('c-filtre').oninput = dessineCarnet;
@@ -890,6 +903,37 @@ async function enregistreEdit() {
 async function supprimeEdit() {
   if (!confirm('Supprimer ce contact du carnet ?')) return;
   await post('/api/carnet/supprime?t=' + editT); g('c-edit').close(); chargeCarnet();
+}
+function bilanImport(j) {
+  if (!j) return 'échec';
+  if (j.ok === false && j.erreur) return j.erreur;
+  return j.lus + ' contact(s) lus · ' + j.ajoutes + ' ajouté(s) au carnet · ' + j.passages + ' passage(s) reconstitué(s) dans le journal' +
+    (j.inconnus ? ' · dont ' + j.inconnus + ' sur des satellites absents du bulletin AMSAT (gardés au carnet, sans passage)' : '') +
+    ' · le journal garde ses 500 passages les plus récents';
+}
+async function profilsWavelog() {
+  txt('i-etat', 'relevé des profils…');
+  let j = null;
+  try { j = await (await fetch('/api/wavelog/profils')).json(); } catch (x) {}
+  if (!j || j.erreur) { txt('i-etat', j && j.erreur ? j.erreur : 'échec'); return; }
+  txt('i-etat', '');
+  g('w-profils').innerHTML = j.profils.map(p => '<label style="display:block"><input type="checkbox" class="w-p" value="' + esc(p.id) + '" checked> ' +
+    esc(p.nom || p.indicatif) + ' · ' + esc(p.carre) + '</label>').join('') +
+    '<button class="primaire" style="margin-top:6px" onclick="importeWavelog()">Importer les contacts satellite</button>';
+}
+async function importeWavelog() {
+  const ids = [...document.querySelectorAll('.w-p')].filter(c => c.checked).map(c => c.value).join(',');
+  txt('i-etat', 'import en cours (tout le carnet en ligne : patience)…');
+  let j = null;
+  try { j = await (await fetch('/api/wavelog/importe?profils=' + enc(ids), { method: 'POST' })).json(); } catch (x) {}
+  txt('i-etat', bilanImport(j)); chargeCarnet();
+}
+async function importeAdif(input) {
+  const f = input.files[0]; if (!f) return;
+  txt('i-etat', 'lecture de ' + f.name + '…');
+  let j = null;
+  try { j = await (await fetch('/api/import/adif?enLigne=' + (g('i-enligne').checked ? 1 : 0), { method: 'POST', body: await f.text() })).json(); } catch (x) {}
+  txt('i-etat', bilanImport(j)); input.value = ''; chargeCarnet();
 }
 async function depose(t) {
   txt('c-depot', 'envoi…');

@@ -176,6 +176,34 @@ class StationPcTest {
     }
 
     @Test
+    fun un_adif_entre_au_carnet_et_reconstitue_son_passage() {
+        val st = station()
+        attends { st.etat.value.satellites.isNotEmpty() }
+        val carnet = CarnetPc(st, fr.f4ioz.satcombo.data.LogStore(File(dossier, "qso_log.json")), horloge = { milieu })
+        val son = SonStation(SonPc(), st, File(dossier, "enr"), File(dossier, "sstv"))
+        val journal = JournalPc(st, carnet, son, File(dossier, "journal"))
+        val imp = ImportPc(st, carnet, journal) { milieu }
+        val f = java.text.SimpleDateFormat("yyyyMMdd HHmmss", java.util.Locale.US).apply { timeZone = java.util.TimeZone.getTimeZone("UTC") }
+        fun qso(call: String, sat: String, t: Long, loc: String): String {
+            val (d, h) = f.format(java.util.Date(t)).split(' ')
+            return "<CALL:${call.length}>$call<QSO_DATE:8>$d<TIME_ON:6>$h<SAT_NAME:${sat.length}>$sat<PROP_MODE:3>SAT<GRIDSQUARE:${loc.length}>$loc<MY_GRIDSQUARE:6>JN18FS<MODE:2>FM<EOR>\n"
+        }
+        val adif = "Export\n<EOH>\n" + qso("F5XYZ", "ISS", milieu - 60_000L, "JN03") + qso("EA4ABC", "ISS", milieu + 30_000L, "IN80") +
+            qso("G0AAA", "LUNE-1", milieu, "IO91")
+        val b = imp.depuisAdif(adif, dejaEnLigne = true)
+        assertEquals(3, b.lus); assertEquals(3, b.ajoutes); assertEquals(1, b.passages); assertEquals(1, b.inconnus)
+        val l = carnet.contacts()
+        assertTrue(l.filter { it.satName == "ISS" }.let { iss -> iss.size == 2 && iss.all { it.envoyeMs > 0 && it.elevationDeg > 0 } })
+        // On a satellite the bulletin does not know: kept in the log all the same, without its position.
+        val lune = l.single { it.callsign == "G0AAA" }
+        assertEquals("LUNE-1", lune.satName); assertEquals(0, lune.catnum)
+        assertEquals(1, journal.passages().size)
+        // Again: nothing new, no second pass.
+        val c = imp.depuisAdif(adif, dejaEnLigne = true)
+        assertEquals(0, c.ajoutes); assertEquals(0, c.passages)
+    }
+
+    @Test
     fun le_mat_simule_vise_le_satellite() {
         val st = station()
         st.suis(25544)

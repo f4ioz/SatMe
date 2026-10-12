@@ -29,7 +29,7 @@ import kotlin.concurrent.thread
  */
 class ServeurPc(private val station: StationPc, private val port: Int, private val reseau: Boolean = false,
                 private val carnet: CarnetPc? = null, private val son: SonStation? = null,
-                private val journal: JournalWebPc? = null) {
+                private val journal: JournalWebPc? = null, private val importPc: ImportPc? = null) {
 
     private var socket: ServerSocket? = null
     val portReel: Int get() = socket?.localPort ?: port
@@ -55,6 +55,12 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
         val chemin = r.chemin.substringBefore('?')
         val q = parametres(r.chemin.substringAfter('?', ""))
         val sortie = c.getOutputStream()
+        if (r.methode == "POST" && chemin == "/api/import/adif") {
+            val corps = RequeteHttp.corps(c.getInputStream(), r, 50L * 1024 * 1024)
+            val b = if (corps == null || importPc == null) null else importPc.depuisAdif(String(corps, Charsets.UTF_8), q["enLigne"] == "1")
+            envoie(sortie, "200 OK", "application/json; charset=utf-8", JsonPc.bilan(b).toString().toByteArray())
+            return
+        }
         if (r.methode == "POST" && chemin == "/api/import") {
             // The phone's backup, sent as the request's body (a few hundred kilobytes with the log).
             val corps = RequeteHttp.corps(c.getInputStream(), r, 20L * 1024 * 1024)
@@ -99,6 +105,11 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                     else JSONObject().put("ok", true).put("fenetres", JSONArray(f.map { w -> JSONObject().put("de", w.deMs).put("a", w.aMs)
                         .put("elMoi", w.elMoi).put("elAutre", w.elAutre).put("azMoi", Math.round(w.azMoi)).put("azAutre", Math.round(w.azAutre)) }))
                 envoie(sortie, "200 OK", "application/json; charset=utf-8", o.toString().toByteArray())
+            }
+            "/api/wavelog/profils" -> {
+                val (l, err) = importPc?.let { kotlinx.coroutines.runBlocking { it.profils() } } ?: (emptyList<fr.f4ioz.satcombo.domain.ProfilsStation.Profil>() to "indisponible")
+                envoie(sortie, "200 OK", "application/json; charset=utf-8", JSONObject().put("erreur", err ?: "")
+                    .put("profils", JSONArray(l.map { JSONObject().put("id", it.id).put("carre", it.carre).put("indicatif", it.indicatif).put("nom", it.nom) })).toString().toByteArray())
             }
             "/api/carres" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JsonPc.carres(carnet, station).toString().toByteArray())
             "/api/carnet" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JsonPc.carnet(carnet).toString().toByteArray())
@@ -158,6 +169,11 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
             }
             "/api/agenda/sked" -> {
                 station.skedAgenda(entier("catnum") ?: 0, q["loc"].orEmpty(), q["de"]?.toLongOrNull() ?: 0L, q["a"]?.toLongOrNull() ?: 0L)
+            }
+            "/api/wavelog/importe" -> {
+                val i = importPc ?: return JSONObject().put("ok", false)
+                val ids = q["profils"].orEmpty().split(',').map { it.trim() }.filter { it.isNotEmpty() }
+                return JsonPc.bilan(kotlinx.coroutines.runBlocking { i.depuisEnLigne(ids) })
             }
             "/api/agenda/retire" -> q["id"]?.toLongOrNull()?.let { station.retireAgenda(it) }
             "/api/agenda/active" -> q["id"]?.toLongOrNull()?.let { station.activeAgenda(it) }
@@ -411,8 +427,8 @@ object JsonPc {
 
     fun carnet(c: CarnetPc?): JSONObject {
         val l = c?.contacts().orEmpty()
-        return JSONObject().put("carres", c?.carres() ?: 0).put("nonDeposes", l.count { it.envoyeMs == 0L })
-            .put("contacts", JSONArray(l.take(500).map { e ->
+        return JSONObject().put("carres", c?.carres() ?: 0).put("nonDeposes", l.count { it.envoyeMs == 0L }).put("total", l.size)
+            .put("contacts", JSONArray(l.take(6000).map { e ->
                 JSONObject().put("t", e.timeMs).put("c", e.callsign).put("l", e.theirLocator).put("sat", e.satName)
                     .put("md", e.mode).put("rs", e.rstSent).put("rr", e.rstRcvd).put("n", e.note).put("nm", e.nom)
                     .put("qth", e.qth).put("az", e.azimuthDeg).put("el", e.elevationDeg).put("dl", e.downlinkMhz)
@@ -466,6 +482,10 @@ object JsonPc {
                 JSONObject().put("nom", it.fileName).put("sat", it.satName).put("t", it.timeMs).put("mode", it.mode).put("complete", it.complete)
             }))
     }
+
+    fun bilan(b: ImportPc.Bilan?): JSONObject = if (b == null) JSONObject().put("ok", false).put("erreur", "fichier illisible ou trop gros")
+        else JSONObject().put("ok", b.message.isEmpty() || b.lus > 0).put("lus", b.lus).put("ajoutes", b.ajoutes).put("passages", b.passages)
+            .put("inconnus", b.inconnus).put("erreur", b.message)
 
     /** FT8 heard: the decodes with what they mean here (CQ, for me, how far, already worked), the waterfall. */
     fun ft8(s: SonStation?, st: StationPc, c: CarnetPc?): JSONObject {

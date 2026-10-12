@@ -64,7 +64,7 @@ fun main(args: Array<String>) {
             kotlinx.coroutines.delay(1000)
         }
     }
-    val serveur = ServeurPc(station, port, reseau, carnet, son, JournalWebPc(journal, station, dossier))
+    val serveur = ServeurPc(station, port, reseau, carnet, son, JournalWebPc(journal, station, dossier), ImportPc(station, carnet, journal))
     serveur.demarre()
     println("SatMe — station PC")
     println("  page      : http://localhost:${serveur.portReel}/" + if (reseau) "  (ouverte au réseau)" else "")
