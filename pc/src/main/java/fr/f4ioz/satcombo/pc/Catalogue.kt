@@ -29,8 +29,11 @@ class Catalogue(
     private val dossier: File,
     private val client: OkHttpClient = clientParDefaut,
     /** False: the disk only, nothing downloaded (the tests). */
-    private val enLigne: Boolean = true
+    val enLigne: Boolean = true
 ) {
+
+    /** Where the downloads are kept (also the AMSAT status page). */
+    val dossierCache: File? get() = dossier
 
     private val fichierGp = File(dossier, "amsat-gp.json")
     private val fichierTle = File(dossier, "amsat-tle.txt")

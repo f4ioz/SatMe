@@ -46,3 +46,7 @@ class StockageAndroid(private val p: SharedPreferences) : Stockage {
 
 /** The contact log in the phone's files (`qso_log.json`). */
 fun LogStore(context: Context): LogStore = LogStore(context.filesDir.resolve("qso_log.json"))
+
+/** The AMSAT status page, its last answer kept in the phone's files. */
+fun AmsatStatusRepository(context: Context): AmsatStatusRepository =
+    AmsatStatusRepository(context.filesDir.resolve(AmsatStatusRepository.CACHE_FILE))

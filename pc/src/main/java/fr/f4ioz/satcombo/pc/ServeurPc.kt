@@ -128,6 +128,7 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
         when (chemin) {
             "/api/suivre" -> return ok.put("ok", entier("catnum")?.let { station.suis(it) } == true)
             "/api/emetteur" -> station.choisitEmetteur(entier("i") ?: 0)
+            "/api/favori" -> entier("catnum")?.let { station.favori(it, q["on"] == "1") }
             "/api/repos" -> station.deplaceRepos(q["d"]?.toLongOrNull() ?: 0L)
             "/api/maintien" -> station.maintien(q["on"] == "1")
             "/api/locator" -> return ok.put("ok", station.poseLocator(q["l"].orEmpty()))
@@ -286,7 +287,9 @@ object JsonPc {
             .put("locator", e.locator).put("indicatif", e.indicatif)
             .put("catalogue", e.catalogue).put("nbSatellites", e.satellites.size)
             .put("calcul", e.calculEnCours)
-        e.suivi?.let { s -> o.put("suivi", JSONObject().put("nom", s.name).put("catnum", s.catalogNumber)) }
+        e.suivi?.let { s -> o.put("suivi", JSONObject().put("nom", s.name).put("catnum", s.catalogNumber)
+            .put("fav", s.catalogNumber in e.favoris)
+            .put("amsat", st.statutAmsat(s.name)?.let { r -> JSONObject().put("statut", r.recent.name).put("mode", r.mode).put("actifs", r.activeReports) } ?: JSONObject.NULL)) }
         e.position?.let { p ->
             o.put("position", JSONObject().put("az", p.azimuthDeg).put("el", p.elevationDeg)
                 .put("distance", p.rangeKm).put("vitesse", p.rangeRateKmS).put("alt", p.altKm)
@@ -325,14 +328,16 @@ object JsonPc {
         return o
     }
 
-    private fun passage(p: fr.f4ioz.satcombo.data.SatPass) = JSONObject()
+    private fun passage(p: fr.f4ioz.satcombo.data.SatPass, st: StationPc? = null) = JSONObject()
+        .put("fav", st?.etat?.value?.favoris?.contains(p.catalogNumber) == true)
+        .put("amsat", st?.statutAmsat(p.satName)?.recent?.name ?: "")
         .put("nom", p.satName).put("catnum", p.catalogNumber).put("aos", p.aosEpochMs).put("los", p.losEpochMs)
         .put("elMax", p.maxElevationDeg).put("azAos", p.aosAzimuthDeg).put("azLos", p.losAzimuthDeg)
 
     fun passages(st: StationPc): JSONObject {
         val e = st.etat.value
         return JSONObject().put("calcul", e.calculEnCours)
-            .put("liste", JSONArray(e.passages.take(300).map { passage(it) }))
+            .put("liste", JSONArray(e.passages.take(300).map { passage(it, st) }))
     }
 
     fun satellites(st: StationPc) = JSONArray(st.etat.value.satellites.map {

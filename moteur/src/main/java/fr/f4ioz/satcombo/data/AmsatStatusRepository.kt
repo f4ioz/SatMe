@@ -8,7 +8,6 @@
  */
 package fr.f4ioz.satcombo.data
 
-import android.content.Context
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
@@ -33,13 +32,14 @@ data class AmsatReport(
  * last-known status is available offline.
  */
 class AmsatStatusRepository(
-    private val context: Context? = null,
+    /** Where the last statuses are kept (null: memory only). */
+    private val cache: java.io.File? = null,
     private val client: OkHttpClient = defaultClient()
 ) {
 
     companion object {
         private const val URL = "https://www.amsat.org/status/"
-        private const val CACHE_FILE = "amsat_status.json"
+        const val CACHE_FILE = "amsat_status.json"
         private const val FRESH_MS = 1 * 60 * 60 * 1000L  // 1 h
         private fun defaultClient() = OkHttpClient.Builder()
             .callTimeout(20, TimeUnit.SECONDS)
@@ -56,7 +56,7 @@ class AmsatStatusRepository(
         private val CELL = Regex("""bgcolor="(#[0-9a-fA-F]{6})"""", RegexOption.IGNORE_CASE)
     }
 
-    private fun cacheFile() = context?.filesDir?.resolve(CACHE_FILE)
+    private fun cacheFile() = cache
 
     /** Age of the cached status in ms, or null if no cache. */
     fun cacheAgeMs(): Long? {
@@ -109,7 +109,7 @@ class AmsatStatusRepository(
     /** Fetch and parse the status table. Returns reports keyed by upper-case name. */
     suspend fun fetch(): Map<String, AmsatReport> = withContext(Dispatchers.IO) {
         val req = Request.Builder().url(URL)
-            .header("User-Agent", TleRepository.USER_AGENT)
+            .header("User-Agent", AgentHttp.USER_AGENT)
             .build()
         val body = client.newCall(req).execute().use { resp ->
             if (!resp.isSuccessful) return@withContext emptyMap()

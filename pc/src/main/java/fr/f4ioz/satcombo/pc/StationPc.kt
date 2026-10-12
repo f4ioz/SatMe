@@ -69,6 +69,10 @@ data class EtatPc(
     val catStatut: String = "",
     val catSimule: Boolean = false,
     val maintienDoppler: Boolean = false,
+    /** The satellites marked ★ (catalog numbers). */
+    val favoris: Set<Int> = emptySet(),
+    /** amsat.org's status page: is each satellite heard these days (by AMSAT name). */
+    val amsat: Map<String, fr.f4ioz.satcombo.data.AmsatReport> = emptyMap(),
 )
 
 /**
@@ -185,7 +189,7 @@ class StationPc(
         // On a PC the mast's port is the one chosen, never searched among the others.
         stationRotor.setRotorAutoPort(false)
         stationCat.regleMaintien(settings.catHoldMs.toLong())
-        change { copy(satellites = this@StationPc.catalogue.satellites(), locator = settings.manualLocator,
+        change { copy(favoris = lisFavoris(), satellites = this@StationPc.catalogue.satellites(), locator = settings.manualLocator,
             indicatif = settings.callsign, observateur = observateur(), catModele = modeleDe(settings.rigModel)) }
         stockage.getInt(CLE_SATELLITE, 0).takeIf { it > 0 }?.let { n -> _etat.value.satellites.firstOrNull { it.catalogNumber == n }?.let { suis(it) } }
         portee.launch(Dispatchers.IO) {
@@ -209,6 +213,44 @@ class StationPc(
                 runCatching { recalcule() }
             }
         }
+        // AMSAT's status page: kept on disk, asked again once an hour.
+        portee.launch(Dispatchers.IO) {
+            change { copy(amsat = amsatRepo.loadCache()) }
+            while (catalogue.enLigne) {
+                runCatching { amsatRepo.get() }.getOrNull()?.takeIf { it.isNotEmpty() }?.let { r -> change { copy(amsat = r) } }
+                delay(3_600_000L)
+            }
+        }
+    }
+
+    private val amsatRepo = fr.f4ioz.satcombo.data.AmsatStatusRepository(this.catalogue.dossierCache?.let { java.io.File(it, "amsat_status.json") })
+
+    /** amsat.org's report for a satellite, by its AMSAT name (letters and digits compared). */
+    fun statutAmsat(nom: String): fr.f4ioz.satcombo.data.AmsatReport? {
+        val r = _etat.value.amsat
+        if (r.isEmpty()) return null
+        fun n(s: String) = s.uppercase().replace(Regex("[^A-Z0-9]"), "")
+        r[nom.uppercase().trim()]?.let { return it }
+        val k = n(nom)
+        return r.values.firstOrNull { n(it.name) == k } ?: if (k.contains("ISS")) r.values.firstOrNull { n(it.name).contains("ISS") } else null
+    }
+
+    // ------------------------------------------------------------ favourites
+
+    private fun lisFavoris(): Set<Int> = stockage.getStringSet(CLE_FAVORIS, emptySet()).orEmpty().mapNotNull { it.toIntOrNull() }.toSet()
+
+    fun favori(catnum: Int, on: Boolean) {
+        val f = if (on) _etat.value.favoris + catnum else _etat.value.favoris - catnum
+        stockage.edit().putStringSet(CLE_FAVORIS, f.map { it.toString() }.toSet()).apply()
+        change { copy(favoris = f) }
+    }
+
+    /** The phone's favourites (its backup), added to the PC's. */
+    fun ajouteFavoris(l: Set<Int>) {
+        if (l.isEmpty()) return
+        val f = _etat.value.favoris + l
+        stockage.edit().putStringSet(CLE_FAVORIS, f.map { it.toString() }.toSet()).apply()
+        change { copy(favoris = f) }
     }
 
     @Volatile private var derniereRecherche = 0L
@@ -313,6 +355,7 @@ class StationPc(
     /** The phone's settings (its backup file), then everything that reads them again. */
     fun importeTelephone(json: String, carnet: fr.f4ioz.satcombo.data.LogStore? = null): Result<Pair<Int, Int>> {
         val r = ImportTelephone.importe(json, stockage).map { it to (carnet?.let { c -> ImportTelephone.importeCarnet(json, c) } ?: 0) }
+        if (r.isSuccess) ajouteFavoris(ImportTelephone.favoris(json))
         if (r.isSuccess) {
             stationRotor.rechargeReglages()
             stationRotor.setRotorAutoPort(false)
@@ -495,6 +538,7 @@ class StationPc(
         val SIMULES = setOf("SIM", "TS2000SIM")
         /** The satellite followed, kept between two starts. */
         const val CLE_SATELLITE = "pc_satellite"
+        const val CLE_FAVORIS = "pc_favoris"
         fun modeleDe(id: String): String = id.takeIf { it in MODELES } ?: "IC9700"
     }
 }

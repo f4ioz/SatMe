@@ -43,6 +43,13 @@ object ImportTelephone {
         return nouveaux.size
     }
 
+    /** The phone's favourites (catalog numbers), from its backup. */
+    fun favoris(json: String): Set<Int> = runCatching {
+        val a = JSONObject(json).optJSONObject("stores")?.optJSONObject("satcombo_favorites")
+            ?.optJSONObject("fav_catnums")?.optJSONArray("v") ?: return emptySet()
+        (0 until a.length()).mapNotNull { a.optString(it).toIntOrNull() }.toSet()
+    }.getOrDefault(emptySet())
+
     /** Writes the backup's settings into [stockage]; how many were taken, or an error. */
     fun importe(json: String, stockage: Stockage): Result<Int> = runCatching {
         val racine = JSONObject(json)

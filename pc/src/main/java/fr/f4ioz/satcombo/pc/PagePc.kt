@@ -64,6 +64,7 @@ object PagePc {
   .bouton-gr { display:flex; gap:6px; flex-wrap:wrap; }
   .pastille { display:inline-block; padding:2px 8px; border-radius:20px; font-size:12px; font-weight:700; }
   .on { background:rgba(91,214,138,.18); color:var(--vert); } .off { background:rgba(154,167,180,.15); color:var(--gris); }
+  .discret { background:transparent; border:none; }
   nav { display:flex; gap:4px; }
   nav button { background:transparent; border:1px solid transparent; color:var(--gris); padding:6px 14px; }
   nav button.actif { color:var(--cyan); border-color:var(--bord); background:var(--carte); }
@@ -93,8 +94,10 @@ object PagePc {
         <input id="filtre" placeholder="Filtrer : ISS, SO-50, RS-44…">
         <label class="petit"><input type="checkbox" id="utc"> UTC</label>
       </div>
+      <div class="ligne"><label class="petit"><input type="checkbox" id="f-fav"> ★ favoris seulement</label>
+        <label class="petit"><input type="checkbox" id="f-actifs"> entendus ces jours-ci (AMSAT)</label></div>
       <div class="etat" id="calcul"></div>
-      <div id="liste"><table><thead><tr><th>Début</th><th>Satellite</th><th>El max</th><th>Durée</th><th></th></tr></thead><tbody id="passages"></tbody></table></div>
+      <div id="liste"><table><thead><tr><th></th><th>Début</th><th>Satellite</th><th>El max</th><th>Durée</th><th></th></tr></thead><tbody id="passages"></tbody></table></div>
     </div>
   </div>
 
@@ -107,7 +110,8 @@ object PagePc {
         <datalist id="tous"></datalist>
         <button onclick="choisitParNom()">Suivre</button>
       </div>
-      <div class="paire"><span class="gros" id="nom">—</span><span id="compte" class="val ambre"></span></div>
+      <div class="paire"><span class="gros" id="nom">—</span><button id="fav" class="discret" title="Favori" onclick="basculeFavori()" style="font-size:20px;padding:2px 8px">☆</button><span id="compte" class="val ambre"></span></div>
+      <div class="petit" id="amsat"></div>
       <div class="paire" style="margin-top:6px">
         <span>Az <span class="val cyan" id="az">—</span></span>
         <span>El <span class="val cyan" id="el">—</span></span>
@@ -399,18 +403,33 @@ function duree(ms) {
 function mhz(hz) { return hz == null ? '—' : (hz / 1e6).toFixed(hz % 1000 === 0 ? 3 : 4); }
 function txt(id, t) { const e = g(id); if (e.textContent !== t) e.textContent = t; }
 
+// amsat.org's colours for its statuses, and their words.
+const AMSAT = { ACTIVE: ['var(--vert)', 'entendu'], BEACON: ['var(--ambre)', 'balise seulement'], NOT_HEARD: ['var(--rose)', 'pas entendu'],
+  CONFLICT: ['#fe6100', 'avis partagés'], UNKNOWN: ['var(--gris)', 'pas de nouvelles'] };
+['f-fav', 'f-actifs'].forEach(i => {
+  try { g(i).checked = localStorage.getItem(i) === '1'; } catch (x) {}
+  g(i).onchange = () => { try { localStorage.setItem(i, g(i).checked ? '1' : '0'); } catch (x) {} dessinePassages(); };
+});
+async function favori(n, on, ev) { if (ev) ev.stopPropagation(); await post('/api/favori?catnum=' + n + '&on=' + (on ? 1 : 0)); chargeListe(); }
+function basculeFavori() { if (E && E.suivi) favori(E.suivi.catnum, !E.suivi.fav); }
 function dessinePassages() {
   const f = g('filtre').value.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+  const seulFav = g('f-fav').checked, seulActifs = g('f-actifs').checked;
   const n = Date.now();
   const suivi = E && E.suivi ? E.suivi.catnum : -1;
-  const lignes = P.filter(p => !f || p.nom.toUpperCase().replace(/[^A-Z0-9]/g, '').includes(f)).slice(0, 150).map(p => {
+  const lignes = P.filter(p => (!f || p.nom.toUpperCase().replace(/[^A-Z0-9]/g, '').includes(f)) && (!seulFav || p.fav) &&
+      (!seulActifs || p.amsat === 'ACTIVE')).slice(0, 150).map(p => {
+    const a = AMSAT[p.amsat];
     const enCours = n >= p.aos && n <= p.los;
     const cl = 'p' + (enCours ? ' encours' : '') + (p.catnum === suivi ? ' choisi' : '');
     const quand = enCours ? 'en cours' : 'dans ' + duree(p.aos - n);
-    return '<tr class="' + cl + '" onclick="suivre(' + p.catnum + ')"><td>' + hm(p.aos) + '</td><td>' + p.nom.replace(/</g, '&lt;') +
+    return '<tr class="' + cl + '" onclick="suivre(' + p.catnum + ')"><td><span title="Favori" style="cursor:pointer;color:' + (p.fav ? 'var(--ambre)' : 'var(--bord)') +
+      '" onclick="favori(' + p.catnum + ',' + !p.fav + ',event)">★</span></td><td>' + hm(p.aos) + '</td><td>' +
+      (a ? '<span title="AMSAT : ' + a[1] + '" style="display:inline-block;width:8px;height:8px;border-radius:4px;margin-right:6px;background:' + a[0] + '"></span>' : '') +
+      p.nom.replace(/</g, '&lt;') +
       '</td><td>' + Math.round(p.elMax) + '°</td><td>' + duree(p.los - p.aos) + '</td><td class="petit">' + quand + '</td></tr>';
   });
-  g('passages').innerHTML = lignes.join('') || '<tr><td colspan="5" class="petit">' + (E && E.locator ? 'aucun passage' : 'renseigne ton locator') + '</td></tr>';
+  g('passages').innerHTML = lignes.join('') || '<tr><td colspan="6" class="petit">' + (E && E.locator ? 'aucun passage' : 'renseigne ton locator') + '</td></tr>';
 }
 async function suivre(n) { await post('/api/suivre?catnum=' + n); }
 let tous = [];
@@ -468,6 +487,10 @@ function dessine() {
   if (document.activeElement !== g('indicatif') && !g('indicatif').value) g('indicatif').value = E.indicatif || '';
   if (document.activeElement !== g('locator') && !g('locator').value) g('locator').value = E.locator || '';
   txt('nom', E.suivi ? E.suivi.nom : '— choisis un passage');
+  g('fav').style.display = E.suivi ? '' : 'none';
+  txt('fav', E.suivi && E.suivi.fav ? '★' : '☆'); g('fav').style.color = E.suivi && E.suivi.fav ? 'var(--ambre)' : 'var(--gris)';
+  const am = E.suivi && E.suivi.amsat;
+  txt('amsat', am ? 'AMSAT : ' + (AMSAT[am.statut] || AMSAT.UNKNOWN)[1] + (am.mode ? ' (' + am.mode + ')' : '') + ' · ' + am.actifs + ' rapport(s) « entendu »' : '');
   txt('c-sat', E.suivi ? '· ' + E.suivi.nom + (E.position ? ' · El ' + Math.round(E.position.el) + '°' : '') : '· suis d’abord un satellite (onglet Station)');
   const p = E.position;
   txt('az', p ? p.az.toFixed(1) + '°' : '—');
