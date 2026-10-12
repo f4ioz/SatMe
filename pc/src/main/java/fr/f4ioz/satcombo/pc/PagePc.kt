@@ -94,6 +94,11 @@ object PagePc {
   .o-puces button { padding:4px 9px; font-size:12px; font-weight:600; }
   .o-puces button.ici { background:var(--cyan); color:#06131A; border-color:var(--cyan); }
   .o-puces button.perso { border-color:var(--ambre); }
+  .r-barre { width:140px; height:8px; background:#0E1720; border-radius:4px; overflow:hidden; }
+  .r-barre i { display:block; height:100%; width:0; background:var(--vert); }
+  .r-cascade { position:relative; height:360px; }
+  .r-cascade canvas { position:absolute; inset:0; width:100%; height:100%; display:block; cursor:crosshair; }
+  .r-droite { display:flex; flex-direction:column; min-width:0; }
   /* On a computer's screen each tab fits the window: what is longer scrolls in its own box. */
   @media (min-width:1101px) and (min-height:600px) {
     body { height:100vh; display:flex; flex-direction:column; overflow:hidden; }
@@ -112,6 +117,8 @@ object PagePc {
     .vue > .grille2 { height:100%; }
     .vue > .grille2 > div { min-height:0; overflow:auto; }
     #k-grille { height:100%; }
+    .r-droite { height:100%; margin:0; }
+    .r-cascade { flex:1; min-height:120px; height:auto; }
     .k-gauche { display:flex; flex-direction:column; min-height:0; }
     .k-fenetres { flex:1; max-height:none; min-height:0; margin-bottom:0; }
     .k-droite { min-height:0; }
@@ -128,7 +135,7 @@ object PagePc {
   <span class="g" id="info-station"></span>
   <span class="g" id="cat-statut-court"></span>
   <nav id="onglets">
-    <button data-v="station" class="actif">Station</button><button data-v="carnet">Carnet</button><button data-v="agenda">Agenda</button><button data-v="carres">Carrés</button><button data-v="frise">Frise</button><button data-v="sked">Sked</button><button data-v="qo100">QO-100</button><button data-v="son">Son</button><button data-v="sstv">SSTV</button><button data-v="aprs">APRS</button><button data-v="ft8">FT8</button><a href="/journal" style="text-decoration:none"><button title="Les passages enregistrés, rejoués">Journal</button></a><button data-v="reglages">Réglages</button>
+    <button data-v="station" class="actif">Station</button><button data-v="carnet">Carnet</button><button data-v="agenda">Agenda</button><button data-v="carres">Carrés</button><button data-v="frise">Frise</button><button data-v="sked">Sked</button><button data-v="qo100">QO-100</button><button data-v="sdr">SDR</button><button data-v="son">Son</button><button data-v="sstv">SSTV</button><button data-v="aprs">APRS</button><button data-v="ft8">FT8</button><a href="/journal" style="text-decoration:none"><button title="Les passages enregistrés, rejoués">Journal</button></a><button data-v="reglages">Réglages</button>
   </nav>
   <span id="rec" class="pastille" style="display:none;background:rgba(229,72,77,.2);color:var(--rose)"></span>
   <span id="heure"></span>
@@ -573,6 +580,57 @@ object PagePc {
   </div>
 </div>
 </div>
+<div class="vue" id="v-sdr" hidden>
+<div class="grille2" id="r-grille">
+  <div>
+    <div class="carte">
+      <div class="t">Clé SDR (rtl_tcp) <span id="r-pastille" class="pastille off">arrêtée</span></div>
+      <div class="ligne" style="margin-top:0"><button class="primaire" onclick="post('/api/sdr/demarrer').then(ticSdr)">Démarrer</button>
+        <button onclick="post('/api/sdr/arreter').then(ticSdr)">Arrêter</button><span class="petit" id="r-info"></span></div>
+      <div class="avert" id="r-erreur"></div>
+    </div>
+    <div class="carte">
+      <div class="t">Écoute</div>
+      <label><input type="checkbox" id="r-suit" onchange="rRegle('suit=' + (this.checked ? 1 : 0))"> Le satellite suivi <b id="r-sat"></b></label>
+      <label style="display:block;margin-top:4px"><input type="checkbox" id="r-doppler" onchange="rRegle('doppler=' + (this.checked ? 1 : 0))"> Corriger le Doppler</label>
+      <div class="ligne"><span class="petit">Sinon (MHz)</span><input id="r-mhz" style="max-width:130px" placeholder="145,800"><button onclick="rRegle('mhz=' + enc(v('r-mhz')))">Écouter</button></div>
+    </div>
+    <div class="carte">
+      <div class="t">Démodulation</div>
+      <div class="ligne" style="margin-top:0"><span class="petit" style="min-width:70px">Mode</span>
+        <select id="r-mode" onchange="rRegle('mode=' + this.value)"><option value="AUTO">celui de l'émetteur</option><option>NFM</option><option>USB</option><option>LSB</option><option>AM</option></select></div>
+      <div class="ligne"><span class="petit" style="min-width:70px">Largeur</span>
+        <select id="r-bw" onchange="rRegle('bw=' + this.value)"><option value="0">celle du mode</option><option value="2400">2,4 kHz</option><option value="3000">3 kHz</option><option value="6000">6 kHz</option><option value="12000">12 kHz</option><option value="16000">16 kHz</option><option value="20000">20 kHz</option></select></div>
+      <div class="ligne"><span class="petit" style="min-width:70px">Silencieux</span><input type="range" id="r-sq" min="-120" max="-20" style="flex:1" onchange="rRegle('squelch=' + this.value)"><span class="petit" id="r-sqv"></span></div>
+      <label class="petit" style="display:block;margin-top:6px"><input type="checkbox" id="r-deemph" onchange="rRegle('deemph=' + (this.checked ? 1 : 0))"> Désaccentuation (phonie FM ; à couper pour la SSTV et la télémesure)</label>
+      <label style="display:block;margin-top:6px"><input type="checkbox" id="r-son" onchange="rRegle('son=' + (this.checked ? 1 : 0))"> Haut-parleur</label>
+      <div class="petit" style="margin-top:4px">Le son de la clé va aussi aux décodeurs (onglets SSTV, APRS, FT8) et à l'enregistrement, à la place de la carte son.</div>
+    </div>
+    <div class="carte">
+      <div class="t">La clé</div>
+      <div class="ligne" style="margin-top:0"><span class="petit" style="min-width:70px">Gain</span><select id="r-gain" onchange="rRegle('gain=' + this.value)"></select>
+        <label class="petit"><input type="checkbox" id="r-agc" onchange="rRegle('agc=' + (this.checked ? 1 : 0))"> CAG numérique</label></div>
+      <div class="ligne"><span class="petit" style="min-width:70px">Erreur</span><input id="r-ppm" style="max-width:70px"><span class="petit">ppm</span><button onclick="rRegle('ppm=' + enc(v('r-ppm')))">Appliquer</button></div>
+      <details style="margin-top:6px"><summary class="petit" style="cursor:pointer">Liaison rtl_tcp</summary>
+        <div class="ligne"><input id="r-hote" placeholder="127.0.0.1" style="max-width:160px"><input id="r-port" placeholder="1234" style="max-width:80px">
+          <button onclick="rRegle('hote=' + enc(v('r-hote')) + '&port=' + enc(v('r-port')))">Enregistrer</button></div>
+        <label class="petit" style="display:block;margin-top:4px"><input type="checkbox" id="r-lance" onchange="rRegle('lance=' + (this.checked ? 1 : 0))"> Lancer rtl_tcp sur ce PC (la clé y est branchée)</label>
+        <label class="petit" style="display:block;margin-top:4px"><input type="checkbox" id="r-bias" onchange="rRegle('bias=' + (this.checked ? 1 : 0))"> Alimenter l'antenne (bias-tee, préampli ou LNB ; clés qui l'ont)</label>
+        <div class="petit" style="margin-top:4px">Une clé sur une autre machine : y lancer <code>rtl_tcp -a 0.0.0.0</code>, puis donner son adresse ici.</div>
+      </details>
+    </div>
+  </div>
+  <div class="carte r-droite">
+    <div class="paire"><span class="o-freq" id="r-freq">—</span><span class="petit" id="r-detail"></span></div>
+    <div class="ligne" style="margin-top:4px"><span class="petit">Niveau</span><div class="r-barre"><i id="r-niveau"></i></div><span class="petit" id="r-db"></span>
+      <span class="rose petit" id="r-sat-av"></span>
+      <span style="margin-left:auto" class="petit">Largeur vue</span><select id="r-span" style="flex:none" onchange="rSpan = +this.value; rCascade = []"><option value="12000">12 kHz</option><option value="24000">24 kHz</option><option value="48000" selected>48 kHz</option><option value="96000">96 kHz</option><option value="176400">176 kHz</option></select>
+      <button onclick="post('/api/sdr/pic')" title="Le signal le plus fort à ±15 kHz">Caler sur le pic</button><button onclick="post('/api/sdr/decalage?hz=0')">Recentrer</button></div>
+    <canvas id="r-spectre" style="width:100%;height:110px;display:block;margin-top:8px;cursor:crosshair" title="Cliquer pour s'y accorder"></canvas>
+    <div class="r-cascade"><canvas id="r-cascade" title="Cliquer pour s'y accorder"></canvas></div>
+  </div>
+</div>
+</div>
 <div class="vue" id="v-ft8" hidden>
 <div class="grille2" style="grid-template-columns:minmax(380px,1fr) minmax(500px,1.5fr)">
   <div>
@@ -951,6 +1009,7 @@ function vue(n) {
   if (n === 'frise') chargeFrise();
   if (n === 'sked') { prepareSked(); setTimeout(dessineSked); }
   if (n === 'qo100') chargeQo100(true);
+  if (n === 'sdr') ticSdr();
 }
 document.querySelectorAll('#onglets button[data-v]').forEach(b => b.onclick = () => vue(b.dataset.v));
 
@@ -1706,6 +1765,95 @@ function dessineLoupe() {
   window.addEventListener('resize', dessineQo100);
 })();
 
+// ------------------------------------------------------------------ SDR
+let R = null, rSpan = 48000, rCascade = [], rTrames = -1, rDernier = null;
+const R820T = [0, 9, 14, 27, 37, 77, 87, 125, 144, 157, 166, 197, 207, 229, 254, 280, 297, 328, 338, 364, 372, 386, 402, 421, 434, 439, 445, 480, 496];
+g('r-gain').innerHTML = '<option value="-1">automatique</option>' + R820T.map(x => '<option value="' + x + '">' + (x / 10).toLocaleString('fr-FR') + ' dB</option>').join('');
+async function rRegle(q) { await post('/api/sdr/reglage?' + q); ticSdr(); }
+async function ticSdr() {
+  if (g('v-sdr').hidden) return;
+  try { R = await (await fetch('/api/sdr')).json(); } catch (x) { return; }
+  const r = R;
+  g('r-pastille').className = 'pastille ' + (r.actif ? 'on' : 'off'); txt('r-pastille', r.actif ? 'réception' : 'arrêtée');
+  txt('r-info', r.actif ? r.tuner + ' · ' + (r.debit / 1024).toFixed(1) + ' Mo/s' + (r.perdus ? ' · ' + r.perdus + ' blocs perdus' : '') : '');
+  txt('r-erreur', r.erreur || '');
+  txt('r-sat', r.satellite || (E && E.suivi ? E.suivi.nom : '(aucun)'));
+  const coche = (id, b) => { if (document.activeElement !== g(id)) g(id).checked = b; };
+  coche('r-suit', r.suit); coche('r-doppler', r.doppler); coche('r-deemph', r.deemph); coche('r-son', r.son); coche('r-agc', r.agc);
+  coche('r-lance', r.lance); coche('r-bias', r.bias);
+  const val = (id, x) => { if (document.activeElement !== g(id)) g(id).value = String(x); };
+  val('r-mode', r.mode); val('r-bw', r.bw); val('r-sq', r.squelch); val('r-gain', r.gain);
+  txt('r-sqv', r.squelch <= -120 ? 'ouvert' : r.squelch + ' dB');
+  if (!v('r-mhz') && document.activeElement !== g('r-mhz')) g('r-mhz').placeholder = (r.manuelle / 1e6).toFixed(4).replace('.', ',');
+  if (document.activeElement !== g('r-ppm')) g('r-ppm').value = r.ppm;
+  if (document.activeElement !== g('r-hote')) g('r-hote').value = r.hote;
+  if (document.activeElement !== g('r-port')) g('r-port').value = r.port;
+  // The frequency heard: the sky's, the click's offset in.
+  const ecoute = r.ciel + r.decalage;
+  txt('r-freq', r.actif || r.ciel ? qFmt(ecoute) : '—');
+  txt('r-detail', r.actif ? 'Doppler ' + ((r.ciel - r.repos) >= 0 ? '+' : '') + (r.ciel - r.repos) + ' Hz' + (r.decalage ? ' · décalage ' + (r.decalage > 0 ? '+' : '') + r.decalage + ' Hz' : '') : '');
+  const pc = Math.max(0, Math.min(100, (r.niveau + 100) * 1.25));
+  g('r-niveau').style.width = pc + '%'; txt('r-db', r.actif ? r.niveau.toFixed(0) + ' dB' : '');
+  txt('r-sat-av', r.saturation > 0.002 ? 'saturation : baisser le gain' : '');
+}
+setInterval(ticSdr, 700);
+async function spectreSdr() {
+  if (g('v-sdr').hidden || !R || !R.actif) return;
+  let j = null;
+  try { j = await (await fetch('/api/sdr/spectre?span=' + rSpan + '&n=' + Math.min(1024, Math.max(128, g('r-spectre').clientWidth)))).json(); } catch (x) { return; }
+  if (!j.db || j.trames === rTrames) return;
+  rTrames = j.trames; rDernier = j;
+  rCascade.unshift(j.db); if (rCascade.length > 600) rCascade.length = 600;
+  dessineSdr();
+}
+setInterval(spectreSdr, 120);
+/** dB to a colour: dark blue for noise, yellow then white for strong signals. */
+function rCouleur(db, bas, haut) {
+  const t = Math.max(0, Math.min(1, (db - bas) / (haut - bas)));
+  const c = [[6, 19, 26], [20, 60, 120], [30, 160, 200], [250, 220, 60], [255, 255, 255]];
+  const k = t * (c.length - 1), i = Math.min(c.length - 2, Math.floor(k)), f = k - i;
+  return c[i].map((x, j) => Math.round(x + (c[i + 1][j] - x) * f));
+}
+function dessineSdr() {
+  const j = rDernier; if (!j) return;
+  const tri = j.db.slice().sort((a, b) => a - b), bruit = tri[Math.floor(tri.length * 0.3)], haut = Math.max(bruit + 25, tri[tri.length - 1]);
+  // Spectrum.
+  const [x, w, h] = toile(g('r-spectre')), n = j.db.length;
+  x.fillStyle = '#0E1720'; x.fillRect(0, 0, w, h);
+  const Y = d => h - 6 - (h - 12) * Math.max(0, Math.min(1, (d - (bruit - 10)) / (haut - bruit + 15)));
+  x.strokeStyle = '#3FE0C8'; x.lineWidth = 1.2; x.beginPath();
+  j.db.forEach((d, i) => { const px = i * w / n; i ? x.lineTo(px, Y(d)) : x.moveTo(px, Y(d)); }); x.stroke();
+  // The channel heard, its width.
+  const bw = (R.bw || ({ NFM: 16000, USB: 2400, LSB: 2400, AM: 6000 }[R.mode] || 16000)) ;
+  const X = hz => w / 2 + (hz / j.span) * w;
+  const dec = R.decalage || 0;
+  const usb = R.mode === 'USB', lsb = R.mode === 'LSB';
+  const a = usb ? dec : lsb ? dec - bw : dec - bw / 2, b = usb ? dec + bw : lsb ? dec : dec + bw / 2;
+  x.fillStyle = 'rgba(255,180,84,.14)'; x.fillRect(X(a), 0, X(b) - X(a), h);
+  x.strokeStyle = '#FFB454'; x.beginPath(); x.moveTo(X(dec), 0); x.lineTo(X(dec), h); x.stroke();
+  // kHz ticks around the frequency heard.
+  x.fillStyle = '#9AA7B4'; x.font = '10px system-ui'; x.textAlign = 'center';
+  const pas = j.span > 100000 ? 20000 : j.span > 40000 ? 10000 : j.span > 20000 ? 5000 : 2000;
+  for (let f = -Math.floor(j.span / 2 / pas) * pas; f <= j.span / 2; f += pas) if (f) x.fillText((f > 0 ? '+' : '') + f / 1000, X(f), 10);
+  // Waterfall: one line a frame, the newest on top.
+  const c = g('r-cascade'), cw = c.clientWidth, ch = c.clientHeight;
+  if (c.width !== cw || c.height !== ch) { c.width = cw; c.height = ch; }
+  const cx = c.getContext('2d'), img = cx.createImageData(cw, 2);
+  // Scroll down two pixels, then the new line (twice, so the waterfall fills in a minute).
+  cx.drawImage(c, 0, 2);
+  for (let i = 0; i < cw; i++) {
+    const [r, gg, bb] = rCouleur(j.db[Math.min(n - 1, Math.floor(i * n / cw))], bruit - 3, haut);
+    for (const k of [i, i + cw]) { img.data[4 * k] = r; img.data[4 * k + 1] = gg; img.data[4 * k + 2] = bb; img.data[4 * k + 3] = 255; }
+  }
+  cx.putImageData(img, 0, 0);
+}
+for (const id of ['r-spectre', 'r-cascade']) g(id).addEventListener('click', ev => {
+  if (!rDernier) return;
+  const b = ev.currentTarget.getBoundingClientRect();
+  const hz = Math.round(((ev.clientX - b.left) / b.width - 0.5) * rDernier.span / 10) * 10;
+  post('/api/sdr/decalage?hz=' + hz).then(ticSdr);
+});
+
 // ------------------------------------------------------------------ FT8
 let H = null, ft8Vu = '';
 async function ticFt8() {
@@ -1796,7 +1944,7 @@ setInterval(ticSon, 1000);
 
 lienRotor(); avertCat();
 // The tab from the address (#carnet, a bookmark), else the last one seen.
-if (['station', 'carnet', 'agenda', 'carres', 'frise', 'sked', 'qo100', 'son', 'sstv', 'aprs', 'ft8', 'reglages'].includes(location.hash.slice(1))) vue(location.hash.slice(1));
+if (['station', 'carnet', 'agenda', 'carres', 'frise', 'sked', 'qo100', 'sdr', 'son', 'sstv', 'aprs', 'ft8', 'reglages'].includes(location.hash.slice(1))) vue(location.hash.slice(1));
 else try { const n = localStorage.getItem('vue'); if (n) vue(n); } catch (x) {}
 tic(); chargeListe(); chargePorts(); chargeSatellites();
 setInterval(chargeSatellites, 600000);

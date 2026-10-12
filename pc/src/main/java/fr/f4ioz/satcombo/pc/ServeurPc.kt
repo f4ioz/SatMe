@@ -11,6 +11,7 @@ package fr.f4ioz.satcombo.pc
 import fr.f4ioz.satcombo.demo.RequeteHttp
 import org.json.JSONArray
 import org.json.JSONObject
+import fr.f4ioz.satcombo.sdr.Dsp
 import java.io.OutputStream
 import java.net.InetAddress
 import java.net.InetSocketAddress
@@ -29,7 +30,8 @@ import kotlin.concurrent.thread
  */
 class ServeurPc(private val station: StationPc, private val port: Int, private val reseau: Boolean = false,
                 private val carnet: CarnetPc? = null, private val son: SonStation? = null,
-                private val journal: JournalWebPc? = null, private val importPc: ImportPc? = null) {
+                private val journal: JournalWebPc? = null, private val importPc: ImportPc? = null,
+                private val sdr: SdrPc? = null) {
 
     private var socket: ServerSocket? = null
     val portReel: Int get() = socket?.localPort ?: port
@@ -100,6 +102,9 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 .put("points", JSONArray(station.traceAuSol().map { (la, lo) -> JSONArray(listOf(Math.round(la * 100) / 100.0, Math.round(lo * 100) / 100.0)) }))
                 .toString().toByteArray())
             "/api/qo100" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JsonPc.qo100(station, q["plan"] == "1").toString().toByteArray())
+            "/api/sdr" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", (sdr?.let { JsonPc.sdr(it) } ?: JSONObject().put("absent", true)).toString().toByteArray())
+            "/api/sdr/spectre" -> envoie(sortie, "200 OK", "application/json; charset=utf-8",
+                (sdr?.let { JsonPc.spectre(it, q["span"]?.toIntOrNull() ?: 48_000, q["n"]?.toIntOrNull() ?: 512) } ?: JSONObject()).toString().toByteArray())
             "/api/frise" -> {
                 val (debut, lignes) = kotlinx.coroutines.runBlocking { station.frise((q["h"]?.toIntOrNull() ?: 12).coerceIn(2, 48)) }
                 envoie(sortie, "200 OK", "application/json; charset=utf-8", JSONObject().put("debut", debut)
@@ -235,6 +240,32 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
             "/api/rotor/suivre" -> rotor.setRotorEnabled(q["on"] == "1")
             "/api/rotor/parquer" -> rotor.rotorParkNow()
             "/api/rotor/stop" -> rotor.rotorStopNow()
+            "/api/sdr/demarrer" -> {
+                val d = sdr ?: return JSONObject().put("ok", false)
+                if (!d.demarre()) return JSONObject().put("ok", false).put("erreur", d.etat.value.erreur)
+            }
+            "/api/sdr/arreter" -> sdr?.arrete()
+            "/api/sdr/decalage" -> q["hz"]?.toIntOrNull()?.let { sdr?.decalageHz = it }
+            "/api/sdr/pic" -> sdr?.calePic()
+            "/api/sdr/reglage" -> {
+                val d = sdr ?: return JSONObject().put("ok", false)
+                val st = station.settings
+                q["gain"]?.toIntOrNull()?.let { d.gain(it.takeIf { g -> g >= 0 }) }
+                q["agc"]?.let { d.agc(it == "1") }
+                q["ppm"]?.toIntOrNull()?.let { d.ppm(it) }
+                q["mode"]?.let { d.modeChoisi = it }
+                q["bw"]?.toIntOrNull()?.let { st.sdrBandwidthHz = it.coerceIn(0, 24_000) }
+                q["squelch"]?.toIntOrNull()?.let { st.sdrSquelchDb = it.coerceIn(-120, 0) }
+                q["son"]?.let { st.sdrAudio = it == "1" }
+                q["deemph"]?.let { st.sdrDeemph = it == "1" }
+                q["doppler"]?.let { st.sdrDopplerTrack = it == "1" }
+                q["suit"]?.let { d.suitSatellite = it == "1" }
+                q["mhz"]?.replace(',', '.')?.toDoubleOrNull()?.let { d.manuelleHz = Math.round(it * 1e6); d.decalageHz = 0 }
+                q["hote"]?.let { d.hote = it }
+                q["port"]?.toIntOrNull()?.let { d.port = it }
+                q["lance"]?.let { d.lance = it == "1" }
+                q["bias"]?.let { d.biasTee = it == "1" }
+            }
             "/api/qo100/frequence" -> q["hz"]?.toLongOrNull()?.let { station.qo100.descente(it) }
             "/api/qo100/pas" -> q["hz"]?.toLongOrNull()?.let { station.qo100.pas(it) }
             "/api/qo100/balise" -> station.qo100.balise()
@@ -393,6 +424,46 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
 
 /** The station as the page reads it. */
 object JsonPc {
+    /** The dongle: its state and its settings. */
+    fun sdr(d: SdrPc): JSONObject {
+        val e = d.etat.value
+        val st = d.station.settings
+        return JSONObject().put("actif", e.actif).put("statut", e.statut).put("erreur", e.erreur).put("tuner", e.tuner)
+            .put("ciel", e.cielHz).put("repos", e.reposHz).put("pll", e.pllHz).put("fine", e.fineHz).put("decalage", e.decalageHz)
+            .put("niveau", Math.round(e.niveauDb * 10) / 10.0).put("saturation", e.saturation.toDouble()).put("debit", e.debitKo).put("perdus", e.perdus)
+            .put("satellite", e.satellite)
+            .put("gain", st.sdrGainTenthDb).put("agc", st.sdrAgc).put("ppm", st.sdrPpm).put("mode", d.modeChoisi).put("bw", st.sdrBandwidthHz)
+            .put("squelch", st.sdrSquelchDb).put("son", st.sdrAudio).put("deemph", st.sdrDeemph).put("doppler", st.sdrDopplerTrack)
+            .put("suit", d.suitSatellite).put("manuelle", d.manuelleHz).put("hote", d.hote).put("port", d.port).put("lance", d.lance).put("bias", d.biasTee)
+    }
+
+    /**
+     * The last spectrum, [n] values (dB, the strongest of the bins each one
+     * covers) over [span] Hz around the Doppler target — the signal stays in
+     * the middle while the satellite passes. Null values before the first.
+     */
+    fun spectre(d: SdrPc, span: Int, n: Int): JSONObject {
+        val sp = d.spectre ?: return JSONObject().put("trames", 0)
+        val e = d.etat.value
+        val nb = sp.size
+        val parBin = Dsp.RTL_RATE.toDouble() / Dsp.DECIM_1 / nb
+        val largeur = span.coerceIn(6_000, 176_400).toDouble()
+        val k = n.coerceIn(64, 2048)
+        val centre = e.fineHz.toDouble()
+        val v = IntArray(k) { i ->
+            val a = centre - largeur / 2 + largeur * i / k
+            val b = a + largeur / k
+            var m = -200f
+            var j0 = Math.floor(a / parBin).toInt() + nb / 2
+            val j1 = Math.ceil(b / parBin).toInt() + nb / 2
+            if (j1 <= j0) j0 = j1 - 1
+            for (j in j0 until j1) if (j in 0 until nb) m = maxOf(m, sp[j])
+            Math.round(m)
+        }
+        return JSONObject().put("trames", d.trames).put("centre", centre).put("span", largeur).put("pll", e.pllHz)
+            .put("db", JSONArray(v.toList()))
+    }
+
     /** QO-100: the pilot's state, the dish and the Sun; with [plan], the band plan and the presets (they never change). */
     fun qo100(st: StationPc, plan: Boolean): JSONObject {
         val Q = fr.f4ioz.satcombo.domain.Qo100

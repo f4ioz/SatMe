@@ -105,6 +105,21 @@ class SonPc {
         for (a in auditeurs) runCatching { a(pcm, n, rate) }
     }
 
+    /**
+     * Another source takes the decoders' input (the SDR dongle): the card is
+     * stopped — two threads feeding the same decoders would mix their state —
+     * and the state says who feeds them, at what rate, as a card would.
+     */
+    fun prendPour(nom: String, rate: Int) {
+        arrete()
+        _etat.update { Etat(actif = true, appareil = nom, rate = rate) }
+    }
+
+    /** That source is done: nothing feeds the decoders any more. */
+    fun rendPar(nom: String) {
+        if (_etat.value.appareil == nom && ligne == null) _etat.update { it.copy(actif = false, niveau = 0f) }
+    }
+
     fun arrete() {
         enMarche = false
         ligne?.let { runCatching { it.stop(); it.close() } }

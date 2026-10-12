@@ -189,6 +189,28 @@ class StationPc(
         stationCat.oublieArmement()
     }
 
+    // ---------------------------------------------------------------- the SDR dongle
+
+    /** What the dongle listens to: the transmitter's downlink at rest, with its Doppler now (sky, calibration in), its mode. */
+    class EcouteSdr(val reposHz: Long, val cibleHz: Long, val mode: String, val satellite: String)
+
+    fun ecouteSdr(): EcouteSdr? {
+        val e = _etat.value
+        val t = emetteurChoisi() ?: return null
+        val lo = t.downlinkLowHz ?: return null
+        val repos = e.repos ?: (lo + (t.downlinkHighHz ?: lo)) / 2
+        // Below the horizon nothing is heard: the rest, not a Doppler that means nothing.
+        val p = e.position
+        val rr = if (p != null && p.elevationDeg >= 0) p.rangeRateKmS else 0.0
+        return EcouteSdr(repos, Doppler.downlink(repos, rr) + e.calibHz, t.mode.orEmpty(), e.suivi?.name.orEmpty())
+    }
+
+    /** A sky frequency as the dongle receives it: through the LNB when it covers it. */
+    fun versCle(satHz: Long): Long = convRx().let { if (it.configure && it.couvre(satHz)) it.versPoste(satHz) else satHz }
+
+    /** The dongle's frequency back to the sky. */
+    fun depuisCle(cleHz: Long): Long = convRx().let { if (it.configure && it.accepteEnEntree(cleHz)) it.versSatellite(cleHz) else cleHz }
+
     // ---------------------------------------------------------------- QO-100
 
     /** QO-100 as the phone's screen drives it: written when moved, never by a loop. */

@@ -64,7 +64,9 @@ fun main(args: Array<String>) {
             kotlinx.coroutines.delay(1000)
         }
     }
-    val serveur = ServeurPc(station, port, reseau, carnet, son, JournalWebPc(journal, station, dossier), ImportPc(station, carnet, journal))
+    // The SDR dongle: nothing opened until asked (rtl_tcp started then, stopped with it).
+    val sdr = SdrPc(station, son.son, station.stockage, portee)
+    val serveur = ServeurPc(station, port, reseau, carnet, son, JournalWebPc(journal, station, dossier), ImportPc(station, carnet, journal), sdr)
     serveur.demarre()
     println("SatMe — station PC")
     println("  page      : http://localhost:${serveur.portReel}/" + if (reseau) "  (ouverte au réseau)" else "")
@@ -72,6 +74,7 @@ fun main(args: Array<String>) {
     println("  Ctrl+C pour arrêter")
     Runtime.getRuntime().addShutdownHook(Thread {
         runCatching { journal.ferme() }
+        runCatching { sdr.arrete() }
         runCatching { son.arreteEnregistrement(); son.son.arrete() }
         runCatching { station.deconnecteCat() }
         runCatching { station.stationRotor.disconnectRotor() }
