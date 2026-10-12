@@ -244,6 +244,12 @@ class StationPc(
 
     private val amsatRepo = fr.f4ioz.satcombo.data.AmsatStatusRepository(this.catalogue.dossierCache?.let { java.io.File(it, "amsat_status.json") })
 
+    /** The status page asked again now (a report just sent). */
+    fun rafraichisAmsat() {
+        if (!catalogue.enLigne) return
+        portee.launch(Dispatchers.IO) { runCatching { amsatRepo.get(force = true) }.getOrNull()?.takeIf { it.isNotEmpty() }?.let { r -> change { copy(amsat = r) } } }
+    }
+
     /** amsat.org's report for a satellite, by its AMSAT name (letters and digits compared). */
     fun statutAmsat(nom: String): fr.f4ioz.satcombo.data.AmsatReport? {
         val r = _etat.value.amsat

@@ -111,7 +111,10 @@ object PagePc {
         <button onclick="choisitParNom()">Suivre</button>
       </div>
       <div class="paire"><span class="gros" id="nom">—</span><button id="fav" class="discret" title="Favori" onclick="basculeFavori()" style="font-size:20px;padding:2px 8px">☆</button><span id="compte" class="val ambre"></span></div>
-      <div class="petit" id="amsat"></div>
+      <div class="ligne" style="margin-top:2px"><span class="petit" id="amsat"></span>
+        <span style="margin-left:auto" class="petit">Rapport AMSAT :</span>
+        <button onclick="rapportAmsat(1)" title="Dire à amsat.org que tu l'entends maintenant">Entendu</button>
+        <button onclick="rapportAmsat(0)" title="Dire à amsat.org que tu ne l'entends pas">Pas entendu</button></div>
       <div class="paire" style="margin-top:6px">
         <span>Az <span class="val cyan" id="az">—</span></span>
         <span>El <span class="val cyan" id="el">—</span></span>
@@ -487,6 +490,12 @@ function dessineAgenda() {
     '<tr><td colspan="4" class="petit">rien de prévu</td></tr>';
 }
 const hz = v => (v > 0 ? '+' : '') + v + ' Hz';
+async function rapportAmsat(entendu) {
+  if (!E || !E.suivi) return;
+  if (!confirm((entendu ? 'Entendu' : 'Pas entendu') + ' : envoyer ce rapport sur la page publique d’amsat.org pour ' + E.suivi.nom + ', avec ton indicatif et ton carré ?')) return;
+  const j = await post('/api/amsat/rapport?entendu=' + entendu);
+  if (j && j.ok) alert('Rapport envoyé à amsat.org (' + j.nom + ').');
+}
 async function favori(n, on, ev) { if (ev) ev.stopPropagation(); await post('/api/favori?catnum=' + n + '&on=' + (on ? 1 : 0)); chargeListe(); }
 function basculeFavori() { if (E && E.suivi) favori(E.suivi.catnum, !E.suivi.fav); }
 function dessinePassages() {

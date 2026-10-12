@@ -214,6 +214,12 @@ class StationPcTest {
             c.requestMethod = "POST"
             assertEquals(200, c.responseCode)
             attends { st.etat.value.catConnecte }
+            // An AMSAT report needs a satellite and a callsign: refused before anything leaves.
+            val rapport = URL("$base/api/amsat/rapport?entendu=1").openConnection() as HttpURLConnection
+            rapport.requestMethod = "POST"
+            val r = JSONObject(rapport.inputStream.bufferedReader().readText())
+            assertFalse(r.getBoolean("ok"))
+            assertTrue(r.getString("erreur").contains("satellite"))
         } finally { s.arrete() }
     }
 }

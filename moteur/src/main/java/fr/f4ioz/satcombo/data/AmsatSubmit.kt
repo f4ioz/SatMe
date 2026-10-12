@@ -73,7 +73,7 @@ object AmsatSubmit {
         runCatching {
             val req = Request.Builder()
                 .url(url(satName, report, callsign, locator, timeMs))
-                .header("User-Agent", TleRepository.USER_AGENT)
+                .header("User-Agent", AgentHttp.USER_AGENT)
                 .build()
             client.newCall(req).execute().use { it.isSuccessful }
         }.getOrDefault(false)

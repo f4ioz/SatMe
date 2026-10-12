@@ -145,6 +145,19 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
             "/api/agenda/retire" -> q["id"]?.toLongOrNull()?.let { station.retireAgenda(it) }
             "/api/agenda/active" -> q["id"]?.toLongOrNull()?.let { station.activeAgenda(it) }
             "/api/agenda/suivi" -> station.agendaSuivi(q["on"] == "1")
+            "/api/amsat/rapport" -> {
+                // Heard or not, on amsat.org's public page: the satellite followed, my callsign and square, now.
+                val e = station.etat.value
+                val sat = e.suivi ?: return JSONObject().put("ok", false).put("erreur", "aucun satellite suivi")
+                if (e.indicatif.isBlank()) return JSONObject().put("ok", false).put("erreur", "renseigne ton indicatif (Réglages)")
+                val nom = station.statutAmsat(sat.name)?.name ?: sat.name
+                val envoye = kotlinx.coroutines.runBlocking {
+                    fr.f4ioz.satcombo.data.AmsatSubmit.send(nom, if (q["entendu"] == "1") fr.f4ioz.satcombo.data.AmsatSubmit.Report.HEARD
+                        else fr.f4ioz.satcombo.data.AmsatSubmit.Report.NOT_HEARD, e.indicatif, e.locator)
+                }
+                if (envoye) station.rafraichisAmsat()
+                return JSONObject().put("ok", envoye).put("nom", nom).put("erreur", if (envoye) "" else "amsat.org n'a pas pris le rapport")
+            }
             "/api/repos" -> station.deplaceRepos(q["d"]?.toLongOrNull() ?: 0L)
             "/api/maintien" -> station.maintien(q["on"] == "1")
             "/api/locator" -> return ok.put("ok", station.poseLocator(q["l"].orEmpty()))
