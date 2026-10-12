@@ -23,6 +23,7 @@ object PagePc {
   :root { --fond:#0B1016; --carte:#131C24; --bord:#22303B; --cyan:#3FE0C8;
           --ambre:#FFB454; --rose:#E5484D; --vert:#5BD68A; --gris:#9AA7B4; --clair:#E8F0F7; }
   * { box-sizing:border-box; }
+  [hidden] { display:none !important; }
   body { margin:0; background:var(--fond); color:var(--clair); font-size:14px;
          font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif; }
   header { display:flex; align-items:baseline; gap:16px; flex-wrap:wrap; padding:10px 16px;
@@ -72,6 +73,46 @@ object PagePc {
   @media (max-width:900px) { .grille2 { grid-template-columns:1fr; } }
   td.act { white-space:nowrap; text-align:right; }
   td.act button { padding:3px 8px; font-size:12px; }
+  /* The sky or the map, one at a time, as on the phone. */
+  .ecran { position:relative; height:min(380px, 45vh); margin-top:8px; background:#0E1720; border-radius:8px; overflow:hidden; }
+  .ecran svg, .ecran canvas { position:absolute; inset:0; width:100%; height:100%; display:block; }
+  .ecran canvas { cursor:grab; touch-action:none; }
+  .ecran canvas[hidden] { display:none; }
+  .bascule { position:absolute; left:8px; top:8px; display:flex; gap:4px; z-index:2; }
+  .bascule button { padding:4px 10px; font-size:12px; }
+  .bascule button.actif { background:var(--cyan); color:#06131A; border-color:var(--cyan); }
+  #suivants-boite { max-height:220px; overflow:auto; }
+  #k-grille { grid-template-columns:minmax(380px,1fr) minmax(420px,1.7fr); }
+  .k-fenetres { max-height:360px; overflow:auto; }
+  .k-corps { display:flex; gap:12px; flex-wrap:wrap; margin-top:10px; }
+  #k-carte { flex:3; min-width:320px; height:460px; border-radius:8px; cursor:grab; touch-action:none; }
+  .k-ciels { flex:1; min-width:180px; max-width:240px; display:flex; flex-direction:column; gap:6px; }
+  .k-ciels svg { width:100%; display:block; }
+  /* On a computer's screen each tab fits the window: what is longer scrolls in its own box. */
+  @media (min-width:1101px) and (min-height:600px) {
+    body { height:100vh; display:flex; flex-direction:column; overflow:hidden; }
+    header { flex:none; }
+    .vue:not([hidden]) { flex:1; min-height:0; overflow:auto; }
+    #v-station .grille { height:100%; }
+    #v-station .col1, #v-station .col2, #v-station .col3 { min-height:0; overflow:auto; }
+    #v-station .col1 .carte { height:100%; display:flex; flex-direction:column; margin:0; }
+    #v-station #liste { flex:1; max-height:none; min-height:0; }
+    #v-station .col2 .carte { height:100%; display:flex; flex-direction:column; margin:0; }
+    #v-station .ecran { flex:1; height:auto; min-height:220px; }
+    #v-station #suivants-boite { flex:none; max-height:24vh; }
+    #v-station .col3 .carte { margin-bottom:8px; padding:10px 12px; }
+    .vue > .grille2 { height:100%; }
+    .vue > .grille2 > div { min-height:0; overflow:auto; }
+    #k-grille { height:100%; }
+    .k-gauche { display:flex; flex-direction:column; min-height:0; }
+    .k-fenetres { flex:1; max-height:none; min-height:0; margin-bottom:0; }
+    .k-droite { min-height:0; }
+    #k-anim { height:100%; display:flex; flex-direction:column; margin:0; }
+    .k-corps { flex:1; min-height:0; flex-wrap:nowrap; }
+    #k-carte { height:auto; }
+    .k-ciels { justify-content:flex-start; }
+    .k-ciels svg { max-height:calc((100vh - 230px) / 2); }
+  }
 </style></head>
 <body>
 <header>
@@ -120,11 +161,14 @@ object PagePc {
         <span>El <span class="val cyan" id="el">—</span></span>
         <span class="petit" id="dist"></span>
       </div>
-      <svg id="ciel" viewBox="-110 -110 220 220" style="width:100%;max-width:380px;display:block;margin:10px auto 0" role="img" aria-label="Le ciel : passage et position du satellite"></svg>
-      <div class="petit" id="infos-passage" style="text-align:center"></div>
-      <canvas id="s-carte" style="width:100%;height:280px;display:block;margin-top:12px;border-radius:8px;cursor:grab;touch-action:none" title="Glisser pour déplacer, molette pour zoomer, double-clic pour revoir le monde"></canvas>
-      <div class="t" style="margin-top:12px">Ses prochains passages</div>
-      <table><tbody id="suivants"></tbody></table>
+      <div class="ecran" id="s-ecran">
+        <div class="bascule"><button id="b-ciel" onclick="montreEcran('ciel')">Ciel</button><button id="b-carte" onclick="montreEcran('carte')">Carte</button></div>
+        <svg id="ciel" viewBox="-110 -110 220 220" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Le ciel : passage et position du satellite"></svg>
+        <canvas id="s-carte" hidden title="Glisser pour déplacer, molette pour zoomer, double-clic pour revoir le monde"></canvas>
+      </div>
+      <div class="petit" id="infos-passage" style="text-align:center;margin-top:4px"></div>
+      <div class="t" style="margin-top:10px">Ses prochains passages</div>
+      <div id="suivants-boite"><table><tbody id="suivants"></tbody></table></div>
     </div>
   </div>
 
@@ -406,40 +450,41 @@ object PagePc {
 </div>
 </div>
 <div class="vue" id="v-sked" hidden>
-<div class="grille2">
-  <div>
+<div class="grille2" id="k-grille">
+  <div class="k-gauche">
     <div class="carte">
       <div class="t">Sked avec une autre station</div>
       <div class="ligne" style="margin-top:0"><input id="k-loc" placeholder="Son carré (IN80, FN31…)" style="text-transform:uppercase"></div>
       <div class="ligne"><select id="k-sat"></select></div>
       <div class="ligne"><span class="petit">Il voit au-dessus de</span><input id="k-min" value="0" style="max-width:60px"><span class="petit">°</span>
         <button class="primaire" onclick="calculeSked()">Chercher</button></div>
-      <div class="petit" style="margin-top:6px">Les fenêtres des 48 h où vous voyez tous deux le satellite (une minute au moins), avec l'élévation maximale de chaque côté.</div>
+      <div class="petit" style="margin-top:6px">Les fenêtres des 48 h où vous voyez tous deux le satellite (une minute au moins), avec l'élévation maximale de chaque côté. ▶ les rejoue sur la carte.</div>
       <div class="etat" id="k-etat"></div>
     </div>
-  </div>
-  <div>
-    <div class="carte">
-      <div style="max-height:300px;overflow:auto"><table><thead><tr><th>Début</th><th>Fin</th><th>Durée</th><th>Moi</th><th>Lui</th><th></th></tr></thead><tbody id="k-liste"></tbody></table></div>
+    <div class="carte k-fenetres">
+      <table><thead><tr><th>Début</th><th>Fin</th><th>Durée</th><th>Moi</th><th>Lui</th><th></th></tr></thead><tbody id="k-liste"></tbody></table>
     </div>
   </div>
-</div>
-<div class="carte" id="k-anim" hidden style="margin-top:14px">
-  <div class="ligne" style="margin-top:0;flex-wrap:wrap">
-    <span class="t" id="k-titre" style="margin:0"></span>
-    <button id="k-joue" onclick="basculeSked()" style="min-width:44px">⏸</button>
-    <input type="range" id="k-curseur" min="0" max="1000" value="0" style="flex:1;min-width:200px">
-    <span id="k-heure" style="font-variant-numeric:tabular-nums;min-width:70px"></span>
-    <span id="k-ensemble" class="petit"></span>
-  </div>
-  <div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:10px">
-    <canvas id="k-carte" style="flex:3;min-width:320px;height:540px;border-radius:8px;cursor:grab;touch-action:none" title="Glisser pour déplacer, molette pour zoomer, double-clic pour recadrer"></canvas>
-    <div style="flex:1;min-width:220px;display:flex;flex-direction:column;gap:8px">
-      <div><div class="petit" id="k-lmoi">Moi</div><svg id="k-cmoi" viewBox="-112 -112 224 224" style="width:100%;max-width:240px"></svg></div>
-      <div><div class="petit" id="k-llui">Lui</div><svg id="k-clui" viewBox="-112 -112 224 224" style="width:100%;max-width:240px"></svg></div>
+  <div class="k-droite">
+    <div class="carte" id="k-vide"><div class="petit">Cherche les fenêtres communes avec une station : la première se rejoue ici, les deux ciels et la carte.</div></div>
+    <div class="carte" id="k-anim" hidden>
+      <div class="ligne" style="margin-top:0;flex-wrap:wrap">
+        <span class="t" id="k-titre" style="margin:0"></span>
+        <button id="k-joue" onclick="basculeSked()" style="min-width:44px">⏸</button>
+        <input type="range" id="k-curseur" min="0" max="1000" value="0" style="flex:1;min-width:160px">
+        <span id="k-heure" style="font-variant-numeric:tabular-nums;min-width:70px"></span>
+        <span id="k-ensemble" class="petit"></span>
+      </div>
+      <div class="k-corps">
+        <canvas id="k-carte" title="Glisser pour déplacer, molette pour zoomer, double-clic pour recadrer"></canvas>
+        <div class="k-ciels">
+          <div><div class="petit" id="k-lmoi">Moi</div><svg id="k-cmoi" viewBox="-112 -112 224 224"></svg></div>
+          <div><div class="petit" id="k-llui">Lui</div><svg id="k-clui" viewBox="-112 -112 224 224"></svg></div>
+        </div>
+      </div>
+      <div class="petit" style="margin-top:6px">En vert, la fenêtre où vous voyez tous deux le satellite ; la zone claire autour du satellite est la partie de la Terre qui le voit à cet instant.</div>
     </div>
   </div>
-  <div class="petit" style="margin-top:6px">En vert, la fenêtre où vous voyez tous deux le satellite ; la zone claire autour du satellite est la partie de la Terre qui le voit à cet instant.</div>
 </div>
 </div>
 <div class="vue" id="v-ft8" hidden>
@@ -1203,7 +1248,7 @@ async function calculeSked() {
     '</td><td>' + w.elMoi + '° · az ' + w.azMoi + '°</td><td>' + w.elAutre + '° · az ' + w.azAutre + '°</td><td style="white-space:nowrap"><button title="Rejouer sur la carte" onclick="rejoueSked(' + i + ')">▶</button> ' +
     '<button title="Mettre à l’agenda" onclick="skedAgenda(' + i + ')">📅</button></td></tr>').join('') ||
     '<tr><td colspan="6" class="petit">aucune fenêtre commune en 48 h</td></tr>';
-  if (K.length) rejoueSked(0); else { g('k-anim').hidden = true; KT = null; }
+  if (K.length) rejoueSked(0); else { g('k-anim').hidden = true; g('k-vide').hidden = false; KT = null; }
 }
 // The sked replayed: both skies and the map, as on the phone.
 let KT = null, kF = 0, kJoue = false, kAvant = 0;
@@ -1222,7 +1267,7 @@ async function rejoueSked(i) {
   txt('k-titre', KT.nom + ' · ' + jourHeure(w.de) + ' → ' + hm(w.a));
   txt('k-lmoi', 'Moi' + (E && E.locator ? ' (' + E.locator + ')' : '') + ' · max ' + w.elMoi + '°');
   txt('k-llui', KT.loc + ' · max ' + w.elAutre + '°');
-  g('k-anim').hidden = false;
+  g('k-anim').hidden = false; g('k-vide').hidden = true;
   kF = 0; kJoue = true; kAvant = 0; txt('k-joue', '⏸');
   cadreSked(); dessineSked();
   requestAnimationFrame(boucleSked);
@@ -1367,6 +1412,15 @@ function dessineSked() {
 attacheCarte(g('k-carte'), KV, dessineSked, cadreSked, 1);
 
 // ------------------------------------------------------------------ the followed satellite's map
+let ecranStation = 'ciel';
+try { ecranStation = localStorage.getItem('ecran-station') === 'carte' ? 'carte' : 'ciel'; } catch (x) {}
+function montreEcran(q) {
+  ecranStation = q;
+  try { localStorage.setItem('ecran-station', q); } catch (x) {}
+  g('ciel').style.display = q === 'ciel' ? '' : 'none'; g('s-carte').hidden = q !== 'carte';
+  g('b-ciel').classList.toggle('actif', q === 'ciel'); g('b-carte').classList.toggle('actif', q === 'carte');
+  dessineCarteStation();
+}
 const SV = { cx: 0.5, cy: 0.4, z: 1, libre: false };
 let traceSol = null, traceVu = 0;
 async function chargeTraceSol() {
@@ -1385,7 +1439,7 @@ function cadreStation() {
   SV.cy = Math.max(0.5 - (1 - c.clientHeight / (256 * Math.pow(2, SV.z))) / 2, Math.min(0.5, wyq(25)));
 }
 function dessineCarteStation() {
-  const c = g('s-carte'); if (!c || g('v-station').hidden || !c.clientWidth) return;
+  const c = g('s-carte'); if (!c || g('v-station').hidden || c.hidden || !c.clientWidth) return;
   if (!SV.libre) cadreStation();
   const m = fondCarte(c, SV), x = m.x, p = E && E.position;
   const nous = E && E.observateur;
@@ -1408,7 +1462,8 @@ function dessineCarteStation() {
   const n = E && E.suivi ? E.suivi.catnum : 0;
   if (n && (!traceSol || traceSol.catnum !== n || Date.now() - traceVu > 60000) && Date.now() - traceVu > 3000) { traceVu = Date.now(); chargeTraceSol(); }
 }
-attacheCarte(g('s-carte'), SV, dessineCarteStation, cadreStation, 0)
+attacheCarte(g('s-carte'), SV, dessineCarteStation, cadreStation, 0);
+montreEcran(ecranStation)
 async function skedAgenda(i) { const w = K[i]; await post('/api/agenda/sked?catnum=' + g('k-sat').value + '&loc=' + enc(v('k-loc')) + '&de=' + w.de + '&a=' + w.a); alert('Sked mis à l’agenda.'); }
 
 // ------------------------------------------------------------------ FT8

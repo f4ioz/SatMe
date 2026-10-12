@@ -85,10 +85,28 @@ object PageJournal {
   .entete { display:flex; gap:10px; align-items:baseline; flex-wrap:wrap; }
   .entete .s { font-size:18px; font-weight:800; }
   .entete .d { color:var(--gris); font-size:12px; flex:1; }
-  .haut { display:grid; grid-template-columns:minmax(0,1fr) 270px; gap:10px; margin-top:6px; }
-  @media (max-width:1200px) { .haut { grid-template-columns:1fr; } }
-  /* The view fits the screen: the whole replay without scrolling on a laptop. */
+  .deux { margin-top:6px; }
+  .cote { margin-top:8px; }
   .ecran { position:relative; height:calc(100vh - 335px); min-height:240px; background:#0E1720; border-radius:8px; overflow:hidden; }
+  /* On a computer's screen the whole page fits it, nothing to scroll: the replay
+     takes the height left, the lists scroll in their own column. */
+  @media (min-width:1200px) and (min-height:560px) {
+    #page { height:100vh; display:flex; flex-direction:column; overflow:hidden; }
+    #page > header { flex:none; }
+    .corps { flex:1; min-height:0; }
+    .liste { max-height:none; min-height:0; }
+    .vue { min-height:0; display:flex; flex-direction:column; }
+    .deux { flex:1; min-height:0; display:grid; grid-template-columns:minmax(0,1fr) 380px; gap:10px; }
+    .gauche { display:flex; flex-direction:column; min-height:0; }
+    .gauche .ecran { flex:1; height:auto; min-height:200px; }
+    .cote { margin-top:0; display:flex; flex-direction:column; min-height:0; }
+    .cote .onglets { flex-wrap:wrap; }
+    .cote .panneau { flex:1; min-height:0; overflow:auto; }
+    .cote .moment { align-self:stretch; }
+    .cote .mo { flex-wrap:wrap; }
+    .cote .mo .x { flex:1 1 150px; }
+    #imageMoment { max-height:30vh; object-fit:contain; }
+  }
   #ciel { position:absolute; inset:0; width:100%; height:100%; }
   #carte { position:absolute; inset:0; width:100%; height:100%; cursor:grab; display:none; }
   .bascule { position:absolute; left:8px; top:8px; display:flex; gap:4px; z-index:2; }
@@ -251,7 +269,10 @@ function construitVue() {
     el('canvas', { id: 'carte' }), el('div', { class: 'attrib', id: 'attrib', text: '© OpenStreetMap' }),
     el('div', { class: 'bascule' }, [el('button', { id: 'bCiel', text: T.vue_ciel, onclick: () => montreVue('ciel') }),
       el('button', { id: 'bCarte', text: T.vue_carte, onclick: () => montreVue('carte') })])]);
-  v.appendChild(el('div', { class: 'haut' }, [ecran, mo]));
+  // Two columns on a wide screen (the replay on the left, the moment and the lists on the right), one below.
+  const gauche = el('div', { class: 'gauche' }), cote = el('div', { class: 'cote' });
+  v.appendChild(el('div', { class: 'deux' }, [gauche, cote]));
+  gauche.appendChild(ecran); cote.appendChild(mo);
   const s = g('smetre'); for (let i = 0; i < 46; i++) s.appendChild(el('i', { class: (i + 0.5) / 46 > 0.6 ? 'r' : '' }));
   [1, 3, 5, 7, 9].forEach(n => g('grad').appendChild(el('span', { text: String(n), style: 'left:' + (n / 9 * 60) + '%' })));
   [20, 40, 60].forEach(db => g('grad').appendChild(el('span', { class: 'r', text: '+' + db, style: 'left:' + Math.min(97, 60 + db / 60 * 40) + '%' })));
@@ -260,7 +281,7 @@ function construitVue() {
   vit.value = String(vitesse);
   const acc = el('input', { type: 'checkbox', id: 'accelere' }); acc.checked = O.accelere;
   acc.addEventListener('change', () => { O.accelere = acc.checked; garde(); if (joue) synchro(); maj(); });
-  v.appendChild(el('div', { class: 'commandes' }, [
+  gauche.appendChild(el('div', { class: 'commandes' }, [
     el('button', { class: 'primaire', id: 'lecture', onclick: bascule }),
     el('button', { class: 'discret', text: '−10 s', onclick: () => cherche(t - 10000) }),
     el('button', { class: 'discret', text: '+10 s', onclick: () => cherche(t + 10000) }),
@@ -268,14 +289,14 @@ function construitVue() {
     el('label', { class: 'aide' }, [acc, document.createTextNode(' ' + T.accelere.split(':')[0])]),
     el('span', { class: 'aide', id: 'position' }),
     P.sons.length ? el('span') : el('span', { class: 'aide', text: T.sans_son })]));
-  v.appendChild(el('canvas', { id: 'frise' }));
-  v.appendChild(el('div', { class: 'rangee', id: 'selection' }));
-  v.appendChild(el('div', { class: 'onglets' }, [
+  gauche.appendChild(el('canvas', { id: 'frise' }));
+  gauche.appendChild(el('div', { class: 'aide', text: T.frise_aide }));
+  gauche.appendChild(el('div', { class: 'rangee', id: 'selection' }));
+  cote.appendChild(el('div', { class: 'onglets' }, [
     el('button', { id: 'oMoments', text: T.moments, onclick: () => { onglet = 'moments'; panneau(); } }),
     el('button', { id: 'oRejeu', text: T.onglet_rejeu, onclick: () => { onglet = 'rejeu'; panneau(); } }),
-    el('button', { id: 'oFabriquer', text: T.onglet_fabriquer, onclick: () => { onglet = 'fabriquer'; panneau(); } }),
-    el('span', { class: 'aide', text: T.frise_aide })]));
-  v.appendChild(el('div', { class: 'panneau', id: 'panneau' }));
+    el('button', { id: 'oFabriquer', text: T.onglet_fabriquer, onclick: () => { onglet = 'fabriquer'; panneau(); } })]));
+  cote.appendChild(el('div', { class: 'panneau', id: 'panneau' }));
   installeFrise(); installeCarte(); montreVue(O.vue); panneau();
 }
 function montreVue(v) {
