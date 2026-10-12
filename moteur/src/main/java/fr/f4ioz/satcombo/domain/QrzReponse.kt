@@ -39,6 +39,28 @@ object QrzReponse {
         val pays: String = "",
         val cle: String = "",
         val erreur: String = "",
+        /** The station's photo on QRZ (an address of theirs), or empty. */
+        val image: String = "",
+        /** Where the station is, as QRZ has it (degrees), or null. */
+        val lat: Double? = null,
+        val lon: Double? = null,
+        /** Street (QRZ's `addr1`), state or region, county. */
+        val adresse: String = "",
+        val etat: String = "",
+        val comte: String = "",
+        val zoneCq: String = "",
+        val zoneItu: String = "",
+        /** Licence class, as the country words it. */
+        val classe: String = "",
+        /** How the station confirms: LoTW, eQSL, paper card; its QSL manager. */
+        val lotw: Boolean = false,
+        val eqsl: Boolean = false,
+        val qslPapier: Boolean = false,
+        val qslManager: String = "",
+        val site: String = "",
+        val surnom: String = "",
+        /** Licensed since (a year, as QRZ gives it). */
+        val depuis: String = "",
     ) {
         val vide: Boolean get() = carre.isBlank() && nom.isBlank() && pays.isBlank()
     }
@@ -61,6 +83,22 @@ object QrzReponse {
             pays = balise(xml, "country"),
             cle = balise(xml, "Key"),
             erreur = balise(xml, "Error"),
+            image = balise(xml, "image"),
+            lat = balise(xml, "lat").toDoubleOrNull(),
+            lon = balise(xml, "lon").toDoubleOrNull(),
+            adresse = balise(xml, "addr1"),
+            etat = balise(xml, "state"),
+            comte = balise(xml, "county"),
+            zoneCq = balise(xml, "cqzone"),
+            zoneItu = balise(xml, "ituzone"),
+            classe = balise(xml, "class"),
+            lotw = balise(xml, "lotw") == "1",
+            eqsl = balise(xml, "eqsl") == "1",
+            qslPapier = balise(xml, "mqsl") == "1",
+            qslManager = balise(xml, "qslmgr"),
+            site = balise(xml, "url"),
+            surnom = balise(xml, "nickname"),
+            depuis = balise(xml, "efdate").take(4),
         )
     }
 }

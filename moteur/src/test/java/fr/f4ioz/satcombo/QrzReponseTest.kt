@@ -109,4 +109,26 @@ class QrzReponseTest {
         assertEquals("", f.courriel)
         assertEquals("JN18FR", f.carre)
     }
+
+    @Test
+    fun la_fiche_complete_pour_le_tableau_de_bord() {
+        val f = QrzReponse.lis("""<?xml version="1.0" encoding="utf-8" ?>
+        <QRZDatabase version="1.34" xmlns="http://xmldata.qrz.com">
+        <Callsign><call>EA1PA</call><grid>IN71rw</grid><fname>Salvador</fname><name>Garcia</name>
+        <addr1>Calle Mayor 1</addr1><addr2>Venta de Banos</addr2><state>Palencia</state><country>Spain</country>
+        <lat>41.920</lat><lon>-4.490</lon><cqzone>14</cqzone><ituzone>37</ituzone><class>A</class>
+        <lotw>1</lotw><eqsl>0</eqsl><mqsl>1</mqsl><qslmgr>via bureau</qslmgr>
+        <image>https://cdn-xml.qrz.com/a/ea1pa/photo.jpg</image><imageinfo>200:300:12345</imageinfo>
+        <url>https://ea1pa.example</url><efdate>1987-05-02</efdate></Callsign>
+        <Session><Key>abc123</Key></Session></QRZDatabase>""")
+        assertEquals("https://cdn-xml.qrz.com/a/ea1pa/photo.jpg", f.image)
+        assertEquals(41.92, f.lat!!, 1e-9); assertEquals(-4.49, f.lon!!, 1e-9)
+        assertEquals("Calle Mayor 1", f.adresse); assertEquals("Palencia", f.etat)
+        assertEquals("14", f.zoneCq); assertEquals("37", f.zoneItu); assertEquals("A", f.classe)
+        assertEquals(true, f.lotw); assertEquals(false, f.eqsl); assertEquals(true, f.qslPapier)
+        assertEquals("via bureau", f.qslManager); assertEquals("1987", f.depuis)
+        // Without them, nothing invented.
+        val court = QrzReponse.lis(fiche)
+        assertEquals("", court.image); assertEquals(null, court.lat); assertEquals(false, court.lotw)
+    }
 }

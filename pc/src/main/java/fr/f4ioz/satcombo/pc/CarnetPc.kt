@@ -62,6 +62,13 @@ class CarnetPc(private val station: StationPc, val store: LogStore, private val 
 
     private fun oublieMemoire() { memoire = null }
 
+    /** Every contact with this station (whatever its suffix: /P, /M…), the newest first. */
+    fun historique(indicatif: String): List<LogEntry> {
+        val b = fr.f4ioz.satcombo.domain.Indicatifs.base(indicatif)
+        if (b.length < 3) return emptyList()
+        return store.load().filter { fr.f4ioz.satcombo.domain.Indicatifs.base(it.callsign) == b }.sortedByDescending { it.timeMs }
+    }
+
     /** A new contact, now; null without a callsign or a satellite. */
     fun ajoute(indicatif: String, locator: String, rstEnvoye: String, rstRecu: String, note: String = "",
                fiche: QrzReponse.Fiche? = null): LogEntry? {

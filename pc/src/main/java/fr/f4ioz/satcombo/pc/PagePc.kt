@@ -58,6 +58,19 @@ object PagePc {
   tr.encours td { color:var(--vert); font-weight:700; }
   tr.choisi td:first-child { box-shadow:inset 3px 0 0 var(--cyan); }
   td.rosace { padding:2px 4px; width:1px; }
+  .grille3c { display:grid; grid-template-columns:minmax(320px,0.9fr) minmax(360px,1fr) minmax(420px,1.3fr); gap:12px; padding:12px 16px; }
+  @media (max-width:1250px) { .grille3c { grid-template-columns:1fr 1fr; } }
+  @media (max-width:800px) { .grille3c { grid-template-columns:1fr; } }
+  .cs-tete { display:flex; gap:12px; align-items:flex-start; }
+  .cs-tete img { width:120px; max-height:150px; object-fit:cover; border-radius:8px; flex:none; }
+  .cs-call { font-family:ui-monospace,Consolas,monospace; font-size:28px; font-weight:800; letter-spacing:2px; color:var(--cyan); }
+  .cs-qsl { display:flex; gap:6px; flex-wrap:wrap; margin-top:4px; }
+  .cs-qsl span { font-size:11px; padding:1px 7px; border-radius:10px; background:rgba(91,214,138,.15); color:var(--vert); }
+  .cs-qsl span.non { background:rgba(154,167,180,.12); color:var(--gris); text-decoration:line-through; }
+  .cs-carte { position:relative; height:190px; margin-top:8px; border-radius:8px; overflow:hidden; }
+  .cs-carte canvas { position:absolute; inset:0; width:100%; height:100%; }
+  .cs-hist td { font-size:12px; vertical-align:top; }
+  .cs-hist .note { color:var(--ambre); font-style:italic; }
   .c-props { display:flex; gap:6px; margin-top:6px; min-height:44px; }
   .c-props button { flex:1; min-width:0; padding:4px 6px; background:rgba(63,224,200,.15); border-color:rgba(63,224,200,.35); text-align:center; }
   .c-props button.choisie { background:var(--cyan); color:#06131A; border-color:var(--cyan); }
@@ -134,8 +147,8 @@ object PagePc {
     #v-station .col3 .carte { margin-bottom:8px; padding:10px 12px; }
     #v-qo100 .grille { height:100%; }
     #v-qo100 .col1, #v-qo100 .col2, #v-qo100 .col3 { min-height:0; overflow:auto; }
-    .vue > .grille2 { height:100%; }
-    .vue > .grille2 > div { min-height:0; overflow:auto; }
+    .vue > .grille2, .vue > .grille3c { height:100%; }
+    .vue > .grille2 > div, .vue > .grille3c > div { min-height:0; overflow:auto; }
     #k-grille { height:100%; }
     .r-droite { height:100%; margin:0; }
     .s2-droite { height:100%; margin:0; }
@@ -318,7 +331,7 @@ object PagePc {
 </div>
 </div>
 <div class="vue" id="v-carnet" hidden>
-<div class="grille2">
+<div class="grille3c">
   <div>
     <div class="carte">
       <div class="t">Nouveau contact <span class="petit" id="c-sat"></span></div>
@@ -343,15 +356,37 @@ object PagePc {
         <button onclick="depose()">Déposer au carnet en ligne</button></div>
       <div class="etat" id="c-depot"></div>
     </div>
-    <div class="carte">
-      <div class="t">Importer</div>
-      <div class="ligne" style="margin-top:0"><button onclick="profilsWavelog()">Depuis le carnet en ligne (Wavelog)…</button></div>
+    <details class="carte">
+      <summary class="t" style="cursor:pointer;margin:0">Importer</summary>
+      <div class="ligne"><button onclick="profilsWavelog()">Depuis le carnet en ligne (Wavelog)…</button></div>
       <div id="w-profils" class="petit"></div>
       <div class="petit" style="margin-top:10px">Ou un fichier ADIF (export Wavelog, LoTW, autre logiciel) :</div>
       <input type="file" id="i-adif" accept=".adi,.adif,.txt" style="width:100%;margin-top:4px" onchange="importeAdif(this)">
       <label class="petit"><input type="checkbox" id="i-enligne" checked> ces contacts sont déjà dans le carnet en ligne (ne pas les y redéposer)</label>
       <div class="petit" style="margin-top:6px">Les contacts satellite absents du carnet y entrent, avec la position du satellite à leur heure ; leurs passages sont reconstitués dans le Journal.</div>
       <div class="etat" id="i-etat"></div>
+    </details>
+  </div>
+  <div>
+    <div class="carte" id="c-station">
+      <div id="cs-vide" class="petit">Tape un indicatif : la station s'affiche ici — sa fiche QRZ (photo, où elle est, distance, carte), et tous vos contacts passés avec leurs notes.</div>
+      <div id="cs-plein" hidden>
+        <div class="cs-tete">
+          <img id="cs-photo" alt="" hidden onerror="this.hidden = true">
+          <div style="min-width:0">
+            <div class="cs-call" id="cs-call"></div>
+            <div id="cs-nom" style="font-weight:700"></div>
+            <div class="petit" id="cs-lieu"></div>
+            <div class="petit" id="cs-info"></div>
+            <div class="cs-qsl" id="cs-qsl"></div>
+          </div>
+        </div>
+        <div class="paire" id="cs-dist" style="margin-top:8px"><span class="s2-gros cyan" id="cs-km"></span><span class="s2-gros ambre" id="cs-az"></span></div>
+        <div class="cs-carte" id="cs-carte-boite"><canvas id="cs-carte"></canvas></div>
+        <div class="t" style="margin-top:10px">Vos contacts avec cette station</div>
+        <div id="cs-resume" class="petit"></div>
+        <div class="cs-hist"><table><tbody id="cs-hist"></tbody></table></div>
+      </div>
     </div>
   </div>
   <div>
@@ -792,6 +827,7 @@ object PagePc {
       <div class="ligne" style="margin-top:0"><input id="qrzUser" placeholder="Identifiant QRZ"><input id="qrzMdp" type="password" placeholder="Mot de passe"></div>
       <div class="petit">Abonnement XML de QRZ nécessaire. Le mot de passe reste sur ce PC et n'est jamais réaffiché.</div>
       <div class="ligne"><button onclick="enregistreReglages()">Enregistrer</button><button onclick="essaiQrz()">Essayer</button><span class="petit" id="qrz-etat"></span></div>
+      <label class="petit" style="display:block;margin-top:8px"><input type="checkbox" id="qrzFiche" onchange="post('/api/reglages?fiche=' + (this.checked ? 1 : 0)).then(() => { ficheVoulue = this.checked; csPour = ''; })"> Fiche QRZ dans le carnet : photo, distance, carte</label>
     </div>
     <div class="carte">
       <div class="t">Carnet en ligne (Wavelog / Cloudlog)</div>
@@ -1163,7 +1199,7 @@ function dessineCarnet() {
   // A thousand lines at most: beyond that, the filter finds faster than the eye.
   const reste = tous.length > 1000 ? '<tr><td colspan="8" class="petit">… et ' + (tous.length - 1000) + ' autres : filtre pour les voir</td></tr>' : '';
   g('c-liste').innerHTML = tous.slice(0, 1000).map(e =>
-    '<tr><td>' + new Date(e.t).toISOString().slice(0, 16).replace('T', ' ') + '</td><td><b>' + esc(e.c) + '</b></td><td>' + esc(e.l) +
+    '<tr><td style="white-space:nowrap">' + new Date(e.t).toISOString().slice(0, 16).replace('T', ' ') + '</td><td><b>' + esc(e.c) + '</b></td><td>' + esc(e.l) +
     '</td><td>' + esc(e.sat) + '</td><td>' + esc(e.md) + '</td><td>' + esc(e.rs) + '/' + esc(e.rr) + '</td><td>' + esc(e.nm) +
     '</td><td class="act">' + (e.envoye ? '<span class="vert" title="déposé au carnet en ligne">✓</span> ' : '<button title="Déposer au carnet en ligne" onclick="depose(' + e.t + ')">⬆</button> ') +
     '<button title="Modifier" onclick="edite(' + e.t + ')">✎</button></td></tr>').join('') + reste ||
@@ -1171,6 +1207,79 @@ function dessineCarnet() {
 }
 g('c-filtre').oninput = dessineCarnet;
 // QRZ after 0.6 s without a key, as on the phone and the desk: a callsign the log does not know by name.
+// ------------------------------------------------------------------ the station's card
+let ficheVoulue = true, csPour = '', CSH = null, CSQ = null, CSQPour = '', minuteurStation = null;
+const CSV = { cx: 0.5, cy: 0.4, z: 3 };
+/** The card of the station typed: its past contacts (the log, at once), its QRZ card (when it comes). */
+function stationPour(brut) {
+  clearTimeout(minuteurStation);
+  const b = base(brut || '');
+  if (b.length < 3 || !/[0-9]/.test(b)) { csPour = ''; g('cs-vide').hidden = false; g('cs-plein').hidden = true; return; }
+  if (b === csPour) return;
+  minuteurStation = setTimeout(async () => {
+    let h = null;
+    try { h = await (await fetch('/api/carnet/station?c=' + enc(b))).json(); } catch (x) { return; }
+    if (base(v('c-call')) !== b) return;
+    csPour = b; CSH = h; ficheVoulue = h.fiche;
+    if (CSQPour !== b) CSQ = null;
+    dessineStation();
+  }, 150);
+}
+function dessineStation() {
+  const h = CSH; if (!h || !csPour) return;
+  const q = CSQ && CSQPour === csPour ? CSQ : null;
+  g('cs-vide').hidden = true; g('cs-plein').hidden = false;
+  const der = h.contacts[0];
+  txt('cs-call', q && q.indicatif ? q.indicatif : csPour);
+  txt('cs-nom', q ? q.nom + (q.surnom ? ' « ' + q.surnom + ' »' : '') : der && der.nm ? der.nm : '');
+  txt('cs-lieu', q ? [q.adresse, q.qth, q.etat, q.pays].filter(x => x).join(' · ') : der && der.qth ? der.qth : '');
+  txt('cs-info', q ? [q.carre, q.zoneCq ? 'CQ ' + q.zoneCq : '', q.zoneItu ? 'ITU ' + q.zoneItu : '', q.classe ? 'classe ' + q.classe : '', q.depuis ? 'licence ' + q.depuis : ''].filter(x => x).join(' · ') : '');
+  g('cs-qsl').innerHTML = q ? '<span' + (q.lotw ? '' : ' class="non"') + '>LoTW</span><span' + (q.eqsl ? '' : ' class="non"') + '>eQSL</span><span' + (q.qslPapier ? '' : ' class="non"') + '>QSL papier</span>' +
+    (q.qslManager ? '<span>' + esc(q.qslManager) + '</span>' : '') + (q.site ? '<a href="' + esc(q.site).replace(/"/g, '') + '" target="_blank" rel="noopener" style="color:var(--cyan);font-size:11px">site</a>' : '') : '';
+  const ph = g('cs-photo');
+  if (q && q.image && ficheVoulue) { if (ph.getAttribute('src') !== q.image) ph.src = q.image; ph.hidden = false; } else { ph.hidden = true; ph.removeAttribute('src'); }
+  // Where: QRZ's place, else the log's square.
+  const ou = q && q.lat != null ? q : (h.lat != null ? h : null);
+  const voir = ficheVoulue && ou && ou.km != null;
+  g('cs-dist').hidden = !voir; g('cs-carte-boite').hidden = !voir;
+  if (voir) { txt('cs-km', ou.km.toLocaleString('fr-FR') + ' km'); txt('cs-az', ou.azimut + '° ' + ou.rose); dessineCarteStation2(ou); }
+  // The log: how many, since when, on which satellites; each contact and its note.
+  const jour = t => new Date(t).toISOString().slice(0, 10);
+  txt('cs-resume', h.total ? h.total + ' contact' + (h.total > 1 ? 's' : '') + ' · premier ' + jour(h.premier) + ' · dernier ' + jour(h.dernier) +
+    (h.sats.length ? ' · ' + h.sats.join(', ') : '') + (h.carres.length ? ' · carrés ' + h.carres.join(' ') : '') : 'Jamais contacté : un nouveau !');
+  g('cs-resume').style.color = h.total ? '' : 'var(--vert)';
+  g('cs-hist').innerHTML = h.contacts.map(e => '<tr><td style="white-space:nowrap">' + new Date(e.t).toISOString().slice(0, 16).replace('T', ' ') + '</td><td>' + esc(e.sat) +
+    '</td><td>' + esc(e.md) + '</td><td>' + esc(e.rs) + '/' + esc(e.rr) + '</td><td>' + esc(e.l) + (e.c !== csPour ? ' <span class="petit">' + esc(e.c) + '</span>' : '') +
+    '</td></tr>' + (e.n ? '<tr><td></td><td colspan="4" class="note">' + esc(e.n) + '</td></tr>' : '')).join('');
+}
+/** The two stations and the great circle between them, on the map. */
+function dessineCarteStation2(ou) {
+  const c = g('cs-carte'); if (!c.clientWidth || !ou.moi) return;
+  const a = ou.moi, b = { lat: ou.lat, lon: ou.lon };
+  // The great circle, a point every few degrees, longitudes continuous from mine.
+  const rad = Math.PI / 180, p1 = [a.lat * rad, a.lon * rad], p2 = [b.lat * rad, b.lon * rad];
+  const d = 2 * Math.asin(Math.sqrt(Math.sin((p2[0] - p1[0]) / 2) ** 2 + Math.cos(p1[0]) * Math.cos(p2[0]) * Math.sin((p2[1] - p1[1]) / 2) ** 2));
+  const arc = []; let ref = a.lon;
+  for (let i = 0; i <= 64; i++) {
+    const f = i / 64; if (d === 0) break;
+    const A = Math.sin((1 - f) * d) / Math.sin(d), B = Math.sin(f * d) / Math.sin(d);
+    const x = A * Math.cos(p1[0]) * Math.cos(p1[1]) + B * Math.cos(p2[0]) * Math.cos(p2[1]);
+    const y = A * Math.cos(p1[0]) * Math.sin(p1[1]) + B * Math.cos(p2[0]) * Math.sin(p2[1]);
+    const z = A * Math.sin(p1[0]) + B * Math.sin(p2[0]);
+    let lon = Math.atan2(y, x) / rad; while (lon - ref > 180) lon -= 360; while (lon - ref < -180) lon += 360; ref = lon;
+    arc.push([Math.atan2(z, Math.sqrt(x * x + y * y)) / rad, lon]);
+  }
+  const lb = arc.length ? arc[arc.length - 1][1] : b.lon;
+  const xs = [wxk(a.lon), wxk(lb)].concat(arc.map(p => wxk(p[1]))), ys = [wyq(a.lat), wyq(b.lat)].concat(arc.map(p => wyq(p[0])));
+  const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+  CSV.cx = (x0 + x1) / 2; CSV.cy = (y0 + y1) / 2;
+  CSV.z = Math.max(1, Math.min(10, Math.log2(Math.min(c.clientWidth / 256 / Math.max(x1 - x0, 1e-4), c.clientHeight / 256 / Math.max(y1 - y0, 1e-4)) * 0.75)));
+  const m = fondCarte(c, CSV);
+  traceCarte(m, arc, '#E86FA8', 2.5, [6, 4]);
+  pointCarte(m, a.lat, a.lon, '#FFB454', 6, E && E.indicatif ? E.indicatif : 'Moi');
+  pointCarte(m, b.lat, lb, '#E86FA8', 7, csPour);
+}
+
 // The stations it may be, as typed (the phone's prediction: the log's contacts, how recent, the same
 // satellite first), and the field's edge in the colour of what is typed: worked before, plausible, unusual.
 let propositions = [], minuteurProps = null;
@@ -1201,6 +1310,7 @@ function montreProposition(i) {
   iProp = i;
   const p = propositions[i];
   g('c-call').value = p ? p.c : tape;
+  stationPour(g('c-call').value);
   if (p && p.l && (!g('c-loc').dataset.tape)) g('c-loc').value = p.l;
   if (!p && !g('c-loc').dataset.tape) g('c-loc').value = '';
   dessinePropositions();
@@ -1236,18 +1346,22 @@ g('c-call').addEventListener('input', () => {
   clearTimeout(minuteurQrz);
   const c = base(v('c-call'));
   if (c !== quiPour) txt('c-qui', '');
+  stationPour(v('c-call'));
   if (c.length < 4 || !/[0-9]/.test(c)) return;
   const connu = C.find(e => base(e.c) === c && e.nm);
   if (connu) {
     quiPour = c; txt('c-qui', connu.nm + (connu.qth ? ' · ' + connu.qth : '') + ' (carnet)');
     if (!v('c-loc') && connu.l && v('c-call').indexOf('/') < 0) g('c-loc').value = connu.l;
-    return;
+    // Known by name: QRZ only for the station's card, when it is wanted.
+    if (!ficheVoulue) return;
   }
   minuteurQrz = setTimeout(async () => {
-    txt('c-qui', 'QRZ…');
+    if (!connu) txt('c-qui', 'QRZ…');
     let f = null;
     try { f = await (await fetch('/api/qrz?c=' + enc(c))).json(); } catch (x) {}
     if (base(v('c-call')) !== c) return;
+    CSQ = f && f.ok ? f : null; CSQPour = c; dessineStation();
+    if (connu) return;
     if (!f || !f.ok) { txt('c-qui', f && f.erreur ? f.erreur : ''); return; }
     quiPour = c;
     txt('c-qui', [f.nom, f.qth, f.pays].filter(x => x).join(' · '));
@@ -1262,7 +1376,7 @@ async function enregistreContact() {
   if (j && j.ok) {
     txt('c-etat', c.toUpperCase() + ' enregistré');
     ['c-call', 'c-loc', 'c-note'].forEach(i => g(i).value = ''); g('c-rs').value = '59'; g('c-rr').value = '59';
-    txt('c-qui', ''); quiPour = ''; g('c-props').innerHTML = ''; propositions = []; iProp = -1; accepte = ''; g('c-loc').dataset.tape = ''; g('c-call').style.borderColor = ''; g('c-call').focus(); chargeCarnet();
+    txt('c-qui', ''); quiPour = ''; stationPour(''); g('c-props').innerHTML = ''; propositions = []; iProp = -1; accepte = ''; g('c-loc').dataset.tape = ''; g('c-call').style.borderColor = ''; g('c-call').focus(); chargeCarnet();
   }
 }
 function edite(t) {
@@ -1338,6 +1452,7 @@ async function chargeReglages() {
   try {
     const r = await (await fetch('/api/reglages')).json();
     g('indicatif').value = r.c; g('locator').value = r.l; g('minEl').value = r.minEl;
+    g('qrzFiche').checked = r.fiche; ficheVoulue = r.fiche;
     g('qrzUser').value = r.qrzUser; g('qrzMdp').placeholder = r.qrzMdp ? 'mot de passe enregistré' : 'Mot de passe';
     g('carnetUrl').value = r.carnetUrl; g('carnetCle').placeholder = r.carnetCle ? 'clé enregistrée' : 'Clé d’API (lecture et écriture)';
     g('carnetProfil').value = r.carnetProfil;
@@ -1446,7 +1561,7 @@ function centreSur(k) { const [lo, la] = coin(k); qcx = wxq(lo + 1); qcy = wyq(l
 function qTuile(z, x, y) {
   const n = 1 << z, xw = ((x % n) + n) % n, k = z + '/' + xw + '/' + y;
   let i = qTuiles.get(k);
-  if (!i) { i = new Image(); i.onload = () => { dessineCarres(); dessineSked(); dessineCarteStation(); }; i.src = '/journal/tuile?z=' + z + '&x=' + xw + '&y=' + y; qTuiles.set(k, i);
+  if (!i) { i = new Image(); i.onload = () => { dessineCarres(); dessineSked(); dessineCarteStation(); if (!g('v-carnet').hidden && CSH) dessineStation(); }; i.src = '/journal/tuile?z=' + z + '&x=' + xw + '&y=' + y; qTuiles.set(k, i);
     if (qTuiles.size > 500) qTuiles.delete(qTuiles.keys().next().value); }
   return i.complete && i.naturalWidth ? i : null;
 }

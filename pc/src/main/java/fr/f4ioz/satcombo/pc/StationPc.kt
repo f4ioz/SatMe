@@ -189,6 +189,11 @@ class StationPc(
         stationCat.oublieArmement()
     }
 
+    /** The QRZ card in the log (photo, distance, map): the operator's choice, on by default. */
+    var ficheQrz: Boolean
+        get() = stockage.getBoolean("pc_qrz_fiche", true)
+        set(v) { stockage.edit().putBoolean("pc_qrz_fiche", v).apply() }
+
     // ---------------------------------------------------------------- the SDR dongle
 
     /** What the dongle listens to: the transmitter's downlink at rest, with its Doppler now (sky, calibration in), its mode. */
