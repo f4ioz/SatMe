@@ -44,3 +44,11 @@ tasks.processResources {
         into("traits")
     }
 }
+
+// The app's icon for the "SatMe" mark on every export: the repository's, taken at build time.
+tasks.processResources {
+    from("../docs/images") {
+        include("icon.png")
+        into("marque")
+    }
+}

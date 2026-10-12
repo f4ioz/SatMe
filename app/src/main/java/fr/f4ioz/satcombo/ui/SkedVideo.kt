@@ -68,7 +68,7 @@ object SkedVideo {
         val nom = "SatMe_Sked_" + satellite.replace(Regex("[^A-Za-z0-9]+"), "-").trim('-') + "_" + autre.replace(Regex("[^A-Za-z0-9]"), "") + "_" +
             SimpleDateFormat("yyyyMMdd_HHmm'Z'", Locale.US).apply { timeZone = utc }.format(deMs) + ".mp4"
         val sortie = File(File(ctx.cacheDir, "skeds").apply { mkdirs() }, nom)
-        val d = Dessin(trace, deMs, aMs, satellite, moi, autre)
+        val d = Dessin(trace, deMs, aMs, satellite, moi, autre, fr.f4ioz.satcombo.data.AppMark.icon(ctx, 160))
         val nb = DUREE_S * FPS
         val fin = FIN_S * FPS
         val t0 = pts.first().t; val t1 = pts.last().t
@@ -82,7 +82,8 @@ object SkedVideo {
         if (ok && sortie.length() > 0) sortie else null
     }.getOrNull()
 
-    private class Dessin(val tr: TraceSked, val deMs: Long, val aMs: Long, val sat: String, val moi: String, val autre: String) {
+    private class Dessin(val tr: TraceSked, val deMs: Long, val aMs: Long, val sat: String, val moi: String, val autre: String,
+                         val icone: Bitmap?) {
         val pts = tr.points
         val vue: JournalPassage.VueCarte = run {
             // Framed on what either station sees, and both stations.
@@ -143,6 +144,8 @@ object SkedVideo {
             c.drawText("$sat · sked $moi ↔ $autre", 20f, 32f, p(Color.WHITE, 24f, true))
             val duree = (aMs - deMs) / 1000
             c.drawText(tf("sked_video_fenetre", date.format(deMs), heure.format(aMs).substring(0, 5), duree / 60, duree % 60), 20f, 55f, p(GRIS, 17f))
+            // The app's mark, in the band's right end, as on every picture SatMe exports.
+            fr.f4ioz.satcombo.data.AppMark.draw(c, CW - 16f, 42f, 5f, icone)
             // The right column: the time, who sees it, both skies.
             c.drawRect(CW.toFloat(), 0f, L.toFloat(), H.toFloat(), p(FOND))
             c.drawText(heure.format(t), CW + 30f, 56f, p(Color.WHITE, 40f, true).apply { typeface = Typeface.create(Typeface.MONOSPACE, Typeface.BOLD) })

@@ -165,6 +165,8 @@ class VideoSked(private val dossier: File, private val tuile: (Int, Int, Int) ->
             g.font = Font(Font.SANS_SERIF, Font.PLAIN, 17); g.color = Color(154, 167, 180)
             g.drawString("fenêtre commune " + date.format(s.deMs) + " → " + heure.format(s.aMs).substring(0, 5) + " UTC · " +
                 ((s.aMs - s.deMs) / 60_000) + " min " + ((s.aMs - s.deMs) / 1000 % 60) + " s", 20, 54)
+            // The app's mark, in the band's right end, as on every picture SatMe exports.
+            MarquePc.dessine(g, CW - 16f, 42f, 5f)
             // The right column: the time, both skies.
             g.color = Color(11, 16, 22); g.fillRect(CW, 0, L - CW, H)
             g.font = Font(Font.MONOSPACED, Font.BOLD, 40); g.color = Color.WHITE

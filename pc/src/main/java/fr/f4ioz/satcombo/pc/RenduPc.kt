@@ -408,7 +408,7 @@ object RenduPc {
             smetre(g, 14f * dp, haut + 72f * dp, w - 70f * dp, 22f * dp, v, JournalPassage.crete(e, instant), dp)
         }
         g.texte(listOf(sc.indicatif, e.locator).filter { it.isNotBlank() }.joinToString(" · "), 14f * dp, h - 10f * dp, gris, police(13 * dp))
-        g.texte("SatMe", w - 14f * dp, h - 10f * dp, CYAN, police(15 * dp, true), droite = true)
+        MarquePc.dessine(g, w - 14f * dp, h - 10f * dp, 3.2f * dp, couleur = CYAN)
         g.dispose()
         return b
     }
@@ -437,7 +437,7 @@ object RenduPc {
             g.texte(t("journal_station_rx"), w / 2f, y, Color(150, 165, 185), police(12 * dp), centre = true); y += 26 * dp
             g.texte(it, w / 2f, y, CYAN, police(22 * dp, true), centre = true)
         }
-        g.texte("SatMe", w / 2f, h - 26 * dp, CYAN, police(24 * dp, true), centre = true)
+        MarquePc.dessine(g, w / 2f, h - 26 * dp, 5.2f * dp, centre = true, couleur = CYAN)
         g.dispose()
         return b
     }
@@ -456,6 +456,8 @@ object RenduPc {
         g.texte(sc.e.satName + " · " + m.texte, 14 * dp, h - 44 * dp, Color.WHITE, police(18 * dp, true))
         g.texte(fmt("yyyy-MM-dd HH:mm:ss").format(Date(m.finMs)) + " UTC  ·  " + listOf(sc.indicatif, sc.e.locator).filter { it.isNotBlank() }.joinToString(" · "),
             14 * dp, h - 22 * dp, Color(160, 175, 195), police(13 * dp))
+        // The mark, as on the other frames.
+        MarquePc.dessine(g, w - 14f * dp, h - 10f * dp, 3.2f * dp, couleur = CYAN)
         g.dispose()
         return b
     }
@@ -495,7 +497,7 @@ object RenduPc {
         val aprs = sc.marques.filter { it.type == TypeMarque.APRS }.distinctBy { it.texte }
         bloc(t("journal_recap_aprs").format(aprs.size), APRS, aprs.map { m ->
             if (JournalPassage.estLeSatellite(m.texte)) m.texte + " — " + t("journal_digi_iss_court") else m.texte })
-        g.texte("SatMe", w - 14f * dp, h - 10f * dp, CYAN, police(15 * dp, true), droite = true)
+        MarquePc.dessine(g, w - 14f * dp, h - 10f * dp, 3.2f * dp, couleur = CYAN)
         g.dispose()
         return b
     }

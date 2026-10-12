@@ -560,6 +560,11 @@ object JournalRendu {
         c.drawText(sc.e.satName + " · " + m.texte, 14 * dp, h - 44 * dp, t1)
         c.drawText(fmt.format(Date(m.finMs)) + " UTC" + "  ·  " +
             listOf(sc.indicatif, sc.e.locator).filter { it.isNotBlank() }.joinToString(" · "), 14 * dp, h - 22 * dp, t2)
+        // The mark, as on the other frames.
+        val logo = sc.logo
+        c.drawText("SatMe", if (logo != null) w - 44f * dp else w - 14f * dp, h - 10f * dp,
+            Paint(Paint.ANTI_ALIAS_FLAG).apply { color = CYAN; textSize = 15f * dp; isFakeBoldText = true; textAlign = Paint.Align.RIGHT })
+        logo?.let { it.setBounds((w - 40 * dp).toInt(), (h - 34 * dp).toInt(), (w - 12 * dp).toInt(), (h - 6 * dp).toInt()); it.draw(c) }
         return out
     }
 
@@ -824,7 +829,9 @@ object JournalRendu {
         val t1 = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE; textSize = 13f * dp; typeface = Typeface.DEFAULT_BOLD }
         val t2 = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(160, 175, 195); textSize = 9f * dp }
         c.drawText(legende, 12 * dp, h - bas + 22 * dp, t1)
-        c.drawText("SatMe · © OpenStreetMap", 12 * dp, h - 12 * dp, t2)
+        c.drawText("© OpenStreetMap", 12 * dp, h - 12 * dp, t2)
+        // The app's mark, as on every picture SatMe exports.
+        fr.f4ioz.satcombo.data.AppMark.draw(c, w - 12 * dp, h - 12 * dp, 3.2f * dp, fr.f4ioz.satcombo.data.AppMark.icon(ctx, 160))
         val f = File(File(ctx.cacheDir, "export").apply { mkdirs() }, "SatMe_Stations_" +
             SimpleDateFormat("yyyyMMdd", Locale.US).format(Date()) + ".png")
         f.outputStream().use { b.compress(Bitmap.CompressFormat.PNG, 100, it) }
