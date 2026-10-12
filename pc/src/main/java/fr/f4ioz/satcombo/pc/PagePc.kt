@@ -60,6 +60,8 @@ object PagePc {
   td.rosace { padding:2px 4px; width:1px; }
   .c-props { display:flex; gap:6px; margin-top:6px; min-height:44px; }
   .c-props button { flex:1; min-width:0; padding:4px 6px; background:rgba(63,224,200,.15); border-color:rgba(63,224,200,.35); text-align:center; }
+  .c-props button.choisie { background:var(--cyan); color:#06131A; border-color:var(--cyan); }
+  .c-props button.choisie span { color:#06131A; }
   .c-props b { display:block; font-family:ui-monospace,Consolas,monospace; font-size:15px; }
   .c-props span { display:block; font-size:11px; color:var(--gris); font-weight:400; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   #liste { max-height:calc(100vh - 190px); overflow:auto; }
@@ -1172,31 +1174,63 @@ g('c-filtre').oninput = dessineCarnet;
 // The stations it may be, as typed (the phone's prediction: the log's contacts, how recent, the same
 // satellite first), and the field's edge in the colour of what is typed: worked before, plausible, unusual.
 let propositions = [], minuteurProps = null;
+// Going through the predictions with Tab: which one is in the field (-1: what was typed), and what was typed.
+let iProp = -1, tape = '', accepte = '';
 const COUL_ETAT = { DEJA_CONTACTE: 'var(--vert)', PLAUSIBLE: 'var(--cyan)', INHABITUEL: 'var(--ambre)', VIDE: '' };
 function proposeIndicatifs() {
   clearTimeout(minuteurProps);
+  iProp = -1; tape = v('c-call');
   minuteurProps = setTimeout(async () => {
     const saisie = v('c-call');
     let j = null;
     try { j = await (await fetch('/api/carnet/propositions?c=' + enc(saisie))).json(); } catch (x) { return; }
-    if (v('c-call') !== saisie) return;
-    propositions = j.propositions.filter(p => p.c !== saisie.toUpperCase());
+    if (v('c-call') !== saisie || iProp >= 0) return;
     g('c-call').style.borderColor = COUL_ETAT[j.etat] || '';
     g('c-call').title = { DEJA_CONTACTE: 'déjà contacté', PLAUSIBLE: 'indicatif plausible', INHABITUEL: 'indicatif inhabituel (rien n’empêche de l’enregistrer)' }[j.etat] || '';
-    g('c-props').innerHTML = propositions.map((p, i) => '<button tabindex="-1" onclick="prendProposition(' + i + ')" title="' + esc(p.c) + (p.sat ? ' · dernier contact sur ' + esc(p.sat) : '') + '"><b>' + esc(p.c) + '</b><span>' +
-      [p.nm ? esc(p.nm.split(' ')[0]) : '', esc(p.l), '×' + p.n].filter(x => x).join(' · ') + '</span></button>').join('');
+    // A prediction just taken: no more to offer.
+    propositions = saisie.toUpperCase() === accepte ? [] : j.propositions.filter(p => p.c !== saisie.toUpperCase());
+    dessinePropositions();
   }, 120);
+}
+function dessinePropositions() {
+  g('c-props').innerHTML = propositions.map((p, i) => '<button tabindex="-1"' + (i === iProp ? ' class="choisie"' : '') + ' onclick="prendProposition(' + i + ')" title="' + esc(p.c) + (p.sat ? ' · dernier contact sur ' + esc(p.sat) : '') + '"><b>' + esc(p.c) + '</b><span>' +
+    [p.nm ? esc(p.nm.split(' ')[0]) : '', esc(p.l), '×' + p.n].filter(x => x).join(' · ') + '</span></button>').join('');
+}
+/** Prediction [i] in the field (its square too), not yet taken: Tab goes on, Enter takes it, Esc gives back what was typed. */
+function montreProposition(i) {
+  iProp = i;
+  const p = propositions[i];
+  g('c-call').value = p ? p.c : tape;
+  if (p && p.l && (!g('c-loc').dataset.tape)) g('c-loc').value = p.l;
+  if (!p && !g('c-loc').dataset.tape) g('c-loc').value = '';
+  dessinePropositions();
 }
 function prendProposition(i) {
   const p = propositions[i]; if (!p) return;
+  accepte = p.c;
   g('c-call').value = p.c;
   if (p.l) g('c-loc').value = p.l;
-  g('c-props').innerHTML = ''; propositions = [];
+  g('c-props').innerHTML = ''; propositions = []; iProp = -1;
+  // The name from the log or QRZ, as for a callsign typed whole.
   g('c-call').dispatchEvent(new Event('input'));
-  g('c-rs').focus();
+  g('c-call').focus();
 }
-// Tab takes the first one, as the phone's first key.
-g('c-call').addEventListener('keydown', e => { if (e.key === 'Tab' && propositions.length && !e.shiftKey) { e.preventDefault(); prendProposition(0); } });
+// A square typed by hand is kept while going through the predictions.
+g('c-loc').addEventListener('input', () => { g('c-loc').dataset.tape = v('c-loc') ? '1' : ''; });
+// Tab: the next prediction (Shift+Tab: the one before); Enter takes it; Esc: back to what was typed.
+// Before the other keys of the field (capture): Enter here takes the prediction, it does not save yet.
+g('c-call').addEventListener('keydown', e => {
+  if (e.key === 'Tab' && propositions.length) {
+    e.preventDefault();
+    const n = propositions.length;
+    montreProposition(e.shiftKey ? (iProp <= 0 ? n - 1 : iProp - 1) : (iProp + 1) % n);
+  } else if (e.key === 'Enter' && iProp >= 0) {
+    e.preventDefault(); e.stopImmediatePropagation();
+    prendProposition(iProp);
+  } else if (e.key === 'Escape' && iProp >= 0) {
+    e.preventDefault(); montreProposition(-1);
+  }
+}, true);
 g('c-call').addEventListener('input', proposeIndicatifs);
 g('c-call').addEventListener('input', () => {
   clearTimeout(minuteurQrz);
@@ -1228,7 +1262,7 @@ async function enregistreContact() {
   if (j && j.ok) {
     txt('c-etat', c.toUpperCase() + ' enregistré');
     ['c-call', 'c-loc', 'c-note'].forEach(i => g(i).value = ''); g('c-rs').value = '59'; g('c-rr').value = '59';
-    txt('c-qui', ''); quiPour = ''; g('c-props').innerHTML = ''; propositions = []; g('c-call').style.borderColor = ''; g('c-call').focus(); chargeCarnet();
+    txt('c-qui', ''); quiPour = ''; g('c-props').innerHTML = ''; propositions = []; iProp = -1; accepte = ''; g('c-loc').dataset.tape = ''; g('c-call').style.borderColor = ''; g('c-call').focus(); chargeCarnet();
   }
 }
 function edite(t) {
