@@ -742,7 +742,7 @@ async function essaiQrz() {
 }
 
 // ------------------------------------------------------------------ sound and SSTV
-let S = null, versionImage = -1, cartesVues = '', imagesVues = '', enregsVus = '';
+let S = null, versionImage = -1, cartesVues = '', imagesVus = '', enregsVus = '';
 const ouverte = n => !g('v-' + n).hidden;
 async function ticSon() {
   try { S = await (await fetch('/api/son')).json(); } catch (x) { return; }
