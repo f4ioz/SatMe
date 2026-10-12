@@ -76,7 +76,9 @@ fun main(args: Array<String>) {
     val telephone = TelephonePc(carnet, journal, File(dossier, "enregistrements"), File(dossier, "sstv"), File(dossier, "tmp"))
     // The phone joining by a QR code: a door of its own next to the page's port, open only while the code is shown.
     val appairage = AppairagePc(telephone, port + 1)
-    val serveur = ServeurPc(station, port, reseau, carnet, son, journalWeb, ImportPc(station, carnet, journal), sdr, videoSked, telephone, appairage)
+    // DATV with a MiniTiouner, through LongMynd: nothing started until asked.
+    val datv = DatvPc(station.stockage, File(dossier, "enregistrements"))
+    val serveur = ServeurPc(station, port, reseau, carnet, son, journalWeb, ImportPc(station, carnet, journal), sdr, videoSked, telephone, appairage, datv)
     serveur.demarre()
     println("SatMe — station PC")
     println("  page      : http://localhost:${serveur.portReel}/" + if (reseau) "  (ouverte au réseau)" else "")
@@ -85,6 +87,7 @@ fun main(args: Array<String>) {
     Runtime.getRuntime().addShutdownHook(Thread {
         runCatching { journal.ferme() }
         runCatching { sdr.arrete() }
+        runCatching { datv.arrete() }
         runCatching { son.arreteEnregistrement(); son.son.arrete() }
         runCatching { station.deconnecteCat() }
         runCatching { station.stationRotor.disconnectRotor() }

@@ -33,7 +33,8 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 private val carnet: CarnetPc? = null, private val son: SonStation? = null,
                 private val journal: JournalWebPc? = null, private val importPc: ImportPc? = null,
                 private val sdr: SdrPc? = null, private val videoSked: VideoSked? = null,
-                private val telephone: TelephonePc? = null, private val appairage: AppairagePc? = null) {
+                private val telephone: TelephonePc? = null, private val appairage: AppairagePc? = null,
+                private val datv: DatvPc? = null) {
 
     private var socket: ServerSocket? = null
     val portReel: Int get() = socket?.localPort ?: port
@@ -59,6 +60,28 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
         val chemin = r.chemin.substringBefore('?')
         val q = parametres(r.chemin.substringAfter('?', ""))
         val sortie = c.getOutputStream()
+        if (chemin == "/api/datv/video.mjpeg" && datv != null) {
+            // The DATV pictures as they come, one JPEG after the other (an <img> shows them as a video).
+            c.soTimeout = 0
+            sortie.write(("HTTP/1.1 200 OK\r\nContent-Type: multipart/x-mixed-replace; boundary=satme\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n").toByteArray())
+            var vu: ByteArray? = null
+            var calme = 0
+            while (true) {
+                val img = datv.image
+                if (img != null && img !== vu) {
+                    vu = img; calme = 0
+                    val ok = runCatching {
+                        sortie.write(("--satme\r\nContent-Type: image/jpeg\r\nContent-Length: ${img.size}\r\n\r\n").toByteArray())
+                        sortie.write(img); sortie.write("\r\n".toByteArray()); sortie.flush()
+                    }.isSuccess
+                    if (!ok) return
+                } else {
+                    // Nothing new for a long while and the reception stopped: the page asks again when it starts.
+                    if (!datv.etat.actif && ++calme > 600) return
+                    Thread.sleep(20)
+                }
+            }
+        }
         if (r.methode == "POST" && chemin == "/api/telephone/zip") {
             // A pass file from the phone (up to 300 MB with its sound): read as it comes, never held whole.
             val t = telephone
@@ -161,6 +184,16 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 val o = JSONObject().put("enCours", r2?.enCours == true).put("fait", r2?.fait ?: 0).put("total", r2?.total ?: 0)
                     .put("bilans", JSONArray(r2?.bilans.orEmpty().map { JsonPc.bilanTelephone(it) }))
                 envoie(sortie, "200 OK", "application/json; charset=utf-8", o.toString().toByteArray())
+            }
+            "/api/datv" -> {
+                val d = datv
+                val o = if (d == null) JSONObject().put("ok", false) else JsonPc.datv(d)
+                envoie(sortie, "200 OK", "application/json; charset=utf-8", o.toString().toByteArray())
+            }
+            "/api/datv/image.jpg" -> {
+                val img = datv?.image
+                if (img == null) envoie(sortie, "404 Not Found", "text/plain", "pas d'image".toByteArray())
+                else envoie(sortie, "200 OK", "image/jpeg", img, "Cache-Control: no-store\r\n")
             }
             "/api/frise" -> {
                 val (debut, lignes) = kotlinx.coroutines.runBlocking { station.frise((q["h"]?.toIntOrNull() ?: 12).coerceIn(2, 48)) }
@@ -431,6 +464,28 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                     .put("ip", e.url.substringAfter("://").substringBefore(':')).put("jusquA", e.jusquA)
             }
             "/api/telephone/qr/ferme" -> appairage?.ferme()
+            "/api/datv/demarre" -> {
+                val d = datv ?: return JSONObject().put("ok", false)
+                val r0 = d.reglage
+                fun khz(k: String) = q[k]?.replace(',', '.')?.toDoubleOrNull()?.let { Math.round(it * 1000.0) }
+                val r = r0.copy(cielKhz = khz("ciel") ?: r0.cielKhz, srKs = q["sr"]?.toIntOrNull() ?: r0.srKs, olKhz = khz("ol") ?: r0.olKhz,
+                    entreeB = q["entree"]?.let { it == "b" } ?: r0.entreeB, lnb = q["lnb"]?.takeIf { it in setOf("", "v", "h") } ?: "",
+                    son = q["son"]?.let { it == "1" } ?: r0.son)
+                d.demarre(r)?.let { return JSONObject().put("ok", false).put("erreur", it) }
+            }
+            "/api/datv/arrete" -> datv?.arrete()
+            "/api/datv/enregistre" -> return ok.put("nom", datv?.enregistre(q["on"] == "1").orEmpty())
+            "/api/datv/vlc" -> datv?.ouvreVlc()?.let { return JSONObject().put("ok", false).put("erreur", it) }
+            "/api/datv/chemin" -> datv?.chemin = q["p"].orEmpty()
+            "/api/datv/cale" -> {
+                // The beacon where the MiniTiouner found it: the LNB's oscillator corrected so that it falls where it is.
+                val d = datv ?: return JSONObject().put("ok", false)
+                val e = d.etat
+                if (!e.verrouille || e.fiTrouveeKhz <= 0) return JSONObject().put("ok", false).put("erreur", "accrocher d'abord un signal (la balise)")
+                val ecart = e.fiTrouveeKhz - d.reglage.fiKhz
+                d.demarre(d.reglage.copy(olKhz = d.reglage.olKhz - ecart))?.let { return JSONObject().put("ok", false).put("erreur", it) }
+                return ok.put("ecart", ecart)
+            }
             "/api/telephone/connecte" -> {
                 val t = telephone ?: return JSONObject().put("ok", false)
                 t.connecte(q["adresse"].orEmpty(), q["code"].orEmpty())?.let { return JSONObject().put("ok", false).put("erreur", it) }
@@ -905,6 +960,21 @@ object JsonPc {
     }
 
     /** The settings shown on the page; passwords and keys never come back, only whether they are set. */
+    fun datv(d: DatvPc): JSONObject {
+        val e = d.etat; val r = d.reglage
+        return JSONObject().put("ok", true).put("actif", e.actif).put("etat", e.etat).put("libelle", e.libelle).put("verrouille", e.verrouille)
+            .put("ciel", r.cielKhz).put("sr", r.srKs).put("ol", r.olKhz).put("fi", r.fiKhz).put("entree", if (r.entreeB) "b" else "a").put("son", r.son)
+            .put("fiTrouvee", e.fiTrouveeKhz).put("cielTrouve", if (e.fiTrouveeKhz > 0) e.fiTrouveeKhz + r.olKhz else 0L).put("srTrouve", e.srTrouveKs)
+            .put("mer", e.merDb ?: JSONObject.NULL).put("modcod", e.modcod).put("fournisseur", e.fournisseur).put("service", e.service)
+            .put("nuls", e.nulsPct).put("agc1", e.agc1).put("agc2", e.agc2).put("kbps", e.kbps).put("images", e.images)
+            .put("ber", e.berPct ?: JSONObject.NULL).put("courtes", e.trames ?: JSONObject.NULL).put("pilotes", e.pilotes ?: JSONObject.NULL)
+            .put("flux", JSONArray(e.flux.map { (pid, t) -> JSONObject().put("pid", pid).put("type", DatvPc.typeFlux(t)) }))
+            .put("enregistrement", e.enregistrement).put("erreur", e.erreur)
+            .put("programme", d.programme() ?: JSONObject.NULL).put("chemin", d.chemin)
+            .put("points", JSONArray(d.constellation().map { JSONArray(listOf(it.first, it.second)) }))
+            .put("debits", JSONArray(DatvPc.DEBITS)).put("canaux", JSONArray(DatvPc.CANAUX_KHZ)).put("balise", DatvPc.BALISE_KHZ)
+    }
+
     fun reglages(st: StationPc): JSONObject {
         val s = st.settings
         return JSONObject().put("c", s.callsign).put("l", s.manualLocator).put("qrzUser", s.qrzUser)

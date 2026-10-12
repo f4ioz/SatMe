@@ -17,7 +17,7 @@ package fr.f4ioz.satcombo.pc
 object PagePc {
     /** The tabs, in their order; the journal is a page of its own between FT8 and the settings. */
     private val ONGLETS = listOf("station" to "Station", "carnet" to "Carnet", "agenda" to "Agenda", "carres" to "Carrés", "frise" to "Frise",
-        "sked" to "Sked", "qo100" to "QO-100", "sdr" to "SDR", "sondes" to "Sondes", "meteor" to "METEOR", "son" to "Son", "sstv" to "SSTV",
+        "sked" to "Sked", "qo100" to "QO-100", "datv" to "DATV", "sdr" to "SDR", "sondes" to "Sondes", "meteor" to "METEOR", "son" to "Son", "sstv" to "SSTV",
         "aprs" to "APRS", "ft8" to "FT8", "journal" to "Journal", "reglages" to "Réglages")
 
     /** The tabs here: buttons, the journal a link. */
@@ -73,6 +73,11 @@ object PagePc {
   #c-liste .c-nm { max-width:96px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--gris); font-size:11px; font-weight:400; }
   #c-liste td.act { white-space:nowrap; }
   .gp-ct { color:var(--gris); font-size:11px; }
+  .d-grille { display:grid; grid-template-columns:minmax(0,1fr) 430px; gap:12px; padding:12px 16px; }
+  @media (max-width:1100px) { .d-grille { grid-template-columns:1fr; } }
+  #d-cadre { position:relative; aspect-ratio:16/9; max-height:calc(100vh - 230px); background:#000; border-radius:8px; overflow:hidden; display:flex; align-items:center; justify-content:center; }
+  #d-video { max-width:100%; max-height:100%; display:none; }
+  #d-vide { position:absolute; color:var(--gris); font-size:15px; }
   #t-qr svg { width:100%; height:100%; display:block; border-radius:8px; }
   #visionneuse::backdrop { background:rgba(0,0,0,.75); }
   #vi-img { display:block; max-width:min(92vw,1280px); max-height:calc(92vh - 60px); min-width:320px; image-rendering:auto; border-radius:6px; cursor:zoom-out; background:#0E1720; }
@@ -683,6 +688,49 @@ object PagePc {
       </div>
       <div class="petit" style="margin-top:6px">En vert, la fenêtre où vous voyez tous deux le satellite ; la zone claire autour du satellite est la partie de la Terre qui le voit à cet instant.</div>
     </div>
+  </div>
+</div>
+</div>
+<div class="vue" id="v-datv" hidden>
+<div class="d-grille">
+  <div class="carte d-ecran">
+    <div class="t">DATV · MiniTiouner <span id="d-titre" class="petit"></span></div>
+    <div id="d-cadre"><img id="d-video" alt=""><div id="d-vide">Réception arrêtée</div></div>
+    <div class="paire" style="margin-top:8px;align-items:center">
+      <span id="d-etat" class="pastille">arrêté</span>
+      <span>MER <b class="val" id="d-mer">—</b></span>
+      <span class="val" id="d-modcod" style="font-size:16px"></span>
+      <span class="petit" id="d-porteuse"></span>
+      <span class="petit" id="d-debit"></span>
+      <span id="d-rec" class="pastille" style="display:none;background:rgba(229,72,77,.2);color:var(--rose)"></span>
+    </div>
+    <div class="petit" id="d-service" style="margin-top:4px"></div>
+  </div>
+  <div class="d-cote">
+    <div class="carte">
+      <div class="t">Réception</div>
+      <div class="ligne" style="margin-top:0"><span class="petit" style="min-width:86px">Ciel (MHz)</span><input id="d-ciel" style="max-width:130px">
+        <button onclick="dBalise()" title="Balise large bande : 10491,500 MHz à 1500 kS/s">Balise</button></div>
+      <div class="ligne"><span class="petit" style="min-width:86px">Canal</span><select id="d-canal" onchange="if (this.value) g('d-ciel').value = this.value"></select></div>
+      <div class="ligne"><span class="petit" style="min-width:86px">kS/s</span><div id="d-debits" class="o-puces" style="flex:1"></div></div>
+      <div class="ligne"><span class="petit" style="min-width:86px">OL du LNB (MHz)</span><input id="d-ol" style="max-width:130px">
+        <button onclick="dCale()" title="Accrocher la balise, puis : l'oscillateur est corrigé pour qu'elle tombe à sa fréquence">Caler sur le signal</button></div>
+      <div class="ligne"><span class="petit" style="min-width:86px">Entrée</span><select id="d-entree" style="max-width:150px"><option value="a">A (haut)</option><option value="b">B (bas)</option></select>
+        <span class="petit">Alim. LNB</span><select id="d-lnb" style="max-width:150px" onchange="dLnb()"><option value="">coupée</option><option value="v">13 V (V)</option><option value="h">18 V (H)</option></select></div>
+      <div class="avert" id="d-lnb-avert" hidden>Le MiniTiouner alimentera le LNB : seulement si rien d'autre ne l'alimente (pas de séparateur qui passe le continu vers un autre récepteur).</div>
+      <label class="petit" style="display:block;margin-top:6px"><input type="checkbox" id="d-son"> Son sur ce PC</label>
+      <div class="ligne"><button class="primaire" onclick="dDemarre()">Recevoir</button><button onclick="dPost('arrete')">Arrêter</button>
+        <button id="d-benr" onclick="dEnregistre()">Enregistrer</button><button onclick="dPost('vlc')" title="Le même flux dans VLC, pleine qualité">VLC</button></div>
+      <div class="etat" id="d-msg"></div>
+    </div>
+    <div class="carte">
+      <div class="t">Constellation</div>
+      <div style="display:flex;gap:12px;align-items:flex-start">
+        <canvas id="d-const" width="200" height="200" style="width:200px;height:200px;background:#0E1720;border-radius:8px"></canvas>
+        <div class="petit" style="flex:1;line-height:1.7" id="d-details"></div>
+      </div>
+    </div>
+    <div class="petit" id="d-prog"></div>
   </div>
 </div>
 </div>
@@ -1318,6 +1366,7 @@ function vue(n) {
   if (n === 'frise') chargeFrise();
   if (n === 'sked') { prepareSked(); setTimeout(dessineSked); }
   if (n === 'qo100') chargeQo100(true);
+  if (n === 'datv') ticDatv(true);
   if (n === 'sdr') ticSdr();
   if (n === 'sondes') { SV2.libre = false; ticSondes(); }
   if (n === 'meteor') ticMeteor();
@@ -1786,6 +1835,75 @@ async function enregistreReglages() {
     chargeReglages(); setTimeout(chargeListe, 1500);
   }
 }
+// ------------------------------------------------------------------ DATV (MiniTiouner, through LongMynd)
+let D = null, dSr = 0;
+const mhz3 = k => (k / 1000).toFixed(3).replace('.', ',');
+async function ticDatv(premier) {
+  if (g('v-datv').hidden) return;
+  try { D = await (await fetch('/api/datv')).json(); } catch (x) { return; }
+  if (!D.ok) return;
+  if (premier || !document.activeElement || !document.activeElement.id.startsWith('d-')) {
+    if (premier) {
+      g('d-ciel').value = mhz3(D.ciel); g('d-ol').value = mhz3(D.ol); g('d-entree').value = D.entree; g('d-son').checked = D.son; dSr = D.sr;
+      g('d-canal').innerHTML = '<option value="">—</option><option value="' + mhz3(D.balise) + '">Balise ' + mhz3(D.balise) + '</option>' +
+        D.canaux.map(k => '<option value="' + mhz3(k) + '">' + mhz3(k) + '</option>').join('');
+    }
+  }
+  g('d-debits').innerHTML = D.debits.map(s => '<button class="' + (s === dSr ? 'ici' : '') + '" onclick="dSr=' + s + ';ticDatv()">' + s + '</button>').join('');
+  const e = g('d-etat'); e.textContent = D.actif ? D.libelle : 'arrêté';
+  e.style.background = D.verrouille ? 'rgba(91,214,138,.2)' : (D.actif ? 'rgba(255,180,84,.2)' : ''); e.style.color = D.verrouille ? 'var(--vert)' : (D.actif ? 'var(--ambre)' : 'var(--gris)');
+  txt('d-mer', D.mer == null || !D.verrouille ? '—' : D.mer.toFixed(1) + ' dB');
+  txt('d-modcod', D.verrouille ? D.modcod : '');
+  txt('d-porteuse', D.cielTrouve ? mhz3(D.cielTrouve) + ' MHz' + (D.srTrouve ? ' · ' + D.srTrouve + ' kS/s' : '') + (D.verrouille ? ' · écart ' + (D.fiTrouvee - D.fi) + ' kHz' : '') : '');
+  txt('d-debit', D.kbps ? Math.round(D.kbps) + ' kb/s' + (D.nuls ? ' · ' + D.nuls + ' % de vide' : '') : '');
+  txt('d-service', [D.fournisseur, D.service].filter(x => x).join(' · ') + (D.flux.length ? '  —  ' + D.flux.map(f => f.type + ' (PID ' + f.pid + ')').join(', ') : ''));
+  txt('d-titre', D.actif ? '· ' + mhz3(D.ciel) + ' MHz · ' + D.sr + ' kS/s · FI ' + mhz3(D.fi) + ' MHz' : '');
+  const r = g('d-rec'); r.style.display = D.enregistrement ? '' : 'none'; r.textContent = '● ' + D.enregistrement;
+  g('d-benr').textContent = D.enregistrement ? 'Arrêter l’enregistrement' : 'Enregistrer';
+  if (D.erreur) txt('d-msg', D.erreur);
+  txt('d-details', D.actif ? '' : '');
+  g('d-details').innerHTML = D.actif ? ['AGC1 ' + D.agc1, 'AGC2 ' + D.agc2, D.ber != null ? 'BER ' + D.ber.toFixed(2) + ' %' : '',
+    D.courtes != null ? (D.courtes ? 'trames courtes' : 'trames normales') : '', D.pilotes != null ? (D.pilotes ? 'pilotes' : 'sans pilotes') : '',
+    D.images ? D.images + ' images' : ''].filter(x => x).join('<br>') : '';
+  const pr = D.programme ? 'ok:' + D.programme : 'non';
+  if (g('d-prog').dataset.vu !== pr) {
+    g('d-prog').dataset.vu = pr;
+    g('d-prog').innerHTML = D.programme ? 'LongMynd : ' + esc(D.programme) :
+      'LongMynd introuvable : le compiler (BATC, github.com/BritishAmateurTelevisionClub/longmynd), puis donner ici son chemin :' +
+      '<div class="ligne"><input id="d-chemin" placeholder="/home/…/longmynd/longmynd"><button onclick="dPost(\'chemin?p=\' + enc(v(\'d-chemin\')))">Utiliser</button></div>';
+  }
+  // The video: asked once the stream runs, dropped when it stops.
+  const v = g('d-video');
+  if (D.actif && D.images && v.style.display !== 'block') { v.src = '/api/datv/video.mjpeg?t=' + Date.now(); v.style.display = 'block'; g('d-vide').hidden = true; }
+  if (!D.actif && v.style.display === 'block') { v.removeAttribute('src'); v.style.display = 'none'; }
+  if (v.style.display !== 'block') { g('d-vide').hidden = false; g('d-vide').textContent = !D.actif ? 'Réception arrêtée' : (D.verrouille ? 'accroché, en attente des images…' : D.libelle + '…'); }
+  dessineConstellation();
+}
+function dessineConstellation() {
+  const c = g('d-const'), x = c.getContext('2d'), w = c.width;
+  x.fillStyle = '#0E1720'; x.fillRect(0, 0, w, w);
+  x.strokeStyle = '#22303B'; x.beginPath(); x.moveTo(w / 2, 0); x.lineTo(w / 2, w); x.moveTo(0, w / 2); x.lineTo(w, w / 2); x.stroke();
+  if (!D || !D.points) return;
+  x.fillStyle = D.verrouille ? 'rgba(63,224,200,.85)' : 'rgba(255,180,84,.7)';
+  D.points.forEach(p => x.fillRect(w / 2 + p[0] * w / 256 - 1, w / 2 - p[1] * w / 256 - 1, 2.5, 2.5));
+}
+setInterval(() => ticDatv(), 500);
+function dParams() {
+  return 'ciel=' + enc(v('d-ciel').replace(',', '.')) + '&sr=' + dSr + '&ol=' + enc(v('d-ol').replace(',', '.')) + '&entree=' + g('d-entree').value +
+    '&lnb=' + g('d-lnb').value + '&son=' + (g('d-son').checked ? 1 : 0);
+}
+async function dDemarre() { txt('d-msg', 'démarrage de LongMynd…'); const j = await dPost('demarre?' + dParams()); if (j && j.ok !== false) txt('d-msg', ''); }
+async function dPost(q) {
+  let j = null;
+  try { j = await (await fetch('/api/datv/' + q, { method: 'POST' })).json(); } catch (x) {}
+  if (j && j.ok === false && j.erreur) txt('d-msg', j.erreur);
+  setTimeout(ticDatv, 200); return j;
+}
+function dBalise() { g('d-ciel').value = mhz3(D ? D.balise : 10491500); dSr = 1500; ticDatv(); }
+async function dCale() { const j = await dPost('cale'); if (j && j.ok) { txt('d-msg', 'oscillateur corrigé de ' + (-j.ecart) + ' kHz'); setTimeout(() => ticDatv(true), 600); } }
+async function dEnregistre() { await dPost('enregistre?on=' + (D && D.enregistrement ? 0 : 1)); }
+function dLnb() { g('d-lnb-avert').hidden = !g('d-lnb').value; }
+
 // ------------------------------------------------------------------ orbital elements
 let SRC = null;
 async function chargeSources() {
@@ -2816,7 +2934,7 @@ setInterval(ticSon, 1000);
 
 lienRotor(); avertCat();
 // The tab from the address (#carnet, a bookmark), else the last one seen.
-if (['station', 'carnet', 'agenda', 'carres', 'frise', 'sked', 'qo100', 'sdr', 'sondes', 'meteor', 'son', 'sstv', 'aprs', 'ft8', 'reglages'].includes(location.hash.slice(1))) vue(location.hash.slice(1));
+if (['station', 'carnet', 'agenda', 'carres', 'frise', 'sked', 'qo100', 'datv', 'sdr', 'sondes', 'meteor', 'son', 'sstv', 'aprs', 'ft8', 'reglages'].includes(location.hash.slice(1))) vue(location.hash.slice(1));
 else try { const n = localStorage.getItem('vue'); if (n) vue(n); } catch (x) {}
 tic(); chargeListe(); chargePorts(); chargeSatellites();
 setInterval(chargeSatellites, 600000);
