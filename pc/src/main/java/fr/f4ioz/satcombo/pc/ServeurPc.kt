@@ -164,6 +164,16 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                     .put("profils", JSONArray(l.map { JSONObject().put("id", it.id).put("carre", it.carre).put("indicatif", it.indicatif).put("nom", it.nom) })).toString().toByteArray())
             }
             "/api/carres" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JsonPc.carres(carnet, station).toString().toByteArray())
+            "/api/carnet/propositions" -> {
+                val saisie = q["c"].orEmpty()
+                val o = carnet?.let { c ->
+                    val (etat, l) = c.propositions(saisie)
+                    JSONObject().put("etat", etat.name).put("propositions", JSONArray(l.map { k ->
+                        JSONObject().put("c", k.indicatif).put("nm", k.nom).put("n", k.contacts).put("sat", k.dernierSat)
+                            .put("l", fr.f4ioz.satcombo.domain.Indicatifs.locatorPropose(k, k.indicatif)) }))
+                } ?: JSONObject().put("etat", "VIDE").put("propositions", JSONArray())
+                envoie(sortie, "200 OK", "application/json; charset=utf-8", o.toString().toByteArray())
+            }
             "/api/carnet" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JsonPc.carnet(carnet).toString().toByteArray())
             "/api/reglages" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JsonPc.reglages(station).toString().toByteArray())
             "/api/qrz" -> {
@@ -719,6 +729,9 @@ object JsonPc {
         .put("amsat", st?.statutAmsat(p.satName)?.recent?.name ?: "")
         .put("nom", p.satName).put("catnum", p.catalogNumber).put("aos", p.aosEpochMs).put("los", p.losEpochMs)
         .put("elMax", p.maxElevationDeg).put("azAos", p.aosAzimuthDeg).put("azLos", p.losAzimuthDeg)
+        // Its arc in the sky (az, el), lightened to some twenty points: the small plot beside it.
+        .put("trace", JSONArray(p.track.let { t -> val pas = maxOf(1, t.size / 20); t.filterIndexed { i, _ -> i % pas == 0 || i == t.size - 1 } }
+            .map { (az, el) -> JSONArray(listOf(Math.round(az), Math.round(el * 10) / 10.0)) }))
 
     fun passages(st: StationPc): JSONObject {
         val e = st.etat.value

@@ -34,6 +34,34 @@ class CarnetPc(private val station: StationPc, val store: LogStore, private val 
 
     fun contacts(): List<LogEntry> = store.load().sortedByDescending { it.timeMs }
 
+    // ------------------------------------------------------------ the callsigns known
+
+    /** What the log knows of each station (the phone's memory), kept a few seconds: asked at every key. */
+    @Volatile private var memoire: Pair<Long, List<fr.f4ioz.satcombo.domain.Indicatifs.Connu>>? = null
+
+    fun memoire(): List<fr.f4ioz.satcombo.domain.Indicatifs.Connu> {
+        memoire?.takeIf { horloge() - it.first < 5_000L }?.let { return it.second }
+        val m = fr.f4ioz.satcombo.domain.Indicatifs.memoire(store.load().filter { it.callsign.isNotBlank() }.map {
+            fr.f4ioz.satcombo.domain.Indicatifs.Contact(indicatif = it.callsign, locator = it.theirLocator, quandMs = it.timeMs,
+                satellite = it.satName, nom = it.nom)
+        })
+        memoire = horloge() to m
+        return m
+    }
+
+    /**
+     * For a callsign being typed: whether it was worked (or looks plausible,
+     * or unusual), and the stations it may be, as the phone ranks them —
+     * contacts, how recent, the same satellite first during a pass.
+     */
+    fun propositions(saisie: String): Pair<fr.f4ioz.satcombo.domain.Indicatifs.Etat, List<fr.f4ioz.satcombo.domain.Indicatifs.Connu>> {
+        val m = memoire()
+        return fr.f4ioz.satcombo.domain.Indicatifs.etat(saisie, m) to
+            fr.f4ioz.satcombo.domain.Indicatifs.suggestions(saisie, m, horloge(), station.etat.value.suivi?.name.orEmpty(), max = 4)
+    }
+
+    private fun oublieMemoire() { memoire = null }
+
     /** A new contact, now; null without a callsign or a satellite. */
     fun ajoute(indicatif: String, locator: String, rstEnvoye: String, rstRecu: String, note: String = "",
                fiche: QrzReponse.Fiche? = null): LogEntry? {
@@ -59,11 +87,12 @@ class CarnetPc(private val station: StationPc, val store: LogStore, private val 
             nom = passes.firstOrNull { it.nom.isNotBlank() }?.nom ?: fiche?.nom.orEmpty(),
             qth = passes.firstOrNull { it.qth.isNotBlank() }?.qth ?: fiche?.qth.orEmpty(),
             courriel = fiche?.courriel.orEmpty())
-        store.add(c)
+        store.add(c); oublieMemoire()
         return c
     }
 
     fun modifie(timeMs: Long, m: LogEntry) {
+        oublieMemoire()
         store.update(timeMs) {
             it.copy(callsign = m.callsign.trim().uppercase(), theirLocator = m.theirLocator.trim().uppercase(),
                 note = m.note.trim(), mode = m.mode.trim(), rstSent = m.rstSent.trim(), rstRcvd = m.rstRcvd.trim(),
@@ -72,7 +101,7 @@ class CarnetPc(private val station: StationPc, val store: LogStore, private val 
         }
     }
 
-    fun supprime(timeMs: Long) { store.delete(timeMs) }
+    fun supprime(timeMs: Long) { store.delete(timeMs); oublieMemoire() }
 
     fun adif(): String = store.toAdif(station.settings.callsign)
 

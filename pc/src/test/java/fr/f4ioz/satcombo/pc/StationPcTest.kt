@@ -134,6 +134,22 @@ class StationPcTest {
         assertTrue(carnet.adif().contains("<CALL:7>F5XYZ/P"))
         carnet.supprime(e.timeMs)
         assertTrue(carnet.contacts().isEmpty())
+        // As typed: the stations it may be, the most worked first, with their square and name.
+        // (A contact is known by its time: the clock moves between them.)
+        var t = milieu
+        val c2 = CarnetPc(st, fr.f4ioz.satcombo.data.LogStore(File(dossier, "qso_log2.json")), horloge = { t })
+        repeat(3) { c2.ajoute("F4ABC", "JN18", "59", "59")!!; t += 60_000 }
+        val d = c2.ajoute("F4ABD", "IN88", "59", "59")!!
+        c2.modifie(d.timeMs, d.copy(nom = "Paul"))
+        val (etat, l) = c2.propositions("F4AB")
+        assertEquals(listOf("F4ABC", "F4ABD"), l.map { it.indicatif })
+        assertEquals(3, l[0].contacts)
+        assertEquals("JN18", l[0].locatorPrincipal)
+        assertEquals("Paul", l[1].nom)
+        assertEquals(fr.f4ioz.satcombo.domain.Indicatifs.Etat.PLAUSIBLE, etat)
+        assertEquals(fr.f4ioz.satcombo.domain.Indicatifs.Etat.DEJA_CONTACTE, c2.propositions("F4ABC/P").first)
+        // Nothing under two characters.
+        assertTrue(c2.propositions("F").second.isEmpty())
     }
 
     @Test

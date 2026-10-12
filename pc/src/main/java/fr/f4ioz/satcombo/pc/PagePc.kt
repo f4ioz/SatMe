@@ -57,6 +57,11 @@ object PagePc {
   tr.p { cursor:pointer; } tr.p:hover { background:#18242E; }
   tr.encours td { color:var(--vert); font-weight:700; }
   tr.choisi td:first-child { box-shadow:inset 3px 0 0 var(--cyan); }
+  td.rosace { padding:2px 4px; width:1px; }
+  .c-props { display:flex; gap:6px; margin-top:6px; min-height:44px; }
+  .c-props button { flex:1; min-width:0; padding:4px 6px; background:rgba(63,224,200,.15); border-color:rgba(63,224,200,.35); text-align:center; }
+  .c-props b { display:block; font-family:ui-monospace,Consolas,monospace; font-size:15px; }
+  .c-props span { display:block; font-size:11px; color:var(--gris); font-weight:400; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   #liste { max-height:calc(100vh - 190px); overflow:auto; }
   svg text { font-family:system-ui,sans-serif; }
   .etat { margin-top:6px; font-size:13px; min-height:18px; color:var(--gris); }
@@ -170,7 +175,7 @@ object PagePc {
       <div class="ligne"><label class="petit"><input type="checkbox" id="f-fav"> ★ favoris seulement</label>
         <label class="petit"><input type="checkbox" id="f-actifs"> entendus ces jours-ci (AMSAT)</label></div>
       <div class="etat" id="calcul"></div>
-      <div id="liste"><table><thead><tr><th></th><th></th><th>Début</th><th>Satellite</th><th>El max</th><th>Durée</th><th></th></tr></thead><tbody id="passages"></tbody></table></div>
+      <div id="liste"><table><thead><tr><th></th><th></th><th></th><th>Début</th><th>Satellite</th><th>El max</th><th>Durée</th><th></th></tr></thead><tbody id="passages"></tbody></table></div>
     </div>
   </div>
 
@@ -316,6 +321,7 @@ object PagePc {
     <div class="carte">
       <div class="t">Nouveau contact <span class="petit" id="c-sat"></span></div>
       <input id="c-call" placeholder="INDICATIF" autocomplete="off" style="width:100%;font-size:26px;font-weight:800;letter-spacing:3px;text-transform:uppercase">
+      <div id="c-props" class="c-props"></div>
       <div id="c-qui" class="petit" style="min-height:20px;margin-top:4px"></div>
       <div class="ligne">
         <input id="c-loc" placeholder="Carré" style="text-transform:uppercase;max-width:120px">
@@ -876,13 +882,13 @@ function dessinePassages() {
     const enCours = n >= p.aos && n <= p.los;
     const cl = 'p' + (enCours ? ' encours' : '') + (p.catnum === suivi ? ' choisi' : '');
     const quand = enCours ? 'en cours' : 'dans ' + duree(p.aos - n);
-    return '<tr class="' + cl + '" onclick="suivre(' + p.catnum + ')">' + celluleAgenda(p) + '<td><span title="Favori" style="cursor:pointer;color:' + (p.fav ? 'var(--ambre)' : 'var(--bord)') +
+    return '<tr class="' + cl + '" onclick="suivre(' + p.catnum + ')">' + celluleAgenda(p) + '<td class="rosace">' + rosace(p.trace, p.elMax, 30) + '</td><td><span title="Favori" style="cursor:pointer;color:' + (p.fav ? 'var(--ambre)' : 'var(--bord)') +
       '" onclick="favori(' + p.catnum + ',' + !p.fav + ',event)">★</span></td><td>' + hm(p.aos) + '</td><td>' +
       (a ? '<span title="AMSAT : ' + a[1] + '" style="display:inline-block;width:8px;height:8px;border-radius:4px;margin-right:6px;background:' + a[0] + '"></span>' : '') +
       p.nom.replace(/</g, '&lt;') +
       '</td><td>' + Math.round(p.elMax) + '°</td><td>' + duree(p.los - p.aos) + '</td><td class="petit">' + quand + '</td></tr>';
   });
-  g('passages').innerHTML = lignes.join('') || '<tr><td colspan="7" class="petit">' + (E && E.locator ? 'aucun passage' : 'renseigne ton locator') + '</td></tr>';
+  g('passages').innerHTML = lignes.join('') || '<tr><td colspan="8" class="petit">' + (E && E.locator ? 'aucun passage' : 'renseigne ton locator') + '</td></tr>';
 }
 async function suivre(n) { await post('/api/suivre?catnum=' + n); }
 let tous = [];
@@ -902,6 +908,29 @@ function choisitParNom() {
 g('cherche').addEventListener('keydown', e => { if (e.key === 'Enter') choisitParNom(); });
 async function repos(d) { await post('/api/repos?d=' + d); }
 
+/**
+ * A pass's arc in the sky, small, as beside each pass on the phone: zenith in
+ * the middle, the horizon round it, 30° and 60° rings, north up; the arc in
+ * the colour of its height (cyan from 50°, green from 25°), its AOS dot and
+ * an arrow at its middle for the way it goes.
+ */
+function rosace(t, elMax, px) {
+  if (!t || t.length < 2) return '';
+  const c = elMax >= 50 ? '#3FE0C8' : elMax >= 25 ? '#5BD68A' : '#9AA7B4';
+  const xy = (az, el) => { const r = 46 * (1 - Math.max(0, Math.min(90, el)) / 90), a = az * Math.PI / 180; return [50 + r * Math.sin(a), 50 - r * Math.cos(a)]; };
+  const pts = t.map(p => xy(p[0], p[1]));
+  const m = Math.max(1, Math.floor(pts.length / 2)), A = pts[m - 1], B = pts[m];
+  const ang = Math.atan2(B[1] - A[1], B[0] - A[0]), s = 9;
+  const pt = (a, d) => (B[0] + d * Math.cos(a)).toFixed(1) + ',' + (B[1] + d * Math.sin(a)).toFixed(1);
+  return '<svg viewBox="0 0 100 100" width="' + px + '" height="' + px + '" style="display:block">' +
+    '<circle cx="50" cy="50" r="46" fill="#101824" stroke="#2A3647" stroke-width="3"/>' +
+    '<circle cx="50" cy="50" r="30.7" fill="none" stroke="#2A3647" stroke-width="1.5" opacity=".6"/>' +
+    '<circle cx="50" cy="50" r="15.3" fill="none" stroke="#2A3647" stroke-width="1.5" opacity=".6"/>' +
+    '<line x1="50" y1="4" x2="50" y2="14" stroke="#2A3647" stroke-width="3"/>' +
+    '<polyline fill="none" stroke="' + c + '" stroke-width="5" stroke-linejoin="round" stroke-linecap="round" points="' + pts.map(p => p[0].toFixed(1) + ',' + p[1].toFixed(1)).join(' ') + '"/>' +
+    '<circle cx="' + pts[0][0].toFixed(1) + '" cy="' + pts[0][1].toFixed(1) + '" r="6" fill="' + c + '"/>' +
+    '<polygon points="' + pt(ang, s) + ' ' + pt(ang + 2.5, s) + ' ' + pt(ang - 2.5, s) + '" fill="' + c + '" stroke="#fff" stroke-opacity=".5" stroke-width="1.5"/></svg>';
+}
 function polaire(az, el) {
   const r = 100 * (1 - Math.max(0, Math.min(90, el)) / 90);
   const a = az * Math.PI / 180;
@@ -979,7 +1008,7 @@ function dessine() {
   const sv = JSON.stringify(E.passagesSuivi.map(p => [p.aos, p.agenda]));
   if (sv !== g('suivants').dataset.vu) {
     g('suivants').dataset.vu = sv;
-    g('suivants').innerHTML = E.passagesSuivi.map(p => '<tr>' + celluleAgenda(p) + '<td>' + jourHeure(p.aos) + '</td><td>' + Math.round(p.elMax) + '°</td><td>' +
+    g('suivants').innerHTML = E.passagesSuivi.map(p => '<tr>' + celluleAgenda(p) + '<td class="rosace">' + rosace(p.trace, p.elMax, 40) + '</td><td>' + jourHeure(p.aos) + '</td><td>' + Math.round(p.elMax) + '°</td><td>' +
       duree(p.los - p.aos) + '</td><td class="petit">' + Math.round(p.azAos) + '° → ' + Math.round(p.azLos) + '°</td></tr>').join('');
   }
   dessineAgenda();
@@ -1140,6 +1169,35 @@ function dessineCarnet() {
 }
 g('c-filtre').oninput = dessineCarnet;
 // QRZ after 0.6 s without a key, as on the phone and the desk: a callsign the log does not know by name.
+// The stations it may be, as typed (the phone's prediction: the log's contacts, how recent, the same
+// satellite first), and the field's edge in the colour of what is typed: worked before, plausible, unusual.
+let propositions = [], minuteurProps = null;
+const COUL_ETAT = { DEJA_CONTACTE: 'var(--vert)', PLAUSIBLE: 'var(--cyan)', INHABITUEL: 'var(--ambre)', VIDE: '' };
+function proposeIndicatifs() {
+  clearTimeout(minuteurProps);
+  minuteurProps = setTimeout(async () => {
+    const saisie = v('c-call');
+    let j = null;
+    try { j = await (await fetch('/api/carnet/propositions?c=' + enc(saisie))).json(); } catch (x) { return; }
+    if (v('c-call') !== saisie) return;
+    propositions = j.propositions.filter(p => p.c !== saisie.toUpperCase());
+    g('c-call').style.borderColor = COUL_ETAT[j.etat] || '';
+    g('c-call').title = { DEJA_CONTACTE: 'déjà contacté', PLAUSIBLE: 'indicatif plausible', INHABITUEL: 'indicatif inhabituel (rien n’empêche de l’enregistrer)' }[j.etat] || '';
+    g('c-props').innerHTML = propositions.map((p, i) => '<button tabindex="-1" onclick="prendProposition(' + i + ')" title="' + esc(p.c) + (p.sat ? ' · dernier contact sur ' + esc(p.sat) : '') + '"><b>' + esc(p.c) + '</b><span>' +
+      [p.nm ? esc(p.nm.split(' ')[0]) : '', esc(p.l), '×' + p.n].filter(x => x).join(' · ') + '</span></button>').join('');
+  }, 120);
+}
+function prendProposition(i) {
+  const p = propositions[i]; if (!p) return;
+  g('c-call').value = p.c;
+  if (p.l) g('c-loc').value = p.l;
+  g('c-props').innerHTML = ''; propositions = [];
+  g('c-call').dispatchEvent(new Event('input'));
+  g('c-rs').focus();
+}
+// Tab takes the first one, as the phone's first key.
+g('c-call').addEventListener('keydown', e => { if (e.key === 'Tab' && propositions.length && !e.shiftKey) { e.preventDefault(); prendProposition(0); } });
+g('c-call').addEventListener('input', proposeIndicatifs);
 g('c-call').addEventListener('input', () => {
   clearTimeout(minuteurQrz);
   const c = base(v('c-call'));
@@ -1170,7 +1228,7 @@ async function enregistreContact() {
   if (j && j.ok) {
     txt('c-etat', c.toUpperCase() + ' enregistré');
     ['c-call', 'c-loc', 'c-note'].forEach(i => g(i).value = ''); g('c-rs').value = '59'; g('c-rr').value = '59';
-    txt('c-qui', ''); quiPour = ''; g('c-call').focus(); chargeCarnet();
+    txt('c-qui', ''); quiPour = ''; g('c-props').innerHTML = ''; propositions = []; g('c-call').style.borderColor = ''; g('c-call').focus(); chargeCarnet();
   }
 }
 function edite(t) {
