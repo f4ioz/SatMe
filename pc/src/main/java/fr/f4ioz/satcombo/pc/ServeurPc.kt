@@ -93,6 +93,12 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
             "/api/passages" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JsonPc.passages(station).toString().toByteArray())
             "/api/satellites" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JsonPc.satellites(station).toString().toByteArray())
             "/api/ports" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JsonPc.ports(station).toString().toByteArray())
+            "/api/trace" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JSONObject()
+                .put("catnum", station.etat.value.suivi?.catalogNumber ?: 0)
+                // The track starts an eighth of an orbit ago: the point for now is the 20th of 160.
+                .put("ici", 20)
+                .put("points", JSONArray(station.traceAuSol().map { (la, lo) -> JSONArray(listOf(Math.round(la * 100) / 100.0, Math.round(lo * 100) / 100.0)) }))
+                .toString().toByteArray())
             "/api/frise" -> {
                 val (debut, lignes) = kotlinx.coroutines.runBlocking { station.frise((q["h"]?.toIntOrNull() ?: 12).coerceIn(2, 48)) }
                 envoie(sortie, "200 OK", "application/json; charset=utf-8", JSONObject().put("debut", debut)
@@ -369,6 +375,7 @@ object JsonPc {
         val o = JSONObject()
             .put("maintenant", e.maintenant)
             .put("locator", e.locator).put("indicatif", e.indicatif)
+            .put("observateur", e.observateur?.let { JSONObject().put("lat", it.latDeg).put("lon", it.lonDeg) } ?: JSONObject.NULL)
             .put("catalogue", e.catalogue).put("nbSatellites", e.satellites.size)
             .put("calcul", e.calculEnCours)
         e.suivi?.let { s -> o.put("suivi", JSONObject().put("nom", s.name).put("catnum", s.catalogNumber)

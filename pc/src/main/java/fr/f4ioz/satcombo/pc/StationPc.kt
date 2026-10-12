@@ -398,6 +398,16 @@ class StationPc(
         }
     }
 
+    /**
+     * The followed satellite's ground track over about one orbit, from an
+     * eighth of it ago (as the phone's map): (lat, lon) points; empty for a
+     * satellite too high for it to mean anything.
+     */
+    fun traceAuSol(): List<Pair<Double, Double>> {
+        val sat = _etat.value.suivi ?: return emptyList()
+        return runCatching { predicteur.groundTrack(sat, horloge(), 160) }.getOrDefault(emptyList())
+    }
+
     // ---------------------------------------------------------------- skeds
 
     /** A window both stations see the satellite: when, and how high for each. */

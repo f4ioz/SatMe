@@ -120,8 +120,9 @@ object PagePc {
         <span>El <span class="val cyan" id="el">—</span></span>
         <span class="petit" id="dist"></span>
       </div>
-      <svg id="ciel" viewBox="-110 -110 220 220" style="width:100%;max-width:460px;display:block;margin:10px auto 0" role="img" aria-label="Le ciel : passage et position du satellite"></svg>
+      <svg id="ciel" viewBox="-110 -110 220 220" style="width:100%;max-width:380px;display:block;margin:10px auto 0" role="img" aria-label="Le ciel : passage et position du satellite"></svg>
       <div class="petit" id="infos-passage" style="text-align:center"></div>
+      <canvas id="s-carte" style="width:100%;height:280px;display:block;margin-top:12px;border-radius:8px;cursor:grab;touch-action:none" title="Glisser pour déplacer, molette pour zoomer, double-clic pour revoir le monde"></canvas>
       <div class="t" style="margin-top:12px">Ses prochains passages</div>
       <table><tbody id="suivants"></tbody></table>
     </div>
@@ -674,6 +675,7 @@ function dessine() {
     txt('infos-passage', 'AOS ' + hm(pa.aos) + ' (' + Math.round(pa.azAos) + '°) · El max ' + Math.round(pa.elMax) + '° · LOS ' + hm(pa.los) + ' (' + Math.round(pa.azLos) + '°)');
   } else { txt('compte', ''); txt('infos-passage', ''); }
   dessineCiel();
+  dessineCarteStation();
   // Transmitters: the list rebuilt only when it changes (an open select would close).
   const cle = JSON.stringify(E.emetteurs.map(t => t.desc)) + (E.suivi ? E.suivi.catnum : '');
   if (cle !== dernierEmetteurs) {
@@ -1072,7 +1074,7 @@ function centreSur(k) { const [lo, la] = coin(k); qcx = wxq(lo + 1); qcy = wyq(l
 function qTuile(z, x, y) {
   const n = 1 << z, xw = ((x % n) + n) % n, k = z + '/' + xw + '/' + y;
   let i = qTuiles.get(k);
-  if (!i) { i = new Image(); i.onload = () => { dessineCarres(); dessineSked(); }; i.src = '/journal/tuile?z=' + z + '&x=' + xw + '&y=' + y; qTuiles.set(k, i);
+  if (!i) { i = new Image(); i.onload = () => { dessineCarres(); dessineSked(); dessineCarteStation(); }; i.src = '/journal/tuile?z=' + z + '&x=' + xw + '&y=' + y; qTuiles.set(k, i);
     if (qTuiles.size > 500) qTuiles.delete(qTuiles.keys().next().value); }
   return i.complete && i.naturalWidth ? i : null;
 }
@@ -1204,7 +1206,7 @@ async function calculeSked() {
   if (K.length) rejoueSked(0); else { g('k-anim').hidden = true; KT = null; }
 }
 // The sked replayed: both skies and the map, as on the phone.
-let KT = null, kF = 0, kJoue = false, kAvant = 0, kz = 3, kcx = 0.5, kcy = 0.35;
+let KT = null, kF = 0, kJoue = false, kAvant = 0;
 const K_DUREE = 15000;   // one full replay, ms
 async function rejoueSked(i) {
   const w = K[i];
@@ -1264,14 +1266,61 @@ function cielSked(id, iAz, iEl, cour) {
   g(id).innerHTML = s;
 }
 function wxk(lon) { return (lon + 180) / 360; }
+/** OpenStreetMap under canvas [c] for view [v] ({cx, cy, z}): the tiles drawn; the context and projections handed back. */
+function fondCarte(c, v) {
+  const w = c.clientWidth, h = c.clientHeight, dpr = window.devicePixelRatio || 1;
+  if (c.width !== Math.round(w * dpr) || c.height !== Math.round(h * dpr)) { c.width = Math.round(w * dpr); c.height = Math.round(h * dpr); }
+  const x = c.getContext('2d'); x.setTransform(dpr, 0, 0, dpr, 0, 0);
+  x.fillStyle = '#AAD3DF'; x.fillRect(0, 0, w, h);
+  const z = Math.max(0, Math.min(16, Math.floor(v.z))), ts = 256 * Math.pow(2, v.z - z), s = 256 * Math.pow(2, v.z);
+  const n = 1 << z, ox = w / 2 - v.cx * s, oy = h / 2 - v.cy * s;
+  for (let ty = Math.max(0, Math.floor(-oy / ts)); ty <= Math.min(n - 1, Math.floor((h - oy) / ts)); ty++)
+    for (let tx = Math.floor(-ox / ts); tx <= Math.floor((w - ox) / ts); tx++) { const i = qTuile(z, tx, ty); if (i) x.drawImage(i, ox + tx * ts, oy + ty * ts, ts + 0.5, ts + 0.5); }
+  return { x, w, h, px: lon => ox + wxk(lon) * s, py: lat => oy + wyq(lat) * s };
+}
+/** Drag, wheel and double-click on a map canvas. */
+function attacheCarte(c, v, redessine, recadre, zMin) {
+  let pres = null;
+  c.addEventListener('pointerdown', ev => { c.setPointerCapture(ev.pointerId); pres = { x: ev.clientX, y: ev.clientY, cx: v.cx, cy: v.cy }; c.style.cursor = 'grabbing'; });
+  c.addEventListener('pointermove', ev => { if (!pres) return; const s = 256 * Math.pow(2, v.z);
+    v.cx = pres.cx - (ev.clientX - pres.x) / s; v.cy = Math.max(0, Math.min(1, pres.cy - (ev.clientY - pres.y) / s)); v.libre = true; redessine(); });
+  c.addEventListener('pointerup', () => { pres = null; c.style.cursor = 'grab'; });
+  c.addEventListener('wheel', ev => { ev.preventDefault(); const r = c.getBoundingClientRect(), s = 256 * Math.pow(2, v.z);
+    const mx = v.cx + (ev.clientX - r.left - r.width / 2) / s, my = v.cy + (ev.clientY - r.top - r.height / 2) / s;
+    v.z = Math.max(zMin || 0, Math.min(12, v.z + (ev.deltaY > 0 ? -0.35 : 0.35))); const s2 = 256 * Math.pow(2, v.z);
+    v.cx = mx - (ev.clientX - r.left - r.width / 2) / s2; v.cy = my - (ev.clientY - r.top - r.height / 2) / s2; v.libre = true; redessine(); }, { passive: false });
+  c.addEventListener('dblclick', () => { v.libre = false; recadre(); redessine(); });
+  window.addEventListener('resize', redessine);
+}
+/** The earth that sees a satellite at [alt] km over [lat, lon], shaded, a turn each side too. */
+function empreinte(m, lat, lon, alt) {
+  const fp = cercle(lat, lon, Math.acos(6371 / (6371 + Math.max(150, alt)))), bord = fp.slice(0, 91), x = m.x;
+  for (const d of [-360, 0, 360]) {
+    x.fillStyle = 'rgba(63,224,200,.16)'; x.beginPath(); fp.forEach((p, k) => k ? x.lineTo(m.px(p[1] + d), m.py(p[0])) : x.moveTo(m.px(p[1] + d), m.py(p[0]))); x.closePath(); x.fill();
+    traceCarte(m, bord.map(p => [p[0], p[1] + d]), 'rgba(20,120,110,.8)', 1.2);
+  }
+}
+function traceCarte(m, l, couleur, larg, tirets) {
+  if (l.length < 2) return; const x = m.x;
+  x.strokeStyle = couleur; x.lineWidth = larg; x.setLineDash(tirets || []);
+  x.beginPath(); l.forEach((p, k) => k ? x.lineTo(m.px(p[1]), m.py(p[0])) : x.moveTo(m.px(p[1]), m.py(p[0]))); x.stroke(); x.setLineDash([]);
+}
+function pointCarte(m, lat, lon, couleur, r, nom) {
+  const x = m.x;
+  x.fillStyle = couleur; x.strokeStyle = '#06131A'; x.lineWidth = 1.5; x.beginPath(); x.arc(m.px(lon), m.py(lat), r, 0, 7); x.fill(); x.stroke();
+  if (!nom) return;
+  x.font = 'bold 12px system-ui'; x.textAlign = 'left'; x.lineWidth = 3; x.strokeStyle = 'rgba(255,255,255,.85)';
+  x.strokeText(nom, m.px(lon) + r + 3, m.py(lat) - 5); x.fillStyle = '#06131A'; x.fillText(nom, m.px(lon) + r + 3, m.py(lat) - 5);
+}
+const KV = { cx: 0.5, cy: 0.35, z: 3 };
 function cadreSked() {
   const c = g('k-carte'); if (!c.clientWidth || !KT) return;
   const pts = KT.points.filter(p => p[2] >= 0 || p[4] >= 0).map(p => [p[5], p[6]]);
   pts.push([KT.moi.lat, KT.moi.lon], [KT.autre.lat, KT.autre.lon]);
   const xs = pts.map(p => wxk(p[1])), ys = pts.map(p => wyq(p[0]));
   const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
-  kcx = (x0 + x1) / 2; kcy = (y0 + y1) / 2;
-  kz = Math.max(1, Math.min(8, Math.log2(Math.min(c.clientWidth / 256 / Math.max(x1 - x0, 0.005), c.clientHeight / 256 / Math.max(y1 - y0, 0.005)) * 0.8)));
+  KV.cx = (x0 + x1) / 2; KV.cy = (y0 + y1) / 2;
+  KV.z = Math.max(1, Math.min(8, Math.log2(Math.min(c.clientWidth / 256 / Math.max(x1 - x0, 0.005), c.clientHeight / 256 / Math.max(y1 - y0, 0.005)) * 0.8)));
 }
 /** The points [lat, lon] at an angular radius [rho] (rad) around [lat0, lon0]: the footprint. */
 function cercle(lat0, lon0, rho) {
@@ -1299,59 +1348,67 @@ function dessineSked() {
   g('k-ensemble').innerHTML = moi && lui ? '<b style="color:#5BD68A">vous le voyez tous deux</b>' : moi ? 'vous seul le voyez' : lui ? KT.loc + ' seul le voit' : 'personne ne le voit';
   cielSked('k-cmoi', 1, 2, cour); cielSked('k-clui', 3, 4, cour);
   // The map.
-  const c = g('k-carte');
-  const w = c.clientWidth, h = c.clientHeight, dpr = window.devicePixelRatio || 1;
-  if (c.width !== Math.round(w * dpr) || c.height !== Math.round(h * dpr)) { c.width = Math.round(w * dpr); c.height = Math.round(h * dpr); }
-  const x = c.getContext('2d'); x.setTransform(dpr, 0, 0, dpr, 0, 0);
-  x.fillStyle = '#AAD3DF'; x.fillRect(0, 0, w, h);
-  const z = Math.max(0, Math.min(16, Math.floor(kz))), ts = 256 * Math.pow(2, kz - z), s = 256 * Math.pow(2, kz);
-  const n = 1 << z, ox = w / 2 - kcx * s, oy = h / 2 - kcy * s;
-  for (let ty = Math.max(0, Math.floor(-oy / ts)); ty <= Math.min(n - 1, Math.floor((h - oy) / ts)); ty++)
-    for (let tx = Math.floor(-ox / ts); tx <= Math.floor((w - ox) / ts); tx++) { const i = qTuile(z, tx, ty); if (i) x.drawImage(i, ox + tx * ts, oy + ty * ts, ts + 0.5, ts + 0.5); }
-  const px = lon => ox + wxk(lon) * s, py = lat => oy + wyq(lat) * s;
-  const trace = (l, couleur, larg, tirets) => { if (l.length < 2) return; x.strokeStyle = couleur; x.lineWidth = larg; x.setLineDash(tirets || []);
-    x.beginPath(); l.forEach((p, k) => k ? x.lineTo(px(p[1]), py(p[0])) : x.moveTo(px(p[1]), py(p[0]))); x.stroke(); x.setLineDash([]); };
-  // The footprint: where the earth sees the satellite now.
-  const rho = Math.acos(6371 / (6371 + Math.max(150, cour[7])));
-  const fp = cercle(cour[5], cour[6], rho), bord = fp.slice(0, 91);
-  // Drawn once more a turn on each side: around a pole it spans the whole map.
-  for (const d of [-360, 0, 360]) {
-    x.fillStyle = 'rgba(63,224,200,.16)'; x.beginPath(); fp.forEach((p, k) => k ? x.lineTo(px(p[1] + d), py(p[0])) : x.moveTo(px(p[1] + d), py(p[0]))); x.closePath(); x.fill();
-    trace(bord.map(p => [p[0], p[1] + d]), 'rgba(20,120,110,.8)', 1.2);
-  }
+  const m = fondCarte(g('k-carte'), KV), x = m.x;
+  empreinte(m, cour[5], cour[6], cour[7]);
   // The ground track, the common window in green, the part already flown darker.
   const P = KT.points.map(p => [p[5], p[6], p[0]]);
-  trace(P, 'rgba(30,40,55,.55)', 1.5, [5, 4]);
-  trace(P.filter(p => p[2] >= KT.w.de && p[2] <= KT.w.a), '#2E9E5B', 4);
-  trace(P.filter(p => p[2] <= cour[0]).concat([[cour[5], cour[6]]]), '#0B6E63', 2);
-  // Each station, its line to the satellite when it sees it.
+  traceCarte(m, P, 'rgba(30,40,55,.55)', 1.5, [5, 4]);
+  traceCarte(m, P.filter(p => p[2] >= KT.w.de && p[2] <= KT.w.a), '#2E9E5B', 4);
+  traceCarte(m, P.filter(p => p[2] <= cour[0]).concat([[cour[5], cour[6]]]), '#0B6E63', 2);
+  // Each station, its line to the satellite while it sees it.
   const station = (st, vu, couleur, nom) => {
-    if (vu) { x.strokeStyle = couleur; x.lineWidth = 1.5; x.beginPath(); x.moveTo(px(st.lon), py(st.lat)); x.lineTo(px(cour[6]), py(cour[5])); x.stroke(); }
-    x.fillStyle = couleur; x.strokeStyle = '#06131A'; x.lineWidth = 1.5; x.beginPath(); x.arc(px(st.lon), py(st.lat), 6, 0, 7); x.fill(); x.stroke();
-    x.font = 'bold 12px system-ui'; x.textAlign = 'left'; x.lineWidth = 3; x.strokeStyle = 'rgba(255,255,255,.85)';
-    x.strokeText(nom, px(st.lon) + 9, py(st.lat) + 4); x.fillStyle = '#06131A'; x.fillText(nom, px(st.lon) + 9, py(st.lat) + 4);
+    if (vu) { x.strokeStyle = couleur; x.lineWidth = 1.5; x.beginPath(); x.moveTo(m.px(st.lon), m.py(st.lat)); x.lineTo(m.px(cour[6]), m.py(cour[5])); x.stroke(); }
+    pointCarte(m, st.lat, st.lon, couleur, 6, nom);
   };
   station(KT.moi, moi, '#FFB454', E && E.indicatif ? E.indicatif : 'Moi');
   station(KT.autre, lui, '#E86FA8', KT.loc);
-  // The satellite.
-  x.fillStyle = moi && lui ? '#5BD68A' : '#3FE0C8'; x.strokeStyle = '#06131A'; x.lineWidth = 2;
-  x.beginPath(); x.arc(px(cour[6]), py(cour[5]), 7, 0, 7); x.fill(); x.stroke();
-  x.font = 'bold 12px system-ui'; x.lineWidth = 3; x.strokeStyle = 'rgba(255,255,255,.85)';
-  x.strokeText(KT.nom, px(cour[6]) + 10, py(cour[5]) - 8); x.fillStyle = '#06131A'; x.fillText(KT.nom, px(cour[6]) + 10, py(cour[5]) - 8);
+  pointCarte(m, cour[5], cour[6], moi && lui ? '#5BD68A' : '#3FE0C8', 7, KT.nom);
 }
-(function () {
-  const c = g('k-carte'); let pres = null;
-  c.addEventListener('pointerdown', ev => { c.setPointerCapture(ev.pointerId); pres = { x: ev.clientX, y: ev.clientY, cx: kcx, cy: kcy }; c.style.cursor = 'grabbing'; });
-  c.addEventListener('pointermove', ev => { if (!pres) return; const s = 256 * Math.pow(2, kz);
-    kcx = pres.cx - (ev.clientX - pres.x) / s; kcy = Math.max(0, Math.min(1, pres.cy - (ev.clientY - pres.y) / s)); dessineSked(); });
-  c.addEventListener('pointerup', () => { pres = null; c.style.cursor = 'grab'; });
-  c.addEventListener('wheel', ev => { ev.preventDefault(); const r = c.getBoundingClientRect(), s = 256 * Math.pow(2, kz);
-    const mx = kcx + (ev.clientX - r.left - r.width / 2) / s, my = kcy + (ev.clientY - r.top - r.height / 2) / s;
-    kz = Math.max(1, Math.min(12, kz + (ev.deltaY > 0 ? -0.35 : 0.35))); const s2 = 256 * Math.pow(2, kz);
-    kcx = mx - (ev.clientX - r.left - r.width / 2) / s2; kcy = my - (ev.clientY - r.top - r.height / 2) / s2; dessineSked(); }, { passive: false });
-  c.addEventListener('dblclick', () => { cadreSked(); dessineSked(); });
-  window.addEventListener('resize', dessineSked);
-})()
+attacheCarte(g('k-carte'), KV, dessineSked, cadreSked, 1);
+
+// ------------------------------------------------------------------ the followed satellite's map
+const SV = { cx: 0.5, cy: 0.4, z: 1, libre: false };
+let traceSol = null, traceVu = 0;
+async function chargeTraceSol() {
+  try { traceSol = await (await fetch('/api/trace')).json(); } catch (x) { return; }
+  // Continuous longitudes: a track over the date line stays one line.
+  let ref = null;
+  traceSol.points.forEach(p => { if (ref != null) { while (p[1] - ref > 180) p[1] -= 360; while (p[1] - ref < -180) p[1] += 360; } ref = p[1]; });
+  traceVu = Date.now();
+  dessineCarteStation();
+}
+function cadreStation() {
+  const c = g('s-carte'); if (!c.clientWidth) return;
+  // The whole world in width, the observer in the middle.
+  SV.z = Math.max(0, Math.log2(c.clientWidth / 256));
+  SV.cx = E && E.observateur ? wxk(E.observateur.lon) : 0.5;
+  SV.cy = Math.max(0.5 - (1 - c.clientHeight / (256 * Math.pow(2, SV.z))) / 2, Math.min(0.5, wyq(25)));
+}
+function dessineCarteStation() {
+  const c = g('s-carte'); if (!c || g('v-station').hidden || !c.clientWidth) return;
+  if (!SV.libre) cadreStation();
+  const m = fondCarte(c, SV), x = m.x, p = E && E.position;
+  const nous = E && E.observateur;
+  for (const d of [-360, 0, 360]) {
+    if (traceSol && E && E.suivi && traceSol.catnum === E.suivi.catnum && traceSol.points.length > 1) {
+      const t = traceSol.points.map(q => [q[0], q[1] + d]);
+      traceCarte(m, t, 'rgba(11,110,99,.9)', 2);
+      traceCarte(m, t.slice(0, traceSol.ici + 1), 'rgba(30,40,55,.45)', 2, [4, 4]);
+    }
+  }
+  if (p) {
+    empreinte(m, p.lat, p.lon, p.alt);
+    for (const d of [-360, 0, 360]) {
+      if (nous && p.el >= 0) { x.strokeStyle = '#FFB454'; x.lineWidth = 1.5; x.beginPath(); x.moveTo(m.px(nous.lon + d), m.py(nous.lat)); x.lineTo(m.px(p.lon + d), m.py(p.lat)); x.stroke(); }
+      if (nous) pointCarte(m, nous.lat, nous.lon + d, '#FFB454', 5, E.indicatif || 'Moi');
+      pointCarte(m, p.lat, p.lon + d, p.el >= 0 ? '#5BD68A' : '#3FE0C8', 6, E.suivi ? E.suivi.nom : '');
+    }
+  } else if (nous) pointCarte(m, nous.lat, nous.lon, '#FFB454', 5, E.indicatif || 'Moi');
+  // The track asked again each minute, and at once for another satellite.
+  const n = E && E.suivi ? E.suivi.catnum : 0;
+  if (n && (!traceSol || traceSol.catnum !== n || Date.now() - traceVu > 60000) && Date.now() - traceVu > 3000) { traceVu = Date.now(); chargeTraceSol(); }
+}
+attacheCarte(g('s-carte'), SV, dessineCarteStation, cadreStation, 0)
 async function skedAgenda(i) { const w = K[i]; await post('/api/agenda/sked?catnum=' + g('k-sat').value + '&loc=' + enc(v('k-loc')) + '&de=' + w.de + '&a=' + w.a); alert('Sked mis à l’agenda.'); }
 
 // ------------------------------------------------------------------ FT8
