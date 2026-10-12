@@ -8,10 +8,9 @@
  */
 package fr.f4ioz.satcombo.cat
 
-import android.content.Context
-import android.hardware.usb.UsbManager
-import com.hoho.android.usbserial.driver.UsbSerialPort
-import com.hoho.android.usbserial.driver.UsbSerialProber
+import fr.f4ioz.satcombo.plateforme.Lignes
+import fr.f4ioz.satcombo.plateforme.PortsSerie
+import fr.f4ioz.satcombo.plateforme.portsDe
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -22,7 +21,7 @@ import kotlin.math.roundToLong
  * The radio's one USB serial line, shared by its two bands: one conversation
  * at a time (a question, its one-line answer), like the other CAT drivers.
  */
-class Thd72Lien(private val context: Context? = null) {
+class Thd72Lien(private val ports: PortsSerie? = null) {
     @Volatile private var link: SerialLink? = null
     val isOpen: Boolean get() = link != null
     private val fil = Mutex()
@@ -33,20 +32,11 @@ class Thd72Lien(private val context: Context? = null) {
     /** Opens the adapter with key [cle] at [baud] (9600 on a TH-D72), 8N1. Once for both bands. */
     suspend fun open(cle: String?, baud: Int): Boolean = withContext(Dispatchers.IO) {
         if (link != null) return@withContext true
-        val ctx = context ?: return@withContext false
-        val um = ctx.getSystemService(Context.USB_SERVICE) as UsbManager
-        val drivers = UsbSerialProber.getDefaultProber().findAllDrivers(um).filter { um.hasPermission(it.device) }
-        val cles = drivers.map { cleDe(it.device) }
-        val choisie = IdentiteUsb.resout(cle, cles) ?: return@withContext false
-        val driver = drivers.getOrNull(cles.indexOf(choisie)) ?: return@withContext false
-        val conn = um.openDevice(driver.device) ?: return@withContext false
-        val p = driver.ports.firstOrNull() ?: run { conn.close(); return@withContext false }
-        runCatching {
-            p.open(conn)
-            p.setParameters(baud, 8, UsbSerialPort.STOPBITS_1, UsbSerialPort.PARITY_NONE)
-            runCatching { p.setDTR(true); p.setRTS(true) }
-            link = UsbSerialLink(p)
-        }.isSuccess
+        // The adapter's first port, 8N1, RTS and DTR up as the radio's cable wants them.
+        val pp = ports ?: return@withContext false
+        val p = pp.portsDe(cle).firstOrNull() ?: return@withContext false
+        link = pp.ouvre(p, baud, Lignes.LEVEES).lien
+        link != null
     }
 
     fun close() {

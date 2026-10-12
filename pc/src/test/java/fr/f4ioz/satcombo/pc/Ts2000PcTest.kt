@@ -8,9 +8,8 @@
  */
 package fr.f4ioz.satcombo.pc
 
-import fr.f4ioz.satcombo.cat.DispositionSat
-import fr.f4ioz.satcombo.cat.ModePoste
 import fr.f4ioz.satcombo.cat.SerialLink
+import fr.f4ioz.satcombo.cat.Ts2000Lien
 import fr.f4ioz.satcombo.cat.Ts2000Sim
 import fr.f4ioz.satcombo.plateforme.Lignes
 import fr.f4ioz.satcombo.plateforme.Ouverture
@@ -22,21 +21,24 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
+/** On the PC the TS-2000 opens on the port chosen only, at the speed chosen only (the phone's driver). */
 class Ts2000PcTest {
 
-    private val port = PortSerie(0, 0, 0, 1, "/dev/ttyUSB0 — RigExpert", "X", 0x0403, "RigExpert")
+    private val porta = PortSerie(0, 0, 0, 2, "/dev/ttyUSB0 — Dual RS232", "X", 0x0403, "Dual RS232")
+    private val portb = PortSerie(1, 0, 1, 2, "/dev/ttyUSB1 — Dual RS232", "X", 0x0403, "Dual RS232")
 
-    /** A PC with one port, whatever is behind it; remembers the lines asked. */
-    private class Ports(val lien: SerialLink) : PortsSerie {
-        var lignes: Lignes? = null
+    private class Ports(val lien: (PortSerie) -> SerialLink) : PortsSerie {
+        val ouverts = ArrayList<Pair<PortSerie, Lignes>>()
         override fun liste() = emptyList<PortSerie>()
         override fun autorise(p: PortSerie) = true
         override fun demande(p: PortSerie) {}
         override suspend fun demandeEtAttends(p: PortSerie) = true
-        override suspend fun ouvre(p: PortSerie, baud: Int, lignes: Lignes): Ouverture { this.lignes = lignes; return Ouverture(lien, "") }
+        override suspend fun ouvre(p: PortSerie, baud: Int, lignes: Lignes, deuxArrets: Boolean): Ouverture {
+            ouverts += p to lignes; return Ouverture(lien(p), "")
+        }
     }
 
-    /** The RigExpert's second port: sends back what it is sent. */
+    /** The RigExpert's PTT port: sends back what it is sent. */
     private class Echo : SerialLink {
         private val q = java.util.concurrent.LinkedBlockingQueue<Byte>()
         var ferme = false
@@ -51,53 +53,24 @@ class Ts2000PcTest {
     }
 
     @Test
-    fun le_ts2000_s_ouvre_lignes_basses_et_se_reconnait() = runBlocking {
+    fun le_port_choisi_seul_lignes_basses() = runBlocking {
         val sim = Ts2000Sim()
-        val ports = Ports(sim)
-        val l = LienTs2000Pc(ports).apply { pacingMs = 0 }
-        assertTrue(l.ouvre(port, 57_600))
-        assertEquals(Lignes.BASSES, ports.lignes)
-    }
-
-    @Test
-    fun le_port_qui_renvoie_nos_mots_est_referme() = runBlocking {
-        val echo = Echo()
-        val l = LienTs2000Pc(Ports(echo)).apply { pacingMs = 0 }
-        assertFalse(l.ouvre(port, 57_600))
-        assertTrue(echo.ferme)
-        assertFalse(l.isOpen)
-        assertTrue(l.lastError.contains("port B"))
-    }
-
-    @Test
-    fun arme_en_fm_regle_la_montee_puis_rend_la_main_a_la_descente_sans_jamais_emettre() = runBlocking {
-        val sim = Ts2000Sim()
-        val l = LienTs2000Pc(Ports(sim)).apply { pacingMs = 0 }
-        assertTrue(l.ouvre(port, 57_600))
-        val p = PosteTs2000Pc(l)
-        p.arme(DispositionSat.CROSS_BAND, ModePoste(0x05, "FM"), ModePoste(0x05, "FM"), 670)
-        assertEquals(4, sim.mode)
-        assertEquals(4, sim.modeMontee)
-        assertTrue(sim.tonOn)
-        assertFalse("control back on the downlink", sim.controleMontee)
-        p.ecrisCouple(436_795_000L, 145_850_000L, memeBande = false)
-        assertEquals(436_795_000L, sim.fa)
-        assertEquals(145_850_000L, sim.fb)
-        assertEquals(436_795_000L, p.lisDescente(false))
-        assertEquals(145_850_000L, p.lisMontee())
+        val pp = Ports { sim }
+        val l = Ts2000Lien(pp).apply { pacingMs = 0 }
+        assertTrue(l.ouvrePort(porta, 57_600))
+        assertEquals(listOf(porta to Lignes.BASSES), pp.ouverts)
+        assertEquals(57_600, l.vitesse)
         assertEquals(0, sim.tentativesEmission)
     }
 
     @Test
-    fun en_emission_la_montee_n_est_ni_lue_ni_ecrite() = runBlocking {
-        val sim = Ts2000Sim()
-        val l = LienTs2000Pc(Ports(sim)).apply { pacingMs = 0 }
-        assertTrue(l.ouvre(port, 57_600))
-        val p = PosteTs2000Pc(l)
-        sim.emet = true
-        val avant = sim.fb
-        p.ecrisMontee(145_900_000L, false)
-        assertEquals(avant, sim.fb)
-        assertEquals(null, p.lisMontee())
+    fun le_port_qui_renvoie_nos_mots_est_referme_et_rien_d_autre_n_est_essaye() = runBlocking {
+        val echo = Echo()
+        val pp = Ports { echo }
+        val l = Ts2000Lien(pp).apply { pacingMs = 0 }
+        assertFalse(l.ouvrePort(portb, 57_600))
+        assertTrue(echo.ferme)
+        assertFalse(l.isOpen)
+        assertEquals(1, pp.ouverts.size)
     }
 }

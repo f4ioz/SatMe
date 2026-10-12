@@ -43,8 +43,11 @@ class PortsSerieAndroid(private val context: Context) : PortsSerie {
             val n = drv.ports.size.coerceAtLeast(1)
             val dev = drv.device
             for (i in 0 until n) {
+                // The serial number may only be read once the adapter is allowed.
+                val serie = if (runCatching { um.hasPermission(dev) }.getOrDefault(false))
+                    runCatching { dev.serialNumber }.getOrNull() else null
                 out.add(PortSerie(out.size, d, i, n, CatScan.etiquette(dev.productName, dev.deviceName, i, n),
-                    cleDe(dev), dev.vendorId, dev.productName))
+                    cleDe(dev), dev.vendorId, dev.productName, serie, dev.deviceName))
             }
         }
         return out
@@ -64,7 +67,7 @@ class PortsSerieAndroid(private val context: Context) : PortsSerie {
         return UsbPermission.await(context, um, dev, UsbPermission.ACTION_CAT, dev.deviceId)
     }
 
-    override suspend fun ouvre(p: PortSerie, baud: Int, lignes: Lignes): Ouverture = withContext(Dispatchers.IO) {
+    override suspend fun ouvre(p: PortSerie, baud: Int, lignes: Lignes, deuxArrets: Boolean): Ouverture = withContext(Dispatchers.IO) {
         val drv = pilotes().getOrNull(p.appareil) ?: return@withContext Ouverture(null, t("cat_err_no_device"))
         if (!um.hasPermission(drv.device)) return@withContext Ouverture(null, t("cat_err_denied"))
         val conn = um.openDevice(drv.device) ?: return@withContext Ouverture(null, t("cat_err_open_device"))
@@ -72,12 +75,20 @@ class PortsSerieAndroid(private val context: Context) : PortsSerie {
         if (port == null) { conn.close(); return@withContext Ouverture(null, t("cat_err_no_port")) }
         runCatching {
             port.open(conn)
-            port.setParameters(baud, 8, UsbSerialPort.STOPBITS_1, UsbSerialPort.PARITY_NONE)
-            val haut = lignes == Lignes.LEVEES
-            runCatching { port.setDTR(haut); port.setRTS(haut) }
+            // Low lines low before anything else: on a RigExpert they may be PTT.
+            if (lignes == Lignes.BASSES) runCatching { port.setDTR(false); port.setRTS(false) }
+            port.setParameters(baud, 8, if (deuxArrets) UsbSerialPort.STOPBITS_2 else UsbSerialPort.STOPBITS_1,
+                UsbSerialPort.PARITY_NONE)
+            when (lignes) {
+                Lignes.LEVEES -> runCatching { port.setDTR(true); port.setRTS(true) }
+                Lignes.BASSES -> runCatching { port.setDTR(false); port.setRTS(false) }
+                // As the adapter's driver leaves them (the FT-817's cables).
+                Lignes.TELLES -> Unit
+            }
             Ouverture(UsbSerialLink(port), "")
         }.getOrElse {
             runCatching { port.close() }
+            runCatching { conn.close() }
             Ouverture(null, tf("cat_err_open_port", it.message ?: "?"))
         }
     }

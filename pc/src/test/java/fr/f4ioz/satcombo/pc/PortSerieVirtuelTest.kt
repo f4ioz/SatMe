@@ -56,7 +56,7 @@ class PortSerieVirtuelTest {
             port.clearDTR(); port.clearRTS()
             port.setComPortParameters(57_600, 8, SerialPort.ONE_STOP_BIT, SerialPort.NO_PARITY)
             assumeTrue("pty opened", port.openPort())
-            val lien = LienTs2000Pc(null).apply { pacingMs = 0; attach(LienPc(port)) }
+            val lien = fr.f4ioz.satcombo.cat.Ts2000Lien().apply { pacingMs = 0; attach(LienPc(port)) }
             assertEquals(Ts2000.ID, lien.commande("ID;", 1_000))
             lien.commande(Ts2000.ecrit("A", 436_795_000L))
             assertEquals(436_795_000L, Ts2000.frequence(lien.commande("FA;", 1_000), "A"))

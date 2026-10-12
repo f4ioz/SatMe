@@ -8,10 +8,10 @@
  */
 package fr.f4ioz.satcombo.cat
 
-import android.content.Context
-import android.hardware.usb.UsbManager
-import com.hoho.android.usbserial.driver.UsbSerialPort
-import com.hoho.android.usbserial.driver.UsbSerialProber
+import fr.f4ioz.satcombo.plateforme.Lignes
+import fr.f4ioz.satcombo.plateforme.PortSerie
+import fr.f4ioz.satcombo.plateforme.PortsSerie
+import fr.f4ioz.satcombo.plateforme.portsDe
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -21,7 +21,11 @@ import kotlinx.coroutines.withContext
  * The TS-2000's serial line, shared by both sides (one cable, one rig).
  * Finds the port that answers `ID019;` and the speed it answers at.
  */
-class Ts2000Lien(private val context: Context? = null) {
+class Ts2000Lien(
+    private val ports: PortsSerie? = null,
+    /** What the search tried and got (on the phone: `adb logcat -s SatMeTs2000`). */
+    private val trace: (String) -> Unit = {}
+) {
     @Volatile private var link: SerialLink? = null
     val isOpen: Boolean get() = link != null
     private val fil = Mutex()
@@ -48,43 +52,52 @@ class Ts2000Lien(private val context: Context? = null) {
 
     private suspend fun ouvre(cle: String?, baud: Int): Boolean = withContext(Dispatchers.IO) {
         if (link != null) return@withContext true
-        val ctx = context ?: return@withContext false
-        val um = ctx.getSystemService(Context.USB_SERVICE) as UsbManager
-        val drivers = UsbSerialProber.getDefaultProber().findAllDrivers(um).filter { um.hasPermission(it.device) }
-        val cles = drivers.map { cleDe(it.device) }
-        val choisie = IdentiteUsb.resout(cle, cles) ?: return@withContext false
-        val driver = drivers.getOrNull(cles.indexOf(choisie)) ?: return@withContext false
+        val pp = ports ?: return@withContext false
+        val tous = pp.portsDe(cle)
+        val premier = tous.firstOrNull() ?: return@withContext false
         val vitesses = (listOf(baud) + Ts2000.VITESSES).filter { it > 0 }.distinct()
-        trace("adaptateur ${driver.device.productName} ${driver.javaClass.simpleName}, ${driver.ports.size} port(s)")
+        trace("adaptateur ${premier.produit}, ${tous.size} port(s)")
         // A RigExpert carries CAT on its first port only; the second is PTT/CW: never written to.
-        val ports = if (driver.device.productName?.contains("RigExpert", ignoreCase = true) == true) driver.ports.take(1) else driver.ports
-        for ((i, p) in ports.withIndex()) {
+        val candidats = if (premier.produit?.contains("RigExpert", ignoreCase = true) == true) tous.take(1) else tous
+        for (p in candidats) {
             for (v in vitesses) {
-                val conn = um.openDevice(driver.device) ?: run { trace("openDevice refusé"); return@withContext false }
-                val ouvert = runCatching {
-                    p.open(conn)
-                    // RTS and DTR low before anything else: on a RigExpert they may be PTT.
-                    runCatching { p.setDTR(false); p.setRTS(false) }
-                    p.setParameters(v, 8, if (v <= 4_800) UsbSerialPort.STOPBITS_2 else UsbSerialPort.STOPBITS_1,
-                        UsbSerialPort.PARITY_NONE)
-                    runCatching { p.setDTR(false); p.setRTS(false) }
+                when (essaie(pp, p, v)) {
+                    Essai.TROUVE -> return@withContext true
+                    Essai.ECHO -> break
+                    Essai.RIEN -> Unit
                 }
-                var echo = false
-                if (ouvert.isSuccess) {
-                    link = LienTrace(p)
-                    val r = identifie()
-                    trace("port $i à $v bauds : ID; → ${r ?: "rien"}")
-                    if (r == Ts2000.ID) { vitesse = v; this@Ts2000Lien.cle = choisie; link = UsbSerialLink(p); return@withContext true }
-                    // A port that sends our own words back is not a rig (the Tiny's PTT/CW port).
-                    echo = r == "ID;"
-                    link = null
-                } else trace("port $i à $v bauds : ouverture impossible (${ouvert.exceptionOrNull()?.message})")
-                runCatching { p.close() }
-                runCatching { conn.close() }
-                if (echo) break
             }
         }
         false
+    }
+
+    private enum class Essai { TROUVE, ECHO, RIEN }
+
+    /**
+     * One port at one speed, RTS and DTR low before anything else (on a
+     * RigExpert they may be PTT); 2 stop bits at 4800 baud or less, as Kenwood
+     * wants. A port that sends our own words back is not a rig.
+     */
+    private suspend fun essaie(pp: PortsSerie, p: PortSerie, v: Int): Essai {
+        val o = pp.ouvre(p, v, Lignes.BASSES, deuxArrets = v <= 4_800)
+        val l = o.lien ?: run { trace("port ${p.port} à $v bauds : ouverture impossible (${o.erreur})"); return Essai.RIEN }
+        link = l
+        val r = identifie()
+        trace("port ${p.port} à $v bauds : ID; → ${r ?: "rien"}")
+        if (r == Ts2000.ID) { vitesse = v; cle = p.cle; return Essai.TROUVE }
+        link = null
+        runCatching { l.close() }
+        return if (r == "ID;") Essai.ECHO else Essai.RIEN
+    }
+
+    /**
+     * Opens exactly [p] at [baud], nothing else tried: the PC, where the
+     * operator picked the port. False when no TS-2000 answers there.
+     */
+    suspend fun ouvrePort(p: PortSerie, baud: Int): Boolean = ouverture.withLock {
+        close()
+        val pp = ports ?: return@withLock false
+        essaie(pp, p, baud) == Essai.TROUVE
     }
 
     fun close() {
@@ -101,18 +114,6 @@ class Ts2000Lien(private val context: Context? = null) {
         commande(";", 300)
         val r = commande("ID;", 700)
         return if (r == "?;") commande("ID;", 700) else r
-    }
-
-    /** What the search tried and got, in the phone's log (`adb logcat -s SatMeTs2000`). */
-    private fun trace(m: String) { runCatching { android.util.Log.i("SatMeTs2000", m) } }
-
-    /** The line while searching: USB errors written to the log instead of swallowed. */
-    private inner class LienTrace(private val port: UsbSerialPort) : SerialLink {
-        override fun write(bytes: ByteArray, timeoutMs: Int): Boolean =
-            runCatching { port.write(bytes, timeoutMs) }.onFailure { trace("écriture : ${it.javaClass.simpleName} ${it.message}") }.isSuccess
-        override fun read(buf: ByteArray, timeoutMs: Int): Int =
-            runCatching { port.read(buf, timeoutMs) }.onFailure { trace("lecture : ${it.javaClass.simpleName} ${it.message}") }.getOrDefault(0)
-        override fun close() { runCatching { port.close() } }
     }
 
     /**

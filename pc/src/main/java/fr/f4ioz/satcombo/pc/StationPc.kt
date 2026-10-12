@@ -97,8 +97,9 @@ class StationPc(
 
     private val civ = CivController(ports)
     private val posteCiv = PosteCatCiv(civ)
-    private val ts2000 = LienTs2000Pc(ports)
-    private val posteTs2000 = PosteTs2000Pc(ts2000)
+    /** The rigs driven as a pair, the phone's drivers: FT-817 / IC-705 (one each side), TS-2000, TH-D72. */
+    private val paire = fr.f4ioz.satcombo.cat.Ft817Pair(ports)
+    private val postePaire = fr.f4ioz.satcombo.cat.PosteCatPaire(paire)
     private val fil = Mutex()
     private var boucleCat: Job? = null
     /** The adapter the rig is on: the mast's search never opens it. */
@@ -106,8 +107,9 @@ class StationPc(
 
     val stationCat = StationCat(object : MondeCat {
         override fun connecte() = _etat.value.catConnecte
-        override fun poste(): PosteCat = if (_etat.value.catModele == "TS2000") posteTs2000 else posteCiv
-        override fun emetSeul() = false
+        override fun poste(): PosteCat = if (_etat.value.catModele in PAIRES) postePaire else posteCiv
+        // A pair with only its TX rig: nothing to read back.
+        override fun emetSeul() = _etat.value.catModele in PAIRES && !paire.rx.isOpen && paire.tx.isOpen
         override fun aprsEnEmission() = false
         override fun satellite() = _etat.value.position
         override fun catnum() = _etat.value.suivi?.catalogNumber
@@ -357,49 +359,104 @@ class StationPc(
 
     // ---------------------------------------------------------- connecting
 
+    /** How the operator wants the rig connected: the model and the port(s) chosen on the page. */
+    data class ChoixCat(
+        val modele: String,
+        /** The rig's port (Icom, TS-2000, TH-D72), or the RX rig's in a pair; -1: none. */
+        val port: Int = -1,
+        val baud: Int = 0,
+        /** A pair: the TX rig's port (-1: none), and which side is an IC-705. */
+        val portTx: Int = -1,
+        val rxIc705: Boolean = false,
+        val txIc705: Boolean = false,
+        /** TH-D72: the band that transmits (0 = A, 1 = B). */
+        val bandeTx: Int = 0,
+    )
+
     /**
-     * Opens the rig on port [index] ([modele]: an Icom on CI-V, or "SIM": a
-     * simulated IC-9700, nothing opened). Nothing is ever searched: only
-     * this port.
+     * Opens the rig on the port(s) chosen, nothing else tried: an Icom on
+     * CI-V, a TS-2000, an FT-817 / IC-705 pair, a TH-D72 — or a simulated
+     * IC-9700 or TS-2000, nothing opened.
      */
-    fun connecteCat(modele: String, index: Int, baud: Int) {
+    fun connecteCat(modele: String, index: Int, baud: Int) = connecteCat(ChoixCat(modele, index, baud))
+
+    fun connecteCat(c: ChoixCat) {
         portee.launch {
             fil.withLock {
                 deconnecteCatDedans()
-                val m = modeleDe(modele)
-                settings.rigModel = if (m == "SIM") settings.rigModel else m
-                if (m == "TS2000" || m == "TS2000SIM") {
-                    ts2000.pacingMs = if (m == "TS2000SIM") 0L else 20L
-                    val p = ports.liste().getOrNull(index)
-                    val ok = if (m == "TS2000SIM") { ts2000.attach(fr.f4ioz.satcombo.cat.Ts2000Sim()); true }
-                             else p != null && ts2000.ouvre(p, if (baud > 0) baud else 57_600)
-                    if (ok && p != null && m == "TS2000") clePoste = p.cle
-                    change { copy(catModele = "TS2000", catConnecte = ok, catSimule = m == "TS2000SIM",
-                        catStatut = when {
-                            m == "TS2000SIM" -> "TS-2000 simulé : rien n'est ouvert"
-                            ok -> "Kenwood TS-2000 sur ${p!!.libelle}"
-                            else -> "échec : ${ts2000.lastError.ifBlank { "port introuvable" }}"
-                        }) }
-                } else if (m == "SIM") {
-                    civ.modele = ModeleIcom.IC9700
-                    civ.radioAddr = ModeleIcom.IC9700.adresse
-                    civ.pacingMs = 0L
-                    civ.attach(Ic9700Sim())
-                    change { copy(catModele = "IC9700", catConnecte = true, catSimule = true,
-                        catStatut = "IC-9700 simulé : rien n'est ouvert") }
-                } else {
-                    val mi = ModeleIcom.de(m)
-                    civ.modele = mi
-                    civ.radioAddr = mi.adresse
-                    civ.pacingMs = 40L
-                    val p = ports.liste().getOrNull(index)
-                    val ok = p != null && civ.open(index, if (baud > 0) baud else mi.baud)
-                    if (ok) {
-                        clePoste = p!!.cle
-                        settings.civUsbIndex = index
+                val m = modeleDe(c.modele)
+                if (m !in SIMULES) settings.rigModel = m
+                val liste = ports.liste()
+                val p = liste.getOrNull(c.port)
+                val pTx = liste.getOrNull(c.portTx)
+                fun echec(pourquoi: String) = change { copy(catModele = m, catConnecte = false, catSimule = false, catStatut = "échec : $pourquoi") }
+                when (m) {
+                    "SIM" -> {
+                        civ.modele = ModeleIcom.IC9700
+                        civ.radioAddr = ModeleIcom.IC9700.adresse
+                        civ.pacingMs = 0L
+                        civ.attach(Ic9700Sim())
+                        change { copy(catModele = "IC9700", catConnecte = true, catSimule = true,
+                            catStatut = "IC-9700 simulé : rien n'est ouvert") }
                     }
-                    change { copy(catModele = m, catConnecte = ok, catSimule = false,
-                        catStatut = if (ok) "${mi.libelle} sur ${p!!.libelle}" else "échec : ${civ.lastError.ifBlank { "port introuvable" }}") }
+                    "TS2000SIM" -> {
+                        paire.configureTs2000()
+                        paire.rx.attach(fr.f4ioz.satcombo.cat.Ts2000Sim())
+                        paire.pacingMs = 0L
+                        change { copy(catModele = "TS2000", catConnecte = true, catSimule = true,
+                            catStatut = "TS-2000 simulé : rien n'est ouvert") }
+                    }
+                    "TS2000" -> {
+                        paire.configureTs2000()
+                        val l = paire.lienTs2000!!
+                        l.pacingMs = 20L
+                        if (p == null) { echec("aucun port choisi"); return@withLock }
+                        if (!l.ouvrePort(p, if (c.baud > 0) c.baud else 57_600))
+                            { echec("pas de TS-2000 qui réponde sur ${p.libelle} (vitesse : menu 56 ; RigExpert : port A)"); return@withLock }
+                        clePoste = p.cle
+                        change { copy(catModele = m, catConnecte = true, catSimule = false,
+                            catStatut = "Kenwood TS-2000 sur ${p.libelle} à ${l.vitesse} bauds") }
+                    }
+                    "THD72" -> {
+                        paire.configureThd72(c.bandeTx.coerceIn(0, 1))
+                        val l = paire.lienThd72!!
+                        if (p == null) { echec("aucun port choisi"); return@withLock }
+                        if (!l.open(p.cle, if (c.baud > 0) c.baud else 9_600) || !l.estUnThd72())
+                            { l.close(); echec("pas de TH-D72 qui réponde sur ${p.libelle}"); return@withLock }
+                        clePoste = p.cle
+                        change { copy(catModele = m, catConnecte = true, catSimule = false,
+                            catStatut = "Kenwood TH-D72 sur ${p.libelle}, émission sur la bande " + (if (c.bandeTx == 0) "A" else "B")) }
+                    }
+                    "PAIRE" -> {
+                        if (p == null && pTx == null) { echec("aucun port choisi"); return@withLock }
+                        if (p != null && pTx != null && p.cle == pTx.cle) { echec("le même port des deux côtés"); return@withLock }
+                        paire.configure(rxIc705 = c.rxIc705, txIc705 = c.txIc705)
+                        paire.pacingMs = 25L
+                        val vitesse = if (c.baud > 0) c.baud else settings.ft817Baud
+                        val (a, b) = paire.open(p?.cle, pTx?.cle, vitesse)
+                        if ((p != null && !a) || (pTx != null && !b)) {
+                            paire.close()
+                            echec("le poste " + (if (p != null && !a) "RX" else "TX") + " ne s'ouvre pas"); return@withLock
+                        }
+                        clePoste = listOfNotNull(p?.cle, pTx?.cle).joinToString(",")
+                        fun nom(ic: Boolean) = if (ic) "IC-705" else "FT-817"
+                        change { copy(catModele = m, catConnecte = true, catSimule = false,
+                            catStatut = listOfNotNull(p?.let { "RX ${nom(c.rxIc705)} sur ${it.libelle}" },
+                                pTx?.let { "TX ${nom(c.txIc705)} sur ${it.libelle}" }).joinToString(" · ")) }
+                    }
+                    else -> {
+                        val mi = ModeleIcom.de(m)
+                        civ.modele = mi
+                        civ.radioAddr = mi.adresse
+                        civ.pacingMs = 40L
+                        val ok = p != null && civ.open(c.port, if (c.baud > 0) c.baud else mi.baud)
+                        if (ok) {
+                            clePoste = p!!.cle
+                            settings.civUsbIndex = c.port
+                        }
+                        change { copy(catModele = m, catConnecte = ok, catSimule = false,
+                            catStatut = if (ok) "${mi.libelle} sur ${p!!.libelle}" else "échec : ${civ.lastError.ifBlank { "port introuvable" }}") }
+                    }
                 }
                 if (_etat.value.catConnecte) lanceBoucleCat()
             }
@@ -411,7 +468,7 @@ class StationPc(
     private fun deconnecteCatDedans() {
         boucleCat?.cancel(); boucleCat = null
         civ.close()
-        ts2000.close()
+        paire.close()
         stationCat.deconnecte()
         change { copy(catConnecte = false, catSimule = false, catStatut = "poste déconnecté") }
     }
@@ -428,8 +485,11 @@ class StationPc(
     }
 
     companion object {
-        /** The rigs the PC drives: the Icom family on CI-V, the TS-2000, and their simulators. */
-        val MODELES = listOf("IC9700", "IC9100", "IC910", "TS2000", "SIM", "TS2000SIM")
+        /** The rigs the PC drives: the Icom family on CI-V, the pairs (TS-2000, FT-817 / IC-705, TH-D72), and simulators. */
+        val MODELES = listOf("IC9700", "IC9100", "IC910", "TS2000", "PAIRE", "THD72", "SIM", "TS2000SIM")
+        /** Driven as a pair: each leg its own rig or VFO. */
+        val PAIRES = setOf("TS2000", "PAIRE", "THD72")
+        val SIMULES = setOf("SIM", "TS2000SIM")
         /** The satellite followed, kept between two starts. */
         const val CLE_SATELLITE = "pc_satellite"
         fun modeleDe(id: String): String = id.takeIf { it in MODELES } ?: "IC9700"

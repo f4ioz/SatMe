@@ -131,11 +131,18 @@ object PagePc {
         <select id="cat-modele">
           <option value="IC9700">Icom IC-9700</option><option value="IC9100">Icom IC-9100</option>
           <option value="IC910">Icom IC-910H</option><option value="TS2000">Kenwood TS-2000</option>
+          <option value="PAIRE">Deux postes (FT-817 / IC-705)</option><option value="THD72">Kenwood TH-D72</option>
           <option value="SIM">IC-9700 simulé (rien n'est ouvert)</option><option value="TS2000SIM">TS-2000 simulé (rien n'est ouvert)</option>
         </select>
         <select id="cat-baud"><option value="0">vitesse du poste</option><option>115200</option><option>57600</option><option>38400</option><option>19200</option><option>9600</option><option>4800</option></select>
       </div>
-      <div class="ligne"><select id="cat-port"></select><button onclick="chargePorts()" title="Relire les ports">↻</button></div>
+      <div class="ligne"><span class="petit" id="cat-port-nom" style="min-width:34px"></span><select id="cat-port"></select>
+        <select id="cat-rx-type" style="max-width:110px"><option value="0">FT-817</option><option value="1">IC-705</option></select>
+        <button onclick="chargePorts()" title="Relire les ports">↻</button></div>
+      <div class="ligne" id="cat-tx-ligne"><span class="petit" style="min-width:34px">TX</span><select id="cat-port-tx"></select>
+        <select id="cat-tx-type" style="max-width:110px"><option value="0">FT-817</option><option value="1">IC-705</option></select></div>
+      <div class="ligne" id="cat-bande-ligne"><span class="petit">Émission sur la bande</span>
+        <select id="cat-bande"><option value="0">A</option><option value="1">B</option></select></div>
       <div class="ligne">
         <button class="primaire" id="cat-co" onclick="catConnecte()">Connecter</button>
         <button id="cat-deco" onclick="post('/api/cat/deconnecter')">Déconnecter</button>
@@ -368,13 +375,14 @@ function dessine() {
   // The rig's model and port as last used, until the operator picks others.
   if (!catTouche) {
     g('cat-modele').value = c.simule ? (c.modele === 'TS2000' ? 'TS2000SIM' : 'SIM') : c.modele;
+    if (!g('cat-modele').value) g('cat-modele').value = 'IC9700';
     if (ports.length && c.port >= 0 && c.port < ports.length) g('cat-port').value = String(c.port);
     avertCat();
   }
   if (!rotTouche && ports.length && r.port >= 0 && r.port < ports.length) g('rot-port').value = String(r.port);
 }
 let catTouche = false, rotTouche = false;
-['cat-modele', 'cat-port', 'cat-baud'].forEach(i => g(i).addEventListener('change', () => catTouche = true));
+['cat-modele', 'cat-port', 'cat-baud', 'cat-port-tx', 'cat-rx-type', 'cat-tx-type', 'cat-bande'].forEach(i => g(i).addEventListener('change', () => catTouche = true));
 ['rot-port', 'rot-baud', 'rot-lien'].forEach(i => g(i).addEventListener('change', () => rotTouche = true));
 function convertisseurs() {
   post('/api/convertisseurs?rxOl=' + enc(v('c-rxOl')) + '&rxInv=' + (g('c-rxInv').checked ? 1 : 0) +
@@ -410,21 +418,32 @@ async function chargePorts() {
   try { ports = await (await fetch('/api/ports')).json(); } catch (x) { ports = []; }
   const o = ports.length ? ports.map(p => '<option value="' + p.index + '">' + p.libelle.replace(/</g, '&lt;') + '</option>').join('')
                          : '<option value="-1">aucun port série</option>';
-  const a = g('cat-port').value, b = g('rot-port').value;
-  g('cat-port').innerHTML = o; g('rot-port').innerHTML = o;
+  const a = g('cat-port').value, b = g('rot-port').value, c = g('cat-port-tx').value;
+  g('cat-port').innerHTML = '<option value="-1">aucun</option>' + o; g('rot-port').innerHTML = o;
+  g('cat-port-tx').innerHTML = '<option value="-1">aucun</option>' + o;
   if (a) g('cat-port').value = a;
+  if (c) g('cat-port-tx').value = c;
   if (b) g('rot-port').value = b; else if (E && E.rotor) g('rot-port').value = String(E.rotor.port);
 }
 function avertCat() {
   const m = g('cat-modele').value;
+  const paire = m === 'PAIRE';
+  g('cat-tx-ligne').style.display = paire ? '' : 'none';
+  g('cat-rx-type').style.display = paire ? '' : 'none';
+  g('cat-bande-ligne').style.display = m === 'THD72' ? '' : 'none';
+  txt('cat-port-nom', paire ? 'RX' : '');
   txt('cat-avert', m === 'TS2000' ? 'TS-2000 : RTS/DTR tenus bas, aucun ordre d’émission. RigExpert : le port A (CAT), jamais le B (PTT). Vitesse : menu 56 (57600 par défaut ici).'
+    : m === 'PAIRE' ? 'Un poste par côté : RX (descente) et TX (montée) ; un côté peut rester vide (« aucun »). FT-817 en 8N2, vitesse de son menu CAT.'
+    : m === 'THD72' ? 'TH-D72 en duplex : une bande émet, l’autre reçoit. Son câble demande RTS/DTR levés.'
     : m.indexOf('SIM') >= 0 ? '' : 'Le CAT Icom lève RTS/DTR : choisis bien le port du poste, jamais celui d’un autre poste.');
 }
 g('cat-modele').onchange = avertCat;
 function catConnecte() {
   const m = g('cat-modele').value;
-  if (m.indexOf('SIM') < 0 && (!ports.length || g('cat-port').value === '-1')) { alert('Aucun port série choisi.'); return; }
-  post('/api/cat/connecter?modele=' + m + '&port=' + enc(g('cat-port').value) + '&baud=' + g('cat-baud').value);
+  if (m.indexOf('SIM') < 0 && m !== 'PAIRE' && (!ports.length || g('cat-port').value === '-1')) { alert('Aucun port série choisi.'); return; }
+  post('/api/cat/connecter?modele=' + m + '&port=' + enc(g('cat-port').value) + '&baud=' + g('cat-baud').value +
+       '&portTx=' + enc(g('cat-port-tx').value) + '&rxIc705=' + g('cat-rx-type').value + '&txIc705=' + g('cat-tx-type').value +
+       '&bandeTx=' + g('cat-bande').value);
 }
 function lienRotor() {
   const l = g('rot-lien').value;

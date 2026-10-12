@@ -8,7 +8,7 @@
  */
 package fr.f4ioz.satcombo.cat
 
-import android.content.Context
+import fr.f4ioz.satcombo.plateforme.PortsSerie
 
 /**
  * Icom IC-705 as one side of a two-rig station, through its own USB port
@@ -23,9 +23,9 @@ import android.content.Context
  * Default CI-V address 0xA4. The rig's "CI-V USB Echo Back" may stay on:
  * the controller already drops its own echo.
  */
-class Ic705Cat(context: Context? = null) : PosteSimple {
+class Ic705Cat(ports: PortsSerie? = null) : PosteSimple {
 
-    private val civ = CivController(context?.let { fr.f4ioz.satcombo.usb.PortsSerieAndroid(it) }).apply { radioAddr = ADRESSE }
+    private val civ = CivController(ports).apply { radioAddr = ADRESSE }
 
     override val isOpen: Boolean get() = civ.isOpen
 

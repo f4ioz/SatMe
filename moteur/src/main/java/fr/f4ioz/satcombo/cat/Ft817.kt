@@ -8,25 +8,12 @@
  */
 package fr.f4ioz.satcombo.cat
 
-import android.content.Context
-import android.hardware.usb.UsbManager
-import fr.f4ioz.satcombo.usb.UsbPermission
-import com.hoho.android.usbserial.driver.UsbSerialPort
-import com.hoho.android.usbserial.driver.UsbSerialProber
+import fr.f4ioz.satcombo.plateforme.Lignes
+import fr.f4ioz.satcombo.plateforme.PortsSerie
+import fr.f4ioz.satcombo.plateforme.portsDe
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
-
-/**
- * A device's key: serial number if any, else vendor/product plus USB tree position.
- *
- * File-level because both classes need it (single rig to open, pair to list and
- * probe); a key computed two different ways would designate nothing.
- */
-internal fun cleDe(dev: android.hardware.usb.UsbDevice): String =
-    IdentiteUsb.cle(
-        runCatching { dev.serialNumber }.getOrNull(),
-        dev.vendorId, dev.productId, dev.deviceName)
 
 /** A USB-serial adapter as shown in the RX/TX assignment UI. */
 data class UsbSerialInfo(
@@ -61,7 +48,7 @@ data class UsbSerialInfo(
  *
  * Talks to a [SerialLink], so [attach] can plug in an [Ft817Sim].
  */
-class Ft817Cat(private val context: Context? = null) : PosteSimple {
+class Ft817Cat(private val ports: PortsSerie? = null) : PosteSimple {
 
     private var link: SerialLink? = null
     var boundSerial: String? = null
@@ -93,24 +80,15 @@ class Ft817Cat(private val context: Context? = null) : PosteSimple {
 
     /** Opens the adapter matching key [deviceSerial] (see [IdentiteUsb]) at [baud], 8N2. */
     override suspend fun open(deviceSerial: String?, baud: Int): Boolean = withContext(Dispatchers.IO) {
-        val ctx = context ?: return@withContext false
-        val um = ctx.getSystemService(Context.USB_SERVICE) as UsbManager
-        val drivers = UsbSerialProber.getDefaultProber().findAllDrivers(um)
-            .filter { um.hasPermission(it.device) }
-
         // Match by key, not serial number: requiring a serial meant a cable
-        // without one (e.g. PL2303TA) was never opened.
-        val cles = drivers.map { cleDe(it.device) }
-        val choisie = IdentiteUsb.resout(deviceSerial, cles) ?: return@withContext false
-        val driver = drivers.getOrNull(cles.indexOf(choisie)) ?: return@withContext false
-        val conn = um.openDevice(driver.device) ?: return@withContext false
-        val p = driver.ports.firstOrNull() ?: return@withContext false
-        runCatching {
-            p.open(conn)
-            p.setParameters(baud, 8, UsbSerialPort.STOPBITS_2, UsbSerialPort.PARITY_NONE)
-            link = UsbSerialLink(p)
-            boundSerial = choisie
-        }.isSuccess
+        // without one (e.g. PL2303TA) was never opened. The adapter's first
+        // port, 8N2, its lines as its driver leaves them (as always on the phone).
+        val pp = ports ?: return@withContext false
+        val p = pp.portsDe(deviceSerial).firstOrNull() ?: return@withContext false
+        val l = pp.ouvre(p, baud, Lignes.TELLES, deuxArrets = true).lien ?: return@withContext false
+        link = l
+        boundSerial = p.cle
+        true
     }
 
     override fun close() {
@@ -280,11 +258,15 @@ class Ft817Cat(private val context: Context? = null) : PosteSimple {
  * Assignment is remembered by adapter key (see [IdentiteUsb]): the serial number
  * survives replugging; the fallback identity only while nothing is moved.
  */
-class Ft817Pair(private val context: Context? = null) {
+class Ft817Pair(
+    private val ports: PortsSerie? = null,
+    /** What the TS-2000's search tried and got (the phone's log). */
+    private val traceTs2000: (String) -> Unit = {}
+) {
 
-    var rx: PosteSimple = Ft817Cat(context)
+    var rx: PosteSimple = Ft817Cat(ports)
         private set
-    var tx: PosteSimple = Ft817Cat(context)
+    var tx: PosteSimple = Ft817Cat(ports)
         private set
 
     /**
@@ -294,8 +276,8 @@ class Ft817Pair(private val context: Context? = null) {
     fun configure(rxIc705: Boolean, txIc705: Boolean) {
         if (isOpen) return
         // A TH-D72 band left from before is replaced too, not kept by default.
-        if (rx is Thd72Bande || rx is Ts2000Cote || (rx is Ic705Cat) != rxIc705) rx = if (rxIc705) Ic705Cat(context) else Ft817Cat(context)
-        if (tx is Thd72Bande || tx is Ts2000Cote || (tx is Ic705Cat) != txIc705) tx = if (txIc705) Ic705Cat(context) else Ft817Cat(context)
+        if (rx is Thd72Bande || rx is Ts2000Cote || (rx is Ic705Cat) != rxIc705) rx = if (rxIc705) Ic705Cat(ports) else Ft817Cat(ports)
+        if (tx is Thd72Bande || tx is Ts2000Cote || (tx is Ic705Cat) != txIc705) tx = if (txIc705) Ic705Cat(ports) else Ft817Cat(ports)
     }
 
     /**
@@ -307,7 +289,7 @@ class Ft817Pair(private val context: Context? = null) {
         if (isOpen) return
         val actuel = (tx as? Thd72Bande)
         if (actuel != null && actuel.bande == bandeTx && (rx as? Thd72Bande)?.lien === actuel.lien) return
-        val lien = Thd72Lien(context)
+        val lien = Thd72Lien(ports)
         tx = Thd72Bande(lien, bandeTx)
         rx = Thd72Bande(lien, 1 - bandeTx)
     }
@@ -319,7 +301,7 @@ class Ft817Pair(private val context: Context? = null) {
     fun configureTs2000() {
         if (isOpen) return
         if (rx is Ts2000Cote && (tx as? Ts2000Cote)?.lien === (rx as Ts2000Cote).lien) return
-        val lien = Ts2000Lien(context)
+        val lien = Ts2000Lien(ports, traceTs2000)
         rx = Ts2000Cote(lien, descente = true)
         tx = Ts2000Cote(lien, descente = false)
     }
@@ -342,23 +324,16 @@ class Ft817Pair(private val context: Context? = null) {
         get() = rx.pacingMs
         set(v) { rx.pacingMs = v; tx.pacingMs = v }
 
-    companion object {
-        private const val ACTION_USB_PERMISSION = UsbPermission.ACTION_CAT
-    }
-
-    /** All recognized USB-serial adapters, with FTDI serial when readable. */
+    /** All recognized USB-serial adapters (one line per adapter), with their serial when readable. */
     fun listDevices(): List<UsbSerialInfo> {
-        val ctx = context ?: return emptyList()
-        val um = ctx.getSystemService(Context.USB_SERVICE) as UsbManager
-        return UsbSerialProber.getDefaultProber().findAllDrivers(um).map { d ->
-            val has = um.hasPermission(d.device)
-            val serie = if (has) runCatching { d.device.serialNumber }.getOrNull() else null
+        val pp = ports ?: return emptyList()
+        return pp.liste().distinctBy { it.appareil }.map { p ->
             UsbSerialInfo(
-                serial = serie,
-                label = d.device.productName ?: "USB serial",
-                deviceName = d.device.deviceName,
-                hasPermission = has,
-                cle = cleDe(d.device)
+                serial = p.serie,
+                label = p.produit ?: "USB serial",
+                deviceName = p.chemin,
+                hasPermission = pp.autorise(p),
+                cle = p.cle
             )
         }
     }
@@ -375,7 +350,7 @@ class Ft817Pair(private val context: Context? = null) {
     suspend fun sonde(cle: String, baud: Int, baudIc705: Int = Ic705Cat.VITESSE): Long? {
         // Yaesu first, then Icom: with an IC-705 in the pair, the adapter may
         // speak either, and each protocol ignores the other's frames.
-        for (poste in listOf<PosteSimple>(Ft817Cat(context), Ic705Cat(context))) {
+        for (poste in listOf<PosteSimple>(Ft817Cat(ports), Ic705Cat(ports))) {
             if (!poste.open(cle, if (poste is Ic705Cat) baudIc705 else baud)) continue
             val hz = runCatching { poste.readFrequency() }.getOrNull()
             poste.close()
@@ -393,7 +368,7 @@ class Ft817Pair(private val context: Context? = null) {
      */
     suspend fun repereIc705(cles: List<String>, baud: Int = Ic705Cat.VITESSE): String? {
         for (cle in cles) {
-            val icom = Ic705Cat(context)
+            val icom = Ic705Cat(ports)
             if (!icom.open(cle, baud)) continue
             val hz = runCatching { icom.readFrequency() }.getOrNull()
             icom.close()
@@ -404,13 +379,10 @@ class Ft817Pair(private val context: Context? = null) {
 
     /** Ask permission for every recognized adapter that lacks it. */
     fun requestPermissions() {
-        val ctx = context ?: return
-        val um = ctx.getSystemService(Context.USB_SERVICE) as UsbManager
-        UsbSerialProber.getDefaultProber().findAllDrivers(um).forEach { d ->
-            // One request code per adapter: the pair asks twice in a row, and
-            // two PendingIntents with the same code would collapse into one.
-            UsbPermission.ensure(ctx, um, d.device, ACTION_USB_PERMISSION, d.device.deviceId)
-        }
+        val pp = ports ?: return
+        // One request per adapter, each under its own code (the platform sees to it): the pair
+        // asks twice in a row, and two requests with the same code would collapse into one.
+        pp.liste().distinctBy { it.appareil }.forEach { pp.demande(it) }
     }
 
     /**

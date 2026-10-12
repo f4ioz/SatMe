@@ -91,7 +91,9 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
             "/api/locator" -> return ok.put("ok", station.poseLocator(q["l"].orEmpty()))
             "/api/indicatif" -> station.poseIndicatif(q["c"].orEmpty())
             "/api/catalogue" -> station.rafraichisCatalogue()
-            "/api/cat/connecter" -> station.connecteCat(q["modele"].orEmpty(), entier("port") ?: 0, entier("baud") ?: 0)
+            "/api/cat/connecter" -> station.connecteCat(StationPc.ChoixCat(q["modele"].orEmpty(),
+                port = entier("port") ?: -1, baud = entier("baud") ?: 0, portTx = entier("portTx") ?: -1,
+                rxIc705 = q["rxIc705"] == "1", txIc705 = q["txIc705"] == "1", bandeTx = entier("bandeTx") ?: 0))
             "/api/cat/deconnecter" -> station.deconnecteCat()
             "/api/rotor/connecter" -> {
                 val lien = if (q["lien"] == "ROTCTLD") "ROTCTLD" else "GS232"

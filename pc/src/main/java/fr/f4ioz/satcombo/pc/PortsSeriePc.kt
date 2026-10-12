@@ -45,12 +45,12 @@ class PortsSeriePc : PortsSerie {
     override fun demande(p: PortSerie) {}
     override suspend fun demandeEtAttends(p: PortSerie): Boolean = true
 
-    override suspend fun ouvre(p: PortSerie, baud: Int, lignes: Lignes): Ouverture = withContext(Dispatchers.IO) {
+    override suspend fun ouvre(p: PortSerie, baud: Int, lignes: Lignes, deuxArrets: Boolean): Ouverture = withContext(Dispatchers.IO) {
         val port = decrit(ports()).firstOrNull { it.first.cle == p.cle && it.first.port == p.port }?.second
             ?: return@withContext Ouverture(null, "port introuvable : ${p.libelle}")
         // Before opening: jSerialComm applies them as the port opens.
         if (lignes == Lignes.LEVEES) { port.setDTR(); port.setRTS() } else { port.clearDTR(); port.clearRTS() }
-        port.setComPortParameters(baud, 8, if (baud <= 4_800) SerialPort.TWO_STOP_BITS else SerialPort.ONE_STOP_BIT,
+        port.setComPortParameters(baud, 8, if (deuxArrets) SerialPort.TWO_STOP_BITS else SerialPort.ONE_STOP_BIT,
             SerialPort.NO_PARITY)
         port.setFlowControl(SerialPort.FLOW_CONTROL_DISABLED)
         if (!port.openPort()) {
@@ -83,7 +83,9 @@ class PortsSeriePc : PortsSerie {
                 val freres = cles.withIndex().filter { it.value == c }.map { it.index }
                 PortSerie(index = i, appareil = appareils.indexOf(c), port = freres.indexOf(i), nbPorts = freres.size,
                     libelle = p.systemPortPath + (if (desc.isNotBlank()) " — $desc" else ""),
-                    cle = c, vendorId = p.vendorID, produit = desc.ifBlank { null }) to p
+                    cle = c, vendorId = p.vendorID, produit = desc.ifBlank { null },
+                    serie = runCatching { p.serialNumber }.getOrNull()?.takeIf { it.isNotBlank() && it != "Unknown" },
+                    chemin = p.systemPortPath) to p
             }
         }
     }

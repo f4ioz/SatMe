@@ -26,7 +26,11 @@ data class PortSerie(
     val libelle: String,
     val cle: String,
     val vendorId: Int,
-    val produit: String?
+    val produit: String?,
+    /** The adapter's serial number, when it has one and may be read (the phone: once allowed). */
+    val serie: String? = null,
+    /** Where the system shows it: `/dev/bus/usb/…` on the phone, `/dev/ttyUSB0` or `COM3` on a PC. */
+    val chemin: String = ""
 )
 
 /**
@@ -37,7 +41,15 @@ data class PortSerie(
  * reboots the board. The drivers that need them up — Icom CDC bridges and
  * GS-232 sketches stay silent otherwise — say so.
  */
-enum class Lignes { BASSES, LEVEES }
+enum class Lignes {
+    BASSES, LEVEES,
+    /**
+     * Left as the platform leaves them: the FT-817's cables were always
+     * opened that way on the phone, and work. On a PC, where opening raises
+     * them, this means low.
+     */
+    TELLES
+}
 
 /** What opening gave: the line, or why not, in words for the operator. */
 class Ouverture(val lien: SerialLink?, val erreur: String)
@@ -56,6 +68,22 @@ interface PortsSerie {
     /** Asks the operator and waits for the answer (true: allowed). */
     suspend fun demandeEtAttends(p: PortSerie): Boolean
 
-    /** Opens [p] at [baud] baud, 8N1, with RTS/DTR as [lignes] says. */
-    suspend fun ouvre(p: PortSerie, baud: Int, lignes: Lignes = Lignes.BASSES): Ouverture
+    /**
+     * Opens [p] at [baud] baud, 8 bits, no parity, one stop bit — two when
+     * [deuxArrets] (Yaesu CAT, a Kenwood at 4800 or less) — with RTS/DTR as
+     * [lignes] says. Low lines are set low before the speed too: a RigExpert
+     * may carry PTT on them.
+     */
+    suspend fun ouvre(p: PortSerie, baud: Int, lignes: Lignes = Lignes.BASSES, deuxArrets: Boolean = false): Ouverture
+}
+
+/**
+ * The ports of the adapter with key [cle] (see `IdentiteUsb`), among those
+ * that may be opened without asking, in port order; empty when none answers
+ * to it.
+ */
+fun PortsSerie.portsDe(cle: String?): List<PortSerie> {
+    val permis = liste().filter { autorise(it) }
+    val choisie = fr.f4ioz.satcombo.cat.IdentiteUsb.resout(cle, permis.map { it.cle }.distinct()) ?: return emptyList()
+    return permis.filter { it.cle == choisie }.sortedBy { it.port }
 }
