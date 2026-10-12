@@ -82,6 +82,65 @@ object SkedVideo {
         if (ok && sortie.length() > 0) sortie else null
     }.getOrNull()
 
+    private fun pinceau(couleur: Int, trait: Float = 0f) = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = couleur
+        if (trait > 0) { style = Paint.Style.STROKE; strokeWidth = trait; strokeCap = Paint.Cap.ROUND; strokeJoin = Paint.Join.ROUND }
+    }
+
+    /**
+     * The map's part of a sked at [t], over tiles already drawn — the same in
+     * the video and on the sked screen: the earth that sees the satellite, the
+     * ground track (dashed, the common window green, flown so far darker),
+     * both stations and their line to it while they see it, the satellite.
+     * [x]/[y]: the map's projection; [u]: the scale of strokes and text
+     * (1 in the 1280×720 video).
+     */
+    fun dessineCarte(c: Canvas, x: (Double) -> Float, y: (Double) -> Float, tr: TraceSked, deMs: Long, aMs: Long, t: Long,
+                     sat: String, moi: String, autre: String, u: Float, largeurCarte: Float) {
+        val pts = tr.points
+        if (pts.size < 2) return
+        val i = tr.instant(t)
+        val vuMoi = i.elMoi >= 0; val vuLui = i.elAutre >= 0
+        // The footprint, a turn each side too (around a pole it spans the map).
+        val cercle = TraceSked.empreinte(i.lat, i.lon, i.altKm)
+        for (d in listOf(-360.0, 0.0, 360.0)) {
+            fun chemin(l: List<DoubleArray>) = Path().also { q -> l.forEachIndexed { k, v -> if (k == 0) q.moveTo(x(v[1] + d), y(v[0])) else q.lineTo(x(v[1] + d), y(v[0])) } }
+            c.drawPath(chemin(cercle).also { it.close() }, pinceau(Color.argb(45, 63, 224, 200)))
+            c.drawPath(chemin(cercle.take(TraceSked.POINTS_CERCLE)), pinceau(Color.argb(200, 20, 120, 110), 1.5f * u))
+        }
+        fun trace(filtre: (Int) -> Boolean, p: Paint) {
+            val q = Path(); var dedans = false
+            for (k in pts.indices) {
+                if (!filtre(k)) { dedans = false; continue }
+                if (!dedans) q.moveTo(x(tr.lons[k]), y(pts[k].lat)) else q.lineTo(x(tr.lons[k]), y(pts[k].lat))
+                dedans = true
+            }
+            c.drawPath(q, p)
+        }
+        trace({ true }, pinceau(Color.argb(150, 30, 40, 55), 2f * u).apply { pathEffect = DashPathEffect(floatArrayOf(7f * u, 6f * u), 0f) })
+        trace({ pts[it].t in deMs..aMs }, pinceau(Color.rgb(46, 158, 91), 6f * u))
+        trace({ pts[it].t <= t }, pinceau(Color.rgb(11, 110, 99), 3f * u))
+        fun station(lat: Double, lon: Double, vu: Boolean, couleur: Int, nom: String) {
+            if (vu) c.drawLine(x(lon), y(lat), x(i.lon), y(i.lat), pinceau(couleur, 2.5f * u))
+            point(c, x(lon), y(lat), 9f * u, couleur, nom, u, largeurCarte)
+        }
+        station(tr.moi.latDeg, tr.moi.lonDeg, vuMoi, AMBRE, moi)
+        station(tr.autre.latDeg, tr.lonAutre, vuLui, ROSE, autre)
+        point(c, x(i.lon), y(i.lat), 11f * u, if (vuMoi && vuLui) VERT else CYAN, sat, u, largeurCarte)
+    }
+
+    private fun point(c: Canvas, x: Float, y: Float, r: Float, couleur: Int, nom: String, u: Float, largeurCarte: Float) {
+        c.drawCircle(x, y, r, pinceau(couleur))
+        c.drawCircle(x, y, r, pinceau(Color.rgb(6, 19, 26), 2f * u))
+        val texte = Paint(Paint.ANTI_ALIAS_FLAG).apply { textSize = 18f * u; typeface = Typeface.DEFAULT_BOLD }
+        // Left of the point near the right edge: the name stays on the map.
+        val largeur = texte.measureText(nom)
+        val tx = if (x + r + 5 * u + largeur > largeurCarte) x - r - 5 * u - largeur else x + r + 5 * u; val ty = y - 6 * u
+        // A white halo, then the name: readable on any map.
+        c.drawText(nom, tx, ty, Paint(texte).apply { color = Color.argb(220, 255, 255, 255); style = Paint.Style.STROKE; strokeWidth = 4f * u })
+        c.drawText(nom, tx, ty, Paint(texte).apply { color = Color.rgb(6, 19, 26) })
+    }
+
     private class Dessin(val tr: TraceSked, val deMs: Long, val aMs: Long, val sat: String, val moi: String, val autre: String,
                          val icone: Bitmap?) {
         val pts = tr.points
@@ -109,36 +168,9 @@ object SkedVideo {
             val c = Canvas(bmp)
             c.drawColor(Color.rgb(221, 230, 241))
             fond?.let { c.drawBitmap(it, 0f, 0f, null) }
+            dessineCarte(c, ::x, ::y, tr, deMs, aMs, t, sat, moi, autre, 1f, CW.toFloat())
             val i = tr.instant(t)
             val vuMoi = i.elMoi >= 0; val vuLui = i.elAutre >= 0
-            // The footprint, a turn each side too (around a pole it spans the map).
-            val cercle = TraceSked.empreinte(i.lat, i.lon, i.altKm)
-            for (d in listOf(-360.0, 0.0, 360.0)) {
-                fun chemin(l: List<DoubleArray>) = Path().also { q -> l.forEachIndexed { k, v -> if (k == 0) q.moveTo(x(v[1] + d), y(v[0])) else q.lineTo(x(v[1] + d), y(v[0])) } }
-                c.drawPath(chemin(cercle).also { it.close() }, p(Color.argb(45, 63, 224, 200)))
-                c.drawPath(chemin(cercle.take(TraceSked.POINTS_CERCLE)), p(Color.argb(200, 20, 120, 110), trait = 1.5f))
-            }
-            // The track: dashed whole, the common window green, flown so far darker.
-            fun trace(filtre: (Int) -> Boolean, pinceau: Paint) {
-                val q = Path(); var dedans = false
-                for (k in pts.indices) {
-                    if (!filtre(k)) { dedans = false; continue }
-                    if (!dedans) q.moveTo(x(tr.lons[k]), y(pts[k].lat)) else q.lineTo(x(tr.lons[k]), y(pts[k].lat))
-                    dedans = true
-                }
-                c.drawPath(q, pinceau)
-            }
-            trace({ true }, p(Color.argb(150, 30, 40, 55), trait = 2f).apply { pathEffect = DashPathEffect(floatArrayOf(7f, 6f), 0f) })
-            trace({ pts[it].t in deMs..aMs }, p(Color.rgb(46, 158, 91), trait = 6f))
-            trace({ pts[it].t <= t }, p(Color.rgb(11, 110, 99), trait = 3f))
-            // The stations, their line to the satellite while they see it.
-            fun station(lat: Double, lon: Double, vu: Boolean, couleur: Int, nom: String) {
-                if (vu) c.drawLine(x(lon), y(lat), x(i.lon), y(i.lat), p(couleur, trait = 2.5f))
-                point(c, x(lon), y(lat), 9f, couleur, nom)
-            }
-            station(tr.moi.latDeg, tr.moi.lonDeg, vuMoi, AMBRE, moi)
-            station(tr.autre.latDeg, tr.lonAutre, vuLui, ROSE, autre)
-            point(c, x(i.lon), y(i.lat), 11f, if (vuMoi && vuLui) VERT else CYAN, sat)
             // The band on top of the map.
             c.drawRect(0f, 0f, CW.toFloat(), 64f, p(Color.argb(215, 11, 16, 22)))
             c.drawText("$sat · sked $moi ↔ $autre", 20f, 32f, p(Color.WHITE, 24f, true))
@@ -194,15 +226,6 @@ object SkedVideo {
                 c.drawCircle(px, py, 8f, p(AMBRE))
                 c.drawText(tf("sked_video_az_el", Math.round(az), Math.round(el)), x0, y0 + taille + 22, p(CLAIR, 15f))
             } else c.drawText(t("sked_video_sous_horizon"), x0, y0 + taille + 22, p(GRIS, 15f))
-        }
-
-        fun point(c: Canvas, x: Float, y: Float, r: Float, couleur: Int, nom: String) {
-            c.drawCircle(x, y, r, p(couleur))
-            c.drawCircle(x, y, r, p(Color.rgb(6, 19, 26), trait = 2f))
-            val tx = x + r + 5; val ty = y - 6
-            // A white halo, then the name: readable on any map.
-            c.drawText(nom, tx, ty, p(Color.argb(220, 255, 255, 255), 18f, true).apply { style = Paint.Style.STROKE; strokeWidth = 4f })
-            c.drawText(nom, tx, ty, p(Color.rgb(6, 19, 26), 18f, true))
         }
     }
 }

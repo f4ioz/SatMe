@@ -40,6 +40,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -491,6 +492,19 @@ fun SondeScreen(ui: UiState, vm: MainViewModel) {
                     if (fl == null || fl.count == 0) {
                         Text(t("sonde_flight_empty"), color = TextLo, fontSize = 12.sp)
                     } else {
+                        // The flight on the map, as on the PC: the track, the burst, the
+                        // landing estimated, the station and its line to the sonde.
+                        val piste = fl.track.filter { it.lat != 0.0 || it.lon != 0.0 }
+                        val atterrit = fl.estimatedLanding()
+                        val cadre = piste.map { it.lat to it.lon } + listOfNotNull(atterrit, obs?.let { it.latDeg to it.lonDeg })
+                        val densite = androidx.compose.ui.platform.LocalDensity.current.density
+                        if (piste.isNotEmpty()) {
+                            CarteTuiles(cadre, fl.serial, Modifier.fillMaxWidth().aspectRatio(1.2f), zoomMax = 13.0) { c, p ->
+                                dessineVolSonde(c, p, piste, if (fl.hasBurst) fl.burst else null, atterrit,
+                                    obs?.let { it.latDeg to it.lonDeg }, fl.serial.ifBlank { fl.type }, densite)
+                            }
+                            Spacer(Modifier.height(8.dp))
+                        }
                         SondeLine(t("sonde_points"), fl.count.toString())
                         SondeLine(t("sonde_duration"),
                             "%d min".format(fl.durationSec / 60))
@@ -643,4 +657,42 @@ private fun share(ctx: android.content.Context, f: File) {
             .addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
         ctx.startActivity(android.content.Intent.createChooser(i, f.name))
     }
+}
+
+/** A radiosonde's flight over the map's tiles (the PC draws the same). */
+private fun dessineVolSonde(c: android.graphics.Canvas, p: ProjectionCarte, piste: List<fr.f4ioz.satcombo.sonde.SondeFrame>,
+                            eclatement: fr.f4ioz.satcombo.sonde.SondeFrame?, atterrit: Pair<Double, Double>?,
+                            moi: Pair<Double, Double>?, nom: String, d: Float) {
+    fun pinceau(couleur: Int, trait: Float = 0f, tirets: Boolean = false) = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+        color = couleur
+        if (trait > 0) { style = android.graphics.Paint.Style.STROKE; strokeWidth = trait; strokeCap = android.graphics.Paint.Cap.ROUND; strokeJoin = android.graphics.Paint.Join.ROUND }
+        if (tirets) pathEffect = android.graphics.DashPathEffect(floatArrayOf(5 * d, 4 * d), 0f)
+    }
+    fun point(la: Double, lo: Double, couleur: Int, r: Float, texte: String?) {
+        val x = p.x(lo); val y = p.y(la)
+        c.drawCircle(x, y, r, pinceau(couleur)); c.drawCircle(x, y, r, pinceau(android.graphics.Color.rgb(6, 19, 26), 1.5f * d))
+        if (texte == null) return
+        val t = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply { textSize = 12 * d; typeface = android.graphics.Typeface.DEFAULT_BOLD }
+        // Left of the point near the right edge: the name stays on the map.
+        val tx = if (x + r + 3 * d + t.measureText(texte) > p.largeur) x - r - 3 * d - t.measureText(texte) else x + r + 3 * d
+        c.drawText(texte, tx, y - 4 * d, android.graphics.Paint(t).apply { color = android.graphics.Color.argb(220, 255, 255, 255); style = android.graphics.Paint.Style.STROKE; strokeWidth = 3 * d })
+        c.drawText(texte, tx, y - 4 * d, android.graphics.Paint(t).apply { color = android.graphics.Color.rgb(6, 19, 26) })
+    }
+    val rose = android.graphics.Color.rgb(232, 111, 168)
+    val chemin = android.graphics.Path()
+    piste.forEachIndexed { k, f -> if (k == 0) chemin.moveTo(p.x(f.lon), p.y(f.lat)) else chemin.lineTo(p.x(f.lon), p.y(f.lat)) }
+    c.drawPath(chemin, pinceau(rose, 3 * d))
+    val der = piste.last()
+    atterrit?.let { (la, lo) ->
+        c.drawLine(p.x(der.lon), p.y(der.lat), p.x(lo), p.y(la), pinceau(rose, 2 * d, tirets = true))
+        // Its name only when apart from the sonde (nearly down, the two points are one).
+        val loin = kotlin.math.hypot((p.x(lo) - p.x(der.lon)).toDouble(), (p.y(la) - p.y(der.lat)).toDouble()) > 24 * d
+        point(la, lo, android.graphics.Color.rgb(229, 72, 77), 6 * d, if (loin) t("sonde_landing") else null)
+    }
+    eclatement?.let { point(it.lat, it.lon, android.graphics.Color.WHITE, 5 * d, t("sonde_burst")) }
+    moi?.let { (la, lo) ->
+        c.drawLine(p.x(lo), p.y(la), p.x(der.lon), p.y(der.lat), pinceau(android.graphics.Color.rgb(255, 180, 84), 1.5f * d, tirets = true))
+        point(la, lo, android.graphics.Color.rgb(255, 180, 84), 6 * d, null)
+    }
+    point(der.lat, der.lon, android.graphics.Color.rgb(63, 224, 200), 7 * d, nom)
 }

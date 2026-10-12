@@ -146,6 +146,15 @@ class MainActivity : ComponentActivity() {
 
     /** A notification tap carries the satellite to open. */
     private fun handleOpenIntent(intent: android.content.Intent?) {
+        // Development builds only: open a screen with something to show, for trying it on an emulator
+        // (adb shell am start -n fr.f4ioz.satcombo/.MainActivity --es essai sked|sonde [--es loc IN80]).
+        if ((applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0) {
+            when (intent?.getStringExtra("essai")) {
+                "sked" -> { vm.openSked(); vm.setSkedSat(intent.getIntExtra("cat", 25544))
+                    vm.setSkedOtherLoc(intent.getStringExtra("loc") ?: "IN80"); vm.computeSkedPlans() }
+                "sonde" -> { vm.openSonde(); vm.essaiSonde() }
+            }
+        }
         val cat = intent?.getIntExtra("open_catnum", -1) ?: -1
         if (cat > 0) {
             val aos = intent?.getLongExtra("open_aos", 0L) ?: 0L

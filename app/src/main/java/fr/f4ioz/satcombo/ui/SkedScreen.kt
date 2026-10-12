@@ -39,6 +39,7 @@ import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -291,7 +292,26 @@ private fun SkedPlanPanel(plan: SkedPlan, ui: UiState, ctx: android.content.Cont
             .map { it.azDeg to it.elDeg }
     }
 
+    // The replay over the earth, as on the PC and in the video: computed once per window.
+    val trace by produceState<fr.f4ioz.satcombo.domain.TraceSked?>(null, plan) {
+        value = withContext(Dispatchers.Default) { runCatching { vm.traceSked(plan) }.getOrNull() }
+    }
+    val cadreCarte = remember(trace) {
+        trace?.let { tr ->
+            tr.points.indices.filter { tr.points[it].elMoi >= 0 || tr.points[it].elAutre >= 0 }.map { tr.points[it].lat to tr.lons[it] } +
+                listOf(tr.moi.latDeg to tr.moi.lonDeg, tr.autre.latDeg to tr.lonAutre)
+        } ?: emptyList()
+    }
+    val densite = androidx.compose.ui.platform.LocalDensity.current.density
+
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        // The map: the ground track, the common window green, the earth that sees it, both stations.
+        trace?.let { tr ->
+            CarteTuiles(cadreCarte, plan, Modifier.fillMaxWidth().aspectRatio(1.25f), zoomMax = 8.0) { c, p ->
+                SkedVideo.dessineCarte(c, p::x, p::y, tr, plan.mutualStartMs, plan.mutualEndMs, curT,
+                    plan.satName, meLabel, plan.dx.locator, densite * 0.75f, p.largeur)
+            }
+        }
         // Two polar plots.
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             SkedStationBlock(

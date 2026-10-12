@@ -5492,6 +5492,18 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     // ===================== weather radiosondes =====================
 
+    /** Development builds: the RS41 test pattern into the decoder, a flight to see on the map. */
+    fun essaiSonde() {
+        viewModelScope.launch(Dispatchers.Default) {
+            val sh = fr.f4ioz.satcombo.sonde.SondeHub
+            sh.stop()
+            sh.start(null, fr.f4ioz.satcombo.sonde.SondeMire.RATE, fr.f4ioz.satcombo.sonde.SondeMire.DEMO_FREQ_HZ, source = "DEMO", model = "RS41", log = false)
+            val src = fr.f4ioz.satcombo.sonde.SondeMire.Source("RS41", 48.70, 2.00, 90)
+            val bloc = ShortArray(fr.f4ioz.satcombo.sonde.SondeMire.RATE / 4)
+            while (true) { val n = src.read(bloc); if (n <= 0) break; sh.feedLive(bloc, n) }
+        }
+    }
+
     fun openSonde() {
         if (!hasExtension(fr.f4ioz.satcombo.data.Extensions.SONDE)) return
         va(Screen.SONDE)
