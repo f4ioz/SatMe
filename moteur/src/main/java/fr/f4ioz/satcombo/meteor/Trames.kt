@@ -40,6 +40,8 @@ class Trames(private val surTrame: (ByteArray) -> Unit) {
     private val recherche = ByteArray(2 * PAIRES_RECHERCHE + 2)
     private var nRecherche = 0
     private var lecture = 0          // which of the 16 readings
+    /** Symbols let go before the next search (see [cherche]). */
+    private var aSauter = 0
     private var bonsBlocs = 0
     private var mauvaisBlocs = 0
 
@@ -66,7 +68,10 @@ class Trames(private val surTrame: (ByteArray) -> Unit) {
     fun traite(soft: ByteArray, count: Int) {
         var i = 0
         while (i < count) {
-            if (!verrouille) {
+            if (!verrouille && aSauter > 0) {
+                val k = minOf(aSauter, count - i)
+                aSauter -= k; i += k
+            } else if (!verrouille) {
                 val libre = recherche.size - nRecherche
                 val k = minOf(libre, count - i)
                 System.arraycopy(soft, i, recherche, nRecherche, k)
@@ -127,10 +132,14 @@ class Trames(private val surTrame: (ByteArray) -> Unit) {
             nRecherche = 0
             for (k in start until garde.size) entre(garde[k].toInt())
         } else {
-            // Slide by a quarter, keep trying.
-            val garde = recherche.size / 4
-            System.arraycopy(recherche, garde, recherche, 0, recherche.size - garde)
-            nRecherche = recherche.size - garde
+            // Nothing here: a fresh window next time, three windows let go first.
+            // Each search decodes its window sixteen times; sliding by a quarter
+            // decoded every symbol of noise sixty-four times — slower than real
+            // time before the satellite rose, the dongle's blocks dropped. Any
+            // window of a good signal locks (every reading is tried), so a
+            // signal appearing is found ~85 ms later; once locked, nothing changes.
+            nRecherche = 0
+            aSauter = SAUT_RECHERCHE * recherche.size
         }
     }
 
@@ -227,6 +236,8 @@ class Trames(private val surTrame: (ByteArray) -> Unit) {
         const val VCDU = 892
         const val PAIRES_RECHERCHE = 1024
         const val SEUIL = 0.07
+        /** Windows let go after a failed search: a quarter of the symbols searched, sixteen times over. */
+        const val SAUT_RECHERCHE = 3
         const val SEUIL_PERTE = 0.09
     }
 }

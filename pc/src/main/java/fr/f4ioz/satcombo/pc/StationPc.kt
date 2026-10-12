@@ -196,13 +196,49 @@ class StationPc(
 
     fun ecouteSdr(): EcouteSdr? {
         val e = _etat.value
-        val t = emetteurChoisi() ?: return null
+        // METEOR: the transmitter SatMe decodes (LRPT 72 k on 137.9 or 137.1), whichever is chosen.
+        val t = if (estMeteor()) {
+            val c = emetteurChoisi()
+            if (c != null && fr.f4ioz.satcombo.meteor.RecepteurMeteor.voieDecodable(c.description, c.downlinkLowHz)) c
+            else e.emetteurs.getOrNull(fr.f4ioz.satcombo.meteor.RecepteurMeteor.choisitVoie(e.emetteurs.map { it.description to it.downlinkLowHz })) ?: c
+        } else emetteurChoisi()
+        t ?: return null
         val lo = t.downlinkLowHz ?: return null
         val repos = e.repos ?: (lo + (t.downlinkHighHz ?: lo)) / 2
         // Below the horizon nothing is heard: the rest, not a Doppler that means nothing.
         val p = e.position
         val rr = if (p != null && p.elevationDeg >= 0) p.rangeRateKmS else 0.0
         return EcouteSdr(repos, Doppler.downlink(repos, rr) + e.calibHz, t.mode.orEmpty(), e.suivi?.name.orEmpty())
+    }
+
+    /** The satellite followed is a METEOR-M sending LRPT pictures. */
+    fun estMeteor(): Boolean = _etat.value.suivi?.let { fr.f4ioz.satcombo.meteor.RecepteurMeteor.emetLrpt(it.catalogNumber, it.name) } == true
+
+    /** Is the followed satellite going north now (the picture is turned so that north is up)? */
+    fun monteVersLeNord(): Boolean {
+        val sat = _etat.value.suivi ?: return false
+        val obs = _etat.value.observateur ?: return false
+        val t = horloge()
+        return runCatching { predicteur.positionAt(sat, obs, t + 60_000).latDeg > predicteur.positionAt(sat, obs, t).latDeg }.getOrDefault(false)
+    }
+
+    /** The next METEOR LRPT pass (or the one under way) within [heures]: satellite and pass. */
+    fun prochainPassageMeteor(heures: Int = 24): Pair<TleEntry, fr.f4ioz.satcombo.data.SatPass>? {
+        val obs = _etat.value.observateur ?: return null
+        val now = horloge()
+        // Kept a minute: the page asks every second.
+        cacheMeteor?.let { (h, t, r) -> if (h == heures && now - t < 60_000L && (r == null || r.second.losEpochMs > now)) return r }
+        return calculeProchainMeteor(obs, now, heures).also { cacheMeteor = Triple(heures, now, it) }
+    }
+    @Volatile private var cacheMeteor: Triple<Int, Long, Pair<TleEntry, fr.f4ioz.satcombo.data.SatPass>?>? = null
+
+    private fun calculeProchainMeteor(obs: Observer, now: Long, heures: Int): Pair<TleEntry, fr.f4ioz.satcombo.data.SatPass>? {
+        return _etat.value.satellites.filter { fr.f4ioz.satcombo.meteor.RecepteurMeteor.emetLrpt(it.catalogNumber, it.name) }.mapNotNull { sat ->
+            runCatching {
+                predicteur.upcomingPasses(sat, obs, now - 20 * 60_000L, heures, settings.minElevDeg.toDouble())
+                    .firstOrNull { it.losEpochMs > now }?.let { sat to it }
+            }.getOrNull()
+        }.minByOrNull { it.second.aosEpochMs }
     }
 
     /** A sky frequency as the dongle receives it: through the LNB when it covers it. */

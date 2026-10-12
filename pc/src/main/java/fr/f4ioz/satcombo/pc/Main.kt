@@ -57,15 +57,17 @@ fun main(args: Array<String>) {
     // The sound card used last time, started again: listening opens nothing on the rig.
     son.carte.takeIf { it.isNotBlank() }?.let { son.son.demarre(it) }
     val journal = JournalPc(station, carnet, son, File(dossier, "journal"))
+    // The SDR dongle: nothing opened until asked (rtl_tcp started then, stopped with it).
+    val meteor = MeteorPc(station, File(dossier, "meteor"))
+    val sdr = SdrPc(station, son.son, station.stockage, portee, dossierSondes = File(dossier, "sondes"), meteor = meteor)
     portee.launch {
         while (true) {
             runCatching { son.tic() }
             runCatching { journal.tic() }
+            runCatching { sdr.ticMeteor() }
             kotlinx.coroutines.delay(1000)
         }
     }
-    // The SDR dongle: nothing opened until asked (rtl_tcp started then, stopped with it).
-    val sdr = SdrPc(station, son.son, station.stockage, portee, dossierSondes = File(dossier, "sondes"))
     val serveur = ServeurPc(station, port, reseau, carnet, son, JournalWebPc(journal, station, dossier), ImportPc(station, carnet, journal), sdr)
     serveur.demarre()
     println("SatMe — station PC")

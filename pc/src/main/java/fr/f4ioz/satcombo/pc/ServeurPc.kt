@@ -124,6 +124,11 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
             "/api/sdr/spectre" -> envoie(sortie, "200 OK", "application/json; charset=utf-8",
                 (sdr?.let { JsonPc.spectre(it, q["span"]?.toIntOrNull() ?: 48_000, q["n"]?.toIntOrNull() ?: 512) } ?: JSONObject()).toString().toByteArray())
             "/api/sondes" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", (sdr?.let { JsonPc.sondes(it) } ?: JSONObject().put("absent", true)).toString().toByteArray())
+            "/api/meteor" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", (sdr?.let { JsonPc.meteor(it) } ?: JSONObject().put("absent", true)).toString().toByteArray())
+            "/api/meteor/apercu.png" -> {
+                val png = sdr?.meteor?.apercuPng()
+                if (png != null) envoie(sortie, "200 OK", "image/png", png) else envoie(sortie, "404 Not Found", "text/plain; charset=utf-8", "pas d'aperçu".toByteArray())
+            }
             "/api/frise" -> {
                 val (debut, lignes) = kotlinx.coroutines.runBlocking { station.frise((q["h"]?.toIntOrNull() ?: 12).coerceIn(2, 48)) }
                 envoie(sortie, "200 OK", "application/json; charset=utf-8", JSONObject().put("debut", debut)
@@ -183,6 +188,7 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                     chemin.startsWith("/enregistrements/") -> son?.fichierEnregistrement(java.net.URLDecoder.decode(chemin.removePrefix("/enregistrements/"), "UTF-8"))
                     chemin.startsWith("/sstv/") -> son?.fichierImage(java.net.URLDecoder.decode(chemin.removePrefix("/sstv/"), "UTF-8"))
                     // A sonde's log or track: only a plain name, inside its folder.
+                    chemin.startsWith("/meteor/") -> sdr?.meteor?.fichier(java.net.URLDecoder.decode(chemin.removePrefix("/meteor/"), "UTF-8"))
                     chemin.startsWith("/sondes/") -> java.net.URLDecoder.decode(chemin.removePrefix("/sondes/"), "UTF-8")
                         .takeIf { it.matches(Regex("[A-Za-z0-9._-]+")) }?.let { n -> sdr?.sondes?.journaux()?.firstOrNull { it.name == n } }
                     else -> null
@@ -303,6 +309,30 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 val f = sdr?.sondes?.exporte(q["kml"] == "1") ?: return JSONObject().put("ok", false).put("erreur", "Pas de vol à exporter.")
                 return JSONObject().put("ok", true).put("nom", f.name)
             }
+            "/api/meteor/demarrer" -> {
+                val d = sdr ?: return JSONObject().put("ok", false)
+                // The followed satellite if it is a METEOR, otherwise the one of the next pass.
+                if (!station.estMeteor()) {
+                    val (sat, _) = station.prochainPassageMeteor(48) ?: return JSONObject().put("ok", false).put("erreur", "Aucun METEOR-M LRPT dans le catalogue.")
+                    station.suis(sat)
+                }
+                d.suitSatellite = true
+                if (!d.demarre()) return JSONObject().put("ok", false).put("erreur", d.etat.value.erreur)
+            }
+            "/api/meteor/arreter" -> sdr?.arrete()
+            "/api/meteor/auto" -> station.settings.meteorAuto = q["on"] == "1"
+            "/api/meteor/cotes" -> { station.settings.meteorCotes = q["on"] == "1"; sdr?.meteor?.recepteur?.cotes = station.settings.meteorCotes }
+            "/api/meteor/enregistre" -> {
+                val m = sdr?.meteor ?: return JSONObject().put("ok", false)
+                val noms = m.ecrit(m.recepteur.imagesMaintenant())
+                if (noms.isEmpty()) return JSONObject().put("ok", false).put("erreur", "Pas encore assez de lignes (80 au moins).")
+            }
+            "/api/meteor/fichier" -> {
+                val m = sdr?.meteor ?: return JSONObject().put("ok", false)
+                m.decodeFichier(q["chemin"].orEmpty())?.let { return JSONObject().put("ok", false).put("erreur", it) }
+            }
+            "/api/meteor/annule" -> sdr?.meteor?.recepteur?.annuleFichier()
+            "/api/meteor/supprime" -> sdr?.meteor?.supprime(q["nom"].orEmpty())
             "/api/qo100/frequence" -> q["hz"]?.toLongOrNull()?.let { station.qo100.descente(it) }
             "/api/qo100/pas" -> q["hz"]?.toLongOrNull()?.let { station.qo100.pas(it) }
             "/api/qo100/balise" -> station.qo100.balise()
@@ -467,6 +497,26 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
 
 /** The station as the page reads it. */
 object JsonPc {
+    /** METEOR: the receiver, the next pass, the pictures. */
+    fun meteor(d: SdrPc): JSONObject {
+        val m = d.meteor ?: return JSONObject().put("absent", true)
+        val e = m.recepteur.etat
+        val st = d.station
+        val o = JSONObject().put("actif", e.actif).put("source", e.source).put("satellite", e.satellite)
+            .put("qualite", Math.round(e.qualiteDb * 10) / 10.0).put("verrou", e.verrou).put("trames", e.trames).put("ratees", e.tramesRatees)
+            .put("lignes", e.lignes).put("canaux", JSONArray(e.canaux)).put("frequence", e.frequenceHz).put("perdus", e.perdus)
+            .put("progression", e.progression.toDouble()).put("fichier", e.fichier ?: "").put("erreur", e.erreur ?: "").put("apercus", e.apercus)
+            .put("auto", st.settings.meteorAuto).put("cotes", st.settings.meteorCotes).put("sdrActif", d.etat.value.actif)
+            .put("sdrErreur", d.etat.value.erreur).put("suiviMeteor", st.estMeteor()).put("dernier", m.dernier ?: "")
+        st.prochainPassageMeteor(48)?.let { (sat, p) ->
+            o.put("prochain", JSONObject().put("sat", sat.name).put("aos", p.aosEpochMs).put("los", p.losEpochMs).put("el", Math.round(p.maxElevationDeg)))
+        }
+        o.put("images", JSONArray(m.images().take(60).map { (f, s) ->
+            JSONObject().put("nom", f.name).put("sat", s.satName).put("t", s.timeMs).put("mode", s.mode).put("note", s.note)
+                .put("complete", s.complete).put("source", s.source) }))
+        return o
+    }
+
     /** The radiosondes: the dongle on them, the decoder, the sites around, the flight. */
     fun sondes(d: SdrPc): JSONObject {
         val st = d.station.settings

@@ -68,7 +68,8 @@ object PagePc {
   .discret { background:transparent; border:none; }
   nav { display:flex; gap:4px; }
   nav button { background:transparent; border:1px solid transparent; color:var(--gris); padding:6px 14px; }
-  @media (max-width:1500px) { nav button { padding:6px 9px; } header { gap:10px; } }
+  @media (max-width:1900px) { nav button { padding:5px 8px; font-size:13px; } header { gap:10px; } nav { gap:2px; } }
+  @media (max-width:1500px) { nav button { padding:4px 6px; font-size:12.5px; } header h1 { font-size:16px; } #info-station { display:none; } }
   nav button.actif { color:var(--cyan); border-color:var(--bord); background:var(--carte); }
   .grille2 { display:grid; grid-template-columns:minmax(320px,1fr) minmax(420px,1.6fr); gap:12px; padding:12px 16px; }
   @media (max-width:900px) { .grille2 { grid-template-columns:1fr; } }
@@ -105,6 +106,12 @@ object PagePc {
   .s2-carte { position:relative; height:420px; margin-top:8px; border-radius:8px; overflow:hidden; }
   .s2-carte canvas { position:absolute; inset:0; width:100%; height:100%; cursor:grab; touch-action:none; }
   .s2-gros { font-family:ui-monospace,Consolas,monospace; font-size:30px; font-weight:800; }
+  .m-droite { display:flex; flex-direction:column; min-width:0; }
+  .m-image { flex:1; min-height:200px; height:460px; margin-top:8px; background:#0E1720; border-radius:8px; overflow:hidden; display:flex; align-items:center; justify-content:center; }
+  .m-image img { max-width:100%; max-height:100%; object-fit:contain; }
+  .m-galerie { display:flex; gap:6px; overflow-x:auto; margin-top:8px; flex:none; }
+  .m-galerie img { height:72px; border-radius:4px; cursor:pointer; border:2px solid transparent; }
+  .m-galerie img.choisi { border-color:var(--cyan); }
   /* On a computer's screen each tab fits the window: what is longer scrolls in its own box. */
   @media (min-width:1101px) and (min-height:600px) {
     body { height:100vh; display:flex; flex-direction:column; overflow:hidden; }
@@ -125,6 +132,8 @@ object PagePc {
     #k-grille { height:100%; }
     .r-droite { height:100%; margin:0; }
     .s2-droite { height:100%; margin:0; }
+    .m-droite { height:100%; margin:0; }
+    .m-image { height:auto; }
     .s2-carte { flex:1; height:auto; min-height:200px; }
     .r-cascade { flex:1; min-height:120px; height:auto; }
     .k-gauche { display:flex; flex-direction:column; min-height:0; }
@@ -143,7 +152,7 @@ object PagePc {
   <span class="g" id="info-station"></span>
   <span class="g" id="cat-statut-court"></span>
   <nav id="onglets">
-    <button data-v="station" class="actif">Station</button><button data-v="carnet">Carnet</button><button data-v="agenda">Agenda</button><button data-v="carres">Carrés</button><button data-v="frise">Frise</button><button data-v="sked">Sked</button><button data-v="qo100">QO-100</button><button data-v="sdr">SDR</button><button data-v="sondes">Sondes</button><button data-v="son">Son</button><button data-v="sstv">SSTV</button><button data-v="aprs">APRS</button><button data-v="ft8">FT8</button><a href="/journal" style="text-decoration:none"><button title="Les passages enregistrés, rejoués">Journal</button></a><button data-v="reglages">Réglages</button>
+    <button data-v="station" class="actif">Station</button><button data-v="carnet">Carnet</button><button data-v="agenda">Agenda</button><button data-v="carres">Carrés</button><button data-v="frise">Frise</button><button data-v="sked">Sked</button><button data-v="qo100">QO-100</button><button data-v="sdr">SDR</button><button data-v="sondes">Sondes</button><button data-v="meteor">METEOR</button><button data-v="son">Son</button><button data-v="sstv">SSTV</button><button data-v="aprs">APRS</button><button data-v="ft8">FT8</button><a href="/journal" style="text-decoration:none"><button title="Les passages enregistrés, rejoués">Journal</button></a><button data-v="reglages">Réglages</button>
   </nav>
   <span id="rec" class="pastille" style="display:none;background:rgba(229,72,77,.2);color:var(--rose)"></span>
   <span id="heure"></span>
@@ -684,6 +693,41 @@ object PagePc {
   </div>
 </div>
 </div>
+<div class="vue" id="v-meteor" hidden>
+<div class="grille2">
+  <div>
+    <div class="carte">
+      <div class="t">METEOR-M · images LRPT <span id="m-pastille" class="pastille off">arrêté</span></div>
+      <div class="petit" id="m-prochain"></div>
+      <div class="ligne"><button class="primaire" onclick="mPost('demarrer')">Recevoir</button><button onclick="mPost('arreter')">Arrêter</button>
+        <button onclick="mPost('enregistre')" title="Écrire ce qui est reçu, sans arrêter">Enregistrer maintenant</button></div>
+      <div class="avert" id="m-erreur"></div>
+      <label class="petit" style="display:block;margin-top:8px"><input type="checkbox" id="m-auto" onchange="mPost('auto?on=' + (this.checked ? 1 : 0))"> Recevoir tout seul : la clé démarre une minute avant chaque passage METEOR (si elle est libre) et s'arrête après</label>
+      <label class="petit" style="display:block;margin-top:4px"><input type="checkbox" id="m-cotes" onchange="mPost('cotes?on=' + (this.checked ? 1 : 0))"> Tracer les côtes et les frontières</label>
+      <div class="petit" style="margin-top:6px">La clé (onglet SDR) reçoit les 120 kHz du signal numérique sur 137,9 ou 137,1 MHz avec le Doppler ; rien à écouter. Les images sont écrites à l'arrêt, nord en haut.</div>
+    </div>
+    <div class="carte">
+      <div class="t">Décodage</div>
+      <div class="paire"><span>Synchro <b id="m-verrou">—</b></span><span>Qualité <b class="val" id="m-qualite">—</b></span><span class="petit" id="m-freq"></span></div>
+      <div class="ligne"><span class="petit" id="m-trames"></span></div>
+      <div class="ligne"><span class="petit" id="m-lignes"></span></div>
+    </div>
+    <div class="carte">
+      <div class="t">Un enregistrement</div>
+      <div class="petit">Le signal brut d'un passage (WAV I/Q, 8, 16 ou 32 bits, 150 à 3 000 kS/s), sur ce PC : son chemin.</div>
+      <div class="ligne"><input id="m-chemin" placeholder="/home/…/meteor-m2-4-20260305.wav"><button onclick="mPost('fichier?chemin=' + enc(v('m-chemin')))">Décoder</button>
+        <button onclick="mPost('annule')">Annuler</button></div>
+      <progress id="m-prog" max="1" value="0" style="margin-top:6px" hidden></progress>
+      <div class="petit" id="m-fichier"></div>
+    </div>
+  </div>
+  <div class="carte m-droite">
+    <div class="paire"><b id="m-titre">—</b><span class="petit" id="m-note"></span><a id="m-lien" style="margin-left:auto;color:var(--cyan)" download></a></div>
+    <div class="m-image"><img id="m-img" alt=""></div>
+    <div class="m-galerie" id="m-galerie"></div>
+  </div>
+</div>
+</div>
 <div class="vue" id="v-ft8" hidden>
 <div class="grille2" style="grid-template-columns:minmax(380px,1fr) minmax(500px,1.5fr)">
   <div>
@@ -1064,6 +1108,7 @@ function vue(n) {
   if (n === 'qo100') chargeQo100(true);
   if (n === 'sdr') ticSdr();
   if (n === 'sondes') { SV2.libre = false; ticSondes(); }
+  if (n === 'meteor') ticMeteor();
 }
 document.querySelectorAll('#onglets button[data-v]').forEach(b => b.onclick = () => vue(b.dataset.v));
 
@@ -2037,6 +2082,51 @@ function dessineSondes() {
 }
 attacheCarte(g('s2-carte'), SV2, dessineSondes, cadreSondes, 2);
 
+// ------------------------------------------------------------------ METEOR
+let M = null, mChoisie = null, mApercu = -1;
+async function mPost(a) { const j = await post('/api/meteor/' + a); if (j && j.ok === false && j.erreur) txt('m-erreur', j.erreur); ticMeteor(); return j; }
+async function ticMeteor() {
+  if (g('v-meteor').hidden) return;
+  try { M = await (await fetch('/api/meteor')).json(); } catch (x) { return; }
+  const m = M, n = Date.now();
+  const enFichier = m.progression >= 0;
+  g('m-pastille').className = 'pastille ' + (m.actif || enFichier ? 'on' : 'off');
+  txt('m-pastille', m.actif ? 'réception' : enFichier ? 'fichier' : 'arrêté');
+  const p = m.prochain;
+  txt('m-prochain', p ? (n >= p.aos && n <= p.los ? 'En cours : ' + p.sat + ', fin à ' + hm(p.los) : 'Prochain passage : ' + p.sat + ' ' + jourHeure(p.aos) + ' (dans ' + duree(p.aos - n) + ')') +
+    ' · élévation max ' + p.el + '°' : 'Aucun passage METEOR-M LRPT connu dans les 48 h.');
+  if (document.activeElement !== g('m-auto')) g('m-auto').checked = m.auto;
+  if (document.activeElement !== g('m-cotes')) g('m-cotes').checked = m.cotes;
+  if (!m.actif && m.sdrErreur) txt('m-erreur', m.sdrErreur); else if (m.actif) txt('m-erreur', '');
+  txt('m-verrou', m.actif || enFichier ? (m.verrou ? 'tenue' : 'cherchée') : '—');
+  g('m-verrou').style.color = m.verrou ? 'var(--vert)' : '';
+  txt('m-qualite', m.actif || enFichier ? m.qualite.toFixed(1) + ' dB' : '—');
+  txt('m-freq', m.actif ? 'porteuse ' + (m.frequence > 0 ? '+' : '') + m.frequence + ' Hz' + (m.perdus ? ' · ' + m.perdus + ' blocs perdus' : '') : '');
+  txt('m-trames', m.trames || m.ratees ? m.trames + ' trames bonnes · ' + m.ratees + ' perdues' : '');
+  txt('m-lignes', m.lignes ? m.lignes + ' lignes · canaux ' + m.canaux.map(c => c - 63).join(', ') : '');
+  g('m-prog').hidden = !enFichier; if (enFichier) g('m-prog').value = m.progression;
+  txt('m-fichier', m.source === 'fichier' ? m.fichier + (m.erreur ? ' : ' + m.erreur : enFichier ? '' : ' : terminé') : '');
+  // The gallery.
+  const gal = m.images.map(i => '<img src="/meteor/' + encodeURIComponent(i.nom) + '" title="' + esc(i.sat + ' · ' + i.note) + '" data-nom="' + esc(i.nom) + '"' +
+    (i.nom === mChoisie ? ' class="choisi"' : '') + ' onclick="mChoisis(this.dataset.nom)">').join('');
+  if (g('m-galerie').dataset.vu !== gal) { g('m-galerie').dataset.vu = gal; g('m-galerie').innerHTML = gal || '<span class="petit">Aucune image encore.</span>'; }
+  // The picture shown: the preview while receiving, else the one chosen, else the newest.
+  if ((m.actif || enFichier) && m.apercus > 0) {
+    if (m.apercus !== mApercu) { mApercu = m.apercus; g('m-img').src = '/api/meteor/apercu.png?' + m.apercus; }
+    txt('m-titre', m.satellite + ' · en cours'); txt('m-note', m.lignes + ' lignes'); g('m-lien').textContent = '';
+  } else {
+    const i = m.images.find(x => x.nom === mChoisie) || m.images[0];
+    if (i) {
+      const src = '/meteor/' + encodeURIComponent(i.nom);
+      if (g('m-img').getAttribute('src') !== src) g('m-img').src = src;
+      txt('m-titre', i.sat + ' · ' + (i.t ? jourHeure(i.t) : '')); txt('m-note', i.note + (i.source === 'file' ? ' · d’un enregistrement' : ''));
+      g('m-lien').href = src; g('m-lien').textContent = 'Télécharger';
+    } else { g('m-img').removeAttribute('src'); txt('m-titre', 'Aucune image'); txt('m-note', ''); g('m-lien').textContent = ''; }
+  }
+}
+function mChoisis(nom) { mChoisie = nom; g('m-galerie').dataset.vu = ''; ticMeteor(); }
+setInterval(ticMeteor, 1000);
+
 // ------------------------------------------------------------------ FT8
 let H = null, ft8Vu = '';
 async function ticFt8() {
@@ -2127,7 +2217,7 @@ setInterval(ticSon, 1000);
 
 lienRotor(); avertCat();
 // The tab from the address (#carnet, a bookmark), else the last one seen.
-if (['station', 'carnet', 'agenda', 'carres', 'frise', 'sked', 'qo100', 'sdr', 'sondes', 'son', 'sstv', 'aprs', 'ft8', 'reglages'].includes(location.hash.slice(1))) vue(location.hash.slice(1));
+if (['station', 'carnet', 'agenda', 'carres', 'frise', 'sked', 'qo100', 'sdr', 'sondes', 'meteor', 'son', 'sstv', 'aprs', 'ft8', 'reglages'].includes(location.hash.slice(1))) vue(location.hash.slice(1));
 else try { const n = localStorage.getItem('vue'); if (n) vue(n); } catch (x) {}
 tic(); chargeListe(); chargePorts(); chargeSatellites();
 setInterval(chargeSatellites, 600000);

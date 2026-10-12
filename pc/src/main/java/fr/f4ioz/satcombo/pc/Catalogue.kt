@@ -37,13 +37,21 @@ class Catalogue(
 
     private val fichierGp = File(dossier, "amsat-gp.json")
     private val fichierTle = File(dossier, "amsat-tle.txt")
+    /** Elements AMSAT does not carry (the METEOR-M picture satellites), from SatNOGS DB. */
+    private val fichierSatnogs = File(dossier, "satnogs-tle.txt")
     private val dossierEmetteurs = File(dossier, "emetteurs")
     private val emetteurs = java.util.concurrent.ConcurrentHashMap<Int, List<Transmitter>>()
 
     /** The satellites known now, from the disk (empty before the first download). */
-    fun satellites(): List<TleEntry> = fusionne(
-        runCatching { OmmParser.parse(fichierGp.readText()) }.getOrDefault(emptyList()),
-        runCatching { lisTle(fichierTle.readText()) }.getOrDefault(emptyList()))
+    fun satellites(): List<TleEntry> {
+        val amsat = fusionne(
+            runCatching { OmmParser.parse(fichierGp.readText()) }.getOrDefault(emptyList()),
+            runCatching { lisTle(fichierTle.readText()) }.getOrDefault(emptyList()))
+        // SatNOGS' only for what AMSAT lacks: AMSAT's names and elements first.
+        val connus = amsat.map { it.catalogNumber }.toSet()
+        val autres = runCatching { lisTle(fichierSatnogs.readText()) }.getOrDefault(emptyList()).filter { it.catalogNumber !in connus }
+        return (amsat + autres).sortedBy { it.name.uppercase() }
+    }
 
     /** Age of the elements on disk (ms), null when there are none. */
     fun age(maintenant: Long = System.currentTimeMillis()): Long? =
@@ -59,6 +67,9 @@ class Catalogue(
         val tle = runCatching { telecharge(AMSAT_TLE) }.getOrNull()
         if (gp != null && OmmParser.parse(gp).isNotEmpty()) fichierGp.writeText(gp)
         if (tle != null && lisTle(tle).isNotEmpty()) fichierTle.writeText(tle)
+        // The METEOR-M sending LRPT pictures, which AMSAT's bulletin does not carry: one small request each.
+        val sn = SATNOGS_EN_PLUS.mapNotNull { n -> runCatching { lisTleSatnogs(telecharge("https://db.satnogs.org/api/tle/?norad_cat_id=$n&format=json")) }.getOrNull() }.flatten()
+        if (sn.isNotEmpty()) fichierSatnogs.writeText(sn.joinToString("") { it.name + "\n" + it.line1 + "\n" + it.line2 + "\n" })
         return when {
             gp == null && tle == null -> "AMSAT injoignable : éléments du disque gardés"
             else -> "éléments AMSAT à jour (${satellites().size} satellites)"
@@ -91,6 +102,18 @@ class Catalogue(
     companion object {
         const val AMSAT_GP = "https://newark192.amsat.org/gpdata/current/daily-bulletin.json"
         const val AMSAT_TLE = "https://www.amsat.org/tle/current/nasabare.txt"
+
+        /** Asked from SatNOGS DB as AMSAT's bulletin lacks them: METEOR-M2-3 and M2-4 (LRPT pictures). */
+        val SATNOGS_EN_PLUS = listOf(57166, 59051)
+
+        /** SatNOGS DB's elements: [{"tle0": name, "tle1", "tle2", …}]. */
+        fun lisTleSatnogs(json: String): List<TleEntry> = runCatching {
+            val a = JSONArray(json)
+            (0 until a.length()).mapNotNull { i ->
+                val o = a.optJSONObject(i) ?: return@mapNotNull null
+                runCatching { TleEntry(o.optString("tle0").removePrefix("0 ").trim(), o.getString("tle1"), o.getString("tle2")) }.getOrNull()
+            }
+        }.getOrDefault(emptyList())
 
         /** CelesTrak refuses this station's address: never asked from the PC. */
         fun interdit(url: String): Boolean = url.contains("celestrak", ignoreCase = true)

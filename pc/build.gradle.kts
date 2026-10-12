@@ -35,3 +35,12 @@ dependencies {
     testImplementation("junit:junit:4.13.2")
     testImplementation(testFixtures(project(":moteur")))
 }
+
+// The coastlines and borders (Natural Earth, public domain) drawn on the METEOR
+// pictures: the phone's files, taken at build time rather than copied.
+tasks.processResources {
+    from("../app/src/main/res/raw") {
+        include("land.json", "borders.json")
+        into("traits")
+    }
+}

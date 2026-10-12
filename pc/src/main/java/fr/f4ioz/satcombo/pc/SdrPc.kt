@@ -49,7 +49,42 @@ import kotlin.concurrent.thread
  */
 class SdrPc(val station: StationPc, private val son: SonPc, private val stockage: Stockage,
             private val portee: CoroutineScope, private val horloge: () -> Long = System::currentTimeMillis,
-            dossierSondes: File? = null) {
+            dossierSondes: File? = null, val meteor: MeteorPc? = null) {
+
+    /** Receiving METEOR pictures now (the followed satellite is one): its samples go to the decoder. */
+    @Volatile var pourMeteor = false; private set
+
+    /** The automatic start on METEOR passes: the satellite it is receiving (0: none), and until when. */
+    @Volatile private var meteorAutoArme = 0
+    private var meteorAutoLos = 0L
+    private var dernierTicMeteor = 0L
+
+    /**
+     * A minute before a METEOR pass the dongle starts on it (the satellite
+     * followed then), after LOS + 30 s it stops — the pictures are written
+     * then. Only when the dongle is free: a reception started by hand is never
+     * taken over. Called every few seconds.
+     */
+    fun ticMeteor() {
+        if (meteor == null || !settings.meteorAuto) { meteorAutoArme = 0; return }
+        val now = horloge()
+        if (meteorAutoArme != 0) {
+            if (!_etat.value.actif) { meteorAutoArme = 0; return }
+            if (now > meteorAutoLos + 30_000L) { meteorAutoArme = 0; arrete() }
+            return
+        }
+        if (_etat.value.actif) return
+        // The passes asked every 15 s, not every second.
+        if (now - dernierTicMeteor < 15_000L) return
+        dernierTicMeteor = now
+        val (sat, p) = station.prochainPassageMeteor(2) ?: return
+        if (now < p.aosEpochMs - 60_000L || now >= p.losEpochMs) return
+        meteorAutoArme = sat.catalogNumber
+        meteorAutoLos = p.losEpochMs
+        station.suis(sat)
+        suitSatellite = true
+        if (!demarre()) meteorAutoArme = 0
+    }
 
     /** The radiosondes: their decoder, fed by the dongle while it listens to one. */
     val sondes = fr.f4ioz.satcombo.sonde.DecodeurSondes(dossierSondes, horloge)
@@ -63,7 +98,7 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
     fun recentre() { recentreVoulu = true }
 
     /** The dongle for a radiosonde: its frequency, its model's filter, no audio, no squelch, no de-emphasis. */
-    fun demarreSondes(): Boolean {
+    @Synchronized fun demarreSondes(): Boolean {
         arrete()
         pourSonde = true
         decalageHz = 0
@@ -197,8 +232,12 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
     @Volatile var spectre: FloatArray? = null; private set
     @Volatile var trames = 0L; private set
 
-    /** The dongle on the satellite (or QO-100, or the manual frequency). */
-    fun demarre(): Boolean {
+    /**
+     * The dongle on the satellite (or QO-100, or the manual frequency).
+     * Starting and stopping take turns: an automatic start (a METEOR pass)
+     * crossing one asked from the page left an rtl_tcp holding the dongle.
+     */
+    @Synchronized fun demarre(): Boolean {
         arrete()
         return lance()
     }
@@ -221,7 +260,14 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
         }
         cibleMaintenant()
         _etat.update { it.copy(actif = true, statut = "réception", erreur = "", tuner = RtlTcp.nomTuner(r.tuner)) }
-        if (!pourSonde) son.prendPour(NOM_SOURCE, Dsp.AUDIO_RATE)
+        // METEOR: 120 kHz of digital signal, nothing to hear — the raw samples to the picture decoder.
+        val m = meteor
+        if (m != null && !pourSonde && !pourQo100() && suitSatellite && station.estMeteor()) {
+            pourMeteor = true
+            m.recepteur.cotes = settings.meteorCotes
+            m.recepteur.demarre(Dsp.RTL_RATE.toDouble(), station.etat.value.suivi?.name ?: "METEOR", station.monteVersLeNord(), station.etat.value.suivi)
+        }
+        if (!pourSonde && !pourMeteor) son.prendPour(NOM_SOURCE, Dsp.AUDIO_RATE)
         thread(isDaemon = true, name = "satme-sdr") { boucle(r, gen) }
         suivi = portee.launch {
             while (generation == gen) { runCatching { cibleMaintenant() }; delay(250) }
@@ -229,8 +275,12 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
         return true
     }
 
-    fun arrete() {
+    @Synchronized fun arrete() {
         if (pourSonde) { sondes.arrete(); pourSonde = false }
+        if (pourMeteor) {
+            pourMeteor = false
+            meteor?.let { m -> val l = m.recepteur.arrete(); if (l.isNotEmpty()) thread(isDaemon = true, name = "satme-meteor-ecrit") { m.ecrit(l) } }
+        }
         generation++
         suivi?.cancel(); suivi = null
         cle?.let { runCatching { it.close() } }
@@ -339,6 +389,8 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
                 val n = r.read(iq, 200)
                 if (n < 0) { if (generation == gen) _etat.update { it.copy(actif = false, statut = "arrêtée", erreur = "rtl_tcp a coupé la liaison") }; break }
                 if (n == 0) continue
+                // METEOR pictures: the raw samples, before any audio chain, decoded on their own thread.
+                if (pourMeteor) meteor?.recepteur?.iq(iq, n, (fine + decalageHz).toDouble())
                 val maintenant = horloge()
                 val veutSpectre = maintenant - dernierSpectre >= 90L
                 val veutPano = maintenant - panoramaDemandeMs < 3000L && maintenant - dernierPano >= 300L
@@ -369,7 +421,7 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
                     }
                 }
                 if (produit > 0 && sonde) sondes.ecoute(pcm, produit)
-                else if (produit > 0) {
+                else if (produit > 0 && !pourMeteor) {
                     if (settings.sdrAudio && hp != null) {
                         // Never wait for the speaker: a late block is dropped, the reading goes on.
                         val octets = ByteArray(produit * 2)
