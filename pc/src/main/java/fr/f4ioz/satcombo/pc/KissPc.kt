@@ -55,7 +55,8 @@ class KissPc(private val station: StationPc, private val aprs: AprsPc, private v
         val s = station.settings
         val p = station.ports.liste().firstOrNull { it.index == index } ?: return "port inconnu"
         if (p.portPttRigExpert()) return "c'est la commande d'émission d'un RigExpert : jamais ouvert"
-        if (station.etat.value.catConnecte && index == s.civUsbIndex) return "c'est le port du poste (CAT) : choisir celui de la radio APRS"
+        if (p.cle in station.clesPoste() || (station.etat.value.catConnecte && index == s.civUsbIndex))
+            return "c'est le port du poste (CAT) : un seul câble — déconnecter le CAT pour passer la radio en KISS"
         if (station.stationRotor.etat.value.rotorConnected && index == s.rotorUsbIndex) return "c'est le port du rotor"
         lien.deconnecte(sortirDuKiss = false)
         val o = station.ports.ouvre(p, vitesse, if (lever) Lignes.LEVEES else Lignes.BASSES)

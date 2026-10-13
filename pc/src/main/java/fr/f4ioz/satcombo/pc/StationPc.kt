@@ -768,7 +768,34 @@ class StationPc(
      */
     fun connecteCat(modele: String, index: Int, baud: Int) = connecteCat(ChoixCat(modele, index, baud))
 
+    /** The adapter that answered as a TH-D72: named so from then on (it says only "CP2102" itself). */
+    var cleThd72: String
+        get() = stockage.getString("pc_thd72_cle", "") ?: ""
+        set(v) { stockage.edit().putString("pc_thd72_cle", v).apply() }
+
+    /** A port as the lists show it: its own name, and "Kenwood TH-D72" once it answered as one. */
+    fun nomPort(p: fr.f4ioz.satcombo.plateforme.PortSerie): String {
+        if (cleThd72.isNotBlank() && p.cle == cleThd72) return p.libelle + " — Kenwood TH-D72"
+        // An Icom's own USB ports carry its name in their serial number ("IC-9700 13012155 A").
+        val icom = p.serie?.let { Regex("^(IC-?\\d{3,4}[A-Z]?)[ _]\\S+(?:[ _]([AB]))?$").find(it.trim()) }
+        return p.libelle + (icom?.let { " — Icom " + it.groupValues[1] + it.groupValues[2].let { s -> if (s.isNotEmpty()) " ($s)" else "" } } ?: "")
+    }
+
+    /** The adapters the connected rig holds (none when not connected). */
+    fun clesPoste(): Set<String> = if (_etat.value.catConnecte) clePoste.split(',').filter { it.isNotBlank() }.toSet() else emptySet()
+
+    /** The CAT asked last: the TH-D72 panel reconnects with it when the transmit band changes. */
+    @Volatile private var derniereChoixCat: ChoixCat? = null
+
+    /** The TH-D72 panel (each band's frequency and power, the transmit band): the phone's, the engine's. */
+    val thd72 = fr.f4ioz.satcombo.cat.Thd72Panneau(settings, portee, { paire.lienThd72 },
+        { _etat.value.catModele == "THD72" && _etat.value.catConnecte }) {
+        // Bands are sides of the pair: reconnect with the new roles.
+        derniereChoixCat?.let { connecteCat(it.copy(bandeTx = settings.thd72BandeTx)) }
+    }
+
     fun connecteCat(c: ChoixCat) {
+        if (c.modele == "THD72") { derniereChoixCat = c; settings.thd72BandeTx = c.bandeTx.coerceIn(0, 1) }
         portee.launch {
             fil.withLock {
                 deconnecteCatDedans()
@@ -812,8 +839,10 @@ class StationPc(
                         if (!l.open(p.cle, if (c.baud > 0) c.baud else 9_600) || !l.estUnThd72())
                             { l.close(); echec("pas de TH-D72 qui réponde sur ${p.libelle}"); return@withLock }
                         clePoste = p.cle
+                        cleThd72 = p.cle
                         change { copy(catModele = m, catConnecte = true, catSimule = false,
                             catStatut = "Kenwood TH-D72 sur ${p.libelle}, émission sur la bande " + (if (c.bandeTx == 0) "A" else "B")) }
+                        thd72.lire()
                     }
                     "PAIRE" -> {
                         if (p == null && pTx == null) { echec("aucun port choisi"); return@withLock }

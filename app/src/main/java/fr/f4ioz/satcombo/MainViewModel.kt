@@ -1089,7 +1089,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val isTs2000: Boolean get() = _ui.value.rigModel == TS2000
 
     /** The TH-D72 panel (see [Thd72Panneau]). */
-    val thd72 = Thd72Panneau(settings, viewModelScope, { ft817.lienThd72 }, { isThd72 }) {
+    val thd72 = fr.f4ioz.satcombo.cat.Thd72Panneau(settings, viewModelScope, { ft817.lienThd72 }, { isThd72 }) {
         if (_ui.value.catConnected) {
             // Bands are sides of the pair: reconnect with the new roles.
             disconnectCat()

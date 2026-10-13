@@ -147,6 +147,8 @@ object PagesPcTelephone {
                     val a = fr.f4ioz.satcombo.aprs.AprsHub.etat.value
                     json(ApiRadio.aprs(a.paquets, a.ecoute, a.nouveaux, u.observer))
                 }
+                // The TH-D72 panel (the phone's).
+                "/api/thd72" -> json(ApiStation.thd72(vm.thd72.etat.value, u.rigModel == "THD72" && u.catConnected, vm.thd72.bandeTx()))
                 // The KISS radio on the phone's USB (its APRS screen's): its adapters listed only, none opened here.
                 "/api/kiss" -> {
                     val l = fr.f4ioz.satcombo.aprs.TncKiss.appareils(vm.getApplication())
@@ -486,6 +488,16 @@ object PagesPcTelephone {
             "/api/datv/noeud" -> { vm.datv.rejoins(p("adresse").trim(), p("code").trim()); OK }
             "/api/datv/enregistre", "/api/datv/vlc", "/api/datv/chemin" ->
                 JSONObject().put("ok", false).put("erreur", "sur le téléphone, l'image et le son sont sur son écran DATV")
+            // ---- the TH-D72 panel: the gestures of the phone's
+            "/api/thd72/lire" -> { vm.thd72.lire(); OK }
+            "/api/thd72/frequence" -> {
+                val b = p("b").toIntOrNull()?.coerceIn(0, 1) ?: return JSONObject().put("ok", false)
+                val hz = ApiQo100.mhz(p("mhz")) ?: return JSONObject().put("ok", false).put("erreur", "une fréquence en MHz")
+                vm.thd72.frequence(b, hz); OK
+            }
+            "/api/thd72/pas" -> { vm.thd72.pas(p("b").toIntOrNull()?.coerceIn(0, 1) ?: 0, if (p("sens") == "-1") -1 else 1); OK }
+            "/api/thd72/puissance" -> { vm.thd72.puissance(p("b").toIntOrNull()?.coerceIn(0, 1) ?: 0, (p("p").toIntOrNull() ?: 0).coerceIn(0, 2)); OK }
+            "/api/thd72/bandetx" -> { vm.thd72.setBandeTx((p("b").toIntOrNull() ?: 0).coerceIn(0, 1)); OK }
             // ---- the KISS radio: the gestures of the phone's APRS screen
             "/api/kiss/connecter" -> {
                 val a = fr.f4ioz.satcombo.aprs.TncKiss.appareils(vm.getApplication()).getOrNull(p("port").toIntOrNull() ?: -1)

@@ -1,6 +1,13 @@
-package fr.f4ioz.satcombo
+/*
+ * SatMe — amateur radio satellite tracking
+ * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
+ * SPDX-License-Identifier: GPL-2.0-or-later
+ *
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
+ */
+package fr.f4ioz.satcombo.cat
 
-import fr.f4ioz.satcombo.cat.Thd72Lien
 import fr.f4ioz.satcombo.data.SettingsStore
 import fr.f4ioz.satcombo.i18n.t
 import kotlinx.coroutines.CoroutineScope
@@ -41,7 +48,7 @@ class Thd72Panneau(
     fun lire() {
         val lien = lien() ?: return
         scope.launch {
-            val hz = (0..1).map { b -> lien.etatBande(b)?.let { fr.f4ioz.satcombo.cat.Thd72.frequence(it) } }
+            val hz = (0..1).map { b -> lien.etatBande(b)?.let { Thd72.frequence(it) } }
             val p = (0..1).map { b -> lien.puissance(b) }
             etat.value = Etat(hz, p, lien.bandeCourante())
         }
@@ -51,7 +58,7 @@ class Thd72Panneau(
     fun frequence(b: Int, hz: Long) {
         val lien = lien() ?: return
         scope.launch {
-            val ok = fr.f4ioz.satcombo.cat.Thd72Bande(lien, b).setFrequency(hz)
+            val ok = Thd72Bande(lien, b).setFrequency(hz)
             lire()
             if (!ok) etat.value = etat.value.copy(message = t("thd72_refuse"))
         }
@@ -62,7 +69,7 @@ class Thd72Panneau(
         val lien = lien() ?: return
         scope.launch {
             val c = lien.etatBande(b) ?: return@launch
-            frequence(b, fr.f4ioz.satcombo.cat.Thd72.frequence(c) + sens * fr.f4ioz.satcombo.cat.Thd72.pas(c))
+            frequence(b, Thd72.frequence(c) + sens * Thd72.pas(c))
         }
     }
 

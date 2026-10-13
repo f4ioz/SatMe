@@ -187,4 +187,9 @@ object ApiStation {
         }.getOrElse { return JSONObject().put("ok", false).put("erreur", "pas de réponse (" + it.javaClass.simpleName + ")") }
         return JSONObject().put("ok", true).put("groupes", r)
     }
+
+    /** The TH-D72 panel as the page shows it: each band's frequency and power, the PTT band, the transmit band. */
+    fun thd72(e: fr.f4ioz.satcombo.cat.Thd72Panneau.Etat, actif: Boolean, bandeTx: Int): JSONObject =
+        JSONObject().put("actif", actif).put("bandeTx", bandeTx).put("bandePtt", e.bandePtt ?: JSONObject.NULL).put("message", e.message)
+            .put("hz", JSONArray(e.hz.map { it ?: JSONObject.NULL })).put("puissance", JSONArray(e.puissance.map { it ?: JSONObject.NULL }))
 }

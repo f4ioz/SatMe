@@ -391,6 +391,16 @@ object PagePc {
         <span class="petit" id="cat-mode"></span>
       </div>
       <div class="etat" id="cat-statut"></div>
+      <div class="petit" id="cat-thd72-aide" hidden style="margin-top:6px">Le TH-D72 se présente comme « CP2102 USB to UART Bridge Controller » ; une fois connecté, SatMe le nomme « Kenwood TH-D72 » dans les listes. Sur ce câble : le CAT ou le KISS (onglet APRS), pas les deux à la fois.</div>
+    </div>
+
+    <div class="carte" id="thd72-carte" hidden>
+      <div class="t">Kenwood TH-D72 <span class="petit" id="thd72-msg"></span></div>
+      <table><tbody id="thd72-bandes"></tbody></table>
+      <div class="ligne"><span class="petit">Émission sur la bande</span>
+        <select id="thd72-tx" style="flex:none" onchange="thPost('bandetx?b=' + this.value)"><option value="0">A</option><option value="1">B</option></select>
+        <button onclick="thPost('lire')">Relire</button></div>
+      <div class="petit" style="margin-top:4px">Chaque changement part au poste quand tu le demandes ; la lecture ne change rien. Puissance : H haute, L basse, EL très basse.</div>
     </div>
 
     <div class="carte">
@@ -3251,6 +3261,39 @@ else try { const n = localStorage.getItem('vue'); if (n) vue(n); } catch (x) {}
 tic(); chargeListe(); chargePorts(); chargeSatellites();
 setInterval(chargeSatellites, 600000);
 setInterval(tic, 1000);
+// The TH-D72 panel: shown while it is the rig connected.
+let TH = null;
+async function thPost(a) { const j = await post('api/thd72/' + a); if (j && j.ok === false && j.erreur) txt('thd72-msg', j.erreur); setTimeout(ticThd72, 600); return j; }
+async function ticThd72() {
+  const montre = E && E.cat && E.cat.modele === 'THD72';
+  g('cat-thd72-aide').hidden = g('cat-modele').value !== 'THD72';
+  if (!montre) { g('thd72-carte').hidden = true; return; }
+  try { TH = await (await fetch('api/thd72')).json(); } catch (x) { return; }
+  g('thd72-carte').hidden = !TH.actif;
+  if (!TH.actif) return;
+  if (document.activeElement !== g('thd72-tx')) g('thd72-tx').value = String(TH.bandeTx);
+  if (TH.message) txt('thd72-msg', TH.message);
+  const ouvert = document.activeElement && document.activeElement.closest && document.activeElement.closest('#thd72-bandes');
+  if (ouvert) return;
+  const P2 = ['H', 'L', 'EL'];
+  g('thd72-bandes').innerHTML = [0, 1].map(b => {
+    const hz = TH.hz[b], pw = TH.puissance[b];
+    return '<tr><td><b>' + (b ? 'B' : 'A') + '</b>' + (TH.bandeTx === b ? ' <span class="petit ambre">TX</span>' : ' <span class="petit cyan">RX</span>') +
+      (TH.bandePtt === b ? ' <span class="petit">PTT</span>' : '') + '</td>' +
+      '<td class="val">' + (hz ? (hz / 1e6).toFixed(4).replace('.', ',') : '—') + '</td>' +
+      '<td><button onclick="thPost(\'pas?b=' + b + '&sens=-1\')">−</button><button onclick="thPost(\'pas?b=' + b + '&sens=1\')">+</button></td>' +
+      '<td><input id="thd72-f' + b + '" placeholder="MHz" style="max-width:100px"><button onclick="thPost(\'frequence?b=' + b + '&mhz=\' + enc(v(\'thd72-f' + b + '\')))">Aller</button></td>' +
+      '<td><select onchange="thPost(\'puissance?b=' + b + '&p=\' + this.value)">' + P2.map((n, i) => '<option value="' + i + '"' + (pw === i ? ' selected' : '') + '>' + n + '</option>').join('') + '</select></td></tr>';
+  }).join('');
+}
+setInterval(ticThd72, 3000);
+// The serial ports again every few seconds while the Station tab is open (a radio plugged in shows up), unless a list is open.
+setInterval(() => {
+  if (g('v-station').hidden) return;
+  const a = document.activeElement;
+  if (a && ['cat-port', 'cat-port-tx', 'rot-port'].includes(a.id)) return;
+  chargePorts();
+}, 5000);
 setInterval(chargeListe, 30000);
 setInterval(dessinePassages, 5000);
 </script>

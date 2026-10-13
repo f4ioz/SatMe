@@ -261,11 +261,13 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 envoie(sortie, "200 OK", "application/json; charset=utf-8", o.toString().toByteArray())
             }
             "/api/ft8" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JsonPc.ft8(son, station, carnet).toString().toByteArray())
+            "/api/thd72" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", fr.f4ioz.satcombo.demo.ApiStation.thd72(station.thd72.etat.value,
+                station.etat.value.catModele == "THD72" && station.etat.value.catConnecte, station.thd72.bandeTx()).toString().toByteArray())
             "/api/kiss" -> {
                 val k = kiss
                 val o = if (k == null) JSONObject().put("absent", true) else {
                     val l = station.ports.liste()
-                    fr.f4ioz.satcombo.demo.ApiRadio.kiss(k.lien.etat.value, l.map { it.index to it.libelle },
+                    fr.f4ioz.satcombo.demo.ApiRadio.kiss(k.lien.etat.value, l.map { it.index to station.nomPort(it) },
                         l.firstOrNull { it.cle == station.settings.aprsKissCle }?.index, station.settings.aprsTravail, station.settings.aprsKissDoppler,
                         k.lignesLevees, lignesAuChoix = true, voulue = k.frequenceVoulue()).let { o ->
                         val st = station.settings
@@ -602,6 +604,16 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 if (lieux.isEmpty()) return JSONObject().put("ok", false).put("erreur", "aucun lieu")
                 return ok.put("dit", kotlinx.coroutines.runBlocking { c.creeProfils(lieux, q["dxcc"].orEmpty(), q["pays"].orEmpty(), q["cq"].orEmpty(), q["itu"].orEmpty()) })
             }
+            // The TH-D72 panel: each change the operator's own; reading never changes the rig.
+            "/api/thd72/lire" -> station.thd72.lire()
+            "/api/thd72/frequence" -> {
+                val b = entier("b")?.coerceIn(0, 1) ?: return JSONObject().put("ok", false)
+                val hz = fr.f4ioz.satcombo.demo.ApiQo100.mhz(q["mhz"]) ?: return JSONObject().put("ok", false).put("erreur", "une fréquence en MHz")
+                station.thd72.frequence(b, hz)
+            }
+            "/api/thd72/pas" -> station.thd72.pas(entier("b")?.coerceIn(0, 1) ?: 0, if (q["sens"] == "-1") -1 else 1)
+            "/api/thd72/puissance" -> station.thd72.puissance(entier("b")?.coerceIn(0, 1) ?: 0, (entier("p") ?: 0).coerceIn(0, 2))
+            "/api/thd72/bandetx" -> station.thd72.setBandeTx((entier("b") ?: 0).coerceIn(0, 1))
             "/api/kiss/connecter" -> {
                 val k = kiss ?: return JSONObject().put("ok", false)
                 kotlinx.coroutines.runBlocking { k.connecte(entier("port") ?: -1, entier("vitesse") ?: 9600, q["lignes"] == "1") }
@@ -899,7 +911,7 @@ object JsonPc {
     }
 
     fun ports(st: StationPc) = JSONArray(st.ports.liste().map {
-        JSONObject().put("index", it.index).put("libelle", it.libelle).put("vendor", it.vendorId)
+        JSONObject().put("index", it.index).put("libelle", st.nomPort(it)).put("vendor", it.vendorId)
     })
 }
 
