@@ -98,6 +98,27 @@ class CarnetPc(private val station: StationPc, val store: LogStore, private val 
         return c
     }
 
+    /**
+     * A contact typed afterwards: on [catnum], at [quandMs] (a past pass),
+     * its az/el where the satellite was then, the mode given; who it is as
+     * already known, else as QRZ says. Null without a callsign, or on an
+     * unknown satellite.
+     */
+    fun ajouteApres(catnum: Int, quandMs: Long, indicatif: String, locator: String, rstEnvoye: String, rstRecu: String,
+                    note: String, mode: String, fiche: QrzReponse.Fiche? = null): LogEntry? {
+        val call = indicatif.trim().uppercase()
+        if (call.isEmpty()) return null
+        val c0 = station.contactApres(catnum, quandMs, call, locator, rstEnvoye, rstRecu, note, mode) ?: return null
+        val passes = historique(call)
+        val c = c0.copy(myGrids = mesCarres(),
+            locatorOrigine = if (fiche != null && locator.trim().equals(fiche.carre, true)) "QRZ" else c0.locatorOrigine,
+            nom = passes.firstOrNull { it.nom.isNotBlank() }?.nom ?: fiche?.nom.orEmpty(),
+            qth = passes.firstOrNull { it.qth.isNotBlank() }?.qth ?: fiche?.qth.orEmpty(),
+            courriel = fiche?.courriel.orEmpty())
+        store.add(c); oublieMemoire()
+        return c
+    }
+
     fun modifie(timeMs: Long, m: LogEntry) {
         oublieMemoire()
         // A contact changed while it waits: its delay starts again.

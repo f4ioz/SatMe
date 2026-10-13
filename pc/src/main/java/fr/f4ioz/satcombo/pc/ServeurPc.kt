@@ -238,6 +238,8 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 val o = fr.f4ioz.satcombo.demo.ApiStation.historiqueJson(l, station.etat.value.observateur, station.ficheQrz)
                 envoie(sortie, "200 OK", "application/json; charset=utf-8", o.toString().toByteArray())
             }
+            "/api/carnet/passages" -> envoie(sortie, "200 OK", "application/json; charset=utf-8",
+                fr.f4ioz.satcombo.demo.ApiCalculs.passagesFinisJson(station.passagesFinis(q["catnum"]?.toIntOrNull() ?: 0)).toString().toByteArray())
             "/api/carnet" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JsonPc.carnet(carnet).toString().toByteArray())
             "/api/reglages" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JsonPc.reglages(station).toString().toByteArray())
             "/api/sources" -> {
@@ -515,7 +517,15 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 val c = carnet ?: return JSONObject().put("ok", false)
                 val fiche = q["c"]?.takeIf { it.isNotBlank() }?.let { kotlinx.coroutines.runBlocking { c.ficheQrz(it) } }
                     ?.takeIf { it.erreur.isBlank() && !it.vide }
-                val e = c.ajoute(q["c"].orEmpty(), q["l"].orEmpty(), q["rs"].orEmpty(), q["rr"].orEmpty(), q["n"].orEmpty(), fiche)
+                // Afterwards: the satellite and the time given (a past pass), not the followed one now.
+                val t = q["t"]?.toLongOrNull()
+                val e = if (t != null) {
+                    if (!fr.f4ioz.satcombo.demo.ApiCalculs.heureApresValable(t, System.currentTimeMillis()))
+                        return JSONObject().put("ok", false).put("erreur", "heure hors du dernier mois")
+                    c.ajouteApres(q["catnum"]?.toIntOrNull() ?: 0, t, q["c"].orEmpty(), q["l"].orEmpty(), q["rs"].orEmpty(), q["rr"].orEmpty(),
+                        q["n"].orEmpty(), q["md"].orEmpty(), fiche)
+                        ?: return JSONObject().put("ok", false).put("erreur", "il faut un indicatif et un satellite")
+                } else c.ajoute(q["c"].orEmpty(), q["l"].orEmpty(), q["rs"].orEmpty(), q["rr"].orEmpty(), q["n"].orEmpty(), fiche)
                     ?: return JSONObject().put("ok", false).put("erreur", "il faut un indicatif et un satellite suivi")
                 return ok.put("t", e.timeMs)
             }

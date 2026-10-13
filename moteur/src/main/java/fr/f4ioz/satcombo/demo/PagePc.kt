@@ -444,8 +444,15 @@ object PagePc {
         <span class="petit">↓</span><input id="c-rr" value="59" style="max-width:60px">
       </div>
       <div class="ligne"><input id="c-note" placeholder="Note"></div>
+      <label class="petit" style="display:block;margin-top:8px"><input type="checkbox" id="ca-on" onchange="apresBascule()"> Après le passage : un passage déjà fini, à son heure</label>
+      <div id="ca" hidden style="margin-top:4px">
+        <div class="ligne" style="margin-top:0"><select id="ca-sat" onchange="apresPassages()" style="flex:1"></select>
+          <select id="ca-md" title="Mode"></select></div>
+        <div class="ligne"><select id="ca-pas" onchange="apresPassage()" style="flex:1"></select></div>
+        <div class="ligne"><input id="ca-heure" type="datetime-local" step="60"><span class="petit" id="ca-utc"></span></div>
+      </div>
       <div class="ligne"><button class="primaire" onclick="enregistreContact()">Enregistrer (Entrée)</button><span class="petit" id="c-etat"></span></div>
-      <div class="petit" style="margin-top:6px">Daté à l'enregistrement, sur le satellite suivi, avec son az/el, ton carré, le mode et les fréquences au repos.</div>
+      <div class="petit" style="margin-top:6px" id="c-aide">Daté à l'enregistrement, sur le satellite suivi, avec son az/el, ton carré, le mode et les fréquences au repos.</div>
     </div>
     <div class="carte">
       <div class="t">Carnet</div>
@@ -1791,9 +1798,48 @@ g('c-call').addEventListener('input', () => {
   }, 600);
 });
 ['c-call', 'c-loc', 'c-rs', 'c-rr', 'c-note'].forEach(i => g(i).addEventListener('keydown', e => { if (e.key === 'Enter') enregistreContact(); }));
+// A contact typed afterwards: a satellite, one of its passes of the last three days (its middle), the time and the mode editable.
+let apresListe = [];
+async function apresBascule() {
+  const on = g('ca-on').checked; g('ca').hidden = !on;
+  txt('c-aide', on ? 'Daté à l’heure choisie, sur ce satellite, avec son az/el d’alors, ton carré et le mode choisi (sans fréquences).' :
+    'Daté à l\'enregistrement, sur le satellite suivi, avec son az/el, ton carré, le mode et les fréquences au repos.');
+  if (!on) return;
+  if (!tous.length) await chargeSatellites();
+  const s = g('ca-sat');
+  if (!s.options.length) s.innerHTML = tous.slice().sort((a, b) => a.nom.localeCompare(b.nom)).map(x => '<option value="' + x.catnum + '">' + esc(x.nom) + '</option>').join('');
+  if (E && E.suivi) s.value = String(E.suivi.catnum);
+  apresPassages();
+}
+const p2c = n => String(n).padStart(2, '0');
+function versLocal(t) { const d = new Date(t); return d.getFullYear() + '-' + p2c(d.getMonth() + 1) + '-' + p2c(d.getDate()) + 'T' + p2c(d.getHours()) + ':' + p2c(d.getMinutes()); }
+async function apresPassages() {
+  let j = null;
+  try { j = await (await fetch('api/carnet/passages?catnum=' + v('ca-sat'))).json(); } catch (x) {}
+  apresListe = (j && j.passages) || [];
+  const md = g('ca-md');
+  if (j && j.modes && md.options.length !== j.modes.length) md.innerHTML = j.modes.map(m => '<option>' + m + '</option>').join('');
+  const hm = t => { const d = new Date(t); return p2c(d.getHours()) + ':' + p2c(d.getMinutes()); };
+  g('ca-pas').innerHTML = apresListe.map((p, i) => '<option value="' + i + '">' + new Date(p.aos).toLocaleDateString() + ' ' + hm(p.aos) + '–' + hm(p.los) + ' · ' + p.elMax + '°</option>').join('') +
+    '<option value="-1">' + (apresListe.length ? 'autre heure…' : 'aucun passage ces trois jours : l’heure à la main') + '</option>';
+  apresPassage();
+}
+function apresPassage() {
+  const p = apresListe[+v('ca-pas')];
+  if (p) g('ca-heure').value = versLocal((p.aos + p.los) / 2);
+  apresUtc();
+}
+function apresUtc() { const t = new Date(v('ca-heure')).getTime(); txt('ca-utc', isNaN(t) ? '' : new Date(t).toISOString().slice(11, 16) + ' UTC'); }
+g('ca-heure').addEventListener('input', apresUtc);
 async function enregistreContact() {
   const c = v('c-call'); if (!c) return;
-  const j = await post('api/carnet/ajoute?c=' + enc(c) + '&l=' + enc(v('c-loc')) + '&rs=' + enc(v('c-rs')) + '&rr=' + enc(v('c-rr')) + '&n=' + enc(v('c-note')));
+  let apres = '';
+  if (g('ca-on').checked) {
+    const t = new Date(v('ca-heure')).getTime();
+    if (isNaN(t)) { txt('c-etat', 'l’heure du contact ?'); return; }
+    apres = '&catnum=' + v('ca-sat') + '&t=' + t + '&md=' + enc(v('ca-md'));
+  }
+  const j = await post('api/carnet/ajoute?c=' + enc(c) + '&l=' + enc(v('c-loc')) + '&rs=' + enc(v('c-rs')) + '&rr=' + enc(v('c-rr')) + '&n=' + enc(v('c-note')) + apres);
   if (j && j.ok) {
     txt('c-etat', c.toUpperCase() + ' enregistré');
     ['c-call', 'c-loc', 'c-note'].forEach(i => g(i).value = ''); g('c-rs').value = '59'; g('c-rr').value = '59';

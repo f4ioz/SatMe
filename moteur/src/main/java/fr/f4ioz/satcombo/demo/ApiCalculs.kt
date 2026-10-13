@@ -141,4 +141,36 @@ object ApiCalculs {
         AgendaStore.put(s, AgendaStore.AgendaEvent(id = id, title = "Sked " + locator.trim().uppercase(),
             timeMs = deMs, satName = sat.name, leadMin = 10, endMs = aMs, kind = "SKED"))
     }
+
+    // ------------------------------------------------- a contact afterwards
+
+    /** The modes a contact typed afterwards can carry (the log's, the ADIF's). */
+    val MODES_APRES = listOf("FM", "USB", "LSB", "CW", "DATA")
+
+    /** [sat]'s passes over in the last [heures] hours, the newest first: where a contact typed afterwards belongs. */
+    fun passagesFinis(p: PassPredictor, sat: TleEntry, obs: Observer, maintenant: Long, heures: Int, minEl: Double): List<fr.f4ioz.satcombo.data.SatPass> =
+        runCatching { p.upcomingPasses(sat, obs, maintenant - heures * 3_600_000L, heures, minEl) }.getOrDefault(emptyList())
+            .filter { it.aosEpochMs <= maintenant }.sortedByDescending { it.aosEpochMs }
+
+    fun passagesFinisJson(l: List<fr.f4ioz.satcombo.data.SatPass>): JSONObject =
+        JSONObject().put("passages", JSONArray(l.map { JSONObject().put("aos", it.aosEpochMs).put("los", it.losEpochMs).put("elMax", Math.round(it.maxElevationDeg)) }))
+            .put("modes", JSONArray(MODES_APRES))
+
+    /** When a contact typed afterwards may be: the past, a month back at most (a minute ahead for clocks). */
+    fun heureApresValable(t: Long, maintenant: Long): Boolean = t in (maintenant - 31L * 86_400_000L)..(maintenant + 60_000L)
+
+    /**
+     * A contact typed afterwards (a paper log, a pass without the keyboard):
+     * at [quandMs], on [sat], its az/el where the satellite was then; the
+     * mode given, no frequency (the rig said nothing of it then).
+     */
+    fun contactApres(p: PassPredictor, sat: TleEntry, obs: Observer?, quandMs: Long, indicatif: String, locator: String,
+                     rstEnvoye: String, rstRecu: String, note: String, mode: String, monLocator: String): LogEntry {
+        val pos = obs?.let { runCatching { p.positionAt(sat, it, quandMs) }.getOrNull() }
+        return LogEntry(timeMs = quandMs, satName = sat.name, catnum = sat.catalogNumber,
+            azimuthDeg = pos?.azimuthDeg ?: 0.0, elevationDeg = pos?.elevationDeg ?: 0.0,
+            myLocator = monLocator, callsign = indicatif.trim().uppercase(), theirLocator = locator.trim().uppercase(),
+            rstSent = rstEnvoye.trim(), rstRcvd = rstRecu.trim(), note = note.trim(), mode = mode.trim().uppercase(),
+            locatorOrigine = if (locator.isBlank()) "INCONNU" else "SAISI")
+    }
 }

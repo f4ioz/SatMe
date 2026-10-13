@@ -82,6 +82,12 @@ object PagesPcTelephone {
                 }
                 // QRZ, as the phone looks it up (its credentials, its session); the card shown, as on the phone.
                 "/api/qrz" -> json(ApiStation.qrz(kotlinx.coroutines.runBlocking { vm.ficheQrz(p("c")) }, u.observer, true))
+                "/api/carnet/passages" -> {
+                    val sat = u.satellites.firstOrNull { it.catalogNumber == p("catnum").toIntOrNull() }
+                    val obs = u.observer
+                    json(ApiCalculs.passagesFinisJson(if (sat == null || obs == null) emptyList()
+                        else ApiCalculs.passagesFinis(vm.predicteurPourPage(), sat, obs, System.currentTimeMillis(), 72, u.minElevDeg.toDouble())))
+                }
                 "/api/carnet/station" -> json(ApiStation.historiqueJson(ApiStation.historique(u.log, p("c")), u.observer, true))
                 // ---- Timeline, Sked, Squares: the engine's computations, from the phone's satellites, place and log
                 "/api/frise" -> {
@@ -168,7 +174,18 @@ object PagesPcTelephone {
                 if (p("memorise") == "1") vm.memoriseDecalages()
                 OK
             }
+            // Afterwards: the satellite and the time given (a past pass), its az/el then (the engine's, as on SatMe-PC).
+            "/api/carnet/apres" -> {
+                val t = p("t").toLongOrNull() ?: return JSONObject().put("ok", false)
+                if (!ApiCalculs.heureApresValable(t, System.currentTimeMillis())) return JSONObject().put("ok", false).put("erreur", "heure hors du dernier mois")
+                val sat = u.satellites.firstOrNull { it.catalogNumber == p("catnum").toIntOrNull() }
+                    ?: return JSONObject().put("ok", false).put("erreur", "il faut un indicatif et un satellite")
+                val e = ApiCalculs.contactApres(vm.predicteurPourPage(), sat, u.observer, t, p("c"), p("l"), p("rs"), p("rr"), p("n"), p("md"), vm.myLocator())
+                if (!vm.ajouteAuCarnet(e)) return JSONObject().put("ok", false).put("erreur", "il faut un indicatif et un satellite")
+                OK.put("t", t)
+            }
             "/api/carnet/ajoute" -> {
+                if (p("t").isNotEmpty()) return action(vm, "/api/carnet/apres", p)
                 val sat = u.selected ?: return JSONObject().put("ok", false).put("erreur", "il faut un indicatif et un satellite suivi")
                 if (p("c").isBlank()) return JSONObject().put("ok", false).put("erreur", "il faut un indicatif et un satellite suivi")
                 val avant = u.log.map { it.timeMs }.toSet()

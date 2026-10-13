@@ -254,6 +254,23 @@ class StationPc(
 
     // ---------------------------------------------------------------- QO-100
 
+    /** [catnum]'s passes over in the last three days, newest first: where a contact typed afterwards goes. */
+    fun passagesFinis(catnum: Int): List<fr.f4ioz.satcombo.data.SatPass> {
+        val e = _etat.value
+        val sat = e.satellites.firstOrNull { it.catalogNumber == catnum } ?: return emptyList()
+        val obs = e.observateur ?: return emptyList()
+        return fr.f4ioz.satcombo.demo.ApiCalculs.passagesFinis(predicteur, sat, obs, horloge(), 72, settings.minElevDeg.toDouble())
+    }
+
+    /** A contact typed afterwards, on [catnum] at [quandMs] (the engine's, as on the phone); null: unknown satellite. */
+    fun contactApres(catnum: Int, quandMs: Long, indicatif: String, locator: String, rstEnvoye: String, rstRecu: String,
+                     note: String, mode: String): fr.f4ioz.satcombo.data.LogEntry? {
+        val e = _etat.value
+        val sat = e.satellites.firstOrNull { it.catalogNumber == catnum } ?: return null
+        return fr.f4ioz.satcombo.demo.ApiCalculs.contactApres(predicteur, sat, e.observateur, quandMs, indicatif, locator,
+            rstEnvoye, rstRecu, note, mode, e.locator)
+    }
+
     /** Each pass with a contact reported "Heard" to amsat.org, when chosen (the phone's, the same). */
     val pushAmsat = fr.f4ioz.satcombo.domain.PushAmsat(settings)
 
