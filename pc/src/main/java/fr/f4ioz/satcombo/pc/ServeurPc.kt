@@ -122,20 +122,23 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
             envoie(sortie, "200 OK", "application/json; charset=utf-8", res.toString().toByteArray())
             return
         }
-        if (r.methode == "POST") {
-            val res = runCatching { action(chemin, q) }.getOrElse { JSONObject().put("ok", false).put("erreur", it.message ?: "erreur") }
-            envoie(sortie, "200 OK", "application/json; charset=utf-8", res.toString().toByteArray())
-            return
-        }
         // The phone's journal page, from the PC's passes.
         if (journal != null && (chemin == "/journal" || chemin == "/journal/")) {
             envoie(sortie, "200 OK", "text/html; charset=utf-8", journal.page().toByteArray()); return
         }
         if (journal != null && chemin.startsWith("/journal/")) {
-            val rep = journal.sert(chemin.removePrefix("/journal")) { q[it].orEmpty() }
+            val rep = journal.sert(chemin.removePrefix("/journal"), { q[it].orEmpty() }) { f ->
+                // A pass's recording or picture, written to disk as it comes.
+                r.methode == "POST" && RequeteHttp.versFichier(c.getInputStream(), r, fr.f4ioz.satcombo.domain.NouveauPassage.OCTETS_MAX, f)
+            }
             val f = rep.fichier
             if (f != null) envoieFichier(sortie, r, f, rep.type, rep.entetes)
             else envoie(sortie, rep.statut, rep.type, rep.corps, rep.entetes)
+            return
+        }
+        if (r.methode == "POST") {
+            val res = runCatching { action(chemin, q) }.getOrElse { JSONObject().put("ok", false).put("erreur", it.message ?: "erreur") }
+            envoie(sortie, "200 OK", "application/json; charset=utf-8", res.toString().toByteArray())
             return
         }
         when (chemin) {

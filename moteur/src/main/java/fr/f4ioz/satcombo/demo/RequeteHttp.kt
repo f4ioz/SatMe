@@ -81,6 +81,29 @@ object RequeteHttp {
         }
         return out
     }
+
+    /**
+     * The body announced by [r] written to [f] as it comes (a recording of a
+     * pass: more than the memory may hold); false when empty, larger than
+     * [max] or cut short — [f] removed then.
+     */
+    fun versFichier(e: InputStream, r: Requete, max: Long, f: java.io.File): Boolean {
+        if (r.longueur <= 0 || r.longueur > max) return false
+        var reste = r.longueur
+        val ok = runCatching {
+            f.outputStream().buffered().use { o ->
+                val tampon = ByteArray(64 * 1024)
+                while (reste > 0) {
+                    val n = e.read(tampon, 0, minOf(tampon.size.toLong(), reste).toInt())
+                    if (n < 0) break
+                    o.write(tampon, 0, n); reste -= n
+                }
+            }
+            reste == 0L
+        }.getOrDefault(false)
+        if (!ok) f.delete()
+        return ok
+    }
 }
 
 /**

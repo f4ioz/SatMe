@@ -31,8 +31,8 @@ import javax.imageio.ImageIO
 class SonStation(
     val son: SonPc,
     private val station: StationPc,
-    private val dossierEnregistrements: File,
-    private val dossierSstv: File,
+    val dossierEnregistrements: File,
+    val dossierSstv: File,
     private val horloge: () -> Long = System::currentTimeMillis,
 ) {
     data class Etat(

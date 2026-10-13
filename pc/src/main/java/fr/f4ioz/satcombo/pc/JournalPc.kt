@@ -162,6 +162,64 @@ class JournalPc(
         return n
     }
 
+    // ------------------------------------------------------- a pass from nothing
+
+    /** [catnum]'s passes over in the last week, newest first: the pass to create. */
+    fun passagesPasses(catnum: Int): List<fr.f4ioz.satcombo.data.SatPass> {
+        val e = station.etat.value
+        val sat = e.satellites.firstOrNull { it.catalogNumber == catnum } ?: return emptyList()
+        val obs = e.observateur ?: return emptyList()
+        return fr.f4ioz.satcombo.demo.ApiCalculs.passagesFinis(predicteur, sat, obs, horloge(), 24 * 7, station.settings.minElevDeg.toDouble())
+    }
+
+    /** A pass written from nothing: [catnum] between [aosMs] and [losMs], its predicted track; null when it cannot be. */
+    fun cree(catnum: Int, aosMs: Long, losMs: Long): JournalPassage.Entree? {
+        if (!fr.f4ioz.satcombo.domain.NouveauPassage.heuresValables(aosMs, losMs, horloge())) return null
+        val e = station.etat.value
+        val sat = e.satellites.firstOrNull { it.catalogNumber == catnum } ?: return null
+        val obs = e.observateur ?: return null
+        val c = fr.f4ioz.satcombo.domain.NouveauPassage.candidat(sat, aosMs, losMs, e.locator)
+        val pas = ((losMs - aosMs) / JournalPassage.PAS_MS).toInt().coerceIn(10, 400)
+        val r = JournalPassage.reconstitue(c, predicteur.sampleTrack(sat, obs, aosMs - 5_000L, losMs + 5_000L, pas)) ?: return null
+        rangement.enregistre(r)
+        // Merged with the same pass when it was already there.
+        return passages().firstOrNull { it.catnum == catnum && it.debutMs <= r.finMs && it.finMs >= r.debutMs } ?: r
+    }
+
+    /**
+     * A recording brought to [e], started at [debutMs]: kept as a WAV named
+     * by its start (an MP3 or another WAV turned into one by ffmpeg, when
+     * there); null when done, else why not.
+     */
+    fun ajouteSon(e: JournalPassage.Entree, debutMs: Long, fichier: File, extension: String): String? {
+        val nom = fr.f4ioz.satcombo.domain.NouveauPassage.nomEnregistrement(e.satName, debutMs, "wav")
+        val dest = File(son.dossierEnregistrements.apply { mkdirs() }, nom)
+        val ff = RenduPc.ffmpeg()
+        if (ff != null) {
+            val p = ProcessBuilder(ff, "-y", "-loglevel", "error", "-i", fichier.path, "-ac", "1", "-c:a", "pcm_s16le", dest.path)
+                .redirectErrorStream(true).start()
+            val dit = p.inputStream.bufferedReader().readText()
+            if (p.waitFor() != 0 || !dest.isFile) { dest.delete(); return "son illisible : " + dit.lines().lastOrNull { it.isNotBlank() }.orEmpty() }
+        } else if (extension == "wav") fichier.copyTo(dest, overwrite = true)
+        else return "un MP3 demande ffmpeg : " + OutilsPc.conseil("ffmpeg")
+        rangement.enregistre(e.copy(enregistrements = (e.enregistrements + nom).distinct()))
+        return null
+    }
+
+    /** A picture brought to [e], received at [tMs] (any image Java reads, kept as PNG); null when done, else why not. */
+    fun ajouteImage(e: JournalPassage.Entree, tMs: Long, mode: String, fichier: File): String? {
+        val img = runCatching { javax.imageio.ImageIO.read(fichier) }.getOrNull() ?: return "image illisible (PNG ou JPEG)"
+        val d = son.dossierSstv.apply { mkdirs() }
+        val (nom, meta) = fr.f4ioz.satcombo.domain.NouveauPassage.image(e.satName, tMs, mode, e.locator, station.settings.callsign) { File(d, it).exists() }
+        javax.imageio.ImageIO.write(img, "png", File(d, nom))
+        File(d, SstvMeta.sidecarName(nom)).writeText(meta)
+        return null
+    }
+
+    /** A contact brought to [e] (the carnet's afterwards entry). */
+    fun ajouteContact(e: JournalPassage.Entree, tMs: Long, indicatif: String, locator: String, rstEnvoye: String, rstRecu: String,
+                      note: String, mode: String) = carnet.ajouteApres(e.catnum, tMs, indicatif, locator, rstEnvoye, rstRecu, note, mode)
+
     // ------------------------------------------------------------ the sky and the map
 
     private fun observateur(e: JournalPassage.Entree): Observer? =

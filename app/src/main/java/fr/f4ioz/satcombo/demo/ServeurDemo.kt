@@ -364,7 +364,11 @@ object ServeurDemo {
             return
         }
         if (chemin.startsWith("/journal/")) {
-            envoieReponse(sortie, JournalWeb.sert(route.removePrefix("/journal")) { parametre(route, it) }, requete)
+            envoieReponse(sortie, JournalWeb.sert(route.removePrefix("/journal"), { parametre(route, it) }) { f ->
+                // A pass's recording or picture, written to disk as it comes.
+                requete?.methode == "POST" && entree != null &&
+                    RequeteHttp.versFichier(entree, requete, fr.f4ioz.satcombo.domain.NouveauPassage.OCTETS_MAX, f)
+            }, requete)
             return
         }
 

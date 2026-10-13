@@ -34,7 +34,8 @@ object PageJournal {
         "pj_planche", "pj_onglet_rejeu", "pj_onglet_fabriquer", "pj_accelere", "pj_avant", "pj_apres", "pj_activite_opt",
         "pj_afficher", "pj_aff_sstv", "pj_aff_fiche", "pj_aff_smetre", "pj_aff_freq", "pj_aff_locator", "pj_resolution",
         "pj_res_xs", "pj_res_m", "pj_res_hd", "pj_ouverture", "pj_recap", "pj_avec_son", "pj_accelere_video",
-        "pj_options_aide", "pj_accelere_actif", "pj_format", "pj_format_portrait", "pj_format_paysage", "pw_code", "pw_entrer", "pw_code_faux", "pw_hors_ligne", "pw_pupitre")
+        "pj_options_aide", "pj_accelere_actif", "pj_format", "pj_format_portrait", "pj_format_paysage", "pw_code", "pw_entrer", "pw_code_faux", "pw_hors_ligne", "pw_pupitre",
+        "pj_n_bouton", "pj_n_titre", "pj_n_aide", "pj_n_sat", "pj_n_passage", "pj_n_autre", "pj_n_aucun", "pj_n_aos", "pj_n_los", "pj_n_creer", "pj_n_refus", "pj_n_trop_gros", "pj_n_indicatif", "pj_n_onglet", "pj_n_contact", "pj_n_son", "pj_n_images", "pj_n_mode", "pj_n_envoyer", "pj_n_envoi", "pj_n_fait", "pj_n_call", "pj_n_loc")
 
     private fun js(s: String): String = buildString {
         for (ch in s) when {
@@ -162,6 +163,7 @@ object PageJournal {
   <h1 id="tTitre"></h1>
   <a id="lienPupitre"></a><a id="lienPlanche"></a>
   <select id="filtre"></select>
+  <button class="discret" id="bNouveau"></button>
   <span class="aide" id="tSous"></span>
   <span id="message" style="color:var(--ambre)"></span>
 </header>
@@ -304,7 +306,8 @@ function construitVue() {
   cote.appendChild(el('div', { class: 'onglets' }, [
     el('button', { id: 'oMoments', text: T.moments, onclick: () => { onglet = 'moments'; panneau(); } }),
     el('button', { id: 'oRejeu', text: T.onglet_rejeu, onclick: () => { onglet = 'rejeu'; panneau(); } }),
-    el('button', { id: 'oFabriquer', text: T.onglet_fabriquer, onclick: () => { onglet = 'fabriquer'; panneau(); } })]));
+    el('button', { id: 'oFabriquer', text: T.onglet_fabriquer, onclick: () => { onglet = 'fabriquer'; panneau(); } }),
+    el('button', { id: 'oAjouter', text: T.n_onglet, onclick: () => { onglet = 'ajouter'; panneau(); } })]));
   cote.appendChild(el('div', { class: 'panneau', id: 'panneau' }));
   installeFrise(); installeCarte(); montreVue(O.vue); panneau();
 }
@@ -355,9 +358,10 @@ function nombreOpt(cle, lib, min, max, apres) {
   return el('label', { class: 'rangee' }, [el('span', { text: lib }), i]);
 }
 function panneau() {
-  ['Moments', 'Rejeu', 'Fabriquer'].forEach(o => g('o' + o).classList.toggle('actif', onglet === o.toLowerCase()));
+  ['Moments', 'Rejeu', 'Fabriquer', 'Ajouter'].forEach(o => g('o' + o).classList.toggle('actif', onglet === o.toLowerCase()));
   const p = g('panneau'); p.innerHTML = '';
-  if (onglet === 'moments') panneauMoments(p); else if (onglet === 'rejeu') panneauRejeu(p); else panneauFabriquer(p);
+  if (onglet === 'moments') panneauMoments(p); else if (onglet === 'rejeu') panneauRejeu(p);
+  else if (onglet === 'ajouter') panneauAjouter(p); else panneauFabriquer(p);
   dessineCadre();
 }
 function panneauMoments(p) {
@@ -397,6 +401,91 @@ function panneauRejeu(p) {
   c.appendChild(caseOpt('locator', T.aff_locator, dessineCarte));
   p.appendChild(c);
   p.appendChild(el('p', { class: 'aide', text: T.options_aide }));
+}
+// ------------------------------------------------------------ a pass from nothing, and what it holds
+// Times typed in local time; sent as milliseconds.
+function versLocal(tt) { const d = new Date(tt); return d.getFullYear() + '-' + p2(d.getMonth() + 1) + '-' + p2(d.getDate()) + 'T' + p2(d.getHours()) + ':' + p2(d.getMinutes()) + ':' + p2(d.getSeconds()); }
+function depuisLocal(i) { const x = new Date(i.value).getTime(); return isNaN(x) ? null : x; }
+function heure(tt) { return el('input', { type: 'datetime-local', step: '1', value: versLocal(tt) }); }
+async function envoie(r, prm, corps) {
+  const x = await fetch(url(r, prm), { method: 'POST', body: corps || '' });
+  if (x.status === 403) { porte(); throw 'session'; }
+  return x.json();
+}
+async function nouveau() {
+  arrete(); P = null; dessineListe();
+  const v = g('vue'); v.innerHTML = '';
+  const sat = el('select'), pas = el('select'), aos = heure(Date.now() - 3600000), los = heure(Date.now() - 3000000);
+  const heures = el('div', { class: 'colonnes', style: 'display:none' }, [el('span', { class: 'aide', text: T.n_aos }), aos, el('span', { class: 'aide', text: T.n_los }), los]);
+  const msg = el('span', { class: 'aide' });
+  let liste = [];
+  async function chargePassages() {
+    const j = await lire('/nouveau/passages', { catnum: sat.value }); liste = j.passages || [];
+    pas.innerHTML = '';
+    liste.forEach((q, i) => pas.appendChild(el('option', { value: i, text: jour(q.aos) + ' · ' + duree(q.los - q.aos) + ' · ' + q.elMax + '°' })));
+    pas.appendChild(el('option', { value: -1, text: liste.length ? T.n_autre : T.n_aucun }));
+    choix();
+  }
+  function choix() {
+    const q = liste[+pas.value]; heures.style.display = q ? 'none' : '';
+    if (q) { aos.value = versLocal(q.aos); los.value = versLocal(q.los); }
+  }
+  sat.addEventListener('change', chargePassages); pas.addEventListener('change', choix);
+  v.appendChild(el('div', { class: 'entete' }, [el('span', { class: 's', text: T.n_titre })]));
+  v.appendChild(el('p', { class: 'aide', text: T.n_aide }));
+  v.appendChild(el('div', { class: 'colonnes' }, [el('span', { class: 'aide', text: T.n_sat }), sat, el('span', { class: 'aide', text: T.n_passage }), pas]));
+  v.appendChild(heures);
+  v.appendChild(el('div', { class: 'rangee' }, [el('button', { class: 'primaire', text: T.n_creer, onclick: async () => {
+    const a = depuisLocal(aos), b = depuisLocal(los); if (a == null || b == null) return;
+    msg.textContent = T.n_envoi;
+    const j = await envoie('/nouveau/cree', { catnum: sat.value, aos: a, los: b });
+    if (!j.ok) { msg.textContent = j.erreur || T.echec; return; }
+    const l = await lire('/liste'); passages = l.passages;
+    onglet = 'ajouter'; ouvre(j.id);
+  } }), msg]));
+  const sats = await lire('/nouveau/satellites');
+  sats.forEach(s => sat.appendChild(el('option', { value: s.catnum, text: s.nom })));
+  const iss = sats.find(s => s.catnum === 25544); if (iss) sat.value = '25544';
+  chargePassages();
+}
+function panneauAjouter(p) {
+  const fin = async (j, msg) => {
+    if (!j.ok) { msg.textContent = j.erreur || T.echec; return; }
+    msg.textContent = T.n_fait;
+    const l = await lire('/liste'); passages = l.passages; ouvre(P.id);
+  };
+  // A contact, at its time (the middle of the pass to start with).
+  const call = el('input', { placeholder: T.n_call, style: 'text-transform:uppercase;width:9em' }), loc = el('input', { placeholder: T.n_loc, style: 'text-transform:uppercase;width:5em' });
+  const md = el('select', {}, ['FM', 'USB', 'LSB', 'CW', 'DATA'].map(m => el('option', { value: m, text: m })));
+  const tq = heure((P.de + P.a) / 2), m1 = el('span', { class: 'aide' });
+  p.appendChild(el('div', { class: 'aide', text: T.n_contact }));
+  p.appendChild(el('div', { class: 'rangee' }, [call, loc, md]));
+  p.appendChild(el('div', { class: 'rangee' }, [tq, el('button', { class: 'discret', text: T.n_envoyer, onclick: async () => {
+    if (!call.value.trim()) { m1.textContent = T.n_indicatif; return; }
+    m1.textContent = T.n_envoi;
+    fin(await envoie('/nouveau/contact', { id: P.id, c: call.value.trim(), l: loc.value.trim(), md: md.value, t: depuisLocal(tq) || '' }), m1);
+  } }), m1]));
+  // Its recording, from when it started.
+  const fs = el('input', { type: 'file', accept: '.wav,.mp3,audio/wav,audio/mpeg' }), ts = heure(P.de), m2 = el('span', { class: 'aide' });
+  p.appendChild(el('div', { class: 'aide', text: T.n_son, style: 'margin-top:10px' }));
+  p.appendChild(el('div', { class: 'rangee' }, [fs]));
+  p.appendChild(el('div', { class: 'rangee' }, [ts, el('button', { class: 'discret', text: T.n_envoyer, onclick: async () => {
+    const f = fs.files[0]; if (!f) return;
+    m2.textContent = T.n_envoi;
+    fin(await envoie('/nouveau/son', { id: P.id, nom: f.name, t: depuisLocal(ts) || '' }, f), m2);
+  } }), m2]));
+  // Its pictures, received at a time (each next one ten seconds later).
+  const fi = el('input', { type: 'file', accept: 'image/png,image/jpeg', multiple: 'multiple' }), ti = heure((P.de + P.a) / 2);
+  const mo = el('input', { placeholder: T.n_mode, style: 'width:8em' }), m3 = el('span', { class: 'aide' });
+  p.appendChild(el('div', { class: 'aide', text: T.n_images, style: 'margin-top:10px' }));
+  p.appendChild(el('div', { class: 'rangee' }, [fi]));
+  p.appendChild(el('div', { class: 'rangee' }, [ti, mo, el('button', { class: 'discret', text: T.n_envoyer, onclick: async () => {
+    const l = [...fi.files]; if (!l.length) return;
+    const t0 = depuisLocal(ti) || ((P.de + P.a) / 2);
+    let j = { ok: true };
+    for (let i = 0; i < l.length && j.ok; i++) { m3.textContent = T.n_envoi + ' ' + (i + 1) + '/' + l.length; j = await envoie('/nouveau/image', { id: P.id, t: Math.round(t0 + i * 10000), mode: mo.value.trim() }, l[i]); }
+    fin(j, m3);
+  } }), m3]));
 }
 let deQuoi = 'tout', titre = '';
 function panneauFabriquer(p) {
@@ -718,6 +807,7 @@ g('tTitre').textContent = 'SatMe · ' + T.titre; g('tSous').textContent = T.sous
 g('lienPupitre').textContent = T.pupitre; g('lienPupitre').href = base + '/';
 g('lienPlanche').textContent = T.planche; g('lienPlanche').href = base + '/planche';
 g('entrer').onclick = entrer;
+g('bNouveau').textContent = T.n_bouton; g('bNouveau').onclick = () => nouveau().catch(() => {});
 g('code').addEventListener('keydown', ev => { if (ev.key === 'Enter') entrer(); });
 g('filtre').onchange = ev => { filtre = ev.target.value; dessineListe(); };
 if (cle) demarre().catch(() => {}); else porte();

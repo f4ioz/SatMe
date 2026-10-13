@@ -553,6 +553,63 @@ class JournalDesPassages(
         }, passages())
     }
 
+    // ------------------------------------------------------- a pass from nothing
+
+    /** [catnum]'s passes over in the last week, newest first: the pass to create. */
+    fun passagesPasses(catnum: Int): List<fr.f4ioz.satcombo.data.SatPass> {
+        val sat = ui().satellites.firstOrNull { it.catalogNumber == catnum } ?: return emptyList()
+        return fr.f4ioz.satcombo.demo.ApiCalculs.passagesFinis(predictor, sat, observateur(), System.currentTimeMillis(), 24 * 7, settings.minElevDeg.toDouble())
+    }
+
+    /** A pass written from nothing: [catnum] between [aosMs] and [losMs], its predicted track; null when it cannot be. */
+    fun cree(catnum: Int, aosMs: Long, losMs: Long): JournalPassage.Entree? {
+        if (!fr.f4ioz.satcombo.domain.NouveauPassage.heuresValables(aosMs, losMs, System.currentTimeMillis())) return null
+        val sat = ui().satellites.firstOrNull { it.catalogNumber == catnum } ?: return null
+        val obs = observateur()
+        val loc = fr.f4ioz.satcombo.location.Maidenhead.fromLatLon(obs.latDeg, obs.lonDeg)
+        val c = fr.f4ioz.satcombo.domain.NouveauPassage.candidat(sat, aosMs, losMs, loc)
+        val pas = ((losMs - aosMs) / JournalPassage.PAS_MS).toInt().coerceIn(10, 400)
+        val r = JournalPassage.reconstitue(c, predictor.sampleTrack(sat, obs, aosMs - 5_000L, losMs + 5_000L, pas)) ?: return null
+        rangement.enregistre(r)
+        // Merged with the same pass when it was already there.
+        return passages().firstOrNull { it.catnum == catnum && it.debutMs <= r.finMs && it.finMs >= r.debutMs } ?: r
+    }
+
+    /**
+     * A recording brought to [e], started at [debutMs]: kept as it is (MP3 or
+     * WAV, Android reads both), named by its start and dated by its end, so
+     * that its sound falls at the right time; null when done, else why not.
+     */
+    fun ajouteSon(e: JournalPassage.Entree, debutMs: Long, fichier: java.io.File, extension: String): String? {
+        val nom = fr.f4ioz.satcombo.domain.NouveauPassage.nomEnregistrement(e.satName, debutMs, extension)
+        val dest = java.io.File(java.io.File(app.getExternalFilesDir(null), "recordings").apply { mkdirs() }, nom)
+        fichier.copyTo(dest, overwrite = true)
+        val duree = dureeEnregistrement(dest)
+        if (duree <= 0L) { dest.delete(); return "son illisible (WAV ou MP3)" }
+        dest.setLastModified(debutMs + duree)
+        rangement.enregistre(e.copy(enregistrements = (e.enregistrements + nom).distinct()))
+        return null
+    }
+
+    /** A picture brought to [e], received at [tMs] (PNG or JPEG, kept as PNG); null when done, else why not. */
+    fun ajouteImage(e: JournalPassage.Entree, tMs: Long, mode: String, fichier: java.io.File): String? {
+        val b = android.graphics.BitmapFactory.decodeFile(fichier.path) ?: return "image illisible (PNG ou JPEG)"
+        val d = fr.f4ioz.satcombo.sstv.SstvHub.dir(app)
+        val (nom, meta) = fr.f4ioz.satcombo.domain.NouveauPassage.image(e.satName, tMs, mode, e.locator, settings.callsign) { java.io.File(d, it).exists() }
+        java.io.File(d, nom).outputStream().use { b.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+        java.io.File(d, fr.f4ioz.satcombo.sstv.SstvMeta.sidecarName(nom)).writeText(meta)
+        return null
+    }
+
+    /** A contact at [tMs] on [e]'s satellite (the engine's afterwards entry, as SatMe-PC's). */
+    fun contact(e: JournalPassage.Entree, tMs: Long, indicatif: String, locator: String, rstEnvoye: String, rstRecu: String,
+                note: String, mode: String): LogEntry? {
+        val sat = ui().satellites.firstOrNull { it.catalogNumber == e.catnum } ?: return null
+        if (indicatif.isBlank()) return null
+        return fr.f4ioz.satcombo.demo.ApiCalculs.contactApres(predictor, sat, observateur(), tMs, indicatif, locator,
+            rstEnvoye, rstRecu, note, mode, e.locator)
+    }
+
     /** The passes chosen, written into the journal; how many. */
     fun importe(c: List<JournalPassage.Candidat>): Int {
         val defaut = observateur()

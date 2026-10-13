@@ -36,6 +36,8 @@ object JournalWeb {
     /** Set by the ViewModel. */
     @Volatile var app: Context? = null
     @Volatile var journal: JournalDesPassages? = null
+    /** Puts a contact into the log (the ViewModel's, so the screens and the online log follow). */
+    @Volatile var ajouteContact: ((fr.f4ioz.satcombo.data.LogEntry) -> Boolean)? = null
 
     private fun json(s: String) = ReponseWeb("200 OK", "application/json; charset=utf-8", s.toByteArray(Charsets.UTF_8))
     private val NON = ReponseWeb("404 Not Found", "text/plain", "non".toByteArray())
@@ -170,12 +172,45 @@ object JournalWeb {
     // ------------------------------------------------------------ routes
 
     /** One request of the journal page. [route] is what follows `/journal`; [p] reads a parameter. */
-    fun sert(route: String, p: (String) -> String): ReponseWeb {
+    /**
+     * One request of the journal page; [corps] writes the request's body (a
+     * sound, a picture) to a file, false when there is none or too large.
+     */
+    fun sert(route: String, p: (String) -> String): ReponseWeb = sert(route, p) { false }
+
+    fun sert(route: String, p: (String) -> String, corps: (File) -> Boolean): ReponseWeb {
         val ctx = app ?: return json("{\"ok\":false,\"raison\":\"pasPret\"}")
         val j = journal ?: return json("{\"ok\":false,\"raison\":\"pasPret\"}")
         val chemin = route.substringBefore('?')
         return runCatching {
             when (chemin) {
+                // ---- a pass from nothing: its satellite and times, then its sound, pictures and contacts
+                "/nouveau/satellites" -> json(org.json.JSONArray(PagesPcTelephone.vm?.ui?.value?.satellites.orEmpty().sortedBy { it.name.uppercase() }
+                    .map { org.json.JSONObject().put("nom", it.name).put("catnum", it.catalogNumber) }).toString())
+                "/nouveau/passages" -> json(ApiCalculs.passagesFinisJson(j.passagesPasses(p("catnum").toIntOrNull() ?: 0)).toString())
+                "/nouveau/cree" -> {
+                    val e = j.cree(p("catnum").toIntOrNull() ?: 0, p("aos").toLongOrNull() ?: 0L, p("los").toLongOrNull() ?: 0L)
+                        ?: return json("{\"ok\":false,\"erreur\":\"${js(fr.f4ioz.satcombo.i18n.t("pj_n_refus"))}\"}")
+                    json("{\"ok\":true,\"id\":\"${js(e.id)}\"}")
+                }
+                "/nouveau/son", "/nouveau/image" -> {
+                    val e = passage(j, p("id")) ?: return NON
+                    val ext = if (chemin == "/nouveau/son") fr.f4ioz.satcombo.domain.NouveauPassage.extensionSon(p("nom"))
+                        ?: return json("{\"ok\":false,\"erreur\":\"WAV ou MP3\"}") else "img"
+                    val tmp = File.createTempFile("satme-import", ".$ext", ctx.cacheDir)
+                    try {
+                        if (!corps(tmp)) return json("{\"ok\":false,\"erreur\":\"${js(fr.f4ioz.satcombo.i18n.t("pj_n_trop_gros"))}\"}")
+                        val t0 = p("t").toLongOrNull() ?: e.debutMs
+                        val err = if (chemin == "/nouveau/son") j.ajouteSon(e, t0, tmp, ext) else j.ajouteImage(e, t0, p("mode").trim(), tmp)
+                        json(if (err == null) "{\"ok\":true}" else "{\"ok\":false,\"erreur\":\"${js(err)}\"}")
+                    } finally { tmp.delete() }
+                }
+                "/nouveau/contact" -> {
+                    val e = passage(j, p("id")) ?: return NON
+                    val c = j.contact(e, p("t").toLongOrNull() ?: ((e.debutMs + e.finMs) / 2), p("c"), p("l"), p("rs"), p("rr"), p("n"), p("md"))
+                    json(if (c != null && ajouteContact?.invoke(c) == true) "{\"ok\":true}"
+                        else "{\"ok\":false,\"erreur\":\"${js(fr.f4ioz.satcombo.i18n.t("pj_n_indicatif"))}\"}")
+                }
                 // The passes kept, newest first, with what each holds.
                 "/liste" -> {
                     val l = j.passages().sortedByDescending { it.debutMs }
@@ -260,7 +295,7 @@ object JournalWeb {
                 "/son" -> {
                     val e = passage(j, p("id")) ?: return NON
                     val m = j.morceaux(e).getOrNull(p("n").toIntOrNull() ?: -1) ?: return NON
-                    ReponseWeb("200 OK", "audio/mpeg", fichier = m.f, entetes = "Cache-Control: max-age=3600\r\n")
+                    ReponseWeb("200 OK", if (m.f.name.endsWith(".wav", true)) "audio/wav" else "audio/mpeg", fichier = m.f, entetes = "Cache-Control: max-age=3600\r\n")
                 }
 
                 // An SSTV picture of the gallery, whole (never another file).

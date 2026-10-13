@@ -14,6 +14,7 @@ import fr.f4ioz.satcombo.demo.PageJournal
 import fr.f4ioz.satcombo.demo.ReponseWeb
 import fr.f4ioz.satcombo.domain.Doppler
 import fr.f4ioz.satcombo.domain.JournalPassage
+import fr.f4ioz.satcombo.i18n.t
 import fr.f4ioz.satcombo.location.Maidenhead
 import java.io.File
 import java.util.Locale
@@ -84,9 +85,42 @@ class JournalWebPc(private val j: JournalPc, private val station: StationPc, pri
         return parCat.ifEmpty { l.qsos.filter { it.downlinkMhz > 0 }.map { it.timeMs to Math.round(it.downlinkMhz * 1e6) } }
     }
 
-    /** One request of the journal page. [route] is what follows `/journal`; [p] reads a parameter. */
-    fun sert(route: String, p: (String) -> String): ReponseWeb = runCatching {
+    /**
+     * One request of the journal page. [route] is what follows `/journal`;
+     * [p] reads a parameter; [corps] writes the request's body (a sound, a
+     * picture) to a file, false when there is none or it is too large.
+     */
+    fun sert(route: String, p: (String) -> String): ReponseWeb = sert(route, p) { false }
+
+    fun sert(route: String, p: (String) -> String, corps: (File) -> Boolean): ReponseWeb = runCatching {
         when (route) {
+            // ---- a pass from nothing: its satellite and times, then its sound, pictures and contacts
+            "/nouveau/satellites" -> json(org.json.JSONArray(station.etat.value.satellites.sortedBy { it.name.uppercase() }
+                .map { org.json.JSONObject().put("nom", it.name).put("catnum", it.catalogNumber) }).toString())
+            "/nouveau/passages" -> json(fr.f4ioz.satcombo.demo.ApiCalculs.passagesFinisJson(j.passagesPasses(p("catnum").toIntOrNull() ?: 0)).toString())
+            "/nouveau/cree" -> {
+                val e = j.cree(p("catnum").toIntOrNull() ?: 0, p("aos").toLongOrNull() ?: 0L, p("los").toLongOrNull() ?: 0L)
+                    ?: return json("{\"ok\":false,\"erreur\":\"${js(t("pj_n_refus"))}\"}")
+                json("{\"ok\":true,\"id\":\"${js(e.id)}\"}")
+            }
+            "/nouveau/son", "/nouveau/image" -> {
+                val e = j.passage(p("id")) ?: return NON
+                val ext = if (route == "/nouveau/son") fr.f4ioz.satcombo.domain.NouveauPassage.extensionSon(p("nom"))
+                    ?: return json("{\"ok\":false,\"erreur\":\"WAV ou MP3\"}") else "img"
+                val tmp = File.createTempFile("satme-import", ".$ext", File(dossier, "tmp").apply { mkdirs() })
+                try {
+                    if (!corps(tmp)) return json("{\"ok\":false,\"erreur\":\"${js(t("pj_n_trop_gros"))}\"}")
+                    val t0 = p("t").toLongOrNull() ?: e.debutMs
+                    val err = if (route == "/nouveau/son") j.ajouteSon(e, t0, tmp, ext) else j.ajouteImage(e, t0, p("mode").trim(), tmp)
+                    json(if (err == null) "{\"ok\":true}" else "{\"ok\":false,\"erreur\":\"${js(err)}\"}")
+                } finally { tmp.delete() }
+            }
+            "/nouveau/contact" -> {
+                val e = j.passage(p("id")) ?: return NON
+                val t0 = p("t").toLongOrNull() ?: ((e.debutMs + e.finMs) / 2)
+                val c = j.ajouteContact(e, t0, p("c"), p("l"), p("rs"), p("rr"), p("n"), p("md"))
+                json(if (c != null) "{\"ok\":true}" else "{\"ok\":false,\"erreur\":\"${js(t("pj_n_indicatif"))}\"}")
+            }
             "/liste" -> {
                 val l = j.passages().sortedByDescending { it.debutMs }
                 val tous = j.liens(l)
