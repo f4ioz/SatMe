@@ -97,6 +97,10 @@ class EnregistrementAutoCat(
             if (R.sstvArmee) {
                 etat.value = t("enreg_auto_sstv"); return@launch
             }
+            // The automatic mode records its own passes: it has the recorder.
+            if (settings.veilleActive && settings.veilleSon) {
+                etat.value = t("enreg_auto_veille"); return@launch
+            }
             if (!u.catConnected) {
                 if (arme != 0) { R.desarme(ctx); arme = 0 }
                 etat.value = t("enreg_auto_attente_cat"); return@launch
@@ -125,6 +129,10 @@ class EnregistrementAutoCat(
             if (audio != null && juge == fr.f4ioz.satcombo.domain.EnregistrementAuto.Audio.ABSENTE) {
                 if (arme != 0) { R.desarme(ctx); arme = 0 }
                 etat.value = mot + " " + t("enreg_auto_pas_arme"); return@launch
+            }
+            // No microphone permission yet: arming would stop the app.
+            if (!VeilleTelephone.microAutorise(ctx, ui().recorderSource)) {
+                etat.value = (if (mot.isNotBlank()) mot + "\n" else "") + t("veille_micro"); return@launch
             }
             if (!ui().recorderEnabled) activeEnregistreur()
             arme = sat.catalogNumber

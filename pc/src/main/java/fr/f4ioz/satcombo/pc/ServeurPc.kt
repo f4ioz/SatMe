@@ -339,16 +339,7 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
             "/api/agenda/retire" -> q["id"]?.toLongOrNull()?.let { station.retireAgenda(it) }
             "/api/agenda/active" -> q["id"]?.toLongOrNull()?.let { station.activeAgenda(it) }
             "/api/agenda/suivi" -> station.agendaSuivi(q["on"] == "1")
-            "/api/veille" -> {
-                q["on"]?.let { station.veille = it == "1" }
-                entier("ajoute")?.let { station.veilleSats = station.veilleSats + it }
-                if (q["favoris"] == "1") station.veilleSats = station.veilleSats + station.etat.value.favoris
-                entier("retire")?.let { station.veilleSats = station.veilleSats - it }
-                entier("el")?.let { station.veilleElMin = it }
-                q["son"]?.let { station.veilleSon = it == "1" }
-                q["ecarte"]?.let { station.ecarteVeille(it, true) }
-                q["garde"]?.let { station.ecarteVeille(it, false) }
-            }
+            "/api/veille" -> fr.f4ioz.satcombo.demo.ApiVeille.action({ q[it] }, station.settings, station.etat.value.favoris, System.currentTimeMillis())
             "/api/amsat/rapport" -> {
                 // Heard or not, on amsat.org's public page: the satellite followed, my callsign and square, now.
                 val e = station.etat.value
@@ -844,19 +835,10 @@ object JsonPc {
     fun veille(st: StationPc, s: SonStation?): JSONObject {
         val e = st.etat.value
         val maintenant = e.maintenant.takeIf { it > 0L } ?: System.currentTimeMillis()
-        val sats = st.veilleSats
-        val plan = st.planVeille(maintenant)
-        val suivi = fr.f4ioz.satcombo.domain.VeilleAuto.aSuivre(plan, maintenant)
-        return JSONObject().put("on", st.veille).put("el", st.veilleElMin).put("son", st.veilleSon)
-            .put("sats", JSONArray(sats.map { n -> JSONObject().put("n", n).put("nom", e.satellites.firstOrNull { it.catalogNumber == n }?.name ?: "#$n") }
-                .sortedBy { it.getString("nom") }))
-            .put("plan", JSONArray(plan.map { l -> JSONObject().put("cle", fr.f4ioz.satcombo.domain.VeilleAuto.cle(l.passage))
-                .put("sat", l.passage.satName).put("n", l.passage.catalogNumber).put("aos", l.passage.aosEpochMs).put("los", l.passage.losEpochMs)
-                .put("el", Math.round(l.passage.maxElevationDeg)).put("garde", l.garde).put("ecarte", l.ecarte).put("perdu", l.perdu ?: "") }))
-            .put("enCours", suivi?.let { fr.f4ioz.satcombo.domain.VeilleAuto.cle(it) } ?: "")
-            .put("calcul", e.calculEnCours)
-            .put("carte", s?.son?.etat?.value?.actif == true)
-            .put("cat", e.catConnecte).put("rotor", st.stationRotor.etat.value.rotorConnected).put("rotorSuit", st.stationRotor.etat.value.rotorEnabled)
+        val r = st.stationRotor.etat.value
+        return fr.f4ioz.satcombo.demo.ApiVeille.json(st.settings, { n -> e.satellites.firstOrNull { it.catalogNumber == n }?.name },
+            st.planVeille(maintenant), maintenant,
+            fr.f4ioz.satcombo.demo.ApiVeille.Pret(s?.son?.etat?.value?.actif == true, e.catConnecte, r.rotorConnected, r.rotorEnabled, e.calculEnCours))
     }
 
     fun passages(st: StationPc): JSONObject {

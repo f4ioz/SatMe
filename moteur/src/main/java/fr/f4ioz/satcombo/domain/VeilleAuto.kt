@@ -69,4 +69,19 @@ object VeilleAuto {
     fun aEnregistrer(plan: List<Ligne>, maintenant: Long): SatPass? = plan.firstOrNull {
         it.garde && maintenant >= it.passage.aosEpochMs - AVANT_SON_MS && maintenant <= it.passage.losEpochMs + APRES_MS
     }?.passage
+
+    /** The recording windows of the kept passes not over (5 s before AOS to 30 s after LOS), with their satellite. */
+    fun fenetres(plan: List<Ligne>, maintenant: Long): List<Triple<Long, Long, String>> =
+        plan.filter { it.garde && it.passage.losEpochMs + APRES_MS > maintenant }
+            .map { Triple(it.passage.aosEpochMs - AVANT_SON_MS, it.passage.losEpochMs + APRES_MS, it.passage.satName) }
+            .take(EnregistrementAuto.MAX)
+
+    /** A pass set aside ([on]) or kept again: the keys of that pass (any AOS close to it) replaced. */
+    fun bascule(ecartes: Set<String>, cle: String, on: Boolean, maintenant: Long): Set<String> {
+        val n = cle.substringBefore(':').toIntOrNull() ?: return ecartes
+        val t = cle.substringAfter(':').toLongOrNull() ?: return ecartes
+        val p = SatPass("", n, t, t, 0.0, 0.0, 0.0, false, false)
+        val reste = purge(ecartes, maintenant).filterNot { ecarte(p, setOf(it)) }.toSet()
+        return if (on) reste + cle else reste
+    }
 }

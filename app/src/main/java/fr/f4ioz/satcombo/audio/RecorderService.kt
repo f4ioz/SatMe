@@ -73,11 +73,16 @@ class RecorderService : Service() {
         private val _fenetres = MutableStateFlow<List<Pair<Long, Long>>>(emptyList())
         val fenetres: StateFlow<List<Pair<Long, Long>>> = _fenetres
 
-        /** Who armed it: [PAR_SSTV] (automatic SSTV) or [PAR_CAT] (every pass under CAT). */
+        /** Who armed it: [PAR_SSTV] (automatic SSTV), [PAR_CAT] (every pass under CAT) or [PAR_VEILLE] (the automatic mode). */
         @Volatile var armePar: String = ""
             private set
         const val PAR_SSTV = "SSTV"
         const val PAR_CAT = "CAT"
+        const val PAR_VEILLE = "VEILLE"
+        /** Each window's satellite (the automatic mode records several), in the windows' order. */
+        const val EXTRA_NOMS = "noms"
+        /** Each armed window's satellite, by its start; empty: the one of [EXTRA_SAT]. */
+        @Volatile private var nomsFenetres: Map<Long, String> = emptyMap()
         const val EXTRA_PAR = "par"
 
         /** Armed by automatic SSTV (not by the recording of every pass under CAT). */
@@ -91,9 +96,10 @@ class RecorderService : Service() {
          */
         fun arme(context: Context, satName: String, fenetres: List<Pair<Long, Long>>,
                  source: String, unprocessed: Boolean, locator: String, avanceMs: Long = 10_000L,
-                 par: String = PAR_SSTV) {
+                 par: String = PAR_SSTV, noms: List<String> = emptyList()) {
             val i = Intent(context, RecorderService::class.java)
                 .setAction(ACTION_ARM)
+                .putExtra(EXTRA_NOMS, noms.toTypedArray())
                 .putExtra(EXTRA_PAR, par)
                 .putExtra(EXTRA_AVANCE, avanceMs)
                 .putExtra(EXTRA_SAT, satName)
@@ -188,7 +194,9 @@ class RecorderService : Service() {
         val f = _fenetres.value.firstOrNull() ?: return@Runnable
         val i = armeIntent ?: return@Runnable
         if (_state.value.recording) return@Runnable
-        demarre(Intent(i).setAction(ACTION_START).putExtra(EXTRA_AUTOSTOP, f.second))
+        val j = Intent(i).setAction(ACTION_START).putExtra(EXTRA_AUTOSTOP, f.second)
+        nomsFenetres[f.first]?.let { j.putExtra(EXTRA_SAT, it) }
+        demarre(j)
     }
 
     /** Waits for the next window (or stops when there is none left). */
@@ -211,9 +219,9 @@ class RecorderService : Service() {
         // The window opens a little before AOS; the AOS is what the operator expects.
         val avance = armeIntent?.getLongExtra(EXTRA_AVANCE, 10_000L) ?: 10_000L
         val heure = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(debut + avance))
-        val sat = armeIntent?.getStringExtra(EXTRA_SAT) ?: ""
+        val sat = nomsFenetres[debut] ?: armeIntent?.getStringExtra(EXTRA_SAT) ?: ""
         // Said as what armed it: automatic SSTV, or every pass recorded under CAT.
-        notifie(tf(if (armePar == PAR_CAT) "rec_arme_titre_cat" else "rec_arme_titre", sat), tf("rec_arme_texte", heure, _fenetres.value.size))
+        notifie(tf(when (armePar) { PAR_CAT -> "rec_arme_titre_cat"; PAR_VEILLE -> "rec_arme_titre_veille"; else -> "rec_arme_titre" }, sat), tf("rec_arme_texte", heure, _fenetres.value.size))
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -221,6 +229,8 @@ class RecorderService : Service() {
             ACTION_ARM -> {
                 val v = intent.getLongArrayExtra(EXTRA_FENETRES) ?: LongArray(0)
                 armePar = intent.getStringExtra(EXTRA_PAR) ?: PAR_SSTV
+                val noms = intent.getStringArrayExtra(EXTRA_NOMS).orEmpty()
+                nomsFenetres = if (noms.size == v.size / 2) (0 until noms.size).associate { v[2 * it] to noms[it] } else emptyMap()
                 _fenetres.value = (0 until v.size / 2).map { v[2 * it] to v[2 * it + 1] }.sortedBy { it.first }
                 armeIntent = Intent(intent)
                 // Foreground at once (5 s rule), with the armed notification.

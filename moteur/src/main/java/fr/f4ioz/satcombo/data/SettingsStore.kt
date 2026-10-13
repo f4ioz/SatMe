@@ -260,6 +260,30 @@ class SettingsStore(private val prefs: Stockage) {
         get() = prefs.getBoolean("enreg_auto_cat", false)
         set(v) { prefs.edit().putBoolean("enreg_auto_cat", v).apply() }
 
+    /** A recording started by hand stops 5 s after the LOS of its pass (the phone did it always). */
+    var enregCoupeLos: Boolean
+        get() = prefs.getBoolean("enreg_coupe_los", true)
+        set(v) { prefs.edit().putBoolean("enreg_coupe_los", v).apply() }
+
+    // The automatic mode (see [fr.f4ioz.satcombo.domain.VeilleAuto]): the chosen satellites' passes followed in turn.
+    var veilleActive: Boolean
+        get() = prefs.getBoolean("veille_auto", false)
+        set(v) { prefs.edit().putBoolean("veille_auto", v).apply() }
+    var veilleSats: Set<Int>
+        get() = prefs.getStringSet("veille_sats", emptySet()).orEmpty().mapNotNull { it.toIntOrNull() }.toSet()
+        set(v) { prefs.edit().putStringSet("veille_sats", v.map { it.toString() }.toSet()).apply() }
+    var veilleElMin: Int
+        get() = prefs.getInt("veille_el", 0)
+        set(v) { prefs.edit().putInt("veille_el", v.coerceIn(0, 90)).apply() }
+    /** Each pass recorded too. */
+    var veilleSon: Boolean
+        get() = prefs.getBoolean("veille_son", true)
+        set(v) { prefs.edit().putBoolean("veille_son", v).apply() }
+    /** The passes set aside ("catnum:AOS ms"). */
+    var veilleEcartes: Set<String>
+        get() = prefs.getStringSet("veille_ecartes", emptySet()).orEmpty()
+        set(v) { prefs.edit().putStringSet("veille_ecartes", v).apply() }
+
     /** Pass journal: seconds the log's contacts are put back (logged after the contact). */
     var journalDecalageQsoS: Int
         get() = prefs.getInt("journal_decalage_qso_s", 0)

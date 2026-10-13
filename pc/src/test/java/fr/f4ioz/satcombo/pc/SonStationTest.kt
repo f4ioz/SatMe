@@ -167,7 +167,7 @@ class SonStationTest {
         val flux = e.get(st) as kotlinx.coroutines.flow.MutableStateFlow<EtatPc>
         el(-3.0)
         flux.value = flux.value.copy(passages = listOf(p))
-        st.veilleSats = setOf(44909); st.veille = true
+        st.settings.veilleSats = setOf(44909); st.settings.veilleActive = true
         s.tic()
         assertEquals("", s.etat.value.enregistrement)
         heure = aos - 4_000L; s.tic()

@@ -228,6 +228,7 @@ object PagesPcTelephone {
                     JSONObject().put("index", i).put("libelle", d.label + (if (d.hasPermission) "" else " — autoriser sur le téléphone")).put("vendor", 0)
                 }))
                 "/api/son" -> json(son(vm))
+                "/api/veille" -> json(veille(vm))
                 "/api/sstv/encours.png" -> {
                     val b = fr.f4ioz.satcombo.sstv.SstvHub.state.value.preview ?: return NON
                     val o = java.io.ByteArrayOutputStream()
@@ -645,7 +646,12 @@ object PagesPcTelephone {
                 if (!u.recorderEnabled) vm.setRecorderEnabled(true)
                 vm.startRecording(); OK
             }
+            "/api/veille" -> {
+                if (ApiVeille.action({ k -> p(k).ifEmpty { null } }, vm.settingsStore(), u.favorites, System.currentTimeMillis())) vm.veille.change()
+                OK
+            }
             "/api/son/options" -> {
+                if (p("coupe").isNotEmpty()) vm.setEnregCoupeLos(p("coupe") == "1")
                 if (p("sstv").isNotEmpty()) vm.setSstvEnabled(p("sstv") == "1")
                 if (p("aprs").isNotEmpty()) vm.setAprsActif(p("aprs") == "1")
                 if (p("auto").isNotEmpty()) return JSONObject().put("ok", false).put("erreur", "sur le téléphone, l'enregistrement des passages se règle dans l'agenda et le CAT")
@@ -746,6 +752,13 @@ object PagesPcTelephone {
         return ApiQo100.etat(e, u.catConnected, q.cleRxHz, ciel, obs != null, plan)
     }
 
+    /** The automatic mode, in SatMe-PC's words ([ApiVeille]). */
+    private fun veille(vm: MainViewModel): JSONObject {
+        val u = vm.ui.value
+        return ApiVeille.json(vm.settingsStore(), { n -> u.satellites.firstOrNull { it.catalogNumber == n }?.name }, vm.veille.plan.value,
+            System.currentTimeMillis(), ApiVeille.Pret(true, u.catConnected, u.rotorConnected, u.rotorEnabled, vm.veille.calcul))
+    }
+
     /** The recorder and the SSTV decoder, in SatMe-PC's words ([ApiSon]). */
     private fun son(vm: MainViewModel): JSONObject {
         val u = vm.ui.value
@@ -760,7 +773,8 @@ object PagesPcTelephone {
             if (r.recording) r.fileName.orEmpty() else "", if (r.recording) (System.currentTimeMillis() - r.startMs) / 1000 else 0L,
             r.recording && r.autoStopMs != null, false, u.sstvEnabled, vm.aprsActif(),
             if (enCours) s.modeName.orEmpty() else "", (s.progress * hauteur).toInt(), hauteur, versionApercu, s.lastSaved.orEmpty(),
-            enregistrements(ctx), fr.f4ioz.satcombo.sstv.SstvHub.shots(ctx).map { it.second }.sortedByDescending { it.timeMs }))
+            enregistrements(ctx), fr.f4ioz.satcombo.sstv.SstvHub.shots(ctx).map { it.second }.sortedByDescending { it.timeMs },
+            vm.enregCoupeLos()))
     }
 
     /**

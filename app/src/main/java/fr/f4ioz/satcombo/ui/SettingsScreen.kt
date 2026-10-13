@@ -3523,6 +3523,87 @@ private fun ColorGroupCard(title: String, rows: List<Triple<String, Int, String>
 }
 
 /**
+ * The automatic mode, as on SatMe-PC: the satellites chosen, the elevation,
+ * the sound, and the coming passes kept or set aside.
+ */
+@Composable
+private fun VeilleCard(ui: UiState, vm: MainViewModel) {
+    val r = vm.veille.reglages
+    var version by remember { mutableStateOf(0) }
+    fun regle(f: fr.f4ioz.satcombo.data.SettingsStore.() -> Unit) { vm.veille.regle(f); version++ }
+    val plan by vm.veille.plan.collectAsState()
+    val etat by vm.veille.etat.collectAsState()
+    val actif = remember(version) { r.veilleActive }
+    val sats = remember(version) { r.veilleSats }
+    val el = remember(version) { r.veilleElMin }
+    val son = remember(version) { r.veilleSon }
+    var choix by remember { mutableStateOf(false) }
+    val fmt = remember(ui.useUtc) { java.text.SimpleDateFormat("EEE HH:mm", java.util.Locale.getDefault()).apply {
+        if (ui.useUtc) timeZone = java.util.TimeZone.getTimeZone("UTC") } }
+    Surface(color = SpaceCard, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(14.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()
+                .toggleable(value = actif, role = Role.Switch, onValueChange = { v -> regle { veilleActive = v } })) {
+                Column(Modifier.weight(1f)) {
+                    Text(t("veille_titre"), color = TextHi, fontWeight = FontWeight.Bold)
+                    Text(t("veille_desc"), color = TextLo, fontSize = 11.sp)
+                }
+                Switch(checked = actif, onCheckedChange = null)
+            }
+            if (actif && etat.isNotBlank()) Text(etat, color = Cyan, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
+            // The satellites chosen, each with its ✕.
+            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                if (sats.isEmpty()) Text(t("veille_aucun_sat"), color = TextLo, fontSize = 12.sp)
+                ui.satellites.filter { it.catalogNumber in sats }.sortedBy { it.name }.forEach { sat ->
+                    AssistChip(onClick = { regle { veilleSats = veilleSats - sat.catalogNumber } }, label = { Text(sat.name + "  ✕", fontSize = 12.sp) })
+                }
+            }
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Box {
+                    OutlinedButton(onClick = { choix = true }) { Text(t("veille_ajouter"), color = Cyan, fontSize = 12.sp) }
+                    DropdownMenu(expanded = choix, onDismissRequest = { choix = false }) {
+                        // The favourites first, then the others.
+                        ui.satellites.filter { it.catalogNumber !in sats }
+                            .sortedWith(compareBy({ it.catalogNumber !in ui.favorites }, { it.name }))
+                            .forEach { sat ->
+                                DropdownMenuItem(text = { Text((if (sat.catalogNumber in ui.favorites) "★ " else "") + sat.name) },
+                                    onClick = { choix = false; regle { veilleSats = veilleSats + sat.catalogNumber } })
+                            }
+                    }
+                }
+                OutlinedButton(onClick = { regle { veilleSats = veilleSats + ui.favorites } }) { Text(t("veille_favoris"), color = Cyan, fontSize = 12.sp) }
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(tf("veille_el", el), color = TextLo, fontSize = 12.sp, modifier = Modifier.weight(1f))
+                TextButton(onClick = { regle { veilleElMin = (veilleElMin - 5).coerceAtLeast(0) } }) { Text("−5", color = Cyan) }
+                TextButton(onClick = { regle { veilleElMin = (veilleElMin + 5).coerceAtMost(90) } }) { Text("+5", color = Cyan) }
+            }
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()
+                .toggleable(value = son, role = Role.Switch, onValueChange = { v -> regle { veilleSon = v } })) {
+                Text(t("veille_son"), color = TextLo, fontSize = 12.sp, modifier = Modifier.weight(1f))
+                Switch(checked = son, onCheckedChange = null)
+            }
+            if (plan.isNotEmpty()) {
+                Text(t("veille_passages"), color = TextHi, fontWeight = FontWeight.Bold, fontSize = 13.sp, modifier = Modifier.padding(top = 8.dp))
+                plan.take(20).forEach { l ->
+                    val c = fr.f4ioz.satcombo.domain.VeilleAuto.cle(l.passage)
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()
+                        .toggleable(value = l.garde, enabled = l.perdu == null, role = Role.Checkbox,
+                            onValueChange = { g -> vm.veille.regle { veilleEcartes = fr.f4ioz.satcombo.domain.VeilleAuto.bascule(veilleEcartes, c, !g, System.currentTimeMillis()) } })) {
+                        Checkbox(checked = l.garde, onCheckedChange = null, enabled = l.perdu == null)
+                        Column(Modifier.weight(1f)) {
+                            Text(fmt.format(java.util.Date(l.passage.aosEpochMs)) + "  " + l.passage.satName + "  " + Math.round(l.passage.maxElevationDeg) + "°",
+                                color = if (l.garde) TextHi else TextLo, fontSize = 12.sp)
+                            if (l.perdu != null) Text(tf("veille_pendant", l.perdu), color = TextLo, fontSize = 11.sp)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
  * Recordings manager: export-folder picker (SAF), then the list of pass
  * recordings (newest first) with their QSO markers from the sidecar .txt —
  * play / share / delete on each. Markers show mm:ss offsets into the audio so
@@ -3550,6 +3631,20 @@ private fun RecordingsSection(ui: UiState, vm: MainViewModel) {
     }
 
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        // --- a recording by hand stopped at the end of its pass ---
+        Surface(color = SpaceCard, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
+            var coupe by remember { mutableStateOf(vm.enregCoupeLos()) }
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(14.dp)
+                .toggleable(value = coupe, role = Role.Switch, onValueChange = { coupe = it; vm.setEnregCoupeLos(it) })) {
+                Column(Modifier.weight(1f)) {
+                    Text(t("enreg_coupe_los"), color = TextHi, fontWeight = FontWeight.Bold)
+                    Text(t("enreg_coupe_los_desc"), color = TextLo, fontSize = 11.sp)
+                }
+                Switch(checked = coupe, onCheckedChange = null)
+            }
+        }
+        // --- the automatic mode: the chosen satellites' passes ---
+        VeilleCard(ui, vm)
         // --- automatic recording under CAT ---
         Surface(color = SpaceCard, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
             Column(Modifier.padding(14.dp)) {

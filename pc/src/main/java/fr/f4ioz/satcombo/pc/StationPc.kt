@@ -369,6 +369,7 @@ class StationPc(
     fun demarre() {
         // On a PC the mast's port is the one chosen, never searched among the others.
         stationRotor.setRotorAutoPort(false)
+        runCatching { reprendVeille() }
         stationCat.regleMaintien(settings.catHoldMs.toLong())
         change { copy(agenda = AgendaStore.purge(stockageAgenda, nowMs = horloge()),
             agendaSuivi = stockage.getBoolean(CLE_AGENDA_SUIVI, true)) }
@@ -536,35 +537,24 @@ class StationPc(
     // ------------------------------------------------------- automatic mode
 
     /** The automatic mode on: the chosen satellites' passes followed in turn (see [fr.f4ioz.satcombo.domain.VeilleAuto]). */
-    var veille: Boolean
-        get() = stockage.getBoolean(CLE_VEILLE, false)
-        set(v) { stockage.edit().putBoolean(CLE_VEILLE, v).apply() }
-    var veilleSats: Set<Int>
-        get() = stockage.getStringSet(CLE_VEILLE_SATS, emptySet()).orEmpty().mapNotNull { it.toIntOrNull() }.toSet()
-        set(v) { stockage.edit().putStringSet(CLE_VEILLE_SATS, v.map { it.toString() }.toSet()).apply() }
-    var veilleElMin: Int
-        get() = stockage.getInt(CLE_VEILLE_EL, 0)
-        set(v) { stockage.edit().putInt(CLE_VEILLE_EL, v.coerceIn(0, 90)).apply() }
+    val veille: Boolean get() = settings.veilleActive
     /** Each pass recorded too (the sound card running). */
-    var veilleSon: Boolean
-        get() = stockage.getBoolean(CLE_VEILLE_SON, true)
-        set(v) { stockage.edit().putBoolean(CLE_VEILLE_SON, v).apply() }
-    var veilleEcartes: Set<String>
-        get() = stockage.getStringSet(CLE_VEILLE_ECARTES, emptySet()).orEmpty()
-        set(v) { stockage.edit().putStringSet(CLE_VEILLE_ECARTES, fr.f4ioz.satcombo.domain.VeilleAuto.purge(v, horloge())).apply() }
+    val veilleSon: Boolean get() = settings.veilleSon
 
-    /** A pass set aside, or kept again. */
-    fun ecarteVeille(cle: String, on: Boolean) {
-        val n = cle.substringBefore(':').toIntOrNull() ?: return
-        val t = cle.substringAfter(':').toLongOrNull() ?: return
-        val p = SatPass("", n, t, t, 0.0, 0.0, 0.0, false, false)
-        val reste = veilleEcartes.filterNot { fr.f4ioz.satcombo.domain.VeilleAuto.ecarte(p, setOf(it)) }.toSet()
-        veilleEcartes = if (on) reste + cle else reste
+    /** The first version's choices (13/10, "pc_veille…"), taken into the settings shared with the phone. */
+    private fun reprendVeille() {
+        val ancien = stockage.getStringSet("pc_veille_sats", null) ?: return
+        if (settings.veilleSats.isEmpty()) settings.veilleSats = ancien.mapNotNull { it.toIntOrNull() }.toSet()
+        if (stockage.getBoolean("pc_veille", false)) settings.veilleActive = true
+        stockage.getInt("pc_veille_el", -1).takeIf { it >= 0 }?.let { settings.veilleElMin = it }
+        if (!stockage.getBoolean("pc_veille_son", true)) settings.veilleSon = false
+        stockage.getStringSet("pc_veille_ecartes", null)?.let { settings.veilleEcartes = it }
+        stockage.edit().remove("pc_veille").remove("pc_veille_sats").remove("pc_veille_el").remove("pc_veille_son").remove("pc_veille_ecartes").apply()
     }
 
     /** The chosen satellites' passes over the next 24 h, as the automatic mode takes them. */
     fun planVeille(maintenant: Long = horloge()): List<fr.f4ioz.satcombo.domain.VeilleAuto.Ligne> =
-        fr.f4ioz.satcombo.domain.VeilleAuto.plan(_etat.value.passages, veilleSats, veilleElMin.toDouble(), veilleEcartes, maintenant)
+        fr.f4ioz.satcombo.domain.VeilleAuto.plan(_etat.value.passages, settings.veilleSats, settings.veilleElMin.toDouble(), settings.veilleEcartes, maintenant)
 
     /** The pass the automatic mode records now, when it is the satellite followed's; null otherwise. */
     fun passageVeilleAEnregistrer(maintenant: Long = horloge()): SatPass? {
@@ -1006,11 +996,6 @@ class StationPc(
         const val CLE_SATELLITE = "pc_satellite"
         const val CLE_FAVORIS = "pc_favoris"
         const val CLE_AGENDA_SUIVI = "pc_agenda_suivi"
-        const val CLE_VEILLE = "pc_veille"
-        const val CLE_VEILLE_SATS = "pc_veille_sats"
-        const val CLE_VEILLE_EL = "pc_veille_el"
-        const val CLE_VEILLE_SON = "pc_veille_son"
-        const val CLE_VEILLE_ECARTES = "pc_veille_ecartes"
         fun modeleDe(id: String): String = id.takeIf { it in MODELES } ?: "IC9700"
     }
 }

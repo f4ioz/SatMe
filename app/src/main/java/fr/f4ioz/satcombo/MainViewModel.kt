@@ -2356,7 +2356,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             .filter { sel == null || it.catalogNumber == sel.catalogNumber }
         val active = passes.firstOrNull { now in it.aosEpochMs..it.losEpochMs }
         val next = passes.filter { it.aosEpochMs >= now }.minByOrNull { it.aosEpochMs }
-        val autoStop = (active ?: next)?.losEpochMs?.let { it + 5_000L }
+        // Stopped at the pass's end, unless the option says to record until stopped by hand.
+        val autoStop = (active ?: next)?.losEpochMs?.let { it + 5_000L }?.takeIf { settings.enregCoupeLos }
         fr.f4ioz.satcombo.audio.RecorderService.start(
             getApplication(), satName, autoStop,
             _ui.value.recorderSource, _ui.value.recorderUnprocessed, myLocator())
@@ -3037,6 +3038,17 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         { _ui.value }, { _ui.value.observer ?: locationProvider.defaultObserver },
         { mesureAudio() }, { setRecorderEnabled(true) }, { myLocator() },
         { runCatching { activeTransmitters().getOrNull(_ui.value.selectedTxIndex)?.description }.getOrNull().orEmpty() })
+
+    /** The settings, for the PC page's automatic mode ([fr.f4ioz.satcombo.demo.ApiVeille]). */
+    fun settingsStore(): SettingsStore = settings
+    /** A recording started by hand stops at the end of its pass (option, on by default). */
+    fun enregCoupeLos(): Boolean = settings.enregCoupeLos
+    fun setEnregCoupeLos(on: Boolean) { settings.enregCoupeLos = on }
+
+    /** The automatic mode, as on SatMe-PC (see [VeilleTelephone]); before the init that starts it. */
+    val veille = VeilleTelephone(getApplication(), settings, viewModelScope, predictor,
+        { _ui.value }, { _ui.value.observer ?: locationProvider.defaultObserver },
+        { n -> selectByCatnum(n) }, { setRecorderEnabled(true) }, { myLocator() })
 
     fun setMaille(n: Int) {
         _ui.value = _ui.value.copy(carnet = _ui.value.carnet.copy(maille = n))
@@ -5234,18 +5246,22 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             !rec.recording -> null
             R.armePar == R.PAR_SSTV && R.fenetres.value.isNotEmpty() -> sstvAutoArme.takeIf { it != 0 } ?: settings.sstvAutoCatnum
             R.armePar == R.PAR_CAT && R.fenetres.value.isNotEmpty() -> enregAutoCat.arme.takeIf { it != 0 }
+            // The automatic mode: the satellite it records (the one it follows, unless changed by hand).
+            R.armePar == R.PAR_VEILLE && R.fenetres.value.isNotEmpty() -> journal.satImport(0, rec.satName)?.catalogNumber ?: _ui.value.selected?.catalogNumber
             // Started by hand: the satellite chosen, else the one the recorder names.
             else -> _ui.value.selected?.catalogNumber ?: journal.satImport(0, rec.satName)?.catalogNumber
         }
         val par = when (R.armePar) {
             R.PAR_SSTV -> fr.f4ioz.satcombo.domain.JournalPassage.AUTO_SSTV
-            R.PAR_CAT -> fr.f4ioz.satcombo.domain.JournalPassage.AUTO_CAT
+            R.PAR_CAT, R.PAR_VEILLE -> fr.f4ioz.satcombo.domain.JournalPassage.AUTO_CAT
             else -> fr.f4ioz.satcombo.domain.JournalPassage.AUTO_FOND
         }.takeIf { R.fenetres.value.isNotEmpty() } ?: fr.f4ioz.satcombo.domain.JournalPassage.AUTO_FOND
         // The transmitter it was armed with; by hand, the one chosen if it is that satellite's.
         val transpondeur = when (par) {
             fr.f4ioz.satcombo.domain.JournalPassage.AUTO_SSTV -> sstvAutoTx.ifBlank { settings.sstvAutoTx }
-            fr.f4ioz.satcombo.domain.JournalPassage.AUTO_CAT -> enregAutoCat.transpondeur
+            fr.f4ioz.satcombo.domain.JournalPassage.AUTO_CAT -> if (R.armePar == R.PAR_CAT) enregAutoCat.transpondeur
+                else if (_ui.value.selected?.catalogNumber == catnum)
+                    runCatching { activeTransmitters().getOrNull(_ui.value.selectedTxIndex)?.description }.getOrNull().orEmpty() else ""
             else -> if (_ui.value.selected?.catalogNumber == catnum)
                 runCatching { activeTransmitters().getOrNull(_ui.value.selectedTxIndex)?.description }.getOrNull().orEmpty() else ""
         }
@@ -5270,6 +5286,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
         // Every pass recorded under CAT: follows the rig and the satellite chosen.
         enregAutoCat.demarre(_ui)
+        // The automatic mode: the chosen satellites' passes, followed and recorded.
+        veille.demarre()
     }
 
     // ------------------------------------------------------- automatic SSTV
