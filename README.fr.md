@@ -26,7 +26,7 @@ L'ISS le 4 octobre : quatre images d'écoles en Robot 36, décodées pendant qu'
 
 SatMe tourne aussi sur un PC (Linux, Windows, Raspberry Pi), avec le moteur même du téléphone : passages, Doppler, poste et rotor, le carnet avec la station en direct à côté, skeds, QO-100 et **DATV avec un MiniTiouner**, clé SDR, radiosondes, METEOR, SSTV, APRS, FT8, le journal des passages — et SatMe sur le téléphone le rejoint en scannant un QR code, ses passages, images, sons et contacts arrivant avec. → [SatMe-PC](docs/station-pc.fr.md)
 
-**Installer** : [SatMe-PC sous Linux](docs/installer-satme-pc.fr.md) · [SatMe-Node sur un Raspberry Pi 3](docs/installer-satme-node.fr.md) (le MiniTiouner à côté de l'antenne) · [téléchargements](https://github.com/f4ioz/SatMe/releases/latest)
+**Installer**, guidé (il voit ce qui est branché) : `curl -fsSL https://raw.githubusercontent.com/f4ioz/SatMe/main/installe-satme.sh -o installe-satme.sh && bash installe-satme.sh` · [SatMe-PC sous Linux](docs/installer-satme-pc.fr.md) · [SatMe-Node sur un Raspberry Pi 3](docs/installer-satme-node.fr.md) (le MiniTiouner à côté de l'antenne) · [téléchargements](https://github.com/f4ioz/SatMe/releases/latest)
 
 <p align="center">
 <img src="docs/images/pc-station.webp" width="49%" alt="SatMe-PC : les prochains passages, FO-29 suivi sur le ciel, les fréquences corrigées du Doppler, poste et rotor">

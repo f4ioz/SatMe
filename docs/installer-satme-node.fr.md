@@ -21,7 +21,15 @@ Mettre la carte dans le Pi, brancher le réseau, l'alimenter, attendre une minut
 
 ## 2. Installer
 
-Depuis un PC du même réseau :
+Depuis un PC du même réseau, l'installation guidée (elle voit un Raspberry Pi sans bureau et propose SatMe-Node) :
+
+```
+ssh <utilisateur>@satme-node.local
+curl -fsSL https://raw.githubusercontent.com/f4ioz/SatMe/main/installe-satme.sh -o installe-satme.sh
+bash installe-satme.sh
+```
+
+Ou à la main :
 
 ```
 ssh <utilisateur>@satme-node.local

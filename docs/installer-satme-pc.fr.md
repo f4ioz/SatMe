@@ -4,6 +4,17 @@
 
 SatMe-PC, c'est toute la station dans un navigateur. Un seul paquet, `satme-pc.tar`, pour Debian, Ubuntu, Linux Mint, Raspberry Pi OS… Rien à compiler.
 
+## Le plus simple : l'installation guidée
+
+```
+curl -fsSL https://raw.githubusercontent.com/f4ioz/SatMe/main/installe-satme.sh -o installe-satme.sh
+bash installe-satme.sh
+```
+
+Il regarde ce qui est branché (adaptateurs du poste ou du rotor, clé RTL-SDR, MiniTiouner) et coche ce qui va avec ; vous choisissez, il installe, puis lance SatMe-PC et ouvre la page. Le relancer pour mettre à jour. `bash installe-satme.sh --oui` prend ce qu'il a détecté sans rien demander.
+
+Les étapes ci-dessous font la même chose à la main.
+
 ## 1. Java
 
 SatMe-PC demande Java 17 ou plus récent :
