@@ -7151,6 +7151,25 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun setQuery(q: String) { _ui.value = _ui.value.copy(query = q) }
     fun setSatActiveOnly(on: Boolean) { _ui.value = _ui.value.copy(satActiveOnly = on) }
 
+    /** The sources chosen at once (SatMe-PC's page): saved, and the elements fetched again once. */
+    fun setSources(ids: Set<String>) {
+        val l = ids.filter { id -> Sources.ALL.any { it.id == id } }.toSet()
+        if (l.isEmpty() || l == _ui.value.enabledSources) return
+        srcStore.save(l)
+        _ui.value = _ui.value.copy(enabledSources = l)
+        bootstrap(force = true)
+    }
+
+    /** Where the station is, as the online log's locations name it (its square, or the line of squares it sits on). */
+    fun emplacementIci(): Set<String> {
+        val u = _ui.value
+        val ici = u.observer?.let { Maidenhead.fromLatLon(it.latDeg, it.lonDeg) } ?: u.manualLocator
+        return fr.f4ioz.satcombo.domain.ProfilsStation.emplacement(ici, myGridsCsv(), u.carnet.maille)
+    }
+
+    /** The places the log was made from, with their contacts (SatMe-PC's page). */
+    fun lieuxDuCarnet(): Map<Set<String>, Int> = emplacementsDuCarnet(_ui.value.carnet.maille)
+
     fun toggleSource(id: String) {
         val cur = _ui.value.enabledSources.toMutableSet()
         if (!cur.add(id)) cur.remove(id)

@@ -24,7 +24,7 @@ object PagesPcTelephone {
     @Volatile var vm: MainViewModel? = null
 
     /** The tabs the phone serves so far; the page hides the others. QO-100 only when its extension is on. */
-    val ONGLETS = listOf("station", "carnet", "agenda", "carres", "frise", "sked", "qo100", "son", "sstv", "journal", "planche")
+    val ONGLETS = listOf("station", "carnet", "agenda", "carres", "frise", "sked", "qo100", "son", "sstv", "journal", "planche", "reglages")
 
     private fun onglets(vm: MainViewModel) =
         ONGLETS.filter { it != "qo100" || vm.hasExtension(fr.f4ioz.satcombo.data.Extensions.QO100) }
@@ -63,6 +63,8 @@ object PagesPcTelephone {
         val vm = vm ?: return json(JSONObject().put("ok", false).put("erreur", "pas prêt"))
         val u = vm.ui.value
         return runCatching {
+            // A gesture always goes to the gestures, even where a reading has the same address (api/reglages).
+            if (methode == "POST") return json(action(vm, route, p))
             when (route) {
                 "/api/capacites" -> json(JSONObject().put("onglets", JSONArray(onglets(vm))).put("serveur", "telephone"))
                 "/api/etat" -> json(etat(vm))
@@ -87,6 +89,37 @@ object PagesPcTelephone {
                     val obs = u.observer
                     json(ApiCalculs.passagesFinisJson(if (sat == null || obs == null) emptyList()
                         else ApiCalculs.passagesFinis(vm.predicteurPourPage(), sat, obs, System.currentTimeMillis(), 72, u.minElevDeg.toDouble())))
+                }
+                // ---- Settings: the phone's own, as SatMe-PC's page shows them
+                "/api/reglages" -> {
+                    val c = u.carnet
+                    json(JSONObject().put("c", u.callsign).put("l", u.manualLocator).put("qrzUser", c.qrzUser)
+                        .put("qrzMdp", c.qrzMdp.isNotEmpty()).put("carnetUrl", c.url).put("carnetCle", c.cle.isNotEmpty())
+                        .put("carnetProfil", c.profil).put("minEl", u.minElevDeg).put("fiche", true)
+                        .put("carnetAuto", c.auto).put("carnetDelai", c.autoDelaiS)
+                        .put("delais", JSONArray(fr.f4ioz.satcombo.domain.EnvoiAuto.DELAIS_S))
+                        .put("amsatAuto", c.amsatAuto).put("amsatEtat", c.amsatEtat))
+                }
+                // CelesTrak is the phone's to reach directly: no server rule here.
+                "/api/sources" -> json(ApiStation.sources(vm.serveurGp(), vm.serveurGpSeul(), u.enabledSources,
+                    if (u.loading) "chargement…" else "", u.satellites.size, celestrakParServeur = false))
+                "/api/sources/essai" -> json(ApiStation.essaiServeurGp(p("serveur").ifBlank { vm.serveurGp() }))
+                "/api/carnet/profils" -> {
+                    val c0 = u.carnet
+                    if (c0.url.isBlank() || c0.cle.isBlank()) return json(JSONObject().put("ok", false).put("erreur", "renseigne l'adresse et la clé du carnet en ligne"))
+                    // Read again, as SatMe-PC does: a few seconds at most.
+                    vm.relevProfils()
+                    val fin = System.currentTimeMillis() + 10_000L
+                    Thread.sleep(300)
+                    while (System.currentTimeMillis() < fin && vm.ui.value.carnet.profilsEtat == fr.f4ioz.satcombo.i18n.t("profils_releve")) Thread.sleep(200)
+                    val c = vm.ui.value.carnet
+                    if (c.profilsListe.isEmpty()) return json(JSONObject().put("ok", false).put("erreur", c.profilsEtat.ifBlank { "le carnet en ligne ne donne aucun profil (adresse ou clé ?)" }))
+                    val ici = vm.emplacementIci()
+                    val pourIci = c.profils[ici] ?: c.profil.ifBlank { null }
+                    json(ApiStation.profilsWavelog(c.profilsListe, ici, pourIci,
+                        vm.lieuxDuCarnet().entries.sortedBy { fr.f4ioz.satcombo.domain.ProfilsStation.nomEmplacement(it.key) }
+                            .map { (lieu, n) -> Triple(lieu, n, c.profils[lieu] ?: c.profil.ifBlank { null }) },
+                        { id, lieu -> id != null && c.profils[lieu] == id }, c.profil, u.callsign))
                 }
                 "/api/carnet/station" -> json(ApiStation.historiqueJson(ApiStation.historique(u.log, p("c")), u.observer, true))
                 // ---- Timeline, Sked, Squares: the engine's computations, from the phone's satellites, place and log
@@ -283,6 +316,52 @@ object PagesPcTelephone {
                 vm.refreshAgenda(); OK
             }
             "/api/agenda/suivi" -> JSONObject().put("ok", false).put("erreur", "sur le téléphone, ce sont les notifications du rendez-vous qui préviennent")
+            // ---- Settings
+            "/api/reglages" -> {
+                if (p("c").isNotEmpty()) vm.setCallsign(p("c").trim().uppercase())
+                p("l").trim().takeIf { it.isNotEmpty() }?.let { l ->
+                    if (fr.f4ioz.satcombo.location.Maidenhead.centre(l) == null) return JSONObject().put("ok", false).put("erreur", "locator non reconnu")
+                    vm.setManualLocator(l.uppercase())
+                }
+                p("minEl").toIntOrNull()?.let { vm.setMinElev(it.coerceIn(0, 45)) }
+                if (p("qrzUser").isNotEmpty()) vm.setQrzUser(p("qrzUser").trim())
+                p("qrzMdp").takeIf { it.isNotEmpty() }?.let { vm.setQrzMdp(it) }
+                if (p("carnetUrl").isNotEmpty()) vm.setCarnetUrl(p("carnetUrl").trim())
+                p("carnetCle").takeIf { it.isNotEmpty() }?.let { vm.setCarnetCle(it.trim()) }
+                if (p("carnetProfil").isNotEmpty()) vm.setCarnetProfil(p("carnetProfil").trim())
+                p("carnetDelai").toIntOrNull()?.let { vm.setCarnetAutoDelai(it) }
+                if (p("carnetAuto").isNotEmpty()) vm.setCarnetAuto(p("carnetAuto") == "1")
+                if (p("amsatAuto").isNotEmpty()) vm.setAmsatAuto(p("amsatAuto") == "1")
+                OK
+            }
+            "/api/sources" -> {
+                p("serveur").takeIf { it.isNotEmpty() }?.let { vm.setServeurGp(it.trim()) }
+                if (p("seul").isNotEmpty()) vm.setServeurGpSeul(p("seul") == "1")
+                p("ids").split(',').map { it.trim() }.filter { it.isNotEmpty() }.toSet().takeIf { it.isNotEmpty() }?.let { vm.setSources(it) }
+                OK
+            }
+            "/api/carnet/profil" -> { vm.setCarnetProfil(p("id").trim()); OK }
+            "/api/carnet/profils/cree" -> JSONObject().put("ok", false).put("erreur", "les profils se créent depuis SatMe-PC, ou dans Wavelog")
+            "/api/convertisseurs" -> {
+                // MHz on the page, Hz here; an empty field leaves it as it is.
+                fun hz(k: String) = p(k).trim().replace(',', '.').takeIf { it.isNotEmpty() }?.toDoubleOrNull()?.let { Math.round(it * 1e6) }
+                hz("rxOl")?.let { vm.setConvRxOl(it); vm.setConvRxActif(it > 0) }
+                if (p("rxInv").isNotEmpty()) vm.setConvRxInverseur(p("rxInv") == "1")
+                hz("txOl")?.let { vm.setConvTxOl(it); vm.setConvTxActif(it > 0) }
+                if (p("txInv").isNotEmpty()) vm.setConvTxInverseur(p("txInv") == "1")
+                OK
+            }
+            "/api/amsat/rapport" -> {
+                // Heard or not, on amsat.org's public page: the satellite followed, now (the phone's own report).
+                val sat = u.selected ?: return JSONObject().put("ok", false).put("erreur", "aucun satellite suivi")
+                if (u.callsign.isBlank()) return JSONObject().put("ok", false).put("erreur", "renseigne ton indicatif (Réglages)")
+                vm.submitAmsatStatus(sat.name, p("entendu") == "1", sat.catalogNumber)
+                val fin = System.currentTimeMillis() + 20_000L
+                Thread.sleep(200)
+                while (System.currentTimeMillis() < fin && vm.ui.value.amsatSubmitState == "busy") Thread.sleep(200)
+                val ok = vm.ui.value.amsatSubmitState == "ok"
+                JSONObject().put("ok", ok).put("nom", sat.name).put("erreur", if (ok) "" else "amsat.org n'a pas pris le rapport")
+            }
             // ---- QO-100: the gestures of the phone's QO-100 screen
             "/api/qo100/frequence" -> { p("hz").toLongOrNull()?.let { vm.setQo100Descente(it) }; OK }
             "/api/qo100/pas" -> { p("hz").toLongOrNull()?.let { vm.qo100Pas(it) }; OK }
@@ -468,7 +547,8 @@ object PagesPcTelephone {
         o.put("agendaSuivi", false).put("agenda", ApiCalculs.agendaJson(u.agenda, maintenant)).put("repos", JSONObject.NULL)
         val (dl, ul) = ApiStation.frequencesDuCiel(u.transmitters.getOrNull(u.selectedTxIndex), u.livePosition?.rangeRateKmS ?: 0.0, null, u.calibShiftHz, u.txShiftHz)
         o.put("ciel", JSONObject().put("dl", dl ?: JSONObject.NULL).put("ul", ul ?: JSONObject.NULL))
-        o.put("convertisseurs", JSONObject().put("rxOl", 0).put("rxInv", false).put("txOl", 0).put("txInv", false))
+        o.put("convertisseurs", JSONObject().put("rxOl", if (u.convRx.actif) u.convRx.olHz else 0).put("rxInv", u.convRx.inverseur)
+            .put("txOl", if (u.convTx.actif) u.convTx.olHz else 0).put("txInv", u.convTx.inverseur))
         o.put("cat", ApiStation.cat(vm.etatBoucleCat(), u.rigModel, u.civUsbIndex, u.catConnected, false, u.catStatus, u.dopplerHold))
         o.put("rotor", ApiStation.rotor(u.rotor.mat))
         return o

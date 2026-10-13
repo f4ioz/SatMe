@@ -1040,7 +1040,7 @@ object PagePc {
       <div class="ligne"><button class="primaire" onclick="enregistreSources()">Enregistrer et télécharger</button></div>
       <div class="etat" id="catalogue"></div>
     </div>
-    <div class="carte">
+    <div class="carte" id="carteTelephone">
       <div class="t">Téléphone</div>
       <div class="petit">Reprendre les réglages du téléphone (Réglages → Sauvegarde, fichier .json) :</div>
       <input type="file" id="import" accept=".json,application/json" onchange="importe(this)" style="width:100%;margin-top:4px">
@@ -3076,6 +3076,8 @@ setInterval(ticAprs, 2000);
 if (window.SATME_TELEPHONE) {
   g('s-note').textContent = 'MP3, comme sur le téléphone : il écoute en enregistrant. La source se choisit ici ; SatMe doit être à l’écran du téléphone pour prendre le micro.';
   g('s-auto-l').hidden = true;
+  // The phone serves this page: no phone to join.
+  g('carteTelephone').hidden = true;
 }
 function ecoute(nom) { g('s-lecteur').src = 'enregistrements/' + nom; g('s-lecteur').play(); }
 async function carteSon(arret) {

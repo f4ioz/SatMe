@@ -248,14 +248,8 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
             "/api/sources" -> {
                 // The orbital elements' choice, as on the phone.
                 val c = station.choixSources()
-                val o = JSONObject().put("serveur", c.serveur).put("seul", c.seul).put("defaut", fr.f4ioz.satcombo.data.ServeurGp.DEFAUT)
-                    .put("etat", station.etat.value.catalogue).put("nombre", station.etat.value.satellites.size)
-                    .put("sources", JSONArray(fr.f4ioz.satcombo.data.Sources.ALL.map { s ->
-                        JSONObject().put("id", s.id).put("nom", s.label).put("actif", s.id in c.sources)
-                            // CelesTrak: from this PC through the server only.
-                            .put("celestrak", s.url.contains("celestrak", true))
-                            .put("detail", if (s.id == fr.f4ioz.satcombo.data.Sources.IMAGES) fr.f4ioz.satcombo.data.SatellitesImages.LISTE.joinToString(", ") { it.nom + " (" + it.images + ")" } else "")
-                    }))
+                val o = fr.f4ioz.satcombo.demo.ApiStation.sources(c.serveur, c.seul, c.sources, station.etat.value.catalogue,
+                    station.etat.value.satellites.size, celestrakParServeur = true)
                 envoie(sortie, "200 OK", "application/json; charset=utf-8", o.toString().toByteArray())
             }
             "/api/qrz" -> {
@@ -571,17 +565,7 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 q["serveur"], q["seul"]?.let { it == "1" })
             "/api/sources/essai" -> {
                 // The server's groups and their counts, or why it does not answer.
-                val base = fr.f4ioz.satcombo.data.ServeurGp.normalise(q["serveur"].orEmpty().ifBlank { station.settings.serveurGp })
-                if (base.isEmpty()) return JSONObject().put("ok", false).put("erreur", "aucune adresse")
-                val r = runCatching {
-                    val c = okhttp3.OkHttpClient.Builder().connectTimeout(8, java.util.concurrent.TimeUnit.SECONDS).readTimeout(15, java.util.concurrent.TimeUnit.SECONDS).build()
-                    c.newCall(okhttp3.Request.Builder().url(fr.f4ioz.satcombo.data.ServeurGp.index(base)).header("User-Agent", fr.f4ioz.satcombo.data.AgentHttp.USER_AGENT).build()).execute().use { rep ->
-                        if (!rep.isSuccessful) return JSONObject().put("ok", false).put("erreur", "HTTP " + rep.code)
-                        val g = JSONObject(rep.body?.string().orEmpty()).getJSONArray("groupes")
-                        (0 until g.length()).joinToString(" · ") { val x = g.getJSONObject(it); x.getString("id") + " " + x.optInt("nombre") }
-                    }
-                }.getOrElse { return JSONObject().put("ok", false).put("erreur", "pas de réponse (" + it.javaClass.simpleName + ")") }
-                return ok.put("groupes", r)
+                return fr.f4ioz.satcombo.demo.ApiStation.essaiServeurGp(q["serveur"].orEmpty().ifBlank { station.settings.serveurGp })
             }
             "/api/carnet/retiens" -> {
                 val t = q["t"]?.toLongOrNull() ?: return JSONObject().put("ok", false)
@@ -592,17 +576,8 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 val c = carnet ?: return JSONObject().put("ok", false)
                 kotlinx.coroutines.runBlocking { c.releveProfils() }?.let { return JSONObject().put("ok", false).put("erreur", it) }
                 if (c.profils.isEmpty()) return JSONObject().put("ok", false).put("erreur", "le carnet en ligne ne donne aucun profil (adresse ou clé ?)")
-                return ok.put("profils", JSONArray(c.profils.map { JSONObject().put("id", it.id).put("indicatif", it.indicatif).put("carre", it.carre).put("nom", it.nom) }))
-                    .put("ici", fr.f4ioz.satcombo.domain.ProfilsStation.nomEmplacement(c.ici())).put("pourIci", c.profilPourLieu(c.ici()) ?: JSONObject.NULL)
-                    .put("iciCouvert", c.couvre(c.profilPourLieu(c.ici()), c.ici()))
-                    .put("choisi", station.settings.carnetProfil)
-                    .put("lieux", JSONArray(c.lieuxDuCarnet().map { (lieu, n, p) ->
-                        JSONObject().put("lieu", fr.f4ioz.satcombo.domain.ProfilsStation.nomEmplacement(lieu)).put("n", n).put("profil", p ?: JSONObject.NULL)
-                            .put("couvert", c.couvre(p, lieu))
-                    }))
-                    // Wavelog needs these to create a profile: France's when the callsign is French.
-                    .put("creation", if (station.settings.callsign.trim().uppercase().startsWith("F"))
-                        JSONObject().put("dxcc", "227").put("pays", "FRANCE").put("cq", "14").put("itu", "27") else JSONObject())
+                return fr.f4ioz.satcombo.demo.ApiStation.profilsWavelog(c.profils, c.ici(), c.profilPourLieu(c.ici()), c.lieuxDuCarnet(),
+                    { id, lieu -> c.couvre(id, lieu) }, station.settings.carnetProfil, station.settings.callsign)
             }
             "/api/carnet/profil" -> station.settings.carnetProfil = q["id"].orEmpty().trim()
             "/api/carnet/profils/cree" -> {

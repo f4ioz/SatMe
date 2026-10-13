@@ -136,4 +136,55 @@ object ApiStation {
             ?.let { ouEstIl(o, moi, null, null, it) }
         return o
     }
+
+    /**
+     * The online log's station locations as the settings show them: the
+     * profiles, the one for here, and which one each place of the log goes
+     * to ([lieux]: place, contacts, profile); [couvre] says whether a
+     * profile really matches a place (else it is only the default).
+     */
+    fun profilsWavelog(profils: List<fr.f4ioz.satcombo.domain.ProfilsStation.Profil>, ici: Set<String>, pourIci: String?,
+                       lieux: List<Triple<Set<String>, Int, String?>>, couvre: (String?, Set<String>) -> Boolean,
+                       choisi: String, indicatif: String): JSONObject =
+        JSONObject().put("ok", true)
+            .put("profils", JSONArray(profils.map { JSONObject().put("id", it.id).put("indicatif", it.indicatif).put("carre", it.carre).put("nom", it.nom) }))
+            .put("ici", fr.f4ioz.satcombo.domain.ProfilsStation.nomEmplacement(ici)).put("pourIci", pourIci ?: JSONObject.NULL)
+            .put("iciCouvert", couvre(pourIci, ici))
+            .put("choisi", choisi)
+            .put("lieux", JSONArray(lieux.map { (lieu, n, p) ->
+                JSONObject().put("lieu", fr.f4ioz.satcombo.domain.ProfilsStation.nomEmplacement(lieu)).put("n", n).put("profil", p ?: JSONObject.NULL)
+                    .put("couvert", couvre(p, lieu))
+            }))
+            // Wavelog needs these to create a profile: France's when the callsign is French.
+            .put("creation", if (indicatif.trim().uppercase().startsWith("F"))
+                JSONObject().put("dxcc", "227").put("pays", "FRANCE").put("cq", "14").put("itu", "27") else JSONObject())
+
+    /**
+     * The orbital elements' choice as the settings show it: the SatMe GP
+     * server, it alone or not, the sources ticked. [celestrakParServeur]:
+     * CelesTrak reached only through the server (SatMe-PC's rule).
+     */
+    fun sources(serveur: String, seul: Boolean, actives: Set<String>, etat: String, nombre: Int, celestrakParServeur: Boolean): JSONObject =
+        JSONObject().put("serveur", serveur).put("seul", seul).put("defaut", fr.f4ioz.satcombo.data.ServeurGp.DEFAUT)
+            .put("etat", etat).put("nombre", nombre)
+            .put("sources", JSONArray(fr.f4ioz.satcombo.data.Sources.ALL.map { s ->
+                JSONObject().put("id", s.id).put("nom", s.label).put("actif", s.id in actives)
+                    .put("celestrak", celestrakParServeur && s.url.contains("celestrak", true))
+                    .put("detail", if (s.id == fr.f4ioz.satcombo.data.Sources.IMAGES) fr.f4ioz.satcombo.data.SatellitesImages.LISTE.joinToString(", ") { it.nom + " (" + it.images + ")" } else "")
+            }))
+
+    /** The SatMe GP server at [serveur]: its groups and their counts, or why it does not answer. */
+    fun essaiServeurGp(serveur: String): JSONObject {
+        val base = fr.f4ioz.satcombo.data.ServeurGp.normalise(serveur)
+        if (base.isEmpty()) return JSONObject().put("ok", false).put("erreur", "aucune adresse")
+        val r = runCatching {
+            val c = okhttp3.OkHttpClient.Builder().connectTimeout(8, java.util.concurrent.TimeUnit.SECONDS).readTimeout(15, java.util.concurrent.TimeUnit.SECONDS).build()
+            c.newCall(okhttp3.Request.Builder().url(fr.f4ioz.satcombo.data.ServeurGp.index(base)).header("User-Agent", fr.f4ioz.satcombo.data.AgentHttp.USER_AGENT).build()).execute().use { rep ->
+                if (!rep.isSuccessful) return JSONObject().put("ok", false).put("erreur", "HTTP " + rep.code)
+                val g = JSONObject(rep.body?.string().orEmpty()).getJSONArray("groupes")
+                (0 until g.length()).joinToString(" · ") { val x = g.getJSONObject(it); x.getString("id") + " " + x.optInt("nombre") }
+            }
+        }.getOrElse { return JSONObject().put("ok", false).put("erreur", "pas de réponse (" + it.javaClass.simpleName + ")") }
+        return JSONObject().put("ok", true).put("groupes", r)
+    }
 }
