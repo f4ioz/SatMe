@@ -8913,8 +8913,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         if (!hasExtension(fr.f4ioz.satcombo.data.Extensions.QO100)) return
         va(Screen.QO100)
         _ui.value = _ui.value.copy(screen = Screen.QO100)
-        // Calibration and dish pointing do not change while operating: read
-        // once on opening.
+        qo100Lit()
+        qo100Panorama(true)
+    }
+
+    /**
+     * Calibration and dish pointing do not change while operating: read once
+     * on opening — of the screen, or of SatMe-PC's page served by the phone.
+     */
+    private fun qo100Lit() {
         val calage = satConfigStore.load(Qo100.NORAD).calibShiftHz
         _ui.value = _ui.value.qo { copy(calageHz = calage) }
         qo100Recalcule()
@@ -8926,7 +8933,39 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             }
             qo100Soleil(obs.latDeg, obs.lonDeg)
         }
-        qo100Panorama(true)
+    }
+
+    /** SatMe-PC's page opened its QO-100 tab: the same reading, the phone's screen left where it is. */
+    fun ouvreQo100PourPage(): Boolean {
+        if (!hasExtension(fr.f4ioz.satcombo.data.Extensions.QO100)) return false
+        qo100Lit()
+        return true
+    }
+
+    fun qo100Centre() = setQo100Descente(qo100Tp().centreDescenteHz)
+
+    /** When the page last asked for the panorama, and who turns it off after. */
+    @Volatile private var panoramaPageMs = 0L
+    private var jobPanoramaPage: kotlinx.coroutines.Job? = null
+
+    /**
+     * The panorama for the page's waterfall: on while the page asks (every
+     * second or so), off ten seconds after it stops — unless the phone's own
+     * QO-100 screen has it. Null while the dongle is not running.
+     */
+    fun panoramaPourPage(): Pair<FloatArray, Pair<Double, Double>?>? {
+        if (!fr.f4ioz.satcombo.sdr.SdrHub.state.value.running) return null
+        panoramaPageMs = System.currentTimeMillis()
+        // Asked each time: leaving the phone's QO-100 screen turns it off.
+        runCatching { fr.f4ioz.satcombo.sdr.SdrHub.setPanorama(true) }
+        viewModelScope.launch {
+            if (jobPanoramaPage?.isActive == true) return@launch
+            jobPanoramaPage = launch {
+                while (System.currentTimeMillis() - panoramaPageMs < 10_000L) delay(2_000L)
+                if (_ui.value.screen != Screen.QO100) runCatching { fr.f4ioz.satcombo.sdr.SdrHub.setPanorama(false) }
+            }
+        }
+        return fr.f4ioz.satcombo.sdr.SdrHub.panorama.value to qo100AxeCiel()
     }
 
     /** The beacon-watching job. Only one, and it dies with the screen. */

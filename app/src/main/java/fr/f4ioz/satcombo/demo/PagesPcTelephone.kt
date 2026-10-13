@@ -23,8 +23,11 @@ object PagesPcTelephone {
     /** The ViewModel, set when it starts. */
     @Volatile var vm: MainViewModel? = null
 
-    /** The tabs the phone serves so far; the page hides the others. */
-    val ONGLETS = listOf("station", "carnet", "agenda", "carres", "frise", "sked", "journal", "planche")
+    /** The tabs the phone serves so far; the page hides the others. QO-100 only when its extension is on. */
+    val ONGLETS = listOf("station", "carnet", "agenda", "carres", "frise", "sked", "qo100", "son", "sstv", "journal", "planche")
+
+    private fun onglets(vm: MainViewModel) =
+        ONGLETS.filter { it != "qo100" || vm.hasExtension(fr.f4ioz.satcombo.data.Extensions.QO100) }
 
     /**
      * The page: SatMe-PC's, the key from the desk put in a cookie for its
@@ -46,7 +49,7 @@ object PagesPcTelephone {
         val u = vm.ui.value
         return runCatching {
             when (route) {
-                "/api/capacites" -> json(JSONObject().put("onglets", JSONArray(ONGLETS)).put("serveur", "telephone"))
+                "/api/capacites" -> json(JSONObject().put("onglets", JSONArray(onglets(vm))).put("serveur", "telephone"))
                 "/api/etat" -> json(etat(vm))
                 "/api/passages" -> json(JSONObject().put("calcul", u.loading).put("liste", JSONArray(u.passes.take(300).map {
                     ApiStation.passage(it, fav = it.catalogNumber in u.favorites, agenda = vm.agendaForPass(it) != null)
@@ -78,7 +81,25 @@ object PagesPcTelephone {
                 "/api/ports" -> json(JSONArray(vm.listeUsb().mapIndexed { i, d ->
                     JSONObject().put("index", i).put("libelle", d.label + (if (d.hasPermission) "" else " — autoriser sur le téléphone")).put("vendor", 0)
                 }))
-                "/api/son" -> json(JSONObject().put("present", false))
+                "/api/son" -> json(son(vm))
+                "/api/sstv/encours.png" -> {
+                    val b = fr.f4ioz.satcombo.sstv.SstvHub.state.value.preview ?: return NON
+                    val o = java.io.ByteArrayOutputStream()
+                    b.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, o)
+                    ReponseWeb("200 OK", "image/png", o.toByteArray())
+                }
+                // ---- QO-100: the phone's QO-100 screen, its state in SatMe-PC's words
+                "/api/qo100" -> {
+                    if (p("plan") == "1" && !vm.ouvreQo100PourPage()) return json(JSONObject().put("ok", false).put("erreur", "QO-100 n'est pas activé sur le téléphone (Réglages → Extensions)"))
+                    json(qo100(vm, p("plan") == "1"))
+                }
+                "/api/qo100/panorama" -> {
+                    val r = vm.panoramaPourPage()
+                    val pan = r?.first?.takeIf { it.isNotEmpty() }
+                    if (pan != null && pan !== dernierPanorama) { dernierPanorama = pan; trames++ }
+                    json(ApiQo100.panorama(r != null, pan, r?.second, p("n").toIntOrNull() ?: 512, trames,
+                        if (pan != null && r.second != null) fr.f4ioz.satcombo.domain.MesureBalise.mesurer(pan, r.second!!.first, r.second!!.second) else null))
+                }
                 "/api/carnet" -> json(carnet(vm))
                 "/api/carnet/propositions" -> {
                     val saisie = p("c")
@@ -207,7 +228,137 @@ object PagesPcTelephone {
                 vm.refreshAgenda(); OK
             }
             "/api/agenda/suivi" -> JSONObject().put("ok", false).put("erreur", "sur le téléphone, ce sont les notifications du rendez-vous qui préviennent")
+            // ---- QO-100: the gestures of the phone's QO-100 screen
+            "/api/qo100/frequence" -> { p("hz").toLongOrNull()?.let { vm.setQo100Descente(it) }; OK }
+            "/api/qo100/pas" -> { p("hz").toLongOrNull()?.let { vm.qo100Pas(it) }; OK }
+            "/api/qo100/balise" -> { vm.qo100AllerBalise(); OK }
+            "/api/qo100/centre" -> { vm.qo100Centre(); OK }
+            "/api/qo100/transpondeur" -> { vm.setQo100Transpondeur(p("cle")); OK }
+            "/api/qo100/balayage" -> { vm.setQo100SansBride(p("on") == "1"); if (p("on") != "1") vm.setQo100Descente(u.qo100.descenteHz); OK }
+            "/api/qo100/poste" -> { vm.setQo100AuPoste(p("on") == "1"); OK }
+            "/api/qo100/cle" -> { vm.setQo100ALaCle(p("on") == "1"); OK }
+            "/api/qo100/memoire" -> { vm.qo100PoseMemoire(p("nom")); OK }
+            "/api/qo100/oublie" -> { p("hz").toLongOrNull()?.let { vm.qo100RetireMemoire(it) }; OK }
+            "/api/qo100/chaine" -> { vm.setQo100Chaine(p("nom")); OK }
+            "/api/qo100/nouvelle" -> { vm.qo100AjouteChaine(p("nom")); OK }
+            "/api/qo100/ol" -> { p("hz").toLongOrNull()?.let { vm.qo100PoseOl(p("sens") == "descente", it) }; OK }
+            "/api/qo100/mesure" -> {
+                val (bon, message) = vm.qo100Mesure(p("sens") == "descente", ApiQo100.mhz(p("ciel")) ?: 0L, ApiQo100.mhz(p("poste")) ?: 0L)
+                JSONObject().put("ok", bon).put("message", message)
+            }
+            "/api/qo100/balise-entendue" -> {
+                val hz = ApiQo100.baliseEntendue(p("mhz")) ?: return JSONObject().put("ok", false).put("message", ApiQo100.BALISE_LOIN)
+                vm.setQo100Calage(u.qo100.calageHz + hz - fr.f4ioz.satcombo.domain.Qo100.BALISE_MEDIANE_HZ); OK
+            }
+            "/api/qo100/caler-mesure" -> {
+                // No measurement: nothing done — certainly not a calibration back to zero.
+                val r = vm.panoramaPourPage()
+                val m = r?.first?.takeIf { it.isNotEmpty() }?.let { pan -> r.second?.let { fr.f4ioz.satcombo.domain.MesureBalise.mesurer(pan, it.first, it.second) } }
+                    ?: u.qo100.balise ?: return JSONObject().put("ok", false).put("erreur", "La balise n'est pas vue par la clé.")
+                vm.setQo100Calage(u.qo100.calageHz + m.ecartArrondiHz); OK
+            }
+            "/api/qo100/calage-zero" -> { vm.setQo100Calage(0L); OK }
+            // ---- Sound: the phone's recorder (the source chosen, the recording started or stopped)
+            "/api/son/carte" -> {
+                val nom = p("nom")
+                when {
+                    nom.isBlank() -> { if (u.recording) vm.stopRecording(); OK }
+                    SOURCES.none { it.first == nom } -> JSONObject().put("ok", false).put("erreur", "source inconnue")
+                    else -> { vm.setRecorderSource(nom); OK.put("message", "le téléphone écoute en enregistrant : « Enregistrer »") }
+                }
+            }
+            "/api/son/enregistrer" -> {
+                if (p("on") != "1") { vm.stopRecording(); return OK }
+                pourquoiPasDEnregistrement(vm)?.let { return JSONObject().put("ok", false).put("erreur", it) }
+                if (!u.recorderEnabled) vm.setRecorderEnabled(true)
+                vm.startRecording(); OK
+            }
+            "/api/son/options" -> {
+                if (p("sstv").isNotEmpty()) vm.setSstvEnabled(p("sstv") == "1")
+                if (p("aprs").isNotEmpty()) vm.setAprsActif(p("aprs") == "1")
+                if (p("auto").isNotEmpty()) return JSONObject().put("ok", false).put("erreur", "sur le téléphone, l'enregistrement des passages se règle dans l'agenda et le CAT")
+                OK
+            }
             else -> JSONObject().put("ok", false).put("erreur", "pas encore sur le téléphone")
+        }
+    }
+
+    /** The sources the phone records from: the SatMe screen's choices. */
+    private val SOURCES = listOf("MIC" to "Micro du téléphone", "BT" to "Bluetooth (HFP)", "USB" to "Carte son USB (le poste)")
+
+    /** The last panorama seen, and how many new ones: the page redraws only a new line. */
+    @Volatile private var dernierPanorama: FloatArray? = null
+    @Volatile private var trames = 0L
+    /** The picture under way, and how often it changed: the page reloads it when this moves. */
+    @Volatile private var dernierApercu: Any? = null
+    @Volatile private var versionApercu = 0L
+
+    /** QO-100 as the phone's screen holds it, in the engine's words ([ApiQo100]). */
+    private fun qo100(vm: MainViewModel, plan: Boolean): JSONObject {
+        val u = vm.ui.value
+        val q = u.qo100
+        val e = fr.f4ioz.satcombo.station.PiloteQo100.Etat(transpondeur = q.transpondeur, sansBride = q.sansBride, descenteHz = q.descenteHz,
+            auPoste = q.auPoste, aLaCle = q.aLaCle, posteRxHz = q.posteRxHz, posteTxHz = q.posteTxHz, posteAtteignable = q.posteAtteignable,
+            calageHz = q.calageHz, surBalise = q.surBalise, memoires = q.memoires, chaines = q.chaines, chaine = q.chaine, statut = q.statut)
+        val obs = u.observer
+        val ciel = obs?.let { ApiQo100.Ciel(fr.f4ioz.satcombo.domain.Qo100.pointage(it.latDeg, it.lonDeg), q.soleilAzimutMs, q.soleilTransits) }
+        return ApiQo100.etat(e, u.catConnected, q.cleRxHz, ciel, obs != null, plan)
+    }
+
+    /** The recorder and the SSTV decoder, in SatMe-PC's words ([ApiSon]). */
+    private fun son(vm: MainViewModel): JSONObject {
+        val u = vm.ui.value
+        val ctx = vm.getApplication<android.app.Application>()
+        val r = fr.f4ioz.satcombo.audio.RecorderService.state.value
+        val s = fr.f4ioz.satcombo.sstv.SstvHub.state.value
+        if (s.preview != null && s.preview !== dernierApercu) { dernierApercu = s.preview; versionApercu++ }
+        val hauteur = s.preview?.height ?: 0
+        val enCours = s.decoding && s.modeName != null
+        return ApiSon.json(ApiSon.Etat(SOURCES, u.recorderSource, r.recording, if (r.recording) 44_100 else 0,
+            if (r.recording) fr.f4ioz.satcombo.audio.MoniteurAudio.etat.value.crete else 0f, "",
+            if (r.recording) r.fileName.orEmpty() else "", if (r.recording) (System.currentTimeMillis() - r.startMs) / 1000 else 0L,
+            r.recording && r.autoStopMs != null, false, u.sstvEnabled, vm.aprsActif(),
+            if (enCours) s.modeName.orEmpty() else "", (s.progress * hauteur).toInt(), hauteur, versionApercu, s.lastSaved.orEmpty(),
+            enregistrements(ctx), fr.f4ioz.satcombo.sstv.SstvHub.shots(ctx).map { it.second }.sortedByDescending { it.timeMs }))
+    }
+
+    /**
+     * Why the page cannot start a recording, or null. Android lets the
+     * microphone be taken only with its permission, and only while SatMe is
+     * on screen: asked otherwise, the recorder would not start (the app
+     * stopped by the system). The permission is asked on the phone, not here.
+     */
+    private fun pourquoiPasDEnregistrement(vm: MainViewModel): String? {
+        val ctx = vm.getApplication<android.app.Application>()
+        val perms = listOf(android.Manifest.permission.RECORD_AUDIO) +
+            if (vm.ui.value.recorderSource == "BT" && android.os.Build.VERSION.SDK_INT >= 31) listOf(android.Manifest.permission.BLUETOOTH_CONNECT) else emptyList()
+        if (perms.any { androidx.core.content.ContextCompat.checkSelfPermission(ctx, it) != android.content.pm.PackageManager.PERMISSION_GRANTED })
+            return "le micro n'est pas autorisé : lancer un premier enregistrement sur le téléphone (⏺), qui le demande"
+        val moi = android.app.ActivityManager.RunningAppProcessInfo()
+        android.app.ActivityManager.getMyMemoryState(moi)
+        if (moi.importance > android.app.ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND)
+            return "SatMe doit être à l'écran du téléphone pour prendre le micro (règle d'Android) : l'ouvrir, puis « Enregistrer »"
+        return null
+    }
+
+    private fun dossierEnregistrements(ctx: android.content.Context) = java.io.File(ctx.getExternalFilesDir(null), "recordings")
+
+    private fun enregistrements(ctx: android.content.Context): List<java.io.File> =
+        (dossierEnregistrements(ctx).listFiles { f -> f.name.startsWith("SatMe_") && (f.name.endsWith(".mp3") || f.name.endsWith(".wav")) }
+            ?: emptyArray()).sortedByDescending { it.lastModified() }
+
+    /** A file of the page: an SSTV picture (`/sstv/…`) or a recording (`/enregistrements/…`); null when it is not one. */
+    fun fichier(chemin: String): ReponseWeb? {
+        val vm = vm ?: return null
+        val ctx = vm.getApplication<android.app.Application>()
+        fun nom(prefixe: String) = java.net.URLDecoder.decode(chemin.removePrefix(prefixe), "UTF-8")
+        return when {
+            chemin.startsWith("/sstv/") -> ApiSon.fichier(fr.f4ioz.satcombo.sstv.SstvHub.dir(ctx), nom("/sstv/"), ".png")
+                ?.let { ReponseWeb("200 OK", "image/png", fichier = it) }
+            chemin.startsWith("/enregistrements/") -> ApiSon.fichier(dossierEnregistrements(ctx), nom("/enregistrements/"), ".mp3", ".wav")
+                ?.takeIf { it.name.startsWith("SatMe_") }
+                ?.let { ReponseWeb("200 OK", if (it.name.endsWith(".mp3")) "audio/mpeg" else "audio/wav", fichier = it) }
+            else -> null
         }
     }
 

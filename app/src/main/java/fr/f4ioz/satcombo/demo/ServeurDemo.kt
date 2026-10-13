@@ -333,8 +333,8 @@ object ServeurDemo {
         }
 
         // The key in the address, or in the cookie SatMe-PC's page sets (its pictures and links carry no parameter).
-        val cle = parametre(route, "cle").ifBlank { requete?.cookie("satme_cle").orEmpty() }
-        if (!sessionValide(cle)) {
+        // Either: SatMe-PC's page has its own `cle` parameter (QO-100's transponder), its key then in the cookie.
+        if (!sessionValide(parametre(route, "cle")) && !sessionValide(requete?.cookie("satme_cle").orEmpty())) {
             envoie(sortie, "403 Forbidden", "application/json",
                 "{\"ok\":false,\"raison\":\"session\"}".toByteArray())
             return
@@ -346,7 +346,13 @@ object ServeurDemo {
         // SatMe-PC's page: its routes, from the phone's state.
         if (chemin.startsWith("/api/")) {
             val r = PagesPcTelephone.sert(chemin, requete?.methode ?: "GET") { parametre(route, it) }
-            envoie(sortie, r.statut, r.type, r.corps, r.entetes)
+            envoieReponse(sortie, r, requete)
+            return
+        }
+        // Its pictures and recordings: only the phone's own, by plain name.
+        if (chemin.startsWith("/sstv/") || chemin.startsWith("/enregistrements/")) {
+            envoieReponse(sortie, PagesPcTelephone.fichier(chemin)
+                ?: ReponseWeb("404 Not Found", "text/plain", ByteArray(0)), requete)
             return
         }
 

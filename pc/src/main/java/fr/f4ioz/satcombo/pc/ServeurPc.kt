@@ -8,6 +8,8 @@
  */
 package fr.f4ioz.satcombo.pc
 
+import fr.f4ioz.satcombo.demo.ApiQo100
+import fr.f4ioz.satcombo.demo.ApiSon
 import fr.f4ioz.satcombo.demo.PagePc
 
 import fr.f4ioz.satcombo.datv.Datv
@@ -153,20 +155,9 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 .toString().toByteArray())
             "/api/qo100/panorama" -> {
                 val d = sdr
-                val o = JSONObject().put("sdr", d?.etat?.value?.actif == true)
-                if (d != null && d.etat.value.actif) {
-                    d.demandePanorama()
-                    val pan = d.panorama; val axe = d.axeQo100()
-                    if (pan != null && axe != null) {
-                        val cols = fr.f4ioz.satcombo.domain.PanoramaQo100.colonnes(pan, axe.first, axe.second, (q["n"]?.toIntOrNull() ?: 512).coerceIn(64, 1024))
-                        o.put("trames", d.panoramaTrames)
-                        o.put("colonnes", cols?.let { c -> JSONArray(c.map { v -> if (v == fr.f4ioz.satcombo.domain.PanoramaQo100.HORS) JSONObject.NULL else Math.round(v) }) } ?: JSONObject.NULL)
-                    }
-                    d.mesureBalise()?.let { m ->
-                        o.put("balise", JSONObject().put("ecart", m.ecartArrondiHz).put("rapport", Math.round(m.rapportDb * 10) / 10.0)
-                            .put("ok", fr.f4ioz.satcombo.domain.MesureBalise.calageSuffisant(m)))
-                    }
-                }
+                val actif = d != null && d.etat.value.actif
+                if (actif) d!!.demandePanorama()
+                val o = ApiQo100.panorama(actif, d?.panorama, d?.axeQo100(), q["n"]?.toIntOrNull() ?: 512, d?.panoramaTrames ?: 0L, if (actif) d!!.mesureBalise() else null)
                 envoie(sortie, "200 OK", "application/json; charset=utf-8", o.toString().toByteArray())
             }
             "/api/qo100" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JsonPc.qo100(station, q["plan"] == "1").toString().toByteArray())
@@ -519,14 +510,11 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
             "/api/qo100/ol" -> q["hz"]?.toLongOrNull()?.let { station.qo100.poseOl(q["sens"] == "descente", it) }
             "/api/qo100/mesure" -> {
                 // MHz on the page.
-                fun hz(k: String) = q[k]?.trim()?.replace(',', '.')?.toDoubleOrNull()?.let { Math.round(it * 1e6) } ?: 0L
-                val (bon, message) = station.qo100.mesure(q["sens"] == "descente", hz("ciel"), hz("poste"))
+                val (bon, message) = station.qo100.mesure(q["sens"] == "descente", ApiQo100.mhz(q["ciel"]) ?: 0L, ApiQo100.mhz(q["poste"]) ?: 0L)
                 return JSONObject().put("ok", bon).put("message", message)
             }
             "/api/qo100/balise-entendue" -> {
-                val hz = q["mhz"]?.trim()?.replace(',', '.')?.toDoubleOrNull()?.let { Math.round(it * 1e6) }
-                    ?.takeIf { Math.abs(it - fr.f4ioz.satcombo.domain.Qo100.BALISE_MEDIANE_HZ) < 2_000_000L }
-                    ?: return JSONObject().put("ok", false).put("message", "Une fréquence près de 10 489,750 MHz, en MHz.")
+                val hz = ApiQo100.baliseEntendue(q["mhz"]) ?: return JSONObject().put("ok", false).put("message", ApiQo100.BALISE_LOIN)
                 station.qo100.caleSurLaBalise(hz)
             }
             "/api/qo100/cle" -> station.qo100.aLaCle(q["on"] == "1")
@@ -826,43 +814,11 @@ object JsonPc {
 
     /** QO-100: the pilot's state, the dish and the Sun; with [plan], the band plan and the presets (they never change). */
     fun qo100(st: StationPc, plan: Boolean): JSONObject {
-        val Q = fr.f4ioz.satcombo.domain.Qo100
         // The tab opened: what is stored read again (the Station tab sets the same calibration).
         if (plan) st.qo100.ouvre()
         val e = st.qo100.etat.value
-        val tr = fr.f4ioz.satcombo.i18n.I18n
-        val seg = e.segment
-        val c = e.chaineActive
-        val o = JSONObject()
-            .put("descente", e.descenteHz).put("montee", e.monteeHz).put("calage", e.calageHz)
-            .put("transpondeur", e.transpondeur).put("sansBride", e.sansBride).put("surBalise", e.surBalise)
-            .put("auPoste", e.auPoste).put("posteRx", e.posteRxHz).put("posteTx", e.posteTxHz).put("atteignable", e.posteAtteignable)
-            .put("emission", e.emissionPermise).put("statut", e.statut).put("catConnecte", st.etat.value.catConnecte)
-            .put("aLaCle", e.aLaCle).put("cleRx", st.versCle(e.descenteHz + e.calageHz))
-            .put("cleAtteignable", st.versCle(e.descenteHz + e.calageHz) in 24_000_000L..1_766_000_000L)
-            .put("tp", JSONObject().put("bas", e.tp.descenteBasHz).put("haut", e.tp.descenteHautHz).put("centre", e.tp.centreDescenteHz))
-            .put("segment", seg?.let { JSONObject().put("nom", tr.t("qo100_seg_" + it.cle)).put("largeur", it.largeurMaxHz)
-                .put("avert", tr.t("qo100_warn_" + it.usage.cleAvertissement)).put("emission", it.emissionPermise) }
-                ?: JSONObject().put("nom", "").put("largeur", 0).put("avert", tr.t("qo100_warn_hors")).put("emission", false))
-            .put("memoires", JSONArray(fr.f4ioz.satcombo.domain.MemoiresQo100.toutes(e.memoires).map { m ->
-                JSONObject().put("hz", m.hz).put("nom", m.libelle { k -> tr.t(k) }).put("fixe", m.fixe) }))
-            .put("chaines", JSONArray(e.chaines.map { it.nom })).put("chaine", c.nom)
-            .put("olRx", c.descenteOlHz).put("olTx", c.monteeOlHz)
-        st.cielQo100()?.let { k ->
-            o.put("ciel", JSONObject().put("az", k.pointage.azDeg).put("el", k.pointage.elDeg).put("skew", k.pointage.skewDeg)
-                .put("visible", k.pointage.visible).put("soleilAz", k.soleilAzimutMs ?: JSONObject.NULL)
-                .put("ombre", fr.f4ioz.satcombo.domain.SoleilQo100.azimutDeLOmbre(k.pointage.azDeg))
-                .put("transits", JSONArray(k.transits.map { t -> JSONObject().put("t", t.instantMs).put("ecart", t.ecartDeg).put("duree", t.dureeS) })))
-        } ?: o.put("ciel", if (st.etat.value.observateur == null) JSONObject().put("inconnu", true) else JSONObject.NULL)
-        if (plan) {
-            o.put("segments", JSONArray(Q.SEGMENTS.map { g -> JSONObject().put("bas", g.basHz).put("haut", g.hautHz)
-                .put("usage", g.usage.name).put("nom", tr.t("qo100_seg_" + g.cle)).put("repere", g.repereHz ?: JSONObject.NULL) }))
-                .put("regletteBas", Q.REGLETTE_BAS_HZ).put("regletteHaut", Q.REGLETTE_HAUT_HZ)
-                .put("transpondeurs", JSONArray(Q.TRANSPONDEURS.map { t -> JSONObject().put("cle", t.cle).put("nom", tr.t("qo100_tp_" + t.cle)) }))
-                .put("presets", JSONArray(fr.f4ioz.satcombo.domain.Convertisseur.PRESETS.map { p ->
-                    JSONObject().put("cle", p.cle).put("nom", tr.t("preset_" + p.cle)).put("ol", p.olHz).put("descente", p.descente) }))
-        }
-        return o
+        return ApiQo100.etat(e, st.etat.value.catConnecte, st.versCle(e.descenteHz + e.calageHz),
+            st.cielQo100()?.let { k -> ApiQo100.Ciel(k.pointage, k.soleilAzimutMs, k.transits) }, st.etat.value.observateur != null, plan)
     }
 
     fun etat(st: StationPc): JSONObject {
@@ -971,19 +927,9 @@ object JsonPc {
         if (s == null) return JSONObject().put("present", false)
         val c = s.son.etat.value
         val e = s.etat.value
-        return JSONObject().put("present", true)
-            .put("cartes", JSONArray(s.son.appareils().map { JSONObject().put("nom", it.nom).put("desc", it.description) }))
-            .put("carte", s.carte).put("actif", c.actif).put("rate", c.rate).put("niveau", c.niveau).put("erreur", c.erreur)
-            .put("enregistrement", e.enregistrement).put("secondes", e.secondes).put("auto", e.auto)
-            .put("enregAuto", s.enregAuto).put("sstv", s.sstvActif).put("aprs", s.aprsActif)
-            .put("sstvMode", e.sstvMode).put("sstvLignes", e.sstvLignes).put("sstvHauteur", e.sstvHauteur)
-            .put("sstvVersion", e.sstvVersion).put("sstvDerniere", e.sstvDerniere)
-            .put("enregistrements", JSONArray(s.enregistrements().take(50).map {
-                JSONObject().put("nom", it.name).put("taille", it.length()).put("date", it.lastModified())
-            }))
-            .put("images", JSONArray(s.images().take(200).map {
-                JSONObject().put("nom", it.fileName).put("sat", it.satName).put("t", it.timeMs).put("mode", it.mode).put("complete", it.complete)
-            }))
+        return ApiSon.json(ApiSon.Etat(s.son.appareils().map { it.nom to it.description }, s.carte, c.actif, c.rate, c.niveau, c.erreur,
+            e.enregistrement, e.secondes, e.auto, s.enregAuto, s.sstvActif, s.aprsActif,
+            e.sstvMode, e.sstvLignes, e.sstvHauteur, e.sstvVersion, e.sstvDerniere, s.enregistrements(), s.images()))
     }
 
     fun bilan(b: ImportPc.Bilan?): JSONObject = if (b == null) JSONObject().put("ok", false).put("erreur", "fichier illisible ou trop gros")

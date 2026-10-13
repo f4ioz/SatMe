@@ -581,10 +581,10 @@ object PagePc {
     <div class="carte">
       <div class="t">Enregistrement</div>
       <div class="ligne" style="margin-top:0"><button class="rouge" id="s-rec" onclick="enregistre()">● Enregistrer</button><span class="val" id="s-duree"></span></div>
-      <div class="ligne"><label class="petit"><input type="checkbox" id="s-auto" onchange="post('api/son/options?auto=' + (this.checked ? 1 : 0))"> Enregistrer chaque passage du satellite suivi (de l'AOS à 30 s après le LOS)</label></div>
+      <div class="ligne" id="s-auto-l"><label class="petit"><input type="checkbox" id="s-auto" onchange="post('api/son/options?auto=' + (this.checked ? 1 : 0))"> Enregistrer chaque passage du satellite suivi (de l'AOS à 30 s après le LOS)</label></div>
       <div class="ligne"><label class="petit"><input type="checkbox" id="s-aprs" onchange="post('api/son/options?aprs=' + (this.checked ? 1 : 0))"> Décoder l'APRS (AFSK 1200 bauds)</label></div>
       <div class="ligne"><label class="petit"><input type="checkbox" id="s-sstv" onchange="post('api/son/options?sstv=' + (this.checked ? 1 : 0))"> Décoder la SSTV en direct</label></div>
-      <div class="petit" style="margin-top:6px">WAV 16 bits, à la moitié de la fréquence de la carte (24 ou 22,05 kHz). Même nom que sur le téléphone.</div>
+      <div class="petit" style="margin-top:6px" id="s-note">WAV 16 bits, à la moitié de la fréquence de la carte (24 ou 22,05 kHz). Même nom que sur le téléphone.</div>
     </div>
   </div>
   <div>
@@ -2076,7 +2076,7 @@ async function ticSon() {
   }
   // SSTV: the picture arriving, reloaded only when it moved.
   txt('i-mode', S.sstvMode ? S.sstvMode + ' · ' + S.sstvLignes + '/' + S.sstvHauteur + ' lignes' : '');
-  txt('sstv-etat', !S.actif ? 'Démarre la carte son (onglet Son) pour décoder.' : !S.sstv ? 'Décodage SSTV coupé (onglet Son).' : S.sstvMode ? 'réception…' : 'à l’écoute');
+  txt('sstv-etat', !S.actif ? (window.SATME_TELEPHONE ? 'Le téléphone décode en enregistrant : « Enregistrer » (onglet Son).' : 'Démarre la carte son (onglet Son) pour décoder.') : !S.sstv ? 'Décodage SSTV coupé (onglet Son).' : S.sstvMode ? 'réception…' : 'à l’écoute');
   if (ouverte('sstv') && S.sstvVersion !== versionImage) {
     versionImage = S.sstvVersion;
     if (S.sstvMode) g('i-encours').src = 'api/sstv/encours.png?v=' + S.sstvVersion;
@@ -3017,6 +3017,11 @@ function dessineAprs() {
 g('a-filtre').oninput = () => { aVus = ''; dessineAprs(); };
 g('a-isss').onchange = () => { aVus = ''; dessineAprs(); };
 setInterval(ticAprs, 2000);
+// Served by the phone: it hears while it records (MP3), its passes recorded through its agenda.
+if (window.SATME_TELEPHONE) {
+  g('s-note').textContent = 'MP3, comme sur le téléphone : il écoute en enregistrant. La source se choisit ici ; SatMe doit être à l’écran du téléphone pour prendre le micro.';
+  g('s-auto-l').hidden = true;
+}
 function ecoute(nom) { g('s-lecteur').src = 'enregistrements/' + nom; g('s-lecteur').play(); }
 async function carteSon(arret) {
   const j = await post('api/son/carte?nom=' + (arret ? '' : enc(g('s-carte').value)));
