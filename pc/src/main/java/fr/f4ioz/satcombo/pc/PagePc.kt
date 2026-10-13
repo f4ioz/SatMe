@@ -1871,8 +1871,10 @@ async function ticDatv(premier) {
   g('d-benr').textContent = D.enregistrement ? 'Arrêter l’enregistrement' : 'Enregistrer';
   if (D.erreur) txt('d-msg', D.erreur);
   txt('d-details', D.actif ? '' : '');
-  g('d-details').innerHTML = D.actif ? ['AGC1 ' + D.agc1, 'AGC2 ' + D.agc2, D.ber != null ? 'BER ' + D.ber.toFixed(2) + ' %' : '',
-    D.courtes != null ? (D.courtes ? 'trames courtes' : 'trames normales') : '', D.pilotes != null ? (D.pilotes ? 'pilotes' : 'sans pilotes') : '',
+  // BER, frames and pilots are measured once locked only: shown then.
+  const vr = D.verrouille;
+  g('d-details').innerHTML = D.actif ? ['AGC1 ' + D.agc1, 'AGC2 ' + D.agc2, vr && D.ber != null ? 'BER ' + D.ber.toFixed(2) + ' %' : '',
+    vr && D.courtes != null ? (D.courtes ? 'trames courtes' : 'trames normales') : '', vr && D.pilotes != null ? (D.pilotes ? 'pilotes' : 'sans pilotes') : '',
     D.images ? D.images + ' images' : ''].filter(x => x).join('<br>') : '';
   const pr = D.programme ? 'ok:' + D.programme : 'non';
   if (g('d-prog').dataset.vu !== pr) {

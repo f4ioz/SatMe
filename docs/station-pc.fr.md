@@ -83,7 +83,13 @@ L'onglet **DATV** reçoit le DVB-S/S2 avec un **MiniTiouner** (tuner et démodul
 - Accrochage (DVB-S / DVB-S2), MER, MODCOD, porteuse et écart, service et fournisseur, flux vidéo et audio, la constellation en direct.
 - L'image dans la page, le son sur le PC, le même flux dans **VLC**, et l'**enregistrement** en fichier `.ts`.
 - L'**alimentation du LNB** par le MiniTiouner **reste coupée** tant qu'on ne la choisit pas (13 V ou 18 V), avec un avertissement.
-- Linux : installer la règle udev de LongMynd pour qu'il ouvre le MiniTiouner (`sudo cp minitiouner.rules /etc/udev/rules.d/`, puis le débrancher et le rebrancher).
+- Linux : une règle udev permet à LongMynd d'ouvrir le MiniTiouner. Le fichier de LongMynd oublie le Pro TS2 (son nom USB est `MiniTiouner_Pro_TS2`) ; celle-ci les couvre tous, puis le débrancher et le rebrancher :
+
+  ```
+  echo 'SUBSYSTEMS=="usb", ATTRS{idVendor}=="0403", ATTRS{idProduct}=="6010", ATTRS{product}=="MiniTiouner*", MODE:="0666"' | sudo tee /etc/udev/rules.d/60-satme-minitiouner.rules
+  sudo udevadm control --reload-rules && sudo udevadm trigger
+  ```
+- Branché, le MiniTiouner apparaît aussi comme deux ports série (`/dev/ttyUSB…`) : ne jamais les choisir comme port du poste ou du rotor.
 
 <p align="center"><img src="images/pc-datv.webp" width="100%" alt="Onglet DATV : un signal de test DVB-S2 accroché, MER, MODCOD, la constellation"></p>
 
@@ -104,7 +110,7 @@ Le script installe Java, compile LongMynd, lui donne accès au MiniTiouner (udev
 
 Sans sa clé, le node ne dit que ce qu'il est ; ce qui le change est un POST ; son alimentation LNB reste coupée tant qu'on ne la choisit pas.
 
-*Ci-dessus, un signal de test (le MiniTiouner lui-même reste à essayer sur l'air).*
+*Ci-dessus, un signal de test. Le MiniTiouner Pro TS2 lui-même est reconnu et cherche (tuner, démodulateur, LNA), sur le PC et par un node ; le premier signal sur l'air reste à venir.*
 
 ## Encore sur le PC
 

@@ -59,6 +59,10 @@ class DatvPcTest {
             "ERROR: FTDI init", "Flow: Main loop aborted, waiting for threads.", "Flow: All threads accounted for. Exiting cleanly.")
         assertEquals("MiniTiouner introuvable : est-il branché ?", DatvPc.pourquoi(sansCarte))
         assertTrue(DatvPc.pourquoi(listOf("ERROR: LIBUSB_ERROR_ACCESS")).startsWith("pas d'accès"))
+        // Without the udev rule: libusb's refusal, then LongMynd asking whether the cable is plugged in.
+        assertTrue(DatvPc.pourquoi(listOf("libusb: error [get_usbfs_fd] libusb couldn't open USB device /dev/bus/usb/001/050, errno=13",
+            "libusb: error [get_usbfs_fd] libusb requires write access to USB device nodes", "ERROR: Unable to open device with VID and PID",
+            "       Is the USB cable plugged in?")).startsWith("pas d'accès"))
         assertEquals("LongMynd : tuner lock", DatvPc.pourquoi(listOf("Flow: x", "ERROR: tuner lock", "Exiting cleanly.")))
     }
 

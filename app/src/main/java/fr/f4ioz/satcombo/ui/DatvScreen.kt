@@ -197,8 +197,9 @@ private fun Constellation(u: DatvTelephone.Ui) {
                 val e = u.etat
                 if (e.actif) {
                     Text("AGC1 ${e.agc1} · AGC2 ${e.agc2}", color = TextHi, fontSize = 12.sp)
-                    e.trames?.let { Text(if (it) t("datv_trames_courtes") else t("datv_trames_normales"), color = TextHi, fontSize = 12.sp) }
-                    e.pilotes?.let { Text(if (it) t("datv_pilotes") else t("datv_sans_pilotes"), color = TextHi, fontSize = 12.sp) }
+                    // Measured once locked only.
+                    if (e.verrouille) e.trames?.let { Text(if (it) t("datv_trames_courtes") else t("datv_trames_normales"), color = TextHi, fontSize = 12.sp) }
+                    if (e.verrouille) e.pilotes?.let { Text(if (it) t("datv_pilotes") else t("datv_sans_pilotes"), color = TextHi, fontSize = 12.sp) }
                     if (e.nulsPct > 0) Text(tf("datv_vide", e.nulsPct), color = TextHi, fontSize = 12.sp)
                 }
             }

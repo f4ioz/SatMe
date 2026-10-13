@@ -404,9 +404,11 @@ class DatvPc(
             val l = journal.map { it.trim() }.filter { it.isNotEmpty() }
             val erreurs = l.filter { it.startsWith("ERROR", true) || it.contains("LIBUSB_ERROR", true) }
             val t = (erreurs.ifEmpty { l.takeLast(6) }).joinToString(" ")
+            // libusb says it before LongMynd's own words, which then wrongly ask whether it is plugged in.
+            val acces = l.any { it.contains("errno=13") || it.contains("requires write access", true) }
             return when {
-                t.contains("LIBUSB_ERROR_ACCESS", true) || t.contains("permission", true) ->
-                    "pas d'accès au MiniTiouner : installer la règle udev de LongMynd (sudo cp minitiouner.rules /etc/udev/rules.d/), puis le débrancher et le rebrancher"
+                acces || t.contains("LIBUSB_ERROR_ACCESS", true) || t.contains("permission", true) ->
+                    "pas d'accès au MiniTiouner : il faut une règle udev pour lui (voir la page SatMe PC, DATV), puis le débrancher et le rebrancher"
                 t.contains("Unable to open device", true) || t.contains("plugged", true) || t.contains("not found", true) ->
                     "MiniTiouner introuvable : est-il branché ?"
                 erreurs.isNotEmpty() -> "LongMynd : " + erreurs.joinToString(" · ") { it.removePrefix("ERROR:").trim() }

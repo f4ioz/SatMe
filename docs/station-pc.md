@@ -83,7 +83,13 @@ The **DATV** tab receives DVB-S/S2 with a **MiniTiouner** (tuner and demodulator
 - Lock (DVB-S / DVB-S2), MER, MODCOD, carrier and offset, service and provider, video and audio streams, the constellation live.
 - The picture in the page, the sound on the PC, the same stream in **VLC**, and **recording** to a `.ts` file.
 - The MiniTiouner's **LNB supply stays off** unless chosen (13 V or 18 V), with a warning.
-- Linux: install LongMynd's udev rule so it can open the MiniTiouner (`sudo cp minitiouner.rules /etc/udev/rules.d/`, then unplug and plug it in again).
+- Linux: a udev rule lets LongMynd open the MiniTiouner. LongMynd's own file misses the Pro TS2 (its USB name is `MiniTiouner_Pro_TS2`); this one covers them all, then unplug and plug it in again:
+
+  ```
+  echo 'SUBSYSTEMS=="usb", ATTRS{idVendor}=="0403", ATTRS{idProduct}=="6010", ATTRS{product}=="MiniTiouner*", MODE:="0666"' | sudo tee /etc/udev/rules.d/60-satme-minitiouner.rules
+  sudo udevadm control --reload-rules && sudo udevadm trigger
+  ```
+- Plugged in, the MiniTiouner also shows as two serial ports (`/dev/ttyUSB…`): never choose them as the rig's or the rotator's port.
 
 <p align="center"><img src="images/pc-datv.webp" width="100%" alt="DATV tab: a DVB-S2 test signal locked, MER, MODCOD, the constellation"></p>
 
@@ -104,7 +110,7 @@ The script installs Java, builds LongMynd, lets it open the MiniTiouner (udev), 
 
 Without its key the node only says what it is; what changes it is a POST; its LNB supply stays off unless chosen.
 
-*Above, a test signal (the MiniTiouner itself is still to be tried on the air).*
+*Above, a test signal. The MiniTiouner Pro TS2 itself is recognised and searches (tuner, demodulator, LNAs), on the PC and through a node; the first signal on the air is still to come.*
 
 ## More of the PC
 
