@@ -817,6 +817,7 @@ object PagesPcTelephone {
         o.put("agendaSuivi", false).put("agenda", ApiCalculs.agendaJson(u.agenda, maintenant)).put("repos", JSONObject.NULL)
         val (dl, ul) = ApiStation.frequencesDuCiel(u.transmitters.getOrNull(u.selectedTxIndex), u.livePosition?.rangeRateKmS ?: 0.0, null, u.calibShiftHz, u.txShiftHz)
         o.put("ciel", JSONObject().put("dl", dl ?: JSONObject.NULL).put("ul", ul ?: JSONObject.NULL))
+        o.put("amsatAuto", u.carnet.amsatAuto).put("amsatEtat", u.carnet.amsatEtat)
         o.put("convertisseurs", JSONObject().put("rxOl", if (u.convRx.actif) u.convRx.olHz else 0).put("rxInv", u.convRx.inverseur)
             .put("txOl", if (u.convTx.actif) u.convTx.olHz else 0).put("txInv", u.convTx.inverseur))
         o.put("cat", ApiStation.cat(vm.etatBoucleCat(), u.rigModel, u.civUsbIndex, u.catConnected, false, u.catStatus, u.dopplerHold))

@@ -802,6 +802,7 @@ object JsonPc {
         o.put("repos", e.repos ?: JSONObject.NULL)
         o.put("ciel", JSONObject().put("dl", dl ?: JSONObject.NULL).put("ul", ul ?: JSONObject.NULL))
         val rx = st.convRx(); val tx = st.convTx()
+        o.put("amsatAuto", st.settings.amsatAuto).put("amsatEtat", st.pushAmsat.etat)
         o.put("convertisseurs", JSONObject()
             .put("rxOl", if (rx.configure) rx.olHz else 0).put("rxInv", rx.inverseur)
             .put("txOl", if (tx.configure) tx.olHz else 0).put("txInv", tx.inverseur))

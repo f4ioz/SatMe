@@ -158,6 +158,12 @@ object PagePc {
   .cr-corps { display:flex; gap:14px; margin-top:8px; flex-wrap:wrap; }
   .cr-ciel { width:min(100%, 280px); flex:none; }
   .cr-infos { flex:1; min-width:200px; }
+  .amsat-boite { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-top:6px; padding:6px 10px; border:1px solid rgba(234,3,3,.6); border-radius:10px; background:rgba(234,3,3,.06); }
+  .amsat-boite .amsat-logo { width:26px; height:26px; flex:none; background:#fff; border-radius:50%; padding:1px; }
+  .amsat-boite b { color:#FF6B6B; letter-spacing:.5px; }
+  .cr-carte { position:relative; height:200px; margin-top:10px; border-radius:8px; overflow:hidden; }
+  .cr-carte canvas { position:absolute; inset:0; width:100%; height:100%; cursor:grab; }
+  .cr-bornes { display:flex; justify-content:space-between; font-size:11px; color:var(--gris); margin-top:2px; }
   .cr-bande { position:relative; height:14px; margin-top:6px; background:linear-gradient(90deg, rgba(63,224,200,.15), rgba(63,224,200,.35), rgba(63,224,200,.15)); border-radius:7px; }
   .cr-bande i { position:absolute; top:-3px; bottom:-3px; width:4px; margin-left:-2px; background:#FFB454; border-radius:2px; }
   .cs-tete { display:flex; gap:12px; align-items:flex-start; }
@@ -304,10 +310,12 @@ object PagePc {
         <button onclick="choisitParNom()">Suivre</button>
       </div>
       <div class="paire"><span class="gros" id="nom">—</span><button id="fav" class="discret" title="Favori" onclick="basculeFavori()" style="font-size:20px;padding:2px 8px">☆</button><span id="compte" class="val ambre"></span></div>
-      <div class="ligne" style="margin-top:2px"><span class="petit" id="amsat"></span>
-        <span style="margin-left:auto" class="petit">Rapport AMSAT :</span>
+      <div class="amsat-boite" title="AMSAT Live OSCAR Status : ce que les stations entendent, et tes rapports"><svg class="amsat-logo" viewBox="0 0 24 24" role="img" aria-label="AMSAT"><path d="M12,6.7 a5.3,5.3 0 1,0 0,10.6 a5.3,5.3 0 1,0 0,-10.6" fill="#EA0303"/><path d="M6.9,12 L17.1,12 M12,6.9 L12,17.1 M7.6,9.1 Q12,7.3 16.4,9.1 M7.6,14.9 Q12,16.7 16.4,14.9" stroke="#fff" stroke-width=".9" fill="none"/><path d="M14.4,20.3 A8.6,8.6 0 1,0 5.92,5.92" stroke="#EA0303" stroke-width="2.1" fill="none"/><path d="M3.7,8.14 L7.27,7.27 L4.5,4.5 Z" fill="#EA0303"/></svg>
+        <b>AMSAT</b><span class="petit" id="amsat"></span>
+        <span style="margin-left:auto" class="petit">Rapport :</span>
         <button onclick="rapportAmsat(1)" title="Dire à amsat.org que tu l'entends maintenant">Entendu</button>
-        <button onclick="rapportAmsat(0)" title="Dire à amsat.org que tu ne l'entends pas">Pas entendu</button></div>
+        <button onclick="rapportAmsat(0)" title="Dire à amsat.org que tu ne l'entends pas">Pas entendu</button>
+        <span class="petit" id="amsat-auto" style="flex-basis:100%"></span></div>
       <div class="paire" style="margin-top:6px">
         <span>Az <span class="val cyan" id="az">—</span></span>
         <span>El <span class="val cyan" id="el">—</span></span>
@@ -517,11 +525,12 @@ object PagePc {
           <svg id="cr-ciel" viewBox="-110 -110 220 220" class="cr-ciel" role="img" aria-label="Le ciel : passage et position du satellite"></svg>
           <div class="cr-infos">
             <div class="t">Fréquences</div>
-            <div class="petit" id="cr-tx"></div>
+            <select id="cr-tx" style="width:100%;margin-top:2px" onchange="post('api/emetteur?i=' + this.value).then(tic)" title="L'émetteur écouté : un transpondeur linéaire montre sa bande"></select>
             <div class="paire"><span>RX <span class="val cyan" id="cr-dl">—</span></span></div>
             <div class="paire"><span>TX <span class="val ambre" id="cr-ul">—</span></span></div>
             <div class="petit" id="cr-poste"></div>
-            <div id="cr-bande" class="cr-bande" title="Où tu es dans la bande du transpondeur"><i id="cr-repos"></i></div>
+            <div id="cr-bande-boite"><div id="cr-bande" class="cr-bande" title="Où tu es dans la bande du transpondeur"><i id="cr-repos"></i></div>
+              <div class="cr-bornes"><span id="cr-bas"></span><span id="cr-haut"></span></div></div>
             <div class="petit" id="cr-bande-txt"></div>
             <div class="t" style="margin-top:10px">Station</div>
             <div class="petit" id="cr-rotor"></div>
@@ -529,6 +538,7 @@ object PagePc {
             <div class="petit" id="cr-sdr"></div>
           </div>
         </div>
+        <div class="cr-carte" title="Sa trace au sol : glisser, molette, double-clic pour recadrer"><canvas id="cr-carte"></canvas></div>
       </div>
       <div id="cr-contacts" hidden>
       <div class="ligne"><input id="c-filtre" placeholder="Filtrer : indicatif, carré, satellite…">
@@ -1307,7 +1317,8 @@ function dessine() {
   g('fav').style.display = E.suivi ? '' : 'none';
   txt('fav', E.suivi && E.suivi.fav ? '★' : '☆'); g('fav').style.color = E.suivi && E.suivi.fav ? 'var(--ambre)' : 'var(--gris)';
   const am = E.suivi && E.suivi.amsat;
-  txt('amsat', am ? 'AMSAT : ' + (AMSAT[am.statut] || AMSAT.UNKNOWN)[1] + (am.mode ? ' (' + am.mode + ')' : '') + ' · ' + am.actifs + ' rapport(s) « entendu »' : '');
+  txt('amsat', am ? (AMSAT[am.statut] || AMSAT.UNKNOWN)[1] + (am.mode ? ' (' + am.mode + ')' : '') + ' · ' + am.actifs + ' rapport(s) « entendu »' : 'pas de statut pour ce satellite');
+  txt('amsat-auto', E.amsatAuto ? 'Signalement automatique activé (Réglages)' + (E.amsatEtat ? ' · ' + E.amsatEtat : '') : 'Signalement automatique coupé (Réglages)');
   txt('c-sat', E.suivi ? '· ' + E.suivi.nom + (E.position ? ' · El ' + Math.round(E.position.el) + '°' : '') : '· choisis le satellite ci-dessous');
   menuSatCarnet();
   const p = E.position;
@@ -1659,18 +1670,25 @@ function dessineStationDirect() {
   g('cr-ciel').innerHTML = cielSvg();
   // Frequencies: the sky's (Doppler in), the rig's.
   const tr = E.emetteurs[E.emetteur];
-  txt('cr-tx', tr ? tr.desc + (tr.mode ? ' · ' + tr.mode : '') : 'aucun émetteur connu');
+  // The transmitters, to choose from here too (a beacon, a transponder…).
+  const sel = g('cr-tx'), opts = (E.emetteurs || []).map((x, i) => '<option value="' + i + '">' + esc(x.desc + (x.mode ? ' · ' + x.mode : '')) + '</option>').join('') || '<option>aucun émetteur connu</option>';
+  if (sel.dataset.vu !== opts) { sel.dataset.vu = opts; sel.innerHTML = opts; }
+  if (document.activeElement !== sel) sel.value = String(E.emetteur);
   txt('cr-dl', mhz(E.ciel.dl)); txt('cr-ul', mhz(E.ciel.ul));
   const c = E.cat;
   txt('cr-poste', c.connecte ? 'Poste ' + c.modele + (c.simule ? ' (simulé)' : '') + ' : RX ' + mhz(c.dl) + ' · TX ' + mhz(c.ul) + ' · ' + (c.mode || '') + (c.pilote ? ' · Doppler' : ' · bouton') + (c.maintien ? ' · en pause' : '') : 'Poste non connecté');
   // Where in a linear transponder: the rest between its edges.
+  // Where in a linear transponder, as the knob moves it (the rig read on CAT): its edges, the frequency at the cursor.
   const lin = tr && tr.lineaire && tr.dlBas && tr.dlHaut && tr.dlHaut > tr.dlBas;
-  g('cr-bande').hidden = !lin;
+  g('cr-bande-boite').hidden = !lin;
   if (lin) {
     const repos = E.repos != null ? E.repos : (tr.dlBas + tr.dlHaut) / 2;
     g('cr-repos').style.left = (100 * Math.max(0, Math.min(1, (repos - tr.dlBas) / (tr.dlHaut - tr.dlBas)))) + '%';
-    txt('cr-bande-txt', 'dans la bande : ' + Math.round((repos - tr.dlBas) / 1000) + ' kHz du bas · ' + Math.round((tr.dlHaut - repos) / 1000) + ' kHz du haut');
-  } else txt('cr-bande-txt', '');
+    txt('cr-bas', mhz(tr.dlBas)); txt('cr-haut', mhz(tr.dlHaut));
+    txt('cr-bande-txt', mhz(repos) + ' au satellite · ' + Math.round((repos - tr.dlBas) / 1000) + ' kHz du bas, ' + Math.round((tr.dlHaut - repos) / 1000) + ' kHz du haut' +
+      (E.repos == null ? ' (le milieu : le poste suit le curseur une fois connecté)' : ''));
+  } else txt('cr-bande-txt', tr ? 'Une seule fréquence (pas de transpondeur linéaire)' : '');
+  dessineCarteCarnet();
   // The mast, the recording, the dongle.
   const r = E.rotor;
   txt('cr-rotor', r.connecte ? 'Rotor : ' + (r.az == null ? '—' : Math.round(r.az) + '° / ' + Math.round(r.el || 0) + '°') + (r.azCible != null ? ' → ' + Math.round(r.azCible) + '° / ' + Math.round(r.elCible || 0) + '°' : '') + (r.attente ? ' · attend le lever' : '') : 'Rotor non connecté');
@@ -2572,7 +2590,7 @@ async function chargeTraceSol() {
   let ref = null;
   traceSol.points.forEach(p => { if (ref != null) { while (p[1] - ref > 180) p[1] -= 360; while (p[1] - ref < -180) p[1] += 360; } ref = p[1]; });
   traceVu = Date.now();
-  dessineCarteStation();
+  dessineCarteStation(); dessineCarteCarnet();
 }
 function cadreStation() {
   const c = g('st-carte'); if (!c.clientWidth) return;
@@ -2606,6 +2624,39 @@ function dessineCarteStation() {
   if (n && (!traceSol || traceSol.catnum !== n || Date.now() - traceVu > 60000) && Date.now() - traceVu > 3000) { traceVu = Date.now(); chargeTraceSol(); }
 }
 attacheCarte(g('st-carte'), SV, dessineCarteStation, cadreStation, 0);
+// The carnet's small map: the same track, the satellite and its footprint, centred on it.
+const CV = { cx: 0.5, cy: 0.4, z: 1, libre: false };
+function cadreCarnet() {
+  const c = g('cr-carte'); if (!c || !c.clientWidth) return;
+  const p = E && E.position;
+  CV.z = Math.max(0, Math.log2(c.clientWidth / 256) - 0.3);
+  CV.cx = p ? wxk(p.lon) : (E && E.observateur ? wxk(E.observateur.lon) : 0.5);
+  CV.cy = p ? Math.max(0.2, Math.min(0.8, wyq(p.lat))) : 0.4;
+}
+function dessineCarteCarnet() {
+  const c = g('cr-carte'); if (!c || g('v-carnet').hidden || vueC !== 'station' || !c.clientWidth) return;
+  if (!CV.libre) cadreCarnet();
+  const m = fondCarte(c, CV), x = m.x, p = E && E.position, nous = E && E.observateur;
+  for (const d of [-360, 0, 360]) {
+    if (traceSol && E && E.suivi && traceSol.catnum === E.suivi.catnum && traceSol.points.length > 1) {
+      const t = traceSol.points.map(q => [q[0], q[1] + d]);
+      traceCarte(m, t, 'rgba(11,110,99,.9)', 2);
+      traceCarte(m, t.slice(0, traceSol.ici + 1), 'rgba(30,40,55,.45)', 2, [4, 4]);
+    }
+  }
+  if (p) {
+    empreinte(m, p.lat, p.lon, p.alt);
+    for (const d of [-360, 0, 360]) {
+      if (nous && p.el >= 0) { x.strokeStyle = '#FFB454'; x.lineWidth = 1.5; x.beginPath(); x.moveTo(m.px(nous.lon + d), m.py(nous.lat)); x.lineTo(m.px(p.lon + d), m.py(p.lat)); x.stroke(); }
+      if (nous) pointCarte(m, nous.lat, nous.lon + d, '#FFB454', 4, '');
+      pointCarte(m, p.lat, p.lon + d, p.el >= 0 ? '#5BD68A' : '#3FE0C8', 5, E.suivi ? E.suivi.nom : '');
+    }
+  }
+  // The track, asked as the Station's map asks it.
+  const n = E && E.suivi ? E.suivi.catnum : 0;
+  if (n && (!traceSol || traceSol.catnum !== n || Date.now() - traceVu > 60000) && Date.now() - traceVu > 3000) { traceVu = Date.now(); chargeTraceSol(); }
+}
+attacheCarte(g('cr-carte'), CV, dessineCarteCarnet, cadreCarnet, 0);
 montreEcran(ecranStation)
 async function skedAgenda(i) { const w = K[i]; await post('api/agenda/sked?catnum=' + g('k-sat').value + '&loc=' + enc(v('k-loc')) + '&de=' + w.de + '&a=' + w.a); alert('Sked mis à l’agenda.'); }
 
