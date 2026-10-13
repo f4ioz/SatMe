@@ -26,17 +26,24 @@ if [ "$windows" = 1 ]; then
     # The tools SatMe-PC calls, next to it (OutilsPc looks there first).
     T="$B/telechargements"; mkdir -p "$T"
     # FFmpeg (GPL build: the videos are H.264), the shared one (smaller): its .exe and .dll.
-    nom=$(curl -fsSL https://api.github.com/repos/BtbN/FFmpeg-Builds/releases/tags/latest \
-        | grep -o '"name": *"ffmpeg-n[0-9.]*-latest-win64-gpl-shared-[0-9.]*\.zip"' | sed 's/.*"\(ffmpeg[^"]*\)"/\1/' | sort -V | tail -1)
+    # Its "latest" release is rebuilt every day (its files briefly missing), and GitHub's API
+    # limits requests without a token: the runner's token when there is one, and a few tries.
+    auth=(); [ -n "$GH_TOKEN" ] && auth=(-H "Authorization: Bearer $GH_TOKEN")
+    nom=""
+    for essai in 1 2 3 4 5 6; do
+        nom=$(curl -fsSL "${auth[@]}" https://api.github.com/repos/BtbN/FFmpeg-Builds/releases/tags/latest \
+            | grep -o '"name": *"ffmpeg-n[0-9.]*-latest-win64-gpl-shared-[0-9.]*\.zip"' | sed 's/.*"\(ffmpeg[^"]*\)"/\1/' | sort -V | tail -1) || true
+        [ -n "$nom" ] && curl -fsSL --retry 3 -o "$T/ffmpeg.zip" "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/$nom" && break
+        echo "FFmpeg pour Windows pas encore là (essai $essai), nouvel essai dans une minute"; nom=""; sleep 60
+    done
     [ -n "$nom" ] || { echo "FFmpeg pour Windows introuvable"; exit 1; }
     echo "FFmpeg : $nom"
-    curl -fsSL -o "$T/ffmpeg.zip" "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/$nom"
     7z x -y -o"$T/ffmpeg" "$T/ffmpeg.zip" > /dev/null
     d=$(ls -d "$T"/ffmpeg/*/bin | head -1)
     cp "$d"/ffmpeg.exe "$d"/ffplay.exe "$d"/*.dll "$E/outils/"
     cp "$(dirname "$d")/LICENSE.txt" "$E/outils/FFMPEG-LICENSE.txt"
     # rtl_tcp (rtl-sdr, GPL-2), 64 bits.
-    curl -fsSL -o "$T/rtl.zip" https://github.com/rtlsdrblog/rtl-sdr-blog/releases/download/V1.4.0/Release.zip
+    curl -fsSL --retry 5 --retry-all-errors -o "$T/rtl.zip" https://github.com/rtlsdrblog/rtl-sdr-blog/releases/download/V1.4.0/Release.zip
     7z x -y -o"$T/rtl" "$T/rtl.zip" > /dev/null
     cp "$T"/rtl/x64/rtl_tcp.exe "$T"/rtl/x64/rtl_test.exe "$T"/rtl/x64/*.dll "$E/outils/"
     printf 'rtl_tcp, rtl_test : rtl-sdr (GPL-2.0), https://github.com/rtlsdrblog/rtl-sdr-blog (V1.4.0)\nffmpeg, ffplay : FFmpeg (GPL), https://github.com/BtbN/FFmpeg-Builds — %s\n' "$nom" > "$E/outils/SOURCES.txt"

@@ -29,12 +29,19 @@ jobs:
           java-version: '21'
       # v5, not v6: v6 binds to Gradle's proprietary caching terms.
       - uses: gradle/actions/setup-gradle@v5
-      - name: Build the Windows package
+      - name: Build SatMe-PC
         shell: bash
         run: |
           V="${GITHUB_REF_NAME#satme-pc-}"
           case "$GITHUB_REF" in refs/tags/*) ;; *) V=dev ;; esac
           ./gradlew --no-daemon -PsatmePcVersion="$V" :pc:installDist
+      - name: Build the Windows package
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          V="${GITHUB_REF_NAME#satme-pc-}"
+          case "$GITHUB_REF" in refs/tags/*) ;; *) V=dev ;; esac
           command -v candle.exe || export PATH="$PATH:/c/Program Files (x86)/WiX Toolset v3.14/bin:/c/Program Files (x86)/WiX Toolset v3.11/bin"
           pc/windows/paquet-windows.sh "$V"
       - uses: actions/upload-artifact@v7
