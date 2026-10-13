@@ -135,7 +135,7 @@ fun Qo100Screen(ui: UiState, vm: MainViewModel) {
             }
         }
 
-        // ---- DATV: the wide band, through a SatMe-node -----------------------
+        // ---- DATV: the wide band, through a SatMe-Node -----------------------
         OutlinedButton(onClick = { vm.openDatv() }, modifier = Modifier.fillMaxWidth()) {
             Text(t("datv_ouvrir"), color = Cyan)
         }

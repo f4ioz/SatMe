@@ -18,6 +18,13 @@ kotlin {
     compilerOptions { jvmTarget.set(JvmTarget.JVM_17) }
 }
 
+// The version a release gives (its tag "satme-pc-2026.10.13" → 2026.10.13); "dev" when built by hand.
+version = providers.gradleProperty("satmePcVersion").getOrElse("dev")
+
+tasks.jar {
+    manifest { attributes("Implementation-Title" to "SatMe-PC", "Implementation-Version" to project.version) }
+}
+
 application {
     mainClass.set("fr.f4ioz.satcombo.pc.MainKt")
     applicationName = "satme"

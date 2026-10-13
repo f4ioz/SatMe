@@ -1,28 +1,22 @@
-# SatMe PC — la station dans un navigateur
+# SatMe-PC — la station dans un navigateur
 
 *Octobre 2026. L'application Android reste la référence ; le PC fait ce qu'il fait, et ce qui est fait sur le PC vient aussi sur le téléphone.*
 
 SatMe tourne sur un PC (Linux, Windows, Raspberry Pi) et se pilote depuis un navigateur. Son cœur est **le même code que sur le téléphone** : boucle Doppler, suivi du rotor, journal des passages, SSTV, METEOR, APRS, FT8 et carnet viennent du module commun `:moteur`.
 
-<p align="center"><img src="images/pc-station.webp" width="100%" alt="SatMe PC, onglet Station : les prochains passages, FO-29 suivi sur le ciel, les fréquences corrigées du Doppler, un IC-9700 et un rotor simulés"></p>
+<p align="center"><img src="images/pc-station.webp" width="100%" alt="SatMe-PC, onglet Station : les prochains passages, FO-29 suivi sur le ciel, les fréquences corrigées du Doppler, un IC-9700 et un rotor simulés"></p>
 
-## Le lancer
+## L'installer
 
-Il faut Java 17 ou plus récent.
-
-```
-./gradlew :pc:installDist
-pc/build/install/satme/bin/satme          # Linux, macOS
-pc\build\install\satme\bin\satme.bat      # Windows
-```
-
-puis ouvrir **http://localhost:8090/**.
+- **Linux** : [Installer SatMe-PC](installer-satme-pc.fr.md) — télécharger `satme-pc.tar`, le décompresser, le lancer, puis ouvrir **http://localhost:8090/**.
+- **Le MiniTiouner près de l'antenne** : [Installer SatMe-Node sur un Raspberry Pi](installer-satme-node.fr.md).
 
 | Option | Effet |
 |---|---|
 | `--port 8090` | le port de la page |
 | `--reseau` | page ouverte aux autres machines du réseau (une station au pied du mât, pilotée depuis la maison) ; sans elle, ce PC seulement |
 | `--dossier DIR` | où sont gardés réglages, carnet, journal et enregistrements (`~/.satme`, `%APPDATA%\SatMe` sous Windows) |
+| `--noeud` | SatMe-Node : seulement le MiniTiouner, piloté par le réseau |
 
 ## Les onglets
 
@@ -93,20 +87,13 @@ L'onglet **DATV** reçoit le DVB-S/S2 avec un **MiniTiouner** (tuner et démodul
 
 <p align="center"><img src="images/pc-datv.webp" width="100%" alt="Onglet DATV : un signal de test DVB-S2 accroché, MER, MODCOD, la constellation"></p>
 
-### SatMe-node : le MiniTiouner à côté de l'antenne
+### SatMe-Node : le MiniTiouner à côté de l'antenne
 
-Le MiniTiouner travaille mieux près du LNB. Un **SatMe-node**, c'est SatMe sur un petit ordinateur là-bas — un Raspberry Pi (un **Pi 3 suffit** : le node ne fait que recevoir, il ne décode rien) — piloté par le réseau depuis SatMe PC et depuis le téléphone (écran **QO-100** → **DATV** : les mêmes réglages, l'image par le décodeur du téléphone). Il fait tourner LongMynd ; son état et le flux de transport (0,3 à 2 Mbit/s) arrivent au PC, qui les montre, les joue et les enregistre comme si le MiniTiouner y était branché.
+Le MiniTiouner travaille mieux près du LNB. Un **SatMe-Node**, c'est SatMe sur un petit ordinateur là-bas — un Raspberry Pi (un **Pi 3 suffit** : le node ne fait que recevoir, il ne décode rien) — piloté par le réseau depuis SatMe-PC et depuis le téléphone (écran **QO-100** → **DATV** : les mêmes réglages, l'image par le décodeur du téléphone). Il fait tourner LongMynd ; son état et le flux de transport (0,3 à 2 Mbit/s) arrivent au PC, qui les montre, les joue et les enregistre comme si le MiniTiouner y était branché.
 
-Sur le Pi (Raspberry Pi OS 64 bits, en Ethernet de préférence) :
+L'installer sur le Pi : [Installer SatMe-Node sur un Raspberry Pi](installer-satme-node.fr.md) — trois commandes, une dizaine de minutes sur un Pi 3.
 
-```
-./gradlew :pc:distTar                        # sur le PC : pc/build/distributions/satme.tar
-scp pc/build/distributions/satme.tar pi@raspberrypi.local:
-ssh pi@raspberrypi.local
-tar xf satme.tar && sudo ./satme/noeud/installe-noeud.sh
-```
-
-Le script installe Java, compile LongMynd, lui donne accès au MiniTiouner (udev) et démarre le service **satme-noeud** (`satme --noeud`, port 8090). À son premier démarrage, le node tire un **code à six chiffres**, affiché à la fin de l'installation (le revoir : `journalctl -u satme-noeud | grep Code`). Dans SatMe PC, onglet DATV, MiniTiouner **Changer** : l'adresse du node et son code, **Associer**. Le PC garde la clé que le node lui a donnée : l'un comme l'autre peut redémarrer. Une adresse vide revient au MiniTiouner du PC.
+Le script installe Java, compile LongMynd, lui donne accès au MiniTiouner (udev) et démarre le service **satme-noeud** (`satme --noeud`, port 8090). À son premier démarrage, le node tire un **code à six chiffres**, affiché à la fin de l'installation (le revoir : `journalctl -u satme-noeud | grep Code`). Dans SatMe-PC, onglet DATV, MiniTiouner **Changer** : l'adresse du node et son code, **Associer**. Le PC garde la clé que le node lui a donnée : l'un comme l'autre peut redémarrer. Une adresse vide revient au MiniTiouner du PC.
 
 Sans sa clé, le node ne dit que ce qu'il est ; ce qui le change est un POST ; son alimentation LNB reste coupée tant qu'on ne la choisit pas.
 

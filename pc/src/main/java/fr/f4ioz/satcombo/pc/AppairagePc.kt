@@ -156,8 +156,8 @@ class AppairagePc(
         }
 
         private const val PAGE = """<!doctype html><html lang="fr"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>SatMe PC</title><body style="font-family:system-ui,sans-serif;background:#0B1016;color:#E8F0F7;padding:24px;line-height:1.5">
-<h2>SatMe PC</h2><p>Ce QR code se scanne depuis l'application SatMe :<br><b>Réglages → Partage et écoute → Partage → Scanner le QR code du PC</b>.</p>
+<title>SatMe-PC</title><body style="font-family:system-ui,sans-serif;background:#0B1016;color:#E8F0F7;padding:24px;line-height:1.5">
+<h2>SatMe-PC</h2><p>Ce QR code se scanne depuis l'application SatMe :<br><b>Réglages → Partage et écoute → Partage → Scanner le QR code du PC</b>.</p>
 <p style="color:#9AA7B4">Le téléphone et le PC doivent être sur le même réseau.</p></body></html>"""
     }
 }

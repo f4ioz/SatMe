@@ -15,7 +15,7 @@ import org.json.JSONObject
 import java.util.concurrent.TimeUnit
 
 /**
- * Joining SatMe PC by its QR code: no address or code typed on either side.
+ * Joining SatMe-PC by its QR code: no address or code typed on either side.
  *
  * The PC's code says where it listens and a token drawn for this time
  * (`http://192.168.1.10:8091/appairage?j=…`). The phone opens its control
@@ -24,7 +24,7 @@ import java.util.concurrent.TimeUnit
  */
 object RejointPc {
 
-    /** The PC's address and token from a scanned QR code; null when it is not SatMe PC's. */
+    /** The PC's address and token from a scanned QR code; null when it is not SatMe-PC's. */
     fun lit(contenu: String): Pair<String, String>? {
         val u = runCatching { java.net.URI(contenu.trim()) }.getOrNull() ?: return null
         if (u.scheme != "http" || u.host.isNullOrBlank() || u.port <= 0 || u.path != "/appairage") return null

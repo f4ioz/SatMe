@@ -19,7 +19,7 @@ import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
 
-/** SatMe-node: what it says to anyone, its code, its key, and what it refuses without one. */
+/** SatMe-Node: what it says to anyone, its code, its key, and what it refuses without one. */
 class NoeudPcTest {
 
     private val stockage = StockageMemoire()

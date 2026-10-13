@@ -160,11 +160,11 @@ class MainActivity : ComponentActivity() {
                 "partage" -> { val sd = fr.f4ioz.satcombo.demo.ServeurDemo
                     sd.demarre(); sd.commande(true)
                     android.util.Log.i("SatMe", "essai partage " + sd.etat.value.urlCommande + " code " + sd.etat.value.codeCommande) }
-                // DATV through a SatMe-node (--es noeud 10.0.2.2:18095 --es code 123456).
+                // DATV through a SatMe-Node (--es noeud 10.0.2.2:18095 --es code 123456).
                 "datv" -> { intent.getStringExtra("noeud")?.let { vm.datv.rejoins(it, intent.getStringExtra("code").orEmpty()) }; vm.openDatv() }
-                // What a scanned QR code of SatMe PC does (--es contenu "http://10.0.2.2:8091/appairage?j=…").
+                // What a scanned QR code of SatMe-PC does (--es contenu "http://10.0.2.2:8091/appairage?j=…").
                 "qr" -> { val pc = fr.f4ioz.satcombo.demo.RejointPc.lit(intent.getStringExtra("contenu").orEmpty())
-                    kotlin.concurrent.thread { android.util.Log.i("SatMe", "essai qr " + pc + " -> " + (pc?.let { fr.f4ioz.satcombo.demo.RejointPc.annonce(it.first, it.second) } ?: "pas SatMe PC")) } }
+                    kotlin.concurrent.thread { android.util.Log.i("SatMe", "essai qr " + pc + " -> " + (pc?.let { fr.f4ioz.satcombo.demo.RejointPc.annonce(it.first, it.second) } ?: "pas SatMe-PC")) } }
             }
         }
         val cat = intent?.getIntExtra("open_catnum", -1) ?: -1

@@ -17,7 +17,7 @@ import java.io.IOException
 import java.util.concurrent.TimeUnit
 
 /**
- * A SatMe-node seen from SatMe PC or the phone: joined once with the code it
+ * A SatMe-Node seen from SatMe-PC or the phone: joined once with the code it
  * gave at its start, then driven with the key it gave for it (kept here).
  * Blocking calls: off the main thread.
  */
@@ -64,7 +64,7 @@ class ClientNoeud(private val stockage: Stockage) {
         if (a.isBlank()) { adresse = ""; cle = ""; nom = ""; return null }
         return runCatching {
             val api = JSONObject(http.newCall(Request.Builder().url(base(a) + "/noeud/api").build()).execute().use { it.body?.string().orEmpty() })
-            if (!api.optBoolean("noeud")) throw IOException("ce n'est pas un SatMe-node")
+            if (!api.optBoolean("noeud")) throw IOException("ce n'est pas un SatMe-Node")
             val j = JSONObject(http.newCall(Request.Builder().url(base(a) + "/noeud/entrer?code=" + java.net.URLEncoder.encode(code.trim(), "UTF-8")).build())
                 .execute().use { it.body?.string().orEmpty() })
             if (!j.optBoolean("ok")) throw IOException("code refusé : celui que le node a donné à son démarrage")

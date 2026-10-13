@@ -480,7 +480,7 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
             "/api/datv/vlc" -> datv?.ouvreVlc()?.let { return JSONObject().put("ok", false).put("erreur", it) }
             "/api/datv/chemin" -> datv?.chemin = q["p"].orEmpty()
             "/api/datv/noeud" -> {
-                // The MiniTiouner on a SatMe-node (address and its code), or back on this PC (no address).
+                // The MiniTiouner on a SatMe-Node (address and its code), or back on this PC (no address).
                 val d = datv ?: return JSONObject().put("ok", false)
                 d.rejoins(q["adresse"].orEmpty(), q["code"].orEmpty())?.let { return JSONObject().put("ok", false).put("erreur", it) }
             }

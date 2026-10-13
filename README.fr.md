@@ -22,17 +22,19 @@ L'ISS le 4 octobre : quatre images d'écoles en Robot 36, décodées pendant qu'
 <img src="docs/images/fr-journal-export-iss.webp" width="24%" alt="L'image que SatMe fabrique pour partager le moment">
 </p>
 
-### SatMe PC — toute la station dans un navigateur
+### SatMe-PC — toute la station dans un navigateur
 
-SatMe tourne aussi sur un PC (Linux, Windows, Raspberry Pi), avec le moteur même du téléphone : passages, Doppler, poste et rotor, le carnet avec la station en direct à côté, skeds, QO-100 et **DATV avec un MiniTiouner**, clé SDR, radiosondes, METEOR, SSTV, APRS, FT8, le journal des passages — et SatMe sur le téléphone le rejoint en scannant un QR code, ses passages, images, sons et contacts arrivant avec. → [SatMe PC](docs/station-pc.fr.md)
+SatMe tourne aussi sur un PC (Linux, Windows, Raspberry Pi), avec le moteur même du téléphone : passages, Doppler, poste et rotor, le carnet avec la station en direct à côté, skeds, QO-100 et **DATV avec un MiniTiouner**, clé SDR, radiosondes, METEOR, SSTV, APRS, FT8, le journal des passages — et SatMe sur le téléphone le rejoint en scannant un QR code, ses passages, images, sons et contacts arrivant avec. → [SatMe-PC](docs/station-pc.fr.md)
+
+**Installer** : [SatMe-PC sous Linux](docs/installer-satme-pc.fr.md) · [SatMe-Node sur un Raspberry Pi 3](docs/installer-satme-node.fr.md) (le MiniTiouner à côté de l'antenne) · [téléchargements](https://github.com/f4ioz/SatMe/releases/latest)
 
 <p align="center">
-<img src="docs/images/pc-station.webp" width="49%" alt="SatMe PC : les prochains passages, FO-29 suivi sur le ciel, les fréquences corrigées du Doppler, poste et rotor">
-<img src="docs/images/pc-carnet.webp" width="49%" alt="Carnet de SatMe PC : un nouveau contact, et à côté la station en direct">
+<img src="docs/images/pc-station.webp" width="49%" alt="SatMe-PC : les prochains passages, FO-29 suivi sur le ciel, les fréquences corrigées du Doppler, poste et rotor">
+<img src="docs/images/pc-carnet.webp" width="49%" alt="Carnet de SatMe-PC : un nouveau contact, et à côté la station en direct">
 </p>
 <p align="center">
-<img src="docs/images/pc-datv.webp" width="49%" alt="SatMe PC, DATV : un signal de test DVB-S2 accroché avec un MiniTiouner, MER, MODCOD, la constellation">
-<img src="docs/images/pc-journal-cadre.webp" width="49%" alt="SatMe PC, journal des passages : le cadre d'une vidéo 3:4 dessiné sur la carte">
+<img src="docs/images/pc-datv.webp" width="49%" alt="SatMe-PC, DATV : un signal de test DVB-S2 accroché avec un MiniTiouner, MER, MODCOD, la constellation">
+<img src="docs/images/pc-journal-cadre.webp" width="49%" alt="SatMe-PC, journal des passages : le cadre d'une vidéo 3:4 dessiné sur la carte">
 </p>
 
 Le téléphone sert aussi des pages au navigateur du PC (câble USB ou Wi-Fi, rien à installer) : le journal des passages rejoué en grand sur une carte avec son son, et la planche SSTV faite à la souris.
@@ -145,7 +147,7 @@ Le téléphone sert aussi des pages au navigateur du PC (câble USB ou Wi-Fi, ri
 - Écoute déportée depuis un second téléphone sur le même réseau.
 - Images, vidéos, sons, planches et cartes : partagés, ou enregistrés sur le téléphone.
 - Poste de commande sur PC : des pages servies par le téléphone, par câble USB ou Wi-Fi — saisie au clavier, cadran polaire, enregistrement, votre station et les prochains passages ; le journal des passages rejoué en grand (carte, S-mètre, frise, lecture accélérée, vidéos fabriquées par le téléphone) ; la planche SSTV faite à la souris — et une [API HTTP](docs/API-v1.fr.md) pour d'autres clients.
-- SatMe PC rejoint en scannant son QR code : les passages, images SSTV, enregistrements et contacts du téléphone apportés au PC. Chaque nouveau contact peut partir tout seul vers Wavelog après un délai au choix, sur le téléphone comme sur le PC.
+- SatMe-PC rejoint en scannant son QR code : les passages, images SSTV, enregistrements et contacts du téléphone apportés au PC. Chaque nouveau contact peut partir tout seul vers Wavelog après un délai au choix, sur le téléphone comme sur le PC.
 
 Français et anglais. Commandes lisibles par les lecteurs d'écran.
 

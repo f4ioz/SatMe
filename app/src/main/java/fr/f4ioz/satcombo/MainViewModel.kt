@@ -5488,7 +5488,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     // ================= SDR (RTL-SDR dongle, beta) =================
 
-    /** DATV through a SatMe-node (the MiniTiouner next to the antenna). */
+    /** DATV through a SatMe-Node (the MiniTiouner next to the antenna). */
     val datv by lazy { fr.f4ioz.satcombo.datv.DatvTelephone(getApplication()) }
 
     fun openDatv() { va(Screen.DATV); _ui.value = _ui.value.copy(screen = Screen.DATV) }

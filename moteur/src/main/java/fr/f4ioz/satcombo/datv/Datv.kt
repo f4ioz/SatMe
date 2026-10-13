@@ -12,7 +12,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 /**
- * DATV reception with a MiniTiouner, what the PC, the SatMe-node and the
+ * DATV reception with a MiniTiouner, what the PC, the SatMe-Node and the
  * phone share: what to receive, what the receiver says, LongMynd's words.
  */
 data class ReglageDatv(
@@ -104,7 +104,7 @@ object Datv {
         0x81 -> "AC-3"; 0x06 -> "données"; else -> "type 0x" + t.toString(16)
     }
 
-    /** The status as JSON, as a node and SatMe PC's page give it. */
+    /** The status as JSON, as a node and SatMe-PC's page give it. */
     fun json(e: EtatDatv, r: ReglageDatv, points: List<Pair<Int, Int>>): JSONObject =
         JSONObject().put("ok", true).put("actif", e.actif).put("etat", e.etat).put("libelle", e.libelle).put("verrouille", e.verrouille)
             .put("ciel", r.cielKhz).put("sr", r.srKs).put("ol", r.olKhz).put("fi", r.fiKhz).put("entree", if (r.entreeB) "b" else "a").put("son", r.son)

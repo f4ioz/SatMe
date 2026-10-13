@@ -247,7 +247,7 @@ fun DemoCarte(vm: fr.f4ioz.satcombo.MainViewModel) {
                         modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp))
                 }
             }
-            // SatMe PC's QR code, whether sharing is on or not: scanned, the
+            // SatMe-PC's QR code, whether sharing is on or not: scanned, the
             // control desk opens and the PC joins it by itself.
             Spacer(Modifier.height(12.dp))
             HorizontalDivider(color = SpaceBg)
@@ -286,7 +286,7 @@ private fun QrCode(contenu: String, modifier: Modifier = Modifier) {
     }
 }
 
-/** Scans SatMe PC's QR code (Google's scanner, no camera permission here), then joins the PC. */
+/** Scans SatMe-PC's QR code (Google's scanner, no camera permission here), then joins the PC. */
 @Composable
 private fun QrPc() {
     val contexte = androidx.compose.ui.platform.LocalContext.current

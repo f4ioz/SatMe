@@ -32,7 +32,7 @@ object PagePc {
      * scoped under #pcBar, the journal's own left alone). The tabs are links
      * back to this page, opened on the tab (#carnet).
      */
-    fun barreJournal(): String = "<header id=\"pcBar\"><h1>SatMe <span class=\"c\">PC</span></h1><span class=\"g\" id=\"pc-info\"></span><nav>" +
+    fun barreJournal(): String = "<header id=\"pcBar\"><h1>SatMe-<span class=\"c\">PC</span></h1><span class=\"g\" id=\"pc-info\"></span><nav>" +
         ONGLETS.joinToString("") { (v, nom) ->
             if (v == "journal") "<button class=\"actif\">$nom</button>" else "<a href=\"/#$v\"><button>$nom</button></a>"
         } + "</nav><span id=\"pc-heure\"></span></header>"
@@ -236,7 +236,7 @@ object PagePc {
 </style></head>
 <body>
 <header>
-  <h1>SatMe <span class="cyan">PC</span></h1>
+  <h1>SatMe-<span class="cyan">PC</span></h1>
   <span class="g" id="info-station"></span>
   <span class="g" id="cat-statut-court"></span>
   <nav id="onglets">
@@ -710,9 +710,9 @@ object PagePc {
     <div class="carte">
       <div class="t">Réception</div>
       <div class="ligne" style="margin-top:0"><span class="petit" style="min-width:86px">MiniTiouner</span><span id="d-ou" class="petit" style="flex:1"></span>
-        <button onclick="g('d-noeud-boite').hidden = !g('d-noeud-boite').hidden" title="Le MiniTiouner sur ce PC, ou sur un SatMe-node près de l'antenne">Changer</button></div>
+        <button onclick="g('d-noeud-boite').hidden = !g('d-noeud-boite').hidden" title="Le MiniTiouner sur ce PC, ou sur un SatMe-Node près de l'antenne">Changer</button></div>
       <div id="d-noeud-boite" hidden>
-        <div class="petit">Un <b>SatMe-node</b> (Raspberry Pi près de l'antenne, <code>satme --noeud</code>) : son adresse et le code qu'il a donné au démarrage. Adresse vide : le MiniTiouner de ce PC.</div>
+        <div class="petit">Un <b>SatMe-Node</b> (Raspberry Pi près de l'antenne, <code>satme --noeud</code>) : son adresse et le code qu'il a donné au démarrage. Adresse vide : le MiniTiouner de ce PC.</div>
         <div class="ligne"><input id="d-noeud" placeholder="192.168.1.30 (ou :port)" style="max-width:190px"><input id="d-noeud-code" placeholder="Code" style="max-width:90px">
           <button onclick="dNoeud()">Associer</button></div>
       </div>
@@ -1484,7 +1484,7 @@ async function suisQr() {
   if (e && e.joint && e.connecte) { g('t-qr-boite').hidden = true; await listeTelephone(); return; }
   if (e && e.erreur) txt('t-qr-etat', e.erreur);
   // Nothing after half a minute: most often this PC's firewall, which the phone cannot get through.
-  else if (Date.now() - qrDepuis > 30000) txt('t-qr-etat', 'toujours rien… Si le téléphone dit « SatMe PC injoignable », le pare-feu de ce PC bloque le port ' + qrPort +
+  else if (Date.now() - qrDepuis > 30000) txt('t-qr-etat', 'toujours rien… Si le téléphone dit « SatMe-PC injoignable », le pare-feu de ce PC bloque le port ' + qrPort +
     ' (Linux avec ufw : sudo ufw allow from 192.168.0.0/16 to any port ' + qrPort + ' proto tcp).');
   if (e && !e.ouvert) return;
   minuteurQr = setTimeout(suisQr, 1000);
@@ -1864,7 +1864,7 @@ async function ticDatv(premier) {
   txt('d-porteuse', D.cielTrouve ? mhz3(D.cielTrouve) + ' MHz' + (D.srTrouve ? ' · ' + D.srTrouve + ' kS/s' : '') + (D.verrouille ? ' · écart ' + (D.fiTrouvee - D.fi) + ' kHz' : '') : '');
   txt('d-debit', D.kbps ? Math.round(D.kbps) + ' kb/s' + (D.nuls ? ' · ' + D.nuls + ' % de vide' : '') : '');
   txt('d-service', [D.fournisseur, D.service].filter(x => x).join(' · ') + (D.flux.length ? '  —  ' + D.flux.map(f => f.type + ' (PID ' + f.pid + ')').join(', ') : ''));
-  txt('d-ou', D.noeud ? 'sur le SatMe-node ' + (D.nomNoeud ? '« ' + D.nomNoeud + ' » ' : '') + '(' + D.noeud + ')' : 'sur ce PC');
+  txt('d-ou', D.noeud ? 'sur le SatMe-Node ' + (D.nomNoeud ? '« ' + D.nomNoeud + ' » ' : '') + '(' + D.noeud + ')' : 'sur ce PC');
   g('d-prog').hidden = !!D.noeud;
   txt('d-titre', D.actif ? '· ' + mhz3(D.ciel) + ' MHz · ' + D.sr + ' kS/s · FI ' + mhz3(D.fi) + ' MHz' : '');
   const r = g('d-rec'); r.style.display = D.enregistrement ? '' : 'none'; r.textContent = '● ' + D.enregistrement;

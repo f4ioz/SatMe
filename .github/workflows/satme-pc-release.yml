@@ -1,0 +1,38 @@
+# SatMe-PC and SatMe-Node: a release built here from the tag "satme-pc-2026.10.13".
+# One package for a Linux PC and a Raspberry Pi (Java 17, no native code of
+# ours): satme-pc.tar, with SatMe-Node's install script inside. No Android
+# APK or AAB is ever published here.
+name: SatMe-PC release
+
+on:
+  push:
+    tags: ['satme-pc-*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Build the package
+        run: |
+          V="${GITHUB_REF_NAME#satme-pc-}"
+          ./gradlew --no-daemon -PsatmePcVersion="$V" :pc:distTar
+          cp pc/build/distributions/satme.tar satme-pc.tar
+          cp pc/build/distributions/satme.tar "satme-pc-$V.tar"
+          sha256sum satme-pc.tar "satme-pc-$V.tar" > SHA256SUMS
+          tar xOf satme-pc.tar satme/lib/pc.jar > /tmp/pc.jar && unzip -p /tmp/pc.jar META-INF/MANIFEST.MF | grep Implementation-Version
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          V="${GITHUB_REF_NAME#satme-pc-}"
+          gh release create "$GITHUB_REF_NAME" satme-pc.tar "satme-pc-$V.tar" SHA256SUMS \
+            --title "SatMe-PC $V" --notes-file pc/NOTES-RELEASE.md --latest

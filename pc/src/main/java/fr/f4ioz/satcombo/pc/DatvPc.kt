@@ -46,7 +46,7 @@ class DatvPc(
     private val stockage: Stockage,
     private val dossierEnregistrements: File,
     private val horloge: () -> Long = System::currentTimeMillis,
-    /** False on a SatMe-node: no picture nor sound here, the stream goes to the network's clients ([abonne]). */
+    /** False on a SatMe-Node: no picture nor sound here, the stream goes to the network's clients ([abonne]). */
     private val lecteursLocaux: Boolean = true,
 ) {
     @Volatile var etat = EtatDatv(); private set
@@ -239,7 +239,7 @@ class DatvPc(
         }
     }
 
-    // ------------------------------------------------------------ a SatMe-node's clients
+    // ------------------------------------------------------------ a SatMe-Node's clients
 
     /** Each network client its own queue: a slow one loses blocks, never holds the others. */
     private val abonnes = java.util.concurrent.CopyOnWriteArrayList<ArrayBlockingQueue<ByteArray>>()
@@ -248,15 +248,15 @@ class DatvPc(
 
     fun desabonne(q: ArrayBlockingQueue<ByteArray>) { abonnes -= q }
 
-    // ------------------------------------------------------------ a SatMe-node receiving for us
+    // ------------------------------------------------------------ a SatMe-Node receiving for us
 
-    /** The SatMe-node receiving for this PC, when one is joined (address, key, name kept). */
+    /** The SatMe-Node receiving for this PC, when one is joined (address, key, name kept). */
     val client = ClientNoeud(stockage)
     val noeud: String get() = client.adresse
     val nomNoeud: String get() = client.nom
     val distant: Boolean get() = client.associe
 
-    /** Joins a SatMe-node with its code (an empty address: the MiniTiouner on this PC again); null when done. */
+    /** Joins a SatMe-Node with its code (an empty address: the MiniTiouner on this PC again); null when done. */
     fun rejoins(adresse: String, code: String): String? { arrete(); return client.rejoins(adresse, code) }
 
     /** Receiving through the node: it starts LongMynd there; its status and stream come here. */
@@ -408,7 +408,7 @@ class DatvPc(
             val acces = l.any { it.contains("errno=13") || it.contains("requires write access", true) }
             return when {
                 acces || t.contains("LIBUSB_ERROR_ACCESS", true) || t.contains("permission", true) ->
-                    "pas d'accès au MiniTiouner : il faut une règle udev pour lui (voir la page SatMe PC, DATV), puis le débrancher et le rebrancher"
+                    "pas d'accès au MiniTiouner : il faut une règle udev pour lui (voir la page SatMe-PC, DATV), puis le débrancher et le rebrancher"
                 t.contains("Unable to open device", true) || t.contains("plugged", true) || t.contains("not found", true) ->
                     "MiniTiouner introuvable : est-il branché ?"
                 erreurs.isNotEmpty() -> "LongMynd : " + erreurs.joinToString(" · ") { it.removePrefix("ERROR:").trim() }

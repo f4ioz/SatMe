@@ -1,28 +1,22 @@
-# SatMe PC — the station in a browser
+# SatMe-PC — the station in a browser
 
 *October 2026. The Android app stays the reference; the PC does what it does, and what is made on the PC comes to the phone too. The PC pages are in French for now.*
 
 SatMe runs on a PC (Linux, Windows, Raspberry Pi) and is driven from a browser. Its core is **the same code as on the phone**: Doppler loop, rotator tracking, pass journal, SSTV, METEOR, APRS, FT8 and the log all come from the shared `:moteur` module.
 
-<p align="center"><img src="images/pc-station.webp" width="100%" alt="SatMe PC, Station tab: the next passes, FO-29 followed on the sky, Doppler-corrected frequencies, a simulated IC-9700 and rotator"></p>
+<p align="center"><img src="images/pc-station.webp" width="100%" alt="SatMe-PC, Station tab: the next passes, FO-29 followed on the sky, Doppler-corrected frequencies, a simulated IC-9700 and rotator"></p>
 
-## Running it
+## Installing it
 
-Java 17 or later is needed.
-
-```
-./gradlew :pc:installDist
-pc/build/install/satme/bin/satme          # Linux, macOS
-pc\build\install\satme\bin\satme.bat      # Windows
-```
-
-then open **http://localhost:8090/**.
+- **Linux**: [Installing SatMe-PC](installer-satme-pc.md) — download `satme-pc.tar`, unpack, start, then open **http://localhost:8090/**.
+- **The MiniTiouner by the antenna**: [Installing SatMe-Node on a Raspberry Pi](installer-satme-node.md).
 
 | Option | Effect |
 |---|---|
 | `--port 8090` | the page's port |
 | `--reseau` | page open to the other machines of the network (a station at the foot of the mast, driven from the house); without it, this PC only |
 | `--dossier DIR` | where settings, log, journal and recordings are kept (`~/.satme`, `%APPDATA%\SatMe` on Windows) |
+| `--noeud` | SatMe-Node: the MiniTiouner only, driven over the network |
 
 ## The tabs
 
@@ -93,20 +87,13 @@ The **DATV** tab receives DVB-S/S2 with a **MiniTiouner** (tuner and demodulator
 
 <p align="center"><img src="images/pc-datv.webp" width="100%" alt="DATV tab: a DVB-S2 test signal locked, MER, MODCOD, the constellation"></p>
 
-### SatMe-node: the MiniTiouner next to the antenna
+### SatMe-Node: the MiniTiouner next to the antenna
 
-The MiniTiouner works best close to the LNB. A **SatMe-node** is SatMe on a small computer there — a Raspberry Pi (a **Pi 3 is enough**: the node only receives, it decodes nothing) — driven over the network by SatMe PC and by the phone (**QO-100** screen → **DATV**: the same controls, the picture through the phone's own decoder). It runs LongMynd; its status and the transport stream (0.3 to 2 Mbit/s) come to the PC, which shows, plays and records them as if the MiniTiouner were plugged into it.
+The MiniTiouner works best close to the LNB. A **SatMe-Node** is SatMe on a small computer there — a Raspberry Pi (a **Pi 3 is enough**: the node only receives, it decodes nothing) — driven over the network by SatMe-PC and by the phone (**QO-100** screen → **DATV**: the same controls, the picture through the phone's own decoder). It runs LongMynd; its status and the transport stream (0.3 to 2 Mbit/s) come to the PC, which shows, plays and records them as if the MiniTiouner were plugged into it.
 
-On the Pi (Raspberry Pi OS 64-bit, Ethernet preferably):
+Installing it on the Pi: [Installing SatMe-Node on a Raspberry Pi](installer-satme-node.md) — three commands, about ten minutes on a Pi 3.
 
-```
-./gradlew :pc:distTar                        # on the PC: pc/build/distributions/satme.tar
-scp pc/build/distributions/satme.tar pi@raspberrypi.local:
-ssh pi@raspberrypi.local
-tar xf satme.tar && sudo ./satme/noeud/installe-noeud.sh
-```
-
-The script installs Java, builds LongMynd, lets it open the MiniTiouner (udev), and starts the **satme-noeud** service (`satme --noeud`, port 8090). At its first start the node draws a **six-digit code**, shown at the end of the installation (again: `journalctl -u satme-noeud | grep Code`). In SatMe PC, DATV tab, MiniTiouner **Changer**: the node's address and its code, **Associer**. The PC keeps the key the node gave: either can restart. An empty address goes back to the MiniTiouner on the PC.
+The script installs Java, builds LongMynd, lets it open the MiniTiouner (udev), and starts the **satme-noeud** service (`satme --noeud`, port 8090). At its first start the node draws a **six-digit code**, shown at the end of the installation (again: `journalctl -u satme-noeud | grep Code`). In SatMe-PC, DATV tab, MiniTiouner **Changer**: the node's address and its code, **Associer**. The PC keeps the key the node gave: either can restart. An empty address goes back to the MiniTiouner on the PC.
 
 Without its key the node only says what it is; what changes it is a POST; its LNB supply stays off unless chosen.
 

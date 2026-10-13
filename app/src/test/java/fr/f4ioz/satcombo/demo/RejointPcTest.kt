@@ -12,7 +12,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
 
-/** SatMe PC's QR code read on the phone, and anything else turned away. */
+/** SatMe-PC's QR code read on the phone, and anything else turned away. */
 class RejointPcTest {
     @Test
     fun le_qr_code_de_satme_pc() {

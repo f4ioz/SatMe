@@ -3,8 +3,8 @@
 # Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
 # SPDX-License-Identifier: GPL-2.0-or-later
 #
-# Installs a SatMe-node on a Raspberry Pi (Raspberry Pi OS 64-bit, Debian):
-# the MiniTiouner next to the antenna, driven over the network by SatMe PC
+# Installs a SatMe-Node on a Raspberry Pi (Raspberry Pi OS 64-bit, Debian):
+# the MiniTiouner next to the antenna, driven over the network by SatMe-PC
 # or the phone. A Pi 3 is enough: the node only receives, nothing is decoded
 # on it.
 #
@@ -65,7 +65,7 @@ if [ "$SERVICE" -eq 1 ]; then
   echo "==> Service satme-noeud"
   cat > /etc/systemd/system/satme-noeud.service <<UNIT
 [Unit]
-Description=SatMe-node (MiniTiouner piloté par le réseau)
+Description=SatMe-Node (MiniTiouner piloté par le réseau)
 After=network-online.target
 Wants=network-online.target
 
@@ -85,7 +85,7 @@ UNIT
   systemctl restart satme-noeud
   sleep 8
   echo
-  journalctl -u satme-noeud -n 20 --no-pager | grep -E "SatMe-node|LongMynd|Code" || true
+  journalctl -u satme-noeud -n 20 --no-pager | grep -E "SatMe-Node|LongMynd|Code" || true
 fi
 
 if command -v ufw >/dev/null 2>&1 && ufw status 2>/dev/null | grep -q "Status: active"; then
@@ -93,6 +93,6 @@ if command -v ufw >/dev/null 2>&1 && ufw status 2>/dev/null | grep -q "Status: a
   echo "Pare-feu actif : sudo ufw allow from 192.168.0.0/16 to any port $PORT proto tcp"
 fi
 echo
-echo "SatMe-node installé. Dans SatMe PC, onglet DATV → MiniTiouner « Changer » :"
+echo "SatMe-Node installé. Dans SatMe-PC, onglet DATV → MiniTiouner « Changer » :"
 echo "  adresse $(hostname -I 2>/dev/null | awk '{print $1}'):$PORT et le code ci-dessus"
 echo "  (le revoir : journalctl -u satme-noeud | grep Code)."

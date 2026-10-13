@@ -19,8 +19,8 @@ import java.util.concurrent.TimeUnit
 import kotlin.concurrent.thread
 
 /**
- * **SatMe-node**: SatMe on a small computer next to the antenna (a Raspberry
- * Pi), the MiniTiouner plugged into it, driven from SatMe PC or the phone
+ * **SatMe-Node**: SatMe on a small computer next to the antenna (a Raspberry
+ * Pi), the MiniTiouner plugged into it, driven from SatMe-PC or the phone
  * over the network (`satme --noeud`).
  *
  * The node only receives: LongMynd there ([DatvPc] without players), its
@@ -129,10 +129,10 @@ class NoeudPc(
     private fun page(o: OutputStream) {
         val e = datv.etat
         val h = """<!doctype html><html lang="fr"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>SatMe-node</title><body style="font-family:system-ui,sans-serif;background:#0B1016;color:#E8F0F7;padding:24px;line-height:1.6">
-<h2>SatMe-node · ${esc(nom)}</h2>
+<title>SatMe-Node</title><body style="font-family:system-ui,sans-serif;background:#0B1016;color:#E8F0F7;padding:24px;line-height:1.6">
+<h2>SatMe-Node · ${esc(nom)}</h2>
 <p>MiniTiouner : ${if (e.actif) esc(e.libelle) + (e.merDb?.let { " · MER %.1f dB".format(it) } ?: "") else "à l'arrêt"}${if (datv.programme() == null) " — <b>LongMynd introuvable</b>" else ""}</p>
-<p style="color:#9AA7B4">Se pilote depuis SatMe PC (onglet DATV, « SatMe-node ») ou le téléphone, avec le code donné au démarrage du node
+<p style="color:#9AA7B4">Se pilote depuis SatMe-PC (onglet DATV, « SatMe-Node ») ou le téléphone, avec le code donné au démarrage du node
 (<code>journalctl -u satme-noeud</code>).</p></body></html>"""
         envoie(o, "200 OK", "text/html; charset=utf-8", h.toByteArray())
     }

@@ -21,10 +21,10 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 /**
- * DATV on the phone, through a SatMe-node: the MiniTiouner stays next to the
+ * DATV on the phone, through a SatMe-Node: the MiniTiouner stays next to the
  * antenna, on a Raspberry Pi, and the phone drives it over the network —
  * no USB driver here, and the phone's hardware decoder shows the picture.
- * The node's protocol is the engine's ([ClientNoeud]), the same as SatMe PC's.
+ * The node's protocol is the engine's ([ClientNoeud]), the same as SatMe-PC's.
  */
 class DatvTelephone(context: Context) {
 

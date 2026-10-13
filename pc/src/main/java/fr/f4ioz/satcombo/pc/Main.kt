@@ -34,11 +34,13 @@ fun main(args: Array<String>) {
             "--reseau" -> reseau = true
             "--noeud" -> noeud = true
             "--dossier" -> dossier = args.getOrNull(++i)?.let(::File) ?: dossier
+            "-v", "--version" -> { println("SatMe-PC " + versionPc()); return }
             "-h", "--help", "--aide" -> {
-                println("satme [--port 8090] [--reseau] [--noeud] [--dossier DIR]")
+                println("SatMe-PC " + versionPc())
+                println("satme [--port 8090] [--reseau] [--noeud] [--dossier DIR] [--version]")
                 println("  --port     port de la page (8090)")
                 println("  --reseau   page ouverte aux autres machines du réseau (sinon ce PC seulement)")
-                println("  --noeud    SatMe-node : seulement le MiniTiouner, piloté par le réseau (Raspberry Pi près de l'antenne)")
+                println("  --noeud    SatMe-Node : seulement le MiniTiouner, piloté par le réseau (Raspberry Pi près de l'antenne)")
                 println("  --dossier  où ranger réglages et éléments (${dossierParDefaut()})")
                 return
             }
@@ -53,7 +55,7 @@ fun main(args: Array<String>) {
         stockageSat = StockageFichier(File(dossier, "satellites.properties")),
         stockageAgenda = StockageFichier(File(dossier, "agenda.properties")))
     I18n.apply(station.settings.language, java.util.Locale.getDefault().language)
-    fr.f4ioz.satcombo.data.AgentHttp.version = "pc"
+    fr.f4ioz.satcombo.data.AgentHttp.version = "pc-" + versionPc()
     fr.f4ioz.satcombo.data.AgentHttp.plateforme = System.getProperty("os.name") ?: "PC"
     station.demarre()
     val carnet = CarnetPc(station, fr.f4ioz.satcombo.data.LogStore(File(dossier, "qso_log.json")))
@@ -84,7 +86,7 @@ fun main(args: Array<String>) {
     val datv = DatvPc(station.stockage, File(dossier, "enregistrements"))
     val serveur = ServeurPc(station, port, reseau, carnet, son, journalWeb, ImportPc(station, carnet, journal), sdr, videoSked, telephone, appairage, datv)
     serveur.demarre()
-    println("SatMe — station PC")
+    println("SatMe-PC " + versionPc())
     println("  page      : http://localhost:${serveur.portReel}/" + if (reseau) "  (ouverte au réseau)" else "")
     println("  réglages  : ${dossier.absolutePath}")
     println("  Ctrl+C pour arrêter")
@@ -109,7 +111,7 @@ fun dossierParDefaut(): File {
 }
 
 /**
- * SatMe-node: the MiniTiouner only, driven over the network — nothing else
+ * SatMe-Node: the MiniTiouner only, driven over the network — nothing else
  * loaded (no elements, no passes), so that a Raspberry Pi 3 does it.
  */
 private fun mainNoeud(port: Int, dossier: File) {
@@ -117,9 +119,14 @@ private fun mainNoeud(port: Int, dossier: File) {
     val datv = DatvPc(stockage, File(dossier, "enregistrements"), lecteursLocaux = false)
     val n = NoeudPc(datv, stockage, port)
     n.demarre()
-    println("SatMe-node « ${n.nom} » : port ${n.portReel}")
+    println("SatMe-Node ${versionPc()} « ${n.nom} » : port ${n.portReel}")
     println("  LongMynd   : " + (datv.programme() ?: "INTROUVABLE (le compiler, ou --dossier/chemin)"))
-    println("  Code à donner à SatMe PC ou au téléphone : ${n.code}")
+    println("  Code à donner à SatMe-PC ou au téléphone : ${n.code}")
     Runtime.getRuntime().addShutdownHook(Thread { runCatching { datv.arrete() }; n.arrete() })
     while (true) Thread.sleep(3_600_000L)
 }
+
+/** SatMe-PC's version, from its jar (a release's date), "dev" when built by hand. */
+fun versionPc(): String = Main::class.java.`package`?.implementationVersion ?: "dev"
+
+private object Main

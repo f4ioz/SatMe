@@ -49,7 +49,7 @@ import fr.f4ioz.satcombo.ui.theme.*
 import kotlinx.coroutines.delay
 
 /**
- * QO-100's wide band on the phone: a SatMe-node next to the antenna receives
+ * QO-100's wide band on the phone: a SatMe-Node next to the antenna receives
  * with its MiniTiouner, the phone drives it and shows its stream.
  */
 @Composable
