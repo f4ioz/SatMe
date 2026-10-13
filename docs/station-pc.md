@@ -29,6 +29,7 @@ SatMe runs on a PC (Linux, Windows, Raspberry Pi) and is driven from a browser. 
 - **SDR**: an RTL-SDR dongle on this PC (rtl_tcp started for you) or on the network.
 - **Sondes** (radiosondes) and **METEOR** (LRPT pictures) from the dongle.
 - **Son** (sound card, recording), **SSTV** (live decoding, the pictures in a viewer), **APRS**, **FT8 / FT4**.
+- **Planche**: the SSTV sheet, as on the phone — the pictures on a template (a grid, around the title, or an imported ARISS template whose boxes are found), filled in order of reception or by dragging, the texts, then the sheet downloaded full size (PNG).
 - **Journal**: the passes replayed with their sound, made into a picture, a video or a GIF.
 - **Réglages** (settings): station, orbital elements, QRZ.com, the online log, converters.
 

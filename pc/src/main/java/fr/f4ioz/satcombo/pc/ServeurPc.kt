@@ -36,7 +36,7 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 private val journal: JournalWebPc? = null, private val importPc: ImportPc? = null,
                 private val sdr: SdrPc? = null, private val videoSked: VideoSked? = null,
                 private val telephone: TelephonePc? = null, private val appairage: AppairagePc? = null,
-                private val datv: DatvPc? = null) {
+                private val datv: DatvPc? = null, private val planche: PlancheWebPc? = null) {
 
     private var socket: ServerSocket? = null
     val portReel: Int get() = socket?.localPort ?: port
@@ -83,6 +83,16 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                     Thread.sleep(20)
                 }
             }
+        }
+        // The SSTV sheet: its page, and its routes (some POST a template or a picture).
+        if (planche != null && (chemin == "/planche" || chemin == "/planche/")) {
+            envoie(sortie, "200 OK", "text/html; charset=utf-8", planche.page().toByteArray()); return
+        }
+        if (planche != null && chemin.startsWith("/planche/")) {
+            val rep = planche.sert(chemin.removePrefix("/planche"), r.methode, { q[it].orEmpty() }) {
+                RequeteHttp.corps(c.getInputStream(), r, PlancheWebPc.IMPORT_MAX)
+            }
+            envoie(sortie, rep.statut, rep.type, rep.corps, rep.entetes); return
         }
         if (r.methode == "POST" && chemin == "/api/telephone/zip") {
             // A pass file from the phone (up to 300 MB with its sound): read as it comes, never held whole.

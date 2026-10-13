@@ -29,6 +29,7 @@ SatMe tourne sur un PC (Linux, Windows, Raspberry Pi) et se pilote depuis un nav
 - **SDR** : une clé RTL-SDR sur ce PC (rtl_tcp démarré pour vous) ou sur le réseau.
 - **Sondes** (radiosondes) et **METEOR** (images LRPT) par la clé.
 - **Son** (carte son, enregistrement), **SSTV** (décodage en direct, les images dans une visionneuse), **APRS**, **FT8 / FT4**.
+- **Planche** : la planche SSTV, comme sur le téléphone — les images sur un modèle (une grille, autour du titre, ou un modèle ARISS importé dont les cases sont trouvées), remplies par ordre de réception ou en les glissant, les textes, puis la planche téléchargée en pleine taille (PNG).
 - **Journal** : les passages rejoués avec leur son, faits en image, vidéo ou GIF.
 - **Réglages** : station, éléments orbitaux, QRZ.com, carnet en ligne, convertisseurs.
 

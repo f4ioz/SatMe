@@ -89,6 +89,7 @@ object PagePlanche {
   .zone.survol { background:rgba(63,224,200,.30); }
   .etiq { position:absolute; left:2px; top:2px; font-size:11px; font-weight:700; padding:0 5px;
           border-radius:4px; background:rgba(0,0,0,.6); color:var(--clair); pointer-events:none; }
+  .etiq.droite { left:auto; right:2px; }
   /* A text's label hides the text itself: shown above it, only when pointed at or picked. */
   .zone.texte .etiq { display:none; top:-20px; left:0; white-space:nowrap; }
   .zone.texte:hover .etiq, .zone.texte.choisie .etiq { display:block; }
@@ -276,7 +277,8 @@ function dessineCalque() {
 function zoneEl(z, k, i, etiquette) {
   const d = el('div', { class: 'zone' + (k === 't' ? ' texte' : '') + (choix && choix.k === k && choix.i === i ? ' choisie' : '') });
   place(d, z);
-  d.appendChild(el('span', { class: 'etiq', text: etiquette }));
+  // When the sheet numbers its boxes itself (top left), the editing label goes to the right: not over it.
+  d.appendChild(el('span', { class: 'etiq' + (k === 'c' && M.numeros ? ' droite' : ''), text: etiquette }));
   const h = el('div', { class: 'poignee' }); d.appendChild(h);
   d.addEventListener('pointerdown', ev => debutGeste(ev, k, i, ev.target === h));
   if (k === 'c') {

@@ -25,15 +25,18 @@ object PagePc {
         Triple("carres", "Carrés", "grid_on"), Triple("frise", "Frise", "timeline"), Triple("sked", "Sked", "handshake"),
         Triple("qo100", "QO-100", "satellite_alt"), Triple("datv", "DATV", "tv"), Triple("sdr", "SDR", "settings_input_antenna"),
         Triple("sondes", "Sondes", "air"), Triple("meteor", "METEOR", "cloud"), Triple("son", "Son", "mic"),
-        Triple("sstv", "SSTV", "live_tv"), Triple("aprs", "APRS", "place"), Triple("ft8", "FT8", "graphic_eq"),
+        Triple("sstv", "SSTV", "live_tv"), Triple("planche", "Planche", "view_quilt"), Triple("aprs", "APRS", "place"), Triple("ft8", "FT8", "graphic_eq"),
         Triple("journal", "Journal", "history"), Triple("reglages", "Réglages", "settings"))
 
     /** A tab's content: its icon above its name. */
     private fun contenu(nom: String, icone: String) = IconesPc.svg(icone) + "<span>$nom</span>"
 
-    /** The tabs here: buttons, the journal a link. */
+    /** The tabs that are pages of their own (served apart), with what they are. */
+    private val PAGES = mapOf("journal" to "Les passages enregistrés, rejoués", "planche" to "La planche SSTV : les images sur un modèle, à télécharger")
+
+    /** The tabs here: buttons, the pages of their own links. */
     private fun boutons() = ONGLETS.joinToString("") { (v, nom, ico) ->
-        if (v == "journal") "<a href=\"/journal\" style=\"text-decoration:none\"><button title=\"Les passages enregistrés, rejoués\">${contenu(nom, ico)}</button></a>"
+        if (v in PAGES) "<a href=\"/$v\" style=\"text-decoration:none\"><button title=\"${PAGES[v]}\">${contenu(nom, ico)}</button></a>"
         else "<button data-v=\"$v\"" + (if (v == "station") " class=\"actif\"" else "") + ">${contenu(nom, ico)}</button>"
     }
 
@@ -48,9 +51,13 @@ object PagePc {
      * scoped under #pcBar, the journal's own left alone). The tabs are links
      * back to this page, opened on the tab (#carnet).
      */
-    fun barreJournal(): String = "<header id=\"pcBar\"><h1>SatMe-<span class=\"c\">PC</span></h1><span class=\"g\" id=\"pc-info\"></span><nav>" +
+    fun barre(actif: String): String = "<header id=\"pcBar\"><h1>SatMe-<span class=\"c\">PC</span></h1><span class=\"g\" id=\"pc-info\"></span><nav>" +
         ONGLETS.joinToString("") { (v, nom, ico) ->
-            if (v == "journal") "<button class=\"actif\">${contenu(nom, ico)}</button>" else "<a href=\"/#$v\"><button>${contenu(nom, ico)}</button></a>"
+            when {
+                v == actif -> "<button class=\"actif\">${contenu(nom, ico)}</button>"
+                v in PAGES -> "<a href=\"/$v\"><button>${contenu(nom, ico)}</button></a>"
+                else -> "<a href=\"/#$v\"><button>${contenu(nom, ico)}</button></a>"
+            }
         } + "</nav><span id=\"pc-heure\"></span></header>"
 
     /** The header's look, as on this page (sizes, gaps, the narrower screens). */

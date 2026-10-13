@@ -30,7 +30,7 @@ class JournalWebPc(private val j: JournalPc, private val station: StationPc, pri
     fun page(): String = PageJournal.html()
         .replace("<script>", "<script>window.SATME_PC=true;try{localStorage.setItem('satme-cle','pc')}catch(e){}</script>\n<style>${PagePc.STYLE_BARRE}</style>\n<script>")
         // The PC's header above the journal, the same as on its other pages.
-        .replace("<div id=\"page\" class=\"cache\">", "<div id=\"page\" class=\"cache\">" + PagePc.barreJournal() + "<script>${PagePc.SCRIPT_BARRE}</script>")
+        .replace("<div id=\"page\" class=\"cache\">", "<div id=\"page\" class=\"cache\">" + PagePc.barre("journal") + "<script>${PagePc.SCRIPT_BARRE}</script>")
         // Its words are the phone's: said here of the PC.
         .let { h -> TEXTES_PC.entries.fold(h) { acc, (cle, pc) -> acc.replace(js(fr.f4ioz.satcombo.i18n.t(cle)), js(fr.f4ioz.satcombo.i18n.t(pc))) } }
 
