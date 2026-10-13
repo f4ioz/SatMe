@@ -89,7 +89,7 @@ L'onglet **DATV** reçoit le DVB-S/S2 avec un **MiniTiouner** (tuner et démodul
 
 ### SatMe-node : le MiniTiouner à côté de l'antenne
 
-Le MiniTiouner travaille mieux près du LNB. Un **SatMe-node**, c'est SatMe sur un petit ordinateur là-bas — un Raspberry Pi (un **Pi 3 suffit** : le node ne fait que recevoir, il ne décode rien) — piloté par le réseau depuis SatMe PC (et bientôt le téléphone). Il fait tourner LongMynd ; son état et le flux de transport (0,3 à 2 Mbit/s) arrivent au PC, qui les montre, les joue et les enregistre comme si le MiniTiouner y était branché.
+Le MiniTiouner travaille mieux près du LNB. Un **SatMe-node**, c'est SatMe sur un petit ordinateur là-bas — un Raspberry Pi (un **Pi 3 suffit** : le node ne fait que recevoir, il ne décode rien) — piloté par le réseau depuis SatMe PC et depuis le téléphone (écran **QO-100** → **DATV** : les mêmes réglages, l'image par le décodeur du téléphone). Il fait tourner LongMynd ; son état et le flux de transport (0,3 à 2 Mbit/s) arrivent au PC, qui les montre, les joue et les enregistre comme si le MiniTiouner y était branché.
 
 Sur le Pi (Raspberry Pi OS 64 bits, en Ethernet de préférence) :
 

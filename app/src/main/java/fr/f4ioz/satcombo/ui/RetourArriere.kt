@@ -48,6 +48,7 @@ object RetourArriere {
         FERMER_NOMMAGE,
         FERMER_AGENDA,
         FERMER_FT8,
+        FERMER_DATV,
         RETOUR_LISTE,
         QUITTER_SELECTION,
     }
@@ -84,6 +85,7 @@ object RetourArriere {
         ecran == Screen.QO100 -> Geste.FERMER_QO100
         ecran == Screen.NOMMAGE -> Geste.FERMER_NOMMAGE
         ecran == Screen.AGENDA -> Geste.FERMER_AGENDA
+        ecran == Screen.DATV -> Geste.FERMER_DATV
         // Only then the sheet underneath.
         selection -> Geste.RETOUR_LISTE
         modeSelection -> Geste.QUITTER_SELECTION

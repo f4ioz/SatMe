@@ -9,7 +9,10 @@
 package fr.f4ioz.satcombo.pc
 
 import fr.f4ioz.satcombo.plateforme.Stockage
-import okhttp3.RequestBody.Companion.toRequestBody
+import fr.f4ioz.satcombo.datv.ClientNoeud
+import fr.f4ioz.satcombo.datv.Datv
+import fr.f4ioz.satcombo.datv.EtatDatv
+import fr.f4ioz.satcombo.datv.ReglageDatv
 import java.io.File
 import java.io.InputStream
 import java.io.OutputStream
@@ -46,49 +49,7 @@ class DatvPc(
     /** False on a SatMe-node: no picture nor sound here, the stream goes to the network's clients ([abonne]). */
     private val lecteursLocaux: Boolean = true,
 ) {
-    /** What to receive: sky frequency, symbol rate, the LNB's oscillator, the NIM's input, its LNB supply. */
-    data class Reglage(
-        val cielKhz: Long = BALISE_KHZ,
-        val srKs: Int = 1500,
-        val olKhz: Long = 9_750_000L,
-        /** The NIM's bottom input rather than the top one. */
-        val entreeB: Boolean = false,
-        /** LNB supply: "" off, "v" 13 V, "h" 18 V. */
-        val lnb: String = "",
-        val son: Boolean = true,
-    ) {
-        val fiKhz: Long get() = cielKhz - olKhz
-    }
-
-    data class Etat(
-        val actif: Boolean = false,
-        /** LongMynd's state: 0 starting, 1 searching, 2 headers, 3 DVB-S, 4 DVB-S2. */
-        val etat: Int = 0,
-        val fiTrouveeKhz: Long = 0L,
-        val srTrouveKs: Int = 0,
-        val merDb: Double? = null,
-        val modcod: String = "",
-        val fournisseur: String = "",
-        val service: String = "",
-        val nulsPct: Int = 0,
-        /** Elementary streams: PID and type (0x1B H.264, 0x24 H.265, 0x03/0x04 MPEG audio, 0x0F AAC…). */
-        val flux: List<Pair<Int, Int>> = emptyList(),
-        val agc1: Int = 0, val agc2: Int = 0,
-        val berPct: Double? = null,
-        val trames: Boolean? = null, val pilotes: Boolean? = null,
-        val kbps: Int = 0,
-        val images: Long = 0L,
-        val enregistrement: String = "",
-        val erreur: String = "",
-        val depuis: Long = 0L,
-    ) {
-        val verrouille: Boolean get() = etat >= 3
-        val libelle: String get() = when (etat) {
-            0 -> "démarrage"; 1 -> "recherche"; 2 -> "en-têtes trouvés"; 3 -> "accroché DVB-S"; 4 -> "accroché DVB-S2"; else -> "?"
-        }
-    }
-
-    @Volatile var etat = Etat(); private set
+    @Volatile var etat = EtatDatv(); private set
     @Volatile var reglage = lisReglage(); private set
 
     /** The last constellation points (I, Q), signed bytes. */
@@ -108,15 +69,15 @@ class DatvPc(
 
     // ------------------------------------------------------------ settings
 
-    private fun lisReglage() = Reglage(
-        cielKhz = stockage.getLong("datv_ciel_khz", BALISE_KHZ),
+    private fun lisReglage() = ReglageDatv(
+        cielKhz = stockage.getLong("datv_ciel_khz", Datv.BALISE_KHZ),
         srKs = stockage.getInt("datv_sr", 1500),
         olKhz = stockage.getLong("datv_ol_khz", 9_750_000L),
         entreeB = stockage.getBoolean("datv_entree_b", false),
         lnb = "",   // never kept: the supply is asked for each time
         son = stockage.getBoolean("datv_son", true))
 
-    private fun garde(r: Reglage) {
+    private fun garde(r: ReglageDatv) {
         stockage.edit().putLong("datv_ciel_khz", r.cielKhz).putInt("datv_sr", r.srKs).putLong("datv_ol_khz", r.olKhz)
             .putBoolean("datv_entree_b", r.entreeB).putBoolean("datv_son", r.son).apply()
     }
@@ -137,12 +98,9 @@ class DatvPc(
 
     /** Starts receiving with [r] (LongMynd started again when it ran); null when started, else why not. */
     @Synchronized
-    fun demarre(r: Reglage = reglage): String? {
+    fun demarre(r: ReglageDatv = reglage): String? {
         arreteIci()
-        if (r.fiKhz !in FI_MIN_KHZ..FI_MAX_KHZ)
-            return "fréquence intermédiaire hors de portée du MiniTiouner : %.3f MHz (ciel %.3f − OL %.3f), il faut 144 à 2450 MHz".format(
-                java.util.Locale.FRANCE, r.fiKhz / 1000.0, r.cielKhz / 1000.0, r.olKhz / 1000.0)
-        if (r.srKs !in 33..27_500) return "débit de symboles hors de portée : ${r.srKs} kS/s"
+        r.refus()?.let { return it }
         if (distant) return demarreDistant(r)
         val prog = programme() ?: return "LongMynd introuvable : le compiler (github.com/BritishAmateurTelevisionClub/longmynd) et donner son chemin"
         reglage = r; garde(r)
@@ -155,7 +113,7 @@ class DatvPc(
         }.getOrElse { arreteIci(); return "LongMynd ne démarre pas : " + (it.message ?: "") }
         longmynd = p
         synchronized(points) { points.clear() }
-        etat = Etat(actif = true, depuis = horloge())
+        etat = EtatDatv(actif = true, depuis = horloge())
         thread(isDaemon = true, name = "satme-datv-etat") { litEtat(sEtat, gen) }
         thread(isDaemon = true, name = "satme-datv-ts") { litTs(sTs, gen) }
         thread(isDaemon = true, name = "satme-datv-garde") {
@@ -174,7 +132,7 @@ class DatvPc(
     fun arrete() {
         val etaitActif = etat.actif
         arreteIci()
-        if (distant && etaitActif) thread(isDaemon = true) { runCatching { noeudPost("/noeud/datv/arrete") } }
+        if (distant && etaitActif) thread(isDaemon = true) { client.arrete() }
     }
 
     @Synchronized
@@ -207,13 +165,13 @@ class DatvPc(
         while (generation == gen && !s.isClosed) {
             val d = DatagramPacket(b, b.size)
             if (runCatching { s.receive(d) }.isFailure) break
-            for ((n, v) in lignes(String(b, 0, d.length, Charsets.ISO_8859_1))) {
+            for ((n, v) in Datv.lignes(String(b, 0, d.length, Charsets.ISO_8859_1))) {
                 var e = etat
                 when (n) {
                     1 -> { val st = v.toIntOrNull() ?: 0; if (st < 3 && e.etat >= 3) flux.clear(); e = e.copy(etat = st, erreur = "") }
                     6 -> e = e.copy(fiTrouveeKhz = v.toLongOrNull() ?: 0L)
-                    7 -> iEnAttente = signe(v)
-                    8 -> { val i = iEnAttente; val q = signe(v)
+                    7 -> iEnAttente = Datv.signe(v)
+                    8 -> { val i = iEnAttente; val q = Datv.signe(v)
                         if (i != null && q != null) synchronized(points) { points.addLast(i to q); while (points.size > 400) points.removeFirst() }
                         iEnAttente = null }
                     9 -> e = e.copy(srTrouveKs = ((v.toLongOrNull() ?: 0L) / 1000L).toInt())
@@ -226,7 +184,7 @@ class DatvPc(
                     17 -> { val pid = pidEnAttente; val t = v.toIntOrNull()
                         if (pid != null && t != null) { flux.removeAll { it.first == pid }; flux += pid to t; e = e.copy(flux = flux.toList()) }
                         pidEnAttente = null }
-                    18 -> e = e.copy(modcod = modcod(v.toIntOrNull() ?: -1, e.etat))
+                    18 -> e = e.copy(modcod = Datv.modcod(v.toIntOrNull() ?: -1, e.etat))
                     19 -> e = e.copy(trames = v.trim() == "1")
                     20 -> e = e.copy(pilotes = v.trim() == "1")
                     26 -> e = e.copy(agc1 = v.toIntOrNull() ?: 0)
@@ -292,88 +250,35 @@ class DatvPc(
 
     // ------------------------------------------------------------ a SatMe-node receiving for us
 
-    /**
-     * The SatMe-node receiving for this PC: its address ("192.168.1.30:8090")
-     * and the key it gave for its code; empty, the MiniTiouner on this PC.
-     */
-    var noeud: String
-        get() = stockage.getString("datv_noeud", "") ?: ""
-        private set(v) { stockage.edit().putString("datv_noeud", v).apply() }
-    private var cleNoeud: String
-        get() = stockage.getString("datv_noeud_cle", "") ?: ""
-        set(v) { stockage.edit().putString("datv_noeud_cle", v).apply() }
-    var nomNoeud: String
-        get() = stockage.getString("datv_noeud_nom", "") ?: ""
-        private set(v) { stockage.edit().putString("datv_noeud_nom", v).apply() }
+    /** The SatMe-node receiving for this PC, when one is joined (address, key, name kept). */
+    val client = ClientNoeud(stockage)
+    val noeud: String get() = client.adresse
+    val nomNoeud: String get() = client.nom
+    val distant: Boolean get() = client.associe
 
-    val distant: Boolean get() = noeud.isNotBlank()
-
-    private val http = okhttp3.OkHttpClient.Builder().connectTimeout(5, TimeUnit.SECONDS).readTimeout(30, TimeUnit.SECONDS).build()
-    private val httpFlux = http.newBuilder().readTimeout(0, TimeUnit.SECONDS).build()
-
-    private fun base() = "http://" + noeud.removePrefix("http://").trimEnd('/').let { if (':' in it) it else "$it:8090" }
-
-    private fun noeudGet(chemin: String): String =
-        http.newCall(okhttp3.Request.Builder().url(base() + chemin + (if ('?' in chemin) "&" else "?") + "cle=" + cleNoeud).build()).execute().use {
-            if (it.code == 403) throw java.io.IOException("le node refuse la clé : l'associer à nouveau avec son code")
-            if (!it.isSuccessful) throw java.io.IOException("le node répond " + it.code)
-            it.body?.string().orEmpty()
-        }
-
-    private fun noeudPost(chemin: String): org.json.JSONObject =
-        http.newCall(okhttp3.Request.Builder().url(base() + chemin + (if ('?' in chemin) "&" else "?") + "cle=" + cleNoeud)
-            .post(ByteArray(0).toRequestBody(null)).build()).execute().use {
-            if (it.code == 403) throw java.io.IOException("le node refuse la clé : l'associer à nouveau avec son code")
-            org.json.JSONObject(it.body?.string().orEmpty().ifBlank { "{}" })
-        }
-
-    /**
-     * Joins the SatMe-node at [adresse] with the code it gave at its start
-     * (`journalctl -u satme-noeud`); an empty address goes back to the
-     * MiniTiouner on this PC. Null when done, else why not.
-     */
-    fun rejoins(adresse: String, code: String): String? {
-        arrete()
-        if (adresse.isBlank()) { noeud = ""; cleNoeud = ""; nomNoeud = ""; return null }
-        val avant = noeud
-        noeud = adresse.trim()
-        return runCatching {
-            val api = org.json.JSONObject(http.newCall(okhttp3.Request.Builder().url(base() + "/noeud/api").build()).execute().use { it.body?.string().orEmpty() })
-            if (!api.optBoolean("noeud")) throw java.io.IOException("ce n'est pas un SatMe-node")
-            val j = org.json.JSONObject(http.newCall(okhttp3.Request.Builder().url(base() + "/noeud/entrer?code=" + java.net.URLEncoder.encode(code.trim(), "UTF-8")).build())
-                .execute().use { it.body?.string().orEmpty() })
-            if (!j.optBoolean("ok")) throw java.io.IOException("code refusé : celui que le node a donné à son démarrage")
-            cleNoeud = j.getString("cle"); nomNoeud = api.optString("nom")
-            null
-        }.getOrElse { noeud = avant; it.message ?: "node injoignable" }
-    }
+    /** Joins a SatMe-node with its code (an empty address: the MiniTiouner on this PC again); null when done. */
+    fun rejoins(adresse: String, code: String): String? { arrete(); return client.rejoins(adresse, code) }
 
     /** Receiving through the node: it starts LongMynd there; its status and stream come here. */
-    private fun demarreDistant(r: Reglage): String? {
+    private fun demarreDistant(r: ReglageDatv): String? {
         reglage = r; garde(r)
-        val q = "?ciel=" + r.cielKhz / 1000.0 + "&sr=" + r.srKs + "&ol=" + r.olKhz / 1000.0 + "&entree=" + (if (r.entreeB) "b" else "a") + "&lnb=" + r.lnb
-        val rep = runCatching { noeudPost("/noeud/datv/demarre$q") }.getOrElse { return "node injoignable : " + (it.message ?: "") }
-        if (!rep.optBoolean("ok", true)) return rep.optString("erreur", "le node refuse")
+        client.demarre(r)?.let { return it }
         val gen = ++generation
         synchronized(points) { points.clear() }
-        etat = Etat(actif = true, depuis = horloge())
+        etat = EtatDatv(actif = true, depuis = horloge())
         thread(isDaemon = true, name = "satme-datv-noeud-etat") { suisNoeud(gen) }
         thread(isDaemon = true, name = "satme-datv-noeud-ts") { litTsNoeud(gen) }
         return null
     }
 
-    /** The node's status, five times a second's half: its words become ours (the stream's rate and recording stay ours). */
+    /** The node's status, twice a second: its words become ours (the stream's rate and the recording stay ours). */
     private fun suisNoeud(gen: Int) {
         var echecs = 0
         while (generation == gen) {
-            runCatching { org.json.JSONObject(noeudGet("/noeud/datv")) }.onSuccess { j ->
+            runCatching { client.etat() }.onSuccess { j ->
                 echecs = 0
-                val e = etatDe(j, etat)
-                synchronized(points) {
-                    points.clear()
-                    j.optJSONArray("points")?.let { a -> for (i in 0 until a.length()) a.optJSONArray(i)?.let { p -> points.addLast(p.optInt(0) to p.optInt(1)) } }
-                }
-                etat = e
+                synchronized(points) { points.clear(); Datv.points(j).forEach { points.addLast(it) } }
+                etat = Datv.etatDe(j, etat)
                 if (!j.optBoolean("actif") && j.optString("erreur").isNotBlank()) {
                     // LongMynd stopped there: said here, the stream closed.
                     synchronized(this) { if (generation == gen) { arreteIci(); etat = etat.copy(erreur = "sur le node : " + j.optString("erreur")) } }
@@ -390,7 +295,7 @@ class DatvPc(
         val b = ByteArray(1316 * 8)
         while (generation == gen) {
             runCatching {
-                httpFlux.newCall(okhttp3.Request.Builder().url(base() + "/noeud/datv/ts?cle=" + cleNoeud).build()).execute().use { rep ->
+                client.httpFlux.newCall(okhttp3.Request.Builder().url(client.urlFlux()).build()).execute().use { rep ->
                     val e = rep.body?.byteStream() ?: return@use
                     while (generation == gen) {
                         val n = e.read(b)
@@ -509,59 +414,15 @@ class DatvPc(
             }
         }
 
-        /** A node's status (its JSON) as ours; what only this side knows ([ici]) is kept. */
-        fun etatDe(j: org.json.JSONObject, ici: Etat): Etat = ici.copy(
-            etat = j.optInt("etat"), fiTrouveeKhz = j.optLong("fiTrouvee"), srTrouveKs = j.optInt("srTrouve"),
-            merDb = if (j.isNull("mer")) null else j.optDouble("mer"), modcod = j.optString("modcod"),
-            fournisseur = j.optString("fournisseur"), service = j.optString("service"), nulsPct = j.optInt("nuls"),
-            flux = j.optJSONArray("flux")?.let { a -> (0 until a.length()).map { a.getJSONObject(it).let { o -> o.optInt("pid") to o.optInt("t") } } } ?: emptyList(),
-            agc1 = j.optInt("agc1"), agc2 = j.optInt("agc2"), berPct = if (j.isNull("ber")) null else j.optDouble("ber"),
-            trames = if (j.isNull("courtes")) null else j.optBoolean("courtes"), pilotes = if (j.isNull("pilotes")) null else j.optBoolean("pilotes"))
-
-        /** QO-100's wide band beacon: 10491.5 MHz, 1.5 MS/s DVB-S2 QPSK. */
-        const val BALISE_KHZ = 10_491_500L
-        /** What the MiniTiouner's tuner covers. */
-        const val FI_MIN_KHZ = 144_000L
-        const val FI_MAX_KHZ = 2_450_000L
-        /** The symbol rates of QO-100's wide band. */
-        val DEBITS = listOf(125, 250, 333, 500, 1000, 1500, 2000)
-        /** The narrow channels, every 500 kHz from 10492.75 to 10499.25 MHz. */
-        val CANAUX_KHZ = (0..13).map { 10_492_750L + it * 500L }
 
         val LONGMYND = "LongMynd (BATC, GPL-3), program run apart"
         private val JOURNAL = File(System.getProperty("java.io.tmpdir"), "satme-longmynd.log")
 
         /** LongMynd's command line for [r]: TS and status to us on UDP, retried every 5 s without packets. */
-        fun commande(prog: String, r: Reglage, portTs: Int, portEtat: Int): List<String> =
+        fun commande(prog: String, r: ReglageDatv, portTs: Int, portEtat: Int): List<String> =
             listOf(prog, "-i", "127.0.0.1", portTs.toString(), "-I", "127.0.0.1", portEtat.toString(), "-r", "5000") +
                 (if (r.entreeB) listOf("-w") else emptyList()) +
                 (if (r.lnb == "v" || r.lnb == "h") listOf("-p", r.lnb) else emptyList()) +
                 listOf(r.fiKhz.toString(), r.srKs.toString())
-
-        /** "$n,m" lines (one or several per datagram, ended by CR). */
-        fun lignes(t: String): List<Pair<Int, String>> =
-            t.split('$').mapNotNull { m ->
-                val l = m.trimEnd('\r', '\n', '\u0000')
-                val i = l.indexOf(',')
-                if (i <= 0) null else l.substring(0, i).toIntOrNull()?.let { it to l.substring(i + 1) }
-            }
-
-        /** A constellation point is a signed byte, sent as 0..255 or sign-extended to 32 bits: its low byte. */
-        fun signe(v: String): Int? = v.trim().toLongOrNull()?.let { (it and 0xFF).toByte().toInt() }
-
-        private val S2 = listOf("DummyPL", "QPSK 1/4", "QPSK 1/3", "QPSK 2/5", "QPSK 1/2", "QPSK 3/5", "QPSK 2/3", "QPSK 3/4", "QPSK 4/5",
-            "QPSK 5/6", "QPSK 8/9", "QPSK 9/10", "8PSK 3/5", "8PSK 2/3", "8PSK 3/4", "8PSK 5/6", "8PSK 8/9", "8PSK 9/10",
-            "16APSK 2/3", "16APSK 3/4", "16APSK 4/5", "16APSK 5/6", "16APSK 8/9", "16APSK 9/10",
-            "32APSK 3/4", "32APSK 4/5", "32APSK 5/6", "32APSK 8/9", "32APSK 9/10")
-        private val S1 = listOf("QPSK 1/2", "QPSK 2/3", "QPSK 3/4", "QPSK 5/6", "QPSK 6/7", "QPSK 7/8")
-
-        /** The MODCOD in words, DVB-S2's table when locked on S2, DVB-S's otherwise. */
-        fun modcod(n: Int, etat: Int): String = (if (etat == 3) S1 else S2).getOrNull(n).orEmpty()
-
-        /** What an elementary stream type is. */
-        fun typeFlux(t: Int): String = when (t) {
-            0x01, 0x02 -> "MPEG-2"; 0x1B -> "H.264"; 0x24 -> "H.265"; 0x03, 0x04 -> "MPEG audio"; 0x0F -> "AAC"; 0x11 -> "AAC LATM"
-            0x81 -> "AC-3"; 0x06 -> "données"; else -> "type 0x" + t.toString(16)
-        }
     }
 }

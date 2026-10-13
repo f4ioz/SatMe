@@ -69,7 +69,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-enum class Screen { PASSES, SETTINGS, LOCATOR, SKED, TIMELINE, PHOTO, ACTIVATION, SSTV, SDR, APT, METEOR, AGENDA, SONDE, ROTOR, QO100, NOMMAGE, GLOBE, FT8, APRS }
+enum class Screen { PASSES, SETTINGS, LOCATOR, SKED, TIMELINE, PHOTO, ACTIVATION, SSTV, SDR, APT, METEOR, AGENDA, SONDE, ROTOR, QO100, NOMMAGE, GLOBE, FT8, APRS, DATV }
 
 /**
  * Fine-tuning settings, kept out of [UiState] because of the 255-register
@@ -5487,6 +5487,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun closeApt() { _ui.value = retour() }
 
     // ================= SDR (RTL-SDR dongle, beta) =================
+
+    /** DATV through a SatMe-node (the MiniTiouner next to the antenna). */
+    val datv by lazy { fr.f4ioz.satcombo.datv.DatvTelephone(getApplication()) }
+
+    fun openDatv() { va(Screen.DATV); _ui.value = _ui.value.copy(screen = Screen.DATV) }
+    fun closeDatv() { _ui.value = retour() }
 
     fun openSdr() {
         if (!hasExtension(fr.f4ioz.satcombo.data.Extensions.SDR)) return

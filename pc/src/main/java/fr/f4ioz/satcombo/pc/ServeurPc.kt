@@ -8,6 +8,8 @@
  */
 package fr.f4ioz.satcombo.pc
 
+import fr.f4ioz.satcombo.datv.Datv
+import fr.f4ioz.satcombo.datv.ReglageDatv
 import fr.f4ioz.satcombo.demo.RequeteHttp
 import org.json.JSONArray
 import org.json.JSONObject
@@ -965,21 +967,10 @@ object JsonPc {
     }
 
     /** The settings shown on the page; passwords and keys never come back, only whether they are set. */
-    fun datv(d: DatvPc): JSONObject {
-        val e = d.etat; val r = d.reglage
-        return JSONObject().put("ok", true).put("actif", e.actif).put("etat", e.etat).put("libelle", e.libelle).put("verrouille", e.verrouille)
-            .put("ciel", r.cielKhz).put("sr", r.srKs).put("ol", r.olKhz).put("fi", r.fiKhz).put("entree", if (r.entreeB) "b" else "a").put("son", r.son)
-            .put("fiTrouvee", e.fiTrouveeKhz).put("cielTrouve", if (e.fiTrouveeKhz > 0) e.fiTrouveeKhz + r.olKhz else 0L).put("srTrouve", e.srTrouveKs)
-            .put("mer", e.merDb ?: JSONObject.NULL).put("modcod", e.modcod).put("fournisseur", e.fournisseur).put("service", e.service)
-            .put("nuls", e.nulsPct).put("agc1", e.agc1).put("agc2", e.agc2).put("kbps", e.kbps).put("images", e.images)
-            .put("ber", e.berPct ?: JSONObject.NULL).put("courtes", e.trames ?: JSONObject.NULL).put("pilotes", e.pilotes ?: JSONObject.NULL)
-            .put("flux", JSONArray(e.flux.map { (pid, t) -> JSONObject().put("pid", pid).put("t", t).put("type", DatvPc.typeFlux(t)) }))
-            .put("noeud", d.noeud).put("nomNoeud", d.nomNoeud)
-            .put("enregistrement", e.enregistrement).put("erreur", e.erreur)
-            .put("programme", d.programme() ?: JSONObject.NULL).put("chemin", d.chemin)
-            .put("points", JSONArray(d.constellation().map { JSONArray(listOf(it.first, it.second)) }))
-            .put("debits", JSONArray(DatvPc.DEBITS)).put("canaux", JSONArray(DatvPc.CANAUX_KHZ)).put("balise", DatvPc.BALISE_KHZ)
-    }
+    fun datv(d: DatvPc): JSONObject = Datv.json(d.etat, d.reglage, d.constellation())
+        .put("noeud", d.noeud).put("nomNoeud", d.nomNoeud)
+        .put("programme", d.programme() ?: JSONObject.NULL).put("chemin", d.chemin)
+        .put("debits", JSONArray(Datv.DEBITS)).put("canaux", JSONArray(Datv.CANAUX_KHZ)).put("balise", Datv.BALISE_KHZ)
 
     fun reglages(st: StationPc): JSONObject {
         val s = st.settings

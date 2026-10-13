@@ -89,7 +89,7 @@ The **DATV** tab receives DVB-S/S2 with a **MiniTiouner** (tuner and demodulator
 
 ### SatMe-node: the MiniTiouner next to the antenna
 
-The MiniTiouner works best close to the LNB. A **SatMe-node** is SatMe on a small computer there — a Raspberry Pi (a **Pi 3 is enough**: the node only receives, it decodes nothing) — driven over the network by SatMe PC (and soon the phone). It runs LongMynd; its status and the transport stream (0.3 to 2 Mbit/s) come to the PC, which shows, plays and records them as if the MiniTiouner were plugged into it.
+The MiniTiouner works best close to the LNB. A **SatMe-node** is SatMe on a small computer there — a Raspberry Pi (a **Pi 3 is enough**: the node only receives, it decodes nothing) — driven over the network by SatMe PC and by the phone (**QO-100** screen → **DATV**: the same controls, the picture through the phone's own decoder). It runs LongMynd; its status and the transport stream (0.3 to 2 Mbit/s) come to the PC, which shows, plays and records them as if the MiniTiouner were plugged into it.
 
 On the Pi (Raspberry Pi OS 64-bit, Ethernet preferably):
 

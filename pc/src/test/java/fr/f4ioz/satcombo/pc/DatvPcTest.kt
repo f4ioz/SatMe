@@ -8,6 +8,8 @@
  */
 package fr.f4ioz.satcombo.pc
 
+import fr.f4ioz.satcombo.datv.Datv
+import fr.f4ioz.satcombo.datv.ReglageDatv
 import fr.f4ioz.satcombo.plateforme.StockageMemoire
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -19,7 +21,7 @@ class DatvPcTest {
 
     @Test
     fun la_ligne_de_commande_de_longmynd() {
-        val r = DatvPc.Reglage(cielKhz = 10_491_500, srKs = 1500, olKhz = 9_750_000)
+        val r = ReglageDatv(cielKhz = 10_491_500, srKs = 1500, olKhz = 9_750_000)
         assertEquals(741_500L, r.fiKhz)
         assertEquals(listOf("/x/longmynd", "-i", "127.0.0.1", "4003", "-I", "127.0.0.1", "4002", "-r", "5000", "741500", "1500"),
             DatvPc.commande("/x/longmynd", r, 4003, 4002))
@@ -30,12 +32,12 @@ class DatvPcTest {
 
     @Test
     fun les_lignes_d_etat() {
-        assertEquals(listOf(1 to "4", 12 to "85", 14 to "SATME TEST"), DatvPc.lignes("\$1,4\r\$12,85\r\$14,SATME TEST\r"))
-        assertEquals(listOf(9 to "1500000"), DatvPc.lignes("\$9,1500000"))
-        assertEquals(-56, DatvPc.signe("200")); assertEquals(-56, DatvPc.signe("4294967240")); assertEquals(50, DatvPc.signe("50"))
-        assertEquals("QPSK 1/2", DatvPc.modcod(4, 4)); assertEquals("8PSK 2/3", DatvPc.modcod(13, 4))
-        assertEquals("QPSK 3/4", DatvPc.modcod(2, 3))
-        assertEquals("H.265", DatvPc.typeFlux(0x24))
+        assertEquals(listOf(1 to "4", 12 to "85", 14 to "SATME TEST"), Datv.lignes("\$1,4\r\$12,85\r\$14,SATME TEST\r"))
+        assertEquals(listOf(9 to "1500000"), Datv.lignes("\$9,1500000"))
+        assertEquals(-56, Datv.signe("200")); assertEquals(-56, Datv.signe("4294967240")); assertEquals(50, Datv.signe("50"))
+        assertEquals("QPSK 1/2", Datv.modcod(4, 4)); assertEquals("8PSK 2/3", Datv.modcod(13, 4))
+        assertEquals("QPSK 3/4", Datv.modcod(2, 3))
+        assertEquals("H.265", Datv.typeFlux(0x24))
     }
 
     @Test
@@ -63,9 +65,9 @@ class DatvPcTest {
     @Test
     fun hors_de_portee_rien_ne_demarre() {
         val d = DatvPc(StockageMemoire(), File(System.getProperty("java.io.tmpdir")))
-        val e = d.demarre(DatvPc.Reglage(cielKhz = 10_491_500, olKhz = 12_000_000))
+        val e = d.demarre(ReglageDatv(cielKhz = 10_491_500, olKhz = 12_000_000))
         assertTrue(e!!.contains("hors de portée"))
         assertTrue(!d.etat.actif)
-        assertTrue(d.demarre(DatvPc.Reglage(srKs = 10))!!.contains("symboles"))
+        assertTrue(d.demarre(ReglageDatv(srKs = 10))!!.contains("symboles"))
     }
 }

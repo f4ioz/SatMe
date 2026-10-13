@@ -148,6 +148,9 @@ dependencies {
     // Scanning SatMe PC's QR code: Google's scanner, its own screen, no camera
     // permission for the app (the image never reaches it, only the text read).
     implementation("com.google.android.gms:play-services-code-scanner:16.1.0")
+    // DATV from a SatMe-node: its transport stream played by Android's hardware decoder (Apache 2.0).
+    implementation("androidx.media3:media3-exoplayer:1.4.1")
+    implementation("androidx.media3:media3-ui:1.4.1")
     val composeBom = platform("androidx.compose:compose-bom:2024.09.00")
     implementation(composeBom)
     implementation("androidx.compose.ui:ui")

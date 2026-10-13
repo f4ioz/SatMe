@@ -147,7 +147,7 @@ class MainActivity : ComponentActivity() {
     /** A notification tap carries the satellite to open. */
     private fun handleOpenIntent(intent: android.content.Intent?) {
         // Development builds only: open a screen with something to show, for trying it on an emulator
-        // (adb shell am start -n fr.f4ioz.satcombo/.MainActivity --es essai sked|sonde|sdr|saisie|partage|qr [--es loc IN80] [--es reseau 10.0.2.2:1234]).
+        // (adb shell am start -n fr.f4ioz.satcombo/.MainActivity --es essai sked|sonde|sdr|saisie|partage|qr|datv [--es loc IN80] [--es reseau 10.0.2.2:1234]).
         if ((applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0) {
             when (intent?.getStringExtra("essai")) {
                 "sked" -> { vm.openSked(); vm.setSkedSat(intent.getIntExtra("cat", 25544))
@@ -160,6 +160,8 @@ class MainActivity : ComponentActivity() {
                 "partage" -> { val sd = fr.f4ioz.satcombo.demo.ServeurDemo
                     sd.demarre(); sd.commande(true)
                     android.util.Log.i("SatMe", "essai partage " + sd.etat.value.urlCommande + " code " + sd.etat.value.codeCommande) }
+                // DATV through a SatMe-node (--es noeud 10.0.2.2:18095 --es code 123456).
+                "datv" -> { intent.getStringExtra("noeud")?.let { vm.datv.rejoins(it, intent.getStringExtra("code").orEmpty()) }; vm.openDatv() }
                 // What a scanned QR code of SatMe PC does (--es contenu "http://10.0.2.2:8091/appairage?j=…").
                 "qr" -> { val pc = fr.f4ioz.satcombo.demo.RejointPc.lit(intent.getStringExtra("contenu").orEmpty())
                     kotlin.concurrent.thread { android.util.Log.i("SatMe", "essai qr " + pc + " -> " + (pc?.let { fr.f4ioz.satcombo.demo.RejointPc.annonce(it.first, it.second) } ?: "pas SatMe PC")) } }

@@ -206,6 +206,7 @@ fun SatComboApp(vm: MainViewModel) {
             RetourArriere.Geste.FERMER_ACTIVATION -> vm.closeActivation()
             RetourArriere.Geste.FERMER_SSTV -> vm.closeSstv()
             RetourArriere.Geste.FERMER_APRS -> vm.closeAprs()
+            RetourArriere.Geste.FERMER_DATV -> vm.closeDatv()
             RetourArriere.Geste.FERMER_SDR -> vm.closeSdr()
             RetourArriere.Geste.FERMER_APT -> vm.closeApt()
             RetourArriere.Geste.FERMER_METEOR -> vm.closeMeteor()
@@ -240,6 +241,7 @@ fun SatComboApp(vm: MainViewModel) {
                     ui.screen == Screen.SONDE -> SondeScreen(ui, vm)
                     ui.screen == Screen.ROTOR -> RotorScreen(ui, vm)
                     ui.screen == Screen.QO100 -> Qo100Screen(ui, vm)
+                    ui.screen == Screen.DATV -> DatvScreen(vm.datv)
                     ui.screen == Screen.NOMMAGE -> NommageScreen(ui, vm)
                     ui.screen == Screen.AGENDA -> AgendaScreen(ui, vm)
                     ui.screen == Screen.LOCATOR -> LocatorScreen(ui, vm)
@@ -368,6 +370,7 @@ private fun TopBar(ui: UiState, vm: MainViewModel) {
                             Screen.SONDE -> t("sonde_title")
                             Screen.ROTOR -> t("rotor_title")
                             Screen.QO100 -> t("qo100_title")
+                            Screen.DATV -> t("datv_titre")
                             Screen.NOMMAGE -> t("entry_title")
                             Screen.AGENDA -> t("agenda_title")
                             else -> "SatMe"
@@ -448,6 +451,7 @@ private fun TopBar(ui: UiState, vm: MainViewModel) {
                 RetourArriere.Geste.FERMER_ACTIVATION -> vm::closeActivation
                 RetourArriere.Geste.FERMER_SSTV -> vm::closeSstv
                 RetourArriere.Geste.FERMER_APRS -> vm::closeAprs
+                RetourArriere.Geste.FERMER_DATV -> vm::closeDatv
                 RetourArriere.Geste.FERMER_SDR -> vm::closeSdr
                 RetourArriere.Geste.FERMER_APT -> vm::closeApt
                 RetourArriere.Geste.FERMER_METEOR -> vm::closeMeteor
