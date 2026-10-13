@@ -23,12 +23,15 @@ object PagesPcTelephone {
     /** The ViewModel, set when it starts. */
     @Volatile var vm: MainViewModel? = null
 
-    /** The tabs the phone serves so far; the page hides the others. QO-100 only when its extension is on. */
-    val ONGLETS = listOf("station", "carnet", "agenda", "carres", "frise", "sked", "qo100", "sdr", "sondes", "meteor", "son", "sstv", "aprs", "ft8", "journal", "planche", "reglages")
+    /** The tabs the phone serves; the page hides the others (and those whose extension is off, [EXTENSIONS]). */
+    val ONGLETS = listOf("station", "carnet", "agenda", "carres", "frise", "sked", "qo100", "datv", "sdr", "sondes", "meteor", "son", "sstv", "aprs", "ft8", "journal", "planche", "reglages")
 
-    private fun onglets(vm: MainViewModel) =
-        ONGLETS.filter { (it != "qo100" || vm.hasExtension(fr.f4ioz.satcombo.data.Extensions.QO100)) &&
-            (it != "meteor" || vm.hasExtension(fr.f4ioz.satcombo.data.Extensions.METEOR)) }
+    /** The tabs behind one of the phone's extensions: shown only when it is on, as its screens. */
+    private val EXTENSIONS = mapOf("qo100" to fr.f4ioz.satcombo.data.Extensions.QO100, "meteor" to fr.f4ioz.satcombo.data.Extensions.METEOR,
+        "sdr" to fr.f4ioz.satcombo.data.Extensions.SDR, "sondes" to fr.f4ioz.satcombo.data.Extensions.SONDE,
+        "aprs" to fr.f4ioz.satcombo.data.Extensions.APRS, "sstv" to fr.f4ioz.satcombo.data.Extensions.SSTV)
+
+    private fun onglets(vm: MainViewModel) = ONGLETS.filter { o -> EXTENSIONS[o]?.let { vm.hasExtension(it) } ?: true }
 
     /**
      * The page: SatMe-PC's, the key from the desk put in a cookie for its
@@ -125,6 +128,19 @@ object PagesPcTelephone {
                     val o = java.io.ByteArrayOutputStream()
                     b.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, o)
                     ReponseWeb("200 OK", "image/png", o.toByteArray())
+                }
+                // ---- DATV: the phone's, through a SatMe-Node (its picture on the phone's own screen)
+                "/api/datv" -> {
+                    val d = vm.datv
+                    // Following the node's status again when it receives and nothing follows it (the DATV screen closed).
+                    val maintenant = System.currentTimeMillis()
+                    if (maintenant - datvRevu > 5_000L) { datvRevu = maintenant; if (!d.ui.value.etat.actif) d.revient() }
+                    val x = d.ui.value
+                    json(fr.f4ioz.satcombo.datv.Datv.json(x.etat, x.reglage, x.points)
+                        .put("noeud", x.adresse).put("nomNoeud", x.nom).put("programme", JSONObject.NULL).put("chemin", "")
+                        .put("windows", false).put("telephone", true).put("erreur", x.message.ifBlank { x.etat.erreur })
+                        .put("debits", JSONArray(fr.f4ioz.satcombo.datv.Datv.DEBITS)).put("canaux", JSONArray(fr.f4ioz.satcombo.datv.Datv.CANAUX_KHZ))
+                        .put("balise", fr.f4ioz.satcombo.datv.Datv.BALISE_KHZ))
                 }
                 // ---- APRS and FT8: what the phone heard (the engine's words, as SatMe-PC's)
                 "/api/aprs" -> {
@@ -443,6 +459,23 @@ object PagesPcTelephone {
                 ApiSon.fichier(d, p("nom"), ".png")?.let { fr.f4ioz.satcombo.meteor.MeteorHub.supprime(it) }
                 OK
             }
+            // ---- DATV: the gestures of the phone's DATV screen
+            "/api/datv/demarre" -> {
+                val d = vm.datv
+                if (!d.ui.value.associe) return JSONObject().put("ok", false).put("erreur", "rejoindre d'abord un SatMe-Node (son adresse et son code)")
+                val r0 = d.ui.value.reglage
+                fun khz(k: String) = p(k).replace(',', '.').toDoubleOrNull()?.let { Math.round(it * 1000.0) }
+                // The LNB supply only when chosen, each time.
+                d.regle(r0.copy(cielKhz = khz("ciel") ?: r0.cielKhz, srKs = p("sr").toIntOrNull() ?: r0.srKs, olKhz = khz("ol") ?: r0.olKhz,
+                    entreeB = if (p("entree").isNotEmpty()) p("entree") == "b" else r0.entreeB, lnb = p("lnb").takeIf { it in setOf("v", "h") } ?: "",
+                    son = if (p("son").isNotEmpty()) p("son") == "1" else r0.son))
+                d.recois(); OK
+            }
+            "/api/datv/arrete" -> { vm.datv.arrete(); OK }
+            "/api/datv/cale" -> { vm.datv.cale(); OK }
+            "/api/datv/noeud" -> { vm.datv.rejoins(p("adresse").trim(), p("code").trim()); OK }
+            "/api/datv/enregistre", "/api/datv/vlc", "/api/datv/chemin" ->
+                JSONObject().put("ok", false).put("erreur", "sur le téléphone, l'image et le son sont sur son écran DATV")
             // ---- FT8: the phone's decoder, started and stopped from the page
             "/api/ft8" -> {
                 val f = fr.f4ioz.satcombo.ft8.Ft8Hub
@@ -598,6 +631,9 @@ object PagesPcTelephone {
         if (c.timeInMillis > System.currentTimeMillis() + 60_000L) c.add(java.util.Calendar.DAY_OF_MONTH, -1)
         c.timeInMillis
     }.getOrDefault(0L)
+
+    /** When the page last had the node's status followed again. */
+    @Volatile private var datvRevu = 0L
 
     /** The METEOR preview seen, and how often it changed: the page reloads it when this moves. */
     @Volatile private var dernierApercuMeteor: Any? = null
