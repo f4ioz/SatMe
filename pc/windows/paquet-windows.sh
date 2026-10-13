@@ -64,7 +64,7 @@ MODULES="java.base,java.desktop,java.instrument,java.sql,jdk.unsupported,java.lo
 commun=(--name SatMe-PC --app-version "$VW" --vendor "F4IOZ"
     --description "SatMe-PC : station satellite radioamateur"
     --input "$E" --main-jar pc.jar --main-class fr.f4ioz.satcombo.pc.MainKt
-    --add-modules "$MODULES" --java-options "-Xmx512m")
+    --add-modules "$MODULES" --java-options "-Xmx512m --enable-native-access=ALL-UNNAMED")
 
 if [ "$windows" = 1 ]; then
     commun+=(--icon pc/windows/satme.ico)

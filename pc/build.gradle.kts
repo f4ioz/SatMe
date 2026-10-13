@@ -31,7 +31,9 @@ application {
     mainClass.set("fr.f4ioz.satcombo.pc.MainKt")
     applicationName = "satme"
     // Enough for the passes of a hundred satellites; small enough for a Raspberry Pi.
-    applicationDefaultJvmArgs = listOf("-Xmx256m")
+    // Native access for the serial ports' library (jSerialComm), said aloud: Java 24+ warns otherwise
+    // and will refuse it one day; Java 17 accepts the option too.
+    applicationDefaultJvmArgs = listOf("-Xmx256m", "--enable-native-access=ALL-UNNAMED")
 }
 
 dependencies {
