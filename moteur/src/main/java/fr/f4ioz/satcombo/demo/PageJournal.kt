@@ -35,7 +35,7 @@ object PageJournal {
         "pj_afficher", "pj_aff_sstv", "pj_aff_fiche", "pj_aff_smetre", "pj_aff_freq", "pj_aff_locator", "pj_resolution",
         "pj_res_xs", "pj_res_m", "pj_res_hd", "pj_ouverture", "pj_recap", "pj_avec_son", "pj_accelere_video",
         "pj_options_aide", "pj_accelere_actif", "pj_format", "pj_format_portrait", "pj_format_paysage", "pw_code", "pw_entrer", "pw_code_faux", "pw_hors_ligne", "pw_pupitre",
-        "pj_n_bouton", "pj_n_carnet", "pj_n_sat_inconnu", "pj_n_mode_auto", "pj_n_dernier", "pj_n_titre", "pj_n_aide", "pj_n_sat", "pj_n_passage", "pj_n_autre", "pj_n_aucun", "pj_n_aos", "pj_n_los", "pj_n_creer", "pj_n_refus", "pj_n_trop_gros", "pj_n_indicatif", "pj_n_onglet", "pj_n_contact", "pj_n_son", "pj_n_images", "pj_n_mode", "pj_n_envoyer", "pj_n_envoi", "pj_n_fait", "pj_n_call", "pj_n_loc")
+        "pj_n_bouton", "pj_n_rs", "pj_n_rr", "pj_n_note", "pj_n_carnet", "pj_n_sat_inconnu", "pj_n_mode_auto", "pj_n_dernier", "pj_n_titre", "pj_n_aide", "pj_n_sat", "pj_n_passage", "pj_n_autre", "pj_n_aucun", "pj_n_aos", "pj_n_los", "pj_n_creer", "pj_n_refus", "pj_n_trop_gros", "pj_n_indicatif", "pj_n_onglet", "pj_n_contact", "pj_n_son", "pj_n_images", "pj_n_mode", "pj_n_envoyer", "pj_n_envoi", "pj_n_fait", "pj_n_call", "pj_n_loc")
 
     private fun js(s: String): String = buildString {
         for (ch in s) when {
@@ -461,6 +461,9 @@ function panneauAjouter(p) {
   const call = el('input', { placeholder: T.n_call, style: 'text-transform:uppercase;width:9em', autocomplete: 'off' }), loc = el('input', { placeholder: T.n_loc, style: 'text-transform:uppercase;width:5em' });
   const md = el('select', {}, [['', T.n_mode_auto]].concat(['FM', 'USB', 'LSB', 'CW', 'DATA'].map(m => [m, m])).map(([v, l]) => el('option', { value: v, text: l })));
   const tq = heure(heureContact()), m1 = el('span', { class: 'aide' }), qui = el('div', { class: 'aide' }), props = el('div', { class: 'rangee' });
+  // The reports both ways (59 to start with) and a comment, as in the carnet.
+  const rs = el('input', { value: '59', title: T.n_rs, style: 'width:3.5em' }), rr = el('input', { value: '59', title: T.n_rr, style: 'width:3.5em' });
+  const note = el('input', { placeholder: T.n_note, style: 'flex:1;min-width:10em' });
   champHeureQso = tq; heureTouchee = false;
   tq.addEventListener('input', () => { heureTouchee = true; });
   // Who it is, as the carnet finds it: the log's predictions as typed, then QRZ; its square unless typed for this very callsign.
@@ -493,13 +496,20 @@ function panneauAjouter(p) {
   p.appendChild(el('div', { class: 'aide', text: T.n_contact }));
   p.appendChild(el('div', { class: 'rangee' }, [call, loc, md]));
   p.appendChild(props); p.appendChild(qui);
-  p.appendChild(el('div', { class: 'rangee' }, [tq, el('button', { class: 'discret', text: T.n_envoyer, onclick: async () => {
-    if (!call.value.trim()) { m1.textContent = T.n_indicatif; return; }
+  p.appendChild(el('div', { class: 'rangee' }, [el('span', { class: 'aide', text: T.n_rs }), rs, el('span', { class: 'aide', text: T.n_rr }), rr, note]));
+  async function enregistre() {
+    if (!call.value.trim()) { m1.textContent = T.n_indicatif; call.focus(); return; }
     m1.textContent = T.n_envoi;
     const tc = depuisLocal(tq);
-    fin(await envoie('/nouveau/contact', { id: P.id, c: call.value.trim(), l: loc.value.trim(), md: md.value, nm: nm, qth: qth, t: tc || '' }), m1,
+    fin(await envoie('/nouveau/contact', { id: P.id, c: call.value.trim(), l: loc.value.trim(), md: md.value, nm: nm, qth: qth,
+      rs: rs.value.trim(), rr: rr.value.trim(), n: note.value.trim(), t: tc || '' }), m1,
       call.value.trim().toUpperCase() + (tc ? ' ' + hms(tc) : '') + ' · ' + T.n_carnet);
-  } }), m1]));
+  }
+  // Enter saves, from any field of the contact (the callsign first of all).
+  [call, loc, rs, rr, note, tq].forEach(c => c.addEventListener('keydown', ev => { if (ev.key === 'Enter') { ev.preventDefault(); enregistre(); } }));
+  p.appendChild(el('div', { class: 'rangee' }, [tq, el('button', { class: 'discret', text: T.n_envoyer, onclick: enregistre }), m1]));
+  // Back on the tab after a contact: the callsign field ready for the next one.
+  if (ajoutFait) setTimeout(() => call.focus(), 0);
   // Its recording, from when it started.
   const fs = el('input', { type: 'file', accept: '.wav,.mp3,audio/wav,audio/mpeg' }), ts = heure(P.de), m2 = el('span', { class: 'aide' });
   p.appendChild(el('div', { class: 'aide', text: T.n_son, style: 'margin-top:10px' }));
