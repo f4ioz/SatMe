@@ -52,4 +52,18 @@ class EmissionKissTest {
         assertEquals(1, l.etat.value.envoyees)
         l.deconnecte(sortirDuKiss = false)
     }
+
+    @Test fun `une radio qui ne repond rien est dite muette`() {
+        val muet = object : SerialLink {
+            override fun write(bytes: ByteArray, timeoutMs: Int): Boolean = true
+            override fun read(buf: ByteArray, timeoutMs: Int): Int { Thread.sleep(20); return 0 }
+            override fun close() {}
+        }
+        val l = LienKiss { }
+        l.attache(muet, "essai", 9600)
+        assertTrue(runBlocking { l.passeEnKiss(144_800_000L) })
+        assertTrue(l.etat.value.muette)
+        assertNull(l.etat.value.frequenceHz)
+        l.deconnecte(sortirDuKiss = false)
+    }
 }

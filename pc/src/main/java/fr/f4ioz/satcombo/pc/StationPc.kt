@@ -781,6 +781,12 @@ class StationPc(
         return p.libelle + (icom?.let { " — Icom " + it.groupValues[1] + it.groupValues[2].let { s -> if (s.isNotEmpty()) " ($s)" else "" } } ?: "")
     }
 
+    /** A port that is an Icom's own (its serial number says so: "IC-9700 13012155 A") or a RigExpert's: never a TH-D72's. */
+    fun portDAutrePoste(p: fr.f4ioz.satcombo.plateforme.PortSerie): Boolean =
+        p.serie?.trim()?.let { Regex("^IC-?\\d{3,4}").containsMatchIn(it) } == true ||
+            (fr.f4ioz.satcombo.cat.CatScan.nomAutrePoste(p.produit) && p.produit?.contains("TH-D7", true) != true) ||
+            p.produit?.contains("RigExpert", true) == true
+
     /** The adapters the connected rig holds (none when not connected). */
     fun clesPoste(): Set<String> = if (_etat.value.catConnecte) clePoste.split(',').filter { it.isNotBlank() }.toSet() else emptySet()
 
@@ -836,6 +842,8 @@ class StationPc(
                         paire.configureThd72(c.bandeTx.coerceIn(0, 1))
                         val l = paire.lienThd72!!
                         if (p == null) { echec("aucun port choisi"); return@withLock }
+                        // Opened with RTS/DTR up, as its cable wants: never on another rig's interface.
+                        if (portDAutrePoste(p)) { echec("${nomPort(p)} est l'interface d'un autre poste : jamais ouvert pour un TH-D72"); return@withLock }
                         if (!l.open(p.cle, if (c.baud > 0) c.baud else 9_600) || !l.estUnThd72())
                             { l.close(); echec("pas de TH-D72 qui réponde sur ${p.libelle}"); return@withLock }
                         clePoste = p.cle

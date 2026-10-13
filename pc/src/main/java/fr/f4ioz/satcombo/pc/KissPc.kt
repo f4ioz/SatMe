@@ -32,10 +32,13 @@ class KissPc(private val station: StationPc, private val aprs: AprsPc, private v
 
     val lien = LienKiss { t -> aprs.ajoute(t, horloge()) }
 
-    /** Raise RTS/DTR on opening: only for a TNC that needs them, never on a rig interface. */
+    /** Raise RTS/DTR on opening: only for a TNC that needs them (a TH-D72's own adapter), never on a rig interface. */
     var lignesLevees: Boolean
         get() = station.stockage.getBoolean("pc_kiss_lignes", false)
         set(v) { station.stockage.edit().putBoolean("pc_kiss_lignes", v).apply() }
+
+    /** The box ticked by default for the port known to be a TH-D72's (it answered as one on CAT). */
+    fun lignesPour(cle: String?): Boolean = lignesLevees || (cle != null && cle.isNotBlank() && cle == station.cleThd72)
 
     @Volatile private var changeMs = 0L
 
@@ -55,6 +58,7 @@ class KissPc(private val station: StationPc, private val aprs: AprsPc, private v
         val s = station.settings
         val p = station.ports.liste().firstOrNull { it.index == index } ?: return "port inconnu"
         if (p.portPttRigExpert()) return "c'est la commande d'émission d'un RigExpert : jamais ouvert"
+        if (station.portDAutrePoste(p)) return "${station.nomPort(p)} est l'interface d'un autre poste : jamais ouvert pour le KISS"
         if (p.cle in station.clesPoste() || (station.etat.value.catConnecte && index == s.civUsbIndex))
             return "c'est le port du poste (CAT) : un seul câble — déconnecter le CAT pour passer la radio en KISS"
         if (station.stationRotor.etat.value.rotorConnected && index == s.rotorUsbIndex) return "c'est le port du rotor"

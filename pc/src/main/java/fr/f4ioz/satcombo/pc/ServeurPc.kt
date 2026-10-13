@@ -267,9 +267,10 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 val k = kiss
                 val o = if (k == null) JSONObject().put("absent", true) else {
                     val l = station.ports.liste()
+                    val choisi = l.firstOrNull { it.cle == station.settings.aprsKissCle } ?: l.firstOrNull { it.cle == station.cleThd72 }
                     fr.f4ioz.satcombo.demo.ApiRadio.kiss(k.lien.etat.value, l.map { it.index to station.nomPort(it) },
-                        l.firstOrNull { it.cle == station.settings.aprsKissCle }?.index, station.settings.aprsTravail, station.settings.aprsKissDoppler,
-                        k.lignesLevees, lignesAuChoix = true, voulue = k.frequenceVoulue()).let { o ->
+                        choisi?.index, station.settings.aprsTravail, station.settings.aprsKissDoppler,
+                        k.lignesPour(choisi?.cle), lignesAuChoix = true, voulue = k.frequenceVoulue()).let { o ->
                         val st = station.settings
                         fr.f4ioz.satcombo.demo.ApiRadio.kissEmission(o, fr.f4ioz.satcombo.aprs.EmissionKiss.source(st), k.chemin(""), k.envoi,
                             st.aprsBaliseIss, st.aprsPositionFloue, st.aprsSsid)

@@ -3190,9 +3190,10 @@ async function ticKiss() {
   if (document.activeElement !== g('kiss-lignes')) g('kiss-lignes').checked = KS.lignes;
   g('kiss-lignes-l').hidden = !KS.lignesAuChoix;
   g('kiss-pastille').className = 'pastille ' + (KS.connecte ? 'on' : 'off');
-  txt('kiss-pastille', !KS.connecte ? 'déconnectée' : KS.initialise ? 'en KISS' : 'connectée');
+  txt('kiss-pastille', !KS.connecte ? 'déconnectée' : KS.muette ? 'muette' : KS.initialise ? 'en KISS' : 'connectée');
   if (KS.connecte) txt('kiss-etat', KS.nom + ' · ' + KS.vitesse + ' bauds' + (KS.frequence ? ' · ' + (KS.frequence / 1e6).toFixed(3).replace('.', ',') + ' MHz' : '') +
-    ' · ' + KS.recues + ' trame(s) reçue(s)' + (KS.erreur ? ' · ' + KS.erreur : ''));
+    ' · ' + KS.recues + ' trame(s) reçue(s)' + (KS.erreur ? ' · ' + KS.erreur : '') +
+    (KS.muette ? ' — la radio n’a rien répondu : déjà en KISS, ou elle n’entend pas la ligne. Un TH-D72 veut RTS/DTR levés : coche la case ci-dessous (pour son port seulement), puis Déconnecter et Connecter.' : ''));
   else if (KS.erreur) txt('kiss-etat', KS.erreur);
   // Sending: who, from which path now, the options.
   txt('kiss-source', KS.source ? '· de ' + KS.source + (KS.chemin ? ' par ' + KS.chemin : '') : '· indicatif à renseigner (Réglages)');

@@ -39,6 +39,12 @@ class LienKiss(private val surTrame: (Trame) -> Unit) {
         /** Read over the radio's PC commands before KISS: frequency (Hz) and band (0 = A, 1 = B). */
         val frequenceHz: Long? = null,
         val bande: Int? = null,
+        /**
+         * The radio said nothing at all to a CR: taken as already in KISS
+         * (a TH-D72 in KISS is silent) — or it does not hear the line (a
+         * TH-D72 whose adapter wants RTS/DTR up). Said, not hidden.
+         */
+        val muette: Boolean = false,
     )
 
     private val _etat = MutableStateFlow(Etat())
@@ -136,7 +142,7 @@ class LienKiss(private val surTrame: (Trame) -> Unit) {
                 return@withContext false
             }
         }
-        _etat.value = _etat.value.copy(initialise = true, erreur = null)
+        _etat.value = _etat.value.copy(initialise = true, erreur = null, muette = r == null)
         true
     }
 
