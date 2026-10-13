@@ -435,6 +435,8 @@ object PagePc {
   <div>
     <div class="carte">
       <div class="t">Nouveau contact <span class="petit" id="c-sat"></span></div>
+      <div class="ligne" style="margin-top:0;margin-bottom:6px"><span class="petit">Satellite</span>
+        <select id="c-satsel" style="flex:1" onchange="if (this.value) suivre(+this.value).then(tic)" title="Le satellite suivi : le carnet, la carte, le poste et le rotor le suivent"></select></div>
       <input id="c-call" placeholder="INDICATIF" autocomplete="off" style="width:100%;font-size:26px;font-weight:800;letter-spacing:3px;text-transform:uppercase">
       <div id="c-props" class="c-props"></div>
       <div id="c-qui" class="petit" style="min-height:20px;margin-top:4px"></div>
@@ -1200,7 +1202,7 @@ function dessinePassages() {
     const enCours = n >= p.aos && n <= p.los;
     const cl = 'p' + (enCours ? ' encours' : '') + (p.catnum === suivi ? ' choisi' : '');
     const quand = enCours ? 'en cours' : 'dans ' + duree(p.aos - n);
-    return '<tr class="' + cl + '" onclick="suivre(' + p.catnum + ')">' + celluleAgenda(p) + '<td class="rosace">' + rosace(p.trace, p.elMax, 30) + '</td><td><span title="Favori" style="cursor:pointer;color:' + (p.fav ? 'var(--ambre)' : 'var(--bord)') +
+    return '<tr class="' + cl + '" title="Suivre ' + p.nom.replace(/"/g, '') + ' : le carnet, la carte, le poste et le rotor le suivent" onclick="suivre(' + p.catnum + ')">' + celluleAgenda(p) + '<td class="rosace">' + rosace(p.trace, p.elMax, 30) + '</td><td><span title="Favori" style="cursor:pointer;color:' + (p.fav ? 'var(--ambre)' : 'var(--bord)') +
       '" onclick="favori(' + p.catnum + ',' + !p.fav + ',event)">★</span></td><td>' + hm(p.aos) + '</td><td>' +
       (a ? '<span title="AMSAT : ' + a[1] + '" style="display:inline-block;width:8px;height:8px;border-radius:4px;margin-right:6px;background:' + a[0] + '"></span>' : '') +
       p.nom.replace(/</g, '&lt;') +
@@ -1209,6 +1211,19 @@ function dessinePassages() {
   g('passages').innerHTML = lignes.join('') || '<tr><td colspan="8" class="petit">' + (E && E.locator ? 'aucun passage' : 'renseigne ton locator') + '</td></tr>';
 }
 async function suivre(n) { await post('api/suivre?catnum=' + n); }
+// The carnet's satellite: the one followed, then the passes under way and to come (the Station list's), once each.
+function menuSatCarnet() {
+  const m = g('c-satsel'); if (!m || document.activeElement === m) return;
+  const n = Date.now(), vus = new Set(), l = [];
+  if (E && E.suivi) { vus.add(E.suivi.catnum); l.push([E.suivi.catnum, E.suivi.nom + ' (suivi)']); }
+  (P || []).filter(p => p.los > n).sort((a, b) => a.aos - b.aos).forEach(p => {
+    if (vus.has(p.catnum) || l.length >= 40) return; vus.add(p.catnum);
+    l.push([p.catnum, p.nom + ' · ' + (n >= p.aos ? 'en cours, El max ' + Math.round(p.elMax) + '°' : hm(p.aos) + ', El max ' + Math.round(p.elMax) + '°')]);
+  });
+  const h = (E && E.suivi ? '' : '<option value="">— choisir un satellite —</option>') + l.map(x => '<option value="' + x[0] + '">' + esc(x[1]) + '</option>').join('');
+  if (m.dataset.vu !== h) { m.dataset.vu = h; m.innerHTML = h; }
+  m.value = E && E.suivi ? String(E.suivi.catnum) : '';
+}
 let tous = [];
 async function chargeSatellites() {
   try { tous = await (await fetch('api/satellites')).json(); } catch (x) { tous = []; }
@@ -1293,7 +1308,8 @@ function dessine() {
   txt('fav', E.suivi && E.suivi.fav ? '★' : '☆'); g('fav').style.color = E.suivi && E.suivi.fav ? 'var(--ambre)' : 'var(--gris)';
   const am = E.suivi && E.suivi.amsat;
   txt('amsat', am ? 'AMSAT : ' + (AMSAT[am.statut] || AMSAT.UNKNOWN)[1] + (am.mode ? ' (' + am.mode + ')' : '') + ' · ' + am.actifs + ' rapport(s) « entendu »' : '');
-  txt('c-sat', E.suivi ? '· ' + E.suivi.nom + (E.position ? ' · El ' + Math.round(E.position.el) + '°' : '') : '· suis d’abord un satellite (onglet Station)');
+  txt('c-sat', E.suivi ? '· ' + E.suivi.nom + (E.position ? ' · El ' + Math.round(E.position.el) + '°' : '') : '· choisis le satellite ci-dessous');
+  menuSatCarnet();
   const p = E.position;
   txt('az', p ? p.az.toFixed(1) + '°' : '—');
   txt('el', p ? p.el.toFixed(1) + '°' : '—');
