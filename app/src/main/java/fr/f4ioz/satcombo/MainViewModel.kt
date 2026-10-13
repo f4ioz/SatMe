@@ -6042,6 +6042,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         if (sdr.isRunning || !sdr.disponible(getApplication())) return
         val (sat, pass) = meteorProchainPassage(2) ?: return
         if (now < pass.aosEpochMs - 60_000L || now >= pass.losEpochMs) return
+        // Never from under the operator working another satellite; one attempt a pass.
+        if (!fr.f4ioz.satcombo.meteor.MeteorAuto.peutPrendre(pass.aosEpochMs, meteorEssayes, estMeteor(), _ui.value.livePosition?.elevationDeg)) return
+        meteorEssayes += pass.aosEpochMs
+        val avant = _ui.value.selected
         meteorAutoArme = sat.catalogNumber
         meteorAutoLos = pass.losEpochMs
         viewModelScope.launch {
@@ -6053,9 +6057,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             val i = fr.f4ioz.satcombo.meteor.MeteorHub.choisitVoie(tx.map { it.description to it.downlinkLowHz })
             if (i >= 0 && i != _ui.value.selectedTxIndex) selectTransmitter(i)
             startSdr()
-            if (!fr.f4ioz.satcombo.sdr.SdrHub.isRunning) meteorAutoArme = 0
+            if (!fr.f4ioz.satcombo.sdr.SdrHub.isRunning) {
+                // The dongle did not start: the satellite selected before put back.
+                meteorAutoArme = 0
+                if (avant != null && avant.catalogNumber != sat.catalogNumber) select(avant)
+            }
         }
     }
+
+    /** The METEOR passes already tried (their AOS): one attempt each. */
+    private val meteorEssayes = java.util.Collections.synchronizedSet(HashSet<Long>())
 
     init {
         viewModelScope.launch {

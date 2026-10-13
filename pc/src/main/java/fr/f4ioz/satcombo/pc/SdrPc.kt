@@ -58,6 +58,8 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
     @Volatile private var meteorAutoArme = 0
     private var meteorAutoLos = 0L
     private var dernierTicMeteor = 0L
+    /** The METEOR passes already tried (their AOS): one attempt each. */
+    private val meteorEssayes = java.util.Collections.synchronizedSet(HashSet<Long>())
 
     /**
      * A minute before a METEOR pass the dongle starts on it (the satellite
@@ -79,11 +81,20 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
         dernierTicMeteor = now
         val (sat, p) = station.prochainPassageMeteor(2) ?: return
         if (now < p.aosEpochMs - 60_000L || now >= p.losEpochMs) return
+        // Never from under the operator working another satellite; one attempt a pass.
+        val e = station.etat.value
+        if (!fr.f4ioz.satcombo.meteor.MeteorAuto.peutPrendre(p.aosEpochMs, meteorEssayes, station.estMeteor(), e.position?.elevationDeg)) return
+        meteorEssayes += p.aosEpochMs
+        val avant = e.suivi
         meteorAutoArme = sat.catalogNumber
         meteorAutoLos = p.losEpochMs
         station.suis(sat)
         suitSatellite = true
-        if (!demarre()) meteorAutoArme = 0
+        if (!demarre()) {
+            // The dongle did not start: the satellite followed before put back.
+            meteorAutoArme = 0
+            if (avant != null && avant.catalogNumber != sat.catalogNumber) station.suis(avant)
+        }
     }
 
     /** The radiosondes: their decoder, fed by the dongle while it listens to one. */
