@@ -91,43 +91,67 @@ class SonStation(
 
     fun demarreEnregistrement(auto: Boolean = false): String? {
         if (wav != null) return null
-        val rate = son.etat.value.rate.takeIf { son.etat.value.actif } ?: return "la carte son n'est pas démarrée"
+        val rate = son.etat.value.rate.takeIf { son.etat.value.actif } ?: return "la carte son n'est pas démarrée (onglet Son)"
         dossierEnregistrements.mkdirs()
         val sat = station.etat.value.suivi?.name ?: "SAT"
         val safe = sat.replace(Regex("[^A-Za-z0-9-]"), "-").trim('-').ifBlank { "SAT" }
         val f = File(dossierEnregistrements, "SatMe_${safe}_${stamp(horloge())}.wav")
         wav = EnregistreurWav(f, rate)
+        basDepuis = 0L; vuLeve = false; finPrevue = 0L
         _etat.update { it.copy(enregistrement = f.name, depuisMs = horloge(), secondes = 0, auto = auto) }
         return null
     }
 
-    fun arreteEnregistrement() {
+    /** Stopped by hand: not started again by itself before the satellite has set. */
+    fun arreteEnregistrement(parLaMain: Boolean = true) {
         val w = wav ?: return
+        if (parLaMain) arreteALaMain = true
         wav = null
         w.ferme()
         _etat.update { it.copy(enregistrement = "", depuisMs = 0L, auto = false) }
     }
 
+    /** A recording, even started by hand, stops after the pass it caught (30 s after LOS). */
+    var coupeLos: Boolean
+        get() = station.stockage.getBoolean("pc_enreg_coupe_los", false)
+        set(v) { station.stockage.edit().putBoolean("pc_enreg_coupe_los", v).apply() }
+
     /**
-     * Every second: with automatic recording on, starts at AOS of the
-     * satellite followed (the card running) and stops 30 s after LOS — only
-     * a recording it started itself.
+     * Every second. Starts by itself (the card running): with automatic
+     * recording on, at AOS of the satellite followed; with the automatic
+     * mode, 5 s before AOS of the pass it follows. Stops 30 s after LOS a
+     * recording it started — and one started by hand with [coupeLos] on,
+     * once the satellite has been up during it.
      */
     fun tic() {
-        if (!enregAuto) return
+        val maintenant = horloge()
         val p = station.etat.value.position
         val leve = p != null && p.elevationDeg >= 0
-        val e = _etat.value
-        if (leve && wav == null && son.etat.value.actif) demarreEnregistrement(auto = true)
-        if (e.auto && wav != null) {
-            if (leve) basDepuis = 0L
-            else {
-                if (basDepuis == 0L) basDepuis = horloge()
-                if (horloge() - basDepuis >= 30_000L) { arreteEnregistrement(); basDepuis = 0L }
-            }
+        // The automatic mode's pass, recorded once (not again after a stop, by hand or at LOS).
+        val veille = station.passageVeilleAEnregistrer(maintenant)
+            ?.takeIf { fr.f4ioz.satcombo.domain.VeilleAuto.cle(it) != veilleFaite }
+        if (!leve && veille == null) arreteALaMain = false
+        if (wav == null && son.etat.value.actif && !arreteALaMain && ((enregAuto && leve) || veille != null)) {
+            demarreEnregistrement(auto = true)
+            finPrevue = veille?.let { it.losEpochMs + fr.f4ioz.satcombo.domain.VeilleAuto.APRES_MS } ?: 0L
+            veille?.let { veilleFaite = fr.f4ioz.satcombo.domain.VeilleAuto.cle(it) }
         }
+        val e = _etat.value
+        if (wav == null) return
+        if (leve) { basDepuis = 0L; vuLeve = true; return }
+        // The automatic mode's pass over, the satellite seen or not (another one followed by hand).
+        if (e.auto && finPrevue > 0L && maintenant > finPrevue) { arreteEnregistrement(parLaMain = false); return }
+        if (!(e.auto || coupeLos) || !vuLeve) return
+        if (basDepuis == 0L) basDepuis = maintenant
+        if (maintenant - basDepuis >= 30_000L) arreteEnregistrement(parLaMain = false)
     }
     private var basDepuis = 0L
+    /** The satellite followed has been up during this recording. */
+    private var vuLeve = false
+    /** The automatic mode's recording: LOS + 30 s at the latest. */
+    private var finPrevue = 0L
+    private var veilleFaite = ""
+    private var arreteALaMain = false
 
     fun enregistrements(): List<File> =
         (dossierEnregistrements.listFiles { f -> f.name.startsWith("SatMe_") && (f.name.endsWith(".wav") || f.name.endsWith(".mp3")) }

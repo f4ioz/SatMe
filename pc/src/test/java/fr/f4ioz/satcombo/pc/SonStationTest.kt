@@ -93,4 +93,90 @@ class SonStationTest {
         assertEquals(3 * 24_000 * 2, fin.getInt(40))
         assertEquals(44L + 3 * 24_000 * 2, fichier.length())
     }
+
+    // ------------------------------------------------------------ stopped after the pass
+
+    private var heure = 1_000_000_000L
+
+    /** A station whose card "runs" at 48 kHz, the satellite followed at [el]°, the clock in hand. */
+    private fun aLHeure(): Triple<SonStation, StationPc, (Double) -> Unit> {
+        val st = StationPc(StockageMemoire(), Catalogue(File(dossier, "cache"), enLigne = false), PortsSeriePc(), portee, { heure })
+        val son = SonPc()
+        val f = son.javaClass.getDeclaredField("_etat").apply { isAccessible = true }
+        @Suppress("UNCHECKED_CAST")
+        (f.get(son) as kotlinx.coroutines.flow.MutableStateFlow<SonPc.Etat>).value = SonPc.Etat(actif = true, appareil = "essai", rate = 48_000)
+        val e = st.javaClass.getDeclaredField("_etat").apply { isAccessible = true }
+        @Suppress("UNCHECKED_CAST")
+        val flux = e.get(st) as kotlinx.coroutines.flow.MutableStateFlow<EtatPc>
+        val sat = fr.f4ioz.satcombo.data.TleEntry("RS-44", "1 44909U", "2 44909")
+        val pose: (Double) -> Unit = { el -> flux.value = flux.value.copy(suivi = sat,
+            position = fr.f4ioz.satcombo.data.SatPosition(0.0, el, 2000.0, 0.0, 1000.0, 0.0, 0.0, false)) }
+        return Triple(SonStation(son, st, File(dossier, "enregistrements"), File(dossier, "sstv"), { heure }), st, pose)
+    }
+
+    @Test
+    fun a_la_main_avec_l_option_il_s_arrete_30_s_apres_le_los() {
+        val (s, _, el) = aLHeure()
+        s.coupeLos = true
+        el(-5.0)
+        assertEquals(null, s.demarreEnregistrement())
+        // Started before AOS: it waits for the satellite to rise.
+        heure += 60_000L; s.tic()
+        assertTrue(s.etat.value.enregistrement.isNotEmpty())
+        el(20.0); heure += 1_000L; s.tic()
+        el(-0.5); heure += 1_000L; s.tic()
+        heure += 29_000L; s.tic()
+        assertTrue(s.etat.value.enregistrement.isNotEmpty())
+        heure += 2_000L; s.tic()
+        assertEquals("", s.etat.value.enregistrement)
+    }
+
+    @Test
+    fun a_la_main_sans_l_option_il_continue() {
+        val (s, _, el) = aLHeure()
+        el(20.0)
+        s.demarreEnregistrement(); s.tic()
+        el(-5.0); s.tic(); heure += 120_000L; s.tic()
+        assertTrue(s.etat.value.enregistrement.isNotEmpty())
+        s.arreteEnregistrement()
+    }
+
+    @Test
+    fun automatique_arrete_a_la_main_il_ne_repart_pas_avant_le_passage_suivant() {
+        val (s, _, el) = aLHeure()
+        s.enregAuto = true
+        el(20.0); s.tic()
+        assertTrue(s.etat.value.auto)
+        s.arreteEnregistrement()
+        heure += 1_000L; s.tic()
+        assertEquals("", s.etat.value.enregistrement)
+        // Set, then up again: the next pass is recorded.
+        el(-5.0); heure += 1_000L; s.tic()
+        el(10.0); heure += 1_000L; s.tic()
+        assertTrue(s.etat.value.enregistrement.isNotEmpty())
+        s.arreteEnregistrement()
+    }
+
+    @Test
+    fun le_mode_automatique_enregistre_son_passage_5_s_avant_l_aos() {
+        val (s, st, el) = aLHeure()
+        val aos = heure + 60_000L
+        val p = fr.f4ioz.satcombo.data.SatPass("RS-44", 44909, aos, aos + 600_000L, 40.0, 0.0, 0.0, false, false)
+        val e = st.javaClass.getDeclaredField("_etat").apply { isAccessible = true }
+        @Suppress("UNCHECKED_CAST")
+        val flux = e.get(st) as kotlinx.coroutines.flow.MutableStateFlow<EtatPc>
+        el(-3.0)
+        flux.value = flux.value.copy(passages = listOf(p))
+        st.veilleSats = setOf(44909); st.veille = true
+        s.tic()
+        assertEquals("", s.etat.value.enregistrement)
+        heure = aos - 4_000L; s.tic()
+        assertTrue(s.etat.value.auto)
+        // The satellite never seen (another one followed by hand meanwhile): stopped at LOS + 30 s all the same.
+        heure = p.losEpochMs + 31_000L; s.tic()
+        assertEquals("", s.etat.value.enregistrement)
+        // And not started again for the same pass.
+        heure = p.losEpochMs + 20_000L; s.tic()
+        assertEquals("", s.etat.value.enregistrement)
+    }
 }

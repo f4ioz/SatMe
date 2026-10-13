@@ -280,6 +280,7 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
             }
             "/api/aprs" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JsonPc.aprs(son, station).toString().toByteArray())
             "/api/son" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JsonPc.son(son).toString().toByteArray())
+            "/api/veille" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JsonPc.veille(station, son).toString().toByteArray())
             "/api/sstv/encours.png" -> son?.imageEnCours()?.let { envoie(sortie, "200 OK", "image/png", it) }
                 ?: envoie(sortie, "404 Not Found", "text/plain", ByteArray(0))
             "/carnet.adi" -> {
@@ -338,6 +339,16 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
             "/api/agenda/retire" -> q["id"]?.toLongOrNull()?.let { station.retireAgenda(it) }
             "/api/agenda/active" -> q["id"]?.toLongOrNull()?.let { station.activeAgenda(it) }
             "/api/agenda/suivi" -> station.agendaSuivi(q["on"] == "1")
+            "/api/veille" -> {
+                q["on"]?.let { station.veille = it == "1" }
+                entier("ajoute")?.let { station.veilleSats = station.veilleSats + it }
+                if (q["favoris"] == "1") station.veilleSats = station.veilleSats + station.etat.value.favoris
+                entier("retire")?.let { station.veilleSats = station.veilleSats - it }
+                entier("el")?.let { station.veilleElMin = it }
+                q["son"]?.let { station.veilleSon = it == "1" }
+                q["ecarte"]?.let { station.ecarteVeille(it, true) }
+                q["garde"]?.let { station.ecarteVeille(it, false) }
+            }
             "/api/amsat/rapport" -> {
                 // Heard or not, on amsat.org's public page: the satellite followed, my callsign and square, now.
                 val e = station.etat.value
@@ -659,6 +670,7 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
             "/api/son/options" -> {
                 val s = son ?: return JSONObject().put("ok", false)
                 q["auto"]?.let { s.enregAuto = it == "1" }
+                q["coupe"]?.let { s.coupeLos = it == "1" }
                 q["sstv"]?.let { s.sstvActif = it == "1" }
                 q["aprs"]?.let { s.aprsActif = it == "1" }
             }
@@ -828,6 +840,25 @@ object JsonPc {
         fav = st?.etat?.value?.favoris?.contains(p.catalogNumber) == true, agenda = st?.auAgenda(p) == true,
         amsat = st?.statutAmsat(p.satName)?.recent?.name ?: "")
 
+    /** The automatic mode: its choices, its plan for 24 h, and what it waits for to work. */
+    fun veille(st: StationPc, s: SonStation?): JSONObject {
+        val e = st.etat.value
+        val maintenant = e.maintenant.takeIf { it > 0L } ?: System.currentTimeMillis()
+        val sats = st.veilleSats
+        val plan = st.planVeille(maintenant)
+        val suivi = fr.f4ioz.satcombo.domain.VeilleAuto.aSuivre(plan, maintenant)
+        return JSONObject().put("on", st.veille).put("el", st.veilleElMin).put("son", st.veilleSon)
+            .put("sats", JSONArray(sats.map { n -> JSONObject().put("n", n).put("nom", e.satellites.firstOrNull { it.catalogNumber == n }?.name ?: "#$n") }
+                .sortedBy { it.getString("nom") }))
+            .put("plan", JSONArray(plan.map { l -> JSONObject().put("cle", fr.f4ioz.satcombo.domain.VeilleAuto.cle(l.passage))
+                .put("sat", l.passage.satName).put("n", l.passage.catalogNumber).put("aos", l.passage.aosEpochMs).put("los", l.passage.losEpochMs)
+                .put("el", Math.round(l.passage.maxElevationDeg)).put("garde", l.garde).put("ecarte", l.ecarte).put("perdu", l.perdu ?: "") }))
+            .put("enCours", suivi?.let { fr.f4ioz.satcombo.domain.VeilleAuto.cle(it) } ?: "")
+            .put("calcul", e.calculEnCours)
+            .put("carte", s?.son?.etat?.value?.actif == true)
+            .put("cat", e.catConnecte).put("rotor", st.stationRotor.etat.value.rotorConnected).put("rotorSuit", st.stationRotor.etat.value.rotorEnabled)
+    }
+
     fun passages(st: StationPc): JSONObject {
         val e = st.etat.value
         return JSONObject().put("calcul", e.calculEnCours)
@@ -886,7 +917,7 @@ object JsonPc {
         val e = s.etat.value
         return ApiSon.json(ApiSon.Etat(s.son.appareils().map { it.nom to it.description }, s.carte, c.actif, c.rate, c.niveau, c.erreur,
             e.enregistrement, e.secondes, e.auto, s.enregAuto, s.sstvActif, s.aprsActif,
-            e.sstvMode, e.sstvLignes, e.sstvHauteur, e.sstvVersion, e.sstvDerniere, s.enregistrements(), s.images()))
+            e.sstvMode, e.sstvLignes, e.sstvHauteur, e.sstvVersion, e.sstvDerniere, s.enregistrements(), s.images(), s.coupeLos))
     }
 
     fun bilan(b: ImportPc.Bilan?): JSONObject = if (b == null) JSONObject().put("ok", false).put("erreur", "fichier illisible ou trop gros")

@@ -26,13 +26,15 @@ object ApiSon {
         val enregistrement: String, val secondes: Long, val auto: Boolean, val enregAuto: Boolean, val sstv: Boolean, val aprs: Boolean,
         val sstvMode: String, val sstvLignes: Int, val sstvHauteur: Int, val sstvVersion: Long, val sstvDerniere: String,
         val enregistrements: List<File>, val images: List<SstvMeta.SstvShot>,
+        /** A recording, even by hand, stopped after its pass; null where not offered. */
+        val coupeLos: Boolean? = null,
     )
 
     fun json(e: Etat): JSONObject = JSONObject().put("present", true)
         .put("cartes", JSONArray(e.cartes.map { JSONObject().put("nom", it.first).put("desc", it.second) }))
         .put("carte", e.carte).put("actif", e.actif).put("rate", e.rate).put("niveau", Math.round(e.niveau * 1000.0) / 1000.0).put("erreur", e.erreur)
         .put("enregistrement", e.enregistrement).put("secondes", e.secondes).put("auto", e.auto)
-        .put("enregAuto", e.enregAuto).put("sstv", e.sstv).put("aprs", e.aprs)
+        .put("enregAuto", e.enregAuto).put("sstv", e.sstv).put("aprs", e.aprs).put("coupeLos", e.coupeLos ?: JSONObject.NULL)
         .put("sstvMode", e.sstvMode).put("sstvLignes", e.sstvLignes).put("sstvHauteur", e.sstvHauteur)
         .put("sstvVersion", e.sstvVersion).put("sstvDerniere", e.sstvDerniere)
         .put("enregistrements", JSONArray(e.enregistrements.take(50).map {

@@ -327,6 +327,8 @@ object PagePc {
         <canvas id="st-carte" hidden title="Glisser pour déplacer, molette pour zoomer, double-clic pour revoir le monde"></canvas>
       </div>
       <div class="petit" id="infos-passage" style="text-align:center;margin-top:4px"></div>
+      <div class="ligne rec-l"><button class="rouge rec-b" onclick="enregistre()">● Enregistrer le son</button><span class="val rec-d"></span><span class="petit rec-m"></span>
+        <label class="petit rec-los-l" style="margin-left:auto"><input type="checkbox" class="rec-los" onchange="coupeLos(this.checked)"> couper à la fin du passage</label></div>
       <div class="t" style="margin-top:10px">Ses prochains passages</div>
       <div id="suivants-boite"><table><tbody id="suivants"></tbody></table></div>
     </div>
@@ -455,6 +457,7 @@ object PagePc {
       <div class="t">Nouveau contact <span class="petit" id="c-sat"></span></div>
       <div class="ligne" style="margin-top:0;margin-bottom:6px"><span class="petit">Satellite</span>
         <select id="c-satsel" style="flex:1" onchange="if (this.value) suivre(+this.value).then(tic)" title="Le satellite suivi : le carnet, la carte, le poste et le rotor le suivent"></select></div>
+      
       <input id="c-call" placeholder="INDICATIF" autocomplete="off" style="width:100%;font-size:26px;font-weight:800;letter-spacing:3px;text-transform:uppercase">
       <div id="c-props" class="c-props"></div>
       <div id="c-qui" class="petit" style="min-height:20px;margin-top:4px"></div>
@@ -464,6 +467,8 @@ object PagePc {
         <span class="petit">↓</span><input id="c-rr" value="59" style="max-width:60px">
       </div>
       <div class="ligne"><input id="c-note" placeholder="Note"></div>
+      <div class="ligne rec-l"><button class="rouge rec-b" onclick="enregistre()">● Enregistrer le son</button><span class="val rec-d"></span><span class="petit rec-m"></span>
+        <label class="petit rec-los-l" style="margin-left:auto"><input type="checkbox" class="rec-los" onchange="coupeLos(this.checked)"> couper à la fin du passage</label></div>
       <label class="petit" style="display:block;margin-top:8px"><input type="checkbox" id="ca-on" onchange="apresBascule()"> Après le passage : un passage déjà fini, à son heure</label>
       <div id="ca" hidden style="margin-top:4px">
         <div class="ligne" style="margin-top:0"><select id="ca-sat" onchange="apresPassages()" style="flex:1"></select>
@@ -610,6 +615,7 @@ object PagePc {
     <div class="carte">
       <div class="t">Enregistrement</div>
       <div class="ligne" style="margin-top:0"><button class="rouge" id="s-rec" onclick="enregistre()">● Enregistrer</button><span class="val" id="s-duree"></span></div>
+      <div class="ligne rec-los-l"><label class="petit"><input type="checkbox" class="rec-los" onchange="coupeLos(this.checked)"> Couper l'enregistrement à la fin du passage, même lancé à la main (30 s après le LOS du satellite suivi)</label></div>
       <div class="ligne" id="s-auto-l"><label class="petit"><input type="checkbox" id="s-auto" onchange="post('api/son/options?auto=' + (this.checked ? 1 : 0))"> Enregistrer chaque passage du satellite suivi (de l'AOS à 30 s après le LOS)</label></div>
       <div class="ligne"><label class="petit"><input type="checkbox" id="s-aprs" onchange="post('api/son/options?aprs=' + (this.checked ? 1 : 0))"> Décoder l'APRS (AFSK 1200 bauds)</label></div>
       <div class="ligne"><label class="petit"><input type="checkbox" id="s-sstv" onchange="post('api/son/options?sstv=' + (this.checked ? 1 : 0))"> Décoder la SSTV en direct</label></div>
@@ -698,10 +704,24 @@ object PagePc {
         Suivre tout seul le satellite d'un rendez-vous, 5 min avant (le poste et le rotor suivent)</label></div>
       <div class="petit" style="margin-top:6px">📅 dans la liste des passages (onglet Station) ajoute ou retire un passage. L'agenda du téléphone arrive avec sa sauvegarde (Réglages).</div>
     </div>
+    <div class="carte va">
+      <div class="t">Mode automatique : ne manquer aucun passage</div>
+      <div class="ligne" style="margin-top:0"><label><input type="checkbox" id="va-on" onchange="veille('on=' + (this.checked ? 1 : 0))"> <b>Actif</b></label><span class="petit" id="va-etat"></span></div>
+      <div class="petit" style="margin-top:6px">Chaque passage gardé est suivi tout seul 5 min avant l'AOS : le poste (CAT, Doppler) et le rotor le suivent, le son est enregistré de 5 s avant l'AOS à 30 s après le LOS, et le passage va au journal. Deux passages en même temps : le premier continue (écarte-le pour garder l'autre). Changer de satellite à la main pendant un passage reste possible.</div>
+      <div class="ligne"><input id="va-sat" list="tous" placeholder="Ajouter un satellite : RS-44, SO-50…"><button onclick="veilleAjoute()">Ajouter</button><button onclick="veille('favoris=1')" title="Ajouter tous les satellites ★">★ favoris</button></div>
+      <div id="va-sats" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px"></div>
+      <div class="ligne"><span class="petit">Passages d'au moins</span><input id="va-el" type="number" min="0" max="90" style="max-width:70px" onchange="veille('el=' + (+this.value || 0))"><span class="petit">° d'élévation max</span></div>
+      <div class="ligne"><label class="petit"><input type="checkbox" id="va-son" onchange="veille('son=' + (this.checked ? 1 : 0))"> Enregistrer le son de chaque passage (carte son de l'onglet Son)</label></div>
+      <div class="etat" id="va-alerte"></div>
+    </div>
   </div>
   <div>
     <div class="carte">
       <table><thead><tr><th>Quand</th><th>Rendez-vous</th><th>Satellite</th><th></th></tr></thead><tbody id="g-liste"></tbody></table>
+    </div>
+    <div class="carte va">
+      <div class="t">Passages du mode automatique (24 h)</div>
+      <table><thead><tr><th>Quand</th><th>Satellite</th><th>El max</th><th>Durée</th><th></th></tr></thead><tbody id="va-plan"></tbody></table>
     </div>
   </div>
 </div>
@@ -1488,6 +1508,7 @@ function vue(n) {
   if (n === 'carnet') { chargeCarnet(); g('c-call').focus(); vueCarnet(vueC); }
   if (n === 'reglages') { chargeReglages().then(() => { if (!wlLu && v('carnetUrl')) { wlLu = true; essaiCarnet(); } }); chargeSources(); }
   if (n === 'son' || n === 'sstv') ticSon();
+  if (n === 'agenda') ticVeille();
   if (n === 'aprs') ticAprs();
   if (n === 'ft8') ticFt8();
   if (n === 'carres') chargeCarres();
@@ -2206,6 +2227,12 @@ async function ticSon() {
   txt('s-rec', S.enregistrement ? '■ Arrêter' : '● Enregistrer');
   txt('s-duree', S.enregistrement ? duree(S.secondes * 1000) + (S.auto ? ' (passage)' : '') : '');
   if (document.activeElement !== g('s-auto')) g('s-auto').checked = S.enregAuto;
+  // The recording buttons of Station and Carnet, and the option to stop after the pass.
+  document.querySelectorAll('.rec-b').forEach(b => b.textContent = S.enregistrement ? '■ Arrêter l’enregistrement' : '● Enregistrer le son');
+  document.querySelectorAll('.rec-d').forEach(d => d.textContent = S.enregistrement ? duree(S.secondes * 1000) : '');
+  document.querySelectorAll('.rec-m').forEach(d => d.textContent = S.enregistrement ? (S.auto ? 'passage' : '') : S.actif ? '' : 'carte son arrêtée (onglet Son)');
+  document.querySelectorAll('.rec-los').forEach(c => { if (document.activeElement !== c) c.checked = !!S.coupeLos; });
+  document.querySelectorAll('.rec-los-l').forEach(l => l.hidden = S.coupeLos === null || S.coupeLos === undefined);
   if (document.activeElement !== g('s-sstv')) g('s-sstv').checked = S.sstv;
   if (document.activeElement !== g('s-aprs')) g('s-aprs').checked = S.aprs;
   const enregs = JSON.stringify(S.enregistrements.map(e => e.nom + e.taille));
@@ -3257,6 +3284,50 @@ async function carteSon(arret) {
   ticSon();
 }
 async function enregistre() { await post('api/son/enregistrer?on=' + (S && S.enregistrement ? 0 : 1)); ticSon(); }
+async function coupeLos(on) { await post('api/son/options?coupe=' + (on ? 1 : 0)); ticSon(); }
+// ------------------------------------------------------------------ automatic mode
+let VA = null, vaVu = '';
+async function veille(q) { if (q) await post('api/veille?' + q); ticVeille(); }
+function veilleAjoute() {
+  const q = v('va-sat').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  if (!q) return;
+  const s = tous.find(x => x.nom.toUpperCase().replace(/[^A-Z0-9]/g, '') === q) ||
+            tous.find(x => x.nom.toUpperCase().replace(/[^A-Z0-9]/g, '').includes(q)) ||
+            tous.find(x => String(x.catnum) === v('va-sat'));
+  if (!s) { alert('Satellite inconnu du bulletin AMSAT.'); return; }
+  g('va-sat').value = '';
+  veille('ajoute=' + s.catnum);
+}
+g('va-sat').addEventListener('keydown', e => { if (e.key === 'Enter') veilleAjoute(); });
+async function ticVeille() {
+  try { VA = await (await fetch('api/veille')).json(); } catch (x) { VA = null; }
+  document.querySelectorAll('.va').forEach(c => c.hidden = !VA);
+  if (!VA) return;
+  if (document.activeElement !== g('va-on')) g('va-on').checked = VA.on;
+  if (document.activeElement !== g('va-son')) g('va-son').checked = VA.son;
+  if (document.activeElement !== g('va-el')) g('va-el').value = VA.el;
+  const p = VA.plan.find(l => l.cle === VA.enCours);
+  const proch = VA.plan.find(l => l.garde);
+  txt('va-etat', !VA.on ? '' : p ? ' · ' + p.sat + ' suivi (LOS ' + hm(p.los) + ')' : proch ? ' · prochain : ' + proch.sat + ' à ' + hm(proch.aos) : ' · aucun passage');
+  const a = [];
+  if (VA.on && !VA.sats.length) a.push('Ajoute au moins un satellite.');
+  if (VA.on && !VA.cat) a.push('Poste non connecté : la fréquence ne suivra pas (onglet Station).');
+  if (VA.on && !VA.rotor) a.push('Rotor non connecté.');
+  else if (VA.on && !VA.rotorSuit) a.push('Rotor connecté mais « Suivre » n’est pas coché.');
+  if (VA.on && VA.son && !VA.carte) a.push('Carte son arrêtée : pas d’enregistrement (onglet Son).');
+  txt('va-alerte', a.join(' '));
+  const cle = JSON.stringify([VA.sats, VA.plan, VA.enCours, VA.on]);
+  if (cle === vaVu) return;
+  vaVu = cle;
+  g('va-sats').innerHTML = VA.sats.map(s => '<span class="pastille">' + esc(s.nom) + ' <a href="#" onclick="veille(\'retire=' + s.n + '\');return false" title="Retirer" style="color:var(--rose);text-decoration:none">✕</a></span>').join('') ||
+    '<span class="petit">aucun satellite choisi</span>';
+  g('va-plan').innerHTML = VA.plan.map(l => '<tr' + (l.cle === VA.enCours ? ' class="encours"' : '') + (l.garde ? '' : ' style="opacity:.55"') + '><td>' + jourHeure(l.aos) + ' → ' + hm(l.los) +
+    '</td><td>' + esc(l.sat) + (l.perdu ? '<div class="petit">pendant ' + esc(l.perdu) + '</div>' : '') + '</td><td>' + l.el + '°</td><td>' + duree(l.los - l.aos) +
+    '</td><td class="act"><label class="petit"><input type="checkbox" ' + (l.garde ? 'checked' : '') + (l.perdu ? ' disabled' : '') +
+    ' onchange="veille((this.checked ? \'garde=\' : \'ecarte=\') + \'' + l.cle + '\')"> garder</label></td></tr>').join('') ||
+    '<tr><td colspan="5" class="petit">' + (VA.sats.length ? (VA.calcul ? 'calcul…' : 'aucun passage dans les 24 h') : 'choisis des satellites') + '</td></tr>';
+}
+setInterval(() => { if (ouverte('agenda')) ticVeille(); }, 2000);
 setInterval(ticSon, 1000);
 
 lienRotor(); avertCat();
