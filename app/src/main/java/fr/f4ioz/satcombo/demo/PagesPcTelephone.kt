@@ -24,7 +24,7 @@ object PagesPcTelephone {
     @Volatile var vm: MainViewModel? = null
 
     /** The tabs the phone serves so far; the page hides the others. QO-100 only when its extension is on. */
-    val ONGLETS = listOf("station", "carnet", "agenda", "carres", "frise", "sked", "qo100", "son", "sstv", "journal", "planche", "reglages")
+    val ONGLETS = listOf("station", "carnet", "agenda", "carres", "frise", "sked", "qo100", "son", "sstv", "aprs", "ft8", "journal", "planche", "reglages")
 
     private fun onglets(vm: MainViewModel) =
         ONGLETS.filter { it != "qo100" || vm.hasExtension(fr.f4ioz.satcombo.data.Extensions.QO100) }
@@ -89,6 +89,20 @@ object PagesPcTelephone {
                     val obs = u.observer
                     json(ApiCalculs.passagesFinisJson(if (sat == null || obs == null) emptyList()
                         else ApiCalculs.passagesFinis(vm.predicteurPourPage(), sat, obs, System.currentTimeMillis(), 72, u.minElevDeg.toDouble())))
+                }
+                // ---- APRS and FT8: what the phone heard (the engine's words, as SatMe-PC's)
+                "/api/aprs" -> {
+                    val a = fr.f4ioz.satcombo.aprs.AprsHub.etat.value
+                    json(ApiRadio.aprs(a.paquets, a.ecoute, a.nouveaux, u.observer))
+                }
+                "/api/ft8" -> {
+                    val f = fr.f4ioz.satcombo.ft8.Ft8Hub.state.value
+                    val faits = u.log.map { it.callsign.uppercase().substringBefore('/') }.toHashSet()
+                    json(ApiRadio.ft8(f.enMarche, f.mode, f.avancement, f.niveau, f.tranches, f.enMarche, f.basseHz, f.hauteHz,
+                        f.cascade, f.spectre, f.entendus.map { e ->
+                            val (de, a, loc) = ApiRadio.decoupe(e.texte)
+                            ApiRadio.Ligne(tranche(e.heure), e.texte, de, a, loc, e.frequenceHz, e.rapportDb, e.decalageS, e.mode)
+                        }, u.callsign.uppercase(), u.observer, faits))
                 }
                 // ---- Settings: the phone's own, as SatMe-PC's page shows them
                 "/api/reglages" -> {
@@ -316,6 +330,23 @@ object PagesPcTelephone {
                 vm.refreshAgenda(); OK
             }
             "/api/agenda/suivi" -> JSONObject().put("ok", false).put("erreur", "sur le téléphone, ce sont les notifications du rendez-vous qui préviennent")
+            // ---- FT8: the phone's decoder, started and stopped from the page
+            "/api/ft8" -> {
+                val f = fr.f4ioz.satcombo.ft8.Ft8Hub
+                val ctx = vm.getApplication<android.app.Application>()
+                when {
+                    p("vide") == "1" -> f.vide()
+                    p("on") == "0" -> f.arrete()
+                    p("on") == "1" -> {
+                        // The phone's microphone (or its audio input): Android's rules, as for a recording.
+                        if (f.state.value.source != "SDR") pourquoiPasDeMicro(vm, "MIC")?.let { return JSONObject().put("ok", false).put("erreur", it) }
+                        f.demarre(ctx, p("mode").takeIf { it == "FT8" || it == "FT4" } ?: f.state.value.mode)
+                    }
+                    // The mode alone: taken at once when it runs, at the next start otherwise.
+                    p("mode") == "FT8" || p("mode") == "FT4" -> if (f.state.value.enMarche && f.state.value.mode != p("mode")) f.demarre(ctx, p("mode"))
+                }
+                OK
+            }
             // ---- Settings
             "/api/reglages" -> {
                 if (p("c").isNotEmpty()) vm.setCallsign(p("c").trim().uppercase())
@@ -403,7 +434,7 @@ object PagesPcTelephone {
             }
             "/api/son/enregistrer" -> {
                 if (p("on") != "1") { vm.stopRecording(); return OK }
-                pourquoiPasDEnregistrement(vm)?.let { return JSONObject().put("ok", false).put("erreur", it) }
+                pourquoiPasDeMicro(vm, u.recorderSource)?.let { return JSONObject().put("ok", false).put("erreur", it) }
                 if (!u.recorderEnabled) vm.setRecorderEnabled(true)
                 vm.startRecording(); OK
             }
@@ -446,6 +477,15 @@ object PagesPcTelephone {
         return passagesCalcules.filter { it.losEpochMs >= maintenant } to passagesEnCours.get()
     }
 
+    /** An FT8 slot's start from its time of day ("HH:mm:ss", UTC): today's, or yesterday's when that is still to come. */
+    private fun tranche(heure: String): Long = runCatching {
+        val (h, m, s) = heure.split(':').map { it.toInt() }
+        val c = java.util.Calendar.getInstance(java.util.TimeZone.getTimeZone("UTC"))
+        c.set(java.util.Calendar.HOUR_OF_DAY, h); c.set(java.util.Calendar.MINUTE, m); c.set(java.util.Calendar.SECOND, s); c.set(java.util.Calendar.MILLISECOND, 0)
+        if (c.timeInMillis > System.currentTimeMillis() + 60_000L) c.add(java.util.Calendar.DAY_OF_MONTH, -1)
+        c.timeInMillis
+    }.getOrDefault(0L)
+
     /** The sources the phone records from: the SatMe screen's choices. */
     private val SOURCES = listOf("MIC" to "Micro du téléphone", "BT" to "Bluetooth (HFP)", "USB" to "Carte son USB (le poste)")
 
@@ -486,15 +526,15 @@ object PagesPcTelephone {
     }
 
     /**
-     * Why the page cannot start a recording, or null. Android lets the
+     * Why the page cannot take the microphone (a recording, FT8), or null. Android lets the
      * microphone be taken only with its permission, and only while SatMe is
      * on screen: asked otherwise, the recorder would not start (the app
      * stopped by the system). The permission is asked on the phone, not here.
      */
-    private fun pourquoiPasDEnregistrement(vm: MainViewModel): String? {
+    private fun pourquoiPasDeMicro(vm: MainViewModel, source: String): String? {
         val ctx = vm.getApplication<android.app.Application>()
         val perms = listOf(android.Manifest.permission.RECORD_AUDIO) +
-            if (vm.ui.value.recorderSource == "BT" && android.os.Build.VERSION.SDK_INT >= 31) listOf(android.Manifest.permission.BLUETOOTH_CONNECT) else emptyList()
+            if (source == "BT" && android.os.Build.VERSION.SDK_INT >= 31) listOf(android.Manifest.permission.BLUETOOTH_CONNECT) else emptyList()
         if (perms.any { androidx.core.content.ContextCompat.checkSelfPermission(ctx, it) != android.content.pm.PackageManager.PERMISSION_GRANTED })
             return "le micro n'est pas autorisé : lancer un premier enregistrement sur le téléphone (⏺), qui le demande"
         val moi = android.app.ActivityManager.RunningAppProcessInfo()

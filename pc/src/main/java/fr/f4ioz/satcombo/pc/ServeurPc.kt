@@ -899,43 +899,19 @@ object JsonPc {
     /** FT8 heard: the decodes with what they mean here (CQ, for me, how far, already worked), the waterfall. */
     fun ft8(s: SonStation?, st: StationPc, c: CarnetPc?): JSONObject {
         val f = s?.ft8 ?: return JSONObject().put("present", false)
-        val moi = st.etat.value.indicatif.uppercase()
-        val obs = st.etat.value.observateur
         val faits = c?.contacts().orEmpty().map { it.callsign.uppercase().substringBefore('/') }.toHashSet()
         val k = f.cascade
-        return JSONObject().put("present", true).put("enMarche", f.enMarche).put("mode", f.mode).put("avancement", f.avancement())
-            .put("niveau", f.niveau).put("tranches", f.tranches).put("carte", s.son.etat.value.actif)
-            .put("basse", Ft8Pc.BASSE_HZ).put("haute", Ft8Pc.HAUTE_HZ)
-            .put("cascade", JSONArray(k?.lignes?.toList().orEmpty().map { java.util.Base64.getEncoder().encodeToString(it) }))
-            .put("spectre", JSONArray(k?.dernierSpectre?.map { Math.round(it * 100) / 100.0 }.orEmpty()))
-            .put("entendus", JSONArray(f.entendus.take(400).map { e ->
-                val ll = e.locator?.let { fr.f4ioz.satcombo.location.Maidenhead.centre(it) }
-                JSONObject().put("t", e.tranche).put("texte", e.texte).put("de", e.appelant ?: "").put("a", e.appele ?: "")
-                    .put("loc", e.locator ?: "").put("hz", e.frequenceHz).put("db", e.rapportDb).put("dt", Math.round(e.decalageS * 10) / 10.0)
-                    .put("mode", e.mode).put("cq", e.texte.startsWith("CQ"))
-                    .put("moi", moi.isNotBlank() && e.appele?.uppercase() == moi)
-                    .put("fait", e.appelant?.uppercase()?.substringBefore('/') in faits)
-                    .put("km", if (ll != null && obs != null) Math.round(fr.f4ioz.satcombo.sonde.Geo.distanceKm(obs.latDeg, obs.lonDeg, ll.first, ll.second)) else JSONObject.NULL)
-            }))
+        return fr.f4ioz.satcombo.demo.ApiRadio.ft8(f.enMarche, f.mode, f.avancement(), f.niveau, f.tranches, s.son.etat.value.actif,
+            Ft8Pc.BASSE_HZ, Ft8Pc.HAUTE_HZ, k?.lignes?.toList().orEmpty(), k?.dernierSpectre ?: FloatArray(0),
+            f.entendus.map { e -> fr.f4ioz.satcombo.demo.ApiRadio.Ligne(e.tranche, e.texte, e.appelant, e.appele, e.locator,
+                e.frequenceHz, e.rapportDb, e.decalageS, e.mode) },
+            st.etat.value.indicatif.uppercase(), st.etat.value.observateur, faits)
     }
 
     /** APRS heard: the frames (newest first) and what they add up to. */
     fun aprs(s: SonStation?, st: StationPc): JSONObject {
         if (s == null) return JSONObject().put("present", false)
-        val l = s.aprs.paquets
-        val obs = st.etat.value.observateur
-        val stations = fr.f4ioz.satcombo.aprs.AprsJeu.stations(l, obs?.latDeg, obs?.lonDeg)
-        val km = stations.associate { it.indicatif to it }
-        return JSONObject().put("present", true).put("actif", s.aprsActif && s.son.etat.value.actif).put("recues", s.aprs.recues)
-            .put("nbStations", stations.size).put("viaIss", l.count { it.viaIss })
-            .put("loin", stations.mapNotNull { it.km }.maxOrNull() ?: JSONObject.NULL)
-            .put("paquets", JSONArray(l.take(400).map { p ->
-                val stn = km[p.nom ?: p.source]
-                JSONObject().put("t", p.quand).put("src", p.source).put("type", p.type.name).put("iss", p.viaIss)
-                    .put("dest", p.destinataire ?: "").put("txt", (p.message ?: p.commentaire).take(120))
-                    .put("chemin", p.trame.relais.joinToString(",") { it.toString() + if (it.repete) "*" else "" })
-                    .put("carre", stn?.carre ?: "").put("km", stn?.km?.let { Math.round(it) } ?: JSONObject.NULL)
-            }))
+        return fr.f4ioz.satcombo.demo.ApiRadio.aprs(s.aprs.paquets, s.aprsActif && s.son.etat.value.actif, s.aprs.recues, st.etat.value.observateur)
     }
 
     fun ports(st: StationPc) = JSONArray(st.ports.liste().map {
