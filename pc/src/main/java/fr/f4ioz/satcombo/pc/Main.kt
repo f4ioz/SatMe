@@ -83,6 +83,7 @@ fun main(args: Array<String>) {
             runCatching { son.tic() }
             runCatching { journal.tic() }
             runCatching { carnet.ticEnvoi() }
+            runCatching { carnet.ticAmsat() }
             runCatching { sdr.ticMeteor() }
             kotlinx.coroutines.delay(1000)
         }

@@ -552,6 +552,7 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 q["fiche"]?.let { station.ficheQrz = it == "1" }
                 q["carnetDelai"]?.toIntOrNull()?.let { s.carnetAutoDelaiS = it }
                 q["carnetAuto"]?.let { carnet?.setAuto(it == "1") }
+                q["amsatAuto"]?.let { s.amsatAuto = it == "1" }
             }
             "/api/sources" -> station.regleSources(q["ids"]?.split(',')?.map { it.trim() }?.filter { it.isNotEmpty() }?.toSet(),
                 q["serveur"], q["seul"]?.let { it == "1" })
@@ -886,6 +887,7 @@ object JsonPc {
             .put("qrzMdp", s.qrzMdp.isNotEmpty()).put("carnetUrl", s.carnetUrl).put("carnetCle", s.carnetCle.isNotEmpty())
             .put("carnetProfil", s.carnetProfil).put("minEl", s.minElevDeg).put("fiche", st.ficheQrz)
             .put("carnetAuto", s.carnetAuto).put("carnetDelai", s.carnetAutoDelaiS)
+            .put("amsatAuto", s.amsatAuto).put("amsatEtat", st.pushAmsat.etat)
             .put("delais", JSONArray(fr.f4ioz.satcombo.domain.EnvoiAuto.DELAIS_S))
     }
 

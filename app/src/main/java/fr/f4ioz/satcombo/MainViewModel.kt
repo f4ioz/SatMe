@@ -204,6 +204,9 @@ data class CarnetUi(
     val autoDelaiS: Int = 60,
     /** Last automatic upload, or why it stopped. */
     val autoEtat: String = "",
+    /** Each pass with a contact reported "Heard" to amsat.org (PushAmsat), and what it last did. */
+    val amsatAuto: Boolean = false,
+    val amsatEtat: String = "",
     /** SatMe acts as a radio in the online log (RelaisRadio). */
     val radio: Boolean = false,
     val radioNom: String = "SatMe",
@@ -1205,7 +1208,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 filtre = settings.carnetFiltre,
                 radio = settings.carnetRadio,
                 radioNom = settings.carnetRadioNom,
-                auto = settings.carnetAuto, autoDelaiS = settings.carnetAutoDelaiS),
+                auto = settings.carnetAuto, autoDelaiS = settings.carnetAutoDelaiS, amsatAuto = settings.amsatAuto),
             catUi = CatUi(
                 ic705Baud = settings.ic705Baud,
                 liseret = settings.liseréEmission,
@@ -1535,6 +1538,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 }
                 runCatching { relaieRadio() }
                 runCatching { envoieAuto() }
+                runCatching { ticAmsat() }
                 kotlinx.coroutines.delay(1000)
             }
         }
@@ -2736,6 +2740,20 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun setCarnetAutoDelai(s: Int) {
         settings.carnetAutoDelaiS = s
         _ui.value = _ui.value.copy(carnet = _ui.value.carnet.copy(autoDelaiS = settings.carnetAutoDelaiS))
+    }
+
+    /** Each pass with a contact reported "Heard" to amsat.org (the same as SatMe-PC's). */
+    val pushAmsat by lazy { fr.f4ioz.satcombo.domain.PushAmsat(settings) }
+
+    fun setAmsatAuto(on: Boolean) {
+        settings.amsatAuto = on
+        _ui.value = _ui.value.copy(carnet = _ui.value.carnet.copy(amsatAuto = on))
+    }
+
+    private fun ticAmsat() {
+        val u = _ui.value
+        pushAmsat.tic(u.log, u.callsign, myLocator()) { n -> amsatMatch(n, u.amsatReports)?.name ?: n }
+        if (pushAmsat.etat != u.carnet.amsatEtat) _ui.value = _ui.value.copy(carnet = _ui.value.carnet.copy(amsatEtat = pushAmsat.etat))
     }
 
     fun setCarnetAuto(on: Boolean) {

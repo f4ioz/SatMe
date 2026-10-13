@@ -314,6 +314,12 @@ class CarnetPc(private val station: StationPc, val store: LogStore, private val 
      * Every second: the oldest contact whose delay is over goes to the online
      * log, one at a time, marked only once the server took it.
      */
+    /** The AMSAT push ([fr.f4ioz.satcombo.domain.PushAmsat]): a pass over with a contact, reported "Heard". */
+    fun ticAmsat() {
+        val e = station.etat.value
+        station.pushAmsat.tic(store.load(), e.indicatif, e.locator) { station.statutAmsat(it)?.name ?: it }
+    }
+
     fun ticEnvoi() {
         val s = station.settings
         if (!s.carnetAuto || envoiEnCours) return

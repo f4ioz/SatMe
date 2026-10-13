@@ -254,6 +254,9 @@ class StationPc(
 
     // ---------------------------------------------------------------- QO-100
 
+    /** Each pass with a contact reported "Heard" to amsat.org, when chosen (the phone's, the same). */
+    val pushAmsat = fr.f4ioz.satcombo.domain.PushAmsat(settings)
+
     /** QO-100 as the phone's screen drives it: written when moved, never by a loop. */
     val qo100: PiloteQo100 by lazy {
         PiloteQo100(settings, satConfig, object : PiloteQo100.Materiel {

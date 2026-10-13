@@ -1048,6 +1048,12 @@ object PagePc {
       <label class="petit" style="display:block;margin-top:8px"><input type="checkbox" id="qrzFiche" onchange="post('api/reglages?fiche=' + (this.checked ? 1 : 0)).then(() => { ficheVoulue = this.checked; csPour = ''; })"> Fiche QRZ dans le carnet : photo, distance, carte</label>
     </div>
     <div class="carte">
+      <div class="t">AMSAT Live OSCAR Status</div>
+      <label class="petit" style="display:block"><input type="checkbox" id="amsatAuto" onchange="post('api/reglages?amsatAuto=' + (this.checked ? 1 : 0)).then(chargeReglages)">
+        Signaler tout seul chaque passage où j'ai fait un contact : « Heard » sur la page publique d'amsat.org, à mon indicatif et mon carré, à l'heure du premier contact, une fois le passage fini</label>
+      <div class="petit" id="amsatEtat" style="margin-top:6px"></div>
+    </div>
+    <div class="carte">
       <div class="t">Carnet en ligne (Wavelog / Cloudlog)</div>
       <div class="ligne" style="margin-top:0"><input id="carnetUrl" placeholder="https://wavelog.exemple.fr/"></div>
       <div class="ligne"><input id="carnetCle" type="password" placeholder="Clé d'API (lecture et écriture)"><input id="carnetProfil" type="hidden"></div>
@@ -1871,6 +1877,8 @@ async function chargeReglages() {
     g('carnetUrl').value = r.carnetUrl; g('carnetCle').placeholder = r.carnetCle ? 'clé enregistrée' : 'Clé d’API (lecture et écriture)';
     g('carnetProfil').value = r.carnetProfil;
     g('carnetAuto').checked = r.carnetAuto; g('carnetDelaiL').hidden = !r.carnetAuto;
+    g('amsatAuto').checked = !!r.amsatAuto;
+    txt('amsatEtat', r.amsatEtat || (r.amsatAuto ? 'Les contacts faits depuis que c’est coché seront signalés.' : 'Coupé : rien n’est envoyé sans toi (bouton « Entendu » de l’onglet Station).'));
     const d = g('carnetDelai');
     if (d.options.length !== r.delais.length) d.innerHTML = r.delais.map(s => '<option value="' + s + '">' + (s < 60 ? s + ' s' : s / 60 + ' min') + '</option>').join('');
     d.value = String(r.carnetDelai);

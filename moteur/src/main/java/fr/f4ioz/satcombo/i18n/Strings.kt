@@ -1593,6 +1593,8 @@ val FR: Map<String, String> = mapOf(
     "auto_reprendre" to "Reprendre l'envoi",
     "demo_diag_ligne" to "écoutes {0} · trames {1} · encodé {2} ko · envoyé {3} ko",
     "auto_titre" to "Envoyer chaque contact vers Wavelog",
+    "amsat_auto_titre" to "Signaler chaque passage à AMSAT",
+    "amsat_auto_desc" to "Chaque passage où vous avez fait un contact : « Heard » sur la page publique AMSAT Live OSCAR Status, à votre indicatif et votre carré, à l'heure du premier contact, une fois le passage fini. Seuls les contacts saisis après l'activation comptent.",
     "auto_desc" to "Après le délai choisi (une minute d'origine), le temps de le mettre en pause ou de le corriger. Seuls les contacts saisis après l'activation partent. Il faut le profil de station.",
     "auto_delai" to "Délai avant l'envoi",
     "auto_envoye" to "{0} envoyé à Wavelog.",

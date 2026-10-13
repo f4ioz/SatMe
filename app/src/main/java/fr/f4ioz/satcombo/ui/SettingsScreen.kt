@@ -1860,6 +1860,15 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
                         Text(ui.carnet.autoEtat, color = TextLo, fontSize = 11.sp,
                             modifier = Modifier.padding(top = 4.dp))
                     }
+                    // Each pass with a contact, "Heard" on amsat.org's public page: only when chosen.
+                    Spacer(Modifier.height(10.dp))
+                    SettingSwitch(t("amsat_auto_titre"), t("amsat_auto_desc"), ui.carnet.amsatAuto) {
+                        vm.setAmsatAuto(it)
+                    }
+                    if (ui.carnet.amsatAuto && ui.carnet.amsatEtat.isNotBlank()) {
+                        Text(ui.carnet.amsatEtat, color = TextLo, fontSize = 11.sp,
+                            modifier = Modifier.padding(top = 4.dp))
+                    }
                 }
             }
         }

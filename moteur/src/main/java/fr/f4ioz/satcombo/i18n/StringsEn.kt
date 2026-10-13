@@ -1569,6 +1569,8 @@ val EN: Map<String, String> = mapOf(
     "auto_reprendre" to "Release",
     "demo_diag_ligne" to "listeners {0} · frames {1} · encoded {2} kB · sent {3} kB",
     "auto_titre" to "Send each contact to Wavelog",
+    "amsat_auto_titre" to "Report each pass to AMSAT",
+    "amsat_auto_desc" to "Each pass where you logged a contact: \"Heard\" on the public AMSAT Live OSCAR Status page, under your callsign and square, at the time of the first contact, once the pass is over. Only contacts logged after turning this on count.",
     "auto_desc" to "After the chosen delay (one minute by default), time to hold it back or fix it. Only contacts logged after turning this on are sent. Needs the station profile.",
     "auto_delai" to "Delay before sending",
     "auto_envoye" to "{0} sent to Wavelog.",

@@ -565,6 +565,27 @@ class SettingsStore(private val prefs: Stockage) {
         get() = prefs.getString("carnet_profil", "") ?: ""
         set(v) { prefs.edit().putString("carnet_profil", v.trim()).apply() }
 
+    /**
+     * Each pass with a contact reported "Heard" to amsat.org by itself
+     * ([fr.f4ioz.satcombo.domain.PushAmsat]): off unless chosen — it writes
+     * on a public page in the operator's name. Turning it on dates it: older
+     * contacts never leave by it.
+     */
+    var amsatAuto: Boolean
+        get() = prefs.getBoolean("amsat_auto", false)
+        set(v) {
+            val e = prefs.edit().putBoolean("amsat_auto", v)
+            if (v && !prefs.getBoolean("amsat_auto", false)) e.putLong("amsat_auto_depuis", System.currentTimeMillis())
+            e.apply()
+        }
+
+    val amsatAutoDepuisMs: Long get() = prefs.getLong("amsat_auto_depuis", 0L)
+
+    /** The passes already reported (their keys), the last two hundred. */
+    var amsatEnvoyes: List<String>
+        get() = (prefs.getString("amsat_envoyes", "") ?: "").split(',').filter { it.isNotBlank() }
+        set(v) { prefs.edit().putString("amsat_envoyes", v.takeLast(200).joinToString(",")).apply() }
+
     /** Each new contact sent on to the online log after a minute (EnvoiAuto). */
     var carnetAuto: Boolean
         get() = prefs.getBoolean("carnet_auto", false)
