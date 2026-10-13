@@ -911,10 +911,36 @@ class StationPc(
         boucleCat = portee.launch {
             while (_etat.value.catConnecte) {
                 runCatching { stationCat.tour() }
+                runCatching { lisSmetre() }
                 delay(100)
             }
         }
     }
+
+    /** The S-meter, read once a second for the journal (0..241, the Icom scale); when it was read. */
+    @Volatile private var smetre: Int? = null
+    @Volatile private var smetreMs = 0L
+
+    /**
+     * As on the phone: an Icom alone (CI-V) or a TS-2000, not the simulated
+     * rig nor a pair of two rigs, a satellite up, never while transmitting
+     * (the meter shows power then). Read only.
+     */
+    private suspend fun lisSmetre() {
+        val e = _etat.value
+        if (!e.catConnecte || e.catSimule || (e.position?.elevationDeg ?: -1.0) < 0.0) return
+        val maintenant = horloge()
+        if (maintenant - smetreMs < 1_000L) return
+        smetreMs = maintenant
+        smetre = when (e.catModele) {
+            "TS2000" -> paire.lienTs2000?.let { l -> if (l.emission() == true) null else l.smetre() }
+            "IC9700", "IC9100", "IC910" -> if (civ.isTransmitting() == true) null else civ.readSMeter()
+            else -> null
+        }
+    }
+
+    /** The S-meter read less than 3 s ago, else null. */
+    fun smetreRecent(): Int? = smetre.takeIf { _etat.value.catConnecte && horloge() - smetreMs <= 3_000L }
 
     companion object {
         /** The rigs the PC drives: the Icom family on CI-V, the pairs (TS-2000, FT-817 / IC-705, TH-D72), and simulators. */

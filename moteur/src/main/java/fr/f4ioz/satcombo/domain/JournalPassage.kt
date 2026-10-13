@@ -436,6 +436,19 @@ object JournalPassage {
     /** Under the satellite at a moment: where, and how high (for its footprint). */
     data class Sol(val tMs: Long, val lat: Double, val lon: Double, val altKm: Double)
 
+    /**
+     * Under the satellite all along its predicted pass (AOS to LOS, today's
+     * elements), every 15 s: the map shows the whole pass, the part followed
+     * drawn over it — a pass followed only in part (SatMe-PC stopped, another
+     * satellite taken) no longer looks cut short.
+     */
+    fun solPrevu(p: PassPredictor, sat: fr.f4ioz.satcombo.data.TleEntry, obs: fr.f4ioz.satcombo.data.Observer, e: Entree): List<Sol> = runCatching {
+        val (aos, los) = p.currentPass(sat, obs, (e.debutMs + e.finMs) / 2) ?: (e.debutMs to e.finMs)
+        val de = minOf(aos, e.debutMs); val a = maxOf(los, e.finMs)
+        if (a <= de || a - de > 3 * 3_600_000L) return emptyList()
+        (de..a step 15_000L).map { t -> p.positionAt(sat, obs, t).let { Sol(t, it.latDeg, it.lonDeg, it.altKm) } }
+    }.getOrDefault(emptyList())
+
     fun solA(sol: List<Sol>, tMs: Long): Sol? = sol.lastOrNull { it.tMs <= tMs } ?: sol.firstOrNull()
 
     /**
@@ -453,6 +466,27 @@ object JournalPassage {
                 kotlin.math.cos(ang) - kotlin.math.sin(la) * kotlin.math.sin(la2))
             Math.toDegrees(la2) to ((Math.toDegrees(lo2) + 540) % 360 - 180)
         }
+    }
+
+    /**
+     * The footprint as one polygon to fill: its longitudes continuous (never
+     * cut at ±180°), closed over the pole when it holds it — a satellite near
+     * the pole sees all around it, and a circle cut in pieces filled only a
+     * strip of it. Draw it shifted by −360°, 0 and +360°.
+     */
+    fun empreintePolygone(lat: Double, lon: Double, altKm: Double): List<Pair<Double, Double>> {
+        val u = ArrayList<Pair<Double, Double>>()
+        var ref: Double? = null
+        for ((la, lo0) in empreinte(lat, lon, altKm)) {
+            var lo = lo0
+            ref?.let { r -> while (lo - r > 180.0) lo -= 360.0; while (lo - r < -180.0) lo += 360.0 }
+            ref = lo; u += la to lo
+        }
+        if (u.size > 1 && kotlin.math.abs(u.last().second - u.first().second) > 180.0) {
+            val pole = if (lat >= 0) 85.05 else -85.05
+            u += pole to u.last().second; u += pole to u.first().second
+        }
+        return u
     }
 
     // Web Mercator, as the map tiles: the world 0..1 both ways.

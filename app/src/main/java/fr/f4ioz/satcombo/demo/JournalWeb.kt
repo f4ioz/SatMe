@@ -250,6 +250,8 @@ object JournalWeb {
                         // The ground track (where the satellite was over the Earth) and the station, for the map.
                         append(",\"sol\":").append(j.traceSol(e).joinToString(",", "[", "]") {
                             "[${it.tMs},${"%.3f".format(java.util.Locale.US, it.lat)},${"%.3f".format(java.util.Locale.US, it.lon)},${Math.round(it.altKm)}]" })
+                    append(",\"solp\":").append(j.traceSolPrevue(e).joinToString(",", "[", "]") {
+                            "[${it.tMs},${"%.3f".format(java.util.Locale.US, it.lat)},${"%.3f".format(java.util.Locale.US, it.lon)},${Math.round(it.altKm)}]" })
                         fr.f4ioz.satcombo.location.Maidenhead.centre(e.locator)?.let { (la, lo) -> append(",\"qth\":[$la,$lo]") }
                         append(",\"sons\":").append(morceaux.withIndex().joinToString(",", "[", "]") { (i, m) ->
                             "{\"n\":$i,\"nom\":\"${js(m.f.name)}\",\"o\":${m.origine},\"an\":${m.annonce},\"du\":${m.dureeMs}}"

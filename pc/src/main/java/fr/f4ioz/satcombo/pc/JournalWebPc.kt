@@ -152,6 +152,8 @@ class JournalWebPc(private val j: JournalPc, private val station: StationPc, pri
                     })
                     append(",\"sol\":").append(j.traceSol(e).joinToString(",", "[", "]") {
                         "[${it.tMs},${"%.3f".format(Locale.US, it.lat)},${"%.3f".format(Locale.US, it.lon)},${Math.round(it.altKm)}]" })
+                    append(",\"solp\":").append(j.traceSolPrevue(e).joinToString(",", "[", "]") {
+                        "[${it.tMs},${"%.3f".format(Locale.US, it.lat)},${"%.3f".format(Locale.US, it.lon)},${Math.round(it.altKm)}]" })
                     Maidenhead.centre(e.locator)?.let { (la, lo) -> append(",\"qth\":[$la,$lo]") }
                     append(",\"sons\":").append(j.morceaux(e).withIndex().joinToString(",", "[", "]") { (i, m) ->
                         "{\"n\":$i,\"nom\":\"${js(m.f.name)}\",\"o\":${m.origine},\"an\":${m.annonce},\"du\":${m.dureeMs}}" })

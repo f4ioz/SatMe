@@ -262,6 +262,9 @@ async function ouvre(id) {
   P.t0 = Math.min(P.de, ...P.sons.map(s => s.o + s.an), ...P.marques.map(m => m.de));
   P.t1 = Math.max(P.a, ...P.marques.map(m => m.a + 5000));
   t = P.de; vue0 = P.t0; vue1 = P.t1; sel = null; activite = []; morceauJoue = -1; fiches = {}; segments = []; carteCadree = false;
+  // A recording started after the pass began: the replay starts where its sound does, not on seconds of silence.
+  const debutSon = P.sons.length ? Math.min(...P.sons.map(s => s.o + s.an)) : null;
+  if (debutSon && debutSon > P.de && debutSon < P.a) t = debutSon;
   dessineListe(); construitVue(); dessineCiel(); maj();
   lire('/activite', { id: id }).then(a => { if (P && P.id === id) { activite = a; dessineFrise(); } }).catch(() => {});
   lire('/fiches', { id: id }).then(f => { if (P && P.id === id) { fiches = f; maj(); } }).catch(() => {});
@@ -629,7 +632,7 @@ function tuile(z, x, y) {
   return i.complete && i.naturalWidth ? i : null;
 }
 function cadreCarte(w, h) {
-  const pts = (P.sol || []).map(s => [s[1], s[2]]);
+  const pts = (P.sol || []).concat(P.solp || []).map(s => [s[1], s[2]]);
   if (P.qth) pts.push(P.qth);
   P.marques.forEach(m => { if (m.lat != null) pts.push([m.lat, m.lon]); });
   if (!pts.length) return;
@@ -677,23 +680,46 @@ function dessineCarte() {
   const trace = (l, couleur, ep, tiret) => { x.strokeStyle = couleur; x.lineWidth = ep; x.setLineDash(tiret || []); x.beginPath(); let pr = null;
     l.forEach(q => { const p = ecran(q[0], q[1]); if (pr && Math.abs(p[0] - pr[0]) < s / 2) x.lineTo(p[0], p[1]); else x.moveTo(p[0], p[1]); pr = p; }); x.stroke(); x.setLineDash([]); };
   const sol = P.sol || [];
+  // The whole predicted pass, dashed, under the part followed (a pass followed only in part no longer looks cut short).
+  if (P.solp && P.solp.length > 1) trace(P.solp.map(q => [q[1], q[2]]), 'rgba(0,150,170,.55)', 2, [6, 5]);
   trace(sol.map(q => [q[1], q[2]]), 'rgba(0,229,255,.35)', 3);
   const fait = sol.filter(q => q[0] <= t).map(q => [q[1], q[2]]); const ici = solA(t); if (ici) fait.push([ici[1], ici[2]]);
   trace(fait, '#00E5FF', 4);
   P.marques.filter(m => m.k === 'SSTV').forEach(m => { const l = sol.filter(q => q[0] >= m.de && q[0] <= m.a).map(q => [q[1], q[2]]);
     const a = solA(m.de), b = solA(m.a); if (a) l.unshift([a[1], a[2]]); if (b) l.push([b[1], b[2]]); trace(l, COULHEX.SSTV, 7); });
   if (ici) {
+    // The footprint as one polygon: longitudes continuous, closed over the pole when it holds it, a turn each side too.
     const rho = Math.acos(6371 / (6371 + ici[3])) * 180 / Math.PI;
-    const e = empreinte(ici[1], ici[2], rho); x.fillStyle = 'rgba(255,194,26,.12)'; x.beginPath(); let pr = null;
-    e.forEach(q => { const p = ecran(q[0], q[1]); if (pr && Math.abs(p[0] - pr[0]) < s / 2) x.lineTo(p[0], p[1]); else x.moveTo(p[0], p[1]); pr = p; }); x.fill();
-    trace(e, 'rgba(255,194,26,.9)', 2);
+    const u = []; let ref = null;
+    empreinte(ici[1], ici[2], rho).forEach(q => { let l = q[1]; if (ref != null) { while (l - ref > 180) l -= 360; while (l - ref < -180) l += 360; } ref = l; u.push([q[0], l]); });
+    const tour = u.slice(), polaire = u.length > 1 && Math.abs(u[u.length - 1][1] - u[0][1]) > 180;
+    if (polaire) { const pole = ici[1] >= 0 ? 85.05 : -85.05; u.push([pole, u[u.length - 1][1]], [pole, u[0][1]]); }
+    const px = lon => ox + wx(lon) * s, py = lat => oy + wy(lat) * s;
+    for (const d of [-360, 0, 360]) {
+      x.beginPath(); u.forEach((q, k) => k ? x.lineTo(px(q[1] + d), py(q[0])) : x.moveTo(px(q[1] + d), py(q[0]))); x.closePath();
+      x.fillStyle = 'rgba(255,194,26,.12)'; x.fill();
+      // Its edge only: the way round over the pole is not one.
+      x.beginPath(); tour.forEach((q, k) => k ? x.lineTo(px(q[1] + d), py(q[0])) : x.moveTo(px(q[1] + d), py(q[0]))); if (!polaire) x.closePath();
+      x.strokeStyle = 'rgba(255,194,26,.9)'; x.lineWidth = 2; x.stroke();
+    }
   }
-  // The stations worked or heard, linked to the satellite at their moment.
-  P.marques.filter(m => m.lat != null && m.de <= t).forEach(m => {
-    const p = ecran(m.lat, m.lon), sat = solA(m.de);
-    if (sat) { const q = ecran(sat[1], sat[2]); x.strokeStyle = COULHEX[couleur(m)]; x.globalAlpha = .6; x.lineWidth = 1.5; x.beginPath(); x.moveTo(p[0], p[1]); x.lineTo(q[0], q[1]); x.stroke(); x.globalAlpha = 1; }
-    x.fillStyle = COULHEX[couleur(m)]; x.beginPath(); x.arc(p[0], p[1], 6, 0, 7); x.fill(); x.strokeStyle = '#0B1016'; x.lineWidth = 2; x.stroke();
-    etiquette(x, m.t, p[0] + 9, p[1] - 9);
+  // The stations worked or heard, as the video draws them: a dot on the track at their moment, named;
+  // where they are, small and grey, named, linked to it.
+  P.marques.filter(m => m.k !== 'SSTV' && m.de <= t).forEach(m => {
+    // On the part followed when the moment is in it, else on the predicted pass.
+    const dansSol = sol.length > 1 && m.de >= sol[0][0] && m.de <= sol[sol.length - 1][0];
+    const sat = dansSol ? solA(m.de) : (P.solp && P.solp.length > 1 ? interpole(P.solp, m.de, 1, 2, false) : solA(m.de));
+    const q = sat ? ecran(sat[1], sat[2]) : null;
+    if (m.lat != null) {
+      const p = ecran(m.lat, m.lon);
+      if (q) { x.strokeStyle = 'rgba(122,130,142,.75)'; x.lineWidth = 1.2; x.beginPath(); x.moveTo(p[0], p[1]); x.lineTo(q[0], q[1]); x.stroke(); }
+      x.fillStyle = '#fff'; x.beginPath(); x.arc(p[0], p[1], 5, 0, 7); x.fill(); x.fillStyle = '#7A828E'; x.beginPath(); x.arc(p[0], p[1], 3.5, 0, 7); x.fill();
+      etiquette(x, m.t, p[0] + 7, p[1] + 10);
+    }
+    if (q) {
+      x.fillStyle = '#fff'; x.beginPath(); x.arc(q[0], q[1], 6, 0, 7); x.fill(); x.fillStyle = COULHEX[couleur(m)]; x.beginPath(); x.arc(q[0], q[1], 4.5, 0, 7); x.fill();
+      etiquette(x, m.t, q[0] + 8, q[1] - (m.k === 'SIGNET' ? -22 : 10));
+    }
   });
   if (P.qth) { const p = ecran(P.qth[0], P.qth[1]); x.fillStyle = '#111'; x.beginPath(); x.arc(p[0], p[1], 7, 0, 7); x.fill(); x.strokeStyle = '#fff'; x.lineWidth = 2; x.stroke();
     if (O.locator) etiquette(x, [P.indicatif, P.loc].filter(v => v).join(' · '), p[0] - 12, p[1] + 4, true); }

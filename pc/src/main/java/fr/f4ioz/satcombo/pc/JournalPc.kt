@@ -51,7 +51,8 @@ class JournalPc(
             rotorEl = if (r.rotorConnected) r.rotorActualEl else null,
             enregistrement = son.etat.value.enregistrement.ifBlank { null },
             transpondeur = station.emetteurChoisi()?.description.orEmpty(),
-            locator = e.locator)
+            locator = e.locator,
+            smetre = station.smetreRecent())
         collecte.suit(sat.catalogNumber, sat.name, horloge(), pos.azimuthDeg, pos.elevationDeg, etat)?.let { garde(it) }
     }
 
@@ -260,6 +261,13 @@ class JournalPc(
     }.getOrDefault(emptyList())
 
     // ------------------------------------------------------------------ the sound
+
+    /** Under the satellite all along its predicted pass (the map's whole pass). */
+    fun traceSolPrevue(e: JournalPassage.Entree): List<JournalPassage.Sol> {
+        val sat = satellite(e) ?: return emptyList()
+        val obs = observateur(e) ?: return emptyList()
+        return JournalPassage.solPrevu(predicteur, sat, obs, e)
+    }
 
     /** The recordings of the pass, each with when it started (its name) and its length (its header). */
     fun morceaux(e: JournalPassage.Entree): List<SonPassage.Morceau> =

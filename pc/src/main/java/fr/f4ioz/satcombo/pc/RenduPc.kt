@@ -167,22 +167,21 @@ object RenduPc {
         val haut = e.points.maxByOrNull { it.el }?.tMs
         val ici = (instant ?: haut)?.let { JournalPassage.solA(sol, it) }
         ici?.let { s ->
-            val emp = JournalPassage.empreinte(s.lat, s.lon, s.altKm)
-            val coupe = emp.zipWithNext().any { (a, b) -> kotlin.math.abs(b.second - a.second) > 180.0 }
+            // One polygon, closed over the pole when it holds it, drawn a turn each side too.
+            val poly = JournalPassage.empreintePolygone(s.lat, s.lon, s.altKm)
+            // Its edge: the circle, without the way round over the pole.
+            val polaire = poly.size > 91
+            val bord = if (polaire) poly.dropLast(2) else poly
             g.stroke = BasicStroke(1.5f * dp)
-            if (!coupe) {
+            for (d in listOf(-360.0, 0.0, 360.0)) {
                 val p = Path2D.Float()
-                emp.forEachIndexed { k, (la, lo) -> val (x, y) = xy(la, lo); if (k == 0) p.moveTo(x, y) else p.lineTo(x, y) }
+                poly.forEachIndexed { k, (la, lo) -> val (x, y) = xy(la, lo + d); if (k == 0) p.moveTo(x, y) else p.lineTo(x, y) }
                 p.closePath()
                 g.color = Color(ISS.red, ISS.green, ISS.blue, 30); g.fill(p)
-                g.color = Color(ISS.red, ISS.green, ISS.blue, 200); g.draw(p)
-            } else {
-                g.color = Color(ISS.red, ISS.green, ISS.blue, 200)
-                for ((a, b) in emp.zipWithNext()) {
-                    if (kotlin.math.abs(b.second - a.second) > 180.0) continue
-                    val (x1, y1) = xy(a.first, a.second); val (x2, y2) = xy(b.first, b.second)
-                    g.draw(java.awt.geom.Line2D.Float(x1, y1, x2, y2))
-                }
+                val c = Path2D.Float()
+                bord.forEachIndexed { k, (la, lo) -> val (x, y) = xy(la, lo + d); if (k == 0) c.moveTo(x, y) else c.lineTo(x, y) }
+                if (!polaire) c.closePath()
+                g.color = Color(ISS.red, ISS.green, ISS.blue, 200); g.draw(c)
             }
         }
         fun ligne(l: List<JournalPassage.Sol>, c: Color, s: BasicStroke) {

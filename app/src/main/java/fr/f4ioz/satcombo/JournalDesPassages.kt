@@ -238,6 +238,12 @@ class JournalDesPassages(
             JournalPassage.Sol(p.tMs, it.latDeg, it.lonDeg, it.altKm) } }
     }.getOrDefault(emptyList())
 
+    /** Under the satellite all along its predicted pass (the map's whole pass). */
+    fun traceSolPrevue(e: JournalPassage.Entree): List<JournalPassage.Sol> {
+        val sat = ui().satellites.firstOrNull { it.catalogNumber == e.catnum } ?: return emptyList()
+        return JournalPassage.solPrevu(predictor, sat, observateur(), e)
+    }
+
     /** Seconds the log's contacts are put back (logged after the contact ended). */
     fun decalageQsoS(): Int = settings.journalDecalageQsoS
     fun setDecalageQsoS(s: Int) { settings.journalDecalageQsoS = s }
