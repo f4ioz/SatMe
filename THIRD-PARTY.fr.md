@@ -42,6 +42,10 @@ celle de la tradition du logiciel radioamateur.
 | `com.squareup.okhttp3:okhttp` | Apache-2.0 | Requêtes réseau |
 | `com.github.mik3y:usb-serial-for-android` | MIT | Ponts série USB (CAT, rotor) |
 | AndroidX, Jetpack Compose, Material 3 | Apache-2.0 | Interface et cycle de vie |
+| AndroidX Media3 (ExoPlayer) | Apache-2.0 | DATV depuis un SatMe-Node, sur le téléphone |
+| Material Symbols (dessins, dans la page de SatMe-PC) | Apache-2.0 | Icônes des onglets de SatMe-PC, celles du téléphone |
+| `com.google.android.gms:play-services-code-scanner` | Propriétaire Google | Scan du QR code de SatMe-PC (sans permission caméra) |
+| LongMynd (BATC), lancé comme programme à part, non inclus | GPL-3.0 | Pilotage du MiniTiouner (DATV), SatMe-PC et SatMe-Node |
 | `com.google.android.gms:play-services-location` | Propriétaire Google | Position GPS |
 | `com.google.android.play:app-update-ktx` | Propriétaire Google | Détection de mise à jour |
 | JUnit, Robolectric (essais seulement) | EPL-1.0, Apache-2.0 | Bancs d'essai |

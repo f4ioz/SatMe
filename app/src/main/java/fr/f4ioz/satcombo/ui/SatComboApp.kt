@@ -34,6 +34,9 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.FilterAlt
 import androidx.compose.material.icons.filled.Timeline
+import androidx.compose.material.icons.filled.Cloud
+import androidx.compose.material.icons.filled.SettingsInputAntenna
+import androidx.compose.material.icons.filled.Tv
 import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.Radar
 import androidx.compose.material.icons.filled.Air
@@ -619,7 +622,8 @@ private fun OverflowMenu(ui: UiState, vm: MainViewModel) {
                 DropdownMenuItem(
                     text = { Text(t("meteor_titre")) },
                     leadingIcon = {
-                        Icon(Icons.Default.Public, null,
+                        // The cloud, as on SatMe-PC: the globe is the Globe's.
+                        Icon(Icons.Default.Cloud, null,
                             tint = if (meteorOn) Aurora else Cyan)
                     },
                     onClick = { open = false; vm.openMeteor() })
@@ -628,7 +632,8 @@ private fun OverflowMenu(ui: UiState, vm: MainViewModel) {
                 DropdownMenuItem(
                     text = { Text(t("sdr_menu")) },
                     leadingIcon = {
-                        Icon(Icons.Default.Usb, null,
+                        // The antenna, as on SatMe-PC: the dongle is a receiver, not a plug.
+                        Icon(Icons.Default.SettingsInputAntenna, null,
                             tint = if (sdrOn) Aurora else Cyan)
                     },
                     onClick = { open = false; vm.openSdr() })
@@ -650,6 +655,11 @@ private fun OverflowMenu(ui: UiState, vm: MainViewModel) {
                             tint = if (ui.qo100.auPoste || ui.qo100.aLaCle) Aurora else Cyan)
                     },
                     onClick = { open = false; vm.openQo100() })
+                // DATV, its wide band, through a SatMe-Node: the same icon as on SatMe-PC.
+                DropdownMenuItem(
+                    text = { Text(t("datv_menu")) },
+                    leadingIcon = { Icon(Icons.Default.Tv, null, tint = Cyan) },
+                    onClick = { open = false; vm.openDatv() })
             }
             if (fr.f4ioz.satcombo.data.Extensions.ROTOR in ui.extensions) {
                 DropdownMenuItem(

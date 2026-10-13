@@ -40,6 +40,7 @@ SatMe runs on a PC (Linux, Windows, Raspberry Pi) and is driven from a browser. 
 ## The log and the online log
 
 - **Delete** a contact from its row (🗑), or tick several and delete them at once.
+- **Wavelog's station locations**: "Read the profiles" shows where you are (your square, or both on a grid line) and the profile it goes to — chosen in the list, or **created** when Wavelog has none for it (DXCC, CQ and ITU zones asked). Each contact goes to the profile of where it was made from, as on the phone; a profile chosen by hand for another square is flagged, Wavelog would file the contacts under its square.
 - **Each new contact sent to Wavelog / Cloudlog by itself**, after a delay to choose (30 s to 30 min): the time to fix it or hold it back (⏸, countdown in the log). A contact the server refuses is held back with the reason. "Essayer" lists the station profiles the key gives. The phone has the same delay choice.
 - **ADIF** export, and the deposit by hand (⬆) as before.
 

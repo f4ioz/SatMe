@@ -601,13 +601,28 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 carnet?.retiens(t, q["on"] == "1")
             }
             "/api/carnet/profils" -> {
-                // The station profiles the key gives: a connection test, and the id to choose.
-                val s = station.settings
-                if (s.carnetUrl.isBlank() || s.carnetCle.isBlank()) return JSONObject().put("ok", false).put("erreur", "renseigne l'adresse et la clé, puis Enregistrer")
-                val l = runCatching { kotlinx.coroutines.runBlocking { fr.f4ioz.satcombo.data.CarnetEnLigne.profils(s.carnetUrl, s.carnetCle) } }
-                    .getOrElse { return JSONObject().put("ok", false).put("erreur", "pas de réponse : " + (it.message ?: it.javaClass.simpleName)) }
-                if (l.isEmpty()) return JSONObject().put("ok", false).put("erreur", "le carnet en ligne ne donne aucun profil (adresse ou clé ?)")
-                return ok.put("profils", JSONArray(l.map { JSONObject().put("id", it.id).put("indicatif", it.indicatif).put("carre", it.carre).put("nom", it.nom) }))
+                // The online log's station locations, and which one each place of the log goes to (here first).
+                val c = carnet ?: return JSONObject().put("ok", false)
+                kotlinx.coroutines.runBlocking { c.releveProfils() }?.let { return JSONObject().put("ok", false).put("erreur", it) }
+                if (c.profils.isEmpty()) return JSONObject().put("ok", false).put("erreur", "le carnet en ligne ne donne aucun profil (adresse ou clé ?)")
+                return ok.put("profils", JSONArray(c.profils.map { JSONObject().put("id", it.id).put("indicatif", it.indicatif).put("carre", it.carre).put("nom", it.nom) }))
+                    .put("ici", fr.f4ioz.satcombo.domain.ProfilsStation.nomEmplacement(c.ici())).put("pourIci", c.profilPourLieu(c.ici()) ?: JSONObject.NULL)
+                    .put("iciCouvert", c.couvre(c.profilPourLieu(c.ici()), c.ici()))
+                    .put("choisi", station.settings.carnetProfil)
+                    .put("lieux", JSONArray(c.lieuxDuCarnet().map { (lieu, n, p) ->
+                        JSONObject().put("lieu", fr.f4ioz.satcombo.domain.ProfilsStation.nomEmplacement(lieu)).put("n", n).put("profil", p ?: JSONObject.NULL)
+                            .put("couvert", c.couvre(p, lieu))
+                    }))
+                    // Wavelog needs these to create a profile: France's when the callsign is French.
+                    .put("creation", if (station.settings.callsign.trim().uppercase().startsWith("F"))
+                        JSONObject().put("dxcc", "227").put("pays", "FRANCE").put("cq", "14").put("itu", "27") else JSONObject())
+            }
+            "/api/carnet/profil" -> station.settings.carnetProfil = q["id"].orEmpty().trim()
+            "/api/carnet/profils/cree" -> {
+                val c = carnet ?: return JSONObject().put("ok", false)
+                val lieux = q["lieux"].orEmpty().split('|').map { l -> l.split(',').map { it.trim().uppercase() }.filter { it.isNotEmpty() }.toSet() }.filter { it.isNotEmpty() }
+                if (lieux.isEmpty()) return JSONObject().put("ok", false).put("erreur", "aucun lieu")
+                return ok.put("dit", kotlinx.coroutines.runBlocking { c.creeProfils(lieux, q["dxcc"].orEmpty(), q["pays"].orEmpty(), q["cq"].orEmpty(), q["itu"].orEmpty()) })
             }
             "/api/son/carte" -> {
                 val s = son ?: return JSONObject().put("ok", false)

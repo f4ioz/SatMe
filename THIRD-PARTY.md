@@ -42,6 +42,10 @@ position; it is also the tradition of amateur radio software.
 | `com.squareup.okhttp3:okhttp` | Apache-2.0 | Network requests |
 | `com.github.mik3y:usb-serial-for-android` | MIT | USB serial bridges (CAT, rotator) |
 | AndroidX, Jetpack Compose, Material 3 | Apache-2.0 | UI and lifecycle |
+| AndroidX Media3 (ExoPlayer) | Apache-2.0 | DATV from a SatMe-Node, on the phone |
+| Material Symbols (drawings, in SatMe-PC's page) | Apache-2.0 | SatMe-PC's tab icons, the phone's own |
+| `com.google.android.gms:play-services-code-scanner` | Google proprietary | Scanning SatMe-PC's QR code (no camera permission) |
+| LongMynd (BATC), run as a separate program, not bundled | GPL-3.0 | Driving the MiniTiouner (DATV), SatMe-PC and SatMe-Node |
 | `com.google.android.gms:play-services-location` | Google proprietary | GPS position |
 | `com.google.android.play:app-update-ktx` | Google proprietary | Update detection |
 | JUnit, Robolectric (tests only) | EPL-1.0, Apache-2.0 | Test harness |

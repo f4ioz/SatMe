@@ -14,6 +14,7 @@ import fr.f4ioz.satcombo.data.LogEntry
 import fr.f4ioz.satcombo.data.LogStore
 import fr.f4ioz.satcombo.data.Qrz
 import fr.f4ioz.satcombo.domain.Doppler
+import fr.f4ioz.satcombo.domain.ProfilsStation
 import fr.f4ioz.satcombo.domain.QrzReponse
 import fr.f4ioz.satcombo.location.Maidenhead
 import kotlinx.coroutines.Dispatchers
@@ -87,7 +88,7 @@ class CarnetPc(private val station: StationPc, val store: LogStore, private val 
         val c = LogEntry(
             timeMs = maintenant, satName = sat.name, catnum = sat.catalogNumber,
             azimuthDeg = pos?.azimuthDeg ?: 0.0, elevationDeg = pos?.elevationDeg ?: 0.0,
-            myLocator = e.locator, callsign = call, theirLocator = locator.trim().uppercase(),
+            myLocator = e.locator, myGrids = mesCarres(), callsign = call, theirLocator = locator.trim().uppercase(),
             rstSent = rstEnvoye.trim(), rstRcvd = rstRecu.trim(), note = note.trim(),
             locatorOrigine = if (locator.isBlank()) "INCONNU" else if (fiche != null && locator.trim().equals(fiche.carre, true)) "QRZ" else "SAISI",
             mode = mode(t),
@@ -180,15 +181,98 @@ class CarnetPc(private val station: StationPc, val store: LogStore, private val 
      */
     suspend fun depose(timeMs: Long): String {
         val s = station.settings
-        if (s.carnetUrl.isBlank() || s.carnetCle.isBlank() || s.carnetProfil.isBlank())
-            return "renseigne l'adresse, une clé en écriture et l'ID du profil du carnet en ligne"
+        if (s.carnetUrl.isBlank() || s.carnetCle.isBlank())
+            return "renseigne l'adresse et une clé en écriture du carnet en ligne"
         val e = store.load().firstOrNull { it.timeMs == timeMs } ?: return "contact introuvable"
-        val adif = Adif.enregistrement(e, s.callsign)
+        if (profils.isEmpty()) releveProfils()
+        val profil = profilPour(e) ?: return "aucun profil Wavelog pour " + ProfilsStation.nomEmplacement(lieuDe(e)) + " : le choisir ou le créer dans Réglages"
+        val adif = Adif.enregistrement(e, stationDuProfil(profil), s.callsign)
         if (adif.isBlank()) return "contact incomplet"
-        val r = CarnetEnLigne.depose(s.carnetUrl, s.carnetCle, s.carnetProfil, adif)
+        val r = CarnetEnLigne.depose(s.carnetUrl, s.carnetCle, profil, adif)
         val pris = CarnetEnLigne.accepte(r) || CarnetEnLigne.doublon(r)
         if (pris) store.marqueEnvoye(timeMs, horloge())
         return if (pris) "${e.callsign} déposé au carnet en ligne" else CarnetEnLigne.raison(r)
+    }
+
+    // ------------------------------------------- Wavelog's station locations, as on the phone
+
+    /** The station locations the online log declares (read by [releveProfils]). */
+    @Volatile var profils: List<ProfilsStation.Profil> = emptyList(); private set
+    @Volatile private var profilsEssai = 0L
+
+    /**
+     * The big squares the station sits in now: its own, then those within
+     * the distance chosen (a site on a grid line) — the phone's rule. Empty
+     * when it is inside one square only.
+     */
+    fun mesCarres(): String {
+        val s = station.settings
+        val mien = station.etat.value.locator.take(4).uppercase()
+        val obs = station.etat.value.observateur
+        val voisins = if (s.nearGridMeters <= 0 || obs == null) emptyList()
+            else runCatching { Maidenhead.neighbourFields(obs.latDeg, obs.lonDeg, s.nearGridMeters.toDouble()).map { it.first } }.getOrDefault(emptyList())
+        val l = (listOf(mien) + voisins.take(3)).filter { it.length == 4 }.distinct()
+        return if (l.size <= 1) "" else l.joinToString(",")
+    }
+
+    /** Where the station is now, as a location (one square, or the squares of a grid line). */
+    fun ici(): Set<String> = ProfilsStation.emplacement(station.etat.value.locator, mesCarres())
+
+    fun lieuDe(e: LogEntry): Set<String> = ProfilsStation.emplacement(e.myLocator, e.myGrids)
+
+    /** Reads the profiles from the online log; null when read, else why not. */
+    suspend fun releveProfils(): String? {
+        val s = station.settings
+        if (s.carnetUrl.isBlank() || s.carnetCle.isBlank()) return "renseigne l'adresse et la clé, puis Enregistrer"
+        return runCatching { profils = CarnetEnLigne.profils(s.carnetUrl, s.carnetCle); null }
+            .getOrElse { "pas de réponse : " + (it.message ?: it.javaClass.simpleName) }
+    }
+
+    /**
+     * The profile a contact goes to: the one covering **exactly** where it
+     * was made from; for here, the one chosen in the settings when none
+     * matches; null when there is none.
+     */
+    fun profilPour(e: LogEntry): String? = profilPourLieu(lieuDe(e))
+
+    fun profilPourLieu(lieu: Set<String>): String? {
+        val trouve = ProfilsStation.apparieEmplacements(listOf(lieu), profils, station.settings.callsign)[lieu]
+        if (trouve != null) return trouve
+        // Here, or no list read: the profile chosen by hand.
+        val choisi = station.settings.carnetProfil.ifBlank { null }
+        return if (profils.isEmpty() || lieu == ici()) choisi else null
+    }
+
+    /** Does a profile cover exactly [lieu] (rather than being only the one chosen by hand)? */
+    fun couvre(id: String?, lieu: Set<String>): Boolean =
+        id != null && ProfilsStation.apparieEmplacements(listOf(lieu), profils, station.settings.callsign)[lieu] == id
+
+    /** The station callsign of a profile ("F4IOZ/P"), else the settings' (Wavelog refuses a different one). */
+    fun stationDuProfil(id: String): String =
+        profils.firstOrNull { it.id == id }?.indicatif?.trim()?.uppercase()?.ifBlank { null } ?: station.settings.callsign
+
+    /** The log's locations, with how many contacts each, and the profile matching it. */
+    fun lieuxDuCarnet(): List<Triple<Set<String>, Int, String?>> =
+        store.load().filter { it.callsign.isNotBlank() }.groupingBy { lieuDe(it) }.eachCount()
+            .entries.sortedBy { ProfilsStation.nomEmplacement(it.key) }
+            .map { (lieu, n) -> Triple(lieu, n, profilPourLieu(lieu)) }
+
+    /**
+     * Creates in the online log the profiles for [lieux] ("CALL @ JN18");
+     * Wavelog needs the DXCC, the CQ and ITU zones. Then reads them again.
+     */
+    suspend fun creeProfils(lieux: List<Set<String>>, dxcc: String, pays: String, cq: String, itu: String): String {
+        val s = station.settings
+        if (itu.isBlank()) return "zone ITU obligatoire : Wavelog refuse ensuite chaque contact d'un profil sans elle"
+        var faits = 0; var dernier = ""
+        for (lieu in lieux) {
+            val carre = ProfilsStation.nomEmplacement(lieu)
+            if (carre == "—") continue
+            val r = CarnetEnLigne.creeProfil(s.carnetUrl, s.carnetCle, s.callsign.trim().uppercase() + " @ " + carre, carre, s.callsign, dxcc, pays, cq, itu)
+            if (CarnetEnLigne.profilEnPlace(r)) faits++ else dernier = CarnetEnLigne.raison(r)
+        }
+        releveProfils()
+        return "$faits profil(s) créé(s) sur ${lieux.size}" + (if (dernier.isBlank()) "" else " · $dernier")
     }
 
     // ------------------------------------------- each contact on its own, as on the phone
@@ -235,7 +319,7 @@ class CarnetPc(private val station: StationPc, val store: LogStore, private val 
     fun ticEnvoi() {
         val s = station.settings
         if (!s.carnetAuto || envoiEnCours) return
-        if (s.carnetUrl.isBlank() || s.carnetCle.isBlank() || s.carnetProfil.isBlank()) return
+        if (s.carnetUrl.isBlank() || s.carnetCle.isBlank()) return
         val maintenant = horloge()
         val e = store.load().filter {
             etatEnvoi(it, maintenant) == fr.f4ioz.satcombo.domain.EnvoiAuto.Etat.PRET && (reessai[it.timeMs] ?: 0L) <= maintenant
@@ -243,9 +327,18 @@ class CarnetPc(private val station: StationPc, val store: LogStore, private val 
         envoiEnCours = true
         kotlin.concurrent.thread(isDaemon = true, name = "satme-envoi") {
             try {
-                val adif = Adif.enregistrement(e, s.callsign)
+                // The profiles once, before the first upload: each contact to its own location's.
+                if (profils.isEmpty() && maintenant - profilsEssai > 600_000L) { profilsEssai = maintenant; kotlinx.coroutines.runBlocking { releveProfils() } }
+                val profil = profilPour(e)
+                if (profil == null) {
+                    store.retiens(e.timeMs, true)
+                    refus[e.timeMs] = "aucun profil Wavelog pour " + ProfilsStation.nomEmplacement(lieuDe(e))
+                    autoEtat = "${e.callsign} en pause : " + refus[e.timeMs] + " (Réglages)"
+                    return@thread
+                }
+                val adif = Adif.enregistrement(e, stationDuProfil(profil), s.callsign)
                 if (adif.isBlank()) { store.retiens(e.timeMs, true); refus[e.timeMs] = "contact incomplet"; return@thread }
-                val r = kotlinx.coroutines.runBlocking { CarnetEnLigne.depose(s.carnetUrl, s.carnetCle, s.carnetProfil, adif) }
+                val r = kotlinx.coroutines.runBlocking { CarnetEnLigne.depose(s.carnetUrl, s.carnetCle, profil, adif) }
                 val issue = CarnetEnLigne.issue(r)
                 autoEtat = when {
                     CarnetEnLigne.doublon(r) -> { store.marqueEnvoye(e.timeMs, horloge()); "${e.callsign} déjà dans le carnet en ligne" }

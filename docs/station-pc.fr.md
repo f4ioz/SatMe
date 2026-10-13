@@ -40,6 +40,7 @@ SatMe tourne sur un PC (Linux, Windows, Raspberry Pi) et se pilote depuis un nav
 ## Le carnet et le carnet en ligne
 
 - **Supprimer** un contact depuis sa ligne (🗑), ou en cocher plusieurs et les supprimer d'un coup.
+- **Les profils de station de Wavelog** : « Lire les profils » montre où l'on est (son carré, ou les deux d'une ligne de carrés) et le profil où cela part — choisi dans la liste, ou **créé** quand Wavelog n'en a pas (DXCC, zones CQ et ITU demandés). Chaque contact part au profil de l'endroit d'où il a été fait, comme sur le téléphone ; un profil choisi à la main pour un autre carré est signalé, Wavelog rangerait les contacts sous son carré.
 - **Chaque nouveau contact envoyé tout seul à Wavelog / Cloudlog**, après un délai au choix (30 s à 30 min) : le temps de le corriger ou de le retenir (⏸, décompte dans le carnet). Un contact que le serveur refuse est mis en pause, avec la raison. « Essayer » liste les profils de station que donne la clé. Le téléphone a le même choix de délai.
 - L'export **ADIF**, et le dépôt à la main (⬆) comme avant.
 

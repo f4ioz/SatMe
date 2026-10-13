@@ -1998,6 +1998,7 @@ val FR: Map<String, String> = mapOf(
     "cmd_titre" to "Poste de commande sur PC",
     "cmd_desc" to "Saisir les contacts au clavier, suivre le passage, enregistrer, changer de satellite — depuis un ordinateur du réseau.",
     "cmd_code" to "Code à saisir sur le PC",
+    "datv_menu" to "DATV (QO-100 bande large)",
     "datv_titre" to "DATV · QO-100 bande large",
     "datv_ouvrir" to "DATV bande large (MiniTiouner sur un SatMe-Node)",
     "datv_arrete" to "Réception arrêtée",

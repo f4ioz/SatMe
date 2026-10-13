@@ -1974,6 +1974,7 @@ val EN: Map<String, String> = mapOf(
     "cmd_titre" to "Control desk on a PC",
     "cmd_desc" to "Log contacts on a real keyboard, follow the pass, record, switch satellite — from a computer on the network.",
     "cmd_code" to "Code to type on the PC",
+    "datv_menu" to "DATV (QO-100 wide band)",
     "datv_titre" to "DATV · QO-100 wide band",
     "datv_ouvrir" to "DATV wide band (MiniTiouner on a SatMe-Node)",
     "datv_arrete" to "Reception stopped",

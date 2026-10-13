@@ -15,16 +15,32 @@ package fr.f4ioz.satcombo.pc
  * that works without the internet, at the foot of the mast.
  */
 object PagePc {
-    /** The tabs, in their order; the journal is a page of its own between FT8 and the settings. */
-    private val ONGLETS = listOf("station" to "Station", "carnet" to "Carnet", "agenda" to "Agenda", "carres" to "Carrés", "frise" to "Frise",
-        "sked" to "Sked", "qo100" to "QO-100", "datv" to "DATV", "sdr" to "SDR", "sondes" to "Sondes", "meteor" to "METEOR", "son" to "Son", "sstv" to "SSTV",
-        "aprs" to "APRS", "ft8" to "FT8", "journal" to "Journal", "reglages" to "Réglages")
+    /**
+     * The tabs, in their order, each with its icon — the phone's for the same
+     * function (Explore for the station and its aiming, MenuBook for the log,
+     * SatelliteAlt for QO-100…). The journal is a page of its own.
+     */
+    private val ONGLETS = listOf(
+        Triple("station", "Station", "explore"), Triple("carnet", "Carnet", "menu_book"), Triple("agenda", "Agenda", "calendar_month"),
+        Triple("carres", "Carrés", "grid_on"), Triple("frise", "Frise", "timeline"), Triple("sked", "Sked", "handshake"),
+        Triple("qo100", "QO-100", "satellite_alt"), Triple("datv", "DATV", "tv"), Triple("sdr", "SDR", "settings_input_antenna"),
+        Triple("sondes", "Sondes", "air"), Triple("meteor", "METEOR", "cloud"), Triple("son", "Son", "mic"),
+        Triple("sstv", "SSTV", "live_tv"), Triple("aprs", "APRS", "place"), Triple("ft8", "FT8", "graphic_eq"),
+        Triple("journal", "Journal", "history"), Triple("reglages", "Réglages", "settings"))
+
+    /** A tab's content: its icon above its name. */
+    private fun contenu(nom: String, icone: String) = IconesPc.svg(icone) + "<span>$nom</span>"
 
     /** The tabs here: buttons, the journal a link. */
-    private fun boutons() = ONGLETS.joinToString("") { (v, nom) ->
-        if (v == "journal") "<a href=\"/journal\" style=\"text-decoration:none\"><button title=\"Les passages enregistrés, rejoués\">Journal</button></a>"
-        else "<button data-v=\"$v\"" + (if (v == "station") " class=\"actif\"" else "") + ">$nom</button>"
+    private fun boutons() = ONGLETS.joinToString("") { (v, nom, ico) ->
+        if (v == "journal") "<a href=\"/journal\" style=\"text-decoration:none\"><button title=\"Les passages enregistrés, rejoués\">${contenu(nom, ico)}</button></a>"
+        else "<button data-v=\"$v\"" + (if (v == "station") " class=\"actif\"" else "") + ">${contenu(nom, ico)}</button>"
     }
+
+    /** The tabs' look, an icon above the name: shared by this page and the journal's header. */
+    private const val ONGLET_STYLE = "nav button{display:inline-flex;flex-direction:column;align-items:center;gap:1px;line-height:1.1}" +
+        "nav button .ico{width:20px;height:20px;fill:currentColor;opacity:.85}nav button.actif .ico{opacity:1}" +
+        "nav button span{font-size:11.5px}nav button:hover{color:var(--clair)}"
 
     /**
      * The same header at the top of the journal's page, a page of its own:
@@ -33,17 +49,18 @@ object PagePc {
      * back to this page, opened on the tab (#carnet).
      */
     fun barreJournal(): String = "<header id=\"pcBar\"><h1>SatMe-<span class=\"c\">PC</span></h1><span class=\"g\" id=\"pc-info\"></span><nav>" +
-        ONGLETS.joinToString("") { (v, nom) ->
-            if (v == "journal") "<button class=\"actif\">$nom</button>" else "<a href=\"/#$v\"><button>$nom</button></a>"
+        ONGLETS.joinToString("") { (v, nom, ico) ->
+            if (v == "journal") "<button class=\"actif\">${contenu(nom, ico)}</button>" else "<a href=\"/#$v\"><button>${contenu(nom, ico)}</button></a>"
         } + "</nav><span id=\"pc-heure\"></span></header>"
 
     /** The header's look, as on this page (sizes, gaps, the narrower screens). */
-    const val STYLE_BARRE = "#tTitre,#lienPlanche,#lienPupitre,#tSous{display:none}" +
-        "#pcBar{display:flex;align-items:baseline;gap:16px;flex-wrap:wrap;padding:10px 16px;border-bottom:1px solid var(--bord);font-size:14px}" +
+    val STYLE_BARRE = "#tTitre,#lienPlanche,#lienPupitre,#tSous{display:none}" +
+        "#pcBar{display:flex;align-items:center;gap:16px;flex-wrap:wrap;padding:10px 16px;border-bottom:1px solid var(--bord);font-size:14px}" +
         "#pcBar h1{font-size:18px;margin:0;letter-spacing:.5px}#pcBar h1 .c{color:var(--cyan)}#pcBar .g{color:var(--gris);font-size:13px}" +
         "#pc-heure{font-family:ui-monospace,Consolas,monospace;font-size:16px;margin-left:auto}" +
         "#pcBar nav{display:flex;gap:4px}#pcBar nav a{text-decoration:none}" +
         "#pcBar nav button{font-size:14px;font-family:inherit;font-weight:700;border-radius:8px;background:transparent;border:1px solid transparent;color:var(--gris);padding:6px 14px;cursor:pointer}" +
+        ONGLET_STYLE.replace("nav ", "#pcBar nav ") +
         "#pcBar nav button.actif{color:var(--cyan);border-color:var(--bord);background:var(--carte)}" +
         "@media (max-width:1900px){#pcBar nav button{padding:5px 8px;font-size:13px}#pcBar{gap:10px}#pcBar nav{gap:2px}}" +
         "@media (max-width:1500px){#pcBar nav button{padding:4px 6px;font-size:12.5px}#pcBar h1{font-size:16px}#pc-info{display:none}}" +
@@ -83,7 +100,7 @@ object PagePc {
   #vi-img { display:block; max-width:min(92vw,1280px); max-height:calc(92vh - 60px); min-width:320px; image-rendering:auto; border-radius:6px; cursor:zoom-out; background:#0E1720; }
   body { margin:0; background:var(--fond); color:var(--clair); font-size:14px;
          font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif; }
-  header { display:flex; align-items:baseline; gap:16px; flex-wrap:wrap; padding:10px 16px;
+  header { display:flex; align-items:center; gap:16px; flex-wrap:wrap; padding:10px 16px;
            border-bottom:1px solid var(--bord); }
   header h1 { font-size:18px; margin:0; letter-spacing:.5px; }
   header .g { color:var(--gris); font-size:13px; }
@@ -156,6 +173,7 @@ object PagePc {
   .discret { background:transparent; border:none; }
   nav { display:flex; gap:4px; }
   nav button { background:transparent; border:1px solid transparent; color:var(--gris); padding:6px 14px; }
+  ${ONGLET_STYLE}
   @media (max-width:1900px) { nav button { padding:5px 8px; font-size:13px; } header { gap:10px; } nav { gap:2px; } }
   @media (max-width:1500px) { nav button { padding:4px 6px; font-size:12.5px; } header h1 { font-size:16px; } #info-station { display:none; } }
   nav button.actif { color:var(--cyan); border-color:var(--bord); background:var(--carte); }
@@ -1018,9 +1036,20 @@ object PagePc {
     <div class="carte">
       <div class="t">Carnet en ligne (Wavelog / Cloudlog)</div>
       <div class="ligne" style="margin-top:0"><input id="carnetUrl" placeholder="https://wavelog.exemple.fr/"></div>
-      <div class="ligne"><input id="carnetCle" type="password" placeholder="Clé d'API (lecture et écriture)"><input id="carnetProfil" placeholder="ID du profil" style="max-width:120px">
-        <select id="carnetProfils" hidden onchange="if (this.value) g('carnetProfil').value = this.value" style="max-width:220px"></select></div>
-      <div class="ligne"><button onclick="enregistreReglages()">Enregistrer</button><button onclick="essaiCarnet()" title="Demande au carnet en ligne ses profils de station">Essayer</button><span class="petit" id="carnet-essai"></span></div>
+      <div class="ligne"><input id="carnetCle" type="password" placeholder="Clé d'API (lecture et écriture)"><input id="carnetProfil" type="hidden"></div>
+      <div class="ligne"><button onclick="enregistreReglages().then(essaiCarnet)">Enregistrer</button><button onclick="essaiCarnet()" title="Demande au carnet en ligne ses profils de station">Lire les profils</button><span class="petit" id="carnet-essai"></span></div>
+      <div id="wl-lieux" hidden style="margin-top:8px">
+        <div class="ligne" style="margin-top:0"><span>Ici <b class="cyan" id="wl-ici"></b></span><span class="petit">→</span>
+          <select id="carnetProfils" onchange="choisitProfil(this.value)" style="flex:1"></select></div>
+        <div class="avert" id="wl-sans" hidden></div>
+        <div class="petit" style="margin-top:8px">Chaque contact part au profil de l'endroit d'où il a été fait (un carré, ou les deux d'une ligne de carrés), comme sur le téléphone :</div>
+        <table style="margin-top:4px"><tbody id="wl-table"></tbody></table>
+        <div id="wl-creation" hidden style="margin-top:6px">
+          <div class="ligne"><span class="petit">Pour créer : DXCC</span><input id="wl-dxcc" style="max-width:64px"><input id="wl-pays" placeholder="Pays" style="max-width:110px">
+            <span class="petit">CQ</span><input id="wl-cq" style="max-width:50px"><span class="petit">ITU</span><input id="wl-itu" style="max-width:50px"></div>
+          <div class="ligne"><button onclick="creeProfils()" id="wl-bcree"></button><span class="petit" id="wl-msg"></span></div>
+        </div>
+      </div>
       <label class="petit" style="display:block;margin-top:10px"><input type="checkbox" id="carnetAuto" onchange="post('/api/reglages?carnetAuto=' + (this.checked ? 1 : 0)).then(chargeReglages)">
         Envoyer chaque nouveau contact au carnet en ligne</label>
       <div class="ligne" id="carnetDelaiL"><span class="petit">après</span><select id="carnetDelai" onchange="post('/api/reglages?carnetDelai=' + this.value)"></select>
@@ -1365,7 +1394,7 @@ function vue(n) {
   document.querySelectorAll('#onglets button').forEach(b => b.classList.toggle('actif', b.dataset.v === n));
   try { localStorage.setItem('vue', n); } catch (x) {}
   if (n === 'carnet') { chargeCarnet(); g('c-call').focus(); vueCarnet(vueC); }
-  if (n === 'reglages') { chargeReglages(); chargeSources(); }
+  if (n === 'reglages') { chargeReglages().then(() => { if (!wlLu && v('carnetUrl')) { wlLu = true; essaiCarnet(); } }); chargeSources(); }
   if (n === 'son' || n === 'sstv') ticSon();
   if (n === 'aprs') ticAprs();
   if (n === 'ft8') ticFt8();
@@ -1949,16 +1978,50 @@ async function essaiGp() {
   try { j = await (await fetch('/api/sources/essai?serveur=' + enc(v('gpServeur')), { method: 'POST' })).json(); } catch (x) {}
   txt('gp-essai', j && j.ok ? 'il répond : ' + j.groupes : (j && j.erreur ? j.erreur : 'pas de réponse'));
 }
+// Wavelog's station locations: the one for here (chosen, or created), and where each place of the log goes.
+let WL = null;
 async function essaiCarnet() {
   txt('carnet-essai', 'carnet en ligne…');
   let j = null;
   try { j = await (await fetch('/api/carnet/profils', { method: 'POST' })).json(); } catch (x) {}
-  if (!j || !j.ok) { txt('carnet-essai', j && j.erreur ? j.erreur : 'pas de réponse'); g('carnetProfils').hidden = true; return; }
+  if (!j || !j.ok) { txt('carnet-essai', j && j.erreur ? j.erreur : 'pas de réponse'); g('wl-lieux').hidden = true; return; }
+  WL = j;
   txt('carnet-essai', 'il répond : ' + j.profils.length + ' profil(s) de station');
+  g('wl-lieux').hidden = false;
+  txt('wl-ici', j.ici);
+  const nomP = p => p.id + ' · ' + [p.nom, p.carre, p.indicatif].filter(x => x).join(' · ');
   const s = g('carnetProfils');
-  s.innerHTML = '<option value="">choisir le profil…</option>' + j.profils.map(p => '<option value="' + esc(p.id) + '">' + esc(p.id + ' · ' + [p.indicatif, p.carre, p.nom].filter(x => x).join(' · ')) + '</option>').join('');
-  s.value = j.profils.some(p => p.id === v('carnetProfil')) ? v('carnetProfil') : ''; s.hidden = false;
+  s.innerHTML = '<option value="">— aucun —</option>' + j.profils.map(p => '<option value="' + esc(p.id) + '">' + esc(nomP(p)) + '</option>').join('');
+  s.value = j.pourIci || '';
+  // A profile chosen by hand for another square: Wavelog would file these contacts under its square.
+  const pIci = j.profils.find(x => x.id === j.pourIci);
+  const sans = g('wl-sans'); sans.hidden = j.iciCouvert;
+  sans.textContent = !j.pourIci ? 'Aucun profil Wavelog ne couvre ' + j.ici + ' : en choisir un ci-dessus, ou le créer ci-dessous.'
+    : 'Le profil choisi est en ' + (pIci ? pIci.carre : '?') + ', pas en ' + j.ici + ' : Wavelog rangerait les contacts d’ici sous son carré. Créer le profil de ' + j.ici + ' ci-dessous ?';
+  const manquants = j.lieux.filter(l => !l.couvert).map(l => l.lieu);
+  if (!j.iciCouvert && manquants.indexOf(j.ici) < 0) manquants.unshift(j.ici);
+  g('wl-table').innerHTML = j.lieux.map(l => {
+    const p = j.profils.find(x => x.id === l.profil);
+    return '<tr><td><b>' + esc(l.lieu) + '</b></td><td class="petit">' + l.n + ' contact(s)</td><td>' +
+      (p && l.couvert ? '<span class="vert">→ ' + esc(nomP(p)) + '</span>'
+        : p ? '<span class="ambre">→ ' + esc(nomP(p)) + ' (choisi à la main, son carré est ' + esc(p.carre) + ')</span>'
+        : '<span class="ambre">aucun profil</span>') + '</td></tr>';
+  }).join('') || '<tr><td class="petit">aucun contact au carnet</td></tr>';
+  g('wl-creation').hidden = manquants.length === 0;
+  g('wl-bcree').textContent = manquants.length === 1 ? 'Créer le profil « ' + manquants[0] + ' »' : 'Créer les ' + manquants.length + ' profils manquants';
+  g('wl-bcree').dataset.lieux = manquants.join('|');
+  ['dxcc', 'pays', 'cq', 'itu'].forEach(k => { if (!v('wl-' + k) && j.creation[k]) g('wl-' + k).value = j.creation[k]; });
 }
+async function choisitProfil(id) {
+  await post('/api/carnet/profil?id=' + enc(id)); g('carnetProfil').value = id; essaiCarnet();
+}
+async function creeProfils() {
+  txt('wl-msg', 'création…');
+  const j = await post('/api/carnet/profils/cree?lieux=' + enc(g('wl-bcree').dataset.lieux) + '&dxcc=' + enc(v('wl-dxcc')) + '&pays=' + enc(v('wl-pays')) +
+    '&cq=' + enc(v('wl-cq')) + '&itu=' + enc(v('wl-itu')));
+  txt('wl-msg', j && j.dit ? j.dit : 'échec'); essaiCarnet();
+}
+let wlLu = false;
 async function essaiQrz() {
   txt('qrz-etat', 'QRZ…');
   let f = null;
