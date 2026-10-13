@@ -1595,6 +1595,8 @@ val FR: Map<String, String> = mapOf(
     "auto_titre" to "Envoyer chaque contact vers Wavelog",
     "pj_n_mode_auto" to "auto (selon le passage)",
     "pj_n_dernier" to "dernier contact sur",
+    "pj_n_carnet" to "dans le carnet",
+    "pj_n_sat_inconnu" to "satellite absent du catalogue actuel : le contact ne peut pas être placé",
     "pj_n_bouton" to "+ Passage",
     "pj_n_titre" to "Nouveau passage",
     "pj_n_aide" to "Un passage suivi sans SatMe : son satellite et ses heures (sa trace est calculée), puis son enregistrement, ses images et ses contacts, dans l'onglet Ajouter.",

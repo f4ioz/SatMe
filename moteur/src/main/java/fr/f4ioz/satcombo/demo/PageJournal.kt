@@ -35,7 +35,7 @@ object PageJournal {
         "pj_afficher", "pj_aff_sstv", "pj_aff_fiche", "pj_aff_smetre", "pj_aff_freq", "pj_aff_locator", "pj_resolution",
         "pj_res_xs", "pj_res_m", "pj_res_hd", "pj_ouverture", "pj_recap", "pj_avec_son", "pj_accelere_video",
         "pj_options_aide", "pj_accelere_actif", "pj_format", "pj_format_portrait", "pj_format_paysage", "pw_code", "pw_entrer", "pw_code_faux", "pw_hors_ligne", "pw_pupitre",
-        "pj_n_bouton", "pj_n_mode_auto", "pj_n_dernier", "pj_n_titre", "pj_n_aide", "pj_n_sat", "pj_n_passage", "pj_n_autre", "pj_n_aucun", "pj_n_aos", "pj_n_los", "pj_n_creer", "pj_n_refus", "pj_n_trop_gros", "pj_n_indicatif", "pj_n_onglet", "pj_n_contact", "pj_n_son", "pj_n_images", "pj_n_mode", "pj_n_envoyer", "pj_n_envoi", "pj_n_fait", "pj_n_call", "pj_n_loc")
+        "pj_n_bouton", "pj_n_carnet", "pj_n_sat_inconnu", "pj_n_mode_auto", "pj_n_dernier", "pj_n_titre", "pj_n_aide", "pj_n_sat", "pj_n_passage", "pj_n_autre", "pj_n_aucun", "pj_n_aos", "pj_n_los", "pj_n_creer", "pj_n_refus", "pj_n_trop_gros", "pj_n_indicatif", "pj_n_onglet", "pj_n_contact", "pj_n_son", "pj_n_images", "pj_n_mode", "pj_n_envoyer", "pj_n_envoi", "pj_n_fait", "pj_n_call", "pj_n_loc")
 
     private fun js(s: String): String = buildString {
         for (ch in s) when {
@@ -255,6 +255,7 @@ function dessineListe() {
 let t = 0, joue = false, vitesse = 1, vue0 = 0, vue1 = 1, sel = null, activite = [], onglet = 'moments';
 async function ouvre(id) {
   arrete();
+  if (!P || P.id !== id) ajoutFait = '';
   P = await lire('/passage', { id: id }); utc = P.utc;
   // What the replay covers: the pass, and what is tied to it a little before or after
   // (a contact logged once the satellite had set, the recording started early).
@@ -449,11 +450,13 @@ async function nouveau() {
   chargePassages();
 }
 function panneauAjouter(p) {
-  const fin = async (j, msg) => {
-    if (!j.ok) { msg.textContent = j.erreur || T.echec; return; }
-    msg.textContent = T.n_fait;
+  // Done: said where it stays seen (the panel is drawn again with the pass), the pass and the list read again.
+  const fin = async (j, msg, quoi) => {
+    if (!j.ok) { msg.textContent = j.erreur || T.echec; msg.style.color = 'var(--ambre)'; return; }
+    ajoutFait = (quoi ? quoi + ' — ' : '') + T.n_fait + ' · ' + hms(Date.now()).slice(0, 5);
     const l = await lire('/liste'); passages = l.passages; ouvre(P.id);
   };
+  if (ajoutFait) p.appendChild(el('div', { class: 'rangee', style: 'color:var(--vert);font-weight:700', text: '✓ ' + ajoutFait }));
   // A contact, at its time: where the sound is paused, else the middle of the pass; the mode the pass's (auto).
   const call = el('input', { placeholder: T.n_call, style: 'text-transform:uppercase;width:9em', autocomplete: 'off' }), loc = el('input', { placeholder: T.n_loc, style: 'text-transform:uppercase;width:5em' });
   const md = el('select', {}, [['', T.n_mode_auto]].concat(['FM', 'USB', 'LSB', 'CW', 'DATA'].map(m => [m, m])).map(([v, l]) => el('option', { value: v, text: l })));
@@ -493,7 +496,9 @@ function panneauAjouter(p) {
   p.appendChild(el('div', { class: 'rangee' }, [tq, el('button', { class: 'discret', text: T.n_envoyer, onclick: async () => {
     if (!call.value.trim()) { m1.textContent = T.n_indicatif; return; }
     m1.textContent = T.n_envoi;
-    fin(await envoie('/nouveau/contact', { id: P.id, c: call.value.trim(), l: loc.value.trim(), md: md.value, nm: nm, qth: qth, t: depuisLocal(tq) || '' }), m1);
+    const tc = depuisLocal(tq);
+    fin(await envoie('/nouveau/contact', { id: P.id, c: call.value.trim(), l: loc.value.trim(), md: md.value, nm: nm, qth: qth, t: tc || '' }), m1,
+      call.value.trim().toUpperCase() + (tc ? ' ' + hms(tc) : '') + ' · ' + T.n_carnet);
   } }), m1]));
   // Its recording, from when it started.
   const fs = el('input', { type: 'file', accept: '.wav,.mp3,audio/wav,audio/mpeg' }), ts = heure(P.de), m2 = el('span', { class: 'aide' });
@@ -502,7 +507,7 @@ function panneauAjouter(p) {
   p.appendChild(el('div', { class: 'rangee' }, [ts, el('button', { class: 'discret', text: T.n_envoyer, onclick: async () => {
     const f = fs.files[0]; if (!f) return;
     m2.textContent = T.n_envoi;
-    fin(await envoie('/nouveau/son', { id: P.id, nom: f.name, t: depuisLocal(ts) || '' }, f), m2);
+    fin(await envoie('/nouveau/son', { id: P.id, nom: f.name, t: depuisLocal(ts) || '' }, f), m2, f.name);
   } }), m2]));
   // Its pictures, received at a time (each next one ten seconds later).
   const fi = el('input', { type: 'file', accept: 'image/png,image/jpeg', multiple: 'multiple' }), ti = heure((P.de + P.a) / 2);
@@ -514,9 +519,11 @@ function panneauAjouter(p) {
     const t0 = depuisLocal(ti) || ((P.de + P.a) / 2);
     let j = { ok: true };
     for (let i = 0; i < l.length && j.ok; i++) { m3.textContent = T.n_envoi + ' ' + (i + 1) + '/' + l.length; j = await envoie('/nouveau/image', { id: P.id, t: Math.round(t0 + i * 10000), mode: mo.value.trim() }, l[i]); }
-    fin(j, m3);
+    fin(j, m3, l.length + ' image(s)');
   } }), m3]));
 }
+// What was just added, said at the top of the Add tab (its panel is drawn again); forgotten with another pass.
+let ajoutFait = '';
 // The contact's time field: it follows the sound where it is paused, until typed in.
 let champHeureQso = null, heureTouchee = false;
 function heureContact() { return !joue && P && t > P.de && t <= P.a + 60000 ? t : (P.de + P.a) / 2; }
