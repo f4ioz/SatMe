@@ -632,6 +632,18 @@ object PagePc {
     </div>
     <div class="ligne"><input id="a-filtre" placeholder="Filtrer : indicatif, message…"><label class="petit"><input type="checkbox" id="a-isss"> par l'ISS seulement</label></div>
   </div>
+  <details class="carte" id="kiss-carte">
+    <summary class="t" style="cursor:pointer;margin:0">Radio APRS en KISS (TH-D72, TM-D710, Mobilinkd…) <span id="kiss-pastille" class="pastille off">déconnectée</span></summary>
+    <div class="ligne"><select id="kiss-port" style="flex:1"></select>
+      <select id="kiss-vitesse" style="flex:none"><option>1200</option><option>4800</option><option selected>9600</option><option>19200</option><option>38400</option><option>57600</option></select>
+      <button class="primaire" onclick="kConnecte()">Connecter</button><button onclick="kPost('deconnecter')">Déconnecter</button></div>
+    <label class="petit" style="display:block;margin-top:6px" id="kiss-lignes-l"><input type="checkbox" id="kiss-lignes"> Lever RTS/DTR à l'ouverture — seulement si ce TNC l'exige ; jamais sur l'interface d'un poste (il passerait en émission)</label>
+    <div class="ligne"><span class="petit">Écoute</span>
+      <select id="kiss-travail" style="flex:none" onchange="kPost('reglage?travail=' + this.value)"><option value="AUTO">l'ISS quand elle passe, sinon 144,800</option><option value="ISS">l'ISS (145,825)</option><option value="TERRE">au sol (144,800)</option><option value="POSTE">la fréquence de la radio, sans y toucher</option></select>
+      <label class="petit"><input type="checkbox" id="kiss-doppler" onchange="kPost('reglage?doppler=' + (this.checked ? 1 : 0))"> Doppler de l'ISS (pas de 5 kHz)</label></div>
+    <div class="petit" id="kiss-etat" style="margin-top:6px"></div>
+    <div class="petit" style="margin-top:4px">La radio décode elle-même ; ses trames arrivent ici avec les autres. Rien ne la fait émettre. Déconnectée, elle revient comme avant.</div>
+  </details>
   <div class="carte">
     <div style="max-height:calc(100vh - 250px);overflow:auto">
       <table><thead><tr><th>Heure</th><th>Station</th><th>Type</th><th>Carré</th><th>km</th><th>Chemin</th><th>Texte</th></tr></thead><tbody id="a-liste"></tbody></table>
@@ -3052,8 +3064,32 @@ setInterval(ticFt8, 1000);
 
 // ------------------------------------------------------------------ APRS
 let A = null, aVus = '';
+// The KISS radio: its port, its state, where it listens.
+let KS = null;
+async function kPost(a) { const j = await post('api/kiss/' + a); if (j && j.ok === false && j.erreur) txt('kiss-etat', j.erreur); ticKiss(); return j; }
+async function kConnecte() {
+  txt('kiss-etat', 'connexion, passage en KISS…');
+  await kPost('connecter?port=' + v('kiss-port') + '&vitesse=' + v('kiss-vitesse') + '&lignes=' + (g('kiss-lignes').checked ? 1 : 0));
+}
+async function ticKiss() {
+  try { KS = await (await fetch('api/kiss')).json(); } catch (x) { return; }
+  if (KS.absent) { g('kiss-carte').hidden = true; return; }
+  const p = g('kiss-port'), l = JSON.stringify(KS.ports);
+  if (p.dataset.vu !== l) { p.dataset.vu = l; p.innerHTML = KS.ports.map(x => '<option value="' + x.index + '">' + esc(x.libelle) + '</option>').join('') || '<option value="-1">aucun port série</option>'; if (KS.port != null) p.value = String(KS.port); }
+  if (document.activeElement !== g('kiss-vitesse') && KS.connecte) g('kiss-vitesse').value = String(KS.vitesse);
+  if (document.activeElement !== g('kiss-travail')) g('kiss-travail').value = KS.travail;
+  if (document.activeElement !== g('kiss-doppler')) g('kiss-doppler').checked = KS.doppler;
+  if (document.activeElement !== g('kiss-lignes')) g('kiss-lignes').checked = KS.lignes;
+  g('kiss-lignes-l').hidden = !KS.lignesAuChoix;
+  g('kiss-pastille').className = 'pastille ' + (KS.connecte ? 'on' : 'off');
+  txt('kiss-pastille', !KS.connecte ? 'déconnectée' : KS.initialise ? 'en KISS' : 'connectée');
+  if (KS.connecte) txt('kiss-etat', KS.nom + ' · ' + KS.vitesse + ' bauds' + (KS.frequence ? ' · ' + (KS.frequence / 1e6).toFixed(3).replace('.', ',') + ' MHz' : '') +
+    ' · ' + KS.recues + ' trame(s) reçue(s)' + (KS.erreur ? ' · ' + KS.erreur : ''));
+  else if (KS.erreur) txt('kiss-etat', KS.erreur);
+}
 async function ticAprs() {
   if (!ouverte('aprs')) return;
+  ticKiss();
   try { A = await (await fetch('api/aprs')).json(); } catch (x) { return; }
   if (!A.present) return;
   txt('a-n', String(A.paquets.length)); txt('a-stations', String(A.nbStations)); txt('a-iss', String(A.viaIss));

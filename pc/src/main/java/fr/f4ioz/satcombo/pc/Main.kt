@@ -75,6 +75,8 @@ fun main(args: Array<String>) {
     // The sound card used last time, started again: listening opens nothing on the rig.
     son.carte.takeIf { it.isNotBlank() }?.let { son.son.demarre(it) }
     val journal = JournalPc(station, carnet, son, File(dossier, "journal"))
+    // A KISS radio on a serial port: nothing opened until asked.
+    val kiss = KissPc(station, son.aprs)
     // The SDR dongle: nothing opened until asked (rtl_tcp started then, stopped with it).
     val meteor = MeteorPc(station, File(dossier, "meteor"))
     val sdr = SdrPc(station, son.son, station.stockage, portee, dossierSondes = File(dossier, "sondes"), meteor = meteor)
@@ -84,6 +86,7 @@ fun main(args: Array<String>) {
             runCatching { journal.tic() }
             runCatching { carnet.ticEnvoi() }
             runCatching { carnet.ticAmsat() }
+            runCatching { kiss.tic() }
             runCatching { sdr.ticMeteor() }
             kotlinx.coroutines.delay(1000)
         }
@@ -98,7 +101,7 @@ fun main(args: Array<String>) {
     // DATV with a MiniTiouner, through LongMynd: nothing started until asked.
     val datv = DatvPc(station.stockage, File(dossier, "enregistrements"))
     val serveur = ServeurPc(station, port, reseau, carnet, son, journalWeb, ImportPc(station, carnet, journal), sdr, videoSked, telephone, appairage, datv,
-        PlancheWebPc(station, son, dossier))
+        PlancheWebPc(station, son, dossier), kiss)
     serveur.demarre()
     println("SatMe-PC " + versionPc())
     println("  page      : http://localhost:${serveur.portReel}/" + if (reseau) "  (ouverte au réseau)" else "")
@@ -111,6 +114,8 @@ fun main(args: Array<String>) {
     }
     Runtime.getRuntime().addShutdownHook(Thread {
         runCatching { journal.ferme() }
+        // The KISS radio put back as it was.
+        runCatching { kiss.deconnecte() }
         runCatching { sdr.arrete() }
         runCatching { datv.arrete() }
         runCatching { son.arreteEnregistrement(); son.son.arrete() }

@@ -147,6 +147,14 @@ object PagesPcTelephone {
                     val a = fr.f4ioz.satcombo.aprs.AprsHub.etat.value
                     json(ApiRadio.aprs(a.paquets, a.ecoute, a.nouveaux, u.observer))
                 }
+                // The KISS radio on the phone's USB (its APRS screen's): its adapters listed only, none opened here.
+                "/api/kiss" -> {
+                    val l = fr.f4ioz.satcombo.aprs.TncKiss.appareils(vm.getApplication())
+                    val s = vm.aprs
+                    json(ApiRadio.kiss(fr.f4ioz.satcombo.aprs.TncKiss.etat.value, l.mapIndexed { i, a -> i to a.nom },
+                        l.indexOfFirst { it.cle == s.kissCle() }.takeIf { it >= 0 }, s.travail(), s.kissDoppler(),
+                        lignesLevees = false, lignesAuChoix = false, voulue = null))
+                }
                 "/api/ft8" -> {
                     val f = fr.f4ioz.satcombo.ft8.Ft8Hub.state.value
                     val faits = u.log.map { it.callsign.uppercase().substringBefore('/') }.toHashSet()
@@ -476,6 +484,19 @@ object PagesPcTelephone {
             "/api/datv/noeud" -> { vm.datv.rejoins(p("adresse").trim(), p("code").trim()); OK }
             "/api/datv/enregistre", "/api/datv/vlc", "/api/datv/chemin" ->
                 JSONObject().put("ok", false).put("erreur", "sur le téléphone, l'image et le son sont sur son écran DATV")
+            // ---- the KISS radio: the gestures of the phone's APRS screen
+            "/api/kiss/connecter" -> {
+                val a = fr.f4ioz.satcombo.aprs.TncKiss.appareils(vm.getApplication()).getOrNull(p("port").toIntOrNull() ?: -1)
+                    ?: return JSONObject().put("ok", false).put("erreur", "adaptateur inconnu")
+                vm.aprs.kissConnecte(a.cle, p("vitesse").toIntOrNull() ?: 9600); OK
+            }
+            "/api/kiss/deconnecter" -> { vm.aprs.kissDeconnecte(); OK }
+            "/api/kiss/reglage" -> {
+                // One setting a call: the Doppler, or else where it listens ("POSTE": its own frequency, left alone).
+                if (p("doppler").isNotEmpty()) vm.aprs.setKissDoppler(p("doppler") == "1")
+                else p("travail").takeIf { it in setOf("TERRE", "ISS", "AUTO", "POSTE") }?.let { vm.aprs.setTravail(it) }
+                OK
+            }
             // ---- FT8: the phone's decoder, started and stopped from the page
             "/api/ft8" -> {
                 val f = fr.f4ioz.satcombo.ft8.Ft8Hub

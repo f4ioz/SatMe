@@ -149,27 +149,8 @@ class AprsStation(
 
     /** Where the KISS radio should be now, or null to leave it. */
     private fun kissFrequenceVoulue(): Long? {
-        val base = when (settings.aprsTravail) {
-            "TERRE" -> 144_800_000L
-            "ISS" -> 145_825_000L
-            "AUTO" -> if (issEnVue()) 145_825_000L else 144_800_000L
-            else -> return null
-        }
-        return if (base == 145_825_000L && settings.aprsKissDoppler) base + palierDoppler(base) else base
-    }
-
-    /**
-     * The ISS Doppler at [hz], in whole 5 kHz steps (the TH-D72's finest
-     * grid for 145.825): +5 kHz early in the pass, 0 around its highest
-     * point, −5 kHz at the end. Zero when the ISS is down.
-     */
-    private fun palierDoppler(hz: Long): Long {
-        val sat = iss() ?: return 0L
-        val obs = ui().observer ?: return 0L
-        val p = runCatching { predictor.positionAt(sat, obs, System.currentTimeMillis()) }.getOrNull() ?: return 0L
-        if (p.elevationDeg <= 0.0) return 0L
-        val decalage = -hz * p.rangeRateKmS / 299_792.458
-        return kotlin.math.round(decalage / 5_000.0).toLong() * 5_000L
+        val p = iss()?.let { sat -> ui().observer?.let { obs -> runCatching { predictor.positionAt(sat, obs, System.currentTimeMillis()) }.getOrNull() } }
+        return fr.f4ioz.satcombo.aprs.FrequenceKiss.voulue(settings.aprsTravail, issEnVue(), settings.aprsKissDoppler, p?.elevationDeg, p?.rangeRateKmS)
     }
 
     fun kissDoppler(): Boolean = settings.aprsKissDoppler
@@ -183,12 +164,12 @@ class AprsStation(
      */
     suspend fun kissTic() {
         if (settings.aprsMode != "KISS") return
-        if (settings.aprsTravail != "AUTO" && !(settings.aprsTravail == "ISS" && settings.aprsKissDoppler)) return
+        if (!fr.f4ioz.satcombo.aprs.FrequenceKiss.suivie(settings.aprsTravail, settings.aprsKissDoppler)) return
         val k = fr.f4ioz.satcombo.aprs.TncKiss.etat.value
         if (!k.connecte || !k.initialise || k.frequenceHz == null) return
         val hz = kissFrequenceVoulue() ?: return
         if (k.frequenceHz == hz) return
-        if (System.currentTimeMillis() - kissChangeMs < 60_000L) return
+        if (System.currentTimeMillis() - kissChangeMs < fr.f4ioz.satcombo.aprs.FrequenceKiss.INTERVALLE_MS) return
         kissChangeMs = System.currentTimeMillis()
         fr.f4ioz.satcombo.aprs.TncKiss.regleFrequence(hz)
     }

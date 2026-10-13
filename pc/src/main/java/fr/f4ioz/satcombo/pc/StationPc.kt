@@ -254,6 +254,14 @@ class StationPc(
 
     // ---------------------------------------------------------------- QO-100
 
+    /** Where satellite [catnum] is from here at [t] (elevation, range rate…); null when unknown. */
+    fun positionSatellite(catnum: Int, t: Long): fr.f4ioz.satcombo.data.SatPosition? {
+        val e = _etat.value
+        val sat = e.satellites.firstOrNull { it.catalogNumber == catnum } ?: return null
+        val obs = e.observateur ?: return null
+        return runCatching { predicteur.positionAt(sat, obs, t) }.getOrNull()
+    }
+
     /** [catnum]'s passes over in the last three days, newest first: where a contact typed afterwards goes. */
     fun passagesFinis(catnum: Int): List<fr.f4ioz.satcombo.data.SatPass> {
         val e = _etat.value

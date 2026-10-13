@@ -40,7 +40,9 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 private val journal: JournalWebPc? = null, private val importPc: ImportPc? = null,
                 private val sdr: SdrPc? = null, private val videoSked: VideoSked? = null,
                 private val telephone: TelephonePc? = null, private val appairage: AppairagePc? = null,
-                private val datv: DatvPc? = null, private val planche: PlancheWebPc? = null) {
+                private val datv: DatvPc? = null, private val planche: PlancheWebPc? = null,
+    /** The KISS radio on a serial port (APRS tab). */
+    private val kiss: KissPc? = null) {
 
     private var socket: ServerSocket? = null
     val portReel: Int get() = socket?.localPort ?: port
@@ -259,6 +261,16 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 envoie(sortie, "200 OK", "application/json; charset=utf-8", o.toString().toByteArray())
             }
             "/api/ft8" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JsonPc.ft8(son, station, carnet).toString().toByteArray())
+            "/api/kiss" -> {
+                val k = kiss
+                val o = if (k == null) JSONObject().put("absent", true) else {
+                    val l = station.ports.liste()
+                    fr.f4ioz.satcombo.demo.ApiRadio.kiss(k.lien.etat.value, l.map { it.index to it.libelle },
+                        l.firstOrNull { it.cle == station.settings.aprsKissCle }?.index, station.settings.aprsTravail, station.settings.aprsKissDoppler,
+                        k.lignesLevees, lignesAuChoix = true, voulue = k.frequenceVoulue())
+                }
+                envoie(sortie, "200 OK", "application/json; charset=utf-8", o.toString().toByteArray())
+            }
             "/api/aprs" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JsonPc.aprs(son, station).toString().toByteArray())
             "/api/son" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JsonPc.son(son).toString().toByteArray())
             "/api/sstv/encours.png" -> son?.imageEnCours()?.let { envoie(sortie, "200 OK", "image/png", it) }
@@ -586,6 +598,13 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 if (lieux.isEmpty()) return JSONObject().put("ok", false).put("erreur", "aucun lieu")
                 return ok.put("dit", kotlinx.coroutines.runBlocking { c.creeProfils(lieux, q["dxcc"].orEmpty(), q["pays"].orEmpty(), q["cq"].orEmpty(), q["itu"].orEmpty()) })
             }
+            "/api/kiss/connecter" -> {
+                val k = kiss ?: return JSONObject().put("ok", false)
+                kotlinx.coroutines.runBlocking { k.connecte(entier("port") ?: -1, entier("vitesse") ?: 9600, q["lignes"] == "1") }
+                    ?.let { return JSONObject().put("ok", false).put("erreur", it) }
+            }
+            "/api/kiss/deconnecter" -> kiss?.deconnecte()
+            "/api/kiss/reglage" -> kiss?.let { k -> kotlinx.coroutines.runBlocking { k.regle(q["travail"], q["doppler"]?.let { it == "1" }) } }
             "/api/son/carte" -> {
                 val s = son ?: return JSONObject().put("ok", false)
                 val nom = q["nom"].orEmpty()

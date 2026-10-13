@@ -74,4 +74,18 @@ object ApiRadio {
                     .put("fait", e.appelant?.uppercase()?.substringBefore('/') in faits)
                     .put("km", if (ll != null && obs != null) Math.round(fr.f4ioz.satcombo.sonde.Geo.distanceKm(obs.latDeg, obs.lonDeg, ll.first, ll.second)) else JSONObject.NULL)
             }))
+
+    /**
+     * The KISS radio as the APRS tab shows it: connected, in KISS, its
+     * frequency, what it received; [ports] the serial ports to choose from,
+     * [port] the one kept; the working mode and the Doppler.
+     */
+    fun kiss(e: fr.f4ioz.satcombo.aprs.LienKiss.Etat, ports: List<Pair<Int, String>>, port: Int?, travail: String, doppler: Boolean,
+             lignesLevees: Boolean, lignesAuChoix: Boolean, voulue: Long?): JSONObject =
+        JSONObject().put("connecte", e.connecte).put("nom", e.nom).put("vitesse", e.vitesse).put("initialise", e.initialise)
+            .put("recues", e.recues).put("envoyees", e.envoyees).put("erreur", e.erreur ?: "")
+            .put("frequence", e.frequenceHz ?: JSONObject.NULL).put("bande", e.bande ?: JSONObject.NULL)
+            .put("ports", JSONArray(ports.map { (i, l) -> JSONObject().put("index", i).put("libelle", l) }))
+            .put("port", port ?: JSONObject.NULL).put("travail", travail).put("doppler", doppler)
+            .put("lignes", lignesLevees).put("lignesAuChoix", lignesAuChoix).put("voulue", voulue ?: JSONObject.NULL)
 }
