@@ -214,36 +214,24 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
             }
             "/api/frise" -> {
                 val (debut, lignes) = kotlinx.coroutines.runBlocking { station.frise((q["h"]?.toIntOrNull() ?: 12).coerceIn(2, 48)) }
-                envoie(sortie, "200 OK", "application/json; charset=utf-8", JSONObject().put("debut", debut)
-                    .put("lignes", JSONArray(lignes.map { l -> JSONObject().put("nom", l.sat.name).put("catnum", l.sat.catalogNumber)
-                        .put("el", JSONArray(l.elevations.map { Math.round(it * 10) / 10.0 })) })).toString().toByteArray())
+                envoie(sortie, "200 OK", "application/json; charset=utf-8", fr.f4ioz.satcombo.demo.ApiCalculs.friseJson(debut, lignes).toString().toByteArray())
             }
             "/api/sked" -> {
                 val f = kotlinx.coroutines.runBlocking { station.sked(q["catnum"]?.toIntOrNull() ?: 0, q["loc"].orEmpty(), q["minEl"]?.toDoubleOrNull() ?: 0.0) }
-                val o = if (f == null) JSONObject().put("ok", false).put("erreur", "carré non reconnu")
-                    else JSONObject().put("ok", true).put("fenetres", JSONArray(f.map { w -> JSONObject().put("de", w.deMs).put("a", w.aMs)
-                        .put("elMoi", w.elMoi).put("elAutre", w.elAutre).put("azMoi", Math.round(w.azMoi)).put("azAutre", Math.round(w.azAutre))
-                        .put("debutTrace", w.debutTrace).put("finTrace", w.finTrace) }))
-                envoie(sortie, "200 OK", "application/json; charset=utf-8", o.toString().toByteArray())
+                envoie(sortie, "200 OK", "application/json; charset=utf-8", fr.f4ioz.satcombo.demo.ApiCalculs.skedJson(f).toString().toByteArray())
             }
             "/api/sked/trace" -> {
                 val tr = kotlinx.coroutines.runBlocking { station.traceSked(q["catnum"]?.toIntOrNull() ?: 0, q["loc"].orEmpty(),
                     q["de"]?.toLongOrNull() ?: 0L, q["a"]?.toLongOrNull() ?: 0L) }
-                fun r(x: Double, n: Int) = Math.round(x * n) / n.toDouble()
-                val o = if (tr == null) JSONObject().put("ok", false)
-                    else JSONObject().put("ok", true)
-                        .put("moi", JSONObject().put("lat", tr.moi.latDeg).put("lon", tr.moi.lonDeg))
-                        .put("autre", JSONObject().put("lat", tr.autre.latDeg).put("lon", tr.autre.lonDeg))
-                        .put("points", JSONArray(tr.points.map { p -> JSONArray(listOf(p.t, r(p.azMoi, 10), r(p.elMoi, 10), r(p.azAutre, 10), r(p.elAutre, 10),
-                            r(p.lat, 100), r(p.lon, 100), Math.round(p.altKm))) }))
-                envoie(sortie, "200 OK", "application/json; charset=utf-8", o.toString().toByteArray())
+                envoie(sortie, "200 OK", "application/json; charset=utf-8", fr.f4ioz.satcombo.demo.ApiCalculs.traceSkedJson(tr).toString().toByteArray())
             }
             "/api/wavelog/profils" -> {
                 val (l, err) = importPc?.let { kotlinx.coroutines.runBlocking { it.profils() } } ?: (emptyList<fr.f4ioz.satcombo.domain.ProfilsStation.Profil>() to "indisponible")
                 envoie(sortie, "200 OK", "application/json; charset=utf-8", JSONObject().put("erreur", err ?: "")
                     .put("profils", JSONArray(l.map { JSONObject().put("id", it.id).put("carre", it.carre).put("indicatif", it.indicatif).put("nom", it.nom) })).toString().toByteArray())
             }
-            "/api/carres" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JsonPc.carres(carnet, station).toString().toByteArray())
+            "/api/carres" -> envoie(sortie, "200 OK", "application/json; charset=utf-8",
+                fr.f4ioz.satcombo.demo.ApiCalculs.carres(carnet?.contacts().orEmpty(), station.etat.value.locator, station.etat.value.observateur).toString().toByteArray())
             "/api/carnet/propositions" -> {
                 val saisie = q["c"].orEmpty()
                 val o = carnet?.let { c ->
@@ -900,11 +888,7 @@ object JsonPc {
             .put("refCalib", e.refCalibHz ?: JSONObject.NULL).put("refTx", e.refTxHz ?: JSONObject.NULL))
         o.put("passagesSuivi", JSONArray(e.passagesSuivi.map { passage(it, st) }))
         o.put("agendaSuivi", e.agendaSuivi)
-        o.put("agenda", JSONArray(e.agenda.filter { it.endOrStartMs >= e.maintenant - 3_600_000L }.take(100).map { a ->
-            JSONObject().put("id", a.id).put("titre", a.title).put("sat", a.satName).put("de", a.timeMs).put("a", a.endOrStartMs)
-                .put("actif", a.enabled).put("type", a.kind).put("note", a.note).put("freq", a.freqHz)
-                .put("enCours", a.activeAt(e.maintenant, 0L))
-        }))
+        o.put("agenda", fr.f4ioz.satcombo.demo.ApiCalculs.agendaJson(e.agenda, e.maintenant))
         o.put("repos", e.repos ?: JSONObject.NULL)
         o.put("ciel", JSONObject().put("dl", dl ?: JSONObject.NULL).put("ul", ul ?: JSONObject.NULL))
         val rx = st.convRx(); val tx = st.convTx()
@@ -952,22 +936,6 @@ object JsonPc {
      * The squares worked (4 characters), from the log: how many contacts,
      * the first one, who, on which satellites; and mine with its neighbours.
      */
-    fun carres(c: CarnetPc?, st: StationPc): JSONObject {
-        val l = c?.contacts().orEmpty().filter { it.theirLocator.length >= 4 && fr.f4ioz.satcombo.location.Maidenhead.centre(it.theirLocator.take(4)) != null }
-        val parCarre = l.groupBy { it.theirLocator.take(4).uppercase() }
-        val mon = st.etat.value.locator.take(4).uppercase()
-        val obs = st.etat.value.observateur
-        return JSONObject().put("mon", mon).put("lat", obs?.latDeg ?: JSONObject.NULL).put("lon", obs?.lonDeg ?: JSONObject.NULL)
-            .put("champs", parCarre.keys.map { it.take(2) }.distinct().size)
-            .put("carres", JSONArray(parCarre.entries.sortedBy { it.key }.map { (k, q) ->
-                val centre = fr.f4ioz.satcombo.location.Maidenhead.centre(k)
-                JSONObject().put("c", k).put("n", q.size).put("premier", q.minOf { it.timeMs }).put("dernier", q.maxOf { it.timeMs })
-                    .put("indicatifs", JSONArray(q.map { it.callsign }.distinct().take(12)))
-                    .put("sats", JSONArray(q.map { it.satName }.distinct()))
-                    .put("km", if (obs != null && centre != null) Math.round(fr.f4ioz.satcombo.sonde.Geo.distanceKm(obs.latDeg, obs.lonDeg, centre.first, centre.second)) else JSONObject.NULL)
-            }))
-    }
-
     /** The settings shown on the page; passwords and keys never come back, only whether they are set. */
     fun datv(d: DatvPc): JSONObject = Datv.json(d.etat, d.reglage, d.constellation())
         .put("noeud", d.noeud).put("nomNoeud", d.nomNoeud)

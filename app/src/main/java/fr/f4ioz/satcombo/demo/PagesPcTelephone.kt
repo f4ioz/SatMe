@@ -24,7 +24,7 @@ object PagesPcTelephone {
     @Volatile var vm: MainViewModel? = null
 
     /** The tabs the phone serves so far; the page hides the others. */
-    val ONGLETS = listOf("station", "carnet", "journal", "planche")
+    val ONGLETS = listOf("station", "carnet", "agenda", "carres", "frise", "sked", "journal", "planche")
 
     /**
      * The page: SatMe-PC's, the key from the desk put in a cookie for its
@@ -49,8 +49,30 @@ object PagesPcTelephone {
                 "/api/capacites" -> json(JSONObject().put("onglets", JSONArray(ONGLETS)).put("serveur", "telephone"))
                 "/api/etat" -> json(etat(vm))
                 "/api/passages" -> json(JSONObject().put("calcul", u.loading).put("liste", JSONArray(u.passes.take(300).map {
-                    ApiStation.passage(it, fav = it.catalogNumber in u.favorites)
+                    ApiStation.passage(it, fav = it.catalogNumber in u.favorites, agenda = vm.agendaForPass(it) != null)
                 })))
+                // ---- Timeline, Sked, Squares: the engine's computations, from the phone's satellites, place and log
+                "/api/frise" -> {
+                    val obs = u.observer ?: return json(ApiCalculs.friseJson(System.currentTimeMillis(), emptyList()))
+                    val debut = System.currentTimeMillis() / 60_000L * 60_000L
+                    val sats = ApiCalculs.satellitesFrise(u.satellites, u.favorites, u.selected, u.agenda, debut)
+                    json(ApiCalculs.friseJson(debut, ApiCalculs.frise(vm.predicteurPourPage(), obs, sats, debut, (p("h").toIntOrNull() ?: 12).coerceIn(2, 48))))
+                }
+                "/api/sked" -> {
+                    val sat = u.satellites.firstOrNull { it.catalogNumber == p("catnum").toIntOrNull() }
+                    val obs = u.observer
+                    json(if (sat == null || obs == null) ApiCalculs.skedJson(emptyList())
+                        else ApiCalculs.skedJson(ApiCalculs.sked(vm.predicteurPourPage(), sat, obs, p("loc"), u.minElevDeg.toDouble(),
+                            p("minEl").toDoubleOrNull() ?: 0.0, System.currentTimeMillis())))
+                }
+                "/api/sked/trace" -> {
+                    val sat = u.satellites.firstOrNull { it.catalogNumber == p("catnum").toIntOrNull() }
+                    val obs = u.observer
+                    json(ApiCalculs.traceSkedJson(if (sat == null || obs == null) null
+                        else ApiCalculs.traceSked(vm.predicteurPourPage(), sat, obs, p("loc"), p("de").toLongOrNull() ?: 0L, p("a").toLongOrNull() ?: 0L)))
+                }
+                "/api/sked/video" -> json(JSONObject().put("ok", false).put("erreur", "la vidéo d'un sked se fait sur le téléphone, dans son écran Sked"))
+                "/api/carres" -> json(ApiCalculs.carres(u.log, vm.myLocator(), u.observer))
                 "/api/satellites" -> json(JSONArray(u.satellites.map { JSONObject().put("nom", it.name).put("catnum", it.catalogNumber) }))
                 // The USB adapters plugged into the phone, listed only (none opened: RTS/DTR untouched).
                 "/api/ports" -> json(JSONArray(vm.listeUsb().mapIndexed { i, d ->
@@ -162,6 +184,29 @@ object PagesPcTelephone {
                 n("minEl")?.let { r.setRotorMinEl(it) }; n("ecart")?.let { r.setRotorDeadband(it) }; n("avantAos")?.let { r.setRotorPreAos(it) }
                 OK
             }
+            // ---- the agenda: the phone's own (the same AgendaStore as SatMe-PC's)
+            "/api/agenda/passage" -> {
+                val n = p("catnum").toIntOrNull(); val aos = p("aos").toLongOrNull()
+                val pass = u.passes.firstOrNull { it.catalogNumber == n && it.aosEpochMs == aos }
+                    ?: return JSONObject().put("ok", false).put("erreur", "passage inconnu")
+                val mis = ApiCalculs.basculePassage(vm.stockageAgenda(), u.agenda, pass, System.currentTimeMillis())
+                vm.refreshAgenda(); OK.put("ajoute", mis)
+            }
+            "/api/agenda/sked" -> {
+                val sat = u.satellites.firstOrNull { it.catalogNumber == p("catnum").toIntOrNull() } ?: return JSONObject().put("ok", false)
+                ApiCalculs.skedAgenda(vm.stockageAgenda(), sat, p("loc"), p("de").toLongOrNull() ?: 0L, p("a").toLongOrNull() ?: 0L, System.currentTimeMillis())
+                vm.refreshAgenda(); OK
+            }
+            "/api/agenda/retire" -> {
+                p("id").toLongOrNull()?.let { fr.f4ioz.satcombo.data.AgendaStore.remove(vm.stockageAgenda(), it) }
+                vm.refreshAgenda(); OK
+            }
+            "/api/agenda/active" -> {
+                val a = u.agenda.firstOrNull { it.id == p("id").toLongOrNull() } ?: return JSONObject().put("ok", false)
+                fr.f4ioz.satcombo.data.AgendaStore.put(vm.stockageAgenda(), a.copy(enabled = !a.enabled))
+                vm.refreshAgenda(); OK
+            }
+            "/api/agenda/suivi" -> JSONObject().put("ok", false).put("erreur", "sur le téléphone, ce sont les notifications du rendez-vous qui préviennent")
             else -> JSONObject().put("ok", false).put("erreur", "pas encore sur le téléphone")
         }
     }
@@ -184,8 +229,8 @@ object PagesPcTelephone {
         o.put("emetteur", u.selectedTxIndex)
         o.put("reglageSat", JSONObject().put("calib", u.calibShiftHz).put("tx", u.txShiftHz)
             .put("refCalib", u.catUi.refCalibShiftHz ?: JSONObject.NULL).put("refTx", u.catUi.refTxShiftHz ?: JSONObject.NULL))
-        o.put("passagesSuivi", JSONArray(siens.take(8).map { ApiStation.passage(it, fav = it.catalogNumber in u.favorites) }))
-        o.put("agendaSuivi", false).put("agenda", JSONArray()).put("repos", JSONObject.NULL)
+        o.put("passagesSuivi", JSONArray(siens.take(8).map { ApiStation.passage(it, fav = it.catalogNumber in u.favorites, agenda = vm.agendaForPass(it) != null) }))
+        o.put("agendaSuivi", false).put("agenda", ApiCalculs.agendaJson(u.agenda, maintenant)).put("repos", JSONObject.NULL)
         val (dl, ul) = ApiStation.frequencesDuCiel(u.transmitters.getOrNull(u.selectedTxIndex), u.livePosition?.rangeRateKmS ?: 0.0, null, u.calibShiftHz, u.txShiftHz)
         o.put("ciel", JSONObject().put("dl", dl ?: JSONObject.NULL).put("ul", ul ?: JSONObject.NULL))
         o.put("convertisseurs", JSONObject().put("rxOl", 0).put("rxInv", false).put("txOl", 0).put("txInv", false))

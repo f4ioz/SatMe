@@ -5498,6 +5498,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun etatBoucleCat(): fr.f4ioz.satcombo.station.EtatBoucleCat = stationCat.etat.value
     /** The USB adapters plugged in, listed only: none opened (RTS/DTR untouched). */
     fun listeUsb(): List<fr.f4ioz.satcombo.cat.UsbSerialInfo> = ft817.listDevices()
+    /** The pass predictor and the agenda's storage, for SatMe-PC's page (Timeline, Sked, Agenda). */
+    fun predicteurPourPage(): PassPredictor = predictor
+    fun stockageAgenda(): fr.f4ioz.satcombo.plateforme.Stockage =
+        fr.f4ioz.satcombo.data.stockage(getApplication(), fr.f4ioz.satcombo.data.AgendaStore.PREFS)
+
     /** The mast, for SatMe-PC's page: the same StationRotor the PC drives. */
     fun rotorPourPage(): fr.f4ioz.satcombo.station.StationRotor = stationRotor
 
