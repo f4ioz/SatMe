@@ -48,9 +48,9 @@ class AprsPc(private val dossier: File, private val satellite: () -> String, pri
     }
 
     private fun lit(ligne: String): Paquet? = runCatching {
-        val (ms, _, b64) = ligne.split('\t', limit = 3)
+        val (ms, sat, b64) = ligne.split('\t', limit = 3)
         val t = Ax25.decode(Base64.getDecoder().decode(b64)) ?: return null
-        Aprs.lit(t, ms.toLong())
+        Aprs.lit(t, ms.toLong()).copy(emis = sat == EMIS)
     }.getOrNull()
 
     /** A block of the card's sound. */
@@ -72,5 +72,19 @@ class AprsPc(private val dossier: File, private val satellite: () -> String, pri
         return true
     }
 
-    companion object { const val MAX = 2000 }
+    /** A frame this station has just sent: shown and kept with the others, marked as sent (as on the phone). */
+    @Synchronized fun ajouteEmis(t: Trame, quand: Long) {
+        val p = Aprs.lit(t, quand).copy(emis = true)
+        runCatching {
+            dossier.mkdirs()
+            File(dossier, jour.format(Date(quand)) + ".txt").appendText("$quand\t$EMIS\t" + Base64.getEncoder().encodeToString(Ax25.encode(t)) + "\n")
+        }
+        paquets = (listOf(p) + paquets).take(MAX)
+    }
+
+    companion object {
+        const val MAX = 2000
+        /** In the file's satellite column: this line was sent, not heard (the phone's mark). */
+        const val EMIS = "↑"
+    }
 }

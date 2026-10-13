@@ -50,16 +50,10 @@ class AprsStation(
     fun setNiveau(v: Float) { settings.aprsNiveau = v }
 
     /** The sender: the callsign from the settings, with the chosen SSID. */
-    fun source(): String = settings.callsign.trim().uppercase().let {
-        if (settings.aprsSsid > 0 && it.isNotEmpty()) "$it-${settings.aprsSsid}" else it
-    }
+    fun source(): String = fr.f4ioz.satcombo.aprs.EmissionKiss.source(settings)
 
     /** Next message number (1..999), so an ack can be matched. */
-    fun numeroSuivant(): String {
-        val n = settings.aprsNumero % 999 + 1
-        settings.aprsNumero = n
-        return n.toString()
-    }
+    fun numeroSuivant(): String = fr.f4ioz.satcombo.aprs.EmissionKiss.numeroSuivant(settings)
 
     /**
      * The frame's audio, checked by decoding it back before anything is
@@ -188,17 +182,10 @@ class AprsStation(
             if (!fr.f4ioz.satcombo.aprs.TncKiss.etat.value.connecte) {
                 envoi.value = t("aprs_kiss_non_connecte"); return@launch
             }
-            // Frequency read (or set) before KISS (TH-D72 "FO"), when there is one: it must be right too.
-            val lue = fr.f4ioz.satcombo.aprs.TncKiss.etat.value.frequenceHz
-            // Set by SatMe itself on an APRS frequency: no need for the operator to vouch for it.
-            val connue = lue != null && fr.f4ioz.satcombo.aprs.AprsEmission.FENETRES.any { lue in it }
-            if (!frequenceConfirmee && !connue) { envoi.value = t("aprs_kiss_confirmer"); return@launch }
-            val raison = fr.f4ioz.satcombo.aprs.AprsEmission.refus(trame.source.indicatif,
-                System.currentTimeMillis(), derniereMs, lue ?: 145_825_000L, 0x05, false, false)
-            if (raison != null) {
-                envoi.value = if (raison == "frequence") tf("aprs_tx_refus_frequence",
-                    "%.4f".format(java.util.Locale.US, (lue ?: 0L) / 1e6)) else t("aprs_tx_refus_$raison")
-                return@launch
+            // Its frequency (read by SatMe, else vouched for), then the rules of any transmission: the engine's.
+            val k = fr.f4ioz.satcombo.aprs.TncKiss.etat.value
+            fr.f4ioz.satcombo.aprs.EmissionKiss.refus(k, frequenceConfirmee, trame.source.indicatif, derniereMs, System.currentTimeMillis())?.let {
+                envoi.value = fr.f4ioz.satcombo.aprs.EmissionKiss.texte(it, k); return@launch
             }
             if (fr.f4ioz.satcombo.aprs.TncKiss.envoie(trame)) {
                 derniereMs = System.currentTimeMillis()
@@ -209,11 +196,7 @@ class AprsStation(
     }
 
     /** The path for what we send now: the ISS digipeater, or the terrestrial network. */
-    fun cheminParDefaut(): List<String> = when (settings.aprsTravail) {
-        "ISS" -> listOf("ARISS")
-        "TERRE" -> listOf("WIDE1-1", "WIDE2-1")
-        else -> if (issEnVue()) listOf("ARISS") else listOf("WIDE1-1", "WIDE2-1")
-    }
+    fun cheminParDefaut(): List<String> = fr.f4ioz.satcombo.aprs.EmissionKiss.chemin(settings.aprsTravail, issEnVue())
 
     /** Working the ISS right now (by choice, or in Auto while it is up). */
     fun surIss(): Boolean = when (settings.aprsTravail) {
@@ -226,18 +209,7 @@ class AprsStation(
      */
     fun positionEmise(): Pair<Double, Double>? {
         val o = ui().observer ?: return null
-        if (!settings.aprsPositionFloue) return o.latDeg to o.lonDeg
-        var n = settings.aprsFlouNordM; var e = settings.aprsFlouEstM
-        if (n.isNaN() || e.isNaN()) {
-            // Uniform over the disc: radius from the square root, so the centre is not favoured.
-            val r = 500.0 * kotlin.math.sqrt(kotlin.random.Random.nextDouble())
-            val a = kotlin.random.Random.nextDouble(0.0, 2 * Math.PI)
-            n = (r * kotlin.math.cos(a)).toFloat(); e = (r * kotlin.math.sin(a)).toFloat()
-            settings.aprsFlouNordM = n; settings.aprsFlouEstM = e
-        }
-        val lat = o.latDeg + n / 111_320.0
-        val lon = o.lonDeg + e / (111_320.0 * kotlin.math.cos(Math.toRadians(o.latDeg)).coerceAtLeast(0.01))
-        return lat to lon
+        return fr.f4ioz.satcombo.aprs.EmissionKiss.position(settings, o.latDeg, o.lonDeg)
     }
 
     fun positionFloue(): Boolean = settings.aprsPositionFloue

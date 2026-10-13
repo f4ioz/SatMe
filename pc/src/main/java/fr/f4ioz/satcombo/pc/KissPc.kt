@@ -8,6 +8,8 @@
  */
 package fr.f4ioz.satcombo.pc
 
+import fr.f4ioz.satcombo.aprs.AprsEmission
+import fr.f4ioz.satcombo.aprs.EmissionKiss
 import fr.f4ioz.satcombo.aprs.FrequenceKiss
 import fr.f4ioz.satcombo.aprs.LienKiss
 import fr.f4ioz.satcombo.plateforme.Lignes
@@ -18,7 +20,9 @@ import fr.f4ioz.satcombo.plateforme.portPttRigExpert
  * USB cable, a TM-D710, a Mobilinkd…), as on the phone: put in KISS and
  * tuned for APRS (the ground, the ISS, or the ISS when it is up, stepped
  * by its Doppler), its frames into the APRS tab; put back as it was when
- * left.
+ * left. It sends what the operator asks (a message, the position, a
+ * status) and, when chosen, the ISS beacon — every check of the phone's
+ * before the radio keys ([EmissionKiss]).
  *
  * **RTS and DTR low unless asked**: opened with them up, a rig interface
  * goes to transmit. A port in use by the rig or the rotator, or a
@@ -74,8 +78,84 @@ class KissPc(private val station: StationPc, private val aprs: AprsPc, private v
         if (lien.etat.value.connecte) { changeMs = horloge(); lien.regleFrequence(hz) }
     }
 
-    /** Every few seconds: the ISS's arrival or its Doppler followed, one switch a minute at most (as on the phone). */
+    // ------------------------------------------------------------ sending
+
+    /** When the last frame went, and what became of the last one asked. */
+    @Volatile private var derniereMs = 0L
+    @Volatile var envoi = ""; private set
+
+    fun issEnVue(): Boolean = horloge().let { m -> listOf(m, m + 60_000L).any { (iss(it)?.elevationDeg ?: -90.0) > 0.0 } }
+
+    /** The path asked: the ISS digipeater, the terrestrial network, or where APRS works now. */
+    fun chemin(choix: String): List<String> = when (choix) {
+        "ARISS" -> listOf("ARISS")
+        "WIDE" -> listOf("WIDE1-1", "WIDE2-1")
+        else -> EmissionKiss.chemin(station.settings.aprsTravail, issEnVue())
+    }
+
+    /**
+     * Sends through the radio: [type] "message" (to [dest], numbered for its
+     * ack when [numero]), "position" (the QTH, approximate when chosen, with
+     * [texte] as comment) or "statut". Null when the radio took it, else why
+     * not. [frequenceConfirmee]: the operator vouches for the radio's
+     * frequency when SatMe could not read it.
+     */
+    suspend fun emet(type: String, dest: String, texte: String, numero: Boolean, choixChemin: String, frequenceConfirmee: Boolean): String? {
+        val s = station.settings
+        val info = when (type) {
+            "message" -> {
+                if (dest.isBlank()) return "à qui ? (son indicatif)"
+                if (texte.isBlank()) return "le message est vide"
+                AprsEmission.message(dest, texte, if (numero) EmissionKiss.numeroSuivant(s) else null)
+            }
+            "position" -> {
+                val o = station.etat.value.observateur ?: return "position inconnue (locator dans Réglages)"
+                val (la, lo) = EmissionKiss.position(s, o.latDeg, o.lonDeg)
+                AprsEmission.position(la, lo, "/-", texte.ifBlank { "SatMe " + station.etat.value.locator.take(4) })
+            }
+            "statut" -> { if (texte.isBlank()) return "le statut est vide"; AprsEmission.statut(texte) }
+            else -> return "quoi émettre ?"
+        }
+        return envoie(AprsEmission.trame(EmissionKiss.source(s), chemin(choixChemin), info), frequenceConfirmee)
+    }
+
+    private suspend fun envoie(t: fr.f4ioz.satcombo.aprs.Trame, frequenceConfirmee: Boolean): String? {
+        val e = lien.etat.value
+        EmissionKiss.refus(e, frequenceConfirmee, t.source.indicatif, derniereMs, horloge())?.let {
+            return EmissionKiss.texte(it, e).also { m -> envoi = m }
+        }
+        if (!lien.envoie(t)) return fr.f4ioz.satcombo.i18n.t("aprs_kiss_echec").also { envoi = it }
+        derniereMs = horloge()
+        aprs.ajouteEmis(t, derniereMs)
+        envoi = fr.f4ioz.satcombo.i18n.t("aprs_kiss_ok")
+        return null
+    }
+
+    /** AOS of the ISS pass already beaconed: one position a pass, never more. */
+    @Volatile private var baliseAos = 0L
+
+    /**
+     * The ISS beacon, when chosen: once the ISS is 15° up, one position a
+     * pass through the ARISS digipeater — only when SatMe read the radio on
+     * 145.825 itself. Every check still applies.
+     */
+    private suspend fun balise() {
+        val s = station.settings
+        if (!s.aprsBaliseIss || !EmissionKiss.balisePrete(lien.etat.value)) return
+        val maintenant = horloge()
+        if ((iss(maintenant)?.elevationDeg ?: -90.0) < 15.0) return
+        val aos = station.passageEnCours(25544, maintenant)?.first ?: return
+        if (aos == baliseAos || EmissionKiss.source(s).isBlank()) return
+        baliseAos = aos
+        val o = station.etat.value.observateur ?: return
+        val (la, lo) = EmissionKiss.position(s, o.latDeg, o.lonDeg)
+        envoie(AprsEmission.trame(EmissionKiss.source(s), listOf("ARISS"),
+            AprsEmission.position(la, lo, "/-", "SatMe " + station.etat.value.locator.take(4))), frequenceConfirmee = true)
+    }
+
+    /** Every few seconds: the ISS's arrival or its Doppler followed, one switch a minute at most (as on the phone); the ISS beacon. */
     suspend fun tic() {
+        runCatching { balise() }
         val s = station.settings
         if (!FrequenceKiss.suivie(s.aprsTravail, s.aprsKissDoppler)) return
         val k = lien.etat.value

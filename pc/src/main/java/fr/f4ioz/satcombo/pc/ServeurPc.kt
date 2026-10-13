@@ -267,7 +267,11 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                     val l = station.ports.liste()
                     fr.f4ioz.satcombo.demo.ApiRadio.kiss(k.lien.etat.value, l.map { it.index to it.libelle },
                         l.firstOrNull { it.cle == station.settings.aprsKissCle }?.index, station.settings.aprsTravail, station.settings.aprsKissDoppler,
-                        k.lignesLevees, lignesAuChoix = true, voulue = k.frequenceVoulue())
+                        k.lignesLevees, lignesAuChoix = true, voulue = k.frequenceVoulue()).let { o ->
+                        val st = station.settings
+                        fr.f4ioz.satcombo.demo.ApiRadio.kissEmission(o, fr.f4ioz.satcombo.aprs.EmissionKiss.source(st), k.chemin(""), k.envoi,
+                            st.aprsBaliseIss, st.aprsPositionFloue, st.aprsSsid)
+                    }
                 }
                 envoie(sortie, "200 OK", "application/json; charset=utf-8", o.toString().toByteArray())
             }
@@ -604,7 +608,20 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                     ?.let { return JSONObject().put("ok", false).put("erreur", it) }
             }
             "/api/kiss/deconnecter" -> kiss?.deconnecte()
-            "/api/kiss/reglage" -> kiss?.let { k -> kotlinx.coroutines.runBlocking { k.regle(q["travail"], q["doppler"]?.let { it == "1" }) } }
+            "/api/kiss/reglage" -> {
+                val st = station.settings
+                q["balise"]?.let { st.aprsBaliseIss = it == "1" }
+                q["floue"]?.let { st.aprsPositionFloue = it == "1" }
+                entier("ssid")?.let { st.aprsSsid = it.coerceIn(0, 15) }
+                kiss?.let { k -> if (q["travail"] != null || q["doppler"] != null) kotlinx.coroutines.runBlocking { k.regle(q["travail"], q["doppler"]?.let { it == "1" }) } }
+            }
+            // A frame through the KISS radio: only when the operator asks, every check of the phone's first.
+            "/api/kiss/emet" -> {
+                val k = kiss ?: return JSONObject().put("ok", false)
+                kotlinx.coroutines.runBlocking { k.emet(q["type"].orEmpty(), q["dest"].orEmpty(), q["texte"].orEmpty(), q["numero"] == "1",
+                    q["chemin"].orEmpty(), q["confirme"] == "1") }?.let { return JSONObject().put("ok", false).put("erreur", it) }
+                return ok.put("message", k.envoi)
+            }
             "/api/son/carte" -> {
                 val s = son ?: return JSONObject().put("ok", false)
                 val nom = q["nom"].orEmpty()

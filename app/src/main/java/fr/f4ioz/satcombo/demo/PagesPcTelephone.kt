@@ -153,7 +153,9 @@ object PagesPcTelephone {
                     val s = vm.aprs
                     json(ApiRadio.kiss(fr.f4ioz.satcombo.aprs.TncKiss.etat.value, l.mapIndexed { i, a -> i to a.nom },
                         l.indexOfFirst { it.cle == s.kissCle() }.takeIf { it >= 0 }, s.travail(), s.kissDoppler(),
-                        lignesLevees = false, lignesAuChoix = false, voulue = null))
+                        lignesLevees = false, lignesAuChoix = false, voulue = null).let { o ->
+                        ApiRadio.kissEmission(o, s.source(), s.cheminParDefaut(), s.envoi.value, vm.aprsBaliseIss(), s.positionFloue(), s.ssid())
+                    })
                 }
                 "/api/ft8" -> {
                     val f = fr.f4ioz.satcombo.ft8.Ft8Hub.state.value
@@ -491,7 +493,33 @@ object PagesPcTelephone {
                 vm.aprs.kissConnecte(a.cle, p("vitesse").toIntOrNull() ?: 9600); OK
             }
             "/api/kiss/deconnecter" -> { vm.aprs.kissDeconnecte(); OK }
+            // A frame through the phone's KISS radio: only when the operator asks, its checks first (EmissionKiss).
+            "/api/kiss/emet" -> {
+                val s = vm.aprs
+                val info = when (p("type")) {
+                    "message" -> {
+                        if (p("dest").isBlank() || p("texte").isBlank()) return JSONObject().put("ok", false).put("erreur", "à qui, et quoi ?")
+                        fr.f4ioz.satcombo.aprs.AprsEmission.message(p("dest"), p("texte"), if (p("numero") == "1") s.numeroSuivant() else null)
+                    }
+                    "position" -> {
+                        val (la, lo) = s.positionEmise() ?: return JSONObject().put("ok", false).put("erreur", "position inconnue")
+                        fr.f4ioz.satcombo.aprs.AprsEmission.position(la, lo, "/-", p("texte").ifBlank { "SatMe " + vm.myLocator().take(4) })
+                    }
+                    "statut" -> fr.f4ioz.satcombo.aprs.AprsEmission.statut(p("texte").ifBlank { return JSONObject().put("ok", false).put("erreur", "le statut est vide") })
+                    else -> return JSONObject().put("ok", false).put("erreur", "quoi émettre ?")
+                }
+                val chemin = when (p("chemin")) { "ARISS" -> listOf("ARISS"); "WIDE" -> listOf("WIDE1-1", "WIDE2-1"); else -> s.cheminParDefaut() }
+                s.envoi.value = ""
+                s.emetKiss(fr.f4ioz.satcombo.aprs.AprsEmission.trame(s.source(), chemin, info), p("confirme") == "1")
+                val fin = System.currentTimeMillis() + 5_000L
+                while (System.currentTimeMillis() < fin && s.envoi.value.isEmpty()) Thread.sleep(100)
+                val m = s.envoi.value
+                JSONObject().put("ok", m == fr.f4ioz.satcombo.i18n.t("aprs_kiss_ok")).put("erreur", m).put("message", m)
+            }
             "/api/kiss/reglage" -> {
+                if (p("balise").isNotEmpty()) vm.setAprsBaliseIss(p("balise") == "1")
+                if (p("floue").isNotEmpty()) vm.aprs.setPositionFloue(p("floue") == "1")
+                p("ssid").toIntOrNull()?.let { vm.aprs.setSsid(it.coerceIn(0, 15)) }
                 // One setting a call: the Doppler, or else where it listens ("POSTE": its own frequency, left alone).
                 if (p("doppler").isNotEmpty()) vm.aprs.setKissDoppler(p("doppler") == "1")
                 else p("travail").takeIf { it in setOf("TERRE", "ISS", "AUTO", "POSTE") }?.let { vm.aprs.setTravail(it) }

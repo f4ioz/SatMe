@@ -254,6 +254,14 @@ class StationPc(
 
     // ---------------------------------------------------------------- QO-100
 
+    /** The pass of [catnum] under way at [t] (AOS, LOS); null when it is down or unknown. */
+    fun passageEnCours(catnum: Int, t: Long): Pair<Long, Long>? {
+        val e = _etat.value
+        val sat = e.satellites.firstOrNull { it.catalogNumber == catnum } ?: return null
+        val obs = e.observateur ?: return null
+        return runCatching { predicteur.currentPass(sat, obs, t) }.getOrNull()
+    }
+
     /** Where satellite [catnum] is from here at [t] (elevation, range rate…); null when unknown. */
     fun positionSatellite(catnum: Int, t: Long): fr.f4ioz.satcombo.data.SatPosition? {
         val e = _etat.value

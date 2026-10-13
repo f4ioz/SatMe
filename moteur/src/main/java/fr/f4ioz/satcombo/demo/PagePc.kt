@@ -642,7 +642,23 @@ object PagePc {
       <select id="kiss-travail" style="flex:none" onchange="kPost('reglage?travail=' + this.value)"><option value="AUTO">l'ISS quand elle passe, sinon 144,800</option><option value="ISS">l'ISS (145,825)</option><option value="TERRE">au sol (144,800)</option><option value="POSTE">la fréquence de la radio, sans y toucher</option></select>
       <label class="petit"><input type="checkbox" id="kiss-doppler" onchange="kPost('reglage?doppler=' + (this.checked ? 1 : 0))"> Doppler de l'ISS (pas de 5 kHz)</label></div>
     <div class="petit" id="kiss-etat" style="margin-top:6px"></div>
-    <div class="petit" style="margin-top:4px">La radio décode elle-même ; ses trames arrivent ici avec les autres. Rien ne la fait émettre. Déconnectée, elle revient comme avant.</div>
+    <div class="petit" style="margin-top:4px">La radio décode elle-même ; ses trames arrivent ici avec les autres. Elle n'émet que ce qui est demandé ci-dessous. Déconnectée, elle revient comme avant.</div>
+    <div class="t" style="margin-top:12px">Émettre par la radio <span class="petit" id="kiss-source"></span></div>
+    <div class="ligne" style="margin-top:0">
+      <select id="kiss-type" style="flex:none" onchange="kType()"><option value="message">Message</option><option value="position">Ma position</option><option value="statut">Statut</option></select>
+      <input id="kiss-dest" placeholder="À (indicatif)" style="max-width:130px;text-transform:uppercase">
+      <input id="kiss-texte" placeholder="Texte (67 caractères)" maxlength="67" style="flex:1"></div>
+    <div class="ligne"><span class="petit">Chemin</span>
+      <select id="kiss-chemin" style="flex:none"><option value="">selon l'écoute</option><option value="ARISS">ISS (ARISS)</option><option value="WIDE">au sol (WIDE1-1,WIDE2-1)</option></select>
+      <label class="petit" id="kiss-numero-l"><input type="checkbox" id="kiss-numero" checked> numéroté (accusé de réception)</label>
+      <button class="rouge" onclick="kEmet()">Émettre</button></div>
+    <label class="petit" style="display:block;margin-top:6px" id="kiss-confirme-l"><input type="checkbox" id="kiss-confirme"> La radio est sur 145,825 MHz (ISS) ou 144,800 MHz, en FM (SatMe n'a pas pu lire sa fréquence)</label>
+    <div class="petit" id="kiss-envoi" style="margin-top:6px"></div>
+    <div class="ligne"><span class="petit">SSID</span><select id="kiss-ssid" style="flex:none" onchange="kPost('reglage?ssid=' + this.value)"></select>
+      <label class="petit"><input type="checkbox" id="kiss-floue" onchange="kPost('reglage?floue=' + (this.checked ? 1 : 0))"> position approchée (à moins de 500 m)</label></div>
+    <label class="petit" style="display:block;margin-top:4px"><input type="checkbox" id="kiss-balise" onchange="kPost('reglage?balise=' + (this.checked ? 1 : 0))">
+      Balise ISS : ma position une fois par passage, l'ISS à 15° — seulement quand SatMe a lu la radio sur 145,825</label>
+    <div class="petit" style="margin-top:4px">Une trame toutes les 20 s au plus : le digipeater de l'ISS est partagé par tout un continent.</div>
   </details>
   <div class="carte">
     <div style="max-height:calc(100vh - 250px);overflow:auto">
@@ -3071,6 +3087,21 @@ async function kConnecte() {
   txt('kiss-etat', 'connexion, passage en KISS…');
   await kPost('connecter?port=' + v('kiss-port') + '&vitesse=' + v('kiss-vitesse') + '&lignes=' + (g('kiss-lignes').checked ? 1 : 0));
 }
+function kType() {
+  const t = v('kiss-type');
+  g('kiss-dest').hidden = t !== 'message'; g('kiss-numero-l').hidden = t !== 'message';
+  g('kiss-texte').placeholder = t === 'message' ? 'Texte (67 caractères)' : t === 'position' ? 'Commentaire (facultatif)' : 'Statut';
+}
+async function kEmet() {
+  const t = v('kiss-type'), quoi = t === 'message' ? 'le message à ' + v('kiss-dest').toUpperCase() : t === 'position' ? 'ta position' : 'le statut';
+  if (!confirm('Émettre maintenant ' + quoi + ' par la radio KISS (' + (KS && KS.source ? KS.source : '?') + ') ?')) return;
+  txt('kiss-envoi', 'envoi…');
+  const j = await post('api/kiss/emet?type=' + t + '&dest=' + enc(v('kiss-dest')) + '&texte=' + enc(v('kiss-texte')) +
+    '&numero=' + (g('kiss-numero').checked ? 1 : 0) + '&chemin=' + v('kiss-chemin') + '&confirme=' + (g('kiss-confirme').checked ? 1 : 0));
+  txt('kiss-envoi', j && j.ok ? (j.message || 'émis') : (j && j.erreur ? j.erreur : 'échec'));
+  if (j && j.ok) g('kiss-texte').value = '';
+  ticKiss(); ticAprs();
+}
 async function ticKiss() {
   try { KS = await (await fetch('api/kiss')).json(); } catch (x) { return; }
   if (KS.absent) { g('kiss-carte').hidden = true; return; }
@@ -3086,6 +3117,15 @@ async function ticKiss() {
   if (KS.connecte) txt('kiss-etat', KS.nom + ' · ' + KS.vitesse + ' bauds' + (KS.frequence ? ' · ' + (KS.frequence / 1e6).toFixed(3).replace('.', ',') + ' MHz' : '') +
     ' · ' + KS.recues + ' trame(s) reçue(s)' + (KS.erreur ? ' · ' + KS.erreur : ''));
   else if (KS.erreur) txt('kiss-etat', KS.erreur);
+  // Sending: who, from which path now, the options.
+  txt('kiss-source', KS.source ? '· de ' + KS.source + (KS.chemin ? ' par ' + KS.chemin : '') : '· indicatif à renseigner (Réglages)');
+  const s = g('kiss-ssid'); if (!s.options.length) s.innerHTML = Array.from({ length: 16 }, (_, i) => '<option value="' + i + '">' + (i ? '-' + i : 'aucun') + '</option>').join('');
+  if (document.activeElement !== s) s.value = String(KS.ssid || 0);
+  if (document.activeElement !== g('kiss-floue')) g('kiss-floue').checked = !!KS.floue;
+  if (document.activeElement !== g('kiss-balise')) g('kiss-balise').checked = !!KS.balise;
+  const lue = KS.frequence != null && (KS.fenetres || []).some(f => KS.frequence >= f[0] && KS.frequence <= f[1]);
+  g('kiss-confirme-l').hidden = lue;
+  if (KS.envoi && !g('kiss-envoi').textContent) txt('kiss-envoi', KS.envoi);
 }
 async function ticAprs() {
   if (!ouverte('aprs')) return;

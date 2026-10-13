@@ -88,4 +88,10 @@ object ApiRadio {
             .put("ports", JSONArray(ports.map { (i, l) -> JSONObject().put("index", i).put("libelle", l) }))
             .put("port", port ?: JSONObject.NULL).put("travail", travail).put("doppler", doppler)
             .put("lignes", lignesLevees).put("lignesAuChoix", lignesAuChoix).put("voulue", voulue ?: JSONObject.NULL)
+
+    /** What the KISS card shows for sending: who, by which path now, the last result, the options. */
+    fun kissEmission(o: JSONObject, source: String, chemin: List<String>, envoi: String, balise: Boolean, floue: Boolean, ssid: Int): JSONObject =
+        o.put("source", source).put("chemin", chemin.joinToString(",")).put("envoi", envoi)
+            .put("balise", balise).put("floue", floue).put("ssid", ssid)
+            .put("fenetres", JSONArray(fr.f4ioz.satcombo.aprs.AprsEmission.FENETRES.map { JSONArray(listOf(it.first, it.last)) }))
 }
