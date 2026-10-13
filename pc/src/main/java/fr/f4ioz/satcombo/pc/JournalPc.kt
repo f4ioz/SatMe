@@ -224,10 +224,14 @@ class JournalPc(
      */
     fun ajouteContact(e: JournalPassage.Entree, tMs: Long, indicatif: String, locator: String, rstEnvoye: String, rstRecu: String,
                       note: String, mode: String, nom: String = "", qth: String = "", fiche: fr.f4ioz.satcombo.domain.QrzReponse.Fiche? = null): fr.f4ioz.satcombo.data.LogEntry? {
+        val N = fr.f4ioz.satcombo.domain.NouveauPassage
+        val (dlLu, ulLu) = N.frequencesA(e, tMs)
+        // The satellite's own elements when known: its transmitter (the rig's then, else the one chosen last, else its transponder).
+        val sat = N.elementsDuSatellite(station.emetteursDe(e.catnum), station.emetteurChoisiPour(e.catnum), dlLu)
         val md = mode.trim().uppercase().takeIf { it.isNotEmpty() && it != "AUTO" }
-            ?: fr.f4ioz.satcombo.domain.NouveauPassage.modeDe(e.transpondeur) ?: carnet.modeSuivi(e.catnum) ?: "FM"
-        val (dl, ul) = fr.f4ioz.satcombo.domain.NouveauPassage.frequencesA(e, tMs)
-        return carnet.ajouteApres(e.catnum, tMs, indicatif, locator, rstEnvoye, rstRecu, note, md, fiche, dl, ul, nom, qth)
+            ?: N.modeDe(e.transpondeur) ?: sat?.mode ?: carnet.modeSuivi(e.catnum) ?: "FM"
+        return carnet.ajouteApres(e.catnum, tMs, indicatif, locator, rstEnvoye, rstRecu, note, md, fiche,
+            dlLu ?: sat?.dlHz, ulLu ?: sat?.ulHz, nom, qth)
     }
 
     /** A callsign's QRZ record (the log's session). */

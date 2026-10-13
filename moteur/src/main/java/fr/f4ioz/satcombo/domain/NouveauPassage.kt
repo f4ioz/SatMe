@@ -78,6 +78,29 @@ object NouveauPassage {
         }
     }
 
+    /** What a contact takes from its satellite: its transmitter's mode and rest frequencies (sky). */
+    class Elements(val emetteur: String, val mode: String, val dlHz: Long?, val ulHz: Long?)
+
+    /**
+     * The satellite's elements for a contact on it, when its transmitters are
+     * known: the one the rig was on ([dlLu], read on CAT), else the one
+     * chosen last for this satellite ([choisi]), else its transponder, else
+     * one that listens (an uplink), else the first; null when none is known.
+     */
+    fun elementsDuSatellite(emetteurs: List<fr.f4ioz.satcombo.data.Transmitter>, choisi: String?, dlLu: Long?): Elements? {
+        val l = emetteurs.filter { it.alive && (it.downlinkLowHz != null || it.uplinkLowHz != null) }
+        if (l.isEmpty()) return null
+        val t = dlLu?.let { d -> l.firstOrNull { e -> val lo = e.downlinkLowHz ?: return@firstOrNull false; d in (lo - 15_000L)..((e.downlinkHighHz ?: lo) + 15_000L) } }
+            ?: choisi?.let { c -> l.firstOrNull { it.description == c } }
+            ?: l.firstOrNull { it.isTransponder } ?: l.firstOrNull { it.uplinkLowHz != null } ?: l.first()
+        val lo = t.downlinkLowHz; val hi = t.downlinkHighHz ?: lo
+        val dl = lo?.let { (it + (hi ?: it)) / 2 }
+        val ul = if (t.isTransponder && dl != null && lo != null && t.uplinkLowHz != null)
+            Doppler.transponderUplinkRest(dl, lo, hi ?: lo, t.uplinkLowHz, t.uplinkHighHz ?: t.uplinkLowHz, t.invert)
+        else t.uplinkLowHz
+        return Elements(t.description, modeEmetteur(t), dl, ul)
+    }
+
     /** The rig's frequencies (sky) at [tMs] on the pass, as followed then on CAT; nulls when not read within 90 s. */
     fun frequencesA(e: JournalPassage.Entree, tMs: Long): Pair<Long?, Long?> {
         val p = e.points.filter { it.dlHz != null || it.ulHz != null }.minByOrNull { kotlin.math.abs(it.tMs - tMs) }

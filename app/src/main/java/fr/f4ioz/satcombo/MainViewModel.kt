@@ -6142,6 +6142,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         if (!on) fr.f4ioz.satcombo.sdr.SdrHub.setDopplerFine(0)
     }
 
+    /** [catnum]'s transmitters (cached) and the one chosen last for it: a contact typed afterwards on it. */
+    suspend fun emetteursDe(catnum: Int): List<fr.f4ioz.satcombo.data.Transmitter> = runCatching { txRepo.forSatellite(catnum) }.getOrDefault(emptyList())
+    fun emetteurChoisiPour(catnum: Int): String? = satConfigStore.load(catnum).txDescription
+
     /** The dongle's gain as kept, tenths of dB; -1 automatic (SatMe-PC's page). */
     fun sdrGainReglage(): Int = settings.sdrGainTenthDb
 

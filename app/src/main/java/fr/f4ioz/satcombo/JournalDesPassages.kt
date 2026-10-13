@@ -608,15 +608,20 @@ class JournalDesPassages(
      * when it was on CAT; who it is as the page found it (log, QRZ).
      */
     fun contact(e: JournalPassage.Entree, tMs: Long, indicatif: String, locator: String, rstEnvoye: String, rstRecu: String,
-                note: String, mode: String, nom: String = "", qth: String = ""): LogEntry? {
+                note: String, mode: String, nom: String = "", qth: String = "",
+                /** The satellite's transmitters and the one chosen last for it (the view model's). */
+                emetteurs: List<fr.f4ioz.satcombo.data.Transmitter> = emptyList(), choisi: String? = null): LogEntry? {
         val sat = ui().satellites.firstOrNull { it.catalogNumber == e.catnum } ?: return null
         if (indicatif.isBlank()) return null
         val u = ui()
+        val N = fr.f4ioz.satcombo.domain.NouveauPassage
+        val (dlLu, ulLu) = N.frequencesA(e, tMs)
+        val elements = N.elementsDuSatellite(emetteurs, choisi, dlLu)
         val md = mode.trim().uppercase().takeIf { it.isNotEmpty() && it != "AUTO" }
-            ?: fr.f4ioz.satcombo.domain.NouveauPassage.modeDe(e.transpondeur)
-            ?: (if (u.selected?.catalogNumber == e.catnum) u.transmitters.getOrNull(u.selectedTxIndex)?.let { fr.f4ioz.satcombo.domain.NouveauPassage.modeEmetteur(it) } else null)
+            ?: N.modeDe(e.transpondeur) ?: elements?.mode
+            ?: (if (u.selected?.catalogNumber == e.catnum) u.transmitters.getOrNull(u.selectedTxIndex)?.let { N.modeEmetteur(it) } else null)
             ?: "FM"
-        val (dl, ul) = fr.f4ioz.satcombo.domain.NouveauPassage.frequencesA(e, tMs)
+        val dl = dlLu ?: elements?.dlHz; val ul = ulLu ?: elements?.ulHz
         val c = fr.f4ioz.satcombo.demo.ApiCalculs.contactApres(predictor, sat, observateur(), tMs, indicatif, locator,
             rstEnvoye, rstRecu, note, md, e.locator)
         return c.copy(nom = nom.trim(), qth = qth.trim(), downlinkMhz = dl?.let { it / 1e6 } ?: 0.0, uplinkMhz = ul?.let { it / 1e6 } ?: 0.0)

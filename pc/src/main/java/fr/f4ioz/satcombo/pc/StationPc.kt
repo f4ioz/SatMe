@@ -787,6 +787,10 @@ class StationPc(
             (fr.f4ioz.satcombo.cat.CatScan.nomAutrePoste(p.produit) && p.produit?.contains("TH-D7", true) != true) ||
             p.produit?.contains("RigExpert", true) == true
 
+    /** [catnum]'s transmitters (SatNOGS, kept on disk), and the one chosen last for it: a contact typed afterwards on it. */
+    fun emetteursDe(catnum: Int): List<Transmitter> = runCatching { catalogue.emetteurs(catnum) }.getOrDefault(emptyList())
+    fun emetteurChoisiPour(catnum: Int): String? = satConfig.load(catnum).txDescription
+
     /** The adapters the connected rig holds (none when not connected). */
     fun clesPoste(): Set<String> = if (_etat.value.catConnecte) clePoste.split(',').filter { it.isNotBlank() }.toSet() else emptySet()
 
