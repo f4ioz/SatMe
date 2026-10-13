@@ -19,10 +19,12 @@ kotlin {
 }
 
 // The version a release gives (its tag "satme-pc-2026.10.13" → 2026.10.13); "dev" when built by hand.
-version = providers.gradleProperty("satmePcVersion").getOrElse("dev")
+// In the jar's manifest only: the project's own version would rename the package
+// (satme-2026.10.13.tar), and the guides and SatMe-Node's script expect satme.tar → satme/.
+val versionPc = providers.gradleProperty("satmePcVersion").getOrElse("dev")
 
 tasks.jar {
-    manifest { attributes("Implementation-Title" to "SatMe-PC", "Implementation-Version" to project.version) }
+    manifest { attributes("Implementation-Title" to "SatMe-PC", "Implementation-Version" to versionPc) }
 }
 
 application {
