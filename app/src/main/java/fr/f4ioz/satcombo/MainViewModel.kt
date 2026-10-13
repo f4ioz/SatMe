@@ -5496,6 +5496,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     /** The station's callsign and the CAT loop, for SatMe-PC's page served by the phone. */
     fun indicatif(): String = settings.callsign
     fun etatBoucleCat(): fr.f4ioz.satcombo.station.EtatBoucleCat = stationCat.etat.value
+    /** The USB adapters plugged in, listed only: none opened (RTS/DTR untouched). */
+    fun listeUsb(): List<fr.f4ioz.satcombo.cat.UsbSerialInfo> = ft817.listDevices()
+    /** The mast, for SatMe-PC's page: the same StationRotor the PC drives. */
+    fun rotorPourPage(): fr.f4ioz.satcombo.station.StationRotor = stationRotor
 
     fun openDatv() { va(Screen.DATV); _ui.value = _ui.value.copy(screen = Screen.DATV) }
     fun closeDatv() { _ui.value = retour() }

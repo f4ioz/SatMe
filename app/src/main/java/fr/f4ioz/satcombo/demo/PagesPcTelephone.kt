@@ -52,8 +52,10 @@ object PagesPcTelephone {
                     ApiStation.passage(it, fav = it.catalogNumber in u.favorites)
                 })))
                 "/api/satellites" -> json(JSONArray(u.satellites.map { JSONObject().put("nom", it.name).put("catnum", it.catalogNumber) }))
-                // The phone drives its own rig and rotator: no port from here.
-                "/api/ports" -> json(JSONArray())
+                // The USB adapters plugged into the phone, listed only (none opened: RTS/DTR untouched).
+                "/api/ports" -> json(JSONArray(vm.listeUsb().mapIndexed { i, d ->
+                    JSONObject().put("index", i).put("libelle", d.label + (if (d.hasPermission) "" else " — autoriser sur le téléphone")).put("vendor", 0)
+                }))
                 "/api/son" -> json(JSONObject().put("present", false))
                 "/api/carnet" -> json(carnet(vm))
                 "/api/carnet/propositions" -> {
@@ -111,6 +113,55 @@ object PagesPcTelephone {
                 val t = p("t").toLongOrNull() ?: return JSONObject().put("ok", false)
                 PontCommande.retiens?.invoke(t, p("on") == "1"); OK
             }
+            // ---- the rig: the phone's own CAT, as its settings would set it
+            "/api/cat/connecter" -> {
+                val m = p("modele")
+                when {
+                    m.endsWith("SIM") -> return JSONObject().put("ok", false).put("erreur", "le poste simulé est sur SatMe-PC ; sur le téléphone, le banc d'essai (Réglages → Radio (CAT))")
+                    m == "PAIRE" -> return JSONObject().put("ok", false).put("erreur", "une paire de postes se règle sur le téléphone (Réglages → Radio (CAT))")
+                }
+                if (m.isNotBlank() && m != u.rigModel) vm.setRigModel(m)
+                p("port").toIntOrNull()?.takeIf { it >= 0 }?.let { vm.setCivUsbIndex(it) }
+                p("baud").toIntOrNull()?.takeIf { it > 0 }?.let { vm.setCivBaud(it) }
+                vm.connectCat(); OK
+            }
+            "/api/cat/deconnecter" -> { vm.disconnectCat(); OK }
+            "/api/maintien" -> { if (u.dopplerHold != (p("on") == "1")) vm.toggleDopplerHold(); OK }
+            // ---- the mast: the same StationRotor as SatMe-PC's, the same orders
+            "/api/rotor/connecter" -> {
+                val r = vm.rotorPourPage()
+                r.setRotorSim(p("sim") == "1")
+                r.setRotorLink(if (p("lien") == "ROTCTLD") "ROTCTLD" else "GS232")
+                p("hote").takeIf { it.isNotBlank() }?.let { r.setRotorHost(it.trim()) }
+                p("tcp").toIntOrNull()?.let { r.setRotorPort(it) }
+                p("port").toIntOrNull()?.let { r.setRotorUsbIndex(it) }
+                p("baud").toIntOrNull()?.let { r.setRotorBaud(it) }
+                // A port chosen on the page: never searched among the others.
+                r.setRotorAutoPort(false)
+                r.connectRotor(); OK
+            }
+            "/api/rotor/deconnecter" -> { vm.rotorPourPage().disconnectRotor(); OK }
+            "/api/rotor/suivre" -> { vm.rotorPourPage().setRotorEnabled(p("on") == "1"); OK }
+            "/api/rotor/parquer" -> { vm.rotorPourPage().rotorParkNow(); OK }
+            "/api/rotor/stop" -> { vm.rotorPourPage().rotorStopNow(); OK }
+            "/api/rotor/aller" -> {
+                val r = vm.rotorPourPage()
+                p("az").toIntOrNull()?.let { r.setRotorManualAz(it) }
+                p("el").toIntOrNull()?.let { r.setRotorManualEl(it) }
+                r.rotorGotoManual(); OK
+            }
+            "/api/rotor/reglages" -> {
+                val r = vm.rotorPourPage()
+                fun n(k: String) = p(k).toIntOrNull()
+                n("maxAz")?.let { r.setRotorMaxAz(it) }; n("maxEl")?.let { r.setRotorMaxEl(it) }
+                p("butee").takeIf { it == "NORTH" || it == "SOUTH" }?.let { r.setRotorAzStop(it) }
+                p("depuisButee").takeIf { it.isNotEmpty() }?.let { r.setRotorAzFromStop(it == "1") }
+                p("flip").takeIf { it.isNotEmpty() }?.let { r.setRotorFlip(it == "1") }
+                p("azSeul").takeIf { it.isNotEmpty() }?.let { r.setRotorAzOnly(it == "1") }
+                n("parkAz")?.let { r.setRotorParkAz(it) }; n("parkEl")?.let { r.setRotorParkEl(it) }
+                n("minEl")?.let { r.setRotorMinEl(it) }; n("ecart")?.let { r.setRotorDeadband(it) }; n("avantAos")?.let { r.setRotorPreAos(it) }
+                OK
+            }
             else -> JSONObject().put("ok", false).put("erreur", "pas encore sur le téléphone")
         }
     }
@@ -138,7 +189,7 @@ object PagesPcTelephone {
         val (dl, ul) = ApiStation.frequencesDuCiel(u.transmitters.getOrNull(u.selectedTxIndex), u.livePosition?.rangeRateKmS ?: 0.0, null, u.calibShiftHz, u.txShiftHz)
         o.put("ciel", JSONObject().put("dl", dl ?: JSONObject.NULL).put("ul", ul ?: JSONObject.NULL))
         o.put("convertisseurs", JSONObject().put("rxOl", 0).put("rxInv", false).put("txOl", 0).put("txInv", false))
-        o.put("cat", ApiStation.cat(vm.etatBoucleCat(), u.rigModel, -1, u.catConnected, false, u.catStatus, u.dopplerHold))
+        o.put("cat", ApiStation.cat(vm.etatBoucleCat(), u.rigModel, u.civUsbIndex, u.catConnected, false, u.catStatus, u.dopplerHold))
         o.put("rotor", ApiStation.rotor(u.rotor.mat))
         return o
     }
