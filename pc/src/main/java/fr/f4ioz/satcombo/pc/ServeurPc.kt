@@ -895,7 +895,7 @@ object JsonPc {
     /** The settings shown on the page; passwords and keys never come back, only whether they are set. */
     fun datv(d: DatvPc): JSONObject = Datv.json(d.etat, d.reglage, d.constellation())
         .put("noeud", d.noeud).put("nomNoeud", d.nomNoeud)
-        .put("programme", d.programme() ?: JSONObject.NULL).put("chemin", d.chemin)
+        .put("programme", d.programme() ?: JSONObject.NULL).put("chemin", d.chemin).put("windows", OutilsPc.windows)
         .put("debits", JSONArray(Datv.DEBITS)).put("canaux", JSONArray(Datv.CANAUX_KHZ)).put("balise", Datv.BALISE_KHZ)
 
     fun reglages(st: StationPc): JSONObject {

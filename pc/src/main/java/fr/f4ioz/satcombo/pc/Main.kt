@@ -26,6 +26,8 @@ fun main(args: Array<String>) {
     var port = 8090
     var reseau = false
     var noeud = false
+    // Started from the desktop (Windows): the browser opened, an icon by the clock.
+    var bureau = OutilsPc.windows
     var dossier = dossierParDefaut()
     var i = 0
     while (i < args.size) {
@@ -33,22 +35,32 @@ fun main(args: Array<String>) {
             "--port" -> port = args.getOrNull(++i)?.toIntOrNull() ?: port
             "--reseau" -> reseau = true
             "--noeud" -> noeud = true
+            "--bureau" -> bureau = true
+            "--console" -> bureau = false
             "--dossier" -> dossier = args.getOrNull(++i)?.let(::File) ?: dossier
             "-v", "--version" -> { println("SatMe-PC " + versionPc()); return }
             "-h", "--help", "--aide" -> {
                 println("SatMe-PC " + versionPc())
-                println("satme [--port 8090] [--reseau] [--noeud] [--dossier DIR] [--version]")
+                println("satme [--port 8090] [--reseau] [--noeud] [--dossier DIR] [--bureau|--console] [--version]")
                 println("  --port     port de la page (8090)")
                 println("  --reseau   page ouverte aux autres machines du réseau (sinon ce PC seulement)")
                 println("  --noeud    SatMe-Node : seulement le MiniTiouner, piloté par le réseau (Raspberry Pi près de l'antenne)")
                 println("  --dossier  où ranger réglages et éléments (${dossierParDefaut()})")
+                println("  --bureau   ouvrir la page dans le navigateur, icône près de l'horloge (d'origine sous Windows)")
                 return
             }
         }
         i++
     }
     dossier.mkdirs()
+    // No console on Windows's desktop: what SatMe-PC says goes to a file, read when something goes wrong.
+    if (bureau && OutilsPc.windows) runCatching {
+        val journal = java.io.PrintStream(java.io.FileOutputStream(File(dossier, "satme-pc.log")), true, "UTF-8")
+        System.setOut(journal); System.setErr(journal)
+    }
     if (noeud) { mainNoeud(port, dossier); return }
+    // Already running: its page, and nothing started twice on the same files.
+    if (bureau && BureauPc.dejaLance(port)) { BureauPc.ouvre("http://localhost:$port/"); return }
     val portee = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     val station = StationPc(StockageFichier(File(dossier, "reglages.properties")),
         Catalogue(File(dossier, "cache")), PortsSeriePc(), portee,
@@ -91,6 +103,11 @@ fun main(args: Array<String>) {
     println("  page      : http://localhost:${serveur.portReel}/" + if (reseau) "  (ouverte au réseau)" else "")
     println("  réglages  : ${dossier.absolutePath}")
     println("  Ctrl+C pour arrêter")
+    if (bureau) {
+        val url = "http://localhost:${serveur.portReel}/"
+        BureauPc.icone(url, dossier)
+        BureauPc.ouvre(url)
+    }
     Runtime.getRuntime().addShutdownHook(Thread {
         runCatching { journal.ferme() }
         runCatching { sdr.arrete() }

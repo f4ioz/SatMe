@@ -565,8 +565,8 @@ object RenduPc {
     }
 
     /** Is ffmpeg there to make videos? */
-    fun ffmpeg(): String? = listOf("ffmpeg", "/usr/bin/ffmpeg", "/usr/local/bin/ffmpeg", "C:\\ffmpeg\\bin\\ffmpeg.exe")
-        .firstOrNull { runCatching { ProcessBuilder(it, "-version").redirectErrorStream(true).start().let { p -> p.inputStream.readBytes(); p.waitFor() == 0 } }.getOrDefault(false) }
+    fun ffmpeg(): String? = (listOfNotNull(OutilsPc.trouve("ffmpeg")) + listOf("ffmpeg", "/usr/bin/ffmpeg", "/usr/local/bin/ffmpeg", "C:\\ffmpeg\\bin\\ffmpeg.exe"))
+        .distinct().firstOrNull { runCatching { ProcessBuilder(it, "-version").redirectErrorStream(true).start().let { p -> p.inputStream.readBytes(); p.waitFor() == 0 } }.getOrDefault(false) }
 
     /**
      * The replay as an MP4 (H.264 + AAC) through ffmpeg: 5 frames a second,

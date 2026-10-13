@@ -1923,6 +1923,7 @@ async function ticDatv(premier) {
   if (g('d-prog').dataset.vu !== pr) {
     g('d-prog').dataset.vu = pr;
     g('d-prog').innerHTML = D.programme ? 'LongMynd : ' + esc(D.programme) :
+      D.windows ? 'Sous Windows, le MiniTiouner se pilote par un SatMe-Node (un Raspberry Pi près de l’antenne) : donner son adresse et son code.' :
       'LongMynd introuvable : le compiler (BATC, github.com/BritishAmateurTelevisionClub/longmynd), puis donner ici son chemin :' +
       '<div class="ligne"><input id="d-chemin" placeholder="/home/…/longmynd/longmynd"><button onclick="dPost(\'chemin?p=\' + enc(v(\'d-chemin\')))">Utiliser</button></div>';
   }

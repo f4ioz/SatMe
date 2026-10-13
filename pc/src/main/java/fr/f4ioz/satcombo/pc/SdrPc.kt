@@ -297,9 +297,9 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
         runCatching { return RtlTcp.connecte(hote, port, 1500) }
         if (!lance || !estLocal(hote)) throw java.io.IOException("rtl_tcp ne répond pas sur $hote:$port")
         val p = runCatching {
-            ProcessBuilder("rtl_tcp", "-a", "127.0.0.1", "-p", port.toString(), "-s", Dsp.RTL_RATE.toString())
+            ProcessBuilder(OutilsPc.trouve("rtl_tcp") ?: "rtl_tcp", "-a", "127.0.0.1", "-p", port.toString(), "-s", Dsp.RTL_RATE.toString())
                 .redirectErrorStream(true).redirectOutput(File(System.getProperty("java.io.tmpdir"), "satme-rtl_tcp.log")).start()
-        }.getOrElse { throw java.io.IOException("rtl_tcp introuvable : installer rtl-sdr (sudo apt install rtl-sdr)") }
+        }.getOrElse { throw java.io.IOException("rtl_tcp introuvable : " + OutilsPc.conseil("rtl_tcp")) }
         processus = p
         val fin = horloge() + 6000
         while (horloge() < fin) {

@@ -102,6 +102,8 @@ class DatvPc(
         arreteIci()
         r.refus()?.let { return it }
         if (distant) return demarreDistant(r)
+        // LongMynd is Linux's: on Windows the MiniTiouner is driven through a SatMe-Node.
+        if (OutilsPc.windows) return "sous Windows, le MiniTiouner se pilote par un SatMe-Node (Raspberry Pi) : donner son adresse et son code ci-dessous"
         val prog = programme() ?: return "LongMynd introuvable : le compiler (github.com/BritishAmateurTelevisionClub/longmynd) et donner son chemin"
         reglage = r; garde(r)
         val gen = ++generation
@@ -317,7 +319,7 @@ class DatvPc(
     @Synchronized
     private fun demarreLecteurs(gen: Int) {
         if (generation != gen || ffmpeg != null) return
-        val ff = RenduPc.ffmpeg() ?: run { etat = etat.copy(erreur = "ffmpeg introuvable : pas d'image (sudo apt install ffmpeg)"); return }
+        val ff = RenduPc.ffmpeg() ?: run { etat = etat.copy(erreur = "ffmpeg introuvable : pas d'image (" + OutilsPc.conseil("ffmpeg") + ")"); return }
         val p = ProcessBuilder(ff, "-loglevel", "error", "-fflags", "nobuffer", "-flags", "low_delay", "-probesize", "200000", "-analyzeduration", "1000000",
             "-f", "mpegts", "-i", "pipe:0", "-map", "0:v:0", "-an", "-vf", "scale=-2:'min(720,ih)'", "-q:v", "5", "-r", "25",
             "-f", "image2pipe", "-c:v", "mjpeg", "pipe:1")
@@ -325,7 +327,7 @@ class DatvPc(
         ffmpeg = p
         thread(isDaemon = true, name = "satme-datv-images") { litImages(p.inputStream, gen) }
         if (reglage.son) {
-            val play = File(File(ff).parentFile, "ffplay").takeIf { it.canExecute() }?.path ?: "ffplay"
+            val play = OutilsPc.trouve("ffplay") ?: File(File(ff).parentFile, "ffplay").takeIf { it.canExecute() }?.path ?: "ffplay"
             ffplay = runCatching {
                 ProcessBuilder(play, "-loglevel", "error", "-nodisp", "-fflags", "nobuffer", "-flags", "low_delay", "-probesize", "200000", "-analyzeduration", "1000000", "-f", "mpegts", "-i", "pipe:0")
                     .redirectError(File(System.getProperty("java.io.tmpdir"), "satme-datv-ffplay.log")).redirectOutput(ProcessBuilder.Redirect.DISCARD).start()
@@ -387,7 +389,7 @@ class DatvPc(
     @Synchronized
     fun ouvreVlc(): String? {
         if (!etat.actif) return "réception arrêtée"
-        val vlc = listOf("/usr/bin/vlc", "/snap/bin/vlc", "/usr/local/bin/vlc").firstOrNull { File(it).canExecute() } ?: return "VLC introuvable"
+        val vlc = OutilsPc.trouve("vlc") ?: return "VLC introuvable : " + (if (OutilsPc.windows) "l'installer (videolan.org)" else OutilsPc.conseil("vlc"))
         val p = runCatching { ProcessBuilder(vlc, "--meta-title", "SatMe DATV", "fd://0").redirectErrorStream(true).redirectOutput(ProcessBuilder.Redirect.DISCARD).start() }
             .getOrElse { return "VLC ne démarre pas" }
         vlcs += p

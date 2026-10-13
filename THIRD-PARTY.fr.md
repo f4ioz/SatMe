@@ -46,6 +46,9 @@ celle de la tradition du logiciel radioamateur.
 | Material Symbols (dessins, dans la page de SatMe-PC) | Apache-2.0 | Icônes des onglets de SatMe-PC, celles du téléphone |
 | `com.google.android.gms:play-services-code-scanner` | Propriétaire Google | Scan du QR code de SatMe-PC (sans permission caméra) |
 | LongMynd (BATC), lancé comme programme à part, non inclus | GPL-3.0 | Pilotage du MiniTiouner (DATV), SatMe-PC et SatMe-Node |
+| FFmpeg (`ffmpeg`, `ffplay`), programmes à part, joints au seul paquet Windows | GPL-3.0 | Vidéos, GIF, images et son DATV ; construction BtbN/FFmpeg-Builds, sources indiquées dans `outils/SOURCES.txt` |
+| rtl-sdr (`rtl_tcp`, `rtl_test`), programmes à part, joints au seul paquet Windows | GPL-2.0 | Clé RTL-SDR ; github.com/rtlsdrblog/rtl-sdr-blog |
+| Java (Eclipse Temurin), joint au seul paquet Windows | GPL-2.0 avec exception « Classpath » | Fait tourner SatMe-PC |
 | `com.google.android.gms:play-services-location` | Propriétaire Google | Position GPS |
 | `com.google.android.play:app-update-ktx` | Propriétaire Google | Détection de mise à jour |
 | JUnit, Robolectric (essais seulement) | EPL-1.0, Apache-2.0 | Bancs d'essai |

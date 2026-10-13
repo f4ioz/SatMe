@@ -1,18 +1,50 @@
 # SatMe-PC and SatMe-Node: a release built here from the tag "satme-pc-2026.10.13".
 # One package for a Linux PC and a Raspberry Pi (Java 17, no native code of
-# ours): satme-pc.tar, with SatMe-Node's install script inside. No Android
-# APK or AAB is ever published here.
+# ours): satme-pc.tar, with SatMe-Node's install script inside; and SatMe-PC
+# for Windows, all in one (Java, ffmpeg, rtl_tcp): an installer and a zip.
+# No Android APK or AAB is ever published here.
+#
+# Pushed to the branch "essai-windows" (or run by hand): the Windows package
+# built and kept as the run's artifact, nothing published.
 name: SatMe-PC release
 
 on:
   push:
     tags: ['satme-pc-*']
+    branches: ['essai-windows']
+  workflow_dispatch:
 
 permissions:
   contents: write
 
 jobs:
+  windows:
+    # WiX 3, which Java 21's jpackage makes its installers with, is on this image.
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Build the Windows package
+        shell: bash
+        run: |
+          V="${GITHUB_REF_NAME#satme-pc-}"
+          case "$GITHUB_REF" in refs/tags/*) ;; *) V=dev ;; esac
+          ./gradlew --no-daemon -PsatmePcVersion="$V" :pc:installDist
+          command -v candle.exe || export PATH="$PATH:/c/Program Files (x86)/WiX Toolset v3.14/bin:/c/Program Files (x86)/WiX Toolset v3.11/bin"
+          pc/windows/paquet-windows.sh "$V"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: satme-pc-windows
+          path: build-windows/sortie/*
+          retention-days: 14
+
   release:
+    if: startsWith(github.ref, 'refs/tags/satme-pc-')
+    needs: windows
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -27,12 +59,18 @@ jobs:
           ./gradlew --no-daemon -PsatmePcVersion="$V" :pc:distTar
           cp pc/build/distributions/satme.tar satme-pc.tar
           cp pc/build/distributions/satme.tar "satme-pc-$V.tar"
-          sha256sum satme-pc.tar "satme-pc-$V.tar" > SHA256SUMS
           tar xOf satme-pc.tar satme/lib/pc.jar > /tmp/pc.jar && unzip -p /tmp/pc.jar META-INF/MANIFEST.MF | grep Implementation-Version
+      - uses: actions/download-artifact@v4
+        with:
+          name: satme-pc-windows
+      - name: Checksums
+        run: |
+          V="${GITHUB_REF_NAME#satme-pc-}"
+          sha256sum satme-pc.tar "satme-pc-$V.tar" satme-pc-windows.msi satme-pc-windows.zip > SHA256SUMS
       - name: Publish the release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           V="${GITHUB_REF_NAME#satme-pc-}"
-          gh release create "$GITHUB_REF_NAME" satme-pc.tar "satme-pc-$V.tar" SHA256SUMS \
+          gh release create "$GITHUB_REF_NAME" satme-pc.tar "satme-pc-$V.tar" satme-pc-windows.msi satme-pc-windows.zip SHA256SUMS \
             --title "SatMe-PC $V" --notes-file pc/NOTES-RELEASE.md --latest

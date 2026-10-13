@@ -9,6 +9,7 @@ SatMe runs on a PC (Linux, Windows, Raspberry Pi) and is driven from a browser. 
 ## Installing it
 
 - **Linux**: [Installing SatMe-PC](installer-satme-pc.md) — download `satme-pc.tar`, unpack, start, then open **http://localhost:8090/**.
+- **Windows**: [Installing SatMe-PC on Windows](installer-satme-pc-windows.md) — all in one: `satme-pc-windows.msi`, double-click, the page opens.
 - **The MiniTiouner by the antenna**: [Installing SatMe-Node on a Raspberry Pi](installer-satme-node.md).
 
 | Option | Effect |

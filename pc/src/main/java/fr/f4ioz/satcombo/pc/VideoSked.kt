@@ -45,7 +45,7 @@ class VideoSked(private val dossier: File, private val tuile: (Int, Int, Int) ->
     /** Starts making it on a thread of its own; false when one is already being made or ffmpeg is missing. */
     fun lance(s: Sked): Boolean {
         if (etat.enCours) return false
-        if (RenduPc.ffmpeg() == null) { etat = Etat(erreur = "ffmpeg n'est pas installé : sudo apt install ffmpeg"); return false }
+        if (RenduPc.ffmpeg() == null) { etat = Etat(erreur = "ffmpeg n'est pas installé : " + OutilsPc.conseil("ffmpeg")); return false }
         etat = Etat(enCours = true)
         thread(isDaemon = true, name = "satme-sked-video") {
             etat = runCatching { fabrique(s) { p -> etat = etat.copy(progression = p) } }

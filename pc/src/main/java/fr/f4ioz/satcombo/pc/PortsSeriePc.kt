@@ -84,7 +84,7 @@ class PortsSeriePc : PortsSerie {
                 val c = cles[i]
                 val freres = cles.withIndex().filter { it.value == c }.map { it.index }
                 PortSerie(index = i, appareil = appareils.indexOf(c), port = freres.indexOf(i), nbPorts = freres.size,
-                    libelle = p.systemPortPath + (if (desc.isNotBlank()) " — $desc" else ""),
+                    libelle = (if (OutilsPc.windows) p.systemPortName else p.systemPortPath) + (if (desc.isNotBlank()) " — $desc" else ""),
                     cle = c, vendorId = p.vendorID, produit = desc.ifBlank { null },
                     serie = runCatching { p.serialNumber }.getOrNull()?.takeIf { it.isNotBlank() && it != "Unknown" },
                     chemin = p.systemPortPath) to p

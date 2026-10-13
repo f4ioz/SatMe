@@ -1,6 +1,6 @@
 # Installer SatMe-PC sous Linux
 
-*[English version](installer-satme-pc.md) · Ce que fait SatMe-PC : [SatMe-PC](station-pc.fr.md)*
+*[English version](installer-satme-pc.md) · Sous Windows : [tout en un](installer-satme-pc-windows.fr.md) · Ce que fait SatMe-PC : [SatMe-PC](station-pc.fr.md)*
 
 SatMe-PC, c'est toute la station dans un navigateur. Un seul paquet, `satme-pc.tar`, pour Debian, Ubuntu, Linux Mint, Raspberry Pi OS… Rien à compiler.
 

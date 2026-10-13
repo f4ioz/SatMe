@@ -1,0 +1,76 @@
+#!/usr/bin/env bash
+# SatMe-PC for Windows, all in one: Java, SatMe-PC, ffmpeg/ffplay and rtl_tcp
+# in one installer (.msi, per user, no administrator) and one folder to unzip
+# (.zip). Run on Windows (GitHub Actions, Git Bash), after
+# `./gradlew :pc:installDist`:
+#
+#   pc/windows/paquet-windows.sh 2026.10.13
+#
+# On Linux it makes the same folder (app-image), without the tools: to check
+# the package before a release.
+set -eo pipefail
+
+V="${1:-dev}"
+racine="$(cd "$(dirname "$0")/../.." && pwd)"
+cd "$racine"
+case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*) windows=1 ;; *) windows=0 ;; esac
+
+B=build-windows
+E="$B/entree"
+rm -rf "$B"
+mkdir -p "$E/outils" "$B/sortie"
+cp pc/build/install/satme/lib/*.jar "$E/"
+cp LICENSE THIRD-PARTY.md THIRD-PARTY.fr.md "$E/"
+
+if [ "$windows" = 1 ]; then
+    # The tools SatMe-PC calls, next to it (OutilsPc looks there first).
+    T="$B/telechargements"; mkdir -p "$T"
+    # FFmpeg (GPL build: the videos are H.264), the shared one (smaller): its .exe and .dll.
+    nom=$(curl -fsSL https://api.github.com/repos/BtbN/FFmpeg-Builds/releases/tags/latest \
+        | grep -o '"name": *"ffmpeg-n[0-9.]*-latest-win64-gpl-shared-[0-9.]*\.zip"' | sed 's/.*"\(ffmpeg[^"]*\)"/\1/' | sort -V | tail -1)
+    [ -n "$nom" ] || { echo "FFmpeg pour Windows introuvable"; exit 1; }
+    echo "FFmpeg : $nom"
+    curl -fsSL -o "$T/ffmpeg.zip" "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/$nom"
+    7z x -y -o"$T/ffmpeg" "$T/ffmpeg.zip" > /dev/null
+    d=$(ls -d "$T"/ffmpeg/*/bin | head -1)
+    cp "$d"/ffmpeg.exe "$d"/ffplay.exe "$d"/*.dll "$E/outils/"
+    cp "$(dirname "$d")/LICENSE.txt" "$E/outils/FFMPEG-LICENSE.txt"
+    # rtl_tcp (rtl-sdr, GPL-2), 64 bits.
+    curl -fsSL -o "$T/rtl.zip" https://github.com/rtlsdrblog/rtl-sdr-blog/releases/download/V1.4.0/Release.zip
+    7z x -y -o"$T/rtl" "$T/rtl.zip" > /dev/null
+    cp "$T"/rtl/x64/rtl_tcp.exe "$T"/rtl/x64/rtl_test.exe "$T"/rtl/x64/*.dll "$E/outils/"
+    printf 'rtl_tcp, rtl_test : rtl-sdr (GPL-2.0), https://github.com/rtlsdrblog/rtl-sdr-blog (V1.4.0)\nffmpeg, ffplay : FFmpeg (GPL), https://github.com/BtbN/FFmpeg-Builds — %s\n' "$nom" > "$E/outils/SOURCES.txt"
+fi
+
+# An installer's version is three numbers, the first two below 256:
+# 2026.10.13 → 26.10.1300, 2026.10.13.1 → 26.10.1301; "dev" → 0.0.0.
+if [[ "$V" =~ ^20([0-9]{2})\.([0-9]{1,2})\.([0-9]{1,2})(\.([0-9]{1,2}))?$ ]]; then
+    VW="$((10#${BASH_REMATCH[1]})).$((10#${BASH_REMATCH[2]})).$((10#${BASH_REMATCH[3]} * 100 + 10#${BASH_REMATCH[5]:-0}))"
+else
+    VW="0.0.0"
+fi
+
+# The Java modules SatMe-PC uses (jdeps), and those found only at run time:
+# TLS (crypto), the languages' dates and numbers, the charsets.
+MODULES="java.base,java.desktop,java.instrument,java.sql,jdk.unsupported,java.logging,java.naming,java.management,java.net.http,jdk.crypto.ec,jdk.crypto.cryptoki,jdk.localedata,jdk.charsets,jdk.zipfs"
+
+commun=(--name SatMe-PC --app-version "$VW" --vendor "F4IOZ"
+    --description "SatMe-PC : station satellite radioamateur"
+    --input "$E" --main-jar pc.jar --main-class fr.f4ioz.satcombo.pc.MainKt
+    --add-modules "$MODULES" --java-options "-Xmx512m")
+
+if [ "$windows" = 1 ]; then
+    commun+=(--icon pc/windows/satme.ico)
+    # The folder to unzip.
+    jpackage --type app-image "${commun[@]}" --dest "$B/image"
+    (cd "$B/image" && 7z a -tzip "../sortie/satme-pc-windows.zip" SatMe-PC > /dev/null)
+    # The installer: per user (no administrator), Start menu and desktop, updated in place.
+    jpackage --type msi "${commun[@]}" --dest "$B/msi" \
+        --win-per-user-install --win-menu --win-menu-group SatMe --win-shortcut --win-shortcut-prompt \
+        --win-upgrade-uuid 8eb50f5b-d5a0-4ee2-b29e-b103f4129360 \
+        --license-file LICENSE
+    cp "$B"/msi/*.msi "$B/sortie/satme-pc-windows.msi"
+else
+    jpackage --type app-image "${commun[@]}" --dest "$B/image"
+fi
+ls -la "$B/sortie" "$B/image"
