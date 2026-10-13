@@ -764,23 +764,7 @@ object JsonPc {
     fun spectre(d: SdrPc, span: Int, n: Int): JSONObject {
         val sp = d.spectre ?: return JSONObject().put("trames", 0)
         val e = d.etat.value
-        val nb = sp.size
-        val parBin = Dsp.RTL_RATE.toDouble() / Dsp.DECIM_1 / nb
-        val largeur = span.coerceIn(6_000, 176_400).toDouble()
-        val k = n.coerceIn(64, 2048)
-        val centre = e.fineHz.toDouble()
-        val v = IntArray(k) { i ->
-            val a = centre - largeur / 2 + largeur * i / k
-            val b = a + largeur / k
-            var m = -200f
-            var j0 = Math.floor(a / parBin).toInt() + nb / 2
-            val j1 = Math.ceil(b / parBin).toInt() + nb / 2
-            if (j1 <= j0) j0 = j1 - 1
-            for (j in j0 until j1) if (j in 0 until nb) m = maxOf(m, sp[j])
-            Math.round(m)
-        }
-        return JSONObject().put("trames", d.trames).put("centre", centre).put("span", largeur).put("pll", e.pllHz)
-            .put("db", JSONArray(v.toList()))
+        return fr.f4ioz.satcombo.demo.ApiSdr.spectre(sp, Dsp.RTL_RATE.toDouble() / Dsp.DECIM_1 / sp.size, e.fineHz.toDouble(), span, n, d.trames.toLong(), e.pllHz)
     }
 
     /** QO-100: the pilot's state, the dish and the Sun; with [plan], the band plan and the presets (they never change). */

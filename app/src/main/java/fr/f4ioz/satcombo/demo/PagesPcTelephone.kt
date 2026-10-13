@@ -24,7 +24,7 @@ object PagesPcTelephone {
     @Volatile var vm: MainViewModel? = null
 
     /** The tabs the phone serves so far; the page hides the others. QO-100 only when its extension is on. */
-    val ONGLETS = listOf("station", "carnet", "agenda", "carres", "frise", "sked", "qo100", "son", "sstv", "aprs", "ft8", "journal", "planche", "reglages")
+    val ONGLETS = listOf("station", "carnet", "agenda", "carres", "frise", "sked", "qo100", "sdr", "son", "sstv", "aprs", "ft8", "journal", "planche", "reglages")
 
     private fun onglets(vm: MainViewModel) =
         ONGLETS.filter { it != "qo100" || vm.hasExtension(fr.f4ioz.satcombo.data.Extensions.QO100) }
@@ -89,6 +89,16 @@ object PagesPcTelephone {
                     val obs = u.observer
                     json(ApiCalculs.passagesFinisJson(if (sat == null || obs == null) emptyList()
                         else ApiCalculs.passagesFinis(vm.predicteurPourPage(), sat, obs, System.currentTimeMillis(), 72, u.minElevDeg.toDouble())))
+                }
+                // ---- the SDR dongle on the phone's USB port
+                "/api/sdr" -> json(sdr(vm))
+                "/api/sdr/spectre" -> {
+                    val st = fr.f4ioz.satcombo.sdr.SdrHub.state.value
+                    val sp = fr.f4ioz.satcombo.sdr.SdrHub.spectrum.value
+                    if (sp !== dernierSpectre && sp.isNotEmpty()) { dernierSpectre = sp; tramesSpectre++ }
+                    json(ApiSdr.spectre(sp, fr.f4ioz.satcombo.sdr.Dsp.RTL_RATE.toDouble() / fr.f4ioz.satcombo.sdr.Dsp.DECIM_1 / sp.size.coerceAtLeast(1),
+                        (st.dopplerFineHz + st.offsetHz).toDouble(), p("span").toIntOrNull() ?: 48_000, p("n").toIntOrNull() ?: 512,
+                        tramesSpectre, st.centerHz - st.dopplerFineHz))
                 }
                 // ---- APRS and FT8: what the phone heard (the engine's words, as SatMe-PC's)
                 "/api/aprs" -> {
@@ -330,6 +340,36 @@ object PagesPcTelephone {
                 vm.refreshAgenda(); OK
             }
             "/api/agenda/suivi" -> JSONObject().put("ok", false).put("erreur", "sur le téléphone, ce sont les notifications du rendez-vous qui préviennent")
+            // ---- the SDR dongle: the phone's own gestures (its SDR screen's)
+            "/api/sdr/demarrer" -> {
+                if (!fr.f4ioz.satcombo.sdr.SdrHub.state.value.connected && fr.f4ioz.satcombo.sdr.SdrHub.devicePresent(vm.getApplication()) == null)
+                    return JSONObject().put("ok", false).put("erreur", "aucune clé SDR branchée sur le téléphone")
+                vm.startSdr()
+                Thread.sleep(800)
+                val st = fr.f4ioz.satcombo.sdr.SdrHub.state.value
+                when {
+                    st.awaitingPermission -> JSONObject().put("ok", false).put("erreur", "autoriser la clé sur l'écran du téléphone, puis Démarrer")
+                    st.error != null && !st.running -> JSONObject().put("ok", false).put("erreur", st.error)
+                    else -> OK
+                }
+            }
+            "/api/sdr/arreter" -> { vm.stopSdr(); OK }
+            "/api/sdr/decalage" -> { p("hz").toIntOrNull()?.let { vm.setSdrOffset(it) }; OK }
+            "/api/sdr/pic" -> { vm.tuneSdrPeak(30_000); OK }
+            "/api/sdr/reglage" -> {
+                p("gain").toIntOrNull()?.let { vm.setSdrGain(it.takeIf { g -> g >= 0 }) }
+                if (p("agc").isNotEmpty()) vm.setSdrAgc(p("agc") == "1")
+                p("ppm").toIntOrNull()?.let { vm.setSdrPpm(it) }
+                p("mode").takeIf { it.isNotEmpty() }?.let { m -> fr.f4ioz.satcombo.sdr.RxMode.values().firstOrNull { it.name == m }?.let { vm.setSdrMode(it) } }
+                p("bw").toIntOrNull()?.let { vm.setSdrBandwidth(it) }
+                p("squelch").toIntOrNull()?.let { vm.setSdrSquelch(it) }
+                if (p("son").isNotEmpty()) vm.setSdrAudio(p("son") == "1")
+                if (p("deemph").isNotEmpty()) vm.setSdrDeemph(p("deemph") == "1")
+                if (p("doppler").isNotEmpty()) vm.setSdrDopplerTrack(p("doppler") == "1")
+                // The phone's dongle follows the satellite followed; no other frequency, no rtl_tcp link.
+                if (p("mhz").isNotEmpty() || p("suit") == "0") return JSONObject().put("ok", false).put("erreur", "sur le téléphone, la clé écoute le satellite suivi (onglet Station)")
+                OK
+            }
             // ---- FT8: the phone's decoder, started and stopped from the page
             "/api/ft8" -> {
                 val f = fr.f4ioz.satcombo.ft8.Ft8Hub
@@ -485,6 +525,30 @@ object PagesPcTelephone {
         if (c.timeInMillis > System.currentTimeMillis() + 60_000L) c.add(java.util.Calendar.DAY_OF_MONTH, -1)
         c.timeInMillis
     }.getOrDefault(0L)
+
+    /** The last spectrum seen, and how many: the page draws a new line of its waterfall only for a new one. */
+    @Volatile private var dernierSpectre: FloatArray? = null
+    @Volatile private var tramesSpectre = 0L
+
+    /** The phone's dongle in SatMe-PC's words (its SDR tab). */
+    private fun sdr(vm: MainViewModel): JSONObject {
+        val u = vm.ui.value
+        val st = fr.f4ioz.satcombo.sdr.SdrHub.state.value
+        val statut = when {
+            st.awaitingPermission -> "à autoriser sur le téléphone"
+            st.running -> "réception"
+            st.connected -> "clé branchée"
+            else -> "aucune clé branchée"
+        }
+        return JSONObject().put("actif", st.running).put("statut", statut).put("erreur", st.error.orEmpty()).put("tuner", st.deviceName.orEmpty())
+            .put("ciel", vm.cleVersSat(st.centerHz)).put("repos", vm.sdrRestHz()).put("pll", st.centerHz - st.dopplerFineHz)
+            .put("fine", st.dopplerFineHz + st.offsetHz).put("decalage", st.offsetHz)
+            .put("niveau", Math.round(st.levelDb * 10) / 10.0).put("saturation", if (st.clipping) 1.0 else 0.0)
+            .put("debit", Math.round(st.mbRead * 1024)).put("perdus", 0).put("satellite", st.satName ?: u.selected?.name.orEmpty())
+            .put("gain", vm.sdrGainReglage()).put("agc", u.sdrAgc).put("ppm", u.sdrPpm).put("mode", vm.sdrMode().name).put("bw", u.sdrBandwidthHz)
+            .put("squelch", u.sdrSquelchDb).put("son", u.sdrAudio).put("deemph", u.sdrDeemph).put("doppler", u.sdrDopplerTrack)
+            .put("suit", true).put("manuelle", 0).put("hote", "").put("port", 0).put("lance", false).put("bias", false)
+    }
 
     /** The sources the phone records from: the SatMe screen's choices. */
     private val SOURCES = listOf("MIC" to "Micro du téléphone", "BT" to "Bluetooth (HFP)", "USB" to "Carte son USB (le poste)")

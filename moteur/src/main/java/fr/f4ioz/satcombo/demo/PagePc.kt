@@ -895,7 +895,7 @@ object PagePc {
       <div class="ligne" style="margin-top:0"><span class="petit" style="min-width:70px">Gain</span><select id="r-gain" onchange="rRegle('gain=' + this.value)"></select>
         <label class="petit"><input type="checkbox" id="r-agc" onchange="rRegle('agc=' + (this.checked ? 1 : 0))"> CAG numérique</label></div>
       <div class="ligne"><span class="petit" style="min-width:70px">Erreur</span><input id="r-ppm" style="max-width:70px"><span class="petit">ppm</span><button onclick="rRegle('ppm=' + enc(v('r-ppm')))">Appliquer</button></div>
-      <details style="margin-top:6px"><summary class="petit" style="cursor:pointer">Liaison rtl_tcp</summary>
+      <details style="margin-top:6px" id="r-liaison"><summary class="petit" style="cursor:pointer">Liaison rtl_tcp</summary>
         <div class="ligne"><input id="r-hote" placeholder="127.0.0.1" style="max-width:160px"><input id="r-port" placeholder="1234" style="max-width:80px">
           <button onclick="rRegle('hote=' + enc(v('r-hote')) + '&port=' + enc(v('r-port')))">Enregistrer</button></div>
         <label class="petit" style="display:block;margin-top:4px"><input type="checkbox" id="r-lance" onchange="rRegle('lance=' + (this.checked ? 1 : 0))"> Lancer rtl_tcp sur ce PC (la clé y est branchée)</label>
@@ -3076,8 +3076,10 @@ setInterval(ticAprs, 2000);
 if (window.SATME_TELEPHONE) {
   g('s-note').textContent = 'MP3, comme sur le téléphone : il écoute en enregistrant. La source se choisit ici ; SatMe doit être à l’écran du téléphone pour prendre le micro.';
   g('s-auto-l').hidden = true;
-  // The phone serves this page: no phone to join.
+  // The phone serves this page: no phone to join; its dongle on its USB port, following the satellite followed.
   g('carteTelephone').hidden = true;
+  g('r-liaison').hidden = true;
+  g('r-mhz').parentElement.hidden = true;
 }
 function ecoute(nom) { g('s-lecteur').src = 'enregistrements/' + nom; g('s-lecteur').play(); }
 async function carteSon(arret) {

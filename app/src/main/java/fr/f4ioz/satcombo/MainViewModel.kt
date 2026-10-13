@@ -6126,6 +6126,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         if (!on) fr.f4ioz.satcombo.sdr.SdrHub.setDopplerFine(0)
     }
 
+    /** The dongle's gain as kept, tenths of dB; -1 automatic (SatMe-PC's page). */
+    fun sdrGainReglage(): Int = settings.sdrGainTenthDb
+
     fun stopSdr() {
         sdrLoopJob?.cancel(); sdrLoopJob = null
         fr.f4ioz.satcombo.sdr.SdrHub.stop()
