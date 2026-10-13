@@ -286,7 +286,7 @@ object ServeurDemo {
 
         // The SSTV sheet on the PC: its page, like the desk's, needs no code; its routes do.
         if (chemin == "/planche" || chemin == "/planche/") {
-            envoie(sortie, "200 OK", "text/html; charset=utf-8", PagePlanche.html().toByteArray(Charsets.UTF_8))
+            envoie(sortie, "200 OK", "text/html; charset=utf-8", PagesPcTelephone.planche().toByteArray(Charsets.UTF_8))
             return
         }
         // SatMe-PC's page, served by the phone: the same.
@@ -296,7 +296,7 @@ object ServeurDemo {
         }
         // The pass journal on the PC: the same.
         if (chemin == "/journal" || chemin == "/journal/") {
-            envoie(sortie, "200 OK", "text/html; charset=utf-8", PageJournal.html().toByteArray(Charsets.UTF_8))
+            envoie(sortie, "200 OK", "text/html; charset=utf-8", PagesPcTelephone.journal().toByteArray(Charsets.UTF_8))
             return
         }
 

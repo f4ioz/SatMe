@@ -66,9 +66,7 @@ class CarnetPc(private val station: StationPc, val store: LogStore, private val 
 
     /** Every contact with this station (whatever its suffix: /P, /M…), the newest first. */
     fun historique(indicatif: String): List<LogEntry> {
-        val b = fr.f4ioz.satcombo.domain.Indicatifs.base(indicatif)
-        if (b.length < 3) return emptyList()
-        return store.load().filter { fr.f4ioz.satcombo.domain.Indicatifs.base(it.callsign) == b }.sortedByDescending { it.timeMs }
+        return fr.f4ioz.satcombo.demo.ApiStation.historique(store.load(), indicatif)
     }
 
     /** A new contact, now; null without a callsign or a satellite. */

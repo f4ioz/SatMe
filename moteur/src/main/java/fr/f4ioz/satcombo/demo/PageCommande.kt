@@ -121,7 +121,7 @@ object PageCommande {
 
 <div class="page" id="poste" style="display:none">
   <h1>SatMe — poste de commande</h1>
-  <div class="sub"><span id="station">—</span> · <a id="lienPlanche" href="planche" style="color:var(--cyan)">Planche SSTV</a> · <a id="lienJournal" href="journal" style="color:var(--cyan)">Journal des passages</a> · <a id="lienPc" href="pc" style="color:var(--cyan)">Pages SatMe-PC</a></div>
+  <div class="sub"><span id="station">—</span> · <a id="lienPlanche" href="planche" style="color:var(--cyan)">Planche SSTV</a> · <a id="lienJournal" href="journal" style="color:var(--cyan)">Journal des passages</a> · <a id="lienPc" href="pc" style="color:var(--cyan)">Pages SatMe</a></div>
 
   <div class="grille">
     <div class="carte">

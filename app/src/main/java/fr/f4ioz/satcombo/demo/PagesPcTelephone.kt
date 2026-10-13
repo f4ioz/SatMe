@@ -33,11 +33,26 @@ object PagesPcTelephone {
      * The page: SatMe-PC's, the key from the desk put in a cookie for its
      * routes, and back to the desk's door when there is none.
      */
-    fun page(): String = PagePc.HTML.replace("<script>", "<script>window.SATME_TELEPHONE=true;(function(){" +
+    fun page(): String = nomSatMe(PagePc.HTML).replace("<script>", "<script>window.SATME_TELEPHONE=true;(function(){" +
         "var k='';try{k=localStorage.getItem('satme-cle')||''}catch(e){}" +
         "var b=location.pathname.replace(/\\/pc\\/?$/,'/');" +
         "if(k)document.cookie='satme_cle='+k+';path='+b+';SameSite=Strict';" +
         "fetch('api/etat').then(function(r){if(r.status===403)location.href=b+'?vers=pc'})})();</script>\n<script>")
+
+    /** Served by the phone, the pages are SatMe's, not SatMe-PC's: their name said so. */
+    private fun nomSatMe(h: String) = h.replace("<h1>SatMe-<span class=\"cyan\">PC</span></h1>", "<h1>SatMe</h1>")
+        .replace("<h1>SatMe-<span class=\"c\">PC</span></h1>", "<h1>SatMe</h1>")
+        .replace("<title>SatMe — station PC</title>", "<title>SatMe — station</title>")
+
+    /** The pass journal, under the same menu as the other pages (as SatMe-PC shows it). */
+    fun journal(): String = PageJournal.html()
+        .replace("<script>", "<script>window.SATME_TELEPHONE=true;</script>\n<style>${PagePc.STYLE_BARRE}</style>\n<script>")
+        .replace("<div id=\"page\" class=\"cache\">", "<div id=\"page\" class=\"cache\">" + nomSatMe(PagePc.barre("journal")) + "<script>${PagePc.SCRIPT_BARRE}</script>")
+
+    /** The SSTV sheet, the same. */
+    fun planche(): String = PagePlanche.html()
+        .replace("<script>", "<script>window.SATME_TELEPHONE=true;</script>\n<style>${PagePc.STYLE_BARRE}#pupitre,#journal{display:none}</style>\n<script>")
+        .replace("<div id=\"editeur\" class=\"cache\">", "<div id=\"editeur\" class=\"cache\">" + nomSatMe(PagePc.barre("planche")) + "<script>${PagePc.SCRIPT_BARRE}</script>")
 
     private fun json(o: Any) = ReponseWeb("200 OK", "application/json; charset=utf-8", o.toString().toByteArray(Charsets.UTF_8))
     private val NON = ReponseWeb("404 Not Found", "application/json", "{\"ok\":false}".toByteArray())
@@ -51,9 +66,23 @@ object PagesPcTelephone {
             when (route) {
                 "/api/capacites" -> json(JSONObject().put("onglets", JSONArray(onglets(vm))).put("serveur", "telephone"))
                 "/api/etat" -> json(etat(vm))
-                "/api/passages" -> json(JSONObject().put("calcul", u.loading).put("liste", JSONArray(u.passes.take(300).map {
-                    ApiStation.passage(it, fav = it.catalogNumber in u.favorites, agenda = vm.agendaForPass(it) != null)
-                })))
+                // Every satellite's passes over 24 h, as SatMe-PC lists them (the phone's own lists hold the followed one and the favourites).
+                "/api/passages" -> {
+                    val (l, calcul) = passagesTous(vm)
+                    json(JSONObject().put("calcul", calcul).put("liste", JSONArray(l.take(300).map {
+                        ApiStation.passage(it, fav = it.catalogNumber in u.favorites, agenda = vm.agendaForPass(it) != null)
+                    })))
+                }
+                "/api/trace" -> {
+                    val sat = u.selected
+                    val pts = if (sat == null) emptyList() else runCatching { vm.predicteurPourPage().groundTrack(sat, System.currentTimeMillis(), 160) }.getOrDefault(emptyList())
+                    // The track starts an eighth of an orbit ago: the point for now is the 20th of 160.
+                    json(JSONObject().put("catnum", sat?.catalogNumber ?: 0).put("ici", 20)
+                        .put("points", JSONArray(pts.map { (la, lo) -> JSONArray(listOf(Math.round(la * 100) / 100.0, Math.round(lo * 100) / 100.0)) })))
+                }
+                // QRZ, as the phone looks it up (its credentials, its session); the card shown, as on the phone.
+                "/api/qrz" -> json(ApiStation.qrz(kotlinx.coroutines.runBlocking { vm.ficheQrz(p("c")) }, u.observer, true))
+                "/api/carnet/station" -> json(ApiStation.historiqueJson(ApiStation.historique(u.log, p("c")), u.observer, true))
                 // ---- Timeline, Sked, Squares: the engine's computations, from the phone's satellites, place and log
                 "/api/frise" -> {
                     val obs = u.observer ?: return json(ApiCalculs.friseJson(System.currentTimeMillis(), emptyList()))
@@ -130,6 +159,15 @@ object PagesPcTelephone {
                 OK
             }
             "/api/emetteur" -> { vm.selectTransmitter(p("i").toIntOrNull() ?: 0); OK }
+            // The satellite's two shifts: nudged, kept as its reference, or back to it.
+            "/api/sat/reglage" -> {
+                if (u.selected == null) return JSONObject().put("ok", false).put("erreur", "aucun satellite suivi")
+                if (p("retour") == "1") vm.rappelleDecalages()
+                p("calib").toLongOrNull()?.let { vm.setCalibShift(vm.ui.value.calibShiftHz + it) }
+                p("tx").toLongOrNull()?.let { vm.setTxShift(vm.ui.value.txShiftHz + it) }
+                if (p("memorise") == "1") vm.memoriseDecalages()
+                OK
+            }
             "/api/carnet/ajoute" -> {
                 val sat = u.selected ?: return JSONObject().put("ok", false).put("erreur", "il faut un indicatif et un satellite suivi")
                 if (p("c").isBlank()) return JSONObject().put("ok", false).put("erreur", "il faut un indicatif et un satellite suivi")
@@ -281,6 +319,35 @@ object PagesPcTelephone {
             }
             else -> JSONObject().put("ok", false).put("erreur", "pas encore sur le téléphone")
         }
+    }
+
+    /** Every satellite's passes, computed in the background and kept five minutes; and whether a computation runs. */
+    @Volatile private var passagesCalcules: List<fr.f4ioz.satcombo.data.SatPass> = emptyList()
+    @Volatile private var passagesDe = 0L
+    @Volatile private var passagesPour = ""
+    private val passagesEnCours = java.util.concurrent.atomic.AtomicBoolean(false)
+
+    private fun passagesTous(vm: MainViewModel): Pair<List<fr.f4ioz.satcombo.data.SatPass>, Boolean> {
+        val u = vm.ui.value
+        val obs = u.observer ?: return emptyList<fr.f4ioz.satcombo.data.SatPass>() to false
+        val maintenant = System.currentTimeMillis()
+        // Computed again when old, or for another place, catalogue or minimum elevation.
+        val pour = "${obs.latDeg},${obs.lonDeg},${u.satellites.size},${u.minElevDeg}"
+        if ((maintenant - passagesDe > 5 * 60_000L || pour != passagesPour) && passagesEnCours.compareAndSet(false, true)) {
+            Thread {
+                try {
+                    val p = vm.predicteurPourPage()
+                    val debut = System.currentTimeMillis()
+                    passagesCalcules = u.satellites.flatMap { s ->
+                        if (!fr.f4ioz.satcombo.domain.PassPredictor.elementsUtilisables(s)) emptyList()
+                        else runCatching { p.upcomingPasses(s, obs, debut - 15 * 60_000L, 24, u.minElevDeg.toDouble()) }
+                            .getOrDefault(emptyList()).filter { it.losEpochMs >= debut }
+                    }.sortedBy { it.aosEpochMs }
+                    passagesDe = debut; passagesPour = pour
+                } finally { passagesEnCours.set(false) }
+            }.apply { isDaemon = true; name = "SatMe passages page"; priority = Thread.MIN_PRIORITY }.start()
+        }
+        return passagesCalcules.filter { it.losEpochMs >= maintenant } to passagesEnCours.get()
     }
 
     /** The sources the phone records from: the SatMe screen's choices. */

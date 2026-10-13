@@ -235,15 +235,7 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
             }
             "/api/carnet/station" -> {
                 val l = carnet?.historique(q["c"].orEmpty()) ?: emptyList()
-                val o = JSONObject().put("total", l.size).put("fiche", station.ficheQrz)
-                    .put("premier", l.lastOrNull()?.timeMs ?: 0L).put("dernier", l.firstOrNull()?.timeMs ?: 0L)
-                    .put("sats", JSONArray(l.map { it.satName }.filter { it.isNotBlank() }.groupingBy { it }.eachCount().entries.sortedByDescending { it.value }.map { "${it.key} ×${it.value}" }))
-                    .put("carres", JSONArray(l.map { it.theirLocator.take(4).uppercase() }.filter { it.length == 4 }.distinct()))
-                    .put("contacts", JSONArray(l.take(100).map { e -> JSONObject().put("t", e.timeMs).put("c", e.callsign).put("l", e.theirLocator)
-                        .put("sat", e.satName).put("md", e.mode).put("rs", e.rstSent).put("rr", e.rstRcvd).put("nm", e.nom).put("qth", e.qth).put("n", e.note) }))
-                // Where it is from the log when QRZ is not asked: its most frequent square.
-                l.mapNotNull { it.theirLocator.takeIf { x -> x.length >= 4 } }.groupingBy { it.uppercase() }.eachCount().maxByOrNull { it.value }?.key
-                    ?.let { JsonPc.ouEstIl(o, station, null, null, it) }
+                val o = fr.f4ioz.satcombo.demo.ApiStation.historiqueJson(l, station.etat.value.observateur, station.ficheQrz)
                 envoie(sortie, "200 OK", "application/json; charset=utf-8", o.toString().toByteArray())
             }
             "/api/carnet" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JsonPc.carnet(carnet).toString().toByteArray())
@@ -264,17 +256,7 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
             "/api/qrz" -> {
                 // Read only (a directory lookup), so a GET; nothing changes in the station.
                 val f = carnet?.let { kotlinx.coroutines.runBlocking { it.ficheQrz(q["c"].orEmpty()) } }
-                val o = if (f == null) JSONObject().put("ok", false).put("erreur", "identifiants QRZ absents ou réseau")
-                    else if (f.erreur.isNotBlank()) JSONObject().put("ok", false).put("erreur", f.erreur)
-                    else JSONObject().put("ok", !f.vide).put("nom", f.nom).put("prenom", f.prenom).put("qth", f.qth)
-                        .put("pays", f.pays).put("carre", f.carre).put("indicatif", f.indicatif)
-                        .put("adresse", f.adresse).put("etat", f.etat).put("comte", f.comte).put("zoneCq", f.zoneCq).put("zoneItu", f.zoneItu)
-                        .put("classe", f.classe).put("lotw", f.lotw).put("eqsl", f.eqsl).put("qslPapier", f.qslPapier)
-                        .put("qslManager", f.qslManager).put("site", f.site).put("surnom", f.surnom).put("depuis", f.depuis)
-                        .also { o -> JsonPc.ouEstIl(o, station, f.lat, f.lon, f.carre) }
-                        // The photo only when the operator wants the QRZ card (Settings).
-                        .put("image", if (station.ficheQrz) f.image else "")
-                        .put("fiche", station.ficheQrz)
+                val o = fr.f4ioz.satcombo.demo.ApiStation.qrz(f, station.etat.value.observateur, station.ficheQrz)
                 envoie(sortie, "200 OK", "application/json; charset=utf-8", o.toString().toByteArray())
             }
             "/api/ft8" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JsonPc.ft8(son, station, carnet).toString().toByteArray())
@@ -911,18 +893,6 @@ object JsonPc {
      * Where a station is from mine: its place (QRZ's coordinates, else its
      * square's centre), the distance and the bearing (great circle).
      */
-    fun ouEstIl(o: JSONObject, st: StationPc, lat: Double?, lon: Double?, carre: String) {
-        val la = lat ?: fr.f4ioz.satcombo.location.Maidenhead.centre(carre)?.first
-        val lo = lon ?: fr.f4ioz.satcombo.location.Maidenhead.centre(carre)?.second
-        if (la == null || lo == null) return
-        o.put("lat", la).put("lon", lo)
-        val moi = st.etat.value.observateur ?: return
-        o.put("moi", JSONObject().put("lat", moi.latDeg).put("lon", moi.lonDeg))
-            .put("km", Math.round(fr.f4ioz.satcombo.sonde.Geo.distanceKm(moi.latDeg, moi.lonDeg, la, lo)))
-            .put("azimut", Math.round(fr.f4ioz.satcombo.sonde.Geo.bearingDeg(moi.latDeg, moi.lonDeg, la, lo)))
-            .put("rose", fr.f4ioz.satcombo.sonde.Geo.compass(fr.f4ioz.satcombo.sonde.Geo.bearingDeg(moi.latDeg, moi.lonDeg, la, lo)))
-    }
-
     fun son(s: SonStation?): JSONObject {
         if (s == null) return JSONObject().put("present", false)
         val c = s.son.etat.value

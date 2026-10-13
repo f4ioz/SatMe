@@ -81,4 +81,59 @@ object ApiStation {
             .put("parkAz", r.rotorParkAz).put("parkEl", r.rotorParkEl).put("minEl", r.rotorMinEl)
             .put("ecart", r.rotorDeadband).put("avantAos", r.rotorPreAos))
         .put("diag", JSONArray(r.rotorDiag))
+
+    /**
+     * A callsign's QRZ record as the page shows it: who, where, how far
+     * from [moi]; the photo only when the operator wants the card ([fiche]).
+     * [f] null: no credentials, or the network failed.
+     */
+    fun qrz(f: fr.f4ioz.satcombo.domain.QrzReponse.Fiche?, moi: fr.f4ioz.satcombo.data.Observer?, fiche: Boolean): JSONObject {
+        if (f == null) return JSONObject().put("ok", false).put("erreur", "identifiants QRZ absents ou réseau")
+        if (f.erreur.isNotBlank()) return JSONObject().put("ok", false).put("erreur", f.erreur)
+        val o = JSONObject().put("ok", !f.vide).put("nom", f.nom).put("prenom", f.prenom).put("qth", f.qth)
+            .put("pays", f.pays).put("carre", f.carre).put("indicatif", f.indicatif)
+            .put("adresse", f.adresse).put("etat", f.etat).put("comte", f.comte).put("zoneCq", f.zoneCq).put("zoneItu", f.zoneItu)
+            .put("classe", f.classe).put("lotw", f.lotw).put("eqsl", f.eqsl).put("qslPapier", f.qslPapier)
+            .put("qslManager", f.qslManager).put("site", f.site).put("surnom", f.surnom).put("depuis", f.depuis)
+        ouEstIl(o, moi, f.lat, f.lon, f.carre)
+        return o.put("image", if (fiche) f.image else "").put("fiche", fiche)
+    }
+
+    /** Where a station is (its coordinates, else its square's centre), and its distance and bearing from [moi]. */
+    fun ouEstIl(o: JSONObject, moi: fr.f4ioz.satcombo.data.Observer?, lat: Double?, lon: Double?, carre: String) {
+        val la = lat ?: fr.f4ioz.satcombo.location.Maidenhead.centre(carre)?.first
+        val lo = lon ?: fr.f4ioz.satcombo.location.Maidenhead.centre(carre)?.second
+        if (la == null || lo == null) return
+        o.put("lat", la).put("lon", lo)
+        if (moi == null) return
+        val az = fr.f4ioz.satcombo.sonde.Geo.bearingDeg(moi.latDeg, moi.lonDeg, la, lo)
+        o.put("moi", JSONObject().put("lat", moi.latDeg).put("lon", moi.lonDeg))
+            .put("km", Math.round(fr.f4ioz.satcombo.sonde.Geo.distanceKm(moi.latDeg, moi.lonDeg, la, lo)))
+            .put("azimut", Math.round(az))
+            .put("rose", fr.f4ioz.satcombo.sonde.Geo.compass(az))
+    }
+
+    /** A station's contacts in the log, newest first: those of the same base callsign; none under three characters. */
+    fun historique(log: List<fr.f4ioz.satcombo.data.LogEntry>, indicatif: String): List<fr.f4ioz.satcombo.data.LogEntry> {
+        val b = fr.f4ioz.satcombo.domain.Indicatifs.base(indicatif)
+        if (b.length < 3) return emptyList()
+        return log.filter { fr.f4ioz.satcombo.domain.Indicatifs.base(it.callsign) == b }.sortedByDescending { it.timeMs }
+    }
+
+    /**
+     * What the log says of a station ([l], newest first): how often, when,
+     * on which satellites, from which squares; and where it is, from its most
+     * frequent square, when QRZ is not asked.
+     */
+    fun historiqueJson(l: List<fr.f4ioz.satcombo.data.LogEntry>, moi: fr.f4ioz.satcombo.data.Observer?, fiche: Boolean): JSONObject {
+        val o = JSONObject().put("total", l.size).put("fiche", fiche)
+            .put("premier", l.lastOrNull()?.timeMs ?: 0L).put("dernier", l.firstOrNull()?.timeMs ?: 0L)
+            .put("sats", JSONArray(l.map { it.satName }.filter { it.isNotBlank() }.groupingBy { it }.eachCount().entries.sortedByDescending { it.value }.map { "${it.key} ×${it.value}" }))
+            .put("carres", JSONArray(l.map { it.theirLocator.take(4).uppercase() }.filter { it.length == 4 }.distinct()))
+            .put("contacts", JSONArray(l.take(100).map { e -> JSONObject().put("t", e.timeMs).put("c", e.callsign).put("l", e.theirLocator)
+                .put("sat", e.satName).put("md", e.mode).put("rs", e.rstSent).put("rr", e.rstRcvd).put("nm", e.nom).put("qth", e.qth).put("n", e.note) }))
+        l.mapNotNull { it.theirLocator.takeIf { x -> x.length >= 4 } }.groupingBy { it.uppercase() }.eachCount().maxByOrNull { it.value }?.key
+            ?.let { ouEstIl(o, moi, null, null, it) }
+        return o
+    }
 }
