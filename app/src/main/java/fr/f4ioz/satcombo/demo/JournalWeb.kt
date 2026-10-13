@@ -207,7 +207,7 @@ object JournalWeb {
                 }
                 "/nouveau/contact" -> {
                     val e = passage(j, p("id")) ?: return NON
-                    val c = j.contact(e, p("t").toLongOrNull() ?: ((e.debutMs + e.finMs) / 2), p("c"), p("l"), p("rs"), p("rr"), p("n"), p("md"))
+                    val c = j.contact(e, p("t").toLongOrNull() ?: ((e.debutMs + e.finMs) / 2), p("c"), p("l"), p("rs"), p("rr"), p("n"), p("md"), p("nm"), p("qth"))
                     json(if (c != null && ajouteContact?.invoke(c) == true) "{\"ok\":true}"
                         else "{\"ok\":false,\"erreur\":\"${js(fr.f4ioz.satcombo.i18n.t("pj_n_indicatif"))}\"}")
                 }

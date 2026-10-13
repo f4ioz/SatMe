@@ -118,7 +118,9 @@ class JournalWebPc(private val j: JournalPc, private val station: StationPc, pri
             "/nouveau/contact" -> {
                 val e = j.passage(p("id")) ?: return NON
                 val t0 = p("t").toLongOrNull() ?: ((e.debutMs + e.finMs) / 2)
-                val c = j.ajouteContact(e, t0, p("c"), p("l"), p("rs"), p("rr"), p("n"), p("md"))
+                // Who it is: QRZ as for any contact (name, town, e-mail where the log knows nothing).
+                val fiche = p("c").takeIf { it.isNotBlank() }?.let { kotlinx.coroutines.runBlocking { j.ficheQrz(it) } }?.takeIf { it.erreur.isBlank() && !it.vide }
+                val c = j.ajouteContact(e, t0, p("c"), p("l"), p("rs"), p("rr"), p("n"), p("md"), p("nm"), p("qth"), fiche)
                 json(if (c != null) "{\"ok\":true}" else "{\"ok\":false,\"erreur\":\"${js(t("pj_n_indicatif"))}\"}")
             }
             "/liste" -> {

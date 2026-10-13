@@ -48,6 +48,43 @@ object NouveauPassage {
     /** The sound formats taken: the extension of the file sent, or null. */
     fun extensionSon(nom: String): String? = nom.substringAfterLast('.', "").lowercase().takeIf { it == "wav" || it == "mp3" }
 
+    /**
+     * A contact's mode from what the pass says of its transmitter ("Mode V/U
+     * Linear Transponder · USB", "FM voice repeater", "CW beacon"); null
+     * when it says nothing that tells.
+     */
+    fun modeDe(transpondeur: String): String? {
+        val m = transpondeur.uppercase()
+        return when {
+            "LSB" in m -> "LSB"
+            Regex("\\bFM\\b").containsMatchIn(m) -> "FM"
+            "USB" in m || "SSB" in m || "LINEAR" in m || "LINÉAIRE" in m || "TRANSPOND" in m -> "USB"
+            "CW" in m -> "CW"
+            "BPSK" in m || "GMSK" in m || "AFSK" in m || "DATA" in m || "PACKET" in m -> "DATA"
+            else -> null
+        }
+    }
+
+    /** A contact's mode from a transmitter as the log writes it (a transponder: USB, LSB when inverting). */
+    fun modeEmetteur(t: fr.f4ioz.satcombo.data.Transmitter?): String {
+        val m = t?.mode.orEmpty().uppercase()
+        return when {
+            m.contains("FM") -> "FM"
+            m.contains("CW") -> "CW"
+            t != null && t.isTransponder -> if (t.invert) "LSB" else "USB"
+            m.contains("LSB") -> "LSB"
+            m.contains("USB") -> "USB"
+            else -> m.ifBlank { "FM" }
+        }
+    }
+
+    /** The rig's frequencies (sky) at [tMs] on the pass, as followed then on CAT; nulls when not read within 90 s. */
+    fun frequencesA(e: JournalPassage.Entree, tMs: Long): Pair<Long?, Long?> {
+        val p = e.points.filter { it.dlHz != null || it.ulHz != null }.minByOrNull { kotlin.math.abs(it.tMs - tMs) }
+            ?.takeIf { kotlin.math.abs(it.tMs - tMs) <= 90_000L } ?: return null to null
+        return p.dlHz to p.ulHz
+    }
+
     /** A picture brought to a pass: its file name and its sidecar, as a picture received then. */
     fun image(satName: String, timeMs: Long, mode: String, locator: String, indicatif: String, existe: (String) -> Boolean): Pair<String, String> {
         var v = 0

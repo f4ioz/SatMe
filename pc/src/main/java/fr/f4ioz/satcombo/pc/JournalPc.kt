@@ -216,9 +216,22 @@ class JournalPc(
         return null
     }
 
-    /** A contact brought to [e] (the carnet's afterwards entry). */
+    /**
+     * A contact brought to [e], as a contact made then: the mode given, else
+     * the pass's transmitter's, else the one followed now when it is the same
+     * satellite; the rig's frequencies of that moment when it was on CAT;
+     * who it is from the log, QRZ ([fiche]) or the page ([nom], [qth]).
+     */
     fun ajouteContact(e: JournalPassage.Entree, tMs: Long, indicatif: String, locator: String, rstEnvoye: String, rstRecu: String,
-                      note: String, mode: String) = carnet.ajouteApres(e.catnum, tMs, indicatif, locator, rstEnvoye, rstRecu, note, mode)
+                      note: String, mode: String, nom: String = "", qth: String = "", fiche: fr.f4ioz.satcombo.domain.QrzReponse.Fiche? = null): fr.f4ioz.satcombo.data.LogEntry? {
+        val md = mode.trim().uppercase().takeIf { it.isNotEmpty() && it != "AUTO" }
+            ?: fr.f4ioz.satcombo.domain.NouveauPassage.modeDe(e.transpondeur) ?: carnet.modeSuivi(e.catnum) ?: "FM"
+        val (dl, ul) = fr.f4ioz.satcombo.domain.NouveauPassage.frequencesA(e, tMs)
+        return carnet.ajouteApres(e.catnum, tMs, indicatif, locator, rstEnvoye, rstRecu, note, md, fiche, dl, ul, nom, qth)
+    }
+
+    /** A callsign's QRZ record (the log's session). */
+    suspend fun ficheQrz(indicatif: String) = carnet.ficheQrz(indicatif)
 
     // ------------------------------------------------------------ the sky and the map
 

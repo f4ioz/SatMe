@@ -1811,7 +1811,7 @@ function montreProposition(i) {
   const p = propositions[i];
   g('c-call').value = p ? p.c : tape;
   stationPour(g('c-call').value);
-  if (p && p.l && (!g('c-loc').dataset.tape)) g('c-loc').value = p.l;
+  if (p && p.l && (!g('c-loc').dataset.tape || locPour !== base(p.c))) { g('c-loc').value = p.l; g('c-loc').dataset.tape = ''; locPour = base(p.c); }
   if (!p && !g('c-loc').dataset.tape) g('c-loc').value = '';
   dessinePropositions();
 }
@@ -1819,14 +1819,21 @@ function prendProposition(i) {
   const p = propositions[i]; if (!p) return;
   accepte = p.c;
   g('c-call').value = p.c;
-  if (p.l) g('c-loc').value = p.l;
+  if (p.l) { g('c-loc').value = p.l; g('c-loc').dataset.tape = ''; locPour = base(p.c); }
   g('c-props').innerHTML = ''; propositions = []; iProp = -1;
   // The name from the log or QRZ, as for a callsign typed whole.
   g('c-call').dispatchEvent(new Event('input'));
   g('c-call').focus();
 }
 // A square typed by hand is kept while going through the predictions.
-g('c-loc').addEventListener('input', () => { g('c-loc').dataset.tape = v('c-loc') ? '1' : ''; });
+// The callsign the square belongs to: typed for it, or filled from it. Another callsign that knows its square replaces it.
+let locPour = '';
+g('c-loc').addEventListener('input', () => { g('c-loc').dataset.tape = v('c-loc') ? '1' : ''; locPour = base(v('c-call')); });
+function locPourIndicatif(l, c) {
+  if (!l || v('c-call').indexOf('/') >= 0) return;
+  if (v('c-loc') && locPour === c) return;
+  g('c-loc').value = l; g('c-loc').dataset.tape = ''; locPour = c;
+}
 // Tab: the next prediction (Shift+Tab: the one before); Enter takes it; Esc: back to what was typed.
 // Before the other keys of the field (capture): Enter here takes the prediction, it does not save yet.
 g('c-call').addEventListener('keydown', e => {
@@ -1846,12 +1853,17 @@ g('c-call').addEventListener('input', () => {
   clearTimeout(minuteurQrz);
   const c = base(v('c-call'));
   if (c !== quiPour) txt('c-qui', '');
+  // Another callsign: a square filled for the previous one goes (one typed by hand stays).
+  if (locPour && locPour !== c && !g('c-loc').dataset.tape) { g('c-loc').value = ''; locPour = ''; }
   stationPour(v('c-call'));
   if (c.length < 4 || !/[0-9]/.test(c)) return;
+  // Its square from the log's last contact that has one (with or without a name).
+  const avecCarre = C.find(e => base(e.c) === c && e.l);
+  if (avecCarre) locPourIndicatif(avecCarre.l, c);
   const connu = C.find(e => base(e.c) === c && e.nm);
   if (connu) {
     quiPour = c; txt('c-qui', connu.nm + (connu.qth ? ' · ' + connu.qth : '') + ' (carnet)');
-    if (!v('c-loc') && connu.l && v('c-call').indexOf('/') < 0) g('c-loc').value = connu.l;
+    locPourIndicatif(connu.l, c);
     // Known by name: QRZ only for the station's card, when it is wanted.
     if (!ficheVoulue) return;
   }
@@ -1865,8 +1877,8 @@ g('c-call').addEventListener('input', () => {
     if (!f || !f.ok) { txt('c-qui', f && f.erreur ? f.erreur : ''); return; }
     quiPour = c;
     txt('c-qui', [f.nom, f.qth, f.pays].filter(x => x).join(' · '));
-    // Its square where none was typed — never for a /P or /M (QRZ gives the home address).
-    if (!v('c-loc') && f.carre && v('c-call').indexOf('/') < 0) g('c-loc').value = f.carre;
+    // Its square, unless one is there for this very callsign — never for a /P or /M (QRZ gives the home address).
+    locPourIndicatif(f.carre, c);
   }, 600);
 });
 ['c-call', 'c-loc', 'c-rs', 'c-rr', 'c-note'].forEach(i => g(i).addEventListener('keydown', e => { if (e.key === 'Enter') enregistreContact(); }));
@@ -1915,7 +1927,7 @@ async function enregistreContact() {
   if (j && j.ok) {
     txt('c-etat', c.toUpperCase() + ' enregistré');
     ['c-call', 'c-loc', 'c-note'].forEach(i => g(i).value = ''); g('c-rs').value = '59'; g('c-rr').value = '59';
-    txt('c-qui', ''); quiPour = ''; stationPour(''); g('c-props').innerHTML = ''; propositions = []; iProp = -1; accepte = ''; g('c-loc').dataset.tape = ''; g('c-call').style.borderColor = ''; g('c-call').focus(); chargeCarnet();
+    txt('c-qui', ''); quiPour = ''; stationPour(''); g('c-props').innerHTML = ''; propositions = []; iProp = -1; accepte = ''; g('c-loc').dataset.tape = ''; locPour = ''; g('c-call').style.borderColor = ''; g('c-call').focus(); chargeCarnet();
   }
 }
 function edite(t) {

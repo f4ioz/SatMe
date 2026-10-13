@@ -35,7 +35,7 @@ object PageJournal {
         "pj_afficher", "pj_aff_sstv", "pj_aff_fiche", "pj_aff_smetre", "pj_aff_freq", "pj_aff_locator", "pj_resolution",
         "pj_res_xs", "pj_res_m", "pj_res_hd", "pj_ouverture", "pj_recap", "pj_avec_son", "pj_accelere_video",
         "pj_options_aide", "pj_accelere_actif", "pj_format", "pj_format_portrait", "pj_format_paysage", "pw_code", "pw_entrer", "pw_code_faux", "pw_hors_ligne", "pw_pupitre",
-        "pj_n_bouton", "pj_n_titre", "pj_n_aide", "pj_n_sat", "pj_n_passage", "pj_n_autre", "pj_n_aucun", "pj_n_aos", "pj_n_los", "pj_n_creer", "pj_n_refus", "pj_n_trop_gros", "pj_n_indicatif", "pj_n_onglet", "pj_n_contact", "pj_n_son", "pj_n_images", "pj_n_mode", "pj_n_envoyer", "pj_n_envoi", "pj_n_fait", "pj_n_call", "pj_n_loc")
+        "pj_n_bouton", "pj_n_mode_auto", "pj_n_dernier", "pj_n_titre", "pj_n_aide", "pj_n_sat", "pj_n_passage", "pj_n_autre", "pj_n_aucun", "pj_n_aos", "pj_n_los", "pj_n_creer", "pj_n_refus", "pj_n_trop_gros", "pj_n_indicatif", "pj_n_onglet", "pj_n_contact", "pj_n_son", "pj_n_images", "pj_n_mode", "pj_n_envoyer", "pj_n_envoi", "pj_n_fait", "pj_n_call", "pj_n_loc")
 
     private fun js(s: String): String = buildString {
         for (ch in s) when {
@@ -454,16 +454,46 @@ function panneauAjouter(p) {
     msg.textContent = T.n_fait;
     const l = await lire('/liste'); passages = l.passages; ouvre(P.id);
   };
-  // A contact, at its time (the middle of the pass to start with).
-  const call = el('input', { placeholder: T.n_call, style: 'text-transform:uppercase;width:9em' }), loc = el('input', { placeholder: T.n_loc, style: 'text-transform:uppercase;width:5em' });
-  const md = el('select', {}, ['FM', 'USB', 'LSB', 'CW', 'DATA'].map(m => el('option', { value: m, text: m })));
-  const tq = heure((P.de + P.a) / 2), m1 = el('span', { class: 'aide' });
+  // A contact, at its time: where the sound is paused, else the middle of the pass; the mode the pass's (auto).
+  const call = el('input', { placeholder: T.n_call, style: 'text-transform:uppercase;width:9em', autocomplete: 'off' }), loc = el('input', { placeholder: T.n_loc, style: 'text-transform:uppercase;width:5em' });
+  const md = el('select', {}, [['', T.n_mode_auto]].concat(['FM', 'USB', 'LSB', 'CW', 'DATA'].map(m => [m, m])).map(([v, l]) => el('option', { value: v, text: l })));
+  const tq = heure(heureContact()), m1 = el('span', { class: 'aide' }), qui = el('div', { class: 'aide' }), props = el('div', { class: 'rangee' });
+  champHeureQso = tq; heureTouchee = false;
+  tq.addEventListener('input', () => { heureTouchee = true; });
+  // Who it is, as the carnet finds it: the log's predictions as typed, then QRZ; its square unless typed for this very callsign.
+  let nm = '', qth = '', locPour = '', minuteur = null, minuteurQrz = null;
+  const baseInd = c => { const p = c.toUpperCase().split('/'); return p.reduce((a, b) => b.length > a.length ? b : a, ''); };
+  const api = (r, prm) => { const q = new URLSearchParams(prm || {}); q.set('cle', cle); return base + '/api/' + r + '?' + q.toString(); };
+  const metLoc = (l, c) => { if (!l || call.value.indexOf('/') >= 0) return; if (loc.value.trim() && locPour === c) return; loc.value = l; locPour = c; };
+  loc.addEventListener('input', () => { locPour = baseInd(call.value.trim()); });
+  const prend = p => { call.value = p.c; nm = p.nm || ''; metLoc(p.l, baseInd(p.c)); props.innerHTML = ''; qui.textContent = [p.nm, p.l, '×' + p.n].filter(x => x).join(' · '); cherche(); };
+  function cherche() {
+    clearTimeout(minuteur); clearTimeout(minuteurQrz);
+    const saisie = call.value.trim(), c = baseInd(saisie);
+    minuteur = setTimeout(async () => {
+      let j = null; try { j = await (await fetch(api('carnet/propositions', { c: saisie }))).json(); } catch (x) { return; }
+      if (call.value.trim() !== saisie) return;
+      props.innerHTML = '';
+      (j.propositions || []).filter(p => p.c !== saisie.toUpperCase()).slice(0, 4).forEach(p =>
+        props.appendChild(el('button', { class: 'discret', text: p.c + (p.l ? ' · ' + p.l : ''), title: [p.nm, p.sat ? T.n_dernier + ' ' + p.sat : ''].filter(x => x).join(' · '), onclick: () => prend(p) })));
+    }, 150);
+    if (c.length < 4 || !/[0-9]/.test(c)) return;
+    minuteurQrz = setTimeout(async () => {
+      let f = null; try { f = await (await fetch(api('qrz', { c: c }))).json(); } catch (x) { return; }
+      if (baseInd(call.value.trim()) !== c || !f || !f.ok) { if (f && f.erreur && baseInd(call.value.trim()) === c) qui.textContent = f.erreur; return; }
+      nm = [f.prenom, f.nom].filter(x => x).join(' ') || f.nom || ''; qth = f.qth || '';
+      qui.textContent = [nm, f.qth, f.pays, f.km != null ? f.km + ' km' : ''].filter(x => x).join(' · ') + ' (QRZ)';
+      metLoc(f.carre, c);
+    }, 600);
+  }
+  call.addEventListener('input', () => { nm = ''; qth = ''; qui.textContent = ''; cherche(); });
   p.appendChild(el('div', { class: 'aide', text: T.n_contact }));
   p.appendChild(el('div', { class: 'rangee' }, [call, loc, md]));
+  p.appendChild(props); p.appendChild(qui);
   p.appendChild(el('div', { class: 'rangee' }, [tq, el('button', { class: 'discret', text: T.n_envoyer, onclick: async () => {
     if (!call.value.trim()) { m1.textContent = T.n_indicatif; return; }
     m1.textContent = T.n_envoi;
-    fin(await envoie('/nouveau/contact', { id: P.id, c: call.value.trim(), l: loc.value.trim(), md: md.value, t: depuisLocal(tq) || '' }), m1);
+    fin(await envoie('/nouveau/contact', { id: P.id, c: call.value.trim(), l: loc.value.trim(), md: md.value, nm: nm, qth: qth, t: depuisLocal(tq) || '' }), m1);
   } }), m1]));
   // Its recording, from when it started.
   const fs = el('input', { type: 'file', accept: '.wav,.mp3,audio/wav,audio/mpeg' }), ts = heure(P.de), m2 = el('span', { class: 'aide' });
@@ -486,6 +516,13 @@ function panneauAjouter(p) {
     for (let i = 0; i < l.length && j.ok; i++) { m3.textContent = T.n_envoi + ' ' + (i + 1) + '/' + l.length; j = await envoie('/nouveau/image', { id: P.id, t: Math.round(t0 + i * 10000), mode: mo.value.trim() }, l[i]); }
     fin(j, m3);
   } }), m3]));
+}
+// The contact's time field: it follows the sound where it is paused, until typed in.
+let champHeureQso = null, heureTouchee = false;
+function heureContact() { return !joue && P && t > P.de && t <= P.a + 60000 ? t : (P.de + P.a) / 2; }
+function majHeureContact() {
+  if (!champHeureQso || heureTouchee || joue || onglet !== 'ajouter' || !document.body.contains(champHeureQso)) return;
+  const v = versLocal(heureContact()); if (champHeureQso.value !== v) champHeureQso.value = v;
 }
 let deQuoi = 'tout', titre = '';
 function panneauFabriquer(p) {
@@ -750,6 +787,7 @@ function cherche(tt) { t = Math.max(P.t0, Math.min(P.t1, tt)); if (t < vue0 || t
 let carteMs = 0;
 function maj() {
   if (!P) return;
+  majHeureContact();
   majCiel(); majMoment(); dessineFrise();
   // The map, redrawn a few times a second during the replay (its tiles are pictures).
   if (O.vue === 'carte' && performance.now() - carteMs > 120) { carteMs = performance.now(); dessineCarte(); }

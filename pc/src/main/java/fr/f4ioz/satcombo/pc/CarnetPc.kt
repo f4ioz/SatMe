@@ -105,19 +105,26 @@ class CarnetPc(private val station: StationPc, val store: LogStore, private val 
      * unknown satellite.
      */
     fun ajouteApres(catnum: Int, quandMs: Long, indicatif: String, locator: String, rstEnvoye: String, rstRecu: String,
-                    note: String, mode: String, fiche: QrzReponse.Fiche? = null): LogEntry? {
+                    note: String, mode: String, fiche: QrzReponse.Fiche? = null,
+                    /** The rig's frequencies then (sky), when known: the journal's, read on CAT during the pass. */
+                    dlHz: Long? = null, ulHz: Long? = null, nom: String = "", qth: String = ""): LogEntry? {
         val call = indicatif.trim().uppercase()
         if (call.isEmpty()) return null
         val c0 = station.contactApres(catnum, quandMs, call, locator, rstEnvoye, rstRecu, note, mode) ?: return null
         val passes = historique(call)
         val c = c0.copy(myGrids = mesCarres(),
             locatorOrigine = if (fiche != null && locator.trim().equals(fiche.carre, true)) "QRZ" else c0.locatorOrigine,
-            nom = passes.firstOrNull { it.nom.isNotBlank() }?.nom ?: fiche?.nom.orEmpty(),
-            qth = passes.firstOrNull { it.qth.isNotBlank() }?.qth ?: fiche?.qth.orEmpty(),
-            courriel = fiche?.courriel.orEmpty())
+            nom = nom.trim().ifBlank { passes.firstOrNull { it.nom.isNotBlank() }?.nom ?: fiche?.nom.orEmpty() },
+            qth = qth.trim().ifBlank { passes.firstOrNull { it.qth.isNotBlank() }?.qth ?: fiche?.qth.orEmpty() },
+            courriel = fiche?.courriel.orEmpty(),
+            downlinkMhz = dlHz?.let { it / 1e6 } ?: c0.downlinkMhz, uplinkMhz = ulHz?.let { it / 1e6 } ?: c0.uplinkMhz)
         store.add(c); oublieMemoire()
         return c
     }
+
+    /** The mode of the transmitter followed now, when it is [catnum]'s (a contact typed afterwards on it). */
+    fun modeSuivi(catnum: Int): String? =
+        if (station.etat.value.suivi?.catalogNumber == catnum) station.emetteurChoisi()?.let { mode(it) } else null
 
     fun modifie(timeMs: Long, m: LogEntry) {
         oublieMemoire()
@@ -147,17 +154,7 @@ class CarnetPc(private val station: StationPc, val store: LogStore, private val 
     fun carres(): Int = store.load().mapNotNull { it.theirLocator.takeIf { l -> l.length >= 4 }?.substring(0, 4)?.uppercase() }.distinct().size
 
     /** The mode the log records: what CAT sets (USB down, LSB up when inverting) on a linear transponder. */
-    private fun mode(t: fr.f4ioz.satcombo.data.Transmitter?): String {
-        val m = t?.mode.orEmpty().uppercase()
-        return when {
-            m.contains("FM") -> "FM"
-            m.contains("CW") -> "CW"
-            t != null && t.isTransponder -> if (t.invert) "LSB" else "USB"
-            m.contains("LSB") -> "LSB"
-            m.contains("USB") -> "USB"
-            else -> m.ifBlank { "FM" }
-        }
-    }
+    private fun mode(t: fr.f4ioz.satcombo.data.Transmitter?): String = fr.f4ioz.satcombo.domain.NouveauPassage.modeEmetteur(t)
 
     /** Both frequencies at rest (sky, no Doppler), as the phone logs them. */
     fun frequencesAuRepos(): Pair<Long?, Long?> {

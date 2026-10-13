@@ -601,13 +601,25 @@ class JournalDesPassages(
         return null
     }
 
-    /** A contact at [tMs] on [e]'s satellite (the engine's afterwards entry, as SatMe-PC's). */
+    /**
+     * A contact at [tMs] on [e]'s satellite, as one made then (as SatMe-PC's):
+     * the mode given, else the pass's transmitter's, else the one selected
+     * when it is the same satellite; the rig's frequencies of that moment
+     * when it was on CAT; who it is as the page found it (log, QRZ).
+     */
     fun contact(e: JournalPassage.Entree, tMs: Long, indicatif: String, locator: String, rstEnvoye: String, rstRecu: String,
-                note: String, mode: String): LogEntry? {
+                note: String, mode: String, nom: String = "", qth: String = ""): LogEntry? {
         val sat = ui().satellites.firstOrNull { it.catalogNumber == e.catnum } ?: return null
         if (indicatif.isBlank()) return null
-        return fr.f4ioz.satcombo.demo.ApiCalculs.contactApres(predictor, sat, observateur(), tMs, indicatif, locator,
-            rstEnvoye, rstRecu, note, mode, e.locator)
+        val u = ui()
+        val md = mode.trim().uppercase().takeIf { it.isNotEmpty() && it != "AUTO" }
+            ?: fr.f4ioz.satcombo.domain.NouveauPassage.modeDe(e.transpondeur)
+            ?: (if (u.selected?.catalogNumber == e.catnum) u.transmitters.getOrNull(u.selectedTxIndex)?.let { fr.f4ioz.satcombo.domain.NouveauPassage.modeEmetteur(it) } else null)
+            ?: "FM"
+        val (dl, ul) = fr.f4ioz.satcombo.domain.NouveauPassage.frequencesA(e, tMs)
+        val c = fr.f4ioz.satcombo.demo.ApiCalculs.contactApres(predictor, sat, observateur(), tMs, indicatif, locator,
+            rstEnvoye, rstRecu, note, md, e.locator)
+        return c.copy(nom = nom.trim(), qth = qth.trim(), downlinkMhz = dl?.let { it / 1e6 } ?: 0.0, uplinkMhz = ul?.let { it / 1e6 } ?: 0.0)
     }
 
     /** The passes chosen, written into the journal; how many. */
