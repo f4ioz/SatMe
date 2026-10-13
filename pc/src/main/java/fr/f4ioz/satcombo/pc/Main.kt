@@ -25,17 +25,20 @@ import java.io.File
 fun main(args: Array<String>) {
     var port = 8090
     var reseau = false
+    var noeud = false
     var dossier = dossierParDefaut()
     var i = 0
     while (i < args.size) {
         when (args[i]) {
             "--port" -> port = args.getOrNull(++i)?.toIntOrNull() ?: port
             "--reseau" -> reseau = true
+            "--noeud" -> noeud = true
             "--dossier" -> dossier = args.getOrNull(++i)?.let(::File) ?: dossier
             "-h", "--help", "--aide" -> {
-                println("satme [--port 8090] [--reseau] [--dossier DIR]")
+                println("satme [--port 8090] [--reseau] [--noeud] [--dossier DIR]")
                 println("  --port     port de la page (8090)")
                 println("  --reseau   page ouverte aux autres machines du réseau (sinon ce PC seulement)")
+                println("  --noeud    SatMe-node : seulement le MiniTiouner, piloté par le réseau (Raspberry Pi près de l'antenne)")
                 println("  --dossier  où ranger réglages et éléments (${dossierParDefaut()})")
                 return
             }
@@ -43,6 +46,7 @@ fun main(args: Array<String>) {
         i++
     }
     dossier.mkdirs()
+    if (noeud) { mainNoeud(port, dossier); return }
     val portee = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     val station = StationPc(StockageFichier(File(dossier, "reglages.properties")),
         Catalogue(File(dossier, "cache")), PortsSeriePc(), portee,
@@ -102,4 +106,20 @@ fun dossierParDefaut(): File {
     val appdata = System.getenv("APPDATA")
     return if (System.getProperty("os.name").orEmpty().startsWith("Windows") && !appdata.isNullOrBlank())
         File(appdata, "SatMe") else File(System.getProperty("user.home"), ".satme")
+}
+
+/**
+ * SatMe-node: the MiniTiouner only, driven over the network — nothing else
+ * loaded (no elements, no passes), so that a Raspberry Pi 3 does it.
+ */
+private fun mainNoeud(port: Int, dossier: File) {
+    val stockage = StockageFichier(File(dossier, "reglages.properties"))
+    val datv = DatvPc(stockage, File(dossier, "enregistrements"), lecteursLocaux = false)
+    val n = NoeudPc(datv, stockage, port)
+    n.demarre()
+    println("SatMe-node « ${n.nom} » : port ${n.portReel}")
+    println("  LongMynd   : " + (datv.programme() ?: "INTROUVABLE (le compiler, ou --dossier/chemin)"))
+    println("  Code à donner à SatMe PC ou au téléphone : ${n.code}")
+    Runtime.getRuntime().addShutdownHook(Thread { runCatching { datv.arrete() }; n.arrete() })
+    while (true) Thread.sleep(3_600_000L)
 }

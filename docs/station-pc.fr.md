@@ -87,6 +87,23 @@ L'onglet **DATV** reçoit le DVB-S/S2 avec un **MiniTiouner** (tuner et démodul
 
 <p align="center"><img src="images/pc-datv.webp" width="100%" alt="Onglet DATV : un signal de test DVB-S2 accroché, MER, MODCOD, la constellation"></p>
 
+### SatMe-node : le MiniTiouner à côté de l'antenne
+
+Le MiniTiouner travaille mieux près du LNB. Un **SatMe-node**, c'est SatMe sur un petit ordinateur là-bas — un Raspberry Pi (un **Pi 3 suffit** : le node ne fait que recevoir, il ne décode rien) — piloté par le réseau depuis SatMe PC (et bientôt le téléphone). Il fait tourner LongMynd ; son état et le flux de transport (0,3 à 2 Mbit/s) arrivent au PC, qui les montre, les joue et les enregistre comme si le MiniTiouner y était branché.
+
+Sur le Pi (Raspberry Pi OS 64 bits, en Ethernet de préférence) :
+
+```
+./gradlew :pc:distTar                        # sur le PC : pc/build/distributions/satme.tar
+scp pc/build/distributions/satme.tar pi@raspberrypi.local:
+ssh pi@raspberrypi.local
+tar xf satme.tar && sudo ./satme/noeud/installe-noeud.sh
+```
+
+Le script installe Java, compile LongMynd, lui donne accès au MiniTiouner (udev) et démarre le service **satme-noeud** (`satme --noeud`, port 8090). À son premier démarrage, le node tire un **code à six chiffres**, affiché à la fin de l'installation (le revoir : `journalctl -u satme-noeud | grep Code`). Dans SatMe PC, onglet DATV, MiniTiouner **Changer** : l'adresse du node et son code, **Associer**. Le PC garde la clé que le node lui a donnée : l'un comme l'autre peut redémarrer. Une adresse vide revient au MiniTiouner du PC.
+
+Sans sa clé, le node ne dit que ce qu'il est ; ce qui le change est un POST ; son alimentation LNB reste coupée tant qu'on ne la choisit pas.
+
 *Ci-dessus, un signal de test (le MiniTiouner lui-même reste à essayer sur l'air).*
 
 ## Encore sur le PC

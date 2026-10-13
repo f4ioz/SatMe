@@ -9,6 +9,7 @@
 package fr.f4ioz.satcombo.pc
 
 import fr.f4ioz.satcombo.plateforme.Stockage
+import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.File
 import java.io.InputStream
 import java.io.OutputStream
@@ -42,6 +43,8 @@ class DatvPc(
     private val stockage: Stockage,
     private val dossierEnregistrements: File,
     private val horloge: () -> Long = System::currentTimeMillis,
+    /** False on a SatMe-node: no picture nor sound here, the stream goes to the network's clients ([abonne]). */
+    private val lecteursLocaux: Boolean = true,
 ) {
     /** What to receive: sky frequency, symbol rate, the LNB's oscillator, the NIM's input, its LNB supply. */
     data class Reglage(
@@ -135,11 +138,12 @@ class DatvPc(
     /** Starts receiving with [r] (LongMynd started again when it ran); null when started, else why not. */
     @Synchronized
     fun demarre(r: Reglage = reglage): String? {
-        arrete()
+        arreteIci()
         if (r.fiKhz !in FI_MIN_KHZ..FI_MAX_KHZ)
             return "fréquence intermédiaire hors de portée du MiniTiouner : %.3f MHz (ciel %.3f − OL %.3f), il faut 144 à 2450 MHz".format(
                 java.util.Locale.FRANCE, r.fiKhz / 1000.0, r.cielKhz / 1000.0, r.olKhz / 1000.0)
         if (r.srKs !in 33..27_500) return "débit de symboles hors de portée : ${r.srKs} kS/s"
+        if (distant) return demarreDistant(r)
         val prog = programme() ?: return "LongMynd introuvable : le compiler (github.com/BritishAmateurTelevisionClub/longmynd) et donner son chemin"
         reglage = r; garde(r)
         val gen = ++generation
@@ -148,7 +152,7 @@ class DatvPc(
         val cmd = commande(prog, r, sTs.localPort, sEtat.localPort)
         val p = runCatching {
             ProcessBuilder(cmd).directory(File(prog).parentFile).redirectErrorStream(true).redirectOutput(JOURNAL).start()
-        }.getOrElse { arrete(); return "LongMynd ne démarre pas : " + (it.message ?: "") }
+        }.getOrElse { arreteIci(); return "LongMynd ne démarre pas : " + (it.message ?: "") }
         longmynd = p
         synchronized(points) { points.clear() }
         etat = Etat(actif = true, depuis = horloge())
@@ -165,8 +169,16 @@ class DatvPc(
         return null
     }
 
+    /** Stops receiving, here and on the node receiving for us. */
     @Synchronized
     fun arrete() {
+        val etaitActif = etat.actif
+        arreteIci()
+        if (distant && etaitActif) thread(isDaemon = true) { runCatching { noeudPost("/noeud/datv/arrete") } }
+    }
+
+    @Synchronized
+    private fun arreteIci() {
         generation++
         longmynd?.let { p -> p.destroy(); if (!p.waitFor(2, TimeUnit.SECONDS)) p.destroyForcibly() }
         longmynd = null
@@ -183,17 +195,7 @@ class DatvPc(
     }
 
     /** LongMynd's last words, made readable (the usual causes said plainly). */
-    private fun pourquoiArret(): String {
-        val l = runCatching { JOURNAL.readLines() }.getOrDefault(emptyList()).map { it.trim() }.filter { it.isNotEmpty() }
-        val t = l.takeLast(6).joinToString(" ")
-        return when {
-            t.contains("LIBUSB_ERROR_ACCESS", true) || t.contains("permission", true) ->
-                "pas d'accès au MiniTiouner : installer la règle udev de LongMynd (sudo cp minitiouner.rules /etc/udev/rules.d/), puis le débrancher et le rebrancher"
-            t.contains("find", true) && t.contains("usb", true) || t.contains("not found", true) || t.contains("no minitiouner", true) ->
-                "MiniTiouner introuvable : est-il branché ?"
-            else -> "LongMynd s'est arrêté : " + (l.lastOrNull() ?: "sans un mot")
-        }
-    }
+    private fun pourquoiArret(): String = pourquoi(runCatching { JOURNAL.readLines() }.getOrDefault(emptyList()))
 
     // ------------------------------------------------------------ LongMynd's status
 
@@ -239,25 +241,165 @@ class DatvPc(
 
     private fun litTs(s: DatagramSocket, gen: Int) {
         val b = ByteArray(65_536)
-        val file = ArrayBlockingQueue<ByteArray>(512)
-        var octets = 0L; var t0 = horloge()
-        // One thread writes to the players: a slow one never holds the socket.
-        thread(isDaemon = true, name = "satme-datv-lecteurs") {
-            while (generation == gen) {
-                val bloc = file.poll(500, TimeUnit.MILLISECONDS) ?: continue
-                lecteurs().forEach { o -> runCatching { o.write(bloc); o.flush() } }
-            }
-        }
+        val r = Reception(gen)
         while (generation == gen && !s.isClosed) {
             val d = DatagramPacket(b, b.size)
             if (runCatching { s.receive(d) }.isFailure) break
-            val bloc = b.copyOf(d.length)
+            r.bloc(b.copyOf(d.length))
+        }
+    }
+
+    /**
+     * Where each block of the stream goes, whatever its source (LongMynd
+     * here, or a node): the recording, the players here, the node's clients.
+     */
+    private inner class Reception(private val gen: Int) {
+        private val file = ArrayBlockingQueue<ByteArray>(512)
+        private var octets = 0L
+        private var t0 = horloge()
+
+        init {
+            // One thread writes to the players: a slow one never holds the source.
+            if (lecteursLocaux) thread(isDaemon = true, name = "satme-datv-lecteurs") {
+                while (generation == gen) {
+                    val bloc = file.poll(500, TimeUnit.MILLISECONDS) ?: continue
+                    lecteurs().forEach { o -> runCatching { o.write(bloc); o.flush() } }
+                }
+            }
+        }
+
+        fun bloc(bloc: ByteArray) {
             octets += bloc.size
             enregistreur?.let { o -> runCatching { o.write(bloc) } }
-            if (ffmpeg == null) demarreLecteurs(gen)
-            if (!file.offer(bloc)) { file.poll(); file.offer(bloc) }
+            if (lecteursLocaux) {
+                if (ffmpeg == null) demarreLecteurs(gen)
+                if (!file.offer(bloc)) { file.poll(); file.offer(bloc) }
+            }
+            for (q in abonnes) if (!q.offer(bloc)) { q.poll(); q.offer(bloc) }
             val t = horloge()
             if (t - t0 >= 1000) { etat = etat.copy(kbps = (octets * 8 / (t - t0)).toInt()); octets = 0; t0 = t }
+        }
+    }
+
+    // ------------------------------------------------------------ a SatMe-node's clients
+
+    /** Each network client its own queue: a slow one loses blocks, never holds the others. */
+    private val abonnes = java.util.concurrent.CopyOnWriteArrayList<ArrayBlockingQueue<ByteArray>>()
+
+    fun abonne(): ArrayBlockingQueue<ByteArray> = ArrayBlockingQueue<ByteArray>(1024).also { abonnes += it }
+
+    fun desabonne(q: ArrayBlockingQueue<ByteArray>) { abonnes -= q }
+
+    // ------------------------------------------------------------ a SatMe-node receiving for us
+
+    /**
+     * The SatMe-node receiving for this PC: its address ("192.168.1.30:8090")
+     * and the key it gave for its code; empty, the MiniTiouner on this PC.
+     */
+    var noeud: String
+        get() = stockage.getString("datv_noeud", "") ?: ""
+        private set(v) { stockage.edit().putString("datv_noeud", v).apply() }
+    private var cleNoeud: String
+        get() = stockage.getString("datv_noeud_cle", "") ?: ""
+        set(v) { stockage.edit().putString("datv_noeud_cle", v).apply() }
+    var nomNoeud: String
+        get() = stockage.getString("datv_noeud_nom", "") ?: ""
+        private set(v) { stockage.edit().putString("datv_noeud_nom", v).apply() }
+
+    val distant: Boolean get() = noeud.isNotBlank()
+
+    private val http = okhttp3.OkHttpClient.Builder().connectTimeout(5, TimeUnit.SECONDS).readTimeout(30, TimeUnit.SECONDS).build()
+    private val httpFlux = http.newBuilder().readTimeout(0, TimeUnit.SECONDS).build()
+
+    private fun base() = "http://" + noeud.removePrefix("http://").trimEnd('/').let { if (':' in it) it else "$it:8090" }
+
+    private fun noeudGet(chemin: String): String =
+        http.newCall(okhttp3.Request.Builder().url(base() + chemin + (if ('?' in chemin) "&" else "?") + "cle=" + cleNoeud).build()).execute().use {
+            if (it.code == 403) throw java.io.IOException("le node refuse la clé : l'associer à nouveau avec son code")
+            if (!it.isSuccessful) throw java.io.IOException("le node répond " + it.code)
+            it.body?.string().orEmpty()
+        }
+
+    private fun noeudPost(chemin: String): org.json.JSONObject =
+        http.newCall(okhttp3.Request.Builder().url(base() + chemin + (if ('?' in chemin) "&" else "?") + "cle=" + cleNoeud)
+            .post(ByteArray(0).toRequestBody(null)).build()).execute().use {
+            if (it.code == 403) throw java.io.IOException("le node refuse la clé : l'associer à nouveau avec son code")
+            org.json.JSONObject(it.body?.string().orEmpty().ifBlank { "{}" })
+        }
+
+    /**
+     * Joins the SatMe-node at [adresse] with the code it gave at its start
+     * (`journalctl -u satme-noeud`); an empty address goes back to the
+     * MiniTiouner on this PC. Null when done, else why not.
+     */
+    fun rejoins(adresse: String, code: String): String? {
+        arrete()
+        if (adresse.isBlank()) { noeud = ""; cleNoeud = ""; nomNoeud = ""; return null }
+        val avant = noeud
+        noeud = adresse.trim()
+        return runCatching {
+            val api = org.json.JSONObject(http.newCall(okhttp3.Request.Builder().url(base() + "/noeud/api").build()).execute().use { it.body?.string().orEmpty() })
+            if (!api.optBoolean("noeud")) throw java.io.IOException("ce n'est pas un SatMe-node")
+            val j = org.json.JSONObject(http.newCall(okhttp3.Request.Builder().url(base() + "/noeud/entrer?code=" + java.net.URLEncoder.encode(code.trim(), "UTF-8")).build())
+                .execute().use { it.body?.string().orEmpty() })
+            if (!j.optBoolean("ok")) throw java.io.IOException("code refusé : celui que le node a donné à son démarrage")
+            cleNoeud = j.getString("cle"); nomNoeud = api.optString("nom")
+            null
+        }.getOrElse { noeud = avant; it.message ?: "node injoignable" }
+    }
+
+    /** Receiving through the node: it starts LongMynd there; its status and stream come here. */
+    private fun demarreDistant(r: Reglage): String? {
+        reglage = r; garde(r)
+        val q = "?ciel=" + r.cielKhz / 1000.0 + "&sr=" + r.srKs + "&ol=" + r.olKhz / 1000.0 + "&entree=" + (if (r.entreeB) "b" else "a") + "&lnb=" + r.lnb
+        val rep = runCatching { noeudPost("/noeud/datv/demarre$q") }.getOrElse { return "node injoignable : " + (it.message ?: "") }
+        if (!rep.optBoolean("ok", true)) return rep.optString("erreur", "le node refuse")
+        val gen = ++generation
+        synchronized(points) { points.clear() }
+        etat = Etat(actif = true, depuis = horloge())
+        thread(isDaemon = true, name = "satme-datv-noeud-etat") { suisNoeud(gen) }
+        thread(isDaemon = true, name = "satme-datv-noeud-ts") { litTsNoeud(gen) }
+        return null
+    }
+
+    /** The node's status, five times a second's half: its words become ours (the stream's rate and recording stay ours). */
+    private fun suisNoeud(gen: Int) {
+        var echecs = 0
+        while (generation == gen) {
+            runCatching { org.json.JSONObject(noeudGet("/noeud/datv")) }.onSuccess { j ->
+                echecs = 0
+                val e = etatDe(j, etat)
+                synchronized(points) {
+                    points.clear()
+                    j.optJSONArray("points")?.let { a -> for (i in 0 until a.length()) a.optJSONArray(i)?.let { p -> points.addLast(p.optInt(0) to p.optInt(1)) } }
+                }
+                etat = e
+                if (!j.optBoolean("actif") && j.optString("erreur").isNotBlank()) {
+                    // LongMynd stopped there: said here, the stream closed.
+                    synchronized(this) { if (generation == gen) { arreteIci(); etat = etat.copy(erreur = "sur le node : " + j.optString("erreur")) } }
+                    return
+                }
+            }.onFailure { if (++echecs >= 10) etat = etat.copy(erreur = "node silencieux : " + (it.message ?: "")) }
+            Thread.sleep(400)
+        }
+    }
+
+    /** The node's stream over HTTP, taken up again when it breaks while receiving. */
+    private fun litTsNoeud(gen: Int) {
+        val r = Reception(gen)
+        val b = ByteArray(1316 * 8)
+        while (generation == gen) {
+            runCatching {
+                httpFlux.newCall(okhttp3.Request.Builder().url(base() + "/noeud/datv/ts?cle=" + cleNoeud).build()).execute().use { rep ->
+                    val e = rep.body?.byteStream() ?: return@use
+                    while (generation == gen) {
+                        val n = e.read(b)
+                        if (n < 0) break
+                        if (n > 0) r.bloc(b.copyOf(n))
+                    }
+                }
+            }
+            if (generation == gen) Thread.sleep(1000)
         }
     }
 
@@ -349,6 +491,33 @@ class DatvPc(
     private val vlcs = java.util.concurrent.CopyOnWriteArrayList<Process>()
 
     companion object {
+        /**
+         * Why LongMynd stopped, from its log: its "ERROR:" lines (its last
+         * line only says it exited cleanly), the usual causes said plainly.
+         */
+        fun pourquoi(journal: List<String>): String {
+            val l = journal.map { it.trim() }.filter { it.isNotEmpty() }
+            val erreurs = l.filter { it.startsWith("ERROR", true) || it.contains("LIBUSB_ERROR", true) }
+            val t = (erreurs.ifEmpty { l.takeLast(6) }).joinToString(" ")
+            return when {
+                t.contains("LIBUSB_ERROR_ACCESS", true) || t.contains("permission", true) ->
+                    "pas d'accès au MiniTiouner : installer la règle udev de LongMynd (sudo cp minitiouner.rules /etc/udev/rules.d/), puis le débrancher et le rebrancher"
+                t.contains("Unable to open device", true) || t.contains("plugged", true) || t.contains("not found", true) ->
+                    "MiniTiouner introuvable : est-il branché ?"
+                erreurs.isNotEmpty() -> "LongMynd : " + erreurs.joinToString(" · ") { it.removePrefix("ERROR:").trim() }
+                else -> "LongMynd s'est arrêté : " + (l.lastOrNull() ?: "sans un mot")
+            }
+        }
+
+        /** A node's status (its JSON) as ours; what only this side knows ([ici]) is kept. */
+        fun etatDe(j: org.json.JSONObject, ici: Etat): Etat = ici.copy(
+            etat = j.optInt("etat"), fiTrouveeKhz = j.optLong("fiTrouvee"), srTrouveKs = j.optInt("srTrouve"),
+            merDb = if (j.isNull("mer")) null else j.optDouble("mer"), modcod = j.optString("modcod"),
+            fournisseur = j.optString("fournisseur"), service = j.optString("service"), nulsPct = j.optInt("nuls"),
+            flux = j.optJSONArray("flux")?.let { a -> (0 until a.length()).map { a.getJSONObject(it).let { o -> o.optInt("pid") to o.optInt("t") } } } ?: emptyList(),
+            agc1 = j.optInt("agc1"), agc2 = j.optInt("agc2"), berPct = if (j.isNull("ber")) null else j.optDouble("ber"),
+            trames = if (j.isNull("courtes")) null else j.optBoolean("courtes"), pilotes = if (j.isNull("pilotes")) null else j.optBoolean("pilotes"))
+
         /** QO-100's wide band beacon: 10491.5 MHz, 1.5 MS/s DVB-S2 QPSK. */
         const val BALISE_KHZ = 10_491_500L
         /** What the MiniTiouner's tuner covers. */

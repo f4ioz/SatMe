@@ -477,6 +477,11 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
             "/api/datv/enregistre" -> return ok.put("nom", datv?.enregistre(q["on"] == "1").orEmpty())
             "/api/datv/vlc" -> datv?.ouvreVlc()?.let { return JSONObject().put("ok", false).put("erreur", it) }
             "/api/datv/chemin" -> datv?.chemin = q["p"].orEmpty()
+            "/api/datv/noeud" -> {
+                // The MiniTiouner on a SatMe-node (address and its code), or back on this PC (no address).
+                val d = datv ?: return JSONObject().put("ok", false)
+                d.rejoins(q["adresse"].orEmpty(), q["code"].orEmpty())?.let { return JSONObject().put("ok", false).put("erreur", it) }
+            }
             "/api/datv/cale" -> {
                 // The beacon where the MiniTiouner found it: the LNB's oscillator corrected so that it falls where it is.
                 val d = datv ?: return JSONObject().put("ok", false)
@@ -968,7 +973,8 @@ object JsonPc {
             .put("mer", e.merDb ?: JSONObject.NULL).put("modcod", e.modcod).put("fournisseur", e.fournisseur).put("service", e.service)
             .put("nuls", e.nulsPct).put("agc1", e.agc1).put("agc2", e.agc2).put("kbps", e.kbps).put("images", e.images)
             .put("ber", e.berPct ?: JSONObject.NULL).put("courtes", e.trames ?: JSONObject.NULL).put("pilotes", e.pilotes ?: JSONObject.NULL)
-            .put("flux", JSONArray(e.flux.map { (pid, t) -> JSONObject().put("pid", pid).put("type", DatvPc.typeFlux(t)) }))
+            .put("flux", JSONArray(e.flux.map { (pid, t) -> JSONObject().put("pid", pid).put("t", t).put("type", DatvPc.typeFlux(t)) }))
+            .put("noeud", d.noeud).put("nomNoeud", d.nomNoeud)
             .put("enregistrement", e.enregistrement).put("erreur", e.erreur)
             .put("programme", d.programme() ?: JSONObject.NULL).put("chemin", d.chemin)
             .put("points", JSONArray(d.constellation().map { JSONArray(listOf(it.first, it.second)) }))

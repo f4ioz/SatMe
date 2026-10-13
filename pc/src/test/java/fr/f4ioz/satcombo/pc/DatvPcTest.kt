@@ -52,6 +52,15 @@ class DatvPcTest {
     }
 
     @Test
+    fun les_causes_d_arret_de_longmynd() {
+        val sansCarte = listOf("Flow: FTDI USB init", "ERROR: Unable to open device with VID and PID", "       Is the USB cable plugged in?",
+            "ERROR: FTDI init", "Flow: Main loop aborted, waiting for threads.", "Flow: All threads accounted for. Exiting cleanly.")
+        assertEquals("MiniTiouner introuvable : est-il branché ?", DatvPc.pourquoi(sansCarte))
+        assertTrue(DatvPc.pourquoi(listOf("ERROR: LIBUSB_ERROR_ACCESS")).startsWith("pas d'accès"))
+        assertEquals("LongMynd : tuner lock", DatvPc.pourquoi(listOf("Flow: x", "ERROR: tuner lock", "Exiting cleanly.")))
+    }
+
+    @Test
     fun hors_de_portee_rien_ne_demarre() {
         val d = DatvPc(StockageMemoire(), File(System.getProperty("java.io.tmpdir")))
         val e = d.demarre(DatvPc.Reglage(cielKhz = 10_491_500, olKhz = 12_000_000))

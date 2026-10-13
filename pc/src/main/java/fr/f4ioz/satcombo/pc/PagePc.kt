@@ -709,7 +709,14 @@ object PagePc {
   <div class="d-cote">
     <div class="carte">
       <div class="t">Réception</div>
-      <div class="ligne" style="margin-top:0"><span class="petit" style="min-width:86px">Ciel (MHz)</span><input id="d-ciel" style="max-width:130px">
+      <div class="ligne" style="margin-top:0"><span class="petit" style="min-width:86px">MiniTiouner</span><span id="d-ou" class="petit" style="flex:1"></span>
+        <button onclick="g('d-noeud-boite').hidden = !g('d-noeud-boite').hidden" title="Le MiniTiouner sur ce PC, ou sur un SatMe-node près de l'antenne">Changer</button></div>
+      <div id="d-noeud-boite" hidden>
+        <div class="petit">Un <b>SatMe-node</b> (Raspberry Pi près de l'antenne, <code>satme --noeud</code>) : son adresse et le code qu'il a donné au démarrage. Adresse vide : le MiniTiouner de ce PC.</div>
+        <div class="ligne"><input id="d-noeud" placeholder="192.168.1.30 (ou :port)" style="max-width:190px"><input id="d-noeud-code" placeholder="Code" style="max-width:90px">
+          <button onclick="dNoeud()">Associer</button></div>
+      </div>
+      <div class="ligne"><span class="petit" style="min-width:86px">Ciel (MHz)</span><input id="d-ciel" style="max-width:130px">
         <button onclick="dBalise()" title="Balise large bande : 10491,500 MHz à 1500 kS/s">Balise</button></div>
       <div class="ligne"><span class="petit" style="min-width:86px">Canal</span><select id="d-canal" onchange="if (this.value) g('d-ciel').value = this.value"></select></div>
       <div class="ligne"><span class="petit" style="min-width:86px">kS/s</span><div id="d-debits" class="o-puces" style="flex:1"></div></div>
@@ -1857,6 +1864,8 @@ async function ticDatv(premier) {
   txt('d-porteuse', D.cielTrouve ? mhz3(D.cielTrouve) + ' MHz' + (D.srTrouve ? ' · ' + D.srTrouve + ' kS/s' : '') + (D.verrouille ? ' · écart ' + (D.fiTrouvee - D.fi) + ' kHz' : '') : '');
   txt('d-debit', D.kbps ? Math.round(D.kbps) + ' kb/s' + (D.nuls ? ' · ' + D.nuls + ' % de vide' : '') : '');
   txt('d-service', [D.fournisseur, D.service].filter(x => x).join(' · ') + (D.flux.length ? '  —  ' + D.flux.map(f => f.type + ' (PID ' + f.pid + ')').join(', ') : ''));
+  txt('d-ou', D.noeud ? 'sur le SatMe-node ' + (D.nomNoeud ? '« ' + D.nomNoeud + ' » ' : '') + '(' + D.noeud + ')' : 'sur ce PC');
+  g('d-prog').hidden = !!D.noeud;
   txt('d-titre', D.actif ? '· ' + mhz3(D.ciel) + ' MHz · ' + D.sr + ' kS/s · FI ' + mhz3(D.fi) + ' MHz' : '');
   const r = g('d-rec'); r.style.display = D.enregistrement ? '' : 'none'; r.textContent = '● ' + D.enregistrement;
   g('d-benr').textContent = D.enregistrement ? 'Arrêter l’enregistrement' : 'Enregistrer';
@@ -1898,6 +1907,11 @@ async function dPost(q) {
   try { j = await (await fetch('/api/datv/' + q, { method: 'POST' })).json(); } catch (x) {}
   if (j && j.ok === false && j.erreur) txt('d-msg', j.erreur);
   setTimeout(ticDatv, 200); return j;
+}
+async function dNoeud() {
+  txt('d-msg', v('d-noeud') ? 'association au node…' : 'retour au MiniTiouner de ce PC…');
+  const j = await dPost('noeud?adresse=' + enc(v('d-noeud')) + '&code=' + enc(v('d-noeud-code')));
+  if (j && j.ok !== false) { txt('d-msg', v('d-noeud') ? 'associé' : 'MiniTiouner de ce PC'); g('d-noeud-boite').hidden = true; g('d-noeud-code').value = ''; }
 }
 function dBalise() { g('d-ciel').value = mhz3(D ? D.balise : 10491500); dSr = 1500; ticDatv(); }
 async function dCale() { const j = await dPost('cale'); if (j && j.ok) { txt('d-msg', 'oscillateur corrigé de ' + (-j.ecart) + ' kHz'); setTimeout(() => ticDatv(true), 600); } }
