@@ -743,21 +743,8 @@ class StationPc(
 
     /** What the sky gives now for the transmitter chosen: (downlink, uplink) with Doppler, Hz. */
     fun frequencesDuCiel(): Pair<Long?, Long?> {
-        val t = emetteurChoisi() ?: return null to null
-        val rr = _etat.value.position?.rangeRateKmS ?: 0.0
-        val dlLo = t.downlinkLowHz; val dlHi = t.downlinkHighHz ?: dlLo
-        val repos = _etat.value.repos ?: dlLo?.let { (it + (dlHi ?: it)) / 2 }
-        val ul = t.uplinkLowHz?.let { ulLo ->
-            val ulHi = t.uplinkHighHz ?: ulLo
-            // Linear: the uplink that lands on the rest, inverting or not.
-            if (repos != null && dlLo != null && dlHi != null && dlHi != dlLo && ulHi != ulLo) {
-                val part = (repos - dlLo).toDouble() / (dlHi - dlLo)
-                if (t.invert) ulHi - Math.round(part * (ulHi - ulLo)) else ulLo + Math.round(part * (ulHi - ulLo))
-            } else (ulLo + ulHi) / 2
-        }
-        // As the rig is set: the calibration after the Doppler, the TX shift on the uplink at rest.
         val e = _etat.value
-        return repos?.let { Doppler.downlink(it, rr) + e.calibHz } to ul?.let { Doppler.uplink(it + e.txShiftHz, rr) }
+        return fr.f4ioz.satcombo.demo.ApiStation.frequencesDuCiel(emetteurChoisi(), e.position?.rangeRateKmS ?: 0.0, e.repos, e.calibHz, e.txShiftHz)
     }
 
     // ---------------------------------------------------------- connecting

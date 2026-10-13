@@ -8,6 +8,8 @@
  */
 package fr.f4ioz.satcombo.pc
 
+import fr.f4ioz.satcombo.demo.PagePc
+
 import fr.f4ioz.satcombo.demo.PagePlanche
 import fr.f4ioz.satcombo.demo.ReponseWeb
 import fr.f4ioz.satcombo.sstv.Planche

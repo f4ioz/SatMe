@@ -8,6 +8,8 @@
  */
 package fr.f4ioz.satcombo.pc
 
+import fr.f4ioz.satcombo.demo.PagePc
+
 import fr.f4ioz.satcombo.datv.Datv
 import fr.f4ioz.satcombo.datv.ReglageDatv
 import fr.f4ioz.satcombo.demo.RequeteHttp
@@ -135,7 +137,10 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
             return
         }
         when (chemin) {
-            "/", "/index.html" -> envoie(sortie, "200 OK", "text/html; charset=utf-8", PagePc.HTML.toByteArray())
+            "/", "/index.html", "/pc" -> envoie(sortie, "200 OK", "text/html; charset=utf-8", PagePc.HTML.toByteArray())
+            // Every tab here; the phone offers some of them.
+            "/api/capacites" -> envoie(sortie, "200 OK", "application/json; charset=utf-8",
+                JSONObject().put("onglets", JSONArray(PagePc.TOUS)).put("serveur", "pc").toString().toByteArray())
             "/api/etat" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JsonPc.etat(station).toString().toByteArray())
             "/api/passages" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JsonPc.passages(station).toString().toByteArray())
             "/api/satellites" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JsonPc.satellites(station).toString().toByteArray())
@@ -886,19 +891,10 @@ object JsonPc {
         e.suivi?.let { s -> o.put("suivi", JSONObject().put("nom", s.name).put("catnum", s.catalogNumber)
             .put("fav", s.catalogNumber in e.favoris)
             .put("amsat", st.statutAmsat(s.name)?.let { r -> JSONObject().put("statut", r.recent.name).put("mode", r.mode).put("actifs", r.activeReports) } ?: JSONObject.NULL)) }
-        e.position?.let { p ->
-            o.put("position", JSONObject().put("az", p.azimuthDeg).put("el", p.elevationDeg)
-                .put("distance", p.rangeKm).put("vitesse", p.rangeRateKmS).put("alt", p.altKm)
-                .put("lat", p.latDeg).put("lon", p.lonDeg).put("eclaire", p.sunlit))
-        }
+        e.position?.let { p -> o.put("position", fr.f4ioz.satcombo.demo.ApiStation.position(p)) }
         e.passage?.let { p -> o.put("passage", passage(p)) }
         o.put("arc", JSONArray(e.arc.map { JSONArray().put(it.first).put(it.second) }))
-        o.put("emetteurs", JSONArray(e.emetteurs.map { t ->
-            JSONObject().put("desc", t.description).put("mode", t.mode ?: "")
-                .put("dlBas", t.downlinkLowHz ?: JSONObject.NULL).put("dlHaut", t.downlinkHighHz ?: JSONObject.NULL)
-                .put("ulBas", t.uplinkLowHz ?: JSONObject.NULL).put("ulHaut", t.uplinkHighHz ?: JSONObject.NULL)
-                .put("inverse", t.invert).put("lineaire", t.isTransponder)
-        }))
+        o.put("emetteurs", fr.f4ioz.satcombo.demo.ApiStation.emetteurs(e.emetteurs))
         o.put("emetteur", e.emetteur)
         o.put("reglageSat", JSONObject().put("calib", e.calibHz).put("tx", e.txShiftHz)
             .put("refCalib", e.refCalibHz ?: JSONObject.NULL).put("refTx", e.refTxHz ?: JSONObject.NULL))
@@ -915,33 +911,14 @@ object JsonPc {
         o.put("convertisseurs", JSONObject()
             .put("rxOl", if (rx.configure) rx.olHz else 0).put("rxInv", rx.inverseur)
             .put("txOl", if (tx.configure) tx.olHz else 0).put("txInv", tx.inverseur))
-        o.put("cat", JSONObject().put("modele", e.catModele).put("port", st.settings.civUsbIndex).put("connecte", e.catConnecte).put("simule", e.catSimule)
-            .put("statut", e.catStatut).put("maintien", e.maintienDoppler)
-            .put("dl", c.descenteHz ?: JSONObject.NULL).put("ul", c.monteeHz ?: JSONObject.NULL)
-            .put("pilote", c.rxPilote).put("mode", c.mode ?: "").put("modeEcart", c.modeEcart))
-        o.put("rotor", JSONObject().put("connecte", r.rotorConnected).put("statut", r.rotorStatus)
-            .put("suit", r.rotorEnabled).put("simule", r.rotorSim).put("lien", r.rotorLink)
-            .put("az", r.rotorActualAz ?: JSONObject.NULL).put("el", r.rotorActualEl ?: JSONObject.NULL)
-            .put("azCible", r.rotorTargetAz ?: JSONObject.NULL).put("elCible", r.rotorTargetEl ?: JSONObject.NULL)
-            .put("port", r.rotorUsbIndex).put("baud", r.rotorBaud).put("hote", r.rotorHost).put("tcp", r.rotorPort)
-            .put("attente", r.rotorPrePositioning)
-            .put("reglages", JSONObject().put("maxAz", r.rotorMaxAz).put("maxEl", r.rotorMaxEl).put("butee", r.rotorAzStop)
-                .put("depuisButee", r.rotorAzFromStop).put("flip", r.rotorFlip).put("azSeul", r.rotorAzOnly)
-                .put("parkAz", r.rotorParkAz).put("parkEl", r.rotorParkEl).put("minEl", r.rotorMinEl)
-                .put("ecart", r.rotorDeadband).put("avantAos", r.rotorPreAos))
-            .put("diag", JSONArray(r.rotorDiag)))
+        o.put("cat", fr.f4ioz.satcombo.demo.ApiStation.cat(c, e.catModele, st.settings.civUsbIndex, e.catConnecte, e.catSimule, e.catStatut, e.maintienDoppler))
+        o.put("rotor", fr.f4ioz.satcombo.demo.ApiStation.rotor(r))
         return o
     }
 
-    private fun passage(p: fr.f4ioz.satcombo.data.SatPass, st: StationPc? = null) = JSONObject()
-        .put("fav", st?.etat?.value?.favoris?.contains(p.catalogNumber) == true)
-        .put("agenda", st?.auAgenda(p) == true)
-        .put("amsat", st?.statutAmsat(p.satName)?.recent?.name ?: "")
-        .put("nom", p.satName).put("catnum", p.catalogNumber).put("aos", p.aosEpochMs).put("los", p.losEpochMs)
-        .put("elMax", p.maxElevationDeg).put("azAos", p.aosAzimuthDeg).put("azLos", p.losAzimuthDeg)
-        // Its arc in the sky (az, el), lightened to some twenty points: the small plot beside it.
-        .put("trace", JSONArray(p.track.let { t -> val pas = maxOf(1, t.size / 20); t.filterIndexed { i, _ -> i % pas == 0 || i == t.size - 1 } }
-            .map { (az, el) -> JSONArray(listOf(Math.round(az), Math.round(el * 10) / 10.0)) }))
+    private fun passage(p: fr.f4ioz.satcombo.data.SatPass, st: StationPc? = null) = fr.f4ioz.satcombo.demo.ApiStation.passage(p,
+        fav = st?.etat?.value?.favoris?.contains(p.catalogNumber) == true, agenda = st?.auAgenda(p) == true,
+        amsat = st?.statutAmsat(p.satName)?.recent?.name ?: "")
 
     fun passages(st: StationPc): JSONObject {
         val e = st.etat.value

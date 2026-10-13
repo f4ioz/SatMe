@@ -121,7 +121,7 @@ object PageCommande {
 
 <div class="page" id="poste" style="display:none">
   <h1>SatMe — poste de commande</h1>
-  <div class="sub"><span id="station">—</span> · <a id="lienPlanche" href="planche" style="color:var(--cyan)">Planche SSTV</a> · <a id="lienJournal" href="journal" style="color:var(--cyan)">Journal des passages</a></div>
+  <div class="sub"><span id="station">—</span> · <a id="lienPlanche" href="planche" style="color:var(--cyan)">Planche SSTV</a> · <a id="lienJournal" href="journal" style="color:var(--cyan)">Journal des passages</a> · <a id="lienPc" href="pc" style="color:var(--cyan)">Pages SatMe-PC</a></div>
 
   <div class="grille">
     <div class="carte">
@@ -207,6 +207,9 @@ const g = id => document.getElementById(id);
 // From the address itself: typed without its final slash, a relative link would lose the token.
 g('lienPlanche').href = base + '/planche';
 g('lienJournal').href = base + '/journal';
+g('lienPc').href = base + '/pc';
+// Back to SatMe-PC's page once the code is given, when it sent here for it.
+const versPc = new URLSearchParams(location.search).get('vers') === 'pc';
 
 async function appel(route, params) {
   const p = new URLSearchParams(params || {});
@@ -221,6 +224,7 @@ async function entrer() {
   if (j.ok) {
     cle = j.cle;
     localStorage.setItem('satme-cle', cle);
+    if (versPc) { location.href = base + '/pc'; return; }
     ouvre();
   } else {
     g('porte-etat').className = 'etat ko';

@@ -6,7 +6,7 @@
  * Free software under the GNU GPL, version 2 or later. Without any warranty.
  * The full licence text is in the LICENSE file.
  */
-package fr.f4ioz.satcombo.pc
+package fr.f4ioz.satcombo.demo
 
 /**
  * The tabs' icons: Google's Material Symbols (filled, Apache License 2.0,

@@ -1410,6 +1410,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         // call nothing else, so the surface exposed to the LAN reads at a glance.
         // The SSTV sheet on the PC (same door, same code): it reads the gallery and the sheets' folder.
         fr.f4ioz.satcombo.demo.PlancheWeb.app = getApplication()
+        // SatMe-PC's page served by the phone (same door, same code): it reads the state, and does the gestures of its tabs.
+        fr.f4ioz.satcombo.demo.PagesPcTelephone.vm = this
         fr.f4ioz.satcombo.demo.PontCommande.ajouteQso = { call, loc, rse, rsr ->
             val sat = _ui.value.selected
             if (sat == null || call.isBlank()) false
@@ -5490,6 +5492,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     /** DATV through a SatMe-Node (the MiniTiouner next to the antenna). */
     val datv by lazy { fr.f4ioz.satcombo.datv.DatvTelephone(getApplication()) }
+
+    /** The station's callsign and the CAT loop, for SatMe-PC's page served by the phone. */
+    fun indicatif(): String = settings.callsign
+    fun etatBoucleCat(): fr.f4ioz.satcombo.station.EtatBoucleCat = stationCat.etat.value
 
     fun openDatv() { va(Screen.DATV); _ui.value = _ui.value.copy(screen = Screen.DATV) }
     fun closeDatv() { _ui.value = retour() }

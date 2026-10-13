@@ -289,6 +289,11 @@ object ServeurDemo {
             envoie(sortie, "200 OK", "text/html; charset=utf-8", PagePlanche.html().toByteArray(Charsets.UTF_8))
             return
         }
+        // SatMe-PC's page, served by the phone: the same.
+        if (chemin == "/pc" || chemin == "/pc/") {
+            envoie(sortie, "200 OK", "text/html; charset=utf-8", PagesPcTelephone.page().toByteArray(Charsets.UTF_8))
+            return
+        }
         // The pass journal on the PC: the same.
         if (chemin == "/journal" || chemin == "/journal/") {
             envoie(sortie, "200 OK", "text/html; charset=utf-8", PageJournal.html().toByteArray(Charsets.UTF_8))
@@ -327,7 +332,8 @@ object ServeurDemo {
             return
         }
 
-        val cle = parametre(route, "cle")
+        // The key in the address, or in the cookie SatMe-PC's page sets (its pictures and links carry no parameter).
+        val cle = parametre(route, "cle").ifBlank { requete?.cookie("satme_cle").orEmpty() }
         if (!sessionValide(cle)) {
             envoie(sortie, "403 Forbidden", "application/json",
                 "{\"ok\":false,\"raison\":\"session\"}".toByteArray())
@@ -335,6 +341,12 @@ object ServeurDemo {
         }
         if (!PontCommande.pret) {
             jsonCourt(sortie, "{\"ok\":false,\"raison\":\"pasPret\"}")
+            return
+        }
+        // SatMe-PC's page: its routes, from the phone's state.
+        if (chemin.startsWith("/api/")) {
+            val r = PagesPcTelephone.sert(chemin, requete?.methode ?: "GET") { parametre(route, it) }
+            envoie(sortie, r.statut, r.type, r.corps, r.entetes)
             return
         }
 

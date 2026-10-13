@@ -6,7 +6,7 @@
  * Free software under the GNU GPL, version 2 or later. Without any warranty.
  * The full licence text is in the LICENSE file.
  */
-package fr.f4ioz.satcombo.pc
+package fr.f4ioz.satcombo.demo
 
 /**
  * The PC station's page: passes on the left, the satellite followed in the
@@ -28,6 +28,9 @@ object PagePc {
         Triple("sstv", "SSTV", "live_tv"), Triple("planche", "Planche", "view_quilt"), Triple("aprs", "APRS", "place"), Triple("ft8", "FT8", "graphic_eq"),
         Triple("journal", "Journal", "history"), Triple("reglages", "Réglages", "settings"))
 
+    /** Every tab's id: what a server offering all of them answers to `api/capacites`. */
+    val TOUS: List<String> get() = ONGLETS.map { it.first }
+
     /** A tab's content: its icon above its name. */
     private fun contenu(nom: String, icone: String) = IconesPc.svg(icone) + "<span>$nom</span>"
 
@@ -36,7 +39,7 @@ object PagePc {
 
     /** The tabs here: buttons, the pages of their own links. */
     private fun boutons() = ONGLETS.joinToString("") { (v, nom, ico) ->
-        if (v in PAGES) "<a href=\"/$v\" style=\"text-decoration:none\"><button title=\"${PAGES[v]}\">${contenu(nom, ico)}</button></a>"
+        if (v in PAGES) "<a href=\"$v\" style=\"text-decoration:none\"><button title=\"${PAGES[v]}\">${contenu(nom, ico)}</button></a>"
         else "<button data-v=\"$v\"" + (if (v == "station") " class=\"actif\"" else "") + ">${contenu(nom, ico)}</button>"
     }
 
@@ -55,8 +58,8 @@ object PagePc {
         ONGLETS.joinToString("") { (v, nom, ico) ->
             when {
                 v == actif -> "<button class=\"actif\">${contenu(nom, ico)}</button>"
-                v in PAGES -> "<a href=\"/$v\"><button>${contenu(nom, ico)}</button></a>"
-                else -> "<a href=\"/#$v\"><button>${contenu(nom, ico)}</button></a>"
+                v in PAGES -> "<a href=\"$v\"><button>${contenu(nom, ico)}</button></a>"
+                else -> "<a href=\"pc#$v\"><button>${contenu(nom, ico)}</button></a>"
             }
         } + "</nav><span id=\"pc-heure\"></span></header>"
 
@@ -77,11 +80,15 @@ object PagePc {
     /** Fills the header: the station from /api/etat, the clock each second (UTC as chosen on the station page). */
     const val SCRIPT_BARRE = "(function(){let E=null;const p2=n=>String(n).padStart(2,'0');" +
         "function utc(){try{return localStorage.getItem('utc')==='1'}catch(x){return false}}" +
-        "async function etat(){try{E=await(await fetch('/api/etat')).json();const i=document.getElementById('pc-info');" +
+        "async function etat(){try{E=await(await fetch('api/etat')).json();const i=document.getElementById('pc-info');" +
         "if(i)i.textContent=[E.indicatif,E.locator].filter(x=>x).join(' · ')+' · '+E.nbSatellites+' satellites'}catch(x){}}" +
         "function heure(){const d=new Date(),u=utc(),h=document.getElementById('pc-heure');if(!h)return;" +
         "h.textContent=(u?[d.getUTCHours(),d.getUTCMinutes(),d.getUTCSeconds()]:[d.getHours(),d.getMinutes(),d.getSeconds()]).map(p2).join(':')+(u?' UTC':'')}" +
-        "etat();setInterval(etat,30000);heure();setInterval(heure,1000)})();"
+        "etat();setInterval(etat,30000);heure();setInterval(heure,1000);" +
+        // The tabs the server offers (the phone some of them): the others hidden.
+        "fetch('api/capacites').then(r=>r.ok?r.json():null).then(j=>{if(!j||!j.onglets)return;" +
+        "document.querySelectorAll('#pcBar nav a').forEach(a=>{const h=a.getAttribute('href').replace('pc#','');if(!j.onglets.includes(h))a.hidden=true})}).catch(()=>{})" +
+        "})();"
 
     val HTML = """<!doctype html>
 <html lang="fr"><head><meta charset="utf-8">
@@ -334,8 +341,8 @@ object PagePc {
         <div class="bouton-gr"><button onclick="regle('tx',-50)">−50</button><button onclick="regle('tx',-10)">−10</button></div>
         <span class="val" id="r-tx" style="min-width:80px;text-align:center">0</span>
         <div class="bouton-gr"><button onclick="regle('tx',10)">+10</button><button onclick="regle('tx',50)">+50</button></div></div>
-      <div class="ligne"><button onclick="post('/api/sat/reglage?memorise=1')" title="Garder ces deux valeurs comme celles qui marchent pour ce satellite">Mémoriser</button>
-        <button id="r-retour" onclick="post('/api/sat/reglage?retour=1')">Revenir à la référence</button><span class="petit" id="r-ref"></span></div>
+      <div class="ligne"><button onclick="post('api/sat/reglage?memorise=1')" title="Garder ces deux valeurs comme celles qui marchent pour ce satellite">Mémoriser</button>
+        <button id="r-retour" onclick="post('api/sat/reglage?retour=1')">Revenir à la référence</button><span class="petit" id="r-ref"></span></div>
       <div class="ligne" id="repos-ligne" style="display:none">
         <span class="petit">Dans le transpondeur</span>
         <div class="bouton-gr">
@@ -366,8 +373,8 @@ object PagePc {
         <select id="cat-bande"><option value="0">A</option><option value="1">B</option></select></div>
       <div class="ligne">
         <button class="primaire" id="cat-co" onclick="catConnecte()">Connecter</button>
-        <button id="cat-deco" onclick="post('/api/cat/deconnecter')">Déconnecter</button>
-        <label class="petit"><input type="checkbox" id="maintien" onchange="post('/api/maintien?on='+(this.checked?1:0))"> Doppler en pause</label>
+        <button id="cat-deco" onclick="post('api/cat/deconnecter')">Déconnecter</button>
+        <label class="petit"><input type="checkbox" id="maintien" onchange="post('api/maintien?on='+(this.checked?1:0))"> Doppler en pause</label>
       </div>
       <div class="avert" id="cat-avert"></div>
       <div class="paire" style="margin-top:8px">
@@ -390,14 +397,14 @@ object PagePc {
       <div class="ligne" id="rot-tcp" style="display:none"><input id="rot-hote" placeholder="hôte"><input id="rot-tcpport" placeholder="4533" style="max-width:90px"></div>
       <div class="ligne">
         <button class="primaire" onclick="rotConnecte()">Connecter</button>
-        <button onclick="post('/api/rotor/deconnecter')">Déconnecter</button>
-        <label class="petit"><input type="checkbox" id="rot-suit" onchange="post('/api/rotor/suivre?on='+(this.checked?1:0))"> Suivre le satellite</label>
+        <button onclick="post('api/rotor/deconnecter')">Déconnecter</button>
+        <label class="petit"><input type="checkbox" id="rot-suit" onchange="post('api/rotor/suivre?on='+(this.checked?1:0))"> Suivre le satellite</label>
       </div>
       <div class="ligne">
-        <button onclick="post('/api/rotor/parquer')">Parquer</button>
-        <button class="rouge" onclick="post('/api/rotor/stop')">Stop</button>
+        <button onclick="post('api/rotor/parquer')">Parquer</button>
+        <button class="rouge" onclick="post('api/rotor/stop')">Stop</button>
         <input id="rot-az" placeholder="az" style="max-width:70px"><input id="rot-el" placeholder="el" style="max-width:70px">
-        <button onclick="post('/api/rotor/aller?az='+enc(v('rot-az'))+'&el='+enc(v('rot-el')))">Aller</button>
+        <button onclick="post('api/rotor/aller?az='+enc(v('rot-az'))+'&el='+enc(v('rot-el')))">Aller</button>
       </div>
       <div class="paire" style="margin-top:8px">
         <span class="petit">Mât <span class="val" id="rot-pos">—</span></span>
@@ -445,7 +452,7 @@ object PagePc {
       <div class="paire"><span><span class="val" id="c-nb">0</span> <span class="petit">contacts</span></span>
         <span><span class="val" id="c-carres">0</span> <span class="petit">carrés</span></span>
         <span><span class="val ambre" id="c-attente">0</span> <span class="petit">à déposer</span></span></div>
-      <div class="ligne"><a href="/carnet.adi" download><button>Exporter en ADIF</button></a>
+      <div class="ligne"><a href="carnet.adi" download><button>Exporter en ADIF</button></a>
         <button onclick="depose()">Déposer au carnet en ligne</button></div>
       <div class="petit" id="c-auto"></div>
       <div class="etat" id="c-depot"></div>
@@ -574,9 +581,9 @@ object PagePc {
     <div class="carte">
       <div class="t">Enregistrement</div>
       <div class="ligne" style="margin-top:0"><button class="rouge" id="s-rec" onclick="enregistre()">● Enregistrer</button><span class="val" id="s-duree"></span></div>
-      <div class="ligne"><label class="petit"><input type="checkbox" id="s-auto" onchange="post('/api/son/options?auto=' + (this.checked ? 1 : 0))"> Enregistrer chaque passage du satellite suivi (de l'AOS à 30 s après le LOS)</label></div>
-      <div class="ligne"><label class="petit"><input type="checkbox" id="s-aprs" onchange="post('/api/son/options?aprs=' + (this.checked ? 1 : 0))"> Décoder l'APRS (AFSK 1200 bauds)</label></div>
-      <div class="ligne"><label class="petit"><input type="checkbox" id="s-sstv" onchange="post('/api/son/options?sstv=' + (this.checked ? 1 : 0))"> Décoder la SSTV en direct</label></div>
+      <div class="ligne"><label class="petit"><input type="checkbox" id="s-auto" onchange="post('api/son/options?auto=' + (this.checked ? 1 : 0))"> Enregistrer chaque passage du satellite suivi (de l'AOS à 30 s après le LOS)</label></div>
+      <div class="ligne"><label class="petit"><input type="checkbox" id="s-aprs" onchange="post('api/son/options?aprs=' + (this.checked ? 1 : 0))"> Décoder l'APRS (AFSK 1200 bauds)</label></div>
+      <div class="ligne"><label class="petit"><input type="checkbox" id="s-sstv" onchange="post('api/son/options?sstv=' + (this.checked ? 1 : 0))"> Décoder la SSTV en direct</label></div>
       <div class="petit" style="margin-top:6px">WAV 16 bits, à la moitié de la fréquence de la carte (24 ou 22,05 kHz). Même nom que sur le téléphone.</div>
     </div>
   </div>
@@ -630,7 +637,7 @@ object PagePc {
   <div>
     <div class="carte">
       <div class="t">Agenda</div>
-      <div class="ligne" style="margin-top:0"><label class="petit"><input type="checkbox" id="g-suivi" onchange="post('/api/agenda/suivi?on=' + (this.checked ? 1 : 0))">
+      <div class="ligne" style="margin-top:0"><label class="petit"><input type="checkbox" id="g-suivi" onchange="post('api/agenda/suivi?on=' + (this.checked ? 1 : 0))">
         Suivre tout seul le satellite d'un rendez-vous, 5 min avant (le poste et le rotor suivent)</label></div>
       <div class="petit" style="margin-top:6px">📅 dans la liste des passages (onglet Station) ajoute ou retire un passage. L'agenda du téléphone arrive avec sa sauvegarde (Réglages).</div>
     </div>
@@ -855,8 +862,8 @@ object PagePc {
   <div>
     <div class="carte">
       <div class="t">Clé SDR (rtl_tcp) <span id="r-pastille" class="pastille off">arrêtée</span></div>
-      <div class="ligne" style="margin-top:0"><button class="primaire" onclick="post('/api/sdr/demarrer').then(ticSdr)">Démarrer</button>
-        <button onclick="post('/api/sdr/arreter').then(ticSdr)">Arrêter</button><span class="petit" id="r-info"></span></div>
+      <div class="ligne" style="margin-top:0"><button class="primaire" onclick="post('api/sdr/demarrer').then(ticSdr)">Démarrer</button>
+        <button onclick="post('api/sdr/arreter').then(ticSdr)">Arrêter</button><span class="petit" id="r-info"></span></div>
       <div class="avert" id="r-erreur"></div>
     </div>
     <div class="carte">
@@ -895,7 +902,7 @@ object PagePc {
     <div class="ligne" style="margin-top:4px"><span class="petit">Niveau</span><div class="r-barre"><i id="r-niveau"></i></div><span class="petit" id="r-db"></span>
       <span class="rose petit" id="r-sat-av"></span>
       <span style="margin-left:auto" class="petit">Largeur vue</span><select id="r-span" style="flex:none" onchange="rSpan = +this.value; rCascade = []"><option value="12000">12 kHz</option><option value="24000">24 kHz</option><option value="48000" selected>48 kHz</option><option value="96000">96 kHz</option><option value="176400">176 kHz</option></select>
-      <button onclick="post('/api/sdr/pic')" title="Le signal le plus fort à ±15 kHz">Caler sur le pic</button><button onclick="post('/api/sdr/decalage?hz=0')">Recentrer</button></div>
+      <button onclick="post('api/sdr/pic')" title="Le signal le plus fort à ±15 kHz">Caler sur le pic</button><button onclick="post('api/sdr/decalage?hz=0')">Recentrer</button></div>
     <canvas id="r-spectre" style="width:100%;height:110px;display:block;margin-top:8px;cursor:crosshair" title="Cliquer pour s'y accorder"></canvas>
     <div class="r-cascade"><canvas id="r-cascade" title="Cliquer pour s'y accorder"></canvas></div>
   </div>
@@ -981,8 +988,8 @@ object PagePc {
     <div class="carte">
       <div class="ligne" style="margin-top:0">
         <button class="primaire" id="8-marche" onclick="ft8Marche()">Écouter</button>
-        <select id="8-mode" onchange="post('/api/ft8?mode=' + this.value)" style="max-width:90px"><option>FT8</option><option>FT4</option></select>
-        <button onclick="post('/api/ft8?vide=1')">Effacer</button>
+        <select id="8-mode" onchange="post('api/ft8?mode=' + this.value)" style="max-width:90px"><option>FT8</option><option>FT4</option></select>
+        <button onclick="post('api/ft8?vide=1')">Effacer</button>
         <span class="petit" id="8-etat" style="margin-left:auto"></span>
       </div>
       <div style="height:6px;background:#0E1720;border-radius:3px;margin-top:10px;overflow:hidden"><div id="8-tranche" style="height:100%;width:0;background:var(--cyan)"></div></div>
@@ -1038,7 +1045,7 @@ object PagePc {
       <div class="ligne" style="margin-top:0"><input id="qrzUser" placeholder="Identifiant QRZ"><input id="qrzMdp" type="password" placeholder="Mot de passe"></div>
       <div class="petit">Abonnement XML de QRZ nécessaire. Le mot de passe reste sur ce PC et n'est jamais réaffiché.</div>
       <div class="ligne"><button onclick="enregistreReglages()">Enregistrer</button><button onclick="essaiQrz()">Essayer</button><span class="petit" id="qrz-etat"></span></div>
-      <label class="petit" style="display:block;margin-top:8px"><input type="checkbox" id="qrzFiche" onchange="post('/api/reglages?fiche=' + (this.checked ? 1 : 0)).then(() => { ficheVoulue = this.checked; csPour = ''; })"> Fiche QRZ dans le carnet : photo, distance, carte</label>
+      <label class="petit" style="display:block;margin-top:8px"><input type="checkbox" id="qrzFiche" onchange="post('api/reglages?fiche=' + (this.checked ? 1 : 0)).then(() => { ficheVoulue = this.checked; csPour = ''; })"> Fiche QRZ dans le carnet : photo, distance, carte</label>
     </div>
     <div class="carte">
       <div class="t">Carnet en ligne (Wavelog / Cloudlog)</div>
@@ -1057,9 +1064,9 @@ object PagePc {
           <div class="ligne"><button onclick="creeProfils()" id="wl-bcree"></button><span class="petit" id="wl-msg"></span></div>
         </div>
       </div>
-      <label class="petit" style="display:block;margin-top:10px"><input type="checkbox" id="carnetAuto" onchange="post('/api/reglages?carnetAuto=' + (this.checked ? 1 : 0)).then(chargeReglages)">
+      <label class="petit" style="display:block;margin-top:10px"><input type="checkbox" id="carnetAuto" onchange="post('api/reglages?carnetAuto=' + (this.checked ? 1 : 0)).then(chargeReglages)">
         Envoyer chaque nouveau contact au carnet en ligne</label>
-      <div class="ligne" id="carnetDelaiL"><span class="petit">après</span><select id="carnetDelai" onchange="post('/api/reglages?carnetDelai=' + this.value)"></select>
+      <div class="ligne" id="carnetDelaiL"><span class="petit">après</span><select id="carnetDelai" onchange="post('api/reglages?carnetDelai=' + this.value)"></select>
         <span class="petit">le temps de le corriger ou de le mettre en pause (⏸ dans le carnet). Seuls les contacts saisis après l'activation partent.</span></div>
     </div>
     <div class="carte">
@@ -1113,8 +1120,8 @@ function celluleAgenda(p) {
   return '<td><span title="' + (p.agenda ? 'Retirer de l’agenda' : 'Mettre à l’agenda') + '" style="cursor:pointer;opacity:' + (p.agenda ? 1 : 0.25) +
     '" onclick="agendaPassage(' + p.catnum + ',' + p.aos + ',event)">📅</span></td>';
 }
-async function agendaPassage(n, aos, ev) { if (ev) ev.stopPropagation(); await post('/api/agenda/passage?catnum=' + n + '&aos=' + aos); chargeListe(); }
-async function regle(k, d) { await post('/api/sat/reglage?' + k + '=' + d); }
+async function agendaPassage(n, aos, ev) { if (ev) ev.stopPropagation(); await post('api/agenda/passage?catnum=' + n + '&aos=' + aos); chargeListe(); }
+async function regle(k, d) { await post('api/sat/reglage?' + k + '=' + d); }
 function jourHeure(ms) {
   const d = new Date(ms);
   return (utc() ? d.toISOString().slice(5, 10).split('-').reverse().join('/') : d.toLocaleDateString(undefined, { day: '2-digit', month: '2-digit' })) + ' ' + hm(ms);
@@ -1129,17 +1136,17 @@ function dessineAgenda() {
   g('g-liste').innerHTML = E.agenda.map(a => '<tr' + (a.enCours ? ' class="encours"' : '') + '><td>' + jourHeure(a.de) + (a.a > a.de ? ' → ' + hm(a.a) : '') +
     '</td><td>' + esc(a.titre) + (a.type ? ' <span class="pastille off">' + esc(a.type) + '</span>' : '') + (a.note ? '<div class="petit">' + esc(a.note) + '</div>' : '') +
     '</td><td>' + esc(a.sat) + '</td><td class="act"><label class="petit"><input type="checkbox" ' + (a.actif ? 'checked' : '') +
-    ' onchange="post(\'/api/agenda/active?id=' + a.id + '\')"> actif</label> <button onclick="post(\'/api/agenda/retire?id=' + a.id + '\')">✕</button></td></tr>').join('') ||
+    ' onchange="post(\'api/agenda/active?id=' + a.id + '\')"> actif</label> <button onclick="post(\'api/agenda/retire?id=' + a.id + '\')">✕</button></td></tr>').join('') ||
     '<tr><td colspan="4" class="petit">rien de prévu</td></tr>';
 }
 const hz = v => (v > 0 ? '+' : '') + v + ' Hz';
 async function rapportAmsat(entendu) {
   if (!E || !E.suivi) return;
   if (!confirm((entendu ? 'Entendu' : 'Pas entendu') + ' : envoyer ce rapport sur la page publique d’amsat.org pour ' + E.suivi.nom + ', avec ton indicatif et ton carré ?')) return;
-  const j = await post('/api/amsat/rapport?entendu=' + entendu);
+  const j = await post('api/amsat/rapport?entendu=' + entendu);
   if (j && j.ok) alert('Rapport envoyé à amsat.org (' + j.nom + ').');
 }
-async function favori(n, on, ev) { if (ev) ev.stopPropagation(); await post('/api/favori?catnum=' + n + '&on=' + (on ? 1 : 0)); chargeListe(); }
+async function favori(n, on, ev) { if (ev) ev.stopPropagation(); await post('api/favori?catnum=' + n + '&on=' + (on ? 1 : 0)); chargeListe(); }
 function basculeFavori() { if (E && E.suivi) favori(E.suivi.catnum, !E.suivi.fav); }
 function dessinePassages() {
   const f = g('filtre').value.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
@@ -1160,10 +1167,10 @@ function dessinePassages() {
   });
   g('passages').innerHTML = lignes.join('') || '<tr><td colspan="8" class="petit">' + (E && E.locator ? 'aucun passage' : 'renseigne ton locator') + '</td></tr>';
 }
-async function suivre(n) { await post('/api/suivre?catnum=' + n); }
+async function suivre(n) { await post('api/suivre?catnum=' + n); }
 let tous = [];
 async function chargeSatellites() {
-  try { tous = await (await fetch('/api/satellites')).json(); } catch (x) { tous = []; }
+  try { tous = await (await fetch('api/satellites')).json(); } catch (x) { tous = []; }
   g('tous').innerHTML = tous.map(s => '<option value="' + s.nom.replace(/"/g, '&quot;') + '">').join('');
 }
 function choisitParNom() {
@@ -1176,7 +1183,7 @@ function choisitParNom() {
   suivre(s.catnum);
 }
 g('cherche').addEventListener('keydown', e => { if (e.key === 'Enter') choisitParNom(); });
-async function repos(d) { await post('/api/repos?d=' + d); }
+async function repos(d) { await post('api/repos?d=' + d); }
 
 /**
  * A pass's arc in the sky, small, as beside each pass on the phone: zenith in
@@ -1328,7 +1335,7 @@ let catTouche = false, rotTouche = false;
 ['rot-port', 'rot-baud', 'rot-lien'].forEach(i => g(i).addEventListener('change', () => rotTouche = true));
 function reglagesRotor() {
   const b = id => g(id).checked ? 1 : 0;
-  post('/api/rotor/reglages?maxAz=' + g('r-maxAz').value + '&maxEl=' + g('r-maxEl').value + '&butee=' + g('r-butee').value +
+  post('api/rotor/reglages?maxAz=' + g('r-maxAz').value + '&maxEl=' + g('r-maxEl').value + '&butee=' + g('r-butee').value +
        '&depuisButee=' + b('r-depuisButee') + '&flip=' + b('r-flip') + '&azSeul=' + b('r-azSeul') +
        '&parkAz=' + enc(v('r-parkAz')) + '&parkEl=' + enc(v('r-parkEl')) + '&minEl=' + enc(v('r-minEl')) +
        '&ecart=' + enc(v('r-ecart')) + '&avantAos=' + enc(v('r-avantAos')));
@@ -1337,7 +1344,7 @@ function reglagesRotor() {
 async function importe(input) {
   const f = input.files[0]; if (!f) return;
   try {
-    const r = await fetch('/api/import', { method:'POST', body: await f.text() });
+    const r = await fetch('api/import', { method:'POST', body: await f.text() });
     const j = await r.json();
     alert(j.ok ? j.n + ' réglages repris du téléphone (ports USB exceptés ; le rotor attend que tu coches « Suivre »), ' +
       j.contacts + ' contact(s) ajouté(s) au carnet.' : 'Import impossible : ' + j.erreur);
@@ -1347,13 +1354,13 @@ async function importe(input) {
 }
 
 async function tic() {
-  try { E = await (await fetch('/api/etat')).json(); dessine(); } catch (x) {}
+  try { E = await (await fetch('api/etat')).json(); dessine(); } catch (x) {}
 }
 async function chargeListe() {
-  try { P = (await (await fetch('/api/passages')).json()).liste; dessinePassages(); } catch (x) {}
+  try { P = (await (await fetch('api/passages')).json()).liste; dessinePassages(); } catch (x) {}
 }
 async function chargePorts() {
-  try { ports = await (await fetch('/api/ports')).json(); } catch (x) { ports = []; }
+  try { ports = await (await fetch('api/ports')).json(); } catch (x) { ports = []; }
   const o = ports.length ? ports.map(p => '<option value="' + p.index + '">' + p.libelle.replace(/</g, '&lt;') + '</option>').join('')
                          : '<option value="-1">aucun port série</option>';
   const a = g('cat-port').value, b = g('rot-port').value, c = g('cat-port-tx').value;
@@ -1379,7 +1386,7 @@ g('cat-modele').onchange = avertCat;
 function catConnecte() {
   const m = g('cat-modele').value;
   if (m.indexOf('SIM') < 0 && m !== 'PAIRE' && (!ports.length || g('cat-port').value === '-1')) { alert('Aucun port série choisi.'); return; }
-  post('/api/cat/connecter?modele=' + m + '&port=' + enc(g('cat-port').value) + '&baud=' + g('cat-baud').value +
+  post('api/cat/connecter?modele=' + m + '&port=' + enc(g('cat-port').value) + '&baud=' + g('cat-baud').value +
        '&portTx=' + enc(g('cat-port-tx').value) + '&rxIc705=' + g('cat-rx-type').value + '&txIc705=' + g('cat-tx-type').value +
        '&bandeTx=' + g('cat-bande').value);
 }
@@ -1391,10 +1398,10 @@ function lienRotor() {
 function rotConnecte() {
   const l = g('rot-lien').value;
   if (l === 'GS232' && (!ports.length || g('rot-port').value === '-1')) { alert('Aucun port série choisi.'); return; }
-  post('/api/rotor/connecter?lien=' + (l === 'ROTCTLD' ? 'ROTCTLD' : 'GS232') + '&sim=' + (l === 'SIM' ? 1 : 0) +
+  post('api/rotor/connecter?lien=' + (l === 'ROTCTLD' ? 'ROTCTLD' : 'GS232') + '&sim=' + (l === 'SIM' ? 1 : 0) +
        '&port=' + enc(g('rot-port').value) + '&baud=' + g('rot-baud').value + '&hote=' + enc(v('rot-hote')) + '&tcp=' + enc(v('rot-tcpport')));
 }
-g('emetteur').onchange = () => post('/api/emetteur?i=' + g('emetteur').value);
+g('emetteur').onchange = () => post('api/emetteur?i=' + g('emetteur').value);
 // ------------------------------------------------------------------ tabs
 function vue(n) {
   document.querySelectorAll('.vue').forEach(x => x.hidden = x.id !== 'v-' + n);
@@ -1422,7 +1429,7 @@ const esc = x => String(x == null ? '' : x).replace(/&/g, '&amp;').replace(/</g,
 const base = c => c.toUpperCase().split('/')[0];
 async function chargeCarnet() {
   try {
-    const j = await (await fetch('/api/carnet')).json();
+    const j = await (await fetch('api/carnet')).json();
     C = j.contacts;
     txt('c-nb', String(j.total)); txt('c-auto', j.auto || ''); txt('c-carres', String(j.carres)); txt('c-attente', String(j.nonDeposes));
     dessineCarnet();
@@ -1456,7 +1463,7 @@ setInterval(() => {
   C.forEach(e => { if (e.ea !== 'attente') return; e.reste = Math.max(0, e.reste - 1); const s = g('ea-' + e.t); if (s) s.textContent = '⏱ ' + e.reste + ' s'; if (e.reste === 0) fini = true; });
   if (fini) { C.forEach(e => { if (e.ea === 'attente' && e.reste === 0) e.ea = 'pret'; }); setTimeout(chargeCarnet, 3000); }
 }, 1000);
-async function retiens(t, on) { await post('/api/carnet/retiens?t=' + t + '&on=' + on); chargeCarnet(); }
+async function retiens(t, on) { await post('api/carnet/retiens?t=' + t + '&on=' + on); chargeCarnet(); }
 // The contacts ticked, to delete at once; kept while the filter changes.
 const coches = new Set();
 let vusCarnet = [];
@@ -1470,7 +1477,7 @@ function majSelection() {
 async function supprimeContacts(l) {
   const qui = l.length === 1 ? (C.find(e => e.t === l[0]) || {}).c || 'ce contact' : l.length + ' contacts';
   if (!confirm('Supprimer ' + qui + ' du carnet ?\n\nCeux déjà déposés au carnet en ligne y restent.')) return false;
-  await post('/api/carnet/supprime?t=' + l.join(','));
+  await post('api/carnet/supprime?t=' + l.join(','));
   l.forEach(t => coches.delete(t)); chargeCarnet(); return true;
 }
 function supprimeSelection() { if (coches.size) supprimeContacts([...coches]); }
@@ -1488,7 +1495,7 @@ async function importeZips(input) {
   for (let i = 0; i < l.length; i++) {
     txt('t-etat', 'import ' + (i + 1) + '/' + l.length + ' : ' + l[i].name + '…');
     let b = null;
-    try { b = await (await fetch('/api/telephone/zip?enLigne=1', { method: 'POST', body: l[i] })).json(); } catch (x) { b = { ok: false, erreur: 'envoi impossible' }; }
+    try { b = await (await fetch('api/telephone/zip?enLigne=1', { method: 'POST', body: l[i] })).json(); } catch (x) { b = { ok: false, erreur: 'envoi impossible' }; }
     out.push(l[i].name + ' — ' + bilanTel(b));
   }
   g('t-etat').innerHTML = out.map(esc).join('<br>'); input.value = ''; chargeCarnet();
@@ -1504,7 +1511,7 @@ let minuteurQr = 0, qrDepuis = 0, qrPort = '';
 async function montreQr(ip) {
   clearTimeout(minuteurQr);
   let j = null;
-  try { j = await (await fetch('/api/telephone/qr' + (ip ? '?adresse=' + enc(ip) : ''), { method: 'POST' })).json(); } catch (x) {}
+  try { j = await (await fetch('api/telephone/qr' + (ip ? '?adresse=' + enc(ip) : ''), { method: 'POST' })).json(); } catch (x) {}
   if (!j || !j.ok) { g('t-qr').innerHTML = ''; txt('t-qr-etat', j && j.erreur ? j.erreur : 'QR code impossible'); g('t-main').open = true; return; }
   g('t-qr').innerHTML = j.svg;
   const s = g('t-ip'); s.innerHTML = j.adresses.map(a => '<option>' + esc(a) + '</option>').join(''); s.value = j.ip;
@@ -1514,9 +1521,9 @@ async function montreQr(ip) {
   suisQr();
 }
 async function suisQr() {
-  if (!g('t-dlg').open) { post('/api/telephone/qr/ferme'); return; }
+  if (!g('t-dlg').open) { post('api/telephone/qr/ferme'); return; }
   let e = null;
-  try { e = await (await fetch('/api/telephone/qr')).json(); } catch (x) {}
+  try { e = await (await fetch('api/telephone/qr')).json(); } catch (x) {}
   if (e && e.joint && e.connecte) { g('t-qr-boite').hidden = true; await listeTelephone(); return; }
   if (e && e.erreur) txt('t-qr-etat', e.erreur);
   // Nothing after half a minute: most often this PC's firewall, which the phone cannot get through.
@@ -1525,18 +1532,18 @@ async function suisQr() {
   if (e && !e.ouvert) return;
   minuteurQr = setTimeout(suisQr, 1000);
 }
-g('t-dlg').addEventListener('close', () => { clearTimeout(minuteurQr); post('/api/telephone/qr/ferme'); });
+g('t-dlg').addEventListener('close', () => { clearTimeout(minuteurQr); post('api/telephone/qr/ferme'); });
 async function connecteTelephone() {
   txt('t-cnx', 'connexion…');
   try { localStorage.setItem('tel-adresse', v('t-adresse')); } catch (x) {}
-  const j = await post('/api/telephone/connecte?adresse=' + enc(v('t-adresse')) + '&code=' + enc(v('t-code')));
+  const j = await post('api/telephone/connecte?adresse=' + enc(v('t-adresse')) + '&code=' + enc(v('t-code')));
   if (!j || j.ok === false) { txt('t-cnx', j && j.erreur ? j.erreur : 'échec'); return; }
-  clearTimeout(minuteurQr); post('/api/telephone/qr/ferme'); g('t-qr-boite').hidden = true;
+  clearTimeout(minuteurQr); post('api/telephone/qr/ferme'); g('t-qr-boite').hidden = true;
   await listeTelephone();
 }
 async function listeTelephone() {
   let l = null;
-  try { l = await (await fetch('/api/telephone/liste')).json(); } catch (x) {}
+  try { l = await (await fetch('api/telephone/liste')).json(); } catch (x) {}
   if (!l || !l.ok) { txt('t-cnx', l && l.erreur ? l.erreur : 'liste illisible'); return; }
   txt('t-cnx', 'connecté à ' + l.adresse + (l.version ? ' (SatMe ' + l.version + ')' : '') + ' · ' + l.passages.length + ' passage(s)');
   g('t-liste-boite').hidden = false;
@@ -1548,11 +1555,11 @@ async function listeTelephone() {
 async function rapatrie() {
   const ids = [...document.querySelectorAll('.t-coche')].filter(c => c.checked).map(c => c.value);
   if (!ids.length) return;
-  const j = await post('/api/telephone/rapatrie?enLigne=' + (g('t-enligne').checked ? 1 : 0) + '&ids=' + enc(ids.join(',')));
+  const j = await post('api/telephone/rapatrie?enLigne=' + (g('t-enligne').checked ? 1 : 0) + '&ids=' + enc(ids.join(',')));
   if (!j || j.ok === false) return;
   const suit = async () => {
     let e = null;
-    try { e = await (await fetch('/api/telephone/etat')).json(); } catch (x) { return; }
+    try { e = await (await fetch('api/telephone/etat')).json(); } catch (x) { return; }
     txt('t-prog', e.enCours ? 'import ' + e.fait + '/' + e.total + '…' : 'terminé : ' + e.total + ' passage(s)');
     g('t-bilan').innerHTML = e.bilans.map(b => esc(bilanTel(b))).join('<br>');
     if (e.enCours) setTimeout(suit, 800); else chargeCarnet();
@@ -1626,7 +1633,7 @@ function stationPour(brut) {
   if (b === csPour) return;
   minuteurStation = setTimeout(async () => {
     let h = null;
-    try { h = await (await fetch('/api/carnet/station?c=' + enc(b))).json(); } catch (x) { return; }
+    try { h = await (await fetch('api/carnet/station?c=' + enc(b))).json(); } catch (x) { return; }
     if (base(v('c-call')) !== b) return;
     csPour = b; CSH = h; ficheVoulue = h.fiche;
     if (CSQPour !== b) CSQ = null;
@@ -1700,7 +1707,7 @@ function proposeIndicatifs() {
   minuteurProps = setTimeout(async () => {
     const saisie = v('c-call');
     let j = null;
-    try { j = await (await fetch('/api/carnet/propositions?c=' + enc(saisie))).json(); } catch (x) { return; }
+    try { j = await (await fetch('api/carnet/propositions?c=' + enc(saisie))).json(); } catch (x) { return; }
     if (v('c-call') !== saisie || iProp >= 0) return;
     g('c-call').style.borderColor = COUL_ETAT[j.etat] || '';
     g('c-call').title = { DEJA_CONTACTE: 'déjà contacté', PLAUSIBLE: 'indicatif plausible', INHABITUEL: 'indicatif inhabituel (rien n’empêche de l’enregistrer)' }[j.etat] || '';
@@ -1766,7 +1773,7 @@ g('c-call').addEventListener('input', () => {
   minuteurQrz = setTimeout(async () => {
     if (!connu) txt('c-qui', 'QRZ…');
     let f = null;
-    try { f = await (await fetch('/api/qrz?c=' + enc(c))).json(); } catch (x) {}
+    try { f = await (await fetch('api/qrz?c=' + enc(c))).json(); } catch (x) {}
     if (base(v('c-call')) !== c) return;
     CSQ = f && f.ok ? f : null; CSQPour = c; dessineStation();
     if (connu) return;
@@ -1780,7 +1787,7 @@ g('c-call').addEventListener('input', () => {
 ['c-call', 'c-loc', 'c-rs', 'c-rr', 'c-note'].forEach(i => g(i).addEventListener('keydown', e => { if (e.key === 'Enter') enregistreContact(); }));
 async function enregistreContact() {
   const c = v('c-call'); if (!c) return;
-  const j = await post('/api/carnet/ajoute?c=' + enc(c) + '&l=' + enc(v('c-loc')) + '&rs=' + enc(v('c-rs')) + '&rr=' + enc(v('c-rr')) + '&n=' + enc(v('c-note')));
+  const j = await post('api/carnet/ajoute?c=' + enc(c) + '&l=' + enc(v('c-loc')) + '&rs=' + enc(v('c-rs')) + '&rr=' + enc(v('c-rr')) + '&n=' + enc(v('c-note')));
   if (j && j.ok) {
     txt('c-etat', c.toUpperCase() + ' enregistré');
     ['c-call', 'c-loc', 'c-note'].forEach(i => g(i).value = ''); g('c-rs').value = '59'; g('c-rr').value = '59';
@@ -1799,7 +1806,7 @@ function edite(t) {
 async function qrzEdit() {
   txt('e-qrz', 'QRZ…');
   let f = null;
-  try { f = await (await fetch('/api/qrz?c=' + enc(base(v('e-call'))))).json(); } catch (x) {}
+  try { f = await (await fetch('api/qrz?c=' + enc(base(v('e-call'))))).json(); } catch (x) {}
   if (!f || !f.ok) { txt('e-qrz', f && f.erreur ? f.erreur : 'QRZ ne connaît pas cet indicatif.'); return; }
   if (!v('e-nm')) g('e-nm').value = f.nom;
   if (!v('e-qth')) g('e-qth').value = f.qth;
@@ -1807,7 +1814,7 @@ async function qrzEdit() {
   txt('e-qrz', [f.nom, f.qth, f.carre, f.pays].filter(x => x).join(' · '));
 }
 async function enregistreEdit() {
-  const j = await post('/api/carnet/modifie?t=' + editT + '&c=' + enc(v('e-call')) + '&l=' + enc(v('e-loc')) + '&md=' + enc(v('e-md')) +
+  const j = await post('api/carnet/modifie?t=' + editT + '&c=' + enc(v('e-call')) + '&l=' + enc(v('e-loc')) + '&md=' + enc(v('e-md')) +
     '&rs=' + enc(v('e-rs')) + '&rr=' + enc(v('e-rr')) + '&nm=' + enc(v('e-nm')) + '&qth=' + enc(v('e-qth')) + '&n=' + enc(v('e-n')) +
     (g('e-loc').dataset.qrz ? '&lo=QRZ' : ''));
   delete g('e-loc').dataset.qrz;
@@ -1826,7 +1833,7 @@ function bilanImport(j) {
 async function profilsWavelog() {
   txt('i-etat', 'relevé des profils…');
   let j = null;
-  try { j = await (await fetch('/api/wavelog/profils')).json(); } catch (x) {}
+  try { j = await (await fetch('api/wavelog/profils')).json(); } catch (x) {}
   if (!j || j.erreur) { txt('i-etat', j && j.erreur ? j.erreur : 'échec'); return; }
   txt('i-etat', '');
   g('w-profils').innerHTML = j.profils.map(p => '<label style="display:block"><input type="checkbox" class="w-p" value="' + esc(p.id) + '" checked> ' +
@@ -1837,19 +1844,19 @@ async function importeWavelog() {
   const ids = [...document.querySelectorAll('.w-p')].filter(c => c.checked).map(c => c.value).join(',');
   txt('i-etat', 'import en cours (tout le carnet en ligne : patience)…');
   let j = null;
-  try { j = await (await fetch('/api/wavelog/importe?profils=' + enc(ids), { method: 'POST' })).json(); } catch (x) {}
+  try { j = await (await fetch('api/wavelog/importe?profils=' + enc(ids), { method: 'POST' })).json(); } catch (x) {}
   txt('i-etat', bilanImport(j)); chargeCarnet();
 }
 async function importeAdif(input) {
   const f = input.files[0]; if (!f) return;
   txt('i-etat', 'lecture de ' + f.name + '…');
   let j = null;
-  try { j = await (await fetch('/api/import/adif?enLigne=' + (g('i-enligne').checked ? 1 : 0), { method: 'POST', body: await f.text() })).json(); } catch (x) {}
+  try { j = await (await fetch('api/import/adif?enLigne=' + (g('i-enligne').checked ? 1 : 0), { method: 'POST', body: await f.text() })).json(); } catch (x) {}
   txt('i-etat', bilanImport(j)); input.value = ''; chargeCarnet();
 }
 async function depose(t) {
   txt('c-depot', 'envoi…');
-  const j = await post('/api/carnet/depose' + (t ? '?t=' + t : ''));
+  const j = await post('api/carnet/depose' + (t ? '?t=' + t : ''));
   txt('c-depot', j && j.dit ? j.dit : '');
   chargeCarnet();
 }
@@ -1857,7 +1864,7 @@ async function depose(t) {
 // ------------------------------------------------------------------ settings
 async function chargeReglages() {
   try {
-    const r = await (await fetch('/api/reglages')).json();
+    const r = await (await fetch('api/reglages')).json();
     g('indicatif').value = r.c; g('locator').value = r.l; g('minEl').value = r.minEl;
     g('qrzFiche').checked = r.fiche; ficheVoulue = r.fiche;
     g('qrzUser').value = r.qrzUser; g('qrzMdp').placeholder = r.qrzMdp ? 'mot de passe enregistré' : 'Mot de passe';
@@ -1870,7 +1877,7 @@ async function chargeReglages() {
   } catch (x) {}
 }
 async function enregistreReglages() {
-  const j = await post('/api/reglages?c=' + enc(v('indicatif')) + '&l=' + enc(v('locator')) + '&minEl=' + enc(v('minEl')) +
+  const j = await post('api/reglages?c=' + enc(v('indicatif')) + '&l=' + enc(v('locator')) + '&minEl=' + enc(v('minEl')) +
     '&qrzUser=' + enc(v('qrzUser')) + '&qrzMdp=' + enc(g('qrzMdp').value) + '&carnetUrl=' + enc(v('carnetUrl')) +
     '&carnetCle=' + enc(g('carnetCle').value) + '&carnetProfil=' + enc(v('carnetProfil')));
   if (j && j.ok !== false) {
@@ -1883,7 +1890,7 @@ let D = null, dSr = 0;
 const mhz3 = k => (k / 1000).toFixed(3).replace('.', ',');
 async function ticDatv(premier) {
   if (g('v-datv').hidden) return;
-  try { D = await (await fetch('/api/datv')).json(); } catch (x) { return; }
+  try { D = await (await fetch('api/datv')).json(); } catch (x) { return; }
   if (!D.ok) return;
   if (premier || !document.activeElement || !document.activeElement.id.startsWith('d-')) {
     if (premier) {
@@ -1921,7 +1928,7 @@ async function ticDatv(premier) {
   }
   // The video: asked once the stream runs, dropped when it stops.
   const v = g('d-video');
-  if (D.actif && D.images && v.style.display !== 'block') { v.src = '/api/datv/video.mjpeg?t=' + Date.now(); v.style.display = 'block'; g('d-vide').hidden = true; }
+  if (D.actif && D.images && v.style.display !== 'block') { v.src = 'api/datv/video.mjpeg?t=' + Date.now(); v.style.display = 'block'; g('d-vide').hidden = true; }
   if (!D.actif && v.style.display === 'block') { v.removeAttribute('src'); v.style.display = 'none'; }
   if (v.style.display !== 'block') { g('d-vide').hidden = false; g('d-vide').textContent = !D.actif ? 'Réception arrêtée' : (D.verrouille ? 'accroché, en attente des images…' : D.libelle + '…'); }
   dessineConstellation();
@@ -1942,7 +1949,7 @@ function dParams() {
 async function dDemarre() { txt('d-msg', 'démarrage de LongMynd…'); const j = await dPost('demarre?' + dParams()); if (j && j.ok !== false) txt('d-msg', ''); }
 async function dPost(q) {
   let j = null;
-  try { j = await (await fetch('/api/datv/' + q, { method: 'POST' })).json(); } catch (x) {}
+  try { j = await (await fetch('api/datv/' + q, { method: 'POST' })).json(); } catch (x) {}
   if (j && j.ok === false && j.erreur) txt('d-msg', j.erreur);
   setTimeout(ticDatv, 200); return j;
 }
@@ -1959,7 +1966,7 @@ function dLnb() { g('d-lnb-avert').hidden = !g('d-lnb').value; }
 // ------------------------------------------------------------------ orbital elements
 let SRC = null;
 async function chargeSources() {
-  try { SRC = await (await fetch('/api/sources')).json(); } catch (x) { return; }
+  try { SRC = await (await fetch('api/sources')).json(); } catch (x) { return; }
   g('gpServeur').value = SRC.serveur; g('gpSeul').checked = SRC.seul;
   g('gpSources').innerHTML = SRC.sources.map(s => '<label class="petit" title="' + esc(s.detail).replace(/"/g, '&quot;') + '"><input type="checkbox" class="gp-src" value="' + s.id + '"' +
     (s.actif ? ' checked' : '') + ' data-celestrak="' + (s.celestrak ? 1 : 0) + '"> ' + esc(s.nom) + (s.celestrak ? ' <span class="gp-ct">(par le serveur)</span>' : '') + '</label>').join('');
@@ -1976,13 +1983,13 @@ g('gpServeur').addEventListener('input', majSources);
 async function enregistreSources() {
   const ids = [...document.querySelectorAll('.gp-src')].filter(c => c.checked).map(c => c.value);
   if (!ids.length) { alert('Au moins une source.'); return; }
-  await post('/api/sources?ids=' + enc(ids.join(',')) + '&serveur=' + enc(v('gpServeur')) + '&seul=' + (g('gpSeul').checked ? 1 : 0));
+  await post('api/sources?ids=' + enc(ids.join(',')) + '&serveur=' + enc(v('gpServeur')) + '&seul=' + (g('gpSeul').checked ? 1 : 0));
   txt('gp-essai', '');
 }
 async function essaiGp() {
   txt('gp-essai', 'serveur…');
   let j = null;
-  try { j = await (await fetch('/api/sources/essai?serveur=' + enc(v('gpServeur')), { method: 'POST' })).json(); } catch (x) {}
+  try { j = await (await fetch('api/sources/essai?serveur=' + enc(v('gpServeur')), { method: 'POST' })).json(); } catch (x) {}
   txt('gp-essai', j && j.ok ? 'il répond : ' + j.groupes : (j && j.erreur ? j.erreur : 'pas de réponse'));
 }
 // Wavelog's station locations: the one for here (chosen, or created), and where each place of the log goes.
@@ -1990,7 +1997,7 @@ let WL = null;
 async function essaiCarnet() {
   txt('carnet-essai', 'carnet en ligne…');
   let j = null;
-  try { j = await (await fetch('/api/carnet/profils', { method: 'POST' })).json(); } catch (x) {}
+  try { j = await (await fetch('api/carnet/profils', { method: 'POST' })).json(); } catch (x) {}
   if (!j || !j.ok) { txt('carnet-essai', j && j.erreur ? j.erreur : 'pas de réponse'); g('wl-lieux').hidden = true; return; }
   WL = j;
   txt('carnet-essai', 'il répond : ' + j.profils.length + ' profil(s) de station');
@@ -2020,11 +2027,11 @@ async function essaiCarnet() {
   ['dxcc', 'pays', 'cq', 'itu'].forEach(k => { if (!v('wl-' + k) && j.creation[k]) g('wl-' + k).value = j.creation[k]; });
 }
 async function choisitProfil(id) {
-  await post('/api/carnet/profil?id=' + enc(id)); g('carnetProfil').value = id; essaiCarnet();
+  await post('api/carnet/profil?id=' + enc(id)); g('carnetProfil').value = id; essaiCarnet();
 }
 async function creeProfils() {
   txt('wl-msg', 'création…');
-  const j = await post('/api/carnet/profils/cree?lieux=' + enc(g('wl-bcree').dataset.lieux) + '&dxcc=' + enc(v('wl-dxcc')) + '&pays=' + enc(v('wl-pays')) +
+  const j = await post('api/carnet/profils/cree?lieux=' + enc(g('wl-bcree').dataset.lieux) + '&dxcc=' + enc(v('wl-dxcc')) + '&pays=' + enc(v('wl-pays')) +
     '&cq=' + enc(v('wl-cq')) + '&itu=' + enc(v('wl-itu')));
   txt('wl-msg', j && j.dit ? j.dit : 'échec'); essaiCarnet();
 }
@@ -2032,7 +2039,7 @@ let wlLu = false;
 async function essaiQrz() {
   txt('qrz-etat', 'QRZ…');
   let f = null;
-  try { f = await (await fetch('/api/qrz?c=' + enc(v('indicatif') || 'F4IOZ'))).json(); } catch (x) {}
+  try { f = await (await fetch('api/qrz?c=' + enc(v('indicatif') || 'F4IOZ'))).json(); } catch (x) {}
   txt('qrz-etat', f && f.ok ? 'QRZ répond : ' + [f.nom, f.qth].filter(x => x).join(' · ') : (f && f.erreur ? f.erreur : 'pas de réponse'));
 }
 
@@ -2040,7 +2047,7 @@ async function essaiQrz() {
 let S = null, versionImage = -1, cartesVues = '', imagesVus = '', enregsVus = '';
 const ouverte = n => !g('v-' + n).hidden;
 async function ticSon() {
-  try { S = await (await fetch('/api/son')).json(); } catch (x) { return; }
+  try { S = await (await fetch('api/son')).json(); } catch (x) { return; }
   if (!S.present) return;
   // The header says it whatever the tab: a recording under way.
   g('rec').style.display = S.enregistrement ? '' : 'none';
@@ -2064,7 +2071,7 @@ async function ticSon() {
   if (enregs !== enregsVus && ouverte('son')) {
     enregsVus = enregs;
     g('s-liste').innerHTML = S.enregistrements.map(e => '<tr><td><a href="#" onclick="ecoute(\'' + enc(e.nom) + '\');return false">' + esc(e.nom) +
-      '</a></td><td class="petit">' + (e.taille / 1048576).toFixed(1) + ' Mo</td><td><a href="/enregistrements/' + enc(e.nom) + '" download>⤓</a></td></tr>').join('') ||
+      '</a></td><td class="petit">' + (e.taille / 1048576).toFixed(1) + ' Mo</td><td><a href="enregistrements/' + enc(e.nom) + '" download>⤓</a></td></tr>').join('') ||
       '<tr><td class="petit">aucun enregistrement</td></tr>';
   }
   // SSTV: the picture arriving, reloaded only when it moved.
@@ -2072,14 +2079,14 @@ async function ticSon() {
   txt('sstv-etat', !S.actif ? 'Démarre la carte son (onglet Son) pour décoder.' : !S.sstv ? 'Décodage SSTV coupé (onglet Son).' : S.sstvMode ? 'réception…' : 'à l’écoute');
   if (ouverte('sstv') && S.sstvVersion !== versionImage) {
     versionImage = S.sstvVersion;
-    if (S.sstvMode) g('i-encours').src = '/api/sstv/encours.png?v=' + S.sstvVersion;
-    else if (S.sstvDerniere) g('i-encours').src = '/sstv/' + enc(S.sstvDerniere);
+    if (S.sstvMode) g('i-encours').src = 'api/sstv/encours.png?v=' + S.sstvVersion;
+    else if (S.sstvDerniere) g('i-encours').src = 'sstv/' + enc(S.sstvDerniere);
   }
   const imgs = JSON.stringify(S.images.map(i => i.nom));
   if (imgs !== imagesVus && ouverte('sstv')) {
     imagesVus = imgs;
-    g('i-galerie').innerHTML = S.images.map((i, n) => '<a href="/sstv/' + enc(i.nom) + '" onclick="voisImage(' + n + '); return false" style="text-decoration:none;color:inherit">' +
-      '<img src="/sstv/' + enc(i.nom) + '" style="width:100%;border-radius:6px" loading="lazy"><div class="petit">' + esc(i.sat) + ' · ' + esc(i.mode) +
+    g('i-galerie').innerHTML = S.images.map((i, n) => '<a href="sstv/' + enc(i.nom) + '" onclick="voisImage(' + n + '); return false" style="text-decoration:none;color:inherit">' +
+      '<img src="sstv/' + enc(i.nom) + '" style="width:100%;border-radius:6px" loading="lazy"><div class="petit">' + esc(i.sat) + ' · ' + esc(i.mode) +
       ' · ' + (i.t ? new Date(i.t).toISOString().slice(0, 16).replace('T', ' ') : '') + (i.complete ? '' : ' · partielle') + '</div></a>').join('') ||
       '<div class="petit">aucune image</div>';
   }
@@ -2089,7 +2096,7 @@ let viN = 0;
 function voisImage(n) {
   const l = (S && S.images) || []; if (!l.length) return;
   viN = (n + l.length) % l.length; const i = l[viN];
-  g('vi-img').src = '/sstv/' + enc(i.nom); g('vi-lien').href = '/sstv/' + enc(i.nom); g('vi-lien').download = i.nom;
+  g('vi-img').src = 'sstv/' + enc(i.nom); g('vi-lien').href = 'sstv/' + enc(i.nom); g('vi-lien').download = i.nom;
   txt('vi-txt', (viN + 1) + '/' + l.length + ' · ' + [i.sat, i.mode, i.t ? new Date(i.t).toISOString().slice(0, 16).replace('T', ' ') + ' UTC' : '', i.complete ? '' : 'partielle'].filter(x => x).join(' · '));
   if (!g('visionneuse').open) g('visionneuse').showModal();
 }
@@ -2109,7 +2116,7 @@ function wyq(lat) { const l = Math.max(-85, Math.min(85, lat)) * Math.PI / 180; 
 // A 4-character square: its south-west corner (2° of longitude, 1° of latitude).
 function coin(c) { const A = 'A'.charCodeAt(0); return [(c.charCodeAt(0) - A) * 20 - 180 + (+c[2]) * 2, (c.charCodeAt(1) - A) * 10 - 90 + (+c[3])]; }
 async function chargeCarres() {
-  try { Q = await (await fetch('/api/carres')).json(); } catch (x) { return; }
+  try { Q = await (await fetch('api/carres')).json(); } catch (x) { return; }
   txt('q-n', String(Q.carres.length)); txt('q-champs', String(Q.champs));
   const kms = Q.carres.map(c => c.km).filter(k => k != null);
   txt('q-loin', kms.length ? String(Math.max(...kms)) : '—');
@@ -2140,7 +2147,7 @@ function centreSur(k) { const [lo, la] = coin(k); qcx = wxq(lo + 1); qcy = wyq(l
 function qTuile(z, x, y) {
   const n = 1 << z, xw = ((x % n) + n) % n, k = z + '/' + xw + '/' + y;
   let i = qTuiles.get(k);
-  if (!i) { i = new Image(); i.onload = () => { dessineCarres(); dessineSked(); dessineCarteStation(); if (!g('v-carnet').hidden && CSH) dessineStation(); }; i.src = '/journal/tuile?z=' + z + '&x=' + xw + '&y=' + y; qTuiles.set(k, i);
+  if (!i) { i = new Image(); i.onload = () => { dessineCarres(); dessineSked(); dessineCarteStation(); if (!g('v-carnet').hidden && CSH) dessineStation(); }; i.src = 'journal/tuile?z=' + z + '&x=' + xw + '&y=' + y; qTuiles.set(k, i);
     if (qTuiles.size > 500) qTuiles.delete(qTuiles.keys().next().value); }
   return i.complete && i.naturalWidth ? i : null;
 }
@@ -2193,7 +2200,7 @@ function dessineCarres() {
 // ------------------------------------------------------------------ timeline
 let F = null;
 async function chargeFrise() {
-  try { F = await (await fetch('/api/frise?h=' + g('f-h').value)).json(); } catch (x) { return; }
+  try { F = await (await fetch('api/frise?h=' + g('f-h').value)).json(); } catch (x) { return; }
   dessineFrise();
 }
 function dessineFrise() {
@@ -2261,7 +2268,7 @@ async function calculeSked() {
   try { localStorage.setItem('sked-loc', loc); } catch (x) {}
   txt('k-etat', 'calcul…');
   let j = null;
-  try { j = await (await fetch('/api/sked?catnum=' + g('k-sat').value + '&loc=' + enc(loc) + '&minEl=' + enc(v('k-min')))).json(); } catch (x) {}
+  try { j = await (await fetch('api/sked?catnum=' + g('k-sat').value + '&loc=' + enc(loc) + '&minEl=' + enc(v('k-min')))).json(); } catch (x) {}
   if (!j || !j.ok) { txt('k-etat', j && j.erreur ? j.erreur : 'échec'); return; }
   K = j.fenetres;
   txt('k-etat', K.length + ' fenêtre(s) commune(s)');
@@ -2277,7 +2284,7 @@ const K_DUREE = 15000;   // one full replay, ms
 async function rejoueSked(i) {
   const w = K[i];
   let j = null;
-  try { j = await (await fetch('/api/sked/trace?catnum=' + g('k-sat').value + '&loc=' + enc(v('k-loc')) + '&de=' + w.debutTrace + '&a=' + w.finTrace)).json(); } catch (x) {}
+  try { j = await (await fetch('api/sked/trace?catnum=' + g('k-sat').value + '&loc=' + enc(v('k-loc')) + '&de=' + w.debutTrace + '&a=' + w.finTrace)).json(); } catch (x) {}
   if (!j || !j.ok || !j.points.length) return;
   // Longitudes made continuous (from mine), so a track over the date line stays one line.
   let ref = j.moi.lon;
@@ -2296,16 +2303,16 @@ async function rejoueSked(i) {
 async function videoSked() {
   if (!KT) return;
   const w = KT.w;
-  const j = await post('/api/sked/video?catnum=' + g('k-sat').value + '&loc=' + enc(KT.loc) + '&de=' + w.de + '&a=' + w.a + '&debutTrace=' + w.debutTrace + '&finTrace=' + w.finTrace);
+  const j = await post('api/sked/video?catnum=' + g('k-sat').value + '&loc=' + enc(KT.loc) + '&de=' + w.de + '&a=' + w.a + '&debutTrace=' + w.debutTrace + '&finTrace=' + w.finTrace);
   if (j && j.ok) suisVideoSked();
 }
 async function suisVideoSked() {
   let e = null;
-  try { e = await (await fetch('/api/sked/video')).json(); } catch (x) { return; }
+  try { e = await (await fetch('api/sked/video')).json(); } catch (x) { return; }
   g('k-video').disabled = e.enCours;
   if (e.enCours) { txt('k-video-etat', 'vidéo ' + Math.round(e.progression * 100) + ' %'); setTimeout(suisVideoSked, 500); return; }
   if (e.erreur) { txt('k-video-etat', e.erreur); return; }
-  if (e.nom) g('k-video-etat').innerHTML = '<a style="color:var(--cyan)" href="/sked-video/' + encodeURIComponent(e.nom) + '">' + esc(e.nom) + '</a>';
+  if (e.nom) g('k-video-etat').innerHTML = '<a style="color:var(--cyan)" href="sked-video/' + encodeURIComponent(e.nom) + '">' + esc(e.nom) + '</a>';
 }
 function basculeSked() { kJoue = !kJoue; txt('k-joue', kJoue ? '⏸' : '▶'); if (kJoue) { kAvant = 0; if (kF >= 1) kF = 0; requestAnimationFrame(boucleSked); } }
 function boucleSked(ts) {
@@ -2459,7 +2466,7 @@ function montreEcran(q) {
 const SV = { cx: 0.5, cy: 0.4, z: 1, libre: false };
 let traceSol = null, traceVu = 0;
 async function chargeTraceSol() {
-  try { traceSol = await (await fetch('/api/trace')).json(); } catch (x) { return; }
+  try { traceSol = await (await fetch('api/trace')).json(); } catch (x) { return; }
   // Continuous longitudes: a track over the date line stays one line.
   let ref = null;
   traceSol.points.forEach(p => { if (ref != null) { while (p[1] - ref > 180) p[1] -= 360; while (p[1] - ref < -180) p[1] += 360; } ref = p[1]; });
@@ -2499,7 +2506,7 @@ function dessineCarteStation() {
 }
 attacheCarte(g('st-carte'), SV, dessineCarteStation, cadreStation, 0);
 montreEcran(ecranStation)
-async function skedAgenda(i) { const w = K[i]; await post('/api/agenda/sked?catnum=' + g('k-sat').value + '&loc=' + enc(v('k-loc')) + '&de=' + w.de + '&a=' + w.a); alert('Sked mis à l’agenda.'); }
+async function skedAgenda(i) { const w = K[i]; await post('api/agenda/sked?catnum=' + g('k-sat').value + '&loc=' + enc(v('k-loc')) + '&de=' + w.de + '&a=' + w.a); alert('Sked mis à l’agenda.'); }
 
 // ------------------------------------------------------------------ QO-100
 let O = null, OP = null;
@@ -2508,12 +2515,12 @@ function qFmt(hz) { const m = Math.floor(hz / 1e6), r = String(hz % 1e6).padStar
   return String(m).replace(/\B(?=(\d{3})+(?!\d))/g, ' ') + ',' + r.slice(0, 3) + ' ' + r.slice(3); }
 function qKhz(hz) { return (hz / 1000).toLocaleString('fr-FR', { maximumFractionDigits: 1 }) + ' kHz'; }
 async function chargeQo100(plan) {
-  try { const j = await (await fetch('/api/qo100' + (plan || !OP ? '?plan=1' : ''))).json(); if (j.segments) OP = j; O = j; } catch (x) { return; }
+  try { const j = await (await fetch('api/qo100' + (plan || !OP ? '?plan=1' : ''))).json(); if (j.segments) OP = j; O = j; } catch (x) { return; }
   dessineQo100();
   // The Sun's dates take a second or two the first time.
   if (!O.ciel) setTimeout(() => { if (!g('v-qo100').hidden) chargeQo100(); }, 1500);
 }
-async function qPost(a) { const j = await post('/api/qo100/' + a); await chargeQo100(); return j; }
+async function qPost(a) { const j = await post('api/qo100/' + a); await chargeQo100(); return j; }
 function qPas(d) { qPost('pas?hz=' + d); }
 function qAller() {
   const x = parseFloat(v('o-aller').replace(',', '.').replace(/\s/g, ''));
@@ -2530,7 +2537,7 @@ async function qCale() {
   txt('o-cmsg', j && j.ok === false ? j.message : '');
 }
 async function qMesure() {
-  const j = await post('/api/qo100/mesure?sens=' + g('o-msens').value + '&ciel=' + enc(v('o-mciel')) + '&poste=' + enc(v('o-mposte')));
+  const j = await post('api/qo100/mesure?sens=' + g('o-msens').value + '&ciel=' + enc(v('o-mciel')) + '&poste=' + enc(v('o-mposte')));
   if (j) { g('o-mmsg').textContent = j.message; g('o-mmsg').style.color = j.ok ? 'var(--vert)' : 'var(--ambre)'; }
   chargeQo100();
 }
@@ -2607,7 +2614,7 @@ function dessineQo100() {
 let OPan = null, oPanHist = [], oPanTrames = -1;
 async function ticPano() {
   if (g('v-qo100').hidden) return;
-  try { OPan = await (await fetch('/api/qo100/panorama?n=' + Math.max(128, Math.min(1024, g('o-pano').clientWidth)))).json(); } catch (x) { return; }
+  try { OPan = await (await fetch('api/qo100/panorama?n=' + Math.max(128, Math.min(1024, g('o-pano').clientWidth)))).json(); } catch (x) { return; }
   if (OPan.colonnes && OPan.trames !== oPanTrames) {
     oPanTrames = OPan.trames;
     if (oPanHist.length && oPanHist[0].length !== OPan.colonnes.length) oPanHist = [];
@@ -2724,11 +2731,11 @@ function dessineLoupe() {
 let R = null, rSpan = 48000, rCascade = [], rTrames = -1, rDernier = null;
 const R820T = [0, 9, 14, 27, 37, 77, 87, 125, 144, 157, 166, 197, 207, 229, 254, 280, 297, 328, 338, 364, 372, 386, 402, 421, 434, 439, 445, 480, 496];
 g('r-gain').innerHTML = '<option value="-1">automatique</option>' + R820T.map(x => '<option value="' + x + '">' + (x / 10).toLocaleString('fr-FR') + ' dB</option>').join('');
-async function rRegle(q) { await post('/api/sdr/reglage?' + q); ticSdr(); }
+async function rRegle(q) { await post('api/sdr/reglage?' + q); ticSdr(); }
 async function ticSdr() {
   // The log's live station shows the dongle too.
   if (g('v-sdr').hidden && g('v-carnet').hidden) return;
-  try { R = await (await fetch('/api/sdr')).json(); } catch (x) { return; }
+  try { R = await (await fetch('api/sdr')).json(); } catch (x) { return; }
   const r = R;
   g('r-pastille').className = 'pastille ' + (r.actif ? 'on' : 'off'); txt('r-pastille', r.actif ? 'réception' : 'arrêtée');
   txt('r-info', r.actif ? r.tuner + ' · ' + (r.debit / 1024).toFixed(1) + ' Mo/s' + (r.perdus ? ' · ' + r.perdus + ' blocs perdus' : '') : '');
@@ -2756,7 +2763,7 @@ setInterval(ticSdr, 700);
 async function spectreSdr() {
   if (g('v-sdr').hidden || !R || !R.actif) return;
   let j = null;
-  try { j = await (await fetch('/api/sdr/spectre?span=' + rSpan + '&n=' + Math.min(1024, Math.max(128, g('r-spectre').clientWidth)))).json(); } catch (x) { return; }
+  try { j = await (await fetch('api/sdr/spectre?span=' + rSpan + '&n=' + Math.min(1024, Math.max(128, g('r-spectre').clientWidth)))).json(); } catch (x) { return; }
   if (!j.db || j.trames === rTrames) return;
   rTrames = j.trames; rDernier = j;
   rCascade.unshift(j.db); if (rCascade.length > 600) rCascade.length = 600;
@@ -2807,17 +2814,17 @@ for (const id of ['r-spectre', 'r-cascade']) g(id).addEventListener('click', ev 
   if (!rDernier) return;
   const b = ev.currentTarget.getBoundingClientRect();
   const hz = Math.round(((ev.clientX - b.left) / b.width - 0.5) * rDernier.span / 10) * 10;
-  post('/api/sdr/decalage?hz=' + hz).then(ticSdr);
+  post('api/sdr/decalage?hz=' + hz).then(ticSdr);
 });
 
 // ------------------------------------------------------------------ radiosondes
 let S2 = null;
 const SV2 = { cx: 0.5, cy: 0.35, z: 7, libre: false };
-async function sPost(a) { const j = await post('/api/sondes/' + a); ticSondes(); return j; }
-async function sExporte(kml) { const j = await sPost('export?kml=' + kml); if (j && j.ok) location.href = '/sondes/' + encodeURIComponent(j.nom); }
+async function sPost(a) { const j = await post('api/sondes/' + a); ticSondes(); return j; }
+async function sExporte(kml) { const j = await sPost('export?kml=' + kml); if (j && j.ok) location.href = 'sondes/' + encodeURIComponent(j.nom); }
 async function ticSondes() {
   if (g('v-sondes').hidden) return;
-  try { S2 = await (await fetch('/api/sondes')).json(); } catch (x) { return; }
+  try { S2 = await (await fetch('api/sondes')).json(); } catch (x) { return; }
   const s = S2;
   g('s2-pastille').className = 'pastille ' + (s.actif ? 'on' : 'off'); txt('s2-pastille', s.actif ? 'réception' : 'arrêtée');
   txt('s2-freq', (s.freq / 1e6).toFixed(3).replace('.', ','));
@@ -2835,7 +2842,7 @@ async function ticSondes() {
     (x.hz / 1e6).toFixed(3) + '</td><td class="petit">' + esc(x.sonde) + '</td><td class="petit">' + x.lachers.join(' · ') + '</td></tr>').join('') ||
     '<tr><td class="petit">renseigne ton locator (Réglages)</td></tr>';
   if (g('s2-sites').dataset.vu !== sites) { g('s2-sites').dataset.vu = sites; g('s2-sites').innerHTML = sites; }
-  const jx = s.journaux.map(f => '<tr><td><a style="color:var(--cyan)" href="/sondes/' + encodeURIComponent(f.nom) + '">' + esc(f.nom) + '</a></td><td class="petit">' +
+  const jx = s.journaux.map(f => '<tr><td><a style="color:var(--cyan)" href="sondes/' + encodeURIComponent(f.nom) + '">' + esc(f.nom) + '</a></td><td class="petit">' +
     Math.max(1, Math.round(f.taille / 1024)) + ' Ko</td></tr>').join('') || '<tr><td class="petit">aucun</td></tr>';
   if (g('s2-journaux').dataset.vu !== jx) { g('s2-journaux').dataset.vu = jx; g('s2-journaux').innerHTML = jx; }
   // The last fix: distance and bearing large, what one reads while walking.
@@ -2887,10 +2894,10 @@ attacheCarte(g('s2-carte'), SV2, dessineSondes, cadreSondes, 2);
 
 // ------------------------------------------------------------------ METEOR
 let M = null, mChoisie = null, mApercu = -1;
-async function mPost(a) { const j = await post('/api/meteor/' + a); if (j && j.ok === false && j.erreur) txt('m-erreur', j.erreur); ticMeteor(); return j; }
+async function mPost(a) { const j = await post('api/meteor/' + a); if (j && j.ok === false && j.erreur) txt('m-erreur', j.erreur); ticMeteor(); return j; }
 async function ticMeteor() {
   if (g('v-meteor').hidden) return;
-  try { M = await (await fetch('/api/meteor')).json(); } catch (x) { return; }
+  try { M = await (await fetch('api/meteor')).json(); } catch (x) { return; }
   const m = M, n = Date.now();
   const enFichier = m.progression >= 0;
   g('m-pastille').className = 'pastille ' + (m.actif || enFichier ? 'on' : 'off');
@@ -2910,17 +2917,17 @@ async function ticMeteor() {
   g('m-prog').hidden = !enFichier; if (enFichier) g('m-prog').value = m.progression;
   txt('m-fichier', m.source === 'fichier' ? m.fichier + (m.erreur ? ' : ' + m.erreur : enFichier ? '' : ' : terminé') : '');
   // The gallery.
-  const gal = m.images.map(i => '<img src="/meteor/' + encodeURIComponent(i.nom) + '" title="' + esc(i.sat + ' · ' + i.note) + '" data-nom="' + esc(i.nom) + '"' +
+  const gal = m.images.map(i => '<img src="meteor/' + encodeURIComponent(i.nom) + '" title="' + esc(i.sat + ' · ' + i.note) + '" data-nom="' + esc(i.nom) + '"' +
     (i.nom === mChoisie ? ' class="choisi"' : '') + ' onclick="mChoisis(this.dataset.nom)">').join('');
   if (g('m-galerie').dataset.vu !== gal) { g('m-galerie').dataset.vu = gal; g('m-galerie').innerHTML = gal || '<span class="petit">Aucune image encore.</span>'; }
   // The picture shown: the preview while receiving, else the one chosen, else the newest.
   if ((m.actif || enFichier) && m.apercus > 0) {
-    if (m.apercus !== mApercu) { mApercu = m.apercus; g('m-img').src = '/api/meteor/apercu.png?' + m.apercus; }
+    if (m.apercus !== mApercu) { mApercu = m.apercus; g('m-img').src = 'api/meteor/apercu.png?' + m.apercus; }
     txt('m-titre', m.satellite + ' · en cours'); txt('m-note', m.lignes + ' lignes'); g('m-lien').textContent = '';
   } else {
     const i = m.images.find(x => x.nom === mChoisie) || m.images[0];
     if (i) {
-      const src = '/meteor/' + encodeURIComponent(i.nom);
+      const src = 'meteor/' + encodeURIComponent(i.nom);
       if (g('m-img').getAttribute('src') !== src) g('m-img').src = src;
       txt('m-titre', i.sat + ' · ' + (i.t ? jourHeure(i.t) : '')); txt('m-note', i.note + (i.source === 'file' ? ' · d’un enregistrement' : ''));
       g('m-lien').href = src; g('m-lien').textContent = 'Télécharger';
@@ -2934,7 +2941,7 @@ setInterval(ticMeteor, 1000);
 let H = null, ft8Vu = '';
 async function ticFt8() {
   if (g('v-ft8').hidden) return;
-  try { H = await (await fetch('/api/ft8')).json(); } catch (x) { return; }
+  try { H = await (await fetch('api/ft8')).json(); } catch (x) { return; }
   if (!H.present) return;
   txt('8-marche', H.enMarche ? 'Arrêter' : 'Écouter');
   if (document.activeElement !== g('8-mode')) g('8-mode').value = H.mode;
@@ -2975,7 +2982,7 @@ function dessineCascade() {
   if (H.spectre.length) { y.strokeStyle = '#3FE0C8'; y.beginPath();
     H.spectre.forEach((v, k) => { const px = sw * k / H.spectre.length, py = sh - 2 - v * (sh - 4); if (k) y.lineTo(px, py); else y.moveTo(px, py); }); y.stroke(); }
 }
-async function ft8Marche() { await post('/api/ft8?on=' + (H && H.enMarche ? 0 : 1) + '&mode=' + g('8-mode').value); ticFt8(); }
+async function ft8Marche() { await post('api/ft8?on=' + (H && H.enMarche ? 0 : 1) + '&mode=' + g('8-mode').value); ticFt8(); }
 function noteFt8(call, loc, db) {
   vue('carnet'); g('c-call').value = call; g('c-loc').value = loc || '';
   // An FT8 report is in dB, as it is said: "-12".
@@ -2990,7 +2997,7 @@ setInterval(ticFt8, 1000);
 let A = null, aVus = '';
 async function ticAprs() {
   if (!ouverte('aprs')) return;
-  try { A = await (await fetch('/api/aprs')).json(); } catch (x) { return; }
+  try { A = await (await fetch('api/aprs')).json(); } catch (x) { return; }
   if (!A.present) return;
   txt('a-n', String(A.paquets.length)); txt('a-stations', String(A.nbStations)); txt('a-iss', String(A.viaIss));
   txt('a-loin', A.loin == null ? '—' : String(Math.round(A.loin)));
@@ -3010,16 +3017,24 @@ function dessineAprs() {
 g('a-filtre').oninput = () => { aVus = ''; dessineAprs(); };
 g('a-isss').onchange = () => { aVus = ''; dessineAprs(); };
 setInterval(ticAprs, 2000);
-function ecoute(nom) { g('s-lecteur').src = '/enregistrements/' + nom; g('s-lecteur').play(); }
+function ecoute(nom) { g('s-lecteur').src = 'enregistrements/' + nom; g('s-lecteur').play(); }
 async function carteSon(arret) {
-  const j = await post('/api/son/carte?nom=' + (arret ? '' : enc(g('s-carte').value)));
+  const j = await post('api/son/carte?nom=' + (arret ? '' : enc(g('s-carte').value)));
   ticSon();
 }
-async function enregistre() { await post('/api/son/enregistrer?on=' + (S && S.enregistrement ? 0 : 1)); ticSon(); }
+async function enregistre() { await post('api/son/enregistrer?on=' + (S && S.enregistrement ? 0 : 1)); ticSon(); }
 setInterval(ticSon, 1000);
 
 lienRotor(); avertCat();
 // The tab from the address (#carnet, a bookmark), else the last one seen.
+// The tabs the server offers (the phone serves some of them): the others hidden, and left if open.
+fetch('api/capacites').then(r => r.ok ? r.json() : null).then(j => {
+  if (!j || !j.onglets) return;
+  document.querySelectorAll('#onglets button[data-v]').forEach(b => { if (!j.onglets.includes(b.dataset.v)) b.hidden = true; });
+  document.querySelectorAll('#onglets a').forEach(a => { if (!j.onglets.includes(a.getAttribute('href'))) a.hidden = true; });
+  const ouvert = document.querySelector('#onglets button.actif');
+  if (ouvert && ouvert.hidden) vue('station');
+}).catch(() => {});
 if (['station', 'carnet', 'agenda', 'carres', 'frise', 'sked', 'qo100', 'datv', 'sdr', 'sondes', 'meteor', 'son', 'sstv', 'aprs', 'ft8', 'reglages'].includes(location.hash.slice(1))) vue(location.hash.slice(1));
 else try { const n = localStorage.getItem('vue'); if (n) vue(n); } catch (x) {}
 tic(); chargeListe(); chargePorts(); chargeSatellites();

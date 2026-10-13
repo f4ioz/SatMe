@@ -19,7 +19,13 @@ import java.io.InputStream
 object RequeteHttp {
 
     /** [plage]: the `Range` header, when the browser asks for a part of a file (a sound it seeks in). */
-    class Requete(val methode: String, val chemin: String, val longueur: Long, val plage: String? = null)
+    class Requete(val methode: String, val chemin: String, val longueur: Long, val plage: String? = null,
+                  /** The "Cookie" header, as sent. */
+                  val cookie: String? = null) {
+        /** One cookie's value, or null. */
+        fun cookie(nom: String): String? = cookie?.split(';')?.map { it.trim() }
+            ?.firstOrNull { it.startsWith("$nom=") }?.substringAfter('=')
+    }
 
     /** A head larger than this is not a browser asking for a page. */
     private const val TETE_MAX = 16 * 1024
@@ -43,7 +49,8 @@ object RequeteHttp {
         val longueur = lignes.drop(1).firstOrNull { it.startsWith("content-length:", ignoreCase = true) }
             ?.substringAfter(':')?.trim()?.toLongOrNull() ?: 0L
         val plage = lignes.drop(1).firstOrNull { it.startsWith("range:", ignoreCase = true) }?.substringAfter(':')?.trim()
-        return Requete(premiere[0].uppercase(), premiere[1], longueur.coerceAtLeast(0L), plage)
+        val cookie = lignes.drop(1).firstOrNull { it.startsWith("cookie:", ignoreCase = true) }?.substringAfter(':')?.trim()
+        return Requete(premiere[0].uppercase(), premiere[1], longueur.coerceAtLeast(0L), plage, cookie)
     }
 
     /**
