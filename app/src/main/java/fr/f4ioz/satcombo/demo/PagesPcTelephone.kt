@@ -24,10 +24,11 @@ object PagesPcTelephone {
     @Volatile var vm: MainViewModel? = null
 
     /** The tabs the phone serves so far; the page hides the others. QO-100 only when its extension is on. */
-    val ONGLETS = listOf("station", "carnet", "agenda", "carres", "frise", "sked", "qo100", "sdr", "son", "sstv", "aprs", "ft8", "journal", "planche", "reglages")
+    val ONGLETS = listOf("station", "carnet", "agenda", "carres", "frise", "sked", "qo100", "sdr", "sondes", "meteor", "son", "sstv", "aprs", "ft8", "journal", "planche", "reglages")
 
     private fun onglets(vm: MainViewModel) =
-        ONGLETS.filter { it != "qo100" || vm.hasExtension(fr.f4ioz.satcombo.data.Extensions.QO100) }
+        ONGLETS.filter { (it != "qo100" || vm.hasExtension(fr.f4ioz.satcombo.data.Extensions.QO100)) &&
+            (it != "meteor" || vm.hasExtension(fr.f4ioz.satcombo.data.Extensions.METEOR)) }
 
     /**
      * The page: SatMe-PC's, the key from the desk put in a cookie for its
@@ -99,6 +100,31 @@ object PagesPcTelephone {
                     json(ApiSdr.spectre(sp, fr.f4ioz.satcombo.sdr.Dsp.RTL_RATE.toDouble() / fr.f4ioz.satcombo.sdr.Dsp.DECIM_1 / sp.size.coerceAtLeast(1),
                         (st.dopplerFineHz + st.offsetHz).toDouble(), p("span").toIntOrNull() ?: 48_000, p("n").toIntOrNull() ?: 512,
                         tramesSpectre, st.centerHz - st.dopplerFineHz))
+                }
+                // ---- radiosondes: the phone's receiver (its dongle, or its audio input)
+                "/api/sondes" -> {
+                    val s = fr.f4ioz.satcombo.sonde.SondeHub.state.value
+                    val d = fr.f4ioz.satcombo.sdr.SdrHub.state.value
+                    val ctx = vm.getApplication<android.app.Application>()
+                    val r = ApiSondes.Recepteur(s.running, d.running && !fr.f4ioz.satcombo.sonde.SondeHub.active, d.error.orEmpty(), u.sondeFreqHz,
+                        d.offsetHz, d.levelDb.toDouble(), u.sondeModel, false, s.frames, s.rejected, s.swing, s.serial, s.type)
+                    json(ApiSondes.json(r, s.last, fr.f4ioz.satcombo.sonde.SondeHub.currentFlight, u.observer, fr.f4ioz.satcombo.sonde.SondeHub.logs(ctx)))
+                }
+                // ---- METEOR: the phone's LRPT receiver, its next pass, its pictures
+                "/api/meteor" -> {
+                    val m = fr.f4ioz.satcombo.meteor.MeteorHub.etat.value
+                    if (m.apercu != null && m.apercu !== dernierApercuMeteor) { dernierApercuMeteor = m.apercu; apercusMeteor++ }
+                    val d = fr.f4ioz.satcombo.sdr.SdrHub.state.value
+                    val r = ApiMeteor.Recepteur(m.actif, m.source, m.satName, m.qualiteDb, m.verrou, m.trames, m.tramesRatees, m.lignes, m.canaux,
+                        m.frequenceHz, m.perdus, m.progression, m.fichier.orEmpty(), m.erreur.orEmpty(), apercusMeteor)
+                    json(ApiMeteor.json(r, vm.meteorAuto(), vm.meteorCotes(), d.running, d.error.orEmpty(), vm.estMeteor(),
+                        m.dernierEnregistre.orEmpty(), vm.meteorProchainPassage(48), fr.f4ioz.satcombo.meteor.MeteorHub.shots(vm.getApplication())))
+                }
+                "/api/meteor/apercu.png" -> {
+                    val b = fr.f4ioz.satcombo.meteor.MeteorHub.etat.value.apercu ?: return NON
+                    val o = java.io.ByteArrayOutputStream()
+                    b.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, o)
+                    ReponseWeb("200 OK", "image/png", o.toByteArray())
                 }
                 // ---- APRS and FT8: what the phone heard (the engine's words, as SatMe-PC's)
                 "/api/aprs" -> {
@@ -370,6 +396,53 @@ object PagesPcTelephone {
                 if (p("mhz").isNotEmpty() || p("suit") == "0") return JSONObject().put("ok", false).put("erreur", "sur le téléphone, la clé écoute le satellite suivi (onglet Station)")
                 OK
             }
+            // ---- radiosondes: the gestures of the phone's radiosonde screen
+            "/api/sondes/demarrer" -> {
+                val src = u.sondeSource
+                if (src == "MIC" || src == "USB") pourquoiPasDeMicro(vm, src)?.let { return JSONObject().put("ok", false).put("erreur", it) }
+                else if (!fr.f4ioz.satcombo.sdr.SdrHub.state.value.connected && fr.f4ioz.satcombo.sdr.SdrHub.devicePresent(vm.getApplication()) == null)
+                    return JSONObject().put("ok", false).put("erreur", "aucune clé SDR branchée sur le téléphone")
+                vm.startSondeRx(); OK
+            }
+            "/api/sondes/arreter" -> { vm.stopSondeRx(); OK }
+            "/api/sondes/frequence" -> { p("khz").replace(',', '.').toDoubleOrNull()?.let { vm.setSondeFreq(Math.round(it * 1000)) }; OK }
+            "/api/sondes/pas" -> { p("n").toIntOrNull()?.let { vm.stepSondeFreq(it) }; OK }
+            "/api/sondes/modele" -> { p("m").takeIf { m -> fr.f4ioz.satcombo.sonde.SondeModel.ALL.any { it.id == m } }?.let { vm.setSondeModel(it) }; OK }
+            "/api/sondes/recentre" -> { fr.f4ioz.satcombo.sdr.SdrHub.tuneCentroid(); OK }
+            "/api/sondes/auto" -> JSONObject().put("ok", false).put("erreur", "le recentrage automatique est sur SatMe-PC ; ici, « Recentrer »")
+            "/api/sondes/oublie" -> { vm.clearSondeFlight(); OK }
+            "/api/sondes/export" -> {
+                val f = fr.f4ioz.satcombo.sonde.SondeHub.export(vm.getApplication(), p("kml") == "1")
+                    ?: return JSONObject().put("ok", false).put("erreur", "Pas de vol à exporter.")
+                OK.put("nom", f.name)
+            }
+            // ---- METEOR: the gestures of the phone's METEOR screen
+            "/api/meteor/demarrer" -> {
+                if (!fr.f4ioz.satcombo.sdr.SdrHub.state.value.connected && fr.f4ioz.satcombo.sdr.SdrHub.devicePresent(vm.getApplication()) == null)
+                    return JSONObject().put("ok", false).put("erreur", "aucune clé SDR branchée sur le téléphone")
+                // The followed satellite if it is a METEOR, otherwise the one of the next pass.
+                if (!vm.estMeteor()) {
+                    val (sat, _) = vm.meteorProchainPassage(48) ?: return JSONObject().put("ok", false).put("erreur", "Aucun METEOR-M LRPT dans le catalogue.")
+                    vm.select(sat)
+                }
+                vm.prepareMeteor()
+                vm.startSdr(); OK
+            }
+            "/api/meteor/arreter" -> { vm.stopSdr(); OK }
+            "/api/meteor/auto" -> { vm.setMeteorAuto(p("on") == "1"); OK }
+            "/api/meteor/cotes" -> { vm.setMeteorCotes(p("on") == "1"); OK }
+            "/api/meteor/enregistre" -> {
+                fr.f4ioz.satcombo.meteor.MeteorHub.enregistreMaintenant(vm.getApplication())
+                    ?: return JSONObject().put("ok", false).put("erreur", "Pas encore assez de lignes (80 au moins).")
+                OK
+            }
+            "/api/meteor/fichier" -> JSONObject().put("ok", false).put("erreur", "sur le téléphone, un fichier se décode depuis son écran METEOR")
+            "/api/meteor/annule" -> { fr.f4ioz.satcombo.meteor.MeteorHub.annuleFichier(); OK }
+            "/api/meteor/supprime" -> {
+                val d = fr.f4ioz.satcombo.meteor.MeteorHub.dir(vm.getApplication())
+                ApiSon.fichier(d, p("nom"), ".png")?.let { fr.f4ioz.satcombo.meteor.MeteorHub.supprime(it) }
+                OK
+            }
             // ---- FT8: the phone's decoder, started and stopped from the page
             "/api/ft8" -> {
                 val f = fr.f4ioz.satcombo.ft8.Ft8Hub
@@ -526,6 +599,10 @@ object PagesPcTelephone {
         c.timeInMillis
     }.getOrDefault(0L)
 
+    /** The METEOR preview seen, and how often it changed: the page reloads it when this moves. */
+    @Volatile private var dernierApercuMeteor: Any? = null
+    @Volatile private var apercusMeteor = 0
+
     /** The last spectrum seen, and how many: the page draws a new line of its waterfall only for a new one. */
     @Volatile private var dernierSpectre: FloatArray? = null
     @Volatile private var tramesSpectre = 0L
@@ -620,6 +697,10 @@ object PagesPcTelephone {
         val ctx = vm.getApplication<android.app.Application>()
         fun nom(prefixe: String) = java.net.URLDecoder.decode(chemin.removePrefix(prefixe), "UTF-8")
         return when {
+            chemin.startsWith("/meteor/") -> ApiSon.fichier(fr.f4ioz.satcombo.meteor.MeteorHub.dir(ctx), nom("/meteor/"), ".png")
+                ?.let { ReponseWeb("200 OK", "image/png", fichier = it) }
+            chemin.startsWith("/sondes/") -> ApiSon.fichier(fr.f4ioz.satcombo.sonde.SondeHub.logDir(ctx), nom("/sondes/"), ".csv", ".kml", ".gpx", ".txt", ".log")
+                ?.let { ReponseWeb("200 OK", "application/octet-stream", fichier = it, entetes = "Content-Disposition: attachment; filename=\"${it.name}\"\r\n") }
             chemin.startsWith("/sstv/") -> ApiSon.fichier(fr.f4ioz.satcombo.sstv.SstvHub.dir(ctx), nom("/sstv/"), ".png")
                 ?.let { ReponseWeb("200 OK", "image/png", fichier = it) }
             chemin.startsWith("/enregistrements/") -> ApiSon.fichier(dossierEnregistrements(ctx), nom("/enregistrements/"), ".mp3", ".wav")

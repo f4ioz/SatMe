@@ -6065,13 +6065,18 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun openMeteor() {
         if (!hasExtension(fr.f4ioz.satcombo.data.Extensions.METEOR)) return
-        fr.f4ioz.satcombo.meteor.MeteorHub.qthLocator = myLocator()
-        fr.f4ioz.satcombo.meteor.MeteorHub.cotes = settings.meteorCotes
-        fr.f4ioz.satcombo.meteor.MeteorHub.elementsConnus = meteorSatellites()
+        prepareMeteor()
         va(Screen.METEOR)
         _ui.value = _ui.value.copy(screen = Screen.METEOR)
     }
     fun closeMeteor() { _ui.value = retour() }
+
+    /** What the receiver needs to know before it starts: the station's square, the coastlines, the METEORs known. */
+    fun prepareMeteor() {
+        fr.f4ioz.satcombo.meteor.MeteorHub.qthLocator = myLocator()
+        fr.f4ioz.satcombo.meteor.MeteorHub.cotes = settings.meteorCotes
+        fr.f4ioz.satcombo.meteor.MeteorHub.elementsConnus = meteorSatellites()
+    }
 
     /**
      * Dongle Doppler tracking, four times a second.

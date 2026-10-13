@@ -3080,6 +3080,8 @@ if (window.SATME_TELEPHONE) {
   g('carteTelephone').hidden = true;
   g('r-liaison').hidden = true;
   g('r-mhz').parentElement.hidden = true;
+  g('m-chemin').parentElement.hidden = true;
+  g('s2-auto').parentElement.hidden = true;
 }
 function ecoute(nom) { g('s-lecteur').src = 'enregistrements/' + nom; g('s-lecteur').play(); }
 async function carteSon(arret) {

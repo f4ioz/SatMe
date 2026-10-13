@@ -350,7 +350,7 @@ object ServeurDemo {
             return
         }
         // Its pictures and recordings: only the phone's own, by plain name.
-        if (chemin.startsWith("/sstv/") || chemin.startsWith("/enregistrements/")) {
+        if (chemin.startsWith("/sstv/") || chemin.startsWith("/enregistrements/") || chemin.startsWith("/sondes/") || chemin.startsWith("/meteor/")) {
             envoieReponse(sortie, PagesPcTelephone.fichier(chemin)
                 ?: ReponseWeb("404 Not Found", "text/plain", ByteArray(0)), requete)
             return
