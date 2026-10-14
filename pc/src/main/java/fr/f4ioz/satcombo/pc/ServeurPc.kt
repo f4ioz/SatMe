@@ -1083,7 +1083,8 @@ object JsonPc {
         val w = s?.cw ?: return JSONObject().put("present", false)
         return JSONObject().put("present", true).put("on", w.actif).put("texte", w.texte()).put("wpm", w.wpm).put("ton", w.tonHz)
             .put("auto", w.tonChoisi == 0).put("marque", w.marque).put("ecart", Math.round(w.ecartDb)).put("version", w.version)
-            .put("carte", s.son.etat.value.actif)
+            .put("carte", s.son.etat.value.actif).put("suivi", w.suivi)
+            .put("mots", JSONArray(w.mots().map { m -> JSONObject().put("m", m.texte).put("g", m.genre.name).put("s", m.score).put("c", m.coherent) }))
     }
 
     fun bilan(b: ImportPc.Bilan?): JSONObject = if (b == null) JSONObject().put("ok", false).put("erreur", "fichier illisible ou trop gros")

@@ -47,7 +47,19 @@ class DecodeurCw(
     @Volatile var ecartDb: Double = 0.0
         private set
 
-    fun fixeTon(hz: Int) { if (hz in TON_MIN..TON_MAX) { tonHz = hz; tonAuto = false } else tonAuto = true }
+    fun fixeTon(hz: Int) { if (hz in TON_MIN..TON_MAX) { tonHz = hz; tonAuto = false; tonPrecis = hz.toDouble() } else tonAuto = true }
+
+    /**
+     * The note moved by [hz] (the satellite's Doppler, when the rig does not
+     * follow it): the decoder moves with it, before it even hears it.
+     */
+    fun decaleTon(hz: Double) {
+        tonPrecis = (tonPrecis + hz).coerceIn(TON_MIN.toDouble(), TON_MAX.toDouble())
+        tonHz = Math.round(tonPrecis).toInt()
+    }
+
+    /** The note, to a hertz, as followed (the Doppler slides it a little all the time). */
+    @Volatile private var tonPrecis = tonHz.toDouble()
 
     // --------------------------------------------------------------- levels
 
@@ -67,6 +79,36 @@ class DecodeurCw(
     private val recherche = DoubleArray(rate / 4)
     private var nRecherche = 0
 
+    // ------------------------------------------------- following the note
+
+    /** The last 40 ms, to measure where the note is while the key is down. */
+    private val fenetre = DoubleArray(max(64, rate / 25))
+    private var posFenetre = 0
+    private var blocsSuivi = 0
+    /** Time since a key down was last heard (blocks): long enough, the note is looked for again in the whole band. */
+    private var blocsSansSignal = 1_000_000
+
+    /**
+     * While the key is down, the note's power just below and above it:
+     * the balance says which way it slid (parabola through three points),
+     * and the note follows by a part of it — the Doppler of a pass slides it
+     * by tens of hertz a minute.
+     */
+    private fun suitTon() {
+        val n = fenetre.size
+        val x = DoubleArray(n) { fenetre[(posFenetre + it) % n] }
+        val pas = 25.0
+        val a = goertzel(x, n, tonPrecis - pas); val b = goertzel(x, n, tonPrecis); val c = goertzel(x, n, tonPrecis + pas)
+        val den = a - 2 * b + c
+        if (b <= a || b <= c || den >= 0) {
+            // The note left the middle: towards the stronger side.
+            if (a > b || c > b) decaleTon(if (c > a) pas / 2 else -pas / 2)
+            return
+        }
+        val decalage = 0.5 * (a - c) / den * pas
+        decaleTon((decalage * 0.5).coerceIn(-8.0, 8.0))
+    }
+
     // --------------------------------------------------------------- timing
 
     private var unitMs = 60.0                          // 20 WPM to start with
@@ -81,8 +123,10 @@ class DecodeurCw(
         for (i in 0 until n) {
             val x = pcm[i] / 32768.0
             accu[nAccu++] = x
+            fenetre[posFenetre] = x; posFenetre = (posFenetre + 1) % fenetre.size
             if (nAccu == bloc) { traiteBloc(); nAccu = 0 }
-            if (tonAuto) {
+            // The whole band searched only when nothing has been heard for a while: in a QSO the note is followed, not hunted.
+            if (tonAuto && blocsSansSignal * msParBloc > 1500) {
                 recherche[nRecherche++] = x
                 if (nRecherche == recherche.size) { chercheTon(); nRecherche = 0 }
             }
@@ -109,11 +153,11 @@ class DecodeurCw(
         }
         val mediane = puissances.sorted()[puissances.size / 2]
         // 12 dB above the band's median: a carrier, not hiss; a small move is not worth changing.
-        if (mediane > 0 && meilleur / mediane > 16 && kotlin.math.abs(hzMeilleur - tonHz) > 15) tonHz = hzMeilleur
+        if (mediane > 0 && meilleur / mediane > 16 && kotlin.math.abs(hzMeilleur - tonHz) > 15) { tonHz = hzMeilleur; tonPrecis = hzMeilleur.toDouble() }
     }
 
     private fun traiteBloc() {
-        val p = goertzel(accu, bloc, tonHz.toDouble())
+        val p = goertzel(accu, bloc, tonPrecis)
         // The last two blocks averaged: steadier than one, back to the noise 10 ms after the key is up.
         val db = 10 * log10((p + lisse) / 2 + 1e-12)
         lisse = p
@@ -130,11 +174,15 @@ class DecodeurCw(
         if (marque) {
             if (!avant) { finSilence(); blocsSilence = 0; hautMarque = 0.0 }
             blocsMarque++
+            blocsSansSignal = 0
+            // Every 40 ms of a key down (after its first 20 ms): where is the note now?
+            if (blocsMarque * msParBloc >= 20 && ++blocsSuivi * msParBloc >= 40) { blocsSuivi = 0; suitTon() }
             hautMarque = max(hautMarque, db - bruit)
         } else {
             // A real key down stands far above the hiss; the hiss's own flickers do not.
             if (avant) { if (hautMarque >= MARQUE_MIN_DB) finMarque(blocsMarque * msParBloc); blocsMarque = 0 }
             blocsSilence++
+            blocsSansSignal++
             silenceEnCours(blocsSilence * msParBloc)
         }
     }

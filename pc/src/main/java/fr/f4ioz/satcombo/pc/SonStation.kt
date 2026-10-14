@@ -130,6 +130,7 @@ class SonStation(
      */
     fun tic() {
         val maintenant = horloge()
+        runCatching { ticCw() }
         val p = station.etat.value.position
         val leve = p != null && p.elevationDeg >= 0
         // The automatic mode's pass, recorded once (not again after a stop, by hand or at LOS).
@@ -151,6 +152,22 @@ class SonStation(
         if (maintenant - basDepuis >= 30_000L) arreteEnregistrement(parLaMain = false)
     }
     private var basDepuis = 0L
+
+    /**
+     * The CW decoder told how the satellite's Doppler moves the note: when the
+     * rig follows it (CAT, not paused) or the dongle does, nothing slides.
+     */
+    private fun ticCw() {
+        if (!cw.actif) return
+        val e = station.etat.value
+        val tx = station.emetteurChoisi()
+        val f = tx?.downlinkLowHz
+        val p = e.position
+        val dop = if (f != null && p != null && p.elevationDeg > -2) -f * p.rangeRateKmS / 299_792.458 else null
+        val parLaCle = son.etat.value.appareil == SdrPc.NOM_SOURCE
+        val corrige = (e.catConnecte && !e.maintienDoppler) || (parLaCle && station.settings.sdrDopplerTrack)
+        cw.ticDoppler(dop, corrige, if ((tx?.mode ?: "").uppercase() == "LSB") -1 else 1)
+    }
     /** The satellite followed has been up during this recording. */
     private var vuLeve = false
     /** The automatic mode's recording: LOS + 30 s at the latest. */

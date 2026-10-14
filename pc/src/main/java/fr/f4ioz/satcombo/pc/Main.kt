@@ -78,6 +78,8 @@ fun main(args: Array<String>) {
     // The sound card used last time, started again: listening opens nothing on the rig.
     son.carte.takeIf { it.isNotBlank() }?.let { son.son.demarre(it) }
     val journal = JournalPc(station, carnet, son, File(dossier, "journal"))
+    // The CW decoder knows the log's callsigns: one of them decoded is right.
+    son.cw.connus = { carnet.contacts().mapNotNull { fr.f4ioz.satcombo.cw.AnalyseCw.base(it.callsign) }.toSet() }
     // A KISS radio on a serial port: nothing opened until asked.
     val kiss = KissPc(station, son.aprs)
     // The SDR dongle: nothing opened until asked (rtl_tcp started then, stopped with it).

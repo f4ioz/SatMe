@@ -1387,13 +1387,23 @@ function rendCw() {
   if (document.activeElement !== g('cw-on')) g('cw-on').checked = c.on;
   g('cw-corps').hidden = !c.on;
   g('cw-led').style.background = c.on && c.marque ? 'var(--vert)' : '#22303C';
-  txt('cw-info', !c.on ? 'coupé' : !c.carte ? 'carte son arrêtée (onglet Son)' : (c.wpm ? c.wpm + ' WPM' : '') + (c.ton ? ' · ' + c.ton + ' Hz' : '') + (c.ecart ? ' · ' + c.ecart + ' dB' : ''));
+  txt('cw-info', !c.on ? 'coupé' : !c.carte ? 'carte son arrêtée (onglet Son)' : (c.wpm ? c.wpm + ' WPM' : '') + (c.ton ? ' · ' + c.ton + ' Hz' : '') + (c.ecart ? ' · ' + c.ecart + ' dB' : '') +
+    ({ poste: ' · Doppler : le poste le suit', 'prédit': ' · Doppler : la note suit le passage', 'mesuré': ' · la note suivie à l’oreille' }[c.suivi] || ''));
   if (document.activeElement !== g('cw-ton')) g('cw-ton').value = c.auto ? '0' : String(c.ton);
   if (c.version === cwVu) return;
   cwVu = c.version;
   const t = g('cw-texte'), bas = t.scrollTop + t.clientHeight >= t.scrollHeight - 8;
-  t.innerHTML = esc(c.texte).replace(/\b([A-Z0-9]{1,3}[0-9][A-Z0-9]{0,3}[A-Z])\b/g,
-    '<a href="#" style="color:var(--cyan)" onclick="g(\'c-call\').value=\'$1\';g(\'c-call\').dispatchEvent(new Event(\'input\'));return false">$1</a>');
+  // Each word as what it is: a callsign that makes sense (clicked: into the entry), a square (into the square), a report, procedure.
+  const vers = (id, m) => 'g(\'' + id + '\').value=\'' + m + '\';g(\'' + id + '\').dispatchEvent(new Event(\'input\'));return false';
+  t.innerHTML = (c.mots || []).map(w => {
+    const m = esc(w.m);
+    if (w.g === 'INDICATIF' && w.c) return '<a href="#" title="Indicatif plausible (' + w.s + '/4) : un clic le met dans la saisie" style="color:var(--cyan);font-weight:800;' +
+      (w.s >= 3 ? 'background:rgba(63,224,200,.16);border-radius:4px;padding:0 3px;' : '') + '" onclick="' + vers('c-call', m) + '">' + m + '</a>';
+    if (w.g === 'CARRE') return '<a href="#" title="Carré : un clic le met dans la saisie" style="color:var(--ambre)" onclick="' + vers('c-loc', m) + '">' + m + '</a>';
+    if (w.g === 'REPORT') return '<span style="color:var(--vert)">' + m + '</span>';
+    if (w.g === 'PROCEDURE') return '<span style="color:var(--gris)">' + m + '</span>';
+    return m;
+  }).join(' ');
   if (bas) t.scrollTop = t.scrollHeight;
 }
 setInterval(() => { if (!g('v-carnet').hidden) ticCw(); }, 1000);

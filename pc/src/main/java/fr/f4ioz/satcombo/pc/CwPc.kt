@@ -50,6 +50,42 @@ class CwPc(private val stockage: Stockage) {
         version++
     }
 
+    // ---------------------------------------------------- what the text holds
+
+    /** The log's callsigns (their base): one decoded that is in the log is right. Read again each minute. */
+    @Volatile var connus: () -> Set<String> = { emptySet() }
+    @Volatile private var connusCache: Set<String> = emptySet()
+    @Volatile private var connusMs = 0L
+
+    /** The text word by word: callsigns that make sense, squares, reports, procedure ([fr.f4ioz.satcombo.cw.AnalyseCw]). */
+    fun mots(): List<fr.f4ioz.satcombo.cw.AnalyseCw.Mot> {
+        val maintenant = System.currentTimeMillis()
+        if (maintenant - connusMs > 60_000L) { connusCache = runCatching(connus).getOrDefault(emptySet()); connusMs = maintenant }
+        return fr.f4ioz.satcombo.cw.AnalyseCw.analyse(texte(), connusCache)
+    }
+
+    // ------------------------------------------------------------ the Doppler
+
+    /** How the note is followed now: "poste" (the rig follows the Doppler), "prédit" (from the pass), "mesuré" (heard only). */
+    @Volatile var suivi: String = "mesuré"
+        private set
+    private var dopplerPrec: Double? = null
+
+    /**
+     * Each second: the satellite's Doppler on the downlink now ([dopplerHz]).
+     * When nothing corrects it before the sound (no CAT, Doppler paused, a
+     * rig tuned by hand), the note slides with it: the decoder is told,
+     * [signe] -1 in LSB (the note goes the other way).
+     */
+    fun ticDoppler(dopplerHz: Double?, corrigeAvant: Boolean, signe: Int) {
+        val d = decodeur
+        if (d == null || dopplerHz == null) { dopplerPrec = null; suivi = "mesuré"; return }
+        if (corrigeAvant) { dopplerPrec = null; suivi = "poste"; return }
+        dopplerPrec?.let { d.decaleTon(signe * (dopplerHz - it)) }
+        dopplerPrec = dopplerHz
+        suivi = "prédit"
+    }
+
     val wpm: Int get() = decodeur?.wpm ?: 0
     val tonHz: Int get() = decodeur?.tonHz ?: tonChoisi
     val marque: Boolean get() = decodeur?.marque == true
