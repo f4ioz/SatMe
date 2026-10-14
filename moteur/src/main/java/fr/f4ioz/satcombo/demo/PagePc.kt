@@ -222,6 +222,14 @@ object PagePc {
   .diag { font-family:ui-monospace,Consolas,monospace; font-size:11px; color:var(--gris); white-space:pre-wrap; margin-top:6px; max-height:90px; overflow:auto; }
   .bouton-gr { display:flex; gap:6px; flex-wrap:wrap; }
   .pastille { display:inline-block; padding:2px 8px; border-radius:20px; font-size:12px; font-weight:700; }
+  /* What is running or connected, at a glance: a green pill and edge; stopped, a red one. */
+  .pastille.marche { background:rgba(91,214,138,.20); color:var(--vert); }
+  .pastille.marche::before { content:'● '; }
+  .pastille.coupe { background:rgba(229,72,77,.16); color:var(--rose); }
+  .pastille.coupe::before { content:'○ '; }
+  .allume { box-shadow:inset 4px 0 0 var(--vert); }
+  .eteint { box-shadow:inset 4px 0 0 rgba(229,72,77,.55); }
+  button.arret { background:transparent; border:1px solid var(--rose); color:var(--rose); }
   .on { background:rgba(91,214,138,.18); color:var(--vert); } .off { background:rgba(154,167,180,.15); color:var(--gris); }
   .discret { background:transparent; border:none; }
   nav { display:flex; gap:4px; }
@@ -572,7 +580,7 @@ object PagePc {
   <div>
     <div class="carte">
       <div class="t">Carte son (le son du poste)</div>
-      <div class="ligne" style="margin-top:0"><select id="s-carte"></select><button onclick="carteSon()">Démarrer</button><button onclick="carteSon(true)">Arrêter</button></div>
+      <div class="ligne" style="margin-top:0"><select id="s-carte"></select><button class="primaire" data-marche="son" onclick="carteSon()">Démarrer</button><button class="arret" data-arret="son" hidden onclick="carteSon(true)">Arrêter</button></div>
       <div style="height:10px;background:#0E1720;border-radius:5px;margin-top:10px;overflow:hidden"><div id="s-niveau" style="height:100%;width:0;background:var(--vert)"></div></div>
       <div class="etat" id="s-etat"></div>
     </div>
@@ -643,10 +651,10 @@ object PagePc {
     <div class="ligne"><input id="a-filtre" placeholder="Filtrer : indicatif, message…"><label class="petit"><input type="checkbox" id="a-isss"> par l'ISS seulement</label></div>
   </div>
   <details class="carte" id="kiss-carte">
-    <summary class="t" style="cursor:pointer;margin:0">Radio APRS en KISS (TH-D72, TM-D710, Mobilinkd…) <span id="kiss-pastille" class="pastille off">déconnectée</span></summary>
+    <summary class="t" style="cursor:pointer;margin:0">Radio APRS en KISS (TH-D72, TM-D710, Mobilinkd…) <span id="kiss-pastille" class="pastille coupe">déconnectée</span></summary>
     <div class="ligne"><select id="kiss-port" style="flex:1"></select>
       <select id="kiss-vitesse" style="flex:none"><option>1200</option><option>4800</option><option selected>9600</option><option>19200</option><option>38400</option><option>57600</option></select>
-      <button class="primaire" onclick="kConnecte()">Connecter</button><button onclick="kPost('deconnecter')">Déconnecter</button></div>
+      <button class="primaire" data-marche="kiss" onclick="kConnecte()">Connecter</button><button class="arret" data-arret="kiss" hidden onclick="kPost('deconnecter')">Déconnecter</button></div>
     <label class="petit" style="display:block;margin-top:6px" id="kiss-lignes-l"><input type="checkbox" id="kiss-lignes"> Lever RTS/DTR à l'ouverture — seulement si ce TNC l'exige ; jamais sur l'interface d'un poste (il passerait en émission)</label>
     <div class="ligne"><span class="petit">Écoute</span>
       <select id="kiss-travail" style="flex:none" onchange="kPost('reglage?travail=' + this.value)"><option value="AUTO">l'ISS quand elle passe, sinon 144,800</option><option value="ISS">l'ISS (145,825)</option><option value="TERRE">au sol (144,800)</option><option value="POSTE">la fréquence de la radio, sans y toucher</option></select>
@@ -830,7 +838,7 @@ object PagePc {
         <span class="petit">Alim. LNB</span><select id="d-lnb" style="max-width:150px" onchange="dLnb()"><option value="">coupée</option><option value="v">13 V (V)</option><option value="h">18 V (H)</option></select></div>
       <div class="avert" id="d-lnb-avert" hidden>Le MiniTiouner alimentera le LNB : seulement si rien d'autre ne l'alimente (pas de séparateur qui passe le continu vers un autre récepteur).</div>
       <label class="petit" style="display:block;margin-top:6px"><input type="checkbox" id="d-son"> Son sur ce PC</label>
-      <div class="ligne"><button class="primaire" onclick="dDemarre()">Recevoir</button><button onclick="dPost('arrete')">Arrêter</button>
+      <div class="ligne"><button class="primaire" data-marche="d" onclick="dDemarre()">Recevoir</button><button class="arret" data-arret="d" hidden onclick="dPost('arrete')">Arrêter</button>
         <button id="d-benr" onclick="dEnregistre()">Enregistrer</button><button onclick="dPost('vlc')" title="Le même flux dans VLC, pleine qualité">VLC</button></div>
       <div class="etat" id="d-msg"></div>
     </div>
@@ -933,9 +941,9 @@ object PagePc {
 <div class="grille2" id="r-grille">
   <div>
     <div class="carte">
-      <div class="t">Clé SDR (rtl_tcp) <span id="r-pastille" class="pastille off">arrêtée</span></div>
-      <div class="ligne" style="margin-top:0"><button class="primaire" onclick="post('api/sdr/demarrer').then(ticSdr)">Démarrer</button>
-        <button onclick="post('api/sdr/arreter').then(ticSdr)">Arrêter</button><span class="petit" id="r-info"></span></div>
+      <div class="t">Clé SDR (rtl_tcp) <span id="r-pastille" class="pastille coupe">arrêtée</span></div>
+      <div class="ligne" style="margin-top:0"><button class="primaire" data-marche="r" onclick="post('api/sdr/demarrer').then(ticSdr)">Démarrer</button>
+        <button class="arret" data-arret="r" hidden onclick="post('api/sdr/arreter').then(ticSdr)">Arrêter</button><span class="petit" id="r-info"></span></div>
       <div class="avert" id="r-erreur"></div>
     </div>
     <div class="carte">
@@ -990,12 +998,12 @@ object PagePc {
 <div class="grille2" id="s2-grille">
   <div>
     <div class="carte">
-      <div class="t">Radiosondes · clé SDR <span id="s2-pastille" class="pastille off">arrêtée</span></div>
+      <div class="t">Radiosondes · clé SDR <span id="s2-pastille" class="pastille coupe">arrêtée</span></div>
       <div class="ligne" style="margin-top:0"><span class="o-freq" style="font-size:26px" id="s2-freq">—</span><span class="petit">MHz</span>
         <button onclick="sPost('pas?n=-1')">−10 k</button><button onclick="sPost('pas?n=1')">+10 k</button></div>
       <div class="ligne"><input id="s2-khz" placeholder="403 000 (kHz)" style="max-width:150px"><button onclick="sPost('frequence?khz=' + enc(v('s2-khz').replace(/\s/g, '')))">Aller</button>
         <span class="petit" style="margin-left:auto">Modèle</span><select id="s2-modele" style="flex:none" onchange="sPost('modele?m=' + this.value)"></select></div>
-      <div class="ligne"><button class="primaire" onclick="sPost('demarrer')">Démarrer</button><button onclick="sPost('arreter')">Arrêter</button>
+      <div class="ligne"><button class="primaire" data-marche="s2" onclick="sPost('demarrer')">Démarrer</button><button class="arret" data-arret="s2" hidden onclick="sPost('arreter')">Arrêter</button>
         <span class="petit" id="s2-info"></span></div>
       <div class="avert" id="s2-erreur"></div>
       <div class="petit" style="margin-top:6px">La clé reçoit en FM étroite, à la largeur du modèle, sans désaccentuation ni silencieux. Nommer le modèle resserre le filtre : quelques dB sur une sonde lointaine.</div>
@@ -1029,9 +1037,9 @@ object PagePc {
 <div class="grille2">
   <div>
     <div class="carte">
-      <div class="t">METEOR-M · images LRPT <span id="m-pastille" class="pastille off">arrêté</span></div>
+      <div class="t">METEOR-M · images LRPT <span id="m-pastille" class="pastille coupe">arrêté</span></div>
       <div class="petit" id="m-prochain"></div>
-      <div class="ligne"><button class="primaire" onclick="mPost('demarrer')">Recevoir</button><button onclick="mPost('arreter')">Arrêter</button>
+      <div class="ligne"><button class="primaire" data-marche="m" onclick="mPost('demarrer')">Recevoir</button><button class="arret" data-arret="m" hidden onclick="mPost('arreter')">Arrêter</button>
         <button onclick="mPost('enregistre')" title="Écrire ce qui est reçu, sans arrêter">Enregistrer maintenant</button></div>
       <div class="avert" id="m-erreur"></div>
       <label class="petit" style="display:block;margin-top:8px"><input type="checkbox" id="m-auto" onchange="mPost('auto?on=' + (this.checked ? 1 : 0))"> Recevoir tout seul : la clé démarre une minute avant chaque passage METEOR (si elle est libre) et s'arrête après</label>
@@ -1110,7 +1118,7 @@ object PagePc {
       <div class="etat" id="sv-etat"></div>
     </div>
     <div class="carte">
-      <div class="t">Poste (CAT) <span id="cat-pastille" class="pastille off">déconnecté</span></div>
+      <div class="t">Poste (CAT) <span id="cat-pastille" class="pastille coupe">déconnecté</span></div>
       <div class="ligne" style="margin-top:0">
         <select id="cat-modele">
           <option value="IC9700">Icom IC-9700</option><option value="IC9100">Icom IC-9100</option>
@@ -1128,8 +1136,8 @@ object PagePc {
       <div class="ligne" id="cat-bande-ligne"><span class="petit">Émission sur la bande</span>
         <select id="cat-bande"><option value="0">A</option><option value="1">B</option></select></div>
       <div class="ligne">
-        <button class="primaire" id="cat-co" onclick="catConnecte()">Connecter</button>
-        <button id="cat-deco" onclick="post('api/cat/deconnecter')">Déconnecter</button>
+        <button class="primaire" id="cat-co" data-marche="cat" onclick="catConnecte()">Connecter</button>
+        <button id="cat-deco" class="arret" data-arret="cat" hidden onclick="post('api/cat/deconnecter')">Déconnecter</button>
       </div>
       <div class="avert" id="cat-avert"></div>
       <div class="paire" style="margin-top:8px">
@@ -1186,7 +1194,7 @@ object PagePc {
   </div>
   <div>
     <div class="carte">
-      <div class="t">Rotor <span id="rot-pastille" class="pastille off">déconnecté</span></div>
+      <div class="t">Rotor <span id="rot-pastille" class="pastille coupe">déconnecté</span></div>
       <div class="ligne" style="margin-top:0">
         <select id="rot-lien" onchange="lienRotor()">
           <option value="GS232">GS-232 (port série)</option><option value="ROTCTLD">rotctld (réseau)</option><option value="SIM">Rotor simulé</option>
@@ -1196,8 +1204,8 @@ object PagePc {
       <div class="ligne" id="rot-serie"><select id="rot-port"></select><button onclick="chargePorts()" title="Relire les ports">↻</button></div>
       <div class="ligne" id="rot-tcp" style="display:none"><input id="rot-hote" placeholder="hôte"><input id="rot-tcpport" placeholder="4533" style="max-width:90px"></div>
       <div class="ligne">
-        <button class="primaire" onclick="rotConnecte()">Connecter</button>
-        <button onclick="post('api/rotor/deconnecter')">Déconnecter</button>
+        <button class="primaire" data-marche="rot" onclick="rotConnecte()">Connecter</button>
+        <button class="arret" data-arret="rot" hidden onclick="post('api/rotor/deconnecter')">Déconnecter</button>
         <label class="petit"><input type="checkbox" id="rot-suit" onchange="post('api/rotor/suivre?on='+(this.checked?1:0))"> Suivre le satellite</label>
       </div>
       <div class="ligne">
@@ -1696,7 +1704,7 @@ function dessine() {
   txt('st-poste', om ? om.text.replace(/ \(rien n'est ouvert\)/, '') : c.modele);
   g('st-poste-ok').className = 'coche ' + (c.connecte ? 'on' : 'off');
   txt('st-poste-ok', c.connecte ? '✓' : 'non connecté');
-  g('cat-pastille').className = 'pastille ' + (c.connecte ? 'on' : 'off');
+  etatMarche('cat', c.connecte);
   txt('cat-pastille', c.connecte ? (c.simule ? 'simulé' : 'connecté') : 'déconnecté');
   txt('cat-statut', c.statut);
   txt('cat-statut-court', c.connecte ? 'CAT ' + c.modele + (c.simule ? ' (simulé)' : '') : '');
@@ -1709,7 +1717,7 @@ function dessine() {
   txt('st-rotor', r.simule ? 'simulé' : rl);
   g('st-rotor-ok').className = 'coche ' + (r.connecte ? 'on' : 'off');
   txt('st-rotor-ok', r.connecte ? '✓' : 'non connecté');
-  g('rot-pastille').className = 'pastille ' + (r.connecte ? 'on' : 'off');
+  etatMarche('rot', r.connecte);
   txt('rot-pastille', r.connecte ? (r.simule ? 'simulé' : 'connecté') : 'déconnecté');
   txt('rot-statut', r.statut + (r.attente ? ' · attend le lever' : ''));
   txt('rot-pos', r.az == null ? '—' : Math.round(r.az) + '° / ' + Math.round(r.el || 0) + '°');
@@ -1764,6 +1772,17 @@ async function tic() {
   // The stream keeps E fresh: only drawn again (an action's result comes by the stream within a moment).
   if (fluxOk && E) { dessine(); return; }
   try { E = await (await fetch('api/etat')).json(); dessine(); } catch (x) {}
+}
+// Connected or not, at a glance: one button at a time (Connect when off, Disconnect when on),
+// the pill green or red, the card's edge green or red.
+function etatMarche(cle, on, pastille) {
+  document.querySelectorAll('[data-marche="' + cle + '"]').forEach(b => b.hidden = !!on);
+  document.querySelectorAll('[data-arret="' + cle + '"]').forEach(b => b.hidden = !on);
+  const p = g(pastille || cle + '-pastille');
+  if (p) { p.classList.remove('on', 'off'); p.classList.toggle('marche', !!on); p.classList.toggle('coupe', !on); }
+  const b = document.querySelector('[data-marche="' + cle + '"]');
+  const carte = b && b.closest('.carte');
+  if (carte) { carte.classList.toggle('allume', !!on); carte.classList.toggle('eteint', !on); }
 }
 // ------------------------------------------------------------------ the live stream (server-sent events)
 // SatMe-PC sends the station, the sound, the dongle and its spectrum as they change; the page's questions
@@ -2404,6 +2423,7 @@ async function ticDatv(premier) {
   }
   g('d-debits').innerHTML = D.debits.map(s => '<button class="' + (s === dSr ? 'ici' : '') + '" onclick="dSr=' + s + ';ticDatv()">' + s + '</button>').join('');
   const e = g('d-etat'); e.textContent = D.actif ? D.libelle : 'arrêté';
+  etatMarche('d', D.actif, 'aucune');
   e.style.background = D.verrouille ? 'rgba(91,214,138,.2)' : (D.actif ? 'rgba(255,180,84,.2)' : ''); e.style.color = D.verrouille ? 'var(--vert)' : (D.actif ? 'var(--ambre)' : 'var(--gris)');
   txt('d-mer', D.mer == null || !D.verrouille ? '—' : D.mer.toFixed(1) + ' dB');
   txt('d-modcod', D.verrouille ? D.modcod : '');
@@ -2571,6 +2591,7 @@ function rendSon() {
   g('s-niveau').style.width = Math.round(Math.min(1, S.niveau) * 100) + '%';
   g('s-niveau').style.background = S.niveau > 0.9 ? 'var(--rose)' : 'var(--vert)';
   txt('s-etat', S.erreur || (S.actif ? S.carte + ' · ' + S.rate + ' Hz' : 'arrêtée'));
+  etatMarche('son', S.actif, 's-etat');
   txt('s-rec', S.enregistrement ? '■ Arrêter' : '● Enregistrer');
   txt('s-duree', S.enregistrement ? duree(S.secondes * 1000) + (S.auto ? ' (passage)' : '') : '');
   if (document.activeElement !== g('s-auto')) g('s-auto').checked = S.enregAuto;
@@ -3291,7 +3312,7 @@ async function ticSdr() {
 function rendSdr() {
   if (!R) return;
   const r = R;
-  g('r-pastille').className = 'pastille ' + (r.actif ? 'on' : 'off'); txt('r-pastille', r.actif ? 'réception' : 'arrêtée');
+  etatMarche('r', r.actif); txt('r-pastille', r.actif ? 'réception' : 'arrêtée');
   txt('r-info', r.actif ? r.tuner + ' · ' + (r.debit / 1024).toFixed(1) + ' Mo/s' + (r.perdus ? ' · ' + r.perdus + ' blocs perdus' : '') : '');
   txt('r-erreur', r.erreur || '');
   txt('r-sat', r.satellite || (E && E.suivi ? E.suivi.nom : '(aucun)'));
@@ -3461,7 +3482,7 @@ async function ticSondes() {
   if (g('v-sondes').hidden) return;
   try { S2 = await (await fetch('api/sondes')).json(); } catch (x) { return; }
   const s = S2;
-  g('s2-pastille').className = 'pastille ' + (s.actif ? 'on' : 'off'); txt('s2-pastille', s.actif ? 'réception' : 'arrêtée');
+  etatMarche('s2', s.actif); txt('s2-pastille', s.actif ? 'réception' : 'arrêtée');
   txt('s2-freq', (s.freq / 1e6).toFixed(3).replace('.', ','));
   const mod = s.modeles.map(m => '<option value="' + m.id + '">' + esc(m.nom) + '</option>').join('');
   if (g('s2-modele').dataset.vu !== mod) { g('s2-modele').dataset.vu = mod; g('s2-modele').innerHTML = mod; }
@@ -3535,7 +3556,7 @@ async function ticMeteor() {
   try { M = await (await fetch('api/meteor')).json(); } catch (x) { return; }
   const m = M, n = Date.now();
   const enFichier = m.progression >= 0;
-  g('m-pastille').className = 'pastille ' + (m.actif || enFichier ? 'on' : 'off');
+  etatMarche('m', m.actif || enFichier);
   txt('m-pastille', m.actif ? 'réception' : enFichier ? 'fichier' : 'arrêté');
   const p = m.prochain;
   txt('m-prochain', p ? (n >= p.aos && n <= p.los ? 'En cours : ' + p.sat + ', fin à ' + hm(p.los) : 'Prochain passage : ' + p.sat + ' ' + jourHeure(p.aos) + ' (dans ' + duree(p.aos - n) + ')') +
@@ -3662,7 +3683,7 @@ async function ticKiss() {
   if (document.activeElement !== g('kiss-doppler')) g('kiss-doppler').checked = KS.doppler;
   if (document.activeElement !== g('kiss-lignes')) g('kiss-lignes').checked = KS.lignes;
   g('kiss-lignes-l').hidden = !KS.lignesAuChoix;
-  g('kiss-pastille').className = 'pastille ' + (KS.connecte ? 'on' : 'off');
+  etatMarche('kiss', KS.connecte);
   txt('kiss-pastille', !KS.connecte ? 'déconnectée' : KS.muette ? 'muette' : KS.initialise ? 'en KISS' : 'connectée');
   if (KS.connecte) txt('kiss-etat', KS.nom + ' · ' + KS.vitesse + ' bauds' + (KS.frequence ? ' · ' + (KS.frequence / 1e6).toFixed(3).replace('.', ',') + ' MHz' : '') +
     ' · ' + KS.recues + ' trame(s) reçue(s)' + (KS.erreur ? ' · ' + KS.erreur : '') +
