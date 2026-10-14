@@ -90,6 +90,7 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
         var refs: List<Any?> = emptyList()
         var etatMs = 0L; var sonMs = 0L; var sdrMs = 0L; var spectreTrames = -1L; var veilleMs = 0L
         var refSon: Any? = null
+        var cwVersion = -1L; var cwMs = 0L
         while (true) {
             val maintenant = System.currentTimeMillis()
             if ("etat" in sujets) {
@@ -109,6 +110,11 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                     refSon = r; sonMs = maintenant
                     if (!envoie("son", JsonPc.son(son).toString())) return
                 }
+            }
+            // CW: each letter as it comes, the key's light a few times a second.
+            if ("cw" in sujets && son != null && (son.cw.version != cwVersion || (son.cw.actif && maintenant - cwMs >= 150L) || maintenant - cwMs >= 2000L)) {
+                cwVersion = son.cw.version; cwMs = maintenant
+                if (!envoie("cw", JsonPc.cw(son).toString())) return
             }
             if ("sdr" in sujets && sdr != null && maintenant - sdrMs >= 200L) {
                 sdrMs = maintenant
@@ -368,6 +374,7 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 }
                 envoie(sortie, "200 OK", "application/json; charset=utf-8", o.toString().toByteArray())
             }
+            "/api/cw" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JsonPc.cw(son).toString().toByteArray())
             "/api/aprs/trophees" -> {
                 val a = son?.aprs
                 val o = if (a == null) JSONObject().put("present", false)
@@ -474,6 +481,12 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                     q["sortie"].orEmpty(), station.settings.callsign, station.settings.manualLocator)
             }
             "/api/mire/stop" -> mire?.arrete()
+            "/api/cw" -> {
+                val w = son?.cw ?: return JSONObject().put("ok", false)
+                q["on"]?.let { w.actif = it == "1" }
+                q["ton"]?.toIntOrNull()?.let { w.tonChoisi = it }
+                if (q["efface"] == "1") w.efface()
+            }
             "/api/veille" -> fr.f4ioz.satcombo.demo.ApiVeille.action({ q[it] }, station.settings, station.etat.value.favoris, System.currentTimeMillis())
             "/api/amsat/rapport" -> {
                 // Heard or not, on amsat.org's public page: the satellite followed, my callsign and square, now.
@@ -1063,6 +1076,14 @@ object JsonPc {
         return ApiSon.json(ApiSon.Etat(s.son.appareils().map { it.nom to it.description }, s.carte, c.actif, c.rate, c.niveau, c.erreur,
             e.enregistrement, e.secondes, e.auto, s.enregAuto, s.sstvActif, s.aprsActif,
             e.sstvMode, e.sstvLignes, e.sstvHauteur, e.sstvVersion, e.sstvDerniere, s.enregistrements(), s.images(), s.coupeLos))
+    }
+
+    /** The CW decoder: on or not, its text, the speed, the tone, the key's light. */
+    fun cw(s: SonStation?): JSONObject {
+        val w = s?.cw ?: return JSONObject().put("present", false)
+        return JSONObject().put("present", true).put("on", w.actif).put("texte", w.texte()).put("wpm", w.wpm).put("ton", w.tonHz)
+            .put("auto", w.tonChoisi == 0).put("marque", w.marque).put("ecart", Math.round(w.ecartDb)).put("version", w.version)
+            .put("carte", s.son.etat.value.actif)
     }
 
     fun bilan(b: ImportPc.Bilan?): JSONObject = if (b == null) JSONObject().put("ok", false).put("erreur", "fichier illisible ou trop gros")

@@ -444,6 +444,17 @@ object PagePc {
       <div class="ligne"><button class="primaire" onclick="enregistreContact()">Enregistrer (Entrée)</button><span class="petit" id="c-etat"></span></div>
       <div class="petit" style="margin-top:6px" id="c-aide">Daté à l'enregistrement, sur le satellite suivi, avec son az/el, ton carré, le mode et les fréquences au repos.</div>
     </div>
+    <div class="carte" id="cw-carte" hidden>
+      <div class="ligne" style="margin:0"><label><input type="checkbox" id="cw-on" onchange="post('api/cw?on=' + (this.checked ? 1 : 0)).then(ticCw)"> <b>Décodeur CW</b></label>
+        <span id="cw-led" title="Manipulateur baissé" style="width:12px;height:12px;border-radius:6px;background:#22303C;display:inline-block"></span>
+        <span class="petit" id="cw-info"></span>
+        <button style="margin-left:auto;padding:3px 9px" onclick="post('api/cw?efface=1').then(ticCw)" title="Effacer le texte">✕</button></div>
+      <div id="cw-corps" hidden>
+        <div id="cw-texte" style="margin-top:8px;height:96px;overflow-y:auto;padding:6px 8px;border-radius:8px;background:#0E1720;font-family:ui-monospace,Consolas,monospace;font-size:15px;line-height:1.45;letter-spacing:1px;word-break:break-word"></div>
+        <div class="ligne"><span class="petit">Note</span><select id="cw-ton" style="flex:none" onchange="post('api/cw?ton=' + this.value).then(ticCw)"><option value="0">trouvée seule</option><option>500</option><option>600</option><option>650</option><option>700</option><option>750</option><option>800</option><option>900</option></select>
+          <span class="petit">Un indicatif décodé : un clic le met dans la saisie.</span></div>
+      </div>
+    </div>
     <div class="carte">
       <div class="t">Carnet</div>
       <div class="paire"><span><span class="val" id="c-nb">0</span> <span class="petit">contacts</span></span>
@@ -1364,6 +1375,28 @@ async function chargeRecords() {
   h += '<div class="petit" style="margin-top:8px">' + R.avecDistance + ' contact(s) sur ' + R.contacts + ' ont les deux carrés (le tien au moment du contact, le sien) : les autres comptent, sans distance.</div>';
   g('cr-records').innerHTML = h;
 }
+// The CW decoder: its window in the Carnet; a callsign in the text, clicked, goes into the entry.
+let CW = null, cwVu = -1;
+async function ticCw() {
+  if (!(fluxOk && CW)) { try { CW = await (await fetch('api/cw')).json(); } catch (x) { return; } }
+  rendCw();
+}
+function rendCw() {
+  const c = CW; if (!c) return;
+  g('cw-carte').hidden = !c.present; if (!c.present) return;
+  if (document.activeElement !== g('cw-on')) g('cw-on').checked = c.on;
+  g('cw-corps').hidden = !c.on;
+  g('cw-led').style.background = c.on && c.marque ? 'var(--vert)' : '#22303C';
+  txt('cw-info', !c.on ? 'coupé' : !c.carte ? 'carte son arrêtée (onglet Son)' : (c.wpm ? c.wpm + ' WPM' : '') + (c.ton ? ' · ' + c.ton + ' Hz' : '') + (c.ecart ? ' · ' + c.ecart + ' dB' : ''));
+  if (document.activeElement !== g('cw-ton')) g('cw-ton').value = c.auto ? '0' : String(c.ton);
+  if (c.version === cwVu) return;
+  cwVu = c.version;
+  const t = g('cw-texte'), bas = t.scrollTop + t.clientHeight >= t.scrollHeight - 8;
+  t.innerHTML = esc(c.texte).replace(/\b([A-Z0-9]{1,3}[0-9][A-Z0-9]{0,3}[A-Z])\b/g,
+    '<a href="#" style="color:var(--cyan)" onclick="g(\'c-call\').value=\'$1\';g(\'c-call\').dispatchEvent(new Event(\'input\'));return false">$1</a>');
+  if (bas) t.scrollTop = t.scrollHeight;
+}
+setInterval(() => { if (!g('v-carnet').hidden) ticCw(); }, 1000);
 // APRS's game: the trophies, and a cheer when one falls (whatever the tab).
 let TR = null, trVu = null;
 async function ticTrophees() {
@@ -1790,7 +1823,7 @@ function etatMarche(cle, on, pastille) {
 let flux = null, fluxOk = false, fluxSujets = '';
 function sujetsFlux() {
   const sdr = !g('v-sdr').hidden;
-  return 'etat,son' + (sdr || !g('v-carnet').hidden ? ',sdr' : '') + (sdr ? ',spectre&span=' + rSpan + '&n=' + Math.min(1024, Math.max(128, g('r-spectre').clientWidth || 512)) : '');
+  return 'etat,son,cw' + (sdr || !g('v-carnet').hidden ? ',sdr' : '') + (sdr ? ',spectre&span=' + rSpan + '&n=' + Math.min(1024, Math.max(128, g('r-spectre').clientWidth || 512)) : '');
 }
 function majFlux() {
   if (!window.EventSource || window.SATME_TELEPHONE) return;
@@ -1801,6 +1834,7 @@ function majFlux() {
   flux = new EventSource('api/flux?t=' + t);
   flux.addEventListener('etat', ev => { fluxOk = true; E = JSON.parse(ev.data); dessine(); });
   flux.addEventListener('son', ev => { S = JSON.parse(ev.data); rendSon(); });
+  flux.addEventListener('cw', ev => { CW = JSON.parse(ev.data); rendCw(); });
   flux.addEventListener('sdr', ev => { R = JSON.parse(ev.data); rendSdr(); });
   flux.addEventListener('spectre', ev => { const j = JSON.parse(ev.data); if (j.db && j.trames !== rTrames) { rTrames = j.trames; rDernier = j; rCascade.unshift(j.db); if (rCascade.length > 600) rCascade.length = 600; dessineSdr(); } });
   // Cut: the questions take over until it comes back (the browser tries again by itself).
@@ -1858,7 +1892,7 @@ function vue(n) {
   document.querySelectorAll('.vue').forEach(x => x.hidden = x.id !== 'v-' + n);
   document.querySelectorAll('#onglets button').forEach(b => b.classList.toggle('actif', b.dataset.v === n));
   try { localStorage.setItem('vue', n); } catch (x) {}
-  if (n === 'carnet') { chargeCarnet(); g('c-call').focus(); vueCarnet(vueC); }
+  if (n === 'carnet') { chargeCarnet(); g('c-call').focus(); vueCarnet(vueC); ticCw(); }
   if (n === 'reglages') { rangeReglages(); majSauvegarde(); majAccordReglages(); }
   if (n === 'reglages') { chargeReglages().then(() => { if (!wlLu && v('carnetUrl')) { wlLu = true; essaiCarnet(); } }); chargeSources(); }
   if (n === 'son' || n === 'sstv') ticSon();

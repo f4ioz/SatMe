@@ -179,4 +179,22 @@ class SonStationTest {
         heure = p.losEpochMs + 20_000L; s.tic()
         assertEquals("", s.etat.value.enregistrement)
     }
+
+    @Test
+    fun le_decodeur_cw_ecrit_ce_que_la_carte_entend_quand_on_l_a_choisi() {
+        val (s, son) = sonStation()
+        val rate = 48_000
+        val manip = listOf(false to 500.0) + fr.f4ioz.satcombo.cw.DecodeurCw.manipulation("CQ DE F4IOZ K", 20) + listOf(false to 1200.0)
+        val l = ArrayList<Short>(); var t = 0L
+        for ((on, ms) in manip) repeat((ms * rate / 1000).toInt()) {
+            l += ((if (on) 0.3 * Math.sin(2 * Math.PI * 700 * t / rate) else 0.0) * 32000).toInt().toShort(); t++
+        }
+        val pcm = l.toShortArray()
+        verse(son, pcm, rate)
+        assertEquals("", s.cw.texte())            // off unless chosen
+        s.cw.actif = true
+        verse(son, pcm, rate)
+        assertTrue(s.cw.texte(), s.cw.texte().trim().endsWith("CQ DE F4IOZ K"))
+        assertTrue(s.cw.wpm in 17..23)
+    }
 }

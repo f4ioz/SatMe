@@ -60,6 +60,8 @@ class SonStation(
     var aprsActif: Boolean
         get() = station.stockage.getBoolean("pc_aprs", true)
         set(v) { station.stockage.edit().putBoolean("pc_aprs", v).apply() }
+    /** CW decoded on the card (off unless chosen), for the Carnet's window. */
+    val cw = CwPc(station.stockage)
     /** FT8 / FT4 on the card, as the phone's FT8 screen. */
     val ft8 = Ft8Pc(horloge)
     /** APRS heard on the card, kept as the phone keeps it. */
@@ -86,6 +88,7 @@ class SonStation(
             if (sstvActif) sstv(pcm, n, rate)
             if (aprsActif) aprs.ecoute(pcm, n, rate)
             ft8.ecoute(pcm, n, rate)
+            cw.ecoute(pcm, n, rate)
         }
     }
 
