@@ -1031,7 +1031,8 @@ object PagePc {
 </div>
 </div>
 <div class="vue" id="v-reglages" hidden>
-<div class="grille2 reg-materiel">
+<div class="ligne" id="reg-sommaire" style="margin:0 0 8px"></div>
+<div class="grille2">
   <div>
     <div class="carte">
       <div class="t">Poste (CAT) <span id="cat-pastille" class="pastille off">déconnecté</span></div>
@@ -1074,6 +1075,39 @@ object PagePc {
       <div class="petit" style="margin-top:4px">Chaque changement part au poste quand tu le demandes ; la lecture ne change rien. Puissance : H haute, L basse, EL très basse.</div>
     </div>
 
+    <div class="carte">
+      <div class="t">Station</div>
+      <div class="ligne" style="margin-top:0">
+        <input id="indicatif" placeholder="Indicatif" style="text-transform:uppercase">
+        <input id="locator" placeholder="Locator (JN18FS)" style="text-transform:uppercase">
+      </div>
+      <div class="ligne"><span class="petit">Passages au-dessus de</span><input id="minEl" style="max-width:60px"><span class="petit">° d'élévation</span></div>
+      <div class="ligne"><button class="primaire" onclick="enregistreReglages()">Enregistrer</button></div>
+      <div class="etat" id="reg-etat"></div>
+    </div>
+    <div class="carte">
+      <div class="t">Skeds annoncés (hams.at)</div>
+      <label class="petit"><input type="checkbox" id="sk-on" onchange="post('api/skeds/reglages?on=' + (this.checked ? 1 : 0))"> Montrer les skeds annoncés sur hams.at : sur les passages (📣), dans Station et le Carnet, sur la carte</label>
+      <div class="ligne"><input id="sk-cle" type="password" placeholder="Clé API hams.at (facultative : la fenêtre commune avec toi)" autocomplete="off">
+        <button onclick="post('api/skeds/reglages?cle=' + enc(v('sk-cle'))); g('sk-cle').value = ''">Enregistrer</button></div>
+      <div class="petit">Comme sur le téléphone ; demandés toutes les 5 minutes. La clé reste sur ce PC.</div>
+    </div>
+    <div class="carte">
+      <div class="t">Éléments orbitaux</div>
+      <div class="petit">Serveur GP SatMe : il interroge AMSAT, CelesTrak et SatNOGS pour tout le monde, et ce PC lui demande tout. Comme sur le téléphone.</div>
+      <div class="ligne"><input id="gpServeur" placeholder="https://gp.f4ioz.fr"><button onclick="essaiGp()">Essayer</button><button onclick="g('gpServeur').value = SRC.defaut; majSources()" id="gpDefaut">Par défaut</button></div>
+      <div class="petit" id="gp-essai"></div>
+      <label class="petit" style="display:block;margin-top:8px"><input type="checkbox" id="gpSeul" onchange="majSources()"> Uniquement ce serveur : jamais AMSAT ni SatNOGS directement</label>
+      <div class="petit" style="margin-top:10px">Sources :</div>
+      <div id="gpSources" style="display:grid;grid-template-columns:1fr 1fr;gap:2px 12px;margin-top:4px"></div>
+      <div class="ligne"><button class="primaire" onclick="enregistreSources()">Enregistrer et télécharger</button></div>
+      <div class="etat" id="catalogue"></div>
+    </div>
+    <div class="carte" id="carteTelephone">
+      <div class="t">Téléphone</div>
+      <div class="petit">Reprendre les réglages du téléphone (Réglages → Sauvegarde, fichier .json) :</div>
+      <input type="file" id="import" accept=".json,application/json" onchange="importe(this)" style="width:100%;margin-top:4px">
+    </div>
   </div>
   <div>
     <div class="carte">
@@ -1117,45 +1151,6 @@ object PagePc {
           <button onclick="reglagesRotor()">Appliquer</button></div>
       </details>
     </div>
-  </div>
-</div>
-<div class="grille2">
-  <div>
-    <div class="carte">
-      <div class="t">Station</div>
-      <div class="ligne" style="margin-top:0">
-        <input id="indicatif" placeholder="Indicatif" style="text-transform:uppercase">
-        <input id="locator" placeholder="Locator (JN18FS)" style="text-transform:uppercase">
-      </div>
-      <div class="ligne"><span class="petit">Passages au-dessus de</span><input id="minEl" style="max-width:60px"><span class="petit">° d'élévation</span></div>
-      <div class="ligne"><button class="primaire" onclick="enregistreReglages()">Enregistrer</button></div>
-      <div class="etat" id="reg-etat"></div>
-    </div>
-    <div class="carte">
-      <div class="t">Skeds annoncés (hams.at)</div>
-      <label class="petit"><input type="checkbox" id="sk-on" onchange="post('api/skeds/reglages?on=' + (this.checked ? 1 : 0))"> Montrer les skeds annoncés sur hams.at : sur les passages (📣), dans Station et le Carnet, sur la carte</label>
-      <div class="ligne"><input id="sk-cle" type="password" placeholder="Clé API hams.at (facultative : la fenêtre commune avec toi)" autocomplete="off">
-        <button onclick="post('api/skeds/reglages?cle=' + enc(v('sk-cle'))); g('sk-cle').value = ''">Enregistrer</button></div>
-      <div class="petit">Comme sur le téléphone ; demandés toutes les 5 minutes. La clé reste sur ce PC.</div>
-    </div>
-    <div class="carte">
-      <div class="t">Éléments orbitaux</div>
-      <div class="petit">Serveur GP SatMe : il interroge AMSAT, CelesTrak et SatNOGS pour tout le monde, et ce PC lui demande tout. Comme sur le téléphone.</div>
-      <div class="ligne"><input id="gpServeur" placeholder="https://gp.f4ioz.fr"><button onclick="essaiGp()">Essayer</button><button onclick="g('gpServeur').value = SRC.defaut; majSources()" id="gpDefaut">Par défaut</button></div>
-      <div class="petit" id="gp-essai"></div>
-      <label class="petit" style="display:block;margin-top:8px"><input type="checkbox" id="gpSeul" onchange="majSources()"> Uniquement ce serveur : jamais AMSAT ni SatNOGS directement</label>
-      <div class="petit" style="margin-top:10px">Sources :</div>
-      <div id="gpSources" style="display:grid;grid-template-columns:1fr 1fr;gap:2px 12px;margin-top:4px"></div>
-      <div class="ligne"><button class="primaire" onclick="enregistreSources()">Enregistrer et télécharger</button></div>
-      <div class="etat" id="catalogue"></div>
-    </div>
-    <div class="carte" id="carteTelephone">
-      <div class="t">Téléphone</div>
-      <div class="petit">Reprendre les réglages du téléphone (Réglages → Sauvegarde, fichier .json) :</div>
-      <input type="file" id="import" accept=".json,application/json" onchange="importe(this)" style="width:100%;margin-top:4px">
-    </div>
-  </div>
-  <div>
     <div class="carte">
       <div class="t">QRZ.com</div>
       <div class="ligne" style="margin-top:0"><input id="qrzUser" placeholder="Identifiant QRZ"><input id="qrzMdp" type="password" placeholder="Mot de passe"></div>
@@ -1262,6 +1257,17 @@ function dessineAgenda() {
     '<tr><td colspan="4" class="petit">rien de prévu</td></tr>';
 }
 const hz = v => (v > 0 ? '+' : '') + v + ' Hz';
+// Réglages: a button per card at the top, to reach any of them without scrolling for it.
+function sommaireReglages() {
+  const b = g('reg-sommaire'); b.innerHTML = '';
+  document.querySelectorAll('#v-reglages .carte > .t').forEach(t => {
+    if (t.parentElement.hidden) return;
+    const nom = (t.firstChild && t.firstChild.textContent || t.textContent).trim(); if (!nom) return;
+    const k = document.createElement('button'); k.textContent = nom.replace(/\s*\(.*$/, '');
+    k.onclick = () => t.parentElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    b.appendChild(k);
+  });
+}
 // The log's pass: hams.at's skeds announced for it, the contacts made during it.
 function bandeauSkeds(id) {
   const b = g(id); if (!b) return;
@@ -1593,6 +1599,7 @@ function vue(n) {
   document.querySelectorAll('#onglets button').forEach(b => b.classList.toggle('actif', b.dataset.v === n));
   try { localStorage.setItem('vue', n); } catch (x) {}
   if (n === 'carnet') { chargeCarnet(); g('c-call').focus(); vueCarnet(vueC); }
+  if (n === 'reglages') sommaireReglages();
   if (n === 'reglages') { chargeReglages().then(() => { if (!wlLu && v('carnetUrl')) { wlLu = true; essaiCarnet(); } }); chargeSources(); }
   if (n === 'son' || n === 'sstv') ticSon();
   if (n === 'agenda') ticVeille();
