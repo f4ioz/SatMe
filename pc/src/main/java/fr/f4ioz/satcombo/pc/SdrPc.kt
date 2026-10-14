@@ -196,6 +196,17 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
     @Volatile private var vaAuPic = false
     fun calePic() { vaAuPic = true }
 
+    /**
+     * Asked from the page (fine tuning, as the phone's): the voice heard set
+     * where a sideband voice sits — its centre of gravity, ±3 kHz around
+     * where we listen, put 1.5 kHz above (USB) or below (LSB). Useless in FM.
+     */
+    @Volatile private var vaVoix = false
+    fun caleVoix(): Boolean { if (fr.f4ioz.satcombo.domain.AccordFin.cibleVoixHz(mode().name) == 0) return false; vaVoix = true; return true }
+
+    /** The mode demodulated now (the chosen one, or the transmitter's). */
+    fun modeEffectif(): String = mode().name
+
     // ------------------------------------------------------------ running
 
     @Volatile private var cle: RtlTcp? = null
@@ -422,6 +433,12 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
                         recentreVoulu = false; dernierRecentre = maintenant
                         val c = chaine.centroidOffsetHz(searchHz = 25_000.0)
                         if (c != 0.0) decalageHz = (fr.f4ioz.satcombo.domain.AccordFin.accordVise(c, 0) - fine).toInt()
+                    }
+                    if (vaVoix) {
+                        vaVoix = false
+                        val cible = fr.f4ioz.satcombo.domain.AccordFin.cibleVoixHz(mode().name)
+                        val c = chaine.centroidOffsetHz(searchHz = fr.f4ioz.satcombo.domain.AccordFin.RECHERCHE_VOIX_HZ, centreHz = (fine + decalageHz).toDouble())
+                        if (cible != 0 && c != 0.0) decalageHz = (fr.f4ioz.satcombo.domain.AccordFin.accordVise(c, cible) - fine).toInt()
                     }
                     if (vaAuPic) {
                         vaAuPic = false

@@ -975,6 +975,12 @@ object PagePc {
       <span class="rose petit" id="r-sat-av"></span>
       <span style="margin-left:auto" class="petit">Largeur vue</span><select id="r-span" style="flex:none" onchange="rSpan = +this.value; rCascade = []"><option value="12000">12 kHz</option><option value="24000">24 kHz</option><option value="48000" selected>48 kHz</option><option value="96000">96 kHz</option><option value="176400">176 kHz</option></select>
       <button onclick="post('api/sdr/pic')" title="Le signal le plus fort à ±15 kHz">Caler sur le pic</button><button onclick="post('api/sdr/decalage?hz=0')">Recentrer</button></div>
+    <div class="ligne" style="margin-top:6px">
+      <button id="r-voix" onclick="caleVoix()" title="Le centre de la voix entendue (±3 kHz) mis à 1,5 kHz du bord, comme sur le téléphone">🗣 Caler sur la voix</button>
+      <span class="petit" id="r-vernier-l" style="margin-left:auto">Vernier</span><span id="r-ratios" class="ligne" style="margin:0;gap:4px"></span></div>
+    <canvas id="r-vernier" style="width:100%;height:44px;display:block;margin-top:6px;cursor:ew-resize;touch-action:none" title="Glisser pour pousser la fréquence (comme un cadran) ; molette aussi"></canvas>
+    <div id="r-loupe-boite"><div class="ligne" style="margin-top:6px"><span class="petit">Loupe</span><select id="r-loupe-span" style="flex:none" onchange="post('api/sdr/accord?loupeSpan=' + this.value).then(ticSdr)"><option value="3000">3 kHz</option><option value="5000">5 kHz</option><option value="10000">10 kHz</option><option value="20000">20 kHz</option></select><span class="petit">autour de l'écoute · cliquer pour s'y poser</span></div>
+      <canvas id="r-loupe" style="width:100%;height:80px;display:block;margin-top:4px;cursor:crosshair"></canvas></div>
     <canvas id="r-spectre" style="width:100%;height:110px;display:block;margin-top:8px;cursor:crosshair" title="Cliquer pour s'y accorder"></canvas>
     <div class="r-cascade"><canvas id="r-cascade" title="Cliquer pour s'y accorder"></canvas></div>
   </div>
@@ -1085,6 +1091,14 @@ object PagePc {
 <div class="reg"><nav class="reg-nav" id="reg-nav"></nav><div class="reg-corps" id="reg-corps"></div></div>
 <div class="grille2" id="reg-origine">
   <div>
+    <div class="carte" id="af-carte" hidden>
+      <div class="t">Accord fin (clé SDR)</div>
+      <div class="petit">Les aides de l'onglet SDR, comme sur le téléphone : elles touchent le décalage logiciel de la clé, jamais le poste.</div>
+      <label style="display:block;margin-top:8px"><input type="checkbox" id="af-loupe" onchange="post('api/sdr/accord?loupe=' + (this.checked ? 1 : 0)).then(ticSdr)"> <b>Loupe</b> <span class="petit">— une seconde vue du spectre, quelques kHz autour de l'écoute</span></label>
+      <label style="display:block;margin-top:6px"><input type="checkbox" id="af-vernier" onchange="post('api/sdr/accord?vernier=' + (this.checked ? 1 : 0)).then(ticSdr)"> <b>Vernier</b> <span class="petit">— un cadran qu'on pousse : la fréquence avance de N Hz par centimètre glissé</span></label>
+      <div class="ligne"><span class="petit">Rapport</span><select id="af-ratio" onchange="post('api/sdr/accord?ratio=' + this.value).then(ticSdr)"><option value="20">20 Hz / cm (fin)</option><option value="200">200 Hz / cm</option><option value="2000">2 kHz / cm (rapide)</option></select></div>
+      <label style="display:block;margin-top:6px"><input type="checkbox" id="af-voix" onchange="post('api/sdr/accord?voix=' + (this.checked ? 1 : 0)).then(ticSdr)"> <b>Caler sur la voix</b> <span class="petit">— en BLU, la voix entendue mise à sa place d'un clic</span></label>
+    </div>
     <div class="carte" id="sv-carte" hidden>
       <div class="t">Sauvegarde générale</div>
       <div class="petit">Toute la station dans un fichier, pour la retrouver sur un autre PC ou après une réinstallation : réglages (poste, rotor, QRZ, carnet en ligne…), carnet, journal des passages, APRS et ses trophées, planches SSTV. Elle contient tes mots de passe et clés : garde-la pour toi.</div>
@@ -1414,6 +1428,7 @@ const CATS_REG = [
   { id: 'satellites', nom: 'Satellites', ico: 'satellite_alt', desc: 'Éléments orbitaux, statut AMSAT', cartes: ['Éléments orbitaux', 'AMSAT'] },
   { id: 'enligne', nom: 'Services en ligne', ico: 'public', desc: 'QRZ.com, Wavelog / Cloudlog, skeds hams.at', cartes: ['QRZ.com', 'Carnet en ligne', 'Skeds'] },
   { id: 'telephone', nom: 'Téléphone', ico: 'smartphone', desc: 'SatMe sur le téléphone : réglages et contacts', cartes: ['Téléphone'] },
+  { id: 'accord', nom: 'Accord fin', ico: 'tune', desc: 'Loupe, vernier, calage sur la voix (clé SDR)', cartes: ['Accord fin'] },
   { id: 'sauvegarde', nom: 'Sauvegarde', ico: 'save', desc: 'Toute la station dans un fichier, et la restaurer', cartes: ['Sauvegarde'] },
 ];
 // The backup: its size, the link, a backup received waiting for the next start.
@@ -1800,7 +1815,7 @@ function vue(n) {
   document.querySelectorAll('#onglets button').forEach(b => b.classList.toggle('actif', b.dataset.v === n));
   try { localStorage.setItem('vue', n); } catch (x) {}
   if (n === 'carnet') { chargeCarnet(); g('c-call').focus(); vueCarnet(vueC); }
-  if (n === 'reglages') { rangeReglages(); majSauvegarde(); }
+  if (n === 'reglages') { rangeReglages(); majSauvegarde(); majAccordReglages(); }
   if (n === 'reglages') { chargeReglages().then(() => { if (!wlLu && v('carnetUrl')) { wlLu = true; essaiCarnet(); } }); chargeSources(); }
   if (n === 'son' || n === 'sstv') ticSon();
   if (n === 'sstv') ticMire(true);
@@ -3265,7 +3280,88 @@ async function ticSdr() {
   const pc = Math.max(0, Math.min(100, (r.niveau + 100) * 1.25));
   g('r-niveau').style.width = pc + '%'; txt('r-db', r.actif ? r.niveau.toFixed(0) + ' dB' : '');
   txt('r-sat-av', r.saturation > 0.002 ? 'saturation : baisser le gain' : '');
+  // Fine tuning: shown as chosen (Réglages › Accord fin).
+  g('af-carte').hidden = r.loupe === undefined;
+  coche('af-loupe', r.loupe); coche('af-vernier', r.vernier); coche('af-voix', r.calageVoix); val('af-ratio', r.ratio); val('r-loupe-span', r.loupeSpan);
+  g('r-loupe-boite').hidden = !r.loupe; g('r-vernier').hidden = !r.vernier; g('r-vernier-l').hidden = !r.vernier; g('r-ratios').hidden = !r.vernier;
+  g('r-voix').hidden = !r.calageVoix; g('r-voix').disabled = !r.actif || !(r.modeEff === 'USB' || r.modeEff === 'LSB');
+  g('r-ratios').innerHTML = [20, 200, 2000].map(k => '<button style="padding:2px 8px;font-size:11px' + (k === r.ratio ? ';border-color:var(--cyan);color:var(--cyan)' : '') +
+    '" onclick="post(\'api/sdr/accord?ratio=' + k + '\').then(ticSdr)">' + (k >= 1000 ? k / 1000 + ' kHz' : k + ' Hz') + '/cm</button>').join('');
+  dessineVernier();
 }
+// Réglages › Accord fin: shown when a dongle is known here (the phone's page sets these on the phone).
+async function majAccordReglages() {
+  let r; try { r = await (await fetch('api/sdr')).json(); } catch (x) { return; }
+  const ok = r && !r.absent && r.loupe !== undefined;
+  g('af-carte').hidden = !ok;
+  if (!ok) { const b = document.querySelector('#reg-nav button[data-cat="accord"]'); if (b) b.hidden = true; return; }
+  g('af-loupe').checked = r.loupe; g('af-vernier').checked = r.vernier; g('af-voix').checked = r.calageVoix; g('af-ratio').value = String(r.ratio);
+}
+async function caleVoix() { await post('api/sdr/voix'); setTimeout(ticSdr, 400); }
+// The vernier: a dial pushed by the finger or the mouse; the frequency moves N Hz per centimetre, with momentum.
+const PX_PAR_CM = 96 / 2.54;
+let vnDecal = 0, vnEnvoi = 0, vnTenu = null, vnVitesse = 0, vnDernier = 0;
+function hzParPx() { return ((R && R.ratio) || 200) / PX_PAR_CM; }
+function pasGraduation(hpp) { const min = 14 * hpp; for (let d = 1; d <= 1e8; d *= 10) for (const m of [1, 2, 5]) if (d * m >= min) return d * m; return 1e8; }
+function dessineVernier() {
+  const c = g('r-vernier'); if (!c || c.hidden || !R) return;
+  const [x, w, h] = toile(c), hpp = hzParPx(), centre = (R.ciel || 0) + (R.decalage || 0) + vnDecal, pas = pasGraduation(hpp);
+  x.fillStyle = '#0E1720'; x.fillRect(0, 0, w, h);
+  const bas = centre - w / 2 * hpp;
+  x.strokeStyle = '#5A6B7C'; x.fillStyle = '#9AA7B4'; x.font = '10px system-ui'; x.textAlign = 'center';
+  for (let f = Math.floor(bas / pas) * pas; f <= centre + w / 2 * hpp; f += pas) {
+    const px = w / 2 + (f - centre) / hpp, maj = Math.round(f / pas) % 5 === 0;
+    x.beginPath(); x.moveTo(px, h); x.lineTo(px, h - (maj ? 18 : 9)); x.stroke();
+    if (maj) x.fillText(((f % 1e6) / 1e3).toFixed(pas < 100 ? 2 : pas < 1000 ? 1 : 0), px, h - 22);
+  }
+  x.strokeStyle = '#FFB454'; x.lineWidth = 2; x.beginPath(); x.moveTo(w / 2, 0); x.lineTo(w / 2, h); x.stroke(); x.lineWidth = 1;
+}
+function vernierPousse(dxPx) {
+  vnDecal += -dxPx * hzParPx();
+  const n = Math.trunc(vnDecal);
+  if (n && Date.now() - vnEnvoi > 80) { vnEnvoi = Date.now(); vnDecal -= n; R.decalage = (R.decalage || 0) + n; post('api/sdr/pas?hz=' + n); }
+  dessineVernier();
+}
+(() => {
+  const c = g('r-vernier');
+  c.addEventListener('pointerdown', ev => { c.setPointerCapture(ev.pointerId); vnTenu = ev.clientX; vnVitesse = 0; vnDernier = performance.now(); });
+  c.addEventListener('pointermove', ev => {
+    if (vnTenu === null) return;
+    const now = performance.now(), dx = ev.clientX - vnTenu; vnTenu = ev.clientX;
+    vnVitesse = dx / Math.max(1, now - vnDernier) * 1000; vnDernier = now; vernierPousse(dx);
+  });
+  c.addEventListener('pointerup', () => {
+    vnTenu = null;
+    // Momentum: the dial keeps turning and slows down (τ = 0,32 s), as on the phone.
+    let v = vnVitesse, t0 = performance.now();
+    const elan = now => { const dt = (now - t0) / 1000; t0 = now; v *= Math.exp(-dt / 0.32); if (Math.abs(v) < 24 || vnTenu !== null) return; vernierPousse(v * dt); requestAnimationFrame(elan); };
+    if (Math.abs(v) > 24) requestAnimationFrame(elan);
+  });
+  c.addEventListener('wheel', ev => { ev.preventDefault(); vernierPousse(ev.deltaY > 0 ? -PX_PAR_CM / 4 : PX_PAR_CM / 4); }, { passive: false });
+})();
+// The magnifier: a few kHz around where we listen.
+let rLoupe = null;
+async function loupeSdr() {
+  if (g('v-sdr').hidden || !R || !R.actif || !R.loupe) return;
+  const c = g('r-loupe');
+  try { rLoupe = await (await fetch('api/sdr/spectre?span=' + R.loupeSpan + '&autour=ecoute&n=' + Math.min(512, Math.max(64, c.clientWidth)))).json(); } catch (x) { return; }
+  if (!rLoupe.db) return;
+  const [x, w, h] = toile(c), d = rLoupe.db, tri = d.slice().sort((a, b) => a - b), bruit = tri[Math.floor(tri.length * 0.3)], haut = Math.max(bruit + 20, tri[tri.length - 1]);
+  x.fillStyle = '#0E1720'; x.fillRect(0, 0, w, h);
+  const Y = v => h - 4 - (h - 8) * Math.max(0, Math.min(1, (v - (bruit - 8)) / (haut - bruit + 12)));
+  x.strokeStyle = '#3FE0C8'; x.lineWidth = 1.4; x.beginPath(); d.forEach((v, i) => { const px = i * w / d.length; i ? x.lineTo(px, Y(v)) : x.moveTo(px, Y(v)); }); x.stroke();
+  x.strokeStyle = '#FFB454'; x.beginPath(); x.moveTo(w / 2, 0); x.lineTo(w / 2, h); x.stroke();
+  x.fillStyle = '#9AA7B4'; x.font = '10px system-ui'; x.textAlign = 'center';
+  const pas = R.loupeSpan > 10000 ? 2000 : R.loupeSpan > 5000 ? 1000 : 500;
+  for (let f = -Math.floor(R.loupeSpan / 2 / pas) * pas; f <= R.loupeSpan / 2; f += pas) if (f) x.fillText((f > 0 ? '+' : '') + (f / 1000).toFixed(1), w / 2 + f / R.loupeSpan * w, 10);
+}
+setInterval(loupeSdr, 200);
+g('r-loupe').addEventListener('click', ev => {
+  if (!R) return;
+  const b = ev.currentTarget.getBoundingClientRect();
+  const hz = Math.round(((ev.clientX - b.left) / b.width - 0.5) * R.loupeSpan / 10) * 10;
+  post('api/sdr/pas?hz=' + hz).then(ticSdr);
+});
 setInterval(ticSdr, 700);
 async function spectreSdr() {
   if (g('v-sdr').hidden || !R || !R.actif) return;

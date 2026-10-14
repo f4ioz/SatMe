@@ -27,7 +27,7 @@ object ApiSdr {
     fun spectre(sp: FloatArray?, parBinHz: Double, centreHz: Double, span: Int, n: Int, trames: Long, pllHz: Long): JSONObject {
         if (sp == null || sp.isEmpty()) return JSONObject().put("trames", 0)
         val nb = sp.size
-        val largeur = span.coerceIn(6_000, 176_400).toDouble()
+        val largeur = span.coerceIn(2_000, 176_400).toDouble()
         val k = n.coerceIn(64, 2048)
         val v = IntArray(k) { i ->
             val a = centreHz - largeur / 2 + largeur * i / k

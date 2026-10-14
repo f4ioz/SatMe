@@ -193,7 +193,7 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
             "/api/qo100" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JsonPc.qo100(station, q["plan"] == "1").toString().toByteArray())
             "/api/sdr" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", (sdr?.let { JsonPc.sdr(it) } ?: JSONObject().put("absent", true)).toString().toByteArray())
             "/api/sdr/spectre" -> envoie(sortie, "200 OK", "application/json; charset=utf-8",
-                (sdr?.let { JsonPc.spectre(it, q["span"]?.toIntOrNull() ?: 48_000, q["n"]?.toIntOrNull() ?: 512) } ?: JSONObject()).toString().toByteArray())
+                (sdr?.let { JsonPc.spectre(it, q["span"]?.toIntOrNull() ?: 48_000, q["n"]?.toIntOrNull() ?: 512, q["autour"] == "ecoute") } ?: JSONObject()).toString().toByteArray())
             "/api/sondes" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", (sdr?.let { JsonPc.sondes(it) } ?: JSONObject().put("absent", true)).toString().toByteArray())
             "/api/meteor" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", (sdr?.let { JsonPc.meteor(it) } ?: JSONObject().put("absent", true)).toString().toByteArray())
             "/api/meteor/apercu.png" -> {
@@ -457,6 +457,17 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
             "/api/sdr/arreter" -> sdr?.arrete()
             "/api/sdr/decalage" -> q["hz"]?.toIntOrNull()?.let { sdr?.decalageHz = it }
             "/api/sdr/pic" -> sdr?.calePic()
+            "/api/sdr/voix" -> if (sdr?.caleVoix() != true) return JSONObject().put("ok", false).put("erreur", "le calage sur la voix sert en BLU (USB / LSB)")
+            // The vernier: the listened frequency pushed by [hz] (the dongle's software offset, ±80 kHz).
+            "/api/sdr/pas" -> q["hz"]?.toIntOrNull()?.let { h -> sdr?.let { it.decalageHz = it.decalageHz + h } }
+            "/api/sdr/accord" -> {
+                val st = station.settings
+                q["loupe"]?.let { st.sdrLoupe = it == "1" }
+                q["loupeSpan"]?.toIntOrNull()?.takeIf { it in fr.f4ioz.satcombo.domain.AccordFin.LOUPES }?.let { st.sdrLoupeSpanHz = it }
+                q["vernier"]?.let { st.sdrVernier = it == "1" }
+                q["ratio"]?.toIntOrNull()?.takeIf { it in fr.f4ioz.satcombo.domain.AccordFin.RAPPORTS }?.let { st.sdrVernierHzParCm = it }
+                q["voix"]?.let { st.sdrCalageVoix = it == "1" }
+            }
             "/api/sdr/reglage" -> {
                 val d = sdr ?: return JSONObject().put("ok", false)
                 val st = station.settings
@@ -842,6 +853,9 @@ object JsonPc {
             .put("gain", st.sdrGainTenthDb).put("agc", st.sdrAgc).put("ppm", st.sdrPpm).put("mode", d.modeChoisi).put("bw", st.sdrBandwidthHz)
             .put("squelch", st.sdrSquelchDb).put("son", st.sdrAudio).put("deemph", st.sdrDeemph).put("doppler", st.sdrDopplerTrack)
             .put("suit", d.suitSatellite).put("manuelle", d.manuelleHz).put("hote", d.hote).put("port", d.port).put("lance", d.lance).put("bias", d.biasTee)
+            // Fine tuning, the phone's settings: the magnifier, the vernier, the voice netting.
+            .put("modeEff", d.modeEffectif()).put("loupe", st.sdrLoupe).put("loupeSpan", st.sdrLoupeSpanHz)
+            .put("vernier", st.sdrVernier).put("ratio", st.sdrVernierHzParCm).put("calageVoix", st.sdrCalageVoix)
     }
 
     /**
@@ -849,10 +863,12 @@ object JsonPc {
      * covers) over [span] Hz around the Doppler target — the signal stays in
      * the middle while the satellite passes. Null values before the first.
      */
-    fun spectre(d: SdrPc, span: Int, n: Int): JSONObject {
+    fun spectre(d: SdrPc, span: Int, n: Int, autourEcoute: Boolean = false): JSONObject {
         val sp = d.spectre ?: return JSONObject().put("trames", 0)
         val e = d.etat.value
-        return fr.f4ioz.satcombo.demo.ApiSdr.spectre(sp, Dsp.RTL_RATE.toDouble() / Dsp.DECIM_1 / sp.size, e.fineHz.toDouble(), span, n, d.trames.toLong(), e.pllHz)
+        // The magnifier: around where we listen (the offset in), not around the Doppler target.
+        val centre = e.fineHz.toDouble() + if (autourEcoute) e.decalageHz else 0
+        return fr.f4ioz.satcombo.demo.ApiSdr.spectre(sp, Dsp.RTL_RATE.toDouble() / Dsp.DECIM_1 / sp.size, centre, span, n, d.trames.toLong(), e.pllHz)
     }
 
     /** QO-100: the pilot's state, the dish and the Sun; with [plan], the band plan and the presets (they never change). */
