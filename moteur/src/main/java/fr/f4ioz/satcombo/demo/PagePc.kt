@@ -158,8 +158,16 @@ object PagePc {
   .cr-corps { display:flex; gap:14px; margin-top:8px; flex-wrap:wrap; }
   .cr-ciel { width:min(100%, 280px); flex:none; }
   .cr-infos { flex:1; min-width:200px; }
-  .amsat-boite { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-top:6px; padding:6px 10px; border:1px solid rgba(234,3,3,.6); border-radius:10px; background:rgba(234,3,3,.06); }
-  .amsat-boite .amsat-logo { width:26px; height:26px; flex:none; background:#fff; border-radius:50%; padding:1px; }
+  .amsat-boite { display:flex; align-items:center; gap:4px 6px; flex-wrap:wrap; justify-content:flex-end; margin-left:auto; max-width:230px;
+    padding:4px 8px; border:1px solid rgba(234,3,3,.6); border-radius:10px; background:rgba(234,3,3,.06); font-size:12px; }
+  .amsat-boite .amsat-logo { width:18px; height:18px; flex:none; background:#fff; border-radius:50%; padding:1px; }
+  .amsat-boite button { padding:2px 8px; font-size:11px; }
+  .amsat-boite .petit { font-size:11px; }
+  .materiel { cursor:pointer; }
+  .materiel b { font-size:14px; }
+  .coche { font-weight:800; }
+  .coche.on { color:var(--vert); }
+  .coche.off { color:var(--gris, #6B7C8F); font-weight:400; font-size:12px; }
   .amsat-boite b { color:#FF6B6B; letter-spacing:.5px; }
   .cr-carte { position:relative; height:200px; margin-top:10px; border-radius:8px; overflow:hidden; }
   .cr-carte canvas { position:absolute; inset:0; width:100%; height:100%; cursor:grab; }
@@ -309,13 +317,12 @@ object PagePc {
         <datalist id="tous"></datalist>
         <button onclick="choisitParNom()">Suivre</button>
       </div>
-      <div class="paire"><span class="gros" id="nom">—</span><button id="fav" class="discret" title="Favori" onclick="basculeFavori()" style="font-size:20px;padding:2px 8px">☆</button><span id="compte" class="val ambre"></span></div>
-      <div class="amsat-boite" title="AMSAT Live OSCAR Status : ce que les stations entendent, et tes rapports"><svg class="amsat-logo" viewBox="0 0 24 24" role="img" aria-label="AMSAT"><path d="M12,6.7 a5.3,5.3 0 1,0 0,10.6 a5.3,5.3 0 1,0 0,-10.6" fill="#EA0303"/><path d="M6.9,12 L17.1,12 M12,6.9 L12,17.1 M7.6,9.1 Q12,7.3 16.4,9.1 M7.6,14.9 Q12,16.7 16.4,14.9" stroke="#fff" stroke-width=".9" fill="none"/><path d="M14.4,20.3 A8.6,8.6 0 1,0 5.92,5.92" stroke="#EA0303" stroke-width="2.1" fill="none"/><path d="M3.7,8.14 L7.27,7.27 L4.5,4.5 Z" fill="#EA0303"/></svg>
-        <b>AMSAT</b><span class="petit" id="amsat"></span>
-        <span style="margin-left:auto" class="petit">Rapport :</span>
-        <button onclick="rapportAmsat(1)" title="Dire à amsat.org que tu l'entends maintenant">Entendu</button>
-        <button onclick="rapportAmsat(0)" title="Dire à amsat.org que tu ne l'entends pas">Pas entendu</button>
-        <span class="petit" id="amsat-auto" style="flex-basis:100%"></span></div>
+      <div class="paire" style="flex-wrap:nowrap;align-items:center"><span class="gros" id="nom" style="white-space:nowrap">—</span><button id="fav" class="discret" title="Favori" onclick="basculeFavori()" style="font-size:20px;padding:2px 8px">☆</button><span id="compte" class="val ambre" style="white-space:nowrap"></span>
+        <div class="amsat-boite" title="AMSAT Live OSCAR Status : ce que les stations entendent, et tes rapports"><svg class="amsat-logo" viewBox="0 0 24 24" role="img" aria-label="AMSAT"><path d="M12,6.7 a5.3,5.3 0 1,0 0,10.6 a5.3,5.3 0 1,0 0,-10.6" fill="#EA0303"/><path d="M6.9,12 L17.1,12 M12,6.9 L12,17.1 M7.6,9.1 Q12,7.3 16.4,9.1 M7.6,14.9 Q12,16.7 16.4,14.9" stroke="#fff" stroke-width=".9" fill="none"/><path d="M14.4,20.3 A8.6,8.6 0 1,0 5.92,5.92" stroke="#EA0303" stroke-width="2.1" fill="none"/><path d="M3.7,8.14 L7.27,7.27 L4.5,4.5 Z" fill="#EA0303"/></svg>
+          <b>AMSAT</b><span class="petit" id="amsat"></span>
+          <button onclick="rapportAmsat(1)" title="Dire à amsat.org que tu l'entends maintenant">Entendu</button>
+          <button onclick="rapportAmsat(0)" title="Dire à amsat.org que tu ne l'entends pas">Pas entendu</button>
+          <span class="petit" id="amsat-auto"></span></div></div>
       <div class="paire" style="margin-top:6px">
         <span>Az <span class="val cyan" id="az">—</span></span>
         <span>El <span class="val cyan" id="el">—</span></span>
@@ -353,6 +360,7 @@ object PagePc {
         <div class="bouton-gr"><button onclick="regle('tx',10)">+10</button><button onclick="regle('tx',50)">+50</button></div></div>
       <div class="ligne"><button onclick="post('api/sat/reglage?memorise=1')" title="Garder ces deux valeurs comme celles qui marchent pour ce satellite">Mémoriser</button>
         <button id="r-retour" onclick="post('api/sat/reglage?retour=1')">Revenir à la référence</button><span class="petit" id="r-ref"></span></div>
+      <div class="ligne"><label class="petit"><input type="checkbox" id="maintien" onchange="post('api/maintien?on='+(this.checked?1:0))"> Doppler en pause</label></div>
       <div class="ligne" id="repos-ligne" style="display:none">
         <span class="petit">Dans le transpondeur</span>
         <div class="bouton-gr">
@@ -363,88 +371,11 @@ object PagePc {
       </div>
     </div>
 
-    <div class="carte">
-      <div class="t">Poste (CAT) <span id="cat-pastille" class="pastille off">déconnecté</span></div>
-      <div class="ligne" style="margin-top:0">
-        <select id="cat-modele">
-          <option value="IC9700">Icom IC-9700</option><option value="IC9100">Icom IC-9100</option>
-          <option value="IC910">Icom IC-910H</option><option value="TS2000">Kenwood TS-2000</option>
-          <option value="PAIRE">Deux postes (FT-817 / IC-705)</option><option value="THD72">Kenwood TH-D72</option>
-          <option value="SIM">IC-9700 simulé (rien n'est ouvert)</option><option value="TS2000SIM">TS-2000 simulé (rien n'est ouvert)</option>
-        </select>
-        <select id="cat-baud"><option value="0">vitesse du poste</option><option>115200</option><option>57600</option><option>38400</option><option>19200</option><option>9600</option><option>4800</option></select>
+    <div class="carte materiel" onclick="vue('reglages')" title="Poste et rotor : leurs réglages sont dans l'onglet Réglages">
+      <div class="paire" style="margin:0">
+        <span><span class="petit">Poste</span> <b id="st-poste">—</b> <span id="st-poste-ok" class="coche"></span></span>
+        <span><span class="petit">Rotor</span> <b id="st-rotor">—</b> <span id="st-rotor-ok" class="coche"></span></span>
       </div>
-      <div class="ligne"><span class="petit" id="cat-port-nom" style="min-width:34px"></span><select id="cat-port"></select>
-        <select id="cat-rx-type" style="max-width:110px"><option value="0">FT-817</option><option value="1">IC-705</option></select>
-        <button onclick="chargePorts()" title="Relire les ports">↻</button></div>
-      <div class="ligne" id="cat-tx-ligne"><span class="petit" style="min-width:34px">TX</span><select id="cat-port-tx"></select>
-        <select id="cat-tx-type" style="max-width:110px"><option value="0">FT-817</option><option value="1">IC-705</option></select></div>
-      <div class="ligne" id="cat-bande-ligne"><span class="petit">Émission sur la bande</span>
-        <select id="cat-bande"><option value="0">A</option><option value="1">B</option></select></div>
-      <div class="ligne">
-        <button class="primaire" id="cat-co" onclick="catConnecte()">Connecter</button>
-        <button id="cat-deco" onclick="post('api/cat/deconnecter')">Déconnecter</button>
-        <label class="petit"><input type="checkbox" id="maintien" onchange="post('api/maintien?on='+(this.checked?1:0))"> Doppler en pause</label>
-      </div>
-      <div class="avert" id="cat-avert"></div>
-      <div class="paire" style="margin-top:8px">
-        <span class="petit">Poste RX <span class="val" id="cat-dl">—</span></span>
-        <span class="petit">TX <span class="val" id="cat-ul">—</span></span>
-        <span class="petit" id="cat-mode"></span>
-      </div>
-      <div class="etat" id="cat-statut"></div>
-      <div class="petit" id="cat-thd72-aide" hidden style="margin-top:6px">Le TH-D72 se présente comme « CP2102 USB to UART Bridge Controller » ; une fois connecté, SatMe le nomme « Kenwood TH-D72 » dans les listes. Sur ce câble : le CAT ou le KISS (onglet APRS), pas les deux à la fois.</div>
-    </div>
-
-    <div class="carte" id="thd72-carte" hidden>
-      <div class="t">Kenwood TH-D72 <span class="petit" id="thd72-msg"></span></div>
-      <table><tbody id="thd72-bandes"></tbody></table>
-      <div class="ligne"><span class="petit">Émission sur la bande</span>
-        <select id="thd72-tx" style="flex:none" onchange="thPost('bandetx?b=' + this.value)"><option value="0">A</option><option value="1">B</option></select>
-        <button onclick="thPost('lire')">Relire</button></div>
-      <div class="petit" style="margin-top:4px">Chaque changement part au poste quand tu le demandes ; la lecture ne change rien. Puissance : H haute, L basse, EL très basse.</div>
-    </div>
-
-    <div class="carte">
-      <div class="t">Rotor <span id="rot-pastille" class="pastille off">déconnecté</span></div>
-      <div class="ligne" style="margin-top:0">
-        <select id="rot-lien" onchange="lienRotor()">
-          <option value="GS232">GS-232 (port série)</option><option value="ROTCTLD">rotctld (réseau)</option><option value="SIM">Rotor simulé</option>
-        </select>
-        <select id="rot-baud"><option>9600</option><option>4800</option><option>19200</option><option>115200</option></select>
-      </div>
-      <div class="ligne" id="rot-serie"><select id="rot-port"></select><button onclick="chargePorts()" title="Relire les ports">↻</button></div>
-      <div class="ligne" id="rot-tcp" style="display:none"><input id="rot-hote" placeholder="hôte"><input id="rot-tcpport" placeholder="4533" style="max-width:90px"></div>
-      <div class="ligne">
-        <button class="primaire" onclick="rotConnecte()">Connecter</button>
-        <button onclick="post('api/rotor/deconnecter')">Déconnecter</button>
-        <label class="petit"><input type="checkbox" id="rot-suit" onchange="post('api/rotor/suivre?on='+(this.checked?1:0))"> Suivre le satellite</label>
-      </div>
-      <div class="ligne">
-        <button onclick="post('api/rotor/parquer')">Parquer</button>
-        <button class="rouge" onclick="post('api/rotor/stop')">Stop</button>
-        <input id="rot-az" placeholder="az" style="max-width:70px"><input id="rot-el" placeholder="el" style="max-width:70px">
-        <button onclick="post('api/rotor/aller?az='+enc(v('rot-az'))+'&el='+enc(v('rot-el')))">Aller</button>
-      </div>
-      <div class="paire" style="margin-top:8px">
-        <span class="petit">Mât <span class="val" id="rot-pos">—</span></span>
-        <span class="petit">Cible <span class="val" id="rot-cible">—</span></span>
-      </div>
-      <div class="etat" id="rot-statut"></div>
-      <div class="diag" id="rot-diag"></div>
-      <details id="rot-reg" style="margin-top:8px"><summary class="petit" style="cursor:pointer">Réglages du rotor</summary>
-        <div class="ligne"><span class="petit" style="min-width:120px">Azimut max</span><select id="r-maxAz"><option>360</option><option>450</option><option>540</option></select>
-          <span class="petit">Élévation max</span><select id="r-maxEl"><option>90</option><option>180</option></select></div>
-        <div class="ligne"><span class="petit" style="min-width:120px">Butée</span><select id="r-butee"><option value="NORTH">au nord</option><option value="SOUTH">au sud</option></select>
-          <label class="petit"><input type="checkbox" id="r-depuisButee"> compte depuis la butée</label></div>
-        <div class="ligne"><label class="petit"><input type="checkbox" id="r-flip"> retournement (flip)</label>
-          <label class="petit"><input type="checkbox" id="r-azSeul"> azimut seul</label></div>
-        <div class="ligne"><span class="petit" style="min-width:120px">Parking az / el</span><input id="r-parkAz" style="max-width:70px"><input id="r-parkEl" style="max-width:70px"></div>
-        <div class="ligne"><span class="petit" style="min-width:120px">Élévation min</span><input id="r-minEl" style="max-width:70px">
-          <span class="petit">Écart avant de bouger</span><input id="r-ecart" style="max-width:60px"></div>
-        <div class="ligne"><span class="petit" style="min-width:120px">Attente avant AOS (min)</span><input id="r-avantAos" style="max-width:60px">
-          <button onclick="reglagesRotor()">Appliquer</button></div>
-      </details>
     </div>
 
   </div>
@@ -1087,6 +1018,94 @@ object PagePc {
 </div>
 </div>
 <div class="vue" id="v-reglages" hidden>
+<div class="grille2 reg-materiel">
+  <div>
+    <div class="carte">
+      <div class="t">Poste (CAT) <span id="cat-pastille" class="pastille off">déconnecté</span></div>
+      <div class="ligne" style="margin-top:0">
+        <select id="cat-modele">
+          <option value="IC9700">Icom IC-9700</option><option value="IC9100">Icom IC-9100</option>
+          <option value="IC910">Icom IC-910H</option><option value="TS2000">Kenwood TS-2000</option>
+          <option value="PAIRE">Deux postes (FT-817 / IC-705)</option><option value="THD72">Kenwood TH-D72</option>
+          <option value="SIM">IC-9700 simulé (rien n'est ouvert)</option><option value="TS2000SIM">TS-2000 simulé (rien n'est ouvert)</option>
+        </select>
+        <select id="cat-baud"><option value="0">vitesse du poste</option><option>115200</option><option>57600</option><option>38400</option><option>19200</option><option>9600</option><option>4800</option></select>
+      </div>
+      <div class="ligne"><span class="petit" id="cat-port-nom" style="min-width:34px"></span><select id="cat-port"></select>
+        <select id="cat-rx-type" style="max-width:110px"><option value="0">FT-817</option><option value="1">IC-705</option></select>
+        <button onclick="chargePorts()" title="Relire les ports">↻</button></div>
+      <div class="ligne" id="cat-tx-ligne"><span class="petit" style="min-width:34px">TX</span><select id="cat-port-tx"></select>
+        <select id="cat-tx-type" style="max-width:110px"><option value="0">FT-817</option><option value="1">IC-705</option></select></div>
+      <div class="ligne" id="cat-bande-ligne"><span class="petit">Émission sur la bande</span>
+        <select id="cat-bande"><option value="0">A</option><option value="1">B</option></select></div>
+      <div class="ligne">
+        <button class="primaire" id="cat-co" onclick="catConnecte()">Connecter</button>
+        <button id="cat-deco" onclick="post('api/cat/deconnecter')">Déconnecter</button>
+      </div>
+      <div class="avert" id="cat-avert"></div>
+      <div class="paire" style="margin-top:8px">
+        <span class="petit">Poste RX <span class="val" id="cat-dl">—</span></span>
+        <span class="petit">TX <span class="val" id="cat-ul">—</span></span>
+        <span class="petit" id="cat-mode"></span>
+      </div>
+      <div class="etat" id="cat-statut"></div>
+      <div class="petit" id="cat-thd72-aide" hidden style="margin-top:6px">Le TH-D72 se présente comme « CP2102 USB to UART Bridge Controller » ; une fois connecté, SatMe le nomme « Kenwood TH-D72 » dans les listes. Sur ce câble : le CAT ou le KISS (onglet APRS), pas les deux à la fois.</div>
+    </div>
+
+    <div class="carte" id="thd72-carte" hidden>
+      <div class="t">Kenwood TH-D72 <span class="petit" id="thd72-msg"></span></div>
+      <table><tbody id="thd72-bandes"></tbody></table>
+      <div class="ligne"><span class="petit">Émission sur la bande</span>
+        <select id="thd72-tx" style="flex:none" onchange="thPost('bandetx?b=' + this.value)"><option value="0">A</option><option value="1">B</option></select>
+        <button onclick="thPost('lire')">Relire</button></div>
+      <div class="petit" style="margin-top:4px">Chaque changement part au poste quand tu le demandes ; la lecture ne change rien. Puissance : H haute, L basse, EL très basse.</div>
+    </div>
+
+  </div>
+  <div>
+    <div class="carte">
+      <div class="t">Rotor <span id="rot-pastille" class="pastille off">déconnecté</span></div>
+      <div class="ligne" style="margin-top:0">
+        <select id="rot-lien" onchange="lienRotor()">
+          <option value="GS232">GS-232 (port série)</option><option value="ROTCTLD">rotctld (réseau)</option><option value="SIM">Rotor simulé</option>
+        </select>
+        <select id="rot-baud"><option>9600</option><option>4800</option><option>19200</option><option>115200</option></select>
+      </div>
+      <div class="ligne" id="rot-serie"><select id="rot-port"></select><button onclick="chargePorts()" title="Relire les ports">↻</button></div>
+      <div class="ligne" id="rot-tcp" style="display:none"><input id="rot-hote" placeholder="hôte"><input id="rot-tcpport" placeholder="4533" style="max-width:90px"></div>
+      <div class="ligne">
+        <button class="primaire" onclick="rotConnecte()">Connecter</button>
+        <button onclick="post('api/rotor/deconnecter')">Déconnecter</button>
+        <label class="petit"><input type="checkbox" id="rot-suit" onchange="post('api/rotor/suivre?on='+(this.checked?1:0))"> Suivre le satellite</label>
+      </div>
+      <div class="ligne">
+        <button onclick="post('api/rotor/parquer')">Parquer</button>
+        <button class="rouge" onclick="post('api/rotor/stop')">Stop</button>
+        <input id="rot-az" placeholder="az" style="max-width:70px"><input id="rot-el" placeholder="el" style="max-width:70px">
+        <button onclick="post('api/rotor/aller?az='+enc(v('rot-az'))+'&el='+enc(v('rot-el')))">Aller</button>
+      </div>
+      <div class="paire" style="margin-top:8px">
+        <span class="petit">Mât <span class="val" id="rot-pos">—</span></span>
+        <span class="petit">Cible <span class="val" id="rot-cible">—</span></span>
+      </div>
+      <div class="etat" id="rot-statut"></div>
+      <div class="diag" id="rot-diag"></div>
+      <details id="rot-reg" style="margin-top:8px"><summary class="petit" style="cursor:pointer">Réglages du rotor</summary>
+        <div class="ligne"><span class="petit" style="min-width:120px">Azimut max</span><select id="r-maxAz"><option>360</option><option>450</option><option>540</option></select>
+          <span class="petit">Élévation max</span><select id="r-maxEl"><option>90</option><option>180</option></select></div>
+        <div class="ligne"><span class="petit" style="min-width:120px">Butée</span><select id="r-butee"><option value="NORTH">au nord</option><option value="SOUTH">au sud</option></select>
+          <label class="petit"><input type="checkbox" id="r-depuisButee"> compte depuis la butée</label></div>
+        <div class="ligne"><label class="petit"><input type="checkbox" id="r-flip"> retournement (flip)</label>
+          <label class="petit"><input type="checkbox" id="r-azSeul"> azimut seul</label></div>
+        <div class="ligne"><span class="petit" style="min-width:120px">Parking az / el</span><input id="r-parkAz" style="max-width:70px"><input id="r-parkEl" style="max-width:70px"></div>
+        <div class="ligne"><span class="petit" style="min-width:120px">Élévation min</span><input id="r-minEl" style="max-width:70px">
+          <span class="petit">Écart avant de bouger</span><input id="r-ecart" style="max-width:60px"></div>
+        <div class="ligne"><span class="petit" style="min-width:120px">Attente avant AOS (min)</span><input id="r-avantAos" style="max-width:60px">
+          <button onclick="reglagesRotor()">Appliquer</button></div>
+      </details>
+    </div>
+  </div>
+</div>
 <div class="grille2">
   <div>
     <div class="carte">
@@ -1347,8 +1366,11 @@ function dessine() {
   g('fav').style.display = E.suivi ? '' : 'none';
   txt('fav', E.suivi && E.suivi.fav ? '★' : '☆'); g('fav').style.color = E.suivi && E.suivi.fav ? 'var(--ambre)' : 'var(--gris)';
   const am = E.suivi && E.suivi.amsat;
-  txt('amsat', am ? (AMSAT[am.statut] || AMSAT.UNKNOWN)[1] + (am.mode ? ' (' + am.mode + ')' : '') + ' · ' + am.actifs + ' rapport(s) « entendu »' : 'pas de statut pour ce satellite');
-  txt('amsat-auto', E.amsatAuto ? 'Signalement automatique activé (Réglages)' + (E.amsatEtat ? ' · ' + E.amsatEtat : '') : 'Signalement automatique coupé (Réglages)');
+  txt('amsat', am ? (AMSAT[am.statut] || AMSAT.UNKNOWN)[1] + (am.mode ? ' (' + am.mode + ')' : '') + ' · ' + am.actifs : 'pas de statut');
+  g('amsat').title = am ? am.actifs + ' rapport(s) « entendu » sur amsat.org ces derniers jours' : 'amsat.org n’a pas de statut pour ce satellite';
+  txt('amsat-auto', E.amsatAuto ? 'auto ✓' : 'auto ✕');
+  g('amsat-auto').dataset.etat = E.amsatEtat || '';
+  g('amsat-auto').title = (E.amsatAuto ? 'Signalement automatique à amsat.org activé' + (E.amsatEtat ? ' : ' + E.amsatEtat : '') : 'Signalement automatique à amsat.org coupé') + ' (Réglages)';
   txt('c-sat', E.suivi ? '· ' + E.suivi.nom + (E.position ? ' · El ' + Math.round(E.position.el) + '°' : '') : '· choisis le satellite ci-dessous');
   menuSatCarnet();
   const p = E.position;
@@ -1391,6 +1413,11 @@ function dessine() {
   dessineAgenda();
   // CAT
   const c = E.cat;
+  // Station shows the rig and the mast by name, a green tick when connected; their settings are in Réglages.
+  const om = [...g('cat-modele').options].find(o => o.value === c.modele);
+  txt('st-poste', om ? om.text.replace(/ \(rien n'est ouvert\)/, '') : c.modele);
+  g('st-poste-ok').className = 'coche ' + (c.connecte ? 'on' : 'off');
+  txt('st-poste-ok', c.connecte ? '✓' : 'non connecté');
   g('cat-pastille').className = 'pastille ' + (c.connecte ? 'on' : 'off');
   txt('cat-pastille', c.connecte ? (c.simule ? 'simulé' : 'connecté') : 'déconnecté');
   txt('cat-statut', c.statut);
@@ -1400,6 +1427,10 @@ function dessine() {
   g('maintien').checked = c.maintien;
   // Rotor
   const r = E.rotor;
+  const rl = { GS232: 'GS-232', ROTCTLD: 'rotctld' }[r.lien] || r.lien || '—';
+  txt('st-rotor', r.simule ? 'simulé' : rl);
+  g('st-rotor-ok').className = 'coche ' + (r.connecte ? 'on' : 'off');
+  txt('st-rotor-ok', r.connecte ? '✓' : 'non connecté');
   g('rot-pastille').className = 'pastille ' + (r.connecte ? 'on' : 'off');
   txt('rot-pastille', r.connecte ? (r.simule ? 'simulé' : 'connecté') : 'déconnecté');
   txt('rot-statut', r.statut + (r.attente ? ' · attend le lever' : ''));

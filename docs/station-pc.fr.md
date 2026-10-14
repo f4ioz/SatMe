@@ -4,7 +4,9 @@
 
 SatMe tourne sur un PC (Linux, Windows, Raspberry Pi) et se pilote depuis un navigateur. Son cœur est **le même code que sur le téléphone** : boucle Doppler, suivi du rotor, journal des passages, SSTV, METEOR, APRS, FT8 et carnet viennent du module commun `:moteur`.
 
-<p align="center"><img src="images/pc-station.webp" width="100%" alt="SatMe-PC, onglet Station : les prochains passages, FO-29 suivi sur le ciel, les fréquences corrigées du Doppler, un IC-9700 et un rotor simulés"></p>
+<p align="center"><img src="images/satme-ensemble-fr.svg" width="100%" alt="Les trois SatMe : le téléphone, SatMe-PC et SatMe-Node au pied du mât ; le téléphone rejoint le PC par un QR code ; le même moteur partout"></p>
+
+<p align="center"><img src="images/pc-station.webp" width="100%" alt="SatMe-PC, onglet Station : les prochains passages, le satellite suivi sur le ciel, l'encart AMSAT, les fréquences corrigées du Doppler, le poste et le rotor avec leur coche verte"></p>
 
 ## L'installer
 
@@ -19,11 +21,13 @@ SatMe tourne sur un PC (Linux, Windows, Raspberry Pi) et se pilote depuis un nav
 | `--dossier DIR` | où sont gardés réglages, carnet, journal et enregistrements (`~/.satme`, `%APPDATA%\SatMe` sous Windows) |
 | `--noeud` | SatMe-Node : seulement le MiniTiouner, piloté par le réseau |
 
+**La page sur les autres machines du réseau** (une tablette, le PC du salon) : lancer `satme --reseau`, puis ouvrir `http://<adresse du PC>:8090/` (`hostname -I` la donne). Sous Linux avec ufw, ouvrir le port au réseau local une fois, dans un terminal : `sudo ufw allow from 192.168.0.0/24 to any port 8090 proto tcp` (adapter la plage à sa box). La page n'a pas de mot de passe : réseau de la maison seulement, jamais ouvert sur internet.
+
 ## Les onglets
 
-- **Station** : les passages des 24 prochaines heures (favoris, entendus ces jours-ci sur AMSAT, agenda), le satellite suivi sur le ciel ou la carte, les fréquences corrigées du Doppler avec les calages RX/TX, le poste (CAT) et le rotor.
-- **Carnet** : un contact se saisit avec l'indicatif prédit d'après le carnet et QRZ (Tab passe d'une prédiction à l'autre, Entrée valide). À côté, la station en direct : le satellite, ses fréquences, le polar plot, le rotor, où l'on est dans la bande passante, l'enregistrement. La fiche de l'indicatif : tous les contacts passés et leurs notes, la fiche QRZ.com (photo, distance, carte) si on la veut.
-- **Agenda**, **Frise** (les passages sur une frise), **Carrés** (les carrés contactés sur une carte).
+- **Station** : les passages des 24 prochaines heures (favoris, entendus ces jours-ci sur AMSAT, agenda), le satellite suivi sur le ciel ou la carte, à droite de son nom l'**encart AMSAT** (ce que les stations entendent, « Entendu » / « Pas entendu » en un clic), les fréquences corrigées du Doppler avec les calages RX/TX, **● Enregistrer le son**, et **le poste et le rotor par leur nom, une coche verte ✓ quand ils sont connectés** — un clic mène à leurs réglages.
+- **Carnet** : un contact se saisit avec l'indicatif prédit d'après le carnet et QRZ (Tab passe d'une prédiction à l'autre, Entrée valide). À côté, la station en direct : le satellite, ses fréquences, le polar plot, le rotor, où l'on est dans la bande passante, l'enregistrement — lancé aussi d'ici. La fiche de l'indicatif : tous les contacts passés et leurs notes, la fiche QRZ.com (photo, distance, carte) si on la veut. Un contact oublié s'ajoute après le passage, à son heure.
+- **Agenda** (les rendez-vous, et le **mode automatique**, voir plus bas), **Frise** (les passages sur une frise), **Carrés** (les carrés contactés sur une carte).
 - **Sked** : les fenêtres où une autre station et vous voyez tous deux un satellite, rejouées sur la carte avec les deux ciels, et faites en vidéo.
 - **QO-100** : le plan de bande du transpondeur bande étroite, le calage sur la balise, la chaîne de station (convertisseurs), et le transpondeur vu par la clé SDR.
 - **DATV** : la bande large de QO-100 avec un MiniTiouner, voir plus bas.
@@ -32,12 +36,36 @@ SatMe tourne sur un PC (Linux, Windows, Raspberry Pi) et se pilote depuis un nav
 - **Son** (carte son, enregistrement), **SSTV** (décodage en direct, les images dans une visionneuse), **APRS**, **FT8 / FT4**.
 - **Planche** : la planche SSTV, comme sur le téléphone — les images sur un modèle (une grille, autour du titre, ou un modèle ARISS importé dont les cases sont trouvées), remplies par ordre de réception ou en les glissant, les textes, puis la planche téléchargée en pleine taille (PNG).
 - **Journal** : les passages rejoués avec leur son, faits en image, vidéo ou GIF.
-- **Réglages** : station, éléments orbitaux, QRZ.com, carnet en ligne, convertisseurs.
+- **Réglages** : **le poste (CAT) et le rotor** en tête (modèle, port, connexion, butées, parking), puis la station, les éléments orbitaux, QRZ.com, le carnet en ligne, les convertisseurs.
 
 <p align="center">
 <img src="images/pc-carnet.webp" width="49%" alt="Onglet Carnet : un nouveau contact, et à côté la station en direct — FO-29, ses fréquences, le polar plot, le rotor">
 <img src="images/pc-carnet-contacts.webp" width="49%" alt="Onglet Carnet, les contacts : en cocher plusieurs pour les supprimer, l'état d'envoi de chacun">
 </p>
+
+## Mode automatique : ne manquer aucun passage
+
+Onglet **Agenda**. On choisit ses satellites (un par un, ou tous les ★ d'un coup) et une élévation minimale ; SatMe-PC liste leurs passages des 24 prochaines heures. Chacun peut être écarté d'une coche.
+
+- **5 minutes avant l'AOS**, le satellite du passage devient le satellite suivi : **le poste (CAT, Doppler) et le rotor le suivent** — le rotor va attendre à l'azimut du lever.
+- **Le son est enregistré** de 5 s avant l'AOS à 30 s après le LOS (la carte son de l'onglet Son), et le passage arrive dans le **journal**, rejouable avec son son.
+- **Deux passages en même temps** : le premier continue, l'autre est marqué « pendant … » ; écarter le premier garde le second.
+- Changer de satellite à la main pendant un passage reste possible : le mode automatique ne reprend pas la main avant le passage suivant.
+- La carte dit ce qui manque : poste non connecté, rotor sans « Suivre », carte son arrêtée.
+
+Le même mode est sur le téléphone (*Réglages → Enregistrement / SSTV & NOAA → Mode automatique*), écran éteint compris ; ses choix et ceux du PC se règlent de la même façon.
+
+<p align="center">
+<img src="images/pc-agenda-auto.webp" width="66%" alt="Onglet Agenda : le mode automatique, les satellites choisis, les passages des 24 h à garder ou écarter, ceux perdus pendant un autre">
+<img src="images/fr-veille.webp" width="24%" alt="Le mode automatique sur le téléphone : les satellites choisis, 16 passages armés">
+</p>
+
+## Enregistrer le son
+
+- **● Enregistrer le son** dans Station, Carnet et Son : un WAV au nom du satellite (`SatMe_RS-44_20261013_203051Z.wav`), comme sur le téléphone.
+- **Couper à la fin du passage** (option) : même lancé à la main, l'enregistrement s'arrête 30 s après le LOS du passage qu'il a pris.
+- **Chaque passage du satellite suivi** (option de l'onglet Son), ou ceux du **mode automatique**.
+- Un enregistrement arrêté à la main ne repart pas tout seul avant le passage suivant.
 
 ## Le carnet et le carnet en ligne
 
@@ -55,11 +83,21 @@ Dans le carnet, **Importer → SatMe sur le téléphone** :
 - Les passages du téléphone sont listés ; ceux cochés arrivent avec leurs **images SSTV**, leurs **enregistrements** (en WAV, l'annonce parlée retirée) et leurs **contacts** (ajoutés au carnet s'ils n'y sont pas déjà).
 - Un **fichier de passage (.zip)** fait sur le téléphone peut aussi être déposé sur la page.
 
+<p align="center"><img src="images/satme-qr-fr.svg" width="100%" alt="Du téléphone au PC en trois gestes : le PC affiche un QR code, le téléphone le scanne, les passages cochés arrivent avec leurs contacts, images SSTV et sons"></p>
+
 <p align="center"><img src="images/pc-telephone.webp" width="70%" alt="Le téléphone rejoint le PC en scannant un QR code"></p>
 
 ## Journal des passages
 
 La page du journal du téléphone, sous les onglets du PC : les passages listés (♪ quand il y a du son), rejoués sur le ciel ou la carte avec le S-mètre, la fréquence, les contacts et les images à leur place. « Fabriquer » : son, image, vidéo, GIF ou fichier de passage. **Le cadre du fichier est dessiné sur le rejeu** (téléphone 3:4 ou écran 16:9) : ce qui est dans le cadre est ce que montre le fichier.
+
+- **Le passage entier** sur la carte : la trace prévue en pointillés, la partie suivie en plein — même quand SatMe-PC a été lancé en cours de passage.
+- **Chaque contact à sa place, comme dans la vidéo** : un point sur la trace au moment du QSO, avec l'indicatif, et la station à son carré, reliée à lui.
+- **Le S-mètre** lu par le CAT (IC-9700, IC-9100, IC-910H, TS-2000), en réception seulement.
+- **Ajouter** un contact au rejeu : en pause, l'heure est celle du son ; indicatif prédit et QRZ, mode et fréquences du satellite, RST (59 / 59 d'origine) et commentaire ; Entrée valide.
+- **+ Passage** : un passage fait de rien — le satellite et ses heures, des contacts, un son, des images.
+
+<p align="center"><img src="images/pc-journal-carte.webp" width="100%" alt="Journal : RS-44 rejoué sur la carte, la trace prévue en pointillés, l'empreinte, F5RRO à sa place sur la trace et à son carré"></p>
 
 <p align="center">
 <img src="images/pc-journal.webp" width="49%" alt="Journal des passages : un passage de l'ISS rejoué sur la carte">
@@ -71,6 +109,12 @@ La page du journal du téléphone, sous les onglets du PC : les passages listés
 Comme sur le téléphone : le **serveur GP SatMe** d'abord (`https://gp.f4ioz.fr` d'origine), ou ce serveur seulement, et les sources au choix — le bulletin AMSAT, les groupes CelesTrak (par le serveur seulement : le PC ne demande jamais rien à CelesTrak), SatNOGS DB, et **les satellites d'images (SSTV, SSDV)** : LAPAN-A2, ASRTU-1, HADES-SA, Geoscan-2/4/5, 239Alferov, UmKA-1, UTMN2, SONATE-2… la plupart absents du bulletin AMSAT, demandés un par un par leur numéro.
 
 <p align="center"><img src="images/pc-reglages.webp" width="80%" alt="Réglages : éléments orbitaux (serveur, sources), QRZ.com, carnet en ligne avec l'envoi automatique"></p>
+
+## Le poste et le rotor
+
+Dans **Réglages**, en tête : le modèle du poste (IC-9700, IC-9100, IC-910H, TS-2000, deux postes FT-817 / IC-705, TH-D72, ou simulé), son port et sa vitesse, Connecter / Déconnecter ; le rotor (GS-232 en série, rotctld par le réseau, ou simulé), Suivre le satellite, Parquer, Stop, ses butées et son parking. L'onglet Station ne garde que leur nom et une coche verte.
+
+<p align="center"><img src="images/pc-reglages-materiel.webp" width="100%" alt="Réglages : le poste (CAT) et le rotor, leurs ports et leur connexion"></p>
 
 ## DATV — la bande large de QO-100 avec un MiniTiouner
 
@@ -122,7 +166,7 @@ Sans sa clé, le node ne dit que ce qu'il est ; ce qui le change est un POST ; s
 - **Rien ne s'ouvre tout seul.** Un port série ne s'ouvre que choisi, et « Connecter » cliqué. Pas de recherche automatique.
 - **RTS et DTR bas** d'origine. Le CAT Icom les lève (ses ponts USB en ont besoin) : **choisir le port du bon poste**. Le TS-2000 les garde bas, et un port qui renvoie nos propres mots (le port PTT d'un RigExpert) est refermé aussitôt.
 - Sous Linux le système lève RTS/DTR un instant à chaque ouverture de port, avant que SatMe puisse les baisser : une raison de plus de n'ouvrir que le port voulu.
-- **Aucun ordre d'émission** n'est jamais envoyé (`TX`, `KY` refusés par le pilote TS-2000).
+- **Le CAT n'émet jamais** (`TX`, `KY` refusés par le pilote TS-2000). Seul l'APRS par un TNC KISS émet, et seulement quand on envoie soi-même un message, sa position ou un statut.
 - **L'alimentation LNB du MiniTiouner est coupée** tant qu'on ne la choisit pas.
 
 ## Avant le premier essai

@@ -3,13 +3,28 @@
 <h1 align="center">SatMe</h1>
 
 <p align="center">
-Poursuite de satellites radioamateurs sur Android — passages, pointage, Doppler, carnet.<br>
+Poursuite de satellites radioamateurs sur Android et sur PC — passages, pointage, Doppler, carnet.<br>
 <a href="https://play.google.com/store/apps/details?id=fr.f4ioz.satcombo">Google Play</a> ·
 <a href="https://github.com/f4ioz/SatMe/wiki/Pourquoi-SatMe">Pourquoi SatMe ?</a> ·
 <a href="https://github.com/f4ioz/SatMe/wiki/Accueil">Documentation (wiki)</a> ·
 <a href="README.md">English</a> ·
 <a href="docs/API-v1.fr.md">API</a>
 </p>
+
+### Une station, trois SatMe
+
+<p align="center"><img src="docs/images/satme-ensemble-fr.svg" width="100%" alt="Les trois SatMe : SatMe sur le téléphone, SatMe-PC sur un PC ou un Raspberry Pi, SatMe-Node au pied du mât ; le téléphone rejoint le PC par un QR code ; le même moteur partout"></p>
+
+**SatMe** dans la poche pour trafiquer partout, **SatMe-PC** pour toute la station dans un navigateur, **SatMe-Node** sur un Raspberry Pi au pied du mât. Le même moteur partout : ce qui se fait sur le PC se fait aussi sur le téléphone. Gratuit, sans compte, sans publicité, logiciel libre.
+
+**L'essayer en deux minutes, sans rien brancher** : poste et rotor simulés, les vrais passages du moment.
+[▶ Google Play](https://play.google.com/store/apps/details?id=fr.f4ioz.satcombo) · PC Linux ou Raspberry Pi : `curl -fsSL https://raw.githubusercontent.com/f4ioz/SatMe/main/installe-satme.sh -o installe-satme.sh && bash installe-satme.sh` · [Windows, tout en un (.msi)](docs/installer-satme-pc-windows.fr.md)
+
+- 🛰 **Ne plus rater un passage** — le mode automatique suit chaque passage des satellites choisis : le poste et le rotor se mettent en place 5 min avant l'AOS, le son est enregistré, le passage arrive dans le journal.
+- 🎯 **Le Doppler fait tout seul** — IC-9700, IC-9100, IC-910H, TS-2000, FT-817 / IC-705, TH-D72 ; on tourne la molette, le poste suit le transpondeur.
+- 🎞 **Chaque passage rejoué** — sur le ciel ou la carte, avec son son, le S-mètre, les contacts et les images SSTV à leur place ; fait en vidéo ou en GIF à partager.
+- 📲 **Du téléphone au PC en un QR code** — les passages faits au portable arrivent sur le PC avec leurs contacts, images et sons.
+- 📡 **Et tout le reste** — SSTV, METEOR, APRS (et KISS), FT8, radiosondes, QO-100 et DATV avec un MiniTiouner, carnet avec QRZ et Wavelog / Cloudlog.
 
 ### Un vrai passage, tel que SatMe l'a gardé
 
@@ -29,13 +44,21 @@ SatMe tourne aussi sur un PC (Linux, Windows, Raspberry Pi), avec le moteur mêm
 **Installer**, guidé (il voit ce qui est branché) : `curl -fsSL https://raw.githubusercontent.com/f4ioz/SatMe/main/installe-satme.sh -o installe-satme.sh && bash installe-satme.sh` · [SatMe-PC sous Linux](docs/installer-satme-pc.fr.md) · [SatMe-PC sous Windows](docs/installer-satme-pc-windows.fr.md) (tout en un) · [SatMe-Node sur un Raspberry Pi 3](docs/installer-satme-node.fr.md) (le MiniTiouner à côté de l'antenne) · [téléchargements](https://github.com/f4ioz/SatMe/releases/latest)
 
 <p align="center">
-<img src="docs/images/pc-station.webp" width="49%" alt="SatMe-PC : les prochains passages, FO-29 suivi sur le ciel, les fréquences corrigées du Doppler, poste et rotor">
-<img src="docs/images/pc-carnet.webp" width="49%" alt="Carnet de SatMe-PC : un nouveau contact, et à côté la station en direct">
+<img src="docs/images/pc-station.webp" width="49%" alt="SatMe-PC, Station : les prochains passages, le satellite suivi sur le ciel, l'encart AMSAT, les fréquences corrigées du Doppler, le poste et le rotor avec leur coche verte">
+<img src="docs/images/pc-carnet.webp" width="49%" alt="Carnet de SatMe-PC : un nouveau contact, et à côté la station en direct, où l'on est dans la bande passante">
+</p>
+<p align="center">
+<img src="docs/images/pc-journal-carte.webp" width="49%" alt="Journal : RS-44 rejoué sur la carte, la trace prévue en pointillés, l'empreinte, F5RRO à sa place sur la trace et à son carré">
+<img src="docs/images/pc-agenda-auto.webp" width="49%" alt="Le mode automatique : les satellites choisis, les passages des 24 h à garder ou écarter">
 </p>
 <p align="center">
 <img src="docs/images/pc-datv.webp" width="49%" alt="SatMe-PC, DATV : un signal de test DVB-S2 accroché avec un MiniTiouner, MER, MODCOD, la constellation">
 <img src="docs/images/pc-journal-cadre.webp" width="49%" alt="SatMe-PC, journal des passages : le cadre d'une vidéo 3:4 dessiné sur la carte">
 </p>
+
+### Du téléphone au PC : un QR code
+
+<p align="center"><img src="docs/images/satme-qr-fr.svg" width="100%" alt="Du téléphone au PC en trois gestes : le PC affiche un QR code, le téléphone le scanne, les passages cochés arrivent avec leurs contacts, images SSTV et sons"></p>
 
 Le téléphone sert aussi des pages au navigateur du PC (câble USB ou Wi-Fi, rien à installer) : le journal des passages rejoué en grand sur une carte avec son son, et la planche SSTV faite à la souris.
 
@@ -81,6 +104,15 @@ Le téléphone sert aussi des pages au navigateur du PC (câble USB ou Wi-Fi, ri
 <img src="docs/images/fr-journal-export.webp" width="24%" alt="Journal des passages : export en image, vidéo ou GIF">
 <img src="docs/images/fr-sstv-sheet-iss.webp" width="24%" alt="Une planche des images de l'ISS">
 </p>
+
+## Nouveau sur SatMe-PC (octobre 2026)
+
+- **Mode automatique** (onglet Agenda, et sur le téléphone) : les satellites choisis, leurs passages des 24 h gardés ou écartés, chacun suivi 5 min avant l'AOS — poste et rotor avec lui — et enregistré de l'AOS au LOS.
+- **Enregistrer le son** depuis Station et Carnet, et l'option **couper à la fin du passage**, même lancé à la main.
+- **Journal** : le passage entier sur la carte (même lancé en cours de passage), chaque contact placé sur la trace et à son carré comme dans la vidéo, le S-mètre lu par le CAT ; un contact ajouté au rejeu prend l'heure du son, le mode et les fréquences du satellite ; un passage fabriqué de rien.
+- **Station** plus claire : l'encart AMSAT à droite du nom, le poste et le rotor par leur nom avec une coche verte — leurs réglages passent dans Réglages.
+- **TH-D72** piloté (fréquences, bandes, TNC) et **APRS par un TNC KISS** en réception et en émission (message, position, statut).
+- **Rapport AMSAT automatique**, contact ajouté après le passage depuis le carnet, **SatMe-PC pour Windows tout en un** (Java, ffmpeg, rtl_tcp).
 
 ## Nouveautés de la 20.82
 

@@ -3,13 +3,28 @@
 <h1 align="center">SatMe</h1>
 
 <p align="center">
-Amateur radio satellite tracking for Android — passes, pointing, Doppler, logging.<br>
+Amateur radio satellite tracking for Android and the PC — passes, pointing, Doppler, logging.<br>
 <a href="https://play.google.com/store/apps/details?id=fr.f4ioz.satcombo">Google Play</a> ·
 <a href="https://github.com/f4ioz/SatMe/wiki/Why-SatMe">Why SatMe?</a> ·
 <a href="https://github.com/f4ioz/SatMe/wiki">Documentation (wiki)</a> ·
 <a href="README.fr.md">Français</a> ·
 <a href="docs/API-v1.md">API</a>
 </p>
+
+### One station, three SatMe
+
+<p align="center"><img src="docs/images/satme-ensemble-en.svg" width="100%" alt="The three SatMe: SatMe on the phone, SatMe-PC on a PC or a Raspberry Pi, SatMe-Node at the mast; the phone joins the PC with a QR code; the same engine everywhere"></p>
+
+**SatMe** in your pocket to work satellites anywhere, **SatMe-PC** for the whole station in a browser, **SatMe-Node** on a Raspberry Pi at the mast. The same engine everywhere: what the PC does, the phone does too. Free, no account, no ads, free software.
+
+**Try it in two minutes, nothing plugged in**: simulated rig and rotator, the real passes of the moment.
+[▶ Google Play](https://play.google.com/store/apps/details?id=fr.f4ioz.satcombo) · Linux PC or Raspberry Pi: `curl -fsSL https://raw.githubusercontent.com/f4ioz/SatMe/main/installe-satme.sh -o installe-satme.sh && bash installe-satme.sh` · [Windows, all in one (.msi)](docs/installer-satme-pc-windows.md)
+
+- 🛰 **Never miss a pass again** — the automatic mode follows every pass of the satellites you chose: rig and rotator in place 5 min before AOS, the sound recorded, the pass in the journal.
+- 🎯 **Doppler handled for you** — IC-9700, IC-9100, IC-910H, TS-2000, FT-817 / IC-705, TH-D72; turn the knob, the rig follows the transponder.
+- 🎞 **Every pass replayed** — on the sky or the map, with its sound, the S-meter, contacts and SSTV pictures in their place; made into a video or a GIF to share.
+- 📲 **From the phone to the PC with one QR code** — passes worked portable land on the PC with their contacts, pictures and sound.
+- 📡 **And everything else** — SSTV, METEOR, APRS (and KISS), FT8, radiosondes, QO-100 and DATV with a MiniTiouner, a log with QRZ and Wavelog / Cloudlog.
 
 ### A real pass, as SatMe kept it
 
@@ -29,13 +44,21 @@ SatMe also runs on a PC (Linux, Windows, Raspberry Pi), with the phone's own eng
 **Install**, guided (it sees what is plugged in): `curl -fsSL https://raw.githubusercontent.com/f4ioz/SatMe/main/installe-satme.sh -o installe-satme.sh && bash installe-satme.sh` · [SatMe-PC on Linux](docs/installer-satme-pc.md) · [SatMe-PC on Windows](docs/installer-satme-pc-windows.md) (all in one) · [SatMe-Node on a Raspberry Pi 3](docs/installer-satme-node.md) (the MiniTiouner next to the antenna) · [downloads](https://github.com/f4ioz/SatMe/releases/latest)
 
 <p align="center">
-<img src="docs/images/pc-station.webp" width="49%" alt="SatMe-PC: the next passes, FO-29 followed on the sky, Doppler-corrected frequencies, rig and rotator">
-<img src="docs/images/pc-carnet.webp" width="49%" alt="SatMe-PC log: a new contact, and beside it the station live">
+<img src="docs/images/pc-station.webp" width="49%" alt="SatMe-PC, Station: the next passes, the satellite followed on the sky, the AMSAT box, Doppler-corrected frequencies, the rig and the rotator with their green tick">
+<img src="docs/images/pc-carnet.webp" width="49%" alt="SatMe-PC log: a new contact, and beside it the station live, where you are in the passband">
+</p>
+<p align="center">
+<img src="docs/images/pc-journal-carte.webp" width="49%" alt="Journal: RS-44 replayed on the map, the predicted track dashed, the footprint, F5RRO in its place on the track and at its square">
+<img src="docs/images/pc-agenda-auto.webp" width="49%" alt="The automatic mode: the satellites chosen, the 24 h passes to keep or set aside">
 </p>
 <p align="center">
 <img src="docs/images/pc-datv.webp" width="49%" alt="SatMe-PC, DATV: a DVB-S2 test signal locked with a MiniTiouner, MER, MODCOD, the constellation">
 <img src="docs/images/pc-journal-cadre.webp" width="49%" alt="SatMe-PC, pass journal: a 3:4 video's frame drawn over the map">
 </p>
+
+### From the phone to the PC: one QR code
+
+<p align="center"><img src="docs/images/satme-qr-en.svg" width="100%" alt="From the phone to the PC in three moves: the PC shows a QR code, the phone scans it, the passes ticked arrive with their contacts, SSTV pictures and sound"></p>
 
 The phone also serves pages to the PC's browser (USB cable or Wi-Fi, nothing to install): the pass journal replayed large on a map with its sound, and the SSTV sheet laid out with the mouse.
 
@@ -81,6 +104,15 @@ The phone also serves pages to the PC's browser (USB cable or Wi-Fi, nothing to 
 <img src="docs/images/en-journal-export.webp" width="24%" alt="Pass journal: export as a picture, video or GIF">
 <img src="docs/images/en-sstv-sheet-iss.webp" width="24%" alt="A sheet of the ISS pictures">
 </p>
+
+## New on SatMe-PC (October 2026)
+
+- **Automatic mode** (Agenda tab, and on the phone): the satellites chosen, their 24 h passes kept or set aside, each followed 5 min before AOS — rig and rotator with it — and recorded from AOS to LOS.
+- **Record the sound** from Station and Carnet, and the option to **stop at the end of the pass**, even when started by hand.
+- **Journal**: the whole pass on the map (even when started mid-pass), each contact placed on the track and at its square as in the video, the S-meter read through CAT; a contact added during the replay takes the sound's time, the satellite's mode and frequencies; a pass made from nothing.
+- A clearer **Station**: the AMSAT box to the right of the name, the rig and the rotator by name with a green tick — their settings move to Réglages.
+- **TH-D72** driven (frequencies, bands, TNC) and **APRS through a KISS TNC**, receiving and transmitting (message, position, status).
+- **Automatic AMSAT report**, a contact added after the pass from the log, **SatMe-PC for Windows all in one** (Java, ffmpeg, rtl_tcp).
 
 ## What's new in 20.82
 
