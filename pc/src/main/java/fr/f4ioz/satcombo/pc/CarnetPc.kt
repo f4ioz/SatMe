@@ -150,6 +150,15 @@ class CarnetPc(private val station: StationPc, val store: LogStore, private val 
 
     fun adif(): String = store.toAdif(station.settings.callsign)
 
+    /** The contacts chosen (their times), as ADIF; all when none is given. */
+    fun adif(choisis: Set<Long>): String = if (choisis.isEmpty()) adif()
+        else fr.f4ioz.satcombo.data.LogStore.toAdif(contacts().filter { it.timeMs in choisis && it.callsign.isNotBlank() }, station.settings.callsign)
+
+    /** The contacts chosen, as the phone's batch for another SatMe (Settings › Backup › merge a batch). */
+    fun lot(choisis: Set<Long>): String =
+        fr.f4ioz.satcombo.data.LotContacts.ecrit(contacts().filter { it.timeMs in choisis && it.callsign.isNotBlank() }.sortedBy { it.timeMs },
+            station.settings.callsign)
+
     /** The worked squares, for the page (a count of distinct 4-character squares). */
     fun carres(): Int = store.load().mapNotNull { it.theirLocator.takeIf { l -> l.length >= 4 }?.substring(0, 4)?.uppercase() }.distinct().size
 

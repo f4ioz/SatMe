@@ -134,6 +134,7 @@ object PagePc {
          background:#0E1720; color:var(--clair); padding:7px 9px; }
   input:focus, select:focus { outline:2px solid var(--cyan); }
   button { cursor:pointer; font-weight:700; }
+  a.bouton { font-size:13px; font-weight:700; border-radius:8px; border:1px solid var(--bord); background:#0E1720; color:var(--clair); padding:6px 9px; text-decoration:none; white-space:nowrap; }
   button:disabled { opacity:.45; cursor:default; }
   .primaire { background:var(--cyan); color:#06131A; border:none; }
   .rouge { background:var(--rose); color:#fff; border:none; }
@@ -169,7 +170,12 @@ object PagePc {
   .coche.on { color:var(--vert); }
   .coche.off { color:var(--gris, #6B7C8F); font-weight:400; font-size:12px; }
   .amsat-boite b { color:#FF6B6B; letter-spacing:.5px; }
-  .cr-carte { position:relative; height:200px; margin-top:10px; border-radius:8px; overflow:hidden; }
+  .cr-carte { position:relative; height:calc(100vh - 640px); min-height:260px; margin-top:10px; border-radius:8px; overflow:hidden; }
+  .sked-bandeau { margin-top:6px; padding:6px 10px; border-radius:8px; background:rgba(255,180,84,.14); border:1px solid rgba(255,180,84,.45); font-size:12px; }
+  .sked-bandeau b.k { color:var(--ambre); letter-spacing:1px; font-size:11px; margin-right:6px; }
+  .sked-bandeau a { color:var(--clair); }
+  .qso-passage { margin-top:6px; font-size:12px; display:flex; flex-wrap:wrap; gap:4px 6px; align-items:center; }
+  .qso-passage span.q { padding:1px 8px; border-radius:10px; background:rgba(255,95,162,.16); color:#FF8CC0; font-weight:700; cursor:pointer; }
   .cr-carte canvas { position:absolute; inset:0; width:100%; height:100%; cursor:grab; }
   .cr-bornes { display:flex; justify-content:space-between; font-size:11px; color:var(--gris); margin-top:2px; }
   .cr-bande { position:relative; height:14px; margin-top:6px; background:linear-gradient(90deg, rgba(63,224,200,.15), rgba(63,224,200,.35), rgba(63,224,200,.15)); border-radius:7px; }
@@ -323,6 +329,7 @@ object PagePc {
           <button onclick="rapportAmsat(1)" title="Dire à amsat.org que tu l'entends maintenant">Entendu</button>
           <button onclick="rapportAmsat(0)" title="Dire à amsat.org que tu ne l'entends pas">Pas entendu</button>
           <span class="petit" id="amsat-auto"></span></div></div>
+      <div class="sked-bandeau" id="st-skeds" hidden></div>
       <div class="paire" style="margin-top:6px">
         <span>Az <span class="val cyan" id="az">—</span></span>
         <span>El <span class="val cyan" id="el">—</span></span>
@@ -467,6 +474,8 @@ object PagePc {
         <div class="paire"><span>Az <span class="val cyan" id="cr-az">—</span></span><span>El <span class="val cyan" id="cr-el">—</span></span><span class="petit" id="cr-dist"></span></div>
         <div class="cr-avance" title="L'avancée du passage, de l'AOS au LOS"><div class="cr-profil" id="cr-profil"></div><i id="cr-curseur"></i></div>
         <div class="petit" id="cr-passage"></div>
+        <div class="sked-bandeau" id="cr-skeds" hidden></div>
+        <div class="qso-passage" id="cr-qso"></div>
         <div class="cr-corps">
           <svg id="cr-ciel" viewBox="-110 -110 220 220" class="cr-ciel" role="img" aria-label="Le ciel : passage et position du satellite"></svg>
           <div class="cr-infos">
@@ -488,7 +497,11 @@ object PagePc {
       </div>
       <div id="cr-contacts" hidden>
       <div class="ligne"><input id="c-filtre" placeholder="Filtrer : indicatif, carré, satellite…">
-        <button class="rouge" id="c-suppr" hidden onclick="supprimeSelection()"></button></div>
+        <span id="c-sel" hidden style="display:flex;gap:6px;align-items:center">
+          <span class="petit" id="c-sel-n"></span>
+          <a class="bouton" id="c-sel-adif" href="#" download title="Les contacts cochés en ADIF (Wavelog, LoTW, un autre carnet)">⤓ ADIF</a>
+          <a class="bouton" id="c-sel-lot" href="#" download title="Les contacts cochés pour SatMe sur un téléphone : Réglages › Sauvegarde › Fusionner un lot reçu">⤓ Lot pour le téléphone</a>
+          <button class="rouge" id="c-suppr" onclick="supprimeSelection()">Supprimer</button></span></div>
       <div style="max-height:calc(100vh - 170px);overflow:auto;margin-top:6px">
         <table><thead><tr><th><input type="checkbox" id="c-tout" title="Tout cocher (ce que le filtre montre)" onchange="cocheTout(this.checked)"></th><th>Date (UTC)</th><th>Indicatif</th><th>Carré</th><th>Satellite</th><th>Mode</th><th>RS</th><th></th></tr></thead>
         <tbody id="c-liste"></tbody></table>
@@ -1119,6 +1132,13 @@ object PagePc {
       <div class="etat" id="reg-etat"></div>
     </div>
     <div class="carte">
+      <div class="t">Skeds annoncés (hams.at)</div>
+      <label class="petit"><input type="checkbox" id="sk-on" onchange="post('api/skeds/reglages?on=' + (this.checked ? 1 : 0))"> Montrer les skeds annoncés sur hams.at : sur les passages (📣), dans Station et le Carnet, sur la carte</label>
+      <div class="ligne"><input id="sk-cle" type="password" placeholder="Clé API hams.at (facultative : la fenêtre commune avec toi)" autocomplete="off">
+        <button onclick="post('api/skeds/reglages?cle=' + enc(v('sk-cle'))); g('sk-cle').value = ''">Enregistrer</button></div>
+      <div class="petit">Comme sur le téléphone ; demandés toutes les 5 minutes. La clé reste sur ce PC.</div>
+    </div>
+    <div class="carte">
       <div class="t">Éléments orbitaux</div>
       <div class="petit">Serveur GP SatMe : il interroge AMSAT, CelesTrak et SatNOGS pour tout le monde, et ce PC lui demande tout. Comme sur le téléphone.</div>
       <div class="ligne"><input id="gpServeur" placeholder="https://gp.f4ioz.fr"><button onclick="essaiGp()">Essayer</button><button onclick="g('gpServeur').value = SRC.defaut; majSources()" id="gpDefaut">Par défaut</button></div>
@@ -1242,6 +1262,40 @@ function dessineAgenda() {
     '<tr><td colspan="4" class="petit">rien de prévu</td></tr>';
 }
 const hz = v => (v > 0 ? '+' : '') + v + ' Hz';
+// The log's pass: hams.at's skeds announced for it, the contacts made during it.
+function bandeauSkeds(id) {
+  const b = g(id); if (!b) return;
+  const l = (E && E.passageCarnet && E.passageCarnet.skeds) || [];
+  b.hidden = !l.length;
+  b.innerHTML = l.length ? '<b class="k">📣 SKED' + (l.length > 1 ? 'S' : '') + ' ANNONCÉ' + (l.length > 1 ? 'S' : '') + '</b>' + l.map(k =>
+    (k.url ? '<a href="' + esc(k.url) + '" target="_blank" rel="noopener"><b>' + esc(k.call) + '</b></a>' : '<b>' + esc(k.call) + '</b>') +
+    ' ' + hm(k.de) + '–' + hm(k.a) + (k.mode ? ' · ' + esc(k.mode) : '') + (k.carres ? ' · ' + esc(k.carres) : '') +
+    (k.commun === false ? ' · <span style="color:var(--rose)">pas de fenêtre commune</span>' : '') +
+    (k.note ? ' <span class="petit">« ' + esc(k.note.slice(0, 80)) + ' »</span>' : '')).join(' &nbsp;·&nbsp; ') : '';
+}
+function majPassageCarnet() {
+  bandeauSkeds('cr-skeds');
+  const pc = E && E.passageCarnet, l = (pc && pc.contacts) || [];
+  g('cr-qso').innerHTML = l.length ? '<span class="petit">Ce passage :</span>' + l.map(c =>
+    '<span class="q" title="' + hm(c.t) + (c.carre ? ' · ' + esc(c.carre) : '') + (c.mode ? ' · ' + esc(c.mode) : '') + '" onclick="g(\'c-call\').value=\'' + esc(c.call) +
+    '\';g(\'c-call\').dispatchEvent(new Event(\'input\'))">' + esc(c.call) + '</span>').join('') : (pc ? '<span class="petit">Aucun contact sur ce passage pour l’instant.</span>' : '');
+}
+// The pass's contacts (pink) and the announced stations (amber ring) on a map, at their squares.
+function pointsDuPassage(m) {
+  const pc = E && E.passageCarnet; if (!pc) return;
+  const x = m.x;
+  for (const d of [-360, 0, 360]) {
+    (pc.skeds || []).forEach(k => { if (k.lat == null) return;
+      x.strokeStyle = '#FFB454'; x.lineWidth = 3; x.beginPath(); x.arc(m.px(k.lon + d), m.py(k.lat), 6, 0, 7); x.stroke();
+      etiquetteCarte(m, k.lat, k.lon + d, '📣 ' + k.call, '#8A5300'); });
+    (pc.contacts || []).forEach(c => { if (c.lat == null) return; pointCarte(m, c.lat, c.lon + d, '#FF5FA2', 5, c.call); });
+  }
+}
+function etiquetteCarte(m, lat, lon, nom, coul) {
+  const x = m.x;
+  x.font = 'bold 12px system-ui'; x.textAlign = 'left'; x.lineWidth = 3; x.strokeStyle = 'rgba(255,255,255,.85)';
+  x.strokeText(nom, m.px(lon) + 9, m.py(lat) + 14); x.fillStyle = coul; x.fillText(nom, m.px(lon) + 9, m.py(lat) + 14);
+}
 async function rapportAmsat(entendu) {
   if (!E || !E.suivi) return;
   if (!confirm((entendu ? 'Entendu' : 'Pas entendu') + ' : envoyer ce rapport sur la page publique d’amsat.org pour ' + E.suivi.nom + ', avec ton indicatif et ton carré ?')) return;
@@ -1264,7 +1318,7 @@ function dessinePassages() {
     return '<tr class="' + cl + '" title="Suivre ' + p.nom.replace(/"/g, '') + ' : le carnet, la carte, le poste et le rotor le suivent" onclick="suivre(' + p.catnum + ')">' + celluleAgenda(p) + '<td class="rosace">' + rosace(p.trace, p.elMax, 30) + '</td><td><span title="Favori" style="cursor:pointer;color:' + (p.fav ? 'var(--ambre)' : 'var(--bord)') +
       '" onclick="favori(' + p.catnum + ',' + !p.fav + ',event)">★</span></td><td>' + hm(p.aos) + '</td><td>' +
       (a ? '<span title="AMSAT : ' + a[1] + '" style="display:inline-block;width:8px;height:8px;border-radius:4px;margin-right:6px;background:' + a[0] + '"></span>' : '') +
-      p.nom.replace(/</g, '&lt;') +
+      p.nom.replace(/</g, '&lt;') + (p.skeds ? ' <span title="' + p.skeds + ' sked(s) annoncé(s) sur hams.at" style="color:var(--ambre)">📣' + (p.skeds > 1 ? p.skeds : '') + '</span>' : '') +
       '</td><td>' + Math.round(p.elMax) + '°</td><td>' + duree(p.los - p.aos) + '</td><td class="petit">' + quand + '</td></tr>';
   });
   g('passages').innerHTML = lignes.join('') || '<tr><td colspan="8" class="petit">' + (E && E.locator ? 'aucun passage' : 'renseigne ton locator') + '</td></tr>';
@@ -1411,6 +1465,8 @@ function dessine() {
       duree(p.los - p.aos) + '</td><td class="petit">' + Math.round(p.azAos) + '° → ' + Math.round(p.azLos) + '°</td></tr>').join('');
   }
   dessineAgenda();
+  bandeauSkeds('st-skeds');
+  if (document.activeElement !== g('sk-on')) g('sk-on').checked = !!E.skedsOn;
   // CAT
   const c = E.cat;
   // Station shows the rig and the mast by name, a green tick when connected; their settings are in Réglages.
@@ -1601,7 +1657,12 @@ function coche(t, on) { if (on) coches.add(t); else coches.delete(t); majSelecti
 function cocheTout(on) { vusCarnet.forEach(t => on ? coches.add(t) : coches.delete(t)); dessineCarnet(); }
 function majSelection() {
   [...coches].forEach(t => { if (!C.some(e => e.t === t)) coches.delete(t); });
-  const b = g('c-suppr'); b.hidden = coches.size === 0; b.textContent = 'Supprimer la sélection (' + coches.size + ')';
+  // The selection: exported (ADIF, or the phone's batch) or deleted.
+  g('c-sel').hidden = coches.size === 0;
+  g('c-sel').style.display = coches.size ? 'flex' : 'none';
+  txt('c-sel-n', coches.size + ' coché' + (coches.size > 1 ? 's' : '') + ' :');
+  const ts = [...coches].join(',');
+  g('c-sel-adif').href = 'api/carnet/adif?t=' + ts; g('c-sel-lot').href = 'api/carnet/lot?t=' + ts;
   g('c-tout').checked = vusCarnet.length > 0 && vusCarnet.every(t => coches.has(t));
 }
 async function supprimeContacts(l) {
@@ -1718,6 +1779,7 @@ function dessineStationDirect() {
   txt('cr-dist', p ? Math.round(p.distance) + ' km · ' + (p.vitesse > 0 ? 's’éloigne ' : 's’approche ') + Math.abs(p.vitesse).toFixed(2) + ' km/s' : '');
   const enCours = pa && n >= pa.aos && n <= pa.los;
   txt('cr-compte', pa ? (enCours ? 'LOS dans ' + duree(pa.los - n) : 'AOS dans ' + duree(pa.aos - n)) : '');
+  majPassageCarnet();
   txt('cr-passage', pa ? 'AOS ' + hm(pa.aos) + ' (' + Math.round(pa.azAos) + '°) · El max ' + Math.round(pa.elMax) + '° · LOS ' + hm(pa.los) + ' (' + Math.round(pa.azLos) + '°)' : '');
   // The pass's elevation profile, now on it.
   const cle = pa ? pa.aos + ':' + pa.los : '';
@@ -2699,6 +2761,7 @@ function dessineCarteStation() {
       pointCarte(m, p.lat, p.lon + d, p.el >= 0 ? '#5BD68A' : '#3FE0C8', 6, E.suivi ? E.suivi.nom : '');
     }
   } else if (nous) pointCarte(m, nous.lat, nous.lon, '#FFB454', 5, E.indicatif || 'Moi');
+  pointsDuPassage(m);
   // The track asked again each minute, and at once for another satellite.
   const n = E && E.suivi ? E.suivi.catnum : 0;
   if (n && (!traceSol || traceSol.catnum !== n || Date.now() - traceVu > 60000) && Date.now() - traceVu > 3000) { traceVu = Date.now(); chargeTraceSol(); }
@@ -2732,6 +2795,7 @@ function dessineCarteCarnet() {
       pointCarte(m, p.lat, p.lon + d, p.el >= 0 ? '#5BD68A' : '#3FE0C8', 5, E.suivi ? E.suivi.nom : '');
     }
   }
+  pointsDuPassage(m);
   // The track, asked as the Station's map asks it.
   const n = E && E.suivi ? E.suivi.catnum : 0;
   if (n && (!traceSol || traceSol.catnum !== n || Date.now() - traceVu > 60000) && Date.now() - traceVu > 3000) { traceVu = Date.now(); chargeTraceSol(); }

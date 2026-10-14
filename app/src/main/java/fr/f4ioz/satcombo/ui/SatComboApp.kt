@@ -1092,7 +1092,7 @@ private fun PassesScreen(ui: UiState, vm: MainViewModel) {
                                     color = TextLo, fontSize = 12.sp)
                             }
                             if (s.maxElevationDeg != null) {
-                                Text("${s.maxElevationDeg.toInt()}°", color = Cyan,
+                                Text("${s.maxElevationDeg!!.toInt()}°", color = Cyan,
                                     fontWeight = FontWeight.Bold, fontSize = 16.sp)
                                 Spacer(Modifier.width(8.dp))
                             }

@@ -88,6 +88,10 @@ data class EtatPc(
     val agenda: List<fr.f4ioz.satcombo.data.AgendaStore.AgendaEvent> = emptyList(),
     /** Follow by itself the satellite an appointment names, from 5 min before it. */
     val agendaSuivi: Boolean = true,
+    /** The satellite followed's pass just over (its contacts still shown a while). */
+    val dernierPassage: SatPass? = null,
+    /** The skeds announced on hams.at (Réglages: off by default, as on the phone). */
+    val skeds: List<fr.f4ioz.satcombo.data.SkedAlert> = emptyList(),
 )
 
 /**
@@ -398,6 +402,13 @@ class StationPc(
                 runCatching { recalcule() }
             }
         }
+        // hams.at's announced skeds, when chosen: every 5 minutes.
+        portee.launch(Dispatchers.IO) {
+            while (true) {
+                runCatching { rafraichisSkeds() }
+                delay(5 * 60_000L)
+            }
+        }
         // AMSAT's status page: kept on disk, asked again once an hour.
         portee.launch(Dispatchers.IO) {
             change { copy(amsat = amsatRepo.loadCache()) }
@@ -483,7 +494,9 @@ class StationPc(
                     .getOrDefault(emptyList()).filter { it.losEpochMs >= maintenant }.take(8)
             }
         } else suivants
-        change { copy(maintenant = maintenant, position = pos, passage = passage, arc = arc, passagesSuivi = nouveaux) }
+        val fini = e.passage?.takeIf { it.losEpochMs < maintenant && it != passage && it.catalogNumber == sat?.catalogNumber }
+        change { copy(maintenant = maintenant, position = pos, passage = passage, arc = arc, passagesSuivi = nouveaux,
+            dernierPassage = fini ?: dernierPassage) }
     }
     @Volatile private var derniereSuite = 0L
 
@@ -575,6 +588,27 @@ class StationPc(
         veilleSuivis += k
         if (_etat.value.suivi?.catalogNumber != p.catalogNumber) suis(p.catalogNumber)
     }
+
+    // ---------------------------------------------------------------- skeds
+
+    private val skedRepo = fr.f4ioz.satcombo.data.SkedRepository()
+
+    /** hams.at's announced skeds asked again (its key when given), or forgotten when the option is off. */
+    suspend fun rafraichisSkeds(force: Boolean = false) {
+        if (!settings.skedsEnabled || !catalogue.enLigne) { change { copy(skeds = emptyList()) }; return }
+        val l = skedRepo.upcoming(settings.skedsToken, force)
+        change { copy(skeds = l) }
+    }
+
+    fun regleSkeds(on: Boolean?, cle: String?) {
+        on?.let { settings.skedsEnabled = it }
+        cle?.let { settings.skedsToken = it }
+        portee.launch(Dispatchers.IO) { runCatching { rafraichisSkeds(force = true) } }
+    }
+
+    /** The skeds announced for a pass. */
+    fun skedsDu(p: SatPass): List<fr.f4ioz.satcombo.data.SkedAlert> =
+        fr.f4ioz.satcombo.domain.SkedsPassage.duPassage(_etat.value.skeds, p.catalogNumber, p.aosEpochMs, p.losEpochMs)
 
     /** The agenda read again (the phone's taken from its backup). */
     fun rechargeAgenda() { change { copy(agenda = AgendaStore.load(stockageAgenda)) } }
@@ -679,7 +713,7 @@ class StationPc(
         derniereRecherche = 0L
         val c = satConfig.load(sat.catalogNumber)
         derniereSuite = 0L
-        change { copy(suivi = sat, position = null, passage = null, arc = emptyList(), emetteurs = emptyList(),
+        change { copy(suivi = sat, position = null, passage = null, arc = emptyList(), emetteurs = emptyList(), dernierPassage = null,
             emetteur = 0, repos = null, passagesSuivi = emptyList(),
             calibHz = c.calibShiftHz, txShiftHz = c.txShiftHz, refCalibHz = c.refCalibShiftHz, refTxHz = c.refTxShiftHz) }
         portee.launch(Dispatchers.IO) {

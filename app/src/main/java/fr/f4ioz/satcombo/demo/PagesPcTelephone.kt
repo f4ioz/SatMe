@@ -76,7 +76,8 @@ object PagesPcTelephone {
                 "/api/passages" -> {
                     val (l, calcul) = passagesTous(vm)
                     json(JSONObject().put("calcul", calcul).put("liste", JSONArray(l.take(300).map {
-                        ApiStation.passage(it, fav = it.catalogNumber in u.favorites, agenda = vm.agendaForPass(it) != null)
+                        ApiStation.passage(it, fav = it.catalogNumber in u.favorites, agenda = vm.agendaForPass(it) != null,
+                            skeds = if (u.skedsEnabled) vm.skedsForPass(it.catalogNumber, it.aosEpochMs, it.losEpochMs).size else 0)
                     })))
                 }
                 "/api/trace" -> {
@@ -248,6 +249,18 @@ object PagesPcTelephone {
                         if (pan != null && r.second != null) fr.f4ioz.satcombo.domain.MesureBalise.mesurer(pan, r.second!!.first, r.second!!.second) else null))
                 }
                 "/api/carnet" -> json(carnet(vm))
+                // The contacts ticked on the page: ADIF, or the batch for another phone (as Settings › Backup makes it).
+                "/api/carnet/adif", "/api/carnet/lot" -> {
+                    val choisis = p("t").split(',').mapNotNull { it.trim().toLongOrNull() }.toSet()
+                    val l = u.log.filter { it.callsign.isNotBlank() && (choisis.isEmpty() || it.timeMs in choisis) }.sortedBy { it.timeMs }
+                    val date = java.text.SimpleDateFormat("yyyyMMdd-HHmm", java.util.Locale.US).format(java.util.Date())
+                    if (route == "/api/carnet/adif") ReponseWeb("200 OK", "text/plain; charset=utf-8",
+                        fr.f4ioz.satcombo.data.LogStore.toAdif(l, vm.indicatif()).toByteArray(),
+                        "Content-Disposition: attachment; filename=\"SatMe_selection_$date.adi\"\r\n")
+                    else ReponseWeb("200 OK", "application/json; charset=utf-8",
+                        fr.f4ioz.satcombo.data.LotContacts.ecrit(l, vm.indicatif()).toByteArray(),
+                        "Content-Disposition: attachment; filename=\"satme-contacts-$date.json\"\r\n")
+                }
                 "/api/carnet/propositions" -> {
                     val saisie = p("c")
                     val m = u.express.memoire
@@ -646,6 +659,11 @@ object PagesPcTelephone {
                 if (!u.recorderEnabled) vm.setRecorderEnabled(true)
                 vm.startRecording(); OK
             }
+            "/api/skeds/reglages" -> {
+                if (p("on").isNotEmpty()) vm.setSkedsEnabled(p("on") == "1")
+                if (p("cle").isNotEmpty()) vm.setSkedsToken(p("cle"))
+                OK
+            }
             "/api/veille" -> {
                 if (ApiVeille.action({ k -> p(k).ifEmpty { null } }, vm.settingsStore(), u.favorites, System.currentTimeMillis())) vm.veille.change()
                 OK
@@ -848,6 +866,15 @@ object PagesPcTelephone {
             .put("txOl", if (u.convTx.actif) u.convTx.olHz else 0).put("txInv", u.convTx.inverseur))
         o.put("cat", ApiStation.cat(vm.etatBoucleCat(), u.rigModel, u.civUsbIndex, u.catConnected, false, u.catStatus, u.dopplerHold))
         o.put("rotor", ApiStation.rotor(u.rotor.mat))
+        // The log's pass, as SatMe-PC gives it: the skeds announced for it, the contacts of the one under way (or just over).
+        if (sat != null && passage != null) {
+            val c = if (passage.aosEpochMs <= maintenant) passage else u.passes.filter { it.catalogNumber == sat.catalogNumber &&
+                it.losEpochMs <= maintenant && it.losEpochMs > maintenant - 3_600_000L }.maxByOrNull { it.losEpochMs } ?: passage
+            val skeds = if (u.skedsEnabled) vm.skedsForPass(sat.catalogNumber, passage.aosEpochMs, passage.losEpochMs) else emptyList()
+            o.put("passageCarnet", ApiStation.passageCarnet(passage.aosEpochMs, passage.losEpochMs, skeds, c.aosEpochMs, c.losEpochMs,
+                fr.f4ioz.satcombo.domain.SkedsPassage.contacts(u.log, sat.catalogNumber, sat.name, c.aosEpochMs, c.losEpochMs)))
+        }
+        o.put("skedsOn", u.skedsEnabled)
         return o
     }
 

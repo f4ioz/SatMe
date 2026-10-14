@@ -148,7 +148,7 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
             // Every tab here; the phone offers some of them.
             "/api/capacites" -> envoie(sortie, "200 OK", "application/json; charset=utf-8",
                 JSONObject().put("onglets", JSONArray(PagePc.TOUS)).put("serveur", "pc").toString().toByteArray())
-            "/api/etat" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JsonPc.etat(station).toString().toByteArray())
+            "/api/etat" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JsonPc.etat(station, carnet).toString().toByteArray())
             "/api/passages" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JsonPc.passages(station).toString().toByteArray())
             "/api/satellites" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JsonPc.satellites(station).toString().toByteArray())
             "/api/ports" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JsonPc.ports(station).toString().toByteArray())
@@ -283,9 +283,18 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
             "/api/veille" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JsonPc.veille(station, son).toString().toByteArray())
             "/api/sstv/encours.png" -> son?.imageEnCours()?.let { envoie(sortie, "200 OK", "image/png", it) }
                 ?: envoie(sortie, "404 Not Found", "text/plain", ByteArray(0))
-            "/carnet.adi" -> {
-                val nom = "SatMe_carnet_" + java.text.SimpleDateFormat("yyyyMMdd_HHmm", java.util.Locale.US).format(java.util.Date()) + ".adi"
-                envoie(sortie, "200 OK", "text/plain; charset=utf-8", (carnet?.adif() ?: "").toByteArray(),
+            "/carnet.adi", "/api/carnet/adif" -> {
+                // The contacts ticked (their times, ?t=…), else the whole log.
+                val choisis = q["t"].orEmpty().split(',').mapNotNull { it.trim().toLongOrNull() }.toSet()
+                val nom = (if (choisis.isEmpty()) "SatMe_carnet_" else "SatMe_selection_") +
+                    java.text.SimpleDateFormat("yyyyMMdd_HHmm", java.util.Locale.US).format(java.util.Date()) + ".adi"
+                envoie(sortie, "200 OK", "text/plain; charset=utf-8", (carnet?.adif(choisis) ?: "").toByteArray(),
+                    "Content-Disposition: attachment; filename=\"$nom\"\r\n")
+            }
+            "/api/carnet/lot" -> {
+                val choisis = q["t"].orEmpty().split(',').mapNotNull { it.trim().toLongOrNull() }.toSet()
+                val nom = "satme-contacts-" + java.text.SimpleDateFormat("yyyyMMdd-HHmm", java.util.Locale.US).format(java.util.Date()) + ".json"
+                envoie(sortie, "200 OK", "application/json; charset=utf-8", (carnet?.lot(choisis) ?: "").toByteArray(),
                     "Content-Disposition: attachment; filename=\"$nom\"\r\n")
             }
             else -> {
@@ -339,6 +348,7 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
             "/api/agenda/retire" -> q["id"]?.toLongOrNull()?.let { station.retireAgenda(it) }
             "/api/agenda/active" -> q["id"]?.toLongOrNull()?.let { station.activeAgenda(it) }
             "/api/agenda/suivi" -> station.agendaSuivi(q["on"] == "1")
+            "/api/skeds/reglages" -> station.regleSkeds(q["on"]?.let { it == "1" }, q["cle"])
             "/api/veille" -> fr.f4ioz.satcombo.demo.ApiVeille.action({ q[it] }, station.settings, station.etat.value.favoris, System.currentTimeMillis())
             "/api/amsat/rapport" -> {
                 // Heard or not, on amsat.org's public page: the satellite followed, my callsign and square, now.
@@ -791,7 +801,7 @@ object JsonPc {
             st.cielQo100()?.let { k -> ApiQo100.Ciel(k.pointage, k.soleilAzimutMs, k.transits) }, st.etat.value.observateur != null, plan)
     }
 
-    fun etat(st: StationPc): JSONObject {
+    fun etat(st: StationPc, carnet: CarnetPc? = null): JSONObject {
         val e = st.etat.value
         val r = st.stationRotor.etat.value
         val c = st.stationCat.etat.value
@@ -824,12 +834,24 @@ object JsonPc {
             .put("txOl", if (tx.configure) tx.olHz else 0).put("txInv", tx.inverseur))
         o.put("cat", fr.f4ioz.satcombo.demo.ApiStation.cat(c, e.catModele, st.settings.civUsbIndex, e.catConnecte, e.catSimule, e.catStatut, e.maintienDoppler))
         o.put("rotor", fr.f4ioz.satcombo.demo.ApiStation.rotor(r))
+        // The log's pass: the skeds announced for the pass under way or next, the contacts of the one under way
+        // (or of the one just over, an hour after it).
+        val s = e.suivi
+        val p = e.passage
+        if (s != null && p != null) {
+            val maintenant = e.maintenant.takeIf { it > 0L } ?: System.currentTimeMillis()
+            val c = if (p.aosEpochMs <= maintenant) p else e.dernierPassage?.takeIf { it.losEpochMs > maintenant - 3_600_000L } ?: p
+            val contacts = fr.f4ioz.satcombo.domain.SkedsPassage.contacts(carnet?.contacts().orEmpty(), s.catalogNumber, s.name, c.aosEpochMs, c.losEpochMs)
+            o.put("passageCarnet", fr.f4ioz.satcombo.demo.ApiStation.passageCarnet(p.aosEpochMs, p.losEpochMs, st.skedsDu(p),
+                c.aosEpochMs, c.losEpochMs, contacts))
+        }
+        o.put("skedsOn", st.settings.skedsEnabled)
         return o
     }
 
     private fun passage(p: fr.f4ioz.satcombo.data.SatPass, st: StationPc? = null) = fr.f4ioz.satcombo.demo.ApiStation.passage(p,
         fav = st?.etat?.value?.favoris?.contains(p.catalogNumber) == true, agenda = st?.auAgenda(p) == true,
-        amsat = st?.statutAmsat(p.satName)?.recent?.name ?: "")
+        amsat = st?.statutAmsat(p.satName)?.recent?.name ?: "", skeds = st?.skedsDu(p)?.size ?: 0)
 
     /** The automatic mode: its choices, its plan for 24 h, and what it waits for to work. */
     fun veille(st: StationPc, s: SonStation?): JSONObject {

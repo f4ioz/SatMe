@@ -6766,16 +6766,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      * as [skedCountForPass] — which is now written on top of this — so a badge and
      * the card it stands for can never disagree.
      */
-    fun skedsForPass(catnum: Int, aosMs: Long, losMs: Long): List<SkedAlert> {
-        val passMid = (aosMs + losMs) / 2
-        return _ui.value.skeds.filter { s ->
-            if (s.satNorad != catnum) return@filter false
-            val sAos = s.workableStartMs ?: s.aosMs
-            val sLos = s.workableEndMs ?: s.losMs
-            val sMid = (sAos + sLos) / 2
-            kotlin.math.abs(sMid - passMid) < 50 * 60_000L && skedVisible(s)
-        }.sortedBy { it.workableStartMs ?: it.aosMs }
-    }
+    fun skedsForPass(catnum: Int, aosMs: Long, losMs: Long): List<SkedAlert> =
+        fr.f4ioz.satcombo.domain.SkedsPassage.duPassage(_ui.value.skeds, catnum, aosMs, losMs).filter { skedVisible(it) }
 
     /** Count of announced skeds overlapping a given pass window (±a few min). */
     fun skedCountForPass(catnum: Int, aosMs: Long, losMs: Long): Int =

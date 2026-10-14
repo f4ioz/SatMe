@@ -751,7 +751,7 @@ internal fun DetailScreen(ui: UiState, vm: MainViewModel, onBack: () -> Unit) {
                                         Surface(color = Color(0xFF49D17F).copy(alpha = 0.14f),
                                             shape = RoundedCornerShape(6.dp),
                                             modifier = Modifier.padding(top = 3.dp, start = 2.dp)) {
-                                            Text("✓ visible ${hm.format(Date(s.workableStartMs))}–${hm.format(Date(s.workableEndMs))} ${tzTag(ui.useUtc)}" +
+                                            Text("✓ visible ${hm.format(Date(s.workableStartMs!!))}–${hm.format(Date(s.workableEndMs!!))} ${tzTag(ui.useUtc)}" +
                                                     (s.maxElevationDeg?.let { " · max ${it.toInt()}°" } ?: "") +
                                                     (s.matchPercent?.let { " · ${it}%" } ?: ""),
                                                 color = Color(0xFF49D17F), fontSize = 11.sp,

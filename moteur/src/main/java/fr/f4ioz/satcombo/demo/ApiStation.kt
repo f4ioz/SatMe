@@ -45,12 +45,36 @@ object ApiStation {
     }
 
     /** A pass in the list, with its small sky arc (some twenty points). */
-    fun passage(p: SatPass, fav: Boolean = false, agenda: Boolean = false, amsat: String = ""): JSONObject = JSONObject()
-        .put("fav", fav).put("agenda", agenda).put("amsat", amsat)
+    fun passage(p: SatPass, fav: Boolean = false, agenda: Boolean = false, amsat: String = "", skeds: Int = 0): JSONObject = JSONObject()
+        .put("fav", fav).put("agenda", agenda).put("amsat", amsat).put("skeds", skeds)
         .put("nom", p.satName).put("catnum", p.catalogNumber).put("aos", p.aosEpochMs).put("los", p.losEpochMs)
         .put("elMax", p.maxElevationDeg).put("azAos", p.aosAzimuthDeg).put("azLos", p.losAzimuthDeg)
         .put("trace", JSONArray(p.track.let { t -> val pas = maxOf(1, t.size / 20); t.filterIndexed { i, _ -> i % pas == 0 || i == t.size - 1 } }
             .map { (az, el) -> JSONArray(listOf(Math.round(az), Math.round(el * 10) / 10.0)) }))
+
+    /**
+     * The pass of the satellite followed for the log: the skeds announced for
+     * it (hams.at) and the contacts made during it, each with its square's
+     * place for the map.
+     */
+    fun passageCarnet(aos: Long, los: Long, skeds: List<fr.f4ioz.satcombo.data.SkedAlert>,
+                      contactsAos: Long, contactsLos: Long, contacts: List<fr.f4ioz.satcombo.data.LogEntry>): JSONObject {
+        fun lieu(o: JSONObject, carre: String?): JSONObject {
+            val c = carre?.takeIf { it.isNotBlank() }?.let { fr.f4ioz.satcombo.location.Maidenhead.centre(it) }
+            if (c != null) o.put("lat", c.first).put("lon", c.second)
+            return o
+        }
+        return JSONObject().put("aos", aos).put("los", los).put("cAos", contactsAos).put("cLos", contactsLos)
+            .put("skeds", JSONArray(skeds.map { s ->
+                lieu(JSONObject().put("call", s.callsign).put("de", s.workableStartMs ?: s.aosMs).put("a", s.workableEndMs ?: s.losMs)
+                    .put("mode", s.mode ?: "").put("carre", s.grids.firstOrNull().orEmpty()).put("carres", s.grids.joinToString(" "))
+                    .put("note", s.comment ?: "").put("url", s.url ?: "")
+                    .put("commun", s.isWorkable ?: JSONObject.NULL), s.grids.firstOrNull())
+            }))
+            .put("contacts", JSONArray(contacts.map { c ->
+                lieu(JSONObject().put("call", c.callsign).put("t", c.timeMs).put("carre", c.theirLocator).put("mode", c.mode), c.theirLocator)
+            }))
+    }
 
     fun position(p: SatPosition): JSONObject = JSONObject().put("az", p.azimuthDeg).put("el", p.elevationDeg)
         .put("distance", p.rangeKm).put("vitesse", p.rangeRateKmS).put("alt", p.altKm)
