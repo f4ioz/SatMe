@@ -2160,6 +2160,7 @@ val EN: Map<String, String> = mapOf(
     "pj_gif" to "Animated GIF",
     "pj_image" to "Picture of this moment",
     "pj_paquet" to "Pass file (.zip)",
+    "pj_paquet_qsos" to "Pass file with its contacts",
     "pj_vue" to "View for pictures and videos",
     "pj_vue_ciel" to "Sky",
     "pj_vue_carte" to "Map",

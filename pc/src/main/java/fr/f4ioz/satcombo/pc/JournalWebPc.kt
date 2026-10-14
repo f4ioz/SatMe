@@ -14,6 +14,7 @@ import fr.f4ioz.satcombo.demo.PageJournal
 import fr.f4ioz.satcombo.demo.ReponseWeb
 import fr.f4ioz.satcombo.domain.Doppler
 import fr.f4ioz.satcombo.domain.JournalPassage
+import fr.f4ioz.satcombo.domain.JournalPaquet
 import fr.f4ioz.satcombo.i18n.t
 import fr.f4ioz.satcombo.location.Maidenhead
 import java.io.File
@@ -196,7 +197,7 @@ class JournalWebPc(private val j: JournalPc, private val station: StationPc, pri
             }
             "/fabrique" -> {
                 val e = j.passage(p("id")) ?: return NON
-                val quoi = p("quoi").takeIf { it in setOf("son", "image", "gif", "video") }
+                val quoi = p("quoi").takeIf { it in setOf("son", "image", "gif", "video", "paquet") }
                     ?: return json("{\"ok\":false,\"raison\":\"telephone\"}")
                 if (quoi == "video" && RenduPc.ffmpeg() == null) return json("{\"ok\":false,\"raison\":\"ffmpeg\"}")
                 val de = p("de").toLongOrNull(); val a = p("a").toLongOrNull()
@@ -207,13 +208,14 @@ class JournalWebPc(private val j: JournalPc, private val station: StationPc, pri
                 if (travaux.size > 20) travaux.keys.sorted().take(travaux.size - 20).forEach { travaux.remove(it) }
                 kotlin.concurrent.thread(name = "JournalWebPc", isDaemon = true) {
                     val sortie = File(dossier, "exports").apply { mkdirs() }
-                    val ext = when (quoi) { "son" -> ".wav"; "image" -> ".png"; "gif" -> ".gif"; else -> ".mp4" }
+                    val ext = when (quoi) { "son" -> ".wav"; "image" -> ".png"; "gif" -> ".gif"; "paquet" -> ".zip"; else -> ".mp4" }
                     val nom = "SatMe_" + e.satName.replace(Regex("[^A-Za-z0-9-]"), "-") + "_" +
                         java.text.SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).apply { timeZone = java.util.TimeZone.getTimeZone("UTC") }
                             .format(java.util.Date(r.first)) + "Z_" + (p("titre").take(30).replace(Regex("[^A-Za-z0-9-]"), "-").ifBlank { if (moment != null) "moment" else "passage" }) + ext
                     t.fichier = runCatching {
                         when (quoi) {
                             "son" -> j.extraitWav(e, r.first, r.last, sortie, nom)
+                            "paquet" -> paquet(e, p("contacts") == "1" || s.journalPaquetQsos, sortie) { t.progres = it }
                             "image" -> RenduPc.png(scene(e, null, null, true, p), p("t").toLongOrNull(), File(sortie, nom))
                             "gif" -> RenduPc.gif(scene(e, moment, p("titre"), false, p), File(sortie, nom)) { t.progres = it }
                             else -> video(e, scene(e, moment, p("titre"), false, p), opt(p, "avecSon", true), File(sortie, nom), sortie) { t.progres = it }
@@ -229,13 +231,52 @@ class JournalWebPc(private val j: JournalPc, private val station: StationPc, pri
             }
             "/fichier" -> {
                 val f = travaux[p("n")]?.fichier ?: return NON
-                val type = when (f.extension) { "png" -> "image/png"; "gif" -> "image/gif"; "mp4" -> "video/mp4"; else -> "audio/wav" }
+                val type = when (f.extension) { "png" -> "image/png"; "gif" -> "image/gif"; "mp4" -> "video/mp4"; "zip" -> JournalPaquet.TYPE; else -> "audio/wav" }
                 ReponseWeb("200 OK", type, fichier = f,
                     entetes = if (p("voir") == "1") "" else "Content-Disposition: attachment; filename=\"${f.name}\"\r\n")
             }
             else -> NON
         }
     }.getOrElse { json("{\"ok\":false,\"raison\":\"${js(it.javaClass.simpleName)}\"}") }
+
+    /**
+     * The pass file, as the phone makes it ([JournalPaquet]): the pass, its
+     * recordings (MP3, as the phone keeps them, with their .info and their
+     * time), its SSTV pictures and their sidecars, its contacts when asked —
+     * a phone or another SatMe-PC opens it.
+     */
+    private fun paquet(e: JournalPassage.Entree, avecContacts: Boolean, sortie: File, progres: (Float) -> Unit): File {
+        val tmp = File(sortie, "paquet-" + System.nanoTime()).apply { mkdirs() }
+        try {
+            val fichiers = ArrayList<Pair<String, File>>()
+            val ff = RenduPc.ffmpeg()
+            val sons = j.morceaux(e).map { it.f }.distinct()
+            sons.forEachIndexed { i, wav ->
+                progres(0.8f * i / sons.size.coerceAtLeast(1))
+                if (ff == null) return@forEachIndexed
+                val mp3 = File(tmp, wav.name.substringBeforeLast('.') + ".mp3")
+                val pr = ProcessBuilder(ff, "-y", "-loglevel", "error", "-i", wav.absolutePath, "-codec:a", "libmp3lame", "-q:a", "4", mp3.absolutePath)
+                    .redirectErrorStream(true).start()
+                pr.inputStream.readBytes(); pr.waitFor()
+                if (mp3.isFile && mp3.length() > 0) {
+                    // The phone places a recording by its file's time (its end) and its length.
+                    mp3.setLastModified(wav.lastModified())
+                    val info = File(tmp, mp3.name.substringBeforeLast('.') + ".info")
+                    info.writeText("locator=" + s.manualLocator.trim() + "\nannonce=0\n"); info.setLastModified(wav.lastModified())
+                    fichiers += "recordings" to mp3; fichiers += "recordings" to info
+                }
+            }
+            val l = j.liens(e)
+            for ((png, shot) in l.images) {
+                fichiers += "sstv" to png
+                File(png.parentFile, fr.f4ioz.satcombo.sstv.SstvMeta.sidecarName(png.name)).takeIf { it.isFile }?.let { fichiers += "sstv" to it }
+            }
+            progres(0.9f)
+            val f = File(sortie, JournalPaquet.nom(e))
+            f.outputStream().buffered().use { o -> JournalPaquet.emballe(o, e, fichiers, contacts = if (avecContacts) l.qsos else emptyList()) }
+            return f
+        } finally { tmp.deleteRecursively() }
+    }
 
     /** What a picture, a GIF or a video shows, from the page's options (else the settings). */
     private fun scene(e: JournalPassage.Entree, moment: LongRange?, titre: String?, image: Boolean, p: (String) -> String): RenduPc.Scene {

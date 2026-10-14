@@ -29,7 +29,7 @@ object PageJournal {
         "pj_titre", "pj_sous", "pj_tous", "pj_aucun", "pj_choisir", "pj_duree", "pj_lecture", "pj_pause", "pj_vitesse",
         "pj_sans_son", "pj_frise_aide", "pj_selection", "pj_effacer", "pj_moments", "pj_aucun_moment", "pj_choisir_morceau",
         "pj_fabriquer", "pj_de_quoi_sel", "pj_de_quoi_tout", "pj_titre_extrait", "pj_son", "pj_video", "pj_gif", "pj_image",
-        "pj_paquet", "pj_vue", "pj_vue_ciel", "pj_vue_carte", "pj_en_cours", "pj_pret", "pj_telecharger", "pj_echec",
+        "pj_paquet", "pj_paquet_qsos", "pj_vue", "pj_vue_ciel", "pj_vue_carte", "pj_en_cours", "pj_pret", "pj_telecharger", "pj_echec",
         "pj_sons", "pj_qso", "pj_aprs", "pj_via_iss", "pj_sstv", "pj_signet", "pj_activite", "pj_smetre", "pj_reconstitue",
         "pj_planche", "pj_onglet_rejeu", "pj_onglet_fabriquer", "pj_accelere", "pj_avant", "pj_apres", "pj_activite_opt",
         "pj_afficher", "pj_aff_sstv", "pj_aff_fiche", "pj_aff_smetre", "pj_aff_freq", "pj_aff_locator", "pj_resolution",
@@ -563,6 +563,7 @@ function panneauFabriquer(p) {
     radio('formatF', 'portrait', T.format_portrait, O.format === 'portrait', () => { O.format = 'portrait'; garde(); dessineCadre(); })]));
   c.appendChild(caseOpt('ouverture', T.ouverture)); c.appendChild(caseOpt('recap', T.recap));
   c.appendChild(caseOpt('avecSon', T.avec_son)); c.appendChild(caseOpt('accelVideo', T.accelere_video));
+  c.appendChild(caseOpt('paquetQsos', T.paquet_qsos));
   p.appendChild(c);
   p.appendChild(el('div', { class: 'rangee' }, [
     el('button', { class: 'discret', text: T.son, onclick: () => fabrique('son') }),
@@ -855,6 +856,7 @@ async function fabrique(quoi) {
   const p = { id: P.id, quoi: quoi, carte: O.vue === 'carte' ? '1' : '0', t: Math.round(t), res: O.res, ouverture: b(O.ouverture), recap: b(O.recap),
     avecSon: b(O.avecSon), accelere: b(O.accelVideo), avant: O.avant, apres: O.apres, rapide: O.rapide, surActivite: b(O.surActivite),
     sstv: b(O.sstv), fiches: b(O.fiches), smetre: b(O.smetre), freq: b(O.freq), locator: b(O.locator) };
+  if (quoi === 'paquet' && O.paquetQsos) p.contacts = '1';
   if (deQuoi === 'sel' && sel && quoi !== 'image' && quoi !== 'paquet') { p.de = Math.round(sel[0]); p.a = Math.round(sel[1]); p.titre = titre; }
   // The map as framed here (centre, zoom, the width it is shown at): the export shows the same.
   if (O.vue === 'carte') { const c = g('carte'); p.mcx = mcx; p.mcy = mcy; p.zc = zc; p.cw = c.clientWidth; p.ch = c.clientHeight;

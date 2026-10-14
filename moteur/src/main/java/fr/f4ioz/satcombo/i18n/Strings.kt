@@ -2184,6 +2184,7 @@ val FR: Map<String, String> = mapOf(
     "pj_gif" to "GIF animé",
     "pj_image" to "Image de ce moment",
     "pj_paquet" to "Fichier du passage (.zip)",
+    "pj_paquet_qsos" to "Fichier du passage avec ses contacts",
     "pj_vue" to "Vue des images et vidéos",
     "pj_vue_ciel" to "Ciel",
     "pj_vue_carte" to "Carte",
