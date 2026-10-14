@@ -973,7 +973,7 @@ object PagePc {
     <div class="paire"><span class="o-freq" id="r-freq">—</span><span class="petit" id="r-detail"></span></div>
     <div class="ligne" style="margin-top:4px"><span class="petit">Niveau</span><div class="r-barre"><i id="r-niveau"></i></div><span class="petit" id="r-db"></span>
       <span class="rose petit" id="r-sat-av"></span>
-      <span style="margin-left:auto" class="petit">Largeur vue</span><select id="r-span" style="flex:none" onchange="rSpan = +this.value; rCascade = []"><option value="12000">12 kHz</option><option value="24000">24 kHz</option><option value="48000" selected>48 kHz</option><option value="96000">96 kHz</option><option value="176400">176 kHz</option></select>
+      <span style="margin-left:auto" class="petit">Largeur vue</span><select id="r-span" style="flex:none" onchange="rSpan = +this.value; rCascade = []; majFlux()"><option value="12000">12 kHz</option><option value="24000">24 kHz</option><option value="48000" selected>48 kHz</option><option value="96000">96 kHz</option><option value="176400">176 kHz</option></select>
       <button onclick="post('api/sdr/pic')" title="Le signal le plus fort à ±15 kHz">Caler sur le pic</button><button onclick="post('api/sdr/decalage?hz=0')">Recentrer</button></div>
     <div class="ligne" style="margin-top:6px">
       <button id="r-voix" onclick="caleVoix()" title="Le centre de la voix entendue (±3 kHz) mis à 1,5 kHz du bord, comme sur le téléphone">🗣 Caler sur la voix</button>
@@ -1761,7 +1761,31 @@ async function importe(input) {
 }
 
 async function tic() {
+  // The stream keeps E fresh: only drawn again (an action's result comes by the stream within a moment).
+  if (fluxOk && E) { dessine(); return; }
   try { E = await (await fetch('api/etat')).json(); dessine(); } catch (x) {}
+}
+// ------------------------------------------------------------------ the live stream (server-sent events)
+// SatMe-PC sends the station, the sound, the dongle and its spectrum as they change; the page's questions
+// stay as the fallback (the stream cut, or the page served by the phone, which has none).
+let flux = null, fluxOk = false, fluxSujets = '';
+function sujetsFlux() {
+  const sdr = !g('v-sdr').hidden;
+  return 'etat,son' + (sdr || !g('v-carnet').hidden ? ',sdr' : '') + (sdr ? ',spectre&span=' + rSpan + '&n=' + Math.min(1024, Math.max(128, g('r-spectre').clientWidth || 512)) : '');
+}
+function majFlux() {
+  if (!window.EventSource || window.SATME_TELEPHONE) return;
+  const t = sujetsFlux();
+  if (flux && t === fluxSujets && flux.readyState !== 2) return;
+  if (flux) flux.close();
+  fluxSujets = t; fluxOk = false;
+  flux = new EventSource('api/flux?t=' + t);
+  flux.addEventListener('etat', ev => { fluxOk = true; E = JSON.parse(ev.data); dessine(); });
+  flux.addEventListener('son', ev => { S = JSON.parse(ev.data); rendSon(); });
+  flux.addEventListener('sdr', ev => { R = JSON.parse(ev.data); rendSdr(); });
+  flux.addEventListener('spectre', ev => { const j = JSON.parse(ev.data); if (j.db && j.trames !== rTrames) { rTrames = j.trames; rDernier = j; rCascade.unshift(j.db); if (rCascade.length > 600) rCascade.length = 600; dessineSdr(); } });
+  // Cut: the questions take over until it comes back (the browser tries again by itself).
+  flux.onerror = () => { fluxOk = false; };
 }
 async function chargeListe() {
   try { P = (await (await fetch('api/passages')).json()).liste; dessinePassages(); } catch (x) {}
@@ -1811,6 +1835,7 @@ function rotConnecte() {
 g('emetteur').onchange = () => post('api/emetteur?i=' + g('emetteur').value);
 // ------------------------------------------------------------------ tabs
 function vue(n) {
+  setTimeout(majFlux, 0);
   document.querySelectorAll('.vue').forEach(x => x.hidden = x.id !== 'v-' + n);
   document.querySelectorAll('#onglets button').forEach(b => b.classList.toggle('actif', b.dataset.v === n));
   try { localStorage.setItem('vue', n); } catch (x) {}
@@ -2528,8 +2553,11 @@ async function essaiQrz() {
 let S = null, versionImage = -1, cartesVues = '', imagesVus = '', enregsVus = '';
 const ouverte = n => !g('v-' + n).hidden;
 async function ticSon() {
-  try { S = await (await fetch('api/son')).json(); } catch (x) { return; }
-  if (!S.present) return;
+  if (!(fluxOk && S)) { try { S = await (await fetch('api/son')).json(); } catch (x) { return; } }
+  rendSon();
+}
+function rendSon() {
+  if (!S || !S.present) return;
   // The header says it whatever the tab: a recording under way.
   g('rec').style.display = S.enregistrement ? '' : 'none';
   txt('rec', S.enregistrement ? '● REC ' + duree(S.secondes * 1000) : '');
@@ -3257,7 +3285,11 @@ async function rRegle(q) { await post('api/sdr/reglage?' + q); ticSdr(); }
 async function ticSdr() {
   // The log's live station shows the dongle too.
   if (g('v-sdr').hidden && g('v-carnet').hidden) return;
-  try { R = await (await fetch('api/sdr')).json(); } catch (x) { return; }
+  if (!(fluxOk && R && fluxSujets.includes('sdr'))) { try { R = await (await fetch('api/sdr')).json(); } catch (x) { return; } }
+  rendSdr();
+}
+function rendSdr() {
+  if (!R) return;
   const r = R;
   g('r-pastille').className = 'pastille ' + (r.actif ? 'on' : 'off'); txt('r-pastille', r.actif ? 'réception' : 'arrêtée');
   txt('r-info', r.actif ? r.tuner + ' · ' + (r.debit / 1024).toFixed(1) + ' Mo/s' + (r.perdus ? ' · ' + r.perdus + ' blocs perdus' : '') : '');
@@ -3364,7 +3396,7 @@ g('r-loupe').addEventListener('click', ev => {
 });
 setInterval(ticSdr, 700);
 async function spectreSdr() {
-  if (g('v-sdr').hidden || !R || !R.actif) return;
+  if (g('v-sdr').hidden || !R || !R.actif || (fluxOk && fluxSujets.includes('spectre'))) return;
   let j = null;
   try { j = await (await fetch('api/sdr/spectre?span=' + rSpan + '&n=' + Math.min(1024, Math.max(128, g('r-spectre').clientWidth)))).json(); } catch (x) { return; }
   if (!j.db || j.trames === rTrames) return;
@@ -3747,6 +3779,7 @@ else try { const n = localStorage.getItem('vue'); if (n) vue(n); } catch (x) {}
 tic(); chargeListe(); chargePorts(); chargeSatellites();
 setInterval(chargeSatellites, 600000);
 setInterval(tic, 1000);
+setTimeout(majFlux, 300);
 // The TH-D72 panel: shown while it is the rig connected.
 let TH = null;
 async function thPost(a) { const j = await post('api/thd72/' + a); if (j && j.ok === false && j.erreur) txt('thd72-msg', j.erreur); setTimeout(ticThd72, 600); return j; }

@@ -66,12 +66,74 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
 
     fun arrete() { runCatching { socket?.close() } }
 
+    /**
+     * The page kept up to date as things change (server-sent events): the
+     * station, the sound, the dongle and its spectrum, each sent when it
+     * changed — no more waiting for the page's next question. Topics in ?t=
+     * (etat, son, sdr, spectre; span and n for the spectrum). The stream
+     * ends when the page goes.
+     */
+    private fun flux(c: Socket, sortie: java.io.OutputStream, q: Map<String, String>) {
+        c.soTimeout = 0
+        val sujets = q["t"].orEmpty().split(',').map { it.trim() }.filter { it.isNotEmpty() }.toSet()
+        val span = q["span"]?.toIntOrNull() ?: 48_000
+        val n = q["n"]?.toIntOrNull() ?: 512
+        runCatching { sortie.write("HTTP/1.1 200 OK\r\nContent-Type: text/event-stream; charset=utf-8\r\nCache-Control: no-store\r\nConnection: close\r\nX-Accel-Buffering: no\r\n\r\nretry: 2000\n\n".toByteArray()); sortie.flush() }
+            .onFailure { return }
+        val envoyes = HashMap<String, String>()
+        fun envoie(sujet: String, json: String): Boolean {
+            if (envoyes[sujet] == json) return true
+            envoyes[sujet] = json
+            return runCatching { sortie.write("event: $sujet\ndata: $json\n\n".toByteArray(Charsets.UTF_8)); sortie.flush() }.isSuccess
+        }
+        // What the station's state is made of: built again when one of them moved, else each second.
+        var refs: List<Any?> = emptyList()
+        var etatMs = 0L; var sonMs = 0L; var sdrMs = 0L; var spectreTrames = -1L; var veilleMs = 0L
+        var refSon: Any? = null
+        while (true) {
+            val maintenant = System.currentTimeMillis()
+            if ("etat" in sujets) {
+                val r = listOf(station.etat.value, station.stationCat.etat.value, station.stationRotor.etat.value)
+                if (r.indices.any { r[it] !== refs.getOrNull(it) } || maintenant - etatMs >= 1000L) {
+                    refs = r; etatMs = maintenant
+                    if (!envoie("etat", JsonPc.etat(station, carnet).toString())) return
+                }
+            }
+            if ("son" in sujets && son != null) {
+                val r = son.etat.value
+                val avant = refSon as? SonStation.Etat
+                // A recording starting or stopping, a picture beginning: at once; the rest (level, seconds,
+                // lines of a picture) at most twice a second — the sound's state moves with every block.
+                val net = avant == null || r.enregistrement != avant.enregistrement || r.sstvMode != avant.sstvMode || r.sstvDerniere != avant.sstvDerniere
+                if (net || (r !== avant && maintenant - sonMs >= 500L) || maintenant - sonMs >= 1000L) {
+                    refSon = r; sonMs = maintenant
+                    if (!envoie("son", JsonPc.son(son).toString())) return
+                }
+            }
+            if ("sdr" in sujets && sdr != null && maintenant - sdrMs >= 200L) {
+                sdrMs = maintenant
+                if (!envoie("sdr", JsonPc.sdr(sdr).toString())) return
+            }
+            if ("spectre" in sujets && sdr != null && sdr.trames.toLong() != spectreTrames) {
+                spectreTrames = sdr.trames.toLong()
+                if (!envoie("spectre", JsonPc.spectre(sdr, span, n).toString())) return
+            }
+            // A comment now and then: a page gone is noticed.
+            if (maintenant - veilleMs >= 15_000L) {
+                veilleMs = maintenant
+                if (runCatching { sortie.write(": \n\n".toByteArray()); sortie.flush() }.isFailure) return
+            }
+            Thread.sleep(40)
+        }
+    }
+
     private fun sert(c: Socket) {
         c.soTimeout = 15_000
         val r = RequeteHttp.lit(c.getInputStream()) ?: return
         val chemin = r.chemin.substringBefore('?')
         val q = parametres(r.chemin.substringAfter('?', ""))
         val sortie = c.getOutputStream()
+        if (chemin == "/api/flux") { flux(c, sortie, q); return }
         if (chemin == "/api/datv/video.mjpeg" && datv != null) {
             // The DATV pictures as they come, one JPEG after the other (an <img> shows them as a video).
             c.soTimeout = 0
