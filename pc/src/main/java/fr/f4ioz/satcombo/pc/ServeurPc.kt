@@ -44,7 +44,9 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
     /** The KISS radio on a serial port (APRS tab). */
     private val kiss: KissPc? = null,
     /** The whole station in one file, and put back at the next start. */
-    private val sauvegarde: SauvegardePc? = null) {
+    private val sauvegarde: SauvegardePc? = null,
+    /** The SSTV test card, played or written. */
+    private val mire: MirePc? = null) {
 
     private var socket: ServerSocket? = null
     val portReel: Int get() = socket?.localPort ?: port
@@ -109,6 +111,13 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 else s.recoit(Borne(c.getInputStream(), r.longueur))
             envoie(sortie, "200 OK", "application/json; charset=utf-8", JSONObject().put("ok", b.ok).put("erreur", b.erreur)
                 .put("fichiers", b.fichiers).put("octets", b.octets).put("date", b.date).put("version", b.version).toString().toByteArray())
+            return
+        }
+        if (r.methode == "GET" && chemin == "/mire.wav" && mire != null) {
+            val m = fr.f4ioz.satcombo.sstv.SstvMode.byName(q["mode"].orEmpty()) ?: fr.f4ioz.satcombo.sstv.SstvMode.ALL.first()
+            val f = mire.wav(m, MirePc.conditions(q["bruit"]?.toIntOrNull() ?: 0, q["fading"].orEmpty(), q["coupures"] == "1", q["profil"] == "1"),
+                station.settings.callsign, station.settings.manualLocator)
+            envoieFichier(sortie, r, f, "audio/wav", "Content-Disposition: attachment; filename=\"${f.name}\"\r\n")
             return
         }
         if (r.methode == "GET" && chemin == "/sauvegarde.zip" && sauvegarde != null) {
@@ -297,6 +306,20 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
             "/api/aprs" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JsonPc.aprs(son, station).toString().toByteArray())
             "/api/son" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JsonPc.son(son).toString().toByteArray())
             "/api/veille" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JsonPc.veille(station, son).toString().toByteArray())
+            "/api/mire" -> {
+                val m = mire
+                val e = m?.etat?.value
+                envoie(sortie, "200 OK", "application/json; charset=utf-8", (if (m == null || e == null) JSONObject().put("present", false) else JSONObject().put("present", true)
+                    .put("modes", JSONArray(fr.f4ioz.satcombo.sstv.SstvMode.ALL.map { JSONObject().put("nom", it.name).put("s", Math.round(fr.f4ioz.satcombo.sstv.SstvEncoder.seconds(it))).put("w", it.width).put("h", it.height) }))
+                    .put("sorties", JSONArray(m.sorties().map { JSONObject().put("nom", it.first).put("desc", it.second) }))
+                    .put("joue", e.joue).put("mode", e.mode).put("progres", e.progres).put("sortie", e.sortie).put("erreur", e.erreur)).toString().toByteArray())
+            }
+            "/api/mire/image.png" -> {
+                val m = fr.f4ioz.satcombo.sstv.SstvMode.byName(q["mode"].orEmpty()) ?: fr.f4ioz.satcombo.sstv.SstvMode.ALL.first()
+                val im = mire?.image(m, station.settings.callsign, station.settings.manualLocator)
+                if (im == null) envoie(sortie, "404 Not Found", "text/plain", ByteArray(0))
+                else envoie(sortie, "200 OK", "image/png", java.io.ByteArrayOutputStream().also { javax.imageio.ImageIO.write(im, "png", it) }.toByteArray())
+            }
             "/api/sstv/encours.png" -> son?.imageEnCours()?.let { envoie(sortie, "200 OK", "image/png", it) }
                 ?: envoie(sortie, "404 Not Found", "text/plain", ByteArray(0))
             "/api/sauvegarde" -> {
@@ -373,6 +396,12 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
             "/api/agenda/suivi" -> station.agendaSuivi(q["on"] == "1")
             "/api/skeds/reglages" -> station.regleSkeds(q["on"]?.let { it == "1" }, q["cle"])
             "/api/sauvegarde/annule" -> sauvegarde?.annule()
+            "/api/mire/joue" -> {
+                val m = fr.f4ioz.satcombo.sstv.SstvMode.byName(q["mode"].orEmpty()) ?: return JSONObject().put("ok", false).put("erreur", "mode inconnu")
+                mire?.joue(m, MirePc.conditions(q["bruit"]?.toIntOrNull() ?: 0, q["fading"].orEmpty(), q["coupures"] == "1", q["profil"] == "1"),
+                    q["sortie"].orEmpty(), station.settings.callsign, station.settings.manualLocator)
+            }
+            "/api/mire/stop" -> mire?.arrete()
             "/api/veille" -> fr.f4ioz.satcombo.demo.ApiVeille.action({ q[it] }, station.settings, station.etat.value.favoris, System.currentTimeMillis())
             "/api/amsat/rapport" -> {
                 // Heard or not, on amsat.org's public page: the satellite followed, my callsign and square, now.

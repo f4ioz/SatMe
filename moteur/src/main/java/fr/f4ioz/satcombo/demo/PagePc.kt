@@ -602,6 +602,24 @@ object PagePc {
       <img id="i-encours" style="width:100%;image-rendering:auto;background:#0E1720;min-height:200px;border-radius:8px" alt="">
       <div class="etat" id="sstv-etat"></div>
     </div>
+    <div class="carte" id="mi-carte" hidden>
+      <div class="t">Mire SSTV</div>
+      <div class="petit">Une image de référence envoyée en SSTV, pour éprouver un décodeur sans satellite : celui de ce PC, d'un téléphone, ou toute une chaîne radio. Rien n'est émis : le son part sur la sortie choisie.</div>
+      <div class="ligne"><select id="mi-mode" onchange="apercuMire()"></select><span class="petit" id="mi-duree"></span></div>
+      <img id="mi-apercu" alt="" style="width:100%;max-width:420px;border-radius:6px;margin-top:8px;display:block">
+      <div class="ligne"><span class="petit">Conditions</span>
+        <select id="mi-bruit" title="Bruit (rapport signal sur bruit)"><option value="0">sans bruit</option><option value="20">bruit 20 dB</option><option value="15">bruit 15 dB</option><option value="12">bruit 12 dB</option><option value="8">bruit 8 dB</option></select>
+        <select id="mi-fading" title="Évanouissements"><option value="NONE">sans fading</option><option value="LIGHT">fading léger</option><option value="STRONG">fading fort</option></select>
+        <label class="petit"><input type="checkbox" id="mi-coupures"> coupures</label>
+        <label class="petit"><input type="checkbox" id="mi-profil"> profil du passage</label></div>
+      <div class="ligne"><button onclick="presetMire(1)">ISS typique</button><button onclick="presetMire(0)">Propre</button></div>
+      <div class="ligne"><span class="petit">Sortie</span><select id="mi-sortie" style="flex:1"></select></div>
+      <div class="avert">Jamais vers l'entrée micro d'un poste avec VOX, sauf essai voulu : il passerait en émission.</div>
+      <div class="ligne"><button class="primaire" id="mi-joue" onclick="joueMire()">▶ Jouer</button><button onclick="post('api/mire/stop').then(ticMire)">■ Stop</button>
+        <a class="bouton" id="mi-wav" href="#" download>⤓ WAV</a></div>
+      <div style="height:8px;background:#0E1720;border-radius:4px;margin-top:8px;overflow:hidden"><div id="mi-barre" style="height:100%;width:0;background:var(--cyan)"></div></div>
+      <div class="etat" id="mi-etat"></div>
+    </div>
   </div>
   <div>
     <div class="carte">
@@ -1286,6 +1304,41 @@ function dessineAgenda() {
     '<tr><td colspan="4" class="petit">rien de prévu</td></tr>';
 }
 const hz = v => (v > 0 ? '+' : '') + v + ' Hz';
+// The SSTV test card.
+let MI = null;
+function paramsMire() {
+  return 'mode=' + enc(g('mi-mode').value) + '&bruit=' + g('mi-bruit').value + '&fading=' + g('mi-fading').value +
+    '&coupures=' + (g('mi-coupures').checked ? 1 : 0) + '&profil=' + (g('mi-profil').checked ? 1 : 0);
+}
+function apercuMire() {
+  g('mi-apercu').src = 'api/mire/image.png?mode=' + enc(g('mi-mode').value);
+  const m = MI && MI.modes.find(x => x.nom === g('mi-mode').value);
+  txt('mi-duree', m ? m.w + '×' + m.h + ' · ' + duree(m.s * 1000) : '');
+  g('mi-wav').href = 'mire.wav?' + paramsMire();
+}
+function presetMire(iss) {
+  g('mi-bruit').value = iss ? '15' : '0'; g('mi-fading').value = iss ? 'LIGHT' : 'NONE';
+  g('mi-coupures').checked = !!iss; g('mi-profil').checked = !!iss; apercuMire();
+}
+['mi-bruit', 'mi-fading', 'mi-coupures', 'mi-profil'].forEach(id => g(id).addEventListener('change', apercuMire));
+async function joueMire() { await post('api/mire/joue?' + paramsMire() + '&sortie=' + enc(g('mi-sortie').value)); ticMire(); }
+async function ticMire(premier) {
+  try { MI = await (await fetch('api/mire')).json(); } catch (x) { MI = null; }
+  g('mi-carte').hidden = !(MI && MI.present); if (!MI || !MI.present) return;
+  if (premier || !g('mi-mode').options.length) {
+    const avant = g('mi-mode').value;
+    g('mi-mode').innerHTML = MI.modes.map(m => '<option>' + esc(m.nom) + '</option>').join('');
+    g('mi-mode').value = avant || (MI.modes.some(m => m.nom === 'PD 120') ? 'PD 120' : MI.modes[0].nom);
+    const s = g('mi-sortie').value;
+    g('mi-sortie').innerHTML = MI.sorties.map(o => '<option value="' + esc(o.nom) + '">' + esc(o.nom ? o.nom + (o.desc ? ' — ' + o.desc.slice(0, 50) : '') : o.desc) + '</option>').join('');
+    if (s) g('mi-sortie').value = s;
+    apercuMire();
+  }
+  g('mi-barre').style.width = Math.round((MI.progres || 0) * 100) + '%';
+  txt('mi-etat', MI.erreur || (MI.joue ? 'lecture de la mire ' + MI.mode + '… ' + Math.round(MI.progres * 100) + ' %' : ''));
+  g('mi-joue').disabled = MI.joue;
+  if (MI.joue) setTimeout(ticMire, 1000);
+}
 // Réglages by category: a list on the left (icon, name, what it holds), the chosen category's cards on the right.
 const ICO = ${icones()};
 const CATS_REG = [
@@ -1297,20 +1350,20 @@ const CATS_REG = [
   { id: 'sauvegarde', nom: 'Sauvegarde', ico: 'save', desc: 'Toute la station dans un fichier, et la restaurer', cartes: ['Sauvegarde'] },
 ];
 // The backup: its size, the link, a backup received waiting for the next start.
-let SV = null;
+let SAUV = null;
 async function majSauvegarde() {
-  try { SV = await (await fetch('api/sauvegarde')).json(); } catch (x) { SV = null; }
-  g('sv-carte').hidden = !(SV && SV.present);
+  try { SAUV = await (await fetch('api/sauvegarde')).json(); } catch (x) { SAUV = null; }
+  g('sv-carte').hidden = !(SAUV && SAUV.present);
   // A category whose cards are all hidden here (the page served by the phone) leaves the list.
   document.querySelectorAll('#reg-corps .reg-sec').forEach(sec => {
     const vide = ![...sec.querySelectorAll('.reg-cartes > .carte')].some(k => !k.hidden || k.id === 'thd72-carte');
     const b = document.querySelector('#reg-nav button[data-cat="' + sec.dataset.cat + '"]'); if (b) b.hidden = vide;
   });
-  if (!SV || !SV.present) return;
+  if (!SAUV || !SAUV.present) return;
   const m = g('sv-medias').checked;
   g('sv-lien').href = 'sauvegarde.zip' + (m ? '?medias=1' : '');
-  txt('sv-taille', 'environ ' + ((m ? SV.tailleMedias : SV.taille) / 1048576).toFixed(1) + ' Mo');
-  g('sv-etat').innerHTML = SV.attente ? 'Une sauvegarde du ' + new Date(SV.attente.date).toLocaleString() + ' sera restaurée au prochain démarrage de SatMe-PC. <button onclick="post(\'api/sauvegarde/annule\').then(majSauvegarde)">Annuler</button>' : '';
+  txt('sv-taille', 'environ ' + ((m ? SAUV.tailleMedias : SAUV.taille) / 1048576).toFixed(1) + ' Mo');
+  g('sv-etat').innerHTML = SAUV.attente ? 'Une sauvegarde du ' + new Date(SAUV.attente.date).toLocaleString() + ' sera restaurée au prochain démarrage de SatMe-PC. <button onclick="post(\'api/sauvegarde/annule\').then(majSauvegarde)">Annuler</button>' : '';
 }
 async function restaureSauvegarde(input) {
   const f = input.files[0]; if (!f) return;
@@ -1683,6 +1736,7 @@ function vue(n) {
   if (n === 'reglages') { rangeReglages(); majSauvegarde(); }
   if (n === 'reglages') { chargeReglages().then(() => { if (!wlLu && v('carnetUrl')) { wlLu = true; essaiCarnet(); } }); chargeSources(); }
   if (n === 'son' || n === 'sstv') ticSon();
+  if (n === 'sstv') ticMire(true);
   if (n === 'agenda') ticVeille();
   if (n === 'aprs') ticAprs();
   if (n === 'ft8') ticFt8();
