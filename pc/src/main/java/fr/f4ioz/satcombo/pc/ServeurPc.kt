@@ -270,6 +270,9 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
             }
             "/api/carnet/passages" -> envoie(sortie, "200 OK", "application/json; charset=utf-8",
                 fr.f4ioz.satcombo.demo.ApiCalculs.passagesFinisJson(station.passagesFinis(q["catnum"]?.toIntOrNull() ?: 0)).toString().toByteArray())
+            "/api/carnet/records" -> envoie(sortie, "200 OK", "application/json; charset=utf-8",
+                fr.f4ioz.satcombo.demo.ApiStation.records(fr.f4ioz.satcombo.domain.RecordsCarnet.calcule(carnet?.contacts().orEmpty(), station.settings.manualLocator))
+                    .toString().toByteArray())
             "/api/carnet" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JsonPc.carnet(carnet).toString().toByteArray())
             "/api/reglages" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JsonPc.reglages(station).toString().toByteArray())
             "/api/sources" -> {

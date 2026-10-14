@@ -76,6 +76,21 @@ object ApiStation {
             }))
     }
 
+    /** The log's records (see [fr.f4ioz.satcombo.domain.RecordsCarnet]), for the Records view. */
+    fun records(b: fr.f4ioz.satcombo.domain.RecordsCarnet.Bilan): JSONObject {
+        val R = fr.f4ioz.satcombo.domain.RecordsCarnet
+        fun r(x: fr.f4ioz.satcombo.domain.RecordsCarnet.Record?): Any = x?.let { JSONObject().put("km", Math.round(it.km)).put("call", it.contact.callsign)
+            .put("carre", it.contact.theirLocator).put("sat", it.contact.satName).put("mode", R.mode(it.contact.mode)).put("quand", it.contact.timeMs) } ?: JSONObject.NULL
+        fun liste(m: Map<String, fr.f4ioz.satcombo.domain.RecordsCarnet.Record>) = JSONArray(m.entries.sortedByDescending { it.value.km }
+            .map { (k, v) -> (r(v) as JSONObject).put("nom", k) })
+        return JSONObject().put("total", r(b.total)).put("contacts", b.contacts).put("avecDistance", b.avecDistance)
+            .put("carres", b.carres.size).put("pays", b.pays.size).put("satellites", b.satellites.size)
+            .put("continents", JSONArray(R.CONTINENTS.map { c -> JSONObject().put("c", c).put("fait", c in b.continents).put("record", r(b.parContinent[c])) }))
+            .put("parSatellite", liste(b.parSatellite)).put("parMode", liste(b.parMode)).put("parPays", liste(b.parPays))
+            .put("paliers", JSONArray(R.PALIERS.map { km -> val c = b.paliers.firstOrNull { it.first == km }?.second
+                JSONObject().put("km", km).put("call", c?.callsign ?: JSONObject.NULL).put("quand", c?.timeMs ?: JSONObject.NULL) }))
+    }
+
     fun position(p: SatPosition): JSONObject = JSONObject().put("az", p.azimuthDeg).put("el", p.elevationDeg)
         .put("distance", p.rangeKm).put("vitesse", p.rangeRateKmS).put("alt", p.altKm)
         .put("lat", p.latDeg).put("lon", p.lonDeg).put("eclaire", p.sunlit)

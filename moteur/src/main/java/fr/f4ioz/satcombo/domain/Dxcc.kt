@@ -21,18 +21,22 @@ package fr.f4ioz.satcombo.domain
  */
 object Dxcc {
 
-    class Entite(val nom: String, val drapeau: String)
+    /** An entity: its name, its flag (country code), its continent (EU, AS, AF, NA, SA, OC — as the DXCC lists it). */
+    class Entite(val nom: String, val drapeau: String, val continent: String = "")
 
     /**
      * Prefix → entity. Keys are tried longest first, so "EA8" (Canaries) wins
      * over "EA" (Spain).
      */
     private val table: Map<String, Entite> = buildMap {
-        fun p(prefixes: String, nom: String, drapeau: String = "") {
-            val e = Entite(nom, drapeau)
+        // The continent of the block below; an entry elsewhere says its own.
+        var bloc = "EU"
+        fun p(prefixes: String, nom: String, drapeau: String = "", continent: String = bloc) {
+            val e = Entite(nom, drapeau, continent)
             prefixes.split(" ").forEach { put(it, e) }
         }
         // Europe
+        bloc = "EU"
         p("F TM TO TV TW TX HW HX HY", "France", "FR")
         p("TK", "Corse", "FR")
         p("G M 2E GX", "Angleterre", "GB")
@@ -46,10 +50,10 @@ object Dxcc {
         p("DA DB DC DD DE DF DG DH DJ DK DL DM DN DO DP DQ DR", "Allemagne", "DE")
         p("EA EB EC ED EE EF EG EH AM AN AO", "Espagne", "ES")
         p("EA6 EB6 EC6", "Baléares", "ES")
-        p("EA8 EB8 EC8", "Canaries", "ES")
-        p("EA9 EB9 EC9", "Ceuta et Melilla", "ES")
+        p("EA8 EB8 EC8", "Canaries", "ES", continent = "AF")
+        p("EA9 EB9 EC9", "Ceuta et Melilla", "ES", continent = "AF")
         p("CT CQ CR CS", "Portugal", "PT")
-        p("CT3 CS3", "Madère", "PT")
+        p("CT3 CS3", "Madère", "PT", continent = "AF")
         p("CU", "Açores", "PT")
         p("I IZ IK IU IW IX", "Italie", "IT")
         p("IS0 IM0", "Sardaigne", "IT")
@@ -89,8 +93,10 @@ object Dxcc {
         p("YL", "Lettonie", "LV")
         p("LY", "Lituanie", "LT")
         p("RA RZ UA UB UC UD UE UF UG UI R", "Russie", "RU")
-        p("TA TB TC", "Turquie", "TR")
-        p("5B C4 H2", "Chypre")
+        p((listOf("R", "RA", "RC", "RD", "RE", "RF", "RG", "RJ", "RK", "RL", "RM", "RN", "RO", "RQ", "RT", "RU", "RV", "RW", "RX", "RY", "RZ",
+            "UA", "UB", "UC", "UD", "UE", "UF", "UG", "UH", "UI").flatMap { listOf(it + "9", it + "0") }).joinToString(" "), "Russie d'Asie", "RU", continent = "AS")
+        p("TA TB TC", "Turquie", "TR", continent = "AS")
+        p("5B C4 H2", "Chypre", continent = "AS")
         p("9H", "Malte", "MT")
         p("3A", "Monaco", "MC")
         p("C3", "Andorre")
@@ -98,23 +104,24 @@ object Dxcc {
         p("T7", "Saint-Marin", "IT")
         p("JW", "Svalbard", "NO")
         p("JX", "Jan Mayen", "NO")
-        // Americas
+        // Americas (North; the South ones say so)
+        bloc = "NA"
         p("K W N AA AB AC AD AE AF AG AH AI AJ AK", "États-Unis", "US")
         p("KL AL NL WL", "Alaska", "US")
-        p("KH6 AH6 NH6 WH6 KH7", "Hawaï", "US")
+        p("KH6 AH6 NH6 WH6 KH7", "Hawaï", "US", continent = "OC")
         p("KP4 NP4 WP4 KP3", "Porto Rico", "US")
         p("VE VA VO VY VB VC VD VF VG VX CF", "Canada", "CA")
         p("XE XA XB XC XD XF XG XH XI 4A 4B 4C 6D 6E 6F 6G 6H 6I 6J", "Mexique", "MX")
-        p("PY PP PQ PR PS PT PU PV PW PX ZV ZW ZX ZY ZZ", "Brésil", "BR")
-        p("LU LO LP LQ LR LS LT LV LW AY AZ L2 L3 L4 L5 L6 L7 L8 L9", "Argentine", "AR")
-        p("CE CA CB CC CD XQ XR 3G", "Chili")
-        p("OA OB OC 4T", "Pérou", "PE")
-        p("HK HJ 5K", "Colombie")
-        p("YV YW YX YY 4M", "Venezuela")
-        p("HC HD", "Équateur")
-        p("CX CV CW", "Uruguay")
-        p("ZP", "Paraguay")
-        p("CP", "Bolivie")
+        p("PY PP PQ PR PS PT PU PV PW PX ZV ZW ZX ZY ZZ", "Brésil", "BR", continent = "SA")
+        p("LU LO LP LQ LR LS LT LV LW AY AZ L2 L3 L4 L5 L6 L7 L8 L9", "Argentine", "AR", continent = "SA")
+        p("CE CA CB CC CD XQ XR 3G", "Chili", continent = "SA")
+        p("OA OB OC 4T", "Pérou", "PE", continent = "SA")
+        p("HK HJ 5K", "Colombie", continent = "SA")
+        p("YV YW YX YY 4M", "Venezuela", continent = "SA")
+        p("HC HD", "Équateur", continent = "SA")
+        p("CX CV CW", "Uruguay", continent = "SA")
+        p("ZP", "Paraguay", continent = "SA")
+        p("CP", "Bolivie", continent = "SA")
         p("HI", "Rép. dominicaine")
         p("CO CM CL T4", "Cuba")
         p("TI TE", "Costa Rica")
@@ -124,13 +131,14 @@ object Dxcc {
         p("FP", "St-Pierre-et-Miquelon", "FR")
         p("FG", "Guadeloupe", "FR")
         p("FM", "Martinique", "FR")
-        p("FY", "Guyane", "FR")
+        p("FY", "Guyane", "FR", continent = "SA")
         p("FS", "Saint-Martin", "FR")
         p("FJ", "Saint-Barthélemy", "FR")
         p("VP9", "Bermudes", "GB")
         p("8P", "Barbade")
         p("6Y", "Jamaïque")
         // Africa
+        bloc = "AF"
         p("CN", "Maroc", "MA")
         p("7X 7T 7U 7V 7W 7Y", "Algérie")
         p("3V", "Tunisie")
@@ -148,6 +156,7 @@ object Dxcc {
         p("S7", "Seychelles")
         p("ZD7", "Sainte-Hélène", "GB")
         // Asia
+        bloc = "AS"
         p("JA JE JF JG JH JI JJ JK JL JM JN JO JP JQ JR JS 7J 7K 7L 7M 7N 8J 8N", "Japon", "JP")
         p("HL DS DT 6K 6L 6M 6N", "Corée du Sud")
         p("BA BB BC BD BG BH BI BJ BL BM BT BY BZ", "Chine")
@@ -184,6 +193,7 @@ object Dxcc {
         p("UJ UK UL UM", "Ouzbékistan")
         p("JT JU JV", "Mongolie")
         // Oceania
+        bloc = "OC"
         p("VK AX", "Australie", "AU")
         p("ZL ZM", "Nouvelle-Zélande", "NZ")
         p("FK", "Nouvelle-Calédonie", "FR")

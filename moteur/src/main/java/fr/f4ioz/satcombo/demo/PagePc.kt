@@ -487,7 +487,8 @@ object PagePc {
   </div>
   <div>
     <div class="carte">
-      <div class="bascule-c"><button id="cv-station" onclick="vueCarnet('station')">Station en direct</button><button id="cv-contacts" onclick="vueCarnet('contacts')">Contacts</button></div>
+      <div class="bascule-c"><button id="cv-station" onclick="vueCarnet('station')">Station en direct</button><button id="cv-contacts" onclick="vueCarnet('contacts')">Contacts</button><button id="cv-records" onclick="vueCarnet('records')">🏆 Records</button></div>
+      <div id="cr-records" hidden></div>
       <div id="cr-station">
         <div class="paire" style="margin-top:8px"><span class="gros" id="cr-sat">—</span><span class="val ambre" id="cr-compte"></span></div>
         <div class="paire"><span>Az <span class="val cyan" id="cr-az">—</span></span><span>El <span class="val cyan" id="cr-el">—</span></span><span class="petit" id="cr-dist"></span></div>
@@ -1317,6 +1318,30 @@ function dessineAgenda() {
     '<tr><td colspan="4" class="petit">rien de prévu</td></tr>';
 }
 const hz = v => (v > 0 ? '+' : '') + v + ' Hz';
+// The log's records: the farthest contacts, by satellite, mode, continent, country; the distances crossed.
+const NOMS_CONT = { EU: 'Europe', AF: 'Afrique', AS: 'Asie', NA: 'Amérique du Nord', SA: 'Amérique du Sud', OC: 'Océanie' };
+async function chargeRecords() {
+  let R; try { R = await (await fetch('api/carnet/records')).json(); } catch (x) { return; }
+  const quand = q => q ? new Date(q).toLocaleDateString() : '';
+  const ligne = (x, nom) => '<tr><td><b>' + esc(nom) + '</b></td><td class="val cyan" style="font-size:16px">' + x.km.toLocaleString() + ' km</td><td><b>' + esc(x.call) + '</b> ' +
+    (x.carre ? '<span class="petit">' + esc(x.carre) + '</span>' : '') + '</td><td class="petit">' + esc(x.sat) + ' · ' + esc(x.mode) + ' · ' + quand(x.quand) + '</td></tr>';
+  const t = R.total;
+  let h = '<div class="paire" style="margin-top:8px"><span><span class="gros cyan">' + (t ? t.km.toLocaleString() + ' km' : '—') + '</span> <span class="petit">au plus loin' +
+    (t ? ' : <b>' + esc(t.call) + '</b> ' + esc(t.carre) + ' · ' + esc(t.sat) + ' · ' + quand(t.quand) : '') + '</span></span></div>';
+  h += '<div class="paire" style="margin-top:6px"><span><span class="val">' + R.contacts + '</span> <span class="petit">contacts</span></span><span><span class="val">' + R.carres +
+    '</span> <span class="petit">carrés</span></span><span><span class="val">' + R.pays + '</span> <span class="petit">pays</span></span><span><span class="val">' + R.satellites +
+    '</span> <span class="petit">satellites</span></span><span><span class="val ambre">' + R.continents.filter(c => c.fait).length + ' / 6</span> <span class="petit">continents (WAC)</span></span></div>';
+  h += '<div class="t" style="margin-top:12px">Continents</div><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:6px;margin-top:4px">' +
+    R.continents.map(c => '<div style="padding:8px 10px;border-radius:10px;border:1px solid var(--bord);' + (c.fait ? 'background:rgba(91,214,138,.10)' : 'opacity:.45') + '"><b>' +
+      (c.fait ? '✓ ' : '') + NOMS_CONT[c.c] + '</b><br><span class="petit">' + (c.record ? c.record.km.toLocaleString() + ' km · ' + esc(c.record.call) : 'pas encore') + '</span></div>').join('') + '</div>';
+  h += '<div class="t" style="margin-top:12px">Distances franchies</div><div class="ligne" style="margin-top:4px">' + R.paliers.map(p => '<span class="pastille" style="padding:4px 10px;' +
+    (p.call ? 'background:rgba(63,224,200,.16);color:var(--cyan)' : 'opacity:.4') + '" title="' + (p.call ? esc(p.call) + ' · ' + quand(p.quand) : 'pas encore') + '">' +
+    (p.call ? '🏅 ' : '') + p.km.toLocaleString() + ' km</span>').join('') + '</div>';
+  const table = (titre, l) => '<div class="t" style="margin-top:12px">' + titre + '</div><table><tbody>' + (l.map(x => ligne(x, x.nom)).join('') || '<tr><td class="petit">aucun contact avec deux carrés</td></tr>') + '</tbody></table>';
+  h += table('Par satellite', R.parSatellite) + table('Par mode', R.parMode) + table('Par pays', R.parPays.slice(0, 40));
+  h += '<div class="petit" style="margin-top:8px">' + R.avecDistance + ' contact(s) sur ' + R.contacts + ' ont les deux carrés (le tien au moment du contact, le sien) : les autres comptent, sans distance.</div>';
+  g('cr-records').innerHTML = h;
+}
 // APRS's game: the trophies, and a cheer when one falls (whatever the tab).
 let TR = null, trVu = null;
 async function ticTrophees() {
@@ -1950,8 +1975,10 @@ try { vueC = localStorage.getItem('vue-carnet') === 'contacts' ? 'contacts' : 's
 function vueCarnet(q) {
   vueC = q;
   try { localStorage.setItem('vue-carnet', q); } catch (x) {}
-  g('cr-station').hidden = q !== 'station'; g('cr-contacts').hidden = q !== 'contacts';
+  g('cr-station').hidden = q !== 'station'; g('cr-contacts').hidden = q !== 'contacts'; g('cr-records').hidden = q !== 'records';
   g('cv-station').classList.toggle('actif', q === 'station'); g('cv-contacts').classList.toggle('actif', q === 'contacts');
+  g('cv-records').classList.toggle('actif', q === 'records');
+  if (q === 'records') chargeRecords();
   if (q === 'station') dessineStationDirect();
 }
 function dessineStationDirect() {

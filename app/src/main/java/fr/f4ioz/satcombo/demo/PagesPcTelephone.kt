@@ -254,6 +254,7 @@ object PagesPcTelephone {
                         if (pan != null && r.second != null) fr.f4ioz.satcombo.domain.MesureBalise.mesurer(pan, r.second!!.first, r.second!!.second) else null))
                 }
                 "/api/carnet" -> json(carnet(vm))
+                "/api/carnet/records" -> json(ApiStation.records(fr.f4ioz.satcombo.domain.RecordsCarnet.calcule(u.log, vm.myLocator())))
                 // The contacts ticked on the page: ADIF, or the batch for another phone (as Settings › Backup makes it).
                 "/api/carnet/adif", "/api/carnet/lot" -> {
                     val choisis = p("t").split(',').mapNotNull { it.trim().toLongOrNull() }.toSet()
