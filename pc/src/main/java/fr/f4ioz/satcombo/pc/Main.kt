@@ -85,6 +85,8 @@ fun main(args: Array<String>) {
     // The SDR dongle: nothing opened until asked (rtl_tcp started then, stopped with it).
     val meteor = MeteorPc(station, File(dossier, "meteor"))
     val sdr = SdrPc(station, son.son, station.stockage, portee, dossierSondes = File(dossier, "sondes"), meteor = meteor)
+    // QO-100 with the dongle: the beacon followed, the calibration held on it when chosen.
+    val qo100 = Qo100Pc(station, sdr)
     portee.launch {
         while (true) {
             runCatching { son.tic() }
@@ -93,9 +95,14 @@ fun main(args: Array<String>) {
             runCatching { carnet.ticAmsat() }
             runCatching { kiss.tic() }
             runCatching { sdr.ticMeteor() }
+            runCatching { qo100.tic() }
             kotlinx.coroutines.delay(1000)
         }
     }
+    // The sound heard here, to the browsers listening (the dongle; the sound card).
+    val diffusion = DiffusionSon()
+    sdr.diffusion = diffusion
+    son.son.auditeurs += { pcm, n, rate -> diffusion.ajoute("carte", pcm, n, rate) }
     val journalWeb = JournalWebPc(journal, station, dossier)
     // A sked as a video, on the journal's map tiles.
     val videoSked = VideoSked(File(dossier, "exports")) { z, x, y -> journalWeb.tuile(z, x, y)?.let { f -> runCatching { javax.imageio.ImageIO.read(f) }.getOrNull() } }
@@ -106,7 +113,7 @@ fun main(args: Array<String>) {
     // DATV with a MiniTiouner, through LongMynd: nothing started until asked.
     val datv = DatvPc(station.stockage, File(dossier, "enregistrements"))
     val serveur = ServeurPc(station, port, reseau, carnet, son, journalWeb, ImportPc(station, carnet, journal), sdr, videoSked, telephone, appairage, datv,
-        PlancheWebPc(station, son, dossier), kiss, sauvegarde, MirePc(File(dossier, "exports")))
+        PlancheWebPc(station, son, dossier), kiss, sauvegarde, MirePc(File(dossier, "exports")), diffusion, qo100)
     serveur.demarre()
     println("SatMe-PC " + versionPc())
     println("  page      : http://localhost:${serveur.portReel}/" + if (reseau) "  (ouverte au réseau)" else "")

@@ -62,7 +62,7 @@ object ApiQo100 {
                 .put("transits", JSONArray(ciel.transits.map { t -> JSONObject().put("t", t.instantMs).put("ecart", t.ecartDeg).put("duree", t.dureeS) })))
         } else o.put("ciel", if (!observateurConnu) JSONObject().put("inconnu", true) else JSONObject.NULL)
         if (plan) {
-            o.put("segments", JSONArray(Qo100.SEGMENTS.map { g -> JSONObject().put("bas", g.basHz).put("haut", g.hautHz)
+            o.put("segments", JSONArray(Qo100.SEGMENTS.map { g -> JSONObject().put("cle", g.cle).put("bas", g.basHz).put("haut", g.hautHz)
                 .put("usage", g.usage.name).put("nom", tr.t("qo100_seg_" + g.cle)).put("repere", g.repereHz ?: JSONObject.NULL) }))
                 .put("regletteBas", Qo100.REGLETTE_BAS_HZ).put("regletteHaut", Qo100.REGLETTE_HAUT_HZ)
                 .put("transpondeurs", JSONArray(Qo100.TRANSPONDEURS.map { t -> JSONObject().put("cle", t.cle).put("nom", tr.t("qo100_tp_" + t.cle)) }))

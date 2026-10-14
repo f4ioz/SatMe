@@ -728,6 +728,11 @@ class SettingsStore(private val prefs: Stockage) {
      * elsewhere (a beacon, the wideband transponder). Off by default: the
      * guard stays unless asked.
      */
+    /** QO-100: the calibration held on the middle beacon by itself (the dongle on the transponder). */
+    var qo100CaleAuto: Boolean
+        get() = prefs.getBoolean("qo100_cale_auto", false)
+        set(v) { prefs.edit().putBoolean("qo100_cale_auto", v).apply() }
+
     var qo100SansBride: Boolean
         get() = prefs.getBoolean("qo100_sans_bride", false)
         set(v) { prefs.edit().putBoolean("qo100_sans_bride", v).apply() }

@@ -46,7 +46,11 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
     /** The whole station in one file, and put back at the next start. */
     private val sauvegarde: SauvegardePc? = null,
     /** The SSTV test card, played or written. */
-    private val mire: MirePc? = null) {
+    private val mire: MirePc? = null,
+    /** The sound to the browsers that listen. */
+    private val diffusion: DiffusionSon? = null,
+    /** QO-100's beacon followed, the stations heard. */
+    private val qo100: Qo100Pc? = null) {
 
     private var socket: ServerSocket? = null
     val portReel: Int get() = socket?.localPort ?: port
@@ -140,6 +144,12 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
         val q = parametres(r.chemin.substringAfter('?', ""))
         val sortie = c.getOutputStream()
         if (chemin == "/api/flux") { flux(c, sortie, q); return }
+        if (chemin == "/api/son/flux" && diffusion != null) {
+            // The dongle's or the sound card's sound, to the browser asking (the page open on another PC).
+            c.soTimeout = 0
+            diffusion.sert(if (q["source"] == "carte") "carte" else "sdr", sortie)
+            return
+        }
         if (chemin == "/api/datv/video.mjpeg" && datv != null) {
             // The DATV pictures as they come, one JPEG after the other (an <img> shows them as a video).
             c.soTimeout = 0
@@ -258,6 +268,7 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 val o = ApiQo100.panorama(actif, d?.panorama, d?.axeQo100(), q["n"]?.toIntOrNull() ?: 512, d?.panoramaTrames ?: 0L, if (actif) d!!.mesureBalise() else null)
                 envoie(sortie, "200 OK", "application/json; charset=utf-8", o.toString().toByteArray())
             }
+            "/api/qo100/qualite" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", (qo100?.json() ?: JSONObject().put("absent", true)).toString().toByteArray())
             "/api/qo100" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JsonPc.qo100(station, q["plan"] == "1").toString().toByteArray())
             "/api/sdr" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", (sdr?.let { JsonPc.sdr(it) } ?: JSONObject().put("absent", true)).toString().toByteArray())
             "/api/sdr/spectre" -> envoie(sortie, "200 OK", "application/json; charset=utf-8",
@@ -685,6 +696,7 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 station.qo100.calage(station.qo100.etat.value.calageHz + m.ecartArrondiHz)
             }
             "/api/qo100/calage-zero" -> station.qo100.annuleCalage()
+            "/api/qo100/auto" -> qo100?.auto = q["on"] == "1"
             "/api/convertisseurs" -> {
                 // MHz on the page, Hz here; an empty field leaves it as it is.
                 fun hz(k: String) = q[k]?.trim()?.replace(',', '.')?.takeIf { it.isNotEmpty() }?.toDoubleOrNull()?.let { Math.round(it * 1e6) }

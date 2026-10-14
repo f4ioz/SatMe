@@ -322,6 +322,16 @@ object PagePc {
     ${boutons()}
   </nav>
   <span id="rec" class="pastille" style="display:none;background:rgba(229,72,77,.2);color:var(--rose)"></span>
+  <span id="ec-boite" style="position:relative" hidden>
+    <button id="ec-btn" onclick="g('ec-pop').hidden = !g('ec-pop').hidden" title="Entendre ici, dans ce navigateur, le son de SatMe-PC (la page ouverte sur un autre PC du réseau)" style="padding:4px 10px">🔈 Écouter ici</button>
+    <div id="ec-pop" hidden style="position:absolute;right:0;top:110%;z-index:50;min-width:280px;padding:10px 12px;border-radius:12px;background:var(--carte);border:1px solid var(--bord);box-shadow:0 8px 24px rgba(0,0,0,.4)">
+      <div class="t" style="margin:0 0 6px">Le son dans ce navigateur</div>
+      <div class="ligne" style="margin:0"><select id="ec-source"><option value="sdr">Clé SDR (QO-100, SDR)</option><option value="carte">Carte son (le poste)</option></select></div>
+      <div class="ligne"><button class="primaire" id="ec-go" onclick="ecouteIci()">▶ Écouter</button><button id="ec-stop" class="arret" hidden onclick="arreteEcoute()">■ Arrêter</button>
+        <span class="petit">Volume</span><input type="range" id="ec-vol" min="0" max="200" value="100" style="flex:1" oninput="if (ecGain) ecGain.gain.value = this.value / 100"></div>
+      <div class="petit" id="ec-etat">Le son de la clé SDR ou de la carte son de SatMe-PC, joué par cet ordinateur — utile quand la page est ouverte sur un autre PC (--reseau).</div>
+    </div>
+  </span>
   <span id="heure"></span>
 </header>
 <div class="vue" id="v-station">
@@ -892,7 +902,7 @@ object PagePc {
       <div class="t">Réglette du transpondeur</div>
       <canvas id="o-reglette" style="width:100%;height:96px;display:block;cursor:crosshair" title="Cliquer ou glisser pour s'y poser · molette ±100 Hz"></canvas>
       <canvas id="o-loupe" style="width:100%;height:70px;display:block;margin-top:6px;cursor:crosshair" title="± 25 kHz autour de l'accord : cliquer pour s'y poser"></canvas>
-      <canvas id="o-pano" style="width:100%;height:130px;display:block;margin-top:6px;cursor:crosshair" title="Le transpondeur vu par la clé SDR, à l'échelle de la réglette : cliquer pour s'y poser"></canvas>
+      <canvas id="o-pano" style="width:100%;height:220px;display:block;margin-top:6px;cursor:crosshair" title="Le transpondeur vu par la clé SDR, à l'échelle de la réglette : cliquer pour s'y poser"></canvas>
       <div class="petit" id="o-pano-msg"></div>
       <div class="paire" style="margin-top:8px"><b id="o-seg"></b><span class="petit" id="o-larg"></span><span id="o-interdit" class="rose" style="font-weight:700"></span></div>
       <div class="petit" id="o-avert" style="margin-top:2px"></div>
@@ -915,11 +925,31 @@ object PagePc {
       <div class="t">Calage sur la balise</div>
       <div id="o-balise" class="o-balise">—</div>
       <div class="ligne" style="margin-top:4px"><button id="o-bmesure" onclick="qCaleMesure()">Caler sur la mesure</button></div>
+      <label style="display:block;margin-top:6px" id="oq-auto-l"><input type="checkbox" id="oq-auto" onchange="post('api/qo100/auto?on=' + (this.checked ? 1 : 0)).then(ticQualite)"> <b>Calage automatique</b>
+        <span class="petit">— la balise médiane mesurée toutes les 5 s, la dérive du LNB suivie toute seule (par petits pas, jamais sur une mesure faible)</span></label>
       <div class="petit">L'oscillateur d'un LNB dérive, surtout à froid. Accorde la balise médiane, lis où elle tombe vraiment, saisis-le : l'écart s'applique à toute la descente.</div>
       <div class="ligne"><span class="petit">Écart mémorisé</span><span class="val" id="o-calage">0 Hz</span></div>
       <div class="ligne"><input id="o-entendue" placeholder="MHz ciel" title="Où tombe vraiment la balise médiane, en MHz ciel : par exemple 10489,7523" style="max-width:170px"><button onclick="qCale()">Appliquer</button>
         <button onclick="qPost('calage-zero')">Remettre à zéro</button></div>
       <div class="etat" id="o-cmsg"></div>
+    </div>
+    <div class="carte" id="oq-carte" hidden>
+      <div class="t">Qualité de la réception <span id="oq-verrou" class="pastille coupe">balise non vue</span></div>
+      <div class="paire" style="margin-top:4px">
+        <span><span class="val" id="oq-snr">—</span> <span class="petit">dB balise / bruit</span></span>
+        <span><span class="val" id="oq-ecart">—</span> <span class="petit">écart</span></span>
+        <span><span class="val ambre" id="oq-derive">—</span> <span class="petit">dérive</span></span></div>
+      <div class="paire" style="margin-top:4px">
+        <span><span class="val" id="oq-erreur">—</span> <span class="petit">erreur du LNB</span></span>
+        <span><span class="val" id="oq-plancher">—</span> <span class="petit">plancher</span></span>
+        <span><span class="val" id="oq-occ">—</span> <span class="petit">stations</span></span></div>
+      <canvas id="oq-histo" style="width:100%;height:70px;display:block;margin-top:8px" title="L'erreur du LNB sur la dernière heure (la balise mesurée toutes les 5 s)"></canvas>
+      <div class="petit">L'erreur du LNB sur la dernière heure : une pente, c'est la dérive (un LNB qui chauffe) ; un trait plat, un LNB stable (GPSDO).</div>
+    </div>
+    <div class="carte" id="oq-sig-carte" hidden>
+      <div class="t">Stations entendues <span class="petit" id="oq-sig-n"></span></div>
+      <div style="max-height:260px;overflow:auto"><table><tbody id="oq-signaux"></tbody></table></div>
+      <div class="petit" style="margin-top:4px">Ce que la clé voit au-dessus du bruit du transpondeur (balises exclues). Un clic : s'y accorder.</div>
     </div>
     <div class="carte">
       <div class="t">Transpondeur</div>
@@ -1816,6 +1846,57 @@ async function tic() {
   if (fluxOk && E) { dessine(); return; }
   try { E = await (await fetch('api/etat')).json(); dessine(); } catch (x) {}
 }
+// The sound in this browser: SatMe-PC streams the dongle's or the sound card's audio; played here with a short buffer.
+let ecCtx = null, ecGain = null, ecLecteur = null, ecArret = null, ecFile = [], ecLu = 0, ecRate = 22050, ecPos = 0;
+async function ecouteIci() {
+  arreteEcoute();
+  const source = g('ec-source').value;
+  try {
+    ecCtx = new (window.AudioContext || window.webkitAudioContext)();
+    ecGain = ecCtx.createGain(); ecGain.gain.value = v('ec-vol') / 100; ecGain.connect(ecCtx.destination);
+    // Played from a queue, resampled to the card's rate; too far behind (more than a second), it catches up.
+    ecLecteur = ecCtx.createScriptProcessor(2048, 0, 1);
+    ecLecteur.onaudioprocess = ev => {
+      const out = ev.outputBuffer.getChannelData(0), pas = ecRate / ecCtx.sampleRate;
+      let enFile = ecFile.reduce((a, b) => a + b.length, 0) - ecPos;
+      if (enFile > ecRate) { while (ecFile.length > 1 && enFile > ecRate * 0.3) { enFile -= ecFile[0].length - ecPos; ecFile.shift(); ecPos = 0; } }
+      for (let i = 0; i < out.length; i++) {
+        if (!ecFile.length) { out[i] = 0; continue; }
+        const b = ecFile[0], k = Math.floor(ecPos);
+        out[i] = b[k] || 0;
+        ecPos += pas;
+        if (ecPos >= b.length) { ecPos -= b.length; ecFile.shift(); }
+      }
+    };
+    ecLecteur.connect(ecGain);
+    ecArret = new AbortController();
+    const r = await fetch('api/son/flux?source=' + source, { signal: ecArret.signal });
+    const lecteur = r.body.getReader();
+    let reste = new Uint8Array(0), entete = true;
+    g('ec-go').hidden = true; g('ec-stop').hidden = false; g('ec-btn').textContent = '🔊 Écoute';
+    txt('ec-etat', 'en écoute : ' + (source === 'sdr' ? 'clé SDR' : 'carte son'));
+    while (true) {
+      const { value, done } = await lecteur.read(); if (done) break;
+      const t = new Uint8Array(reste.length + value.length); t.set(reste); t.set(value, reste.length);
+      let o = 0;
+      if (entete && t.length >= 4) { ecRate = t[0] | (t[1] << 8) | (t[2] << 16) | (t[3] << 24); o = 4; entete = false; }
+      const n = Math.floor((t.length - o) / 2), f = new Float32Array(n), dv = new DataView(t.buffer, o, n * 2);
+      for (let i = 0; i < n; i++) f[i] = dv.getInt16(2 * i, true) / 32768;
+      if (n) ecFile.push(f);
+      reste = t.slice(o + n * 2);
+    }
+  } catch (x) { if (ecArret && !ecArret.signal.aborted) txt('ec-etat', 'son impossible : ' + (x.message || x)); }
+  if (ecArret && !ecArret.signal.aborted) arreteEcoute();
+}
+function arreteEcoute() {
+  if (ecArret) ecArret.abort(); ecArret = null;
+  if (ecLecteur) { try { ecLecteur.disconnect(); } catch (x) {} ecLecteur = null; }
+  if (ecCtx) { try { ecCtx.close(); } catch (x) {} ecCtx = null; }
+  ecFile = []; ecPos = 0;
+  g('ec-go').hidden = false; g('ec-stop').hidden = true; g('ec-btn').textContent = '🔈 Écouter ici';
+}
+// Shown where SatMe-PC streams (not on the page served by the phone).
+g('ec-boite').hidden = !!window.SATME_TELEPHONE;
 // Connected or not, at a glance: one button at a time (Connect when off, Disconnect when on),
 // the pill green or red, the card's edge green or red.
 function etatMarche(cle, on, pastille) {
@@ -1913,7 +1994,7 @@ function vue(n) {
   if (n === 'carres') chargeCarres();
   if (n === 'frise') chargeFrise();
   if (n === 'sked') { prepareSked(); setTimeout(dessineSked); }
-  if (n === 'qo100') chargeQo100(true);
+  if (n === 'qo100') { chargeQo100(true); ticQualite(); }
   if (n === 'datv') ticDatv(true);
   if (n === 'sdr') ticSdr();
   if (n === 'sondes') { SV2.libre = false; ticSondes(); }
@@ -3145,6 +3226,46 @@ function qAller() {
 function qMemoire() { qPost('memoire?nom=' + enc(v('o-nom'))); g('o-nom').value = ''; }
 function qOublie() { qPost('oublie?hz=' + O.descente); }
 function qNouvelle() { const n = v('o-nouvelle'); if (!n) return; g('o-nouvelle').value = ''; qPost('nouvelle?nom=' + enc(n)); }
+// The beacon followed: its quality, the LNB's error over the last hour, the stations heard.
+let OQ = null, oqVu = '';
+async function ticQualite() {
+  if (g('v-qo100').hidden) return;
+  try { OQ = await (await fetch('api/qo100/qualite')).json(); } catch (x) { OQ = null; }
+  const q = OQ, ok = q && !q.absent;
+  g('oq-auto-l').hidden = !ok; g('oq-carte').hidden = !ok || !q.cle; g('oq-sig-carte').hidden = !ok || !q.cle;
+  if (!ok) return;
+  if (document.activeElement !== g('oq-auto')) g('oq-auto').checked = q.auto;
+  etatMarche('oq', q.verrou, 'oq-verrou'); txt('oq-verrou', q.verrou ? (q.auto ? 'calée sur la balise' : 'balise suivie') : 'balise non vue');
+  const sg = (v, u) => v == null ? '—' : (v > 0 ? '+' : '') + v + (u || '');
+  txt('oq-snr', q.rapport != null ? q.rapport.toFixed(1) : '—');
+  txt('oq-ecart', sg(q.ecart, ' Hz'));
+  txt('oq-derive', q.derive != null ? sg(q.derive, ' Hz/min') : '…');
+  txt('oq-erreur', q.erreur != null ? sg(q.erreur, ' Hz') + ' · ' + q.ppm.toFixed(3) + ' ppm' : '—');
+  txt('oq-plancher', q.plancher != null ? q.plancher + ' dB' : '—');
+  txt('oq-occ', q.signaux ? q.signaux.length : '—');
+  // The LNB's error over the hour.
+  const c = g('oq-histo'), [x, w, h] = toile(c), l = q.historique || [];
+  x.fillStyle = '#0E1720'; x.fillRect(0, 0, w, h);
+  if (l.length > 1) {
+    const t0 = l[0][0], t1 = Math.max(l[l.length - 1][0], t0 + 1);
+    let lo = Math.min(...l.map(p => p[1])), hi = Math.max(...l.map(p => p[1])); if (hi - lo < 40) { const m = (hi + lo) / 2; lo = m - 20; hi = m + 20; }
+    x.strokeStyle = '#3FE0C8'; x.lineWidth = 1.5; x.beginPath();
+    l.forEach((p, i) => { const px = (p[0] - t0) / (t1 - t0) * (w - 4) + 2, py = h - 4 - (p[1] - lo) / (hi - lo) * (h - 8); i ? x.lineTo(px, py) : x.moveTo(px, py); }); x.stroke();
+    x.fillStyle = '#9AA7B4'; x.font = '10px system-ui'; x.textAlign = 'left';
+    x.fillText(Math.round(hi) + ' Hz', 4, 10); x.fillText(Math.round(lo) + ' Hz', 4, h - 4);
+    x.textAlign = 'right'; x.fillText(Math.round((t1 - t0) / 60000) + ' min', w - 4, 10);
+  }
+  const cle = JSON.stringify(q.signaux);
+  if (cle === oqVu) return;
+  oqVu = cle;
+  const seg = s => s ? (OP && OP.segments ? ((OP.segments.find(x => x.cle === s) || {}).nom || s) : s) : '';
+  txt('oq-sig-n', q.signaux && q.signaux.length ? '· ' + q.signaux.length : '');
+  g('oq-signaux').innerHTML = (q.signaux || []).map(s => '<tr style="cursor:pointer" onclick="qPost(\'frequence?hz=' + s.hz + '\')"><td class="val" style="font-size:15px">' +
+    (s.hz / 1e6).toFixed(4).replace('.', ',') + '</td><td><div class="r-barre" style="width:80px"><i style="width:' + Math.min(100, s.snr * 3) + '%"></i></div></td><td class="petit">' +
+    s.snr + ' dB</td><td class="petit">' + (s.largeur / 1000).toFixed(1) + ' kHz</td><td class="petit">' + esc(seg(s.seg)) + '</td></tr>').join('') ||
+    '<tr><td class="petit">rien au-dessus du bruit</td></tr>';
+}
+setInterval(ticQualite, 2000);
 async function qCaleMesure() { const j = await qPost('caler-mesure'); if (j && j.ok === false && j.erreur) txt('o-cmsg', j.erreur); }
 function qOl(sens, ol) { qPost('ol?sens=' + sens + '&hz=' + ol); }
 async function qCale() {

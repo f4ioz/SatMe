@@ -192,6 +192,9 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
     @Volatile var decalageHz: Int = 0
         set(v) { field = v.coerceIn(-80_000, 80_000); _etat.update { it.copy(decalageHz = field) } }
 
+    /** The sound sent to the browsers that listen (see [DiffusionSon]). */
+    @Volatile var diffusion: DiffusionSon? = null
+
     /** Asked from the page: the strongest signal near the listened frequency. */
     @Volatile private var vaAuPic = false
     fun calePic() { vaAuPic = true }
@@ -457,6 +460,8 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
                         if (hp.available() >= octets.size) hp.write(octets, 0, octets.size)
                     }
                     if (son.etat.value.appareil == NOM_SOURCE && son.etat.value.actif) son.distribue(pcm, produit, Dsp.AUDIO_RATE)
+                    // The browsers listening to the dongle (the page open on another PC).
+                    diffusion?.ajoute("sdr", pcm, produit, Dsp.AUDIO_RATE)
                 }
                 if (maintenant - dernierEtat >= 250L) {
                     val debit = ((r.octets - dernierOctets) * 1000 / maxOf(1L, maintenant - dernierEtat) / 1024).toInt()
