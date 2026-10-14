@@ -61,6 +61,9 @@ fun main(args: Array<String>) {
     if (noeud) { mainNoeud(port, dossier); return }
     // Already running: its page, and nothing started twice on the same files.
     if (bureau && BureauPc.dejaLance(port)) { BureauPc.ouvre("http://localhost:$port/"); return }
+    // A backup received last time: put back now, before anything reads the settings.
+    val sauvegarde = SauvegardePc(dossier)
+    if (runCatching { sauvegarde.appliqueSiPrete() }.getOrDefault(false)) println("  sauvegarde restaurée (les réglages remplacés sont dans avant-restauration-…)")
     val portee = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     val station = StationPc(StockageFichier(File(dossier, "reglages.properties")),
         Catalogue(File(dossier, "cache")), PortsSeriePc(), portee,
@@ -101,7 +104,7 @@ fun main(args: Array<String>) {
     // DATV with a MiniTiouner, through LongMynd: nothing started until asked.
     val datv = DatvPc(station.stockage, File(dossier, "enregistrements"))
     val serveur = ServeurPc(station, port, reseau, carnet, son, journalWeb, ImportPc(station, carnet, journal), sdr, videoSked, telephone, appairage, datv,
-        PlancheWebPc(station, son, dossier), kiss)
+        PlancheWebPc(station, son, dossier), kiss, sauvegarde)
     serveur.demarre()
     println("SatMe-PC " + versionPc())
     println("  page      : http://localhost:${serveur.portReel}/" + if (reseau) "  (ouverte au réseau)" else "")

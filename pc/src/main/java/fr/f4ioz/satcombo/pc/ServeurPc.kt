@@ -42,7 +42,9 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 private val telephone: TelephonePc? = null, private val appairage: AppairagePc? = null,
                 private val datv: DatvPc? = null, private val planche: PlancheWebPc? = null,
     /** The KISS radio on a serial port (APRS tab). */
-    private val kiss: KissPc? = null) {
+    private val kiss: KissPc? = null,
+    /** The whole station in one file, and put back at the next start. */
+    private val sauvegarde: SauvegardePc? = null) {
 
     private var socket: ServerSocket? = null
     val portReel: Int get() = socket?.localPort ?: port
@@ -99,6 +101,20 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 RequeteHttp.corps(c.getInputStream(), r, PlancheWebPc.IMPORT_MAX)
             }
             envoie(sortie, rep.statut, rep.type, rep.corps, rep.entetes); return
+        }
+        if (r.methode == "POST" && chemin == "/api/sauvegarde/restaure") {
+            // A backup, read as it comes (it may hold the recordings): laid aside for the next start.
+            val s = sauvegarde
+            val b = if (s == null || r.longueur <= 0 || r.longueur > SauvegardePc.MAX_OCTETS) SauvegardePc.Bilan(false, erreur = "fichier trop gros ou vide")
+                else s.recoit(Borne(c.getInputStream(), r.longueur))
+            envoie(sortie, "200 OK", "application/json; charset=utf-8", JSONObject().put("ok", b.ok).put("erreur", b.erreur)
+                .put("fichiers", b.fichiers).put("octets", b.octets).put("date", b.date).put("version", b.version).toString().toByteArray())
+            return
+        }
+        if (r.methode == "GET" && chemin == "/sauvegarde.zip" && sauvegarde != null) {
+            val f = sauvegarde.fabrique(q["medias"] == "1")
+            envoieFichier(sortie, r, f, "application/zip", "Content-Disposition: attachment; filename=\"${f.name}\"\r\n")
+            return
         }
         if (r.methode == "POST" && chemin == "/api/telephone/zip") {
             // A pass file from the phone (up to 300 MB with its sound): read as it comes, never held whole.
@@ -283,6 +299,13 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
             "/api/veille" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JsonPc.veille(station, son).toString().toByteArray())
             "/api/sstv/encours.png" -> son?.imageEnCours()?.let { envoie(sortie, "200 OK", "image/png", it) }
                 ?: envoie(sortie, "404 Not Found", "text/plain", ByteArray(0))
+            "/api/sauvegarde" -> {
+                val s = sauvegarde
+                val (t, tm) = s?.taille() ?: (0L to 0L)
+                val a = s?.enAttente()
+                envoie(sortie, "200 OK", "application/json; charset=utf-8", JSONObject().put("present", s != null).put("taille", t).put("tailleMedias", tm)
+                    .put("attente", a?.let { JSONObject().put("date", it.date).put("version", it.version) } ?: JSONObject.NULL).toString().toByteArray())
+            }
             "/carnet.adi", "/api/carnet/adif" -> {
                 // The contacts ticked (their times, ?t=…), else the whole log.
                 val choisis = q["t"].orEmpty().split(',').mapNotNull { it.trim().toLongOrNull() }.toSet()
@@ -349,6 +372,7 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
             "/api/agenda/active" -> q["id"]?.toLongOrNull()?.let { station.activeAgenda(it) }
             "/api/agenda/suivi" -> station.agendaSuivi(q["on"] == "1")
             "/api/skeds/reglages" -> station.regleSkeds(q["on"]?.let { it == "1" }, q["cle"])
+            "/api/sauvegarde/annule" -> sauvegarde?.annule()
             "/api/veille" -> fr.f4ioz.satcombo.demo.ApiVeille.action({ q[it] }, station.settings, station.etat.value.favoris, System.currentTimeMillis())
             "/api/amsat/rapport" -> {
                 // Heard or not, on amsat.org's public page: the satellite followed, my callsign and square, now.

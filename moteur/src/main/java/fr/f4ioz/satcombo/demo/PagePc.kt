@@ -1053,6 +1053,16 @@ object PagePc {
 <div class="reg"><nav class="reg-nav" id="reg-nav"></nav><div class="reg-corps" id="reg-corps"></div></div>
 <div class="grille2" id="reg-origine">
   <div>
+    <div class="carte" id="sv-carte" hidden>
+      <div class="t">Sauvegarde générale</div>
+      <div class="petit">Toute la station dans un fichier, pour la retrouver sur un autre PC ou après une réinstallation : réglages (poste, rotor, QRZ, carnet en ligne…), carnet, journal des passages, APRS et ses trophées, planches SSTV. Elle contient tes mots de passe et clés : garde-la pour toi.</div>
+      <label class="petit" style="display:block;margin-top:8px"><input type="checkbox" id="sv-medias" onchange="majSauvegarde()"> avec les enregistrements, images SSTV, METEOR et radiosondes (plus lourd)</label>
+      <div class="ligne"><a class="bouton" id="sv-lien" href="sauvegarde.zip" download>⤓ Télécharger la sauvegarde</a><span class="petit" id="sv-taille"></span></div>
+      <div class="t" style="margin-top:14px">Restaurer</div>
+      <div class="petit">Choisis une sauvegarde : elle est reprise au prochain démarrage de SatMe-PC. Rien n'est perdu : les réglages remplacés sont gardés à part (dossier avant-restauration-…), le carnet est fusionné, les fichiers déjà là restent.</div>
+      <div class="ligne"><input type="file" id="sv-fichier" accept=".zip,application/zip" onchange="restaureSauvegarde(this)"></div>
+      <div class="etat" id="sv-etat"></div>
+    </div>
     <div class="carte">
       <div class="t">Poste (CAT) <span id="cat-pastille" class="pastille off">déconnecté</span></div>
       <div class="ligne" style="margin-top:0">
@@ -1284,7 +1294,34 @@ const CATS_REG = [
   { id: 'satellites', nom: 'Satellites', ico: 'satellite_alt', desc: 'Éléments orbitaux, statut AMSAT', cartes: ['Éléments orbitaux', 'AMSAT'] },
   { id: 'enligne', nom: 'Services en ligne', ico: 'public', desc: 'QRZ.com, Wavelog / Cloudlog, skeds hams.at', cartes: ['QRZ.com', 'Carnet en ligne', 'Skeds'] },
   { id: 'telephone', nom: 'Téléphone', ico: 'smartphone', desc: 'SatMe sur le téléphone : réglages et contacts', cartes: ['Téléphone'] },
+  { id: 'sauvegarde', nom: 'Sauvegarde', ico: 'save', desc: 'Toute la station dans un fichier, et la restaurer', cartes: ['Sauvegarde'] },
 ];
+// The backup: its size, the link, a backup received waiting for the next start.
+let SV = null;
+async function majSauvegarde() {
+  try { SV = await (await fetch('api/sauvegarde')).json(); } catch (x) { SV = null; }
+  g('sv-carte').hidden = !(SV && SV.present);
+  // A category whose cards are all hidden here (the page served by the phone) leaves the list.
+  document.querySelectorAll('#reg-corps .reg-sec').forEach(sec => {
+    const vide = ![...sec.querySelectorAll('.reg-cartes > .carte')].some(k => !k.hidden || k.id === 'thd72-carte');
+    const b = document.querySelector('#reg-nav button[data-cat="' + sec.dataset.cat + '"]'); if (b) b.hidden = vide;
+  });
+  if (!SV || !SV.present) return;
+  const m = g('sv-medias').checked;
+  g('sv-lien').href = 'sauvegarde.zip' + (m ? '?medias=1' : '');
+  txt('sv-taille', 'environ ' + ((m ? SV.tailleMedias : SV.taille) / 1048576).toFixed(1) + ' Mo');
+  g('sv-etat').innerHTML = SV.attente ? 'Une sauvegarde du ' + new Date(SV.attente.date).toLocaleString() + ' sera restaurée au prochain démarrage de SatMe-PC. <button onclick="post(\'api/sauvegarde/annule\').then(majSauvegarde)">Annuler</button>' : '';
+}
+async function restaureSauvegarde(input) {
+  const f = input.files[0]; if (!f) return;
+  if (!confirm('Restaurer « ' + f.name + ' » au prochain démarrage de SatMe-PC ?')) { input.value = ''; return; }
+  txt('sv-etat', 'envoi…');
+  try {
+    const j = await (await fetch('api/sauvegarde/restaure', { method: 'POST', body: f })).json();
+    txt('sv-etat', j.ok ? j.fichiers + ' fichier(s) reçus. Arrête puis relance SatMe-PC pour les reprendre.' : 'Refusée : ' + j.erreur);
+  } catch (x) { txt('sv-etat', 'Envoi impossible.'); }
+  input.value = ''; majSauvegarde();
+}
 let catReg = 'station';
 try { catReg = localStorage.getItem('reglages') || 'station'; } catch (x) {}
 function rangeReglages() {
@@ -1643,7 +1680,7 @@ function vue(n) {
   document.querySelectorAll('#onglets button').forEach(b => b.classList.toggle('actif', b.dataset.v === n));
   try { localStorage.setItem('vue', n); } catch (x) {}
   if (n === 'carnet') { chargeCarnet(); g('c-call').focus(); vueCarnet(vueC); }
-  if (n === 'reglages') rangeReglages();
+  if (n === 'reglages') { rangeReglages(); majSauvegarde(); }
   if (n === 'reglages') { chargeReglages().then(() => { if (!wlLu && v('carnetUrl')) { wlLu = true; essaiCarnet(); } }); chargeSources(); }
   if (n === 'son' || n === 'sstv') ticSon();
   if (n === 'agenda') ticVeille();
