@@ -48,4 +48,25 @@ class AprsPcTest {
         assertEquals("F4IOZ-7", relu.paquets.single().source)
         assertTrue(File(dossier, "2026-10-12.txt").readText().contains("\tISS\t"))
     }
+
+    @Test
+    fun les_trophees_du_telephone_se_gagnent_et_se_gardent() {
+        val d = File(dossier, "aprs")
+        // Me in Paris (JN18); a station heard through the ISS from Madrid, 1 050 km away.
+        val joueur = { Triple("F4IOZ", 48.8, 2.4) }
+        val a = AprsPc(d, { "ISS" }, { t }, joueur)
+        val loin = Trame(Adresse.de("APRS"), Adresse.de("EA4ABC"),
+            listOf(Adresse("RS0ISS", repete = true)), "=4024.00N/00342.00W-hola".toByteArray())
+        assertTrue(a.ajoute(loin, t))
+        val e = a.trophees
+        assertTrue(fr.f4ioz.satcombo.aprs.Trophees.Badge.PREMIER_PAQUET in e.badges)
+        assertTrue(fr.f4ioz.satcombo.aprs.Trophees.Badge.PREMIER_ISS in e.badges)
+        assertTrue(fr.f4ioz.satcombo.aprs.Trophees.Badge.KM_1000 in e.badges)
+        assertEquals("EA4ABC", e.recordIndicatif)
+        assertTrue(a.evenements.isNotEmpty())
+        // Kept apart from the history, next to it: read back by a new start.
+        assertTrue(File(dossier, "aprs-trophees.txt").isFile)
+        val relu = AprsPc(d, { "ISS" }, { t }, joueur)
+        assertEquals("EA4ABC", relu.trophees.recordIndicatif)
+    }
 }

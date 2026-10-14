@@ -669,6 +669,19 @@ object PagePc {
       Balise ISS : ma position une fois par passage, l'ISS à 15° — seulement quand SatMe a lu la radio sur 145,825</label>
     <div class="petit" style="margin-top:4px">Une trame toutes les 20 s au plus : le digipeater de l'ISS est partagé par tout un continent.</div>
   </details>
+  <details class="carte" id="tr-carte" open>
+    <summary class="t" style="cursor:pointer">🏆 Trophées APRS <span class="petit" id="tr-resume"></span></summary>
+    <div class="petit">Le jeu du téléphone : chaque station entendue, chaque carré, chaque pays, ta trame revenue par l'ISS… Gardés à part de l'historique.</div>
+    <div class="paire" style="margin-top:8px" id="tr-jour"></div>
+    <div class="t" style="margin-top:12px">Records</div>
+    <div class="paire" id="tr-records"></div>
+    <div class="t" style="margin-top:12px">Badges</div>
+    <div id="tr-badges" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:8px;margin-top:6px"></div>
+    <div class="grille2" style="margin-top:10px;padding:0">
+      <div><div class="t">Contacts APRS</div><div id="tr-contacts" class="petit"></div></div>
+      <div><div class="t">Dernières fêtes</div><div id="tr-fetes" class="petit"></div></div>
+    </div>
+  </details>
   <div class="carte">
     <div style="max-height:calc(100vh - 250px);overflow:auto">
       <table><thead><tr><th>Heure</th><th>Station</th><th>Type</th><th>Carré</th><th>km</th><th>Chemin</th><th>Texte</th></tr></thead><tbody id="a-liste"></tbody></table>
@@ -1304,6 +1317,35 @@ function dessineAgenda() {
     '<tr><td colspan="4" class="petit">rien de prévu</td></tr>';
 }
 const hz = v => (v > 0 ? '+' : '') + v + ' Hz';
+// APRS's game: the trophies, and a cheer when one falls (whatever the tab).
+let TR = null, trVu = null;
+async function ticTrophees() {
+  try { TR = await (await fetch('api/aprs/trophees')).json(); } catch (x) { return; }
+  if (!TR || !TR.present) { g('tr-carte').hidden = true; return; }
+  const ev = TR.evenements[0];
+  if (ev && trVu !== null && ev.quand > trVu) toast(ev.texte);
+  if (ev) trVu = Math.max(trVu || 0, ev.quand); else if (trVu === null) trVu = 0;
+  if (!ouverte('aprs')) return;
+  const j = TR.jour, r = TR.records, n = (v, l, c) => '<span><span class="val ' + (c || '') + '">' + v + '</span> <span class="petit">' + l + '</span></span>';
+  const gagnes = TR.badges.filter(b => b.quand).length;
+  txt('tr-resume', ' · ' + gagnes + ' / ' + TR.badges.length + ' badges');
+  g('tr-jour').innerHTML = '<span class="petit">Aujourd’hui</span>' + n(j.stations, 'stations') + n(j.pays, 'pays') + n(j.carres, 'carrés') + n(j.viaIss, 'par l’ISS', 'ambre') +
+    n(j.contacts, 'contacts') + n(j.repetes, 'répétées') + (j.plusLoin ? n(j.plusLoin.km, 'km (' + esc(j.plusLoin.call) + ')', 'cyan') : '');
+  g('tr-records').innerHTML = n(r.km ? r.km : '—', 'km au plus loin' + (r.kmCall ? ' (' + esc(r.kmCall) + ')' : ''), 'cyan') + n(r.carres, 'carrés') + n(r.pays, 'pays') +
+    n(r.repetes, 'répétées par l’ISS', 'ambre') + n(r.contacts, 'contacts');
+  g('tr-badges').innerHTML = TR.badges.map(b => '<div title="' + esc(b.desc) + '" style="display:flex;gap:8px;align-items:center;padding:8px 10px;border-radius:10px;border:1px solid var(--bord);' +
+    (b.quand ? 'background:rgba(91,214,138,.10)' : 'opacity:.45') + '"><span style="font-size:24px">' + b.emoji + '</span><span><b>' + esc(b.nom) + '</b><br><span class="petit">' +
+    (b.quand ? 'gagné le ' + new Date(b.quand).toLocaleDateString() : esc(b.desc)) + '</span></span></div>').join('');
+  g('tr-contacts').innerHTML = TR.contacts.map(c => esc(c.call) + (c.carre ? ' · ' + esc(c.carre) : '') + (c.iss ? ' · 🛰 ISS' : '') + ' · ' + new Date(c.quand).toLocaleString()).join('<br>') || 'aucun contact (un message et son accusé)';
+  g('tr-fetes').innerHTML = TR.evenements.map(e => new Date(e.quand).toLocaleString() + ' — ' + esc(e.texte)).join('<br>') || 'rien encore depuis le démarrage';
+}
+setInterval(ticTrophees, 15000);
+function toast(texte) {
+  const d = document.createElement('div');
+  d.textContent = texte;
+  d.style.cssText = 'position:fixed;right:18px;bottom:18px;z-index:99;padding:12px 16px;border-radius:12px;background:var(--carte);border:1px solid var(--cyan);font-weight:700;box-shadow:0 6px 24px rgba(0,0,0,.4)';
+  document.body.appendChild(d); setTimeout(() => d.remove(), 8000);
+}
 // The SSTV test card.
 let MI = null;
 function paramsMire() {
@@ -1738,7 +1780,7 @@ function vue(n) {
   if (n === 'son' || n === 'sstv') ticSon();
   if (n === 'sstv') ticMire(true);
   if (n === 'agenda') ticVeille();
-  if (n === 'aprs') ticAprs();
+  if (n === 'aprs') { ticAprs(); ticTrophees(); }
   if (n === 'ft8') ticFt8();
   if (n === 'carres') chargeCarres();
   if (n === 'frise') chargeFrise();

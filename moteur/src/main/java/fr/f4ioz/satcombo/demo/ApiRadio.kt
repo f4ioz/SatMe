@@ -19,6 +19,39 @@ import org.json.JSONObject
  */
 object ApiRadio {
 
+    /**
+     * APRS's game, as the phone's Trophies tab: today's tally, the records,
+     * the badges (won or to win), the contacts made, the recent cheers.
+     */
+    fun trophees(e: fr.f4ioz.satcombo.aprs.Trophees.Etat, paquets: List<Paquet>, moi: String, obs: Observer?,
+                 evenements: List<Pair<Long, fr.f4ioz.satcombo.aprs.Trophees.Evenement>>, maintenant: Long): JSONObject {
+        val t = fr.f4ioz.satcombo.i18n.I18n::t
+        val pays: (String) -> String? = { c -> fr.f4ioz.satcombo.domain.Dxcc.entite(fr.f4ioz.satcombo.aprs.AprsJeu.base(c))?.nom }
+        val minuit = java.util.Calendar.getInstance().apply { timeInMillis = maintenant; set(java.util.Calendar.HOUR_OF_DAY, 0)
+            set(java.util.Calendar.MINUTE, 0); set(java.util.Calendar.SECOND, 0); set(java.util.Calendar.MILLISECOND, 0) }.timeInMillis
+        val b = fr.f4ioz.satcombo.aprs.AprsJeu.bilan(paquets, minuit, moi, obs?.latDeg, obs?.lonDeg, pays)
+        fun ev(x: fr.f4ioz.satcombo.aprs.Trophees.Evenement): String = when (x) {
+            is fr.f4ioz.satcombo.aprs.Trophees.Evenement.RepeteIss -> "🔁 Ta trame est revenue par l'ISS" + (if (x.autres.isNotEmpty()) " (avec " + x.autres.take(5).joinToString(", ") + ")" else "")
+            is fr.f4ioz.satcombo.aprs.Trophees.Evenement.NouveauCarre -> "🟩 Nouveau carré " + x.carre + " (" + x.indicatif + ")"
+            is fr.f4ioz.satcombo.aprs.Trophees.Evenement.NouveauPays -> "🌍 Nouveau pays : " + x.pays + " (" + x.indicatif + ")"
+            is fr.f4ioz.satcombo.aprs.Trophees.Evenement.Record -> "📏 Record : " + x.km + " km (" + x.indicatif + ")"
+            is fr.f4ioz.satcombo.aprs.Trophees.Evenement.Contact -> "🤝 Contact avec " + x.contact.indicatif + (if (x.contact.viaIss) " par l'ISS" else "")
+            is fr.f4ioz.satcombo.aprs.Trophees.Evenement.NouveauBadge -> x.badge.emoji + " Trophée : " + t("aprs_badge_" + x.badge.cle)
+        }
+        return JSONObject()
+            .put("jour", JSONObject().put("stations", b.stations).put("pays", b.pays.size).put("carres", b.carres.size)
+                .put("plusLoin", b.plusLoin?.let { s -> JSONObject().put("call", s.indicatif).put("km", Math.round(s.km ?: 0.0)) } ?: JSONObject.NULL)
+                .put("viaIss", b.viaIss).put("envoyes", b.envoyes).put("accuses", b.accuses).put("contacts", b.contacts).put("repetes", b.repetes))
+            .put("records", JSONObject().put("km", Math.round(e.recordKm)).put("kmCall", e.recordIndicatif).put("kmQuand", e.recordQuand)
+                .put("carres", e.carres.size).put("pays", e.pays.size).put("repetes", e.repetesIss).put("contacts", e.contacts.size))
+            .put("badges", JSONArray(fr.f4ioz.satcombo.aprs.Trophees.Badge.entries.map { x ->
+                JSONObject().put("cle", x.cle).put("emoji", x.emoji).put("nom", t("aprs_badge_" + x.cle)).put("desc", t("aprs_badge_" + x.cle + "_desc"))
+                    .put("quand", e.badges[x] ?: JSONObject.NULL) }))
+            .put("contacts", JSONArray(fr.f4ioz.satcombo.aprs.AprsJeu.contacts(paquets, moi).sortedByDescending { it.quand }.take(50).map { c ->
+                JSONObject().put("call", c.indicatif).put("quand", c.quand).put("carre", c.carre ?: "").put("iss", c.viaIss) }))
+            .put("evenements", JSONArray(evenements.take(20).map { (q, x) -> JSONObject().put("quand", q).put("texte", ev(x)) }))
+    }
+
     /** APRS heard ([paquets], newest first) and what they add up to: stations, how far, via the ISS. */
     fun aprs(paquets: List<Paquet>, actif: Boolean, recues: Int, obs: Observer?): JSONObject {
         val stations = fr.f4ioz.satcombo.aprs.AprsJeu.stations(paquets, obs?.latDeg, obs?.lonDeg)

@@ -148,6 +148,11 @@ object PagesPcTelephone {
                     val a = fr.f4ioz.satcombo.aprs.AprsHub.etat.value
                     json(ApiRadio.aprs(a.paquets, a.ecoute, a.nouveaux, u.observer))
                 }
+                "/api/aprs/trophees" -> {
+                    val a = fr.f4ioz.satcombo.aprs.AprsHub.etat.value
+                    json(ApiRadio.trophees(fr.f4ioz.satcombo.aprs.AprsHub.trophees.value, a.paquets, vm.indicatif(), u.observer,
+                        emptyList(), System.currentTimeMillis()).put("present", true))
+                }
                 // The TH-D72 panel (the phone's).
                 "/api/thd72" -> json(ApiStation.thd72(vm.thd72.etat.value, u.rigModel == "THD72" && u.catConnected, vm.thd72.bandeTx()))
                 // The KISS radio on the phone's USB (its APRS screen's): its adapters listed only, none opened here.

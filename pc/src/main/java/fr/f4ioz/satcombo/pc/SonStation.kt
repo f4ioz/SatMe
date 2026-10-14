@@ -63,7 +63,9 @@ class SonStation(
     /** FT8 / FT4 on the card, as the phone's FT8 screen. */
     val ft8 = Ft8Pc(horloge)
     /** APRS heard on the card, kept as the phone keeps it. */
-    val aprs = AprsPc(File(dossierEnregistrements.parentFile, "aprs"), { station.etat.value.suivi?.name ?: "" }, horloge)
+    val aprs = AprsPc(File(dossierEnregistrements.parentFile, "aprs"), { station.etat.value.suivi?.name ?: "" }, horloge) {
+        Triple(station.settings.callsign, station.etat.value.observateur?.latDeg, station.etat.value.observateur?.lonDeg)
+    }
     var enregAuto: Boolean
         get() = station.stockage.getBoolean("pc_enreg_auto", false)
         set(v) { station.stockage.edit().putBoolean("pc_enreg_auto", v).apply() }

@@ -21,21 +21,22 @@ import fr.f4ioz.satcombo.sonde.Geo
  */
 object Trophees {
 
-    enum class Badge(val cle: String) {
-        PREMIER_PAQUET("premier_paquet"),
-        PREMIER_ISS("premier_iss"),
-        REPETE_ISS("repete_iss"),
-        ISS_10("iss_10"),
-        CONTACT("contact"),
-        CONTACT_ISS("contact_iss"),
-        CARRES_10("carres_10"),
-        CARRES_50("carres_50"),
-        PAYS_10("pays_10"),
-        KM_1000("km_1000"),
-        KM_2000("km_2000"),
-        KM_3000("km_3000"),
-        JEUDI("jeudi"),
-        METEO("meteo"),
+    /** Each badge: its key (texts aprs_badge_<cle>) and its picture, the same on the phone and the PC. */
+    enum class Badge(val cle: String, val emoji: String) {
+        PREMIER_PAQUET("premier_paquet", "📡"),
+        PREMIER_ISS("premier_iss", "🛰"),
+        REPETE_ISS("repete_iss", "🔁"),
+        ISS_10("iss_10", "🚀"),
+        CONTACT("contact", "🤝"),
+        CONTACT_ISS("contact_iss", "🌌"),
+        CARRES_10("carres_10", "🟩"),
+        CARRES_50("carres_50", "🗺"),
+        PAYS_10("pays_10", "🌍"),
+        KM_1000("km_1000", "📏"),
+        KM_2000("km_2000", "🎯"),
+        KM_3000("km_3000", "🏆"),
+        JEUDI("jeudi", "🗓"),
+        METEO("meteo", "⛅"),
     }
 
     data class Etat(

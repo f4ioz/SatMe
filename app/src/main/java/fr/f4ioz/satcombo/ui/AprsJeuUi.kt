@@ -742,13 +742,7 @@ private fun Chiffre(valeur: String, nom: String) {
     }
 }
 
-private val EMOJI_BADGE = mapOf(
-    Trophees.Badge.PREMIER_PAQUET to "📡", Trophees.Badge.PREMIER_ISS to "🛰", Trophees.Badge.REPETE_ISS to "🔁",
-    Trophees.Badge.ISS_10 to "🚀", Trophees.Badge.CONTACT to "🤝", Trophees.Badge.CONTACT_ISS to "🌌",
-    Trophees.Badge.CARRES_10 to "🟩", Trophees.Badge.CARRES_50 to "🗺", Trophees.Badge.PAYS_10 to "🌍",
-    Trophees.Badge.KM_1000 to "📏", Trophees.Badge.KM_2000 to "🎯", Trophees.Badge.KM_3000 to "🏆",
-    Trophees.Badge.JEUDI to "🗓", Trophees.Badge.METEO to "⛅",
-)
+private val EMOJI_BADGE = Trophees.Badge.entries.associateWith { it.emoji }
 
 @Composable
 private fun CarteBadge(b: Trophees.Badge, gagne: Long?, modifier: Modifier) {

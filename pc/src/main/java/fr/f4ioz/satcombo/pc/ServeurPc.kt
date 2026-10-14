@@ -303,6 +303,13 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 }
                 envoie(sortie, "200 OK", "application/json; charset=utf-8", o.toString().toByteArray())
             }
+            "/api/aprs/trophees" -> {
+                val a = son?.aprs
+                val o = if (a == null) JSONObject().put("present", false)
+                    else fr.f4ioz.satcombo.demo.ApiRadio.trophees(a.trophees, a.paquets, station.settings.callsign, station.etat.value.observateur,
+                        a.evenements, System.currentTimeMillis()).put("present", true)
+                envoie(sortie, "200 OK", "application/json; charset=utf-8", o.toString().toByteArray())
+            }
             "/api/aprs" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JsonPc.aprs(son, station).toString().toByteArray())
             "/api/son" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JsonPc.son(son).toString().toByteArray())
             "/api/veille" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JsonPc.veille(station, son).toString().toByteArray())
