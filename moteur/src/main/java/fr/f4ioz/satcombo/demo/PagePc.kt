@@ -34,6 +34,10 @@ object PagePc {
     /** A tab's content: its icon above its name. */
     private fun contenu(nom: String, icone: String) = IconesPc.svg(icone) + "<span>$nom</span>"
 
+    /** The settings categories' icons, for the page's script. */
+    private fun icones(): String = org.json.JSONObject(listOf("person", "radio", "satellite_alt", "public", "smartphone", "save", "tune", "straighten")
+        .associateWith { IconesPc.svg(it, "ico-reg") }).toString()
+
     /** The tabs that are pages of their own (served apart), with what they are. */
     private val PAGES = mapOf("journal" to "Les passages enregistrés, rejoués", "planche" to "La planche SSTV : les images sur un modèle, à télécharger")
 
@@ -134,6 +138,21 @@ object PagePc {
          background:#0E1720; color:var(--clair); padding:7px 9px; }
   input:focus, select:focus { outline:2px solid var(--cyan); }
   button { cursor:pointer; font-weight:700; }
+  .reg { display:flex; gap:16px; align-items:flex-start; padding:14px 16px; }
+  .reg-nav { flex:0 0 250px; display:flex; flex-direction:column; gap:6px; position:sticky; top:0; }
+  #v-reglages .reg-nav button { display:flex; flex-direction:row; justify-content:flex-start; width:100%; gap:12px; align-items:center; text-align:left; padding:10px 12px; background:var(--carte); border:1px solid var(--bord); border-radius:12px; }
+  #v-reglages .reg-nav button svg { margin:0; width:26px; height:26px; flex:none; fill:var(--gris); }
+  .reg-nav button b { display:block; font-size:14px; }
+  .reg-nav button small { display:block; font-size:11px; color:var(--gris); font-weight:400; margin-top:2px; }
+  .reg-nav button.actif { border-color:var(--cyan); background:rgba(63,224,200,.08); }
+  .reg-nav button.actif svg { fill:var(--cyan); }
+  .reg-corps { flex:1; min-width:0; }
+  .reg-tete { display:flex; gap:12px; align-items:center; margin:2px 0 12px; }
+  .reg-tete svg { width:34px; height:34px; fill:var(--cyan); flex:none; }
+  .reg-nom { font-size:22px; font-weight:800; }
+  .reg-cartes { display:grid; grid-template-columns:repeat(auto-fit, minmax(440px, 1fr)); gap:12px; align-items:start; }
+  .reg-cartes .carte { margin:0; }
+  @media (max-width:900px) { .reg { flex-direction:column; } .reg-nav { flex:none; width:100%; position:static; flex-direction:row; flex-wrap:wrap; } .reg-nav button small { display:none; } .reg-cartes { grid-template-columns:1fr; } }
   a.bouton { font-size:13px; font-weight:700; border-radius:8px; border:1px solid var(--bord); background:#0E1720; color:var(--clair); padding:6px 9px; text-decoration:none; white-space:nowrap; }
   button:disabled { opacity:.45; cursor:default; }
   .primaire { background:var(--cyan); color:#06131A; border:none; }
@@ -1031,8 +1050,8 @@ object PagePc {
 </div>
 </div>
 <div class="vue" id="v-reglages" hidden>
-<div class="ligne" id="reg-sommaire" style="margin:0 0 8px"></div>
-<div class="grille2">
+<div class="reg"><nav class="reg-nav" id="reg-nav"></nav><div class="reg-corps" id="reg-corps"></div></div>
+<div class="grille2" id="reg-origine">
   <div>
     <div class="carte">
       <div class="t">Poste (CAT) <span id="cat-pastille" class="pastille off">déconnecté</span></div>
@@ -1257,16 +1276,41 @@ function dessineAgenda() {
     '<tr><td colspan="4" class="petit">rien de prévu</td></tr>';
 }
 const hz = v => (v > 0 ? '+' : '') + v + ' Hz';
-// Réglages: a button per card at the top, to reach any of them without scrolling for it.
-function sommaireReglages() {
-  const b = g('reg-sommaire'); b.innerHTML = '';
-  document.querySelectorAll('#v-reglages .carte > .t').forEach(t => {
-    if (t.parentElement.hidden) return;
-    const nom = (t.firstChild && t.firstChild.textContent || t.textContent).trim(); if (!nom) return;
-    const k = document.createElement('button'); k.textContent = nom.replace(/\s*\(.*$/, '');
-    k.onclick = () => t.parentElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    b.appendChild(k);
-  });
+// Réglages by category: a list on the left (icon, name, what it holds), the chosen category's cards on the right.
+const ICO = ${icones()};
+const CATS_REG = [
+  { id: 'station', nom: 'Ma station', ico: 'person', desc: 'Indicatif, carré, élévation minimale', cartes: ['Station'] },
+  { id: 'materiel', nom: 'Poste et rotor', ico: 'radio', desc: 'CAT, TH-D72, rotor, convertisseurs', cartes: ['Poste', 'Kenwood TH-D72', 'Rotor', 'Convertisseurs'] },
+  { id: 'satellites', nom: 'Satellites', ico: 'satellite_alt', desc: 'Éléments orbitaux, statut AMSAT', cartes: ['Éléments orbitaux', 'AMSAT'] },
+  { id: 'enligne', nom: 'Services en ligne', ico: 'public', desc: 'QRZ.com, Wavelog / Cloudlog, skeds hams.at', cartes: ['QRZ.com', 'Carnet en ligne', 'Skeds'] },
+  { id: 'telephone', nom: 'Téléphone', ico: 'smartphone', desc: 'SatMe sur le téléphone : réglages et contacts', cartes: ['Téléphone'] },
+];
+let catReg = 'station';
+try { catReg = localStorage.getItem('reglages') || 'station'; } catch (x) {}
+function rangeReglages() {
+  const corps = g('reg-corps');
+  if (!corps.childElementCount) {
+    const cartes = [...document.querySelectorAll('#reg-origine .carte')];
+    CATS_REG.forEach(c => {
+      const sec = document.createElement('section'); sec.className = 'reg-sec'; sec.dataset.cat = c.id;
+      sec.innerHTML = '<div class="reg-tete">' + (ICO[c.ico] || '') + '<div><div class="reg-nom">' + c.nom + '</div><div class="petit">' + c.desc + '</div></div></div><div class="reg-cartes"></div>';
+      c.cartes.forEach(n => cartes.filter(k => { const t = k.querySelector('.t'); return t && t.textContent.trim().startsWith(n); })
+        .forEach(k => sec.querySelector('.reg-cartes').appendChild(k)));
+      corps.appendChild(sec);
+    });
+    // A card no category names still shows, under the last one.
+    cartes.filter(k => k.closest('#reg-origine')).forEach(k => corps.lastChild.querySelector('.reg-cartes').appendChild(k));
+    g('reg-origine').hidden = true;
+    g('reg-nav').innerHTML = CATS_REG.map(c => '<button data-cat="' + c.id + '" onclick="montreReglages(\'' + c.id + '\')">' + (ICO[c.ico] || '') +
+      '<span><b>' + c.nom + '</b><small>' + c.desc + '</small></span></button>').join('');
+  }
+  montreReglages(catReg);
+}
+function montreReglages(id) {
+  if (!CATS_REG.some(c => c.id === id)) id = 'station';
+  catReg = id; try { localStorage.setItem('reglages', id); } catch (x) {}
+  document.querySelectorAll('#reg-corps .reg-sec').forEach(s => s.hidden = s.dataset.cat !== id);
+  document.querySelectorAll('#reg-nav button').forEach(b => b.classList.toggle('actif', b.dataset.cat === id));
 }
 // The log's pass: hams.at's skeds announced for it, the contacts made during it.
 function bandeauSkeds(id) {
@@ -1599,7 +1643,7 @@ function vue(n) {
   document.querySelectorAll('#onglets button').forEach(b => b.classList.toggle('actif', b.dataset.v === n));
   try { localStorage.setItem('vue', n); } catch (x) {}
   if (n === 'carnet') { chargeCarnet(); g('c-call').focus(); vueCarnet(vueC); }
-  if (n === 'reglages') sommaireReglages();
+  if (n === 'reglages') rangeReglages();
   if (n === 'reglages') { chargeReglages().then(() => { if (!wlLu && v('carnetUrl')) { wlLu = true; essaiCarnet(); } }); chargeSources(); }
   if (n === 'son' || n === 'sstv') ticSon();
   if (n === 'agenda') ticVeille();
