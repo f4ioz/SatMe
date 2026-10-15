@@ -30,7 +30,8 @@ class Ft8CorpusTest {
     private fun mesure(s: Ft8Banc.Scenario): Mesure {
         val audio = Ft8Banc.audio(s)
         val t0 = System.nanoTime()
-        val r = Ft8Decodeur.decode(audio, s.mode.cadenceHz, s.mode)
+        val r = Ft8Decodeur.decode(audio, s.mode.cadenceHz, s.mode,
+            penteHzS = if (s.penteConnue) s.penteCommuneHzS else 0.0)
         val ms = (System.nanoTime() - t0) / 1_000_000
         val lus = r.map { it.message.brut }
         val attendus = s.attendus
@@ -41,9 +42,9 @@ class Ft8CorpusTest {
     private val PLANCHERS = mapOf(
         "forts" to 10, "moyens" to 12, "faibles" to 7, "tres_faibles" to 0,
         "bande_chargee" to 19, "chevauchement" to 4, "fort_masque_faible" to 3,
-        "doppler_connu_-1.0Hz/s" to 0, "doppler_connu_1.0Hz/s" to 0,
-        "doppler_connu_-3.0Hz/s" to 0, "doppler_connu_3.0Hz/s" to 0,
-        "doppler_inconnu_1Hz/s" to 0, "pentes_propres_2Hz/s" to 1, "pente_connue_et_propre" to 0,
+        "doppler_connu_-1.0Hz/s" to 8, "doppler_connu_1.0Hz/s" to 7,
+        "doppler_connu_-3.0Hz/s" to 8, "doppler_connu_3.0Hz/s" to 8,
+        "doppler_inconnu_1Hz/s" to 0, "pentes_propres_2Hz/s" to 1, "pente_connue_et_propre" to 4,
         "indicatifs_composes" to 3, "ft4" to 4,
     )
 

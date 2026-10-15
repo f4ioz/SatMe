@@ -154,11 +154,11 @@ class SonStation(
     private var basDepuis = 0L
 
     /**
-     * The CW decoder told how the satellite's Doppler moves the note: when the
-     * rig follows it (CAT, not paused) or the dongle does, nothing slides.
+     * The CW decoder and FT8 told how the satellite's Doppler moves the
+     * audio: when the rig follows it (CAT, not paused) or the dongle does,
+     * nothing slides.
      */
     private fun ticCw() {
-        if (!cw.actif) return
         val e = station.etat.value
         val tx = station.emetteurChoisi()
         val f = tx?.downlinkLowHz
@@ -166,7 +166,11 @@ class SonStation(
         val dop = if (f != null && p != null && p.elevationDeg > -2) -f * p.rangeRateKmS / 299_792.458 else null
         val parLaCle = son.etat.value.appareil == SdrPc.NOM_SOURCE
         val corrige = (e.catConnecte && !e.maintienDoppler) || (parLaCle && station.settings.sdrDopplerTrack)
-        cw.ticDoppler(dop, corrige, if ((tx?.mode ?: "").uppercase() == "LSB") -1 else 1)
+        val signe = if ((tx?.mode ?: "").uppercase() == "LSB") -1 else 1
+        // FT8 too: the slot's residual drift removed before decoding.
+        ft8.ticDoppler(dop, corrige, signe)
+        if (!cw.actif) return
+        cw.ticDoppler(dop, corrige, signe)
     }
     /** The satellite followed has been up during this recording. */
     private var vuLeve = false

@@ -87,4 +87,33 @@ class Ft8PcTest {
             assertEquals("CQ F4IOZ IN77", json.getJSONArray("decodes").getJSONObject(0).getString("texte"))
         } finally { dossier.deleteRecursively() }
     }
+
+    @Test
+    fun la_pente_du_doppler_sur_le_creneau_vient_des_ephemerides() {
+        var t = 1_791_800_000_000L
+        val f = Ft8Pc { t }
+        // −2 Hz/s on the downlink, heard in USB: the same slope in the audio.
+        for (s in 0..15) { f.ticDoppler(1000.0 - 2.0 * s, false, 1); t += 1000 }
+        assertEquals(-2.0, f.penteSur(1_791_800_000_000L, 1_791_800_015_000L), 1e-9)
+        // LSB turns the audio the other way.
+        for (s in 0..15) { f.ticDoppler(1000.0 - 2.0 * s, false, -1); t += 1000 }
+        assertEquals(2.0, f.penteSur(1_791_800_016_000L, 1_791_800_031_000L), 1e-9)
+        // The rig follows the Doppler: nothing left to remove.
+        f.ticDoppler(900.0, true, 1)
+        assertEquals(0.0, f.penteSur(1_791_800_016_000L, 1_791_800_031_000L), 1e-9)
+    }
+
+    @Test
+    fun un_cq_qui_glisse_est_decode_quand_la_pente_est_connue() {
+        val message = BooleanArray(Ft8.BITS_MESSAGE)
+        Ft8.ecritEntier(message, 0, 28, 2L)
+        Ft8.ecritEntier(message, 29, 28, Ft8.indicatifVers28("F4IOZ")!!)
+        Ft8.ecritEntier(message, 59, 15, (('I' - 'A') * 1800 + ('N' - 'A') * 100 + 7 * 10 + 7).toLong())
+        Ft8.ecritEntier(message, 74, 3, 1L)
+        val tons = Ft8.bitsVersSymboles(fr.f4ioz.satcombo.domain.Ldpc.encode(Ft8.avecControle(message)))
+        // 3 Hz/s: 38 Hz across the transmission, six tones.
+        val a = Ft8Signal.synthetise(tons, Ft8Signal.FT8, 1000.0, 0.5, dureeTotaleS = 15.0, penteHzS = 3.0)
+        val avec = Ft8Pc { 0L }.apply { demarre("FT8"); decodeTranche(a, Ft8Signal.FT8.cadenceHz.toInt(), 0L, 3.0) }
+        assertEquals("CQ F4IOZ IN77", avec.entendus.single().texte)
+    }
 }

@@ -180,6 +180,65 @@ object Ft8Signal {
         }
     }
 
+    /** Inverse of [fft], scaled by 1/n. */
+    fun fftInverse(re: FloatArray, im: FloatArray) {
+        for (i in im.indices) im[i] = -im[i]
+        fft(re, im)
+        val k = 1f / re.size
+        for (i in re.indices) { re[i] *= k; im[i] = -im[i] * k }
+    }
+
+    /** Smallest power of two at least [n]. */
+    fun puissanceDeDeux(n: Int): Int {
+        var p = 1
+        while (p < n) p = p shl 1
+        return p
+    }
+
+    // ------------------------------------------------------------ Doppler
+
+    /**
+     * Removes a linear frequency drift from a block of audio: the residual
+     * Doppler of a LEO pass over one slot, when the rig does not follow it.
+     *
+     * A real signal cannot be shifted on its own (the negative frequencies
+     * would move the other way), so the analytic signal is made first:
+     * Hilbert transform by FFT, negative half zeroed. It is multiplied by a
+     * quadratic phase whose instantaneous frequency is −[penteHzS]·(t − t₀),
+     * then the real part is kept. The shift is zero at [milieuS] (the middle
+     * of the block by default): frequencies read afterwards are those of the
+     * middle of the slot.
+     *
+     * Zero-padded to a power of two, so the circular transform does not wrap
+     * the end onto the start.
+     */
+    fun retirePente(
+        audio: FloatArray,
+        cadenceHz: Double,
+        penteHzS: Double,
+        milieuS: Double = audio.size / cadenceHz / 2.0
+    ): FloatArray {
+        if (penteHzS == 0.0 || audio.isEmpty()) return audio.copyOf()
+        val n = puissanceDeDeux(audio.size + audio.size / 8)
+        val re = FloatArray(n)
+        val im = FloatArray(n)
+        audio.copyInto(re)
+        fft(re, im)
+        // Analytic signal: DC and Nyquist kept, positive half doubled.
+        for (k in 1 until n / 2) { re[k] *= 2f; im[k] *= 2f }
+        for (k in n / 2 + 1 until n) { re[k] = 0f; im[k] = 0f }
+        fftInverse(re, im)
+        val sortie = FloatArray(audio.size)
+        for (i in audio.indices) {
+            val t = i / cadenceHz - milieuS
+            // Phase of the correction: −2π·k·t²/2, so its frequency is −k·t.
+            val phi = -PI * penteHzS * t * t
+            val c = cos(phi); val sn = sin(phi)
+            sortie[i] = (re[i] * c - im[i] * sn).toFloat()
+        }
+        return sortie
+    }
+
     // ------------------------------------------------------------ spectrogram
 
     /**

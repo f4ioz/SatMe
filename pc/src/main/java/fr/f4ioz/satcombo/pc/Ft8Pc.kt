@@ -82,6 +82,36 @@ class Ft8Pc(
     private val bloc = ShortArray(1024)
     private var dansBloc = 0
 
+    /** The followed satellite's Doppler as heard in the audio, (UTC ms, Hz), the last minute. */
+    private val dopplers = ArrayDeque<Pair<Long, Double>>()
+
+    /**
+     * Each second: the satellite's Doppler on the downlink now, as the CW
+     * decoder gets it. When the rig (CAT) or the dongle follows it
+     * ([corrigeAvant]) nothing slides in the audio and nothing is removed;
+     * [signe] is −1 in LSB, where the audio moves the other way.
+     */
+    @Synchronized fun ticDoppler(dopplerHz: Double?, corrigeAvant: Boolean, signe: Int) {
+        if (dopplerHz == null || corrigeAvant) { dopplers.clear(); return }
+        val t = horloge()
+        dopplers.addLast(t to signe * dopplerHz)
+        while (dopplers.isNotEmpty() && dopplers.first().first < t - 60_000L) dopplers.removeFirst()
+    }
+
+    /**
+     * The drift over a slot (Hz/s): the Doppler's least-squares slope over the
+     * seconds that fell in it, zero without enough of them.
+     */
+    @Synchronized fun penteSur(debut: Long, fin: Long): Double {
+        val l = dopplers.filter { it.first in debut..fin }
+        if (l.size < 3) return 0.0
+        val mt = l.sumOf { (it.first - debut) / 1000.0 } / l.size
+        val md = l.sumOf { it.second } / l.size
+        var num = 0.0; var den = 0.0
+        for ((t, d) in l) { val x = (t - debut) / 1000.0 - mt; num += x * (d - md); den += x * x }
+        return if (den > 0.0) num / den else 0.0
+    }
+
     private fun dureeTranche() = if (mode == "FT4") 7_500L else 15_000L
     private fun signal() = if (mode == "FT4") Ft8Signal.FT4 else Ft8Signal.FT8
 
@@ -126,15 +156,16 @@ class Ft8Pc(
             val etaitPremiere = premiere || trancheCourante < 0
             trancheCourante = numero; ecrit = 0; premiere = false
             val sig = signal(); val m = mode; val c = cadence
-            if (!etaitPremiere && plein.size > sig.parSymbole * sig.symboles / 4) decodeur.execute { decode(plein, c, sig, m, debut) }
+            val pente = penteSur(debut, debut + dureeTranche())
+            if (!etaitPremiere && plein.size > sig.parSymbole * sig.symboles / 4) decodeur.execute { decode(plein, c, sig, m, debut, pente) }
         }
     }
 
     /** How far into the current slot (0..1), for the page's bar. */
     fun avancement(): Float = (horloge() % dureeTranche()).toFloat() / dureeTranche()
 
-    private fun decode(audio: FloatArray, cadence: Int, sig: Ft8Signal.Mode, m: String, debut: Long) {
-        val l = runCatching { Ft8Decodeur.decode(audio, cadence.toDouble(), sig) }.getOrDefault(emptyList())
+    private fun decode(audio: FloatArray, cadence: Int, sig: Ft8Signal.Mode, m: String, debut: Long, pente: Double = 0.0) {
+        val l = runCatching { Ft8Decodeur.decode(audio, cadence.toDouble(), sig, penteHzS = pente) }.getOrDefault(emptyList())
         val nouveaux = l.map {
             Entendu(debut, it.message.brut, it.message.appelant, it.message.appele, it.message.locator,
                 Math.round(it.frequenceHz).toInt(), it.rapportDb, it.instantS, m)
@@ -176,7 +207,8 @@ class Ft8Pc(
     }
 
     /** Fed directly (the tests): a slot's audio, decoded at once. */
-    fun decodeTranche(audio: FloatArray, cadence: Int, debut: Long) = decode(audio, cadence, signal(), mode, debut)
+    fun decodeTranche(audio: FloatArray, cadence: Int, debut: Long, penteHzS: Double = 0.0) =
+        decode(audio, cadence, signal(), mode, debut, penteHzS)
 
     companion object {
         /** About 5.5 Hz a column (FT8's tones are 6.25 Hz apart). */

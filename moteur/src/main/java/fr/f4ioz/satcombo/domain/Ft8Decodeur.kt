@@ -55,6 +55,11 @@ object Ft8Decodeur {
      * [cadenceHz] is the capture rate, whatever it is; resampling to the
      * mode's internal rate is done here.
      *
+     * [penteHzS] is the slot's known frequency drift (Hz/s, as heard in the
+     * audio): the derivative of the satellite's downlink Doppler, from the
+     * ephemeris, when nothing upstream follows it. It is removed before
+     * anything else (see [Ft8Signal.retirePente]); zero leaves the audio as is.
+     *
      * Returns messages strongest first. An empty list — nothing passed the
      * CRC — is the most common and normal case.
      */
@@ -64,10 +69,12 @@ object Ft8Decodeur {
         mode: Ft8Signal.Mode = Ft8Signal.FT8,
         basseHz: Double = 200.0,
         hauteHz: Double = 3000.0,
-        maximumCandidats: Int = 32
+        maximumCandidats: Int = 32,
+        penteHzS: Double = 0.0
     ): List<Decode> {
         if (mode.synchro.isEmpty()) return emptyList()
-        val ramene = Ft8Signal.reechantillonne(audio, cadenceHz, mode.cadenceHz)
+        val entree = Ft8Signal.reechantillonne(audio, cadenceHz, mode.cadenceHz)
+        val ramene = if (penteHzS == 0.0) entree else Ft8Signal.retirePente(entree, mode.cadenceHz, penteHzS)
         if (ramene.size < mode.parSymbole * mode.symboles) return emptyList()
 
         val spec = Ft8Signal.spectrogramme(ramene, mode, basseHz, hauteHz)
