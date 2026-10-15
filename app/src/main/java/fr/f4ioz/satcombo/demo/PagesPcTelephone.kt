@@ -81,6 +81,17 @@ object PagesPcTelephone {
                             skeds = if (u.skedsEnabled) vm.skedsForPass(it.catalogNumber, it.aosEpochMs, it.losEpochMs).size else 0)
                     })))
                 }
+                // The passes listed, as a calendar (the list's filters, or one satellite).
+                "/api/passages.ics" -> {
+                    val maintenant = System.currentTimeMillis()
+                    val l = fr.f4ioz.satcombo.domain.CalendrierPassages.choisis(passagesTous(vm).first, maintenant, p("f"),
+                        u.favorites.takeIf { p("fav") == "1" }, p("catnum").toIntOrNull()) {
+                        p("actifs") != "1" || vm.amsatFor(it.satName, it.catalogNumber)?.recent?.name == "ACTIVE"
+                    }
+                    ReponseWeb("200 OK", fr.f4ioz.satcombo.domain.CalendrierPassages.TYPE,
+                        fr.f4ioz.satcombo.domain.CalendrierPassages.ics(l, maintenant).toByteArray(),
+                        "Content-Disposition: attachment; filename=\"" + fr.f4ioz.satcombo.domain.CalendrierPassages.nomFichier(maintenant) + "\"\r\n")
+                }
                 "/api/trace" -> {
                     val sat = u.selected
                     val pts = if (sat == null) emptyList() else runCatching { vm.predicteurPourPage().groundTrack(sat, System.currentTimeMillis(), 160) }.getOrDefault(emptyList())

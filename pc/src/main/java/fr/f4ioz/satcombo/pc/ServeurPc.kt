@@ -430,6 +430,19 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 envoie(sortie, "200 OK", "text/plain; charset=utf-8", (carnet?.adif(choisis) ?: "").toByteArray(),
                     "Content-Disposition: attachment; filename=\"$nom\"\r\n")
             }
+            // The passes listed, as a calendar: the list's filters (?f=, fav=1, actifs=1) or one satellite (?catnum=).
+            "/api/passages.ics" -> {
+                val e = station.etat.value
+                val maintenant = System.currentTimeMillis()
+                val n = q["catnum"]?.toIntOrNull()
+                val l = fr.f4ioz.satcombo.domain.CalendrierPassages.choisis(if (n != null) e.passagesSuivi + e.passages else e.passages,
+                    maintenant, q["f"].orEmpty(), e.favoris.takeIf { q["fav"] == "1" }, n) {
+                    q["actifs"] != "1" || station.statutAmsat(it.satName)?.recent?.name == "ACTIVE"
+                }.distinctBy { fr.f4ioz.satcombo.domain.CalendrierPassages.uid(it) }
+                envoie(sortie, "200 OK", fr.f4ioz.satcombo.domain.CalendrierPassages.TYPE,
+                    fr.f4ioz.satcombo.domain.CalendrierPassages.ics(l, maintenant).toByteArray(),
+                    "Content-Disposition: attachment; filename=\"" + fr.f4ioz.satcombo.domain.CalendrierPassages.nomFichier(maintenant) + "\"\r\n")
+            }
             "/api/carnet/lot" -> {
                 val choisis = q["t"].orEmpty().split(',').mapNotNull { it.trim().toLongOrNull() }.toSet()
                 val nom = "satme-contacts-" + java.text.SimpleDateFormat("yyyyMMdd-HHmm", java.util.Locale.US).format(java.util.Date()) + ".json"

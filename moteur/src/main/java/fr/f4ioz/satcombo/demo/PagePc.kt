@@ -397,7 +397,8 @@ object PagePc {
         <label class="petit"><input type="checkbox" id="utc"> UTC</label>
       </div>
       <div class="ligne"><label class="petit"><input type="checkbox" id="f-fav"> ★ favoris seulement</label>
-        <label class="petit"><input type="checkbox" id="f-actifs"> entendus ces jours-ci (AMSAT)</label></div>
+        <label class="petit"><input type="checkbox" id="f-actifs"> entendus ces jours-ci (AMSAT)</label>
+        <a class="bouton" id="ics-liste" href="api/passages.ics" download title="Les passages de la liste (avec ses filtres) dans un fichier d'agenda : Google Agenda, Outlook, Thunderbird…" style="margin-left:auto">⤓ Agenda (.ics)</a></div>
       <div class="etat" id="calcul"></div>
       <div id="liste"><table><thead><tr><th></th><th></th><th></th><th>Début</th><th>Satellite</th><th>El max</th><th>Durée</th><th></th></tr></thead><tbody id="passages"></tbody></table></div>
     </div>
@@ -432,7 +433,7 @@ object PagePc {
       <div class="petit" id="infos-passage" style="text-align:center;margin-top:4px"></div>
       <div class="ligne rec-l"><button class="rouge rec-b" onclick="enregistre()">● Enregistrer le son</button><span class="val rec-d"></span><span class="petit rec-m"></span>
         <label class="petit rec-los-l" style="margin-left:auto"><input type="checkbox" class="rec-los" onchange="coupeLos(this.checked)"> couper à la fin du passage</label></div>
-      <div class="t" style="margin-top:10px">Ses prochains passages</div>
+      <div class="t" style="margin-top:10px">Ses prochains passages <a class="petit" id="ics-suivi" href="api/passages.ics" download title="Ses prochains passages dans un fichier d'agenda" style="color:var(--cyan);font-weight:normal">⤓ .ics</a></div>
       <div id="suivants-boite"><table><tbody id="suivants"></tbody></table></div>
     </div>
   </div>
@@ -1707,6 +1708,7 @@ function dessinePassages() {
       p.nom.replace(/</g, '&lt;') + (p.skeds ? ' <span title="' + p.skeds + ' sked(s) annoncé(s) sur hams.at" style="color:var(--ambre)">📣' + (p.skeds > 1 ? p.skeds : '') + '</span>' : '') +
       '</td><td>' + Math.round(p.elMax) + '°</td><td>' + duree(p.los - p.aos) + '</td><td class="petit">' + quand + '</td></tr>';
   });
+  g('ics-liste').href = 'api/passages.ics?f=' + enc(g('filtre').value.trim()) + (seulFav ? '&fav=1' : '') + (seulActifs ? '&actifs=1' : '');
   g('passages').innerHTML = lignes.join('') || '<tr><td colspan="8" class="petit">' + (E && E.locator ? 'aucun passage' : 'renseigne ton locator') + '</td></tr>';
 }
 async function suivre(n) { await post('api/suivre?catnum=' + n); }
@@ -1844,6 +1846,7 @@ function dessine() {
     txt('r-ref', rs.refCalib == null ? 'pas de référence' : 'réf. RX ' + hz(rs.refCalib) + ' · TX ' + hz(rs.refTx));
     g('r-retour').disabled = rs.refCalib == null;
   }
+  if (E.suivi) g('ics-suivi').href = 'api/passages.ics?catnum=' + E.suivi.catnum;
   const sv = JSON.stringify(E.passagesSuivi.map(p => [p.aos, p.agenda]));
   if (sv !== g('suivants').dataset.vu) {
     g('suivants').dataset.vu = sv;

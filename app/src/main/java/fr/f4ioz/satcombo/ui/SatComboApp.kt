@@ -1003,6 +1003,21 @@ private fun PassesScreen(ui: UiState, vm: MainViewModel) {
                                 }
                             }
                         }
+                        // The ticked passes into the calendar app (an .ics through the share sheet).
+                        TextButton(onClick = {
+                            val uri = vm.exportPassagesIcs()
+                            if (uri == null) android.widget.Toast.makeText(ctx, t("ics_export_aucun"), android.widget.Toast.LENGTH_SHORT).show()
+                            else ctx.startActivity(android.content.Intent.createChooser(
+                                android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                                    type = "text/calendar"
+                                    putExtra(android.content.Intent.EXTRA_STREAM, uri)
+                                    addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                }, t("ics_export")))
+                        }, enabled = ui.selectedPassKeys.isNotEmpty()) {
+                            Icon(Icons.Default.EventNote, t("ics_export"), Modifier.size(16.dp), tint = Cyan)
+                            Spacer(Modifier.width(2.dp))
+                            Text(".ics", color = Cyan, fontSize = 12.sp)
+                        }
                         TextButton(
                             onClick = { demande = "SAVE" },
                             enabled = ui.selectedPassKeys.isNotEmpty()

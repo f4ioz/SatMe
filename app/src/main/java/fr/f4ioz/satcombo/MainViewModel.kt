@@ -7595,6 +7595,25 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun passKey(p: fr.f4ioz.satcombo.data.SatPass) = "${p.catalogNumber}@${p.aosEpochMs}"
 
+    /**
+     * The passes ticked (all those listed when none is) as an iCalendar file
+     * in the export cache, for the share sheet; null when none is left to come.
+     */
+    fun exportPassagesIcs(): android.net.Uri? {
+        val app = getApplication<android.app.Application>()
+        val now = System.currentTimeMillis()
+        val keys = _ui.value.selectedPassKeys
+        val l = fr.f4ioz.satcombo.domain.CalendrierPassages.choisis(
+            _ui.value.favoritePasses.filter { keys.isEmpty() || passKey(it) in keys }, now)
+        if (l.isEmpty()) return null
+        return runCatching {
+            val dir = java.io.File(app.cacheDir, "export").apply { mkdirs() }
+            val f = java.io.File(dir, fr.f4ioz.satcombo.domain.CalendrierPassages.nomFichier(now))
+            f.writeText(fr.f4ioz.satcombo.domain.CalendrierPassages.ics(l, now))
+            androidx.core.content.FileProvider.getUriForFile(app, app.packageName + ".fileprovider", f)
+        }.getOrNull()
+    }
+
     // ------------------------------------------------- pass Doppler
 
     private var dopplerPassKey: String = ""
