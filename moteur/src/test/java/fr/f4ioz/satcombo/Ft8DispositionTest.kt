@@ -114,6 +114,10 @@ class Ft8DispositionTest {
     fun les_accuses_de_reception_se_lisent() {
         assertEquals("RRR", Ft8.deplie(typeUn("W9XYZ", "F4IOZ", 32_402))!!.brut.split(" ").last())
         assertEquals("RR73", Ft8.deplie(typeUn("W9XYZ", "F4IOZ", 32_403))!!.brut.split(" ").last())
+        // RR73 sent as a square (17 × 1 800 + 17 × 100 + 73): an acknowledgement, not a place.
+        val rr = Ft8.deplie(typeUn("W9XYZ", "F4IOZ", 32_373))!!
+        assertEquals("RR73", rr.brut.split(" ").last())
+        assertEquals(null, rr.locator)
         assertEquals("73", Ft8.deplie(typeUn("W9XYZ", "F4IOZ", 32_404))!!.brut.split(" ").last())
     }
 

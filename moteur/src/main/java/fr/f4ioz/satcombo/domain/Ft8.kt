@@ -284,6 +284,9 @@ object Ft8 {
             }
         }
 
+        // "RR73" sent in the square's place (a square in the middle of the Pacific): the acknowledgement,
+        // as everyone reads it — else a station saying 73 is drawn 5 000 km away, a "new square" too.
+        if (carre == "RR73") { carre = null; accuse = "RR73" }
         val bout = carre ?: accuse
             ?: rapport?.let { (if (it >= 0) "+" else "") + it } ?: ""
         return Message(
