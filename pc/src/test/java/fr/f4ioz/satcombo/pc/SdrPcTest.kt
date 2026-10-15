@@ -235,4 +235,34 @@ class SdrPcTest {
         assertEquals(fr.f4ioz.satcombo.sdr.RxMode.USB, SdrPc.modeDe("CW"))
         assertEquals(fr.f4ioz.satcombo.sdr.RxMode.NFM, SdrPc.modeDe("AFSK"))
     }
+
+    @Test
+    fun la_cle_quitte_meteor_quand_on_la_met_sur_qo100_et_le_son_revient() {
+        // A METEOR (the ISS's elements under METEOR-M2 4's number): the dongle starts for its pictures, silent.
+        File(dossier, "amsat-tle.txt").appendText("""METEOR-M2 4
+1 59051U 98067A   26284.17638745  .00009430  00000-0  18014-3 0  9996
+2 59051  51.6312  86.0933 0006713 248.1316 111.8959 15.48821882589734
+""")
+        val t = Catalogue.lisTle(File(dossier, "amsat-tle.txt").readText()).first().epochMs!!
+        val st = StationPc(StockageMemoire(), Catalogue(dossier, enLigne = false), PortsSeriePc(), portee, horloge = { t })
+        st.settings.manualLocator = "JN18FS"
+        st.demarre()
+        assertTrue(st.suis(59051))
+        val son = SonPc()
+        val recu = java.util.concurrent.atomic.AtomicInteger()
+        son.auditeurs += { _, n, _ -> recu.addAndGet(n) }
+        val sdr = SdrPc(st, son, StockageMemoire(), portee, horloge = { t }, meteor = MeteorPc(st, File(dossier, "meteor")))
+        st.settings.sdrAudio = false
+        sdr.lance = false
+        sdr.port = serveur.localPort
+        fauxRtlTcp()
+        assertTrue(sdr.demarre())
+        assertTrue(sdr.pourMeteor)
+        assertFalse(son.etat.value.actif)
+        // QO-100 set on the dongle (the morning of 15 October): METEOR left, the sound back.
+        st.qo100.aLaCle(true)
+        attends { !sdr.pourMeteor && son.etat.value.appareil == SdrPc.NOM_SOURCE }
+        attends { recu.get() > Dsp.AUDIO_RATE / 4 }
+        sdr.arrete()
+    }
 }

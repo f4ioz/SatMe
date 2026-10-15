@@ -71,11 +71,13 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
         if (meteor == null || !settings.meteorAuto) { meteorAutoArme = 0; return }
         val now = horloge()
         if (meteorAutoArme != 0) {
-            if (!_etat.value.actif) { meteorAutoArme = 0; return }
-            if (now > meteorAutoLos + 30_000L) { meteorAutoArme = 0; arrete() }
+            if (!_etat.value.actif) { meteorAutoArme = 0; rendSatellite(); return }
+            if (now > meteorAutoLos + 30_000L) { meteorAutoArme = 0; arrete(); rendSatellite() }
             return
         }
         if (_etat.value.actif) return
+        // The dongle set on QO-100 (behind its converter, 137 MHz is out of reach): METEOR leaves it alone.
+        if (station.qo100.etat.value.aLaCle) return
         // The passes asked every 15 s, not every second.
         if (now - dernierTicMeteor < 15_000L) return
         dernierTicMeteor = now
@@ -86,6 +88,7 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
         if (!fr.f4ioz.satcombo.meteor.MeteorAuto.peutPrendre(p.aosEpochMs, meteorEssayes, station.estMeteor(), e.position?.elevationDeg)) return
         meteorEssayes += p.aosEpochMs
         val avant = e.suivi
+        meteorAutoAvant = avant?.takeIf { it.catalogNumber != sat.catalogNumber }
         meteorAutoArme = sat.catalogNumber
         meteorAutoLos = p.losEpochMs
         station.suis(sat)
@@ -94,6 +97,31 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
             // The dongle did not start: the satellite followed before put back.
             meteorAutoArme = 0
             if (avant != null && avant.catalogNumber != sat.catalogNumber) station.suis(avant)
+        }
+    }
+
+    /** The satellite followed before an automatic METEOR pass took over: given back after it. */
+    @Volatile private var meteorAutoAvant: fr.f4ioz.satcombo.data.TleEntry? = null
+
+    private fun rendSatellite() {
+        val avant = meteorAutoAvant ?: return
+        meteorAutoAvant = null
+        // Only if the operator has not chosen another one meanwhile.
+        if (station.estMeteor()) station.suis(avant)
+    }
+
+    /**
+     * The dongle left METEOR (QO-100 set on it, another satellite followed):
+     * the picture receiver stopped, the sound back — it stayed silent all
+     * morning after a night's METEOR pass (15 October).
+     */
+    private fun quitteMeteorSiBesoin() {
+        if (!pourMeteor || (!pourQo100() && suitSatellite && station.estMeteor())) return
+        synchronized(this) {
+            if (!pourMeteor) return
+            pourMeteor = false
+            meteor?.let { m -> val l = m.recepteur.arrete(); if (l.isNotEmpty()) thread(isDaemon = true, name = "satme-meteor-ecrit") { m.ecrit(l) } }
+            if (!pourSonde) son.prendPour(NOM_SOURCE, Dsp.AUDIO_RATE)
         }
     }
 
@@ -428,6 +456,8 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
                 // METEOR pictures: the raw samples, before any audio chain, decoded on their own thread.
                 if (pourMeteor) meteor?.recepteur?.iq(iq, n, (fine + decalageHz).toDouble())
                 val maintenant = horloge()
+                // Still for METEOR? (QO-100 set on the dongle, another satellite followed: the sound back.)
+                if (pourMeteor && maintenant - dernierEtat >= 200L) quitteMeteorSiBesoin()
                 val veutSpectre = maintenant - dernierSpectre >= 90L
                 val veutPano = maintenant - panoramaDemandeMs < 3000L && maintenant - dernierPano >= 300L
                 val produit = chaine.process(iq, n, pcm, feedSpectrum = veutSpectre, feedPanorama = veutPano)
