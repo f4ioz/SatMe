@@ -58,7 +58,10 @@ object PagesPcTelephone {
         .replace("<script>", "<script>window.SATME_TELEPHONE=true;</script>\n<style>${PagePc.STYLE_BARRE}#pupitre,#journal{display:none}</style>\n<script>")
         .replace("<div id=\"editeur\" class=\"cache\">", "<div id=\"editeur\" class=\"cache\">" + nomSatMe(PagePc.barre("planche")) + "<script>${PagePc.SCRIPT_BARRE}</script>")
 
-    private fun json(o: Any) = ReponseWeb("200 OK", "application/json; charset=utf-8", o.toString().toByteArray(Charsets.UTF_8))
+    /** The FT8 tab's own settings (the stations waited for), in their own preferences. */
+    private fun stockageFt8(vm: fr.f4ioz.satcombo.MainViewModel) = fr.f4ioz.satcombo.data.stockage(vm.getApplication(), "satcombo_ft8")
+
+    private fun json(o: Any) =ReponseWeb("200 OK", "application/json; charset=utf-8", o.toString().toByteArray(Charsets.UTF_8))
     private val NON = ReponseWeb("404 Not Found", "application/json", "{\"ok\":false}".toByteArray())
     private val OK get() = JSONObject().put("ok", true)
 
@@ -169,11 +172,14 @@ object PagesPcTelephone {
                 "/api/ft8" -> {
                     val f = fr.f4ioz.satcombo.ft8.Ft8Hub.state.value
                     val faits = u.log.map { it.callsign.uppercase().substringBefore('/') }.toHashSet()
+                    val paysFaits = u.log.mapNotNull { fr.f4ioz.satcombo.domain.Dxcc.entite(it.callsign)?.nom }.toHashSet()
+                    val carresFaits = u.log.mapNotNull { it.theirLocator.trim().uppercase().take(4).takeIf { l -> l.length == 4 } }.toHashSet()
                     json(ApiRadio.ft8(f.enMarche, f.mode, f.avancement, f.niveau, f.tranches, f.enMarche, f.basseHz, f.hauteHz,
                         f.cascade, f.spectre, f.entendus.map { e ->
                             val (de, a, loc) = ApiRadio.decoupe(e.texte)
                             ApiRadio.Ligne(tranche(e.heure), e.texte, de, a, loc, e.frequenceHz, e.rapportDb, e.decalageS, e.mode)
-                        }, u.callsign.uppercase(), u.observer, faits))
+                        }, u.callsign.uppercase(), u.observer, faits, paysFaits, carresFaits,
+                        guettees = fr.f4ioz.satcombo.domain.Ft8Veille.lit(stockageFt8(vm)), panne = f.panne))
                 }
                 // ---- Settings: the phone's own, as SatMe-PC's page shows them
                 "/api/reglages" -> {
@@ -563,6 +569,9 @@ object PagesPcTelephone {
             "/api/ft8" -> {
                 val f = fr.f4ioz.satcombo.ft8.Ft8Hub
                 val ctx = vm.getApplication<android.app.Application>()
+                // The stations waited for: a setting of the phone's, as SatMe-PC's.
+                if (p("guettees").isNotEmpty() || p("guettees_vide") == "1")
+                    return JSONObject().put("ok", true).put("guettees", JSONArray(fr.f4ioz.satcombo.domain.Ft8Veille.ecrit(stockageFt8(vm), p("guettees"))))
                 when {
                     p("vide") == "1" -> f.vide()
                     p("on") == "0" -> f.arrete()

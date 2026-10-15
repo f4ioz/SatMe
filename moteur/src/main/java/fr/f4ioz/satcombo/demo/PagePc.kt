@@ -161,6 +161,17 @@ object PagePc {
   .f8 { padding:12px 16px; display:flex; flex-direction:column; gap:12px; }
   .f8-tete { display:flex; gap:16px; align-items:center; margin:0; }
   .f8-anneau { width:86px; height:86px; flex:none; }
+  .f8-horloge-boite { display:flex; flex-direction:column; align-items:center; gap:3px; flex:none; }
+  .f8-horloge { font-size:11px; font-weight:700; white-space:nowrap; cursor:help; color:var(--gris); }
+  .f8-diag { display:flex; gap:10px; align-items:center; padding:9px 14px; border-radius:10px; font-size:13px;
+    background:rgba(229,72,77,.12); border:1px solid rgba(229,72,77,.55); }
+  .f8-diag.ambre { background:rgba(255,180,84,.12); border-color:rgba(255,180,84,.5); }
+  .f8-diag b { color:var(--rose); } .f8-diag.ambre b { color:var(--ambre); }
+  .f8-diag .ico { font-size:20px; }
+  tr.f8-guettee td { background:rgba(63,224,200,.10); } tr.f8-guettee td:first-child { box-shadow:inset 3px 0 0 var(--cyan); }
+  .m8-bulle.guettee { box-shadow:0 0 0 2px rgba(63,224,200,.55); }
+  .f8-puce.guet { color:var(--cyan); border-color:rgba(63,224,200,.55); }
+  .f8-puce.guet.frais { background:rgba(63,224,200,.14); }
   .f8-puces { display:flex; gap:6px; flex-wrap:wrap; margin-top:8px; }
   .f8-puce { padding:3px 10px; border-radius:20px; background:#0E1720; border:1px solid var(--bord); font-size:12px; color:var(--gris); }
   .f8-puce b { color:var(--clair); font-size:14px; }
@@ -1165,7 +1176,10 @@ object PagePc {
 <div class="vue" id="v-ft8" hidden>
 <div class="f8">
   <div class="carte f8-tete">
-    <svg id="8-anneau" viewBox="0 0 100 100" class="f8-anneau" role="img" aria-label="Le créneau en cours"></svg>
+    <div class="f8-horloge-boite">
+      <svg id="8-anneau" viewBox="0 0 100 100" class="f8-anneau" role="img" aria-label="Le créneau en cours"></svg>
+      <span class="f8-horloge" id="8-horloge"></span>
+    </div>
     <div style="flex:1;min-width:0">
       <div class="ligne" style="margin-top:0">
         <button class="primaire" id="8-marche" data-marche="8" onclick="ft8Marche()">Écouter</button>
@@ -1178,8 +1192,14 @@ object PagePc {
         <span class="petit" id="8-etat"></span>
       </div>
       <div class="f8-puces" id="8-puces"></div>
+      <div class="ligne">
+        <label class="petit" for="8-guet" title="Une ligne de ces stations est surlignée, et signalée ici. Réception seule : rien n’est émis.">👁 Stations guettées</label>
+        <input id="8-guet" placeholder="indicatifs, ex. K1ABC EA8/F4XYZ" style="max-width:320px" onchange="f8Guette(this.value)">
+        <span class="f8-puces" id="8-guet-alerte" style="margin-top:0"></span>
+      </div>
     </div>
   </div>
+  <div class="f8-diag" id="8-diag" role="status" hidden></div>
   <div class="f8-grille">
     <div class="carte f8-cascade-boite">
       <div class="paire" style="margin:0 0 6px"><b>Cascade</b><span class="petit" id="8-libre"></span><span class="petit" style="margin-left:auto">Les indicatifs décodés écrits à leur fréquence, dans leur créneau</span></div>
@@ -1190,7 +1210,7 @@ object PagePc {
     <div class="carte f8-radar-boite">
       <div class="paire" style="margin:0 0 6px"><b>Radar</b><span class="petit" id="8-radar-info"></span></div>
       <canvas id="8-radar" style="width:100%;aspect-ratio:1/1;display:block;border-radius:50%;background:radial-gradient(circle,#0B1A24 0%,#05070D 75%)"></canvas>
-      <div class="petit" style="margin-top:6px">Chaque station à son azimut et sa distance depuis ton QTH. Elle pâlit avec le temps, pulse quand elle vient d'être entendue. <span style="color:#5BD68A">●</span> CQ <span style="color:#FFB454">★</span> nouveau pays <span style="color:#FF5FA2">●</span> t'appelle <span style="color:#6B7C8F">●</span> déjà au carnet</div>
+      <div class="petit" style="margin-top:6px">Chaque station à son azimut et sa distance depuis ton QTH. Elle pâlit avec le temps, pulse quand elle vient d'être entendue. <span style="color:#5BD68A">●</span> CQ <span style="color:#FFB454">★</span> nouveau pays <span style="color:#FF5FA2">●</span> m'appelle <span style="color:#6B7C8F">●</span> déjà contacté</div>
     </div>
     <div class="m8" id="8-messages" hidden>
       <div class="carte"><div class="paire" style="margin:0 0 6px"><b>Conversations</b><span class="petit">deux stations qui se parlent</span></div><div class="m8-convs" id="8-convs"></div></div>
@@ -3871,7 +3891,55 @@ async function ticFt8() {
   txt('8-etat', !H.carte ? 'carte son arrêtée (onglet Son)' : H.enMarche ? H.tranches + ' créneaux · niveau ' + Math.round(H.niveau * 100) + ' %' : 'à l’arrêt');
   // The page served by the phone has no stream of rows: its whole waterfall each time.
   if (f8Complete && H.cascade) { f8Lignes = H.cascade.slice().reverse().map(b => Uint8Array.from(atob(b), ch => ch.charCodeAt(0))); f8Fin = Date.now(); f8Pas = 128; dessineCascade(); }
-  for (const f of [dessineAnneau, puces, opportunites, listeFt8, messagesFt8]) { try { f(); } catch (x) { console.error(x); } }
+  for (const f of [dessineAnneau, horlogeFt8, diagFt8, guetFt8, puces, opportunites, listeFt8, messagesFt8]) { try { f(); } catch (x) { console.error(x); } }
+}
+// What a line is to me, said the same in the list, the messages and the waterfall: [word, short, colour, why].
+function f8Marques(e) {
+  const m = [];
+  if (e.moi) m.push(['m’appelle', 'm’appelle', '#FF5FA2', 'Ce message contient ton indicatif']);
+  if (e.guettee) m.push(['👁 guettée', '👁', '#3FE0C8', 'Une station que tu guettes']);
+  if (e.nouveauPays) m.push(['nouveau pays', 'pays', '#FFB454', 'Aucun contact de ce pays au carnet']);
+  if (e.nouveauCarre) m.push(['nouvelle grille', 'grille', '#FFB454', 'Aucun contact dans ce carré au carnet']);
+  if (e.fait) m.push(['déjà contacté', '✓', '#6B7C8F', 'Déjà au carnet']);
+  return m;
+}
+// [court]: the table's narrow column takes the short words, as the waterfall.
+const f8Tags = (e, court) => f8Marques(e).map(x => ' <span class="f8-tag" style="color:' + x[2] + ';border-color:' + x[2] + '" title="' + x[0] + ' : ' + x[3] + '">' + x[court ? 1 : 0] + '</span>').join('');
+// Our clock read from the stations' DT: the same lateness for all is ours.
+function horlogeFt8() {
+  const qui = window.SATME_TELEPHONE ? 'du téléphone' : 'du PC', o = H.horloge, el = g('8-horloge');
+  if (!o) { el.textContent = H.enMarche ? 'Horloge : …' : ''; el.style.color = 'var(--gris)';
+    el.title = 'L’horloge se lit sur le DT des stations : il faut quelques décodages récents.'; return; }
+  const d = o.decalage, a = Math.abs(d);
+  el.textContent = 'Horloge ' + qui + ' : ' + (d > 0 ? '+' : d < 0 ? '−' : '') + a.toFixed(1).replace('.', ',') + ' s';
+  el.style.color = a < 0.3 ? 'var(--vert)' : a < 1 ? 'var(--ambre)' : 'var(--rose)';
+  el.title = 'Le DT médian de ' + o.decodes + ' décodages sur les ' + o.tranches + ' dernières tranches' +
+    (d > 0 ? ' : les stations arrivent en retard, notre horloge est en avance.' : d < 0 ? ' : les stations arrivent en avance, notre horloge est en retard.' : '.') +
+    ' Les stations s’écartent de ±' + o.dispersion.toFixed(1).replace('.', ',') + ' s entre elles.\n' +
+    'Si toutes montrent le même décalage, c’est notre horloge : la synchroniser par NTP' +
+    (window.SATME_TELEPHONE ? ' (heure automatique dans les réglages du téléphone).' : ' (timedatectl sous Linux, « Régler l’heure automatiquement » sous Windows).') +
+    ' Au-delà d’une seconde, le décodage se perd.';
+}
+// One problem with the reception at a time, gone once solved.
+function diagFt8() {
+  const d = H.diag, el = g('8-diag');
+  el.hidden = !d;
+  if (!d) return;
+  el.classList.toggle('ambre', d.code === 'rien');
+  el.innerHTML = '<span class="ico">' + (d.code === 'son' ? '🔇' : d.code === 'silence' ? '🔈' : '📭') + '</span><span><b>' + esc(d.titre) + '</b> — ' + esc(d.detail) + '</span>';
+}
+// The stations waited for: typed here, kept by the station; heard lately, said discreetly.
+async function f8Guette(t) {
+  const j = await post('api/ft8?guettees=' + enc(t.trim()) + (t.trim() ? '' : '&guettees_vide=1'));
+  if (j && j.guettees) g('8-guet').value = j.guettees.join(' ');
+  ft8Vu = ''; f8MsgVu = ''; ticFt8();
+}
+function guetFt8() {
+  if (document.activeElement !== g('8-guet')) g('8-guet').value = (H.guettees || []).join(' ');
+  const vus = new Map(), now = Date.now();
+  for (const e of H.entendus) if (e.guettee && now - e.t < 10 * 60000 && !vus.has(e.de)) vus.set(e.de, e);
+  g('8-guet-alerte').innerHTML = [...vus.values()].map(e => '<span class="f8-puce guet' + (now - e.t < 2 * f8Slot() + 3000 ? ' frais' : '') +
+    '" title="Réception seule : rien n’est émis">👁 <b>' + esc(e.de) + '</b> ' + new Date(e.t).toISOString().slice(11, 19) + ' · ' + e.hz + ' Hz · ' + (e.db > 0 ? '+' : '') + e.db + ' dB</span>').join('');
 }
 async function ticCascade() {
   if (g('v-ft8').hidden || f8Complete) return;
@@ -3906,13 +3974,14 @@ function puces() {
 function valeur(e) {
   let s = 0; const r = [];
   if (e.nouveauPays) { s += 50; r.push(['nouveau pays', '#FFB454']); }
-  if (e.nouveauCarre) { s += 20; r.push(['nouveau carré', '#FFB454']); }
+  if (e.nouveauCarre) { s += 20; r.push(['nouvelle grille', '#FFB454']); }
+  if (e.guettee) { s += 30; r.push(['👁 guettée', '#3FE0C8']); }
   if (e.km != null) { s += Math.min(30, e.km / 300); if (e.km > 3000) r.push(['DX ' + e.km.toLocaleString() + ' km', '#3FE0C8']); }
   s += Math.max(0, e.db + 24) / 2;
   if (e.cq) { s += 15; r.push(['CQ', '#5BD68A']); }
   if (e.vu <= 2) { s += 5; r.push(['rare ici', '#9AA7B4']); }
-  if (e.fait) { s -= 40; r.push(['déjà au carnet', '#6B7C8F']); }
-  if (e.moi) { s += 100; r.push(['t’appelle', '#FF5FA2']); }
+  if (e.fait) { s -= 40; r.push(['déjà contacté', '#6B7C8F']); }
+  if (e.moi) { s += 100; r.push(['m’appelle', '#FF5FA2']); }
   return [s, r];
 }
 function opportunites() {
@@ -3934,12 +4003,12 @@ function listeFt8() {
   ft8Vu = cle;
   let avant = 0;
   g('8-liste').innerHTML = l.slice(0, 250).map(e => {
-    const sep = avant && e.t !== avant ? ' class="f8-sep"' : ''; avant = e.t;
+    const cl = [avant && e.t !== avant ? 'f8-sep' : '', e.guettee ? 'f8-guettee' : ''].filter(Boolean).join(' '), sep = cl ? ' class="' + cl + '"' : ''; avant = e.t;
     const coul = e.moi ? '#FF5FA2' : e.nouveauPays ? '#FFB454' : e.cq ? '#5BD68A' : e.fait ? '#6B7C8F' : '#E8F0F7';
     const barre = '<span class="f8-db"><i style="width:' + Math.max(4, Math.min(100, (e.db + 24) * 3)) + '%;background:' + (e.db >= -5 ? '#5BD68A' : e.db >= -15 ? '#FFB454' : '#FF5FA2') + '"></i></span>';
     return '<tr' + sep + '><td class="petit">' + new Date(e.t).toISOString().slice(11, 19) + '</td><td title="' + esc(e.pays || '') + (e.cont ? ' · ' + (F8_CONT[e.cont] || e.cont) : '') + '">' + f8Drapeau(e.drapeau) +
       '</td><td style="color:' + coul + ';font-weight:700">' + esc(e.de || '') + (e.nouveauPays ? ' ★' : '') + '</td><td>' + barre + '<span class="petit">' + e.db + '</span></td><td class="petit">' + e.hz +
-      '</td><td style="font-family:ui-monospace,Consolas,monospace;color:' + coul + '">' + esc(e.texte) + (e.fait ? ' <span class="pastille on" title="déjà au carnet">✓</span>' : '') + (e.nouveauCarre ? ' <span class="f8-tag" style="color:#FFB454;border-color:#FFB454">carré</span>' : '') +
+      '</td><td style="font-family:ui-monospace,Consolas,monospace;color:' + coul + '">' + esc(e.texte) + f8Tags(e, true) +
       '</td><td class="petit">' + (e.km == null ? '' : e.km.toLocaleString() + (e.az != null ? ' · ' + e.az + '°' : '')) + '</td><td>' + (e.de ? '<button title="Préparer ce contact dans le carnet" onclick="noteFt8(\'' + esc(e.de) + '\',\'' + esc(e.loc) + '\',' + e.db + ')">✎</button>' : '') + '</td></tr>';
   }).join('') || '<tr><td colspan="8" class="petit">' + (H.enMarche ? 'rien encore décodé' : 'prêt') + '</td></tr>';
   dessineRadar();
@@ -3970,14 +4039,21 @@ function dessineCascade() {
     if (!e.de || e.t < f8Fin - dureeVue - s) continue;
     const px = X(e.hz);
     let y = Y(e.t + s * 0.85);
-    const lw0 = x.measureText(f8Drapeau(e.drapeau) + ' ' + e.de).width + 8;
+    // Its marks after the callsign, short, in their colours.
+    const mq = f8Marques(e), t = f8Drapeau(e.drapeau) + ' ' + e.de, lt = x.measureText(t).width;
+    x.font = 'bold 9px Drapeaux,system-ui';
+    const lm = mq.map(q => x.measureText(q[1]).width + 6), lw0 = lt + 8 + lm.reduce((a, b) => a + b + 3, 0);
+    x.font = 'bold 11px Drapeaux,system-ui';
     while (places.some(p => Math.abs(p[1] - y) < 14 && px < p[0] + p[2] && p[0] < px + lw0)) y += 14;
     places.push([px, y, lw0]);
     if (y < 8 || y > h) continue;
-    const coul = e.moi ? '#FF5FA2' : e.nouveauPays ? '#FFB454' : e.cq ? '#5BD68A' : e.fait ? '#9AA7B4' : '#E8F0F7';
-    const t = f8Drapeau(e.drapeau) + ' ' + e.de, lw = x.measureText(t).width + 8;
-    x.fillStyle = 'rgba(5,7,13,.72)'; x.fillRect(px - 2, y - 11, lw, 14); x.fillStyle = coul; x.fillText(t, px + 2, y);
+    const coul = e.moi ? '#FF5FA2' : e.guettee ? '#3FE0C8' : e.nouveauPays ? '#FFB454' : e.cq ? '#5BD68A' : e.fait ? '#9AA7B4' : '#E8F0F7';
+    x.fillStyle = e.guettee ? 'rgba(18,48,45,.9)' : 'rgba(5,7,13,.72)'; x.fillRect(px - 2, y - 11, lw0, 14); x.fillStyle = coul; x.fillText(t, px + 2, y);
     x.fillRect(px - 2, y - 11, 2, 14);
+    let mx = px + lt + 6;
+    x.font = 'bold 9px Drapeaux,system-ui';
+    mq.forEach((q, i) => { x.strokeStyle = q[2]; x.fillStyle = q[2]; x.strokeRect(mx + 0.5, y - 9.5, lm[i], 11); x.fillText(q[1], mx + 3, y - 1); mx += lm[i] + 3; });
+    x.font = 'bold 11px Drapeaux,system-ui';
   }
   // A free spot to send: the quietest 60 Hz of the last two slots between 500 and 2 500 Hz
   // (the rig's filter cuts the edges), away from every station decoded.
@@ -4084,6 +4160,8 @@ function messagesFt8() {
     liste.map(c => { const [a, b] = c.k.split('|'), der = c.msgs[c.msgs.length - 1], gr = f8Genre(der);
       return '<div class="m8-conv' + (f8Conv === c.k ? ' actif' : '') + '" onclick="f8Conv=\'' + c.k + '\';f8MsgVu=\'\';messagesFt8()">' +
         '<span class="m8-av">' + fl(a) + '<i>' + fl(b) + '</i></span><span style="flex:1;min-width:0"><b>' + esc(a) + ' ⇄ ' + esc(b) + '</b>' + (c.fin ? ' <span style="color:var(--vert)" title="QSO bouclé">✓</span>' : '') +
+        (c.msgs.some(m => m.moi) ? ' <span class="f8-tag" style="color:#FF5FA2;border-color:#FF5FA2">m’appelle</span>' : '') +
+        (c.msgs.some(m => m.guettee) ? ' <span class="f8-tag" style="color:#3FE0C8;border-color:#3FE0C8" title="Une station que tu guettes">👁</span>' : '') +
         '<br><span class="petit">' + gr[0] + ' ' + esc(der.de) + ' : ' + esc(gr[1] || der.texte) + '</span></span><span class="petit" style="text-align:right">' + heure(der.t) + '<br><span class="m8-n">' + c.msgs.length + '</span></span></div>'; }).join('');
   // The thread: one conversation as bubbles (one station left, the other right), or the stream.
   const c = f8Conv ? convs.get(f8Conv) : null;
@@ -4094,9 +4172,9 @@ function messagesFt8() {
   g('8-fil').innerHTML = msgs.map(e => {
     const gr = f8Genre(e), droite = c ? e.de !== gauche : false, coul = e.moi ? 'var(--rose)' : gr[2] === 'cq' ? 'var(--vert)' : gr[2] === 'fin' ? 'var(--cyan)' : 'var(--clair)';
     const sep = e.t !== avant ? '<div class="m8-heure">' + new Date(e.t).toISOString().slice(11, 19) + ' UTC</div>' : ''; avant = e.t;
-    return sep + '<div class="m8-ligne' + (droite ? ' droite' : '') + '"><div class="m8-bulle' + (droite ? ' droite' : '') + (e.moi ? ' moi' : '') + '">' +
+    return sep + '<div class="m8-ligne' + (droite ? ' droite' : '') + '"><div class="m8-bulle' + (droite ? ' droite' : '') + (e.moi ? ' moi' : '') + (e.guettee ? ' guettee' : '') + '">' +
       '<div class="m8-qui">' + f8Drapeau(e.drapeau) + ' <b style="color:' + coul + '">' + esc(e.de || '?') + '</b>' + (e.a && !c ? ' <span class="petit">→ ' + esc(e.a) + '</span>' : '') +
-      ' <span class="petit">' + (e.db > 0 ? '+' : '') + e.db + ' dB · ' + e.hz + ' Hz</span></div>' +
+      ' <span class="petit">' + (e.db > 0 ? '+' : '') + e.db + ' dB · ' + e.hz + ' Hz</span>' + f8Tags(e) + '</div>' +
       '<div class="m8-txt"><span class="m8-ico" title="' + esc(gr[1]) + '">' + gr[0] + '</span> ' + esc(e.texte) + '</div>' +
       (gr[1] ? '<div class="petit">' + esc(gr[1]) + (e.km != null && gr[2] !== 'fin' ? ' · ' + e.km.toLocaleString() + ' km' : '') + '</div>' : '') + '</div></div>';
   }).join('') || '<div class="petit" style="padding:20px">' + (H.enMarche ? 'rien encore' : 'à l’écoute, les messages arriveront ici') + '</div>';
