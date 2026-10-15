@@ -135,7 +135,7 @@ Un onglet pensé pour voir la bande, pas seulement la lire :
 
 Dans l'onglet **SDR**, *Récepteur* choisit entre la clé RTL-SDR (rtl_tcp, d'origine) et un **ADALM-PLUTO** joint par le réseau : sur son câble USB il répond sur 192.168.2.1 (port 30431), en Wi-Fi ou Ethernet donner son adresse. Rien à installer : SatMe parle directement à son serveur IIO.
 
-- **Réception seulement.** SatMe règle son côté réception et rien d'autre : l'oscillateur RX, le débit, la bande analogique, le gain. Il n'ouvre jamais l'émetteur, n'écrit jamais ses réglages, ne touche ni à son disque USB ni à son `config.txt`.
+- **Réception seulement.** Le récepteur règle le côté réception et rien d'autre : l'oscillateur RX, le débit, la bande analogique, le gain. Il n'ouvre jamais l'émetteur, n'écrit jamais ses réglages, ne touche ni à son disque USB ni à son `config.txt`. Émettre n'appartient qu'à l'onglet DATV (plus bas).
 - Tout marche comme avec la clé : Doppler, QO-100 (derrière le LNB, FI vers 739 MHz, ou derrière un convertisseur, réglé comme pour la clé), la cascade et le panorama, le son pour les décodeurs, METEOR, les radiosondes. De 70 MHz à 6 GHz.
 - Il tourne à 2,1168 MS/s, ramenés ici aux 1,0584 MS/s de la clé ; ses 12 bits sont gardés jusqu'au démodulateur. Environ 8,5 Mo/s sur le câble.
 - **Gain** : *automatique* est la CAG lente de l'AD936x ; sinon de 0 à 71 dB. La ligne d'état montre la carte et son micrologiciel.
@@ -170,6 +170,35 @@ Le script installe Java, compile LongMynd, lui donne accès au MiniTiouner (udev
 Sans sa clé, le node ne dit que ce qu'il est ; ce qui le change est un POST ; son alimentation LNB reste coupée tant qu'on ne la choisit pas.
 
 *Ci-dessus, un signal de test. Le MiniTiouner Pro TS2 lui-même est reconnu et cherche (tuner, démodulateur, LNA), sur le PC et par un node ; le premier signal sur l'air reste à venir.*
+
+## Émission DATV — l'ADALM-PLUTO vers QO-100
+
+La carte **Émission** de l'onglet DATV envoie un signal DVB-S2 au transpondeur large bande de QO-100 avec un **ADALM-PLUTO**. SatMe fabrique lui-même le DVB-S2 (EN 302 307-1 : QPSK à tous les taux, 8PSK de 3/5 à 9/10, trames normales ou courtes, pilotes, roll-off 0,35 / 0,25 / 0,20) ; **ffmpeg** fait de l'image un flux de transport exactement au débit que porte le MODCOD (`-muxrate`, complété de paquets nuls), le nom du service et du fournisseur étant l'indicatif de la station. L'image : la mire SatMe avec l'indicatif, une image fixe, ou une caméra (`/dev/video…`, seulement listée tant qu'aucune émission ne démarre).
+
+**La station.** PC —USB— port **TX** du Pluto → filtre passe-bande → amplificateur → source (montée 2,4 GHz). Contrôle en réception : parabole, LNB → **MiniTiouner** (onglet DATV, *Réception*). Pendant l'émission, le Pluto ne reçoit pas (l'onglet SDR le refuse : ils partagent la fréquence d'échantillonnage).
+
+| kS/s | échantillons par symbole | débit du Pluto |
+|---|---|---|
+| 125 | 17 | 2,125 Méch/s |
+| 250 | 9 | 2,25 Méch/s |
+| 333 | 7 | 2,331 Méch/s |
+| 500 | 5 | 2,5 Méch/s |
+| 1000 | 3 | 3 Méch/s |
+| 1500 / 2000 | 2 | 3 / 4 Méch/s |
+
+**Premier essai : sur charge, jamais sur l'antenne.** TX du Pluto → atténuateur de 30 dB (ou plus) → entrée du MiniTiouner (son tuner couvre 2,4 GHz en direct : *Ciel* = la fréquence de montée, OL du LNB 0, alimentation LNB **coupée**). Cocher *Test sur charge* (toute fréquence, gain bridé à −40 dB au plus, avertissement en rouge), choisir 333 kS/s QPSK 2/3, **ÉMETTRE**, confirmer : le MiniTiouner doit accrocher en DVB-S2, l'indicatif en service et la mire à l'image. Seulement ensuite l'amplificateur et la parabole.
+
+**Les règles, dans le code.**
+- Seulement sur action de l'opérateur : **ÉMETTRE** puis une confirmation ; jamais au démarrage, jamais reprise des réglages (seuls les paramètres sont gardés).
+- Un **indicatif** (Réglages › Station) avant tout envoi.
+- Sur l'air, toute la bande occupée (Rs × (1 + α)) entre **2403,000 et 2410,000 MHz** en montée : à l'écart de la balise (montée 2402,0 MHz, sa bande finit vers 2402,9 MHz), jusqu'au dernier canal du plan de bande (10499,25 MHz en descente, 2409,75 MHz en montée). La liste des canaux est celle du plan ; celui que tient le MiniTiouner est marqué occupé.
+- **Durée** : 10 min d'origine, 30 min au plus, puis arrêt tout seul.
+- Arrêt tout seul quand le Pluto ne prend plus d'échantillons ou est débranché, quand les échantillons arrivent trop souvent en retard, quand ffmpeg s'arrête, quand la page se tait depuis 15 s (onglet fermé, réseau perdu), et à la fermeture de SatMe-PC.
+- À chaque arrêt, l'**oscillateur d'émission du Pluto est coupé d'abord** ; au démarrage il reste coupé jusqu'aux premiers échantillons. Si le Pluto ne répond plus à ce moment-là, la page le dit : le débrancher.
+- **Gain d'émission** : −30 dB d'origine, jamais au-dessus du maximum de Réglages (−10 dB d'origine).
+- **Boucle fermée** : le MER du MiniTiouner sur notre propre signal comparé à celui de la balise (mesuré avant, bouton *Balise*) : si l'on n'est pas au moins 1 dB sous la balise, un avertissement, et le gain baisse de 1 dB toutes les 5 s jusqu'à y être. Il ne remonte jamais tout seul.
+
+**Réglages › Poste et rotor › ADALM-PLUTO** : le gain d'émission maximal, et *Couper l'oscillateur d'émission du Pluto quand SatMe s'en sert en réception* (décoché d'origine). Un Pluto allumé laisse tourner son oscillateur d'émission (2450 MHz d'origine) : coché, SatMe le coupe à chaque démarrage de la réception par le Pluto. Seul le code de l'émetteur écrit du côté émission du Pluto ; le récepteur ne le peut toujours pas.
 
 ## Encore sur le PC
 
@@ -208,7 +237,7 @@ Pour d'autres programmes du PC (un carnet, un tableau de bord, un script) : **R�
 - Sous Linux le système lève RTS/DTR un instant à chaque ouverture de port, avant que SatMe puisse les baisser : une raison de plus de n'ouvrir que le port voulu.
 - **Le CAT n'émet jamais** (`TX`, `KY` refusés par le pilote TS-2000). Seul l'APRS par un TNC KISS émet, et seulement quand on envoie soi-même un message, sa position ou un statut.
 - **L'alimentation LNB du MiniTiouner est coupée** tant qu'on ne la choisit pas.
-- **L'ADALM-PLUTO ne fait que recevoir** : rien n'est écrit ni ouvert de son côté émission.
+- **L'ADALM-PLUTO n'émet que depuis l'onglet DATV**, sur un clic confirmé, dans les règles ci-dessus ; le récepteur n'écrit jamais son côté émission.
 
 ## Avant le premier essai
 
