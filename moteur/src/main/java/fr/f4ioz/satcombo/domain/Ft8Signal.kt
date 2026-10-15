@@ -519,38 +519,8 @@ object Ft8Signal {
         val sortie = FloatArray(total)
         val debut = (decalageS * cadence).roundToInt()
 
-        // Frequency trajectory, one point per sample.
-        val nSignal = tons.size * mode.parSymbole
-        val freq = DoubleArray(nSignal)
-        for (i in 0 until nSignal) {
-            val s = i / mode.parSymbole
-            freq[i] = frequenceBasseHz + tons[s] * mode.ecartHz
-        }
-        if (penteHzS != 0.0) {
-            val milieu = nSignal / 2.0
-            for (i in 0 until nSignal) freq[i] += penteHzS * (i - milieu) / cadence
-        }
-        // Gaussian smoothing of the trajectory.
-        if (lissageBT > 0.0) {
-            val sigma = mode.parSymbole / (2.0 * PI * lissageBT) * sqrt(ln(2.0))
-            val demi = (3 * sigma).toInt().coerceAtLeast(1)
-            val noyau = DoubleArray(2 * demi + 1)
-            var somme = 0.0
-            for (k in noyau.indices) {
-                val x = (k - demi).toDouble()
-                noyau[k] = exp(-x * x / (2 * sigma * sigma)); somme += noyau[k]
-            }
-            for (k in noyau.indices) noyau[k] /= somme
-            val lisse = DoubleArray(nSignal)
-            for (i in 0 until nSignal) {
-                var acc = 0.0
-                for (k in noyau.indices) {
-                    acc += noyau[k] * freq[(i + k - demi).coerceIn(0, nSignal - 1)]
-                }
-                lisse[i] = acc
-            }
-            System.arraycopy(lisse, 0, freq, 0, nSignal)
-        }
+        val freq = trajectoire(tons, mode, frequenceBasseHz, lissageBT, penteHzS)
+        val nSignal = freq.size
 
         var phase = 0.0
         for (i in 0 until nSignal) {
@@ -560,6 +530,135 @@ object Ft8Signal {
             if (phase > 2.0 * PI) phase -= 2.0 * PI
         }
         return sortie
+    }
+
+    /**
+     * The frequency of every sample of a transmission (Hz): the tones, the
+     * Gaussian smoothing of each change, the drift (zero mid-transmission).
+     *
+     * Each change is smoothed by the running sum of the Gaussian kernel, not
+     * by convolving every sample with it: the same numbers, a few hundred
+     * times faster — fast enough to rebuild every decoded signal and take it
+     * out of the slot.
+     */
+    fun trajectoire(
+        tons: IntArray,
+        mode: Mode,
+        frequenceBasseHz: Double,
+        lissageBT: Double = mode.lissageBT,
+        penteHzS: Double = 0.0
+    ): DoubleArray {
+        val cadence = mode.cadenceHz
+        val n = mode.parSymbole
+        val nSignal = tons.size * n
+        val freq = DoubleArray(nSignal)
+        val milieu = nSignal / 2.0
+        for (i in 0 until nSignal) {
+            freq[i] = frequenceBasseHz + tons[i / n] * mode.ecartHz + penteHzS * (i - milieu) / cadence
+        }
+        if (lissageBT <= 0.0 || tons.size < 2) return freq
+        val sigma = n / (2.0 * PI * lissageBT) * sqrt(ln(2.0))
+        val demi = (3 * sigma).toInt().coerceAtLeast(1).coerceAtMost(n / 2)
+        // Kernel, normalized, then its running sum.
+        val cumul = DoubleArray(2 * demi + 1)
+        var somme = 0.0
+        for (k in cumul.indices) {
+            val x = (k - demi).toDouble()
+            somme += exp(-x * x / (2 * sigma * sigma)); cumul[k] = somme
+        }
+        for (k in cumul.indices) cumul[k] /= somme
+        // At a change at sample B, sample i sees the new tone with weight
+        // Σ kernel[k] for i + k − demi ≥ B.
+        for (s in 1 until tons.size) {
+            val saut = (tons[s] - tons[s - 1]) * mode.ecartHz
+            if (saut == 0.0) continue
+            val b = s * n
+            for (i in b - demi until b + demi) {
+                if (i < 0 || i >= nSignal) continue
+                val k = b - i + demi - 1          // last kernel index still on the old tone
+                val nouveau = 1.0 - (if (k >= 0) cumul[k.coerceAtMost(2 * demi)] else 0.0)
+                freq[i] = freq[i] - (if (i >= b) saut else 0.0) + saut * nouveau
+            }
+        }
+        return freq
+    }
+
+    /**
+     * Takes a decoded transmission out of the audio, in place.
+     *
+     * Its waveform is rebuilt from its tones ([trajectoire]); its amplitude
+     * and phase are fitted by correlation over blocks of four symbols and
+     * interpolated between them, so a slow fade or a small frequency error
+     * is followed rather than left behind. The start is tried a few samples
+     * either side and the best fit kept: what remains is the noise and the
+     * stations underneath.
+     */
+    fun soustrait(
+        audio: FloatArray,
+        tons: IntArray,
+        mode: Mode,
+        frequenceBasseHz: Double,
+        debutS: Double,
+        penteHzS: Double = 0.0
+    ) {
+        val freq = trajectoire(tons, mode, frequenceBasseHz, mode.lissageBT, penteHzS)
+        val nSignal = freq.size
+        val co = FloatArray(nSignal)
+        val si = FloatArray(nSignal)
+        var phase = 0.0
+        for (i in 0 until nSignal) {
+            co[i] = cos(phase).toFloat(); si[i] = sin(phase).toFloat()
+            phase += 2.0 * PI * freq[i] / mode.cadenceHz
+            if (phase > 2.0 * PI) phase -= 2.0 * PI
+        }
+        val bloc = mode.parSymbole * 4
+        val nBlocs = (nSignal + bloc - 1) / bloc
+        val a = DoubleArray(nBlocs)
+        val b = DoubleArray(nBlocs)
+        val debut0 = Math.round(debutS * mode.cadenceHz).toInt()
+        var meilleur = -1.0
+        var debut = debut0
+        val pas = mode.parSymbole / 64
+        for (d in -2..2) {
+            val essai = debut0 + d * pas
+            val e = ajuste(audio, co, si, essai, bloc, a, b)
+            if (e > meilleur) { meilleur = e; debut = essai }
+        }
+        ajuste(audio, co, si, debut, bloc, a, b)
+        for (i in 0 until nSignal) {
+            val n = debut + i
+            if (n < 0 || n >= audio.size) continue
+            // Linear interpolation between block centres.
+            val x = (i - bloc / 2.0) / bloc
+            val k = kotlin.math.floor(x).toInt().coerceIn(0, nBlocs - 1)
+            val k2 = (k + 1).coerceAtMost(nBlocs - 1)
+            val f = (x - k).coerceIn(0.0, 1.0)
+            val aa = a[k] + (a[k2] - a[k]) * f
+            val bb = b[k] + (b[k2] - b[k]) * f
+            audio[n] -= (aa * co[i] + bb * si[i]).toFloat()
+        }
+    }
+
+    /** Per-block least squares of audio on cos/sin; returns the fitted energy. */
+    private fun ajuste(audio: FloatArray, co: FloatArray, si: FloatArray, debut: Int, bloc: Int,
+                       a: DoubleArray, b: DoubleArray): Double {
+        var energie = 0.0
+        for (k in a.indices) {
+            var sc = 0.0; var ss = 0.0; var cc = 0.0; var s2 = 0.0; var cs = 0.0
+            for (i in k * bloc until minOf((k + 1) * bloc, co.size)) {
+                val n = debut + i
+                if (n < 0 || n >= audio.size) continue
+                val x = audio[n]
+                sc += x * co[i]; ss += x * si[i]
+                cc += co[i] * co[i]; s2 += si[i] * si[i]; cs += co[i] * si[i]
+            }
+            val det = cc * s2 - cs * cs
+            if (det <= 1e-9) { a[k] = 0.0; b[k] = 0.0; continue }
+            a[k] = (sc * s2 - ss * cs) / det
+            b[k] = (ss * cc - sc * cs) / det
+            energie += a[k] * sc + b[k] * ss
+        }
+        return energie
     }
 
     /**

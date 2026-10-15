@@ -37,7 +37,9 @@ object Ft8Decodeur {
         /** SNR referred to 2500 Hz, like an FT8 report. */
         val rapportDb: Int,
         /** Sync score, for sorting and diagnostics. */
-        val scoreSynchro: Float
+        val scoreSynchro: Float,
+        /** The pass that found it: 1, or later once stronger signals were taken out. */
+        val passe: Int = 1,
     )
 
     /**
@@ -53,10 +55,16 @@ object Ft8Decodeur {
      * is why the hard-decision fallback is held to a clean sync (see
      * [decode]).
      */
-    enum class Profondeur(val candidats: Int, val seuilSynchro: Float, val toursLdpc: Int) {
-        LEGERE(32, 1.5f, 30),
-        NORMALE(60, 1.3f, 30),
-        PROFONDE(120, 1.1f, 40),
+    enum class Profondeur(
+        val candidats: Int,
+        val seuilSynchro: Float,
+        val toursLdpc: Int,
+        /** Passes: after each, what was decoded is taken out and the rest searched again. */
+        val passes: Int,
+    ) {
+        LEGERE(32, 1.5f, 30, 1),
+        NORMALE(60, 1.3f, 30, 2),
+        PROFONDE(120, 1.1f, 40, 3),
     }
 
     /**
@@ -112,29 +120,46 @@ object Ft8Decodeur {
         val ramene = if (penteHzS == 0.0) entree else Ft8Signal.retirePente(entree, mode.cadenceHz, penteHzS)
         if (ramene.size < mode.parSymbole * mode.symboles) return emptyList()
 
-        val spec = Ft8Signal.spectrogramme(ramene, mode, basseHz, hauteHz)
-        val candidats = Ft8Signal.candidats(spec,
-            maximum = profondeur?.candidats ?: maximumCandidats,
-            scoreMinimal = profondeur?.seuilSynchro ?: Profondeur.LEGERE.seuilSynchro,
-            voisins = true)
         val tours = profondeur?.toursLdpc ?: Profondeur.LEGERE.toursLdpc
-        val spectre = Ft8Fin.spectre(ramene, mode)
+        val passes = profondeur?.passes ?: 1
+        // Taken out pass after pass (already a copy: the caller's audio stays as given).
+        val reste = ramene
 
         val sortie = ArrayList<Decode>()
         val dejaVus = HashSet<String>()
-        for (c in candidats) {
-            val f0 = c.frequenceHz(spec)
-            val t0 = c.instantS(spec)
-            // A neighbour of a signal already read: the same signal again.
-            if (sortie.any { abs(it.frequenceHz - f0) < mode.ecartHz && abs(it.instantS - t0) < mode.dureeSymbole }) continue
-            val d = essaie(spectre, mode, f0, t0, c.score, tours) ?: continue
-            // Neighbouring candidates can yield the same message; keep only
-            // the first, the list is already sorted by score.
-            if (!dejaVus.add(d.message.brut)) continue
-            sortie.add(d)
+        for (passe in 1..passes) {
+            val spec = Ft8Signal.spectrogramme(reste, mode, basseHz, hauteHz)
+            val candidats = Ft8Signal.candidats(spec,
+                maximum = profondeur?.candidats ?: maximumCandidats,
+                scoreMinimal = profondeur?.seuilSynchro ?: Profondeur.LEGERE.seuilSynchro,
+                voisins = true)
+            val spectre = Ft8Fin.spectre(reste, mode)
+            val nouveaux = ArrayList<Lu>()
+            for (c in candidats) {
+                val f0 = c.frequenceHz(spec)
+                val t0 = c.instantS(spec)
+                // A neighbour of a signal already read in this pass: the same signal again.
+                if (nouveaux.any { abs(it.decode.frequenceHz - f0) < mode.ecartHz &&
+                        abs(it.decode.instantS - t0) < mode.dureeSymbole }) continue
+                val lu = essaie(spectre, mode, f0, t0, c.score, tours) ?: continue
+                // Neighbouring candidates can yield the same message; keep only
+                // the first, the list is already sorted by score.
+                if (!dejaVus.add(lu.decode.message.brut)) continue
+                nouveaux.add(lu)
+            }
+            sortie.addAll(nouveaux.map { if (passe > 1) it.decode.copy(passe = passe) else it.decode })
+            if (nouveaux.isEmpty() || passe == passes) break
+            // Each signal read is rebuilt and taken out: the next pass hears
+            // what it was hiding.
+            for (lu in nouveaux) {
+                Ft8Signal.soustrait(reste, lu.tons, mode, lu.decode.frequenceHz, lu.decode.instantS, lu.penteHzS)
+            }
         }
         return sortie
     }
+
+    /** A decode and what is needed to take it out of the audio. */
+    private class Lu(val decode: Decode, val tons: IntArray, val penteHzS: Double)
 
     /**
      * One candidate, from its rough place to a message or nothing: its own
@@ -148,7 +173,7 @@ object Ft8Decodeur {
         t0: Double,
         score: Float,
         tours: Int,
-    ): Decode? {
+    ): Lu? {
         val e = mode.ecartHz
         val canal = Ft8Fin.canal(spectre, f0, -2.5 * e, (mode.tons + 1.5) * e)
         // A rough start is within half a symbol, a rough frequency within a
@@ -183,13 +208,13 @@ object Ft8Decodeur {
         // gave one, else what was read.
         val envoyes = if (corrige == null) tons
             else if (quatreTons) Ft4.bitsVersSymboles(corrige) else Ft8.bitsVersSymboles(corrige)
-        return Decode(
+        return Lu(Decode(
             message = message,
             frequenceHz = canal.origineHz + l.decalageHz,
             instantS = l.debut / canal.cadence,
             rapportDb = Ft8Fin.rapportDb(l, envoyes, mode),
             scoreSynchro = score
-        )
+        ), envoyes, l.penteHzS)
     }
 
     /**

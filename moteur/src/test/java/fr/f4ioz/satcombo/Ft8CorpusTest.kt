@@ -50,7 +50,7 @@ class Ft8CorpusTest {
      */
     private val PLANCHERS = mapOf(
         "forts" to 10, "moyens" to 12, "faibles" to 9, "tres_faibles" to 3,
-        "bande_chargee" to 22, "chevauchement" to 6, "fort_masque_faible" to 3,
+        "bande_chargee" to 23, "chevauchement" to 8, "fort_masque_faible" to 6,
         "doppler_connu_-1.0Hz/s" to 8, "doppler_connu_1.0Hz/s" to 8,
         "doppler_connu_-3.0Hz/s" to 8, "doppler_connu_3.0Hz/s" to 8,
         "doppler_inconnu_1Hz/s" to 0, "pentes_propres_2Hz/s" to 1, "pente_connue_et_propre" to 3,
