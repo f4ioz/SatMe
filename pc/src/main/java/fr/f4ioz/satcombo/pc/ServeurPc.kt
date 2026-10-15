@@ -824,6 +824,8 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 else s.arreteEnregistrement()
             }
             "/api/ft8" -> {
+                // The stations waited for: settings, kept even without a sound card.
+                q["guettees"]?.let { return JSONObject().put("ok", true).put("guettees", JSONArray(fr.f4ioz.satcombo.domain.Ft8Veille.ecrit(station.stockage, it))) }
                 val f = son?.ft8 ?: return JSONObject().put("ok", false)
                 when {
                     q["vide"] == "1" -> f.vide()
@@ -1118,7 +1120,8 @@ object JsonPc {
             Ft8Pc.BASSE_HZ, Ft8Pc.HAUTE_HZ, emptyList(), k?.dernierSpectre ?: FloatArray(0),
             f.entendus.map { e -> fr.f4ioz.satcombo.demo.ApiRadio.Ligne(e.tranche, e.texte, e.appelant, e.appele, e.locator,
                 e.frequenceHz, e.rapportDb, e.decalageS, e.mode) },
-            st.etat.value.indicatif.uppercase(), st.etat.value.observateur, faits, paysFaits, carresFaits)
+            st.etat.value.indicatif.uppercase(), st.etat.value.observateur, faits, paysFaits, carresFaits,
+            guettees = fr.f4ioz.satcombo.domain.Ft8Veille.lit(st.stockage), sonDepuisMs = f.sonDepuisMs(), sansDecodage = f.sansDecodage)
     }
 
     /** APRS heard: the frames (newest first) and what they add up to. */

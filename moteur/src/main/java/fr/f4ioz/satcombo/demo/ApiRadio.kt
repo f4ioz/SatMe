@@ -94,9 +94,25 @@ object ApiRadio {
     fun ft8(enMarche: Boolean, mode: String, avancement: Float, niveau: Float, tranches: Int, carte: Boolean, basseHz: Int, hauteHz: Int,
             cascade: List<ByteArray>, spectre: FloatArray, entendus: List<Ligne>, moi: String, obs: Observer?, faits: Set<String>,
             /** The log's countries and squares (4 characters): a station from elsewhere is new. */
-            paysFaits: Set<String> = emptySet(), carresFaits: Set<String> = emptySet()): JSONObject {
+            paysFaits: Set<String> = emptySet(), carresFaits: Set<String> = emptySet(),
+            /** The stations waited for (typed by the operator): a line from one is marked. */
+            guettees: List<String> = emptyList(),
+            /** Since the last sound block (null: not known), slots heard with nothing decoded (null: from the decodes), the listener's own trouble. */
+            sonDepuisMs: Long? = null, sansDecodage: Int? = null, panne: String = "",
+            maintenant: Long = System.currentTimeMillis()): JSONObject {
         val compte = entendus.mapNotNull { it.appelant?.uppercase() }.groupingBy { it }.eachCount()
-        return JSONObject().put("present", true).put("enMarche", enMarche).put("mode", mode).put("avancement", avancement.toDouble())
+        val V = fr.f4ioz.satcombo.domain.Ft8Veille
+        val dureeMs = if (mode == "FT4") 7_500L else 15_000L
+        // The clock and the reception, read here so that both servers say the same.
+        val h = V.horloge(entendus.filter { it.mode == mode }.map { it.tranche to it.decalageS }, maintenant)
+        val d = V.diagnostic(enMarche, carte, sonDepuisMs, niveau,
+            sansDecodage ?: V.sansDecodage(tranches, entendus.maxOfOrNull { it.tranche }, maintenant, dureeMs), panne)
+        return JSONObject()
+            .put("horloge", h?.let { JSONObject().put("decalage", Math.round(it.decalageS * 10) / 10.0).put("dispersion", Math.round(it.dispersionS * 10) / 10.0)
+                .put("decodes", it.decodes).put("tranches", it.tranches) } ?: JSONObject.NULL)
+            .put("diag", d?.let { JSONObject().put("code", it.code).put("titre", it.titre).put("detail", it.detail) } ?: JSONObject.NULL)
+            .put("guettees", JSONArray(guettees))
+            .put("present", true).put("enMarche", enMarche).put("mode", mode).put("avancement", avancement.toDouble())
             .put("niveau", Math.round(niveau * 1000.0) / 1000.0).put("tranches", tranches).put("carte", carte)
             .put("basse", basseHz).put("haute", hauteHz)
             .put("cascade", JSONArray(cascade.map { java.util.Base64.getEncoder().encodeToString(it) }))
@@ -106,7 +122,8 @@ object ApiRadio {
                 JSONObject().put("t", e.tranche).put("texte", e.texte).put("de", e.appelant ?: "").put("a", e.appele ?: "")
                     .put("loc", e.locator ?: "").put("hz", e.frequenceHz).put("db", e.rapportDb).put("dt", Math.round(e.decalageS * 10) / 10.0)
                     .put("mode", e.mode).put("cq", e.texte.startsWith("CQ"))
-                    .put("moi", moi.isNotBlank() && e.appele?.uppercase() == moi)
+                    .put("moi", V.appelleMoi(e.texte, e.appelant, e.appele, moi))
+                    .put("guettee", V.guettee(e.appelant, guettees))
                     .put("fait", e.appelant?.uppercase()?.substringBefore('/') in faits)
                     .put("km", if (ll != null && obs != null) Math.round(fr.f4ioz.satcombo.sonde.Geo.distanceKm(obs.latDeg, obs.lonDeg, ll.first, ll.second)) else JSONObject.NULL)
                     .put("az", if (ll != null && obs != null) Math.round(fr.f4ioz.satcombo.sonde.Geo.bearingDeg(obs.latDeg, obs.lonDeg, ll.first, ll.second)) else JSONObject.NULL)

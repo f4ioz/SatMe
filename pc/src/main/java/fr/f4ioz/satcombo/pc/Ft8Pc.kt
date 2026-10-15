@@ -50,6 +50,12 @@ class Ft8Pc(private val horloge: () -> Long = System::currentTimeMillis) {
     /** When the waterfall's newest row was made: the page draws the slots' edges from it. */
     @Volatile var derniereLigneMs = 0L
         private set
+    /** When the card's last block came (or the listening started): no sound when it stops. */
+    @Volatile var dernierSonMs = 0L
+        private set
+    /** Slots decoded in a row with nothing in them, since the start. */
+    @Volatile var sansDecodage = 0
+        private set
 
     private val decodeur = Executors.newSingleThreadExecutor { r -> Thread(r, "satme-ft8").apply { isDaemon = true } }
     private var facteur = 1
@@ -69,15 +75,17 @@ class Ft8Pc(private val horloge: () -> Long = System::currentTimeMillis) {
     @Synchronized fun demarre(m: String = mode) {
         mode = if (m == "FT4") "FT4" else "FT8"
         enMarche = true; premiere = true; trancheCourante = -1L; ecrit = 0; cadence = 0
+        dernierSonMs = horloge(); sansDecodage = 0
     }
 
     @Synchronized fun arrete() { enMarche = false }
 
-    @Synchronized fun vide() { entendus = emptyList(); tranches = 0 }
+    @Synchronized fun vide() { entendus = emptyList(); tranches = 0; sansDecodage = 0 }
 
     /** A block of the card's sound. */
     @Synchronized fun ecoute(pcm: ShortArray, n: Int, rate: Int) {
         if (!enMarche) return
+        dernierSonMs = horloge()
         if (cadence == 0 || cadence != rate / facteur) {
             facteur = Math.round(rate / 12_000.0).toInt().coerceAtLeast(1)
             cadence = rate / facteur
@@ -114,6 +122,9 @@ class Ft8Pc(private val horloge: () -> Long = System::currentTimeMillis) {
     /** How far into the current slot (0..1), for the page's bar. */
     fun avancement(): Float = (horloge() % dureeTranche()).toFloat() / dureeTranche()
 
+    /** Since the card's last block, for the reception's diagnostic. */
+    fun sonDepuisMs(): Long = horloge() - dernierSonMs
+
     private fun decode(audio: FloatArray, cadence: Int, sig: Ft8Signal.Mode, m: String, debut: Long) {
         val l = runCatching { Ft8Decodeur.decode(audio, cadence.toDouble(), sig) }.getOrDefault(emptyList())
         val nouveaux = l.map {
@@ -124,6 +135,7 @@ class Ft8Pc(private val horloge: () -> Long = System::currentTimeMillis) {
             // Newest first, capped: an evening of listening would otherwise hold thousands of lines.
             entendus = (nouveaux + entendus).take(500)
             tranches++
+            sansDecodage = if (nouveaux.isEmpty()) sansDecodage + 1 else 0
         }
     }
 
