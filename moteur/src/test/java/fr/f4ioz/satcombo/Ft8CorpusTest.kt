@@ -1,0 +1,127 @@
+/*
+ * SatMe — amateur radio satellite tracking
+ * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
+ * SPDX-License-Identifier: GPL-2.0-or-later
+ *
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
+ */
+package fr.f4ioz.satcombo
+
+import fr.f4ioz.satcombo.domain.Ft8Decodeur
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+/**
+ * The measurement corpus: every scenario of [Ft8Banc] decoded, the score
+ * printed, and only the **floors** asserted — what the decoder already does.
+ *
+ * It never fails on an improvement, it fails on a regression. When the
+ * decoder gets better, raise the floors here, never lower them to pass.
+ *
+ * False decodes (a message nobody sent) are held to the baseline, and to
+ * zero on noise: a decoder that invents is worse than one that misses.
+ */
+class Ft8CorpusTest {
+
+    data class Mesure(val nom: String, val trouves: Int, val attendus: Int, val faux: List<String>, val ms: Long)
+
+    /** Decodes one scenario as the stations would: the slot's audio, what is known about it. */
+    private fun mesure(s: Ft8Banc.Scenario, p: Ft8Decodeur.Profondeur? = PROFONDEUR): Mesure {
+        val audio = Ft8Banc.audio(s)
+        val t0 = System.nanoTime()
+        val r = Ft8Decodeur.decode(audio, s.mode.cadenceHz, s.mode,
+            penteHzS = if (s.penteConnue) s.penteCommuneHzS else 0.0, profondeur = p,
+            apriori = s.moi?.let { Ft8Decodeur.Apriori(it, s.partenaire!!, s.rapportsEchanges) })
+        val ms = (System.nanoTime() - t0) / 1_000_000
+        val lus = r.map { it.message.brut }
+        val attendus = s.attendus
+        return Mesure(s.nom, lus.count { it in attendus }, attendus.size, lus.filter { it !in attendus }, ms)
+    }
+
+    /** The budget measured and held to the floors: SatMe-PC's. */
+    private val PROFONDEUR = Ft8Decodeur.Profondeur.PROFONDE
+
+    /**
+     * Minimum decodes per scenario: the baseline, raised as the decoder improves.
+     *
+     * Lowered once, on purpose: "pente_connue_et_propre" lost a word read by
+     * hard decisions with 11 of 21 sync symbols right, now refused (noise
+     * candidates reach 10); see `Ft8Decodeur.synchroFranche`.
+     */
+    private val PLANCHERS = mapOf(
+        "forts" to 10, "moyens" to 12, "faibles" to 9, "tres_faibles" to 3,
+        "bande_chargee" to 23, "chevauchement" to 8, "fort_masque_faible" to 6,
+        "doppler_connu_-1.0Hz/s" to 8, "doppler_connu_1.0Hz/s" to 8,
+        "doppler_connu_-3.0Hz/s" to 8, "doppler_connu_3.0Hz/s" to 8,
+        "doppler_inconnu_1Hz/s" to 8, "pentes_propres_2Hz/s" to 8, "pente_connue_et_propre" to 8,
+        "indicatifs_composes" to 5, "qso_rapport" to 3, "qso_r_rapport" to 2, "qso_rr73" to 3,
+        "qso_rr73_trop_tot" to 2, "ft4" to 8,
+    )
+
+    @Test
+    fun le_corpus_ne_recule_pas() {
+        // One run unmeasured: the JIT would otherwise be charged to the first scenario.
+        Ft8Decodeur.decode(Ft8Banc.audio(Ft8Banc.corpus().first()), 12_800.0)
+        val mesures = Ft8Banc.corpus().map { mesure(it) }
+        val texte = StringBuilder("\nCorpus FT8 : scénario | décodés/attendus | faux | ms\n")
+        for (m in mesures) texte.append("%-26s %3d/%-3d  faux %d  %5d ms%s\n".format(
+            m.nom, m.trouves, m.attendus, m.faux.size, m.ms,
+            if (m.faux.isEmpty()) "" else "  " + m.faux.joinToString(" | ")))
+        texte.append("TOTAL %d/%d, faux %d, %d ms\n".format(mesures.sumOf { it.trouves },
+            mesures.sumOf { it.attendus }, mesures.sumOf { it.faux.size }, mesures.sumOf { it.ms }))
+        // The other budgets, in short: what the phone and a busy PC get, and what it costs.
+        for (p in listOf(Ft8Decodeur.Profondeur.LEGERE, Ft8Decodeur.Profondeur.NORMALE)) {
+            val m = Ft8Banc.corpus().map { mesure(it, p) }
+            texte.append("%-9s %d/%d, faux %d, %d ms (pire tranche %d ms)\n".format(p.name, m.sumOf { it.trouves },
+                m.sumOf { it.attendus }, m.sumOf { it.faux.size }, m.sumOf { it.ms }, m.maxOf { it.ms }))
+            assertTrue("$p : faux décodages " + m.filter { it.faux.isNotEmpty() }.map { it.nom + "=" + it.faux }, m.all { it.faux.isEmpty() })
+        }
+        texte.append("%-9s pire tranche %d ms\n".format(PROFONDEUR.name, mesures.maxOf { it.ms }))
+        println(texte)
+
+        for (m in mesures) {
+            val plancher = PLANCHERS[m.nom] ?: 0
+            assertTrue("${m.nom} : ${m.trouves} décodés, il en faut au moins $plancher", m.trouves >= plancher)
+            assertTrue("${m.nom} : faux décodages ${m.faux}", m.faux.isEmpty())
+        }
+    }
+
+    @Test
+    fun la_derive_propre_dune_station_est_rendue() {
+        // 2 Hz/s known for the slot, 1.5 Hz/s more of its own.
+        val st = Ft8Banc.station("CQ", "F4IOZ", "JN18", 1200.0, -8.0, pente = 1.5)
+        val s = Ft8Banc.Scenario("derive", listOf(st), penteCommuneHzS = 2.0, graine = 77)
+        val r = Ft8Decodeur.decode(Ft8Banc.audio(s), s.mode.cadenceHz, s.mode, penteHzS = 2.0,
+            profondeur = Ft8Decodeur.Profondeur.PROFONDE)
+        assertTrue(r.joinToString { it.message.brut }, r.size == 1 && r[0].message.brut == "CQ F4IOZ JN18")
+        assertTrue("pente ${r[0].penteHzS}", kotlin.math.abs(r[0].penteHzS - 3.5) <= 0.5)
+    }
+
+    @Test
+    fun lattente_dun_qso_ne_fabrique_rien_du_bruit() {
+        // Expected messages, a lower sync threshold, every budget: still nothing out of noise.
+        val ap = Ft8Decodeur.Apriori("F4IOZ", "EA4AB", rapportsEchanges = true, carrePartenaire = "IN80")
+        for (g in 1..16) {
+            val s = Ft8Banc.Scenario("bruit", emptyList(), graine = 700L + g,
+                porteuses = if (g % 4 == 0) listOf(1310.0) else emptyList())
+            for (p in Ft8Decodeur.Profondeur.values()) {
+                val r = Ft8Decodeur.decode(Ft8Banc.audio(s), s.mode.cadenceHz, s.mode, profondeur = p, apriori = ap)
+                assertTrue("graine $g, $p : ${r.map { it.message.brut }}", r.isEmpty())
+            }
+        }
+    }
+
+    @Test
+    fun un_partenaire_sous_le_seuil_est_lu_par_attente_et_marque() {
+        val s = Ft8Banc.corpus().first { it.nom == "qso_rapport" }
+        val r = Ft8Decodeur.decode(Ft8Banc.audio(s), s.mode.cadenceHz, s.mode,
+            profondeur = Ft8Decodeur.Profondeur.PROFONDE, apriori = Ft8Decodeur.Apriori("F4IOZ", "EA4AB"))
+        val p = r.single { it.message.appelant == "EA4AB" }
+        assertTrue(p.ap)
+        assertTrue(r.filter { it !== p }.none { it.ap })
+        // Without the QSO, not read at all.
+        val sans = Ft8Decodeur.decode(Ft8Banc.audio(s), s.mode.cadenceHz, s.mode, profondeur = Ft8Decodeur.Profondeur.PROFONDE)
+        assertTrue(sans.none { it.message.appelant == "EA4AB" })
+    }
+}

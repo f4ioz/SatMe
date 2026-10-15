@@ -860,6 +860,7 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 val f = son?.ft8 ?: return JSONObject().put("ok", false)
                 when {
                     q["vide"] == "1" -> f.vide()
+                    q["tranches"] != null -> f.enregistreTranches = q["tranches"] == "1"
                     q["on"] == "1" -> { if (son.son.etat.value.actif) f.demarre(q["mode"] ?: f.mode) else return JSONObject().put("ok", false).put("erreur", "démarre d'abord la carte son (onglet Son)") }
                     q["on"] == "0" -> f.arrete()
                     q["mode"] != null -> if (f.enMarche) f.demarre(q["mode"]!!) else f.demarre(q["mode"]!!).also { f.arrete() }
@@ -1155,6 +1156,7 @@ object JsonPc {
                 e.frequenceHz, e.rapportDb, e.decalageS, e.mode) },
             st.etat.value.indicatif.uppercase(), st.etat.value.observateur, faits, paysFaits, carresFaits,
             guettees = fr.f4ioz.satcombo.domain.Ft8Veille.lit(st.stockage), sonDepuisMs = f.sonDepuisMs(), sansDecodage = f.sansDecodage)
+            .put("enregistreTranches", f.enregistreTranches)
     }
 
     /** APRS heard: the frames (newest first) and what they add up to. */
