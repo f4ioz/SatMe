@@ -38,7 +38,7 @@ object PagePc {
     private fun contenu(nom: String, icone: String) = IconesPc.svg(icone) + "<span>$nom</span>"
 
     /** The settings categories' icons, for the page's script. */
-    private fun icones(): String = org.json.JSONObject(listOf("person", "radio", "satellite_alt", "public", "smartphone", "save", "tune", "straighten")
+    private fun icones(): String = org.json.JSONObject(listOf("person", "radio", "satellite_alt", "public", "smartphone", "save", "tune", "straighten", "mic")
         .associateWith { IconesPc.svg(it, "ico-reg") }).toString()
 
     /** The tabs that are pages of their own (served apart), with what they are. */
@@ -324,6 +324,14 @@ object PagePc {
   @keyframes o-leila { from { opacity:1; } to { opacity:.55; } }
   .o-balise b { font-family:ui-monospace,Consolas,monospace; font-size:16px; }
   .o-puces { display:flex; gap:6px; flex-wrap:wrap; }
+  .ph-fil { margin-top:8px; max-height:340px; overflow-y:auto; display:flex; flex-direction:column; gap:6px; }
+  .ph-b { background:#0E1720; border-radius:10px; padding:6px 9px; border-left:3px solid var(--bord); }
+  .ph-t { font-size:12px; color:var(--gris); }
+  .ph-x { font-size:15px; line-height:1.45; word-break:break-word; }
+  .ph-tr { font-style:italic; color:var(--gris); font-size:13px; margin-top:2px; }
+  .ph-ch { display:inline-block; margin:4px 4px 0 0; padding:2px 8px; border-radius:12px; border:1px solid var(--cyan); color:var(--cyan); font-weight:700; font-size:13px; cursor:pointer; background:none; }
+  .ph-ch.connu { background:rgba(63,224,200,.16); }
+  .ph-i { color:var(--cyan); font-weight:800; } .ph-c { color:var(--ambre); font-weight:700; } .ph-r { color:var(--vert); font-weight:700; }
   .o-puces button { padding:4px 9px; font-size:12px; font-weight:600; }
   .o-puces button.ici { background:var(--cyan); color:#06131A; border-color:var(--cyan); }
   .o-puces button.perso { border-color:var(--ambre); }
@@ -529,6 +537,21 @@ object PagePc {
           <span class="petit">Un indicatif décodé : un clic le met dans la saisie.</span></div>
       </div>
     </div>
+    <div id="ph-slot-carnet"><div class="carte" id="ph-carte" hidden>
+      <div class="ligne" style="margin:0"><label><input type="checkbox" id="ph-on" onchange="phRegle('on=' + (this.checked ? 1 : 0))"> <b>Phonie → texte</b></label>
+        <span id="ph-led" title="Voix entendue" style="width:12px;height:12px;border-radius:6px;background:#22303C;display:inline-block"></span>
+        <span class="petit" id="ph-info"></span>
+        <span style="margin-left:auto;display:flex;gap:4px"><a id="ph-export" href="phonie/journal" download title="Le texte transcrit du jour"><button style="padding:3px 9px">⤓</button></a>
+          <button style="padding:3px 9px" onclick="phRegle('efface=1')" title="Vider la fenêtre (le fichier du jour reste)">✕</button></span></div>
+      <div class="avert" id="ph-erreur"></div>
+      <div id="ph-corps" hidden>
+        <div class="ligne"><select id="ph-langue" style="flex:none" onchange="phRegle('langue=' + this.value)"><option value="">langue trouvée seule</option><option value="fr">français</option><option value="en">anglais</option><option value="de">allemand</option><option value="es">espagnol</option><option value="it">italien</option><option value="pl">polonais</option></select>
+          <select id="ph-source" style="flex:none" onchange="phRegle('source=' + this.value)"><option value="auto">clé SDR si elle joue, sinon carte son</option><option value="carte">carte son</option><option value="sdr">clé SDR</option></select>
+          <label class="petit"><input type="checkbox" id="ph-trad" onchange="phRegle('traduire=' + (this.checked ? 1 : 0))"> traduire en anglais</label></div>
+        <div id="ph-fil" class="ph-fil"></div>
+        <div class="petit" style="margin-top:4px">Un indicatif trouvé : un clic prépare le contact dans le carnet, avec le carré et le report entendus. Plus le texte est pâle, moins le moteur est sûr.</div>
+      </div>
+    </div></div>
     <div class="carte">
       <div class="t">Carnet</div>
       <div class="paire"><span><span class="val" id="c-nb">0</span> <span class="petit">contacts</span></span>
@@ -984,6 +1007,7 @@ object PagePc {
       <div class="petit" style="margin-top:6px">Les fréquences de gauche sont celles du ciel ; le poste travaille en fréquence intermédiaire, après les convertisseurs de la chaîne. Pas de Doppler ici : le poste n'est écrit que quand tu bouges. Tant que la case est cochée, le Doppler du satellite suivi est en pause.</div>
       <div class="petit" style="margin-top:4px">La clé se démarre dans l'onglet SDR ; elle suit alors cette fréquence, en BLU, et montre tout le transpondeur dans le panorama.</div>
     </div>
+    <div id="ph-slot-qo100"></div>
   </div>
   <div class="col3">
     <div class="carte">
@@ -1090,6 +1114,7 @@ object PagePc {
         <div class="petit" style="margin-top:4px">Réception seulement : SatMe ne règle que son côté réception (oscillateur, débit, bande, gain) et n'émet jamais.</div>
       </details>
     </div>
+    <div id="ph-slot-sdr"></div>
   </div>
   <div class="carte r-droite">
     <div class="paire"><span class="o-freq" id="r-freq">—</span><span class="petit" id="r-detail"></span></div>
@@ -1347,6 +1372,18 @@ object PagePc {
         <button onclick="regleLien('port=' + enc(v('lien-port')))">Appliquer</button><span class="petit" id="lien-etat"></span></div>
       <div class="petit" style="margin-top:6px">Chaque seconde le satellite suivi (azimut, élévation, distance, fréquences et Doppler), les alertes de passage (AOS dans 5 min, AOS, LOS) et chaque contact noté au carnet, en JSON. Rien n'est accepté en retour. Sur ce PC seulement, sauf si SatMe-PC est lancé avec --reseau.</div>
     </div>
+    <div class="carte" id="phr-carte" hidden>
+      <div class="t">Phonie → texte</div>
+      <div class="petit">La voix entendue (carte son ou clé SDR) écrite au fil de l'écoute, avec les indicatifs, carrés et reports trouvés : une fenêtre dans les onglets SDR, QO-100 et Carnet. Le moteur (faster-whisper, en Python) tourne sur ce PC : rien ne part sur Internet pendant l'écoute. Coupé par défaut : rien ne démarre sans la case de la fenêtre.</div>
+      <div class="ligne"><span class="petit" style="min-width:80px">Modèle</span><select id="phr-modele" onchange="phrRegle('modele=' + this.value)"></select></div>
+      <div class="ligne"><span class="petit" style="min-width:80px">Calcul</span><select id="phr-calcul" onchange="phrRegle('calcul=' + this.value)"><option value="auto">carte NVIDIA si elle répond, sinon processeur</option><option value="cuda">carte NVIDIA (CUDA)</option><option value="cpu">processeur</option></select></div>
+      <div class="ligne"><span class="petit" style="min-width:80px">Python</span><input id="phr-python" placeholder="celui de SatMe (stt/)"><button onclick="phrRegle('python=' + enc(g('phr-python').value.trim()))">Enregistrer</button></div>
+      <div class="petit" id="phr-etat" style="margin-top:6px"></div>
+      <div class="ligne"><button class="primaire" id="phr-installe" onclick="phrInstalle()">Installer le moteur</button><button id="phr-verifie" onclick="phrRegle('verifie=1')">Vérifier</button></div>
+      <div class="petit" style="margin-top:4px">Le bouton télécharge depuis PyPI faster-whisper et ce qu'il lui faut (environ 150 Mo) et, si une carte NVIDIA répond, ses bibliothèques cuBLAS et cuDNN (environ 1,3 Go de plus) ; puis le modèle choisi depuis Hugging Face. Tout va dans <code>stt/</code> du dossier de SatMe ; rien n'est téléchargé sans ce bouton. Il faut Python 3.9 ou plus récent (sous Debian/Ubuntu : python3-venv).</div>
+      <div class="etat" id="phr-etape"></div>
+      <pre id="phr-journal" hidden style="max-height:180px;overflow:auto;font-size:11px;background:#0E1720;padding:6px;border-radius:8px;white-space:pre-wrap;word-break:break-all;margin:6px 0 0"></pre>
+    </div>
     <div class="carte" id="carteTelephone">
       <div class="t">Téléphone</div>
       <div class="petit">Reprendre les réglages du téléphone (Réglages → Sauvegarde, fichier .json) :</div>
@@ -1570,6 +1607,120 @@ function rendCw() {
   if (bas) t.scrollTop = t.scrollHeight;
 }
 setInterval(() => { if (!g('v-carnet').hidden) ticCw(); }, 1000);
+
+// « Phonie → texte »: one window, moved into the tab shown (SDR, QO-100, Carnet); the voice heard, over by over.
+let PH = null, phDernier = 0, phListe = [], phTour = 0;
+const PH_DRAPEAU = { fr: 'FR', en: 'GB', de: 'DE', es: 'ES', it: 'IT', pl: 'PL', pt: 'PT', nl: 'NL', cs: 'CZ', sk: 'SK', ru: 'RU', uk: 'UA', ja: 'JP', hu: 'HU', ro: 'RO', el: 'GR', sv: 'SE', fi: 'FI', da: 'DK', no: 'NO', hr: 'HR', sl: 'SI', tr: 'TR', zh: 'CN', ca: 'ES' };
+function phPlace() {
+  const n = ['sdr', 'qo100', 'carnet'].find(t => !g('v-' + t).hidden);
+  if (!n) return null;
+  const slot = g('ph-slot-' + n), c = g('ph-carte');
+  if (c.parentNode !== slot) slot.appendChild(c);
+  return n;
+}
+async function ticPhonie(force) {
+  if (!phPlace()) return;
+  // Off: a look every 5 s is enough.
+  if (!force && PH && !PH.on && (++phTour % 5)) return;
+  let j = null;
+  try { j = await (await fetch('api/phonie?depuis=' + phDernier)).json(); } catch (x) {}
+  if (!j || !j.present) { g('ph-carte').hidden = true; return; }
+  PH = j;
+  if (j.dernier < phDernier) { phDernier = 0; phListe = []; return ticPhonie(true); }
+  let neuf = false;
+  if (j.bulles.length) { phListe = phListe.concat(j.bulles).slice(-80); phDernier = j.bulles[j.bulles.length - 1].id; neuf = true; }
+  if (phListe.length && phListe[0].id < j.premier) { phListe = phListe.filter(b => b.id >= j.premier); neuf = true; }
+  rendPhonie(neuf);
+}
+function rendPhonie(neuf) {
+  const j = PH; if (!j) return;
+  g('ph-carte').hidden = false;
+  if (document.activeElement !== g('ph-on')) g('ph-on').checked = j.on;
+  g('ph-corps').hidden = !j.on;
+  g('ph-led').style.background = j.on && j.voix ? 'var(--vert)' : '#22303C';
+  if (document.activeElement !== g('ph-langue')) g('ph-langue').value = j.langue;
+  if (document.activeElement !== g('ph-source')) g('ph-source').value = j.source;
+  g('ph-trad').checked = j.traduire;
+  const etat = { 'coupé': 'coupé', 'démarrage': 'chargement du modèle…', 'prêt': j.info || 'prêt', 'erreur': 'en panne' }[j.etat] || j.etat;
+  const lag = (j.file || j.perdus) ? ' · retard ' + Math.round(j.retard) + ' s · ' + j.file + ' en attente' + (j.perdus ? ' · ' + j.perdus + ' perdu(s)' : '') : '';
+  txt('ph-info', etat + (j.on && j.sourceActive ? ' · ' + (j.sourceActive === 'sdr' ? 'clé SDR' : 'carte son') : '') + lag + (j.on && j.calcul ? ' · ' + String(j.calcul).replace('.', ',') + ' s par passage' : ''));
+  txt('ph-erreur', j.erreur || (!j.installe && !j.on ? 'Moteur non installé : Réglages › Phonie → texte.' : ''));
+  if (!neuf) return;
+  const f = g('ph-fil'), bas = f.scrollTop + f.clientHeight >= f.scrollHeight - 8;
+  f.innerHTML = phListe.map(phBulle).join('') || '<div class="petit" style="padding:10px">À l’écoute : chaque passage de voix s’écrira ici.</div>';
+  if (bas) f.scrollTop = f.scrollHeight;
+}
+function phBulle(b) {
+  // The text, with what was found in it lit.
+  let h = '', i = 0;
+  (b.elements || []).slice().sort((x, y) => x.d - y.d).forEach(e => {
+    if (e.d < i) return;
+    h += esc(b.texte.slice(i, e.d));
+    const cl = e.g === 'INDICATIF' ? 'ph-i' : e.g === 'CARRE' ? 'ph-c' : 'ph-r';
+    h += '<span class="' + cl + '" title="' + esc(e.v) + '">' + esc(b.texte.slice(e.d, e.f)) + '</span>';
+    i = e.f;
+  });
+  h += esc(b.texte.slice(i));
+  const carre = (b.elements || []).find(e => e.g === 'CARRE'), rep = (b.elements || []).find(e => e.g === 'REPORT');
+  const vus = {};
+  const puces = (b.elements || []).filter(e => e.g === 'INDICATIF' && !vus[e.v] && (vus[e.v] = 1)).map(e =>
+    '<button class="ph-ch' + (e.k ? ' connu' : '') + '" title="' + esc(e.pays || '') + (e.k ? ' · déjà au carnet' : '') + ' · un clic : le contact préparé" onclick="phNote(\'' + esc(e.v) + '\',\'' +
+    (carre ? esc(carre.v) : '') + '\',\'' + (rep ? esc(rep.v) : '') + '\')">' + (e.drapeau ? f8Drapeau(e.drapeau) + ' ' : '') + esc(e.v) + '</button>').join('');
+  const conf = Math.max(0, Math.min(1, b.conf || 0));
+  const fr = b.freq ? (b.freq / 1e6).toFixed(4).replace('.', ',') + ' MHz' : '';
+  return '<div class="ph-b" style="opacity:' + (0.55 + 0.45 * conf).toFixed(2) + ';border-left-color:' + (conf > 0.7 ? 'var(--vert)' : conf > 0.5 ? 'var(--ambre)' : 'var(--rose)') + '">' +
+    '<div class="ph-t">' + hm(b.t, true) + (utc() ? ' UTC' : '') + (fr ? ' · ' + fr : '') + (b.sat ? ' · ' + esc(b.sat) : '') + ' · ' +
+    (PH_DRAPEAU[b.langue] ? f8Drapeau(PH_DRAPEAU[b.langue]) + ' ' : '') + esc(b.langue) + ' · ' + Math.round(b.duree) + ' s · sûr à ' + Math.round(conf * 100) + ' %</div>' +
+    '<div class="ph-x">' + h + '</div>' + (b.traduction ? '<div class="ph-tr">' + esc(b.traduction) + '</div>' : '') + (puces ? '<div>' + puces + '</div>' : '') + '</div>';
+}
+function phNote(call, loc, rep) {
+  vue('carnet'); g('c-call').value = call;
+  if (loc) g('c-loc').value = loc;
+  if (rep) g('c-rr').value = rep;
+  g('c-call').dispatchEvent(new Event('input')); g('c-call').focus();
+}
+async function phRegle(q) {
+  if (q === 'efface=1') { phListe = []; }
+  await post('api/phonie?' + q);
+  ticPhonie(true);
+}
+setInterval(() => ticPhonie(false), 1000);
+// Its settings: the engine, the model, the installation (followed while it runs).
+let PHR = null, phrSuivi = null;
+async function chargePhonieReglages() {
+  let j = null;
+  try { j = await (await fetch('api/phonie/moteur')).json(); } catch (x) {}
+  if (!j || j.venv === undefined) { g('phr-carte').hidden = true; return; }
+  PHR = j; g('phr-carte').hidden = false;
+  const m = g('phr-modele');
+  if (m.options.length !== j.modeles.length) m.innerHTML = j.modeles.map(x => '<option value="' + x.nom + '">' + x.nom + ' (' + x.taille + ')' +
+    ({ 'large-v3': ' — le plus juste, carte NVIDIA conseillée', turbo: ' — presque aussi juste, bien plus rapide', medium: ' — moyen', small: ' — léger, pour le processeur' }[x.nom] || '') + '</option>').join('');
+  if (document.activeElement !== m) m.value = j.modele;
+  if (document.activeElement !== g('phr-calcul')) g('phr-calcul').value = j.calcul;
+  if (document.activeElement !== g('phr-python')) g('phr-python').value = j.python;
+  const v = j.verification;
+  let e = j.pythonUtilise ? 'Python : ' + j.pythonUtilise + (j.python ? '' : ' (stt/ de SatMe)') : 'Moteur non installé (' + j.venv + ' absent).';
+  if (j.gpu) e += ' · carte : ' + j.gpu;
+  if (v) e += v.ok ? ' · faster-whisper ' + v.faster_whisper + ' · CUDA : ' + (v.cuda ? v.cuda + ' carte(s)' : 'non') + ' · modèles présents : ' + (v.modeles.join(', ') || 'aucun') : ' · ' + (v.erreur || 'vérification ratée');
+  else if (j.verificationEnCours) e += ' · vérification…';
+  txt('phr-etat', e);
+  const i = j.installation;
+  g('phr-installe').disabled = i.enCours;
+  txt('phr-etape', i.erreur ? 'Échec : ' + i.erreur : i.enCours ? 'En cours : ' + i.etape + (i.mo ? ' · ' + Math.round(i.mo) + ' Mo' : '') : i.fini ? 'Moteur installé : la case « Phonie → texte » des onglets SDR, QO-100 ou Carnet le met en marche.' : '');
+  g('phr-journal').hidden = !i.lignes.length;
+  const pre = g('phr-journal'), bas = pre.scrollTop + pre.clientHeight >= pre.scrollHeight - 8;
+  const t = i.lignes.join('\n');
+  if (pre.textContent !== t) { pre.textContent = t; if (bas) pre.scrollTop = pre.scrollHeight; }
+  clearTimeout(phrSuivi);
+  if ((i.enCours || j.verificationEnCours) && !g('v-reglages').hidden) phrSuivi = setTimeout(chargePhonieReglages, 1000);
+}
+async function phrRegle(q) { await post('api/phonie/moteur?' + q); chargePhonieReglages(); if (q === 'verifie=1') setTimeout(chargePhonieReglages, 600); }
+async function phrInstalle() {
+  const m = g('phr-modele').value, t = (PHR && PHR.modeles.find(x => x.nom === m) || {}).taille || '';
+  if (!confirm('Télécharger et installer le moteur de transcription ?\n\nfaster-whisper depuis PyPI (environ 150 Mo, et environ 1,3 Go de plus avec une carte NVIDIA), puis le modèle « ' + m + ' » (' + t + ') depuis Hugging Face, dans le dossier stt/ de SatMe.')) return;
+  await post('api/phonie/moteur?installe=1');
+  setTimeout(chargePhonieReglages, 300);
+}
 // APRS's game: the trophies, and a cheer when one falls (whatever the tab).
 let TR = null, trVu = null;
 async function ticTrophees() {
@@ -1641,6 +1792,7 @@ const CATS_REG = [
   { id: 'materiel', nom: 'Poste et rotor', ico: 'radio', desc: 'CAT, TH-D72, rotor, convertisseurs', cartes: ['Poste', 'Kenwood TH-D72', 'Rotor', 'Convertisseurs', 'Journal Doppler'] },
   { id: 'satellites', nom: 'Satellites', ico: 'satellite_alt', desc: 'Éléments orbitaux, statut AMSAT, lien WebSocket', cartes: ['Éléments orbitaux', 'AMSAT', 'Lien satellite'] },
   { id: 'enligne', nom: 'Services en ligne', ico: 'public', desc: 'QRZ.com, Wavelog / Cloudlog, skeds hams.at', cartes: ['QRZ.com', 'Carnet en ligne', 'Skeds'] },
+  { id: 'phonie', nom: 'Phonie → texte', ico: 'mic', desc: 'La voix entendue écrite : moteur, modèle, installation', cartes: ['Phonie → texte'] },
   { id: 'telephone', nom: 'Téléphone', ico: 'smartphone', desc: 'SatMe sur le téléphone : réglages et contacts', cartes: ['Téléphone'] },
   { id: 'accord', nom: 'Accord fin', ico: 'tune', desc: 'Loupe, vernier, calage sur la voix (clé SDR)', cartes: ['Accord fin'] },
   { id: 'sauvegarde', nom: 'Sauvegarde', ico: 'save', desc: 'Toute la station dans un fichier, et la restaurer', cartes: ['Sauvegarde'] },
@@ -2119,6 +2271,8 @@ function vue(n) {
   document.querySelectorAll('#onglets button').forEach(b => b.classList.toggle('actif', b.dataset.v === n));
   try { localStorage.setItem('vue', n); } catch (x) {}
   if (n === 'carnet') { chargeCarnet(); g('c-call').focus(); vueCarnet(vueC); ticCw(); }
+  if (n === 'carnet' || n === 'sdr' || n === 'qo100') ticPhonie(true);
+  if (n === 'reglages') chargePhonieReglages();
   if (n === 'reglages') { rangeReglages(); majSauvegarde(); majAccordReglages(); }
   if (n === 'reglages') { chargeReglages().then(() => { if (!wlLu && v('carnetUrl')) { wlLu = true; essaiCarnet(); } }); chargeSources(); }
   if (n === 'son' || n === 'sstv') ticSon();

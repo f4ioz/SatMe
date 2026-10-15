@@ -298,6 +298,7 @@ class PhoniePc(
         .put("source", source).put("sourceActive", sourceActive).put("voix", actif && enVoix).put("file", enFile).put("perdus", perdus)
         .put("retard", Math.round(retardS() * 10) / 10.0).put("calcul", Math.round(calculMoyenS * 100) / 100.0)
         .put("installe", install.python(python) != null).put("version", version).put("dernier", dernierId())
+        .put("premier", bulles().firstOrNull()?.id ?: (dernierId() + 1))
         .put("bulles", JSONArray(bulles(depuis).takeLast(80).map { b ->
             b.json().put("elements", JSONArray(b.elements.map { e ->
                 e.json().also { j -> if (e.genre == AnalysePhonie.Genre.INDICATIF) fr.f4ioz.satcombo.domain.Dxcc.entite(e.valeur)?.let { d -> j.put("pays", d.nom).put("drapeau", d.drapeau) } }
