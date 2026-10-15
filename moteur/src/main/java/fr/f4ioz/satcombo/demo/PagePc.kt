@@ -176,6 +176,25 @@ object PagePc {
   .f8-sep td { border-top:2px solid var(--bord); }
   .f8-db { display:inline-block; width:34px; height:6px; background:#1C2A36; border-radius:3px; margin-right:4px; vertical-align:middle; overflow:hidden; }
   .f8-db i { display:block; height:100%; }
+  .m8 { display:grid; grid-template-columns:minmax(300px,380px) 1fr; gap:12px; }
+  .m8-convs { max-height:calc(100vh - 230px); overflow:auto; }
+  .m8-conv { display:flex; gap:10px; align-items:center; padding:9px 10px; border-radius:12px; cursor:pointer; border:1px solid transparent; }
+  .m8-conv:hover { background:rgba(63,224,200,.05); }
+  .m8-conv.actif { border-color:var(--cyan); background:rgba(63,224,200,.08); }
+  .m8-av { position:relative; width:40px; height:40px; flex:none; border-radius:50%; background:#0E1720; display:grid; place-items:center; font-size:20px; }
+  .m8-av i { position:absolute; right:-4px; bottom:-4px; font-size:14px; font-style:normal; }
+  .m8-n { display:inline-block; min-width:20px; padding:0 6px; border-radius:10px; background:var(--cyan); color:#06131A; font-weight:800; font-size:11px; text-align:center; }
+  .m8-fil { height:calc(100vh - 260px); overflow:auto; padding:6px 4px; background:linear-gradient(180deg, rgba(14,23,32,.5), transparent); border-radius:10px; }
+  .m8-heure { text-align:center; font-size:10px; color:var(--gris); margin:10px 0 4px; }
+  .m8-ligne { display:flex; margin:3px 0; }
+  .m8-ligne.droite { justify-content:flex-end; }
+  .m8-bulle { max-width:78%; padding:7px 11px; border-radius:16px 16px 16px 4px; background:#16232E; border:1px solid var(--bord); }
+  .m8-bulle.droite { border-radius:16px 16px 4px 16px; background:#12302D; border-color:rgba(63,224,200,.35); }
+  .m8-bulle.moi { border-color:var(--rose); }
+  .m8-qui { font-size:12px; margin-bottom:2px; }
+  .m8-txt { font-family:ui-monospace,Consolas,monospace; font-size:15px; }
+  .m8-ico { font-family:system-ui; }
+  @media (max-width:900px) { .m8 { grid-template-columns:1fr; } }
   a.bouton { font-size:13px; font-weight:700; border-radius:8px; border:1px solid var(--bord); background:#0E1720; color:var(--clair); padding:6px 9px; text-decoration:none; white-space:nowrap; }
   button:disabled { opacity:.45; cursor:default; }
   .primaire { background:var(--cyan); color:#06131A; border:none; }
@@ -1144,12 +1163,17 @@ object PagePc {
         <button onclick="post('api/ft8?vide=1').then(() => { f8Lignes = []; f8Total = 0; })">Effacer</button>
         <input id="8-filtre" placeholder="Filtrer : indicatif, pays, carré…" style="max-width:220px">
         <label class="petit"><input type="checkbox" id="8-cq"> CQ seulement</label>
-        <span class="petit" id="8-etat" style="margin-left:auto"></span>
+        <span class="bascule-c" style="margin-left:auto"><button id="8-b-tableau" class="actif" onclick="f8Montre('tableau')">📊 Tableau</button><button id="8-b-messages" onclick="f8Montre('messages')">💬 Messages</button></span>
+        <span class="petit" id="8-etat"></span>
       </div>
       <div class="f8-puces" id="8-puces"></div>
     </div>
   </div>
-  <div class="f8-grille">
+  <div class="m8" id="8-messages" hidden>
+    <div class="carte" style="margin:0"><div class="t" style="margin-top:0">Conversations</div><div class="m8-convs" id="8-convs"></div></div>
+    <div class="carte" style="margin:0"><div class="t" style="margin-top:0" id="8-fil-titre"></div><div class="m8-fil" id="8-fil"></div></div>
+  </div>
+  <div class="f8-grille" id="8-tableau">
     <div class="carte f8-cascade-boite">
       <div class="paire" style="margin:0 0 6px"><b>Cascade</b><span class="petit" id="8-libre"></span><span class="petit" style="margin-left:auto">Les indicatifs décodés écrits à leur fréquence, dans leur créneau</span></div>
       <div style="position:relative"><canvas id="8-cascade" style="width:100%;height:420px;display:block;border-radius:8px;background:#05070D;cursor:crosshair"></canvas></div>
@@ -3824,7 +3848,7 @@ async function ticFt8() {
   txt('8-etat', !H.carte ? 'carte son arrêtée (onglet Son)' : H.enMarche ? H.tranches + ' créneaux · niveau ' + Math.round(H.niveau * 100) + ' %' : 'à l’arrêt');
   // The page served by the phone has no stream of rows: its whole waterfall each time.
   if (f8Complete && H.cascade) { f8Lignes = H.cascade.slice().reverse().map(b => Uint8Array.from(atob(b), ch => ch.charCodeAt(0))); f8Fin = Date.now(); f8Pas = 128; dessineCascade(); }
-  dessineAnneau(); puces(); opportunites(); listeFt8();
+  dessineAnneau(); puces(); opportunites(); listeFt8(); messagesFt8();
 }
 async function ticCascade() {
   if (g('v-ft8').hidden || f8Complete) return;
@@ -3993,6 +4017,65 @@ function dessineRadar() {
   txt('8-radar-info', l.length ? l.length + ' stations placées · cercle extérieur ' + echelle.toLocaleString() + ' km' : '');
 }
 setInterval(() => { if (!g('v-ft8').hidden && H) dessineRadar(); }, 120);
+// The messages, as a messenger: the conversations between two stations (both sides gathered),
+// and the stream as it comes. Each message read for what it is: a call, a square, a report, the end.
+let f8Vue = 'tableau', f8Conv = null, f8MsgVu = '';
+function f8Montre(v) {
+  f8Vue = v;
+  g('8-tableau').hidden = v !== 'tableau'; g('8-messages').hidden = v !== 'messages';
+  g('8-b-tableau').classList.toggle('actif', v === 'tableau'); g('8-b-messages').classList.toggle('actif', v === 'messages');
+  try { localStorage.setItem('ft8-vue', v); } catch (x) {}
+  f8MsgVu = ''; if (H) messagesFt8();
+}
+// What a message says, from its last word.
+function f8Genre(e) {
+  const m = e.texte.trim().split(/\s+/), fin = m[m.length - 1] || '';
+  if (/^CQ\b/.test(e.texte)) return ['📣', 'appel', 'cq'];
+  if (fin === 'RR73' || fin === '73') return ['🤝', fin === 'RR73' ? 'bien reçu, 73' : '73', 'fin'];
+  if (fin === 'RRR') return ['✅', 'bien reçu', 'fin'];
+  if (/^R[+-]\d+$/.test(fin)) return ['✅', 'report reçu ' + fin.slice(1) + ' dB', 'r'];
+  if (/^[+-]\d+$/.test(fin)) return ['📶', 'report ' + fin + ' dB', 'rapport'];
+  if (e.loc) return ['📍', 'carré ' + e.loc, 'carre'];
+  return ['💬', '', 'autre'];
+}
+function f8Paire(e) { return e.de && e.a ? [e.de, e.a].sort().join('|') : null; }
+function messagesFt8() {
+  if (f8Vue !== 'messages' || !H) return;
+  const l = H.entendus.slice().reverse();                               // oldest first
+  const drap = new Map(); for (const e of l) if (e.de) drap.set(e.de, e);
+  // The conversations: two stations, every message either sent; done when one says RR73 / 73 / RRR.
+  const convs = new Map();
+  for (const e of l) { const k = f8Paire(e); if (!k) continue;
+    const c = convs.get(k) || { k: k, msgs: [], fin: false }; c.msgs.push(e); if (f8Genre(e)[2] === 'fin') c.fin = true; convs.set(k, c); }
+  const liste = [...convs.values()].sort((a, b) => b.msgs[b.msgs.length - 1].t - a.msgs[a.msgs.length - 1].t);
+  const cle = JSON.stringify([liste.length, l.length, l.length ? l[l.length - 1].t + l[l.length - 1].texte : '', f8Conv]);
+  if (cle === f8MsgVu) return;
+  f8MsgVu = cle;
+  const fl = c => f8Drapeau((drap.get(c) || {}).drapeau);
+  const heure = t => new Date(t).toISOString().slice(11, 16);
+  g('8-convs').innerHTML = '<div class="m8-conv' + (f8Conv == null ? ' actif' : '') + '" onclick="f8Conv=null;f8MsgVu=\'\';messagesFt8()"><span class="m8-av">📡</span><span style="flex:1;min-width:0"><b>Au fil de l’eau</b><br><span class="petit">tous les messages, comme ils arrivent</span></span></div>' +
+    liste.map(c => { const [a, b] = c.k.split('|'), der = c.msgs[c.msgs.length - 1], gr = f8Genre(der);
+      return '<div class="m8-conv' + (f8Conv === c.k ? ' actif' : '') + '" onclick="f8Conv=\'' + c.k + '\';f8MsgVu=\'\';messagesFt8()">' +
+        '<span class="m8-av">' + fl(a) + '<i>' + fl(b) + '</i></span><span style="flex:1;min-width:0"><b>' + esc(a) + ' ⇄ ' + esc(b) + '</b>' + (c.fin ? ' <span style="color:var(--vert)" title="QSO bouclé">✓</span>' : '') +
+        '<br><span class="petit">' + gr[0] + ' ' + esc(der.de) + ' : ' + esc(gr[1] || der.texte) + '</span></span><span class="petit" style="text-align:right">' + heure(der.t) + '<br><span class="m8-n">' + c.msgs.length + '</span></span></div>'; }).join('');
+  // The thread: one conversation as bubbles (one station left, the other right), or the stream.
+  const c = f8Conv ? convs.get(f8Conv) : null;
+  const msgs = c ? c.msgs : l.slice(-120);
+  const gauche = c ? c.k.split('|')[0] : null;
+  txt('8-fil-titre', c ? c.k.replace('|', ' ⇄ ') + (c.fin ? ' · QSO bouclé ✓' : ' · en cours') : 'Au fil de l’eau · ' + l.length + ' messages');
+  let avant = 0;
+  g('8-fil').innerHTML = msgs.map(e => {
+    const gr = f8Genre(e), droite = c ? e.de !== gauche : false, coul = e.moi ? 'var(--rose)' : gr[2] === 'cq' ? 'var(--vert)' : gr[2] === 'fin' ? 'var(--cyan)' : 'var(--clair)';
+    const sep = e.t !== avant ? '<div class="m8-heure">' + new Date(e.t).toISOString().slice(11, 19) + ' UTC</div>' : ''; avant = e.t;
+    return sep + '<div class="m8-ligne' + (droite ? ' droite' : '') + '"><div class="m8-bulle' + (droite ? ' droite' : '') + (e.moi ? ' moi' : '') + '">' +
+      '<div class="m8-qui">' + f8Drapeau(e.drapeau) + ' <b style="color:' + coul + '">' + esc(e.de || '?') + '</b>' + (e.a && !c ? ' <span class="petit">→ ' + esc(e.a) + '</span>' : '') +
+      ' <span class="petit">' + (e.db > 0 ? '+' : '') + e.db + ' dB · ' + e.hz + ' Hz</span></div>' +
+      '<div class="m8-txt"><span class="m8-ico" title="' + esc(gr[1]) + '">' + gr[0] + '</span> ' + esc(e.texte) + '</div>' +
+      (gr[1] ? '<div class="petit">' + esc(gr[1]) + (e.km != null && gr[2] !== 'fin' ? ' · ' + e.km.toLocaleString() + ' km' : '') + '</div>' : '') + '</div></div>';
+  }).join('') || '<div class="petit" style="padding:20px">' + (H.enMarche ? 'rien encore' : 'à l’écoute, les messages arriveront ici') + '</div>';
+  const fil = g('8-fil'); fil.scrollTop = fil.scrollHeight;
+}
+try { if (localStorage.getItem('ft8-vue') === 'messages') f8Montre('messages'); } catch (x) {}
 async function ft8Marche() { await post('api/ft8?on=' + (H && H.enMarche ? 0 : 1) + '&mode=' + g('8-mode').value); ticFt8(); }
 function noteFt8(call, loc, db) {
   vue('carnet'); g('c-call').value = call; g('c-loc').value = loc || '';
