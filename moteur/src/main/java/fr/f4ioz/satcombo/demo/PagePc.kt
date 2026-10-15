@@ -1047,7 +1047,7 @@ object PagePc {
 <div class="grille2" id="r-grille">
   <div>
     <div class="carte">
-      <div class="t">Clé SDR (rtl_tcp) <span id="r-pastille" class="pastille coupe">arrêtée</span></div>
+      <div class="t"><span id="r-titre">Clé SDR (rtl_tcp)</span> <span id="r-pastille" class="pastille coupe">arrêtée</span></div>
       <div class="ligne" style="margin-top:0"><button class="primaire" data-marche="r" onclick="post('api/sdr/demarrer').then(ticSdr)">Démarrer</button>
         <button class="arret" data-arret="r" hidden onclick="post('api/sdr/arreter').then(ticSdr)">Arrêter</button><span class="petit" id="r-info"></span></div>
       <div class="avert" id="r-erreur"></div>
@@ -1070,9 +1070,11 @@ object PagePc {
       <div class="petit" style="margin-top:4px">Le son de la clé va aussi aux décodeurs (onglets SSTV, APRS, FT8) et à l'enregistrement, à la place de la carte son.</div>
     </div>
     <div class="carte">
-      <div class="t">La clé</div>
-      <div class="ligne" style="margin-top:0"><span class="petit" style="min-width:70px">Gain</span><select id="r-gain" onchange="rRegle('gain=' + this.value)"></select>
-        <label class="petit"><input type="checkbox" id="r-agc" onchange="rRegle('agc=' + (this.checked ? 1 : 0))"> CAG numérique</label></div>
+      <div class="t" id="r-cle-t">La clé</div>
+      <div class="ligne" style="margin-top:0"><span class="petit" style="min-width:70px">Récepteur</span>
+        <select id="r-recepteur" onchange="rRegle('recepteur=' + this.value)"><option value="rtl">Clé RTL-SDR (rtl_tcp)</option><option value="pluto">ADALM-PLUTO (réseau)</option></select></div>
+      <div class="ligne"><span class="petit" style="min-width:70px">Gain</span><select id="r-gain" onchange="rRegle('gain=' + this.value)"></select>
+        <label class="petit" id="r-agc-l"><input type="checkbox" id="r-agc" onchange="rRegle('agc=' + (this.checked ? 1 : 0))"> CAG numérique</label></div>
       <div class="ligne"><span class="petit" style="min-width:70px">Erreur</span><input id="r-ppm" style="max-width:70px"><span class="petit">ppm</span><button onclick="rRegle('ppm=' + enc(v('r-ppm')))">Appliquer</button></div>
       <details style="margin-top:6px" id="r-liaison"><summary class="petit" style="cursor:pointer">Liaison rtl_tcp</summary>
         <div class="ligne"><input id="r-hote" placeholder="127.0.0.1" style="max-width:160px"><input id="r-port" placeholder="1234" style="max-width:80px">
@@ -1080,6 +1082,12 @@ object PagePc {
         <label class="petit" style="display:block;margin-top:4px"><input type="checkbox" id="r-lance" onchange="rRegle('lance=' + (this.checked ? 1 : 0))"> Lancer rtl_tcp sur ce PC (la clé y est branchée)</label>
         <label class="petit" style="display:block;margin-top:4px"><input type="checkbox" id="r-bias" onchange="rRegle('bias=' + (this.checked ? 1 : 0))"> Alimenter l'antenne (bias-tee, préampli ou LNB ; clés qui l'ont)</label>
         <div class="petit" style="margin-top:4px">Une clé sur une autre machine : y lancer <code>rtl_tcp -a 0.0.0.0</code>, puis donner son adresse ici.</div>
+      </details>
+      <details style="margin-top:6px" id="r-liaison-pluto" hidden><summary class="petit" style="cursor:pointer">Liaison ADALM-PLUTO</summary>
+        <div class="ligne"><input id="r-pluto-hote" placeholder="192.168.2.1" style="max-width:160px"><input id="r-pluto-port" placeholder="30431" style="max-width:80px">
+          <button onclick="rRegle('plutoHote=' + enc(v('r-pluto-hote')) + '&plutoPort=' + enc(v('r-pluto-port')))">Enregistrer</button></div>
+        <div class="petit" style="margin-top:4px">Branché en USB, l'ADALM-PLUTO répond sur 192.168.2.1 ; sur le réseau, donner son adresse. De 70 MHz à 6 GHz : derrière un LNB (FI vers 739 MHz) ou un convertisseur, comme la clé.</div>
+        <div class="petit" style="margin-top:4px">Réception seulement : SatMe ne règle que son côté réception (oscillateur, débit, bande, gain) et n'émet jamais.</div>
       </details>
     </div>
   </div>
@@ -3657,7 +3665,14 @@ function dessineLoupe() {
 // ------------------------------------------------------------------ SDR
 let R = null, rSpan = 48000, rCascade = [], rTrames = -1, rDernier = null;
 const R820T = [0, 9, 14, 27, 37, 77, 87, 125, 144, 157, 166, 197, 207, 229, 254, 280, 297, 328, 338, 364, 372, 386, 402, 421, 434, 439, 445, 480, 496];
-g('r-gain').innerHTML = '<option value="-1">automatique</option>' + R820T.map(x => '<option value="' + x + '">' + (x / 10).toLocaleString('fr-FR') + ' dB</option>').join('');
+// The gains offered: the dongle's tuner table, or the Pluto's 0 to 71 dB (tenths, as the dongle's).
+function remplitGain(pluto) {
+  const l = pluto ? Array.from({ length: 72 }, (_, k) => k * 10) : R820T;
+  g('r-gain').innerHTML = '<option value="-1">' + (pluto ? 'automatique (CAG lente)' : 'automatique') + '</option>' +
+    l.map(x => '<option value="' + x + '">' + (x / 10).toLocaleString('fr-FR') + ' dB</option>').join('');
+  g('r-gain').dataset.src = pluto ? 'pluto' : 'rtl';
+}
+remplitGain(false);
 async function rRegle(q) { await post('api/sdr/reglage?' + q); ticSdr(); }
 async function ticSdr() {
   // The log's live station shows the dongle too.
@@ -3676,7 +3691,15 @@ function rendSdr() {
   coche('r-suit', r.suit); coche('r-doppler', r.doppler); coche('r-deemph', r.deemph); coche('r-son', r.son); coche('r-agc', r.agc);
   coche('r-lance', r.lance); coche('r-bias', r.bias);
   const val = (id, x) => { if (document.activeElement !== g(id)) g(id).value = String(x); };
-  val('r-mode', r.mode); val('r-bw', r.bw); val('r-sq', r.squelch); val('r-gain', r.gain);
+  // The receiver: the dongle (rtl_tcp) or the Pluto, each with its own settings shown.
+  const pluto = r.recepteur === 'pluto';
+  if (g('r-gain').dataset.src !== (pluto ? 'pluto' : 'rtl')) remplitGain(pluto);
+  txt('r-titre', pluto ? 'ADALM-PLUTO (réseau)' : 'Clé SDR (rtl_tcp)'); txt('r-cle-t', pluto ? 'Le récepteur' : 'La clé');
+  g('r-agc-l').hidden = pluto; g('r-liaison').hidden = pluto; g('r-liaison-pluto').hidden = !pluto;
+  val('r-recepteur', r.recepteur || 'rtl');
+  if (r.plutoHote !== undefined) { val('r-pluto-hote', r.plutoHote); val('r-pluto-port', r.plutoPort); }
+  val('r-mode', r.mode); val('r-bw', r.bw); val('r-sq', r.squelch);
+  val('r-gain', pluto && r.gain >= 0 ? Math.min(710, Math.round(r.gain / 10) * 10) : r.gain);
   txt('r-sqv', r.squelch <= -120 ? 'ouvert' : r.squelch + ' dB');
   if (!v('r-mhz') && document.activeElement !== g('r-mhz')) g('r-mhz').placeholder = (r.manuelle / 1e6).toFixed(4).replace('.', ',');
   if (document.activeElement !== g('r-ppm')) g('r-ppm').value = r.ppm;

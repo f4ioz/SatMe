@@ -281,7 +281,7 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 envoie(sortie, "200 OK", "application/json; charset=utf-8", o.toString().toByteArray())
             }
             "/api/qo100/qualite" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", (qo100?.json() ?: JSONObject().put("absent", true)).toString().toByteArray())
-            "/api/qo100" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JsonPc.qo100(station, q["plan"] == "1").toString().toByteArray())
+            "/api/qo100" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JsonPc.qo100(station, q["plan"] == "1", sdr?.gammeHz).toString().toByteArray())
             "/api/sdr" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", (sdr?.let { JsonPc.sdr(it) } ?: JSONObject().put("absent", true)).toString().toByteArray())
             "/api/sdr/spectre" -> envoie(sortie, "200 OK", "application/json; charset=utf-8",
                 (sdr?.let { JsonPc.spectre(it, q["span"]?.toIntOrNull() ?: 48_000, q["n"]?.toIntOrNull() ?: 512, q["autour"] == "ecoute") } ?: JSONObject()).toString().toByteArray())
@@ -598,6 +598,9 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 q["hote"]?.let { d.hote = it }
                 q["port"]?.toIntOrNull()?.let { d.port = it }
                 q["lance"]?.let { d.lance = it == "1" }
+                q["recepteur"]?.let { d.recepteur = it }
+                q["plutoHote"]?.let { d.plutoHote = it }
+                q["plutoPort"]?.toIntOrNull()?.let { d.plutoPort = it }
                 q["bias"]?.let { d.biasTee = it == "1" }
             }
             "/api/sondes/demarrer" -> {
@@ -977,6 +980,7 @@ object JsonPc {
             .put("gain", st.sdrGainTenthDb).put("agc", st.sdrAgc).put("ppm", st.sdrPpm).put("mode", d.modeChoisi).put("bw", st.sdrBandwidthHz)
             .put("squelch", st.sdrSquelchDb).put("son", st.sdrAudio).put("deemph", st.sdrDeemph).put("doppler", st.sdrDopplerTrack)
             .put("suit", d.suitSatellite).put("manuelle", d.manuelleHz).put("hote", d.hote).put("port", d.port).put("lance", d.lance).put("bias", d.biasTee)
+            .put("recepteur", d.recepteur).put("plutoHote", d.plutoHote).put("plutoPort", d.plutoPort)
             // Fine tuning, the phone's settings: the magnifier, the vernier, the voice netting.
             .put("modeEff", d.modeEffectif()).put("loupe", st.sdrLoupe).put("loupeSpan", st.sdrLoupeSpanHz)
             .put("vernier", st.sdrVernier).put("ratio", st.sdrVernierHzParCm).put("calageVoix", st.sdrCalageVoix)
@@ -996,12 +1000,13 @@ object JsonPc {
     }
 
     /** QO-100: the pilot's state, the dish and the Sun; with [plan], the band plan and the presets (they never change). */
-    fun qo100(st: StationPc, plan: Boolean): JSONObject {
+    fun qo100(st: StationPc, plan: Boolean, gammeCle: LongRange? = null): JSONObject {
         // The tab opened: what is stored read again (the Station tab sets the same calibration).
         if (plan) st.qo100.ouvre()
         val e = st.qo100.etat.value
         return ApiQo100.etat(e, st.etat.value.catConnecte, st.versCle(e.descenteHz + e.calageHz),
-            st.cielQo100()?.let { k -> ApiQo100.Ciel(k.pointage, k.soleilAzimutMs, k.transits) }, st.etat.value.observateur != null, plan)
+            st.cielQo100()?.let { k -> ApiQo100.Ciel(k.pointage, k.soleilAzimutMs, k.transits) }, st.etat.value.observateur != null, plan,
+            gammeCle ?: ApiQo100.GAMME_CLE)
     }
 
     fun etat(st: StationPc, carnet: CarnetPc? = null): JSONObject {

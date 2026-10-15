@@ -11,9 +11,11 @@ package fr.f4ioz.satcombo.pc
 import fr.f4ioz.satcombo.domain.DopplerTuner
 import fr.f4ioz.satcombo.plateforme.Stockage
 import fr.f4ioz.satcombo.sdr.Dsp
+import fr.f4ioz.satcombo.sdr.PlutoSdr
 import fr.f4ioz.satcombo.sdr.RtlTcp
 import fr.f4ioz.satcombo.sdr.RxChain
 import fr.f4ioz.satcombo.sdr.RxMode
+import fr.f4ioz.satcombo.sdr.SourceIq
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -29,12 +31,15 @@ import javax.sound.sampled.SourceDataLine
 import kotlin.concurrent.thread
 
 /**
- * The SDR dongle on the PC, through `rtl_tcp`: the phone's reception, the
- * same engine.
+ * The SDR receiver on the PC: an RTL-SDR dongle through `rtl_tcp`, or an
+ * ADALM-PLUTO on the network ([PlutoSdr], its receive side only) — the
+ * phone's reception, the same engine.
  *
  * - **rtl_tcp** is started here when the dongle is on this PC (and stopped
  *   with it), or reached on another machine of the network (a small
  *   computer by the antenna).
+ * - **The Pluto** is reached at its address (192.168.2.1 over its USB
+ *   cable); it gives the same rate as the dongle, in 16 bits.
  * - **The frequency** is the followed satellite's downlink with its Doppler,
  *   asked every 250 ms; between blocks, [DopplerTuner] decides whether the
  *   software mixer absorbs it (no click) or the PLL must move.
@@ -198,7 +203,22 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
         set(v) { stockage.edit().putBoolean(CLE_LANCE, v).apply() }
     var biasTee: Boolean
         get() = stockage.getBoolean(CLE_BIAS, false)
-        set(v) { stockage.edit().putBoolean(CLE_BIAS, v).apply(); cle?.let { runCatching { it.setBiasTee(v) } } }
+        set(v) { stockage.edit().putBoolean(CLE_BIAS, v).apply(); (cle as? RtlTcp)?.let { runCatching { it.setBiasTee(v) } } }
+    /** The receiver: [RTL] (the dongle, rtl_tcp) or [PLUTO]; taken at the next start. */
+    var recepteur: String
+        get() = stockage.getString(CLE_RECEPTEUR, RTL).takeIf { it == PLUTO } ?: RTL
+        set(v) { stockage.edit().putString(CLE_RECEPTEUR, if (v == PLUTO) PLUTO else RTL).apply() }
+    var plutoHote: String
+        get() = stockage.getString(CLE_PLUTO_HOTE, PlutoSdr.HOTE) ?: PlutoSdr.HOTE
+        set(v) { stockage.edit().putString(CLE_PLUTO_HOTE, v.trim().ifEmpty { PlutoSdr.HOTE }).apply() }
+    var plutoPort: Int
+        get() = stockage.getInt(CLE_PLUTO_PORT, PlutoSdr.PORT)
+        set(v) { stockage.edit().putInt(CLE_PLUTO_PORT, v.coerceIn(1, 65535)).apply() }
+    private fun estPluto() = recepteur == PLUTO
+
+    /** The frequencies the chosen receiver tunes to (Hz): the dongle's, or the Pluto's. */
+    val gammeHz: LongRange get() = (cle as? PlutoSdr)?.let { it.frequenceMinHz..it.frequenceMaxHz }
+        ?: if (estPluto()) 70_000_000L..6_000_000_000L else 24_000_000L..1_766_000_000L
     /** "AUTO": the transmitter's mode; or NFM, USB, LSB, AM. */
     var modeChoisi: String
         get() = stockage.getString(CLE_MODE, "AUTO") ?: "AUTO"
@@ -240,7 +260,7 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
 
     // ------------------------------------------------------------ running
 
-    @Volatile private var cle: RtlTcp? = null
+    @Volatile private var cle: SourceIq? = null
     @Volatile private var processus: Process? = null
     @Volatile private var generation = 0
     private var suivi: Job? = null
@@ -323,7 +343,7 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
         _etat.update { Etat(statut = "connexion…") }
         val r = runCatching { connecte() }.getOrElse { e ->
             arreteProcessus()
-            _etat.update { Etat(erreur = e.message ?: "rtl_tcp injoignable") }
+            _etat.update { Etat(erreur = e.message ?: if (estPluto()) "ADALM-PLUTO injoignable" else "rtl_tcp injoignable") }
             return false
         }
         cle = r
@@ -332,10 +352,11 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
             if (settings.sdrPpm != 0) r.setFreqCorrection(settings.sdrPpm)
             r.setAgc(settings.sdrAgc)
             r.setGain(settings.sdrGainTenthDb.takeIf { it >= 0 })
-            if (biasTee) r.setBiasTee(true)
+            if (biasTee && r is RtlTcp) r.setBiasTee(true)
         }
         cibleMaintenant()
-        _etat.update { it.copy(actif = true, statut = "réception", erreur = "", tuner = RtlTcp.nomTuner(r.tuner)) }
+        val nom = when (r) { is RtlTcp -> RtlTcp.nomTuner(r.tuner); is PlutoSdr -> r.description; else -> "" }
+        _etat.update { it.copy(actif = true, statut = "réception", erreur = "", tuner = nom) }
         // METEOR: 120 kHz of digital signal, nothing to hear — the raw samples to the picture decoder.
         val m = meteor
         if (m != null && imagesVoulues && !pourSonde && !pourQo100() && suitSatellite && station.estMeteor()) {
@@ -369,7 +390,8 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
     }
 
     /** rtl_tcp started here when asked and nothing answers yet; then the connection, retried while it starts. */
-    private fun connecte(): RtlTcp {
+    private fun connecte(): SourceIq {
+        if (estPluto()) return PlutoSdr.connecte(plutoHote, plutoPort)
         runCatching { return RtlTcp.connecte(hote, port, 1500) }
         if (!lance || !estLocal(hote)) throw java.io.IOException("rtl_tcp ne répond pas sur $hote:$port")
         val p = runCatching {
@@ -429,9 +451,11 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
         _etat.update { it.copy(cielHz = ciel, reposHz = repos, satellite = e?.satellite.orEmpty()) }
     }
 
-    private fun boucle(r: RtlTcp, gen: Int) {
+    private fun boucle(r: SourceIq, gen: Int) {
         val chaine = RxChain()
         val iq = ByteArray(RtlTcp.BLOC)
+        // A receiver with more bits (the Pluto): its 16-bit samples, the same count of pairs per block.
+        val iq16 = if (r.iq16) ShortArray(RtlTcp.BLOC) else null
         val pcm = ShortArray(chaine.maxAudio(iq.size))
         var pll = 0L; var fine = 0L
         var dernierSpectre = 0L; var dernierEtat = 0L; var dernierOctets = 0L
@@ -462,17 +486,24 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
                 val deemph = !sonde && settings.sdrDeemph
                 if (chaine.deemphasis != deemph) chaine.deemphasis = deemph
 
-                val n = r.read(iq, 200)
-                if (n < 0) { if (generation == gen) _etat.update { it.copy(actif = false, statut = "arrêtée", erreur = "rtl_tcp a coupé la liaison") }; break }
+                val n = if (iq16 != null) r.read16(iq16, 200) else r.read(iq, 200)
+                if (n < 0) {
+                    val pourquoi = if (r is PlutoSdr) r.erreur ?: "l'ADALM-PLUTO a coupé la liaison" else "rtl_tcp a coupé la liaison"
+                    if (generation == gen) _etat.update { it.copy(actif = false, statut = "arrêtée", erreur = pourquoi) }
+                    break
+                }
                 if (n == 0) continue
                 // METEOR pictures: the raw samples, before any audio chain, decoded on their own thread.
-                if (pourMeteor) meteor?.recepteur?.iq(iq, n, (fine + decalageHz).toDouble())
+                if (pourMeteor) meteor?.recepteur?.let { m ->
+                    if (iq16 != null) m.iq16(iq16, n, (fine + decalageHz).toDouble()) else m.iq(iq, n, (fine + decalageHz).toDouble())
+                }
                 val maintenant = horloge()
                 // Still for METEOR? (QO-100 set on the dongle, another satellite followed: the sound back.)
                 if (pourMeteor && maintenant - dernierEtat >= 200L) quitteMeteorSiBesoin()
                 val veutSpectre = maintenant - dernierSpectre >= 90L
                 val veutPano = maintenant - panoramaDemandeMs < 3000L && maintenant - dernierPano >= 300L
-                val produit = chaine.process(iq, n, pcm, feedSpectrum = veutSpectre, feedPanorama = veutPano)
+                val produit = if (iq16 != null) chaine.process16(iq16, n, pcm, feedSpectrum = veutSpectre, feedPanorama = veutPano)
+                    else chaine.process(iq, n, pcm, feedSpectrum = veutSpectre, feedPanorama = veutPano)
                 if (veutSpectre) dernierSpectre = maintenant
                 if (veutPano) dernierPano = maintenant
                 if (chaine.panorama.frames != panoVue) {
@@ -521,7 +552,7 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
                     val debit = ((r.octets - dernierOctets) * 1000 / maxOf(1L, maintenant - dernierEtat) / 1024).toInt()
                     dernierOctets = r.octets; dernierEtat = maintenant
                     _etat.update { it.copy(pllHz = pll, fineHz = fine, niveauDb = chaine.levelDb, saturation = chaine.clipRatio,
-                        debitKo = debit, perdus = r.perdus) }
+                        debitKo = debit, perdus = r.perdus, erreur = if (r is PlutoSdr) r.avertissement else it.erreur) }
                 }
             }
         } finally {
@@ -546,6 +577,11 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
         const val CLE_MODE = "pc_sdr_mode"
         const val CLE_MANUELLE = "pc_sdr_manuelle"
         const val CLE_SUIT = "pc_sdr_suit"
+        const val CLE_RECEPTEUR = "pc_sdr_recepteur"
+        const val CLE_PLUTO_HOTE = "pc_sdr_pluto_hote"
+        const val CLE_PLUTO_PORT = "pc_sdr_pluto_port"
+        const val RTL = "rtl"
+        const val PLUTO = "pluto"
 
         /** A transmitter's mode as the dongle demodulates it. */
         fun modeDe(m: String): RxMode {

@@ -26,6 +26,9 @@ import org.json.JSONObject
  */
 object ApiQo100 {
 
+    /** An RTL-SDR dongle's tuning range (R820T), Hz. */
+    val GAMME_CLE = 24_000_000L..1_766_000_000L
+
     /** The dish's aim from here, and the Sun's dates that check it. */
     class Ciel(val p: Qo100.Pointage, val soleilAzimutMs: Long?, val transits: List<SoleilQo100.Transit>)
 
@@ -34,8 +37,10 @@ object ApiQo100 {
      * [ciel] null while not computed, [observateurConnu] false when the
      * station does not know where it is; [plan] adds the band plan, the
      * transponders and the converter presets (asked once, when the tab opens).
+     * [gammeCle]: what the receiver tunes to (an RTL-SDR dongle's by default).
      */
-    fun etat(e: PiloteQo100.Etat, catConnecte: Boolean, cleRxHz: Long, ciel: Ciel?, observateurConnu: Boolean, plan: Boolean): JSONObject {
+    fun etat(e: PiloteQo100.Etat, catConnecte: Boolean, cleRxHz: Long, ciel: Ciel?, observateurConnu: Boolean, plan: Boolean,
+             gammeCle: LongRange = GAMME_CLE): JSONObject {
         val tr = I18n
         val seg = e.segment
         val c = e.chaineActive
@@ -45,7 +50,7 @@ object ApiQo100 {
             .put("auPoste", e.auPoste).put("posteRx", e.posteRxHz).put("posteTx", e.posteTxHz).put("atteignable", e.posteAtteignable)
             .put("emission", e.emissionPermise).put("statut", e.statut).put("catConnecte", catConnecte)
             .put("aLaCle", e.aLaCle).put("cleRx", cleRxHz)
-            .put("cleAtteignable", cleRxHz in 24_000_000L..1_766_000_000L)
+            .put("cleAtteignable", cleRxHz in gammeCle)
             .put("tp", JSONObject().put("bas", e.tp.descenteBasHz).put("haut", e.tp.descenteHautHz).put("centre", e.tp.centreDescenteHz))
             .put("segment", seg?.let { JSONObject().put("nom", tr.t("qo100_seg_" + it.cle)).put("largeur", it.largeurMaxHz)
                 .put("avert", tr.t("qo100_warn_" + it.usage.cleAvertissement)).put("emission", it.emissionPermise) }

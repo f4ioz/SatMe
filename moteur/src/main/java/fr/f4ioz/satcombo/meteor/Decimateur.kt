@@ -42,15 +42,22 @@ class Decimateur(val fsEntree: Double, val facteur: Int = 4, coupureHz: Double =
      * Unsigned-byte pairs ([iq], [n] bytes) to [re]/[im]; returns how many
      * samples came out (at most n / 2 / facteur + 1).
      */
-    fun traiteU8(iq: ByteArray, n: Int, decalageHz: Double, re: FloatArray, im: FloatArray): Int {
+    fun traiteU8(iq: ByteArray, n: Int, decalageHz: Double, re: FloatArray, im: FloatArray): Int =
+        traite(n, decalageHz, re, im) { k -> ((iq[k].toInt() and 0xFF) - 127.5) / 127.5 }
+
+    /** As [traiteU8], from signed 16-bit pairs ([n] shorts, full scale ±32768). */
+    fun traiteS16(iq: ShortArray, n: Int, decalageHz: Double, re: FloatArray, im: FloatArray): Int =
+        traite(n, decalageHz, re, im) { k -> iq[k] / 32768.0 }
+
+    private inline fun traite(n: Int, decalageHz: Double, re: FloatArray, im: FloatArray, valeur: (Int) -> Double): Int {
         var o = 0
         val dphi = -2 * PI * decalageHz / fsEntree
         val cd = cos(dphi); val sd = sin(dphi)
         var c = cos(phase); var s = sin(phase)
         var k = 0
         while (k + 1 < n) {
-            val x = ((iq[k].toInt() and 0xFF) - 127.5) / 127.5
-            val y = ((iq[k + 1].toInt() and 0xFF) - 127.5) / 127.5
+            val x = valeur(k)
+            val y = valeur(k + 1)
             k += 2
             histI[pos] = x * c - y * s
             histQ[pos] = x * s + y * c

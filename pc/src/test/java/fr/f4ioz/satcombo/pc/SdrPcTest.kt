@@ -272,4 +272,82 @@ class SdrPcTest {
         attends { recu.get() > Dsp.AUDIO_RATE / 4 }
         sdr.arrete()
     }
+
+    /** An IIO daemon of a few lines: a Pluto's context, its attributes, noise in its RX buffer; cut after [coupeApres] reads. */
+    private val ecritures = CopyOnWriteArrayList<String>()
+    private fun fauxPluto(coupeApres: Int) = thread(isDaemon = true) {
+        val xml = ("<context name=\"local\"><context-attribute name=\"hw_model\" value=\"Analog Devices PlutoSDR Rev.C (Z7010-AD9364)\" />" +
+            "<context-attribute name=\"fw_version\" value=\"v0.37\" /><device id=\"iio:device0\" name=\"ad9361-phy\" ></device>" +
+            "<device id=\"iio:device3\" name=\"cf-ad9361-lpc\" ><channel id=\"voltage0\" type=\"input\" ><scan-element index=\"0\" format=\"le:S12/16&gt;&gt;0\" /></channel>" +
+            "<channel id=\"voltage1\" type=\"input\" ><scan-element index=\"1\" format=\"le:S12/16&gt;&gt;0\" /></channel></device></context>").toByteArray()
+        val lus = java.util.concurrent.atomic.AtomicInteger()
+        runCatching {
+            while (!fini) {
+                val c = serveur.accept()
+                thread(isDaemon = true) {
+                    runCatching {
+                        c.use {
+                            val e = java.io.BufferedInputStream(c.getInputStream()); val o = c.getOutputStream()
+                            val r = Random(3)
+                            while (true) {
+                                val l = StringBuilder().apply { while (true) { val b = e.read(); if (b < 0) return@runCatching; if (b == 10) break; if (b != 13) append(b.toChar()) } }.toString()
+                                val m = l.split(' ')
+                                when (m[0]) {
+                                    "PRINT" -> { o.write("${xml.size}\n".toByteArray()); o.write(xml); o.write(10) }
+                                    "READ" -> { val v = (if (m.last() == "sampling_frequency") "2116800" else "[70000000 1 6000000000]").toByteArray() + 0
+                                        o.write("${v.size}\n".toByteArray()); o.write(v); o.write(10) }
+                                    "WRITE" -> { val n = m.last().toInt(); val v = ByteArray(n); var k = 0; while (k < n) k += e.read(v, k, n - k)
+                                        ecritures += m.drop(1).dropLast(1).joinToString(" ") + " = " + String(v); o.write("$n\n".toByteArray()) }
+                                    "READBUF" -> {
+                                        if (lus.incrementAndGet() > coupeApres) return@runCatching
+                                        val n = m[2].toInt()
+                                        val d = ByteArray(n) { k -> if (k % 2 == 1) (if (r.nextBoolean()) 0 else -1).toByte() else r.nextInt(-100, 100).toByte() }
+                                        o.write("$n\n00000003\n".toByteArray()); o.write(d); Thread.sleep(30)
+                                    }
+                                    else -> o.write("0\n".toByteArray())
+                                }
+                                o.flush()
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    @Test
+    fun l_adalm_pluto_a_la_place_de_la_cle() {
+        val iss = Catalogue.lisTle(File(dossier, "amsat-tle.txt").readText()).first()
+        val p = PassPredictor().upcomingPasses(iss, Observer(48.77, 2.46), iss.epochMs!!, 48, 10.0).first()
+        val milieu = (p.aosEpochMs + p.losEpochMs) / 2
+        val st = StationPc(StockageMemoire(), Catalogue(dossier, enLigne = false), PortsSeriePc(), portee, horloge = { milieu })
+        st.settings.manualLocator = "JN18FS"
+        st.demarre()
+        assertTrue(st.suis(25544))
+        attends { st.etat.value.position != null && st.etat.value.emetteurs.isNotEmpty() }
+        val son = SonPc()
+        val recu = java.util.concurrent.atomic.AtomicInteger()
+        son.auditeurs += { _, n, _ -> recu.addAndGet(n) }
+        val sdr = SdrPc(st, son, StockageMemoire(), portee, horloge = { milieu })
+        st.settings.sdrAudio = false
+        // The dongle by default; the Pluto chosen, at its address.
+        assertEquals(SdrPc.RTL, sdr.recepteur)
+        sdr.recepteur = SdrPc.PLUTO
+        sdr.plutoHote = "127.0.0.1"
+        sdr.plutoPort = serveur.localPort
+        fauxPluto(coupeApres = 60)
+        assertTrue(sdr.demarre())
+        assertTrue(sdr.etat.value.tuner, sdr.etat.value.tuner.startsWith("PlutoSDR Rev.C"))
+        attends { recu.get() > Dsp.AUDIO_RATE / 4 }
+        attends { ecritures.any { it.startsWith("ad9361-phy OUTPUT altvoltage0 frequency") } }
+        val lo = ecritures.first { it.startsWith("ad9361-phy OUTPUT altvoltage0 frequency") }.substringAfter("= ").toDouble()
+        assertEquals(437_800_000.0, lo, 12_000.0)
+        assertTrue(ecritures.contains("ad9361-phy INPUT voltage0 sampling_frequency = 2116800"))
+        // Only the receive side written.
+        for (w in ecritures) assertTrue(w, w.startsWith("ad9361-phy INPUT voltage0 ") || w.startsWith("ad9361-phy OUTPUT altvoltage0 frequency "))
+        // Pulled out: stopped, and said.
+        attends { !sdr.etat.value.actif }
+        assertEquals("l'ADALM-PLUTO a coupé la liaison", sdr.etat.value.erreur)
+        sdr.arrete()
+    }
 }

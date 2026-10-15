@@ -42,8 +42,8 @@ class RtlTcp private constructor(private val socket: Socket, val tuner: Int, val
     private val sortie: OutputStream = socket.getOutputStream()
     private val file = ArrayBlockingQueue<ByteArray>(PROFONDEUR)
     @Volatile var ouvert = true; private set
-    @Volatile var perdus = 0L; private set
-    @Volatile var octets = 0L; private set
+    @Volatile override var perdus = 0L; private set
+    @Volatile override var octets = 0L; private set
 
     private val lecteur = thread(isDaemon = true, name = "satme-rtl-tcp") {
         val entree = socket.getInputStream()

@@ -31,7 +31,7 @@ SatMe tourne sur un PC (Linux, Windows, Raspberry Pi) et se pilote depuis un nav
 - **Sked** : les fenêtres où une autre station et vous voyez tous deux un satellite, rejouées sur la carte avec les deux ciels, et faites en vidéo.
 - **QO-100** : le plan de bande du transpondeur bande étroite, le calage sur la balise, la chaîne de station (convertisseurs), et le transpondeur vu par la clé SDR.
 - **DATV** : la bande large de QO-100 avec un MiniTiouner, voir plus bas.
-- **SDR** : une clé RTL-SDR sur ce PC (rtl_tcp démarré pour vous) ou sur le réseau.
+- **SDR** : une clé RTL-SDR sur ce PC (rtl_tcp démarré pour vous) ou sur le réseau, ou un **ADALM-PLUTO** (plus bas).
 - **Sondes** (radiosondes) et **METEOR** (images LRPT) par la clé.
 - **Son** (carte son, enregistrement), **SSTV** (décodage en direct, les images dans une visionneuse), **APRS**, **FT8 / FT4**.
 - **Planche** : la planche SSTV, comme sur le téléphone — les images sur un modèle (une grille, autour du titre, ou un modèle ARISS importé dont les cases sont trouvées), remplies par ordre de réception ou en les glissant, les textes, puis la planche téléchargée en pleine taille (PNG).
@@ -131,6 +131,16 @@ Un onglet pensé pour voir la bande, pas seulement la lire :
 <img src="images/pc-ft8-messages.webp" width="49%" alt="FT8, les messages : les conversations entre deux stations, et le fil au fil de l'eau en bulles">
 </p>
 
+## L'ADALM-PLUTO en récepteur
+
+Dans l'onglet **SDR**, *Récepteur* choisit entre la clé RTL-SDR (rtl_tcp, d'origine) et un **ADALM-PLUTO** joint par le réseau : sur son câble USB il répond sur 192.168.2.1 (port 30431), en Wi-Fi ou Ethernet donner son adresse. Rien à installer : SatMe parle directement à son serveur IIO.
+
+- **Réception seulement.** SatMe règle son côté réception et rien d'autre : l'oscillateur RX, le débit, la bande analogique, le gain. Il n'ouvre jamais l'émetteur, n'écrit jamais ses réglages, ne touche ni à son disque USB ni à son `config.txt`.
+- Tout marche comme avec la clé : Doppler, QO-100 (derrière le LNB, FI vers 739 MHz, ou derrière un convertisseur, réglé comme pour la clé), la cascade et le panorama, le son pour les décodeurs, METEOR, les radiosondes. De 70 MHz à 6 GHz.
+- Il tourne à 2,1168 MS/s, ramenés ici aux 1,0584 MS/s de la clé ; ses 12 bits sont gardés jusqu'au démodulateur. Environ 8,5 Mo/s sur le câble.
+- **Gain** : *automatique* est la CAG lente de l'AD936x ; sinon de 0 à 71 dB. La ligne d'état montre la carte et son micrologiciel.
+- Débranché, ou muet trois secondes : la réception s'arrête et dit pourquoi.
+
 ## DATV — la bande large de QO-100 avec un MiniTiouner
 
 L'onglet **DATV** reçoit le DVB-S/S2 avec un **MiniTiouner** (tuner et démodulateur sur USB), piloté par [LongMynd](https://github.com/BritishAmateurTelevisionClub/longmynd), le logiciel libre du BATC. SatMe le lance à part, comme rtl_tcp : le compiler, puis donner son chemin sur la page (ou le mettre dans le `PATH`).
@@ -198,6 +208,7 @@ Pour d'autres programmes du PC (un carnet, un tableau de bord, un script) : **R�
 - Sous Linux le système lève RTS/DTR un instant à chaque ouverture de port, avant que SatMe puisse les baisser : une raison de plus de n'ouvrir que le port voulu.
 - **Le CAT n'émet jamais** (`TX`, `KY` refusés par le pilote TS-2000). Seul l'APRS par un TNC KISS émet, et seulement quand on envoie soi-même un message, sa position ou un statut.
 - **L'alimentation LNB du MiniTiouner est coupée** tant qu'on ne la choisit pas.
+- **L'ADALM-PLUTO ne fait que recevoir** : rien n'est écrit ni ouvert de son côté émission.
 
 ## Avant le premier essai
 

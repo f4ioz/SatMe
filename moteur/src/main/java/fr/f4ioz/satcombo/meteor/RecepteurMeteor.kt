@@ -94,7 +94,8 @@ class RecepteurMeteor(
     private var dernierApercu = 0L
     private var dernierEtat = 0L
 
-    private val file = ArrayBlockingQueue<Pair<ByteArray, Double>>(BLOCS)
+    /** Unsigned-byte blocks ([iq]) or 16-bit ones ([iq16]). */
+    private val file = ArrayBlockingQueue<Pair<Any, Double>>(BLOCS)
     private val libres = ArrayBlockingQueue<ByteArray>(BLOCS + 4)
     private var fil: Thread? = null
     @Volatile private var enMarche = false
@@ -130,6 +131,12 @@ class RecepteurMeteor(
         if (!file.offer(b to decalageHz)) { perdus++; libres.offer(b) }
     }
 
+    /** As [iq], from signed 16-bit I/Q pairs ([n] shorts). */
+    fun iq16(bloc: ShortArray, n: Int, decalageHz: Double) {
+        if (!enMarche || n <= 0) return
+        if (!file.offer(bloc.copyOf(n) to decalageHz)) perdus++
+    }
+
     private fun boucle() {
         val s = session ?: return
         val d = decimateur ?: return
@@ -137,10 +144,14 @@ class RecepteurMeteor(
         while (enMarche) {
             val (b, dec) = file.poll(200, TimeUnit.MILLISECONDS) ?: continue
             runCatching {
-                val n = d.traiteU8(b, b.size, dec, re, im)
+                val n = when (b) {
+                    is ByteArray -> d.traiteU8(b, b.size, dec, re, im)
+                    is ShortArray -> d.traiteS16(b, b.size, dec, re, im)
+                    else -> 0
+                }
                 s.symboles(re, im, n)
             }
-            libres.offer(b)
+            if (b is ByteArray) libres.offer(b)
             publie(s, false)
         }
     }

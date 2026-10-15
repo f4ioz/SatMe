@@ -31,7 +31,7 @@ SatMe runs on a PC (Linux, Windows, Raspberry Pi) and is driven from a browser. 
 - **Sked**: the windows where you and another station both see a satellite, replayed on the map with both skies, and made into a video.
 - **QO-100**: the narrow band transponder's band plan, the beacon calibration, the station chain (converters), and the transponder seen by the SDR dongle.
 - **DATV**: QO-100's wide band with a MiniTiouner, see below.
-- **SDR**: an RTL-SDR dongle on this PC (rtl_tcp started for you) or on the network.
+- **SDR**: an RTL-SDR dongle on this PC (rtl_tcp started for you) or on the network, or an **ADALM-PLUTO** (below).
 - **Sondes** (radiosondes) and **METEOR** (LRPT pictures) from the dongle.
 - **Son** (sound card, recording), **SSTV** (live decoding, the pictures in a viewer), **APRS**, **FT8 / FT4**.
 - **Planche**: the SSTV sheet, as on the phone — the pictures on a template (a grid, around the title, or an imported ARISS template whose boxes are found), filled in order of reception or by dragging, the texts, then the sheet downloaded full size (PNG).
@@ -131,6 +131,16 @@ A tab made to see the band, not only to read it:
 <img src="images/pc-ft8-messages.webp" width="49%" alt="FT8, the messages: the conversations between two stations, and the stream as bubbles">
 </p>
 
+## The ADALM-PLUTO as a receiver
+
+In the **SDR** tab, *Récepteur* chooses between the RTL-SDR dongle (rtl_tcp, the default) and an **ADALM-PLUTO** reached on the network: on its USB cable it answers at 192.168.2.1 (port 30431), on Wi-Fi or Ethernet give its address. Nothing to install: SatMe talks to its IIO server directly.
+
+- **Receive only.** SatMe sets its receive side and nothing else: the RX oscillator, the sample rate, the analog bandwidth, the gain. It never opens the transmitter, never writes its settings, never touches its USB drive or its `config.txt`.
+- Everything works as with the dongle: Doppler, QO-100 (behind the LNB, IF around 739 MHz, or behind a converter, set as for the dongle), the waterfall and panorama, the sound for the decoders, METEOR, radiosondes. From 70 MHz to 6 GHz.
+- It runs at 2.1168 MS/s, brought down here to the dongle's 1.0584 MS/s; its 12 bits are kept to the demodulator. About 8.5 MB/s on the cable.
+- **Gain**: *automatique* is the AD936x's slow AGC; otherwise 0 to 71 dB. The status line shows the board and its firmware.
+- Pulled out, or silent for three seconds: the reception stops and says why.
+
 ## DATV — QO-100's wide band with a MiniTiouner
 
 The **DATV** tab receives DVB-S/S2 with a **MiniTiouner** (tuner and demodulator on USB), driven by [LongMynd](https://github.com/BritishAmateurTelevisionClub/longmynd), BATC's free program. SatMe runs it apart, as it runs rtl_tcp: build it, then give its path on the page (or put it in the `PATH`).
@@ -198,6 +208,7 @@ For other programs on the PC (a logger, a dashboard, a script): **Réglages › 
 - On Linux the system raises RTS/DTR for an instant on every port opening, before SatMe can lower them: one more reason to open only the port meant.
 - **CAT never transmits** (`TX`, `KY` refused by the TS-2000 driver). Only APRS through a KISS TNC transmits, and only when you send a message, your position or a status yourself.
 - **The MiniTiouner's LNB supply is off** unless chosen.
+- **The ADALM-PLUTO only receives**: nothing on its transmit side is written or opened.
 
 ## Before the first try
 

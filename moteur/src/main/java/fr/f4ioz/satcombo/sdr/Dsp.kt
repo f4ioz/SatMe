@@ -803,7 +803,39 @@ class RxChain(
             aQ[k] = (bq - 127.5f) / 127.5f
         }
         clip = clipped.toFloat() / (2 * n)
+        return suite(n, out, feedSpectrum, feedPanorama)
+    }
 
+    /**
+     * As [process], from signed 16-bit I, Q pairs ([len] shorts, full scale
+     * ±32768): a receiver with more bits than the dongle keeps them.
+     */
+    fun process16(
+        iq: ShortArray,
+        len: Int,
+        out: ShortArray,
+        feedSpectrum: Boolean = false,
+        feedPanorama: Boolean = false,
+    ): Int {
+        val n = len / 2
+        if (n == 0) return 0
+        retune()
+        if (aI.size < n) { aI = FloatArray(n); aQ = FloatArray(n) }
+        var clipped = 0
+        for (k in 0 until n) {
+            val si = iq[2 * k].toInt()
+            val sq = iq[2 * k + 1].toInt()
+            if (si <= -CLIP16 || si >= CLIP16) clipped++
+            if (sq <= -CLIP16 || sq >= CLIP16) clipped++
+            aI[k] = si / 32768f
+            aQ[k] = sq / 32768f
+        }
+        clip = clipped.toFloat() / (2 * n)
+        return suite(n, out, feedSpectrum, feedPanorama)
+    }
+
+    /** The chain from the converted samples in [aI], [aQ] ([n] of them) on. */
+    private fun suite(n: Int, out: ShortArray, feedSpectrum: Boolean, feedPanorama: Boolean): Int {
         // Panorama taken here, on the raw stream, before the fine-tuning mixer:
         // anchored to the PLL frequency alone, so an absolute frequency scale
         // with fixed markers can be drawn. Taken after the mixer, it would
@@ -896,6 +928,9 @@ class RxChain(
         return produced
     }
 }
+
+/** 16-bit samples at or beyond this are counted as clipped (the bytes' 2 / 253, as a fraction of full scale). */
+private const val CLIP16 = 32_000
 
 /** Old name from the NFM-only days, kept so existing callers and tests still build. */
 typealias NfmChain = RxChain
