@@ -40,6 +40,36 @@ object Ft8Decodeur {
     )
 
     /**
+     * How hard to look at a slot.
+     *
+     * More candidates and a lower sync threshold reach weaker stations, more
+     * LDPC rounds save a few that converge late; all of it costs time, and a
+     * slot must be decoded before the next one closes. [LEGERE] is what a
+     * phone can always afford; [PROFONDE] is for a PC, or a low satellite
+     * whose stations are all weak.
+     *
+     * More candidates are also more chances for noise to pass the CRC: that
+     * is why the hard-decision fallback is held to a clean sync (see
+     * [decode]).
+     */
+    enum class Profondeur(val candidats: Int, val seuilSynchro: Float, val toursLdpc: Int) {
+        LEGERE(32, 1.5f, 30),
+        NORMALE(60, 1.3f, 30),
+        PROFONDE(120, 1.1f, 40),
+    }
+
+    /**
+     * Fewest sync symbols the hard decisions must get right before a word
+     * read without LDPC is believed: random bits pass the 14-bit CRC once in
+     * 16 384, and a deep search tries many candidates. 13 of 21 for FT8,
+     * 10 of 16 for FT4 (noise candidates stay below 11 of 21 on the bench): a
+     * real signal strong enough to be read without the
+     * code clears it easily; noise almost never does.
+     */
+    private fun synchroFranche(tons: IntArray, mode: Ft8Signal.Mode): Boolean =
+        if (mode.tons == 4) Ft4.scoreCostas(tons) >= 10 else Ft8.scoreCostas(tons) >= 13
+
+    /**
      * Noise bandwidth correction.
      *
      * A transform over exactly one symbol has a noise bandwidth equal to the
@@ -60,6 +90,9 @@ object Ft8Decodeur {
      * ephemeris, when nothing upstream follows it. It is removed before
      * anything else (see [Ft8Signal.retirePente]); zero leaves the audio as is.
      *
+     * [profondeur] sets the search budget; without it, [maximumCandidats]
+     * candidates at the usual threshold (the light budget).
+     *
      * Returns messages strongest first. An empty list — nothing passed the
      * CRC — is the most common and normal case.
      */
@@ -70,7 +103,8 @@ object Ft8Decodeur {
         basseHz: Double = 200.0,
         hauteHz: Double = 3000.0,
         maximumCandidats: Int = 32,
-        penteHzS: Double = 0.0
+        penteHzS: Double = 0.0,
+        profondeur: Profondeur? = null
     ): List<Decode> {
         if (mode.synchro.isEmpty()) return emptyList()
         val entree = Ft8Signal.reechantillonne(audio, cadenceHz, mode.cadenceHz)
@@ -78,7 +112,10 @@ object Ft8Decodeur {
         if (ramene.size < mode.parSymbole * mode.symboles) return emptyList()
 
         val spec = Ft8Signal.spectrogramme(ramene, mode, basseHz, hauteHz)
-        val candidats = Ft8Signal.candidats(spec, maximum = maximumCandidats)
+        val candidats = Ft8Signal.candidats(spec,
+            maximum = profondeur?.candidats ?: maximumCandidats,
+            scoreMinimal = profondeur?.seuilSynchro ?: Profondeur.LEGERE.seuilSynchro)
+        val tours = profondeur?.toursLdpc ?: Profondeur.LEGERE.toursLdpc
 
         val sortie = ArrayList<Decode>()
         val dejaVus = HashSet<String>()
@@ -89,13 +126,14 @@ object Ft8Decodeur {
             // it saves very strong signals the decoder may reject when the
             // graph oscillates.
             val douces = Ft8Signal.vraisemblances(spec, c)
-            val corrige = if (douces.size >= LdpcTables.N) Ldpc.decode(douces).bits else null
+            val corrige = if (douces.size >= LdpcTables.N) Ldpc.decode(douces, tours).bits else null
 
             val tons = Ft8Signal.tons(spec, c)
             // The only place the two modes differ: FT4 packs two bits per
             // symbol instead of three and scrambles the 77 message bits before
             // the CRC. Past that, same CRC, format and unpacking.
             val quatreTons = mode.tons == 4
+            if (corrige == null && !synchroFranche(tons, mode)) continue
             val bits = corrige ?: (if (quatreTons) Ft4.symbolesVersBits(tons)
                        else Ft8.symbolesVersBits(tons))
             val utiles = bits.copyOf(Ft8.BITS_UTILES)

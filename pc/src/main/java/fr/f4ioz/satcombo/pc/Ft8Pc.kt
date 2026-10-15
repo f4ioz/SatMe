@@ -91,11 +91,32 @@ class Ft8Pc(
      * ([corrigeAvant]) nothing slides in the audio and nothing is removed;
      * [signe] is −1 in LSB, where the audio moves the other way.
      */
-    @Synchronized fun ticDoppler(dopplerHz: Double?, corrigeAvant: Boolean, signe: Int) {
+    @Synchronized fun ticDoppler(dopplerHz: Double?, corrigeAvant: Boolean, signe: Int, elevationDeg: Double? = null) {
+        elevation = elevationDeg
         if (dopplerHz == null || corrigeAvant) { dopplers.clear(); return }
         val t = horloge()
         dopplers.addLast(t to signe * dopplerHz)
         while (dopplers.isNotEmpty() && dopplers.first().first < t - 60_000L) dopplers.removeFirst()
+    }
+
+    /** The followed satellite's elevation, null when none is followed or it is down. */
+    @Volatile private var elevation: Double? = null
+    /** How long the last slot took to decode, ms. */
+    @Volatile var dernierDecodageMs = 0L
+        private set
+
+    /**
+     * The budget for the next slot: deep when the satellite is low (its
+     * stations all weak) or when the last slot left plenty of time (a
+     * geostationary satellite, a fast PC), normal otherwise. Never more than
+     * the slot can afford: a deep decode that took over 40 % of the slot
+     * falls back to normal.
+     */
+    fun profondeur(): Ft8Decodeur.Profondeur {
+        val budget = dureeTranche() * 0.4
+        val bas = elevation?.let { it < 15.0 } ?: false
+        return if (dernierDecodageMs < budget || (bas && dernierDecodageMs < dureeTranche() * 0.6))
+            Ft8Decodeur.Profondeur.PROFONDE else Ft8Decodeur.Profondeur.NORMALE
     }
 
     /**
@@ -165,7 +186,10 @@ class Ft8Pc(
     fun avancement(): Float = (horloge() % dureeTranche()).toFloat() / dureeTranche()
 
     private fun decode(audio: FloatArray, cadence: Int, sig: Ft8Signal.Mode, m: String, debut: Long, pente: Double = 0.0) {
-        val l = runCatching { Ft8Decodeur.decode(audio, cadence.toDouble(), sig, penteHzS = pente) }.getOrDefault(emptyList())
+        val t0 = System.nanoTime()
+        val l = runCatching { Ft8Decodeur.decode(audio, cadence.toDouble(), sig, penteHzS = pente, profondeur = profondeur()) }
+            .getOrDefault(emptyList())
+        dernierDecodageMs = (System.nanoTime() - t0) / 1_000_000
         val nouveaux = l.map {
             Entendu(debut, it.message.brut, it.message.appelant, it.message.appele, it.message.locator,
                 Math.round(it.frequenceHz).toInt(), it.rapportDb, it.instantS, m)

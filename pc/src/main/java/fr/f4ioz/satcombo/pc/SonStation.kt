@@ -168,7 +168,7 @@ class SonStation(
         val corrige = (e.catConnecte && !e.maintienDoppler) || (parLaCle && station.settings.sdrDopplerTrack)
         val signe = if ((tx?.mode ?: "").uppercase() == "LSB") -1 else 1
         // FT8 too: the slot's residual drift removed before decoding.
-        ft8.ticDoppler(dop, corrige, signe)
+        ft8.ticDoppler(dop, corrige, signe, p?.elevationDeg?.takeIf { it > -2 && f != null })
         if (!cw.actif) return
         cw.ticDoppler(dop, corrige, signe)
     }
