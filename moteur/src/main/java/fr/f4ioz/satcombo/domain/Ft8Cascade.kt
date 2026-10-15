@@ -13,7 +13,22 @@ package fr.f4ioz.satcombo.domain
  * the last [LIGNES] kept, and the instant spectrum. Fed samples at [cadence]
  * (12 kHz, the decoder's rate) by the phone's microphone or the PC's sound card.
  */
-class Ft8Cascade(val basseHz: Int, val hauteHz: Int, val colonnes: Int, private val cadence: Int = 12_000) {
+class Ft8Cascade(val basseHz: Int, val hauteHz: Int, val colonnes: Int, private val cadence: Int = 12_000,
+                 /** Rows kept (the phone's screen: [LIGNES]; SatMe-PC keeps three slots). */
+                 val lignesMax: Int = LIGNES) {
+
+    /** Rows made since the start: the page asks for those after the last it has. */
+    @Volatile var total = 0L
+        private set
+
+    /** Time between two rows, ms. */
+    val pasMs: Double get() = PAS_ANALYSE * 1000.0 / cadence
+
+    /** The rows after the [n]th, oldest first (all kept if [n] is too old). */
+    @Synchronized fun depuis(n: Long): List<ByteArray> {
+        val k = (total - n).coerceIn(0L, lignes.size.toLong()).toInt()
+        return lignes.take(k).reversed()
+    }
 
     companion object {
         const val FENETRE = 2048
@@ -40,7 +55,7 @@ class Ft8Cascade(val basseHz: Int, val hauteHz: Int, val colonnes: Int, private 
         private set
 
     /** Feeds samples; true when a new row is ready. */
-    fun verse(bloc: ShortArray, combien: Int): Boolean {
+    @Synchronized fun verse(bloc: ShortArray, combien: Int): Boolean {
         var pret = false
         for (i in 0 until combien) {
             anneau[ecrit] = bloc[i] / 32768f
@@ -92,7 +107,8 @@ class Ft8Cascade(val basseHz: Int, val hauteHz: Int, val colonnes: Int, private 
         }
         dernierSpectre = courbe
         lignes.addFirst(ligne)
-        while (lignes.size > LIGNES) lignes.removeLast()
+        while (lignes.size > lignesMax) lignes.removeLast()
+        total++
         return true
     }
 }

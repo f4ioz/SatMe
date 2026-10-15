@@ -92,8 +92,11 @@ object ApiRadio {
 
     /** FT8 heard: the decodes with what they mean here (CQ, for me, how far, already worked), the waterfall. */
     fun ft8(enMarche: Boolean, mode: String, avancement: Float, niveau: Float, tranches: Int, carte: Boolean, basseHz: Int, hauteHz: Int,
-            cascade: List<ByteArray>, spectre: FloatArray, entendus: List<Ligne>, moi: String, obs: Observer?, faits: Set<String>): JSONObject =
-        JSONObject().put("present", true).put("enMarche", enMarche).put("mode", mode).put("avancement", avancement.toDouble())
+            cascade: List<ByteArray>, spectre: FloatArray, entendus: List<Ligne>, moi: String, obs: Observer?, faits: Set<String>,
+            /** The log's countries and squares (4 characters): a station from elsewhere is new. */
+            paysFaits: Set<String> = emptySet(), carresFaits: Set<String> = emptySet()): JSONObject {
+        val compte = entendus.mapNotNull { it.appelant?.uppercase() }.groupingBy { it }.eachCount()
+        return JSONObject().put("present", true).put("enMarche", enMarche).put("mode", mode).put("avancement", avancement.toDouble())
             .put("niveau", Math.round(niveau * 1000.0) / 1000.0).put("tranches", tranches).put("carte", carte)
             .put("basse", basseHz).put("haute", hauteHz)
             .put("cascade", JSONArray(cascade.map { java.util.Base64.getEncoder().encodeToString(it) }))
@@ -106,7 +109,27 @@ object ApiRadio {
                     .put("moi", moi.isNotBlank() && e.appele?.uppercase() == moi)
                     .put("fait", e.appelant?.uppercase()?.substringBefore('/') in faits)
                     .put("km", if (ll != null && obs != null) Math.round(fr.f4ioz.satcombo.sonde.Geo.distanceKm(obs.latDeg, obs.lonDeg, ll.first, ll.second)) else JSONObject.NULL)
+                    .put("az", if (ll != null && obs != null) Math.round(fr.f4ioz.satcombo.sonde.Geo.bearingDeg(obs.latDeg, obs.lonDeg, ll.first, ll.second)) else JSONObject.NULL)
+                    .also { o ->
+                        // Where it is from (its country, flag, continent), and what it would bring the log.
+                        val ent = e.appelant?.let { fr.f4ioz.satcombo.domain.Dxcc.entite(it) }
+                        o.put("pays", ent?.nom ?: "").put("drapeau", ent?.drapeau ?: "").put("cont", ent?.continent ?: "")
+                        o.put("nouveauPays", ent != null && paysFaits.isNotEmpty() && ent.nom !in paysFaits)
+                        o.put("nouveauCarre", e.locator != null && e.locator.length >= 4 && carresFaits.isNotEmpty() && e.locator.take(4).uppercase() !in carresFaits)
+                        o.put("vu", compte[e.appelant?.uppercase()] ?: 0)
+                        // Which slot of the two it sends in (an FT8 minute has four: even and odd).
+                        o.put("pair", (e.tranche / (if (e.mode == "FT4") 7_500L else 15_000L)) % 2 == 0L)
+                    }
             }))
+    }
+
+    /** The waterfall's rows after the page's last ([depuis]), oldest first, with what dates them. */
+    fun ft8Cascade(c: fr.f4ioz.satcombo.domain.Ft8Cascade?, depuis: Long, derniereLigneMs: Long): JSONObject {
+        if (c == null) return JSONObject().put("total", 0)
+        val l = c.depuis(depuis)
+        return JSONObject().put("total", c.total).put("colonnes", c.colonnes).put("pasMs", c.pasMs).put("finMs", derniereLigneMs)
+            .put("lignes", JSONArray(l.map { java.util.Base64.getEncoder().encodeToString(it) }))
+    }
 
     /**
      * The KISS radio as the APRS tab shows it: connected, in KISS, its

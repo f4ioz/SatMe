@@ -393,6 +393,8 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                         a.evenements, System.currentTimeMillis()).put("present", true)
                 envoie(sortie, "200 OK", "application/json; charset=utf-8", o.toString().toByteArray())
             }
+            "/api/ft8/cascade" -> envoie(sortie, "200 OK", "application/json; charset=utf-8",
+                fr.f4ioz.satcombo.demo.ApiRadio.ft8Cascade(son?.ft8?.cascade, q["depuis"]?.toLongOrNull() ?: 0L, son?.ft8?.derniereLigneMs ?: 0L).toString().toByteArray())
             "/api/aprs" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JsonPc.aprs(son, station).toString().toByteArray())
             "/api/son" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JsonPc.son(son).toString().toByteArray())
             "/api/veille" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JsonPc.veille(station, son).toString().toByteArray())
@@ -1106,13 +1108,16 @@ object JsonPc {
     /** FT8 heard: the decodes with what they mean here (CQ, for me, how far, already worked), the waterfall. */
     fun ft8(s: SonStation?, st: StationPc, c: CarnetPc?): JSONObject {
         val f = s?.ft8 ?: return JSONObject().put("present", false)
-        val faits = c?.contacts().orEmpty().map { it.callsign.uppercase().substringBefore('/') }.toHashSet()
+        val contacts = c?.contacts().orEmpty()
+        val faits = contacts.map { it.callsign.uppercase().substringBefore('/') }.toHashSet()
+        val paysFaits = contacts.mapNotNull { fr.f4ioz.satcombo.domain.Dxcc.entite(it.callsign)?.nom }.toHashSet()
+        val carresFaits = contacts.mapNotNull { it.theirLocator.trim().uppercase().take(4).takeIf { l -> l.length == 4 } }.toHashSet()
         val k = f.cascade
         return fr.f4ioz.satcombo.demo.ApiRadio.ft8(f.enMarche, f.mode, f.avancement(), f.niveau, f.tranches, s.son.etat.value.actif,
-            Ft8Pc.BASSE_HZ, Ft8Pc.HAUTE_HZ, k?.lignes?.toList().orEmpty(), k?.dernierSpectre ?: FloatArray(0),
+            Ft8Pc.BASSE_HZ, Ft8Pc.HAUTE_HZ, emptyList(), k?.dernierSpectre ?: FloatArray(0),
             f.entendus.map { e -> fr.f4ioz.satcombo.demo.ApiRadio.Ligne(e.tranche, e.texte, e.appelant, e.appele, e.locator,
                 e.frequenceHz, e.rapportDb, e.decalageS, e.mode) },
-            st.etat.value.indicatif.uppercase(), st.etat.value.observateur, faits)
+            st.etat.value.indicatif.uppercase(), st.etat.value.observateur, faits, paysFaits, carresFaits)
     }
 
     /** APRS heard: the frames (newest first) and what they add up to. */

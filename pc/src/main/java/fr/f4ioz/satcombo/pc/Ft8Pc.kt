@@ -47,6 +47,9 @@ class Ft8Pc(private val horloge: () -> Long = System::currentTimeMillis) {
         private set
     @Volatile var cascade: Ft8Cascade? = null
         private set
+    /** When the waterfall's newest row was made: the page draws the slots' edges from it. */
+    @Volatile var derniereLigneMs = 0L
+        private set
 
     private val decodeur = Executors.newSingleThreadExecutor { r -> Thread(r, "satme-ft8").apply { isDaemon = true } }
     private var facteur = 1
@@ -78,7 +81,7 @@ class Ft8Pc(private val horloge: () -> Long = System::currentTimeMillis) {
         if (cadence == 0 || cadence != rate / facteur) {
             facteur = Math.round(rate / 12_000.0).toInt().coerceAtLeast(1)
             cadence = rate / facteur
-            cascade = Ft8Cascade(BASSE_HZ, HAUTE_HZ, COLONNES, cadence)
+            cascade = Ft8Cascade(BASSE_HZ, HAUTE_HZ, COLONNES, cadence, LIGNES)
             tampon = FloatArray((dureeTranche() * cadence / 1000).toInt())
             ecrit = 0; somme = 0; dansSomme = 0; dansBloc = 0
         }
@@ -92,7 +95,7 @@ class Ft8Pc(private val horloge: () -> Long = System::currentTimeMillis) {
             somme = 0; dansSomme = 0
             if (ecrit < tampon.size) tampon[ecrit++] = s / 32768f
             bloc[dansBloc++] = s.toShort()
-            if (dansBloc == bloc.size) { cascade?.verse(bloc, dansBloc); dansBloc = 0 }
+            if (dansBloc == bloc.size) { if (cascade?.verse(bloc, dansBloc) == true) derniereLigneMs = horloge(); dansBloc = 0 }
         }
         niveau = pic / 32768f
         // A new slot: the one just over is decoded (the first one, cut, is dropped).
@@ -128,7 +131,10 @@ class Ft8Pc(private val horloge: () -> Long = System::currentTimeMillis) {
     fun decodeTranche(audio: FloatArray, cadence: Int, debut: Long) = decode(audio, cadence, signal(), mode, debut)
 
     companion object {
-        const val COLONNES = 256
+        /** About 5.5 Hz a column (FT8's tones are 6.25 Hz apart). */
+        const val COLONNES = 512
+        /** About 46 s: three FT8 slots. */
+        const val LIGNES = 360
         const val BASSE_HZ = 200
         const val HAUTE_HZ = 3000
     }

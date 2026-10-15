@@ -153,6 +153,29 @@ object PagePc {
   .reg-cartes { display:grid; grid-template-columns:repeat(auto-fit, minmax(440px, 1fr)); gap:12px; align-items:start; }
   .reg-cartes .carte { margin:0; }
   @media (max-width:900px) { .reg { flex-direction:column; } .reg-nav { flex:none; width:100%; position:static; flex-direction:row; flex-wrap:wrap; } .reg-nav button small { display:none; } .reg-cartes { grid-template-columns:1fr; } }
+  .f8 { padding:12px 16px; display:flex; flex-direction:column; gap:12px; }
+  .f8-tete { display:flex; gap:16px; align-items:center; margin:0; }
+  .f8-anneau { width:86px; height:86px; flex:none; }
+  .f8-puces { display:flex; gap:6px; flex-wrap:wrap; margin-top:8px; }
+  .f8-puce { padding:3px 10px; border-radius:20px; background:#0E1720; border:1px solid var(--bord); font-size:12px; color:var(--gris); }
+  .f8-puce b { color:var(--clair); font-size:14px; }
+  .f8-grille { display:grid; grid-template-columns:minmax(420px,1.7fr) minmax(300px,1fr) minmax(340px,1.15fr); gap:12px; align-items:start; }
+  .f8-grille .carte { margin:0; }
+  @media (max-width:1300px) { .f8-grille { grid-template-columns:1fr 1fr; } .f8-cascade-boite { grid-column:1 / -1; } }
+  @media (max-width:800px) { .f8-grille { grid-template-columns:1fr; } }
+  .f8-op { display:flex; gap:10px; align-items:center; padding:7px 8px; border-radius:10px; cursor:pointer; border:1px solid transparent; }
+  .f8-op:hover { border-color:var(--cyan); background:rgba(63,224,200,.06); }
+  .f8-dr { font-size:22px; line-height:1; }
+  .f8-call { font-size:15px; letter-spacing:.5px; }
+  .f8-tag { display:inline-block; font-size:10px; font-weight:700; padding:0 6px; border:1px solid; border-radius:10px; margin:3px 4px 0 0; }
+  .f8-score { flex:none; width:44px; height:44px; border-radius:50%; display:grid; place-items:center; font-weight:800; font-size:13px;
+    background:conic-gradient(var(--cyan) calc(var(--v) * 1%), #1C2A36 0); position:relative; }
+  .f8-score::before { content:''; position:absolute; inset:5px; border-radius:50%; background:var(--carte); }
+  .f8-score { isolation:isolate; } .f8-score::before { z-index:-1; }
+  .f8-table td { padding:3px 6px; font-size:13px; white-space:nowrap; }
+  .f8-sep td { border-top:2px solid var(--bord); }
+  .f8-db { display:inline-block; width:34px; height:6px; background:#1C2A36; border-radius:3px; margin-right:4px; vertical-align:middle; overflow:hidden; }
+  .f8-db i { display:block; height:100%; }
   a.bouton { font-size:13px; font-weight:700; border-radius:8px; border:1px solid var(--bord); background:#0E1720; color:var(--clair); padding:6px 9px; text-decoration:none; white-space:nowrap; }
   button:disabled { opacity:.45; cursor:default; }
   .primaire { background:var(--cyan); color:#06131A; border:none; }
@@ -1110,27 +1133,43 @@ object PagePc {
 </div>
 </div>
 <div class="vue" id="v-ft8" hidden>
-<div class="grille2" style="grid-template-columns:minmax(380px,1fr) minmax(500px,1.5fr)">
-  <div>
-    <div class="carte">
+<div class="f8">
+  <div class="carte f8-tete">
+    <svg id="8-anneau" viewBox="0 0 100 100" class="f8-anneau" role="img" aria-label="Le créneau en cours"></svg>
+    <div style="flex:1;min-width:0">
       <div class="ligne" style="margin-top:0">
-        <button class="primaire" id="8-marche" onclick="ft8Marche()">Écouter</button>
+        <button class="primaire" id="8-marche" data-marche="8" onclick="ft8Marche()">Écouter</button>
+        <button class="arret" data-arret="8" hidden onclick="ft8Marche()">Arrêter</button>
         <select id="8-mode" onchange="post('api/ft8?mode=' + this.value)" style="max-width:90px"><option>FT8</option><option>FT4</option></select>
-        <button onclick="post('api/ft8?vide=1')">Effacer</button>
+        <button onclick="post('api/ft8?vide=1').then(() => { f8Lignes = []; f8Total = 0; })">Effacer</button>
+        <input id="8-filtre" placeholder="Filtrer : indicatif, pays, carré…" style="max-width:220px">
+        <label class="petit"><input type="checkbox" id="8-cq"> CQ seulement</label>
         <span class="petit" id="8-etat" style="margin-left:auto"></span>
       </div>
-      <div style="height:6px;background:#0E1720;border-radius:3px;margin-top:10px;overflow:hidden"><div id="8-tranche" style="height:100%;width:0;background:var(--cyan)"></div></div>
-      <canvas id="8-cascade" style="width:100%;height:260px;display:block;margin-top:10px;border-radius:6px;background:#06131A"></canvas>
-      <canvas id="8-spectre" style="width:100%;height:60px;display:block;margin-top:2px"></canvas>
-      <div class="petit" style="margin-top:6px">Le son du poste par la carte son (onglet Son). L'horloge du PC doit être à l'heure à la seconde près (NTP).</div>
+      <div class="f8-puces" id="8-puces"></div>
     </div>
   </div>
-  <div>
+  <div class="f8-grille">
+    <div class="carte f8-cascade-boite">
+      <div class="paire" style="margin:0 0 6px"><b>Cascade</b><span class="petit" id="8-libre"></span><span class="petit" style="margin-left:auto">Les indicatifs décodés écrits à leur fréquence, dans leur créneau</span></div>
+      <div style="position:relative"><canvas id="8-cascade" style="width:100%;height:420px;display:block;border-radius:8px;background:#05070D;cursor:crosshair"></canvas></div>
+      <canvas id="8-spectre" style="width:100%;height:56px;display:block;margin-top:2px"></canvas>
+      <div class="petit" style="margin-top:4px">Le son du poste par la carte son (onglet Son), ou la clé SDR. L'horloge du PC doit être juste à la seconde (NTP). Cliquer : la fréquence audio sous la souris.</div>
+    </div>
     <div class="carte">
-      <div class="ligne" style="margin-top:0"><input id="8-filtre" placeholder="Filtrer : indicatif, carré…">
-        <label class="petit"><input type="checkbox" id="8-cq"> CQ seulement</label></div>
-      <div style="max-height:calc(100vh - 190px);overflow:auto;margin-top:6px">
-        <table><thead><tr><th>UTC</th><th>dB</th><th>DT</th><th>Hz</th><th>Message</th><th>km</th><th></th></tr></thead><tbody id="8-liste"></tbody></table>
+      <div class="paire" style="margin:0 0 6px"><b>Radar</b><span class="petit" id="8-radar-info"></span></div>
+      <canvas id="8-radar" style="width:100%;aspect-ratio:1/1;display:block;border-radius:50%;background:radial-gradient(circle,#0B1A24 0%,#05070D 75%)"></canvas>
+      <div class="petit" style="margin-top:6px">Chaque station à son azimut et sa distance depuis ton QTH. Elle pâlit avec le temps, pulse quand elle vient d'être entendue. <span style="color:#5BD68A">●</span> CQ <span style="color:#FFB454">★</span> nouveau pays <span style="color:#FF5FA2">●</span> t'appelle <span style="color:#6B7C8F">●</span> déjà au carnet</div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:12px;min-width:0">
+      <div class="carte">
+        <div class="paire" style="margin:0 0 6px"><b>Qui appeler maintenant</b><span class="petit">ce que chaque station apporterait</span></div>
+        <div id="8-opport"></div>
+      </div>
+      <div class="carte" style="flex:1;min-height:0">
+        <div style="max-height:calc(100vh - 470px);min-height:200px;overflow:auto">
+          <table class="f8-table"><thead><tr><th>UTC</th><th></th><th>Station</th><th>dB</th><th>Hz</th><th>Message</th><th>km</th><th></th></tr></thead><tbody id="8-liste"></tbody></table>
+        </div>
       </div>
     </div>
   </div>
@@ -3763,50 +3802,197 @@ function mChoisis(nom) { mChoisie = nom; g('m-galerie').dataset.vu = ''; ticMete
 setInterval(ticMeteor, 1000);
 
 // ------------------------------------------------------------------ FT8
-let H = null, ft8Vu = '';
+// Four ideas: the slot's ring, the waterfall that speaks (callsigns written where they sent, the slots' edges,
+// a free spot found), the radar (each station at its bearing and distance), and who to call now (what each brings).
+let H = null, ft8Vu = '', f8Lignes = [], f8Total = 0, f8Pas = 128, f8Fin = 0, f8Complete = false, f8Libre = null, f8Clic = null;
+const f8Drapeau = c => c && c.length === 2 ? String.fromCodePoint(...[...c.toUpperCase()].map(x => 0x1F1E6 + x.charCodeAt(0) - 65)) : '🏳';
+const F8_CONT = { EU: 'Europe', AF: 'Afrique', AS: 'Asie', NA: 'Am. Nord', SA: 'Am. Sud', OC: 'Océanie' };
+const f8Slot = () => (H && H.mode === 'FT4') ? 7500 : 15000;
+// A colour table (dark blue, violet, orange, yellow, white): weak lines stay visible, strong ones do not burn.
+const F8_PAL = (() => {
+  const p = [[5, 7, 13], [20, 24, 70], [80, 30, 120], [170, 50, 110], [235, 110, 50], [250, 200, 60], [255, 255, 230]], t = [];
+  for (let i = 0; i < 256; i++) { const k = i / 255 * (p.length - 1), a = Math.min(p.length - 2, Math.floor(k)), f = k - a;
+    t.push(p[a].map((v, j) => Math.round(v + (p[a + 1][j] - v) * f))); }
+  return t;
+})();
 async function ticFt8() {
   if (g('v-ft8').hidden) return;
   try { H = await (await fetch('api/ft8')).json(); } catch (x) { return; }
   if (!H.present) return;
-  txt('8-marche', H.enMarche ? 'Arrêter' : 'Écouter');
+  etatMarche('8', H.enMarche, 'aucune');
   if (document.activeElement !== g('8-mode')) g('8-mode').value = H.mode;
   txt('8-etat', !H.carte ? 'carte son arrêtée (onglet Son)' : H.enMarche ? H.tranches + ' créneaux · niveau ' + Math.round(H.niveau * 100) + ' %' : 'à l’arrêt');
-  g('8-tranche').style.width = H.enMarche ? Math.round(H.avancement * 100) + '%' : '0';
+  // The page served by the phone has no stream of rows: its whole waterfall each time.
+  if (f8Complete && H.cascade) { f8Lignes = H.cascade.slice().reverse().map(b => Uint8Array.from(atob(b), ch => ch.charCodeAt(0))); f8Fin = Date.now(); f8Pas = 128; dessineCascade(); }
+  dessineAnneau(); puces(); opportunites(); listeFt8();
+}
+async function ticCascade() {
+  if (g('v-ft8').hidden || f8Complete) return;
+  let j; try { const r = await fetch('api/ft8/cascade?depuis=' + f8Total); if (!r.ok) { f8Complete = true; return; } j = await r.json(); } catch (x) { return; }
+  if (j.total < f8Total) f8Lignes = [];
+  f8Total = j.total; f8Pas = j.pasMs || f8Pas; f8Fin = j.finMs || f8Fin;
+  (j.lignes || []).forEach(b => f8Lignes.push(Uint8Array.from(atob(b), ch => ch.charCodeAt(0))));
+  if (f8Lignes.length > 360) f8Lignes.splice(0, f8Lignes.length - 360);
   dessineCascade();
+}
+setInterval(ticCascade, 250);
+// The slot's ring: the 15 s as a circle, the seconds left, even or odd.
+function dessineAnneau() {
+  const s = f8Slot(), now = Date.now(), dans = now % s, pair = Math.floor(now / s) % 2 === 0;
+  const a = dans / s * 2 * Math.PI, R = 42, x = 50 + R * Math.sin(a), y = 50 - R * Math.cos(a), grand = a > Math.PI ? 1 : 0;
+  g('8-anneau').innerHTML = '<circle cx="50" cy="50" r="42" fill="none" stroke="#1C2A36" stroke-width="9"/>' +
+    (H && H.enMarche ? '<path d="M50 8 A42 42 0 ' + grand + ' 1 ' + x.toFixed(1) + ' ' + y.toFixed(1) + '" fill="none" stroke="' + (pair ? '#3FE0C8' : '#FFB454') + '" stroke-width="9" stroke-linecap="round"/>' : '') +
+    '<text x="50" y="50" text-anchor="middle" font-size="22" font-weight="800" fill="#E8F0F7">' + Math.ceil((s - dans) / 1000) + '</text>' +
+    '<text x="50" y="68" text-anchor="middle" font-size="10" fill="' + (pair ? '#3FE0C8' : '#FFB454') + '">' + (pair ? 'PAIR' : 'IMPAIR') + '</text>';
+}
+setInterval(() => { if (!g('v-ft8').hidden) dessineAnneau(); }, 200);
+// The session at a glance.
+function puces() {
+  const l = H.entendus, de = new Set(l.map(e => e.de).filter(Boolean)), pays = new Set(l.map(e => e.pays).filter(Boolean)), cont = new Set(l.map(e => e.cont).filter(Boolean));
+  const loin = l.filter(e => e.km != null).sort((a, b) => b.km - a.km)[0];
+  const nv = new Set(l.filter(e => e.nouveauPays).map(e => e.pays)), cq = new Set(l.filter(e => e.cq).map(e => e.de));
+  const p = (v, t, c) => '<span class="f8-puce"' + (c ? ' style="color:' + c + '"' : '') + '><b>' + v + '</b> ' + t + '</span>';
+  g('8-puces').innerHTML = p(de.size, 'stations') + p(pays.size, 'pays') + p(cont.size + '/6', 'continents') + p(cq.size, 'en CQ', '#5BD68A') +
+    (nv.size ? p(nv.size, 'pays nouveaux', '#FFB454') : '') + (loin ? p(loin.km.toLocaleString() + ' km', f8Drapeau(loin.drapeau) + ' ' + esc(loin.de), '#3FE0C8') : '');
+}
+// Who to call now: each station heard in the last few minutes, valued by what it would bring.
+function valeur(e) {
+  let s = 0; const r = [];
+  if (e.nouveauPays) { s += 50; r.push(['nouveau pays', '#FFB454']); }
+  if (e.nouveauCarre) { s += 20; r.push(['nouveau carré', '#FFB454']); }
+  if (e.km != null) { s += Math.min(30, e.km / 300); if (e.km > 3000) r.push(['DX ' + e.km.toLocaleString() + ' km', '#3FE0C8']); }
+  s += Math.max(0, e.db + 24) / 2;
+  if (e.cq) { s += 15; r.push(['CQ', '#5BD68A']); }
+  if (e.vu <= 2) { s += 5; r.push(['rare ici', '#9AA7B4']); }
+  if (e.fait) { s -= 40; r.push(['déjà au carnet', '#6B7C8F']); }
+  if (e.moi) { s += 100; r.push(['t’appelle', '#FF5FA2']); }
+  return [s, r];
+}
+function opportunites() {
+  const recent = Date.now() - 5 * 60000, vus = new Map();
+  for (const e of H.entendus) if (e.de && e.t >= recent && !vus.has(e.de)) vus.set(e.de, e);
+  const l = [...vus.values()].map(e => [e, ...valeur(e)]).filter(x => x[1] > 0).sort((a, b) => b[1] - a[1]).slice(0, 7);
+  g('8-opport').innerHTML = l.map(([e, s, r]) => '<div class="f8-op" onclick="noteFt8(\'' + esc(e.de) + '\',\'' + esc(e.loc) + '\',' + e.db + ')" title="Préparer ce contact dans le carnet">' +
+    '<span class="f8-dr">' + f8Drapeau(e.drapeau) + '</span><span style="min-width:0;flex:1"><b class="f8-call">' + esc(e.de) + '</b> <span class="petit">' + esc(e.pays || '') +
+    (e.loc ? ' · ' + esc(e.loc) : '') + (e.az != null ? ' · ' + e.az + '°' : '') + ' · ' + e.hz + ' Hz · ' + (e.pair ? 'pair' : 'impair') + '</span><br>' +
+    r.map(x => '<span class="f8-tag" style="color:' + x[1] + ';border-color:' + x[1] + '">' + x[0] + '</span>').join('') + '</span>' +
+    '<span class="f8-score" title="Anneau : ce qu’elle apporterait ; au centre : son signal (dB)" style="--v:' + Math.min(100, Math.round(s)) + '">' + (e.db > 0 ? '+' : '') + e.db + '</span></div>').join('') ||
+    '<div class="petit">' + (H.enMarche ? 'personne depuis 5 minutes' : 'à l’écoute, les stations s’y classeront') + '</div>';
+}
+function listeFt8() {
   const f = v('8-filtre').toUpperCase(), cq = g('8-cq').checked;
-  const l = H.entendus.filter(e => (!cq || e.cq) && (!f || [e.texte, e.loc].join(' ').toUpperCase().includes(f)));
+  const l = H.entendus.filter(e => (!cq || e.cq) && (!f || [e.texte, e.loc, e.pays].join(' ').toUpperCase().includes(f)));
   const cle = JSON.stringify([f, cq, l.length, l.length ? l[0].t + l[0].texte : '']);
-  if (cle === ft8Vu) return;
+  if (cle === ft8Vu) { dessineRadar(); return; }
   ft8Vu = cle;
   let avant = 0;
-  g('8-liste').innerHTML = l.map(e => {
-    // A line between slots, as in a log of the band.
-    const sep = avant && e.t !== avant ? ' style="border-top:2px solid var(--bord)"' : ''; avant = e.t;
-    const coul = e.moi ? 'color:var(--rose);font-weight:800' : e.cq ? 'color:var(--vert);font-weight:700' : '';
-    return '<tr' + sep + '><td>' + new Date(e.t).toISOString().slice(11, 19) + '</td><td>' + e.db + '</td><td>' + e.dt + '</td><td>' + e.hz +
-      '</td><td style="font-family:ui-monospace,Consolas,monospace;' + coul + '">' + esc(e.texte) + (e.fait ? ' <span class="pastille on" title="déjà au carnet">✓</span>' : '') +
-      '</td><td>' + (e.km == null ? '' : e.km) + '</td><td>' + (e.de ? '<button title="Préparer ce contact dans le carnet" onclick="noteFt8(\'' + esc(e.de) + '\',\'' + esc(e.loc) + '\',' + e.db + ')">✎</button>' : '') + '</td></tr>';
-  }).join('') || '<tr><td colspan="7" class="petit">' + (H.enMarche ? 'rien encore décodé' : 'prêt') + '</td></tr>';
+  g('8-liste').innerHTML = l.slice(0, 250).map(e => {
+    const sep = avant && e.t !== avant ? ' class="f8-sep"' : ''; avant = e.t;
+    const coul = e.moi ? '#FF5FA2' : e.nouveauPays ? '#FFB454' : e.cq ? '#5BD68A' : e.fait ? '#6B7C8F' : '#E8F0F7';
+    const barre = '<span class="f8-db"><i style="width:' + Math.max(4, Math.min(100, (e.db + 24) * 3)) + '%;background:' + (e.db >= -5 ? '#5BD68A' : e.db >= -15 ? '#FFB454' : '#FF5FA2') + '"></i></span>';
+    return '<tr' + sep + '><td class="petit">' + new Date(e.t).toISOString().slice(11, 19) + '</td><td title="' + esc(e.pays || '') + (e.cont ? ' · ' + (F8_CONT[e.cont] || e.cont) : '') + '">' + f8Drapeau(e.drapeau) +
+      '</td><td style="color:' + coul + ';font-weight:700">' + esc(e.de || '') + (e.nouveauPays ? ' ★' : '') + '</td><td>' + barre + '<span class="petit">' + e.db + '</span></td><td class="petit">' + e.hz +
+      '</td><td style="font-family:ui-monospace,Consolas,monospace;color:' + coul + '">' + esc(e.texte) + (e.fait ? ' <span class="pastille on" title="déjà au carnet">✓</span>' : '') + (e.nouveauCarre ? ' <span class="f8-tag" style="color:#FFB454;border-color:#FFB454">carré</span>' : '') +
+      '</td><td class="petit">' + (e.km == null ? '' : e.km.toLocaleString() + (e.az != null ? ' · ' + e.az + '°' : '')) + '</td><td>' + (e.de ? '<button title="Préparer ce contact dans le carnet" onclick="noteFt8(\'' + esc(e.de) + '\',\'' + esc(e.loc) + '\',' + e.db + ')">✎</button>' : '') + '</td></tr>';
+  }).join('') || '<tr><td colspan="8" class="petit">' + (H.enMarche ? 'rien encore décodé' : 'prêt') + '</td></tr>';
+  dessineRadar();
 }
+// The waterfall: newest on top; the slots' edges; the callsigns where they sent; the free spot.
 function dessineCascade() {
-  const c = g('8-cascade'), w = c.clientWidth, h = c.clientHeight, dpr = window.devicePixelRatio || 1;
-  if (c.width !== Math.round(w * dpr)) { c.width = Math.round(w * dpr); c.height = Math.round(h * dpr); }
-  const x = c.getContext('2d'); x.setTransform(dpr, 0, 0, dpr, 0, 0);
-  x.fillStyle = '#06131A'; x.fillRect(0, 0, w, h);
-  const rows = H.cascade.map(b => Uint8Array.from(atob(b), ch => ch.charCodeAt(0)));
-  const rh = h / 60;
-  rows.forEach((r, i) => { const cw = w / r.length;
-    for (let k = 0; k < r.length; k++) { const v = r[k]; if (v < 8) continue;
-      x.fillStyle = 'rgb(' + Math.min(255, v * 2) + ',' + Math.min(255, v * 1.4) + ',' + (60 + v / 2) + ')'; x.fillRect(k * cw, i * rh, cw + 0.5, rh + 0.5); } });
-  // The audio frequencies, each 500 Hz.
-  x.fillStyle = 'rgba(232,240,247,.7)'; x.font = '10px system-ui';
-  for (let f = 500; f < H.haute; f += 500) { const px = w * (f - H.basse) / (H.haute - H.basse); x.fillRect(px, 0, 1, 4); x.fillText(f, px + 2, 11); }
-  const s = g('8-spectre'), sw = s.clientWidth, sh = s.clientHeight;
-  if (s.width !== Math.round(sw * dpr)) { s.width = Math.round(sw * dpr); s.height = Math.round(sh * dpr); }
-  const y = s.getContext('2d'); y.setTransform(dpr, 0, 0, dpr, 0, 0); y.clearRect(0, 0, sw, sh);
-  if (H.spectre.length) { y.strokeStyle = '#3FE0C8'; y.beginPath();
-    H.spectre.forEach((v, k) => { const px = sw * k / H.spectre.length, py = sh - 2 - v * (sh - 4); if (k) y.lineTo(px, py); else y.moveTo(px, py); }); y.stroke(); }
+  const c = g('8-cascade'), [x, w, h] = toile(c), n = f8Lignes.length;
+  x.fillStyle = '#05070D'; x.fillRect(0, 0, w, h);
+  if (!n || !H) return;
+  const cols = f8Lignes[n - 1].length, img = x.createImageData(cols, n);
+  for (let r = 0; r < n; r++) { const ligne = f8Lignes[n - 1 - r];
+    for (let k = 0; k < cols; k++) { const p = F8_PAL[ligne[k]], o = 4 * (r * cols + k); img.data[o] = p[0]; img.data[o + 1] = p[1]; img.data[o + 2] = p[2]; img.data[o + 3] = 255; } }
+  const tmp = document.createElement('canvas'); tmp.width = cols; tmp.height = n; tmp.getContext('2d').putImageData(img, 0, 0);
+  x.imageSmoothingEnabled = false; x.drawImage(tmp, 0, 0, w, h * n / 360);
+  const dureeVue = 360 * f8Pas, Y = t => (f8Fin - t) / dureeVue * h, X = hz => (hz - H.basse) / (H.haute - H.basse) * w, s = f8Slot();
+  // The slots' edges, their time and parity.
+  x.font = '10px system-ui'; x.textAlign = 'left';
+  for (let t = Math.floor(f8Fin / s) * s; t > f8Fin - dureeVue; t -= s) {
+    const y = Y(t); x.strokeStyle = 'rgba(232,240,247,.35)'; x.setLineDash([4, 4]); x.beginPath(); x.moveTo(0, y); x.lineTo(w, y); x.stroke(); x.setLineDash([]);
+    const pair = Math.floor(t / s) % 2 === 0; x.fillStyle = pair ? '#3FE0C8' : '#FFB454';
+    x.fillText(new Date(t).toISOString().slice(11, 19) + (pair ? ' pair' : ' impair'), 4, y + 12);
+  }
+  // The callsigns, in the slot they sent in, at their audio frequency.
+  x.font = 'bold 11px system-ui';
+  // Two stations close in frequency: the second label a line lower, not over the first.
+  const places = [];
+  for (const e of H.entendus) {
+    if (!e.de || e.t < f8Fin - dureeVue - s) continue;
+    const px = X(e.hz);
+    let y = Y(e.t + s * 0.85);
+    const lw0 = x.measureText(f8Drapeau(e.drapeau) + ' ' + e.de).width + 8;
+    while (places.some(p => Math.abs(p[1] - y) < 14 && px < p[0] + p[2] && p[0] < px + lw0)) y += 14;
+    places.push([px, y, lw0]);
+    if (y < 8 || y > h) continue;
+    const coul = e.moi ? '#FF5FA2' : e.nouveauPays ? '#FFB454' : e.cq ? '#5BD68A' : e.fait ? '#9AA7B4' : '#E8F0F7';
+    const t = f8Drapeau(e.drapeau) + ' ' + e.de, lw = x.measureText(t).width + 8;
+    x.fillStyle = 'rgba(5,7,13,.72)'; x.fillRect(px - 2, y - 11, lw, 14); x.fillStyle = coul; x.fillText(t, px + 2, y);
+    x.fillRect(px - 2, y - 11, 2, 14);
+  }
+  // A free spot to send: the quietest 60 Hz of the last two slots between 500 and 2 500 Hz
+  // (the rig's filter cuts the edges), away from every station decoded.
+  const occupe = H.entendus.filter(e => e.t > f8Fin - 2 * s - 2000).map(e => e.hz);
+  let meilleur = null, mini = 1e9;
+  const recents = f8Lignes.slice(Math.max(0, n - Math.round(2 * s / f8Pas)));
+  for (let hz = 500; hz <= 2500; hz += 10) {
+    if (occupe.some(o => Math.abs(o - hz) < 70)) continue;
+    const k0 = Math.floor((hz - 30 - H.basse) / (H.haute - H.basse) * cols), k1 = Math.ceil((hz + 30 - H.basse) / (H.haute - H.basse) * cols);
+    let somme = 0; for (const l of recents) for (let k = k0; k <= k1; k++) somme += l[k] || 0;
+    // As quiet: the nearer the middle of the passband, the better.
+    if (somme < mini * 0.97 || (somme <= mini * 1.03 && meilleur != null && Math.abs(hz - 1500) < Math.abs(meilleur - 1500))) { mini = Math.min(mini, somme); meilleur = hz; }
+  }
+  f8Libre = meilleur;
+  if (meilleur) { const px = X(meilleur); x.fillStyle = 'rgba(91,214,138,.22)'; x.fillRect(X(meilleur - 30), 0, X(meilleur + 30) - X(meilleur - 30), h);
+    x.fillStyle = '#5BD68A'; x.font = 'bold 11px system-ui'; x.fillText('▼ libre ' + meilleur + ' Hz', Math.min(w - 90, px + 4), 12); }
+  txt('8-libre', meilleur ? '· place libre pour émettre : ' + meilleur + ' Hz' : '');
+  // The audio frequencies.
+  x.fillStyle = 'rgba(232,240,247,.75)'; x.font = '10px system-ui';
+  for (let f = 500; f < H.haute; f += 500) { const px = X(f); x.fillRect(px, h - 5, 1, 5); x.fillText(f, px + 2, h - 6); }
+  if (f8Clic) { x.strokeStyle = '#FF5FA2'; x.beginPath(); x.moveTo(X(f8Clic), 0); x.lineTo(X(f8Clic), h); x.stroke(); x.fillStyle = '#FF5FA2'; x.fillText(f8Clic + ' Hz', X(f8Clic) + 3, 26); }
+  // The spectrum: the newest row, as a line.
+  const sp = g('8-spectre'), [y2, sw, sh] = toile(sp), der = f8Lignes[n - 1];
+  y2.fillStyle = '#05070D'; y2.fillRect(0, 0, sw, sh); y2.strokeStyle = '#3FE0C8'; y2.lineWidth = 1.2; y2.beginPath();
+  for (let k = 0; k < der.length; k++) { const px = sw * k / der.length, py = sh - 2 - der[k] / 255 * (sh - 4); if (k) y2.lineTo(px, py); else y2.moveTo(px, py); } y2.stroke();
 }
+g('8-cascade').addEventListener('click', ev => { if (!H) return; const b = ev.currentTarget.getBoundingClientRect(); f8Clic = Math.round((H.basse + (ev.clientX - b.left) / b.width * (H.haute - H.basse)) / 5) * 5; dessineCascade(); });
+// The radar: an azimuthal map around the station — each one at its bearing and distance.
+function dessineRadar() {
+  const c = g('8-radar'); if (!c || !H) return;
+  const [x, w, h] = toile(c), R = Math.min(w, h) / 2 - 14, cx = w / 2, cy = h / 2, now = Date.now();
+  x.clearRect(0, 0, w, h);
+  const vus = new Map();
+  for (const e of H.entendus) if (e.de && e.km != null && e.az != null && !vus.has(e.de) && now - e.t < 60 * 60000) vus.set(e.de, e);
+  const l = [...vus.values()], maxKm = l.length ? Math.max(...l.map(e => e.km)) : 2000;
+  const echelle = [2000, 5000, 10000, 15000, 20000].find(k => k >= maxKm) || 20000;
+  x.strokeStyle = 'rgba(63,224,200,.18)'; x.fillStyle = 'rgba(154,167,180,.8)'; x.font = '10px system-ui'; x.textAlign = 'center';
+  // A square-root scale: the near stations (most of them) spread out, the far ones still fit.
+  const rayon = km => Math.sqrt(Math.min(1, km / echelle)) * R;
+  for (const f of [0.05, 0.25, 0.5, 1]) { const r = rayon(echelle * f); x.beginPath(); x.arc(cx, cy, r, 0, 7); x.stroke(); x.fillText(Math.round(echelle * f).toLocaleString() + ' km', cx, cy - r + 11); }
+  for (let a = 0; a < 360; a += 30) { const r = a * Math.PI / 180; x.beginPath(); x.moveTo(cx, cy); x.lineTo(cx + R * Math.sin(r), cy - R * Math.cos(r)); x.stroke(); }
+  x.fillStyle = '#E8F0F7'; x.font = 'bold 12px system-ui';
+  [['N', 0], ['E', 90], ['S', 180], ['O', 270]].forEach(([t, a]) => { const r = a * Math.PI / 180; x.fillText(t, cx + (R + 8) * Math.sin(r), cy - (R + 8) * Math.cos(r) + 4); });
+  // The sweep: one turn per slot, as a radar's beam.
+  const bal = (now % f8Slot()) / f8Slot() * 2 * Math.PI;
+  const grad = x.createConicGradient ? x.createConicGradient(bal - Math.PI / 2 - 0.6, cx, cy) : null;
+  if (grad && H.enMarche) { grad.addColorStop(0, 'rgba(63,224,200,0)'); grad.addColorStop(0.095, 'rgba(63,224,200,.16)'); grad.addColorStop(0.1, 'rgba(63,224,200,0)');
+    x.fillStyle = grad; x.beginPath(); x.arc(cx, cy, R, 0, 7); x.fill(); }
+  x.fillStyle = '#FFB454'; x.beginPath(); x.arc(cx, cy, 4, 0, 7); x.fill();
+  const dernier = Math.max(0, ...H.entendus.map(e => e.t));
+  l.sort((a, b) => a.t - b.t).forEach(e => {
+    const r = e.az * Math.PI / 180, d = rayon(e.km), px = cx + d * Math.sin(r), py = cy - d * Math.cos(r);
+    const age = Math.min(1, (now - e.t) / (60 * 60000)), alpha = 1 - age * 0.75, taille = 3 + Math.max(0, e.db + 22) / 5;
+    const coul = e.moi ? '255,95,162' : e.nouveauPays ? '255,180,84' : e.cq ? '91,214,138' : e.fait ? '107,124,143' : '63,224,200';
+    if (e.t === dernier && H.enMarche) { const ph = (now % 1500) / 1500; x.strokeStyle = 'rgba(' + coul + ',' + (1 - ph) + ')'; x.lineWidth = 2; x.beginPath(); x.arc(px, py, taille + ph * 14, 0, 7); x.stroke(); x.lineWidth = 1; }
+    x.fillStyle = 'rgba(' + coul + ',' + alpha + ')';
+    if (e.nouveauPays) { x.font = (taille * 3) + 'px system-ui'; x.fillText('★', px, py + taille); } else { x.beginPath(); x.arc(px, py, taille, 0, 7); x.fill(); }
+    if (now - e.t < 15 * 60000) { x.font = '10px system-ui'; x.fillStyle = 'rgba(232,240,247,' + alpha + ')'; x.fillText(e.de, px, py - taille - 3); }
+  });
+  txt('8-radar-info', l.length ? l.length + ' stations placées · cercle extérieur ' + echelle.toLocaleString() + ' km' : '');
+}
+setInterval(() => { if (!g('v-ft8').hidden && H) dessineRadar(); }, 120);
 async function ft8Marche() { await post('api/ft8?on=' + (H && H.enMarche ? 0 : 1) + '&mode=' + g('8-mode').value); ticFt8(); }
 function noteFt8(call, loc, db) {
   vue('carnet'); g('c-call').value = call; g('c-loc').value = loc || '';
