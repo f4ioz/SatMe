@@ -52,7 +52,25 @@ class Ft8Pc(
         val rapportDb: Int,
         val decalageS: Double,
         val mode: String,
+        /** Read by expectation during a QSO (see `Ft8Decodeur.Apriori`). */
+        val ap: Boolean = false,
     )
+
+    /** My callsign (the settings'), for decoding with what a QSO lets us expect. */
+    @Volatile var indicatif = ""
+
+    /**
+     * The QSO evident from what was heard: the last station that called me
+     * in the last three minutes; reports exchanged once it sent me one.
+     */
+    fun apriori(): Ft8Decodeur.Apriori? {
+        val moi = indicatif.trim().uppercase().ifEmpty { return null }
+        val recents = entendus.filter { horloge() - it.tranche < 180_000L && it.appele == moi && it.appelant != null }
+        val lui = recents.firstOrNull()?.appelant ?: return null
+        val siens = recents.filter { it.appelant == lui }
+        return Ft8Decodeur.Apriori(moi, lui, siens.any { Regex("[+-]\\d\\d$").containsMatchIn(it.texte) },
+            siens.firstNotNullOfOrNull { it.locator })
+    }
 
     @Volatile var enMarche = false
         private set
@@ -187,12 +205,13 @@ class Ft8Pc(
 
     private fun decode(audio: FloatArray, cadence: Int, sig: Ft8Signal.Mode, m: String, debut: Long, pente: Double = 0.0) {
         val t0 = System.nanoTime()
-        val l = runCatching { Ft8Decodeur.decode(audio, cadence.toDouble(), sig, penteHzS = pente, profondeur = profondeur()) }
+        val l = runCatching { Ft8Decodeur.decode(audio, cadence.toDouble(), sig, penteHzS = pente, profondeur = profondeur(),
+            apriori = apriori()) }
             .getOrDefault(emptyList())
         dernierDecodageMs = (System.nanoTime() - t0) / 1_000_000
         val nouveaux = l.map {
             Entendu(debut, it.message.brut, it.message.appelant, it.message.appele, it.message.locator,
-                Math.round(it.frequenceHz).toInt(), it.rapportDb, it.instantS, m)
+                Math.round(it.frequenceHz).toInt(), it.rapportDb, it.instantS, m, it.ap)
         }
         if (enregistreTranches) runCatching { garde(audio, cadence, m, debut, l) }
         synchronized(this) {
@@ -213,6 +232,7 @@ class Ft8Pc(
             .put("decodes", JSONArray(l.map {
                 JSONObject().put("texte", it.message.brut).put("frequenceHz", it.frequenceHz)
                     .put("rapportDb", it.rapportDb).put("decalageS", it.instantS)
+                    .put("penteHzS", it.penteHzS).put("passe", it.passe).put("ap", it.ap)
             }))
         File(dossier, "$nom.json").writeText(json.toString(1))
         val limite = horloge() - GARDE_TRANCHES_MS

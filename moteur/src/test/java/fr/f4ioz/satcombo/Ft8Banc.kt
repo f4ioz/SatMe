@@ -52,6 +52,7 @@ object Ft8Banc {
         /** My callsign and my partner's, for decoding with what is expected. */
         val moi: String? = null,
         val partenaire: String? = null,
+        val rapportsEchanges: Boolean = false,
     ) {
         val attendus: Set<String> get() = stations.mapNotNull { it.attendu }.toSet()
     }
@@ -217,7 +218,21 @@ object Ft8Banc {
                 station("CQ", "LZ1AB", "KN22", 1900.0, -12.0, -0.2),
                 station("LZ1AB", "SV1ABC", "KM18", 2200.0, -9.0, 0.0)), graine = 130)
         }
-        for (g in 1..6) l += Scenario("bruit_$g", emptyList(), graine = 200L + g)
+        // A QSO with a weak partner (F4IOZ works EA4AB), with stations around.
+        fun qso(nom: String, bout: String, snr: Double, echanges: Boolean, montre: Boolean, graine: Long) {
+            val p = station("F4IOZ", "EA4AB", bout, 1310.0, snr, 0.1)
+            l += Scenario(nom, listOf(if (montre) p else p.copy(attendu = null),
+                station("CQ", "G0ABC", "IO91", 700.0, -8.0, 0.0),
+                station("DL1XYZ", "OK1DEF", "-07", 1900.0, -12.0, 0.3)),
+                graine = graine, moi = "F4IOZ", partenaire = "EA4AB", rapportsEchanges = echanges)
+        }
+        qso("qso_rapport", "-23", -23.0, false, true, 150)
+        qso("qso_r_rapport", "R-21", -23.5, false, true, 151)
+        qso("qso_rr73", "RR73", -23.0, true, true, 152)
+        // Reports not yet exchanged: a RR73 must not be read by expectation.
+        qso("qso_rr73_trop_tot", "RR73", -24.0, false, false, 153)
+        for (g in 1..6) l += Scenario("bruit_$g", emptyList(), graine = 200L + g,
+            moi = if (g % 2 == 0) "F4IOZ" else null, partenaire = "EA4AB", rapportsEchanges = true)
         l += Scenario("bruit_porteuses", emptyList(), graine = 210, porteuses = listOf(700.0, 1503.1, 2250.0))
         l += Scenario("ft4", bande(30, 8, -14.0..0.0, dtMax = 0.3), mode = Ft8Signal.FT4, graine = 140)
         return l

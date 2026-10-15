@@ -116,4 +116,26 @@ class Ft8PcTest {
         val avec = Ft8Pc { 0L }.apply { demarre("FT8"); decodeTranche(a, Ft8Signal.FT8.cadenceHz.toInt(), 0L, 3.0) }
         assertEquals("CQ F4IOZ IN77", avec.entendus.single().texte)
     }
+
+    @Test
+    fun le_qso_en_cours_vient_de_qui_ma_appele() {
+        val m = BooleanArray(Ft8.BITS_MESSAGE)
+        Ft8.ecritEntier(m, 0, 28, Ft8.indicatifVers28("F4IOZ")!!)
+        Ft8.ecritEntier(m, 29, 28, Ft8.indicatifVers28("EA4AB")!!)
+        Ft8.ecritEntier(m, 59, 15, 32_435L - 12)
+        Ft8.ecritEntier(m, 74, 3, 1L)
+        val tons = Ft8.bitsVersSymboles(fr.f4ioz.satcombo.domain.Ldpc.encode(Ft8.avecControle(m)))
+        val a = Ft8Signal.synthetise(tons, Ft8Signal.FT8, 1200.0, 0.5, dureeTotaleS = 15.0)
+        var t = 1_791_800_015_000L
+        val f = Ft8Pc { t }
+        f.demarre("FT8")
+        assertEquals(null, f.apriori())
+        f.indicatif = "f4ioz"
+        f.decodeTranche(a, Ft8Signal.FT8.cadenceHz.toInt(), t - 15_000)
+        assertEquals("F4IOZ EA4AB -12", f.entendus.single().texte)
+        assertEquals(fr.f4ioz.satcombo.domain.Ft8Decodeur.Apriori("F4IOZ", "EA4AB", true, null), f.apriori())
+        // Minutes later, no QSO is evident any more.
+        t += 600_000L
+        assertEquals(null, f.apriori())
+    }
 }

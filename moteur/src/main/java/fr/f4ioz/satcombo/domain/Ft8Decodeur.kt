@@ -42,7 +42,84 @@ object Ft8Decodeur {
         val passe: Int = 1,
         /** Its frequency drift across the transmission, Hz/s: the slot's known one plus its own. */
         val penteHzS: Double = 0.0,
+        /**
+         * Read with what was expected ([Apriori]) rather than found by the
+         * code alone: right in all likelihood, but to be shown as such.
+         */
+        val ap: Boolean = false,
     )
+
+    /**
+     * What a QSO in progress lets us expect: my callsign and my partner's.
+     *
+     * A weak partner's next message is one of a few dozen (a report, R and a
+     * report, RRR, RR73, 73, or its CQ); when the code fails on a candidate,
+     * each is compared with what was received bit by bit, and one that agrees
+     * far beyond chance is taken. Acknowledgements are expected only once
+     * reports have been exchanged ([rapportsEchanges]): a 73 never comes out
+     * of a QSO that has not happened.
+     */
+    data class Apriori(
+        val moi: String,
+        val partenaire: String,
+        val rapportsEchanges: Boolean = false,
+        /** The partner's grid (4 characters) when known: its CQ and its call with the grid. */
+        val carrePartenaire: String? = null,
+    )
+
+    /**
+     * Least agreement between the received likelihoods and an expected
+     * codeword, Σ llr·s / Σ |llr| (1 = every bit as sent, 0 = chance), and
+     * the least lead over the next expected message. Set on the bench: over
+     * 1400 noise candidates the best of 125 expected messages never passed
+     * 0.40 (about five standard deviations); a partner at −22 dB gives
+     * 0.6–0.8, at −23 dB 0.5–0.75.
+     */
+    private const val ACCORD_AP = 0.55
+    /** Sync threshold of the extra spots searched during a QSO. */
+    private const val SEUIL_AP = 0.7f
+    private const val ECART_AP = 0.10
+
+    /** The expected messages' codewords and their texts' 77 bits. */
+    private class Attendu(val bits77: BooleanArray, val mot: BooleanArray)
+
+    private fun attendus(ap: Apriori, mode: Ft8Signal.Mode): List<Attendu> {
+        val moi = Ft8.indicatifVers28(ap.moi) ?: return emptyList()
+        val lui = Ft8.indicatifVers28(ap.partenaire) ?: return emptyList()
+        val l = ArrayList<Attendu>()
+        fun ajoute(c1: Long, c2: Long, r: Boolean, g15: Int) {
+            val m = BooleanArray(Ft8.BITS_MESSAGE)
+            Ft8.ecritEntier(m, 0, 28, c1)
+            Ft8.ecritEntier(m, 29, 28, c2)
+            m[58] = r
+            Ft8.ecritEntier(m, 59, 15, g15.toLong())
+            Ft8.ecritEntier(m, 74, 3, 1L)
+            val utiles = if (mode.tons == 4) Ft4.avecControle(m) else Ft8.avecControle(m)
+            l += Attendu(m, Ldpc.encode(utiles))
+        }
+        for (r in -30..30) {
+            ajoute(moi, lui, false, 32_435 + r)
+            ajoute(moi, lui, true, 32_435 + r)
+        }
+        if (ap.rapportsEchanges) for (g in 32_402..32_404) ajoute(moi, lui, false, g)
+        ap.carrePartenaire?.trim()?.uppercase()?.takeIf { Regex("[A-R]{2}[0-9]{2}").matches(it) }?.let { c ->
+            val g = (c[0] - 'A') * 1800 + (c[1] - 'A') * 100 + (c[2] - '0') * 10 + (c[3] - '0')
+            ajoute(moi, lui, false, g)
+            ajoute(2L, lui, false, g)
+        }
+        return l
+    }
+
+    /** Σ llr·s / Σ |llr|, s = +1 where the codeword has a zero. */
+    fun accord(douces: FloatArray, mot: BooleanArray): Double {
+        var num = 0.0; var den = 0.0
+        for (i in 0 until minOf(douces.size, mot.size)) {
+            val v = douces[i].toDouble()
+            num += if (mot[i]) -v else v
+            den += abs(v)
+        }
+        return if (den > 0.0) num / den else 0.0
+    }
 
     /**
      * How hard to look at a slot.
@@ -112,6 +189,10 @@ object Ft8Decodeur {
      * [profondeur] sets the search budget; without it, [maximumCandidats]
      * candidates at the usual threshold (the light budget).
      *
+     * [apriori], during a QSO, lets a candidate the code cannot read be
+     * matched against what the partner is expected to send (see [Apriori]);
+     * such decodes carry [Decode.ap].
+     *
      * Returns messages strongest first. An empty list — nothing passed the
      * CRC — is the most common and normal case.
      */
@@ -123,7 +204,8 @@ object Ft8Decodeur {
         hauteHz: Double = 3000.0,
         maximumCandidats: Int = 32,
         penteHzS: Double = 0.0,
-        profondeur: Profondeur? = null
+        profondeur: Profondeur? = null,
+        apriori: Apriori? = null
     ): List<Decode> {
         if (mode.synchro.isEmpty()) return emptyList()
         val entree = Ft8Signal.reechantillonne(audio, cadenceHz, mode.cadenceHz)
@@ -139,11 +221,16 @@ object Ft8Decodeur {
         val dejaVus = HashSet<String>()
         // Drift searches spent so far, against the budget's.
         val essaisPente = IntArray(1)
+        val attendus = apriori?.let { attendus(it, mode) }.orEmpty()
         for (passe in 1..passes) {
             val spec = Ft8Signal.spectrogramme(reste, mode, basseHz, hauteHz)
+            val seuil = profondeur?.seuilSynchro ?: Profondeur.LEGERE.seuilSynchro
+            // During a QSO, fainter spots too: the partner may be below what
+            // the code alone reads, and its expected messages are a far
+            // stronger test than the sync.
             val candidats = Ft8Signal.candidats(spec,
-                maximum = profondeur?.candidats ?: maximumCandidats,
-                scoreMinimal = profondeur?.seuilSynchro ?: Profondeur.LEGERE.seuilSynchro,
+                maximum = (profondeur?.candidats ?: maximumCandidats) + (if (attendus.isEmpty()) 0 else 60),
+                scoreMinimal = if (attendus.isEmpty()) seuil else minOf(seuil, SEUIL_AP),
                 voisins = true)
             val spectre = Ft8Fin.spectre(reste, mode)
             val nouveaux = ArrayList<Lu>()
@@ -153,8 +240,9 @@ object Ft8Decodeur {
                 // A neighbour of a signal already read in this pass: the same signal again.
                 if (nouveaux.any { abs(it.decode.frequenceHz - f0) < mode.ecartHz &&
                         abs(it.decode.instantS - t0) < mode.dureeSymbole }) continue
-                val pente = if (essaisPente[0] < (profondeur?.essaisPente ?: 0)) profondeur?.penteMaxHzS ?: 0.0 else 0.0
-                val lu = essaie(spectre, mode, f0, t0, c.score, tours, pente, essaisPente) ?: continue
+                val pente = if (c.score >= seuil && essaisPente[0] < (profondeur?.essaisPente ?: 0))
+                    profondeur?.penteMaxHzS ?: 0.0 else 0.0
+                val lu = essaie(spectre, mode, f0, t0, c.score, tours, pente, essaisPente, attendus) ?: continue
                 // Neighbouring candidates can yield the same message; keep only
                 // the first, the list is already sorted by score.
                 if (!dejaVus.add(lu.decode.message.brut)) continue
@@ -189,6 +277,7 @@ object Ft8Decodeur {
         penteMaxHzS: Double = 0.0,
         /** Counts the drift searches made. */
         essaisPente: IntArray? = null,
+        attendus: List<Attendu> = emptyList(),
     ): Lu? {
         val e = mode.ecartHz
         val canal = Ft8Fin.canal(spectre, f0, -2.5 * e, (mode.tons + 1.5) * e)
@@ -199,7 +288,7 @@ object Ft8Decodeur {
         val debut = Math.round(t0 * canal.cadence).toInt()
         val l = Ft8Fin.synchronise(canal, mode, debut, Ft8Fin.PAR_SYMBOLE / 2, decalages, doubleArrayOf(0.0))
         lis(l, canal, mode, score, tours)?.let { return it }
-        if (penteMaxHzS <= 0.0) return null
+        if (penteMaxHzS <= 0.0) return parAttente(l, canal, mode, score, attendus)
         essaisPente?.let { it[0]++ }
 
         // --- a drift of its own ---
@@ -219,6 +308,32 @@ object Ft8Decodeur {
             DoubleArray(5) { grossier.decalageHz + (it - 2) * pas / 2 },
             DoubleArray(5) { grossier.penteHzS + (it - 2) * 0.25 })
         return lis(fin, large, mode, score, tours)
+            ?: parAttente(l, canal, mode, score, attendus)
+    }
+
+    /**
+     * The last chance of a candidate during a QSO: the expected message
+     * that agrees best with what was received, if it agrees far beyond
+     * chance, far ahead of the next one, at a believable SNR.
+     */
+    private fun parAttente(l: Ft8Fin.Lecture, canal: Ft8Fin.Canal, mode: Ft8Signal.Mode, score: Float,
+                           attendus: List<Attendu>): Lu? {
+        if (attendus.isEmpty()) return null
+        val douces = Ft8Fin.vraisemblances(l, mode)
+        var meilleur: Attendu? = null
+        var a1 = -1.0; var a2 = -1.0
+        for (a in attendus) {
+            val v = accord(douces, a.mot)
+            if (v > a1) { a2 = a1; a1 = v; meilleur = a } else if (v > a2) a2 = v
+        }
+        val m = meilleur ?: return null
+        if (a1 < ACCORD_AP || a1 - a2 < ECART_AP) return null
+        val message = Ft8.deplie(m.bits77) ?: return null
+        val envoyes = if (mode.tons == 4) Ft4.bitsVersSymboles(m.mot) else Ft8.bitsVersSymboles(m.mot)
+        val rapport = Ft8Fin.rapportDb(l, envoyes, mode)
+        if (rapport < -28) return null
+        return Lu(Decode(message, canal.origineHz + l.decalageHz, l.debut / canal.cadence, rapport, score,
+            ap = true), envoyes, l.penteHzS)
     }
 
     /** A candidate's tones, read where it sits, to a message or nothing. */

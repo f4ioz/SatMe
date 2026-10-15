@@ -31,7 +31,8 @@ class Ft8CorpusTest {
         val audio = Ft8Banc.audio(s)
         val t0 = System.nanoTime()
         val r = Ft8Decodeur.decode(audio, s.mode.cadenceHz, s.mode,
-            penteHzS = if (s.penteConnue) s.penteCommuneHzS else 0.0, profondeur = p)
+            penteHzS = if (s.penteConnue) s.penteCommuneHzS else 0.0, profondeur = p,
+            apriori = s.moi?.let { Ft8Decodeur.Apriori(it, s.partenaire!!, s.rapportsEchanges) })
         val ms = (System.nanoTime() - t0) / 1_000_000
         val lus = r.map { it.message.brut }
         val attendus = s.attendus
@@ -54,7 +55,8 @@ class Ft8CorpusTest {
         "doppler_connu_-1.0Hz/s" to 8, "doppler_connu_1.0Hz/s" to 8,
         "doppler_connu_-3.0Hz/s" to 8, "doppler_connu_3.0Hz/s" to 8,
         "doppler_inconnu_1Hz/s" to 8, "pentes_propres_2Hz/s" to 8, "pente_connue_et_propre" to 8,
-        "indicatifs_composes" to 3, "ft4" to 8,
+        "indicatifs_composes" to 3, "qso_rapport" to 3, "qso_r_rapport" to 2, "qso_rr73" to 3,
+        "qso_rr73_trop_tot" to 2, "ft4" to 8,
     )
 
     @Test
@@ -94,5 +96,32 @@ class Ft8CorpusTest {
             profondeur = Ft8Decodeur.Profondeur.PROFONDE)
         assertTrue(r.joinToString { it.message.brut }, r.size == 1 && r[0].message.brut == "CQ F4IOZ JN18")
         assertTrue("pente ${r[0].penteHzS}", kotlin.math.abs(r[0].penteHzS - 3.5) <= 0.5)
+    }
+
+    @Test
+    fun lattente_dun_qso_ne_fabrique_rien_du_bruit() {
+        // Expected messages, a lower sync threshold, every budget: still nothing out of noise.
+        val ap = Ft8Decodeur.Apriori("F4IOZ", "EA4AB", rapportsEchanges = true, carrePartenaire = "IN80")
+        for (g in 1..16) {
+            val s = Ft8Banc.Scenario("bruit", emptyList(), graine = 700L + g,
+                porteuses = if (g % 4 == 0) listOf(1310.0) else emptyList())
+            for (p in Ft8Decodeur.Profondeur.values()) {
+                val r = Ft8Decodeur.decode(Ft8Banc.audio(s), s.mode.cadenceHz, s.mode, profondeur = p, apriori = ap)
+                assertTrue("graine $g, $p : ${r.map { it.message.brut }}", r.isEmpty())
+            }
+        }
+    }
+
+    @Test
+    fun un_partenaire_sous_le_seuil_est_lu_par_attente_et_marque() {
+        val s = Ft8Banc.corpus().first { it.nom == "qso_rapport" }
+        val r = Ft8Decodeur.decode(Ft8Banc.audio(s), s.mode.cadenceHz, s.mode,
+            profondeur = Ft8Decodeur.Profondeur.PROFONDE, apriori = Ft8Decodeur.Apriori("F4IOZ", "EA4AB"))
+        val p = r.single { it.message.appelant == "EA4AB" }
+        assertTrue(p.ap)
+        assertTrue(r.filter { it !== p }.none { it.ap })
+        // Without the QSO, not read at all.
+        val sans = Ft8Decodeur.decode(Ft8Banc.audio(s), s.mode.cadenceHz, s.mode, profondeur = Ft8Decodeur.Profondeur.PROFONDE)
+        assertTrue(sans.none { it.message.appelant == "EA4AB" })
     }
 }
