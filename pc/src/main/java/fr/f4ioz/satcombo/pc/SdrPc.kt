@@ -93,7 +93,7 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
         meteorAutoLos = p.losEpochMs
         station.suis(sat)
         suitSatellite = true
-        if (!demarre()) {
+        if (!demarre(pourImages = true)) {
             // The dongle did not start: the satellite followed before put back.
             meteorAutoArme = 0
             if (avant != null && avant.catalogNumber != sat.catalogNumber) station.suis(avant)
@@ -301,10 +301,20 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
      * Starting and stopping take turns: an automatic start (a METEOR pass)
      * crossing one asked from the page left an rtl_tcp holding the dongle.
      */
-    @Synchronized fun demarre(): Boolean {
+    @Synchronized fun demarre(pourImages: Boolean = false): Boolean {
         arrete()
+        imagesVoulues = pourImages
         return lance()
     }
+
+    /**
+     * METEOR's pictures asked (its tab's "Recevoir", or the automatic pass):
+     * only then does the dongle go silent for the picture decoder. Started
+     * from the SDR or QO-100 tab it gives sound, whatever the satellite
+     * followed — it stayed silent after a night's METEOR pass left
+     * METEOR-M2 4 as the satellite followed (15 October).
+     */
+    @Volatile private var imagesVoulues = false
 
     private fun lance(): Boolean {
         val gen = ++generation
@@ -326,7 +336,7 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
         _etat.update { it.copy(actif = true, statut = "réception", erreur = "", tuner = RtlTcp.nomTuner(r.tuner)) }
         // METEOR: 120 kHz of digital signal, nothing to hear — the raw samples to the picture decoder.
         val m = meteor
-        if (m != null && !pourSonde && !pourQo100() && suitSatellite && station.estMeteor()) {
+        if (m != null && imagesVoulues && !pourSonde && !pourQo100() && suitSatellite && station.estMeteor()) {
             pourMeteor = true
             m.recepteur.cotes = settings.meteorCotes
             m.recepteur.demarre(Dsp.RTL_RATE.toDouble(), station.etat.value.suivi?.name ?: "METEOR", station.monteVersLeNord(), station.etat.value.suivi)

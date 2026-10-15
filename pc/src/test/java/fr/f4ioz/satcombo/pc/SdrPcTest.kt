@@ -256,9 +256,16 @@ class SdrPcTest {
         sdr.lance = false
         sdr.port = serveur.localPort
         fauxRtlTcp()
+        // Started from the SDR tab with a METEOR followed: sound, not pictures.
         assertTrue(sdr.demarre())
+        assertFalse(sdr.pourMeteor)
+        attends { son.etat.value.appareil == SdrPc.NOM_SOURCE && recu.get() > 0 }
+        // Asked for its pictures (the METEOR tab, or the automatic pass): silent, the samples to the decoder.
+        fauxRtlTcp()
+        assertTrue(sdr.demarre(pourImages = true))
         assertTrue(sdr.pourMeteor)
         assertFalse(son.etat.value.actif)
+        recu.set(0)
         // QO-100 set on the dongle (the morning of 15 October): METEOR left, the sound back.
         st.qo100.aLaCle(true)
         attends { !sdr.pourMeteor && son.etat.value.appareil == SdrPc.NOM_SOURCE }

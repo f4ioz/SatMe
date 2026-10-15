@@ -596,7 +596,7 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                     station.suis(sat)
                 }
                 d.suitSatellite = true
-                if (!d.demarre()) return JSONObject().put("ok", false).put("erreur", d.etat.value.erreur)
+                if (!d.demarre(pourImages = true)) return JSONObject().put("ok", false).put("erreur", d.etat.value.erreur)
             }
             "/api/meteor/arreter" -> sdr?.arrete()
             "/api/meteor/auto" -> station.settings.meteorAuto = q["on"] == "1"
