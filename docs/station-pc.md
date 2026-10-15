@@ -116,6 +116,21 @@ In **Réglages**, first: the rig's model (IC-9700, IC-9100, IC-910H, TS-2000, tw
 
 <p align="center"><img src="images/pc-reglages-materiel.webp" width="100%" alt="Settings: the rig (CAT) and the rotator, their ports and connection"></p>
 
+## FT8 / FT4: the band at a glance
+
+A tab made to see the band, not only to read it:
+
+- **The slot's ring**: the 15 s as a circle, the countdown, cyan when the slot is even, orange when odd.
+- **A waterfall that speaks**: 46 s, about 5.5 Hz a column, the slots' edges and times. **Each callsign decoded is written with its flag, at its frequency, in its slot.** A **free spot** to send is found by itself (the quietest place between 500 and 2 500 Hz, away from the stations decoded).
+- **The radar**: each station a dot at its bearing and distance from your QTH. It fades with time and pulses when just heard; a sweep turns once a slot. Green for a CQ, ★ for a country new to your log, pink when it calls you.
+- **Who to call now**: the stations of the last 5 minutes, ranked by what each would bring (new country, new square, distance, strength, CQ, rarity); a click prepares the contact in the log.
+- **💬 Messages**, as a messenger: the conversations between two stations (flags, the last message, ✓ when the QSO is closed), each one as bubbles, or everything as it comes. Each message says what it is: 📣 call, 📍 square, 📶 report, ✅ report received, 🤝 RR73 / 73.
+
+<p align="center">
+<img src="images/pc-ft8.webp" width="49%" alt="FT8 on QO-100: the slot's ring, the waterfall with the callsigns at their frequency, the radar of the stations, who to call now">
+<img src="images/pc-ft8-messages.webp" width="49%" alt="FT8, the messages: the conversations between two stations, and the stream as bubbles">
+</p>
+
 ## DATV — QO-100's wide band with a MiniTiouner
 
 The **DATV** tab receives DVB-S/S2 with a **MiniTiouner** (tuner and demodulator on USB), driven by [LongMynd](https://github.com/BritishAmateurTelevisionClub/longmynd), BATC's free program. SatMe runs it apart, as it runs rtl_tcp: build it, then give its path on the page (or put it in the `PATH`).

@@ -116,6 +116,21 @@ Dans **Réglages**, en tête : le modèle du poste (IC-9700, IC-9100, IC-910H, T
 
 <p align="center"><img src="images/pc-reglages-materiel.webp" width="100%" alt="Réglages : le poste (CAT) et le rotor, leurs ports et leur connexion"></p>
 
+## FT8 / FT4 : la bande en un coup d'œil
+
+Un onglet pensé pour voir la bande, pas seulement la lire :
+
+- **L'anneau du créneau** : les 15 s en cercle, le compte à rebours, en cyan si le créneau est pair, en orange s'il est impair.
+- **La cascade qui parle** : 46 s, environ 5,5 Hz par colonne, les limites des créneaux et leur heure. **Chaque indicatif décodé est écrit avec son drapeau, à sa fréquence, dans son créneau.** Une **place libre** pour émettre est trouvée toute seule (le coin le plus calme entre 500 et 2 500 Hz, loin des stations décodées).
+- **Le radar** : chaque station est un point à son azimut et à sa distance depuis ton QTH. Il pâlit avec le temps, pulse quand la station vient d'être entendue ; un balayage fait un tour par créneau. Vert pour un CQ, ★ pour un pays nouveau pour ton carnet, rose si elle t'appelle.
+- **Qui appeler maintenant** : les stations des 5 dernières minutes, classées par ce qu'elles apporteraient (nouveau pays, nouveau carré, distance, force, CQ, rareté) ; un clic prépare le contact dans le carnet.
+- **💬 Messages**, comme une messagerie : les conversations entre deux stations (drapeaux, dernier message, ✓ quand le QSO est bouclé), chacune en bulles, ou tout au fil de l'eau. Chaque message dit ce qu'il est : 📣 appel, 📍 carré, 📶 report, ✅ report reçu, 🤝 RR73 / 73.
+
+<p align="center">
+<img src="images/pc-ft8.webp" width="49%" alt="FT8 sur QO-100 : l'anneau du créneau, la cascade avec les indicatifs à leur fréquence, le radar des stations, qui appeler maintenant">
+<img src="images/pc-ft8-messages.webp" width="49%" alt="FT8, les messages : les conversations entre deux stations, et le fil au fil de l'eau en bulles">
+</p>
+
 ## DATV — la bande large de QO-100 avec un MiniTiouner
 
 L'onglet **DATV** reçoit le DVB-S/S2 avec un **MiniTiouner** (tuner et démodulateur sur USB), piloté par [LongMynd](https://github.com/BritishAmateurTelevisionClub/longmynd), le logiciel libre du BATC. SatMe le lance à part, comme rtl_tcp : le compiler, puis donner son chemin sur la page (ou le mettre dans le `PATH`).

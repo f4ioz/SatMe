@@ -107,6 +107,13 @@ Le téléphone sert aussi des pages au navigateur du PC (câble USB ou Wi-Fi, ri
 
 ## Nouveau sur SatMe-PC (octobre 2026)
 
+- **FT8 / FT4 réinventé** : la cascade qui écrit chaque indicatif à sa fréquence avec son drapeau, une place libre pour émettre, un **radar** des stations autour de ton QTH, **qui appeler maintenant** classé par ce que chacun apporterait, et les **messages** en conversations, comme une messagerie.
+
+<p align="center">
+<img src="docs/images/pc-ft8.webp" width="49%" alt="FT8 sur QO-100 : l'anneau du créneau, la cascade avec les indicatifs à leur fréquence, le radar, qui appeler maintenant">
+<img src="docs/images/pc-ft8-messages.webp" width="49%" alt="FT8, les messages : les conversations entre deux stations, en bulles">
+</p>
+
 - **Mode automatique** (onglet Agenda, et sur le téléphone) : les satellites choisis, leurs passages des 24 h gardés ou écartés, chacun suivi 5 min avant l'AOS — poste et rotor avec lui — et enregistré de l'AOS au LOS.
 - **Enregistrer le son** depuis Station et Carnet, et l'option **couper à la fin du passage**, même lancé à la main.
 - **Journal** : le passage entier sur la carte (même lancé en cours de passage), chaque contact placé sur la trace et à son carré comme dans la vidéo, le S-mètre lu par le CAT ; un contact ajouté au rejeu prend l'heure du son, le mode et les fréquences du satellite ; un passage fabriqué de rien.

@@ -107,6 +107,13 @@ The phone also serves pages to the PC's browser (USB cable or Wi-Fi, nothing to 
 
 ## New on SatMe-PC (October 2026)
 
+- **FT8 / FT4 reinvented**: a waterfall that writes each callsign at its frequency with its flag, a free spot to send, a **radar** of the stations around your QTH, **who to call now** ranked by what each would bring, and the **messages** as conversations, as a messenger.
+
+<p align="center">
+<img src="docs/images/pc-ft8.webp" width="49%" alt="FT8 on QO-100: the slot's ring, the waterfall with the callsigns at their frequency, the radar, who to call now">
+<img src="docs/images/pc-ft8-messages.webp" width="49%" alt="FT8, the messages: the conversations between two stations, as bubbles">
+</p>
+
 - **Automatic mode** (Agenda tab, and on the phone): the satellites chosen, their 24 h passes kept or set aside, each followed 5 min before AOS — rig and rotator with it — and recorded from AOS to LOS.
 - **Record the sound** from Station and Carnet, and the option to **stop at the end of the pass**, even when started by hand.
 - **Journal**: the whole pass on the map (even when started mid-pass), each contact placed on the track and at its square as in the video, the S-meter read through CAT; a contact added during the replay takes the sound's time, the satellite's mode and frequencies; a pass made from nothing.
