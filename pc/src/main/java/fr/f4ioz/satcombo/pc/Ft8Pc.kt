@@ -116,6 +116,7 @@ class Ft8Pc(private val horloge: () -> Long = System::currentTimeMillis) {
 
     private fun decode(audio: FloatArray, cadence: Int, sig: Ft8Signal.Mode, m: String, debut: Long) {
         val l = runCatching { Ft8Decodeur.decode(audio, cadence.toDouble(), sig) }.getOrDefault(emptyList())
+        fr.f4ioz.satcombo.domain.Ft8Indicatifs.commun.sauve()
         val nouveaux = l.map {
             Entendu(debut, it.message.brut, it.message.appelant, it.message.appele, it.message.locator,
                 Math.round(it.frequenceHz).toInt(), it.rapportDb, it.instantS, m)

@@ -80,6 +80,12 @@ fun main(args: Array<String>) {
     val journal = JournalPc(station, carnet, son, File(dossier, "journal"))
     // The CW decoder knows the log's callsigns: one of them decoded is right.
     son.cw.connus = { carnet.contacts().mapNotNull { fr.f4ioz.satcombo.cw.AnalyseCw.base(it.callsign) }.toSet() }
+    // FT8/FT4 hashed callsigns: those heard in clear (kept between two starts), the log's, ours.
+    fr.f4ioz.satcombo.domain.Ft8Indicatifs.commun.apply {
+        branche(StockageFichier(File(dossier, "ft8-indicatifs.properties")))
+        runCatching { amorce(carnet.contacts().map { it.callsign }) }
+        moi = { station.etat.value.indicatif }
+    }
     // A KISS radio on a serial port: nothing opened until asked.
     val kiss = KissPc(station, son.aprs)
     // The SDR dongle: nothing opened until asked (rtl_tcp started then, stopped with it).
