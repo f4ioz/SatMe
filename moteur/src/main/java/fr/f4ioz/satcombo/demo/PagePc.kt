@@ -176,15 +176,16 @@ object PagePc {
   .f8-sep td { border-top:2px solid var(--bord); }
   .f8-db { display:inline-block; width:34px; height:6px; background:#1C2A36; border-radius:3px; margin-right:4px; vertical-align:middle; overflow:hidden; }
   .f8-db i { display:block; height:100%; }
-  .m8 { display:grid; grid-template-columns:minmax(300px,380px) 1fr; gap:12px; }
-  .m8-convs { max-height:calc(100vh - 230px); overflow:auto; }
+  .m8 { display:flex; flex-direction:column; gap:12px; min-width:0; }
+  .m8 .carte { margin:0; }
+  .m8-convs { max-height:240px; overflow:auto; }
   .m8-conv { display:flex; gap:10px; align-items:center; padding:9px 10px; border-radius:12px; cursor:pointer; border:1px solid transparent; }
   .m8-conv:hover { background:rgba(63,224,200,.05); }
   .m8-conv.actif { border-color:var(--cyan); background:rgba(63,224,200,.08); }
   .m8-av { position:relative; width:40px; height:40px; flex:none; border-radius:50%; background:#0E1720; display:grid; place-items:center; font-size:20px; }
   .m8-av i { position:absolute; right:-4px; bottom:-4px; font-size:14px; font-style:normal; }
   .m8-n { display:inline-block; min-width:20px; padding:0 6px; border-radius:10px; background:var(--cyan); color:#06131A; font-weight:800; font-size:11px; text-align:center; }
-  .m8-fil { height:calc(100vh - 260px); overflow:auto; padding:6px 4px; background:linear-gradient(180deg, rgba(14,23,32,.5), transparent); border-radius:10px; }
+  .m8-fil { height:calc(100vh - 560px); min-height:260px; overflow:auto; padding:6px 4px; background:linear-gradient(180deg, rgba(14,23,32,.5), transparent); border-radius:10px; }
   .m8-heure { text-align:center; font-size:10px; color:var(--gris); margin:10px 0 4px; }
   .m8-ligne { display:flex; margin:3px 0; }
   .m8-ligne.droite { justify-content:flex-end; }
@@ -194,7 +195,8 @@ object PagePc {
   .m8-qui { font-size:12px; margin-bottom:2px; }
   .m8-txt { font-family:ui-monospace,Consolas,monospace; font-size:15px; }
   .m8-ico { font-family:system-ui; }
-  @media (max-width:900px) { .m8 { grid-template-columns:1fr; } }
+  /* Messages shown: the radar only where there is room for three columns. */
+  @media (max-width:1500px) { .f8-messages .f8-radar-boite { display:none; } .f8-messages .f8-grille { grid-template-columns:minmax(420px,1.3fr) minmax(360px,1fr); } }
   a.bouton { font-size:13px; font-weight:700; border-radius:8px; border:1px solid var(--bord); background:#0E1720; color:var(--clair); padding:6px 9px; text-decoration:none; white-space:nowrap; }
   button:disabled { opacity:.45; cursor:default; }
   .primaire { background:var(--cyan); color:#06131A; border:none; }
@@ -1169,23 +1171,23 @@ object PagePc {
       <div class="f8-puces" id="8-puces"></div>
     </div>
   </div>
-  <div class="m8" id="8-messages" hidden>
-    <div class="carte" style="margin:0"><div class="t" style="margin-top:0">Conversations</div><div class="m8-convs" id="8-convs"></div></div>
-    <div class="carte" style="margin:0"><div class="t" style="margin-top:0" id="8-fil-titre"></div><div class="m8-fil" id="8-fil"></div></div>
-  </div>
-  <div class="f8-grille" id="8-tableau">
+  <div class="f8-grille">
     <div class="carte f8-cascade-boite">
       <div class="paire" style="margin:0 0 6px"><b>Cascade</b><span class="petit" id="8-libre"></span><span class="petit" style="margin-left:auto">Les indicatifs décodés écrits à leur fréquence, dans leur créneau</span></div>
       <div style="position:relative"><canvas id="8-cascade" style="width:100%;height:420px;display:block;border-radius:8px;background:#05070D;cursor:crosshair"></canvas></div>
       <canvas id="8-spectre" style="width:100%;height:56px;display:block;margin-top:2px"></canvas>
       <div class="petit" style="margin-top:4px">Le son du poste par la carte son (onglet Son), ou la clé SDR. L'horloge du PC doit être juste à la seconde (NTP). Cliquer : la fréquence audio sous la souris.</div>
     </div>
-    <div class="carte">
+    <div class="carte f8-radar-boite">
       <div class="paire" style="margin:0 0 6px"><b>Radar</b><span class="petit" id="8-radar-info"></span></div>
       <canvas id="8-radar" style="width:100%;aspect-ratio:1/1;display:block;border-radius:50%;background:radial-gradient(circle,#0B1A24 0%,#05070D 75%)"></canvas>
       <div class="petit" style="margin-top:6px">Chaque station à son azimut et sa distance depuis ton QTH. Elle pâlit avec le temps, pulse quand elle vient d'être entendue. <span style="color:#5BD68A">●</span> CQ <span style="color:#FFB454">★</span> nouveau pays <span style="color:#FF5FA2">●</span> t'appelle <span style="color:#6B7C8F">●</span> déjà au carnet</div>
     </div>
-    <div style="display:flex;flex-direction:column;gap:12px;min-width:0">
+    <div class="m8" id="8-messages" hidden>
+      <div class="carte"><div class="paire" style="margin:0 0 6px"><b>Conversations</b><span class="petit">deux stations qui se parlent</span></div><div class="m8-convs" id="8-convs"></div></div>
+      <div class="carte" style="flex:1;min-height:0"><div class="t" style="margin-top:0" id="8-fil-titre"></div><div class="m8-fil" id="8-fil"></div></div>
+    </div>
+    <div id="8-tableau" style="display:flex;flex-direction:column;gap:12px;min-width:0">
       <div class="carte">
         <div class="paire" style="margin:0 0 6px"><b>Qui appeler maintenant</b><span class="petit">ce que chaque station apporterait</span></div>
         <div id="8-opport"></div>
@@ -3848,7 +3850,7 @@ async function ticFt8() {
   txt('8-etat', !H.carte ? 'carte son arrêtée (onglet Son)' : H.enMarche ? H.tranches + ' créneaux · niveau ' + Math.round(H.niveau * 100) + ' %' : 'à l’arrêt');
   // The page served by the phone has no stream of rows: its whole waterfall each time.
   if (f8Complete && H.cascade) { f8Lignes = H.cascade.slice().reverse().map(b => Uint8Array.from(atob(b), ch => ch.charCodeAt(0))); f8Fin = Date.now(); f8Pas = 128; dessineCascade(); }
-  dessineAnneau(); puces(); opportunites(); listeFt8(); messagesFt8();
+  for (const f of [dessineAnneau, puces, opportunites, listeFt8, messagesFt8]) { try { f(); } catch (x) { console.error(x); } }
 }
 async function ticCascade() {
   if (g('v-ft8').hidden || f8Complete) return;
@@ -3985,7 +3987,9 @@ g('8-cascade').addEventListener('click', ev => { if (!H) return; const b = ev.cu
 // The radar: an azimuthal map around the station — each one at its bearing and distance.
 function dessineRadar() {
   const c = g('8-radar'); if (!c || !H) return;
+  if (!c.clientWidth || c.offsetParent === null) return;
   const [x, w, h] = toile(c), R = Math.min(w, h) / 2 - 14, cx = w / 2, cy = h / 2, now = Date.now();
+  if (R <= 20) return;
   x.clearRect(0, 0, w, h);
   const vus = new Map();
   for (const e of H.entendus) if (e.de && e.km != null && e.az != null && !vus.has(e.de) && now - e.t < 60 * 60000) vus.set(e.de, e);
@@ -4023,6 +4027,8 @@ let f8Vue = 'tableau', f8Conv = null, f8MsgVu = '';
 function f8Montre(v) {
   f8Vue = v;
   g('8-tableau').hidden = v !== 'tableau'; g('8-messages').hidden = v !== 'messages';
+  g('v-ft8').classList.toggle('f8-messages', v === 'messages');
+  setTimeout(() => { try { dessineCascade(); dessineRadar(); } catch (x) {} }, 0);
   g('8-b-tableau').classList.toggle('actif', v === 'tableau'); g('8-b-messages').classList.toggle('actif', v === 'messages');
   try { localStorage.setItem('ft8-vue', v); } catch (x) {}
   f8MsgVu = ''; if (H) messagesFt8();
