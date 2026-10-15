@@ -128,6 +128,15 @@ class StationCat(private val monde: MondeCat, private val horloge: () -> Long = 
     /** Loop rounds since the rig's mode was last asked. */
     private var toursDepuisLeMode = 0
 
+    /**
+     * What was last written to the rig and read back from it, in sky Hz (0:
+     * nothing yet). Only noted on the way, for the pass log: nothing reads
+     * them in the loop.
+     */
+    @Volatile var ecritDescenteHz = 0L; private set
+    @Volatile var ecritMonteeHz = 0L; private set
+    @Volatile var luDescenteHz = 0L; private set
+
     // ---------------------------------------------- what the rest of the app tells
 
     /** The knob hold delay, the same for RX, FM and TX: two seconds too long is too long everywhere. */
@@ -153,13 +162,17 @@ class StationCat(private val monde: MondeCat, private val horloge: () -> Long = 
     }
 
     /** Another satellite: nothing read from the rig stands for it. */
-    fun nouveauSatellite() = change { copy(descenteHz = null, monteeHz = null) }
+    fun nouveauSatellite() {
+        ecritDescenteHz = 0L; ecritMonteeHz = 0L; luDescenteHz = 0L
+        change { copy(descenteHz = null, monteeHz = null) }
+    }
 
     /** The rig is gone. */
     fun deconnecte() {
         catArmedFor = null
         rxArbiter.reset(); fmArbiter.reset()
         toursDepuisLeMode = 0
+        ecritDescenteHz = 0L; ecritMonteeHz = 0L; luDescenteHz = 0L
         _etat.value = EtatBoucleCat()
     }
 
@@ -200,9 +213,11 @@ class StationCat(private val monde: MondeCat, private val horloge: () -> Long = 
         if (!atteignableParLePoste(ul)) {
             // The uplink goes elsewhere: keep only the downlink.
             poste.ecrisDescente(dl)
+            ecritDescenteHz = dlSat
             return
         }
         poste.ecrisCouple(dl, ul, sameBand)
+        ecritDescenteHz = dlSat; ecritMonteeHz = ulSat
     }
 
     /** Writes the uplink only — when the operator holds the receive side. */
@@ -210,11 +225,12 @@ class StationCat(private val monde: MondeCat, private val horloge: () -> Long = 
         val ul = monde.posteTx(ulSat)
         if (!atteignableParLePoste(ul)) return
         monde.poste().ecrisMontee(ul, sameBand)
+        ecritMonteeHz = ulSat
     }
 
     /** Reads the downlink back and converts it straight to sky frequency. */
     private suspend fun lireDescente(sameBand: Boolean): Long? =
-        runCatching { monde.poste().lisDescente(sameBand) }.getOrNull()?.let { monde.satDepuisPoste(it) }
+        runCatching { monde.poste().lisDescente(sameBand) }.getOrNull()?.let { monde.satDepuisPoste(it) }?.also { luDescenteHz = it }
 
     // ---------------------------------------------- the transponder's rules
 
@@ -366,7 +382,7 @@ class StationCat(private val monde: MondeCat, private val horloge: () -> Long = 
                 } else {
                     if (kotlin.math.abs(dl - lastSentDl) >= dopplerThreshold(t)) {
                         lastSentDl = dl
-                        runCatching { poste.ecrisDescente(monde.posteRx(dl)) }
+                        runCatching { poste.ecrisDescente(monde.posteRx(dl)); ecritDescenteHz = dl }
                     }
                     change { copy(descenteHz = dl, monteeHz = null) }
                 }

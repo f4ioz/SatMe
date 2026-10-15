@@ -8569,9 +8569,54 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 kotlinx.coroutines.delay(100)
                 runCatching { gardeCat() }
                 runCatching { lisSMetre() }
+                runCatching { noteDoppler() }
             }
+            // The rig gone: the pass under way closes.
+            runCatching { noteDoppler(force = true) }
         }
     }
+
+    // ------------------------------------------------------- the Doppler/CAT log
+
+    private var suiviDoppler: fr.f4ioz.satcombo.domain.JournalDoppler? = null
+    private var dopplerNoteMs = 0L
+
+    /** Where the logs go: the app's files (shared through the FileProvider). */
+    private fun dossierDoppler() = java.io.File(getApplication<android.app.Application>().filesDir, "doppler")
+
+    /** Once a second from the CAT loop: the followed pass noted, as the loop wrote and read it (observed only). */
+    private fun noteDoppler(force: Boolean = false) {
+        val now = System.currentTimeMillis()
+        if (!force && now - dopplerNoteMs < 1_000L) return
+        dopplerNoteMs = now
+        val u = _ui.value
+        val sat = u.selected
+        val actif = settings.journalDoppler && u.catConnected && sat != null
+        if (!actif && suiviDoppler?.enCours == null) return
+        val j = suiviDoppler ?: fr.f4ioz.satcombo.domain.JournalDoppler(dossierDoppler()).also { suiviDoppler = it }
+        val p = u.livePosition
+        val ech = if (actif && p != null) {
+            val tx = activeTransmitters().getOrNull(u.selectedTxIndex)
+            val dl = u.rxRestHz ?: tx?.downlinkLowHz?.let { lo -> (lo + (tx.downlinkHighHz ?: lo)) / 2 }
+            fr.f4ioz.satcombo.domain.JournalDoppler.Echantillon(now, p.azimuthDeg, p.elevationDeg, p.rangeKm, p.rangeRateKmS,
+                dl, fr.f4ioz.satcombo.domain.JournalDoppler.reposMontee(tx, dl),
+                stationCat.ecritDescenteHz.takeIf { it > 0 }, stationCat.ecritMonteeHz.takeIf { it > 0 },
+                stationCat.luDescenteHz.takeIf { it > 0 })
+        } else null
+        j.tic(actif, sat?.name.orEmpty(), sat?.catalogNumber ?: 0, ech)
+    }
+
+    fun journalDopplerActif(): Boolean = settings.journalDoppler
+    fun setJournalDoppler(on: Boolean) { settings.journalDoppler = on }
+
+    /** The logs kept, newest first. */
+    fun journauxDoppler(): List<java.io.File> = fr.f4ioz.satcombo.domain.JournalDoppler.liste(dossierDoppler())
+
+    /** A log for the share sheet. */
+    fun partageDoppler(f: java.io.File): android.net.Uri? = runCatching {
+        val app = getApplication<android.app.Application>()
+        androidx.core.content.FileProvider.getUriForFile(app, app.packageName + ".fileprovider", f)
+    }.getOrNull()
 
     /**
      * Watchdog: connected, the Icom writes but no longer answers reads (15 s)

@@ -2631,6 +2631,8 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
             }
         }
 
+            // The Doppler/CAT log of the passes followed.
+            item { JournalDopplerCarte(vm) }
         }
 
         // --- Converters (LNB / transverter) ---

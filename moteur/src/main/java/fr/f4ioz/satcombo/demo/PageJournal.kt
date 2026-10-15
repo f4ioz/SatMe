@@ -35,7 +35,7 @@ object PageJournal {
         "pj_afficher", "pj_aff_sstv", "pj_aff_fiche", "pj_aff_smetre", "pj_aff_freq", "pj_aff_locator", "pj_resolution",
         "pj_res_xs", "pj_res_m", "pj_res_hd", "pj_ouverture", "pj_recap", "pj_avec_son", "pj_accelere_video",
         "pj_options_aide", "pj_accelere_actif", "pj_format", "pj_format_portrait", "pj_format_paysage", "pw_code", "pw_entrer", "pw_code_faux", "pw_hors_ligne", "pw_pupitre",
-        "pj_n_bouton", "pj_n_rs", "pj_n_rr", "pj_n_note", "pj_n_carnet", "pj_n_sat_inconnu", "pj_n_mode_auto", "pj_n_dernier", "pj_n_titre", "pj_n_aide", "pj_n_sat", "pj_n_passage", "pj_n_autre", "pj_n_aucun", "pj_n_aos", "pj_n_los", "pj_n_creer", "pj_n_refus", "pj_n_trop_gros", "pj_n_indicatif", "pj_n_onglet", "pj_n_contact", "pj_n_son", "pj_n_images", "pj_n_mode", "pj_n_envoyer", "pj_n_envoi", "pj_n_fait", "pj_n_call", "pj_n_loc")
+        "pj_doppler", "pj_n_bouton", "pj_n_rs", "pj_n_rr", "pj_n_note", "pj_n_carnet", "pj_n_sat_inconnu", "pj_n_mode_auto", "pj_n_dernier", "pj_n_titre", "pj_n_aide", "pj_n_sat", "pj_n_passage", "pj_n_autre", "pj_n_aucun", "pj_n_aos", "pj_n_los", "pj_n_creer", "pj_n_refus", "pj_n_trop_gros", "pj_n_indicatif", "pj_n_onglet", "pj_n_contact", "pj_n_son", "pj_n_images", "pj_n_mode", "pj_n_envoyer", "pj_n_envoi", "pj_n_fait", "pj_n_call", "pj_n_loc")
 
     private fun js(s: String): String = buildString {
         for (ch in s) when {
@@ -387,6 +387,12 @@ function panneauMoments(p) {
     P.sons.forEach(s => p.appendChild(el('div', { class: 'rangee' }, [
       el('a', { href: url('/son', { id: P.id, n: s.n }), download: s.nom, text: '⤓ ' + s.nom }),
       el('span', { class: 'aide', text: hms(s.o + s.an) + ' · ' + duree(s.du - s.an) })])));
+  }
+  // The pass's Doppler/CAT log, when it was kept.
+  if (P.doppler && P.doppler.length) {
+    p.appendChild(el('div', { class: 'aide', text: T.doppler, style: 'margin-top:8px' }));
+    P.doppler.forEach(n => p.appendChild(el('div', { class: 'rangee' }, [
+      el('a', { href: url('/doppler', { nom: n }), download: n, text: '⤓ ' + n })])));
   }
 }
 function panneauRejeu(p) {

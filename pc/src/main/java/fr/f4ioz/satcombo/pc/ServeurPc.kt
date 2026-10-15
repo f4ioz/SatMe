@@ -253,6 +253,10 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
             "/api/capacites" -> envoie(sortie, "200 OK", "application/json; charset=utf-8",
                 JSONObject().put("onglets", JSONArray(PagePc.TOUS)).put("serveur", "pc").toString().toByteArray())
             "/api/etat" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JsonPc.etat(station, carnet).toString().toByteArray())
+            // The Doppler/CAT log: on or not, the last files (downloaded from the journal's route).
+            "/api/doppler" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JSONObject().put("on", station.settings.journalDoppler)
+                .put("fichiers", JSONArray(station.journauxDoppler().take(8).map { JSONObject().put("nom", it.name).put("taille", it.length()) }))
+                .toString().toByteArray())
             "/api/passages" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JsonPc.passages(station).toString().toByteArray())
             "/api/satellites" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JsonPc.satellites(station).toString().toByteArray())
             "/api/ports" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JsonPc.ports(station).toString().toByteArray())
@@ -769,6 +773,7 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 q["carnetAuto"]?.let { carnet?.setAuto(it == "1") }
                 q["amsatAuto"]?.let { s.amsatAuto = it == "1" }
             }
+            "/api/doppler" -> station.journalDoppler(q["on"] == "1")
             "/api/horizon" -> station.poseMasque(fr.f4ioz.satcombo.domain.MasqueHorizon.lis(q["m"]))
             "/api/sources" -> station.regleSources(q["ids"]?.split(',')?.map { it.trim() }?.filter { it.isNotEmpty() }?.toSet(),
                 q["serveur"], q["seul"]?.let { it == "1" })

@@ -72,6 +72,8 @@ fun main(args: Array<String>) {
     I18n.apply(station.settings.language, java.util.Locale.getDefault().language)
     fr.f4ioz.satcombo.data.AgentHttp.version = "pc-" + versionPc()
     fr.f4ioz.satcombo.data.AgentHttp.plateforme = System.getProperty("os.name") ?: "PC"
+    // The Doppler/CAT logs (when switched on), beside the journal of passes.
+    station.dossierDoppler = File(dossier, "doppler")
     station.demarre()
     val carnet = CarnetPc(station, fr.f4ioz.satcombo.data.LogStore(File(dossier, "qso_log.json")))
     val son = SonStation(SonPc(), station, File(dossier, "enregistrements"), File(dossier, "sstv"))

@@ -1394,6 +1394,13 @@ object PagePc {
       <div class="ligne" id="carnetDelaiL"><span class="petit">après</span><select id="carnetDelai" onchange="post('api/reglages?carnetDelai=' + this.value)"></select>
         <span class="petit">le temps de le corriger ou de le mettre en pause (⏸ dans le carnet). Seuls les contacts saisis après l'activation partent.</span></div>
     </div>
+    <div class="carte" id="dop-carte">
+      <div class="t">Journal Doppler / CAT</div>
+      <label class="petit" style="display:block"><input type="checkbox" id="dop-on" onchange="post('api/doppler?on=' + (this.checked ? 1 : 0)).then(chargeDoppler)">
+        Noter chaque passage suivi avec le poste connecté</label>
+      <div class="petit" style="margin-top:6px">Toutes les 5 s : élévation, Doppler prévu à la descente et à la montée, fréquence écrite au poste et relue. Un fichier CSV par passage (AOS, montée, TCA, descente, LOS), avec le passage dans le Journal. SatMe ne demande rien de plus au poste.</div>
+      <div id="dop-liste" class="petit" style="margin-top:6px"></div>
+    </div>
     <div class="carte">
       <div class="t">Convertisseurs</div>
       <div class="petit" id="conv-lu">—</div>
@@ -1589,7 +1596,7 @@ async function ticMire(premier) {
 const ICO = ${icones()};
 const CATS_REG = [
   { id: 'station', nom: 'Ma station', ico: 'person', desc: 'Indicatif, carré, élévation minimale, horizon', cartes: ['Station', 'Horizon'] },
-  { id: 'materiel', nom: 'Poste et rotor', ico: 'radio', desc: 'CAT, TH-D72, rotor, convertisseurs', cartes: ['Poste', 'Kenwood TH-D72', 'Rotor', 'Convertisseurs'] },
+  { id: 'materiel', nom: 'Poste et rotor', ico: 'radio', desc: 'CAT, TH-D72, rotor, convertisseurs', cartes: ['Poste', 'Kenwood TH-D72', 'Rotor', 'Convertisseurs', 'Journal Doppler'] },
   { id: 'satellites', nom: 'Satellites', ico: 'satellite_alt', desc: 'Éléments orbitaux, statut AMSAT', cartes: ['Éléments orbitaux', 'AMSAT'] },
   { id: 'enligne', nom: 'Services en ligne', ico: 'public', desc: 'QRZ.com, Wavelog / Cloudlog, skeds hams.at', cartes: ['QRZ.com', 'Carnet en ligne', 'Skeds'] },
   { id: 'telephone', nom: 'Téléphone', ico: 'smartphone', desc: 'SatMe sur le téléphone : réglages et contacts', cartes: ['Téléphone'] },
@@ -2597,7 +2604,7 @@ async function chargeReglages() {
   try {
     const r = await (await fetch('api/reglages')).json();
     g('indicatif').value = r.c; g('locator').value = r.l; g('minEl').value = r.minEl;
-    horizonDe(r);
+    horizonDe(r); chargeDoppler();
     g('qrzFiche').checked = r.fiche; ficheVoulue = r.fiche;
     g('qrzUser').value = r.qrzUser; g('qrzMdp').placeholder = r.qrzMdp ? 'mot de passe enregistré' : 'Mot de passe';
     g('carnetUrl').value = r.carnetUrl; g('carnetCle').placeholder = r.carnetCle ? 'clé enregistrée' : 'Clé d’API (lecture et écriture)';
@@ -2618,6 +2625,15 @@ async function enregistreReglages() {
     txt('reg-etat', 'enregistré'); g('qrzMdp').value = ''; g('carnetCle').value = '';
     chargeReglages(); setTimeout(chargeListe, 1500);
   }
+}
+// ------------------------------------------------------------------ Doppler/CAT log
+async function chargeDoppler() {
+  let j = null;
+  try { j = await (await fetch('api/doppler')).json(); } catch (x) {}
+  if (!j || j.on === undefined) { g('dop-carte').hidden = true; return; }
+  g('dop-on').checked = !!j.on;
+  g('dop-liste').innerHTML = j.fichiers.length ? 'Derniers : ' + j.fichiers.map(f => '<a href="journal/doppler?nom=' + enc(f.nom) + '" download style="color:var(--cyan)">' +
+    esc(f.nom) + '</a> (' + Math.max(1, Math.round(f.taille / 1024)) + ' ko)').join(' · ') : 'Aucun journal pour l’instant.';
 }
 // ------------------------------------------------------------------ horizon mask
 let HZ = [0, 0, 0, 0, 0, 0, 0, 0];
