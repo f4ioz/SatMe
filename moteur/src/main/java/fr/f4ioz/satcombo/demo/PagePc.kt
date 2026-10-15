@@ -15,6 +15,9 @@ package fr.f4ioz.satcombo.demo
  * that works without the internet, at the foot of the mast.
  */
 object PagePc {
+
+    /** The flags' font (Twemoji, CC BY 4.0), served at `api/police-drapeaux` by SatMe-PC and the phone. */
+    val POLICE_DRAPEAUX: ByteArray? by lazy { PagePc::class.java.getResourceAsStream("drapeaux.woff2")?.use { it.readBytes() } }
     /**
      * The tabs, in their order, each with its icon — the phone's for the same
      * function (Explore for the station and its aiming, MenuBook for the log,
@@ -116,8 +119,10 @@ object PagePc {
   #t-qr svg { width:100%; height:100%; display:block; border-radius:8px; }
   #visionneuse::backdrop { background:rgba(0,0,0,.75); }
   #vi-img { display:block; max-width:min(92vw,1280px); max-height:calc(92vh - 60px); min-width:320px; image-rendering:auto; border-radius:6px; cursor:zoom-out; background:#0E1720; }
+  /* The flags drawn by the page itself: Windows (and a Linux without a colour emoji font) shows two letters instead. */
+  @font-face { font-family:Drapeaux; src:url(api/police-drapeaux) format('woff2'); unicode-range:U+1F1E6-1F1FF,U+1F3F4,U+E0062-E007F; font-display:swap; }
   body { margin:0; background:var(--fond); color:var(--clair); font-size:14px;
-         font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif; }
+         font-family:Drapeaux,system-ui,-apple-system,Segoe UI,Roboto,sans-serif; }
   header { display:flex; align-items:center; gap:16px; flex-wrap:wrap; padding:10px 16px;
            border-bottom:1px solid var(--bord); }
   header h1 { font-size:18px; margin:0; letter-spacing:.5px; }
@@ -1661,7 +1666,7 @@ function pointsDuPassage(m) {
 }
 function etiquetteCarte(m, lat, lon, nom, coul) {
   const x = m.x;
-  x.font = 'bold 12px system-ui'; x.textAlign = 'left'; x.lineWidth = 3; x.strokeStyle = 'rgba(255,255,255,.85)';
+  x.font = 'bold 12px Drapeaux,system-ui'; x.textAlign = 'left'; x.lineWidth = 3; x.strokeStyle = 'rgba(255,255,255,.85)';
   x.strokeText(nom, m.px(lon) + 9, m.py(lat) + 14); x.fillStyle = coul; x.fillText(nom, m.px(lon) + 9, m.py(lat) + 14);
 }
 async function rapportAmsat(entendu) {
@@ -2899,13 +2904,13 @@ function dessineCarres() {
     x.strokeStyle = lat % 10 === 0 ? 'rgba(30,40,55,.55)' : 'rgba(30,40,55,.18)'; x.beginPath(); x.moveTo(0, py(lat)); x.lineTo(w, py(lat)); x.stroke(); }
   // Worked: the more contacts, the deeper the colour.
   const max = Math.max(1, ...Q.carres.map(q => q.n));
-  x.font = 'bold ' + Math.max(9, Math.min(14, pasCarre / 4)) + 'px system-ui'; x.textAlign = 'center';
+  x.font = 'bold ' + Math.max(9, Math.min(14, pasCarre / 4)) + 'px Drapeaux,system-ui'; x.textAlign = 'center';
   Q.carres.forEach(q => { const a = 0.25 + 0.5 * Math.log(1 + q.n) / Math.log(1 + max);
     const [xa, ya, xb, yb] = carre(q.c, 'rgba(63,224,200,' + a.toFixed(2) + ')', 'rgba(20,120,110,.9)', 1);
     if (pasCarre > 28) { x.fillStyle = '#06131A'; x.fillText(q.c, (xa + xb) / 2, (ya + yb) / 2 + 4); } });
   if (Q.mon && Q.mon.length === 4) { carre(Q.mon, 'rgba(255,180,84,.45)', '#FFB454', 2.5);
     if (Q.lat != null) { x.fillStyle = '#1a1f2a'; x.beginPath(); x.arc(px(Q.lon), py(Q.lat), 5, 0, 7); x.fill(); } }
-  if (pasCarre <= 14) { x.fillStyle = 'rgba(20,30,45,.7)'; x.font = '11px system-ui';
+  if (pasCarre <= 14) { x.fillStyle = 'rgba(20,30,45,.7)'; x.font = '11px Drapeaux,system-ui';
     for (let lon = -180; lon < 180; lon += 20) for (let lat = -90; lat < 90; lat += 10) {
       const f = String.fromCharCode(65 + (lon + 180) / 20) + String.fromCharCode(65 + (lat + 90) / 10); x.fillText(f, px(lon + 10), py(lat + 5)); } }
 }
@@ -2939,7 +2944,7 @@ function dessineFrise() {
   const minutes = F.lignes.length ? F.lignes[0].el.length : (+g('f-h').value) * 60;
   const tx = k => gauche + (w - gauche - 8) * k / minutes;
   // The hours.
-  x.font = '11px system-ui'; x.fillStyle = '#9AA7B4'; x.textAlign = 'center';
+  x.font = '11px Drapeaux,system-ui'; x.fillStyle = '#9AA7B4'; x.textAlign = 'center';
   for (let k = 0; k <= minutes; k++) {
     const t = F.debut + k * 60000, d = new Date(t), mn = utc() ? d.getUTCMinutes() : d.getMinutes(), hh = utc() ? d.getUTCHours() : d.getHours();
     if (mn !== 0) continue;
@@ -2951,7 +2956,7 @@ function dessineFrise() {
   if (!n) { x.textAlign = 'left'; x.fillText('Aucun satellite : marque des ★ favoris (onglet Station).', gauche, haut + 24); return; }
   F.lignes.forEach((l, i) => {
     const y0 = haut + i * ligneH, base = y0 + ligneH - 6;
-    x.textAlign = 'left'; x.font = (E && E.suivi && E.suivi.catnum === l.catnum ? 'bold ' : '') + '13px system-ui';
+    x.textAlign = 'left'; x.font = (E && E.suivi && E.suivi.catnum === l.catnum ? 'bold ' : '') + '13px Drapeaux,system-ui';
     x.fillStyle = E && E.suivi && E.suivi.catnum === l.catnum ? '#3FE0C8' : '#E8F0F7'; x.fillText(l.nom.slice(0, 16), 8, base - 10);
     x.strokeStyle = '#22303B'; x.beginPath(); x.moveTo(gauche, base); x.lineTo(w - 8, base); x.stroke();
     // Each pass as the hill of its elevation, its top written.
@@ -2964,7 +2969,7 @@ function dessineFrise() {
       for (let m = k; m < j; m++) x.lineTo(tx(m), base - (ligneH - 12) * l.el[m] / 90);
       x.lineTo(tx(j - 1), base); x.closePath();
       x.fillStyle = top >= 40 ? 'rgba(91,214,138,.75)' : top >= 15 ? 'rgba(63,224,200,.6)' : 'rgba(154,167,180,.45)'; x.fill();
-      x.fillStyle = '#E8F0F7'; x.font = '10px system-ui'; x.textAlign = 'center';
+      x.fillStyle = '#E8F0F7'; x.font = '10px Drapeaux,system-ui'; x.textAlign = 'center';
       if (tx(j) - tx(k) > 18) x.fillText(Math.round(top) + '°', tx(kTop), base - (ligneH - 12) * top / 90 - 2);
       k = j;
     }
@@ -3122,7 +3127,7 @@ function pointCarte(m, lat, lon, couleur, r, nom) {
   const x = m.x;
   x.fillStyle = couleur; x.strokeStyle = '#06131A'; x.lineWidth = 1.5; x.beginPath(); x.arc(m.px(lon), m.py(lat), r, 0, 7); x.fill(); x.stroke();
   if (!nom) return;
-  x.font = 'bold 12px system-ui'; x.textAlign = 'left'; x.lineWidth = 3; x.strokeStyle = 'rgba(255,255,255,.85)';
+  x.font = 'bold 12px Drapeaux,system-ui'; x.textAlign = 'left'; x.lineWidth = 3; x.strokeStyle = 'rgba(255,255,255,.85)';
   x.strokeText(nom, m.px(lon) + r + 3, m.py(lat) - 5); x.fillStyle = '#06131A'; x.fillText(nom, m.px(lon) + r + 3, m.py(lat) - 5);
 }
 const KV = { cx: 0.5, cy: 0.35, z: 3 };
@@ -3320,7 +3325,7 @@ async function ticQualite() {
     let lo = Math.min(...l.map(p => p[1])), hi = Math.max(...l.map(p => p[1])); if (hi - lo < 40) { const m = (hi + lo) / 2; lo = m - 20; hi = m + 20; }
     x.strokeStyle = '#3FE0C8'; x.lineWidth = 1.5; x.beginPath();
     l.forEach((p, i) => { const px = (p[0] - t0) / (t1 - t0) * (w - 4) + 2, py = h - 4 - (p[1] - lo) / (hi - lo) * (h - 8); i ? x.lineTo(px, py) : x.moveTo(px, py); }); x.stroke();
-    x.fillStyle = '#9AA7B4'; x.font = '10px system-ui'; x.textAlign = 'left';
+    x.fillStyle = '#9AA7B4'; x.font = '10px Drapeaux,system-ui'; x.textAlign = 'left';
     x.fillText(Math.round(hi) + ' Hz', 4, 10); x.fillText(Math.round(lo) + ' Hz', 4, h - 4);
     x.textAlign = 'right'; x.fillText((t1 - t0) > 7200000 ? Math.round((t1 - t0) / 3600000) + ' h' : Math.round((t1 - t0) / 60000) + ' min', w - 4, 10);
   }
@@ -3478,11 +3483,11 @@ function dessineReglette() {
   for (const s of OP.segments) {
     x.fillStyle = COUL_USAGE[s.usage] || '#9AA7B4'; x.globalAlpha = .75;
     x.fillRect(X(s.bas), 22, Math.max(1.5, X(s.haut) - X(s.bas) - 1), 26); x.globalAlpha = 1;
-    if (X(s.haut) - X(s.bas) > 44) { x.fillStyle = '#06131A'; x.font = '600 10px system-ui'; x.textAlign = 'center'; x.fillText(s.nom.slice(0, Math.floor((X(s.haut) - X(s.bas)) / 6)), (X(s.bas) + X(s.haut)) / 2, 39); }
+    if (X(s.haut) - X(s.bas) > 44) { x.fillStyle = '#06131A'; x.font = '600 10px Drapeaux,system-ui'; x.textAlign = 'center'; x.fillText(s.nom.slice(0, Math.floor((X(s.haut) - X(s.bas)) / 6)), (X(s.bas) + X(s.haut)) / 2, 39); }
   }
   // My memories, then the 50 kHz ticks.
   x.fillStyle = '#FFB454'; O.memoires.filter(m => !m.fixe).forEach(m => { x.beginPath(); x.moveTo(X(m.hz), 50); x.lineTo(X(m.hz) - 4, 57); x.lineTo(X(m.hz) + 4, 57); x.fill(); });
-  x.fillStyle = '#9AA7B4'; x.strokeStyle = '#22303B'; x.font = '10px system-ui'; x.textAlign = 'center';
+  x.fillStyle = '#9AA7B4'; x.strokeStyle = '#22303B'; x.font = '10px Drapeaux,system-ui'; x.textAlign = 'center';
   for (let f = Math.ceil(b / 50000) * 50000; f <= t; f += 50000) {
     x.beginPath(); x.moveTo(X(f), 60); x.lineTo(X(f), f % 100000 === 0 ? 70 : 66); x.stroke();
     if (f % 100000 === 0 && X(f) > 14 && X(f) < w - 14) x.fillText(((f - 10489000000) / 1000) + '', X(f), 84);
@@ -3501,7 +3506,7 @@ function dessineLoupe() {
     x.fillStyle = COUL_USAGE[s.usage] || '#9AA7B4'; x.globalAlpha = .35;
     x.fillRect(Math.max(0, X(s.bas)), 0, Math.min(w, X(s.haut)) - Math.max(0, X(s.bas)), 30); x.globalAlpha = 1;
   }
-  x.strokeStyle = '#3B4B58'; x.fillStyle = '#9AA7B4'; x.font = '10px system-ui'; x.textAlign = 'center';
+  x.strokeStyle = '#3B4B58'; x.fillStyle = '#9AA7B4'; x.font = '10px Drapeaux,system-ui'; x.textAlign = 'center';
   for (let f = Math.ceil((c - LOUPE) / 1000) * 1000; f <= c + LOUPE; f += 1000) {
     const k = f % 5000 === 0; x.beginPath(); x.moveTo(X(f), 30); x.lineTo(X(f), k ? 42 : 36); x.stroke();
     if (k && X(f) > 12 && X(f) < w - 12) x.fillText(((f % 1e6) / 1000).toFixed(0), X(f), 56);
@@ -3595,7 +3600,7 @@ function dessineVernier() {
   const [x, w, h] = toile(c), hpp = hzParPx(), centre = (R.ciel || 0) + (R.decalage || 0) + vnDecal, pas = pasGraduation(hpp);
   x.fillStyle = '#0E1720'; x.fillRect(0, 0, w, h);
   const bas = centre - w / 2 * hpp;
-  x.strokeStyle = '#5A6B7C'; x.fillStyle = '#9AA7B4'; x.font = '10px system-ui'; x.textAlign = 'center';
+  x.strokeStyle = '#5A6B7C'; x.fillStyle = '#9AA7B4'; x.font = '10px Drapeaux,system-ui'; x.textAlign = 'center';
   for (let f = Math.floor(bas / pas) * pas; f <= centre + w / 2 * hpp; f += pas) {
     const px = w / 2 + (f - centre) / hpp, maj = Math.round(f / pas) % 5 === 0;
     x.beginPath(); x.moveTo(px, h); x.lineTo(px, h - (maj ? 18 : 9)); x.stroke();
@@ -3638,7 +3643,7 @@ async function loupeSdr() {
   const Y = v => h - 4 - (h - 8) * Math.max(0, Math.min(1, (v - (bruit - 8)) / (haut - bruit + 12)));
   x.strokeStyle = '#3FE0C8'; x.lineWidth = 1.4; x.beginPath(); d.forEach((v, i) => { const px = i * w / d.length; i ? x.lineTo(px, Y(v)) : x.moveTo(px, Y(v)); }); x.stroke();
   x.strokeStyle = '#FFB454'; x.beginPath(); x.moveTo(w / 2, 0); x.lineTo(w / 2, h); x.stroke();
-  x.fillStyle = '#9AA7B4'; x.font = '10px system-ui'; x.textAlign = 'center';
+  x.fillStyle = '#9AA7B4'; x.font = '10px Drapeaux,system-ui'; x.textAlign = 'center';
   const pas = R.loupeSpan > 10000 ? 2000 : R.loupeSpan > 5000 ? 1000 : 500;
   for (let f = -Math.floor(R.loupeSpan / 2 / pas) * pas; f <= R.loupeSpan / 2; f += pas) if (f) x.fillText((f > 0 ? '+' : '') + (f / 1000).toFixed(1), w / 2 + f / R.loupeSpan * w, 10);
 }
@@ -3685,7 +3690,7 @@ function dessineSdr() {
   x.fillStyle = 'rgba(255,180,84,.14)'; x.fillRect(X(a), 0, X(b) - X(a), h);
   x.strokeStyle = '#FFB454'; x.beginPath(); x.moveTo(X(dec), 0); x.lineTo(X(dec), h); x.stroke();
   // kHz ticks around the frequency heard.
-  x.fillStyle = '#9AA7B4'; x.font = '10px system-ui'; x.textAlign = 'center';
+  x.fillStyle = '#9AA7B4'; x.font = '10px Drapeaux,system-ui'; x.textAlign = 'center';
   const pas = j.span > 100000 ? 20000 : j.span > 40000 ? 10000 : j.span > 20000 ? 5000 : 2000;
   for (let f = -Math.floor(j.span / 2 / pas) * pas; f <= j.span / 2; f += pas) if (f) x.fillText((f > 0 ? '+' : '') + f / 1000, X(f), 10);
   // Waterfall: one line a frame, the newest on top.
@@ -3831,6 +3836,8 @@ setInterval(ticMeteor, 1000);
 // Four ideas: the slot's ring, the waterfall that speaks (callsigns written where they sent, the slots' edges,
 // a free spot found), the radar (each station at its bearing and distance), and who to call now (what each brings).
 let H = null, ft8Vu = '', f8Lignes = [], f8Total = 0, f8Pas = 128, f8Fin = 0, f8Complete = false, f8Libre = null, f8Clic = null;
+// The flags' font, loaded before the canvases draw with it.
+try { document.fonts.load('12px Drapeaux', '\u{1F1EB}\u{1F1F7}'); } catch (e) {}
 const f8Drapeau = c => c && c.length === 2 ? String.fromCodePoint(...[...c.toUpperCase()].map(x => 0x1F1E6 + x.charCodeAt(0) - 65)) : '🏳';
 const F8_CONT = { EU: 'Europe', AF: 'Afrique', AS: 'Asie', NA: 'Am. Nord', SA: 'Am. Sud', OC: 'Océanie' };
 const f8Slot = () => (H && H.mode === 'FT4') ? 7500 : 15000;
@@ -3935,14 +3942,14 @@ function dessineCascade() {
   x.imageSmoothingEnabled = false; x.drawImage(tmp, 0, 0, w, h * n / 360);
   const dureeVue = 360 * f8Pas, Y = t => (f8Fin - t) / dureeVue * h, X = hz => (hz - H.basse) / (H.haute - H.basse) * w, s = f8Slot();
   // The slots' edges, their time and parity.
-  x.font = '10px system-ui'; x.textAlign = 'left';
+  x.font = '10px Drapeaux,system-ui'; x.textAlign = 'left';
   for (let t = Math.floor(f8Fin / s) * s; t > f8Fin - dureeVue; t -= s) {
     const y = Y(t); x.strokeStyle = 'rgba(232,240,247,.35)'; x.setLineDash([4, 4]); x.beginPath(); x.moveTo(0, y); x.lineTo(w, y); x.stroke(); x.setLineDash([]);
     const pair = Math.floor(t / s) % 2 === 0; x.fillStyle = pair ? '#3FE0C8' : '#FFB454';
     x.fillText(new Date(t).toISOString().slice(11, 19) + (pair ? ' pair' : ' impair'), 4, y + 12);
   }
   // The callsigns, in the slot they sent in, at their audio frequency.
-  x.font = 'bold 11px system-ui';
+  x.font = 'bold 11px Drapeaux,system-ui';
   // Two stations close in frequency: the second label a line lower, not over the first.
   const places = [];
   for (const e of H.entendus) {
@@ -3972,10 +3979,10 @@ function dessineCascade() {
   }
   f8Libre = meilleur;
   if (meilleur) { const px = X(meilleur); x.fillStyle = 'rgba(91,214,138,.22)'; x.fillRect(X(meilleur - 30), 0, X(meilleur + 30) - X(meilleur - 30), h);
-    x.fillStyle = '#5BD68A'; x.font = 'bold 11px system-ui'; x.fillText('▼ libre ' + meilleur + ' Hz', Math.min(w - 90, px + 4), 12); }
+    x.fillStyle = '#5BD68A'; x.font = 'bold 11px Drapeaux,system-ui'; x.fillText('▼ libre ' + meilleur + ' Hz', Math.min(w - 90, px + 4), 12); }
   txt('8-libre', meilleur ? '· place libre pour émettre : ' + meilleur + ' Hz' : '');
   // The audio frequencies.
-  x.fillStyle = 'rgba(232,240,247,.75)'; x.font = '10px system-ui';
+  x.fillStyle = 'rgba(232,240,247,.75)'; x.font = '10px Drapeaux,system-ui';
   for (let f = 500; f < H.haute; f += 500) { const px = X(f); x.fillRect(px, h - 5, 1, 5); x.fillText(f, px + 2, h - 6); }
   if (f8Clic) { x.strokeStyle = '#FF5FA2'; x.beginPath(); x.moveTo(X(f8Clic), 0); x.lineTo(X(f8Clic), h); x.stroke(); x.fillStyle = '#FF5FA2'; x.fillText(f8Clic + ' Hz', X(f8Clic) + 3, 26); }
   // The spectrum: the newest row, as a line.
@@ -3995,12 +4002,12 @@ function dessineRadar() {
   for (const e of H.entendus) if (e.de && e.km != null && e.az != null && !vus.has(e.de) && now - e.t < 60 * 60000) vus.set(e.de, e);
   const l = [...vus.values()], maxKm = l.length ? Math.max(...l.map(e => e.km)) : 2000;
   const echelle = [2000, 5000, 10000, 15000, 20000].find(k => k >= maxKm) || 20000;
-  x.strokeStyle = 'rgba(63,224,200,.18)'; x.fillStyle = 'rgba(154,167,180,.8)'; x.font = '10px system-ui'; x.textAlign = 'center';
+  x.strokeStyle = 'rgba(63,224,200,.18)'; x.fillStyle = 'rgba(154,167,180,.8)'; x.font = '10px Drapeaux,system-ui'; x.textAlign = 'center';
   // A square-root scale: the near stations (most of them) spread out, the far ones still fit.
   const rayon = km => Math.sqrt(Math.min(1, km / echelle)) * R;
   for (const f of [0.05, 0.25, 0.5, 1]) { const r = rayon(echelle * f); x.beginPath(); x.arc(cx, cy, r, 0, 7); x.stroke(); x.fillText(Math.round(echelle * f).toLocaleString() + ' km', cx, cy - r + 11); }
   for (let a = 0; a < 360; a += 30) { const r = a * Math.PI / 180; x.beginPath(); x.moveTo(cx, cy); x.lineTo(cx + R * Math.sin(r), cy - R * Math.cos(r)); x.stroke(); }
-  x.fillStyle = '#E8F0F7'; x.font = 'bold 12px system-ui';
+  x.fillStyle = '#E8F0F7'; x.font = 'bold 12px Drapeaux,system-ui';
   [['N', 0], ['E', 90], ['S', 180], ['O', 270]].forEach(([t, a]) => { const r = a * Math.PI / 180; x.fillText(t, cx + (R + 8) * Math.sin(r), cy - (R + 8) * Math.cos(r) + 4); });
   // The sweep: one turn per slot, as a radar's beam.
   const bal = (now % f8Slot()) / f8Slot() * 2 * Math.PI;
@@ -4015,8 +4022,8 @@ function dessineRadar() {
     const coul = e.moi ? '255,95,162' : e.nouveauPays ? '255,180,84' : e.cq ? '91,214,138' : e.fait ? '107,124,143' : '63,224,200';
     if (e.t === dernier && H.enMarche) { const ph = (now % 1500) / 1500; x.strokeStyle = 'rgba(' + coul + ',' + (1 - ph) + ')'; x.lineWidth = 2; x.beginPath(); x.arc(px, py, taille + ph * 14, 0, 7); x.stroke(); x.lineWidth = 1; }
     x.fillStyle = 'rgba(' + coul + ',' + alpha + ')';
-    if (e.nouveauPays) { x.font = (taille * 3) + 'px system-ui'; x.fillText('★', px, py + taille); } else { x.beginPath(); x.arc(px, py, taille, 0, 7); x.fill(); }
-    if (now - e.t < 15 * 60000) { x.font = '10px system-ui'; x.fillStyle = 'rgba(232,240,247,' + alpha + ')'; x.fillText(e.de, px, py - taille - 3); }
+    if (e.nouveauPays) { x.font = (taille * 3) + 'px Drapeaux,system-ui'; x.fillText('★', px, py + taille); } else { x.beginPath(); x.arc(px, py, taille, 0, 7); x.fill(); }
+    if (now - e.t < 15 * 60000) { x.font = '10px Drapeaux,system-ui'; x.fillStyle = 'rgba(232,240,247,' + alpha + ')'; x.fillText(e.de, px, py - taille - 3); }
   });
   txt('8-radar-info', l.length ? l.length + ' stations placées · cercle extérieur ' + echelle.toLocaleString() + ' km' : '');
 }

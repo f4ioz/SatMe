@@ -1,0 +1,3 @@
+drapeaux.woff2 is the "Twemoji Country Flags" font of country-flag-emoji-polyfill 0.1.10 (TalkJS).
+The flag art comes from Twemoji (https://github.com/twitter/twemoji), Copyright Twitter, Inc. and
+other contributors, used and redistributed under CC BY 4.0: https://creativecommons.org/licenses/by/4.0/

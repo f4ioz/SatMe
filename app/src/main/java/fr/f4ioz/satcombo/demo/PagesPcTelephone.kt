@@ -70,6 +70,7 @@ object PagesPcTelephone {
             // A gesture always goes to the gestures, even where a reading has the same address (api/reglages).
             if (methode == "POST") return json(action(vm, route, p))
             when (route) {
+                "/api/police-drapeaux" -> PagePc.POLICE_DRAPEAUX?.let { ReponseWeb("200 OK", "font/woff2", it) } ?: NON
                 "/api/capacites" -> json(JSONObject().put("onglets", JSONArray(onglets(vm))).put("serveur", "telephone"))
                 "/api/etat" -> json(etat(vm))
                 // Every satellite's passes over 24 h, as SatMe-PC lists them (the phone's own lists hold the followed one and the favourites).

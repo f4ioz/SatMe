@@ -248,6 +248,7 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
         }
         when (chemin) {
             "/", "/index.html", "/pc" -> envoie(sortie, "200 OK", "text/html; charset=utf-8", PagePc.HTML.toByteArray())
+            "/api/police-drapeaux" -> PagePc.POLICE_DRAPEAUX?.let { envoie(sortie, "200 OK", "font/woff2", it) } ?: envoie(sortie, "404 Not Found", "text/plain", ByteArray(0))
             // Every tab here; the phone offers some of them.
             "/api/capacites" -> envoie(sortie, "200 OK", "application/json; charset=utf-8",
                 JSONObject().put("onglets", JSONArray(PagePc.TOUS)).put("serveur", "pc").toString().toByteArray())
