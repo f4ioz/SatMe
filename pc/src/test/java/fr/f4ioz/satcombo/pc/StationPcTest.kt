@@ -66,6 +66,32 @@ class StationPcTest {
         while (!quoi()) { check(System.currentTimeMillis() < fin) { "trop long" }; Thread.sleep(50) }
     }
 
+    /** The Doppler/CAT log: off by default, nothing written; on, the pass opens its CSV; the rig gone, it closes. */
+    @Test
+    fun le_journal_doppler_note_le_passage_suivi() {
+        val st = station()
+        val d = File(dossier, "doppler")
+        st.dossierDoppler = d
+        assertTrue(st.suis(25544))
+        attends { st.etat.value.position != null && st.etat.value.emetteurs.isNotEmpty() }
+        st.connecteCat("SIM", 0, 0)
+        attends { st.stationCat.ecritDescenteHz > 0 }
+        Thread.sleep(1500)
+        assertTrue("off by default", st.journauxDoppler().isEmpty())
+        st.journalDoppler(true)
+        attends { st.journauxDoppler().isNotEmpty() }
+        val f = st.journauxDoppler().single()
+        assertTrue(f.name.startsWith("doppler-ISS-"))
+        assertEquals(fr.f4ioz.satcombo.domain.JournalDoppler.ENTETE, f.readLines().first())
+        // The rig disconnected: the pass closes with its row (written frequency, read back).
+        st.deconnecteCat()
+        attends { f.readLines().size >= 2 }
+        val l = f.readLines()[1].split(",")
+        assertEquals("AOS", l[2])
+        assertTrue(l[13].toLong() > 435_000_000L)
+        assertTrue(l[15].isNotEmpty())
+    }
+
     @Test
     fun le_poste_simule_suit_le_doppler_de_l_iss() {
         val st = station()

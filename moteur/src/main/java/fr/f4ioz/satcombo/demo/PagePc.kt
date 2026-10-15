@@ -408,7 +408,8 @@ object PagePc {
         <label class="petit"><input type="checkbox" id="utc"> UTC</label>
       </div>
       <div class="ligne"><label class="petit"><input type="checkbox" id="f-fav"> ★ favoris seulement</label>
-        <label class="petit"><input type="checkbox" id="f-actifs"> entendus ces jours-ci (AMSAT)</label></div>
+        <label class="petit"><input type="checkbox" id="f-actifs"> entendus ces jours-ci (AMSAT)</label>
+        <a class="bouton" id="ics-liste" href="api/passages.ics" download title="Les passages de la liste (avec ses filtres) dans un fichier d'agenda : Google Agenda, Outlook, Thunderbird…" style="margin-left:auto">⤓ Agenda (.ics)</a></div>
       <div class="etat" id="calcul"></div>
       <div id="liste"><table><thead><tr><th></th><th></th><th></th><th>Début</th><th>Satellite</th><th>El max</th><th>Durée</th><th></th></tr></thead><tbody id="passages"></tbody></table></div>
     </div>
@@ -443,7 +444,7 @@ object PagePc {
       <div class="petit" id="infos-passage" style="text-align:center;margin-top:4px"></div>
       <div class="ligne rec-l"><button class="rouge rec-b" onclick="enregistre()">● Enregistrer le son</button><span class="val rec-d"></span><span class="petit rec-m"></span>
         <label class="petit rec-los-l" style="margin-left:auto"><input type="checkbox" class="rec-los" onchange="coupeLos(this.checked)"> couper à la fin du passage</label></div>
-      <div class="t" style="margin-top:10px">Ses prochains passages</div>
+      <div class="t" style="margin-top:10px">Ses prochains passages <a class="petit" id="ics-suivi" href="api/passages.ics" download title="Ses prochains passages dans un fichier d'agenda" style="color:var(--cyan);font-weight:normal">⤓ .ics</a></div>
       <div id="suivants-boite"><table><tbody id="suivants"></tbody></table></div>
     </div>
   </div>
@@ -1304,6 +1305,15 @@ object PagePc {
       <div class="etat" id="reg-etat"></div>
     </div>
     <div class="carte">
+      <div class="t">Horizon</div>
+      <div class="petit">La hauteur des obstacles (toits, arbres, relief) dans chaque direction, en degrés au-dessus de l'horizon. Les passages commencent et finissent alors quand le satellite les dépasse ; les heures sans obstacle restent en infobulle (✱). Tout à 0 : rien ne change.</div>
+      <div class="ligne"><span class="petit">Secteurs</span><select id="hz-n" onchange="hzSecteurs(+this.value)"><option value="8">8 × 45°</option><option value="12">12 × 30°</option></select></div>
+      <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-start;margin-top:6px">
+        <svg id="hz-dessin" viewBox="-62 -62 124 124" width="150" height="150" role="img" aria-label="Le masque d'horizon vu du dessus"></svg>
+        <div id="hz-champs" style="display:grid;grid-template-columns:repeat(2, auto 64px);gap:4px 8px;align-items:center"></div></div>
+      <div class="ligne"><button class="primaire" onclick="enregistreHorizon()">Enregistrer</button><button onclick="hzSecteurs(HZ.length, true)">Tout à 0</button><span class="petit" id="hz-etat"></span></div>
+    </div>
+    <div class="carte">
       <div class="t">Skeds annoncés (hams.at)</div>
       <label class="petit"><input type="checkbox" id="sk-on" onchange="post('api/skeds/reglages?on=' + (this.checked ? 1 : 0))"> Montrer les skeds annoncés sur hams.at : sur les passages (📣), dans Station et le Carnet, sur la carte</label>
       <div class="ligne"><input id="sk-cle" type="password" placeholder="Clé API hams.at (facultative : la fenêtre commune avec toi)" autocomplete="off">
@@ -1320,6 +1330,14 @@ object PagePc {
       <div id="gpSources" style="display:grid;grid-template-columns:1fr 1fr;gap:2px 12px;margin-top:4px"></div>
       <div class="ligne"><button class="primaire" onclick="enregistreSources()">Enregistrer et télécharger</button></div>
       <div class="etat" id="catalogue"></div>
+    </div>
+    <div class="carte" id="lien-carte">
+      <div class="t">Lien satellite (WebSocket)</div>
+      <label class="petit" style="display:block"><input type="checkbox" id="lien-on" onchange="regleLien('on=' + (this.checked ? 1 : 0))">
+        Diffuser l'état de la station à d'autres programmes de ce PC</label>
+      <div class="ligne"><span class="petit">Port</span><input id="lien-port" type="number" min="1024" max="65535" style="max-width:90px">
+        <button onclick="regleLien('port=' + enc(v('lien-port')))">Appliquer</button><span class="petit" id="lien-etat"></span></div>
+      <div class="petit" style="margin-top:6px">Chaque seconde le satellite suivi (azimut, élévation, distance, fréquences et Doppler), les alertes de passage (AOS dans 5 min, AOS, LOS) et chaque contact noté au carnet, en JSON. Rien n'est accepté en retour. Sur ce PC seulement, sauf si SatMe-PC est lancé avec --reseau.</div>
     </div>
     <div class="carte" id="carteTelephone">
       <div class="t">Téléphone</div>
@@ -1409,6 +1427,13 @@ object PagePc {
         Envoyer chaque nouveau contact au carnet en ligne</label>
       <div class="ligne" id="carnetDelaiL"><span class="petit">après</span><select id="carnetDelai" onchange="post('api/reglages?carnetDelai=' + this.value)"></select>
         <span class="petit">le temps de le corriger ou de le mettre en pause (⏸ dans le carnet). Seuls les contacts saisis après l'activation partent.</span></div>
+    </div>
+    <div class="carte" id="dop-carte">
+      <div class="t">Journal Doppler / CAT</div>
+      <label class="petit" style="display:block"><input type="checkbox" id="dop-on" onchange="post('api/doppler?on=' + (this.checked ? 1 : 0)).then(chargeDoppler)">
+        Noter chaque passage suivi avec le poste connecté</label>
+      <div class="petit" style="margin-top:6px">Toutes les 5 s : élévation, Doppler prévu à la descente et à la montée, fréquence écrite au poste et relue. Un fichier CSV par passage (AOS, montée, TCA, descente, LOS), avec le passage dans le Journal. SatMe ne demande rien de plus au poste.</div>
+      <div id="dop-liste" class="petit" style="margin-top:6px"></div>
     </div>
     <div class="carte">
       <div class="t">Convertisseurs</div>
@@ -1604,9 +1629,9 @@ async function ticMire(premier) {
 // Réglages by category: a list on the left (icon, name, what it holds), the chosen category's cards on the right.
 const ICO = ${icones()};
 const CATS_REG = [
-  { id: 'station', nom: 'Ma station', ico: 'person', desc: 'Indicatif, carré, élévation minimale', cartes: ['Station'] },
-  { id: 'materiel', nom: 'Poste et rotor', ico: 'radio', desc: 'CAT, TH-D72, rotor, convertisseurs', cartes: ['Poste', 'Kenwood TH-D72', 'Rotor', 'Convertisseurs'] },
-  { id: 'satellites', nom: 'Satellites', ico: 'satellite_alt', desc: 'Éléments orbitaux, statut AMSAT', cartes: ['Éléments orbitaux', 'AMSAT'] },
+  { id: 'station', nom: 'Ma station', ico: 'person', desc: 'Indicatif, carré, élévation minimale, horizon', cartes: ['Station', 'Horizon'] },
+  { id: 'materiel', nom: 'Poste et rotor', ico: 'radio', desc: 'CAT, TH-D72, rotor, convertisseurs', cartes: ['Poste', 'Kenwood TH-D72', 'Rotor', 'Convertisseurs', 'Journal Doppler'] },
+  { id: 'satellites', nom: 'Satellites', ico: 'satellite_alt', desc: 'Éléments orbitaux, statut AMSAT, lien WebSocket', cartes: ['Éléments orbitaux', 'AMSAT', 'Lien satellite'] },
   { id: 'enligne', nom: 'Services en ligne', ico: 'public', desc: 'QRZ.com, Wavelog / Cloudlog, skeds hams.at', cartes: ['QRZ.com', 'Carnet en ligne', 'Skeds'] },
   { id: 'telephone', nom: 'Téléphone', ico: 'smartphone', desc: 'SatMe sur le téléphone : réglages et contacts', cartes: ['Téléphone'] },
   { id: 'accord', nom: 'Accord fin', ico: 'tune', desc: 'Loupe, vernier, calage sur la voix (clé SDR)', cartes: ['Accord fin'] },
@@ -1719,11 +1744,12 @@ function dessinePassages() {
     const cl = 'p' + (enCours ? ' encours' : '') + (p.catnum === suivi ? ' choisi' : '');
     const quand = enCours ? 'en cours' : 'dans ' + duree(p.aos - n);
     return '<tr class="' + cl + '" title="Suivre ' + p.nom.replace(/"/g, '') + ' : le carnet, la carte, le poste et le rotor le suivent" onclick="suivre(' + p.catnum + ')">' + celluleAgenda(p) + '<td class="rosace">' + rosace(p.trace, p.elMax, 30) + '</td><td><span title="Favori" style="cursor:pointer;color:' + (p.fav ? 'var(--ambre)' : 'var(--bord)') +
-      '" onclick="favori(' + p.catnum + ',' + !p.fav + ',event)">★</span></td><td>' + hm(p.aos) + '</td><td>' +
+      '" onclick="favori(' + p.catnum + ',' + !p.fav + ',event)">★</span></td><td>' + hm(p.aos) + marqueHorizon(p) + '</td><td>' +
       (a ? '<span title="AMSAT : ' + a[1] + '" style="display:inline-block;width:8px;height:8px;border-radius:4px;margin-right:6px;background:' + a[0] + '"></span>' : '') +
       p.nom.replace(/</g, '&lt;') + (p.skeds ? ' <span title="' + p.skeds + ' sked(s) annoncé(s) sur hams.at" style="color:var(--ambre)">📣' + (p.skeds > 1 ? p.skeds : '') + '</span>' : '') +
       '</td><td>' + Math.round(p.elMax) + '°</td><td>' + duree(p.los - p.aos) + '</td><td class="petit">' + quand + '</td></tr>';
   });
+  g('ics-liste').href = 'api/passages.ics?f=' + enc(g('filtre').value.trim()) + (seulFav ? '&fav=1' : '') + (seulActifs ? '&actifs=1' : '');
   g('passages').innerHTML = lignes.join('') || '<tr><td colspan="8" class="petit">' + (E && E.locator ? 'aucun passage' : 'renseigne ton locator') + '</td></tr>';
 }
 async function suivre(n) { await post('api/suivre?catnum=' + n); }
@@ -1861,10 +1887,11 @@ function dessine() {
     txt('r-ref', rs.refCalib == null ? 'pas de référence' : 'réf. RX ' + hz(rs.refCalib) + ' · TX ' + hz(rs.refTx));
     g('r-retour').disabled = rs.refCalib == null;
   }
+  if (E.suivi) g('ics-suivi').href = 'api/passages.ics?catnum=' + E.suivi.catnum;
   const sv = JSON.stringify(E.passagesSuivi.map(p => [p.aos, p.agenda]));
   if (sv !== g('suivants').dataset.vu) {
     g('suivants').dataset.vu = sv;
-    g('suivants').innerHTML = E.passagesSuivi.map(p => '<tr>' + celluleAgenda(p) + '<td class="rosace">' + rosace(p.trace, p.elMax, 40) + '</td><td>' + jourHeure(p.aos) + '</td><td>' + Math.round(p.elMax) + '°</td><td>' +
+    g('suivants').innerHTML = E.passagesSuivi.map(p => '<tr>' + celluleAgenda(p) + '<td class="rosace">' + rosace(p.trace, p.elMax, 40) + '</td><td>' + jourHeure(p.aos) + marqueHorizon(p) + '</td><td>' + Math.round(p.elMax) + '°</td><td>' +
       duree(p.los - p.aos) + '</td><td class="petit">' + Math.round(p.azAos) + '° → ' + Math.round(p.azLos) + '°</td></tr>').join('');
   }
   dessineAgenda();
@@ -2611,6 +2638,7 @@ async function chargeReglages() {
   try {
     const r = await (await fetch('api/reglages')).json();
     g('indicatif').value = r.c; g('locator').value = r.l; g('minEl').value = r.minEl;
+    horizonDe(r); chargeDoppler(); chargeLien();
     g('qrzFiche').checked = r.fiche; ficheVoulue = r.fiche;
     g('qrzUser').value = r.qrzUser; g('qrzMdp').placeholder = r.qrzMdp ? 'mot de passe enregistré' : 'Mot de passe';
     g('carnetUrl').value = r.carnetUrl; g('carnetCle').placeholder = r.carnetCle ? 'clé enregistrée' : 'Clé d’API (lecture et écriture)';
@@ -2633,6 +2661,61 @@ async function enregistreReglages() {
     txt('reg-etat', 'enregistré'); g('qrzMdp').value = ''; g('carnetCle').value = '';
     chargeReglages(); setTimeout(chargeListe, 1500);
   }
+}
+// ------------------------------------------------------------------ satellite link (WebSocket)
+async function chargeLien() {
+  let j = null;
+  try { j = await (await fetch('api/lien')).json(); } catch (x) {}
+  if (!j || j.absent || j.on === undefined) { g('lien-carte').hidden = true; return; }
+  g('lien-on').checked = !!j.on;
+  if (document.activeElement !== g('lien-port')) g('lien-port').value = j.port;
+  txt('lien-etat', j.erreur ? j.erreur : j.ecoute ? 'ws://' + (j.reseau ? location.hostname : 'localhost') + ':' + j.port + '/ · ' + j.clients + ' client(s)' : 'coupé');
+}
+async function regleLien(q) { await post('api/lien?' + q); chargeLien(); }
+// ------------------------------------------------------------------ Doppler/CAT log
+async function chargeDoppler() {
+  let j = null;
+  try { j = await (await fetch('api/doppler')).json(); } catch (x) {}
+  if (!j || j.on === undefined) { g('dop-carte').hidden = true; return; }
+  g('dop-on').checked = !!j.on;
+  g('dop-liste').innerHTML = j.fichiers.length ? 'Derniers : ' + j.fichiers.map(f => '<a href="journal/doppler?nom=' + enc(f.nom) + '" download style="color:var(--cyan)">' +
+    esc(f.nom) + '</a> (' + Math.max(1, Math.round(f.taille / 1024)) + ' ko)').join(' · ') : 'Aucun journal pour l’instant.';
+}
+// ------------------------------------------------------------------ horizon mask
+let HZ = [0, 0, 0, 0, 0, 0, 0, 0];
+function hzSecteurs(n, zero) {
+  if (zero || HZ.length !== n) HZ = Array(n).fill(0);
+  g('hz-n').value = String(HZ.length);
+  const w = 360 / HZ.length;
+  g('hz-champs').innerHTML = HZ.map((e, i) => '<span class="petit">' + Math.round(i * w) + '–' + Math.round((i + 1) * w) + '°</span>' +
+    '<input type="number" min="0" max="90" step="1" value="' + e + '" oninput="HZ[' + i + '] = Math.max(0, Math.min(90, +this.value || 0)); hzDessin()">').join('');
+  hzDessin();
+}
+// Seen from above: the ring is the horizon, the centre the zenith; the obstacles in amber.
+function hzDessin() {
+  const R = 55, w = 360 / HZ.length, pt = (az, r) => { const a = az * Math.PI / 180; return (r * Math.sin(a)).toFixed(1) + ' ' + (-r * Math.cos(a)).toFixed(1); };
+  let d = 'M' + pt(0, R) + ' A' + R + ' ' + R + ' 0 1 1 ' + pt(180, R) + ' A' + R + ' ' + R + ' 0 1 1 ' + pt(360, R) + 'Z M';
+  HZ.forEach((e, i) => { const r = R * (1 - e / 90); for (let k = 0; k <= 6; k++) d += (i || k ? ' L' : '') + pt(i * w + k * w / 6, r); });
+  let h = '<circle r="' + R + '" fill="none" stroke="var(--bord)"/><circle r="' + (R * 2 / 3).toFixed(1) + '" fill="none" stroke="var(--bord)" stroke-dasharray="2 3"/>' +
+    '<circle r="' + (R / 3).toFixed(1) + '" fill="none" stroke="var(--bord)" stroke-dasharray="2 3"/>' +
+    '<path d="' + d + 'Z" fill="var(--ambre)" fill-opacity=".45" fill-rule="evenodd" stroke="var(--ambre)" stroke-width=".8"/>';
+  [['N', 0], ['E', 90], ['S', 180], ['O', 270]].forEach(([l, a]) => { const [x, y] = pt(a, R + 5).split(' ');
+    h += '<text x="' + x + '" y="' + y + '" font-size="8" fill="var(--gris)" text-anchor="middle" dominant-baseline="middle">' + l + '</text>'; });
+  g('hz-dessin').innerHTML = h;
+}
+async function enregistreHorizon() {
+  const j = await post('api/horizon?m=' + (HZ.some(e => e > 0) ? HZ.join(',') : ''));
+  if (j && j.ok !== false) { txt('hz-etat', 'enregistré, passages recalculés'); setTimeout(chargeListe, 1500); }
+}
+function horizonDe(r) {
+  if (document.activeElement && document.activeElement.closest && document.activeElement.closest('#hz-champs')) return;
+  HZ = r.horizon && r.horizon.length ? r.horizon.slice() : Array(+g('hz-n').value || 8).fill(0);
+  hzSecteurs(HZ.length);
+}
+// A pass moved by the horizon mask: its times over the bare horizon, in a tooltip.
+function marqueHorizon(p) {
+  return p.geoAos ? '<span class="petit" title="Au-dessus des obstacles de ' + hm(p.aos) + ' à ' + hm(p.los) + ' ; sans obstacle de ' +
+    hm(p.geoAos) + ' à ' + hm(p.geoLos) + '"> ✱</span>' : '';
 }
 // ------------------------------------------------------------------ DATV (MiniTiouner, through LongMynd)
 let D = null, dSr = 0;

@@ -2391,6 +2391,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _ui.value.selected?.let { selectByCatnum(it.catalogNumber) }
     }
 
+    /** The obstacles around the station (not in UiState: it is at its register limit). */
+    fun masqueHorizon(): fr.f4ioz.satcombo.domain.MasqueHorizon = settings.masqueHorizon
+
+    /** The horizon mask: the pass lists computed again with it. */
+    fun setMasqueHorizon(m: fr.f4ioz.satcombo.domain.MasqueHorizon) {
+        settings.masqueHorizon = m
+        computeFavoritePasses()
+        _ui.value.selected?.let { selectByCatnum(it.catalogNumber) }
+    }
+
     fun setSkedsEnabled(on: Boolean) {
         settings.skedsEnabled = on
         _ui.value = _ui.value.copy(skedsEnabled = on)
@@ -7319,7 +7329,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 hours = _ui.value.passHorizonHours + _ui.value.pastPassHours
             }
             val merged = withContext(Dispatchers.Default) {
-                favs.flatMap { predictor.upcomingPasses(it, obs, fromMs = from, hours = hours, minElDeg = settings.minElevDeg.toDouble()) }
+                val masque = settings.masqueHorizon
+                favs.flatMap { predictor.upcomingPasses(it, obs, fromMs = from, hours = hours, minElDeg = settings.minElevDeg.toDouble(), masque = masque) }
                     .filter { it.losEpochMs > now - back && it.aosEpochMs < windowEnd }
                     .sortedBy { it.aosEpochMs }
                     // Safety cap only. The old limit of 120 silently dropped the
@@ -7637,6 +7648,25 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun passKey(p: fr.f4ioz.satcombo.data.SatPass) = "${p.catalogNumber}@${p.aosEpochMs}"
+
+    /**
+     * The passes ticked (all those listed when none is) as an iCalendar file
+     * in the export cache, for the share sheet; null when none is left to come.
+     */
+    fun exportPassagesIcs(): android.net.Uri? {
+        val app = getApplication<android.app.Application>()
+        val now = System.currentTimeMillis()
+        val keys = _ui.value.selectedPassKeys
+        val l = fr.f4ioz.satcombo.domain.CalendrierPassages.choisis(
+            _ui.value.favoritePasses.filter { keys.isEmpty() || passKey(it) in keys }, now)
+        if (l.isEmpty()) return null
+        return runCatching {
+            val dir = java.io.File(app.cacheDir, "export").apply { mkdirs() }
+            val f = java.io.File(dir, fr.f4ioz.satcombo.domain.CalendrierPassages.nomFichier(now))
+            f.writeText(fr.f4ioz.satcombo.domain.CalendrierPassages.ics(l, now))
+            androidx.core.content.FileProvider.getUriForFile(app, app.packageName + ".fileprovider", f)
+        }.getOrNull()
+    }
 
     // ------------------------------------------------- pass Doppler
 
@@ -8593,9 +8623,54 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 kotlinx.coroutines.delay(100)
                 runCatching { gardeCat() }
                 runCatching { lisSMetre() }
+                runCatching { noteDoppler() }
             }
+            // The rig gone: the pass under way closes.
+            runCatching { noteDoppler(force = true) }
         }
     }
+
+    // ------------------------------------------------------- the Doppler/CAT log
+
+    private var suiviDoppler: fr.f4ioz.satcombo.domain.JournalDoppler? = null
+    private var dopplerNoteMs = 0L
+
+    /** Where the logs go: the app's files (shared through the FileProvider). */
+    private fun dossierDoppler() = java.io.File(getApplication<android.app.Application>().filesDir, "doppler")
+
+    /** Once a second from the CAT loop: the followed pass noted, as the loop wrote and read it (observed only). */
+    private fun noteDoppler(force: Boolean = false) {
+        val now = System.currentTimeMillis()
+        if (!force && now - dopplerNoteMs < 1_000L) return
+        dopplerNoteMs = now
+        val u = _ui.value
+        val sat = u.selected
+        val actif = settings.journalDoppler && u.catConnected && sat != null
+        if (!actif && suiviDoppler?.enCours == null) return
+        val j = suiviDoppler ?: fr.f4ioz.satcombo.domain.JournalDoppler(dossierDoppler()).also { suiviDoppler = it }
+        val p = u.livePosition
+        val ech = if (actif && p != null) {
+            val tx = activeTransmitters().getOrNull(u.selectedTxIndex)
+            val dl = u.rxRestHz ?: tx?.downlinkLowHz?.let { lo -> (lo + (tx.downlinkHighHz ?: lo)) / 2 }
+            fr.f4ioz.satcombo.domain.JournalDoppler.Echantillon(now, p.azimuthDeg, p.elevationDeg, p.rangeKm, p.rangeRateKmS,
+                dl, fr.f4ioz.satcombo.domain.JournalDoppler.reposMontee(tx, dl),
+                stationCat.ecritDescenteHz.takeIf { it > 0 }, stationCat.ecritMonteeHz.takeIf { it > 0 },
+                stationCat.luDescenteHz.takeIf { it > 0 })
+        } else null
+        j.tic(actif, sat?.name.orEmpty(), sat?.catalogNumber ?: 0, ech)
+    }
+
+    fun journalDopplerActif(): Boolean = settings.journalDoppler
+    fun setJournalDoppler(on: Boolean) { settings.journalDoppler = on }
+
+    /** The logs kept, newest first. */
+    fun journauxDoppler(): List<java.io.File> = fr.f4ioz.satcombo.domain.JournalDoppler.liste(dossierDoppler())
+
+    /** A log for the share sheet. */
+    fun partageDoppler(f: java.io.File): android.net.Uri? = runCatching {
+        val app = getApplication<android.app.Application>()
+        androidx.core.content.FileProvider.getUriForFile(app, app.packageName + ".fileprovider", f)
+    }.getOrNull()
 
     /**
      * Watchdog: connected, the Icom writes but no longer answers reads (15 s)
@@ -8973,7 +9048,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 (((focus - now) / 3600_000L) + 6).toInt().coerceIn(72, 24 * 90)
             else 72
             val passes = withContext(Dispatchers.Default) {
-                predictor.upcomingPasses(sat, obs, fromMs = from, hours = hours, minElDeg = settings.minElevDeg.toDouble())
+                predictor.upcomingPasses(sat, obs, fromMs = from, hours = hours, minElDeg = settings.minElevDeg.toDouble(),
+                    masque = settings.masqueHorizon)
             }.filter { it.losEpochMs > now - back }
             val gt = withContext(Dispatchers.Default) {
                 predictor.groundTrack(sat, System.currentTimeMillis())

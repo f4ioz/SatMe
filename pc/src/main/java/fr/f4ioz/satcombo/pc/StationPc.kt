@@ -489,14 +489,16 @@ class StationPc(
             suivants.first().catalogNumber != sat.catalogNumber) && maintenant - derniereSuite >= 60_000L
         val nouveaux = if (aRefaire) {
             derniereSuite = maintenant
+            val masque = settings.masqueHorizon
             withContext(Dispatchers.Default) {
-                runCatching { predicteur.upcomingPasses(sat!!, obs!!, maintenant - 30 * 60_000L, 72, settings.minElevDeg.toDouble()) }
+                runCatching { predicteur.upcomingPasses(sat!!, obs!!, maintenant - 30 * 60_000L, 72, settings.minElevDeg.toDouble(), masque) }
                     .getOrDefault(emptyList()).filter { it.losEpochMs >= maintenant }.take(8)
             }
         } else suivants
         val fini = e.passage?.takeIf { it.losEpochMs < maintenant && it != passage && it.catalogNumber == sat?.catalogNumber }
         change { copy(maintenant = maintenant, position = pos, passage = passage, arc = arc, passagesSuivi = nouveaux,
             dernierPassage = fini ?: dernierPassage) }
+        runCatching { noteDoppler(maintenant) }
     }
     @Volatile private var derniereSuite = 0L
 
@@ -694,14 +696,58 @@ class StationPc(
         val sats = _etat.value.satellites
         change { copy(calculEnCours = true) }
         val debut = horloge()
+        val masque = settings.masqueHorizon
         val l = withContext(Dispatchers.Default) {
             sats.flatMap { s ->
                 if (!PassPredictor.elementsUtilisables(s)) emptyList()
-                else runCatching { predicteur.upcomingPasses(s, obs, debut - 15 * 60_000L, 24, settings.minElevDeg.toDouble()) }
+                else runCatching { predicteur.upcomingPasses(s, obs, debut - 15 * 60_000L, 24, settings.minElevDeg.toDouble(), masque) }
                     .getOrDefault(emptyList()).filter { it.losEpochMs >= debut }
             }.sortedBy { it.aosEpochMs }
         }
         change { copy(passages = l, calculEnCours = false) }
+    }
+
+    // ------------------------------------------------------- the Doppler/CAT log
+
+    /** Where the Doppler/CAT logs go, one CSV per pass (set at start; null: none kept). */
+    @Volatile var dossierDoppler: java.io.File? = null
+    private var suiviDoppler: fr.f4ioz.satcombo.domain.JournalDoppler? = null
+
+    /**
+     * Each second: with the log on and the rig connected, the followed pass
+     * noted — what the loop wrote and read, observed only.
+     */
+    private fun noteDoppler(t: Long) {
+        val d = dossierDoppler ?: return
+        val e = _etat.value
+        val sat = e.suivi
+        val actif = settings.journalDoppler && e.catConnecte && sat != null
+        if (!actif && suiviDoppler?.enCours == null) return
+        val j = suiviDoppler ?: fr.f4ioz.satcombo.domain.JournalDoppler(d).also { suiviDoppler = it }
+        val p = e.position
+        val ech = if (actif && p != null) {
+            val tx = emetteurChoisi()
+            val dl = e.repos ?: tx?.downlinkLowHz?.let { lo -> (lo + (tx.downlinkHighHz ?: lo)) / 2 }
+            fr.f4ioz.satcombo.domain.JournalDoppler.Echantillon(t, p.azimuthDeg, p.elevationDeg, p.rangeKm, p.rangeRateKmS,
+                dl, fr.f4ioz.satcombo.domain.JournalDoppler.reposMontee(tx, dl),
+                stationCat.ecritDescenteHz.takeIf { it > 0 }, stationCat.ecritMonteeHz.takeIf { it > 0 },
+                stationCat.luDescenteHz.takeIf { it > 0 })
+        } else null
+        j.tic(actif, sat?.name.orEmpty(), sat?.catalogNumber ?: 0, ech)
+    }
+
+    /** The log switched on or off (off: the pass under way closes at the next second). */
+    fun journalDoppler(on: Boolean) { settings.journalDoppler = on }
+
+    /** The logs kept, newest first. */
+    fun journauxDoppler(): List<java.io.File> = dossierDoppler?.let { fr.f4ioz.satcombo.domain.JournalDoppler.liste(it) }.orEmpty()
+
+    /** The horizon mask set on the page: the lists computed again with it. */
+    fun poseMasque(m: fr.f4ioz.satcombo.domain.MasqueHorizon) {
+        settings.masqueHorizon = m
+        derniereSuite = 0L
+        change { copy(passagesSuivi = emptyList()) }
+        portee.launch { runCatching { recalcule() } }
     }
 
     // ------------------------------------------------------------- choices

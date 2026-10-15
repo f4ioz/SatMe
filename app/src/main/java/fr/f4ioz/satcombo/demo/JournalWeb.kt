@@ -258,6 +258,8 @@ object JournalWeb {
                         })
                         append(",\"sig\":").append(e.signal.joinToString(",", "[", "]") { "[${it.tMs},${it.s}]" })
                         append(",\"freq\":").append(frequences(j, e, l).joinToString(",", "[", "]") { "[${it.first},${it.second}]" })
+                        append(",\"doppler\":").append(fr.f4ioz.satcombo.domain.JournalDoppler.duPassage(File(ctx.filesDir, "doppler"),
+                            e.satName, e.debutMs, e.finMs).joinToString(",", "[", "]") { "\"${js(it.name)}\"" })
                         append("}")
                     })
                 }
@@ -328,6 +330,11 @@ object JournalWeb {
                     val t = travaux[p("n")] ?: return NON
                     json("{\"fini\":${t.fini},\"progres\":${t.progres},\"ok\":${t.fichier != null}," +
                         "\"nom\":\"${js(t.fichier?.name ?: "")}\",\"taille\":${t.fichier?.length() ?: 0}}")
+                }
+                // A Doppler/CAT log (CSV), by its name.
+                "/doppler" -> {
+                    val f = fr.f4ioz.satcombo.domain.JournalDoppler.fichier(File(ctx.filesDir, "doppler"), p("nom")) ?: return NON
+                    ReponseWeb("200 OK", "text/csv; charset=utf-8", fichier = f, entetes = "Content-Disposition: attachment; filename=\"${f.name}\"\r\n")
                 }
                 "/fichier" -> {
                     val f = travaux[p("n")]?.fichier ?: return NON

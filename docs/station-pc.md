@@ -176,6 +176,21 @@ Without its key the node only says what it is; what changes it is a POST; its LN
 <img src="images/pc-sstv.webp" width="49%" alt="SSTV: a picture opened in the viewer">
 </p>
 
+## The satellite link (WebSocket)
+
+For other programs on the PC (a logger, a dashboard, a script): **Réglages › Satellites › Lien satellite**, off by default. Once on, `ws://localhost:8095/` (the port can be changed) pushes JSON text frames; on this PC only, unless SatMe-PC was started with `--reseau`. Nothing a client sends is acted upon (ping is answered, close echoed).
+
+| `type` | When | Fields |
+|---|---|---|
+| `hello` | on connecting | `app`, `version`, `callsign`, `locator` |
+| `satellite` | every second while a satellite is followed | `time`, `name`, `catnum`, `az`, `el`, `rangeKm`, `rangeRateKmS`, `transmitter`, `downlinkHz`, `uplinkHz` (with Doppler), `dopplerDownHz`, `dopplerUpHz` |
+| `passAlert` | the followed satellite and the ★ favourites | `kind` (`aosSoon` 5 min before, with `inS`; `aos`; `los`), `name`, `catnum`, `aos`, `los` (ms UTC), `maxEl`, `aosAz`, `losAz` |
+| `qsoLogged` | a contact goes into the log | `time`, `call`, `grid`, `satellite`, `catnum`, `mode`, `rstSent`, `rstRcvd`, `downlinkMHz`, `uplinkMHz`, `az`, `el`, `myGrid` |
+
+```
+{"type":"satellite","time":1792089000000,"name":"ISS","catnum":25544,"az":212.4,"el":31.7,"rangeKm":812.3,"rangeRateKmS":-4.512,"transmitter":"FM voice repeater (V/U)","downlinkHz":437806580,"uplinkHz":145987810,"dopplerDownHz":6580,"dopplerUpHz":-2190}
+```
+
 ## Hardware safety
 
 - **Nothing opens by itself.** A serial port opens only when it is chosen and "Connect" is clicked. No automatic search.

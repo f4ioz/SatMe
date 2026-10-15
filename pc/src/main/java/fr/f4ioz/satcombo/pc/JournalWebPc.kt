@@ -160,6 +160,8 @@ class JournalWebPc(private val j: JournalPc, private val station: StationPc, pri
                         "{\"n\":$i,\"nom\":\"${js(m.f.name)}\",\"o\":${m.origine},\"an\":${m.annonce},\"du\":${m.dureeMs}}" })
                     append(",\"sig\":").append(e.signal.joinToString(",", "[", "]") { "[${it.tMs},${it.s}]" })
                     append(",\"freq\":").append(frequences(e, l).joinToString(",", "[", "]") { "[${it.first},${it.second}]" })
+                    append(",\"doppler\":").append(station.dossierDoppler?.let { fr.f4ioz.satcombo.domain.JournalDoppler.duPassage(it, e.satName, e.debutMs, e.finMs) }
+                        .orEmpty().joinToString(",", "[", "]") { "\"${js(it.name)}\"" })
                     append("}")
                 })
             }
@@ -228,6 +230,11 @@ class JournalWebPc(private val j: JournalPc, private val station: StationPc, pri
             "/travail" -> {
                 val t = travaux[p("n")] ?: return NON
                 json("{\"fini\":${t.fini},\"progres\":${t.progres},\"ok\":${t.fichier != null},\"nom\":\"${js(t.fichier?.name ?: "")}\",\"taille\":${t.fichier?.length() ?: 0}}")
+            }
+            // A Doppler/CAT log (CSV), by its name.
+            "/doppler" -> {
+                val f = station.dossierDoppler?.let { fr.f4ioz.satcombo.domain.JournalDoppler.fichier(it, p("nom")) } ?: return NON
+                ReponseWeb("200 OK", "text/csv; charset=utf-8", fichier = f, entetes = "Content-Disposition: attachment; filename=\"${f.name}\"\r\n")
             }
             "/fichier" -> {
                 val f = travaux[p("n")]?.fichier ?: return NON

@@ -84,6 +84,17 @@ object PagesPcTelephone {
                             skeds = if (u.skedsEnabled) vm.skedsForPass(it.catalogNumber, it.aosEpochMs, it.losEpochMs).size else 0)
                     })))
                 }
+                // The passes listed, as a calendar (the list's filters, or one satellite).
+                "/api/passages.ics" -> {
+                    val maintenant = System.currentTimeMillis()
+                    val l = fr.f4ioz.satcombo.domain.CalendrierPassages.choisis(passagesTous(vm).first, maintenant, p("f"),
+                        u.favorites.takeIf { p("fav") == "1" }, p("catnum").toIntOrNull()) {
+                        p("actifs") != "1" || vm.amsatFor(it.satName, it.catalogNumber)?.recent?.name == "ACTIVE"
+                    }
+                    ReponseWeb("200 OK", fr.f4ioz.satcombo.domain.CalendrierPassages.TYPE,
+                        fr.f4ioz.satcombo.domain.CalendrierPassages.ics(l, maintenant).toByteArray(),
+                        "Content-Disposition: attachment; filename=\"" + fr.f4ioz.satcombo.domain.CalendrierPassages.nomFichier(maintenant) + "\"\r\n")
+                }
                 "/api/trace" -> {
                     val sat = u.selected
                     val pts = if (sat == null) emptyList() else runCatching { vm.predicteurPourPage().groundTrack(sat, System.currentTimeMillis(), 160) }.getOrDefault(emptyList())
@@ -190,7 +201,8 @@ object PagesPcTelephone {
                         .put("carnetAuto", c.auto).put("carnetDelai", c.autoDelaiS)
                         .put("delais", JSONArray(fr.f4ioz.satcombo.domain.EnvoiAuto.DELAIS_S))
                         .put("amsatAuto", c.amsatAuto).put("amsatEtat", c.amsatEtat)
-                        .put("pskReporter", c.pskReporter).put("pskEtat", c.pskEtat))
+                        .put("pskReporter", c.pskReporter).put("pskEtat", c.pskEtat)
+                        .put("horizon", JSONArray(vm.masqueHorizon().elevationsDeg)))
                 }
                 // CelesTrak is the phone's to reach directly: no server rule here.
                 "/api/sources" -> json(ApiStation.sources(vm.serveurGp(), vm.serveurGpSeul(), u.enabledSources,
@@ -604,6 +616,7 @@ object PagesPcTelephone {
                 if (p("pskReporter").isNotEmpty()) vm.setPskReporter(p("pskReporter") == "1")
                 OK
             }
+            "/api/horizon" -> { vm.setMasqueHorizon(fr.f4ioz.satcombo.domain.MasqueHorizon.lis(p("m"))); OK }
             "/api/sources" -> {
                 p("serveur").takeIf { it.isNotEmpty() }?.let { vm.setServeurGp(it.trim()) }
                 if (p("seul").isNotEmpty()) vm.setServeurGpSeul(p("seul") == "1")
@@ -708,7 +721,8 @@ object PagesPcTelephone {
         val obs = u.observer ?: return emptyList<fr.f4ioz.satcombo.data.SatPass>() to false
         val maintenant = System.currentTimeMillis()
         // Computed again when old, or for another place, catalogue or minimum elevation.
-        val pour = "${obs.latDeg},${obs.lonDeg},${u.satellites.size},${u.minElevDeg}"
+        val masque = vm.masqueHorizon()
+        val pour = "${obs.latDeg},${obs.lonDeg},${u.satellites.size},${u.minElevDeg},${masque.texte()}"
         if ((maintenant - passagesDe > 5 * 60_000L || pour != passagesPour) && passagesEnCours.compareAndSet(false, true)) {
             Thread {
                 try {
@@ -716,7 +730,7 @@ object PagesPcTelephone {
                     val debut = System.currentTimeMillis()
                     passagesCalcules = u.satellites.flatMap { s ->
                         if (!fr.f4ioz.satcombo.domain.PassPredictor.elementsUtilisables(s)) emptyList()
-                        else runCatching { p.upcomingPasses(s, obs, debut - 15 * 60_000L, 24, u.minElevDeg.toDouble()) }
+                        else runCatching { p.upcomingPasses(s, obs, debut - 15 * 60_000L, 24, u.minElevDeg.toDouble(), masque) }
                             .getOrDefault(emptyList()).filter { it.losEpochMs >= debut }
                     }.sortedBy { it.aosEpochMs }
                     passagesDe = debut; passagesPour = pour

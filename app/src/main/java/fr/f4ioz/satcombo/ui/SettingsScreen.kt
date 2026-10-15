@@ -623,6 +623,13 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
             }
         }
 
+        // --- horizon mask ---
+        item { SectionHeader(t("horizon_section")) }
+        item {
+            var masque by remember { mutableStateOf(vm.masqueHorizon()) }
+            HorizonReglage(masque) { vm.setMasqueHorizon(it); masque = vm.masqueHorizon() }
+        }
+
         // --- past passes ---
         item { SectionHeader(t("past_passes")) }
         item {
@@ -2633,6 +2640,8 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
             }
         }
 
+            // The Doppler/CAT log of the passes followed.
+            item { JournalDopplerCarte(vm) }
         }
 
         // --- Converters (LNB / transverter) ---

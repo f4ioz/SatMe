@@ -50,7 +50,9 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
     /** The sound to the browsers that listen. */
     private val diffusion: DiffusionSon? = null,
     /** QO-100's beacon followed, the stations heard. */
-    private val qo100: Qo100Pc? = null) {
+    private val qo100: Qo100Pc? = null,
+    /** The satellite link (local WebSocket), set in Réglages. */
+    private val lien: LienSatellitePc? = null) {
 
     private var socket: ServerSocket? = null
     val portReel: Int get() = socket?.localPort ?: port
@@ -253,6 +255,15 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
             "/api/capacites" -> envoie(sortie, "200 OK", "application/json; charset=utf-8",
                 JSONObject().put("onglets", JSONArray(PagePc.TOUS)).put("serveur", "pc").toString().toByteArray())
             "/api/etat" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JsonPc.etat(station, carnet).toString().toByteArray())
+            // The satellite link: on or not, its port, who listens.
+            "/api/lien" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", (lien?.let { l ->
+                JSONObject().put("on", l.actif).put("port", l.port).put("ecoute", l.ecoute).put("clients", l.nbClients)
+                    .put("erreur", l.erreur).put("reseau", reseau)
+            } ?: JSONObject().put("absent", true)).toString().toByteArray())
+            // The Doppler/CAT log: on or not, the last files (downloaded from the journal's route).
+            "/api/doppler" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JSONObject().put("on", station.settings.journalDoppler)
+                .put("fichiers", JSONArray(station.journauxDoppler().take(8).map { JSONObject().put("nom", it.name).put("taille", it.length()) }))
+                .toString().toByteArray())
             "/api/passages" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JsonPc.passages(station).toString().toByteArray())
             "/api/satellites" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JsonPc.satellites(station).toString().toByteArray())
             "/api/ports" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JsonPc.ports(station).toString().toByteArray())
@@ -429,6 +440,19 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                     java.text.SimpleDateFormat("yyyyMMdd_HHmm", java.util.Locale.US).format(java.util.Date()) + ".adi"
                 envoie(sortie, "200 OK", "text/plain; charset=utf-8", (carnet?.adif(choisis) ?: "").toByteArray(),
                     "Content-Disposition: attachment; filename=\"$nom\"\r\n")
+            }
+            // The passes listed, as a calendar: the list's filters (?f=, fav=1, actifs=1) or one satellite (?catnum=).
+            "/api/passages.ics" -> {
+                val e = station.etat.value
+                val maintenant = System.currentTimeMillis()
+                val n = q["catnum"]?.toIntOrNull()
+                val l = fr.f4ioz.satcombo.domain.CalendrierPassages.choisis(if (n != null) e.passagesSuivi + e.passages else e.passages,
+                    maintenant, q["f"].orEmpty(), e.favoris.takeIf { q["fav"] == "1" }, n) {
+                    q["actifs"] != "1" || station.statutAmsat(it.satName)?.recent?.name == "ACTIVE"
+                }.distinctBy { fr.f4ioz.satcombo.domain.CalendrierPassages.uid(it) }
+                envoie(sortie, "200 OK", fr.f4ioz.satcombo.domain.CalendrierPassages.TYPE,
+                    fr.f4ioz.satcombo.domain.CalendrierPassages.ics(l, maintenant).toByteArray(),
+                    "Content-Disposition: attachment; filename=\"" + fr.f4ioz.satcombo.domain.CalendrierPassages.nomFichier(maintenant) + "\"\r\n")
             }
             "/api/carnet/lot" -> {
                 val choisis = q["t"].orEmpty().split(',').mapNotNull { it.trim().toLongOrNull() }.toSet()
@@ -757,6 +781,12 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 q["amsatAuto"]?.let { s.amsatAuto = it == "1" }
                 q["pskReporter"]?.let { v -> son?.psk?.let { it.actif = v == "1" } ?: run { s.pskReporter = v == "1" } }
             }
+            "/api/doppler" -> station.journalDoppler(q["on"] == "1")
+            "/api/lien" -> {
+                lien?.regle(q["on"]?.let { it == "1" }, q["port"]?.trim()?.toIntOrNull())
+                if (lien != null && lien.erreur.isNotEmpty()) return JSONObject().put("ok", false).put("erreur", lien.erreur)
+            }
+            "/api/horizon" -> station.poseMasque(fr.f4ioz.satcombo.domain.MasqueHorizon.lis(q["m"]))
             "/api/sources" -> station.regleSources(q["ids"]?.split(',')?.map { it.trim() }?.filter { it.isNotEmpty() }?.toSet(),
                 q["serveur"], q["seul"]?.let { it == "1" })
             "/api/sources/essai" -> {
@@ -1082,6 +1112,7 @@ object JsonPc {
             .put("amsatAuto", s.amsatAuto).put("amsatEtat", st.pushAmsat.etat)
             .put("pskReporter", s.pskReporter).put("pskEtat", son?.psk?.etat().orEmpty())
             .put("delais", JSONArray(fr.f4ioz.satcombo.domain.EnvoiAuto.DELAIS_S))
+            .put("horizon", JSONArray(s.masqueHorizon.elevationsDeg))
     }
 
     /**
