@@ -308,6 +308,9 @@ object PagePc {
   .k-ciels svg { width:100%; display:block; }
   .o-freq { font-family:ui-monospace,Consolas,monospace; font-size:34px; font-weight:800; color:var(--cyan); cursor:ns-resize; user-select:none; }
   .o-balise { font-size:13px; }
+  .o-leila { display:inline-block; margin:4px 0 2px; padding:2px 10px; border-radius:6px; background:#FF5A5A; color:#fff; font-weight:800; letter-spacing:2px; animation:o-leila 1s ease-in-out infinite alternate; }
+  .o-leila[hidden] { display:none; }
+  @keyframes o-leila { from { opacity:1; } to { opacity:.55; } }
   .o-balise b { font-family:ui-monospace,Consolas,monospace; font-size:16px; }
   .o-puces { display:flex; gap:6px; flex-wrap:wrap; }
   .o-puces button { padding:4px 9px; font-size:12px; font-weight:600; }
@@ -930,6 +933,7 @@ object PagePc {
       <div class="t">QO-100 · géostationnaire, 25,9° est</div>
       <div class="petit">Descente (ciel)</div>
       <div id="o-dl" class="o-freq" title="Molette : ±100 Hz (Maj : ±1 kHz) · flèches ← → ±100 Hz, ↑ ↓ ±1 kHz"></div>
+      <div id="o-leila" class="o-leila" hidden title="La sirène LEILA de la station sol : la station écoutée émet plus fort que les balises et doit baisser sa puissance.">⚠ LEILA</div>
       <div class="petit" style="margin-top:4px">Montée <span id="o-ul" class="val ambre" style="font-size:18px"></span></div>
       <div class="ligne bouton-gr" style="margin-top:10px">
         <button onclick="qPas(-10000)">−10 k</button><button onclick="qPas(-1000)">−1 k</button><button onclick="qPas(-100)">−100</button>
@@ -3303,6 +3307,8 @@ async function ticQualite() {
   try { OQ = await (await fetch('api/qo100/qualite')).json(); } catch (x) { OQ = null; }
   const q = OQ, ok = q && !q.absent;
   g('oq-auto-l').hidden = !ok; g('oq-carte').hidden = !ok || !q.cle; g('oq-sig-carte').hidden = !ok || !q.cle;
+  g('o-leila').hidden = !(ok && q.leila);
+  if (ok && q.leila) g('o-leila').title = 'La sirène LEILA de la station sol, entendue il y a ' + q.leilaIlYa + ' s (vers ' + q.leilaHz + ' Hz dans le son) : la station écoutée émet plus fort que les balises et doit baisser sa puissance.';
   if (!ok) return;
   if (document.activeElement !== g('oq-auto')) g('oq-auto').checked = q.auto;
   etatMarche('oq', q.verrou, 'oq-verrou'); txt('oq-verrou', q.verrou ? (q.auto ? 'calée sur la balise' : 'balise suivie') : 'balise non vue');

@@ -23,6 +23,18 @@ import org.json.JSONObject
 class Qo100Pc(private val station: StationPc, private val sdr: SdrPc, private val horloge: () -> Long = System::currentTimeMillis) {
 
     val suivi = SuiviBaliseQo100()
+    /** LEILA in the dongle's sound, and in the card's when the rig is on QO-100. */
+    private val leila = fr.f4ioz.satcombo.domain.DetecteurLeila(fr.f4ioz.satcombo.sdr.Dsp.AUDIO_RATE)
+    @Volatile private var leilaCarte: fr.f4ioz.satcombo.domain.DetecteurLeila? = null
+
+    init { sdr.ecouteQo100 = { pcm, n -> leila.ecoute(pcm, n, horloge()) } }
+
+    /** The sound card's sound: listened for LEILA while the rig is on QO-100. */
+    fun ecouteCarte(pcm: ShortArray, n: Int, rate: Int) {
+        if (!station.qo100.etat.value.auPoste) return
+        val d = leilaCarte?.takeIf { it.rate == rate } ?: fr.f4ioz.satcombo.domain.DetecteurLeila(rate).also { leilaCarte = it }
+        d.ecoute(pcm, n, horloge())
+    }
     private var dernierMs = 0L
 
     /** Calibration held on the beacon by itself (Réglages and the QO-100 tab; off by default). */
@@ -52,6 +64,10 @@ class Qo100Pc(private val station: StationPc, private val sdr: SdrPc, private va
         d?.let { p ->
             o.put("ecart", Math.round(p.ecartHz)).put("rapport", Math.round(p.rapportDb * 10) / 10.0).put("quand", p.t)
                 .put("erreur", Math.round(p.erreurHz)).put("ppm", Math.round(SuiviBaliseQo100.ppm(p.erreurHz) * 1000) / 1000.0)
+        }
+        // LEILA heard lately (10 s): the station listened to sends too strong.
+        listOfNotNull(leila, leilaCarte).filter { it.entendue(t) }.maxByOrNull { it.dernierMs }?.let {
+            o.put("leila", true).put("leilaHz", it.tonHz).put("leilaIlYa", (t - it.dernierMs) / 1000)
         }
         suivi.deriveHzParMin(t)?.let { o.put("derive", Math.round(it * 10) / 10.0) }
         o.put("historique", JSONArray(suivi.historique().map { JSONArray().put(it.t).put(Math.round(it.erreurHz)) }))

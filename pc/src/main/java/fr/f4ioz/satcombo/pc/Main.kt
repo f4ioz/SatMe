@@ -87,6 +87,7 @@ fun main(args: Array<String>) {
     val sdr = SdrPc(station, son.son, station.stockage, portee, dossierSondes = File(dossier, "sondes"), meteor = meteor)
     // QO-100 with the dongle: the beacon followed, the calibration held on it when chosen.
     val qo100 = Qo100Pc(station, sdr)
+    son.son.auditeurs += { pcm, n, rate -> qo100.ecouteCarte(pcm, n, rate) }
     portee.launch {
         while (true) {
             runCatching { son.tic() }

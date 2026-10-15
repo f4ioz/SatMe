@@ -257,6 +257,8 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
     @Volatile var panoramaTrames = 0L; private set
     @Volatile private var panoramaDemandeMs = 0L
     fun demandePanorama() { panoramaDemandeMs = horloge() }
+    /** The dongle's sound while on QO-100 ([Dsp.AUDIO_RATE]): LEILA listened for. */
+    @Volatile var ecouteQo100: ((ShortArray, Int) -> Unit)? = null
 
     /**
      * The panorama's axis, in QO-100's nominal sky: its centre and signed
@@ -511,6 +513,7 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
                         if (hp.available() >= octets.size) hp.write(octets, 0, octets.size)
                     }
                     if (son.etat.value.appareil == NOM_SOURCE && son.etat.value.actif) son.distribue(pcm, produit, Dsp.AUDIO_RATE)
+                    if (pourQo100()) ecouteQo100?.invoke(pcm, produit)
                     // The browsers listening to the dongle (the page open on another PC).
                     diffusion?.ajoute("sdr", pcm, produit, Dsp.AUDIO_RATE)
                 }
