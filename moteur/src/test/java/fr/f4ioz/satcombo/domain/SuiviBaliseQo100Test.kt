@@ -19,12 +19,43 @@ class SuiviBaliseQo100Test {
 
     @Test fun `le calage suit la balise, sans croire une mesure faible ou trop loin`() {
         val s = SuiviBaliseQo100()
-        assertEquals(1_080L, s.mesure(0, m(100.0, 20f), 1_000, corrige = true))   // 80 % of 100 Hz
-        assertNull(s.mesure(1, m(5.0, 20f), 1_000, corrige = true))               // close enough
-        assertNull(s.mesure(2, m(300.0, 6f), 1_000, corrige = true))              // too weak
-        assertNull(s.mesure(3, m(9_000.0, 25f), 1_000, corrige = true))           // another line
-        assertNull(s.mesure(4, m(100.0, 20f), 1_000, corrige = false))            // measured, not written
+        // Half a minute of measures before anything is written; then 80 % of the 100 Hz they agree on.
+        for (k in 0 until 5) assertNull(s.mesure(k.toLong(), m(100.0, 20f), 1_000, corrige = true))
+        assertEquals(1_080L, s.mesure(5, m(100.0, 20f), 1_000, corrige = true))
+        assertNull(s.mesure(6, m(15.0, 20f), 1_100, corrige = true))              // close enough
+        assertNull(s.mesure(2, m(300.0, 6f), 1_100, corrige = true))              // too weak
+        assertNull(s.mesure(3, m(5.0, 20f), 1_100, corrige = false))              // measured, not written
+        // Another line 20 kHz away (a strong station): thrown away, not even recorded.
+        assertNull(s.mesure(4, m(19_700.0, 25f), 1_100, corrige = true))
+        assertEquals(1, s.ecartees)
         assertTrue(s.verrouille(10_000))
+    }
+
+    @Test fun `une balise qui saute entre deux lobes ne fait pas sauter l'accord`() {
+        // The night of 14 to 15 October: measures -5 500 and -6 200 Hz in turn, the true error between.
+        val s = SuiviBaliseQo100()
+        var calage = -5_850L
+        val ecrits = ArrayList<Long>()
+        for (k in 0 until 60) {
+            val erreur = if (k % 2 == 0) -5_500.0 else -6_200.0
+            s.mesure(k * 5_000L, m(erreur - calage, 20f), calage, corrige = true)?.let { calage = it; ecrits += it }
+        }
+        // The mean sits between the lobes: a few small touches at first, never a 700 Hz swing.
+        assertTrue("$ecrits", ecrits.size <= 6 && ecrits.all { kotlin.math.abs(it + 5_850) <= 60 })
+    }
+
+    @Test fun `le centre de la balise PSK, ni l'un ni l'autre lobe`() {
+        // A spectrum 1 Hz a bin, two lobes at -350 and +350 Hz of 10 489,750, the left one a little higher.
+        val n = 20_000
+        val centre = Qo100.BALISE_MEDIANE_HZ.toDouble()
+        val mag = FloatArray(n) { -60f }
+        for (k in -150..150) { mag[n / 2 - 350 + k] = maxOf(mag[n / 2 - 350 + k], -20f - kotlin.math.abs(k) / 30f + 1f) }
+        for (k in -150..150) { mag[n / 2 + 350 + k] = maxOf(mag[n / 2 + 350 + k], -20f - kotlin.math.abs(k) / 30f) }
+        val pic = MesureBalise.mesurer(mag, centre, n.toDouble(), fenetreHz = 3_000.0)!!
+        val c = MesureBalise.mesurerCentre(mag, centre, n.toDouble(), fenetreHz = 3_000.0)!!
+        assertTrue("pic ${pic.ecartHz}", kotlin.math.abs(pic.ecartHz + 350) < 20)
+        // A lobe 1 dB stronger pulls the centre a little (tens of hertz), never to the lobe (350 Hz).
+        assertTrue("centre ${c.ecartHz}", kotlin.math.abs(c.ecartHz) < 100)
     }
 
     @Test fun `la derive du LNB en Hz par minute`() {

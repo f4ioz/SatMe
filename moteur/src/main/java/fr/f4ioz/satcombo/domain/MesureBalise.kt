@@ -142,6 +142,43 @@ object MesureBalise {
     }
 
     /**
+     * The beacon's centre, not its peak: the middle beacon is phase-modulated,
+     * its spectrum has two lobes, and a peak read jumps from one to the other
+     * (seven hundred hertz apart, seen through a night on F4IOZ's station).
+     * The peak found as [mesurer] finds it, then the centre of gravity of the
+     * power standing above the floor within [demiLargeurHz] of it.
+     */
+    fun mesurerCentre(
+        magDb: FloatArray,
+        centreHz: Double,
+        etendueHz: Double,
+        cibleHz: Double = Qo100.BALISE_MEDIANE_HZ.toDouble(),
+        fenetreHz: Double = 20_000.0,
+        demiLargeurHz: Double = 800.0,
+        seuilDb: Float = 6f,
+    ): Mesure? {
+        val pic = mesurer(magDb, centreHz, etendueHz, cibleHz, fenetreHz, seuilDb) ?: return null
+        val n = magDb.size
+        val hzParRaie = etendueHz / n
+        fun raie(f: Double): Double = n / 2.0 + (f - centreHz) / hzParRaie
+        val f0 = cibleHz + pic.ecartHz
+        val a = raie(f0 - demiLargeurHz); val b = raie(f0 + demiLargeurHz)
+        val bas = max(0.0, ceil(min(a, b))).toInt()
+        val haut = min((n - 1).toDouble(), floor(max(a, b))).toInt()
+        if (haut - bas < 2) return pic
+        var poids = 0.0; var somme = 0.0
+        for (i in bas..haut) {
+            val au = magDb[i] - pic.plancherDb
+            if (au <= 3f) continue
+            val w = Math.pow(10.0, au / 10.0) - 1.0
+            poids += w; somme += w * i
+        }
+        if (poids <= 0.0) return pic
+        val mesuree = centreHz + (somme / poids - n / 2.0) * hzParRaie
+        return Mesure(ecartHz = mesuree - cibleHz, niveauDb = pic.niveauDb, plancherDb = pic.plancherDb)
+    }
+
+    /**
      * Is the alignment clean enough to leave alone? 100 Hz at 10 GHz is
      * 0.01 ppm — better than an ordinary crystal LNB holds, and about the
      * width of a CW note. Below it nobody hears a difference.

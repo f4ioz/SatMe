@@ -39,7 +39,9 @@ class Qo100Pc(private val station: StationPc, private val sdr: SdrPc, private va
         dernierMs = t
         sdr.demandePanorama()
         val calage = station.qo100.etat.value.calageHz
-        suivi.mesure(t, sdr.mesureBalise(), calage, auto)?.let { station.qo100.calage(it) }
+        // Known lately: looked for within 3 kHz only; lost, within 20 kHz.
+        val fenetre = if (suivi.verrouille(t, 120_000L)) 3_000.0 else 20_000.0
+        suivi.mesure(t, sdr.mesureBaliseCentre(fenetre), calage, auto)?.let { station.qo100.calage(it) }
     }
 
     fun json(): JSONObject {
@@ -53,6 +55,9 @@ class Qo100Pc(private val station: StationPc, private val sdr: SdrPc, private va
         }
         suivi.deriveHzParMin(t)?.let { o.put("derive", Math.round(it * 10) / 10.0) }
         o.put("historique", JSONArray(suivi.historique().map { JSONArray().put(it.t).put(Math.round(it.erreurHz)) }))
+        o.put("journee", JSONArray(suivi.journee().map { JSONArray().put(it.first).put(Math.round(it.second)) }))
+        o.put("ecartees", suivi.ecartees)
+        suivi.erreurRecente()?.let { o.put("erreurMediane", Math.round(it)) }
         // The stations heard: the transponder's view, a column per 500 Hz.
         val pan = sdr.panorama
         val axe = sdr.axeQo100()

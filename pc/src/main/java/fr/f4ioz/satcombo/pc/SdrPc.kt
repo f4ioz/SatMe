@@ -253,6 +253,17 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
         return fr.f4ioz.satcombo.domain.MesureBalise.mesurer(pan, c, e)
     }
 
+    /**
+     * The beacon's centre (its two lobes weighed, not one of them), searched
+     * within [fenetreHz] of where it should be — narrow once it is known,
+     * so a strong station 20 kHz away is never taken for it.
+     */
+    fun mesureBaliseCentre(fenetreHz: Double): fr.f4ioz.satcombo.domain.MesureBalise.Mesure? {
+        val pan = panorama ?: return null
+        val (c, e) = axeQo100() ?: return null
+        return fr.f4ioz.satcombo.domain.MesureBalise.mesurerCentre(pan, c, e, fenetreHz = fenetreHz)
+    }
+
     /** The last spectrum: dB per bin from −88.2 to +88.2 kHz around the PLL. */
     @Volatile var spectre: FloatArray? = null; private set
     @Volatile var trames = 0L; private set

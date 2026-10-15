@@ -21,7 +21,7 @@ class SuiviBaliseQo100(
     /** Below this, the beacon is not trusted (dB above the floor). */
     val seuilDb: Float = 12f,
     /** Closer than this, nothing to correct. */
-    val toleranceHz: Long = 12L,
+    val toleranceHz: Long = 30L,
     /** Further than this in one go: another line caught, not the beacon. */
     val sautMaxHz: Long = 5_000L,
 ) {
@@ -32,28 +32,60 @@ class SuiviBaliseQo100(
     }
 
     private val points = ArrayDeque<Point>()
+    /** A day, a point a minute (the median of its measures): the night's drift. */
+    private val minutes = ArrayDeque<Pair<Long, Double>>()
+    private var minuteEnCours = -1L
+    private val dansLaMinute = ArrayList<Double>()
     @Volatile var dernier: Point? = null
+        private set
+    /** Measures thrown away: too far from the others (another line, not the beacon). */
+    @Volatile var ecartees = 0
         private set
 
     /** The last hour of measures, oldest first. */
     fun historique(): List<Point> = synchronized(points) { points.toList() }
 
+    /** The last day, a point a minute: (time, the LNB's error). */
+    fun journee(): List<Pair<Long, Double>> = synchronized(points) { minutes.toList() }
+
+    private fun mediane(l: List<Double>): Double = l.sorted().let { if (it.size % 2 == 1) it[it.size / 2] else (it[it.size / 2 - 1] + it[it.size / 2]) / 2 }
+
+    /**
+     * The LNB's error as the last [n] measures (two minutes) give it: their
+     * mean — the lines too far are already out, and a median would jump from
+     * one of the PSK beacon's lobes to the other. Null before [minimum].
+     */
+    fun erreurRecente(n: Int = 24, minimum: Int = 6): Double? = historique().takeLast(n).takeIf { it.size >= minimum }?.map { it.erreurHz }?.average()
+
     /**
      * A measure at [t] with the calibration [calageHz]; null [m] or a weak
-     * one: the beacon not heard. Returns the calibration to write when
-     * [corrige] and worth it, else null.
+     * one: the beacon not heard. One too far from the recent ones is
+     * another line, thrown away. Returns the calibration to write when
+     * [corrige] and the recent measures agree it is worth it, else null.
      */
     fun mesure(t: Long, m: MesureBalise.Mesure?, calageHz: Long, corrige: Boolean): Long? {
         if (m == null || m.rapportDb < seuilDb) return null
         val p = Point(t, calageHz, m.ecartHz, m.rapportDb)
+        val ref = historique().takeLast(12).takeIf { it.size >= 3 }?.map { it.erreurHz }?.let { mediane(it) }
+        if (ref != null && abs(p.erreurHz - ref) > ECARTEE_HZ) { ecartees++; return null }
         dernier = p
         synchronized(points) {
             points.addLast(p)
             while (points.isNotEmpty() && points.first().t < t - 3_600_000L) points.removeFirst()
+            val minute = t / 60_000L
+            if (minute != minuteEnCours && dansLaMinute.isNotEmpty()) {
+                minutes.addLast(minuteEnCours * 60_000L to mediane(dansLaMinute)); dansLaMinute.clear()
+                while (minutes.isNotEmpty() && minutes.first().first < t - 86_400_000L) minutes.removeFirst()
+            }
+            minuteEnCours = minute; dansLaMinute += p.erreurHz
         }
-        if (!corrige || abs(m.ecartHz) < toleranceHz || abs(m.ecartHz) > sautMaxHz) return null
-        // Most of the way, not all: the measure itself wavers by a few hertz.
-        return calageHz + (m.ecartHz * 0.8).roundToLong()
+        if (!corrige) return null
+        // The recent measures' median, never one alone: each one wavers, and the PSK beacon's two
+        // lobes pull it either way. Nothing written before half a minute of them.
+        val cible = erreurRecente() ?: return null
+        val delta = cible - calageHz
+        if (abs(delta) < toleranceHz || abs(delta) > sautMaxHz) return null
+        return calageHz + (delta * 0.8).roundToLong()
     }
 
     /** The beacon heard lately (within [depuisMs]). */
@@ -74,6 +106,8 @@ class SuiviBaliseQo100(
     companion object {
         /** The LNB's error as parts per million of its oscillator (9 750 MHz for a usual one). */
         fun ppm(erreurHz: Double, oscillateurHz: Double = 9_750_000_000.0): Double = erreurHz / oscillateurHz * 1e6
+        /** Further than this from the recent measures: not the beacon. */
+        const val ECARTEE_HZ = 1_500.0
     }
 }
 

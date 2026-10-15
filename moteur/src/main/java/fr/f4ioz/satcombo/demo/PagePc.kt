@@ -944,7 +944,7 @@ object PagePc {
         <span><span class="val" id="oq-plancher">—</span> <span class="petit">plancher</span></span>
         <span><span class="val" id="oq-occ">—</span> <span class="petit">stations</span></span></div>
       <canvas id="oq-histo" style="width:100%;height:70px;display:block;margin-top:8px" title="L'erreur du LNB sur la dernière heure (la balise mesurée toutes les 5 s)"></canvas>
-      <div class="petit">L'erreur du LNB sur la dernière heure : une pente, c'est la dérive (un LNB qui chauffe) ; un trait plat, un LNB stable (GPSDO).</div>
+      <div class="petit"><span id="oq-histo-t">L'erreur du LNB sur la dernière heure.</span> Une pente, c'est la dérive (un LNB qui chauffe) ; un trait plat, un LNB stable (GPSDO).</div>
     </div>
     <div class="carte" id="oq-sig-carte" hidden>
       <div class="t">Stations entendues <span class="petit" id="oq-sig-n"></span></div>
@@ -3244,7 +3244,11 @@ async function ticQualite() {
   txt('oq-plancher', q.plancher != null ? q.plancher + ' dB' : '—');
   txt('oq-occ', q.signaux ? q.signaux.length : '—');
   // The LNB's error over the hour.
-  const c = g('oq-histo'), [x, w, h] = toile(c), l = q.historique || [];
+  // The day (a point a minute) once there is more than an hour of it, else the last hour.
+  const jour = (q.journee || []).length > 60, l = jour ? q.journee : (q.historique || []);
+  const c = g('oq-histo'), [x, w, h] = toile(c);
+  txt('oq-histo-t', (jour ? 'L’erreur du LNB depuis ' + Math.round((l[l.length - 1][0] - l[0][0]) / 3600000) + ' h (un point par minute)' : 'L’erreur du LNB sur la dernière heure') +
+    (q.ecartees ? ' · ' + q.ecartees + ' mesure(s) écartée(s) : une autre raie que la balise' : '') + '.');
   x.fillStyle = '#0E1720'; x.fillRect(0, 0, w, h);
   if (l.length > 1) {
     const t0 = l[0][0], t1 = Math.max(l[l.length - 1][0], t0 + 1);
@@ -3253,7 +3257,7 @@ async function ticQualite() {
     l.forEach((p, i) => { const px = (p[0] - t0) / (t1 - t0) * (w - 4) + 2, py = h - 4 - (p[1] - lo) / (hi - lo) * (h - 8); i ? x.lineTo(px, py) : x.moveTo(px, py); }); x.stroke();
     x.fillStyle = '#9AA7B4'; x.font = '10px system-ui'; x.textAlign = 'left';
     x.fillText(Math.round(hi) + ' Hz', 4, 10); x.fillText(Math.round(lo) + ' Hz', 4, h - 4);
-    x.textAlign = 'right'; x.fillText(Math.round((t1 - t0) / 60000) + ' min', w - 4, 10);
+    x.textAlign = 'right'; x.fillText((t1 - t0) > 7200000 ? Math.round((t1 - t0) / 3600000) + ' h' : Math.round((t1 - t0) / 60000) + ' min', w - 4, 10);
   }
   const cle = JSON.stringify(q.signaux);
   if (cle === oqVu) return;
