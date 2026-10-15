@@ -33,6 +33,10 @@ class CarnetPc(private val station: StationPc, val store: LogStore, private val 
 
     private val qrz = Qrz()
 
+    /** Told of each contact the operator logs (the satellite link). */
+    val ecouteurs = java.util.concurrent.CopyOnWriteArrayList<(LogEntry) -> Unit>()
+    private fun annonce(c: LogEntry) = ecouteurs.forEach { runCatching { it(c) } }
+
     fun contacts(): List<LogEntry> = store.load().sortedByDescending { it.timeMs }
 
     // ------------------------------------------------------------ the callsigns known
@@ -95,6 +99,7 @@ class CarnetPc(private val station: StationPc, val store: LogStore, private val 
             qth = passes.firstOrNull { it.qth.isNotBlank() }?.qth ?: fiche?.qth.orEmpty(),
             courriel = fiche?.courriel.orEmpty())
         store.add(c); oublieMemoire()
+        annonce(c)
         return c
     }
 
@@ -119,6 +124,7 @@ class CarnetPc(private val station: StationPc, val store: LogStore, private val 
             courriel = fiche?.courriel.orEmpty(),
             downlinkMhz = dlHz?.let { it / 1e6 } ?: c0.downlinkMhz, uplinkMhz = ulHz?.let { it / 1e6 } ?: c0.uplinkMhz)
         store.add(c); oublieMemoire()
+        annonce(c)
         return c
     }
 

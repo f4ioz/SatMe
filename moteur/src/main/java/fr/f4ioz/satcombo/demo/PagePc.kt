@@ -1311,6 +1311,14 @@ object PagePc {
       <div class="ligne"><button class="primaire" onclick="enregistreSources()">Enregistrer et télécharger</button></div>
       <div class="etat" id="catalogue"></div>
     </div>
+    <div class="carte" id="lien-carte">
+      <div class="t">Lien satellite (WebSocket)</div>
+      <label class="petit" style="display:block"><input type="checkbox" id="lien-on" onchange="regleLien('on=' + (this.checked ? 1 : 0))">
+        Diffuser l'état de la station à d'autres programmes de ce PC</label>
+      <div class="ligne"><span class="petit">Port</span><input id="lien-port" type="number" min="1024" max="65535" style="max-width:90px">
+        <button onclick="regleLien('port=' + enc(v('lien-port')))">Appliquer</button><span class="petit" id="lien-etat"></span></div>
+      <div class="petit" style="margin-top:6px">Chaque seconde le satellite suivi (azimut, élévation, distance, fréquences et Doppler), les alertes de passage (AOS dans 5 min, AOS, LOS) et chaque contact noté au carnet, en JSON. Rien n'est accepté en retour. Sur ce PC seulement, sauf si SatMe-PC est lancé avec --reseau.</div>
+    </div>
     <div class="carte" id="carteTelephone">
       <div class="t">Téléphone</div>
       <div class="petit">Reprendre les réglages du téléphone (Réglages → Sauvegarde, fichier .json) :</div>
@@ -1597,7 +1605,7 @@ const ICO = ${icones()};
 const CATS_REG = [
   { id: 'station', nom: 'Ma station', ico: 'person', desc: 'Indicatif, carré, élévation minimale, horizon', cartes: ['Station', 'Horizon'] },
   { id: 'materiel', nom: 'Poste et rotor', ico: 'radio', desc: 'CAT, TH-D72, rotor, convertisseurs', cartes: ['Poste', 'Kenwood TH-D72', 'Rotor', 'Convertisseurs', 'Journal Doppler'] },
-  { id: 'satellites', nom: 'Satellites', ico: 'satellite_alt', desc: 'Éléments orbitaux, statut AMSAT', cartes: ['Éléments orbitaux', 'AMSAT'] },
+  { id: 'satellites', nom: 'Satellites', ico: 'satellite_alt', desc: 'Éléments orbitaux, statut AMSAT, lien WebSocket', cartes: ['Éléments orbitaux', 'AMSAT', 'Lien satellite'] },
   { id: 'enligne', nom: 'Services en ligne', ico: 'public', desc: 'QRZ.com, Wavelog / Cloudlog, skeds hams.at', cartes: ['QRZ.com', 'Carnet en ligne', 'Skeds'] },
   { id: 'telephone', nom: 'Téléphone', ico: 'smartphone', desc: 'SatMe sur le téléphone : réglages et contacts', cartes: ['Téléphone'] },
   { id: 'accord', nom: 'Accord fin', ico: 'tune', desc: 'Loupe, vernier, calage sur la voix (clé SDR)', cartes: ['Accord fin'] },
@@ -2604,7 +2612,7 @@ async function chargeReglages() {
   try {
     const r = await (await fetch('api/reglages')).json();
     g('indicatif').value = r.c; g('locator').value = r.l; g('minEl').value = r.minEl;
-    horizonDe(r); chargeDoppler();
+    horizonDe(r); chargeDoppler(); chargeLien();
     g('qrzFiche').checked = r.fiche; ficheVoulue = r.fiche;
     g('qrzUser').value = r.qrzUser; g('qrzMdp').placeholder = r.qrzMdp ? 'mot de passe enregistré' : 'Mot de passe';
     g('carnetUrl').value = r.carnetUrl; g('carnetCle').placeholder = r.carnetCle ? 'clé enregistrée' : 'Clé d’API (lecture et écriture)';
@@ -2626,6 +2634,16 @@ async function enregistreReglages() {
     chargeReglages(); setTimeout(chargeListe, 1500);
   }
 }
+// ------------------------------------------------------------------ satellite link (WebSocket)
+async function chargeLien() {
+  let j = null;
+  try { j = await (await fetch('api/lien')).json(); } catch (x) {}
+  if (!j || j.absent || j.on === undefined) { g('lien-carte').hidden = true; return; }
+  g('lien-on').checked = !!j.on;
+  if (document.activeElement !== g('lien-port')) g('lien-port').value = j.port;
+  txt('lien-etat', j.erreur ? j.erreur : j.ecoute ? 'ws://' + (j.reseau ? location.hostname : 'localhost') + ':' + j.port + '/ · ' + j.clients + ' client(s)' : 'coupé');
+}
+async function regleLien(q) { await post('api/lien?' + q); chargeLien(); }
 // ------------------------------------------------------------------ Doppler/CAT log
 async function chargeDoppler() {
   let j = null;

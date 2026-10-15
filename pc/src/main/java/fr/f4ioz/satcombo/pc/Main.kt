@@ -76,6 +76,10 @@ fun main(args: Array<String>) {
     station.dossierDoppler = File(dossier, "doppler")
     station.demarre()
     val carnet = CarnetPc(station, fr.f4ioz.satcombo.data.LogStore(File(dossier, "qso_log.json")))
+    // The satellite link (a local WebSocket for other programs): only when chosen in Réglages.
+    val lien = LienSatellitePc(station, reseau)
+    carnet.ecouteurs += { lien.qso(it) }
+    lien.demarreSiActif()
     val son = SonStation(SonPc(), station, File(dossier, "enregistrements"), File(dossier, "sstv"))
     // The sound card used last time, started again: listening opens nothing on the rig.
     son.carte.takeIf { it.isNotBlank() }?.let { son.son.demarre(it) }
@@ -116,7 +120,7 @@ fun main(args: Array<String>) {
     // DATV with a MiniTiouner, through LongMynd: nothing started until asked.
     val datv = DatvPc(station.stockage, File(dossier, "enregistrements"))
     val serveur = ServeurPc(station, port, reseau, carnet, son, journalWeb, ImportPc(station, carnet, journal), sdr, videoSked, telephone, appairage, datv,
-        PlancheWebPc(station, son, dossier), kiss, sauvegarde, MirePc(File(dossier, "exports")), diffusion, qo100)
+        PlancheWebPc(station, son, dossier), kiss, sauvegarde, MirePc(File(dossier, "exports")), diffusion, qo100, lien)
     serveur.demarre()
     println("SatMe-PC " + versionPc())
     println("  page      : http://localhost:${serveur.portReel}/" + if (reseau) "  (ouverte au réseau)" else "")
@@ -136,6 +140,7 @@ fun main(args: Array<String>) {
         runCatching { son.arreteEnregistrement(); son.son.arrete() }
         runCatching { station.deconnecteCat() }
         runCatching { station.stationRotor.disconnectRotor() }
+        runCatching { lien.arrete() }
         serveur.arrete()
     })
     // The server and the loops run on their own threads; this one waits.

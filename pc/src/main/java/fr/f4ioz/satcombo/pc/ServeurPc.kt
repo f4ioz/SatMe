@@ -50,7 +50,9 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
     /** The sound to the browsers that listen. */
     private val diffusion: DiffusionSon? = null,
     /** QO-100's beacon followed, the stations heard. */
-    private val qo100: Qo100Pc? = null) {
+    private val qo100: Qo100Pc? = null,
+    /** The satellite link (local WebSocket), set in Réglages. */
+    private val lien: LienSatellitePc? = null) {
 
     private var socket: ServerSocket? = null
     val portReel: Int get() = socket?.localPort ?: port
@@ -253,6 +255,11 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
             "/api/capacites" -> envoie(sortie, "200 OK", "application/json; charset=utf-8",
                 JSONObject().put("onglets", JSONArray(PagePc.TOUS)).put("serveur", "pc").toString().toByteArray())
             "/api/etat" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JsonPc.etat(station, carnet).toString().toByteArray())
+            // The satellite link: on or not, its port, who listens.
+            "/api/lien" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", (lien?.let { l ->
+                JSONObject().put("on", l.actif).put("port", l.port).put("ecoute", l.ecoute).put("clients", l.nbClients)
+                    .put("erreur", l.erreur).put("reseau", reseau)
+            } ?: JSONObject().put("absent", true)).toString().toByteArray())
             // The Doppler/CAT log: on or not, the last files (downloaded from the journal's route).
             "/api/doppler" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JSONObject().put("on", station.settings.journalDoppler)
                 .put("fichiers", JSONArray(station.journauxDoppler().take(8).map { JSONObject().put("nom", it.name).put("taille", it.length()) }))
@@ -774,6 +781,10 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 q["amsatAuto"]?.let { s.amsatAuto = it == "1" }
             }
             "/api/doppler" -> station.journalDoppler(q["on"] == "1")
+            "/api/lien" -> {
+                lien?.regle(q["on"]?.let { it == "1" }, q["port"]?.trim()?.toIntOrNull())
+                if (lien != null && lien.erreur.isNotEmpty()) return JSONObject().put("ok", false).put("erreur", lien.erreur)
+            }
             "/api/horizon" -> station.poseMasque(fr.f4ioz.satcombo.domain.MasqueHorizon.lis(q["m"]))
             "/api/sources" -> station.regleSources(q["ids"]?.split(',')?.map { it.trim() }?.filter { it.isNotEmpty() }?.toSet(),
                 q["serveur"], q["seul"]?.let { it == "1" })
