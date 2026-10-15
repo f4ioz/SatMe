@@ -54,7 +54,9 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
     /** The satellite link (local WebSocket), set in Réglages. */
     private val lien: LienSatellitePc? = null,
     /** « Phonie → texte »: the voice written out (off unless chosen). */
-    private val phonie: PhoniePc? = null) {
+    private val phonie: PhoniePc? = null,
+    /** DATV transmission with the ADALM-PLUTO (DATV tab). */
+    private val emission: EmissionDatvPc? = null) {
 
     private var socket: ServerSocket? = null
     val portReel: Int get() = socket?.localPort ?: port
@@ -320,6 +322,11 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
             "/api/datv" -> {
                 val d = datv
                 val o = if (d == null) JSONObject().put("ok", false) else JsonPc.datv(d)
+                envoie(sortie, "200 OK", "application/json; charset=utf-8", o.toString().toByteArray())
+            }
+            "/api/datv/emission" -> {
+                val o = emission?.json()?.put("ok", true)?.put("coupeTx", sdr?.coupeTxEnReception == true)
+                    ?.put("plutoHote", sdr?.plutoHote.orEmpty())?.put("plutoPort", sdr?.plutoPort ?: 0) ?: JSONObject().put("ok", false)
                 envoie(sortie, "200 OK", "application/json; charset=utf-8", o.toString().toByteArray())
             }
             "/api/datv/image.jpg" -> {
@@ -675,6 +682,31 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 d.demarre(r)?.let { return JSONObject().put("ok", false).put("erreur", it) }
             }
             "/api/datv/arrete" -> datv?.arrete()
+            // Transmission: the parameters (kept), the start (confirmed on the page), the stop, the page's heartbeat, the gain.
+            "/api/datv/emission/reglage" -> {
+                val e = emission ?: return JSONObject().put("ok", false)
+                q["modcod"]?.let { e.modcodTexte = it }
+                entier("sr")?.let { e.srKs = it }
+                q["ro"]?.replace(',', '.')?.toDoubleOrNull()?.let { a -> fr.f4ioz.satcombo.datv.s2.Rolloff.de(a)?.let { e.rolloff = it } }
+                q["courtes"]?.let { e.courtes = it == "1" }
+                q["pilotes"]?.let { e.pilotes = it == "1" }
+                q["mhz"]?.replace(',', '.')?.toDoubleOrNull()?.let { e.frequenceKhz = Math.round(it * 1000.0) }
+                q["gain"]?.replace(',', '.')?.toDoubleOrNull()?.let { e.regleGain(it) }
+                entier("duree")?.let { e.dureeS = it * 60 }
+                q["source"]?.let { e.source = it }
+                q["image"]?.let { e.image = it }
+                q["camera"]?.let { if (it.isEmpty() || it in EmissionDatvPc.cameras()) e.camera = it }
+                q["hevc"]?.let { e.hevc = it == "1" }
+                q["son"]?.let { e.son = it == "1" }
+                q["gainMax"]?.replace(',', '.')?.toDoubleOrNull()?.let { e.gainMaxDb = it }
+                q["coupeTx"]?.let { sdr?.coupeTxEnReception = it == "1" }
+            }
+            "/api/datv/emission/demarre" -> {
+                val e = emission ?: return JSONObject().put("ok", false)
+                e.demarre(q["confirme"] == "1", q["charge"] == "1")?.let { return JSONObject().put("ok", false).put("erreur", it) }
+            }
+            "/api/datv/emission/arrete" -> emission?.arrete()
+            "/api/datv/emission/vie" -> emission?.vie()
             "/api/datv/enregistre" -> return ok.put("nom", datv?.enregistre(q["on"] == "1").orEmpty())
             "/api/datv/vlc" -> datv?.ouvreVlc()?.let { return JSONObject().put("ok", false).put("erreur", it) }
             "/api/datv/chemin" -> datv?.chemin = q["p"].orEmpty()

@@ -1,0 +1,261 @@
+/*
+ * SatMe — amateur radio satellite tracking
+ * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
+ * SPDX-License-Identifier: GPL-2.0-or-later
+ *
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
+ */
+package fr.f4ioz.satcombo.pc
+
+import fr.f4ioz.satcombo.datv.Datv
+import fr.f4ioz.satcombo.datv.s2.RecepteurDvbs2
+import fr.f4ioz.satcombo.datv.s2.Rolloff
+import fr.f4ioz.satcombo.plateforme.StockageMemoire
+import org.junit.After
+import org.junit.Assert.assertArrayEquals
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
+import org.junit.Assume.assumeTrue
+import org.junit.Test
+import java.io.BufferedInputStream
+import java.io.ByteArrayOutputStream
+import java.io.File
+import java.io.InputStream
+import java.io.PipedInputStream
+import java.io.PipedOutputStream
+import java.net.ServerSocket
+import java.net.Socket
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.atomic.AtomicInteger
+import kotlin.concurrent.thread
+
+/**
+ * The DATV transmission from the page's side to the Pluto's samples, all
+ * offline: a fake IIO daemon takes the samples, the test receiver decodes
+ * them back to the transport stream.
+ */
+class EmissionDatvPcTest {
+
+    /** An IIO daemon that keeps every TX sample written (at the DAC's pace). */
+    private class FauxPluto(val debit: Double = 2_331_000.0) {
+        val serveur = ServerSocket(0)
+        val connexions = AtomicInteger()
+        val commandes = CopyOnWriteArrayList<String>()
+        val attributs = ConcurrentHashMap<String, String>()
+        val echantillons = ByteArrayOutputStream()
+        @Volatile var octets = 0L
+        val port get() = serveur.localPort
+
+        init {
+            thread(isDaemon = true) { runCatching { while (true) { val c = serveur.accept(); connexions.incrementAndGet(); thread(isDaemon = true) { sert(c) } } } }
+        }
+
+        private fun ligne(e: InputStream): String? {
+            val b = ByteArrayOutputStream()
+            while (true) { val c = e.read(); if (c < 0) return null; if (c == '\n'.code) return b.toString("US-ASCII").trimEnd('\r'); b.write(c) }
+        }
+
+        private fun lis(e: InputStream, n: Int) = ByteArray(n).also { var k = 0; while (k < n) { val r = e.read(it, k, n - k); if (r < 0) error("fin"); k += r } }
+
+        private fun sert(c: Socket) = runCatching {
+            c.use {
+                val e = BufferedInputStream(c.getInputStream()); val o = c.getOutputStream()
+                while (true) {
+                    val l = ligne(e) ?: break
+                    val m = l.split(' ')
+                    commandes += l
+                    when (m[0]) {
+                        "PRINT" -> { val x = XML.toByteArray(); o.write("${x.size}\n".toByteArray()); o.write(x); o.write('\n'.code) }
+                        "WRITE" -> { val n = m.last().toInt(); attributs[m.drop(1).dropLast(1).joinToString(" ")] = String(lis(e, n)); o.write("$n\n".toByteArray()) }
+                        "TIMEOUT", "OPEN", "CLOSE" -> o.write("0\n".toByteArray())
+                        "WRITEBUF" -> {
+                            val n = m[2].toInt()
+                            o.write("$n\n".toByteArray()); o.flush()
+                            val d = lis(e, n)
+                            synchronized(echantillons) { echantillons.write(d) }
+                            octets += n
+                            Thread.sleep((n / 4 / debit * 1000).toLong())
+                            o.write("$n\n".toByteArray())
+                        }
+                        else -> o.write("-22\n".toByteArray())
+                    }
+                    o.flush()
+                }
+            }
+        }
+
+        fun iq(): ShortArray {
+            val b = synchronized(echantillons) { echantillons.toByteArray() }
+            return ShortArray(b.size / 2) { ((b[2 * it].toInt() and 0xFF) or (b[2 * it + 1].toInt() shl 8)).toShort() }
+        }
+
+        val loEteint get() = attributs["ad9361-phy OUTPUT altvoltage1 powerdown"] == "1"
+        fun close() = runCatching { serveur.close() }
+    }
+
+    /** A transport stream maker without ffmpeg: [n] numbered packets, then the pipe kept open. */
+    private class TsSynthetique(val n: Int) : EmissionDatvPc.FabriqueTs {
+        val paquets = ArrayList<ByteArray>()
+        var demandes = 0
+        var parametres: EmissionDatvPc.ParametresTs? = null
+        override fun demarre(p: EmissionDatvPc.ParametresTs): EmissionDatvPc.Processus {
+            demandes++; parametres = p
+            val entree = PipedInputStream(1 shl 20)
+            val sortie = PipedOutputStream(entree)
+            val r = java.util.Random(7)
+            for (k in 0 until n) paquets += ByteArray(188).also { r.nextBytes(it); it[0] = 0x47; it[1] = 0x01; it[2] = 0x00; it[3] = (0x10 or (k and 15)).toByte() }
+            val vivant = java.util.concurrent.atomic.AtomicBoolean(true)
+            thread(isDaemon = true) { runCatching { paquets.forEach { sortie.write(it) }; sortie.flush(); while (vivant.get()) Thread.sleep(50) } }
+            return object : EmissionDatvPc.Processus {
+                override val sortie: InputStream = entree
+                override val vivant: Boolean get() = vivant.get()
+                override fun arrete() { vivant.set(false); runCatching { sortie.close() } }
+            }
+        }
+    }
+
+    private val ouverts = ArrayList<FauxPluto>()
+    @After fun fin() { ouverts.forEach { it.close() } }
+
+    private fun attends(ms: Long, c: () -> Boolean): Boolean {
+        val fin = System.currentTimeMillis() + ms
+        while (System.currentTimeMillis() < fin) { if (c()) return true; Thread.sleep(20) }
+        return c()
+    }
+
+    private fun emission(p: FauxPluto, ts: EmissionDatvPc.FabriqueTs, indicatif: String = "F4IOZ", vieMs: Long = 15_000L,
+                         reception: () -> EmissionDatvPc.Reception? = { null }, occupe: String? = null): EmissionDatvPc =
+        EmissionDatvPc(StockageMemoire(), File(System.getProperty("java.io.tmpdir"), "satme-test-datv"), { indicatif },
+            plutoHote = { "127.0.0.1" }, plutoPort = { p.port }, plutoOccupe = { occupe }, reception = reception, fabrique = ts, vieMs = vieMs)
+
+    @Test
+    fun rien_sans_confirmation_ni_indicatif_ni_dans_la_bande() {
+        val p = FauxPluto().also { ouverts += it }
+        val ts = TsSynthetique(10)
+        val e = emission(p, ts)
+        assertEquals("émission non confirmée", e.demarre(confirme = false, chargeFictive = false))
+        e.frequenceKhz = 2_402_000L
+        assertTrue(e.demarre(true, false)!!.contains("balise"))
+        e.frequenceKhz = 2_409_750L
+        assertTrue(emission(p, ts, indicatif = "").demarre(true, false)!!.contains("indicatif"))
+        assertTrue(emission(p, ts, occupe = "l'ADALM-PLUTO reçoit").demarre(true, false)!!.contains("reçoit"))
+        // Nothing reached the Pluto, ffmpeg never started.
+        assertEquals(0, p.connexions.get())
+        assertEquals(0, ts.demandes)
+        assertFalse(e.etat.emet)
+    }
+
+    @Test
+    fun bout_en_bout_jusqu_aux_echantillons_du_pluto() {
+        val p = FauxPluto().also { ouverts += it }
+        val ts = TsSynthetique(450)
+        val e = emission(p, ts)
+        e.modcodTexte = "QPSK 2/3"; e.srKs = 333; e.rolloff = Rolloff.A25; e.pilotes = true; e.courtes = false
+        e.frequenceKhz = 2_409_750L; e.gainDb = -30.0
+        assertNull(e.demarre(confirme = true, chargeFictive = false))
+        assertEquals(e.debitTs(), ts.parametres!!.debitTs)
+        assertEquals("F4IOZ", ts.parametres!!.indicatif)
+        // 450 packets (less than the 2 s the stream buffer holds), of which the 15 whole frames carry 428.
+        val ok = attends(8000) { e.vie(); (e.json().optLong("paquets")) >= 425 && p.octets > 4L * 2_331_000 * 2 }
+        assertTrue(e.json().toString().take(600) + " octets " + p.octets, ok)
+        e.arrete()
+        assertFalse(e.etat.emet)
+        assertTrue(p.loEteint)
+        assertEquals("2409750000", p.attributs["ad9361-phy OUTPUT altvoltage1 frequency"])
+        assertEquals("2331000", p.attributs["ad9361-phy OUTPUT voltage0 sampling_frequency"])
+        assertEquals("-30.00", p.attributs["ad9361-phy OUTPUT voltage0 hardwaregain"])
+        // The Pluto's samples, decoded back: the same packets, byte for byte.
+        val rx = RecepteurDvbs2(Rolloff.A25, 7)
+        val b = rx.decode(rx.symboles(p.iq()))
+        assertTrue("${b.paquets.size} paquets", b.paquets.size >= 425)
+        for (k in b.paquets.indices) assertArrayEquals("paquet $k", ts.paquets[k], b.paquets[k])
+        assertEquals(0, b.crcPaquetsFaux)
+        assertEquals(0, b.ldpcEchecs)
+        assertEquals(setOf(6), b.modcods)
+    }
+
+    @Test
+    fun la_page_muette_arrete_l_emission() {
+        val p = FauxPluto().also { ouverts += it }
+        val e = emission(p, TsSynthetique(50), vieMs = 400L)
+        assertNull(e.demarre(true, false))
+        assertTrue(attends(3000) { e.tic(); !e.etat.emet })
+        assertTrue(e.etat.raison, e.etat.raison.contains("page"))
+        assertTrue(p.loEteint)
+    }
+
+    @Test
+    fun charge_fictive_toute_frequence_gain_au_plus_moins_40() {
+        val p = FauxPluto(debit = 2_450_000.0).also { ouverts += it }
+        val e = emission(p, TsSynthetique(50))
+        e.frequenceKhz = 2_450_000L; e.gainDb = -10.0; e.srKs = 250
+        assertNotNull(e.demarre(true, chargeFictive = false))
+        assertNull(e.demarre(true, chargeFictive = true))
+        assertTrue(attends(2000) { p.attributs["ad9361-phy OUTPUT voltage0 hardwaregain"] != null })
+        assertEquals("-40.00", p.attributs["ad9361-phy OUTPUT voltage0 hardwaregain"])
+        // Raised from the page: still held.
+        e.regleGain(0.0)
+        assertEquals("-40.00", p.attributs["ad9361-phy OUTPUT voltage0 hardwaregain"])
+        e.arrete()
+        assertTrue(p.loEteint)
+    }
+
+    @Test
+    fun boucle_fermee_sur_mesures_simulees() {
+        val p = FauxPluto().also { ouverts += it }
+        var vue: EmissionDatvPc.Reception? = null
+        val e = emission(p, TsSynthetique(50), reception = { vue })
+        e.frequenceKhz = 2_409_750L; e.gainDb = -20.0
+        // The MiniTiouner on the beacon first: its MER noted.
+        vue = EmissionDatvPc.Reception(true, 12.0, Datv.BALISE_KHZ, "QO-100")
+        e.tic()
+        assertEquals(12.0, e.merBalise!!, 0.0)
+        assertNull(e.demarre(true, false))
+        // Then on our downlink, 2 dB above the beacon: the gain stepped down.
+        vue = EmissionDatvPc.Reception(true, 14.0, 10_499_250L, "F4IOZ")
+        e.vie(); e.tic()
+        assertTrue(e.boucle.etat.tropFort)
+        assertEquals("-21.00", p.attributs["ad9361-phy OUTPUT voltage0 hardwaregain"])
+        assertTrue(e.json().getJSONObject("boucle").getString("message").startsWith("TROP FORT"))
+        e.arrete()
+    }
+
+    @Test
+    fun ffmpeg_reel_service_au_nom_de_l_indicatif() {
+        val ff = RenduPc.ffmpeg()?.takeIf { File(it).canExecute() }
+        val probe = ff?.let { File(File(it).parentFile, "ffprobe") }?.takeIf { it.canExecute() }
+        assumeTrue("ffmpeg absent", ff != null && probe != null)
+        val p = FauxPluto().also { ouverts += it }
+        val e = emission(p, EmissionDatvPc.FfmpegTs())
+        e.modcodTexte = "QPSK 2/3"; e.srKs = 333; e.rolloff = Rolloff.A35; e.frequenceKhz = 2_409_750L; e.source = "mire"
+        assertNull(e.demarre(true, false))
+        assertTrue(attends(15_000) { e.vie(); e.json().optLong("paquets") > 700 })
+        val j = e.json()
+        e.arrete()
+        assertTrue(p.loEteint)
+        println("DATV émission (ffmpeg réel) : TS ${j.optLong("debitTs")} bit/s, ${j.optLong("paquets")} paquets, " +
+            "%.0f %% de trames vides, CPU %.0f %%".format(j.optDouble("tramesVidesPct"), j.optDouble("cpu")))
+        val rx = RecepteurDvbs2(Rolloff.A35, 7)
+        val b = rx.decode(rx.symboles(p.iq()))
+        assertEquals(0, b.crcPaquetsFaux)
+        val f = File.createTempFile("satme-datv", ".ts")
+        f.outputStream().use { o -> b.paquets.forEach { o.write(it) } }
+        val sortie = ProcessBuilder(probe!!.path, "-hide_banner", f.path).redirectErrorStream(true).start().inputStream.bufferedReader().readText()
+        f.delete()
+        assertTrue(sortie, sortie.contains("service_name    : F4IOZ"))
+        assertTrue(sortie, sortie.contains("h264"))
+    }
+
+    companion object {
+        val XML = """<?xml version="1.0" encoding="utf-8"?><context name="local">""" +
+            """<device id="iio:device0" name="ad9361-phy" ></device>""" +
+            """<device id="iio:device2" name="cf-ad9361-dds-core-lpc" ><channel id="voltage0" type="output" ><scan-element index="0" format="le:S16/16&gt;&gt;0" /></channel>""" +
+            """<channel id="voltage1" type="output" ><scan-element index="1" format="le:S16/16&gt;&gt;0" /></channel></device>""" +
+            """<device id="iio:device3" name="cf-ad9361-lpc" ></device></context>"""
+    }
+}

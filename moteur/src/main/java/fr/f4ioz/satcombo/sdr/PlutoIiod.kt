@@ -40,6 +40,8 @@ import kotlin.math.sin
  *   the first one followed by the channel mask on a line; 0 or the count
  *   asked ends it.
  * - `PRINT`: the length, then the context's XML and a line feed.
+ * - `WRITEBUF <dev> <bytes>`: the count the daemon takes, the bytes, then
+ *   the count written.
  *
  * One command at a time on a connection: the samples have one of their own.
  */
@@ -108,6 +110,21 @@ class Iiod private constructor(private val socket: Socket) : Closeable {
             lu += n
         }
         return lu
+    }
+
+    /**
+     * [n] bytes of samples to [dev]'s output buffer (`WRITEBUF`): the daemon
+     * says how many it takes, they follow, then how many it wrote. Only the
+     * transmitter ([PlutoEmission]) calls it.
+     */
+    @Synchronized fun ecritTampon(dev: String, src: ByteArray, n: Int): Int {
+        val pret = execute("WRITEBUF $dev $n")
+        if (pret < 0) throw Refus(pret, "WRITEBUF")
+        if (pret != n) throw IOException("WRITEBUF : $pret octets attendus au lieu de $n")
+        sortie.write(src, 0, n); sortie.flush()
+        val fait = entier()
+        if (fait < 0) throw Refus(fait, "WRITEBUF")
+        return fait
     }
 
     override fun close() { runCatching { socket.close() } }

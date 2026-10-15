@@ -135,7 +135,7 @@ A tab made to see the band, not only to read it:
 
 In the **SDR** tab, *Récepteur* chooses between the RTL-SDR dongle (rtl_tcp, the default) and an **ADALM-PLUTO** reached on the network: on its USB cable it answers at 192.168.2.1 (port 30431), on Wi-Fi or Ethernet give its address. Nothing to install: SatMe talks to its IIO server directly.
 
-- **Receive only.** SatMe sets its receive side and nothing else: the RX oscillator, the sample rate, the analog bandwidth, the gain. It never opens the transmitter, never writes its settings, never touches its USB drive or its `config.txt`.
+- **Receive only.** The receiver sets the receive side and nothing else: the RX oscillator, the sample rate, the analog bandwidth, the gain. It never opens the transmitter, never writes its settings, never touches its USB drive or its `config.txt`. Transmitting is the DATV tab's alone (below).
 - Everything works as with the dongle: Doppler, QO-100 (behind the LNB, IF around 739 MHz, or behind a converter, set as for the dongle), the waterfall and panorama, the sound for the decoders, METEOR, radiosondes. From 70 MHz to 6 GHz.
 - It runs at 2.1168 MS/s, brought down here to the dongle's 1.0584 MS/s; its 12 bits are kept to the demodulator. About 8.5 MB/s on the cable.
 - **Gain**: *automatique* is the AD936x's slow AGC; otherwise 0 to 71 dB. The status line shows the board and its firmware.
@@ -170,6 +170,35 @@ The script installs Java, builds LongMynd, lets it open the MiniTiouner (udev), 
 Without its key the node only says what it is; what changes it is a POST; its LNB supply stays off unless chosen.
 
 *Above, a test signal. The MiniTiouner Pro TS2 itself is recognised and searches (tuner, demodulator, LNAs), on the PC and through a node; the first signal on the air is still to come.*
+
+## DATV transmission — the ADALM-PLUTO to QO-100
+
+The DATV tab's **Émission** card sends a DVB-S2 signal to QO-100's wide band transponder with an **ADALM-PLUTO**. SatMe makes the DVB-S2 itself (EN 302 307-1: QPSK at every rate, 8PSK 3/5 to 9/10, normal or short frames, pilots, roll-off 0.35 / 0.25 / 0.20); **ffmpeg** makes the picture into a transport stream at exactly the rate the MODCOD carries (`-muxrate`, null packets filling it), the service's name and provider being the station's callsign. The picture: SatMe's test card with the callsign, a still image, or a camera (`/dev/video…`, listed only until a transmission starts).
+
+**The station.** PC —USB— Pluto **TX** port → band-pass filter → power amplifier → feed (2.4 GHz uplink). Reception check: dish, LNB → **MiniTiouner** (DATV tab, *Réception*). While transmitting, the Pluto does not receive (the SDR tab refuses it; they share the sample rate).
+
+| kS/s | samples per symbol | Pluto rate |
+|---|---|---|
+| 125 | 17 | 2.125 MS/s |
+| 250 | 9 | 2.25 MS/s |
+| 333 | 7 | 2.331 MS/s |
+| 500 | 5 | 2.5 MS/s |
+| 1000 | 3 | 3 MS/s |
+| 1500 / 2000 | 2 | 3 / 4 MS/s |
+
+**First test: into a load, never into the antenna.** Pluto TX → 30 dB attenuator (or more) → MiniTiouner input (its tuner covers 2.4 GHz directly: *Ciel* = the uplink frequency, LNB oscillator 0, LNB supply **off**). Tick *Test sur charge* (any frequency, gain held at −40 dB or below, a red warning), choose 333 kS/s QPSK 2/3, **ÉMETTRE**, confirm: the MiniTiouner should lock on DVB-S2 with the callsign as service and the test card as picture. Only then the amplifier and the dish.
+
+**The rules, built in.**
+- Only on the operator's action: **ÉMETTRE** then a confirmation; never at startup, never taken back from the settings (only the parameters are kept).
+- A **callsign** (Réglages › Station) before anything is sent.
+- On the air, the whole occupied band (Rs × (1 + α)) between **2403.000 and 2410.000 MHz** uplink: clear of the beacon (uplink 2402.0 MHz, its band ending near 2402.9 MHz), up to the band plan's last channel (10499.25 MHz down, 2409.75 MHz up). The channel list is the band plan's; the one the MiniTiouner holds is marked busy.
+- **Duration** 10 min by default, 30 min at most, then it stops by itself.
+- It stops by itself when the Pluto stops taking samples or is pulled out, when the samples come late too often, when ffmpeg stops, when the page has been silent for 15 s (closed tab, lost network), and when SatMe-PC closes.
+- At every stop the Pluto's **TX oscillator is powered down first**; at the start it stays down until the first samples are in. Should the Pluto be unreachable at that moment, the page says so: unplug it.
+- **TX gain**: −30 dB by default, never above the maximum set in Réglages (−10 dB by default).
+- **Closed loop**: the MiniTiouner's MER on our own signal against the beacon's (measured with *Balise* beforehand): if we are not at least 1 dB under the beacon, a warning, and the gain is stepped down 1 dB every 5 s until we are. It never steps it up.
+
+**Réglages › Poste et rotor › ADALM-PLUTO**: the maximum TX gain, and *Couper l'oscillateur d'émission du Pluto quand SatMe s'en sert en réception* (off by default). A Pluto switched on leaves its TX oscillator running (2450 MHz by default): ticked, SatMe powers it down each time it starts receiving with the Pluto. Only the transmitter's code writes anything on the Pluto's transmit side; the receiver still cannot.
 
 ## More of the PC
 
@@ -218,7 +247,7 @@ For other programs on the PC (a logger, a dashboard, a script): **Réglages › 
 - On Linux the system raises RTS/DTR for an instant on every port opening, before SatMe can lower them: one more reason to open only the port meant.
 - **CAT never transmits** (`TX`, `KY` refused by the TS-2000 driver). Only APRS through a KISS TNC transmits, and only when you send a message, your position or a status yourself.
 - **The MiniTiouner's LNB supply is off** unless chosen.
-- **The ADALM-PLUTO only receives**: nothing on its transmit side is written or opened.
+- **The ADALM-PLUTO transmits only from the DATV tab**, on a confirmed click, within the rules above; the receiver never writes its transmit side.
 
 ## Before the first try
 
