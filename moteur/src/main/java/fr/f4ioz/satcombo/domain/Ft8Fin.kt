@@ -117,16 +117,32 @@ object Ft8Fin {
      */
     private fun redresse(c: Canal, debut: Int, fin: Int, decalageHz: Double, penteHzS: Double, milieuS: Double,
                          re: FloatArray, im: FloatArray) {
+        // The phase is quadratic: its rotation from one sample to the next
+        // changes by a constant factor. Two complex multiplications a sample
+        // instead of a cosine and a sine; exact values again every 256
+        // samples so rounding does not pile up.
+        val fs = c.cadence
+        var cr = 0.0; var ci = 0.0      // exp(j·phi(n))
+        var rr = 0.0; var ri = 0.0      // exp(j·(phi(n+1) − phi(n)))
+        val dd = -2 * PI * penteHzS / (fs * fs)
+        val qr = cos(dd); val qi = sin(dd)
         for (n in debut until fin) {
             val j = n - debut
-            if (n < 0 || n >= c.re.size) { re[j] = 0f; im[j] = 0f; continue }
-            val t = n / c.cadence
-            val u = t - milieuS
-            val phi = -2 * PI * (decalageHz * t + 0.5 * penteHzS * u * u)
-            val co = cos(phi).toFloat(); val si = sin(phi).toFloat()
-            val a = c.re[n]; val b = c.im[n]
-            re[j] = a * co - b * si
-            im[j] = a * si + b * co
+            if ((j and 255) == 0) {
+                val t = n / fs
+                val u = t - milieuS
+                val phi = -2 * PI * (decalageHz * t + 0.5 * penteHzS * u * u)
+                val pas = -2 * PI * (decalageHz / fs + penteHzS * (u / fs + 0.5 / (fs * fs)))
+                cr = cos(phi); ci = sin(phi); rr = cos(pas); ri = sin(pas)
+            }
+            if (n < 0 || n >= c.re.size) { re[j] = 0f; im[j] = 0f } else {
+                val a = c.re[n]; val b = c.im[n]
+                val co = cr.toFloat(); val si = ci.toFloat()
+                re[j] = a * co - b * si
+                im[j] = a * si + b * co
+            }
+            val nr = cr * rr - ci * ri; ci = cr * ri + ci * rr; cr = nr
+            val mr = rr * qr - ri * qi; ri = rr * qi + ri * qr; rr = mr
         }
     }
 

@@ -53,7 +53,7 @@ class Ft8CorpusTest {
         "bande_chargee" to 23, "chevauchement" to 8, "fort_masque_faible" to 6,
         "doppler_connu_-1.0Hz/s" to 8, "doppler_connu_1.0Hz/s" to 8,
         "doppler_connu_-3.0Hz/s" to 8, "doppler_connu_3.0Hz/s" to 8,
-        "doppler_inconnu_1Hz/s" to 0, "pentes_propres_2Hz/s" to 1, "pente_connue_et_propre" to 3,
+        "doppler_inconnu_1Hz/s" to 8, "pentes_propres_2Hz/s" to 8, "pente_connue_et_propre" to 8,
         "indicatifs_composes" to 3, "ft4" to 8,
     )
 
@@ -83,5 +83,16 @@ class Ft8CorpusTest {
             assertTrue("${m.nom} : ${m.trouves} décodés, il en faut au moins $plancher", m.trouves >= plancher)
             assertTrue("${m.nom} : faux décodages ${m.faux}", m.faux.isEmpty())
         }
+    }
+
+    @Test
+    fun la_derive_propre_dune_station_est_rendue() {
+        // 2 Hz/s known for the slot, 1.5 Hz/s more of its own.
+        val st = Ft8Banc.station("CQ", "F4IOZ", "JN18", 1200.0, -8.0, pente = 1.5)
+        val s = Ft8Banc.Scenario("derive", listOf(st), penteCommuneHzS = 2.0, graine = 77)
+        val r = Ft8Decodeur.decode(Ft8Banc.audio(s), s.mode.cadenceHz, s.mode, penteHzS = 2.0,
+            profondeur = Ft8Decodeur.Profondeur.PROFONDE)
+        assertTrue(r.joinToString { it.message.brut }, r.size == 1 && r[0].message.brut == "CQ F4IOZ JN18")
+        assertTrue("pente ${r[0].penteHzS}", kotlin.math.abs(r[0].penteHzS - 3.5) <= 0.5)
     }
 }

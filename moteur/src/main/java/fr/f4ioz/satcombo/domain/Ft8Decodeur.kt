@@ -40,6 +40,8 @@ object Ft8Decodeur {
         val scoreSynchro: Float,
         /** The pass that found it: 1, or later once stronger signals were taken out. */
         val passe: Int = 1,
+        /** Its frequency drift across the transmission, Hz/s: the slot's known one plus its own. */
+        val penteHzS: Double = 0.0,
     )
 
     /**
@@ -61,10 +63,18 @@ object Ft8Decodeur {
         val toursLdpc: Int,
         /** Passes: after each, what was decoded is taken out and the rest searched again. */
         val passes: Int,
+        /** Own drift searched, Hz/s each side, for candidates that failed without. */
+        val penteMaxHzS: Double,
+        /**
+         * How many failed candidates get that search, per slot, best first:
+         * it costs ten readings each, and a band full of QRM would otherwise
+         * spend the slot on it.
+         */
+        val essaisPente: Int,
     ) {
-        LEGERE(32, 1.5f, 30, 1),
-        NORMALE(60, 1.3f, 30, 2),
-        PROFONDE(120, 1.1f, 40, 3),
+        LEGERE(32, 1.5f, 30, 1, 0.0, 0),
+        NORMALE(60, 1.3f, 30, 2, 2.0, 25),
+        PROFONDE(120, 1.1f, 40, 3, 4.0, 60),
     }
 
     /**
@@ -127,6 +137,8 @@ object Ft8Decodeur {
 
         val sortie = ArrayList<Decode>()
         val dejaVus = HashSet<String>()
+        // Drift searches spent so far, against the budget's.
+        val essaisPente = IntArray(1)
         for (passe in 1..passes) {
             val spec = Ft8Signal.spectrogramme(reste, mode, basseHz, hauteHz)
             val candidats = Ft8Signal.candidats(spec,
@@ -141,13 +153,14 @@ object Ft8Decodeur {
                 // A neighbour of a signal already read in this pass: the same signal again.
                 if (nouveaux.any { abs(it.decode.frequenceHz - f0) < mode.ecartHz &&
                         abs(it.decode.instantS - t0) < mode.dureeSymbole }) continue
-                val lu = essaie(spectre, mode, f0, t0, c.score, tours) ?: continue
+                val pente = if (essaisPente[0] < (profondeur?.essaisPente ?: 0)) profondeur?.penteMaxHzS ?: 0.0 else 0.0
+                val lu = essaie(spectre, mode, f0, t0, c.score, tours, pente, essaisPente) ?: continue
                 // Neighbouring candidates can yield the same message; keep only
                 // the first, the list is already sorted by score.
                 if (!dejaVus.add(lu.decode.message.brut)) continue
                 nouveaux.add(lu)
             }
-            sortie.addAll(nouveaux.map { if (passe > 1) it.decode.copy(passe = passe) else it.decode })
+            sortie.addAll(nouveaux.map { it.decode.copy(passe = passe, penteHzS = penteHzS + it.penteHzS) })
             if (nouveaux.isEmpty() || passe == passes) break
             // Each signal read is rebuilt and taken out: the next pass hears
             // what it was hiding.
@@ -173,6 +186,9 @@ object Ft8Decodeur {
         t0: Double,
         score: Float,
         tours: Int,
+        penteMaxHzS: Double = 0.0,
+        /** Counts the drift searches made. */
+        essaisPente: IntArray? = null,
     ): Lu? {
         val e = mode.ecartHz
         val canal = Ft8Fin.canal(spectre, f0, -2.5 * e, (mode.tons + 1.5) * e)
@@ -180,8 +196,33 @@ object Ft8Decodeur {
         // quarter of a tone: search a little wider than that.
         val pas = e / 16
         val decalages = DoubleArray(13) { (it - 6) * pas }
-        val l = Ft8Fin.synchronise(canal, mode, Math.round(t0 * canal.cadence).toInt(),
-            Ft8Fin.PAR_SYMBOLE / 2, decalages, doubleArrayOf(0.0))
+        val debut = Math.round(t0 * canal.cadence).toInt()
+        val l = Ft8Fin.synchronise(canal, mode, debut, Ft8Fin.PAR_SYMBOLE / 2, decalages, doubleArrayOf(0.0))
+        lis(l, canal, mode, score, tours)?.let { return it }
+        if (penteMaxHzS <= 0.0) return null
+        essaisPente?.let { it[0]++ }
+
+        // --- a drift of its own ---
+        //
+        // A station whose own Doppler nobody removes (its uplink, a rig
+        // that does not follow), or a slot whose drift was not known: the
+        // tones slide by a tone or more across the transmission and the
+        // reading above failed. A few drifts each side, 1 Hz/s apart, then
+        // the best refined to a quarter: half a hertz per second left over
+        // is still under a tone at the ends.
+        val marge = penteMaxHzS * mode.dureeS / 2
+        val large = Ft8Fin.canal(spectre, f0, -2.5 * e - marge, (mode.tons + 1.5) * e + marge)
+        val n = penteMaxHzS.toInt()
+        val pentes = (-n..n).filter { it != 0 }.map { it.toDouble() }.toDoubleArray()
+        val grossier = Ft8Fin.synchronise(large, mode, debut, Ft8Fin.PAR_SYMBOLE / 2, decalages, pentes)
+        val fin = Ft8Fin.synchronise(large, mode, grossier.debut, 4,
+            DoubleArray(5) { grossier.decalageHz + (it - 2) * pas / 2 },
+            DoubleArray(5) { grossier.penteHzS + (it - 2) * 0.25 })
+        return lis(fin, large, mode, score, tours)
+    }
+
+    /** A candidate's tones, read where it sits, to a message or nothing. */
+    private fun lis(l: Ft8Fin.Lecture, canal: Ft8Fin.Canal, mode: Ft8Signal.Mode, score: Float, tours: Int): Lu? {
 
         // --- error correction first ---
         //
@@ -213,7 +254,8 @@ object Ft8Decodeur {
             frequenceHz = canal.origineHz + l.decalageHz,
             instantS = l.debut / canal.cadence,
             rapportDb = Ft8Fin.rapportDb(l, envoyes, mode),
-            scoreSynchro = score
+            scoreSynchro = score,
+            penteHzS = l.penteHzS
         ), envoyes, l.penteHzS)
     }
 
