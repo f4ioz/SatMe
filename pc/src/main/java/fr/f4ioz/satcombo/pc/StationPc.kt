@@ -489,8 +489,9 @@ class StationPc(
             suivants.first().catalogNumber != sat.catalogNumber) && maintenant - derniereSuite >= 60_000L
         val nouveaux = if (aRefaire) {
             derniereSuite = maintenant
+            val masque = settings.masqueHorizon
             withContext(Dispatchers.Default) {
-                runCatching { predicteur.upcomingPasses(sat!!, obs!!, maintenant - 30 * 60_000L, 72, settings.minElevDeg.toDouble()) }
+                runCatching { predicteur.upcomingPasses(sat!!, obs!!, maintenant - 30 * 60_000L, 72, settings.minElevDeg.toDouble(), masque) }
                     .getOrDefault(emptyList()).filter { it.losEpochMs >= maintenant }.take(8)
             }
         } else suivants
@@ -694,14 +695,23 @@ class StationPc(
         val sats = _etat.value.satellites
         change { copy(calculEnCours = true) }
         val debut = horloge()
+        val masque = settings.masqueHorizon
         val l = withContext(Dispatchers.Default) {
             sats.flatMap { s ->
                 if (!PassPredictor.elementsUtilisables(s)) emptyList()
-                else runCatching { predicteur.upcomingPasses(s, obs, debut - 15 * 60_000L, 24, settings.minElevDeg.toDouble()) }
+                else runCatching { predicteur.upcomingPasses(s, obs, debut - 15 * 60_000L, 24, settings.minElevDeg.toDouble(), masque) }
                     .getOrDefault(emptyList()).filter { it.losEpochMs >= debut }
             }.sortedBy { it.aosEpochMs }
         }
         change { copy(passages = l, calculEnCours = false) }
+    }
+
+    /** The horizon mask set on the page: the lists computed again with it. */
+    fun poseMasque(m: fr.f4ioz.satcombo.domain.MasqueHorizon) {
+        settings.masqueHorizon = m
+        derniereSuite = 0L
+        change { copy(passagesSuivi = emptyList()) }
+        portee.launch { runCatching { recalcule() } }
     }
 
     // ------------------------------------------------------------- choices

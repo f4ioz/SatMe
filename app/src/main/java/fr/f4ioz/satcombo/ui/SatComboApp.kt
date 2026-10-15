@@ -1459,6 +1459,9 @@ internal fun PassCard(
                     }
                     if (showSat) Text(ligne, color = TextLo, style = MaterialTheme.typography.bodySmall,
                         maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    // Moved by the horizon mask: the times over the bare horizon.
+                    if (p.masque) Text(tf("horizon_pass_geo", hm.format(Date(p.geoAosEpochMs)), hm.format(Date(p.geoLosEpochMs))),
+                        color = TextLo, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     // Event title under the pass line: the badge says there is
                     // something, the title says what.
                     if (agendaTitle != null) {

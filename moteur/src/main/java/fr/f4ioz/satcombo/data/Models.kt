@@ -75,8 +75,13 @@ data class SatPass(
     val losAzimuthDeg: Double,
     val sunlit: Boolean,         // satellite illuminated -> visible to eye
     val nightAtObserver: Boolean, // dark sky at QTH
-    val track: List<Pair<Double, Double>> = emptyList() // (az, el) samples AOS->LOS
+    val track: List<Pair<Double, Double>> = emptyList(), // (az, el) samples AOS->LOS
+    /** AOS/LOS over the geometric horizon; differ from the above only through a horizon mask. */
+    val geoAosEpochMs: Long = aosEpochMs,
+    val geoLosEpochMs: Long = losEpochMs,
 ) {
+    /** The horizon mask moved this pass's AOS or LOS. */
+    val masque: Boolean get() = geoAosEpochMs != aosEpochMs || geoLosEpochMs != losEpochMs
     /** ISS-Detector-style: a pass you can actually see with the naked eye. */
     val visualPass: Boolean get() = sunlit && nightAtObserver && maxElevationDeg >= 10.0
     val durationSec: Long get() = (losEpochMs - aosEpochMs) / 1000

@@ -183,7 +183,8 @@ object PagesPcTelephone {
                         .put("carnetProfil", c.profil).put("minEl", u.minElevDeg).put("fiche", true)
                         .put("carnetAuto", c.auto).put("carnetDelai", c.autoDelaiS)
                         .put("delais", JSONArray(fr.f4ioz.satcombo.domain.EnvoiAuto.DELAIS_S))
-                        .put("amsatAuto", c.amsatAuto).put("amsatEtat", c.amsatEtat))
+                        .put("amsatAuto", c.amsatAuto).put("amsatEtat", c.amsatEtat)
+                        .put("horizon", JSONArray(vm.masqueHorizon().elevationsDeg)))
                 }
                 // CelesTrak is the phone's to reach directly: no server rule here.
                 "/api/sources" -> json(ApiStation.sources(vm.serveurGp(), vm.serveurGpSeul(), u.enabledSources,
@@ -593,6 +594,7 @@ object PagesPcTelephone {
                 if (p("amsatAuto").isNotEmpty()) vm.setAmsatAuto(p("amsatAuto") == "1")
                 OK
             }
+            "/api/horizon" -> { vm.setMasqueHorizon(fr.f4ioz.satcombo.domain.MasqueHorizon.lis(p("m"))); OK }
             "/api/sources" -> {
                 p("serveur").takeIf { it.isNotEmpty() }?.let { vm.setServeurGp(it.trim()) }
                 if (p("seul").isNotEmpty()) vm.setServeurGpSeul(p("seul") == "1")
@@ -697,7 +699,8 @@ object PagesPcTelephone {
         val obs = u.observer ?: return emptyList<fr.f4ioz.satcombo.data.SatPass>() to false
         val maintenant = System.currentTimeMillis()
         // Computed again when old, or for another place, catalogue or minimum elevation.
-        val pour = "${obs.latDeg},${obs.lonDeg},${u.satellites.size},${u.minElevDeg}"
+        val masque = vm.masqueHorizon()
+        val pour = "${obs.latDeg},${obs.lonDeg},${u.satellites.size},${u.minElevDeg},${masque.texte()}"
         if ((maintenant - passagesDe > 5 * 60_000L || pour != passagesPour) && passagesEnCours.compareAndSet(false, true)) {
             Thread {
                 try {
@@ -705,7 +708,7 @@ object PagesPcTelephone {
                     val debut = System.currentTimeMillis()
                     passagesCalcules = u.satellites.flatMap { s ->
                         if (!fr.f4ioz.satcombo.domain.PassPredictor.elementsUtilisables(s)) emptyList()
-                        else runCatching { p.upcomingPasses(s, obs, debut - 15 * 60_000L, 24, u.minElevDeg.toDouble()) }
+                        else runCatching { p.upcomingPasses(s, obs, debut - 15 * 60_000L, 24, u.minElevDeg.toDouble(), masque) }
                             .getOrDefault(emptyList()).filter { it.losEpochMs >= debut }
                     }.sortedBy { it.aosEpochMs }
                     passagesDe = debut; passagesPour = pour

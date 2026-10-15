@@ -121,13 +121,35 @@ class PassPredictor {
         return sunEl > -shadowDeg
     }
 
-    /** Scan forward [hours] and collect passes above [minElDeg]. */
+    /**
+     * Scan forward [hours] and collect passes above [minElDeg]. With a
+     * [masque], AOS/LOS are where the satellite clears the obstacles (the
+     * geometric ones kept in the pass) and passes hidden all along are left
+     * out; an empty mask changes nothing.
+     */
     fun upcomingPasses(
         e: TleEntry,
         o: Observer,
         fromMs: Long = System.currentTimeMillis(),
         hours: Int = 72,
-        minElDeg: Double = 5.0
+        minElDeg: Double = 5.0,
+        masque: MasqueHorizon? = null,
+    ): List<SatPass> {
+        val l = upcomingPassesGeo(e, o, fromMs, hours, minElDeg)
+        if (masque == null || masque.vide || l.isEmpty()) return l
+        val sat = SatelliteFactory.createSatellite(tle(e))
+        val station = gs(o)
+        return l.mapNotNull { p ->
+            masque.applique(p) { t -> sat.getPosition(station, Date(t)).let { Math.toDegrees(it.azimuth) to Math.toDegrees(it.elevation) } }
+        }
+    }
+
+    private fun upcomingPassesGeo(
+        e: TleEntry,
+        o: Observer,
+        fromMs: Long,
+        hours: Int,
+        minElDeg: Double,
     ): List<SatPass> {
         val sat = SatelliteFactory.createSatellite(tle(e))
         val station = gs(o)

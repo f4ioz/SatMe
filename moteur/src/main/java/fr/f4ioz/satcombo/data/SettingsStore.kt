@@ -926,6 +926,14 @@ class SettingsStore(private val prefs: Stockage) {
         get() = prefs.getInt("min_elev", 5)
         set(v) { prefs.edit().putInt("min_elev", v.coerceIn(0, 30)).apply() }
 
+    /**
+     * The obstacles around the station, per azimuth sector ("" = none): the
+     * pass lists then show when the satellite really clears them.
+     */
+    var masqueHorizon: fr.f4ioz.satcombo.domain.MasqueHorizon
+        get() = fr.f4ioz.satcombo.domain.MasqueHorizon.lis(prefs.getString("horizon_mask", ""))
+        set(v) { prefs.edit().putString("horizon_mask", if (v.vide) "" else v.texte()).apply() }
+
     var skedsToken: String
         get() = prefs.getString("skeds_token", "") ?: ""
         set(v) { prefs.edit().putString("skeds_token", v.trim()).apply() }

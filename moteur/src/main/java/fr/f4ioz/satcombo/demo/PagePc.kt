@@ -1284,6 +1284,15 @@ object PagePc {
       <div class="etat" id="reg-etat"></div>
     </div>
     <div class="carte">
+      <div class="t">Horizon</div>
+      <div class="petit">La hauteur des obstacles (toits, arbres, relief) dans chaque direction, en degrés au-dessus de l'horizon. Les passages commencent et finissent alors quand le satellite les dépasse ; les heures sans obstacle restent en infobulle (✱). Tout à 0 : rien ne change.</div>
+      <div class="ligne"><span class="petit">Secteurs</span><select id="hz-n" onchange="hzSecteurs(+this.value)"><option value="8">8 × 45°</option><option value="12">12 × 30°</option></select></div>
+      <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-start;margin-top:6px">
+        <svg id="hz-dessin" viewBox="-62 -62 124 124" width="150" height="150" role="img" aria-label="Le masque d'horizon vu du dessus"></svg>
+        <div id="hz-champs" style="display:grid;grid-template-columns:repeat(2, auto 64px);gap:4px 8px;align-items:center"></div></div>
+      <div class="ligne"><button class="primaire" onclick="enregistreHorizon()">Enregistrer</button><button onclick="hzSecteurs(HZ.length, true)">Tout à 0</button><span class="petit" id="hz-etat"></span></div>
+    </div>
+    <div class="carte">
       <div class="t">Skeds annoncés (hams.at)</div>
       <label class="petit"><input type="checkbox" id="sk-on" onchange="post('api/skeds/reglages?on=' + (this.checked ? 1 : 0))"> Montrer les skeds annoncés sur hams.at : sur les passages (📣), dans Station et le Carnet, sur la carte</label>
       <div class="ligne"><input id="sk-cle" type="password" placeholder="Clé API hams.at (facultative : la fenêtre commune avec toi)" autocomplete="off">
@@ -1578,7 +1587,7 @@ async function ticMire(premier) {
 // Réglages by category: a list on the left (icon, name, what it holds), the chosen category's cards on the right.
 const ICO = ${icones()};
 const CATS_REG = [
-  { id: 'station', nom: 'Ma station', ico: 'person', desc: 'Indicatif, carré, élévation minimale', cartes: ['Station'] },
+  { id: 'station', nom: 'Ma station', ico: 'person', desc: 'Indicatif, carré, élévation minimale, horizon', cartes: ['Station', 'Horizon'] },
   { id: 'materiel', nom: 'Poste et rotor', ico: 'radio', desc: 'CAT, TH-D72, rotor, convertisseurs', cartes: ['Poste', 'Kenwood TH-D72', 'Rotor', 'Convertisseurs'] },
   { id: 'satellites', nom: 'Satellites', ico: 'satellite_alt', desc: 'Éléments orbitaux, statut AMSAT', cartes: ['Éléments orbitaux', 'AMSAT'] },
   { id: 'enligne', nom: 'Services en ligne', ico: 'public', desc: 'QRZ.com, Wavelog / Cloudlog, skeds hams.at', cartes: ['QRZ.com', 'Carnet en ligne', 'Skeds'] },
@@ -1693,7 +1702,7 @@ function dessinePassages() {
     const cl = 'p' + (enCours ? ' encours' : '') + (p.catnum === suivi ? ' choisi' : '');
     const quand = enCours ? 'en cours' : 'dans ' + duree(p.aos - n);
     return '<tr class="' + cl + '" title="Suivre ' + p.nom.replace(/"/g, '') + ' : le carnet, la carte, le poste et le rotor le suivent" onclick="suivre(' + p.catnum + ')">' + celluleAgenda(p) + '<td class="rosace">' + rosace(p.trace, p.elMax, 30) + '</td><td><span title="Favori" style="cursor:pointer;color:' + (p.fav ? 'var(--ambre)' : 'var(--bord)') +
-      '" onclick="favori(' + p.catnum + ',' + !p.fav + ',event)">★</span></td><td>' + hm(p.aos) + '</td><td>' +
+      '" onclick="favori(' + p.catnum + ',' + !p.fav + ',event)">★</span></td><td>' + hm(p.aos) + marqueHorizon(p) + '</td><td>' +
       (a ? '<span title="AMSAT : ' + a[1] + '" style="display:inline-block;width:8px;height:8px;border-radius:4px;margin-right:6px;background:' + a[0] + '"></span>' : '') +
       p.nom.replace(/</g, '&lt;') + (p.skeds ? ' <span title="' + p.skeds + ' sked(s) annoncé(s) sur hams.at" style="color:var(--ambre)">📣' + (p.skeds > 1 ? p.skeds : '') + '</span>' : '') +
       '</td><td>' + Math.round(p.elMax) + '°</td><td>' + duree(p.los - p.aos) + '</td><td class="petit">' + quand + '</td></tr>';
@@ -1838,7 +1847,7 @@ function dessine() {
   const sv = JSON.stringify(E.passagesSuivi.map(p => [p.aos, p.agenda]));
   if (sv !== g('suivants').dataset.vu) {
     g('suivants').dataset.vu = sv;
-    g('suivants').innerHTML = E.passagesSuivi.map(p => '<tr>' + celluleAgenda(p) + '<td class="rosace">' + rosace(p.trace, p.elMax, 40) + '</td><td>' + jourHeure(p.aos) + '</td><td>' + Math.round(p.elMax) + '°</td><td>' +
+    g('suivants').innerHTML = E.passagesSuivi.map(p => '<tr>' + celluleAgenda(p) + '<td class="rosace">' + rosace(p.trace, p.elMax, 40) + '</td><td>' + jourHeure(p.aos) + marqueHorizon(p) + '</td><td>' + Math.round(p.elMax) + '°</td><td>' +
       duree(p.los - p.aos) + '</td><td class="petit">' + Math.round(p.azAos) + '° → ' + Math.round(p.azLos) + '°</td></tr>').join('');
   }
   dessineAgenda();
@@ -2585,6 +2594,7 @@ async function chargeReglages() {
   try {
     const r = await (await fetch('api/reglages')).json();
     g('indicatif').value = r.c; g('locator').value = r.l; g('minEl').value = r.minEl;
+    horizonDe(r);
     g('qrzFiche').checked = r.fiche; ficheVoulue = r.fiche;
     g('qrzUser').value = r.qrzUser; g('qrzMdp').placeholder = r.qrzMdp ? 'mot de passe enregistré' : 'Mot de passe';
     g('carnetUrl').value = r.carnetUrl; g('carnetCle').placeholder = r.carnetCle ? 'clé enregistrée' : 'Clé d’API (lecture et écriture)';
@@ -2605,6 +2615,42 @@ async function enregistreReglages() {
     txt('reg-etat', 'enregistré'); g('qrzMdp').value = ''; g('carnetCle').value = '';
     chargeReglages(); setTimeout(chargeListe, 1500);
   }
+}
+// ------------------------------------------------------------------ horizon mask
+let HZ = [0, 0, 0, 0, 0, 0, 0, 0];
+function hzSecteurs(n, zero) {
+  if (zero || HZ.length !== n) HZ = Array(n).fill(0);
+  g('hz-n').value = String(HZ.length);
+  const w = 360 / HZ.length;
+  g('hz-champs').innerHTML = HZ.map((e, i) => '<span class="petit">' + Math.round(i * w) + '–' + Math.round((i + 1) * w) + '°</span>' +
+    '<input type="number" min="0" max="90" step="1" value="' + e + '" oninput="HZ[' + i + '] = Math.max(0, Math.min(90, +this.value || 0)); hzDessin()">').join('');
+  hzDessin();
+}
+// Seen from above: the ring is the horizon, the centre the zenith; the obstacles in amber.
+function hzDessin() {
+  const R = 55, w = 360 / HZ.length, pt = (az, r) => { const a = az * Math.PI / 180; return (r * Math.sin(a)).toFixed(1) + ' ' + (-r * Math.cos(a)).toFixed(1); };
+  let d = 'M' + pt(0, R) + ' A' + R + ' ' + R + ' 0 1 1 ' + pt(180, R) + ' A' + R + ' ' + R + ' 0 1 1 ' + pt(360, R) + 'Z M';
+  HZ.forEach((e, i) => { const r = R * (1 - e / 90); for (let k = 0; k <= 6; k++) d += (i || k ? ' L' : '') + pt(i * w + k * w / 6, r); });
+  let h = '<circle r="' + R + '" fill="none" stroke="var(--bord)"/><circle r="' + (R * 2 / 3).toFixed(1) + '" fill="none" stroke="var(--bord)" stroke-dasharray="2 3"/>' +
+    '<circle r="' + (R / 3).toFixed(1) + '" fill="none" stroke="var(--bord)" stroke-dasharray="2 3"/>' +
+    '<path d="' + d + 'Z" fill="var(--ambre)" fill-opacity=".45" fill-rule="evenodd" stroke="var(--ambre)" stroke-width=".8"/>';
+  [['N', 0], ['E', 90], ['S', 180], ['O', 270]].forEach(([l, a]) => { const [x, y] = pt(a, R + 5).split(' ');
+    h += '<text x="' + x + '" y="' + y + '" font-size="8" fill="var(--gris)" text-anchor="middle" dominant-baseline="middle">' + l + '</text>'; });
+  g('hz-dessin').innerHTML = h;
+}
+async function enregistreHorizon() {
+  const j = await post('api/horizon?m=' + (HZ.some(e => e > 0) ? HZ.join(',') : ''));
+  if (j && j.ok !== false) { txt('hz-etat', 'enregistré, passages recalculés'); setTimeout(chargeListe, 1500); }
+}
+function horizonDe(r) {
+  if (document.activeElement && document.activeElement.closest && document.activeElement.closest('#hz-champs')) return;
+  HZ = r.horizon && r.horizon.length ? r.horizon.slice() : Array(+g('hz-n').value || 8).fill(0);
+  hzSecteurs(HZ.length);
+}
+// A pass moved by the horizon mask: its times over the bare horizon, in a tooltip.
+function marqueHorizon(p) {
+  return p.geoAos ? '<span class="petit" title="Au-dessus des obstacles de ' + hm(p.aos) + ' à ' + hm(p.los) + ' ; sans obstacle de ' +
+    hm(p.geoAos) + ' à ' + hm(p.geoLos) + '"> ✱</span>' : '';
 }
 // ------------------------------------------------------------------ DATV (MiniTiouner, through LongMynd)
 let D = null, dSr = 0;

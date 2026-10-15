@@ -2387,6 +2387,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _ui.value.selected?.let { selectByCatnum(it.catalogNumber) }
     }
 
+    /** The obstacles around the station (not in UiState: it is at its register limit). */
+    fun masqueHorizon(): fr.f4ioz.satcombo.domain.MasqueHorizon = settings.masqueHorizon
+
+    /** The horizon mask: the pass lists computed again with it. */
+    fun setMasqueHorizon(m: fr.f4ioz.satcombo.domain.MasqueHorizon) {
+        settings.masqueHorizon = m
+        computeFavoritePasses()
+        _ui.value.selected?.let { selectByCatnum(it.catalogNumber) }
+    }
+
     fun setSkedsEnabled(on: Boolean) {
         settings.skedsEnabled = on
         _ui.value = _ui.value.copy(skedsEnabled = on)
@@ -7265,7 +7275,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 hours = _ui.value.passHorizonHours + _ui.value.pastPassHours
             }
             val merged = withContext(Dispatchers.Default) {
-                favs.flatMap { predictor.upcomingPasses(it, obs, fromMs = from, hours = hours, minElDeg = settings.minElevDeg.toDouble()) }
+                val masque = settings.masqueHorizon
+                favs.flatMap { predictor.upcomingPasses(it, obs, fromMs = from, hours = hours, minElDeg = settings.minElevDeg.toDouble(), masque = masque) }
                     .filter { it.losEpochMs > now - back && it.aosEpochMs < windowEnd }
                     .sortedBy { it.aosEpochMs }
                     // Safety cap only. The old limit of 120 silently dropped the
@@ -8919,7 +8930,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 (((focus - now) / 3600_000L) + 6).toInt().coerceIn(72, 24 * 90)
             else 72
             val passes = withContext(Dispatchers.Default) {
-                predictor.upcomingPasses(sat, obs, fromMs = from, hours = hours, minElDeg = settings.minElevDeg.toDouble())
+                predictor.upcomingPasses(sat, obs, fromMs = from, hours = hours, minElDeg = settings.minElevDeg.toDouble(),
+                    masque = settings.masqueHorizon)
             }.filter { it.losEpochMs > now - back }
             val gt = withContext(Dispatchers.Default) {
                 predictor.groundTrack(sat, System.currentTimeMillis())

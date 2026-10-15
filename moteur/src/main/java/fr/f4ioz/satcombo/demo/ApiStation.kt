@@ -49,6 +49,7 @@ object ApiStation {
         .put("fav", fav).put("agenda", agenda).put("amsat", amsat).put("skeds", skeds)
         .put("nom", p.satName).put("catnum", p.catalogNumber).put("aos", p.aosEpochMs).put("los", p.losEpochMs)
         .put("elMax", p.maxElevationDeg).put("azAos", p.aosAzimuthDeg).put("azLos", p.losAzimuthDeg)
+        .also { o -> if (p.masque) o.put("geoAos", p.geoAosEpochMs).put("geoLos", p.geoLosEpochMs) }
         .put("trace", JSONArray(p.track.let { t -> val pas = maxOf(1, t.size / 20); t.filterIndexed { i, _ -> i % pas == 0 || i == t.size - 1 } }
             .map { (az, el) -> JSONArray(listOf(Math.round(az), Math.round(el * 10) / 10.0)) }))
 
