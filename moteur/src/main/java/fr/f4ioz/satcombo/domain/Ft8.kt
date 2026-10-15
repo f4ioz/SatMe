@@ -176,10 +176,9 @@ object Ft8 {
      * Six slots of different kinds (letter or digit, digit, letters) combined
      * in mixed radix.
      *
-     * Returns `null` for anything else: compound callsigns, prefixes,
-     * suffixes. Those travel as 22-bit hashes, which cannot be resolved
-     * without having heard the callsign in clear — so nothing is shown rather
-     * than a guess.
+     * Returns `null` for anything else: tokens, and the 22-bit hashes of
+     * compound callsigns, which only [Ft8Indicatifs] can put a name on (a
+     * callsign heard in clear before).
      */
     fun indicatifDepuis28(n: Long): String? {
         if (n < JETONS + HACHES) return null
@@ -235,19 +234,36 @@ object Ft8 {
         val rapportDb: Int?,
     )
 
-    /**
-     * Unpacks the 77 bits of an ordinary message.
-     *
-     * Only **type 1** is handled: two standard callsigns and a grid square or
-     * report. Other types (contest, free text, compound callsigns) are
-     * rejected rather than guessed. An approximate callsign is worse than none:
-     * it would end up in a log.
-     */
-    fun deplie(message: BooleanArray): Message? {
-        if (message.size < BITS_MESSAGE) return null
-        val i3 = lisEntier(message, 74, 3).toInt()
-        if (i3 != 1) return null
+    /** Unpacks with the shared table of callsigns heard ([Ft8Indicatifs.commun]). */
+    fun deplie(message: BooleanArray): Message? = deplie(message, Ft8Indicatifs.commun)
 
+    /**
+     * Unpacks the 77 bits of a message.
+     *
+     * Handled: **types 1 and 2** (two callsigns and a grid square or report,
+     * `/R` or `/P` on either), **type 4** (one compound callsign in clear,
+     * the other hashed) and **type 0.1** (the DXpedition's double message).
+     * Other types (contest, free text, telemetry) are rejected rather than
+     * guessed. An approximate callsign is worse than none: it would end up in
+     * a log.
+     *
+     * Every callsign read in clear goes into [connus]; a hashed one is shown
+     * `<F/G4ABC>` when [connus] knows it, `<...>` otherwise — the brackets
+     * stay, so the reader sees it came as a hash.
+     */
+    fun deplie(message: BooleanArray, connus: Ft8Indicatifs): Message? {
+        if (message.size < BITS_MESSAGE) return null
+        return when (lisEntier(message, 74, 3).toInt()) {
+            1 -> deplieStandard(message, "/R", connus)
+            2 -> deplieStandard(message, "/P", connus)
+            4 -> deplieCompose(message, connus)
+            0 -> if (lisEntier(message, 71, 3) == 1L) deplieExpedition(message, connus) else null
+            else -> null
+        }
+    }
+
+    /** Types 1 and 2: c28 r1 c28 r1 R1 g15 i3. */
+    private fun deplieStandard(message: BooleanArray, suffixe: String, connus: Ft8Indicatifs): Message? {
         val c1 = lisEntier(message, 0, 28)
         val c2 = lisEntier(message, 29, 28)
         // Bit 59, not 58. Type 1 layout is
@@ -258,9 +274,8 @@ object Ft8 {
         // wrong offset cannot catch this.
         val g15 = lisEntier(message, 59, 15).toInt()
 
-        val appele = jetonOuIndicatif(c1)
-        val appelant = jetonOuIndicatif(c2)
-        if (appele == null || appelant == null) return null
+        val appele = champ28(c1, message[28], suffixe, connus) ?: return null
+        val appelant = champ28(c2, message[57], suffixe, connus) ?: return null
 
         var carre: String? = null
         var rapport: Int? = null
@@ -290,21 +305,116 @@ object Ft8 {
         val bout = carre ?: accuse
             ?: rapport?.let { (if (it >= 0) "+" else "") + it } ?: ""
         return Message(
-            brut = listOf(appele, appelant, bout).filter { it.isNotBlank() }
+            brut = listOf(appele.texte, appelant.texte, bout).filter { it.isNotBlank() }
                 .joinToString(" "),
-            appelant = appelant.takeIf { it != "CQ" && it != "QRZ" && it != "DE" },
-            appele = appele.takeIf { it != "CQ" && it != "QRZ" && it != "DE" },
+            appelant = appelant.indicatif,
+            appele = appele.indicatif,
             locator = carre,
             rapportDb = rapport)
     }
 
-    /** The three reserved tokens, then actual callsigns. */
-    private fun jetonOuIndicatif(n: Long): String? = when (n) {
-        0L -> "DE"
-        1L -> "QRZ"
-        2L -> "CQ"
-        else -> indicatifDepuis28(n)
+    /** Type 4: h12 c58 h1 r2 c1 — one compound callsign in clear, the other hashed. */
+    private fun deplieCompose(message: BooleanArray, connus: Ft8Indicatifs): Message? {
+        val h12 = lisEntier(message, 0, 12).toInt()
+        val enClair = indicatifDepuis58(lisEntier(message, 12, 58)) ?: return null
+        val hacheEnSecond = message[70]
+        val r2 = lisEntier(message, 71, 2).toInt()
+        val cq = message[73]
+        connus.retiens(enClair)
+        if (cq) return Message("CQ $enClair", enClair, null, null, null)
+        val autre = champHache(h12, 12, connus)
+        val clair = Champ(enClair, enClair)
+        val (appele, appelant) = if (hacheEnSecond) clair to autre else autre to clair
+        val bout = when (r2) { 1 -> "RRR"; 2 -> "RR73"; 3 -> "73"; else -> "" }
+        return Message(
+            brut = listOf(appele.texte, appelant.texte, bout).filter { it.isNotBlank() }.joinToString(" "),
+            appelant = appelant.indicatif, appele = appele.indicatif, locator = null, rapportDb = null)
     }
+
+    /**
+     * Type 0.1: c28 c28 h10 r5 — the DXpedition answering two stations at
+     * once: "K1ABC RR73; W9XYZ <KH1/KH7Z> -08". The sender is the hashed one.
+     */
+    private fun deplieExpedition(message: BooleanArray, connus: Ft8Indicatifs): Message? {
+        val fini = champ28(lisEntier(message, 0, 28), false, "", connus)
+            ?.takeIf { it.indicatif != null } ?: return null
+        val suivant = champ28(lisEntier(message, 28, 28), false, "", connus)
+            ?.takeIf { it.indicatif != null } ?: return null
+        val dx = champHache(lisEntier(message, 56, 10).toInt(), 10, connus)
+        val rapport = lisEntier(message, 66, 5).toInt() * 2 - 30
+        return Message(
+            brut = "${fini.texte} RR73; ${suivant.texte} ${dx.texte} " + (if (rapport >= 0) "+" else "") + rapport,
+            appelant = dx.indicatif, appele = suivant.indicatif, locator = null, rapportDb = rapport)
+    }
+
+    /** A callsign field: what is shown, and the callsign itself (`null` for a token or an unknown hash). */
+    private class Champ(val texte: String, val indicatif: String?)
+
+    /**
+     * A 28-bit field: a token (DE, QRZ, CQ, "CQ 123", "CQ DX"), a 22-bit
+     * hash, or a standard callsign — shown with its suffix when [r] is set
+     * (`/R` in type 1, `/P` in type 2). The callsign itself keeps no suffix:
+     * it is the station, for the log and the flags.
+     */
+    private fun champ28(n: Long, r: Boolean, suffixe: String, connus: Ft8Indicatifs): Champ? {
+        when {
+            n == 0L -> return Champ("DE", null)
+            n == 1L -> return Champ("QRZ", null)
+            n == 2L -> return Champ("CQ", null)
+            n < 1_003L -> return Champ("CQ " + (n - 3).toString().padStart(3, '0'), null)
+            n < 1_003L + 27 * 27 * 27 * 27 -> {
+                var v = n - 1_003L
+                val c = CharArray(4)
+                for (i in 3 downTo 0) { c[i] = A4[(v % 27).toInt()]; v /= 27 }
+                val mot = String(c).trim()
+                if (mot.isEmpty() || ' ' in mot) return null
+                return Champ("CQ $mot", null)
+            }
+            n < JETONS -> return null
+            n < JETONS + HACHES -> return champHache((n - JETONS).toInt(), 22, connus)
+        }
+        val base = indicatifDepuis28(n) ?: return null
+        val entier = if (r) base + suffixe else base
+        if (r) connus.retiens(base)
+        connus.retiens(entier)
+        return Champ(entier, base)
+    }
+
+    private fun champHache(h: Int, bits: Int, connus: Ft8Indicatifs): Champ {
+        val s = connus.trouve(h, bits)
+        return Champ(if (s != null) "<$s>" else "<...>", s)
+    }
+
+    /**
+     * A 58-bit callsign (type 4): 11 characters of [Ft8Indicatifs.A38] in
+     * base 38, left-aligned. `null` past 38^11 or for what does not look like
+     * a callsign: a corrupted message that passed the CRC must not show one.
+     */
+    fun indicatifDepuis58(n: Long): String? {
+        if (n < 0) return null
+        var v = n
+        val c = CharArray(11)
+        for (i in 10 downTo 0) { c[i] = Ft8Indicatifs.A38[(v % 38).toInt()]; v /= 38 }
+        if (v != 0L) return null
+        val s = String(c).trimEnd()
+        return Ft8Indicatifs.propre(s)?.takeIf { it == s }
+    }
+
+    /** The inverse: up to 11 characters to 58 bits. */
+    fun indicatifVers58(indicatif: String): Long? {
+        val s = indicatif.trim().uppercase()
+        if (s.isEmpty() || s.length > 11) return null
+        var v = 0L
+        for (i in 0 until 11) {
+            val k = Ft8Indicatifs.A38.indexOf(if (i < s.length) s[i] else ' ')
+            if (k < 0) return null
+            v = v * 38 + k
+        }
+        return v
+    }
+
+    /** A 22-bit hash in a 28-bit field: what a station sends for a callsign it cannot pack. */
+    fun hacheVers28(indicatif: String): Long? = Ft8Indicatifs.hache(indicatif, 22)?.let { JETONS + it }
 
     private fun lisEntier(bits: BooleanArray, debut: Int, longueur: Int): Long {
         var v = 0L

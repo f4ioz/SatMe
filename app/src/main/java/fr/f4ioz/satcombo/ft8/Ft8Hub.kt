@@ -12,7 +12,11 @@ import android.content.Context
 import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaRecorder
+import fr.f4ioz.satcombo.data.LogStore
+import fr.f4ioz.satcombo.data.SettingsStore
+import fr.f4ioz.satcombo.data.stockage
 import fr.f4ioz.satcombo.domain.Ft8Decodeur
+import fr.f4ioz.satcombo.domain.Ft8Indicatifs
 import fr.f4ioz.satcombo.domain.Ft8Signal
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -98,8 +102,28 @@ object Ft8Hub {
         arrete()
         val src = _state.value.source
         _state.value = Etat(enMarche = true, mode = nom, source = src)
+        connais(ctx)
         boucle = CoroutineScope(Dispatchers.Default).launch {
             if (src == "SDR") tourneSdr(nom, this) else tourne(nom, this)
+        }
+    }
+
+    @Volatile private var connusBranches = false
+
+    /**
+     * Hashed callsigns: the table of those heard in clear (kept between two
+     * starts), seeded with the log, always holding ours.
+     */
+    private fun connais(ctx: Context) {
+        val app = ctx.applicationContext
+        val t = Ft8Indicatifs.commun
+        val reglages = SettingsStore(app)
+        t.moi = { reglages.callsign }
+        CoroutineScope(Dispatchers.IO).launch {
+            runCatching {
+                if (!connusBranches) { connusBranches = true; t.branche(stockage(app, "satcombo_ft8")) }
+                t.amorce(LogStore(app).load().map { it.callsign })
+            }
         }
     }
 
@@ -314,6 +338,7 @@ object Ft8Hub {
         } catch (e: Exception) {
             emptyList()
         }
+        Ft8Indicatifs.commun.sauve()
         val heure = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.US).apply {
             timeZone = java.util.TimeZone.getTimeZone("UTC")
         }.format(java.util.Date(horloge()))
