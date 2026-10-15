@@ -290,6 +290,11 @@ object PagePc {
   .allume { box-shadow:inset 4px 0 0 var(--vert); }
   .eteint { box-shadow:inset 4px 0 0 rgba(229,72,77,.55); }
   button.arret { background:transparent; border:1px solid var(--rose); color:var(--rose); }
+  button.emettre { background:#C62828; color:#fff; border:none; font-weight:800; font-size:18px; padding:12px 26px; letter-spacing:1px; }
+  button.emettre:disabled { opacity:.35; }
+  button.arret-tx { background:#fff; color:#C62828; border:3px solid #C62828; font-weight:800; font-size:18px; padding:10px 26px; }
+  .e-charge { background:#5A0E0E; color:#FFD7D7; border:2px solid #E5484D; border-radius:8px; padding:8px 10px; font-weight:700; margin-top:8px; }
+  .e-direct { background:rgba(229,72,77,.18); border:1px solid #E5484D; border-radius:8px; padding:8px 10px; margin-top:8px; }
   .on { background:rgba(91,214,138,.18); color:var(--vert); } .off { background:rgba(154,167,180,.15); color:var(--gris); }
   .discret { background:transparent; border:none; }
   nav { display:flex; gap:4px; }
@@ -934,6 +939,37 @@ object PagePc {
         <div class="petit" style="flex:1;line-height:1.7" id="d-details"></div>
       </div>
     </div>
+    <div class="carte" id="e-carte">
+      <div class="t">Émission · ADALM-PLUTO <span id="e-pastille" class="pastille" style="color:var(--gris)">arrêtée</span></div>
+      <div class="petit">DVB-S2 fait par SatMe, vers le transpondeur large bande de QO-100 ; le MiniTiouner ci-dessus vérifie le signal à la descente.</div>
+      <div class="ligne"><span class="petit" style="min-width:86px">MODCOD</span><select id="e-modcod" onchange="eRegle()" style="max-width:120px"></select>
+        <label class="petit"><input type="checkbox" id="e-courtes" onchange="eRegle()"> trames courtes</label>
+        <label class="petit"><input type="checkbox" id="e-pilotes" onchange="eRegle()"> pilotes</label></div>
+      <div class="ligne"><span class="petit" style="min-width:86px">kS/s</span><select id="e-sr" onchange="eRegle()" style="max-width:90px"></select>
+        <span class="petit">roll-off</span><select id="e-ro" onchange="eRegle()" style="max-width:80px"></select></div>
+      <div class="ligne"><span class="petit" style="min-width:86px">Canal</span><select id="e-canal" onchange="if (this.value) { g('e-mhz').value = this.value; eRegle(); }"></select></div>
+      <div class="ligne"><span class="petit" style="min-width:86px">Montée (MHz)</span><input id="e-mhz" style="max-width:120px" onchange="eRegle()">
+        <span class="petit" id="e-descente"></span></div>
+      <div class="avert" id="e-bande"></div>
+      <div class="ligne"><span class="petit" style="min-width:86px">Source</span><select id="e-source" onchange="eRegle()" style="max-width:190px">
+        <option value="mire">Mire SatMe + indicatif</option><option value="image">Image fixe</option><option value="camera">Caméra</option></select>
+        <select id="e-hevc" onchange="eRegle()" style="max-width:90px"><option value="0">H.264</option><option value="1">H.265</option></select>
+        <label class="petit"><input type="checkbox" id="e-son" onchange="eRegle()"> son</label></div>
+      <div class="ligne" id="e-image-l" hidden><span class="petit" style="min-width:86px">Image</span><input id="e-image" placeholder="/home/…/image.png" onchange="eRegle()"></div>
+      <div class="ligne" id="e-camera-l" hidden><span class="petit" style="min-width:86px">Caméra</span><select id="e-camera" onchange="eRegle()"></select></div>
+      <div class="ligne"><span class="petit" style="min-width:86px">Gain TX (dB)</span><input id="e-gain" type="number" step="1" min="-89" max="0" style="max-width:80px" onchange="eRegle()">
+        <button onclick="eGain(-1)" title="1 dB de moins">−1</button><button onclick="eGain(1)" title="1 dB de plus">+1</button><span class="petit" id="e-gainmax"></span></div>
+      <div class="ligne"><span class="petit" style="min-width:86px">Durée (min)</span><input id="e-duree" type="number" min="1" max="30" style="max-width:80px" onchange="eRegle()">
+        <span class="petit">puis arrêt automatique (30 min au plus)</span></div>
+      <label class="petit" style="display:block;margin-top:8px"><input type="checkbox" id="e-charge" onchange="eMontre()"> <b>Test sur charge</b> — toute fréquence, gain bridé à −40 dB</label>
+      <div class="e-charge" id="e-charge-avert" hidden>⚠ TEST SUR CHARGE : la sortie TX de l'ADALM-PLUTO doit aller sur une charge fictive 50 Ω ou un atténuateur (vers le MiniTiouner), JAMAIS sur une antenne ni sur l'amplificateur.</div>
+      <div class="petit" id="e-calc" style="margin-top:6px"></div>
+      <div class="ligne" style="margin-top:10px"><button class="emettre" id="e-go" onclick="eEmettre()">ÉMETTRE</button>
+        <button class="arret-tx" id="e-stop" onclick="eArrete()">ARRÊT</button></div>
+      <div id="e-direct" class="e-direct" hidden></div>
+      <div id="e-boucle" class="petit" style="margin-top:8px;line-height:1.7"></div>
+      <div class="etat" id="e-msg"></div>
+    </div>
     <div class="petit" id="d-prog"></div>
   </div>
 </div>
@@ -1443,6 +1479,16 @@ object PagePc {
       <div class="petit" style="margin-top:6px">Toutes les 5 s : élévation, Doppler prévu à la descente et à la montée, fréquence écrite au poste et relue. Un fichier CSV par passage (AOS, montée, TCA, descente, LOS), avec le passage dans le Journal. SatMe ne demande rien de plus au poste.</div>
       <div id="dop-liste" class="petit" style="margin-top:6px"></div>
     </div>
+    <div class="carte" id="px-carte">
+      <div class="t">ADALM-PLUTO (émission DATV)</div>
+      <div class="petit">L'émission se lance de l'onglet DATV, jamais toute seule. Ici, ce qui la borne et ce que fait le Pluto quand SatMe s'en sert en réception.</div>
+      <label class="petit" style="display:block;margin-top:8px"><input type="checkbox" id="px-coupe" onchange="post('api/datv/emission/reglage?coupeTx=' + (this.checked ? 1 : 0))">
+        Couper l'oscillateur d'émission du Pluto quand SatMe s'en sert en réception</label>
+      <div class="petit" style="margin-top:4px">Allumé, le Pluto laisse son oscillateur d'émission tourner (une fuite sur la sortie TX). Coché : SatMe l'éteint à chaque démarrage de la réception par le Pluto.</div>
+      <div class="ligne"><span class="petit">Gain d'émission maximal (dB)</span><input id="px-gainmax" type="number" step="1" min="-89" max="0" style="max-width:80px">
+        <button onclick="post('api/datv/emission/reglage?gainMax=' + enc(v('px-gainmax'))).then(chargePx)">Enregistrer</button></div>
+      <div class="petit">Jamais dépassé, quoi qu'on demande dans l'onglet DATV (0 dB = la pleine puissance du Pluto, environ +7 dBm).</div>
+    </div>
     <div class="carte">
       <div class="t">Convertisseurs</div>
       <div class="petit" id="conv-lu">—</div>
@@ -1638,7 +1684,7 @@ async function ticMire(premier) {
 const ICO = ${icones()};
 const CATS_REG = [
   { id: 'station', nom: 'Ma station', ico: 'person', desc: 'Indicatif, carré, élévation minimale, horizon', cartes: ['Station', 'Horizon'] },
-  { id: 'materiel', nom: 'Poste et rotor', ico: 'radio', desc: 'CAT, TH-D72, rotor, convertisseurs', cartes: ['Poste', 'Kenwood TH-D72', 'Rotor', 'Convertisseurs', 'Journal Doppler'] },
+  { id: 'materiel', nom: 'Poste et rotor', ico: 'radio', desc: 'CAT, TH-D72, rotor, convertisseurs, ADALM-PLUTO', cartes: ['Poste', 'Kenwood TH-D72', 'Rotor', 'Convertisseurs', 'Journal Doppler', 'ADALM-PLUTO'] },
   { id: 'satellites', nom: 'Satellites', ico: 'satellite_alt', desc: 'Éléments orbitaux, statut AMSAT, lien WebSocket', cartes: ['Éléments orbitaux', 'AMSAT', 'Lien satellite'] },
   { id: 'enligne', nom: 'Services en ligne', ico: 'public', desc: 'QRZ.com, Wavelog / Cloudlog, skeds hams.at', cartes: ['QRZ.com', 'Carnet en ligne', 'Skeds'] },
   { id: 'telephone', nom: 'Téléphone', ico: 'smartphone', desc: 'SatMe sur le téléphone : réglages et contacts', cartes: ['Téléphone'] },
@@ -2646,7 +2692,7 @@ async function chargeReglages() {
   try {
     const r = await (await fetch('api/reglages')).json();
     g('indicatif').value = r.c; g('locator').value = r.l; g('minEl').value = r.minEl;
-    horizonDe(r); chargeDoppler(); chargeLien();
+    horizonDe(r); chargeDoppler(); chargeLien(); chargePx();
     g('qrzFiche').checked = r.fiche; ficheVoulue = r.fiche;
     g('qrzUser').value = r.qrzUser; g('qrzMdp').placeholder = r.qrzMdp ? 'mot de passe enregistré' : 'Mot de passe';
     g('carnetUrl').value = r.carnetUrl; g('carnetCle').placeholder = r.carnetCle ? 'clé enregistrée' : 'Clé d’API (lecture et écriture)';
@@ -2806,6 +2852,107 @@ function dBalise() { g('d-ciel').value = mhz3(D ? D.balise : 10491500); dSr = 15
 async function dCale() { const j = await dPost('cale'); if (j && j.ok) { txt('d-msg', 'oscillateur corrigé de ' + (-j.ecart) + ' kHz'); setTimeout(() => ticDatv(true), 600); } }
 async function dEnregistre() { await dPost('enregistre?on=' + (D && D.enregistrement ? 0 : 1)); }
 function dLnb() { g('d-lnb-avert').hidden = !g('d-lnb').value; }
+
+// ------------------------------------------------------------------ DATV transmission (ADALM-PLUTO)
+let EM = null, eVieW = null, ePremier = true;
+async function chargePx() {
+  try { const j = await (await fetch('api/datv/emission')).json(); if (!j.ok) { g('px-carte').hidden = true; return; }
+    g('px-coupe').checked = !!j.coupeTx; g('px-gainmax').value = j.gainMax; } catch (x) {}
+}
+// The page says it is there while transmitting: from a worker, which a hidden tab does not slow down.
+function eVie(on) {
+  if (on && !eVieW) {
+    const bat = () => fetch('api/datv/emission/vie', { method: 'POST' }).catch(() => {});
+    try {
+      eVieW = new Worker(URL.createObjectURL(new Blob(['setInterval(function () { postMessage(0); }, 1000);'], { type: 'text/javascript' })));
+      eVieW.onmessage = bat;
+    } catch (x) { eVieW = { t: setInterval(bat, 1000), terminate() { clearInterval(this.t); } }; }
+    bat();
+  } else if (!on && eVieW) { eVieW.terminate(); eVieW = null; }
+}
+window.addEventListener('pagehide', () => { if (EM && EM.emet) navigator.sendBeacon('api/datv/emission/arrete'); });
+async function ticEmission() {
+  if (g('v-datv').hidden && !(EM && EM.emet)) return;
+  let j; try { j = await (await fetch('api/datv/emission')).json(); } catch (x) { return; }
+  if (!j.ok) { g('e-carte').hidden = true; return; }
+  EM = j; eVie(j.emet);
+  const libre = !document.activeElement || !document.activeElement.id.startsWith('e-');
+  if (ePremier || libre) {
+    if (ePremier) {
+      g('e-modcod').innerHTML = j.modcods.map(m => '<option>' + m + '</option>').join('');
+      g('e-sr').innerHTML = (D && D.debits ? D.debits : [125, 250, 333, 500, 1000, 1500, 2000]).map(s => '<option value="' + s + '">' + s + '</option>').join('');
+      g('e-ro').innerHTML = j.rolloffs.map(a => '<option value="' + a + '">' + String(a).replace('.', ',') + '</option>').join('');
+    }
+    g('e-modcod').value = j.modcod; g('e-sr').value = j.sr; g('e-ro').value = j.ro; g('e-courtes').checked = j.courtes; g('e-pilotes').checked = j.pilotes;
+    g('e-mhz').value = mhz3(j.khz); g('e-gain').value = j.gain; g('e-duree').value = Math.round(j.duree / 60);
+    g('e-source').value = j.source; g('e-image').value = j.image; g('e-hevc').value = j.hevc ? '1' : '0'; g('e-son').checked = j.son;
+    const cams = j.cameras.length ? j.cameras : [''];
+    g('e-camera').innerHTML = cams.map(c => '<option value="' + esc(c) + '">' + (c ? esc(c) : 'aucune caméra trouvée') + '</option>').join('');
+    g('e-camera').value = j.camera || cams[0];
+    ePremier = false;
+  }
+  // The band plan's channels at this symbol rate; the one the MiniTiouner holds now marked busy.
+  const occupe = D && D.verrouille && D.cielTrouve ? D.cielTrouve : 0;
+  const can = j.canaux.filter(c => c.srMax >= j.sr);
+  const html = '<option value="">—</option>' + can.map(c => '<option value="' + mhz3(c.montee) + '">' + mhz3(c.montee) + ' ↑ / ' + mhz3(c.descente) + ' ↓' +
+    (occupe && Math.abs(occupe - c.descente) < j.sr / 2 && D.service !== j.indicatif ? ' — occupé (' + esc(D.service || 'signal') + ')' : '') + '</option>').join('');
+  if (g('e-canal').dataset.vu !== html) { g('e-canal').dataset.vu = html; g('e-canal').innerHTML = html; }
+  g('e-image-l').hidden = j.source !== 'image'; g('e-camera-l').hidden = j.source !== 'camera';
+  txt('e-descente', '↓ ' + mhz3(j.descenteKhz) + ' MHz');
+  txt('e-gainmax', 'max ' + j.gainMax + ' dB (Réglages)');
+  const charge = g('e-charge').checked;
+  txt('e-bande', charge ? '' : j.refusBande);
+  txt('e-calc', 'TS ' + (j.debitTs / 1000).toFixed(1).replace('.', ',') + ' kbit/s · ' + Math.round(j.occupeKhz) + ' kHz occupés · Pluto ' +
+    (j.echantillons / 1e6).toFixed(3).replace('.', ',') + ' Méch/s (' + j.sps + ' par symbole)' + (j.indicatif ? ' · service « ' + j.indicatif + ' »' : ' · indicatif manquant (Réglages)'));
+  const p = g('e-pastille');
+  p.textContent = j.emet ? (j.charge ? 'SUR CHARGE' : 'EN ÉMISSION') : 'arrêtée';
+  p.style.background = j.emet ? '#C62828' : ''; p.style.color = j.emet ? '#fff' : 'var(--gris)';
+  g('e-go').disabled = j.emet; g('e-stop').hidden = !j.emet;
+  ['e-modcod', 'e-sr', 'e-ro', 'e-courtes', 'e-pilotes', 'e-canal', 'e-mhz', 'e-source', 'e-image', 'e-camera', 'e-hevc', 'e-son', 'e-duree', 'e-charge'].forEach(i => g(i).disabled = j.emet);
+  const dir = g('e-direct');
+  dir.hidden = !j.emet;
+  if (j.emet) dir.innerHTML = '<b>' + (j.charge ? 'Sur charge' : 'En émission') + '</b> sur ' + mhz3(j.khz) + ' MHz · reste <b>' + duree(j.restant * 1000) + '</b>' +
+    ' · gain ' + j.gainApplique + ' dB<br>TS reçu de ffmpeg ' + j.tsKbps + ' kbit/s · trames vides ' + Math.round(j.tramesVidesPct) + ' % · manques ' + j.manques +
+    (j.tsPerdus ? ' · paquets perdus ' + j.tsPerdus : '') + (j.ecretages ? ' · écrêtages ' + j.ecretages : '') + ' · CPU ' + (j.cpu >= 0 ? Math.round(j.cpu) + ' %' : '—');
+  if (!j.emet && (j.raison || j.erreur)) txt('e-msg', 'Dernière émission : ' + [j.raison, j.erreur].filter(x => x).join(' — '));
+  // The closed loop: our signal and the beacon, both measured by the MiniTiouner.
+  const b = j.boucle;
+  const merNous = D && D.verrouille && D.mer != null ? D.mer.toFixed(1) + ' dB' : '—';
+  g('e-boucle').innerHTML = '<b>Boucle MiniTiouner</b> · MER reçue ' + merNous + ' · MER balise ' + (j.merBalise == null ? 'inconnue' : j.merBalise.toFixed(1) + ' dB (il y a ' + duree(j.merBaliseAge * 1000) + ')') +
+    (j.emet && !j.charge ? '<br><span style="color:' + (b.tropFort ? 'var(--rose);font-weight:700' : 'var(--vert)') + '">' + esc(b.message || 'en attente de mesures') + '</span>' : '') +
+    (j.charge ? '<br>Sur charge : pas de comparaison à la balise.' : '');
+  eMontre();
+}
+setInterval(ticEmission, 1000);
+function eMontre() { g('e-charge-avert').hidden = !g('e-charge').checked; if (EM) txt('e-bande', g('e-charge').checked ? '' : EM.refusBande); }
+function eParams() {
+  return 'modcod=' + enc(v('e-modcod')) + '&sr=' + v('e-sr') + '&ro=' + v('e-ro') + '&courtes=' + (g('e-courtes').checked ? 1 : 0) + '&pilotes=' + (g('e-pilotes').checked ? 1 : 0) +
+    '&mhz=' + enc(v('e-mhz').replace(',', '.')) + '&gain=' + enc(v('e-gain')) + '&duree=' + enc(v('e-duree')) + '&source=' + v('e-source') +
+    '&image=' + enc(v('e-image')) + '&camera=' + enc(g('e-camera').value) + '&hevc=' + v('e-hevc') + '&son=' + (g('e-son').checked ? 1 : 0);
+}
+async function eRegle() {
+  try { await fetch('api/datv/emission/reglage?' + eParams(), { method: 'POST' }); } catch (x) {}
+  setTimeout(ticEmission, 100);
+}
+async function eGain(d) { g('e-gain').value = Math.min(0, (parseFloat(v('e-gain')) || -30) + d); await eRegle(); }
+async function eEmettre() {
+  await eRegle();
+  if (!EM) return;
+  const charge = g('e-charge').checked;
+  const q = charge ? 'TEST SUR CHARGE à ' + v('e-mhz') + ' MHz, gain ' + Math.min(parseFloat(v('e-gain')), EM.gainCharge) + ' dB au plus.\n\nLa sortie TX du Pluto est-elle bien sur une charge fictive ou un atténuateur, et rien d’autre ?'
+    : 'ÉMETTRE vers QO-100 à ' + v('e-mhz') + ' MHz (descente ' + mhz3(EM.descenteKhz) + ' MHz), ' + v('e-sr') + ' kS/s, ' + v('e-modcod') + ', gain ' + v('e-gain') + ' dB, ' + v('e-duree') + ' min au plus.\n\nCanal libre vérifié ? Indicatif ' + EM.indicatif + '.';
+  if (!confirm(q)) return;
+  txt('e-msg', 'démarrage : ffmpeg, puis l’ADALM-PLUTO…');
+  let j = null;
+  try { j = await (await fetch('api/datv/emission/demarre?confirme=1&charge=' + (charge ? 1 : 0), { method: 'POST' })).json(); } catch (x) {}
+  txt('e-msg', j && j.ok === false ? 'Refusé : ' + j.erreur : (j ? 'émission en cours' : 'pas de réponse de SatMe-PC'));
+  if (j && j.ok !== false) eVie(true);
+  setTimeout(ticEmission, 300);
+}
+async function eArrete() {
+  try { await fetch('api/datv/emission/arrete', { method: 'POST' }); } catch (x) {}
+  txt('e-msg', 'arrêtée'); setTimeout(ticEmission, 200);
+}
 
 // ------------------------------------------------------------------ orbital elements
 let SRC = null;

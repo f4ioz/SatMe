@@ -51,45 +51,7 @@ class MirePc(private val dossierExports: File, private val horloge: () -> Long =
     }.getOrDefault(emptyList())
 
     /** The card for [mode], at the mode's size: bars, grey steps, checkers, edges, the call and square. */
-    fun image(mode: SstvMode, indicatif: String, locator: String): BufferedImage {
-        val w = mode.width; val h = mode.height
-        val im = BufferedImage(w, h, BufferedImage.TYPE_INT_RGB)
-        val g = im.createGraphics()
-        g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
-        g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON)
-        g.color = Color(0x0B1020); g.fillRect(0, 0, w, h)
-        val bord = maxOf(4, w / 40); val coche = maxOf(4, h / 40)
-        val barresBas = (h * 0.42f).toInt(); val grisBas = (h * 0.54f).toInt()
-        val l = w - 2 * bord
-        for (i in BARRES.indices) { g.color = Color(BARRES[i]); g.fillRect(bord + l * i / BARRES.size, coche, l * (i + 1) / BARRES.size - l * i / BARRES.size, barresBas - coche) }
-        for (i in 0 until 16) { val v = i * 255 / 15; g.color = Color(v, v, v); g.fillRect(bord + l * i / 16, barresBas, l * (i + 1) / 16 - l * i / 16, grisBas - barresBas) }
-        for (i in 0 until 16) {
-            g.color = if (i % 2 == 0) Color.WHITE else Color.BLACK
-            val x0 = bord + l * i / 16; val dx = l * (i + 1) / 16 - x0
-            g.fillRect(x0, 0, dx, coche); g.fillRect(x0, h - coche, dx, coche)
-        }
-        g.color = Color(0x00C000); g.fillRect(0, 0, bord, h)
-        g.color = Color(0xC00000); g.fillRect(w - bord, 0, bord, h)
-        val haut = grisBas + h / 40
-        val dispo = h - haut - coche
-        val logo = (dispo * 0.72f).toInt().coerceAtLeast(24)
-        val lx = bord + w / 24; val ly = haut + (dispo - logo) / 2
-        MarquePc.icone?.let { g.drawImage(it, lx, ly, logo, logo, null) } ?: run {
-            g.color = Color(0x3FE0C8); g.stroke = BasicStroke(maxOf(2f, logo / 12f)); g.drawOval(lx, ly, logo, logo)
-        }
-        val tx = lx + logo + w / 40
-        g.color = Color.WHITE; g.font = Font(Font.SANS_SERIF, Font.BOLD, (dispo * 0.30f).toInt().coerceAtLeast(8))
-        g.drawString("SatMe", tx, (haut + dispo * 0.30f).toInt())
-        g.font = Font(Font.SANS_SERIF, Font.PLAIN, (dispo * 0.19f).toInt().coerceAtLeast(7))
-        val ligne = listOf(indicatif.trim(), locator.trim()).filter { it.isNotEmpty() }.joinToString("  ")
-        g.color = Color(0x9FE8FF); if (ligne.isNotEmpty()) g.drawString(ligne, tx, (haut + dispo * 0.56f).toInt())
-        g.color = Color(0xFFC65C); g.drawString(mode.name, tx, (haut + dispo * 0.82f).toInt())
-        g.color = Color(0x8AA0C0); g.font = Font(Font.SANS_SERIF, Font.PLAIN, (dispo * 0.13f).toInt().coerceAtLeast(6))
-        val dim = "${w}x$h"
-        g.drawString(dim, w - bord - w / 40 - g.fontMetrics.stringWidth(dim), (h - coche - dispo * 0.06f).toInt())
-        g.dispose()
-        return im
-    }
+    fun image(mode: SstvMode, indicatif: String, locator: String): BufferedImage = carte(mode.width, mode.height, indicatif, locator, mode.name)
 
     private fun pixels(im: BufferedImage) = im.getRGB(0, 0, im.width, im.height, null, 0, im.width)
 
@@ -164,6 +126,46 @@ class MirePc(private val dossierExports: File, private val horloge: () -> Long =
         const val RATE = 44_100
         val FORMAT = AudioFormat(RATE.toFloat(), 16, 1, true, false)
         private val BARRES = intArrayOf(0xFFFFFF, 0xFFFF00, 0x00FFFF, 0x00FF00, 0xFF00FF, 0xFF0000, 0x0000FF, 0x000000)
+
+        /** The card at [w]×[h]: bars, grey steps, checkers, edges, the call and square, [libelle] (the mode, or DATV). */
+        fun carte(w: Int, h: Int, indicatif: String, locator: String, libelle: String): BufferedImage {
+            val im = BufferedImage(w, h, BufferedImage.TYPE_INT_RGB)
+            val g = im.createGraphics()
+            g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
+            g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON)
+            g.color = Color(0x0B1020); g.fillRect(0, 0, w, h)
+            val bord = maxOf(4, w / 40); val coche = maxOf(4, h / 40)
+            val barresBas = (h * 0.42f).toInt(); val grisBas = (h * 0.54f).toInt()
+            val l = w - 2 * bord
+            for (i in BARRES.indices) { g.color = Color(BARRES[i]); g.fillRect(bord + l * i / BARRES.size, coche, l * (i + 1) / BARRES.size - l * i / BARRES.size, barresBas - coche) }
+            for (i in 0 until 16) { val v = i * 255 / 15; g.color = Color(v, v, v); g.fillRect(bord + l * i / 16, barresBas, l * (i + 1) / 16 - l * i / 16, grisBas - barresBas) }
+            for (i in 0 until 16) {
+                g.color = if (i % 2 == 0) Color.WHITE else Color.BLACK
+                val x0 = bord + l * i / 16; val dx = l * (i + 1) / 16 - x0
+                g.fillRect(x0, 0, dx, coche); g.fillRect(x0, h - coche, dx, coche)
+            }
+            g.color = Color(0x00C000); g.fillRect(0, 0, bord, h)
+            g.color = Color(0xC00000); g.fillRect(w - bord, 0, bord, h)
+            val haut = grisBas + h / 40
+            val dispo = h - haut - coche
+            val logo = (dispo * 0.72f).toInt().coerceAtLeast(24)
+            val lx = bord + w / 24; val ly = haut + (dispo - logo) / 2
+            MarquePc.icone?.let { g.drawImage(it, lx, ly, logo, logo, null) } ?: run {
+                g.color = Color(0x3FE0C8); g.stroke = BasicStroke(maxOf(2f, logo / 12f)); g.drawOval(lx, ly, logo, logo)
+            }
+            val tx = lx + logo + w / 40
+            g.color = Color.WHITE; g.font = Font(Font.SANS_SERIF, Font.BOLD, (dispo * 0.30f).toInt().coerceAtLeast(8))
+            g.drawString("SatMe", tx, (haut + dispo * 0.30f).toInt())
+            g.font = Font(Font.SANS_SERIF, Font.PLAIN, (dispo * 0.19f).toInt().coerceAtLeast(7))
+            val ligne = listOf(indicatif.trim(), locator.trim()).filter { it.isNotEmpty() }.joinToString("  ")
+            g.color = Color(0x9FE8FF); if (ligne.isNotEmpty()) g.drawString(ligne, tx, (haut + dispo * 0.56f).toInt())
+            g.color = Color(0xFFC65C); g.drawString(libelle, tx, (haut + dispo * 0.82f).toInt())
+            g.color = Color(0x8AA0C0); g.font = Font(Font.SANS_SERIF, Font.PLAIN, (dispo * 0.13f).toInt().coerceAtLeast(6))
+            val dim = "${w}x$h"
+            g.drawString(dim, w - bord - w / 40 - g.fontMetrics.stringWidth(dim), (h - coche - dispo * 0.06f).toInt())
+            g.dispose()
+            return im
+        }
 
         /** The conditions from the page: noise SNR (dB, 0 = none), fading, dropouts, the pass's profile. */
         fun conditions(bruit: Int, fading: String, coupures: Boolean, profil: Boolean) = SstvConditions(

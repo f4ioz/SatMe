@@ -216,6 +216,18 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
         set(v) { stockage.edit().putInt(CLE_PLUTO_PORT, v.coerceIn(1, 65535)).apply() }
     private fun estPluto() = recepteur == PLUTO
 
+    /** The Pluto transmitting (DATV tab): its receiver may not start meanwhile (they share the sample rate). */
+    var emissionPluto: () -> Boolean = { false }
+    /** The Pluto receiving here now. */
+    val plutoEnReception: Boolean get() = cle is PlutoSdr
+    /**
+     * Power the Pluto's TX LO down when receiving with it (Réglages; off by
+     * default). Done by the transmitter's class, the only one that writes TX.
+     */
+    var coupeTxEnReception: Boolean
+        get() = stockage.getBoolean(CLE_COUPE_TX, false)
+        set(v) { stockage.edit().putBoolean(CLE_COUPE_TX, v).apply() }
+
     /** The frequencies the chosen receiver tunes to (Hz): the dongle's, or the Pluto's. */
     val gammeHz: LongRange get() = (cle as? PlutoSdr)?.let { it.frequenceMinHz..it.frequenceMaxHz }
         ?: if (estPluto()) 70_000_000L..6_000_000_000L else 24_000_000L..1_766_000_000L
@@ -391,7 +403,15 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
 
     /** rtl_tcp started here when asked and nothing answers yet; then the connection, retried while it starts. */
     private fun connecte(): SourceIq {
-        if (estPluto()) return PlutoSdr.connecte(plutoHote, plutoPort)
+        if (estPluto()) {
+            if (emissionPluto()) throw java.io.IOException("l'ADALM-PLUTO émet (onglet DATV) : arrêter l'émission d'abord")
+            val p = PlutoSdr.connecte(plutoHote, plutoPort)
+            if (coupeTxEnReception) {
+                val (h, n) = plutoHote to plutoPort
+                thread(isDaemon = true, name = "satme-pluto-coupe-tx") { fr.f4ioz.satcombo.sdr.PlutoEmission.coupeOscillateur(h, n) }
+            }
+            return p
+        }
         runCatching { return RtlTcp.connecte(hote, port, 1500) }
         if (!lance || !estLocal(hote)) throw java.io.IOException("rtl_tcp ne répond pas sur $hote:$port")
         val p = runCatching {
@@ -580,6 +600,7 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
         const val CLE_RECEPTEUR = "pc_sdr_recepteur"
         const val CLE_PLUTO_HOTE = "pc_sdr_pluto_hote"
         const val CLE_PLUTO_PORT = "pc_sdr_pluto_port"
+        const val CLE_COUPE_TX = "pc_sdr_pluto_coupe_tx"
         const val RTL = "rtl"
         const val PLUTO = "pluto"
 

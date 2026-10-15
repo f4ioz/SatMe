@@ -14,7 +14,7 @@ package fr.f4ioz.satcombo.datv.s2
  * 16 200 bits): one line per group of 360 information bits, as printed.
  * Read once into arrays ([TablesLdpc.lignes]).
  */
-internal object TablesLdpc {
+object TablesLdpc {
 
     /** The table for [taux], normal or [courte] frame; null when the standard has none (9/10 short). */
     fun texte(taux: Taux, courte: Boolean): String? = (if (courte) COURTES else NORMALES)[taux]

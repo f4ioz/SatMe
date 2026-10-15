@@ -125,8 +125,15 @@ fun main(args: Array<String>) {
     val appairage = AppairagePc(telephone, port + 1)
     // DATV with a MiniTiouner, through LongMynd: nothing started until asked.
     val datv = DatvPc(station.stockage, File(dossier, "enregistrements"))
+    // DATV transmission with the Pluto: nothing sent until the operator asks and confirms on the page.
+    val emission = EmissionDatvPc(station.stockage, File(dossier, "tmp"), indicatif = { station.settings.callsign },
+        locator = { station.settings.manualLocator }, plutoHote = { sdr.plutoHote }, plutoPort = { sdr.plutoPort },
+        plutoOccupe = { if (sdr.plutoEnReception) "l'ADALM-PLUTO reçoit (onglet SDR) : arrêter cette réception d'abord" else null },
+        reception = { datv.etat.let { e -> if (!e.actif) null else EmissionDatvPc.Reception(e.verrouille, e.merDb, datv.reglage.cielKhz, e.service) } })
+    sdr.emissionPluto = { emission.etat.emet }
+    portee.launch { while (true) { runCatching { emission.tic() }; kotlinx.coroutines.delay(1000) } }
     val serveur = ServeurPc(station, port, reseau, carnet, son, journalWeb, ImportPc(station, carnet, journal), sdr, videoSked, telephone, appairage, datv,
-        PlancheWebPc(station, son, dossier), kiss, sauvegarde, MirePc(File(dossier, "exports")), diffusion, qo100, lien)
+        PlancheWebPc(station, son, dossier), kiss, sauvegarde, MirePc(File(dossier, "exports")), diffusion, qo100, lien, emission)
     serveur.demarre()
     println("SatMe-PC " + versionPc())
     println("  page      : http://localhost:${serveur.portReel}/" + if (reseau) "  (ouverte au réseau)" else "")
@@ -138,6 +145,8 @@ fun main(args: Array<String>) {
         BureauPc.ouvre(url)
     }
     Runtime.getRuntime().addShutdownHook(Thread {
+        // The transmitter first: its LO powered down before anything else.
+        runCatching { emission.arrete("SatMe-PC fermé") }
         runCatching { journal.ferme() }
         // The KISS radio put back as it was.
         runCatching { kiss.deconnecte() }
