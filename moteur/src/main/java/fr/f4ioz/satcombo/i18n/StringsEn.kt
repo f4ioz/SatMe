@@ -1620,6 +1620,8 @@ val EN: Map<String, String> = mapOf(
     "pj_n_fait" to "added",
     "pj_n_call" to "CALLSIGN",
     "pj_n_loc" to "Square",
+    "psk_reporter_titre" to "Send to PSK Reporter",
+    "psk_reporter_desc" to "The FT8 / FT4 stations heard, every 5 minutes: their callsign, square, the frequency and the satellite, with your callsign and square. Only when the frequency is certain: rig on CAT, or the SDR dongle on QO-100.",
     "amsat_auto_titre" to "Report each pass to AMSAT",
     "amsat_auto_desc" to "Each pass where you logged a contact: \"Heard\" on the public AMSAT Live OSCAR Status page, under your callsign and square, at the time of the first contact, once the pass is over. Only contacts logged after turning this on count.",
     "auto_desc" to "After the chosen delay (one minute by default), time to hold it back or fix it. Only contacts logged after turning this on are sent. Needs the station profile.",

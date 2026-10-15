@@ -1644,6 +1644,8 @@ val FR: Map<String, String> = mapOf(
     "pj_n_fait" to "ajouté",
     "pj_n_call" to "INDICATIF",
     "pj_n_loc" to "Carré",
+    "psk_reporter_titre" to "Envoyer à PSK Reporter",
+    "psk_reporter_desc" to "Les stations FT8 / FT4 entendues, toutes les 5 minutes : leur indicatif, leur carré, la fréquence et le satellite, avec votre indicatif et votre carré. Seulement quand la fréquence est sûre : poste relié en CAT, ou clé SDR sur QO-100.",
     "amsat_auto_titre" to "Signaler chaque passage à AMSAT",
     "amsat_auto_desc" to "Chaque passage où vous avez fait un contact : « Heard » sur la page publique AMSAT Live OSCAR Status, à votre indicatif et votre carré, à l'heure du premier contact, une fois le passage fini. Seuls les contacts saisis après l'activation comptent.",
     "auto_desc" to "Après le délai choisi (une minute d'origine), le temps de le mettre en pause ou de le corriger. Seuls les contacts saisis après l'activation partent. Il faut le profil de station.",

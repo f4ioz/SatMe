@@ -207,6 +207,9 @@ data class CarnetUi(
     /** Each pass with a contact reported "Heard" to amsat.org (PushAmsat), and what it last did. */
     val amsatAuto: Boolean = false,
     val amsatEtat: String = "",
+    /** FT8 / FT4 stations heard sent to PSK Reporter (off by default), and what it last did. */
+    val pskReporter: Boolean = false,
+    val pskEtat: String = "",
     /** SatMe acts as a radio in the online log (RelaisRadio). */
     val radio: Boolean = false,
     val radioNom: String = "SatMe",
@@ -1208,7 +1211,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 filtre = settings.carnetFiltre,
                 radio = settings.carnetRadio,
                 radioNom = settings.carnetRadioNom,
-                auto = settings.carnetAuto, autoDelaiS = settings.carnetAutoDelaiS, amsatAuto = settings.amsatAuto),
+                auto = settings.carnetAuto, autoDelaiS = settings.carnetAutoDelaiS, amsatAuto = settings.amsatAuto, pskReporter = settings.pskReporter),
             catUi = CatUi(
                 ic705Baud = settings.ic705Baud,
                 liseret = settings.liseréEmission,
@@ -1539,6 +1542,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 runCatching { relaieRadio() }
                 runCatching { envoieAuto() }
                 runCatching { ticAmsat() }
+                runCatching { ticPsk() }
                 kotlinx.coroutines.delay(1000)
             }
         }
@@ -2749,6 +2753,56 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun setAmsatAuto(on: Boolean) {
         settings.amsatAuto = on
         _ui.value = _ui.value.copy(carnet = _ui.value.carnet.copy(amsatAuto = on))
+    }
+
+    /** The FT8 / FT4 stations heard, to PSK Reporter: from a thread of its own, never this one. */
+    private val psk by lazy {
+        fr.f4ioz.satcombo.domain.PskReporter(fr.f4ioz.satcombo.domain.EnvoiUdp()).also { p ->
+            fr.f4ioz.satcombo.ft8.Ft8Hub.auDecode = { l, t -> if (settings.pskReporter) pskRecoit(p, l, t) }
+        }
+    }
+
+    fun setPskReporter(on: Boolean) {
+        settings.pskReporter = on
+        // Built on first use: that hooks it to the FT8 listening.
+        if (on) psk.etat else psk.vide()
+        _ui.value = _ui.value.copy(carnet = _ui.value.carnet.copy(pskReporter = on))
+    }
+
+    /**
+     * Where a decode was heard: the rig on CAT (its microphone input), or the
+     * dongle following QO-100. Anything else is not known for sure: not sent.
+     */
+    private fun pskRecoit(p: fr.f4ioz.satcombo.domain.PskReporter, l: List<fr.f4ioz.satcombo.ft8.Ft8Hub.Entendu>, t: Long) {
+        val u = _ui.value
+        val q = u.qo100
+        val sdr = fr.f4ioz.satcombo.ft8.Ft8Hub.state.value.source == "SDR"
+        val qo = if (sdr) q.aLaCle else q.auPoste
+        val antenne = fr.f4ioz.satcombo.domain.PskReporter.antenne(qo, u.selected?.name)
+        val dl = stationCat.etat.value.descenteHz
+        for (e in l) {
+            val (de, _, loc) = fr.f4ioz.satcombo.demo.ApiRadio.decoupe(e.texte)
+            // A hashed call (<...>) is not a callsign heard.
+            if (de == null || e.texte.contains("<$de>")) continue
+            val f = if (sdr) fr.f4ioz.satcombo.domain.PskReporter.frequenceCle(q.aLaCle, q.descenteHz, e.frequenceHz)
+                else fr.f4ioz.satcombo.domain.PskReporter.frequence(u.catConnected, dl, q.auPoste, q.descenteHz, u.selected != null, e.frequenceHz)
+            // The slot it was heard in: decoded just after it closed.
+            val tranche = if (e.mode == "FT4") 7_500L else 15_000L
+            p.ajoute(de, loc, e.mode, e.rapportDb, f, (t / tranche - 1) * tranche, antenne, u.callsign)
+        }
+    }
+
+    private fun ticPsk() {
+        if (!settings.pskReporter) return
+        val u = _ui.value
+        psk.tic(true, u.callsign, myLocatorFull(), "SatMe " + fr.f4ioz.satcombo.demo.ServeurDemo.versionApp)
+        val e = when {
+            u.callsign.isBlank() -> "Indicatif manquant : rien n'est envoyé"
+            psk.etat.isNotBlank() -> psk.etat + (if (psk.enAttente > 0) " · ${psk.enAttente} en attente" else "")
+            psk.enAttente > 0 -> "${psk.enAttente} station(s) en attente, envoi toutes les 5 min"
+            else -> ""
+        }
+        if (e != u.carnet.pskEtat) _ui.value = _ui.value.copy(carnet = _ui.value.carnet.copy(pskEtat = e))
     }
 
     private fun ticAmsat() {

@@ -79,6 +79,9 @@ object Ft8Hub {
         val mode: String
     )
 
+    /** Each slot's decodes and when they were made (PSK Reporter). */
+    @Volatile var auDecode: ((List<Entendu>, Long) -> Unit)? = null
+
     private val _state = MutableStateFlow(Etat())
     val state = _state.asStateFlow()
 
@@ -331,5 +334,6 @@ object Ft8Hub {
             // hold thousands of lines.
             entendus = (nouveaux + avant.entendus).take(300),
             tranches = avant.tranches + 1)
+        if (nouveaux.isNotEmpty()) auDecode?.let { runCatching { it(nouveaux, horloge()) } }
     }
 }

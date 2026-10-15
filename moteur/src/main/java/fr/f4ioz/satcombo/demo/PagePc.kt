@@ -1363,6 +1363,12 @@ object PagePc {
       <div class="petit" id="amsatEtat" style="margin-top:6px"></div>
     </div>
     <div class="carte">
+      <div class="t">PSK Reporter</div>
+      <label class="petit" style="display:block"><input type="checkbox" id="pskReporter" onchange="post('api/reglages?pskReporter=' + (this.checked ? 1 : 0)).then(chargeReglages)">
+        Envoyer à PSK Reporter les stations FT8 / FT4 entendues, toutes les 5 minutes : leur indicatif, leur carré, la fréquence et le satellite, avec mon indicatif et mon carré. Seulement quand la fréquence est sûre (poste relié en CAT)</label>
+      <div class="petit" id="pskEtat" style="margin-top:6px"></div>
+    </div>
+    <div class="carte">
       <div class="t">Carnet en ligne (Wavelog / Cloudlog)</div>
       <div class="ligne" style="margin-top:0"><input id="carnetUrl" placeholder="https://wavelog.exemple.fr/"></div>
       <div class="ligne"><input id="carnetCle" type="password" placeholder="Clé d'API (lecture et écriture)"><input id="carnetProfil" type="hidden"></div>
@@ -2592,6 +2598,8 @@ async function chargeReglages() {
     g('carnetAuto').checked = r.carnetAuto; g('carnetDelaiL').hidden = !r.carnetAuto;
     g('amsatAuto').checked = !!r.amsatAuto;
     txt('amsatEtat', r.amsatEtat || (r.amsatAuto ? 'Les contacts faits depuis que c’est coché seront signalés.' : 'Coupé : rien n’est envoyé sans toi (bouton « Entendu » de l’onglet Station).'));
+    g('pskReporter').checked = !!r.pskReporter;
+    txt('pskEtat', r.pskEtat || (r.pskReporter ? 'Activé : premier envoi 5 minutes après la première station entendue.' : 'Coupé : rien n’est envoyé.'));
     const d = g('carnetDelai');
     if (d.options.length !== r.delais.length) d.innerHTML = r.delais.map(s => '<option value="' + s + '">' + (s < 60 ? s + ' s' : s / 60 + ' min') + '</option>').join('');
     d.value = String(r.carnetDelai);

@@ -1869,6 +1869,15 @@ private fun SettingsGeneral(ui: UiState, vm: MainViewModel) {
                         Text(ui.carnet.amsatEtat, color = TextLo, fontSize = 11.sp,
                             modifier = Modifier.padding(top = 4.dp))
                     }
+                    // FT8 / FT4 stations heard, to PSK Reporter: only when chosen.
+                    Spacer(Modifier.height(10.dp))
+                    SettingSwitch(t("psk_reporter_titre"), t("psk_reporter_desc"), ui.carnet.pskReporter) {
+                        vm.setPskReporter(it)
+                    }
+                    if (ui.carnet.pskReporter && ui.carnet.pskEtat.isNotBlank()) {
+                        Text(ui.carnet.pskEtat, color = TextLo, fontSize = 11.sp,
+                            modifier = Modifier.padding(top = 4.dp))
+                    }
                 }
             }
         }

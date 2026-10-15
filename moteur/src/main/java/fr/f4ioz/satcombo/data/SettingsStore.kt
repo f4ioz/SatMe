@@ -610,6 +610,14 @@ class SettingsStore(private val prefs: Stockage) {
         get() = (prefs.getString("amsat_envoyes", "") ?: "").split(',').filter { it.isNotBlank() }
         set(v) { prefs.edit().putString("amsat_envoyes", v.takeLast(200).joinToString(",")).apply() }
 
+    /**
+     * The FT8 / FT4 stations heard sent to PSK Reporter every five minutes
+     * ([fr.f4ioz.satcombo.domain.PskReporter]): off unless chosen.
+     */
+    var pskReporter: Boolean
+        get() = prefs.getBoolean("psk_reporter", false)
+        set(v) { prefs.edit().putBoolean("psk_reporter", v).apply() }
+
     /** Each new contact sent on to the online log after a minute (EnvoiAuto). */
     var carnetAuto: Boolean
         get() = prefs.getBoolean("carnet_auto", false)

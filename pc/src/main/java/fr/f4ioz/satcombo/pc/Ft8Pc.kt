@@ -47,6 +47,8 @@ class Ft8Pc(private val horloge: () -> Long = System::currentTimeMillis) {
         private set
     @Volatile var cascade: Ft8Cascade? = null
         private set
+    /** Each slot's decodes, as they come (PSK Reporter). */
+    @Volatile var auDecode: ((List<Entendu>) -> Unit)? = null
     /** When the waterfall's newest row was made: the page draws the slots' edges from it. */
     @Volatile var derniereLigneMs = 0L
         private set
@@ -125,6 +127,7 @@ class Ft8Pc(private val horloge: () -> Long = System::currentTimeMillis) {
             entendus = (nouveaux + entendus).take(500)
             tranches++
         }
+        if (nouveaux.isNotEmpty()) auDecode?.let { runCatching { it(nouveaux) } }
     }
 
     /** Fed directly (the tests): a slot's audio, decoded at once. */

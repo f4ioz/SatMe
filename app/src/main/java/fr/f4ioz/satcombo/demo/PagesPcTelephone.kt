@@ -183,7 +183,8 @@ object PagesPcTelephone {
                         .put("carnetProfil", c.profil).put("minEl", u.minElevDeg).put("fiche", true)
                         .put("carnetAuto", c.auto).put("carnetDelai", c.autoDelaiS)
                         .put("delais", JSONArray(fr.f4ioz.satcombo.domain.EnvoiAuto.DELAIS_S))
-                        .put("amsatAuto", c.amsatAuto).put("amsatEtat", c.amsatEtat))
+                        .put("amsatAuto", c.amsatAuto).put("amsatEtat", c.amsatEtat)
+                        .put("pskReporter", c.pskReporter).put("pskEtat", c.pskEtat))
                 }
                 // CelesTrak is the phone's to reach directly: no server rule here.
                 "/api/sources" -> json(ApiStation.sources(vm.serveurGp(), vm.serveurGpSeul(), u.enabledSources,
@@ -591,6 +592,7 @@ object PagesPcTelephone {
                 p("carnetDelai").toIntOrNull()?.let { vm.setCarnetAutoDelai(it) }
                 if (p("carnetAuto").isNotEmpty()) vm.setCarnetAuto(p("carnetAuto") == "1")
                 if (p("amsatAuto").isNotEmpty()) vm.setAmsatAuto(p("amsatAuto") == "1")
+                if (p("pskReporter").isNotEmpty()) vm.setPskReporter(p("pskReporter") == "1")
                 OK
             }
             "/api/sources" -> {

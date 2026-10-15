@@ -354,7 +354,7 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 fr.f4ioz.satcombo.demo.ApiStation.records(fr.f4ioz.satcombo.domain.RecordsCarnet.calcule(carnet?.contacts().orEmpty(), station.settings.manualLocator))
                     .toString().toByteArray())
             "/api/carnet" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JsonPc.carnet(carnet).toString().toByteArray())
-            "/api/reglages" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JsonPc.reglages(station).toString().toByteArray())
+            "/api/reglages" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JsonPc.reglages(station, son).toString().toByteArray())
             "/api/sources" -> {
                 // The orbital elements' choice, as on the phone.
                 val c = station.choixSources()
@@ -755,6 +755,7 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 q["carnetDelai"]?.toIntOrNull()?.let { s.carnetAutoDelaiS = it }
                 q["carnetAuto"]?.let { carnet?.setAuto(it == "1") }
                 q["amsatAuto"]?.let { s.amsatAuto = it == "1" }
+                q["pskReporter"]?.let { v -> son?.psk?.let { it.actif = v == "1" } ?: run { s.pskReporter = v == "1" } }
             }
             "/api/sources" -> station.regleSources(q["ids"]?.split(',')?.map { it.trim() }?.filter { it.isNotEmpty() }?.toSet(),
                 q["serveur"], q["seul"]?.let { it == "1" })
@@ -1070,13 +1071,14 @@ object JsonPc {
         .put("programme", d.programme() ?: JSONObject.NULL).put("chemin", d.chemin).put("windows", OutilsPc.windows)
         .put("debits", JSONArray(Datv.DEBITS)).put("canaux", JSONArray(Datv.CANAUX_KHZ)).put("balise", Datv.BALISE_KHZ)
 
-    fun reglages(st: StationPc): JSONObject {
+    fun reglages(st: StationPc, son: SonStation? = null): JSONObject {
         val s = st.settings
         return JSONObject().put("c", s.callsign).put("l", s.manualLocator).put("qrzUser", s.qrzUser)
             .put("qrzMdp", s.qrzMdp.isNotEmpty()).put("carnetUrl", s.carnetUrl).put("carnetCle", s.carnetCle.isNotEmpty())
             .put("carnetProfil", s.carnetProfil).put("minEl", s.minElevDeg).put("fiche", st.ficheQrz)
             .put("carnetAuto", s.carnetAuto).put("carnetDelai", s.carnetAutoDelaiS)
             .put("amsatAuto", s.amsatAuto).put("amsatEtat", st.pushAmsat.etat)
+            .put("pskReporter", s.pskReporter).put("pskEtat", son?.psk?.etat().orEmpty())
             .put("delais", JSONArray(fr.f4ioz.satcombo.domain.EnvoiAuto.DELAIS_S))
     }
 
