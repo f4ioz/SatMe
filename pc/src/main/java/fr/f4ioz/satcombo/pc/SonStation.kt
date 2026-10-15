@@ -63,7 +63,7 @@ class SonStation(
     /** CW decoded on the card (off unless chosen), for the Carnet's window. */
     val cw = CwPc(station.stockage)
     /** FT8 / FT4 on the card, as the phone's FT8 screen. */
-    val ft8 = Ft8Pc(horloge)
+    val ft8 = Ft8Pc(station.stockage, File(dossierEnregistrements.parentFile, "ft8-tranches"), horloge)
     /** APRS heard on the card, kept as the phone keeps it. */
     val aprs = AprsPc(File(dossierEnregistrements.parentFile, "aprs"), { station.etat.value.suivi?.name ?: "" }, horloge) {
         Triple(station.settings.callsign, station.etat.value.observateur?.latDeg, station.etat.value.observateur?.lonDeg)

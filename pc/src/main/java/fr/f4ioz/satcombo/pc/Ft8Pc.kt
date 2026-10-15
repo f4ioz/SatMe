@@ -11,6 +11,10 @@ package fr.f4ioz.satcombo.pc
 import fr.f4ioz.satcombo.domain.Ft8Cascade
 import fr.f4ioz.satcombo.domain.Ft8Decodeur
 import fr.f4ioz.satcombo.domain.Ft8Signal
+import fr.f4ioz.satcombo.plateforme.Stockage
+import org.json.JSONArray
+import org.json.JSONObject
+import java.io.File
 import java.util.concurrent.Executors
 
 /**
@@ -20,7 +24,22 @@ import java.util.concurrent.Executors
  * waterfall and the spectrum. The card's rate brought down by an integer
  * factor to about 12 kHz, the decoder's.
  */
-class Ft8Pc(private val horloge: () -> Long = System::currentTimeMillis) {
+class Ft8Pc(
+    private val stockage: Stockage?,
+    /** Where [enregistreTranches] keeps the slots (`ft8-tranches/` in the data folder). */
+    private val dossierTranches: File?,
+    private val horloge: () -> Long = System::currentTimeMillis,
+) {
+
+    constructor(horloge: () -> Long = System::currentTimeMillis) : this(null, null, horloge)
+
+    /**
+     * Each decoded slot kept as WAV + JSON of its decodes, for the bench: off
+     * unless chosen, purged after [GARDE_TRANCHES_MS].
+     */
+    var enregistreTranches: Boolean
+        get() = stockage?.getBoolean("pc_ft8_tranches", false) ?: false
+        set(v) { stockage?.edit()?.putBoolean("pc_ft8_tranches", v)?.apply() }
 
     data class Entendu(
         /** Start of its slot, UTC ms. */
@@ -120,11 +139,40 @@ class Ft8Pc(private val horloge: () -> Long = System::currentTimeMillis) {
             Entendu(debut, it.message.brut, it.message.appelant, it.message.appele, it.message.locator,
                 Math.round(it.frequenceHz).toInt(), it.rapportDb, it.instantS, m)
         }
+        if (enregistreTranches) runCatching { garde(audio, cadence, m, debut, l) }
         synchronized(this) {
             // Newest first, capped: an evening of listening would otherwise hold thousands of lines.
             entendus = (nouveaux + entendus).take(500)
             tranches++
         }
+    }
+
+    /** The slot and what came out of it, side by side; older slots purged. */
+    private fun garde(audio: FloatArray, cadence: Int, m: String, debut: Long, l: List<Ft8Decodeur.Decode>) {
+        val dossier = dossierTranches ?: return
+        dossier.mkdirs()
+        val nom = java.text.SimpleDateFormat("yyyyMMdd_HHmmss", java.util.Locale.US)
+            .apply { timeZone = java.util.TimeZone.getTimeZone("UTC") }.format(java.util.Date(debut)) + "_" + m
+        ecritWav(File(dossier, "$nom.wav"), audio, cadence)
+        val json = JSONObject().put("debut", debut).put("mode", m).put("cadence", cadence)
+            .put("decodes", JSONArray(l.map {
+                JSONObject().put("texte", it.message.brut).put("frequenceHz", it.frequenceHz)
+                    .put("rapportDb", it.rapportDb).put("decalageS", it.instantS)
+            }))
+        File(dossier, "$nom.json").writeText(json.toString(1))
+        val limite = horloge() - GARDE_TRANCHES_MS
+        dossier.listFiles()?.filter { it.isFile && it.lastModified() < limite }?.forEach { it.delete() }
+    }
+
+    /** 16-bit mono PCM. */
+    private fun ecritWav(f: File, audio: FloatArray, cadence: Int) {
+        val b = java.nio.ByteBuffer.allocate(44 + audio.size * 2).order(java.nio.ByteOrder.LITTLE_ENDIAN)
+        b.put("RIFF".toByteArray()).putInt(36 + audio.size * 2).put("WAVE".toByteArray())
+        b.put("fmt ".toByteArray()).putInt(16).putShort(1).putShort(1).putInt(cadence).putInt(cadence * 2)
+            .putShort(2).putShort(16)
+        b.put("data".toByteArray()).putInt(audio.size * 2)
+        for (v in audio) b.putShort((v.coerceIn(-1f, 1f) * 32767).toInt().toShort())
+        f.writeBytes(b.array())
     }
 
     /** Fed directly (the tests): a slot's audio, decoded at once. */
@@ -137,5 +185,7 @@ class Ft8Pc(private val horloge: () -> Long = System::currentTimeMillis) {
         const val LIGNES = 360
         const val BASSE_HZ = 200
         const val HAUTE_HZ = 3000
+        /** Recorded slots are kept three days. */
+        const val GARDE_TRANCHES_MS = 3L * 24 * 3600 * 1000
     }
 }

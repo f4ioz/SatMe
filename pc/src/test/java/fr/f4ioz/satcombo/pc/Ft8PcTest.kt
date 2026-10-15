@@ -64,4 +64,27 @@ class Ft8PcTest {
         assertEquals(1, f.tranches)
         assertTrue(f.cascade!!.lignes.isNotEmpty())
     }
+
+    @Test
+    fun les_tranches_sont_gardees_sur_demande_et_purgees_apres_trois_jours() {
+        val dossier = java.nio.file.Files.createTempDirectory("ft8-tranches").toFile()
+        try {
+            val maintenant = 1_791_800_000_000L
+            val stockage = fr.f4ioz.satcombo.plateforme.StockageMemoire()
+            val f = Ft8Pc(stockage, dossier) { maintenant }
+            f.demarre("FT8")
+            // Off by default: nothing written.
+            f.decodeTranche(audio(), Ft8Signal.FT8.cadenceHz.toInt(), maintenant - 15_000)
+            assertTrue(dossier.listFiles().isNullOrEmpty())
+            val vieux = java.io.File(dossier, "20000101_000000_FT8.wav").apply { writeText("x"); setLastModified(maintenant - 4L * 24 * 3600 * 1000) }
+            f.enregistreTranches = true
+            f.decodeTranche(audio(), Ft8Signal.FT8.cadenceHz.toInt(), maintenant - 15_000)
+            val noms = dossier.listFiles()!!.map { it.name }.sorted()
+            assertEquals(2, noms.size)
+            assertTrue(noms.all { it.endsWith("_FT8.json") || it.endsWith("_FT8.wav") })
+            assertTrue(!vieux.exists())
+            val json = org.json.JSONObject(java.io.File(dossier, noms.first { it.endsWith(".json") }).readText())
+            assertEquals("CQ F4IOZ IN77", json.getJSONArray("decodes").getJSONObject(0).getString("texte"))
+        } finally { dossier.deleteRecursively() }
+    }
 }

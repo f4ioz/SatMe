@@ -428,7 +428,12 @@ object Ft8Signal {
         decalageS: Double = 0.0,
         dureeTotaleS: Double = mode.dureeS + 2.0,
         amplitude: Float = 0.5f,
-        lissageBT: Double = mode.lissageBT
+        lissageBT: Double = mode.lissageBT,
+        /**
+         * Linear frequency drift, Hz per second, zero at the middle of the
+         * transmission: a LEO pass's Doppler over one slot, for the bench.
+         */
+        penteHzS: Double = 0.0
     ): FloatArray {
         val cadence = mode.cadenceHz
         val total = (dureeTotaleS * cadence).toInt()
@@ -441,6 +446,10 @@ object Ft8Signal {
         for (i in 0 until nSignal) {
             val s = i / mode.parSymbole
             freq[i] = frequenceBasseHz + tons[s] * mode.ecartHz
+        }
+        if (penteHzS != 0.0) {
+            val milieu = nSignal / 2.0
+            for (i in 0 until nSignal) freq[i] += penteHzS * (i - milieu) / cadence
         }
         // Gaussian smoothing of the trajectory.
         if (lissageBT > 0.0) {
