@@ -8,6 +8,7 @@
  */
 package fr.f4ioz.satcombo.domain
 
+import kotlin.math.abs
 import kotlin.math.log10
 
 /**
@@ -114,46 +115,81 @@ object Ft8Decodeur {
         val spec = Ft8Signal.spectrogramme(ramene, mode, basseHz, hauteHz)
         val candidats = Ft8Signal.candidats(spec,
             maximum = profondeur?.candidats ?: maximumCandidats,
-            scoreMinimal = profondeur?.seuilSynchro ?: Profondeur.LEGERE.seuilSynchro)
+            scoreMinimal = profondeur?.seuilSynchro ?: Profondeur.LEGERE.seuilSynchro,
+            voisins = true)
         val tours = profondeur?.toursLdpc ?: Profondeur.LEGERE.toursLdpc
+        val spectre = Ft8Fin.spectre(ramene, mode)
 
         val sortie = ArrayList<Decode>()
         val dejaVus = HashSet<String>()
         for (c in candidats) {
-            // --- error correction first ---
-            //
-            // If LDPC does not converge, fall back to hard decisions: free, and
-            // it saves very strong signals the decoder may reject when the
-            // graph oscillates.
-            val douces = Ft8Signal.vraisemblances(spec, c)
-            val corrige = if (douces.size >= LdpcTables.N) Ldpc.decode(douces, tours).bits else null
-
-            val tons = Ft8Signal.tons(spec, c)
-            // The only place the two modes differ: FT4 packs two bits per
-            // symbol instead of three and scrambles the 77 message bits before
-            // the CRC. Past that, same CRC, format and unpacking.
-            val quatreTons = mode.tons == 4
-            if (corrige == null && !synchroFranche(tons, mode)) continue
-            val bits = corrige ?: (if (quatreTons) Ft4.symbolesVersBits(tons)
-                       else Ft8.symbolesVersBits(tons))
-            val utiles = bits.copyOf(Ft8.BITS_UTILES)
-            // CRC first: no point unpacking what is wrong.
-            if (!Ft8.controleJuste(utiles)) continue
-            val brut = if (quatreTons) Ft4.message(utiles)
-                       else utiles.copyOf(Ft8.BITS_MESSAGE)
-            val message = Ft8.deplie(brut) ?: continue
+            val f0 = c.frequenceHz(spec)
+            val t0 = c.instantS(spec)
+            // A neighbour of a signal already read: the same signal again.
+            if (sortie.any { abs(it.frequenceHz - f0) < mode.ecartHz && abs(it.instantS - t0) < mode.dureeSymbole }) continue
+            val d = essaie(spectre, mode, f0, t0, c.score, tours) ?: continue
             // Neighbouring candidates can yield the same message; keep only
             // the first, the list is already sorted by score.
-            if (!dejaVus.add(message.brut)) continue
-            sortie.add(Decode(
-                message = message,
-                frequenceHz = c.frequenceHz(spec),
-                instantS = c.instantS(spec),
-                rapportDb = rapportDb(spec, c, mode),
-                scoreSynchro = c.score
-            ))
+            if (!dejaVus.add(d.message.brut)) continue
+            sortie.add(d)
         }
         return sortie
+    }
+
+    /**
+     * One candidate, from its rough place to a message or nothing: its own
+     * channel, start, frequency and drift searched finely there
+     * ([Ft8Fin.synchronise]), its tones read, LDPC, CRC, unpacking.
+     */
+    private fun essaie(
+        spectre: Ft8Fin.Spectre,
+        mode: Ft8Signal.Mode,
+        f0: Double,
+        t0: Double,
+        score: Float,
+        tours: Int,
+    ): Decode? {
+        val e = mode.ecartHz
+        val canal = Ft8Fin.canal(spectre, f0, -2.5 * e, (mode.tons + 1.5) * e)
+        // A rough start is within half a symbol, a rough frequency within a
+        // quarter of a tone: search a little wider than that.
+        val pas = e / 16
+        val decalages = DoubleArray(13) { (it - 6) * pas }
+        val l = Ft8Fin.synchronise(canal, mode, Math.round(t0 * canal.cadence).toInt(),
+            Ft8Fin.PAR_SYMBOLE / 2, decalages, doubleArrayOf(0.0))
+
+        // --- error correction first ---
+        //
+        // If LDPC does not converge, fall back to hard decisions: free, and
+        // it saves very strong signals the decoder may reject when the
+        // graph oscillates.
+        val douces = Ft8Fin.vraisemblances(l, mode)
+        val corrige = Ldpc.decode(douces, tours).bits
+        val tons = Ft8Fin.tons(l)
+        // The only place the two modes differ: FT4 packs two bits per
+        // symbol instead of three and scrambles the 77 message bits before
+        // the CRC. Past that, same CRC, format and unpacking.
+        val quatreTons = mode.tons == 4
+        if (corrige == null && !synchroFranche(tons, mode)) return null
+        val bits = corrige ?: (if (quatreTons) Ft4.symbolesVersBits(tons)
+                   else Ft8.symbolesVersBits(tons))
+        val utiles = bits.copyOf(Ft8.BITS_UTILES)
+        // CRC first: no point unpacking what is wrong.
+        if (!Ft8.controleJuste(utiles)) return null
+        val brut = if (quatreTons) Ft4.message(utiles)
+                   else utiles.copyOf(Ft8.BITS_MESSAGE)
+        val message = Ft8.deplie(brut) ?: return null
+        // The tones actually sent, for the SNR: the codeword's when LDPC
+        // gave one, else what was read.
+        val envoyes = if (corrige == null) tons
+            else if (quatreTons) Ft4.bitsVersSymboles(corrige) else Ft8.bitsVersSymboles(corrige)
+        return Decode(
+            message = message,
+            frequenceHz = canal.origineHz + l.decalageHz,
+            instantS = l.debut / canal.cadence,
+            rapportDb = Ft8Fin.rapportDb(l, envoyes, mode),
+            scoreSynchro = score
+        )
     }
 
     /**

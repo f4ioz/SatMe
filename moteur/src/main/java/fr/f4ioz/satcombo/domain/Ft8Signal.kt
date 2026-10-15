@@ -346,7 +346,14 @@ object Ft8Signal {
     fun candidats(
         spec: Spectrogramme,
         maximum: Int = 32,
-        scoreMinimal: Float = 1.5f
+        scoreMinimal: Float = 1.5f,
+        /**
+         * Also keep, after the best of each frequency, the next best spots
+         * nearby (another start, a tone or two off): a second station
+         * overlapping a first, or the same burst caught better elsewhere.
+         * Up to [maximum] in all, the best of each frequency first.
+         */
+        voisins: Boolean = false
     ): List<Candidat> {
         val mode = spec.mode
         if (mode.synchro.isEmpty()) return emptyList()
@@ -405,6 +412,19 @@ object Ft8Signal {
                 gardes.add(c)
                 if (gardes.size >= maximum) break
             }
+        }
+        if (voisins && gardes.size < maximum) {
+            // Not right beside a spot already kept (that is the same peak),
+            // and at most three per signal width.
+            val autres = ArrayList<Candidat>()
+            for (c in trouves) {
+                if (gardes.size + autres.size >= maximum) break
+                val proches = (gardes + autres).filter { kotlin.math.abs(it.raie - c.raie) <= raieDernierTon }
+                if (proches.size >= 3) continue
+                if (proches.any { kotlin.math.abs(it.raie - c.raie) <= 1 && kotlin.math.abs(it.pas - c.pas) <= 1 }) continue
+                autres.add(c)
+            }
+            gardes.addAll(autres)
         }
         return gardes
     }

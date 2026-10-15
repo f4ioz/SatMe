@@ -49,12 +49,12 @@ class Ft8CorpusTest {
      * candidates reach 10); see `Ft8Decodeur.synchroFranche`.
      */
     private val PLANCHERS = mapOf(
-        "forts" to 10, "moyens" to 12, "faibles" to 7, "tres_faibles" to 0,
-        "bande_chargee" to 22, "chevauchement" to 4, "fort_masque_faible" to 3,
-        "doppler_connu_-1.0Hz/s" to 8, "doppler_connu_1.0Hz/s" to 7,
+        "forts" to 10, "moyens" to 12, "faibles" to 9, "tres_faibles" to 3,
+        "bande_chargee" to 22, "chevauchement" to 6, "fort_masque_faible" to 3,
+        "doppler_connu_-1.0Hz/s" to 8, "doppler_connu_1.0Hz/s" to 8,
         "doppler_connu_-3.0Hz/s" to 8, "doppler_connu_3.0Hz/s" to 8,
         "doppler_inconnu_1Hz/s" to 0, "pentes_propres_2Hz/s" to 1, "pente_connue_et_propre" to 3,
-        "indicatifs_composes" to 3, "ft4" to 4,
+        "indicatifs_composes" to 3, "ft4" to 8,
     )
 
     @Test
