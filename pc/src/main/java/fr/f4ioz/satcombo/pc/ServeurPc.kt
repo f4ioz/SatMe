@@ -52,7 +52,9 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
     /** QO-100's beacon followed, the stations heard. */
     private val qo100: Qo100Pc? = null,
     /** The satellite link (local WebSocket), set in Réglages. */
-    private val lien: LienSatellitePc? = null) {
+    private val lien: LienSatellitePc? = null,
+    /** « Phonie → texte »: the voice written out (off unless chosen). */
+    private val phonie: PhoniePc? = null) {
 
     private var socket: ServerSocket? = null
     val portReel: Int get() = socket?.localPort ?: port
@@ -243,6 +245,7 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
             else envoie(sortie, rep.statut, rep.type, rep.corps, rep.entetes)
             return
         }
+        if (phonie != null && (chemin.startsWith("/api/phonie") || chemin.startsWith("/phonie/"))) { phonie(r, chemin, q, sortie, phonie); return }
         if (r.methode == "POST") {
             val res = runCatching { action(chemin, q) }.getOrElse { JSONObject().put("ok", false).put("erreur", it.message ?: "erreur") }
             envoie(sortie, "200 OK", "application/json; charset=utf-8", res.toString().toByteArray())
@@ -900,6 +903,34 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
     }
 
     /** A file as it is on disk, by parts when the browser asks (a sound it seeks in). */
+    /** « Phonie → texte »: its state and overs, its settings, the day's transcript to download. */
+    private fun phonie(r: RequeteHttp.Requete, chemin: String, q: Map<String, String>, sortie: OutputStream, p: PhoniePc) {
+        val json = "application/json; charset=utf-8"
+        if (r.methode == "POST") {
+            val res = runCatching { p.action(chemin, q) }.getOrElse { JSONObject().put("ok", false).put("erreur", it.message ?: "erreur") }
+            envoie(sortie, "200 OK", json, res.toString().toByteArray()); return
+        }
+        when (chemin) {
+            "/api/phonie" -> envoie(sortie, "200 OK", json, p.json(q["depuis"]?.toLongOrNull() ?: 0L).toString().toByteArray())
+            "/api/phonie/moteur" -> envoie(sortie, "200 OK", json, p.jsonMoteur().toString().toByteArray())
+            "/api/phonie/jours" -> envoie(sortie, "200 OK", json, JSONObject().put("jours", JSONArray(p.jours())).toString().toByteArray())
+            "/phonie/journal" -> {
+                val rien = "rien de transcrit ce jour".toByteArray()
+                val jour = q["jour"].orEmpty().takeIf { Regex("\\d{4}-\\d{2}-\\d{2}").matches(it) } ?: p.jours().firstOrNull()
+                    ?: return envoie(sortie, "404 Not Found", "text/plain; charset=utf-8", rien)
+                if (q["format"] == "jsonl") {
+                    val f = java.io.File(p.fichierJour(0L).parentFile, "$jour.jsonl")
+                    if (!f.isFile) return envoie(sortie, "404 Not Found", "text/plain; charset=utf-8", rien)
+                    envoieFichier(sortie, r, f, "application/x-ndjson", "Content-Disposition: attachment; filename=\"SatMe_phonie_$jour.jsonl\"\r\n")
+                } else {
+                    val t = p.texteJour(jour) ?: return envoie(sortie, "404 Not Found", "text/plain; charset=utf-8", rien)
+                    envoie(sortie, "200 OK", "text/plain; charset=utf-8", t.toByteArray(Charsets.UTF_8), "Content-Disposition: attachment; filename=\"SatMe_phonie_$jour.txt\"\r\n")
+                }
+            }
+            else -> envoie(sortie, "404 Not Found", "text/plain", ByteArray(0))
+        }
+    }
+
     private fun envoieFichier(s: OutputStream, r: RequeteHttp.Requete, f: java.io.File, typeDonne: String? = null, entetes: String = "") {
         val type = typeDonne ?: when {
             f.name.endsWith(".png") -> "image/png"

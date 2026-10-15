@@ -279,6 +279,8 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
     fun demandePanorama() { panoramaDemandeMs = horloge() }
     /** The dongle's sound while on QO-100 ([Dsp.AUDIO_RATE]): LEILA listened for. */
     @Volatile var ecouteQo100: ((ShortArray, Int) -> Unit)? = null
+    /** The dongle's sound for « Phonie → texte » ([Dsp.AUDIO_RATE]), with the squelch's gate when one is set. */
+    @Volatile var ecouteVoix: ((ShortArray, Int, Boolean?) -> Unit)? = null
 
     /**
      * The panorama's axis, in QO-100's nominal sky: its centre and signed
@@ -545,6 +547,7 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
                     }
                     if (son.etat.value.appareil == NOM_SOURCE && son.etat.value.actif) son.distribue(pcm, produit, Dsp.AUDIO_RATE)
                     if (pourQo100()) ecouteQo100?.invoke(pcm, produit)
+                    ecouteVoix?.invoke(pcm, produit, if (settings.sdrSquelchDb > -120) chaine.squelch.open else null)
                     // The browsers listening to the dongle (the page open on another PC).
                     diffusion?.ajoute("sdr", pcm, produit, Dsp.AUDIO_RATE)
                 }

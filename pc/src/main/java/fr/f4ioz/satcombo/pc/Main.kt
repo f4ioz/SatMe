@@ -100,6 +100,13 @@ fun main(args: Array<String>) {
     // QO-100 with the dongle: the beacon followed, the calibration held on it when chosen.
     val qo100 = Qo100Pc(station, sdr)
     son.son.auditeurs += { pcm, n, rate -> qo100.ecouteCarte(pcm, n, rate) }
+    // « Phonie → texte »: off unless chosen; the engine (a Python helper) started only then.
+    val phonie = PhoniePc(station.stockage, InstallPhoniePc(dossier), File(dossier, "phonie"))
+    phonie.connus = { carnet.contacts().mapNotNull { fr.f4ioz.satcombo.cw.AnalyseCw.base(it.callsign) }.toSet() }
+    phonie.contexte = { src -> contextePhonie(station, sdr, src) }
+    son.son.auditeurs += { pcm, n, rate -> phonie.ecouteCarte(pcm, n, rate) }
+    sdr.ecouteVoix = { pcm, n, sq -> phonie.ecouteSdr(pcm, n, fr.f4ioz.satcombo.sdr.Dsp.AUDIO_RATE, sq) }
+    phonie.demarre()
     portee.launch {
         while (true) {
             runCatching { son.tic() }
@@ -126,7 +133,7 @@ fun main(args: Array<String>) {
     // DATV with a MiniTiouner, through LongMynd: nothing started until asked.
     val datv = DatvPc(station.stockage, File(dossier, "enregistrements"))
     val serveur = ServeurPc(station, port, reseau, carnet, son, journalWeb, ImportPc(station, carnet, journal), sdr, videoSked, telephone, appairage, datv,
-        PlancheWebPc(station, son, dossier), kiss, sauvegarde, MirePc(File(dossier, "exports")), diffusion, qo100, lien)
+        PlancheWebPc(station, son, dossier), kiss, sauvegarde, MirePc(File(dossier, "exports")), diffusion, qo100, lien, phonie)
     serveur.demarre()
     println("SatMe-PC " + versionPc())
     println("  page      : http://localhost:${serveur.portReel}/" + if (reseau) "  (ouverte au réseau)" else "")
@@ -147,10 +154,28 @@ fun main(args: Array<String>) {
         runCatching { station.deconnecteCat() }
         runCatching { station.stationRotor.disconnectRotor() }
         runCatching { lien.arrete() }
+        runCatching { phonie.arrete() }
         serveur.arrete()
     })
     // The server and the loops run on their own threads; this one waits.
     Thread.currentThread().join()
+}
+
+/**
+ * What « Phonie → texte » writes beside an over: the sky frequency and the
+ * satellite. QO-100 when it is set on the dongle or the rig; the dongle's
+ * frequency; the rig's by CAT.
+ */
+private fun contextePhonie(station: StationPc, sdr: SdrPc, source: String): Pair<Long?, String> {
+    val q = station.qo100.etat.value
+    val e = station.etat.value
+    return if (source == "sdr") {
+        if (q.aLaCle) q.descenteHz to "QO-100"
+        else sdr.etat.value.cielHz.takeIf { it > 0 } to sdr.etat.value.satellite
+    } else {
+        if (q.auPoste) q.descenteHz to "QO-100"
+        else (if (e.catConnecte) station.stationCat.etat.value.descenteHz else null) to (e.suivi?.name ?: "")
+    }
 }
 
 /** ~/.satme on Linux and macOS, %APPDATA%\SatMe on Windows. */
