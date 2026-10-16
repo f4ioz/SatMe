@@ -139,7 +139,8 @@ fun main(args: Array<String>) {
     // DATV with a MiniTiouner, through LongMynd: nothing started until asked.
     val datv = DatvPc(station.stockage, File(dossier, "enregistrements"))
     // Its sound subtitled, the callsigns written in its picture: each off unless chosen in the DATV tab.
-    val textesDatv = TextesDatvPc(station.stockage, TextesDatvPc.Source.de(datv), phonie)
+    val textesDatv = TextesDatvPc(station.stockage, TextesDatvPc.Source.de(datv), phonie,
+        carnet = { carnet.contacts().map { it.callsign } }, moi = { station.settings.callsign })
     datv.ecouteSon = { pcm, n, rate -> phonie.ecouteDatv(pcm, n, rate) }
     phonie.contexte = { src ->
         if (src != "datv") contextePhonie(station, sdr, src)

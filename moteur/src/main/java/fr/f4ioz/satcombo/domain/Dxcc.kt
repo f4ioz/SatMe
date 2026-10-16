@@ -210,6 +210,9 @@ object Dxcc {
     private val longueurs: List<Int> =
         table.keys.map { it.length }.distinct().sortedDescending()
 
+    /** True when [prefixe] is one of the table's own (F, EA, 9A), not merely starting with one. */
+    fun prefixe(prefixe: String): Boolean = table.containsKey(prefixe.uppercase())
+
     /**
      * DXCC entity of a callsign, or null when the prefix is unknown.
      *
