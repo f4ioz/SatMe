@@ -74,9 +74,9 @@ class QualiteDatvTest {
         assertEquals(2, deforme.niveau)
         assertTrue(deforme.texte, deforme.texte.contains("7,5 dB de marge"))
         assertTrue(QualiteDatv.verdict(m(cc = 0.0, tei = 1.0, fec = true)).texte.startsWith("Trames entières"))
-        // The owner's indoor test: 7 dB of margin, 11.9 % BER, whole frames lost: the transmitter.
+        // The owner's indoor test: 7 dB of margin, the receiver's « BER » at 11.9 % (not trusted), whole frames lost: a distorted signal.
         val tx = QualiteDatv.verdict(m(marge = 7.0, cc = 20.0, fec = null, entieres = true).copy(berPct = 11.9))
-        assertTrue(tx.texte, tx.texte.startsWith("Symboles nets (7,0 dB de marge) mais bits faux (BER 11,9 %)"))
+        assertTrue(tx.texte, tx.texte.startsWith("Trames entières perdues au démodulateur malgré 7,0 dB de marge"))
         // A thin margin stays the signal's fault, whatever the BER.
         assertTrue(QualiteDatv.verdict(m(marge = 0.5, cc = 20.0).copy(berPct = 11.9)).texte.startsWith("Signal juste"))
         // Decoding errors alone.

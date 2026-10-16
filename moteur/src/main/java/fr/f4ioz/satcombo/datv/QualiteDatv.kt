@@ -141,11 +141,7 @@ object QualiteDatv {
             return when {
                 marge != null && marge < MARGE_JUSTE_DB -> Verdict(2, "Signal juste : des trames sont perdues après correction (BCH)",
                     "rapprocher les antennes / augmenter le gain / choisir un MODCOD plus robuste")
-                // Clean symbols but wrong bits: the points land on the constellation, the wrong ones.
-                marge != null && marge >= 3.0 && (m.berPct ?: 0.0) >= 1.0 -> Verdict(2,
-                    "Symboles nets (" + m1 + " dB de marge) mais bits faux (BER " + "%.1f".format(java.util.Locale.FRANCE, m.berPct) +
-                        " %) : trames perdues par un défaut de l'émetteur plutôt que du signal",
-                    "vérifier le modulateur (embrouillage, pilotes, codage LDPC/BCH) : essayer sans pilotes, ou un autre émetteur")
+                // The receiver's « BER » is left out: it stayed near 12 % with a perfect picture in QPSK 1/2 (16/10), not a measure to judge by.
                 m.fecEnEchec == true || m.tramesEntieres -> Verdict(2,
                     "Trames entières perdues au démodulateur" + (if (m1 != null) " malgré " + m1 + " dB de marge" else "") + " : signal déformé plutôt que faible",
                     "baisser le gain d'émission ou de réception (saturation), vérifier l'émetteur (horloge, niveau), essayer un MODCOD plus robuste")
