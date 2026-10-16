@@ -289,6 +289,8 @@ class EmissionDatvPcTest {
         val e = hackrf(f, ts)
         e.modcodTexte = "QPSK 2/3"; e.srKs = 333; e.rolloff = Rolloff.A25; e.pilotes = true; e.courtes = false
         e.vgaHackrf = 8; e.dureeInterieurS = 300
+        assertTrue(e.hackrfDecalage)
+        e.hackrfDecalage = false
         assertEquals(1_255_000L, e.frequenceInterieurKhz)
         e.detecteHackrf()
         assertNull(e.demarre(confirme = true, chargeFictive = false, interieur = true))
@@ -315,6 +317,39 @@ class EmissionDatvPcTest {
         for (k in b.paquets.indices) assertArrayEquals("paquet $k", ts.paquets[k], b.paquets[k])
         assertEquals(0, b.crcPaquetsFaux)
         assertEquals(0, b.ldpcEchecs)
+    }
+
+    @Test
+    fun hackrf_oscillateur_decale_le_signal_reste_sur_sa_frequence() {
+        val f = FauxHackrf(limite = 8_000_000L)
+        val ts = TsSynthetique(450)
+        val e = hackrf(f, ts)
+        e.modcodTexte = "QPSK 2/3"; e.srKs = 333; e.rolloff = Rolloff.A25; e.pilotes = true; e.courtes = false
+        val j0 = e.json().getJSONObject("decalage")
+        assertEquals(1_254_500.0, j0.getDouble("loKhz"), 0.0)
+        assertEquals("", j0.getString("refus"))
+        assertNull(e.demarre(confirme = true, chargeFictive = false, interieur = true))
+        // The band rules on the signal itself.
+        assertEquals(1_255_000L, e.etat.frequenceKhz)
+        assertTrue(attends(10_000) { e.vie(); f.compte >= 8_000_000L })
+        e.arrete()
+        assertTrue(attends(2000) { f.finEntree })
+        // The LO 500 kHz below, the same rate and filter.
+        assertEquals(listOf("-t", "-", "-f", "1254500000", "-s", "2331000", "-b", "1750000", "-x", "0", "-a", "0", "-p", "0"), f.args)
+        // Mixed back down by the receiver's side: the same packets.
+        val b8 = f.iq
+        val iq = ShortArray(b8.size) { (b8[it] * 256).toShort() }
+        fr.f4ioz.satcombo.sdr.Melangeur(-500_000.0, 2_331_000.0).applique(iq)
+        val rx = RecepteurDvbs2(Rolloff.A25, 7)
+        val b = rx.decode(rx.symboles(iq))
+        assertTrue("${b.paquets.size} paquets", b.paquets.size >= 400)
+        for (k in b.paquets.indices) assertArrayEquals("paquet $k", ts.paquets[k], b.paquets[k])
+        assertEquals(0, b.ldpcEchecs)
+        // At the top of 13 cm: the LO and the image go below the signal, inside the band.
+        e.srKs = 2000; e.rolloff = Rolloff.A35; e.frequenceInterieurKhz = 2_448_600L
+        val d = e.json().getJSONObject("decalage")
+        assertEquals(2_446_980.0, d.getDouble("loKhz"), 0.0)
+        assertEquals(8_000_000L, e.json().getLong("echantillons"))
     }
 
     @Test

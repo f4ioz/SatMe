@@ -723,6 +723,7 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 q["emetteur"]?.let { if (!e.etat.emet) e.emetteur = fr.f4ioz.satcombo.datv.Emetteur.de(it) }
                 q["vga"]?.replace(',', '.')?.toDoubleOrNull()?.let { e.vgaHackrf = fr.f4ioz.satcombo.datv.ReglesEmission.vgaHackrf(it) }
                 q["hackrfOutil"]?.let { e.hackrfOutil = it }
+                q["hackrfDecalage"]?.let { if (!e.etat.emet) e.hackrfDecalage = it == "1" }
                 q["intMhz"]?.replace(',', '.')?.toDoubleOrNull()?.let { e.frequenceInterieurKhz = Math.round(it * 1000.0) }
                 entier("intDuree")?.let { e.dureeInterieurS = it * 60 }
                 // The station card sent in the stream.

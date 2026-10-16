@@ -1107,6 +1107,8 @@ object PagePc {
       <div id="e-hackrf-l" hidden>
         <div class="ligne"><span class="petit" style="min-width:86px">Outils HackRF</span><input id="e-hackrf-outil" placeholder="vide : hackrf_transfer du PATH" onchange="eRegle()"></div>
         <div class="petit" id="e-hackrf-prog"></div>
+        <label class="petit" style="display:block;margin-top:4px" title="La fuite de l'oscillateur local du HackRF (une porteuse) tombait au centre du signal ; décalée, elle reste hors de la bande occupée"><input type="checkbox" id="e-hackrf-dec" onchange="eRegle()"> Oscillateur décalé : sa fuite hors de la bande occupée (le signal reste sur sa fréquence)</label>
+        <div class="petit" id="e-hackrf-dec-info"></div>
         <div class="avert" id="e-hackrf-note"></div>
       </div>
       <div class="ligne"><span class="petit" style="min-width:86px">MODCOD</span><select id="e-modcod" onchange="eRegle()" style="max-width:120px"></select>
@@ -3468,7 +3470,7 @@ async function ticEmission() {
     const cams = j.cameras.length ? j.cameras : [''];
     g('e-camera').innerHTML = cams.map(c => '<option value="' + esc(c) + '">' + (c ? esc(c) : 'aucune caméra trouvée') + '</option>').join('');
     g('e-camera').value = j.camera || cams[0];
-    g('e-emetteur').value = j.emetteur; g('e-vga').value = j.vga; g('e-hackrf-outil').value = j.hackrfOutil;
+    g('e-emetteur').value = j.emetteur; g('e-vga').value = j.vga; g('e-hackrf-outil').value = j.hackrfOutil; g('e-hackrf-dec').checked = !!j.hackrfDecalage;
     g('e-int-mhz').value = mhz3(j.intKhz); g('e-int-duree').value = Math.round(j.intDuree / 60);
     ePremier = false;
   }
@@ -3490,6 +3492,10 @@ async function ticEmission() {
   txt('e-hackrf-info', !hk ? '' : !j.hackrf.lu ? 'non détecté (bouton Détecter)' : (j.hackrf.cartes.length ? j.hackrf.cartes.map(c => c.libelle).join(', ') : j.hackrf.message));
   txt('e-hackrf-prog', j.hackrfProgramme ? 'hackrf_transfer : ' + j.hackrfProgramme : j.hackrfConseil);
   txt('e-hackrf-note', 'QO-100 : ' + j.hackrfPasQo100 + '.');
+  const dc = j.decalage;
+  g('e-hackrf-dec-info').style.color = dc && dc.refus ? 'var(--rose)' : '';
+  txt('e-hackrf-dec-info', !hk || !j.hackrfDecalage ? '' : !dc ? '' : dc.refus ? dc.refus :
+    'Essai en intérieur : oscillateur du HackRF sur ' + mhz3(dc.loKhz) + ' MHz, signal ' + (dc.decalageKhz > 0 ? '+' : '') + Math.round(dc.decalageKhz) + ' kHz plus loin');
   txt('e-charge-gain', hk ? 'gain VGA ≤ ' + j.vgaMax + ' dB, amplificateur RF coupé' : 'gain bridé à −40 dB');
   txt('e-int-p', hk ? 'HackRF : amplificateur RF coupé, gain VGA ≤ ' + j.vgaMax + ' dB' : 'ADALM-PLUTO : gain ≤ ' + j.intGainPluto + ' dB');
   txt('e-calc', 'TS ' + (j.debitTs / 1000).toFixed(1).replace('.', ',') + ' kbit/s · ' + Math.round(j.occupeKhz) + ' kHz occupés · ' + (hk ? 'HackRF ' : 'Pluto ') +
@@ -3500,7 +3506,7 @@ async function ticEmission() {
   p.style.background = j.emet ? '#C62828' : ''; p.style.color = j.emet ? '#fff' : 'var(--gris)';
   g('e-go').disabled = j.emet; g('e-stop').hidden = !j.emet;
   ['e-modcod', 'e-sr', 'e-ro', 'e-courtes', 'e-pilotes', 'e-canal', 'e-mhz', 'e-source', 'e-image', 'e-video', 'e-camera', 'e-hevc', 'e-son', 'e-duree', 'e-charge',
-    'e-emetteur', 'e-interieur', 'e-int-mhz', 'e-int-duree', 'e-vga', 'e-hackrf-outil', 'e-hackrf-det'].forEach(i => g(i).disabled = j.emet);
+    'e-emetteur', 'e-interieur', 'e-int-mhz', 'e-int-duree', 'e-vga', 'e-hackrf-outil', 'e-hackrf-det', 'e-hackrf-dec'].forEach(i => g(i).disabled = j.emet);
   // A transmission running (the page reloaded): its mode shown.
   if (j.emet) { g('e-charge').checked = j.charge; g('e-interieur').checked = j.interieur; }
   const dir = g('e-direct');
@@ -3555,7 +3561,7 @@ function eParams() {
   return 'modcod=' + enc(v('e-modcod')) + '&sr=' + v('e-sr') + '&ro=' + v('e-ro') + '&courtes=' + (g('e-courtes').checked ? 1 : 0) + '&pilotes=' + (g('e-pilotes').checked ? 1 : 0) +
     '&mhz=' + enc(v('e-mhz').replace(',', '.')) + '&gain=' + enc(v('e-gain')) + '&duree=' + enc(v('e-duree')) + '&source=' + v('e-source') +
     '&image=' + enc(v('e-image')) + '&video=' + enc(v('e-video')) + '&camera=' + enc(g('e-camera').value) + '&hevc=' + v('e-hevc') + '&son=' + (g('e-son').checked ? 1 : 0) +
-    '&emetteur=' + v('e-emetteur') + '&vga=' + enc(v('e-vga')) + '&hackrfOutil=' + enc(v('e-hackrf-outil')) +
+    '&emetteur=' + v('e-emetteur') + '&vga=' + enc(v('e-vga')) + '&hackrfOutil=' + enc(v('e-hackrf-outil')) + '&hackrfDecalage=' + (g('e-hackrf-dec').checked ? 1 : 0) +
     '&intMhz=' + enc(v('e-int-mhz').replace(',', '.')) + '&intDuree=' + enc(v('e-int-duree'));
 }
 async function eRegle() {

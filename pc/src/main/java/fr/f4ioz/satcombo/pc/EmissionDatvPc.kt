@@ -13,6 +13,7 @@ import fr.f4ioz.satcombo.datv.CarteStation
 import fr.f4ioz.satcombo.datv.InserteurCarte
 import fr.f4ioz.satcombo.datv.LigneChat
 import fr.f4ioz.satcombo.datv.Datv
+import fr.f4ioz.satcombo.datv.DecalageHackrf
 import fr.f4ioz.satcombo.datv.DemandeEmission
 import fr.f4ioz.satcombo.datv.Emetteur
 import fr.f4ioz.satcombo.datv.PlanInterieur
@@ -25,6 +26,7 @@ import fr.f4ioz.satcombo.datv.s2.SourceTs
 import fr.f4ioz.satcombo.plateforme.Stockage
 import fr.f4ioz.satcombo.sdr.EmetteurDatv
 import fr.f4ioz.satcombo.sdr.HackrfEmission
+import fr.f4ioz.satcombo.sdr.Melangeur
 import fr.f4ioz.satcombo.sdr.PlutoEmission
 import org.json.JSONArray
 import org.json.JSONObject
@@ -161,6 +163,10 @@ class EmissionDatvPc(
     var hackrfOutil: String
         get() = stockage.getString("datv_tx_hackrf_outil", "") ?: ""
         set(v) { stockage.edit().putString("datv_tx_hackrf_outil", v.trim()).apply() }
+    /** The HackRF's LO tuned beside the signal ([DecalageHackrf]): its leakage out of the occupied band. */
+    var hackrfDecalage: Boolean
+        get() = stockage.getBoolean("datv_tx_hackrf_decalage", true)
+        set(v) { stockage.edit().putBoolean("datv_tx_hackrf_decalage", v).apply() }
     /** The indoor test's frequency (kHz). */
     var frequenceInterieurKhz: Long
         get() = stockage.getLong("datv_tx_int_khz", PlanInterieur.DEFAUT_KHZ)
@@ -336,7 +342,10 @@ class EmissionDatvPc(
         val d = DemandeEmission(khz, srKs, m, rolloff, gain, duree, chargeFictive, indicatif(), interieur, qui)
         ReglesEmission.refus(d, gainMaxDb)?.let { return it }
         val programme = if (hackrf) outilHackrf("hackrf_transfer") ?: return conseilHackrf() else ""
-        val sps = ReglesEmission.sps(srKs)
+        // The HackRF's LO beside the signal: the band rules above stay on the signal itself.
+        val plan = if (hackrf && hackrfDecalage) DecalageHackrf.plan(khz, srKs, rolloff.alpha, interieur)
+            ?: return DecalageHackrf.refus(khz, srKs, rolloff.alpha, interieur) else null
+        val sps = plan?.sps ?: ReglesEmission.sps(srKs)
         val debit = srKs * 1000L * sps
         val debitTs = m.debitTs(srKs * 1000.0).toLong()
         val img = when (source) {
@@ -361,10 +370,12 @@ class EmissionDatvPc(
         if (hackrf) {
             val hx = HackrfEmission(programme, ReglesEmission.HACKRF_VGA_MAX)
             val r = HackrfEmission.Reglage(
-                frequenceHz = khz * 1000L, debit = debit, vgaDb = ReglesEmission.vgaHackrf(gain), dureeMs = duree * 1000L,
-                bandeHz = Math.round(PlanQo100.occupeKhz(srKs, rolloff.alpha) * 1000), plafondVgaDb = ReglesEmission.HACKRF_VGA_MAX,
+                frequenceHz = plan?.loHz ?: (khz * 1000L), debit = debit, vgaDb = ReglesEmission.vgaHackrf(gain), dureeMs = duree * 1000L,
+                bandeHz = plan?.bandeHz ?: Math.round(PlanQo100.occupeKhz(srKs, rolloff.alpha) * 1000), plafondVgaDb = ReglesEmission.HACKRF_VGA_MAX,
                 paires = paires(debit), serie = infoHackrf.cartes.singleOrNull()?.serie.orEmpty(), garde = { garde(gen, p) })
-            refus = hx.demarre(r) { b -> mod.remplis(b, b.size / 2) }
+            // The baseband moved up to the wanted frequency, before the 8-bit conversion.
+            val mel = plan?.let { Melangeur(it.decalageHz.toDouble(), debit.toDouble()) }
+            refus = hx.demarre(r) { b -> mod.remplis(b, b.size / 2); mel?.applique(b) }
             e = hx
         } else {
             val px = PlutoEmission(plutoHote(), plutoPort(), gainMaxDb = minOf(gainMaxDb, 0.0))
@@ -486,6 +497,14 @@ class EmissionDatvPc(
             .put("intRefus", PlanInterieur.refus(ik, srKs, rolloff.alpha) ?: "")
             .put("intAvert", PlanInterieur.avertissement(ik, srKs, rolloff.alpha) ?: "")
             .put("filtreHackrf", HackrfEmission.filtre(Math.round(PlanQo100.occupeKhz(srKs, rolloff.alpha) * 1000)))
+            .put("hackrfDecalage", hackrfDecalage)
+        // The HackRF's LO beside the signal (indoor test): where it goes, or why not.
+        if (emetteur == Emetteur.HACKRF && hackrfDecalage) {
+            val pl = DecalageHackrf.plan(ik, srKs, rolloff.alpha, true)
+            o.put("decalage", JSONObject().put("refus", DecalageHackrf.refus(ik, srKs, rolloff.alpha, true) ?: "")
+                .put("loKhz", pl?.let { it.loHz / 1000.0 } ?: JSONObject.NULL).put("decalageKhz", pl?.let { it.decalageHz / 1000.0 } ?: JSONObject.NULL))
+            if (pl != null) o.put("sps", pl.sps).put("echantillons", pl.debit).put("filtreHackrf", HackrfEmission.filtre(pl.bandeHz))
+        }
         if (pe != null) {
             o.put("restant", maxOf(0L, (pe.finMs - t) / 1000)).put("tampons", pe.tampons).put("manques", pe.manques).put("gainApplique", pe.gainDb)
         }
