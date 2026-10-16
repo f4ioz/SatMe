@@ -9,6 +9,8 @@
 package fr.f4ioz.satcombo.demo
 
 import fr.f4ioz.satcombo.sstv.SstvMeta
+import fr.f4ioz.satcombo.sstv.SstvMode
+import fr.f4ioz.satcombo.sstv.SstvSon
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -28,7 +30,59 @@ object ApiSon {
         val enregistrements: List<File>, val images: List<SstvMeta.SstvShot>,
         /** A recording, even by hand, stopped after its pass; null where not offered. */
         val coupeLos: Boolean? = null,
+        /** The SSTV decoder in detail (its settings, what it hears); null where not given. */
+        val detail: Sstv? = null,
+        /** Where the pictures are: each one says whether its sound and GIF are kept. */
+        val dossierImages: File? = null,
     )
+
+    /** The SSTV decoder: settings, what it hears, the work under way. */
+    class Sstv(
+        /** "auto", "carte", "sdr"; "" where the source is not chosen here. */
+        val source: String = "",
+        /** The source feeding it now, in words ("" when none). */
+        val sourceActive: String = "",
+        /** Time since its last sound (ms), -1 when never. */
+        val depuisMs: Long = -1L,
+        val niveau: Float = 0f,
+        /** Tuning error measured by the decoder (Hz), when known. */
+        val ecartHz: Int? = null,
+        /** The sync tone seen away from 1200 Hz (Hz), when it stands out. */
+        val ecartSyncHz: Int? = null,
+        /** dB from [spectreBasHz] by [spectrePasHz]; null when not computed. */
+        val spectre: FloatArray? = null,
+        val spectreBasHz: Int = 0,
+        val spectrePasHz: Int = 0,
+        val force: String = "",
+        val continu: Boolean = true,
+        val nettoyage: Boolean = true,
+        /** A picture under way (header heard or started by hand). */
+        val decodage: Boolean = false,
+        val progres: Float = 0f,
+        val gardees: Int = 0,
+        val erreur: String = "",
+        /** What to do when nothing useful is heard. */
+        val conseil: String = "",
+        val redecode: String = "",
+        val redecodeProgres: Float = -1f,
+        val redecodeImages: Int = 0,
+        val gif: String = "",
+        /** What this side can do: decode a recording again, make a GIF. */
+        val peutRedecoder: Boolean = true,
+        val peutGif: Boolean = true,
+    )
+
+    fun sstv(d: Sstv): JSONObject = JSONObject().put("source", d.source).put("sourceActive", d.sourceActive)
+        .put("depuisMs", d.depuisMs).put("niveau", Math.round(d.niveau * 1000.0) / 1000.0)
+        .put("ecartHz", d.ecartHz ?: JSONObject.NULL).put("ecartSyncHz", d.ecartSyncHz ?: JSONObject.NULL)
+        .put("spectre", d.spectre?.let { s -> JSONArray(s.map { Math.round(it).toInt() }) } ?: JSONObject.NULL)
+        .put("spectreBas", d.spectreBasHz).put("spectrePas", d.spectrePasHz)
+        .put("force", d.force).put("continu", d.continu).put("nettoyage", d.nettoyage)
+        .put("decodage", d.decodage).put("progres", Math.round(d.progres * 1000.0) / 1000.0).put("gardees", d.gardees)
+        .put("erreur", d.erreur).put("conseil", d.conseil)
+        .put("redecode", d.redecode).put("redecodeProgres", Math.round(d.redecodeProgres * 1000.0) / 1000.0).put("redecodeImages", d.redecodeImages)
+        .put("gif", d.gif).put("peutRedecoder", d.peutRedecoder).put("peutGif", d.peutGif)
+        .put("modes", JSONArray(SstvMode.ALL.map { it.name }))
 
     fun json(e: Etat): JSONObject = JSONObject().put("present", true)
         .put("cartes", JSONArray(e.cartes.map { JSONObject().put("nom", it.first).put("desc", it.second) }))
@@ -41,8 +95,15 @@ object ApiSon {
             JSONObject().put("nom", it.name).put("taille", it.length()).put("date", it.lastModified())
         }))
         .put("images", JSONArray(e.images.take(200).map {
-            JSONObject().put("nom", it.fileName).put("sat", it.satName).put("t", it.timeMs).put("mode", it.mode).put("complete", it.complete)
+            val o = JSONObject().put("nom", it.fileName).put("sat", it.satName).put("t", it.timeMs).put("mode", it.mode).put("complete", it.complete)
+            e.dossierImages?.let { d ->
+                val png = File(d, it.fileName)
+                o.put("son", SstvSon.fichier(png).isFile).put("gif", SstvSon.gif(png).isFile)
+                    .put("source", it.source).put("enregistrement", it.recording).put("redecode", it.redecodeMs > 0L)
+            }
+            o
         }))
+        .put("sstvDetail", e.detail?.let { sstv(it) } ?: JSONObject.NULL)
 
     /** A file asked for by name: only a plain name, inside [dossier], ending in one of [suffixes]; else null. */
     fun fichier(dossier: File, nom: String, vararg suffixes: String): File? {

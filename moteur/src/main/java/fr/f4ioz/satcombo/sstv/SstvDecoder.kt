@@ -196,6 +196,12 @@ class SstvDecoder(
     private var heldIsCr = false
     private var heldRow = -1
 
+    /** Tuning error being removed, Hz: measured on the last header, then followed on the sync pulses. */
+    val correctionHz: Float get() = correction
+
+    /** Noise inside recent sync pulses, Hz (-1 until a picture has been followed). */
+    val bruitSyncHz: Double get() = syncSpread
+
     /** Rough audio level of the filtered signal — for a UI tuning indicator. */
     val level: Double get() = demod.level
 
