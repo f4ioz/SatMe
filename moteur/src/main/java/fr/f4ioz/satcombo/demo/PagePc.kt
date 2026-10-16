@@ -388,12 +388,53 @@ object PagePc {
     .k-ciels { justify-content:flex-start; }
     .k-ciels svg { max-height:calc((100vh - 230px) / 2); }
   }
+  .tq { padding:12px 16px 0; }
+  .tq .grille { padding-left:0; padding-right:0; }
+  .tq-aide { border-color:rgba(63,224,200,.45); }
+  .tq-etapes { margin:8px 0 0; padding-left:22px; display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:6px 22px; font-size:13px; }
+  @media (max-width:1300px) { .tq-etapes { grid-template-columns:1fr 1fr; } }
+  @media (max-width:640px) { .tq-etapes { grid-template-columns:1fr; } }
+  .tq-bandeau { display:flex; align-items:center; gap:10px; flex-wrap:wrap; padding:10px 14px; margin-bottom:12px; border-radius:12px; background:rgba(255,180,84,.12); border:1px solid rgba(255,180,84,.55); }
+  .tq-grille { display:grid; grid-template-columns:minmax(0,1fr) minmax(340px,420px); gap:12px; }
+  @media (max-width:1100px) { .tq-grille { grid-template-columns:minmax(0,1fr); } }
+  .tq-haut { display:grid; grid-template-columns:minmax(0,1.1fr) minmax(0,1fr); gap:0 12px; }
+  @media (max-width:1500px) { .tq-haut { grid-template-columns:minmax(0,1fr); } }
+  .tq-ligne1 { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+  .tq-go { font-size:16px; padding:10px 18px; font-weight:800; }
+  .tq-etat { display:flex; gap:4px 16px; flex-wrap:wrap; margin-top:8px; font-size:12.5px; }
+  .tq-etat span { color:var(--gris); } .tq-etat span.ok { color:var(--vert); } .tq-etat span.non { color:var(--ambre); }
+  .tq-freq { display:flex; gap:12px 24px; flex-wrap:wrap; align-items:flex-end; margin-top:8px; }
+  .tq-smetre-boite { flex:1; min-width:200px; }
+  .tq-smetre { height:14px; border-radius:7px; background:#0E1720; overflow:hidden; margin-top:4px; }
+  .tq-smetre i { display:block; height:100%; width:0; background:linear-gradient(90deg,var(--vert),var(--ambre) 75%,var(--rose)); transition:width .3s; }
+  .tq-son { gap:8px 14px; flex-wrap:wrap; align-items:center; }
+  .tq-pano { width:100%; height:clamp(220px, 34vh, 400px); display:block; margin-top:6px; cursor:crosshair; }
+  .tq-legende { display:flex; flex-wrap:wrap; gap:4px 12px; margin-top:6px; font-size:11.5px; color:var(--gris); }
+  .tq-legende i { display:inline-block; width:10px; height:10px; border-radius:3px; margin-right:4px; vertical-align:-1px; }
+  .tq-signaux { display:flex; flex-wrap:wrap; gap:6px; margin-top:6px; }
+  .tq-signaux button { padding:3px 9px; font-size:12px; border-width:1px; border-style:solid; background:transparent; }
+  .tq-signaux button.ici { background:rgba(255,255,255,.10); font-weight:700; }
+  .tq-onglets { display:inline-flex; gap:4px; flex-wrap:wrap; }
+  .tq-onglets button { padding:3px 10px; font-size:12px; }
+  .tq-onglets button.actif { border-color:var(--cyan); color:var(--cyan); background:rgba(63,224,200,.08); }
+  .tq-onglets button.auto-choisi { box-shadow:inset 0 -2px 0 var(--cyan); color:var(--clair); }
+  .tq-ft8 { max-height:250px; overflow:auto; margin-top:6px; }
+  .tq-sstv-img { display:block; max-width:100%; max-height:260px; margin-top:8px; border-radius:6px; background:#0E1720; min-height:60px; min-width:120px; }
+  .tq-conseil { padding:8px 10px; border-radius:8px; background:rgba(255,180,84,.14); border:1px solid rgba(255,180,84,.55); margin-bottom:8px; font-size:13px; }
+  .tq-plus-t { color:var(--gris); font-size:11px; letter-spacing:1.6px; text-transform:uppercase; padding:10px 0 8px; border-top:1px solid var(--bord); margin-top:4px; }
+  .tq-cote #cw-carte, .tq-main #cw-carte { margin-bottom:0; }
+  @media (max-width:2300px) { header.a-ctx #info-station { display:none; } }
+  /* A narrow screen: the tabs scroll sideways rather than widen the page. */
+  @media (max-width:760px) { #onglets { max-width:100%; overflow-x:auto; } }
+  .ctx-chip { border:1px solid var(--bord); background:var(--carte); color:var(--gris); border-radius:14px; padding:3px 10px; font-size:12.5px; cursor:pointer; white-space:nowrap; }
+  .ctx-chip.qo { border-color:var(--cyan); color:var(--cyan); background:rgba(63,224,200,.08); font-weight:700; }
 </style></head>
 <body>
 <header>
   <h1>SatMe-<span class="cyan">PC</span></h1>
   <span class="g" id="info-station"></span>
   <span class="g" id="cat-statut-court"></span>
+  <button id="ctx-chip" class="ctx-chip" hidden onclick="vue(tqQo() ? 'qo100' : 'station')"></button>
   <nav id="onglets">
     ${boutons()}
   </nav>
@@ -505,9 +546,9 @@ object PagePc {
 <div class="vue" id="v-carnet" hidden>
 <div class="grille3c">
   <div>
-    <div class="carte">
+    <div id="c-saisie-slot"><div class="carte" id="c-saisie">
       <div class="t">Nouveau contact <span class="petit" id="c-sat"></span></div>
-      <div class="ligne" style="margin-top:0;margin-bottom:6px"><span class="petit">Satellite</span>
+      <div class="ligne" id="c-satligne" style="margin-top:0;margin-bottom:6px"><span class="petit">Satellite</span>
         <select id="c-satsel" style="flex:1" onchange="if (this.value) suivre(+this.value).then(tic)" title="Le satellite suivi : le carnet, la carte, le poste et le rotor le suivent"></select></div>
       
       <input id="c-call" placeholder="INDICATIF" autocomplete="off" style="width:100%;font-size:26px;font-weight:800;letter-spacing:3px;text-transform:uppercase">
@@ -530,8 +571,8 @@ object PagePc {
       </div>
       <div class="ligne"><button class="primaire" onclick="enregistreContact()">Enregistrer (Entrée)</button><span class="petit" id="c-etat"></span></div>
       <div class="petit" style="margin-top:6px" id="c-aide">Daté à l'enregistrement, sur le satellite suivi, avec son az/el, ton carré, le mode et les fréquences au repos.</div>
-    </div>
-    <div class="carte" id="cw-carte" hidden>
+    </div></div>
+    <div id="cw-slot-carnet"><div class="carte" id="cw-carte" hidden>
       <div class="ligne" style="margin:0"><label><input type="checkbox" id="cw-on" onchange="post('api/cw?on=' + (this.checked ? 1 : 0)).then(ticCw)"> <b>Décodeur CW</b></label>
         <span id="cw-led" title="Manipulateur baissé" style="width:12px;height:12px;border-radius:6px;background:#22303C;display:inline-block"></span>
         <span class="petit" id="cw-info"></span>
@@ -541,7 +582,7 @@ object PagePc {
         <div class="ligne"><span class="petit">Note</span><select id="cw-ton" style="flex:none" onchange="post('api/cw?ton=' + this.value).then(ticCw)"><option value="0">trouvée seule</option><option>500</option><option>600</option><option>650</option><option>700</option><option>750</option><option>800</option><option>900</option></select>
           <span class="petit">Un indicatif décodé : un clic le met dans la saisie.</span></div>
       </div>
-    </div>
+    </div></div>
     <div id="ph-slot-carnet"><div class="carte" id="ph-carte" hidden>
       <div class="ligne" style="margin:0"><label><input type="checkbox" id="ph-on" onchange="phRegle('on=' + (this.checked ? 1 : 0))"> <b>Phonie → texte</b></label>
         <span id="ph-led" title="Voix entendue" style="width:12px;height:12px;border-radius:6px;background:#22303C;display:inline-block"></span>
@@ -1024,107 +1065,184 @@ object PagePc {
 </div>
 </div>
 <div class="vue" id="v-qo100" hidden>
-<div class="grille">
-  <div class="col1">
-    <div class="carte">
-      <div class="t">QO-100 · géostationnaire, 25,9° est</div>
-      <div class="petit">Descente (ciel)</div>
-      <div id="o-dl" class="o-freq" title="Molette : ±100 Hz (Maj : ±1 kHz) · flèches ← → ±100 Hz, ↑ ↓ ±1 kHz"></div>
-      <div id="o-leila" class="o-leila" hidden title="La sirène LEILA de la station sol : la station écoutée émet plus fort que les balises et doit baisser sa puissance.">⚠ LEILA</div>
-      <div class="petit" style="margin-top:4px">Montée <span id="o-ul" class="val ambre" style="font-size:18px"></span></div>
-      <div class="ligne bouton-gr" style="margin-top:10px">
-        <button onclick="qPas(-10000)">−10 k</button><button onclick="qPas(-1000)">−1 k</button><button onclick="qPas(-100)">−100</button>
-        <button onclick="qPas(100)">+100</button><button onclick="qPas(1000)">+1 k</button><button onclick="qPas(10000)">+10 k</button></div>
-      <div class="ligne"><button id="o-bbalise" onclick="qPost('balise')">Balise médiane</button><button onclick="qPost('centre')">Centre</button>
-        <span class="petit" id="o-bords"></span></div>
-      <div class="ligne"><span class="petit">Aller à (MHz ciel)</span><input id="o-aller" placeholder="10489,688" style="max-width:130px">
-        <button onclick="qAller()">Aller</button></div>
+<div class="tq">
+  <div class="carte tq-aide" id="tq-aide" hidden>
+    <div class="ligne" style="margin:0"><b class="cyan">Comment ça marche</b><span class="petit">le trafic sur QO-100, d'un seul écran</span>
+      <button style="margin-left:auto;padding:3px 10px" onclick="tqAideFerme()">Compris ✕</button></div>
+    <ol class="tq-etapes">
+      <li><b>Démarrer la réception QO-100</b> : un clic démarre le récepteur, le met sur QO-100 et donne son son aux décodeurs.</li>
+      <li><b>Cliquer un signal</b> dans la cascade : SatMe s'y accorde dans son mode (BLU, CW, FT8, SSTV) et ouvre le bon décodeur en bas.</li>
+      <li><b>Noter le contact</b> à droite : le satellite QO-100, la fréquence et le mode sont déjà là.</li>
+      <li>La <b>balise médiane</b> est la référence : si l'écart est grand, coche le calage automatique.</li>
+    </ol>
+  </div>
+  <div class="tq-bandeau" id="tq-reprise" hidden>
+    <span>📡 <b>Tu recevais QO-100</b> quand SatMe s'est arrêté.</span>
+    <button class="primaire" onclick="tqReprise(1)">Reprendre QO-100</button><button onclick="tqReprise(0)">Non merci</button>
+    <span class="petit">Pour la reprendre toute seule : Réglages › Satellites. Rien n'est jamais émis.</span>
+  </div>
+  <div class="tq-grille">
+    <div class="tq-main">
+      <div class="tq-haut">
+      <div class="carte tq-rx" id="tq-rx">
+        <div class="tq-ligne1">
+          <button class="primaire tq-go" id="tq-go" onclick="tqDemarre()">▶ Démarrer la réception QO-100</button>
+          <button class="arret tq-go" id="tq-stop" hidden onclick="tqArrete()">■ Arrêter</button>
+          <span id="tq-pastille" class="pastille coupe">arrêtée</span>
+          <span class="petit" id="tq-recepteur"></span>
+          <button class="discret petit" style="margin-left:auto" onclick="g('tq-aide').hidden = !g('tq-aide').hidden" title="Comment ça marche">? Aide</button>
+          <span id="o-leila" class="o-leila" hidden title="La sirène LEILA de la station sol : la station écoutée émet plus fort que les balises et doit baisser sa puissance.">⚠ LEILA</span>
+        </div>
+        <div class="tq-etat" id="tq-etapes"></div>
+        <div class="avert" id="tq-msg"></div>
+        <div class="tq-freq">
+          <div>
+            <div class="petit">Descente (ciel) <span id="o-bords"></span></div>
+            <div id="o-dl" class="o-freq" title="Molette : ±100 Hz (Maj : ±1 kHz) · flèches ← → ±100 Hz, ↑ ↓ ±1 kHz"></div>
+            <div class="petit">Montée <span id="o-ul" class="val ambre" style="font-size:16px"></span></div>
+          </div>
+          <div class="tq-smetre-boite">
+            <div class="petit">Niveau <span id="tq-db"></span></div>
+            <div class="tq-smetre"><i id="tq-smetre"></i></div>
+            <div class="ligne" style="margin-top:6px"><span class="petit">Mode</span>
+              <select id="tq-mode" style="flex:none" onchange="tqMode(this.value)" title="Le mode noté au carnet (celui du signal accordé, sinon le tien)">
+                <option value="SSB">BLU (SSB)</option><option>CW</option><option>FT8</option><option>FT4</option><option>SSTV</option><option>PSK31</option><option>RTTY</option></select>
+              <span class="petit" id="tq-demod"></span></div>
+          </div>
+        </div>
+        <div class="ligne bouton-gr">
+          <button onclick="qPas(-1000)">−1 k</button><button onclick="qPas(-100)">−100</button><button onclick="qPas(100)">+100</button><button onclick="qPas(1000)">+1 k</button>
+          <button id="o-bbalise" onclick="qPost('balise')">Balise médiane</button><button onclick="qPost('centre')">Centre</button>
+          <input id="o-aller" placeholder="10489,688" style="max-width:110px" title="Aller à (MHz ciel)"><button onclick="qAller()">Aller</button></div>
+        <div class="ligne tq-son">
+          <label class="petit"><input type="checkbox" id="tq-hp" onchange="rRegle('son=' + (this.checked ? 1 : 0)).then(tqTic)"> Haut-parleur du PC</label>
+          <span id="tq-ec-boite"><button id="tq-ec" onclick="tqEcoute()" title="Le son du récepteur joué par ce navigateur">🔈 Écouter ici</button>
+            <span class="petit">Volume</span><input type="range" id="tq-vol" min="0" max="200" value="100" style="width:90px;flex:none" oninput="g('ec-vol').value = this.value; if (ecGain) ecGain.gain.value = this.value / 100"></span>
+          <span class="petit">Silencieux</span><input type="range" id="tq-sq" min="-120" max="-20" style="width:110px;flex:none" onchange="rRegle('squelch=' + this.value).then(tqTic)"><span class="petit" id="tq-sqv"></span>
+          <label class="petit" id="tq-agc-l"><input type="checkbox" id="tq-agc" onchange="rRegle('agc=' + (this.checked ? 1 : 0)).then(tqTic)"> CAG</label>
+        </div>
+      </div>
+      <div class="carte" id="tq-dock">
+        <div class="ligne" style="margin:0 0 8px"><span class="t" style="margin:0">Décodeur</span>
+          <span class="tq-onglets" id="tq-onglets">
+            <button data-d="auto">Auto</button><button data-d="phonie">Phonie</button><button data-d="cw">CW</button><button data-d="ft8">FT8 / FT4</button><button data-d="sstv">SSTV</button></span>
+          <span class="petit" id="tq-d-info" style="margin-left:auto"></span></div>
+        <div id="tq-d-rien" class="petit">Clique un signal dans la cascade : le décodeur de son mode s'ouvre ici (phonie écrite, CW, FT8, image SSTV).</div>
+        <div id="tq-d-phonie" hidden><div id="ph-slot-qo100"></div><div class="petit" id="tq-ph-absent" hidden>« Phonie → texte » n'est pas installé : Réglages › Phonie → texte.</div></div>
+        <div id="tq-d-cw" hidden><div id="cw-slot-qo100"></div><div class="petit" id="tq-cw-absent" hidden>Le décodeur CW n'est pas disponible ici.</div></div>
+        <div id="tq-d-ft8" hidden>
+          <div class="ligne" style="margin:0"><button id="tq-ft8-go" onclick="tqFt8Marche()">▶ Décoder</button><span class="petit" id="tq-ft8-etat"></span>
+            <button style="margin-left:auto" onclick="vue('ft8')">Onglet FT8 complet ›</button></div>
+          <div class="tq-ft8"><table><tbody id="tq-ft8"></tbody></table></div>
+        </div>
+        <div id="tq-d-sstv" hidden>
+          <div class="ligne" style="margin:0"><button onclick="post('api/sstv/caler').then(ticSon)" title="Commencer l'image maintenant, sans attendre son entête">Caler maintenant</button>
+            <span class="petit" id="tq-sstv-etat"></span><button style="margin-left:auto" onclick="vue('sstv')">Onglet SSTV ›</button></div>
+          <img id="tq-sstv-img" alt="" class="tq-sstv-img">
+        </div>
+      </div>
+      </div>
+      <div class="carte">
+        <div class="t" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span>Transpondeur à bande étroite</span>
+          <span class="petit" id="tq-cl-etat" style="text-transform:none;letter-spacing:0"></span>
+          <span style="margin-left:auto;text-transform:none;letter-spacing:0" class="petit">Largeur
+            <select id="tq-zoom" style="flex:none" onchange="tqZoom(+this.value)"><option value="500000">500 kHz</option><option value="200000">200 kHz</option><option value="100000">100 kHz</option><option value="50000">50 kHz</option><option value="20000">20 kHz</option></select></span></div>
+        <canvas id="o-reglette" style="width:100%;height:90px;display:block;cursor:crosshair" title="Cliquer ou glisser pour s'y poser · molette ±100 Hz"></canvas>
+        <canvas id="o-pano" class="tq-pano" title="Le transpondeur vu par le récepteur : cliquer un signal pour s'y accorder dans son mode"></canvas>
+        <div class="petit" id="o-pano-msg"></div>
+        <div id="tq-legende" class="tq-legende"></div>
+        <div id="tq-signaux" class="tq-signaux"></div>
+        <canvas id="o-loupe" style="width:100%;height:64px;display:block;margin-top:6px;cursor:crosshair" title="± 25 kHz autour de l'accord : cliquer pour s'y poser"></canvas>
+        <div class="paire" style="margin-top:8px"><b id="o-seg"></b><span class="petit" id="o-larg"></span><span id="o-interdit" class="rose" style="font-weight:700"></span></div>
+        <div class="petit" id="o-avert" style="margin-top:2px"></div>
+      </div>
     </div>
-    <div class="carte">
-      <div class="t">Mémoires</div>
-      <div id="o-memoires" class="o-puces"></div>
-      <div class="ligne"><input id="o-nom" placeholder="Nom (facultatif)" style="max-width:180px"><button onclick="qMemoire()">Mémoriser ici</button>
-        <button id="o-oublie" onclick="qOublie()">Oublier</button></div>
+    <div class="tq-cote">
+      <div id="tq-carnet-slot"></div>
+      <div class="carte">
+        <div class="t">Calage sur la balise</div>
+        <div id="tq-conseil" class="tq-conseil" hidden></div>
+        <div id="o-balise" class="o-balise">—</div>
+        <div class="ligne" style="margin-top:4px"><button id="o-bmesure" onclick="qCaleMesure()">Caler sur la mesure</button></div>
+        <label style="display:block;margin-top:6px" id="oq-auto-l"><input type="checkbox" id="oq-auto" onchange="post('api/qo100/auto?on=' + (this.checked ? 1 : 0)).then(ticQualite).then(tqTic)"> <b>Calage automatique</b>
+          <span class="petit">— la balise médiane mesurée toutes les 5 s, la dérive du LNB suivie toute seule (par petits pas, jamais sur une mesure faible)</span></label>
+        <div class="ligne"><span class="petit">Écart mémorisé</span><span class="val" id="o-calage">0 Hz</span></div>
+        <details style="margin-top:4px"><summary class="petit" style="cursor:pointer">À la main</summary>
+          <div class="petit">L'oscillateur d'un LNB dérive, surtout à froid. Accorde la balise médiane, lis où elle tombe vraiment, saisis-le : l'écart s'applique à toute la descente.</div>
+          <div class="ligne"><input id="o-entendue" placeholder="MHz ciel" title="Où tombe vraiment la balise médiane, en MHz ciel : par exemple 10489,7523" style="max-width:170px"><button onclick="qCale()">Appliquer</button>
+            <button onclick="qPost('calage-zero')">Remettre à zéro</button></div></details>
+        <div class="etat" id="o-cmsg"></div>
+      </div>
+      <div class="carte" id="oq-carte" hidden>
+        <div class="t">Qualité de la réception <span id="oq-verrou" class="pastille coupe">balise non vue</span></div>
+        <div class="paire" style="margin-top:4px">
+          <span><span class="val" id="oq-snr">—</span> <span class="petit">dB balise / bruit</span></span>
+          <span><span class="val" id="oq-ecart">—</span> <span class="petit">écart</span></span>
+          <span><span class="val ambre" id="oq-derive">—</span> <span class="petit">dérive</span></span></div>
+        <div class="paire" style="margin-top:4px">
+          <span><span class="val" id="oq-erreur">—</span> <span class="petit">erreur du LNB</span></span>
+          <span><span class="val" id="oq-plancher">—</span> <span class="petit">plancher</span></span>
+          <span><span class="val" id="oq-occ">—</span> <span class="petit">stations</span></span></div>
+        <canvas id="oq-histo" style="width:100%;height:70px;display:block;margin-top:8px" title="L'erreur du LNB sur la dernière heure (la balise mesurée toutes les 5 s)"></canvas>
+        <div class="petit"><span id="oq-histo-t">L'erreur du LNB sur la dernière heure.</span> Une pente, c'est la dérive (un LNB qui chauffe) ; un trait plat, un LNB stable (GPSDO).</div>
+      </div>
+      <div class="carte">
+        <div class="t">Mémoires</div>
+        <div id="o-memoires" class="o-puces"></div>
+        <div class="ligne"><input id="o-nom" placeholder="Nom (facultatif)" style="max-width:180px"><button onclick="qMemoire()">Mémoriser ici</button>
+          <button id="o-oublie" onclick="qOublie()">Oublier</button></div>
+      </div>
     </div>
   </div>
-  <div class="col2">
-    <div class="carte">
-      <div class="t">Réglette du transpondeur</div>
-      <canvas id="o-reglette" style="width:100%;height:96px;display:block;cursor:crosshair" title="Cliquer ou glisser pour s'y poser · molette ±100 Hz"></canvas>
-      <canvas id="o-loupe" style="width:100%;height:70px;display:block;margin-top:6px;cursor:crosshair" title="± 25 kHz autour de l'accord : cliquer pour s'y poser"></canvas>
-      <canvas id="o-pano" style="width:100%;height:220px;display:block;margin-top:6px;cursor:crosshair" title="Le transpondeur vu par la clé SDR, à l'échelle de la réglette : cliquer pour s'y poser"></canvas>
-      <div class="petit" id="o-pano-msg"></div>
-      <div class="paire" style="margin-top:8px"><b id="o-seg"></b><span class="petit" id="o-larg"></span><span id="o-interdit" class="rose" style="font-weight:700"></span></div>
-      <div class="petit" id="o-avert" style="margin-top:2px"></div>
+  <div class="tq-plus-t">Plus de QO-100 · le poste, la clé, le transpondeur, la chaîne de station, le pointage</div>
+  <div class="grille" style="padding-top:0">
+    <div class="col1">
+      <div class="carte">
+        <div class="t">Ce que voient le poste et la clé</div>
+        <label><input type="checkbox" id="o-poste" onchange="qPost('poste?on=' + (this.checked ? 1 : 0))"> Appliquer au poste</label>
+        <div class="paire" style="margin-top:8px">
+          <span>Poste RX <span class="val cyan" id="o-prx">—</span></span><span>Poste TX <span class="val ambre" id="o-ptx">—</span></span></div>
+        <div class="avert" id="o-hors"></div>
+        <label style="display:block;margin-top:8px"><input type="checkbox" id="o-cle" onchange="qPost('cle?on=' + (this.checked ? 1 : 0))"> Appliquer à la clé SDR</label>
+        <div class="paire" style="margin-top:4px"><span>Clé RX <span class="val cyan" id="o-crx">—</span></span><span class="petit" id="o-cmsg2"></span></div>
+        <div class="etat" id="o-statut"></div>
+        <div class="petit" style="margin-top:6px">Les fréquences du cockpit sont celles du ciel ; le poste travaille en fréquence intermédiaire, après les convertisseurs de la chaîne. Pas de Doppler ici : le poste n'est écrit que quand tu bouges. Tant que « Appliquer au poste » est coché, le Doppler du satellite suivi est en pause et le carnet note sur QO-100.</div>
+        <div class="petit" style="margin-top:4px">« Démarrer la réception QO-100 » coche « Appliquer à la clé » et démarre le récepteur ; l'onglet SDR garde tous ses réglages.</div>
+      </div>
     </div>
-    <div class="carte">
-      <div class="t">Ce que voient le poste et la clé</div>
-      <label><input type="checkbox" id="o-poste" onchange="qPost('poste?on=' + (this.checked ? 1 : 0))"> Appliquer au poste</label>
-      <div class="paire" style="margin-top:8px">
-        <span>Poste RX <span class="val cyan" id="o-prx">—</span></span><span>Poste TX <span class="val ambre" id="o-ptx">—</span></span></div>
-      <div class="avert" id="o-hors"></div>
-      <label style="display:block;margin-top:8px"><input type="checkbox" id="o-cle" onchange="qPost('cle?on=' + (this.checked ? 1 : 0))"> Appliquer à la clé SDR</label>
-      <div class="paire" style="margin-top:4px"><span>Clé RX <span class="val cyan" id="o-crx">—</span></span><span class="petit" id="o-cmsg2"></span></div>
-      <div class="etat" id="o-statut"></div>
-      <div class="petit" style="margin-top:6px">Les fréquences de gauche sont celles du ciel ; le poste travaille en fréquence intermédiaire, après les convertisseurs de la chaîne. Pas de Doppler ici : le poste n'est écrit que quand tu bouges. Tant que la case est cochée, le Doppler du satellite suivi est en pause.</div>
-      <div class="petit" style="margin-top:4px">La clé se démarre dans l'onglet SDR ; elle suit alors cette fréquence, en BLU, et montre tout le transpondeur dans le panorama.</div>
+    <div class="col2">
+      <div class="carte" id="oq-sig-carte" hidden>
+        <div class="t">Stations entendues <span class="petit" id="oq-sig-n"></span></div>
+        <div style="max-height:260px;overflow:auto"><table><tbody id="oq-signaux"></tbody></table></div>
+        <div class="petit" style="margin-top:4px">Ce que la clé voit au-dessus du bruit du transpondeur (balises exclues). Un clic : s'y accorder.</div>
+      </div>
+      <div class="carte">
+        <div class="t">Transpondeur</div>
+        <div class="ligne" style="margin-top:0" id="o-tps"></div>
+        <label class="petit" style="display:block;margin-top:6px"><input type="checkbox" id="o-balayage" onchange="qPost('balayage?on=' + (this.checked ? 1 : 0))"> Balayer tout QO-100 (écoute ; rien n'est émis là où le plan l'interdit)</label>
+        <div class="ligne bouton-gr"><button onclick="qPas(-10000)">−10 k</button><button onclick="qPas(10000)">+10 k</button></div>
+      </div>
     </div>
-    <div id="ph-slot-qo100"></div>
-  </div>
-  <div class="col3">
-    <div class="carte">
-      <div class="t">Calage sur la balise</div>
-      <div id="o-balise" class="o-balise">—</div>
-      <div class="ligne" style="margin-top:4px"><button id="o-bmesure" onclick="qCaleMesure()">Caler sur la mesure</button></div>
-      <label style="display:block;margin-top:6px" id="oq-auto-l"><input type="checkbox" id="oq-auto" onchange="post('api/qo100/auto?on=' + (this.checked ? 1 : 0)).then(ticQualite)"> <b>Calage automatique</b>
-        <span class="petit">— la balise médiane mesurée toutes les 5 s, la dérive du LNB suivie toute seule (par petits pas, jamais sur une mesure faible)</span></label>
-      <div class="petit">L'oscillateur d'un LNB dérive, surtout à froid. Accorde la balise médiane, lis où elle tombe vraiment, saisis-le : l'écart s'applique à toute la descente.</div>
-      <div class="ligne"><span class="petit">Écart mémorisé</span><span class="val" id="o-calage">0 Hz</span></div>
-      <div class="ligne"><input id="o-entendue" placeholder="MHz ciel" title="Où tombe vraiment la balise médiane, en MHz ciel : par exemple 10489,7523" style="max-width:170px"><button onclick="qCale()">Appliquer</button>
-        <button onclick="qPost('calage-zero')">Remettre à zéro</button></div>
-      <div class="etat" id="o-cmsg"></div>
-    </div>
-    <div class="carte" id="oq-carte" hidden>
-      <div class="t">Qualité de la réception <span id="oq-verrou" class="pastille coupe">balise non vue</span></div>
-      <div class="paire" style="margin-top:4px">
-        <span><span class="val" id="oq-snr">—</span> <span class="petit">dB balise / bruit</span></span>
-        <span><span class="val" id="oq-ecart">—</span> <span class="petit">écart</span></span>
-        <span><span class="val ambre" id="oq-derive">—</span> <span class="petit">dérive</span></span></div>
-      <div class="paire" style="margin-top:4px">
-        <span><span class="val" id="oq-erreur">—</span> <span class="petit">erreur du LNB</span></span>
-        <span><span class="val" id="oq-plancher">—</span> <span class="petit">plancher</span></span>
-        <span><span class="val" id="oq-occ">—</span> <span class="petit">stations</span></span></div>
-      <canvas id="oq-histo" style="width:100%;height:70px;display:block;margin-top:8px" title="L'erreur du LNB sur la dernière heure (la balise mesurée toutes les 5 s)"></canvas>
-      <div class="petit"><span id="oq-histo-t">L'erreur du LNB sur la dernière heure.</span> Une pente, c'est la dérive (un LNB qui chauffe) ; un trait plat, un LNB stable (GPSDO).</div>
-    </div>
-    <div class="carte" id="oq-sig-carte" hidden>
-      <div class="t">Stations entendues <span class="petit" id="oq-sig-n"></span></div>
-      <div style="max-height:260px;overflow:auto"><table><tbody id="oq-signaux"></tbody></table></div>
-      <div class="petit" style="margin-top:4px">Ce que la clé voit au-dessus du bruit du transpondeur (balises exclues). Un clic : s'y accorder.</div>
-    </div>
-    <div class="carte">
-      <div class="t">Transpondeur</div>
-      <div class="ligne" style="margin-top:0" id="o-tps"></div>
-      <label class="petit" style="display:block;margin-top:6px"><input type="checkbox" id="o-balayage" onchange="qPost('balayage?on=' + (this.checked ? 1 : 0))"> Balayer tout QO-100 (écoute ; rien n'est émis là où le plan l'interdit)</label>
-    </div>
-    <div class="carte">
-      <div class="t">Chaîne de station</div>
-      <div class="ligne" style="margin-top:0"><select id="o-chaine" onchange="qPost('chaine?nom=' + enc(this.value))"></select>
-        <input id="o-nouvelle" placeholder="Nouvelle chaîne…" style="max-width:150px"><button onclick="qNouvelle()">Ajouter</button></div>
-      <div class="ligne"><span class="petit" style="min-width:95px">OL descente</span><select id="o-olrx" onchange="qOl('descente', this.value)"></select></div>
-      <div class="ligne"><span class="petit" style="min-width:95px">OL montée</span><select id="o-oltx" onchange="qOl('montee', this.value)"></select></div>
-      <div class="avert" id="o-beta"></div>
-      <details style="margin-top:6px"><summary class="petit" style="cursor:pointer">Mesurer un oscillateur</summary>
-        <div class="petit" style="margin-top:4px">Écoute un même signal sur une référence (WebSDR sur GPSDO) et sur ton poste ; recopie les deux fréquences : l'écart est l'oscillateur.</div>
-        <div class="ligne"><select id="o-msens" style="max-width:120px"><option value="descente">Descente</option><option value="montee">Montée</option></select>
-          <input id="o-mciel" placeholder="Référence (MHz)"><input id="o-mposte" placeholder="Poste (MHz)"><button onclick="qMesure()">Mesurer</button></div>
-        <div class="etat" id="o-mmsg"></div>
-      </details>
-    </div>
-    <div class="carte">
-      <details><summary class="t" style="cursor:pointer;margin:0">Réglage initial · pointage et Soleil</summary>
-        <div id="o-ciel" class="petit" style="margin-top:8px"></div>
-      </details>
+    <div class="col3">
+      <div class="carte">
+        <div class="t">Chaîne de station</div>
+        <div class="ligne" style="margin-top:0"><select id="o-chaine" onchange="qPost('chaine?nom=' + enc(this.value))"></select>
+          <input id="o-nouvelle" placeholder="Nouvelle chaîne…" style="max-width:150px"><button onclick="qNouvelle()">Ajouter</button></div>
+        <div class="ligne"><span class="petit" style="min-width:95px">OL descente</span><select id="o-olrx" onchange="qOl('descente', this.value)"></select></div>
+        <div class="ligne"><span class="petit" style="min-width:95px">OL montée</span><select id="o-oltx" onchange="qOl('montee', this.value)"></select></div>
+        <div class="avert" id="o-beta"></div>
+        <details style="margin-top:6px"><summary class="petit" style="cursor:pointer">Mesurer un oscillateur</summary>
+          <div class="petit" style="margin-top:4px">Écoute un même signal sur une référence (WebSDR sur GPSDO) et sur ton poste ; recopie les deux fréquences : l'écart est l'oscillateur.</div>
+          <div class="ligne"><select id="o-msens" style="max-width:120px"><option value="descente">Descente</option><option value="montee">Montée</option></select>
+            <input id="o-mciel" placeholder="Référence (MHz)"><input id="o-mposte" placeholder="Poste (MHz)"><button onclick="qMesure()">Mesurer</button></div>
+          <div class="etat" id="o-mmsg"></div>
+        </details>
+      </div>
+      <div class="carte">
+        <details><summary class="t" style="cursor:pointer;margin:0">Réglage initial · pointage et Soleil</summary>
+          <div id="o-ciel" class="petit" style="margin-top:8px"></div>
+        </details>
+      </div>
     </div>
   </div>
 </div>
@@ -1337,6 +1455,11 @@ object PagePc {
       <label style="display:block;margin-top:6px"><input type="checkbox" id="af-vernier" onchange="post('api/sdr/accord?vernier=' + (this.checked ? 1 : 0)).then(ticSdr)"> <b>Vernier</b> <span class="petit">— un cadran qu'on pousse : la fréquence avance de N Hz par centimètre glissé</span></label>
       <div class="ligne"><span class="petit">Rapport</span><select id="af-ratio" onchange="post('api/sdr/accord?ratio=' + this.value).then(ticSdr)"><option value="20">20 Hz / cm (fin)</option><option value="200">200 Hz / cm</option><option value="2000">2 kHz / cm (rapide)</option></select></div>
       <label style="display:block;margin-top:6px"><input type="checkbox" id="af-voix" onchange="post('api/sdr/accord?voix=' + (this.checked ? 1 : 0)).then(ticSdr)"> <b>Caler sur la voix</b> <span class="petit">— en BLU, la voix entendue mise à sa place d'un clic</span></label>
+    </div>
+    <div class="carte" id="rq-carte" hidden>
+      <div class="t">QO-100 au démarrage</div>
+      <label style="display:block"><input type="checkbox" id="rq-auto" onchange="post('api/qo100/reprise-auto?on=' + (this.checked ? 1 : 0)).then(tqTic)"> <b>Reprendre la réception QO-100 au démarrage</b></label>
+      <div class="petit" style="margin-top:4px">Si QO-100 était reçu quand SatMe-PC s'est arrêté, il est repris tout seul au démarrage suivant : le récepteur, la fréquence et le mode d'alors. Sans cette case, un bandeau le propose dans l'onglet QO-100. Réception seulement : rien n'est jamais émis, et le poste n'est pas touché.</div>
     </div>
     <div class="carte" id="sv-carte" hidden>
       <div class="t">Sauvegarde générale</div>
@@ -1684,7 +1807,7 @@ function rendCw() {
   }).join(' ');
   if (bas) t.scrollTop = t.scrollHeight;
 }
-setInterval(() => { if (!g('v-carnet').hidden) ticCw(); }, 1000);
+setInterval(() => { if (!g('v-carnet').hidden || !g('v-qo100').hidden) ticCw(); }, 1000);
 
 // « Phonie → texte »: one window, moved into the tab shown (SDR, QO-100, Carnet); the voice heard, over by over.
 let PH = null, phDernier = 0, phListe = [], phTour = 0;
@@ -1752,7 +1875,7 @@ function phBulle(b) {
     '<div class="ph-x">' + h + '</div>' + (b.traduction ? '<div class="ph-tr">' + esc(b.traduction) + '</div>' : '') + (puces ? '<div>' + puces + '</div>' : '') + '</div>';
 }
 function phNote(call, loc, rep) {
-  vue('carnet'); g('c-call').value = call;
+  versSaisie(); g('c-call').value = call;
   if (loc) g('c-loc').value = loc;
   if (rep) g('c-rr').value = rep;
   g('c-call').dispatchEvent(new Event('input')); g('c-call').focus();
@@ -1868,7 +1991,7 @@ const ICO = ${icones()};
 const CATS_REG = [
   { id: 'station', nom: 'Ma station', ico: 'person', desc: 'Indicatif, carré, élévation minimale, horizon', cartes: ['Station', 'Horizon'] },
   { id: 'materiel', nom: 'Poste et rotor', ico: 'radio', desc: 'CAT, TH-D72, rotor, convertisseurs, ADALM-PLUTO', cartes: ['Poste', 'Kenwood TH-D72', 'Rotor', 'Convertisseurs', 'Journal Doppler', 'ADALM-PLUTO'] },
-  { id: 'satellites', nom: 'Satellites', ico: 'satellite_alt', desc: 'Éléments orbitaux, statut AMSAT, lien WebSocket', cartes: ['Éléments orbitaux', 'AMSAT', 'Lien satellite'] },
+  { id: 'satellites', nom: 'Satellites', ico: 'satellite_alt', desc: 'Éléments orbitaux, statut AMSAT, lien WebSocket, QO-100 au démarrage', cartes: ['Éléments orbitaux', 'AMSAT', 'Lien satellite', 'QO-100'] },
   { id: 'enligne', nom: 'Services en ligne', ico: 'public', desc: 'QRZ.com, Wavelog / Cloudlog, skeds hams.at', cartes: ['QRZ.com', 'Carnet en ligne', 'Skeds'] },
   { id: 'phonie', nom: 'Phonie → texte', ico: 'mic', desc: 'La voix entendue écrite : moteur, modèle, installation', cartes: ['Phonie → texte'] },
   { id: 'telephone', nom: 'Téléphone', ico: 'smartphone', desc: 'SatMe sur le téléphone : réglages et contacts', cartes: ['Téléphone'] },
@@ -2092,7 +2215,7 @@ function dessine() {
   txt('amsat-auto', E.amsatAuto ? 'auto ✓' : 'auto ✕');
   g('amsat-auto').dataset.etat = E.amsatEtat || '';
   g('amsat-auto').title = (E.amsatAuto ? 'Signalement automatique à amsat.org activé' + (E.amsatEtat ? ' : ' + E.amsatEtat : '') : 'Signalement automatique à amsat.org coupé') + ' (Réglages)';
-  txt('c-sat', E.suivi ? '· ' + E.suivi.nom + (E.position ? ' · El ' + Math.round(E.position.el) + '°' : '') : '· choisis le satellite ci-dessous');
+  if (!tqQo()) txt('c-sat', E.suivi ? '· ' + E.suivi.nom + (E.position ? ' · El ' + Math.round(E.position.el) + '°' : '') : '· choisis le satellite ci-dessous');
   menuSatCarnet();
   const p = E.position;
   txt('az', p ? p.az.toFixed(1) + '°' : '—');
@@ -2345,6 +2468,7 @@ g('emetteur').onchange = () => post('api/emetteur?i=' + g('emetteur').value);
 // ------------------------------------------------------------------ tabs
 function vue(n) {
   setTimeout(majFlux, 0);
+  tqRange(n);
   document.querySelectorAll('.vue').forEach(x => x.hidden = x.id !== 'v-' + n);
   document.querySelectorAll('#onglets button').forEach(b => b.classList.toggle('actif', b.dataset.v === n));
   try { localStorage.setItem('vue', n); } catch (x) {}
@@ -2361,7 +2485,7 @@ function vue(n) {
   if (n === 'carres') chargeCarres();
   if (n === 'frise') chargeFrise();
   if (n === 'sked') { prepareSked(); setTimeout(dessineSked); }
-  if (n === 'qo100') { chargeQo100(true); ticQualite(); }
+  if (n === 'qo100') { chargeQo100(true); ticQualite(); tqAide(); tqTic(); ticCw(); ticPhonie(true); tqFt8(); }
   if (n === 'datv') ticDatv(true);
   if (n === 'sdr') ticSdr();
   if (n === 'sondes') { SV2.libre = false; ticSondes(); }
@@ -3264,6 +3388,7 @@ function rendSon() {
   // SSTV: the picture arriving, reloaded only when it moved.
   txt('i-mode', S.sstvMode ? S.sstvMode + ' · ' + S.sstvLignes + '/' + S.sstvHauteur + ' lignes' : '');
   rendSstv();
+  tqSstv();
   txt('sstv-etat', !S.actif ? (window.SATME_TELEPHONE ? 'Le téléphone décode en enregistrant : « Enregistrer » (onglet Son).' : '') : !S.sstv ? 'Décodage SSTV coupé.' : S.sstvMode ? 'réception…' : S.sstvDerniere ? 'dernière image : ' + S.sstvDerniere : '');
   if (ouverte('sstv') && S.sstvVersion !== versionImage) {
     versionImage = S.sstvVersion;
@@ -3985,17 +4110,20 @@ function dessineQo100() {
   dessineReglette(); dessineLoupe(); dessinePano();
 }
 // The panorama: the dongle's whole band on the ruler's scale, newest row on top.
-let OPan = null, oPanHist = [], oPanTrames = -1;
+let OPan = null, oPanHist = [], oPanTrames = -1, oPanZoom = '';
 async function ticPano() {
   if (g('v-qo100').hidden) return;
-  try { OPan = await (await fetch('api/qo100/panorama?n=' + Math.max(128, Math.min(1024, g('o-pano').clientWidth)))).json(); } catch (x) { return; }
+  const fz = tqFenetre(), zq = fz && !fz.plein ? '&bas=' + fz.b + '&haut=' + fz.t : '';
+  if (zq !== oPanZoom) { oPanZoom = zq; oPanHist = []; }
+  try { OPan = await (await fetch('api/qo100/panorama?n=' + Math.max(128, Math.min(1024, g('o-pano').clientWidth)) + zq)).json(); } catch (x) { return; }
+  if (zq !== oPanZoom) return;
   if (OPan.colonnes && OPan.trames !== oPanTrames) {
     oPanTrames = OPan.trames;
     if (oPanHist.length && oPanHist[0].length !== OPan.colonnes.length) oPanHist = [];
     oPanHist.unshift(OPan.colonnes); if (oPanHist.length > 200) oPanHist.length = 200;
   }
   const b = OPan.balise;
-  g('o-balise').innerHTML = !OPan.sdr ? 'La clé SDR ne tourne pas : la démarrer (onglet SDR) et cocher « Appliquer à la clé ».'
+  g('o-balise').innerHTML = !OPan.sdr ? 'Le récepteur ne tourne pas : « Démarrer la réception QO-100 », en haut.'
     : !b ? 'Balise non vue. Vérifier le pointage, ou attendre quelques secondes.'
     : 'Balise médiane vue par la clé : écart <b style="color:' + (b.ok ? 'var(--vert)' : 'var(--ambre)') + '">' + (b.ecart > 0 ? '+' : '') + b.ecart + ' Hz</b>, ' +
       '<b style="color:' + (b.rapport >= 15 ? 'var(--vert)' : 'var(--ambre)') + '">' + b.rapport.toFixed(1) + ' dB</b> au-dessus du bruit' +
@@ -4009,16 +4137,17 @@ function dessinePano() {
   const c = g('o-pano'), w = c.clientWidth, h = c.clientHeight, dpr = window.devicePixelRatio || 1;
   const [x] = toile(c);
   x.fillStyle = '#06131A'; x.fillRect(0, 0, w, h);
-  txt('o-pano-msg', oPanHist.length ? '' : (OPan && OPan.sdr ? 'Le panorama arrive…' : 'Le panorama : la clé SDR démarrée (onglet SDR) et réglée sur QO-100 (« Appliquer à la clé »).'));
+  txt('o-pano-msg', oPanHist.length ? '' : (OPan && OPan.sdr ? 'La cascade arrive…' : 'La cascade du transpondeur : « Démarrer la réception QO-100 », en haut, et elle se remplit ici.'));
   if (!oPanHist.length) return;
   // The scale: at least 20 dB, or plain noise would paint as a busy transponder.
   let lo = 1e9, hi = -1e9;
   for (const r of oPanHist) for (const v of r) if (v != null) { if (v < lo) lo = v; if (v > hi) hi = v; }
   if (hi < lo + 20) hi = lo + 20;
-  const n = oPanHist[0].length, rows = Math.min(oPanHist.length, h), img = x.createImageData(Math.max(1, Math.round((w - 8) * dpr)), Math.max(1, Math.round(rows * dpr)));
+  // Two pixels a row: the waterfall fills twice as fast.
+  const n = oPanHist[0].length, rows = Math.min(oPanHist.length * 2, h), img = x.createImageData(Math.max(1, Math.round((w - 8) * dpr)), Math.max(1, Math.round(rows * dpr)));
   const W = img.width, H = img.height;
   for (let yy = 0; yy < H; yy++) {
-    const r = oPanHist[Math.min(oPanHist.length - 1, Math.floor(yy / dpr))];
+    const r = oPanHist[Math.min(oPanHist.length - 1, Math.floor(yy / dpr / 2))];
     for (let xx = 0; xx < W; xx++) {
       const v = r[Math.min(n - 1, Math.floor(xx * n / W))];
       const k = 4 * (yy * W + xx);
@@ -4027,11 +4156,16 @@ function dessinePano() {
     }
   }
   x.setTransform(1, 0, 0, 1, 0, 0); x.putImageData(img, Math.round(4 * dpr), 0); x.setTransform(dpr, 0, 0, dpr, 0, 0);
-  // The beacons, the frequency listened to.
-  const b = OP.regletteBas, t = OP.regletteHaut, X = f => 4 + (w - 8) * (f - b) / (t - b);
+  // The beacons, the frequency listened to, the signals named.
+  const fz = tqFenetre(), b = fz.b, t = fz.t, X = f => 4 + (w - 8) * (f - b) / (t - b);
   x.strokeStyle = 'rgba(229,72,229,.8)'; x.setLineDash([3, 3]);
-  for (const s of OP.segments) if (s.usage === 'BALISE' && s.repere) { x.beginPath(); x.moveTo(X(s.repere), 0); x.lineTo(X(s.repere), h); x.stroke(); }
-  x.setLineDash([]); x.strokeStyle = '#FFFFFF'; x.lineWidth = 1.5; x.beginPath(); x.moveTo(X(O.descente), 0); x.lineTo(X(O.descente), 8); x.stroke(); x.lineWidth = 1;
+  for (const s of OP.segments) if (s.usage === 'BALISE' && s.repere && s.repere >= b && s.repere <= t) { x.beginPath(); x.moveTo(X(s.repere), 0); x.lineTo(X(s.repere), h); x.stroke(); }
+  x.setLineDash([]); x.strokeStyle = '#FFFFFF'; x.lineWidth = 1.5; x.beginPath(); x.moveTo(X(O.descente), 0); x.lineTo(X(O.descente), 10); x.stroke(); x.lineWidth = 1;
+  // The scale, kHz above 10 489 MHz.
+  const pas = t - b > 200000 ? 50000 : t - b > 60000 ? 10000 : 5000;
+  x.fillStyle = 'rgba(232,240,247,.75)'; x.font = '10px Drapeaux,system-ui'; x.textAlign = 'center';
+  for (let f = Math.ceil(b / pas) * pas; f <= t; f += pas) if (X(f) > 14 && X(f) < w - 14) x.fillText(String((f - 10489000000) / 1000), X(f), h - 4);
+  tqEtiquettes(x, w, X, b, t);
 }
 /** The canvas at its displayed size; its 2D context. */
 function toile(c) {
@@ -4049,6 +4183,9 @@ function dessineReglette() {
     x.fillRect(X(s.bas), 22, Math.max(1.5, X(s.haut) - X(s.bas) - 1), 26); x.globalAlpha = 1;
     if (X(s.haut) - X(s.bas) > 44) { x.fillStyle = '#06131A'; x.font = '600 10px Drapeaux,system-ui'; x.textAlign = 'center'; x.fillText(s.nom.slice(0, Math.floor((X(s.haut) - X(s.bas)) / 6)), (X(s.bas) + X(s.haut)) / 2, 39); }
   }
+  // The waterfall's window when zoomed.
+  const fz = tqFenetre();
+  if (fz && !fz.plein) { x.strokeStyle = 'rgba(232,240,247,.7)'; x.lineWidth = 1; x.strokeRect(X(fz.b) + .5, 18.5, X(fz.t) - X(fz.b) - 1, 40); }
   // My memories, then the 50 kHz ticks.
   x.fillStyle = '#FFB454'; O.memoires.filter(m => !m.fixe).forEach(m => { x.beginPath(); x.moveTo(X(m.hz), 50); x.lineTo(X(m.hz) - 4, 57); x.lineTo(X(m.hz) + 4, 57); x.fill(); });
   x.fillStyle = '#9AA7B4'; x.strokeStyle = '#22303B'; x.font = '10px Drapeaux,system-ui'; x.textAlign = 'center';
@@ -4086,7 +4223,16 @@ function dessineLoupe() {
   r.addEventListener('pointerdown', ev => { if (!OP) return; tire = true; r.setPointerCapture(ev.pointerId); qPost('frequence?hz=' + f(ev)); });
   r.addEventListener('pointermove', ev => { if (!tire || Date.now() - dernier < 120) return; dernier = Date.now(); qPost('frequence?hz=' + f(ev)); });
   r.addEventListener('pointerup', ev => { if (tire) qPost('frequence?hz=' + f(ev)); tire = false; });
-  g('o-pano').addEventListener('click', ev => { if (!OP) return; qPost('frequence?hz=' + f(ev)); });
+  // The waterfall: a signal named near the click is tuned in its mode; elsewhere, the frequency clicked.
+  g('o-pano').addEventListener('click', ev => {
+    if (!OP) return;
+    const fz = tqFenetre(), bb = g('o-pano').getBoundingClientRect();
+    const hz = fz.b + (fz.t - fz.b) * (ev.clientX - bb.left - 4) / (bb.width - 8);
+    const tol = Math.max(600, (fz.t - fz.b) / Math.max(1, bb.width - 8) * 8);
+    const k = tqCorr(), s = tqNommes().filter(q => Math.abs(q.hz + k - hz) <= q.largeurHz / 2 + tol).sort((p, q) => Math.abs(p.hz + k - hz) - Math.abs(q.hz + k - hz))[0];
+    if (s) tqAccorde(s);
+    else tqPost('api/qo100/accorde?hz=' + Math.round(hz / 100) * 100).then(() => chargeQo100());
+  });
   const l = g('o-loupe');
   l.addEventListener('click', ev => { if (!O) return; const b = l.getBoundingClientRect();
     qPost('frequence?hz=' + Math.round((O.descente + LOUPE * (ev.clientX - b.left - b.width / 2) / (b.width / 2 - 4)) / 100) * 100); });
@@ -4100,6 +4246,264 @@ function dessineLoupe() {
   });
   window.addEventListener('resize', dessineQo100);
 })();
+
+// ------------------------------------------------------------------ QO-100 cockpit
+// One screen to operate the narrow transponder: the receiver in one gesture, the signals named on the waterfall,
+// the decoder of the signal tuned docked below, the log on QO-100. Polled slowly elsewhere: the header says what SatMe follows.
+let TQ = null, TQS = null, tqDecAuto = '', tqDock = 'auto', tqZ = 500000, tqFen = null, tqOccupe = false, tqErreur = '', tqN = 0, tqFt8Vu = '', tqSstvV = -1;
+try { tqDock = localStorage.getItem('tq-dock') || 'auto'; tqZ = +(localStorage.getItem('tq-zoom') || 500000) || 500000; } catch (x) {}
+g('tq-zoom').value = String(tqZ);
+const TQ_COUL = { blu: '#3FE0C8', cw: '#6F8CFF', ft8: '#B07CFF', ft4: '#D58CFF', psk31: '#FF8FD0', rtty: '#FFD166', sstv: '#FFB454', porteuse: '#9AA7B4',
+  balise: '#E5484D', numerique_large: '#8BC34A', inconnu: '#6B7C8F' };
+const TQ_NOM = { blu: 'BLU', cw: 'CW', ft8: 'FT8', ft4: 'FT4', psk31: 'PSK31', rtty: 'RTTY', sstv: 'SSTV', porteuse: 'porteuse', balise: 'balise', numerique_large: 'numérique', inconnu: '?' };
+const TQ_DEC_MODE = { SSB: 'phonie', CW: 'cw', FT8: 'ft8', FT4: 'ft8', SSTV: 'sstv' };
+/** The signals worth a label: judged with some confidence (the doubtful ones would only clutter the waterfall). */
+const TQ_SUR = 0.3;
+/** Where the receiver hears a signal: its sky frequency plus what the calibration does not hold yet (0 once the LNB is calibrated). */
+const tqCorr = () => (TQS && TQS.correction) || 0;
+const tqNommes = () => (TQS && TQS.signaux ? TQS.signaux : []).filter(s => s.confiance >= TQ_SUR && s.classe !== 'inconnu');
+g('tq-legende').innerHTML = Object.keys(TQ_NOM).filter(k => k !== 'inconnu').map(k => '<span><i style="background:' + TQ_COUL[k] + '"></i>' + TQ_NOM[k] + '</span>').join('');
+/** A gesture without the alert box: the cockpit says what went wrong in its own words. */
+async function tqPost(u) {
+  try { const r = await fetch(u, { method: 'POST' }); const j = await r.json(); setTimeout(tic, 150); return j; } catch (x) { return null; }
+}
+async function tqTic() {
+  let j = null;
+  try { j = await (await fetch('api/qo100/trafic')).json(); } catch (x) {}
+  TQ = j && !j.absent && j.contexte ? j : null;
+  tqRend();
+}
+const tqQo = () => !!(TQ && TQ.contexte && TQ.contexte.qo100);
+function tqRend() {
+  const t = TQ, c = t && t.contexte, chip = g('ctx-chip');
+  // The header, whatever the tab: what the log follows.
+  chip.hidden = !c || !c.libelle;
+  if (c && c.libelle) {
+    txt('ctx-chip', (c.qo100 ? '📡 ' : '🛰 ') + c.libelle); chip.classList.toggle('qo', !!c.qo100);
+    chip.title = c.qo100 ? 'SatMe suit QO-100 (' + (c.par === 'poste' ? 'le poste y est' : 'le récepteur y est') + ') : les contacts notés vont sur QO-100, avec cette fréquence et ce mode.'
+      : 'Le satellite suivi : les contacts notés vont sur lui.';
+  }
+  // Room for it in the header: the station's line gives way.
+  chip.parentNode.classList.toggle('a-ctx', !chip.hidden);
+  g('tq-reprise').hidden = !(t && t.reprendre);
+  // Réglages: shown where the setting exists (not on the phone).
+  g('rq-carte').hidden = !(t && t.repriseAuto !== undefined);
+  if (t && t.repriseAuto !== undefined && document.activeElement !== g('rq-auto')) g('rq-auto').checked = !!t.repriseAuto;
+  // The log's entry, wherever it is: QO-100 said, the satellite list left aside.
+  const qo = tqQo();
+  g('c-satligne').hidden = qo && !g('ca-on').checked;
+  if (!g('ca-on').checked) txt('c-aide', qo ? 'Daté à l’enregistrement, sur QO-100 (' + (c.par === 'poste' ? 'le poste y est' : 'le récepteur y est') + '), avec la fréquence du ciel, ton carré et le mode du signal accordé.'
+    : 'Daté à l\'enregistrement, sur le satellite suivi, avec son az/el, ton carré, le mode et les fréquences au repos.');
+  if (qo) txt('c-sat', '· ' + c.libelle);
+  if (g('v-qo100').hidden) return;
+  if (!t) { txt('tq-msg', 'Le cockpit QO-100 n’est pas disponible ici.'); return; }
+  const r = t.recepteur, recoit = t.recoit;
+  g('tq-go').hidden = recoit; g('tq-stop').hidden = !recoit;
+  g('tq-go').disabled = tqOccupe;
+  txt('tq-go', tqOccupe ? '… démarrage du récepteur' : r.actif && !t.cle ? '▶ Mettre le récepteur sur QO-100' : '▶ Démarrer la réception QO-100');
+  const p = g('tq-pastille'); p.classList.toggle('marche', recoit); p.classList.toggle('coupe', !recoit);
+  txt('tq-pastille', recoit ? 'réception QO-100' : r.actif ? 'récepteur sur autre chose' : 'arrêtée');
+  g('tq-rx').classList.toggle('allume', recoit); g('tq-rx').classList.toggle('eteint', !recoit);
+  txt('tq-recepteur', r.nom || '');
+  // The steps of the gesture, each said done or not.
+  const etapes = [[r.actif, 'récepteur en marche'], [t.cle, 'QO-100 appliqué au récepteur'], [recoit, 'son vers les décodeurs'], [qo, 'carnet sur QO-100']];
+  const h = etapes.map(e => '<span class="' + (e[0] ? 'ok' : 'non') + '">' + (e[0] ? '✓ ' : '○ ') + e[1] + '</span>').join('');
+  if (g('tq-etapes').innerHTML !== h) g('tq-etapes').innerHTML = h;
+  // Why not, and what to do.
+  let m = '';
+  if (!recoit) {
+    m = tqErreur || (r.erreur ? 'Le récepteur dit : ' + r.erreur + '.' : '');
+    if (m) m += ' Vérifie qu’il est branché et allumé, et qu’il est bien choisi dans l’onglet SDR (carte « ' + (window.SATME_TELEPHONE ? 'La clé' : 'Le récepteur') + ' »).';
+    else if (r.actif) m = 'Le récepteur écoute autre chose (onglet SDR) : « Mettre le récepteur sur QO-100 » le reprend.';
+    else if (!tqOccupe) m = 'Le récepteur est arrêté : un clic sur « Démarrer la réception QO-100 » fait tout (récepteur, QO-100, son, carnet).';
+  }
+  txt('tq-msg', m);
+  // The level: the receiver's, in dB.
+  g('tq-smetre').style.width = (r.actif ? Math.max(0, Math.min(100, (r.niveau + 100) * 1.25)) : 0) + '%';
+  txt('tq-db', r.actif ? r.niveau.toFixed(0) + ' dB' : '—');
+  txt('tq-demod', recoit ? 'démodulé en ' + r.mode : '');
+  if (document.activeElement !== g('tq-mode') && qo && c.mode) g('tq-mode').value = c.mode;
+  // The sound.
+  if (document.activeElement !== g('tq-hp')) g('tq-hp').checked = !!r.son;
+  if (document.activeElement !== g('tq-sq')) g('tq-sq').value = String(r.squelch);
+  txt('tq-sqv', r.squelch <= -120 ? 'ouvert' : r.squelch + ' dB');
+  g('tq-agc-l').hidden = r.agc === null || r.agc === undefined;
+  if (r.agc !== null && r.agc !== undefined && document.activeElement !== g('tq-agc')) g('tq-agc').checked = !!r.agc;
+  g('tq-ec-boite').hidden = !!window.SATME_TELEPHONE;
+  txt('tq-ec', ecArret && g('ec-source').value === 'sdr' ? '■ Arrêter l’écoute ici' : '🔈 Écouter ici');
+  // The beacon far off and nothing following it: say so, with the remedy.
+  const k = g('tq-conseil');
+  k.hidden = !t.conseilCalage;
+  const kh = t.conseilCalage ? 'La balise médiane tombe à <b>' + (t.ecartBalise > 0 ? '+' : '') + t.ecartBalise.toLocaleString('fr-FR') + ' Hz</b> de sa place : le LNB a dérivé, tout le transpondeur est décalé d’autant. ' +
+    '<button class="primaire" style="margin-top:6px" onclick="tqCalageAuto()">Activer le calage automatique</button>' : '';
+  if (k.innerHTML !== kh) k.innerHTML = kh;
+  tqDockRend();
+}
+async function tqDemarre() {
+  tqOccupe = true; tqErreur = ''; tqRend();
+  const j = await tqPost('api/qo100/demarrer');
+  tqOccupe = false;
+  if (!j) tqErreur = 'SatMe ne répond pas.';
+  else if (j.ok === false) tqErreur = 'Le récepteur n’a pas démarré : ' + (j.erreur || 'raison inconnue') + '.';
+  await tqTic(); chargeQo100(); ticQualite();
+}
+async function tqArrete() {
+  tqErreur = '';
+  if (ecArret && g('ec-source').value === 'sdr') arreteEcoute();
+  await tqPost('api/qo100/arreter'); await tqTic(); chargeQo100();
+}
+async function tqReprise(on) {
+  if (on) { vue('qo100'); tqOccupe = true; tqRend(); }
+  const j = await tqPost('api/qo100/reprise?on=' + on);
+  tqOccupe = false;
+  if (on && j && j.ok === false) tqErreur = 'Reprise impossible : ' + (j.erreur || 'raison inconnue') + '.';
+  await tqTic(); chargeQo100();
+}
+async function tqMode(m) { await tqPost('api/qo100/mode?m=' + enc(m)); tqDecAuto = TQ_DEC_MODE[m] || ''; tqTic(); }
+async function tqCalageAuto() { await tqPost('api/qo100/auto?on=1'); ticQualite(); tqTic(); }
+function tqEcoute() {
+  if (ecArret && g('ec-source').value === 'sdr') arreteEcoute();
+  else { g('ec-source').value = 'sdr'; g('ec-vol').value = g('tq-vol').value; ecouteIci(); }
+  setTimeout(tqRend, 400);
+}
+// « Comment ça marche »: the first visits, until closed.
+function tqAide() {
+  let n = 0, ferme = false;
+  try { n = +(localStorage.getItem('tq-aide-n') || 0); ferme = localStorage.getItem('tq-aide-ferme') === '1'; localStorage.setItem('tq-aide-n', String(n + 1)); } catch (x) {}
+  g('tq-aide').hidden = ferme || n >= 8;
+}
+function tqAideFerme() { g('tq-aide').hidden = true; try { localStorage.setItem('tq-aide-ferme', '1'); } catch (x) {} }
+// The signals the receiver hears, each judged (BLU, CW, FT8…): asked only while the cockpit is shown (asking keeps the analysis on).
+async function tqSignaux() {
+  if (g('v-qo100').hidden) return;
+  if (!TQ || !TQ.classifieur || !TQ.recoit) TQS = null;
+  else { try { const j = await (await fetch('api/qo100/signaux')).json(); TQS = j && !j.absent ? j : null; } catch (x) { TQS = null; } }
+  tqSignauxRend();
+}
+setInterval(tqSignaux, 1000);
+function tqSignauxRend() {
+  const tous = TQS && TQS.signaux ? TQS.signaux.length : 0, l = tqNommes().filter(s => s.classe !== 'balise').sort((a, b) => a.hz - b.hz);
+  const cl = TQ && TQ.classifieur;
+  g('tq-legende').hidden = !cl;
+  txt('tq-cl-etat', !TQ ? '' : !cl ? 'les étiquettes des signaux ne sont pas encore là ici' : !TQ.recoit ? 'les signaux seront reconnus dès la réception'
+    : TQS && TQS.actif ? l.length + ' signal(aux) reconnu(s)' + (tous > l.length ? ' (' + (tous - l.length) + ' douteux non étiquetés)' : '') + ' · un clic pour s’y accorder' : 'analyse des signaux en route…');
+  const ici = (O ? O.descente : 0) - tqCorr();
+  const h = l.map(s => {
+    const c = TQ_COUL[s.classe] || '#9AA7B4', a = Math.abs(s.hz - ici) < 3000;
+    return '<button class="' + (a ? 'ici' : '') + '" style="border-color:' + c + ';color:' + c + ';opacity:' + (0.5 + 0.5 * Math.min(1, s.confiance)).toFixed(2) + '" title="' +
+      esc(s.libelle) + ' · sûr à ' + Math.round(s.confiance * 100) + ' % · ' + (s.largeurHz / 1000).toFixed(1) + ' kHz · ' + Math.round(s.snrDb) + ' dB' + (s.details ? ' · ' + esc(s.details) : '') +
+      '" onclick="tqAccordeId(' + s.id + ')">' + (TQ_NOM[s.classe] || esc(s.classe)) + ' · ' + (s.hz / 1e6).toFixed(4).replace('.', ',') + ' · ' + Math.round(s.confiance * 100) + ' %</button>';
+  }).join('');
+  if (g('tq-signaux').innerHTML !== h) g('tq-signaux').innerHTML = h;
+}
+function tqAccordeId(id) { const s = TQS && TQS.signaux ? TQS.signaux.find(x => x.id === id) : null; if (s) tqAccorde(s); }
+/** A signal clicked: tuned in its mode, its decoder opened (and started) in the dock. */
+async function tqAccorde(s) {
+  const j = await tqPost('api/qo100/accorde?hz=' + (s.hz + tqCorr()) + '&classe=' + enc(s.classe));
+  if (j && j.decodeur !== undefined) {
+    tqDecAuto = j.decodeur;
+    if (j.decodeur === 'ft8') await tqPost('api/ft8?on=1&mode=' + (j.ft8Mode || 'FT8'));
+    else if (j.decodeur === 'cw') await tqPost('api/cw?on=1');
+    else if (j.decodeur === 'sstv') await tqPost('api/sstv/reglage?actif=1');
+    tqFt8Vu = '';
+  }
+  await chargeQo100(); tqTic(); ticCw(); ticSon(); tqFt8();
+}
+// The dock: the decoder chosen by the signal tuned (« Auto »), or by hand.
+function tqDecodeur() { return tqDock !== 'auto' ? tqDock : (tqDecAuto || (tqQo() ? TQ_DEC_MODE[TQ.contexte.mode] || '' : '')); }
+function tqDockRend() {
+  const d = tqDecodeur();
+  document.querySelectorAll('#tq-onglets button').forEach(b => { b.classList.toggle('actif', b.dataset.d === tqDock); b.classList.toggle('auto-choisi', tqDock === 'auto' && b.dataset.d === d); });
+  for (const k of ['phonie', 'cw', 'ft8', 'sstv']) g('tq-d-' + k).hidden = d !== k;
+  g('tq-d-rien').hidden = !!d;
+  txt('tq-d-info', tqDock === 'auto' ? (d ? 'choisi d’après le signal accordé' : '') : 'choisi à la main');
+  g('tq-ph-absent').hidden = !g('ph-carte').hidden;
+  g('tq-cw-absent').hidden = !g('cw-carte').hidden;
+}
+document.querySelectorAll('#tq-onglets button').forEach(b => b.onclick = () => {
+  tqDock = b.dataset.d; try { localStorage.setItem('tq-dock', tqDock); } catch (x) {}
+  tqDockRend(); tqFt8(); tqSstv(); ticPhonie(true); ticCw();
+});
+// FT8/FT4 in the dock: the last messages, a click prepares the contact.
+async function tqFt8() {
+  if (g('v-qo100').hidden || tqDecodeur() !== 'ft8') return;
+  let j = null;
+  try { j = await (await fetch('api/ft8')).json(); } catch (x) {}
+  if (!j || !j.present) { txt('tq-ft8-etat', 'FT8 n’est pas disponible ici'); return; }
+  H = j;
+  txt('tq-ft8-go', H.enMarche ? '■ Arrêter' : '▶ Décoder ' + (H.mode || 'FT8'));
+  txt('tq-ft8-etat', !H.carte ? 'pas de son : démarrer la réception QO-100' : H.enMarche ? H.mode + ' · ' + H.tranches + ' créneaux · niveau ' + Math.round(H.niveau * 100) + ' %' : 'à l’arrêt');
+  const l = (H.entendus || []).slice(0, 40);
+  const cle = JSON.stringify([H.enMarche, l.length, l.length ? l[0].t + l[0].texte : '']);
+  if (cle === tqFt8Vu) return;
+  tqFt8Vu = cle;
+  g('tq-ft8').innerHTML = l.map(e => '<tr><td class="petit">' + new Date(e.t).toISOString().slice(11, 19) + '</td><td>' + f8Drapeau(e.drapeau) + '</td><td class="petit">' + e.db +
+    ' dB</td><td class="petit">' + e.hz + ' Hz</td><td style="font-family:ui-monospace,Consolas,monospace' + (e.moi ? ';color:#FF5FA2' : e.cq ? ';color:#5BD68A' : '') + '">' + esc(e.texte) +
+    '</td><td>' + (e.de ? '<button title="Préparer ce contact" onclick="noteFt8(\'' + esc(e.de) + '\',\'' + esc(e.loc) + '\',' + e.db + ')">✎</button>' : '') + '</td></tr>').join('') ||
+    '<tr><td class="petit">' + (H.enMarche ? 'rien encore décodé : un créneau dure ' + (H.mode === 'FT4' ? '7,5' : '15') + ' s' : 'à l’arrêt : « Décoder »') + '</td></tr>';
+}
+setInterval(tqFt8, 1500);
+async function tqFt8Marche() { await tqPost('api/ft8?on=' + (H && H.enMarche ? 0 : 1) + '&mode=' + ((H && H.mode) || 'FT8')); tqFt8Vu = ''; tqFt8(); }
+// SSTV in the dock: the picture arriving.
+function tqSstv() {
+  if (!S || g('v-qo100').hidden || tqDecodeur() !== 'sstv') return;
+  txt('tq-sstv-etat', !S.actif ? 'pas de son : démarrer la réception QO-100' : !S.sstv ? 'décodage SSTV coupé (onglet SSTV)' : S.sstvMode ? S.sstvMode + ' · ' + S.sstvLignes + '/' + S.sstvHauteur + ' lignes'
+    : S.sstvDerniere ? 'dernière image : ' + S.sstvDerniere : 'à l’écoute d’une image…');
+  if (S.sstvVersion !== tqSstvV) {
+    tqSstvV = S.sstvVersion;
+    if (S.sstvMode) g('tq-sstv-img').src = 'api/sstv/encours.png?v=' + S.sstvVersion;
+    else if (S.sstvDerniere) g('tq-sstv-img').src = 'sstv/' + enc(S.sstvDerniere);
+  }
+}
+// The log's entry and the CW window live in the cockpit while it is shown, back in the Carnet when it is.
+function tqRange(n) {
+  if (n === 'qo100') { g('tq-carnet-slot').appendChild(g('c-saisie')); g('cw-slot-qo100').appendChild(g('cw-carte')); }
+  else if (n === 'carnet') { g('c-saisie-slot').appendChild(g('c-saisie')); g('cw-slot-carnet').appendChild(g('cw-carte')); }
+}
+/** A callsign picked in a decoder: into the entry, where it is (the cockpit's, else the Carnet's). */
+function versSaisie() { if (g('v-qo100').hidden) vue('carnet'); }
+// The zoom: the window follows the tuning, moved only when it leaves the window's middle.
+function tqFenetre() {
+  if (!OP) return null;
+  const B = OP.regletteBas, T = OP.regletteHaut;
+  if (tqZ >= T - B) return { b: B, t: T, plein: true };
+  const c = O ? O.descente : (B + T) / 2;
+  let f = tqFen && tqFen.z === tqZ ? tqFen : null;
+  if (!f || c < f.b + tqZ * 0.2 || c > f.t - tqZ * 0.2) {
+    const b = Math.max(B, Math.min(T - tqZ, Math.round((c - tqZ / 2) / 1000) * 1000));
+    f = { b: b, t: b + tqZ, z: tqZ };
+  }
+  tqFen = f;
+  return f;
+}
+function tqZoom(z) { tqZ = z; tqFen = null; oPanHist = []; try { localStorage.setItem('tq-zoom', String(z)); } catch (x) {} dessineQo100(); ticPano(); }
+/** The classifier's labels over the waterfall: colour by class, paler when less sure; the strongest first, four rows at most. */
+function tqEtiquettes(x, w, X, b, t) {
+  const l = tqNommes();
+  if (!l.length) return;
+  const rangs = [];
+  x.font = '600 11px Drapeaux,system-ui'; x.textBaseline = 'top'; x.textAlign = 'center';
+  l.slice().sort((p, q) => q.snrDb - p.snrDb).forEach(s => {
+    if (s.hz + tqCorr() < b || s.hz + tqCorr() > t) return;
+    const c = TQ_COUL[s.classe] || '#9AA7B4', cx = X(s.hz + tqCorr()), lw = Math.max(3, (w - 8) * s.largeurHz / (t - b));
+    const e = (TQ_NOM[s.classe] || s.classe) + ' ' + Math.round(s.confiance * 100) + '%', tw = x.measureText(e).width + 8;
+    let r = 0;
+    while (r < 4 && (rangs[r] || []).some(a => cx - tw / 2 < a[1] + 2 && cx + tw / 2 > a[0] - 2)) r++;
+    if (r >= 4) return;
+    (rangs[r] = rangs[r] || []).push([cx - tw / 2, cx + tw / 2]);
+    const y = 12 + r * 19;
+    x.globalAlpha = 0.4 + 0.6 * Math.max(0, Math.min(1, s.confiance));
+    x.fillStyle = 'rgba(6,19,26,.85)'; x.fillRect(cx - tw / 2, y, tw, 15);
+    x.strokeStyle = c; x.lineWidth = 1; x.strokeRect(cx - tw / 2 + .5, y + .5, tw - 1, 14);
+    x.fillStyle = c; x.fillText(e, cx, y + 2);
+    x.fillRect(cx - lw / 2, y + 16, lw, 2);
+    x.globalAlpha = 1;
+  });
+  x.textBaseline = 'alphabetic';
+}
+let tqTour = 0;
+setInterval(() => { if (!g('v-qo100').hidden || ++tqTour % 3 === 0) tqTic(); }, 1000);
+tqTic();
 
 // ------------------------------------------------------------------ SDR
 let R = null, rSpan = 48000, rCascade = [], rTrames = -1, rDernier = null;
@@ -4728,7 +5132,7 @@ function messagesFt8() {
 try { if (localStorage.getItem('ft8-vue') === 'messages') f8Montre('messages'); } catch (x) {}
 async function ft8Marche() { await post('api/ft8?on=' + (H && H.enMarche ? 0 : 1) + '&mode=' + g('8-mode').value); ticFt8(); }
 function noteFt8(call, loc, db) {
-  vue('carnet'); g('c-call').value = call; g('c-loc').value = loc || '';
+  versSaisie(); g('c-call').value = call; g('c-loc').value = loc || '';
   // An FT8 report is in dB, as it is said: "-12".
   g('c-rr').value = (db > 0 ? '+' : '') + db;
   g('c-call').dispatchEvent(new Event('input')); g('c-call').focus();
