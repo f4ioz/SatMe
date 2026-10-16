@@ -1205,7 +1205,7 @@ object PagePc {
       </div>
       <details style="margin-top:8px"><summary class="petit">Carte de visite dans le flux</summary>
         <label class="petit" style="display:block;margin-top:6px"><input type="checkbox" id="e-carte-on" onchange="eRegleCarte()"> Envoyer la carte de visite : indicatif, locator, nom, logiciel, fréquence et MODCOD, avec ce qui suit (à la place de paquets nuls : les autres récepteurs l’ignorent, l’image ne change pas)</label>
-        <div class="ligne"><span class="petit" style="min-width:86px">QTH</span><input id="e-qth" maxlength="48" placeholder="Ville" onchange="eRegleCarte()"></div>
+        <div class="ligne"><span class="petit" style="min-width:86px">QTH</span><input id="ec-qth" maxlength="48" placeholder="Ville" onchange="eRegleCarte()"></div>
         <div class="ligne"><span class="petit" style="min-width:86px">Puissance</span><input id="e-puissance" maxlength="24" placeholder="10 W" style="max-width:100px" onchange="eRegleCarte()">
           <span class="petit">Antenne</span><input id="e-antenne" maxlength="48" placeholder="Parabole 1,2 m" onchange="eRegleCarte()"></div>
         <div class="ligne"><span class="petit" style="min-width:86px">Message</span><input id="e-message" maxlength="140" placeholder="Retour par le chat, 73" onchange="eRegleCarte()"></div>
@@ -3925,9 +3925,9 @@ function ticCarteDatv() {
   const fil = EM.chat.map(d => dcBulle(EM.indicatif, d.texte, d.t, true, vus.has(d.seq))).join('');
   const ef = g('e-chat-fil');
   if (ef.dataset.vu !== fil) { ef.dataset.vu = fil; ef.innerHTML = fil; ef.scrollTop = ef.scrollHeight; }
-  const libre = !document.activeElement || !['e-qth', 'e-puissance', 'e-antenne', 'e-message', 'e-retour', 'e-retour-mode'].includes(document.activeElement.id);
+  const libre = !document.activeElement || !['ec-qth', 'e-puissance', 'e-antenne', 'e-message', 'e-retour', 'e-retour-mode'].includes(document.activeElement.id);
   if (eCartePremier || libre) {
-    g('e-carte-on').checked = EM.carteOn; g('e-qth').value = EM.qth; g('e-puissance').value = EM.puissance; g('e-antenne').value = EM.antenne; g('e-message').value = EM.message;
+    g('e-carte-on').checked = EM.carteOn; g('ec-qth').value = EM.qth; g('e-puissance').value = EM.puissance; g('e-antenne').value = EM.antenne; g('e-message').value = EM.message;
     g('e-retour').value = EM.retourHz ? (EM.retourHz / 1e6).toFixed(EM.retourHz % 1000 ? 6 : 3).replace('.', ',') : '';
     g('e-retour-mode').value = EM.retourMode || 'USB';
     txt('e-retour-info', EM.retourHz && !EM.retourDonne ? 'celle du cockpit QO-100' : '');
@@ -3955,7 +3955,7 @@ async function dcEcouteRetour(hz, mode) {
   await chargeQo100(); tqTic(); ticPhonie(true);
 }
 async function eRegleCarte() {
-  await post('api/datv/emission/reglage?carte=' + (g('e-carte-on').checked ? 1 : 0) + '&qth=' + enc(v('e-qth')) + '&puissance=' + enc(v('e-puissance')) +
+  await post('api/datv/emission/reglage?carte=' + (g('e-carte-on').checked ? 1 : 0) + '&qth=' + enc(v('ec-qth')) + '&puissance=' + enc(v('e-puissance')) +
     '&antenne=' + enc(v('e-antenne')) + '&message=' + enc(v('e-message')));
 }
 // ------------------------------------------------------------ DATV transmission: overlay, preview, file choice
