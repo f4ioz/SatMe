@@ -113,6 +113,15 @@ object PagePc {
   .gp-ct { color:var(--gris); font-size:11px; }
   .d-grille { display:grid; grid-template-columns:minmax(0,1fr) 430px; gap:12px; padding:12px 16px; }
   @media (max-width:1100px) { .d-grille { grid-template-columns:1fr; } }
+  .dc-carte { margin-top:10px; border:1px solid var(--bord); border-radius:10px; padding:10px 12px; background:rgba(63,224,200,.05); }
+  .dc-tete { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+  .dc-call { font-size:22px; letter-spacing:.5px; color:var(--cyan); }
+  .dc-drapeau { font-size:24px; font-family:Drapeaux,system-ui; }
+  .dc-message { margin-top:6px; font-style:italic; }
+  .dc-chat { display:flex; flex-direction:column; gap:4px; margin-top:8px; max-height:220px; overflow-y:auto; }
+  .dc-bulle { align-self:flex-start; max-width:85%; background:#1B2A36; border-radius:12px 12px 12px 3px; padding:5px 10px; overflow-wrap:anywhere; }
+  .dc-bulle.moi { align-self:flex-end; background:rgba(63,224,200,.18); border-radius:12px 12px 3px 12px; }
+  .dc-bulle .petit { margin-right:6px; }
   #d-cadre { position:relative; aspect-ratio:16/9; max-height:calc(100vh - 230px); background:#000; border-radius:8px; overflow:hidden; display:flex; align-items:center; justify-content:center; }
   #d-video { max-width:100%; max-height:100%; display:none; }
   #d-vide { position:absolute; color:var(--gris); font-size:15px; }
@@ -1027,6 +1036,17 @@ object PagePc {
       </div>
       <div id="q-pids"></div>
     </div>
+    <div id="dc-carte" class="dc-carte" hidden>
+      <div class="dc-tete"><span id="dc-drapeau" class="dc-drapeau"></span><b id="dc-call" class="dc-call"></b>
+        <span id="dc-connu" class="pastille" style="background:rgba(91,214,138,.2);color:var(--vert)" hidden></span>
+        <span class="petit" id="dc-age"></span>
+        <button style="margin-left:auto" onclick="dcNote()" title="Dans le carnet : QO-100 (ou DATV terrestre), mode DATV, la fréquence, la MER reçue comme report">Noter le QSO</button></div>
+      <div id="dc-info" style="margin-top:4px"></div>
+      <div class="petit" id="dc-tech" style="margin-top:2px"></div>
+      <div id="dc-message" class="dc-message" hidden></div>
+      <div id="dc-chat" class="dc-chat"></div>
+      <div class="etat" id="dc-msg"></div>
+    </div>
   </div>
   <div class="d-cote">
     <div class="carte">
@@ -1108,6 +1128,18 @@ object PagePc {
       <div class="petit" id="e-calc" style="margin-top:6px"></div>
       <div class="ligne" style="margin-top:10px"><button class="emettre" id="e-go" onclick="eEmettre()">ÉMETTRE</button>
         <button class="arret-tx" id="e-stop" onclick="eArrete()">ARRÊT</button></div>
+      <div id="e-chat-l" hidden>
+        <div class="ligne"><input id="e-chat" maxlength="140" placeholder="Chat dans le flux émis (Entrée) — 140 caractères" onkeydown="if (event.key === 'Enter') eChat()">
+          <button onclick="eChat()">Envoyer</button></div>
+        <div id="e-chat-fil" class="dc-chat"></div>
+      </div>
+      <details style="margin-top:8px"><summary class="petit">Carte de visite dans le flux</summary>
+        <label class="petit" style="display:block;margin-top:6px"><input type="checkbox" id="e-carte-on" onchange="eRegleCarte()"> Envoyer la carte de visite : indicatif, locator, nom, logiciel, fréquence et MODCOD, avec ce qui suit (à la place de paquets nuls : les autres récepteurs l’ignorent, l’image ne change pas)</label>
+        <div class="ligne"><span class="petit" style="min-width:86px">QTH</span><input id="e-qth" maxlength="48" placeholder="Ville" onchange="eRegleCarte()"></div>
+        <div class="ligne"><span class="petit" style="min-width:86px">Puissance</span><input id="e-puissance" maxlength="24" placeholder="10 W" style="max-width:100px" onchange="eRegleCarte()">
+          <span class="petit">Antenne</span><input id="e-antenne" maxlength="48" placeholder="Parabole 1,2 m" onchange="eRegleCarte()"></div>
+        <div class="ligne"><span class="petit" style="min-width:86px">Message</span><input id="e-message" maxlength="140" placeholder="Retour par le chat, 73" onchange="eRegleCarte()"></div>
+      </details>
       <div id="e-direct" class="e-direct" hidden></div>
       <div id="e-boucle" class="petit" style="margin-top:8px;line-height:1.7"></div>
       <div class="etat" id="e-msg"></div>
@@ -3454,6 +3486,66 @@ async function eEmettre() {
 async function eArrete() {
   try { await fetch('api/datv/emission/arrete', { method: 'POST' }); } catch (x) {}
   txt('e-msg', 'arrêtée'); setTimeout(ticEmission, 200);
+}
+
+// ------------------------------------------------------------------ DATV station card and chat (in the transport stream)
+let eCartePremier = true;
+function dcBulle(c, texte, t, moi, recu) {
+  return '<div class="dc-bulle' + (moi ? ' moi' : '') + '"><span class="petit">' + hm(t) + '</span><b>' + esc(c) + '</b> ' + esc(texte) +
+    (recu === undefined ? '' : recu ? ' <span style="color:var(--vert)" title="Reçu par le MiniTiouner">✓✓ reçu</span>' : ' <span class="petit" title="Envoyé, pas encore revu à la réception">✓</span>') + '</div>';
+}
+function ticCarteDatv() {
+  if (g('v-datv').hidden) return;
+  const k = D && D.carte, moi = EM ? EM.indicatif : '';
+  const boite = g('dc-carte');
+  boite.hidden = !(k && (k.recue || k.chat.length));
+  if (k && !boite.hidden) {
+    txt('dc-drapeau', k.drapeau ? f8Drapeau(k.drapeau) : '');
+    txt('dc-call', k.indicatif || (k.chat.length ? k.chat[k.chat.length - 1].c : ''));
+    const connu = g('dc-connu'); connu.hidden = !k.contacts; txt('dc-connu', k.contacts ? '✓ dans le carnet (' + k.contacts + ')' : '');
+    txt('dc-age', k.recue ? (k.indicatif === moi ? 'notre propre signal · ' : '') + 'carte reçue il y a ' + duree(k.age * 1000) : '');
+    g('dc-info').innerHTML = [k.pays ? esc(k.pays) : '', k.nom ? esc(k.nom) : '', k.qth ? esc(k.qth) : '', k.locator ? '<b>' + esc(k.locator) + '</b>' : '',
+      k.km != null ? k.km.toLocaleString('fr-FR') + ' km · ' + k.azimut + '° ' + esc(k.rose) : ''].filter(x => x).join(' · ');
+    txt('dc-tech', [k.khz ? mhz3(k.khz) + ' MHz' : '', k.modcod ? k.modcod + (k.sr ? ' · ' + k.sr + ' kS/s' : '') : '', k.puissance, k.antenne, k.logiciel].filter(x => x).join(' · '));
+    const m = g('dc-message'); m.hidden = !k.message; txt('dc-message', k.message ? '« ' + k.message + ' »' : '');
+    const html = k.chat.map(l => dcBulle(l.c, l.texte, l.t, l.c === moi)).join('');
+    const f = g('dc-chat');
+    if (f.dataset.vu !== html) { f.dataset.vu = html; f.innerHTML = html; f.scrollTop = f.scrollHeight; }
+  }
+  if (!EM) return;
+  // Transmitting: the chat rides on it; our lines ticked once the MiniTiouner sees them come back.
+  g('e-chat-l').hidden = !EM.emet;
+  const vus = new Set(k ? k.chat.filter(l => l.c === EM.indicatif).map(l => l.seq) : []);
+  const fil = EM.chat.map(d => dcBulle(EM.indicatif, d.texte, d.t, true, vus.has(d.seq))).join('');
+  const ef = g('e-chat-fil');
+  if (ef.dataset.vu !== fil) { ef.dataset.vu = fil; ef.innerHTML = fil; ef.scrollTop = ef.scrollHeight; }
+  const libre = !document.activeElement || !['e-qth', 'e-puissance', 'e-antenne', 'e-message'].includes(document.activeElement.id);
+  if (eCartePremier || libre) {
+    g('e-carte-on').checked = EM.carteOn; g('e-qth').value = EM.qth; g('e-puissance').value = EM.puissance; g('e-antenne').value = EM.antenne; g('e-message').value = EM.message;
+    eCartePremier = false;
+  }
+}
+setInterval(ticCarteDatv, 1000);
+async function eRegleCarte() {
+  await post('api/datv/emission/reglage?carte=' + (g('e-carte-on').checked ? 1 : 0) + '&qth=' + enc(v('e-qth')) + '&puissance=' + enc(v('e-puissance')) +
+    '&antenne=' + enc(v('e-antenne')) + '&message=' + enc(v('e-message')));
+}
+async function eChat() {
+  const t = v('e-chat').trim(); if (!t) return;
+  let j = null;
+  try { j = await (await fetch('api/datv/emission/chat?texte=' + enc(t), { method: 'POST' })).json(); } catch (x) {}
+  if (j && j.ok !== false) g('e-chat').value = '';
+  else txt('e-msg', j && j.erreur ? j.erreur : 'pas de réponse de SatMe-PC');
+  setTimeout(ticEmission, 200);
+}
+async function dcNote() {
+  const k = D && D.carte; if (!k || !k.indicatif) { txt('dc-msg', 'aucune carte reçue'); return; }
+  // QO-100: the downlink where the MiniTiouner holds it; terrestrial: the frequency received.
+  const khz = D.verrouille && D.cielTrouve ? D.cielTrouve : D.ciel;
+  const mer = D.verrouille && D.mer != null ? D.mer.toFixed(1) + 'dB' : '';
+  const j = await post('api/datv/qso?c=' + enc(k.indicatif) + '&l=' + enc(k.locator) + '&rs=' + enc(mer) + '&qo100=' + (k.qo100 ? 1 : 0) + '&khz=' + khz +
+    '&nm=' + enc(k.nom) + '&qth=' + enc(k.qth) + '&n=' + enc('DATV' + (k.modcod ? ' ' + k.modcod : '') + (mer ? ', MER ' + mer : '')));
+  txt('dc-msg', j && j.ok ? k.indicatif + ' noté au carnet (' + (k.qo100 ? 'QO-100' : 'DATV terrestre') + ')' : (j && j.erreur ? j.erreur : 'pas de réponse'));
 }
 
 // ------------------------------------------------------------------ orbital elements

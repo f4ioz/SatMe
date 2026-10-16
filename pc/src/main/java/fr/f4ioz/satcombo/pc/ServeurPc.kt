@@ -332,7 +332,7 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
             }
             "/api/datv" -> {
                 val d = datv
-                val o = if (d == null) JSONObject().put("ok", false) else JsonPc.datv(d)
+                val o = if (d == null) JSONObject().put("ok", false) else JsonPc.datv(d).put("carte", carteDatv(d))
                 envoie(sortie, "200 OK", "application/json; charset=utf-8", o.toString().toByteArray())
             }
             "/api/datv/emission" -> {
@@ -718,6 +718,12 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 q["hackrfOutil"]?.let { e.hackrfOutil = it }
                 q["intMhz"]?.replace(',', '.')?.toDoubleOrNull()?.let { e.frequenceInterieurKhz = Math.round(it * 1000.0) }
                 entier("intDuree")?.let { e.dureeInterieurS = it * 60 }
+                // The station card sent in the stream.
+                q["carte"]?.let { e.carteOn = it == "1" }
+                q["qth"]?.let { e.qth = it }
+                q["puissance"]?.let { e.puissance = it }
+                q["antenne"]?.let { e.antenne = it }
+                q["message"]?.let { e.message = it }
             }
             "/api/datv/emission/demarre" -> {
                 val e = emission ?: return JSONObject().put("ok", false)
@@ -730,6 +736,19 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 return ok.put("message", i.message).put("cartes", JSONArray(i.cartes.map { it.libelle }))
             }
             "/api/datv/emission/arrete" -> emission?.arrete()
+            // A chat line in the stream being sent (refused when nothing is being sent: typing never transmits).
+            "/api/datv/emission/chat" -> {
+                val e = emission ?: return JSONObject().put("ok", false)
+                e.dis(q["texte"].orEmpty())?.let { return JSONObject().put("ok", false).put("erreur", it) }
+            }
+            "/api/datv/qso" -> {
+                // The station whose card is received, into the log: QO-100 or terrestrial DATV, the MER we measure as our report.
+                val c = carnet ?: return JSONObject().put("ok", false)
+                val e = c.ajouteDatv(q["c"].orEmpty(), q["l"].orEmpty(), q["rs"].orEmpty(), q["n"].orEmpty(),
+                    q["qo100"] == "1", q["khz"]?.toLongOrNull() ?: 0L, q["nm"].orEmpty(), q["qth"].orEmpty())
+                    ?: return JSONObject().put("ok", false).put("erreur", "il faut un indicatif")
+                return ok.put("t", e.timeMs)
+            }
             "/api/datv/emission/vie" -> emission?.vie()
             "/api/datv/enregistre" -> return ok.put("nom", datv?.enregistre(q["on"] == "1").orEmpty())
             "/api/datv/vlc" -> datv?.ouvreVlc()?.let { return JSONObject().put("ok", false).put("erreur", it) }
@@ -1009,6 +1028,10 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
 
     /** A file as it is on disk, by parts when the browser asks (a sound it seeks in). */
     /** « Phonie → texte »: its state and overs, its settings, the day's transcript to download. */
+    /** The station card received on DATV, with where it is from us and whether it is in the log. */
+    private fun carteDatv(d: DatvPc): JSONObject = d.carte.json(System.currentTimeMillis(), station.etat.value.observateur,
+        { c -> carnet?.historique(c)?.size ?: 0 }, d.reglage.cielKhz)
+
     private fun phonie(r: RequeteHttp.Requete, chemin: String, q: Map<String, String>, sortie: OutputStream, p: PhoniePc) {
         val json = "application/json; charset=utf-8"
         if (r.methode == "POST") {

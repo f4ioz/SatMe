@@ -9,6 +9,9 @@
 package fr.f4ioz.satcombo.pc
 
 import fr.f4ioz.satcombo.datv.BoucleNiveau
+import fr.f4ioz.satcombo.datv.CarteStation
+import fr.f4ioz.satcombo.datv.InserteurCarte
+import fr.f4ioz.satcombo.datv.LigneChat
 import fr.f4ioz.satcombo.datv.Datv
 import fr.f4ioz.satcombo.datv.DemandeEmission
 import fr.f4ioz.satcombo.datv.Emetteur
@@ -67,6 +70,10 @@ class EmissionDatvPc(
     private val horloge: () -> Long = System::currentTimeMillis,
     /** Silence from the page longer than this: stopped. */
     private val vieMs: Long = 15_000L,
+    /** The operator's name (Réglages), for the station card. */
+    private val nom: () -> String = { "" },
+    /** The software named in the station card. */
+    private val logiciel: String = "SatMe-PC",
 ) {
     /** The MiniTiouner's view: locked, MER, where it is tuned (sky kHz), the service's name. */
     data class Reception(val verrouille: Boolean, val merDb: Double?, val cielKhz: Long, val service: String)
@@ -162,6 +169,65 @@ class EmissionDatvPc(
         get() = PlanInterieur.dureeS(stockage.getInt("datv_tx_int_duree", PlanInterieur.DUREE_DEFAUT_S))
         set(v) { stockage.edit().putInt("datv_tx_int_duree", PlanInterieur.dureeS(v)).apply() }
 
+    // The station card carried in the stream (see [fr.f4ioz.satcombo.datv.CarteTs]).
+    var carteOn: Boolean
+        get() = stockage.getBoolean("datv_tx_carte", true)
+        set(v) { stockage.edit().putBoolean("datv_tx_carte", v).apply() }
+    var qth: String
+        get() = stockage.getString("datv_tx_qth", "") ?: ""
+        set(v) { stockage.edit().putString("datv_tx_qth", v.trim().take(48)).apply(); majCarte() }
+    var puissance: String
+        get() = stockage.getString("datv_tx_puissance", "") ?: ""
+        set(v) { stockage.edit().putString("datv_tx_puissance", v.trim().take(24)).apply(); majCarte() }
+    var antenne: String
+        get() = stockage.getString("datv_tx_antenne", "") ?: ""
+        set(v) { stockage.edit().putString("datv_tx_antenne", v.trim().take(48)).apply(); majCarte() }
+    var message: String
+        get() = stockage.getString("datv_tx_message", "") ?: ""
+        set(v) { stockage.edit().putString("datv_tx_message", v.trim().take(fr.f4ioz.satcombo.datv.CarteTs.CHAT_MAX)).apply(); majCarte() }
+
+    /** The card for a transmission on [khz] in [m]. */
+    fun carteStation(khz: Long, m: Modcod, sr: Int = srKs): CarteStation = CarteStation(
+        indicatif = indicatif().trim().uppercase(), locator = locator().trim().uppercase(), nom = nom().trim(), qth = qth,
+        puissance = puissance, antenne = antenne, logiciel = logiciel, frequenceKhz = khz,
+        modcod = m.constellation.libelle + " " + m.taux.libelle, srKs = sr, message = message)
+
+    private fun majCarte() {
+        val i = inserteur ?: return
+        val e = etat
+        if (e.emet) i.carte = carteStation(e.frequenceKhz, modcodEnCours ?: modcod(), srEnCours)
+    }
+
+    /** A chat line sent, and when. */
+    data class Dit(val seq: Int, val texte: String, val ms: Long)
+    private val dits = ArrayList<Dit>()
+    private var seqChat = -1
+    private var dernierDitMs = 0L
+
+    /**
+     * A chat line in the stream being sent: only while a transmission the
+     * operator started runs (typing never starts one), 140 characters, one line every 2 s.
+     * Null once queued, else why not.
+     */
+    @Synchronized
+    fun dis(texte: String): String? {
+        val i = inserteur
+        if (!etat.emet || i == null) return "aucune émission en cours : le chat passe dans le flux émis"
+        val t = texte.trim().replace(Regex("\\s+"), " ")
+        if (t.isEmpty()) return "message vide"
+        if (t.codePointCount(0, t.length) > fr.f4ioz.satcombo.datv.CarteTs.CHAT_MAX) return "140 caractères au plus"
+        val maintenant = horloge()
+        if (maintenant - dernierDitMs < CHAT_INTERVALLE_MS) return "un message toutes les 2 s au plus"
+        if (seqChat < 0) seqChat = ((maintenant / 1000) and 0xFFFF).toInt()
+        seqChat = (seqChat + 1) and 0xFFFF
+        i.ajoute(LigneChat(seqChat, indicatif().trim().uppercase(), t))
+        dernierDitMs = maintenant
+        synchronized(dits) { dits += Dit(seqChat, t, maintenant); while (dits.size > 30) dits.removeAt(0) }
+        return null
+    }
+
+    fun dits(): List<Dit> = synchronized(dits) { dits.toList() }
+
     /** One of the HackRF's tools: in the folder set, else where [outilParDefaut] finds it; null when missing. */
     fun outilHackrf(nom: String): String? {
         val r = hackrfOutil
@@ -237,6 +303,9 @@ class EmissionDatvPc(
     private var processus: Processus? = null
     private var modulateur: ModulateurDvbs2? = null
     private var flux: FluxTs? = null
+    @Volatile private var inserteur: InserteurCarte? = null
+    @Volatile private var modcodEnCours: Modcod? = null
+    @Volatile private var srEnCours = 0
     @Volatile private var derniereVie = 0L
     @Volatile private var generation = 0
     val boucle = BoucleNiveau()
@@ -277,7 +346,9 @@ class EmissionDatvPc(
             else -> mire()
         }
         val gen = ++generation
-        val f = FluxTs(maxOf(64, (debitTs / 1504 * 2).toInt()))
+        // The station card and the chat in place of null packets: the rate unchanged.
+        val ins = if (carteOn) InserteurCarte(horloge).also { it.carte = carteStation(khz, m) } else null
+        val f = FluxTs(maxOf(64, (debitTs / 1504 * 2).toInt()), ins)
         val p = runCatching { fabrique.demarre(ParametresTs(debitTs, source, img, camera, d.indicatif.trim().uppercase(), hevc, son)) }
             .getOrElse { return "ffmpeg ne démarre pas : " + (it.message ?: "") }
         processus = p; flux = f
@@ -307,6 +378,7 @@ class EmissionDatvPc(
         }
         if (refus != null) { generation++; p.arrete(); processus = null; return refus }
         tx = e
+        inserteur = ins; modcodEnCours = m; srEnCours = srKs
         etat = Etat(emet = true, chargeFictive = chargeFictive, interieur = interieur, emetteur = qui, frequenceKhz = khz, debitTs = debitTs)
         return null
     }
@@ -327,6 +399,7 @@ class EmissionDatvPc(
         generation++
         processus?.arrete(); processus = null
         tx = null
+        inserteur = null
         val pe = px?.etatCommun()
         if (etat.emet) etat = etat.copy(emet = false, raison = pe?.raison ?: raison, erreur = pe?.erreur.orEmpty())
     }
@@ -426,11 +499,17 @@ class EmissionDatvPc(
         val b = boucle.etat
         o.put("boucle", JSONObject().put("ecart", b.ecartDb ?: JSONObject.NULL).put("tropFort", b.tropFort).put("message", b.message).put("baisses", b.baisses))
         o.put("cpu", cpu())
+        o.put("carteOn", carteOn).put("qth", qth).put("puissance", puissance).put("antenne", antenne).put("message", message)
+            .put("carteEnvoyee", inserteur?.remplaces ?: 0L)
+            .put("chat", JSONArray(dits().map { d -> JSONObject().put("seq", d.seq).put("texte", d.texte).put("t", d.ms) }))
         return o
     }
 
     companion object {
         val SOURCES = setOf("mire", "animee", "image", "video", "camera")
+
+        /** One chat line every 2 s at most. */
+        const val CHAT_INTERVALLE_MS = 2000L
 
         /** About 50 ms per buffer, a multiple of 1024 pairs. */
         fun paires(debit: Long): Int = (((debit / 20) + 1023) / 1024 * 1024).toInt().coerceIn(4096, 1 shl 18)
@@ -511,10 +590,11 @@ class EmissionDatvPc(
 
     /**
      * The transport stream between ffmpeg and the modulator: whole packets,
-     * resynchronised on 0x47; when it backs up (the source a little faster
+     * resynchronised on 0x47, the station card put in place of null packets
+     * ([inserteur]); when it backs up (the source a little faster
      * than the Pluto's clock), null packets go first.
      */
-    class FluxTs(capacite: Int) : SourceTs {
+    class FluxTs(capacite: Int, private val inserteur: InserteurCarte? = null) : SourceTs {
         private val file = ArrayBlockingQueue<ByteArray>(capacite)
         private val seuil = capacite * 3 / 4
         @Volatile var perdus = 0L; private set
@@ -548,7 +628,8 @@ class EmissionDatvPc(
                 var k = 0
                 while (n - k >= 188) {
                     if (b[k].toInt() != 0x47) { k++; continue }
-                    ajoute(b.copyOfRange(k, k + 188))
+                    val p = b.copyOfRange(k, k + 188)
+                    ajoute(inserteur?.traite(p) ?: p)
                     k += 188
                 }
                 System.arraycopy(b, k, b, 0, n - k)
