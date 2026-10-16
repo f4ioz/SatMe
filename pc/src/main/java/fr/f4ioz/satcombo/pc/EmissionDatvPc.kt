@@ -8,11 +8,13 @@
  */
 package fr.f4ioz.satcombo.pc
 
+import fr.f4ioz.satcombo.datv.AdaptationModcod
 import fr.f4ioz.satcombo.datv.BoucleNiveau
 import fr.f4ioz.satcombo.datv.CarteStation
 import fr.f4ioz.satcombo.datv.InserteurCarte
 import fr.f4ioz.satcombo.datv.LigneChat
 import fr.f4ioz.satcombo.datv.Datv
+import fr.f4ioz.satcombo.datv.DecalageHackrf
 import fr.f4ioz.satcombo.datv.DemandeEmission
 import fr.f4ioz.satcombo.datv.Emetteur
 import fr.f4ioz.satcombo.datv.PlanInterieur
@@ -25,6 +27,7 @@ import fr.f4ioz.satcombo.datv.s2.SourceTs
 import fr.f4ioz.satcombo.plateforme.Stockage
 import fr.f4ioz.satcombo.sdr.EmetteurDatv
 import fr.f4ioz.satcombo.sdr.HackrfEmission
+import fr.f4ioz.satcombo.sdr.Melangeur
 import fr.f4ioz.satcombo.sdr.PlutoEmission
 import org.json.JSONArray
 import org.json.JSONObject
@@ -74,9 +77,16 @@ class EmissionDatvPc(
     private val nom: () -> String = { "" },
     /** The software named in the station card. */
     private val logiciel: String = "SatMe-PC",
+    /** The MODCOD's adaptation for each transmission (its timings shortened in the tests). */
+    private val nouvelleAdaptation: () -> AdaptationModcod = { AdaptationModcod() },
 ) {
-    /** The MiniTiouner's view: locked, MER, where it is tuned (sky kHz), the service's name. */
-    data class Reception(val verrouille: Boolean, val merDb: Double?, val cielKhz: Long, val service: String)
+    /**
+     * The MiniTiouner's view: locked, MER, where it is tuned (sky kHz), the
+     * service's name; the station card's callsign (a recent one), packets
+     * lost now (continuity or transport errors).
+     */
+    data class Reception(val verrouille: Boolean, val merDb: Double?, val cielKhz: Long, val service: String,
+                         val carteIndicatif: String = "", val pertes: Boolean = false)
 
     /** What makes the transport stream: started with its exact rate, gives a byte stream. */
     interface FabriqueTs {
@@ -161,6 +171,25 @@ class EmissionDatvPc(
     var hackrfOutil: String
         get() = stockage.getString("datv_tx_hackrf_outil", "") ?: ""
         set(v) { stockage.edit().putString("datv_tx_hackrf_outil", v.trim()).apply() }
+    /** The HackRF's LO tuned beside the signal ([DecalageHackrf]): its leakage out of the occupied band. */
+    var hackrfDecalage: Boolean
+        get() = stockage.getBoolean("datv_tx_hackrf_decalage", true)
+        set(v) { stockage.edit().putBoolean("datv_tx_hackrf_decalage", v).apply() }
+    /** « Adapter le MODCOD à la réception »: off unless the operator checks it. */
+    var adaptOn: Boolean
+        get() = stockage.getBoolean("datv_tx_adapt", false)
+        set(v) { stockage.edit().putBoolean("datv_tx_adapt", v).apply() }
+    /** The range the adaptation may use: its most robust and its most efficient MODCOD. */
+    var adaptMin: String
+        get() = stockage.getString("datv_tx_adapt_min", "QPSK 1/4")?.takeIf { Modcod.de(it) != null } ?: "QPSK 1/4"
+        set(v) { if (Modcod.de(v) != null) stockage.edit().putString("datv_tx_adapt_min", v).apply() }
+    var adaptMax: String
+        get() = stockage.getString("datv_tx_adapt_max", "8PSK 3/4")?.takeIf { Modcod.de(it) != null } ?: "8PSK 3/4"
+        set(v) { if (Modcod.de(v) != null) stockage.edit().putString("datv_tx_adapt_max", v).apply() }
+    /** The margin kept above the MODCOD's threshold (dB). */
+    var adaptMarge: Double
+        get() = stockage.getFloat("datv_tx_adapt_marge", 2f).toDouble().coerceIn(0.5, 10.0)
+        set(v) { if (!v.isNaN()) stockage.edit().putFloat("datv_tx_adapt_marge", v.coerceIn(0.5, 10.0).toFloat()).apply() }
     /** The indoor test's frequency (kHz). */
     var frequenceInterieurKhz: Long
         get() = stockage.getLong("datv_tx_int_khz", PlanInterieur.DEFAUT_KHZ)
@@ -300,12 +329,21 @@ class EmissionDatvPc(
 
     @Volatile var etat = Etat(); private set
     private var tx: EmetteurDatv? = null
-    private var processus: Processus? = null
-    private var modulateur: ModulateurDvbs2? = null
-    private var flux: FluxTs? = null
+    @Volatile private var processus: Processus? = null
+    /** The modulator making the frames now: a new one for each MODCOD (its counts on the page). */
+    @Volatile private var modulateur: ModulateurDvbs2? = null
+    /** The one the transmitter reads (its shaping filter): the frames from [modulateur] once the MODCOD changed. */
+    @Volatile private var sortie: ModulateurDvbs2? = null
+    @Volatile private var flux: FluxTs? = null
     @Volatile private var inserteur: InserteurCarte? = null
     @Volatile private var modcodEnCours: Modcod? = null
     @Volatile private var srEnCours = 0
+    @Volatile private var spsEnCours = 0
+    @Volatile private var parametresEnCours: ParametresTs? = null
+    /** The MODCOD fitted to our own reception, for the transmission running (or the last one). */
+    @Volatile var adaptation: AdaptationModcod? = null; private set
+    /** A MODCOD change under way (a second ffmpeg starting). */
+    @Volatile private var commutation = false
     @Volatile private var derniereVie = 0L
     @Volatile private var generation = 0
     val boucle = BoucleNiveau()
@@ -336,7 +374,10 @@ class EmissionDatvPc(
         val d = DemandeEmission(khz, srKs, m, rolloff, gain, duree, chargeFictive, indicatif(), interieur, qui)
         ReglesEmission.refus(d, gainMaxDb)?.let { return it }
         val programme = if (hackrf) outilHackrf("hackrf_transfer") ?: return conseilHackrf() else ""
-        val sps = ReglesEmission.sps(srKs)
+        // The HackRF's LO beside the signal: the band rules above stay on the signal itself.
+        val plan = if (hackrf && hackrfDecalage) DecalageHackrf.plan(khz, srKs, rolloff.alpha, interieur)
+            ?: return DecalageHackrf.refus(khz, srKs, rolloff.alpha, interieur) else null
+        val sps = plan?.sps ?: ReglesEmission.sps(srKs)
         val debit = srKs * 1000L * sps
         val debitTs = m.debitTs(srKs * 1000.0).toLong()
         val img = when (source) {
@@ -349,22 +390,25 @@ class EmissionDatvPc(
         // The station card and the chat in place of null packets: the rate unchanged.
         val ins = if (carteOn) InserteurCarte(horloge).also { it.carte = carteStation(khz, m) } else null
         val f = FluxTs(maxOf(64, (debitTs / 1504 * 2).toInt()), ins)
-        val p = runCatching { fabrique.demarre(ParametresTs(debitTs, source, img, camera, d.indicatif.trim().uppercase(), hevc, son)) }
+        val pts = ParametresTs(debitTs, source, img, camera, d.indicatif.trim().uppercase(), hevc, son)
+        val p = runCatching { fabrique.demarre(pts) }
             .getOrElse { return "ffmpeg ne démarre pas : " + (it.message ?: "") }
         processus = p; flux = f
-        thread(isDaemon = true, name = "satme-datv-tx-ts") { f.lit(p.sortie) { generation == gen } }
+        thread(isDaemon = true, name = "satme-datv-tx-ts") { f.lit(p.sortie) { generation == gen && processus === p } }
         val mod = ModulateurDvbs2(m, rolloff, sps, f)
-        modulateur = mod
+        modulateur = mod; sortie = mod
         derniereVie = horloge()
         val e: EmetteurDatv
         val refus: String?
         if (hackrf) {
             val hx = HackrfEmission(programme, ReglesEmission.HACKRF_VGA_MAX)
             val r = HackrfEmission.Reglage(
-                frequenceHz = khz * 1000L, debit = debit, vgaDb = ReglesEmission.vgaHackrf(gain), dureeMs = duree * 1000L,
-                bandeHz = Math.round(PlanQo100.occupeKhz(srKs, rolloff.alpha) * 1000), plafondVgaDb = ReglesEmission.HACKRF_VGA_MAX,
-                paires = paires(debit), serie = infoHackrf.cartes.singleOrNull()?.serie.orEmpty(), garde = { garde(gen, p) })
-            refus = hx.demarre(r) { b -> mod.remplis(b, b.size / 2) }
+                frequenceHz = plan?.loHz ?: (khz * 1000L), debit = debit, vgaDb = ReglesEmission.vgaHackrf(gain), dureeMs = duree * 1000L,
+                bandeHz = plan?.bandeHz ?: Math.round(PlanQo100.occupeKhz(srKs, rolloff.alpha) * 1000), plafondVgaDb = ReglesEmission.HACKRF_VGA_MAX,
+                paires = paires(debit), serie = infoHackrf.cartes.singleOrNull()?.serie.orEmpty(), garde = { garde(gen) })
+            // The baseband moved up to the wanted frequency, before the 8-bit conversion.
+            val mel = plan?.let { Melangeur(it.decalageHz.toDouble(), debit.toDouble()) }
+            refus = hx.demarre(r) { b -> mod.remplis(b, b.size / 2); mel?.applique(b) }
             e = hx
         } else {
             val px = PlutoEmission(plutoHote(), plutoPort(), gainMaxDb = minOf(gainMaxDb, 0.0))
@@ -372,23 +416,73 @@ class EmissionDatvPc(
                 frequenceHz = khz * 1000L, debit = debit, gainDb = gainDb, dureeMs = duree * 1000L,
                 plafondDb = when { chargeFictive -> ReglesEmission.GAIN_CHARGE_DB; interieur -> PlanInterieur.GAIN_PLUTO_DB; else -> 0.0 },
                 paires = paires(debit),
-                garde = { garde(gen, p) })
+                garde = { garde(gen) })
             refus = px.demarre(r) { b -> mod.remplis(b, b.size / 2) }
             e = px
         }
         if (refus != null) { generation++; p.arrete(); processus = null; return refus }
         tx = e
-        inserteur = ins; modcodEnCours = m; srEnCours = srKs
+        inserteur = ins; modcodEnCours = m; srEnCours = srKs; spsEnCours = sps; parametresEnCours = pts
+        adaptation = nouvelleAdaptation()
         etat = Etat(emet = true, chargeFictive = chargeFictive, interieur = interieur, emetteur = qui, frequenceKhz = khz, debitTs = debitTs)
         return null
     }
 
-    /** Why the transmission must stop now, or null. */
-    private fun garde(gen: Int, p: Processus): String? = when {
-        generation != gen -> "arrêtée"
-        horloge() - derniereVie > vieMs -> "page SatMe fermée ou injoignable"
-        !p.vivant -> "ffmpeg s'est arrêté" + p.erreur().let { if (it.isBlank()) "" else " : $it" }
-        else -> null
+    /** Why the transmission must stop now, or null: the ffmpeg running now (it changes with the MODCOD). */
+    private fun garde(gen: Int): String? {
+        if (generation != gen) return "arrêtée"
+        if (horloge() - derniereVie > vieMs) return "page SatMe fermée ou injoignable"
+        val p = processus ?: return "arrêtée"
+        return if (!p.vivant) "ffmpeg s'est arrêté" + p.erreur().let { if (it.isBlank()) "" else " : $it" } else null
+    }
+
+    /**
+     * A new MODCOD while transmitting, the frequency, symbol rate, power and
+     * transmitter unchanged: a second ffmpeg at the new rate, the new
+     * modulator taking over once its stream flows (or after 3 s: dummy
+     * frames meanwhile), then the old ffmpeg stopped. The receiver relocks.
+     * Null once switched, else why not.
+     */
+    fun commute(m: Modcod): String? {
+        val gen: Int
+        val f: FluxTs
+        val p: Processus
+        val pts: ParametresTs
+        synchronized(this) {
+            if (!etat.emet || tx == null) return "aucune émission en cours"
+            if (m.refus() != null) return m.refus()
+            if (m == modcodEnCours) return null
+            gen = generation
+            val debitTs = m.debitTs(srEnCours * 1000.0).toLong()
+            pts = (parametresEnCours ?: return "paramètres inconnus").copy(debitTs = debitTs)
+            f = FluxTs(maxOf(64, (debitTs / 1504 * 2).toInt()), inserteur)
+            p = runCatching { fabrique.demarre(pts) }.getOrElse { return "ffmpeg ne démarre pas : " + (it.message ?: "") }
+            commutation = true
+        }
+        try {
+            thread(isDaemon = true, name = "satme-datv-tx-ts") { f.lit(p.sortie) { generation == gen && (processus === p || commutation) } }
+            // A frame's worth of the new stream before taking over.
+            val fin = System.currentTimeMillis() + 3000
+            val besoin = m.dfl / 1504 + 2
+            while (System.currentTimeMillis() < fin && f.disponibles() < besoin && p.vivant && generation == gen) Thread.sleep(20)
+            synchronized(this) {
+                if (generation != gen || !etat.emet) { p.arrete(); return "émission arrêtée pendant le changement" }
+                if (!p.vivant) { p.arrete(); return "ffmpeg ne démarre pas au nouveau débit" + p.erreur().let { if (it.isBlank()) "" else " : $it" } }
+                val ancien = processus
+                val s = sortie ?: run { p.arrete(); return "aucune émission en cours" }
+                // Its frames follow the current one's at the next frame boundary.
+                val nouveau = ModulateurDvbs2(m, s.rolloff, s.sps, f)
+                s.suite = nouveau
+                modulateur = nouveau
+                flux = f; processus = p; parametresEnCours = pts; modcodEnCours = m
+                ancien?.arrete()
+                inserteur?.carte = carteStation(etat.frequenceKhz, m, srEnCours)
+                etat = etat.copy(debitTs = pts.debitTs)
+            }
+            return null
+        } finally {
+            commutation = false
+        }
     }
 
     /** Stops transmitting (the Pluto's LO powered down); the picture's maker stopped. */
@@ -400,6 +494,7 @@ class EmissionDatvPc(
         processus?.arrete(); processus = null
         tx = null
         inserteur = null
+        adaptation?.arrete()
         val pe = px?.etatCommun()
         if (etat.emet) etat = etat.copy(emet = false, raison = pe?.raison ?: raison, erreur = pe?.erreur.orEmpty())
     }
@@ -424,7 +519,9 @@ class EmissionDatvPc(
             synchronized(this) { arrete(pe.raison) }
             etat = etat.copy(raison = pe.raison, erreur = pe.erreur)
         }
-        val r = reception() ?: return
+        val r0 = reception()
+        adapte(r0)
+        val r = r0 ?: return
         val t = horloge()
         if (r.verrouille && r.merDb != null && kotlin.math.abs(r.cielKhz - Datv.BALISE_KHZ) < 100 && r.service != indicatif().trim().uppercase()) {
             merBalise = r.merDb; merBaliseMs = t
@@ -436,6 +533,35 @@ class EmissionDatvPc(
         val g = boucle.mesure(if (nous) r.merDb else null, merBalise, 0L, px.etat.gainDb, t) ?: return
         px.regleGain(g)
     }
+
+    /** Our own signal in what the receiver holds: locked, and our callsign as the service or on a recent station card. */
+    fun nousRecoit(r: Reception?): Boolean {
+        val ind = indicatif().trim().uppercase()
+        if (r == null || !r.verrouille || ind.isEmpty()) return false
+        return r.service.trim().equals(ind, true) || r.carteIndicatif.trim().equals(ind, true)
+    }
+
+    /**
+     * The MODCOD fitted to our reception: only with the option checked,
+     * while a transmission the operator started runs, on our own signal.
+     * The MODCOD only: nothing else of the transmission changes.
+     */
+    private fun adapte(r: Reception?) {
+        val a = adaptation ?: return
+        if (!etat.emet || tx == null || commutation) return
+        if (!adaptOn) { if (a.etat.actif) a.arrete(); return }
+        val courant = modcodEnCours ?: return
+        val min = Modcod.de(adaptMin, courant.courte, courant.pilotes) ?: return
+        val max = Modcod.de(adaptMax, courant.courte, courant.pilotes) ?: return
+        val nous = nousRecoit(r)
+        val qo100 = !etat.chargeFictive && !etat.interieur && tx is PlutoEmission
+        val m = AdaptationModcod.Mesure(nous && r?.merDb != null, if (nous) r?.merDb else null, nous && r?.pertes == true)
+        val vers = a.tic(courant, min, max, adaptMarge, m, horloge(), qo100) ?: return
+        erreurAdaptation = commute(vers).orEmpty()
+    }
+
+    /** Why the last MODCOD change could not be made, or empty. */
+    @Volatile var erreurAdaptation = ""; private set
 
     /** The test card with the callsign, as a PNG for ffmpeg. */
     private fun mire(): File {
@@ -486,6 +612,14 @@ class EmissionDatvPc(
             .put("intRefus", PlanInterieur.refus(ik, srKs, rolloff.alpha) ?: "")
             .put("intAvert", PlanInterieur.avertissement(ik, srKs, rolloff.alpha) ?: "")
             .put("filtreHackrf", HackrfEmission.filtre(Math.round(PlanQo100.occupeKhz(srKs, rolloff.alpha) * 1000)))
+            .put("hackrfDecalage", hackrfDecalage)
+        // The HackRF's LO beside the signal (indoor test): where it goes, or why not.
+        if (emetteur == Emetteur.HACKRF && hackrfDecalage) {
+            val pl = DecalageHackrf.plan(ik, srKs, rolloff.alpha, true)
+            o.put("decalage", JSONObject().put("refus", DecalageHackrf.refus(ik, srKs, rolloff.alpha, true) ?: "")
+                .put("loKhz", pl?.let { it.loHz / 1000.0 } ?: JSONObject.NULL).put("decalageKhz", pl?.let { it.decalageHz / 1000.0 } ?: JSONObject.NULL))
+            if (pl != null) o.put("sps", pl.sps).put("echantillons", pl.debit).put("filtreHackrf", HackrfEmission.filtre(pl.bandeHz))
+        }
         if (pe != null) {
             o.put("restant", maxOf(0L, (pe.finMs - t) / 1000)).put("tampons", pe.tampons).put("manques", pe.manques).put("gainApplique", pe.gainDb)
         }
@@ -493,11 +627,22 @@ class EmissionDatvPc(
             // The share of the air time in dummy frames (the stream late, or starting).
             val vide = m.tramesVides.toDouble() * fr.f4ioz.satcombo.datv.s2.CouchePhysique.SYMBOLES_VIDE
             val tot = vide + m.tramesDonnees.toDouble() * m.modcod.symboles
-            o.put("tramesVidesPct", if (tot > 0) 100.0 * vide / tot else 0.0).put("ecretages", m.ecretages).put("paquets", m.paquets)
+            o.put("tramesVidesPct", if (tot > 0) 100.0 * vide / tot else 0.0).put("ecretages", (sortie ?: m).ecretages).put("paquets", m.paquets)
         }
         flux?.let { o.put("tsPerdus", it.perdus).put("tsKbps", it.kbps()) }
         val b = boucle.etat
         o.put("boucle", JSONObject().put("ecart", b.ecartDb ?: JSONObject.NULL).put("tropFort", b.tropFort).put("message", b.message).put("baisses", b.baisses))
+        // The MODCOD fitted to our reception.
+        val a = adaptation
+        val ae = a?.etat
+        o.put("modcodEnCours", modcodEnCours?.let { AdaptationModcod.nom(it) } ?: "")
+        o.put("adapt", JSONObject().put("on", adaptOn).put("min", adaptMin).put("max", adaptMax).put("marge", adaptMarge)
+            .put("actif", e.emet && ae?.actif == true).put("boucle", ae?.boucle == true).put("fige", ae?.fige == true)
+            .put("courant", ae?.courant ?: "").put("cible", ae?.cible ?: "").put("margeMesuree", ae?.margeDb ?: JSONObject.NULL)
+            .put("seuil", ae?.seuilDb ?: JSONObject.NULL).put("prochaine", ae?.prochaine ?: "").put("suggestion", ae?.suggestion ?: "")
+            .put("erreur", erreurAdaptation)
+            .put("historique", JSONArray((a?.historique() ?: emptyList()).map { c ->
+                JSONObject().put("t", c.ms).put("de", c.de).put("vers", c.vers).put("raison", c.raison) })))
         o.put("cpu", cpu())
         o.put("carteOn", carteOn).put("qth", qth).put("puissance", puissance).put("antenne", antenne).put("message", message)
             .put("carteEnvoyee", inserteur?.remplaces ?: 0L)

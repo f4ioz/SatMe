@@ -723,6 +723,12 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 q["emetteur"]?.let { if (!e.etat.emet) e.emetteur = fr.f4ioz.satcombo.datv.Emetteur.de(it) }
                 q["vga"]?.replace(',', '.')?.toDoubleOrNull()?.let { e.vgaHackrf = fr.f4ioz.satcombo.datv.ReglesEmission.vgaHackrf(it) }
                 q["hackrfOutil"]?.let { e.hackrfOutil = it }
+                q["hackrfDecalage"]?.let { if (!e.etat.emet) e.hackrfDecalage = it == "1" }
+                // The MODCOD fitted to our reception: on, its range, its margin.
+                q["adapt"]?.let { e.adaptOn = it == "1" }
+                q["adaptMin"]?.let { e.adaptMin = it }
+                q["adaptMax"]?.let { e.adaptMax = it }
+                q["adaptMarge"]?.replace(',', '.')?.toDoubleOrNull()?.let { e.adaptMarge = it }
                 q["intMhz"]?.replace(',', '.')?.toDoubleOrNull()?.let { e.frequenceInterieurKhz = Math.round(it * 1000.0) }
                 entier("intDuree")?.let { e.dureeInterieurS = it * 60 }
                 // The station card sent in the stream.

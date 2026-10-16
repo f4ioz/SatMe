@@ -351,4 +351,39 @@ class Dvbs2Test {
             assertTrue("seulement ${"%.1f".format(facteur)} × le temps réel", facteur > 2.0)
         }
     }
+
+    @Test
+    fun changement_de_modcod_a_la_frontiere_de_trame_flux_continu() {
+        // Two streams of numbered packets: the second MODCOD's takes over mid-way.
+        class Numerotes(val debut: Int) : SourceTs {
+            var k = debut
+            override fun disponibles() = 10_000
+            override fun lis(dst: ByteArray) {
+                java.util.Arrays.fill(dst, (k and 0x7F).toByte()); dst[0] = 0x47; dst[1] = (k shr 8).toByte(); dst[2] = k.toByte(); dst[3] = 0x10; k++
+            }
+        }
+        val a = Numerotes(0)
+        val b = Numerotes(1000)
+        val m1 = ModulateurDvbs2(Modcod.de("QPSK 1/2", false, true)!!, Rolloff.A25, 4, a)
+        val m2 = ModulateurDvbs2(Modcod.de("8PSK 2/3", false, true)!!, Rolloff.A25, 4, b)
+        val iq = ShortArray(2 * 4 * 5 * 33_000)
+        val n1 = 4 * 45_000   // mid-frame
+        val partie = ShortArray(2 * n1)
+        m1.remplis(partie, n1)
+        m1.suite = m2
+        val reste = ShortArray(iq.size - 2 * n1)
+        m1.remplis(reste, reste.size / 2)
+        System.arraycopy(partie, 0, iq, 0, partie.size); System.arraycopy(reste, 0, iq, partie.size, reste.size)
+        val rx = RecepteurDvbs2(Rolloff.A25, 4)
+        val bilan = rx.decode(rx.symboles(iq))
+        assertEquals(setOf(m1.modcod.code, m2.modcod.code), bilan.modcods)
+        assertEquals(0, bilan.ldpcEchecs)
+        assertEquals(0, bilan.crcPaquetsFaux)
+        // Every packet of the first stream begun is finished, then the second's from its first.
+        val nums = bilan.paquets.map { ((it[1].toInt() and 0xFF) shl 8) or (it[2].toInt() and 0xFF) }
+        val bascule = nums.indexOf(1000)
+        assertTrue(bascule > 0)
+        assertEquals((0 until bascule).toList(), nums.subList(0, bascule))
+        assertEquals((1000 until 1000 + nums.size - bascule).toList(), nums.subList(bascule, nums.size))
+    }
 }

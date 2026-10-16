@@ -120,6 +120,22 @@ class ModulateurDvbs2(
     private val tampon = FloatArray(2 * sps)
     private var posTampon = 2 * sps
 
+    /**
+     * Another modulator (a new MODCOD, its own stream) whose frames follow
+     * from the next frame boundary on: no frame cut, this one's shaping
+     * filter carried on, only its frames' source replaced.
+     */
+    @Volatile var suite: ModulateurDvbs2? = null
+    /** Whose frames go out now: this one, or its [suite]. */
+    private var courant: ModulateurDvbs2 = this
+
+    /** The packet [o] had begun, finished here first: the stream continuous across the change (SYNCD right). */
+    private fun reprend(o: ModulateurDvbs2) {
+        System.arraycopy(o.paquet, 0, paquet, 0, 188)
+        posPaquet = o.posPaquet
+        crcPrecedent = o.crcPrecedent
+    }
+
     @Volatile var tramesDonnees = 0L; private set
     @Volatile var tramesVides = 0L; private set
     @Volatile var paquets = 0L; private set
@@ -185,7 +201,11 @@ class ModulateurDvbs2(
         val fin = 2 * paires
         while (o < fin) {
             if (posTampon == tampon.size) {
-                if (posTrame == trame.size) { trame = prochaineTrame(); posTrame = 0 }
+                if (posTrame == trame.size) {
+                    val s = suite
+                    if (s != null && s !== courant) { s.reprend(courant); courant = s }
+                    trame = courant.prochaineTrame(); posTrame = 0
+                }
                 interp.pousse(trame[posTrame], trame[posTrame + 1], tampon, 0)
                 posTrame += 2
                 symboles++
