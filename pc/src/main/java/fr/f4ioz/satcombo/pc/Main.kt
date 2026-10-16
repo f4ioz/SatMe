@@ -150,7 +150,15 @@ fun main(args: Array<String>) {
     val emission = EmissionDatvPc(station.stockage, File(dossier, "tmp"), indicatif = { station.settings.callsign },
         locator = { station.settings.manualLocator }, plutoHote = { sdr.plutoHote }, plutoPort = { sdr.plutoPort },
         plutoOccupe = { if (sdr.plutoEnReception) "l'ADALM-PLUTO reçoit (onglet SDR) : arrêter cette réception d'abord" else null },
-        reception = { datv.etat.let { e -> if (!e.actif) null else EmissionDatvPc.Reception(e.verrouille, e.merDb, datv.reglage.cielKhz, e.service) } },
+        reception = { datv.etat.let { e ->
+            if (!e.actif) null else {
+                // The station card received lately, and packets lost now (the quality panel's figures).
+                val carte = datv.carte.carte?.takeIf { System.currentTimeMillis() - datv.carte.carteMs < 15_000 }?.indicatif.orEmpty()
+                val q = datv.qualite()
+                val pertes = q != null && (q.optDouble("cc", 0.0) >= 0.2 || q.optDouble("tei", 0.0) > 0)
+                EmissionDatvPc.Reception(e.verrouille, e.merDb, datv.reglage.cielKhz, e.service, carte, pertes)
+            }
+        } },
         nom = { station.settings.plancheNom }, logiciel = "SatMe-PC " + versionPc())
     sdr.emissionPluto = { emission.etat.emet }
     portee.launch { while (true) { runCatching { emission.tic() }; kotlinx.coroutines.delay(1000) } }

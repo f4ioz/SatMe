@@ -1161,6 +1161,14 @@ object PagePc {
           <span class="petit">Antenne</span><input id="e-antenne" maxlength="48" placeholder="Parabole 1,2 m" onchange="eRegleCarte()"></div>
         <div class="ligne"><span class="petit" style="min-width:86px">Message</span><input id="e-message" maxlength="140" placeholder="Retour par le chat, 73" onchange="eRegleCarte()"></div>
       </details>
+      <div id="e-adapt" style="margin-top:10px;border-top:1px solid rgba(255,255,255,.08);padding-top:8px">
+        <label class="petit" style="display:block"><input type="checkbox" id="e-adapt-on" onchange="eRegleAdapt()"> <b>Adapter le MODCOD à la réception</b> — boucle fermée : le MiniTiouner reçoit notre propre signal, SatMe choisit le MODCOD (jamais la fréquence, le débit de symboles ni la puissance)</label>
+        <div class="ligne"><span class="petit" style="min-width:86px">Plage</span><select id="e-adapt-min" onchange="eRegleAdapt()" style="max-width:110px" title="Le plus robuste autorisé"></select>
+          <span class="petit">à</span><select id="e-adapt-max" onchange="eRegleAdapt()" style="max-width:110px" title="Le plus efficace autorisé"></select>
+          <span class="petit">marge</span><input id="e-adapt-marge" type="number" step="0.5" min="0.5" max="10" style="max-width:70px" onchange="eRegleAdapt()"><span class="petit">dB</span></div>
+        <div class="petit" id="e-adapt-etat" style="line-height:1.7"></div>
+        <div class="petit" id="e-adapt-histo" style="line-height:1.6;margin-top:4px"></div>
+      </div>
       <div id="e-direct" class="e-direct" hidden></div>
       <div id="e-boucle" class="petit" style="margin-top:8px;line-height:1.7"></div>
       <div class="etat" id="e-msg"></div>
@@ -3463,7 +3471,11 @@ async function ticEmission() {
       g('e-modcod').innerHTML = j.modcods.map(m => '<option>' + m + '</option>').join('');
       g('e-sr').innerHTML = (D && D.debits ? D.debits : [125, 250, 333, 500, 1000, 1500, 2000]).map(s => '<option value="' + s + '">' + s + '</option>').join('');
       g('e-ro').innerHTML = j.rolloffs.map(a => '<option value="' + a + '">' + String(a).replace('.', ',') + '</option>').join('');
+      const mcs = j.modcods.map(m => '<option>' + m + '</option>').join('');
+      g('e-adapt-min').innerHTML = mcs; g('e-adapt-max').innerHTML = mcs;
     }
+    g('e-adapt-on').checked = j.adapt.on; g('e-adapt-min').value = j.adapt.min; g('e-adapt-max').value = j.adapt.max;
+    g('e-adapt-marge').value = j.adapt.marge;
     g('e-modcod').value = j.modcod; g('e-sr').value = j.sr; g('e-ro').value = j.ro; g('e-courtes').checked = j.courtes; g('e-pilotes').checked = j.pilotes;
     g('e-mhz').value = mhz3(j.khz); g('e-gain').value = j.gain; g('e-duree').value = Math.round(j.duree / 60);
     g('e-source').value = j.source; g('e-image').value = j.image; g('e-video').value = j.video || ''; g('e-hevc').value = j.hevc ? '1' : '0'; g('e-son').checked = j.son;
@@ -3521,7 +3533,35 @@ async function ticEmission() {
   g('e-boucle').innerHTML = '<b>Boucle MiniTiouner</b> · MER reçue ' + merNous + ' · MER balise ' + (j.merBalise == null ? 'inconnue' : j.merBalise.toFixed(1) + ' dB (il y a ' + duree(j.merBaliseAge * 1000) + ')') +
     (j.emet && !j.charge && !j.interieur ? '<br><span style="color:' + (b.tropFort ? 'var(--rose);font-weight:700' : 'var(--vert)') + '">' + esc(b.message || 'en attente de mesures') + '</span>' : '') +
     (j.charge ? '<br>Sur charge : pas de comparaison à la balise.' : '');
+  eAdapt(j);
   eMontre();
+}
+// The MODCOD fitted to our reception: what is sent, what the MER allows, the next decision, the changes made.
+function eAdapt(j) {
+  const a = j.adapt, fr1 = x => x.toFixed(1).replace('.', ',');
+  let h;
+  if (!a.on) h = 'Désactivée : le MODCOD reste celui choisi (' + esc(j.modcod) + ').';
+  else if (!j.emet) h = 'Agira pendant la prochaine émission, dès que le MiniTiouner reçoit notre propre signal (service ou carte de visite à l’indicatif ' + esc(j.indicatif || '?') + '). ' +
+    'Descend vite (marge &lt; 0,5 dB ou paquets perdus), remonte après 20 s de marge ≥ ' + fr1(a.marge + 1.5) + ' dB ; boucle perdue 10 s : le plus robuste, figé.';
+  else {
+    const qm = D && D.qualite && D.qualite.marge != null ? fr1(D.qualite.marge) + ' dB' : '—';
+    h = 'MODCOD émis <b>' + esc(j.modcodEnCours || j.modcod) + '</b>' + (a.cible ? ' · possible : ' + esc(a.cible) : '') +
+      ' · marge ' + (a.margeMesuree != null ? '<b>' + fr1(a.margeMesuree) + ' dB</b>' : '—') + (a.seuil != null ? ' (seuil ' + fr1(a.seuil) + ' dB, cible ' + fr1(a.marge) + ' dB)' : '') +
+      ' · panneau qualité ' + qm + '<br>' +
+      (a.boucle ? '<span style="color:var(--vert)">● Boucle confirmée</span> — ' : '<span style="color:var(--ambre);font-weight:700">⚠ Boucle non confirmée' + (a.fige ? ' — MODCOD figé' : '') + '</span> — ') +
+      esc(a.prochaine || 'en attente de mesures');
+    if (a.suggestion) h += '<br><span style="color:var(--ambre)">💡 ' + esc(a.suggestion) + '</span>';
+    if (a.erreur) h += '<br><span style="color:var(--rose)">Changement impossible : ' + esc(a.erreur) + '</span>';
+  }
+  if (g('e-adapt-etat').dataset.h !== h) { g('e-adapt-etat').dataset.h = h; g('e-adapt-etat').innerHTML = h; }
+  const l = (a.historique || []).slice(-8).reverse();
+  const hh = l.length ? '<b>Changements</b><br>' + l.map(c => new Date(c.t).toLocaleTimeString('fr-FR') + ' · ' + esc(c.de) + ' → <b>' + esc(c.vers) + '</b> — ' + esc(c.raison)).join('<br>') : '';
+  if (g('e-adapt-histo').dataset.h !== hh) { g('e-adapt-histo').dataset.h = hh; g('e-adapt-histo').innerHTML = hh; }
+}
+async function eRegleAdapt() {
+  const q = 'adapt=' + (g('e-adapt-on').checked ? 1 : 0) + '&adaptMin=' + enc(v('e-adapt-min')) + '&adaptMax=' + enc(v('e-adapt-max')) + '&adaptMarge=' + enc(v('e-adapt-marge'));
+  try { await fetch('api/datv/emission/reglage?' + q, { method: 'POST' }); } catch (x) {}
+  setTimeout(ticEmission, 100);
 }
 setInterval(ticEmission, 1000);
 // The test's mode: QO-100 (the Pluto only), the dummy load, or the indoor test; one at a time.

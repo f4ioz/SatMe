@@ -427,6 +427,107 @@ class EmissionDatvPcTest {
         assertEquals("QPSK 2/3", l.carte?.modcod)
     }
 
+    // ------------------------------------------------------------ the MODCOD fitted to our own reception
+
+    /** Records each ffmpeg asked for, and lets [dedans] make it. */
+    private class Releve(val dedans: EmissionDatvPc.FabriqueTs) : EmissionDatvPc.FabriqueTs {
+        val demandes = CopyOnWriteArrayList<EmissionDatvPc.ParametresTs>()
+        override fun demarre(p: EmissionDatvPc.ParametresTs): EmissionDatvPc.Processus { demandes += p; return dedans.demarre(p) }
+    }
+
+    private fun adaptative(p: FauxPluto, ts: EmissionDatvPc.FabriqueTs, horloge: () -> Long, vue: () -> EmissionDatvPc.Reception?) =
+        EmissionDatvPc(StockageMemoire(), File(System.getProperty("java.io.tmpdir"), "satme-test-datv"), { "F4IOZ" },
+            plutoHote = { "127.0.0.1" }, plutoPort = { p.port }, reception = vue, fabrique = ts, horloge = horloge,
+            nouvelleAdaptation = { fr.f4ioz.satcombo.datv.AdaptationModcod(monteeMs = 3_000L, attenteMs = 2_000L, perteBoucleMs = 3_000L) })
+
+    private fun debit(m: String) = fr.f4ioz.satcombo.datv.s2.Modcod.de(m, false, true)!!.debitTs(333_000.0).toLong()
+
+    @Test
+    fun modcod_adapte_sur_mesures_simulees() {
+        val p = FauxPluto().also { ouverts += it }
+        val ts = Releve(TsSynthetique(2000))
+        var t = 1_000_000L
+        var vue: EmissionDatvPc.Reception? = EmissionDatvPc.Reception(true, 9.0, 10_499_250L, "F4IOZ")
+        val e = adaptative(p, ts, { t }, { vue })
+        e.modcodTexte = "QPSK 1/2"; e.srKs = 333; e.pilotes = true; e.frequenceKhz = 2_409_750L; e.gainDb = -30.0
+        assertFalse(e.adaptOn)
+        assertNull(e.demarre(true, false))
+        fun secondes(n: Int) = repeat(n) { t += 1000; e.vie(); e.tic() }
+        assertTrue(attends(8000) { e.vie(); e.json().optLong("paquets") > 100 })
+        // Off by default: 9 dB of MER and nothing changes.
+        secondes(10)
+        assertEquals(1, ts.demandes.size)
+        assertEquals("Désactivée", e.json().getJSONObject("adapt").let { if (it.getBoolean("actif")) "active" else "Désactivée" })
+        // On: after the slow climb, 8PSK 2/3 (6.62 dB + 2 dB of margin under 9 dB), a new ffmpeg at its rate.
+        e.adaptOn = true
+        secondes(5)
+        assertEquals(2, ts.demandes.size)
+        assertEquals(debit("8PSK 2/3"), ts.demandes[1].debitTs)
+        assertEquals(debit("8PSK 2/3"), e.etat.debitTs)
+        assertEquals("F4IOZ", ts.demandes[1].indicatif)
+        val j = e.json()
+        assertEquals("8PSK 2/3", j.getString("modcodEnCours"))
+        assertEquals("QPSK 1/2", j.getString("modcod"))   // the operator's choice kept
+        assertEquals("8PSK 2/3", j.getJSONObject("adapt").getJSONArray("historique").getJSONObject(0).getString("vers"))
+        assertTrue(attends(8000) { e.vie(); e.json().optLong("paquets") > 150 })
+        // Packets lost: down at once (two seconds), at least one step.
+        vue = EmissionDatvPc.Reception(true, 9.0, 10_499_250L, "F4IOZ", pertes = true)
+        secondes(4)
+        assertEquals(3, ts.demandes.size)
+        assertTrue(ts.demandes[2].debitTs < debit("8PSK 2/3"))
+        assertTrue(attends(8000) { e.vie(); e.json().optLong("paquets") > 150 })
+        // Our signal gone (another service): after 3 s, the most robust allowed, then frozen.
+        vue = EmissionDatvPc.Reception(true, 9.0, 10_499_250L, "F1ABC")
+        secondes(2)
+        assertTrue(e.json().getJSONObject("adapt").getString("prochaine").contains("perdu"))
+        secondes(3)
+        assertEquals(4, ts.demandes.size)
+        assertEquals(debit("QPSK 1/4"), ts.demandes[3].debitTs)
+        secondes(20)
+        assertEquals(4, ts.demandes.size)
+        assertTrue(e.json().getJSONObject("adapt").getBoolean("fige"))
+        // Never the frequency, the rate, the gain: the Pluto's settings as at the start.
+        assertEquals("2409750000", p.attributs["ad9361-phy OUTPUT altvoltage1 frequency"])
+        assertEquals("2331000", p.attributs["ad9361-phy OUTPUT voltage0 sampling_frequency"])
+        assertEquals("-30.00", p.attributs["ad9361-phy OUTPUT voltage0 hardwaregain"])
+        assertTrue(attends(8000) { e.vie(); e.json().optLong("paquets") > 100 })
+        assertTrue(e.etat.emet)
+        e.arrete()
+        assertTrue(p.loEteint)
+        // The samples carry each MODCOD in turn, switched at frame boundaries: every frame whole, every one decoded.
+        val rx = RecepteurDvbs2(Rolloff.A25, 7)
+        val b = rx.decode(rx.symboles(p.iq()))
+        val codes = listOf("QPSK 1/2", "8PSK 2/3", "QPSK 1/4").map { fr.f4ioz.satcombo.datv.s2.Modcod.de(it)!!.code }
+        assertTrue("${b.modcods} ⊇ $codes", b.modcods.containsAll(codes))
+        assertEquals(4, b.modcods.size)
+        assertEquals(0, b.ldpcEchecs)
+    }
+
+    @Test
+    fun ffmpeg_reel_changement_de_modcod_nouveau_muxrate() {
+        val ff = RenduPc.ffmpeg()?.takeIf { File(it).canExecute() }
+        assumeTrue("ffmpeg absent", ff != null)
+        val p = FauxPluto().also { ouverts += it }
+        val ts = Releve(EmissionDatvPc.FfmpegTs())
+        var t = 1_000_000L
+        val e = adaptative(p, ts, { t }, { EmissionDatvPc.Reception(true, 9.0, 1_255_000L, "", carteIndicatif = "F4IOZ") })
+        e.modcodTexte = "QPSK 1/2"; e.srKs = 333; e.rolloff = Rolloff.A25; e.pilotes = true; e.source = "mire"; e.son = false
+        e.frequenceInterieurKhz = 1_255_000L; e.adaptOn = true
+        assertNull(e.demarre(true, false, interieur = true))
+        assertTrue(attends(15_000) { e.vie(); e.json().optLong("paquets") > 300 })
+        repeat(5) { t += 1000; e.vie(); e.tic() }
+        assertEquals(2, ts.demandes.size)
+        val mux = EmissionDatvPc.commande("ffmpeg", ts.demandes[1]).let { it[it.indexOf("-muxrate") + 1] }
+        assertEquals(debit("8PSK 2/3").toString(), mux)
+        // The new ffmpeg feeds the new modulator, the transmission never stopped.
+        assertTrue(attends(15_000) { e.vie(); e.json().optLong("paquets") > 400 })
+        assertTrue(e.etat.emet)
+        e.arrete()
+        val rx = RecepteurDvbs2(Rolloff.A25, 7)
+        val b = rx.decode(rx.symboles(p.iq()))
+        assertTrue(b.modcods.toString(), b.modcods.contains(fr.f4ioz.satcombo.datv.s2.Modcod.de("8PSK 2/3")!!.code))
+    }
+
     @Test
     fun chat_seulement_pendant_une_emission_et_pas_trop_vite() {
         val p = FauxPluto().also { ouverts += it }
