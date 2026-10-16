@@ -67,6 +67,29 @@ class FiltrePhonieTest {
         assertNull(ProtocolePhonie.litTrame(java.io.DataInputStream(ByteArray(0).inputStream())))
     }
 
+    @Test fun `le protocole la traduction`() {
+        val pcm = FloatArray(160)
+        // No language asked: the header as before (Whisper's English).
+        val (h0, _) = ProtocolePhonie.litTrame(java.io.DataInputStream(ProtocolePhonie.trame(1, pcm, "", traduire = true).inputStream()))!!
+        assertFalse(h0.has("cible"))
+        val (h, _) = ProtocolePhonie.litTrame(java.io.DataInputStream(ProtocolePhonie.trame(2, pcm, "", traduire = true, cible = "fr").inputStream()))!!
+        assertEquals("fr", h.getString("cible"))
+        val r = ProtocolePhonie.lit("""{"id":2,"langue":"pl","proba":0.9,"calcul_s":0.5,"segments":[{"debut":0,"fin":2,"texte":"Dzień dobry","avg_logprob":-0.2,"no_speech_prob":0.01,"traduction":"Bonjour"}],"traduction":"Bonjour","langue_cible":"fr","traduction_s":0.05}""")
+            as ProtocolePhonie.Message.Reponse
+        assertEquals("fr", r.langueCible); assertEquals("Bonjour", r.morceaux.single().traduction); assertEquals(0.05, r.traductionS, 1e-9)
+        val m = ProtocolePhonie.lit("""{"id":3,"langue":"pl","proba":0.9,"calcul_s":0.5,"segments":[],"traduction":"","langue_cible":"","traduction_erreur":"traduction pl → fr non installée"}""")
+            as ProtocolePhonie.Message.Reponse
+        assertEquals("", m.langueCible); assertTrue(m.traductionErreur.contains("non installée"))
+        // An older helper: its translation was English.
+        val v = ProtocolePhonie.lit("""{"id":4,"langue":"pl","proba":0.9,"calcul_s":0.5,"segments":[],"traduction":"Good morning"}""") as ProtocolePhonie.Message.Reponse
+        assertEquals("en", v.langueCible)
+        // A bubble kept before: the same.
+        val vieille = org.json.JSONObject("""{"id":1,"t":1,"duree":2,"src":"carte","freq":null,"sat":"","langue":"pl","proba":0.9,"texte":"Dzień dobry","traduction":"Good morning","conf":0.8,"calcul":0.3,"elements":[]}""")
+        assertEquals("en", BullePhonie.depuis(vieille).langueCible)
+        val b = BullePhonie.depuis(vieille).copy(traduction = "Bonjour", langueCible = "fr")
+        assertEquals(b, BullePhonie.depuis(b.json()))
+    }
+
     @Test fun `le protocole les messages`() {
         val r = ProtocolePhonie.lit("""{"id":7,"langue":"pl","proba":0.97,"calcul_s":0.4,"segments":[{"debut":0,"fin":2.5,"texte":" Dzień dobry","avg_logprob":-0.2,"no_speech_prob":0.01}],"traduction":"Good morning"}""")
         r as ProtocolePhonie.Message.Reponse

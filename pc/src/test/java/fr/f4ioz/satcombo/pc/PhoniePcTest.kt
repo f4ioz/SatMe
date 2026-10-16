@@ -165,6 +165,77 @@ class PhoniePcTest {
         assertEquals("sdr", p.bulles().single().source)
     }
 
+    /** An engine translating segment by segment into the language asked (the second segment: a hallucination). */
+    private class Traducteur : MoteurPhonie {
+        val cibles = ArrayList<String>()
+        override fun demarre() = Message.Pret("turbo", "cpu", "int8", 0.1, "")
+        override fun transcrit(id: Long, pcm: FloatArray, langue: String, traduire: Boolean): Message = transcrit(id, pcm, langue, traduire, "")
+        override fun transcrit(id: Long, pcm: FloatArray, langue: String, traduire: Boolean, cible: String): Message {
+            cibles += cible
+            val tr = traduire && cible.isNotEmpty()
+            return Message.Reponse(id, "pl", 0.98, 0.2, listOf(
+                ProtocolePhonie.Morceau(0.0, 2.0, "Dzień dobry, tu SP9ABC", -0.2, 0.01, 1.2, if (tr) "Bonjour, ici SP9ABC" else ""),
+                ProtocolePhonie.Morceau(2.0, 3.0, "Dziękuję za obejrzenie", -0.2, 0.01, 1.2, if (tr) "Merci de votre attention" else "")),
+                if (tr) "Bonjour, ici SP9ABC Merci de votre attention" else "", if (tr) cible else "")
+        }
+        override fun arrete() {}
+    }
+
+    @Test fun `la traduction en francais sous le texte`() {
+        val t = Traducteur()
+        val st = StockageMemoire()
+        val p = PhoniePc(st, InstallPhoniePc(dossier), File(dossier, "phonie"), { horloge }, fabrique = { t }).also { ouverts += it }
+        assertEquals("fr", p.cible)
+        p.actif = true
+        // Off: no language asked, no translation, the text as before.
+        parle(p, 1)
+        assertTrue(attend(3000) { p.bulles().size == 1 })
+        assertEquals("", t.cibles.last())
+        val b0 = p.bulles().single()
+        assertEquals("Dzień dobry, tu SP9ABC", b0.texte); assertEquals("", b0.traduction); assertEquals("", b0.langueCible)
+        // On: French, the hallucinated segment's translation left out with it.
+        p.action("/api/phonie", mapOf("traduire" to "1"))
+        parle(p, 1)
+        assertTrue(attend(3000) { p.bulles().size == 2 })
+        assertEquals("fr", t.cibles.last())
+        val b = p.bulles().last()
+        assertEquals("Dzień dobry, tu SP9ABC", b.texte); assertEquals("Bonjour, ici SP9ABC", b.traduction); assertEquals("fr", b.langueCible)
+        assertTrue(p.texteJour(p.jours().single())!!.contains("(fr) Bonjour, ici SP9ABC"))
+        assertEquals("fr", p.json(0).getJSONArray("bulles").getJSONObject(1).getString("langueCible"))
+        // Whisper's English: no language in the header, as before.
+        p.action("/api/phonie", mapOf("cible" to "whisper"))
+        parle(p, 1)
+        assertTrue(attend(3000) { t.cibles.size == 3 })
+        assertEquals("", t.cibles.last())
+        // A language not offered is refused; the DATV subtitles' choice is kept.
+        p.action("/api/phonie", mapOf("cible" to "xx", "stTraduction" to "1"))
+        assertEquals("whisper", p.cible); assertTrue(p.stTraduction)
+        assertTrue(p.json(0).getBoolean("stTraduction"))
+    }
+
+    @Test fun `les paires de langues a installer`() {
+        assertEquals(listOf("pl_en", "en_fr", "de_en"), InstallPhoniePc.pairesPour(listOf("pl", "de", "fr"), "fr"))
+        assertEquals(listOf("en_fr"), InstallPhoniePc.pairesPour(listOf("en"), "fr"))
+        assertEquals(listOf("pl_en"), InstallPhoniePc.pairesPour(listOf("pl", "en"), "en"))
+        val i = InstallPhoniePc(dossier)
+        assertTrue(i.pairesInstallees().isEmpty())
+        File(i.traduction, "pl_en/model").mkdirs(); File(i.traduction, "pl_en/model/model.bin").writeText("x"); File(i.traduction, "pl_en/sentencepiece.model").writeText("x")
+        File(i.traduction, "en_fr/model").mkdirs()
+        assertEquals(listOf("pl_en"), i.pairesInstallees())
+        assertTrue(i.commande("python3", "turbo", "auto").containsAll(listOf("--traduction", i.traduction.absolutePath)))
+        // The settings card: what is there, what is missing and its size.
+        val p = phonie(Faux("x"))
+        val tr = p.jsonMoteur().getJSONObject("traduction")
+        assertEquals("fr", tr.getString("cible"))
+        assertTrue(tr.getJSONArray("manquent").toList().contains("en_fr"))
+        assertFalse(tr.getJSONArray("manquent").toList().contains("pl_en"))
+        p.action("/api/phonie/moteur", mapOf("tradLangues" to "pl,zz"))
+        assertEquals(listOf("pl"), p.languesTraduction)
+        assertEquals(65, p.jsonMoteur().getJSONObject("traduction").getInt("mo"))
+        assertTrue(i.retirePaire("pl_en")); assertFalse(i.retirePaire("../x"))
+        assertTrue(i.pairesInstallees().isEmpty())
+    }
+
     // ------------------------------------------------------------------ the child process
 
     private fun java() = File(System.getProperty("java.home"), "bin/java").absolutePath
@@ -178,6 +249,8 @@ class PhoniePcTest {
         assertEquals("faux", pret.modele)
         val r = m.transcrit(5, FloatArray(16_000), "pl", true) as Message.Reponse
         assertEquals(5L, r.id); assertEquals("16000 échantillons, pl", r.texte); assertEquals("traduit", r.traduction)
+        val f = m.transcrit(6, FloatArray(1600), "pl", true, "fr") as Message.Reponse
+        assertEquals("fr", f.langueCible); assertEquals("traduit en fr", f.morceaux.single().traduction)
         m.arrete()
     }
 
@@ -204,8 +277,10 @@ object FauxMoteurPhonie {
             if (h.optString("langue") == "crash") { System.err.println("panne simulée"); System.err.flush(); System.exit(3) }
             val r = JSONObject().put("id", h.getLong("id")).put("langue", h.optString("langue")).put("proba", 1.0).put("calcul_s", 0.0)
                 .put("segments", org.json.JSONArray().put(JSONObject().put("debut", 0).put("fin", 1).put("texte", "${pcm.size} échantillons, ${h.optString("langue")}")
-                    .put("avg_logprob", -0.1).put("no_speech_prob", 0.0)))
+                    .put("avg_logprob", -0.1).put("no_speech_prob", 0.0)
+                    .apply { if (h.has("cible")) put("traduction", "traduit en " + h.getString("cible")) }))
                 .put("traduction", if (h.optBoolean("traduire")) "traduit" else "")
+                .apply { if (h.has("cible")) put("langue_cible", h.getString("cible")) }
             println(r.toString())
             System.out.flush()
         }

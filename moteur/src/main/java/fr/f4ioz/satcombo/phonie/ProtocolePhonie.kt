@@ -20,22 +20,26 @@ import java.io.DataOutputStream
  * To it, on its standard input, one frame per piece of voice:
  * `[u32 BE: header length][header, JSON UTF-8][u32 BE: PCM length][PCM s16le, 16 kHz mono]`,
  * the header `{"id":7,"langue":"fr","tache":"transcribe","traduire":false,"rate":16000,"format":"s16le"}`
- * (an empty language: found by the engine).
+ * (an empty language: found by the engine), with `"cible":"fr"` when the text is
+ * to be translated into that language (absent: Whisper's own English translation).
  *
  * From it, one JSON object per line on its standard output: first
  * `{"pret":true,"modele":"large-v3","calcul":"cuda","type":"float16","charge_s":3.2}`
  * (or `{"erreur":"…","fatal":true}`), then one answer per frame:
  * `{"id":7,"langue":"pl","proba":0.98,"calcul_s":0.4,"segments":[{"debut":0.0,"fin":3.1,"texte":"…",
  * "avg_logprob":-0.3,"no_speech_prob":0.02,"compression":1.2}],"traduction":"…"}`, or `{"id":7,"erreur":"…"}`.
+ * With a "cible": each segment's `"traduction"` too, `"langue_cible":"fr"` (the language the
+ * translation is in, "" when none), `"traduction_s"`, and `"traduction_erreur"` (a pair missing…).
  */
 object ProtocolePhonie {
 
     const val RATE = 16_000
 
     /** The frame for one piece: [pcm] at 16 kHz, −1…1. */
-    fun trame(id: Long, pcm: FloatArray, langue: String = "", traduire: Boolean = false): ByteArray {
+    fun trame(id: Long, pcm: FloatArray, langue: String = "", traduire: Boolean = false, cible: String = ""): ByteArray {
         val entete = JSONObject().put("id", id).put("langue", langue).put("tache", "transcribe")
-            .put("traduire", traduire).put("rate", RATE).put("format", "s16le").toString().toByteArray(Charsets.UTF_8)
+            .put("traduire", traduire).put("rate", RATE).put("format", "s16le")
+            .apply { if (cible.isNotBlank()) put("cible", cible) }.toString().toByteArray(Charsets.UTF_8)
         val o = ByteArrayOutputStream(entete.size + pcm.size * 2 + 8)
         val d = DataOutputStream(o)
         d.writeInt(entete.size); d.write(entete)
@@ -63,12 +67,18 @@ object ProtocolePhonie {
 
     /** A segment of an answer, as the engine heard it. */
     data class Morceau(val debutS: Double, val finS: Double, val texte: String,
-                       val avgLogprob: Double, val noSpeechProb: Double, val compression: Double = 1.0)
+                       val avgLogprob: Double, val noSpeechProb: Double, val compression: Double = 1.0,
+                       /** This segment translated ("" when not asked, or with Whisper's whole-over translation). */
+                       val traduction: String = "")
 
     sealed class Message {
         data class Pret(val modele: String, val calcul: String, val type: String, val chargeS: Double, val repli: String) : Message()
         data class Reponse(val id: Long, val langue: String, val proba: Double, val calculS: Double,
-                           val morceaux: List<Morceau>, val traduction: String) : Message() {
+                           val morceaux: List<Morceau>, val traduction: String,
+                           /** The language [traduction] is in ("" when none). */
+                           val langueCible: String = "",
+                           /** Why the translation asked is missing (a language pair not installed…). */
+                           val traductionErreur: String = "", val traductionS: Double = 0.0) : Message() {
             val texte: String get() = morceaux.joinToString(" ") { it.texte.trim() }.trim()
         }
         data class Erreur(val id: Long?, val texte: String, val fatale: Boolean) : Message()
@@ -88,8 +98,12 @@ object ProtocolePhonie {
                 Message.Reponse(j.optLong("id"), j.optString("langue"), j.optDouble("proba", 0.0), j.optDouble("calcul_s", 0.0),
                     (0 until s.length()).mapNotNull { s.optJSONObject(it) }.map {
                         Morceau(it.optDouble("debut", 0.0), it.optDouble("fin", 0.0), it.optString("texte"),
-                            it.optDouble("avg_logprob", 0.0), it.optDouble("no_speech_prob", 0.0), it.optDouble("compression", 1.0))
-                    }, j.optString("traduction"))
+                            it.optDouble("avg_logprob", 0.0), it.optDouble("no_speech_prob", 0.0), it.optDouble("compression", 1.0),
+                            it.optString("traduction"))
+                    }, j.optString("traduction"),
+                    // An older helper translated into English only, without saying so.
+                    if (j.has("langue_cible")) j.optString("langue_cible") else if (j.optString("traduction").isNotBlank()) "en" else "",
+                    j.optString("traduction_erreur"), j.optDouble("traduction_s", 0.0))
             }
             j.has("progres") || j.has("mo") -> Message.Progres(j.optString("progres"), j.optDouble("mo", 0.0))
             else -> Message.Autre
@@ -119,19 +133,23 @@ data class BullePhonie(
     val confiance: Double,
     val calculS: Double,
     val elements: List<AnalysePhonie.Element>,
+    /** The language [traduction] is in ("" when none). */
+    val langueCible: String = "",
 ) {
     fun json(): JSONObject = JSONObject().put("id", id).put("t", t).put("duree", Math.round(dureeS * 10) / 10.0)
         .put("src", source).put("freq", freqHz ?: JSONObject.NULL).put("sat", satellite).put("langue", langue)
         .put("proba", Math.round(probaLangue * 100) / 100.0).put("texte", texte).put("traduction", traduction)
         .put("conf", Math.round(confiance * 100) / 100.0).put("calcul", Math.round(calculS * 100) / 100.0)
-        .put("elements", JSONArray(elements.map { it.json() }))
+        .put("elements", JSONArray(elements.map { it.json() })).put("langueCible", langueCible)
 
     companion object {
         fun depuis(j: JSONObject): BullePhonie = BullePhonie(j.optLong("id"), j.optLong("t"), j.optDouble("duree", 0.0),
             j.optString("src"), if (j.isNull("freq") || !j.has("freq")) null else j.optLong("freq"), j.optString("sat"),
             j.optString("langue"), j.optDouble("proba", 0.0), j.optString("texte"), j.optString("traduction"),
             j.optDouble("conf", 0.0), j.optDouble("calcul", 0.0),
-            (j.optJSONArray("elements") ?: JSONArray()).let { a -> (0 until a.length()).mapNotNull { a.optJSONObject(it) }.map { AnalysePhonie.Element.depuis(it) } })
+            (j.optJSONArray("elements") ?: JSONArray()).let { a -> (0 until a.length()).mapNotNull { a.optJSONObject(it) }.map { AnalysePhonie.Element.depuis(it) } },
+            // Kept before the language was noted: English, the only one then.
+            j.optString("langueCible").ifBlank { if (j.optString("traduction").isNotBlank()) "en" else "" })
 
         /** The engine's mean log-probability as 0…1 (exp, weighted by each segment's length). */
         fun confiance(m: List<ProtocolePhonie.Morceau>): Double {

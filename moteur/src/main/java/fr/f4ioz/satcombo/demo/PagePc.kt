@@ -365,7 +365,7 @@ object PagePc {
   .ph-b { background:#0E1720; border-radius:10px; padding:6px 9px; border-left:3px solid var(--bord); }
   .ph-t { font-size:12px; color:var(--gris); }
   .ph-x { font-size:15px; line-height:1.45; word-break:break-word; }
-  .ph-tr { font-style:italic; color:var(--gris); font-size:13px; margin-top:2px; }
+  .ph-tr { font-style:italic; color:#BFD8E4; font-size:14px; line-height:1.4; margin-top:2px; word-break:break-word; }
   .ph-ch { display:inline-block; margin:4px 4px 0 0; padding:2px 8px; border-radius:12px; border:1px solid var(--cyan); color:var(--cyan); font-weight:700; font-size:13px; cursor:pointer; background:none; }
   .ph-ch.connu { background:rgba(63,224,200,.16); }
   .ph-i { color:var(--cyan); font-weight:800; } .ph-c { color:var(--ambre); font-weight:700; } .ph-r { color:var(--vert); font-weight:700; }
@@ -625,7 +625,8 @@ object PagePc {
       <div id="ph-corps" hidden>
         <div class="ligne"><select id="ph-langue" style="flex:none" onchange="phRegle('langue=' + this.value)"><option value="">langue trouvée seule</option><option value="fr">français</option><option value="en">anglais</option><option value="de">allemand</option><option value="es">espagnol</option><option value="it">italien</option><option value="pl">polonais</option></select>
           <select id="ph-source" style="flex:none" onchange="phRegle('source=' + this.value)"><option value="auto">clé SDR si elle joue, sinon carte son</option><option value="carte">carte son</option><option value="sdr">clé SDR</option></select>
-          <label class="petit"><input type="checkbox" id="ph-trad" onchange="phRegle('traduire=' + (this.checked ? 1 : 0))"> traduire en anglais</label></div>
+          <label class="petit"><input type="checkbox" id="ph-trad" onchange="phRegle('traduire=' + (this.checked ? 1 : 0))"> Traduire en</label>
+          <select id="ph-cible" style="flex:none" onchange="phRegle('cible=' + this.value)"><option value="fr">français</option><option value="en">anglais</option><option value="de">allemand</option><option value="es">espagnol</option><option value="it">italien</option><option value="nl">néerlandais</option><option value="pl">polonais</option><option value="pt">portugais</option><option value="whisper">anglais par Whisper (modèle large-v3)</option></select></div>
         <div id="ph-fil" class="ph-fil"></div>
         <div class="petit" style="margin-top:4px">Un indicatif trouvé : un clic prépare le contact dans le carnet, avec le carré et le report entendus. Plus le texte est pâle, moins le moteur est sûr.</div>
       </div>
@@ -1084,7 +1085,8 @@ object PagePc {
     <div class="carte" id="dt-carte" hidden>
       <div class="t">Sous-titres et indicatifs</div>
       <label class="petit" style="display:block"><input type="checkbox" id="dt-st" onchange="dtRegle('soustitres=' + (this.checked ? 1 : 0))"> Sous-titres : le son reçu écrit sous l’image (Phonie → texte)</label>
-      <label class="petit" style="display:block;margin-left:22px"><input type="checkbox" id="dt-trad" onchange="dtTrad(this.checked)"> avec la traduction (anglais)</label>
+      <label class="petit" style="display:block;margin-left:22px"><input type="checkbox" id="dt-trad" onchange="dtTrad(this.checked)"> avec la traduction (<span id="dt-cible">français</span>)</label>
+      <label class="petit" style="display:block;margin-left:44px"><input type="checkbox" id="dt-st-tr" onchange="dtStTraduction(this.checked)"> <span id="dt-st-tr-nom">sous-titres en français</span> : la traduction seule sur l’image</label>
       <div class="petit" id="dt-st-etat"></div>
       <label class="petit" style="display:block;margin-top:6px"><input type="checkbox" id="dt-ocr" onchange="dtRegle('ocr=' + (this.checked ? 1 : 0))"> Lire les indicatifs dans l’image</label>
       <div class="petit" id="dt-ocr-etat"></div>
@@ -1671,6 +1673,15 @@ object PagePc {
       <div class="petit" style="margin-top:4px">Le bouton télécharge depuis PyPI faster-whisper et ce qu'il lui faut (environ 150 Mo) et, si une carte NVIDIA répond, ses bibliothèques cuBLAS et cuDNN (environ 1,3 Go de plus) ; puis le modèle choisi depuis Hugging Face. Tout va dans <code>stt/</code> du dossier de SatMe ; rien n'est téléchargé sans ce bouton. Il faut Python 3.9 ou plus récent (sous Debian/Ubuntu : python3-venv).</div>
       <div class="etat" id="phr-etape"></div>
       <pre id="phr-journal" hidden style="max-height:180px;overflow:auto;font-size:11px;background:#0E1720;padding:6px;border-radius:8px;white-space:pre-wrap;word-break:break-all;margin:6px 0 0"></pre>
+      <div class="t" style="margin-top:12px">Traduction</div>
+      <div class="petit">Le texte entendu traduit sur ce PC, sans Internet : les paires de langues d’Argos Translate (modèles OPUS-MT, licence CC-BY 4.0), lues par CTranslate2 comme le moteur de transcription. D’une langue à l’autre en passant par l’anglais. La case « Traduire en » de la fenêtre Phonie → texte la met en marche.</div>
+      <div class="ligne"><span class="petit" style="min-width:80px">Traduire en</span><select id="phr-cible" onchange="phrRegle('cible=' + this.value)"></select></div>
+      <div class="petit" style="margin-top:4px">Langues entendues à traduire (la paire anglais → langue choisie, commune à toutes, est comptée sur la ligne « anglais ») :</div>
+      <div id="phr-langues" style="display:flex;flex-wrap:wrap;gap:4px 12px;margin-top:4px"></div>
+      <div class="petit" id="phr-tr-etat" style="margin-top:6px"></div>
+      <div class="ligne"><button class="primaire" id="phr-tr-installe" onclick="phrInstalleTraduction()">Installer la traduction</button></div>
+      <div class="etat" id="phr-tr-etape"></div>
+      <pre id="phr-tr-journal" hidden style="max-height:160px;overflow:auto;font-size:11px;background:#0E1720;padding:6px;border-radius:8px;white-space:pre-wrap;word-break:break-all;margin:6px 0 0"></pre>
     </div>
     <div class="carte" id="carteTelephone">
       <div class="t">Téléphone</div>
@@ -1914,6 +1925,7 @@ setInterval(() => { if (!g('v-carnet').hidden || !g('v-qo100').hidden) ticCw(); 
 
 // « Phonie → texte »: one window, moved into the tab shown (SDR, QO-100, Carnet); the voice heard, over by over.
 let PH = null, phDernier = 0, phListe = [], phTour = 0;
+const PH_CIBLES = { fr: 'français', en: 'anglais', de: 'allemand', es: 'espagnol', it: 'italien', nl: 'néerlandais', pl: 'polonais', pt: 'portugais' };
 const PH_DRAPEAU = { fr: 'FR', en: 'GB', de: 'DE', es: 'ES', it: 'IT', pl: 'PL', pt: 'PT', nl: 'NL', cs: 'CZ', sk: 'SK', ru: 'RU', uk: 'UA', ja: 'JP', hu: 'HU', ro: 'RO', el: 'GR', sv: 'SE', fi: 'FI', da: 'DK', no: 'NO', hr: 'HR', sl: 'SI', tr: 'TR', zh: 'CN', ca: 'ES' };
 function phPlace() {
   const n = ['sdr', 'qo100', 'carnet'].find(t => !g('v-' + t).hidden);
@@ -1945,10 +1957,11 @@ function rendPhonie(neuf) {
   if (document.activeElement !== g('ph-langue')) g('ph-langue').value = j.langue;
   if (document.activeElement !== g('ph-source')) g('ph-source').value = j.source;
   g('ph-trad').checked = j.traduire;
+  if (document.activeElement !== g('ph-cible')) g('ph-cible').value = j.cible || 'fr';
   const etat = { 'coupé': 'coupé', 'démarrage': 'chargement du modèle…', 'prêt': j.info || 'prêt', 'erreur': 'en panne' }[j.etat] || j.etat;
   const lag = (j.file || j.perdus) ? ' · retard ' + Math.round(j.retard) + ' s · ' + j.file + ' en attente' + (j.perdus ? ' · ' + j.perdus + ' perdu(s)' : '') : '';
   txt('ph-info', etat + (j.on && j.sourceActive ? ' · ' + (j.sourceActive === 'sdr' ? 'clé SDR' : 'carte son') : '') + lag + (j.on && j.calcul ? ' · ' + String(j.calcul).replace('.', ',') + ' s par passage' : ''));
-  txt('ph-erreur', j.erreur || (!j.installe && !j.on ? 'Moteur non installé : Réglages › Phonie → texte.' : ''));
+  txt('ph-erreur', j.erreur || (!j.installe && !j.on ? 'Moteur non installé : Réglages › Phonie → texte.' : '') || (j.on && j.traductionErreur) || '');
   if (!neuf) return;
   const f = g('ph-fil'), bas = f.scrollTop + f.clientHeight >= f.scrollHeight - 8;
   f.innerHTML = phListe.map(phBulle).join('') || '<div class="petit" style="padding:10px">À l’écoute : chaque passage de voix s’écrira ici.</div>';
@@ -1975,7 +1988,8 @@ function phBulle(b) {
   return '<div class="ph-b" style="opacity:' + (0.55 + 0.45 * conf).toFixed(2) + ';border-left-color:' + (conf > 0.7 ? 'var(--vert)' : conf > 0.5 ? 'var(--ambre)' : 'var(--rose)') + '">' +
     '<div class="ph-t">' + hm(b.t, true) + (utc() ? ' UTC' : '') + (fr ? ' · ' + fr : '') + (b.sat ? ' · ' + esc(b.sat) : '') + ' · ' +
     (PH_DRAPEAU[b.langue] ? f8Drapeau(PH_DRAPEAU[b.langue]) + ' ' : '') + esc(b.langue) + ' · ' + Math.round(b.duree) + ' s · sûr à ' + Math.round(conf * 100) + ' %</div>' +
-    '<div class="ph-x">' + h + '</div>' + (b.traduction ? '<div class="ph-tr">' + esc(b.traduction) + '</div>' : '') + (puces ? '<div>' + puces + '</div>' : '') + '</div>';
+    '<div class="ph-x">' + h + '</div>' + (b.traduction && b.traduction !== b.texte ? '<div class="ph-tr" title="Traduction' + (b.langueCible ? ' (' + esc(b.langueCible) + ')' : '') + ', faite sur ce PC">' +
+    (b.langueCible && b.langueCible !== 'fr' && PH_DRAPEAU[b.langueCible] ? f8Drapeau(PH_DRAPEAU[b.langueCible]) + ' ' : '') + esc(b.traduction) + '</div>' : '') + (puces ? '<div>' + puces + '</div>' : '') + '</div>';
 }
 function phNote(call, loc, rep) {
   versSaisie(); g('c-call').value = call;
@@ -2015,8 +2029,43 @@ async function chargePhonieReglages() {
   const pre = g('phr-journal'), bas = pre.scrollTop + pre.clientHeight >= pre.scrollHeight - 8;
   const t = i.lignes.join('\n');
   if (pre.textContent !== t) { pre.textContent = t; if (bas) pre.scrollTop = pre.scrollHeight; }
+  const tr = j.traduction;
+  if (tr) phrTraduction(tr);
   clearTimeout(phrSuivi);
-  if ((i.enCours || j.verificationEnCours) && !g('v-reglages').hidden) phrSuivi = setTimeout(chargePhonieReglages, 1000);
+  if ((i.enCours || j.verificationEnCours || (tr && tr.installation.enCours)) && !g('v-reglages').hidden) phrSuivi = setTimeout(chargePhonieReglages, 1000);
+}
+// The translation: the language written, the languages heard (their pairs, sizes), its installation.
+function phrTraduction(tr) {
+  const c = g('phr-cible');
+  if (c.options.length !== tr.cibles.length + 1) c.innerHTML = tr.cibles.map(x => '<option value="' + x.code + '">' + x.nom + '</option>').join('') +
+    '<option value="whisper">anglais par Whisper (modèle large-v3, sans paire à installer)</option>';
+  if (document.activeElement !== c) c.value = tr.cible;
+  const box = g('phr-langues'), cle = tr.langues.map(l => l.code + l.mo + l.installee + tr.choisies.includes(l.code)).join();
+  if (box.dataset.cle !== cle) {
+    box.dataset.cle = cle;
+    box.innerHTML = tr.langues.map(l => '<label class="petit"><input type="checkbox" value="' + l.code + '"' + (tr.choisies.includes(l.code) ? ' checked' : '') + ' onchange="phrLangues()"> ' +
+      l.nom + ' <span style="color:' + (l.installee ? 'var(--vert)' : 'var(--gris)') + '">' + (!l.paires.length ? '(rien à installer)' : l.installee ? '✓ installé' : '≈ ' + l.mo + ' Mo') + '</span></label>').join('');
+  }
+  const ti = tr.installation;
+  txt('phr-tr-etat', (tr.paires.length ? 'Paires présentes : ' + tr.paires.map(p => p.replace('_', ' → ')).join(', ') : 'Aucune paire de langues installée.') +
+    (tr.manquent.length ? ' · à télécharger pour ce choix : ' + tr.manquent.map(p => p.replace('_', ' → ')).join(', ') + ' (≈ ' + tr.mo + ' Mo)' : ' · tout est là pour ce choix.'));
+  g('phr-tr-installe').disabled = ti.enCours || !PHR.pythonUtilise || (!tr.manquent.length && tr.sentencepiece);
+  txt('phr-tr-etape', ti.erreur ? 'Échec : ' + ti.erreur : ti.enCours ? 'En cours : ' + ti.etape + (ti.mo ? ' · ' + Math.round(ti.mo) + ' Mo' : '') :
+    ti.fini ? 'Traduction installée : choisir la langue dans la fenêtre Phonie → texte (case « Traduire en »).' : !PHR.pythonUtilise ? 'Installer d’abord le moteur ci-dessus.' : '');
+  const pre = g('phr-tr-journal'), bas = pre.scrollTop + pre.clientHeight >= pre.scrollHeight - 8, t = ti.lignes.join('\n');
+  pre.hidden = !ti.lignes.length;
+  if (pre.textContent !== t) { pre.textContent = t; if (bas) pre.scrollTop = pre.scrollHeight; }
+}
+async function phrLangues() {
+  const l = Array.from(g('phr-langues').querySelectorAll('input:checked')).map(x => x.value);
+  await phrRegle('tradLangues=' + enc(l.join(',')));
+}
+async function phrInstalleTraduction() {
+  const tr = PHR && PHR.traduction; if (!tr) return;
+  if (!confirm('Installer la traduction hors ligne ?\n\nsentencepiece depuis PyPI (environ 2 Mo), puis ' + (tr.manquent.length ? 'les paires ' + tr.manquent.map(p => p.replace('_', ' → ')).join(', ') +
+    ' depuis l’index d’Argos Translate (environ ' + tr.mo + ' Mo en tout)' : 'aucune paire (déjà là)') + ', dans le dossier stt/traduction de SatMe.\n\nEnsuite, rien ne part sur Internet : la traduction se fait sur ce PC.')) return;
+  await post('api/phonie/moteur?installeTraduction=1');
+  setTimeout(chargePhonieReglages, 300);
 }
 async function phrRegle(q) { await post('api/phonie/moteur?' + q); chargePhonieReglages(); if (q === 'verifie=1') setTimeout(chargePhonieReglages, 600); }
 async function phrInstalle() {
@@ -3382,6 +3431,13 @@ async function ticTextesDatv() {
   const ph = dtPh;
   if (ph && document.activeElement !== g('dt-trad')) g('dt-trad').checked = ph.traduire;
   g('dt-trad').disabled = !j.soustitres;
+  if (ph) {
+    const nom = ph.cible === 'whisper' ? 'anglais' : (PH_CIBLES[ph.cible] || 'français');
+    txt('dt-cible', nom + (ph.cible === 'whisper' ? ', par Whisper' : ''));
+    txt('dt-st-tr-nom', 'sous-titres en ' + nom);
+    if (document.activeElement !== g('dt-st-tr')) g('dt-st-tr').checked = !!ph.stTraduction;
+  }
+  g('dt-st-tr').disabled = !j.soustitres || !(ph && ph.traduire);
   const etat = !j.phonie ? 'Phonie → texte absent.' : !j.soustitres ? '' : !j.soustitresActifs ? 'en attente de la réception' :
     !ph ? '' : ({ 'démarrage': 'chargement du modèle…', 'prêt': 'à l’écoute' + (ph.voix ? ' · voix' : ''), 'erreur': 'en panne' }[ph.etat] || ph.etat) +
     (ph.erreur ? ' · ' + ph.erreur : '') + (ph.on && ph.source !== 'datv' ? ' · Phonie → texte écoute le DATV (sa source revient ensuite)' : '');
@@ -3406,10 +3462,12 @@ function dtSousTitres(on) {
   const o = g('d-st'), maintenant = Date.now();
   const l = on ? dtListe.filter(b => maintenant - (b.t + b.duree * 1000) < 60000).slice(-2) : [];
   o.hidden = !l.length;
-  const trad = g('dt-trad').checked;
+  const trad = g('dt-trad').checked, seule = trad && g('dt-st-tr').checked;
   // A long over: its end only, two lines or so each.
   const fin = (t, n) => { if (t.length <= n) return t; const c = t.slice(-n); return '…' + c.slice(c.indexOf(' ') + 1); };
   o.innerHTML = l.map((b, i) => { const ancien = i < l.length - 1, n = ancien ? 90 : 130;
+    // « Sous-titres en français »: the translation in the original's place (the original when there is none).
+    if (seule && b.traduction) return '<div' + (ancien ? ' class="vieux"' : '') + '>' + (PH_DRAPEAU[b.langue] ? f8Drapeau(PH_DRAPEAU[b.langue]) + ' ' : '') + esc(fin(b.traduction, n)) + '</div>';
     return '<div' + (ancien ? ' class="vieux"' : '') + '>' + (PH_DRAPEAU[b.langue] ? f8Drapeau(PH_DRAPEAU[b.langue]) + ' ' : '') + esc(fin(b.texte, n)) + '</div>' +
       (trad && b.traduction && b.traduction !== b.texte ? '<div class="d-st-tr' + (ancien ? ' vieux' : '') + '">' + esc(fin(b.traduction, n)) + '</div>' : ''); }).join('');
 }
@@ -3422,6 +3480,7 @@ function dtFil() {
 }
 async function dtRegle(q) { try { await fetch('api/datv/textes?' + q, { method: 'POST' }); } catch (x) {} setTimeout(ticTextesDatv, 200); }
 async function dtTrad(on) { try { await fetch('api/phonie?traduire=' + (on ? 1 : 0), { method: 'POST' }); } catch (x) {} dtPh = null; setTimeout(ticTextesDatv, 200); }
+async function dtStTraduction(on) { try { await fetch('api/phonie?stTraduction=' + (on ? 1 : 0), { method: 'POST' }); } catch (x) {} dtPh = null; dtSousTitres(DT && DT.soustitresActifs); setTimeout(ticTextesDatv, 200); }
 // A DATV contact: the log's form filled, saved in mode DATV on QO-100 or terrestrial (by the frequency received).
 function dNote(call, loc, rep) {
   const k = (D && D.ciel) || (DT && DT.ciel) || 0;

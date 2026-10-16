@@ -24,6 +24,8 @@ class InstallPhoniePc(val dossier: File, private val windows: Boolean = OutilsPc
     val venv = File(dossier, "stt")
     val modeles = File(venv, "modeles")
     val script = File(venv, "satme_phonie.py")
+    /** The translation's language pairs (Argos Translate's packages, unpacked). */
+    val traduction = File(venv, "traduction")
 
     /** The environment's interpreter (bin/python, Scripts\python.exe on Windows). */
     fun pythonVenv(): File = if (windows) File(venv, "Scripts/python.exe") else File(venv, "bin/python")
@@ -47,7 +49,8 @@ class InstallPhoniePc(val dossier: File, private val windows: Boolean = OutilsPc
     }
 
     fun commande(python: String, modele: String, calcul: String): List<String> =
-        listOf(python, ecritScript().absolutePath, "--modele", modele, "--modeles", modeles.absolutePath, "--calcul", calcul)
+        listOf(python, ecritScript().absolutePath, "--modele", modele, "--modeles", modeles.absolutePath, "--calcul", calcul,
+            "--traduction", traduction.absolutePath)
 
     // ------------------------------------------------------------------ what is there
 
@@ -94,16 +97,51 @@ class InstallPhoniePc(val dossier: File, private val windows: Boolean = OutilsPc
     class Installation(val enCours: Boolean = false, val etape: String = "", val lignes: List<String> = emptyList(),
                        val erreur: String = "", val fini: Boolean = false, val mo: Double = 0.0)
 
-    @Volatile var installation = Installation()
-        private set
-    private val journal = ArrayDeque<String>()
+    /** One installation's log and state (the engine's, the translation's). */
+    private inner class Suivi {
+        @Volatile var etat = Installation()
+        private val journal = ArrayDeque<String>()
+        private fun lignes() = synchronized(journal) { journal.toList() }
 
-    private fun note(l: String) = synchronized(journal) {
-        journal.addLast(l.take(300)); while (journal.size > 80) journal.removeFirst()
-        installation = Installation(true, installation.etape, journal.toList(), mo = installation.mo)
+        fun commence(): Boolean {
+            if (etat.enCours) return false
+            synchronized(journal) { journal.clear() }
+            etat = Installation(true, "préparation")
+            return true
+        }
+        fun note(l: String) = synchronized(journal) {
+            journal.addLast(l.take(300)); while (journal.size > 80) journal.removeFirst()
+            etat = Installation(true, etat.etape, journal.toList(), mo = etat.mo)
+        }
+        fun etape(e: String) { etat = Installation(true, e, lignes()); note("— $e") }
+        fun mo(m: Double) { etat = Installation(true, etat.etape, lignes(), mo = m) }
+        fun fini() { etat = Installation(false, "installé", lignes(), fini = true) }
+        fun echec(e: Exception) { etat = Installation(false, etat.etape, lignes(), erreur = e.message ?: e.toString()) }
+
+        /** Runs [c], each line of its output to the log ([filtre] true: taken, not logged); fails on a non-zero exit. */
+        fun lance(c: List<String>, env: Map<String, String> = environnement(horsLigne = false), filtre: (String) -> Boolean = { false }) {
+            note("$ " + c.joinToString(" "))
+            val pb = ProcessBuilder(c).redirectErrorStream(true)
+            pb.environment().putAll(env)
+            val p = pb.start()
+            p.outputStream.close()
+            p.inputStream.bufferedReader(Charsets.UTF_8).forEachLine { if (!filtre(it) && it.isNotBlank()) note(it) }
+            val code = p.waitFor()
+            if (code != 0) throw IllegalStateException("échec (code $code) : " + (synchronized(journal) { journal.lastOrNull { !it.startsWith("$") } } ?: c.first()))
+        }
     }
 
-    private fun etape(e: String) { installation = Installation(true, e, synchronized(journal) { journal.toList() }); note("— $e") }
+    private val suivi = Suivi()
+    private val suiviTraduction = Suivi()
+
+    /** The engine's installation. */
+    val installation: Installation get() = suivi.etat
+    /** The translation's installation. */
+    val installationTraduction: Installation get() = suiviTraduction.etat
+
+    private fun note(l: String) = suivi.note(l)
+    private fun etape(e: String) = suivi.etape(e)
+    private fun lance(c: List<String>, env: Map<String, String> = environnement(horsLigne = false), filtre: (String) -> Boolean = { false }) = suivi.lance(c, env, filtre)
 
     /**
      * Creates `stt/` (when it is not there), installs faster-whisper with
@@ -111,9 +149,7 @@ class InstallPhoniePc(val dossier: File, private val windows: Boolean = OutilsPc
      * [modele], checks. In a thread; [installation] says how it goes.
      */
     fun installe(modele: String, apres: () -> Unit = {}) {
-        if (installation.enCours) return
-        synchronized(journal) { journal.clear() }
-        installation = Installation(true, "préparation")
+        if (!suivi.commence()) return
         thread(isDaemon = true, name = "satme-phonie-installe") {
             try {
                 val py = pythonVenv()
@@ -136,7 +172,7 @@ class InstallPhoniePc(val dossier: File, private val windows: Boolean = OutilsPc
                 lance(listOf(py.absolutePath, ecritScript().absolutePath, "--telecharge", "--modele", modele, "--modeles", modeles.absolutePath),
                     environnement(horsLigne = false)) { l ->
                     val j = runCatching { JSONObject(l) }.getOrNull()
-                    if (j != null && j.has("mo")) { installation = Installation(true, installation.etape, synchronized(journal) { journal.toList() }, mo = j.optDouble("mo")); true }
+                    if (j != null && j.has("mo")) { suivi.mo(j.optDouble("mo")); true }
                     else false
                 }
                 etape("vérification")
@@ -146,24 +182,68 @@ class InstallPhoniePc(val dossier: File, private val windows: Boolean = OutilsPc
                 val v = verification
                 if (v == null || !v.optBoolean("ok")) throw IllegalStateException(v?.optString("erreur") ?: "vérification impossible")
                 note("faster-whisper ${v.optString("faster_whisper")} · CUDA : ${v.optInt("cuda")} carte(s) · modèles : ${v.optJSONArray("modeles")?.join(", ")?.replace("\"", "")}")
-                installation = Installation(false, "installé", synchronized(journal) { journal.toList() }, fini = true)
+                suivi.fini()
                 apres()
             } catch (e: Exception) {
-                installation = Installation(false, installation.etape, synchronized(journal) { journal.toList() }, erreur = e.message ?: e.toString())
+                suivi.echec(e)
             }
         }
     }
 
-    /** Runs [c], each line of its output to the log ([filtre] true: taken, not logged); fails on a non-zero exit. */
-    private fun lance(c: List<String>, env: Map<String, String> = environnement(horsLigne = false), filtre: (String) -> Boolean = { false }) {
-        note("$ " + c.joinToString(" "))
-        val pb = ProcessBuilder(c).redirectErrorStream(true)
-        pb.environment().putAll(env)
-        val p = pb.start()
-        p.outputStream.close()
-        p.inputStream.bufferedReader(Charsets.UTF_8).forEachLine { if (!filtre(it) && it.isNotBlank()) note(it) }
-        val code = p.waitFor()
-        if (code != 0) throw IllegalStateException("échec (code $code) : " + (synchronized(journal) { journal.lastOrNull { !it.startsWith("$") } } ?: c.first()))
+    // ------------------------------------------------------------------ translation
+
+    /** The language pairs unpacked (`pl_en`, `en_fr`…), read from the folder. */
+    fun pairesInstallees(): List<String> = (traduction.listFiles() ?: emptyArray())
+        .filter { it.isDirectory && it.name.matches(Regex("[a-z]{2,3}_[a-z]{2,3}")) && File(it, "model/model.bin").isFile && File(it, "sentencepiece.model").isFile }
+        .map { it.name }.sorted()
+
+    /**
+     * Installs the offline translation: sentencepiece with pip in the
+     * engine's environment, then the [paires] from Argos Translate's index
+     * into `stt/traduction/`. In a thread; [installationTraduction] says how it goes.
+     */
+    fun installeTraduction(python: String?, paires: List<String>, apres: () -> Unit = {}) {
+        if (!suiviTraduction.commence()) return
+        thread(isDaemon = true, name = "satme-phonie-traduction") {
+            val s = suiviTraduction
+            try {
+                val py = python ?: throw IllegalStateException("installer d'abord le moteur (bouton « Installer le moteur »)")
+                s.etape("installation de sentencepiece (le reste est déjà là avec faster-whisper)")
+                s.lance(listOf(py, "-m", "pip", "install", "--disable-pip-version-check", "--progress-bar", "off", "sentencepiece"))
+                val manquent = paires.filter { it !in pairesInstallees() }
+                if (manquent.isNotEmpty()) {
+                    s.etape("téléchargement de " + manquent.joinToString(", ") { it.replace("_", " → ") } +
+                        " (environ ${manquent.sumOf { TAILLES_PAIRES[it] ?: 80 }} Mo)")
+                    traduction.mkdirs()
+                    s.lance(listOf(py, ecritScript().absolutePath, "--installe-traduction", "--paires", manquent.joinToString(","),
+                        "--modeles", modeles.absolutePath, "--traduction", traduction.absolutePath), environnement(horsLigne = false)) { l ->
+                        val j = runCatching { JSONObject(l) }.getOrNull() ?: return@lance false
+                        when {
+                            j.has("erreur") -> { s.note(j.optString("erreur")); true }
+                            j.has("progres") -> { s.mo(j.optDouble("mo")); true }
+                            j.has("paire") -> { s.note(j.optString("paire").replace("_", " → ") + " : installée (${j.optDouble("mo")} Mo)"); true }
+                            j.optBoolean("fini") -> {
+                                val absentes = j.optJSONArray("absentes")?.let { a -> (0 until a.length()).map { a.optString(it) } }.orEmpty()
+                                if (absentes.isNotEmpty()) s.note("non proposées par l'index : " + absentes.joinToString(", ") { it.replace("_", " → ") })
+                                true
+                            }
+                            else -> false
+                        }
+                    }
+                }
+                s.note("paires présentes : " + pairesInstallees().joinToString(", ") { it.replace("_", " → ") })
+                s.fini()
+                apres()
+            } catch (e: Exception) {
+                s.echec(e)
+            }
+        }
+    }
+
+    /** Removes one pair ("pl_en"). */
+    fun retirePaire(paire: String): Boolean {
+        if (!paire.matches(Regex("[a-z]{2,3}_[a-z]{2,3}"))) return false
+        return File(traduction, paire).takeIf { it.isDirectory }?.deleteRecursively() ?: false
     }
 
     private fun executeCourt(c: List<String>, secondes: Long, env: Map<String, String> = emptyMap()): String? = runCatching {
@@ -182,5 +262,26 @@ class InstallPhoniePc(val dossier: File, private val windows: Boolean = OutilsPc
     companion object {
         /** The models offered, and what each weighs once downloaded. */
         val TAILLES = linkedMapOf("large-v3" to "3,1 Go", "turbo" to "1,6 Go", "medium" to "1,5 Go", "small" to "0,5 Go")
+
+        /** The languages heard on QO-100 that can be translated, in French. */
+        val LANGUES = linkedMapOf("pl" to "polonais", "de" to "allemand", "en" to "anglais", "es" to "espagnol", "it" to "italien",
+            "nl" to "néerlandais", "pt" to "portugais", "ru" to "russe", "uk" to "ukrainien", "cs" to "tchèque", "fr" to "français")
+        /** The languages a translation can be written in. */
+        val CIBLES = linkedMapOf("fr" to "français", "en" to "anglais", "de" to "allemand", "es" to "espagnol", "it" to "italien",
+            "nl" to "néerlandais", "pl" to "polonais", "pt" to "portugais")
+        /** Each pair's download (Mo, Argos Translate's index, October 2026); about 15 % more once unpacked. */
+        val TAILLES_PAIRES = mapOf(
+            "pl_en" to 72, "de_en" to 151, "es_en" to 285, "it_en" to 87, "nl_en" to 70, "pt_en" to 69, "ru_en" to 156,
+            "uk_en" to 76, "cs_en" to 71, "fr_en" to 67,
+            "en_fr" to 65, "en_de" to 151, "en_es" to 88, "en_it" to 88, "en_nl" to 72, "en_pl" to 67, "en_pt" to 66)
+
+        /** The pairs to translate [langues] into [cible]: each through English (the index has no direct pair between two others). */
+        fun pairesPour(langues: Collection<String>, cible: String): List<String> = langues.filter { it != cible }.flatMap { l ->
+            when {
+                l == "en" -> listOf("en_$cible")
+                cible == "en" -> listOf("${l}_en")
+                else -> listOf("${l}_en", "en_$cible")
+            }
+        }.distinct()
     }
 }

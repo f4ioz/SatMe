@@ -66,6 +66,21 @@ class PhoniePc(
     var traduire: Boolean
         get() = stockage.getBoolean("pc_phonie_traduire", false)
         set(v) { stockage.edit().putBoolean("pc_phonie_traduire", v).apply() }
+    /** The language translated into (offline, Argos Translate's pairs); "whisper": Whisper's own English (large-v3). */
+    var cible: String
+        get() = (stockage.getString("pc_phonie_cible", "fr") ?: "fr").takeIf { it in InstallPhoniePc.CIBLES || it == WHISPER } ?: "fr"
+        set(v) { if (v in InstallPhoniePc.CIBLES || v == WHISPER) stockage.edit().putString("pc_phonie_cible", v).apply() }
+    /** The languages whose pairs the installer fetches. */
+    var languesTraduction: List<String>
+        get() = (stockage.getString("pc_phonie_trad_langues", null) ?: LANGUES_DEFAUT).split(",").filter { it in InstallPhoniePc.LANGUES }
+        set(v) { stockage.edit().putString("pc_phonie_trad_langues", v.filter { it in InstallPhoniePc.LANGUES }.distinct().joinToString(",")).apply() }
+    /** The DATV subtitles in the translation only (« sous-titres en français »), the words heard set aside. */
+    var stTraduction: Boolean
+        get() = stockage.getBoolean("pc_phonie_st_traduction", false)
+        set(v) { stockage.edit().putBoolean("pc_phonie_st_traduction", v).apply() }
+    /** Why the last translation asked is missing ("" when it came). */
+    @Volatile var traductionErreur = ""
+        private set
     /** "auto" (the dongle while it plays, else the card), "carte", "sdr". */
     var source: String
         get() = (stockage.getString("pc_phonie_source", "auto") ?: "auto").takeIf { it in SOURCES } ?: "auto"
@@ -218,7 +233,7 @@ class PhoniePc(
             enCours = a
             try {
                 val pcm = DecoupeVoix.normalise(a.piece.segment.pcm)
-                val r = m.transcrit(++numero, pcm, langue, traduire)
+                val r = m.transcrit(++numero, pcm, langue, traduire, if (traduire && cible != WHISPER) cible else "")
                 if (g != generation) return
                 when (r) {
                     is Message.Reponse -> recoit(a, r)
@@ -258,15 +273,19 @@ class PhoniePc(
     private fun recoit(a: Attente, r: Message.Reponse) {
         val gardes = FiltrePhonie.garde(r.morceaux)
         calculMoyenS = if (calculMoyenS == 0.0) r.calculS else calculMoyenS * 0.8 + r.calculS * 0.2
+        if (traduire) traductionErreur = r.traductionErreur
         if (gardes.isEmpty()) return
         val texte = gardes.joinToString(" ") { it.texte.trim() }.trim()
+        // Translated segment by segment: the kept ones only; else the whole over's (Whisper's).
+        val traduction = if (r.morceaux.any { it.traduction.isNotBlank() }) gardes.joinToString(" ") { it.traduction.trim() }.trim() else r.traduction.trim()
         val maintenant = horloge()
         if (maintenant - connusMs > 60_000L) { connusCache = runCatching(connus).getOrDefault(emptySet()); connusMs = maintenant }
         val vus = synchronized(bulles) {
             bulles.filter { maintenant - it.t < 30 * 60_000L }.flatMap { b -> b.elements.filter { it.genre == AnalysePhonie.Genre.INDICATIF }.map { AnalysePhonie.base(it.valeur) } }.toSet()
         }
         val b = BullePhonie(0, a.piece.debutMs, a.piece.segment.dureeS, a.source, a.freqHz, a.satellite, r.langue, r.proba,
-            texte, r.traduction.trim(), BullePhonie.confiance(gardes), r.calculS, AnalysePhonie.analyse(texte, r.langue, connusCache, vus))
+            texte, traduction, BullePhonie.confiance(gardes), r.calculS, AnalysePhonie.analyse(texte, r.langue, connusCache, vus),
+            if (traduction.isNotEmpty()) r.langueCible else "")
         synchronized(bulles) {
             chargeJour()
             val c = b.copy(id = ++idBulle)
@@ -310,7 +329,7 @@ class PhoniePc(
             val trouves = b.elements.joinToString(" ") { it.valeur }
             heure.format(Date(b.t)) + " UTC" + (b.freqHz?.let { " · %.4f MHz".format(Locale.US, it / 1e6) } ?: "") +
                 (if (b.satellite.isNotBlank()) " · ${b.satellite}" else "") + " · ${b.langue}" + "\n" + b.texte + "\n" +
-                (if (b.traduction.isNotBlank()) "  (en) ${b.traduction}\n" else "") + (if (trouves.isNotBlank()) "  → $trouves\n" else "") + "\n"
+                (if (b.traduction.isNotBlank()) "  (${b.langueCible.ifBlank { "en" }}) ${b.traduction}\n" else "") + (if (trouves.isNotBlank()) "  → $trouves\n" else "") + "\n"
         }
     }
 
@@ -318,6 +337,8 @@ class PhoniePc(
 
     fun json(depuis: Long): JSONObject = JSONObject().put("present", true).put("on", actif).put("etat", if (enService) etat else "coupé")
         .put("erreur", if (enService) erreur else "").put("datv", datv).put("info", info).put("modele", modele).put("langue", langue).put("traduire", traduire)
+        .put("cible", cible).put("stTraduction", stTraduction).put("traductionErreur", if (traduire) traductionErreur else "")
+        .put("paires", JSONArray(install.pairesInstallees()))
         .put("source", source).put("sourceActive", sourceActive).put("voix", enService && enVoix).put("file", enFile).put("perdus", perdus)
         .put("retard", Math.round(retardS() * 10) / 10.0).put("calcul", Math.round(calculMoyenS * 100) / 100.0)
         .put("installe", install.python(python) != null).put("version", version).put("dernier", dernierId())
@@ -337,6 +358,29 @@ class PhoniePc(
             .put("modeles", JSONArray(InstallPhoniePc.TAILLES.map { (k, v) -> JSONObject().put("nom", k).put("taille", v) }))
             .put("installation", JSONObject().put("enCours", i.enCours).put("etape", i.etape).put("lignes", JSONArray(i.lignes.takeLast(30)))
                 .put("erreur", i.erreur).put("fini", i.fini).put("mo", i.mo))
+            .put("traduction", jsonTraduction())
+    }
+
+    /** The translation's part of the settings card: the languages, their pairs and sizes, what is there. */
+    private fun jsonTraduction(): JSONObject {
+        val t = install.installationTraduction
+        val presentes = install.pairesInstallees()
+        val choisies = languesTraduction
+        val c = if (cible == WHISPER) "fr" else cible
+        val voulues = InstallPhoniePc.pairesPour(choisies, c)
+        val manquent = voulues.filter { it !in presentes }
+        return JSONObject().put("cible", cible).put("choisies", JSONArray(choisies)).put("paires", JSONArray(presentes))
+            .put("manquent", JSONArray(manquent)).put("mo", manquent.sumOf { InstallPhoniePc.TAILLES_PAIRES[it] ?: 80 })
+            .put("sentencepiece", install.verification?.optJSONObject("traduction")?.optString("sentencepiece") ?: JSONObject.NULL)
+            .put("langues", JSONArray(InstallPhoniePc.LANGUES.map { (k, v) ->
+                val p = InstallPhoniePc.pairesPour(listOf(k), c)
+                // The pivot (English → the language written) is shared: counted on English's line only.
+                JSONObject().put("code", k).put("nom", v).put("mo", p.filter { k == "en" || it != "en_$c" }.sumOf { InstallPhoniePc.TAILLES_PAIRES[it] ?: 80 })
+                    .put("installee", p.all { it in presentes }).put("paires", JSONArray(p))
+            }))
+            .put("cibles", JSONArray(InstallPhoniePc.CIBLES.map { (k, v) -> JSONObject().put("code", k).put("nom", v) }))
+            .put("installation", JSONObject().put("enCours", t.enCours).put("etape", t.etape).put("lignes", JSONArray(t.lignes.takeLast(30)))
+                .put("erreur", t.erreur).put("fini", t.fini).put("mo", t.mo))
     }
 
     /** The page's settings and actions (POST /api/phonie…). */
@@ -344,7 +388,9 @@ class PhoniePc(
         when (chemin) {
             "/api/phonie" -> {
                 q["langue"]?.let { langue = it }
-                q["traduire"]?.let { traduire = it == "1" }
+                q["traduire"]?.let { traduire = it == "1"; traductionErreur = "" }
+                q["cible"]?.let { cible = it; traductionErreur = "" }
+                q["stTraduction"]?.let { stTraduction = it == "1" }
                 q["source"]?.let { source = it }
                 if (q["efface"] == "1") efface()
                 q["on"]?.let { v ->
@@ -359,6 +405,14 @@ class PhoniePc(
                 q["calcul"]?.let { calcul = it }
                 if (q["verifie"] == "1") { if (install.gpu == null) thread(isDaemon = true) { install.detecteGpu() }; install.verifie(install.python(python)) }
                 if (q["installe"] == "1") install.installe(modele) { redemarre() }
+                q["cible"]?.let { cible = it; traductionErreur = "" }
+                q["tradLangues"]?.let { languesTraduction = it.split(",").map { l -> l.trim() } }
+                // New pairs are read by the engine at each over: nothing to restart.
+                if (q["installeTraduction"] == "1") install.installeTraduction(install.python(python),
+                    InstallPhoniePc.pairesPour(languesTraduction, if (cible == WHISPER) "fr" else cible)) {
+                    traductionErreur = ""; install.verifie(install.python(python))
+                }
+                q["retirePaire"]?.let { install.retirePaire(it) }
             }
             else -> return JSONObject().put("ok", false).put("erreur", "inconnu : $chemin")
         }
@@ -370,6 +424,10 @@ class PhoniePc(
         const val MAX_BULLES = 300
         val CALCULS = setOf("auto", "cuda", "cpu")
         val SOURCES = setOf("auto", "carte", "sdr")
+        /** The translation by Whisper itself (English only, large-v3), as before. */
+        const val WHISPER = "whisper"
+        /** The languages heard most on QO-100. */
+        const val LANGUES_DEFAUT = "pl,de,en,es,it,nl,pt,ru,uk,cs"
         private fun jour(t: Long) = SimpleDateFormat("yyyy-MM-dd", Locale.US).apply { timeZone = TimeZone.getTimeZone("UTC") }.format(Date(t))
     }
 }

@@ -23,6 +23,8 @@ interface MoteurPhonie {
     fun demarre(): Message.Pret
     /** One piece of voice: the answer ([Message.Reponse] or [Message.Erreur]); an exception when the engine died. */
     fun transcrit(id: Long, pcm: FloatArray, langue: String, traduire: Boolean): Message
+    /** The same, the translation into [cible] (a language code; "" or "whisper": Whisper's English). */
+    fun transcrit(id: Long, pcm: FloatArray, langue: String, traduire: Boolean, cible: String): Message = transcrit(id, pcm, langue, traduire)
     fun arrete()
 }
 
@@ -76,9 +78,11 @@ class MoteurProcessus(
         }
     }
 
-    override fun transcrit(id: Long, pcm: FloatArray, langue: String, traduire: Boolean): Message {
+    override fun transcrit(id: Long, pcm: FloatArray, langue: String, traduire: Boolean): Message = transcrit(id, pcm, langue, traduire, "")
+
+    override fun transcrit(id: Long, pcm: FloatArray, langue: String, traduire: Boolean, cible: String): Message {
         val o = entree ?: throw IllegalStateException("moteur arrêté")
-        runCatching { o.write(ProtocolePhonie.trame(id, pcm, langue, traduire)); o.flush() }
+        runCatching { o.write(ProtocolePhonie.trame(id, pcm, langue, traduire, cible)); o.flush() }
             .onFailure { throw IllegalStateException(raisonArret()) }
         // Translating doubles the work; a slow processor takes a few times the piece's length.
         val delai = 60_000L + pcm.size / 16L * (if (traduire) 20 else 10)
