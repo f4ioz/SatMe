@@ -63,6 +63,9 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
     /** The DATV picture's subtitles and callsigns read in it (set before [demarre]). */
     @Volatile var textesDatv: TextesDatvPc? = null
 
+    /** QO-100's wide band spectrum from the ground station, its signals and the « veille » (set before [demarre]). */
+    @Volatile var large: SpectreLargePc? = null
+
     /** The DATV transmission's pictures and videos: the folder browser and the files sent (set before [demarre]). */
     @Volatile var fichiersDatv: FichiersDatvPc? = null
 
@@ -261,6 +264,15 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
         if (phonie != null && (chemin.startsWith("/api/phonie") || chemin.startsWith("/phonie/"))) { phonie(r, chemin, q, sortie, phonie); return }
         textesDatv?.takeIf { chemin == "/api/datv/textes" }?.let { t ->
             val o = if (r.methode == "POST") runCatching { t.action(q) }.getOrElse { JSONObject().put("ok", false).put("erreur", it.message ?: "erreur") } else t.json()
+            envoie(sortie, "200 OK", "application/json; charset=utf-8", o.toString().toByteArray()); return
+        }
+        if (chemin == "/api/datv/large" || chemin.startsWith("/api/datv/large/")) {
+            val l = large
+            val o = when {
+                l == null -> JSONObject().put("ok", false)
+                r.methode == "POST" -> runCatching { l.action(chemin, q) }.getOrElse { JSONObject().put("ok", false).put("erreur", it.message ?: "erreur") }
+                else -> l.json(q["depuis"]?.toLongOrNull() ?: -1L)
+            }
             envoie(sortie, "200 OK", "application/json; charset=utf-8", o.toString().toByteArray()); return
         }
         if (chemin.startsWith("/api/datv/sources/") || chemin.startsWith("/api/datv/emission/apercu") || chemin == "/api/datv/emission/incrustation") {
@@ -703,9 +715,10 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 val r = r0.copy(cielKhz = khz("ciel") ?: r0.cielKhz, srKs = q["sr"]?.toIntOrNull() ?: r0.srKs, olKhz = khz("ol") ?: r0.olKhz,
                     entreeB = q["entree"]?.let { it == "b" } ?: r0.entreeB, lnb = q["lnb"]?.takeIf { it in setOf("", "v", "h") } ?: "",
                     son = q["son"]?.let { it == "1" } ?: r0.son)
+                large?.veilleArrete()
                 d.demarre(r)?.let { return JSONObject().put("ok", false).put("erreur", it) }
             }
-            "/api/datv/arrete" -> datv?.arrete()
+            "/api/datv/arrete" -> { large?.veilleArrete("arrêtée : réception arrêtée"); datv?.arrete() }
             // Transmission: the parameters (kept), the start (confirmed on the page), the stop, the page's heartbeat, the gain.
             "/api/datv/emission/reglage" -> {
                 val e = emission ?: return JSONObject().put("ok", false)
@@ -783,6 +796,7 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 val e = d.etat
                 if (!e.verrouille || e.fiTrouveeKhz <= 0) return JSONObject().put("ok", false).put("erreur", "accrocher d'abord un signal (la balise)")
                 val ecart = e.fiTrouveeKhz - d.reglage.fiKhz
+                large?.veilleArrete()
                 d.demarre(d.reglage.copy(olKhz = d.reglage.olKhz - ecart))?.let { return JSONObject().put("ok", false).put("erreur", it) }
                 return ok.put("ecart", ecart)
             }

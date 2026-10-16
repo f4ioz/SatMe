@@ -63,6 +63,9 @@ class DatvPc(
     /** The station card and chat lines found in the stream (forgotten at each start). */
     val carte = fr.f4ioz.satcombo.datv.LecteurCarte(horloge)
 
+    /** The stream's own names (its SDT), forgotten at each start. */
+    val sdt = fr.f4ioz.satcombo.datv.LecteurSdt()
+
     /** The last picture made (JPEG) and its number. */
     @Volatile var image: ByteArray? = null; private set
 
@@ -150,7 +153,7 @@ class DatvPc(
         }.getOrElse { arreteIci(); return "LongMynd ne démarre pas : " + (it.message ?: "") }
         longmynd = p
         synchronized(points) { points.clear() }
-        carte.oublie()
+        carte.oublie(); sdt.oublie()
         etat = EtatDatv(actif = true, depuis = horloge())
         suisQualite(gen)
         thread(isDaemon = true, name = "satme-datv-etat") { litEtat(sEtat, gen) }
@@ -283,6 +286,7 @@ class DatvPc(
             octets += bloc.size
             analyse.ajoute(bloc)
             runCatching { carte.bloc(bloc) }
+            runCatching { sdt.bloc(bloc) }
             enregistreur?.let { o -> runCatching { o.write(bloc) } }
             if (lecteursLocaux) {
                 if (ffmpeg == null) demarreLecteurs(gen)
@@ -321,7 +325,7 @@ class DatvPc(
         client.demarre(r)?.let { return it }
         val gen = ++generation
         synchronized(points) { points.clear() }
-        carte.oublie()
+        carte.oublie(); sdt.oublie()
         etat = EtatDatv(actif = true, depuis = horloge())
         suisQualite(gen)
         thread(isDaemon = true, name = "satme-datv-noeud-etat") { suisNoeud(gen) }
@@ -522,13 +526,14 @@ class DatvPc(
 
     /** The transport stream as received, to a .ts file (any player reads it); the file's name, or "" once stopped. */
     @Synchronized
-    fun enregistre(on: Boolean): String {
+    fun enregistre(on: Boolean, etiquette: String = ""): String {
         enregistreur?.let { runCatching { it.close() } }
         enregistreur = null
         if (!on || !etat.actif) { etat = etat.copy(enregistrement = ""); return "" }
         dossierEnregistrements.mkdirs()
         val nom = "SatMe_DATV_" + java.text.SimpleDateFormat("yyyyMMdd_HHmmss'Z'", java.util.Locale.US)
-            .apply { timeZone = java.util.TimeZone.getTimeZone("UTC") }.format(java.util.Date(horloge())) + "_" + (reglage.cielKhz / 1000.0).toString().replace('.', '-') + ".ts"
+            .apply { timeZone = java.util.TimeZone.getTimeZone("UTC") }.format(java.util.Date(horloge())) + "_" + (reglage.cielKhz / 1000.0).toString().replace('.', '-') +
+            etiquette.replace(Regex("[^A-Za-z0-9-]+"), "-").trim('-').take(24).let { if (it.isEmpty()) "" else "_$it" } + ".ts"
         enregistreur = File(dossierEnregistrements, nom).outputStream().buffered(1 shl 20)
         etat = etat.copy(enregistrement = nom)
         return nom

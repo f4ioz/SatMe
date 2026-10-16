@@ -1,0 +1,242 @@
+/*
+ * SatMe — amateur radio satellite tracking
+ * Copyright (C) 2025-2026  Olivier Gouyen (F4IOZ)
+ * SPDX-License-Identifier: GPL-2.0-or-later
+ *
+ * Free software under the GNU GPL, version 2 or later. Without any warranty.
+ * The full licence text is in the LICENSE file.
+ */
+package fr.f4ioz.satcombo.pc
+
+import fr.f4ioz.satcombo.datv.BandeLarge
+import fr.f4ioz.satcombo.datv.Datv
+import fr.f4ioz.satcombo.datv.NomsSignaux
+import fr.f4ioz.satcombo.datv.ReglageDatv
+import fr.f4ioz.satcombo.datv.SignalLarge
+import fr.f4ioz.satcombo.datv.VeilleDatv
+import fr.f4ioz.satcombo.plateforme.Stockage
+import org.json.JSONArray
+import org.json.JSONObject
+import kotlin.concurrent.thread
+
+/**
+ * QO-100's wide band as the ground station sees it (the BATC's public
+ * spectrum, read only), in the DATV tab: the signals found in it, their
+ * names, a click to receive one, and the « veille » going round them.
+ *
+ * Off unless chosen; connected only while the option is on and the DATV
+ * tab asked within the last [VU_MS]. Nothing is ever sent there but the
+ * opening, the pongs and the close.
+ */
+class SpectreLargePc(
+    private val stockage: Stockage,
+    private val datv: DatvPc,
+    private val horloge: () -> Long = System::currentTimeMillis,
+    /** The spectrum's frames, one connection (by default the ground station's WebSocket). */
+    private val ouvre: () -> Source = { Source.de(ClientWebSocketPc.ouvre(HOTE, 443, CHEMIN, PROTOCOLE, AGENT)) },
+    /** Starts receiving with these settings; null when started, else why not. */
+    private val recois: (ReglageDatv) -> String? = { datv.demarre(it) },
+) {
+    /** One connection's frames: [recoit] blocks, null once closed. */
+    class Source(val recoit: () -> ByteArray?, val ferme: () -> Unit) {
+        companion object {
+            fun de(c: ClientWebSocketPc) = Source({ c.recoit() }, { c.fermePoliment() })
+        }
+    }
+
+    /** The callsign read in the picture lately, when there is one. */
+    @Volatile var indicatifImage: () -> String? = { null }
+
+    var on: Boolean
+        get() = stockage.getBoolean("datv_large", false)
+        set(v) { stockage.edit().putBoolean("datv_large", v).apply(); if (!v) courant?.ferme?.invoke() }
+
+    @Volatile private var vuMs = 0L
+    @Volatile private var courant: Source? = null
+    @Volatile var etat = ""; private set
+    @Volatile private var prochainEssai = 0L
+    @Volatile private var delai = DELAI_MIN_MS
+
+    @Volatile var numero = 0L; private set
+    @Volatile private var trameMs = 0L
+    @Volatile private var derniere = IntArray(0)
+    private val recentes = ArrayDeque<IntArray>()
+    @Volatile var signaux: List<SignalLarge> = emptyList(); private set
+
+    val noms = NomsSignaux().also { it.reprends(stockage.getString(CLE_NOMS, null), horloge()) }
+    val veille = VeilleDatv(stockage.getInt("datv_veille_attente_s", 12) * 1000L, stockage.getBoolean("datv_veille_balise", false))
+    var veilleEnregistre: Boolean
+        get() = stockage.getBoolean("datv_veille_enr", false)
+        set(v) { stockage.edit().putBoolean("datv_veille_enr", v).apply() }
+    private var enregistrePour: VeilleDatv.Cible? = null
+
+    /** Connected only while wanted: the option on, the DATV tab open. */
+    fun voulu(): Boolean = on && horloge() - vuMs < VU_MS
+
+    /** The reading thread (started once). */
+    fun demarre() {
+        thread(isDaemon = true, name = "satme-datv-large") {
+            while (true) {
+                runCatching { boucle() }
+                Thread.sleep(500)
+            }
+        }
+    }
+
+    /** One turn: connected and read while wanted, else waiting. */
+    fun boucle() {
+        if (!voulu()) { etat = if (on) "en attente de l’onglet DATV" else ""; return }
+        if (horloge() < prochainEssai) return
+        etat = "connexion…"
+        val s = runCatching { ouvre() }.getOrElse { echec(it.message ?: it.javaClass.simpleName); return }
+        courant = s
+        var recues = 0
+        try {
+            etat = "connecté"
+            while (voulu()) {
+                val b = s.recoit() ?: break
+                if (trame(b)) recues++
+            }
+        } catch (e: Exception) {
+            if (voulu()) etat = "coupé : " + (e.message ?: e.javaClass.simpleName)
+        } finally {
+            runCatching { s.ferme() }
+            courant = null
+        }
+        if (recues > 0) delai = DELAI_MIN_MS
+        if (voulu()) echec(if (recues == 0) "aucune trame reçue" else "connexion fermée")
+        else etat = if (on) "en attente de l’onglet DATV" else ""
+    }
+
+    private fun echec(pourquoi: String) {
+        prochainEssai = horloge() + delai
+        etat = "indisponible (" + pourquoi + "), nouvel essai dans " + delai / 1000 + " s"
+        delai = minOf(delai * 2, DELAI_MAX_MS)
+    }
+
+    /** A frame received: kept, its signals found (on the last second's average). */
+    fun trame(b: ByteArray): Boolean {
+        val v = BandeLarge.valeurs(b)
+        if (v.size < 100) return false
+        synchronized(recentes) {
+            recentes.addLast(v); while (recentes.size > 4) recentes.removeFirst()
+            signaux = BandeLarge.detecte(BandeLarge.moyenne(recentes.toList()))
+        }
+        derniere = v; trameMs = horloge(); numero++
+        return true
+    }
+
+    /** Fresh frames (the last within 5 s). */
+    fun frais(): Boolean = numero > 0 && horloge() - trameMs < 5_000L
+
+    // ------------------------------------------------------------ the receiver
+
+    /** The signal the MiniTiouner is on, when it receives. */
+    fun tenu(sg: SignalLarge): Boolean = datv.etat.actif &&
+        Math.abs(sg.centreKhz - datv.reglage.cielKhz) <= maxOf(NomsSignaux.tolerance(sg.srKs), sg.largeurKhz / 2)
+
+    /** Receives [khz] at [srKs] (the LNB's oscillator, the input, the supply as they are); null when started. */
+    fun accorde(khz: Long, srKs: Int): String? {
+        if (khz !in BandeLarge.DEBUT_KHZ..BandeLarge.DEBUT_KHZ + BandeLarge.LARGEUR_KHZ || srKs !in 25..4000) return "signal hors de la bande large"
+        return recois(datv.reglage.copy(cielKhz = khz, srKs = srKs))
+    }
+
+    /** The operator tuned by hand: the « veille » stops. */
+    fun veilleArrete(pourquoi: String = "arrêtée : réglage à la main") { if (veille.active) veille.arrete(pourquoi) }
+
+    /** The name of what is received now: the SDT's, LongMynd's, the station card's, the picture's. */
+    fun nomRecu(): String {
+        val c = datv.carte.carte?.takeIf { horloge() - datv.carte.carteMs < 60_000L }?.indicatif
+        return datv.sdt.nom.ifBlank { datv.etat.service }.ifBlank { c.orEmpty() }.ifBlank { indicatifImage().orEmpty() }.trim()
+    }
+
+    /** Each second: the connection dropped when no longer wanted, the names noted, the « veille » moved on. */
+    fun tic() {
+        if (!voulu()) courant?.let { runCatching { it.ferme() } }
+        val e = datv.etat
+        val maintenant = horloge()
+        val r = datv.reglage
+        if (e.actif && e.verrouille && r.cielKhz in BandeLarge.DEBUT_KHZ..BandeLarge.DEBUT_KHZ + BandeLarge.LARGEUR_KHZ) {
+            val sr = BandeLarge.debit((if (e.srTrouveKs > 0) e.srTrouveKs else r.srKs).toDouble())
+            val n = nomRecu()
+            if (n.isNotEmpty() && noms.note(r.cielKhz, sr, n, maintenant)) stockage.edit().putString(CLE_NOMS, noms.texte()).apply()
+        }
+        if (!veille.active) { enregistrePour = null; return }
+        if (!frais()) { veillePause = true; return }
+        veillePause = false
+        val c = veille.tic(maintenant, signaux, e.actif && e.verrouille)
+        if (c != null) {
+            enregistrePour = null
+            accorde(c.khz, c.srKs)?.let { veille.arrete("arrêtée : $it") }
+            return
+        }
+        val cible = veille.cible
+        if (veilleEnregistre && cible != null && enregistrePour != cible && e.actif && e.verrouille && e.enregistrement.isEmpty()) {
+            enregistrePour = cible
+            datv.enregistre(true, noms.nom(cible.khz, cible.srKs, maintenant) ?: nomRecu())
+        }
+    }
+    @Volatile private var veillePause = false
+
+    // ------------------------------------------------------------ the page
+
+    fun json(depuis: Long): JSONObject {
+        vuMs = horloge()
+        val maintenant = horloge()
+        val o = JSONObject().put("ok", true).put("on", on).put("etat", etat).put("n", numero).put("frais", frais())
+            .put("debut", BandeLarge.DEBUT_KHZ).put("largeur", BandeLarge.LARGEUR_KHZ).put("balise", Datv.BALISE_KHZ)
+            .put("canaux", JSONArray(Datv.CANAUX_KHZ)).put("canauxLarges", JSONArray(BandeLarge.CANAUX_LARGES_KHZ))
+            .put("bruit", BandeLarge.BRUIT).put("seuil", BandeLarge.SEUIL).put("unitesDb", BandeLarge.UNITES_PAR_DB)
+        if (on && frais() && depuis != numero) o.put("valeurs", JSONArray(derniere))
+        if (on && frais()) {
+            val tenus = signaux.map { tenu(it) }
+            val l = signaux.mapIndexed { i, sg ->
+                val nom = noms.nom(sg.centreKhz, sg.srKs, maintenant) ?: if (tenus[i] && datv.etat.verrouille) nomRecu() else ""
+                BandeLarge.json(sg).put("nom", nom).put("tenu", tenus[i])
+            }
+            o.put("signaux", JSONArray(l))
+        } else o.put("signaux", JSONArray())
+        o.put("recepteur", if (datv.etat.actif) JSONObject().put("ciel", datv.reglage.cielKhz).put("sr", datv.reglage.srKs)
+            .put("verrouille", datv.etat.verrouille) else JSONObject.NULL)
+        o.put("veille", JSONObject().put("on", veille.active).put("etat", if (veille.active && veillePause) "en pause : pas de spectre récent" else veille.etat)
+            .put("attente", veille.attenteMs / 1000).put("balise", veille.avecBalise).put("enr", veilleEnregistre))
+        return o
+    }
+
+    fun action(chemin: String, q: Map<String, String>): JSONObject {
+        val ok = JSONObject().put("ok", true)
+        when (chemin) {
+            "/api/datv/large/reglage" -> {
+                q["on"]?.let { on = it == "1"; if (on) { vuMs = horloge(); prochainEssai = 0L; delai = DELAI_MIN_MS } else veilleArrete("arrêtée : spectre coupé") }
+                q["attente"]?.trim()?.toIntOrNull()?.coerceIn(4, 300)?.let { veille.attenteMs = it * 1000L; stockage.edit().putInt("datv_veille_attente_s", it).apply() }
+                q["balise"]?.let { veille.avecBalise = it == "1"; stockage.edit().putBoolean("datv_veille_balise", veille.avecBalise).apply() }
+                q["enr"]?.let { veilleEnregistre = it == "1" }
+            }
+            "/api/datv/large/accorde" -> {
+                val khz = q["khz"]?.trim()?.toLongOrNull() ?: return JSONObject().put("ok", false).put("erreur", "quelle fréquence ?")
+                val sr = q["sr"]?.trim()?.toIntOrNull() ?: return JSONObject().put("ok", false).put("erreur", "quel débit ?")
+                veilleArrete()
+                accorde(khz, sr)?.let { return JSONObject().put("ok", false).put("erreur", it) }
+            }
+            "/api/datv/large/veille" -> {
+                if (q["on"] == "1") {
+                    if (!on) return JSONObject().put("ok", false).put("erreur", "activer d’abord le spectre de la bande large")
+                    veille.demarre()
+                } else veilleArrete("arrêtée")
+            }
+            else -> return JSONObject().put("ok", false).put("erreur", "inconnu")
+        }
+        return ok
+    }
+
+    companion object {
+        const val HOTE = "eshail.batc.org.uk"
+        const val CHEMIN = "/wb/fft"
+        const val PROTOCOLE = "fft"
+        const val AGENT = "SatMe-PC"
+        const val VU_MS = 10_000L
+        const val DELAI_MIN_MS = 2_000L
+        const val DELAI_MAX_MS = 60_000L
+        private const val CLE_NOMS = "datv_large_noms"
+    }
+}

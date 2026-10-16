@@ -147,6 +147,14 @@ fun main(args: Array<String>) {
         else datv.reglage.cielKhz.let { k -> k * 1000L to (if (fr.f4ioz.satcombo.datv.IndicatifsImage.qo100(k)) "QO-100" else "DATV") }
     }
     portee.launch { while (true) { runCatching { textesDatv.tic() }; kotlinx.coroutines.delay(1000) } }
+    // QO-100's wide band spectrum from the ground station: off unless chosen, connected only while the DATV tab is open.
+    val large = SpectreLargePc(station.stockage, datv)
+    large.indicatifImage = {
+        val t = System.currentTimeMillis()
+        textesDatv.confirmes().filter { t - it.dernierMs < 30_000L }.maxByOrNull { it.dernierMs }?.indicatif
+    }
+    large.demarre()
+    portee.launch { while (true) { runCatching { large.tic() }; kotlinx.coroutines.delay(1000) } }
     // DATV transmission with the Pluto: nothing sent until the operator asks and confirms on the page.
     val emission = EmissionDatvPc(station.stockage, File(dossier, "tmp"), indicatif = { station.settings.callsign },
         locator = { station.settings.manualLocator }, plutoHote = { sdr.plutoHote }, plutoPort = { sdr.plutoPort },
@@ -170,6 +178,7 @@ fun main(args: Array<String>) {
         PlancheWebPc(station, son, dossier), kiss, sauvegarde, MirePc(File(dossier, "exports")), diffusion, qo100, lien, phonie, emission, trafic)
     serveur.textesDatv = textesDatv
     serveur.fichiersDatv = fichiersDatv
+    serveur.large = large
     serveur.demarre()
     // QO-100 received when SatMe-PC stopped: taken back only when chosen in Réglages (reception only).
     Thread({ runCatching { trafic.repriseAuDemarrage() } }, "satme-qo100-reprise").apply { isDaemon = true; start() }

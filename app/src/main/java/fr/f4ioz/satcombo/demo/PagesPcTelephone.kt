@@ -62,7 +62,8 @@ object PagesPcTelephone {
     private fun stockageFt8(vm: fr.f4ioz.satcombo.MainViewModel) = fr.f4ioz.satcombo.data.stockage(vm.getApplication(), "satcombo_ft8")
 
     private fun json(o: Any) =ReponseWeb("200 OK", "application/json; charset=utf-8", o.toString().toByteArray(Charsets.UTF_8))
-    private const val PAS_D_EMISSION_DATV = "pas d'émission DATV depuis le téléphone : c'est SatMe-PC qui émet"
+    private const val PAS_DE_SPECTRE_LARGE = "le spectre de la bande large est sur SatMe-PC"
+    private const val PAS_D_EMISSION_DATV ="pas d'émission DATV depuis le téléphone : c'est SatMe-PC qui émet"
     private val NON = ReponseWeb("404 Not Found", "application/json", "{\"ok\":false}".toByteArray())
     private val OK get() = JSONObject().put("ok", true)
 
@@ -149,6 +150,8 @@ object PagesPcTelephone {
                     b.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, o)
                     ReponseWeb("200 OK", "image/png", o.toByteArray())
                 }
+                // ---- DATV: the wide band's spectrum is SatMe-PC's (hidden on the phone's page)
+                "/api/datv/large" -> json(JSONObject().put("ok", false).put("erreur", PAS_DE_SPECTRE_LARGE))
                 // ---- DATV: the phone's, through a SatMe-Node (its picture on the phone's own screen)
                 "/api/datv" -> {
                     val d = vm.datv
@@ -536,6 +539,8 @@ object PagesPcTelephone {
             "/api/datv/noeud" -> { vm.datv.rejoins(p("adresse").trim(), p("code").trim()); OK }
             "/api/datv/sources/envoi", "/api/datv/sources/supprime", "/api/datv/emission/apercu", "/api/datv/emission/incrustation" ->
                 JSONObject().put("ok", false).put("erreur", PAS_D_EMISSION_DATV)
+            "/api/datv/large/reglage", "/api/datv/large/accorde", "/api/datv/large/veille" ->
+                JSONObject().put("ok", false).put("erreur", PAS_DE_SPECTRE_LARGE)
             "/api/datv/enregistre", "/api/datv/vlc", "/api/datv/chemin" ->
                 JSONObject().put("ok", false).put("erreur", "sur le téléphone, l'image et le son sont sur son écran DATV")
             // ---- the TH-D72 panel: the gestures of the phone's

@@ -109,6 +109,19 @@ object WebSocketPc {
         return Trame((b0 and 0x80) != 0, b0 and 0x0F, d)
     }
 
+    /** Reads one frame from a server; null at the end of the stream, on a masked frame (section 5.1) or one over [max] bytes. */
+    fun litTrameServeur(e: InputStream, max: Int): Trame? {
+        val b0 = e.read(); if (b0 < 0) return null
+        val b1 = e.read(); if (b1 < 0) return null
+        if ((b1 and 0x80) != 0) return null
+        var n = (b1 and 0x7F).toLong()
+        if (n == 126L) n = ((lit(e, 2) ?: return null).let { ((it[0].toInt() and 0xFF) shl 8) or (it[1].toInt() and 0xFF) }).toLong()
+        else if (n == 127L) n = (lit(e, 8) ?: return null).fold(0L) { a, x -> (a shl 8) or (x.toLong() and 0xFF) }
+        if (n < 0 || n > max) return null
+        val d = lit(e, n.toInt()) ?: return null
+        return Trame((b0 and 0x80) != 0, b0 and 0x0F, d)
+    }
+
     /** A client frame, masked as a client must (tests, and any SatMe client). */
     fun trameClient(opcode: Int, donnees: ByteArray, masque: ByteArray = byteArrayOf(0x12, 0x34, 0x56, 0x78), fin: Boolean = true): ByteArray {
         val o = ByteArrayOutputStream()
