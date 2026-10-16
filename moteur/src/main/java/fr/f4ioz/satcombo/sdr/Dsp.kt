@@ -325,25 +325,32 @@ class DcBlock(private val alpha: Float = 0.9995f) {
  * does, massively: 40 dB between a station at zenith and one on the horizon.
  * Without AGC you spend the pass chasing the volume knob.
  *
- * Fast attack (don't saturate on a syllable), slow release (don't let noise
- * pump up between words).
+ * A hang AGC, as voice wants it: the gain drops at once on a louder peak
+ * (2 ms), then holds 300 ms and only rises slowly (12 dB/s). Following the
+ * waveform itself (the gain rising within each pitch period, the hiss pumped
+ * up between words) made the voice sound hollow.
  */
 class AudioAgc(
     private val target: Float = 8_000f,
-    private val maxGain: Float = 20_000_000f
+    private val maxGain: Float = 20_000_000f,
+    rate: Double = Dsp.AUDIO_RATE.toDouble(),
 ) {
     private var env = 0f
-    private val attack = 0.02f
-    private val release = 0.0003f
+    private var hang = 0
+    private val attack = (1.0 - kotlin.math.exp(-1.0 / (0.002 * rate))).toFloat()
+    private val hangSamples = (0.3 * rate).toInt()
+    private val decay = Math.pow(10.0, -12.0 / 20.0 / rate).toFloat()
 
-    fun reset() { env = 0f }
+    fun reset() { env = 0f; hang = 0 }
 
     /** Converts [count] float samples to levelled 16-bit audio. */
     fun process(buf: FloatArray, count: Int, out: ShortArray) {
         for (k in 0 until count) {
             val x = buf[k]
             val a = abs(x)
-            env += if (a > env) attack * (a - env) else release * (a - env)
+            if (a > env) { env += attack * (a - env); hang = hangSamples }
+            else if (hang > 0) hang--
+            else env *= decay
             val g = if (env <= 1e-7f) maxGain else (target / env).coerceIn(1f, maxGain)
             out[k] = (x * g).coerceIn(-32000f, 32000f).toInt().toShort()
         }
@@ -526,7 +533,7 @@ class RxChain(
     private val disc = FmDiscriminator(stage2Rate, maxDeviationHz)
     private val dc = DcBlock()
     private val deemph = Deemphasis(750.0, stage2Rate)
-    private val agc = AudioAgc()
+    private val agc = AudioAgc(rate = stage2Rate)
 
     /** Sideband filter, rebuilt when mode or width changes. */
     private var ssb: ComplexBandpass? = null

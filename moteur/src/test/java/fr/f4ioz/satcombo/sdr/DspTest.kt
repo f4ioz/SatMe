@@ -14,6 +14,7 @@ import org.junit.Test
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.cos
+import kotlin.math.log10
 import kotlin.math.sin
 
 /**
@@ -462,6 +463,32 @@ class DspTest {
         var peak = 0
         for (k in n / 2 until n) peak = maxOf(peak, abs(out[k].toInt()))
         assertTrue("niveau apres CAG $peak", peak > 5_000 && peak < 20_000)
+    }
+
+    @Test
+    fun la_commande_de_gain_ne_suit_pas_la_forme_d_onde() {
+        // A voiced sound: 150 Hz pulses through a 700 Hz resonance, steady level. The gain must hold
+        // from one pitch period to the next (it rose within each period before: a hollow voice).
+        val r = 44_100
+        val n = r
+        val buf = FloatArray(n) { k ->
+            val t = (k % (r / 150)).toDouble() / r
+            (0.01 * kotlin.math.exp(-t * 900.0) * cos(2.0 * PI * 700.0 * t)).toFloat()
+        }
+        val out = ShortArray(n)
+        AudioAgc(rate = r.toDouble()).process(buf, n, out)
+        val p = r / 150
+        val pics = (n / 2 / p until n / p - 1).map { c -> (c * p until (c + 1) * p).maxOf { abs(out[it].toInt()) } }
+        val ecart = 20 * log10(pics.max().toDouble() / pics.min())
+        assertTrue("pics de periode en periode : ecart $ecart dB", ecart < 1.0)
+        // A pause of 0.2 s between words: the gain holds, the hiss is not pumped up.
+        val agc = AudioAgc(rate = r.toDouble())
+        val voix = FloatArray(r / 2) { (0.05 * cos(2.0 * PI * 500.0 * it / r)).toFloat() }
+        val souffle = FloatArray(r / 5) { (0.0005 * cos(2.0 * PI * 1_300.0 * it / r)).toFloat() }
+        val o1 = ShortArray(voix.size); val o2 = ShortArray(souffle.size)
+        agc.process(voix, voix.size, o1); agc.process(souffle, souffle.size, o2)
+        val crete = o2.maxOf { abs(it.toInt()) }
+        assertTrue("souffle remonte a $crete entre deux mots", crete < 200)
     }
 
     // ---------------------------------------------------- spectrum and FFT
