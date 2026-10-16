@@ -14,6 +14,7 @@ import fr.f4ioz.satcombo.phonie.CapteurPhonie
 import fr.f4ioz.satcombo.phonie.DecoupeVoix
 import fr.f4ioz.satcombo.phonie.FilePhonie
 import fr.f4ioz.satcombo.phonie.FiltrePhonie
+import fr.f4ioz.satcombo.phonie.SourcePhonie
 import fr.f4ioz.satcombo.phonie.ProtocolePhonie.Message
 import fr.f4ioz.satcombo.plateforme.Stockage
 import org.json.JSONArray
@@ -47,7 +48,7 @@ class PhoniePc(
 
     var actif: Boolean
         get() = stockage.getBoolean("pc_phonie", false)
-        set(v) { stockage.edit().putBoolean("pc_phonie", v).apply(); if (v) demarre() else arrete() }
+        set(v) { stockage.edit().putBoolean("pc_phonie", v).apply(); if (v) demarre() else if (!datv) arrete() }
     var python: String
         get() = stockage.getString("pc_phonie_python", "") ?: ""
         set(v) { stockage.edit().putString("pc_phonie_python", v.trim()).apply(); redemarre() }
@@ -81,32 +82,54 @@ class PhoniePc(
 
     private val carte = CapteurPhonie()
     private val sdr = CapteurPhonie()
+    private val capteurDatv = CapteurPhonie()
     @Volatile private var sdrVuMs = 0L
-    /** The source feeding now ("carte", "sdr", "" before any sound). */
+
+    /**
+     * The DATV subtitles on: the received picture's sound alone feeds, and
+     * the engine runs even when « Phonie → texte » is off. The source chosen
+     * is untouched, so it comes back when they stop.
+     */
+    @Volatile var datv = false
+        private set
+
+    /** Engine running: chosen, or for the DATV subtitles. */
+    val enService: Boolean get() = actif || datv
+
+    @Synchronized fun prendsDatv(on: Boolean) {
+        if (on == datv) return
+        datv = on
+        capteurDatv.reinitialise(); carte.reinitialise(); sdr.reinitialise(); sourceActive = ""
+        if (on) demarre() else if (!actif) arrete()
+    }
+
+    /** The DATV reception's sound, while its subtitles are on. */
+    fun ecouteDatv(pcm: ShortArray, n: Int, rate: Int) {
+        if (!SourcePhonie.admise("datv", source, datv, false)) return
+        if (sourceActive != "datv") { sourceActive = "datv"; capteurDatv.reinitialise() }
+        capteurDatv.pousse(pcm, n, rate, horloge()).forEach { ajoute(it, "datv") }
+    }
+    /** The source feeding now ("carte", "sdr", "datv", "" before any sound). */
     @Volatile var sourceActive = ""
         private set
 
     /** The sound card's blocks (the dongle's too when it is the card's source). */
     fun ecouteCarte(pcm: ShortArray, n: Int, rate: Int) {
-        if (!actif) return
-        val s = source
-        if (s == "sdr" || (s == "auto" && horloge() - sdrVuMs < 1500L)) return
+        if (!actif || !SourcePhonie.admise("carte", source, datv, horloge() - sdrVuMs < 1500L)) return
         if (sourceActive != "carte") { sourceActive = "carte"; carte.reinitialise() }
         carte.pousse(pcm, n, rate, horloge()).forEach { ajoute(it, "carte") }
     }
 
     /** The dongle's demodulated sound; [squelch]: its gate when one is set. */
     fun ecouteSdr(pcm: ShortArray, n: Int, rate: Int, squelch: Boolean?) {
-        if (!actif) return
-        val s = source
-        if (s == "carte") return
+        if (!actif || !SourcePhonie.admise("sdr", source, datv, true)) return
         sdrVuMs = horloge()
         if (sourceActive != "sdr") { sourceActive = "sdr"; sdr.reinitialise() }
         sdr.pousse(pcm, n, rate, horloge(), squelch).forEach { ajoute(it, "sdr") }
     }
 
     /** True while a voice is being heard. */
-    val enVoix: Boolean get() = when (sourceActive) { "carte" -> carte.enVoix; "sdr" -> sdr.enVoix; else -> false }
+    val enVoix: Boolean get() = when (sourceActive) { "carte" -> carte.enVoix; "sdr" -> sdr.enVoix; "datv" -> capteurDatv.enVoix; else -> false }
 
     private class Attente(val piece: CapteurPhonie.Piece, val source: String, val freqHz: Long?, val satellite: String)
 
@@ -152,7 +175,7 @@ class PhoniePc(
 
     /** Starts the worker (when on, at SatMe-PC's start too). */
     @Synchronized fun demarre() {
-        if (!actif || travail?.isAlive == true) return
+        if (!enService || travail?.isAlive == true) return
         val g = ++generation
         etat = "démarrage"; erreur = ""
         travail = thread(isDaemon = true, name = "satme-phonie") { boucle(g) }
@@ -164,12 +187,12 @@ class PhoniePc(
         runCatching { moteur?.arrete() }
         moteur = null
         file.vide(); enCours = null
-        carte.reinitialise(); sdr.reinitialise(); sourceActive = ""
+        carte.reinitialise(); sdr.reinitialise(); capteurDatv.reinitialise(); sourceActive = ""
         etat = "coupé"; erreur = ""; info = ""; echecs = 0
     }
 
     /** A setting that the engine reads at start changed: started again (when on). */
-    fun redemarre() { if (!actif) return; arrete(); demarre() }
+    fun redemarre() { if (!enService) return; arrete(); demarre() }
 
     private fun boucle(g: Int) {
         while (g == generation) {
@@ -293,9 +316,9 @@ class PhoniePc(
 
     // ------------------------------------------------------------------ the page
 
-    fun json(depuis: Long): JSONObject = JSONObject().put("present", true).put("on", actif).put("etat", if (actif) etat else "coupé")
-        .put("erreur", if (actif) erreur else "").put("info", info).put("modele", modele).put("langue", langue).put("traduire", traduire)
-        .put("source", source).put("sourceActive", sourceActive).put("voix", actif && enVoix).put("file", enFile).put("perdus", perdus)
+    fun json(depuis: Long): JSONObject = JSONObject().put("present", true).put("on", actif).put("etat", if (enService) etat else "coupé")
+        .put("erreur", if (enService) erreur else "").put("datv", datv).put("info", info).put("modele", modele).put("langue", langue).put("traduire", traduire)
+        .put("source", source).put("sourceActive", sourceActive).put("voix", enService && enVoix).put("file", enFile).put("perdus", perdus)
         .put("retard", Math.round(retardS() * 10) / 10.0).put("calcul", Math.round(calculMoyenS * 100) / 100.0)
         .put("installe", install.python(python) != null).put("version", version).put("dernier", dernierId())
         .put("premier", bulles().firstOrNull()?.id ?: (dernierId() + 1))

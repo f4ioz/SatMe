@@ -84,6 +84,7 @@ object Adif {
     fun modeOf(raw: String?): Pair<String, String> {
         val s = (raw ?: "").uppercase()
         return when {
+            s.contains("DATV") || s == "ATV" -> "ATV" to ""
             s.contains("USB") -> "SSB" to "USB"
             s.contains("LSB") -> "SSB" to "LSB"
             s.contains("SSB") -> "SSB" to ""
@@ -157,7 +158,8 @@ object Adif {
             sb.append(field("QSO_DATE", df.format(d)))
             sb.append(field("TIME_ON", tf.format(d)))
             sb.append(field("SAT_NAME", e.satName))
-            sb.append(field("PROP_MODE", "SAT"))
+            // No satellite: a terrestrial contact (DATV on 23 cm), not a satellite one.
+            if (e.satName.isNotBlank()) sb.append(field("PROP_MODE", "SAT"))
             if (station.isNotBlank()) {
                 sb.append(field("STATION_CALLSIGN", station.uppercase()))
                 sb.append(field("OPERATOR", operateur.ifBlank { station }.uppercase()))

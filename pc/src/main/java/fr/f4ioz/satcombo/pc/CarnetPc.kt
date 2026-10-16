@@ -117,6 +117,36 @@ class CarnetPc(private val station: StationPc, val store: LogStore, private val 
     }
 
     /**
+     * A DATV contact, now, in mode DATV: on QO-100 when [cielKhz] (the
+     * picture received) is in its wide band transponder (the dish's aim, both
+     * frequencies), else terrestrial (no satellite, the frequency received).
+     */
+    fun ajouteDatv(indicatif: String, locator: String, rstEnvoye: String, rstRecu: String, note: String, cielKhz: Long,
+                   fiche: QrzReponse.Fiche? = null): LogEntry? {
+        val call = indicatif.trim().uppercase()
+        if (call.isEmpty() || cielKhz <= 0) return null
+        val e = station.etat.value
+        val qo = fr.f4ioz.satcombo.datv.IndicatifsImage.qo100(cielKhz)
+        val ciel = if (qo) e.observateur?.let { fr.f4ioz.satcombo.domain.Qo100.pointage(it.latDeg, it.lonDeg) } else null
+        val passes = historique(call)
+        val c = LogEntry(
+            timeMs = horloge(), satName = if (qo) fr.f4ioz.satcombo.domain.TraficQo100.NOM else "",
+            catnum = if (qo) fr.f4ioz.satcombo.domain.Qo100.NORAD else 0,
+            azimuthDeg = ciel?.azDeg ?: 0.0, elevationDeg = ciel?.elDeg ?: 0.0,
+            myLocator = e.locator, myGrids = mesCarres(), callsign = call, theirLocator = locator.trim().uppercase(),
+            rstSent = rstEnvoye.trim(), rstRcvd = rstRecu.trim(), note = note.trim(),
+            locatorOrigine = if (locator.isBlank()) "INCONNU" else if (fiche != null && locator.trim().equals(fiche.carre, true)) "QRZ" else "SAISI",
+            mode = "DATV",
+            downlinkMhz = cielKhz / 1000.0, uplinkMhz = if (qo) fr.f4ioz.satcombo.datv.IndicatifsImage.monteeKhz(cielKhz) / 1000.0 else 0.0,
+            nom = passes.firstOrNull { it.nom.isNotBlank() }?.nom ?: fiche?.nom.orEmpty(),
+            qth = passes.firstOrNull { it.qth.isNotBlank() }?.qth ?: fiche?.qth.orEmpty(),
+            courriel = fiche?.courriel.orEmpty())
+        store.add(c); oublieMemoire()
+        annonce(c)
+        return c
+    }
+
+    /**
      * A contact typed afterwards: on [catnum], at [quandMs] (a past pass),
      * its az/el where the satellite was then, the mode given; who it is as
      * already known, else as QRZ says. Null without a callsign, or on an

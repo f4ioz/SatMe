@@ -116,6 +116,15 @@ object PagePc {
   #d-cadre { position:relative; aspect-ratio:16/9; max-height:calc(100vh - 230px); background:#000; border-radius:8px; overflow:hidden; display:flex; align-items:center; justify-content:center; }
   #d-video { max-width:100%; max-height:100%; display:none; }
   #d-vide { position:absolute; color:var(--gris); font-size:15px; }
+  .d-st { position:absolute; left:3%; right:3%; bottom:4%; display:flex; flex-direction:column; align-items:center; gap:4px; pointer-events:none; }
+  .d-st div { background:rgba(0,0,0,.74); color:#fff; font-size:clamp(15px,2.3vw,27px); font-weight:600; line-height:1.3; padding:3px 12px; border-radius:6px; text-align:center; text-shadow:0 1px 2px #000; }
+  .d-st .d-st-tr { font-size:clamp(13px,1.8vw,21px); font-style:italic; font-weight:500; color:#CFF6EE; }
+  .d-st .vieux { opacity:.6; }
+  .d-lu { position:absolute; top:8px; right:8px; background:rgba(0,0,0,.72); color:#fff; font-weight:800; letter-spacing:1px; padding:4px 10px; border-radius:6px; font-size:15px; pointer-events:none; }
+  .d-lu.sur { box-shadow:0 0 0 2px var(--vert); }
+  .dt-lu { margin-top:6px; padding:6px 9px; background:#0E1720; border-radius:10px; border-left:3px solid var(--cyan); }
+  .dt-lu b { font-size:20px; letter-spacing:2px; }
+  .dt-lu.sur { border-left-color:var(--vert); }
   #t-qr svg { width:100%; height:100%; display:block; border-radius:8px; }
   #visionneuse::backdrop { background:rgba(0,0,0,.75); }
   #vi-img { display:block; max-width:min(92vw,1280px); max-height:calc(92vh - 60px); min-width:320px; image-rendering:auto; border-radius:6px; cursor:zoom-out; background:#0E1720; }
@@ -988,7 +997,7 @@ object PagePc {
 <div class="d-grille">
   <div class="carte d-ecran">
     <div class="t">DATV · MiniTiouner <span id="d-titre" class="petit"></span></div>
-    <div id="d-cadre"><img id="d-video" alt=""><div id="d-vide">Réception arrêtée</div></div>
+    <div id="d-cadre"><img id="d-video" alt=""><div id="d-vide">Réception arrêtée</div><div id="d-lu" class="d-lu" hidden></div><div id="d-st" class="d-st" hidden></div></div>
     <div class="paire" style="margin-top:8px;align-items:center">
       <span id="d-etat" class="pastille">arrêté</span>
       <span>MER <b class="val" id="d-mer">—</b></span>
@@ -1022,6 +1031,16 @@ object PagePc {
       <div class="ligne"><button class="primaire" data-marche="d" onclick="dDemarre()">Recevoir</button><button class="arret" data-arret="d" hidden onclick="dPost('arrete')">Arrêter</button>
         <button id="d-benr" onclick="dEnregistre()">Enregistrer</button><button onclick="dPost('vlc')" title="Le même flux dans VLC, pleine qualité">VLC</button></div>
       <div class="etat" id="d-msg"></div>
+    </div>
+    <div class="carte" id="dt-carte" hidden>
+      <div class="t">Sous-titres et indicatifs</div>
+      <label class="petit" style="display:block"><input type="checkbox" id="dt-st" onchange="dtRegle('soustitres=' + (this.checked ? 1 : 0))"> Sous-titres : le son reçu écrit sous l’image (Phonie → texte)</label>
+      <label class="petit" style="display:block;margin-left:22px"><input type="checkbox" id="dt-trad" onchange="dtTrad(this.checked)"> avec la traduction (anglais)</label>
+      <div class="petit" id="dt-st-etat"></div>
+      <label class="petit" style="display:block;margin-top:6px"><input type="checkbox" id="dt-ocr" onchange="dtRegle('ocr=' + (this.checked ? 1 : 0))"> Lire les indicatifs dans l’image</label>
+      <div class="petit" id="dt-ocr-etat"></div>
+      <div id="dt-lus"></div>
+      <div id="dt-fil" class="ph-fil" style="max-height:260px"></div>
     </div>
     <div class="carte">
       <div class="t">Constellation</div>
@@ -2946,8 +2965,10 @@ async function enregistreContact() {
     if (isNaN(t)) { txt('c-etat', 'l’heure du contact ?'); return; }
     apres = '&catnum=' + v('ca-sat') + '&t=' + t + '&md=' + enc(v('ca-md'));
   }
-  const j = await post('api/carnet/ajoute?c=' + enc(c) + '&l=' + enc(v('c-loc')) + '&rs=' + enc(v('c-rs')) + '&rr=' + enc(v('c-rr')) + '&n=' + enc(v('c-note')) + apres);
+  const j = await post('api/carnet/ajoute?c=' + enc(c) + '&l=' + enc(v('c-loc')) + '&rs=' + enc(v('c-rs')) + '&rr=' + enc(v('c-rr')) + '&n=' + enc(v('c-note')) + apres +
+    (dtQso ? '&datv=' + dtQso : ''));
   if (j && j.ok) {
+    if (dtQso) { dtQso = 0; const a = g('c-aide'); if (a.dataset.avant) { a.textContent = a.dataset.avant; a.dataset.avant = ''; } }
     txt('c-etat', c.toUpperCase() + ' enregistré');
     ['c-call', 'c-loc', 'c-note'].forEach(i => g(i).value = ''); g('c-rs').value = '59'; g('c-rr').value = '59';
     txt('c-qui', ''); quiPour = ''; stationPour(''); g('c-props').innerHTML = ''; propositions = []; iProp = -1; accepte = ''; g('c-loc').dataset.tape = ''; locPour = ''; g('c-call').style.borderColor = ''; g('c-call').focus(); chargeCarnet();
@@ -3185,6 +3206,80 @@ function dBalise() { g('d-ciel').value = mhz3(D ? D.balise : 10491500); dSr = 15
 async function dCale() { const j = await dPost('cale'); if (j && j.ok) { txt('d-msg', 'oscillateur corrigé de ' + (-j.ecart) + ' kHz'); setTimeout(() => ticDatv(true), 600); } }
 async function dEnregistre() { await dPost('enregistre?on=' + (D && D.enregistrement ? 0 : 1)); }
 function dLnb() { g('d-lnb-avert').hidden = !g('d-lnb').value; }
+
+// ------------------------------------------------------------------ DATV: the sound subtitled, the callsigns read in the picture
+let DT = null, dtPh = null, dtDernier = 0, dtListe = [], dtQso = 0;
+async function ticTextesDatv() {
+  if (g('v-datv').hidden) return;
+  let j = null;
+  try { j = await (await fetch('api/datv/textes')).json(); } catch (x) { return; }
+  if (!j || !j.ok) { g('dt-carte').hidden = true; return; }
+  DT = j; g('dt-carte').hidden = false;
+  if (document.activeElement !== g('dt-st')) g('dt-st').checked = j.soustitres;
+  if (document.activeElement !== g('dt-ocr')) g('dt-ocr').checked = j.ocr;
+  g('dt-st').disabled = !j.phonie;
+  // The overs heard on the DATV sound (the phonie's, from this source only).
+  if (j.phonie && (j.soustitres || !dtPh)) {
+    let p = null;
+    try { p = await (await fetch('api/phonie?depuis=' + dtDernier)).json(); } catch (x) {}
+    if (p && p.present) {
+      dtPh = p;
+      if (p.dernier < dtDernier) { dtDernier = 0; dtListe = []; }
+      const nv = p.bulles.filter(b => b.src === 'datv');
+      if (p.bulles.length) dtDernier = p.bulles[p.bulles.length - 1].id;
+      if (nv.length) { dtListe = dtListe.concat(nv).slice(-60); dtFil(); }
+      else if (!g('dt-fil').innerHTML) dtFil();
+    }
+  }
+  const ph = dtPh;
+  if (ph && document.activeElement !== g('dt-trad')) g('dt-trad').checked = ph.traduire;
+  g('dt-trad').disabled = !j.soustitres;
+  const etat = !j.phonie ? 'Phonie → texte absent.' : !j.soustitres ? '' : !j.soustitresActifs ? 'en attente de la réception' :
+    !ph ? '' : ({ 'démarrage': 'chargement du modèle…', 'prêt': 'à l’écoute' + (ph.voix ? ' · voix' : ''), 'erreur': 'en panne' }[ph.etat] || ph.etat) +
+    (ph.erreur ? ' · ' + ph.erreur : '') + (ph.on && ph.source !== 'datv' ? ' · Phonie → texte écoute le DATV (sa source revient ensuite)' : '');
+  txt('dt-st-etat', etat);
+  dtSousTitres(j.soustitresActifs);
+  // The callsigns read in the picture.
+  txt('dt-ocr-etat', !j.ocr ? '' : !j.outil ? 'tesseract introuvable : ' + j.conseil :
+    (j.occupe ? 'lecture… · ' : '') + j.lectures + ' lecture(s)' + (j.texte ? ' · lu : « ' + j.texte + ' »' : '') + (j.erreur ? ' · ' + j.erreur : ''));
+  if (!j.ocr && !j.outil) txt('dt-ocr-etat', 'tesseract (facultatif) : ' + j.conseil);
+  const lus = j.ocr ? j.lus : [];
+  g('dt-lus').innerHTML = lus.map((l, i) => '<div class="dt-lu' + (l.accord ? ' sur' : '') + '"' + (i ? ' style="opacity:.7"' : '') + '>' +
+    (i ? '' : '<span class="petit">Indicatif lu dans l’image : </span>') + '<b>' + esc(l.c) + '</b> ' + (l.drapeau ? f8Drapeau(l.drapeau) + ' ' : '') +
+    '<span class="petit">' + esc(l.pays || '') + ' · lu ' + l.lectures + ' fois de suite' + (l.accord ? ' · <span style="color:var(--vert)">= nom du service, très probable</span>' : '') + '</span> ' +
+    '<button onclick="dNote(\'' + esc(l.c) + '\',\'\',\'\')">Noter le QSO</button></div>').join('');
+  const b = g('d-lu'), l0 = lus[0];
+  b.hidden = !(l0 && D && D.actif);
+  if (l0) { b.innerHTML = esc(l0.c) + (l0.drapeau ? ' ' + f8Drapeau(l0.drapeau) : ''); b.className = 'd-lu' + (l0.accord ? ' sur' : ''); }
+}
+setInterval(() => ticTextesDatv(), 1000);
+// Under the picture: the last two overs (a minute at most), big, with their language's flag.
+function dtSousTitres(on) {
+  const o = g('d-st'), maintenant = Date.now();
+  const l = on ? dtListe.filter(b => maintenant - (b.t + b.duree * 1000) < 60000).slice(-2) : [];
+  o.hidden = !l.length;
+  const trad = g('dt-trad').checked;
+  o.innerHTML = l.map((b, i) => '<div' + (i < l.length - 1 ? ' class="vieux"' : '') + '>' + (PH_DRAPEAU[b.langue] ? f8Drapeau(PH_DRAPEAU[b.langue]) + ' ' : '') + esc(b.texte) + '</div>' +
+    (trad && b.traduction ? '<div class="d-st-tr' + (i < l.length - 1 ? ' vieux' : '') + '">' + esc(b.traduction) + '</div>' : '')).join('');
+}
+function dtFil() {
+  const f = g('dt-fil'), bas = f.scrollTop + f.clientHeight >= f.scrollHeight - 8;
+  // The phonie's overs, their chips noting a DATV contact.
+  f.innerHTML = dtListe.map(b => phBulle(b).replace(/onclick="phNote\(/g, 'onclick="dNote(')).join('') ||
+    '<div class="petit" style="padding:6px">Les passages de voix reçus en DATV s’écriront ici.</div>';
+  if (bas) f.scrollTop = f.scrollHeight;
+}
+async function dtRegle(q) { try { await fetch('api/datv/textes?' + q, { method: 'POST' }); } catch (x) {} setTimeout(ticTextesDatv, 200); }
+async function dtTrad(on) { try { await fetch('api/phonie?traduire=' + (on ? 1 : 0), { method: 'POST' }); } catch (x) {} dtPh = null; setTimeout(ticTextesDatv, 200); }
+// A DATV contact: the log's form filled, saved in mode DATV on QO-100 or terrestrial (by the frequency received).
+function dNote(call, loc, rep) {
+  const k = (D && D.ciel) || (DT && DT.ciel) || 0;
+  phNote(call, loc, rep);
+  dtQso = k;
+  const a = g('c-aide');
+  if (!a.dataset.avant) a.dataset.avant = a.textContent;
+  a.textContent = 'Contact DATV · ' + (DT && DT.qo100 ? 'QO-100 ' : 'terrestre ') + mhz3(k) + ' MHz : enregistré en mode DATV.';
+}
 
 // ------------------------------------------------------------------ DATV transmission (ADALM-PLUTO, HackRF One)
 let EM = null, eVieW = null, ePremier = true;

@@ -32,6 +32,7 @@ object OutilsPc {
         when (nom) {
             "vlc" -> pf.map { "$it\\VideoLAN\\VLC\\vlc.exe" }
             "ffmpeg", "ffplay" -> listOf("C:\\ffmpeg\\bin\\$nom.exe") + pf.map { "$it\\ffmpeg\\bin\\$nom.exe" }
+            "tesseract" -> pf.map { "$it\\Tesseract-OCR\\tesseract.exe" }
             else -> emptyList()
         }
     } else listOf("/usr/bin/$nom", "/usr/local/bin/$nom", "/snap/bin/$nom")
@@ -47,6 +48,8 @@ object OutilsPc {
 
     /** What to do when [nom] is missing, said for this system. */
     fun conseil(nom: String): String = when {
+        windows && nom == "tesseract" -> "installer Tesseract OCR (son installateur pour Windows), puis relancer SatMe-PC"
+        nom == "tesseract" -> "installer tesseract (sudo apt install tesseract-ocr)"
         windows -> "$nom manque : réinstaller SatMe-PC (il vient avec)"
         nom == "rtl_tcp" -> "installer rtl-sdr (sudo apt install rtl-sdr)"
         nom == "vlc" -> "installer VLC (sudo apt install vlc)"

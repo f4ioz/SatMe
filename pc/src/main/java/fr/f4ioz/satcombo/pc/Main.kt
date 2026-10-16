@@ -138,6 +138,14 @@ fun main(args: Array<String>) {
     val appairage = AppairagePc(telephone, port + 1)
     // DATV with a MiniTiouner, through LongMynd: nothing started until asked.
     val datv = DatvPc(station.stockage, File(dossier, "enregistrements"))
+    // Its sound subtitled, the callsigns written in its picture: each off unless chosen in the DATV tab.
+    val textesDatv = TextesDatvPc(station.stockage, TextesDatvPc.Source.de(datv), phonie)
+    datv.ecouteSon = { pcm, n, rate -> phonie.ecouteDatv(pcm, n, rate) }
+    phonie.contexte = { src ->
+        if (src != "datv") contextePhonie(station, sdr, src)
+        else datv.reglage.cielKhz.let { k -> k * 1000L to (if (fr.f4ioz.satcombo.datv.IndicatifsImage.qo100(k)) "QO-100" else "DATV") }
+    }
+    portee.launch { while (true) { runCatching { textesDatv.tic() }; kotlinx.coroutines.delay(1000) } }
     // DATV transmission with the Pluto: nothing sent until the operator asks and confirms on the page.
     val emission = EmissionDatvPc(station.stockage, File(dossier, "tmp"), indicatif = { station.settings.callsign },
         locator = { station.settings.manualLocator }, plutoHote = { sdr.plutoHote }, plutoPort = { sdr.plutoPort },
@@ -147,6 +155,7 @@ fun main(args: Array<String>) {
     portee.launch { while (true) { runCatching { emission.tic() }; kotlinx.coroutines.delay(1000) } }
     val serveur = ServeurPc(station, port, reseau, carnet, son, journalWeb, ImportPc(station, carnet, journal), sdr, videoSked, telephone, appairage, datv,
         PlancheWebPc(station, son, dossier), kiss, sauvegarde, MirePc(File(dossier, "exports")), diffusion, qo100, lien, phonie, emission, trafic)
+    serveur.textesDatv = textesDatv
     serveur.demarre()
     // QO-100 received when SatMe-PC stopped: taken back only when chosen in Réglages (reception only).
     Thread({ runCatching { trafic.repriseAuDemarrage() } }, "satme-qo100-reprise").apply { isDaemon = true; start() }

@@ -60,6 +60,9 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
     /** QO-100 operated from one screen: the reception in one gesture, the session kept. */
     private val trafic: TraficQo100Pc? = null) {
 
+    /** The DATV picture's subtitles and callsigns read in it (set before [demarre]). */
+    @Volatile var textesDatv: TextesDatvPc? = null
+
     private var socket: ServerSocket? = null
     val portReel: Int get() = socket?.localPort ?: port
 
@@ -253,6 +256,10 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
             return
         }
         if (phonie != null && (chemin.startsWith("/api/phonie") || chemin.startsWith("/phonie/"))) { phonie(r, chemin, q, sortie, phonie); return }
+        textesDatv?.takeIf { chemin == "/api/datv/textes" }?.let { t ->
+            val o = if (r.methode == "POST") runCatching { t.action(q) }.getOrElse { JSONObject().put("ok", false).put("erreur", it.message ?: "erreur") } else t.json()
+            envoie(sortie, "200 OK", "application/json; charset=utf-8", o.toString().toByteArray()); return
+        }
         if (r.methode == "POST") {
             val res = runCatching { action(chemin, q) }.getOrElse { JSONObject().put("ok", false).put("erreur", it.message ?: "erreur") }
             envoie(sortie, "200 OK", "application/json; charset=utf-8", res.toString().toByteArray())
@@ -814,6 +821,12 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                     ?.takeIf { it.erreur.isBlank() && !it.vide }
                 // Afterwards: the satellite and the time given (a past pass), not the followed one now.
                 val t = q["t"]?.toLongOrNull()
+                // From the DATV tab: mode DATV, on QO-100 or terrestrial by the frequency received.
+                q["datv"]?.toLongOrNull()?.let { k ->
+                    val d = c.ajouteDatv(q["c"].orEmpty(), q["l"].orEmpty(), q["rs"].orEmpty(), q["rr"].orEmpty(), q["n"].orEmpty(), k, fiche)
+                        ?: return JSONObject().put("ok", false).put("erreur", "il faut un indicatif et la fréquence reçue")
+                    return ok.put("t", d.timeMs)
+                }
                 val e = if (t != null) {
                     if (!fr.f4ioz.satcombo.demo.ApiCalculs.heureApresValable(t, System.currentTimeMillis()))
                         return JSONObject().put("ok", false).put("erreur", "heure hors du dernier mois")
