@@ -150,7 +150,8 @@ class TextesDatvPc(
     }
 
     companion object {
-        const val LISTE = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789/"
+        /** The characters read; the space too, else the words come out glued (DEEA4ABC). */
+        const val LISTE = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789/ "
 
         /**
          * The views read: the whole picture (sparse text), then its top and
@@ -203,7 +204,8 @@ class TextesDatvPc(
             val sortie = File.createTempFile("satme-ocr-", ".txt")
             try {
                 ImageIO.write(img, "png", png)
-                val p = ProcessBuilder(prog, png.absolutePath, "stdout", "--psm", psm.toString(), "-c", "tessedit_char_whitelist=$LISTE")
+                val p = ProcessBuilder(prog, png.absolutePath, "stdout", "--psm", psm.toString(), "-c", "tessedit_char_whitelist=$LISTE",
+                    "-c", "preserve_interword_spaces=1")
                     .redirectOutput(sortie).redirectError(ProcessBuilder.Redirect.DISCARD).start()
                 if (!p.waitFor(delaiS, TimeUnit.SECONDS)) { p.destroyForcibly(); return null }
                 if (p.exitValue() != 0) return null

@@ -3259,8 +3259,11 @@ function dtSousTitres(on) {
   const l = on ? dtListe.filter(b => maintenant - (b.t + b.duree * 1000) < 60000).slice(-2) : [];
   o.hidden = !l.length;
   const trad = g('dt-trad').checked;
-  o.innerHTML = l.map((b, i) => '<div' + (i < l.length - 1 ? ' class="vieux"' : '') + '>' + (PH_DRAPEAU[b.langue] ? f8Drapeau(PH_DRAPEAU[b.langue]) + ' ' : '') + esc(b.texte) + '</div>' +
-    (trad && b.traduction ? '<div class="d-st-tr' + (i < l.length - 1 ? ' vieux' : '') + '">' + esc(b.traduction) + '</div>' : '')).join('');
+  // A long over: its end only, two lines or so each.
+  const fin = (t, n) => { if (t.length <= n) return t; const c = t.slice(-n); return '…' + c.slice(c.indexOf(' ') + 1); };
+  o.innerHTML = l.map((b, i) => { const ancien = i < l.length - 1, n = ancien ? 90 : 130;
+    return '<div' + (ancien ? ' class="vieux"' : '') + '>' + (PH_DRAPEAU[b.langue] ? f8Drapeau(PH_DRAPEAU[b.langue]) + ' ' : '') + esc(fin(b.texte, n)) + '</div>' +
+      (trad && b.traduction && b.traduction !== b.texte ? '<div class="d-st-tr' + (ancien ? ' vieux' : '') + '">' + esc(fin(b.traduction, n)) + '</div>' : ''); }).join('');
 }
 function dtFil() {
   const f = g('dt-fil'), bas = f.scrollTop + f.clientHeight >= f.scrollHeight - 8;

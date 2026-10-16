@@ -263,8 +263,9 @@ class TextesDatvPcTest {
         val t = TextesDatvPc(StockageMemoire(), TextesDatvPc.Source({ true }, { true }, { null }, { "" }, { 0L }, {}), null, { horloge })
         val c1 = t.lisImage(prog!!, image("EA4ABC"))
         println("tesseract : « ${t.dernierTexte} » → $c1")
-        val c2 = t.lisImage(prog, image("EA4ABC", 1280, 720, Color(10, 10, 10)))
+        val c2 = t.lisImage(prog, image("CQ DE G4XYZ", 1280, 720, Color(10, 10, 10)))
         println("tesseract : « ${t.dernierTexte} » → $c2")
-        assertTrue(c1.contains("EA4ABC") || c2.contains("EA4ABC"))
+        assertTrue(c1.contains("EA4ABC"))
+        assertTrue(c2.contains("G4XYZ"))
     }
 }
