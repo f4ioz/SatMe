@@ -150,7 +150,7 @@ class DatvPc(
 
     private fun arreteFlux() {
         (listOf(ffmpeg, ffplay) + vlcs).forEach { p -> p?.let { runCatching { it.outputStream.close() }; it.destroy() } }
-        ffmpeg = null; ffplay = null; vlcs.clear()
+        ffmpeg = null; ffplay = null; vlcs.clear(); typesLecteurs = null
         enregistre(false)
     }
 
@@ -185,7 +185,8 @@ class DatvPc(
                     16 -> pidEnAttente = v.toIntOrNull()
                     17 -> { val pid = pidEnAttente; val t = v.toIntOrNull()
                         if (pid != null && t != null) { flux.removeAll { it.first == pid }; flux += pid to t; e = e.copy(flux = flux.toList()) }
-                        pidEnAttente = null }
+                        pidEnAttente = null
+                        relanceSiAutreCodage(flux.map { it.second }.toSet()) }
                     18 -> e = e.copy(modcod = Datv.modcod(v.toIntOrNull() ?: -1, e.etat))
                     19 -> e = e.copy(trames = v.trim() == "1")
                     20 -> e = e.copy(pilotes = v.trim() == "1")
@@ -313,6 +314,26 @@ class DatvPc(
     private fun lecteurs(): List<OutputStream> {
         vlcs.removeAll { !it.isAlive }
         return listOfNotNull(ffmpeg?.outputStream, ffplay?.outputStream) + vlcs.map { it.outputStream }
+    }
+
+    /** The streams' types the players were started on. */
+    @Volatile private var typesLecteurs: Set<Int>? = null
+
+    /**
+     * The station changed its coding (H.264 → H.265, another sound): the
+     * players, started on the old one, would decode nothing more. Stopped,
+     * they start again with the next packets.
+     */
+    @Synchronized
+    private fun relanceSiAutreCodage(types: Set<Int>) {
+        val avant = typesLecteurs
+        if (ffmpeg == null || types.isEmpty()) return
+        if (avant == null) { typesLecteurs = types; return }
+        // A type not seen when they started (the list rebuilt piece by piece after a lost lock is no change).
+        if (avant.containsAll(types)) return
+        typesLecteurs = types
+        listOfNotNull(ffmpeg, ffplay).forEach { p -> runCatching { p.outputStream.close() }; p.destroy() }
+        ffmpeg = null; ffplay = null
     }
 
     /** ffmpeg for the page's pictures, ffplay for the sound: started with the first packets, stopped with LongMynd. */
