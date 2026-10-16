@@ -1138,7 +1138,7 @@ object PagePc {
           <label class="petit"><input type="checkbox" id="ei-logo" onchange="eiRegle()"> logo SatMe</label>
           <label class="petit"><input type="checkbox" id="ei-heure" onchange="eiRegle()"> heure UTC</label></div>
         <div class="ligne"><span class="petit" style="min-width:86px">Texte</span><input id="ei-texte" maxlength="60" placeholder="Une ligne libre (60 caractères)" onchange="eiRegle()"></div>
-        <div class="ligne"><span class="petit" style="min-width:86px">Position</span><select id="ei-position" onchange="eiRegle()" style="max-width:170px">
+        <div class="ligne"><span class="petit" style="min-width:86px">Position</span><select id="ei-position" onchange="eiRegle()" style="max-width:200px">
           <option value="haut-gauche">en haut à gauche</option><option value="haut-droite">en haut à droite</option><option value="bas-gauche">en bas à gauche</option>
           <option value="bas-droite">en bas à droite</option><option value="bandeau">bandeau en bas</option></select>
           <select id="ei-taille" onchange="eiRegle()" style="max-width:100px"><option value="petit">petit</option><option value="moyen">moyen</option><option value="grand">grand</option></select>
@@ -3744,7 +3744,7 @@ async function fdEnvois() {
   const b = g('fd-envois');
   b.innerHTML = l.length ? l.map((f, i) => '<div class="fd-el" data-i="' + i + '" title="' + fdAttr(f.nom) + '">' + fdVignette(f) +
     '<div class="fd-n">' + esc(f.nom) + '</div><div class="petit">' + fdTaille(f.taille) + '</div><button class="fd-x" title="Supprimer ce fichier envoyé">✕</button></div>').join('')
-    : '<div class="petit">aucun fichier envoyé pour l’instant</div>';
+    : '<div class="petit" style="grid-column:1/-1">aucun fichier envoyé pour l’instant</div>';
   b.querySelectorAll('.fd-el').forEach(x => {
     const f = l[+x.dataset.i];
     x.onclick = () => fdChoisit(f.chemin);

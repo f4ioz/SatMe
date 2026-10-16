@@ -66,6 +66,7 @@ class FichiersDatvPc(
      * with the shortcuts; [chemin] empty: the home folder.
      */
     fun liste(chemin: String, type: String): JSONObject {
+        envois.mkdirs()
         val raccourcis = racines().filter { it.dossier.isDirectory }
         val depart = chemin.ifBlank { raccourcis.firstOrNull()?.dossier?.path.orEmpty() }
         val o = JSONObject().put("raccourcis", JSONArray(raccourcis.map { JSONObject().put("nom", it.nom).put("chemin", it.dossier.path) }))
