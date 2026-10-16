@@ -9,9 +9,14 @@
 package fr.f4ioz.satcombo.pc
 
 import fr.f4ioz.satcombo.datv.Datv
+import fr.f4ioz.satcombo.datv.Emetteur
+import fr.f4ioz.satcombo.datv.PlanInterieur
+import fr.f4ioz.satcombo.datv.ReglesEmission
 import fr.f4ioz.satcombo.datv.s2.RecepteurDvbs2
 import fr.f4ioz.satcombo.datv.s2.Rolloff
 import fr.f4ioz.satcombo.plateforme.StockageMemoire
+import fr.f4ioz.satcombo.sdr.FauxHackrf
+import fr.f4ioz.satcombo.sdr.HackrfEmission
 import org.junit.After
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
@@ -223,6 +228,136 @@ class EmissionDatvPcTest {
         assertEquals("-21.00", p.attributs["ad9361-phy OUTPUT voltage0 hardwaregain"])
         assertTrue(e.json().getJSONObject("boucle").getString("message").startsWith("TROP FORT"))
         e.arrete()
+    }
+
+    // ------------------------------------------------------------ HackRF and the indoor test (a fake hackrf_transfer only)
+
+    private val fauxHackrf = ArrayList<FauxHackrf>()
+    @After fun finHackrf() { HackrfEmission.arreteTout(); fauxHackrf.forEach { it.close() } }
+
+    private fun hackrf(f: FauxHackrf?, ts: EmissionDatvPc.FabriqueTs, indicatif: String = "F4IOZ"): EmissionDatvPc {
+        assumeTrue("sh absent", File("/bin/sh").canExecute())
+        // Never the PATH: no real hackrf_transfer, ever.
+        val e = EmissionDatvPc(StockageMemoire(), File(System.getProperty("java.io.tmpdir"), "satme-test-datv"), { indicatif },
+            plutoHote = { "127.0.0.1" }, plutoPort = { 9 }, fabrique = ts, outilParDefaut = { null })
+        e.emetteur = Emetteur.HACKRF
+        if (f != null) { fauxHackrf += f; e.hackrfOutil = f.dossier.path }
+        return e
+    }
+
+    @Test
+    fun hackrf_jamais_vers_qo100_ni_sans_outil() {
+        val f = FauxHackrf()
+        val ts = TsSynthetique(10)
+        val e = hackrf(f, ts)
+        e.frequenceKhz = 2_409_750L
+        assertEquals(ReglesEmission.HACKRF_PAS_QO100, e.demarre(confirme = true, chargeFictive = false))
+        assertEquals("émission non confirmée", e.demarre(confirme = false, chargeFictive = false, interieur = true))
+        e.frequenceInterieurKhz = 1_800_000L
+        assertTrue(e.demarre(true, false, interieur = true)!!.contains("1240–1300"))
+        assertTrue(hackrf(f, ts, indicatif = "").demarre(true, false, interieur = true)!!.contains("indicatif"))
+        // Tools missing: said how to install them.
+        assertTrue(hackrf(null, ts).demarre(true, false, interieur = true)!!.contains("apt install hackrf"))
+        // Nothing started.
+        assertTrue(f.args.isEmpty())
+        assertEquals(0, ts.demandes)
+        // The gain asked is held at 10 dB.
+        e.vgaHackrf = 40
+        assertEquals(ReglesEmission.HACKRF_VGA_MAX, e.vgaHackrf)
+    }
+
+    @Test
+    fun hackrf_detection_lecture_seule() {
+        val f = FauxHackrf()
+        val e = hackrf(f, TsSynthetique(10))
+        val i = e.detecteHackrf()
+        assertEquals("HackRF One · n° …234e925f · firmware 2024.02.1", i.cartes.single().libelle)
+        assertTrue(f.args.isEmpty())
+        f.mode = "absent"
+        assertTrue(e.detecteHackrf().message.startsWith("HackRF absent"))
+        assertTrue(hackrf(null, TsSynthetique(1)).detecteHackrf().message.contains("hackrf_info introuvable"))
+        val j = e.json()
+        assertEquals("hackrf", j.getString("emetteur"))
+        assertEquals(1_255_000L, j.getLong("intKhz"))
+        assertEquals("", j.getString("intRefus"))
+    }
+
+    @Test
+    fun hackrf_essai_en_interieur_bout_en_bout() {
+        val f = FauxHackrf(limite = 8_000_000L)
+        val ts = TsSynthetique(450)
+        val e = hackrf(f, ts)
+        e.modcodTexte = "QPSK 2/3"; e.srKs = 333; e.rolloff = Rolloff.A25; e.pilotes = true; e.courtes = false
+        e.vgaHackrf = 8; e.dureeInterieurS = 300
+        assertEquals(1_255_000L, e.frequenceInterieurKhz)
+        e.detecteHackrf()
+        assertNull(e.demarre(confirme = true, chargeFictive = false, interieur = true))
+        assertTrue(e.etat.interieur)
+        assertTrue(attends(10_000) { e.vie(); f.compte >= 8_000_000L })
+        val j = e.json()
+        assertTrue(j.getBoolean("emet"))
+        assertEquals(8.0, j.getDouble("gainApplique"), 0.0)
+        assertTrue(j.getLong("restant") in 295L..300L)
+        // The closed loop on the beacon stays out of it.
+        e.tic()
+        assertEquals(0, e.boucle.etat.baisses)
+        e.arrete()
+        assertFalse(e.etat.emet)
+        assertTrue(attends(2000) { f.finEntree })
+        assertEquals(listOf("-d", "a06063c8234e925f", "-t", "-", "-f", "1255000000", "-s", "2331000", "-b", "1750000", "-x", "8", "-a", "0", "-p", "0"), f.args)
+        assertEquals(0, HackrfEmission.enCours())
+        // The HackRF's 8-bit samples, decoded back: the same packets.
+        val b8 = f.iq
+        val iq = ShortArray(b8.size) { (b8[it] * 256).toShort() }
+        val rx = RecepteurDvbs2(Rolloff.A25, 7)
+        val b = rx.decode(rx.symboles(iq))
+        assertTrue("${b.paquets.size} paquets", b.paquets.size >= 400)
+        for (k in b.paquets.indices) assertArrayEquals("paquet $k", ts.paquets[k], b.paquets[k])
+        assertEquals(0, b.crcPaquetsFaux)
+        assertEquals(0, b.ldpcEchecs)
+    }
+
+    @Test
+    fun hackrf_absent_au_demarrage_message_clair() {
+        val f = FauxHackrf("absent")
+        val ts = TsSynthetique(10)
+        val e = hackrf(f, ts)
+        val r = e.demarre(true, chargeFictive = true)
+        assertTrue(r ?: "null", r!!.startsWith("HackRF absent"))
+        assertFalse(e.etat.emet)
+        assertEquals(0, HackrfEmission.enCours())
+    }
+
+    @Test
+    fun hackrf_qui_meurt_arrete_l_emission() {
+        val f = FauxHackrf("meurt")
+        val e = hackrf(f, TsSynthetique(50))
+        assertNull(e.demarre(true, false, interieur = true))
+        assertTrue(attends(5000) { e.vie(); e.tic(); !e.etat.emet })
+        assertTrue(e.etat.erreur, e.etat.erreur.contains("hackrf_transfer"))
+        assertEquals(0, HackrfEmission.enCours())
+    }
+
+    @Test
+    fun pluto_essai_en_interieur_gain_au_plus_moins_40() {
+        val p = FauxPluto(debit = 2_331_000.0).also { ouverts += it }
+        val e = emission(p, TsSynthetique(50))
+        e.gainDb = -10.0; e.srKs = 333; e.frequenceKhz = 2_409_750L
+        e.frequenceInterieurKhz = 2_320_000L
+        assertNull(e.demarre(true, chargeFictive = false, interieur = true))
+        assertTrue(attends(2000) { p.attributs["ad9361-phy OUTPUT voltage0 hardwaregain"] != null })
+        assertEquals("-40.00", p.attributs["ad9361-phy OUTPUT voltage0 hardwaregain"])
+        assertEquals("2320000000", p.attributs["ad9361-phy OUTPUT altvoltage1 frequency"])
+        e.regleGain(0.0)
+        assertEquals("-40.00", p.attributs["ad9361-phy OUTPUT voltage0 hardwaregain"])
+        assertTrue(e.json().getLong("restant") <= PlanInterieur.DUREE_DEFAUT_S)
+        e.arrete()
+        assertTrue(p.loEteint)
+        // Outside the amateur bands: refused before the Pluto is reached.
+        val avant = p.connexions.get()
+        e.frequenceInterieurKhz = 2_460_000L
+        assertNotNull(e.demarre(true, false, interieur = true))
+        assertEquals(avant, p.connexions.get())
     }
 
     @Test

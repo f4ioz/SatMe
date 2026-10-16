@@ -51,7 +51,7 @@ class PlutoEmission(
     /** More underruns than this within [fenetreManquesMs]: stopped. */
     private val manquesMax: Int = 20,
     private val fenetreManquesMs: Long = 10_000L,
-) {
+) : EmetteurDatv {
     data class Reglage(
         val frequenceHz: Long,
         /** Samples per second (I/Q pairs). */
@@ -83,6 +83,12 @@ class PlutoEmission(
     )
 
     @Volatile var etat = Etat(); private set
+
+    override val nom: String get() = "ADALM-PLUTO"
+
+    override fun etatCommun(): EtatEmission = etat.let {
+        EtatEmission(it.emet, it.debutMs, it.finMs, it.frequenceHz, it.gainDb, it.tampons, it.manques, it.raison, it.erreur)
+    }
 
     private var ctrl: Iiod? = null
     @Volatile private var flux: Iiod? = null
@@ -150,10 +156,10 @@ class PlutoEmission(
     }
 
     /** Stops transmitting (the LO powered down first); [raison] kept in the state. */
-    fun arrete(raison: String = "arrêt demandé") = coupe(generation, raison, "")
+    override fun arrete(raison: String) = coupe(generation, raison, "")
 
     /** A new gain while transmitting (clamped as at the start); the gain applied, or null when not transmitting. */
-    fun regleGain(db: Double): Double? {
+    override fun regleGain(db: Double): Double? {
         val c = ctrl ?: return null
         if (!actif) return null
         val g = gainApplique(db, plafond)

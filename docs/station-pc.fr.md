@@ -240,6 +240,29 @@ Pour d'autres programmes du PC (un carnet, un tableau de bord, un script) : **R�
 {"type":"satellite","time":1792089000000,"name":"ISS","catnum":25544,"az":212.4,"el":31.7,"rangeKm":812.3,"rangeRateKmS":-4.512,"transmitter":"FM voice repeater (V/U)","downlinkHz":437806580,"uplinkHz":145987810,"dopplerDownHz":6580,"dopplerUpHz":-2190}
 ```
 
+### Le HackRF One et l'essai en intérieur
+
+L'*Émetteur* de la carte **Émission** propose aussi un **HackRF One**, pour essayer la réception du MiniTiouner — jamais vers QO-100 : son convertisseur prend des échantillons de 8 bits, ses harmoniques et raies parasites demandent un filtre, et QO-100 demande un amplificateur ; QO-100 reste au Pluto. Le HackRF n'émet qu'en **essai en intérieur** et en **test sur charge**.
+
+SatMe le pilote par l'outil `hackrf_transfer`, les échantillons sur son entrée standard en I/Q signés 8 bits (les 16 bits du modulateur, octet haut arrondi, environ 10 dB sous la pleine échelle), aux mêmes débits que le Pluto (2,125 à 4 Méch/s), avec le filtre de bande de base le plus étroit qui laisse passer le signal :
+
+`hackrf_transfer [-d NUMÉRO] -t - -f FRÉQ_HZ -s DÉBIT -b FILTRE_HZ -x VGA -a 0 -p 0`
+
+- **Installation.** Linux : `sudo apt install hackrf` (il apporte `hackrf_transfer`, `hackrf_info` et les règles udev : débrancher et rebrancher le HackRF ensuite). Windows : les outils HackRF pour Windows (`hackrf_transfer.exe`, `hackrf_info.exe`) et le pilote WinUSB du HackRF ; donner leur dossier dans *Outils HackRF* s'ils ne sont pas dans le PATH.
+- **Détection, en lecture seule.** *Détecter* lance seulement `hackrf_info` (il liste les cartes, n'émet rien) : « HackRF One · numéro de série · firmware ». Rien d'autre ne tourne avant **ÉMETTRE** confirmé.
+- **Faible puissance seulement.** L'amplificateur RF est **toujours coupé** (`-a 0` sur chaque ligne de commande ; une ligne sans lui, ou avec toute autre option, est refusée par le code), l'alimentation du port d'antenne coupée (`-p 0`), le gain VGA d'émission de 0 à **10 dB** au plus (le HackRF va jusqu'à 47). Le gain est pris au démarrage.
+- **Arrêt** : l'entrée de l'outil fermée d'abord (il s'arrête à la fin de son entrée), puis il est terminé, puis tué. Arrêt quand l'outil meurt, dit le HackRF absent ou pris, ne prend plus d'échantillons depuis 3 s, à la fin du temps permis, quand la page se tait depuis 15 s, et à la fermeture de SatMe-PC (aucun `hackrf_transfer` ne reste).
+
+**L'essai en intérieur** (*Essai en intérieur*, Pluto ou HackRF) : deux petites antennes à quelques mètres, à l'intérieur, pour voir toute la chaîne marcher avant toute parabole.
+- Une vraie émission radio : pour un **radioamateur titulaire d'une licence**, sous son indicatif (nom du service et mire), avec un avertissement orange dans la carte.
+- Seulement dans les bandes amateur que couvre le MiniTiouner, **toute la bande occupée dedans** : 23 cm **1240–1300 MHz** ou 13 cm **2300–2450 MHz**. 1255 MHz d'origine ; 1260–1300 MHz est partagé avec les satellites de radionavigation et 2400–2450 MHz avec le Wi-Fi (la carte le dit).
+- **Puissance minimale** : le Pluto à −40 dB au plus ; le HackRF amplificateur coupé et VGA ≤ 10 dB.
+- **5 min** d'origine, **10 min** au plus, puis arrêt tout seul. La boucle fermée de QO-100 ne sert pas.
+
+**Côté réception.** La carte donne les réglages du MiniTiouner pour l'essai : *Ciel* = la fréquence d'émission, OL du LNB **0**, le même débit de symboles, alimentation LNB **coupée** — *Régler la réception* les remplit (sans démarrer). Avec une antenne sur l'entrée du MiniTiouner, l'alimentation LNB **doit être coupée**, sinon ses 13/18 V partent dans l'antenne.
+
+**Premier essai en intérieur, pas à pas.** Indicatif donné (Réglages › Station). TX du HackRF (ou du Pluto) → petite antenne 23 cm ; entrée du MiniTiouner → une autre petite antenne, à 2–3 m. Carte : *Émetteur* HackRF One, *Détecter* ; cocher *Essai en intérieur*, 1255 MHz, 333 kS/s, QPSK 2/3, mire, VGA 0 dB (Pluto : −40 dB ou moins), 5 min. *Régler la réception*, puis *Recevoir* dans la carte Réception (alimentation LNB coupée). **ÉMETTRE**, confirmer : le MiniTiouner doit accrocher en DVB-S2, l'indicatif en service. Pas d'accrochage : monter le VGA de quelques dB (10 au plus), ou rapprocher les antennes.
+
 ## Sécurité du matériel
 
 - **Rien ne s'ouvre tout seul.** Un port série ne s'ouvre que choisi, et « Connecter » cliqué. Pas de recherche automatique.
@@ -248,6 +271,7 @@ Pour d'autres programmes du PC (un carnet, un tableau de bord, un script) : **R�
 - **Le CAT n'émet jamais** (`TX`, `KY` refusés par le pilote TS-2000). Seul l'APRS par un TNC KISS émet, et seulement quand on envoie soi-même un message, sa position ou un statut.
 - **L'alimentation LNB du MiniTiouner est coupée** tant qu'on ne la choisit pas.
 - **L'ADALM-PLUTO n'émet que depuis l'onglet DATV**, sur un clic confirmé, dans les règles ci-dessus ; le récepteur n'écrit jamais son côté émission.
+- **Le HackRF One n'émet que depuis l'onglet DATV**, sur un clic confirmé, en essai en intérieur ou sur charge, son amplificateur RF toujours coupé et son gain à 10 dB au plus ; jamais vers QO-100.
 
 ## Avant le premier essai
 

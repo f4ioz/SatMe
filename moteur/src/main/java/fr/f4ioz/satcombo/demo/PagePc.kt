@@ -294,6 +294,7 @@ object PagePc {
   button.emettre:disabled { opacity:.35; }
   button.arret-tx { background:#fff; color:#C62828; border:3px solid #C62828; font-weight:800; font-size:18px; padding:10px 26px; }
   .e-charge { background:#5A0E0E; color:#FFD7D7; border:2px solid #E5484D; border-radius:8px; padding:8px 10px; font-weight:700; margin-top:8px; }
+  .e-legal { background:#4A2A06; color:#FFE2B8; border:2px solid #F08C1A; border-radius:8px; padding:8px 10px; margin-top:8px; font-size:12px; line-height:1.5; }
   .e-direct { background:rgba(229,72,77,.18); border:1px solid #E5484D; border-radius:8px; padding:8px 10px; margin-top:8px; }
   .on { background:rgba(91,214,138,.18); color:var(--vert); } .off { background:rgba(154,167,180,.15); color:var(--gris); }
   .discret { background:transparent; border:none; }
@@ -1030,15 +1031,23 @@ object PagePc {
       </div>
     </div>
     <div class="carte" id="e-carte">
-      <div class="t">Émission · ADALM-PLUTO <span id="e-pastille" class="pastille" style="color:var(--gris)">arrêtée</span></div>
+      <div class="t">Émission · <span id="e-titre">ADALM-PLUTO</span> <span id="e-pastille" class="pastille" style="color:var(--gris)">arrêtée</span></div>
       <div class="petit">DVB-S2 fait par SatMe, vers le transpondeur large bande de QO-100 ; le MiniTiouner ci-dessus vérifie le signal à la descente.</div>
+      <div class="ligne"><span class="petit" style="min-width:86px">Émetteur</span><select id="e-emetteur" onchange="eRegle()" style="max-width:150px">
+        <option value="pluto">ADALM-PLUTO</option><option value="hackrf">HackRF One</option></select>
+        <span class="petit" id="e-hackrf-info" style="flex:1"></span><button id="e-hackrf-det" onclick="eDetecte()" title="hackrf_info : liste les HackRF branchés, n'émet rien">Détecter</button></div>
+      <div id="e-hackrf-l" hidden>
+        <div class="ligne"><span class="petit" style="min-width:86px">Outils HackRF</span><input id="e-hackrf-outil" placeholder="vide : hackrf_transfer du PATH" onchange="eRegle()"></div>
+        <div class="petit" id="e-hackrf-prog"></div>
+        <div class="avert" id="e-hackrf-note"></div>
+      </div>
       <div class="ligne"><span class="petit" style="min-width:86px">MODCOD</span><select id="e-modcod" onchange="eRegle()" style="max-width:120px"></select>
         <label class="petit"><input type="checkbox" id="e-courtes" onchange="eRegle()"> trames courtes</label>
         <label class="petit"><input type="checkbox" id="e-pilotes" onchange="eRegle()"> pilotes</label></div>
       <div class="ligne"><span class="petit" style="min-width:86px">kS/s</span><select id="e-sr" onchange="eRegle()" style="max-width:90px"></select>
         <span class="petit">roll-off</span><select id="e-ro" onchange="eRegle()" style="max-width:80px"></select></div>
-      <div class="ligne"><span class="petit" style="min-width:86px">Canal</span><select id="e-canal" onchange="if (this.value) { g('e-mhz').value = this.value; eRegle(); }"></select></div>
-      <div class="ligne"><span class="petit" style="min-width:86px">Montée (MHz)</span><input id="e-mhz" style="max-width:120px" onchange="eRegle()">
+      <div class="ligne" id="e-canal-l"><span class="petit" style="min-width:86px">Canal</span><select id="e-canal" onchange="if (this.value) { g('e-mhz').value = this.value; eRegle(); }"></select></div>
+      <div class="ligne" id="e-mhz-l"><span class="petit" style="min-width:86px">Montée (MHz)</span><input id="e-mhz" style="max-width:120px" onchange="eRegle()">
         <span class="petit" id="e-descente"></span></div>
       <div class="avert" id="e-bande"></div>
       <div class="ligne"><span class="petit" style="min-width:86px">Source</span><select id="e-source" onchange="eRegle()" style="max-width:190px">
@@ -1047,12 +1056,25 @@ object PagePc {
         <label class="petit"><input type="checkbox" id="e-son" onchange="eRegle()"> son</label></div>
       <div class="ligne" id="e-image-l" hidden><span class="petit" style="min-width:86px">Image</span><input id="e-image" placeholder="/home/…/image.png" onchange="eRegle()"></div>
       <div class="ligne" id="e-camera-l" hidden><span class="petit" style="min-width:86px">Caméra</span><select id="e-camera" onchange="eRegle()"></select></div>
-      <div class="ligne"><span class="petit" style="min-width:86px">Gain TX (dB)</span><input id="e-gain" type="number" step="1" min="-89" max="0" style="max-width:80px" onchange="eRegle()">
+      <div class="ligne" id="e-vga-l" hidden><span class="petit" style="min-width:86px">Gain VGA (dB)</span><input id="e-vga" type="number" step="1" min="0" max="10" style="max-width:80px" onchange="eRegle()">
+        <span class="petit">0 à 10 dB, amplificateur RF toujours coupé ; pris au démarrage</span></div>
+      <div class="ligne" id="e-gain-l"><span class="petit" style="min-width:86px">Gain TX (dB)</span><input id="e-gain" type="number" step="1" min="-89" max="0" style="max-width:80px" onchange="eRegle()">
         <button onclick="eGain(-1)" title="1 dB de moins">−1</button><button onclick="eGain(1)" title="1 dB de plus">+1</button><span class="petit" id="e-gainmax"></span></div>
-      <div class="ligne"><span class="petit" style="min-width:86px">Durée (min)</span><input id="e-duree" type="number" min="1" max="30" style="max-width:80px" onchange="eRegle()">
+      <div class="ligne" id="e-duree-l"><span class="petit" style="min-width:86px">Durée (min)</span><input id="e-duree" type="number" min="1" max="30" style="max-width:80px" onchange="eRegle()">
         <span class="petit">puis arrêt automatique (30 min au plus)</span></div>
-      <label class="petit" style="display:block;margin-top:8px"><input type="checkbox" id="e-charge" onchange="eMontre()"> <b>Test sur charge</b> — toute fréquence, gain bridé à −40 dB</label>
-      <div class="e-charge" id="e-charge-avert" hidden>⚠ TEST SUR CHARGE : la sortie TX de l'ADALM-PLUTO doit aller sur une charge fictive 50 Ω ou un atténuateur (vers le MiniTiouner), JAMAIS sur une antenne ni sur l'amplificateur.</div>
+      <label class="petit" style="display:block;margin-top:8px"><input type="checkbox" id="e-charge" onchange="eMode('e-charge')"> <b>Test sur charge</b> — toute fréquence, <span id="e-charge-gain">gain bridé à −40 dB</span></label>
+      <div class="e-charge" id="e-charge-avert" hidden>⚠ TEST SUR CHARGE : la sortie TX de l'<span class="e-nom">ADALM-PLUTO</span> doit aller sur une charge fictive 50 Ω ou un atténuateur (vers le MiniTiouner), JAMAIS sur une antenne ni sur l'amplificateur.</div>
+      <label class="petit" style="display:block;margin-top:6px"><input type="checkbox" id="e-interieur" onchange="eMode('e-interieur')"> <b>Essai en intérieur</b> — deux petites antennes à quelques mètres, puissance minimale</label>
+      <div id="e-int-l" hidden>
+        <div class="e-legal">⚠ ESSAI EN INTÉRIEUR : une vraie émission radio. Réservé à un radioamateur titulaire d'une licence, sous son indicatif (dans le nom du service et sur la mire), dans une bande amateur (23 cm 1240–1300 MHz ou 13 cm 2300–2450 MHz), à la puissance minimale (<span id="e-int-p">−40 dB</span>), à l'intérieur, sur une petite antenne, quelques minutes. Jamais d'amplificateur.</div>
+        <div class="ligne"><span class="petit" style="min-width:86px">Fréquence (MHz)</span><input id="e-int-mhz" style="max-width:120px" onchange="eRegle()">
+          <button onclick="g('e-int-mhz').value = mhz3(EM ? EM.intDefautKhz : 1255000); eRegle()" title="23 cm, hors de la partie partagée">1255</button></div>
+        <div class="ligne"><span class="petit" style="min-width:86px">Durée (min)</span><input id="e-int-duree" type="number" min="1" max="10" style="max-width:80px" onchange="eRegle()">
+          <span class="petit">puis arrêt automatique (10 min au plus)</span></div>
+        <div class="avert" id="e-int-refus" style="color:var(--rose)"></div>
+        <div class="avert" id="e-int-avert"></div>
+      </div>
+      <div class="petit" id="e-rx" style="margin-top:6px;line-height:1.6" hidden></div>
       <div class="petit" id="e-calc" style="margin-top:6px"></div>
       <div class="ligne" style="margin-top:10px"><button class="emettre" id="e-go" onclick="eEmettre()">ÉMETTRE</button>
         <button class="arret-tx" id="e-stop" onclick="eArrete()">ARRÊT</button></div>
@@ -3163,7 +3185,7 @@ async function dCale() { const j = await dPost('cale'); if (j && j.ok) { txt('d-
 async function dEnregistre() { await dPost('enregistre?on=' + (D && D.enregistrement ? 0 : 1)); }
 function dLnb() { g('d-lnb-avert').hidden = !g('d-lnb').value; }
 
-// ------------------------------------------------------------------ DATV transmission (ADALM-PLUTO)
+// ------------------------------------------------------------------ DATV transmission (ADALM-PLUTO, HackRF One)
 let EM = null, eVieW = null, ePremier = true;
 async function chargePx() {
   try { const j = await (await fetch('api/datv/emission')).json(); if (!j.ok) { g('px-carte').hidden = true; return; }
@@ -3199,6 +3221,8 @@ async function ticEmission() {
     const cams = j.cameras.length ? j.cameras : [''];
     g('e-camera').innerHTML = cams.map(c => '<option value="' + esc(c) + '">' + (c ? esc(c) : 'aucune caméra trouvée') + '</option>').join('');
     g('e-camera').value = j.camera || cams[0];
+    g('e-emetteur').value = j.emetteur; g('e-vga').value = j.vga; g('e-hackrf-outil').value = j.hackrfOutil;
+    g('e-int-mhz').value = mhz3(j.intKhz); g('e-int-duree').value = Math.round(j.intDuree / 60);
     ePremier = false;
   }
   // The band plan's channels at this symbol rate; the one the MiniTiouner holds now marked busy.
@@ -3212,33 +3236,80 @@ async function ticEmission() {
   txt('e-gainmax', 'max ' + j.gainMax + ' dB (Réglages)');
   const charge = g('e-charge').checked;
   txt('e-bande', charge ? '' : j.refusBande);
-  txt('e-calc', 'TS ' + (j.debitTs / 1000).toFixed(1).replace('.', ',') + ' kbit/s · ' + Math.round(j.occupeKhz) + ' kHz occupés · Pluto ' +
-    (j.echantillons / 1e6).toFixed(3).replace('.', ',') + ' Méch/s (' + j.sps + ' par symbole)' + (j.indicatif ? ' · service « ' + j.indicatif + ' »' : ' · indicatif manquant (Réglages)'));
+  // The transmitter: the Pluto, or the HackRF (tests only) with what hackrf_info found.
+  const hk = j.emetteur === 'hackrf';
+  txt('e-titre', j.emetteurNom); document.querySelectorAll('.e-nom').forEach(x => x.textContent = j.emetteurNom);
+  g('e-hackrf-l').hidden = !hk; g('e-hackrf-det').hidden = !hk; g('e-vga-l').hidden = !hk; g('e-gain-l').hidden = hk;
+  txt('e-hackrf-info', !hk ? '' : !j.hackrf.lu ? 'non détecté (bouton Détecter)' : (j.hackrf.cartes.length ? j.hackrf.cartes.map(c => c.libelle).join(', ') : j.hackrf.message));
+  txt('e-hackrf-prog', j.hackrfProgramme ? 'hackrf_transfer : ' + j.hackrfProgramme : j.hackrfConseil);
+  txt('e-hackrf-note', 'QO-100 : ' + j.hackrfPasQo100 + '.');
+  txt('e-charge-gain', hk ? 'gain VGA ≤ ' + j.vgaMax + ' dB, amplificateur RF coupé' : 'gain bridé à −40 dB');
+  txt('e-int-p', hk ? 'HackRF : amplificateur RF coupé, gain VGA ≤ ' + j.vgaMax + ' dB' : 'ADALM-PLUTO : gain ≤ ' + j.intGainPluto + ' dB');
+  txt('e-calc', 'TS ' + (j.debitTs / 1000).toFixed(1).replace('.', ',') + ' kbit/s · ' + Math.round(j.occupeKhz) + ' kHz occupés · ' + (hk ? 'HackRF ' : 'Pluto ') +
+    (j.echantillons / 1e6).toFixed(3).replace('.', ',') + ' Méch/s (' + j.sps + ' par symbole)' + (hk ? ' · filtre ' + (j.filtreHackrf / 1e6).toFixed(2).replace('.', ',') + ' MHz' : '') +
+    (j.indicatif ? ' · service « ' + j.indicatif + ' »' : ' · indicatif manquant (Réglages)'));
   const p = g('e-pastille');
-  p.textContent = j.emet ? (j.charge ? 'SUR CHARGE' : 'EN ÉMISSION') : 'arrêtée';
+  p.textContent = j.emet ? (j.charge ? 'SUR CHARGE' : j.interieur ? 'ESSAI INTÉRIEUR' : 'EN ÉMISSION') : 'arrêtée';
   p.style.background = j.emet ? '#C62828' : ''; p.style.color = j.emet ? '#fff' : 'var(--gris)';
   g('e-go').disabled = j.emet; g('e-stop').hidden = !j.emet;
-  ['e-modcod', 'e-sr', 'e-ro', 'e-courtes', 'e-pilotes', 'e-canal', 'e-mhz', 'e-source', 'e-image', 'e-camera', 'e-hevc', 'e-son', 'e-duree', 'e-charge'].forEach(i => g(i).disabled = j.emet);
+  ['e-modcod', 'e-sr', 'e-ro', 'e-courtes', 'e-pilotes', 'e-canal', 'e-mhz', 'e-source', 'e-image', 'e-camera', 'e-hevc', 'e-son', 'e-duree', 'e-charge',
+    'e-emetteur', 'e-interieur', 'e-int-mhz', 'e-int-duree', 'e-vga', 'e-hackrf-outil', 'e-hackrf-det'].forEach(i => g(i).disabled = j.emet);
+  // A transmission running (the page reloaded): its mode shown.
+  if (j.emet) { g('e-charge').checked = j.charge; g('e-interieur').checked = j.interieur; }
   const dir = g('e-direct');
   dir.hidden = !j.emet;
-  if (j.emet) dir.innerHTML = '<b>' + (j.charge ? 'Sur charge' : 'En émission') + '</b> sur ' + mhz3(j.khz) + ' MHz · reste <b>' + duree(j.restant * 1000) + '</b>' +
-    ' · gain ' + j.gainApplique + ' dB<br>TS reçu de ffmpeg ' + j.tsKbps + ' kbit/s · trames vides ' + Math.round(j.tramesVidesPct) + ' % · manques ' + j.manques +
+  if (j.emet) dir.innerHTML = '<b>' + (j.charge ? 'Sur charge' : j.interieur ? 'Essai en intérieur' : 'En émission') + '</b> sur ' + mhz3(j.khzEnCours) + ' MHz · reste <b>' + duree(j.restant * 1000) + '</b>' +
+    (j.emetteurEnCours === 'hackrf' ? ' · HackRF, VGA ' + j.gainApplique + ' dB, amplificateur coupé' : ' · gain ' + j.gainApplique + ' dB') + '<br>TS reçu de ffmpeg ' + j.tsKbps + ' kbit/s · trames vides ' + Math.round(j.tramesVidesPct) + ' % · manques ' + j.manques +
     (j.tsPerdus ? ' · paquets perdus ' + j.tsPerdus : '') + (j.ecretages ? ' · écrêtages ' + j.ecretages : '') + ' · CPU ' + (j.cpu >= 0 ? Math.round(j.cpu) + ' %' : '—');
   if (!j.emet && (j.raison || j.erreur)) txt('e-msg', 'Dernière émission : ' + [j.raison, j.erreur].filter(x => x).join(' — '));
   // The closed loop: our signal and the beacon, both measured by the MiniTiouner.
   const b = j.boucle;
   const merNous = D && D.verrouille && D.mer != null ? D.mer.toFixed(1) + ' dB' : '—';
   g('e-boucle').innerHTML = '<b>Boucle MiniTiouner</b> · MER reçue ' + merNous + ' · MER balise ' + (j.merBalise == null ? 'inconnue' : j.merBalise.toFixed(1) + ' dB (il y a ' + duree(j.merBaliseAge * 1000) + ')') +
-    (j.emet && !j.charge ? '<br><span style="color:' + (b.tropFort ? 'var(--rose);font-weight:700' : 'var(--vert)') + '">' + esc(b.message || 'en attente de mesures') + '</span>' : '') +
+    (j.emet && !j.charge && !j.interieur ? '<br><span style="color:' + (b.tropFort ? 'var(--rose);font-weight:700' : 'var(--vert)') + '">' + esc(b.message || 'en attente de mesures') + '</span>' : '') +
     (j.charge ? '<br>Sur charge : pas de comparaison à la balise.' : '');
   eMontre();
 }
 setInterval(ticEmission, 1000);
-function eMontre() { g('e-charge-avert').hidden = !g('e-charge').checked; if (EM) txt('e-bande', g('e-charge').checked ? '' : EM.refusBande); }
+// The test's mode: QO-100 (the Pluto only), the dummy load, or the indoor test; one at a time.
+function eMode(id) { if (g(id).checked) ['e-charge', 'e-interieur'].forEach(i => { if (i !== id) g(i).checked = false; }); eMontre(); }
+function eMontre() {
+  const charge = g('e-charge').checked, inter = g('e-interieur').checked, hk = EM && EM.emetteur === 'hackrf';
+  g('e-charge-avert').hidden = !charge; g('e-int-l').hidden = !inter;
+  g('e-canal-l').hidden = inter; g('e-mhz-l').hidden = inter; g('e-duree-l').hidden = inter;
+  g('e-boucle').hidden = inter || hk;
+  if (!EM) return;
+  txt('e-bande', charge || inter ? '' : hk ? 'Avec le HackRF : cocher « Essai en intérieur » ou « Test sur charge ».' : EM.refusBande);
+  txt('e-int-refus', inter ? EM.intRefus : ''); txt('e-int-avert', inter ? EM.intAvert : '');
+  // What the MiniTiouner needs to receive this test: no LNB, so no oscillator and no supply.
+  const rx = g('e-rx');
+  rx.hidden = !(charge || inter);
+  if (rx.hidden) return;
+  const k = inter ? EM.intKhz : EM.khz;
+  const html = k < 144000 || k > 2450000 ? 'Réception : ' + mhz3(k) + ' MHz est hors de la plage du MiniTiouner (144 à 2450 MHz).'
+    : '<b>Réception MiniTiouner</b> : fréquence <b>' + mhz3(k) + ' MHz</b> (ciel = entrée), OL du LNB <b>0</b>, <b>' + EM.sr + ' kS/s</b>, alim. LNB <b>coupée</b> ' +
+      '<button onclick="eRxRegle(' + k + ',' + EM.sr + ')">Régler la réception</button><br>' +
+      (inter ? 'Une antenne sur l’entrée du MiniTiouner : alimentation LNB COUPÉE, sinon ses 13/18 V partent dans l’antenne.'
+        : 'Sur charge : l’atténuateur vers l’entrée du MiniTiouner, alimentation LNB coupée.');
+  if (rx.dataset.vu !== html) { rx.dataset.vu = html; rx.innerHTML = html; }
+}
+// The DATV receiver set for the test (not started): the frequency as is, no oscillator, no LNB supply.
+function eRxRegle(k, sr) {
+  g('d-ciel').value = mhz3(k); g('d-ol').value = '0,000'; g('d-lnb').value = ''; dLnb(); dSr = sr;
+  txt('d-msg', 'réception réglée pour l’essai (OL 0, alimentation LNB coupée) : « Recevoir » pour démarrer');
+  ticDatv();
+}
+async function eDetecte() {
+  txt('e-hackrf-info', 'lecture (hackrf_info)…');
+  try { await fetch('api/datv/emission/hackrf', { method: 'POST' }); } catch (x) {}
+  setTimeout(ticEmission, 100);
+}
 function eParams() {
   return 'modcod=' + enc(v('e-modcod')) + '&sr=' + v('e-sr') + '&ro=' + v('e-ro') + '&courtes=' + (g('e-courtes').checked ? 1 : 0) + '&pilotes=' + (g('e-pilotes').checked ? 1 : 0) +
     '&mhz=' + enc(v('e-mhz').replace(',', '.')) + '&gain=' + enc(v('e-gain')) + '&duree=' + enc(v('e-duree')) + '&source=' + v('e-source') +
-    '&image=' + enc(v('e-image')) + '&camera=' + enc(g('e-camera').value) + '&hevc=' + v('e-hevc') + '&son=' + (g('e-son').checked ? 1 : 0);
+    '&image=' + enc(v('e-image')) + '&camera=' + enc(g('e-camera').value) + '&hevc=' + v('e-hevc') + '&son=' + (g('e-son').checked ? 1 : 0) +
+    '&emetteur=' + v('e-emetteur') + '&vga=' + enc(v('e-vga')) + '&hackrfOutil=' + enc(v('e-hackrf-outil')) +
+    '&intMhz=' + enc(v('e-int-mhz').replace(',', '.')) + '&intDuree=' + enc(v('e-int-duree'));
 }
 async function eRegle() {
   try { await fetch('api/datv/emission/reglage?' + eParams(), { method: 'POST' }); } catch (x) {}
@@ -3248,13 +3319,17 @@ async function eGain(d) { g('e-gain').value = Math.min(0, (parseFloat(v('e-gain'
 async function eEmettre() {
   await eRegle();
   if (!EM) return;
-  const charge = g('e-charge').checked;
-  const q = charge ? 'TEST SUR CHARGE à ' + v('e-mhz') + ' MHz, gain ' + Math.min(parseFloat(v('e-gain')), EM.gainCharge) + ' dB au plus.\n\nLa sortie TX du Pluto est-elle bien sur une charge fictive ou un atténuateur, et rien d’autre ?'
+  const charge = g('e-charge').checked, inter = g('e-interieur').checked, hk = EM.emetteur === 'hackrf';
+  const gainTxt = hk ? 'gain VGA ' + Math.max(0, Math.min(parseInt(v('e-vga')) || 0, EM.vgaMax)) + ' dB, amplificateur RF coupé'
+    : 'gain ' + Math.min(parseFloat(v('e-gain')), charge ? EM.gainCharge : EM.intGainPluto) + ' dB au plus';
+  const q = inter ? 'ESSAI EN INTÉRIEUR avec le ' + EM.emetteurNom + ' à ' + v('e-int-mhz') + ' MHz, ' + v('e-sr') + ' kS/s, ' + gainTxt + ', ' + v('e-int-duree') + ' min au plus.\n\n' +
+      'Indicatif ' + EM.indicatif + '. Radioamateur titulaire d’une licence, petite antenne à l’intérieur, aucun amplificateur ?'
+    : charge ? 'TEST SUR CHARGE à ' + v('e-mhz') + ' MHz, ' + gainTxt + '.\n\nLa sortie TX du ' + (hk ? 'HackRF' : 'Pluto') + ' est-elle bien sur une charge fictive ou un atténuateur, et rien d’autre ?'
     : 'ÉMETTRE vers QO-100 à ' + v('e-mhz') + ' MHz (descente ' + mhz3(EM.descenteKhz) + ' MHz), ' + v('e-sr') + ' kS/s, ' + v('e-modcod') + ', gain ' + v('e-gain') + ' dB, ' + v('e-duree') + ' min au plus.\n\nCanal libre vérifié ? Indicatif ' + EM.indicatif + '.';
   if (!confirm(q)) return;
-  txt('e-msg', 'démarrage : ffmpeg, puis l’ADALM-PLUTO…');
+  txt('e-msg', 'démarrage : ffmpeg, puis ' + (hk ? 'hackrf_transfer…' : 'l’ADALM-PLUTO…'));
   let j = null;
-  try { j = await (await fetch('api/datv/emission/demarre?confirme=1&charge=' + (charge ? 1 : 0), { method: 'POST' })).json(); } catch (x) {}
+  try { j = await (await fetch('api/datv/emission/demarre?confirme=1&charge=' + (charge ? 1 : 0) + '&interieur=' + (inter ? 1 : 0), { method: 'POST' })).json(); } catch (x) {}
   txt('e-msg', j && j.ok === false ? 'Refusé : ' + j.erreur : (j ? 'émission en cours' : 'pas de réponse de SatMe-PC'));
   if (j && j.ok !== false) eVie(true);
   setTimeout(ticEmission, 300);

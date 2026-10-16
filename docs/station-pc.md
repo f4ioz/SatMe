@@ -240,6 +240,29 @@ For other programs on the PC (a logger, a dashboard, a script): **Réglages › 
 {"type":"satellite","time":1792089000000,"name":"ISS","catnum":25544,"az":212.4,"el":31.7,"rangeKm":812.3,"rangeRateKmS":-4.512,"transmitter":"FM voice repeater (V/U)","downlinkHz":437806580,"uplinkHz":145987810,"dopplerDownHz":6580,"dopplerUpHz":-2190}
 ```
 
+### The HackRF One and the indoor test
+
+The **Émission** card's *Émetteur* also offers a **HackRF One**, to test the MiniTiouner receiver — never to QO-100: its converter takes 8-bit samples, its harmonics and spurious outputs need a filter, and QO-100 needs a power amplifier; QO-100 stays the Pluto's. The HackRF sends only in the **indoor test** and the **dummy load** test.
+
+SatMe drives it through the `hackrf_transfer` tool, the samples on its standard input as signed 8-bit I/Q (the modulator's 16-bit samples, top byte rounded, about 10 dB under full scale), at the same sample rates as the Pluto (2.125 to 4 MS/s), with the narrowest baseband filter that holds the signal:
+
+`hackrf_transfer [-d SERIAL] -t - -f FREQ_HZ -s RATE -b FILTER_HZ -x VGA -a 0 -p 0`
+
+- **Installation.** Linux: `sudo apt install hackrf` (it brings `hackrf_transfer`, `hackrf_info` and the udev rules: unplug and replug the HackRF afterwards). Windows: the HackRF tools for Windows (`hackrf_transfer.exe`, `hackrf_info.exe`) and the HackRF's WinUSB driver; give their folder in *Outils HackRF* if they are not in the PATH.
+- **Detection, read-only.** *Détecter* runs `hackrf_info` only (it lists the boards, sends nothing): « HackRF One · serial number · firmware ». Nothing else runs until **ÉMETTRE** is confirmed.
+- **Low power only.** The RF amplifier is **always off** (`-a 0` on every command line; a line without it, or with any other option, is refused by the code), the antenna port's supply off (`-p 0`), the TX VGA gain 0 to **10 dB** at most (the HackRF goes to 47). The gain is taken at the start.
+- **Stop**: the tool's input closed first (it ends at the end of its input), then terminated, then killed. It stops when the tool dies, says the HackRF is missing or busy, stops taking samples for 3 s, at the end of the time allowed, when the page is silent for 15 s, and when SatMe-PC closes (no `hackrf_transfer` left running).
+
+**The indoor test** (*Essai en intérieur*, Pluto or HackRF): two small antennas a few metres apart, indoors, to see the whole chain work before any dish.
+- A real radio emission: for a **licensed radio amateur**, under the callsign (service name and test card), with an orange warning in the card.
+- Only in amateur bands the MiniTiouner covers, the **whole occupied band inside**: 23 cm **1240–1300 MHz** or 13 cm **2300–2450 MHz**. 1255 MHz by default; 1260–1300 MHz is shared with radionavigation satellites and 2400–2450 MHz with Wi-Fi (the card says so).
+- **Minimum power**: the Pluto at −40 dB at most; the HackRF with its amplifier off and VGA ≤ 10 dB.
+- **5 min** by default, **10 min** at most, then it stops by itself. The QO-100 closed loop is not used.
+
+**The receiving side.** The card gives the MiniTiouner's settings for the test: *Ciel* = the transmit frequency, LNB oscillator **0**, the same symbol rate, LNB supply **off** — *Régler la réception* fills them in (without starting). With an antenna on the MiniTiouner's input the LNB supply **must be off**, or its 13/18 V go into the antenna.
+
+**First indoor test, step by step.** Callsign set (Réglages › Station). HackRF (or Pluto) TX → small 23 cm antenna; MiniTiouner input → another small antenna, 2–3 m away. Card: *Émetteur* HackRF One, *Détecter*; tick *Essai en intérieur*, 1255 MHz, 333 kS/s, QPSK 2/3, test card, VGA 0 dB (Pluto: −40 dB or lower), 5 min. *Régler la réception*, then *Recevoir* in the Réception card (LNB supply off). **ÉMETTRE**, confirm: the MiniTiouner should lock on DVB-S2, the callsign as service. No lock: raise the VGA a few dB (10 at most), or bring the antennas closer.
+
 ## Hardware safety
 
 - **Nothing opens by itself.** A serial port opens only when it is chosen and "Connect" is clicked. No automatic search.
@@ -248,6 +271,7 @@ For other programs on the PC (a logger, a dashboard, a script): **Réglages › 
 - **CAT never transmits** (`TX`, `KY` refused by the TS-2000 driver). Only APRS through a KISS TNC transmits, and only when you send a message, your position or a status yourself.
 - **The MiniTiouner's LNB supply is off** unless chosen.
 - **The ADALM-PLUTO transmits only from the DATV tab**, on a confirmed click, within the rules above; the receiver never writes its transmit side.
+- **The HackRF One transmits only from the DATV tab**, on a confirmed click, for the indoor test or into a load, its RF amplifier always off and its gain 10 dB at most; never to QO-100.
 
 ## Before the first try
 

@@ -162,6 +162,8 @@ fun main(args: Array<String>) {
     Runtime.getRuntime().addShutdownHook(Thread {
         // The transmitter first: its LO powered down before anything else.
         runCatching { emission.arrete("SatMe-PC fermé") }
+        // No hackrf_transfer outlives SatMe-PC.
+        runCatching { fr.f4ioz.satcombo.sdr.HackrfEmission.arreteTout() }
         runCatching { journal.ferme() }
         // The KISS radio put back as it was.
         runCatching { kiss.deconnecte() }

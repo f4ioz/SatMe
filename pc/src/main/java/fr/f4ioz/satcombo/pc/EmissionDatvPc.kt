@@ -11,6 +11,8 @@ package fr.f4ioz.satcombo.pc
 import fr.f4ioz.satcombo.datv.BoucleNiveau
 import fr.f4ioz.satcombo.datv.Datv
 import fr.f4ioz.satcombo.datv.DemandeEmission
+import fr.f4ioz.satcombo.datv.Emetteur
+import fr.f4ioz.satcombo.datv.PlanInterieur
 import fr.f4ioz.satcombo.datv.PlanQo100
 import fr.f4ioz.satcombo.datv.ReglesEmission
 import fr.f4ioz.satcombo.datv.s2.ModulateurDvbs2
@@ -18,6 +20,8 @@ import fr.f4ioz.satcombo.datv.s2.Modcod
 import fr.f4ioz.satcombo.datv.s2.Rolloff
 import fr.f4ioz.satcombo.datv.s2.SourceTs
 import fr.f4ioz.satcombo.plateforme.Stockage
+import fr.f4ioz.satcombo.sdr.EmetteurDatv
+import fr.f4ioz.satcombo.sdr.HackrfEmission
 import fr.f4ioz.satcombo.sdr.PlutoEmission
 import org.json.JSONArray
 import org.json.JSONObject
@@ -33,6 +37,10 @@ import kotlin.concurrent.thread
  * made into an MPEG transport stream by ffmpeg at exactly the rate the
  * MODCOD carries, modulated in DVB-S2 here ([ModulateurDvbs2]) and sent by
  * [PlutoEmission]. The MiniTiouner (DATV tab) checks it from the downlink.
+ *
+ * A HackRF One ([HackrfEmission]) sends too, for tests only: the indoor
+ * test ([PlanInterieur]) and the dummy load, never QO-100. The Pluto does
+ * the indoor test as well, at −40 dB at most.
  *
  * **Only on the operator's word**: a start needs the page's confirmation;
  * nothing transmits at startup and nothing of a transmission is kept in the
@@ -54,6 +62,8 @@ class EmissionDatvPc(
     private val reception: () -> Reception? = { null },
     /** The transport stream's maker: ffmpeg here, something else in the tests. */
     private val fabrique: FabriqueTs = FfmpegTs(),
+    /** The HackRF's tools (hackrf_transfer, hackrf_info) when no folder is set: the PATH. */
+    private val outilParDefaut: (String) -> String? = { OutilsPc.trouve(it) },
     private val horloge: () -> Long = System::currentTimeMillis,
     /** Silence from the page longer than this: stopped. */
     private val vieMs: Long = 15_000L,
@@ -130,6 +140,76 @@ class EmissionDatvPc(
     var son: Boolean
         get() = stockage.getBoolean("datv_tx_son", true)
         set(v) { stockage.edit().putBoolean("datv_tx_son", v).apply() }
+    var emetteur: Emetteur
+        get() = Emetteur.de(stockage.getString("datv_tx_emetteur", Emetteur.PLUTO.cle))
+        set(v) { stockage.edit().putString("datv_tx_emetteur", v.cle).apply() }
+    /** The HackRF's TX VGA gain (dB), asked; applied at [ReglesEmission.HACKRF_VGA_MAX] at most. */
+    var vgaHackrf: Int
+        get() = stockage.getInt("datv_tx_hackrf_vga", 0).coerceIn(0, ReglesEmission.HACKRF_VGA_MAX)
+        set(v) { stockage.edit().putInt("datv_tx_hackrf_vga", v.coerceIn(0, ReglesEmission.HACKRF_VGA_MAX)).apply() }
+    /** Where hackrf_transfer is (the program or its folder); empty: the PATH. */
+    var hackrfOutil: String
+        get() = stockage.getString("datv_tx_hackrf_outil", "") ?: ""
+        set(v) { stockage.edit().putString("datv_tx_hackrf_outil", v.trim()).apply() }
+    /** The indoor test's frequency (kHz). */
+    var frequenceInterieurKhz: Long
+        get() = stockage.getLong("datv_tx_int_khz", PlanInterieur.DEFAUT_KHZ)
+        set(v) { stockage.edit().putLong("datv_tx_int_khz", v).apply() }
+    var dureeInterieurS: Int
+        get() = PlanInterieur.dureeS(stockage.getInt("datv_tx_int_duree", PlanInterieur.DUREE_DEFAUT_S))
+        set(v) { stockage.edit().putInt("datv_tx_int_duree", PlanInterieur.dureeS(v)).apply() }
+
+    /** One of the HackRF's tools: in the folder set, else where [outilParDefaut] finds it; null when missing. */
+    fun outilHackrf(nom: String): String? {
+        val r = hackrfOutil
+        if (r.isNotEmpty()) {
+            val f = File(r)
+            val exe = if (OutilsPc.windows) "$nom.exe" else nom
+            val c = when {
+                f.isDirectory -> File(f, exe)
+                f.isFile && f.name.substringBefore('.') == nom -> f
+                f.isFile -> File(f.parentFile, exe)
+                else -> return null
+            }
+            return c.takeIf { it.isFile && (OutilsPc.windows || it.canExecute()) }?.path
+        }
+        return outilParDefaut(nom)
+    }
+
+    /** What to do when the HackRF's tools are missing. */
+    fun conseilHackrf(): String =
+        if (OutilsPc.windows) "hackrf_transfer.exe introuvable : installer les outils HackRF pour Windows (et le pilote WinUSB du HackRF), puis donner leur dossier dans « Outils HackRF »"
+        else "hackrf_transfer introuvable : installer hackrf (sudo apt install hackrf), ou donner son chemin dans « Outils HackRF »"
+
+    /** The last read of hackrf_info: what it found, or why not. */
+    data class InfoHackrf(val cartes: List<HackrfEmission.Carte> = emptyList(), val message: String = "", val lu: Boolean = false)
+    @Volatile var infoHackrf = InfoHackrf(); private set
+
+    /**
+     * Runs `hackrf_info` (read-only: it lists the boards) and keeps what it
+     * says. Never while transmitting.
+     */
+    fun detecteHackrf(): InfoHackrf {
+        if (etat.emet) return infoHackrf
+        val prog = outilHackrf("hackrf_info")
+        val i = if (prog == null) InfoHackrf(message = "hackrf_info introuvable : " + conseilHackrf().substringAfter(": "), lu = true)
+        else runCatching {
+            val pr = ProcessBuilder(prog).redirectErrorStream(true).start()
+            runCatching { pr.outputStream.close() }
+            val lu = StringBuilder()
+            val t = thread(isDaemon = true, name = "satme-hackrf-info") { runCatching { lu.append(pr.inputStream.bufferedReader().readText()) } }
+            if (!pr.waitFor(5, TimeUnit.SECONDS)) { pr.destroyForcibly(); InfoHackrf(message = "hackrf_info ne répond pas", lu = true) }
+            else {
+                t.join(1000)
+                val texte = synchronized(lu) { lu.toString() }
+                val c = HackrfEmission.lisInfo(texte)
+                InfoHackrf(c, if (c.isEmpty()) (HackrfEmission.traduis(texte.lines().firstOrNull { HackrfEmission.traduis(it) != null }.orEmpty())
+                    ?: "aucun HackRF trouvé (le brancher)") else "", true)
+            }
+        }.getOrElse { InfoHackrf(message = "hackrf_info : " + (it.message ?: "erreur"), lu = true) }
+        infoHackrf = i
+        return i
+    }
 
     fun modcod(): Modcod = Modcod.de(modcodTexte, courtes, pilotes) ?: Modcod.de("QPSK 2/3", courtes, pilotes)!!
 
@@ -141,6 +221,8 @@ class EmissionDatvPc(
     data class Etat(
         val emet: Boolean = false,
         val chargeFictive: Boolean = false,
+        val interieur: Boolean = false,
+        val emetteur: Emetteur = Emetteur.PLUTO,
         val frequenceKhz: Long = 0L,
         val debitTs: Long = 0L,
         val raison: String = "",
@@ -148,7 +230,7 @@ class EmissionDatvPc(
     )
 
     @Volatile var etat = Etat(); private set
-    private var pluto: PlutoEmission? = null
+    private var tx: EmetteurDatv? = null
     private var processus: Processus? = null
     private var modulateur: ModulateurDvbs2? = null
     private var flux: FluxTs? = null
@@ -164,17 +246,26 @@ class EmissionDatvPc(
 
     /**
      * Starts transmitting, on the operator's confirmed action only
-     * ([confirme]); null once transmitting, else why not.
+     * ([confirme]), into a dummy load ([chargeFictive]), for the indoor test
+     * ([interieur]) or to QO-100 (the Pluto only); null once transmitting,
+     * else why not.
      */
     @Synchronized
-    fun demarre(confirme: Boolean, chargeFictive: Boolean): String? {
+    fun demarre(confirme: Boolean, chargeFictive: Boolean, interieur: Boolean = false): String? {
         if (!confirme) return "émission non confirmée"
         if (etat.emet) return "déjà en émission"
-        plutoOccupe()?.let { return it }
+        val qui = emetteur
+        val hackrf = qui == Emetteur.HACKRF
+        if (!hackrf) plutoOccupe()?.let { return it }
         val m = modcod()
-        val d = DemandeEmission(frequenceKhz, srKs, m, rolloff, gainDb, dureeS, chargeFictive, indicatif())
+        val khz = if (interieur) frequenceInterieurKhz else frequenceKhz
+        val duree = if (interieur) dureeInterieurS else dureeS
+        val gain = if (hackrf) vgaHackrf.toDouble() else gainDb
+        val d = DemandeEmission(khz, srKs, m, rolloff, gain, duree, chargeFictive, indicatif(), interieur, qui)
         ReglesEmission.refus(d, gainMaxDb)?.let { return it }
+        val programme = if (hackrf) outilHackrf("hackrf_transfer") ?: return conseilHackrf() else ""
         val sps = ReglesEmission.sps(srKs)
+        val debit = srKs * 1000L * sps
         val debitTs = m.debitTs(srKs * 1000.0).toLong()
         val img = when (source) {
             "image" -> File(image).takeIf { it.isFile } ?: return "image introuvable : " + image.ifBlank { "(aucune)" }
@@ -189,16 +280,30 @@ class EmissionDatvPc(
         thread(isDaemon = true, name = "satme-datv-tx-ts") { f.lit(p.sortie) { generation == gen } }
         val mod = ModulateurDvbs2(m, rolloff, sps, f)
         modulateur = mod
-        val px = PlutoEmission(plutoHote(), plutoPort(), gainMaxDb = minOf(gainMaxDb, 0.0))
         derniereVie = horloge()
-        val r = PlutoEmission.Reglage(
-            frequenceHz = frequenceKhz * 1000L, debit = srKs * 1000L * sps, gainDb = gainDb, dureeMs = dureeS * 1000L,
-            plafondDb = if (chargeFictive) ReglesEmission.GAIN_CHARGE_DB else 0.0,
-            paires = paires(srKs * 1000L * sps),
-            garde = { garde(gen, p) })
-        px.demarre(r) { b -> mod.remplis(b, b.size / 2) }?.let { e -> p.arrete(); processus = null; return e }
-        pluto = px
-        etat = Etat(emet = true, chargeFictive = chargeFictive, frequenceKhz = frequenceKhz, debitTs = debitTs)
+        val e: EmetteurDatv
+        val refus: String?
+        if (hackrf) {
+            val hx = HackrfEmission(programme, ReglesEmission.HACKRF_VGA_MAX)
+            val r = HackrfEmission.Reglage(
+                frequenceHz = khz * 1000L, debit = debit, vgaDb = ReglesEmission.vgaHackrf(gain), dureeMs = duree * 1000L,
+                bandeHz = Math.round(PlanQo100.occupeKhz(srKs, rolloff.alpha) * 1000), plafondVgaDb = ReglesEmission.HACKRF_VGA_MAX,
+                paires = paires(debit), serie = infoHackrf.cartes.singleOrNull()?.serie.orEmpty(), garde = { garde(gen, p) })
+            refus = hx.demarre(r) { b -> mod.remplis(b, b.size / 2) }
+            e = hx
+        } else {
+            val px = PlutoEmission(plutoHote(), plutoPort(), gainMaxDb = minOf(gainMaxDb, 0.0))
+            val r = PlutoEmission.Reglage(
+                frequenceHz = khz * 1000L, debit = debit, gainDb = gainDb, dureeMs = duree * 1000L,
+                plafondDb = when { chargeFictive -> ReglesEmission.GAIN_CHARGE_DB; interieur -> PlanInterieur.GAIN_PLUTO_DB; else -> 0.0 },
+                paires = paires(debit),
+                garde = { garde(gen, p) })
+            refus = px.demarre(r) { b -> mod.remplis(b, b.size / 2) }
+            e = px
+        }
+        if (refus != null) { generation++; p.arrete(); processus = null; return refus }
+        tx = e
+        etat = Etat(emet = true, chargeFictive = chargeFictive, interieur = interieur, emetteur = qui, frequenceKhz = khz, debitTs = debitTs)
         return null
     }
 
@@ -213,18 +318,21 @@ class EmissionDatvPc(
     /** Stops transmitting (the Pluto's LO powered down); the picture's maker stopped. */
     @Synchronized
     fun arrete(raison: String = "arrêt demandé") {
-        val px = pluto
+        val px = tx
         px?.arrete(raison)
         generation++
         processus?.arrete(); processus = null
-        pluto = null
-        if (etat.emet) etat = etat.copy(emet = false, raison = px?.etat?.raison ?: raison, erreur = px?.etat?.erreur.orEmpty())
+        tx = null
+        val pe = px?.etatCommun()
+        if (etat.emet) etat = etat.copy(emet = false, raison = pe?.raison ?: raison, erreur = pe?.erreur.orEmpty())
     }
 
     /** A new gain while transmitting (clamped as at the start), kept for next time. */
     fun regleGain(db: Double): Double? {
         gainDb = db
-        return pluto?.regleGain(db)
+        val px = tx
+        // The HackRF takes its gain at the start; the Pluto's only goes to the Pluto.
+        return if (px is PlutoEmission) px.regleGain(db) else null
     }
 
     /**
@@ -233,17 +341,19 @@ class EmissionDatvPc(
      * the closed loop on our own signal.
      */
     fun tic() {
-        val px = pluto
-        if (px != null && !px.etat.emet && etat.emet) {
-            synchronized(this) { arrete(px.etat.raison) }
-            etat = etat.copy(raison = px.etat.raison, erreur = px.etat.erreur)
+        val px = tx
+        if (px != null && !px.etatCommun().emet && etat.emet) {
+            val pe = px.etatCommun()
+            synchronized(this) { arrete(pe.raison) }
+            etat = etat.copy(raison = pe.raison, erreur = pe.erreur)
         }
         val r = reception() ?: return
         val t = horloge()
         if (r.verrouille && r.merDb != null && kotlin.math.abs(r.cielKhz - Datv.BALISE_KHZ) < 100 && r.service != indicatif().trim().uppercase()) {
             merBalise = r.merDb; merBaliseMs = t
         }
-        if (!etat.emet || etat.chargeFictive || px == null) return
+        // The closed loop on the beacon: on QO-100 only (the Pluto).
+        if (!etat.emet || etat.chargeFictive || etat.interieur || px !is PlutoEmission) return
         val nous = r.verrouille && (r.service.equals(indicatif().trim(), true) ||
             kotlin.math.abs(r.cielKhz - (etat.frequenceKhz + PlanQo100.DECALAGE_KHZ)) < srKs / 2)
         val g = boucle.mesure(if (nous) r.merDb else null, merBalise, 0L, px.etat.gainDb, t) ?: return
@@ -261,8 +371,8 @@ class EmissionDatvPc(
 
     /** The status for the page. */
     fun json(): JSONObject {
-        val px = pluto
-        val pe = px?.etat
+        val px = tx
+        val pe = px?.etatCommun()
         val m = modulateur
         val e = etat
         val t = horloge()
@@ -278,13 +388,27 @@ class EmissionDatvPc(
             .put("occupeKhz", PlanQo100.occupeKhz(srKs, rolloff.alpha))
             .put("refusBande", PlanQo100.refus(frequenceKhz, srKs, rolloff.alpha) ?: "")
             .put("indicatif", indicatif().trim().uppercase())
-            .put("raison", e.raison).put("erreur", e.erreur)
+            .put("raison", e.raison).put("erreur", e.erreur).put("khzEnCours", e.frequenceKhz)
             .put("cameras", JSONArray(cameras()))
             .put("modcods", JSONArray(Modcod.tous(false, false).map { it.constellation.libelle + " " + it.taux.libelle }))
             .put("rolloffs", JSONArray(Rolloff.entries.map { it.alpha }))
             .put("canaux", JSONArray(PlanQo100.CANAUX.map { c -> JSONObject().put("descente", c.descenteKhz).put("montee", c.monteeKhz).put("srMax", c.srMaxKs) }))
             .put("bas", PlanQo100.BAS_KHZ).put("haut", PlanQo100.HAUT_KHZ)
             .put("merBalise", merBalise ?: JSONObject.NULL).put("merBaliseAge", if (merBalise == null) JSONObject.NULL else (t - merBaliseMs) / 1000)
+        // The HackRF, the indoor test and what the MiniTiouner needs for it.
+        val ik = frequenceInterieurKhz
+        val ih = infoHackrf
+        o.put("emetteur", emetteur.cle).put("emetteurNom", emetteur.libelle).put("interieur", e.interieur).put("emetteurEnCours", e.emetteur.cle)
+            .put("vga", vgaHackrf).put("vgaMax", ReglesEmission.HACKRF_VGA_MAX).put("hackrfOutil", hackrfOutil)
+            .put("hackrfProgramme", outilHackrf("hackrf_transfer") ?: "").put("hackrfConseil", conseilHackrf())
+            .put("hackrfPasQo100", ReglesEmission.HACKRF_PAS_QO100)
+            .put("hackrf", JSONObject().put("lu", ih.lu).put("message", ih.message)
+                .put("cartes", JSONArray(ih.cartes.map { c -> JSONObject().put("serie", c.serie).put("libelle", c.libelle) })))
+            .put("intKhz", ik).put("intDuree", dureeInterieurS).put("intDureeMax", PlanInterieur.DUREE_MAX_S)
+            .put("intGainPluto", PlanInterieur.GAIN_PLUTO_DB).put("intDefautKhz", PlanInterieur.DEFAUT_KHZ)
+            .put("intRefus", PlanInterieur.refus(ik, srKs, rolloff.alpha) ?: "")
+            .put("intAvert", PlanInterieur.avertissement(ik, srKs, rolloff.alpha) ?: "")
+            .put("filtreHackrf", HackrfEmission.filtre(Math.round(PlanQo100.occupeKhz(srKs, rolloff.alpha) * 1000)))
         if (pe != null) {
             o.put("restant", maxOf(0L, (pe.finMs - t) / 1000)).put("tampons", pe.tampons).put("manques", pe.manques).put("gainApplique", pe.gainDb)
         }

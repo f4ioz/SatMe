@@ -711,10 +711,22 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 q["son"]?.let { e.son = it == "1" }
                 q["gainMax"]?.replace(',', '.')?.toDoubleOrNull()?.let { e.gainMaxDb = it }
                 q["coupeTx"]?.let { sdr?.coupeTxEnReception = it == "1" }
+                // The transmitter (not while transmitting), the HackRF's gain and tools, the indoor test.
+                q["emetteur"]?.let { if (!e.etat.emet) e.emetteur = fr.f4ioz.satcombo.datv.Emetteur.de(it) }
+                q["vga"]?.replace(',', '.')?.toDoubleOrNull()?.let { e.vgaHackrf = fr.f4ioz.satcombo.datv.ReglesEmission.vgaHackrf(it) }
+                q["hackrfOutil"]?.let { e.hackrfOutil = it }
+                q["intMhz"]?.replace(',', '.')?.toDoubleOrNull()?.let { e.frequenceInterieurKhz = Math.round(it * 1000.0) }
+                entier("intDuree")?.let { e.dureeInterieurS = it * 60 }
             }
             "/api/datv/emission/demarre" -> {
                 val e = emission ?: return JSONObject().put("ok", false)
-                e.demarre(q["confirme"] == "1", q["charge"] == "1")?.let { return JSONObject().put("ok", false).put("erreur", it) }
+                e.demarre(q["confirme"] == "1", q["charge"] == "1", q["interieur"] == "1")?.let { return JSONObject().put("ok", false).put("erreur", it) }
+            }
+            // hackrf_info only (it lists the boards, sends nothing).
+            "/api/datv/emission/hackrf" -> {
+                val e = emission ?: return JSONObject().put("ok", false)
+                val i = e.detecteHackrf()
+                return ok.put("message", i.message).put("cartes", JSONArray(i.cartes.map { it.libelle }))
             }
             "/api/datv/emission/arrete" -> emission?.arrete()
             "/api/datv/emission/vie" -> emission?.vie()
