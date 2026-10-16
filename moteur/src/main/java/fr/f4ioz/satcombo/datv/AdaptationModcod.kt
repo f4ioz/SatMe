@@ -103,7 +103,7 @@ class AdaptationModcod(
             etat = base.copy(fige = fige, prochaine = when {
                 fige -> "figé sur " + nom(courant) + " jusqu'au retour de notre signal"
                 vueUneFois -> "notre signal perdu depuis %d s : le plus robuste après %d s".format((t - derniereBoucle) / 1000, perteBoucleMs / 1000)
-                else -> "boucle non confirmée : notre signal n'est pas reçu (service ou carte de visite à notre indicatif)"
+                else -> "notre signal n'est pas reçu (ni service ni carte de visite à notre indicatif)"
             })
             return null
         }

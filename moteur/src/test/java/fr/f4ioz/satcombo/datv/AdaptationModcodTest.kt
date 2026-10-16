@@ -129,7 +129,7 @@ class AdaptationModcodTest {
         val b = Banc(mc("QPSK 2/3"))
         b.seconde(Mesure(false, 9.0), 60)
         assertTrue(b.changes.isEmpty())
-        assertTrue(b.a.etat.prochaine.startsWith("boucle non confirmée"))
+        assertTrue(b.a.etat.prochaine.contains("pas reçu"))
         assertTrue(!b.a.etat.boucle)
         // Seen, then lost: after 10 s the most robust, then frozen.
         b.seconde(mer(5.0), 3)
