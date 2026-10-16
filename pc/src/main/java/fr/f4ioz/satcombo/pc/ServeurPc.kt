@@ -56,7 +56,9 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
     /** « Phonie → texte »: the voice written out (off unless chosen). */
     private val phonie: PhoniePc? = null,
     /** DATV transmission with the ADALM-PLUTO (DATV tab). */
-    private val emission: EmissionDatvPc? = null) {
+    private val emission: EmissionDatvPc? = null,
+    /** QO-100 operated from one screen: the reception in one gesture, the session kept. */
+    private val trafic: TraficQo100Pc? = null) {
 
     private var socket: ServerSocket? = null
     val portReel: Int get() = socket?.localPort ?: port
@@ -285,12 +287,15 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 val d = sdr
                 val actif = d != null && d.etat.value.actif
                 if (actif) d!!.demandePanorama()
-                val o = ApiQo100.panorama(actif, d?.panorama, d?.axeQo100(), q["n"]?.toIntOrNull() ?: 512, d?.panoramaTrames ?: 0L, if (actif) d!!.mesureBalise() else null)
+                val o = ApiQo100.panorama(actif, d?.panorama, d?.axeQo100(), q["n"]?.toIntOrNull() ?: 512, d?.panoramaTrames ?: 0L, if (actif) d!!.mesureBalise() else null,
+                    ApiQo100.fenetre(q["bas"], q["haut"]))
                 envoie(sortie, "200 OK", "application/json; charset=utf-8", o.toString().toByteArray())
             }
             // The signals on the transponder, each judged (BLU, CW, FT8…): asking is what keeps the analysis on.
             "/api/qo100/signaux" -> envoie(sortie, "200 OK", "application/json; charset=utf-8",
                 (qo100?.signaux?.let { it.demande(); it.json() } ?: JSONObject().put("actif", false).put("absent", true)).toString().toByteArray())
+            "/api/qo100/trafic" -> envoie(sortie, "200 OK", "application/json; charset=utf-8",
+                (trafic?.json() ?: JSONObject().put("absent", true)).toString().toByteArray())
             "/api/qo100/qualite" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", (qo100?.json() ?: JSONObject().put("absent", true)).toString().toByteArray())
             "/api/qo100" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JsonPc.qo100(station, q["plan"] == "1", sdr?.gammeHz).toString().toByteArray())
             "/api/sdr" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", (sdr?.let { JsonPc.sdr(it) } ?: JSONObject().put("absent", true)).toString().toByteArray())
@@ -583,7 +588,7 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 val d = sdr ?: return JSONObject().put("ok", false)
                 if (!d.demarre()) return JSONObject().put("ok", false).put("erreur", d.etat.value.erreur)
             }
-            "/api/sdr/arreter" -> sdr?.arrete()
+            "/api/sdr/arreter" -> { trafic?.oublie(); sdr?.arrete() }
             "/api/sdr/decalage" -> q["hz"]?.toIntOrNull()?.let { sdr?.decalageHz = it }
             "/api/sdr/pic" -> sdr?.calePic()
             "/api/sdr/voix" -> if (sdr?.caleVoix() != true) return JSONObject().put("ok", false).put("erreur", "le calage sur la voix sert en BLU (USB / LSB)")
@@ -760,7 +765,24 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 val hz = ApiQo100.baliseEntendue(q["mhz"]) ?: return JSONObject().put("ok", false).put("message", ApiQo100.BALISE_LOIN)
                 station.qo100.caleSurLaBalise(hz)
             }
-            "/api/qo100/cle" -> station.qo100.aLaCle(q["on"] == "1")
+            "/api/qo100/cle" -> { if (q["on"] != "1") trafic?.oublie(); station.qo100.aLaCle(q["on"] == "1") }
+            // The cockpit: one gesture to receive, a signal tuned in its mode, the session taken back or not.
+            "/api/qo100/demarrer" -> {
+                val t = trafic ?: return JSONObject().put("ok", false).put("erreur", "pas de récepteur ici")
+                t.demarre()?.let { return JSONObject().put("ok", false).put("erreur", it) }
+            }
+            "/api/qo100/arreter" -> trafic?.arrete()
+            "/api/qo100/accorde" -> {
+                val hz = q["hz"]?.toLongOrNull() ?: return JSONObject().put("ok", false)
+                val a = trafic?.accorde(hz, q["classe"]) ?: run { station.qo100.descente(hz); null }
+                a?.let { return ok.put("cadran", it.cadranHz).put("mode", it.modeCarnet).put("decodeur", it.decodeur).put("ft8Mode", it.ft8Mode) }
+            }
+            "/api/qo100/mode" -> trafic?.mode(q["m"].orEmpty())
+            "/api/qo100/reprise" -> {
+                val t = trafic ?: return JSONObject().put("ok", false)
+                if (q["on"] == "1") t.reprend()?.let { return JSONObject().put("ok", false).put("erreur", it) } else t.oublie()
+            }
+            "/api/qo100/reprise-auto" -> station.settings.qo100RepriseAuto = q["on"] == "1"
             "/api/qo100/caler-mesure" -> {
                 // No measurement: nothing done — certainly not a calibration back to zero.
                 val m = sdr?.mesureBalise() ?: return JSONObject().put("ok", false).put("erreur", "La balise n'est pas vue par la clé.")

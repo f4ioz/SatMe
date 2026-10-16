@@ -14,6 +14,7 @@ import fr.f4ioz.satcombo.domain.MesureBalise
 import fr.f4ioz.satcombo.domain.PanoramaQo100
 import fr.f4ioz.satcombo.domain.Qo100
 import fr.f4ioz.satcombo.domain.SoleilQo100
+import fr.f4ioz.satcombo.domain.TraficQo100
 import fr.f4ioz.satcombo.i18n.I18n
 import fr.f4ioz.satcombo.station.PiloteQo100
 import org.json.JSONArray
@@ -82,11 +83,16 @@ object ApiQo100 {
      * ([axe]: centre, signed width), [n] columns, and the middle beacon as
      * measured there. [pan] null or empty: the dongle gives nothing yet.
      */
-    fun panorama(sdr: Boolean, pan: FloatArray?, axe: Pair<Double, Double>?, n: Int, trames: Long, mesure: MesureBalise.Mesure?): JSONObject {
+    fun panorama(sdr: Boolean, pan: FloatArray?, axe: Pair<Double, Double>?, n: Int, trames: Long, mesure: MesureBalise.Mesure?,
+                 fenetre: LongRange? = null): JSONObject {
         val o = JSONObject().put("sdr", sdr)
         if (!sdr) return o
         if (pan != null && pan.isNotEmpty() && axe != null) {
-            val cols = PanoramaQo100.colonnes(pan, axe.first, axe.second, n.coerceIn(64, 1024))
+            // A zoom: within the ruler, 5 kHz wide at least.
+            val f = fenetre?.takeIf { it.first >= Qo100.REGLETTE_BAS_HZ - 50_000 && it.last <= Qo100.REGLETTE_HAUT_HZ + 50_000 && it.last - it.first >= 5_000 }
+            val cols = PanoramaQo100.colonnes(pan, axe.first, axe.second, n.coerceIn(64, 1024),
+                f?.first ?: Qo100.REGLETTE_BAS_HZ, f?.last ?: Qo100.REGLETTE_HAUT_HZ)
+            if (f != null) o.put("bas", f.first).put("haut", f.last)
             o.put("trames", trames)
             o.put("colonnes", cols?.let { c -> JSONArray(c.map { v -> if (v == PanoramaQo100.HORS) JSONObject.NULL else Math.round(v) }) } ?: JSONObject.NULL)
         }
@@ -95,6 +101,43 @@ object ApiQo100 {
                 .put("ok", MesureBalise.calageSuffisant(m)))
         }
         return o
+    }
+
+    /** The receiver as the QO-100 cockpit shows it. */
+    class Recepteur(val present: Boolean, val actif: Boolean, val nom: String, val statut: String, val erreur: String,
+                    val niveauDb: Double, val mode: String, val son: Boolean, val squelch: Int, val agc: Boolean?)
+
+    /**
+     * The cockpit's state (`api/qo100/trafic`): the context (what the log
+     * follows), the receiver, the session kept through a restart. Fields
+     * a server lacks are left out ([repriseAuto] null: no such setting there;
+     * [classifieur] false: no labels).
+     */
+    fun trafic(ctx: TraficQo100.Contexte, cleSurQo100: Boolean, auPoste: Boolean, r: Recepteur, enCours: Boolean,
+               repriseAuto: Boolean?, classifieur: Boolean, calageAuto: Boolean?, ecartBaliseHz: Long?, serveur: String): JSONObject {
+        val recoit = r.actif && cleSurQo100
+        val o = JSONObject().put("serveur", serveur).put("recoit", recoit).put("cle", cleSurQo100).put("auPoste", auPoste)
+            .put("contexte", JSONObject().put("qo100", ctx.qo100).put("satellite", ctx.satellite).put("catnum", ctx.catnum)
+                .put("par", ctx.par.name.lowercase()).put("libelle", ctx.libelle)
+                .put("descente", ctx.descenteHz ?: JSONObject.NULL).put("montee", ctx.monteeHz ?: JSONObject.NULL)
+                .put("demod", ctx.demod).put("mode", ctx.modeCarnet))
+            .put("recepteur", JSONObject().put("present", r.present).put("actif", r.actif).put("nom", r.nom).put("statut", r.statut)
+                .put("erreur", r.erreur).put("niveau", r.niveauDb).put("mode", r.mode).put("son", r.son).put("squelch", r.squelch)
+                .put("agc", r.agc ?: JSONObject.NULL))
+            .put("enCours", enCours).put("reprendre", TraficQo100.aReprendre(enCours, recoit))
+            .put("classifieur", classifieur)
+            .put("conseilCalage", TraficQo100.conseilCalage(ecartBaliseHz, calageAuto ?: false) && calageAuto != null)
+        repriseAuto?.let { o.put("repriseAuto", it) }
+        calageAuto?.let { o.put("calageAuto", it) }
+        ecartBaliseHz?.let { o.put("ecartBalise", it) }
+        return o
+    }
+
+    /** The zoom asked by the page (`bas`, `haut`, sky Hz), or null for the whole ruler. */
+    fun fenetre(bas: String?, haut: String?): LongRange? {
+        val b = bas?.toLongOrNull() ?: return null
+        val h = haut?.toLongOrNull() ?: return null
+        return if (h > b) b..h else null
     }
 
     /** A frequency typed in MHz (comma or dot), in Hz; null when it is not one. */

@@ -32,12 +32,13 @@ object PanoramaQo100 {
      * would drown it in noise. Null when the window hardly covers the ruler:
      * tuned elsewhere, the row would say nothing.
      */
-    fun colonnes(pan: FloatArray, centreHz: Double, etendueHz: Double, colonnes: Int = 512): FloatArray? {
+    fun colonnes(pan: FloatArray, centreHz: Double, etendueHz: Double, colonnes: Int = 512,
+                 basHz: Long = Qo100.REGLETTE_BAS_HZ, hautHz: Long = Qo100.REGLETTE_HAUT_HZ): FloatArray? {
         val n = pan.size
-        if (n < 16 || etendueHz == 0.0 || centreHz <= 0.0 || colonnes < 8) return null
+        if (n < 16 || etendueHz == 0.0 || centreHz <= 0.0 || colonnes < 8 || hautHz <= basHz) return null
         val hzParRaie = etendueHz / n
-        val bas = Qo100.REGLETTE_BAS_HZ.toDouble()
-        val haut = Qo100.REGLETTE_HAUT_HZ.toDouble()
+        val bas = basHz.toDouble()
+        val haut = hautHz.toDouble()
         val out = FloatArray(colonnes)
         var utiles = 0
         for (c in 0 until colonnes) {

@@ -100,6 +100,9 @@ fun main(args: Array<String>) {
     // QO-100 with the dongle: the beacon followed, the calibration held on it when chosen.
     val qo100 = Qo100Pc(station, sdr)
     son.son.auditeurs += { pcm, n, rate -> qo100.ecouteCarte(pcm, n, rate) }
+    // QO-100 from one screen; the log on QO-100 while the receiver or the rig is on it.
+    val trafic = TraficQo100Pc(station, sdr, qo100)
+    carnet.contexte = { trafic.contexte() }
     // « Phonie → texte »: off unless chosen; the engine (a Python helper) started only then.
     val phonie = PhoniePc(station.stockage, InstallPhoniePc(dossier), File(dossier, "phonie"))
     phonie.connus = { carnet.contacts().mapNotNull { fr.f4ioz.satcombo.cw.AnalyseCw.base(it.callsign) }.toSet() }
@@ -118,6 +121,7 @@ fun main(args: Array<String>) {
             runCatching { kiss.tic() }
             runCatching { sdr.ticMeteor() }
             runCatching { qo100.tic() }
+            runCatching { trafic.tic() }
             kotlinx.coroutines.delay(1000)
         }
     }
@@ -142,8 +146,10 @@ fun main(args: Array<String>) {
     sdr.emissionPluto = { emission.etat.emet }
     portee.launch { while (true) { runCatching { emission.tic() }; kotlinx.coroutines.delay(1000) } }
     val serveur = ServeurPc(station, port, reseau, carnet, son, journalWeb, ImportPc(station, carnet, journal), sdr, videoSked, telephone, appairage, datv,
-        PlancheWebPc(station, son, dossier), kiss, sauvegarde, MirePc(File(dossier, "exports")), diffusion, qo100, lien, phonie, emission)
+        PlancheWebPc(station, son, dossier), kiss, sauvegarde, MirePc(File(dossier, "exports")), diffusion, qo100, lien, phonie, emission, trafic)
     serveur.demarre()
+    // QO-100 received when SatMe-PC stopped: taken back only when chosen in Réglages (reception only).
+    Thread({ runCatching { trafic.repriseAuDemarrage() } }, "satme-qo100-reprise").apply { isDaemon = true; start() }
     println("SatMe-PC " + versionPc())
     println("  page      : http://localhost:${serveur.portReel}/" + if (reseau) "  (ouverte au réseau)" else "")
     println("  réglages  : ${dossier.absolutePath}")

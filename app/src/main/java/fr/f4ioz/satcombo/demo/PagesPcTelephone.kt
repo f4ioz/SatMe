@@ -271,8 +271,12 @@ object PagesPcTelephone {
                     val pan = r?.first?.takeIf { it.isNotEmpty() }
                     if (pan != null && pan !== dernierPanorama) { dernierPanorama = pan; trames++ }
                     json(ApiQo100.panorama(r != null, pan, r?.second, p("n").toIntOrNull() ?: 512, trames,
-                        if (pan != null && r.second != null) fr.f4ioz.satcombo.domain.MesureBalise.mesurer(pan, r.second!!.first, r.second!!.second) else null))
+                        if (pan != null && r.second != null) fr.f4ioz.satcombo.domain.MesureBalise.mesurer(pan, r.second!!.first, r.second!!.second) else null,
+                        ApiQo100.fenetre(p("bas").ifEmpty { null }, p("haut").ifEmpty { null })))
                 }
+                // The QO-100 cockpit: the phone's receiver and QO-100 screen; no signal classifier here yet.
+                "/api/qo100/trafic" -> json(trafic(vm))
+                "/api/qo100/signaux" -> json(JSONObject().put("actif", false).put("absent", true))
                 "/api/carnet" -> json(carnet(vm))
                 "/api/carnet/records" -> json(ApiStation.records(fr.f4ioz.satcombo.domain.RecordsCarnet.calcule(u.log, vm.myLocator())))
                 // The contacts ticked on the page: ADIF, or the batch for another phone (as Settings › Backup makes it).
@@ -646,6 +650,22 @@ object PagesPcTelephone {
                 JSONObject().put("ok", ok).put("nom", sat.name).put("erreur", if (ok) "" else "amsat.org n'a pas pris le rapport")
             }
             // ---- QO-100: the gestures of the phone's QO-100 screen
+            "/api/qo100/demarrer" -> {
+                if (!vm.ouvreQo100PourPage()) return JSONObject().put("ok", false).put("erreur", "QO-100 n'est pas activé sur le téléphone (Réglages → Extensions)")
+                vm.setQo100ALaCle(true)
+                if (fr.f4ioz.satcombo.sdr.SdrHub.state.value.running) OK else action(vm, "/api/sdr/demarrer", p)
+            }
+            "/api/qo100/arreter" -> { vm.stopSdr(); vm.setQo100ALaCle(false); OK }
+            "/api/qo100/accorde" -> {
+                val hz = p("hz").toLongOrNull() ?: return JSONObject().put("ok", false)
+                val a = p("classe").takeIf { it.isNotBlank() }?.let { fr.f4ioz.satcombo.domain.TraficQo100.accord(it, hz) }
+                vm.setQo100Descente(a?.cadranHz ?: hz)
+                vm.setSdrOffset(0)
+                a?.let { OK.put("cadran", it.cadranHz).put("mode", it.modeCarnet).put("decodeur", it.decodeur).put("ft8Mode", it.ft8Mode) } ?: OK
+            }
+            "/api/qo100/mode" -> OK
+            "/api/qo100/reprise", "/api/qo100/reprise-auto" ->
+                JSONObject().put("ok", false).put("erreur", "sur le téléphone, la réception QO-100 se reprend depuis son écran QO-100")
             "/api/qo100/frequence" -> { p("hz").toLongOrNull()?.let { vm.setQo100Descente(it) }; OK }
             "/api/qo100/pas" -> { p("hz").toLongOrNull()?.let { vm.qo100Pas(it) }; OK }
             "/api/qo100/balise" -> { vm.qo100AllerBalise(); OK }
@@ -842,6 +862,20 @@ object PagesPcTelephone {
         val obs = u.observer
         val ciel = obs?.let { ApiQo100.Ciel(fr.f4ioz.satcombo.domain.Qo100.pointage(it.latDeg, it.lonDeg), q.soleilAzimutMs, q.soleilTransits) }
         return ApiQo100.etat(e, u.catConnected, q.cleRxHz, ciel, obs != null, plan)
+    }
+
+    /** The QO-100 cockpit's state, in SatMe-PC's words ([ApiQo100.trafic]). */
+    private fun trafic(vm: MainViewModel): JSONObject {
+        val u = vm.ui.value
+        val q = u.qo100
+        val st = fr.f4ioz.satcombo.sdr.SdrHub.state.value
+        val ctx = fr.f4ioz.satcombo.domain.TraficQo100.contexte(q.aLaCle, st.running, q.auPoste, q.descenteHz, "SSB",
+            u.selected?.name, u.selected?.catalogNumber ?: 0)
+        val r = ApiQo100.Recepteur(true, st.running, st.deviceName ?: "clé SDR du téléphone",
+            if (st.running) "réception" else if (st.connected) "clé branchée" else "aucune clé branchée", st.error.orEmpty(),
+            Math.round(st.levelDb * 10) / 10.0, vm.sdrMode().name, u.sdrAudio, u.sdrSquelchDb, u.sdrAgc)
+        return ApiQo100.trafic(ctx, q.aLaCle, q.auPoste, r, enCours = false, repriseAuto = null, classifieur = false,
+            calageAuto = null, ecartBaliseHz = null, serveur = "telephone")
     }
 
     /** The automatic mode, in SatMe-PC's words ([ApiVeille]). */

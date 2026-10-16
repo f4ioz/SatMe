@@ -741,6 +741,29 @@ class SettingsStore(private val prefs: Stockage) {
         get() = prefs.getBoolean("qo100_cale_auto", false)
         set(v) { prefs.edit().putBoolean("qo100_cale_auto", v).apply() }
 
+    /**
+     * QO-100 being received (the receiver on it) when SatMe last ran: kept
+     * through a restart, cleared only when the operator stops it. With the
+     * dial and the log mode, to take it back as it was.
+     */
+    var qo100EnCours: Boolean
+        get() = prefs.getBoolean("qo100_en_cours", false)
+        set(v) { prefs.edit().putBoolean("qo100_en_cours", v).apply() }
+
+    var qo100DernierHz: Long
+        get() = prefs.getLong("qo100_dernier_hz", 0L)
+        set(v) { prefs.edit().putLong("qo100_dernier_hz", v).apply() }
+
+    /** The log mode on QO-100 (SSB, CW, FT8…): the last signal tuned. */
+    var qo100ModeCarnet: String
+        get() = prefs.getString("qo100_mode_carnet", "SSB") ?: "SSB"
+        set(v) { prefs.edit().putString("qo100_mode_carnet", v).apply() }
+
+    /** Take the QO-100 reception back by itself at start (off by default; never any transmission). */
+    var qo100RepriseAuto: Boolean
+        get() = prefs.getBoolean("qo100_reprise_auto", false)
+        set(v) { prefs.edit().putBoolean("qo100_reprise_auto", v).apply() }
+
     var qo100SansBride: Boolean
         get() = prefs.getBoolean("qo100_sans_bride", false)
         set(v) { prefs.edit().putBoolean("qo100_sans_bride", v).apply() }

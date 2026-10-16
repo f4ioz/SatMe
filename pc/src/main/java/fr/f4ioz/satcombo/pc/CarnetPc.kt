@@ -62,7 +62,8 @@ class CarnetPc(private val station: StationPc, val store: LogStore, private val 
     fun propositions(saisie: String): Pair<fr.f4ioz.satcombo.domain.Indicatifs.Etat, List<fr.f4ioz.satcombo.domain.Indicatifs.Connu>> {
         val m = memoire()
         return fr.f4ioz.satcombo.domain.Indicatifs.etat(saisie, m) to
-            fr.f4ioz.satcombo.domain.Indicatifs.suggestions(saisie, m, horloge(), station.etat.value.suivi?.name.orEmpty(), max = 4)
+            fr.f4ioz.satcombo.domain.Indicatifs.suggestions(saisie, m, horloge(),
+                contexte?.invoke()?.takeIf { it.qo100 }?.satellite ?: station.etat.value.suivi?.name.orEmpty(), max = 4)
     }
 
     /** The memory of callsigns made again at the next key (contacts added from elsewhere). */
@@ -73,27 +74,39 @@ class CarnetPc(private val station: StationPc, val store: LogStore, private val 
         return fr.f4ioz.satcombo.demo.ApiStation.historique(store.load(), indicatif)
     }
 
+    /**
+     * What SatMe follows for the log (set by SatMe-PC): QO-100 when the
+     * receiver or the rig is on it — then a contact goes on QO-100, with its
+     * sky frequencies and mode, whatever satellite is followed.
+     */
+    @Volatile var contexte: (() -> fr.f4ioz.satcombo.domain.TraficQo100.Contexte?)? = null
+
     /** A new contact, now; null without a callsign or a satellite. */
     fun ajoute(indicatif: String, locator: String, rstEnvoye: String, rstRecu: String, note: String = "",
                fiche: QrzReponse.Fiche? = null): LogEntry? {
         val call = indicatif.trim().uppercase()
         if (call.isEmpty()) return null
         val e = station.etat.value
-        val sat = e.suivi ?: return null
-        val pos = e.position
+        val qo = contexte?.invoke()?.takeIf { it.qo100 }
+        val sat = e.suivi
+        if (qo == null && sat == null) return null
         val t = station.emetteurChoisi()
         val maintenant = horloge()
         // Who it is, as already known: a past contact, else what QRZ said while it was typed.
         val base = call.substringBefore('/').let { if (it.length < 3) call else it }
         val passes = store.load().filter { it.callsign.substringBefore('/') == base }.sortedByDescending { it.timeMs }
-        val (dl, ul) = frequencesAuRepos()
+        // On QO-100: its dish's aim, its sky frequencies, the mode of the signal tuned.
+        val ciel = if (qo != null) e.observateur?.let { fr.f4ioz.satcombo.domain.Qo100.pointage(it.latDeg, it.lonDeg) } else null
+        val (dl, ul) = if (qo != null) qo.descenteHz to qo.monteeHz else frequencesAuRepos()
+        val pos = e.position
         val c = LogEntry(
-            timeMs = maintenant, satName = sat.name, catnum = sat.catalogNumber,
-            azimuthDeg = pos?.azimuthDeg ?: 0.0, elevationDeg = pos?.elevationDeg ?: 0.0,
+            timeMs = maintenant, satName = qo?.satellite ?: sat!!.name, catnum = qo?.catnum ?: sat!!.catalogNumber,
+            azimuthDeg = if (qo != null) ciel?.azDeg ?: 0.0 else pos?.azimuthDeg ?: 0.0,
+            elevationDeg = if (qo != null) ciel?.elDeg ?: 0.0 else pos?.elevationDeg ?: 0.0,
             myLocator = e.locator, myGrids = mesCarres(), callsign = call, theirLocator = locator.trim().uppercase(),
             rstSent = rstEnvoye.trim(), rstRcvd = rstRecu.trim(), note = note.trim(),
             locatorOrigine = if (locator.isBlank()) "INCONNU" else if (fiche != null && locator.trim().equals(fiche.carre, true)) "QRZ" else "SAISI",
-            mode = mode(t),
+            mode = qo?.modeCarnet ?: mode(t),
             downlinkMhz = dl?.let { it / 1e6 } ?: 0.0, uplinkMhz = ul?.let { it / 1e6 } ?: 0.0,
             nom = passes.firstOrNull { it.nom.isNotBlank() }?.nom ?: fiche?.nom.orEmpty(),
             qth = passes.firstOrNull { it.qth.isNotBlank() }?.qth ?: fiche?.qth.orEmpty(),
