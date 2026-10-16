@@ -188,6 +188,7 @@ class DatvPc(
     private fun arreteFlux() {
         (listOf(ffmpeg, ffplay) + vlcs).forEach { p -> p?.let { runCatching { it.outputStream.close() }; it.destroy() } }
         ffmpeg = null; ffplay = null; vlcs.clear(); typesLecteurs = null
+        arreteSonTexte()
         enregistre(false)
     }
 
@@ -285,6 +286,7 @@ class DatvPc(
             enregistreur?.let { o -> runCatching { o.write(bloc) } }
             if (lecteursLocaux) {
                 if (ffmpeg == null) demarreLecteurs(gen)
+                if (sousTitres && ffmpeg != null && sonTexte?.enMarche != true && horloge() - essaiSonTexteMs >= 5000L) demarreSonTexte(gen)
                 if (!file.offer(bloc)) { file.poll(); file.offer(bloc) }
             }
             for (q in abonnes) if (!q.offer(bloc)) { q.poll(); q.offer(bloc) }
@@ -366,7 +368,7 @@ class DatvPc(
 
     private fun lecteurs(): List<OutputStream> {
         vlcs.removeAll { !it.isAlive }
-        return listOfNotNull(ffmpeg?.outputStream, ffplay?.outputStream) + vlcs.map { it.outputStream }
+        return listOfNotNull(ffmpeg?.outputStream, ffplay?.outputStream, sonTexte?.entree) + vlcs.map { it.outputStream }
     }
 
     /** The streams' types the players were started on. */
@@ -387,7 +389,35 @@ class DatvPc(
         typesLecteurs = types
         listOfNotNull(ffmpeg, ffplay).forEach { p -> runCatching { p.outputStream.close() }; p.destroy() }
         ffmpeg = null; ffplay = null
+        arreteSonTexte()
     }
+
+    // ------------------------------------------------------------ the sound for the subtitles
+
+    /** Where the sound goes as PCM (16 kHz mono) while [sousTitres] is on. */
+    @Volatile var ecouteSon: ((ShortArray, Int, Int) -> Unit)? = null
+
+    /** The sound decoded for the subtitles: started with the players' next packets, stopped at once when off. */
+    @Volatile var sousTitres = false
+        set(v) { field = v; if (!v) arreteSonTexte() }
+
+    @Volatile private var sonTexte: SonDatvPc? = null
+
+    @Synchronized
+    private fun demarreSonTexte(gen: Int) {
+        if (generation != gen || sonTexte?.enMarche == true || !sousTitres) return
+        // Gone (no sound track yet): tried again every 5 s, not on each packet.
+        val t = horloge()
+        if (t - essaiSonTexteMs < 5000L) return
+        essaiSonTexteMs = t
+        sonTexte?.arrete()
+        val e = ecouteSon ?: return
+        val ff = RenduPc.ffmpeg() ?: return
+        sonTexte = SonDatvPc(ff, e).takeIf { it.demarre() }
+    }
+    @Volatile private var essaiSonTexteMs = 0L
+
+    private fun arreteSonTexte() { sonTexte?.arrete(); sonTexte = null; essaiSonTexteMs = 0L }
 
     /** ffmpeg for the page's pictures, ffplay for the sound: started with the first packets, stopped with LongMynd. */
     @Synchronized

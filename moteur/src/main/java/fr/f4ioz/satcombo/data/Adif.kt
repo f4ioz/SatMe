@@ -160,7 +160,8 @@ object Adif {
             val d = Date(e.timeMs)
             sb.append(field("QSO_DATE", df.format(d)))
             sb.append(field("TIME_ON", tf.format(d)))
-            val satellite = e.satName != DATV_TERRESTRE
+            // A satellite contact only: a terrestrial DATV one (23 cm) has neither SAT_NAME nor PROP_MODE.
+            val satellite = e.satName.isNotBlank() && e.satName != DATV_TERRESTRE
             if (satellite) {
                 sb.append(field("SAT_NAME", e.satName))
                 sb.append(field("PROP_MODE", "SAT"))
