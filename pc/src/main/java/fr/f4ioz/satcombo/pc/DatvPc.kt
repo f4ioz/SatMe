@@ -56,6 +56,9 @@ class DatvPc(
     private val points = ArrayDeque<Pair<Int, Int>>()
     fun constellation(): List<Pair<Int, Int>> = synchronized(points) { points.toList() }
 
+    /** The station card and chat lines found in the stream (forgotten at each start). */
+    val carte = fr.f4ioz.satcombo.datv.LecteurCarte(horloge)
+
     /** The last picture made (JPEG) and its number. */
     @Volatile var image: ByteArray? = null; private set
 
@@ -115,6 +118,7 @@ class DatvPc(
         }.getOrElse { arreteIci(); return "LongMynd ne démarre pas : " + (it.message ?: "") }
         longmynd = p
         synchronized(points) { points.clear() }
+        carte.oublie()
         etat = EtatDatv(actif = true, depuis = horloge())
         thread(isDaemon = true, name = "satme-datv-etat") { litEtat(sEtat, gen) }
         thread(isDaemon = true, name = "satme-datv-ts") { litTs(sTs, gen) }
@@ -231,6 +235,7 @@ class DatvPc(
 
         fun bloc(bloc: ByteArray) {
             octets += bloc.size
+            runCatching { carte.bloc(bloc) }
             enregistreur?.let { o -> runCatching { o.write(bloc) } }
             if (lecteursLocaux) {
                 if (ffmpeg == null) demarreLecteurs(gen)
@@ -268,6 +273,7 @@ class DatvPc(
         client.demarre(r)?.let { return it }
         val gen = ++generation
         synchronized(points) { points.clear() }
+        carte.oublie()
         etat = EtatDatv(actif = true, depuis = horloge())
         thread(isDaemon = true, name = "satme-datv-noeud-etat") { suisNoeud(gen) }
         thread(isDaemon = true, name = "satme-datv-noeud-ts") { litTsNoeud(gen) }

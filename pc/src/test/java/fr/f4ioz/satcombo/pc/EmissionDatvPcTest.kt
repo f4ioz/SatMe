@@ -384,6 +384,37 @@ class EmissionDatvPcTest {
         f.delete()
         assertTrue(sortie, sortie.contains("service_name    : F4IOZ"))
         assertTrue(sortie, sortie.contains("h264"))
+        // The station card, through the whole DVB-S2 chain, in place of null packets.
+        val l = fr.f4ioz.satcombo.datv.LecteurCarte()
+        b.paquets.forEach { l.bloc(it) }
+        assertEquals("F4IOZ", l.carte?.indicatif)
+        assertEquals(2_409_750L, l.carte?.frequenceKhz)
+        assertEquals("QPSK 2/3", l.carte?.modcod)
+    }
+
+    @Test
+    fun chat_seulement_pendant_une_emission_et_pas_trop_vite() {
+        val p = FauxPluto().also { ouverts += it }
+        var t = 1_000_000L
+        val e = EmissionDatvPc(StockageMemoire(), File(System.getProperty("java.io.tmpdir"), "satme-test-datv"), { "F4IOZ" },
+            plutoHote = { "127.0.0.1" }, plutoPort = { p.port }, fabrique = TsSynthetique(50), horloge = { t })
+        e.frequenceKhz = 2_409_750L
+        // Typing never transmits: refused with no transmission running, and nothing started.
+        assertNotNull(e.dis("bonjour"))
+        assertEquals(0, p.connexions.get())
+        assertFalse(e.etat.emet)
+        assertNull(e.demarre(true, false))
+        assertNull(e.dis("bonjour"))
+        t += 500
+        assertNotNull(e.dis("trop vite"))
+        t += 2000
+        assertNotNull(e.dis("x".repeat(141)))
+        assertNull(e.dis("é".repeat(140)))
+        assertEquals(listOf("bonjour", "é".repeat(140)), e.dits().map { it.texte })
+        assertEquals(e.dits()[0].seq + 1, e.dits()[1].seq)
+        e.arrete()
+        t += 5000
+        assertNotNull(e.dis("après"))
     }
 
     companion object {

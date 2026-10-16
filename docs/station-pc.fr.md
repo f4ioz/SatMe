@@ -200,6 +200,16 @@ La carte **Émission** de l'onglet DATV envoie un signal DVB-S2 au transpondeur 
 
 **Réglages › Poste et rotor › ADALM-PLUTO** : le gain d'émission maximal, et *Couper l'oscillateur d'émission du Pluto quand SatMe s'en sert en réception* (décoché d'origine). Un Pluto allumé laisse tourner son oscillateur d'émission (2450 MHz d'origine) : coché, SatMe le coupe à chaque démarrage de la réception par le Pluto. Seul le code de l'émetteur écrit du côté émission du Pluto ; le récepteur ne le peut toujours pas.
 
+### Carte de visite et chat dans le flux
+
+Pendant une émission, SatMe glisse dans le flux de transport une **carte de visite** de la station, et le **chat** tapé dans la carte Émission (une ligne de 140 caractères au plus, une toutes les 2 s ; taper n'émet jamais rien : le chat ne passe que dans une émission déjà lancée). Ils prennent la place de paquets nuls : le débit ne change pas, l'image et le son non plus, et un récepteur qui ne les connaît pas les ignore. À la réception, l'onglet DATV montre la carte de la station reçue (drapeau, locator, distance et azimut, message, logiciel ; marquée si elle est déjà au carnet), ses lignes de chat en bulles, et **Noter le QSO** (QO-100, ou *DATV terrestre* hors de la bande large ; mode DATV ; la MER mesurée comme report). En recevant son propre signal, ses lignes se cochent *✓✓ reçu*. La carte se coupe dans *Carte de visite dans le flux*.
+
+**Le format**, pour qui voudrait le lire ou l'émettre :
+
+- **PID 0x1F00**, sections privées MPEG (ISO/IEC 13818-1, forme longue : `section_syntax_indicator` 1, `private_indicator` 1, CRC-32 MPEG-2 à la fin) ; une section par groupe de paquets, la première avec `payload_unit_start` et `pointer_field` 0, le dernier complété de 0xFF. La PMT n'est pas modifiée.
+- **table_id 0xE5 : carte** (`table_id_extension` 0, `version_number` change avec le contenu), répétée toutes les 2 s. **table_id 0xE6 : ligne de chat** (`table_id_extension` = numéro de séquence sur 16 bits), envoyée 5 fois à 1 s d'intervalle ; le récepteur dédoublonne par indicatif et séquence.
+- Charge utile : `SATM`, un octet de format (1), puis des champs TLV (étiquette 1 octet, longueur 1 octet, valeur UTF-8 de 255 octets au plus). Étiquettes : 0x01 indicatif (obligatoire), 0x02 locator, 0x03 nom, 0x04 QTH, 0x05 puissance, 0x06 antenne, 0x07 logiciel, 0x08 fréquence d'émission (kHz, en chiffres), 0x09 MODCOD, 0x0A débit de symboles (kS/s), 0x0B message, 0x20 texte du chat. Une étiquette inconnue se saute ; un octet de format ≥ 0x80 annonce une disposition incompatible : la section s'ignore.
+
 ## Encore sur le PC
 
 <p align="center">

@@ -22,6 +22,9 @@ import java.util.TimeZone
  */
 object Adif {
 
+    /** The "satellite" of a terrestrial DATV contact: no satellite fields for it. */
+    const val DATV_TERRESTRE = "DATV terrestre"
+
     /**
      * ADIF band for a frequency in MHz (lower case, no space). Out of band
      * returns empty rather than a wrong band: a missing field imports, a wrong
@@ -84,6 +87,7 @@ object Adif {
     fun modeOf(raw: String?): Pair<String, String> {
         val s = (raw ?: "").uppercase()
         return when {
+            s.contains("ATV") -> "ATV" to ""
             s.contains("USB") -> "SSB" to "USB"
             s.contains("LSB") -> "SSB" to "LSB"
             s.contains("SSB") -> "SSB" to ""
@@ -156,8 +160,11 @@ object Adif {
             val d = Date(e.timeMs)
             sb.append(field("QSO_DATE", df.format(d)))
             sb.append(field("TIME_ON", tf.format(d)))
-            sb.append(field("SAT_NAME", e.satName))
-            sb.append(field("PROP_MODE", "SAT"))
+            val satellite = e.satName != DATV_TERRESTRE
+            if (satellite) {
+                sb.append(field("SAT_NAME", e.satName))
+                sb.append(field("PROP_MODE", "SAT"))
+            }
             if (station.isNotBlank()) {
                 sb.append(field("STATION_CALLSIGN", station.uppercase()))
                 sb.append(field("OPERATOR", operateur.ifBlank { station }.uppercase()))
@@ -184,12 +191,12 @@ object Adif {
             }
             // Satellite azimuth and elevation at contact time. ADIF means them
             // for the station antenna — which, on satellites, points at the bird.
-            if (e.elevationDeg >= 0.0) {
+            if (satellite && e.elevationDeg >= 0.0) {
                 sb.append(field("ANT_AZ", "%.1f".format(Locale.US,
                     ((e.azimuthDeg % 360.0) + 360.0) % 360.0)))
                 sb.append(field("ANT_EL", "%.1f".format(Locale.US, e.elevationDeg)))
             }
-            sb.append(field("SAT_MODE", satMode(e.uplinkMhz, e.downlinkMhz)))
+            if (satellite) sb.append(field("SAT_MODE", satMode(e.uplinkMhz, e.downlinkMhz)))
             if (e.myLocator.isNotBlank()) sb.append(field("MY_GRIDSQUARE", e.myLocator))
             if (e.theirLocator.isNotBlank()) sb.append(field("GRIDSQUARE", e.theirLocator))
             // What the directory told us about the other station, so the remote

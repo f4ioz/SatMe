@@ -141,6 +141,36 @@ class CarnetPc(private val station: StationPc, val store: LogStore, private val 
         return c
     }
 
+    /**
+     * A DATV contact, now, from the station card received: on QO-100 (its
+     * wide band: [khz] the downlink received) or terrestrial; mode DATV, the
+     * MER we measure on its signal as the report given ([rapport]). Null
+     * without a callsign.
+     */
+    fun ajouteDatv(indicatif: String, locator: String, rapport: String, note: String, qo100: Boolean, khz: Long,
+                   nom: String = "", qth: String = ""): LogEntry? {
+        val call = indicatif.trim().uppercase()
+        if (call.isEmpty()) return null
+        val e = station.etat.value
+        val ciel = if (qo100) e.observateur?.let { fr.f4ioz.satcombo.domain.Qo100.pointage(it.latDeg, it.lonDeg) } else null
+        val passes = historique(call)
+        val mhz = khz / 1000.0
+        val c = LogEntry(
+            timeMs = horloge(), satName = if (qo100) fr.f4ioz.satcombo.domain.TraficQo100.NOM else fr.f4ioz.satcombo.data.Adif.DATV_TERRESTRE,
+            catnum = if (qo100) fr.f4ioz.satcombo.domain.Qo100.NORAD else 0,
+            azimuthDeg = ciel?.azDeg ?: 0.0, elevationDeg = ciel?.elDeg ?: 0.0,
+            myLocator = e.locator, myGrids = mesCarres(), callsign = call, theirLocator = locator.trim().uppercase(),
+            rstSent = rapport.trim(), rstRcvd = "", note = note.trim(),
+            locatorOrigine = if (locator.isBlank()) "INCONNU" else "SAISI", mode = "DATV",
+            // QO-100: the downlink received, the uplink 8089.5 MHz below; terrestrial: the one frequency.
+            downlinkMhz = mhz, uplinkMhz = if (qo100 && mhz > 0) mhz - fr.f4ioz.satcombo.domain.Qo100.DECALAGE_HZ / 1e6 else mhz,
+            nom = nom.trim().ifBlank { passes.firstOrNull { it.nom.isNotBlank() }?.nom.orEmpty() },
+            qth = qth.trim().ifBlank { passes.firstOrNull { it.qth.isNotBlank() }?.qth.orEmpty() })
+        store.add(c); oublieMemoire()
+        annonce(c)
+        return c
+    }
+
     /** The mode of the transmitter followed now, when it is [catnum]'s (a contact typed afterwards on it). */
     fun modeSuivi(catnum: Int): String? =
         if (station.etat.value.suivi?.catalogNumber == catnum) station.emetteurChoisi()?.let { mode(it) } else null
