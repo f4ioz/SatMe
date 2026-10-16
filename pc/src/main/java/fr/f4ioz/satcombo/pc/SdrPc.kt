@@ -291,6 +291,12 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
     fun demandePanorama() { panoramaDemandeMs = horloge() }
     /** The dongle's sound while on QO-100 ([Dsp.AUDIO_RATE]): LEILA listened for. */
     @Volatile var ecouteQo100: ((ShortArray, Int) -> Unit)? = null
+    /**
+     * The raw IQ while on QO-100, for the signal classifier (8-bit bytes or
+     * 16-bit shorts, the count of values, the PLL): set by [SignauxQo100Pc],
+     * which returns at once unless a page asked lately.
+     */
+    @Volatile var iqQo100: ((ByteArray?, ShortArray?, Int, Long) -> Unit)? = null
     /** The dongle's sound for « Phonie → texte » ([Dsp.AUDIO_RATE]), with the squelch's gate when one is set. */
     @Volatile var ecouteVoix: ((ShortArray, Int, Boolean?) -> Unit)? = null
 
@@ -303,6 +309,11 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
      */
     fun axeQo100(): Pair<Double, Double>? {
         val pll = panoramaPllHz.takeIf { it > 0 && _etat.value.actif } ?: return null
+        return axeQo100(pll)
+    }
+
+    /** The same axis for a stream read with the PLL at [pll]. */
+    fun axeQo100(pll: Long): Pair<Double, Double> {
         val q = station.qo100.etat.value
         val centre = station.depuisCle(pll).toDouble() - q.calageHz
         val conv = station.convRx()
@@ -519,6 +530,7 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
                 if (pourMeteor) meteor?.recepteur?.let { m ->
                     if (iq16 != null) m.iq16(iq16, n, (fine + decalageHz).toDouble()) else m.iq(iq, n, (fine + decalageHz).toDouble())
                 }
+                iqQo100?.let { if (pourQo100()) it(if (iq16 == null) iq else null, iq16, n, pll) }
                 val maintenant = horloge()
                 // Still for METEOR? (QO-100 set on the dongle, another satellite followed: the sound back.)
                 if (pourMeteor && maintenant - dernierEtat >= 200L) quitteMeteorSiBesoin()
