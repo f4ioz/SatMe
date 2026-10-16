@@ -162,10 +162,14 @@ fun main(args: Array<String>) {
         } },
         nom = { station.settings.plancheNom }, logiciel = "SatMe-PC " + versionPc())
     sdr.emissionPluto = { emission.etat.emet }
+    // Text and the mark over the transmitted picture; its pictures and videos chosen from the page.
+    emission.incrustation = IncrustationDatvPc(station.stockage)
+    val fichiersDatv = FichiersDatvPc(File(dossier, "datv-sources"), File(dossier, "tmp/vignettes"))
     portee.launch { while (true) { runCatching { emission.tic() }; kotlinx.coroutines.delay(1000) } }
     val serveur = ServeurPc(station, port, reseau, carnet, son, journalWeb, ImportPc(station, carnet, journal), sdr, videoSked, telephone, appairage, datv,
         PlancheWebPc(station, son, dossier), kiss, sauvegarde, MirePc(File(dossier, "exports")), diffusion, qo100, lien, phonie, emission, trafic)
     serveur.textesDatv = textesDatv
+    serveur.fichiersDatv = fichiersDatv
     serveur.demarre()
     // QO-100 received when SatMe-PC stopped: taken back only when chosen in Réglages (reception only).
     Thread({ runCatching { trafic.repriseAuDemarrage() } }, "satme-qo100-reprise").apply { isDaemon = true; start() }

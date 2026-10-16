@@ -62,6 +62,7 @@ object PagesPcTelephone {
     private fun stockageFt8(vm: fr.f4ioz.satcombo.MainViewModel) = fr.f4ioz.satcombo.data.stockage(vm.getApplication(), "satcombo_ft8")
 
     private fun json(o: Any) =ReponseWeb("200 OK", "application/json; charset=utf-8", o.toString().toByteArray(Charsets.UTF_8))
+    private const val PAS_D_EMISSION_DATV = "pas d'émission DATV depuis le téléphone : c'est SatMe-PC qui émet"
     private val NON = ReponseWeb("404 Not Found", "application/json", "{\"ok\":false}".toByteArray())
     private val OK get() = JSONObject().put("ok", true)
 
@@ -139,6 +140,9 @@ object PagesPcTelephone {
                     json(ApiMeteor.json(r, vm.meteorAuto(), vm.meteorCotes(), d.running, d.error.orEmpty(), vm.estMeteor(),
                         m.dernierEnregistre.orEmpty(), vm.meteorProchainPassage(48), fr.f4ioz.satcombo.meteor.MeteorHub.shots(vm.getApplication())))
                 }
+                // ---- DATV transmission's sources: SatMe-PC only (the phone sends no DATV)
+                "/api/datv/sources/liste", "/api/datv/sources/envois", "/api/datv/emission/incrustation" ->
+                    json(JSONObject().put("ok", false).put("erreur", PAS_D_EMISSION_DATV))
                 "/api/meteor/apercu.png" -> {
                     val b = fr.f4ioz.satcombo.meteor.MeteorHub.etat.value.apercu ?: return NON
                     val o = java.io.ByteArrayOutputStream()
@@ -530,6 +534,8 @@ object PagesPcTelephone {
             "/api/datv/arrete" -> { vm.datv.arrete(); OK }
             "/api/datv/cale" -> { vm.datv.cale(); OK }
             "/api/datv/noeud" -> { vm.datv.rejoins(p("adresse").trim(), p("code").trim()); OK }
+            "/api/datv/sources/envoi", "/api/datv/sources/supprime", "/api/datv/emission/apercu", "/api/datv/emission/incrustation" ->
+                JSONObject().put("ok", false).put("erreur", PAS_D_EMISSION_DATV)
             "/api/datv/enregistre", "/api/datv/vlc", "/api/datv/chemin" ->
                 JSONObject().put("ok", false).put("erreur", "sur le téléphone, l'image et le son sont sur son écran DATV")
             // ---- the TH-D72 panel: the gestures of the phone's

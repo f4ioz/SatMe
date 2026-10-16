@@ -108,6 +108,8 @@ class EmissionDatvPc(
         val indicatif: String,
         val hevc: Boolean,
         val son: Boolean,
+        /** Text and the mark over the picture (see [IncrustationDatvPc]); null: none, the command unchanged. */
+        val incrustation: IncrustationDatvPc.IncrustationTs? = null,
     )
 
     // ------------------------------------------------------------ settings (parameters only)
@@ -390,7 +392,8 @@ class EmissionDatvPc(
         // The station card and the chat in place of null packets: the rate unchanged.
         val ins = if (carteOn) InserteurCarte(horloge).also { it.carte = carteStation(khz, m) } else null
         val f = FluxTs(maxOf(64, (debitTs / 1504 * 2).toInt()), ins)
-        val pts = ParametresTs(debitTs, source, img, camera, d.indicatif.trim().uppercase(), hevc, son)
+        val inc = runCatching { incrustation?.pour(debitTs, source, d.indicatif, locator(), File(dossierImages, "incrustation-datv.png")) }.getOrNull()
+        val pts = ParametresTs(debitTs, source, img, camera, d.indicatif.trim().uppercase(), hevc, son, inc)
         val p = runCatching { fabrique.demarre(pts) }
             .getOrElse { return "ffmpeg ne démarre pas : " + (it.message ?: "") }
         processus = p; flux = f
@@ -454,7 +457,10 @@ class EmissionDatvPc(
             if (m == modcodEnCours) return null
             gen = generation
             val debitTs = m.debitTs(srEnCours * 1000.0).toLong()
-            pts = (parametresEnCours ?: return "paramètres inconnus").copy(debitTs = debitTs)
+            val avant = parametresEnCours ?: return "paramètres inconnus"
+            // The overlay drawn again: the picture's size follows the new stream rate.
+            val inc = avant.incrustation?.let { runCatching { incrustation?.pour(debitTs, avant.source, avant.indicatif, locator(), File(dossierImages, "incrustation-datv.png")) }.getOrNull() }
+            pts = avant.copy(debitTs = debitTs, incrustation = inc)
             f = FluxTs(maxOf(64, (debitTs / 1504 * 2).toInt()), inserteur)
             p = runCatching { fabrique.demarre(pts) }.getOrElse { return "ffmpeg ne démarre pas : " + (it.message ?: "") }
             commutation = true
@@ -572,6 +578,46 @@ class EmissionDatvPc(
         return f
     }
 
+    // ------------------------------------------------------------ overlay and preview (nothing transmitted)
+
+    /** Text and the mark over the picture (set before the first start). */
+    @Volatile var incrustation: IncrustationDatvPc? = null
+
+    /** The last preview's picture. */
+    val fichierApercu: File get() = File(dossierImages, "apercu-datv.jpg")
+
+    /**
+     * One frame of what a start would send now (source, overlay), as a JPEG
+     * in [fichierApercu], made by ffmpeg from the same command: no radio
+     * involved. Null once made, else why not.
+     */
+    fun apercu(ff: String? = RenduPc.ffmpeg(), delaiS: Long = 20): String? {
+        if (ff == null) return "ffmpeg introuvable (" + OutilsPc.conseil("ffmpeg") + ")"
+        val src = source
+        val img = when (src) {
+            "image" -> File(image).takeIf { it.isFile } ?: return "image introuvable : " + image.ifBlank { "(aucune)" }
+            "video" -> File(video).takeIf { it.isFile } ?: return "vidéo introuvable : " + video.ifBlank { "(aucune)" }
+            "camera" -> null.also { if (camera.isBlank()) return "aucune caméra choisie" }
+            else -> mire()
+        }
+        val ts = debitTs()
+        val call = indicatif().trim().uppercase()
+        val inc = runCatching { incrustation?.pour(ts, src, call, locator(), File(dossierImages, "incrustation-apercu.png"), direct = false) }.getOrNull()
+        val sortie = fichierApercu
+        sortie.delete()
+        val c = IncrustationDatvPc.commandeApercu(commande(ff, ParametresTs(ts, src, img, camera, call, hevc, son, inc)), sortie)
+        return runCatching {
+            val pr = ProcessBuilder(c).redirectErrorStream(true).start()
+            runCatching { pr.outputStream.close() }
+            val lu = StringBuilder()
+            val t = thread(isDaemon = true, name = "satme-datv-apercu") { runCatching { lu.append(pr.inputStream.bufferedReader().readText()) } }
+            if (!pr.waitFor(delaiS, TimeUnit.SECONDS)) { pr.destroyForcibly(); return "ffmpeg ne répond pas" }
+            t.join(1000)
+            if (pr.exitValue() != 0 || !sortie.isFile) "ffmpeg : " + synchronized(lu) { lu.toString() }.lines().lastOrNull { it.isNotBlank() }.orEmpty().take(200)
+            else null
+        }.getOrElse { "ffmpeg : " + (it.message ?: "erreur") }
+    }
+
     /** The status for the page. */
     fun json(): JSONObject {
         val px = tx
@@ -673,17 +719,20 @@ class EmissionDatvPc(
          * stream at exactly [p]'s rate (`-muxrate`, null packets padding it
          * out), the callsign as the service's name and provider.
          */
+        /** The picture's size for a transport stream of [ts] bit/s. */
+        fun taille(ts: Long): Pair<Int, Int> = when {
+            ts < 250_000 -> 426 to 240
+            ts < 700_000 -> 640 to 360
+            ts < 1_600_000 -> 960 to 540
+            else -> 1280 to 720
+        }
+
         fun commande(ff: String, p: ParametresTs): List<String> {
             val ts = p.debitTs
             val audio = if (p.son) 32_000L else 0L
             // What the video may take: the stream less the audio, the tables and a margin for the multiplexer.
             val video = ((ts - audio) * 0.78 - 8_000).toLong().coerceAtLeast(20_000L)
-            val (w, h) = when {
-                ts < 250_000 -> 426 to 240
-                ts < 700_000 -> 640 to 360
-                ts < 1_600_000 -> 960 to 540
-                else -> 1280 to 720
-            }
+            val (w, h) = taille(ts)
             val fixe = p.source == "mire" || p.source == "image"
             val anime = p.source == "animee"
             val ips = if (fixe) 10 else 25
@@ -701,11 +750,17 @@ class EmissionDatvPc(
             val entreeSon = if (anime) 2 else 1
             if (p.son && p.source != "video") l += listOf("-re", "-f", "lavfi", "-i",
                 if (anime) "sine=frequency=1000:beep_factor=4:sample_rate=48000" else "anullsrc=r=48000:cl=mono")
-            if (anime) l += listOf("-filter_complex", "[0:v]$cadre[f];[f][1:v]overlay=x=(W-w)/2+(W-w)/2.2*sin(t*0.8):y=H/14,format=yuv420p[v]",
+            // The overlay: the last input, laid over the picture last.
+            val inc = p.incrustation
+            val entreeInc = 1 + (if (anime) 1 else 0) + (if (p.son && p.source != "video") 1 else 0)
+            if (inc != null) l += IncrustationDatvPc.entree(inc)
+            val anim = "[0:v]$cadre[f];[f][1:v]overlay=x=(W-w)/2+(W-w)/2.2*sin(t*0.8):y=H/14,format=yuv420p"
+            if (anime) l += listOf("-filter_complex", if (inc == null) "$anim[v]" else IncrustationDatvPc.filtre(anim, entreeInc, w, h),
                 "-map", "[v]")
+            else if (inc != null) l += listOf("-filter_complex", IncrustationDatvPc.filtre("[0:v]$cadre", entreeInc, w, h), "-map", "[v]")
             else l += listOf("-map", "0:v:0")
             if (p.son) l += listOf("-map", if (p.source == "video") "0:a:0?" else "$entreeSon:a:0")
-            if (!anime) l += listOf("-vf", "$cadre,format=yuv420p")
+            if (!anime && inc == null) l += listOf("-vf", "$cadre,format=yuv420p")
             l += listOf("-r", ips.toString())
             l += if (p.hevc) listOf("-c:v", "libx265", "-preset", "veryfast", "-tune", "zerolatency", "-x265-params", "log-level=error:keyint=${ips * 2}:repeat-headers=1")
                 else listOf("-c:v", "libx264", "-preset", "veryfast", "-tune", "zerolatency", "-g", (ips * 2).toString())
@@ -724,6 +779,8 @@ class EmissionDatvPc(
             val ff = RenduPc.ffmpeg() ?: throw java.io.IOException("ffmpeg introuvable (" + OutilsPc.conseil("ffmpeg") + ")")
             val journal = File(System.getProperty("java.io.tmpdir"), "satme-datv-tx-ffmpeg.log")
             val pr = ProcessBuilder(commande(ff, p)).redirectError(journal).start()
+            // The time over the picture: a fresh overlay into ffmpeg's input, until it stops.
+            p.incrustation?.takeIf { it.direct }?.let { inc -> thread(isDaemon = true, name = "satme-datv-incrustation") { inc.alimente(pr.outputStream) { pr.isAlive } } }
             return object : Processus {
                 override val sortie: InputStream = pr.inputStream
                 override val vivant: Boolean get() = pr.isAlive
