@@ -471,13 +471,13 @@ class EmissionDatvPc(
                 "video" -> l += listOf("-re", "-stream_loop", "-1", "-i", p.image!!.path)
                 else -> l += listOf("-re", "-loop", "1", "-framerate", ips.toString(), "-i", p.image!!.path)
             }
-            // The animated card: a moving test picture (its own counter turning) over the test card, the callsign still in sight.
+            // The animated card: a moving test picture (its own counter turning) over the card's colour bars, the callsign left in sight.
             if (anime) l += listOf("-re", "-f", "lavfi", "-i", "testsrc2=size=" + (w / 3 / 2 * 2) + "x" + (h / 3 / 2 * 2) + ":rate=25")
             // The sound: the file's own, a beep each second with the animated card, else silence.
             val entreeSon = if (anime) 2 else 1
             if (p.son && p.source != "video") l += listOf("-re", "-f", "lavfi", "-i",
                 if (anime) "sine=frequency=1000:beep_factor=4:sample_rate=48000" else "anullsrc=r=48000:cl=mono")
-            if (anime) l += listOf("-filter_complex", "[0:v]$cadre[f];[f][1:v]overlay=x=(W-w)/2+(W-w)/2.2*sin(t*0.8):y=H-h-H/12,format=yuv420p[v]",
+            if (anime) l += listOf("-filter_complex", "[0:v]$cadre[f];[f][1:v]overlay=x=(W-w)/2+(W-w)/2.2*sin(t*0.8):y=H/14,format=yuv420p[v]",
                 "-map", "[v]")
             else l += listOf("-map", "0:v:0")
             if (p.son) l += listOf("-map", if (p.source == "video") "0:a:0?" else "$entreeSon:a:0")
