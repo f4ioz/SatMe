@@ -210,29 +210,54 @@ class TextesDatvPcTest {
 
     @Test fun `la preparation agrandit et met le texte en sombre`() {
         val img = ImageIO.read(image("EA4ABC").inputStream())
-        val vues = TextesDatvPc.prepare(img)
-        assertEquals(listOf(11, 6), vues.map { it.second })
-        val tout = vues[0].first
+        val tout = TextesDatvPc.net(img, 2)
         assertEquals(1280, tout.width); assertEquals(BufferedImage.TYPE_BYTE_GRAY, tout.type)
         // The dark background made light.
         assertTrue(tout.raster.getSample(4, 4, 0) > 200)
+        // One line alone: enlarged, two levels only, black text on white whatever its colours.
+        val carte = MirePc.carte(640, 360, "F4IOZ", "JN18FS", "DATV")
+        val l = TextesDatvPc.ligne(carte, TextesDatvPc.Companion.Ligne(150, 236, 220, 40, "FAIOZ JN18FS"))
+        assertTrue(l.height >= 64 * 1.3); assertEquals(BufferedImage.TYPE_BYTE_GRAY, l.type)
+        val px = IntArray(l.width * l.height).also { l.raster.getSamples(0, 0, l.width, l.height, 0, it) }
+        assertTrue(px.all { it == 0 || it == 255 })
+        val noirs = px.count { it == 0 }
+        assertTrue("$noirs", noirs in px.size / 50..px.size / 3)
+        assertEquals(255, l.raster.getSample(0, 0, 0))
+        // The lines of a read: its words with two signs or more, grouped, in picture pixels.
+        val tsv = "level\tpage_num\tblock_num\tpar_num\tline_num\tword_num\tleft\ttop\twidth\theight\tconf\ttext\n" +
+            "5\t1\t1\t1\t1\t1\t320\t520\t120\t50\t90\tFAIOZ\n5\t1\t1\t1\t1\t2\t470\t520\t200\t52\t90\tJN18FS\n" +
+            "5\t1\t2\t1\t1\t1\t20\t20\t30\t30\t60\t=\n"
+        val lignes = TextesDatvPc.lignes(tsv, 2, 640, 360)
+        assertEquals(listOf(TextesDatvPc.Companion.Ligne(160, 260, 175, 26, "FAIOZ JN18FS")), lignes)
     }
 
     @Test fun `un faux tesseract lu deux fois de suite`() {
         val args = File(dossier, "args.txt")
         val prog = File(dossier, "tesseract").apply {
-            writeText("#!/bin/sh\necho \"$@\" >> '${args.path}'\ntest -s \"$1\" || exit 3\necho 'CQ EA4ABC'\necho 'JN11 10491.500 1500KS'\n")
+            // The whole picture asked for its words' boxes; the lines alone, as text.
+            val tsv = "level\\tpage_num\\tblock_num\\tpar_num\\tline_num\\tword_num\\tleft\\ttop\\twidth\\theight\\tconf\\ttext\\n" +
+                "5\\t1\\t1\\t1\\t1\\t1\\t100\\t50\\t60\\t40\\t90\\tCQ\\n5\\t1\\t1\\t1\\t1\\t2\\t180\\t50\\t200\\t40\\t90\\tEA4ABC\\n" +
+                "5\\t1\\t2\\t1\\t1\\t1\\t100\\t600\\t200\\t40\\t90\\tFAIOZ\\n"
+            writeText("#!/bin/sh\necho \"$@\" >> '${args.path}'\ntest -s \"$1\" || exit 3\n" +
+                "case \"$*\" in *tsv*) printf '$tsv' ;; *) echo 'CQ EA4ABC'; echo 'FAIOZ JN11 10491.500 1500KS' ;; esac\n")
             setExecutable(true)
         }
         val jpeg = image("EA4ABC")
-        var service = "EA4ABC"
+        var service = "F4IOZ"
         val src = TextesDatvPc.Source({ true }, { true }, { jpeg }, { service }, { 10_491_500L }, {})
         val t = TextesDatvPc(StockageMemoire(), src, null, { horloge }, outil = { prog.path }, periodeMs = 3000)
         t.ocr = true
         t.tic()
         assertTrue(attend(5000) { t.lectures == 1L && !t.json().getBoolean("occupe") })
-        // One read only: nothing shown yet.
-        assertEquals(0, t.json().getJSONArray("lus").length())
+        // One read only: only the one the service name vouches for (FAIOZ read, F4IOZ meant).
+        val un = t.json()
+        assertEquals(1, un.getJSONArray("lus").length())
+        un.getJSONArray("lus").getJSONObject(0).let { lu ->
+            assertEquals("F4IOZ", lu.getString("c")); assertEquals("service", lu.getString("garant")); assertEquals("FAIOZ", lu.getString("mot"))
+            assertTrue(lu.getBoolean("accord"))
+        }
+        assertTrue(un.getString("texte"), un.getString("texte").contains("F4IOZ JN11"))
+        assertFalse(un.getString("texte").contains("FAIOZ"))
         t.tic()
         Thread.sleep(100)
         assertEquals(1L, t.lectures)  // not before its period
@@ -241,19 +266,23 @@ class TextesDatvPcTest {
         assertTrue(attend(5000) { t.lectures == 2L && !t.json().getBoolean("occupe") })
         val j = t.json()
         val lu = j.getJSONArray("lus").getJSONObject(0)
-        assertEquals("EA4ABC", lu.getString("c")); assertEquals("ES", lu.getString("drapeau")); assertTrue(lu.getBoolean("accord"))
+        assertEquals(listOf("EA4ABC", "F4IOZ"), (0 until 2).map { j.getJSONArray("lus").getJSONObject(it).getString("c") }.sorted())
+        val ea = (0 until 2).map { j.getJSONArray("lus").getJSONObject(it) }.first { it.getString("c") == "EA4ABC" }
+        assertEquals("ES", ea.getString("drapeau")); assertFalse(ea.getBoolean("accord")); assertEquals("", ea.getString("garant"))
         assertTrue(j.getBoolean("qo100")); assertTrue(j.getString("texte").contains("CQ EA4ABC"))
-        service = "SatMe"
-        assertFalse(t.json().getJSONArray("lus").getJSONObject(0).getBoolean("accord"))
-        // Each read: the whole picture (sparse), the bands (a block), callsign characters only.
+        service = "EA4ABC"
+        assertTrue(t.json().getJSONArray("lus").let { a -> (0 until a.length()).map { a.getJSONObject(it) } }.first { it.getString("c") == "EA4ABC" }.getBoolean("accord"))
+        assertTrue(lu.has("lectures"))
+        // Each read: the whole picture (sparse, with the boxes), its lines alone twice (a block each), callsign characters only.
         val l = args.readLines()
-        assertEquals(4, l.size)
-        assertTrue(l[0], l[0].contains("stdout --psm 11 -c tessedit_char_whitelist=" + TextesDatvPc.LISTE))
-        assertTrue(l[1].contains("--psm 6"))
+        assertEquals(6, l.size)
+        assertTrue(l[0], l[0].contains("stdout --oem 1 --psm 11 -c tessedit_char_whitelist=" + TextesDatvPc.LISTE))
+        assertTrue(l[0], l[0].endsWith("tsv"))
+        assertTrue(l[1].contains("--psm 6")); assertFalse(l[1].contains("tsv")); assertTrue(l[2].contains("--psm 6"))
         // Off: forgotten, nothing read.
         t.ocr = false
         horloge += 3000; t.tic(); Thread.sleep(100)
-        assertEquals(4, args.readLines().size)
+        assertEquals(6, args.readLines().size)
         assertEquals(0, t.json().getJSONArray("lus").length())
     }
 

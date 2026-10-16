@@ -3392,13 +3392,14 @@ async function ticTextesDatv() {
     (j.occupe ? 'lecture… · ' : '') + j.lectures + ' lecture(s)' + (j.texte ? ' · lu : « ' + j.texte + ' »' : '') + (j.erreur ? ' · ' + j.erreur : ''));
   if (!j.ocr && !j.outil) txt('dt-ocr-etat', 'tesseract (facultatif) : ' + j.conseil);
   const lus = j.ocr ? j.lus : [];
-  g('dt-lus').innerHTML = lus.map((l, i) => '<div class="dt-lu' + (l.accord ? ' sur' : '') + '"' + (i ? ' style="opacity:.7"' : '') + '>' +
+  g('dt-lus').innerHTML = lus.map((l, i) => '<div class="dt-lu' + (l.accord || l.garant ? ' sur' : '') + '"' + (i ? ' style="opacity:.7"' : '') + '>' +
     (i ? '' : '<span class="petit">Indicatif lu dans l’image : </span>') + '<b>' + esc(l.c) + '</b> ' + (l.drapeau ? f8Drapeau(l.drapeau) + ' ' : '') +
-    '<span class="petit">' + esc(l.pays || '') + ' · lu ' + l.lectures + ' fois de suite' + (l.accord ? ' · <span style="color:var(--vert)">= nom du service, très probable</span>' : '') + '</span> ' +
+    '<span class="petit">' + esc(l.pays || '') + ' · lu ' + l.lectures + ' fois de suite' + (l.mot ? ' (écrit « ' + esc(l.mot) + ' » par la lecture)' : '') +
+    (l.accord || l.garant ? ' · <span style="color:var(--vert)">' + ({ carte: '= carte de la station', carnet: 'déjà au carnet', moi: '= ton indicatif' }[l.garant] || '= nom du service') + ', très probable</span>' : '') + '</span> ' +
     '<button onclick="dNote(\'' + esc(l.c) + '\',\'\',\'\')">Noter le QSO</button></div>').join('');
   const b = g('d-lu'), l0 = lus[0];
   b.hidden = !(l0 && D && D.actif);
-  if (l0) { b.innerHTML = esc(l0.c) + (l0.drapeau ? ' ' + f8Drapeau(l0.drapeau) : ''); b.className = 'd-lu' + (l0.accord ? ' sur' : ''); }
+  if (l0) { b.innerHTML = esc(l0.c) + (l0.drapeau ? ' ' + f8Drapeau(l0.drapeau) : ''); b.className = 'd-lu' + (l0.accord || l0.garant ? ' sur' : ''); }
 }
 setInterval(() => ticTextesDatv(), 1000);
 // Under the picture: the last two overs (a minute at most), big, with their language's flag.

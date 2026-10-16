@@ -53,6 +53,88 @@ class IndicatifsImageTest {
         v.oublie(); assertTrue(v.confirmes().isEmpty())
     }
 
+    // ------------------------------------------------------------------ look-alike signs
+
+    private val f4ioz = IndicatifsImage.Connus(service = "F4IOZ")
+
+    @Test fun `FAIOZ avec le service F4IOZ devient F4IOZ tout de suite`() {
+        val l = IndicatifsImage.lis("SM A FAIOZ JN18FS DATV 1280X720", f4ioz).single()
+        assertEquals("F4IOZ", l.indicatif); assertEquals("FAIOZ", l.mot)
+        assertEquals(IndicatifsImage.Garant.SERVICE, l.garant); assertEquals(1, l.corrections)
+        // Shown from the first read.
+        val v = VoteIndicatifs()
+        val lus = IndicatifsImage.lis("FAIOZ JN18FS", f4ioz)
+        assertEquals(listOf("F4IOZ"), v.lecture(lus.map { it.indicatif }, 1000, lus.filter { it.garant != null }.map { it.indicatif }))
+        assertEquals("F4IOZ JN18FS", IndicatifsImage.corrige("FAIOZ JN18FS", lus))
+        // Two signs swapped, a /P kept, any voucher: the strongest is named.
+        assertEquals("F4IOZ/P", IndicatifsImage.lis("FAI0Z/P", f4ioz).single().indicatif)
+        val tous = IndicatifsImage.Connus(carte = "EA4ABC", carnet = listOf("G4XYZ", "F4IOZ"), moi = "F4IOZ")
+        assertEquals(IndicatifsImage.Garant.CARTE, IndicatifsImage.lis("EAAABC", tous).single().garant)
+        assertEquals(IndicatifsImage.Garant.CARNET, IndicatifsImage.lis("G4XY2", tous).single().garant)
+        assertEquals(IndicatifsImage.Garant.CARNET, IndicatifsImage.lis("FAIOZ", tous).single().garant)
+        assertEquals(IndicatifsImage.Garant.MOI, IndicatifsImage.lis("FAIOZ", IndicatifsImage.Connus(moi = "F4IOZ")).single().garant)
+        // Read right, vouched for too.
+        assertEquals(IndicatifsImage.Garant.SERVICE, IndicatifsImage.lis("F4IOZ", f4ioz).single().garant)
+        // Not look-alikes, or too many: nothing vouched.
+        assertTrue(IndicatifsImage.lis("FXIOZ", f4ioz).isEmpty())
+        assertNull(IndicatifsImage.lis("FA1O2", f4ioz).firstOrNull { it.garant != null })
+    }
+
+    @Test fun `FAIOZ seul devient F4IOZ par le vote`() {
+        val l = IndicatifsImage.lis("FAIOZ JN18FS").single()
+        assertEquals("F4IOZ", l.indicatif); assertNull(l.garant)
+        val v = VoteIndicatifs()
+        assertTrue(v.lecture(listOf(l.indicatif), 1000).isEmpty())
+        assertEquals(listOf("F4IOZ"), v.lecture(IndicatifsImage.candidats("FAIOZ"), 4000))
+        // The other look-alikes the same way.
+        assertEquals(listOf("EA4ABC"), IndicatifsImage.candidats("EAAABC"))
+        assertEquals(listOf("SP5XYZ"), IndicatifsImage.candidats("SPSXYZ"))
+        assertEquals(listOf("G4XYZ"), IndicatifsImage.candidats("GAXYZ"))
+        assertEquals(listOf("F4IOZ"), IndicatifsImage.candidats("F4I0Z"))
+        assertEquals(listOf("G4XYZ/P"), IndicatifsImage.candidats("GAXYZ/P"))
+        // Not in a sentence, nor written in small letters.
+        assertTrue(IndicatifsImage.lis("CQ CQ FROM THE GAXYZ STATION").isEmpty())
+        assertTrue(IndicatifsImage.lis("Kayak Gaxyz").isEmpty())
+        assertEquals(listOf("G4XYZ"), IndicatifsImage.candidats("Gaxyz", IndicatifsImage.Connus(carnet = listOf("G4XYZ"))))
+    }
+
+    @Test fun `un signe lu deux fois et le meme mot lu deux facons`() {
+        // A sign read twice (both look-alikes come out), the 9 read Q.
+        assertEquals(listOf("SP5XYZ"), IndicatifsImage.candidats("SPS5XYZ"))
+        assertEquals(listOf("F4IOZ"), IndicatifsImage.candidats("F4AIOZ"))
+        assertEquals(listOf("G4XYZ"), IndicatifsImage.candidats("GA4XYZ"))
+        assertEquals(listOf("9A1AA"), IndicatifsImage.candidats("9QA1AA"))
+        assertEquals(listOf("9A1AA"), IndicatifsImage.candidats("QA1AA"))
+        assertEquals(IndicatifsImage.Garant.SERVICE, IndicatifsImage.lis("F4AIOZ", f4ioz).single().garant)
+        // One read, several views of one line: the better reading only.
+        assertEquals(listOf("F/G4ABC"), IndicatifsImage.candidats("F/G4ABC JN18FS\nFIG4ABC JN18FS\nF/GA4ABC JN18FS"))
+        assertEquals(listOf("SP5XYZ"), IndicatifsImage.candidats("SP5XYZ JN18FS\nSPS5XYZ JN1I8FS"))
+        // Real callsigns of the usual shape stay as read.
+        for (c in listOf("KB1ABC", "SM0ABCD", "EA4ABC", "OH2XYZ", "VK2ABC", "9A1AA", "DL1ABC/P", "F/G4ABC", "G0ABC", "2E0ABC", "M0XYZ")) {
+            assertEquals(c, listOf(c), IndicatifsImage.candidats(c))
+        }
+    }
+
+    @Test fun `jamais un mot sans chiffre ni un mot courant`() {
+        for (m in listOf("FAIOZ", "SATME", "DATV", "HELLO", "CAMERA", "VIDEO", "TEST", "STATION", "BONJOUR", "LIVE", "QO100", "DVBS2",
+                "1500KS", "10GHZ", "2400MHZ", "H265", "AUDIO", "SIGNAL", "IMAGE", "STEREO", "MPEG", "PLUTO", "LONGMYND")) {
+            assertNull(m, IndicatifsImage.plausible(m))
+            if (m != "FAIOZ") assertTrue(m, IndicatifsImage.lis(m).isEmpty())
+            assertTrue(m, IndicatifsImage.lis(m, f4ioz).all { it.indicatif == "F4IOZ" })
+        }
+        // FAIOZ itself is never shown.
+        assertFalse(IndicatifsImage.candidats("FAIOZ", f4ioz).contains("FAIOZ"))
+        assertFalse(IndicatifsImage.candidats("FAIOZ").contains("FAIOZ"))
+    }
+
+    @Test fun `les carres ne sont pas des indicatifs`() {
+        for (m in listOf("JN18FS", "JN18", "IN97AB", "JNI8FS", "JNL8FS", "IO91WM", "JO20")) {
+            assertTrue(m, IndicatifsImage.lis(m).isEmpty())
+            assertTrue(m, IndicatifsImage.lis(m, f4ioz).isEmpty())
+        }
+        assertEquals("F4IOZ JN18FS", IndicatifsImage.corrige("FAIOZ JN18FS", IndicatifsImage.lis("FAIOZ JN18FS")))
+    }
+
     @Test fun `accord avec le nom du service`() {
         assertTrue(IndicatifsImage.accord("EA4ABC", "EA4ABC"))
         assertTrue(IndicatifsImage.accord("EA4ABC/P", "ea4abc-tv"))
