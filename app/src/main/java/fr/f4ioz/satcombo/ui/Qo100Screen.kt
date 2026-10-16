@@ -218,7 +218,10 @@ fun Qo100Screen(ui: UiState, vm: MainViewModel) {
 
                 if (q.statut.isNotBlank()) {
                     Spacer(Modifier.height(8.dp))
-                    Text(q.statut, color = Amber, fontSize = 11.sp)
+                    // Emergency frequency: red, as on SatMe-PC.
+                    val urgence = fr.f4ioz.satcombo.domain.GardeQo100.urgence(q.descenteHz)
+                    Text(q.statut, color = if (urgence) androidx.compose.ui.graphics.Color(0xFFFF4D4D) else Amber, fontSize = 11.sp,
+                        fontWeight = if (urgence) androidx.compose.ui.text.font.FontWeight.Bold else null)
                 }
             }
         }

@@ -77,6 +77,8 @@ class EmissionDatvPc(
     private val nom: () -> String = { "" },
     /** The software named in the station card. */
     private val logiciel: String = "SatMe-PC",
+    /** The talkback offered when none is set: the cockpit's narrow band frequency, or null. */
+    private val retourParDefaut: () -> Long? = { null },
     /** The MODCOD's adaptation for each transmission (its timings shortened in the tests). */
     private val nouvelleAdaptation: () -> AdaptationModcod = { AdaptationModcod() },
 ) {
@@ -217,11 +219,24 @@ class EmissionDatvPc(
         get() = stockage.getString("datv_tx_message", "") ?: ""
         set(v) { stockage.edit().putString("datv_tx_message", v.trim().take(fr.f4ioz.satcombo.datv.CarteTs.CHAT_MAX)).apply(); majCarte() }
 
+    /**
+     * Talkback on QO-100's narrow band (downlink Hz), 0: none. Never set: the
+     * cockpit's frequency ([retourParDefaut]); cleared by the operator: none.
+     */
+    var retourHz: Long
+        get() = stockage.getLong("datv_tx_retour_hz", -1L).let { if (it < 0) retourParDefaut() ?: 0L else it }
+        set(v) { stockage.edit().putLong("datv_tx_retour_hz", v.coerceAtLeast(0L)).apply(); majCarte() }
+    val retourDonne: Boolean get() = stockage.getLong("datv_tx_retour_hz", -1L) >= 0
+    var retourMode: String
+        get() = CarteStation.modeRetour(stockage.getString("datv_tx_retour_mode", "USB") ?: "USB")
+        set(v) { stockage.edit().putString("datv_tx_retour_mode", CarteStation.modeRetour(v)).apply(); majCarte() }
+
     /** The card for a transmission on [khz] in [m]. */
     fun carteStation(khz: Long, m: Modcod, sr: Int = srKs): CarteStation = CarteStation(
         indicatif = indicatif().trim().uppercase(), locator = locator().trim().uppercase(), nom = nom().trim(), qth = qth,
         puissance = puissance, antenne = antenne, logiciel = logiciel, frequenceKhz = khz,
-        modcod = m.constellation.libelle + " " + m.taux.libelle, srKs = sr, message = message)
+        modcod = m.constellation.libelle + " " + m.taux.libelle, srKs = sr, message = message,
+        retourHz = retourHz, retourMode = retourMode)
 
     private fun majCarte() {
         val i = inserteur ?: return
@@ -691,6 +706,7 @@ class EmissionDatvPc(
                 JSONObject().put("t", c.ms).put("de", c.de).put("vers", c.vers).put("raison", c.raison) })))
         o.put("cpu", cpu())
         o.put("carteOn", carteOn).put("qth", qth).put("puissance", puissance).put("antenne", antenne).put("message", message)
+            .put("retourHz", retourHz).put("retourMode", retourMode).put("retourDonne", retourDonne)
             .put("carteEnvoyee", inserteur?.remplaces ?: 0L)
             .put("chat", JSONArray(dits().map { d -> JSONObject().put("seq", d.seq).put("texte", d.texte).put("t", d.ms) }))
         return o

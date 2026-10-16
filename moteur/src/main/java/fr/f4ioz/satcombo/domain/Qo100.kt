@@ -69,6 +69,12 @@ object Qo100 {
 
     const val BALISE_HAUTE_HZ = 10_490_000_000L
 
+    /** Multimedia beacon (8APSK), centre as published. */
+    const val BALISE_MULTIMEDIA_HZ = 10_489_995_000L
+
+    /** Where contest activity is allowed, inside the mixed segment. */
+    val CONCOURS: LongRange = 10_489_870_000L until 10_489_990_000L
+
     /**
      * A QO-100 transponder. Bounds are sky frequencies; uplink bounds are
      * spelled out rather than computed so the band plan reads at a glance.
@@ -212,15 +218,15 @@ object Qo100 {
      * Worth noting when re-reading this table:
      *
      * - **There are four beacons, not three.** The multimedia beacon at
-     *   10 489.990–10 489.997 (8APSK 7 200 bit/s) explains the 7 kHz at the
-     *   top edge (see [Transpondeur]). It has no constant: it is a guard, not
-     *   a marker.
+     *   10 489.995 (8APSK 7 200 bit/s, 10 489.990–10 489.997) explains the
+     *   7 kHz at the top edge (see [Transpondeur]).
      * - **The last transmit frequency is 10 489.990**, not 10 489.997. That is
      *   [DERNIERE_DESCENTE_EMISSIBLE_HZ], the one value here that prevents real
      *   interference.
-     * - **Broadcast and emergency are 7.5 kHz each**, so their shared edge is
-     *   at 10 489.8575. Not a typo: the published table does give two 7.5 kHz
-     *   slices around 10 489.855 and 10 489.860.
+     * - **Broadcast 10 489.850–858, emergency 10 489.858–865**, as the
+     *   current AMSAT-DL plan gives them (8 kHz and 7 kHz).
+     * - **Contests** are welcome in the mixed segment from 10 489.870
+     *   ([CONCOURS]), never below.
      */
     val SEGMENTS: List<Segment> = listOf(
         Segment("balise_basse", 10_489_500_000L, 10_489_505_000L, Usage.BALISE,
@@ -236,14 +242,14 @@ object Qo100 {
             repereHz = BALISE_MEDIANE_HZ),
         Segment("ssb_haut", 10_489_755_000L, 10_489_850_000L, Usage.PHONIE,
             largeurMaxHz = 2_700),
-        Segment("diffusion", 10_489_850_000L, 10_489_857_500L, Usage.DIFFUSION,
+        Segment("diffusion", 10_489_850_000L, 10_489_858_000L, Usage.DIFFUSION,
             largeurMaxHz = 2_700, repereHz = 10_489_855_000L),
-        Segment("urgence", 10_489_857_500L, 10_489_865_000L, Usage.URGENCE,
+        Segment("urgence", 10_489_858_000L, 10_489_865_000L, Usage.URGENCE,
             largeurMaxHz = 2_700, repereHz = 10_489_860_000L),
         Segment("mixte", 10_489_865_000L, 10_489_990_000L, Usage.MIXTE,
             largeurMaxHz = 2_700),
         Segment("balise_multimedia", 10_489_990_000L, 10_489_997_000L, Usage.BALISE,
-            repereHz = 10_489_993_500L),
+            repereHz = BALISE_MULTIMEDIA_HZ),
         Segment("balise_haute", 10_489_997_000L, 10_490_000_000L, Usage.BALISE,
             repereHz = BALISE_HAUTE_HZ),
     )

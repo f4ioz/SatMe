@@ -31,7 +31,21 @@ data class CarteStation(
     val message: String = "",
     /** The section's version_number (0..31): changes with the content. */
     val version: Int = 0,
-)
+    /**
+     * Talkback: where the station listens on QO-100's narrow band (downlink,
+     * Hz), 0 when not given; [retourMode] USB or CW.
+     */
+    val retourHz: Long = 0L,
+    val retourMode: String = "",
+) {
+    /** The talkback, when it is a narrow band frequency. */
+    val retour: Boolean get() = retourHz in fr.f4ioz.satcombo.domain.Qo100.NB.descenteBasHz..fr.f4ioz.satcombo.domain.Qo100.NB.descenteHautHz
+
+    companion object {
+        /** The talkback modes; anything else reads as USB. */
+        fun modeRetour(m: String): String = if (m.trim().uppercase() == "CW") "CW" else "USB"
+    }
+}
 
 /** A chat line: its sequence number (16 bits), who wrote it, the text. */
 data class LigneChat(val seq: Int, val indicatif: String, val texte: String)
@@ -71,6 +85,9 @@ object CarteTs {
     const val T_MODCOD = 0x09
     const val T_SR = 0x0A
     const val T_MESSAGE = 0x0B
+    /** Talkback on QO-100's narrow band: downlink in Hz (digits), then its mode (USB, CW). */
+    const val T_RETOUR = 0x0C
+    const val T_RETOUR_MODE = 0x0D
     const val T_TEXTE = 0x20
 
     private val TABLE_CRC = IntArray(256) { i ->
@@ -129,7 +146,9 @@ object CarteTs {
         T_NOM to c.nom.trim().take(48), T_QTH to c.qth.trim().take(48),
         T_PUISSANCE to c.puissance.trim().take(24), T_ANTENNE to c.antenne.trim().take(48), T_LOGICIEL to c.logiciel.trim().take(40),
         T_FREQUENCE to (if (c.frequenceKhz > 0) c.frequenceKhz.toString() else ""), T_MODCOD to c.modcod.trim().take(24),
-        T_SR to (if (c.srKs > 0) c.srKs.toString() else ""), T_MESSAGE to c.message.trim().take(CHAT_MAX)))
+        T_SR to (if (c.srKs > 0) c.srKs.toString() else ""), T_MESSAGE to c.message.trim().take(CHAT_MAX),
+        T_RETOUR to (if (c.retourHz > 0) c.retourHz.toString() else ""),
+        T_RETOUR_MODE to (if (c.retourHz > 0) CarteStation.modeRetour(c.retourMode) else "")))
 
     fun section(l: LigneChat): ByteArray = section(TABLE_CHAT, l.seq and 0xFFFF, 0, listOf(
         T_INDICATIF to l.indicatif.trim().uppercase().take(16), T_TEXTE to l.texte.trim().take(CHAT_MAX)))
@@ -168,7 +187,9 @@ object CarteTs {
             puissance = champs[T_PUISSANCE].orEmpty(), antenne = champs[T_ANTENNE].orEmpty(), logiciel = champs[T_LOGICIEL].orEmpty(),
             frequenceKhz = champs[T_FREQUENCE]?.trim()?.toLongOrNull() ?: 0L, modcod = champs[T_MODCOD].orEmpty(),
             srKs = champs[T_SR]?.trim()?.toIntOrNull() ?: 0, message = champs[T_MESSAGE].orEmpty(),
-            version = ((s[5].toInt() and 0xFF) shr 1) and 0x1F)
+            version = ((s[5].toInt() and 0xFF) shr 1) and 0x1F,
+            retourHz = champs[T_RETOUR]?.trim()?.toLongOrNull()?.takeIf { it > 0 } ?: 0L,
+            retourMode = champs[T_RETOUR]?.let { CarteStation.modeRetour(champs[T_RETOUR_MODE].orEmpty()) }.orEmpty())
     }
 
     /**
@@ -409,6 +430,9 @@ class LecteurCarte(private val horloge: () -> Long = System::currentTimeMillis, 
                 .put("qth", c.qth).put("puissance", c.puissance).put("antenne", c.antenne).put("logiciel", c.logiciel)
                 .put("khz", c.frequenceKhz).put("modcod", c.modcod).put("sr", c.srKs).put("message", c.message).put("version", c.version)
                 .put("contacts", contacts(c.indicatif))
+            // Talkback on the narrow band: shown only when it is one.
+            if (c.retour) o.put("retourHz", c.retourHz).put("retourMode", c.retourMode)
+                .put("retourUrgence", fr.f4ioz.satcombo.domain.GardeQo100.urgence(c.retourHz))
             fr.f4ioz.satcombo.domain.Dxcc.entite(c.indicatif)?.let { o.put("pays", it.nom).put("drapeau", it.drapeau) }
             if (c.locator.isNotBlank()) fr.f4ioz.satcombo.demo.ApiStation.ouEstIl(o, moi, null, null, c.locator)
         }

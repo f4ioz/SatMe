@@ -168,7 +168,10 @@ fun main(args: Array<String>) {
                 EmissionDatvPc.Reception(e.verrouille, e.merDb, datv.reglage.cielKhz, e.service, carte, pertes)
             }
         } },
-        nom = { station.settings.plancheNom }, logiciel = "SatMe-PC " + versionPc())
+        nom = { station.settings.plancheNom }, logiciel = "SatMe-PC " + versionPc(),
+        // Talkback by default: where the rig is on QO-100's narrow band, when SatMe may propose it.
+        retourParDefaut = { station.qo100.etat.value.let { q ->
+            q.descenteHz.takeIf { q.auPoste && q.transpondeur == fr.f4ioz.satcombo.domain.Qo100.NB.cle && fr.f4ioz.satcombo.domain.GardeQo100.proposable(it) } } })
     sdr.emissionPluto = { emission.etat.emet }
     // Text and the mark over the transmitted picture; its pictures and videos chosen from the page.
     emission.incrustation = IncrustationDatvPc(station.stockage)

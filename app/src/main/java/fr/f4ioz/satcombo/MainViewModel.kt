@@ -6524,7 +6524,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     val corr = st.offsetHz - st.dopplerFineHz
                     if (corr != 0L) {
                         hub.setOffset(0)
-                        setQo100Descente(_ui.value.qo100.descenteHz + corr)
+                        setQo100Descente(_ui.value.qo100.descenteHz + corr, qo100Origine)
                     }
                     return@launch
                 }
@@ -9295,7 +9295,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      * edges the matching uplink leaves the transponder and the carrier lands
      * on the neighbour — a geostationary has no horizon to end the mistake.
      */
-    fun setQo100Descente(hz: Long) {
+    fun setQo100Descente(hz: Long, origine: fr.f4ioz.satcombo.domain.GardeQo100.Origine = fr.f4ioz.satcombo.domain.GardeQo100.Origine.MAIN) {
+        qo100Origine = origine
         // Unclamped mode sweeps all of QO-100, never beyond the band plan.
         val borne = if (settings.qo100SansBride)
             hz.coerceIn(Qo100.REGLETTE_BAS_HZ, Qo100.REGLETTE_HAUT_HZ)
@@ -9318,7 +9319,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun qo100AllerBalise() = setQo100Descente(Qo100.BALISE_MEDIANE_HZ)
 
     /** Go to a memory or marker. */
-    fun qo100Aller(hz: Long) = setQo100Descente(hz)
+    fun qo100Aller(hz: Long) = setQo100Descente(hz, fr.f4ioz.satcombo.domain.GardeQo100.Origine.PROPOSEE)
+
+    /** Who chose the QO-100 frequency: an emergency one proposed by SatMe is never sent to the rig. */
+    @Volatile private var qo100Origine = fr.f4ioz.satcombo.domain.GardeQo100.Origine.MAIN
 
     /**
      * Stores the current frequency as a memory. The name is optional (the kHz
@@ -9559,9 +9563,17 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         // to transmit on a beacon — the whole band's reference — one PTT press
         // away. So the uplink is written only where the band plan allows, and
         // the screen says so.
-        val peutEmettre = Qo100.emissionAutorisee(q.descenteHz)
-        if (q.auPoste && !peutEmettre) {
+        val permis = Qo100.emissionAutorisee(q.descenteHz)
+        // Emergency: written only when tuned by hand, and said.
+        val peutEmettre = fr.f4ioz.satcombo.domain.GardeQo100.monteeEnvoyable(q.descenteHz, qo100Origine)
+        if (q.auPoste && !permis) {
             _ui.value = _ui.value.qo { copy(statut = t("qo100_ecoute_seule")) }
+        } else if (q.auPoste && !peutEmettre) {
+            _ui.value = _ui.value.qo { copy(statut = t("qo100_urgence_retenue")) }
+        } else if (q.auPoste && fr.f4ioz.satcombo.domain.GardeQo100.urgence(q.descenteHz)) {
+            _ui.value = _ui.value.qo { copy(statut = t("qo100_urgence")) }
+        } else if (q.statut == t("qo100_urgence") || q.statut == t("qo100_urgence_retenue")) {
+            _ui.value = _ui.value.qo { copy(statut = "") }
         }
         if (q.auPoste && peutEmettre) viewModelScope.launch {
             // sameBand = false: 145 RX / 432 TX is the rig's satellite mode,

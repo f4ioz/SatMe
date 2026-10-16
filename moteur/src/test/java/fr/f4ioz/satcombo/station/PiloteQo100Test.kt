@@ -137,4 +137,26 @@ class PiloteQo100Test {
         p.retireMemoire(10_489_688_000L)
         assertEquals(listOf("Sked"), pilote().etat.value.memoires.map { it.nom })
     }
+
+    @Test
+    fun l_urgence_proposee_n_arrive_pas_au_poste_l_urgence_a_la_main_si() {
+        val p = pilote()
+        p.auPoste(true)
+        ecrits.clear()
+        // A memory, a signal clicked: heard, the uplink held back, said.
+        p.descente(10_489_860_000L, fr.f4ioz.satcombo.domain.GardeQo100.Origine.PROPOSEE)
+        assertTrue(ecrits.isEmpty())
+        assertTrue(p.etat.value.urgence)
+        assertTrue(p.etat.value.monteeRetenue)
+        assertEquals(fr.f4ioz.satcombo.i18n.t("qo100_urgence_retenue"), p.etat.value.statut)
+        // Tuned by hand: written, with the warning.
+        p.pas(100)
+        assertEquals(10_489_860_100L to 2_400_360_100L, ecrits.last())
+        assertFalse(p.etat.value.monteeRetenue)
+        assertEquals(fr.f4ioz.satcombo.i18n.t("qo100_urgence"), p.etat.value.statut)
+        // Proposed elsewhere: written as before, the warning gone.
+        p.descente(10_489_700_000L, fr.f4ioz.satcombo.domain.GardeQo100.Origine.PROPOSEE)
+        assertEquals(10_489_700_000L to 2_400_200_000L, ecrits.last())
+        assertEquals("", p.etat.value.statut)
+    }
 }

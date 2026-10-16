@@ -9,6 +9,7 @@
 package fr.f4ioz.satcombo.pc
 
 import fr.f4ioz.satcombo.demo.ApiQo100
+import fr.f4ioz.satcombo.domain.GardeQo100
 import fr.f4ioz.satcombo.domain.TraficQo100
 import org.json.JSONObject
 
@@ -57,7 +58,7 @@ class TraficQo100Pc(private val station: StationPc, private val sdr: SdrPc, priv
 
     /** The session as it was (dial, mode), then started. */
     fun reprend(): String? {
-        s.qo100DernierHz.takeIf { it > 0 }?.let { station.qo100.descente(it) }
+        s.qo100DernierHz.takeIf { it > 0 }?.let { station.qo100.descente(it, GardeQo100.Origine.PROPOSEE) }
         return demarre()
     }
 
@@ -72,7 +73,8 @@ class TraficQo100Pc(private val station: StationPc, private val sdr: SdrPc, priv
     /** A signal clicked on: its dial, USB, its log mode; [classe] null tunes [hz] as given. */
     fun accorde(hz: Long, classe: String?): TraficQo100.Accord? {
         val a = classe?.takeIf { it.isNotBlank() }?.let { TraficQo100.accord(it, hz) }
-        station.qo100.descente(a?.cadranHz ?: hz)
+        // Clicked, not tuned by hand: an emergency frequency is heard, its uplink not written.
+        station.qo100.descente(a?.cadranHz ?: hz, GardeQo100.Origine.PROPOSEE)
         sdr.decalageHz = 0
         a?.let { s.qo100ModeCarnet = it.modeCarnet }
         return a

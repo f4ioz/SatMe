@@ -525,6 +525,9 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
         }
     }
 
+    private fun origine(proposee: Boolean) =
+        if (proposee) fr.f4ioz.satcombo.domain.GardeQo100.Origine.PROPOSEE else fr.f4ioz.satcombo.domain.GardeQo100.Origine.MAIN
+
     /** What a POST asks; the answer says whether it was done. */
     private fun action(chemin: String, q: Map<String, String>): JSONObject {
         val ok = JSONObject().put("ok", true)
@@ -756,6 +759,16 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 q["puissance"]?.let { e.puissance = it }
                 q["antenne"]?.let { e.antenne = it }
                 q["message"]?.let { e.message = it }
+                // Talkback (MHz on the page): empty clears it; a narrow band frequency, never the emergency one.
+                q["retourMode"]?.let { e.retourMode = it }
+                q["retour"]?.let { m ->
+                    val hz = ApiQo100.mhz(m) ?: 0L
+                    if (hz != 0L && hz !in fr.f4ioz.satcombo.domain.Qo100.NB.descenteBasHz..fr.f4ioz.satcombo.domain.Qo100.NB.descenteHautHz)
+                        return JSONObject().put("ok", false).put("erreur", "fréquence de retour : une descente du transpondeur étroit, 10 489,505 à 10 489,997 MHz")
+                    if (hz != 0L && fr.f4ioz.satcombo.domain.GardeQo100.urgence(hz))
+                        return JSONObject().put("ok", false).put("erreur", "fréquence d'urgence : réservée au trafic d'urgence, pas un retour")
+                    e.retourHz = hz
+                }
             }
             "/api/datv/emission/demarre" -> {
                 val e = emission ?: return JSONObject().put("ok", false)
@@ -809,7 +822,8 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 val ids = q["ids"].orEmpty().split(',').map { it.trim() }.filter { it.isNotEmpty() }
                 if (!t.lanceRapatriement(ids, q["enLigne"] != "0")) return JSONObject().put("ok", false).put("erreur", "rien à faire, ou déjà en cours")
             }
-            "/api/qo100/frequence" -> q["hz"]?.toLongOrNull()?.let { station.qo100.descente(it) }
+            // auto=1: a frequency SatMe proposed (a memory), not one tuned by hand.
+            "/api/qo100/frequence" -> q["hz"]?.toLongOrNull()?.let { station.qo100.descente(it, origine(q["auto"] == "1")) }
             "/api/qo100/pas" -> q["hz"]?.toLongOrNull()?.let { station.qo100.pas(it) }
             "/api/qo100/balise" -> station.qo100.balise()
             "/api/qo100/centre" -> station.qo100.centre()
@@ -839,7 +853,7 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
             "/api/qo100/arreter" -> trafic?.arrete()
             "/api/qo100/accorde" -> {
                 val hz = q["hz"]?.toLongOrNull() ?: return JSONObject().put("ok", false)
-                val a = trafic?.accorde(hz, q["classe"]) ?: run { station.qo100.descente(hz); null }
+                val a = trafic?.accorde(hz, q["classe"]) ?: run { station.qo100.descente(hz, origine(true)); null }
                 a?.let { return ok.put("cadran", it.cadranHz).put("mode", it.modeCarnet).put("decodeur", it.decodeur).put("ft8Mode", it.ft8Mode) }
             }
             "/api/qo100/mode" -> trafic?.mode(q["m"].orEmpty())

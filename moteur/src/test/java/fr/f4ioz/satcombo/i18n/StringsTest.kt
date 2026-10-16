@@ -210,6 +210,13 @@ class StringsTest {
             val k = "qo100_seg_" + s.cle
             assertTrue("libellé manquant pour le segment ${s.cle}", FR.containsKey(k))
             assertTrue("libellé anglais manquant pour ${s.cle}", EN.containsKey(k))
+            // The segment's rules, in the ruler's tooltip.
+            assertTrue("règle manquante pour le segment ${s.cle}", FR.containsKey("qo100_regle_" + s.cle))
+            assertTrue("règle anglaise manquante pour ${s.cle}", EN.containsKey("qo100_regle_" + s.cle))
+        }
+        for (k in listOf("qo100_regle_concours", "qo100_conseil_mode", "qo100_conseil_large", "qo100_urgence", "qo100_urgence_retenue")) {
+            assertTrue("clé $k absente en français", FR.containsKey(k))
+            assertTrue("clé $k absente en anglais", EN.containsKey(k))
         }
         for (u in fr.f4ioz.satcombo.domain.Qo100.Usage.entries) {
             val k = "qo100_warn_" + u.cleAvertissement

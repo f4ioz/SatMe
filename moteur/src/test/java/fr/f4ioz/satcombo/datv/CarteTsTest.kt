@@ -10,6 +10,7 @@ package fr.f4ioz.satcombo.datv
 
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -58,6 +59,62 @@ class CarteTsTest {
         assertEquals("F1ABC", (CarteTs.lis(inconnu) as CarteStation).indicatif)
         // Without a callsign: nothing.
         assertNull(CarteTs.lis(CarteTs.section(CarteTs.TABLE_CARTE, 0, 0, listOf(CarteTs.T_NOM to "x"))))
+    }
+
+    @Test
+    fun frequence_de_retour_aller_retour_et_lecteurs_anciens() {
+        val avec = carte.copy(retourHz = 10_489_650_000L, retourMode = "cw")
+        val r = CarteTs.lis(CarteTs.section(avec)) as CarteStation
+        assertEquals(10_489_650_000L, r.retourHz)
+        assertEquals("CW", r.retourMode)
+        assertTrue(r.retour)
+        // Mode left out or unknown: USB.
+        assertEquals("USB", (CarteTs.lis(CarteTs.section(avec.copy(retourMode = ""))) as CarteStation).retourMode)
+        assertEquals("USB", (CarteTs.lis(CarteTs.section(avec.copy(retourMode = "FM"))) as CarteStation).retourMode)
+        // Without it: no tag in the stream, nothing read.
+        val sans = CarteTs.section(carte)
+        val r0 = CarteTs.lis(sans) as CarteStation
+        assertEquals(0L, r0.retourHz)
+        assertEquals("", r0.retourMode)
+        assertFalse(r0.retour)
+        assertTrue(CarteTs.section(avec).size > sans.size)
+        // An older reader (tags up to 0x0B): the new tags skipped, every other field the same.
+        val anciens = tlv(CarteTs.section(avec)).filterKeys { it <= CarteTs.T_MESSAGE }
+        assertEquals(tlv(sans), anciens)
+        assertEquals(setOf(CarteTs.T_RETOUR, CarteTs.T_RETOUR_MODE), tlv(CarteTs.section(avec)).keys - anciens.keys)
+        // A frequency outside the narrow band is carried, but is no talkback.
+        assertFalse((CarteTs.lis(CarteTs.section(carte.copy(retourHz = 145_800_000L))) as CarteStation).retour)
+        // Through a stream: the reader's card has it, the page too.
+        var t = 0L
+        val ins = InserteurCarte({ t })
+        ins.carte = avec.copy(locator = "")
+        val l = LecteurCarte({ t })
+        flux(3000).forEachIndexed { k, p -> t = k.toLong(); l.bloc(ins.traite(p.copyOf())) }
+        assertEquals(10_489_650_000L, l.carte?.retourHz)
+        val j = l.json(t, null, { 0 }, 10_494_750L)
+        assertEquals(10_489_650_000L, j.getLong("retourHz"))
+        assertEquals("CW", j.getString("retourMode"))
+        assertFalse(j.getBoolean("retourUrgence"))
+        // Announced on the emergency frequency: flagged, the page offers no tuning.
+        val urg = LecteurCarte({ 0L }).also { lu -> CarteTs.paquets(CarteTs.section(carte.copy(locator = "", retourHz = 10_489_860_000L))).forEachIndexed { k, p ->
+            p[3] = (0x10 or k).toByte(); lu.bloc(p) } }
+        assertTrue(urg.json(0L, null, { 0 }, 10_494_750L).getBoolean("retourUrgence"))
+        // A card without talkback: no field at all.
+        val sansJ = LecteurCarte({ 0L }).also { lu -> CarteTs.paquets(CarteTs.section(carte.copy(locator = ""))).forEachIndexed { k, p ->
+            p[3] = (0x10 or k).toByte(); lu.bloc(p) } }.json(0L, null, { 0 }, 10_494_750L)
+        assertFalse(sansJ.has("retourHz"))
+    }
+
+    /** A card section's fields, as a reader walking the TLV sees them. */
+    private fun tlv(s: ByteArray): Map<Int, String> {
+        val m = LinkedHashMap<Int, String>()
+        var i = 13
+        while (i + 2 <= s.size - 4) {
+            val n = s[i + 1].toInt() and 0xFF
+            m[s[i].toInt() and 0xFF] = String(s, i + 2, n, Charsets.UTF_8)
+            i += 2 + n
+        }
+        return m
     }
 
     private fun avecFormat(s: ByteArray, f: Int): ByteArray {

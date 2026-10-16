@@ -11,6 +11,7 @@ package fr.f4ioz.satcombo.station
 import fr.f4ioz.satcombo.data.SatConfigStore
 import fr.f4ioz.satcombo.data.SettingsStore
 import fr.f4ioz.satcombo.domain.ChaineQo100
+import fr.f4ioz.satcombo.domain.GardeQo100
 import fr.f4ioz.satcombo.domain.MemoiresQo100
 import fr.f4ioz.satcombo.domain.Qo100
 import fr.f4ioz.satcombo.i18n.t
@@ -36,6 +37,10 @@ import kotlin.math.abs
  * - **sweeping is not transmitting**: where the band plan forbids it (the
  *   beacons), nothing is sent to the rig, not even the downlink — the uplink
  *   would sit one PTT press away from the band's reference;
+ * - **the emergency segment is never reached by SatMe's own choice**: a
+ *   frequency it proposes there (a signal, a memory, a talkback) is heard,
+ *   its uplink not written; tuned by hand, it is written, with a warning
+ *   (see [GardeQo100]);
  * - the calibration (the LNB's drift, stored as NORAD 43700's shift) moves
  *   the downlink only, the uplink follows the nominal one;
  * - the chain decides the converters, including when it wants none.
@@ -80,10 +85,15 @@ class PiloteQo100(
         val chaines: List<ChaineQo100.Chaine> = emptyList(),
         val chaine: String = "Fixe",
         val statut: String = "",
+        /** Who chose [descenteHz]: the operator, or SatMe (see [GardeQo100]). */
+        val origine: GardeQo100.Origine = GardeQo100.Origine.MAIN,
     ) {
         val monteeHz: Long get() = Qo100.monteeDepuisDescente(descenteHz)
         val segment: Qo100.Segment? get() = Qo100.segment(descenteHz)
         val emissionPermise: Boolean get() = Qo100.emissionAutorisee(descenteHz)
+        val urgence: Boolean get() = GardeQo100.urgence(descenteHz)
+        /** The uplink held back: SatMe chose an emergency frequency. */
+        val monteeRetenue: Boolean get() = emissionPermise && !GardeQo100.monteeEnvoyable(descenteHz, origine)
         val tp: Qo100.Transpondeur get() = Qo100.TRANSPONDEURS.firstOrNull { it.cle == transpondeur } ?: Qo100.NB
         val chaineActive: ChaineQo100.Chaine get() = ChaineQo100.choisie(chaines, chaine)
     }
@@ -111,11 +121,14 @@ class PiloteQo100(
         recalcule(); pousse()
     }
 
-    /** Tunes, clamped to the transponder (or the band plan when sweeping). */
-    fun descente(hz: Long) {
+    /**
+     * Tunes, clamped to the transponder (or the band plan when sweeping).
+     * [origine]: by hand, or proposed by SatMe (a signal, a memory…).
+     */
+    fun descente(hz: Long, origine: GardeQo100.Origine = GardeQo100.Origine.MAIN) {
         val e = _etat.value
         val borne = if (e.sansBride) hz.coerceIn(Qo100.REGLETTE_BAS_HZ, Qo100.REGLETTE_HAUT_HZ) else e.tp.brideDescente(hz)
-        change { copy(descenteHz = borne) }
+        change { copy(descenteHz = borne, origine = origine) }
         recalcule(); pousse()
     }
 
@@ -248,7 +261,8 @@ class PiloteQo100(
         val e = _etat.value
         if (!e.auPoste) return
         if (!e.emissionPermise) { change { copy(statut = t("qo100_ecoute_seule")) }; return }
-        change { copy(statut = "") }
+        if (e.monteeRetenue) { change { copy(statut = t("qo100_urgence_retenue")) }; return }
+        change { copy(statut = if (e.urgence) t("qo100_urgence") else "") }
         materiel.ecris(e.descenteHz + e.calageHz, e.monteeHz)
     }
 }

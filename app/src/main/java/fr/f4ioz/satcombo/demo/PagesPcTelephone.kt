@@ -670,14 +670,15 @@ object PagesPcTelephone {
             "/api/qo100/accorde" -> {
                 val hz = p("hz").toLongOrNull() ?: return JSONObject().put("ok", false)
                 val a = p("classe").takeIf { it.isNotBlank() }?.let { fr.f4ioz.satcombo.domain.TraficQo100.accord(it, hz) }
-                vm.setQo100Descente(a?.cadranHz ?: hz)
+                vm.setQo100Descente(a?.cadranHz ?: hz, fr.f4ioz.satcombo.domain.GardeQo100.Origine.PROPOSEE)
                 vm.setSdrOffset(0)
                 a?.let { OK.put("cadran", it.cadranHz).put("mode", it.modeCarnet).put("decodeur", it.decodeur).put("ft8Mode", it.ft8Mode) } ?: OK
             }
             "/api/qo100/mode" -> OK
             "/api/qo100/reprise", "/api/qo100/reprise-auto" ->
                 JSONObject().put("ok", false).put("erreur", "sur le téléphone, la réception QO-100 se reprend depuis son écran QO-100")
-            "/api/qo100/frequence" -> { p("hz").toLongOrNull()?.let { vm.setQo100Descente(it) }; OK }
+            "/api/qo100/frequence" -> { p("hz").toLongOrNull()?.let { vm.setQo100Descente(it,
+                if (p("auto") == "1") fr.f4ioz.satcombo.domain.GardeQo100.Origine.PROPOSEE else fr.f4ioz.satcombo.domain.GardeQo100.Origine.MAIN) }; OK }
             "/api/qo100/pas" -> { p("hz").toLongOrNull()?.let { vm.qo100Pas(it) }; OK }
             "/api/qo100/balise" -> { vm.qo100AllerBalise(); OK }
             "/api/qo100/centre" -> { vm.qo100Centre(); OK }

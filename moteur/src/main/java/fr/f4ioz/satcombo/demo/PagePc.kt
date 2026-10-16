@@ -125,6 +125,8 @@ object PagePc {
   .dc-call { font-size:22px; letter-spacing:.5px; color:var(--cyan); }
   .dc-drapeau { font-size:24px; font-family:Drapeaux,system-ui; }
   .dc-message { margin-top:6px; font-style:italic; }
+  .dc-retour { margin-top:6px; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  .dc-retour.urgence { color:#FF6A60; font-weight:700; }
   .dc-chat { display:flex; flex-direction:column; gap:4px; margin-top:8px; max-height:220px; overflow-y:auto; }
   .dc-bulle { align-self:flex-start; max-width:85%; background:#1B2A36; border-radius:12px 12px 12px 3px; padding:5px 10px; overflow-wrap:anywhere; }
   .dc-bulle.moi { align-self:flex-end; background:rgba(63,224,200,.18); border-radius:12px 12px 3px 12px; }
@@ -460,6 +462,8 @@ object PagePc {
   .tq-ft8 { max-height:250px; overflow:auto; margin-top:6px; }
   .tq-sstv-img { display:block; max-width:100%; max-height:260px; margin-top:8px; border-radius:6px; background:#0E1720; min-height:60px; min-width:120px; }
   .tq-conseil { padding:8px 10px; border-radius:8px; background:rgba(255,180,84,.14); border:1px solid rgba(255,180,84,.55); margin-bottom:8px; font-size:13px; }
+  .tq-urgence { padding:8px 10px; border-radius:8px; background:#B3261E; color:#fff; font-weight:700; margin-top:6px; font-size:13px; }
+  .tq-conseil-mode { color:var(--gris); font-size:12px; margin-top:4px; font-style:italic; }
   .tq-plus-t { color:var(--gris); font-size:11px; letter-spacing:1.6px; text-transform:uppercase; padding:10px 0 8px; border-top:1px solid var(--bord); margin-top:4px; }
   .tq-cote #cw-carte, .tq-main #cw-carte { margin-bottom:0; }
   @media (max-width:2300px) { header.a-ctx #info-station { display:none; } }
@@ -1080,6 +1084,7 @@ object PagePc {
       <div id="dc-info" style="margin-top:4px"></div>
       <div class="petit" id="dc-tech" style="margin-top:2px"></div>
       <div id="dc-message" class="dc-message" hidden></div>
+      <div id="dc-retour" class="dc-retour" hidden></div>
       <div id="dc-chat" class="dc-chat"></div>
       <div class="etat" id="dc-msg"></div>
     </div>
@@ -1204,6 +1209,10 @@ object PagePc {
         <div class="ligne"><span class="petit" style="min-width:86px">Puissance</span><input id="e-puissance" maxlength="24" placeholder="10 W" style="max-width:100px" onchange="eRegleCarte()">
           <span class="petit">Antenne</span><input id="e-antenne" maxlength="48" placeholder="Parabole 1,2 m" onchange="eRegleCarte()"></div>
         <div class="ligne"><span class="petit" style="min-width:86px">Message</span><input id="e-message" maxlength="140" placeholder="Retour par le chat, 73" onchange="eRegleCarte()"></div>
+        <div class="ligne"><span class="petit" style="min-width:86px" title="Où tu écoutes les réponses sur le transpondeur à bande étroite (descente, MHz). Vide : pas de retour annoncé.">Retour NB</span>
+          <input id="e-retour" placeholder="10489,650" style="max-width:120px" title="Fréquence de retour sur QO-100 bande étroite (descente, MHz) : les stations qui te reçoivent peuvent l’écouter en un clic" onchange="eRegleRetour()">
+          <select id="e-retour-mode" style="flex:none" onchange="eRegleRetour()"><option value="USB">BLU (USB)</option><option value="CW">CW</option></select>
+          <span class="petit" id="e-retour-info"></span></div>
       </details>
       <div id="e-adapt" style="margin-top:10px;border-top:1px solid rgba(255,255,255,.08);padding-top:8px">
         <label class="petit" style="display:block"><input type="checkbox" id="e-adapt-on" onchange="eRegleAdapt()"> <b>Adapter le MODCOD à la réception</b> — boucle fermée : le MiniTiouner reçoit notre propre signal, SatMe choisit le MODCOD (jamais la fréquence, le débit de symboles ni la puissance)</label>
@@ -1252,6 +1261,7 @@ object PagePc {
         </div>
         <div class="tq-etat" id="tq-etapes"></div>
         <div class="avert" id="tq-msg"></div>
+        <div class="tq-urgence" id="tq-urgence" hidden></div>
         <div class="tq-freq">
           <div>
             <div class="petit">Descente (ciel) <span id="o-bords"></span></div>
@@ -1265,6 +1275,7 @@ object PagePc {
               <select id="tq-mode" style="flex:none" onchange="tqMode(this.value)" title="Le mode noté au carnet (celui du signal accordé, sinon le tien)">
                 <option value="SSB">BLU (SSB)</option><option>CW</option><option>FT8</option><option>FT4</option><option>SSTV</option><option>PSK31</option><option>RTTY</option></select>
               <span class="petit" id="tq-demod"></span></div>
+            <div class="tq-conseil-mode" id="tq-conseil-mode"></div>
           </div>
         </div>
         <div class="ligne bouton-gr">
@@ -3896,6 +3907,13 @@ function ticCarteDatv() {
       k.km != null ? k.km.toLocaleString('fr-FR') + ' km · ' + k.azimut + '° ' + esc(k.rose) : ''].filter(x => x).join(' · ');
     txt('dc-tech', [k.khz ? mhz3(k.khz) + ' MHz' : '', k.modcod ? k.modcod + (k.sr ? ' · ' + k.sr + ' kS/s' : '') : '', k.puissance, k.antenne, k.logiciel].filter(x => x).join(' · '));
     const m = g('dc-message'); m.hidden = !k.message; txt('dc-message', k.message ? '« ' + k.message + ' »' : '');
+    // Talkback on the narrow band: one click to the cockpit, tuned there.
+    const rt = g('dc-retour'), rh = k.retourHz ? (k.retourUrgence
+      ? '⚠ Retour annoncé sur la fréquence d’urgence (' + qFmt(k.retourHz).replace(/ 000$/, '') + ') : SatMe ne s’y accorde pas de lui-même.'
+      : '<span>Retour en ' + (k.retourMode === 'CW' ? 'CW' : 'BLU') + ' : <b class="val">' + qFmt(k.retourHz).replace(/ 000$/, '') + '</b></span>' +
+        '<button onclick="dcEcouteRetour(' + k.retourHz + ',\'' + (k.retourMode === 'CW' ? 'CW' : 'USB') + '\')" title="Le cockpit QO-100 accordé sur ce retour (le récepteur bande étroite), Phonie → texte allumé s’il est installé">Écouter le retour</button>') : '';
+    rt.hidden = !rh; rt.classList.toggle('urgence', !!k.retourUrgence);
+    if (rt.dataset.vu !== rh) { rt.dataset.vu = rh; rt.innerHTML = rh; }
     const html = k.chat.map(l => dcBulle(l.c, l.texte, l.t, l.c === moi)).join('');
     const f = g('dc-chat');
     if (f.dataset.vu !== html) { f.dataset.vu = html; f.innerHTML = html; f.scrollTop = f.scrollHeight; }
@@ -3907,13 +3925,35 @@ function ticCarteDatv() {
   const fil = EM.chat.map(d => dcBulle(EM.indicatif, d.texte, d.t, true, vus.has(d.seq))).join('');
   const ef = g('e-chat-fil');
   if (ef.dataset.vu !== fil) { ef.dataset.vu = fil; ef.innerHTML = fil; ef.scrollTop = ef.scrollHeight; }
-  const libre = !document.activeElement || !['e-qth', 'e-puissance', 'e-antenne', 'e-message'].includes(document.activeElement.id);
+  const libre = !document.activeElement || !['e-qth', 'e-puissance', 'e-antenne', 'e-message', 'e-retour', 'e-retour-mode'].includes(document.activeElement.id);
   if (eCartePremier || libre) {
     g('e-carte-on').checked = EM.carteOn; g('e-qth').value = EM.qth; g('e-puissance').value = EM.puissance; g('e-antenne').value = EM.antenne; g('e-message').value = EM.message;
+    g('e-retour').value = EM.retourHz ? (EM.retourHz / 1e6).toFixed(EM.retourHz % 1000 ? 6 : 3).replace('.', ',') : '';
+    g('e-retour-mode').value = EM.retourMode || 'USB';
+    txt('e-retour-info', EM.retourHz && !EM.retourDonne ? 'celle du cockpit QO-100' : '');
     eCartePremier = false;
   }
 }
 setInterval(ticCarteDatv, 1000);
+async function eRegleRetour() {
+  await post('api/datv/emission/reglage?retour=' + enc(v('e-retour')) + '&retourMode=' + g('e-retour-mode').value);
+  eCartePremier = true;
+}
+/** « Écouter le retour »: the cockpit, the narrow band receiver on that frequency, its voice written when the engine is there. */
+async function dcEcouteRetour(hz, mode) {
+  vue('qo100');
+  if (!(TQ && TQ.recoit)) await tqDemarre();
+  // A CW carrier heard as a note; a voice on its dial. Proposed, not tuned by hand: the guards apply.
+  await tqPost('api/qo100/accorde?hz=' + hz + (mode === 'CW' ? '&classe=cw' : ''));
+  await tqPost('api/qo100/mode?m=' + (mode === 'CW' ? 'CW' : 'SSB'));
+  tqDecAuto = mode === 'CW' ? 'cw' : 'phonie';
+  if (mode !== 'CW') {
+    let p = null;
+    try { p = await (await fetch('api/phonie?depuis=0')).json(); } catch (x) {}
+    if (p && p.present && p.installe && !p.on) await tqPost('api/phonie?on=1');
+  }
+  await chargeQo100(); tqTic(); ticPhonie(true);
+}
 async function eRegleCarte() {
   await post('api/datv/emission/reglage?carte=' + (g('e-carte-on').checked ? 1 : 0) + '&qth=' + enc(v('e-qth')) + '&puissance=' + enc(v('e-puissance')) +
     '&antenne=' + enc(v('e-antenne')) + '&message=' + enc(v('e-message')));
@@ -4804,7 +4844,7 @@ async function ticQualite() {
   oqVu = cle;
   const seg = s => s ? (OP && OP.segments ? ((OP.segments.find(x => x.cle === s) || {}).nom || s) : s) : '';
   txt('oq-sig-n', q.signaux && q.signaux.length ? '· ' + q.signaux.length : '');
-  g('oq-signaux').innerHTML = (q.signaux || []).map(s => '<tr style="cursor:pointer" onclick="qPost(\'frequence?hz=' + s.hz + '\')"><td class="val" style="font-size:15px">' +
+  g('oq-signaux').innerHTML = (q.signaux || []).map(s => '<tr style="cursor:pointer" onclick="qPost(\'frequence?auto=1&hz=' + s.hz + '\')"><td class="val" style="font-size:15px">' +
     (s.hz / 1e6).toFixed(4).replace('.', ',') + '</td><td><div class="r-barre" style="width:80px"><i style="width:' + Math.min(100, s.snr * 3) + '%"></i></div></td><td class="petit">' +
     s.snr + ' dB</td><td class="petit">' + (s.largeur / 1000).toFixed(1) + ' kHz</td><td class="petit">' + esc(seg(s.seg)) + '</td></tr>').join('') ||
     '<tr><td class="petit">rien au-dessus du bruit</td></tr>';
@@ -4821,6 +4861,14 @@ async function qMesure() {
   if (j) { g('o-mmsg').textContent = j.message; g('o-mmsg').style.color = j.ok ? 'var(--vert)' : 'var(--ambre)'; }
   chargeQo100();
 }
+/** The band plan's segment of a sky frequency (null outside). */
+function qSegment(hz) { if (!OP || !OP.segments) return null; const l = OP.segments; return l.find(x => hz >= x.bas && hz < x.haut) || (hz === l[l.length - 1].haut ? l[l.length - 1] : null); }
+/** A frequency's segment and its rule, for a tooltip (starting with a line break). */
+function qRegle(hz) {
+  const s = qSegment(hz); if (!s) return '';
+  const k = OP.concours && hz >= OP.concours.bas && hz < OP.concours.haut && s.usage === 'MIXTE' ? ' ' + OP.concours.regle : '';
+  return '\n' + s.nom + ' — ' + (s.regle || '') + k;
+}
 const COUL_USAGE = { BALISE: '#E5484D', CW: '#6F8CFF', NUMERIQUE: '#B07CFF', PHONIE: '#3FE0C8', DIFFUSION: '#FFB454', URGENCE: '#FF6A60', MIXTE: '#9AA7B4' };
 function dessineQo100() {
   if (!O || !OP || g('v-qo100').hidden) return;
@@ -4833,7 +4881,7 @@ function dessineQo100() {
   if (g('o-memoires').dataset.vu !== cle) {
     g('o-memoires').dataset.vu = cle;
     g('o-memoires').innerHTML = O.memoires.map(m => '<button class="' + (Math.abs(m.hz - O.descente) < 500 ? 'ici' : '') + (m.fixe ? '' : ' perso') +
-      '" title="' + qFmt(m.hz) + '" onclick="qPost(\'frequence?hz=' + m.hz + '\')">' + esc(m.nom) + '</button>').join('');
+      '" title="' + esc(qFmt(m.hz) + qRegle(m.hz)) + '" onclick="qPost(\'frequence?auto=1&hz=' + m.hz + '\')">' + esc(m.nom) + '</button>').join('');
   }
   g('o-oublie').disabled = !O.memoires.some(m => !m.fixe && m.hz === O.descente);
   // Segment.
@@ -4841,6 +4889,10 @@ function dessineQo100() {
   txt('o-larg', O.segment.largeur ? O.segment.largeur + ' Hz au plus' : '');
   txt('o-interdit', O.emission ? '' : 'Émission interdite ici');
   txt('o-avert', O.segment.avert);
+  g('o-seg').title = O.segment.regle || '';
+  g('tq-urgence').hidden = !O.urgence;
+  txt('tq-urgence', !O.urgence ? '' : O.monteeRetenue ? '⚠ Fréquence d’urgence : réservée au trafic d’urgence. SatMe ne l’envoie pas au poste de lui-même ; l’accorder à la main seulement pour du trafic d’urgence.'
+    : '⚠ Fréquence d’urgence : réservée au trafic d’urgence.' + (O.auPoste ? ' La montée est au poste : n’émettre que pour du trafic d’urgence.' : ''));
   // The rig.
   g('o-poste').checked = O.auPoste;
   txt('o-prx', mhz(O.posteRx)); txt('o-ptx', mhz(O.posteTx));
@@ -4939,6 +4991,13 @@ function dessinePano() {
   x.setTransform(1, 0, 0, 1, 0, 0); x.putImageData(img, Math.round(4 * dpr), 0); x.setTransform(dpr, 0, 0, dpr, 0, 0);
   // The beacons, the frequency listened to, the signals named.
   const fz = tqFenetre(), b = fz.b, t = fz.t, X = f => 4 + (w - 8) * (f - b) / (t - b);
+  // The band plan, a strip on top, in the ruler's colours.
+  for (const s of OP.segments) {
+    if (s.haut < b || s.bas > t) continue;
+    x.fillStyle = COUL_USAGE[s.usage] || '#9AA7B4'; x.globalAlpha = s.usage === 'URGENCE' ? 1 : .7;
+    x.fillRect(X(Math.max(b, s.bas)), 0, Math.max(1, X(Math.min(t, s.haut)) - X(Math.max(b, s.bas)) - 1), s.usage === 'URGENCE' ? 6 : 4); x.globalAlpha = 1;
+    if (s.usage === 'URGENCE' && X(s.haut) - X(s.bas) > 30) { x.fillStyle = '#FF6A60'; x.font = 'bold 9px Drapeaux,system-ui'; x.textAlign = 'center'; x.fillText('URGENCE', (X(Math.max(b, s.bas)) + X(Math.min(t, s.haut))) / 2, 16); }
+  }
   x.strokeStyle = 'rgba(229,72,229,.8)'; x.setLineDash([3, 3]);
   for (const s of OP.segments) if (s.usage === 'BALISE' && s.repere && s.repere >= b && s.repere <= t) { x.beginPath(); x.moveTo(X(s.repere), 0); x.lineTo(X(s.repere), h); x.stroke(); }
   x.setLineDash([]); x.strokeStyle = '#FFFFFF'; x.lineWidth = 1.5; x.beginPath(); x.moveTo(X(O.descente), 0); x.lineTo(X(O.descente), 10); x.stroke(); x.lineWidth = 1;
@@ -4964,6 +5023,11 @@ function dessineReglette() {
     x.fillRect(X(s.bas), 22, Math.max(1.5, X(s.haut) - X(s.bas) - 1), 26); x.globalAlpha = 1;
     if (X(s.haut) - X(s.bas) > 44) { x.fillStyle = '#06131A'; x.font = '600 10px Drapeaux,system-ui'; x.textAlign = 'center'; x.fillText(s.nom.slice(0, Math.floor((X(s.haut) - X(s.bas)) / 6)), (X(s.bas) + X(s.haut)) / 2, 39); }
   }
+  // Contests allowed: a bar under the mixed segment.
+  if (OP.concours) { x.fillStyle = '#FFD166'; x.fillRect(X(OP.concours.bas), 49, X(OP.concours.haut) - X(OP.concours.bas) - 1, 2);
+    if (X(OP.concours.haut) - X(OP.concours.bas) > 60) { x.font = '9px Drapeaux,system-ui'; x.textAlign = 'center'; x.fillText('concours', (X(OP.concours.bas) + X(OP.concours.haut)) / 2, 18); } }
+  // Emergency: outlined in red, never a place to land by chance.
+  for (const s of OP.segments) if (s.usage === 'URGENCE') { x.strokeStyle = '#FF3B30'; x.lineWidth = 2; x.strokeRect(X(s.bas) - 1, 21, X(s.haut) - X(s.bas) + 1, 28); x.lineWidth = 1; }
   // The waterfall's window when zoomed.
   const fz = tqFenetre();
   if (fz && !fz.plein) { x.strokeStyle = 'rgba(232,240,247,.7)'; x.lineWidth = 1; x.strokeRect(X(fz.b) + .5, 18.5, X(fz.t) - X(fz.b) - 1, 40); }
@@ -5004,6 +5068,10 @@ function dessineLoupe() {
   r.addEventListener('pointerdown', ev => { if (!OP) return; tire = true; r.setPointerCapture(ev.pointerId); qPost('frequence?hz=' + f(ev)); });
   r.addEventListener('pointermove', ev => { if (!tire || Date.now() - dernier < 120) return; dernier = Date.now(); qPost('frequence?hz=' + f(ev)); });
   r.addEventListener('pointerup', ev => { if (tire) qPost('frequence?hz=' + f(ev)); tire = false; });
+  const bulle = (c, hz) => { const t = qFmt(Math.round(hz / 100) * 100) + qRegle(Math.round(hz)); if (c.title !== t) c.title = t; };
+  r.addEventListener('mousemove', ev => { if (OP) bulle(r, f(ev)); });
+  g('o-pano').addEventListener('mousemove', ev => { if (!OP) return; const fz = tqFenetre(), bb = g('o-pano').getBoundingClientRect();
+    bulle(g('o-pano'), fz.b + (fz.t - fz.b) * (ev.clientX - bb.left - 4) / (bb.width - 8)); });
   // The waterfall: a signal named near the click is tuned in its mode; elsewhere, the frequency clicked.
   g('o-pano').addEventListener('click', ev => {
     if (!OP) return;
@@ -5104,6 +5172,7 @@ function tqRend() {
   txt('tq-db', r.actif ? r.niveau.toFixed(0) + ' dB' : '—');
   txt('tq-demod', recoit ? 'démodulé en ' + r.mode : '');
   if (document.activeElement !== g('tq-mode') && qo && c.mode) g('tq-mode').value = c.mode;
+  txt('tq-conseil-mode', qo && t.conseilMode ? 'ⓘ ' + t.conseilMode : '');
   // The sound.
   if (document.activeElement !== g('tq-hp')) g('tq-hp').checked = !!r.son;
   if (document.activeElement !== g('tq-sq')) g('tq-sq').value = String(r.squelch);
@@ -5790,7 +5859,10 @@ function dessineCascade() {
   const occupe = H.entendus.filter(e => e.t > f8Fin - 2 * s - 2000).map(e => e.hz);
   let meilleur = null, mini = 1e9;
   const recents = f8Lignes.slice(Math.max(0, n - Math.round(2 * s / f8Pas)));
-  for (let hz = 500; hz <= 2500; hz += 10) {
+  // On QO-100: only where the band plan puts the digital modes (never the emergency frequency).
+  const surQo = tqQo(), pl = surQo ? TQ.ft8Plage : null;
+  const de = pl ? Math.ceil(pl.bas / 10) * 10 : 500, a = pl ? pl.haut : surQo ? 0 : 2500;
+  for (let hz = de; hz <= a; hz += 10) {
     if (occupe.some(o => Math.abs(o - hz) < 70)) continue;
     const k0 = Math.floor((hz - 30 - H.basse) / (H.haute - H.basse) * cols), k1 = Math.ceil((hz + 30 - H.basse) / (H.haute - H.basse) * cols);
     let somme = 0; for (const l of recents) for (let k = k0; k <= k1; k++) somme += l[k] || 0;
@@ -5800,7 +5872,8 @@ function dessineCascade() {
   f8Libre = meilleur;
   if (meilleur) { const px = X(meilleur); x.fillStyle = 'rgba(91,214,138,.22)'; x.fillRect(X(meilleur - 30), 0, X(meilleur + 30) - X(meilleur - 30), h);
     x.fillStyle = '#5BD68A'; x.font = 'bold 11px Drapeaux,system-ui'; x.fillText('▼ libre ' + meilleur + ' Hz', Math.min(w - 90, px + 4), 12); }
-  txt('8-libre', meilleur ? '· place libre pour émettre : ' + meilleur + ' Hz' : '');
+  txt('8-libre', meilleur ? '· place libre pour émettre : ' + meilleur + ' Hz' + (surQo ? ' (segment numérique de QO-100)' : '')
+    : surQo && !pl ? '· QO-100 : pas de place proposée, l’accord n’est pas dans les segments numériques (10 489,540 – 10 489,650)' : '');
   // The audio frequencies.
   x.fillStyle = 'rgba(232,240,247,.75)'; x.font = '10px Drapeaux,system-ui';
   for (let f = 500; f < H.haute; f += 500) { const px = X(f); x.fillRect(px, h - 5, 1, 5); x.fillText(f, px + 2, h - 6); }

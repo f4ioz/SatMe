@@ -9,6 +9,7 @@
 package fr.f4ioz.satcombo.demo
 
 import fr.f4ioz.satcombo.domain.Convertisseur
+import fr.f4ioz.satcombo.domain.GardeQo100
 import fr.f4ioz.satcombo.domain.MemoiresQo100
 import fr.f4ioz.satcombo.domain.MesureBalise
 import fr.f4ioz.satcombo.domain.PanoramaQo100
@@ -49,12 +50,14 @@ object ApiQo100 {
             .put("descente", e.descenteHz).put("montee", e.monteeHz).put("calage", e.calageHz)
             .put("transpondeur", e.transpondeur).put("sansBride", e.sansBride).put("surBalise", e.surBalise)
             .put("auPoste", e.auPoste).put("posteRx", e.posteRxHz).put("posteTx", e.posteTxHz).put("atteignable", e.posteAtteignable)
-            .put("emission", e.emissionPermise).put("statut", e.statut).put("catConnecte", catConnecte)
+            .put("emission", e.emissionPermise).put("statut", e.statut)
+            .put("urgence", e.urgence).put("monteeRetenue", e.monteeRetenue).put("catConnecte", catConnecte)
             .put("aLaCle", e.aLaCle).put("cleRx", cleRxHz)
             .put("cleAtteignable", cleRxHz in gammeCle)
             .put("tp", JSONObject().put("bas", e.tp.descenteBasHz).put("haut", e.tp.descenteHautHz).put("centre", e.tp.centreDescenteHz))
             .put("segment", seg?.let { JSONObject().put("nom", tr.t("qo100_seg_" + it.cle)).put("largeur", it.largeurMaxHz)
-                .put("avert", tr.t("qo100_warn_" + it.usage.cleAvertissement)).put("emission", it.emissionPermise) }
+                .put("avert", tr.t("qo100_warn_" + it.usage.cleAvertissement)).put("emission", it.emissionPermise)
+                .put("cle", it.cle).put("usage", it.usage.name).put("regle", tr.t("qo100_regle_" + it.cle)) }
                 ?: JSONObject().put("nom", "").put("largeur", 0).put("avert", tr.t("qo100_warn_hors")).put("emission", false))
             .put("memoires", JSONArray(MemoiresQo100.toutes(e.memoires).map { m ->
                 JSONObject().put("hz", m.hz).put("nom", m.libelle { k -> tr.t(k) }).put("fixe", m.fixe) }))
@@ -69,7 +72,10 @@ object ApiQo100 {
         } else o.put("ciel", if (!observateurConnu) JSONObject().put("inconnu", true) else JSONObject.NULL)
         if (plan) {
             o.put("segments", JSONArray(Qo100.SEGMENTS.map { g -> JSONObject().put("cle", g.cle).put("bas", g.basHz).put("haut", g.hautHz)
-                .put("usage", g.usage.name).put("nom", tr.t("qo100_seg_" + g.cle)).put("repere", g.repereHz ?: JSONObject.NULL) }))
+                .put("usage", g.usage.name).put("nom", tr.t("qo100_seg_" + g.cle)).put("repere", g.repereHz ?: JSONObject.NULL)
+                .put("regle", tr.t("qo100_regle_" + g.cle)) }))
+                .put("concours", JSONObject().put("bas", Qo100.CONCOURS.first).put("haut", Qo100.CONCOURS.last + 1)
+                    .put("regle", tr.t("qo100_regle_concours")))
                 .put("regletteBas", Qo100.REGLETTE_BAS_HZ).put("regletteHaut", Qo100.REGLETTE_HAUT_HZ)
                 .put("transpondeurs", JSONArray(Qo100.TRANSPONDEURS.map { t -> JSONObject().put("cle", t.cle).put("nom", tr.t("qo100_tp_" + t.cle)) }))
                 .put("presets", JSONArray(Convertisseur.PRESETS.map { p ->
@@ -127,6 +133,14 @@ object ApiQo100 {
             .put("enCours", enCours).put("reprendre", TraficQo100.aReprendre(enCours, recoit))
             .put("classifieur", classifieur)
             .put("conseilCalage", TraficQo100.conseilCalage(ecartBaliseHz, calageAuto ?: false) && calageAuto != null)
+        // The band plan's guards on what is tuned: the mode's hint, where an FT8 free spot may be proposed.
+        val dl = ctx.descenteHz
+        if (ctx.qo100 && dl != null) {
+            o.put("conseilMode", GardeQo100.conseilMode(dl, ctx.modeCarnet)?.let { c ->
+                I18n.tf(c.cle, ctx.modeCarnet.uppercase(), I18n.t("qo100_seg_" + c.segment.cle)) } ?: "")
+            o.put("urgence", GardeQo100.urgence(dl))
+            o.put("ft8Plage", GardeQo100.plageAudioNumerique(dl)?.let { JSONObject().put("bas", it.first).put("haut", it.last) } ?: JSONObject.NULL)
+        }
         repriseAuto?.let { o.put("repriseAuto", it) }
         calageAuto?.let { o.put("calageAuto", it) }
         ecartBaliseHz?.let { o.put("ecartBalise", it) }

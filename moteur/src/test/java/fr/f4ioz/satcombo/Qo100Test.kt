@@ -269,20 +269,17 @@ class Qo100Test {
         assertEquals(0, seg("cw").largeurMaxHz)
     }
 
-    /**
-     * Broadcast and emergency: two 7.5 kHz slices around 10489.855 and
-     * 10489.860. The boundary falls on a half kilohertz — looks like a typo,
-     * is not.
-     */
+    /** Broadcast 10 489.850–858, emergency 10 489.858–865: the current AMSAT-DL plan. */
     @Test
-    fun la_diffusion_et_l_urgence_font_sept_kilohertz_et_demi_chacune() {
+    fun la_diffusion_et_l_urgence_suivent_le_plan_actuel() {
         val diff = Qo100.SEGMENTS.first { it.cle == "diffusion" }
         val urg = Qo100.SEGMENTS.first { it.cle == "urgence" }
-        assertEquals(7_500L, diff.largeurHz)
-        assertEquals(7_500L, urg.largeurHz)
+        assertEquals(10_489_850_000L, diff.basHz)
+        assertEquals(10_489_858_000L, diff.hautHz)
+        assertEquals(10_489_858_000L, urg.basHz)
+        assertEquals(10_489_865_000L, urg.hautHz)
         assertEquals(10_489_855_000L, diff.repereHz!!)
         assertEquals(10_489_860_000L, urg.repereHz!!)
-        assertEquals(10_489_857_500L, diff.hautHz)
         // Transmitting is allowed: reserved uses, not prohibitions.
         assertTrue(diff.emissionPermise)
         assertTrue(urg.emissionPermise)
