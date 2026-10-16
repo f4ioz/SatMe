@@ -288,6 +288,9 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 val o = ApiQo100.panorama(actif, d?.panorama, d?.axeQo100(), q["n"]?.toIntOrNull() ?: 512, d?.panoramaTrames ?: 0L, if (actif) d!!.mesureBalise() else null)
                 envoie(sortie, "200 OK", "application/json; charset=utf-8", o.toString().toByteArray())
             }
+            // The signals on the transponder, each judged (BLU, CW, FT8…): asking is what keeps the analysis on.
+            "/api/qo100/signaux" -> envoie(sortie, "200 OK", "application/json; charset=utf-8",
+                (qo100?.signaux?.let { it.demande(); it.json() } ?: JSONObject().put("actif", false).put("absent", true)).toString().toByteArray())
             "/api/qo100/qualite" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", (qo100?.json() ?: JSONObject().put("absent", true)).toString().toByteArray())
             "/api/qo100" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JsonPc.qo100(station, q["plan"] == "1", sdr?.gammeHz).toString().toByteArray())
             "/api/sdr" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", (sdr?.let { JsonPc.sdr(it) } ?: JSONObject().put("absent", true)).toString().toByteArray())

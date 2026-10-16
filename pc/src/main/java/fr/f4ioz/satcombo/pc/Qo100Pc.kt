@@ -23,6 +23,8 @@ import org.json.JSONObject
 class Qo100Pc(private val station: StationPc, private val sdr: SdrPc, private val horloge: () -> Long = System::currentTimeMillis) {
 
     val suivi = SuiviBaliseQo100()
+    /** What each signal on the transponder is: runs only while a page asks. */
+    val signaux = SignauxQo100Pc(sdr, suivi, horloge)
     /** LEILA in the dongle's sound, and in the card's when the rig is on QO-100. */
     private val leila = fr.f4ioz.satcombo.domain.DetecteurLeila(fr.f4ioz.satcombo.sdr.Dsp.AUDIO_RATE)
     @Volatile private var leilaCarte: fr.f4ioz.satcombo.domain.DetecteurLeila? = null
