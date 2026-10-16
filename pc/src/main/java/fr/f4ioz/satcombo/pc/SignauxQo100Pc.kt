@@ -119,11 +119,18 @@ class SignauxQo100Pc(private val sdr: SdrPc, private val suivi: SuiviBaliseQo100
      */
     private fun correction(t: Long): Double {
         val calage = sdr.station.qo100.etat.value.calageHz
-        val d = suivi.dernier ?: return 0.0
-        if (t - d.t > 60_000L) return 0.0
-        val erreur = suivi.erreurRecente() ?: d.erreurHz
-        return erreur - calage
+        val d = suivi.dernier
+        if (d != null && t - d.t <= 60_000L) return (suivi.erreurRecente() ?: d.erreurHz) - calage
+        // Not followed lately (its measures refused, or none yet): the panorama's own look at the
+        // beacon, the last minute's mean. Without it the beacons were looked for 6.7 kHz off (16 October).
+        sdr.mesureBaliseCentre(20_000.0)?.takeIf { it.rapportDb >= BALISE_DB }?.let { m ->
+            if (vuesBalise.lastOrNull()?.first != t) vuesBalise.addLast(t to m.ecartHz)
+        }
+        while (vuesBalise.isNotEmpty() && t - vuesBalise.first().first > 60_000L) vuesBalise.removeFirst()
+        return if (vuesBalise.size >= 3) vuesBalise.map { it.second }.average() else 0.0
     }
+
+    private val vuesBalise = ArrayDeque<Pair<Long, Double>>()
 
     fun json(): JSONObject {
         val t = horloge()
@@ -133,7 +140,7 @@ class SignauxQo100Pc(private val sdr: SdrPc, private val suivi: SuiviBaliseQo100
         o.put("signaux", JSONArray(liste.filter { t - listeMs < 5_000L }.map { s ->
             JSONObject().put("id", s.id).put("hz", s.hz).put("largeurHz", s.largeurHz).put("classe", s.classe.cle)
                 .put("libelle", s.classe.libelle).put("confiance", s.confiance).put("depuisMs", s.depuisMs)
-                .put("vuIlYaMs", s.vuIlYaMs).put("snrDb", s.snrDb).put("details", s.details)
+                .put("vuIlYaMs", s.vuIlYaMs).put("snrDb", s.snrDb).put("snrBandeDb", s.snrBandeDb).put("details", s.details)
                 .put("segment", Qo100.segment(s.hz)?.cle ?: "")
         }))
         return o
@@ -148,5 +155,7 @@ class SignauxQo100Pc(private val sdr: SdrPc, private val suivi: SuiviBaliseQo100
         const val FILE = 256
         /** Around the band plan: the LNB may be some kilohertz off before the beacon corrects it. */
         const val MARGE_HZ = 25_000L
+        /** The beacon over the panorama's floor, to be trusted for the axis. */
+        const val BALISE_DB = 10.0
     }
 }

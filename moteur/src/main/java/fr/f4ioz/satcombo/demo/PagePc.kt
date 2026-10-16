@@ -4391,7 +4391,7 @@ function tqSignauxRend() {
   const h = l.map(s => {
     const c = TQ_COUL[s.classe] || '#9AA7B4', a = Math.abs(s.hz - ici) < 3000;
     return '<button class="' + (a ? 'ici' : '') + '" style="border-color:' + c + ';color:' + c + ';opacity:' + (0.5 + 0.5 * Math.min(1, s.confiance)).toFixed(2) + '" title="' +
-      esc(s.libelle) + ' · sûr à ' + Math.round(s.confiance * 100) + ' % · ' + (s.largeurHz / 1000).toFixed(1) + ' kHz · ' + Math.round(s.snrDb) + ' dB' + (s.details ? ' · ' + esc(s.details) : '') +
+      esc(s.libelle) + ' · sûr à ' + Math.round(s.confiance * 100) + ' % · ' + (s.largeurHz / 1000).toFixed(1) + ' kHz · ' + Math.round(s.snrBandeDb != null ? s.snrBandeDb : s.snrDb) + ' dB' + (s.details ? ' · ' + esc(s.details) : '') +
       '" onclick="tqAccordeId(' + s.id + ')">' + (TQ_NOM[s.classe] || esc(s.classe)) + ' · ' + (s.hz / 1e6).toFixed(4).replace('.', ',') + ' · ' + Math.round(s.confiance * 100) + ' %</button>';
   }).join('');
   if (g('tq-signaux').innerHTML !== h) g('tq-signaux').innerHTML = h;
