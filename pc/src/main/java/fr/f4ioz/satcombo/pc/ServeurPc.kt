@@ -706,6 +706,7 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 entier("duree")?.let { e.dureeS = it * 60 }
                 q["source"]?.let { e.source = it }
                 q["image"]?.let { e.image = it }
+                q["video"]?.let { e.video = it }
                 q["camera"]?.let { if (it.isEmpty() || it in EmissionDatvPc.cameras()) e.camera = it }
                 q["hevc"]?.let { e.hevc = it == "1" }
                 q["son"]?.let { e.son = it == "1" }

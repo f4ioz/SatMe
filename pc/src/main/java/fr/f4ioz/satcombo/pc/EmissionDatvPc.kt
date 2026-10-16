@@ -124,13 +124,16 @@ class EmissionDatvPc(
     var dureeS: Int
         get() = ReglesEmission.dureeS(stockage.getInt("datv_tx_duree", ReglesEmission.DUREE_DEFAUT_S))
         set(v) { stockage.edit().putInt("datv_tx_duree", ReglesEmission.dureeS(v)).apply() }
-    /** "mire", "image" or "camera". */
+    /** "mire", "animee" (the test card with a moving picture and a beep), "image", "video" (a file, looped) or "camera". */
     var source: String
         get() = stockage.getString("datv_tx_source", "mire").takeIf { it in SOURCES } ?: "mire"
         set(v) { if (v in SOURCES) stockage.edit().putString("datv_tx_source", v).apply() }
     var image: String
         get() = stockage.getString("datv_tx_image", "") ?: ""
         set(v) { stockage.edit().putString("datv_tx_image", v.trim()).apply() }
+    var video: String
+        get() = stockage.getString("datv_tx_video", "") ?: ""
+        set(v) { stockage.edit().putString("datv_tx_video", v.trim()).apply() }
     var camera: String
         get() = stockage.getString("datv_tx_camera", "") ?: ""
         set(v) { stockage.edit().putString("datv_tx_camera", v.trim()).apply() }
@@ -269,6 +272,7 @@ class EmissionDatvPc(
         val debitTs = m.debitTs(srKs * 1000.0).toLong()
         val img = when (source) {
             "image" -> File(image).takeIf { it.isFile } ?: return "image introuvable : " + image.ifBlank { "(aucune)" }
+            "video" -> File(video).takeIf { it.isFile } ?: return "vidéo introuvable : " + video.ifBlank { "(aucune)" }
             "camera" -> null.also { if (camera.isBlank()) return "aucune caméra choisie" }
             else -> mire()
         }
@@ -382,7 +386,7 @@ class EmissionDatvPc(
             .put("khz", frequenceKhz).put("descenteKhz", frequenceKhz + PlanQo100.DECALAGE_KHZ)
             .put("gain", gainDb).put("gainMax", gainMaxDb).put("gainCharge", ReglesEmission.GAIN_CHARGE_DB)
             .put("duree", dureeS).put("dureeMax", ReglesEmission.DUREE_MAX_S)
-            .put("source", source).put("image", image).put("camera", camera).put("hevc", hevc).put("son", son)
+            .put("source", source).put("image", image).put("video", video).put("camera", camera).put("hevc", hevc).put("son", son)
             .put("debitTs", mc.debitTs(srKs * 1000.0).toLong()).put("sps", ReglesEmission.sps(srKs))
             .put("echantillons", srKs * 1000L * ReglesEmission.sps(srKs))
             .put("occupeKhz", PlanQo100.occupeKhz(srKs, rolloff.alpha))
@@ -426,7 +430,7 @@ class EmissionDatvPc(
     }
 
     companion object {
-        val SOURCES = setOf("mire", "image", "camera")
+        val SOURCES = setOf("mire", "animee", "image", "video", "camera")
 
         /** About 50 ms per buffer, a multiple of 1024 pairs. */
         fun paires(debit: Long): Int = (((debit / 20) + 1023) / 1024 * 1024).toInt().coerceIn(4096, 1 shl 18)
@@ -456,15 +460,29 @@ class EmissionDatvPc(
                 ts < 1_600_000 -> 960 to 540
                 else -> 1280 to 720
             }
-            val fixe = p.source != "camera"
+            val fixe = p.source == "mire" || p.source == "image"
+            val anime = p.source == "animee"
             val ips = if (fixe) 10 else 25
+            val cadre = "scale=$w:$h:force_original_aspect_ratio=decrease,pad=$w:$h:(ow-iw)/2:(oh-ih)/2"
             val l = ArrayList<String>()
             l += listOf(ff, "-hide_banner", "-loglevel", "error", "-nostdin")
-            if (p.source == "camera") l += listOf("-f", "v4l2", "-framerate", "25", "-i", p.camera)
-            else l += listOf("-re", "-loop", "1", "-framerate", ips.toString(), "-i", p.image!!.path)
-            if (p.son) l += listOf("-re", "-f", "lavfi", "-i", "anullsrc=r=48000:cl=mono")
-            l += listOf("-map", "0:v:0") + (if (p.son) listOf("-map", "1:a:0") else emptyList())
-            l += listOf("-vf", "scale=$w:$h:force_original_aspect_ratio=decrease,pad=$w:$h:(ow-iw)/2:(oh-ih)/2,format=yuv420p", "-r", ips.toString())
+            when (p.source) {
+                "camera" -> l += listOf("-f", "v4l2", "-framerate", "25", "-i", p.camera)
+                "video" -> l += listOf("-re", "-stream_loop", "-1", "-i", p.image!!.path)
+                else -> l += listOf("-re", "-loop", "1", "-framerate", ips.toString(), "-i", p.image!!.path)
+            }
+            // The animated card: a moving test picture (its own counter turning) over the test card, the callsign still in sight.
+            if (anime) l += listOf("-re", "-f", "lavfi", "-i", "testsrc2=size=" + (w / 3 / 2 * 2) + "x" + (h / 3 / 2 * 2) + ":rate=25")
+            // The sound: the file's own, a beep each second with the animated card, else silence.
+            val entreeSon = if (anime) 2 else 1
+            if (p.son && p.source != "video") l += listOf("-re", "-f", "lavfi", "-i",
+                if (anime) "sine=frequency=1000:beep_factor=4:sample_rate=48000" else "anullsrc=r=48000:cl=mono")
+            if (anime) l += listOf("-filter_complex", "[0:v]$cadre[f];[f][1:v]overlay=x=(W-w)/2+(W-w)/2.2*sin(t*0.8):y=H-h-H/12,format=yuv420p[v]",
+                "-map", "[v]")
+            else l += listOf("-map", "0:v:0")
+            if (p.son) l += listOf("-map", if (p.source == "video") "0:a:0?" else "$entreeSon:a:0")
+            if (!anime) l += listOf("-vf", "$cadre,format=yuv420p")
+            l += listOf("-r", ips.toString())
             l += if (p.hevc) listOf("-c:v", "libx265", "-preset", "veryfast", "-tune", "zerolatency", "-x265-params", "log-level=error:keyint=${ips * 2}:repeat-headers=1")
                 else listOf("-c:v", "libx264", "-preset", "veryfast", "-tune", "zerolatency", "-g", (ips * 2).toString())
             l += listOf("-b:v", video.toString(), "-maxrate", video.toString(), "-bufsize", (video / 2).toString())

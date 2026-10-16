@@ -1051,10 +1051,11 @@ object PagePc {
         <span class="petit" id="e-descente"></span></div>
       <div class="avert" id="e-bande"></div>
       <div class="ligne"><span class="petit" style="min-width:86px">Source</span><select id="e-source" onchange="eRegle()" style="max-width:190px">
-        <option value="mire">Mire SatMe + indicatif</option><option value="image">Image fixe</option><option value="camera">Caméra</option></select>
+        <option value="mire">Mire SatMe + indicatif</option><option value="animee">Mire animée (vidéo de test, bip)</option><option value="image">Image fixe</option><option value="video">Fichier vidéo (en boucle)</option><option value="camera">Caméra</option></select>
         <select id="e-hevc" onchange="eRegle()" style="max-width:90px"><option value="0">H.264</option><option value="1">H.265</option></select>
         <label class="petit"><input type="checkbox" id="e-son" onchange="eRegle()"> son</label></div>
       <div class="ligne" id="e-image-l" hidden><span class="petit" style="min-width:86px">Image</span><input id="e-image" placeholder="/home/…/image.png" onchange="eRegle()"></div>
+      <div class="ligne" id="e-video-l" hidden><span class="petit" style="min-width:86px">Vidéo</span><input id="e-video" placeholder="/home/…/essai.mp4" onchange="eRegle()"></div>
       <div class="ligne" id="e-camera-l" hidden><span class="petit" style="min-width:86px">Caméra</span><select id="e-camera" onchange="eRegle()"></select></div>
       <div class="ligne" id="e-vga-l" hidden><span class="petit" style="min-width:86px">Gain VGA (dB)</span><input id="e-vga" type="number" step="1" min="0" max="10" style="max-width:80px" onchange="eRegle()">
         <span class="petit">0 à 10 dB, amplificateur RF toujours coupé ; pris au démarrage</span></div>
@@ -3217,7 +3218,7 @@ async function ticEmission() {
     }
     g('e-modcod').value = j.modcod; g('e-sr').value = j.sr; g('e-ro').value = j.ro; g('e-courtes').checked = j.courtes; g('e-pilotes').checked = j.pilotes;
     g('e-mhz').value = mhz3(j.khz); g('e-gain').value = j.gain; g('e-duree').value = Math.round(j.duree / 60);
-    g('e-source').value = j.source; g('e-image').value = j.image; g('e-hevc').value = j.hevc ? '1' : '0'; g('e-son').checked = j.son;
+    g('e-source').value = j.source; g('e-image').value = j.image; g('e-video').value = j.video || ''; g('e-hevc').value = j.hevc ? '1' : '0'; g('e-son').checked = j.son;
     const cams = j.cameras.length ? j.cameras : [''];
     g('e-camera').innerHTML = cams.map(c => '<option value="' + esc(c) + '">' + (c ? esc(c) : 'aucune caméra trouvée') + '</option>').join('');
     g('e-camera').value = j.camera || cams[0];
@@ -3231,7 +3232,7 @@ async function ticEmission() {
   const html = '<option value="">—</option>' + can.map(c => '<option value="' + mhz3(c.montee) + '">' + mhz3(c.montee) + ' ↑ / ' + mhz3(c.descente) + ' ↓' +
     (occupe && Math.abs(occupe - c.descente) < j.sr / 2 && D.service !== j.indicatif ? ' — occupé (' + esc(D.service || 'signal') + ')' : '') + '</option>').join('');
   if (g('e-canal').dataset.vu !== html) { g('e-canal').dataset.vu = html; g('e-canal').innerHTML = html; }
-  g('e-image-l').hidden = j.source !== 'image'; g('e-camera-l').hidden = j.source !== 'camera';
+  g('e-image-l').hidden = j.source !== 'image'; g('e-video-l').hidden = j.source !== 'video'; g('e-camera-l').hidden = j.source !== 'camera';
   txt('e-descente', '↓ ' + mhz3(j.descenteKhz) + ' MHz');
   txt('e-gainmax', 'max ' + j.gainMax + ' dB (Réglages)');
   const charge = g('e-charge').checked;
@@ -3252,7 +3253,7 @@ async function ticEmission() {
   p.textContent = j.emet ? (j.charge ? 'SUR CHARGE' : j.interieur ? 'ESSAI INTÉRIEUR' : 'EN ÉMISSION') : 'arrêtée';
   p.style.background = j.emet ? '#C62828' : ''; p.style.color = j.emet ? '#fff' : 'var(--gris)';
   g('e-go').disabled = j.emet; g('e-stop').hidden = !j.emet;
-  ['e-modcod', 'e-sr', 'e-ro', 'e-courtes', 'e-pilotes', 'e-canal', 'e-mhz', 'e-source', 'e-image', 'e-camera', 'e-hevc', 'e-son', 'e-duree', 'e-charge',
+  ['e-modcod', 'e-sr', 'e-ro', 'e-courtes', 'e-pilotes', 'e-canal', 'e-mhz', 'e-source', 'e-image', 'e-video', 'e-camera', 'e-hevc', 'e-son', 'e-duree', 'e-charge',
     'e-emetteur', 'e-interieur', 'e-int-mhz', 'e-int-duree', 'e-vga', 'e-hackrf-outil', 'e-hackrf-det'].forEach(i => g(i).disabled = j.emet);
   // A transmission running (the page reloaded): its mode shown.
   if (j.emet) { g('e-charge').checked = j.charge; g('e-interieur').checked = j.interieur; }
@@ -3307,7 +3308,7 @@ async function eDetecte() {
 function eParams() {
   return 'modcod=' + enc(v('e-modcod')) + '&sr=' + v('e-sr') + '&ro=' + v('e-ro') + '&courtes=' + (g('e-courtes').checked ? 1 : 0) + '&pilotes=' + (g('e-pilotes').checked ? 1 : 0) +
     '&mhz=' + enc(v('e-mhz').replace(',', '.')) + '&gain=' + enc(v('e-gain')) + '&duree=' + enc(v('e-duree')) + '&source=' + v('e-source') +
-    '&image=' + enc(v('e-image')) + '&camera=' + enc(g('e-camera').value) + '&hevc=' + v('e-hevc') + '&son=' + (g('e-son').checked ? 1 : 0) +
+    '&image=' + enc(v('e-image')) + '&video=' + enc(v('e-video')) + '&camera=' + enc(g('e-camera').value) + '&hevc=' + v('e-hevc') + '&son=' + (g('e-son').checked ? 1 : 0) +
     '&emetteur=' + v('e-emetteur') + '&vga=' + enc(v('e-vga')) + '&hackrfOutil=' + enc(v('e-hackrf-outil')) +
     '&intMhz=' + enc(v('e-int-mhz').replace(',', '.')) + '&intDuree=' + enc(v('e-int-duree'));
 }
