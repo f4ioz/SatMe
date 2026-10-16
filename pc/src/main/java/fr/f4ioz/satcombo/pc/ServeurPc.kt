@@ -111,14 +111,17 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 }
             }
             if ("son" in sujets && son != null) {
-                val r = son.etat.value
-                val avant = refSon as? SonStation.Etat
+                val r = son.etat.value to son.sstv.etat.value
+                @Suppress("UNCHECKED_CAST")
+                val avant = refSon as? Pair<SonStation.Etat, SstvPc.Etat>
                 // A recording starting or stopping, a picture beginning: at once; the rest (level, seconds,
                 // lines of a picture) at most twice a second — the sound's state moves with every block.
-                val net = avant == null || r.enregistrement != avant.enregistrement || r.sstvMode != avant.sstvMode || r.sstvDerniere != avant.sstvDerniere
-                if (net || (r !== avant && maintenant - sonMs >= 500L) || maintenant - sonMs >= 1000L) {
+                val net = avant == null || r.first.enregistrement != avant.first.enregistrement || r.second.mode != avant.second.mode ||
+                    r.second.derniere != avant.second.derniere
+                val bouge = avant == null || r.first !== avant.first || r.second !== avant.second
+                if (net || (bouge && maintenant - sonMs >= 500L) || maintenant - sonMs >= 1000L) {
                     refSon = r; sonMs = maintenant
-                    if (!envoie("son", JsonPc.son(son).toString())) return
+                    if (!envoie("son", JsonPc.son(son, sdr).toString())) return
                 }
             }
             // CW: each letter as it comes, the key's light a few times a second.
@@ -418,7 +421,7 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
             "/api/ft8/cascade" -> envoie(sortie, "200 OK", "application/json; charset=utf-8",
                 fr.f4ioz.satcombo.demo.ApiRadio.ft8Cascade(son?.ft8?.cascade, q["depuis"]?.toLongOrNull() ?: 0L, son?.ft8?.derniereLigneMs ?: 0L).toString().toByteArray())
             "/api/aprs" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JsonPc.aprs(son, station).toString().toByteArray())
-            "/api/son" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JsonPc.son(son).toString().toByteArray())
+            "/api/son" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JsonPc.son(son, sdr).toString().toByteArray())
             "/api/veille" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JsonPc.veille(station, son).toString().toByteArray())
             "/api/mire" -> {
                 val m = mire
@@ -911,6 +914,38 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 q["sstv"]?.let { s.sstvActif = it == "1" }
                 q["aprs"]?.let { s.aprsActif = it == "1" }
             }
+            // SSTV, as the phone's controls: source, forced mode, continuous, cleaning; start by hand, end.
+            "/api/sstv/reglage" -> {
+                val x = son?.sstv ?: return JSONObject().put("ok", false)
+                q["source"]?.let { if (it in SstvPc.SOURCES) x.source = it else return JSONObject().put("ok", false).put("erreur", "source inconnue") }
+                q["force"]?.let { x.force = fr.f4ioz.satcombo.sstv.SstvMode.byName(it) }
+                q["continu"]?.let { x.continu = it == "1" }
+                q["nettoyage"]?.let { x.nettoyage = it == "1" }
+                q["actif"]?.let { son.sstvActif = it == "1" }
+            }
+            "/api/sstv/caler" -> {
+                val x = son?.sstv ?: return JSONObject().put("ok", false)
+                x.cale(q["mode"]?.let { fr.f4ioz.satcombo.sstv.SstvMode.byName(it) })?.let { return JSONObject().put("ok", false).put("erreur", it) }
+            }
+            "/api/sstv/abandon" -> son?.sstv?.abandonne() ?: return JSONObject().put("ok", false)
+            "/api/sstv/redecode" -> {
+                val x = son?.sstv ?: return JSONObject().put("ok", false)
+                // A recording by its name, or a picture's own sound (decoded again with what its sidecar says).
+                val image = q["image"]?.let { x.fichier(it) }
+                val f = if (image != null) fr.f4ioz.satcombo.sstv.SstvSon.fichier(image) else son.fichierEnregistrement(q["nom"].orEmpty())
+                    ?: return JSONObject().put("ok", false).put("erreur", "enregistrement introuvable")
+                val origine = image?.let { im -> x.images().firstOrNull { it.fileName == im.name } }
+                x.redecode(f, origine)?.let { return JSONObject().put("ok", false).put("erreur", it) }
+            }
+            "/api/sstv/annule" -> son?.sstv?.annuleRedecodage() ?: return JSONObject().put("ok", false)
+            "/api/sstv/supprime" -> {
+                val x = son?.sstv ?: return JSONObject().put("ok", false)
+                if (!x.supprime(q["nom"].orEmpty())) return JSONObject().put("ok", false).put("erreur", "image introuvable")
+            }
+            "/api/sstv/gif" -> {
+                val x = son?.sstv ?: return JSONObject().put("ok", false)
+                x.gif(q["nom"].orEmpty())?.let { return JSONObject().put("ok", false).put("erreur", it) }
+            }
             "/api/rotor/reglages" -> {
                 entier("maxAz")?.let { rotor.setRotorMaxAz(it) }
                 entier("maxEl")?.let { rotor.setRotorMaxEl(it) }
@@ -968,6 +1003,7 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
             f.name.endsWith(".png") -> "image/png"
             f.name.endsWith(".wav") -> "audio/wav"
             f.name.endsWith(".mp3") -> "audio/mpeg"
+            f.name.endsWith(".gif") -> "image/gif"
             else -> "application/octet-stream"
         }
         val taille = f.length()
@@ -1188,13 +1224,38 @@ object JsonPc {
      * Where a station is from mine: its place (QRZ's coordinates, else its
      * square's centre), the distance and the bearing (great circle).
      */
-    fun son(s: SonStation?): JSONObject {
+    fun son(s: SonStation?, sdr: SdrPc? = null): JSONObject {
         if (s == null) return JSONObject().put("present", false)
         val c = s.son.etat.value
         val e = s.etat.value
+        val v = s.sstv.etat.value
         return ApiSon.json(ApiSon.Etat(s.son.appareils().map { it.nom to it.description }, s.carte, c.actif, c.rate, c.niveau, c.erreur,
             e.enregistrement, e.secondes, e.auto, s.enregAuto, s.sstvActif, s.aprsActif,
-            e.sstvMode, e.sstvLignes, e.sstvHauteur, e.sstvVersion, e.sstvDerniere, s.enregistrements(), s.images(), s.coupeLos))
+            v.mode, v.lignes, v.hauteur, v.version, v.derniere, s.enregistrements(), s.images(), s.coupeLos,
+            detail = sstvDetail(s, sdr), dossierImages = s.dossierSstv))
+            // What actually feeds the decoders (the dongle when it took the card's place), not only the card chosen.
+            .put("appareil", c.appareil)
+    }
+
+    /** The SSTV decoder in detail: its source, what it hears, its settings, the work under way. */
+    fun sstvDetail(s: SonStation, sdr: SdrPc?): ApiSon.Sstv {
+        val x = s.sstv
+        val v = x.etat.value
+        val e = x.ecoute()
+        val sdrActive = sdr?.etat?.value?.actif == true
+        val carte = s.son.etat.value
+        val src = when (x.sourceActive) {
+            SstvPc.SDR -> "clé SDR"
+            SstvPc.CARTE -> if (carte.appareil == SdrPc.NOM_SOURCE) "clé SDR (par l'onglet Son)" else "carte son" + (carte.appareil.takeIf { it.isNotBlank() }?.let { " ($it)" } ?: "")
+            else -> ""
+        }
+        return ApiSon.Sstv(source = x.source, sourceActive = if (e.depuisMs in 0..SstvPc.SON_VU_MS) src else "", depuisMs = e.depuisMs,
+            niveau = e.niveau, ecartHz = e.ecartHz, ecartSyncHz = e.ecartSyncHz, spectre = e.spectre,
+            spectreBasHz = fr.f4ioz.satcombo.sstv.SstvAccord.BASSE_HZ, spectrePasHz = fr.f4ioz.satcombo.sstv.SstvAccord.PAS_HZ,
+            force = x.force?.name.orEmpty(), continu = x.continu, nettoyage = x.nettoyage, decodage = e.decodage,
+            progres = e.progres, gardees = v.gardees, erreur = v.erreur,
+            conseil = x.conseil(carte.actif, sdrActive).orEmpty(),
+            redecode = v.redecode, redecodeProgres = v.redecodeProgres, redecodeImages = v.redecodeImages, gif = v.gif)
     }
 
     /** The CW decoder: on or not, its text, the speed, the tone, the key's light. */

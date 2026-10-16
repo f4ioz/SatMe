@@ -106,6 +106,8 @@ fun main(args: Array<String>) {
     phonie.contexte = { src -> contextePhonie(station, sdr, src) }
     son.son.auditeurs += { pcm, n, rate -> phonie.ecouteCarte(pcm, n, rate) }
     sdr.ecouteVoix = { pcm, n, sq -> phonie.ecouteSdr(pcm, n, fr.f4ioz.satcombo.sdr.Dsp.AUDIO_RATE, sq) }
+    // SSTV hears the dongle directly (« auto »: while it plays), not only through the Son tab.
+    sdr.ecouteSstv = { pcm, n -> son.sstv.ecouteSdr(pcm, n, fr.f4ioz.satcombo.sdr.Dsp.AUDIO_RATE) }
     phonie.demarre()
     portee.launch {
         while (true) {

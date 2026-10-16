@@ -720,9 +720,34 @@ object PagePc {
 <div class="grille2">
   <div>
     <div class="carte">
-      <div class="t">En cours <span class="petit" id="i-mode"></span></div>
-      <img id="i-encours" style="width:100%;image-rendering:auto;background:#0E1720;min-height:200px;border-radius:8px" alt="">
+      <div class="t">Réception SSTV <span class="petit" id="i-mode"></span></div>
+      <div class="val" id="sstv-statut" style="font-size:15px"></div>
+      <div class="avert" id="sstv-conseil" hidden></div>
+      <div class="ligne" style="margin-top:6px"><span class="petit" style="min-width:52px">Niveau</span>
+        <div style="flex:1;height:8px;background:#0E1720;border-radius:4px;overflow:hidden"><div id="sstv-niveau" style="height:100%;width:0;background:var(--vert)"></div></div>
+        <span class="petit" id="sstv-source-active" style="min-width:120px;text-align:right"></span></div>
+      <canvas id="sstv-spectre" width="600" height="56" style="width:100%;height:56px;background:#0E1720;border-radius:6px;margin-top:6px" title="Le son de 900 à 2600 Hz : synchro 1200, image 1500–2300, en-tête 1900"></canvas>
+      <div class="petit" id="sstv-ecart"></div>
+      <div class="ligne"><span class="petit" id="sstv-source-l">Source</span>
+        <select id="sstv-source" style="flex:none" onchange="post('api/sstv/reglage?source=' + this.value)"><option value="auto">auto : la clé SDR si elle joue, sinon la carte son</option><option value="carte">carte son (onglet Son)</option><option value="sdr">clé SDR</option></select></div>
+      <div class="ligne"><span class="petit">Mode</span><select id="sstv-force" style="flex:none" onchange="post('api/sstv/reglage?force=' + enc(this.value || 'auto'))"></select>
+        <button id="sstv-caler" onclick="post('api/sstv/caler')" title="Commencer l'image tout de suite, dans le mode choisi, sans attendre l'en-tête">⚡ Caler maintenant</button>
+        <button class="arret" id="sstv-abandon" hidden onclick="post('api/sstv/abandon')" title="Finir l'image en cours (gardée si assez de lignes) et écouter à nouveau">✕ Arrêter l'image</button></div>
+      <div class="petit">Mode imposé : l'en-tête VIS n'est plus attendu. « Caler maintenant » accroche l'image sur la prochaine impulsion de synchro.</div>
+      <label class="petit" style="display:block;margin-top:6px"><input type="checkbox" id="sstv-actif" onchange="post('api/sstv/reglage?actif=' + (this.checked ? 1 : 0))"> Décoder la SSTV en direct</label>
+      <label class="petit" style="display:block;margin-top:4px"><input type="checkbox" id="sstv-continu" onchange="post('api/sstv/reglage?continu=' + (this.checked ? 1 : 0))"> Décodage continu : démarre une image sur ses tops de synchronisation, même sans en-tête (mode reconnu à la durée des lignes)</label>
+      <label class="petit" style="display:block;margin-top:4px"><input type="checkbox" id="sstv-nettoyage" onchange="post('api/sstv/reglage?nettoyage=' + (this.checked ? 1 : 0))"> Nettoyer les images : répare les lignes et les traits perdus dans le bruit</label>
+      <img id="i-encours" style="width:100%;image-rendering:auto;background:#0E1720;min-height:200px;border-radius:8px;margin-top:8px" alt="">
+      <div style="height:6px;background:#0E1720;border-radius:3px;margin-top:4px;overflow:hidden"><div id="sstv-barre" style="height:100%;width:0;background:var(--vert)"></div></div>
       <div class="etat" id="sstv-etat"></div>
+    </div>
+    <div class="carte" id="sstv-redec-carte">
+      <div class="t">Décoder un enregistrement</div>
+      <div class="petit">Repasse un enregistrement du PC dans le décodeur (avec le mode imposé et le décodage continu choisis ci-dessus). Les images retrouvent l'heure de leur réception.</div>
+      <div class="ligne"><select id="sstv-enreg" style="flex:1"></select><button class="primaire" id="sstv-redec" onclick="post('api/sstv/redecode?nom=' + enc(g('sstv-enreg').value))">⟳ Décoder</button>
+        <button id="sstv-annule" hidden onclick="post('api/sstv/annule')">Annuler</button></div>
+      <div style="height:6px;background:#0E1720;border-radius:3px;margin-top:6px;overflow:hidden"><div id="sstv-redec-barre" style="height:100%;width:0;background:var(--cyan)"></div></div>
+      <div class="petit" id="sstv-redec-etat"></div>
     </div>
     <div class="carte" id="mi-carte" hidden>
       <div class="t">Mire SSTV</div>
@@ -745,8 +770,9 @@ object PagePc {
   </div>
   <div>
     <div class="carte">
-      <div class="t">Images reçues</div>
-      <div id="i-galerie" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px"></div>
+      <div class="t">Images reçues <span class="petit" id="i-nombre"></span></div>
+      <div class="ligne" style="margin-top:0"><select id="i-filtre" style="flex:none" onchange="imagesVus = ''; rendSon()"><option value="">tous les satellites</option></select></div>
+      <div id="i-galerie" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px;margin-top:8px"></div>
     </div>
   </div>
 </div>
@@ -1538,6 +1564,12 @@ object PagePc {
   <img id="vi-img" alt="" onclick="g('visionneuse').close()">
   <div class="ligne" style="margin-top:6px"><button onclick="voisImage(viN - 1)" title="Précédente (←)">‹</button><button onclick="voisImage(viN + 1)" title="Suivante (→)">›</button>
     <span class="petit" id="vi-txt" style="flex:1"></span><a id="vi-lien" download><button>⤓ Enregistrer</button></a><button onclick="g('visionneuse').close()">Fermer</button></div>
+  <div class="ligne" id="vi-outils" style="margin-top:6px">
+    <audio id="vi-son" controls style="flex:1;min-width:200px;height:32px"></audio>
+    <button id="vi-redec" onclick="viAction('redecode?image=')" title="Repasser le son de cette image dans le décodeur">⟳ Redécoder son son</button>
+    <button id="vi-gif" onclick="viAction('gif?nom=')" title="L'image qui arrive, en boucle, sans son">🎞 GIF</button><a id="vi-gif-lien" download hidden><button>⤓ GIF</button></a>
+    <button class="arret" onclick="viSupprime()">🗑 Supprimer</button></div>
+  <div class="petit" id="vi-sans-son"></div>
 </dialog>
 <script>
 const g = id => document.getElementById(id);
@@ -3231,29 +3263,135 @@ function rendSon() {
   }
   // SSTV: the picture arriving, reloaded only when it moved.
   txt('i-mode', S.sstvMode ? S.sstvMode + ' · ' + S.sstvLignes + '/' + S.sstvHauteur + ' lignes' : '');
-  txt('sstv-etat', !S.actif ? (window.SATME_TELEPHONE ? 'Le téléphone décode en enregistrant : « Enregistrer » (onglet Son).' : 'Démarre la carte son (onglet Son) pour décoder.') : !S.sstv ? 'Décodage SSTV coupé (onglet Son).' : S.sstvMode ? 'réception…' : 'à l’écoute');
+  rendSstv();
+  txt('sstv-etat', !S.actif ? (window.SATME_TELEPHONE ? 'Le téléphone décode en enregistrant : « Enregistrer » (onglet Son).' : '') : !S.sstv ? 'Décodage SSTV coupé.' : S.sstvMode ? 'réception…' : S.sstvDerniere ? 'dernière image : ' + S.sstvDerniere : '');
   if (ouverte('sstv') && S.sstvVersion !== versionImage) {
     versionImage = S.sstvVersion;
     if (S.sstvMode) g('i-encours').src = 'api/sstv/encours.png?v=' + S.sstvVersion;
     else if (S.sstvDerniere) g('i-encours').src = 'sstv/' + enc(S.sstvDerniere);
   }
-  const imgs = JSON.stringify(S.images.map(i => i.nom));
+  // The gallery, by satellite when one is chosen.
+  const sats = JSON.stringify([...new Set(S.images.map(i => i.sat).filter(x => x))].sort());
+  if (sats !== satsVus) {
+    satsVus = sats;
+    const f = g('i-filtre').value;
+    g('i-filtre').innerHTML = '<option value="">tous les satellites</option>' + JSON.parse(sats).map(x => '<option>' + esc(x) + '</option>').join('');
+    g('i-filtre').value = f;
+  }
+  const filtre = g('i-filtre').value;
+  imagesMontrees = S.images.filter(i => !filtre || i.sat === filtre);
+  txt('i-nombre', String(imagesMontrees.length));
+  const imgs = JSON.stringify(imagesMontrees.map(i => i.nom + (i.gif ? 'g' : '')));
   if (imgs !== imagesVus && ouverte('sstv')) {
     imagesVus = imgs;
-    g('i-galerie').innerHTML = S.images.map((i, n) => '<a href="sstv/' + enc(i.nom) + '" onclick="voisImage(' + n + '); return false" style="text-decoration:none;color:inherit">' +
+    g('i-galerie').innerHTML = imagesMontrees.map((i, n) => '<a href="sstv/' + enc(i.nom) + '" onclick="voisImage(' + n + '); return false" style="text-decoration:none;color:inherit">' +
       '<img src="sstv/' + enc(i.nom) + '" style="width:100%;border-radius:6px" loading="lazy"><div class="petit">' + esc(i.sat) + ' · ' + esc(i.mode) +
-      ' · ' + (i.t ? new Date(i.t).toISOString().slice(0, 16).replace('T', ' ') : '') + (i.complete ? '' : ' · partielle') + '</div></a>').join('') ||
+      ' · ' + (i.t ? new Date(i.t).toISOString().slice(0, 16).replace('T', ' ') : '') + (i.complete ? '' : ' · partielle') +
+      (i.redecode ? ' · redécodée' : '') + (i.son ? ' · ♪' : '') + '</div></a>').join('') ||
       '<div class="petit">aucune image</div>';
   }
+  if (g('visionneuse').open) voisOutils();
+}
+let satsVus = '', imagesMontrees = [], modesSstvVus = '';
+// The decoder in detail: what it hears, from where, its settings, the work under way.
+function rendSstv() {
+  const D = S.sstvDetail;
+  g('sstv-source').hidden = g('sstv-source-l').hidden = !D || !D.source;
+  if (document.activeElement !== g('sstv-actif')) g('sstv-actif').checked = S.sstv;
+  if (!D) { txt('sstv-statut', ''); return; }
+  if (D.modes && JSON.stringify(D.modes) !== modesSstvVus) {
+    modesSstvVus = JSON.stringify(D.modes);
+    g('sstv-force').innerHTML = '<option value="">Auto (VIS)</option>' + D.modes.map(m => '<option>' + esc(m) + '</option>').join('');
+  }
+  if (document.activeElement !== g('sstv-force')) g('sstv-force').value = D.force || '';
+  if (D.source && document.activeElement !== g('sstv-source')) g('sstv-source').value = D.source;
+  if (document.activeElement !== g('sstv-continu')) g('sstv-continu').checked = D.continu;
+  if (document.activeElement !== g('sstv-nettoyage')) g('sstv-nettoyage').checked = D.nettoyage;
+  g('sstv-caler').hidden = D.decodage; g('sstv-abandon').hidden = !D.decodage;
+  g('sstv-caler').disabled = !D.force;
+  g('sstv-caler').title = D.force ? 'Commencer l\'image tout de suite en ' + D.force + ', sans attendre l\'en-tête' : 'Choisir d\'abord un mode';
+  const ecoute = D.sourceActive !== '';
+  const st = !S.sstv ? 'Décodage coupé'
+    : D.decodage ? 'Réception ' + (S.sstvMode || '') + (S.sstvHauteur ? ' · ' + S.sstvLignes + '/' + S.sstvHauteur + ' lignes' : '') + ' · ' + Math.round(D.progres * 100) + ' %'
+    : ecoute ? 'À l’écoute' + (D.force ? ' · mode imposé ' + D.force : D.continu ? ' · en-tête VIS ou tops de synchro' : ' · en attente de l’en-tête VIS')
+    : 'Pas de son';
+  txt('sstv-statut', st + (D.gardees ? ' · ' + D.gardees + ' image' + (D.gardees > 1 ? 's' : '') + ' gardée' + (D.gardees > 1 ? 's' : '') : ''));
+  g('sstv-statut').style.color = D.decodage ? 'var(--vert)' : ecoute ? 'var(--cyan)' : 'var(--ambre)';
+  const conseil = [D.conseil, D.erreur].filter(x => x).join(' · ');
+  g('sstv-conseil').hidden = !conseil; txt('sstv-conseil', conseil);
+  txt('sstv-source-active', D.sourceActive);
+  g('sstv-niveau').style.width = Math.round(Math.min(1, D.niveau) * 100) + '%';
+  g('sstv-niveau').style.background = D.niveau > 0.95 ? 'var(--rose)' : D.niveau < 0.003 ? 'var(--ambre)' : 'var(--vert)';
+  g('sstv-barre').style.width = (D.decodage ? Math.round(D.progres * 100) : 0) + '%';
+  const e = [];
+  if (D.ecartSyncHz != null) e.push('synchro vue à ' + (1200 + D.ecartSyncHz) + ' Hz (' + (D.ecartSyncHz > 0 ? '+' : '') + D.ecartSyncHz + ' Hz)');
+  if (D.ecartHz != null) e.push('écart d’accord corrigé par le décodeur : ' + (D.ecartHz > 0 ? '+' : '') + D.ecartHz + ' Hz');
+  txt('sstv-ecart', e.join(' · ') || (ecoute ? 'Accord : la synchro doit tomber sur le trait 1200 Hz (au-delà de ±250 Hz l’en-tête n’est plus reconnu).' : ''));
+  if (ouverte('sstv')) spectreSstv(D);
+  // Decoding a recording again.
+  g('sstv-redec-carte').hidden = !D.peutRedecoder;
+  const en = JSON.stringify(S.enregistrements.map(x => x.nom));
+  if (en !== enregsSstvVus) {
+    enregsSstvVus = en;
+    const avant = g('sstv-enreg').value;
+    g('sstv-enreg').innerHTML = S.enregistrements.map(x => '<option value="' + esc(x.nom).replace(/"/g, '&quot;') + '">' + esc(x.nom) + ' · ' + (x.taille / 1048576).toFixed(1) + ' Mo</option>').join('') || '<option value="">aucun enregistrement</option>';
+    if (avant) g('sstv-enreg').value = avant;
+  }
+  const enCours = D.redecodeProgres >= 0;
+  g('sstv-redec').hidden = enCours; g('sstv-annule').hidden = !enCours;
+  g('sstv-redec-barre').style.width = (enCours ? Math.round(D.redecodeProgres * 100) : 0) + '%';
+  txt('sstv-redec-etat', enCours ? D.redecode + ' · ' + Math.round(D.redecodeProgres * 100) + ' % · ' + D.redecodeImages + ' image(s)'
+    : D.redecode ? D.redecode + ' : ' + D.redecodeImages + ' image(s) trouvée(s)' : '');
+}
+let enregsSstvVus = '';
+// The sound from 900 to 2600 Hz, the SSTV tones marked: the sync line shows where the receiver is tuned.
+function spectreSstv(D) {
+  const c = g('sstv-spectre'), x = c.getContext('2d'), w = c.width, h = c.height;
+  x.fillStyle = '#0E1720'; x.fillRect(0, 0, w, h);
+  const bas = D.spectreBas || 900, pas = D.spectrePas || 20, n = D.spectre ? D.spectre.length : Math.round((2600 - bas) / pas) + 1;
+  const px = f => (f - bas) / (pas * (n - 1)) * w;
+  [[1200, 'synchro'], [1500, 'noir'], [1900, 'VIS'], [2300, 'blanc']].forEach(([f, l]) => {
+    x.strokeStyle = f === 1200 ? '#FFB454' : '#22303B'; x.lineWidth = 1; x.beginPath(); x.moveTo(px(f), 0); x.lineTo(px(f), h); x.stroke();
+    x.fillStyle = '#9AA7B4'; x.font = '10px sans-serif'; x.fillText(f + ' ' + l, px(f) + 2, 10);
+  });
+  if (!D.spectre) return;
+  x.strokeStyle = '#3FE0C8'; x.lineWidth = 1.5; x.beginPath();
+  D.spectre.forEach((db, i) => { const y = h - Math.max(0, (db + 50) / 50) * (h - 12); i ? x.lineTo(i / (n - 1) * w, y) : x.moveTo(0, y); });
+  x.stroke();
 }
 // A picture opened over the page, not in a tab: the arrows go through the gallery, Escape closes.
 let viN = 0;
 function voisImage(n) {
-  const l = (S && S.images) || []; if (!l.length) return;
+  const l = imagesMontrees.length ? imagesMontrees : ((S && S.images) || []); if (!l.length) return;
   viN = (n + l.length) % l.length; const i = l[viN];
   g('vi-img').src = 'sstv/' + enc(i.nom); g('vi-lien').href = 'sstv/' + enc(i.nom); g('vi-lien').download = i.nom;
-  txt('vi-txt', (viN + 1) + '/' + l.length + ' · ' + [i.sat, i.mode, i.t ? new Date(i.t).toISOString().slice(0, 16).replace('T', ' ') + ' UTC' : '', i.complete ? '' : 'partielle'].filter(x => x).join(' · '));
+  txt('vi-txt', (viN + 1) + '/' + l.length + ' · ' + [i.sat, i.mode, i.t ? new Date(i.t).toISOString().slice(0, 16).replace('T', ' ') + ' UTC' : '', i.complete ? '' : 'partielle',
+    i.redecode ? 'redécodée' + (i.enregistrement ? ' de ' + i.enregistrement : '') : ''].filter(x => x).join(' · '));
+  viNom = i.nom; viSonVu = '';
+  voisOutils();
   if (!g('visionneuse').open) g('visionneuse').showModal();
+}
+let viNom = '', viSonVu = '';
+// The picture's own sound, its GIF, deleting it: as the phone's viewer.
+function voisOutils() {
+  const i = ((S && S.images) || []).find(x => x.nom === viNom);
+  const D = S && S.sstvDetail;
+  g('vi-outils').hidden = !i || !D;
+  if (!i || !D) return;
+  const wav = viNom.replace(/\.png$/, '.wav'), gif = viNom.replace(/\.png$/, '.gif');
+  g('vi-son').hidden = g('vi-redec').hidden = !i.son;
+  if (i.son && viSonVu !== wav) { viSonVu = wav; g('vi-son').src = 'sstv/' + enc(wav); }
+  g('vi-redec').disabled = D.redecodeProgres >= 0 || !D.peutRedecoder;
+  g('vi-gif').hidden = !D.peutGif; g('vi-gif').disabled = !!D.gif;
+  txt('vi-gif', D.gif === viNom ? '🎞 GIF en cours…' : i.gif ? '🎞 Refaire le GIF' : '🎞 GIF');
+  g('vi-gif-lien').hidden = !i.gif; g('vi-gif-lien').href = 'sstv/' + enc(gif); g('vi-gif-lien').download = gif;
+  txt('vi-sans-son', i.son ? '' : 'Le son de cette image n’est pas gardé (images reçues avant que SatMe ne le garde).');
+}
+async function viAction(a) { if (viNom) await post('api/sstv/' + a + enc(viNom)); }
+async function viSupprime() {
+  if (!viNom || !confirm('Supprimer ' + viNom + ' (avec son son et son GIF) ?')) return;
+  const j = await post('api/sstv/supprime?nom=' + enc(viNom));
+  if (j && j.ok !== false) { g('visionneuse').close(); imagesVus = ''; }
 }
 g('visionneuse').addEventListener('keydown', e => {
   if (e.key === 'ArrowLeft') { e.preventDefault(); voisImage(viN - 1); } else if (e.key === 'ArrowRight') { e.preventDefault(); voisImage(viN + 1); }

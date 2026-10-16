@@ -706,6 +706,48 @@ object PagesPcTelephone {
                 if (p("auto").isNotEmpty()) return JSONObject().put("ok", false).put("erreur", "sur le téléphone, l'enregistrement des passages se règle dans l'agenda et le CAT")
                 OK
             }
+            // ---- SSTV: the phone's controls (SstvHub), from the page
+            "/api/sstv/reglage" -> {
+                val ctx = vm.getApplication<android.app.Application>()
+                if (p("source").isNotEmpty()) return JSONObject().put("ok", false).put("erreur", "sur le téléphone, la SSTV écoute l'enregistrement (onglet Son) ou la clé SDR qui la décode")
+                if (p("force").isNotEmpty()) fr.f4ioz.satcombo.sstv.SstvHub.setForcedMode(ctx, p("force").takeIf { it != "auto" })
+                if (p("continu").isNotEmpty()) fr.f4ioz.satcombo.sstv.SstvHub.setContinu(ctx, p("continu") == "1")
+                if (p("nettoyage").isNotEmpty()) fr.f4ioz.satcombo.sstv.SstvHub.setNettoyage(ctx, p("nettoyage") == "1")
+                if (p("actif").isNotEmpty()) vm.setSstvEnabled(p("actif") == "1")
+                OK
+            }
+            "/api/sstv/caler" -> {
+                val ctx = vm.getApplication<android.app.Application>()
+                if (p("mode").isNotEmpty()) fr.f4ioz.satcombo.sstv.SstvHub.setForcedMode(ctx, p("mode"))
+                if (fr.f4ioz.satcombo.sstv.SstvHub.forceStart()) OK
+                else JSONObject().put("ok", false).put("erreur", fr.f4ioz.satcombo.sstv.SstvHub.state.value.erreur ?: "impossible")
+            }
+            "/api/sstv/abandon" -> { fr.f4ioz.satcombo.sstv.SstvHub.abortFrame(); OK }
+            "/api/sstv/annule" -> { fr.f4ioz.satcombo.sstv.SstvHub.cancelFileDecode(); OK }
+            "/api/sstv/redecode" -> {
+                val ctx = vm.getApplication<android.app.Application>()
+                if (fr.f4ioz.satcombo.sstv.SstvHub.state.value.fileProgress >= 0f) return JSONObject().put("ok", false).put("erreur", "un décodage est déjà en cours")
+                val image = p("image").takeIf { it.isNotEmpty() }?.let { n -> fr.f4ioz.satcombo.sstv.SstvHub.shots(ctx).firstOrNull { it.first.name == n } }
+                val f = if (image != null) fr.f4ioz.satcombo.sstv.SstvSon.fichier(image.first).takeIf { it.isFile }
+                    else ApiSon.fichier(dossierEnregistrements(ctx), p("nom"), ".mp3", ".wav")
+                if (f == null) return JSONObject().put("ok", false).put("erreur", "enregistrement introuvable")
+                Thread { runCatching { fr.f4ioz.satcombo.sstv.SstvHub.decodeFile(ctx, f, image?.second) } }.apply { isDaemon = true }.start()
+                OK
+            }
+            "/api/sstv/supprime" -> {
+                val ctx = vm.getApplication<android.app.Application>()
+                val f = ApiSon.fichier(fr.f4ioz.satcombo.sstv.SstvHub.dir(ctx), p("nom"), ".png") ?: return JSONObject().put("ok", false).put("erreur", "image introuvable")
+                fr.f4ioz.satcombo.sstv.SstvHub.delete(f); OK
+            }
+            "/api/sstv/gif" -> {
+                val ctx = vm.getApplication<android.app.Application>()
+                val (png, shot) = fr.f4ioz.satcombo.sstv.SstvHub.shots(ctx).firstOrNull { it.first.name == p("nom") }
+                    ?: return JSONObject().put("ok", false).put("erreur", "image introuvable")
+                if (gifEnCours.isNotEmpty()) return JSONObject().put("ok", false).put("erreur", "un GIF est déjà en cours")
+                gifEnCours = png.name
+                Thread { try { fr.f4ioz.satcombo.sstv.SstvVideo.fabriqueGif(ctx, png, shot) } finally { gifEnCours = "" } }.apply { isDaemon = true }.start()
+                OK
+            }
             else -> JSONObject().put("ok", false).put("erreur", "pas encore sur le téléphone")
         }
     }
@@ -824,8 +866,22 @@ object PagesPcTelephone {
             r.recording && r.autoStopMs != null, false, u.sstvEnabled, vm.aprsActif(),
             if (enCours) s.modeName.orEmpty() else "", (s.progress * hauteur).toInt(), hauteur, versionApercu, s.lastSaved.orEmpty(),
             enregistrements(ctx), fr.f4ioz.satcombo.sstv.SstvHub.shots(ctx).map { it.second }.sortedByDescending { it.timeMs },
-            vm.enregCoupeLos()))
+            vm.enregCoupeLos(), detail = sstvDetail(s, r.recording), dossierImages = fr.f4ioz.satcombo.sstv.SstvHub.dir(ctx)))
     }
+
+    /** A GIF being made from the page (the picture's name). */
+    @Volatile private var gifEnCours = ""
+
+    /** The phone's SSTV decoder in SatMe-PC's words: its settings and state (the source is the recorder or the dongle). */
+    private fun sstvDetail(s: fr.f4ioz.satcombo.sstv.SstvHub.SstvState, enregistre: Boolean): ApiSon.Sstv = ApiSon.Sstv(
+        source = "", sourceActive = if (s.listening) (if (fr.f4ioz.satcombo.sdr.SdrHub.state.value.running && !enregistre) "clé SDR du téléphone" else "enregistrement du téléphone") else "",
+        depuisMs = if (s.listening) 0L else -1L,
+        niveau = if (enregistre) fr.f4ioz.satcombo.audio.MoniteurAudio.etat.value.crete else 0f,
+        force = s.forcedMode.orEmpty(), continu = s.continu, nettoyage = s.nettoyage, decodage = s.decoding, progres = s.progress,
+        gardees = s.savedCount, erreur = s.erreur.orEmpty(),
+        conseil = if (s.listening) "" else "Le téléphone décode en enregistrant : « Enregistrer » (onglet Son), ou avec sa clé SDR.",
+        redecode = if (s.fileProgress >= 0f) s.fileName.orEmpty() else "", redecodeProgres = s.fileProgress, redecodeImages = s.fileImages,
+        gif = gifEnCours)
 
     /**
      * Why the page cannot take the microphone (a recording, FT8), or null. Android lets the
@@ -862,8 +918,8 @@ object PagesPcTelephone {
                 ?.let { ReponseWeb("200 OK", "image/png", fichier = it) }
             chemin.startsWith("/sondes/") -> ApiSon.fichier(fr.f4ioz.satcombo.sonde.SondeHub.logDir(ctx), nom("/sondes/"), ".csv", ".kml", ".gpx", ".txt", ".log")
                 ?.let { ReponseWeb("200 OK", "application/octet-stream", fichier = it, entetes = "Content-Disposition: attachment; filename=\"${it.name}\"\r\n") }
-            chemin.startsWith("/sstv/") -> ApiSon.fichier(fr.f4ioz.satcombo.sstv.SstvHub.dir(ctx), nom("/sstv/"), ".png")
-                ?.let { ReponseWeb("200 OK", "image/png", fichier = it) }
+            chemin.startsWith("/sstv/") -> ApiSon.fichier(fr.f4ioz.satcombo.sstv.SstvHub.dir(ctx), nom("/sstv/"), ".png", ".wav", ".gif")
+                ?.let { ReponseWeb("200 OK", when (it.extension) { "wav" -> "audio/wav"; "gif" -> "image/gif"; else -> "image/png" }, fichier = it) }
             chemin.startsWith("/enregistrements/") -> ApiSon.fichier(dossierEnregistrements(ctx), nom("/enregistrements/"), ".mp3", ".wav")
                 ?.takeIf { it.name.startsWith("SatMe_") }
                 ?.let { ReponseWeb("200 OK", if (it.name.endsWith(".mp3")) "audio/mpeg" else "audio/wav", fichier = it) }

@@ -293,6 +293,8 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
     @Volatile var ecouteQo100: ((ShortArray, Int) -> Unit)? = null
     /** The dongle's sound for « Phonie → texte » ([Dsp.AUDIO_RATE]), with the squelch's gate when one is set. */
     @Volatile var ecouteVoix: ((ShortArray, Int, Boolean?) -> Unit)? = null
+    /** The dongle's sound for the SSTV decoder ([Dsp.AUDIO_RATE]), whatever the Son tab's source. */
+    @Volatile var ecouteSstv: ((ShortArray, Int) -> Unit)? = null
 
     /**
      * The panorama's axis, in QO-100's nominal sky: its centre and signed
@@ -568,6 +570,7 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
                     if (son.etat.value.appareil == NOM_SOURCE && son.etat.value.actif) son.distribue(pcm, produit, Dsp.AUDIO_RATE)
                     if (pourQo100()) ecouteQo100?.invoke(pcm, produit)
                     ecouteVoix?.invoke(pcm, produit, if (settings.sdrSquelchDb > -120) chaine.squelch.open else null)
+                    ecouteSstv?.let { runCatching { it(pcm, produit) } }
                     // The browsers listening to the dongle (the page open on another PC).
                     diffusion?.ajoute("sdr", pcm, produit, Dsp.AUDIO_RATE)
                 }
