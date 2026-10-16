@@ -157,9 +157,12 @@ class SpectreLargePc(
         val maintenant = horloge()
         val r = datv.reglage
         if (e.actif && e.verrouille && r.cielKhz in BandeLarge.DEBUT_KHZ..BandeLarge.DEBUT_KHZ + BandeLarge.LARGEUR_KHZ) {
-            val sr = BandeLarge.debit((if (e.srTrouveKs > 0) e.srTrouveKs else r.srKs).toDouble())
+            // Under the rate tuned (as the spectrum measured it) and the one found, when they differ.
+            val debits = listOf(r.srKs, e.srTrouveKs).filter { it > 0 }.map { BandeLarge.debit(it.toDouble()) }.distinct()
             val n = nomRecu()
-            if (n.isNotEmpty() && noms.note(r.cielKhz, sr, n, maintenant)) stockage.edit().putString(CLE_NOMS, noms.texte()).apply()
+            var nouveau = false
+            if (n.isNotEmpty()) debits.forEach { if (noms.note(r.cielKhz, it, n, maintenant)) nouveau = true }
+            if (nouveau) stockage.edit().putString(CLE_NOMS, noms.texte()).apply()
         }
         if (!veille.active) { enregistrePour = null; return }
         if (!frais()) { veillePause = true; return }

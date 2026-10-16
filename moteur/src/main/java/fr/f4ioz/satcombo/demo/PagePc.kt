@@ -3518,7 +3518,7 @@ function wbSpectre() {
   if (bal) {
     const yb = wbY(bal.niveau - WB.unitesDb, h);
     x.strokeStyle = 'rgba(255,180,84,.6)'; x.beginPath(); x.moveTo(wbX(10492500, w), yb); x.lineTo(w, yb); x.stroke();
-    x.fillStyle = 'rgba(255,180,84,.8)'; x.textAlign = 'right'; x.fillText('balise − 1 dB', w - 4, yb - 3); x.textAlign = 'center';
+    x.fillStyle = 'rgba(255,180,84,.8)'; x.textAlign = 'left'; x.fillText('balise − 1 dB', wbX(10492500, w) + 4, yb - 3); x.textAlign = 'center';
   }
   x.setLineDash([]);
   if (!wbVals) { x.fillStyle = '#6F7D8A'; x.fillText('en attente du spectre…', w / 2, h / 2); wbBoites = []; return; }
