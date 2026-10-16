@@ -116,6 +116,19 @@ object PagePc {
   #d-cadre { position:relative; aspect-ratio:16/9; max-height:calc(100vh - 230px); background:#000; border-radius:8px; overflow:hidden; display:flex; align-items:center; justify-content:center; }
   #d-video { max-width:100%; max-height:100%; display:none; }
   #d-vide { position:absolute; color:var(--gris); font-size:15px; }
+  #q-boite { margin-top:12px; border-top:1px solid var(--bord); padding-top:10px; }
+  .q-haut { display:flex; gap:16px; align-items:center; flex-wrap:wrap; }
+  #q-marge { font-family:ui-monospace,Consolas,monospace; font-size:30px; font-weight:800; white-space:nowrap; }
+  #q-verdict { font-size:15px; font-weight:700; }
+  .q-tuiles { display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:6px; margin-top:10px; }
+  .q-tuile { background:#0E1720; border-radius:8px; padding:6px 9px; font-size:12px; color:var(--gris); line-height:1.5; }
+  .q-tuile b { color:var(--clair); font-family:ui-monospace,Consolas,monospace; font-size:15px; font-weight:600; }
+  .q-courbes { display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:6px; margin-top:8px; }
+  .q-courbes canvas { width:100%; height:44px; background:#0E1720; border-radius:6px; display:block; }
+  #q-pids table { border-collapse:collapse; width:100%; margin-top:6px; }
+  #q-pids td, #q-pids th { padding:2px 6px; text-align:right; font-family:ui-monospace,Consolas,monospace; font-size:12px; }
+  #q-pids th { color:var(--gris); font-weight:400; }
+  #q-pids td:nth-child(2), #q-pids th:nth-child(2) { text-align:left; font-family:inherit; }
   #t-qr svg { width:100%; height:100%; display:block; border-radius:8px; }
   #visionneuse::backdrop { background:rgba(0,0,0,.75); }
   #vi-img { display:block; max-width:min(92vw,1280px); max-height:calc(92vh - 60px); min-width:320px; image-rendering:auto; border-radius:6px; cursor:zoom-out; background:#0E1720; }
@@ -998,6 +1011,22 @@ object PagePc {
       <span id="d-rec" class="pastille" style="display:none;background:rgba(229,72,77,.2);color:var(--rose)"></span>
     </div>
     <div class="petit" id="d-service" style="margin-top:4px"></div>
+    <div id="q-boite" hidden>
+      <div class="t">Qualité de réception</div>
+      <div class="q-haut">
+        <div id="q-marge" title="MER mesurée moins le MER qu'il faut au MODCOD pour une image sans erreur (DVB-S2 : EN 302 307-1, table 13)">Marge —</div>
+        <div style="flex:1;min-width:220px"><div id="q-verdict"></div><div class="petit" id="q-conseil"></div></div>
+      </div>
+      <div class="q-tuiles" id="q-tuiles"></div>
+      <div class="petit" id="q-boucle" style="margin-top:8px" hidden></div>
+      <div class="q-courbes">
+        <div><div class="petit">MER (2 min)</div><canvas id="q-c-mer" width="340" height="44"></canvas></div>
+        <div><div class="petit">Marge</div><canvas id="q-c-marge" width="340" height="44"></canvas></div>
+        <div><div class="petit">Paquets reçus / attendus</div><canvas id="q-c-ratio" width="340" height="44"></canvas></div>
+        <div><div class="petit">Erreurs de continuité /s</div><canvas id="q-c-cc" width="340" height="44"></canvas></div>
+      </div>
+      <div id="q-pids"></div>
+    </div>
   </div>
   <div class="d-cote">
     <div class="carte">
@@ -3155,6 +3184,93 @@ async function ticDatv(premier) {
   if (v.style.display !== 'block') { g('d-vide').hidden = false; g('d-vide').textContent = !D.actif ? 'Réception arrêtée' :
     D.telephone ? (D.verrouille ? 'accroché : l’image est sur l’écran DATV du téléphone' : D.libelle + '…') : (D.verrouille ? 'accroché, en attente des images…' : D.libelle + '…'); }
   dessineConstellation();
+  qualiteDatv();
+}
+// ------------------------------------------------------------------ DATV reception quality
+let qEm = null, qEmPs = null;
+const fr1 = x => x == null ? '—' : x.toFixed(1).replace('.', ',');
+const pct = x => x == null ? '—' : Math.round(x * 100) + ' %';
+function dqCase(titre, val, sous, couleur) {
+  return '<div class="q-tuile">' + titre + '<br><b' + (couleur ? ' style="color:' + couleur + '"' : '') + '>' + val + '</b>' + (sous ? '<br>' + sous : '') + '</div>';
+}
+function qualiteDatv() {
+  const Q = D.qualite, b = g('q-boite');
+  b.hidden = !Q || !(D.actif || Q.secondes > 0);
+  if (b.hidden) return;
+  const m = Q.marge, mm = g('q-marge');
+  txt('q-marge', m == null ? 'Marge —' : 'Marge ' + (m >= 0 ? '+' : '−') + fr1(Math.abs(m)) + ' dB');
+  mm.style.color = m == null ? 'var(--gris)' : m < 1 ? 'var(--rose)' : m < 3 ? 'var(--ambre)' : 'var(--vert)';
+  const vd = Q.verdict || {};
+  txt('q-verdict', vd.texte || ''); g('q-verdict').style.color = vd.niveau === 0 ? 'var(--vert)' : vd.niveau === 1 ? 'var(--ambre)' : 'var(--rose)';
+  txt('q-conseil', vd.conseil ? '→ ' + vd.conseil : '');
+  const rc = Q.ratio == null ? null : Q.ratio < 0.9 ? 'var(--rose)' : Q.ratio < 0.98 ? 'var(--ambre)' : 'var(--vert)';
+  const t = [];
+  t.push(dqCase('Seuil du MODCOD', Q.seuil == null ? '—' : fr1(Q.seuil) + ' dB', 'MER ' + fr1(Q.mer) + ' dB'));
+  t.push(dqCase('Paquets reçus / attendus', Math.round(Q.recus) + ' / ' + (Q.attendus == null ? '—' : Math.round(Q.attendus)) + ' /s',
+    pct(Q.ratio) + (Q.ratioPcr != null ? ' · d’après le PCR ' + pct(Q.ratioPcr) : ''), rc));
+  t.push(dqCase('Continuité (paquets perdus)', fr1(Q.cc) + ' err/s', Q.totalCc + ' erreurs, ≥ ' + Q.totalManquants + ' paquets manquants',
+    Q.cc >= 0.2 ? 'var(--rose)' : 'var(--vert)'));
+  t.push(dqCase('Erreurs de transport', 'TEI ' + Q.totalTei, 'pertes de synchro ' + Q.sync + (Q.doublons ? ' · doublons ' + Q.doublons : ''),
+    Q.totalTei || Q.sync ? 'var(--ambre)' : ''));
+  const fec = [];
+  if (D.bchNonCorrige != null) fec.push('BCH non corrigé : ' + (D.bchNonCorrige ? 'oui' : 'non'));
+  if (D.bch != null) fec.push('BCH ' + fr1(Q.bchS) + '/s');
+  if (D.ldpc != null) fec.push('LDPC ' + fr1(Q.ldpcS) + '/s');
+  if (D.viterbi != null && D.etat === 3) fec.push('Viterbi ' + D.viterbi.toFixed(2) + ' %');
+  t.push(dqCase('Correction d’erreurs', D.ber != null ? 'BER ' + D.ber.toFixed(2) + ' %' : '—', fec.join(' · '),
+    Q.fec === true ? 'var(--rose)' : Q.fec === false ? 'var(--vert)' : ''));
+  if (Q.paquetsParTrame != null) t.push(dqCase('Trames DVB-S2', fr1(Q.paquetsParTrame) + ' paquets/trame',
+    Q.tramesEntieres ? 'pertes par trames entières' : (Q.totalCc ? 'pertes éparses' : 'aucune perte'), Q.tramesEntieres ? 'var(--rose)' : ''));
+  t.push(dqCase('Décodeurs (par minute)', 'vidéo ' + Math.round(Q.videoMin) + ' · son ' + Math.round(Q.audioMin),
+    (Q.imagesS != null ? fr1(Q.imagesS) + ' images/s' : '') + (Q.fluxMin >= 1 ? ' · flux ' + Math.round(Q.fluxMin) : ''),
+    Q.videoMin + Q.audioMin > 3 ? 'var(--ambre)' : ''));
+  t.push(dqCase('Tables', ['PAT', 'PMT', 'SDT', 'PCR'].map(k => (Q[k.toLowerCase()] ? '✓' : '✗') + k).join(' '),
+    'vide ' + Math.round(Q.nulsPct) + ' %' + (Q.debitPcr != null ? ' · flux ' + Math.round(Q.debitPcr / 1000) + ' kb/s (PCR)' : '')));
+  const ht = t.join('');
+  if (g('q-tuiles').dataset.h !== ht) { g('q-tuiles').dataset.h = ht; g('q-tuiles').innerHTML = ht; }
+  // Our own signal received (closed loop): packets sent and received side by side.
+  const bo = g('q-boucle');
+  const nous = EM && EM.emet && D.verrouille && D.service && EM.indicatif && D.service.trim().toUpperCase() === EM.indicatif;
+  if (nous && typeof EM.paquets === 'number') {
+    const now = Date.now();
+    if (!qEm || EM.paquets < qEm.p) qEm = { t: now, p: EM.paquets };
+    else if (now - qEm.t >= 2000 && EM.paquets > qEm.p) { qEmPs = (EM.paquets - qEm.p) * 1000 / (now - qEm.t); qEm = { t: now, p: EM.paquets }; }
+    bo.hidden = false;
+    txt('q-boucle', 'Boucle sur notre signal : émis ' + (qEmPs == null ? '…' : Math.round(qEmPs)) + ' paquets/s · reçus ' + Math.round(Q.recus) +
+      ' paquets/s' + (qEmPs ? ' (' + Math.round(100 * Q.recus / qEmPs) + ' %)' : '') + (EM.tsPerdus ? ' · perdus à l’émission ' + EM.tsPerdus : ''));
+  } else { bo.hidden = true; qEm = null; qEmPs = null; }
+  const h = Q.histo || {};
+  dqCourbe('q-c-mer', h.mer, { ref: Q.seuil, couleur: '#3FE0C8' });
+  dqCourbe('q-c-marge', h.marge, { ref: 0, couleur: '#FFB454' });
+  dqCourbe('q-c-ratio', h.ratio, { ref: 1, min: 0, max: 1.1, couleur: '#5BD68A' });
+  dqCourbe('q-c-cc', h.cc, { ref: 0, min: 0, couleur: '#E5484D' });
+  const pids = (Q.pids || []).map(p => '<tr><td>' + p.pid + '</td><td>' + esc(p.role) + (p.pcr ? ' · PCR' : '') + '</td><td>' + Math.round(p.kbps) +
+    '</td><td' + (p.cc ? ' style="color:var(--rose)"' : '') + '>' + p.cc + '</td><td>' + p.manquants + '</td></tr>').join('');
+  const hp = pids ? '<table><tr><th>PID</th><th>contenu</th><th>kb/s</th><th>err. cont.</th><th>manquants</th></tr>' + pids + '</table>' : '';
+  if (g('q-pids').dataset.h !== hp) { g('q-pids').dataset.h = hp; g('q-pids').innerHTML = hp; }
+}
+// A small curve over the last two minutes; nulls are gaps; ref a dashed line.
+function dqCourbe(id, a, o) {
+  const c = g(id), x = c.getContext('2d'), w = c.width, hh = c.height;
+  x.clearRect(0, 0, w, hh);
+  a = a || [];
+  const vals = a.filter(v => v != null);
+  if (!vals.length) return;
+  let lo = o.min != null ? o.min : Math.min.apply(null, vals.concat(o.ref != null ? [o.ref] : []));
+  let hi = o.max != null ? Math.max(o.max, Math.max.apply(null, vals)) : Math.max.apply(null, vals.concat(o.ref != null ? [o.ref] : []));
+  if (hi - lo < 1e-6) { hi += 1; lo -= o.min != null ? 0 : 1; }
+  const y = v => hh - 3 - (v - lo) / (hi - lo) * (hh - 6), n = 120;
+  if (o.ref != null) { x.strokeStyle = '#4A5A68'; x.setLineDash([3, 3]); x.beginPath(); x.moveTo(0, y(o.ref)); x.lineTo(w, y(o.ref)); x.stroke(); x.setLineDash([]); }
+  x.strokeStyle = o.couleur; x.lineWidth = 1.5; x.beginPath();
+  let dedans = false;
+  a.forEach((v, i) => {
+    const px = w - (a.length - 1 - i) * w / (n - 1);
+    if (v == null) { dedans = false; return; }
+    if (dedans) x.lineTo(px, y(v)); else x.moveTo(px, y(v));
+    dedans = true;
+  });
+  x.stroke();
+  x.fillStyle = '#9AA7B4'; x.font = '10px sans-serif'; x.fillText(fr1(vals[vals.length - 1]), 4, 11);
 }
 function dessineConstellation() {
   const c = g('d-const'), x = c.getContext('2d'), w = c.width;
