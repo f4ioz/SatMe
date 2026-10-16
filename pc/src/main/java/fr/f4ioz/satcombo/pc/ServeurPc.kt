@@ -63,6 +63,9 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
     /** The DATV picture's subtitles and callsigns read in it (set before [demarre]). */
     @Volatile var textesDatv: TextesDatvPc? = null
 
+    /** The DATV transmission's pictures and videos: the folder browser and the files sent (set before [demarre]). */
+    @Volatile var fichiersDatv: FichiersDatvPc? = null
+
     private var socket: ServerSocket? = null
     val portReel: Int get() = socket?.localPort ?: port
 
@@ -259,6 +262,9 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
         textesDatv?.takeIf { chemin == "/api/datv/textes" }?.let { t ->
             val o = if (r.methode == "POST") runCatching { t.action(q) }.getOrElse { JSONObject().put("ok", false).put("erreur", it.message ?: "erreur") } else t.json()
             envoie(sortie, "200 OK", "application/json; charset=utf-8", o.toString().toByteArray()); return
+        }
+        if (chemin.startsWith("/api/datv/sources/") || chemin.startsWith("/api/datv/emission/apercu") || chemin == "/api/datv/emission/incrustation") {
+            sourcesDatv(r, c, chemin, q, sortie); return
         }
         if (r.methode == "POST") {
             val res = runCatching { action(chemin, q) }.getOrElse { JSONObject().put("ok", false).put("erreur", it.message ?: "erreur") }
@@ -1037,6 +1043,53 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
             else -> return JSONObject().put("ok", false).put("erreur", "inconnu : $chemin")
         }
         return ok
+    }
+
+    /**
+     * DATV transmission's sources: the folder browser (read only), the files
+     * sent from the page, the overlay's settings and the preview (one frame
+     * made by ffmpeg, nothing transmitted).
+     */
+    private fun sourcesDatv(r: RequeteHttp.Requete, c: Socket, chemin: String, q: Map<String, String>, sortie: OutputStream) {
+        val json = "application/json; charset=utf-8"
+        fun repond(o: JSONObject) = envoie(sortie, "200 OK", json, o.toString().toByteArray())
+        val absent = JSONObject().put("ok", false).put("erreur", "émission DATV indisponible")
+        val f = fichiersDatv
+        val e = emission
+        val post = r.methode == "POST"
+        when {
+            chemin == "/api/datv/sources/liste" -> repond(f?.liste(q["d"].orEmpty(), q["type"].orEmpty()) ?: absent)
+            chemin == "/api/datv/sources/envois" -> repond(f?.envoisJson() ?: absent)
+            chemin == "/api/datv/sources/vignette.jpg" -> {
+                val b = f?.vignette(q["p"].orEmpty())
+                if (b == null) envoie(sortie, "404 Not Found", "text/plain; charset=utf-8", "pas de vignette".toByteArray())
+                else envoie(sortie, "200 OK", "image/jpeg", b)
+            }
+            post && chemin == "/api/datv/sources/envoi" -> {
+                if (f == null) return repond(absent)
+                val res = f.recoit(q["nom"].orEmpty(), r.longueur, Borne(c.getInputStream(), r.longueur))
+                repond(res.fold({ JSONObject().put("ok", true).put("chemin", it.path).put("nom", it.name) },
+                    { JSONObject().put("ok", false).put("erreur", it.message ?: "envoi refusé") }))
+            }
+            post && chemin == "/api/datv/sources/supprime" -> repond(if (f != null && f.supprime(q["nom"].orEmpty())) JSONObject().put("ok", true)
+                else JSONObject().put("ok", false).put("erreur", "fichier introuvable"))
+            chemin == "/api/datv/emission/incrustation" -> {
+                val i = e?.incrustation ?: return repond(absent)
+                if (post) i.regle(q)
+                repond(i.json())
+            }
+            post && chemin == "/api/datv/emission/apercu" -> {
+                if (e == null) return repond(absent)
+                val err = e.apercu()
+                repond(if (err == null) JSONObject().put("ok", true).put("t", System.currentTimeMillis()) else JSONObject().put("ok", false).put("erreur", err))
+            }
+            chemin == "/api/datv/emission/apercu.jpg" -> {
+                val a = e?.fichierApercu
+                if (a == null || !a.isFile) envoie(sortie, "404 Not Found", "text/plain; charset=utf-8", "pas d'aperçu".toByteArray())
+                else envoie(sortie, "200 OK", "image/jpeg", a.readBytes())
+            }
+            else -> envoie(sortie, "404 Not Found", json, "{\"ok\":false}".toByteArray())
+        }
     }
 
     /** A file as it is on disk, by parts when the browser asks (a sound it seeks in). */

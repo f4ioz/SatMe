@@ -110,6 +110,13 @@ object PagePc {
   #c-liste td.act button { padding:3px 5px; }
   #c-liste .c-nm { max-width:96px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--gris); font-size:11px; font-weight:400; }
   #c-liste td.act { white-space:nowrap; }
+  .fd-grille { display:grid; grid-template-columns:repeat(auto-fill,minmax(120px,1fr)); gap:6px; max-height:50vh; overflow:auto; margin-top:6px; }
+  .fd-el { background:var(--fond); border:1px solid var(--bord); border-radius:8px; padding:4px; cursor:pointer; font-size:11px; overflow:hidden; position:relative; }
+  .fd-el:hover { border-color:var(--cyan); }
+  .fd-el .fd-v { height:72px; display:flex; align-items:center; justify-content:center; background:#0E1720; border-radius:4px; font-size:28px; }
+  .fd-el .fd-v img { max-width:100%; max-height:72px; }
+  .fd-el .fd-n { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:3px; }
+  .fd-el .fd-x { position:absolute; top:2px; right:2px; padding:0 5px; font-size:11px; }
   .gp-ct { color:var(--gris); font-size:11px; }
   .d-grille { display:grid; grid-template-columns:minmax(0,1fr) 430px; gap:12px; padding:12px 16px; }
   @media (max-width:1100px) { .d-grille { grid-template-columns:1fr; } }
@@ -1122,9 +1129,25 @@ object PagePc {
         <option value="mire">Mire SatMe + indicatif</option><option value="animee">Mire animée (vidéo de test, bip)</option><option value="image">Image fixe</option><option value="video">Fichier vidéo (en boucle)</option><option value="camera">Caméra</option></select>
         <select id="e-hevc" onchange="eRegle()" style="max-width:90px"><option value="0">H.264</option><option value="1">H.265</option></select>
         <label class="petit"><input type="checkbox" id="e-son" onchange="eRegle()"> son</label></div>
-      <div class="ligne" id="e-image-l" hidden><span class="petit" style="min-width:86px">Image</span><input id="e-image" placeholder="/home/…/image.png" onchange="eRegle()"></div>
-      <div class="ligne" id="e-video-l" hidden><span class="petit" style="min-width:86px">Vidéo</span><input id="e-video" placeholder="/home/…/essai.mp4" onchange="eRegle()"></div>
+      <div class="ligne" id="e-image-l" hidden><span class="petit" style="min-width:86px">Image</span><input id="e-image" placeholder="/home/…/image.png" onchange="eRegle()"><button id="e-image-par" onclick="fdOuvre('image')" title="Choisir une image sur ce PC, ou en envoyer une depuis cet ordinateur">Parcourir…</button></div>
+      <div class="ligne" id="e-video-l" hidden><span class="petit" style="min-width:86px">Vidéo</span><input id="e-video" placeholder="/home/…/essai.mp4" onchange="eRegle()"><button id="e-video-par" onclick="fdOuvre('video')" title="Choisir une vidéo sur ce PC, ou en envoyer une depuis cet ordinateur">Parcourir…</button></div>
       <div class="ligne" id="e-camera-l" hidden><span class="petit" style="min-width:86px">Caméra</span><select id="e-camera" onchange="eRegle()"></select></div>
+      <details id="ei" style="margin-top:6px"><summary class="petit">Incrustation sur l’image <span id="ei-resume"></span></summary>
+        <div class="ligne"><label class="petit"><input type="checkbox" id="ei-indicatif" onchange="eiRegle()"> indicatif</label>
+          <label class="petit"><input type="checkbox" id="ei-locator" onchange="eiRegle()"> locator</label>
+          <label class="petit"><input type="checkbox" id="ei-logo" onchange="eiRegle()"> logo SatMe</label>
+          <label class="petit"><input type="checkbox" id="ei-heure" onchange="eiRegle()"> heure UTC</label></div>
+        <div class="ligne"><span class="petit" style="min-width:86px">Texte</span><input id="ei-texte" maxlength="60" placeholder="Une ligne libre (60 caractères)" onchange="eiRegle()"></div>
+        <div class="ligne"><span class="petit" style="min-width:86px">Position</span><select id="ei-position" onchange="eiRegle()" style="max-width:170px">
+          <option value="haut-gauche">en haut à gauche</option><option value="haut-droite">en haut à droite</option><option value="bas-gauche">en bas à gauche</option>
+          <option value="bas-droite">en bas à droite</option><option value="bandeau">bandeau en bas</option></select>
+          <select id="ei-taille" onchange="eiRegle()" style="max-width:100px"><option value="petit">petit</option><option value="moyen">moyen</option><option value="grand">grand</option></select>
+          <label class="petit"><input type="checkbox" id="ei-fond" onchange="eiRegle()"> fond sombre</label></div>
+        <div class="petit">Sur la mire, l’indicatif, le locator et le logo y sont déjà : seuls le texte et l’heure s’ajoutent. Le débit émis ne change pas.</div>
+      </details>
+      <div class="ligne"><button id="e-apercu-go" onclick="eApercu()" title="Une image de ce qui serait émis (source et incrustation), faite par ffmpeg : rien n’est émis">Prévisualiser</button>
+        <span class="petit" id="e-apercu-msg" style="flex:1"></span></div>
+      <img id="e-apercu" alt="Aperçu de l’image émise" hidden style="max-width:100%;border-radius:6px;border:1px solid var(--bord);display:block;margin-bottom:6px">
       <div class="ligne" id="e-vga-l" hidden><span class="petit" style="min-width:86px">Gain VGA (dB)</span><input id="e-vga" type="number" step="1" min="0" max="10" style="max-width:80px" onchange="eRegle()">
         <span class="petit">0 à 10 dB, amplificateur RF toujours coupé ; pris au démarrage</span></div>
       <div class="ligne" id="e-gain-l"><span class="petit" style="min-width:86px">Gain TX (dB)</span><input id="e-gain" type="number" step="1" min="-89" max="0" style="max-width:80px" onchange="eRegle()">
@@ -1786,6 +1809,18 @@ object PagePc {
   </div>
 </div>
 </div>
+<dialog id="fd-dlg" style="background:var(--carte);color:var(--clair);border:1px solid var(--bord);border-radius:12px;width:min(820px,96vw)">
+  <div class="t">Choisir <span id="fd-quoi">une image</span> <span class="petit">sur le PC de SatMe-PC (lecture seule)</span></div>
+  <div class="ligne" id="fd-raccourcis" style="flex-wrap:wrap"></div>
+  <div class="ligne"><button id="fd-haut" onclick="fdVa(FD.parent)" title="Dossier parent">↑</button><span class="petit" id="fd-chemin" style="flex:1;word-break:break-all"></span></div>
+  <div id="fd-liste" class="fd-grille"></div>
+  <div class="petit" id="fd-msg"></div>
+  <details id="fd-envoi" style="margin-top:8px"><summary class="petit">Envoyer un fichier depuis cet ordinateur <span id="fd-max"></span></summary>
+    <div class="ligne"><input type="file" id="fd-fichier" style="flex:1"><button class="primaire" onclick="fdEnvoie()">Envoyer</button><span class="petit" id="fd-prog"></span></div>
+    <div id="fd-envois" class="fd-grille"></div>
+  </details>
+  <div class="ligne"><button onclick="g('fd-dlg').close()">Fermer</button></div>
+</dialog>
 <dialog id="visionneuse" onclick="if (event.target === this) this.close()">
   <img id="vi-img" alt="" onclick="g('visionneuse').close()">
   <div class="ligne" style="margin-top:6px"><button onclick="voisImage(viN - 1)" title="Précédente (←)">‹</button><button onclick="voisImage(viN + 1)" title="Suivante (→)">›</button>
@@ -3499,7 +3534,7 @@ async function ticEmission() {
   p.textContent = j.emet ? (j.charge ? 'SUR CHARGE' : j.interieur ? 'ESSAI INTÉRIEUR' : 'EN ÉMISSION') : 'arrêtée';
   p.style.background = j.emet ? '#C62828' : ''; p.style.color = j.emet ? '#fff' : 'var(--gris)';
   g('e-go').disabled = j.emet; g('e-stop').hidden = !j.emet;
-  ['e-modcod', 'e-sr', 'e-ro', 'e-courtes', 'e-pilotes', 'e-canal', 'e-mhz', 'e-source', 'e-image', 'e-video', 'e-camera', 'e-hevc', 'e-son', 'e-duree', 'e-charge',
+  ['e-modcod', 'e-sr', 'e-ro', 'e-courtes', 'e-pilotes', 'e-canal', 'e-mhz', 'e-source', 'e-image', 'e-video', 'e-image-par', 'e-video-par', 'e-camera', 'e-hevc', 'e-son', 'e-duree', 'e-charge',
     'e-emetteur', 'e-interieur', 'e-int-mhz', 'e-int-duree', 'e-vga', 'e-hackrf-outil', 'e-hackrf-det'].forEach(i => g(i).disabled = j.emet);
   // A transmission running (the page reloaded): its mode shown.
   if (j.emet) { g('e-charge').checked = j.charge; g('e-interieur').checked = j.interieur; }
@@ -3627,6 +3662,115 @@ setInterval(ticCarteDatv, 1000);
 async function eRegleCarte() {
   await post('api/datv/emission/reglage?carte=' + (g('e-carte-on').checked ? 1 : 0) + '&qth=' + enc(v('e-qth')) + '&puissance=' + enc(v('e-puissance')) +
     '&antenne=' + enc(v('e-antenne')) + '&message=' + enc(v('e-message')));
+}
+// ------------------------------------------------------------ DATV transmission: overlay, preview, file choice
+let eiPremier = true;
+async function eiCharge() {
+  let j; try { j = await (await fetch('api/datv/emission/incrustation')).json(); } catch (x) { return; }
+  if (!j.ok) { g('ei').hidden = true; g('e-apercu-go').hidden = true; return; }
+  const libre = !document.activeElement || !document.activeElement.id.startsWith('ei-');
+  if (eiPremier || libre) {
+    ['indicatif', 'locator', 'logo', 'heure', 'fond'].forEach(k => g('ei-' + k).checked = j[k]);
+    g('ei-texte').value = j.texte; g('ei-position').value = j.position; g('ei-taille').value = j.taille;
+    eiPremier = false;
+  }
+  const l = [j.indicatif ? 'indicatif' : '', j.locator ? 'locator' : '', j.logo ? 'logo' : '', j.texte ? 'texte' : '', j.heure ? 'heure' : ''].filter(x => x);
+  txt('ei-resume', l.length ? '· ' + l.join(', ') : '· aucune');
+}
+async function eiRegle() {
+  const q = ['indicatif', 'locator', 'logo', 'heure', 'fond'].map(k => k + '=' + (g('ei-' + k).checked ? 1 : 0)).join('&') +
+    '&texte=' + enc(g('ei-texte').value) + '&position=' + v('ei-position') + '&taille=' + v('ei-taille');
+  try { await fetch('api/datv/emission/incrustation?' + q, { method: 'POST' }); } catch (x) {}
+  eiCharge();
+}
+setTimeout(eiCharge, 1500);
+async function eApercu() {
+  if (!(EM && EM.emet)) await eRegle();
+  await eiRegle();
+  txt('e-apercu-msg', 'ffmpeg prépare une image (rien n’est émis)…');
+  g('e-apercu-go').disabled = true;
+  let j = null;
+  try { j = await (await fetch('api/datv/emission/apercu', { method: 'POST' })).json(); } catch (x) {}
+  g('e-apercu-go').disabled = false;
+  if (!j || j.ok === false) { txt('e-apercu-msg', j && j.erreur ? j.erreur : 'pas de réponse de SatMe-PC'); return; }
+  const im = g('e-apercu');
+  im.src = 'api/datv/emission/apercu.jpg?t=' + j.t; im.hidden = false;
+  txt('e-apercu-msg', 'Aperçu à la taille émise' + (EM ? ' (TS ' + Math.round(EM.debitTs / 1000) + ' kbit/s)' : '') + ' : rien n’est émis');
+}
+// The file browser: folders of the PC running SatMe-PC (read only), and files sent from this computer.
+let FD = { type: 'image', chemin: '', parent: null, max: 0 };
+function fdAttr(s) { return esc(s).replace(/"/g, '&quot;'); }
+function fdTaille(n) { return n >= 1048576 ? (n / 1048576).toFixed(1).replace('.', ',') + ' Mo' : Math.max(1, Math.round(n / 1024)) + ' ko'; }
+function fdVignette(e) {
+  return '<div class="fd-v"><img loading="lazy" src="api/datv/sources/vignette.jpg?p=' + enc(e.chemin) + '" alt="" data-g="' + (e.genre === 'video' ? '🎞' : '🖼') +
+    '" onerror="this.replaceWith(document.createTextNode(this.dataset.g))"></div>';
+}
+function fdOuvre(type) {
+  FD.type = type;
+  txt('fd-quoi', type === 'video' ? 'une vidéo' : 'une image');
+  const cur = v(type === 'video' ? 'e-video' : 'e-image');
+  const k = Math.max(cur.lastIndexOf('/'), cur.lastIndexOf('\\'));
+  const dossier = k > 0 ? cur.substring(0, k) : (FD.chemin || '');
+  if (!g('fd-dlg').open) g('fd-dlg').showModal();
+  fdVa(dossier, true); fdEnvois();
+}
+async function fdVa(d, repli) {
+  if (d === null || d === undefined) return;
+  let j; try { j = await (await fetch('api/datv/sources/liste?type=' + FD.type + '&d=' + enc(d))).json(); } catch (x) { txt('fd-msg', 'pas de réponse de SatMe-PC'); return; }
+  g('fd-raccourcis').innerHTML = (j.raccourcis || []).map((r, i) => '<button data-i="' + i + '">' + esc(r.nom) + '</button>').join('');
+  g('fd-raccourcis').querySelectorAll('button').forEach(b => b.onclick = () => fdVa(j.raccourcis[+b.dataset.i].chemin));
+  if (!j.ok) { if (repli && d) return fdVa('', false); txt('fd-msg', j.erreur || 'dossier illisible'); return; }
+  FD.chemin = j.chemin; FD.parent = j.parent;
+  txt('fd-chemin', j.chemin); g('fd-haut').disabled = !j.parent;
+  const l = g('fd-liste');
+  l.innerHTML = j.entrees.map((e, i) => '<div class="fd-el" data-i="' + i + '" title="' + fdAttr(e.nom) + '">' +
+    (e.dossier ? '<div class="fd-v">📁</div>' : fdVignette(e)) +
+    '<div class="fd-n">' + esc(e.nom) + '</div>' + (e.dossier ? '' : '<div class="petit">' + fdTaille(e.taille) + '</div>') + '</div>').join('');
+  l.querySelectorAll('.fd-el').forEach(x => x.onclick = () => { const e = j.entrees[+x.dataset.i]; if (e.dossier) fdVa(e.chemin); else fdChoisit(e.chemin); });
+  txt('fd-msg', j.entrees.length ? (j.tronque ? 'liste tronquée (' + j.entrees.length + ' éléments)' : '') :
+    'aucun dossier ni ' + (FD.type === 'video' ? 'vidéo (mp4, mkv, mov, avi, webm, ts, m4v)' : 'image (png, jpg, webp, bmp)') + ' ici');
+}
+function fdChoisit(chemin) {
+  g(FD.type === 'video' ? 'e-video' : 'e-image').value = chemin;
+  g('e-source').value = FD.type;
+  g('fd-dlg').close();
+  eRegle();
+}
+async function fdEnvois() {
+  let j; try { j = await (await fetch('api/datv/sources/envois')).json(); } catch (x) { return; }
+  if (!j.ok) { g('fd-envoi').hidden = true; return; }
+  FD.max = j.max; txt('fd-max', '(' + Math.round(j.max / 1048576) + ' Mo au plus, gardé dans ' + j.dossier + ')');
+  const l = j.fichiers.filter(f => f.genre === FD.type);
+  const b = g('fd-envois');
+  b.innerHTML = l.length ? l.map((f, i) => '<div class="fd-el" data-i="' + i + '" title="' + fdAttr(f.nom) + '">' + fdVignette(f) +
+    '<div class="fd-n">' + esc(f.nom) + '</div><div class="petit">' + fdTaille(f.taille) + '</div><button class="fd-x" title="Supprimer ce fichier envoyé">✕</button></div>').join('')
+    : '<div class="petit">aucun fichier envoyé pour l’instant</div>';
+  b.querySelectorAll('.fd-el').forEach(x => {
+    const f = l[+x.dataset.i];
+    x.onclick = () => fdChoisit(f.chemin);
+    x.querySelector('.fd-x').onclick = async ev => {
+      ev.stopPropagation();
+      if (!confirm('Supprimer « ' + f.nom + ' » des fichiers envoyés ?')) return;
+      try { await fetch('api/datv/sources/supprime?nom=' + enc(f.nom), { method: 'POST' }); } catch (x2) {}
+      fdEnvois();
+    };
+  });
+}
+function fdEnvoie() {
+  const f = g('fd-fichier').files[0];
+  if (!f) { txt('fd-prog', 'choisir un fichier d’abord'); return; }
+  if (FD.max && f.size > FD.max) { txt('fd-prog', 'fichier trop gros (' + Math.round(FD.max / 1048576) + ' Mo au plus)'); return; }
+  txt('fd-prog', 'envoi de ' + fdTaille(f.size) + '…');
+  const x = new XMLHttpRequest();
+  x.open('POST', 'api/datv/sources/envoi?nom=' + enc(f.name));
+  x.upload.onprogress = e => { if (e.lengthComputable) txt('fd-prog', 'envoi ' + Math.round(100 * e.loaded / e.total) + ' %'); };
+  x.onload = () => {
+    let j = null; try { j = JSON.parse(x.responseText); } catch (e) {}
+    if (j && j.ok) { txt('fd-prog', 'reçu : ' + j.nom); g('fd-fichier').value = ''; fdEnvois(); fdChoisit(j.chemin); }
+    else txt('fd-prog', j && j.erreur ? j.erreur : 'envoi refusé');
+  };
+  x.onerror = () => txt('fd-prog', 'envoi interrompu');
+  x.send(f);
 }
 async function eChat() {
   const t = v('e-chat').trim(); if (!t) return;
