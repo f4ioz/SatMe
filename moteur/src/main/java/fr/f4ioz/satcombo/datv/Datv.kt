@@ -53,6 +53,14 @@ data class EtatDatv(
     val agc1: Int = 0, val agc2: Int = 0,
     val berPct: Double? = null,
     val trames: Boolean? = null, val pilotes: Boolean? = null,
+    /** The LNA's gain word (boards with LNAs), the I and Q input powers. */
+    val lna: Int? = null, val puissanceI: Int? = null, val puissanceQ: Int? = null,
+    /** DVB-S: the Viterbi error rate (%) and the code rate n/(n+1) found. */
+    val viterbiPct: Double? = null, val poinconnage: Int? = null,
+    /** DVB-S2: the LDPC and BCH error counters as read, BCH's uncorrected flag. */
+    val ldpc: Int? = null, val bch: Int? = null, val bchNonCorrige: Boolean? = null,
+    /** The same counters followed through their wraps since the start. */
+    val ldpcTotal: Long = 0L, val bchTotal: Long = 0L,
     val kbps: Int = 0,
     val images: Long = 0L,
     val enregistrement: String = "",
@@ -114,6 +122,10 @@ object Datv {
             .put("ber", e.berPct ?: JSONObject.NULL).put("courtes", e.trames ?: JSONObject.NULL).put("pilotes", e.pilotes ?: JSONObject.NULL)
             .put("flux", JSONArray(e.flux.map { (pid, t) -> JSONObject().put("pid", pid).put("t", t).put("type", typeFlux(t)) }))
             .put("enregistrement", e.enregistrement).put("erreur", e.erreur)
+            .put("lna", e.lna ?: JSONObject.NULL).put("puissanceI", e.puissanceI ?: JSONObject.NULL).put("puissanceQ", e.puissanceQ ?: JSONObject.NULL)
+            .put("viterbi", e.viterbiPct ?: JSONObject.NULL).put("poinconnage", e.poinconnage ?: JSONObject.NULL)
+            .put("ldpc", e.ldpc ?: JSONObject.NULL).put("bch", e.bch ?: JSONObject.NULL).put("bchNonCorrige", e.bchNonCorrige ?: JSONObject.NULL)
+            .put("ldpcTotal", e.ldpcTotal).put("bchTotal", e.bchTotal)
             .put("points", JSONArray(points.map { JSONArray(listOf(it.first, it.second)) }))
 
     /** A node's status (its JSON) as ours; what only this side knows ([ici]) is kept. */
@@ -123,7 +135,20 @@ object Datv {
         fournisseur = j.optString("fournisseur"), service = j.optString("service"), nulsPct = j.optInt("nuls"),
         flux = j.optJSONArray("flux")?.let { a -> (0 until a.length()).map { a.getJSONObject(it).let { o -> o.optInt("pid") to o.optInt("t") } } } ?: emptyList(),
         agc1 = j.optInt("agc1"), agc2 = j.optInt("agc2"), berPct = if (j.isNull("ber")) null else j.optDouble("ber"),
-        trames = if (j.isNull("courtes")) null else j.optBoolean("courtes"), pilotes = if (j.isNull("pilotes")) null else j.optBoolean("pilotes"))
+        trames = if (j.isNull("courtes")) null else j.optBoolean("courtes"), pilotes = if (j.isNull("pilotes")) null else j.optBoolean("pilotes"),
+        lna = entier(j, "lna"), puissanceI = entier(j, "puissanceI"), puissanceQ = entier(j, "puissanceQ"),
+        viterbiPct = if (j.has("viterbi") && !j.isNull("viterbi")) j.optDouble("viterbi") else null, poinconnage = entier(j, "poinconnage"),
+        ldpc = entier(j, "ldpc"), bch = entier(j, "bch"), bchNonCorrige = if (j.has("bchNonCorrige") && !j.isNull("bchNonCorrige")) j.optBoolean("bchNonCorrige") else null,
+        ldpcTotal = j.optLong("ldpcTotal"), bchTotal = j.optLong("bchTotal"))
+
+    private fun entier(j: JSONObject, k: String): Int? = if (j.has(k) && !j.isNull(k)) j.optInt(k) else null
+
+    /** How far a wrapping counter went from [avant] to [apres] (0 the first time). */
+    fun ecartCompteur(avant: Int?, apres: Int, modulo: Int): Int = if (avant == null) 0 else Math.floorMod(apres - avant, modulo)
+
+    /** LongMynd's BCH error counter has 4 bits, its LDPC one 16. */
+    const val MODULO_BCH = 16
+    const val MODULO_LDPC = 65_536
 
     /** The constellation points of a status JSON. */
     fun points(j: JSONObject): List<Pair<Int, Int>> =

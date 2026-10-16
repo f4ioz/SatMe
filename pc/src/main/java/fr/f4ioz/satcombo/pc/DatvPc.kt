@@ -13,6 +13,10 @@ import fr.f4ioz.satcombo.datv.ClientNoeud
 import fr.f4ioz.satcombo.datv.Datv
 import fr.f4ioz.satcombo.datv.EtatDatv
 import fr.f4ioz.satcombo.datv.ReglageDatv
+import fr.f4ioz.satcombo.datv.AnalyseTs
+import fr.f4ioz.satcombo.datv.QualiteDatv
+import fr.f4ioz.satcombo.datv.SuiviQualite
+import org.json.JSONObject
 import java.io.File
 import java.io.InputStream
 import java.io.OutputStream
@@ -67,6 +71,34 @@ class DatvPc(
     private var enregistreur: OutputStream? = null
     @Volatile private var generation = 0
 
+    /** The stream's own health, the decoders' errors, followed each second while receiving. */
+    @Volatile private var analyse = AnalyseTs()
+    @Volatile private var suivi = SuiviQualite()
+    private val journalImages = JournalDecodeur(File(System.getProperty("java.io.tmpdir"), "satme-datv-ffmpeg.log"))
+    private val journalSon = JournalDecodeur(File(System.getProperty("java.io.tmpdir"), "satme-datv-ffplay.log"))
+
+    /** The reception's quality (the last second's), or null before the first. */
+    fun qualite(): JSONObject? = suivi.json()
+
+    private fun suisQualite(gen: Int) {
+        analyse = AnalyseTs(); suivi = SuiviQualite()
+        journalImages.saute(); journalSon.saute()
+        thread(isDaemon = true, name = "satme-datv-qualite") {
+            while (generation == gen) {
+                Thread.sleep(1000)
+                if (generation != gen) break
+                runCatching { mesureQualite() }
+            }
+        }
+    }
+
+    /** One second of quality: the stream's analysis, the decoders' logs, the receiver's words. */
+    fun mesureQualite(): JSONObject {
+        journalImages.lis(); journalSon.lis()
+        return suivi.seconde(horloge(), etat, reglage.srKs, analyse.bilan(), journalImages.video + journalSon.video,
+            journalImages.audio + journalSon.audio, journalImages.flux + journalSon.flux, lecteursLocaux)
+    }
+
     // ------------------------------------------------------------ settings
 
     private fun lisReglage() = ReglageDatv(
@@ -116,6 +148,7 @@ class DatvPc(
         longmynd = p
         synchronized(points) { points.clear() }
         etat = EtatDatv(actif = true, depuis = horloge())
+        suisQualite(gen)
         thread(isDaemon = true, name = "satme-datv-etat") { litEtat(sEtat, gen) }
         thread(isDaemon = true, name = "satme-datv-ts") { litTs(sTs, gen) }
         thread(isDaemon = true, name = "satme-datv-garde") {
@@ -164,6 +197,8 @@ class DatvPc(
         var iEnAttente: Int? = null
         val flux = ArrayList<Pair<Int, Int>>()
         var pidEnAttente: Int? = null
+        var bchAvant: Int? = null
+        var ldpcAvant: Int? = null
         while (generation == gen && !s.isClosed) {
             val d = DatagramPacket(b, b.size)
             if (runCatching { s.receive(d) }.isFailure) break
@@ -192,6 +227,16 @@ class DatvPc(
                     20 -> e = e.copy(pilotes = v.trim() == "1")
                     26 -> e = e.copy(agc1 = v.toIntOrNull() ?: 0)
                     27 -> e = e.copy(agc2 = v.toIntOrNull() ?: 0)
+                    2 -> e = e.copy(lna = v.trim().toIntOrNull())
+                    3 -> e = e.copy(poinconnage = v.trim().toIntOrNull())
+                    4 -> e = e.copy(puissanceI = v.trim().toIntOrNull())
+                    5 -> e = e.copy(puissanceQ = v.trim().toIntOrNull())
+                    10 -> e = e.copy(viterbiPct = v.trim().toIntOrNull()?.let { it / 100.0 })
+                    21 -> v.trim().toIntOrNull()?.let { x ->
+                        e = e.copy(ldpc = x, ldpcTotal = e.ldpcTotal + Datv.ecartCompteur(ldpcAvant, x, Datv.MODULO_LDPC)); ldpcAvant = x }
+                    22 -> v.trim().toIntOrNull()?.let { x ->
+                        e = e.copy(bch = x, bchTotal = e.bchTotal + Datv.ecartCompteur(bchAvant, x, Datv.MODULO_BCH)); bchAvant = x }
+                    23 -> e = e.copy(bchNonCorrige = v.trim() == "1")
                 }
                 etat = e
             }
@@ -231,6 +276,7 @@ class DatvPc(
 
         fun bloc(bloc: ByteArray) {
             octets += bloc.size
+            analyse.ajoute(bloc)
             enregistreur?.let { o -> runCatching { o.write(bloc) } }
             if (lecteursLocaux) {
                 if (ffmpeg == null) demarreLecteurs(gen)
@@ -269,6 +315,7 @@ class DatvPc(
         val gen = ++generation
         synchronized(points) { points.clear() }
         etat = EtatDatv(actif = true, depuis = horloge())
+        suisQualite(gen)
         thread(isDaemon = true, name = "satme-datv-noeud-etat") { suisNoeud(gen) }
         thread(isDaemon = true, name = "satme-datv-noeud-ts") { litTsNoeud(gen) }
         return null
@@ -341,6 +388,8 @@ class DatvPc(
     private fun demarreLecteurs(gen: Int) {
         if (generation != gen || ffmpeg != null) return
         val ff = RenduPc.ffmpeg() ?: run { etat = etat.copy(erreur = "ffmpeg introuvable : pas d'image (" + OutilsPc.conseil("ffmpeg") + ")"); return }
+        // The logs start again with the players.
+        journalImages.reprends(); journalSon.reprends()
         val p = ProcessBuilder(ff, "-loglevel", "error", "-fflags", "nobuffer", "-flags", "low_delay", "-probesize", "200000", "-analyzeduration", "1000000",
             "-f", "mpegts", "-i", "pipe:0", "-map", "0:v:0", "-an", "-vf", "scale=-2:'min(720,ih)'", "-q:v", "5", "-r", "25",
             "-f", "image2pipe", "-c:v", "mjpeg", "pipe:1")
@@ -385,6 +434,52 @@ class DatvPc(
                 precedent = c
             }
         }
+    }
+
+    /**
+     * A decoder's log (ffmpeg's, ffplay's at error level), read as it grows:
+     * its error lines counted by kind (picture, sound, stream).
+     */
+    class JournalDecodeur(private val f: File) {
+        @Volatile var video = 0L; private set
+        @Volatile var audio = 0L; private set
+        @Volatile var flux = 0L; private set
+        private var position = 0L
+        private var derniere: Char? = null
+
+        /** From the start of the file (the decoder started again, the file emptied). */
+        @Synchronized fun reprends() { position = 0; derniere = null }
+
+        /** From its end: what an earlier reception wrote is not counted. */
+        @Synchronized fun saute() { position = f.length(); derniere = null }
+
+        @Synchronized fun lis() {
+            val l = f.length()
+            if (l < position) position = 0
+            if (l == position) return
+            runCatching {
+                java.io.RandomAccessFile(f, "r").use { r ->
+                    r.seek(position)
+                    val b = ByteArray(minOf(l - position, 1L shl 20).toInt())
+                    r.readFully(b)
+                    val t = String(b, Charsets.ISO_8859_1)
+                    val fin = t.lastIndexOf('\n')
+                    if (fin < 0) { if (b.size == 1 shl 20) position += b.size; return@use }
+                    position += fin + 1
+                    t.substring(0, fin).split('\n').forEach { compte(it) }
+                }
+            }
+        }
+
+        fun compte(ligne: String) {
+            val n = QualiteDatv.repetitions(ligne)
+            if (n != null) { ajoute(derniere, n); return }
+            val c = QualiteDatv.classe(ligne)
+            derniere = c
+            ajoute(c, 1)
+        }
+
+        private fun ajoute(c: Char?, n: Int) { when (c) { 'v' -> video += n; 'a' -> audio += n; 't' -> flux += n } }
     }
 
     // ------------------------------------------------------------ recording

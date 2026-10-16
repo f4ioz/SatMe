@@ -67,6 +67,31 @@ class DatvPcTest {
     }
 
     @Test
+    fun les_erreurs_des_decodeurs_comptees_au_fil_du_journal() {
+        val f = File.createTempFile("satme-datv", ".log")
+        try {
+            val j = DatvPc.JournalDecodeur(f)
+            f.writeText("[h264 @ 0x1] error while decoding MB 3 4, bytestream -7\n[h264 @ 0x1] concealing 20 DC, 20 AC, 20 MV errors in P frame\n")
+            j.lis()
+            assertEquals(2L, j.video)
+            // A line half written waits for its end; a repeat counts the line before.
+            f.appendText("    Last message repeated 3 times\n[aac @ 0x2] Reserved bit set.\n[aac @ 0x2] Number of ba")
+            j.lis()
+            assertEquals(5L, j.video); assertEquals(1L, j.audio)
+            f.appendText("nds (31) exceeds limit (14).\n[mpegts @ 0x3] Packet corrupt\n")
+            j.lis()
+            assertEquals(2L, j.audio); assertEquals(1L, j.flux)
+            // The decoder started again, its log emptied: read from its start.
+            f.writeText("[hevc @ 0x4] Could not find ref with POC 7\n")
+            j.lis()
+            assertEquals(6L, j.video)
+            // An earlier reception's lines are skipped.
+            j.saute(); j.lis()
+            assertEquals(6L, j.video)
+        } finally { f.delete() }
+    }
+
+    @Test
     fun hors_de_portee_rien_ne_demarre() {
         val d = DatvPc(StockageMemoire(), File(System.getProperty("java.io.tmpdir")))
         val e = d.demarre(ReglageDatv(cielKhz = 10_491_500, olKhz = 12_000_000))
