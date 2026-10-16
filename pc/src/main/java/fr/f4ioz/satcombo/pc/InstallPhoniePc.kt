@@ -194,7 +194,7 @@ class InstallPhoniePc(val dossier: File, private val windows: Boolean = OutilsPc
 
     /** The language pairs unpacked (`pl_en`, `en_fr`…), read from the folder. */
     fun pairesInstallees(): List<String> = (traduction.listFiles() ?: emptyArray())
-        .filter { it.isDirectory && it.name.matches(Regex("[a-z]{2,3}_[a-z]{2,3}")) && File(it, "model/model.bin").isFile && File(it, "sentencepiece.model").isFile }
+        .filter { it.isDirectory && it.name.matches(Regex("[a-z]{2,3}_[a-z]{2,3}")) && File(it, "model/model.bin").isFile && (File(it, "sentencepiece.model").isFile || File(it, "bpe.model").isFile) }
         .map { it.name }.sorted()
 
     /**
@@ -208,8 +208,8 @@ class InstallPhoniePc(val dossier: File, private val windows: Boolean = OutilsPc
             val s = suiviTraduction
             try {
                 val py = python ?: throw IllegalStateException("installer d'abord le moteur (bouton « Installer le moteur »)")
-                s.etape("installation de sentencepiece (le reste est déjà là avec faster-whisper)")
-                s.lance(listOf(py, "-m", "pip", "install", "--disable-pip-version-check", "--progress-bar", "off", "sentencepiece"))
+                s.etape("installation de sentencepiece, sacremoses et subword-nmt (le reste est déjà là avec faster-whisper)")
+                s.lance(listOf(py, "-m", "pip", "install", "--disable-pip-version-check", "--progress-bar", "off", "sentencepiece", "sacremoses", "subword-nmt"))
                 val manquent = paires.filter { it !in pairesInstallees() }
                 if (manquent.isNotEmpty()) {
                     s.etape("téléchargement de " + manquent.joinToString(", ") { it.replace("_", " → ") } +

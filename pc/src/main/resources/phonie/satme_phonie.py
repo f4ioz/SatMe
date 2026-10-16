@@ -172,7 +172,7 @@ def paires_installees(dossier):
     for n in sorted(os.listdir(dossier)):
         d = os.path.join(dossier, n)
         if re.fullmatch(r"[a-z]{2,3}_[a-z]{2,3}", n) and os.path.isfile(os.path.join(d, "model", "model.bin")) \
-                and os.path.isfile(os.path.join(d, "sentencepiece.model")):
+                and (os.path.isfile(os.path.join(d, "sentencepiece.model")) or os.path.isfile(os.path.join(d, "bpe.model"))):
             r[n] = d
     return r
 
@@ -199,8 +199,26 @@ def chemin_traduction(de, vers, paires):
     return None
 
 
+class DecoupeBpe:
+    """The packages cut by BPE codes (bpe.model, « @@ » joins): Moses words, then the codes; and back."""
+
+    def __init__(self, codes, de, vers):
+        from sacremoses import MosesTokenizer, MosesDetokenizer
+        from subword_nmt.apply_bpe import BPE
+        with open(codes, encoding="utf-8") as f:
+            self.bpe = BPE(f, separator="@@")
+        self.mots = MosesTokenizer(lang=de)
+        self.texte = MosesDetokenizer(lang=vers)
+
+    def encode(self, x, out_type=str):
+        return self.bpe.process_line(self.mots.tokenize(x, return_str=True, escape=False)).split()
+
+    def decode_pieces(self, jetons):
+        return self.texte.detokenize(" ".join(jetons).replace("@@ ", "").replace("@@", "").split())
+
+
 class Traducteur:
-    """Argos Translate's packages, read directly: sentencepiece in, CTranslate2, sentencepiece out."""
+    """Argos Translate's packages, read directly: sentencepiece (or BPE codes) in, CTranslate2, the same out."""
 
     def __init__(self, dossier, calcul):
         self.dossier = dossier
@@ -220,7 +238,11 @@ class Traducteur:
                 meta = json.load(f)
         except Exception:
             pass
-        sp = sentencepiece.SentencePieceProcessor(model_file=os.path.join(d, "sentencepiece.model"))
+        if os.path.isfile(os.path.join(d, "sentencepiece.model")):
+            sp = sentencepiece.SentencePieceProcessor(model_file=os.path.join(d, "sentencepiece.model"))
+        else:
+            de, _, vers = nom.partition("_")
+            sp = DecoupeBpe(os.path.join(d, "bpe.model"), de, vers)
         essais = ([("cuda", "int8_float16")] if self.calcul == "cuda" else []) + [("cpu", "int8")]
         tr, raison = None, ""
         for calcul, type_ in essais:
@@ -308,9 +330,10 @@ def deballe(archive, cible):
             os.makedirs(os.path.dirname(dest), exist_ok=True)
             with z.open(info) as src, open(dest, "wb") as out:
                 shutil.copyfileobj(src, out)
-    if not os.path.isfile(os.path.join(tmp, "sentencepiece.model")) or not os.path.isfile(os.path.join(tmp, "model", "model.bin")):
+    decoupe = os.path.isfile(os.path.join(tmp, "sentencepiece.model")) or os.path.isfile(os.path.join(tmp, "bpe.model"))
+    if not decoupe or not os.path.isfile(os.path.join(tmp, "model", "model.bin")):
         shutil.rmtree(tmp, ignore_errors=True)
-        raise RuntimeError("format non pris en charge (pas de sentencepiece.model)")
+        raise RuntimeError("format non pris en charge (ni sentencepiece.model ni bpe.model)")
     shutil.rmtree(cible, ignore_errors=True)
     os.replace(tmp, cible)
 
@@ -331,6 +354,7 @@ def installe_traduction(a):
     offertes = {p["from_code"] + "_" + p["to_code"]: p for p in index if p.get("links")}
     deja = paires_installees(dossier)
     absentes = [p for p in voulues if p not in offertes]
+    echecs = []
     for nom in voulues:
         if nom in deja or nom not in offertes:
             continue
@@ -348,16 +372,19 @@ def installe_traduction(a):
             deballe(archive, os.path.join(dossier, nom))
             dit({"paire": nom, "mo": round(taille(os.path.join(dossier, nom)) / 1e6, 1)})
         except Exception as e:
-            dit({"erreur": "paire " + nom + " : " + str(e), "fatal": True})
-            sys.exit(2)
+            # One pair failing does not stop the others.
+            echecs.append(nom)
+            dit({"erreur": "paire " + nom + " : " + str(e)})
         finally:
             for f in (archive, archive + ".part"):
                 try:
                     os.remove(f)
                 except OSError:
                     pass
-    dit({"fini": True, "paires": sorted(paires_installees(dossier)), "absentes": absentes,
+    dit({"fini": True, "paires": sorted(paires_installees(dossier)), "absentes": absentes, "echecs": echecs,
          "mo": round(taille(dossier) / 1e6, 1)})
+    if echecs:
+        sys.exit(2)
 
 
 def taille(d):
