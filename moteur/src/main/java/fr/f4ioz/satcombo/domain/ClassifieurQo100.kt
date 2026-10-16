@@ -387,8 +387,8 @@ object ClassifieurQo100 {
     }
 
     private fun balise(m: MesuresSignal, ciel: Long): String? = when {
-        abs(ciel - Qo100.BALISE_BASSE_HZ) <= 700 && m.largeurHz <= 300 -> "balise CW basse"
-        abs(ciel - Qo100.BALISE_HAUTE_HZ) <= 700 && m.largeurHz <= 300 -> "balise CW haute"
+        abs(ciel - Qo100.BALISE_BASSE_HZ) <= 700 && m.largeurHz <= 600 -> "balise CW basse"
+        abs(ciel - Qo100.BALISE_HAUTE_HZ) <= 700 && m.largeurHz <= 600 -> "balise CW haute"
         abs(ciel - Qo100.BALISE_MEDIANE_HZ) <= 1_500 && m.largeurHz in 150.0..2_000.0 -> "balise PSK 400 bit/s"
         ciel in 10_489_988_000L..10_489_998_000L && m.largeurHz >= 800 -> "balise multimédia"
         else -> null

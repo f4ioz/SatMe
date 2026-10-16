@@ -16,7 +16,9 @@ import kotlin.math.cos
 import kotlin.math.floor
 import kotlin.math.ln
 import kotlin.math.max
+import kotlin.math.log10
 import kotlin.math.min
+import kotlin.math.pow
 import kotlin.math.sin
 import kotlin.math.sqrt
 
@@ -356,42 +358,178 @@ class AnalyseurQo100(val cadence: Double, val taille: Int = 65_536) {
     /**
      * The signals now, each judged: [cielCentreHz] is the sky frequency of
      * the stream's centre (bin taille/2), already corrected for the LNB.
-     * Only those seen within [recentMs].
+     *
+     * What the real transponder taught: a comb of weak steady lines every
+     * 100 Hz from the receiver chain is no station ([peigne]); a keyed
+     * signal's clicks and a transmitter's second line are not stations of
+     * their own ([memeEmission]); a line barely over the noise gets no label
+     * ([snrRequis]); a signal gone leaves the list within seconds (an FT8
+     * station's silent slot, a voice's pause excepted).
      */
-    fun signaux(tMs: Long, cielCentreHz: Double, recentMs: Long = 20_000L): List<SignalQo100> {
-        val out = ArrayList<SignalQo100>()
-        val paires = paires(tMs)
+    fun signaux(tMs: Long, cielCentreHz: Double, recentMs: Long = OUBLI_MS): List<SignalQo100> {
+        val vivantes = LinkedHashMap<Piste, MesuresSignal>()
+        for (pst in pistes) if (tMs - pst.vueMs <= recentMs) mesures(pst)?.let { vivantes[pst] = it }
+        val parasites = peigne(vivantes)
+        val retenus = ArrayList<Pair<List<Piste>, SignalQo100>>()
+        val paires = paires(tMs).filter { (a, b) -> a !in parasites && b !in parasites }
         for ((a, b) in paires) {
-            val ma = mesures(a) ?: continue; val mb = mesures(b) ?: continue
+            val ma = vivantes[a] ?: continue; val mb = vivantes[b] ?: continue
             val bas = min(ma.centreBin - ma.largeurHz / 2 / hzParCase, mb.centreBin - mb.largeurHz / 2 / hzParCase)
             val haut = max(ma.centreBin + ma.largeurHz / 2 / hzParCase, mb.centreBin + mb.largeurHz / 2 / hzParCase)
             val ciel = cielCentreHz + ((bas + haut) / 2 - taille / 2) * hzParCase
             val ecart = abs(ma.centreBin - mb.centreBin) * hzParCase
-            out += SignalQo100(min(a.id, b.id), Math.round(ciel), Math.round((haut - bas) * hzParCase).toInt(), ClasseQo100.RTTY, 0.8,
-                min(a.depuisMs, b.depuisMs), tMs - max(a.vueMs, b.vueMs), Math.round(max(ma.snrDb, mb.snrDb) * 10) / 10.0,
-                "2 raies à ${Math.round(ecart)} Hz, en alternance")
+            val largeur = (haut - bas) * hzParCase
+            // Both lines' power counted: the pair's SNR.
+            val snr = 10 * log10(10.0.pow(ma.snrDb / 10) + 10.0.pow(mb.snrDb / 10))
+            val s = SignalQo100(min(a.id, b.id), Math.round(ciel), Math.round(largeur).toInt(), ClasseQo100.RTTY, 0.8,
+                min(a.depuisMs, b.depuisMs), tMs - max(a.vueMs, b.vueMs), arrondi(snr),
+                "2 raies à ${Math.round(ecart)} Hz, en alternance", arrondi(snrBande(snr, largeur)))
+            if (s.vuIlYaMs <= RECENT_MS && s.snrBandeDb >= snrRequis(largeur)) retenus += listOf(a, b) to s
         }
         val appariees = paires.flatMap { listOf(it.first, it.second) }.toSet()
-        for (pst in pistes) {
-            if (tMs - pst.vueMs > recentMs || pst in appariees) continue
-            val mes = mesures(pst) ?: continue
+        for ((pst, mes) in vivantes) {
+            if (pst in appariees || pst in parasites) continue
             val ciel = cielCentreHz + (mes.centreBin - taille / 2) * hzParCase
             val (c, conf, det) = ClassifieurQo100.juge(mes, ciel.toLong())
             // The receiver's own line at its centre (its oscillator leaking through): not a station.
             if (c == ClasseQo100.PORTEUSE && abs(mes.centreBin - taille / 2) < 1.5) continue
-            // Unknown and hardly over the floor: a bump of the noise, not worth a label.
-            if (c == ClasseQo100.INCONNU && pst.classe == ClasseQo100.INCONNU && mes.reliefDb < 3.0 && mes.snrDb < 6.0) continue
             // A verdict changes only when the new one is clearly better: no flicker from second to second.
+            // One whose confidence has faded below the threshold gives way.
             if (c != pst.classe) {
-                if (pst.classe == ClasseQo100.INCONNU || conf > pst.confiance + 0.1 || conf >= 0.5) {
+                if (pst.classe == ClasseQo100.INCONNU || conf > pst.confiance + 0.1 || conf >= 0.5 || pst.confiance < ClassifieurQo100.SEUIL) {
                     pst.classe = c; pst.confiance = conf
                 } else pst.confiance = max(0.0, pst.confiance - 0.05)
             } else pst.confiance += 0.3 * (conf - pst.confiance)
             pst.details = if (pst.classe == c) det else pst.details
-            out += SignalQo100(pst.id, Math.round(ciel), Math.round(mes.largeurHz).toInt(), pst.classe,
-                Math.round(pst.confiance * 100) / 100.0, pst.depuisMs, tMs - pst.vueMs, Math.round(mes.snrDb * 10) / 10.0, pst.details)
+            val bande = snrBande(mes.snrDb, mes.largeurHz)
+            val vuIlYa = tMs - pst.vueMs
+            // Gone: a few seconds, longer for what is silent by nature (an FT8 slot off, a voice's pause).
+            val limite = when (pst.classe) {
+                ClasseQo100.FT8, ClasseQo100.FT4 -> RECENT_CRENEAU_MS
+                ClasseQo100.BLU -> RECENT_PHONIE_MS
+                else -> RECENT_MS
+            }
+            if (vuIlYa > limite) continue
+            // Hardly over the noise: no label. Unknown: only with real energy.
+            val requis = snrRequis(mes.largeurHz) + if (pst.classe == ClasseQo100.INCONNU) 3.0 else 0.0
+            if (pst.classe != ClasseQo100.BALISE && bande < requis) continue
+            if (pst.classe == ClasseQo100.INCONNU && mes.reliefDb < 3.0 && mes.snrDb < 6.0) continue
+            retenus += listOf(pst) to SignalQo100(pst.id, Math.round(ciel), Math.round(mes.largeurHz).toInt(), pst.classe,
+                Math.round(pst.confiance * 100) / 100.0, pst.depuisMs, vuIlYa, arrondi(mes.snrDb), pst.details, arrondi(bande))
         }
-        return rattache(out).sortedBy { it.hz }
+        return rattache(fusionne(retenus)).sortedBy { it.hz }
+    }
+
+    private fun arrondi(x: Double) = Math.round(x * 10) / 10.0
+
+    /** From over the noise in 2.5 kHz to over the noise in the signal's own band (100 Hz at least: a keyed note needs it). */
+    private fun snrBande(snr2500Db: Double, largeurHz: Double) = snr2500Db + 10 * log10(2500.0 / max(BANDE_MIN_HZ, largeurHz))
+
+    /**
+     * How far over the noise, in its own band, a signal must stand to be
+     * named: 6 dB when narrow, down to 3 dB at 2 kHz and more (a voice or a
+     * wide mode is a sure thing over many bins at less).
+     */
+    fun snrRequis(largeurHz: Double): Double {
+        val x = ((log10(max(300.0, largeurHz)) - log10(300.0)) / (log10(2000.0) - log10(300.0))).coerceIn(0.0, 1.0)
+        return SNR_REQUIS_DB - 3.0 * x
+    }
+
+    /**
+     * A comb: narrow weak lines on one grid (a spacing 40–600 Hz, the gaps
+     * between neighbours whole multiples of it), five and more in a row.
+     * Mains-rate interference in a receiver chain draws exactly that, every
+     * 100 Hz; stations never line up so. A line of the comb far stronger
+     * than its fellows (12 dB) is a station that happens to sit on it.
+     */
+    private fun peigne(vivantes: Map<Piste, MesuresSignal>): Set<Piste> {
+        val etroites = vivantes.entries.filter { it.value.largeurHz <= 150 && it.key.hist.taille >= 32 }
+            .map { it.key to raieHz(it.key, it.value) }.sortedBy { it.second }
+        if (etroites.size < PEIGNE_MIN) return emptySet()
+        // The spacing: the commonest gap between neighbours (within the tolerance), seen four times at least.
+        val ecarts = etroites.zipWithNext { a, b -> b.second - a.second }.filter { it in 40.0..600.0 }.sorted()
+        var pas = 0.0; var meilleur = 0
+        var j = 0
+        for (i in ecarts.indices) {
+            while (ecarts[i] - ecarts[j] > 2 * TOLERANCE_PEIGNE_HZ) j++
+            val n = i - j + 1
+            if (n > meilleur) { meilleur = n; pas = ecarts.subList(j, i + 1).average() }
+        }
+        if (meilleur < PEIGNE_MIN - 1) return emptySet()
+        fun surGrille(d: Double): Boolean { val k = Math.round(d / pas); return k in 1..4 && abs(d - k * pas) <= TOLERANCE_PEIGNE_HZ + k }
+        val out = HashSet<Piste>()
+        var debut = 0
+        for (i in 1..etroites.size) {
+            if (i < etroites.size && surGrille(etroites[i].second - etroites[i - 1].second)) continue
+            if (i - debut >= PEIGNE_MIN) {
+                val chaine = etroites.subList(debut, i).map { it.first }
+                val med = MesuresSignal.mediane(chaine.map { vivantes.getValue(it).snrDb })
+                for (p in chaine) if (vivantes.getValue(p).snrDb < med + 12) out += p
+            }
+            debut = i
+        }
+        return out
+    }
+
+    /** A narrow piste's frequency (Hz on the stream's scale): its tone measured frame by frame, else its band's centre. */
+    private fun raieHz(pst: Piste, mes: MesuresSignal): Double {
+        val h = pst.hist
+        val l = ArrayList<Double>()
+        for (i in max(0, h.taille - 256) until h.taille) {
+            val k = h.idx(i)
+            if (h.on[k] && !h.fin[k].isNaN() && h.conc[k] >= 0.5f) l += h.fin[k].toDouble()
+        }
+        return (if (l.size >= 8) MesuresSignal.mediane(l) else mes.centreBin) * hzParCase
+    }
+
+    /**
+     * One emission seen as several pistes: a weaker line within a few
+     * hundred hertz, on only when a stronger keyed one is (its clicks, a
+     * transmitter's spurious line keyed with it), is part of it. Stations
+     * on slots (FT8, FT4) are left alone: neighbours there start together
+     * by rule.
+     */
+    private fun fusionne(l: List<Pair<List<Piste>, SignalQo100>>): List<SignalQo100> {
+        val creneaux = setOf(ClasseQo100.FT8, ClasseQo100.FT4)
+        val out = ArrayList<Pair<List<Piste>, SignalQo100>>()
+        for (e in l.sortedByDescending { it.second.snrBandeDb }) {
+            val (ps, s) = e
+            val k = if (s.classe in creneaux || ps.size != 1) -1 else out.indexOfFirst { (pa, a) ->
+                a.classe !in creneaux && pa.size == 1 &&
+                    abs(a.hz - s.hz) - (a.largeurHz + s.largeurHz) / 2.0 <= FUSION_HZ && memeEmission(pa[0], ps[0], a.snrDb - s.snrDb)
+            }
+            if (k < 0) { out += e; continue }
+            // The strongest line stays what it is (a beacon's, a station's note): the weaker one is just not listed.
+            val (pa, a) = out[k]
+            out[k] = pa to a.copy(vuIlYaMs = min(a.vuIlYaMs, s.vuIlYaMs))
+        }
+        return out.map { it.second }
+    }
+
+    /**
+     * Is [b] on only when the keyed [a] is ([plusFortDb]: how much stronger
+     * [a] is)? Over their last common frames, a frame either side allowed.
+     */
+    private fun memeEmission(a: Piste, b: Piste, plusFortDb: Double): Boolean {
+        val ha = a.hist; val hb = b.hist
+        val n = min(400, min(ha.taille, hb.taille))
+        if (n < 64) return false
+        // Every piste gets every frame: aligned on the last one.
+        if (ha.t[ha.idx(ha.taille - 1)] != hb.t[hb.idx(hb.taille - 1)]) return false
+        var onA = 0; var onB = 0; var bAvecA = 0; var lesDeux = 0
+        for (i in 0 until n) {
+            val ia = ha.taille - n + i; val ib = hb.taille - n + i
+            val aOn = ha.on[ha.idx(ia)]
+            if (aOn) onA++
+            if (!hb.on[hb.idx(ib)]) continue
+            onB++
+            if (aOn) lesDeux++
+            if (aOn || (ia > 0 && ha.on[ha.idx(ia - 1)]) || (ia < ha.taille - 1 && ha.on[ha.idx(ia + 1)])) bAvecA++
+        }
+        if (onB < 10 || onA.toDouble() / n > 0.9) return false
+        val cond = bAvecA.toDouble() / onB
+        val jaccard = lesDeux.toDouble() / max(1, onA + onB - lesDeux)
+        return cond >= 0.85 && (jaccard >= 0.5 || plusFortDb >= 6.0)
     }
 
     /**
@@ -436,13 +574,16 @@ class AnalyseurQo100(val cadence: Double, val taille: Int = 65_536) {
      * A wide signal's own pieces seen apart — SSTV's 1200 Hz sync below its
      * picture, a BPSK beacon's side lobes — are not stations: an unknown
      * weaker line within [PROCHE_HZ] of such a signal's edge is taken into it.
+     * A beacon also takes in the lines keyed or steady beside it 6 dB down
+     * and more (its keying's sidebands): nobody calls on a beacon's edge.
      */
     private fun rattache(l: List<SignalQo100>): List<SignalQo100> {
         val larges = setOf(ClasseQo100.SSTV, ClasseQo100.BALISE, ClasseQo100.NUMERIQUE_LARGE)
+        val raies = setOf(ClasseQo100.CW, ClasseQo100.PORTEUSE)
         val out = l.toMutableList()
         for (s in l) {
-            if (s.classe != ClasseQo100.INCONNU) continue
-            val hote = out.filter { it.classe in larges && it.snrDb > s.snrDb }
+            if (s.classe != ClasseQo100.INCONNU && s.classe !in raies) continue
+            val hote = out.filter { if (s.classe in raies) it.classe == ClasseQo100.BALISE && it.snrDb > s.snrDb + 6 else it.classe in larges && it.snrDb > s.snrDb }
                 .minByOrNull { abs(it.hz - s.hz) - (it.largeurHz + s.largeurHz) / 2.0 } ?: continue
             if (abs(hote.hz - s.hz) - (hote.largeurHz + s.largeurHz) / 2.0 > PROCHE_HZ) continue
             out.remove(s)
@@ -482,7 +623,20 @@ class AnalyseurQo100(val cadence: Double, val taille: Int = 65_536) {
         const val NET = 4.0
         /** A piece this close to a wide signal's edge is part of it. */
         const val PROCHE_HZ = 450.0
-        const val OUBLI_MS = 40_000L
+        /** A piste not seen this long is forgotten (an FT8 station's silent slot is shorter). */
+        const val OUBLI_MS = 25_000L
+        /** Listed while seen within this; on slots, within a slot and a frame; a voice, a pause between phrases. */
+        const val RECENT_MS = 5_000L
+        const val RECENT_CRENEAU_MS = 17_000L
+        const val RECENT_PHONIE_MS = 10_000L
+        /** Over the noise in its band (narrow) to be named. */
+        const val SNR_REQUIS_DB = 6.0
+        const val BANDE_MIN_HZ = 100.0
+        /** Lines in a row on one grid to make a comb, and how near the grid (Hz). */
+        const val PEIGNE_MIN = 5
+        const val TOLERANCE_PEIGNE_HZ = 6.0
+        /** A weaker line this close to a keyed one's edge may be part of it. */
+        const val FUSION_HZ = 500.0
         /** Frames kept per piste: a minute at 62 ms. */
         const val HISTORIQUE = 1024
     }
@@ -527,9 +681,11 @@ data class SignalQo100(
     val depuisMs: Long,
     /** Last seen this long ago (ms): an FT8 station is silent every other slot. */
     val vuIlYaMs: Long,
-    /** Over the noise in 2.5 kHz. */
+    /** Over the noise in 2.5 kHz (a narrow line reads low: −10 dB is a CW heard well). */
     val snrDb: Double,
     val details: String,
+    /** Over the noise in its own band (100 Hz at least): what the ear hears. */
+    val snrBandeDb: Double = snrDb,
 )
 
 /** Radix-2 FFT with its tables computed once: 65 536 points, sixteen times a second. */

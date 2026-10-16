@@ -68,8 +68,15 @@ class ScenesQo100(val dureeS: Double, seed: Long, val t0Ms: Long = 1_792_000_000
         ajouteTon({ hz + d(it) }, { a })
     }
 
-    /** CW: [texte] again and again at [wpm], a pause between calls. */
-    fun cw(hz: Double, snrDb: Double, wpm: Int = 18, texte: String = "CQ CQ DE F4IOZ F4IOZ K") {
+    /**
+     * CW: [texte] again and again at [wpm], a pause between calls ([pauseS]
+     * at least). [fronteS]: the keying edges (4 ms as a keyer shapes them;
+     * near nothing, a hard key and its clicks). [qsbDb]: a slow fade of that
+     * depth. [copies]: other lines keyed with it (offset Hz, level dB
+     * relative), as a transmitter's spurious ones.
+     */
+    fun cw(hz: Double, snrDb: Double, wpm: Int = 18, texte: String = "CQ CQ DE F4IOZ F4IOZ K", fronteS: Double = 0.004,
+           qsbDb: Double = 0.0, pauseS: Double = 1.0, copies: List<Pair<Double, Double>> = emptyList()) {
         val d = derive()
         val a = amplitude(snrDb)
         val cle = BooleanArray(n)
@@ -80,11 +87,48 @@ class ScenesQo100(val dureeS: Double, seed: Long, val t0Ms: Long = 1_792_000_000
                 if (bas) for (k in k0.coerceAtMost(n) until k1) cle[k] = true
                 t += ms / 1000
             }
-            t += 1.0 + rnd.nextDouble() * 2
+            t += pauseS + rnd.nextDouble() * 2
         }
-        // 4 ms edges, as a keyer shapes them.
-        val env = lisse(cle, 0.004)
-        ajouteTon({ hz + d(it) }, { a * env[(it * CADENCE).toInt().coerceIn(0, n - 1)] })
+        val env = lisse(cle, fronteS)
+        val phQsb = rnd.nextDouble() * 2 * PI
+        val qsb: (Double) -> Double = { t -> 10.0.pow(-qsbDb / 20 * (0.5 + 0.5 * sin(2 * PI * t / 9 + phQsb))) }
+        for ((dHz, dDb) in listOf(0.0 to 0.0) + copies) {
+            val g = 10.0.pow(dDb / 20)
+            ajouteTon({ hz + dHz + d(it) }, { a * g * qsb(it) * env[(it * CADENCE).toInt().coerceIn(0, n - 1)] })
+        }
+    }
+
+    /**
+     * A comb of steady weak lines every [pasHz] from [deHz] to [aHz], each
+     * [snrMinDb]..[snrMaxDb] over the noise in 2.5 kHz and slowly
+     * scintillating: what mains-rate interference leaves in a receiver chain.
+     */
+    fun peigne(deHz: Double, aHz: Double, pasHz: Double, snrMinDb: Double, snrMaxDb: Double) {
+        val k0 = Math.ceil(deHz / pasHz).toInt(); val k1 = Math.floor(aHz / pasHz).toInt()
+        val raies = (k0..k1).map { k -> Triple(k * pasHz, amplitude(snrMinDb + rnd.nextDouble() * (snrMaxDb - snrMinDb)), rnd.nextDouble() * 2 * PI) }
+        // Each line a rotating phasor (renormalised now and then), its level updated per 256 samples.
+        val cr = DoubleArray(raies.size); val ci = DoubleArray(raies.size)
+        val wr = DoubleArray(raies.size); val wi = DoubleArray(raies.size)
+        for (j in raies.indices) {
+            val p0 = rnd.nextDouble() * 2 * PI; cr[j] = cos(p0); ci[j] = sin(p0)
+            val w = 2 * PI * raies[j].first / CADENCE; wr[j] = cos(w); wi[j] = sin(w)
+        }
+        val amp = DoubleArray(raies.size)
+        for (k in 0 until n) {
+            if (k % 256 == 0) {
+                val t = k / CADENCE
+                for (j in raies.indices) {
+                    amp[j] = raies[j].second * (1 + 0.4 * sin(2 * PI * t / 5 + raies[j].third))
+                    val m = sqrt(cr[j] * cr[j] + ci[j] * ci[j]); cr[j] /= m; ci[j] /= m
+                }
+            }
+            var re = 0.0; var im = 0.0
+            for (j in raies.indices) {
+                val r = cr[j] * wr[j] - ci[j] * wi[j]; ci[j] = cr[j] * wi[j] + ci[j] * wr[j]; cr[j] = r
+                re += amp[j] * r; im += amp[j] * ci[j]
+            }
+            i[k] += re.toFloat(); q[k] += im.toFloat()
+        }
     }
 
     /** FT8 or FT4: a station sending every other slot, its frame 0.5 s into it (plus the satellite's quarter second). */
