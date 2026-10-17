@@ -52,7 +52,7 @@ class CalibrationIqPcTest {
             return Tx().also { tx = it } to null
         }
         override fun ouvreRx(rx: String, app: Emetteur): SourceIq =
-            CanalIqSimule(corrections.pour(CalibrationIqPc.cle(app), series.getValue(app)), bruit = 1e-4)
+            CanalIqSimule(corrections.pour(CalibrationIqPc.cle(app), series.getValue(app)), debit = CalibrationIqPc.DEBIT.toDouble(), bruit = 1e-4)
         override fun rendRx(rx: String) { rendu++ }
     }
 

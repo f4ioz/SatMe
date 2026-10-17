@@ -196,7 +196,7 @@ class CalibrationIqPc(
             etat = etat.copy(etape = "émission de la porteuse d'essai…")
             val ton = TonIq(TON_HZ, DEBIT.toDouble())
             var serie = serie0
-            val t = TonEssai(FREQUENCE_HZ, DEBIT, gainTxDb, if (auto) DUREE_AUTO_MS else DUREE_ESSAI_MS, PAIRES, serie0,
+            val t = TonEssai(FREQUENCE_HZ, DEBIT, gainTxDb, if (auto) DUREE_AUTO_MS else DUREE_ESSAI_MS, if (e == Emetteur.HACKRF) PAIRES_HACKRF else PAIRES, serie0,
                 correction = { s ->
                     if (serie.isEmpty()) serie = s
                     if (s.isEmpty()) null else corrections.pour(cle(e), s).also { c -> holder = c; avant = c.parametres }
@@ -212,7 +212,9 @@ class CalibrationIqPc(
                 while (gen == generation && x.etatCommun().emet) Thread.sleep(200)
                 return
             }
-            val banc = BancIq(c, src, DEBIT.toDouble(), TON_HZ, DECALAGE_RX_HZ, attenteMs(e))
+            // Narrow bins (18 Hz): the tone, clean, stands far above a weak link's noise.
+            val banc = BancIq(c, src, DEBIT.toDouble(), TON_HZ, DECALAGE_RX_HZ, attenteMs(e), paires = 2 * POINTS_FFT,
+                analyse = AnalyseTonIq(DEBIT.toDouble(), POINTS_FFT))
             etat = etat.copy(etape = "réglage du gain de réception…")
             val premier = cale(gen, src, banc, rx!!) ?: throw IOException(
                 Datv.libelleRecepteur(rx) + " n'entend pas la porteuse à 1245 MHz (antenne ? câble ?)")
@@ -274,7 +276,8 @@ class CalibrationIqPc(
             val r = banc.ecoute()
             journal(gen, "gain de réception $g dB : " + (r?.let { String.format(Locale.FRANCE, "crête %.0f dBFS, bruit %.0f dBc", it.creteDbfs, it.bruitDbc) } ?: "porteuse non entendue"))
             when {
-                r == null -> { if (g >= max) return dernier; g = minOf(max, g + 10) }
+                // Not 20 dB above the noise: not the tone (a noise peak).
+                r == null || r.bruitDbc > -20 -> { if (g >= max) return dernier; g = minOf(max, g + 10) }
                 r.creteDbfs > -4 -> { if (g <= 0) return r; g = maxOf(0, g - 10); dernier = r }
                 r.creteDbfs < -30 && g < max -> { g = minOf(max, g + 10); dernier = r }
                 else -> return r
@@ -304,7 +307,8 @@ class CalibrationIqPc(
         e.ppmMesure?.let { o.put("ppmMesure", Math.round(it * 1000) / 1000.0) }
         val l = JSONArray()
         for (a in listOf(Emetteur.PLUTO, Emetteur.BLADERF, Emetteur.HACKRF)) {
-            val s = materiel.serie(a, false)
+            // Not read yet since SatMe started: the only board of that kind kept here.
+            val s = materiel.serie(a, false).ifEmpty { corrections.connues().singleOrNull { it.first == cle(a) }?.second.orEmpty() }
             val j = JSONObject().put("cle", a.cle).put("nom", a.libelle).put("serie", s).put("mesureur", materiel.mesureur(a)?.let { Datv.libelleRecepteur(it) }.orEmpty())
             if (s.isNotEmpty()) {
                 val p = corrections.pour(cle(a), s).parametres
@@ -321,11 +325,15 @@ class CalibrationIqPc(
     companion object {
         /** 23 cm, inside the indoor test's band, below the part shared with radionavigation satellites. */
         const val FREQUENCE_HZ = 1_245_000_000L
-        const val DEBIT = 2_000_000L
+        /** Above the AD936x's lowest rate without its FIR (2.083 MS/s), within the HackRF's. */
+        const val DEBIT = 2_400_000L
         const val TON_HZ = 200_000.0
         /** The transmitter's LO this far above the receiver's centre: tone, LO and image at +600, +400, +200 kHz. */
         const val DECALAGE_RX_HZ = 400_000.0
         const val PAIRES = 16_384
+        /** hackrf_transfer takes 128 k pairs at a time: smaller buffers would look like underruns. */
+        const val PAIRES_HACKRF = 65_536
+        const val POINTS_FFT = 131_072
         const val DUREE_AUTO_MS = 150_000L
         const val DUREE_ESSAI_MS = 60_000L
         const val GAIN_MAX_DB = PlanInterieur.GAIN_PLUTO_DB
@@ -333,7 +341,7 @@ class CalibrationIqPc(
         const val GAIN_DEFAUT_DB = -50.0
         const val GAIN_RX_DEPART = 30
         /** The transmitters' queues: the Pluto's few buffers, the HackRF's USB transfers, bladeRF-cli's 2 M samples. */
-        val ATTENTES = mapOf(Emetteur.PLUTO to 250L, Emetteur.HACKRF to 600L, Emetteur.BLADERF to 1_600L)
+        val ATTENTES = mapOf(Emetteur.PLUTO to 250L, Emetteur.HACKRF to 900L, Emetteur.BLADERF to 1_600L)
 
         fun cle(e: Emetteur): String = when (e) {
             Emetteur.PLUTO -> CorrectionsIq.PLUTO
