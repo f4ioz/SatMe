@@ -82,6 +82,9 @@ class RecepteurS2(
     @Volatile private var bchCorriges = 0L
     @Volatile private var tramesSautees = 0L
     @Volatile private var iterations = 0.0
+    /** Frames failed in a row: a lock on noise, or a signal gone; the lock is given up after [ECHECS_DECROCHE]. */
+    @Volatile private var echecsSuite = 0
+    @Volatile private var lacher = false
     @Volatile private var soumis = 0L
     @Volatile private var traites = 0L
 
@@ -107,6 +110,7 @@ class RecepteurS2(
             val f = enCours.poll(200, TimeUnit.MILLISECONDS) ?: continue
             val b = runCatching { f.get() }.getOrNull()
             if (b != null) {
+                if (b.octets == null) { if (++echecsSuite >= ECHECS_DECROCHE) lacher = true } else echecsSuite = 0
                 if (b.octets == null) ldpcEchecs++ else { bitsCorriges += b.bitsCorriges; bchCorriges += b.bchCorriges.coerceAtLeast(0) }
                 trameur.trace?.invoke("FEC trame ${b.numero} ${b.modcod.libelle} : " + (if (b.octets == null) "ÉCHEC" else "ok") + " en ${b.iterations} itérations, BCH ${b.bchCorriges}")
                 iterations += 0.05 * (b.iterations - iterations)
@@ -129,6 +133,7 @@ class RecepteurS2(
     fun echantillons(iq: FloatArray, n: Int) {
         if (!ouvert) return
         flux.rolloff?.let { if (abs(it - frontal.alpha) > 1e-6) frontal.regleAlpha(it) }
+        if (lacher) { lacher = false; echecsSuite = 0; if (trameur.etape == 2) trameur.lache() }
         frontal.traite(iq, n / 2) { i, q -> trameur.symbole(i, q) }
         // The carrier gone far from the filter's centre (a drifting LNB): searched again.
         if (trameur.etape == 2 && abs(trameur.omegaBoucle) > 0.3 && !frontal.enAcquisition) { trameur.lache(); frontal.acquiers() }
@@ -164,6 +169,8 @@ class RecepteurS2(
     }
 
     companion object {
+        const val ECHECS_DECROCHE = 8
+
         fun filsParDefaut(): Int = (Runtime.getRuntime().availableProcessors() - 2).coerceIn(1, 4)
 
         /**
