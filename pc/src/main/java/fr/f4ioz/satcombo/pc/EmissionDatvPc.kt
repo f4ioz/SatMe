@@ -27,6 +27,7 @@ import fr.f4ioz.satcombo.datv.s2.SourceTs
 import fr.f4ioz.satcombo.plateforme.Stockage
 import fr.f4ioz.satcombo.sdr.Bladerf
 import fr.f4ioz.satcombo.sdr.BladerfEmission
+import fr.f4ioz.satcombo.sdr.CorrectionsIq
 import fr.f4ioz.satcombo.sdr.EmetteurDatv
 import fr.f4ioz.satcombo.sdr.HackrfEmission
 import fr.f4ioz.satcombo.sdr.Melangeur
@@ -379,6 +380,8 @@ class EmissionDatvPc(
     private var tx: EmetteurDatv? = null
     /** Why another transmission runs (SSTV), or null: DATV waits for it. */
     @Volatile var autreEmission: () -> String? = { null }
+    /** The transmitters' I/Q corrections, each board its own (none: the samples as made). */
+    @Volatile var corrections: CorrectionsIq? = null
     @Volatile private var processus: Processus? = null
     /** The modulator making the frames now: a new one for each MODCOD (its counts on the page). */
     @Volatile private var modulateur: ModulateurDvbs2? = null
@@ -460,7 +463,8 @@ class EmissionDatvPc(
             val r = HackrfEmission.Reglage(
                 frequenceHz = plan?.loHz ?: (khz * 1000L), debit = debit, vgaDb = ReglesEmission.vgaHackrf(gain), dureeMs = duree * 1000L,
                 bandeHz = plan?.bandeHz ?: Math.round(PlanQo100.occupeKhz(srKs, rolloff.alpha) * 1000), plafondVgaDb = ReglesEmission.HACKRF_VGA_MAX,
-                paires = paires(debit), serie = infoHackrf.cartes.singleOrNull()?.serie.orEmpty(), garde = { garde(gen) })
+                paires = paires(debit), serie = infoHackrf.cartes.singleOrNull()?.serie.orEmpty(), garde = { garde(gen) },
+                correction = { s -> corrections?.aAppliquer(CorrectionsIq.HACKRF, s) })
             // The baseband moved up to the wanted frequency, before the 8-bit conversion.
             val mel = plan?.let { Melangeur(it.decalageHz.toDouble(), debit.toDouble()) }
             refus = hx.demarre(r) { b -> mod.remplis(b, b.size / 2); mel?.applique(b) }
@@ -470,7 +474,8 @@ class EmissionDatvPc(
             val r = BladerfEmission.Reglage(
                 frequenceHz = khz * 1000L, debit = debit, gainDb = gain, dureeMs = duree * 1000L,
                 plafondDb = when { chargeFictive -> ReglesEmission.GAIN_CHARGE_DB; interieur -> PlanInterieur.GAIN_PLUTO_DB; else -> 0.0 },
-                paires = paires(debit), serie = infoBladerf.carte?.serie.orEmpty(), garde = { garde(gen) })
+                paires = paires(debit), serie = infoBladerf.carte?.serie.orEmpty(), garde = { garde(gen) },
+                correction = { s -> corrections?.aAppliquer(CorrectionsIq.BLADERF, s) })
             refus = bx.demarre(r) { b -> mod.remplis(b, b.size / 2) }
             e = bx
         } else {
@@ -479,7 +484,7 @@ class EmissionDatvPc(
                 frequenceHz = khz * 1000L, debit = debit, gainDb = gainDb, dureeMs = duree * 1000L,
                 plafondDb = when { chargeFictive -> ReglesEmission.GAIN_CHARGE_DB; interieur -> PlanInterieur.GAIN_PLUTO_DB; else -> 0.0 },
                 paires = paires(debit),
-                garde = { garde(gen) })
+                garde = { garde(gen) }, correction = { s -> corrections?.aAppliquer(CorrectionsIq.PLUTO, s) })
             refus = px.demarre(r) { b -> mod.remplis(b, b.size / 2) }
             e = px
         }

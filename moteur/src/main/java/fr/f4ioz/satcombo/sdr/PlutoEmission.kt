@@ -67,6 +67,8 @@ class PlutoEmission(
         val paires: Int = 65_536,
         /** Asked every 200 ms: a reason to stop, or null (the page gone, SatMe closing…). */
         val garde: () -> String? = { null },
+        /** The I/Q correction for the board of this serial number (its context's hw_serial), or none. */
+        val correction: (String) -> CorrectionIq? = { null },
     )
 
     data class Etat(
@@ -83,6 +85,9 @@ class PlutoEmission(
     )
 
     @Volatile var etat = Etat(); private set
+
+    /** The board's serial number (its context's hw_serial), once [demarre] has read it. */
+    @Volatile var serie: String = ""; private set
 
     override val nom: String get() = "ADALM-PLUTO"
 
@@ -127,14 +132,18 @@ class PlutoEmission(
         }
         ctrl = c
         val masque: String
+        val etage: EtageIq?
         try {
-            masque = verifie(c.contexte())
+            val xml = c.contexte()
+            masque = verifie(xml)
+            serie = PlutoSdr.Contexte.lis(xml).attributs["hw_serial"].orEmpty()
+            etage = r.correction(serie)?.let { EtageIq(it, r.frequenceHz, r.debit) }
             // Silent first, then set up.
             ecritTx(c, PHY, LO_TX, "powerdown", "1")
             ecritTx(c, PHY, TX, "hardwaregain", db(gain))
             ecritTx(c, PHY, TX, "sampling_frequency", r.debit.toString())
             ecritTx(c, PHY, TX, "rf_bandwidth", (if (r.bandeHz > 0) r.bandeHz else r.debit).coerceIn(BANDE_MIN, BANDE_MAX).toString())
-            ecritTx(c, PHY, LO_TX, "frequency", r.frequenceHz.toString())
+            ecritTx(c, PHY, LO_TX, "frequency", (etage?.loHz ?: r.frequenceHz).toString())
             // DDS tones off (raw is shared by the four), their scale to 0: only the buffer goes out.
             for (k in 0 until 4) {
                 ecritTx(c, TX_DEV, Iiod.Canal(true, "altvoltage$k"), "raw", "0")
@@ -152,7 +161,7 @@ class PlutoEmission(
         etat = Etat(emet = true, debutMs = maintenant, finMs = maintenant + duree, frequenceHz = r.frequenceHz, gainDb = gain)
         val file = ArrayBlockingQueue<ShortArray>(PROFONDEUR)
         fils.clear()
-        fils += Thread({ produit(gen, r.paires, file, producteur) }, "satme-pluto-tx-mod").apply { isDaemon = true; priority = Thread.MAX_PRIORITY - 1 }
+        fils += Thread({ produit(gen, r.paires, file, producteur, etage) }, "satme-pluto-tx-mod").apply { isDaemon = true; priority = Thread.MAX_PRIORITY - 1 }
         fils += Thread({ ecrit(gen, r, masque, file) }, "satme-pluto-tx").apply { isDaemon = true; priority = Thread.MAX_PRIORITY }
         fils += Thread({ veille(gen, r) }, "satme-pluto-tx-garde").apply { isDaemon = true }
         fils.forEach { it.start() }
@@ -177,11 +186,13 @@ class PlutoEmission(
 
     // ------------------------------------------------------------ threads
 
-    private fun produit(gen: Int, paires: Int, file: ArrayBlockingQueue<ShortArray>, producteur: (ShortArray) -> Unit) {
+    private fun produit(gen: Int, paires: Int, file: ArrayBlockingQueue<ShortArray>, producteur: (ShortArray) -> Unit, etage: EtageIq?) {
         try {
             while (actif && generation == gen) {
                 val b = ShortArray(2 * paires)
                 producteur(b)
+                // The correction last, just before the transmitter.
+                etage?.applique(b)
                 while (actif && generation == gen && !file.offer(b, 200, TimeUnit.MILLISECONDS)) { /* the Pluto sets the pace */ }
             }
         } catch (x: InterruptedException) {

@@ -69,6 +69,8 @@ class HackrfEmission(
         val serie: String = "",
         /** Asked every 200 ms: a reason to stop, or null. */
         val garde: () -> String? = { null },
+        /** The I/Q correction for the board of this serial number ([serie]), or none. */
+        val correction: (String) -> CorrectionIq? = { null },
     )
 
     /** What `hackrf_info` says of one board. */
@@ -113,7 +115,10 @@ class HackrfEmission(
         if (r.serie.isNotEmpty() && !r.serie.matches(SERIE)) return "numéro de série du HackRF invalide"
         val vga = vgaApplique(r.vgaDb, r.plafondVgaDb)
         val duree = r.dureeMs.coerceIn(1L, DUREE_MAX_MS)
-        val cmd = commande(programme, r, vga)
+        // The correction after the producer's own mixing; the LO moved by the crystal's error.
+        val etage = r.correction(r.serie)?.let { EtageIq(it, r.frequenceHz, r.debit) }
+        if (etage != null && etage.loHz !in FREQ_MIN_HZ..FREQ_MAX_HZ) return "fréquence hors de la plage du HackRF (1 à 6000 MHz)"
+        val cmd = commande(programme, if (etage == null) r else r.copy(frequenceHz = etage.loHz), vga)
         val gen = ++generation
         fatal = null
         synchronized(journal) { journal.clear() }
@@ -134,7 +139,7 @@ class HackrfEmission(
         lecteur = Thread({ litErreurs(p) }, "satme-hackrf-tx-journal").apply { isDaemon = true; start() }
         val file = ArrayBlockingQueue<ShortArray>(PROFONDEUR)
         fils.clear()
-        fils += Thread({ produit(gen, r.paires, file, producteur) }, "satme-hackrf-tx-mod").apply { isDaemon = true; priority = Thread.MAX_PRIORITY - 1 }
+        fils += Thread({ produit(gen, r.paires, file, producteur, etage) }, "satme-hackrf-tx-mod").apply { isDaemon = true; priority = Thread.MAX_PRIORITY - 1 }
         fils += Thread({ ecrit(gen, p, file) }, "satme-hackrf-tx").apply { isDaemon = true; priority = Thread.MAX_PRIORITY }
         fils += Thread({ veille(gen, p, r) }, "satme-hackrf-tx-garde").apply { isDaemon = true }
         fils.forEach { it.start() }
@@ -156,11 +161,13 @@ class HackrfEmission(
 
     // ------------------------------------------------------------ threads
 
-    private fun produit(gen: Int, paires: Int, file: ArrayBlockingQueue<ShortArray>, producteur: (ShortArray) -> Unit) {
+    private fun produit(gen: Int, paires: Int, file: ArrayBlockingQueue<ShortArray>, producteur: (ShortArray) -> Unit, etage: EtageIq?) {
         try {
             while (actif && generation == gen) {
                 val b = ShortArray(2 * paires)
                 producteur(b)
+                // The correction last, just before the transmitter.
+                etage?.applique(b)
                 while (actif && generation == gen && !file.offer(b, 200, TimeUnit.MILLISECONDS)) { /* the HackRF sets the pace */ }
             }
         } catch (x: InterruptedException) {

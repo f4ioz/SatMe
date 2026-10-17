@@ -109,6 +109,28 @@ class HackrfEmissionTest {
     }
 
     @Test
+    fun correction_iq_neutre_rien_ne_change_sinon_appliquee() {
+        fun envoie(c: (String) -> CorrectionIq?): Pair<ByteArray, List<String>> {
+            val f = faux(limite = 65_536)
+            val h = HackrfEmission(f.transfer.path)
+            var n = 0
+            val rampe: (ShortArray) -> Unit = { b -> for (k in b.indices) { b[k] = ((n * 37 + k * 11) % 40_000 - 20_000).toShort() }; n++ }
+            assertNull(h.demarre(reglage(serie = "a06063c8").copy(correction = c), rampe))
+            assertTrue(attends(5000) { f.iq.size >= 65_536 })
+            h.arrete()
+            return f.iq.copyOf(65_536) to f.args
+        }
+        val (brut, a0) = envoie { null }
+        val (neutre, a1) = envoie { s -> CorrectionIq("hackrf", s) }
+        assertArrayEquals(brut, neutre)
+        assertEquals(a0, a1)
+        val (corrige, a2) = envoie { s -> CorrectionIq("hackrf", s, ParametresIq(dcI = 0.01, gain = 0.02, ppm = 2.0)) }
+        assertFalse(brut.contentEquals(corrige))
+        // The LO lowered by 2 ppm: 2510 Hz at 1255 MHz.
+        assertEquals((1_255_000_000L - 2510L).toString(), a2[a2.indexOf("-f") + 1])
+    }
+
+    @Test
     fun emet_puis_s_arrete_par_la_fin_de_l_entree() {
         val f = faux()
         val h = HackrfEmission(f.transfer.path)

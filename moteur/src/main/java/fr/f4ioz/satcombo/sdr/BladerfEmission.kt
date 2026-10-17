@@ -72,6 +72,8 @@ class BladerfEmission(
         /** The board's serial number, or empty for the first one. */
         val serie: String = "",
         val garde: () -> String? = { null },
+        /** The I/Q correction for the board of this serial number ([serie]), or none. */
+        val correction: (String) -> CorrectionIq? = { null },
     )
 
     @Volatile var etat = EtatEmission(); private set
@@ -129,6 +131,9 @@ class BladerfEmission(
         val cli = gainCli(g)
         val bande = (if (r.bandeHz > 0) r.bandeHz else r.debit).coerceIn(BANDE_MIN, BANDE_MAX)
         val duree = r.dureeMs.coerceIn(1L, DUREE_MAX_MS)
+        val etage = r.correction(r.serie)?.let { EtageIq(it, r.frequenceHz, r.debit) }
+        val lo = etage?.loHz ?: r.frequenceHz
+        if (lo !in FREQ_MIN_HZ..FREQ_MAX_HZ) return "fréquence hors de la plage du bladeRF (47 à 6000 MHz)"
         val gen = synchronized(verrouEtat) { ++generation }
         val f = try { Bladerf.creeFifo("tx.iq", dossierFifo) } catch (x: IOException) { return x.message }
         fifo = f
@@ -146,9 +151,9 @@ class BladerfEmission(
                 val gamme = s.attend(Regex("Gain TX1\\s+overall:\\s*-?\\d+ dB \\(Range: \\[([-\\d.]+), ([-\\d.]+)\\]\\)"), attenteReponseMs, "gain")
                 if (gamme.groupValues[2].toDoubleOrNull() != Bladerf.DECALAGE_GAIN_TX.toDouble())
                     throw IOException("bladeRF : gamme de gain TX inattendue (" + gamme.groupValues[1] + " à " + gamme.groupValues[2] + " dB) : émission refusée")
-                s.envoie("set frequency tx1 " + r.frequenceHz)
+                s.envoie("set frequency tx1 $lo")
                 val fq = s.attend(Regex("TX1 Frequency:\\s*(\\d+) Hz"), attenteReponseMs, "fréquence").groupValues[1].toLong()
-                if (kotlin.math.abs(fq - r.frequenceHz) > 10) throw IOException("bladeRF : fréquence $fq Hz au lieu de ${r.frequenceHz}")
+                if (kotlin.math.abs(fq - lo) > 10) throw IOException("bladeRF : fréquence $fq Hz au lieu de $lo")
                 s.envoie("set samplerate tx1 " + r.debit)
                 val de = s.attend(Regex("Setting TX1 sample rate - req:\\s*\\d+.*actual:\\s*(\\d+)"), attenteReponseMs, "débit").groupValues[1].toLong()
                 if (kotlin.math.abs(de - r.debit) > r.debit / 10_000 + 1) throw IOException("bladeRF : débit $de éch/s au lieu de ${r.debit}")
@@ -171,7 +176,7 @@ class BladerfEmission(
         etat = EtatEmission(emet = true, debutMs = maintenant, finMs = maintenant + duree, frequenceHz = r.frequenceHz, gainDb = g)
         val file = ArrayBlockingQueue<ShortArray>(PROFONDEUR)
         fils.clear()
-        fils += Thread({ produit(gen, r.paires, file, producteur) }, "satme-bladerf-tx-mod").apply { isDaemon = true; priority = Thread.MAX_PRIORITY - 1 }
+        fils += Thread({ produit(gen, r.paires, file, producteur, etage) }, "satme-bladerf-tx-mod").apply { isDaemon = true; priority = Thread.MAX_PRIORITY - 1 }
         fils += Thread({ ecrit(gen, f, file) }, "satme-bladerf-tx").apply { isDaemon = true; priority = Thread.MAX_PRIORITY }
         fils.forEach { it.start() }
         runCatching { s.envoie("tx start") }.onFailure { coupe(gen, "", "bladeRF-cli : " + (it.message ?: "liaison perdue")) }
@@ -234,11 +239,13 @@ class BladerfEmission(
 
     // ------------------------------------------------------------ threads
 
-    private fun produit(gen: Int, paires: Int, file: ArrayBlockingQueue<ShortArray>, producteur: (ShortArray) -> Unit) {
+    private fun produit(gen: Int, paires: Int, file: ArrayBlockingQueue<ShortArray>, producteur: (ShortArray) -> Unit, etage: EtageIq?) {
         try {
             while (actif && generation == gen) {
                 val b = ShortArray(2 * paires)
                 producteur(b)
+                // The correction last, just before the transmitter.
+                etage?.applique(b)
                 while (actif && generation == gen && !file.offer(b, 200, TimeUnit.MILLISECONDS)) { /* the bladeRF sets the pace */ }
             }
         } catch (x: InterruptedException) {

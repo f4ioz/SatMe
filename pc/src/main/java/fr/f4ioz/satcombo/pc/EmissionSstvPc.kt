@@ -72,6 +72,9 @@ class EmissionSstvPc(
     /** Silence from the page longer than this: stopped. */
     private val vieMs: Long = 15_000L,
 ) {
+    /** The transmitters' I/Q corrections, each board its own (none: the samples as made). */
+    @Volatile var corrections: fr.f4ioz.satcombo.sdr.CorrectionsIq? = null
+
     // ------------------------------------------------------------ settings (parameters only)
 
     var emetteur: Emetteur
@@ -223,12 +226,12 @@ class EmissionSstvPc(
         if (blade) {
             val bx = BladerfEmission(programmeCli, gainMaxDb = plafond)
             refus = bx.demarre(BladerfEmission.Reglage(d.frequenceHz, mod.debit, d.gainDb, duree, plafondDb = plafond, paires = paires,
-                garde = { garde(gen) })) { b -> mod.remplis(b, b.size / 2) }
+                garde = { garde(gen) }, correction = { s -> corrections?.aAppliquer(fr.f4ioz.satcombo.sdr.CorrectionsIq.BLADERF, s) })) { b -> mod.remplis(b, b.size / 2) }
             e = bx
         } else {
             val px2 = PlutoEmission(plutoHote(), plutoPort(), gainMaxDb = plafond)
             refus = px2.demarre(PlutoEmission.Reglage(d.frequenceHz, mod.debit, d.gainDb, duree, plafondDb = plafond, paires = paires,
-                garde = { garde(gen) })) { b -> mod.remplis(b, b.size / 2) }
+                garde = { garde(gen) }, correction = { s -> corrections?.aAppliquer(fr.f4ioz.satcombo.sdr.CorrectionsIq.PLUTO, s) })) { b -> mod.remplis(b, b.size / 2) }
             e = px2
         }
         if (refus != null) { generation++; return refus }

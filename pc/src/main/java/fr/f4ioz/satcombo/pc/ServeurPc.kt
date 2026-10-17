@@ -72,6 +72,9 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
     /** SSTV on the air with the Pluto or the bladeRF (set before [demarre]). */
     @Volatile var emissionSstv: EmissionSstvPc? = null
 
+    /** The transmitters' I/Q correction and its calibration (set before [demarre]). */
+    @Volatile var iq: CalibrationIqPc? = null
+
     /** QRZ.com records of the callsigns seen in DATV, and their photos (set before [demarre]). */
     @Volatile var qrzDatv: QrzDatvPc? = null
 
@@ -377,6 +380,8 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 }
                 envoie(sortie, "200 OK", "application/json; charset=utf-8", o.toString().toByteArray())
             }
+            "/api/iq" -> envoie(sortie, "200 OK", "application/json; charset=utf-8",
+                (iq?.json()?.put("ok", true) ?: JSONObject().put("ok", false)).toString().toByteArray())
             "/api/sstv/emission" -> envoie(sortie, "200 OK", "application/json; charset=utf-8",
                 (emissionSstv?.json()?.put("ok", true) ?: JSONObject().put("ok", false)).toString().toByteArray())
             // The picture a start would send now, the callsign over it (nothing transmitted).
@@ -853,6 +858,25 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                     ?.let { return JSONObject().put("ok", false).put("erreur", it) }
             }
             "/api/sstv/emission/arrete" -> emissionSstv?.arrete()
+            // The transmitters' I/Q correction: the sliders (kept, live), the test tone and the calibration (indoors, confirmed), the stop.
+            "/api/iq/regle" -> {
+                val c = iq ?: return JSONObject().put("ok", false)
+                val e = fr.f4ioz.satcombo.datv.Emetteur.de(q["app"])
+                fun d(k: String) = q[k]?.replace(',', '.')?.toDoubleOrNull()
+                q["gainTx"]?.let { d("gainTx")?.let { g -> c.gainTxDb = g } }
+                if (q.keys.any { it in setOf("dcI", "dcQ", "gain", "phase", "ppm", "raz") }) {
+                    val p0 = c.correction(e, true)?.parametres ?: fr.f4ioz.satcombo.sdr.ParametresIq.NEUTRE
+                    val p = if (q["raz"] == "1") fr.f4ioz.satcombo.sdr.ParametresIq.NEUTRE
+                        else fr.f4ioz.satcombo.sdr.ParametresIq(d("dcI") ?: p0.dcI, d("dcQ") ?: p0.dcQ, d("gain") ?: p0.gain, d("phase") ?: p0.phaseDeg, d("ppm") ?: p0.ppm)
+                    c.regle(e, p)?.let { return JSONObject().put("ok", false).put("erreur", it) }
+                }
+            }
+            "/api/iq/demarre" -> {
+                val c = iq ?: return JSONObject().put("ok", false)
+                c.demarre(fr.f4ioz.satcombo.datv.Emetteur.de(q["app"]), q["auto"] == "1", q["mesure"] == "1", q["confirme"] == "1")
+                    ?.let { return JSONObject().put("ok", false).put("erreur", it) }
+            }
+            "/api/iq/arrete" -> iq?.arrete()
             "/api/sstv/emission/vie" -> emissionSstv?.vie()
             // A chat line in the stream being sent (refused when nothing is being sent: typing never transmits).
             "/api/datv/emission/chat" -> {

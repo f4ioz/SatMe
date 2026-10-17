@@ -178,6 +178,13 @@ fun main(args: Array<String>) {
         // Talkback by default: where the rig is on QO-100's narrow band, when SatMe may propose it.
         retourParDefaut = { station.qo100.etat.value.let { q ->
             q.descenteHz.takeIf { q.auPoste && q.transpondeur == fr.f4ioz.satcombo.domain.Qo100.NB.cle && fr.f4ioz.satcombo.domain.GardeQo100.proposable(it) } } })
+    // The transmitters' I/Q correction (Réglages › Émission): kept per board, used by DATV and SSTV; calibrated indoors only.
+    val corrections = fr.f4ioz.satcombo.sdr.CorrectionsIq(station.stockage)
+    emission.corrections = corrections
+    var sstvRef: EmissionSstvPc? = null
+    val iq = CalibrationIqPc(station.stockage, corrections,
+        MaterielIqPc(sdr, emission, { sstvRef }, datv, { trafic.reprend() }, { station.settings.qo100EnCours }))
+    val iqEnCours = "une correction I/Q est en cours (Réglages › Émission) : l'arrêter d'abord"
     // SSTV on the air with the Pluto or the bladeRF: as DATV, nothing sent until asked and confirmed on the page.
     val planche = PlancheWebPc(station, son, dossier)
     val emissionSstv = EmissionSstvPc(station.stockage, indicatif = { station.settings.callsign }, locator = { station.settings.manualLocator },
@@ -187,20 +194,23 @@ fun main(args: Array<String>) {
         bladerfOccupe = { if (sdr.bladerfEnReception) "le bladeRF reçoit (onglet SDR) : arrêter cette réception d'abord"
             else if (datv.sdrTenu == fr.f4ioz.satcombo.datv.Datv.BLADERF) "le bladeRF reçoit la DATV : arrêter cette réception d'abord" else null },
         bladerfProgramme = { sdr.programmeBladerf() },
-        autreEmission = { if (emission.etat.emet) "une émission DATV est en cours : l'arrêter d'abord" else null },
+        autreEmission = { if (emission.etat.emet) "une émission DATV est en cours : l'arrêter d'abord" else if (iq.enCours) iqEnCours else null },
         gainMaxDb = { emission.gainMaxDb },
         planche = { planche.image(it) }, planches = { planche.modeles() },
         signauxQo100 = { qo100.signaux.recents() })
-    emission.autreEmission = { if (emissionSstv.etat.emet) "une émission SSTV est en cours : l'arrêter d'abord" else null }
+    sstvRef = emissionSstv
+    emissionSstv.corrections = corrections
+    emission.autreEmission = { if (emissionSstv.etat.emet) "une émission SSTV est en cours : l'arrêter d'abord" else if (iq.enCours) iqEnCours else null }
     // DATV received with the Pluto or the bladeRF: the SDR tab's board lent, given back afterwards; never while it transmits.
     datv.materiel = MaterielSdrPc(sdr, { trafic.reprend() }, { station.settings.qo100EnCours }) { r ->
         val qui = if (r == fr.f4ioz.satcombo.datv.Datv.PLUTO) fr.f4ioz.satcombo.datv.Emetteur.PLUTO else fr.f4ioz.satcombo.datv.Emetteur.BLADERF
-        if ((emission.etat.emet && emission.etat.emetteur == qui) || emissionSstv.emetAvec(qui))
+        if (iq.enCours) iqEnCours
+        else if ((emission.etat.emet && emission.etat.emetteur == qui) || emissionSstv.emetAvec(qui))
             (if (qui == fr.f4ioz.satcombo.datv.Emetteur.PLUTO) "l'ADALM-PLUTO" else "le bladeRF") + " émet : arrêter l'émission d'abord" else null
     }
-    sdr.emissionPluto = { emission.etat.emet || emissionSstv.emetAvec(fr.f4ioz.satcombo.datv.Emetteur.PLUTO) }
+    sdr.emissionPluto = { emission.etat.emet || emissionSstv.emetAvec(fr.f4ioz.satcombo.datv.Emetteur.PLUTO) || iq.tient(fr.f4ioz.satcombo.datv.Emetteur.PLUTO) }
     sdr.emissionBladerf = { (emission.etat.emet && emission.etat.emetteur == fr.f4ioz.satcombo.datv.Emetteur.BLADERF) ||
-        emissionSstv.emetAvec(fr.f4ioz.satcombo.datv.Emetteur.BLADERF) }
+        emissionSstv.emetAvec(fr.f4ioz.satcombo.datv.Emetteur.BLADERF) || iq.tient(fr.f4ioz.satcombo.datv.Emetteur.BLADERF) }
     // Text and the mark over the transmitted picture; its pictures and videos chosen from the page.
     emission.incrustation = IncrustationDatvPc(station.stockage)
     val fichiersDatv = FichiersDatvPc(File(dossier, "datv-sources"), File(dossier, "tmp/vignettes"))
@@ -208,6 +218,7 @@ fun main(args: Array<String>) {
     val serveur = ServeurPc(station, port, reseau, carnet, son, journalWeb, ImportPc(station, carnet, journal), sdr, videoSked, telephone, appairage, datv,
         planche, kiss, sauvegarde, MirePc(File(dossier, "exports")), diffusion, qo100, lien, phonie, emission, trafic)
     serveur.emissionSstv = emissionSstv
+    serveur.iq = iq
     serveur.textesDatv = textesDatv
     serveur.fichiersDatv = fichiersDatv
     serveur.qrzDatv = QrzDatvPc(dossier, { station.settings.qrzUser.isNotBlank() && station.settings.qrzMdp.isNotBlank() },
@@ -227,6 +238,7 @@ fun main(args: Array<String>) {
     }
     Runtime.getRuntime().addShutdownHook(Thread {
         // The transmitter first: its LO powered down before anything else.
+        runCatching { iq.arrete() }
         runCatching { emission.arrete("SatMe-PC fermé") }
         // No hackrf_transfer outlives SatMe-PC.
         runCatching { fr.f4ioz.satcombo.sdr.HackrfEmission.arreteTout() }

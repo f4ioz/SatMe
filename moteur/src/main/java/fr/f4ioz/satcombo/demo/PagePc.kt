@@ -38,7 +38,7 @@ object PagePc {
     private fun contenu(nom: String, icone: String) = IconesPc.svg(icone) + "<span>$nom</span>"
 
     /** The settings categories' icons, for the page's script. */
-    private fun icones(): String = org.json.JSONObject(listOf("person", "radio", "satellite_alt", "public", "smartphone", "save", "tune", "straighten", "mic")
+    private fun icones(): String = org.json.JSONObject(listOf("person", "radio", "satellite_alt", "public", "smartphone", "save", "tune", "straighten", "mic", "cloud_upload")
         .associateWith { IconesPc.svg(it, "ico-reg") }).toString()
 
     /** The tabs that are pages of their own (served apart), with what they are. */
@@ -2033,6 +2033,27 @@ object PagePc {
         <button onclick="post('api/datv/emission/reglage?gainMax=' + enc(v('px-gainmax'))).then(chargePx)">Enregistrer</button></div>
       <div class="petit">Jamais dépassé, quoi qu'on demande dans l'onglet DATV (0 dB = la pleine puissance du Pluto, environ +7 dBm).</div>
     </div>
+    <div class="carte" id="iq-carte">
+      <div class="t">Correction I/Q des émetteurs</div>
+      <div class="petit">Chaque émetteur laisse passer un peu de son oscillateur (une fuite au centre), une image du signal (son reflet autour de l'oscillateur) et un écart de fréquence (son quartz). SatMe les corrige sur les échantillons, juste avant l'émetteur, en DATV comme en SSTV ; chaque carte garde sa correction (par numéro de série). À zéro : rien n'est changé.</div>
+      <div class="ligne"><span class="petit">Émetteur</span><select id="iq-app" onchange="iqTouche = 0; chargeIq()"><option value="pluto">ADALM-PLUTO</option><option value="bladerf">bladeRF 2.0</option><option value="hackrf">HackRF One</option></select>
+        <span class="petit" id="iq-serie"></span></div>
+      <div id="iq-curseurs"></div>
+      <div class="ligne"><button onclick="post('api/iq/regle?raz=1&app=' + v('iq-app')).then(() => { iqTouche = 0; chargeIq(); })">Remettre à zéro</button>
+        <span class="petit">Les curseurs agissent aussitôt sur une émission en cours avec cette carte.</span></div>
+      <div class="petit" id="iq-res" style="margin-top:4px"></div>
+      <div class="t" style="margin-top:10px">Mesure et calibration <span class="petit">essai en intérieur seulement : porteuse à 1245 MHz, à faible puissance</span></div>
+      <div class="ligne"><span class="petit">Atténuation d'émission (dB, −40 au plus ; le HackRF à 0 dB de gain)</span><input id="iq-gaintx" type="number" step="1" min="-89" max="-40" style="max-width:70px"></div>
+      <div class="ligne" style="flex-wrap:wrap"><button id="iq-essai" onclick="iqDemarre(false)">Porteuse d'essai</button>
+        <label class="petit"><input type="checkbox" id="iq-mes" checked> la mesurer</label>
+        <button id="iq-auto" onclick="iqDemarre(true)">Calibration automatique</button>
+        <button id="iq-arrete" onclick="post('api/iq/arrete').then(chargeIq)" disabled>Arrêter</button></div>
+      <div class="petit" id="iq-mesureur"></div>
+      <div class="petit" id="iq-etat" style="margin-top:4px"></div>
+      <div class="petit" id="iq-mesure" style="font-variant-numeric:tabular-nums"></div>
+      <pre class="petit" id="iq-journal" hidden style="max-height:180px;overflow:auto;white-space:pre-wrap"></pre>
+      <div class="petit" style="margin-top:4px">La calibration émet une porteuse 200 kHz au-dessus de l'oscillateur ; un autre SDR de la station (le bladeRF, ou le Pluto pour le bladeRF) l'écoute, mesure la fuite et l'image, et SatMe cherche les réglages qui les éteignent. L'écart de fréquence est relevé par rapport au quartz du récepteur. Le récepteur de l'onglet SDR est prêté pendant la mesure, puis rendu.</div>
+    </div>
     <div class="carte">
       <div class="t">Convertisseurs</div>
       <div class="petit" id="conv-lu">—</div>
@@ -2508,6 +2529,7 @@ const CATS_REG = [
   { id: 'phonie', nom: 'Phonie → texte', ico: 'mic', desc: 'La voix entendue écrite : moteur, modèle, installation', cartes: ['Phonie → texte'] },
   { id: 'telephone', nom: 'Téléphone', ico: 'smartphone', desc: 'SatMe sur le téléphone : réglages et contacts', cartes: ['Téléphone'] },
   { id: 'accord', nom: 'Accord fin', ico: 'tune', desc: 'Loupe, vernier, calage sur la voix (clé SDR)', cartes: ['Accord fin'] },
+  { id: 'emission', nom: 'Émission', ico: 'cloud_upload', desc: 'Correction I/Q des émetteurs : fuite, image, fréquence', cartes: ['Correction I/Q'] },
   { id: 'sauvegarde', nom: 'Sauvegarde', ico: 'save', desc: 'Toute la station dans un fichier, et la restaurer', cartes: ['Sauvegarde'] },
 ];
 // The backup: its size, the link, a backup received waiting for the next start.
@@ -2562,6 +2584,53 @@ function montreReglages(id) {
   catReg = id; try { localStorage.setItem('reglages', id); } catch (x) {}
   document.querySelectorAll('#reg-corps .reg-sec').forEach(s => s.hidden = s.dataset.cat !== id);
   document.querySelectorAll('#reg-nav button').forEach(b => b.classList.toggle('actif', b.dataset.cat === id));
+  if (id === 'emission') chargeIq();
+}
+// Réglages › Émission: the transmitters' I/Q correction (sliders kept, live), the test tone, the automatic calibration.
+let IQ = null, iqSuivi = null, iqTouche = 0, iqEnvoi = null;
+const IQ_CHAMPS = [['dcI', 'Fuite : DC I', -0.05, 0.05, 0.0001, 4], ['dcQ', 'Fuite : DC Q', -0.05, 0.05, 0.0001, 4],
+  ['gain', 'Image : gain', -0.2, 0.2, 0.0005, 4], ['phase', 'Image : phase (°)', -10, 10, 0.01, 2], ['ppm', 'Fréquence (ppm)', -50, 50, 0.01, 2]];
+function iqConstruit() {
+  if (g('iq-curseurs').childElementCount) return;
+  g('iq-curseurs').innerHTML = IQ_CHAMPS.map(c => '<div class="ligne"><span class="petit" style="min-width:130px">' + c[1] + '</span><input type="range" id="iq-' + c[0] +
+    '" min="' + c[2] + '" max="' + c[3] + '" step="' + c[4] + '" style="flex:1" oninput="iqBouge()"><span class="petit" id="iq-' + c[0] + '-v" style="min-width:64px;text-align:right"></span></div>').join('');
+}
+function iqBouge() {
+  iqTouche = Date.now();
+  IQ_CHAMPS.forEach(c => txt('iq-' + c[0] + '-v', (+g('iq-' + c[0]).value).toFixed(c[5])));
+  clearTimeout(iqEnvoi);
+  iqEnvoi = setTimeout(() => post('api/iq/regle?app=' + v('iq-app') + IQ_CHAMPS.map(c => '&' + c[0] + '=' + g('iq-' + c[0]).value).join('')), 150);
+}
+async function chargeIq() {
+  clearTimeout(iqSuivi);
+  try { IQ = await (await fetch('api/iq')).json(); } catch (x) { IQ = null; }
+  if (!IQ || !IQ.ok) { g('iq-carte').hidden = true; return; }
+  iqConstruit();
+  if (IQ.actif && IQ.appareil) g('iq-app').value = IQ.appareil;
+  const a = IQ.appareils.find(x => x.cle === v('iq-app')) || {};
+  txt('iq-serie', a.serie ? 'n° ' + a.serie : 'numéro de série pas encore lu');
+  txt('iq-mesureur', a.mesureur ? 'Mesurée par : ' + a.mesureur + '.' : 'Aucun autre SDR pour la mesurer : les curseurs seulement.');
+  if (Date.now() - iqTouche > 1500) {
+    const p = a.p || { dcI: 0, dcQ: 0, gain: 0, phase: 0, ppm: 0 };
+    IQ_CHAMPS.forEach(c => { g('iq-' + c[0]).value = p[c[0]]; txt('iq-' + c[0] + '-v', (+p[c[0]]).toFixed(c[5])); });
+  }
+  txt('iq-res', a.resultat ? 'Dernière calibration, ' + a.resultat + '.' : '');
+  if (document.activeElement !== g('iq-gaintx')) g('iq-gaintx').value = IQ.gainTx;
+  const m = IQ.mesure;
+  txt('iq-etat', (IQ.actif ? '● ' : '') + (IQ.etape || '') + (IQ.erreur ? ' — ' + IQ.erreur : ''));
+  txt('iq-mesure', m ? 'Fuite ' + m.fuite + ' dBc · image ' + m.image + ' dBc · bruit ' + m.bruit + ' dBc · crête ' + m.crete + ' dBFS' +
+    (IQ.ppmMesure != null ? ' · écart ' + IQ.ppmMesure.toFixed(3) + ' ppm' : '') : '');
+  const jl = IQ.journal || [];
+  if (g('iq-journal').textContent !== jl.join('\n')) g('iq-journal').textContent = jl.join('\n');
+  g('iq-journal').hidden = !jl.length;
+  g('iq-essai').disabled = IQ.actif; g('iq-auto').disabled = IQ.actif || !a.mesureur; g('iq-arrete').disabled = !IQ.actif;
+  if (IQ.actif || (!g('v-reglages').hidden && catReg === 'emission')) iqSuivi = setTimeout(chargeIq, IQ.actif ? 1000 : 5000);
+}
+function iqDemarre(auto) {
+  const nom = g('iq-app').selectedOptions[0].textContent;
+  if (!confirm((auto ? 'Calibration automatique' : 'Porteuse d’essai') + ' : le ' + nom + ' émet une porteuse à ' + IQ.frequenceMhz + ' MHz (essai en intérieur, ' +
+    (v('iq-app') === 'hackrf' ? 'gain TX 0 dB' : 'atténuation ' + v('iq-gaintx') + ' dB') + ') pendant ' + (auto ? 'deux minutes et demie au plus' : 'une minute au plus') + '. Émettre ?')) return;
+  post('api/iq/regle?gainTx=' + enc(v('iq-gaintx'))).then(() => post('api/iq/demarre?confirme=1&app=' + v('iq-app') + (auto ? '&auto=1' : '') + (g('iq-mes').checked ? '&mesure=1' : ''))).then(chargeIq);
 }
 // The log's pass: hams.at's skeds announced for it, the contacts made during it.
 function bandeauSkeds(id) {
