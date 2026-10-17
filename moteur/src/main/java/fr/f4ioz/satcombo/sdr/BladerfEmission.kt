@@ -152,7 +152,7 @@ class BladerfEmission(
                 if (kotlin.math.abs(de - r.debit) > r.debit / 10_000 + 1) throw IOException("bladeRF : débit $de éch/s au lieu de ${r.debit}")
                 s.envoie("set bandwidth tx1 $bande")
                 s.attend(Regex("TX1 Bandwidth:\\s*\\d+ Hz"), attenteReponseMs, "bande")
-                s.envoie("tx config file=" + f.path + " format=bin repeat=1 delay=0 channel=1 samples=" + r.paires + " buffers=32 xfers=16 timeout=2000")
+                s.envoie("tx config file=" + f.path + " format=bin repeat=1 delay=0 channel=1 samples=" + r.paires + " buffers=$TAMPONS_CLI xfers=16 timeout=2000")
                 s.envoie("tx")
                 val fichier = s.attend(Regex("File:\\s*(.+)$"), attenteReponseMs, "réglage du flux").groupValues[1].trim()
                 if (fichier != f.path) throw IOException("bladeRF : flux sur « $fichier » au lieu du tube")
@@ -256,7 +256,8 @@ class BladerfEmission(
             while (actif && generation == gen) {
                 var b = file.poll()
                 if (b == null) {
-                    if (envoyes >= 2) manque()
+                    // At the start the tool fills its own buffers at once and empties the queue: not a lateness.
+                    if (envoyes >= TAMPONS_CLI + 4) manque()
                     b = file.poll(500, TimeUnit.MILLISECONDS) ?: continue
                 }
                 if (octets.size != b.size * 2) octets = ByteArray(b.size * 2)
@@ -340,6 +341,8 @@ class BladerfEmission(
     }
 
     companion object {
+        /** The tool's own buffers (filled at once at the start). */
+        const val TAMPONS_CLI = 32
         /** The AD9361's TX attenuation range, whole dB. */
         const val GAIN_MIN_DB = -89
         const val DEBIT_MIN = 520_834L
