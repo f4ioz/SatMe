@@ -118,7 +118,7 @@ object PagePc {
   .fd-el .fd-n { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:3px; }
   .fd-el .fd-x { position:absolute; top:2px; right:2px; padding:0 5px; font-size:11px; }
   .gp-ct { color:var(--gris); font-size:11px; }
-  .d-grille { display:grid; grid-template-columns:minmax(0,1fr) 430px; gap:12px; padding:12px 16px; }
+  .d-grille { display:grid; grid-template-columns:minmax(0,1fr) 420px; gap:10px; padding:10px 14px; }
   @media (max-width:1100px) { .d-grille { grid-template-columns:1fr; } }
   .dc-carte { margin-top:10px; border:1px solid var(--bord); border-radius:10px; padding:10px 12px; background:rgba(63,224,200,.05); }
   .dc-tete { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
@@ -131,8 +131,8 @@ object PagePc {
   .dc-bulle { align-self:flex-start; max-width:85%; background:#1B2A36; border-radius:12px 12px 12px 3px; padding:5px 10px; overflow-wrap:anywhere; }
   .dc-bulle.moi { align-self:flex-end; background:rgba(63,224,200,.18); border-radius:12px 12px 3px 12px; }
   .dc-bulle .petit { margin-right:6px; }
-  #d-cadre { position:relative; aspect-ratio:16/9; max-height:calc(100vh - 230px); background:#000; border-radius:8px; overflow:hidden; display:flex; align-items:center; justify-content:center; }
-  #d-video { max-width:100%; max-height:100%; display:none; }
+  #d-cadre { position:relative; aspect-ratio:16/9; background:#000; border-radius:8px; overflow:hidden; display:flex; align-items:center; justify-content:center; }
+  #d-video { width:100%; height:100%; object-fit:contain; display:none; }
   #d-vide { position:absolute; color:var(--gris); font-size:15px; }
   #q-boite { margin-top:12px; border-top:1px solid var(--bord); padding-top:10px; }
   .q-haut { display:flex; gap:16px; align-items:center; flex-wrap:wrap; }
@@ -409,8 +409,19 @@ object PagePc {
     #v-station .ecran { flex:1; height:auto; min-height:220px; }
     #v-station #suivants-boite { flex:none; max-height:24vh; }
     #v-station .col3 .carte { margin-bottom:8px; padding:10px 12px; }
-    #v-qo100 .grille { height:100%; }
-    #v-qo100 .col1, #v-qo100 .col2, #v-qo100 .col3 { min-height:0; overflow:auto; }
+    /* QO-100 and DATV: one screen; the waterfall and the side panels take what is left. */
+    #v-qo100 .tq { height:100%; box-sizing:border-box; display:flex; flex-direction:column; padding-bottom:10px; }
+    #v-qo100 .tq-grille { flex:1; min-height:0; }
+    #v-qo100 .tq-main { display:flex; flex-direction:column; min-height:0; }
+    #v-qo100 .tq-haut { grid-template-columns:minmax(0,1.1fr) minmax(0,1fr); }
+    #v-qo100 #tq-dock { contain:size; min-height:200px; overflow:auto; }
+    #v-qo100 .tq-chute { flex:1; min-height:0; display:flex; flex-direction:column; margin:0; }
+    #v-qo100 .tq-pano { flex:1; min-height:110px; height:auto; }
+    #v-qo100 .tq-cote, .d-cote { display:flex; flex-direction:column; min-height:0; }
+    #v-qo100 .tq-cote .st, .d-cote .st { flex:1; min-height:0; display:flex; flex-direction:column; }
+    .st-pan { flex:1; min-height:0; overflow:auto; }
+    #v-datv .d-grille { height:100%; box-sizing:border-box; }
+    #v-datv .d-ecran { margin:0; min-height:0; overflow:auto; }
     .vue > .grille2, .vue > .grille3c { height:100%; }
     .vue > .grille2 > div, .vue > .grille3c > div { min-height:0; overflow:auto; }
     #k-grille { height:100%; }
@@ -464,7 +475,58 @@ object PagePc {
   .tq-conseil { padding:8px 10px; border-radius:8px; background:rgba(255,180,84,.14); border:1px solid rgba(255,180,84,.55); margin-bottom:8px; font-size:13px; }
   .tq-urgence { padding:8px 10px; border-radius:8px; background:#B3261E; color:#fff; font-weight:700; margin-top:6px; font-size:13px; }
   .tq-conseil-mode { color:var(--gris); font-size:12px; margin-top:4px; font-style:italic; }
-  .tq-plus-t { color:var(--gris); font-size:11px; letter-spacing:1.6px; text-transform:uppercase; padding:10px 0 8px; border-top:1px solid var(--bord); margin-top:4px; }
+  /* Sub-tabs inside a tab: the live part stays in view, the rest one click away. */
+  .st-nav { display:flex; gap:4px; flex-wrap:wrap; margin-bottom:8px; flex:none; }
+  .st-nav button { display:inline-flex; align-items:center; gap:5px; padding:4px 9px; font-size:12px; font-weight:600; background:var(--carte); color:var(--gris); }
+  .st-nav button .st-ico { width:16px; height:16px; fill:currentColor; flex:none; }
+  .st-nav button.actif { border-color:var(--cyan); color:var(--cyan); background:rgba(63,224,200,.08); }
+  .st-nav button[hidden] { display:none; }
+  .st-pan > .carte:last-child { margin-bottom:0; }
+  /* Denser type for the two cockpits. */
+  :where(#v-qo100, #v-datv) { font-size:13px; }
+  :where(#v-qo100, #v-datv) .carte { padding:9px 11px; margin-bottom:8px; border-radius:10px; }
+  :where(#v-qo100, #v-datv) .t { margin-bottom:6px; }
+  :where(#v-qo100, #v-datv) .ligne { margin-top:6px; gap:6px; }
+  :where(#v-qo100, #v-datv) input, :where(#v-qo100, #v-datv) select, :where(#v-qo100, #v-datv) button { font-size:13px; padding:5px 8px; }
+  :where(#v-qo100, #v-datv) .val { font-size:17px; }
+  #v-qo100 .tq { padding:10px 14px 0; }
+  #v-qo100 .tq-grille { gap:10px; }
+  #v-qo100 .tq-go { font-size:14px; padding:7px 14px; }
+  #v-qo100 .o-freq { font-size:28px; }
+  #v-qo100 .tq-freq { margin-top:4px; }
+  #v-qo100 .tq-etat { margin-top:4px; }
+  #v-qo100 .tq-reglette { height:80px; }
+  #v-qo100 .tq-loupe { height:58px; }
+  #v-qo100 .tq-legende, #v-qo100 .tq-signaux { margin-top:4px; }
+  #v-qo100 #c-saisie #c-call { font-size:20px; padding:5px 9px; }
+  #v-qo100 #c-saisie .c-props { min-height:0; }
+  #v-qo100 #c-saisie #c-qui { min-height:0; }
+  #v-qo100 #c-saisie #c-aide { display:none; }
+  .d-haut { display:flex; gap:10px; align-items:stretch; }
+  .d-haut #d-cadre { flex:none; width:min(calc((100vh - var(--d-bas)) * 16 / 9), calc(100% - 330px)); }
+  #v-datv { --d-bas:210px; }
+  #v-datv:has(#wb-boite:not([hidden]) #wb-zone:not([hidden])) { --d-bas:420px; }
+  .d-info { flex:1; min-width:0; display:flex; flex-direction:column; gap:4px; }
+  .d-info .dc-carte { margin-top:4px; flex:1 1 0; min-height:0; overflow:auto; }
+  .d-info .dc-chat { max-height:none; }
+  .d-haut .d-info { contain:size; }
+  #q-resume .q-haut { display:block; }
+  #q-resume #q-marge { font-size:22px; }
+  #q-resume #q-verdict { font-size:14px; }
+  #dq-carte #q-boite { margin-top:0; border-top:0; padding-top:0; margin-bottom:10px; }
+  .wb-spectre { height:130px; } .wb-chute { height:40px; }
+  .wb-bas { display:flex; gap:6px 14px; flex-wrap:wrap; align-items:center; margin-top:5px; }
+  .e-boutons { position:sticky; bottom:0; z-index:1; background:var(--carte); padding:6px 0; margin-top:8px; }
+  #v-datv button.emettre, #v-datv button.arret-tx { font-size:16px; padding:8px 22px; }
+  @media (min-width:1501px) { #v-datv:has(#wb-boite:not([hidden]) #wb-zone:not([hidden])) { --d-bas:385px; } }
+  @media (min-width:1101px) and (max-width:1500px) {
+    #v-qo100 .tq-grille { grid-template-columns:minmax(0,1fr) 340px; }
+    #v-qo100 .tq-haut { grid-template-columns:minmax(0,1.35fr) minmax(0,1fr); }
+    #v-qo100 .o-freq { font-size:24px; }
+    #v-qo100 #tq-vol, #v-qo100 #tq-sq { width:70px !important; }
+    .st-nav button:not(.actif) span { display:none; }
+  }
+  @media (max-width:1100px) { .d-haut { flex-direction:column; } .d-haut #d-cadre { width:100%; } .d-haut .d-info { contain:none; } .d-info .dc-carte { flex:none; } .d-info .dc-chat { max-height:220px; } }
   .tq-cote #cw-carte, .tq-main #cw-carte { margin-bottom:0; }
   @media (max-width:2300px) { header.a-ctx #info-station { display:none; } }
   /* A narrow screen: the tabs scroll sideways rather than widen the page. */
@@ -1031,7 +1093,9 @@ object PagePc {
 <div class="d-grille">
   <div class="carte d-ecran">
     <div class="t">DATV · MiniTiouner <span id="d-titre" class="petit"></span></div>
+    <div class="d-haut">
     <div id="d-cadre"><img id="d-video" alt=""><div id="d-vide">Réception arrêtée</div><div id="d-lu" class="d-lu" hidden></div><div id="d-st" class="d-st" hidden></div></div>
+      <div class="d-info">
     <div class="paire" style="margin-top:8px;align-items:center">
       <span id="d-etat" class="pastille">arrêté</span>
       <span>MER <b class="val" id="d-mer">—</b></span>
@@ -1041,41 +1105,12 @@ object PagePc {
       <span id="d-rec" class="pastille" style="display:none;background:rgba(229,72,77,.2);color:var(--rose)"></span>
     </div>
     <div class="petit" id="d-service" style="margin-top:4px"></div>
-    <div id="wb-boite" hidden style="margin-top:10px;border-top:1px solid var(--bord);padding-top:8px">
-      <div class="paire" style="align-items:center">
-        <label class="petit" title="Le spectre public mesuré par la station sol de QO-100 (BATC), reçu par Internet tant que l’onglet DATV est ouvert : rien n’y est envoyé"><input type="checkbox" id="wb-on" onchange="wbRegle('on=' + (this.checked ? 1 : 0))"> Spectre de la bande large (station sol)</label>
-        <span class="petit" id="wb-etat"></span>
-      </div>
-      <div id="wb-zone" hidden>
-        <canvas id="wb-spectre" width="900" height="190" style="width:100%;height:190px;margin-top:6px;background:#0E1720;border-radius:8px 8px 0 0;cursor:crosshair"></canvas>
-        <canvas id="wb-chute" width="900" height="70" style="width:100%;height:70px;display:block;background:#0E1720;border-radius:0 0 8px 8px"></canvas>
-        <div class="petit" style="margin-top:2px">Spectre de la station sol (BATC), 10490,5 – 10499,5 MHz · un clic sur un signal : le MiniTiouner s’y accorde (même OL, même entrée)</div>
-        <div id="wb-liste" style="margin-top:6px"></div>
-        <div class="ligne" style="flex-wrap:wrap;gap:10px;margin-top:6px">
-          <label class="petit"><input type="checkbox" id="wb-veille" onchange="wbVeille(this.checked)"> Veille : passer d’un signal occupé à l’autre</label>
-          <span class="petit">rester <input id="wb-attente" style="width:44px" onchange="wbRegle('attente=' + enc(this.value))"> s sans accroche</span>
-          <label class="petit"><input type="checkbox" id="wb-balise" onchange="wbRegle('balise=' + (this.checked ? 1 : 0))"> avec la balise</label>
-          <label class="petit"><input type="checkbox" id="wb-enr" onchange="wbRegle('enr=' + (this.checked ? 1 : 0))"> enregistrer le TS à chaque accroche</label>
-        </div>
-        <div class="petit" id="wb-veille-etat"></div>
-      </div>
-    </div>
-    <div id="q-boite" hidden>
-      <div class="t">Qualité de réception</div>
+        <div id="q-resume" hidden>
       <div class="q-haut">
         <div id="q-marge" title="MER mesurée moins le MER qu'il faut au MODCOD pour une image sans erreur (DVB-S2 : EN 302 307-1, table 13)">Marge —</div>
         <div style="flex:1;min-width:220px"><div id="q-verdict"></div><div class="petit" id="q-conseil"></div></div>
       </div>
-      <div class="q-tuiles" id="q-tuiles"></div>
-      <div class="petit" id="q-boucle" style="margin-top:8px" hidden></div>
-      <div class="q-courbes">
-        <div><div class="petit">MER (2 min)</div><canvas id="q-c-mer" width="340" height="44"></canvas></div>
-        <div><div class="petit">Marge</div><canvas id="q-c-marge" width="340" height="44"></canvas></div>
-        <div><div class="petit">Paquets reçus / attendus</div><canvas id="q-c-ratio" width="340" height="44"></canvas></div>
-        <div><div class="petit">Erreurs de continuité /s</div><canvas id="q-c-cc" width="340" height="44"></canvas></div>
-      </div>
-      <div id="q-pids"></div>
-    </div>
+        </div>
     <div id="dc-carte" class="dc-carte" hidden>
       <div class="dc-tete"><span id="dc-drapeau" class="dc-drapeau"></span><b id="dc-call" class="dc-call"></b>
         <span id="dc-connu" class="pastille" style="background:rgba(91,214,138,.2);color:var(--vert)" hidden></span>
@@ -1088,8 +1123,32 @@ object PagePc {
       <div id="dc-chat" class="dc-chat"></div>
       <div class="etat" id="dc-msg"></div>
     </div>
+      </div>
+    </div>
+    <div id="wb-boite" hidden style="margin-top:8px;border-top:1px solid var(--bord);padding-top:6px">
+      <div class="paire" style="align-items:center;gap:6px 16px">
+        <label class="petit" title="Le spectre public mesuré par la station sol de QO-100 (BATC), reçu par Internet tant que l’onglet DATV est ouvert : rien n’y est envoyé"><input type="checkbox" id="wb-on" onchange="wbRegle('on=' + (this.checked ? 1 : 0))"> Spectre de la bande large (station sol)</label>
+        <span class="petit" id="wb-etat"></span>
+        <span class="petit wb-aide">10490,5 – 10499,5 MHz · un clic sur un signal : le MiniTiouner s’y accorde (même OL, même entrée)</span>
+      </div>
+      <div id="wb-zone" hidden>
+        <canvas id="wb-spectre" width="900" height="130" class="wb-spectre" style="width:100%;margin-top:4px;background:#0E1720;border-radius:8px 8px 0 0;cursor:crosshair"></canvas>
+        <canvas id="wb-chute" width="900" height="40" class="wb-chute" style="width:100%;display:block;background:#0E1720;border-radius:0 0 8px 8px"></canvas>
+        <div class="wb-bas"><div id="wb-liste"></div>
+        <div class="ligne" style="flex-wrap:wrap;gap:4px 10px;margin-top:0">
+          <label class="petit"><input type="checkbox" id="wb-veille" onchange="wbVeille(this.checked)"> Veille : passer d’un signal occupé à l’autre</label>
+          <span class="petit">rester <input id="wb-attente" style="width:44px" onchange="wbRegle('attente=' + enc(this.value))"> s sans accroche</span>
+          <label class="petit"><input type="checkbox" id="wb-balise" onchange="wbRegle('balise=' + (this.checked ? 1 : 0))"> avec la balise</label>
+          <label class="petit"><input type="checkbox" id="wb-enr" onchange="wbRegle('enr=' + (this.checked ? 1 : 0))"> enregistrer le TS à chaque accroche</label>
+        </div></div>
+        <div class="petit" id="wb-veille-etat"></div>
+      </div>
+    </div>
   </div>
   <div class="d-cote">
+    <div class="st" data-st="datv">
+      <div class="st-nav"><button data-p="d-p-rx" title="Le MiniTiouner : fréquence, débit, LNB">${IconesPc.svg("settings_input_antenna", "st-ico")}<span>Réception</span></button><button data-p="d-p-tx" title="L’émission DVB-S2 vers QO-100">${IconesPc.svg("cloud_upload", "st-ico")}<span>Émission</span></button><button data-p="d-p-q" title="Qualité de réception, courbes, PID, constellation">${IconesPc.svg("graphic_eq", "st-ico")}<span>Qualité</span></button><button data-p="d-p-st" title="Sous-titres et indicatifs lus dans l’image">${IconesPc.svg("live_tv", "st-ico")}<span>Sous-titres</span></button></div>
+      <div class="st-pan" id="d-p-rx">
     <div class="carte">
       <div class="t">Réception</div>
       <div class="ligne" style="margin-top:0"><span class="petit" style="min-width:86px">MiniTiouner</span><span id="d-ou" class="petit" style="flex:1"></span>
@@ -1113,24 +1172,9 @@ object PagePc {
         <button id="d-benr" onclick="dEnregistre()">Enregistrer</button><button onclick="dPost('vlc')" title="Le même flux dans VLC, pleine qualité">VLC</button></div>
       <div class="etat" id="d-msg"></div>
     </div>
-    <div class="carte" id="dt-carte" hidden>
-      <div class="t">Sous-titres et indicatifs</div>
-      <label class="petit" style="display:block"><input type="checkbox" id="dt-st" onchange="dtRegle('soustitres=' + (this.checked ? 1 : 0))"> Sous-titres : le son reçu écrit sous l’image (Phonie → texte)</label>
-      <label class="petit" style="display:block;margin-left:22px"><input type="checkbox" id="dt-trad" onchange="dtTrad(this.checked)"> avec la traduction (<span id="dt-cible">français</span>)</label>
-      <label class="petit" style="display:block;margin-left:44px"><input type="checkbox" id="dt-st-tr" onchange="dtStTraduction(this.checked)"> <span id="dt-st-tr-nom">sous-titres en français</span> : la traduction seule sur l’image</label>
-      <div class="petit" id="dt-st-etat"></div>
-      <label class="petit" style="display:block;margin-top:6px"><input type="checkbox" id="dt-ocr" onchange="dtRegle('ocr=' + (this.checked ? 1 : 0))"> Lire les indicatifs dans l’image</label>
-      <div class="petit" id="dt-ocr-etat"></div>
-      <div id="dt-lus"></div>
-      <div id="dt-fil" class="ph-fil" style="max-height:260px"></div>
-    </div>
-    <div class="carte">
-      <div class="t">Constellation</div>
-      <div style="display:flex;gap:12px;align-items:flex-start">
-        <canvas id="d-const" width="200" height="200" style="width:200px;height:200px;background:#0E1720;border-radius:8px"></canvas>
-        <div class="petit" style="flex:1;line-height:1.7" id="d-details"></div>
+    <div class="petit" id="d-prog"></div>
       </div>
-    </div>
+      <div class="st-pan" id="d-p-tx" hidden>
     <div class="carte" id="e-carte">
       <div class="t">Émission · <span id="e-titre">ADALM-PLUTO</span> <span id="e-pastille" class="pastille" style="color:var(--gris)">arrêtée</span></div>
       <div class="petit">DVB-S2 fait par SatMe, vers le transpondeur large bande de QO-100 ; le MiniTiouner ci-dessus vérifie le signal à la descente.</div>
@@ -1196,7 +1240,7 @@ object PagePc {
       </div>
       <div class="petit" id="e-rx" style="margin-top:6px;line-height:1.6" hidden></div>
       <div class="petit" id="e-calc" style="margin-top:6px"></div>
-      <div class="ligne" style="margin-top:10px"><button class="emettre" id="e-go" onclick="eEmettre()">ÉMETTRE</button>
+      <div class="ligne e-boutons"><button class="emettre" id="e-go" onclick="eEmettre()">ÉMETTRE</button>
         <button class="arret-tx" id="e-stop" onclick="eArrete()">ARRÊT</button></div>
       <div id="e-chat-l" hidden>
         <div class="ligne"><input id="e-chat" maxlength="140" placeholder="Chat dans le flux émis (Entrée) — 140 caractères" onkeydown="if (event.key === 'Enter') eChat()">
@@ -1226,7 +1270,44 @@ object PagePc {
       <div id="e-boucle" class="petit" style="margin-top:8px;line-height:1.7"></div>
       <div class="etat" id="e-msg"></div>
     </div>
-    <div class="petit" id="d-prog"></div>
+      </div>
+      <div class="st-pan" id="d-p-q" hidden>
+    <div class="carte" id="dq-carte">
+    <div id="q-boite" hidden>
+      <div class="t">Qualité de réception</div>
+      <div class="q-tuiles" id="q-tuiles"></div>
+      <div class="petit" id="q-boucle" style="margin-top:8px" hidden></div>
+      <div class="q-courbes">
+        <div><div class="petit">MER (2 min)</div><canvas id="q-c-mer" width="340" height="44"></canvas></div>
+        <div><div class="petit">Marge</div><canvas id="q-c-marge" width="340" height="44"></canvas></div>
+        <div><div class="petit">Paquets reçus / attendus</div><canvas id="q-c-ratio" width="340" height="44"></canvas></div>
+        <div><div class="petit">Erreurs de continuité /s</div><canvas id="q-c-cc" width="340" height="44"></canvas></div>
+      </div>
+      <div id="q-pids"></div>
+    </div>
+    <div>
+      <div class="t">Constellation</div>
+      <div style="display:flex;gap:12px;align-items:flex-start">
+        <canvas id="d-const" width="200" height="200" style="width:170px;height:170px;background:#0E1720;border-radius:8px"></canvas>
+        <div class="petit" style="flex:1;line-height:1.7" id="d-details"></div>
+      </div>
+    </div>
+    </div>
+      </div>
+      <div class="st-pan" id="d-p-st" hidden>
+    <div class="carte" id="dt-carte" hidden>
+      <div class="t">Sous-titres et indicatifs</div>
+      <label class="petit" style="display:block"><input type="checkbox" id="dt-st" onchange="dtRegle('soustitres=' + (this.checked ? 1 : 0))"> Sous-titres : le son reçu écrit sous l’image (Phonie → texte)</label>
+      <label class="petit" style="display:block;margin-left:22px"><input type="checkbox" id="dt-trad" onchange="dtTrad(this.checked)"> avec la traduction (<span id="dt-cible">français</span>)</label>
+      <label class="petit" style="display:block;margin-left:44px"><input type="checkbox" id="dt-st-tr" onchange="dtStTraduction(this.checked)"> <span id="dt-st-tr-nom">sous-titres en français</span> : la traduction seule sur l’image</label>
+      <div class="petit" id="dt-st-etat"></div>
+      <label class="petit" style="display:block;margin-top:6px"><input type="checkbox" id="dt-ocr" onchange="dtRegle('ocr=' + (this.checked ? 1 : 0))"> Lire les indicatifs dans l’image</label>
+      <div class="petit" id="dt-ocr-etat"></div>
+      <div id="dt-lus"></div>
+      <div id="dt-fil" class="ph-fil" style="max-height:none"></div>
+    </div>
+      </div>
+    </div>
   </div>
 </div>
 </div>
@@ -1310,23 +1391,26 @@ object PagePc {
         </div>
       </div>
       </div>
-      <div class="carte">
+      <div class="carte tq-chute">
         <div class="t" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span>Transpondeur à bande étroite</span>
           <span class="petit" id="tq-cl-etat" style="text-transform:none;letter-spacing:0"></span>
           <span style="margin-left:auto;text-transform:none;letter-spacing:0" class="petit">Largeur
             <select id="tq-zoom" style="flex:none" onchange="tqZoom(+this.value)"><option value="500000">500 kHz</option><option value="200000">200 kHz</option><option value="100000">100 kHz</option><option value="50000">50 kHz</option><option value="20000">20 kHz</option></select></span></div>
-        <canvas id="o-reglette" style="width:100%;height:90px;display:block;cursor:crosshair" title="Cliquer ou glisser pour s'y poser · molette ±100 Hz"></canvas>
+        <canvas id="o-reglette" class="tq-reglette" style="width:100%;display:block;cursor:crosshair" title="Cliquer ou glisser pour s'y poser · molette ±100 Hz"></canvas>
         <canvas id="o-pano" class="tq-pano" title="Le transpondeur vu par le récepteur : cliquer un signal pour s'y accorder dans son mode"></canvas>
         <div class="petit" id="o-pano-msg"></div>
         <div id="tq-legende" class="tq-legende"></div>
         <div id="tq-signaux" class="tq-signaux"></div>
-        <canvas id="o-loupe" style="width:100%;height:64px;display:block;margin-top:6px;cursor:crosshair" title="± 25 kHz autour de l'accord : cliquer pour s'y poser"></canvas>
+        <canvas id="o-loupe" class="tq-loupe" style="width:100%;display:block;margin-top:4px;cursor:crosshair" title="± 25 kHz autour de l'accord : cliquer pour s'y poser"></canvas>
         <div class="paire" style="margin-top:8px"><b id="o-seg"></b><span class="petit" id="o-larg"></span><span id="o-interdit" class="rose" style="font-weight:700"></span></div>
         <div class="petit" id="o-avert" style="margin-top:2px"></div>
       </div>
     </div>
     <div class="tq-cote">
       <div id="tq-carnet-slot"></div>
+      <div class="st" data-st="tq">
+        <div class="st-nav"><button data-p="tq-p-calage" title="Calage sur la balise médiane">${IconesPc.svg("tune", "st-ico")}<span>Calage</span></button><button data-p="tq-p-q" title="Qualité de la réception, stations entendues">${IconesPc.svg("graphic_eq", "st-ico")}<span>Qualité</span></button><button data-p="tq-p-mem" title="Les fréquences mémorisées">${IconesPc.svg("save", "st-ico")}<span>Mémoires</span></button><button data-p="tq-p-poste" title="Le poste, la clé, le transpondeur, la chaîne de station">${IconesPc.svg("radio", "st-ico")}<span>Poste &amp; chaîne</span></button><button data-p="tq-p-ciel" title="Réglage initial : pointage et Soleil">${IconesPc.svg("explore", "st-ico")}<span>Pointage</span></button></div>
+        <div class="st-pan" id="tq-p-calage">
       <div class="carte">
         <div class="t">Calage sur la balise</div>
         <div id="tq-conseil" class="tq-conseil" hidden></div>
@@ -1341,6 +1425,8 @@ object PagePc {
             <button onclick="qPost('calage-zero')">Remettre à zéro</button></div></details>
         <div class="etat" id="o-cmsg"></div>
       </div>
+        </div>
+        <div class="st-pan" id="tq-p-q" hidden>
       <div class="carte" id="oq-carte" hidden>
         <div class="t">Qualité de la réception <span id="oq-verrou" class="pastille coupe">balise non vue</span></div>
         <div class="paire" style="margin-top:4px">
@@ -1354,17 +1440,21 @@ object PagePc {
         <canvas id="oq-histo" style="width:100%;height:70px;display:block;margin-top:8px" title="L'erreur du LNB sur la dernière heure (la balise mesurée toutes les 5 s)"></canvas>
         <div class="petit"><span id="oq-histo-t">L'erreur du LNB sur la dernière heure.</span> Une pente, c'est la dérive (un LNB qui chauffe) ; un trait plat, un LNB stable (GPSDO).</div>
       </div>
+      <div class="carte" id="oq-sig-carte" hidden>
+        <div class="t">Stations entendues <span class="petit" id="oq-sig-n"></span></div>
+        <div style="max-height:260px;overflow:auto"><table><tbody id="oq-signaux"></tbody></table></div>
+        <div class="petit" style="margin-top:4px">Ce que la clé voit au-dessus du bruit du transpondeur (balises exclues). Un clic : s'y accorder.</div>
+      </div>
+        </div>
+        <div class="st-pan" id="tq-p-mem" hidden>
       <div class="carte">
         <div class="t">Mémoires</div>
         <div id="o-memoires" class="o-puces"></div>
         <div class="ligne"><input id="o-nom" placeholder="Nom (facultatif)" style="max-width:180px"><button onclick="qMemoire()">Mémoriser ici</button>
           <button id="o-oublie" onclick="qOublie()">Oublier</button></div>
       </div>
-    </div>
-  </div>
-  <div class="tq-plus-t">Plus de QO-100 · le poste, la clé, le transpondeur, la chaîne de station, le pointage</div>
-  <div class="grille" style="padding-top:0">
-    <div class="col1">
+        </div>
+        <div class="st-pan" id="tq-p-poste" hidden>
       <div class="carte">
         <div class="t">Ce que voient le poste et la clé</div>
         <label><input type="checkbox" id="o-poste" onchange="qPost('poste?on=' + (this.checked ? 1 : 0))"> Appliquer au poste</label>
@@ -1377,21 +1467,12 @@ object PagePc {
         <div class="petit" style="margin-top:6px">Les fréquences du cockpit sont celles du ciel ; le poste travaille en fréquence intermédiaire, après les convertisseurs de la chaîne. Pas de Doppler ici : le poste n'est écrit que quand tu bouges. Tant que « Appliquer au poste » est coché, le Doppler du satellite suivi est en pause et le carnet note sur QO-100.</div>
         <div class="petit" style="margin-top:4px">« Démarrer la réception QO-100 » coche « Appliquer à la clé » et démarre le récepteur ; l'onglet SDR garde tous ses réglages.</div>
       </div>
-    </div>
-    <div class="col2">
-      <div class="carte" id="oq-sig-carte" hidden>
-        <div class="t">Stations entendues <span class="petit" id="oq-sig-n"></span></div>
-        <div style="max-height:260px;overflow:auto"><table><tbody id="oq-signaux"></tbody></table></div>
-        <div class="petit" style="margin-top:4px">Ce que la clé voit au-dessus du bruit du transpondeur (balises exclues). Un clic : s'y accorder.</div>
-      </div>
       <div class="carte">
         <div class="t">Transpondeur</div>
         <div class="ligne" style="margin-top:0" id="o-tps"></div>
         <label class="petit" style="display:block;margin-top:6px"><input type="checkbox" id="o-balayage" onchange="qPost('balayage?on=' + (this.checked ? 1 : 0))"> Balayer tout QO-100 (écoute ; rien n'est émis là où le plan l'interdit)</label>
         <div class="ligne bouton-gr"><button onclick="qPas(-10000)">−10 k</button><button onclick="qPas(10000)">+10 k</button></div>
       </div>
-    </div>
-    <div class="col3">
       <div class="carte">
         <div class="t">Chaîne de station</div>
         <div class="ligne" style="margin-top:0"><select id="o-chaine" onchange="qPost('chaine?nom=' + enc(this.value))"></select>
@@ -1406,10 +1487,13 @@ object PagePc {
           <div class="etat" id="o-mmsg"></div>
         </details>
       </div>
+        </div>
+        <div class="st-pan" id="tq-p-ciel" hidden>
       <div class="carte">
-        <details><summary class="t" style="cursor:pointer;margin:0">Réglage initial · pointage et Soleil</summary>
-          <div id="o-ciel" class="petit" style="margin-top:8px"></div>
-        </details>
+        <div class="t">Réglage initial · pointage et Soleil</div>
+        <div id="o-ciel" class="petit"></div>
+      </div>
+        </div>
       </div>
     </div>
   </div>
@@ -2719,6 +2803,33 @@ function vue(n) {
   if (n === 'meteor') ticMeteor();
 }
 document.querySelectorAll('#onglets button[data-v]').forEach(b => b.onclick = () => vue(b.dataset.v));
+// Sub-tabs (QO-100, DATV): the last one opened is kept; a tab whose cards are all hidden is not offered.
+function stOuvre(st, p) {
+  st.querySelectorAll('.st-nav button').forEach(b => b.classList.toggle('actif', b.dataset.p === p));
+  st.querySelectorAll(':scope > .st-pan').forEach(x => x.hidden = x.id !== p);
+}
+function stMaj() {
+  document.querySelectorAll('.st').forEach(st => {
+    let actif = null;
+    st.querySelectorAll('.st-nav button').forEach(b => {
+      const pan = g(b.dataset.p), plein = [].some.call(pan.children, c => !c.hidden);
+      if (b.hidden === plein) b.hidden = !plein;
+      if (b.classList.contains('actif')) actif = b;
+    });
+    if (!actif || actif.hidden) { const b = st.querySelector('.st-nav button:not([hidden])'); if (b) stOuvre(st, b.dataset.p); }
+  });
+}
+document.querySelectorAll('.st').forEach(st => {
+  let p = null;
+  try { p = localStorage.getItem('st-' + st.dataset.st); } catch (x) {}
+  if (!p || !g(p)) p = st.querySelector('.st-nav button').dataset.p;
+  stOuvre(st, p);
+  st.querySelectorAll('.st-nav button').forEach(b => b.onclick = () => {
+    stOuvre(st, b.dataset.p);
+    try { localStorage.setItem('st-' + st.dataset.st, b.dataset.p); } catch (x) {}
+  });
+});
+stMaj(); setInterval(stMaj, 1000);
 
 // ------------------------------------------------------------------ log
 let C = [], minuteurQrz = 0, quiPour = '', editT = 0;
@@ -3373,6 +3484,7 @@ function dqCase(titre, val, sous, couleur) {
 function qualiteDatv() {
   const Q = D.qualite, b = g('q-boite');
   b.hidden = !Q || !(D.actif || Q.secondes > 0);
+  g('q-resume').hidden = b.hidden;
   if (b.hidden) return;
   const m = Q.marge, mm = g('q-marge');
   txt('q-marge', m == null ? 'Marge —' : 'Marge ' + (m >= 0 ? '+' : '−') + fr1(Math.abs(m)) + ' dB');
