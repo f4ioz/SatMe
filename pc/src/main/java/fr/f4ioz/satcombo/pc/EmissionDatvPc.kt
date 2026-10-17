@@ -21,6 +21,10 @@ import fr.f4ioz.satcombo.datv.PlanInterieur
 import fr.f4ioz.satcombo.datv.PlanQo100
 import fr.f4ioz.satcombo.datv.ReglesEmission
 import fr.f4ioz.satcombo.datv.s2.ModulateurDvbs2
+import fr.f4ioz.satcombo.datv.ModulateurDatv
+import fr.f4ioz.satcombo.datv.Norme
+import fr.f4ioz.satcombo.datv.dvbs.ModulateurDvbs
+import fr.f4ioz.satcombo.datv.dvbs.TauxDvbs
 import fr.f4ioz.satcombo.datv.s2.Modcod
 import fr.f4ioz.satcombo.datv.s2.Rolloff
 import fr.f4ioz.satcombo.datv.s2.SourceTs
@@ -126,6 +130,17 @@ class EmissionDatvPc(
     var modcodTexte: String
         get() = stockage.getString("datv_tx_modcod", "QPSK 2/3") ?: "QPSK 2/3"
         set(v) { if (Modcod.de(v) != null) stockage.edit().putString("datv_tx_modcod", v).apply() }
+    /** DVB-S2 or DVB-S (legacy: QPSK, its own code rates, roll-off 0,35, no adaptation). */
+    var norme: Norme
+        get() = Norme.de(stockage.getString("datv_tx_norme", Norme.DVBS2.cle)) ?: Norme.DVBS2
+        set(v) { stockage.edit().putString("datv_tx_norme", v.cle).apply() }
+    /** DVB-S's code rate, "QPSK 3/4". */
+    var tauxDvbsTexte: String
+        get() = stockage.getString("datv_tx_dvbs_taux", "QPSK 3/4")?.let { TauxDvbs.de(it)?.nom } ?: "QPSK 3/4"
+        set(v) { TauxDvbs.de(v)?.let { stockage.edit().putString("datv_tx_dvbs_taux", it.nom).apply() } }
+    fun tauxDvbs(): TauxDvbs = TauxDvbs.de(tauxDvbsTexte) ?: TauxDvbs.R3_4
+    /** The roll-off sent: DVB-S's 0,35 whatever the DVB-S2 setting. */
+    val rolloffEffectif: Rolloff get() = if (norme == Norme.DVBS) Rolloff.A35 else rolloff
     var srKs: Int
         get() = stockage.getInt("datv_tx_sr", 333).takeIf { it in Datv.DEBITS } ?: 333
         set(v) { if (v in Datv.DEBITS) stockage.edit().putInt("datv_tx_sr", v).apply() }
@@ -243,16 +258,19 @@ class EmissionDatvPc(
         set(v) { stockage.edit().putString("datv_tx_retour_mode", CarteStation.modeRetour(v)).apply(); majCarte() }
 
     /** The card for a transmission on [khz] in [m]. */
-    fun carteStation(khz: Long, m: Modcod, sr: Int = srKs): CarteStation = CarteStation(
+    fun carteStation(khz: Long, m: Modcod, sr: Int = srKs): CarteStation = carteStation(khz, m.constellation.libelle + " " + m.taux.libelle, sr)
+
+    /** The card with the MODCOD as written ("DVB-S QPSK 3/4" in DVB-S). */
+    fun carteStation(khz: Long, modcod: String, sr: Int): CarteStation = CarteStation(
         indicatif = indicatif().trim().uppercase(), locator = locator().trim().uppercase(), nom = nom().trim(), qth = qth,
         puissance = puissance, antenne = antenne, logiciel = logiciel, frequenceKhz = khz,
-        modcod = m.constellation.libelle + " " + m.taux.libelle, srKs = sr, message = message,
+        modcod = modcod, srKs = sr, message = message,
         retourHz = retourHz, retourMode = retourMode)
 
     private fun majCarte() {
         val i = inserteur ?: return
         val e = etat
-        if (e.emet) i.carte = carteStation(e.frequenceKhz, modcodEnCours ?: modcod(), srEnCours)
+        if (e.emet) i.carte = carteStation(e.frequenceKhz, libelleEnCours(), srEnCours)
     }
 
     /** A chat line sent, and when. */
@@ -360,7 +378,15 @@ class EmissionDatvPc(
     fun modcod(): Modcod = Modcod.de(modcodTexte, courtes, pilotes) ?: Modcod.de("QPSK 2/3", courtes, pilotes)!!
 
     /** The transport stream rate (bit/s) for the current parameters. */
-    fun debitTs(): Long = modcod().debitTs(srKs * 1000.0).toLong()
+    fun debitTs(): Long = debitTs(norme, srKs)
+
+    private fun debitTs(n: Norme, sr: Int): Long =
+        if (n == Norme.DVBS) tauxDvbs().debitTs(sr * 1000.0).toLong() else modcod().debitTs(sr * 1000.0).toLong()
+
+    /** What is sent now, as the station card and the page write it. */
+    private fun libelleEnCours(): String =
+        if (normeEnCours == Norme.DVBS) "DVB-S " + (tauxEnCours ?: tauxDvbs()).nom
+        else (modcodEnCours ?: modcod()).let { it.constellation.libelle + " " + it.taux.libelle }
 
     // ------------------------------------------------------------ the transmission
 
@@ -381,12 +407,14 @@ class EmissionDatvPc(
     @Volatile var autreEmission: () -> String? = { null }
     @Volatile private var processus: Processus? = null
     /** The modulator making the frames now: a new one for each MODCOD (its counts on the page). */
-    @Volatile private var modulateur: ModulateurDvbs2? = null
+    @Volatile private var modulateur: ModulateurDatv? = null
     /** The one the transmitter reads (its shaping filter): the frames from [modulateur] once the MODCOD changed. */
-    @Volatile private var sortie: ModulateurDvbs2? = null
+    @Volatile private var sortie: ModulateurDatv? = null
     @Volatile private var flux: FluxTs? = null
     @Volatile private var inserteur: InserteurCarte? = null
     @Volatile private var modcodEnCours: Modcod? = null
+    @Volatile private var normeEnCours: Norme = Norme.DVBS2
+    @Volatile private var tauxEnCours: TauxDvbs? = null
     @Volatile private var srEnCours = 0
     @Volatile private var spsEnCours = 0
     @Volatile private var parametresEnCours: ParametresTs? = null
@@ -420,6 +448,9 @@ class EmissionDatvPc(
         val blade = qui == Emetteur.BLADERF
         if (blade) bladerfOccupe()?.let { return it } else if (!hackrf) plutoOccupe()?.let { return it }
         val m = modcod()
+        val nrm = norme
+        val td = tauxDvbs()
+        val rolloff = rolloffEffectif
         val khz = if (interieur) frequenceInterieurKhz else frequenceKhz
         val duree = if (interieur) dureeInterieurS else dureeS
         val gain = if (hackrf) vgaHackrf.toDouble() else if (blade) gainBladerf else gainDb
@@ -433,7 +464,7 @@ class EmissionDatvPc(
         // The bladeRF: 4 samples a symbol at least (kept; the frames lost at 1 MS indoors do not depend on it, 4 to 8 tried).
         val sps = plan?.sps ?: if (blade) maxOf(4, ReglesEmission.sps(srKs)) else ReglesEmission.sps(srKs)
         val debit = srKs * 1000L * sps
-        val debitTs = m.debitTs(srKs * 1000.0).toLong()
+        val debitTs = debitTs(nrm, srKs)
         val img = when (source) {
             "image" -> File(image).takeIf { it.isFile } ?: return "image introuvable : " + image.ifBlank { "(aucune)" }
             "video" -> File(video).takeIf { it.isFile } ?: return "vidéo introuvable : " + video.ifBlank { "(aucune)" }
@@ -442,7 +473,9 @@ class EmissionDatvPc(
         }
         val gen = ++generation
         // The station card and the chat in place of null packets: the rate unchanged.
-        val ins = if (carteOn) InserteurCarte(horloge).also { it.carte = carteStation(khz, m) } else null
+        val ins = if (carteOn) InserteurCarte(horloge).also {
+            it.carte = if (nrm == Norme.DVBS) carteStation(khz, "DVB-S " + td.nom, srKs) else carteStation(khz, m)
+        } else null
         val f = FluxTs(maxOf(64, (debitTs / 1504 * 2).toInt()), ins)
         val inc = runCatching { incrustation?.pour(debitTs, source, d.indicatif, locator(), File(dossierImages, "incrustation-datv.png")) }.getOrNull()
         val pts = ParametresTs(debitTs, source, img, camera, d.indicatif.trim().uppercase(), hevc, son, inc)
@@ -450,7 +483,7 @@ class EmissionDatvPc(
             .getOrElse { return "ffmpeg ne démarre pas : " + (it.message ?: "") }
         processus = p; flux = f
         thread(isDaemon = true, name = "satme-datv-tx-ts") { f.lit(p.sortie) { generation == gen && processus === p } }
-        val mod = ModulateurDvbs2(m, rolloff, sps, f)
+        val mod: ModulateurDatv = if (nrm == Norme.DVBS) ModulateurDvbs(td, sps, f) else ModulateurDvbs2(m, rolloff, sps, f)
         modulateur = mod; sortie = mod
         derniereVie = horloge()
         val e: EmetteurDatv
@@ -485,7 +518,7 @@ class EmissionDatvPc(
         }
         if (refus != null) { generation++; p.arrete(); processus = null; return refus }
         tx = e
-        inserteur = ins; modcodEnCours = m; srEnCours = srKs; spsEnCours = sps; parametresEnCours = pts
+        inserteur = ins; modcodEnCours = m; normeEnCours = nrm; tauxEnCours = if (nrm == Norme.DVBS) td else null; srEnCours = srKs; spsEnCours = sps; parametresEnCours = pts
         adaptation = nouvelleAdaptation()
         etat = Etat(emet = true, chargeFictive = chargeFictive, interieur = interieur, emetteur = qui, frequenceKhz = khz, debitTs = debitTs)
         return null
@@ -513,6 +546,7 @@ class EmissionDatvPc(
         val pts: ParametresTs
         synchronized(this) {
             if (!etat.emet || tx == null) return "aucune émission en cours"
+            if (normeEnCours != Norme.DVBS2) return "changement de MODCOD en DVB-S2 seulement"
             if (m.refus() != null) return m.refus()
             if (m == modcodEnCours) return null
             gen = generation
@@ -535,7 +569,7 @@ class EmissionDatvPc(
                 if (generation != gen || !etat.emet) { p.arrete(); return "émission arrêtée pendant le changement" }
                 if (!p.vivant) { p.arrete(); return "ffmpeg ne démarre pas au nouveau débit" + p.erreur().let { if (it.isBlank()) "" else " : $it" } }
                 val ancien = processus
-                val s = sortie ?: run { p.arrete(); return "aucune émission en cours" }
+                val s = sortie as? ModulateurDvbs2 ?: run { p.arrete(); return "aucune émission en cours" }
                 // Its frames follow the current one's at the next frame boundary.
                 val nouveau = ModulateurDvbs2(m, s.rolloff, s.sps, f)
                 s.suite = nouveau
@@ -615,7 +649,7 @@ class EmissionDatvPc(
     private fun adapte(r: Reception?) {
         val a = adaptation ?: return
         if (!etat.emet || tx == null || commutation) return
-        if (!adaptOn) { if (a.etat.actif) a.arrete(); return }
+        if (!adaptOn || normeEnCours != Norme.DVBS2) { if (a.etat.actif) a.arrete(); return }
         val courant = modcodEnCours ?: return
         val min = Modcod.de(adaptMin, courant.courte, courant.pilotes) ?: return
         val max = Modcod.de(adaptMax, courant.courte, courant.pilotes) ?: return
@@ -685,17 +719,19 @@ class EmissionDatvPc(
         val m = modulateur
         val e = etat
         val t = horloge()
-        val mc = modcod()
         val o = JSONObject().put("emet", e.emet && pe?.emet == true).put("charge", e.chargeFictive)
-            .put("modcod", modcodTexte).put("sr", srKs).put("ro", rolloff.alpha).put("courtes", courtes).put("pilotes", pilotes)
+            .put("modcod", modcodTexte).put("norme", norme.libelle).put("modcodDvbs", tauxDvbsTexte)
+            .put("normes", JSONArray(Norme.entries.map { it.libelle }))
+            .put("modcodsDvbs", JSONArray(TauxDvbs.entries.map { it.nom })).put("roEffectif", rolloffEffectif.alpha)
+            .put("sr", srKs).put("ro", rolloff.alpha).put("courtes", courtes).put("pilotes", pilotes)
             .put("khz", frequenceKhz).put("descenteKhz", frequenceKhz + PlanQo100.DECALAGE_KHZ)
             .put("gain", if (emetteur == Emetteur.BLADERF) gainBladerf else gainDb).put("gainMax", gainMaxDb).put("gainCharge", ReglesEmission.GAIN_CHARGE_DB)
             .put("duree", dureeS).put("dureeMax", ReglesEmission.DUREE_MAX_S)
             .put("source", source).put("image", image).put("video", video).put("camera", camera).put("hevc", hevc).put("son", son)
-            .put("debitTs", mc.debitTs(srKs * 1000.0).toLong()).put("sps", ReglesEmission.sps(srKs)).put("spsEnCours", spsEnCours)
+            .put("debitTs", debitTs()).put("sps", ReglesEmission.sps(srKs)).put("spsEnCours", spsEnCours)
             .put("echantillons", srKs * 1000L * ReglesEmission.sps(srKs))
-            .put("occupeKhz", PlanQo100.occupeKhz(srKs, rolloff.alpha))
-            .put("refusBande", PlanQo100.refus(frequenceKhz, srKs, rolloff.alpha) ?: "")
+            .put("occupeKhz", PlanQo100.occupeKhz(srKs, rolloffEffectif.alpha))
+            .put("refusBande", PlanQo100.refus(frequenceKhz, srKs, rolloffEffectif.alpha) ?: "")
             .put("indicatif", indicatif().trim().uppercase())
             .put("raison", e.raison).put("erreur", e.erreur).put("khzEnCours", e.frequenceKhz)
             .put("cameras", JSONArray(cameras()))
@@ -715,9 +751,9 @@ class EmissionDatvPc(
                 .put("cartes", JSONArray(ih.cartes.map { c -> JSONObject().put("serie", c.serie).put("libelle", c.libelle) })))
             .put("intKhz", ik).put("intDuree", dureeInterieurS).put("intDureeMax", PlanInterieur.DUREE_MAX_S)
             .put("intGainPluto", PlanInterieur.GAIN_PLUTO_DB).put("intDefautKhz", PlanInterieur.DEFAUT_KHZ)
-            .put("intRefus", PlanInterieur.refus(ik, srKs, rolloff.alpha) ?: "")
-            .put("intAvert", PlanInterieur.avertissement(ik, srKs, rolloff.alpha) ?: "")
-            .put("filtreHackrf", HackrfEmission.filtre(Math.round(PlanQo100.occupeKhz(srKs, rolloff.alpha) * 1000)))
+            .put("intRefus", PlanInterieur.refus(ik, srKs, rolloffEffectif.alpha) ?: "")
+            .put("intAvert", PlanInterieur.avertissement(ik, srKs, rolloffEffectif.alpha) ?: "")
+            .put("filtreHackrf", HackrfEmission.filtre(Math.round(PlanQo100.occupeKhz(srKs, rolloffEffectif.alpha) * 1000)))
             .put("hackrfDecalage", hackrfDecalage)
         // The bladeRF: its tool, what bladeRF-cli -e info found.
         val ib = infoBladerf
@@ -725,8 +761,8 @@ class EmissionDatvPc(
             .put("bladerf", JSONObject().put("lu", ib.lu).put("message", ib.message).put("libelle", ib.carte?.libelle ?: "").put("serie", ib.carte?.serie ?: ""))
         // The HackRF's LO beside the signal (indoor test): where it goes, or why not.
         if (emetteur == Emetteur.HACKRF && hackrfDecalage) {
-            val pl = DecalageHackrf.plan(ik, srKs, rolloff.alpha, true)
-            o.put("decalage", JSONObject().put("refus", DecalageHackrf.refus(ik, srKs, rolloff.alpha, true) ?: "")
+            val pl = DecalageHackrf.plan(ik, srKs, rolloffEffectif.alpha, true)
+            o.put("decalage", JSONObject().put("refus", DecalageHackrf.refus(ik, srKs, rolloffEffectif.alpha, true) ?: "")
                 .put("loKhz", pl?.let { it.loHz / 1000.0 } ?: JSONObject.NULL).put("decalageKhz", pl?.let { it.decalageHz / 1000.0 } ?: JSONObject.NULL))
             if (pl != null) o.put("sps", pl.sps).put("echantillons", pl.debit).put("filtreHackrf", HackrfEmission.filtre(pl.bandeHz))
         }
@@ -736,9 +772,7 @@ class EmissionDatvPc(
         }
         if (m != null) {
             // The share of the air time in dummy frames (the stream late, or starting).
-            val vide = m.tramesVides.toDouble() * fr.f4ioz.satcombo.datv.s2.CouchePhysique.SYMBOLES_VIDE
-            val tot = vide + m.tramesDonnees.toDouble() * m.modcod.symboles
-            o.put("tramesVidesPct", if (tot > 0) 100.0 * vide / tot else 0.0).put("ecretages", (sortie ?: m).ecretages).put("paquets", m.paquets)
+            o.put("tramesVidesPct", 100.0 * m.partVide()).put("ecretages", (sortie ?: m).ecretages).put("paquets", m.paquets)
         }
         flux?.let { o.put("tsPerdus", it.perdus).put("tsKbps", it.kbps()) }
         val b = boucle.etat
@@ -746,7 +780,8 @@ class EmissionDatvPc(
         // The MODCOD fitted to our reception.
         val a = adaptation
         val ae = a?.etat
-        o.put("modcodEnCours", modcodEnCours?.let { AdaptationModcod.nom(it) } ?: "")
+        o.put("modcodEnCours", if (normeEnCours == Norme.DVBS) tauxEnCours?.let { "DVB-S " + it.nom } ?: "" else modcodEnCours?.let { AdaptationModcod.nom(it) } ?: "")
+            .put("normeEnCours", normeEnCours.libelle)
         o.put("adapt", JSONObject().put("on", adaptOn).put("min", adaptMin).put("max", adaptMax).put("marge", adaptMarge)
             .put("actif", e.emet && ae?.actif == true).put("boucle", ae?.boucle == true).put("fige", ae?.fige == true)
             .put("courant", ae?.courant ?: "").put("cible", ae?.cible ?: "").put("margeMesuree", ae?.margeDb ?: JSONObject.NULL)
@@ -776,13 +811,15 @@ class EmissionDatvPc(
          * frames) cannot be taken, or null: a rate outside [Datv.DEBITS] or
          * an unknown MODCOD is refused, never left at the previous one.
          */
-        fun refusReglage(sr: String?, modcod: String?, courtes: Boolean): String? {
+        fun refusReglage(sr: String?, modcod: String?, courtes: Boolean, norme: Norme = Norme.DVBS2): String? {
             if (sr != null) {
                 val v = sr.trim().toIntOrNull()
                 if (v == null || v !in Datv.DEBITS)
                     return "débit de symboles non prévu : ${sr.trim()} kS/s (prévus : ${Datv.DEBITS.joinToString(", ")} kS/s)"
             }
-            if (modcod != null) {
+            if (modcod != null && norme == Norme.DVBS) {
+                if (TauxDvbs.de(modcod) == null) return "en DVB-S : QPSK 1/2, 2/3, 3/4, 5/6 ou 7/8 (pas ${modcod.trim()})"
+            } else if (modcod != null) {
                 if (Modcod.de(modcod) == null) return "MODCOD inconnu : ${modcod.trim()}"
                 if (Modcod.de(modcod, courtes) == null) return "${modcod.trim()} n'existe pas en trames courtes"
             }

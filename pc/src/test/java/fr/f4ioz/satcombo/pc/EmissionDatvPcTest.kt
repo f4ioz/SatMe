@@ -182,6 +182,38 @@ class EmissionDatvPcTest {
     }
 
     @Test
+    fun dvbs_bout_en_bout_jusqu_aux_echantillons_du_pluto() {
+        val p = FauxPluto().also { ouverts += it }
+        val ts = TsSynthetique(450)
+        val e = emission(p, ts)
+        // DVB-S: the DVB-S2 roll-off setting (0,25) not used, 0,35 sent; its own code rate.
+        e.norme = fr.f4ioz.satcombo.datv.Norme.DVBS; e.tauxDvbsTexte = "QPSK 3/4"
+        e.modcodTexte = "QPSK 2/3"; e.srKs = 333; e.rolloff = Rolloff.A25; e.adaptOn = true
+        e.frequenceKhz = 2_409_750L; e.gainDb = -30.0
+        assertEquals(fr.f4ioz.satcombo.datv.dvbs.TauxDvbs.R3_4.debitTs(333_000.0).toLong(), e.debitTs())
+        assertEquals(0.35, e.json().getDouble("roEffectif"), 1e-9)
+        assertNull(e.demarre(confirme = true, chargeFictive = false))
+        assertEquals(e.debitTs(), ts.parametres!!.debitTs)
+        val ok = attends(8000) { e.vie(); e.tic(); e.json().optLong("paquets") >= 450 && p.octets > 3L * 2_331_000 * 4 }
+        val j = e.json()
+        assertTrue(j.toString().take(600) + " octets " + p.octets, ok)
+        assertEquals("DVB-S QPSK 3/4", j.getString("modcodEnCours"))
+        assertFalse(j.getJSONObject("adapt").getBoolean("actif"))
+        assertNotNull(e.commute(fr.f4ioz.satcombo.datv.s2.Modcod.de("QPSK 1/2")!!))
+        e.arrete()
+        // The Pluto's samples decoded back by the tests' DVB-S receiver: every packet, in order.
+        val rx = RecepteurDvbs2(Rolloff.A35, 7)
+        val b = fr.f4ioz.satcombo.datv.dvbs.RecepteurDvbsEssai(fr.f4ioz.satcombo.datv.dvbs.TauxDvbs.R3_4).decode(rx.symboles(p.iq()))
+        assertEquals(0, b.paquetsFaux)
+        val utiles = b.paquets.filter { !(it[1] == 0x1F.toByte() && it[2] == 0xFF.toByte()) }
+        assertTrue("${utiles.size} paquets", utiles.size >= 440)
+        for (k in utiles.indices) assertArrayEquals("paquet $k", ts.paquets[k], utiles[k])
+        // DVB-S settings checked against its own code rates.
+        assertNull(EmissionDatvPc.refusReglage(null, "QPSK 7/8", false, fr.f4ioz.satcombo.datv.Norme.DVBS))
+        assertNotNull(EmissionDatvPc.refusReglage(null, "8PSK 2/3", false, fr.f4ioz.satcombo.datv.Norme.DVBS))
+    }
+
+    @Test
     fun bout_en_bout_jusqu_aux_echantillons_du_pluto() {
         val p = FauxPluto().also { ouverts += it }
         val ts = TsSynthetique(450)

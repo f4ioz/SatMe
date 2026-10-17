@@ -1267,7 +1267,7 @@ object PagePc {
       <div class="st-pan" id="d-p-tx" hidden>
     <div class="carte" id="e-carte">
       <div class="t">Émission · <span id="e-titre">ADALM-PLUTO</span> <span id="e-pastille" class="pastille" style="color:var(--gris)">arrêtée</span></div>
-      <div class="petit">DVB-S2 fait par SatMe, vers le transpondeur large bande de QO-100 ; le MiniTiouner ci-dessus vérifie le signal à la descente.</div>
+      <div class="petit">DVB-S2 ou DVB-S fait par SatMe, vers le transpondeur large bande de QO-100 ; le MiniTiouner ci-dessus vérifie le signal à la descente.</div>
       <div class="ligne"><span class="petit" style="min-width:86px">Émetteur</span><select id="e-emetteur" onchange="eRegle()" style="max-width:150px">
         <option value="pluto">ADALM-PLUTO</option><option value="hackrf">HackRF One</option><option value="bladerf">bladeRF 2.0</option></select>
         <span class="petit" id="e-hackrf-info" style="flex:1"></span><button id="e-hackrf-det" onclick="eDetecte()" title="hackrf_info : liste les HackRF branchés, n'émet rien">Détecter</button></div>
@@ -1279,9 +1279,11 @@ object PagePc {
         <div class="avert" id="e-hackrf-note"></div>
       </div>
       <div class="petit" id="e-bladerf-l" hidden></div>
+      <div class="ligne"><span class="petit" style="min-width:86px">Norme</span><select id="e-norme" onchange="eNorme()" style="max-width:120px"><option value="DVB-S2">DVB-S2</option><option value="DVB-S">DVB-S</option></select>
+        <span class="petit" id="e-norme-info"></span></div>
       <div class="ligne"><span class="petit" style="min-width:86px">MODCOD</span><select id="e-modcod" onchange="eRegle()" style="max-width:120px"></select>
-        <label class="petit"><input type="checkbox" id="e-courtes" onchange="eRegle()"> trames courtes</label>
-        <label class="petit"><input type="checkbox" id="e-pilotes" onchange="eRegle()"> pilotes</label></div>
+        <label class="petit" id="e-courtes-l"><input type="checkbox" id="e-courtes" onchange="eRegle()"> trames courtes</label>
+        <label class="petit" id="e-pilotes-l"><input type="checkbox" id="e-pilotes" onchange="eRegle()"> pilotes</label></div>
       <div class="ligne"><span class="petit" style="min-width:86px">kS/s</span><select id="e-sr" onchange="eRegle()" style="max-width:90px"></select>
         <span class="petit">roll-off</span><select id="e-ro" onchange="eRegle()" style="max-width:80px"></select></div>
       <div class="ligne" id="e-canal-l"><span class="petit" style="min-width:86px">Canal</span><select id="e-canal" onchange="if (this.value) { g('e-mhz').value = this.value; eRegle(); }"></select></div>
@@ -4056,7 +4058,6 @@ async function ticEmission() {
   const libre = !document.activeElement || !document.activeElement.id.startsWith('e-');
   if (ePremier || libre) {
     if (ePremier) {
-      g('e-modcod').innerHTML = j.modcods.map(m => '<option>' + m + '</option>').join('');
       g('e-sr').innerHTML = (D && D.debits ? D.debits : [125, 250, 333, 500, 1000, 1500, 2000]).map(s => '<option value="' + s + '">' + s + '</option>').join('');
       g('e-ro').innerHTML = j.rolloffs.map(a => '<option value="' + a + '">' + String(a).replace('.', ',') + '</option>').join('');
       const mcs = j.modcods.map(m => '<option>' + m + '</option>').join('');
@@ -4064,7 +4065,11 @@ async function ticEmission() {
     }
     g('e-adapt-on').checked = j.adapt.on; g('e-adapt-min').value = j.adapt.min; g('e-adapt-max').value = j.adapt.max;
     g('e-adapt-marge').value = j.adapt.marge;
-    g('e-modcod').value = j.modcod; g('e-sr').value = j.sr; g('e-ro').value = j.ro; g('e-courtes').checked = j.courtes; g('e-pilotes').checked = j.pilotes;
+    // DVB-S: its own code rates in the MODCOD list.
+    const s1 = j.norme === 'DVB-S', lst = s1 ? j.modcodsDvbs : j.modcods;
+    if (g('e-modcod').dataset.norme !== j.norme) { g('e-modcod').dataset.norme = j.norme; g('e-modcod').innerHTML = lst.map(m => '<option>' + m + '</option>').join(''); }
+    g('e-norme').value = j.norme;
+    g('e-modcod').value = s1 ? j.modcodDvbs : j.modcod; g('e-sr').value = j.sr; g('e-ro').value = j.ro; g('e-courtes').checked = j.courtes; g('e-pilotes').checked = j.pilotes;
     g('e-mhz').value = mhz3(j.khz); g('e-gain').value = j.gain; g('e-duree').value = Math.round(j.duree / 60);
     g('e-source').value = j.source; g('e-image').value = j.image; g('e-video').value = j.video || ''; g('e-hevc').value = j.hevc ? '1' : '0'; g('e-son').checked = j.son;
     const cams = j.cameras.length ? j.cameras : [''];
@@ -4080,6 +4085,12 @@ async function ticEmission() {
   const html = '<option value="">—</option>' + can.map(c => '<option value="' + mhz3(c.montee) + '">' + mhz3(c.montee) + ' ↑ / ' + mhz3(c.descente) + ' ↓' +
     (occupe && Math.abs(occupe - c.descente) < j.sr / 2 && D.service !== j.indicatif ? ' — occupé (' + esc(D.service || 'signal') + ')' : '') + '</option>').join('');
   if (g('e-canal').dataset.vu !== html) { g('e-canal').dataset.vu = html; g('e-canal').innerHTML = html; }
+  // DVB-S: QPSK, roll-off 0,35, no frames nor pilots, no MODCOD adaptation.
+  const s1 = j.norme === 'DVB-S';
+  g('e-courtes-l').hidden = s1; g('e-pilotes-l').hidden = s1;
+  if (s1) g('e-ro').value = j.roEffectif;
+  g('e-adapt-on').disabled = s1 || j.emet && j.normeEnCours === 'DVB-S';
+  txt('e-norme-info', s1 ? 'EN 300 421 : QPSK, Reed-Solomon et code convolutif, roll-off 0,35 ; le MiniTiouner le reçoit ; pas d’adaptation du MODCOD' : 'EN 302 307');
   g('e-image-l').hidden = j.source !== 'image'; g('e-video-l').hidden = j.source !== 'video'; g('e-camera-l').hidden = j.source !== 'camera';
   txt('e-descente', '↓ ' + mhz3(j.descenteKhz) + ' MHz');
   txt('e-gainmax', 'max ' + j.gainMax + ' dB (Réglages)');
@@ -4110,14 +4121,15 @@ async function ticEmission() {
   p.textContent = j.emet ? (j.charge ? 'SUR CHARGE' : j.interieur ? 'ESSAI INTÉRIEUR' : 'EN ÉMISSION') : 'arrêtée';
   p.style.background = j.emet ? '#C62828' : ''; p.style.color = j.emet ? '#fff' : 'var(--gris)';
   g('e-go').disabled = j.emet; g('e-stop').hidden = !j.emet;
-  ['e-modcod', 'e-sr', 'e-ro', 'e-courtes', 'e-pilotes', 'e-canal', 'e-mhz', 'e-source', 'e-image', 'e-video', 'e-image-par', 'e-video-par', 'e-camera', 'e-hevc', 'e-son', 'e-duree', 'e-charge',
+  g('e-ro').disabled = j.emet || s1; g('e-norme').disabled = j.emet;
+  ['e-modcod', 'e-sr', 'e-courtes', 'e-pilotes', 'e-canal', 'e-mhz', 'e-source', 'e-image', 'e-video', 'e-image-par', 'e-video-par', 'e-camera', 'e-hevc', 'e-son', 'e-duree', 'e-charge',
     'e-emetteur', 'e-interieur', 'e-int-mhz', 'e-int-duree', 'e-vga', 'e-hackrf-outil', 'e-hackrf-det', 'e-hackrf-dec'].forEach(i => g(i).disabled = j.emet);
   // A transmission running (the page reloaded): its mode shown.
   if (j.emet) { g('e-charge').checked = j.charge; g('e-interieur').checked = j.interieur; }
   const dir = g('e-direct');
   dir.hidden = !j.emet;
   if (j.emet) dir.innerHTML = '<b>' + (j.charge ? 'Sur charge' : j.interieur ? 'Essai en intérieur' : 'En émission') + '</b> sur ' + mhz3(j.khzEnCours) + ' MHz · reste <b>' + duree(j.restant * 1000) + '</b>' +
-    (j.emetteurEnCours === 'hackrf' ? ' · HackRF, VGA ' + j.gainApplique + ' dB, amplificateur coupé' : (j.emetteurEnCours === 'bladerf' ? ' · bladeRF' : '') + ' · gain ' + j.gainApplique + ' dB') + '<br>TS reçu de ffmpeg ' + j.tsKbps + ' kbit/s · trames vides ' + Math.round(j.tramesVidesPct) + ' % · manques ' + j.manques + (j.sousCharges ? ' · bladeRF à court d’échantillons ' + j.sousCharges + ' fois' : '') +
+    (j.emetteurEnCours === 'hackrf' ? ' · HackRF, VGA ' + j.gainApplique + ' dB, amplificateur coupé' : (j.emetteurEnCours === 'bladerf' ? ' · bladeRF' : '') + ' · gain ' + j.gainApplique + ' dB') + '<br>TS reçu de ffmpeg ' + j.tsKbps + ' kbit/s · ' + (j.normeEnCours === 'DVB-S' ? 'paquets nuls ajoutés ' : 'trames vides ') + Math.round(j.tramesVidesPct) + ' % · manques ' + j.manques + (j.sousCharges ? ' · bladeRF à court d’échantillons ' + j.sousCharges + ' fois' : '') +
     (j.tsPerdus ? ' · paquets perdus ' + j.tsPerdus : '') + (j.ecretages ? ' · écrêtages ' + j.ecretages : '') + ' · CPU ' + (j.cpu >= 0 ? Math.round(j.cpu) + ' %' : '—');
   if (!j.emet && (j.raison || j.erreur)) txt('e-msg', 'Dernière émission : ' + [j.raison, j.erreur].filter(x => x).join(' — '));
   // The closed loop: our signal and the beacon, both measured by the MiniTiouner.
@@ -4133,7 +4145,8 @@ async function ticEmission() {
 function eAdapt(j) {
   const a = j.adapt, fr1 = x => x.toFixed(1).replace('.', ',');
   let h;
-  if (!a.on) h = 'Désactivée : le MODCOD reste celui choisi (' + esc(j.modcod) + ').';
+  if (j.norme === 'DVB-S' || j.emet && j.normeEnCours === 'DVB-S') h = 'En DVB-S : pas d’adaptation, le taux de code reste celui choisi (' + esc(j.modcodDvbs) + ').';
+  else if (!a.on) h = 'Désactivée : le MODCOD reste celui choisi (' + esc(j.modcod) + ').';
   else if (!j.emet) h = 'Agira pendant la prochaine émission, dès que le MiniTiouner reçoit notre propre signal (service ou carte de visite à l’indicatif ' + esc(j.indicatif || '?') + '). ' +
     'Descend vite (marge &lt; 0,5 dB ou paquets perdus), remonte après 20 s de marge ≥ ' + fr1(a.marge + 1.5) + ' dB ; boucle perdue 10 s : le plus robuste, figé.';
   else {
@@ -4191,8 +4204,14 @@ async function eDetecte() {
   try { await fetch('api/datv/emission/' + (bl ? 'bladerf' : 'hackrf'), { method: 'POST' }); } catch (x) {}
   setTimeout(ticEmission, 100);
 }
+// The standard alone first: the MODCOD list then follows it.
+async function eNorme() {
+  try { await fetch('api/datv/emission/reglage?norme=' + enc(v('e-norme')), { method: 'POST' }); } catch (x) {}
+  ePremier = true; g('e-norme').blur();
+  setTimeout(ticEmission, 100);
+}
 function eParams() {
-  return 'modcod=' + enc(v('e-modcod')) + '&sr=' + v('e-sr') + '&ro=' + v('e-ro') + '&courtes=' + (g('e-courtes').checked ? 1 : 0) + '&pilotes=' + (g('e-pilotes').checked ? 1 : 0) +
+  return 'norme=' + enc(v('e-norme')) + '&modcod=' + enc(v('e-modcod')) + '&sr=' + v('e-sr') + (v('e-norme') === 'DVB-S' ? '' : '&ro=' + v('e-ro')) + '&courtes=' + (g('e-courtes').checked ? 1 : 0) + '&pilotes=' + (g('e-pilotes').checked ? 1 : 0) +
     '&mhz=' + enc(v('e-mhz').replace(',', '.')) + '&gain=' + enc(v('e-gain')) + '&duree=' + enc(v('e-duree')) + '&source=' + v('e-source') +
     '&image=' + enc(v('e-image')) + '&video=' + enc(v('e-video')) + '&camera=' + enc(g('e-camera').value) + '&hevc=' + v('e-hevc') + '&son=' + (g('e-son').checked ? 1 : 0) +
     '&emetteur=' + v('e-emetteur') + '&vga=' + enc(v('e-vga')) + '&hackrfOutil=' + enc(v('e-hackrf-outil')) + '&hackrfDecalage=' + (g('e-hackrf-dec').checked ? 1 : 0) +
@@ -4212,7 +4231,7 @@ async function eEmettre() {
   const q = inter ? 'ESSAI EN INTÉRIEUR avec le ' + EM.emetteurNom + ' à ' + v('e-int-mhz') + ' MHz, ' + v('e-sr') + ' kS/s, ' + gainTxt + ', ' + v('e-int-duree') + ' min au plus.\n\n' +
       'Indicatif ' + EM.indicatif + '. Radioamateur titulaire d’une licence, petite antenne à l’intérieur, aucun amplificateur ?'
     : charge ? 'TEST SUR CHARGE à ' + v('e-mhz') + ' MHz, ' + gainTxt + '.\n\nLa sortie TX du ' + (hk ? 'HackRF' : EM.emetteur === 'bladerf' ? 'bladeRF' : 'Pluto') + ' est-elle bien sur une charge fictive ou un atténuateur, et rien d’autre ?'
-    : 'ÉMETTRE vers QO-100 avec le ' + EM.emetteurNom + ' à ' + v('e-mhz') + ' MHz (descente ' + mhz3(EM.descenteKhz) + ' MHz), ' + v('e-sr') + ' kS/s, ' + v('e-modcod') + ', gain ' + v('e-gain') + ' dB, ' + v('e-duree') + ' min au plus.\n\nCanal libre vérifié ? Indicatif ' + EM.indicatif + '.';
+    : 'ÉMETTRE vers QO-100 avec le ' + EM.emetteurNom + ' à ' + v('e-mhz') + ' MHz (descente ' + mhz3(EM.descenteKhz) + ' MHz), ' + v('e-sr') + ' kS/s, ' + v('e-norme') + ' ' + v('e-modcod') + ', gain ' + v('e-gain') + ' dB, ' + v('e-duree') + ' min au plus.\n\nCanal libre vérifié ? Indicatif ' + EM.indicatif + '.';
   if (!confirm(q)) return;
   txt('e-msg', 'démarrage : ffmpeg, puis ' + (hk ? 'hackrf_transfer…' : EM.emetteur === 'bladerf' ? 'bladeRF-cli…' : 'l’ADALM-PLUTO…'));
   let j = null;
