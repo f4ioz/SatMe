@@ -49,8 +49,8 @@ class HackrfEmissionTest {
         assertEquals(listOf("-d", "a06063c8234e925f"), HackrfEmission.commande("h", reglage(serie = "a06063c8234e925f"), 0).subList(1, 3))
         // Whatever is asked, 10 dB at most, never below 0.
         val h = HackrfEmission("h")
-        assertEquals(10, h.vgaApplique(47))
-        assertEquals(10, HackrfEmission("h", vgaMax = 47).vgaApplique(47))
+        assertEquals(20, h.vgaApplique(47))
+        assertEquals(20, HackrfEmission("h", vgaMax = 47).vgaApplique(47))
         assertEquals(3, h.vgaApplique(10, plafond = 3))
         assertEquals(0, h.vgaApplique(-5))
         // Any other line is refused: the amplifier, the antenna port's supply, a higher gain, a file, other options.
@@ -62,7 +62,7 @@ class HackrfEmissionTest {
         HackrfEmission.verifie(bon)
         refuse { it[it.indexOf("-a") + 1] = "1" }
         refuse { it[it.indexOf("-p") + 1] = "1" }
-        refuse { it[it.indexOf("-x") + 1] = "11" }
+        refuse { it[it.indexOf("-x") + 1] = "21" }
         refuse { it[it.indexOf("-x") + 1] = "47" }
         refuse { it[it.indexOf("-t") + 1] = "fichier.iq" }
         refuse { it += listOf("-R") }
@@ -114,10 +114,10 @@ class HackrfEmissionTest {
         val h = HackrfEmission(f.transfer.path)
         assertNull(h.demarre(reglage(vga = 30), ton))
         assertTrue(h.etat.emet)
-        assertEquals(10.0, h.etat.gainDb, 0.0)
+        assertEquals(20.0, h.etat.gainDb, 0.0)
         assertTrue(attends(5000) { f.compte > 300_000 })
         // The command line it got: amplifier off, gain held.
-        assertEquals(listOf("-t", "-", "-f", "1255000000", "-s", "2331000", "-b", "1750000", "-x", "10", "-a", "0", "-p", "0"), f.args)
+        assertEquals(listOf("-t", "-", "-f", "1255000000", "-s", "2331000", "-b", "1750000", "-x", "20", "-a", "0", "-p", "0"), f.args)
         assertNull(h.regleGain(40.0))
         h.arrete()
         assertFalse(h.etat.emet)

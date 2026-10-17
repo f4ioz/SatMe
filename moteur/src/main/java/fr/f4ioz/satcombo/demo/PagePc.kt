@@ -1232,8 +1232,8 @@ object PagePc {
       <div class="ligne"><button id="e-apercu-go" onclick="eApercu()" title="Une image de ce qui serait émis (source et incrustation), faite par ffmpeg : rien n’est émis">Prévisualiser</button>
         <span class="petit" id="e-apercu-msg" style="flex:1"></span></div>
       <img id="e-apercu" alt="Aperçu de l’image émise" hidden style="max-width:100%;border-radius:6px;border:1px solid var(--bord);display:block;margin-bottom:6px">
-      <div class="ligne" id="e-vga-l" hidden><span class="petit" style="min-width:86px">Gain VGA (dB)</span><input id="e-vga" type="number" step="1" min="0" max="10" style="max-width:80px" onchange="eRegle()">
-        <span class="petit">0 à 10 dB, amplificateur RF toujours coupé ; pris au démarrage</span></div>
+      <div class="ligne" id="e-vga-l" hidden><span class="petit" style="min-width:86px">Gain VGA (dB)</span><input id="e-vga" type="number" step="1" min="0" max="20" style="max-width:80px" onchange="eRegle()">
+        <span class="petit">0 à 20 dB, amplificateur RF toujours coupé ; pris au démarrage</span></div>
       <div class="ligne" id="e-gain-l"><span class="petit" style="min-width:86px">Gain TX (dB)</span><input id="e-gain" type="number" step="1" min="-89" max="0" style="max-width:80px" onchange="eRegle()">
         <button onclick="eGain(-1)" title="1 dB de moins">−1</button><button onclick="eGain(1)" title="1 dB de plus">+1</button><span class="petit" id="e-gainmax"></span></div>
       <div class="ligne" id="e-duree-l"><span class="petit" style="min-width:86px">Durée (min)</span><input id="e-duree" type="number" min="1" max="30" style="max-width:80px" onchange="eRegle()">

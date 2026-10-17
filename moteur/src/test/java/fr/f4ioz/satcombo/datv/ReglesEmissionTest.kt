@@ -114,7 +114,7 @@ class ReglesEmissionTest {
         // The Pluto as before.
         assertNull(ReglesEmission.refus(d(2_409_750L, 333, Rolloff.A35), 0.0))
         assertNotNull(ReglesEmission.refus(d(50_000L, charge = true), 0.0))
-        assertEquals(10, ReglesEmission.vgaHackrf(47.0))
+        assertEquals(20, ReglesEmission.vgaHackrf(47.0))
         assertEquals(0, ReglesEmission.vgaHackrf(-3.0))
         assertEquals(6, ReglesEmission.vgaHackrf(6.9))
         assertEquals(0, ReglesEmission.vgaHackrf(Double.NaN))

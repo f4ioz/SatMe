@@ -270,7 +270,7 @@ class HackrfEmission(
 
     companion object {
         /** The ceiling of the TX VGA gain in SatMe (dB); the HackRF goes to 47. */
-        const val VGA_MAX = 10
+        const val VGA_MAX = 20
         const val DEBIT_MIN = 2_000_000L
         const val DEBIT_MAX = 20_000_000L
         const val FREQ_MIN_HZ = 1_000_000L

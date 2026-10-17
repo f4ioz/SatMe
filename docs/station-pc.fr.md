@@ -272,13 +272,13 @@ SatMe le pilote par l'outil `hackrf_transfer`, les échantillons sur son entrée
 
 - **Installation.** Linux : `sudo apt install hackrf` (il apporte `hackrf_transfer`, `hackrf_info` et les règles udev : débrancher et rebrancher le HackRF ensuite). Windows : les outils HackRF pour Windows (`hackrf_transfer.exe`, `hackrf_info.exe`) et le pilote WinUSB du HackRF ; donner leur dossier dans *Outils HackRF* s'ils ne sont pas dans le PATH.
 - **Détection, en lecture seule.** *Détecter* lance seulement `hackrf_info` (il liste les cartes, n'émet rien) : « HackRF One · numéro de série · firmware ». Rien d'autre ne tourne avant **ÉMETTRE** confirmé.
-- **Faible puissance seulement.** L'amplificateur RF est **toujours coupé** (`-a 0` sur chaque ligne de commande ; une ligne sans lui, ou avec toute autre option, est refusée par le code), l'alimentation du port d'antenne coupée (`-p 0`), le gain VGA d'émission de 0 à **10 dB** au plus (le HackRF va jusqu'à 47). Le gain est pris au démarrage.
+- **Faible puissance seulement.** L'amplificateur RF est **toujours coupé** (`-a 0` sur chaque ligne de commande ; une ligne sans lui, ou avec toute autre option, est refusée par le code), l'alimentation du port d'antenne coupée (`-p 0`), le gain VGA d'émission de 0 à **20 dB** au plus (le HackRF va jusqu'à 47). Le gain est pris au démarrage.
 - **Arrêt** : l'entrée de l'outil fermée d'abord (il s'arrête à la fin de son entrée), puis il est terminé, puis tué. Arrêt quand l'outil meurt, dit le HackRF absent ou pris, ne prend plus d'échantillons depuis 3 s, à la fin du temps permis, quand la page se tait depuis 15 s, et à la fermeture de SatMe-PC (aucun `hackrf_transfer` ne reste).
 
 **L'essai en intérieur** (*Essai en intérieur*, Pluto ou HackRF) : deux petites antennes à quelques mètres, à l'intérieur, pour voir toute la chaîne marcher avant toute parabole.
 - Une vraie émission radio : pour un **radioamateur titulaire d'une licence**, sous son indicatif (nom du service et mire), avec un avertissement orange dans la carte.
 - Seulement dans les bandes amateur que couvre le MiniTiouner, **toute la bande occupée dedans** : 23 cm **1240–1300 MHz** ou 13 cm **2300–2450 MHz**. 1255 MHz d'origine ; 1260–1300 MHz est partagé avec les satellites de radionavigation et 2400–2450 MHz avec le Wi-Fi (la carte le dit).
-- **Puissance minimale** : le Pluto à −40 dB au plus ; le HackRF amplificateur coupé et VGA ≤ 10 dB.
+- **Puissance minimale** : le Pluto à −40 dB au plus ; le HackRF amplificateur coupé et VGA ≤ 20 dB.
 - **5 min** d'origine, **10 min** au plus, puis arrêt tout seul. La boucle fermée de QO-100 ne sert pas.
 
 **Côté réception.** La carte donne les réglages du MiniTiouner pour l'essai : *Ciel* = la fréquence d'émission, OL du LNB **0**, le même débit de symboles, alimentation LNB **coupée** — *Régler la réception* les remplit (sans démarrer). Avec une antenne sur l'entrée du MiniTiouner, l'alimentation LNB **doit être coupée**, sinon ses 13/18 V partent dans l'antenne.
@@ -293,7 +293,7 @@ SatMe le pilote par l'outil `hackrf_transfer`, les échantillons sur son entrée
 - **Le CAT n'émet jamais** (`TX`, `KY` refusés par le pilote TS-2000). Seul l'APRS par un TNC KISS émet, et seulement quand on envoie soi-même un message, sa position ou un statut.
 - **L'alimentation LNB du MiniTiouner est coupée** tant qu'on ne la choisit pas.
 - **L'ADALM-PLUTO n'émet que depuis l'onglet DATV**, sur un clic confirmé, dans les règles ci-dessus ; le récepteur n'écrit jamais son côté émission.
-- **Le HackRF One n'émet que depuis l'onglet DATV**, sur un clic confirmé, en essai en intérieur ou sur charge, son amplificateur RF toujours coupé et son gain à 10 dB au plus ; jamais vers QO-100.
+- **Le HackRF One n'émet que depuis l'onglet DATV**, sur un clic confirmé, en essai en intérieur ou sur charge, son amplificateur RF toujours coupé et son gain à 20 dB au plus ; jamais vers QO-100.
 - **Le bladeRF 2.0 n'émet que depuis l'onglet DATV**, sur un clic confirmé, dans les règles du Pluto (−40 dB au plus sur charge et en intérieur) ; son récepteur n'envoie jamais de commande d'émission.
 
 ## Avant le premier essai

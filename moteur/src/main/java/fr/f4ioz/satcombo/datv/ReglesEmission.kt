@@ -147,7 +147,7 @@ object ReglesEmission {
      * The HackRF's TX VGA, the only power it ever gets: its RF amplifier
      * always off, the gain never above this (dB).
      */
-    const val HACKRF_VGA_MAX = 10
+    const val HACKRF_VGA_MAX = 20
     /** Why the HackRF does not go to QO-100. */
     const val HACKRF_PAS_QO100 = "le HackRF n'émet qu'en « essai en intérieur » ou sur charge : son convertisseur 8 bits et ses " +
         "harmoniques demandent un filtre et un amplificateur avant QO-100 ; QO-100 reste réservé à l'ADALM-PLUTO"
