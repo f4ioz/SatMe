@@ -957,7 +957,8 @@ object PagePc {
       <div class="avert" id="xs-refus" style="color:var(--rose)"></div>
       <div class="avert" id="xs-avert"></div>
       <div class="ligne e-boutons"><button class="emettre" id="xs-go" onclick="xsEmettre()">ÉMETTRE</button>
-        <button class="arret-tx" id="xs-stop" onclick="xsArrete()">ARRÊT</button></div>
+        <button class="arret-tx" id="xs-stop" onclick="xsArrete()">ARRÊT</button>
+        <button onclick="xsReception()" title="Le récepteur de l'onglet SDR calé sur cette émission : même fréquence, même modulation (NFM pour la FM, USB ou LSB pour la BLU) — pour s'écouter soi-même avec un autre SDR">Régler la réception</button></div>
       <div style="height:8px;background:#0E1720;border-radius:4px;margin-top:8px;overflow:hidden"><div id="xs-barre" style="height:100%;width:0;background:#C62828"></div></div>
       <div class="petit" id="xs-boucle" style="margin-top:6px;line-height:1.6"></div>
       <div class="etat" id="xs-msg"></div>
@@ -2442,6 +2443,14 @@ async function xsEmettre() {
   txt('xs-msg', r && r.ok === false ? 'Refusé : ' + r.erreur : (r ? 'émission en cours' : 'pas de réponse de SatMe-PC'));
   if (r && r.ok !== false) xsVie(true);
   xsCharge();
+}
+// The SDR tab's receiver on our own SSTV transmission: its frequency, the demodulation matching ours (AUTO would pick SSB).
+async function xsReception() {
+  if (!XS) return;
+  const khz = g('xs-interieur').checked ? XS.intKhz : XS.khz;
+  const mod = { nbfm: 'NFM', usb: 'USB', lsb: 'LSB' }[XS.modulation] || 'NFM';
+  const r = await post('api/sdr/reglage?suit=0&mode=' + mod + '&mhz=' + encodeURIComponent(mhz3(khz)));
+  txt('xs-msg', r && r.ok === false ? (r.erreur || 'réglage refusé') : 'Récepteur SDR : ' + mhz3(khz) + ' MHz en ' + mod + ' (il doit être démarré dans l’onglet SDR, sur un autre appareil que l’émetteur)');
 }
 async function xsArrete() {
   try { await fetch('api/sstv/emission/arrete', { method: 'POST' }); } catch (x) {}
