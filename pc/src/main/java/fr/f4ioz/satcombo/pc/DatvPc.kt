@@ -62,6 +62,9 @@ class DatvPc(
 
     /** The station card and chat lines found in the stream (forgotten at each start). */
     val carte = fr.f4ioz.satcombo.datv.LecteurCarte(horloge)
+    /** When the current lock began: a name read before it belongs to another station. */
+    @Volatile var verrouDepuisMs = 0L
+        private set
 
     /** The stream's own names (its SDT), forgotten at each start. */
     val sdt = fr.f4ioz.satcombo.datv.LecteurSdt()
@@ -213,7 +216,11 @@ class DatvPc(
             for ((n, v) in Datv.lignes(String(b, 0, d.length, Charsets.ISO_8859_1))) {
                 var e = etat
                 when (n) {
-                    1 -> { val st = v.toIntOrNull() ?: 0; if (st < 3 && e.etat >= 3) flux.clear(); e = e.copy(etat = st, erreur = "") }
+                    1 -> { val st = v.toIntOrNull() ?: 0
+                        // Lock lost: what named the station goes with it (the next one may be another station).
+                        if (st < 3 && e.etat >= 3) { flux.clear(); sdt.oublie(); e = e.copy(service = "", fournisseur = "") }
+                        if (st >= 3 && e.etat < 3) verrouDepuisMs = horloge()
+                        e = e.copy(etat = st, erreur = "") }
                     6 -> e = e.copy(fiTrouveeKhz = v.toLongOrNull() ?: 0L)
                     7 -> iEnAttente = Datv.signe(v)
                     8 -> { val i = iEnAttente; val q = Datv.signe(v)

@@ -146,7 +146,7 @@ class SpectreLargePc(
 
     /** The name of what is received now: the SDT's, LongMynd's, the station card's, the picture's. */
     fun nomRecu(): String {
-        val c = datv.carte.carte?.takeIf { horloge() - datv.carte.carteMs < 60_000L }?.indicatif
+        val c = datv.carte.carte?.takeIf { horloge() - datv.carte.carteMs < 60_000L && datv.carte.carteMs >= datv.verrouDepuisMs }?.indicatif
         return datv.sdt.nom.ifBlank { datv.etat.service }.ifBlank { c.orEmpty() }.ifBlank { indicatifImage().orEmpty() }.trim()
     }
 
