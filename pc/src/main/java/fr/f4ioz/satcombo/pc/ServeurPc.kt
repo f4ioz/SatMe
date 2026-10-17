@@ -756,6 +756,7 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 val r = r0.copy(cielKhz = khz("ciel") ?: r0.cielKhz, srKs = q["sr"]?.toIntOrNull() ?: r0.srKs, olKhz = khz("ol") ?: r0.olKhz,
                     entreeB = q["entree"]?.let { it == "b" } ?: r0.entreeB, lnb = q["lnb"]?.takeIf { it in setOf("", "v", "h") } ?: "",
                     son = q["son"]?.let { it == "1" } ?: r0.son)
+                q["recepteur"]?.takeIf { it in Datv.RECEPTEURS }?.let { d.recepteur = it }
                 large?.veilleArrete()
                 d.demarre(r)?.let { return JSONObject().put("ok", false).put("erreur", it) }
             }
@@ -1316,7 +1317,7 @@ object JsonPc {
         return JSONObject().put("actif", e.actif).put("statut", e.statut).put("erreur", e.erreur).put("tuner", e.tuner)
             .put("ciel", e.cielHz).put("repos", e.reposHz).put("pll", e.pllHz).put("fine", e.fineHz).put("decalage", e.decalageHz)
             .put("niveau", Math.round(e.niveauDb * 10) / 10.0).put("saturation", e.saturation.toDouble()).put("debit", e.debitKo).put("perdus", e.perdus)
-            .put("satellite", e.satellite)
+            .put("satellite", e.satellite).put("datvTient", d.datvTient ?: "")
             .put("gain", st.sdrGainTenthDb).put("agc", st.sdrAgc).put("ppm", st.sdrPpm).put("mode", d.modeChoisi).put("bw", st.sdrBandwidthHz)
             .put("squelch", st.sdrSquelchDb).put("son", st.sdrAudio).put("deemph", st.sdrDeemph).put("doppler", st.sdrDopplerTrack)
             .put("suit", d.suitSatellite).put("manuelle", d.manuelleHz).put("hote", d.hote).put("port", d.port).put("lance", d.lance).put("bias", d.biasTee)
@@ -1450,6 +1451,12 @@ object JsonPc {
         .put("noeud", d.noeud).put("nomNoeud", d.nomNoeud)
         .put("programme", d.programme() ?: JSONObject.NULL).put("chemin", d.chemin).put("windows", OutilsPc.windows)
         .put("debits", JSONArray(Datv.DEBITS)).put("canaux", JSONArray(Datv.CANAUX_KHZ)).put("balise", Datv.BALISE_KHZ)
+        .put("recepteur", d.recepteur).put("sdrTenu", d.sdrTenu ?: "").put("s2", d.logiciel?.let { l ->
+            val e = l.etatS2()
+            JSONObject().put("fs", l.fs).put("trames", e.tramesDonnees).put("vides", e.tramesVides).put("echecs", e.ldpcEchecs)
+                .put("sautees", e.tramesSautees).put("iterations", Math.round(e.iterationsMoyennes * 10) / 10.0).put("paquets", e.paquets)
+                .put("paquetsFaux", e.paquetsFaux).put("decalage", Math.round(e.decalageHz)).put("verrouillages", e.verrouillages)
+        } ?: JSONObject.NULL)
 
     fun reglages(st: StationPc, son: SonStation? = null): JSONObject {
         val s = st.settings

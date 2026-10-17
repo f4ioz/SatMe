@@ -16,6 +16,8 @@ import fr.f4ioz.satcombo.datv.ReglageDatv
 import fr.f4ioz.satcombo.datv.AnalyseTs
 import fr.f4ioz.satcombo.datv.QualiteDatv
 import fr.f4ioz.satcombo.datv.SuiviQualite
+import fr.f4ioz.satcombo.datv.ReceptionSdrDatv
+import fr.f4ioz.satcombo.sdr.SourceIq
 import org.json.JSONObject
 import java.io.File
 import java.io.InputStream
@@ -45,13 +47,27 @@ import kotlin.concurrent.thread
  * The LNB supply from the MiniTiouner (13 V or 18 V, on boards that have it)
  * stays off unless asked: an LNB powered by something else, or a splitter
  * passing DC, must not get a second supply.
+ *
+ * **Without a MiniTiouner**: an ADALM-PLUTO or a bladeRF 2.0 ([recepteur])
+ * and SatMe's own DVB-S2 demodulator ([ReceptionSdrDatv]); the SDR is taken
+ * from the SDR tab while it receives here ([materiel]), and given back.
  */
+/** Where the software receiver gets its SDR: opened for DATV, then given back to whoever had it. */
+interface MaterielSdrDatv {
+    /** Opens [recepteur] ([Datv.PLUTO], [Datv.BLADERF]); an IOException in French says why not. */
+    fun ouvre(recepteur: String): SourceIq
+    /** Done with it (closed already): what used it before may take it back. */
+    fun rend(recepteur: String)
+}
+
 class DatvPc(
     private val stockage: Stockage,
     private val dossierEnregistrements: File,
     private val horloge: () -> Long = System::currentTimeMillis,
     /** False on a SatMe-Node: no picture nor sound here, the stream goes to the network's clients ([abonne]). */
     private val lecteursLocaux: Boolean = true,
+    /** The SDRs for the software receiver; null: MiniTiouner only. */
+    var materiel: MaterielSdrDatv? = null,
 ) {
     @Volatile var etat = EtatDatv(); private set
     @Volatile var reglage = lisReglage(); private set
@@ -123,6 +139,18 @@ class DatvPc(
             .putBoolean("datv_entree_b", r.entreeB).putBoolean("datv_son", r.son).apply()
     }
 
+    /** The receiver: [Datv.MINITIOUNER] (LongMynd), [Datv.PLUTO] or [Datv.BLADERF] (SatMe's demodulator); taken at the next start. */
+    var recepteur: String
+        get() = stockage.getString("datv_recepteur", Datv.MINITIOUNER).takeIf { it in Datv.RECEPTEURS } ?: Datv.MINITIOUNER
+        set(v) { stockage.edit().putString("datv_recepteur", if (v in Datv.RECEPTEURS) v else Datv.MINITIOUNER).apply() }
+
+    /** The SDR held by the software receiver now ([Datv.PLUTO], [Datv.BLADERF]), or null. */
+    @Volatile var sdrTenu: String? = null; private set
+
+    /** The software receiver running here, for its figures. */
+    @Volatile var logiciel: ReceptionSdrDatv? = null; private set
+    private var filLogiciel: Thread? = null
+
     /** Where LongMynd is: the path chosen, else the usual places. */
     var chemin: String
         get() = stockage.getString("datv_longmynd", "") ?: ""
@@ -141,6 +169,11 @@ class DatvPc(
     @Synchronized
     fun demarre(r: ReglageDatv = reglage): String? {
         arreteIci()
+        val rec = recepteur
+        if (rec != Datv.MINITIOUNER) {
+            ReceptionSdrDatv.refus(r)?.let { return it }
+            return if (distant) demarreDistant(r) else demarreLogiciel(r, rec)
+        }
         r.refus()?.let { return it }
         if (distant) return demarreDistant(r)
         // LongMynd is Linux's: on Windows the MiniTiouner is driven through a SatMe-Node.
@@ -185,6 +218,9 @@ class DatvPc(
         generation++
         longmynd?.let { p -> p.destroy(); if (!p.waitFor(2, TimeUnit.SECONDS)) p.destroyForcibly() }
         longmynd = null
+        // The software receiver's thread closes its SDR itself: waited for, so the next start finds it free.
+        filLogiciel?.let { t -> if (t !== Thread.currentThread()) runCatching { t.join(4000) } }
+        filLogiciel = null
         arreteFlux()
         runCatching { socketEtat?.close() }; runCatching { socketTs?.close() }
         socketEtat = null; socketTs = null
@@ -200,6 +236,64 @@ class DatvPc(
 
     /** LongMynd's last words, made readable (the usual causes said plainly). */
     private fun pourquoiArret(): String = pourquoi(runCatching { JOURNAL.readLines() }.getOrDefault(emptyList()))
+
+    // ------------------------------------------------------------ the software receiver (Pluto, bladeRF)
+
+    /** The SDR opened (a thread of its own), the demodulator fed, its status in the MiniTiouner's words. */
+    private fun demarreLogiciel(r: ReglageDatv, rec: String): String? {
+        val m = materiel ?: return "pas de récepteur SDR ici"
+        reglage = r; garde(r)
+        val gen = ++generation
+        synchronized(points) { points.clear() }
+        carte.oublie(); sdt.oublie()
+        etat = EtatDatv(actif = true, depuis = horloge())
+        suisQualite(gen)
+        filLogiciel = thread(isDaemon = true, name = "satme-datv-s2") {
+            val src = try { m.ouvre(rec) } catch (x: Exception) {
+                if (generation == gen) { etat = etat.copy(actif = false, erreur = x.message ?: "récepteur injoignable"); arreteFlux() }
+                return@thread
+            }
+            sdrTenu = rec
+            val rx = Reception(gen)
+            val l = runCatching { ReceptionSdrDatv(src, r, { b -> rx.bloc(b) }) }.getOrNull()
+            try {
+                if (l == null) return@thread
+                logiciel = l
+                l.regle()
+                val suivi = thread(isDaemon = true, name = "satme-datv-s2-etat") {
+                    while (generation == gen) {
+                        runCatching { majLogiciel(l, gen) }
+                        try { Thread.sleep(300) } catch (_: InterruptedException) { break }
+                    }
+                }
+                val bon = runCatching { l.boucle { generation == gen } }.getOrElse { false }
+                suivi.interrupt()
+                if (!bon && generation == gen) {
+                    etat = etat.copy(actif = false, erreur = l.erreur ?: (Datv.libelleRecepteur(rec) + " : réception perdue"))
+                    arreteFlux()
+                }
+            } finally {
+                runCatching { l?.ferme() }
+                logiciel = null
+                runCatching { src.close() }
+                sdrTenu = null
+                runCatching { m.rend(rec) }
+            }
+        }
+        return null
+    }
+
+    /** The demodulator's figures as LongMynd's: lock, MER, MODCOD, carrier, rate, FEC counters, the stream's names. */
+    private fun majLogiciel(l: ReceptionSdrDatv, gen: Int) {
+        if (generation != gen) return
+        val avant = etat
+        var e = ReceptionSdrDatv.etatDatv(l.etatS2(), avant, l.reglage)
+        if (e.etat >= 3 && avant.etat < 3) { verrouDepuisMs = horloge(); journalImages.enAttente = true; journalSon.enAttente = true }
+        if (e.etat < 3 && avant.etat >= 3) { sdt.oublie(); e = e.copy(service = "", fournisseur = "") }
+        sdt.services.firstOrNull()?.let { sv -> e = e.copy(service = sv.nom, fournisseur = sv.fournisseur) }
+        if (generation == gen) etat = e
+        synchronized(points) { points.clear(); l.points().forEach { points.addLast(it) } }
+    }
 
     // ------------------------------------------------------------ LongMynd's status
 
@@ -329,7 +423,7 @@ class DatvPc(
     /** Receiving through the node: it starts LongMynd there; its status and stream come here. */
     private fun demarreDistant(r: ReglageDatv): String? {
         reglage = r; garde(r)
-        client.demarre(r)?.let { return it }
+        client.demarre(r, recepteur)?.let { return it }
         val gen = ++generation
         synchronized(points) { points.clear() }
         carte.oublie(); sdt.oublie()

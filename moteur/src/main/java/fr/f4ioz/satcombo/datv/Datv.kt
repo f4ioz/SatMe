@@ -77,6 +77,17 @@ object Datv {
     /** What the MiniTiouner's tuner covers. */
     const val FI_MIN_KHZ = 144_000L
     const val FI_MAX_KHZ = 2_450_000L
+    /** The SDR receivers' tuning range (ADALM-PLUTO, bladeRF), kHz. */
+    const val FI_SDR_MIN_KHZ = 70_000L
+    const val FI_SDR_MAX_KHZ = 6_000_000L
+    /** The receivers: the MiniTiouner (LongMynd), or an SDR with SatMe's own DVB-S2 demodulator. */
+    const val MINITIOUNER = "minitiouner"
+    const val PLUTO = "pluto"
+    const val BLADERF = "bladerf"
+    val RECEPTEURS = listOf(MINITIOUNER, PLUTO, BLADERF)
+
+    fun libelleRecepteur(r: String): String = when (r) { PLUTO -> "ADALM-PLUTO"; BLADERF -> "bladeRF 2.0"; else -> "MiniTiouner" }
+
     /** The symbol rates of QO-100's wide band. */
     val DEBITS = listOf(125, 250, 333, 500, 1000, 1500, 2000)
     /** The narrow channels, every 500 kHz from 10492.75 to 10499.25 MHz. */
