@@ -24,7 +24,7 @@ Poursuite de satellites radioamateurs sur Android et sur PC — passages, pointa
 - 🎯 **Le Doppler fait tout seul** — IC-9700, IC-9100, IC-910H, TS-2000, FT-817 / IC-705, TH-D72 ; on tourne la molette, le poste suit le transpondeur.
 - 🎞 **Chaque passage rejoué** — sur le ciel ou la carte, avec son son, le S-mètre, les contacts et les images SSTV à leur place ; fait en vidéo ou en GIF à partager.
 - 📲 **Du téléphone au PC en un QR code** — les passages faits au portable arrivent sur le PC avec leurs contacts, images et sons.
-- 📡 **Et tout le reste** — SSTV, METEOR, APRS (et KISS), FT8, radiosondes, QO-100 et DATV avec un MiniTiouner, carnet avec QRZ et Wavelog / Cloudlog.
+- 📡 **Et tout le reste** — SSTV, METEOR, APRS (et KISS), FT8, radiosondes, un cockpit QO-100, la DATV en réception et en émission, phonie → texte, carnet avec QRZ et Wavelog / Cloudlog.
 
 ### Un vrai passage, tel que SatMe l'a gardé
 
@@ -39,7 +39,7 @@ L'ISS le 4 octobre : quatre images d'écoles en Robot 36, décodées pendant qu'
 
 ### SatMe-PC — toute la station dans un navigateur
 
-SatMe tourne aussi sur un PC (Linux, Windows, Raspberry Pi), avec le moteur même du téléphone : passages, Doppler, poste et rotor, le carnet avec la station en direct à côté, skeds, QO-100 et **DATV avec un MiniTiouner**, clé SDR, radiosondes, METEOR, SSTV, APRS, FT8, le journal des passages — et SatMe sur le téléphone le rejoint en scannant un QR code, ses passages, images, sons et contacts arrivant avec. → [SatMe-PC](docs/station-pc.fr.md)
+SatMe tourne aussi sur un PC (Linux, Windows, Raspberry Pi), avec le moteur même du téléphone : passages, Doppler, poste et rotor, le carnet avec la station en direct à côté, skeds, le **cockpit QO-100**, la **DATV** en réception et en émission, SDR (RTL-SDR, ADALM-PLUTO, bladeRF 2.0), phonie → texte, radiosondes, METEOR, SSTV, APRS, FT8, le journal des passages — et SatMe sur le téléphone le rejoint en scannant un QR code, ses passages, images, sons et contacts arrivant avec. → [SatMe-PC](docs/station-pc.fr.md)
 
 **Installer**, guidé (il voit ce qui est branché) : `curl -fsSL https://raw.githubusercontent.com/f4ioz/SatMe/main/installe-satme.sh -o installe-satme.sh && bash installe-satme.sh` · [SatMe-PC sous Linux](docs/installer-satme-pc.fr.md) · [SatMe-PC sous Windows](docs/installer-satme-pc-windows.fr.md) (tout en un) · [SatMe-Node sur un Raspberry Pi 3](docs/installer-satme-node.fr.md) (le MiniTiouner à côté de l'antenne) · [téléchargements](https://github.com/f4ioz/SatMe/releases/latest)
 
@@ -52,7 +52,7 @@ SatMe tourne aussi sur un PC (Linux, Windows, Raspberry Pi), avec le moteur mêm
 <img src="docs/images/pc-agenda-auto.webp" width="49%" alt="Le mode automatique : les satellites choisis, les passages des 24 h à garder ou écarter">
 </p>
 <p align="center">
-<img src="docs/images/pc-datv.webp" width="49%" alt="SatMe-PC, DATV : un signal de test DVB-S2 accroché avec un MiniTiouner, MER, MODCOD, la constellation">
+<img src="docs/images/pc-datv-emission.webp" width="49%" alt="SatMe-PC, émission DATV : un essai en intérieur avec l'ADALM-PLUTO, QPSK 2/3, une vidéo en boucle, l'avertissement de l'essai en intérieur">
 <img src="docs/images/pc-journal-cadre.webp" width="49%" alt="SatMe-PC, journal des passages : le cadre d'une vidéo 3:4 dessiné sur la carte">
 </p>
 
@@ -107,19 +107,34 @@ Le téléphone sert aussi des pages au navigateur du PC (câble USB ou Wi-Fi, ri
 
 ## Nouveau sur SatMe-PC (octobre 2026)
 
-- **FT8 / FT4 réinventé** : la cascade qui écrit chaque indicatif à sa fréquence avec son drapeau, une place libre pour émettre, un **radar** des stations autour de ton QTH, **qui appeler maintenant** classé par ce que chacun apporterait, et les **messages** en conversations, comme une messagerie.
+SatMe-PC est passé d'une station satellites à toute une station QO-100 et DATV, avec son propre modem DVB-S2 et trois cartes SDR. Tout ce qui suit est détaillé dans le [guide SatMe-PC](docs/station-pc.fr.md) et le [wiki](https://github.com/f4ioz/SatMe/wiki/SatMe-PC-fr).
+
+<p align="center">
+<img src="docs/images/pc-datv.webp" width="49%" alt="SatMe-PC, DATV : un essai en intérieur sur 23 cm, l'ADALM-PLUTO émet et le bladeRF 2.0 reçoit avec le démodulateur DVB-S2 de SatMe ; marge +5,5 dB, image parfaite, l'indicatif lu dans l'image avec sa fiche QRZ">
+<img src="docs/images/pc-datv-qualite.webp" width="49%" alt="Qualité de réception DATV : la marge face au seuil du MODCOD, paquets reçus et attendus, erreurs, courbes sur deux minutes, les PID, la constellation">
+</p>
+
+**📡 Cockpit QO-100** — la bande étroite sur un écran : un clic démarre la réception, la cascade **nomme chaque signal** (BLU, CW, FT8, FT4, PSK31, RTTY, SSTV, balises…), un clic s'y accorde et ouvre le bon décodeur, la saisie du carnet à côté. Le plan de bande et ses segments, une garde sur la **fréquence d'urgence**, le calage sur la balise tenu tout seul, **LEILA** signalée, la session reprise après un arrêt.
+
+**📺 DATV, réception et émission**
+- Recevoir avec un **MiniTiouner**, un **SatMe-Node** au pied du mât, ou un **ADALM-PLUTO / bladeRF 2.0** avec le **démodulateur DVB-S2** de SatMe.
+- La **qualité de réception** en clair : la marge face au MODCOD, les paquets perdus, un verdict. **La bande large d'un coup d'œil** d'après le spectre de la station sol, les stations nommées, un clic pour s'accorder.
+- Les **sous-titres en direct** du son reçu, les **indicatifs lus dans l'image** avec leur fiche QRZ, une **carte de visite et un chat** portés dans le flux.
+- **Émettre** avec le **modulateur DVB-S2** de SatMe (Pluto, bladeRF) : mire, vidéo ou caméra, incrustation, un MODCOD ajusté à sa propre réception — et des **essais en intérieur ou sur charge** (HackRF One aussi), toutes les règles de sécurité dans le code.
+
+**🖼 SSTV** — comme sur le téléphone : la SDR écoutée directement, mode imposé, décodage continu sans en-tête, **calage automatique**, l'image dessinée ligne à ligne dans un onglet qui tient sur un écran — et **la SSTV à l'émission** avec le Pluto ou le bladeRF (FM ou BLU, règles des bandes et des satellites dans le code).
+
+**🔤 FT8 / FT4** — un décodeur qui retire le Doppler du satellite, soustrait ce qu'il a décodé, retrouve les indicatifs hachés et attend les réponses du correspondant ; l'horloge d'après les stations, les stations guettées, des marques partout, **PSK Reporter** (au choix).
+
+**🗣 Phonie → texte** — la BLU et la FM écrites passage par passage, indicatifs, carrés et reports en couleur, **traduites en français** — le tout sur le PC, sans Internet.
+
+**🛰 Station** — masque d'horizon, passages vers n'importe quel agenda (`.ics`), un journal Doppler / CAT par passage, un **lien WebSocket** pour d'autres programmes, une sauvegarde générale.
 
 <p align="center">
 <img src="docs/images/pc-ft8.webp" width="49%" alt="FT8 sur QO-100 : l'anneau du créneau, la cascade avec les indicatifs à leur fréquence, le radar, qui appeler maintenant">
 <img src="docs/images/pc-ft8-messages.webp" width="49%" alt="FT8, les messages : les conversations entre deux stations, en bulles">
 </p>
-
-- **Mode automatique** (onglet Agenda, et sur le téléphone) : les satellites choisis, leurs passages des 24 h gardés ou écartés, chacun suivi 5 min avant l'AOS — poste et rotor avec lui — et enregistré de l'AOS au LOS.
-- **Enregistrer le son** depuis Station et Carnet, et l'option **couper à la fin du passage**, même lancé à la main.
-- **Journal** : le passage entier sur la carte (même lancé en cours de passage), chaque contact placé sur la trace et à son carré comme dans la vidéo, le S-mètre lu par le CAT ; un contact ajouté au rejeu prend l'heure du son, le mode et les fréquences du satellite ; un passage fabriqué de rien.
-- **Station** plus claire : l'encart AMSAT à droite du nom, le poste et le rotor par leur nom avec une coche verte — leurs réglages passent dans Réglages.
-- **TH-D72** piloté (fréquences, bandes, TNC) et **APRS par un TNC KISS** en réception et en émission (message, position, statut).
-- **Rapport AMSAT automatique**, contact ajouté après le passage depuis le carnet, **SatMe-PC pour Windows tout en un** (Java, ffmpeg, rtl_tcp).
+<p align="center"><img src="docs/images/pc-sstv.webp" width="98%" alt="SatMe-PC, images SSTV reçues : la série ARISS de l'ISS en Robot 36, UmKA-1"></p>
 
 ## Nouveautés de la 20.82
 
@@ -196,7 +211,8 @@ Français et anglais. Commandes lisibles par les lecteurs d'écran.
 |---|---|
 | Postes | Icom IC-9700 · Icom IC-910H¹ · Icom IC-9100¹ · Kenwood TS-2000 (mode SAT ; RigExpert Tiny essayé) · Kenwood TH-D72 (FM, full duplex) · Yaesu FT-817 ou Icom IC-705¹ de chaque côté · FT-817 ou IC-705¹ + clé SDR |
 | APRS | Poste KISS en USB : Kenwood TH-D72 (essayé) ; autres TNC KISS sur une ligne série USB¹ · Yaesu FT3D : les stations qu'il décode (positions, sortie WAY.P) |
-| SDR | RTL2832U (phonie, SSTV, images METEOR avec une antenne 137 MHz) |
+| SDR | RTL2832U (phonie, SSTV, images METEOR avec une antenne 137 MHz) · SatMe-PC en plus : ADALM-PLUTO (réseau), Nuand bladeRF 2.0 micro (USB 3, Linux) — en réception, et en émission DATV et SSTV · HackRF One (émetteur d'essai, en intérieur ou sur charge seulement) |
+| DATV | MiniTiouner (par LongMynd, sur le PC ou un SatMe-Node) · ADALM-PLUTO ou bladeRF 2.0 avec le démodulateur DVB-S2 de SatMe |
 | Boussole | WitMotion WT901BLE, WT9011DCL-BT50 |
 | Rotors | Yaesu GS-232 · Hamlib rotctld (réseau) |
 | Série USB | CP210x, FTDI, PL2303, CH340/341/9102, MCP2200/2221, CDC |
@@ -213,6 +229,7 @@ Le téléphone n'a qu'un port USB-C. Un hub alimenté branché dessus porte tout
 ## Documentation
 
 - **[Wiki SatMe](https://github.com/f4ioz/SatMe/wiki/Accueil)** : le guide complet, pas à pas, avec captures — installation, passages, CAT, enregistrement, SSTV, APRS, carnet, FAQ
+- **[Guide SatMe-PC](docs/station-pc.fr.md)** : chaque onglet du PC — cockpit QO-100, DATV en réception et en émission, SSTV, FT8 / FT4, phonie → texte, le matériel SDR, les règles de sécurité
 - [API du poste de commande v1](docs/API-v1.fr.md) : protocole HTTP pour d'autres clients
 - [Serveur GP SatMe](https://github.com/f4ioz/SatMe-serveur) : relais d'éléments orbitaux (OMM/GP) pour SatMe, à installer sur un Raspberry Pi, un serveur Linux ou Proxmox
 - [Composants tiers](THIRD-PARTY.fr.md)

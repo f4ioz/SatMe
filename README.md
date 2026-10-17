@@ -24,7 +24,7 @@ Amateur radio satellite tracking for Android and the PC — passes, pointing, Do
 - 🎯 **Doppler handled for you** — IC-9700, IC-9100, IC-910H, TS-2000, FT-817 / IC-705, TH-D72; turn the knob, the rig follows the transponder.
 - 🎞 **Every pass replayed** — on the sky or the map, with its sound, the S-meter, contacts and SSTV pictures in their place; made into a video or a GIF to share.
 - 📲 **From the phone to the PC with one QR code** — passes worked portable land on the PC with their contacts, pictures and sound.
-- 📡 **And everything else** — SSTV, METEOR, APRS (and KISS), FT8, radiosondes, QO-100 and DATV with a MiniTiouner, a log with QRZ and Wavelog / Cloudlog.
+- 📡 **And everything else** — SSTV, METEOR, APRS (and KISS), FT8, radiosondes, a QO-100 cockpit, DATV received and transmitted, voice to text, a log with QRZ and Wavelog / Cloudlog.
 
 ### A real pass, as SatMe kept it
 
@@ -39,7 +39,7 @@ The ISS on 4 October: four school pictures in Robot 36, decoded as they arrived,
 
 ### SatMe-PC — the whole station in a browser
 
-SatMe also runs on a PC (Linux, Windows, Raspberry Pi), with the phone's own engine: passes, Doppler, rig and rotator, the log with the station live beside it, skeds, QO-100 and **DATV with a MiniTiouner**, SDR dongle, radiosondes, METEOR, SSTV, APRS, FT8, the pass journal — and SatMe on the phone joins it by scanning a QR code, its passes, pictures, sounds and contacts coming over. → [SatMe-PC](docs/station-pc.md)
+SatMe also runs on a PC (Linux, Windows, Raspberry Pi), with the phone's own engine: passes, Doppler, rig and rotator, the log with the station live beside it, skeds, the **QO-100 cockpit**, **DATV** received and transmitted, SDR (RTL-SDR, ADALM-PLUTO, bladeRF 2.0), voice to text, radiosondes, METEOR, SSTV, APRS, FT8, the pass journal — and SatMe on the phone joins it by scanning a QR code, its passes, pictures, sounds and contacts coming over. → [SatMe-PC](docs/station-pc.md)
 
 **Install**, guided (it sees what is plugged in): `curl -fsSL https://raw.githubusercontent.com/f4ioz/SatMe/main/installe-satme.sh -o installe-satme.sh && bash installe-satme.sh` · [SatMe-PC on Linux](docs/installer-satme-pc.md) · [SatMe-PC on Windows](docs/installer-satme-pc-windows.md) (all in one) · [SatMe-Node on a Raspberry Pi 3](docs/installer-satme-node.md) (the MiniTiouner next to the antenna) · [downloads](https://github.com/f4ioz/SatMe/releases/latest)
 
@@ -52,7 +52,7 @@ SatMe also runs on a PC (Linux, Windows, Raspberry Pi), with the phone's own eng
 <img src="docs/images/pc-agenda-auto.webp" width="49%" alt="The automatic mode: the satellites chosen, the 24 h passes to keep or set aside">
 </p>
 <p align="center">
-<img src="docs/images/pc-datv.webp" width="49%" alt="SatMe-PC, DATV: a DVB-S2 test signal locked with a MiniTiouner, MER, MODCOD, the constellation">
+<img src="docs/images/pc-datv-emission.webp" width="49%" alt="SatMe-PC, DATV transmission: an indoor test with the ADALM-PLUTO, QPSK 2/3, a looped video, the indoor-test warning">
 <img src="docs/images/pc-journal-cadre.webp" width="49%" alt="SatMe-PC, pass journal: a 3:4 video's frame drawn over the map">
 </p>
 
@@ -107,19 +107,34 @@ The phone also serves pages to the PC's browser (USB cable or Wi-Fi, nothing to 
 
 ## New on SatMe-PC (October 2026)
 
-- **FT8 / FT4 reinvented**: a waterfall that writes each callsign at its frequency with its flag, a free spot to send, a **radar** of the stations around your QTH, **who to call now** ranked by what each would bring, and the **messages** as conversations, as a messenger.
+SatMe-PC grew from a satellite station into a whole QO-100 and DATV station, with its own DVB-S2 modem and three SDR boards. Everything below is in the [SatMe-PC guide](docs/station-pc.md) and the [wiki](https://github.com/f4ioz/SatMe/wiki/SatMe-PC).
+
+<p align="center">
+<img src="docs/images/pc-datv.webp" width="49%" alt="SatMe-PC, DATV: an indoor test at 23 cm, ADALM-PLUTO transmitting and bladeRF 2.0 receiving with SatMe's own DVB-S2 demodulator; margin +5.5 dB, picture perfect, the callsign read in the picture with its QRZ record">
+<img src="docs/images/pc-datv-qualite.webp" width="49%" alt="DATV reception quality: the margin against the MODCOD's threshold, packets received and expected, errors, curves over two minutes, the PIDs, the constellation">
+</p>
+
+**📡 QO-100 cockpit** — the narrow band on one screen: one click starts the reception, the waterfall **names each signal** (SSB, CW, FT8, FT4, PSK31, RTTY, SSTV, beacons…), a click tunes it and opens the right decoder, the log entry beside it. The band plan with its segments, a guard on the **emergency frequency**, the beacon calibration held by itself, **LEILA** flagged, the session resumed after a restart.
+
+**📺 DATV, reception and transmission**
+- Receive with a **MiniTiouner**, a **SatMe-Node** at the mast, or an **ADALM-PLUTO / bladeRF 2.0** with SatMe's own **DVB-S2 demodulator**.
+- **Reception quality** in plain words: the margin against the MODCOD, lost packets, a verdict. The **wide band at a glance** from the ground station's spectrum, named stations, click to tune.
+- **Live subtitles** of the received sound, **callsigns read in the picture** with their QRZ card, a **station card and chat** carried in the stream.
+- **Transmit** with SatMe's own **DVB-S2 modulator** (Pluto, bladeRF): test card, video or camera, overlay, a MODCOD fitted to your own reception — and **indoor or dummy-load tests** (HackRF One too), every safety rule in the code.
+
+**🖼 SSTV** — as on the phone: the SDR heard directly, forced mode, continuous decoding without a header, **automatic tuning**, the picture drawn line by line in a one-screen tab — and **SSTV on the air** with the Pluto or the bladeRF (FM or SSB, band and satellite rules built in).
+
+**🔤 FT8 / FT4** — a decoder that removes the satellite's Doppler, subtracts what it decoded, resolves hashed callsigns and expects your partner's answers; the clock from the stations, watched stations, marks everywhere, **PSK Reporter** (opt-in).
+
+**🗣 Voice to text** — SSB and FM written out over by over, callsigns, squares and reports lit, **translated into French** — all offline on the PC.
+
+**🛰 Station** — horizon mask, passes to any calendar (`.ics`), a Doppler / CAT log per pass, a **WebSocket** link for other programs, a general backup.
 
 <p align="center">
 <img src="docs/images/pc-ft8.webp" width="49%" alt="FT8 on QO-100: the slot's ring, the waterfall with the callsigns at their frequency, the radar, who to call now">
 <img src="docs/images/pc-ft8-messages.webp" width="49%" alt="FT8, the messages: the conversations between two stations, as bubbles">
 </p>
-
-- **Automatic mode** (Agenda tab, and on the phone): the satellites chosen, their 24 h passes kept or set aside, each followed 5 min before AOS — rig and rotator with it — and recorded from AOS to LOS.
-- **Record the sound** from Station and Carnet, and the option to **stop at the end of the pass**, even when started by hand.
-- **Journal**: the whole pass on the map (even when started mid-pass), each contact placed on the track and at its square as in the video, the S-meter read through CAT; a contact added during the replay takes the sound's time, the satellite's mode and frequencies; a pass made from nothing.
-- A clearer **Station**: the AMSAT box to the right of the name, the rig and the rotator by name with a green tick — their settings move to Réglages.
-- **TH-D72** driven (frequencies, bands, TNC) and **APRS through a KISS TNC**, receiving and transmitting (message, position, status).
-- **Automatic AMSAT report**, a contact added after the pass from the log, **SatMe-PC for Windows all in one** (Java, ffmpeg, rtl_tcp).
+<p align="center"><img src="docs/images/pc-sstv.webp" width="98%" alt="SatMe-PC, SSTV pictures received: the ISS's ARISS series in Robot 36, UmKA-1"></p>
 
 ## What's new in 20.82
 
@@ -196,7 +211,8 @@ French and English. Controls readable by screen readers.
 |---|---|
 | Radios | Icom IC-9700 · Icom IC-910H¹ · Icom IC-9100¹ · Kenwood TS-2000 (SAT mode; RigExpert Tiny tried) · Kenwood TH-D72 (FM, full duplex) · Yaesu FT-817 or Icom IC-705¹ on each side · FT-817 or IC-705¹ + SDR dongle |
 | APRS | KISS radio over USB: Kenwood TH-D72 (tried); other KISS TNCs on a USB serial line¹ · Yaesu FT3D: stations it decodes (positions, WAY.P output) |
-| SDR | RTL2832U (voice, SSTV, METEOR pictures with a 137 MHz antenna) |
+| SDR | RTL2832U (voice, SSTV, METEOR pictures with a 137 MHz antenna) · SatMe-PC also: ADALM-PLUTO (network), Nuand bladeRF 2.0 micro (USB 3, Linux) — receive, and transmit DATV and SSTV · HackRF One (test transmitter, indoor or dummy load only) |
+| DATV | MiniTiouner (through LongMynd, on the PC or a SatMe-Node) · ADALM-PLUTO or bladeRF 2.0 with SatMe's DVB-S2 demodulator |
 | Compass | WitMotion WT901BLE, WT9011DCL-BT50 |
 | Rotators | Yaesu GS-232 · Hamlib rotctld (network) |
 | USB serial | CP210x, FTDI, PL2303, CH340/341/9102, MCP2200/2221, CDC |
@@ -213,6 +229,7 @@ The phone has a single USB-C port. A powered hub behind it carries everything: r
 ## Documentation
 
 - **[SatMe wiki](https://github.com/f4ioz/SatMe/wiki)**: the full guide, step by step, with screenshots — installation, passes, CAT, recording, SSTV, APRS, logbook, FAQ
+- **[SatMe-PC guide](docs/station-pc.md)**: every tab of the PC — QO-100 cockpit, DATV reception and transmission, SSTV, FT8 / FT4, voice to text, the SDR hardware, the safety rules
 - [Control desk API v1](docs/API-v1.md): HTTP protocol for third-party clients
 - [SatMe GP server](https://github.com/f4ioz/SatMe-serveur): relays orbital elements (OMM/GP) to SatMe, to install on a Raspberry Pi, a Linux server or Proxmox
 - [Third-party components](THIRD-PARTY.md)
