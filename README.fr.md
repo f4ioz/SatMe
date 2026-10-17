@@ -134,7 +134,7 @@ SatMe-PC est passé d'une station satellites à toute une station QO-100 et DATV
 <img src="docs/images/pc-ft8.webp" width="49%" alt="FT8 sur QO-100 : l'anneau du créneau, la cascade avec les indicatifs à leur fréquence, le radar, qui appeler maintenant">
 <img src="docs/images/pc-ft8-messages.webp" width="49%" alt="FT8, les messages : les conversations entre deux stations, en bulles">
 </p>
-<p align="center"><img src="docs/images/pc-sstv.webp" width="98%" alt="SatMe-PC, images SSTV reçues : la série ARISS de l'ISS en Robot 36, UmKA-1"></p>
+<p align="center"><img src="docs/images/pc-sstv.webp" width="98%" alt="SatMe-PC, images SSTV reçues : RS-44, UmKA-1 et l'ISS, chacune avec son satellite, son mode et son heure"></p>
 
 ## Nouveautés de la 20.82
 

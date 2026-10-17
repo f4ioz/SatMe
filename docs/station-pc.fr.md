@@ -289,7 +289,7 @@ Pendant une émission, SatMe glisse dans le flux de transport une **carte de vis
 
 L'onglet **SSTV**, comme sur le téléphone : l'**image en direct** (dessinée à sa vraie taille dès la première ligne, les lignes à venir sombres, celle qui arrive marquée), l'état du décodeur et un raccourci d'émission restent en vue ; **Réception**, **Émission**, **Mire**, **Images** et **Réglages** sont des sous-onglets.
 
-<p align="center"><img src="images/pc-sstv.webp" width="100%" alt="SSTV, sous-onglet Images : les images de l'ISS de la série ARISS en Robot 36, celles d'UmKA-1, chacune avec son satellite, son mode et son heure"></p>
+<p align="center"><img src="images/pc-sstv.webp" width="100%" alt="SSTV, sous-onglet Images : les images de RS-44, d'UmKA-1 et de l'ISS, chacune avec son satellite, son mode et son heure"></p>
 
 **Réception**
 

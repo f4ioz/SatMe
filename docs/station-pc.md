@@ -289,7 +289,7 @@ While transmitting, SatMe slips a **station card** into the transport stream, an
 
 The **SSTV** tab, as on the phone: the **live picture** (drawn at its true size from the first line, the lines to come dark, the arriving one marked), the decoder's state and a TX shortcut stay in view; **Réception**, **Émission**, **Mire**, **Images** and **Réglages** are sub-tabs.
 
-<p align="center"><img src="images/pc-sstv.webp" width="100%" alt="SSTV, Images sub-tab: ISS pictures of the ARISS series in Robot 36, UmKA-1 pictures, each with its satellite, mode and time"></p>
+<p align="center"><img src="images/pc-sstv.webp" width="100%" alt="SSTV, Images sub-tab: RS-44, UmKA-1 and ISS pictures, each with its satellite, mode and time"></p>
 
 **Reception**
 

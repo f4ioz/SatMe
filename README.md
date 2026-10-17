@@ -134,7 +134,7 @@ SatMe-PC grew from a satellite station into a whole QO-100 and DATV station, wit
 <img src="docs/images/pc-ft8.webp" width="49%" alt="FT8 on QO-100: the slot's ring, the waterfall with the callsigns at their frequency, the radar, who to call now">
 <img src="docs/images/pc-ft8-messages.webp" width="49%" alt="FT8, the messages: the conversations between two stations, as bubbles">
 </p>
-<p align="center"><img src="docs/images/pc-sstv.webp" width="98%" alt="SatMe-PC, SSTV pictures received: the ISS's ARISS series in Robot 36, UmKA-1"></p>
+<p align="center"><img src="docs/images/pc-sstv.webp" width="98%" alt="SatMe-PC, SSTV pictures received: RS-44, UmKA-1 and the ISS, each with its satellite, mode and time"></p>
 
 ## What's new in 20.82
 
