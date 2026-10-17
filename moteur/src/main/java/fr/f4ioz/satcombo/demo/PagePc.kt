@@ -3463,8 +3463,12 @@ async function ticDatv(premier) {
   txt('d-debit', D.kbps ? Math.round(D.kbps) + ' kb/s' + (D.nuls ? ' · ' + D.nuls + ' % de vide' : '') : '');
   txt('d-service', [D.fournisseur, D.service].filter(x => x).join(' · ') + (D.flux.length ? '  —  ' + D.flux.map(f => f.type + ' (PID ' + f.pid + ')').join(', ') : ''));
   // The service name is a callsign: its QRZ record under it (unless the station card shows it already).
-  const sq = D.qrz && D.qrz.service && !(D.carte && D.carte.recue && D.carte.indicatif === D.qrz.service) ? D.qrz.service : '';
-  dPose('d-qrz-service', sq ? '<b>' + esc(sq) + '</b> · ' + dQrzHtml(sq, false) : '');
+  // The callsign read in the picture since this lock comes first when it differs from the service name (often the transmitter's own setting).
+  const lu = D.verrouille ? dLuActuel() : null;
+  const sv = D.qrz && D.qrz.service && !(D.carte && D.carte.recue && D.carte.indicatif === D.qrz.service) ? D.qrz.service : '';
+  const sq = D.verrouille ? (lu && lu.c !== sv ? lu.c : sv) : '';
+  dPose('d-qrz-service', sq ? '<b>' + esc(sq) + '</b>' + (lu && sq === lu.c ? ' <span class="petit">lu dans l’image' + (sv ? ' (service : ' + esc(sv) + ')' : '') + '</span>' : '') +
+    ' · ' + dQrzHtml(sq, false) : '');
   txt('d-ou', D.noeud ? 'sur le SatMe-Node ' + (D.nomNoeud ? '« ' + D.nomNoeud + ' » ' : '') + '(' + D.noeud + ')' : 'sur ce PC');
   g('d-prog').hidden = !!D.noeud;
   txt('d-titre', D.actif ? '· ' + mhz3(D.ciel) + ' MHz · ' + D.sr + ' kS/s · FI ' + mhz3(D.fi) + ' MHz' : '');
@@ -3785,7 +3789,8 @@ async function ticTextesDatv() {
   txt('dt-ocr-etat', !j.ocr ? '' : !j.outil ? 'tesseract introuvable : ' + j.conseil :
     (j.occupe ? 'lecture… · ' : '') + j.lectures + ' lecture(s)' + (j.texte ? ' · lu : « ' + j.texte + ' »' : '') + (j.erreur ? ' · ' + j.erreur : ''));
   if (!j.ocr && !j.outil) txt('dt-ocr-etat', 'tesseract (facultatif) : ' + j.conseil);
-  const lus = j.ocr ? j.lus : [];
+  // Only what was read since the current lock: the previous station's callsign goes with it.
+  const lus = j.ocr && D && D.verrouille ? j.lus.filter(l => !D.verrouDepuis || l.t >= D.verrouDepuis) : [];
   g('dt-lus').innerHTML = lus.map((l, i) => '<div class="dt-lu' + (l.accord || l.garant ? ' sur' : '') + '"' + (i ? ' style="opacity:.7"' : '') + '>' +
     (i ? '' : '<span class="petit">Indicatif lu dans l’image : </span>') + '<b>' + esc(l.c) + '</b> ' + (l.drapeau ? f8Drapeau(l.drapeau) + ' ' : '') +
     '<span class="petit">' + esc(l.pays || '') + ' · lu ' + l.lectures + ' fois de suite' + (l.mot ? ' (écrit « ' + esc(l.mot) + ' » par la lecture)' : '') +
@@ -3793,7 +3798,7 @@ async function ticTextesDatv() {
     '<button onclick="dNote(\'' + esc(l.c) + '\',\'\',\'\')">Noter le QSO</button>' +
     (dQrz(l.c) && !dQrz(l.c).attente ? '<div class="dc-qrz">' + dQrzHtml(l.c, true) + '</div>' : '') + '</div>').join('');
   const b = g('d-lu'), l0 = lus[0];
-  b.hidden = !(l0 && D && D.actif);
+  b.hidden = !(l0 && D && D.actif && D.verrouille);
   if (l0) { b.innerHTML = esc(l0.c) + (l0.drapeau ? ' ' + f8Drapeau(l0.drapeau) : ''); b.className = 'd-lu' + (l0.accord || l0.garant ? ' sur' : ''); }
 }
 setInterval(() => ticTextesDatv(), 1000);
@@ -4031,6 +4036,10 @@ async function eArrete() {
 
 // ------------------------------------------------------------------ DATV: QRZ.com records of the callsigns seen
 // Looked up by SatMe-PC once per callsign (kept 7 days, one request every 5 s at most): D.qrz.
+function dLuActuel() {
+  if (!DT || !DT.ocr || !DT.lus || !D) return null;
+  return DT.lus.find(l => !D.verrouDepuis || l.t >= D.verrouDepuis) || null;
+}
 function dQrz(c) { return D && D.qrz && D.qrz.fiches && c ? D.qrz.fiches[c] : null; }
 function dQrzHtml(c, court) {
   if (!D || !D.qrz || !c) return '';

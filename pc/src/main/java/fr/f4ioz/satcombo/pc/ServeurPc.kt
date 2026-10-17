@@ -360,7 +360,7 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
             }
             "/api/datv" -> {
                 val d = datv
-                val o = if (d == null) JSONObject().put("ok", false) else JsonPc.datv(d).put("carte", carteDatv(d)).also { o ->
+                val o = if (d == null) JSONObject().put("ok", false) else JsonPc.datv(d).put("carte", carteDatv(d)).put("verrouDepuis", d.verrouDepuisMs).also { o ->
                     qrzDatv?.let { z ->
                         // The callsigns confirmed: the card's, the service name's, those the picture's reading confirmed.
                         val t = textesDatv
