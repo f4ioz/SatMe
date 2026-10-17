@@ -425,6 +425,9 @@ object PagePc {
     #v-qo100 .tq-cote .st, .d-cote .st { flex:1; min-height:0; display:flex; flex-direction:column; }
     .st-pan { flex:1; min-height:0; overflow:auto; }
     #v-datv .d-grille { height:100%; box-sizing:border-box; }
+    #v-sstv .sx { height:100%; box-sizing:border-box; grid-template-rows:minmax(0,1fr); }
+    #v-sstv .sx-direct { min-height:0; max-height:100%; overflow:auto; box-sizing:border-box; }
+    #v-sstv .sx > .st { min-height:0; display:flex; flex-direction:column; }
     #v-datv .d-ecran { margin:0; min-height:0; overflow:auto; }
     .vue > .grille2, .vue > .grille3c { height:100%; }
     .vue > .grille2 > div, .vue > .grille3c > div { min-height:0; overflow:auto; }
@@ -486,13 +489,26 @@ object PagePc {
   .st-nav button.actif { border-color:var(--cyan); color:var(--cyan); background:rgba(63,224,200,.08); }
   .st-nav button[hidden] { display:none; }
   .st-pan > .carte:last-child { margin-bottom:0; }
-  /* Denser type for the two cockpits. */
-  :where(#v-qo100, #v-datv) { font-size:13px; }
-  :where(#v-qo100, #v-datv) .carte { padding:9px 11px; margin-bottom:8px; border-radius:10px; }
-  :where(#v-qo100, #v-datv) .t { margin-bottom:6px; }
-  :where(#v-qo100, #v-datv) .ligne { margin-top:6px; gap:6px; }
-  :where(#v-qo100, #v-datv) input, :where(#v-qo100, #v-datv) select, :where(#v-qo100, #v-datv) button { font-size:13px; padding:5px 8px; }
-  :where(#v-qo100, #v-datv) .val { font-size:17px; }
+  /* Denser type for the cockpits. */
+  :where(#v-qo100, #v-datv, #v-sstv) { font-size:13px; }
+  :where(#v-qo100, #v-datv, #v-sstv) .carte { padding:9px 11px; margin-bottom:8px; border-radius:10px; }
+  :where(#v-qo100, #v-datv, #v-sstv) .t { margin-bottom:6px; }
+  :where(#v-qo100, #v-datv, #v-sstv) .ligne { margin-top:6px; gap:6px; }
+  :where(#v-qo100, #v-datv, #v-sstv) input, :where(#v-qo100, #v-datv, #v-sstv) select, :where(#v-qo100, #v-datv, #v-sstv) button { font-size:13px; padding:5px 8px; }
+  :where(#v-qo100, #v-datv, #v-sstv) .val { font-size:17px; }
+  /* SSTV: the live column beside the sub-tabs; stacked on a narrow screen. */
+  .sx { display:grid; grid-template-columns:minmax(280px,400px) minmax(0,1fr); gap:10px; padding:10px 14px; }
+  @media (max-width:1100px) { .sx { grid-template-columns:minmax(0,1fr); } .sx-image { max-height:clamp(150px, 30vh, 320px); } }
+  .sx-direct { margin:0; align-self:start; }
+  .sx-image { width:100%; aspect-ratio:5/4; max-height:clamp(150px, 40vh, 320px); background:#0E1720; border-radius:8px; overflow:hidden; }
+  .sx-image img { display:block; width:100%; height:100%; object-fit:contain; }
+  .sx-image img:not([src]) { visibility:hidden; }
+  #v-sstv #sstv-spectre { max-width:720px; }
+  @media (min-width:1101px) { #v-sstv #xs-apercu, #v-sstv #mi-apercu { float:right; margin:6px 0 6px 12px; } #v-sstv #xs-carte, #v-sstv #mi-carte { display:flow-root; } }
+  .sx-tx { padding-top:6px; border-top:1px solid var(--bord); }
+  #v-sstv button.emettre, #v-sstv button.arret-tx { font-size:14px; padding:6px 16px; }
+  #v-sstv .sx-tx button.emettre, #v-sstv .sx-tx button.arret-tx { font-size:13px; padding:5px 12px; }
+  #i-galerie .petit { font-size:11px; line-height:1.3; }
   #v-qo100 .tq { padding:10px 14px 0; }
   #v-qo100 .tq-grille { gap:10px; }
   #v-qo100 .tq-go { font-size:14px; padding:7px 14px; }
@@ -529,6 +545,7 @@ object PagePc {
     #v-qo100 .o-freq { font-size:24px; }
     #v-qo100 #tq-vol, #v-qo100 #tq-sq { width:70px !important; }
     .st-nav button:not(.actif) span { display:none; }
+    #v-sstv .st-nav button:not(.actif) span { display:inline; }
   }
   @media (max-width:1100px) { .d-haut { flex-direction:column; } .d-haut #d-cadre { width:100%; } .d-haut .d-info { contain:none; } .d-info .dc-carte { flex:none; } .d-info .dc-chat { max-height:220px; } }
   .tq-cote #cw-carte, .tq-main #cw-carte { margin-bottom:0; }
@@ -868,61 +885,43 @@ object PagePc {
 </div>
 </div>
 <div class="vue" id="v-sstv" hidden>
-<div class="grille2">
-  <div>
-    <div class="carte">
+<!-- Live column (picture, decoder, TX state) always in view; the rest in sub-tabs. -->
+<div class="sx">
+  <div class="carte sx-direct">
       <div class="t">Réception SSTV <span class="petit" id="i-mode"></span></div>
+      <div class="sx-image"><img id="i-encours" alt=""></div>
+      <div style="height:6px;background:#0E1720;border-radius:3px;margin-top:4px;overflow:hidden"><div id="sstv-barre" style="height:100%;width:0;background:var(--vert)"></div></div>
       <div class="val" id="sstv-statut" style="font-size:15px"></div>
       <div class="avert" id="sstv-conseil" hidden></div>
       <div class="ligne" style="margin-top:6px"><span class="petit" style="min-width:52px">Niveau</span>
         <div style="flex:1;height:8px;background:#0E1720;border-radius:4px;overflow:hidden"><div id="sstv-niveau" style="height:100%;width:0;background:var(--vert)"></div></div>
         <span class="petit" id="sstv-source-active" style="min-width:120px;text-align:right"></span></div>
-      <canvas id="sstv-spectre" width="600" height="56" style="width:100%;height:56px;background:#0E1720;border-radius:6px;margin-top:6px" title="Le son de 900 à 2600 Hz : synchro 1200, image 1500–2300, en-tête 1900"></canvas>
-      <div class="petit" id="sstv-ecart"></div>
+      <div class="etat" id="sstv-etat"></div>
+      <div class="ligne sx-tx" id="sx-tx" hidden><span class="petit">Émission</span><span id="sx-tx-pastille" class="pastille" style="color:var(--gris)">arrêtée</span><span class="petit" id="sx-tx-pc"></span>
+        <button class="emettre" id="sx-tx-go" onclick="xsEmettre()" title="Émettre avec les réglages du sous-onglet Émission (confirmation demandée)">ÉMETTRE</button><button class="arret-tx" id="sx-tx-stop" onclick="xsArrete()">ARRÊT</button></div>
+  </div>
+  <div class="st" data-st="sstv">
+    <div class="st-nav"><button data-p="sx-p-rx" title="Source, mode imposé, calage, indicateur d’accord">${IconesPc.svg("settings_input_antenna", "st-ico")}<span>Réception</span></button><button data-p="sx-p-tx" title="L’émission SSTV par l’ADALM-PLUTO ou le bladeRF">${IconesPc.svg("cloud_upload", "st-ico")}<span>Émission</span></button><button data-p="sx-p-mire" title="La mire SSTV jouée sur une sortie son">${IconesPc.svg("tv", "st-ico")}<span>Mire</span></button><button data-p="sx-p-img" title="Les images reçues">${IconesPc.svg("grid_on", "st-ico")}<span>Images</span></button><button data-p="sx-p-reg" title="Décodage continu, nettoyage, décoder un enregistrement">${IconesPc.svg("settings", "st-ico")}<span>Réglages</span></button></div>
+    <div class="st-pan" id="sx-p-rx">
+    <div class="carte">
+      <div class="t">Réception</div>
+      <label class="petit" style="display:block;margin-top:0"><input type="checkbox" id="sstv-actif" onchange="post('api/sstv/reglage?actif=' + (this.checked ? 1 : 0))"> Décoder la SSTV en direct</label>
       <div class="ligne"><span class="petit" id="sstv-source-l">Source</span>
         <select id="sstv-source" style="flex:none" onchange="post('api/sstv/reglage?source=' + this.value)"><option value="auto">auto : la clé SDR si elle joue, sinon la carte son</option><option value="carte">carte son (onglet Son)</option><option value="sdr">clé SDR</option></select></div>
       <div class="ligne"><span class="petit">Mode</span><select id="sstv-force" style="flex:none" onchange="post('api/sstv/reglage?force=' + enc(this.value || 'auto'))"></select>
         <button id="sstv-caler" onclick="post('api/sstv/caler')" title="Commencer l'image tout de suite, dans le mode choisi, sans attendre l'en-tête">⚡ Caler maintenant</button>
         <button class="arret" id="sstv-abandon" hidden onclick="post('api/sstv/abandon')" title="Finir l'image en cours (gardée si assez de lignes) et écouter à nouveau">✕ Arrêter l'image</button></div>
       <div class="petit">Mode imposé : l'en-tête VIS n'est plus attendu. « Caler maintenant » accroche l'image sur la prochaine impulsion de synchro.</div>
-      <label class="petit" style="display:block;margin-top:6px"><input type="checkbox" id="sstv-actif" onchange="post('api/sstv/reglage?actif=' + (this.checked ? 1 : 0))"> Décoder la SSTV en direct</label>
-      <label class="petit" style="display:block;margin-top:4px"><input type="checkbox" id="sstv-continu" onchange="post('api/sstv/reglage?continu=' + (this.checked ? 1 : 0))"> Décodage continu : démarre une image sur ses tops de synchronisation, même sans en-tête (mode reconnu à la durée des lignes)</label>
-      <label class="petit" style="display:block;margin-top:4px"><input type="checkbox" id="sstv-nettoyage" onchange="post('api/sstv/reglage?nettoyage=' + (this.checked ? 1 : 0))"> Nettoyer les images : répare les lignes et les traits perdus dans le bruit</label>
+      <canvas id="sstv-spectre" width="600" height="56" style="width:100%;height:56px;background:#0E1720;border-radius:6px;margin-top:6px" title="Le son de 900 à 2600 Hz : synchro 1200, image 1500–2300, en-tête 1900"></canvas>
+      <div class="petit" id="sstv-ecart"></div>
       <div id="sstv-afc-bloc" hidden>
         <label class="petit" style="display:block;margin-top:4px"><input type="checkbox" id="sstv-afc" onchange="post('api/sstv/reglage?afc=' + (this.checked ? 1 : 0))"> Calage automatique : mesure l’écart des tons (en-tête, tops de synchro) et recale doucement la réception (clé SDR, ou poste piloté en CAT avec le Doppler) — pas de 20 Hz au plus par seconde, ±1 kHz au plus</label>
         <div class="ligne" style="margin-top:2px"><span class="petit" id="sstv-afc-etat" style="flex:1"></span>
           <button id="sstv-afc-zero" onclick="post('api/sstv/afc/zero')" title="Remettre l’accord où vous l’aviez laissé et oublier les mesures">↺ Remettre à zéro</button></div>
       </div>
-      <img id="i-encours" style="width:100%;image-rendering:auto;background:#0E1720;min-height:200px;border-radius:8px;margin-top:8px" alt="">
-      <div style="height:6px;background:#0E1720;border-radius:3px;margin-top:4px;overflow:hidden"><div id="sstv-barre" style="height:100%;width:0;background:var(--vert)"></div></div>
-      <div class="etat" id="sstv-etat"></div>
     </div>
-    <div class="carte" id="sstv-redec-carte">
-      <div class="t">Décoder un enregistrement</div>
-      <div class="petit">Repasse un enregistrement du PC dans le décodeur (avec le mode imposé et le décodage continu choisis ci-dessus). Les images retrouvent l'heure de leur réception.</div>
-      <div class="ligne"><select id="sstv-enreg" style="flex:1"></select><button class="primaire" id="sstv-redec" onclick="post('api/sstv/redecode?nom=' + enc(g('sstv-enreg').value))">⟳ Décoder</button>
-        <button id="sstv-annule" hidden onclick="post('api/sstv/annule')">Annuler</button></div>
-      <div style="height:6px;background:#0E1720;border-radius:3px;margin-top:6px;overflow:hidden"><div id="sstv-redec-barre" style="height:100%;width:0;background:var(--cyan)"></div></div>
-      <div class="petit" id="sstv-redec-etat"></div>
     </div>
-    <div class="carte" id="mi-carte" hidden>
-      <div class="t">Mire SSTV</div>
-      <div class="petit">Une image de référence envoyée en SSTV, pour éprouver un décodeur sans satellite : celui de ce PC, d'un téléphone, ou toute une chaîne radio. Rien n'est émis : le son part sur la sortie choisie.</div>
-      <div class="ligne"><select id="mi-mode" onchange="apercuMire()"></select><span class="petit" id="mi-duree"></span></div>
-      <img id="mi-apercu" alt="" style="width:100%;max-width:420px;border-radius:6px;margin-top:8px;display:block">
-      <div class="ligne"><span class="petit">Conditions</span>
-        <select id="mi-bruit" title="Bruit (rapport signal sur bruit)"><option value="0">sans bruit</option><option value="20">bruit 20 dB</option><option value="15">bruit 15 dB</option><option value="12">bruit 12 dB</option><option value="8">bruit 8 dB</option></select>
-        <select id="mi-fading" title="Évanouissements"><option value="NONE">sans fading</option><option value="LIGHT">fading léger</option><option value="STRONG">fading fort</option></select>
-        <label class="petit"><input type="checkbox" id="mi-coupures"> coupures</label>
-        <label class="petit"><input type="checkbox" id="mi-profil"> profil du passage</label></div>
-      <div class="ligne"><button onclick="presetMire(1)">ISS typique</button><button onclick="presetMire(0)">Propre</button></div>
-      <div class="ligne"><span class="petit">Sortie</span><select id="mi-sortie" style="flex:1"></select></div>
-      <div class="avert">Jamais vers l'entrée micro d'un poste avec VOX, sauf essai voulu : il passerait en émission.</div>
-      <div class="ligne"><button class="primaire" id="mi-joue" onclick="joueMire()">▶ Jouer</button><button onclick="post('api/mire/stop').then(ticMire)">■ Stop</button>
-        <a class="bouton" id="mi-wav" href="#" download>⤓ WAV</a></div>
-      <div style="height:8px;background:#0E1720;border-radius:4px;margin-top:8px;overflow:hidden"><div id="mi-barre" style="height:100%;width:0;background:var(--cyan)"></div></div>
-      <div class="etat" id="mi-etat"></div>
-    </div>
+    <div class="st-pan" id="sx-p-tx">
     <div class="carte" id="xs-carte" hidden>
       <div class="t">Émission SSTV <span id="xs-pastille" class="pastille" style="color:var(--gris)">arrêtée</span></div>
       <div class="petit">Une image envoyée en SSTV par l’ADALM-PLUTO ou le bladeRF, en FM étroite ou en BLU, l’indicatif écrit en haut de l’image. Rien n’est émis sans ÉMETTRE puis une confirmation ; l’émission s’arrête seule une fois l’image envoyée.</div>
@@ -936,7 +935,7 @@ object PagePc {
       <div class="ligne"><span class="petit" style="min-width:86px">Mode</span><select id="xs-mode" style="max-width:170px" onchange="xsRegle('mode', this.value)"></select>
         <span class="petit">×</span><select id="xs-rep" style="flex:none" onchange="xsRegle('rep', this.value)" title="Combien de fois l’image part"><option>1</option><option>2</option><option>3</option></select>
         <label class="petit"><input type="checkbox" id="xs-cw" onchange="xsRegle('cw', this.checked ? 1 : 0)"> indicatif en CW à la fin</label></div>
-      <img id="xs-apercu" alt="Image émise" style="width:100%;max-width:420px;border-radius:6px;margin-top:8px;display:block">
+      <img id="xs-apercu" alt="Image émise" style="max-width:100%;max-height:200px;border-radius:6px;margin-top:6px;display:block">
       <div class="ligne"><span class="petit" style="min-width:86px">Modulation</span><select id="xs-modulation" style="max-width:150px" onchange="xsRegle('modulation', this.value)">
         <option value="nbfm">FM étroite</option><option value="usb">BLU haute (USB)</option><option value="lsb">BLU basse (LSB)</option></select>
         <select id="xs-dev" style="flex:none" onchange="xsRegle('dev', this.value)" title="Excursion"><option value="5000">±5 kHz</option><option value="2500">±2,5 kHz</option></select>
@@ -963,12 +962,48 @@ object PagePc {
       <div class="petit" id="xs-boucle" style="margin-top:6px;line-height:1.6"></div>
       <div class="etat" id="xs-msg"></div>
     </div>
-  </div>
-  <div>
+    </div>
+    <div class="st-pan" id="sx-p-mire">
+    <div class="carte" id="mi-carte" hidden>
+      <div class="t">Mire SSTV</div>
+      <div class="petit">Une image de référence envoyée en SSTV, pour éprouver un décodeur sans satellite : celui de ce PC, d'un téléphone, ou toute une chaîne radio. Rien n'est émis : le son part sur la sortie choisie.</div>
+      <div class="ligne"><select id="mi-mode" onchange="apercuMire()"></select><span class="petit" id="mi-duree"></span></div>
+      <img id="mi-apercu" alt="" style="max-width:100%;max-height:200px;border-radius:6px;margin-top:6px;display:block">
+      <div class="ligne"><span class="petit">Conditions</span>
+        <select id="mi-bruit" title="Bruit (rapport signal sur bruit)"><option value="0">sans bruit</option><option value="20">bruit 20 dB</option><option value="15">bruit 15 dB</option><option value="12">bruit 12 dB</option><option value="8">bruit 8 dB</option></select>
+        <select id="mi-fading" title="Évanouissements"><option value="NONE">sans fading</option><option value="LIGHT">fading léger</option><option value="STRONG">fading fort</option></select>
+        <label class="petit"><input type="checkbox" id="mi-coupures"> coupures</label>
+        <label class="petit"><input type="checkbox" id="mi-profil"> profil du passage</label></div>
+      <div class="ligne"><button onclick="presetMire(1)">ISS typique</button><button onclick="presetMire(0)">Propre</button></div>
+      <div class="ligne"><span class="petit">Sortie</span><select id="mi-sortie" style="flex:1"></select></div>
+      <div class="avert">Jamais vers l'entrée micro d'un poste avec VOX, sauf essai voulu : il passerait en émission.</div>
+      <div class="ligne"><button class="primaire" id="mi-joue" onclick="joueMire()">▶ Jouer</button><button onclick="post('api/mire/stop').then(ticMire)">■ Stop</button>
+        <a class="bouton" id="mi-wav" href="#" download>⤓ WAV</a></div>
+      <div style="height:8px;background:#0E1720;border-radius:4px;margin-top:8px;overflow:hidden"><div id="mi-barre" style="height:100%;width:0;background:var(--cyan)"></div></div>
+      <div class="etat" id="mi-etat"></div>
+    </div>
+    </div>
+    <div class="st-pan" id="sx-p-img">
     <div class="carte">
       <div class="t">Images reçues <span class="petit" id="i-nombre"></span></div>
       <div class="ligne" style="margin-top:0"><select id="i-filtre" style="flex:none" onchange="imagesVus = ''; rendSon()"><option value="">tous les satellites</option></select></div>
-      <div id="i-galerie" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px;margin-top:8px"></div>
+      <div id="i-galerie" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(132px,1fr));gap:6px;margin-top:8px"></div>
+    </div>
+    </div>
+    <div class="st-pan" id="sx-p-reg">
+    <div class="carte">
+      <div class="t">Décodage</div>
+      <label class="petit" style="display:block;margin-top:0"><input type="checkbox" id="sstv-continu" onchange="post('api/sstv/reglage?continu=' + (this.checked ? 1 : 0))"> Décodage continu : démarre une image sur ses tops de synchronisation, même sans en-tête (mode reconnu à la durée des lignes)</label>
+      <label class="petit" style="display:block;margin-top:4px"><input type="checkbox" id="sstv-nettoyage" onchange="post('api/sstv/reglage?nettoyage=' + (this.checked ? 1 : 0))"> Nettoyer les images : répare les lignes et les traits perdus dans le bruit</label>
+    </div>
+    <div class="carte" id="sstv-redec-carte">
+      <div class="t">Décoder un enregistrement</div>
+      <div class="petit">Repasse un enregistrement du PC dans le décodeur (avec le mode imposé (Réception) et le décodage continu choisis). Les images retrouvent l'heure de leur réception.</div>
+      <div class="ligne"><select id="sstv-enreg" style="flex:1"></select><button class="primaire" id="sstv-redec" onclick="post('api/sstv/redecode?nom=' + enc(g('sstv-enreg').value))">⟳ Décoder</button>
+        <button id="sstv-annule" hidden onclick="post('api/sstv/annule')">Annuler</button></div>
+      <div style="height:6px;background:#0E1720;border-radius:3px;margin-top:6px;overflow:hidden"><div id="sstv-redec-barre" style="height:100%;width:0;background:var(--cyan)"></div></div>
+      <div class="petit" id="sstv-redec-etat"></div>
+    </div>
     </div>
   </div>
 </div>
@@ -2386,7 +2421,7 @@ async function xsRegle(k, val) {
 }
 async function xsCharge() {
   try { XS = await (await fetch('api/sstv/emission')).json(); } catch (x) { XS = null; }
-  g('xs-carte').hidden = !(XS && XS.ok);
+  g('xs-carte').hidden = g('sx-tx').hidden = !(XS && XS.ok);
   if (!XS || !XS.ok) return;
   xsRend();
   if (XS.emet && !xsSuivi) { xsSuivi = true; setTimeout(() => { xsSuivi = false; xsCharge(); }, 1000); }
@@ -2416,6 +2451,9 @@ function xsRend() {
   const p = g('xs-pastille');
   p.textContent = j.emet ? 'EN ÉMISSION' : 'arrêtée'; p.className = 'pastille' + (j.emet ? ' coupe' : ''); p.style.color = j.emet ? '' : 'var(--gris)';
   g('xs-go').disabled = j.emet || !!j['refus_' + c];
+  const q = g('sx-tx-pastille'); q.textContent = p.textContent; q.className = p.className; q.style.color = p.style.color;
+  g('sx-tx-go').disabled = g('xs-go').disabled; g('sx-tx-go').hidden = j.emet;
+  txt('sx-tx-pc', j.emet ? Math.round((j.progres || 0) * 100) + ' %' : '');
   ['xs-emetteur', 'xs-source', 'xs-planche', 'xs-fichier', 'xs-mode', 'xs-rep', 'xs-cw', 'xs-modulation', 'xs-dev', 'xs-preacc', 'xs-mhz', 'xs-int-mhz', 'xs-sat', 'xs-charge', 'xs-interieur']
     .forEach(id => { g(id).disabled = j.emet; });
   g('xs-barre').style.width = Math.round((j.progres || 0) * 100) + '%';
