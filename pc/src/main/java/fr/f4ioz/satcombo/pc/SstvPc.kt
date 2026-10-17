@@ -309,8 +309,16 @@ class SstvPc(
     fun imageEnCours(): ByteArray? {
         val (m, px) = enCours ?: return null
         val h = _etat.value.lignes.coerceIn(1, m.height)
-        val img = BufferedImage(m.width, h, BufferedImage.TYPE_INT_RGB)
+        // The whole frame at its own size, the lines still to come dark, the line arriving marked:
+        // the picture fills in from the top, never stretched.
+        val img = BufferedImage(m.width, m.height, BufferedImage.TYPE_INT_RGB)
         img.setRGB(0, 0, m.width, h, px, 0, m.width)
+        if (h < m.height) {
+            val g = img.createGraphics()
+            g.color = java.awt.Color(0x0E, 0x17, 0x20); g.fillRect(0, h, m.width, m.height - h)
+            g.color = java.awt.Color(0x3F, 0xE0, 0xC8); g.fillRect(0, h, m.width, 1)
+            g.dispose()
+        }
         val o = java.io.ByteArrayOutputStream()
         ImageIO.write(img, "png", o)
         return o.toByteArray()
