@@ -34,8 +34,8 @@ class SstvAfcTest {
     private val son by lazy { SstvEncoder.encode(robot, mire(robot), fs, leadMs = 600.0, trailMs = 400.0) }
     private val reference by lazy { AfcBanc.decode(son, fs, { 0.0 }, afc = false).images.first() }
 
-    @Test fun `the header's offset is measured over plus or minus 300 Hz, noise or not`() {
-        for (off in listOf(-300.0, -170.0, 0.0, 90.0, 300.0)) {
+    @Test fun `the header's offset is measured over plus or minus 750 Hz, noise or not`() {
+        for (off in listOf(-750.0, -620.0, -300.0, -170.0, 0.0, 90.0, 300.0, 620.0)) {
             val e = SstvEcart(fs)
             val d = AfcBanc.Decaleur(fs)
             val n = (2.5 * fs).toInt()
@@ -63,7 +63,7 @@ class SstvAfcTest {
         // The same noise in tune: the best to expect.
         val base = AfcBanc.ecart(AfcBanc.decode(son, fs, { 0.0 }, afc = false, bruit = 2500.0, ssb = true).images.first(), reference)
         val fautes = ArrayList<String>()
-        for (off in listOf(-300.0, -250.0, -200.0, -100.0, 100.0, 200.0, 250.0, 300.0)) {
+        for (off in listOf(-750.0, -620.0, -300.0, -250.0, -200.0, -100.0, 100.0, 200.0, 250.0, 300.0, 620.0, 750.0)) {
             val avec = AfcBanc.decode(son, fs, { off }, afc = true, bruit = 2500.0, ssb = true)
             val sans = AfcBanc.decode(son, fs, { off }, afc = false, bruit = 2500.0, ssb = true)
             val ea = avec.images.firstOrNull()?.let { AfcBanc.ecart(it, reference) } ?: 255.0

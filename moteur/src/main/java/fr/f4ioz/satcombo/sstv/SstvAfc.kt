@@ -223,7 +223,8 @@ class SstvEcart(private val rate: Int) {
     fun oublie() { syncN = 0; bordN = 0; vis = null }
 
     companion object {
-        const val VIS_MAX_HZ = 600.0
+        /** Two crystals (a Pluto, a bladeRF, an LNB) easily differ by 600 Hz and more at 23 cm: ±1 kHz. */
+        const val VIS_MAX_HZ = 1000.0
         const val BRUIT_MAX_HZ = 60.0
         const val FENETRE_S = 20.0
         const val SYNCS_UTILES = 9
@@ -370,7 +371,7 @@ class SstvAfc(private val rate: Int, /** Small steps during a picture too (else 
     companion object {
         const val ZONE_MORTE_HZ = 15
         const val PAS_MAX_HZ = 20
-        const val LIMITE_HZ = 1000
+        const val LIMITE_HZ = 2000
         /** A rig's sound comes back about that late after a frequency write (CAT round, rig, sound card). */
         const val ATTENTE_MS = 600
         /** Headers the decoder reads itself (its own reach, less a margin). */
