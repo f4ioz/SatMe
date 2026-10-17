@@ -42,6 +42,8 @@ class StationCatTest {
         var maintien = false
         var repos: Long? = null
         var connecte = true
+        var afc = 0L
+        override fun afcRxHz() = afc
         override fun connecte() = connecte
         override fun poste() = poste
         override fun emetSeul() = false
@@ -153,6 +155,27 @@ class StationCatTest {
         assertTrue(st.etat.value.rxPilote)
         assertEquals(435_642_000L, sim.mainHz)
         assertEquals(ulAvant - 2_000L, sim.subHz)
+        assertEquals(0, sim.refusals)
+    }
+
+    @Test
+    fun le_calage_sstv_passe_par_les_ecritures_de_la_boucle_sans_bouger_le_repos() = runBlocking {
+        val (st, m) = station(lineaire)
+        m.repos = 435_640_000L
+        repeat(30) { st.tour(); t += 100 }
+        val avant = ecritures()
+        assertEquals(435_640_000L, sim.mainHz)
+        // The SSTV tuning asks 60 Hz more: the next round writes it, once.
+        m.afc = 60L
+        repeat(10) { st.tour(); t += 100 }
+        assertEquals(435_640_060L, sim.mainHz)
+        assertEquals(435_640_000L, m.repos)
+        assertTrue(ecritures() - avant <= 2)
+        // On hold: nothing written, the rest read back without the tuning's share.
+        m.maintien = true
+        m.afc = 120L
+        repeat(10) { st.tour(); t += 100 }
+        assertEquals(435_640_060L, sim.mainHz)
         assertEquals(0, sim.refusals)
     }
 

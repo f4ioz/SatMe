@@ -543,7 +543,7 @@ object SdrHub {
             autoTune = autoCentroid,
             spanHz = Dsp.RTL_RATE.toDouble() / Dsp.DECIM_1)
 
-        if (sstv) runCatching { SstvHub.startLive(app, Dsp.AUDIO_RATE, satName) }
+        if (sstv) runCatching { SstvHub.startLive(app, Dsp.AUDIO_RATE, satName, cibleAfc) }
         // APRS from the dongle's audio too (ISS digipeater), when turned on.
         aprsSdr = runCatching {
             val st = fr.f4ioz.satcombo.data.SettingsStore(app)
@@ -922,6 +922,19 @@ object SdrHub {
     fun setSquelch(db: Int) {
         wantSquelch = db
         _state.value = _state.value.copy(squelchDb = db)
+    }
+
+    /**
+     * What the SSTV automatic tuning moves: the operator's fine offset, between
+     * two blocks of the very sound this loop gives the decoder (coupled). In
+     * USB or LSB only: in FM the tones do not move with the tuning.
+     */
+    private val cibleAfc = object : fr.f4ioz.satcombo.sstv.CibleAfc {
+        override fun sens() = when (wantMode) { RxMode.USB -> 1; RxMode.LSB -> -1; else -> 0 }
+        override fun disponible() = running
+        override val couplee = true
+        override fun position() = userOffset.toLong()
+        override fun deplace(hz: Int) = setOffset(userOffset + hz)
     }
 
     /**

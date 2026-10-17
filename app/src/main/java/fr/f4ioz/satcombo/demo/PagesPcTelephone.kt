@@ -745,9 +745,11 @@ object PagesPcTelephone {
                 if (p("force").isNotEmpty()) fr.f4ioz.satcombo.sstv.SstvHub.setForcedMode(ctx, p("force").takeIf { it != "auto" })
                 if (p("continu").isNotEmpty()) fr.f4ioz.satcombo.sstv.SstvHub.setContinu(ctx, p("continu") == "1")
                 if (p("nettoyage").isNotEmpty()) fr.f4ioz.satcombo.sstv.SstvHub.setNettoyage(ctx, p("nettoyage") == "1")
+                if (p("afc").isNotEmpty()) fr.f4ioz.satcombo.sstv.SstvHub.setAfc(ctx, p("afc") == "1")
                 if (p("actif").isNotEmpty()) vm.setSstvEnabled(p("actif") == "1")
                 OK
             }
+            "/api/sstv/afc/zero" -> { fr.f4ioz.satcombo.sstv.SstvHub.remiseAZeroAfc(); OK }
             "/api/sstv/caler" -> {
                 val ctx = vm.getApplication<android.app.Application>()
                 if (p("mode").isNotEmpty()) fr.f4ioz.satcombo.sstv.SstvHub.setForcedMode(ctx, p("mode"))
@@ -927,7 +929,12 @@ object PagesPcTelephone {
         gardees = s.savedCount, erreur = s.erreur.orEmpty(),
         conseil = if (s.listening) "" else "Le téléphone décode en enregistrant : « Enregistrer » (onglet Son), ou avec sa clé SDR.",
         redecode = if (s.fileProgress >= 0f) s.fileName.orEmpty() else "", redecodeProgres = s.fileProgress, redecodeImages = s.fileImages,
-        gif = gifEnCours)
+        gif = gifEnCours,
+        calage = ApiSon.Calage(actif = s.afc, mesureHz = if (s.listening) s.afcMesureHz else null, totalHz = s.afcTotalHz,
+            applique = s.afc && s.afcApplique,
+            voie = if (!s.listening) "" else if (fr.f4ioz.satcombo.sdr.SdrHub.state.value.running && !enregistre) "décalage fin de la clé SDR du téléphone"
+                else "poste par CAT du téléphone, avec les écritures du Doppler",
+            conseil = if (s.listening) fr.f4ioz.satcombo.ui.afcConseil(s).orEmpty() else ""))
 
     /**
      * Why the page cannot take the microphone (a recording, FT8), or null. Android lets the

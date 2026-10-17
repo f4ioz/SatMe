@@ -9,7 +9,9 @@
 package fr.f4ioz.satcombo.pc
 
 import fr.f4ioz.satcombo.plateforme.Stockage
+import fr.f4ioz.satcombo.sstv.CibleAfc
 import fr.f4ioz.satcombo.sstv.SstvAccord
+import fr.f4ioz.satcombo.sstv.SstvAfc
 import fr.f4ioz.satcombo.sstv.SstvDecoder
 import fr.f4ioz.satcombo.sstv.SstvMeta
 import fr.f4ioz.satcombo.sstv.SstvMode
@@ -96,6 +98,21 @@ class SstvPc(
     var nettoyage: Boolean
         get() = stockage.getBoolean("pc_sstv_nettoyage", true)
         set(v) { stockage.edit().putBoolean("pc_sstv_nettoyage", v).apply() }
+    /**
+     * Automatic tuning (off by default): the tones' offset measured, the
+     * receiver nudged to bring them home (see [SstvAfc]). Off again: the
+     * receiver goes back where the operator left it.
+     */
+    var afc: Boolean
+        get() = stockage.getBoolean("pc_sstv_afc", false)
+        set(v) { stockage.edit().putBoolean("pc_sstv_afc", v).apply(); if (!v) coupeAfc() }
+
+    /**
+     * What the tuning may move for a source ("carte", "sdr"): the dongle's
+     * fine offset, the rig through SatMe's CAT writes, or nothing (advice
+     * only). Set by whoever knows the station.
+     */
+    @Volatile var cibleAfc: (source: String) -> CibleAfc? = { null }
 
     // ------------------------------------------------------------------ the sound in
 
@@ -103,6 +120,7 @@ class SstvPc(
     @Volatile private var decodeur: SstvDecoder? = null
     @Volatile private var memoire: SstvSon.Memoire? = null
     @Volatile private var accord: SstvAccord? = null
+    @Volatile private var calage: SstvAfc? = null
     /** The source feeding the decoder now ("carte", "sdr", "" before any sound). */
     @Volatile var sourceActive = ""; private set
     @Volatile var rateActif = 0; private set
@@ -131,7 +149,8 @@ class SstvPc(
         // Kept before decoding: a picture ending in this block takes it all.
         runCatching { memoire?.ajoute(pcm, n) }
         runCatching { accord?.ajoute(pcm, n) }
-        runCatching { d.feed(pcm, n) }.onFailure { e ->
+        val a = if (afc) calage ?: SstvAfc(rate).also { calage = it } else null
+        runCatching { if (a != null) a.nourrit(d, pcm, n, runCatching { cibleAfc(src) }.getOrNull()) else d.feed(pcm, n) }.onFailure { e ->
             val k = ++pannes
             _etat.update { it.copy(erreur = e.javaClass.simpleName + (if (k > 1) " ×$k" else "")) }
         }
@@ -139,6 +158,9 @@ class SstvPc(
 
     /** Another source or rate: a fresh decoder (the picture under way is dropped). */
     private fun nouveau(src: String, rate: Int): SstvDecoder {
+        // The tuning belonged to the old source: its receiver back where the operator left it.
+        calage?.let { c -> runCatching { c.remiseAZero(cibleAfc(sourceActive)) } }
+        calage = null
         sourceActive = src; rateActif = rate
         enCours = null; pannes = 0
         memoire = SstvSon.Memoire(rate)
@@ -149,6 +171,8 @@ class SstvPc(
 
     /** Settings changed so that the decoder must start over (source, off). */
     @Synchronized private fun oublie() {
+        calage?.let { c -> runCatching { c.remiseAZero(cibleAfc(sourceActive)) } }
+        calage = null
         decodeur = null; memoire = null; accord = null; enCours = null
         sourceActive = ""; rateActif = 0; derniereMs = 0L
         _etat.update { it.copy(mode = "", lignes = 0, hauteur = 0) }
@@ -180,6 +204,29 @@ class SstvPc(
         val d = decodeur?.takeIf { horloge() - derniereMs < SON_VU_MS } ?: return "aucun son n'arrive au décodeur SSTV"
         runCatching { d.forceStart(m) }.onFailure { return it.javaClass.simpleName }
         return null
+    }
+
+    /** The tuning off: the receiver back, the decoder left alone. */
+    @Synchronized private fun coupeAfc() {
+        calage?.let { c -> runCatching { c.remiseAZero(cibleAfc(sourceActive)) } }
+        calage = null
+        decodeur?.mesureSync = null
+    }
+
+    /** The tuning's « reset »: the receiver back where the operator left it, the measurements forgotten. */
+    @Synchronized fun remiseAZeroAfc() {
+        calage?.let { c -> runCatching { c.remiseAZero(cibleAfc(sourceActive)) } }
+    }
+
+    /** The tuning for the page: on, measured, applied, and what to do by hand. */
+    class Calage(val actif: Boolean, val mesureHz: Int?, val totalHz: Int, val applique: Boolean, val sens: Int,
+                 val visHz: Int?, val corrections: Int, val voie: String, val conseil: String)
+
+    fun calage(voie: String): Calage {
+        val e = calage?.etat ?: SstvAfc.Etat()
+        val frais = derniereMs > 0 && horloge() - derniereMs < SON_VU_MS
+        val m = if (frais) e.mesureHz else null
+        return Calage(afc, m, e.totalHz, e.applique, e.sens, e.visHz, e.corrections, voie, conseilAfc(afc, m, e.applique, e.sens))
     }
 
     /** Ends the picture under way (kept when it has enough lines) and listens again. */
@@ -449,5 +496,19 @@ class SstvPc(
         fun minLignes(m: SstvMode) = (m.height / 8).coerceAtLeast(1)
 
         fun nomSource(s: String) = when (s) { SDR -> "clé SDR"; CARTE -> "carte son"; else -> "source" }
+
+        /** What to tell when the tuning measures but cannot move the receiver. */
+        fun conseilAfc(actif: Boolean, mesureHz: Int?, applique: Boolean, sens: Int): String {
+            if (mesureHz == null || kotlin.math.abs(mesureHz) <= SstvAfc.ZONE_MORTE_HZ) return ""
+            if (actif && applique) return ""
+            val hz = if (sens != 0) sens * mesureHz else mesureHz
+            val signe = if (hz > 0) "+" else "−"
+            return when (sens) {
+                0 -> "Tons décalés de " + (if (mesureHz > 0) "+" else "−") + kotlin.math.abs(mesureHz) + " Hz : en BLU, accorder de " +
+                    (if (mesureHz > 0) "+" else "−") + kotlin.math.abs(mesureHz) + " Hz en USB (" + (if (mesureHz > 0) "−" else "+") +
+                    kotlin.math.abs(mesureHz) + " en LSB) ; en FM l'accord n'y change rien."
+                else -> "Accorder de " + signe + kotlin.math.abs(hz) + " Hz."
+            }
+        }
     }
 }

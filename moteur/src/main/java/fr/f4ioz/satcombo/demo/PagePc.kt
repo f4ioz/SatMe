@@ -888,6 +888,11 @@ object PagePc {
       <label class="petit" style="display:block;margin-top:6px"><input type="checkbox" id="sstv-actif" onchange="post('api/sstv/reglage?actif=' + (this.checked ? 1 : 0))"> Décoder la SSTV en direct</label>
       <label class="petit" style="display:block;margin-top:4px"><input type="checkbox" id="sstv-continu" onchange="post('api/sstv/reglage?continu=' + (this.checked ? 1 : 0))"> Décodage continu : démarre une image sur ses tops de synchronisation, même sans en-tête (mode reconnu à la durée des lignes)</label>
       <label class="petit" style="display:block;margin-top:4px"><input type="checkbox" id="sstv-nettoyage" onchange="post('api/sstv/reglage?nettoyage=' + (this.checked ? 1 : 0))"> Nettoyer les images : répare les lignes et les traits perdus dans le bruit</label>
+      <div id="sstv-afc-bloc" hidden>
+        <label class="petit" style="display:block;margin-top:4px"><input type="checkbox" id="sstv-afc" onchange="post('api/sstv/reglage?afc=' + (this.checked ? 1 : 0))"> Calage automatique : mesure l’écart des tons (en-tête, tops de synchro) et recale doucement la réception (clé SDR, ou poste piloté en CAT avec le Doppler) — pas de 20 Hz au plus par seconde, ±1 kHz au plus</label>
+        <div class="ligne" style="margin-top:2px"><span class="petit" id="sstv-afc-etat" style="flex:1"></span>
+          <button id="sstv-afc-zero" onclick="post('api/sstv/afc/zero')" title="Remettre l’accord où vous l’aviez laissé et oublier les mesures">↺ Remettre à zéro</button></div>
+      </div>
       <img id="i-encours" style="width:100%;image-rendering:auto;background:#0E1720;min-height:200px;border-radius:8px;margin-top:8px" alt="">
       <div style="height:6px;background:#0E1720;border-radius:3px;margin-top:4px;overflow:hidden"><div id="sstv-barre" style="height:100%;width:0;background:var(--vert)"></div></div>
       <div class="etat" id="sstv-etat"></div>
@@ -4417,6 +4422,7 @@ function rendSstv() {
   if (D.source && document.activeElement !== g('sstv-source')) g('sstv-source').value = D.source;
   if (document.activeElement !== g('sstv-continu')) g('sstv-continu').checked = D.continu;
   if (document.activeElement !== g('sstv-nettoyage')) g('sstv-nettoyage').checked = D.nettoyage;
+  afcSstv(D.afc);
   g('sstv-caler').hidden = D.decodage; g('sstv-abandon').hidden = !D.decodage;
   g('sstv-caler').disabled = !D.force;
   g('sstv-caler').title = D.force ? 'Commencer l\'image tout de suite en ' + D.force + ', sans attendre l\'en-tête' : 'Choisir d\'abord un mode';
@@ -4496,6 +4502,21 @@ function voisOutils() {
   txt('vi-gif', D.gif === viNom ? '🎞 GIF en cours…' : i.gif ? '🎞 Refaire le GIF' : '🎞 GIF');
   g('vi-gif-lien').hidden = !i.gif; g('vi-gif-lien').href = 'sstv/' + enc(gif); g('vi-gif-lien').download = gif;
   txt('vi-sans-son', i.son ? '' : 'Le son de cette image n’est pas gardé (images reçues avant que SatMe ne le garde).');
+}
+function afcSstv(A) {
+  g('sstv-afc-bloc').hidden = !A;
+  if (!A) return;
+  if (document.activeElement !== g('sstv-afc')) g('sstv-afc').checked = A.actif;
+  const hz = v => (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v) + ' Hz';
+  const e = [A.actif ? 'actif' : 'coupé'];
+  if (A.mesureHz != null) e.push('écart mesuré ' + hz(A.mesureHz));
+  if (A.actif) e.push('correction appliquée ' + hz(A.totalHz) + (A.corrections ? ' (' + A.corrections + ' pas)' : ''));
+  if (A.visHz != null) e.push('dernier en-tête ' + hz(A.visHz));
+  if (A.voie) e.push(A.voie);
+  if (A.conseil) e.push(A.conseil);
+  txt('sstv-afc-etat', e.join(' · '));
+  g('sstv-afc-etat').style.color = A.conseil ? 'var(--ambre)' : A.applique ? 'var(--vert)' : '';
+  g('sstv-afc-zero').disabled = !A.actif || (A.totalHz === 0 && A.mesureHz == null);
 }
 async function viAction(a) { if (viNom) await post('api/sstv/' + a + enc(viNom)); }
 async function viSupprime() {

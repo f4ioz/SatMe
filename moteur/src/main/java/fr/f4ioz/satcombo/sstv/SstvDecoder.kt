@@ -202,6 +202,26 @@ class SstvDecoder(
     /** Noise inside recent sync pulses, Hz (-1 until a picture has been followed). */
     val bruitSyncHz: Double get() = syncSpread
 
+    /**
+     * Each sync pulse followed during a picture: how far it sits from 1200 Hz
+     * in the sound as it arrives now (Hz), and its spread (Hz, the noise).
+     * For the automatic tuning; null (the default) costs nothing.
+     */
+    @Volatile var mesureSync: ((ecartHz: Double, bruitHz: Double) -> Unit)? = null
+
+    /**
+     * The receiver was moved: from the next sample fed on, every tone arrives
+     * [deltaHz] lower. The correction follows, so the picture under way sees
+     * no jump. Called between two blocks, by whoever moved the receiver.
+     * [resteHz]: the offset left, when known better than the decoder knows it
+     * (a header it could not read): the correction becomes that.
+     */
+    @Synchronized
+    fun recale(deltaHz: Double, resteHz: Double? = null) {
+        val c = if (resteHz != null) resteHz.toFloat() else correction - deltaHz.toFloat()
+        correction = c.coerceIn(-MAX_OFFSET.toFloat(), MAX_OFFSET.toFloat())
+    }
+
     /** Rough audio level of the filtered signal — for a UI tuning indicator. */
     val level: Double get() = demod.level
 
@@ -236,7 +256,34 @@ class SstvDecoder(
         lastSync = -1.0; blockIndex = 0; flushing = false
         missedRun = 0; forcedAnchor = false
         correction = 0f
+        entetePrevue = null
         pulseCount = 0; pulseScan = 0L; wasIdle = true
+    }
+
+    // A header read by the automatic tuning, beyond this decoder's reach: mode, end (samples fed), offset.
+    private var entetePrevue: Triple<SstvMode, Long, Double>? = null
+
+    /**
+     * A header read elsewhere, over a wider range than [MAX_OFFSET] (the
+     * automatic tuning): the picture starts on it during the next [feed], as
+     * if read here. [finAbs]: where it ends, in samples fed; [ecartHz]: its
+     * offset in the sound as fed.
+     */
+    @Synchronized
+    fun attendsEntete(mode: SstvMode, finAbs: Long, ecartHz: Double) { entetePrevue = Triple(mode, finAbs, ecartHz) }
+
+    private fun lisEntete(m0: SstvMode, fin: Long, ecartHz: Double) {
+        if (forcedAnchor && state != State.IDLE) return
+        if (fin < freqBase + (60 * spms).toLong() || fin > total) return
+        if (state != State.IDLE) emitPartial()
+        val m = forcedMode ?: m0
+        // The sound from the header's end on, corrected as the header says.
+        val d = (ecartHz - correction).toFloat()
+        correction = ecartHz.toFloat().coerceIn(-ENTETE_MAX_HZ, ENTETE_MAX_HZ)
+        val i0 = (fin - (60 * spms).toLong() - freqBase).toInt().coerceAtLeast(0)
+        for (i in i0 until freqLen) { freq[i] -= d; freqN[i] -= d }
+        nextTest = maxOf(nextTest, (fin / spms).toLong() + 60)
+        startImage(m, fin)
     }
 
     /** Push audio in. Chunks of a few thousand samples are ideal. */
@@ -247,6 +294,7 @@ class SstvDecoder(
         demod.process(pcm, count, scratch, scratchN)
         append(scratch, scratchN, count)
         produceMs()
+        entetePrevue?.let { (m, fin, e) -> if (fin <= total) { entetePrevue = null; lisEntete(m, fin, e) } }
         // Back to idle: pulses of the picture just decoded must not start it
         // again.
         if (state == State.IDLE && !wasIdle) { pulseScan = total; pulseCount = 0 }
@@ -523,6 +571,11 @@ class SstvDecoder(
         }
         val n = (i1 - i0).toDouble()
         val mean = s / n
+        // For the automatic tuning: the wide and narrow readings must agree, or the pulse is distorted (a weak sync under
+        // another tone read 400 Hz low on one, 200 on the other, both steady).
+        mesureSync?.let { f -> runCatching { mesureLarge(i0, i1)?.let { (med, mad) ->
+            val bruit = maxOf(mad, sqrt(maxOf(0.0, s2 / n - mean * mean)))
+            f(med + correction - SstvTone.SYNC, if (abs(med - mean) > ACCORD_LECTURES_HZ) 999.0 else bruit) } } }
         syncSpread = noiseSpread(i0, i1, mean).let { if (syncSpread < 0) it else syncSpread + (it - syncSpread) * 0.2 }
         // Only a clean pulse is a reference. Receiver noise sits mostly above
         // 1200 Hz and pulls a noisy reading up: followed, it shifted every
@@ -531,6 +584,29 @@ class SstvDecoder(
         val err = mean - SstvTone.SYNC
         if (abs(err) > 150.0) return
         retune(err * 0.1, start)
+    }
+
+    /**
+     * A sync pulse's tone on the wide reading, over [i0, i1): the median of
+     * means over one 2400 Hz period (see [noiseSpread]), and their median
+     * deviation. The narrow reading sits on its filter's edge at 1200 Hz:
+     * in noise it read 250 Hz low, steady enough to look right.
+     */
+    private fun mesureLarge(i0: Long, i1: Long): Pair<Double, Double>? {
+        val w = maxOf(2, (spms / 2.4).roundToInt())
+        val m = ArrayList<Double>()
+        var i = i0
+        while (i + w <= i1) {
+            var s = 0.0
+            for (j in i until i + w) s += freq[(j - freqBase).toInt()]
+            m += s / w
+            i += w
+        }
+        if (m.size < 3) return null
+        m.sort()
+        val med = m[m.size / 2]
+        val mad = m.map { abs(it - med) }.sorted()[m.size / 2]
+        return med to mad
     }
 
     /**
@@ -1154,6 +1230,10 @@ class SstvDecoder(
         private const val NOISY_SYNC_HZ = 60.0
         /** Largest tuning error the header is accepted with, Hz. */
         private const val MAX_OFFSET = 250.0
+        /** A header read by the automatic tuning: its reach. */
+        private const val ENTETE_MAX_HZ = 600f
+        /** A sync pulse is a tuning reference when its wide and narrow readings agree this well. */
+        private const val ACCORD_LECTURES_HZ = 25.0
         /** Everything below this is treated as the sync tone. */
         private const val SYNC_MAX = 1350f
         /** Missed syncs before widening the search. */

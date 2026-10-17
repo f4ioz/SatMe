@@ -76,6 +76,45 @@ class SstvPcTest {
         assertEquals(robot36, t.force)
     }
 
+    @Test fun `calage automatique - coupe par defaut, il recale la cle et revient a zero quand on le coupe`() {
+        val st = StockageMemoire()
+        val s = sstv(st)
+        assertFalse(s.afc)
+        // A dongle in USB, mistuned: the tones arrive 180 Hz high; its fine offset moves them.
+        var decalage = 0L
+        s.cibleAfc = { src ->
+            if (src != SstvPc.SDR) null else object : fr.f4ioz.satcombo.sstv.CibleAfc {
+                override fun sens() = 1
+                override val couplee = true
+                override fun position() = decalage
+                override fun deplace(hz: Int) { decalage += hz }
+            }
+        }
+        s.afc = true
+        assertTrue(sstv(st).afc)
+        val rate = Dsp.AUDIO_RATE
+        val brut = signal(rate)
+        val d = fr.f4ioz.satcombo.sstv.AfcBanc.Decaleur(rate)
+        val y = ShortArray(2048)
+        verse(brut, rate) { b, n -> d.traite(b, n, y, 180.0 - decalage); s.ecouteSdr(y, n, rate) }
+        assertEquals(180.0, decalage.toDouble(), 10.0)
+        val c = s.calage("")
+        assertTrue(c.actif && c.applique)
+        assertEquals(decalage.toInt(), c.totalHz)
+        assertEquals("Robot 36", s.images().single().mode)
+        // Off: the dongle back where it was.
+        s.afc = false
+        assertEquals(0L, decalage)
+    }
+
+    @Test fun `calage automatique - sans recepteur a bouger, un conseil`() {
+        assertEquals("Accorder de +120 Hz.", SstvPc.conseilAfc(true, 120, false, 1))
+        assertEquals("Accorder de −120 Hz.", SstvPc.conseilAfc(true, 120, false, -1))
+        assertEquals("", SstvPc.conseilAfc(true, 120, true, 1))
+        assertEquals("", SstvPc.conseilAfc(true, 10, false, 1))
+        assertTrue(SstvPc.conseilAfc(true, -90, false, 0).contains("en FM"))
+    }
+
     @Test fun `le son de la cle donne une image, avec son propre son`() {
         val s = sstv()
         verse(signal(Dsp.AUDIO_RATE), Dsp.AUDIO_RATE) { b, n -> s.ecouteSdr(b, n, Dsp.AUDIO_RATE) }

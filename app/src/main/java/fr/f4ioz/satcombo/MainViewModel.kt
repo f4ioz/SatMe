@@ -1017,6 +1017,29 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      */
     private val posteCiv = fr.f4ioz.satcombo.cat.PosteCatCiv(cat)
     private val postePaire by lazy { fr.f4ioz.satcombo.cat.PosteCatPaire(ft817) }
+    /**
+     * The SSTV automatic tuning's share of the downlink (sky Hz), added to the
+     * CAT loop's own writes; 0 when off.
+     */
+    @Volatile private var sstvAfcHz: Long = 0L
+
+    /**
+     * What the SSTV automatic tuning moves when the phone hears a rig: the rig,
+     * only while the CAT loop drives its dial (connected, Doppler not on hold,
+     * nobody turning it), through the loop's own writes — never a write of its
+     * own. Otherwise advice only.
+     */
+    private val cibleAfcCat = object : fr.f4ioz.satcombo.sstv.CibleAfc {
+        override fun sens() = fr.f4ioz.satcombo.sstv.SstvAfc.sensDuMode(activeTransmitters().getOrNull(_ui.value.selectedTxIndex)?.mode)
+        override fun disponible(): Boolean {
+            val u = _ui.value
+            return u.catConnected && !u.dopplerHold && u.catRxDoppler && stationCat.etat.value.rxPilote
+        }
+        override val couplee = false
+        override fun position() = sstvAfcHz
+        override fun deplace(hz: Int) { sstvAfcHz += hz }
+    }
+
     private val stationCat = fr.f4ioz.satcombo.station.StationCat(object : fr.f4ioz.satcombo.station.MondeCat {
         override fun connecte(): Boolean = _ui.value.catConnected
         override fun poste(): fr.f4ioz.satcombo.cat.PosteCat = if (isPairRig) postePaire else posteCiv
@@ -1030,6 +1053,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         override fun decalageTxHz(): Long = _ui.value.txShiftHz
         override fun poseDecalageTx(hz: Long) = setTxShift(hz)
         override fun decalageRxHz(): Long = activeRxOffset()
+        override fun afcRxHz(): Long = sstvAfcHz
         override fun modeCw(): Boolean = _ui.value.opMode == "CW"
         override fun maintienDoppler(): Boolean = _ui.value.dopplerHold
         override fun dopplerRx(): Boolean = _ui.value.catRxDoppler
@@ -1362,6 +1386,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     val ui: StateFlow<UiState> = _ui.asStateFlow()
 
     init {
+        fr.f4ioz.satcombo.sstv.SstvHub.cibleCat = cibleAfcCat
         // The mast's state, as the station keeps it, onto the screens.
         viewModelScope.launch {
             stationRotor.etat.collect { e -> _ui.update { it.copy(rotor = it.rotor.copy(mat = e)) } }
@@ -8991,6 +9016,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             rxRestHz = null, selectedTxIndex = 0,
             catRadioDownlinkHz = null, catRadioUplinkHz = null)
         stationCat.nouveauSatellite()
+        // The SSTV tuning's share belonged to the old satellite.
+        sstvAfcHz = 0L
         viewModelScope.launch {
             val tx = txRepo.forSatellite(sat.catalogNumber)
             val status = txRepo.statusOf(sat.catalogNumber)

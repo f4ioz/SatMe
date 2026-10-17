@@ -70,7 +70,31 @@ object ApiSon {
         /** What this side can do: decode a recording again, make a GIF. */
         val peutRedecoder: Boolean = true,
         val peutGif: Boolean = true,
+        /** The automatic tuning; null where there is none. */
+        val calage: Calage? = null,
     )
+
+    /** The automatic SSTV tuning: on, the offset measured, the correction applied, by what, and advice. */
+    class Calage(
+        val actif: Boolean = false,
+        /** Hz, in the sound as it arrives; null when not measured. */
+        val mesureHz: Int? = null,
+        /** Hz of sound moved so far. */
+        val totalHz: Int = 0,
+        /** The receiver is being moved now (else advice only). */
+        val applique: Boolean = false,
+        /** What it moves, in words. */
+        val voie: String = "",
+        /** The last header's offset (Hz). */
+        val visHz: Int? = null,
+        val corrections: Int = 0,
+        /** What to do by hand, "" when nothing. */
+        val conseil: String = "",
+    )
+
+    private fun calage(c: Calage): JSONObject = JSONObject().put("actif", c.actif).put("mesureHz", c.mesureHz ?: JSONObject.NULL)
+        .put("totalHz", c.totalHz).put("applique", c.applique).put("voie", c.voie).put("visHz", c.visHz ?: JSONObject.NULL)
+        .put("corrections", c.corrections).put("conseil", c.conseil)
 
     fun sstv(d: Sstv): JSONObject = JSONObject().put("source", d.source).put("sourceActive", d.sourceActive)
         .put("depuisMs", d.depuisMs).put("niveau", Math.round(d.niveau * 1000.0) / 1000.0)
@@ -82,6 +106,7 @@ object ApiSon {
         .put("erreur", d.erreur).put("conseil", d.conseil)
         .put("redecode", d.redecode).put("redecodeProgres", Math.round(d.redecodeProgres * 1000.0) / 1000.0).put("redecodeImages", d.redecodeImages)
         .put("gif", d.gif).put("peutRedecoder", d.peutRedecoder).put("peutGif", d.peutGif)
+        .put("afc", d.calage?.let { calage(it) } ?: JSONObject.NULL)
         .put("modes", JSONArray(SstvMode.ALL.map { it.name }))
 
     fun json(e: Etat): JSONObject = JSONObject().put("present", true)

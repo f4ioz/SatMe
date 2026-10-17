@@ -74,6 +74,9 @@ class SonStation(
 
     @Volatile private var wav: EnregistreurWav? = null
 
+    /** The rig answers by CAT (for the SSTV tuning's page). */
+    fun catConnecte(): Boolean = station.etat.value.catConnecte
+
     init {
         son.auditeurs += { pcm, n, rate ->
             wav?.let { w -> w.ajoute(pcm, n); _etat.update { it.copy(secondes = w.secondes) } }
