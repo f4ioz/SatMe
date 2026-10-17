@@ -3925,7 +3925,7 @@ async function ticEmission() {
   const dir = g('e-direct');
   dir.hidden = !j.emet;
   if (j.emet) dir.innerHTML = '<b>' + (j.charge ? 'Sur charge' : j.interieur ? 'Essai en intérieur' : 'En émission') + '</b> sur ' + mhz3(j.khzEnCours) + ' MHz · reste <b>' + duree(j.restant * 1000) + '</b>' +
-    (j.emetteurEnCours === 'hackrf' ? ' · HackRF, VGA ' + j.gainApplique + ' dB, amplificateur coupé' : (j.emetteurEnCours === 'bladerf' ? ' · bladeRF' : '') + ' · gain ' + j.gainApplique + ' dB') + '<br>TS reçu de ffmpeg ' + j.tsKbps + ' kbit/s · trames vides ' + Math.round(j.tramesVidesPct) + ' % · manques ' + j.manques +
+    (j.emetteurEnCours === 'hackrf' ? ' · HackRF, VGA ' + j.gainApplique + ' dB, amplificateur coupé' : (j.emetteurEnCours === 'bladerf' ? ' · bladeRF' : '') + ' · gain ' + j.gainApplique + ' dB') + '<br>TS reçu de ffmpeg ' + j.tsKbps + ' kbit/s · trames vides ' + Math.round(j.tramesVidesPct) + ' % · manques ' + j.manques + (j.sousCharges ? ' · bladeRF à court d’échantillons ' + j.sousCharges + ' fois' : '') +
     (j.tsPerdus ? ' · paquets perdus ' + j.tsPerdus : '') + (j.ecretages ? ' · écrêtages ' + j.ecretages : '') + ' · CPU ' + (j.cpu >= 0 ? Math.round(j.cpu) + ' %' : '—');
   if (!j.emet && (j.raison || j.erreur)) txt('e-msg', 'Dernière émission : ' + [j.raison, j.erreur].filter(x => x).join(' — '));
   // The closed loop: our signal and the beacon, both measured by the MiniTiouner.

@@ -68,12 +68,18 @@ class SessionBladerf(
                 if (t.isEmpty()) return@forEachLine
                 synchronized(journal) { journal.addLast(t); while (journal.size > 60) journal.removeFirst() }
                 Bladerf.traduis(t)?.let { if (fatal == null) fatal = it; derniere = it }
+                // The device starved of samples: counted, shown with the transmission.
+                if ("underrun" in t.lowercase()) sousCharges++
                 lignes.offer(t)
             }
         }
     }
 
     val vivant: Boolean get() = processus.isAlive
+
+    /** The tool's « underrun » lines: the bladeRF ran out of samples to send. */
+    @Volatile var sousCharges = 0
+        private set
 
     /** The last error line since the last call, or null. */
     fun prendErreur(): String? = derniere.also { derniere = null }

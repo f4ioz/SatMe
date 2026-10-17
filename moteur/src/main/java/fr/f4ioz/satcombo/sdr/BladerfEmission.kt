@@ -81,6 +81,9 @@ class BladerfEmission(
     override fun etatCommun(): EtatEmission = etat
 
     @Volatile private var session: SessionBladerf? = null
+
+    /** How often the device ran out of samples to send (the tool's « underrun » lines). */
+    val sousCharges: Int get() = session?.sousCharges ?: 0
     @Volatile private var fifo: File? = null
     @Volatile private var sortie: OutputStream? = null
     @Volatile private var ouvertureEnCours = false
@@ -149,7 +152,7 @@ class BladerfEmission(
                 if (kotlin.math.abs(de - r.debit) > r.debit / 10_000 + 1) throw IOException("bladeRF : débit $de éch/s au lieu de ${r.debit}")
                 s.envoie("set bandwidth tx1 $bande")
                 s.attend(Regex("TX1 Bandwidth:\\s*\\d+ Hz"), attenteReponseMs, "bande")
-                s.envoie("tx config file=" + f.path + " format=bin repeat=1 delay=0 channel=1 samples=" + r.paires + " buffers=16 xfers=8 timeout=2000")
+                s.envoie("tx config file=" + f.path + " format=bin repeat=1 delay=0 channel=1 samples=" + r.paires + " buffers=32 xfers=16 timeout=2000")
                 s.envoie("tx")
                 val fichier = s.attend(Regex("File:\\s*(.+)$"), attenteReponseMs, "réglage du flux").groupValues[1].trim()
                 if (fichier != f.path) throw IOException("bladeRF : flux sur « $fichier » au lieu du tube")

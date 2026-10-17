@@ -427,7 +427,8 @@ class EmissionDatvPc(
         // The HackRF's LO beside the signal: the band rules above stay on the signal itself.
         val plan = if (hackrf && hackrfDecalage) DecalageHackrf.plan(khz, srKs, rolloff.alpha, interieur)
             ?: return DecalageHackrf.refus(khz, srKs, rolloff.alpha, interieur) else null
-        val sps = plan?.sps ?: ReglesEmission.sps(srKs)
+        // The bladeRF: 4 samples a symbol at least (3 at 1 MS lost whole frames indoors with 8 dB of margin).
+        val sps = plan?.sps ?: if (blade) maxOf(4, ReglesEmission.sps(srKs)) else ReglesEmission.sps(srKs)
         val debit = srKs * 1000L * sps
         val debitTs = m.debitTs(srKs * 1000.0).toLong()
         val img = when (source) {
@@ -728,6 +729,7 @@ class EmissionDatvPc(
         }
         if (pe != null) {
             o.put("restant", maxOf(0L, (pe.finMs - t) / 1000)).put("tampons", pe.tampons).put("manques", pe.manques).put("gainApplique", pe.gainDb)
+            (tx as? BladerfEmission)?.let { o.put("sousCharges", it.sousCharges) }
         }
         if (m != null) {
             // The share of the air time in dummy frames (the stream late, or starting).
