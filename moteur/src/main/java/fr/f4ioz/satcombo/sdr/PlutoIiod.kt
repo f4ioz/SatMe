@@ -40,8 +40,10 @@ import kotlin.math.sin
  *   the first one followed by the channel mask on a line; 0 or the count
  *   asked ends it.
  * - `PRINT`: the length, then the context's XML and a line feed.
- * - `WRITEBUF <dev> <bytes>`: the count the daemon takes, the bytes, then
- *   the count written.
+ * - `WRITEBUF <dev> <bytes>` (after `OPEN` with the buffer's sample count):
+ *   0 when the daemon is ready to take them, the bytes, then the count
+ *   written once the buffer is pushed (a negative errno instead, either
+ *   time).
  *
  * One command at a time on a connection: the samples have one of their own.
  */
@@ -113,17 +115,19 @@ class Iiod private constructor(private val socket: Socket) : Closeable {
     }
 
     /**
-     * [n] bytes of samples to [dev]'s output buffer (`WRITEBUF`): the daemon
-     * says how many it takes, they follow, then how many it wrote. Only the
-     * transmitter ([PlutoEmission]) calls it.
+     * [n] bytes of samples (one whole buffer, as opened) to [dev]'s output
+     * buffer (`WRITEBUF`): the daemon answers 0 when ready, the bytes
+     * follow, then it answers how many it pushed. Only the transmitter
+     * ([PlutoEmission]) calls it.
      */
     @Synchronized fun ecritTampon(dev: String, src: ByteArray, n: Int): Int {
         val pret = execute("WRITEBUF $dev $n")
         if (pret < 0) throw Refus(pret, "WRITEBUF")
-        if (pret != n) throw IOException("WRITEBUF : $pret octets attendus au lieu de $n")
+        if (pret != 0) throw IOException("WRITEBUF : réponse inattendue ($pret) avant les échantillons")
         sortie.write(src, 0, n); sortie.flush()
         val fait = entier()
         if (fait < 0) throw Refus(fait, "WRITEBUF")
+        if (fait != n) throw IOException("WRITEBUF : $fait octets pris sur $n")
         return fait
     }
 

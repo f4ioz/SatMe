@@ -78,7 +78,8 @@ class EmissionSstvPcTest {
                         "TIMEOUT", "OPEN", "CLOSE" -> o.write("0\n".toByteArray())
                         "WRITEBUF" -> {
                             val n = m[2].toInt()
-                            o.write("$n\n".toByteArray()); o.flush()
+                            // As the real daemon: 0 (ready), the bytes, then the count pushed.
+                            o.write("0\n".toByteArray()); o.flush()
                             val d = lis(e, n)
                             recoit(ShortArray(n / 2) { ((d[2 * it].toInt() and 0xFF) or (d[2 * it + 1].toInt() shl 8)).toShort() })
                             octets += n

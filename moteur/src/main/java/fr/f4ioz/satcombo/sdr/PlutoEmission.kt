@@ -135,7 +135,11 @@ class PlutoEmission(
             ecritTx(c, PHY, TX, "sampling_frequency", r.debit.toString())
             ecritTx(c, PHY, TX, "rf_bandwidth", (if (r.bandeHz > 0) r.bandeHz else r.debit).coerceIn(BANDE_MIN, BANDE_MAX).toString())
             ecritTx(c, PHY, LO_TX, "frequency", r.frequenceHz.toString())
-            for (k in 0 until 4) ecritTx(c, TX_DEV, Iiod.Canal(true, "altvoltage$k"), "raw", "0")
+            // DDS tones off (raw is shared by the four), their scale to 0: only the buffer goes out.
+            for (k in 0 until 4) {
+                ecritTx(c, TX_DEV, Iiod.Canal(true, "altvoltage$k"), "raw", "0")
+                ecritTx(c, TX_DEV, Iiod.Canal(true, "altvoltage$k"), "scale", "0")
+            }
         } catch (x: IOException) {
             eteint(c)
             c.close(); ctrl = null
@@ -298,7 +302,7 @@ class PlutoEmission(
         val ECRITURES: Set<Triple<String, Iiod.Canal, String>> = setOf(
             Triple(PHY, LO_TX, "powerdown"), Triple(PHY, LO_TX, "frequency"),
             Triple(PHY, TX, "hardwaregain"), Triple(PHY, TX, "sampling_frequency"), Triple(PHY, TX, "rf_bandwidth")) +
-            (0 until 4).map { Triple(TX_DEV, Iiod.Canal(true, "altvoltage$it"), "raw") }
+            (0 until 4).flatMap { k -> listOf("raw", "scale").map { Triple(TX_DEV, Iiod.Canal(true, "altvoltage$k"), it) } }
         const val GAIN_MIN_DB = -89.75
         const val BANDE_MIN = 200_000L
         const val BANDE_MAX = 56_000_000L
@@ -315,7 +319,12 @@ class PlutoEmission(
 
         fun db(g: Double) = String.format(Locale.US, "%.2f", g)
 
-        /** The TX channels' mask from the context (I = voltage0, Q = voltage1, 16-bit little-endian). */
+        /**
+         * The TX DMA channels' mask from the context: I = voltage0, Q =
+         * voltage1 (scan indices 0 and 1 on a Pluto: "00000003"), signed
+         * 16-bit little-endian words, the DAC's 12 bits at the top (full
+         * scale ±32767). The altvoltage tone channels have no scan element.
+         */
         fun masqueTx(xml: String): String? {
             val m = Regex("<device id=\"[^\"]*\" name=\"$TX_DEV\"[^>]*>(.*?)</device>", RegexOption.DOT_MATCHES_ALL).find(xml) ?: return null
             val canaux = Regex("<channel id=\"(voltage[01])\" type=\"output\"[^>]*>\\s*<scan-element index=\"(\\d+)\" format=\"([^\"]*)\"")

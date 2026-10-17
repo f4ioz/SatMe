@@ -82,7 +82,8 @@ class EmissionDatvPcTest {
                         "TIMEOUT", "OPEN", "CLOSE" -> o.write("0\n".toByteArray())
                         "WRITEBUF" -> {
                             val n = m[2].toInt()
-                            o.write("$n\n".toByteArray()); o.flush()
+                            // As the real daemon: 0 (ready), the bytes, then the count pushed.
+                            o.write("0\n".toByteArray()); o.flush()
                             val d = lis(e, n)
                             synchronized(echantillons) { echantillons.write(d) }
                             octets += n
