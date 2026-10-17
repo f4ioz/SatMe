@@ -101,7 +101,9 @@ object PlanInterieur {
 /** Which transmitter sends. */
 enum class Emetteur(val cle: String, val libelle: String) {
     PLUTO("pluto", "ADALM-PLUTO"),
-    HACKRF("hackrf", "HackRF One");
+    HACKRF("hackrf", "HackRF One"),
+    /** An AD9361 as the Pluto (12-bit DAC, the same attenuation): the Pluto's rules, QO-100 included. */
+    BLADERF("bladerf", "bladeRF 2.0");
 
     companion object {
         fun de(cle: String?): Emetteur = entries.firstOrNull { it.cle == cle } ?: PLUTO
@@ -114,7 +116,7 @@ data class DemandeEmission(
     val srKs: Int,
     val modcod: Modcod,
     val rolloff: Rolloff,
-    /** TX gain: the Pluto's (dB, ≤ 0: an attenuation), the HackRF's TX VGA (dB, ≥ 0). */
+    /** TX gain: the Pluto's and the bladeRF's (dB, ≤ 0: an attenuation), the HackRF's TX VGA (dB, ≥ 0). */
     val gainDb: Double,
     val dureeS: Int = ReglesEmission.DUREE_DEFAUT_S,
     /** Into a dummy load: any frequency, the gain held at or below [ReglesEmission.GAIN_CHARGE_DB]. */
@@ -168,6 +170,7 @@ object ReglesEmission {
             d.interieur -> PlanInterieur.refus(d.frequenceKhz, d.srKs, d.rolloff.alpha)
             !d.chargeFictive -> PlanQo100.refus(d.frequenceKhz, d.srKs, d.rolloff.alpha)
             hackrf && d.frequenceKhz !in 1_000L..6_000_000L -> "fréquence hors de la plage du HackRF"
+            d.emetteur == Emetteur.BLADERF -> if (d.frequenceKhz !in 47_000L..6_000_000L) "fréquence hors de la plage du bladeRF" else null
             !hackrf && d.frequenceKhz !in 70_000L..6_000_000L -> "fréquence hors de la plage de l'ADALM-PLUTO"
             else -> null
         }

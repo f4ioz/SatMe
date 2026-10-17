@@ -15,6 +15,8 @@ import fr.f4ioz.satcombo.datv.ReglesEmission
 import fr.f4ioz.satcombo.datv.s2.RecepteurDvbs2
 import fr.f4ioz.satcombo.datv.s2.Rolloff
 import fr.f4ioz.satcombo.plateforme.StockageMemoire
+import fr.f4ioz.satcombo.sdr.Bladerf
+import fr.f4ioz.satcombo.sdr.FauxBladerf
 import fr.f4ioz.satcombo.sdr.FauxHackrf
 import fr.f4ioz.satcombo.sdr.HackrfEmission
 import org.junit.After
@@ -551,6 +553,107 @@ class EmissionDatvPcTest {
         e.arrete()
         t += 5000
         assertNotNull(e.dis("après"))
+    }
+
+    // ------------------------------------------------------------ bladeRF (a fake bladeRF-cli only)
+
+    private val fauxBladerf = ArrayList<FauxBladerf>()
+    @After fun finBladerf() { Bladerf.arreteTout(); fauxBladerf.forEach { it.close() } }
+
+    private fun bladerf(f: FauxBladerf?, ts: EmissionDatvPc.FabriqueTs, occupe: String? = null,
+                        reception: () -> EmissionDatvPc.Reception? = { null }): EmissionDatvPc {
+        assumeTrue("sh ou mkfifo absent", File("/bin/sh").canExecute() && File("/usr/bin/mkfifo").canExecute())
+        // Never the PATH: no real bladeRF-cli, ever.
+        val e = EmissionDatvPc(StockageMemoire(), File(System.getProperty("java.io.tmpdir"), "satme-test-datv"), { "F4IOZ" },
+            plutoHote = { "127.0.0.1" }, plutoPort = { 9 }, plutoOccupe = { "le Pluto ne doit pas compter" }, bladerfOccupe = { occupe },
+            bladerfProgramme = { f?.cli?.path }, reception = reception, fabrique = ts)
+        e.emetteur = Emetteur.BLADERF
+        if (f != null) fauxBladerf += f
+        return e
+    }
+
+    @Test
+    fun bladerf_vers_qo100_bout_en_bout_gain_bas_par_defaut() {
+        val f = FauxBladerf(limite = 8_000_000L)
+        val ts = TsSynthetique(300)
+        val e = bladerf(f, ts)
+        e.modcodTexte = "QPSK 2/3"; e.srKs = 333; e.rolloff = Rolloff.A25; e.pilotes = true; e.courtes = false
+        e.frequenceKhz = 2_409_750L
+        // Its own gain, low by default; the Pluto's untouched.
+        assertEquals(EmissionDatvPc.GAIN_BLADERF_DEFAUT_DB, e.json().getDouble("gain"), 0.0)
+        e.regleGain(-45.0)
+        assertEquals(-45.0, e.gainBladerf, 0.0)
+        assertEquals(ReglesEmission.GAIN_DEFAUT_DB, e.gainDb, 0.0)
+        assertEquals(bladerf(null, ts).demarre(true, false), e.conseilBladerf())
+        val i = e.detecteBladerf()
+        assertEquals("aac46df92fb64a47a150cc2ab9b40e1f", i.carte!!.serie)
+        assertNull(e.demarre(confirme = true, chargeFictive = false))
+        assertTrue(attends(10_000) { e.vie(); f.compte >= 8_000_000L })
+        val j = e.json()
+        assertTrue(j.getBoolean("emet"))
+        assertEquals("bladerf", j.getString("emetteurEnCours"))
+        assertEquals(-45.0, j.getDouble("gainApplique"), 0.0)
+        // While sending: a new gain goes to the bladeRF, under the ceiling of Réglages (−10 dB).
+        assertEquals(-10.0, e.regleGain(0.0)!!, 0.0)
+        e.arrete()
+        assertFalse(e.etat.emet)
+        assertEquals("off", f.txActif)
+        assertEquals(0, Bladerf.enCours())
+        val c = f.commandes
+        assertEquals(listOf("set gain tx1 21", "set frequency tx1 2409750000", "set samplerate tx1 2331000", "set bandwidth tx1 2331000"), c.take(4))
+        assertTrue(c.toString(), c.containsAll(listOf("tx start", "set gain tx1 56", "tx stop", "quit")))
+        assertTrue(f.args.last().startsWith("-d *:serial=aac46df92fb64a47a150cc2ab9b40e1f -i"))
+        // Its SC16 Q11 samples, decoded back: the same packets.
+        val b = f.iq
+        val iq = ShortArray(b.size / 2) { (((b[2 * it].toInt() and 0xff) or (b[2 * it + 1].toInt() shl 8)) * 16).toShort() }
+        val rx = RecepteurDvbs2(Rolloff.A25, 7)
+        val d = rx.decode(rx.symboles(iq))
+        assertTrue("${d.paquets.size} paquets", d.paquets.size >= 200)
+        for (k in d.paquets.indices) assertArrayEquals("paquet $k", ts.paquets[k], d.paquets[k])
+        assertEquals(0, d.ldpcEchecs)
+    }
+
+    @Test
+    fun bladerf_interieur_et_charge_bride_a_moins_40_occupe_refuse() {
+        val f = FauxBladerf()
+        val e = bladerf(f, TsSynthetique(50))
+        e.gainMaxDb = 0.0
+        e.regleGain(0.0)
+        e.frequenceInterieurKhz = 2_320_000L
+        assertNull(e.demarre(true, chargeFictive = false, interieur = true))
+        assertTrue(e.etat.interieur)
+        assertEquals(-40.0, e.json().getDouble("gainApplique"), 0.0)
+        assertEquals(-40.0, e.regleGain(0.0)!!, 0.0)
+        e.arrete()
+        assertTrue(f.commandes.filter { it.startsWith("set gain") }.all { it == "set gain tx1 26" })
+        assertNull(e.demarre(true, chargeFictive = true))
+        assertEquals(-40.0, e.json().getDouble("gainApplique"), 0.0)
+        e.arrete()
+        assertEquals(0, Bladerf.enCours())
+        // The bladeRF receiving (SDR tab): refused, nothing started; the Pluto's state does not count.
+        val n = f.commandes.size
+        assertEquals("le bladeRF reçoit", bladerf(f, TsSynthetique(5), occupe = "le bladeRF reçoit").demarre(true, false, interieur = true))
+        assertEquals(n, f.commandes.size)
+    }
+
+    @Test
+    fun bladerf_boucle_fermee_sur_la_balise() {
+        val f = FauxBladerf()
+        var r: EmissionDatvPc.Reception? = EmissionDatvPc.Reception(true, 8.0, Datv.BALISE_KHZ, "QO-100")
+        val e = bladerf(f, TsSynthetique(50), reception = { r })
+        e.frequenceKhz = 2_409_750L
+        e.gainMaxDb = 0.0
+        e.regleGain(-20.0)
+        e.tic()
+        assertNotNull(e.merBalise)
+        assertNull(e.demarre(true, false))
+        // Our own signal stronger than the beacon: the gain stepped down by 1 dB.
+        r = EmissionDatvPc.Reception(true, 9.0, 2_409_750L + fr.f4ioz.satcombo.datv.PlanQo100.DECALAGE_KHZ, "F4IOZ")
+        e.vie(); e.tic()
+        assertEquals(-21.0, e.json().getDouble("gainApplique"), 0.0)
+        assertTrue(f.commandes.contains("set gain tx1 45"))
+        e.arrete()
+        assertEquals(0, Bladerf.enCours())
     }
 
     companion object {

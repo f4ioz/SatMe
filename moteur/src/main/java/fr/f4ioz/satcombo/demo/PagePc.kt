@@ -1135,7 +1135,7 @@ object PagePc {
       <div class="t">Émission · <span id="e-titre">ADALM-PLUTO</span> <span id="e-pastille" class="pastille" style="color:var(--gris)">arrêtée</span></div>
       <div class="petit">DVB-S2 fait par SatMe, vers le transpondeur large bande de QO-100 ; le MiniTiouner ci-dessus vérifie le signal à la descente.</div>
       <div class="ligne"><span class="petit" style="min-width:86px">Émetteur</span><select id="e-emetteur" onchange="eRegle()" style="max-width:150px">
-        <option value="pluto">ADALM-PLUTO</option><option value="hackrf">HackRF One</option></select>
+        <option value="pluto">ADALM-PLUTO</option><option value="hackrf">HackRF One</option><option value="bladerf">bladeRF 2.0</option></select>
         <span class="petit" id="e-hackrf-info" style="flex:1"></span><button id="e-hackrf-det" onclick="eDetecte()" title="hackrf_info : liste les HackRF branchés, n'émet rien">Détecter</button></div>
       <div id="e-hackrf-l" hidden>
         <div class="ligne"><span class="petit" style="min-width:86px">Outils HackRF</span><input id="e-hackrf-outil" placeholder="vide : hackrf_transfer du PATH" onchange="eRegle()"></div>
@@ -1144,6 +1144,7 @@ object PagePc {
         <div class="petit" id="e-hackrf-dec-info"></div>
         <div class="avert" id="e-hackrf-note"></div>
       </div>
+      <div class="petit" id="e-bladerf-l" hidden></div>
       <div class="ligne"><span class="petit" style="min-width:86px">MODCOD</span><select id="e-modcod" onchange="eRegle()" style="max-width:120px"></select>
         <label class="petit"><input type="checkbox" id="e-courtes" onchange="eRegle()"> trames courtes</label>
         <label class="petit"><input type="checkbox" id="e-pilotes" onchange="eRegle()"> pilotes</label></div>
@@ -1444,7 +1445,7 @@ object PagePc {
     <div class="carte">
       <div class="t" id="r-cle-t">La clé</div>
       <div class="ligne" style="margin-top:0"><span class="petit" style="min-width:70px">Récepteur</span>
-        <select id="r-recepteur" onchange="rRegle('recepteur=' + this.value)"><option value="rtl">Clé RTL-SDR (rtl_tcp)</option><option value="pluto">ADALM-PLUTO (réseau)</option></select></div>
+        <select id="r-recepteur" onchange="rRegle('recepteur=' + this.value)"><option value="rtl">Clé RTL-SDR (rtl_tcp)</option><option value="pluto">ADALM-PLUTO (réseau)</option><option value="bladerf">bladeRF 2.0 (USB)</option></select></div>
       <div class="ligne"><span class="petit" style="min-width:70px">Gain</span><select id="r-gain" onchange="rRegle('gain=' + this.value)"></select>
         <label class="petit" id="r-agc-l"><input type="checkbox" id="r-agc" onchange="rRegle('agc=' + (this.checked ? 1 : 0))"> CAG numérique</label></div>
       <div class="ligne"><span class="petit" style="min-width:70px">Erreur</span><input id="r-ppm" style="max-width:70px"><span class="petit">ppm</span><button onclick="rRegle('ppm=' + enc(v('r-ppm')))">Appliquer</button></div>
@@ -1460,6 +1461,12 @@ object PagePc {
           <button onclick="rRegle('plutoHote=' + enc(v('r-pluto-hote')) + '&plutoPort=' + enc(v('r-pluto-port')))">Enregistrer</button></div>
         <div class="petit" style="margin-top:4px">Branché en USB, l'ADALM-PLUTO répond sur 192.168.2.1 ; sur le réseau, donner son adresse. De 70 MHz à 6 GHz : derrière un LNB (FI vers 739 MHz) ou un convertisseur, comme la clé.</div>
         <div class="petit" style="margin-top:4px">Réception seulement : SatMe ne règle que son côté réception (oscillateur, débit, bande, gain) et n'émet jamais.</div>
+      </details>
+      <details style="margin-top:6px" id="r-liaison-bladerf" hidden open><summary class="petit" style="cursor:pointer">bladeRF 2.0 (bladeRF-cli)</summary>
+        <div class="ligne"><span class="petit" id="r-bladerf-info" style="flex:1"></span><button onclick="rDetecteBladerf()" title="bladeRF-cli -e info : lit le modèle, le numéro et le FPGA, n'émet rien">Détecter</button></div>
+        <div class="ligne"><input id="r-bladerf-outil" placeholder="vide : bladeRF-cli du PATH" onchange="rRegle('bladerfOutil=' + enc(v('r-bladerf-outil')))"></div>
+        <div class="petit" id="r-bladerf-prog"></div>
+        <div class="petit" style="margin-top:4px">De 70 MHz à 6 GHz, sur un port USB 3. Réception seulement : SatMe ne donne à bladeRF-cli que des commandes RX1 (oscillateur, débit, bande, gain) et n'émet jamais d'ici.</div>
       </details>
     </div>
     <div id="ph-slot-sdr"></div>
@@ -3753,10 +3760,15 @@ async function ticEmission() {
   const charge = g('e-charge').checked;
   txt('e-bande', charge ? '' : j.refusBande);
   // The transmitter: the Pluto, or the HackRF (tests only) with what hackrf_info found.
-  const hk = j.emetteur === 'hackrf';
+  const hk = j.emetteur === 'hackrf', bl = j.emetteur === 'bladerf';
   txt('e-titre', j.emetteurNom); document.querySelectorAll('.e-nom').forEach(x => x.textContent = j.emetteurNom);
-  g('e-hackrf-l').hidden = !hk; g('e-hackrf-det').hidden = !hk; g('e-vga-l').hidden = !hk; g('e-gain-l').hidden = hk;
-  txt('e-hackrf-info', !hk ? '' : !j.hackrf.lu ? 'non détecté (bouton Détecter)' : (j.hackrf.cartes.length ? j.hackrf.cartes.map(c => c.libelle).join(', ') : j.hackrf.message));
+  g('e-hackrf-l').hidden = !hk; g('e-hackrf-det').hidden = !hk && !bl; g('e-vga-l').hidden = !hk; g('e-gain-l').hidden = hk;
+  g('e-hackrf-det').title = bl ? 'bladeRF-cli -e info : lit le modèle, le numéro et le FPGA, n’émet rien' : 'hackrf_info : liste les HackRF branchés, n’émet rien';
+  txt('e-hackrf-info', bl ? (!j.bladerf.lu ? 'non détecté (bouton Détecter)' : j.bladerf.libelle || j.bladerf.message)
+    : !hk ? '' : !j.hackrf.lu ? 'non détecté (bouton Détecter)' : (j.hackrf.cartes.length ? j.hackrf.cartes.map(c => c.libelle).join(', ') : j.hackrf.message));
+  g('e-bladerf-l').hidden = !bl;
+  txt('e-bladerf-l', !bl ? '' : (j.bladerfProgramme ? 'bladeRF-cli : ' + j.bladerfProgramme : j.bladerfConseil) +
+    ' · gain = atténuation comme le Pluto (0 dB = pleine puissance ; bladeRF-cli reçoit ' + j.bladerfDecalageGain + ' + gain), bridé à −40 dB sur charge et en intérieur, relu après le départ ; QO-100 permis (CNA 12 bits) — filtre et amplificateur à prévoir.');
   txt('e-hackrf-prog', j.hackrfProgramme ? 'hackrf_transfer : ' + j.hackrfProgramme : j.hackrfConseil);
   txt('e-hackrf-note', 'QO-100 : ' + j.hackrfPasQo100 + '.');
   const dc = j.decalage;
@@ -3764,8 +3776,8 @@ async function ticEmission() {
   txt('e-hackrf-dec-info', !hk || !j.hackrfDecalage ? '' : !dc ? '' : dc.refus ? dc.refus :
     'Essai en intérieur : oscillateur du HackRF sur ' + mhz3(dc.loKhz) + ' MHz, signal ' + (dc.decalageKhz > 0 ? '+' : '') + Math.round(dc.decalageKhz) + ' kHz plus loin');
   txt('e-charge-gain', hk ? 'gain VGA ≤ ' + j.vgaMax + ' dB, amplificateur RF coupé' : 'gain bridé à −40 dB');
-  txt('e-int-p', hk ? 'HackRF : amplificateur RF coupé, gain VGA ≤ ' + j.vgaMax + ' dB' : 'ADALM-PLUTO : gain ≤ ' + j.intGainPluto + ' dB');
-  txt('e-calc', 'TS ' + (j.debitTs / 1000).toFixed(1).replace('.', ',') + ' kbit/s · ' + Math.round(j.occupeKhz) + ' kHz occupés · ' + (hk ? 'HackRF ' : 'Pluto ') +
+  txt('e-int-p', hk ? 'HackRF : amplificateur RF coupé, gain VGA ≤ ' + j.vgaMax + ' dB' : (bl ? 'bladeRF' : 'ADALM-PLUTO') + ' : gain ≤ ' + j.intGainPluto + ' dB');
+  txt('e-calc', 'TS ' + (j.debitTs / 1000).toFixed(1).replace('.', ',') + ' kbit/s · ' + Math.round(j.occupeKhz) + ' kHz occupés · ' + (hk ? 'HackRF ' : bl ? 'bladeRF ' : 'Pluto ') +
     (j.echantillons / 1e6).toFixed(3).replace('.', ',') + ' Méch/s (' + j.sps + ' par symbole)' + (hk ? ' · filtre ' + (j.filtreHackrf / 1e6).toFixed(2).replace('.', ',') + ' MHz' : '') +
     (j.indicatif ? ' · service « ' + j.indicatif + ' »' : ' · indicatif manquant (Réglages)'));
   const p = g('e-pastille');
@@ -3779,7 +3791,7 @@ async function ticEmission() {
   const dir = g('e-direct');
   dir.hidden = !j.emet;
   if (j.emet) dir.innerHTML = '<b>' + (j.charge ? 'Sur charge' : j.interieur ? 'Essai en intérieur' : 'En émission') + '</b> sur ' + mhz3(j.khzEnCours) + ' MHz · reste <b>' + duree(j.restant * 1000) + '</b>' +
-    (j.emetteurEnCours === 'hackrf' ? ' · HackRF, VGA ' + j.gainApplique + ' dB, amplificateur coupé' : ' · gain ' + j.gainApplique + ' dB') + '<br>TS reçu de ffmpeg ' + j.tsKbps + ' kbit/s · trames vides ' + Math.round(j.tramesVidesPct) + ' % · manques ' + j.manques +
+    (j.emetteurEnCours === 'hackrf' ? ' · HackRF, VGA ' + j.gainApplique + ' dB, amplificateur coupé' : (j.emetteurEnCours === 'bladerf' ? ' · bladeRF' : '') + ' · gain ' + j.gainApplique + ' dB') + '<br>TS reçu de ffmpeg ' + j.tsKbps + ' kbit/s · trames vides ' + Math.round(j.tramesVidesPct) + ' % · manques ' + j.manques +
     (j.tsPerdus ? ' · paquets perdus ' + j.tsPerdus : '') + (j.ecretages ? ' · écrêtages ' + j.ecretages : '') + ' · CPU ' + (j.cpu >= 0 ? Math.round(j.cpu) + ' %' : '—');
   if (!j.emet && (j.raison || j.erreur)) txt('e-msg', 'Dernière émission : ' + [j.raison, j.erreur].filter(x => x).join(' — '));
   // The closed loop: our signal and the beacon, both measured by the MiniTiouner.
@@ -3848,8 +3860,9 @@ function eRxRegle(k, sr) {
   ticDatv();
 }
 async function eDetecte() {
-  txt('e-hackrf-info', 'lecture (hackrf_info)…');
-  try { await fetch('api/datv/emission/hackrf', { method: 'POST' }); } catch (x) {}
+  const bl = EM && EM.emetteur === 'bladerf';
+  txt('e-hackrf-info', bl ? 'lecture (bladeRF-cli -e info)…' : 'lecture (hackrf_info)…');
+  try { await fetch('api/datv/emission/' + (bl ? 'bladerf' : 'hackrf'), { method: 'POST' }); } catch (x) {}
   setTimeout(ticEmission, 100);
 }
 function eParams() {
@@ -3872,10 +3885,10 @@ async function eEmettre() {
     : 'gain ' + Math.min(parseFloat(v('e-gain')), charge ? EM.gainCharge : EM.intGainPluto) + ' dB au plus';
   const q = inter ? 'ESSAI EN INTÉRIEUR avec le ' + EM.emetteurNom + ' à ' + v('e-int-mhz') + ' MHz, ' + v('e-sr') + ' kS/s, ' + gainTxt + ', ' + v('e-int-duree') + ' min au plus.\n\n' +
       'Indicatif ' + EM.indicatif + '. Radioamateur titulaire d’une licence, petite antenne à l’intérieur, aucun amplificateur ?'
-    : charge ? 'TEST SUR CHARGE à ' + v('e-mhz') + ' MHz, ' + gainTxt + '.\n\nLa sortie TX du ' + (hk ? 'HackRF' : 'Pluto') + ' est-elle bien sur une charge fictive ou un atténuateur, et rien d’autre ?'
-    : 'ÉMETTRE vers QO-100 à ' + v('e-mhz') + ' MHz (descente ' + mhz3(EM.descenteKhz) + ' MHz), ' + v('e-sr') + ' kS/s, ' + v('e-modcod') + ', gain ' + v('e-gain') + ' dB, ' + v('e-duree') + ' min au plus.\n\nCanal libre vérifié ? Indicatif ' + EM.indicatif + '.';
+    : charge ? 'TEST SUR CHARGE à ' + v('e-mhz') + ' MHz, ' + gainTxt + '.\n\nLa sortie TX du ' + (hk ? 'HackRF' : EM.emetteur === 'bladerf' ? 'bladeRF' : 'Pluto') + ' est-elle bien sur une charge fictive ou un atténuateur, et rien d’autre ?'
+    : 'ÉMETTRE vers QO-100 avec le ' + EM.emetteurNom + ' à ' + v('e-mhz') + ' MHz (descente ' + mhz3(EM.descenteKhz) + ' MHz), ' + v('e-sr') + ' kS/s, ' + v('e-modcod') + ', gain ' + v('e-gain') + ' dB, ' + v('e-duree') + ' min au plus.\n\nCanal libre vérifié ? Indicatif ' + EM.indicatif + '.';
   if (!confirm(q)) return;
-  txt('e-msg', 'démarrage : ffmpeg, puis ' + (hk ? 'hackrf_transfer…' : 'l’ADALM-PLUTO…'));
+  txt('e-msg', 'démarrage : ffmpeg, puis ' + (hk ? 'hackrf_transfer…' : EM.emetteur === 'bladerf' ? 'bladeRF-cli…' : 'l’ADALM-PLUTO…'));
   let j = null;
   try { j = await (await fetch('api/datv/emission/demarre?confirme=1&charge=' + (charge ? 1 : 0) + '&interieur=' + (inter ? 1 : 0), { method: 'POST' })).json(); } catch (x) {}
   txt('e-msg', j && j.ok === false ? 'Refusé : ' + j.erreur : (j ? 'émission en cours' : 'pas de réponse de SatMe-PC'));
@@ -5360,10 +5373,16 @@ let R = null, rSpan = 48000, rCascade = [], rTrames = -1, rDernier = null;
 const R820T = [0, 9, 14, 27, 37, 77, 87, 125, 144, 157, 166, 197, 207, 229, 254, 280, 297, 328, 338, 364, 372, 386, 402, 421, 434, 439, 445, 480, 496];
 // The gains offered: the dongle's tuner table, or the Pluto's 0 to 71 dB (tenths, as the dongle's).
 function remplitGain(pluto) {
-  const l = pluto ? Array.from({ length: 72 }, (_, k) => k * 10) : R820T;
+  // pluto: true (0 to 71 dB), 'bladerf' (0 to 60 dB), false (the dongle's table).
+  const l = pluto ? Array.from({ length: pluto === 'bladerf' ? 61 : 72 }, (_, k) => k * 10) : R820T;
   g('r-gain').innerHTML = '<option value="-1">' + (pluto ? 'automatique (CAG lente)' : 'automatique') + '</option>' +
     l.map(x => '<option value="' + x + '">' + (x / 10).toLocaleString('fr-FR') + ' dB</option>').join('');
-  g('r-gain').dataset.src = pluto ? 'pluto' : 'rtl';
+  g('r-gain').dataset.src = pluto === 'bladerf' ? 'bladerf' : pluto ? 'pluto' : 'rtl';
+}
+async function rDetecteBladerf() {
+  txt('r-bladerf-info', 'lecture (bladeRF-cli -e info)…');
+  try { await post('api/sdr/bladerf'); } catch (x) {}
+  ticSdr();
 }
 remplitGain(false);
 async function rRegle(q) { await post('api/sdr/reglage?' + q); ticSdr(); }
@@ -5385,14 +5404,19 @@ function rendSdr() {
   coche('r-lance', r.lance); coche('r-bias', r.bias);
   const val = (id, x) => { if (document.activeElement !== g(id)) g(id).value = String(x); };
   // The receiver: the dongle (rtl_tcp) or the Pluto, each with its own settings shown.
-  const pluto = r.recepteur === 'pluto';
-  if (g('r-gain').dataset.src !== (pluto ? 'pluto' : 'rtl')) remplitGain(pluto);
-  txt('r-titre', pluto ? 'ADALM-PLUTO (réseau)' : 'Clé SDR (rtl_tcp)'); txt('r-cle-t', pluto ? 'Le récepteur' : 'La clé');
-  g('r-agc-l').hidden = pluto; g('r-liaison').hidden = pluto; g('r-liaison-pluto').hidden = !pluto;
+  const blade = r.recepteur === 'bladerf', pluto = r.recepteur === 'pluto' || blade;
+  if (g('r-gain').dataset.src !== (blade ? 'bladerf' : pluto ? 'pluto' : 'rtl')) remplitGain(blade ? 'bladerf' : pluto);
+  txt('r-titre', blade ? 'bladeRF 2.0 (USB)' : pluto ? 'ADALM-PLUTO (réseau)' : 'Clé SDR (rtl_tcp)'); txt('r-cle-t', pluto ? 'Le récepteur' : 'La clé');
+  g('r-agc-l').hidden = pluto; g('r-liaison').hidden = pluto; g('r-liaison-pluto').hidden = !pluto || blade; g('r-liaison-bladerf').hidden = !blade;
+  if (blade && r.bladerf) {
+    txt('r-bladerf-info', !r.bladerf.lu ? 'non détecté (bouton Détecter)' : r.bladerf.libelle || r.bladerf.message);
+    txt('r-bladerf-prog', r.bladerfProgramme ? 'bladeRF-cli : ' + r.bladerfProgramme : r.bladerfConseil);
+    val('r-bladerf-outil', r.bladerfOutil || '');
+  }
   val('r-recepteur', r.recepteur || 'rtl');
   if (r.plutoHote !== undefined) { val('r-pluto-hote', r.plutoHote); val('r-pluto-port', r.plutoPort); }
   val('r-mode', r.mode); val('r-bw', r.bw); val('r-sq', r.squelch);
-  val('r-gain', pluto && r.gain >= 0 ? Math.min(710, Math.round(r.gain / 10) * 10) : r.gain);
+  val('r-gain', pluto && r.gain >= 0 ? Math.min(blade ? 600 : 710, Math.round(r.gain / 10) * 10) : r.gain);
   txt('r-sqv', r.squelch <= -120 ? 'ouvert' : r.squelch + ' dB');
   if (!v('r-mhz') && document.activeElement !== g('r-mhz')) g('r-mhz').placeholder = (r.manuelle / 1e6).toFixed(4).replace('.', ',');
   if (document.activeElement !== g('r-ppm')) g('r-ppm').value = r.ppm;

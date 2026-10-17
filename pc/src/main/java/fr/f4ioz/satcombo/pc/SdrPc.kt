@@ -11,6 +11,8 @@ package fr.f4ioz.satcombo.pc
 import fr.f4ioz.satcombo.domain.DopplerTuner
 import fr.f4ioz.satcombo.plateforme.Stockage
 import fr.f4ioz.satcombo.sdr.Dsp
+import fr.f4ioz.satcombo.sdr.Bladerf
+import fr.f4ioz.satcombo.sdr.BladerfSdr
 import fr.f4ioz.satcombo.sdr.PlutoSdr
 import fr.f4ioz.satcombo.sdr.RtlTcp
 import fr.f4ioz.satcombo.sdr.RxChain
@@ -40,6 +42,8 @@ import kotlin.concurrent.thread
  *   computer by the antenna).
  * - **The Pluto** is reached at its address (192.168.2.1 over its USB
  *   cable); it gives the same rate as the dongle, in 16 bits.
+ * - **A bladeRF 2.0** on USB, through `bladeRF-cli` ([BladerfSdr]): the
+ *   same rate, in 16 bits, as the Pluto.
  * - **The frequency** is the followed satellite's downlink with its Doppler,
  *   asked every 250 ms; between blocks, [DopplerTuner] decides whether the
  *   software mixer absorbs it (no click) or the PLL must move.
@@ -204,10 +208,48 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
     var biasTee: Boolean
         get() = stockage.getBoolean(CLE_BIAS, false)
         set(v) { stockage.edit().putBoolean(CLE_BIAS, v).apply(); (cle as? RtlTcp)?.let { runCatching { it.setBiasTee(v) } } }
-    /** The receiver: [RTL] (the dongle, rtl_tcp) or [PLUTO]; taken at the next start. */
+    /** The receiver: [RTL] (the dongle, rtl_tcp), [PLUTO] or [BLADERF]; taken at the next start. */
     var recepteur: String
-        get() = stockage.getString(CLE_RECEPTEUR, RTL).takeIf { it == PLUTO } ?: RTL
-        set(v) { stockage.edit().putString(CLE_RECEPTEUR, if (v == PLUTO) PLUTO else RTL).apply() }
+        get() = stockage.getString(CLE_RECEPTEUR, RTL).takeIf { it == PLUTO || it == BLADERF } ?: RTL
+        set(v) { stockage.edit().putString(CLE_RECEPTEUR, if (v == PLUTO || v == BLADERF) v else RTL).apply() }
+    /** Where bladeRF-cli is (the program or its folder); empty: the PATH. */
+    var bladerfOutil: String
+        get() = stockage.getString(CLE_BLADERF_OUTIL, "") ?: ""
+        set(v) { stockage.edit().putString(CLE_BLADERF_OUTIL, v.trim()).apply() }
+    private fun estBladerf() = recepteur == BLADERF
+    /** The bladeRF transmitting (DATV tab): its receiver may not start meanwhile (one program holds the board). */
+    var emissionBladerf: () -> Boolean = { false }
+    /** The bladeRF receiving here now. */
+    val bladerfEnReception: Boolean get() = cle is BladerfSdr
+
+    /** bladeRF-cli: in the folder set, else in the PATH; null when missing. */
+    fun programmeBladerf(): String? {
+        val r = bladerfOutil
+        if (r.isEmpty()) return OutilsPc.trouve("bladeRF-cli")
+        val f = File(r)
+        val c = if (f.isDirectory) File(f, if (OutilsPc.windows) "bladeRF-cli.exe" else "bladeRF-cli") else f
+        return c.takeIf { it.isFile && (OutilsPc.windows || it.canExecute()) }?.path
+    }
+
+    /** The last `bladeRF-cli -e info`: the board, or why not. */
+    data class InfoBladerf(val carte: Bladerf.Carte? = null, val message: String = "", val lu: Boolean = false)
+    @Volatile var infoBladerf = InfoBladerf(); private set
+
+    /** Reads what the bladeRF is (read-only); not while it receives here, nor while it transmits. */
+    fun detecteBladerf(): InfoBladerf {
+        val i = when {
+            bladerfEnReception -> infoBladerf.copy(message = "", lu = true)
+            emissionBladerf() -> InfoBladerf(infoBladerf.carte, "le bladeRF émet (onglet DATV)", true)
+            else -> programmeBladerf()?.let { p -> Bladerf.detecte(p).let { (c, m) -> InfoBladerf(c, m, true) } }
+                ?: InfoBladerf(message = conseilBladerf(), lu = true)
+        }
+        infoBladerf = i
+        return i
+    }
+
+    fun conseilBladerf(): String = if (OutilsPc.windows)
+        "bladeRF-cli.exe introuvable ; et sous Windows SatMe ne sait pas encore lui passer les échantillons (tube nommé) : bladeRF sous Linux"
+        else "bladeRF-cli introuvable : installer bladerf (sudo apt install bladerf), ou donner son chemin ci-dessous"
     var plutoHote: String
         get() = stockage.getString(CLE_PLUTO_HOTE, PlutoSdr.HOTE) ?: PlutoSdr.HOTE
         set(v) { stockage.edit().putString(CLE_PLUTO_HOTE, v.trim().ifEmpty { PlutoSdr.HOTE }).apply() }
@@ -230,7 +272,8 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
 
     /** The frequencies the chosen receiver tunes to (Hz): the dongle's, or the Pluto's. */
     val gammeHz: LongRange get() = (cle as? PlutoSdr)?.let { it.frequenceMinHz..it.frequenceMaxHz }
-        ?: if (estPluto()) 70_000_000L..6_000_000_000L else 24_000_000L..1_766_000_000L
+        ?: if (estPluto()) 70_000_000L..6_000_000_000L
+        else if (estBladerf()) BladerfSdr.FREQ_MIN_HZ..BladerfSdr.FREQ_MAX_HZ else 24_000_000L..1_766_000_000L
     /** "AUTO": the transmitter's mode; or NFM, USB, LSB, AM. */
     var modeChoisi: String
         get() = stockage.getString(CLE_MODE, "AUTO") ?: "AUTO"
@@ -370,7 +413,7 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
         _etat.update { Etat(statut = "connexion…") }
         val r = runCatching { connecte() }.getOrElse { e ->
             arreteProcessus()
-            _etat.update { Etat(erreur = e.message ?: if (estPluto()) "ADALM-PLUTO injoignable" else "rtl_tcp injoignable") }
+            _etat.update { Etat(erreur = e.message ?: if (estPluto()) "ADALM-PLUTO injoignable" else if (estBladerf()) "bladeRF injoignable" else "rtl_tcp injoignable") }
             return false
         }
         cle = r
@@ -382,7 +425,7 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
             if (biasTee && r is RtlTcp) r.setBiasTee(true)
         }
         cibleMaintenant()
-        val nom = when (r) { is RtlTcp -> RtlTcp.nomTuner(r.tuner); is PlutoSdr -> r.description; else -> "" }
+        val nom = when (r) { is RtlTcp -> RtlTcp.nomTuner(r.tuner); is PlutoSdr -> r.description; is BladerfSdr -> r.description; else -> "" }
         _etat.update { it.copy(actif = true, statut = "réception", erreur = "", tuner = nom) }
         // METEOR: 120 kHz of digital signal, nothing to hear — the raw samples to the picture decoder.
         val m = meteor
@@ -418,6 +461,12 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
 
     /** rtl_tcp started here when asked and nothing answers yet; then the connection, retried while it starts. */
     private fun connecte(): SourceIq {
+        if (estBladerf()) {
+            if (emissionBladerf()) throw java.io.IOException("le bladeRF émet (onglet DATV) : arrêter l'émission d'abord")
+            val prog = programmeBladerf() ?: throw java.io.IOException(conseilBladerf())
+            val c = infoBladerf.carte
+            return BladerfSdr.ouvre(prog, c?.serie.orEmpty(), c?.libelle ?: "bladeRF 2.0")
+        }
         if (estPluto()) {
             if (emissionPluto()) throw java.io.IOException("l'ADALM-PLUTO émet (onglet DATV) : arrêter l'émission d'abord")
             val p = PlutoSdr.connecte(plutoHote, plutoPort)
@@ -523,7 +572,8 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
 
                 val n = if (iq16 != null) r.read16(iq16, 200) else r.read(iq, 200)
                 if (n < 0) {
-                    val pourquoi = if (r is PlutoSdr) r.erreur ?: "l'ADALM-PLUTO a coupé la liaison" else "rtl_tcp a coupé la liaison"
+                    val pourquoi = if (r is PlutoSdr) r.erreur ?: "l'ADALM-PLUTO a coupé la liaison"
+                        else if (r is BladerfSdr) r.erreur ?: "bladeRF-cli s'est arrêté" else "rtl_tcp a coupé la liaison"
                     if (generation == gen) _etat.update { it.copy(actif = false, statut = "arrêtée", erreur = pourquoi) }
                     break
                 }
@@ -590,7 +640,7 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
                     val debit = ((r.octets - dernierOctets) * 1000 / maxOf(1L, maintenant - dernierEtat) / 1024).toInt()
                     dernierOctets = r.octets; dernierEtat = maintenant
                     _etat.update { it.copy(pllHz = pll, fineHz = fine, niveauDb = chaine.levelDb, saturation = chaine.clipRatio,
-                        debitKo = debit, perdus = r.perdus, erreur = if (r is PlutoSdr) r.avertissement else it.erreur) }
+                        debitKo = debit, perdus = r.perdus, erreur = when (r) { is PlutoSdr -> r.avertissement; is BladerfSdr -> r.avertissement; else -> it.erreur }) }
                 }
             }
         } finally {
@@ -619,8 +669,10 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
         const val CLE_PLUTO_HOTE = "pc_sdr_pluto_hote"
         const val CLE_PLUTO_PORT = "pc_sdr_pluto_port"
         const val CLE_COUPE_TX = "pc_sdr_pluto_coupe_tx"
+        const val CLE_BLADERF_OUTIL = "pc_sdr_bladerf_outil"
         const val RTL = "rtl"
         const val PLUTO = "pluto"
+        const val BLADERF = "bladerf"
 
         /** A transmitter's mode as the dongle demodulates it. */
         fun modeDe(m: String): RxMode {

@@ -31,7 +31,7 @@ SatMe runs on a PC (Linux, Windows, Raspberry Pi) and is driven from a browser. 
 - **Sked**: the windows where you and another station both see a satellite, replayed on the map with both skies, and made into a video.
 - **QO-100**: the narrow band transponder's band plan (AMSAT-DL's, in colour on the ruler and atop the waterfall, each segment's rule on hover), the beacon calibration, the station chain (converters), and the transponder seen by the SDR dongle. **Emergency frequency** (10 489.858 – 10 489.865): red banner; SatMe never sends the uplink there to the rig by itself (a memory, a signal clicked, a DATV talkback) — only when tuned by hand. The FT8 free spot is offered only in the digital segments; a mode out of its segment (SSB in the CW segment…) gets a discreet hint.
 - **DATV**: QO-100's wide band with a MiniTiouner, see below.
-- **SDR**: an RTL-SDR dongle on this PC (rtl_tcp started for you) or on the network, or an **ADALM-PLUTO** (below).
+- **SDR**: an RTL-SDR dongle on this PC (rtl_tcp started for you) or on the network, or an **ADALM-PLUTO**, or a **bladeRF 2.0** (below).
 - **Sondes** (radiosondes) and **METEOR** (LRPT pictures) from the dongle.
 - **Son** (sound card, recording), **SSTV** (live decoding, the pictures in a viewer), **APRS**, **FT8 / FT4**.
 - **Planche**: the SSTV sheet, as on the phone — the pictures on a template (a grid, around the title, or an imported ARISS template whose boxes are found), filled in order of reception or by dragging, the texts, then the sheet downloaded full size (PNG).
@@ -140,6 +140,16 @@ In the **SDR** tab, *Récepteur* chooses between the RTL-SDR dongle (rtl_tcp, th
 - It runs at 2.1168 MS/s, brought down here to the dongle's 1.0584 MS/s; its 12 bits are kept to the demodulator. About 8.5 MB/s on the cable.
 - **Gain**: *automatique* is the AD936x's slow AGC; otherwise 0 to 71 dB. The status line shows the board and its firmware.
 - Pulled out, or silent for three seconds: the reception stops and says why.
+
+## The bladeRF 2.0 (USB)
+
+A **Nuand bladeRF 2.0** (micro xA4…) on a **USB 3** port is a third receiver (**SDR** tab, *Récepteur* « bladeRF 2.0 (USB) ») and a third DATV transmitter (**Émission** card, *Émetteur* « bladeRF 2.0 »). SatMe drives it through the **bladeRF-cli** tool in interactive mode, the samples (SC16 Q11) going through a named pipe; nothing else to install on the Java side.
+
+- **Installing (Linux)**: `sudo apt install bladerf` (bladeRF-cli, libbladeRF and the udev rule). The **FPGA** loads by itself when the board opens, from `~/.config/Nuand/bladeRF/hostedxA4.rbf` (or `/usr/share/Nuand/bladeRF/`): put your model's `.rbf` file there. The package's udev rule gives access to the **plugdev** group: `sudo usermod -aG plugdev $USER`, log in again, unplug and plug back. Check with `bladeRF-cli -p`.
+- **Détecter** (SDR tab or Émission card) runs `bladeRF-cli -e info -e version`: read-only, it shows the model, serial number, FPGA and firmware. The serial found is then used to open that board.
+- **Receiving**: as the Pluto, 2.1168 MS/s brought down to the dongle's 1.0584 MS/s, 12 bits kept; 70 MHz to 6 GHz; gain *automatique* (the AD9361's AGC) or 0 to 60 dB. Everything works as with the dongle: QO-100 behind the LNB or a converter, cockpit, panorama, signal classifier, FT8, SSTV, voice, LEILA, METEOR, radiosondes. SatMe only gives bladeRF-cli RX1 commands; silent too long or unplugged, the reception stops and says why. bladeRF-cli's folder is set in the SDR tab (empty: the PATH).
+- **Transmitting**: the Pluto's rules (the same AD9361, a 12-bit converter), QO-100 included. The gain is an **attenuation** like the Pluto's (0 dB = full power; bladeRF-cli gets 66 + gain), **−50 dB by default**, never above the maximum in Réglages, **held at −40 dB** into a load and for the indoor test. Each setting (gain, frequency, rate, band, stream) is checked in bladeRF-cli's answer before `tx start`; once the stream flows the gain is read back (never more than asked). Stop: `tx stop`, pipe closed, `quit`, then the tool ended. A bladeRF receiving does not transmit, and the other way round.
+- **Windows**: bladeRF-cli.exe (Nuand's Windows tools) cannot write into a named pipe: the bladeRF works only under Linux for now; the page says so.
 
 ## DATV — QO-100's wide band with a MiniTiouner
 
@@ -284,6 +294,7 @@ SatMe drives it through the `hackrf_transfer` tool, the samples on its standard 
 - **The MiniTiouner's LNB supply is off** unless chosen.
 - **The ADALM-PLUTO transmits only from the DATV tab**, on a confirmed click, within the rules above; the receiver never writes its transmit side.
 - **The HackRF One transmits only from the DATV tab**, on a confirmed click, for the indoor test or into a load, its RF amplifier always off and its gain 10 dB at most; never to QO-100.
+- **The bladeRF 2.0 transmits only from the DATV tab**, on a confirmed click, within the Pluto's rules (−40 dB at most into a load and indoors); its receiver never sends a transmit command.
 
 ## Before the first try
 

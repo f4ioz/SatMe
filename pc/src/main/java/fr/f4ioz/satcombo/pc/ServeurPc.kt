@@ -650,7 +650,14 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 q["recepteur"]?.let { d.recepteur = it }
                 q["plutoHote"]?.let { d.plutoHote = it }
                 q["plutoPort"]?.toIntOrNull()?.let { d.plutoPort = it }
+                q["bladerfOutil"]?.let { d.bladerfOutil = it }
                 q["bias"]?.let { d.biasTee = it == "1" }
+            }
+            // bladeRF-cli -e info only (it opens the board, prints what it is, sends nothing).
+            "/api/sdr/bladerf" -> {
+                val d = sdr ?: return JSONObject().put("ok", false)
+                val i = d.detecteBladerf()
+                return ok.put("message", i.message).put("libelle", i.carte?.libelle ?: "")
             }
             "/api/sondes/demarrer" -> {
                 val d = sdr ?: return JSONObject().put("ok", false)
@@ -779,6 +786,12 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 val e = emission ?: return JSONObject().put("ok", false)
                 val i = e.detecteHackrf()
                 return ok.put("message", i.message).put("cartes", JSONArray(i.cartes.map { it.libelle }))
+            }
+            // bladeRF-cli -e info only (it opens the board, prints what it is, sends nothing).
+            "/api/datv/emission/bladerf" -> {
+                val e = emission ?: return JSONObject().put("ok", false)
+                val i = e.detecteBladerf()
+                return ok.put("message", i.message).put("libelle", i.carte?.libelle ?: "")
             }
             "/api/datv/emission/arrete" -> emission?.arrete()
             // A chat line in the stream being sent (refused when nothing is being sent: typing never transmits).
@@ -1241,6 +1254,8 @@ object JsonPc {
             .put("squelch", st.sdrSquelchDb).put("son", st.sdrAudio).put("deemph", st.sdrDeemph).put("doppler", st.sdrDopplerTrack)
             .put("suit", d.suitSatellite).put("manuelle", d.manuelleHz).put("hote", d.hote).put("port", d.port).put("lance", d.lance).put("bias", d.biasTee)
             .put("recepteur", d.recepteur).put("plutoHote", d.plutoHote).put("plutoPort", d.plutoPort)
+            .put("bladerfOutil", d.bladerfOutil).put("bladerfProgramme", d.programmeBladerf() ?: "").put("bladerfConseil", d.conseilBladerf())
+            .put("bladerf", d.infoBladerf.let { i -> JSONObject().put("lu", i.lu).put("message", i.message).put("libelle", i.carte?.libelle ?: "") })
             // Fine tuning, the phone's settings: the magnifier, the vernier, the voice netting.
             .put("modeEff", d.modeEffectif()).put("loupe", st.sdrLoupe).put("loupeSpan", st.sdrLoupeSpanHz)
             .put("vernier", st.sdrVernier).put("ratio", st.sdrVernierHzParCm).put("calageVoix", st.sdrCalageVoix)
