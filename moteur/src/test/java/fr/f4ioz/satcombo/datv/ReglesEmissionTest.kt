@@ -121,6 +121,18 @@ class ReglesEmissionTest {
     }
 
     @Test
+    fun bladerf_comme_le_pluto() {
+        val b = d(2_409_750L, 333, Rolloff.A35).copy(emetteur = Emetteur.BLADERF)
+        assertNull(ReglesEmission.refus(b, 0.0))
+        assertNotNull(ReglesEmission.refus(b.copy(frequenceKhz = 2_402_000L), 0.0))
+        // Into a load: its own range, 47 MHz to 6 GHz.
+        assertNull(ReglesEmission.refus(b.copy(chargeFictive = true, frequenceKhz = 50_000L), 0.0))
+        assertTrue(ReglesEmission.refus(b.copy(chargeFictive = true, frequenceKhz = 40_000L), 0.0)!!.contains("bladeRF"))
+        assertEquals(Emetteur.BLADERF, Emetteur.de("bladerf"))
+        assertEquals(-40.0, ReglesEmission.gain(0.0, 0.0, charge = false, interieur = true), 0.0)
+    }
+
+    @Test
     fun echantillons_par_symbole_pour_le_pluto() {
         val attendu = mapOf(125 to 17, 250 to 9, 333 to 7, 500 to 5, 1000 to 3, 1500 to 2, 2000 to 2)
         for ((sr, k) in attendu) {

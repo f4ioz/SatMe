@@ -25,6 +25,8 @@ import fr.f4ioz.satcombo.datv.s2.Modcod
 import fr.f4ioz.satcombo.datv.s2.Rolloff
 import fr.f4ioz.satcombo.datv.s2.SourceTs
 import fr.f4ioz.satcombo.plateforme.Stockage
+import fr.f4ioz.satcombo.sdr.Bladerf
+import fr.f4ioz.satcombo.sdr.BladerfEmission
 import fr.f4ioz.satcombo.sdr.EmetteurDatv
 import fr.f4ioz.satcombo.sdr.HackrfEmission
 import fr.f4ioz.satcombo.sdr.Melangeur
@@ -46,7 +48,8 @@ import kotlin.concurrent.thread
  *
  * A HackRF One ([HackrfEmission]) sends too, for tests only: the indoor
  * test ([PlanInterieur]) and the dummy load, never QO-100. The Pluto does
- * the indoor test as well, at −40 dB at most.
+ * the indoor test as well, at −40 dB at most. A bladeRF 2.0
+ * ([BladerfEmission], an AD9361 as the Pluto) follows the Pluto's rules.
  *
  * **Only on the operator's word**: a start needs the page's confirmation;
  * nothing transmits at startup and nothing of a transmission is kept in the
@@ -64,6 +67,10 @@ class EmissionDatvPc(
     private val plutoPort: () -> Int = { fr.f4ioz.satcombo.sdr.PlutoSdr.PORT },
     /** Why the Pluto is busy (the SDR receiving with it), or null. */
     private val plutoOccupe: () -> String? = { null },
+    /** Why the bladeRF is busy (the SDR receiving with it), or null. */
+    private val bladerfOccupe: () -> String? = { null },
+    /** bladeRF-cli's path (the SDR tab's setting, else the PATH), or null when missing. */
+    private val bladerfProgramme: () -> String? = { OutilsPc.trouve("bladeRF-cli") },
     /** What the MiniTiouner sees now, for the closed loop. */
     private val reception: () -> Reception? = { null },
     /** The transport stream's maker: ffmpeg here, something else in the tests. */
@@ -171,6 +178,10 @@ class EmissionDatvPc(
     var vgaHackrf: Int
         get() = stockage.getInt("datv_tx_hackrf_vga", 0).coerceIn(0, ReglesEmission.HACKRF_VGA_MAX)
         set(v) { stockage.edit().putInt("datv_tx_hackrf_vga", v.coerceIn(0, ReglesEmission.HACKRF_VGA_MAX)).apply() }
+    /** The bladeRF's attenuation (dB, ≤ 0), as the Pluto's gain; low by default. */
+    var gainBladerf: Double
+        get() = stockage.getFloat("datv_tx_bladerf_gain", GAIN_BLADERF_DEFAUT_DB.toFloat()).toDouble()
+        set(v) { if (!v.isNaN()) stockage.edit().putFloat("datv_tx_bladerf_gain", v.coerceIn(BladerfEmission.GAIN_MIN_DB.toDouble(), 0.0).toFloat()).apply() }
     /** Where hackrf_transfer is (the program or its folder); empty: the PATH. */
     var hackrfOutil: String
         get() = stockage.getString("datv_tx_hackrf_outil", "") ?: ""
@@ -326,6 +337,26 @@ class EmissionDatvPc(
         return i
     }
 
+    /** What to do when bladeRF-cli is missing. */
+    fun conseilBladerf(): String =
+        if (OutilsPc.windows) "bladeRF-cli.exe introuvable ; et sous Windows SatMe ne sait pas encore lui passer les échantillons (tube nommé) : bladeRF sous Linux"
+        else "bladeRF-cli introuvable : installer bladerf (sudo apt install bladerf), ou donner son chemin dans l'onglet SDR"
+
+    /** The last read of `bladeRF-cli -e info`: the board, or why not. */
+    data class InfoBladerf(val carte: Bladerf.Carte? = null, val message: String = "", val lu: Boolean = false)
+    @Volatile var infoBladerf = InfoBladerf(); private set
+
+    /** Reads what the bladeRF is (read-only: `bladeRF-cli -e info -e version`). Never while it transmits or receives. */
+    fun detecteBladerf(): InfoBladerf {
+        if (etat.emet) return infoBladerf
+        bladerfOccupe()?.let { return InfoBladerf(infoBladerf.carte, it, true).also { i -> infoBladerf = i } }
+        val prog = bladerfProgramme()
+        val i = if (prog == null) InfoBladerf(message = conseilBladerf(), lu = true)
+            else Bladerf.detecte(prog).let { (c, m) -> InfoBladerf(c, m, true) }
+        infoBladerf = i
+        return i
+    }
+
     fun modcod(): Modcod = Modcod.de(modcodTexte, courtes, pilotes) ?: Modcod.de("QPSK 2/3", courtes, pilotes)!!
 
     /** The transport stream rate (bit/s) for the current parameters. */
@@ -383,14 +414,16 @@ class EmissionDatvPc(
         if (etat.emet) return "déjà en émission"
         val qui = emetteur
         val hackrf = qui == Emetteur.HACKRF
-        if (!hackrf) plutoOccupe()?.let { return it }
+        val blade = qui == Emetteur.BLADERF
+        if (blade) bladerfOccupe()?.let { return it } else if (!hackrf) plutoOccupe()?.let { return it }
         val m = modcod()
         val khz = if (interieur) frequenceInterieurKhz else frequenceKhz
         val duree = if (interieur) dureeInterieurS else dureeS
-        val gain = if (hackrf) vgaHackrf.toDouble() else gainDb
+        val gain = if (hackrf) vgaHackrf.toDouble() else if (blade) gainBladerf else gainDb
         val d = DemandeEmission(khz, srKs, m, rolloff, gain, duree, chargeFictive, indicatif(), interieur, qui)
         ReglesEmission.refus(d, gainMaxDb)?.let { return it }
-        val programme = if (hackrf) outilHackrf("hackrf_transfer") ?: return conseilHackrf() else ""
+        val programme = if (hackrf) outilHackrf("hackrf_transfer") ?: return conseilHackrf()
+            else if (blade) bladerfProgramme() ?: return conseilBladerf() else ""
         // The HackRF's LO beside the signal: the band rules above stay on the signal itself.
         val plan = if (hackrf && hackrfDecalage) DecalageHackrf.plan(khz, srKs, rolloff.alpha, interieur)
             ?: return DecalageHackrf.refus(khz, srKs, rolloff.alpha, interieur) else null
@@ -428,6 +461,14 @@ class EmissionDatvPc(
             val mel = plan?.let { Melangeur(it.decalageHz.toDouble(), debit.toDouble()) }
             refus = hx.demarre(r) { b -> mod.remplis(b, b.size / 2); mel?.applique(b) }
             e = hx
+        } else if (blade) {
+            val bx = BladerfEmission(programme, gainMaxDb = minOf(gainMaxDb, 0.0))
+            val r = BladerfEmission.Reglage(
+                frequenceHz = khz * 1000L, debit = debit, gainDb = gain, dureeMs = duree * 1000L,
+                plafondDb = when { chargeFictive -> ReglesEmission.GAIN_CHARGE_DB; interieur -> PlanInterieur.GAIN_PLUTO_DB; else -> 0.0 },
+                paires = paires(debit), serie = infoBladerf.carte?.serie.orEmpty(), garde = { garde(gen) })
+            refus = bx.demarre(r) { b -> mod.remplis(b, b.size / 2) }
+            e = bx
         } else {
             val px = PlutoEmission(plutoHote(), plutoPort(), gainMaxDb = minOf(gainMaxDb, 0.0))
             val r = PlutoEmission.Reglage(
@@ -522,10 +563,10 @@ class EmissionDatvPc(
 
     /** A new gain while transmitting (clamped as at the start), kept for next time. */
     fun regleGain(db: Double): Double? {
-        gainDb = db
+        if (emetteur == Emetteur.BLADERF) gainBladerf = db else gainDb = db
         val px = tx
-        // The HackRF takes its gain at the start; the Pluto's only goes to the Pluto.
-        return if (px is PlutoEmission) px.regleGain(db) else null
+        // The HackRF takes its gain at the start; the Pluto's only goes to the Pluto, the bladeRF's to the bladeRF.
+        return when (px) { is PlutoEmission -> px.regleGain(db); is BladerfEmission -> px.regleGain(db); else -> null }
     }
 
     /**
@@ -547,11 +588,11 @@ class EmissionDatvPc(
         if (r.verrouille && r.merDb != null && kotlin.math.abs(r.cielKhz - Datv.BALISE_KHZ) < 100 && r.service != indicatif().trim().uppercase()) {
             merBalise = r.merDb; merBaliseMs = t
         }
-        // The closed loop on the beacon: on QO-100 only (the Pluto).
-        if (!etat.emet || etat.chargeFictive || etat.interieur || px !is PlutoEmission) return
+        // The closed loop on the beacon: on QO-100 only (the Pluto, the bladeRF).
+        if (!etat.emet || etat.chargeFictive || etat.interieur || !(px is PlutoEmission || px is BladerfEmission)) return
         val nous = r.verrouille && (r.service.equals(indicatif().trim(), true) ||
             kotlin.math.abs(r.cielKhz - (etat.frequenceKhz + PlanQo100.DECALAGE_KHZ)) < srKs / 2)
-        val g = boucle.mesure(if (nous) r.merDb else null, merBalise, 0L, px.etat.gainDb, t) ?: return
+        val g = boucle.mesure(if (nous) r.merDb else null, merBalise, 0L, px.etatCommun().gainDb, t) ?: return
         px.regleGain(g)
     }
 
@@ -575,7 +616,7 @@ class EmissionDatvPc(
         val min = Modcod.de(adaptMin, courant.courte, courant.pilotes) ?: return
         val max = Modcod.de(adaptMax, courant.courte, courant.pilotes) ?: return
         val nous = nousRecoit(r)
-        val qo100 = !etat.chargeFictive && !etat.interieur && tx is PlutoEmission
+        val qo100 = !etat.chargeFictive && !etat.interieur && (tx is PlutoEmission || tx is BladerfEmission)
         val m = AdaptationModcod.Mesure(nous && r?.merDb != null, if (nous) r?.merDb else null, nous && r?.pertes == true)
         val vers = a.tic(courant, min, max, adaptMarge, m, horloge(), qo100) ?: return
         erreurAdaptation = commute(vers).orEmpty()
@@ -644,7 +685,7 @@ class EmissionDatvPc(
         val o = JSONObject().put("emet", e.emet && pe?.emet == true).put("charge", e.chargeFictive)
             .put("modcod", modcodTexte).put("sr", srKs).put("ro", rolloff.alpha).put("courtes", courtes).put("pilotes", pilotes)
             .put("khz", frequenceKhz).put("descenteKhz", frequenceKhz + PlanQo100.DECALAGE_KHZ)
-            .put("gain", gainDb).put("gainMax", gainMaxDb).put("gainCharge", ReglesEmission.GAIN_CHARGE_DB)
+            .put("gain", if (emetteur == Emetteur.BLADERF) gainBladerf else gainDb).put("gainMax", gainMaxDb).put("gainCharge", ReglesEmission.GAIN_CHARGE_DB)
             .put("duree", dureeS).put("dureeMax", ReglesEmission.DUREE_MAX_S)
             .put("source", source).put("image", image).put("video", video).put("camera", camera).put("hevc", hevc).put("son", son)
             .put("debitTs", mc.debitTs(srKs * 1000.0).toLong()).put("sps", ReglesEmission.sps(srKs))
@@ -674,6 +715,10 @@ class EmissionDatvPc(
             .put("intAvert", PlanInterieur.avertissement(ik, srKs, rolloff.alpha) ?: "")
             .put("filtreHackrf", HackrfEmission.filtre(Math.round(PlanQo100.occupeKhz(srKs, rolloff.alpha) * 1000)))
             .put("hackrfDecalage", hackrfDecalage)
+        // The bladeRF: its tool, what bladeRF-cli -e info found.
+        val ib = infoBladerf
+        o.put("bladerfProgramme", bladerfProgramme() ?: "").put("bladerfConseil", conseilBladerf()).put("bladerfDecalageGain", Bladerf.DECALAGE_GAIN_TX)
+            .put("bladerf", JSONObject().put("lu", ib.lu).put("message", ib.message).put("libelle", ib.carte?.libelle ?: "").put("serie", ib.carte?.serie ?: ""))
         // The HackRF's LO beside the signal (indoor test): where it goes, or why not.
         if (emetteur == Emetteur.HACKRF && hackrfDecalage) {
             val pl = DecalageHackrf.plan(ik, srKs, rolloff.alpha, true)
@@ -714,6 +759,9 @@ class EmissionDatvPc(
 
     companion object {
         val SOURCES = setOf("mire", "animee", "image", "video", "camera")
+
+        /** The bladeRF's attenuation when none was set: low (66 − 50 = 16 dB of libbladeRF's overall gain). */
+        const val GAIN_BLADERF_DEFAUT_DB = -50.0
 
         /** One chat line every 2 s at most. */
         const val CHAT_INTERVALLE_MS = 2000L

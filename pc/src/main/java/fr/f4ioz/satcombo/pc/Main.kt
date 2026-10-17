@@ -159,6 +159,8 @@ fun main(args: Array<String>) {
     val emission = EmissionDatvPc(station.stockage, File(dossier, "tmp"), indicatif = { station.settings.callsign },
         locator = { station.settings.manualLocator }, plutoHote = { sdr.plutoHote }, plutoPort = { sdr.plutoPort },
         plutoOccupe = { if (sdr.plutoEnReception) "l'ADALM-PLUTO reçoit (onglet SDR) : arrêter cette réception d'abord" else null },
+        bladerfOccupe = { if (sdr.bladerfEnReception) "le bladeRF reçoit (onglet SDR) : arrêter cette réception d'abord" else null },
+        bladerfProgramme = { sdr.programmeBladerf() },
         reception = { datv.etat.let { e ->
             if (!e.actif) null else {
                 // The station card received lately, and packets lost now (the quality panel's figures).
@@ -173,6 +175,7 @@ fun main(args: Array<String>) {
         retourParDefaut = { station.qo100.etat.value.let { q ->
             q.descenteHz.takeIf { q.auPoste && q.transpondeur == fr.f4ioz.satcombo.domain.Qo100.NB.cle && fr.f4ioz.satcombo.domain.GardeQo100.proposable(it) } } })
     sdr.emissionPluto = { emission.etat.emet }
+    sdr.emissionBladerf = { emission.etat.emet && emission.etat.emetteur == fr.f4ioz.satcombo.datv.Emetteur.BLADERF }
     // Text and the mark over the transmitted picture; its pictures and videos chosen from the page.
     emission.incrustation = IncrustationDatvPc(station.stockage)
     val fichiersDatv = FichiersDatvPc(File(dossier, "datv-sources"), File(dossier, "tmp/vignettes"))
@@ -205,6 +208,8 @@ fun main(args: Array<String>) {
         // The KISS radio put back as it was.
         runCatching { kiss.deconnecte() }
         runCatching { sdr.arrete() }
+        // Nor any bladeRF-cli (the receiver's stopped just above, gently).
+        runCatching { fr.f4ioz.satcombo.sdr.Bladerf.arreteTout() }
         runCatching { datv.arrete() }
         runCatching { son.arreteEnregistrement(); son.son.arrete() }
         runCatching { station.deconnecteCat() }

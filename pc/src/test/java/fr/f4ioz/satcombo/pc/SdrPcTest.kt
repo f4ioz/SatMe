@@ -350,4 +350,53 @@ class SdrPcTest {
         assertEquals("l'ADALM-PLUTO a coupé la liaison", sdr.etat.value.erreur)
         sdr.arrete()
     }
+
+    @Test
+    fun le_bladerf_a_la_place_de_la_cle() {
+        org.junit.Assume.assumeTrue(File("/bin/sh").canExecute() && File("/usr/bin/mkfifo").canExecute())
+        val f = fr.f4ioz.satcombo.sdr.FauxBladerf()
+        try {
+            val iss = Catalogue.lisTle(File(dossier, "amsat-tle.txt").readText()).first()
+            val p = PassPredictor().upcomingPasses(iss, Observer(48.77, 2.46), iss.epochMs!!, 48, 10.0).first()
+            val milieu = (p.aosEpochMs + p.losEpochMs) / 2
+            val st = StationPc(StockageMemoire(), Catalogue(dossier, enLigne = false), PortsSeriePc(), portee, horloge = { milieu })
+            st.settings.manualLocator = "JN18FS"
+            st.demarre()
+            assertTrue(st.suis(25544))
+            attends { st.etat.value.position != null && st.etat.value.emetteurs.isNotEmpty() }
+            val son = SonPc()
+            val recu = java.util.concurrent.atomic.AtomicInteger()
+            son.auditeurs += { _, n, _ -> recu.addAndGet(n) }
+            val sdr = SdrPc(st, son, StockageMemoire(), portee, horloge = { milieu })
+            st.settings.sdrAudio = false
+            sdr.recepteur = SdrPc.BLADERF
+            assertEquals(SdrPc.BLADERF, sdr.recepteur)
+            // Never the PATH: the fake one only.
+            sdr.bladerfOutil = f.dossier.path
+            assertEquals(f.cli.path, sdr.programmeBladerf())
+            assertEquals("aac46df92fb64a47a150cc2ab9b40e1f", sdr.detecteBladerf().carte!!.serie)
+            assertEquals(70_000_000L..6_000_000_000L, sdr.gammeHz)
+            // It transmits: no reception.
+            sdr.emissionBladerf = { true }
+            assertFalse(sdr.demarre())
+            assertTrue(sdr.etat.value.erreur, sdr.etat.value.erreur.contains("émet"))
+            sdr.emissionBladerf = { false }
+            assertTrue(sdr.demarre())
+            assertTrue(sdr.bladerfEnReception)
+            assertTrue(sdr.etat.value.tuner, sdr.etat.value.tuner.startsWith("bladeRF 2.0"))
+            attends { recu.get() > Dsp.AUDIO_RATE / 4 }
+            attends { f.commandes.any { it.startsWith("set frequency rx1 437") } }
+            val lo = f.commandes.first { it.startsWith("set frequency rx1 437") }.substringAfterLast(' ').toDouble()
+            assertEquals(437_800_000.0, lo, 12_000.0)
+            sdr.arrete()
+            assertFalse(sdr.bladerfEnReception)
+            attends { fr.f4ioz.satcombo.sdr.Bladerf.enCours() == 0 }
+            val c = f.commandes
+            assertTrue(c.toString(), c.containsAll(listOf("set samplerate rx1 2116800", "rx start", "rx stop", "quit")))
+            assertTrue(c.toString(), c.none { it.startsWith("tx") || it.contains("tx1") })
+        } finally {
+            fr.f4ioz.satcombo.sdr.Bladerf.arreteTout()
+            f.close()
+        }
+    }
 }

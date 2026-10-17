@@ -31,7 +31,7 @@ SatMe tourne sur un PC (Linux, Windows, Raspberry Pi) et se pilote depuis un nav
 - **Sked** : les fenêtres où une autre station et vous voyez tous deux un satellite, rejouées sur la carte avec les deux ciels, et faites en vidéo.
 - **QO-100** : le plan de bande du transpondeur bande étroite (celui d'AMSAT-DL, en couleurs sur la réglette et en tête de la cascade, la règle de chaque segment au survol), le calage sur la balise, la chaîne de station (convertisseurs), et le transpondeur vu par la clé SDR. **Fréquence d'urgence** (10 489,858 – 10 489,865) : bandeau rouge ; SatMe n'y envoie jamais la montée au poste de lui-même (mémoire, signal cliqué, retour DATV) — seulement accordée à la main. La place libre FT8 n'est proposée que dans les segments numériques ; un mode hors de son segment (BLU dans la télégraphie…) est signalé discrètement.
 - **DATV** : la bande large de QO-100 avec un MiniTiouner, voir plus bas.
-- **SDR** : une clé RTL-SDR sur ce PC (rtl_tcp démarré pour vous) ou sur le réseau, ou un **ADALM-PLUTO** (plus bas).
+- **SDR** : une clé RTL-SDR sur ce PC (rtl_tcp démarré pour vous) ou sur le réseau, ou un **ADALM-PLUTO**, ou un **bladeRF 2.0** (plus bas).
 - **Sondes** (radiosondes) et **METEOR** (images LRPT) par la clé.
 - **Son** (carte son, enregistrement), **SSTV** (décodage en direct, les images dans une visionneuse), **APRS**, **FT8 / FT4**.
 - **Planche** : la planche SSTV, comme sur le téléphone — les images sur un modèle (une grille, autour du titre, ou un modèle ARISS importé dont les cases sont trouvées), remplies par ordre de réception ou en les glissant, les textes, puis la planche téléchargée en pleine taille (PNG).
@@ -140,6 +140,16 @@ Dans l'onglet **SDR**, *Récepteur* choisit entre la clé RTL-SDR (rtl_tcp, d'or
 - Il tourne à 2,1168 MS/s, ramenés ici aux 1,0584 MS/s de la clé ; ses 12 bits sont gardés jusqu'au démodulateur. Environ 8,5 Mo/s sur le câble.
 - **Gain** : *automatique* est la CAG lente de l'AD936x ; sinon de 0 à 71 dB. La ligne d'état montre la carte et son micrologiciel.
 - Débranché, ou muet trois secondes : la réception s'arrête et dit pourquoi.
+
+## Le bladeRF 2.0 (USB)
+
+Un **Nuand bladeRF 2.0** (micro xA4…) branché sur un port **USB 3** sert de troisième récepteur (onglet **SDR**, *Récepteur* « bladeRF 2.0 (USB) ») et de troisième émetteur DATV (carte **Émission**, *Émetteur* « bladeRF 2.0 »). SatMe le pilote par l'outil **bladeRF-cli** en mode interactif, les échantillons (SC16 Q11) passant par un tube nommé ; rien d'autre à installer côté Java.
+
+- **Installation (Linux)** : `sudo apt install bladerf` (bladeRF-cli, libbladeRF et la règle udev). Le **FPGA** se charge tout seul à l'ouverture depuis `~/.config/Nuand/bladeRF/hostedxA4.rbf` (ou `/usr/share/Nuand/bladeRF/`) : y déposer le fichier `.rbf` de son modèle. La règle udev du paquet donne l'accès au groupe **plugdev** : `sudo usermod -aG plugdev $USER`, se reconnecter, débrancher et rebrancher. Vérifier avec `bladeRF-cli -p`.
+- **Détecter** (onglet SDR ou carte Émission) lance `bladeRF-cli -e info -e version` : lecture seule, il affiche le modèle, le numéro de série, le FPGA et le micrologiciel. Le numéro trouvé sert ensuite à ouvrir cette carte-là.
+- **En réception** : comme le Pluto, à 2,1168 MS/s ramenés aux 1,0584 MS/s de la clé, 12 bits gardés ; de 70 MHz à 6 GHz ; gain *automatique* (CAG de l'AD9361) ou de 0 à 60 dB. Tout marche comme avec la clé : QO-100 derrière le LNB ou un convertisseur, cockpit, panorama, classement des signaux, FT8, SSTV, phonie, LEILA, METEOR, radiosondes. SatMe ne donne à bladeRF-cli que des commandes RX1 ; muet trop longtemps ou débranché, la réception s'arrête et dit pourquoi. Le dossier de bladeRF-cli se donne dans l'onglet SDR (vide : le PATH).
+- **En émission** : les règles du Pluto (même AD9361, convertisseur 12 bits), QO-100 compris. Le gain est une **atténuation** comme celle du Pluto (0 dB = pleine puissance ; bladeRF-cli reçoit 66 + gain), **−50 dB d'origine**, jamais au-dessus du maximum des Réglages, **bridé à −40 dB** sur charge et en essai en intérieur. Chaque réglage (gain, fréquence, débit, bande, flux) est vérifié dans la réponse de bladeRF-cli avant `tx start` ; une fois le flux parti, le gain est relu (jamais plus que demandé). Arrêt : `tx stop`, tube fermé, `quit`, puis l'outil terminé. Un bladeRF qui reçoit n'émet pas, et inversement.
+- **Windows** : bladeRF-cli.exe (outils Nuand pour Windows) ne peut pas écrire dans un tube nommé : le bladeRF n'est pour l'instant utilisable que sous Linux ; la page le dit.
 
 ## DATV — la bande large de QO-100 avec un MiniTiouner
 
@@ -284,6 +294,7 @@ SatMe le pilote par l'outil `hackrf_transfer`, les échantillons sur son entrée
 - **L'alimentation LNB du MiniTiouner est coupée** tant qu'on ne la choisit pas.
 - **L'ADALM-PLUTO n'émet que depuis l'onglet DATV**, sur un clic confirmé, dans les règles ci-dessus ; le récepteur n'écrit jamais son côté émission.
 - **Le HackRF One n'émet que depuis l'onglet DATV**, sur un clic confirmé, en essai en intérieur ou sur charge, son amplificateur RF toujours coupé et son gain à 10 dB au plus ; jamais vers QO-100.
+- **Le bladeRF 2.0 n'émet que depuis l'onglet DATV**, sur un clic confirmé, dans les règles du Pluto (−40 dB au plus sur charge et en intérieur) ; son récepteur n'envoie jamais de commande d'émission.
 
 ## Avant le premier essai
 
