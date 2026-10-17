@@ -32,7 +32,7 @@ class PlutoEmissionTest {
      * An IIO daemon taking TX buffers at [debit] pairs per second; it may
      * stop answering them ([muetApres]) or cut the connection ([coupeApres]).
      */
-    private class FauxIiod(val debit: Double = 2_000_000.0, val muetApres: Int = Int.MAX_VALUE, val coupeApres: Int = Int.MAX_VALUE) {
+    private class FauxIiod(val debit: Double = 2_000_000.0, val muetApres: Int = Int.MAX_VALUE, val coupeApres: Int = Int.MAX_VALUE, val xml: String = XML) {
         val serveur = ServerSocket(0)
         val commandes = CopyOnWriteArrayList<String>()
         val connexions = AtomicInteger()
@@ -62,6 +62,7 @@ class PlutoEmissionTest {
         private fun lis(e: InputStream, n: Int): ByteArray = ByteArray(n).also { var k = 0; while (k < n) { val r = e.read(it, k, n - k); if (r < 0) error("fin"); k += r } }
 
         private fun sert(c: Socket) = runCatching {
+            var ouvert = 0
             c.use {
                 val e = BufferedInputStream(c.getInputStream())
                 val o = c.getOutputStream()
@@ -70,7 +71,7 @@ class PlutoEmissionTest {
                     commandes += l
                     val m = l.split(' ')
                     when (m[0]) {
-                        "PRINT" -> { val x = XML.toByteArray(); o.write("${x.size}\n".toByteArray()); o.write(x); o.write('\n'.code) }
+                        "PRINT" -> { val x = xml.toByteArray(); o.write("${x.size}\n".toByteArray()); o.write(x); o.write('\n'.code) }
                         "READ" -> {
                             val v = attributs[m.drop(1).joinToString(" ")]
                             if (v == null) o.write("-2\n".toByteArray())
@@ -85,11 +86,16 @@ class PlutoEmissionTest {
                             commandes[commandes.size - 1] = "WRITE $cle = $v"
                             o.write("$n\n".toByteArray())
                         }
-                        "TIMEOUT", "OPEN", "CLOSE" -> o.write("0\n".toByteArray())
+                        "TIMEOUT" -> o.write("0\n".toByteArray())
+                        "OPEN" -> { ouvert = m[2].toInt() * 4; o.write("0\n".toByteArray()) }
+                        "CLOSE" -> { ouvert = 0; o.write("0\n".toByteArray()) }
                         "WRITEBUF" -> {
                             if (writebufs >= coupeApres) return@runCatching
                             val n = m[2].toInt()
-                            o.write("$n\n".toByteArray()); o.flush()
+                            // As the real daemon: no buffer open, refused; else 0 (ready), the bytes, then the count pushed.
+                            if (ouvert == 0) { o.write("-9\n".toByteArray()); o.flush(); continue }
+                            if (n != ouvert) { o.write("-22\n".toByteArray()); o.flush(); continue }
+                            o.write("0\n".toByteArray()); o.flush()
                             val d = lis(e, n)
                             octetsRecus += n
                             for (k in 0 until n / 2) { val v = ((d[2 * k].toInt() and 0xFF) or (d[2 * k + 1].toInt() shl 8)).toShort().toInt(); if (kotlin.math.abs(v) > crete) crete = kotlin.math.abs(v) }
@@ -157,9 +163,13 @@ class PlutoEmissionTest {
             "WRITE ad9361-phy OUTPUT voltage0 rf_bandwidth = 2331000",
             "WRITE ad9361-phy OUTPUT altvoltage1 frequency = 2405250000",
             "WRITE cf-ad9361-dds-core-lpc OUTPUT altvoltage0 raw = 0",
+            "WRITE cf-ad9361-dds-core-lpc OUTPUT altvoltage0 scale = 0",
             "WRITE cf-ad9361-dds-core-lpc OUTPUT altvoltage1 raw = 0",
+            "WRITE cf-ad9361-dds-core-lpc OUTPUT altvoltage1 scale = 0",
             "WRITE cf-ad9361-dds-core-lpc OUTPUT altvoltage2 raw = 0",
+            "WRITE cf-ad9361-dds-core-lpc OUTPUT altvoltage2 scale = 0",
             "WRITE cf-ad9361-dds-core-lpc OUTPUT altvoltage3 raw = 0",
+            "WRITE cf-ad9361-dds-core-lpc OUTPUT altvoltage3 scale = 0",
             "TIMEOUT 3000",
             "OPEN cf-ad9361-dds-core-lpc 8192 00000003",
             "WRITEBUF cf-ad9361-dds-core-lpc 32768",
@@ -332,7 +342,36 @@ class PlutoEmissionTest {
         assertNull(PlutoEmission.masqueTx(XML.replace("le:S16/16&gt;&gt;0", "le:S16/32&gt;&gt;0")))
     }
 
+    @Test
+    fun masque_tx_du_contexte_reel() {
+        // A Rev.C, firmware v0.37: I/Q at scan indices 0 and 1, the four tone channels without any.
+        assertTrue(REEL.contains("name=\"cf-ad9361-dds-core-lpc\"") && REEL.contains("altvoltage3"))
+        assertEquals("00000003", PlutoEmission.masqueTx(REEL))
+        val d = PlutoSdr.Contexte.lis(REEL)
+        assertTrue(PlutoEmission.PHY in d.appareils && PlutoEmission.TX_DEV in d.appareils)
+        assertEquals("00000003" to 12, d.masqueRx)
+        // Indices swapped: I would come second, refused.
+        assertNull(PlutoEmission.masqueTx(REEL.replace("<scan-element index=\"0\" format=\"le:S16", "<scan-element index=\"7\" format=\"le:S16")))
+    }
+
+    @Test
+    fun le_vrai_contexte_est_servi_et_l_emission_part() {
+        val f = faux(FauxIiod(xml = REEL))
+        val p = PlutoEmission("127.0.0.1", f.port, gainMaxDb = -10.0)
+        assertNull(p.demarre(PlutoEmission.Reglage(frequenceHz = 1_245_000_000L, debit = 2_116_800L, gainDb = -40.0, dureeMs = 60_000L, paires = 106_496), ton))
+        assertTrue(attends(3000) { f.writebufs >= 3 })
+        assertTrue(p.etat.emet)
+        p.arrete()
+        assertEquals("", p.etat.erreur)
+        assertTrue(f.commandes.contains("OPEN cf-ad9361-dds-core-lpc 106496 00000003"))
+        assertTrue(f.commandes.contains("WRITEBUF cf-ad9361-dds-core-lpc 425984"))
+        assertTrue(f.loEteint)
+    }
+
     companion object {
+        /** The context a real ADALM-PLUTO (Rev.C, firmware v0.37) prints. */
+        val REEL: String = PlutoEmissionTest::class.java.getResourceAsStream("/sdr/pluto-contexte.xml")!!.readBytes().toString(Charsets.UTF_8)
+
         val XML = """<?xml version="1.0" encoding="utf-8"?><context name="local" version-major="0" version-minor="24" version-git="v0.24" description="Linux">""" +
             """<context-attribute name="hw_model" value="Analog Devices PlutoSDR Rev.C (Z7010-AD9364)" />""" +
             """<device id="iio:device0" name="ad9361-phy" ><channel id="voltage0" type="output" ><attribute name="hardwaregain" filename="out_voltage0_hardwaregain" /></channel></device>""" +
