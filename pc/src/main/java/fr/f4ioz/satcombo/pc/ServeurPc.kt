@@ -770,9 +770,14 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
             "/api/datv/emission/reglage" -> {
                 val e = emission ?: return JSONObject().put("ok", false)
                 // A symbol rate or a MODCOD not offered: refused, nothing changed (never kept silently at the old one).
-                EmissionDatvPc.refusReglage(q["sr"], q["modcod"], q["courtes"]?.let { it == "1" } ?: e.courtes)
+                // The standard first: the MODCOD given is read in it (DVB-S: its code rates). Not while transmitting.
+                val norme = q["norme"]?.let { fr.f4ioz.satcombo.datv.Norme.de(it) ?: return JSONObject().put("ok", false).put("erreur", "norme inconnue : $it") }
+                if (norme != null && norme != e.norme && e.etat.emet) return JSONObject().put("ok", false).put("erreur", "norme : arrêter l'émission d'abord")
+                val nrm = norme ?: e.norme
+                EmissionDatvPc.refusReglage(q["sr"], q["modcod"], q["courtes"]?.let { it == "1" } ?: e.courtes, nrm)
                     ?.let { return JSONObject().put("ok", false).put("erreur", it) }
-                q["modcod"]?.let { e.modcodTexte = it }
+                norme?.let { e.norme = it }
+                q["modcod"]?.let { if (nrm == fr.f4ioz.satcombo.datv.Norme.DVBS) e.tauxDvbsTexte = it else e.modcodTexte = it }
                 entier("sr")?.let { e.srKs = it }
                 q["ro"]?.replace(',', '.')?.toDoubleOrNull()?.let { a -> fr.f4ioz.satcombo.datv.s2.Rolloff.de(a)?.let { e.rolloff = it } }
                 q["courtes"]?.let { e.courtes = it == "1" }

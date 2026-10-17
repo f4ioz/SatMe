@@ -94,7 +94,7 @@ class ModulateurDvbs2(
     private val source: SourceTs,
     reculDb: Double = RECUL_DB,
     portee: Int = 16,
-) {
+) : fr.f4ioz.satcombo.datv.ModulateurDatv {
     init {
         require(modcod.refus() == null) { modcod.refus()!! }
         require(sps >= 2)
@@ -138,9 +138,15 @@ class ModulateurDvbs2(
 
     @Volatile var tramesDonnees = 0L; private set
     @Volatile var tramesVides = 0L; private set
-    @Volatile var paquets = 0L; private set
-    @Volatile var ecretages = 0L; private set
+    @Volatile override var paquets = 0L; private set
+    @Volatile override var ecretages = 0L; private set
     @Volatile var symboles = 0L; private set
+
+    override fun partVide(): Double {
+        val vide = tramesVides.toDouble() * CouchePhysique.SYMBOLES_VIDE
+        val tot = vide + tramesDonnees.toDouble() * modcod.symboles
+        return if (tot > 0) vide / tot else 0.0
+    }
 
     /** The next PLFRAME's symbols: data when a DATA FIELD is ready, else a dummy one. */
     fun prochaineTrame(): FloatArray {
@@ -196,7 +202,7 @@ class ModulateurDvbs2(
     }
 
     /** [paires] I/Q pairs into [dst] (2 shorts each), always all of them. */
-    fun remplis(dst: ShortArray, paires: Int) {
+    override fun remplis(dst: ShortArray, paires: Int) {
         var o = 0
         val fin = 2 * paires
         while (o < fin) {
