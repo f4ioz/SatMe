@@ -81,6 +81,7 @@ class BladerfEmission(
     override fun etatCommun(): EtatEmission = etat
 
     @Volatile private var session: SessionBladerf? = null
+    @Volatile private var pairesParTampon = 65_536
 
     /** How often the device ran out of samples to send (the tool's « underrun » lines). */
     val sousCharges: Int get() = session?.sousCharges ?: 0
@@ -119,6 +120,7 @@ class BladerfEmission(
     fun demarre(r: Reglage, producteur: (ShortArray) -> Unit): String? {
         if (actif) return "déjà en émission"
         require(r.paires in 1024..(1 shl 20) && r.paires % 1024 == 0)
+        pairesParTampon = r.paires
         if (r.debit !in DEBIT_MIN..DEBIT_MAX) return "débit de ${r.debit} éch/s hors de la plage du bladeRF (0,52 à 61,44 Méch/s)"
         if (r.frequenceHz !in FREQ_MIN_HZ..FREQ_MAX_HZ) return "fréquence hors de la plage du bladeRF (47 à 6000 MHz)"
         if (r.serie.isNotEmpty() && !r.serie.matches(Bladerf.SERIE)) return "numéro de série du bladeRF invalide"
@@ -152,7 +154,7 @@ class BladerfEmission(
                 if (kotlin.math.abs(de - r.debit) > r.debit / 10_000 + 1) throw IOException("bladeRF : débit $de éch/s au lieu de ${r.debit}")
                 s.envoie("set bandwidth tx1 $bande")
                 s.attend(Regex("TX1 Bandwidth:\\s*\\d+ Hz"), attenteReponseMs, "bande")
-                s.envoie("tx config file=" + f.path + " format=bin repeat=1 delay=0 channel=1 samples=" + r.paires + " buffers=$TAMPONS_CLI xfers=16 timeout=2000")
+                s.envoie("tx config file=" + f.path + " format=bin repeat=1 delay=0 channel=1 samples=$ECHANTILLONS_CLI buffers=$TAMPONS_CLI xfers=$TRANSFERTS_CLI timeout=2000")
                 s.envoie("tx")
                 val fichier = s.attend(Regex("File:\\s*(.+)$"), attenteReponseMs, "réglage du flux").groupValues[1].trim()
                 if (fichier != f.path) throw IOException("bladeRF : flux sur « $fichier » au lieu du tube")
@@ -257,7 +259,7 @@ class BladerfEmission(
                 var b = file.poll()
                 if (b == null) {
                     // At the start the tool fills its own buffers at once and empties the queue: not a lateness.
-                    if (envoyes >= TAMPONS_CLI + 4) manque()
+                    if (envoyes.toLong() * pairesParTampon >= (TAMPONS_CLI + 8L) * ECHANTILLONS_CLI) manque()
                     b = file.poll(500, TimeUnit.MILLISECONDS) ?: continue
                 }
                 if (octets.size != b.size * 2) octets = ByteArray(b.size * 2)
@@ -341,8 +343,14 @@ class BladerfEmission(
     }
 
     companion object {
-        /** The tool's own buffers (filled at once at the start). */
-        const val TAMPONS_CLI = 32
+        /**
+         * The tool's USB buffers: small and many (32 768 samples each, 16 in
+         * flight: 2 MB), as the device likes them. Buffers of 50 ms went beyond
+         * the kernel's 16 MB of USB memory at 6 MS/s (LIBUSB_ERROR_NO_MEM).
+         */
+        const val ECHANTILLONS_CLI = 32_768
+        const val TAMPONS_CLI = 64
+        const val TRANSFERTS_CLI = 16
         /** The AD9361's TX attenuation range, whole dB. */
         const val GAIN_MIN_DB = -89
         const val DEBIT_MIN = 520_834L
