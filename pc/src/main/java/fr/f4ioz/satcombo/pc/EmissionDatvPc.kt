@@ -826,8 +826,8 @@ class EmissionDatvPc(
             if (p.son) l += listOf("-map", if (p.source == "video") "0:a:0?" else "$entreeSon:a:0")
             if (!anime && inc == null) l += listOf("-vf", "$cadre,format=yuv420p")
             l += listOf("-r", ips.toString())
-            l += if (p.hevc) listOf("-c:v", "libx265", "-preset", "veryfast", "-tune", "zerolatency", "-x265-params", "log-level=error:keyint=${ips * 2}:repeat-headers=1")
-                else listOf("-c:v", "libx264", "-preset", "veryfast", "-tune", "zerolatency", "-g", (ips * 2).toString())
+            l += if (p.hevc) listOf("-c:v", "libx265", "-preset", "veryfast", "-tune", "zerolatency", "-x265-params", "log-level=error:keyint=$ips:repeat-headers=1")
+                else listOf("-c:v", "libx264", "-preset", "veryfast", "-tune", "zerolatency", "-g", ips.toString())
             l += listOf("-b:v", video.toString(), "-maxrate", video.toString(), "-bufsize", (video / 2).toString())
             if (p.son) l += listOf("-c:a", "aac", "-b:a", "32k", "-ac", "1")
             l += listOf("-f", "mpegts", "-muxrate", ts.toString(), "-mpegts_original_network_id", "1", "-mpegts_transport_stream_id", "1",

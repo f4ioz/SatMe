@@ -219,7 +219,7 @@ class DatvPc(
                     1 -> { val st = v.toIntOrNull() ?: 0
                         // Lock lost: what named the station goes with it (the next one may be another station).
                         if (st < 3 && e.etat >= 3) { flux.clear(); sdt.oublie(); e = e.copy(service = "", fournisseur = "") }
-                        if (st >= 3 && e.etat < 3) verrouDepuisMs = horloge()
+                        if (st >= 3 && e.etat < 3) { verrouDepuisMs = horloge(); journalImages.enAttente = true; journalSon.enAttente = true }
                         e = e.copy(etat = st, erreur = "") }
                     6 -> e = e.copy(fiTrouveeKhz = v.toLongOrNull() ?: 0L)
                     7 -> iEnAttente = Datv.signe(v)
@@ -459,7 +459,7 @@ class DatvPc(
         while (generation == gen) {
             val n = runCatching { e.read(b) }.getOrDefault(-1)
             if (n < 0) break
-            d.ajoute(b, n) { img -> image = img; etat = etat.copy(images = etat.images + 1) }
+            d.ajoute(b, n) { img -> image = img; etat = etat.copy(images = etat.images + 1); journalImages.enAttente = false; journalSon.enAttente = false }
         }
     }
 
@@ -493,9 +493,15 @@ class DatvPc(
         @Volatile var flux = 0L; private set
         private var position = 0L
         private var derniere: Char? = null
+        /**
+         * Joining a stream, a decoder complains until the next complete
+         * picture with its headers (a second or two): not a coding fault, not
+         * counted until a picture came out.
+         */
+        @Volatile var enAttente = false
 
         /** From the start of the file (the decoder started again, the file emptied). */
-        @Synchronized fun reprends() { position = 0; derniere = null }
+        @Synchronized fun reprends() { position = 0; derniere = null; enAttente = true }
 
         /** From its end: what an earlier reception wrote is not counted. */
         @Synchronized fun saute() { position = f.length(); derniere = null }
@@ -519,6 +525,7 @@ class DatvPc(
         }
 
         fun compte(ligne: String) {
+            if (enAttente) { derniere = null; return }
             val n = QualiteDatv.repetitions(ligne)
             if (n != null) { ajoute(derniere, n); return }
             val c = QualiteDatv.classe(ligne)

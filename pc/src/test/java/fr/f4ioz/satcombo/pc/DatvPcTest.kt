@@ -88,6 +88,15 @@ class DatvPcTest {
             // An earlier reception's lines are skipped.
             j.saute(); j.lis()
             assertEquals(6L, j.video)
+            // A decoder joining the stream: its complaints before the first picture are not counted.
+            j.enAttente = true
+            f.appendText("[hevc @ 0x4] PPS id out of range: 0\n    Last message repeated 60 times\n")
+            j.lis()
+            assertEquals(6L, j.video)
+            j.enAttente = false
+            f.appendText("[hevc @ 0x4] Could not find ref with POC 9\n")
+            j.lis()
+            assertEquals(7L, j.video)
         } finally { f.delete() }
     }
 
