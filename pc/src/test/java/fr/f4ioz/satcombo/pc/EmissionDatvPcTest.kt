@@ -141,6 +141,29 @@ class EmissionDatvPcTest {
             plutoHote = { "127.0.0.1" }, plutoPort = { p.port }, plutoOccupe = { occupe }, reception = reception, fabrique = ts, vieMs = vieMs)
 
     @Test
+    fun debit_ou_modcod_non_prevu_refuse_et_non_garde_en_silence() {
+        // 750 kS/s is not offered: refused (the old rate used to stay, the receiver tuned elsewhere).
+        assertTrue(EmissionDatvPc.refusReglage("750", null, false)!!.contains("750"))
+        assertTrue(EmissionDatvPc.refusReglage("abc", null, false)!!.contains("non prévu"))
+        assertNotNull(EmissionDatvPc.refusReglage(null, "QPSK 7/8", false))
+        assertNotNull(EmissionDatvPc.refusReglage(null, "QPSK 9/10", true))
+        for (sr in Datv.DEBITS) assertNull(EmissionDatvPc.refusReglage(sr.toString(), "QPSK 2/3", false))
+        assertNull(EmissionDatvPc.refusReglage(null, null, true))
+        assertNull(EmissionDatvPc.refusReglage(null, "8PSK 3/4", true))
+    }
+
+    @Test
+    fun debit_du_flux_sur_les_dernieres_secondes() {
+        val t = System.currentTimeMillis()
+        val f = EmissionDatvPc.FluxTs(2000)
+        val p = ByteArray(188).also { it[0] = 0x47; it[1] = 0x01 }
+        repeat(1000) { f.ajoute(p) }
+        assertEquals(295.0, f.kbps(t + 5_100).toDouble(), 4.0)
+        // Nothing more for 5 s: the rate falls to 0 (the average since the start would still say 147).
+        assertEquals(0L, f.kbps(t + 10_200))
+    }
+
+    @Test
     fun rien_sans_confirmation_ni_indicatif_ni_dans_la_bande() {
         val p = FauxPluto().also { ouverts += it }
         val ts = TsSynthetique(10)

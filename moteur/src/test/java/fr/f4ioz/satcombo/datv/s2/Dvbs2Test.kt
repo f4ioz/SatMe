@@ -386,4 +386,41 @@ class Dvbs2Test {
         assertEquals((0 until bascule).toList(), nums.subList(0, bascule))
         assertEquals((1000 until 1000 + nums.size - bascule).toList(), nums.subList(bascule, nums.size))
     }
+
+    // ------------------------------------------------------------ buffers, samples per symbol
+
+    @Test
+    fun remplis_par_morceaux_de_toutes_tailles_meme_signal() {
+        // The transmitters ask for buffers of any size: the samples must not depend on it.
+        val m = Modcod.de("QPSK 2/3", pilotes = true)!!
+        for (sps in listOf(2, 3, 4, 5, 7)) {
+            val total = (m.symboles * 2 + 5_000) * sps
+            val entier = ShortArray(2 * total)
+            ModulateurDvbs2(m, Rolloff.A25, sps, Paquets(7, Int.MAX_VALUE)).remplis(entier, total)
+            val morceaux = ShortArray(2 * total)
+            val mod = ModulateurDvbs2(m, Rolloff.A25, sps, Paquets(7, Int.MAX_VALUE))
+            val r = java.util.Random(sps.toLong())
+            val tailles = intArrayOf(1, 2, 3, 7, sps, sps + 1, 1023, 4096, 32_768, 32_771)
+            var fait = 0
+            while (fait < total) {
+                val n = minOf(total - fait, if (r.nextInt(4) == 0) 1 + r.nextInt(50_000) else tailles[r.nextInt(tailles.size)])
+                val b = ShortArray(2 * n)
+                mod.remplis(b, n)
+                System.arraycopy(b, 0, morceaux, 2 * fait, 2 * n)
+                fait += n
+            }
+            assertArrayEquals("sps $sps", entier, morceaux)
+        }
+    }
+
+    @Test
+    fun bout_en_bout_sps_2_a_7_avec_bruit() {
+        // Each transmitter's samples per symbol, normal frames with pilots, Es/N0 4 dB: every frame decodes.
+        for (sps in listOf(2, 3, 4, 5, 7)) {
+            val (src, b) = boucle(Modcod.de("QPSK 1/2", pilotes = true)!!, Rolloff.A25, sps, 90, esN0Db = 4.0)
+            println("DVB-S2 ×$sps Es/N0 4 dB : ${b.tramesDonnees} trames, ${b.bitsCorriges} bits corrigés, ${b.ldpcEchecs} échecs LDPC")
+            assertEquals("sps $sps", 0, b.ldpcEchecs)
+            verifieOctetPourOctet(src, b)
+        }
+    }
 }

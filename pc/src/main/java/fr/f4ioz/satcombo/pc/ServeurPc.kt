@@ -751,6 +751,9 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
             // Transmission: the parameters (kept), the start (confirmed on the page), the stop, the page's heartbeat, the gain.
             "/api/datv/emission/reglage" -> {
                 val e = emission ?: return JSONObject().put("ok", false)
+                // A symbol rate or a MODCOD not offered: refused, nothing changed (never kept silently at the old one).
+                EmissionDatvPc.refusReglage(q["sr"], q["modcod"], q["courtes"]?.let { it == "1" } ?: e.courtes)
+                    ?.let { return JSONObject().put("ok", false).put("erreur", it) }
                 q["modcod"]?.let { e.modcodTexte = it }
                 entier("sr")?.let { e.srKs = it }
                 q["ro"]?.replace(',', '.')?.toDoubleOrNull()?.let { a -> fr.f4ioz.satcombo.datv.s2.Rolloff.de(a)?.let { e.rolloff = it } }

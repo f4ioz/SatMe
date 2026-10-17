@@ -427,7 +427,7 @@ class EmissionDatvPc(
         // The HackRF's LO beside the signal: the band rules above stay on the signal itself.
         val plan = if (hackrf && hackrfDecalage) DecalageHackrf.plan(khz, srKs, rolloff.alpha, interieur)
             ?: return DecalageHackrf.refus(khz, srKs, rolloff.alpha, interieur) else null
-        // The bladeRF: 4 samples a symbol at least (3 at 1 MS lost whole frames indoors with 8 dB of margin).
+        // The bladeRF: 4 samples a symbol at least (kept; the frames lost at 1 MS indoors do not depend on it, 4 to 8 tried).
         val sps = plan?.sps ?: if (blade) maxOf(4, ReglesEmission.sps(srKs)) else ReglesEmission.sps(srKs)
         val debit = srKs * 1000L * sps
         val debitTs = m.debitTs(srKs * 1000.0).toLong()
@@ -689,7 +689,7 @@ class EmissionDatvPc(
             .put("gain", if (emetteur == Emetteur.BLADERF) gainBladerf else gainDb).put("gainMax", gainMaxDb).put("gainCharge", ReglesEmission.GAIN_CHARGE_DB)
             .put("duree", dureeS).put("dureeMax", ReglesEmission.DUREE_MAX_S)
             .put("source", source).put("image", image).put("video", video).put("camera", camera).put("hevc", hevc).put("son", son)
-            .put("debitTs", mc.debitTs(srKs * 1000.0).toLong()).put("sps", ReglesEmission.sps(srKs))
+            .put("debitTs", mc.debitTs(srKs * 1000.0).toLong()).put("sps", ReglesEmission.sps(srKs)).put("spsEnCours", spsEnCours)
             .put("echantillons", srKs * 1000L * ReglesEmission.sps(srKs))
             .put("occupeKhz", PlanQo100.occupeKhz(srKs, rolloff.alpha))
             .put("refusBande", PlanQo100.refus(frequenceKhz, srKs, rolloff.alpha) ?: "")
@@ -767,6 +767,24 @@ class EmissionDatvPc(
 
         /** One chat line every 2 s at most. */
         const val CHAT_INTERVALLE_MS = 2000L
+
+        /**
+         * Why the settings asked ([sr] in kS/s, [modcod], with [courtes]
+         * frames) cannot be taken, or null: a rate outside [Datv.DEBITS] or
+         * an unknown MODCOD is refused, never left at the previous one.
+         */
+        fun refusReglage(sr: String?, modcod: String?, courtes: Boolean): String? {
+            if (sr != null) {
+                val v = sr.trim().toIntOrNull()
+                if (v == null || v !in Datv.DEBITS)
+                    return "débit de symboles non prévu : ${sr.trim()} kS/s (prévus : ${Datv.DEBITS.joinToString(", ")} kS/s)"
+            }
+            if (modcod != null) {
+                if (Modcod.de(modcod) == null) return "MODCOD inconnu : ${modcod.trim()}"
+                if (Modcod.de(modcod, courtes) == null) return "${modcod.trim()} n'existe pas en trames courtes"
+            }
+            return null
+        }
 
         /** About 50 ms per buffer, a multiple of 1024 pairs. */
         fun paires(debit: Long): Int = (((debit / 20) + 1023) / 1024 * 1024).toInt().coerceIn(4096, 1 shl 18)
@@ -876,7 +894,23 @@ class EmissionDatvPc(
             if (!file.offer(p)) { file.poll(); perdus++; file.offer(p) }
         }
 
-        fun kbps(): Long = octets * 8 / maxOf(1L, System.currentTimeMillis() - t0)
+        @Volatile private var repereT = t0
+        @Volatile private var repereOctets = 0L
+        @Volatile private var precedentT = t0
+        @Volatile private var precedentOctets = 0L
+
+        /**
+         * The rate the stream comes in at, over the last 5 to 10 s (not since
+         * the start: ffmpeg's first seconds without a packet made it read low).
+         */
+        @Synchronized
+        fun kbps(maintenant: Long = System.currentTimeMillis()): Long {
+            if (maintenant - repereT >= 5_000L) {
+                precedentT = repereT; precedentOctets = repereOctets
+                repereT = maintenant; repereOctets = octets
+            }
+            return (octets - precedentOctets) * 8 / maxOf(1L, maintenant - precedentT)
+        }
 
         override fun disponibles(): Int = file.size
 
