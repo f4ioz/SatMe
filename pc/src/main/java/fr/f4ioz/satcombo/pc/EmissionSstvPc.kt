@@ -302,7 +302,8 @@ class EmissionSstvPc(
             .put("rep", repetitions).put("cw", cwId).put("secondes", Math.round(secondes()))
             .put("indicatif", indicatif().trim().uppercase())
             .put("dureeMax", ReglesSstvRf.DUREE_MAX_S).put("dureeIntMax", ReglesSstvRf.DUREE_INTERIEUR_MAX_S)
-            .put("raison", e.raison).put("erreur", e.erreur)
+            // Stopped by itself since the last tic: its reason already.
+            .put("raison", if (e.emet && pe?.emet == false) pe.raison else e.raison).put("erreur", if (e.emet && pe?.emet == false) pe.erreur else e.erreur)
             .put("modes", JSONArray(SstvMode.ALL.map { JSONObject().put("nom", it.name).put("s", Math.round(SstvEncoder.seconds(it))) }))
             .put("planches", JSONArray(runCatching { planches() }.getOrDefault(emptyList()).map { JSONObject().put("id", it.first).put("nom", it.second) }))
         // What a start would meet, in each context (the page shows it before any click).
