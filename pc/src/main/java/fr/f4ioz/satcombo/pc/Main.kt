@@ -181,6 +181,8 @@ fun main(args: Array<String>) {
         PlancheWebPc(station, son, dossier), kiss, sauvegarde, MirePc(File(dossier, "exports")), diffusion, qo100, lien, phonie, emission, trafic)
     serveur.textesDatv = textesDatv
     serveur.fichiersDatv = fichiersDatv
+    serveur.qrzDatv = QrzDatvPc(dossier, { station.settings.qrzUser.isNotBlank() && station.settings.qrzMdp.isNotBlank() },
+        { c -> kotlinx.coroutines.runBlocking { carnet.ficheQrz(c) } })
     serveur.large = large
     serveur.demarre()
     // QO-100 received when SatMe-PC stopped: taken back only when chosen in Réglages (reception only).
