@@ -377,6 +377,8 @@ class EmissionDatvPc(
 
     @Volatile var etat = Etat(); private set
     private var tx: EmetteurDatv? = null
+    /** Why another transmission runs (SSTV), or null: DATV waits for it. */
+    @Volatile var autreEmission: () -> String? = { null }
     @Volatile private var processus: Processus? = null
     /** The modulator making the frames now: a new one for each MODCOD (its counts on the page). */
     @Volatile private var modulateur: ModulateurDvbs2? = null
@@ -412,6 +414,7 @@ class EmissionDatvPc(
     fun demarre(confirme: Boolean, chargeFictive: Boolean, interieur: Boolean = false): String? {
         if (!confirme) return "émission non confirmée"
         if (etat.emet) return "déjà en émission"
+        autreEmission()?.let { return it }
         val qui = emetteur
         val hackrf = qui == Emetteur.HACKRF
         val blade = qui == Emetteur.BLADERF

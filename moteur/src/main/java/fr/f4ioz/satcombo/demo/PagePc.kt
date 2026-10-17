@@ -923,6 +923,45 @@ object PagePc {
       <div style="height:8px;background:#0E1720;border-radius:4px;margin-top:8px;overflow:hidden"><div id="mi-barre" style="height:100%;width:0;background:var(--cyan)"></div></div>
       <div class="etat" id="mi-etat"></div>
     </div>
+    <div class="carte" id="xs-carte" hidden>
+      <div class="t">Émission SSTV <span id="xs-pastille" class="pastille" style="color:var(--gris)">arrêtée</span></div>
+      <div class="petit">Une image envoyée en SSTV par l’ADALM-PLUTO ou le bladeRF, en FM étroite ou en BLU, l’indicatif écrit en haut de l’image. Rien n’est émis sans ÉMETTRE puis une confirmation ; l’émission s’arrête seule une fois l’image envoyée.</div>
+      <div class="ligne"><span class="petit" style="min-width:86px">Émetteur</span><select id="xs-emetteur" style="max-width:150px" onchange="xsRegle('emetteur', this.value)">
+        <option value="pluto">ADALM-PLUTO</option><option value="bladerf">bladeRF 2.0</option></select></div>
+      <div class="ligne"><span class="petit" style="min-width:86px">Image</span><select id="xs-source" style="max-width:190px" onchange="xsRegle('source', this.value)">
+        <option value="mire">Mire SatMe + indicatif</option><option value="planche">Planche SSTV</option><option value="fichier">Fichier image</option></select>
+        <select id="xs-planche" hidden onchange="xsRegle('planche', this.value)"></select></div>
+      <div class="ligne" id="xs-fichier-l" hidden><span class="petit" style="min-width:86px">Fichier</span><input id="xs-fichier" placeholder="/home/…/image.png" onchange="xsRegle('fichier', this.value)">
+        <button onclick="fdOuvre('image', 'xs-fichier', function (c) { xsRegle('fichier', c); })" title="Choisir une image sur ce PC, ou en envoyer une depuis cet ordinateur">Parcourir…</button></div>
+      <div class="ligne"><span class="petit" style="min-width:86px">Mode</span><select id="xs-mode" style="max-width:170px" onchange="xsRegle('mode', this.value)"></select>
+        <span class="petit">×</span><select id="xs-rep" style="flex:none" onchange="xsRegle('rep', this.value)" title="Combien de fois l’image part"><option>1</option><option>2</option><option>3</option></select>
+        <label class="petit"><input type="checkbox" id="xs-cw" onchange="xsRegle('cw', this.checked ? 1 : 0)"> indicatif en CW à la fin</label></div>
+      <img id="xs-apercu" alt="Image émise" style="width:100%;max-width:420px;border-radius:6px;margin-top:8px;display:block">
+      <div class="ligne"><span class="petit" style="min-width:86px">Modulation</span><select id="xs-modulation" style="max-width:150px" onchange="xsRegle('modulation', this.value)">
+        <option value="nbfm">FM étroite</option><option value="usb">BLU haute (USB)</option><option value="lsb">BLU basse (LSB)</option></select>
+        <select id="xs-dev" style="flex:none" onchange="xsRegle('dev', this.value)" title="Excursion"><option value="5000">±5 kHz</option><option value="2500">±2,5 kHz</option></select>
+        <label class="petit" id="xs-preacc-l"><input type="checkbox" id="xs-preacc" onchange="xsRegle('preacc', this.checked ? 1 : 0)"> préaccentuation</label></div>
+      <div class="ligne" id="xs-mhz-l"><span class="petit" style="min-width:86px">Fréquence (MHz)</span><input id="xs-mhz" style="max-width:120px" onchange="xsRegle('mhz', this.value)">
+        <span class="petit" id="xs-occupe"></span></div>
+      <label class="petit" style="display:block;margin-top:4px"><input type="checkbox" id="xs-sat" onchange="xsRend()"> <b>Vers un satellite</b> — les sous-bandes satellites (145,8–146, 435–438, 1260–1270 MHz ; QO-100 en BLU, segments numérique et mixte) ; jamais 145,800 MHz (ISS)</label>
+      <div class="ligne"><span class="petit" style="min-width:86px">Gain TX (dB)</span><input id="xs-gain" type="number" step="1" min="-89" max="0" style="max-width:80px" onchange="xsRegle('gain', this.value)">
+        <span class="petit" id="xs-gainmax"></span></div>
+      <label class="petit" style="display:block;margin-top:8px"><input type="checkbox" id="xs-charge" onchange="xsCtx('xs-charge')"> <b>Test sur charge</b> — toute fréquence, gain bridé à −40 dB</label>
+      <div class="e-charge" id="xs-charge-avert" hidden>⚠ TEST SUR CHARGE : la sortie TX doit aller sur une charge fictive 50 Ω ou un atténuateur, JAMAIS sur une antenne ni sur un amplificateur.</div>
+      <label class="petit" style="display:block;margin-top:6px"><input type="checkbox" id="xs-interieur" onchange="xsCtx('xs-interieur')"> <b>Essai en intérieur</b> — deux petites antennes à quelques mètres, puissance minimale</label>
+      <div id="xs-int-l" hidden>
+        <div class="e-legal">⚠ ESSAI EN INTÉRIEUR : une vraie émission radio. Réservé à un radioamateur titulaire d’une licence, sous son indicatif (écrit sur l’image), dans une bande amateur (23 cm 1240–1300 MHz ou 13 cm 2300–2450 MHz, hors sous-bandes satellites), à −40 dB au plus, à l’intérieur, sur une petite antenne, 5 minutes au plus. Jamais d’amplificateur.</div>
+        <div class="ligne"><span class="petit" style="min-width:86px">Fréquence (MHz)</span><input id="xs-int-mhz" style="max-width:120px" onchange="xsRegle('intMhz', this.value)">
+          <button onclick="xsRegle('intMhz', mhz3(XS ? XS.intDefautKhz : 1245000))" title="23 cm, hors des parties partagées">1245</button></div>
+      </div>
+      <div class="avert" id="xs-refus" style="color:var(--rose)"></div>
+      <div class="avert" id="xs-avert"></div>
+      <div class="ligne e-boutons"><button class="emettre" id="xs-go" onclick="xsEmettre()">ÉMETTRE</button>
+        <button class="arret-tx" id="xs-stop" onclick="xsArrete()">ARRÊT</button></div>
+      <div style="height:8px;background:#0E1720;border-radius:4px;margin-top:8px;overflow:hidden"><div id="xs-barre" style="height:100%;width:0;background:#C62828"></div></div>
+      <div class="petit" id="xs-boucle" style="margin-top:6px;line-height:1.6"></div>
+      <div class="etat" id="xs-msg"></div>
+    </div>
   </div>
   <div>
     <div class="carte">
@@ -2315,6 +2354,99 @@ async function ticMire(premier) {
   g('mi-joue').disabled = MI.joue;
   if (MI.joue) setTimeout(ticMire, 1000);
 }
+// SSTV on the air (ADALM-PLUTO, bladeRF): parameters kept by SatMe-PC, « vers un satellite » only on this page.
+let XS = null, xsVieW = null, xsSuivi = false, xsApercuCle = '';
+function xsCtxCle() { return g('xs-interieur').checked ? 'int' : g('xs-charge').checked ? 'charge' : g('xs-sat').checked ? 'sat' : 'air'; }
+function xsVie(on) {
+  if (on && !xsVieW) {
+    const bat = () => fetch('api/sstv/emission/vie', { method: 'POST' }).catch(() => {});
+    try {
+      xsVieW = new Worker(URL.createObjectURL(new Blob(['setInterval(function () { postMessage(0); }, 1000);'], { type: 'text/javascript' })));
+      xsVieW.onmessage = bat;
+    } catch (x) { xsVieW = { t: setInterval(bat, 1000), terminate() { clearInterval(this.t); } }; }
+    bat();
+  } else if (!on && xsVieW) { xsVieW.terminate(); xsVieW = null; }
+}
+window.addEventListener('pagehide', () => { if (XS && XS.emet) navigator.sendBeacon('api/sstv/emission/arrete'); });
+function xsVal(id, val) { const e = g(id); if (document.activeElement !== e) e.value = val; }
+function xsCtx(id) {
+  if (g(id).checked) g(id === 'xs-charge' ? 'xs-interieur' : 'xs-charge').checked = false;
+  xsRend();
+}
+async function xsRegle(k, val) {
+  let j = null;
+  try { j = await (await fetch('api/sstv/emission/reglage?' + k + '=' + enc(val), { method: 'POST' })).json(); } catch (x) {}
+  if (j && j.ok === false && j.erreur) txt('xs-msg', 'Refusé : ' + j.erreur);
+  await xsCharge();
+}
+async function xsCharge() {
+  try { XS = await (await fetch('api/sstv/emission')).json(); } catch (x) { XS = null; }
+  g('xs-carte').hidden = !(XS && XS.ok);
+  if (!XS || !XS.ok) return;
+  xsRend();
+  if (XS.emet && !xsSuivi) { xsSuivi = true; setTimeout(() => { xsSuivi = false; xsCharge(); }, 1000); }
+  if (!XS.emet) xsVie(false);
+}
+function xsRend() {
+  const j = XS; if (!j) return;
+  if (g('xs-mode').options.length !== j.modes.length)
+    g('xs-mode').innerHTML = j.modes.map(m => '<option value="' + esc(m.nom) + '">' + esc(m.nom) + ' (' + duree(m.s * 1000) + ')</option>').join('');
+  const pl = j.planches.map(p => '<option value="' + esc(p.id) + '">' + esc(p.nom) + '</option>').join('');
+  if (g('xs-planche').innerHTML !== pl) g('xs-planche').innerHTML = pl;
+  xsVal('xs-emetteur', j.emetteur); xsVal('xs-source', j.source); xsVal('xs-planche', j.planche); xsVal('xs-fichier', j.fichier);
+  xsVal('xs-mode', j.mode); xsVal('xs-rep', String(j.rep)); g('xs-cw').checked = j.cw;
+  xsVal('xs-modulation', j.modulation); xsVal('xs-dev', String(Math.round(j.dev))); g('xs-preacc').checked = j.preacc;
+  xsVal('xs-mhz', mhz3(j.khz)); xsVal('xs-int-mhz', mhz3(j.intKhz)); xsVal('xs-gain', j.gain);
+  g('xs-planche').hidden = j.source !== 'planche'; g('xs-fichier-l').hidden = j.source !== 'fichier';
+  g('xs-dev').hidden = g('xs-preacc-l').hidden = j.modulation !== 'nbfm';
+  const inter = g('xs-interieur').checked, charge = g('xs-charge').checked;
+  g('xs-int-l').hidden = !inter; g('xs-charge-avert').hidden = !charge; g('xs-mhz-l').hidden = inter;
+  txt('xs-occupe', 'occupe ' + j.occupe + (j.descenteKhz ? ' · descente ' + mhz3(j.descenteKhz) + ' MHz' : ''));
+  txt('xs-gainmax', inter || charge ? '−40 dB au plus ici' : 'plafond ' + j.gainMax + ' dB (Réglages)');
+  const c = xsCtxCle();
+  txt('xs-refus', j['refus_' + c] ? '⛔ ' + j['refus_' + c] : '');
+  txt('xs-avert', j['avert_' + c] || '');
+  const cle = j.mode + '|' + j.source + '|' + j.planche + '|' + j.fichier + '|' + j.indicatif;
+  if (cle !== xsApercuCle) { xsApercuCle = cle; g('xs-apercu').src = 'api/sstv/emission/apercu.png?mode=' + enc(j.mode) + '&t=' + Date.now(); }
+  const p = g('xs-pastille');
+  p.textContent = j.emet ? 'EN ÉMISSION' : 'arrêtée'; p.className = 'pastille' + (j.emet ? ' coupe' : ''); p.style.color = j.emet ? '' : 'var(--gris)';
+  g('xs-go').disabled = j.emet || !!j['refus_' + c];
+  ['xs-emetteur', 'xs-source', 'xs-planche', 'xs-fichier', 'xs-mode', 'xs-rep', 'xs-cw', 'xs-modulation', 'xs-dev', 'xs-preacc', 'xs-mhz', 'xs-int-mhz', 'xs-sat', 'xs-charge', 'xs-interieur']
+    .forEach(id => { g(id).disabled = j.emet; });
+  g('xs-barre').style.width = Math.round((j.progres || 0) * 100) + '%';
+  if (j.emet) {
+    const ec = j.enCours;
+    txt('xs-msg', 'EN ÉMISSION · ' + mhz3(Math.round(ec.hz / 1000)) + ' MHz ' + ec.modulation.toUpperCase() + ' · ' + ec.mode +
+      ' · image ' + Math.min((j.image || 0) + 1, j.images || 1) + '/' + (j.images || 1) + ' · ' + Math.round((j.progres || 0) * 100) + ' % · gain ' + j.gainApplique + ' dB · reste ' + j.restant + ' s au plus' +
+      (j.manques ? ' · ' + j.manques + ' manques' : ''));
+  } else if (j.raison || j.erreur) txt('xs-msg', 'Arrêtée : ' + (j.raison || '') + (j.erreur ? ' — ' + j.erreur : ''));
+  const b = j.boucle;
+  txt('xs-boucle', j.emet && j.enCours.satellite && j.qo100 ? (b.ecart !== null ? 'QO-100 : notre signal ' + b.nous.toFixed(1) + ' dB, balise ' + b.balise.toFixed(1) + ' dB (écart ' + b.ecart.toFixed(1) + ' dB) ' : '') +
+    (b.message || 'boucle fermée indisponible : recevoir QO-100 dans l’onglet SDR pour comparer notre niveau à celui de la balise ; sinon rester très bas') : '');
+}
+async function xsEmettre() {
+  if (!XS) return;
+  const j = XS, inter = g('xs-interieur').checked, charge = g('xs-charge').checked, sat = g('xs-sat').checked;
+  const mod = g('xs-modulation').selectedOptions[0].textContent + (j.modulation === 'nbfm' ? ' ±' + (j.dev / 1000).toString().replace('.', ',') + ' kHz' : '');
+  const quoi = j.mode + (j.rep > 1 ? ' ×' + j.rep : '') + (j.cw ? ' + indicatif en CW' : '') + ', ' + j.secondes + ' s';
+  const nom = j.emetteur === 'bladerf' ? 'bladeRF' : 'ADALM-PLUTO';
+  const q = inter ? 'ESSAI EN INTÉRIEUR SSTV avec le ' + nom + ' à ' + mhz3(j.intKhz) + ' MHz en ' + mod + ', ' + quoi + ', gain ' + Math.min(j.gain, j.gainInterieur) + ' dB au plus.\n\n' +
+      'Indicatif ' + j.indicatif + ' sur l’image. Radioamateur titulaire d’une licence, petite antenne à l’intérieur, aucun amplificateur ?'
+    : charge ? 'TEST SUR CHARGE SSTV à ' + mhz3(j.khz) + ' MHz, gain ' + Math.min(j.gain, j.gainCharge) + ' dB au plus.\n\nLa sortie TX du ' + nom + ' est-elle bien sur une charge fictive ou un atténuateur, et rien d’autre ?'
+    : 'ÉMETTRE en SSTV' + (sat ? ' VERS UN SATELLITE' : '') + ' avec le ' + nom + ' à ' + mhz3(j.khz) + ' MHz en ' + mod + ', ' + quoi + ', gain ' + j.gain + ' dB.\n\n' +
+      'Fréquence libre vérifiée ? Indicatif ' + j.indicatif + ' sur l’image.' + (j.qo100 && sat ? '\n\nQO-100 : jamais plus fort que la balise.' : '');
+  if (!confirm(q)) return;
+  txt('xs-msg', 'démarrage de l’émission…');
+  let r = null;
+  try { r = await (await fetch('api/sstv/emission/demarre?confirme=1&interieur=' + (inter ? 1 : 0) + '&charge=' + (charge ? 1 : 0) + '&satellite=' + (sat ? 1 : 0), { method: 'POST' })).json(); } catch (x) {}
+  txt('xs-msg', r && r.ok === false ? 'Refusé : ' + r.erreur : (r ? 'émission en cours' : 'pas de réponse de SatMe-PC'));
+  if (r && r.ok !== false) xsVie(true);
+  xsCharge();
+}
+async function xsArrete() {
+  try { await fetch('api/sstv/emission/arrete', { method: 'POST' }); } catch (x) {}
+  xsVie(false); xsCharge();
+}
 // Réglages by category: a list on the left (icon, name, what it holds), the chosen category's cards on the right.
 const ICO = ${icones()};
 const CATS_REG = [
@@ -2807,7 +2939,7 @@ function vue(n) {
   if (n === 'reglages') { rangeReglages(); majSauvegarde(); majAccordReglages(); }
   if (n === 'reglages') { chargeReglages().then(() => { if (!wlLu && v('carnetUrl')) { wlLu = true; essaiCarnet(); } }); chargeSources(); }
   if (n === 'son' || n === 'sstv') ticSon();
-  if (n === 'sstv') ticMire(true);
+  if (n === 'sstv') { ticMire(true); xsCharge(); }
   if (n === 'agenda') ticVeille();
   if (n === 'aprs') { ticAprs(); ticTrophees(); }
   if (n === 'ft8') ticFt8();
@@ -4178,10 +4310,11 @@ function fdVignette(e) {
   return '<div class="fd-v"><img loading="lazy" src="api/datv/sources/vignette.jpg?p=' + enc(e.chemin) + '" alt="" data-g="' + (e.genre === 'video' ? '🎞' : '🖼') +
     '" onerror="this.replaceWith(document.createTextNode(this.dataset.g))"></div>';
 }
-function fdOuvre(type) {
-  FD.type = type;
+// [cible]: another field than the DATV one (SSTV), [apres] called with the path chosen.
+function fdOuvre(type, cible, apres) {
+  FD.type = type; FD.cible = cible || null; FD.apres = apres || null;
   txt('fd-quoi', type === 'video' ? 'une vidéo' : 'une image');
-  const cur = v(type === 'video' ? 'e-video' : 'e-image');
+  const cur = v(cible || (type === 'video' ? 'e-video' : 'e-image'));
   const k = Math.max(cur.lastIndexOf('/'), cur.lastIndexOf('\\'));
   const dossier = k > 0 ? cur.substring(0, k) : (FD.chemin || '');
   if (!g('fd-dlg').open) g('fd-dlg').showModal();
@@ -4204,6 +4337,7 @@ async function fdVa(d, repli) {
     'aucun dossier ni ' + (FD.type === 'video' ? 'vidéo (mp4, mkv, mov, avi, webm, ts, m4v)' : 'image (png, jpg, webp, bmp)') + ' ici');
 }
 function fdChoisit(chemin) {
+  if (FD.cible) { g(FD.cible).value = chemin; g('fd-dlg').close(); if (FD.apres) FD.apres(chemin); return; }
   g(FD.type === 'video' ? 'e-video' : 'e-image').value = chemin;
   g('e-source').value = FD.type;
   g('fd-dlg').close();

@@ -132,6 +132,13 @@ class SignauxQo100Pc(private val sdr: SdrPc, private val suivi: SuiviBaliseQo100
 
     private val vuesBalise = ArrayDeque<Pair<Long, Double>>()
 
+    /** The signals heard lately (asked again: the analysis kept on), or null while the receiver is not on QO-100. */
+    fun recents(): List<SignalQo100>? {
+        if (!(sdr.etat.value.actif && sdr.station.qo100.etat.value.aLaCle)) return null
+        demande()
+        return if (horloge() - listeMs < 5_000L) liste else null
+    }
+
     fun json(): JSONObject {
         val t = horloge()
         val o = JSONObject().put("actif", fil != null && sdr.etat.value.actif && sdr.station.qo100.etat.value.aLaCle)

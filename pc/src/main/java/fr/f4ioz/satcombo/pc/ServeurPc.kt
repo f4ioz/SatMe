@@ -69,6 +69,9 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
     /** The DATV transmission's pictures and videos: the folder browser and the files sent (set before [demarre]). */
     @Volatile var fichiersDatv: FichiersDatvPc? = null
 
+    /** SSTV on the air with the Pluto or the bladeRF (set before [demarre]). */
+    @Volatile var emissionSstv: EmissionSstvPc? = null
+
     /** QRZ.com records of the callsigns seen in DATV, and their photos (set before [demarre]). */
     @Volatile var qrzDatv: QrzDatvPc? = null
 
@@ -373,6 +376,15 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                     }
                 }
                 envoie(sortie, "200 OK", "application/json; charset=utf-8", o.toString().toByteArray())
+            }
+            "/api/sstv/emission" -> envoie(sortie, "200 OK", "application/json; charset=utf-8",
+                (emissionSstv?.json()?.put("ok", true) ?: JSONObject().put("ok", false)).toString().toByteArray())
+            // The picture a start would send now, the callsign over it (nothing transmitted).
+            "/api/sstv/emission/apercu.png" -> {
+                val m = fr.f4ioz.satcombo.sstv.SstvMode.byName(q["mode"].orEmpty())
+                val b = emissionSstv?.let { e -> e.apercuPng(m ?: e.mode) }
+                if (b == null) envoie(sortie, "404 Not Found", "text/plain; charset=utf-8", "pas d'image".toByteArray())
+                else envoie(sortie, "200 OK", "image/png", b)
             }
             "/api/datv/emission" -> {
                 val o = emission?.json()?.put("ok", true)?.put("coupeTx", sdr?.coupeTxEnReception == true)
@@ -816,6 +828,31 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 return ok.put("message", i.message).put("libelle", i.carte?.libelle ?: "")
             }
             "/api/datv/emission/arrete" -> emission?.arrete()
+            // SSTV on the air: the parameters (kept; « vers un satellite » never), the confirmed start, the stop, the page's heartbeat.
+            "/api/sstv/emission/reglage" -> {
+                val e = emissionSstv ?: return JSONObject().put("ok", false)
+                if (e.etat.emet && (q.keys - setOf("gain")).isNotEmpty()) return JSONObject().put("ok", false).put("erreur", "en émission : seul le gain change")
+                q["emetteur"]?.let { e.emetteur = fr.f4ioz.satcombo.datv.Emetteur.de(it) }
+                q["modulation"]?.let { m -> e.modulation = fr.f4ioz.satcombo.sdr.ModulationAudio.de(m) ?: return JSONObject().put("ok", false).put("erreur", "modulation inconnue") }
+                q["dev"]?.replace(',', '.')?.toDoubleOrNull()?.let { e.deviationHz = it }
+                q["preacc"]?.let { e.preaccentuation = it == "1" }
+                q["mhz"]?.replace(',', '.')?.toDoubleOrNull()?.let { e.frequenceKhz = Math.round(it * 1000.0) }
+                q["intMhz"]?.replace(',', '.')?.toDoubleOrNull()?.let { e.frequenceInterieurKhz = Math.round(it * 1000.0) }
+                q["mode"]?.let { m -> e.mode = fr.f4ioz.satcombo.sstv.SstvMode.byName(m) ?: return JSONObject().put("ok", false).put("erreur", "mode inconnu") }
+                q["source"]?.let { if (it in EmissionSstvPc.SOURCES) e.source = it }
+                q["planche"]?.let { e.plancheId = it }
+                q["fichier"]?.let { e.fichier = it }
+                entier("rep")?.let { e.repetitions = it }
+                q["cw"]?.let { e.cwId = it == "1" }
+                q["gain"]?.replace(',', '.')?.toDoubleOrNull()?.let { e.regleGain(it) }
+            }
+            "/api/sstv/emission/demarre" -> {
+                val e = emissionSstv ?: return JSONObject().put("ok", false)
+                e.demarre(q["confirme"] == "1", q["interieur"] == "1", q["charge"] == "1", q["satellite"] == "1")
+                    ?.let { return JSONObject().put("ok", false).put("erreur", it) }
+            }
+            "/api/sstv/emission/arrete" -> emissionSstv?.arrete()
+            "/api/sstv/emission/vie" -> emissionSstv?.vie()
             // A chat line in the stream being sent (refused when nothing is being sent: typing never transmits).
             "/api/datv/emission/chat" -> {
                 val e = emission ?: return JSONObject().put("ok", false)

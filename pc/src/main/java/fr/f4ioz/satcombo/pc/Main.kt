@@ -176,14 +176,28 @@ fun main(args: Array<String>) {
         // Talkback by default: where the rig is on QO-100's narrow band, when SatMe may propose it.
         retourParDefaut = { station.qo100.etat.value.let { q ->
             q.descenteHz.takeIf { q.auPoste && q.transpondeur == fr.f4ioz.satcombo.domain.Qo100.NB.cle && fr.f4ioz.satcombo.domain.GardeQo100.proposable(it) } } })
-    sdr.emissionPluto = { emission.etat.emet }
-    sdr.emissionBladerf = { emission.etat.emet && emission.etat.emetteur == fr.f4ioz.satcombo.datv.Emetteur.BLADERF }
+    // SSTV on the air with the Pluto or the bladeRF: as DATV, nothing sent until asked and confirmed on the page.
+    val planche = PlancheWebPc(station, son, dossier)
+    val emissionSstv = EmissionSstvPc(station.stockage, indicatif = { station.settings.callsign }, locator = { station.settings.manualLocator },
+        plutoHote = { sdr.plutoHote }, plutoPort = { sdr.plutoPort },
+        plutoOccupe = { if (sdr.plutoEnReception) "l'ADALM-PLUTO reçoit (onglet SDR) : arrêter cette réception d'abord" else null },
+        bladerfOccupe = { if (sdr.bladerfEnReception) "le bladeRF reçoit (onglet SDR) : arrêter cette réception d'abord" else null },
+        bladerfProgramme = { sdr.programmeBladerf() },
+        autreEmission = { if (emission.etat.emet) "une émission DATV est en cours : l'arrêter d'abord" else null },
+        gainMaxDb = { emission.gainMaxDb },
+        planche = { planche.image(it) }, planches = { planche.modeles() },
+        signauxQo100 = { qo100.signaux.recents() })
+    emission.autreEmission = { if (emissionSstv.etat.emet) "une émission SSTV est en cours : l'arrêter d'abord" else null }
+    sdr.emissionPluto = { emission.etat.emet || emissionSstv.emetAvec(fr.f4ioz.satcombo.datv.Emetteur.PLUTO) }
+    sdr.emissionBladerf = { (emission.etat.emet && emission.etat.emetteur == fr.f4ioz.satcombo.datv.Emetteur.BLADERF) ||
+        emissionSstv.emetAvec(fr.f4ioz.satcombo.datv.Emetteur.BLADERF) }
     // Text and the mark over the transmitted picture; its pictures and videos chosen from the page.
     emission.incrustation = IncrustationDatvPc(station.stockage)
     val fichiersDatv = FichiersDatvPc(File(dossier, "datv-sources"), File(dossier, "tmp/vignettes"))
-    portee.launch { while (true) { runCatching { emission.tic() }; kotlinx.coroutines.delay(1000) } }
+    portee.launch { while (true) { runCatching { emission.tic() }; runCatching { emissionSstv.tic() }; kotlinx.coroutines.delay(1000) } }
     val serveur = ServeurPc(station, port, reseau, carnet, son, journalWeb, ImportPc(station, carnet, journal), sdr, videoSked, telephone, appairage, datv,
-        PlancheWebPc(station, son, dossier), kiss, sauvegarde, MirePc(File(dossier, "exports")), diffusion, qo100, lien, phonie, emission, trafic)
+        planche, kiss, sauvegarde, MirePc(File(dossier, "exports")), diffusion, qo100, lien, phonie, emission, trafic)
+    serveur.emissionSstv = emissionSstv
     serveur.textesDatv = textesDatv
     serveur.fichiersDatv = fichiersDatv
     serveur.qrzDatv = QrzDatvPc(dossier, { station.settings.qrzUser.isNotBlank() && station.settings.qrzMdp.isNotBlank() },

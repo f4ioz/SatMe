@@ -239,7 +239,7 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
     fun detecteBladerf(): InfoBladerf {
         val i = when {
             bladerfEnReception -> infoBladerf.copy(message = "", lu = true)
-            emissionBladerf() -> InfoBladerf(infoBladerf.carte, "le bladeRF émet (onglet DATV)", true)
+            emissionBladerf() -> InfoBladerf(infoBladerf.carte, "le bladeRF émet (onglet DATV ou SSTV)", true)
             else -> programmeBladerf()?.let { p -> Bladerf.detecte(p).let { (c, m) -> InfoBladerf(c, m, true) } }
                 ?: InfoBladerf(message = conseilBladerf(), lu = true)
         }
@@ -462,13 +462,13 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
     /** rtl_tcp started here when asked and nothing answers yet; then the connection, retried while it starts. */
     private fun connecte(): SourceIq {
         if (estBladerf()) {
-            if (emissionBladerf()) throw java.io.IOException("le bladeRF émet (onglet DATV) : arrêter l'émission d'abord")
+            if (emissionBladerf()) throw java.io.IOException("le bladeRF émet (onglet DATV ou SSTV) : arrêter l'émission d'abord")
             val prog = programmeBladerf() ?: throw java.io.IOException(conseilBladerf())
             val c = infoBladerf.carte
             return BladerfSdr.ouvre(prog, c?.serie.orEmpty(), c?.libelle ?: "bladeRF 2.0")
         }
         if (estPluto()) {
-            if (emissionPluto()) throw java.io.IOException("l'ADALM-PLUTO émet (onglet DATV) : arrêter l'émission d'abord")
+            if (emissionPluto()) throw java.io.IOException("l'ADALM-PLUTO émet (onglet DATV ou SSTV) : arrêter l'émission d'abord")
             val p = PlutoSdr.connecte(plutoHote, plutoPort)
             if (coupeTxEnReception) {
                 val (h, n) = plutoHote to plutoPort

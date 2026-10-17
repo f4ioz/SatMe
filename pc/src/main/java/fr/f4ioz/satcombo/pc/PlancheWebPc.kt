@@ -97,6 +97,18 @@ class PlancheWebPc(private val station: StationPc, private val son: SonStation, 
     private fun modele(id: String): Planche.Modele? =
         id.takeIf { it.matches(Regex("[A-Za-z0-9_-]{1,40}")) }?.let { i -> rangement.modeles().firstOrNull { it.id == i } }
 
+    /** The templates: id and name (the SSTV transmission's choice). */
+    fun modeles(): List<Pair<String, String>> = rangement.modeles().map { it.id to it.nom }
+
+    /** The sheet [id] as the preview draws it, [largeur] wide (sent in SSTV), or null. */
+    fun image(id: String, largeur: Int = 1200): BufferedImage? {
+        val m = modele(id) ?: return null
+        val places = places(m)
+        val imgs = places.mapNotNull { (i, x) -> vignette(x.first, 400)?.let { i to (it to x.second) } }.toMap()
+        val fond = rangement.fond(m)?.let { PlancheRenduPc.charge(it, 1600) }
+        return PlancheRenduPc.dessine(m, fond, largeur, imgs, valeurs(m, places) { "" })
+    }
+
     /** One request of the sheet page: [route] what follows `/planche`, [corps] the body (a template sent, a picture). */
     fun sert(route: String, methode: String, p: (String) -> String, corps: () -> ByteArray?): ReponseWeb {
         val r = rangement
