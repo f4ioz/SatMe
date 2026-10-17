@@ -53,6 +53,16 @@ object SstvHub {
         val continu: Boolean = true,
         /** Pictures cleaned before they are saved (see [SstvNettoyage]). */
         val nettoyage: Boolean = true,
+        /** Automatic tuning on (see [SstvAfc]). */
+        val afc: Boolean = false,
+        /** Its offset measured (Hz, in the sound as it arrives), null when not known. */
+        val afcMesureHz: Int? = null,
+        /** The correction it applied so far (Hz of sound). */
+        val afcTotalHz: Int = 0,
+        /** It is moving the receiver now (else advice only). */
+        val afcApplique: Boolean = false,
+        /** How the tones follow the receiver: +1 USB, -1 LSB, 0 unknown or FM. */
+        val afcSens: Int = 0,
         /** Last engine failure — shown, not hidden. */
         val erreur: String? = null,
         /** True once a frame is under way (header received or forced start). */
@@ -86,6 +96,16 @@ object SstvHub {
     /** Picture cleaning, kept here for the same reason as [forced]. */
     @Volatile private var nettoyage = true
 
+    /** Automatic tuning, kept here for the same reason as [forced]. */
+    @Volatile private var afc = false
+
+    /**
+     * What the automatic tuning moves when the capture is the phone's sound
+     * (a rig): the rig through the CAT loop's own writes, set by the
+     * ViewModel. The SDR dongle gives its own when it starts the capture.
+     */
+    @Volatile var cibleCat: CibleAfc? = null
+
     @Volatile private var loaded = false
 
     /**
@@ -101,9 +121,42 @@ object SstvHub {
         forced = if (name.isBlank()) null else SstvMode.byName(name)
         continu = runCatching { SettingsStore(ctx).sstvContinu }.getOrDefault(true)
         nettoyage = runCatching { SettingsStore(ctx).sstvNettoyage }.getOrDefault(true)
+        afc = runCatching { SettingsStore(ctx).sstvAfc }.getOrDefault(false)
         live?.forcedMode = forced
         live?.continuous = continu
-        _state.value = _state.value.copy(forcedMode = forced?.name, continu = continu, nettoyage = nettoyage)
+        _state.value = _state.value.copy(forcedMode = forced?.name, continu = continu, nettoyage = nettoyage, afc = afc)
+    }
+
+    /**
+     * Turns the automatic tuning on or off. Persisted. Off: the receiver goes
+     * back where the operator left it, the decoder is left alone.
+     */
+    fun setAfc(ctx: Context, on: Boolean) {
+        afc = on
+        runCatching { SettingsStore(ctx).sstvAfc = on }
+        if (!on) synchronized(verrouAfc) { lacheAfc() }
+        _state.value = _state.value.copy(afc = on, afcMesureHz = null, afcTotalHz = 0, afcApplique = false)
+    }
+
+    /** The tuning's « reset »: the receiver back where the operator left it, the measurements forgotten. */
+    fun remiseAZeroAfc() {
+        synchronized(verrouAfc) { liveAfc?.let { a -> runCatching { a.remiseAZero(cibleLive()) } } }
+        _state.value = _state.value.copy(afcMesureHz = null, afcTotalHz = 0)
+    }
+
+    private val verrouAfc = Any()
+    private var liveAfc: SstvAfc? = null
+    @Volatile private var liveCible: CibleAfc? = null
+    private var liveRate = 0
+    private var afcVuMs = 0L
+
+    private fun cibleLive(): CibleAfc? = liveCible ?: cibleCat
+
+    /** The tuning dropped: its receiver moved back, the decoder no longer reports to it. */
+    private fun lacheAfc() {
+        liveAfc?.let { a -> runCatching { a.remiseAZero(cibleLive()) } }
+        liveAfc = null
+        live?.mesureSync = null
     }
 
     /** Turns picture cleaning on or off. Persisted. */
@@ -186,7 +239,8 @@ object SstvHub {
 
     /** Hook the engine to a capture running at [sampleRate]. */
     @Synchronized
-    fun startLive(ctx: Context, sampleRate: Int, satName: String) {
+    fun startLive(ctx: Context, sampleRate: Int, satName: String, cible: CibleAfc? = null) {
+        synchronized(verrouAfc) { lacheAfc(); liveCible = cible; liveRate = sampleRate }
         liveCtx = ctx.applicationContext
         liveSat = satName
         lastPreviewMs = 0L
@@ -209,11 +263,26 @@ object SstvHub {
         val d = live ?: return
         // Kept before decoding: a picture ending in this buffer takes it all.
         runCatching { liveSon?.ajoute(pcm, count) }
-        runCatching { d.feed(pcm, count) }.onFailure { e ->
+        runCatching {
+            if (afc) synchronized(verrouAfc) {
+                val a = liveAfc ?: SstvAfc(liveRate).also { liveAfc = it }
+                a.nourrit(d, pcm, count, cibleLive())
+                publieAfc(a)
+            } else d.feed(pcm, count)
+        }.onFailure { e ->
             val n = ++pannes
             _state.value = _state.value.copy(
                 erreur = e.javaClass.simpleName + (if (n > 1) " ×$n" else ""))
         }
+    }
+
+    /** The tuning's numbers for the screens, twice a second. */
+    private fun publieAfc(a: SstvAfc) {
+        val now = System.currentTimeMillis()
+        if (now - afcVuMs < 500L) return
+        afcVuMs = now
+        val e = a.etat
+        _state.value = _state.value.copy(afcMesureHz = e.mesureHz, afcTotalHz = e.totalHz, afcApplique = e.applique, afcSens = e.sens)
     }
 
     /** Decoder failures since listening started. */
@@ -225,6 +294,7 @@ object SstvHub {
             _state.value = _state.value.copy(listening = false); return
         }
         runCatching { d.finish() }
+        synchronized(verrouAfc) { lacheAfc(); liveCible = null }
         live = null
         liveSon = null
         _state.value = _state.value.copy(

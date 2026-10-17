@@ -390,6 +390,11 @@ class SettingsStore(private val prefs: Stockage) {
         get() = prefs.getBoolean("sstv_continu_2078", true)
         set(v) { prefs.edit().putBoolean("sstv_continu_2078", v).apply() }
 
+    /** SSTV automatic tuning (see [fr.f4ioz.satcombo.sstv.SstvAfc]). Off by default. */
+    var sstvAfc: Boolean
+        get() = prefs.getBoolean("sstv_afc", false)
+        set(v) { prefs.edit().putBoolean("sstv_afc", v).apply() }
+
     /** Spoken header (satellite, date, locator) at the start of pass recordings. */
     var annonceVocale: Boolean
         get() = prefs.getBoolean("annonce_vocale", true)

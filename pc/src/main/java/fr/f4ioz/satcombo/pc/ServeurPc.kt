@@ -1055,8 +1055,10 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 q["force"]?.let { x.force = fr.f4ioz.satcombo.sstv.SstvMode.byName(it) }
                 q["continu"]?.let { x.continu = it == "1" }
                 q["nettoyage"]?.let { x.nettoyage = it == "1" }
+                q["afc"]?.let { x.afc = it == "1" }
                 q["actif"]?.let { son.sstvActif = it == "1" }
             }
+            "/api/sstv/afc/zero" -> son?.sstv?.remiseAZeroAfc() ?: return JSONObject().put("ok", false)
             "/api/sstv/caler" -> {
                 val x = son?.sstv ?: return JSONObject().put("ok", false)
                 x.cale(q["mode"]?.let { fr.f4ioz.satcombo.sstv.SstvMode.byName(it) })?.let { return JSONObject().put("ok", false).put("erreur", it) }
@@ -1440,7 +1442,26 @@ object JsonPc {
             force = x.force?.name.orEmpty(), continu = x.continu, nettoyage = x.nettoyage, decodage = e.decodage,
             progres = e.progres, gardees = v.gardees, erreur = v.erreur,
             conseil = x.conseil(carte.actif, sdrActive).orEmpty(),
-            redecode = v.redecode, redecodeProgres = v.redecodeProgres, redecodeImages = v.redecodeImages, gif = v.gif)
+            redecode = v.redecode, redecodeProgres = v.redecodeProgres, redecodeImages = v.redecodeImages, gif = v.gif,
+            calage = calage(s, sdr))
+    }
+
+    /** The SSTV automatic tuning for the page: what it moves (or why it does not), its numbers. */
+    private fun calage(s: SonStation, sdr: SdrPc?): ApiSon.Calage {
+        val x = s.sstv
+        val parLaCle = x.sourceActive == SstvPc.SDR || s.son.etat.value.appareil == SdrPc.NOM_SOURCE
+        val catConnecte = s.catConnecte()
+        val c = x.calage("")
+        val voie = when {
+            x.sourceActive.isEmpty() -> ""
+            parLaCle -> if (c.sens == 0) "clé SDR : en " + (sdr?.modeEffectif() ?: "FM") + " l'accord ne déplace pas les tons, rien à caler"
+                else "décalage fin de la clé SDR"
+            !catConnecte -> "poste sans CAT : conseil seulement"
+            c.sens == 0 -> "poste : transpondeur hors BLU, rien à caler"
+            !c.applique -> "poste par CAT : en attente (Doppler en maintien ou bouton tourné), conseil seulement"
+            else -> "poste par CAT, avec les écritures du Doppler"
+        }
+        return ApiSon.Calage(c.actif, c.mesureHz, c.totalHz, c.actif && c.applique, voie, c.visHz, c.corrections, c.conseil)
     }
 
     /** The CW decoder: on or not, its text, the speed, the tone, the key's light. */

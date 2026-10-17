@@ -133,6 +133,12 @@ class StationPc(
     /** The adapter the rig is on: the mast's search never opens it. */
     @Volatile private var clePoste: String = ""
 
+    /**
+     * The automatic SSTV tuning's share of the downlink (sky Hz), added to
+     * the Doppler loop's own writes (see [SstvPc.afc]); 0 when off.
+     */
+    @Volatile var afcSstvHz: Long = 0L
+
     val stationCat = StationCat(object : MondeCat {
         override fun connecte() = _etat.value.catConnecte
         override fun poste(): PosteCat = if (_etat.value.catModele in PAIRES) postePaire else posteCiv
@@ -147,6 +153,7 @@ class StationPc(
         override fun decalageTxHz() = _etat.value.txShiftHz
         override fun poseDecalageTx(hz: Long) = reglageSat(txHz = hz)
         override fun decalageRxHz() = 0L
+        override fun afcRxHz() = afcSstvHz
         override fun modeCw() = false
         // QO-100 drives the rig itself, when asked: the Doppler loop then holds.
         override fun maintienDoppler() = _etat.value.maintienDoppler || qo100.etat.value.auPoste
@@ -755,6 +762,8 @@ class StationPc(
     fun suis(sat: TleEntry) {
         stockage.edit().putInt(CLE_SATELLITE, sat.catalogNumber).apply()
         stationCat.nouveauSatellite()
+        // The SSTV tuning's share belonged to the old satellite.
+        afcSstvHz = 0L
         stationCat.oublieArmement()
         derniereRecherche = 0L
         val c = satConfig.load(sat.catalogNumber)

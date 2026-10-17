@@ -51,6 +51,11 @@ interface MondeCat {
     fun poseDecalageTx(hz: Long)
     /** The RX offset of the operating mode (voice or CW). */
     fun decalageRxHz(): Long
+    /**
+     * The automatic SSTV tuning's share of the downlink (sky Hz), taken up by
+     * the loop's own writes only — never a write of its own. 0 by default.
+     */
+    fun afcRxHz(): Long = 0L
     fun modeCw(): Boolean
     fun maintienDoppler(): Boolean
     fun dopplerRx(): Boolean
@@ -372,7 +377,7 @@ class StationCat(private val monde: MondeCat, private val horloge: () -> Long = 
         when (catLayout) {
             DispositionSat.BEACON -> {
                 val dlRest = monde.repos() ?: centreRx(t) ?: return
-                val dl = Doppler.downlink(dlRest, rr) + shift
+                val dl = Doppler.downlink(dlRest, rr) + shift + monde.afcRxHz()
                 if (monde.maintienDoppler()) {
                     // On hold, show the rig as it is, not the command we do not
                     // send (that would fake tracking). Read via `lireDescente`,
@@ -495,10 +500,11 @@ class StationCat(private val monde: MondeCat, private val horloge: () -> Long = 
         if (geste) lastSentDl = 0L
         val pilote = (!auPoste || rxArbiter.driven) && monde.dopplerRx() && !monde.maintienDoppler()
 
-        // While not driving, rest is read from the rig, with calibration and
-        // mode (voice/CW) offsets removed since they are re-added on write.
+        // While not driving, rest is read from the rig, with calibration,
+        // mode (voice/CW) and SSTV tuning offsets removed since they are
+        // re-added on write.
         val lu = if (dlObserved != null)
-            Doppler.restFromDownlink(dlObserved - shift - monde.decalageRxHz(), rr)
+            Doppler.restFromDownlink(dlObserved - shift - monde.decalageRxHz() - monde.afcRxHz(), rr)
         else monde.repos() ?: centreRx(t) ?: return
         val lo = t.downlinkLowHz ?: lu
         val hi = t.downlinkHighHz ?: lu
@@ -513,7 +519,7 @@ class StationCat(private val monde: MondeCat, private val horloge: () -> Long = 
             rest, t.downlinkLowHz ?: rest, t.downlinkHighHz ?: rest,
             t.uplinkLowHz!!, t.uplinkHighHz ?: t.uplinkLowHz!!, effectiveInvert(t))
         val ul = Doppler.uplink(ulRest, rr) + txShift
-        val dl = Doppler.downlink(rest, rr) + shift + monde.decalageRxHz()
+        val dl = Doppler.downlink(rest, rr) + shift + monde.decalageRxHz() + monde.afcRxHz()
 
         // --- TX knob as shift control ---
         // `ul` = `Doppler.uplink(ulRest, rr) + txShift`; if the operator turned

@@ -111,6 +111,8 @@ fun main(args: Array<String>) {
     sdr.ecouteVoix = { pcm, n, sq -> phonie.ecouteSdr(pcm, n, fr.f4ioz.satcombo.sdr.Dsp.AUDIO_RATE, sq) }
     // SSTV hears the dongle directly (« auto »: while it plays), not only through the Son tab.
     sdr.ecouteSstv = { pcm, n -> son.sstv.ecouteSdr(pcm, n, fr.f4ioz.satcombo.sdr.Dsp.AUDIO_RATE) }
+    // The SSTV automatic tuning: the dongle's fine offset when it feeds the decoder, else the rig through the CAT loop.
+    son.sstv.cibleAfc = { src -> cibleAfcSstv(src, son, sdr, station) }
     phonie.demarre()
     portee.launch {
         while (true) {
@@ -231,6 +233,33 @@ private fun contextePhonie(station: StationPc, sdr: SdrPc, source: String): Pair
     } else {
         if (q.auPoste) q.descenteHz to "QO-100"
         else (if (e.catConnecte) station.stationCat.etat.value.descenteHz else null) to (e.suivi?.name ?: "")
+    }
+}
+
+/**
+ * What the SSTV automatic tuning may move for [source]: the dongle's fine
+ * offset when the dongle's sound feeds the decoder (moved between two of its
+ * own blocks: coupled); otherwise the rig, through the CAT loop's own writes,
+ * only while that loop drives the dial (connected, not on hold, nobody
+ * turning it); otherwise nothing, advice only.
+ */
+internal fun cibleAfcSstv(source: String, son: SonStation, sdr: SdrPc, station: StationPc): fr.f4ioz.satcombo.sstv.CibleAfc {
+    val parLaCle = source == SstvPc.SDR || son.son.etat.value.appareil == SdrPc.NOM_SOURCE
+    return if (parLaCle) object : fr.f4ioz.satcombo.sstv.CibleAfc {
+        override fun sens() = fr.f4ioz.satcombo.sstv.SstvAfc.sensDuMode(sdr.modeEffectif())
+        override fun disponible() = sdr.etat.value.actif
+        override val couplee = true
+        override fun position() = sdr.decalageHz.toLong()
+        override fun deplace(hz: Int) { sdr.decalageHz = sdr.decalageHz + hz }
+    } else object : fr.f4ioz.satcombo.sstv.CibleAfc {
+        override fun sens() = fr.f4ioz.satcombo.sstv.SstvAfc.sensDuMode(station.emetteurChoisi()?.mode)
+        override fun disponible(): Boolean {
+            val e = station.etat.value
+            return e.catConnecte && !e.maintienDoppler && !station.qo100.etat.value.auPoste && station.stationCat.etat.value.rxPilote
+        }
+        override val couplee = false
+        override fun position() = station.afcSstvHz
+        override fun deplace(hz: Int) { station.afcSstvHz = station.afcSstvHz + hz }
     }
 }
 

@@ -147,11 +147,54 @@ fun SstvModeControls(
             if (!compact) Text(t("sstv_nettoyage_desc"), color = TextLo, fontSize = 10.sp)
         }
     }
+    // Automatic tuning: the tones' offset measured, the receiver nudged (off by default).
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.toggleable(value = st.afc, role = Role.Checkbox,
+            onValueChange = { SstvHub.setAfc(ctx, it) })
+    ) {
+        Checkbox(checked = st.afc, onCheckedChange = null)
+        Column {
+            Text(t("sstv_afc"), color = TextHi, fontSize = if (compact) 11.sp else 12.sp)
+            if (!compact) Text(t("sstv_afc_desc"), color = TextLo, fontSize = 10.sp)
+        }
+    }
+    if (st.afc) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(afcLine(st), color = if (st.afcApplique || st.afcMesureHz == null) TextLo else Amber,
+                fontSize = 10.sp, modifier = Modifier.weight(1f))
+            OutlinedButton(
+                onClick = { SstvHub.remiseAZeroAfc() },
+                enabled = st.afcTotalHz != 0 || st.afcMesureHz != null,
+                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                shape = RoundedCornerShape(10.dp)
+            ) { Text(t("sstv_afc_zero"), fontSize = 10.sp) }
+        }
+    }
     // Show failures: a dead engine behind a "listening" label is the worst case.
     st.erreur?.let {
         Text(it, color = Amber, fontSize = 10.sp,
             modifier = Modifier.padding(top = 2.dp))
     }
+}
+
+/** The automatic tuning in one line: measured, applied, or what to do by hand. */
+fun afcLine(st: SstvHub.SstvState): String {
+    fun hz(v: Int) = (if (v > 0) "+" else if (v < 0) "−" else "") + kotlin.math.abs(v) + " Hz"
+    val parts = ArrayList<String>()
+    st.afcMesureHz?.let { parts += tf("sstv_afc_mesure", hz(it)) }
+    parts += tf("sstv_afc_total", hz(st.afcTotalHz))
+    val c = afcConseil(st)
+    if (c != null) parts += c else if (!st.afcApplique) parts += t("sstv_afc_attente")
+    return parts.joinToString("  ·  ")
+}
+
+/** What to do by hand when the tuning measures an offset it cannot correct; null otherwise. */
+fun afcConseil(st: SstvHub.SstvState): String? {
+    fun hz(v: Int) = (if (v > 0) "+" else if (v < 0) "−" else "") + kotlin.math.abs(v) + " Hz"
+    val m = st.afcMesureHz ?: return null
+    if (st.afcApplique || kotlin.math.abs(m) <= fr.f4ioz.satcombo.sstv.SstvAfc.ZONE_MORTE_HZ) return null
+    return if (st.afcSens != 0) tf("sstv_afc_conseil", hz(st.afcSens * m)) else tf("sstv_afc_conseil_inconnu", hz(m))
 }
 
 /**
