@@ -122,6 +122,10 @@ object PagePc {
   @media (max-width:1100px) { .d-grille { grid-template-columns:1fr; } }
   .dc-carte { margin-top:10px; border:1px solid var(--bord); border-radius:10px; padding:10px 12px; background:rgba(63,224,200,.05); }
   .dc-tete { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+  .dc-qrz { margin-top:4px; font-size:13px; overflow:hidden; }
+  .dc-qrz img { float:right; max-width:72px; max-height:90px; border-radius:4px; margin-left:8px; }
+  .dc-qrz a { color:var(--cyan); }
+  .dc-qrz .non { opacity:.4; text-decoration:line-through; }
   .dc-call { font-size:22px; letter-spacing:.5px; color:var(--cyan); }
   .dc-drapeau { font-size:24px; font-family:Drapeaux,system-ui; }
   .dc-message { margin-top:6px; font-style:italic; }
@@ -1105,6 +1109,7 @@ object PagePc {
       <span id="d-rec" class="pastille" style="display:none;background:rgba(229,72,77,.2);color:var(--rose)"></span>
     </div>
     <div class="petit" id="d-service" style="margin-top:4px"></div>
+    <div id="d-qrz-service" class="dc-qrz" hidden></div>
         <div id="q-resume" hidden>
       <div class="q-haut">
         <div id="q-marge" title="MER mesurée moins le MER qu'il faut au MODCOD pour une image sans erreur (DVB-S2 : EN 302 307-1, table 13)">Marge —</div>
@@ -1117,6 +1122,7 @@ object PagePc {
         <span class="petit" id="dc-age"></span>
         <button style="margin-left:auto" onclick="dcNote()" title="Dans le carnet : QO-100 (ou DATV terrestre), mode DATV, la fréquence, la MER reçue comme report">Noter le QSO</button></div>
       <div id="dc-info" style="margin-top:4px"></div>
+      <div id="dc-qrz" class="dc-qrz" hidden></div>
       <div class="petit" id="dc-tech" style="margin-top:2px"></div>
       <div id="dc-message" class="dc-message" hidden></div>
       <div id="dc-retour" class="dc-retour" hidden></div>
@@ -3444,6 +3450,9 @@ async function ticDatv(premier) {
   txt('d-porteuse', D.cielTrouve ? mhz3(D.cielTrouve) + ' MHz' + (D.srTrouve ? ' · ' + D.srTrouve + ' kS/s' : '') + (D.verrouille ? ' · écart ' + (D.fiTrouvee - D.fi) + ' kHz' : '') : '');
   txt('d-debit', D.kbps ? Math.round(D.kbps) + ' kb/s' + (D.nuls ? ' · ' + D.nuls + ' % de vide' : '') : '');
   txt('d-service', [D.fournisseur, D.service].filter(x => x).join(' · ') + (D.flux.length ? '  —  ' + D.flux.map(f => f.type + ' (PID ' + f.pid + ')').join(', ') : ''));
+  // The service name is a callsign: its QRZ record under it (unless the station card shows it already).
+  const sq = D.qrz && D.qrz.service && !(D.carte && D.carte.recue && D.carte.indicatif === D.qrz.service) ? D.qrz.service : '';
+  dPose('d-qrz-service', sq ? '<b>' + esc(sq) + '</b> · ' + dQrzHtml(sq, false) : '');
   txt('d-ou', D.noeud ? 'sur le SatMe-Node ' + (D.nomNoeud ? '« ' + D.nomNoeud + ' » ' : '') + '(' + D.noeud + ')' : 'sur ce PC');
   g('d-prog').hidden = !!D.noeud;
   txt('d-titre', D.actif ? '· ' + mhz3(D.ciel) + ' MHz · ' + D.sr + ' kS/s · FI ' + mhz3(D.fi) + ' MHz' : '');
@@ -3769,7 +3778,8 @@ async function ticTextesDatv() {
     (i ? '' : '<span class="petit">Indicatif lu dans l’image : </span>') + '<b>' + esc(l.c) + '</b> ' + (l.drapeau ? f8Drapeau(l.drapeau) + ' ' : '') +
     '<span class="petit">' + esc(l.pays || '') + ' · lu ' + l.lectures + ' fois de suite' + (l.mot ? ' (écrit « ' + esc(l.mot) + ' » par la lecture)' : '') +
     (l.accord || l.garant ? ' · <span style="color:var(--vert)">' + ({ carte: '= carte de la station', carnet: 'déjà au carnet', moi: '= ton indicatif' }[l.garant] || '= nom du service') + ', très probable</span>' : '') + '</span> ' +
-    '<button onclick="dNote(\'' + esc(l.c) + '\',\'\',\'\')">Noter le QSO</button></div>').join('');
+    '<button onclick="dNote(\'' + esc(l.c) + '\',\'\',\'\')">Noter le QSO</button>' +
+    (dQrz(l.c) && !dQrz(l.c).attente ? '<div class="dc-qrz">' + dQrzHtml(l.c, true) + '</div>' : '') + '</div>').join('');
   const b = g('d-lu'), l0 = lus[0];
   b.hidden = !(l0 && D && D.actif);
   if (l0) { b.innerHTML = esc(l0.c) + (l0.drapeau ? ' ' + f8Drapeau(l0.drapeau) : ''); b.className = 'd-lu' + (l0.accord || l0.garant ? ' sur' : ''); }
@@ -3803,6 +3813,8 @@ async function dtStTraduction(on) { try { await fetch('api/phonie?stTraduction='
 function dNote(call, loc, rep) {
   const k = (D && D.ciel) || (DT && DT.ciel) || 0;
   phNote(call, loc, rep);
+  const f = dQrz(call);
+  if (f && f.ok && f.carre && !v('c-loc') && call.indexOf('/') < 0) g('c-loc').value = f.carre;
   dtQso = k;
   const a = g('c-aide');
   if (!a.dataset.avant) a.dataset.avant = a.textContent;
@@ -3999,6 +4011,32 @@ async function eArrete() {
   txt('e-msg', 'arrêtée'); setTimeout(ticEmission, 200);
 }
 
+// ------------------------------------------------------------------ DATV: QRZ.com records of the callsigns seen
+// Looked up by SatMe-PC once per callsign (kept 7 days, one request every 5 s at most): D.qrz.
+function dQrz(c) { return D && D.qrz && D.qrz.fiches && c ? D.qrz.fiches[c] : null; }
+function dQrzHtml(c, court) {
+  if (!D || !D.qrz || !c) return '';
+  if (!D.qrz.compte) return court ? '' : '<span class="petit">compte QRZ non configuré (Réglages › Services en ligne)</span>';
+  const f = dQrz(c); if (!f) return '';
+  const lien = f.lien ? ' <a href="' + esc(f.lien).replace(/"/g, '') + '" target="_blank" rel="noopener">fiche QRZ</a>' : '';
+  if (f.attente) return '<span class="petit">QRZ…</span>';
+  if (f.inconnu) return '<span class="petit">inconnu de QRZ</span>' + lien;
+  if (f.echec) return '<span class="petit">QRZ : ' + esc(f.echec) + '</span>' + lien;
+  const qsl = court ? '' : ' <span class="petit"><span' + (f.lotw ? '' : ' class="non"') + '>LoTW</span> <span' + (f.eqsl ? '' : ' class="non"') + '>eQSL</span> <span' +
+    (f.qslPapier ? '' : ' class="non"') + '>QSL directe</span>' + (f.qslManager ? ' · via ' + esc(f.qslManager) : '') + '</span>';
+  const pays = f.pays || f.paysDxcc || '';
+  const morceaux = [f.nom ? '<b>' + esc(f.nom) + '</b>' : '', [f.qth, f.etat].filter(x => x).map(esc).join(', '),
+    pays ? (f.drapeau ? f8Drapeau(f.drapeau) + ' ' : '') + esc(pays) : '', f.carre ? '<b>' + esc(f.carre) + '</b>' : '',
+    f.km != null ? f.km.toLocaleString('fr-FR') + ' km · ' + f.azimut + '° ' + esc(f.rose) : '', f.classe && !court ? 'classe ' + esc(f.classe) : ''].filter(x => x);
+  return (!court && f.photo ? '<img src="' + esc(f.photo).replace(/"/g, '') + '" alt="" loading="lazy" onerror="this.remove()">' : '') +
+    '<span class="petit">QRZ : </span>' + morceaux.join(' · ') + qsl + lien;
+}
+/** [id]'s content changed only when it differs (the photo not reloaded every tick). */
+function dPose(id, html) {
+  const z = g(id); if (!z) return;
+  z.hidden = !html;
+  if (z.dataset.vu !== html) { z.dataset.vu = html; z.innerHTML = html; }
+}
 // ------------------------------------------------------------------ DATV station card and chat (in the transport stream)
 let eCartePremier = true;
 function dcBulle(c, texte, t, moi, recu) {
@@ -4017,6 +4055,7 @@ function ticCarteDatv() {
     txt('dc-age', k.recue ? (k.indicatif === moi ? 'notre propre signal · ' : '') + 'carte reçue il y a ' + duree(k.age * 1000) : '');
     g('dc-info').innerHTML = [k.pays ? esc(k.pays) : '', k.nom ? esc(k.nom) : '', k.qth ? esc(k.qth) : '', k.locator ? '<b>' + esc(k.locator) + '</b>' : '',
       k.km != null ? k.km.toLocaleString('fr-FR') + ' km · ' + k.azimut + '° ' + esc(k.rose) : ''].filter(x => x).join(' · ');
+    dPose('dc-qrz', dQrzHtml(k.indicatif, false));
     txt('dc-tech', [k.khz ? mhz3(k.khz) + ' MHz' : '', k.modcod ? k.modcod + (k.sr ? ' · ' + k.sr + ' kS/s' : '') : '', k.puissance, k.antenne, k.logiciel].filter(x => x).join(' · '));
     const m = g('dc-message'); m.hidden = !k.message; txt('dc-message', k.message ? '« ' + k.message + ' »' : '');
     // Talkback on the narrow band: one click to the cockpit, tuned there.

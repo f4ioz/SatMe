@@ -69,6 +69,9 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
     /** The DATV transmission's pictures and videos: the folder browser and the files sent (set before [demarre]). */
     @Volatile var fichiersDatv: FichiersDatvPc? = null
 
+    /** QRZ.com records of the callsigns seen in DATV, and their photos (set before [demarre]). */
+    @Volatile var qrzDatv: QrzDatvPc? = null
+
     private var socket: ServerSocket? = null
     val portReel: Int get() = socket?.localPort ?: port
 
@@ -357,13 +360,28 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
             }
             "/api/datv" -> {
                 val d = datv
-                val o = if (d == null) JSONObject().put("ok", false) else JsonPc.datv(d).put("carte", carteDatv(d))
+                val o = if (d == null) JSONObject().put("ok", false) else JsonPc.datv(d).put("carte", carteDatv(d)).also { o ->
+                    qrzDatv?.let { z ->
+                        // The callsigns confirmed: the card's, the service name's, those the picture's reading confirmed.
+                        val t = textesDatv
+                        val l = fr.f4ioz.satcombo.datv.QrzDatv.candidats(d.carte.carte?.indicatif.orEmpty(), d.etat.service,
+                            if (t != null && t.ocr) t.confirmes().map { it.indicatif } else emptyList())
+                        z.suit(l)
+                        o.put("qrz", z.json(l, station.etat.value.observateur)
+                            .put("service", fr.f4ioz.satcombo.datv.QrzDatv.candidats("", d.etat.service, emptyList()).firstOrNull().orEmpty()))
+                    }
+                }
                 envoie(sortie, "200 OK", "application/json; charset=utf-8", o.toString().toByteArray())
             }
             "/api/datv/emission" -> {
                 val o = emission?.json()?.put("ok", true)?.put("coupeTx", sdr?.coupeTxEnReception == true)
                     ?.put("plutoHote", sdr?.plutoHote.orEmpty())?.put("plutoPort", sdr?.plutoPort ?: 0) ?: JSONObject().put("ok", false)
                 envoie(sortie, "200 OK", "application/json; charset=utf-8", o.toString().toByteArray())
+            }
+            "/api/datv/qrz/photo" -> {
+                val p = qrzDatv?.photo(q["c"].orEmpty())
+                if (p == null) envoie(sortie, "404 Not Found", "text/plain", "pas de photo".toByteArray())
+                else envoie(sortie, "200 OK", p.second, p.first)
             }
             "/api/datv/image.jpg" -> {
                 val img = datv?.image
@@ -789,8 +807,12 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
             "/api/datv/qso" -> {
                 // The station whose card is received, into the log: QO-100 or terrestrial DATV, the MER we measure as our report.
                 val c = carnet ?: return JSONObject().put("ok", false)
-                val e = c.ajouteDatv(q["c"].orEmpty(), q["l"].orEmpty(), q["rs"].orEmpty(), q["n"].orEmpty(),
-                    q["qo100"] == "1", q["khz"]?.toLongOrNull() ?: 0L, q["nm"].orEmpty(), q["qth"].orEmpty())
+                // What the card leaves blank, from QRZ (its square never for a /P or /M: QRZ gives the home address).
+                val f = qrzDatv?.fiche(q["c"].orEmpty())
+                val l = q["l"].orEmpty().ifBlank { if (f != null && !q["c"].orEmpty().contains('/')) f.carre else "" }
+                val e = c.ajouteDatv(q["c"].orEmpty(), l, q["rs"].orEmpty(), q["n"].orEmpty(),
+                    q["qo100"] == "1", q["khz"]?.toLongOrNull() ?: 0L, q["nm"].orEmpty().ifBlank { f?.nom.orEmpty() },
+                    q["qth"].orEmpty().ifBlank { f?.qth.orEmpty() })
                     ?: return JSONObject().put("ok", false).put("erreur", "il faut un indicatif")
                 return ok.put("t", e.timeMs)
             }
@@ -876,7 +898,9 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
             }
             "/api/carnet/ajoute" -> {
                 val c = carnet ?: return JSONObject().put("ok", false)
-                val fiche = q["c"]?.takeIf { it.isNotBlank() }?.let { kotlinx.coroutines.runBlocking { c.ficheQrz(it) } }
+                // From the DATV tab, the record already fetched there first (no second QRZ request).
+                val fiche = q["c"]?.takeIf { it.isNotBlank() }?.let { cs ->
+                    q["datv"]?.let { qrzDatv?.fiche(cs) } ?: kotlinx.coroutines.runBlocking { c.ficheQrz(cs) } }
                     ?.takeIf { it.erreur.isBlank() && !it.vide }
                 // Afterwards: the satellite and the time given (a past pass), not the followed one now.
                 val t = q["t"]?.toLongOrNull()
