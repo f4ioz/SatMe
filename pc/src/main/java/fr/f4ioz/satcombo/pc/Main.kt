@@ -160,8 +160,10 @@ fun main(args: Array<String>) {
     // DATV transmission with the Pluto: nothing sent until the operator asks and confirms on the page.
     val emission = EmissionDatvPc(station.stockage, File(dossier, "tmp"), indicatif = { station.settings.callsign },
         locator = { station.settings.manualLocator }, plutoHote = { sdr.plutoHote }, plutoPort = { sdr.plutoPort },
-        plutoOccupe = { if (sdr.plutoEnReception) "l'ADALM-PLUTO reçoit (onglet SDR) : arrêter cette réception d'abord" else null },
-        bladerfOccupe = { if (sdr.bladerfEnReception) "le bladeRF reçoit (onglet SDR) : arrêter cette réception d'abord" else null },
+        plutoOccupe = { if (sdr.plutoEnReception) "l'ADALM-PLUTO reçoit (onglet SDR) : arrêter cette réception d'abord"
+            else if (datv.sdrTenu == fr.f4ioz.satcombo.datv.Datv.PLUTO) "l'ADALM-PLUTO reçoit la DATV : arrêter cette réception d'abord" else null },
+        bladerfOccupe = { if (sdr.bladerfEnReception) "le bladeRF reçoit (onglet SDR) : arrêter cette réception d'abord"
+            else if (datv.sdrTenu == fr.f4ioz.satcombo.datv.Datv.BLADERF) "le bladeRF reçoit la DATV : arrêter cette réception d'abord" else null },
         bladerfProgramme = { sdr.programmeBladerf() },
         reception = { datv.etat.let { e ->
             if (!e.actif) null else {
@@ -180,14 +182,22 @@ fun main(args: Array<String>) {
     val planche = PlancheWebPc(station, son, dossier)
     val emissionSstv = EmissionSstvPc(station.stockage, indicatif = { station.settings.callsign }, locator = { station.settings.manualLocator },
         plutoHote = { sdr.plutoHote }, plutoPort = { sdr.plutoPort },
-        plutoOccupe = { if (sdr.plutoEnReception) "l'ADALM-PLUTO reçoit (onglet SDR) : arrêter cette réception d'abord" else null },
-        bladerfOccupe = { if (sdr.bladerfEnReception) "le bladeRF reçoit (onglet SDR) : arrêter cette réception d'abord" else null },
+        plutoOccupe = { if (sdr.plutoEnReception) "l'ADALM-PLUTO reçoit (onglet SDR) : arrêter cette réception d'abord"
+            else if (datv.sdrTenu == fr.f4ioz.satcombo.datv.Datv.PLUTO) "l'ADALM-PLUTO reçoit la DATV : arrêter cette réception d'abord" else null },
+        bladerfOccupe = { if (sdr.bladerfEnReception) "le bladeRF reçoit (onglet SDR) : arrêter cette réception d'abord"
+            else if (datv.sdrTenu == fr.f4ioz.satcombo.datv.Datv.BLADERF) "le bladeRF reçoit la DATV : arrêter cette réception d'abord" else null },
         bladerfProgramme = { sdr.programmeBladerf() },
         autreEmission = { if (emission.etat.emet) "une émission DATV est en cours : l'arrêter d'abord" else null },
         gainMaxDb = { emission.gainMaxDb },
         planche = { planche.image(it) }, planches = { planche.modeles() },
         signauxQo100 = { qo100.signaux.recents() })
     emission.autreEmission = { if (emissionSstv.etat.emet) "une émission SSTV est en cours : l'arrêter d'abord" else null }
+    // DATV received with the Pluto or the bladeRF: the SDR tab's board lent, given back afterwards; never while it transmits.
+    datv.materiel = MaterielSdrPc(sdr, { trafic.reprend() }, { station.settings.qo100EnCours }) { r ->
+        val qui = if (r == fr.f4ioz.satcombo.datv.Datv.PLUTO) fr.f4ioz.satcombo.datv.Emetteur.PLUTO else fr.f4ioz.satcombo.datv.Emetteur.BLADERF
+        if ((emission.etat.emet && emission.etat.emetteur == qui) || emissionSstv.emetAvec(qui))
+            (if (qui == fr.f4ioz.satcombo.datv.Emetteur.PLUTO) "l'ADALM-PLUTO" else "le bladeRF") + " émet : arrêter l'émission d'abord" else null
+    }
     sdr.emissionPluto = { emission.etat.emet || emissionSstv.emetAvec(fr.f4ioz.satcombo.datv.Emetteur.PLUTO) }
     sdr.emissionBladerf = { (emission.etat.emet && emission.etat.emetteur == fr.f4ioz.satcombo.datv.Emetteur.BLADERF) ||
         emissionSstv.emetAvec(fr.f4ioz.satcombo.datv.Emetteur.BLADERF) }
@@ -296,6 +306,7 @@ fun dossierParDefaut(): File {
 private fun mainNoeud(port: Int, dossier: File) {
     val stockage = StockageFichier(File(dossier, "reglages.properties"))
     val datv = DatvPc(stockage, File(dossier, "enregistrements"), lecteursLocaux = false)
+    datv.materiel = MaterielNoeud(stockage)
     val n = NoeudPc(datv, stockage, port)
     n.demarre()
     println("SatMe-Node ${versionPc()} « ${n.nom} » : port ${n.portReel}")

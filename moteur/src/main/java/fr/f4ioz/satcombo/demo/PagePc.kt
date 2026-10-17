@@ -1201,7 +1201,11 @@ object PagePc {
       <div class="st-pan" id="d-p-rx">
     <div class="carte">
       <div class="t">Réception</div>
-      <div class="ligne" style="margin-top:0"><span class="petit" style="min-width:86px">MiniTiouner</span><span id="d-ou" class="petit" style="flex:1"></span>
+      <div class="ligne" style="margin-top:0"><span class="petit" style="min-width:86px">Récepteur</span>
+        <select id="d-recepteur" style="max-width:220px" onchange="dRecepteurVu()"><option value="minitiouner">MiniTiouner (LongMynd)</option>
+          <option value="pluto">ADALM-PLUTO</option><option value="bladerf">bladeRF 2.0</option></select></div>
+      <div class="petit" id="d-recepteur-note" hidden>Démodulateur DVB-S2 de SatMe (QPSK, 8PSK). L’onglet SDR prête son récepteur pendant la réception et le reprend à l’arrêt.</div>
+      <div class="ligne" style="margin-top:0"><span class="petit" style="min-width:86px">Où</span><span id="d-ou" class="petit" style="flex:1"></span>
         <button onclick="g('d-noeud-boite').hidden = !g('d-noeud-boite').hidden" title="Le MiniTiouner sur ce PC, ou sur un SatMe-Node près de l'antenne">Changer</button></div>
       <div id="d-noeud-boite" hidden>
         <div class="petit">Un <b>SatMe-Node</b> (Raspberry Pi près de l'antenne, <code>satme --noeud</code>) : son adresse et le code qu'il a donné au démarrage. Adresse vide : le MiniTiouner de ce PC.</div>
@@ -1214,7 +1218,7 @@ object PagePc {
       <div class="ligne"><span class="petit" style="min-width:86px">kS/s</span><div id="d-debits" class="o-puces" style="flex:1"></div></div>
       <div class="ligne"><span class="petit" style="min-width:86px">OL du LNB (MHz)</span><input id="d-ol" style="max-width:130px">
         <button onclick="dCale()" title="Accrocher la balise, puis : l'oscillateur est corrigé pour qu'elle tombe à sa fréquence">Caler sur le signal</button></div>
-      <div class="ligne"><span class="petit" style="min-width:86px">Entrée</span><select id="d-entree" style="max-width:150px"><option value="a">A (haut)</option><option value="b">B (bas)</option></select>
+      <div class="ligne" id="d-ligne-entree"><span class="petit" style="min-width:86px">Entrée</span><select id="d-entree" style="max-width:150px"><option value="a">A (haut)</option><option value="b">B (bas)</option></select>
         <span class="petit">Alim. LNB</span><select id="d-lnb" style="max-width:150px" onchange="dLnb()"><option value="">coupée</option><option value="v">13 V (V)</option><option value="h">18 V (H)</option></select></div>
       <div class="avert" id="d-lnb-avert" hidden>Le MiniTiouner alimentera le LNB : seulement si rien d'autre ne l'alimente (pas de séparateur qui passe le continu vers un autre récepteur).</div>
       <label class="petit" style="display:block;margin-top:6px"><input type="checkbox" id="d-son"> Son sur ce PC</label>
@@ -3581,6 +3585,7 @@ async function ticDatv(premier) {
   if (premier || !document.activeElement || !document.activeElement.id.startsWith('d-')) {
     if (premier) {
       g('d-ciel').value = mhz3(D.ciel); g('d-ol').value = mhz3(D.ol); g('d-entree').value = D.entree; g('d-son').checked = D.son; dSr = D.sr;
+      g('d-recepteur').value = D.recepteur || 'minitiouner'; dRecepteurVu();
       g('d-canal').innerHTML = '<option value="">—</option><option value="' + mhz3(D.balise) + '">Balise ' + mhz3(D.balise) + '</option>' +
         D.canaux.map(k => '<option value="' + mhz3(k) + '">' + mhz3(k) + '</option>').join('');
     }
@@ -3602,7 +3607,7 @@ async function ticDatv(premier) {
   dPose('d-qrz-service', sq ? '<b>' + esc(sq) + '</b>' + (lu && sq === lu.c ? ' <span class="petit">lu dans l’image' + (sv ? ' (service : ' + esc(sv) + ')' : '') + '</span>' : '') +
     ' · ' + dQrzHtml(sq, false) : '');
   txt('d-ou', D.noeud ? 'sur le SatMe-Node ' + (D.nomNoeud ? '« ' + D.nomNoeud + ' » ' : '') + '(' + D.noeud + ')' : 'sur ce PC');
-  g('d-prog').hidden = !!D.noeud;
+  g('d-prog').hidden = !!D.noeud || (D.recepteur && D.recepteur !== 'minitiouner');
   txt('d-titre', D.actif ? '· ' + mhz3(D.ciel) + ' MHz · ' + D.sr + ' kS/s · FI ' + mhz3(D.fi) + ' MHz' : '');
   const r = g('d-rec'); r.style.display = D.enregistrement ? '' : 'none'; r.textContent = '● ' + D.enregistrement;
   g('d-benr').textContent = D.enregistrement ? 'Arrêter l’enregistrement' : 'Enregistrer';
@@ -3612,7 +3617,9 @@ async function ticDatv(premier) {
   const vr = D.verrouille;
   g('d-details').innerHTML = D.actif ? ['AGC1 ' + D.agc1, 'AGC2 ' + D.agc2, vr && D.ber != null ? 'BER ' + D.ber.toFixed(2) + ' %' : '',
     vr && D.courtes != null ? (D.courtes ? 'trames courtes' : 'trames normales') : '', vr && D.pilotes != null ? (D.pilotes ? 'pilotes' : 'sans pilotes') : '',
-    D.images ? D.images + ' images' : ''].filter(x => x).join('<br>') : '';
+    D.images ? D.images + ' images' : '',
+    D.s2 ? 'trames ' + D.s2.trames + ' · échecs ' + D.s2.echecs + (D.s2.sautees ? ' · sautées ' + D.s2.sautees : '') : '',
+    D.s2 ? 'LDPC ' + D.s2.iterations + ' itér. · ' + Math.round(D.s2.fs / 1000) + ' kéch/s' : ''].filter(x => x).join('<br>') : '';
   const pr = D.programme ? 'ok:' + D.programme : 'non';
   if (g('d-prog').dataset.vu !== pr) {
     g('d-prog').dataset.vu = pr;
@@ -3729,9 +3736,15 @@ function dessineConstellation() {
 setInterval(() => ticDatv(), 500);
 function dParams() {
   return 'ciel=' + enc(v('d-ciel').replace(',', '.')) + '&sr=' + dSr + '&ol=' + enc(v('d-ol').replace(',', '.')) + '&entree=' + g('d-entree').value +
-    '&lnb=' + g('d-lnb').value + '&son=' + (g('d-son').checked ? 1 : 0);
+    '&lnb=' + g('d-lnb').value + '&son=' + (g('d-son').checked ? 1 : 0) + '&recepteur=' + g('d-recepteur').value;
 }
-async function dDemarre() { txt('d-msg', 'démarrage de LongMynd…'); const j = await dPost('demarre?' + dParams()); if (j && j.ok !== false) txt('d-msg', ''); }
+// The receiver chosen: the MiniTiouner's own settings (input, LNB supply) only for it.
+function dRecepteurVu() {
+  const m = g('d-recepteur').value === 'minitiouner';
+  g('d-ligne-entree').hidden = !m; g('d-recepteur-note').hidden = m;
+  if (!m) { g('d-lnb').value = ''; dLnb(); }
+}
+async function dDemarre() { txt('d-msg', g('d-recepteur').value === 'minitiouner' ? 'démarrage de LongMynd…' : 'ouverture du récepteur…'); const j = await dPost('demarre?' + dParams()); if (j && j.ok !== false) txt('d-msg', ''); }
 async function dPost(q) {
   let j = null;
   try { j = await (await fetch('api/datv/' + q, { method: 'POST' })).json(); } catch (x) {}
@@ -5712,7 +5725,9 @@ function rendSdr() {
   const r = R;
   etatMarche('r', r.actif); txt('r-pastille', r.actif ? 'réception' : 'arrêtée');
   txt('r-info', r.actif ? r.tuner + ' · ' + (r.debit / 1024).toFixed(1) + ' Mo/s' + (r.perdus ? ' · ' + r.perdus + ' blocs perdus' : '') : '');
-  txt('r-erreur', r.erreur || '');
+  // The SDR lent to DATV's demodulator: said plainly, the tab takes it back when DATV stops.
+  txt('r-erreur', r.datvTient ? (r.datvTient === 'pluto' ? 'L’ADALM-PLUTO' : 'Le bladeRF') + ' reçoit la DATV (onglet DATV) : ' +
+    'l’onglet SDR ne peut pas s’en servir pendant ce temps ; il reprendra à l’arrêt de cette réception.' : (r.erreur || ''));
   txt('r-sat', r.satellite || (E && E.suivi ? E.suivi.nom : '(aucun)'));
   const coche = (id, b) => { if (document.activeElement !== g(id)) g(id).checked = b; };
   coche('r-suit', r.suit); coche('r-doppler', r.doppler); coche('r-deemph', r.deemph); coche('r-son', r.son); coche('r-agc', r.agc);

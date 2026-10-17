@@ -73,9 +73,17 @@ class ClientNoeud(private val stockage: Stockage) {
         }.getOrElse { it.message ?: "node injoignable" }
     }
 
-    /** Starts receiving [r] there; null when started, else why not. */
-    fun demarre(r: ReglageDatv): String? {
-        val q = "?ciel=" + r.cielKhz / 1000.0 + "&sr=" + r.srKs + "&ol=" + r.olKhz / 1000.0 + "&entree=" + (if (r.entreeB) "b" else "a") + "&lnb=" + r.lnb
+    /** Starts receiving [r] there with [recepteur] (see [Datv.RECEPTEURS]); null when started, else why not. */
+    fun demarre(r: ReglageDatv, recepteur: String = Datv.MINITIOUNER): String? {
+        if (recepteur != Datv.MINITIOUNER) {
+            // An older node knows only the MiniTiouner: it would start that one instead.
+            val connus = runCatching { JSONObject(http.newCall(Request.Builder().url(base() + "/noeud/api").build()).execute().use { it.body?.string().orEmpty() }) }
+                .getOrNull()?.optJSONArray("recepteurs")
+            if (connus == null || (0 until connus.length()).none { connus.optString(it) == recepteur })
+                return "ce SatMe-Node ne sait pas recevoir avec " + Datv.libelleRecepteur(recepteur) + " : le mettre à jour"
+        }
+        val q = "?ciel=" + r.cielKhz / 1000.0 + "&sr=" + r.srKs + "&ol=" + r.olKhz / 1000.0 + "&entree=" + (if (r.entreeB) "b" else "a") + "&lnb=" + r.lnb +
+            "&recepteur=" + recepteur
         val rep = runCatching { post("/noeud/datv/demarre$q") }.getOrElse { return "node injoignable : " + (it.message ?: "") }
         return if (rep.optBoolean("ok", true)) null else rep.optString("erreur", "le node refuse")
     }

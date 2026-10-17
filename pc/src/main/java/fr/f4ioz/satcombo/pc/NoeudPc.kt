@@ -25,7 +25,9 @@ import kotlin.concurrent.thread
  *
  * The node only receives: LongMynd there ([DatvPc] without players), its
  * status and its transport stream sent to the clients. Nothing is decoded on
- * it, which is why a Raspberry Pi 3 is enough.
+ * it, which is why a Raspberry Pi 3 is enough. Or an ADALM-PLUTO / a
+ * bladeRF plugged into it and SatMe's DVB-S2 demodulator ([MaterielNoeud]):
+ * that one wants a Raspberry Pi 4 or 5, the same stream going out.
  *
  * **A code, then a key.** At its first start the node draws a six-digit
  * code, said in its log (`journalctl -u satme-noeud`) and kept. A client
@@ -73,7 +75,7 @@ class NoeudPc(
         when (chemin) {
             // What it is, for anyone: nothing more.
             "/noeud/api" -> json(o, JSONObject().put("noeud", true).put("nom", nom).put("services", org.json.JSONArray(listOf("datv")))
-                .put("longmynd", datv.programme() != null))
+                .put("longmynd", datv.programme() != null).put("recepteurs", org.json.JSONArray(fr.f4ioz.satcombo.datv.Datv.RECEPTEURS)))
             "/noeud/entrer" -> {
                 if (q["code"]?.trim() == code) {
                     val cle = (1..24).map { "abcdefghijklmnopqrstuvwxyz0123456789".random() }.joinToString("")
@@ -102,6 +104,8 @@ class NoeudPc(
                 val r0 = datv.reglage
                 val r = r0.copy(cielKhz = khz("ciel") ?: r0.cielKhz, srKs = q["sr"]?.toIntOrNull() ?: r0.srKs, olKhz = khz("ol") ?: r0.olKhz,
                     entreeB = q["entree"]?.let { it == "b" } ?: r0.entreeB, lnb = q["lnb"]?.takeIf { it in setOf("", "v", "h") } ?: "", son = false)
+                // The receiver asked (an older client asks none: the MiniTiouner).
+                datv.recepteur = q["recepteur"]?.takeIf { it in fr.f4ioz.satcombo.datv.Datv.RECEPTEURS } ?: fr.f4ioz.satcombo.datv.Datv.MINITIOUNER
                 val e = datv.demarre(r)
                 json(o, if (e == null) JSONObject().put("ok", true) else JSONObject().put("ok", false).put("erreur", e))
             }

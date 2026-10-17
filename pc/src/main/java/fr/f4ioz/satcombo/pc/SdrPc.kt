@@ -221,6 +221,8 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
     var emissionBladerf: () -> Boolean = { false }
     /** The bladeRF receiving here now. */
     val bladerfEnReception: Boolean get() = cle is BladerfSdr
+    /** The receiver DATV's demodulator holds now ("pluto", "bladerf"), or null: this tab may not start on it meanwhile. */
+    @Volatile var datvTient: String? = null
 
     /** bladeRF-cli: in the folder set, else in the PATH; null when missing. */
     fun programmeBladerf(): String? {
@@ -463,12 +465,14 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
     private fun connecte(): SourceIq {
         if (estBladerf()) {
             if (emissionBladerf()) throw java.io.IOException("le bladeRF émet (onglet DATV ou SSTV) : arrêter l'émission d'abord")
+            if (datvTient == BLADERF) throw java.io.IOException(DATV_TIENT_BLADERF)
             val prog = programmeBladerf() ?: throw java.io.IOException(conseilBladerf())
             val c = infoBladerf.carte
             return BladerfSdr.ouvre(prog, c?.serie.orEmpty(), c?.libelle ?: "bladeRF 2.0")
         }
         if (estPluto()) {
             if (emissionPluto()) throw java.io.IOException("l'ADALM-PLUTO émet (onglet DATV ou SSTV) : arrêter l'émission d'abord")
+            if (datvTient == PLUTO) throw java.io.IOException(DATV_TIENT_PLUTO)
             val p = PlutoSdr.connecte(plutoHote, plutoPort)
             if (coupeTxEnReception) {
                 val (h, n) = plutoHote to plutoPort
@@ -657,6 +661,8 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
     }.getOrNull()
 
     companion object {
+        const val DATV_TIENT_PLUTO = "l'ADALM-PLUTO reçoit la DATV (onglet DATV) : arrêter cette réception d'abord (l'onglet SDR reprendra ensuite)"
+        const val DATV_TIENT_BLADERF = "le bladeRF reçoit la DATV (onglet DATV) : arrêter cette réception d'abord (l'onglet SDR reprendra ensuite)"
         const val NOM_SOURCE = "Clé SDR (rtl_tcp)"
         const val CLE_HOTE = "pc_sdr_hote"
         const val CLE_PORT = "pc_sdr_port"
