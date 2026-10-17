@@ -421,9 +421,11 @@ class LecteurCarte(private val horloge: () -> Long = System::currentTimeMillis, 
      * bearing from [moi], how many contacts with it in the log) and the
      * chat lines. [cielKhz]: where we receive (QO-100's wide band or not).
      */
-    fun json(maintenant: Long, moi: fr.f4ioz.satcombo.data.Observer?, contacts: (String) -> Int, cielKhz: Long): JSONObject {
+    fun json(maintenant: Long, moi: fr.f4ioz.satcombo.data.Observer?, contacts: (String) -> Int, cielKhz: Long,
+             valideDepuisMs: Long = 0L): JSONObject {
         val o = JSONObject()
-        val c = carte
+        // A card read before the current lock is another station's: not shown as the one received.
+        val c = carte?.takeIf { carteMs >= valideDepuisMs }
         o.put("recue", c != null).put("qo100", cielKhz in QO100_LARGE_KHZ)
         if (c != null) {
             o.put("age", (maintenant - carteMs) / 1000).put("indicatif", c.indicatif).put("locator", c.locator).put("nom", c.nom)

@@ -364,8 +364,9 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                     qrzDatv?.let { z ->
                         // The callsigns confirmed: the card's, the service name's, those the picture's reading confirmed.
                         val t = textesDatv
-                        val l = fr.f4ioz.satcombo.datv.QrzDatv.candidats(d.carte.carte?.indicatif.orEmpty(), d.etat.service,
-                            if (t != null && t.ocr) t.confirmes().map { it.indicatif } else emptyList())
+                        val carteActuelle = d.carte.carte?.takeIf { d.carte.carteMs >= d.verrouDepuisMs }?.indicatif.orEmpty()
+                        val l = fr.f4ioz.satcombo.datv.QrzDatv.candidats(carteActuelle, d.etat.service,
+                            if (t != null && t.ocr) t.confirmes().filter { it.dernierMs >= d.verrouDepuisMs }.map { it.indicatif } else emptyList())
                         z.suit(l)
                         o.put("qrz", z.json(l, station.etat.value.observateur)
                             .put("service", fr.f4ioz.satcombo.datv.QrzDatv.candidats("", d.etat.service, emptyList()).firstOrNull().orEmpty()))
@@ -1167,7 +1168,7 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
     /** « Phonie → texte »: its state and overs, its settings, the day's transcript to download. */
     /** The station card received on DATV, with where it is from us and whether it is in the log. */
     private fun carteDatv(d: DatvPc): JSONObject = d.carte.json(System.currentTimeMillis(), station.etat.value.observateur,
-        { c -> carnet?.historique(c)?.size ?: 0 }, d.reglage.cielKhz)
+        { c -> carnet?.historique(c)?.size ?: 0 }, d.reglage.cielKhz, d.verrouDepuisMs)
 
     private fun phonie(r: RequeteHttp.Requete, chemin: String, q: Map<String, String>, sortie: OutputStream, p: PhoniePc) {
         val json = "application/json; charset=utf-8"
