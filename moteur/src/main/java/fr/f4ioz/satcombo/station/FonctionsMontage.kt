@@ -477,8 +477,8 @@ object FonctionsMontage {
         val file = ArrayDeque<Triple<String, String?, Int>>(); file.add(Triple(depart, null, 0)); prof[depart] = 0
         while (file.isNotEmpty()) {
             val (id, arrivee, d) = file.removeFirst()
-            val m = c.element(id)?.let { Montage.modele(it) } ?: continue
-            for (p in m.ports) {
+            val e = c.element(id) ?: continue
+            for (p in Montage.ports(e)) {
                 if (p.signal != Signal.RF || p.id == arrivee) continue
                 if (tx && !(p.voie.emet && p.sens != Sens.ENTREE)) continue
                 if (!tx && !(p.voie.recoit && p.sens != Sens.SORTIE)) continue
@@ -512,7 +512,7 @@ object FonctionsMontage {
             for (l in c.liens) {
                 val (ici, autre) = when (id) { l.de.element -> l.de to l.vers; l.vers.element -> l.vers to l.de; else -> continue }
                 val p = Montage.port(c, ici) ?: continue
-                if (p.signal == Signal.RF || p.signal == Signal.MECA) continue
+                if (!p.signal.versPc) continue
                 if (audio && id == depart && p.signal == Signal.COMMANDE) continue
                 val ga = c.element(autre.element)?.let { Montage.modele(it) }?.genre
                 if (ga !in setOf(Genre.ORDINATEUR, Genre.NOEUD, Genre.INTERFACE, Genre.CARTE_SON)) continue

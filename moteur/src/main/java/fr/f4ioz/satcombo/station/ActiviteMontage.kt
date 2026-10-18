@@ -30,7 +30,13 @@ object ActiviteMontage {
         val etat: JSONObject? = null, val sdr: JSONObject? = null, val datv: JSONObject? = null,
         val emissionDatv: JSONObject? = null, val emissionSstv: JSONObject? = null, val iq: JSONObject? = null,
         val qo100: JSONObject? = null, val lien: JSONObject? = null,
+        /** The programs and services beside the computer, as the PC sees them (see [boites]). */
+        val boites: JSONObject? = null,
     )
+
+    /** A boîte's state: talking with SatMe now, set up but quiet, or off (not set up). */
+    enum class EtatBoite { CONNECTE, CONFIGURE, ARRET }
+    data class Boite(val etat: EtatBoite, val texte: String)
 
     /**
      * The roles active now ("sdr:pluto", "tx:bladerf", "cat"…), the ones in
@@ -41,6 +47,8 @@ object ActiviteMontage {
     data class Activite(
         val rx: Set<String> = emptySet(), val tx: Set<String> = emptySet(), val relies: Set<String> = emptySet(),
         val erreurs: Map<String, String> = emptyMap(), val mhz: Map<String, Double> = emptyMap(), val resume: List<String> = emptyList(),
+        /** The boîtes' states, by their role's name ("wavelog", "lien"…). */
+        val boites: Map<String, Boite> = emptyMap(),
     ) {
         val vide get() = rx.isEmpty() && tx.isEmpty()
     }
@@ -48,7 +56,8 @@ object ActiviteMontage {
     enum class Etat { REPOS, RELIE, RX, TX, RXTX }
 
     /** The chain lit: each element's and cable's state, the frequency on each radio cable lit, the elements in error. */
-    data class Allumage(val elements: Map<String, Etat>, val liens: Map<String, Etat>, val mhz: Map<String, Double>, val erreurs: Map<String, String>) {
+    data class Allumage(val elements: Map<String, Etat>, val liens: Map<String, Etat>, val mhz: Map<String, Double>, val erreurs: Map<String, String>,
+                        val boites: Map<String, Boite> = emptyMap()) {
         /** The elements taking part in what happens now (the simplified drawing). */
         fun enOeuvre(): Set<String> = elements.filterValues { it != Etat.REPOS }.keys
     }
@@ -134,7 +143,59 @@ object ActiviteMontage {
         if (rot.b("connecte")) relies += "rotor"
         val li = l.lien
         if (li.b("ecoute") && (li?.optInt("clients", 0) ?: 0) > 0) relies += "telephone"
-        return Activite(rx, tx, relies, err, mhz, resume)
+        val bx = boites(l.boites)
+        bx.forEach { (k, v) -> if (v.etat == EtatBoite.CONNECTE) relies += "boite:$k" }
+        return Activite(rx, tx, relies, err, mhz, resume, bx)
+    }
+
+    /**
+     * The boîtes' states from what the PC knows (settings filled in, a
+     * service on, programs connected): never asked of the services
+     * themselves. Keys of [o]: wavelog {url, cle}, qrz {configure}, psk {on,
+     * etat}, chat {on, etat}, carnets (the rigctld state: on, clients, port),
+     * lien (on, clients, port), telephone {connecte, adresse}, noeud {nom,
+     * actif}, ecoute {on}.
+     */
+    fun boites(o: JSONObject?): Map<String, Boite> {
+        if (o == null) return emptyMap()
+        val r = LinkedHashMap<String, Boite>()
+        fun n(x: JSONObject?) = x?.optInt("clients", 0) ?: 0
+        o.optJSONObject("wavelog")?.let { w ->
+            r["wavelog"] = when {
+                w.b("url") && w.b("cle") -> Boite(EtatBoite.CONFIGURE, "adresse et clé réglées")
+                w.b("url") -> Boite(EtatBoite.CONFIGURE, "adresse réglée, sans clé")
+                else -> Boite(EtatBoite.ARRET, "pas réglé")
+            }
+        }
+        o.optJSONObject("qrz")?.let { q -> r["qrz"] = if (q.b("configure")) Boite(EtatBoite.CONFIGURE, "identifiant réglé") else Boite(EtatBoite.ARRET, "pas réglé") }
+        o.optJSONObject("psk")?.let { p -> r["psk"] = if (p.b("on")) Boite(EtatBoite.CONNECTE, p.s("etat").ifBlank { "envoi choisi" }) else Boite(EtatBoite.ARRET, "envoi non choisi") }
+        o.optJSONObject("chat")?.let { c -> r["chat"] = if (c.b("on")) Boite(EtatBoite.CONNECTE, c.s("etat").ifBlank { "en marche" }) else Boite(EtatBoite.ARRET, "arrêté") }
+        o.optJSONObject("carnets")?.let { k ->
+            r["carnets"] = when {
+                !k.b("on") -> Boite(EtatBoite.ARRET, "arrêté")
+                n(k) > 0 -> Boite(EtatBoite.CONNECTE, n(k).toString() + (if (n(k) > 1) " programmes" else " programme"))
+                else -> Boite(EtatBoite.CONFIGURE, "en attente" + (k.optInt("port", 0).takeIf { it > 0 }?.let { " (port $it)" } ?: ""))
+            }
+        }
+        o.optJSONObject("lien")?.let { k ->
+            r["lien"] = when {
+                !k.b("on") -> Boite(EtatBoite.ARRET, "arrêté")
+                n(k) > 0 -> Boite(EtatBoite.CONNECTE, n(k).toString() + (if (n(k) > 1) " clients" else " client"))
+                else -> Boite(EtatBoite.CONFIGURE, "en attente" + (k.optInt("port", 0).takeIf { it > 0 }?.let { " (port $it)" } ?: ""))
+            }
+        }
+        o.optJSONObject("telephone")?.let { t ->
+            r["telephone"] = if (t.b("connecte")) Boite(EtatBoite.CONNECTE, t.s("adresse").ifBlank { "appairé" }) else Boite(EtatBoite.ARRET, "pas appairé")
+        }
+        o.optJSONObject("noeud")?.let { k ->
+            r["noeud"] = when {
+                k.s("nom").isBlank() -> Boite(EtatBoite.ARRET, "aucun")
+                k.b("actif") -> Boite(EtatBoite.CONNECTE, k.s("nom"))
+                else -> Boite(EtatBoite.CONFIGURE, k.s("nom"))
+            }
+        }
+        o.optJSONObject("ecoute")?.let { k -> r["ecoute"] = if (k.b("on")) Boite(EtatBoite.CONNECTE, "le son part vers une page") else Boite(EtatBoite.ARRET, "personne n'écoute") }
+        return r
     }
 
     private fun nomRecepteur(r: String) = when (r) {
@@ -170,8 +231,8 @@ object ActiviteMontage {
             while (file.isNotEmpty()) {
                 val (id, arrivee) = file.removeFirst()
                 if (!vus.add(id + "/" + arrivee)) continue
-                val m = c.element(id)?.let { Montage.modele(it) } ?: continue
-                for (p in m.ports) {
+                val e = c.element(id) ?: continue
+                for (p in Montage.ports(e)) {
                     if (p.signal != Signal.RF || p.id == arrivee) continue
                     if (tx && !(p.voie.emet && p.sens != Sens.ENTREE)) continue
                     if (!tx && !(p.voie.recoit && p.sens != Sens.SORTIE)) continue
@@ -184,8 +245,8 @@ object ActiviteMontage {
                         val loin = Montage.port(c, la) ?: continue
                         if (loin.signal != Signal.RF || (if (tx) !loin.voie.emet else !loin.voie.recoit)) continue
                         marque(li, l.id, etat); marque(el, la.element, etat)
-                        // The band the cable carries: the sky's on the antenna side of an LNB / converter, the IF after.
-                        val nominal = listOfNotNull(Montage.port(c, ici)?.mhz, loin.mhz).maxOrNull()
+                        // The band the cable carries: the output's (a wide-band input takes what comes), else the higher.
+                        val nominal = bandeDuCable(Montage.port(c, ici), loin)
                         // The frequency shown: the sky's or the IF's, whichever belongs to the cable's band.
                         val vues = (if (tx) listOf("ciel-tx", "fi-tx") else listOf("ciel-rx", "fi-rx")).mapNotNull { a.mhz[it] }
                         val f = if (nominal == null) vues.firstOrNull()
@@ -208,7 +269,7 @@ object ActiviteMontage {
                     val autre = when (id) { l.de.element -> l.vers; l.vers.element -> l.de; else -> continue }
                     val ici = if (autre == l.vers) l.de else l.vers
                     val p = Montage.port(c, ici) ?: continue
-                    if (p.signal == Signal.RF || p.signal == Signal.MECA) continue
+                    if (!p.signal.versPc) continue
                     val ga = c.element(autre.element)?.let { Montage.modele(it) }?.genre
                     // Towards the computer only: a radio or an antenna beyond is not part of it.
                     if (ga !in setOf(Genre.ORDINATEUR, Genre.TELEPHONE, Genre.NOEUD, Genre.INTERFACE, Genre.CARTE_SON)) continue
@@ -224,7 +285,7 @@ object ActiviteMontage {
             for (l in c.liens) {
                 val autre = when (id) { l.de.element -> l.vers; l.vers.element -> l.de; else -> continue }
                 val p = Montage.port(c, autre) ?: continue
-                if (p.signal == Signal.RF) continue
+                if (!p.signal.versPc) continue
                 marque(li, l.id, Etat.RELIE); marque(el, autre.element, Etat.RELIE)
             }
         }
@@ -232,7 +293,19 @@ object ActiviteMontage {
         for ((role, texte) in a.erreurs) sources(setOf(role)).forEach { erreurs[it] = texte }
         c.elements.forEach { if (it.id !in el) el[it.id] = Etat.REPOS }
         c.liens.forEach { if (it.id !in li) li[it.id] = Etat.REPOS }
-        return Allumage(el, li, mhz, erreurs)
+        val bx = HashMap<String, Boite>()
+        for (e in c.elements) {
+            val r = roles[e.id]!!.firstOrNull { it.startsWith("boite:") } ?: continue
+            bx[e.id] = a.boites[r.removePrefix("boite:")] ?: Boite(EtatBoite.ARRET, "état inconnu ici")
+        }
+        return Allumage(el, li, mhz, erreurs, bx)
+    }
+
+    /** The band a radio cable between [a] and [b] carries (MHz): the output's when one end is an output, else the higher. */
+    fun bandeDuCable(a: Montage.Port?, b: Montage.Port?): Int? {
+        val s = listOfNotNull(a, b).filter { it.sens == Sens.SORTIE && it.mhz != null }
+        if (s.size == 1) return s.single().mhz
+        return listOfNotNull(a?.mhz, b?.mhz).maxOrNull()
     }
 
     fun json(a: Activite, al: Allumage): JSONObject = JSONObject()
@@ -241,22 +314,32 @@ object ActiviteMontage {
         .put("mhz", JSONObject(al.mhz))
         .put("erreurs", JSONObject(al.erreurs))
         .put("frequences", JSONObject(a.mhz))
+        .put("boites", JSONObject().also { o -> al.boites.forEach { (id, b) -> o.put(id, JSONObject().put("etat", b.etat.name.lowercase()).put("texte", b.texte)) } })
         .put("resume", JSONArray(a.resume))
         .put("rx", a.rx.isNotEmpty()).put("tx", a.tx.isNotEmpty())
 
     /** A pretend activity, for the page's demonstration (`?essai=`): never what the station does. */
     fun essai(quoi: String): Activite = when (quoi) {
-        "rx" -> Activite(rx = setOf("sdr:pluto", "sdr:rtl", "cat", "datv:minitiouner"), mhz = mapOf("ciel-rx" to 10489.750, "fi-rx" to 739.750),
-            resume = listOf("Démonstration : réception (rien n'est reçu)"))
-        "tx" -> Activite(rx = setOf("sdr:pluto", "datv:minitiouner", "cat", "noeud"), tx = setOf("tx:pluto", "tx:bladerf"),
+        "rx" -> Activite(rx = setOf("sdr:pluto", "sdr:rtl", "cat", "datv:minitiouner"), relies = setOf("boite:lien", "boite:carnets"),
+            mhz = mapOf("ciel-rx" to 10489.750, "fi-rx" to 739.750),
+            resume = listOf("Démonstration : réception (rien n'est reçu)"), boites = BOITES_ESSAI)
+        "tx" -> Activite(rx = setOf("sdr:pluto", "datv:minitiouner", "cat", "noeud"), tx = setOf("tx:pluto", "tx:bladerf", "cat"),
             mhz = mapOf("ciel-rx" to 10489.750, "fi-rx" to 739.750, "ciel-tx" to 2400.250, "fi-tx" to 144.250),
-            resume = listOf("Démonstration : émission simulée (rien n'est émis)"))
+            resume = listOf("Démonstration : émission simulée (rien n'est émis)"), boites = BOITES_ESSAI)
         "datv-pluto" -> Activite(rx = setOf("datv:pluto", "cat"), mhz = mapOf("ciel-rx" to 10491.500, "fi-rx" to 741.500),
             resume = listOf("Démonstration : DATV reçue par l'ADALM-PLUTO (rien n'est reçu)"))
         "sstv-carte" -> Activite(rx = setOf("cat", "son"), mhz = mapOf("ciel-rx" to 10489.800),
             resume = listOf("Démonstration : SSTV par l'IC-9700 et sa carte son (rien n'est reçu)"))
         else -> Activite()
     }
+
+    /** The boîtes of the demonstration: said so, nothing is asked of any service. */
+    private val BOITES_ESSAI = mapOf(
+        "wavelog" to Boite(EtatBoite.CONFIGURE, "adresse et clé réglées"), "qrz" to Boite(EtatBoite.CONFIGURE, "identifiant réglé"),
+        "psk" to Boite(EtatBoite.ARRET, "envoi non choisi"), "chat" to Boite(EtatBoite.ARRET, "arrêté"),
+        "carnets" to Boite(EtatBoite.CONNECTE, "1 programme"), "lien" to Boite(EtatBoite.CONNECTE, "2 clients"),
+        "telephone" to Boite(EtatBoite.ARRET, "pas appairé"), "noeud" to Boite(EtatBoite.ARRET, "aucun"),
+        "ecoute" to Boite(EtatBoite.ARRET, "personne n'écoute"))
 
     // ------------------------------------------------------------------ the chain SatMe suggests
 

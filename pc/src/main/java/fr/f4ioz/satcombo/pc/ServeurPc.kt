@@ -114,7 +114,24 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
         emissionSstv = emissionSstv?.let { e -> runCatching { e.json().put("ok", true) }.getOrNull() },
         iq = iq?.let { i -> runCatching { i.json().put("ok", true) }.getOrNull() },
         qo100 = runCatching { JsonPc.qo100(station, false, sdr?.gammeHz) }.getOrNull(),
-        lien = lien?.let { l -> JSONObject().put("on", l.actif).put("ecoute", l.ecoute).put("clients", l.nbClients) })
+        lien = lien?.let { l -> JSONObject().put("on", l.actif).put("ecoute", l.ecoute).put("clients", l.nbClients) },
+        boites = runCatching { boitesMontage() }.getOrNull())
+
+    /** The programs and services beside the computer, as this PC knows them (settings, services on): nothing asked of them. */
+    private fun boitesMontage(): JSONObject {
+        val s = station.settings
+        val o = JSONObject()
+            .put("wavelog", JSONObject().put("url", s.carnetUrl.isNotBlank()).put("cle", s.carnetCle.isNotBlank()))
+            .put("qrz", JSONObject().put("configure", s.qrzUser.isNotBlank() && s.qrzMdp.isNotBlank()))
+            .put("psk", JSONObject().put("on", son?.psk?.actif ?: s.pskReporter).put("etat", son?.psk?.etat().orEmpty()))
+            .put("telephone", JSONObject().put("connecte", telephone?.connecte == true).put("adresse", telephone?.adresse.orEmpty()))
+            .put("ecoute", JSONObject().put("on", diffusion?.ecoute("sdr") == true || diffusion?.ecoute("datv") == true))
+        chatLarge?.let { c -> o.put("chat", JSONObject().put("on", c.on).put("etat", c.etat)) }
+        rigctld?.let { r -> runCatching { r.json() }.getOrNull()?.let { j -> o.put("carnets", JSONObject().put("on", j.optBoolean("on")).put("clients", j.optInt("clients")).put("port", j.optInt("port"))) } }
+        lien?.let { l -> o.put("lien", JSONObject().put("on", l.actif).put("clients", l.nbClients).put("port", l.port)) }
+        datv?.let { d -> o.put("noeud", JSONObject().put("nom", d.nomNoeud.ifBlank { d.noeud }).put("actif", d.noeud.isNotBlank() && d.etat.actif)) }
+        return o
+    }
 
     /** The « Montage » page's functions: their state, and its receive gestures through the page's own routes. */
     val fonctionsMontage: FonctionsPc by lazy { FonctionsPc(station, sdr, son, datv, phonie, diffusion, { c, q -> action(c, q) }, { lecturesMontage() }) }
