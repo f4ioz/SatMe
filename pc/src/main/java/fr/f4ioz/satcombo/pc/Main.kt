@@ -225,6 +225,10 @@ fun main(args: Array<String>) {
         { c -> kotlinx.coroutines.runBlocking { carnet.ficheQrz(c) } })
     serveur.large = large
     serveur.montage = MontagePc(dossier) { serveur.lecturesMontage() }
+    // Open to the network: a password for every other machine (drawn the first time, said in the log).
+    val acces = AccesDistantPc(dossier, reseau)
+    val ligneAcces = runCatching { acces.initialise() }.getOrNull()
+    serveur.acces = acces
     datv.diffusion = diffusion
     // The wide band chat, tune requests by UDP: each off unless chosen in the DATV tab.
     serveur.chatLarge = ChatLargePc(station.stockage, { station.settings.callsign }).also { it.demarre() }
@@ -235,6 +239,8 @@ fun main(args: Array<String>) {
     Thread({ runCatching { trafic.repriseAuDemarrage() } }, "satme-qo100-reprise").apply { isDaemon = true; start() }
     println("SatMe-PC " + versionPc())
     println("  page      : http://localhost:${serveur.portReel}/" + if (reseau) "  (ouverte au réseau)" else "")
+    if (reseau) println(ligneAcces ?: if (acces.defini) "  accès à distance : mot de passe demandé aux autres machines"
+        else "  accès à distance : aucun mot de passe, les autres machines n'ont rien (Réglages › Accès à distance)")
     println("  réglages  : ${dossier.absolutePath}")
     println("  Ctrl+C pour arrêter")
     if (bureau) {

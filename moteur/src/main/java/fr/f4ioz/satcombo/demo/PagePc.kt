@@ -66,7 +66,7 @@ object PagePc {
     private fun onglet(id: String) = ONGLETS.first { it.id == id }
 
     /** The settings categories' icons, for the page's script. */
-    private fun icones(): String = org.json.JSONObject(listOf("person", "radio", "satellite_alt", "public", "smartphone", "save", "tune", "straighten", "mic", "cloud_upload")
+    private fun icones(): String = org.json.JSONObject(listOf("person", "radio", "satellite_alt", "public", "smartphone", "save", "tune", "straighten", "mic", "cloud_upload", "lock")
         .associateWith { IconesPc.svg(it, "ico-reg") }).toString()
 
     /** The tabs that are pages of their own (served apart). */
@@ -348,6 +348,9 @@ object PagePc {
 <html lang="fr"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>SatMe — station PC</title>
+<meta name="theme-color" content="#0F161D">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icone-192.png">
 <style>
   /* Design tokens. Surfaces by tone (s0 the page, s3 a raised hover), colour kept for data and states:
      ok / warn / danger / info, rx cyan, tx red-orange (only ever for a transmission), mark violet, sat yellow. */
@@ -410,6 +413,8 @@ ${STYLE_JETONS}
   .dt-lu b { font-size:20px; letter-spacing:2px; }
   .dt-lu.sur { border-left-color:var(--vert); }
   #t-qr svg { width:100%; height:100%; display:block; border-radius:8px; }
+  .ad-initial { margin:8px 0 4px; padding:8px 10px; border-radius:var(--r2); background:rgba(255,180,84,.1); border:1px solid rgba(255,180,84,.45); }
+  .ad-initial b { font-family:var(--mono); font-size:var(--fs-l); color:var(--warn); user-select:all; }
   #visionneuse::backdrop { background:rgba(0,0,0,.75); }
   #vi-img { display:block; max-width:min(92vw,1280px); max-height:calc(92vh - 60px); min-width:320px; image-rendering:auto; border-radius:6px; cursor:zoom-out; background:#0E1720; }
   /* The flags drawn by the page itself: Windows (and a Linux without a colour emoji font) shows two letters instead. */
@@ -2449,6 +2454,27 @@ ${rail()}
         <button onclick="regleLien('port=' + enc(v('lien-port')))">Appliquer</button><span class="petit" id="lien-etat"></span></div>
       <div class="petit aide" style="margin-top:6px">Chaque seconde le satellite suivi (azimut, élévation, distance, fréquences et Doppler), les alertes de passage (AOS dans 5 min, AOS, LOS) et chaque contact noté au carnet, en JSON. Rien n'est accepté en retour. Sur ce PC seulement, sauf si SatMe-PC est lancé avec --reseau.</div>
     </div>
+    <div class="carte" id="ad-carte" hidden>
+      <div class="t">Accès à distance</div>
+      <div class="petit" id="ad-etat"></div>
+      <div class="ad-initial" id="ad-initial" hidden>Mot de passe tiré au premier démarrage : <b id="ad-initial-v"></b><span class="petit"> — à remplacer par le tien ci-dessous</span></div>
+      <div class="ligne"><input id="ad-mdp" type="password" placeholder="Nouveau mot de passe (8 caractères au moins)" autocomplete="new-password" maxlength="200">
+        <button class="primaire" onclick="adRegle()">Enregistrer</button></div>
+      <div class="ligne"><button id="ad-sessions" onclick="adSessions()">Fermer les autres sessions</button><button id="ad-retire" hidden onclick="adRetire()">Supprimer le mot de passe</button>
+        <button id="ad-deco" hidden onclick="adDeconnecte()">Se déconnecter</button></div>
+      <div class="etat" id="ad-msg"></div>
+      <div class="petit aide">Lancé avec --reseau, SatMe-PC s’ouvre aux autres machines du réseau : chacune passe par une page de connexion, puis garde sa session 30 jours (un cookie). Ce PC lui-même entre sans mot de passe, comme avant. Cinq essais faux depuis une même adresse : une minute d’attente, puis le double après chaque série.</div>
+      <div class="petit aide">Le mot de passe n’est gardé qu’haché (PBKDF2) dans acces-distant.properties, jamais dans la sauvegarde. Le changer ferme les autres sessions. Une émission lancée à distance demande les mêmes confirmations qu’ici.</div>
+      <div class="petit aide">Sans HTTPS, le mot de passe et la page passent en clair sur le réseau local : à réserver à un réseau de confiance (ou à un tunnel chiffré).</div>
+    </div>
+    <div class="carte" id="ap-carte">
+      <div class="t">Sur cet appareil</div>
+      <label class="petit" style="display:block"><input type="checkbox" id="ap-eveil" onchange="eveilRegle(this.checked)"> Garder l’écran allumé tant que la page est affichée</label>
+      <div class="petit" id="ap-eveil-etat"></div>
+      <div class="ligne"><button id="ap-installe" hidden onclick="apInstalle()">Installer l’application</button><span class="petit" id="ap-installe-etat"></span></div>
+      <div class="petit aide">L’écran allumé et l’installation (une fenêtre à part, une icône) se règlent pour cet appareil et ce navigateur seulement.</div>
+      <div class="petit aide">Les navigateurs ne les permettent que sur une page sûre : http://localhost sur ce PC, ou une adresse en HTTPS. Depuis une autre machine en http://192.168.…, la plupart les refusent : l’écran peut s’éteindre et « Installer » n’apparaît pas (un raccourci sur l’écran d’accueil reste possible).</div>
+    </div>
     <div class="carte" id="phr-carte" hidden>
       <div class="t">Phonie → texte</div>
       <div class="petit aide">La voix entendue (carte son ou clé SDR) écrite au fil de l'écoute, avec les indicatifs, carrés et reports trouvés : une fenêtre dans les onglets SDR, QO-100 et Carnet. Le moteur (faster-whisper, en Python) tourne sur ce PC : rien ne part sur Internet pendant l'écoute. Coupé par défaut : rien ne démarre sans la case de la fenêtre.</div>
@@ -2684,6 +2710,19 @@ window.addEventListener('unhandledrejection', e => { window.__err.push('promesse
 const g = id => document.getElementById(id);
 const v = id => g(id).value.trim();
 const enc = encodeURIComponent;
+// From another machine, the session over (closed, expired): back to the login page, then here.
+if (window.fetch) {
+  const fetch0 = window.fetch;
+  window.fetch = function () {
+    return fetch0.apply(this, arguments).then(r => {
+      if (r.status === 401 && r.headers.get('X-SatMe-Connexion')) {
+        location.href = '/connexion?suite=' + enc(location.pathname + location.search + location.hash);
+        return new Promise(() => {});
+      }
+      return r;
+    });
+  };
+}
 let E = null, P = [], ports = [], dernierEmetteurs = '';
 const utc = () => g('utc').checked;
 try { g('utc').checked = localStorage.getItem('utc') === '1'; } catch (x) {}
@@ -3125,6 +3164,7 @@ const CATS_REG = [
   { id: 'telephone', nom: 'Téléphone', ico: 'smartphone', desc: 'SatMe sur le téléphone : réglages et contacts', cartes: ['Téléphone'] },
   { id: 'accord', nom: 'Accord fin', ico: 'tune', desc: 'Loupe, vernier, calage sur la voix (clé SDR)', cartes: ['Accord fin'] },
   { id: 'emission', nom: 'Émission', ico: 'cloud_upload', desc: 'Correction I/Q des émetteurs : fuite, image, fréquence', cartes: ['Correction I/Q'] },
+  { id: 'acces', nom: 'Accès à distance', ico: 'lock', desc: 'Mot de passe des autres machines, application, écran allumé', cartes: ['Accès à distance', 'Sur cet appareil'] },
   { id: 'sauvegarde', nom: 'Sauvegarde', ico: 'save', desc: 'Toute la station dans un fichier, et la restaurer', cartes: ['Sauvegarde'] },
 ];
 // The backup: its size, the link, a backup received waiting for the next start.
@@ -3180,7 +3220,93 @@ function montreReglages(id) {
   document.querySelectorAll('#reg-corps .reg-sec').forEach(s => s.hidden = s.dataset.cat !== id);
   document.querySelectorAll('#reg-nav button').forEach(b => b.classList.toggle('actif', b.dataset.cat === id));
   if (id === 'emission') chargeIq();
+  if (id === 'acces') { majAcces(); eveilMaj(); apMaj(); }
 }
+// Réglages › Accès à distance: the password other machines are asked, set from this PC or a session.
+var AD = null;
+async function majAcces() {
+  try { const r = await fetch('api/acces'); AD = r.ok ? await r.json() : null; } catch (x) { AD = null; }
+  const ok = !!(AD && AD.present);
+  g('ad-carte').hidden = !ok;
+  if (!ok) return;
+  const n = AD.sessions || 0;
+  txt('ad-etat', (AD.reseau ? '' : 'Lancé sans --reseau : la page n’est ouverte qu’à ce PC. ') +
+    (AD.defini ? 'Mot de passe défini' + (AD.depuis ? ' le ' + new Date(AD.depuis).toLocaleDateString() : '') + ' · ' + n + ' session' + (n > 1 ? 's' : '') + ' ouverte' + (n > 1 ? 's' : '') + ' à distance.'
+      : 'Aucun mot de passe : les autres machines n’ont accès à rien.') +
+    (AD.connecte ? ' Cette page est ouverte à distance.' : ''));
+  g('ad-initial').hidden = !AD.initial; txt('ad-initial-v', AD.initial || '');
+  g('ad-retire').hidden = !(AD.local && AD.defini);
+  g('ad-deco').hidden = !AD.connecte;
+  g('ad-sessions').hidden = !AD.defini || n === 0 || (AD.connecte && n < 2);
+}
+async function adPost(u, corps) {
+  try { return await (await fetch(u, { method: 'POST', body: corps || '', headers: { 'Content-Type': 'application/x-www-form-urlencoded' } })).json(); } catch (x) { return null; }
+}
+async function adRegle() {
+  const m = g('ad-mdp').value;
+  if (m.length < 8) { txt('ad-msg', '8 caractères au moins.'); return; }
+  const j = await adPost('api/acces/mdp', 'mdp=' + enc(m));
+  g('ad-mdp').value = '';
+  txt('ad-msg', j && j.ok ? 'Mot de passe enregistré ; les autres sessions sont fermées.' : 'Refusé : ' + (j && j.erreur || 'pas de réponse'));
+  majAcces();
+}
+async function adSessions() {
+  if (!confirm('Fermer les sessions des autres machines ? Elles devront redonner le mot de passe.')) return;
+  const j = await adPost('api/acces/sessions');
+  txt('ad-msg', j && j.ok ? 'Sessions fermées.' : 'Pas de réponse.');
+  majAcces();
+}
+async function adRetire() {
+  if (!confirm('Supprimer le mot de passe ? Les autres machines n’auront plus accès à rien, jusqu’au prochain.')) return;
+  const j = await adPost('api/acces/retire');
+  txt('ad-msg', j && j.ok ? 'Mot de passe supprimé.' : 'Refusé : ' + (j && j.erreur || 'pas de réponse'));
+  majAcces();
+}
+async function adDeconnecte() {
+  await adPost('deconnexion');
+  location.href = '/connexion';
+}
+// Réglages › Sur cet appareil: the screen kept on (Screen Wake Lock), the page installed as an application.
+var eveil = null;
+function eveilVoulu() { try { return localStorage.getItem('ecran-allume') === '1'; } catch (x) { return false; } }
+async function eveilPrend() {
+  if (!('wakeLock' in navigator) || document.visibilityState !== 'visible' || eveil) return;
+  try {
+    eveil = await navigator.wakeLock.request('screen');
+    eveil.addEventListener('release', () => { eveil = null; eveilMaj(); });
+  } catch (x) { eveil = null; }
+  eveilMaj();
+}
+function eveilRegle(on) {
+  try { localStorage.setItem('ecran-allume', on ? '1' : '0'); } catch (x) {}
+  if (on) eveilPrend(); else if (eveil) { eveil.release().catch(() => {}); eveil = null; }
+  eveilMaj();
+}
+function eveilMaj() {
+  const dispo = 'wakeLock' in navigator, voulu = eveilVoulu();
+  g('ap-eveil').disabled = !dispo; g('ap-eveil').checked = dispo && voulu;
+  txt('ap-eveil-etat', !dispo ? (window.isSecureContext ? 'Ce navigateur ne sait pas garder l’écran allumé.' : 'Indisponible : page en http depuis une autre machine (voir ?).')
+    : eveil ? 'L’écran reste allumé.' : voulu ? 'Repris dès que la page est affichée.' : '');
+}
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && eveilVoulu()) eveilPrend(); });
+if (eveilVoulu()) eveilPrend();
+var apInvite = null;
+window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); apInvite = e; apMaj(); });
+window.addEventListener('appinstalled', () => { apInvite = null; apMaj(); });
+function apMaj() {
+  const appli = !!(window.matchMedia && matchMedia('(display-mode: standalone)').matches);
+  g('ap-installe').hidden = !apInvite || appli;
+  txt('ap-installe-etat', appli ? 'Ouverte comme application.' : apInvite ? '' : !window.isSecureContext ? 'Installation indisponible : page en http depuis une autre machine (voir ?).'
+    : 'Ou par le menu du navigateur : « Installer la page comme application ».');
+}
+async function apInstalle() {
+  if (!apInvite) return;
+  apInvite.prompt();
+  try { await apInvite.userChoice; } catch (x) {}
+  apInvite = null; apMaj();
+}
+// Only the page's frame and icons kept (never the API): on a safe page (this PC, HTTPS), not on the phone's.
+if ('serviceWorker' in navigator && window.isSecureContext && !window.SATME_TELEPHONE) navigator.serviceWorker.register('sw.js').catch(() => {});
 // Réglages › Émission: the transmitters' I/Q correction (sliders kept, live), the test tone, the automatic calibration.
 let IQ = null, iqSuivi = null, iqTouche = 0, iqEnvoi = null;
 const IQ_CHAMPS = [['dcI', 'Fuite : DC I', -0.05, 0.05, 0.0001, 4], ['dcQ', 'Fuite : DC Q', -0.05, 0.05, 0.0001, 4],
