@@ -828,6 +828,24 @@ ${STYLE_JETONS}
   .tq-onglets button.actif { border-color:var(--cyan); color:var(--cyan); background:rgba(63,224,200,.08); }
   .tq-onglets button.auto-choisi { box-shadow:inset 0 -2px 0 var(--cyan); color:var(--clair); }
   .tq-ft8 { max-height:250px; overflow:auto; margin-top:6px; }
+  /* « Décodeurs multiples »: one line a channel, its colour, its level, its last decode. */
+  .tq-mu { display:flex; flex-direction:column; gap:3px; margin:0 0 8px; padding-bottom:6px; border-bottom:1px solid var(--ligne); }
+  .mu-l { display:grid; grid-template-columns:10px 54px 78px 34px 46px minmax(0,1fr) auto auto; align-items:center; gap:6px; font-size:12px; min-height:22px; }
+  .mu-l > i { width:10px; height:10px; border-radius:3px; background:var(--c); }
+  .mu-l > b { color:var(--c); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .mu-f { font-variant-numeric:tabular-nums; cursor:pointer; white-space:nowrap; }
+  .mu-f:hover { color:var(--cyan); }
+  .mu-niv { height:6px; border-radius:3px; background:#0E1720; overflow:hidden; }
+  .mu-niv i { display:block; height:100%; background:var(--c); }
+  .mu-d { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-family:ui-monospace,Consolas,monospace; font-size:11.5px; color:var(--clair); }
+  .mu-d.gris { color:var(--gris); font-family:inherit; font-style:italic; }
+  .mu-l button { padding:1px 6px; font-size:12px; }
+  .mu-l button.mu-ec[aria-pressed="true"] { border-color:var(--cyan); color:var(--cyan); background:rgba(63,224,200,.12); }
+  .mu-vide { font-size:12px; color:var(--gris); }
+  .mu-menu { width:min(300px,calc(100vw - 16px)); }
+  .mu-menu .mu-ch { display:flex; flex-wrap:wrap; gap:4px; }
+  .mu-menu .mu-ch button { padding:3px 9px; font-size:12px; border-color:var(--c); color:var(--c); }
+  .mu-pre { display:flex; flex-wrap:wrap; gap:6px; margin:4px 0 8px; }
   .tq-sstv-img { display:block; max-width:100%; max-height:260px; margin-top:8px; border-radius:6px; background:#0E1720; min-height:60px; min-width:120px; }
   .tq-conseil { padding:8px 10px; border-radius:8px; background:rgba(255,180,84,.14); border:1px solid rgba(255,180,84,.55); margin-bottom:8px; font-size:13px; }
   .tq-urgence { padding:8px 10px; border-radius:8px; background:#B3261E; color:#fff; font-weight:700; margin-top:6px; font-size:13px; }
@@ -1112,6 +1130,23 @@ ${rail()}
   <button id="h-aide" class="h-rond" onclick="aideClavier()" title="Raccourcis clavier (?)">?</button>
   <span id="heure"></span><span id="h-utc" class="h-utc" title="Temps universel"></span>
 </header>
+<div id="mu-pop" class="sp-pop" hidden role="dialog" aria-label="Décodeurs multiples">
+  <div class="t sp-pop-t">Décodeurs multiples<span class="h-esp"></span><button type="button" class="discret" onclick="g('mu-pop').hidden = true" aria-label="Fermer">✕</button></div>
+  <label style="display:block"><input type="checkbox" id="mu-on" onchange="muPost('option?on=' + (this.checked ? 1 : 0))"> <b>Plusieurs décodeurs à la fois</b></label>
+  <div class="petit" style="margin:2px 0 8px">Jusqu’à 4 canaux pris dans ce que voit le récepteur, chacun avec son décodeur. Le son reste celui de l’accord principal, sauf le canal coché 🔈.</div>
+  <div class="petit">Préréglages</div>
+  <div class="mu-pre" id="mu-pre"></div>
+  <div class="petit">Sur la fréquence écoutée</div>
+  <div class="ligne" style="margin:2px 0 8px"><select id="mu-dec" style="flex:1"></select><button onclick="muAjouteIci()">Ajouter</button></div>
+  <div class="petit aide">Clic droit (ou Maj + clic) sur un signal de la cascade : « Ajouter un décodeur ici ». Un clic sur la fréquence d’un canal y accorde le récepteur principal. Chaque canal coûte de l’ordre de 1 % d’un cœur.</div>
+  <div class="ligne" style="margin-top:8px"><button class="discret" onclick="muPost('vide')">Retirer tous les canaux</button><span class="petit" id="mu-msg" style="margin-left:auto"></span></div>
+</div>
+<div id="mu-menu" class="sp-pop mu-menu" hidden role="menu" aria-label="Ajouter un décodeur ici">
+  <div class="t sp-pop-t" style="text-transform:none;letter-spacing:0">Ajouter un décodeur ici<span class="h-esp"></span><button type="button" class="discret" onclick="g('mu-menu').hidden = true" aria-label="Fermer">✕</button></div>
+  <div class="petit" id="mu-menu-f" style="margin-bottom:6px"></div>
+  <div class="mu-ch" id="mu-menu-ch"></div>
+  <div class="petit" id="mu-menu-msg" style="margin-top:6px"></div>
+</div>
 <div id="aff-pop" class="sp-pop" hidden role="dialog" aria-label="Affichage du spectre et de la cascade">
   <div class="t sp-pop-t">Affichage<span class="h-esp"></span><button type="button" class="discret" onclick="affDefaut()" title="Revenir aux réglages d'origine">défaut</button><button type="button" class="discret" onclick="g('aff-pop').hidden = true" aria-label="Fermer">✕</button></div>
   <div class="sp-g sp-sdr">
@@ -2134,7 +2169,9 @@ ${rail()}
         <div class="ligne" style="margin:0 0 8px"><span class="t" style="margin:0">Décodeur</span>
           <span class="tq-onglets" id="tq-onglets">
             <button data-d="auto">Auto</button><button data-d="phonie">Phonie</button><button data-d="cw">CW</button><button data-d="ft8">FT8 / FT4</button><button data-d="sstv">SSTV</button></span>
-          <span class="petit" id="tq-d-info" style="margin-left:auto"></span></div>
+          <span class="petit" id="tq-d-info" style="margin-left:auto"></span>
+          <button class="sp-b" id="tq-mu-b" hidden onclick="muOuvre(this)" aria-pressed="false" title="Décodeurs multiples : plusieurs signaux décodés à la fois, chacun sur son canal">${IconesPc.svg("view_quilt")}<span>Multiples</span></button></div>
+        <div id="tq-mu" class="tq-mu" hidden></div>
         <div id="tq-d-rien" class="petit">Clique un signal dans la cascade : le décodeur de son mode s'ouvre ici (phonie écrite, CW, FT8, image SSTV).</div>
         <div id="tq-d-phonie" hidden><div id="ph-slot-qo100"></div><div class="petit" id="tq-ph-absent" hidden>« Phonie → texte » n'est pas installé : Réglages › Phonie → texte.</div></div>
         <div id="tq-d-cw" hidden><div id="cw-slot-qo100"></div><div class="petit" id="tq-cw-absent" hidden>Le décodeur CW n'est pas disponible ici.</div></div>
@@ -6670,6 +6707,7 @@ function dessinePano() {
   for (let f = Math.ceil(b / pas) * pas; f <= t; f += pas) if (X(f) > 14 && X(f) < w - 14) x.fillText(String((f - 10489000000) / 1000), X(f), h - 4);
   qoDrapeaux(x, X, b, t, 7);
   tqEtiquettes(x, w, X, b, t);
+  muMarques(x, X, b, t, h);
 }
 /** The receiver's memories on a QO-100 scale: a coloured flag each (the names in the tooltip). */
 function qoDrapeaux(x, X, b, t, y) {
@@ -6717,6 +6755,8 @@ function dessineReglette() {
     if (f % 100000 === 0 && X(f) > 14 && X(f) < w - 14) x.fillText(((f - 10489000000) / 1000) + '', X(f), 84);
   }
   x.textAlign = 'left'; x.fillText('10 489 MHz +kHz', 4, 12);
+  // The channels of « Décodeurs multiples »: a coloured tick each.
+  for (const k of muVisibles(b, t)) { x.fillStyle = k.couleur; x.fillRect(X(k.hz) - 1, 16, 3, 40); }
   // The cursor.
   x.strokeStyle = '#FFFFFF'; x.lineWidth = 2; x.beginPath(); x.moveTo(X(O.descente), 16); x.lineTo(X(O.descente), 56); x.stroke(); x.lineWidth = 1;
   x.fillStyle = '#FFFFFF'; x.beginPath(); x.moveTo(X(O.descente), 16); x.lineTo(X(O.descente) - 5, 8); x.lineTo(X(O.descente) + 5, 8); x.fill();
@@ -6744,6 +6784,8 @@ function dessineLoupe() {
     const tw = x.measureText(m.nom).width; if (px + 4 > fin) { x.fillText(m.nom, px + 4, 11); fin = px + tw + 10; }
   }
   x.strokeStyle = '#FFFFFF'; x.lineWidth = 2; x.beginPath(); x.moveTo(w / 2, 0); x.lineTo(w / 2, 44); x.stroke(); x.lineWidth = 1;
+  // The channels of « Décodeurs multiples » within ±25 kHz: their passband, their colour.
+  for (const k of muVisibles(c - LOUPE, c + LOUPE)) { const [lo, hi] = muBande(k); x.fillStyle = k.couleur; x.fillRect(X(k.hz + lo), 30, Math.max(2, X(k.hz + hi) - X(k.hz + lo)), 5); }
   x.fillStyle = '#9AA7B4'; x.textAlign = 'left'; x.fillText('± 25 kHz', 4, 66);
 }
 (function () {
@@ -6762,6 +6804,7 @@ function dessineLoupe() {
   // The waterfall: a signal named near the click is tuned in its mode; elsewhere, the frequency clicked.
   g('o-pano').addEventListener('click', ev => {
     if (!OP) return;
+    if (ev.shiftKey && MU && !MU.absent) { muMenu(ev); return; }
     const fz = tqFenetre(), bb = g('o-pano').getBoundingClientRect();
     const X = f => 4 + (bb.width - 8) * (f - fz.b) / (fz.t - fz.b), mf = ev.clientY - bb.top < 18 ? qoMemoireA(ev.clientX - bb.left, X, fz.b, fz.t) : null;
     if (mf) { memAccorde(mf, 'qo100'); return; }
@@ -6771,7 +6814,10 @@ function dessineLoupe() {
     if (s) tqAccorde(s);
     else tqPost('api/qo100/accorde?hz=' + Math.round(hz / 100) * 100).then(() => chargeQo100());
   });
+  g('o-pano').addEventListener('contextmenu', ev => { if (OP && MU && !MU.absent) { ev.preventDefault(); muMenu(ev); } });
   const l = g('o-loupe');
+  l.addEventListener('contextmenu', ev => { if (!O || !MU || MU.absent) return; ev.preventDefault(); const b = l.getBoundingClientRect();
+    muMenuA(ev, Math.round((O.descente + LOUPE * (ev.clientX - b.left - b.width / 2) / (b.width / 2 - 4)) / 10) * 10, null); });
   l.addEventListener('click', ev => { if (!O) return; const b = l.getBoundingClientRect();
     qPost('frequence?hz=' + Math.round((O.descente + LOUPE * (ev.clientX - b.left - b.width / 2) / (b.width / 2 - 4)) / 100) * 100); });
   // The wheel: on the frequency, the ruler or the loupe.
@@ -7043,6 +7089,111 @@ function tqEtiquettes(x, w, X, b, t) {
 let tqTour = 0;
 setInterval(() => { if (!g('v-qo100').hidden || ++tqTour % 3 === 0) tqTic(); }, 1000);
 tqTic();
+
+// ---- « Décodeurs multiples »: channels taken from the receiver's IQ, each with its decoder (off by default)
+let MU = null, muVu = '';
+/** The audio each channel decodes, Hz above its dial: what the markers show. */
+function muBande(k) { return k.mode === 'CW' ? [450, 950] : k.mode === 'FM' ? [-6000, 6000] : [200, 3000]; }
+function muVisibles(b, t) { return MU && MU.option && MU.canaux ? MU.canaux.filter(k => k.hz + 3000 >= b && k.hz - 6000 <= t) : []; }
+async function muTic() {
+  if (g('v-qo100').hidden && MU) return;
+  let j = null;
+  try { j = await (await fetch('api/canaux')).json(); } catch (x) {}
+  MU = j && !j.absent ? j : (j ? { absent: true } : MU);
+  muRend();
+}
+setInterval(muTic, 1000);
+async function muPost(u) {
+  let j = null;
+  try { j = await (await fetch('api/canaux/' + u, { method: 'POST' })).json(); } catch (x) {}
+  if (j && j.ok === false) txt('mu-msg', j.erreur || 'refusé'); else txt('mu-msg', '');
+  await muTic();
+  return j;
+}
+function muOuvre(ancre) {
+  const p = g('mu-pop');
+  if (!p.hidden) { p.hidden = true; return; }
+  g('aff-pop').hidden = true; g('mem-pop').hidden = true; g('mu-menu').hidden = true;
+  muRend(); popPlace(p, ancre);
+}
+function muRend() {
+  const m = MU, abs = !m || m.absent;
+  g('tq-mu-b').hidden = abs;
+  if (abs) { g('tq-mu').hidden = true; return; }
+  g('tq-mu-b').setAttribute('aria-pressed', String(!!m.option));
+  if (document.activeElement !== g('mu-on')) g('mu-on').checked = !!m.option;
+  const pre = (m.prereglages || []).map(p => '<button onclick="muPrereglage(\'' + p.cle + '\')">' + esc(p.nom) + '</button>').join('');
+  if (g('mu-pre').dataset.vu !== pre) { g('mu-pre').dataset.vu = pre; g('mu-pre').innerHTML = pre; }
+  const dec = (m.decodeurs || []).map(d => '<option value="' + d.cle + '">' + esc(d.nom) + '</option>').join('');
+  if (g('mu-dec').dataset.vu !== dec) { g('mu-dec').dataset.vu = dec; g('mu-dec').innerHTML = dec; }
+  // The list in the dock: only with the option on.
+  const l = m.option ? m.canaux : [];
+  g('tq-mu').hidden = !m.option;
+  const recoit = !!(TQ && TQ.recoit);
+  const h = l.map(k => {
+    const niv = k.niveau == null ? 0 : Math.max(0, Math.min(100, (k.niveau + 100) * 1.25));
+    const d = !recoit ? '<span class="mu-d gris">en attente de la réception QO-100</span>'
+      : k.horsBande ? '<span class="mu-d gris">hors de la bande reçue</span>'
+      : k.dernier ? '<span class="mu-d" title="' + esc((k.lignes || []).map(e => e.texte).join('\n') || k.dernier) + '">' + esc(k.dernier) + '</span>'
+      : '<span class="mu-d gris">' + (k.info ? esc(k.info) : k.decodeur === 'aucun' ? 'écoute seule' : k.decodeur === 'ft8' || k.decodeur === 'ft4' ? 'à l’écoute (créneau de ' + (k.decodeur === 'ft4' ? '7,5' : '15') + ' s)' : 'à l’écoute…') + '</span>';
+    return '<div class="mu-l" style="--c:' + k.couleur + '"><i></i><b>' + esc(k.nom) + '</b>' +
+      '<span class="mu-f" title="Accorder le récepteur principal ici" onclick="qPost(\'frequence?hz=' + k.hz + '\')">' + (k.hz / 1e6).toFixed(4).replace('.', ',') + '</span>' +
+      '<span class="petit">' + (k.mode === 'USB' ? 'BLU' : k.mode) + '</span>' +
+      '<span class="mu-niv" title="' + (k.niveau == null ? '' : k.niveau.toFixed(0) + ' dB') + (k.loin ? ' · hors du premier étage (filtre propre)' : '') + '"><i style="width:' + niv.toFixed(0) + '%"></i></span>' + d +
+      '<button class="mu-ec" aria-pressed="' + !!k.ecoute + '" title="' + (k.ecoute ? 'Revenir au son de l’accord principal' : 'Écouter ce canal à la place de l’accord principal') + '" onclick="muPost(\'ecoute?id=' + k.id + '&on=' + (k.ecoute ? 0 : 1) + '\')">🔈</button>' +
+      '<button class="discret" title="Retirer ce canal" onclick="muPost(\'retire?id=' + k.id + '\')">✕</button></div>';
+  }).join('') || '<div class="mu-vide">Aucun canal : clic droit sur un signal de la cascade, ou un préréglage (bouton « Multiples »).</div>';
+  if (h !== muVu) { muVu = h; g('tq-mu').innerHTML = h; }
+}
+/** A preset: the strongest CW and voice signals named on the waterfall go with it. */
+function muPrereglage(nom) {
+  const k = tqCorr(), l = tqNommes(), fort = c => l.filter(s => s.classe === c).sort((a, b) => b.snrDb - a.snrDb)[0];
+  const cw = fort('cw'), blu = fort('blu');
+  muPost('prereglage?nom=' + nom + (cw ? '&cw=' + Math.round(cw.hz + k) : '') + (blu ? '&blu=' + Math.round(blu.hz + k) : '') + (O ? '&ecoute=' + O.descente : ''));
+}
+function muAjouteIci() { if (O) muPost('ajoute?cadran=' + O.descente + '&hz=' + O.descente + '&decodeur=' + g('mu-dec').value); }
+/** The menu at a waterfall click: the signal named there (its class) or the frequency clicked. */
+function muMenu(ev) {
+  const fz = tqFenetre(), bb = g('o-pano').getBoundingClientRect();
+  const hz = fz.b + (fz.t - fz.b) * (ev.clientX - bb.left - 4) / (bb.width - 8);
+  const tol = Math.max(600, (fz.t - fz.b) / Math.max(1, bb.width - 8) * 8);
+  const k = tqCorr(), s = tqNommes().filter(q => Math.abs(q.hz + k - hz) <= q.largeurHz / 2 + tol).sort((p, q) => Math.abs(p.hz + k - hz) - Math.abs(q.hz + k - hz))[0];
+  muMenuA(ev, s ? Math.round(s.hz + k) : Math.round(hz / 10) * 10, s || null);
+}
+function muMenuA(ev, hz, s) {
+  const m = g('mu-menu');
+  g('mu-pop').hidden = true;
+  txt('mu-menu-f', (s ? (TQ_NOM[s.classe] || s.classe) + ' · ' : '') + qFmt(hz) + (MU && MU.canaux && MU.option && MU.canaux.length >= MU.max ? ' — déjà ' + MU.max + ' canaux' : ''));
+  txt('mu-menu-msg', '');
+  const ds = (MU && MU.decodeurs) || [];
+  m.dataset.hz = String(hz); m.dataset.classe = s ? s.classe : '';
+  g('mu-menu-ch').innerHTML = (s ? '<button style="--c:' + (TQ_COUL[s.classe] || '#9AA7B4') + '" onclick="muMenuChoix(\'\')" title="Le décodeur du signal reconnu">Auto (' + esc(TQ_NOM[s.classe] || s.classe) + ')</button>' : '') +
+    ds.map(d => '<button style="--c:' + d.couleur + '" onclick="muMenuChoix(\'' + d.cle + '\')">' + esc(d.nom) + '</button>').join('');
+  m.hidden = false;
+  const w = m.offsetWidth, h = m.offsetHeight;
+  m.style.left = Math.min(Math.max(8, ev.clientX + 4), innerWidth - w - 8) + 'px';
+  m.style.top = Math.min(Math.max(8, ev.clientY + 4), innerHeight - h - 8) + 'px';
+}
+async function muMenuChoix(d) {
+  const m = g('mu-menu');
+  const j = await muPost('ajoute?hz=' + m.dataset.hz + (m.dataset.classe ? '&classe=' + enc(m.dataset.classe) : '') + (d ? '&decodeur=' + d : ''));
+  if (j && j.ok === false) { txt('mu-menu-msg', j.erreur || 'refusé'); return; }
+  m.hidden = true; dessinePano(); dessineLoupe();
+}
+/** The channels on the waterfall: a dashed line on the dial, the passband underlined, the decoder named. */
+function muMarques(x, X, b, t, h) {
+  const l = muVisibles(b, t);
+  if (!l.length) return;
+  x.font = '600 10px Drapeaux,system-ui'; x.textAlign = 'left'; x.textBaseline = 'alphabetic';
+  for (const k of l) {
+    const [lo, hi] = muBande(k), x0 = X(k.hz + lo), x1 = Math.max(x0 + 3, X(k.hz + hi)), y = h - 24;
+    x.globalAlpha = .55; x.strokeStyle = k.couleur; x.setLineDash([2, 3]); x.beginPath(); x.moveTo(X(k.hz) + .5, 0); x.lineTo(X(k.hz) + .5, y); x.stroke(); x.setLineDash([]);
+    x.globalAlpha = .9; x.fillStyle = k.couleur; x.fillRect(x0, y, x1 - x0, 4);
+    const e = k.nom + (k.ecoute ? ' 🔈' : ''), tw = x.measureText(e).width + 6;
+    x.fillStyle = 'rgba(6,19,26,.85)'; x.fillRect(x0, y - 14, tw, 13);
+    x.fillStyle = k.couleur; x.fillText(e, x0 + 3, y - 4); x.globalAlpha = 1;
+  }
+}
 
 // ------------------------------------------------------------------ SDR
 let R = null, rSpan = 48000, rTrames = -1, rDernier = null;
@@ -7686,12 +7837,12 @@ g('aff-pals').addEventListener('click', ev => {
 function affDefaut() { Object.assign(AFF, AFF_DEF); affGarde(); affRend(); spRaz(); spSale(true); if (!g('v-qo100').hidden) dessineQo100(); }
 // A popover closes with a click elsewhere or Escape.
 document.addEventListener('pointerdown', ev => {
-  for (const id of ['aff-pop', 'mem-pop', 'niv-pop']) {
+  for (const id of ['aff-pop', 'mem-pop', 'niv-pop', 'mu-pop', 'mu-menu']) {
     const p = g(id);
     if (!p.hidden && !p.contains(ev.target) && !(ev.target.closest && ev.target.closest('.sp-b'))) p.hidden = true;
   }
 }, true);
-document.addEventListener('keydown', ev => { if (ev.key === 'Escape') { g('aff-pop').hidden = true; g('mem-pop').hidden = true; g('niv-pop').hidden = true; } });
+document.addEventListener('keydown', ev => { if (ev.key === 'Escape') { for (const id of ['aff-pop', 'mem-pop', 'niv-pop', 'mu-pop', 'mu-menu']) g(id).hidden = true; } });
 
 // ---- the memories: a list by tag, a form, import and export
 let memFiltre = '', memEnCours = null, memOu = 'sdr';

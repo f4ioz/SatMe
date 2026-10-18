@@ -116,6 +116,10 @@ fun main(args: Array<String>) {
     sdr.ecouteSstv = { pcm, n -> son.sstv.ecouteSdr(pcm, n, fr.f4ioz.satcombo.sdr.Dsp.AUDIO_RATE) }
     // The SSTV automatic tuning: the dongle's fine offset when it feeds the decoder, else the rig through the CAT loop.
     son.sstv.cibleAfc = { src -> cibleAfcSstv(src, son, sdr, station) }
+    // « Décodeurs multiples » on QO-100: off unless chosen; a channel's voice written with its own dial.
+    val canaux = CanauxPc(station.stockage, son.sstv, phonie)
+    canaux.indicatif = { station.etat.value.indicatif }
+    sdr.canaux = canaux
     phonie.demarre()
     portee.launch {
         while (true) {
@@ -149,7 +153,9 @@ fun main(args: Array<String>) {
         carnet = { carnet.contacts().map { it.callsign } }, moi = { station.settings.callsign })
     datv.ecouteSon = { pcm, n, rate -> phonie.ecouteDatv(pcm, n, rate) }
     phonie.contexte = { src ->
-        if (src != "datv") contextePhonie(station, sdr, src)
+        val k = if (src == "sdr") canaux.cadranPhonie() else null
+        if (k != null) k to fr.f4ioz.satcombo.domain.TraficQo100.NOM
+        else if (src != "datv") contextePhonie(station, sdr, src)
         else datv.reglage.cielKhz.let { k -> k * 1000L to (if (fr.f4ioz.satcombo.datv.IndicatifsImage.qo100(k)) "QO-100" else "DATV") }
     }
     portee.launch { while (true) { runCatching { textesDatv.tic() }; kotlinx.coroutines.delay(1000) } }
@@ -232,6 +238,7 @@ fun main(args: Array<String>) {
     serveur.memoiresSdr = MemoiresSdrPc(dossier)
     serveur.niveaux = niveaux
     serveur.soleil = soleil
+    serveur.canaux = canaux
     // Open to the network: a password for every other machine (drawn the first time, said in the log).
     val acces = AccesDistantPc(dossier, reseau)
     val ligneAcces = runCatching { acces.initialise() }.getOrNull()
@@ -310,7 +317,15 @@ private fun contextePhonie(station: StationPc, sdr: SdrPc, source: String): Pair
  */
 internal fun cibleAfcSstv(source: String, son: SonStation, sdr: SdrPc, station: StationPc): fr.f4ioz.satcombo.sstv.CibleAfc {
     val parLaCle = source == SstvPc.SDR || son.son.etat.value.appareil == SdrPc.NOM_SOURCE
-    return if (parLaCle) object : fr.f4ioz.satcombo.sstv.CibleAfc {
+    // A channel of « Décodeurs multiples » feeds the picture: its dial is what moves, never the main receiver.
+    val canal = sdr.canaux?.takeIf { parLaCle && it.tientSstv() }
+    return if (canal != null) object : fr.f4ioz.satcombo.sstv.CibleAfc {
+        override fun sens() = 1
+        override fun disponible() = sdr.etat.value.actif
+        override val couplee = true
+        override fun position() = canal.cadranSstv() ?: 0L
+        override fun deplace(hz: Int) { canal.decaleSstv(hz) }
+    } else if (parLaCle) object : fr.f4ioz.satcombo.sstv.CibleAfc {
         override fun sens() = fr.f4ioz.satcombo.sstv.SstvAfc.sensDuMode(sdr.modeEffectif())
         override fun disponible() = sdr.etat.value.actif
         override val couplee = true

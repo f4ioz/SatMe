@@ -170,6 +170,9 @@ class Ft8Pc(
 
     @Synchronized fun arrete() { enMarche = false }
 
+    /** Stopped for good (a channel removed): its decoding thread let go. */
+    fun ferme() { arrete(); decodeur.shutdown() }
+
     @Synchronized fun vide() { entendus = emptyList(); tranches = 0; sansDecodage = 0 }
 
     /** A block of the card's sound. */
