@@ -97,6 +97,9 @@ fun main(args: Array<String>) {
     // The SDR dongle: nothing opened until asked (rtl_tcp started then, stopped with it).
     val meteor = MeteorPc(station, File(dossier, "meteor"))
     val sdr = SdrPc(station, son.son, station.stockage, portee, dossierSondes = File(dossier, "sondes"), meteor = meteor)
+    // The raw I/Q kept and played back; nothing heard from a recording or the generator goes to PSK Reporter.
+    val iqSdr = IqPc(sdr, station, dossier, journal)
+    son.psk.bloque = { sdr.fictif }
     // QO-100 with the dongle: the beacon followed, the calibration held on it when chosen.
     val qo100 = Qo100Pc(station, sdr)
     son.son.auditeurs += { pcm, n, rate -> qo100.ecouteCarte(pcm, n, rate) }
@@ -122,6 +125,7 @@ fun main(args: Array<String>) {
             runCatching { carnet.ticAmsat() }
             runCatching { kiss.tic() }
             runCatching { sdr.ticMeteor() }
+            runCatching { iqSdr.tic() }
             runCatching { qo100.tic() }
             runCatching { trafic.tic() }
             kotlinx.coroutines.delay(1000)
@@ -226,6 +230,7 @@ fun main(args: Array<String>) {
     serveur.large = large
     serveur.montage = MontagePc(dossier) { serveur.lecturesMontage() }
     serveur.memoiresSdr = MemoiresSdrPc(dossier)
+    serveur.iqSdr = iqSdr
     // Open to the network: a password for every other machine (drawn the first time, said in the log).
     val acces = AccesDistantPc(dossier, reseau)
     val ligneAcces = runCatching { acces.initialise() }.getOrNull()

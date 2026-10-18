@@ -672,6 +672,20 @@ ${STYLE_JETONS}
   .mem-f { font-family:var(--mono); font-variant-numeric:tabular-nums; color:var(--texte-2); }
   .mem-e { padding:0 6px; }
   .mem-edit { padding:8px; border:1px solid var(--ligne); border-radius:var(--r1); margin-bottom:6px; }
+  .rq-lecture { margin-top:4px; padding:4px 6px; border:1px solid var(--ligne); border-radius:var(--r1); background:var(--creux); }
+  .rq-lecture .mono, .rq-liste .mono { font-family:var(--mono); font-variant-numeric:tabular-nums; }
+  .rq-point { width:8px; height:8px; border-radius:50%; background:var(--danger); display:inline-block; }
+  .rq-liste { max-height:220px; }
+  .rq-l { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:2px 6px; padding:4px 8px; border-bottom:1px solid var(--ligne); }
+  .rq-l b { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:600; }
+  .rq-l .petit { grid-column:1; color:var(--texte-2); }
+  .rq-l .rq-a { grid-row:1 / span 2; grid-column:2; display:flex; gap:4px; align-items:center; }
+  .rq-l .rq-a button, .rq-l .rq-a a { padding:2px 7px; font-size:var(--fs-xs); }
+  .gen-t { width:100%; border-collapse:collapse; margin-top:6px; }
+  .gen-t th { font-size:var(--fs-xs); color:var(--texte-3); font-weight:600; text-align:left; padding:2px 4px; }
+  .gen-t td { padding:2px 4px; }
+  .gen-t input[type=number] { width:70px; }
+  .gen-t button { padding:2px 7px; font-size:var(--fs-xs); }
   .bouton-lien { display:inline-block; padding:4px 10px; border:1px solid var(--ligne-forte); border-radius:var(--r1); color:var(--texte); text-decoration:none; }
   .s2-droite { display:flex; flex-direction:column; min-width:0; }
   .s2-carte { position:relative; height:420px; margin-top:8px; border-radius:8px; overflow:hidden; }
@@ -1100,6 +1114,35 @@ ${rail()}
   </div>
   <div class="petit" id="mem-msg"></div>
   <div class="aide">Un clic sur une mémoire y accorde le récepteur (réception seulement) : dans la vue, par le décalage ; au-delà, le récepteur y va et ne suit plus le satellite. Les drapeaux du spectre se cliquent aussi (clic droit : modifier). Gardées par SatMe-PC (memoires-sdr.json) ; l'export JSON se réimporte ici ou sur un autre PC sans doublons.</div>
+</div>
+<div id="rq-pop" class="sp-pop" hidden role="dialog" aria-label="I/Q : remonter le temps, enregistrer, rejouer">
+  <div class="t sp-pop-t">I/Q du récepteur<span class="h-esp"></span><button type="button" class="discret" onclick="g('rq-pop').hidden = true" aria-label="Fermer">✕</button></div>
+  <div class="sp-st" style="margin-top:2px">Remonter le temps</div>
+  <div class="sp-l"><label><input type="checkbox" id="rq-anneau" onchange="rqPost('anneau?on=' + (this.checked ? 1 : 0))"> Garder en permanence les</label>
+    <select id="rq-minutes" onchange="rqPost('anneau?minutes=' + this.value)"><option>1</option><option>2</option><option>3</option><option>5</option><option>10</option></select><span>dernières minutes</span></div>
+  <div class="petit" id="rq-anneau-info" style="margin-top:3px"></div>
+  <div class="sp-l" style="margin-top:6px"><button type="button" class="primaire" id="rq-garde" onclick="rqGarde()">Garder les dernières minutes</button><span class="petit" id="rq-copie"></span></div>
+  <div class="sp-st">Enregistrer</div>
+  <div class="sp-l"><button type="button" id="rq-enr" onclick="rqEnregistre()">● Enregistrer</button><span class="petit">au plus</span>
+    <select id="rq-limite" onchange="rqPost('enregistre?on=' + (RQ && RQ.enregistre.on ? 1 : 0) + '&limite=' + this.value)"><option value="1">1 min</option><option value="5">5 min</option><option value="10">10 min</option><option value="20">20 min</option><option value="60">60 min</option></select>
+    <span class="petit" id="rq-enr-info"></span></div>
+  <div class="sp-st">Enregistrements I/Q</div>
+  <div id="rq-liste" class="mem-liste rq-liste"></div>
+  <div class="petit" id="rq-msg" aria-live="polite"></div>
+  <div class="aide">Les échantillons bruts du récepteur (1,0584 Mé/s : 127 Mo par minute depuis une clé RTL, 254 Mo depuis l'ADALM-PLUTO, le bladeRF ou le générateur), au format SigMF (.sigmf-data et .sigmf-meta : fréquence, date, satellite, mode). « Remonter le temps » écrit sur le disque, dans un fichier de taille fixe, jamais en mémoire ; éteint par défaut. « Rejouer » prend l'enregistrement comme récepteur : spectre, démodulation et décodeurs (SSTV, CW, FT8, phonie) travaillent dessus. Des fichiers bruts (.cu8, .cs8, .cs16, .cf32) déposés dans le dossier se rejouent aussi, débit demandé. Réception seulement : rien n'est jamais émis. <span id="rq-dossier"></span></div>
+</div>
+<div id="gen-pop" class="sp-pop" hidden role="dialog" aria-label="Générateur d'essai">
+  <div class="t sp-pop-t">Générateur d'essai<span class="h-esp"></span><button type="button" class="discret" onclick="genDefaut()" title="Revenir aux signaux d'origine">défaut</button><button type="button" class="discret" onclick="g('gen-pop').hidden = true" aria-label="Fermer">✕</button></div>
+  <div class="sp-l"><span class="petit">Bruit</span><select id="gen-bruit" data-gen="bruit"><option value="-20">fort (−20 dBFS)</option><option value="-32">moyen (−32 dBFS)</option><option value="-45">faible (−45 dBFS)</option></select></div>
+  <table class="gen-t"><thead><tr><th></th><th>Signal</th><th>Décalage (kHz)</th><th>S/B (dB)</th><th></th></tr></thead><tbody id="gen-lignes"></tbody></table>
+  <div class="sp-g" style="margin-top:6px">
+    <span>Texte CW</span><span class="sp-l"><input id="gen-cwTexte" data-gen="cwTexte" maxlength="60" style="flex:1"><input type="number" id="gen-cwWpm" data-gen="cwWpm" min="5" max="40" style="width:56px" title="Mots par minute"><span class="petit">mots/min</span></span>
+    <span>Ton FM</span><span class="sp-l"><input type="number" id="gen-fmTon" data-gen="fmTon" min="100" max="3000" step="50" style="width:80px"><span class="petit">Hz</span></span>
+    <span>Message FT8</span><input id="gen-ft8Message" data-gen="ft8Message" maxlength="40" placeholder="CQ Q0SAT JN18" title="« CQ INDICATIF CARRÉ » ou « INDICATIF INDICATIF CARRÉ »">
+    <span>Mode SSTV</span><select id="gen-sstvMode" data-gen="sstvMode"></select>
+  </div>
+  <div class="petit" id="gen-msg" aria-live="polite"></div>
+  <div class="aide">Un faux récepteur, sans matériel : du bruit et des signaux d'essai autour de la fréquence écoutée (« Sinon (MHz) », ou QO-100 quand son onglet a le récepteur). « Écouter » règle le mode et le décalage pour l'entendre : CW à 700 Hz en USB, BLU en USB, FM et SSTV en FM étroite, FT8 dans les tranches paires (indicatif d'essai, jamais envoyé à PSK Reporter). S/B mesuré dans 3 kHz. Rien n'est émis : le générateur ne nourrit que la réception.</div>
 </div>
 <div class="vue" id="v-station">
 <div class="grille">
@@ -2244,7 +2287,12 @@ ${rail()}
     <div class="carte">
       <div class="t" id="r-cle-t">La clé</div>
       <div class="ligne" style="margin-top:0"><span class="petit" style="min-width:70px">Récepteur</span>
-        <select id="r-recepteur" onchange="rRegle('recepteur=' + this.value)"><option value="rtl">Clé RTL-SDR (rtl_tcp)</option><option value="pluto">ADALM-PLUTO (réseau)</option><option value="bladerf">bladeRF 2.0 (USB)</option></select></div>
+        <select id="r-recepteur" onchange="rRegle('recepteur=' + this.value)"><option value="rtl">Clé RTL-SDR (rtl_tcp)</option><option value="pluto">ADALM-PLUTO (réseau)</option><option value="bladerf">bladeRF 2.0 (USB)</option><option value="fichier" class="r-fictif">Fichier I/Q (relecture)</option><option value="generateur" class="r-fictif">Générateur d'essai</option></select></div>
+      <div class="ligne" id="r-fichier-l" hidden><span class="petit" style="min-width:70px">Fichier</span><b class="petit" id="r-fichier-nom" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></b>
+        <button onclick="rqOuvre(this)" title="Les enregistrements I/Q : en choisir un à rejouer">Choisir…</button></div>
+      <div class="ligne" id="r-gen-l" hidden><span class="petit" style="flex:1">Bruit et signaux d'essai, sans antenne ni matériel.</span>
+        <button class="sp-b" id="sp-b-gen" onclick="genOuvre(this)" title="Les signaux du générateur : où, à quel niveau, et comment les écouter">${IconesPc.svg("tune")}<span>Signaux…</span></button></div>
+      <div id="r-materiel">
       <div class="ligne"><span class="petit" style="min-width:70px">Gain</span><select id="r-gain" onchange="rRegle('gain=' + this.value)"></select>
         <label class="petit" id="r-agc-l"><input type="checkbox" id="r-agc" onchange="rRegle('agc=' + (this.checked ? 1 : 0))"> CAG numérique</label></div>
       <div class="ligne"><span class="petit" style="min-width:70px">Erreur</span><input id="r-ppm" style="max-width:70px"><span class="petit">ppm</span><button onclick="rRegle('ppm=' + enc(v('r-ppm')))">Appliquer</button></div>
@@ -2267,11 +2315,22 @@ ${rail()}
         <div class="petit" id="r-bladerf-prog"></div>
         <div class="petit aide" style="margin-top:4px">De 70 MHz à 6 GHz, sur un port USB 3. Réception seulement : SatMe ne donne à bladeRF-cli que des commandes RX1 (oscillateur, débit, bande, gain) et n'émet jamais d'ici.</div>
       </details>
+      </div>
     </div>
     <div id="ph-slot-sdr"></div>
   </div>
   <div class="carte r-droite">
     <div class="paire"><span class="o-freq" id="r-freq">—</span><span class="petit" id="r-detail"></span></div>
+    <div class="ligne rq-lecture" id="r-lecture" hidden role="group" aria-label="Lecture de l'enregistrement">
+      <button id="r-lec-pause" onclick="lecRegle('pause=' + (R && R.lecture && R.lecture.pause ? 0 : 1))" title="Lecture / pause">⏸</button>
+      <span class="petit mono" id="r-lec-t">0:00</span>
+      <input type="range" id="r-lec-pos" min="0" max="1000" value="0" style="flex:1;min-width:120px" aria-label="Position dans l'enregistrement" onchange="lecCherche(this.value)">
+      <span class="petit mono" id="r-lec-d">0:00</span>
+      <select id="r-lec-v" style="flex:none" onchange="lecRegle('vitesse=' + this.value)" title="Vitesse (au-delà de ×1, le haut-parleur se tait ; les décodeurs suivent, sauf FT8)"><option value="1">×1</option><option value="2">×2</option><option value="4">×4</option></select>
+      <label class="petit"><input type="checkbox" id="r-lec-boucle" onchange="lecRegle('boucle=' + (this.checked ? 1 : 0))"> en boucle</label>
+      <label class="petit" title="Repartir quand la seconde de l'enregistrement (modulo 15 s) est celle de l'horloge : les tranches FT8 retombent juste. Attente jusqu'à 15 s."><input type="checkbox" id="r-lec-cale" onchange="lecRegle('cale=' + (this.checked ? 1 : 0))"> tranches FT8</label>
+      <span class="petit" id="r-lec-info"></span>
+    </div>
     <div class="ligne" style="margin-top:4px"><span class="petit">Niveau</span><div class="r-barre"><i id="r-niveau"></i></div><span class="petit" id="r-db"></span>
       <span class="rose petit" id="r-sat-av"></span>
       <span style="margin-left:auto" class="petit">Largeur vue</span><select id="r-span" style="flex:none" onchange="spVue(+this.value, 0)"><option value="12000">12 kHz</option><option value="24000">24 kHz</option><option value="48000" selected>48 kHz</option><option value="96000">96 kHz</option><option value="176400">176 kHz</option><option id="r-span-z" hidden></option></select>
@@ -2281,6 +2340,7 @@ ${rail()}
       <button class="sp-b" id="sp-b-aff" onclick="affOuvre(this, 'sdr')" title="Affichage : moyenne, crêtes, niveaux, palette de la cascade, molette, repères">${IconesPc.svg("tune")}<span>Affichage</span></button>
       <button class="sp-b" id="sp-b-mem" onclick="memOuvre(this, 'sdr')" title="Les mémoires du récepteur (nom, fréquence, mode, étiquette)">${IconesPc.svg("save")}<span>Mémoires</span></button>
       <button class="sp-b" id="sp-b-ici" onclick="memAjouteIci(this, 'sdr')" title="Mémoriser la fréquence écoutée" aria-label="Mémoriser la fréquence écoutée">＋</button>
+      <button class="sp-b" id="sp-b-iq" onclick="rqOuvre(this)" title="I/Q : remonter le temps (les dernières minutes gardées), enregistrer, rejouer">${IconesPc.svg("history")}<span>I/Q</span><i class="rq-point" id="rq-point" hidden></i></button>
       <button class="sp-b" id="sp-b-crete" hidden onclick="spRaz()" title="Effacer les crêtes et les minimums tenus">⟲ crêtes</button>
       <span class="petit" id="sp-zoom" title="Le zoom de la vue (molette sur le spectre ; 0 : vue entière)"></span>
       <div class="aide">Spectre : un clic s'y accorde ; la molette zoome autour du pointeur (Maj : déplace la vue), glisser déplace la vue dans les 176 kHz que voit le récepteur ; les bords orangés de la bande passante se tirent pour changer la largeur de réception. Cascade : la molette accorde, « à inertie » (un tour rapide lance l'accord, qui ralentit) ; Ctrl + molette zoome. Avec le focus (clic ou Tab) : ← → un pas, ↑ ↓ dix pas, + − zoom, 0 vue entière. Les petits drapeaux sont les mémoires (clic : s'y accorder ; clic droit : la modifier) ; le liseré coloré en haut, le plan de bandes. Réception seulement.</div>
@@ -6960,7 +7020,7 @@ async function ticSdr() {
 function rendSdr() {
   if (!R) return;
   const r = R;
-  etatMarche('r', r.actif); txt('r-pastille', r.actif ? 'réception' : 'arrêtée');
+  etatMarche('r', r.actif); txt('r-pastille', r.actif ? (r.lecture && r.statut ? r.statut : 'réception') : 'arrêtée');
   txt('r-info', r.actif ? r.tuner + ' · ' + (r.debit / 1024).toFixed(1) + ' Mo/s' + (r.perdus ? ' · ' + r.perdus + ' blocs perdus' : '') : '');
   // The SDR lent to DATV's demodulator: said plainly, the tab takes it back when DATV stops.
   txt('r-erreur', r.datvTient ? (r.datvTient === 'pluto' ? 'L’ADALM-PLUTO' : 'Le bladeRF') + ' reçoit la DATV (onglet DATV) : ' +
@@ -6973,7 +7033,10 @@ function rendSdr() {
   // The receiver: the dongle (rtl_tcp) or the Pluto, each with its own settings shown.
   const blade = r.recepteur === 'bladerf', pluto = r.recepteur === 'pluto' || blade;
   if (g('r-gain').dataset.src !== (blade ? 'bladerf' : pluto ? 'pluto' : 'rtl')) remplitGain(blade ? 'bladerf' : pluto);
-  txt('r-titre', blade ? 'bladeRF 2.0 (USB)' : pluto ? 'ADALM-PLUTO (réseau)' : 'Clé SDR (rtl_tcp)'); txt('r-cle-t', pluto ? 'Le récepteur' : 'La clé');
+  const fictif = r.recepteur === 'fichier' || r.recepteur === 'generateur';
+  txt('r-titre', r.recepteur === 'fichier' ? 'Fichier I/Q (relecture)' : r.recepteur === 'generateur' ? 'Générateur d’essai' :
+    blade ? 'bladeRF 2.0 (USB)' : pluto ? 'ADALM-PLUTO (réseau)' : 'Clé SDR (rtl_tcp)'); txt('r-cle-t', pluto || fictif ? 'Le récepteur' : 'La clé');
+  if (r.generateur !== undefined) rendFictif(r);
   g('r-agc-l').hidden = pluto; g('r-liaison').hidden = pluto; g('r-liaison-pluto').hidden = !pluto || blade; g('r-liaison-bladerf').hidden = !blade;
   if (blade && r.bladerf) {
     txt('r-bladerf-info', !r.bladerf.lu ? 'non détecté (bouton Détecter)' : r.bladerf.libelle || r.bladerf.message);
@@ -7530,12 +7593,148 @@ g('aff-pals').addEventListener('click', ev => {
 function affDefaut() { Object.assign(AFF, AFF_DEF); affGarde(); affRend(); spRaz(); spSale(true); if (!g('v-qo100').hidden) dessineQo100(); }
 // A popover closes with a click elsewhere or Escape.
 document.addEventListener('pointerdown', ev => {
-  for (const id of ['aff-pop', 'mem-pop']) {
+  for (const id of ['aff-pop', 'mem-pop', 'rq-pop', 'gen-pop']) {
     const p = g(id);
     if (!p.hidden && !p.contains(ev.target) && !(ev.target.closest && ev.target.closest('.sp-b'))) p.hidden = true;
   }
 }, true);
-document.addEventListener('keydown', ev => { if (ev.key === 'Escape') { g('aff-pop').hidden = true; g('mem-pop').hidden = true; } });
+document.addEventListener('keydown', ev => { if (ev.key === 'Escape') { for (const id of ['aff-pop', 'mem-pop', 'rq-pop', 'gen-pop']) g(id).hidden = true; } });
+
+// ---- I/Q: « remonter le temps », the recordings and their replay; the test generator (receive only)
+let RQ = null;
+const escA = x => esc(x).replace(/"/g, '&quot;');
+function rqTaille(o) { return o >= 1073741824 ? (o / 1073741824).toLocaleString('fr-FR', { maximumFractionDigits: 1 }) + ' Go' : Math.max(0, Math.round(o / 1048576)).toLocaleString('fr-FR') + ' Mo'; }
+function rqDuree(s) { s = Math.max(0, Math.round(s || 0)); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); }
+function popsFerme(sauf) { for (const id of ['aff-pop', 'mem-pop', 'rq-pop', 'gen-pop']) if (id !== sauf) g(id).hidden = true; }
+function rqOuvre(ancre) {
+  const p = g('rq-pop');
+  if (!p.hidden && ancre.classList.contains('sp-b')) { p.hidden = true; return; }
+  popsFerme('rq-pop'); txt('rq-msg', ''); rqRend(); popPlace(p, ancre); rqTic();
+}
+async function rqTic() {
+  if (window.SATME_TELEPHONE) return;
+  try { const j = await (await fetch('api/sdr-iq')).json(); if (j && j.ok !== false) { RQ = j; rqRend(); } } catch (x) {}
+}
+async function rqPost(q) {
+  try {
+    const j = await (await fetch('api/sdr-iq/' + q, { method: 'POST' })).json();
+    if (j.ok === false) txt('rq-msg', j.erreur || 'refusé'); else { RQ = j; rqRend(); }
+    ticSdr(); return j;
+  } catch (x) { txt('rq-msg', 'SatMe-PC ne répond pas'); return null; }
+}
+function rqRend() {
+  const j = RQ; if (!j) return;
+  const a = j.anneau, e = j.enregistre;
+  if (document.activeElement !== g('rq-anneau')) g('rq-anneau').checked = a.on;
+  if (document.activeElement !== g('rq-minutes')) g('rq-minutes').value = String(a.minutes);
+  txt('rq-anneau-info', 'Sur le disque : ' + rqTaille(a.octets8) + ' (clé RTL) ou ' + rqTaille(a.octets16) + ' (16 bits) · libre : ' + rqTaille(j.libre) +
+    (a.on ? ' · tenu : ' + rqDuree(a.tenuS) : '') + (j.erreur ? ' · ' + j.erreur : ''));
+  const b = g('rq-garde');
+  b.disabled = !a.on || !(a.tenuS > 2) || j.copie !== null;
+  b.textContent = (a.minutes > 1 ? 'Garder les ' + a.minutes + ' dernières minutes' : 'Garder la dernière minute') + (a.on && a.tenuS > 0 && a.tenuS < a.minutes * 60 - 3 ? ' (' + rqDuree(a.tenuS) + ' pour l’instant)' : '');
+  txt('rq-copie', j.copie !== null ? 'copie : ' + Math.round(j.copie * 100) + ' %' : (j.message || ''));
+  g('rq-enr').textContent = e.on ? '■ Arrêter' : '● Enregistrer'; g('rq-enr').classList.toggle('arret', e.on);
+  if (document.activeElement !== g('rq-limite')) g('rq-limite').value = String(e.limite);
+  txt('rq-enr-info', e.on ? rqDuree(e.s) + ' · ' + rqTaille(e.octets) : '');
+  g('rq-point').hidden = !e.on;
+  const enLecture = R && R.lecture ? R.lecture.nom : '';
+  const html = (j.fichiers || []).map(f => {
+    const d = new Date(f.date);
+    const quand = d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' }) + ' ' + d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+    const det = f.enCours ? 'en cours d’enregistrement · ' + rqTaille(f.taille) : f.brut ? 'brut ' + f.format + ' · ' + rqTaille(f.taille) : f.erreur ? f.erreur :
+      [quand, f.satellite, f.frequence ? mhzFr(f.frequence) + ' MHz' : '', f.mode, rqDuree(f.duree), rqTaille(f.taille), f.essai ? 'générateur' : ''].filter(Boolean).join(' · ');
+    return '<div class="rq-l"><b title="' + escA(f.nom) + '">' + esc(f.nom.replace(/\.sigmf-data$/, '')) + '</b><span class="rq-a">' +
+      (f.enCours ? '<span class="petit" style="color:var(--danger)">● enregistre</span>' : f.nom === enLecture ? '<span class="petit cyan">en lecture</span>' : '<button type="button" data-rejoue="' + escA(f.nom) + '"' + (f.erreur ? ' disabled' : '') + ' title="Le prendre comme récepteur">▶ Rejouer</button>') +
+      '<a class="bouton-lien" href="sdr-iq/' + encodeURIComponent(f.nom) + '" download title="Télécharger les échantillons">⤓</a>' +
+      (f.meta ? '<a class="bouton-lien" href="sdr-iq/' + encodeURIComponent(f.meta) + '" download title="Télécharger la description (sigmf-meta)">méta</a>' : '') +
+      '<button type="button" class="discret" data-suppr="' + escA(f.nom) + '" title="Supprimer" aria-label="Supprimer" style="color:var(--rose)">✕</button></span>' +
+      '<span class="petit">' + esc(det) + (f.passage ? ' · <a href="journal" title="Le journal des passages">passage ' + esc(f.passage) + '</a>' : '') + '</span></div>';
+  }).join('') || '<div class="petit" style="padding:8px">Aucun enregistrement pour l’instant.</div>';
+  if (g('rq-liste').dataset.vu !== html) { g('rq-liste').dataset.vu = html; g('rq-liste').innerHTML = html; }
+  txt('rq-dossier', 'Dossier : ' + j.dossier);
+}
+g('rq-liste').addEventListener('click', async ev => {
+  const r = ev.target.closest('[data-rejoue]');
+  if (r) {
+    let q = 'rejoue?nom=' + encodeURIComponent(r.dataset.rejoue);
+    const f = ((RQ && RQ.fichiers) || []).find(x => x.nom === r.dataset.rejoue);
+    if (f && f.brut) {
+      const d = prompt('Débit de ce fichier brut (échantillons par seconde)', '1058400'); if (!d) return;
+      const m = prompt('Fréquence au centre (MHz), si connue', '') || '';
+      q += '&debit=' + encodeURIComponent(d) + '&mhz=' + encodeURIComponent(m);
+    }
+    txt('rq-msg', 'ouverture…');
+    const j = await rqPost(q); if (j && j.ok !== false) txt('rq-msg', 'en lecture : ' + r.dataset.rejoue);
+    return;
+  }
+  const s = ev.target.closest('[data-suppr]');
+  if (s && confirm('Supprimer « ' + s.dataset.suppr + ' » ?')) rqPost('supprime?nom=' + encodeURIComponent(s.dataset.suppr));
+});
+async function rqGarde() {
+  const j = await rqPost('garde'); if (!j || j.ok === false) return;
+  let n = 0; const suit = async () => { await rqTic(); if (RQ && RQ.copie !== null && n++ < 1200) setTimeout(suit, 500); }; setTimeout(suit, 300);
+}
+function rqEnregistre() { rqPost('enregistre?on=' + (RQ && RQ.enregistre.on ? 0 : 1) + '&limite=' + g('rq-limite').value); }
+setInterval(() => { if (!g('v-sdr').hidden && (!g('rq-pop').hidden || (RQ && RQ.enregistre.on))) rqTic(); }, 1000);
+// The recording played: its transport; the generator and the file in « La clé ».
+function rendFictif(r) {
+  const fic = r.recepteur === 'fichier', gen = r.recepteur === 'generateur';
+  g('r-fichier-l').hidden = !fic; g('r-gen-l').hidden = !gen; g('r-materiel').hidden = fic || gen;
+  txt('r-fichier-nom', r.fichierIq ? r.fichierIq.replace(/\.sigmf-data$/, '') : '(aucun : Choisir…)');
+  const l = r.lecture; g('r-lecture').hidden = !l;
+  if (l) {
+    txt('r-lec-pause', l.pause ? '▶' : '⏸'); g('r-lec-pause').title = l.pause ? 'Reprendre' : 'Pause';
+    txt('r-lec-t', rqDuree(l.pos)); txt('r-lec-d', rqDuree(l.duree));
+    if (document.activeElement !== g('r-lec-pos')) g('r-lec-pos').value = String(l.duree > 0 ? Math.round(l.pos / l.duree * 1000) : 0);
+    if (document.activeElement !== g('r-lec-v')) g('r-lec-v').value = String(l.vitesse);
+    g('r-lec-boucle').checked = l.boucle; g('r-lec-cale').checked = l.cale;
+    txt('r-lec-info', l.attente > 0 ? 'calage FT8 : ' + Math.ceil(l.attente) + ' s' : l.moment ? new Date(l.moment).toISOString().slice(11, 19) + ' UTC' : '');
+  }
+  if (!g('gen-pop').hidden) genRend(false);
+}
+async function lecRegle(q) { try { await fetch('api/sdr-iq/lecture?' + q, { method: 'POST' }); } catch (x) {} ticSdr(); }
+function lecCherche(v) { const l = R && R.lecture; if (l) lecRegle('pos=' + (v / 1000 * l.duree).toFixed(1)); }
+const GEN_SIG = [['porteuse', 'Porteuse'], ['cw', 'CW'], ['blu', 'BLU (voix)'], ['fm', 'FM (ton)'], ['ft8', 'FT8'], ['sstv', 'SSTV (FM)']];
+function genOuvre(ancre) {
+  const p = g('gen-pop');
+  if (!p.hidden) { p.hidden = true; return; }
+  popsFerme('gen-pop'); txt('gen-msg', ''); genRend(true); popPlace(p, ancre);
+}
+function genRend(tout) {
+  const G = R && R.generateur; if (!G) return;
+  if (tout || !g('gen-lignes').dataset.vu) {
+    g('gen-lignes').dataset.vu = '1';
+    g('gen-lignes').innerHTML = GEN_SIG.map(([k, nom]) => '<tr><td><input type="checkbox" data-gen="' + k + 'On" aria-label="' + nom + '"></td><td>' + nom + '</td>' +
+      '<td><input type="number" data-gen="' + k + 'Hz" data-khz="1" step="0.5" min="-85" max="85" aria-label="Décalage de ' + nom + ' (kHz)"></td>' +
+      '<td><input type="number" data-gen="' + k + 'Snr" step="1" min="-20" max="60" aria-label="S/B de ' + nom + ' (dB)"></td>' +
+      '<td><button type="button" data-ecoute="' + k + '" title="Régler le mode et le décalage pour l’entendre">Écouter</button></td></tr>').join('');
+    g('gen-sstvMode').innerHTML = (G.modesSstv || []).map(m => '<option>' + esc(m) + '</option>').join('');
+  }
+  document.querySelectorAll('#gen-pop [data-gen]').forEach(e => {
+    if (document.activeElement === e) return;
+    const v = G[e.dataset.gen]; if (v === undefined) return;
+    if (e.type === 'checkbox') e.checked = String(v) === '1'; else e.value = e.dataset.khz ? String(v / 1000) : String(v);
+  });
+  const ec = (G.ecoutes || []).map(x => x.cle);
+  document.querySelectorAll('#gen-pop [data-ecoute]').forEach(b => b.disabled = !ec.includes(b.dataset.ecoute) || !(R && R.actif && R.recepteur === 'generateur'));
+}
+async function genEnvoie(q) {
+  try { const j = await (await fetch('api/sdr-iq/generateur?' + q, { method: 'POST' })).json(); txt('gen-msg', j.ok === false ? (j.erreur || 'refusé') : ''); } catch (x) { txt('gen-msg', 'SatMe-PC ne répond pas'); }
+  await ticSdr(); genRend(false);
+}
+g('gen-pop').addEventListener('change', ev => {
+  const e = ev.target, k = e.dataset && e.dataset.gen; if (!k) return;
+  const v = e.type === 'checkbox' ? (e.checked ? '1' : '0') : e.dataset.khz ? String(Math.round(parseFloat(String(e.value).replace(',', '.')) * 1000)) : e.value;
+  genEnvoie(k + '=' + encodeURIComponent(v));
+});
+g('gen-pop').addEventListener('click', async ev => {
+  const b = ev.target.closest('[data-ecoute]'); if (!b) return;
+  const e = ((R && R.generateur && R.generateur.ecoutes) || []).find(x => x.cle === b.dataset.ecoute); if (!e) return;
+  await post('api/sdr/reglage?mode=' + e.mode + '&bw=' + (e.bw || 0)); await post('api/sdr/decalage?hz=' + e.hz);
+  txt('gen-msg', e.nom + ' : ' + e.mode + ', décalage ' + (e.hz / 1000).toLocaleString('fr-FR') + ' kHz'); ticSdr();
+});
+function genDefaut() { genEnvoie('defaut=1'); }
+if (window.SATME_TELEPHONE) { document.querySelectorAll('.r-fictif').forEach(o => o.remove()); g('sp-b-iq').hidden = true; }
 
 // ---- the memories: a list by tag, a form, import and export
 let memFiltre = '', memEnCours = null, memOu = 'sdr';
