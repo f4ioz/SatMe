@@ -68,7 +68,7 @@ object PagePc {
     private fun onglet(id: String) = ONGLETS.first { it.id == id }
 
     /** The settings categories' icons, for the page's script. */
-    private fun icones(): String = org.json.JSONObject(listOf("person", "radio", "satellite_alt", "public", "smartphone", "save", "tune", "straighten", "mic", "cloud_upload", "handshake", "lock")
+    private fun icones(): String = org.json.JSONObject(listOf("person", "radio", "satellite_alt", "public", "smartphone", "save", "tune", "straighten", "mic", "cloud_upload", "handshake", "lock", "campaign")
         .associateWith { IconesPc.svg(it, "ico-reg") }).toString()
 
     /** The tabs that are pages of their own (served apart). */
@@ -181,6 +181,11 @@ object PagePc {
   .h-m { color:var(--texte-2); font-size:var(--fs-xs); font-weight:600; }
   .h-puce.inactif .h-f { color:var(--texte-3); }
   #h-mol { align-items:center; } #h-mol .ico { width:15px; height:15px; fill:var(--rx); flex:none; }
+  #h-ann { min-width:0; padding:3px 8px; font-size:14px; line-height:1; } #h-ann.muet { opacity:.55; } #h-ann.parle { border-color:var(--rx); }
+  #ann-carte .ligne > * { flex:none; }
+  .ann-ev { display:grid; grid-template-columns:1fr 1fr; gap:2px 12px; margin:6px 0; font-size:var(--fs-s); }
+  .ann-ev label { display:flex; gap:6px; align-items:center; }
+  .ann-dites { margin:4px 0 0; padding:0; list-style:none; font-size:var(--fs-xs); color:var(--texte-2); max-height:5.4em; overflow:hidden; }
   .mol-touches { display:grid; grid-template-columns:auto auto 1fr; gap:3px 8px; align-items:center; margin:6px 0 4px; font-size:var(--fs-s); }
   .mol-touches .ligne { margin:0; }
   #h-pass.encours { border-color:rgba(91,214,138,.55); } #h-pass.encours .h-f { color:var(--ok); }
@@ -1224,6 +1229,7 @@ ${rail()}
   <button id="ctx-chip" class="ctx-chip" hidden onclick="vue(tqQo() ? 'qo100' : 'station')"></button>
   <button id="h-rx" class="h-puce" onclick="vue(this.dataset.v || 'sdr')" title="Le récepteur actif : sa fréquence et son mode"><b>RX</b><span class="h-f" id="h-rx-f">—</span><span class="h-m" id="h-rx-m"></span></button>
   <button id="h-mol" class="h-puce" hidden onclick="vue('reglages'); montreReglages('interfaces')" title="La molette USB : son pas et ce qu'elle accorde (Réglages › Interfaces)">${IconesPc.svg("tune")}<span class="h-m" id="h-mol-t"></span></button>
+  <button id="h-ann" class="h-puce" hidden onclick="annMuet()" title="Annonces vocales : clic pour les couper ou les remettre (Réglages › Annonces)">🔊</button>
   <button id="h-tx" class="h-tx" hidden onclick="arretEmissions()" title="Une émission est en cours. Clic ou Échap : tout arrêter"><b>TX</b><span id="h-tx-q"></span><span class="h-tx-x">■ Échap</span></button>
   <button id="h-pass" class="h-puce" onclick="vue('station')" title="Le prochain passage du satellite suivi"><span id="h-pass-n">—</span><span class="h-f" id="h-pass-t"></span></button>
   <span id="rec" class="pastille" style="display:none;background:rgba(229,72,77,.2);color:var(--rose)"></span>
@@ -2965,6 +2971,31 @@ ${rail()}
         <div class="petit aide">Réception seulement : la molette ne passe jamais en émission (PTT) et ne lance rien. Capturer : SatMe seul lit la molette, le volume du bureau ne bouge plus tant que SatMe-PC tourne ; jamais un clavier complet (lecture seule alors).</div>
       </div>
     </div>
+    <div class="carte" id="ann-carte" hidden>
+      <div class="t">Annonces vocales</div>
+      <label class="petit" style="display:block"><input type="checkbox" id="ann-on" onchange="regleAnn('on=' + (this.checked ? 1 : 0))"> Annoncer à voix haute ce qui arrive (en français)</label>
+      <div id="ann-corps">
+        <div class="ligne"><span class="petit">Voix</span><select id="ann-sortie" onchange="regleAnn('sortie=' + this.value)"><option value="NAVIGATEUR">le navigateur</option><option value="PC">le haut-parleur du PC</option><option value="LES_DEUX">les deux</option></select>
+          <span class="petit">Détail</span><select id="ann-detail" onchange="regleAnn('detail=' + this.value)"><option value="COURT">court</option><option value="NORMAL">normal</option><option value="DETAILLE">détaillé</option></select>
+          <button id="ann-essai" onclick="essaiAnn()">Tester</button></div>
+        <div class="ligne"><span class="petit">Vitesse</span><input type="range" id="ann-vitesse" min="0.5" max="2" step="0.1" style="width:110px" onchange="regleAnn('vitesse=' + this.value)">
+          <span class="petit">Volume</span><input type="range" id="ann-volume" min="0" max="100" step="5" style="width:110px" onchange="regleAnn('volume=' + this.value)">
+          <label class="petit"><input type="checkbox" id="ann-ici" onchange="annIciChange(this.checked)"> cette page parle</label></div>
+        <div class="ligne" id="ann-l-nav"><span class="petit">Voix du navigateur</span><select id="ann-voix-nav" style="max-width:260px" onchange="annVoixNav(this.value)"></select></div>
+        <div class="ligne" id="ann-l-pc"><span class="petit">Moteur du PC</span><select id="ann-moteur" style="flex:none" onchange="regleAnn('moteur=' + enc(this.value))"></select>
+          <input id="ann-voix" placeholder="voix (vide : française)" style="width:220px" onchange="regleAnn('voix=' + enc(this.value))">
+          <span class="petit">Récepteur</span><select id="ann-baisse" style="flex:none" onchange="regleAnn('baisse=' + this.value)"><option value="100">inchangé</option><option value="50">baissé à 50 %</option><option value="25">baissé à 25 %</option><option value="0">coupé</option></select></div>
+        <div class="ligne"><span class="petit">Passage annoncé</span><input type="number" id="ann-minutes" min="1" max="30" style="width:56px" onchange="regleAnn('minutes=' + this.value)"><span class="petit">min avant · rappel d'émission toutes les</span>
+          <input type="number" id="ann-rappel" min="1" max="60" style="width:56px" onchange="regleAnn('rappel=' + this.value)"><span class="petit">min</span>
+          <label class="petit"><input type="checkbox" id="ann-phon" onchange="regleAnn('phonetique=' + (this.checked ? 1 : 0))"> indicatifs épelés (Alfa, Bravo…)</label></div>
+        <div id="ann-ev" class="ann-ev"></div>
+        <div class="petit" id="ann-etat"></div>
+        <ul class="ann-dites" id="ann-dites"></ul>
+        <div class="petit aide">Chaque case choisit un événement : le satellite suivi qui arrive (N minutes avant, son lever, son coucher, avec l'élévation maximale), une émission DATV, SSTV ou une correction I/Q qui commence ou s'arrête, et « Émission en cours » redit toutes les N minutes tant qu'elle dure, LEILA entendue sur QO-100, une image SSTV complète, son indicatif décodé en FT8 ou en CW, la DATV accrochée ou perdue et l'indicatif lu dans son image, une fenêtre de diffusion par avion (onglet Avions), le rotor en butée ou perdu, le récepteur SDR arrêté de lui-même, le pas de la molette.</div>
+        <div class="petit aide">Le navigateur : la page dit l'annonce avec une voix française s'il en a une, ici ou sur une autre machine (« cette page parle » se règle sur chaque navigateur). Le haut-parleur du PC : un moteur de synthèse installé sur ce PC (speech-dispatcher, eSpeak NG, eSpeak, ou Piper avec son modèle .onnx dans « voix »), le son du récepteur SDR baissé pendant l'annonce. Aucun moteur trouvé : le navigateur seulement.</div>
+        <div class="petit aide">Jamais la même annonce deux fois en 30 secondes, trois au plus en attente (les plus anciennes laissées). Le haut-parleur 🔊 en haut de la page coupe tout d'un clic, sans changer les réglages. Rien ne sort de ce PC.</div>
+      </div>
+    </div>
     <div class="carte" id="ad-carte" hidden>
       <div class="t">Accès à distance</div>
       <div class="petit" id="ad-etat"></div>
@@ -3672,6 +3703,7 @@ const CATS_REG = [
   { id: 'materiel', nom: 'Poste et rotor', ico: 'radio', desc: 'CAT, TH-D72, rotor, convertisseurs, ADALM-PLUTO', cartes: ['Poste', 'Kenwood TH-D72', 'Rotor', 'Convertisseurs', 'Journal Doppler', 'ADALM-PLUTO'] },
   { id: 'satellites', nom: 'Satellites', ico: 'satellite_alt', desc: 'Éléments orbitaux, statut AMSAT, QO-100 au démarrage', cartes: ['Éléments orbitaux', 'AMSAT', 'QO-100'] },
   { id: 'interfaces', nom: 'Interfaces', ico: 'handshake', desc: 'Lien WebSocket, fréquence pour les carnets (rigctld), molette USB', cartes: ['Lien satellite', 'Fréquence pour les carnets', 'Molette USB'] },
+  { id: 'annonces', nom: 'Annonces', ico: 'campaign', desc: 'Annonces vocales : passages, émission, appels, voix', cartes: ['Annonces vocales'] },
   { id: 'enligne', nom: 'Services en ligne', ico: 'public', desc: 'QRZ.com, Wavelog / Cloudlog, skeds hams.at', cartes: ['QRZ.com', 'Carnet en ligne', 'Skeds'] },
   { id: 'phonie', nom: 'Phonie → texte', ico: 'mic', desc: 'La voix entendue écrite : moteur, modèle, installation', cartes: ['Phonie → texte'] },
   { id: 'telephone', nom: 'Téléphone', ico: 'smartphone', desc: 'SatMe sur le téléphone : réglages et contacts', cartes: ['Téléphone'] },
@@ -4230,7 +4262,7 @@ function etatMarche(cle, on, pastille) {
 let flux = null, fluxOk = false, fluxSujets = '';
 function sujetsFlux() {
   const sdr = !g('v-sdr').hidden;
-  return 'etat,son,cw' + (sdr || !g('v-carnet').hidden ? ',sdr' : '') + (sdr ? ',spectre&span=' + rSpan + '&dx=' + rDx + '&n=' + Math.min(1024, Math.max(128, g('r-spectre').clientWidth || 512)) : '');
+  return 'etat,son,cw,annonce' + (sdr || !g('v-carnet').hidden ? ',sdr' : '') + (sdr ? ',spectre&span=' + rSpan + '&dx=' + rDx + '&n=' + Math.min(1024, Math.max(128, g('r-spectre').clientWidth || 512)) : '');
 }
 function majFlux() {
   if (!window.EventSource || window.SATME_TELEPHONE) return;
@@ -4238,7 +4270,8 @@ function majFlux() {
   if (flux && t === fluxSujets && flux.readyState !== 2) return;
   if (flux) flux.close();
   fluxSujets = t; fluxOk = false;
-  flux = new EventSource('api/flux?t=' + t);
+  flux = new EventSource('api/flux?t=' + t + (annSeq >= 0 ? '&an=' + annSeq : ''));
+  flux.addEventListener('annonce', ev => { const a = JSON.parse(ev.data); if (a.seq <= annSeq) return; annSeq = a.seq; parleAnn(a); });
   flux.addEventListener('etat', ev => { fluxOk = true; E = JSON.parse(ev.data); dessine(); });
   flux.addEventListener('son', ev => { S = JSON.parse(ev.data); rendSon(); });
   flux.addEventListener('cw', ev => { CW = JSON.parse(ev.data); rendCw(); });
@@ -4865,7 +4898,7 @@ async function chargeReglages() {
   try {
     const r = await (await fetch('api/reglages')).json();
     g('indicatif').value = r.c; g('locator').value = r.l; g('minEl').value = r.minEl;
-    horizonDe(r); chargeDoppler(); chargeLien(); chargeRig(); chargeMol(); chargePx();
+    horizonDe(r); chargeDoppler(); chargeLien(); chargeRig(); chargeMol(); chargeAnn(); chargePx();
     g('qrzFiche').checked = r.fiche; ficheVoulue = r.fiche;
     g('qrzUser').value = r.qrzUser; g('qrzMdp').placeholder = r.qrzMdp ? 'mot de passe enregistré' : 'Mot de passe';
     g('carnetUrl').value = r.carnetUrl; g('carnetCle').placeholder = r.carnetCle ? 'clé enregistrée' : 'Clé d’API (lecture et écriture)';
@@ -4961,6 +4994,81 @@ function rendMol(j) {
 }
 async function regleMol(q) { const j = await post('api/molette?' + q); if (j && j.dispo !== undefined) rendMol(j); else chargeMol(); HX.t.mol = 0; }
 setInterval(() => { if (ouverte('reglages') && !g('mol-carte').hidden && g('mol-carte').offsetParent) chargeMol(); }, 1000);
+// ------------------------------------------------------------------ spoken announcements
+// SatMe-PC chooses what to say and when; the sentences come by the live stream, said here with a French voice of this browser.
+let ANN = null, annSeq = -1;
+const annLs = (k, d) => { try { const x = localStorage.getItem(k); return x === null ? d : x; } catch (e) { return d; } };
+const annLsPose = (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} };
+const annVoixFr = () => window.speechSynthesis ? speechSynthesis.getVoices().filter(x => /^fr/i.test(x.lang)) : [];
+async function chargeAnn() {
+  let j = null;
+  try { j = await (await fetch('api/annonces')).json(); } catch (x) {}
+  rendAnn(j);
+}
+function annVoixRemplit() {
+  const s = g('ann-voix-nav'); if (document.activeElement === s) return;
+  const l = annVoixFr();
+  const h = '<option value="">' + (l.some(x => x.localService) ? 'française de ce navigateur' : window.speechSynthesis ? 'aucune voix française locale' : 'ce navigateur ne parle pas') + '</option>' +
+    l.map(x => '<option value="' + esc(x.name).replace(/"/g, '&quot;') + '">' + esc(x.name + (x.localService ? '' : ' (en ligne)')) + '</option>').join('');
+  if (s.dataset.h !== h) { s.innerHTML = h; s.dataset.h = h; }
+  s.value = annLs('annVoix', '');
+}
+if (window.speechSynthesis) speechSynthesis.onvoiceschanged = () => { if (ANN) annVoixRemplit(); };
+function annCategorie(vu) { const b = document.querySelector('#reg-nav button[data-cat="annonces"]'); if (b) b.hidden = !vu; }
+function rendAnn(j) {
+  if (!j || j.absent || j.on === undefined) { g('ann-carte').hidden = true; annCategorie(false); ANN = null; return; }
+  ANN = j; annRattrape(j);
+  g('ann-carte').hidden = false; annCategorie(true);
+  g('ann-on').checked = !!j.on; g('ann-corps').hidden = !j.on;
+  molSel('ann-sortie', j.sortie); molSel('ann-detail', j.detail); molSel('ann-vitesse', j.vitesse); molSel('ann-volume', j.volume);
+  molSel('ann-minutes', j.minutes); molSel('ann-rappel', j.rappel); molSel('ann-baisse', j.baisse);
+  if (document.activeElement !== g('ann-voix')) g('ann-voix').value = j.voix || '';
+  g('ann-phon').checked = !!j.phonetique; g('ann-ici').checked = annLs('annIci', '1') === '1';
+  const ms = j.moteurs || [];
+  const mh = '<option value="">' + (ms.length ? 'auto' : 'aucun sur ce PC') + '</option>' + ms.map(m => '<option value="' + m.nom + '">' + esc(m.libelle) + '</option>').join('');
+  const sm = g('ann-moteur'); if (sm.dataset.h !== mh) { sm.innerHTML = mh; sm.dataset.h = mh; }
+  molSel('ann-moteur', j.moteur || '');
+  g('ann-l-pc').hidden = j.sortie === 'NAVIGATEUR'; g('ann-l-nav').hidden = j.sortie === 'PC' && !!j.moteurEffectif;
+  annVoixRemplit();
+  const ev = g('ann-ev'), cle = JSON.stringify(j.sortes);
+  if (ev.dataset.h !== cle) {
+    ev.dataset.h = cle;
+    ev.innerHTML = (j.sortes || []).map(s => '<label><input type="checkbox"' + (s.on ? ' checked' : '') + ' onchange="regleAnn(\'s_' + s.id + '=\' + (this.checked ? 1 : 0))"> ' + esc(s.nom) + '</label>').join('');
+  }
+  const lib = (ms.find(m => m.nom === j.moteurEffectif) || {}).libelle;
+  txt('ann-etat', (j.muet ? 'Coupées (🔇 en haut de la page). ' : '') +
+    (j.sortie !== 'NAVIGATEUR' ? (lib ? 'PC : ' + lib + (j.parle ? ', parle…' : '') + '. ' : 'Aucun moteur de synthèse sur ce PC : le navigateur parle. ') : '') +
+    (window.speechSynthesis ? '' : 'Ce navigateur ne sait pas parler. ') + (j.erreur ? j.erreur + '. ' : '') +
+    (j.repetees ? j.repetees + ' répétée(s) écartée(s).' : ''));
+  g('ann-dites').innerHTML = (j.dites || []).map(a => '<li>' + hm(a.ms, true) + ' · ' + esc(a.texte) + '</li>').join('');
+}
+/** The live stream cut: the sentences read by the questions instead, said once. */
+function annRattrape(j) {
+  if (annSeq < 0) { annSeq = j.seq || 0; return; }
+  if (fluxOk) return;
+  (j.dites || []).slice().reverse().forEach(a => { if (a.seq > annSeq) { annSeq = a.seq; parleAnn(a); } });
+}
+function parleAnn(a) {
+  if (!a || !a.navigateur || !window.speechSynthesis || annLs('annIci', '1') !== '1' || (ANN && ANN.muet)) return;
+  const u = new SpeechSynthesisUtterance(a.texte);
+  u.lang = 'fr-FR'; u.rate = a.vitesse || 1; u.volume = Math.max(0, Math.min(1, (a.volume == null ? 80 : a.volume) / 100));
+  const l = annVoixFr(), nom = annLs('annVoix', '');
+  const x = (nom && l.find(y => y.name === nom)) || l.find(y => y.localService);
+  // Only voices on line: none taken unless chosen (the text would leave this machine).
+  if (x) u.voice = x; else if (l.length) return;
+  speechSynthesis.speak(u);
+}
+async function regleAnn(q) { const j = await post('api/annonces?' + q); if (j && j.on !== undefined) { rendAnn(j); HX.ann = j; rendTete(); } else chargeAnn(); }
+async function essaiAnn() { await post('api/annonces/essai'); setTimeout(chargeAnn, 600); }
+function annIciChange(on) { annLsPose('annIci', on ? '1' : '0'); if (!on && window.speechSynthesis) speechSynthesis.cancel(); }
+function annVoixNav(n) { annLsPose('annVoix', n); parleAnn({ navigateur: true, texte: 'Voix choisie', vitesse: ANN ? ANN.vitesse : 1, volume: ANN ? ANN.volume : 80 }); }
+async function annMuet() {
+  const muet = !(HX.ann && HX.ann.muet);
+  if (muet && window.speechSynthesis) speechSynthesis.cancel();
+  const j = await post('api/annonces?muet=' + (muet ? 1 : 0));
+  if (j && j.on !== undefined) { HX.ann = j; rendTete(); if (!g('ann-carte').hidden) rendAnn(j); }
+}
+setInterval(() => { if (ouverte('reglages') && !g('ann-carte').hidden && g('ann-carte').offsetParent) chargeAnn(); }, 2000);
 // ------------------------------------------------------------------ Doppler/CAT log
 async function chargeDoppler() {
   let j = null;
@@ -10511,7 +10619,8 @@ async function ticTete() {
   if (document.hidden) return;
   await Promise.all([hxLit('dtx', 'api/datv/emission', 2000), hxLit('stx', 'api/sstv/emission', 2000), hxLit('iq', 'api/iq', 3000),
     hxLit('sdr', 'api/sdr', 3000), hxLit('datv', 'api/datv', 10000), hxLit('lien', 'api/lien', 15000), hxLit('rig', 'api/rigctld', 5000),
-    hxLit('mol', 'api/molette?ctx=' + enc(molVue()), 2000)]);
+    hxLit('mol', 'api/molette?ctx=' + enc(molVue()), 2000), hxLit('ann', 'api/annonces', 3000)]);
+  if (HX.ann && HX.ann.on !== undefined) annRattrape(HX.ann);
   rendTete();
 }
 /** What transmits now: each transmitter SatMe drives. */
@@ -10545,6 +10654,11 @@ function rendTete() {
   // The USB knob, while it is read: its step and what it tunes.
   const mo = HX.mol, moVu = !!(mo && mo.puce);
   g('h-mol').hidden = !moVu; if (moVu) txt('h-mol-t', mo.puce);
+  // Spoken announcements, while on: muted or not in one click.
+  const an = HX.ann, anVu = !!(an && an.on);
+  g('h-ann').hidden = !anVu;
+  if (anVu) { txt('h-ann', an.muet ? '🔇' : '🔊'); g('h-ann').classList.toggle('muet', !!an.muet); g('h-ann').classList.toggle('parle', !!an.parle);
+    g('h-ann').title = an.muet ? 'Annonces vocales coupées : clic pour les remettre' : 'Annonces vocales : clic pour les couper (Réglages › Annonces)'; }
   // The next pass of the satellite followed, counted down.
   // The next pass of the satellite followed, else the list's next one (a favourite first).
   const n = Date.now(), lp = (P || []).filter(x => x.los > n);
@@ -10697,7 +10811,8 @@ function palSources() {
   A('■ Arrêter toute émission', 'Échap · DATV, SSTV, I/Q, mire', arretEmissions, 'arret');
   A('Démarrer la réception SDR', 'récepteur, écoute', () => post('api/sdr/demarrer').then(() => { HX.t = {}; ticTete(); ticSdr(); }));
   A('Arrêter la réception SDR', 'récepteur', () => post('api/sdr/arreter').then(() => { HX.t = {}; ticTete(); ticSdr(); }));
-  A('Couper le son', 'haut-parleur SDR et écoute dans ce navigateur, muet', () => { rRegle('son=0'); if (!g('ec-stop').hidden) arreteEcoute(); annonce('Son coupé'); });
+  if (HX.ann && HX.ann.on) A('Annonces vocales : ' + (HX.ann.muet ? 'remettre' : 'couper'), 'voix, parole, muet', annMuet);
+  A('Couper le son', 'haut-parleur SDR et écoute dans ce navigateur, muet',() => { rRegle('son=0'); if (!g('ec-stop').hidden) arreteEcoute(); annonce('Son coupé'); });
   A('Rétablir le son', 'haut-parleur SDR', () => { rRegle('son=1'); annonce('Haut-parleur SDR rétabli'); });
   if (!g('ec-boite').hidden) A('Écouter ici', 'le son de SatMe-PC dans ce navigateur', () => { g('ec-pop').hidden = false; });
   A('Ouvrir les réglages', 'configuration', () => vue('reglages'));

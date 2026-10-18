@@ -35,6 +35,9 @@ class HautParleurPc(private val rate: Int, private val ouvre: () -> SourceDataLi
     private val bloc = rate / 100
     private val cible = (rate * CIBLE_S).toLong()
     @Volatile private var enMarche = true
+    /** The level asked (1 as received): lowered while SatMe speaks; reached over about 30 ms, no click. */
+    @Volatile var gain = 1f
+    private var gainVu = 1f
     private val fil = Thread({ boucle() }, "satme-haut-parleur").apply { isDaemon = true; priority = Thread.MAX_PRIORITY; start() }
 
     /** A block from the receiver: kept, never waited for. */
@@ -63,6 +66,12 @@ class HautParleurPc(private val rate: Int, private val ouvre: () -> SourceDataLi
             val b = anneau[((k + 1) and masque.toLong()).toInt()].toInt()
             sortie[i] = (a + (b - a) * x).toInt().toShort()
             lu += pas
+        }
+        val voulu = gain.coerceIn(0f, 1f)
+        if (voulu != 1f || gainVu != 1f) for (i in sortie.indices) {
+            gainVu += (voulu - gainVu) * 0.002f
+            if (kotlin.math.abs(voulu - gainVu) < 1e-4f) gainVu = voulu
+            sortie[i] = (sortie[i] * gainVu).toInt().toShort()
         }
     }
 
