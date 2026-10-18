@@ -22,32 +22,46 @@ import org.json.JSONObject
  */
 object Montage {
 
-    /** What a piece of hardware is; [colonne] its place from the antennas (0) to the computer, left to right. */
-    enum class Genre(val nom: String, val colonne: Int) {
-        ANTENNE("Antennes", 0),
-        LNB("Têtes de réception (LNB)", 1),
-        AMPLI("Amplificateurs", 1),
-        CONVERTISSEUR("Convertisseurs", 2),
-        ALIMENTATION("Alimentations, T de polarisation", 2),
-        FILTRE("Filtres", 2),
-        CHARGE("Atténuateurs, charges", 2),
-        COUPLEUR("Répartiteurs", 2),
-        ROTOR("Rotors", 1),
-        POSTE("Postes émetteurs-récepteurs", 3),
-        SDR("Récepteurs et émetteurs SDR", 3),
-        RECEPTEUR_DATV("Récepteurs DATV", 3),
-        NOEUD("Boîtiers déportés", 4),
-        CARTE_SON("Cartes son", 4),
-        INTERFACE("Interfaces de station", 4),
-        ORDINATEUR("Ordinateurs", 5),
-        TELEPHONE("Téléphones", 6),
+    /** The groups of the editing palette, in their order. */
+    enum class Palette(val nom: String) {
+        ANTENNES("Antennes"), TETES("Têtes & convertisseurs"), REFERENCES("Références"), RECEPTEURS("Récepteurs & postes"),
+        AMPLIS("Amplis"), ORDINATEURS("Ordinateurs"), BOITES("Boîtes logicielles"),
+    }
+
+    /** What a piece of hardware is; [colonne] its place from the antennas (0) to the computer, left to right; [palette] its group there. */
+    enum class Genre(val nom: String, val colonne: Int, val palette: Palette) {
+        ANTENNE("Antennes", 0, Palette.ANTENNES),
+        LNB("Têtes de réception (LNB)", 1, Palette.TETES),
+        AMPLI("Amplificateurs", 1, Palette.AMPLIS),
+        REFERENCE("Références de fréquence (GPSDO)", 1, Palette.REFERENCES),
+        CONVERTISSEUR("Convertisseurs", 2, Palette.TETES),
+        ALIMENTATION("Alimentations, T de polarisation", 2, Palette.TETES),
+        FILTRE("Filtres", 2, Palette.TETES),
+        CHARGE("Atténuateurs, charges", 2, Palette.TETES),
+        COUPLEUR("Répartiteurs", 2, Palette.TETES),
+        ROTOR("Rotors", 1, Palette.ANTENNES),
+        POSTE("Postes émetteurs-récepteurs", 3, Palette.RECEPTEURS),
+        SDR("Récepteurs et émetteurs SDR", 3, Palette.RECEPTEURS),
+        RECEPTEUR_DATV("Récepteurs DATV", 3, Palette.RECEPTEURS),
+        NOEUD("Boîtiers déportés", 4, Palette.ORDINATEURS),
+        CARTE_SON("Cartes son", 4, Palette.ORDINATEURS),
+        INTERFACE("Interfaces de station", 4, Palette.ORDINATEURS),
+        ORDINATEUR("Ordinateurs", 5, Palette.ORDINATEURS),
+        TELEPHONE("Téléphones", 6, Palette.ORDINATEURS),
+        BOITE("Boîtes logicielles (services, programmes)", 6, Palette.BOITES),
     }
 
     /** Which way a signal goes through a port. */
     enum class Sens { ENTREE, SORTIE, BIDIR }
 
-    /** What a port carries: radio (RF), data, sound, commands (CAT, PTT, rotor), a mounting. */
-    enum class Signal { RF, DONNEES, AUDIO, COMMANDE, MECA }
+    /**
+     * What a port carries: radio (RF), data, sound, commands (CAT, PTT, rotor), a mounting,
+     * a frequency reference (10 MHz, 25 MHz clock), a DC supply, a GPS antenna's signal.
+     */
+    enum class Signal { RF, DONNEES, AUDIO, COMMANDE, MECA, REF, DC, GPS;
+        /** Whether it goes on to the computer (data, sound, commands): what the data paths follow. */
+        val versPc get() = this == DONNEES || this == AUDIO || this == COMMANDE
+    }
 
     /** The path a radio port belongs to: reception, transmission, both; [AUCUNE] for the rest. */
     enum class Voie { RX, TX, RXTX, AUCUNE;
@@ -56,7 +70,7 @@ object Montage {
     }
 
     /** Cables by family: a link is possible when both ports accept its family. */
-    enum class Famille { COAX, DIRECT, USB, RESEAU, WIFI, AUDIO, SERIE, ROTOR }
+    enum class Famille { COAX, DIRECT, USB, RESEAU, WIFI, AUDIO, SERIE, ROTOR, REFERENCE, ALIM, GPS, INTERNET }
 
     /** The cables the page draws, each in its own way (a coaxial thick, a network cable dashed…). */
     enum class Cable(val nom: String, val famille: Famille) {
@@ -72,7 +86,11 @@ object Montage {
         AUDIO("Audio", Famille.AUDIO),
         CAT("CAT (série)", Famille.SERIE),
         PTT("PTT", Famille.SERIE),
-        ROTOR("Commande du rotor", Famille.ROTOR);
+        ROTOR("Commande du rotor", Famille.ROTOR),
+        REFERENCE("Référence (horloge)", Famille.REFERENCE),
+        ALIM("Alimentation (continu)", Famille.ALIM),
+        GPS("Antenne GPS", Famille.GPS),
+        INTERNET("Réseau / Internet (logiciel)", Famille.INTERNET);
 
         companion object {
             fun de(nom: String?): Cable? = entries.firstOrNull { it.name == nom }
@@ -96,29 +114,55 @@ object Montage {
         val familles: Set<Famille> get() = when (signal) {
             Signal.RF -> if (connecteur == "guide") setOf(Famille.DIRECT) else setOf(Famille.COAX, Famille.DIRECT)
             Signal.DONNEES -> when (connecteur) {
-                "USB" -> setOf(Famille.USB); "RJ45" -> setOf(Famille.RESEAU); "Wi-Fi" -> setOf(Famille.WIFI)
+                "USB" -> setOf(Famille.USB); "RJ45" -> setOf(Famille.RESEAU); "Wi-Fi" -> setOf(Famille.WIFI); "Internet" -> setOf(Famille.INTERNET)
                 else -> setOf(Famille.USB, Famille.RESEAU, Famille.WIFI)
             }
             Signal.AUDIO -> setOf(Famille.AUDIO)
-            Signal.COMMANDE -> if (connecteur == "rotor") setOf(Famille.ROTOR) else setOf(Famille.SERIE, Famille.USB)
+            Signal.COMMANDE -> when (connecteur) { "rotor" -> setOf(Famille.ROTOR); "RCA" -> setOf(Famille.SERIE); else -> setOf(Famille.SERIE, Famille.USB) }
             Signal.MECA -> setOf(Famille.ROTOR)
+            Signal.REF -> setOf(Famille.REFERENCE)
+            Signal.DC -> setOf(Famille.ALIM)
+            Signal.GPS -> setOf(Famille.GPS)
         }
+    }
+
+    /**
+     * A setting of one piece the owner chooses (a reference input fitted or
+     * not, an output's frequency): [valeurs] value → what the page says.
+     */
+    data class Option(val id: String, val nom: String, val valeurs: List<Pair<String, String>>, val defaut: String) {
+        fun admet(v: String) = valeurs.any { it.first == v }
     }
 
     /**
      * A piece of hardware the catalogue knows: [dessin] the drawing the page
      * makes of it, [l]×[h] its size there, [roles] what ties it to SatMe's
      * live state ("sdr:pluto", "tx:bladerf", "datv:minitiouner", "cat"…).
+     * [ports] all it may have; [variante] those it has with the owner's
+     * [options] (a reference port only when fitted, an output's frequency).
      */
     data class Modele(
         val id: String, val nom: String, val genre: Genre, val dessin: String, val ports: List<Port>,
         val l: Int, val h: Int, val roles: Set<String> = emptySet(), val note: String = "",
+        val options: List<Option> = emptyList(), val variante: ((Map<String, String>) -> List<Port>)? = null,
     ) {
         fun port(id: String): Port? = ports.firstOrNull { it.id == id }
+        /** The options as set: the owner's where valid, the defaults otherwise. */
+        fun reglees(o: Map<String, String>): Map<String, String> = options.associate { op -> op.id to (o[op.id]?.takeIf { op.admet(it) } ?: op.defaut) }
+        /** The ports with the options [o]. */
+        fun portsAvec(o: Map<String, String>): List<Port> = variante?.invoke(reglees(o)) ?: ports
     }
 
-    /** One piece put in the station: its [modele] in the catalogue, the [nom] the owner gives it. */
-    data class Element(val id: String, val modele: String, val nom: String = "")
+    /**
+     * One piece put in the station: its [modele] in the catalogue, the [nom]
+     * the owner gives it, its [options], where the owner put it on the
+     * drawing ([x], [y]; null: the automatic layout's place); [photo]: its
+     * photo cut out drawn in place of SatMe's drawing (when there is one).
+     */
+    data class Element(val id: String, val modele: String, val nom: String = "", val options: Map<String, String> = emptyMap(),
+                       val x: Int? = null, val y: Int? = null, val photo: Boolean = false) {
+        val place get() = x != null && y != null
+    }
 
     /** One end of a cable: an element's port. */
     data class Bout(val element: String, val port: String) {
@@ -146,6 +190,8 @@ object Montage {
     const val ELEMENTS_MAX = 40
     const val LIENS_MAX = 80
     const val VERSION = 1
+    /** The farthest a piece may be put on the drawing. */
+    const val PLACE_MAX = 4000
 
     /** The model of [e], from the catalogue. */
     fun modele(e: Element): Modele? = CatalogueMateriel.modele(e.modele)
@@ -153,8 +199,11 @@ object Montage {
     /** The name shown for [e]: the owner's, else the catalogue's. */
     fun nom(e: Element): String = e.nom.ifBlank { modele(e)?.nom ?: e.modele }
 
+    /** [e]'s ports, its options applied. */
+    fun ports(e: Element): List<Port> = modele(e)?.portsAvec(e.options) ?: emptyList()
+
     /** The port at [b] in chain [c], or null when the element or the port is not there. */
-    fun port(c: Chaine, b: Bout): Port? = c.element(b.element)?.let { modele(it) }?.port(b.port)
+    fun port(c: Chaine, b: Bout): Port? = c.element(b.element)?.let { e -> ports(e).firstOrNull { it.id == b.port } }
 
     /** The cable families both ports take, or empty when they cannot be linked. */
     fun familles(a: Port, b: Port): Set<Famille> = a.familles intersect b.familles
@@ -174,6 +223,10 @@ object Montage {
             Famille.AUDIO in f -> Cable.AUDIO
             Famille.SERIE in f -> if (a.id.contains("ptt") || b.id.contains("ptt")) Cable.PTT else Cable.CAT
             Famille.ROTOR in f -> Cable.ROTOR
+            Famille.REFERENCE in f -> Cable.REFERENCE
+            Famille.ALIM in f -> Cable.ALIM
+            Famille.GPS in f -> Cable.GPS
+            Famille.INTERNET in f -> Cable.INTERNET
             else -> null
         }
     }
@@ -199,7 +252,13 @@ object Montage {
         val vus = HashSet<String>()
         val elements = c.elements.asSequence()
             .filter { ID.matches(it.id) && CatalogueMateriel.modele(it.modele) != null && vus.add(it.id) }
-            .map { it.copy(nom = propre(it.nom, 60)) }
+            .map { e ->
+                val m = CatalogueMateriel.modele(e.modele)!!
+                // Only the model's options, with values it knows; the defaults not kept. A place on the drawing, bounded, or none.
+                val o = m.options.mapNotNull { op -> e.options[op.id]?.takeIf { op.admet(it) && it != op.defaut }?.let { op.id to it } }.toMap()
+                val place = e.x != null && e.y != null
+                e.copy(nom = propre(e.nom, 60), options = o, x = if (place) e.x!!.coerceIn(0, PLACE_MAX) else null, y = if (place) e.y!!.coerceIn(0, PLACE_MAX) else null)
+            }
             .take(ELEMENTS_MAX).toList()
         var sortie = Chaine(elements, emptyList(), propre(c.nom, 80))
         val ids = HashSet<String>()
@@ -217,7 +276,13 @@ object Montage {
     // ------------------------------------------------------------------ JSON
 
     fun ecrit(c: Chaine): JSONObject = JSONObject().put("v", VERSION).put("nom", c.nom)
-        .put("elements", JSONArray(c.elements.map { e -> JSONObject().put("id", e.id).put("m", e.modele).put("nom", e.nom) }))
+        .put("elements", JSONArray(c.elements.map { e ->
+            JSONObject().put("id", e.id).put("m", e.modele).put("nom", e.nom).also { o ->
+                if (e.options.isNotEmpty()) o.put("o", JSONObject(e.options))
+                if (e.place) o.put("x", e.x).put("y", e.y)
+                if (e.photo) o.put("ph", true)
+            }
+        }))
         .put("liens", JSONArray(c.liens.map { l ->
             JSONObject().put("id", l.id).put("de", l.de.toString()).put("vers", l.vers.toString()).put("c", l.cable.name).put("note", l.note)
         }))
@@ -229,7 +294,13 @@ object Montage {
         val el = o.optJSONArray("elements") ?: JSONArray()
         val li = o.optJSONArray("liens") ?: JSONArray()
         val elements = (0 until minOf(el.length(), ELEMENTS_MAX * 2)).mapNotNull { i ->
-            el.optJSONObject(i)?.let { Element(it.optString("id"), it.optString("m"), it.optString("nom")) }
+            el.optJSONObject(i)?.let { x ->
+                val o = x.optJSONObject("o")
+                val opts = o?.keys()?.asSequence()?.take(16)?.associateWith { k -> o.optString(k) }.orEmpty()
+                val px = if (x.has("x") && x.has("y")) x.optInt("x") else null
+                val py = if (px != null) x.optInt("y") else null
+                Element(x.optString("id"), x.optString("m"), x.optString("nom"), opts, px, py, x.optBoolean("ph", false))
+            }
         }
         val liens = (0 until minOf(li.length(), LIENS_MAX * 2)).mapNotNull { i ->
             val x = li.optJSONObject(i) ?: return@mapNotNull null
@@ -247,16 +318,30 @@ object Montage {
         .put("modeles", JSONArray(CatalogueMateriel.MODELES.map { m ->
             JSONObject().put("id", m.id).put("nom", m.nom).put("court", CatalogueMateriel.court(m)).put("genre", m.genre.name).put("dessin", m.dessin).put("l", m.l).put("h", m.h)
                 .put("note", m.note).put("roles", JSONArray(m.roles.toList()))
-                .put("ports", JSONArray(m.ports.map { p ->
-                    JSONObject().put("id", p.id).put("nom", p.nom).put("sens", p.sens.name).put("signal", p.signal.name).put("voie", p.voie.name)
-                        .put("mhz", p.mhz ?: JSONObject.NULL).put("connecteur", p.connecteur).put("multiple", p.multiple)
-                        .put("familles", JSONArray(p.familles.map { it.name }))
+                .put("ports", JSONArray(m.ports.map { portJson(it) }))
+                .put("options", JSONArray(m.options.map { op ->
+                    JSONObject().put("id", op.id).put("nom", op.nom).put("defaut", op.defaut)
+                        .put("valeurs", JSONArray(op.valeurs.map { JSONObject().put("v", it.first).put("t", it.second) }))
                 }))
         }))
+        .put("palette", JSONArray(Palette.entries.map { p -> JSONObject().put("id", p.name).put("nom", p.nom)
+            .put("genres", JSONArray(Genre.entries.filter { it.palette == p }.map { it.name })) }))
         .put("cables", JSONArray(Cable.entries.map { JSONObject().put("id", it.name).put("nom", it.nom).put("famille", it.famille.name) }))
         .put("prereglages", JSONArray(CatalogueMateriel.PREREGLAGES.map { p ->
             JSONObject().put("id", p.id).put("nom", p.nom).put("quoi", p.quoi).put("chaine", ecrit(p.chaine))
         }))
+
+    fun portJson(p: Port): JSONObject = JSONObject().put("id", p.id).put("nom", p.nom).put("sens", p.sens.name).put("signal", p.signal.name).put("voie", p.voie.name)
+        .put("mhz", p.mhz ?: JSONObject.NULL).put("connecteur", p.connecteur).put("multiple", p.multiple)
+        .put("familles", JSONArray(p.familles.map { it.name }))
+
+    /** The ports of each element of [c] whose options change them (the page draws those, not the catalogue's). */
+    fun portsJson(c: Chaine): JSONObject = JSONObject().also { o ->
+        for (e in c.elements) {
+            val m = modele(e) ?: continue
+            if (m.variante != null) o.put(e.id, JSONArray(ports(e).map { portJson(it) }))
+        }
+    }
 
     /** A new element's id, not yet in [c]. */
     fun nouvelId(c: Chaine, prefixe: String = "e"): String {
@@ -273,10 +358,10 @@ object Montage {
         private var c = Chaine(nom = nom)
         private var n = 0
 
-        fun ajoute(modele: String, nom: String = ""): String {
+        fun ajoute(modele: String, nom: String = "", options: Map<String, String> = emptyMap()): String {
             require(CatalogueMateriel.modele(modele) != null) { "modèle inconnu : $modele" }
             val id = "e" + (++n)
-            c = c.copy(elements = c.elements + Element(id, modele, nom))
+            c = c.copy(elements = c.elements + Element(id, modele, nom, options))
             return id
         }
 

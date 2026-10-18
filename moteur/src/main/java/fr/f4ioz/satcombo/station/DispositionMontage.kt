@@ -12,6 +12,7 @@ import fr.f4ioz.satcombo.station.Montage.Chaine
 import fr.f4ioz.satcombo.station.Montage.Element
 import fr.f4ioz.satcombo.station.Montage.Genre
 import fr.f4ioz.satcombo.station.Montage.Lien
+import fr.f4ioz.satcombo.station.Montage.Port
 import fr.f4ioz.satcombo.station.Montage.Sens
 import fr.f4ioz.satcombo.station.Montage.Signal
 import fr.f4ioz.satcombo.station.Montage.Voie
@@ -25,6 +26,10 @@ import org.json.JSONObject
  * column the reception path above, the transmission below; the cables
  * orthogonal, in the gaps between the columns (or under the drawing when a
  * cable would cross a piece of hardware).
+ *
+ * Once the owner has moved a piece ([Element.place]), the drawing is his:
+ * each piece where he put it (those not yet placed in a row below), the
+ * cables from port to port with square corners.
  */
 object DispositionMontage {
 
@@ -35,7 +40,10 @@ object DispositionMontage {
     private const val ECART_V = 34
     private const val PAS_VOIE = 10
 
-    data class Boite(val id: String, val x: Int, val y: Int, val l: Int, val h: Int, val colonne: Int) {
+    /** Where a port is on the drawing, and on which side of its piece: 'g' left, 'd' right, 'b' below. */
+    data class PortPlace(val id: String, val x: Int, val y: Int, val cote: Char)
+
+    data class Boite(val id: String, val x: Int, val y: Int, val l: Int, val h: Int, val colonne: Int, val ports: List<PortPlace> = emptyList()) {
         val bas get() = y + h
         val milieuY get() = y + (h - ETIQUETTE) / 2
     }
@@ -44,7 +52,7 @@ object DispositionMontage {
     data class Trace(val id: String, val points: List<Pair<Int, Int>>, val etiquette: Pair<Int, Int>,
                      val de: Pair<Int, Int>, val vers: Pair<Int, Int>)
 
-    data class Plan(val largeur: Int, val hauteur: Int, val boites: List<Boite>, val traces: List<Trace>) {
+    data class Plan(val largeur: Int, val hauteur: Int, val boites: List<Boite>, val traces: List<Trace>, val libre: Boolean = false) {
         fun boite(id: String) = boites.firstOrNull { it.id == id }
     }
 
@@ -53,9 +61,9 @@ object DispositionMontage {
 
     /** An element's paths: 0 reception, 1 both, 2 transmission, 3 none (data, rotor). */
     private fun rangVoie(e: Element, liens: List<Lien>): Int {
-        val m = Montage.modele(e) ?: return 3
+        if (Montage.modele(e) == null) return 3
         val relies = liens.flatMap { listOf(it.de, it.vers) }.filter { it.element == e.id }.map { it.port }.toSet()
-        val rf = m.ports.filter { it.signal == Signal.RF && (relies.isEmpty() || it.id in relies) }
+        val rf = Montage.ports(e).filter { it.signal == Signal.RF && (relies.isEmpty() || it.id in relies) }
         if (rf.isEmpty()) return 3
         val rx = rf.any { it.voie.recoit }; val tx = rf.any { it.voie.emet }
         return when { rx && tx -> 1; rx -> 0; tx -> 2; else -> 3 }
@@ -96,6 +104,7 @@ object DispositionMontage {
         val liens = chaine.liens.filter { it.de.element in ids && it.vers.element in ids }
         val c = Chaine(elements, liens)
         if (elements.isEmpty()) return Plan(2 * MARGE, 2 * MARGE, emptyList(), emptyList())
+        if (elements.any { it.place }) return libre(c)
         val taille = elements.associate { e -> e.id to (Montage.modele(e)!!.let { it.l to it.h + ETIQUETTE }) }
 
         // ---- columns: the genre's place at least, right of what stands left of it
@@ -115,12 +124,13 @@ object DispositionMontage {
             }
             if (!bouge) return@repeat
         }
-        // The computer and the phone always last.
+        // The computer and the phone (and the programs beside it) always last.
         val genre = elements.associate { it.id to Montage.modele(it)!!.genre }
-        val autres = elements.filter { genre[it.id] != Genre.ORDINATEUR && genre[it.id] != Genre.TELEPHONE }.maxOfOrNull { col[it.id]!! } ?: -1
+        val apres = setOf(Genre.TELEPHONE, Genre.BOITE)
+        val autres = elements.filter { genre[it.id] != Genre.ORDINATEUR && genre[it.id] !in apres }.maxOfOrNull { col[it.id]!! } ?: -1
         elements.filter { genre[it.id] == Genre.ORDINATEUR }.forEach { col[it.id] = maxOf(col[it.id]!!, autres + 1) }
         val pc = elements.filter { genre[it.id] == Genre.ORDINATEUR }.maxOfOrNull { col[it.id]!! } ?: autres
-        elements.filter { genre[it.id] == Genre.TELEPHONE }.forEach { col[it.id] = maxOf(col[it.id]!!, pc + 1) }
+        elements.filter { genre[it.id] in apres }.forEach { col[it.id] = maxOf(col[it.id]!!, pc + 1) }
         // Empty columns removed.
         val utilisees = col.values.toSortedSet().toList()
         elements.forEach { col[it.id] = utilisees.indexOf(col[it.id]!!) }
@@ -275,7 +285,110 @@ object DispositionMontage {
         val basDessin = boites.maxOf { it.bas }
         val largeur = (boites.maxOf { it.x + it.l }).coerceAtLeast(traces.flatMap { it.points }.maxOfOrNull { it.first } ?: 0) + MARGE
         val hauteur = maxOf(basDessin, traces.flatMap { it.points }.maxOfOrNull { it.second } ?: 0) + MARGE
-        return Plan(largeur, hauteur, boites, traces)
+        // Every port's place: a cabled one where its cable ends, the others on their side.
+        val bouts = HashMap<Pair<String, String>, Pair<Int, Int>>()
+        for (l in liens) {
+            bouts.putIfAbsent(l.de.element to l.de.port, position[l.id to l.de.element]!!)
+            bouts.putIfAbsent(l.vers.element to l.vers.port, position[l.id to l.vers.element]!!)
+        }
+        val avecPorts = boites.map { b ->
+            val e = c.element(b.id)!!
+            b.copy(ports = placesPorts(e, b).map { p -> bouts[b.id to p.id]?.let { (x, y) -> p.copy(x = x, y = y, cote = if (x <= b.x) 'g' else if (x >= b.x + b.l) 'd' else p.cote) } ?: p })
+        }
+        return Plan(largeur, hauteur, avecPorts, traces)
+    }
+
+    /** The side of its piece a port stands on: radio in on the left, out on the right; references and supplies below; data towards the computer. */
+    fun cote(g: Genre?, p: Port): Char = when {
+        p.signal == Signal.REF || p.signal == Signal.DC || p.signal == Signal.GPS ->
+            if (p.sens == Sens.SORTIE) 'd' else if (p.signal == Signal.GPS) 'g' else 'b'
+        p.signal == Signal.MECA -> 'b'
+        p.signal == Signal.RF -> when (p.sens) { Sens.ENTREE -> 'g'; Sens.SORTIE -> 'd'; Sens.BIDIR -> if (g == Genre.ANTENNE) 'd' else 'g' }
+        g == Genre.ORDINATEUR -> if (p.connecteur == "Internet") 'd' else 'g'
+        g == Genre.TELEPHONE || g == Genre.BOITE -> 'g'
+        p.signal == Signal.COMMANDE && p.sens == Sens.ENTREE -> 'b'
+        else -> 'd'
+    }
+
+    /** [e]'s ports on the edges of its box [b], each side's spread evenly. */
+    fun placesPorts(e: Element, b: Boite): List<PortPlace> {
+        val g = Montage.modele(e)?.genre
+        val hd = b.h - ETIQUETTE
+        val ps = Montage.ports(e)
+        val parCote = ps.groupBy { cote(g, it) }
+        return ps.map { p ->
+            val k = cote(g, p); val l = parCote[k]!!; val i = l.indexOf(p); val n = l.size
+            when (k) {
+                'g' -> PortPlace(p.id, b.x, b.y + hd * (i + 1) / (n + 1), 'g')
+                'd' -> PortPlace(p.id, b.x + b.l, b.y + hd * (i + 1) / (n + 1), 'd')
+                else -> PortPlace(p.id, b.x + b.l * (i + 1) / (n + 1), b.y + hd, 'b')
+            }
+        }
+    }
+
+    /** How far a cable leaves its port straight before it turns. */
+    private const val SORTIE_PORT = 16
+
+    /**
+     * The owner's drawing: the pieces he placed where he put them, the others
+     * in a row below; each cable from port to port, leaving straight then
+     * turning square.
+     */
+    private fun libre(c: Chaine): Plan {
+        val taille = c.elements.associate { e -> e.id to (Montage.modele(e)!!.let { it.l to it.h + ETIQUETTE }) }
+        val placees = c.elements.filter { it.place }
+        val droite = maxOf(900, placees.maxOf { it.x!! + taille[it.id]!!.first })
+        var y0 = placees.maxOf { it.y!! + taille[it.id]!!.second } + ECART_V
+        var x = MARGE; var hRang = 0
+        val boites = c.elements.map { e ->
+            val (l, h) = taille[e.id]!!
+            if (e.place) Boite(e.id, e.x!!, e.y!!, l, h, base(e))
+            else {
+                if (x > MARGE && x + l > droite) { x = MARGE; y0 += hRang + ECART_V; hRang = 0 }
+                Boite(e.id, x, y0, l, h, base(e)).also { x += l + 40; hRang = maxOf(hRang, h) }
+            }
+        }.map { b -> b.copy(ports = placesPorts(c.element(b.id)!!, b)) }
+        val parId = boites.associateBy { it.id }
+        val etiquettes = ArrayList<Pair<Int, Int>>()
+        val traces = c.liens.mapNotNull { l ->
+            val a = parId[l.de.element]?.ports?.firstOrNull { it.id == l.de.port } ?: return@mapNotNull null
+            val b = parId[l.vers.element]?.ports?.firstOrNull { it.id == l.vers.port } ?: return@mapNotNull null
+            val pts = equerre(a, b)
+            val et = etiquette(pts, boites, etiquettes)
+            etiquettes += et
+            Trace(l.id, pts, et, a.x to a.y, b.x to b.y)
+        }
+        val tous = boites.flatMap { listOf(it.x + it.l to it.bas) } + traces.flatMap { it.points }
+        return Plan(tous.maxOf { it.first } + MARGE, tous.maxOf { it.second } + MARGE, boites, traces, libre = true)
+    }
+
+    /** A cable between two ports: straight out of each, one square turn between (two when they face each other). */
+    fun equerre(a: PortPlace, b: PortPlace): List<Pair<Int, Int>> {
+        fun sort(p: PortPlace) = when (p.cote) { 'g' -> (p.x - SORTIE_PORT) to p.y; 'd' -> (p.x + SORTIE_PORT) to p.y; else -> p.x to (p.y + SORTIE_PORT) }
+        val a1 = sort(a); val b1 = sort(b)
+        val face = (a.cote == 'd' && b.cote == 'g' && a1.first <= b1.first) || (a.cote == 'g' && b.cote == 'd' && a1.first >= b1.first)
+        val pts = if (face) {
+            val mx = (a.x + b.x) / 2
+            listOf(a.x to a.y, mx to a.y, mx to b.y, b.x to b.y)
+        } else if (a.cote == 'b' && b.cote == 'b') {
+            val yb = maxOf(a1.second, b1.second)
+            listOf(a.x to a.y, a.x to yb, b.x to yb, b.x to b.y)
+        } else if (b.cote == 'b') {
+            listOf(a.x to a.y, a1, b.x to a1.second, b.x to b.y)
+        } else {
+            listOf(a.x to a.y, a1, a1.first to b1.second, b1, b.x to b.y)
+        }
+        // Repeated points and straight-through corners dropped.
+        val net = pts.fold(ArrayList<Pair<Int, Int>>()) { acc, p -> if (acc.lastOrNull() != p) acc.add(p); acc }
+        val propre = ArrayList<Pair<Int, Int>>()
+        for (p in net) {
+            if (propre.size >= 2) {
+                val u = propre[propre.size - 2]; val v = propre.last()
+                if ((u.first == v.first && v.first == p.first) || (u.second == v.second && v.second == p.second)) propre.removeAt(propre.size - 1)
+            }
+            propre += p
+        }
+        return propre
     }
 
     /** A label's room: about this wide, drawn just above its point. */
@@ -312,8 +425,11 @@ object DispositionMontage {
         return s?.let { (it.first.first + it.second.first) / 2 to it.first.second } ?: pts[pts.size / 2]
     }
 
-    fun json(p: Plan): JSONObject = JSONObject().put("l", p.largeur).put("h", p.hauteur)
-        .put("boites", JSONArray(p.boites.map { JSONObject().put("id", it.id).put("x", it.x).put("y", it.y).put("l", it.l).put("h", it.h).put("col", it.colonne) }))
+    fun json(p: Plan): JSONObject = JSONObject().put("l", p.largeur).put("h", p.hauteur).put("libre", p.libre)
+        .put("boites", JSONArray(p.boites.map { b ->
+            JSONObject().put("id", b.id).put("x", b.x).put("y", b.y).put("l", b.l).put("h", b.h).put("col", b.colonne)
+                .put("ports", JSONArray(b.ports.map { JSONArray(listOf(it.id, it.x, it.y, it.cote.toString())) }))
+        }))
         .put("traces", JSONArray(p.traces.map { t ->
             JSONObject().put("id", t.id).put("pts", JSONArray(t.points.map { JSONArray(listOf(it.first, it.second)) }))
                 .put("et", JSONArray(listOf(t.etiquette.first, t.etiquette.second)))

@@ -328,7 +328,7 @@ object PagesPcTelephone {
                 "/api/canaux" -> json(JSONObject().put("absent", true))
                 "/api/plan-bandes" -> json(fr.f4ioz.satcombo.domain.PlanBandes.json(fr.f4ioz.satcombo.domain.PlanBandes.defaut {
                     fr.f4ioz.satcombo.i18n.I18n.t("qo100_seg_$it") }).put("ok", true))
-                "/api/montage/suggestion" -> json(JSONObject().put("ok", false).put("erreur", MONTAGE_SUR_PC))
+                "/api/montage/suggestion", "/api/montage/detection" -> json(JSONObject().put("ok", false).put("erreur", MONTAGE_SUR_PC))
                 // Levels over time and the Sun's noise are measured on SatMe-PC's receiver: none here (the page hides them).
                 "/api/niveaux", "/api/soleil" -> json(JSONObject().put("ok", false).put("absent", true))
                 "/api/montage/profils" -> json(JSONObject().put("ok", true).put("telephone", true).put("profils", JSONArray()).put("actuels", JSONArray()).put("emission", ""))
@@ -813,7 +813,8 @@ object PagesPcTelephone {
                 Thread { try { fr.f4ioz.satcombo.sstv.SstvVideo.fabriqueGif(ctx, png, shot) } finally { gifEnCours = "" } }.apply { isDaemon = true }.start()
                 OK
             }
-            "/api/montage", "/api/montage/photo", "/api/montage/action", "/api/montage/profils" -> JSONObject().put("ok", false).put("erreur", MONTAGE_SUR_PC)
+            "/api/montage", "/api/montage/photo", "/api/montage/action", "/api/montage/profils", "/api/montage/edition", "/api/montage/annule",
+            "/api/montage/refait", "/api/montage/fusion" -> JSONObject().put("ok", false).put("erreur", MONTAGE_SUR_PC)
             "/api/memoires-sdr", "/api/memoires-sdr/import" -> JSONObject().put("ok", false).put("erreur", "les mémoires du récepteur se gardent sur SatMe-PC")
             "/api/molette" -> JSONObject().put("ok", false).put("erreur", "absent")
             else -> JSONObject().put("ok", false).put("erreur", "pas encore sur le téléphone")
