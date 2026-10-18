@@ -82,6 +82,9 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
     /** The station's frequency for logging programs, rigctld protocol (set before [demarre]). */
     @Volatile var rigctld: RigctldPc? = null
 
+    /** The USB volume knob as a VFO, Linux (set before [demarre]). */
+    @Volatile var molette: MoletteUsbPc? = null
+
     /** The « Montage » page: the station's chain, its drawing lit by what happens (set before [demarre]). */
     @Volatile var montage: MontagePc? = null
     @Volatile var memoiresSdr: MemoiresSdrPc? = null
@@ -415,6 +418,9 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
             } ?: JSONObject().put("absent", true)).toString().toByteArray())
             "/api/rigctld" -> envoie(sortie, "200 OK", "application/json; charset=utf-8",
                 (rigctld?.json() ?: JSONObject().put("absent", true)).toString().toByteArray())
+            // The USB knob: its state; the page's tab told at each reading (the « Auto » target follows it).
+            "/api/molette" -> envoie(sortie, "200 OK", "application/json; charset=utf-8",
+                (molette?.let { m -> m.contextePage(q["ctx"]); m.json() } ?: JSONObject().put("absent", true)).toString().toByteArray())
             // The Doppler/CAT log: on or not, the last files (downloaded from the journal's route).
             "/api/doppler" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JSONObject().put("on", station.settings.journalDoppler)
                 .put("fichiers", JSONArray(station.journauxDoppler().take(8).map { JSONObject().put("nom", it.name).put("taille", it.length()) }))
@@ -1265,6 +1271,7 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 lien?.regle(q["on"]?.let { it == "1" }, q["port"]?.trim()?.toIntOrNull())
                 if (lien != null && lien.erreur.isNotEmpty()) return JSONObject().put("ok", false).put("erreur", lien.erreur)
             }
+            "/api/molette" -> return (molette ?: return JSONObject().put("ok", false).put("erreur", "absent")).regle(q).put("ok", true)
             "/api/rigctld" -> {
                 val r = rigctld ?: return JSONObject().put("ok", false).put("erreur", "absent")
                 fun b(k: String) = q[k]?.let { it == "1" }

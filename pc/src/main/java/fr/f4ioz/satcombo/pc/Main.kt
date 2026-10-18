@@ -269,6 +269,10 @@ fun main(args: Array<String>) {
     val rigctld = RigctldPc(station, sdr, reseau) { emission.etat.emet || emissionSstv.etat.emet || iq.enCours }
     rigctld.demarreSiActif()
     serveur.rigctld = rigctld
+    // The USB volume knob as a VFO (Linux): off unless chosen in Réglages › Interfaces; receive tuning only.
+    val molette = MoletteUsbPc(station.stockage, station.settings, mondeMolette(station, sdr))
+    molette.demarre()
+    serveur.molette = molette
     serveur.demarre()
     // QO-100 received when SatMe-PC stopped: taken back only when chosen in Réglages (reception only).
     Thread({ runCatching { trafic.repriseAuDemarrage() } }, "satme-qo100-reprise").apply { isDaemon = true; start() }
@@ -302,6 +306,7 @@ fun main(args: Array<String>) {
         runCatching { station.stationRotor.disconnectRotor() }
         runCatching { lien.arrete() }
         runCatching { rigctld.arrete() }
+        runCatching { molette.arrete() }
         runCatching { phonie.arrete() }
         serveur.arrete()
     })
@@ -359,6 +364,28 @@ internal fun cibleAfcSstv(source: String, son: SonStation, sdr: SdrPc, station: 
         override fun position() = station.afcSstvHz
         override fun deplace(hz: Int) { station.afcSstvHz = station.afcSstvHz + hz }
     }
+}
+
+/**
+ * What the USB knob tunes, through the page's own paths: the satellite's
+ * rest and shifts (the CAT loop writes them; nothing keys the rig), the
+ * dongle's fine offset, QO-100's downlink.
+ */
+internal fun mondeMolette(station: StationPc, sdr: SdrPc) = object : MoletteUsbPc.Monde {
+    override fun contexte(page: String?): fr.f4ioz.satcombo.domain.MoletteUsb.Contexte {
+        val q = station.qo100.etat.value
+        return fr.f4ioz.satcombo.domain.MoletteUsb.Contexte(page, station.etat.value.catConnecte, sdr.etat.value.actif, q.auPoste, q.aLaCle)
+    }
+    override fun vfo(dHz: Long) {
+        // As on the phone: off a transponder there is no uplink to follow, the RX shift is the control.
+        if (station.emetteurChoisi()?.isTransponder == true) station.deplaceRepos(dHz) else shiftRx(dHz)
+    }
+    override fun shiftRx(dHz: Long) = station.reglageSat(calibHz = station.etat.value.calibHz + dHz)
+    override fun shiftTx(dHz: Long) = station.reglageSat(txHz = station.etat.value.txShiftHz + dHz)
+    override fun zeroRx() = station.reglageSat(calibHz = 0L)
+    override fun zeroTx() = station.reglageSat(txHz = 0L)
+    override fun sdr(dHz: Long) { sdr.decalageHz = sdr.decalageHz + dHz.toInt() }
+    override fun qo100(dHz: Long) = station.qo100.pas(dHz)
 }
 
 /** ~/.satme on Linux and macOS, %APPDATA%\SatMe on Windows. */

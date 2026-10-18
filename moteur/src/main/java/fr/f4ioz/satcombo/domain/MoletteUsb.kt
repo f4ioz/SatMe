@@ -152,4 +152,60 @@ object MoletteUsb {
         val i = PAS.indexOf(pasHz)
         return if (i < 0) PAS.first() else PAS[(i + 1) % PAS.size]
     }
+
+    // ---- Other platforms (SatMe-PC on Linux) ----
+
+    /** Linux key codes beyond the table get this offset: they never collide with an Android code. */
+    const val DECALAGE_LINUX = 100_000
+
+    /**
+     * A Linux input key code (`KEY_*`) in the codes above, so that one rule
+     * and one set of learned keys serve both platforms. The knob's keys and
+     * the media keys a pad may send are translated; any other key is kept,
+     * shifted out of Android's range (Linux 3 and 4 are digits, not Home and
+     * Back: they must stay learnable).
+     */
+    fun codeDepuisLinux(code: Int): Int = when (code) {
+        0 -> 0
+        115 -> VOLUME_UP          // KEY_VOLUMEUP
+        114 -> VOLUME_DOWN        // KEY_VOLUMEDOWN
+        113 -> VOLUME_MUTE        // KEY_MUTE
+        164 -> 85                 // KEY_PLAYPAUSE
+        166 -> 86                 // KEY_STOPCD
+        163 -> 87                 // KEY_NEXTSONG
+        165 -> 88                 // KEY_PREVIOUSSONG
+        else -> DECALAGE_LINUX + code
+    }
+
+    /** What the knob tunes where there is more than a rig: SatMe-PC's rule. */
+    enum class Accord { POSTE, SDR, QO100 }
+
+    /** What [accordDe] looks at; [contexte] is the tab shown (`sdr`, `qo100`…), `null` when no page says. */
+    data class Contexte(
+        val contexte: String?,
+        val catRelie: Boolean,
+        val sdrEnMarche: Boolean,
+        val qo100AuPoste: Boolean = false,
+        val qo100ALaCle: Boolean = false,
+    )
+
+    /**
+     * Who the knob tunes. A fixed choice is obeyed. « Auto » follows the
+     * screen first, like the phone on its QO-100 screen: the SDR tab tunes
+     * the dongle, the QO-100 cockpit the narrow band. Elsewhere the rig when
+     * it is on CAT (on QO-100 when it is there), else the dongle while it
+     * receives, else the satellite tuning, which harms nothing.
+     */
+    fun accordDe(reglage: String, c: Contexte): Accord = when (reglage) {
+        "POSTE" -> Accord.POSTE
+        "SDR" -> Accord.SDR
+        "QO100" -> Accord.QO100
+        else -> when {
+            c.contexte == "qo100" -> Accord.QO100
+            c.contexte == "sdr" -> Accord.SDR
+            c.catRelie -> if (c.qo100AuPoste) Accord.QO100 else Accord.POSTE
+            c.sdrEnMarche -> if (c.qo100ALaCle) Accord.QO100 else Accord.SDR
+            else -> Accord.POSTE
+        }
+    }
 }

@@ -190,4 +190,41 @@ class MoletteBoitierTest {
         // A corrupted value does not stall the cycle.
         assertEquals("SHIFT_RX", MoletteUsb.cibleSuivante("n'importe quoi"))
     }
+
+    @Test
+    fun les_touches_linux_rejoignent_les_codes_communs() {
+        assertEquals(MoletteUsb.VOLUME_UP, MoletteUsb.codeDepuisLinux(115))
+        assertEquals(MoletteUsb.VOLUME_DOWN, MoletteUsb.codeDepuisLinux(114))
+        assertEquals(MoletteUsb.VOLUME_MUTE, MoletteUsb.codeDepuisLinux(113))
+        // Linux 3 and 4 are digits: shifted, they stay learnable (Android's Home and Back are refused).
+        assertEquals(100_003, MoletteUsb.codeDepuisLinux(3))
+        assertTrue(MoletteUsb.apprenable(MoletteUsb.codeDepuisLinux(4)))
+        assertEquals(0, MoletteUsb.codeDepuisLinux(0))
+        // A Linux knob then gives the same gestures as on the phone.
+        assertEquals(Geste.Bouge(-10L), MoletteUsb.geste(MoletteUsb.codeDepuisLinux(114), actif = true, externe = true, pasHz = 10L))
+        assertEquals(Geste.ChangePas, MoletteUsb.geste(MoletteUsb.codeDepuisLinux(113), actif = true, externe = true, pasHz = 10L))
+    }
+
+    @Test
+    fun la_regle_d_accord_du_pc() {
+
+        fun auto(ctx: String?, cat: Boolean, sdr: Boolean, qoPoste: Boolean = false, qoCle: Boolean = false) =
+            MoletteUsb.accordDe("AUTO", MoletteUsb.Contexte(ctx, cat, sdr, qoPoste, qoCle))
+        // The screen first.
+        assertEquals(MoletteUsb.Accord.SDR, auto("sdr", cat = true, sdr = false))
+        assertEquals(MoletteUsb.Accord.QO100, auto("qo100", cat = true, sdr = true))
+        // Elsewhere the rig on CAT, on QO-100 when it is there.
+        assertEquals(MoletteUsb.Accord.POSTE, auto("ciel", cat = true, sdr = true))
+        assertEquals(MoletteUsb.Accord.QO100, auto(null, cat = true, sdr = false, qoPoste = true))
+        // No rig: the dongle while it receives.
+        assertEquals(MoletteUsb.Accord.SDR, auto("station", cat = false, sdr = true))
+        assertEquals(MoletteUsb.Accord.QO100, auto(null, cat = false, sdr = true, qoCle = true))
+        assertEquals(MoletteUsb.Accord.POSTE, auto(null, cat = false, sdr = false))
+        // A fixed choice is obeyed, whatever the screen.
+        assertEquals(MoletteUsb.Accord.POSTE, MoletteUsb.accordDe("POSTE", MoletteUsb.Contexte("sdr", false, true)))
+        assertEquals(MoletteUsb.Accord.SDR, MoletteUsb.accordDe("SDR", MoletteUsb.Contexte("qo100", true, false)))
+        assertEquals(MoletteUsb.Accord.QO100, MoletteUsb.accordDe("QO100", MoletteUsb.Contexte(null, false, false)))
+        // A damaged setting is « Auto ».
+        assertEquals(MoletteUsb.Accord.SDR, MoletteUsb.accordDe("??", MoletteUsb.Contexte("sdr", true, true)))
+    }
 }
