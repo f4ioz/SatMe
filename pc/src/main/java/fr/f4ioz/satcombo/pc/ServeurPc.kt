@@ -85,6 +85,10 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
     /** The « Montage » page: the station's chain, its drawing lit by what happens (set before [demarre]). */
     @Volatile var montage: MontagePc? = null
     @Volatile var memoiresSdr: MemoiresSdrPc? = null
+    /** « Niveau dans le temps » (set before [demarre]). */
+    @Volatile var niveaux: NiveauxPc? = null
+    /** The Sun's noise and the raster around it (set before [demarre]). */
+    @Volatile var soleil: SoleilPc? = null
 
     /** What the « Montage » page lights: the same state the other tabs read. */
     fun lecturesMontage(): fr.f4ioz.satcombo.station.ActiviteMontage.Lectures = fr.f4ioz.satcombo.station.ActiviteMontage.Lectures(
@@ -334,6 +338,17 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
             val m = memoiresSdr
             val rep = m?.sert(chemin, r.methode, { q[it].orEmpty() }) { max -> RequeteHttp.corps(c.getInputStream(), r, max) }
                 ?: fr.f4ioz.satcombo.demo.ReponseWeb("200 OK", "application/json; charset=utf-8", "{\"ok\":false}".toByteArray())
+            envoie(sortie, rep.statut, rep.type, rep.corps, rep.entetes); return
+        }
+        // Levels over time and the Sun's noise (receive only; the raster moves the rotor only once confirmed).
+        if (chemin == "/api/niveaux" || chemin == "/api/niveaux.csv" || chemin.startsWith("/api/niveaux/")) {
+            val rep = niveaux?.sert(chemin, r.methode) { q[it].orEmpty() }
+                ?: fr.f4ioz.satcombo.demo.ReponseWeb("200 OK", "application/json; charset=utf-8", "{\"ok\":false,\"absent\":true}".toByteArray())
+            envoie(sortie, rep.statut, rep.type, rep.corps, rep.entetes); return
+        }
+        if (chemin == "/api/soleil" || chemin.startsWith("/api/soleil/")) {
+            val rep = soleil?.sert(chemin, r.methode) { q[it].orEmpty() }
+                ?: fr.f4ioz.satcombo.demo.ReponseWeb("200 OK", "application/json; charset=utf-8", "{\"ok\":false,\"absent\":true}".toByteArray())
             envoie(sortie, rep.statut, rep.type, rep.corps, rep.entetes); return
         }
         // The « Montage » page: its chain (a POST saves it, a drawing only), its photos.

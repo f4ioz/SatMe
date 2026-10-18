@@ -325,6 +325,8 @@ object PagesPcTelephone {
                 "/api/plan-bandes" -> json(fr.f4ioz.satcombo.domain.PlanBandes.json(fr.f4ioz.satcombo.domain.PlanBandes.defaut {
                     fr.f4ioz.satcombo.i18n.I18n.t("qo100_seg_$it") }).put("ok", true))
                 "/api/montage/suggestion" -> json(JSONObject().put("ok", false).put("erreur", MONTAGE_SUR_PC))
+                // Levels over time and the Sun's noise are measured on SatMe-PC's receiver: none here (the page hides them).
+                "/api/niveaux", "/api/soleil" -> json(JSONObject().put("ok", false).put("absent", true))
                 else -> if (methode == "POST") json(action(vm, route, p)) else NON
             }
         }.getOrElse { json(JSONObject().put("ok", false).put("erreur", it.message ?: it.javaClass.simpleName)) }
