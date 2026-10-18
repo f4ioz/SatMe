@@ -178,6 +178,9 @@ object PagePc {
   .h-f { font-family:var(--mono); font-variant-numeric:tabular-nums; color:var(--texte); font-size:var(--fs-m); }
   .h-m { color:var(--texte-2); font-size:var(--fs-xs); font-weight:600; }
   .h-puce.inactif .h-f { color:var(--texte-3); }
+  #h-mol { align-items:center; } #h-mol .ico { width:15px; height:15px; fill:var(--rx); flex:none; }
+  .mol-touches { display:grid; grid-template-columns:auto auto 1fr; gap:3px 8px; align-items:center; margin:6px 0 4px; font-size:var(--fs-s); }
+  .mol-touches .ligne { margin:0; }
   #h-pass.encours { border-color:rgba(91,214,138,.55); } #h-pass.encours .h-f { color:var(--ok); }
   #h-pass.proche { border-color:rgba(255,180,84,.55); } #h-pass.proche .h-f { color:var(--warn); }
   .h-tx { display:inline-flex; align-items:center; gap:8px; padding:3px 10px; border-radius:14px; background:var(--tx); color:#fff; border:1px solid var(--tx);
@@ -1071,6 +1074,7 @@ ${rail()}
   <span class="g" id="cat-statut-court"></span>
   <button id="ctx-chip" class="ctx-chip" hidden onclick="vue(tqQo() ? 'qo100' : 'station')"></button>
   <button id="h-rx" class="h-puce" onclick="vue(this.dataset.v || 'sdr')" title="Le récepteur actif : sa fréquence et son mode"><b>RX</b><span class="h-f" id="h-rx-f">—</span><span class="h-m" id="h-rx-m"></span></button>
+  <button id="h-mol" class="h-puce" hidden onclick="vue('reglages'); montreReglages('interfaces')" title="La molette USB : son pas et ce qu'elle accorde (Réglages › Interfaces)">${IconesPc.svg("tune")}<span class="h-m" id="h-mol-t"></span></button>
   <button id="h-tx" class="h-tx" hidden onclick="arretEmissions()" title="Une émission est en cours. Clic ou Échap : tout arrêter"><b>TX</b><span id="h-tx-q"></span><span class="h-tx-x">■ Échap</span></button>
   <button id="h-pass" class="h-puce" onclick="vue('station')" title="Le prochain passage du satellite suivi"><span id="h-pass-n">—</span><span class="h-f" id="h-pass-t"></span></button>
   <span id="rec" class="pastille" style="display:none;background:rgba(229,72,77,.2);color:var(--rose)"></span>
@@ -2591,6 +2595,27 @@ ${rail()}
       <div class="petit aide">Lecture seule pour l'émission : la commande d'émission (PTT) est toujours refusée. Le changement de fréquence ou de mode, quand la case le permet, n'accorde que le récepteur SDR, jamais le poste. « Noter la montée » : la fréquence d'émission (QO-100, poste en satellite) au lieu de la descente.</div>
       <div class="petit aide">Réseau local : seulement si SatMe-PC est lancé avec --reseau ; sinon ce PC seulement. Le port 4532 est celui d'usage ; il doit différer de celui du rotor (rotctld, 4533).</div>
     </div>
+    <div class="carte" id="mol-carte" hidden>
+      <div class="t">Molette USB (VFO)</div>
+      <div class="petit" id="mol-nd" hidden>Non disponible sur cette machine (Linux seulement).</div>
+      <div id="mol-corps">
+        <label class="petit" style="display:block"><input type="checkbox" id="mol-on" onchange="regleMol('on=' + (this.checked ? 1 : 0))"> Accorder avec la molette de volume USB</label>
+        <div class="ligne"><select id="mol-app" style="max-width:260px" onchange="regleMol('appareil=' + enc(this.value))"></select><span class="petit" id="mol-etat"></span></div>
+        <div class="petit" id="mol-udev" hidden>Molette illisible : autoriser le groupe plugdev, dans un terminal (puis débrancher et rebrancher) :
+          <div class="ligne"><code id="mol-udev-c" style="user-select:all;word-break:break-all;font-size:var(--fs-xs)"></code><button onclick="navigator.clipboard && navigator.clipboard.writeText(g('mol-udev-c').textContent)">Copier</button></div></div>
+        <label class="petit" style="display:block"><input type="checkbox" id="mol-capture" onchange="regleMol('capture=' + (this.checked ? 1 : 0))"> Capturer la molette (le volume du PC ne bouge plus)</label>
+        <div class="ligne"><span class="petit">Accorde</span><select id="mol-accord" onchange="regleMol('accord=' + this.value)"><option value="AUTO">Auto</option><option value="POSTE">Poste (satellite)</option><option value="SDR">SDR</option><option value="QO100">QO-100</option></select>
+          <span class="petit">Pas</span><select id="mol-pas" onchange="regleMol('pas=' + this.value)"><option value="10">10 Hz</option><option value="100">100 Hz</option><option value="1000">1 kHz</option></select>
+          <span class="petit" id="mol-effectif"></span></div>
+        <div class="ligne"><span class="petit">Poste</span><select id="mol-cible" style="flex:none" onchange="regleMol('cible=' + this.value)"><option value="VFO">VFO</option><option value="SHIFT_RX">décalage RX</option><option value="SHIFT_TX">décalage TX</option></select>
+          <span class="petit">Appui</span><select id="mol-action" style="flex:none" onchange="regleMol('action=' + this.value)"><option value="PAS">change le pas</option><option value="CIBLE">cible suivante</option><option value="ZERO">décalage à zéro</option></select></div>
+        <div id="mol-touches" class="mol-touches"></div>
+        <div class="petit" id="mol-dernier">Dernier événement : —</div>
+        <div class="petit aide">Comme sur le téléphone : tourner déplace la fréquence d'un pas (10 Hz, 100 Hz ou 1 kHz), l'appui fait l'action choisie, et les touches A, B, C d'un petit clavier choisissent la cible. « Apprendre » puis presser la touche (20 s).</div>
+        <div class="petit aide">Auto : l'onglet SDR accorde le récepteur SDR, le cockpit QO-100 la bande étroite ; ailleurs le poste quand il est relié en CAT (QO-100 s'il y est), sinon le SDR en marche. Poste : le VFO du satellite (le repos dans le transpondeur, la montée suit), ou les décalages RX / TX que la boucle CAT écrit.</div>
+        <div class="petit aide">Réception seulement : la molette ne passe jamais en émission (PTT) et ne lance rien. Capturer : SatMe seul lit la molette, le volume du bureau ne bouge plus tant que SatMe-PC tourne ; jamais un clavier complet (lecture seule alors).</div>
+      </div>
+    </div>
     <div class="carte" id="ad-carte" hidden>
       <div class="t">Accès à distance</div>
       <div class="petit" id="ad-etat"></div>
@@ -3297,7 +3322,7 @@ const CATS_REG = [
   { id: 'station', nom: 'Ma station', ico: 'person', desc: 'Indicatif, carré, élévation minimale, horizon', cartes: ['Station', 'Horizon'] },
   { id: 'materiel', nom: 'Poste et rotor', ico: 'radio', desc: 'CAT, TH-D72, rotor, convertisseurs, ADALM-PLUTO', cartes: ['Poste', 'Kenwood TH-D72', 'Rotor', 'Convertisseurs', 'Journal Doppler', 'ADALM-PLUTO'] },
   { id: 'satellites', nom: 'Satellites', ico: 'satellite_alt', desc: 'Éléments orbitaux, statut AMSAT, QO-100 au démarrage', cartes: ['Éléments orbitaux', 'AMSAT', 'QO-100'] },
-  { id: 'interfaces', nom: 'Interfaces', ico: 'handshake', desc: 'Lien WebSocket, fréquence pour les carnets (rigctld)', cartes: ['Lien satellite', 'Fréquence pour les carnets'] },
+  { id: 'interfaces', nom: 'Interfaces', ico: 'handshake', desc: 'Lien WebSocket, fréquence pour les carnets (rigctld), molette USB', cartes: ['Lien satellite', 'Fréquence pour les carnets', 'Molette USB'] },
   { id: 'enligne', nom: 'Services en ligne', ico: 'public', desc: 'QRZ.com, Wavelog / Cloudlog, skeds hams.at', cartes: ['QRZ.com', 'Carnet en ligne', 'Skeds'] },
   { id: 'phonie', nom: 'Phonie → texte', ico: 'mic', desc: 'La voix entendue écrite : moteur, modèle, installation', cartes: ['Phonie → texte'] },
   { id: 'telephone', nom: 'Téléphone', ico: 'smartphone', desc: 'SatMe sur le téléphone : réglages et contacts', cartes: ['Téléphone'] },
@@ -4489,7 +4514,7 @@ async function chargeReglages() {
   try {
     const r = await (await fetch('api/reglages')).json();
     g('indicatif').value = r.c; g('locator').value = r.l; g('minEl').value = r.minEl;
-    horizonDe(r); chargeDoppler(); chargeLien(); chargeRig(); chargePx();
+    horizonDe(r); chargeDoppler(); chargeLien(); chargeRig(); chargeMol(); chargePx();
     g('qrzFiche').checked = r.fiche; ficheVoulue = r.fiche;
     g('qrzUser').value = r.qrzUser; g('qrzMdp').placeholder = r.qrzMdp ? 'mot de passe enregistré' : 'Mot de passe';
     g('carnetUrl').value = r.carnetUrl; g('carnetCle').placeholder = r.carnetCle ? 'clé enregistrée' : 'Clé d’API (lecture et écriture)';
@@ -4537,6 +4562,54 @@ async function chargeRig() {
   txt('rig-lu', l ? 'Donné maintenant : ' + qFmt(l.hz) + ' MHz ' + l.mode + (l.txHz ? ' · émission ' + qFmt(l.txHz) + ' MHz' : '') + (l.ptt ? ' · en émission' : '') : '');
 }
 async function regleRig(q) { await post('api/rigctld?' + q); chargeRig(); HX.t.rig = 0; }
+// ------------------------------------------------------------------ the USB knob as a VFO (Linux)
+let molTouchesCle = '';
+const molVue = () => { const x = document.querySelector('.vue:not([hidden])'); return x ? x.id.slice(2) : ''; };
+const MOL_CIBLES = { VFO: 'VFO', SHIFT_RX: 'décalage RX', SHIFT_TX: 'décalage TX' };
+const MOL_ETATS = { coupe: 'coupée', absent: 'non branchée', permission: 'illisible (droits)', ouvert: 'lue', erreur: 'erreur' };
+async function chargeMol() {
+  let j = null;
+  try { j = await (await fetch('api/molette?ctx=' + enc(molVue()))).json(); } catch (x) {}
+  rendMol(j);
+}
+function molSel(id, val) { const e = g(id); if (document.activeElement !== e && val != null) e.value = String(val); }
+function rendMol(j) {
+  if (!j || j.absent || j.dispo === undefined) { g('mol-carte').hidden = true; return; }
+  g('mol-carte').hidden = false;
+  g('mol-nd').hidden = !!j.dispo; g('mol-corps').hidden = !j.dispo;
+  if (!j.dispo) return;
+  g('mol-on').checked = !!j.on; g('mol-capture').checked = !!j.capture;
+  const app = g('mol-app');
+  if (document.activeElement !== app) {
+    const l = [{ nom: '', lib: 'Auto (la molette reconnue)' }].concat((j.appareils || []).map(a => ({ nom: a.nom, lib: a.nom + ' · ' + a.evenement + (a.molette ? ' · molette' : '') })));
+    if (j.choix && !l.some(a => a.nom === j.choix)) l.push({ nom: j.choix, lib: j.choix + ' (absent)' });
+    const h = l.map(a => '<option value="' + esc(a.nom).replace(/"/g, '&quot;') + '">' + esc(a.lib) + '</option>').join('');
+    if (app.dataset.h !== h) { app.innerHTML = h; app.dataset.h = h; }
+    app.value = j.choix || '';
+  }
+  const a = j.appareil;
+  txt('mol-etat', (MOL_ETATS[j.etat] || j.etat) + (j.etat === 'ouvert' && a ? ' : ' + a.evenement + (j.capture_effective ? ', capturée' : ', lecture seule') : '') + (j.message ? ' — ' + j.message : ''));
+  g('mol-udev').hidden = !(j.on && j.etat === 'permission'); txt('mol-udev-c', j.udev || '');
+  molSel('mol-accord', j.accord); molSel('mol-pas', j.pas); molSel('mol-action', j.action); molSel('mol-cible', j.cible);
+  txt('mol-effectif', '→ ' + ({ POSTE: 'le poste', SDR: 'le SDR', QO100: 'QO-100' }[j.accord_effectif] || '—'));
+  const t = j.touches || [], ap = j.apprend;
+  const cle = JSON.stringify([t, ap]);
+  if (cle !== molTouchesCle && !(document.activeElement && document.activeElement.closest && document.activeElement.closest('#mol-touches'))) {
+    molTouchesCle = cle;
+    g('mol-touches').innerHTML = t.map((k, i) => {
+      const nom = i < 3 ? 'Touche ' + 'ABC'[i] : 'Appui';
+      const sel = i < 3 ? '<select onchange="regleMol(\'cible' + 'ABC'[i] + '=\' + this.value)">' + Object.keys(MOL_CIBLES).map(c =>
+        '<option value="' + c + '"' + (c === k.cible ? ' selected' : '') + '>' + MOL_CIBLES[c] + '</option>').join('') + '</select>' : '<span class="petit">l\'action ci-dessus</span>';
+      return '<span>' + nom + ' : <b>' + esc(k.nom) + '</b></span>' + sel + '<span class="ligne">' +
+        (ap === i ? '<button onclick="regleMol(\'apprendre=-1\')">Presser la touche… (annuler)</button>' : '<button onclick="regleMol(\'apprendre=' + i + '\')">Apprendre</button>') +
+        (k.code ? '<button class="discret" onclick="regleMol(\'oublie=' + i + '\')" title="Oublier cette touche">✕</button>' : '') + '</span>';
+    }).join('');
+  }
+  const d = j.dernier;
+  txt('mol-dernier', 'Dernier événement : ' + (d ? hm(d.ms, true) + ' · ' + d.nom + (d.valeur === 2 ? ' (répétée)' : '') + ' → ' + d.geste : '—'));
+}
+async function regleMol(q) { const j = await post('api/molette?' + q); if (j && j.dispo !== undefined) rendMol(j); else chargeMol(); HX.t.mol = 0; }
+setInterval(() => { if (ouverte('reglages') && !g('mol-carte').hidden && g('mol-carte').offsetParent) chargeMol(); }, 1000);
 // ------------------------------------------------------------------ Doppler/CAT log
 async function chargeDoppler() {
   let j = null;
@@ -8894,7 +8967,8 @@ async function hxLit(cle, url, ms) {
 async function ticTete() {
   if (document.hidden) return;
   await Promise.all([hxLit('dtx', 'api/datv/emission', 2000), hxLit('stx', 'api/sstv/emission', 2000), hxLit('iq', 'api/iq', 3000),
-    hxLit('sdr', 'api/sdr', 3000), hxLit('datv', 'api/datv', 10000), hxLit('lien', 'api/lien', 15000), hxLit('rig', 'api/rigctld', 5000)]);
+    hxLit('sdr', 'api/sdr', 3000), hxLit('datv', 'api/datv', 10000), hxLit('lien', 'api/lien', 15000), hxLit('rig', 'api/rigctld', 5000),
+    hxLit('mol', 'api/molette?ctx=' + enc(molVue()), 2000)]);
   rendTete();
 }
 /** What transmits now: each transmitter SatMe drives. */
@@ -8925,6 +8999,9 @@ function rendTete() {
   { const d = new Date(); txt('h-utc', utc() ? '' : String(d.getUTCHours()).padStart(2, '0') + ':' + String(d.getUTCMinutes()).padStart(2, '0') + ' UTC'); }
   txt('h-rx-f', f ? f + ' MHz' : '—'); txt('h-rx-m', m); g('h-rx').dataset.v = vu; g('h-rx').classList.toggle('inactif', !f);
   g('h-rx').title = f ? 'Réception : ' + qui + ', ' + f + ' MHz ' + m : 'Aucun récepteur en marche (onglet SDR, ou le poste en CAT)';
+  // The USB knob, while it is read: its step and what it tunes.
+  const mo = HX.mol, moVu = !!(mo && mo.puce);
+  g('h-mol').hidden = !moVu; if (moVu) txt('h-mol-t', mo.puce);
   // The next pass of the satellite followed, counted down.
   // The next pass of the satellite followed, else the list's next one (a favourite first).
   const n = Date.now(), lp = (P || []).filter(x => x.los > n);
