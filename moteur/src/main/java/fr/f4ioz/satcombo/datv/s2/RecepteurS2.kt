@@ -68,6 +68,8 @@ class RecepteurS2(
     plageHz: Double = fs / 2,
     /** The LDPC's iterations at most (fewer when the decoders are late). */
     val iterationsMax: Int = 50,
+    /** Live (an SDR): late decoders skip frames or iterate less. Off (a file, the tests): every frame waits its turn, fully decoded. */
+    val tempsReel: Boolean = true,
 ) {
     val frontal = FrontalS2(fs, rs, alpha, plageHz)
     private val flux = FluxTsS2(sortieTs)
@@ -96,11 +98,11 @@ class RecepteurS2(
 
     private fun soumets(t: TrameS2) {
         if (!ouvert) return
-        if (enCours.remainingCapacity() == 0) { tramesSautees++; sauter = true; return }
+        if (tempsReel && enCours.remainingCapacity() == 0) { tramesSautees++; sauter = true; return }
         val tr = if (sauter) TrameS2(t.numero, t.modcod, t.llr, true) else t
         sauter = false
         // Late: fewer iterations rather than frames dropped.
-        val n = if (enCours.size > enCours.remainingCapacity()) iterationsMax / 3 else iterationsMax
+        val n = if (tempsReel && enCours.size > enCours.remainingCapacity()) iterationsMax / 3 else iterationsMax
         soumis++
         enCours.put(pool.submit<BbFrame> { decodeurs.get().decode(tr, n) })
     }

@@ -77,7 +77,8 @@ class RecepteurS2Test {
     private fun passe(c: CanalS2, secondes: Double): Resultat {
         val x = c.signal(secondes)
         val recu = Recu(c)
-        val rx = RecepteurS2(c.fs, c.rs, recu.sortie, 3)
+        // Not live: a loaded machine (other builds) must not skip frames and fail the thresholds.
+        val rx = RecepteurS2(c.fs, c.rs, recu.sortie, 3, tempsReel = false)
         var k = 0
         val b = FloatArray(2 * 16_384)
         var verrou = -1.0
