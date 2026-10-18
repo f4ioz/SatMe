@@ -79,6 +79,9 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
     /** The transmitters' I/Q correction and its calibration (set before [demarre]). */
     @Volatile var iq: CalibrationIqPc? = null
 
+    /** The station's frequency for logging programs, rigctld protocol (set before [demarre]). */
+    @Volatile var rigctld: RigctldPc? = null
+
     /** The « Montage » page: the station's chain, its drawing lit by what happens (set before [demarre]). */
     @Volatile var montage: MontagePc? = null
 
@@ -339,6 +342,8 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 JSONObject().put("on", l.actif).put("port", l.port).put("ecoute", l.ecoute).put("clients", l.nbClients)
                     .put("erreur", l.erreur).put("reseau", reseau)
             } ?: JSONObject().put("absent", true)).toString().toByteArray())
+            "/api/rigctld" -> envoie(sortie, "200 OK", "application/json; charset=utf-8",
+                (rigctld?.json() ?: JSONObject().put("absent", true)).toString().toByteArray())
             // The Doppler/CAT log: on or not, the last files (downloaded from the journal's route).
             "/api/doppler" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JSONObject().put("on", station.settings.journalDoppler)
                 .put("fichiers", JSONArray(station.journauxDoppler().take(8).map { JSONObject().put("nom", it.name).put("taille", it.length()) }))
@@ -1091,6 +1096,12 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
             "/api/lien" -> {
                 lien?.regle(q["on"]?.let { it == "1" }, q["port"]?.trim()?.toIntOrNull())
                 if (lien != null && lien.erreur.isNotEmpty()) return JSONObject().put("ok", false).put("erreur", lien.erreur)
+            }
+            "/api/rigctld" -> {
+                val r = rigctld ?: return JSONObject().put("ok", false).put("erreur", "absent")
+                fun b(k: String) = q[k]?.let { it == "1" }
+                r.regle(b("on"), q["port"]?.trim()?.toIntOrNull(), b("reseau"), b("accord"), b("montee"))
+                if (r.erreur.isNotEmpty()) return JSONObject().put("ok", false).put("erreur", r.erreur)
             }
             "/api/horizon" -> station.poseMasque(fr.f4ioz.satcombo.domain.MasqueHorizon.lis(q["m"]))
             "/api/sources" -> station.regleSources(q["ids"]?.split(',')?.map { it.trim() }?.filter { it.isNotEmpty() }?.toSet(),

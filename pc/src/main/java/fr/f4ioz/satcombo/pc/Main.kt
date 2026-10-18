@@ -230,6 +230,10 @@ fun main(args: Array<String>) {
     serveur.chatLarge = ChatLargePc(station.stockage, { station.settings.callsign }).also { it.demarre() }
     serveur.accordUdp = AccordUdpPc(station.stockage, reseau, { datv.reglage },
         { r -> large.veilleArrete("arrêtée : accord reçu par UDP"); datv.demarre(r) }, { datv.etat.actif }).also { it.relance() }
+    // The station's frequency for logging programs (rigctld protocol): off unless chosen in Réglages › Interfaces.
+    val rigctld = RigctldPc(station, sdr, reseau) { emission.etat.emet || emissionSstv.etat.emet || iq.enCours }
+    rigctld.demarreSiActif()
+    serveur.rigctld = rigctld
     serveur.demarre()
     // QO-100 received when SatMe-PC stopped: taken back only when chosen in Réglages (reception only).
     Thread({ runCatching { trafic.repriseAuDemarrage() } }, "satme-qo100-reprise").apply { isDaemon = true; start() }
@@ -259,6 +263,7 @@ fun main(args: Array<String>) {
         runCatching { station.deconnecteCat() }
         runCatching { station.stationRotor.disconnectRotor() }
         runCatching { lien.arrete() }
+        runCatching { rigctld.arrete() }
         runCatching { phonie.arrete() }
         serveur.arrete()
     })

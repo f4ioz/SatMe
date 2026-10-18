@@ -66,7 +66,7 @@ object PagePc {
     private fun onglet(id: String) = ONGLETS.first { it.id == id }
 
     /** The settings categories' icons, for the page's script. */
-    private fun icones(): String = org.json.JSONObject(listOf("person", "radio", "satellite_alt", "public", "smartphone", "save", "tune", "straighten", "mic", "cloud_upload")
+    private fun icones(): String = org.json.JSONObject(listOf("person", "radio", "satellite_alt", "public", "smartphone", "save", "tune", "straighten", "mic", "cloud_upload", "handshake")
         .associateWith { IconesPc.svg(it, "ico-reg") }).toString()
 
     /** The tabs that are pages of their own (served apart). */
@@ -2449,6 +2449,20 @@ ${rail()}
         <button onclick="regleLien('port=' + enc(v('lien-port')))">Appliquer</button><span class="petit" id="lien-etat"></span></div>
       <div class="petit aide" style="margin-top:6px">Chaque seconde le satellite suivi (azimut, élévation, distance, fréquences et Doppler), les alertes de passage (AOS dans 5 min, AOS, LOS) et chaque contact noté au carnet, en JSON. Rien n'est accepté en retour. Sur ce PC seulement, sauf si SatMe-PC est lancé avec --reseau.</div>
     </div>
+    <div class="carte" id="rig-carte">
+      <div class="t">Fréquence pour les carnets (rigctld)</div>
+      <label class="petit" style="display:block"><input type="checkbox" id="rig-on" onchange="regleRig('on=' + (this.checked ? 1 : 0))">
+        Donner la fréquence et le mode de réception aux logiciels de carnet</label>
+      <div class="ligne"><span class="petit">Port</span><input id="rig-port" type="number" min="1024" max="65535" style="max-width:90px">
+        <button onclick="regleRig('port=' + enc(v('rig-port')))">Appliquer</button><span class="petit" id="rig-etat"></span></div>
+      <label class="petit" style="display:block"><input type="checkbox" id="rig-reseau" onchange="regleRig('reseau=' + (this.checked ? 1 : 0))"> Réseau local</label>
+      <label class="petit" style="display:block"><input type="checkbox" id="rig-montee" onchange="regleRig('montee=' + (this.checked ? 1 : 0))"> Noter la montée plutôt que la descente</label>
+      <label class="petit" style="display:block"><input type="checkbox" id="rig-accord" onchange="regleRig('accord=' + (this.checked ? 1 : 0))"> Autoriser le changement de fréquence (réception SDR seulement)</label>
+      <div class="petit" id="rig-lu" style="margin-top:4px"></div>
+      <div class="petit aide">Protocole rigctld (réseau) : un logiciel de carnet ou de modes numériques réglé sur « rigctld », adresse 127.0.0.1 et ce port, lit la fréquence du ciel (QO-100 : la descente, 10 489,750 MHz…), le mode, le VFO, le split (la montée quand elle est connue) et l'état d'émission. Ce qui est lu : le poste quand il est relié en CAT, sinon le récepteur SDR.</div>
+      <div class="petit aide">Lecture seule pour l'émission : la commande d'émission (PTT) est toujours refusée. Le changement de fréquence ou de mode, quand la case le permet, n'accorde que le récepteur SDR, jamais le poste. « Noter la montée » : la fréquence d'émission (QO-100, poste en satellite) au lieu de la descente.</div>
+      <div class="petit aide">Réseau local : seulement si SatMe-PC est lancé avec --reseau ; sinon ce PC seulement. Le port 4532 est celui d'usage ; il doit différer de celui du rotor (rotctld, 4533).</div>
+    </div>
     <div class="carte" id="phr-carte" hidden>
       <div class="t">Phonie → texte</div>
       <div class="petit aide">La voix entendue (carte son ou clé SDR) écrite au fil de l'écoute, avec les indicatifs, carrés et reports trouvés : une fenêtre dans les onglets SDR, QO-100 et Carnet. Le moteur (faster-whisper, en Python) tourne sur ce PC : rien ne part sur Internet pendant l'écoute. Coupé par défaut : rien ne démarre sans la case de la fenêtre.</div>
@@ -2611,7 +2625,8 @@ ${rail()}
   <button id="sb-cat" class="sb-i" onclick="vue('reglages'); montreReglages('materiel')" title="Le poste (Réglages › Poste et rotor)"><i></i><span>Poste</span><b id="sb-cat-t">—</b></button>
   <button id="sb-rot" class="sb-i" onclick="vue('reglages'); montreReglages('materiel')" title="Le rotor (Réglages › Poste et rotor)"><i></i><span>Rotor</span><b id="sb-rot-t">—</b></button>
   <button id="sb-rec" class="sb-i" hidden onclick="vue('son')" title="Un enregistrement est en cours (onglet Son)"><i></i><b id="sb-rec-t"></b></button>
-  <button id="sb-tel" class="sb-i" onclick="vue('reglages'); montreReglages('satellites')" title="Le lien WebSocket (téléphone, logiciels de suivi) : Réglages › Satellites"><i></i><span>Lien</span><b id="sb-tel-t">—</b></button>
+  <button id="sb-tel" class="sb-i" onclick="vue('reglages'); montreReglages('interfaces')" title="Le lien WebSocket (téléphone, logiciels de suivi) : Réglages › Interfaces"><i></i><span>Lien</span><b id="sb-tel-t">—</b></button>
+  <button id="sb-rig" class="sb-i" hidden onclick="vue('reglages'); montreReglages('interfaces')" title="La fréquence donnée aux logiciels de carnet (rigctld) : Réglages › Interfaces"><i></i><span>Carnets</span><b id="sb-rig-t">—</b></button>
   <span class="h-esp"></span>
   <button id="sb-err" class="sb-i" onclick="montreErreurs(this)" title="Les erreurs relevées par la page et par SatMe-PC"><i></i><span>Erreurs</span><b id="sb-err-t">0</b></button>
   <span class="sb-k"><kbd>Échap</kbd> arrêt émission <kbd>Ctrl K</kbd> commandes <kbd>?</kbd> aide</span>
@@ -3119,7 +3134,8 @@ const ICO = ${icones()};
 const CATS_REG = [
   { id: 'station', nom: 'Ma station', ico: 'person', desc: 'Indicatif, carré, élévation minimale, horizon', cartes: ['Station', 'Horizon'] },
   { id: 'materiel', nom: 'Poste et rotor', ico: 'radio', desc: 'CAT, TH-D72, rotor, convertisseurs, ADALM-PLUTO', cartes: ['Poste', 'Kenwood TH-D72', 'Rotor', 'Convertisseurs', 'Journal Doppler', 'ADALM-PLUTO'] },
-  { id: 'satellites', nom: 'Satellites', ico: 'satellite_alt', desc: 'Éléments orbitaux, statut AMSAT, lien WebSocket, QO-100 au démarrage', cartes: ['Éléments orbitaux', 'AMSAT', 'Lien satellite', 'QO-100'] },
+  { id: 'satellites', nom: 'Satellites', ico: 'satellite_alt', desc: 'Éléments orbitaux, statut AMSAT, QO-100 au démarrage', cartes: ['Éléments orbitaux', 'AMSAT', 'QO-100'] },
+  { id: 'interfaces', nom: 'Interfaces', ico: 'handshake', desc: 'Lien WebSocket, fréquence pour les carnets (rigctld)', cartes: ['Lien satellite', 'Fréquence pour les carnets'] },
   { id: 'enligne', nom: 'Services en ligne', ico: 'public', desc: 'QRZ.com, Wavelog / Cloudlog, skeds hams.at', cartes: ['QRZ.com', 'Carnet en ligne', 'Skeds'] },
   { id: 'phonie', nom: 'Phonie → texte', ico: 'mic', desc: 'La voix entendue écrite : moteur, modèle, installation', cartes: ['Phonie → texte'] },
   { id: 'telephone', nom: 'Téléphone', ico: 'smartphone', desc: 'SatMe sur le téléphone : réglages et contacts', cartes: ['Téléphone'] },
@@ -4223,7 +4239,7 @@ async function chargeReglages() {
   try {
     const r = await (await fetch('api/reglages')).json();
     g('indicatif').value = r.c; g('locator').value = r.l; g('minEl').value = r.minEl;
-    horizonDe(r); chargeDoppler(); chargeLien(); chargePx();
+    horizonDe(r); chargeDoppler(); chargeLien(); chargeRig(); chargePx();
     g('qrzFiche').checked = r.fiche; ficheVoulue = r.fiche;
     g('qrzUser').value = r.qrzUser; g('qrzMdp').placeholder = r.qrzMdp ? 'mot de passe enregistré' : 'Mot de passe';
     g('carnetUrl').value = r.carnetUrl; g('carnetCle').placeholder = r.carnetCle ? 'clé enregistrée' : 'Clé d’API (lecture et écriture)';
@@ -4257,6 +4273,20 @@ async function chargeLien() {
   txt('lien-etat', j.erreur ? j.erreur : j.ecoute ? 'ws://' + (j.reseau ? location.hostname : 'localhost') + ':' + j.port + '/ · ' + j.clients + ' client(s)' : 'coupé');
 }
 async function regleLien(q) { await post('api/lien?' + q); chargeLien(); }
+// ------------------------------------------------------------------ the frequency for logging programs (rigctld)
+async function chargeRig() {
+  let j = null;
+  try { j = await (await fetch('api/rigctld')).json(); } catch (x) {}
+  if (!j || j.absent || j.on === undefined) { g('rig-carte').hidden = true; return; }
+  g('rig-on').checked = !!j.on; g('rig-accord').checked = !!j.accord; g('rig-montee').checked = !!j.montee;
+  g('rig-reseau').checked = !!j.reseauLocal; g('rig-reseau').disabled = !j.reseau;
+  g('rig-reseau').parentNode.title = j.reseau ? '' : 'SatMe-PC lancé sans --reseau : ce PC seulement';
+  if (document.activeElement !== g('rig-port')) g('rig-port').value = j.port;
+  txt('rig-etat', j.erreur ? j.erreur : j.ecoute ? (j.ouvert ? 'réseau local' : '127.0.0.1') + ':' + j.port + ' · ' + j.clients + ' client(s)' : 'coupé');
+  const l = j.lecture;
+  txt('rig-lu', l ? 'Donné maintenant : ' + qFmt(l.hz) + ' MHz ' + l.mode + (l.txHz ? ' · émission ' + qFmt(l.txHz) + ' MHz' : '') + (l.ptt ? ' · en émission' : '') : '');
+}
+async function regleRig(q) { await post('api/rigctld?' + q); chargeRig(); HX.t.rig = 0; }
 // ------------------------------------------------------------------ Doppler/CAT log
 async function chargeDoppler() {
   let j = null;
@@ -8027,7 +8057,7 @@ async function hxLit(cle, url, ms) {
 async function ticTete() {
   if (document.hidden) return;
   await Promise.all([hxLit('dtx', 'api/datv/emission', 2000), hxLit('stx', 'api/sstv/emission', 2000), hxLit('iq', 'api/iq', 3000),
-    hxLit('sdr', 'api/sdr', 3000), hxLit('datv', 'api/datv', 10000), hxLit('lien', 'api/lien', 15000)]);
+    hxLit('sdr', 'api/sdr', 3000), hxLit('datv', 'api/datv', 10000), hxLit('lien', 'api/lien', 15000), hxLit('rig', 'api/rigctld', 5000)]);
   rendTete();
 }
 /** What transmits now: each transmitter SatMe drives. */
@@ -8081,6 +8111,9 @@ function rendTete() {
   g('sb-rec').hidden = !rec; if (rec) sb('sb-rec', 'danger', g('rec').textContent);
   const li = HX.lien;
   sb('sb-tel', li && li.ecoute ? (li.clients ? 'ok' : 'info') : '', li && li.on !== undefined ? (li.ecoute ? li.clients + ' client' + (li.clients > 1 ? 's' : '') : 'coupé') : '—');
+  const rg = HX.rig, rgVu = !!(rg && rg.on !== undefined);
+  g('sb-rig').hidden = !rgVu;
+  if (rgVu) sb('sb-rig', rg.erreur ? 'warn' : rg.ecoute ? (rg.clients ? 'ok' : 'info') : '', rg.erreur ? 'erreur' : rg.ecoute ? rg.clients + ' client' + (rg.clients > 1 ? 's' : '') : 'coupé');
   const ne = (window.__err || []).length + erreursServeur().length;
   sb('sb-err', ne ? 'danger' : 'ok', String(ne));
 }

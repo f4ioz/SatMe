@@ -420,7 +420,7 @@ Comme sur le téléphone : le **serveur GP SatMe** d'abord (`https://gp.f4ioz.fr
 
 ### Le lien satellite (WebSocket)
 
-Pour d'autres programmes du PC (un carnet, un tableau de bord, un script) : **Réglages › Satellites › Lien satellite**, coupé d'origine. Une fois coché, `ws://localhost:8095/` (le port se change) envoie des trames texte en JSON ; sur ce PC seulement, sauf si SatMe-PC est lancé avec `--reseau`. Rien de ce qu'envoie un client n'est exécuté (le ping a sa réponse, la fermeture son écho).
+Pour d'autres programmes du PC (un carnet, un tableau de bord, un script) : **Réglages › Interfaces › Lien satellite**, coupé d'origine. Une fois coché, `ws://localhost:8095/` (le port se change) envoie des trames texte en JSON ; sur ce PC seulement, sauf si SatMe-PC est lancé avec `--reseau`. Rien de ce qu'envoie un client n'est exécuté (le ping a sa réponse, la fermeture son écho).
 
 | `type` | Quand | Champs |
 |---|---|---|
@@ -432,6 +432,16 @@ Pour d'autres programmes du PC (un carnet, un tableau de bord, un script) : **R�
 ```
 {"type":"satellite","time":1792089000000,"name":"ISS","catnum":25544,"az":212.4,"el":31.7,"rangeKm":812.3,"rangeRateKmS":-4.512,"transmitter":"FM voice repeater (V/U)","downlinkHz":437806580,"uplinkHz":145987810,"dopplerDownHz":6580,"dopplerUpHz":-2190}
 ```
+
+### La fréquence pour les carnets (rigctld)
+
+**Réglages › Interfaces › Fréquence pour les carnets**, coupé d'origine : un serveur au protocole réseau rigctld, port 4532 (il se change ; pas celui du rotor), sur ce PC seulement sauf si « Réseau local » est coché et SatMe-PC lancé avec `--reseau`. Un logiciel de carnet ou de modes numériques réglé sur « rigctld » à 127.0.0.1:4532 lit :
+
+- `f` la fréquence du ciel de la réception en cours — le poste quand il est relié en CAT, sinon le récepteur SDR ; sur QO-100 la descente nominale (10 489 750 000), ou la montée si « Noter la montée » est coché ;
+- `m` le mode et la bande passante, `v` VFOA, `s` / `i` le split et la fréquence d'émission quand il y en a une (la montée QO-100, l'émission du poste), `t` si SatMe émet en ce moment (DATV, SSTV, calibration I/Q) ;
+- `\dump_state`, `\chk_vfo`, `\get_powerstat`, `\dump_caps`, les formes longues, et les réponses étendues (`+`, `;`).
+
+`T` (PTT) et tout réglage d'émission sont toujours refusés (`RPRT -11`). `F` et `M` aussi, sauf si « Autoriser le changement de fréquence » est coché : ils n'accordent alors que le récepteur SDR — jamais le poste, ni quand QO-100 est au poste.
 
 ## Encore sur le PC
 

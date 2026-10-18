@@ -285,6 +285,8 @@ object PagesPcTelephone {
                 // The QO-100 cockpit: the phone's receiver and QO-100 screen; no signal classifier here yet.
                 "/api/qo100/trafic" -> json(trafic(vm))
                 "/api/qo100/signaux" -> json(JSONObject().put("actif", false).put("absent", true))
+                // The rigctld server for logging programs is SatMe-PC's: its card and status hidden here.
+                "/api/rigctld" -> json(JSONObject().put("absent", true))
                 "/api/carnet" -> json(carnet(vm))
                 "/api/carnet/records" -> json(ApiStation.records(fr.f4ioz.satcombo.domain.RecordsCarnet.calcule(u.log, vm.myLocator())))
                 // The contacts ticked on the page: ADIF, or the batch for another phone (as Settings › Backup makes it).
