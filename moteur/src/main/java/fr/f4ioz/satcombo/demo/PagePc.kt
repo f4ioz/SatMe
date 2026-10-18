@@ -750,9 +750,9 @@ object PagePc {
   #pal-l { max-height:min(440px,58vh); overflow:auto; padding:6px; }
   .pal-g { font-size:10.5px; font-weight:700; letter-spacing:1px; text-transform:uppercase; color:var(--texte-3); padding:8px 10px 3px; }
   .pal-i { display:flex; align-items:center; gap:10px; padding:6px 10px; border-radius:var(--r1); cursor:pointer; }
-  .pal-i .ico, .pal-i .st-ico { width:18px; height:18px; fill:var(--texte-2); flex:none; }
+  .pal-i svg { width:18px; height:18px; fill:var(--texte-2); flex:none; }
   .pal-i small { margin-left:auto; color:var(--texte-3); font-size:var(--fs-xs); white-space:nowrap; }
-  .pal-i.sel { background:rgba(63,224,200,.12); color:var(--rx); } .pal-i.sel .ico { fill:var(--rx); }
+  .pal-i.sel { background:rgba(63,224,200,.12); color:var(--rx); } .pal-i.sel svg { fill:var(--rx); }
   .pal-i.arret { color:#FF9A80; }
   .pal-vide { padding:18px; text-align:center; color:var(--texte-3); }
   .pal-pied { display:flex; gap:16px; flex-wrap:wrap; padding:7px 14px; border-top:1px solid var(--ligne); font-size:var(--fs-xs); color:var(--texte-3); }
