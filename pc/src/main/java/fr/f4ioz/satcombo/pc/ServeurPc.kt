@@ -97,6 +97,12 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
         qo100 = runCatching { JsonPc.qo100(station, false, sdr?.gammeHz) }.getOrNull(),
         lien = lien?.let { l -> JSONObject().put("on", l.actif).put("ecoute", l.ecoute).put("clients", l.nbClients) })
 
+    /** The password asked of other machines when the page is open to the network (set before [demarre]). */
+    @Volatile var acces: AccesDistantPc? = null
+
+    /** This PC asking (free, as before the password); another machine needs a session. */
+    @Volatile internal var estLocal: (InetAddress) -> Boolean = { it.isLoopbackAddress }
+
     /** QRZ.com records of the callsigns seen in DATV, and their photos (set before [demarre]). */
     @Volatile var qrzDatv: QrzDatvPc? = null
 
@@ -195,6 +201,10 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
         val chemin = r.chemin.substringBefore('?')
         val q = parametres(r.chemin.substringAfter('?', ""))
         val sortie = c.getOutputStream()
+        // Another machine: a session first, whatever it asks (page, API, streams, files).
+        val local = estLocal(c.inetAddress)
+        if (garde(c, r, chemin, q, sortie, local)) return
+        if (chemin == "/api/acces" || chemin.startsWith("/api/acces/")) { acces(c, r, chemin, sortie, local); return }
         if (chemin == "/api/flux") { flux(c, sortie, q); return }
         if (chemin == "/api/son/flux" && diffusion != null) {
             // The dongle's or the sound card's sound, to the browser asking (the page open on another PC).
@@ -612,6 +622,86 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 else envoie(sortie, "404 Not Found", "text/plain; charset=utf-8", "introuvable".toByteArray())
             }
         }
+    }
+
+    /**
+     * The door for other machines: the application's files (no secret) and
+     * the login page for anyone; everything else for this PC or a session
+     * only. True when the request was answered here.
+     */
+    private fun garde(c: Socket, r: RequeteHttp.Requete, chemin: String, q: Map<String, String>, sortie: OutputStream, local: Boolean): Boolean {
+        when (chemin) {
+            "/manifest.webmanifest" -> { envoie(sortie, "200 OK", "application/manifest+json; charset=utf-8", PagesAccesPc.MANIFESTE.toByteArray()); return true }
+            "/sw.js" -> { envoie(sortie, "200 OK", "text/javascript; charset=utf-8", PagesAccesPc.SERVICE_WORKER.toByteArray()); return true }
+            "/icone-192.png", "/icone-512.png" -> {
+                val b = PagesAccesPc.icone(if (chemin == "/icone-192.png") 192 else 512)
+                if (b == null) envoie(sortie, "404 Not Found", "text/plain", ByteArray(0)) else envoie(sortie, "200 OK", "image/png", b)
+                return true
+            }
+        }
+        val a = acces
+        val jeton = r.cookie(AccesDistantPc.COOKIE)
+        val ouverte = local || (a != null && a.session(jeton))
+        val html = "text/html; charset=utf-8"
+        if (chemin == "/connexion") {
+            when {
+                ouverte -> redirige(sortie, AccesDistantPc.suite(q["suite"]))
+                a == null || !a.defini -> envoie(sortie, "403 Forbidden", html, PagesAccesPc.connexion("", "/", false).toByteArray())
+                r.methode == "POST" -> {
+                    val f = RequeteHttp.corps(c.getInputStream(), r, 4096)?.let { b -> runCatching { parametres(String(b, Charsets.UTF_8)) }.getOrNull() }.orEmpty()
+                    val suite = AccesDistantPc.suite(f["suite"])
+                    when (val res = a.connecte(c.inetAddress.hostAddress, f["mdp"].orEmpty())) {
+                        is AccesDistantPc.Connexion.Ouverte -> redirige(sortie, suite, AccesDistantPc.cookie(res.jeton))
+                        is AccesDistantPc.Connexion.Refusee -> envoie(sortie, "401 Unauthorized", html, PagesAccesPc.connexion(res.raison, suite, true).toByteArray())
+                    }
+                }
+                else -> envoie(sortie, "200 OK", html, PagesAccesPc.connexion("", AccesDistantPc.suite(q["suite"]), true).toByteArray())
+            }
+            return true
+        }
+        if (chemin == "/deconnexion") {
+            if (r.methode != "POST") { envoie(sortie, "405 Method Not Allowed", "text/plain", ByteArray(0)); return true }
+            a?.sessions?.retire(jeton)
+            envoie(sortie, "200 OK", "application/json; charset=utf-8", JSONObject().put("ok", true).toString().toByteArray(), AccesDistantPc.COOKIE_EFFACE)
+            return true
+        }
+        if (ouverte) return false
+        // A page asked by a browser: the login page, then back here; anything else: refused, said so.
+        if (r.methode == "GET" && chemin in PAGES_NAVIGATEUR) {
+            val ici = r.chemin.takeIf { it.length < 400 } ?: chemin
+            redirige(sortie, "/connexion?suite=" + java.net.URLEncoder.encode(ici, "UTF-8"))
+        } else envoie(sortie, "401 Unauthorized", "application/json; charset=utf-8",
+            JSONObject().put("ok", false).put("erreur", "connexion requise").put("connexion", true).toString().toByteArray(), "X-SatMe-Connexion: 1\r\n")
+        return true
+    }
+
+    /** Réglages › Accès à distance: the password (set from this PC or a session), the sessions. */
+    private fun acces(c: Socket, r: RequeteHttp.Requete, chemin: String, sortie: OutputStream, local: Boolean) {
+        val a = acces
+        val jeton = r.cookie(AccesDistantPc.COOKIE)
+        val o = when {
+            a == null -> JSONObject().put("ok", false).put("present", false)
+            r.methode != "POST" -> JSONObject().put("ok", true).put("present", true).put("reseau", reseau).put("local", local)
+                .put("defini", a.defini).put("depuis", a.depuis).put("sessions", a.sessions.nombre)
+                .put("connecte", !local && a.session(jeton)).put("initial", if (local) a.initial ?: "" else "")
+            chemin == "/api/acces/mdp" -> {
+                // In the body, not the address: a password never in a URL.
+                val f = RequeteHttp.corps(c.getInputStream(), r, 4096)?.let { b -> runCatching { parametres(String(b, Charsets.UTF_8)) }.getOrNull() }.orEmpty()
+                val err = a.regle(f["mdp"].orEmpty(), if (local) null else jeton)
+                if (err == null) JSONObject().put("ok", true) else JSONObject().put("ok", false).put("erreur", err)
+            }
+            chemin == "/api/acces/retire" ->
+                if (!local) JSONObject().put("ok", false).put("erreur", "seulement depuis le PC lui-même")
+                else { a.retire(); JSONObject().put("ok", true) }
+            chemin == "/api/acces/sessions" -> { a.sessions.retireTout(if (local) null else jeton); JSONObject().put("ok", true) }
+            else -> JSONObject().put("ok", false).put("erreur", "inconnu")
+        }
+        envoie(sortie, "200 OK", "application/json; charset=utf-8", o.toString().toByteArray())
+    }
+
+    private fun redirige(s: OutputStream, ou: String, entetes: String = "") {
+        s.write(("HTTP/1.1 303 See Other\r\nLocation: $ou\r\n" + entetes + "Content-Length: 0\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n").toByteArray())
+        s.flush()
     }
 
     private fun origine(proposee: Boolean) =
@@ -1677,7 +1767,10 @@ object JsonPc {
     })
 }
 
-private val ReponseMontageAbsente = fr.f4ioz.satcombo.demo.ReponseWeb("200 OK", "application/json; charset=utf-8",
+/** The pages a browser opens by their address: without a session, sent to the login page (else a 401). */
+private val PAGES_NAVIGATEUR = setOf("/", "/index.html", "/pc", "/journal", "/journal/", "/planche", "/planche/")
+
+private val ReponseMontageAbsente =fr.f4ioz.satcombo.demo.ReponseWeb("200 OK", "application/json; charset=utf-8",
     "{\"ok\":false,\"erreur\":\"pas de montage ici\"}".toByteArray())
 
 /** [n] bytes of [e] at most: a request's body read as a stream. */
