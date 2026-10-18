@@ -48,6 +48,9 @@ object IconesPc {
         // The page's frame: the rail's button, the command palette, listening here.
         // The station's chain (drawn here, not a Material Symbol): a piece on the left cabled to two on the right.
         "montage" to "M80-600h240v240H80Zm240 100h120v40H320Zm120-280h40v560h-40Zm40 0h120v40H480Zm0 520h120v40H480ZM600-840h280v200H600Zm0 520h280v200H600Z",
+        // Drawn for SatMe: an aircraft seen from above, a folded map.
+        "flight" to "M480-880q25 0 42.5 17.5T540-820v220l300 180v80l-300-90v190l80 60v60l-140-40-140 40v-60l80-60v-190l-300 90v-80l300-180v-220q0-25 17.5-42.5T480-880Z",
+        "map" to "M120-200v-560l220-73v560l-220 73Zm260-633 200 66v560l-200-66v-560Zm240 66 220-73v560l-220 73v-560Z",
         "menu" to "M120-240v-80h720v80H120Zm0-200v-80h720v80H120Zm0-200v-80h720v80H120Z",
         "search" to "M784-120 532-372q-30 24-69 38t-83 14q-109 0-184.5-75.5T120-580q0-109 75.5-184.5T380-840q109 0 184.5 75.5T640-580q0 44-14 83t-38 69l252 252-56 56ZM380-400q75 0 127.5-52.5T560-580q0-75-52.5-127.5T380-760q-75 0-127.5 52.5T200-580q0 75 52.5 127.5T380-400Z",
         "headphones" to "M360-120H200q-33 0-56.5-23.5T120-200v-280q0-75 28.5-140.5t77-114q48.5-48.5 114-77T480-840q75 0 140.5 28.5t114 77q48.5 48.5 77 114T840-480v280q0 33-23.5 56.5T760-120H600v-320h160v-40q0-117-81.5-198.5T480-760q-117 0-198.5 81.5T200-480v40h160v320Z",

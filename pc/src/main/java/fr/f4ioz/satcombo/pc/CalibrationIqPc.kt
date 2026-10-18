@@ -429,6 +429,7 @@ class MaterielIqPc(
 
     override fun ouvreRx(rx: String, app: Emetteur): SourceIq {
         val tx = if (app == Emetteur.PLUTO) Datv.PLUTO else if (app == Emetteur.BLADERF) Datv.BLADERF else ""
+        if (sdr.adsbTient() == SdrPc.PLUTO && (rx == Datv.PLUTO || tx == Datv.PLUTO)) throw IOException(SdrPc.ADSB_TIENT_PLUTO)
         val sienne = (sdr.plutoEnReception && (rx == Datv.PLUTO || tx == Datv.PLUTO)) || (sdr.bladerfEnReception && (rx == Datv.BLADERF || tx == Datv.BLADERF))
         if (sienne) { aRendre = qo100EnCours(); sdr.arrete() } else aRendre = null
         sdr.datvTient = rx
