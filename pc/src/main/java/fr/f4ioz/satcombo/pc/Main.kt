@@ -225,6 +225,7 @@ fun main(args: Array<String>) {
         { c -> kotlinx.coroutines.runBlocking { carnet.ficheQrz(c) } })
     serveur.large = large
     serveur.montage = MontagePc(dossier) { serveur.lecturesMontage() }
+    serveur.memoiresSdr = MemoiresSdrPc(dossier)
     datv.diffusion = diffusion
     // The wide band chat, tune requests by UDP: each off unless chosen in the DATV tab.
     serveur.chatLarge = ChatLargePc(station.stockage, { station.settings.callsign }).also { it.demarre() }

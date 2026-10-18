@@ -642,6 +642,32 @@ ${STYLE_JETONS}
   .r-cascade { position:relative; height:360px; }
   .r-cascade canvas { position:absolute; inset:0; width:100%; height:100%; display:block; cursor:crosshair; }
   .r-droite { display:flex; flex-direction:column; min-width:0; }
+  .sp-b { display:inline-flex; align-items:center; gap:4px; padding:3px 8px; font-size:var(--fs-s); }
+  .sp-b .ico { width:16px; height:16px; fill:currentColor; }
+  #r-spectre:focus-visible, #r-cascade:focus-visible { outline:1px solid var(--rx); outline-offset:-1px; }
+  .sp-pop { position:fixed; z-index:60; width:min(380px,calc(100vw - 16px)); max-height:calc(100vh - 16px); overflow:auto; padding:8px 12px 10px; border-radius:var(--r3);
+    background:var(--s2); border:1px solid var(--ligne-forte); box-shadow:var(--ombre-pop); font-size:var(--fs-s); }
+  .sp-pop-t { display:flex; align-items:center; gap:6px; margin:0 0 6px; }
+  .sp-pop-t .h-esp { flex:1; }
+  .sp-pop[data-ou="qo100"] .sp-sdr { display:none; }
+  .sp-g { display:grid; grid-template-columns:max-content minmax(0,1fr); gap:5px 10px; align-items:center; }
+  .sp-g > span:nth-child(odd) { color:var(--texte-2); }
+  .sp-l { display:flex; flex-wrap:wrap; align-items:center; gap:6px; }
+  .sp-st { margin:9px 0 5px; font-size:var(--fs-xs); font-weight:700; letter-spacing:1px; text-transform:uppercase; color:var(--texte-3); }
+  .sp-pals { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:5px; margin-bottom:7px; }
+  .sp-pal { display:flex; flex-direction:column; align-items:stretch; gap:3px; padding:4px; font-size:var(--fs-xs); }
+  .sp-pal i { display:block; height:12px; border-radius:3px; }
+  .sp-pal.actif { border-color:var(--rx); color:var(--rx); background:rgba(63,224,200,.08); }
+  .mem-liste { max-height:260px; overflow:auto; margin:6px 0; border:1px solid var(--ligne); border-radius:var(--r1); background:var(--creux); }
+  .mem-g { padding:5px 8px 2px; font-size:var(--fs-xs); font-weight:700; letter-spacing:.8px; text-transform:uppercase; color:var(--texte-3); }
+  .mem-l { display:flex; align-items:center; gap:8px; padding:3px 8px; cursor:pointer; }
+  .mem-l:hover { background:rgba(63,224,200,.08); }
+  .mem-l i { width:9px; height:9px; border-radius:2px; flex:none; }
+  .mem-l b { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:600; }
+  .mem-f { font-family:var(--mono); font-variant-numeric:tabular-nums; color:var(--texte-2); }
+  .mem-e { padding:0 6px; }
+  .mem-edit { padding:8px; border:1px solid var(--ligne); border-radius:var(--r1); margin-bottom:6px; }
+  .bouton-lien { display:inline-block; padding:4px 10px; border:1px solid var(--ligne-forte); border-radius:var(--r1); color:var(--texte); text-decoration:none; }
   .s2-droite { display:flex; flex-direction:column; min-width:0; }
   .s2-carte { position:relative; height:420px; margin-top:8px; border-radius:8px; overflow:hidden; }
   .s2-carte canvas { position:absolute; inset:0; width:100%; height:100%; cursor:grab; touch-action:none; }
@@ -1020,6 +1046,56 @@ ${rail()}
   <button id="h-aide" class="h-rond" onclick="aideClavier()" title="Raccourcis clavier (?)">?</button>
   <span id="heure"></span><span id="h-utc" class="h-utc" title="Temps universel"></span>
 </header>
+<div id="aff-pop" class="sp-pop" hidden role="dialog" aria-label="Affichage du spectre et de la cascade">
+  <div class="t sp-pop-t">Affichage<span class="h-esp"></span><button type="button" class="discret" onclick="affDefaut()" title="Revenir aux réglages d'origine">défaut</button><button type="button" class="discret" onclick="g('aff-pop').hidden = true" aria-label="Fermer">✕</button></div>
+  <div class="sp-g sp-sdr">
+    <span>Moyenne</span><select data-aff="moy" title="Moyenne glissante (exponentielle) sur ce nombre de trames"><option value="0">non</option><option value="2">2 trames</option><option value="4">4 trames</option><option value="8">8 trames</option><option value="16">16 trames</option></select>
+    <span>Crêtes</span><span class="sp-l"><label><input type="checkbox" data-aff="crete"> tenues</label><select data-aff="decCrete" title="Descente des crêtes"><option value="0">fixes</option><option value="1">−1 dB/s</option><option value="3">−3 dB/s</option><option value="10">−10 dB/s</option></select><button type="button" class="discret" onclick="spRaz()" title="Effacer les crêtes et les minimums">⟲</button></span>
+    <span>Minimum</span><label><input type="checkbox" data-aff="mini"> tenu</label>
+    <span>Niveaux</span><span class="sp-l"><label title="Le bas sur le bruit, le haut sur le plus fort signal"><input type="checkbox" data-aff="auto"> auto</label><span class="petit">réf.</span><input type="number" id="aff-ref" data-aff="ref" min="-160" max="20" step="5" style="width:62px"><span class="petit">dB, plage</span>
+      <select id="aff-plage" data-aff="plage"><option value="30">30</option><option value="40">40</option><option value="60">60</option><option value="80">80</option><option value="100">100</option><option value="120">120</option></select></span>
+  </div>
+  <div class="sp-st">Cascade</div>
+  <div class="sp-pals" id="aff-pals"></div>
+  <div class="sp-g">
+    <span>Contraste</span><input type="range" data-aff="contraste" min="0.5" max="3" step="0.1">
+    <span>Luminosité</span><input type="range" data-aff="lum" min="-0.4" max="0.4" step="0.02">
+    <span class="sp-sdr">Plancher</span><label class="sp-sdr" title="Le noir posé sur le bruit (sinon : la référence et la plage ci-dessus)"><input type="checkbox" data-aff="plancher"> sur le bruit (auto)</label>
+    <span class="sp-sdr">Vitesse</span><select class="sp-sdr" data-aff="vitesse"><option value="0.5">lente</option><option value="1">normale</option><option value="2">rapide</option><option value="4">très rapide</option></select>
+  </div>
+  <div class="sp-st sp-sdr">Accord</div>
+  <div class="sp-g sp-sdr">
+    <span>Molette</span><label title="Un tour rapide lance l'accord, qui ralentit tout seul"><input type="checkbox" data-aff="inertie"> à inertie</label>
+    <span>Pas BLU, CW</span><select data-aff="pasBlu"><option value="1">1 Hz</option><option value="5">5 Hz</option><option value="10">10 Hz</option><option value="25">25 Hz</option><option value="50">50 Hz</option><option value="100">100 Hz</option></select>
+    <span>Pas FM, AM</span><select data-aff="pasFm"><option value="100">100 Hz</option><option value="500">500 Hz</option><option value="1000">1 kHz</option><option value="2500">2,5 kHz</option><option value="5000">5 kHz</option><option value="6250">6,25 kHz</option><option value="12500">12,5 kHz</option></select>
+  </div>
+  <div class="sp-st">Repères</div>
+  <div class="sp-l"><label class="sp-sdr"><input type="checkbox" data-aff="plan"> plan de bandes</label><label><input type="checkbox" data-aff="mem"> drapeaux des mémoires</label></div>
+  <div class="aide">Gardé dans ce navigateur. Le plan de bandes (IARU Région 1 pour 2 m, 70 cm, 23 cm, 13 cm, 3 cm, et celui de QO-100) se remplace bande par bande avec un fichier plan-bandes.json dans le dossier de données de SatMe-PC : <a href="api/plan-bandes?defaut=1" download>le plan d'origine</a> sert de modèle (fréquences en Hz, usages SATELLITE, BALISE, CW, ETROITE, BLU, FM, RELAIS, NUMERIQUE, TOUS_MODES, ATV).</div>
+</div>
+<div id="mem-pop" class="sp-pop" hidden role="dialog" aria-label="Mémoires du récepteur">
+  <div class="t sp-pop-t">Mémoires du récepteur<span class="h-esp"></span><button type="button" class="discret" onclick="g('mem-pop').hidden = true" aria-label="Fermer">✕</button></div>
+  <div class="sp-l"><select id="mem-filtre" title="Étiquette" style="flex:1"></select><button type="button" onclick="memEdite('')" title="La fréquence écoutée">＋ Ici</button>
+    <button type="button" onclick="g('mem-fichier').click()" title="Ajouter les mémoires d'un fichier JSON">Importer</button><a class="bouton-lien" href="api/memoires-sdr/export" download title="Toutes les mémoires dans un fichier JSON">Exporter</a>
+    <input type="file" id="mem-fichier" accept=".json,application/json" hidden></div>
+  <div id="mem-liste" class="mem-liste"></div>
+  <div id="mem-edit" class="mem-edit" hidden>
+    <div class="petit" id="mem-titre-e"></div>
+    <div class="sp-g">
+      <span>Nom</span><input id="mem-nom" maxlength="60" placeholder="ISS phonie">
+      <span>Fréquence</span><span class="sp-l"><input id="mem-mhz" placeholder="145,800" style="width:120px"><span class="petit">MHz (ciel)</span></span>
+      <span>Mode</span><span class="sp-l"><select id="mem-mode"><option value="">celui du récepteur</option><option>NFM</option><option>USB</option><option>LSB</option><option>CW</option><option>AM</option></select>
+        <select id="mem-bw" title="Largeur de réception"><option value="0">largeur du mode</option><option value="500">0,5 kHz</option><option value="2400">2,4 kHz</option><option value="3000">3 kHz</option><option value="6000">6 kHz</option><option value="12000">12 kHz</option><option value="16000">16 kHz</option><option value="20000">20 kHz</option></select></span>
+      <span>Étiquette</span><input id="mem-etiquette" list="mem-etiq" maxlength="40" placeholder="Satellites FM">
+      <span>Couleur</span><span class="sp-l"><input type="color" id="mem-couleur" style="width:44px;padding:0 2px" oninput="g('mem-coul-auto').checked = false"><label class="petit"><input type="checkbox" id="mem-coul-auto"> celle de l'étiquette</label></span>
+    </div>
+    <datalist id="mem-etiq"></datalist>
+    <div class="sp-l" style="margin-top:6px"><button type="button" class="primaire" onclick="memGarde()">Enregistrer</button><button type="button" onclick="g('mem-edit').hidden = true">Annuler</button>
+      <button type="button" id="mem-suppr" class="discret" style="margin-left:auto;color:var(--rose)" onclick="memSupprime()">Supprimer</button></div>
+  </div>
+  <div class="petit" id="mem-msg"></div>
+  <div class="aide">Un clic sur une mémoire y accorde le récepteur (réception seulement) : dans la vue, par le décalage ; au-delà, le récepteur y va et ne suit plus le satellite. Les drapeaux du spectre se cliquent aussi (clic droit : modifier). Gardées par SatMe-PC (memoires-sdr.json) ; l'export JSON se réimporte ici ou sur un autre PC sans doublons.</div>
+</div>
 <div class="vue" id="v-station">
 <div class="grille">
   <!-- Passes -->
@@ -1963,7 +2039,8 @@ ${rail()}
       <div class="carte tq-chute">
         <div class="t" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span>Transpondeur à bande étroite</span>
           <span class="petit" id="tq-cl-etat" style="text-transform:none;letter-spacing:0"></span>
-          <span style="margin-left:auto;text-transform:none;letter-spacing:0" class="petit">Largeur
+          <span style="margin-left:auto;text-transform:none;letter-spacing:0;display:inline-flex;gap:4px"><button class="sp-b" id="tq-b-aff" onclick="affOuvre(this, 'qo100')" title="Affichage : palette, contraste et luminosité de la cascade, drapeaux des mémoires">${IconesPc.svg("tune")}<span>Affichage</span></button><button class="sp-b" id="tq-b-mem" onclick="memOuvre(this, 'qo100')" title="Les mémoires du récepteur (étiquette « QO-100 » pour celles d'ici)">${IconesPc.svg("save")}<span>Mémoires</span></button></span>
+          <span style="text-transform:none;letter-spacing:0" class="petit">Largeur
             <select id="tq-zoom" style="flex:none" onchange="tqZoom(+this.value)"><option value="500000">500 kHz</option><option value="200000">200 kHz</option><option value="100000">100 kHz</option><option value="50000">50 kHz</option><option value="20000">20 kHz</option></select></span></div>
         <canvas id="o-reglette" class="tq-reglette" style="width:100%;display:block;cursor:crosshair" title="Cliquer ou glisser pour s'y poser · molette ±100 Hz"></canvas>
         <canvas id="o-pano" class="tq-pano" title="Le transpondeur vu par le récepteur : cliquer un signal pour s'y accorder dans son mode"></canvas>
@@ -2192,16 +2269,22 @@ ${rail()}
     <div class="paire"><span class="o-freq" id="r-freq">—</span><span class="petit" id="r-detail"></span></div>
     <div class="ligne" style="margin-top:4px"><span class="petit">Niveau</span><div class="r-barre"><i id="r-niveau"></i></div><span class="petit" id="r-db"></span>
       <span class="rose petit" id="r-sat-av"></span>
-      <span style="margin-left:auto" class="petit">Largeur vue</span><select id="r-span" style="flex:none" onchange="rSpan = +this.value; rCascade = []; majFlux()"><option value="12000">12 kHz</option><option value="24000">24 kHz</option><option value="48000" selected>48 kHz</option><option value="96000">96 kHz</option><option value="176400">176 kHz</option></select>
+      <span style="margin-left:auto" class="petit">Largeur vue</span><select id="r-span" style="flex:none" onchange="spVue(+this.value, 0)"><option value="12000">12 kHz</option><option value="24000">24 kHz</option><option value="48000" selected>48 kHz</option><option value="96000">96 kHz</option><option value="176400">176 kHz</option><option id="r-span-z" hidden></option></select>
       <button onclick="post('api/sdr/pic')" title="Le signal le plus fort à ±15 kHz">Caler sur le pic</button><button onclick="post('api/sdr/decalage?hz=0')">Recentrer</button></div>
     <div class="ligne" style="margin-top:6px">
       <button id="r-voix" onclick="caleVoix()" title="Le centre de la voix entendue (±3 kHz) mis à 1,5 kHz du bord, comme sur le téléphone">🗣 Caler sur la voix</button>
+      <button class="sp-b" id="sp-b-aff" onclick="affOuvre(this, 'sdr')" title="Affichage : moyenne, crêtes, niveaux, palette de la cascade, molette, repères">${IconesPc.svg("tune")}<span>Affichage</span></button>
+      <button class="sp-b" id="sp-b-mem" onclick="memOuvre(this, 'sdr')" title="Les mémoires du récepteur (nom, fréquence, mode, étiquette)">${IconesPc.svg("save")}<span>Mémoires</span></button>
+      <button class="sp-b" id="sp-b-ici" onclick="memAjouteIci(this, 'sdr')" title="Mémoriser la fréquence écoutée" aria-label="Mémoriser la fréquence écoutée">＋</button>
+      <button class="sp-b" id="sp-b-crete" hidden onclick="spRaz()" title="Effacer les crêtes et les minimums tenus">⟲ crêtes</button>
+      <span class="petit" id="sp-zoom" title="Le zoom de la vue (molette sur le spectre ; 0 : vue entière)"></span>
+      <div class="aide">Spectre : un clic s'y accorde ; la molette zoome autour du pointeur (Maj : déplace la vue), glisser déplace la vue dans les 176 kHz que voit le récepteur ; les bords orangés de la bande passante se tirent pour changer la largeur de réception. Cascade : la molette accorde, « à inertie » (un tour rapide lance l'accord, qui ralentit) ; Ctrl + molette zoome. Avec le focus (clic ou Tab) : ← → un pas, ↑ ↓ dix pas, + − zoom, 0 vue entière. Les petits drapeaux sont les mémoires (clic : s'y accorder ; clic droit : la modifier) ; le liseré coloré en haut, le plan de bandes. Réception seulement.</div>
       <span class="petit" id="r-vernier-l" style="margin-left:auto">Vernier</span><span id="r-ratios" class="ligne" style="margin:0;gap:4px"></span></div>
     <canvas id="r-vernier" style="width:100%;height:44px;display:block;margin-top:6px;cursor:ew-resize;touch-action:none" title="Glisser pour pousser la fréquence (comme un cadran) ; molette aussi"></canvas>
     <div id="r-loupe-boite"><div class="ligne" style="margin-top:6px"><span class="petit">Loupe</span><select id="r-loupe-span" style="flex:none" onchange="post('api/sdr/accord?loupeSpan=' + this.value).then(ticSdr)"><option value="3000">3 kHz</option><option value="5000">5 kHz</option><option value="10000">10 kHz</option><option value="20000">20 kHz</option></select><span class="petit">autour de l'écoute · cliquer pour s'y poser</span></div>
       <canvas id="r-loupe" style="width:100%;height:80px;display:block;margin-top:4px;cursor:crosshair"></canvas></div>
-    <canvas id="r-spectre" style="width:100%;height:110px;display:block;margin-top:8px;cursor:crosshair" title="Cliquer pour s'y accorder"></canvas>
-    <div class="r-cascade"><canvas id="r-cascade" title="Cliquer pour s'y accorder"></canvas></div>
+    <canvas id="r-spectre" tabindex="0" aria-label="Spectre : cliquer pour s'accorder, molette pour zoomer, glisser pour déplacer la vue, flèches pour accorder" style="width:100%;height:130px;display:block;margin-top:8px;cursor:crosshair;touch-action:none"></canvas>
+    <div class="r-cascade"><canvas id="r-cascade" tabindex="0" aria-label="Cascade : cliquer pour s'accorder, molette pour accorder" style="touch-action:none"></canvas><canvas id="r-cascade-sur" aria-hidden="true" style="pointer-events:none"></canvas></div>
   </div>
 </div>
 </div>
@@ -3607,7 +3690,7 @@ function etatMarche(cle, on, pastille) {
 let flux = null, fluxOk = false, fluxSujets = '';
 function sujetsFlux() {
   const sdr = !g('v-sdr').hidden;
-  return 'etat,son,cw' + (sdr || !g('v-carnet').hidden ? ',sdr' : '') + (sdr ? ',spectre&span=' + rSpan + '&n=' + Math.min(1024, Math.max(128, g('r-spectre').clientWidth || 512)) : '');
+  return 'etat,son,cw' + (sdr || !g('v-carnet').hidden ? ',sdr' : '') + (sdr ? ',spectre&span=' + rSpan + '&dx=' + rDx + '&n=' + Math.min(1024, Math.max(128, g('r-spectre').clientWidth || 512)) : '');
 }
 function majFlux() {
   if (!window.EventSource || window.SATME_TELEPHONE) return;
@@ -3619,8 +3702,8 @@ function majFlux() {
   flux.addEventListener('etat', ev => { fluxOk = true; E = JSON.parse(ev.data); dessine(); });
   flux.addEventListener('son', ev => { S = JSON.parse(ev.data); rendSon(); });
   flux.addEventListener('cw', ev => { CW = JSON.parse(ev.data); rendCw(); });
-  flux.addEventListener('sdr', ev => { R = JSON.parse(ev.data); rendSdr(); });
-  flux.addEventListener('spectre', ev => { const j = JSON.parse(ev.data); if (j.db && j.trames !== rTrames) { rTrames = j.trames; rDernier = j; rCascade.unshift(j.db); if (rCascade.length > 600) rCascade.length = 600; dessineSdr(); } });
+  flux.addEventListener('sdr', ev => { if (SP_ESSAI) return; R = JSON.parse(ev.data); rendSdr(); });
+  flux.addEventListener('spectre', ev => { const j = JSON.parse(ev.data); if (j.db && j.trames !== rTrames && !SP_ESSAI) { rTrames = j.trames; rDernier = j; spRecoit(j); } });
   // Cut: the questions take over until it comes back (the browser tries again by itself).
   flux.onerror = () => { fluxOk = false; };
 }
@@ -3693,7 +3776,8 @@ function vue(n) {
   if (n === 'sked') { prepareSked(); setTimeout(dessineSked); }
   if (n === 'qo100') { chargeQo100(true); ticQualite(); tqAide(); tqTic(); ticCw(); ticPhonie(true); tqFt8(); }
   if (n === 'datv') ticDatv(true);
-  if (n === 'sdr') ticSdr();
+  if (n === 'sdr') { ticSdr(); spSale(true); }
+  g('aff-pop').hidden = true; g('mem-pop').hidden = true;
   if (n === 'sondes') { SV2.libre = false; ticSondes(); }
   if (n === 'meteor') ticMeteor();
   if (n === 'montage') mtOuvre();
@@ -6285,7 +6369,7 @@ function dessineQo100() {
   dessineReglette(); dessineLoupe(); dessinePano();
 }
 // The panorama: the dongle's whole band on the ruler's scale, newest row on top.
-let OPan = null, oPanHist = [], oPanTrames = -1, oPanZoom = '';
+let OPan = null, oPanHist = [], oPanTrames = -1, oPanZoom = '', oPanImg = null, oPanU = null;
 async function ticPano() {
   if (g('v-qo100').hidden) return;
   const fz = tqFenetre(), zq = fz && !fz.plein ? '&bas=' + fz.b + '&haut=' + fz.t : '';
@@ -6318,19 +6402,19 @@ function dessinePano() {
   let lo = 1e9, hi = -1e9;
   for (const r of oPanHist) for (const v of r) if (v != null) { if (v < lo) lo = v; if (v > hi) hi = v; }
   if (hi < lo + 20) hi = lo + 20;
-  // Two pixels a row: the waterfall fills twice as fast.
-  const n = oPanHist[0].length, rows = Math.min(oPanHist.length * 2, h), img = x.createImageData(Math.max(1, Math.round((w - 8) * dpr)), Math.max(1, Math.round(rows * dpr)));
-  const W = img.width, H = img.height;
+  // Two pixels a row: the waterfall fills twice as fast. The palette, contrast and brightness of « Affichage ».
+  const n = oPanHist[0].length, rows = Math.min(oPanHist.length * 2, h), W = Math.max(1, Math.round((w - 8) * dpr)), H = Math.max(1, Math.round(rows * dpr));
+  if (!oPanImg || oPanImg.width !== W || oPanImg.height !== H) { oPanImg = x.createImageData(W, H); oPanU = new Uint32Array(oPanImg.data.buffer); }
+  const u = oPanU, lut = palLut(AFF.pal), [k1, k0] = palEchelle(lo, hi), vide = (255 << 24 | 44 << 16 | 40 << 8 | 40) >>> 0;
   for (let yy = 0; yy < H; yy++) {
-    const r = oPanHist[Math.min(oPanHist.length - 1, Math.floor(yy / dpr / 2))];
+    const r = oPanHist[Math.min(oPanHist.length - 1, Math.floor(yy / dpr / 2))], o = yy * W;
     for (let xx = 0; xx < W; xx++) {
       const v = r[Math.min(n - 1, Math.floor(xx * n / W))];
-      const k = 4 * (yy * W + xx);
-      const [cr, cg, cb] = v == null ? [40, 40, 44] : rCouleur(v, lo, hi);
-      img.data[k] = cr; img.data[k + 1] = cg; img.data[k + 2] = cb; img.data[k + 3] = 255;
+      if (v == null) { u[o + xx] = vide; continue; }
+      let k = v * k1 + k0; k = k < 0 ? 0 : k > 255 ? 255 : k | 0; u[o + xx] = lut[k];
     }
   }
-  x.setTransform(1, 0, 0, 1, 0, 0); x.putImageData(img, Math.round(4 * dpr), 0); x.setTransform(dpr, 0, 0, dpr, 0, 0);
+  x.setTransform(1, 0, 0, 1, 0, 0); x.putImageData(oPanImg, Math.round(4 * dpr), 0); x.setTransform(dpr, 0, 0, dpr, 0, 0);
   // The beacons, the frequency listened to, the signals named.
   const fz = tqFenetre(), b = fz.b, t = fz.t, X = f => 4 + (w - 8) * (f - b) / (t - b);
   // The band plan, a strip on top, in the ruler's colours.
@@ -6347,7 +6431,21 @@ function dessinePano() {
   const pas = t - b > 200000 ? 50000 : t - b > 60000 ? 10000 : 5000;
   x.fillStyle = 'rgba(232,240,247,.75)'; x.font = '10px Drapeaux,system-ui'; x.textAlign = 'center';
   for (let f = Math.ceil(b / pas) * pas; f <= t; f += pas) if (X(f) > 14 && X(f) < w - 14) x.fillText(String((f - 10489000000) / 1000), X(f), h - 4);
+  qoDrapeaux(x, X, b, t, 7);
   tqEtiquettes(x, w, X, b, t);
+}
+/** The receiver's memories on a QO-100 scale: a coloured flag each (the names in the tooltip). */
+function qoDrapeaux(x, X, b, t, y) {
+  for (const m of memVisibles(b, t)) {
+    const px = X(m.hz); x.fillStyle = memCouleur(m);
+    x.beginPath(); x.moveTo(px, y + 7); x.lineTo(px - 4, y); x.lineTo(px + 4, y); x.fill();
+  }
+}
+/** The memory whose flag is near [px] on that scale. */
+function qoMemoireA(px, X, b, t) {
+  let r = null, d0 = 7;
+  for (const m of memVisibles(b, t)) { const d = Math.abs(X(m.hz) - px); if (d < d0) { d0 = d; r = m; } }
+  return r;
 }
 /** The canvas at its displayed size; its 2D context. */
 function toile(c) {
@@ -6375,6 +6473,7 @@ function dessineReglette() {
   if (fz && !fz.plein) { x.strokeStyle = 'rgba(232,240,247,.7)'; x.lineWidth = 1; x.strokeRect(X(fz.b) + .5, 18.5, X(fz.t) - X(fz.b) - 1, 40); }
   // My memories, then the 50 kHz ticks.
   x.fillStyle = '#FFB454'; O.memoires.filter(m => !m.fixe).forEach(m => { x.beginPath(); x.moveTo(X(m.hz), 50); x.lineTo(X(m.hz) - 4, 57); x.lineTo(X(m.hz) + 4, 57); x.fill(); });
+  qoDrapeaux(x, X, b, t, 50);
   x.fillStyle = '#9AA7B4'; x.strokeStyle = '#22303B'; x.font = '10px Drapeaux,system-ui'; x.textAlign = 'center';
   for (let f = Math.ceil(b / 50000) * 50000; f <= t; f += 50000) {
     x.beginPath(); x.moveTo(X(f), 60); x.lineTo(X(f), f % 100000 === 0 ? 70 : 66); x.stroke();
@@ -6400,6 +6499,13 @@ function dessineLoupe() {
     if (k && X(f) > 12 && X(f) < w - 12) x.fillText(((f % 1e6) / 1000).toFixed(0), X(f), 56);
   }
   x.fillStyle = '#FFB454'; O.memoires.forEach(m => { if (Math.abs(m.hz - c) < LOUPE) { x.fillRect(X(m.hz) - 1, 0, 2, 30); } });
+  // The receiver's memories: their colour, their name when it fits.
+  x.font = '600 10px Drapeaux,system-ui'; x.textAlign = 'left';
+  let fin = -1e9;
+  for (const m of memVisibles(c - LOUPE, c + LOUPE)) {
+    const px = X(m.hz); x.fillStyle = memCouleur(m); x.fillRect(px - 1, 0, 2, 30);
+    const tw = x.measureText(m.nom).width; if (px + 4 > fin) { x.fillText(m.nom, px + 4, 11); fin = px + tw + 10; }
+  }
   x.strokeStyle = '#FFFFFF'; x.lineWidth = 2; x.beginPath(); x.moveTo(w / 2, 0); x.lineTo(w / 2, 44); x.stroke(); x.lineWidth = 1;
   x.fillStyle = '#9AA7B4'; x.textAlign = 'left'; x.fillText('± 25 kHz', 4, 66);
 }
@@ -6413,11 +6519,15 @@ function dessineLoupe() {
   const bulle = (c, hz) => { const t = qFmt(Math.round(hz / 100) * 100) + qRegle(Math.round(hz)); if (c.title !== t) c.title = t; };
   r.addEventListener('mousemove', ev => { if (OP) bulle(r, f(ev)); });
   g('o-pano').addEventListener('mousemove', ev => { if (!OP) return; const fz = tqFenetre(), bb = g('o-pano').getBoundingClientRect();
+    const X = f => 4 + (bb.width - 8) * (f - fz.b) / (fz.t - fz.b), m = ev.clientY - bb.top < 18 ? qoMemoireA(ev.clientX - bb.left, X, fz.b, fz.t) : null;
+    if (m) { const t = m.nom + ' — ' + qFmt(m.hz) + (m.etiquette ? ' · ' + m.etiquette : '') + ' (cliquer pour s’y accorder)'; if (g('o-pano').title !== t) g('o-pano').title = t; return; }
     bulle(g('o-pano'), fz.b + (fz.t - fz.b) * (ev.clientX - bb.left - 4) / (bb.width - 8)); });
   // The waterfall: a signal named near the click is tuned in its mode; elsewhere, the frequency clicked.
   g('o-pano').addEventListener('click', ev => {
     if (!OP) return;
     const fz = tqFenetre(), bb = g('o-pano').getBoundingClientRect();
+    const X = f => 4 + (bb.width - 8) * (f - fz.b) / (fz.t - fz.b), mf = ev.clientY - bb.top < 18 ? qoMemoireA(ev.clientX - bb.left, X, fz.b, fz.t) : null;
+    if (mf) { memAccorde(mf, 'qo100'); return; }
     const hz = fz.b + (fz.t - fz.b) * (ev.clientX - bb.left - 4) / (bb.width - 8);
     const tol = Math.max(600, (fz.t - fz.b) / Math.max(1, bb.width - 8) * 8);
     const k = tqCorr(), s = tqNommes().filter(q => Math.abs(q.hz + k - hz) <= q.largeurHz / 2 + tol).sort((p, q) => Math.abs(p.hz + k - hz) - Math.abs(q.hz + k - hz))[0];
@@ -6698,7 +6808,7 @@ setInterval(() => { if (!g('v-qo100').hidden || ++tqTour % 3 === 0) tqTic(); }, 
 tqTic();
 
 // ------------------------------------------------------------------ SDR
-let R = null, rSpan = 48000, rCascade = [], rTrames = -1, rDernier = null;
+let R = null, rSpan = 48000, rTrames = -1, rDernier = null;
 const R820T = [0, 9, 14, 27, 37, 77, 87, 125, 144, 157, 166, 197, 207, 229, 254, 280, 297, 328, 338, 364, 372, 386, 402, 421, 434, 439, 445, 480, 496];
 // The gains offered: the dongle's tuner table, or the Pluto's 0 to 71 dB (tenths, as the dongle's).
 function remplitGain(pluto) {
@@ -6718,7 +6828,7 @@ async function rRegle(q) { await post('api/sdr/reglage?' + q); ticSdr(); }
 async function ticSdr() {
   // The log's live station shows the dongle too.
   if (g('v-sdr').hidden && g('v-carnet').hidden) return;
-  if (!(fluxOk && R && fluxSujets.includes('sdr'))) { try { R = await (await fetch('api/sdr')).json(); } catch (x) { return; } }
+  if (!SP_ESSAI && !(fluxOk && R && fluxSujets.includes('sdr'))) { try { R = await (await fetch('api/sdr')).json(); } catch (x) { return; } }
   rendSdr();
 }
 function rendSdr() {
@@ -6746,7 +6856,7 @@ function rendSdr() {
   }
   val('r-recepteur', r.recepteur || 'rtl');
   if (r.plutoHote !== undefined) { val('r-pluto-hote', r.plutoHote); val('r-pluto-port', r.plutoPort); }
-  val('r-mode', r.mode); val('r-bw', r.bw); val('r-sq', r.squelch);
+  spBwOption(r.bw); val('r-mode', r.mode); val('r-bw', r.bw); val('r-sq', r.squelch);
   val('r-gain', pluto && r.gain >= 0 ? Math.min(blade ? 600 : 710, Math.round(r.gain / 10) * 10) : r.gain);
   txt('r-sqv', r.squelch <= -120 ? 'ouvert' : r.squelch + ' dB');
   if (!v('r-mhz') && document.activeElement !== g('r-mhz')) g('r-mhz').placeholder = (r.manuelle / 1e6).toFixed(4).replace('.', ',');
@@ -6768,6 +6878,13 @@ function rendSdr() {
   g('r-ratios').innerHTML = [20, 200, 2000].map(k => '<button style="padding:2px 8px;font-size:11px' + (k === r.ratio ? ';border-color:var(--cyan);color:var(--cyan)' : '') +
     '" onclick="post(\'api/sdr/accord?ratio=' + k + '\').then(ticSdr)">' + (k >= 1000 ? k / 1000 + ' kHz' : k + ' Hz') + '/cm</button>').join('');
   dessineVernier();
+  spSale();
+}
+/** A receive width not in the list (dragged on the spectrum): an option of its own. */
+function spBwOption(bw) {
+  const s = g('r-bw'); if ([...s.options].some(o => o.value === String(bw))) return;
+  const o = g('r-bw-z') || s.appendChild(Object.assign(document.createElement('option'), { id: 'r-bw-z' }));
+  o.value = String(bw); o.textContent = (bw / 1000).toLocaleString('fr-FR', { maximumFractionDigits: 1 }) + ' kHz';
 }
 // Réglages › Accord fin: shown when a dongle is known here (the phone's page sets these on the phone).
 async function majAccordReglages() {
@@ -6843,62 +6960,571 @@ g('r-loupe').addEventListener('click', ev => {
   post('api/sdr/pas?hz=' + hz).then(ticSdr);
 });
 setInterval(ticSdr, 700);
+// ------------------------------------------------------------------ spectrum and waterfall: display, tuning, memories, band plans
+// The view: [rSpan] Hz wide, panned [rDx] Hz from the receiver's centre (the sky frequency R.ciel), within SP_MAX.
+// Options kept in this browser (AFF); the memories and the band plans on the PC.
+const SP_MAX = 176400, SP_MIN = 3000;
+// The test mode (?essai-spectre=1): a receiver pretended in this page, nothing asked of the hardware.
+const SP_ESSAI = /[?&]essai-spectre=1/.test(location.search);
+let rDx = 0;
+const AFF_DEF = { moy: 0, crete: false, decCrete: 3, mini: false, auto: true, ref: -30, plage: 80, pal: 'classique', contraste: 1, lum: 0, plancher: true,
+  vitesse: 2, inertie: true, pasBlu: 10, pasFm: 1000, plan: true, mem: true };
+const AFF = Object.assign({}, AFF_DEF);
+try { const s = JSON.parse(localStorage.getItem('sp-affichage') || '{}'); for (const k in AFF_DEF) if (typeof s[k] === typeof AFF_DEF[k]) AFF[k] = s[k]; } catch (x) {}
+function affGarde() { try { localStorage.setItem('sp-affichage', JSON.stringify(AFF)); } catch (x) {} }
+// The palettes: colour stops from weak to strong, made into 256 colours once (ABGR words for an ImageData).
+const PALETTES = {
+  classique: ['Classique', [[6, 19, 26], [20, 60, 120], [30, 160, 200], [250, 220, 60], [255, 255, 255]]],
+  viridis: ['Viridis', [[68, 1, 84], [65, 68, 135], [42, 120, 142], [34, 168, 132], [122, 209, 81], [253, 231, 37]]],
+  gris: ['Gris', [[0, 0, 0], [70, 70, 70], [170, 170, 170], [255, 255, 255]]],
+  chaud: ['Chaud', [[0, 0, 0], [90, 0, 0], [200, 40, 0], [255, 150, 0], [255, 240, 120], [255, 255, 255]]],
+  neon: ['Néon', [[4, 0, 18], [48, 0, 110], [170, 0, 190], [255, 40, 150], [0, 230, 255], [230, 255, 255]]],
+  nuit: ['Nuit', [[0, 0, 0], [30, 0, 0], [95, 4, 0], [170, 25, 5], [230, 70, 20], [255, 140, 70]]],
+  ocean: ['Océan', [[2, 8, 20], [0, 45, 90], [0, 115, 140], [60, 200, 180], [210, 255, 235]]],
+};
+const PAL_LUT = {};
+function palLut(nom) {
+  if (PAL_LUT[nom]) return PAL_LUT[nom];
+  const p = (PALETTES[nom] || PALETTES.classique)[1], t = new Uint32Array(257);
+  for (let i = 0; i < 256; i++) {
+    const k = i / 255 * (p.length - 1), a = Math.min(p.length - 2, Math.floor(k)), f = k - a;
+    const r = Math.round(p[a][0] + (p[a + 1][0] - p[a][0]) * f), gg = Math.round(p[a][1] + (p[a + 1][1] - p[a][1]) * f), b = Math.round(p[a][2] + (p[a + 1][2] - p[a][2]) * f);
+    t[i] = (255 << 24 | b << 16 | gg << 8 | r) >>> 0;
+  }
+  t[256] = (255 << 24 | 20 << 16 | 14 << 8 | 10) >>> 0;  // outside what was received
+  return (PAL_LUT[nom] = t);
+}
+const palCss = nom => 'linear-gradient(90deg,' + (PALETTES[nom] || PALETTES.classique)[1].map(c => 'rgb(' + c.join(',') + ')').join(',') + ')';
+/** dB to a palette index: [k1, k0] for idx = db·k1 + k0, contrast and brightness in. */
+function palEchelle(bas, haut) {
+  const k1 = 255 * AFF.contraste / Math.max(1, haut - bas);
+  return [k1, 255 * AFF.lum - bas * k1];
+}
+// The band plans and the colours of their uses (QO-100's as its ruler).
+const COUL_PLAN = { SATELLITE: '#5BD68A', BALISE: '#E5484D', CW: '#6F8CFF', ETROITE: '#8FA8FF', BLU: '#3FE0C8', FM: '#FF8FD0', RELAIS: '#C77DBA',
+  NUMERIQUE: '#B07CFF', TOUS_MODES: '#9AA7B4', ATV: '#FFD166', DIFFUSION: '#FFB454', URGENCE: '#FF6A60' };
+const NOM_PLAN = { SATELLITE: 'satellites', BALISE: 'balises', CW: 'CW', ETROITE: 'bande étroite', BLU: 'BLU', FM: 'FM', RELAIS: 'relais', NUMERIQUE: 'numérique',
+  TOUS_MODES: 'tous modes', ATV: 'ATV', DIFFUSION: 'diffusion', URGENCE: 'urgence' };
+let PLAN = [];
+async function planCharge() {
+  try { const j = await (await fetch('api/plan-bandes')).json(); if (j.segments) PLAN = j.segments.slice().sort((a, b) => (b.haut - b.bas) - (a.haut - a.bas)); } catch (x) {}
+}
+/** The finest segment holding [hz]. */
+function planA(hz) { let r = null; for (const s of PLAN) if (hz >= s.bas && hz < s.haut && (!r || s.haut - s.bas < r.haut - r.bas)) r = s; return r; }
+// The memories: kept by SatMe-PC; the phone's page has none.
+let MEM = { memoires: [], etiquettes: [] };
+const COUL_ETIQ = ['#FFB454', '#3FE0C8', '#B07CFF', '#5BD68A', '#FF8FD0', '#6F8CFF', '#FFD166', '#E86F6F'];
+function memCouleur(m) {
+  if (m.couleur) return m.couleur;
+  let h = 0; for (const c of m.etiquette || '') h = (h * 31 + c.charCodeAt(0)) >>> 0;
+  return m.etiquette ? COUL_ETIQ[h % COUL_ETIQ.length] : '#E8F0F7';
+}
+async function memCharge() {
+  try { const j = await (await fetch('api/memoires-sdr')).json(); if (j.memoires) MEM = j; } catch (x) {}
+  memRend(); spSale(true);
+  if (!g('v-qo100').hidden) dessineQo100();
+}
+const memVisibles = (bas, haut) => AFF.mem ? MEM.memoires.filter(m => m.hz >= bas && m.hz <= haut) : [];
+const mhzFr = hz => (hz / 1e6).toLocaleString('fr-FR', { minimumFractionDigits: 4, maximumFractionDigits: 6 });
+
+// ---- the spectrum's state: the frames (data space), the averages, the holds, the waterfall's rows
+let spCle = '', spCur = null, spMoy = null, spCrete = null, spMini = null, spTri = null, spVide = true, spT = 0;
+let spBruit = -100, spHaut = -60, spNiv = false;
+const spHist = []; let spHistN = 0;                       // rows, newest first (a ring of reused arrays)
+const SP_HIST_MAX = 600;
+let spImg = null, spImgU = null, spPlein = null, spPleinU = null, spDemiTour = 0;
+let spAFaire = false, spNeuf = false, spRefaire = true;
+let spSouris = null;                                       // { c: 'spectre'|'cascade', x, y } under the pointer
+let spGlisse = null;                                       // a drag: { quoi: 'vue'|'bord', x0, dx0, bord, bougé }
+let spBw = null;                                           // the width shown while its edge is dragged
+/** A new frame from the receiver (the stream, the question, or the test): averages, holds, levels, the waterfall's row. */
+function spRecoit(j) {
+  const db = j.db, n = db.length; if (!n) return;
+  const cle = n + '/' + j.span + '/' + (j.dx || 0);
+  if (cle !== spCle) { spCle = cle; spCur = new Float32Array(n); spMoy = new Float32Array(n); spCrete = new Float32Array(n); spMini = new Float32Array(n); spTri = new Float32Array(n); spVide = true; }
+  const now = performance.now(), dt = spT ? Math.min(1, (now - spT) / 1000) : 0; spT = now;
+  const a = AFF.moy >= 2 ? 1 / AFF.moy : 1, dec = AFF.decCrete * dt;
+  for (let i = 0; i < n; i++) {
+    const d = db[i]; spCur[i] = d;
+    const m = spVide ? d : spMoy[i] + a * (d - spMoy[i]); spMoy[i] = m;
+    spCrete[i] = spVide ? m : Math.max(m, spCrete[i] - dec);
+    spMini[i] = spVide ? m : Math.min(m, spMini[i]);
+  }
+  spVide = false;
+  // The noise (30th percentile) and the top, smoothed: the scale does not jump with each frame.
+  spTri.set(spMoy); spTri.sort();
+  const b = spTri[Math.floor(n * 0.3)], h = Math.max(b + 25, spTri[n - 1]);
+  if (!spNiv) { spBruit = b; spHaut = h; spNiv = true; } else { spBruit += (b - spBruit) * 0.15; spHaut += (h - spHaut) * 0.15; }
+  // The waterfall's row: the oldest array reused.
+  let r = spHist.length >= SP_HIST_MAX ? spHist.pop() : null;
+  if (!r || r.db.length !== n) r = { db: new Float32Array(n) };
+  r.db.set(spCur); r.dx = j.dx || 0; r.span = j.span;
+  spHist.unshift(r);
+  spNeuf = true; spDemande();
+}
+function spRaz() { spVide = true; if (spMoy) { spCrete.set(spMoy); spMini.set(spMoy); } spSale(); }
+function spDemande() { if (!spAFaire) { spAFaire = true; requestAnimationFrame(spPeint); } }
+function spSale(cascade) { if (cascade) spRefaire = true; spDemande(); }
+/** The view's limits: a span between SP_MIN and SP_MAX, the pan within what the receiver sees. */
+function spBorne() {
+  rSpan = Math.round(Math.max(SP_MIN, Math.min(SP_MAX, rSpan)));
+  const m = (SP_MAX - rSpan) / 2; rDx = Math.round(Math.max(-m, Math.min(m, rDx)));
+}
+let spFluxT = 0;
+/** The view changed (zoom, pan): drawn at once from what is there, the receiver asked for it a moment later. */
+function spVue(span, dx) {
+  rSpan = span; rDx = dx; spBorne();
+  const s = g('r-span'), std = [...s.options].some(o => o.value === String(rSpan) && o.id !== 'r-span-z');
+  const z = g('r-span-z'); z.hidden = std; z.value = std ? '' : String(rSpan);
+  z.textContent = (rSpan / 1000).toLocaleString('fr-FR', { maximumFractionDigits: 1 }) + ' kHz';
+  s.value = String(rSpan);
+  txt('sp-zoom', rSpan < SP_MAX || rDx ? '×' + (SP_MAX / rSpan).toLocaleString('fr-FR', { maximumFractionDigits: 1 }) : '');
+  spSale(true);
+  clearTimeout(spFluxT); spFluxT = setTimeout(majFlux, 250);
+}
+const spOff = (px, w) => rDx - rSpan / 2 + px / w * rSpan;      // px → Hz from the centre
+const spPx = (off, w) => (off - (rDx - rSpan / 2)) / rSpan * w;  // Hz from the centre → px
+const spModeR = () => (R && (R.modeEff || R.mode)) || 'NFM';
+const spBlu = () => /USB|LSB|CW/.test(spModeR());
+/** The tuning step: by the mode (10 Hz in SSB and CW, 1 kHz in FM and AM by default). */
+const spPas = () => spBlu() ? AFF.pasBlu : AFF.pasFm;
+/** The passband heard, Hz from the centre: [low, high]. */
+function spBande() {
+  const m = spModeR(), bw = spBw != null ? spBw : (R.bw || ({ NFM: 16000, USB: 2400, LSB: 2400, AM: 6000 }[m] || 16000)), dec = R.decalage || 0;
+  return m === 'USB' ? [dec, dec + bw] : m === 'LSB' ? [dec - bw, dec] : [dec - bw / 2, dec + bw / 2];
+}
+/** A request to the receiver; in the test mode (no receiver), done here. */
+function spPost(u) {
+  if (!SP_ESSAI) return post(u).then(ticSdr);
+  const q = new URLSearchParams(u.split('?')[1] || ''), r = R;
+  if (u.indexOf('api/sdr/decalage') === 0) r.decalage = +q.get('hz');
+  else if (u.indexOf('api/sdr/pas') === 0) r.decalage = Math.max(-80000, Math.min(80000, r.decalage + +q.get('hz')));
+  else if (u.indexOf('api/sdr/reglage') === 0) {
+    if (q.has('mode')) { r.mode = q.get('mode'); r.modeEff = r.mode === 'AUTO' ? 'NFM' : r.mode; r.bw = 0; }
+    if (q.has('bw')) r.bw = +q.get('bw');
+    if (q.has('mhz')) { r.ciel = r.repos = Math.round(parseFloat(q.get('mhz')) * 1e6); r.decalage = 0; spHist.length = 0; }
+  }
+  rendSdr(); spSale(); return Promise.resolve({ ok: true });
+}
+
+// ---- the drawing, once a frame at most
+function spPeint() {
+  spAFaire = false;
+  if (g('v-sdr').hidden || !R) return;
+  const t0 = performance.now();
+  if (rDernier && spMoy) spSpectre();
+  spCascade();
+  spSur();
+  spMesure.ms += performance.now() - t0; spMesure.n++;
+}
+const spMesure = { ms: 0, n: 0 };
+function spNiveaux() {
+  return AFF.auto ? [spBruit - 10, spHaut + 5] : [AFF.ref - AFF.plage, AFF.ref];
+}
+function spTrace(x, d, w, h, Y, j) {
+  const n = d.length, x0 = spPx((j.dx || 0) - j.span / 2, w), k = j.span / rSpan * w / n;
+  x.beginPath();
+  for (let i = 0; i < n; i++) { const px = x0 + (i + 0.5) * k, py = Y(d[i]); if (i) x.lineTo(px, py); else x.moveTo(px, py); }
+  x.stroke();
+}
+function spSpectre() {
+  const j = rDernier, [x, w, h] = toile(g('r-spectre')), ciel = R.ciel || 0;
+  x.fillStyle = '#0E1720'; x.fillRect(0, 0, w, h);
+  const [bas, haut] = spNiveaux(), H0 = 16, Y = d => H0 + (h - H0 - 4) * (1 - Math.max(0, Math.min(1, (d - bas) / (haut - bas))));
+  // The dB grid, every 10 dB.
+  x.strokeStyle = 'rgba(154,167,180,.12)'; x.fillStyle = 'rgba(154,167,180,.6)'; x.font = '9px Drapeaux,system-ui'; x.textAlign = 'left'; x.lineWidth = 1;
+  for (let d = Math.ceil(bas / 10) * 10; d <= haut; d += 10) { const y = Math.round(Y(d)) + .5; x.beginPath(); x.moveTo(0, y); x.lineTo(w, y); x.stroke(); if (y > H0 + 18 && y < h - 6) x.fillText(d + ' dB', 3, y - 2); }
+  // The band plan, a thin strip on top.
+  const fb = ciel + spOff(0, w), fh = ciel + spOff(w, w);
+  if (AFF.plan && ciel) for (const s of PLAN) {
+    if (s.haut <= fb || s.bas >= fh) continue;
+    const a = Math.max(0, spPx(s.bas - ciel, w)), b = Math.min(w, spPx(s.haut - ciel, w));
+    x.fillStyle = COUL_PLAN[s.usage] || '#9AA7B4'; x.globalAlpha = .8; x.fillRect(a, 0, Math.max(1, b - a - 1), 4); x.globalAlpha = 1;
+  }
+  // The passband heard and its edges (dragged to change the width).
+  const [ba, bb] = spBande(), xa = spPx(ba, w), xb = spPx(bb, w), dec = spPx(R.decalage || 0, w);
+  x.fillStyle = 'rgba(255,180,84,.13)'; x.fillRect(xa, H0, xb - xa, h - H0);
+  x.strokeStyle = 'rgba(255,180,84,.75)'; x.setLineDash([3, 3]);
+  for (const e of [xa, xb]) if (Math.abs(e - dec) > 1) { x.beginPath(); x.moveTo(e, H0); x.lineTo(e, h); x.stroke(); }
+  x.setLineDash([]); x.strokeStyle = '#FFB454'; x.lineWidth = 1.5; x.beginPath(); x.moveTo(dec, H0); x.lineTo(dec, h); x.stroke(); x.lineWidth = 1;
+  // The holds, then the spectrum.
+  if (AFF.mini) { x.strokeStyle = 'rgba(111,140,255,.7)'; spTrace(x, spMini, w, h, Y, j); }
+  if (AFF.crete) { x.strokeStyle = 'rgba(255,95,162,.85)'; spTrace(x, spCrete, w, h, Y, j); }
+  x.strokeStyle = '#3FE0C8'; x.lineWidth = 1.2; spTrace(x, AFF.moy >= 2 ? spMoy : spCur, w, h, Y, j); x.lineWidth = 1;
+  // kHz from the centre, under the strip.
+  x.fillStyle = '#9AA7B4'; x.font = '10px Drapeaux,system-ui'; x.textAlign = 'center';
+  const pas = pasGraduation(rSpan / w) * 5;
+  for (let f = Math.ceil(spOff(0, w) / pas) * pas; f <= spOff(w, w); f += pas) { const px = spPx(f, w); if (px > 16 && px < w - 16) x.fillText((f > 0 ? '+' : '') + (f / 1000).toLocaleString('fr-FR', { maximumFractionDigits: 1 }), px, 14); }
+  // The memories: a flag each, its name beside when there is room.
+  spDrapeaux(x, w, ciel, 16, true);
+  // The cursor: frequency, level, the plan's segment, a memory near.
+  const s = spSouris;
+  if (s && !spGlisse) {
+    const off = spOff(s.x, w), hz = ciel + off;
+    let lv = null;
+    if (s.c === 'spectre') { const d = AFF.moy >= 2 ? spMoy : spCur, i = Math.floor((off - ((j.dx || 0) - j.span / 2)) / j.span * d.length); if (i >= 0 && i < d.length) lv = d[i]; }
+    else { const r = spHist[Math.floor(s.y / Math.max(.5, AFF.vitesse))]; if (r) { const i = Math.floor((off - (r.dx - r.span / 2)) / r.span * r.db.length); if (i >= 0 && i < r.db.length) lv = r.db[i]; } }
+    x.strokeStyle = 'rgba(232,240,247,.5)'; x.beginPath(); x.moveTo(s.x + .5, H0); x.lineTo(s.x + .5, h); x.stroke();
+    if (s.c === 'spectre' && lv != null) { x.beginPath(); x.moveTo(0, Y(lv) + .5); x.lineTo(w, Y(lv) + .5); x.stroke(); }
+    const seg = AFF.plan && ciel ? planA(hz) : null, m = spMemoireA(s.x, w, ciel);
+    const t = mhzFr(hz) + ' MHz' + (lv != null ? ' · ' + Math.round(lv) + ' dB' : '') + (m ? ' · ' + m.nom : seg ? ' · ' + (seg.nom || NOM_PLAN[seg.usage]) : '');
+    x.font = '11px Drapeaux,system-ui'; const tw = x.measureText(t).width + 10, tx = Math.min(w - tw - 2, Math.max(2, s.x + 8));
+    x.fillStyle = 'rgba(6,19,26,.9)'; x.fillRect(tx, h - 19, tw, 16); x.fillStyle = '#E8F0F7'; x.textAlign = 'left'; x.fillText(t, tx + 5, h - 7);
+  }
+  // A dragged edge: the width said.
+  if (spGlisse && spGlisse.quoi === 'bord' && spBw != null) {
+    const t = 'largeur ' + (spBw / 1000).toLocaleString('fr-FR', { maximumFractionDigits: 1 }) + ' kHz';
+    x.font = '11px Drapeaux,system-ui'; x.fillStyle = 'rgba(6,19,26,.9)'; x.fillRect(xb + 6, H0 + 2, x.measureText(t).width + 10, 16);
+    x.fillStyle = '#FFB454'; x.textAlign = 'left'; x.fillText(t, xb + 11, H0 + 14);
+  }
+}
+/** The memories' flags along [y] (a triangle, the name when it fits; two rows at most). */
+function spDrapeaux(x, w, ciel, y, noms) {
+  if (!ciel) return;
+  const l = memVisibles(ciel + spOff(0, w), ciel + spOff(w, w)), fins = [-1e9, -1e9];
+  x.font = '600 10px Drapeaux,system-ui'; x.textAlign = 'left';
+  for (const m of l) {
+    const px = spPx(m.hz - ciel, w), c = memCouleur(m);
+    x.fillStyle = c; x.beginPath(); x.moveTo(px, y + 9); x.lineTo(px - 4, y + 2); x.lineTo(px + 4, y + 2); x.fill();
+    if (!noms) continue;
+    const tw = x.measureText(m.nom).width, rang = fins[0] < px ? 0 : fins[1] < px ? 1 : -1;
+    if (rang < 0) continue;
+    const ty = y + 22 + rang * 12;
+    x.fillStyle = 'rgba(6,19,26,.75)'; x.fillRect(px + 3, ty - 9, tw + 4, 11); x.fillStyle = c; x.fillText(m.nom, px + 5, ty);
+    fins[rang] = px + tw + 12;
+  }
+}
+/** The memory whose flag is under [px] (±6 px). */
+function spMemoireA(px, w, ciel) {
+  if (!ciel) return null;
+  let r = null, d0 = 7;
+  for (const m of memVisibles(ciel + spOff(-8, w), ciel + spOff(w + 8, w))) { const d = Math.abs(spPx(m.hz - ciel, w) - px); if (d < d0) { d0 = d; r = m; } }
+  return r;
+}
+/** The waterfall: the new rows scrolled in, or all of it again after a change of view, palette or levels. */
+function spCascade() {
+  const c = g('r-cascade'), cw = c.clientWidth, ch = c.clientHeight;
+  if (!cw || !ch) return;
+  if (c.width !== cw || c.height !== ch) { c.width = cw; c.height = ch; spRefaire = true; }
+  const cx = c.getContext('2d'), lut = palLut(AFF.pal);
+  const [bas, haut] = AFF.plancher ? [spBruit - 3, spHaut] : [AFF.ref - AFF.plage, AFF.ref], [k1, k0] = palEchelle(bas, haut);
+  const ligne = (r, u, o) => {
+    const n = r.db.length, a = (rDx - rSpan / 2 - (r.dx - r.span / 2)) / r.span * n, pk = rSpan / r.span * n / cw;
+    for (let px = 0; px < cw; px++) {
+      const i = Math.floor(a + (px + 0.5) * pk);
+      if (i < 0 || i >= n) { u[o + px] = lut[256]; continue; }
+      let k = r.db[i] * k1 + k0; k = k < 0 ? 0 : k > 255 ? 255 : k | 0;
+      u[o + px] = lut[k];
+    }
+  };
+  if (spRefaire) {
+    spRefaire = false; spNeuf = false;
+    if (!spPlein || spPlein.width !== cw || spPlein.height !== ch) { spPlein = cx.createImageData(cw, ch); spPleinU = new Uint32Array(spPlein.data.buffer); }
+    const v = Math.max(.5, AFF.vitesse);
+    for (let y = 0; y < ch; y++) { const r = spHist[Math.floor(y / v)]; if (r) ligne(r, spPleinU, y * cw); else spPleinU.fill(lut[256], y * cw, (y + 1) * cw); }
+    cx.putImageData(spPlein, 0, 0);
+    return;
+  }
+  if (!spNeuf || !spHist.length) return;
+  spNeuf = false;
+  // Half speed: one pixel every other frame.
+  let rangs = AFF.vitesse;
+  if (rangs < 1) { spDemiTour ^= 1; if (spDemiTour) return; rangs = 1; }
+  if (!spImg || spImg.width !== cw) { spImg = cx.createImageData(cw, 4); spImgU = new Uint32Array(spImg.data.buffer); }
+  ligne(spHist[0], spImgU, 0);
+  for (let k = 1; k < rangs; k++) spImgU.copyWithin(k * cw, 0, cw);
+  cx.drawImage(c, 0, rangs);
+  cx.putImageData(spImg, 0, 0, 0, 0, cw, rangs);
+}
+/** Over the waterfall (its own canvas, the waterfall scrolls under it): the memories, the passband, the cursor. */
+function spSur() {
+  const c = g('r-cascade-sur'), [x, w, h] = toile(c), ciel = R.ciel || 0;
+  x.clearRect(0, 0, w, h);
+  const [ba, bb] = spBande();
+  x.strokeStyle = 'rgba(255,180,84,.55)'; x.setLineDash([2, 4]);
+  for (const e of [spPx(ba, w), spPx(bb, w)]) { x.beginPath(); x.moveTo(e, 0); x.lineTo(e, h); x.stroke(); }
+  x.setLineDash([]);
+  spDrapeaux(x, w, ciel, 0, false);
+  const s = spSouris;
+  if (s && s.c === 'cascade') { x.strokeStyle = 'rgba(232,240,247,.45)'; x.beginPath(); x.moveTo(s.x + .5, 0); x.lineTo(s.x + .5, h); x.stroke(); }
+}
+
+// ---- the stream and the questions
 async function spectreSdr() {
-  if (g('v-sdr').hidden || !R || !R.actif || (fluxOk && fluxSujets.includes('spectre'))) return;
+  if (g('v-sdr').hidden || !R || !R.actif || SP_ESSAI || (fluxOk && fluxSujets.includes('spectre'))) return;
   let j = null;
-  try { j = await (await fetch('api/sdr/spectre?span=' + rSpan + '&n=' + Math.min(1024, Math.max(128, g('r-spectre').clientWidth)))).json(); } catch (x) { return; }
+  try { j = await (await fetch('api/sdr/spectre?span=' + rSpan + '&dx=' + rDx + '&n=' + Math.min(1024, Math.max(128, g('r-spectre').clientWidth)))).json(); } catch (x) { return; }
   if (!j.db || j.trames === rTrames) return;
-  rTrames = j.trames; rDernier = j;
-  rCascade.unshift(j.db); if (rCascade.length > 600) rCascade.length = 600;
-  dessineSdr();
+  rTrames = j.trames; rDernier = j; spRecoit(j);
 }
 setInterval(spectreSdr, 120);
-/** dB to a colour: dark blue for noise, yellow then white for strong signals. */
-function rCouleur(db, bas, haut) {
-  const t = Math.max(0, Math.min(1, (db - bas) / (haut - bas)));
-  const c = [[6, 19, 26], [20, 60, 120], [30, 160, 200], [250, 220, 60], [255, 255, 255]];
-  const k = t * (c.length - 1), i = Math.min(c.length - 2, Math.floor(k)), f = k - i;
-  return c[i].map((x, j) => Math.round(x + (c[i + 1][j] - x) * f));
+function dessineSdr() { spSale(); }
+
+// ---- the mouse, the wheel, the keys
+/** A tuning by [hz] (the dial's offset), shown at once, sent at most every 70 ms. */
+let spEnvoi = 0, spAEnvoyer = 0, spEnvoiT = 0;
+function spAccordePas(hz) {
+  if (!R || !hz) return;
+  R.decalage = Math.max(-80000, Math.min(80000, (R.decalage || 0) + hz));
+  spAEnvoyer += hz;
+  const part = () => { spEnvoiT = 0; const n = spAEnvoyer; spAEnvoyer = 0; spEnvoi = Date.now(); if (n) spPost('api/sdr/pas?hz=' + n); };
+  if (Date.now() - spEnvoi > 70) part(); else if (!spEnvoiT) spEnvoiT = setTimeout(part, 70);
+  txt('r-freq', qFmt((R.ciel || 0) + R.decalage));
+  spSale();
 }
-function dessineSdr() {
-  const j = rDernier; if (!j) return;
-  const tri = j.db.slice().sort((a, b) => a - b), bruit = tri[Math.floor(tri.length * 0.3)], haut = Math.max(bruit + 25, tri[tri.length - 1]);
-  // Spectrum.
-  const [x, w, h] = toile(g('r-spectre')), n = j.db.length;
-  x.fillStyle = '#0E1720'; x.fillRect(0, 0, w, h);
-  const Y = d => h - 6 - (h - 12) * Math.max(0, Math.min(1, (d - (bruit - 10)) / (haut - bruit + 15)));
-  x.strokeStyle = '#3FE0C8'; x.lineWidth = 1.2; x.beginPath();
-  j.db.forEach((d, i) => { const px = i * w / n; i ? x.lineTo(px, Y(d)) : x.moveTo(px, Y(d)); }); x.stroke();
-  // The channel heard, its width.
-  const bw = (R.bw || ({ NFM: 16000, USB: 2400, LSB: 2400, AM: 6000 }[R.mode] || 16000)) ;
-  const X = hz => w / 2 + (hz / j.span) * w;
-  const dec = R.decalage || 0;
-  const usb = R.mode === 'USB', lsb = R.mode === 'LSB';
-  const a = usb ? dec : lsb ? dec - bw : dec - bw / 2, b = usb ? dec + bw : lsb ? dec : dec + bw / 2;
-  x.fillStyle = 'rgba(255,180,84,.14)'; x.fillRect(X(a), 0, X(b) - X(a), h);
-  x.strokeStyle = '#FFB454'; x.beginPath(); x.moveTo(X(dec), 0); x.lineTo(X(dec), h); x.stroke();
-  // kHz ticks around the frequency heard.
-  x.fillStyle = '#9AA7B4'; x.font = '10px Drapeaux,system-ui'; x.textAlign = 'center';
-  const pas = j.span > 100000 ? 20000 : j.span > 40000 ? 10000 : j.span > 20000 ? 5000 : 2000;
-  for (let f = -Math.floor(j.span / 2 / pas) * pas; f <= j.span / 2; f += pas) if (f) x.fillText((f > 0 ? '+' : '') + f / 1000, X(f), 10);
-  // Waterfall: one line a frame, the newest on top.
-  const c = g('r-cascade'), cw = c.clientWidth, ch = c.clientHeight;
-  if (c.width !== cw || c.height !== ch) { c.width = cw; c.height = ch; }
-  const cx = c.getContext('2d'), img = cx.createImageData(cw, 2);
-  // Scroll down two pixels, then the new line (twice, so the waterfall fills in a minute).
-  cx.drawImage(c, 0, 2);
-  for (let i = 0; i < cw; i++) {
-    const [r, gg, bb] = rCouleur(j.db[Math.min(n - 1, Math.floor(i * n / cw))], bruit - 3, haut);
-    for (const k of [i, i + cw]) { img.data[4 * k] = r; img.data[4 * k + 1] = gg; img.data[4 * k + 2] = bb; img.data[4 * k + 3] = 255; }
+// The wheel « à inertie »: each notch one step; a quick spin gathers speed and the dial runs on, slowing down (τ = 0,35 s).
+let spV = 0, spVAcc = 0, spVT = 0, spNotch = 0, spRoue = 0;
+function spMolette(ev) {
+  const unite = ev.deltaMode === 1 ? 33 : ev.deltaMode === 2 ? 100 : 1;
+  spRoue += ev.deltaY * unite;
+  const crans = Math.trunc(spRoue / 100); if (!crans) return;
+  spRoue -= crans * 100;
+  const pas = spPas() * (ev.shiftKey ? 10 : 1), sens = -Math.sign(crans), now = performance.now();
+  spAccordePas(sens * pas * Math.abs(crans));
+  if (!AFF.inertie) return;
+  if (now - spNotch < 120) { spV += sens * pas * 8 * Math.abs(crans); spV = Math.max(-pas * 2000, Math.min(pas * 2000, spV)); }
+  spNotch = now;
+  if (!spVT && spV) { spVT = now; requestAnimationFrame(spElan); }
+}
+function spElan(now) {
+  const dt = Math.min(.1, (now - spVT) / 1000), pas = spPas(); spVT = now;
+  spV *= Math.exp(-dt / 0.35);
+  if (Math.abs(spV) < pas * 2 || spGlisse) { spV = 0; spVAcc = 0; spVT = 0; return; }
+  spVAcc += spV * dt;
+  const n = Math.trunc(spVAcc / pas); if (n) { spVAcc -= n * pas; spAccordePas(n * pas); }
+  requestAnimationFrame(spElan);
+}
+function spZoom(facteur, px, w) {
+  const f = spOff(px, w), s = Math.max(SP_MIN, Math.min(SP_MAX, rSpan * facteur));
+  // The frequency under the pointer stays under it.
+  spVue(s, f - (px / w - 0.5) * s);
+}
+(function () {
+  const sp = g('r-spectre'), ca = g('r-cascade');
+  const pos = (ev, c) => { const b = c.getBoundingClientRect(); return [ev.clientX - b.left, b.width]; };
+  const bordA = (px, w) => { if (!R) return null; const [a, b] = spBande(), m = spModeR();
+    const xa = spPx(a, w), xb = spPx(b, w);
+    if (Math.abs(px - xb) < 6 && m !== 'LSB') return 'haut';
+    if (Math.abs(px - xa) < 6 && m !== 'USB') return 'bas';
+    return null; };
+  for (const [c, nom] of [[sp, 'spectre'], [ca, 'cascade']]) {
+    c.addEventListener('pointermove', ev => {
+      const [px, w] = pos(ev, c), b = c.getBoundingClientRect();
+      spSouris = { c: nom, x: px, y: ev.clientY - b.top };
+      const gl = spGlisse;
+      if (gl && gl.c === c) {
+        if (Math.abs(px - gl.x0) > 3) gl.bouge = true;
+        if (gl.quoi === 'bord') {
+          const off = spOff(px, w), dec = R.decalage || 0, m = spModeR();
+          spBw = Math.round(Math.max(500, Math.min(24000, m === 'USB' || m === 'LSB' ? Math.abs(off - dec) : 2 * Math.abs(off - dec))) / 100) * 100;
+        } else if (gl.bouge) spVue(rSpan, gl.dx0 - (px - gl.x0) / w * rSpan);
+      }
+      c.style.cursor = nom === 'spectre' && !gl && bordA(px, w) ? 'ew-resize' : gl && gl.bouge && gl.quoi === 'vue' ? 'grabbing' : 'crosshair';
+      spSale();
+    });
+    c.addEventListener('pointerleave', () => { spSouris = null; spSale(); });
+    c.addEventListener('pointerdown', ev => {
+      if (ev.button !== 0) return;
+      const [px, w] = pos(ev, c); c.setPointerCapture(ev.pointerId);
+      const bord = nom === 'spectre' ? bordA(px, w) : null;
+      spGlisse = { c, quoi: bord ? 'bord' : 'vue', bord, x0: px, dx0: rDx, bouge: false };
+    });
+    c.addEventListener('pointerup', ev => {
+      const gl = spGlisse; spGlisse = null; if (!gl || !R) return;
+      const [px, w] = pos(ev, c), b = c.getBoundingClientRect(), y = ev.clientY - b.top;
+      if (gl.quoi === 'bord') { const bw = spBw; spBw = null; if (bw && gl.bouge) { R.bw = bw; spPost('api/sdr/reglage?bw=' + bw); } spSale(); return; }
+      if (gl.bouge) return;
+      // A click: a memory's flag tunes to it; elsewhere, the frequency clicked.
+      const m = (nom === 'spectre' ? y > 14 && y < 30 : y < 14) ? spMemoireA(px, w, R.ciel || 0) : null;
+      if (m) { memAccorde(m, 'sdr'); return; }
+      R.decalage = Math.round(spOff(px, w) / 10) * 10; spSale();
+      spPost('api/sdr/decalage?hz=' + R.decalage);
+    });
+    c.addEventListener('contextmenu', ev => {
+      const [px, w] = pos(ev, c), m = R ? spMemoireA(px, w, R.ciel || 0) : null;
+      if (m) { ev.preventDefault(); memOuvre(c, 'sdr'); memEdite(m.id); }
+    });
+    // The wheel: on the spectrum the zoom (Shift: the pan), on the waterfall the tuning (Ctrl: the zoom).
+    c.addEventListener('wheel', ev => {
+      ev.preventDefault();
+      const [px, w] = pos(ev, c);
+      if (nom === 'spectre' ? !ev.shiftKey && !ev.ctrlKey : ev.ctrlKey) spZoom(ev.deltaY > 0 ? 1.25 : 0.8, px, w);
+      else if (nom === 'spectre' && ev.shiftKey) spVue(rSpan, rDx + Math.sign(ev.deltaY || ev.deltaX) * rSpan / 10);
+      else spMolette(ev);
+    }, { passive: false });
+    c.addEventListener('keydown', ev => {
+      const p = spPas() * (ev.shiftKey ? 10 : 1), w = c.clientWidth;
+      const d = { ArrowLeft: -p, ArrowRight: p, ArrowDown: -10 * p, ArrowUp: 10 * p }[ev.key];
+      if (d) spAccordePas(d);
+      else if (ev.key === '+' || ev.key === '=') spZoom(0.8, spPx(R ? R.decalage || 0 : 0, w), w);
+      else if (ev.key === '-') spZoom(1.25, spPx(R ? R.decalage || 0 : 0, w), w);
+      else if (ev.key === '0') spVue(SP_MAX, 0);
+      else return;
+      ev.preventDefault(); ev.stopPropagation();
+    });
   }
-  cx.putImageData(img, 0, 0);
+  new ResizeObserver(() => spSale(true)).observe(ca);
+})();
+
+// ---- « Affichage »: the options, in a popover over the spectrum (or the QO-100 waterfall)
+function popPlace(p, ancre) {
+  const r = ancre.getBoundingClientRect(); p.hidden = false;
+  const w = p.offsetWidth, h = p.offsetHeight;
+  let y = r.bottom + 6; if (y + h > innerHeight - 8) y = Math.max(8, innerHeight - h - 8);
+  p.style.left = Math.min(Math.max(8, r.right - w), innerWidth - w - 8) + 'px'; p.style.top = y + 'px';
 }
-for (const id of ['r-spectre', 'r-cascade']) g(id).addEventListener('click', ev => {
-  if (!rDernier) return;
-  const b = ev.currentTarget.getBoundingClientRect();
-  const hz = Math.round(((ev.clientX - b.left) / b.width - 0.5) * rDernier.span / 10) * 10;
-  post('api/sdr/decalage?hz=' + hz).then(ticSdr);
+function affOuvre(ancre, ou) {
+  const p = g('aff-pop');
+  if (!p.hidden && p.dataset.ou === ou) { p.hidden = true; return; }
+  g('mem-pop').hidden = true;
+  p.dataset.ou = ou; affRend(); popPlace(p, ancre);
+}
+function affRend() {
+  document.querySelectorAll('#aff-pop [data-aff]').forEach(e => {
+    const k = e.dataset.aff;
+    if (e.type === 'checkbox') e.checked = !!AFF[k]; else e.value = String(AFF[k]);
+  });
+  g('aff-ref').disabled = AFF.auto && AFF.plancher; g('aff-plage').disabled = AFF.auto && AFF.plancher;
+  g('aff-pals').innerHTML = Object.keys(PALETTES).map(k => '<button type="button" class="sp-pal' + (k === AFF.pal ? ' actif' : '') + '" data-pal="' + k +
+    '" title="' + PALETTES[k][0] + '" aria-pressed="' + (k === AFF.pal) + '"><i style="background:' + palCss(k) + '"></i><span>' + PALETTES[k][0] + '</span></button>').join('');
+  g('sp-b-crete').hidden = !AFF.crete && !AFF.mini;
+}
+g('aff-pop').addEventListener('input', ev => {
+  const e = ev.target, k = e.dataset && e.dataset.aff; if (!k) return;
+  AFF[k] = e.type === 'checkbox' ? e.checked : typeof AFF_DEF[k] === 'number' ? (parseFloat(e.value) || 0) : e.value;
+  if (k === 'moy' || k === 'crete' || k === 'mini') spRaz();
+  affGarde(); affRend(); spSale(true);
+  if (!g('v-qo100').hidden) dessineQo100();
 });
+g('aff-pals').addEventListener('click', ev => {
+  const b = ev.target.closest('[data-pal]'); if (!b) return;
+  AFF.pal = b.dataset.pal; affGarde(); affRend(); spSale(true);
+  if (!g('v-qo100').hidden) dessinePano();
+});
+function affDefaut() { Object.assign(AFF, AFF_DEF); affGarde(); affRend(); spRaz(); spSale(true); if (!g('v-qo100').hidden) dessineQo100(); }
+// A popover closes with a click elsewhere or Escape.
+document.addEventListener('pointerdown', ev => {
+  for (const id of ['aff-pop', 'mem-pop']) {
+    const p = g(id);
+    if (!p.hidden && !p.contains(ev.target) && !(ev.target.closest && ev.target.closest('.sp-b'))) p.hidden = true;
+  }
+}, true);
+document.addEventListener('keydown', ev => { if (ev.key === 'Escape') { g('aff-pop').hidden = true; g('mem-pop').hidden = true; } });
+
+// ---- the memories: a list by tag, a form, import and export
+let memFiltre = '', memEnCours = null, memOu = 'sdr';
+try { memFiltre = localStorage.getItem('mem-filtre') || ''; } catch (x) {}
+function memOuvre(ancre, ou) {
+  const p = g('mem-pop');
+  if (!p.hidden && p.dataset.ou === ou && ancre.classList.contains('sp-b')) { p.hidden = true; return; }
+  g('aff-pop').hidden = true; memOu = ou; p.dataset.ou = ou;
+  g('mem-edit').hidden = true; memRend(); popPlace(p, ancre);
+}
+function memRend() {
+  const f = g('mem-filtre'), et = MEM.etiquettes || [];
+  const opts = '<option value="">toutes (' + MEM.memoires.length + ')</option>' + et.map(e => '<option' + (e === memFiltre ? ' selected' : '') + '>' + esc(e) + '</option>').join('');
+  if (f.dataset.vu !== opts) { f.dataset.vu = opts; f.innerHTML = opts; }
+  f.value = et.includes(memFiltre) ? memFiltre : '';
+  g('mem-etiq').innerHTML = et.map(e => '<option value="' + esc(e) + '">').join('');
+  const l = MEM.memoires.filter(m => !f.value || m.etiquette === f.value).sort((a, b) => (a.etiquette || '\uffff').localeCompare(b.etiquette || '\uffff', 'fr') || a.hz - b.hz);
+  let avant = null;
+  g('mem-liste').innerHTML = l.map(m => {
+    const tete = !f.value && m.etiquette !== avant ? '<div class="mem-g">' + esc(m.etiquette || 'sans étiquette') + '</div>' : ''; avant = m.etiquette;
+    return tete + '<div class="mem-l" data-id="' + esc(m.id) + '" title="S’y accorder (réception)"><i style="background:' + memCouleur(m) + '"></i><b>' + esc(m.nom) + '</b>' +
+      '<span class="mem-f">' + mhzFr(m.hz) + '</span><span class="petit">' + esc(m.mode || '') + (m.largeur ? ' ' + (m.largeur / 1000).toLocaleString('fr-FR') + ' k' : '') + '</span>' +
+      '<button type="button" class="discret mem-e" data-e="' + esc(m.id) + '" title="Modifier">✎</button></div>';
+  }).join('') || '<div class="petit" style="padding:8px">' + (window.SATME_TELEPHONE ? 'Les mémoires du récepteur se gardent sur SatMe-PC.' : 'Aucune mémoire : « ＋ Ici » garde la fréquence écoutée.') + '</div>';
+}
+g('mem-filtre').addEventListener('change', e => { memFiltre = e.target.value; try { localStorage.setItem('mem-filtre', memFiltre); } catch (x) {} memRend(); });
+g('mem-liste').addEventListener('click', ev => {
+  const e = ev.target.closest('[data-e]'); if (e) { memEdite(e.dataset.e); return; }
+  const l = ev.target.closest('.mem-l'); if (!l) return;
+  const m = MEM.memoires.find(x => x.id === l.dataset.id); if (m) memAccorde(m, memOu);
+});
+/** Where we listen now, in the tab the memory is asked from: [hz, mode, width]. */
+function memIci() {
+  if (memOu === 'qo100' && O) return [O.descente, 'USB', 2400, 'QO-100'];
+  if (!R) return [0, '', 0, ''];
+  const m = spModeR();
+  return [(R.ciel || 0) + (R.decalage || 0), m === 'AUTO' ? '' : m, R.bw || 0, ''];
+}
+function memEdite(id) {
+  const m = id ? MEM.memoires.find(x => x.id === id) : null;
+  memEnCours = m ? m.id : '';
+  const [hz, mode, bw, et] = memIci();
+  const v0 = m || { nom: '', hz: hz, mode: mode, largeur: bw, etiquette: et || (memFiltre || ''), couleur: '' };
+  g('mem-nom').value = v0.nom; g('mem-mhz').value = v0.hz ? (v0.hz / 1e6).toFixed(6).replace(/0{1,2}$/, '').replace('.', ',') : '';
+  g('mem-mode').value = v0.mode || ''; g('mem-bw').value = String(v0.largeur || 0); g('mem-etiquette').value = v0.etiquette || '';
+  g('mem-coul-auto').checked = !v0.couleur; g('mem-couleur').value = v0.couleur || memCouleur(v0);
+  g('mem-suppr').hidden = !m; txt('mem-titre-e', m ? 'Modifier « ' + m.nom + ' »' : 'Nouvelle mémoire');
+  g('mem-edit').hidden = false; txt('mem-msg', '');
+  setTimeout(() => g('mem-nom').focus(), 0);
+}
+function memAjouteIci(ancre, ou) { memOuvre(ancre, ou); memEdite(''); }
+async function memEnvoie(corps, u) {
+  if (window.SATME_TELEPHONE) { txt('mem-msg', 'Les mémoires du récepteur se gardent sur SatMe-PC.'); return null; }
+  try {
+    const j = await (await fetch(u || 'api/memoires-sdr', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: corps })).json();
+    if (j.ok === false) { txt('mem-msg', j.erreur || 'refusé'); return null; }
+    MEM = j; memRend(); spSale(true); if (!g('v-qo100').hidden) dessineQo100(); return j;
+  } catch (x) { txt('mem-msg', 'SatMe-PC ne répond pas'); return null; }
+}
+async function memGarde() {
+  const hz = Math.round(parseFloat(v('mem-mhz').replace(',', '.').replace(/\s/g, '')) * 1e6);
+  if (!hz) { txt('mem-msg', 'la fréquence, en MHz (145,800)'); return; }
+  const m = { id: memEnCours || '', nom: v('mem-nom') || mhzFr(hz), hz: hz, mode: v('mem-mode'), largeur: +v('mem-bw') || 0,
+    etiquette: v('mem-etiquette'), couleur: g('mem-coul-auto').checked ? '' : g('mem-couleur').value };
+  if (await memEnvoie(JSON.stringify(m))) g('mem-edit').hidden = true;
+}
+async function memSupprime() {
+  if (!memEnCours) return;
+  if (await memEnvoie('', 'api/memoires-sdr?retire=' + enc(memEnCours))) g('mem-edit').hidden = true;
+}
+g('mem-fichier').addEventListener('change', async ev => {
+  const f = ev.target.files[0]; ev.target.value = ''; if (!f) return;
+  const j = await memEnvoie(await f.text(), 'api/memoires-sdr/import');
+  if (j) txt('mem-msg', j.ajoutees + ' mémoire(s) ajoutée(s)');
+});
+/** A memory clicked: the receiver tuned there (reception only), in its mode and width. */
+function memAccorde(m, ou) {
+  if (ou === 'qo100') { qPost('frequence?hz=' + m.hz); return; }
+  if (!R) return;
+  const mode = m.mode === 'CW' ? 'USB' : m.mode, reglage = (mode ? 'mode=' + mode : '') + (m.largeur ? (mode ? '&' : '') + 'bw=' + m.largeur : '');
+  const off = m.hz - (R.ciel || 0);
+  // Within what the receiver sees: an offset; beyond, the receiver moved there (no longer following the satellite).
+  const p = Math.abs(off) <= 80000 && R.actif ? spPost('api/sdr/decalage?hz=' + Math.round(off)) : spPost('api/sdr/reglage?suit=0&mhz=' + (m.hz / 1e6).toFixed(6));
+  p.then(() => { if (reglage) spPost('api/sdr/reglage?' + reglage); });
+  if (Math.abs(off) <= 80000) { R.decalage = Math.round(off); if (Math.abs(off - rDx) > rSpan / 2) spVue(rSpan, off); }
+  spSale();
+}
+
+// ---- the test mode: a pretended receiver and spectrum, for the screenshots and the trials without hardware
+if (SP_ESSAI) {
+  let k = 0, ph = 0;
+  const bruit = () => { k = (Math.imul(k, 1103515245) + 12345) & 0x7fffffff; return k / 0x7fffffff; };
+  R = { actif: true, tuner: 'essai (spectre simulé)', debit: 2048, perdus: 0, datvTient: '', erreur: '', satellite: 'essai', suit: false, doppler: false, deemph: false,
+    son: false, agc: false, lance: false, bias: false, recepteur: 'rtl', mode: 'USB', modeEff: 'USB', bw: 0, squelch: -120, gain: 280, manuelle: 145950000,
+    ppm: 0, hote: '127.0.0.1', port: 1234, ciel: 145950000, repos: 145950000, decalage: 0, niveau: -62, saturation: 0 };
+  // Signals at sky frequencies: a carrier, a voice (moving), a FM station, a beacon; the noise.
+  const sig = [[145935000, -48, 300], [145942000, -62, 2400], [145962000, -55, 12000], [145953500, -70, 150], [145968000, -66, 3000], [145990000, -60, 2400]];
+  setInterval(() => {
+    if (g('v-sdr').hidden) return;
+    const n = Math.min(1024, Math.max(128, g('r-spectre').clientWidth || 512)), db = new Array(n), c = R.ciel;
+    ph += 0.12;
+    for (let i = 0; i < n; i++) {
+      const f = c + rDx - rSpan / 2 + rSpan * (i + .5) / n;
+      let d = -102 + 4 * bruit() + 3 * Math.sin(f / 9000);
+      for (let s = 0; s < sig.length; s++) {
+        const q = sig[s], e = Math.abs(f - q[0]) / (q[2] / 2), niv = q[1] + (s === 1 ? 8 * Math.sin(ph) : 0);
+        if (e < 1) d = Math.max(d, niv - 6 * e * e + 2 * bruit()); else if (e < 3) d = Math.max(d, niv - 25 - 12 * (e - 1) + 2 * bruit());
+      }
+      db[i] = Math.round(d);
+    }
+    rTrames++; rDernier = { trames: rTrames, span: rSpan, dx: rDx, db: db };
+    spRecoit(rDernier);
+  }, 110);
+}
+planCharge(); memCharge(); g('sp-b-crete').hidden = !AFF.crete && !AFF.mini;
 
 // ------------------------------------------------------------------ radiosondes
 let S2 = null;

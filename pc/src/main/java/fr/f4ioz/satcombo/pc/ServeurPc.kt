@@ -84,6 +84,7 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
 
     /** The « Montage » page: the station's chain, its drawing lit by what happens (set before [demarre]). */
     @Volatile var montage: MontagePc? = null
+    @Volatile var memoiresSdr: MemoiresSdrPc? = null
 
     /** What the « Montage » page lights: the same state the other tabs read. */
     fun lecturesMontage(): fr.f4ioz.satcombo.station.ActiviteMontage.Lectures = fr.f4ioz.satcombo.station.ActiviteMontage.Lectures(
@@ -129,6 +130,7 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
         val sujets = q["t"].orEmpty().split(',').map { it.trim() }.filter { it.isNotEmpty() }.toSet()
         val span = q["span"]?.toIntOrNull() ?: 48_000
         val n = q["n"]?.toIntOrNull() ?: 512
+        val dx = q["dx"]?.toIntOrNull() ?: 0
         runCatching { sortie.write("HTTP/1.1 200 OK\r\nContent-Type: text/event-stream; charset=utf-8\r\nCache-Control: no-store\r\nConnection: close\r\nX-Accel-Buffering: no\r\n\r\nretry: 2000\n\n".toByteArray()); sortie.flush() }
             .onFailure { return }
         val envoyes = HashMap<String, String>()
@@ -176,7 +178,7 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
             }
             if ("spectre" in sujets && sdr != null && sdr.trames.toLong() != spectreTrames) {
                 spectreTrames = sdr.trames.toLong()
-                if (!envoie("spectre", JsonPc.spectre(sdr, span, n).toString())) return
+                if (!envoie("spectre", JsonPc.spectre(sdr, span, n, dx = dx).toString())) return
             }
             // A comment now and then: a page gone is noticed.
             if (maintenant - veilleMs >= 15_000L) {
@@ -317,6 +319,13 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
         if (chemin.startsWith("/api/datv/sources/") || chemin.startsWith("/api/datv/emission/apercu") || chemin == "/api/datv/emission/incrustation") {
             sourcesDatv(r, c, chemin, q, sortie); return
         }
+        // The receiver's memories and the band plans (display and receive only).
+        if (chemin == "/api/plan-bandes" || chemin == "/api/memoires-sdr" || chemin.startsWith("/api/memoires-sdr/")) {
+            val m = memoiresSdr
+            val rep = m?.sert(chemin, r.methode, { q[it].orEmpty() }) { max -> RequeteHttp.corps(c.getInputStream(), r, max) }
+                ?: fr.f4ioz.satcombo.demo.ReponseWeb("200 OK", "application/json; charset=utf-8", "{\"ok\":false}".toByteArray())
+            envoie(sortie, rep.statut, rep.type, rep.corps, rep.entetes); return
+        }
         // The « Montage » page: its chain (a POST saves it, a drawing only), its photos.
         if (chemin == "/api/montage" || chemin.startsWith("/api/montage/")) {
             val m = montage
@@ -374,7 +383,7 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
             "/api/qo100" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JsonPc.qo100(station, q["plan"] == "1", sdr?.gammeHz).toString().toByteArray())
             "/api/sdr" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", (sdr?.let { JsonPc.sdr(it) } ?: JSONObject().put("absent", true)).toString().toByteArray())
             "/api/sdr/spectre" -> envoie(sortie, "200 OK", "application/json; charset=utf-8",
-                (sdr?.let { JsonPc.spectre(it, q["span"]?.toIntOrNull() ?: 48_000, q["n"]?.toIntOrNull() ?: 512, q["autour"] == "ecoute") } ?: JSONObject()).toString().toByteArray())
+                (sdr?.let { JsonPc.spectre(it, q["span"]?.toIntOrNull() ?: 48_000, q["n"]?.toIntOrNull() ?: 512, q["autour"] == "ecoute", q["dx"]?.toIntOrNull() ?: 0) } ?: JSONObject()).toString().toByteArray())
             "/api/sondes" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", (sdr?.let { JsonPc.sondes(it) } ?: JSONObject().put("absent", true)).toString().toByteArray())
             "/api/meteor" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", (sdr?.let { JsonPc.meteor(it) } ?: JSONObject().put("absent", true)).toString().toByteArray())
             "/api/meteor/apercu.png" -> {
@@ -1430,12 +1439,14 @@ object JsonPc {
      * covers) over [span] Hz around the Doppler target — the signal stays in
      * the middle while the satellite passes. Null values before the first.
      */
-    fun spectre(d: SdrPc, span: Int, n: Int, autourEcoute: Boolean = false): JSONObject {
+    fun spectre(d: SdrPc, span: Int, n: Int, autourEcoute: Boolean = false, dx: Int = 0): JSONObject {
         val sp = d.spectre ?: return JSONObject().put("trames", 0)
         val e = d.etat.value
-        // The magnifier: around where we listen (the offset in), not around the Doppler target.
-        val centre = e.fineHz.toDouble() + if (autourEcoute) e.decalageHz else 0
-        return fr.f4ioz.satcombo.demo.ApiSdr.spectre(sp, Dsp.RTL_RATE.toDouble() / Dsp.DECIM_1 / sp.size, centre, span, n, d.trames.toLong(), e.pllHz)
+        // The magnifier: around where we listen (the offset in), not around the Doppler target;
+        // [dx]: the view panned, within what the receiver sees.
+        val k = if (autourEcoute) 0 else fr.f4ioz.satcombo.demo.ApiSdr.decalageVue(span, dx)
+        val centre = e.fineHz.toDouble() + (if (autourEcoute) e.decalageHz else 0) + k
+        return fr.f4ioz.satcombo.demo.ApiSdr.spectre(sp, Dsp.RTL_RATE.toDouble() / Dsp.DECIM_1 / sp.size, centre, span, n, d.trames.toLong(), e.pllHz).put("dx", k)
     }
 
     /** QO-100: the pilot's state, the dish and the Sun; with [plan], the band plan and the presets (they never change). */

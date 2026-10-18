@@ -119,9 +119,11 @@ object PagesPcTelephone {
                     val st = fr.f4ioz.satcombo.sdr.SdrHub.state.value
                     val sp = fr.f4ioz.satcombo.sdr.SdrHub.spectrum.value
                     if (sp !== dernierSpectre && sp.isNotEmpty()) { dernierSpectre = sp; tramesSpectre++ }
+                    val span = p("span").toIntOrNull() ?: 48_000
+                    val dx = ApiSdr.decalageVue(span, p("dx").toIntOrNull() ?: 0)
                     json(ApiSdr.spectre(sp, fr.f4ioz.satcombo.sdr.Dsp.RTL_RATE.toDouble() / fr.f4ioz.satcombo.sdr.Dsp.DECIM_1 / sp.size.coerceAtLeast(1),
-                        (st.dopplerFineHz + st.offsetHz).toDouble(), p("span").toIntOrNull() ?: 48_000, p("n").toIntOrNull() ?: 512,
-                        tramesSpectre, st.centerHz - st.dopplerFineHz))
+                        (st.dopplerFineHz + st.offsetHz + dx).toDouble(), span, p("n").toIntOrNull() ?: 512,
+                        tramesSpectre, st.centerHz - st.dopplerFineHz).put("dx", dx))
                 }
                 // ---- radiosondes: the phone's receiver (its dongle, or its audio input)
                 "/api/sondes" -> {
@@ -316,6 +318,11 @@ object PagesPcTelephone {
                     .put("plan", fr.f4ioz.satcombo.station.DispositionMontage.json(fr.f4ioz.satcombo.station.DispositionMontage.dispose(fr.f4ioz.satcombo.station.Montage.Chaine())))
                     .put("etat", JSONObject()).put("photos", JSONArray()))
                 "/api/montage/catalogue" -> json(fr.f4ioz.satcombo.station.Montage.catalogueJson())
+                // The receiver's memories are kept on SatMe-PC: none here; the band plans, SatMe's own.
+                "/api/memoires-sdr", "/api/memoires-sdr/export" -> json(fr.f4ioz.satcombo.domain.MemoiresSdr.ecrit(emptyList())
+                    .put("ok", true).put("telephone", true).put("etiquettes", JSONArray()))
+                "/api/plan-bandes" -> json(fr.f4ioz.satcombo.domain.PlanBandes.json(fr.f4ioz.satcombo.domain.PlanBandes.defaut {
+                    fr.f4ioz.satcombo.i18n.I18n.t("qo100_seg_$it") }).put("ok", true))
                 "/api/montage/suggestion" -> json(JSONObject().put("ok", false).put("erreur", MONTAGE_SUR_PC))
                 else -> if (methode == "POST") json(action(vm, route, p)) else NON
             }
@@ -793,6 +800,7 @@ object PagesPcTelephone {
                 OK
             }
             "/api/montage", "/api/montage/photo" -> JSONObject().put("ok", false).put("erreur", MONTAGE_SUR_PC)
+            "/api/memoires-sdr", "/api/memoires-sdr/import" -> JSONObject().put("ok", false).put("erreur", "les mémoires du récepteur se gardent sur SatMe-PC")
             else -> JSONObject().put("ok", false).put("erreur", "pas encore sur le téléphone")
         }
     }
