@@ -1193,6 +1193,43 @@ ${STYLE_CADRE}
   .aide-arret kbd { font-size:13px; padding:1px 8px; border-color:var(--tx); color:#FFB3A1; }
   .tx-mot { color:var(--tx); }
   .aide-grille { display:grid; grid-template-columns:max-content 1fr; gap:8px 14px; align-items:baseline; }
+  /* ---------------------------------------------------------------- the built-in manual (F1) */
+  .man { position:fixed; inset:0; z-index:190; display:grid; place-items:center; background:rgba(4,8,12,.62); }
+  .man[hidden] { display:none; }
+  .man-boite { width:min(1240px,96vw); height:min(900px,92vh); display:grid; grid-template-rows:auto 1fr auto; border-radius:12px; background:var(--s2);
+    border:1px solid var(--ligne-forte); box-shadow:var(--ombre-pop); overflow:hidden; }
+  .man-tete { display:flex; align-items:center; gap:10px; padding:8px 14px; border-bottom:1px solid var(--ligne); }
+  .man-tete b { font-size:15px; white-space:nowrap; }
+  .man-tete .ico { width:18px; height:18px; fill:var(--texte-2); flex:none; }
+  #man-q { flex:1; min-width:120px; max-width:520px; }
+  .man-corps { display:grid; grid-template-columns:minmax(220px,300px) 1fr; min-height:0; }
+  .man-gauche { border-right:1px solid var(--ligne); overflow:auto; padding:8px 6px; min-height:0; }
+  .man-gauche a { display:block; padding:4px 8px; border-radius:var(--r1); color:var(--texte-2); text-decoration:none; font-size:var(--fs-m); line-height:1.35; }
+  .man-gauche a.s { padding-left:22px; font-size:var(--fs-s); color:var(--texte-3); }
+  .man-gauche a:hover { background:var(--s3); color:var(--texte); }
+  .man-gauche a.ici { background:rgba(63,224,200,.12); color:var(--rx); }
+  .man-gauche a.man-r { color:var(--texte); padding:6px 8px; }
+  .man-r:hover, .man-gauche a.man-r.sel { background:rgba(63,224,200,.12); }
+  .man-r b { font-size:var(--fs-m); } .man-r small { float:right; color:var(--rx); font-family:var(--mono); }
+  .man-r p { margin:3px 0 0; font-size:var(--fs-s); color:var(--texte-2); line-height:1.4; }
+  .man-vide { padding:14px 8px; color:var(--texte-3); font-size:var(--fs-s); }
+  #man-txt { overflow:auto; padding:6px 28px 28px; min-height:0; line-height:1.6; font-size:var(--fs-l); outline:none; }
+  #man-txt h1, #man-txt h2 { font-size:21px; margin:14px 0 8px; } #man-txt h3 { font-size:16px; margin:20px 0 6px; color:var(--rx); } #man-txt h4 { font-size:14px; margin:14px 0 4px; }
+  #man-txt p { margin:8px 0; } #man-txt ul, #man-txt ol { margin:6px 0; padding-left:22px; } #man-txt li { margin:3px 0; }
+  #man-txt a { color:var(--rx); }
+  #man-txt code { font-family:var(--mono); font-size:.9em; padding:0 4px; border-radius:4px; background:var(--s0); border:1px solid var(--ligne); }
+  #man-txt pre { background:var(--s0); border:1px solid var(--ligne); border-radius:var(--r2); padding:8px 10px; overflow:auto; }
+  #man-txt pre code { border:none; padding:0; background:none; }
+  #man-txt table { border-collapse:collapse; margin:8px 0; font-size:var(--fs-m); }
+  #man-txt th, #man-txt td { border:1px solid var(--ligne); padding:4px 8px; text-align:left; vertical-align:top; }
+  #man-txt th { background:var(--s3); }
+  .man mark { background:rgba(255,209,102,.35); color:inherit; border-radius:2px; }
+  .man mark.ici { background:var(--sat); color:var(--s0); }
+  .man-pied { display:flex; gap:16px; flex-wrap:wrap; align-items:center; padding:6px 14px; border-top:1px solid var(--ligne); font-size:var(--fs-xs); color:var(--texte-3); }
+  .man-nav { display:inline-flex; gap:4px; align-items:center; margin-left:auto; }
+  .man-nav button { padding:1px 8px; }
+  #pop .aide-plus { display:inline-block; margin-top:4px; color:var(--rx); cursor:pointer; text-decoration:underline; font-size:var(--fs-xs); }
+  @media (max-width:760px) { .man-corps { grid-template-columns:1fr; grid-template-rows:minmax(0,34%) 1fr; } .man-gauche { border-right:none; border-bottom:1px solid var(--ligne); } #man-txt { padding:6px 14px 20px; } }
   /* ---------------------------------------------------------------- components, polished */
   .grille > *, .grille2 > *, .grille3c > * { min-width:0; }
   /* A long list keeps its column names in view. */
@@ -1378,7 +1415,8 @@ ${rail()}
   <table class="gen-t"><thead><tr><th></th><th>Signal</th><th>Décalage (kHz)</th><th>S/B (dB)</th><th></th></tr></thead><tbody id="gen-lignes"></tbody></table>
   <div class="sp-g" style="margin-top:6px">
     <span>Texte CW</span><span class="sp-l"><input id="gen-cwTexte" data-gen="cwTexte" maxlength="60" style="flex:1"><input type="number" id="gen-cwWpm" data-gen="cwWpm" min="5" max="40" style="width:56px" title="Mots par minute"><span class="petit">mots/min</span></span>
-    <span>Ton FM</span><span class="sp-l"><input type="number" id="gen-fmTon" data-gen="fmTon" min="100" max="3000" step="50" style="width:80px"><span class="petit">Hz</span></span>
+    <span>Ton FM</span><span class="sp-l"><input type="number" id="gen-fmTon" data-gen="fmTon" min="100" max="3000" step="50" style="width:80px"><span class="petit">Hz</span>
+      <select id="gen-fmCtcss" data-gen="fmCtcss" title="Un sous-ton CTCSS sous le ton FM (déviation 500 Hz)" aria-label="Sous-ton CTCSS du signal FM"></select></span>
     <span>Message FT8</span><input id="gen-ft8Message" data-gen="ft8Message" maxlength="40" placeholder="CQ Q0SAT JN18" title="« CQ INDICATIF CARRÉ » ou « INDICATIF INDICATIF CARRÉ »">
     <span>Mode SSTV</span><select id="gen-sstvMode" data-gen="sstvMode"></select>
   </div>
@@ -2552,6 +2590,8 @@ ${rail()}
       <div class="ligne"><span class="petit" style="min-width:70px">Largeur</span>
         <select id="r-bw" onchange="rRegle('bw=' + this.value)"><option value="0">celle du mode</option><option value="2400">2,4 kHz</option><option value="3000">3 kHz</option><option value="6000">6 kHz</option><option value="12000">12 kHz</option><option value="16000">16 kHz</option><option value="20000">20 kHz</option></select></div>
       <div class="ligne"><span class="petit" style="min-width:70px">Silencieux</span><input type="range" id="r-sq" min="-120" max="-20" style="flex:1" onchange="rRegle('squelch=' + this.value)"><span class="petit" id="r-sqv"></span></div>
+      <div class="ligne" id="r-tsq-l" hidden><span class="petit" style="min-width:70px">Sous-ton</span><select id="r-tsq" style="flex:1" onchange="rRegle('tonSq=' + this.value)" title="Silencieux sur sous-ton (NFM) : le son ne passe que quand ce ton CTCSS est entendu"></select><span class="petit" id="r-tsqv"></span></div>
+      <div class="aide">CTCSS, en NFM : le sous-ton d'un émetteur (67,0 à 254,1 Hz, les 50 tons de la table) est lu sous la voix et s'affiche à côté du niveau (« CTCSS 67,0 Hz »), en moins d'une seconde. « Sous-ton » : le son (haut-parleur, décodeurs, phonie) ne passe que tant que ce ton est entendu. Réception seulement.</div>
       ${ligneNettoyage("r")}
       <label class="petit" style="display:block;margin-top:6px"><input type="checkbox" id="r-deemph" onchange="rRegle('deemph=' + (this.checked ? 1 : 0))"> Désaccentuation (phonie FM ; à couper pour la SSTV et la télémesure)</label>
       <label style="display:block;margin-top:6px"><input type="checkbox" id="r-son" onchange="rRegle('son=' + (this.checked ? 1 : 0))"> Haut-parleur</label>
@@ -2605,7 +2645,7 @@ ${rail()}
       <span class="petit" id="r-lec-info"></span>
     </div>
     <div class="ligne" style="margin-top:4px"><span class="petit">Niveau</span><div class="r-barre"><i id="r-niveau"></i></div><span class="petit" id="r-db"></span>
-      <span class="rose petit" id="r-sat-av"></span>
+      <span class="rose petit" id="r-sat-av"></span><span class="cyan petit mono" id="r-ctcss" hidden></span>
       <span style="margin-left:auto" class="petit">Largeur vue</span><select id="r-span" style="flex:none" onchange="spVue(+this.value, 0)"><option value="12000">12 kHz</option><option value="24000">24 kHz</option><option value="48000" selected>48 kHz</option><option value="96000">96 kHz</option><option value="176400">176 kHz</option><option id="r-span-z" hidden></option></select>
       <button onclick="post('api/sdr/pic')" title="Le signal le plus fort à ±15 kHz">Caler sur le pic</button><button onclick="post('api/sdr/decalage?hz=0')">Recentrer</button></div>
     <div class="ligne" style="margin-top:6px">
@@ -3152,7 +3192,7 @@ ${rail()}
   <button id="sb-rig" class="sb-i" hidden onclick="vue('reglages'); montreReglages('interfaces')" title="La fréquence donnée aux logiciels de carnet (rigctld) : Réglages › Interfaces"><i></i><span>Carnets</span><b id="sb-rig-t">—</b></button>
   <span class="h-esp"></span>
   <button id="sb-err" class="sb-i" onclick="montreErreurs(this)" title="Les erreurs relevées par la page et par SatMe-PC"><i></i><span>Erreurs</span><b id="sb-err-t">0</b></button>
-  <span class="sb-k"><kbd>Échap</kbd> arrêt émission <kbd>Ctrl K</kbd> commandes <kbd>?</kbd> aide</span>
+  <span class="sb-k"><kbd>Échap</kbd> arrêt émission <kbd>Ctrl K</kbd> commandes <kbd>?</kbd> aide <kbd>F1</kbd> manuel</span>
 </footer>
 <div id="mt-pop" class="mt-pop" hidden role="region" aria-label="Chaîne en œuvre">
   <div class="mt-pop-tete"><b>Chaîne en œuvre</b><span class="h-esp"></span><a href="#montage" onclick="vue('montage')">Ouvrir le montage ›</a>
@@ -3186,11 +3226,26 @@ ${rail()}
     <div><kbd>Ctrl</kbd> <kbd>K</kbd></div><div>Commandes : aller à un onglet, accorder le récepteur (réception seulement), suivre un satellite, ouvrir un indicatif dans le carnet, actions courantes</div>
     <div><kbd>1</kbd> … <kbd>6</kbd></div><div>Espaces : 1 Ciel · 2 QO-100 · 3 DATV · 4 Modes · 5 Carnet · 6 Station (le dernier onglet vu de chacun)</div>
     <div><kbd>?</kbd></div><div>Cette aide</div>
+    <div><kbd>F1</kbd></div><div><a href="#" onclick="event.preventDefault(); g('aide-dlg').close(); manOuvre()">Le manuel</a> : le guide de SatMe-PC, avec recherche, ouvert au chapitre de l'onglet en cours (Échap le ferme)</div>
     <div><kbd>[</kbd></div><div>Déplier ou replier le menu de gauche</div>
     <div><kbd>←</kbd> <kbd>→</kbd> <kbd>↑</kbd> <kbd>↓</kbd></div><div>QO-100 : accord par 100 Hz / 1 kHz (hors d'un champ de saisie)</div>
     <div><span class="h-rond" style="display:inline-grid">?</span></div><div>Sur un titre : l'explication de la carte (survol, clic ou Entrée)</div>
   </div>
 </dialog>
+<div id="man" class="man" hidden role="dialog" aria-modal="true" aria-labelledby="man-t">
+  <div class="man-boite">
+    <div class="man-tete"><b id="man-t">Manuel</b>${IconesPc.svg("search")}<input id="man-q" type="search" autocomplete="off" placeholder="Chercher dans le manuel (tous les mots)" aria-label="Chercher dans le manuel" aria-controls="man-res">
+      <span class="petit" id="man-n" aria-live="polite"></span><span class="h-esp"></span>
+      <button class="arret" id="man-tx" hidden onclick="arretEmissions()" title="Une émission est en cours">■ Arrêter toute émission</button>
+      <button class="discret" onclick="manFerme()" aria-label="Fermer le manuel" title="Fermer (Échap)">✕</button></div>
+    <div class="man-corps">
+      <div class="man-gauche"><nav id="man-plan" aria-label="Chapitres du manuel"></nav><div id="man-res" role="listbox" aria-label="Résultats de la recherche" hidden></div></div>
+      <article id="man-txt" tabindex="-1"></article>
+    </div>
+    <div class="man-pied"><span><kbd>F1</kbd> le manuel</span><span><kbd>Échap</kbd> fermer (encore <kbd>Échap</kbd> : arrêt de toute émission)</span><span><kbd>↑</kbd> <kbd>↓</kbd> les résultats, <kbd>Entrée</kbd> l'occurrence suivante</span>
+      <span class="man-nav" id="man-nav" hidden><button type="button" onclick="manSaute(-1)" aria-label="Occurrence précédente">‹</button><span id="man-nav-t"></span><button type="button" onclick="manSaute(1)" aria-label="Occurrence suivante">›</button></span></div>
+  </div>
+</div>
 <dialog id="fd-dlg" style="background:var(--carte);color:var(--clair);border:1px solid var(--bord);border-radius:12px;width:min(820px,96vw)">
   <div class="t">Choisir <span id="fd-quoi">une image</span> <span class="petit">sur le PC de SatMe-PC (lecture seule)</span></div>
   <div class="ligne" id="fd-raccourcis" style="flex-wrap:wrap"></div>
@@ -7891,6 +7946,16 @@ function rendSdr() {
   spBwOption(r.bw); val('r-mode', r.mode); val('r-bw', r.bw); val('r-sq', r.squelch);
   val('r-gain', pluto && r.gain >= 0 ? Math.min(blade ? 600 : 710, Math.round(r.gain / 10) * 10) : r.gain);
   txt('r-sqv', r.squelch <= -120 ? 'ouvert' : r.squelch + ' dB');
+  // CTCSS: the tone heard (NFM), the tone squelch (absent on the phone's page).
+  g('r-tsq-l').hidden = r.tonSq === undefined;
+  if (r.tonSq !== undefined) {
+    const s = g('r-tsq'); if (!s.options.length) s.innerHTML = ctcssOptions('aucun (son toujours)');
+    val('r-tsq', String(r.tonSq || 0));
+    txt('r-tsqv', !r.tonSq ? '' : r.modeEff !== 'NFM' ? 'NFM seulement' : r.tonFerme ? 'fermé' : 'ouvert');
+  }
+  const ct = r.actif && r.ctcss && r.ctcss.hz > 0 ? r.ctcss : null;
+  g('r-ctcss').hidden = !ct;
+  if (ct) { txt('r-ctcss', 'CTCSS ' + fr1(ct.hz) + ' Hz'); g('r-ctcss').title = 'Sous-ton CTCSS entendu : confiance ' + Math.round(ct.confiance * 100) + ' %, déviation ≈ ' + ct.dev + ' Hz'; }
   if (!v('r-mhz') && document.activeElement !== g('r-mhz')) g('r-mhz').placeholder = (r.manuelle / 1e6).toFixed(4).replace('.', ',');
   if (document.activeElement !== g('r-ppm')) g('r-ppm').value = r.ppm;
   if (document.activeElement !== g('r-hote')) g('r-hote').value = r.hote;
@@ -8582,6 +8647,13 @@ function rendFictif(r) {
 }
 async function lecRegle(q) { try { await fetch('api/sdr-iq/lecture?' + q, { method: 'POST' }); } catch (x) {} ticSdr(); }
 function lecCherche(v) { const l = R && R.lecture; if (l) lecRegle('pos=' + (v / 1000 * l.duree).toFixed(1)); }
+/** A select's options: [aucun] (0), then the 50 standard CTCSS tones (Hz), as the receiver reads them. */
+function ctcssOptions(aucun) {
+  const T = [67.0, 69.3, 71.9, 74.4, 77.0, 79.7, 82.5, 85.4, 88.5, 91.5, 94.8, 97.4, 100.0, 103.5, 107.2, 110.9, 114.8, 118.8, 123.0, 127.3,
+  131.8, 136.5, 141.3, 146.2, 151.4, 156.7, 159.8, 162.2, 165.5, 167.9, 171.3, 173.8, 177.3, 179.9, 183.5, 186.2, 189.9, 192.8, 196.6, 199.5,
+  203.5, 206.5, 210.7, 218.1, 225.7, 229.1, 233.6, 241.8, 250.3, 254.1];
+  return '<option value="0">' + aucun + '</option>' + T.map(t => '<option value="' + t + '">' + fr1(t) + ' Hz</option>').join('');
+}
 const GEN_SIG = [['porteuse', 'Porteuse'], ['cw', 'CW'], ['blu', 'BLU (voix)'], ['fm', 'FM (ton)'], ['ft8', 'FT8'], ['sstv', 'SSTV (FM)']];
 function genOuvre(ancre) {
   const p = g('gen-pop');
@@ -8597,6 +8669,7 @@ function genRend(tout) {
       '<td><input type="number" data-gen="' + k + 'Snr" step="1" min="-20" max="60" aria-label="S/B de ' + nom + ' (dB)"></td>' +
       '<td><button type="button" data-ecoute="' + k + '" title="Régler le mode et le décalage pour l’entendre">Écouter</button></td></tr>').join('');
     g('gen-sstvMode').innerHTML = (G.modesSstv || []).map(m => '<option>' + esc(m) + '</option>').join('');
+    g('gen-fmCtcss').innerHTML = ctcssOptions('sans CTCSS');
   }
   document.querySelectorAll('#gen-pop [data-gen]').forEach(e => {
     if (document.activeElement === e) return;
@@ -10641,12 +10714,166 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Escape') { arretEmissions(); popCache(); if (MT.sel) mtFicheFerme(); return; }
   if ((e.ctrlKey || e.metaKey) && !e.altKey && (e.key === 'k' || e.key === 'K')) { e.preventDefault(); palette(); return; }
   const a = document.activeElement;
-  if (e.ctrlKey || e.metaKey || e.altKey || (a && (/INPUT|SELECT|TEXTAREA/.test(a.tagName) || a.isContentEditable)) || document.querySelector('dialog[open]')) return;
+  if (e.ctrlKey || e.metaKey || e.altKey || (a && (/INPUT|SELECT|TEXTAREA/.test(a.tagName) || a.isContentEditable)) || document.querySelector('dialog[open]') || !g('man').hidden) return;
   if (e.key === '?') { e.preventDefault(); aideClavier(); }
   else if (e.key >= '1' && e.key <= '6' && ESPACES_WS[+e.key - 1]) { e.preventDefault(); wsOuvre(ESPACES_WS[+e.key - 1]); }
   else if (e.key === '[') railRegle(!document.body.classList.contains('rail-ouvert'));
 });
 function aideClavier() { popCache(); g('aide-dlg').showModal(); }
+
+// ------------------------------------------------------------------ the built-in manual (F1)
+// The guide's chapters (api/manuel, rendered by the server from the bundled guide), searched by the server, words highlighted here.
+// Its own Escape comes first (capture on window): closing it never stops a transmission; closed, Escape stops them as before.
+const MAN = { d: null, absent: false, ch: null, mots: [], marques: [], i: -1, res: [], sel: -1, avant: null, n: 0 };
+async function manCharge() {
+  if (MAN.d || MAN.absent) return MAN.d;
+  try { const r = await fetch('api/manuel'); const j = r.ok ? await r.json() : null; if (j && j.ok) MAN.d = j; else MAN.absent = true; } catch (x) { MAN.absent = true; }
+  return MAN.d;
+}
+const manOnglet = () => { const v = document.querySelector('.vue:not([hidden])'); return v ? v.id.slice(2) : 'station'; };
+const manNom = x => sansAccent(x || '').replace(/[^a-z0-9]+/g, ' ').trim();
+/** The anchor for a card's title: a section of the tab's chapter (or of the whole guide) with the same name, else the tab's chapter. */
+function manAncre(titre) {
+  const d = MAN.d, o = d.onglets || {}, base = o[manOnglet()] || o['*'];
+  const t = manNom(titre);
+  if (t.length >= 4) {
+    const pareil = s => { const x = manNom(s.titre); return x === t || (t.length >= 6 && x.length >= 6 && (x.startsWith(t) || t.startsWith(x))); };
+    const ch = manChapitre(base);
+    const ici = ch ? [{ id: ch.id, titre: ch.titre }].concat(ch.sections || []) : [];
+    const tous = d.chapitres.flatMap(c => [{ id: c.id, titre: c.titre }].concat(c.sections || []));
+    // Last, the same first word, a long one (« Nettoyage NFM » → « Nettoyage du son »).
+    const m1 = t.split(' ')[0], premier = s => m1.length >= 7 && manNom(s.titre).split(' ')[0] === m1;
+    const s = ici.find(pareil) || tous.find(pareil) || ici.find(premier) || tous.find(premier);
+    if (s) return s.id;
+  }
+  return base;
+}
+function manChapitre(ancre) { return MAN.d && MAN.d.chapitres.find(c => c.id === ancre || (c.sections || []).some(s => s.id === ancre)); }
+async function manOuvre(ancre, titreCarte) {
+  if (!g('man').hidden) { g('man-q').focus(); g('man-q').select(); return; }
+  popCache();
+  const d = await manCharge();
+  if (!d) { annonce('Le manuel n’est pas disponible ici'); return; }
+  MAN.avant = document.activeElement;
+  if (!g('man-plan').firstChild) g('man-plan').innerHTML = d.chapitres.map(c => '<a href="#" data-man="' + escA(c.id) + '">' + esc(c.titre) + '</a>' +
+    (c.sections || []).map(s => '<a href="#" class="s" data-man="' + escA(s.id) + '">' + esc(s.titre) + '</a>').join('')).join('');
+  g('man').hidden = false; manTx();
+  manVa(ancre || manAncre(titreCarte), true);
+  g('man-q').focus();
+}
+function manFerme() {
+  g('man').hidden = true;
+  const a = MAN.avant; MAN.avant = null;
+  if (a && a.focus && document.contains(a)) try { a.focus(); } catch (x) {}
+}
+/** A transmission under way: its stop button in the manual's header (Escape there closes the manual first). */
+function manTx() { if (!g('man').hidden) g('man-tx').hidden = !emissionsEnCours().length; }
+setInterval(manTx, 1000);
+function manVa(ancre, garderMots) {
+  const c = manChapitre(ancre) || (MAN.d && MAN.d.chapitres[0]); if (!c) return;
+  const art = g('man-txt');
+  art.innerHTML = c.html; MAN.ch = c.id;
+  document.querySelectorAll('#man-plan a').forEach(a => a.classList.toggle('ici', a.dataset.man === ancre));
+  const ici = document.querySelector('#man-plan a.ici'); if (ici) ici.scrollIntoView({ block: 'nearest' });
+  manMarque();
+  const cible = ancre !== c.id ? art.querySelector('[id="' + String(ancre).replace(/["\\]/g, '') + '"]') : null;
+  if (cible) art.scrollTop = cible.offsetTop - art.offsetTop - 6; else art.scrollTop = 0;
+  if (MAN.marques.length && garderMots && !cible) manSaute(0);
+}
+/** [x] folded (lower case, no accents), with each folded character's place in [x]. */
+function manPlie(x) {
+  let f = ''; const idx = [];
+  for (let i = 0; i < x.length; i++) { const c = sansAccent(x[i]); for (let k = 0; k < c.length; k++) { f += c[k]; idx.push(i); } }
+  return [f, idx];
+}
+/** Where the words occur in [x]: [start, end) pairs in [x], in order, not overlapping. */
+function manTrouve(x, mots) {
+  if (!mots.length) return [];
+  const [f, idx] = manPlie(x), l = [];
+  for (const m of mots) { let i = 0; while ((i = f.indexOf(m, i)) >= 0) { l.push([idx[i], idx[i + m.length - 1] + 1]); i += m.length; } }
+  l.sort((a, b) => a[0] - b[0]);
+  const r = [];
+  for (const x of l) if (!r.length || x[0] >= r[r.length - 1][1]) r.push(x);
+  return r;
+}
+function manSurligne(x, mots) {
+  let h = '', de = 0;
+  for (const [a, b] of manTrouve(x, mots)) { h += esc(x.slice(de, a)) + '<mark>' + esc(x.slice(a, b)) + '</mark>'; de = b; }
+  return h + esc(x.slice(de));
+}
+/** The words searched marked in the chapter shown. */
+function manMarque() {
+  const art = g('man-txt'); MAN.marques = []; MAN.i = -1;
+  if (MAN.mots.length) {
+    const w = document.createTreeWalker(art, NodeFilter.SHOW_TEXT), noeuds = [];
+    while (w.nextNode()) noeuds.push(w.currentNode);
+    for (const t of noeuds) {
+      const v = t.nodeValue, r = manTrouve(v, MAN.mots); if (!r.length) continue;
+      const fr = document.createDocumentFragment(); let de = 0;
+      for (const [a, b] of r) {
+        fr.appendChild(document.createTextNode(v.slice(de, a)));
+        const m = document.createElement('mark'); m.textContent = v.slice(a, b); fr.appendChild(m); de = b;
+      }
+      fr.appendChild(document.createTextNode(v.slice(de)));
+      t.parentNode.replaceChild(fr, t);
+    }
+    MAN.marques = [...art.querySelectorAll('mark')];
+  }
+  g('man-nav').hidden = !MAN.marques.length;
+  txt('man-nav-t', MAN.marques.length ? MAN.marques.length + ' dans ce chapitre' : '');
+}
+/** The next (or previous) occurrence in the chapter, brought into view; 0: the first. */
+function manSaute(dx) {
+  const l = MAN.marques; if (!l.length) return;
+  if (MAN.i >= 0 && l[MAN.i]) l[MAN.i].classList.remove('ici');
+  MAN.i = dx === 0 || MAN.i < 0 ? (dx < 0 ? l.length - 1 : 0) : (MAN.i + dx + l.length) % l.length;
+  const m = l[MAN.i]; m.classList.add('ici');
+  const art = g('man-txt'), r = m.getBoundingClientRect(), ra = art.getBoundingClientRect();
+  art.scrollTop += r.top - ra.top - ra.height / 3;
+  txt('man-nav-t', (MAN.i + 1) + ' / ' + l.length + ' dans ce chapitre');
+}
+let manMinuterie = 0;
+async function manCherche() {
+  const q = g('man-q').value.trim(), n = ++MAN.n;
+  if (!q) { MAN.mots = []; MAN.res = []; g('man-res').hidden = true; g('man-plan').hidden = false; txt('man-n', ''); if (MAN.ch) manVa(MAN.ch); return; }
+  let j; try { j = await (await fetch('api/manuel/cherche?q=' + encodeURIComponent(q))).json(); } catch (x) { return; }
+  if (n !== MAN.n) return;
+  MAN.mots = j.mots || []; MAN.res = j.chapitres || []; MAN.sel = MAN.res.length ? 0 : -1;
+  g('man-plan').hidden = true; g('man-res').hidden = false;
+  txt('man-n', !MAN.mots.length ? 'deux lettres au moins' : j.total ? j.total + ' résultat' + (j.total > 1 ? 's' : '') + ' dans ' + MAN.res.length + ' chapitre' + (MAN.res.length > 1 ? 's' : '') : 'rien trouvé');
+  g('man-res').innerHTML = MAN.res.length ? MAN.res.map((r, k) => '<a href="#" class="man-r' + (k === MAN.sel ? ' sel' : '') + '" role="option" data-res="' + k + '"><small>' + r.n + '</small><b>' + manSurligne(r.titre, MAN.mots) + '</b>' +
+    (r.extraits || []).map(e => '<p>' + manSurligne(e, MAN.mots) + '</p>').join('') + '</a>').join('')
+    : '<div class="man-vide">' + (MAN.mots.length ? 'Aucun chapitre ne contient tous ces mots.' : '') + '</div>';
+  if (MAN.res.length) manVa(MAN.res[0].id, true); else manMarque();
+}
+function manChoisit(k) {
+  if (k < 0 || k >= MAN.res.length) return;
+  MAN.sel = k; document.querySelectorAll('#man-res .man-r').forEach((a, i) => a.classList.toggle('sel', i === k));
+  const a = document.querySelector('#man-res .man-r.sel'); if (a) a.scrollIntoView({ block: 'nearest' });
+  manVa(MAN.res[k].id, true);
+}
+g('man-q').addEventListener('input', () => { clearTimeout(manMinuterie); manMinuterie = setTimeout(manCherche, 160); });
+g('man-q').addEventListener('keydown', e => {
+  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); manChoisit(MAN.sel + (e.key === 'ArrowDown' ? 1 : -1)); }
+  else if (e.key === 'Enter') { e.preventDefault(); clearTimeout(manMinuterie); if (MAN.mots.length && MAN.marques.length) manSaute(e.shiftKey ? -1 : 1); else manCherche(); }
+});
+g('man').addEventListener('click', e => {
+  if (e.target === g('man')) { manFerme(); return; }
+  const a = e.target.closest('[data-man]'), r = e.target.closest('[data-res]'), l = e.target.closest('#man-txt a[data-ancre]');
+  if (a) { e.preventDefault(); manVa(a.dataset.man, true); }
+  else if (r) { e.preventDefault(); manChoisit(+r.dataset.res); }
+  else if (l) { e.preventDefault(); manVa(l.dataset.ancre, true); }
+});
+// Before every other keyboard handler: F1 opens; while open, Escape is the manual's alone (clears the search, then closes).
+window.addEventListener('keydown', e => {
+  if (e.key === 'F1') { e.preventDefault(); e.stopImmediatePropagation(); manOuvre(); return; }
+  if (g('man').hidden || e.key !== 'Escape') return;
+  // A dialog opened over the manual (Ctrl+K…): its Escape, as everywhere else.
+  if (document.querySelector('dialog[open]')) return;
+  e.preventDefault(); e.stopImmediatePropagation();
+  if (g('man-q').value && document.activeElement === g('man-q')) { g('man-q').value = ''; manCherche(); }
+  else manFerme();
+}, true);
 
 // ------------------------------------------------------------------ help popovers: the « ? » beside a title
 // The long explanations (class aide) stay in the page, hidden; the nearest title before them gets a « ? » that shows them.
@@ -10683,10 +10910,18 @@ function aidesInit() {
     q.aides.push(a);
   });
 }
-const aideHtml = q => (q.aides || []).map(a => '<div class="aide-p">' + a.innerHTML + '</div>').join('');
+const aideHtml = q => (q.aides || []).map(a => '<div class="aide-p">' + a.innerHTML + '</div>').join('') +
+  (MAN.absent ? '' : '<a class="aide-plus" href="#" data-manuel="1" title="Le chapitre du manuel (F1)">En savoir plus</a>');
 document.addEventListener('click', e => {
   const q = e.target.closest && e.target.closest('.q');
   if (q) { e.preventDefault(); e.stopPropagation(); if (popDe === q && g('pop').dataset.epingle) popCache(); else popMontre(q, aideHtml(q), true); return; }
+  const plus = e.target.closest && e.target.closest('#pop [data-manuel]');
+  if (plus) {
+    // The card's title (the « ? » sits in it): its section of the manual when one has the same name.
+    e.preventDefault(); e.stopPropagation();
+    const t = popDe && popDe.parentElement ? popDe.parentElement.textContent.replace(/\?/g, '').trim() : '';
+    popCache(); manOuvre(null, t); return;
+  }
   if (!e.target.closest || !e.target.closest('#pop')) popCache();
 }, true);
 document.addEventListener('mouseover', e => {
@@ -10752,6 +10987,7 @@ function palSources() {
   if (ouverte('qo100') || ouverte('datv')) A('Schéma de la chaîne en œuvre', 'par-dessus l’onglet ' + (ouverte('qo100') ? 'QO-100' : 'DATV'), () => mtPopBascule(ouverte('qo100') ? 'qo100' : 'datv'));
   A('Déplier ou replier le menu', 'touche [', () => railRegle(!document.body.classList.contains('rail-ouvert')));
   A('Raccourcis clavier', 'touche ?', aideClavier);
+  if (!MAN.absent) A('Manuel', 'F1 · le guide de SatMe-PC, avec recherche', () => manOuvre());
   return l;
 }
 /** What the text typed itself proposes: a frequency, a satellite, a callsign. */

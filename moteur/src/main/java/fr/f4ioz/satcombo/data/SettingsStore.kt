@@ -493,6 +493,11 @@ class SettingsStore(private val prefs: Stockage) {
         get() = prefs.getInt("sdr_squelch", -120)
         set(v) { prefs.edit().putInt("sdr_squelch", v).apply() }
 
+    /** Tone squelch: the CTCSS tone (tenths of Hz) the NFM sound waits for; 0 = off. */
+    var sdrSilencieuxTon: Int
+        get() = prefs.getInt("sdr_silencieux_ton", 0)
+        set(v) { prefs.edit().putInt("sdr_silencieux_ton", v).apply() }
+
     /** Sound cleaning per demodulation mode, JSON ({"USB": {…}}, see [fr.f4ioz.satcombo.sdr.RxCleaning]); none = all off. */
     var sdrNettoyage: String
         get() = prefs.getString("sdr_nettoyage", "{}") ?: "{}"

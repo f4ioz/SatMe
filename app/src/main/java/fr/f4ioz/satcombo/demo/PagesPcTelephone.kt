@@ -77,6 +77,9 @@ object PagesPcTelephone {
             if (methode == "POST") return json(action(vm, route, p))
             when (route) {
                 "/api/police-drapeaux" -> PagePc.POLICE_DRAPEAUX?.let { ReponseWeb("200 OK", "font/woff2", it) } ?: NON
+                // The built-in manual (F1): the guide bundled in the engine, as on SatMe-PC.
+                "/api/manuel" -> ReponseWeb("200 OK", "application/json; charset=utf-8", Manuel.REPONSE)
+                "/api/manuel/cherche" -> json(Manuel.chercheJson(p("q").take(200)))
                 "/api/capacites" -> json(JSONObject().put("onglets", JSONArray(onglets(vm))).put("serveur", "telephone"))
                 "/api/etat" -> json(etat(vm))
                 // Every satellite's passes over 24 h, as SatMe-PC lists them (the phone's own lists hold the followed one and the favourites).

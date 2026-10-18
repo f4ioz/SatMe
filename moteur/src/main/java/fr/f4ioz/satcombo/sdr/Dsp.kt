@@ -543,6 +543,7 @@ class RxChain(
         Dsp.lowPass(63, dec2Cutoff, stage1Rate), Dsp.DECIM_2)
 
     private val disc = FmDiscriminator(stage2Rate, maxDeviationHz)
+    private val sousTon = DetecteurSousTon(stage2Rate, 26_000.0 / maxDeviationHz)
     private val dc = DcBlock()
     private val deemph = Deemphasis(750.0, stage2Rate)
     private val agc = AudioAgc(rate = stage2Rate)
@@ -581,6 +582,26 @@ class RxChain(
 
     /** Squelch, dBFS. −120 dB means off. */
     val squelch = Squelch()
+
+    /**
+     * CTCSS detection ([DetecteurSousTon]) on the discriminator output, NFM
+     * only. Off by default: the phone pays nothing unless it asks.
+     */
+    var subTones: Boolean = false
+
+    /**
+     * Tone squelch, NFM only: the sound passes only while this CTCSS tone
+     * (Hz, one of [DetecteurSousTon.TONS]) is heard; 0 is off. Runs the
+     * detection even when [subTones] is off.
+     */
+    var toneSquelchHz: Double = 0.0
+
+    /** The CTCSS tone heard (none outside NFM or when nothing asks for it). */
+    val subTone: DetecteurSousTon.Etat get() = if (mode == RxMode.NFM && (subTones || toneSquelchHz > 0.0)) sousTon.etat else DetecteurSousTon.Etat()
+
+    /** True while the tone squelch holds the sound back. */
+    val toneSquelchClosed: Boolean
+        get() = mode == RxMode.NFM && toneSquelchHz > 0.0 && abs(sousTon.etat.hz - toneSquelchHz) > 0.3
 
     /** Sound cleaning ([RxCleaning]): all off by default. */
     var cleaning: RxCleaning = RxCleaning.OFF
@@ -633,6 +654,7 @@ class RxChain(
     /** Panorama span, Hz: the dongle rate. */
     val panoramaSpanHz: Double get() = rtlRate
 
+    private var sousTonVu = false
     private var nco = 0.0
     private var level = -120f
     private var amDc = 0f
@@ -778,7 +800,7 @@ class RxChain(
     private var fl = FloatArray(0)
 
     fun reset() {
-        dec1.reset(); dec2.reset(); disc.reset(); dc.reset(); deemph.reset()
+        dec1.reset(); dec2.reset(); disc.reset(); dc.reset(); deemph.reset(); sousTon.reset()
         agc.reset(); squelch.reset(); ssb?.reset(); spectrum.reset()
         blanker.reset(); autoNotch.reset(); manualNotch.reset(); nr.reset()
         nco = 0.0; level = -120f; amDc = 0f
@@ -971,10 +993,14 @@ class RxChain(
         level = if (avg <= 1e-9) -120f else (20.0 * log10(avg)).toFloat()
         val open = squelch.update(level)
         agc.speed = c.agc
+        if (mode != RxMode.NFM && sousTonVu) { sousTonVu = false; sousTon.reset() }
 
         val produced = when (mode) {
             RxMode.NFM -> {
                 val p = disc.process(cI, cQ, count, out)
+                // Sub-tones read here, straight from the discriminator: nothing has touched the lows yet.
+                if (subTones || toneSquelchHz > 0.0) { sousTonVu = true; sousTon.process(out, p) }
+                else if (sousTonVu) { sousTonVu = false; sousTon.reset() }
                 dc.process(out, p)
                 if (deemphasis) deemph.process(out, p)
                 if (c.autoNotch || c.notch || c.nr > 0) {
@@ -1009,7 +1035,7 @@ class RxChain(
             }
         }
 
-        if (!open) {
+        if (!open || toneSquelchClosed) {
             java.util.Arrays.fill(out, 0, produced, 0)
         }
         var mx = 0
