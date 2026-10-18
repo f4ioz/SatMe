@@ -26,7 +26,8 @@ import kotlin.concurrent.thread
  * names, a click to receive one, and the « veille » going round them.
  *
  * Off unless chosen; connected only while the option is on and the DATV
- * tab asked within the last [VU_MS]. Nothing is ever sent there but the
+ * tab (or the QO-100 one, when it shows the strip too) asked within the
+ * last [VU_MS]. Nothing is ever sent there but the
  * opening, the pongs and the close.
  */
 class SpectreLargePc(
@@ -51,6 +52,11 @@ class SpectreLargePc(
     var on: Boolean
         get() = stockage.getBoolean("datv_large", false)
         set(v) { stockage.edit().putBoolean("datv_large", v).apply(); if (!v) courant?.ferme?.invoke() }
+
+    /** Also shown in the QO-100 tab (off unless chosen). */
+    var dansQo100: Boolean
+        get() = stockage.getBoolean("datv_large_qo100", false)
+        set(v) { stockage.edit().putBoolean("datv_large_qo100", v).apply() }
 
     @Volatile private var vuMs = 0L
     @Volatile private var courant: Source? = null
@@ -89,7 +95,7 @@ class SpectreLargePc(
 
     /** One turn: connected and read while wanted, else waiting. */
     fun boucle() {
-        if (!voulu()) { etat = if (on) "en attente de l’onglet DATV" else ""; return }
+        if (!voulu()) { etat = if (on) "en attente de l’onglet DATV ou QO-100" else ""; return }
         if (horloge() < prochainEssai) return
         etat = "connexion…"
         val s = runCatching { ouvre() }.getOrElse { echec(it.message ?: it.javaClass.simpleName); return }
@@ -109,7 +115,7 @@ class SpectreLargePc(
         }
         if (recues > 0) delai = DELAI_MIN_MS
         if (voulu()) echec(if (recues == 0) "aucune trame reçue" else "connexion fermée")
-        else etat = if (on) "en attente de l’onglet DATV" else ""
+        else etat = if (on) "en attente de l’onglet DATV ou QO-100" else ""
     }
 
     private fun echec(pourquoi: String) {
@@ -191,10 +197,11 @@ class SpectreLargePc(
 
     // ------------------------------------------------------------ the page
 
-    fun json(depuis: Long): JSONObject {
-        vuMs = horloge()
+    /** The state for the page; [vu]: a tab shows the strip (which keeps the connection). */
+    fun json(depuis: Long, vu: Boolean = true): JSONObject {
+        if (vu) vuMs = horloge()
         val maintenant = horloge()
-        val o = JSONObject().put("ok", true).put("on", on).put("etat", etat).put("n", numero).put("frais", frais())
+        val o = JSONObject().put("ok", true).put("on", on).put("qo100", dansQo100).put("etat", etat).put("n", numero).put("frais", frais())
             .put("debut", BandeLarge.DEBUT_KHZ).put("largeur", BandeLarge.LARGEUR_KHZ).put("balise", Datv.BALISE_KHZ)
             .put("canaux", JSONArray(Datv.CANAUX_KHZ)).put("canauxLarges", JSONArray(BandeLarge.CANAUX_LARGES_KHZ))
             .put("bruit", BandeLarge.BRUIT).put("seuil", BandeLarge.SEUIL).put("unitesDb", BandeLarge.UNITES_PAR_DB)
@@ -223,6 +230,7 @@ class SpectreLargePc(
                 q["attente"]?.trim()?.toIntOrNull()?.coerceIn(4, 300)?.let { veille.attenteMs = it * 1000L; stockage.edit().putInt("datv_veille_attente_s", it).apply() }
                 q["balise"]?.let { veille.avecBalise = it == "1"; stockage.edit().putBoolean("datv_veille_balise", veille.avecBalise).apply() }
                 q["enr"]?.let { veilleEnregistre = it == "1" }
+                q["qo100"]?.let { dansQo100 = it == "1" }
             }
             "/api/datv/large/accorde" -> {
                 val khz = q["khz"]?.trim()?.toLongOrNull() ?: return JSONObject().put("ok", false).put("erreur", "quelle fréquence ?")

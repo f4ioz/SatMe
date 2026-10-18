@@ -15,14 +15,22 @@ import java.util.concurrent.TimeUnit
 import kotlin.concurrent.thread
 
 /**
- * The DATV stream's sound as PCM, for the subtitles: an ffmpeg of its own
- * reads the same transport stream blocks as the players and gives its first
- * sound track as 16-bit mono at 16 kHz, handed to [ecoute] by 100 ms blocks.
+ * The DATV stream's sound as PCM: an ffmpeg of its own reads the same
+ * transport stream blocks as the players and gives its first sound track as
+ * 16-bit PCM — mono at 16 kHz for the subtitles, stereo at 48 kHz for the
+ * sound played here with its levels — handed to [ecoute] by blocks of
+ * [blocMs] (samples, all channels interleaved).
  */
 class SonDatvPc(
     private val ffmpeg: String,
+    private val rate: Int = RATE,
+    private val canaux: Int = 1,
+    blocMs: Int = 100,
+    private val journal: String = "satme-datv-son.log",
     private val ecoute: (ShortArray, Int, Int) -> Unit,
 ) {
+    private val bloc = rate * blocMs / 1000 * canaux
+
     @Volatile private var processus: Process? = null
 
     /** Where the stream's blocks go; null once stopped. */
@@ -33,8 +41,8 @@ class SonDatvPc(
     /** Starts ffmpeg; false when it does not start. */
     fun demarre(): Boolean {
         val p = runCatching {
-            ProcessBuilder(commande(ffmpeg))
-                .redirectError(File(System.getProperty("java.io.tmpdir"), "satme-datv-son.log")).start()
+            ProcessBuilder(commande(ffmpeg, rate, canaux))
+                .redirectError(File(System.getProperty("java.io.tmpdir"), journal)).start()
         }.getOrNull() ?: return false
         processus = p
         thread(isDaemon = true, name = "satme-datv-son") { lis(p.inputStream) }
@@ -50,25 +58,24 @@ class SonDatvPc(
     }
 
     private fun lis(e: InputStream) {
-        val b = ByteArray(BLOC * 2)
+        val b = ByteArray(bloc * 2)
         var n = 0
         while (true) {
             val k = runCatching { e.read(b, n, b.size - n) }.getOrDefault(-1)
             if (k < 0) break
             n += k
             if (n < b.size) continue
-            val pcm = ShortArray(BLOC) { ((b[2 * it].toInt() and 0xFF) or (b[2 * it + 1].toInt() shl 8)).toShort() }
-            runCatching { ecoute(pcm, BLOC, RATE) }
+            val pcm = ShortArray(bloc) { ((b[2 * it].toInt() and 0xFF) or (b[2 * it + 1].toInt() shl 8)).toShort() }
+            runCatching { ecoute(pcm, bloc, rate) }
             n = 0
         }
     }
 
     companion object {
         const val RATE = 16_000
-        private const val BLOC = RATE / 10
 
-        fun commande(ffmpeg: String): List<String> = listOf(ffmpeg, "-loglevel", "error", "-fflags", "nobuffer",
+        fun commande(ffmpeg: String, rate: Int = RATE, canaux: Int = 1): List<String> = listOf(ffmpeg, "-loglevel", "error", "-fflags", "nobuffer",
             "-probesize", "200000", "-analyzeduration", "1000000", "-f", "mpegts", "-i", "pipe:0",
-            "-map", "0:a:0", "-vn", "-ac", "1", "-ar", RATE.toString(), "-f", "s16le", "pipe:1")
+            "-map", "0:a:0", "-vn", "-ac", canaux.toString(), "-ar", rate.toString(), "-f", "s16le", "pipe:1")
     }
 }

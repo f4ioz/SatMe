@@ -224,6 +224,11 @@ fun main(args: Array<String>) {
     serveur.qrzDatv = QrzDatvPc(dossier, { station.settings.qrzUser.isNotBlank() && station.settings.qrzMdp.isNotBlank() },
         { c -> kotlinx.coroutines.runBlocking { carnet.ficheQrz(c) } })
     serveur.large = large
+    datv.diffusion = diffusion
+    // The wide band chat, tune requests by UDP: each off unless chosen in the DATV tab.
+    serveur.chatLarge = ChatLargePc(station.stockage, { station.settings.callsign }).also { it.demarre() }
+    serveur.accordUdp = AccordUdpPc(station.stockage, reseau, { datv.reglage },
+        { r -> large.veilleArrete("arrêtée : accord reçu par UDP"); datv.demarre(r) }, { datv.etat.actif }).also { it.relance() }
     serveur.demarre()
     // QO-100 received when SatMe-PC stopped: taken back only when chosen in Réglages (reception only).
     Thread({ runCatching { trafic.repriseAuDemarrage() } }, "satme-qo100-reprise").apply { isDaemon = true; start() }

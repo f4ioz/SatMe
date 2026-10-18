@@ -22,9 +22,9 @@ import javax.net.ssl.SSLSocket
 import javax.net.ssl.SSLSocketFactory
 
 /**
- * A WebSocket client that only listens (RFC 6455, client side): the
- * opening handshake (TLS by the JDK), the messages received, pings
- * answered, the close echoed. Nothing else is ever sent.
+ * A WebSocket client (RFC 6455, client side): the opening handshake (TLS
+ * by the JDK), the messages received, pings answered, the close echoed.
+ * Nothing else is sent but what the caller passes to [envoieTexte].
  */
 class ClientWebSocketPc private constructor(private val socket: Socket, private val max: Int) : Closeable {
     private val entree = BufferedInputStream(socket.getInputStream(), 16_384)
@@ -58,6 +58,9 @@ class ClientWebSocketPc private constructor(private val socket: Socket, private 
         }
         return null
     }
+
+    /** A text message (a chat's protocol packets, its messages). */
+    fun envoieTexte(t: String) = envoie(WebSocketPc.TEXTE, t.toByteArray(Charsets.UTF_8))
 
     @Synchronized
     private fun envoie(opcode: Int, donnees: ByteArray) {

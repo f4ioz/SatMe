@@ -232,7 +232,7 @@ class DatvPc(
     private fun arreteFlux() {
         (listOf(ffmpeg, ffplay) + vlcs).forEach { p -> p?.let { runCatching { it.outputStream.close() }; it.destroy() } }
         ffmpeg = null; ffplay = null; vlcs.clear(); typesLecteurs = null
-        arreteSonTexte()
+        arreteSonTexte(); arreteSonLocal()
         enregistre(false)
     }
 
@@ -395,6 +395,8 @@ class DatvPc(
             if (lecteursLocaux) {
                 if (ffmpeg == null) demarreLecteurs(gen)
                 if (sousTitres && ffmpeg != null && sonTexte?.enMarche != true && horloge() - essaiSonTexteMs >= 5000L) demarreSonTexte(gen)
+                if (ffmpeg != null && sonLocalVoulu() && sonLocal?.enMarche != true && horloge() - essaiSonLocalMs >= 5000L) demarreSonLocal(gen)
+                else if (sonLocal != null && !sonLocalVoulu()) arreteSonLocal()
                 if (!file.offer(bloc)) { file.poll(); file.offer(bloc) }
             }
             for (q in abonnes) if (!q.offer(bloc)) { q.poll(); q.offer(bloc) }
@@ -476,7 +478,7 @@ class DatvPc(
 
     private fun lecteurs(): List<OutputStream> {
         vlcs.removeAll { !it.isAlive }
-        return listOfNotNull(ffmpeg?.outputStream, ffplay?.outputStream, sonTexte?.entree) + vlcs.map { it.outputStream }
+        return listOfNotNull(ffmpeg?.outputStream, ffplay?.outputStream, sonTexte?.entree, sonLocal?.entree) + vlcs.map { it.outputStream }
     }
 
     /** The streams' types the players were started on. */
@@ -497,7 +499,7 @@ class DatvPc(
         typesLecteurs = types
         listOfNotNull(ffmpeg, ffplay).forEach { p -> runCatching { p.outputStream.close() }; p.destroy() }
         ffmpeg = null; ffplay = null
-        arreteSonTexte()
+        arreteSonTexte(); arreteSonLocal()
     }
 
     // ------------------------------------------------------------ the sound for the subtitles
@@ -521,7 +523,7 @@ class DatvPc(
         sonTexte?.arrete()
         val e = ecouteSon ?: return
         val ff = RenduPc.ffmpeg() ?: return
-        sonTexte = SonDatvPc(ff, e).takeIf { it.demarre() }
+        sonTexte = SonDatvPc(ff, ecoute = e).takeIf { it.demarre() }
     }
     @Volatile private var essaiSonTexteMs = 0L
 
@@ -540,7 +542,7 @@ class DatvPc(
             .redirectError(File(System.getProperty("java.io.tmpdir"), "satme-datv-ffmpeg.log")).start()
         ffmpeg = p
         thread(isDaemon = true, name = "satme-datv-images") { litImages(p.inputStream, gen) }
-        if (reglage.son) demarreSon(ff)
+        if (reglage.son && !sonReglable) demarreSon(ff)
     }
 
     /** ffplay for the sound on this PC. */
@@ -556,9 +558,62 @@ class DatvPc(
     @Synchronized
     fun coupeSon(on: Boolean) {
         regleSon(on)
-        if (!on) { ffplay?.let { p -> runCatching { p.outputStream.close() }; p.destroy() }; ffplay = null; return }
+        if (!on) { arreteFfplay(); if (!sonLocalVoulu()) arreteSonLocal(); return }
+        // Played here with its levels: the next block starts it.
+        if (sonReglable) return
         if (ffmpeg != null && ffplay == null && lecteursLocaux) RenduPc.ffmpeg()?.let { demarreSon(it) }
     }
+
+    private fun arreteFfplay() { ffplay?.let { p -> runCatching { p.outputStream.close() }; p.destroy() }; ffplay = null }
+
+    // ------------------------------------------------------------ the sound played here, its levels, its volume
+
+    /** The browsers listening to the DATV sound (« Écouter ici »), fed by the decoder here. */
+    @Volatile var diffusion: DiffusionSon? = null
+
+    /** The levels of the sound decoded here. */
+    val niveaux = fr.f4ioz.satcombo.datv.NiveauxSon()
+
+    /** The sound decoded by SatMe (levels, volume) rather than by ffplay: off unless chosen. */
+    val sonReglable: Boolean get() = stockage.getBoolean("datv_son_reglable", false)
+
+    /** The volume of the sound decoded here, in % (0 to 200). */
+    val volume: Int get() = stockage.getInt("datv_volume", 100).coerceIn(0, 200)
+
+    @Synchronized
+    fun regleSonLocal(reglable: Boolean?, volumePct: Int?) {
+        volumePct?.let { stockage.edit().putInt("datv_volume", it.coerceIn(0, 200)).apply() }
+        if (reglable == null || reglable == sonReglable) return
+        stockage.edit().putBoolean("datv_son_reglable", reglable).apply()
+        if (reglable) arreteFfplay()
+        else {
+            if (!sonLocalVoulu()) arreteSonLocal()
+            if (reglage.son && ffmpeg != null && ffplay == null && lecteursLocaux) RenduPc.ffmpeg()?.let { demarreSon(it) }
+        }
+    }
+
+    /** Played here with its levels, or a browser listens to it. */
+    private fun sonLocalVoulu(): Boolean = lecteursLocaux && ((sonReglable && reglage.son) || diffusion?.ecoute("datv") == true)
+
+    @Volatile private var sonLocal: SonLocalDatvPc? = null
+    @Volatile private var essaiSonLocalMs = 0L
+
+    @Synchronized
+    private fun demarreSonLocal(gen: Int) {
+        if (generation != gen || sonLocal?.enMarche == true || !sonLocalVoulu()) return
+        val t = horloge()
+        if (t - essaiSonLocalMs < 5000L) return
+        essaiSonLocalMs = t
+        sonLocal?.arrete()
+        val ff = RenduPc.ffmpeg() ?: return
+        sonLocal = SonLocalDatvPc(ff, niveaux, { volume / 100.0 }, { sonReglable && reglage.son }, diffusion, horloge).takeIf { it.demarre() }
+    }
+
+    private fun arreteSonLocal() { sonLocal?.arrete(); sonLocal = null; essaiSonLocalMs = 0L }
+
+    /** The levels for the page. */
+    fun sonJson(): JSONObject = niveaux.json(horloge()).put("reglable", sonReglable).put("volume", volume).put("son", reglage.son)
+        .put("enMarche", sonLocal?.enMarche == true).put("erreur", sonLocal?.erreur.orEmpty())
 
     /** JPEG pictures one after the other on ffmpeg's output: each kept whole, from its start to its end marker. */
     private fun litImages(e: InputStream, gen: Int) {

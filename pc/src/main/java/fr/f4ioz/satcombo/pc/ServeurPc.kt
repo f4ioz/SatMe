@@ -65,6 +65,10 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
 
     /** QO-100's wide band spectrum from the ground station, its signals and the « veille » (set before [demarre]). */
     @Volatile var large: SpectreLargePc? = null
+    /** The wide band chat (off unless chosen). */
+    @Volatile var chatLarge: ChatLargePc? = null
+    /** Tune requests by UDP (off unless chosen). */
+    @Volatile var accordUdp: AccordUdpPc? = null
 
     /** The DATV transmission's pictures and videos: the folder browser and the files sent (set before [demarre]). */
     @Volatile var fichiersDatv: FichiersDatvPc? = null
@@ -176,7 +180,7 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
         if (chemin == "/api/son/flux" && diffusion != null) {
             // The dongle's or the sound card's sound, to the browser asking (the page open on another PC).
             c.soTimeout = 0
-            diffusion.sert(if (q["source"] == "carte") "carte" else "sdr", sortie)
+            diffusion.sert(when (q["source"]) { "carte" -> "carte"; "datv" -> "datv"; else -> "sdr" }, sortie)
             return
         }
         if (chemin == "/api/datv/video.mjpeg" && datv != null) {
@@ -280,7 +284,16 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
             val o = when {
                 l == null -> JSONObject().put("ok", false)
                 r.methode == "POST" -> runCatching { l.action(chemin, q) }.getOrElse { JSONObject().put("ok", false).put("erreur", it.message ?: "erreur") }
-                else -> l.json(q["depuis"]?.toLongOrNull() ?: -1L)
+                else -> l.json(q["depuis"]?.toLongOrNull() ?: -1L, q["vu"] != "0")
+            }
+            envoie(sortie, "200 OK", "application/json; charset=utf-8", o.toString().toByteArray()); return
+        }
+        if (chemin == "/api/datv/chat" || chemin.startsWith("/api/datv/chat/")) {
+            val l = chatLarge
+            val o = when {
+                l == null -> JSONObject().put("ok", false)
+                r.methode == "POST" -> runCatching { l.action(chemin, q) }.getOrElse { JSONObject().put("ok", false).put("erreur", it.message ?: "erreur") }
+                else -> l.json(q["depuis"]?.toLongOrNull() ?: -1L).put("rapport", rapportDatv())
             }
             envoie(sortie, "200 OK", "application/json; charset=utf-8", o.toString().toByteArray()); return
         }
@@ -401,6 +414,10 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 if (p == null) envoie(sortie, "404 Not Found", "text/plain", "pas de photo".toByteArray())
                 else envoie(sortie, "200 OK", p.second, p.first)
             }
+            "/api/datv/son/niveaux" -> envoie(sortie, "200 OK", "application/json; charset=utf-8",
+                (datv?.sonJson()?.put("ok", true) ?: JSONObject().put("ok", false)).toString().toByteArray())
+            "/api/datv/accord-udp" -> envoie(sortie, "200 OK", "application/json; charset=utf-8",
+                (accordUdp?.json()?.put("ok", true) ?: JSONObject().put("ok", false)).toString().toByteArray())
             "/api/datv/image.jpg" -> {
                 val img = datv?.image
                 if (img == null) envoie(sortie, "404 Not Found", "text/plain", "pas d'image".toByteArray())
@@ -904,6 +921,12 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
             "/api/datv/enregistre" -> return ok.put("nom", datv?.enregistre(q["on"] == "1").orEmpty())
             "/api/datv/udp" -> datv?.regleUdp(q["on"]?.let { it == "1" }, q["dest"])?.let { return JSONObject().put("ok", false).put("erreur", it) }
             "/api/datv/son" -> datv?.coupeSon(q["on"] == "1")
+            "/api/datv/son/local" -> datv?.regleSonLocal(q["reglable"]?.let { it == "1" }, q["volume"]?.trim()?.toIntOrNull())
+            "/api/datv/accord-udp" -> {
+                val a = accordUdp ?: return JSONObject().put("ok", false).put("erreur", "indisponible")
+                val port = q["port"]?.let { it.trim().toIntOrNull() ?: return JSONObject().put("ok", false).put("erreur", "port : un nombre") }
+                a.regle(q["on"]?.let { it == "1" }, port, q["reseau"]?.let { it == "1" })?.let { return JSONObject().put("ok", false).put("erreur", it) }
+            }
             "/api/datv/vlc" -> datv?.ouvreVlc()?.let { return JSONObject().put("ok", false).put("erreur", it) }
             "/api/datv/chemin" -> datv?.chemin = q["p"].orEmpty()
             "/api/datv/noeud" -> {
@@ -1241,6 +1264,15 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
     /** A file as it is on disk, by parts when the browser asks (a sound it seeks in). */
     /** « Phonie → texte »: its state and overs, its settings, the day's transcript to download. */
     /** The station card received on DATV, with where it is from us and whether it is in the log. */
+    /** The reception report the chat's habit writes, for what is received now ("" when nothing is locked). */
+    private fun rapportDatv(): String {
+        val d = datv ?: return ""
+        val e = d.etat
+        if (!e.actif || !e.verrouille) return ""
+        val marge = d.qualite()?.opt("marge")?.let { (it as? Number)?.toDouble() }
+        return fr.f4ioz.satcombo.datv.ChatLarge.rapport(large?.nomRecu() ?: e.service, marge, e.merDb, d.reglage.srKs, d.reglage.cielKhz)
+    }
+
     private fun carteDatv(d: DatvPc): JSONObject = d.carte.json(System.currentTimeMillis(), station.etat.value.observateur,
         { c -> carnet?.historique(c)?.size ?: 0 }, d.reglage.cielKhz, d.verrouDepuisMs)
 
@@ -1482,6 +1514,7 @@ object JsonPc {
         .put("noeud", d.noeud).put("nomNoeud", d.nomNoeud)
         .put("programme", d.programme() ?: JSONObject.NULL).put("chemin", d.chemin).put("windows", OutilsPc.windows)
         .put("debits", JSONArray(Datv.DEBITS)).put("canaux", JSONArray(Datv.CANAUX_KHZ)).put("balise", Datv.BALISE_KHZ)
+        .put("sonReglable", d.sonReglable).put("volume", d.volume)
         .put("udp", JSONObject().put("on", d.udpOn).put("dest", d.udpDestination).put("datagrammes", d.udpDatagrammes).put("erreur", d.udpErreur))
         .put("recepteur", d.recepteur).put("sdrTenu", d.sdrTenu ?: "").put("s2", d.logiciel?.let { l ->
             val e = l.etatS2()

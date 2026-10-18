@@ -202,6 +202,22 @@ L'installer sur le Pi : [Installer SatMe-Node sur un Raspberry Pi](installer-sat
 - Les **signaux trouvés**, chacun avec sa largeur arrondie au débit de symboles le plus proche, son niveau face à la balise, et le **nom** de la station une fois lu (nom du service, carte de visite ou indicatif dans l'image ; gardé 24 h pour cette fréquence et ce débit).
 - **Cliquer un signal** : le MiniTiouner s'y accorde (même OL, même entrée).
 - **Veille** : les canaux occupés tour à tour, tenus tant qu'ils sont accrochés, un enregistrement au nom de la station en option ; tout accord à la main l'arrête.
+- **Dans le cockpit QO-100 aussi** : *Bande large DATV (station sol)*, décoché d'origine, y montre la même bande sous le transpondeur étroit ; un clic sur un signal y accorde le récepteur DATV. La connexion ne reste ouverte que tant qu'un des deux onglets la montre.
+
+### Son, salon et accord par UDP
+
+Chacun coupé tant qu'on ne le choisit pas dans la carte Réception.
+
+- **Vumètre et volume** : le son est décodé par SatMe (ffmpeg en PCM stéréo 48 kHz) au lieu de ffplay, joué par la sortie son du PC avec le volume choisi (0 à 200 %, appliqué tout de suite), son niveau gauche et droite (« M » quand les deux voies sont identiques) avec la crête tenue 1,5 s. **Écouter ici** › *Son DATV* l'envoie aussi au navigateur, avec son propre volume.
+- **Salon de la bande large** : le salon public de la station sol (BATC), en lecture seule tant qu'on n'écrit pas : rien n'y est envoyé sans un clic sur **Envoyer**, le pseudo est l'indicatif de la station (posé juste avant le premier message), un message toutes les 3 s au plus ; sans indicatif, il reste en lecture seule. **Rapport** écrit dans la case le rapport de réception d'usage (« SigReport: indicatif - D marge (MER dB) - débit Ks - fréquence »), à relire puis envoyer. Aucun service de rapports de réception DATV en ligne n'est joignable aujourd'hui : la page le dit (« service indisponible ») et rien d'autre n'est envoyé.
+- **Accord par UDP** : un autre programme demande un accord par un datagramme texte, sur le port choisi (9997 d'origine), de ce PC seulement — ou du réseau local, si SatMe-PC est lancé avec `--reseau` et que la case est cochée. Réception seulement : rien n'est jamais répondu ni émis, l'alimentation du LNB reste comme elle est, une demande toutes les 2 s au plus (10 par minute), la même redemandée pendant la réception ne relance rien. Deux formats :
+
+  ```
+  FREQ=10494750;SR=1500;OL=9750000;ENTREE=A
+  [GlobalMsg],Freq=10491500,Offset=9750000,Srate=1500,FPlug=A
+  ```
+
+  Le premier : la fréquence ciel en kHz (ou en MHz avec un point : `FREQ=10494.75`), le débit en kS/s, l'oscillateur du LNB en kHz et l'entrée A ou B en option (gardés sinon). Le second, courant parmi les outils DATV : Freq en kHz, Offset l'oscillateur en kHz (0 : Freq est déjà la fréquence intermédiaire), Srate en kS/s ; ses autres clés (alimentation, 22 kHz…) sont ignorées. Par exemple : `echo -n 'FREQ=10494750;SR=333' | nc -u -w1 127.0.0.1 9997`.
 
 ### Qualité de réception
 

@@ -542,6 +542,10 @@ object PagePc {
   #q-resume #q-verdict { font-size:14px; }
   #dq-carte #q-boite { margin-top:0; border-top:0; padding-top:0; margin-bottom:10px; }
   .wb-boite { margin-top:8px; border-top:1px solid var(--bord); padding-top:5px; }
+  .d-vu { width:140px; height:18px; border-radius:4px; background:#0E1720; }
+  .d-chat-liste { max-height:190px; overflow-y:auto; font-size:12px; line-height:1.35; margin-top:2px; overflow-wrap:anywhere; }
+  .d-chat-liste .h { color:var(--gris); margin-right:6px; } .d-chat-liste b { color:var(--ambre); margin-right:6px; }
+  .tq-wb .wb-spectre { height:110px; }
   .wb-tete { align-items:center; gap:4px 14px; }
   .wb-tete #wb-plus-b { margin-left:auto; padding:2px 10px; }
   .wb-bande { position:relative; margin-top:4px; }
@@ -588,7 +592,7 @@ object PagePc {
     <button id="ec-btn" onclick="g('ec-pop').hidden = !g('ec-pop').hidden" title="Entendre ici, dans ce navigateur, le son de SatMe-PC (la page ouverte sur un autre PC du réseau)" style="padding:4px 10px">🔈 Écouter ici</button>
     <div id="ec-pop" hidden style="position:absolute;right:0;top:110%;z-index:50;min-width:280px;padding:10px 12px;border-radius:12px;background:var(--carte);border:1px solid var(--bord);box-shadow:0 8px 24px rgba(0,0,0,.4)">
       <div class="t" style="margin:0 0 6px">Le son dans ce navigateur</div>
-      <div class="ligne" style="margin:0"><select id="ec-source"><option value="sdr">Clé SDR (QO-100, SDR)</option><option value="carte">Carte son (le poste)</option></select></div>
+      <div class="ligne" style="margin:0"><select id="ec-source"><option value="sdr">Clé SDR (QO-100, SDR)</option><option value="carte">Carte son (le poste)</option><option value="datv">Son DATV</option></select></div>
       <div class="ligne"><button class="primaire" id="ec-go" onclick="ecouteIci()">▶ Écouter</button><button id="ec-stop" class="arret" hidden onclick="arreteEcoute()">■ Arrêter</button>
         <span class="petit">Volume</span><input type="range" id="ec-vol" min="0" max="200" value="100" style="flex:1" oninput="if (ecGain) ecGain.gain.value = this.value / 100"></div>
       <div class="petit" id="ec-etat">Le son de la clé SDR ou de la carte son de SatMe-PC, joué par cet ordinateur — utile quand la page est ouverte sur un autre PC (--reseau).</div>
@@ -1283,6 +1287,15 @@ object PagePc {
       <div class="ligne" style="flex-wrap:wrap;gap:4px 10px"><label class="petit" title="Coupé ou remis tout de suite, pendant la réception aussi"><input type="checkbox" id="d-son" onchange="dPost('son?on=' + (this.checked ? 1 : 0))"> Son sur ce PC</label>
         <label class="petit" title="Le flux de transport reçu, tel quel, vers un autre lecteur (VLC, ffplay…) : ce PC ou le réseau local seulement, rien vers Internet"><input type="checkbox" id="d-udp" onchange="dUdp()"> Flux TS en UDP vers</label>
         <input id="d-udp-dest" style="max-width:140px" placeholder="127.0.0.1:9080" onchange="dUdp()"><span class="petit" id="d-udp-etat"></span></div>
+      <div class="ligne" id="d-vu-ligne" style="flex-wrap:wrap;gap:4px 10px"><label class="petit" title="Le son décodé par SatMe plutôt que par ffplay : son niveau gauche et droite (ou mono) avec la crête tenue, et un volume réglable tout de suite. Sert aussi « Écouter ici » › Son DATV."><input type="checkbox" id="d-vu-on" onchange="dSonLocal('reglable=' + (this.checked ? 1 : 0))"> Vumètre et volume</label>
+        <span id="d-vu-boite" class="paire" style="gap:6px;align-items:center" hidden><canvas id="d-vu" class="d-vu" width="140" height="18" title="Niveau du son DATV en dB pleine échelle : barre = crête du moment, trait = crête tenue 1,5 s ; « M » quand les deux voies sont identiques"></canvas>
+          <input type="range" id="d-vol" min="0" max="200" value="100" style="width:90px;flex:none" title="Volume du son DATV sur ce PC (et vers « Écouter ici »)" oninput="txt('d-vol-v', this.value + ' %')" onchange="dSonLocal('volume=' + this.value)"><span class="petit" id="d-vol-v"></span></span>
+        <span class="petit" id="d-vu-etat"></span></div>
+      <details id="d-ua"><summary class="petit" style="cursor:pointer">Accord par UDP</summary>
+        <div class="ligne" style="flex-wrap:wrap;gap:4px 10px"><label class="petit" title="Un autre programme peut demander un accord par un datagramme UDP texte, par exemple « FREQ=10494750;SR=1500;OL=9750000 » (kHz, kS/s, kHz ; ENTREE=A ou B en option) ou « [GlobalMsg],Freq=10491500,Offset=9750000,Srate=1500 ». Réception seulement : rien n’est jamais répondu ni émis, l’alimentation du LNB n’est jamais changée, une demande toutes les 2 s au plus."><input type="checkbox" id="d-ua-on" onchange="dAccordUdp()"> Écouter les demandes d’accord sur le port</label>
+          <input id="d-ua-port" style="max-width:70px" onchange="dAccordUdp()">
+          <label class="petit" id="d-ua-res-l" title="Accepter aussi les machines du réseau local (seulement avec --reseau) ; sinon ce PC seulement"><input type="checkbox" id="d-ua-res" onchange="dAccordUdp()"> réseau local</label></div>
+        <div class="petit" id="d-ua-etat"></div></details>
       <div class="ligne"><button class="primaire" data-marche="d" onclick="dDemarre()">Recevoir</button><button class="arret" data-arret="d" hidden onclick="dPost('arrete')">Arrêter</button>
         <button id="d-benr" onclick="dEnregistre()">Enregistrer</button><button onclick="dPhoto()" title="L’image reçue, enregistrée en PNG sur cet ordinateur">Photo</button><button onclick="dPost('vlc')" title="Le même flux dans VLC, pleine qualité">VLC</button></div>
       <div class="etat" id="d-msg"></div>
@@ -1290,6 +1303,19 @@ object PagePc {
     <div class="carte" id="d-entendus-carte" hidden>
       <div class="t">Stations entendues <span class="petit">(un clic : y retourner)</span></div>
       <div id="d-entendus" class="d-entendus"></div>
+    </div>
+    <div class="carte" id="d-chat-carte">
+      <div class="t" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span>Salon de la bande large</span>
+        <label class="petit" style="text-transform:none;letter-spacing:0" title="Le salon public de la station sol de QO-100 (BATC), reçu par Internet tant que l’onglet DATV est ouvert. Rien n’y est envoyé sans un clic sur « Envoyer » ; le pseudo est l’indicatif de la station, posé au premier message."><input type="checkbox" id="d-chat-on" onchange="dChatRegle(this.checked)"> afficher</label>
+        <span class="petit" id="d-chat-etat" style="text-transform:none;letter-spacing:0"></span></div>
+      <div id="d-chat-zone" hidden>
+        <div id="d-chat-liste" class="d-chat-liste"></div>
+        <div class="ligne" style="margin-top:4px"><input id="d-chat-texte" maxlength="300" placeholder="Message (envoyé seulement par « Envoyer »)" onkeydown="if (event.key === 'Enter') dChatEnvoie()">
+          <button id="d-chat-envoie" onclick="dChatEnvoie()">Envoyer</button>
+          <button id="d-chat-rapport" onclick="dChatRapport()" title="Écrit dans la case le rapport de réception d’usage dans le salon (indicatif reçu, marge D, MER, débit, fréquence), à relire puis envoyer. Aucun service de rapports de réception DATV n’est joignable aujourd’hui : seul le salon les reçoit.">Rapport</button></div>
+        <div class="petit" id="d-chat-qui"></div>
+        <div class="petit" id="d-rapport-service" title="Aucun service de rapports de réception DATV en ligne n’a été trouvé joignable : les rapports se donnent dans ce salon.">Service de rapports de réception : indisponible</div>
+      </div>
     </div>
     <div class="petit" id="d-prog"></div>
       </div>
@@ -1526,6 +1552,15 @@ object PagePc {
         <canvas id="o-loupe" class="tq-loupe" style="width:100%;display:block;margin-top:4px;cursor:crosshair" title="± 25 kHz autour de l'accord : cliquer pour s'y poser"></canvas>
         <div class="paire" style="margin-top:8px"><b id="o-seg"></b><span class="petit" id="o-larg"></span><span id="o-interdit" class="rose" style="font-weight:700"></span></div>
         <div class="petit" id="o-avert" style="margin-top:2px"></div>
+      </div>
+      <div class="carte tq-wb" id="tq-wb-carte">
+        <div class="paire wb-tete"><label class="petit" title="Le spectre public du transpondeur large bande mesuré par la station sol (BATC), reçu par Internet tant qu’un des onglets DATV ou QO-100 le montre : rien n’y est envoyé. Un clic sur un signal y accorde le récepteur DATV."><input type="checkbox" id="tq-wb-on" onchange="tqWbRegle(this.checked)"> Bande large DATV (station sol)</label>
+          <span class="petit" id="tq-wb-etat"></span></div>
+        <div id="tq-wb-zone" class="wb-bande" hidden>
+          <canvas id="tq-wb-spectre" class="wb-spectre"></canvas>
+          <canvas id="tq-wb-chute" class="wb-chute"></canvas>
+          <div id="tq-wb-bulle" class="wb-bulle" hidden></div>
+        </div>
       </div>
     </div>
     <div class="tq-cote">
@@ -2974,7 +3009,7 @@ async function ecouteIci() {
     const lecteur = r.body.getReader();
     let reste = new Uint8Array(0), entete = true;
     g('ec-go').hidden = true; g('ec-stop').hidden = false; g('ec-btn').textContent = '🔊 Écoute';
-    txt('ec-etat', 'en écoute : ' + (source === 'sdr' ? 'clé SDR' : 'carte son'));
+    txt('ec-etat', 'en écoute : ' + (source === 'sdr' ? 'clé SDR' : source === 'datv' ? 'son DATV' : 'carte son'));
     while (true) {
       const { value, done } = await lecteur.read(); if (done) break;
       const t = new Uint8Array(reste.length + value.length); t.set(reste); t.set(value, reste.length);
@@ -3762,6 +3797,7 @@ async function ticDatv(premier) {
     txt('d-udp-etat', D.udp.erreur ? D.udp.erreur : D.udp.on && D.actif ? D.udp.datagrammes + ' datagrammes' : '');
   }
   if (document.activeElement !== g('d-son')) g('d-son').checked = D.son;
+  dSonVu();
   const r = g('d-rec'); r.style.display = D.enregistrement ? '' : 'none'; r.textContent = '● ' + D.enregistrement;
   g('d-benr').textContent = D.enregistrement ? 'Arrêter l’enregistrement' : 'Enregistrer';
   if (D.erreur) txt('d-msg', D.erreur);
@@ -3914,7 +3950,7 @@ async function dCale() { const j = await dPost('cale'); if (j && j.ok) { txt('d-
 async function dEnregistre() { await dPost('enregistre?on=' + (D && D.enregistrement ? 0 : 1)); }
 function dLnb() { g('d-lnb-avert').hidden = !g('d-lnb').value; }
 // ------------------------------------------------------------------ DATV: QO-100's wide band, the ground station's spectrum
-let WB = null, wbN = -1, wbVals = null, wbDernier = 0, wbBoites = [], wbSouris = null;
+let WB = null, wbN = -1, wbVals = null, wbDernier = 0;
 const WB_MIN = 8000, WB_MAX = 44000;
 const wbSr = s => s >= 1000 ? String(s / 1000).replace('.', ',') + ' MS' : s + ' kS';
 const WB_REGLE = 'Indice : en bande large, la densité de puissance doit rester au moins 1 dB sous celle de la balise ' +
@@ -3932,27 +3968,36 @@ function wbVu() {
   g('wb-plus-b').textContent = grand ? 'Réduire ▴' : 'Détails ▾';
 }
 wbVu();
+// Shown in the DATV tab, and in the QO-100 one when chosen there: asked (and so connected) only while one of them shows it.
 async function ticLarge() {
-  if (g('v-datv').hidden || window.SATME_TELEPHONE) return;
-  const t = Date.now();
-  if (WB && !WB.on && t - wbDernier < 3000) return;
+  const enDatv = !g('v-datv').hidden, enQo = !g('v-qo100').hidden;
+  if ((!enDatv && !enQo) || window.SATME_TELEPHONE) return;
+  const t = Date.now(), montre = enDatv || (WB && WB.qo100);
+  if ((!WB || !WB.on || !montre) && t - wbDernier < 3000) return;
   wbDernier = t;
-  let j; try { j = await (await fetch('api/datv/large?depuis=' + wbN)).json(); } catch (x) { return; }
-  if (!j.ok) { g('wb-boite').hidden = true; return; }
-  WB = j; g('wb-boite').hidden = false;
+  let j; try { j = await (await fetch('api/datv/large?depuis=' + wbN + (montre ? '' : '&vu=0'))).json(); } catch (x) { return; }
+  if (!j.ok) { g('wb-boite').hidden = true; g('tq-wb-carte').hidden = true; return; }
+  WB = j; g('wb-boite').hidden = false; g('tq-wb-carte').hidden = false;
+  const qo = j.on && j.qo100;
+  g('tq-wb-on').checked = qo; g('tq-wb-zone').hidden = !qo;
   g('wb-on').checked = j.on;
   g('wb-zone').hidden = !j.on; g('wb-plus-b').hidden = !j.on;
   txt('wb-etat', !j.on ? '' : j.etat === 'connecté' ? (j.frais ? (j.signaux.length + (j.signaux.length > 1 ? ' signaux' : ' signal')) : 'en attente des trames…') : j.etat);
+  txt('tq-wb-etat', qo ? g('wb-etat').textContent : '');
   const vv = j.veille;
   if (document.activeElement !== g('wb-attente')) g('wb-attente').value = vv.attente;
   g('wb-veille').checked = vv.on; g('wb-balise').checked = vv.balise; g('wb-enr').checked = vv.enr;
   txt('wb-veille-etat', vv.etat && vv.on ? 'Veille : ' + vv.etat : '');
   dEntendus(j.entendus || []);
   if (!j.on) return;
-  if (j.valeurs) { wbN = j.n; wbVals = j.valeurs; wbChute(wbVals); }
+  const ici = (enDatv ? ['wb'] : []).concat(enQo && qo ? ['tq-wb'] : []);
+  if (j.valeurs) { wbN = j.n; wbVals = j.valeurs; ici.forEach(p => wbChute(wbVals, p + '-chute')); }
   if (!j.frais) wbVals = null;
-  wbSpectre();
-  wbListe();
+  ici.forEach(p => wbSpectre(p + '-spectre'));
+  if (enDatv) wbListe();
+}
+async function tqWbRegle(on) {
+  await wbRegle('qo100=' + (on ? 1 : 0) + (on ? '&on=1' : ''));
 }
 setInterval(ticLarge, 500);
 // The canvas as large as shown: text at its size, not stretched.
@@ -3973,8 +4018,8 @@ function wbTx() {
   const k = EM.khzEnCours || EM.khz;
   return { khz: k + (EM.descenteKhz - EM.khz), larg: EM.occupeKhz || EM.sr * 1.35, sr: EM.sr };
 }
-function wbSpectre() {
-  const c = g('wb-spectre');
+function wbSpectre(id) {
+  const c = g(id || 'wb-spectre');
   wbTaille(c);
   const x = c.getContext('2d'), w = c.width, h = c.height, bas = h - 13;
   x.fillStyle = '#0E1720'; x.fillRect(0, 0, w, h);
@@ -4010,7 +4055,7 @@ function wbSpectre() {
   if (tx) marque(tx, 'rgba(229,72,77,.13)', '#E5484D', 'TX');
   if (rx) marque(rx, rx.verrouille ? 'rgba(91,214,138,.12)' : 'rgba(255,180,84,.10)', rx.verrouille ? '#5BD68A' : '#FFB454',
     'RX' + (rx.marge != null ? ' · D ' + (rx.marge >= 0 ? '+' : '−') + fr1(Math.abs(rx.marge)) : rx.verrouille ? '' : ' …'));
-  if (!wbVals) { x.fillStyle = '#6F7D8A'; x.font = '11px sans-serif'; x.fillText('en attente du spectre…', w / 2, h / 2); wbBoites = []; return; }
+  if (!wbVals) { x.fillStyle = '#6F7D8A'; x.font = '11px sans-serif'; x.fillText('en attente du spectre…', w / 2, h / 2); c._b = []; return; }
   const n = wbVals.length;
   x.beginPath(); x.moveTo(0, bas);
   for (let i = 0; i < n; i++) x.lineTo(i * w / n, wbY(wbVals[i], h));
@@ -4021,7 +4066,7 @@ function wbSpectre() {
   for (let i = 0; i < n; i++) { const px = i * w / n, py = wbY(wbVals[i], h); if (i) x.lineTo(px, py); else x.moveTo(px, py); }
   x.strokeStyle = '#3FE0C8'; x.lineWidth = 1; x.stroke();
   // The signals found: their width, their name and rate above (a label moved, or left out, where it would cover another).
-  wbBoites = [];
+  c._b = [];
   const pris = [];
   const libre = (a, b, y) => !pris.some(p => a < p.b && b > p.a && Math.abs(y - p.y) < 11);
   (WB.signaux || []).slice().sort((a, z) => (z.nom ? 1 : 0) - (a.nom ? 1 : 0) || z.sr - a.sr).forEach(s => {
@@ -4039,7 +4084,7 @@ function wbSpectre() {
       x.fillStyle = coul; x.fillText(lib, cx, ly);
     }
     x.font = '10px sans-serif';
-    wbBoites.push({ x0: x0, x1: x1, s: s });
+    c._b.push({ x0: x0, x1: x1, s: s });
   });
   // The beacon's line named where no label is (at its right end, else its left).
   if (bal) {
@@ -4047,32 +4092,38 @@ function wbSpectre() {
     const ax = [w - 4 - lw, wbX(10492500, w) + 4, w / 2 - lw / 2].find(a => libre(a - 3, a + lw + 3, yb)) ?? (w - 4 - lw);
     x.fillStyle = 'rgba(255,180,84,.85)'; x.textAlign = 'left'; x.fillText(lib, ax, yb); x.textAlign = 'center';
   }
-  if (wbSouris != null) { x.strokeStyle = 'rgba(232,240,247,.35)'; x.beginPath(); x.moveTo(wbSouris + 0.5, 0); x.lineTo(wbSouris + 0.5, bas); x.stroke(); }
+  if (c._s != null) { x.strokeStyle = 'rgba(232,240,247,.35)'; x.beginPath(); x.moveTo(c._s + 0.5, 0); x.lineTo(c._s + 0.5, bas); x.stroke(); }
 }
-function wbSous(px) {
-  return wbBoites.filter(b => px >= b.x0 - 6 && px <= b.x1 + 6).sort((a, z) => Math.abs((a.x0 + a.x1) / 2 - px) - Math.abs((z.x0 + z.x1) / 2 - px))[0];
+function wbSous(c, px) {
+  return (c._b || []).filter(b => px >= b.x0 - 6 && px <= b.x1 + 6).sort((a, z) => Math.abs((a.x0 + a.x1) / 2 - px) - Math.abs((z.x0 + z.x1) / 2 - px))[0];
 }
-g('wb-spectre').onclick = e => {
-  if (!WB || !wbBoites.length) return;
-  const c = g('wb-spectre'), r = c.getBoundingClientRect(), b = wbSous((e.clientX - r.left) * c.width / r.width);
+// The same strip in each tab: a click tunes the DATV receiver, a bubble names what is under the mouse.
+function wbBranche(id, bulle) {
+const c = g(id);
+c.onclick = e => {
+  if (!WB || !(c._b || []).length) return;
+  const r = c.getBoundingClientRect(), b = wbSous(c, (e.clientX - r.left) * c.width / r.width);
   if (b) wbAccorde(b.s);
 };
-g('wb-spectre').onmousemove = e => {
+c.onmousemove = e => {
   if (!WB) return;
-  const c = g('wb-spectre'), r = c.getBoundingClientRect(), px = (e.clientX - r.left) * c.width / r.width, b = wbSous(px);
-  wbSouris = px;
+  const r = c.getBoundingClientRect(), px = (e.clientX - r.left) * c.width / r.width, b = wbSous(c, px);
+  c._s = px;
   const khz = WB.debut + px / c.width * WB.largeur, rx = wbRx(), tx = wbTx();
   let t = b ? wbTitre(b.s) : mhz3(Math.round(khz)) + ' MHz · aucun signal ici';
   if (!b && rx && Math.abs(khz - rx.khz) <= rx.larg / 2) t += '\ncanal du récepteur';
   if (tx && Math.abs(khz - tx.khz) <= tx.larg / 2) t += '\nnotre émission : ' + mhz3(Math.round(tx.khz)) + ' MHz · ' + wbSr(tx.sr);
-  const bu = g('wb-bulle');
+  const bu = g(bulle);
   bu.textContent = t; bu.hidden = false;
   const l = px + 14 + bu.offsetWidth > r.width ? px - 14 - bu.offsetWidth : px + 14;
   bu.style.left = Math.max(0, l) + 'px';
   c.style.cursor = b ? 'pointer' : 'crosshair';
-  if (WB.on) wbSpectre();
+  if (WB.on) wbSpectre(id);
 };
-g('wb-spectre').onmouseleave = () => { g('wb-bulle').hidden = true; wbSouris = null; if (WB && WB.on) wbSpectre(); };
+c.onmouseleave = () => { g(bulle).hidden = true; c._s = null; if (WB && WB.on) wbSpectre(id); };
+}
+wbBranche('wb-spectre', 'wb-bulle');
+wbBranche('tq-wb-spectre', 'tq-wb-bulle');
 function wbTitre(s) {
   return (s.balise ? 'Balise · ' : '') + mhz3(s.centre) + ' MHz · ' + wbSr(s.sr) + (s.nom ? ' · ' + s.nom : '') +
     (s.db != null && !s.balise ? '\n' + (s.db >= 0 ? '+' : '−') + fr1(Math.abs(s.db)) + ' dB par rapport à la balise' : '') +
@@ -4087,8 +4138,8 @@ function wbListe() {
   if (g('wb-liste').dataset.h !== ht) { g('wb-liste').dataset.h = ht; g('wb-liste').innerHTML = ht; }
 }
 // The waterfall: a row per frame, the newest on top.
-function wbChute(vals) {
-  const c = g('wb-chute');
+function wbChute(vals, id) {
+  const c = g(id || 'wb-chute');
   wbTaille(c);
   const x = c.getContext('2d'), w = c.width, h = c.height;
   if (h > 1) x.drawImage(c, 0, 0, w, h - 1, 0, 1, w, h - 1);
@@ -4118,6 +4169,102 @@ async function wbVeille(on) {
   if (j && j.ok === false) { g('wb-veille').checked = false; txt('wb-veille-etat', j.erreur || ''); }
   wbDernier = 0; setTimeout(ticLarge, 150);
 }
+// ------------------------------------------------------------------ DATV: the sound decoded here (levels, volume)
+let dVuJ = null;
+function dSonVu() {
+  if (!D) return;
+  if (document.activeElement !== g('d-vu-on')) g('d-vu-on').checked = !!D.sonReglable;
+  g('d-vu-boite').hidden = !D.sonReglable;
+  if (document.activeElement !== g('d-vol')) { g('d-vol').value = D.volume; txt('d-vol-v', D.volume + ' %'); }
+}
+async function dSonLocal(q) {
+  try { await fetch('api/datv/son/local?' + q, { method: 'POST' }); } catch (x) {}
+  setTimeout(ticDatv, 150);
+}
+// Ten times a second while shown (the option on, or the DATV sound heard in this browser).
+async function ticVu() {
+  if (g('v-datv').hidden || window.SATME_TELEPHONE || g('d-vu-boite').hidden) return;
+  try { dVuJ = await (await fetch('api/datv/son/niveaux')).json(); } catch (x) { return; }
+  if (!dVuJ.ok) return;
+  txt('d-vu-etat', dVuJ.erreur || (!dVuJ.son ? 'son coupé sur ce PC' : dVuJ.enMarche ? '' : D && D.actif ? 'en attente du son…' : ''));
+  dVuDessine(dVuJ);
+}
+setInterval(ticVu, 100);
+function dVuDessine(j) {
+  const c = g('d-vu'), x = c.getContext('2d'), w = c.width, h = c.height, bas = -60;
+  x.fillStyle = '#0E1720'; x.fillRect(0, 0, w, h);
+  const px = db => Math.max(0, Math.min(1, (db - bas) / -bas)) * (w - 14);
+  const voies = j.mono ? [['M', j.g]] : [['G', j.g], ['D', j.d]], hb = (h - 2) / voies.length;
+  x.font = '9px sans-serif'; x.textBaseline = 'middle';
+  voies.forEach((v, i) => {
+    const y = 1 + i * hb, k = v[1];
+    x.fillStyle = '#6F7D8A'; x.fillText(v[0], 2, y + hb / 2);
+    const gr = x.createLinearGradient(12, 0, w, 0);
+    gr.addColorStop(0, '#5BD68A'); gr.addColorStop(0.75, '#5BD68A'); gr.addColorStop(0.9, '#FFB454'); gr.addColorStop(1, '#E5484D');
+    x.fillStyle = gr; x.fillRect(12, y + 1, px(k.crete), hb - 2);
+    x.fillStyle = 'rgba(232,240,247,.85)'; x.fillRect(12 + px(k.tenue) - 1, y, 2, hb);
+  });
+  // −20, −10, −3 dBFS
+  x.fillStyle = 'rgba(232,240,247,.25)'; [-20, -10, -3].forEach(d => x.fillRect(12 + px(d), 0, 1, h));
+}
+// ------------------------------------------------------------------ DATV: tune requests by UDP
+let dUa = null, dUaDernier = 0;
+async function ticAccordUdp(force) {
+  if (g('v-datv').hidden || window.SATME_TELEPHONE) return;
+  const t = Date.now(); if (!force && t - dUaDernier < 3000) return; dUaDernier = t;
+  try { dUa = await (await fetch('api/datv/accord-udp')).json(); } catch (x) { return; }
+  if (!dUa.ok) { g('d-ua').hidden = true; return; }
+  if (document.activeElement !== g('d-ua-on')) g('d-ua-on').checked = dUa.on;
+  if (document.activeElement !== g('d-ua-port')) g('d-ua-port').value = dUa.port;
+  g('d-ua-res').checked = dUa.reseau; g('d-ua-res-l').hidden = !dUa.reseauPermis;
+  txt('d-ua-etat', !dUa.on ? '' : dUa.erreur ? dUa.erreur : 'à l’écoute sur ' + (dUa.reseau ? 'le réseau local' : 'ce PC') + ', port ' + dUa.port +
+    (dUa.recus ? ' · ' + dUa.recus + ' reçue' + (dUa.recus > 1 ? 's' : '') + ' · dernière : « ' + dUa.dernier + ' » → ' + dUa.resultat : '') +
+    (dUa.refuses ? ' · ' + dUa.refuses + ' venue' + (dUa.refuses > 1 ? 's' : '') + ' d’ailleurs, ignorée' + (dUa.refuses > 1 ? 's' : '') : ''));
+}
+setInterval(ticAccordUdp, 1000);
+async function dAccordUdp() {
+  let j = null;
+  try { j = await (await fetch('api/datv/accord-udp?on=' + (g('d-ua-on').checked ? 1 : 0) + '&port=' + enc(v('d-ua-port')) +
+    '&reseau=' + (g('d-ua-res').checked ? 1 : 0), { method: 'POST' })).json(); } catch (x) {}
+  if (j && j.ok === false) txt('d-ua-etat', j.erreur || 'refusé');
+  else setTimeout(() => ticAccordUdp(true), 150);
+}
+// ------------------------------------------------------------------ DATV: the wide band chat (read only until « Envoyer »)
+let dCh = null, dChN = -1, dChDernier = 0;
+async function ticChat(force) {
+  if (g('v-datv').hidden || window.SATME_TELEPHONE) return;
+  const t = Date.now(); if (!force && t - dChDernier < (dCh && dCh.on ? 2000 : 5000)) return; dChDernier = t;
+  let j; try { j = await (await fetch('api/datv/chat?depuis=' + dChN)).json(); } catch (x) { return; }
+  if (!j.ok) { g('d-chat-carte').hidden = true; return; }
+  dCh = j;
+  g('d-chat-on').checked = j.on; g('d-chat-zone').hidden = !j.on;
+  txt('d-chat-etat', !j.on ? '' : j.etat + (j.connecte && j.spectateurs ? ' · ' + j.spectateurs + ' à l’écoute' : ''));
+  g('d-chat-texte').disabled = g('d-chat-envoie').disabled = !!j.lectureSeule;
+  g('d-chat-texte').placeholder = j.lectureSeule ? 'Lecture seule : indicatif de la station manquant (Réglages)' : 'Message de ' + j.nick + ' (envoyé seulement par « Envoyer »)';
+  g('d-chat-rapport').disabled = !!j.lectureSeule || !j.rapport;
+  txt('d-chat-qui', j.nicks.length ? 'Présents : ' + j.nicks.join(', ') : '');
+  if (j.messages) {
+    dChN = j.n;
+    const l = g('d-chat-liste'), enBas = l.scrollTop + l.clientHeight >= l.scrollHeight - 8;
+    l.innerHTML = j.messages.slice(-120).map(m => { const d = new Date(m.t);
+      return '<div><span class="h">' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0') + '</span><b>' + esc(m.nom) + '</b>' + esc(m.texte) + '</div>'; }).join('') ||
+      '<div class="petit">aucun message</div>';
+    if (enBas || force) l.scrollTop = l.scrollHeight;
+  }
+}
+setInterval(ticChat, 1000);
+async function dChatRegle(on) {
+  try { await fetch('api/datv/chat/reglage?on=' + (on ? 1 : 0), { method: 'POST' }); } catch (x) {}
+  dChN = -1; setTimeout(() => ticChat(true), 200);
+}
+async function dChatEnvoie() {
+  const t = v('d-chat-texte').trim(); if (!t) return;
+  let j = null;
+  try { j = await (await fetch('api/datv/chat/envoie?texte=' + enc(t), { method: 'POST' })).json(); } catch (x) {}
+  if (j && j.ok) { g('d-chat-texte').value = ''; setTimeout(() => ticChat(true), 400); }
+  else txt('d-chat-etat', j ? (j.erreur || 'refusé') : 'pas de réponse de SatMe-PC');
+}
+function dChatRapport() { if (dCh && dCh.rapport) { g('d-chat-texte').value = dCh.rapport; g('d-chat-texte').focus(); } }
 // The stations heard lately: when, where; a click goes back there.
 let dEntL = [];
 function dEntendus(l) {
