@@ -51,4 +51,19 @@ object ApiSdr {
         return JSONObject().put("trames", trames).put("centre", centreHz).put("span", largeur).put("pll", pllHz)
             .put("db", JSONArray(v.toList()))
     }
+
+    /**
+     * The sound cleaning in the page's words: the settings of the mode being
+     * demodulated ([mode]), what it does now (carriers notched, audio Hz;
+     * share of the IQ blanked), and every mode's settings.
+     */
+    fun nettoyage(mode: fr.f4ioz.satcombo.sdr.RxMode, parMode: Map<fr.f4ioz.satcombo.sdr.RxMode, fr.f4ioz.satcombo.sdr.RxCleaning>,
+                  notches: List<Double>, blanc: Float): JSONObject {
+        val tous = JSONObject()
+        parMode.forEach { (m, c) -> tous.put(m.name, c.json()) }
+        return JSONObject().put("ok", true).put("mode", mode.name)
+            .put("reglages", (parMode[mode] ?: fr.f4ioz.satcombo.sdr.RxCleaning.OFF).json())
+            .put("notches", JSONArray(notches.map { Math.round(it) })).put("blanc", Math.round(blanc * 10_000) / 100.0)
+            .put("modes", tous)
+    }
 }

@@ -212,6 +212,15 @@ object SdrHub {
      */
     @Volatile private var wantDeemph = false
 
+    /** Sound cleaning per mode ([RxCleaning]); none while a radiosonde or METEOR is received. */
+    @Volatile private var wantCleaning: Map<RxMode, RxCleaning> = emptyMap()
+
+    fun setCleaning(m: Map<RxMode, RxCleaning>) { wantCleaning = m }
+
+    /** Carriers the automatic notch holds now, audio Hz; share of IQ blanked. */
+    @Volatile var notchesVus: List<Double> = emptyList(); private set
+    @Volatile var tauxBlanc: Float = 0f; private set
+
     /** Pending auto-tune request on the strongest bin. */
     @Volatile private var wantPeak = false
     @Volatile private var peakFromHz = -40_000.0
@@ -675,6 +684,10 @@ object SdrHub {
                 val off = wantOffset.toDouble()
                 if (chain.offsetHz != off) chain.offsetHz = off
                 if (chain.deemphasis != wantDeemph) chain.deemphasis = wantDeemph
+                val net = if (SondeHub.active || fr.f4ioz.satcombo.meteor.MeteorHub.actif) RxCleaning.OFF
+                    else wantCleaning[chain.mode] ?: RxCleaning.OFF
+                if (chain.cleaning !== net) chain.cleaning = net
+                chain.cw = wantBandwidth in 1..1_000
 
                 // Short wait: it bounds how long the loop takes to notice a
                 // stop, hence how long [stop] blocks.
@@ -785,6 +798,7 @@ object SdrHub {
                 val now = System.currentTimeMillis()
                 if (now - lastUi >= 250L && mine()) {
                     lastUi = now
+                    notchesVus = chain.autoNotches(); tauxBlanc = if (chain.cleaning.nb) chain.blankedRatio() else 0f
                     val cur = _state.value
                     _state.value = cur.copy(
                         // Report what we actually listen to, software shift

@@ -344,6 +344,33 @@ object PagePc {
   });
 })();"""
 
+    /**
+     * The sound cleaning's row (noise blanker, notches, noise reduction, AGC),
+     * the same in the SDR tab ([p] "r", with its fine settings) and the
+     * QO-100 receiver card ("tq"). Its « ? » explains each button.
+     */
+    private fun ligneNettoyage(p: String): String = """<div class="nt" id="$p-nt" hidden>
+  <span class="t nt-t">Nettoyage <span class="petit" id="$p-nt-mode"></span></span>
+  <div class="aide"><b>NB</b> (antiparasite) : les claquements très courts d'une alimentation à découpage ou de l'alimentation du LNB, repérés sur les échantillons I/Q bruts (bien au-dessus du niveau moyen) et effacés avant tout filtre.</div>
+  <div class="aide"><b>Notch auto</b> : une porteuse fixe qui siffle dans la voix est repérée par sa constance et creusée, jusqu'à trois à la fois. En CW (largeur ≤ 1 kHz ou mode CW), une note doit tenir 2 s avant d'être creusée : la manipulation passe.</div>
+  <div class="aide"><b>Notch</b> : un creux étroit à la fréquence audio donnée. Maj+clic sur le spectre ou la loupe de l'onglet SDR le pose sur une porteuse.</div>
+  <div class="aide"><b>Réduction de bruit</b> : le souffle baisse entre les mots et sous la voix (spectre court, gain de Wiener). Légère, moyenne ou forte ; 29 ms de retard ; en pause quand le silencieux est fermé.</div>
+  <div class="aide"><b>CAG</b> du son (BLU, AM) : moyenne (celle d'avant), lente pour une voix posée, rapide pour un signal qui varie vite.</div>
+  <div class="aide">Réglés pour chaque mode (USB, LSB, NFM, AM) et gardés ; tout est coupé au départ. Réception seulement.</div>
+  <button type="button" id="$p-nt-nb" aria-pressed="false" onclick="ntBascule('nb')" title="Antiparasite sur les échantillons I/Q">NB</button>
+  <button type="button" id="$p-nt-auto" aria-pressed="false" onclick="ntBascule('notchAuto')" title="Creuser les porteuses fixes">Notch auto</button>
+  <button type="button" id="$p-nt-notch" aria-pressed="false" onclick="ntBascule('notch')" title="Creux à la fréquence donnée">Notch</button>
+  <input id="$p-nt-hz" class="nt-hz" inputmode="numeric" aria-label="Fréquence du notch (Hz)" title="Fréquence audio du notch, Hz" onchange="ntRegle('notchHz=' + enc(this.value))"><span class="petit nt-unite">Hz</span>
+  <select id="$p-nt-nr" onchange="ntRegle('nr=' + this.value)" aria-label="Réduction de bruit" title="Réduction de bruit"><option value="0">Réduction : non</option><option value="1">Réduction : légère</option><option value="2">Réduction : moyenne</option><option value="3">Réduction : forte</option></select>
+  <select id="$p-nt-cag" onchange="ntRegle('cag=' + this.value)" aria-label="Vitesse de la CAG du son" title="Vitesse de la CAG du son"><option value="lente">CAG lente</option><option value="moyenne">CAG moyenne</option><option value="rapide">CAG rapide</option></select>
+  <span class="petit nt-etat" id="$p-nt-etat"></span>
+</div>""" + (if (p != "r") "" else """
+<details class="nt-fin" id="r-nt-fin"><summary class="petit">Réglages fins du nettoyage</summary>
+  <div class="ligne"><span class="petit" style="min-width:110px">NB : seuil</span><input type="range" id="r-nt-seuil" min="3" max="20" step="1" style="flex:1" onchange="ntRegle('nbSeuil=' + this.value)" title="Un claquement : un échantillon tant de fois au-dessus du niveau moyen (8 par défaut)"><span class="petit" id="r-nt-seuilv"></span></div>
+  <div class="ligne"><span class="petit" style="min-width:110px">NB : largeur</span><select id="r-nt-largeur" onchange="ntRegle('nbLargeur=' + this.value)"><option value="5">5 µs</option><option value="10">10 µs</option><option value="20">20 µs</option><option value="50">50 µs</option><option value="100">100 µs</option><option value="200">200 µs</option></select>
+    <span class="petit" style="margin-left:12px">Notch : largeur</span><select id="r-nt-nlarg" onchange="ntRegle('notchLargeur=' + this.value)"><option value="30">30 Hz</option><option value="50">50 Hz</option><option value="80">80 Hz</option><option value="150">150 Hz</option><option value="300">300 Hz</option></select></div>
+</details>""")
+
     val HTML = """<!doctype html>
 <html lang="fr"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -756,6 +783,17 @@ ${STYLE_JETONS}
   .tq-smetre { height:14px; border-radius:7px; background:#0E1720; overflow:hidden; margin-top:4px; }
   .tq-smetre i { display:block; height:100%; width:0; background:linear-gradient(90deg,var(--vert),var(--ambre) 75%,var(--rose)); transition:width .3s; }
   .tq-son { gap:8px 14px; flex-wrap:wrap; align-items:center; }
+  .nt { display:flex; flex-wrap:wrap; align-items:center; gap:5px; margin-top:8px; }
+  .nt[hidden] { display:none; }
+  .nt .nt-t { margin:0 2px 0 0; letter-spacing:.5px; } .nt .nt-t .petit { text-transform:none; letter-spacing:0; font-weight:400; color:var(--texte-3); }
+  .nt button { padding:3px 8px; font-size:12px; }
+  .nt button.actif { background:var(--cyan); color:#06131A; border-color:var(--cyan); }
+  .nt select { flex:none; width:auto; font-size:12px; padding:3px; }
+  .nt .nt-hz { width:62px; flex:none; font-size:12px; padding:3px 6px; }
+  #tq-nt .nt-unite { display:none; } #tq-nt .nt-hz { width:52px; }
+  .nt .nt-etat { flex-basis:100%; color:var(--texte-3); min-height:0; }
+  .nt .nt-etat:empty { display:none; }
+  .nt-fin { margin-top:4px; } .nt-fin summary { cursor:pointer; }
   .tq-pano { width:100%; height:clamp(220px, 34vh, 400px); display:block; margin-top:6px; cursor:crosshair; }
   .tq-legende { display:flex; flex-wrap:wrap; gap:4px 12px; margin-top:6px; font-size:11.5px; color:var(--gris); }
   .tq-legende i { display:inline-block; width:10px; height:10px; border-radius:3px; margin-right:4px; vertical-align:-1px; }
@@ -2020,6 +2058,7 @@ ${rail()}
           <span class="petit">Silencieux</span><input type="range" id="tq-sq" min="-120" max="-20" style="width:110px;flex:none" onchange="rRegle('squelch=' + this.value).then(tqTic)"><span class="petit" id="tq-sqv"></span>
           <label class="petit" id="tq-agc-l"><input type="checkbox" id="tq-agc" onchange="rRegle('agc=' + (this.checked ? 1 : 0)).then(tqTic)"> CAG</label>
         </div>
+        ${ligneNettoyage("tq")}
       </div>
       <div class="carte" id="tq-dock">
         <div class="ligne" style="margin:0 0 8px"><span class="t" style="margin:0">Décodeur</span>
@@ -2237,6 +2276,7 @@ ${rail()}
       <div class="ligne"><span class="petit" style="min-width:70px">Largeur</span>
         <select id="r-bw" onchange="rRegle('bw=' + this.value)"><option value="0">celle du mode</option><option value="2400">2,4 kHz</option><option value="3000">3 kHz</option><option value="6000">6 kHz</option><option value="12000">12 kHz</option><option value="16000">16 kHz</option><option value="20000">20 kHz</option></select></div>
       <div class="ligne"><span class="petit" style="min-width:70px">Silencieux</span><input type="range" id="r-sq" min="-120" max="-20" style="flex:1" onchange="rRegle('squelch=' + this.value)"><span class="petit" id="r-sqv"></span></div>
+      ${ligneNettoyage("r")}
       <label class="petit" style="display:block;margin-top:6px"><input type="checkbox" id="r-deemph" onchange="rRegle('deemph=' + (this.checked ? 1 : 0))"> Désaccentuation (phonie FM ; à couper pour la SSTV et la télémesure)</label>
       <label style="display:block;margin-top:6px"><input type="checkbox" id="r-son" onchange="rRegle('son=' + (this.checked ? 1 : 0))"> Haut-parleur</label>
       <div class="petit aide" style="margin-top:4px">Le son de la clé va aussi aux décodeurs (onglets SSTV, APRS, FT8) et à l'enregistrement, à la place de la carte son.</div>
@@ -2286,9 +2326,9 @@ ${rail()}
       <div class="aide">Spectre : un clic s'y accorde ; la molette zoome autour du pointeur (Maj : déplace la vue), glisser déplace la vue dans les 176 kHz que voit le récepteur ; les bords orangés de la bande passante se tirent pour changer la largeur de réception. Cascade : la molette accorde, « à inertie » (un tour rapide lance l'accord, qui ralentit) ; Ctrl + molette zoome. Avec le focus (clic ou Tab) : ← → un pas, ↑ ↓ dix pas, + − zoom, 0 vue entière. Les petits drapeaux sont les mémoires (clic : s'y accorder ; clic droit : la modifier) ; le liseré coloré en haut, le plan de bandes. Réception seulement.</div>
       <span class="petit" id="r-vernier-l" style="margin-left:auto">Vernier</span><span id="r-ratios" class="ligne" style="margin:0;gap:4px"></span></div>
     <canvas id="r-vernier" style="width:100%;height:44px;display:block;margin-top:6px;cursor:ew-resize;touch-action:none" title="Glisser pour pousser la fréquence (comme un cadran) ; molette aussi"></canvas>
-    <div id="r-loupe-boite"><div class="ligne" style="margin-top:6px"><span class="petit">Loupe</span><select id="r-loupe-span" style="flex:none" onchange="post('api/sdr/accord?loupeSpan=' + this.value).then(ticSdr)"><option value="3000">3 kHz</option><option value="5000">5 kHz</option><option value="10000">10 kHz</option><option value="20000">20 kHz</option></select><span class="petit">autour de l'écoute · cliquer pour s'y poser</span></div>
+    <div id="r-loupe-boite"><div class="ligne" style="margin-top:6px"><span class="petit">Loupe</span><select id="r-loupe-span" style="flex:none" onchange="post('api/sdr/accord?loupeSpan=' + this.value).then(ticSdr)"><option value="3000">3 kHz</option><option value="5000">5 kHz</option><option value="10000">10 kHz</option><option value="20000">20 kHz</option></select><span class="petit">autour de l'écoute · cliquer pour s'y poser · Maj+clic : notch</span></div>
       <canvas id="r-loupe" style="width:100%;height:80px;display:block;margin-top:4px;cursor:crosshair"></canvas></div>
-    <canvas id="r-spectre" tabindex="0" aria-label="Spectre : cliquer pour s'accorder, molette pour zoomer, glisser pour déplacer la vue, flèches pour accorder" style="width:100%;height:130px;display:block;margin-top:8px;cursor:crosshair;touch-action:none"></canvas>
+    <canvas id="r-spectre" tabindex="0" aria-label="Spectre : cliquer pour s'accorder, Maj+clic pour y poser le notch, molette pour zoomer, glisser pour déplacer la vue, flèches pour accorder" style="width:100%;height:130px;display:block;margin-top:8px;cursor:crosshair;touch-action:none"></canvas>
     <div class="r-cascade"><canvas id="r-cascade" tabindex="0" aria-label="Cascade : cliquer pour s'accorder, molette pour accorder" style="touch-action:none"></canvas><canvas id="r-cascade-sur" aria-hidden="true" style="pointer-events:none"></canvas></div>
   </div>
 </div>
@@ -7083,9 +7123,52 @@ g('r-loupe').addEventListener('click', ev => {
   if (!R) return;
   const b = ev.currentTarget.getBoundingClientRect();
   const hz = Math.round(((ev.clientX - b.left) / b.width - 0.5) * R.loupeSpan / 10) * 10;
+  if (ev.shiftKey) { ntPose(hz); return; }
   post('api/sdr/pas?hz=' + hz).then(ticSdr);
 });
 setInterval(ticSdr, 700);
+// ------------------------------------------------------------------ sound cleaning (SDR tab, QO-100 receiver card)
+let NT = null, ntVu = 0;
+async function ntTic() {
+  if (g('v-sdr').hidden && g('v-qo100').hidden) return;
+  if (Date.now() - ntVu < 2000) return;
+  ntVu = Date.now();
+  try { const r = await fetch('api/sdr/nettoyage'); NT = r.ok ? await r.json() : null; } catch (x) { NT = null; }
+  ntRend();
+}
+setInterval(ntTic, 1000);
+function ntRend() {
+  for (const p of ['r', 'tq']) {
+    const boite = g(p + '-nt'); if (!boite) continue;
+    const ok = !!(NT && NT.ok && NT.reglages);
+    boite.hidden = !ok; if (g(p + '-nt-fin')) g(p + '-nt-fin').hidden = !ok;
+    if (!ok) continue;
+    const c = NT.reglages;
+    const presse = (id, b) => { const e = g(p + '-nt-' + id); e.classList.toggle('actif', !!b); e.setAttribute('aria-pressed', b ? 'true' : 'false'); };
+    presse('nb', c.nb); presse('auto', c.notchAuto); presse('notch', c.notch);
+    const val = (id, x) => { const e = g(p + '-nt-' + id); if (e && document.activeElement !== e) e.value = String(x); };
+    val('hz', c.notchHz); val('nr', c.nr); val('cag', c.cag);
+    if (p === 'r') { val('seuil', c.nbSeuil); txt('r-nt-seuilv', '×' + c.nbSeuil); val('largeur', c.nbLargeur); val('nlarg', c.notchLargeur); }
+    txt(p + '-nt-mode', NT.mode); g(p + '-nt-mode').title = 'Les réglages de ce mode (chaque mode garde les siens)';
+    const e = [];
+    if (c.nb) e.push(NT.blanc > 0 ? NT.blanc.toLocaleString('fr-FR') + ' % des échantillons effacés' : 'aucun claquement');
+    if (c.notchAuto) e.push(NT.notches.length ? 'porteuses creusées : ' + NT.notches.join(', ') + ' Hz' : 'aucune porteuse fixe');
+    txt(p + '-nt-etat', e.join(' · '));
+  }
+}
+async function ntRegle(q) {
+  const j = await post('api/sdr/nettoyage?' + q + (NT && NT.mode ? '&mode=' + NT.mode : ''));
+  if (j && j.ok) { NT = j; ntVu = Date.now(); }
+  ntRend();
+}
+function ntBascule(k) { if (NT && NT.reglages) ntRegle(k + '=' + (NT.reglages[k] ? 0 : 1)); }
+/** Maj+clic on the spectrum: the notch on that point, [d] Hz from the listening frequency. */
+function ntPose(d) {
+  const m = R && R.modeEff, a = Math.round(m === 'LSB' ? -d : m === 'USB' ? d : Math.abs(d));
+  if (a < 50 || a > 5000) { annonce('Ce point tombe hors du son (' + a + ' Hz) : pas de notch'); return; }
+  ntRegle('notch=1&notchHz=' + a); annonce('Notch posé à ' + a + ' Hz');
+}
+
 // ------------------------------------------------------------------ spectrum and waterfall: display, tuning, memories, band plans
 // The view: [rSpan] Hz wide, panned [rDx] Hz from the receiver's centre (the sky frequency R.ciel), within SP_MAX.
 // Options kept in this browser (AFF); the memories and the band plans on the PC.
@@ -7463,6 +7546,8 @@ function spZoom(facteur, px, w) {
       // A click: a memory's flag tunes to it; elsewhere, the frequency clicked.
       const m = (nom === 'spectre' ? y > 14 && y < 30 : y < 14) ? spMemoireA(px, w, R.ciel || 0) : null;
       if (m) { memAccorde(m, 'sdr'); return; }
+      // Shift+click: the notch on that point.
+      if (ev.shiftKey) { ntPose(Math.round(spOff(px, w) / 10) * 10 - (R.decalage || 0)); return; }
       R.decalage = Math.round(spOff(px, w) / 10) * 10; spSale();
       spPost('api/sdr/decalage?hz=' + R.decalage);
     });

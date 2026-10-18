@@ -493,6 +493,11 @@ class SettingsStore(private val prefs: Stockage) {
         get() = prefs.getInt("sdr_squelch", -120)
         set(v) { prefs.edit().putInt("sdr_squelch", v).apply() }
 
+    /** Sound cleaning per demodulation mode, JSON ({"USB": {…}}, see [fr.f4ioz.satcombo.sdr.RxCleaning]); none = all off. */
+    var sdrNettoyage: String
+        get() = prefs.getString("sdr_nettoyage", "{}") ?: "{}"
+        set(v) { prefs.edit().putString("sdr_nettoyage", v).apply() }
+
     /** Spectrum display span, in Hz. */
     /** Small waterfall under the compass on the pass page. */
     var sdrInlineWaterfall: Boolean
