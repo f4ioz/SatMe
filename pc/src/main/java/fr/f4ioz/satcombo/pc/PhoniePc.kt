@@ -270,6 +270,9 @@ class PhoniePc(
     @Volatile private var connusMs = 0L
     private var charge = false
 
+    /** The last over written out, or null. */
+    fun derniere(): BullePhonie? = synchronized(bulles) { bulles.lastOrNull() }
+
     private fun recoit(a: Attente, r: Message.Reponse) {
         val gardes = FiltrePhonie.garde(r.morceaux)
         calculMoyenS = if (calculMoyenS == 0.0) r.calculS else calculMoyenS * 0.8 + r.calculS * 0.2

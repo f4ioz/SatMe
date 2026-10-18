@@ -585,6 +585,13 @@ class RxChain(
     /** True while filling a started panorama frame. */
     private var collectingPan = false
 
+    /**
+     * Secondary channels ([CanauxSecondaires]): given each block's raw samples
+     * ([n] of them) and the first stage's output ([n1], at [spectrumSpanHz]),
+     * neither to be modified. Null (the default): nothing more is done.
+     */
+    @Volatile var canaux: ((FloatArray, FloatArray, Int, FloatArray, FloatArray, Int) -> Unit)? = null
+
     /** Spectrum span, Hz (first stage rate). */
     val spectrumSpanHz: Double get() = stage1Rate
 
@@ -853,6 +860,8 @@ class RxChain(
         val m1 = dec1.maxOut(n)
         if (bI.size < m1) { bI = FloatArray(m1); bQ = FloatArray(m1) }
         val n1 = dec1.process(aI, aQ, n, bI, bQ)
+        // The secondary channels: the same block, raw and first stage, before the fine shift touches it.
+        canaux?.invoke(aI, aQ, n, bI, bQ, n1)
 
         // Spectrum taken BEFORE the fine shift. Taken after, the waterfall
         // slid with the cursor and the displayed offset accumulated instead of

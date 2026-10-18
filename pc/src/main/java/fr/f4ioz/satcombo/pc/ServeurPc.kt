@@ -85,6 +85,8 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
     /** The « Montage » page: the station's chain, its drawing lit by what happens (set before [demarre]). */
     @Volatile var montage: MontagePc? = null
     @Volatile var memoiresSdr: MemoiresSdrPc? = null
+    /** « Décodeurs multiples » in the QO-100 cockpit (set before [demarre]). */
+    @Volatile var canaux: CanauxPc? = null
 
     /** What the « Montage » page lights: the same state the other tabs read. */
     fun lecturesMontage(): fr.f4ioz.satcombo.station.ActiviteMontage.Lectures = fr.f4ioz.satcombo.station.ActiviteMontage.Lectures(
@@ -328,6 +330,16 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
         }
         if (chemin.startsWith("/api/datv/sources/") || chemin.startsWith("/api/datv/emission/apercu") || chemin == "/api/datv/emission/incrustation") {
             sourcesDatv(r, c, chemin, q, sortie); return
+        }
+        // « Décodeurs multiples »: the channels taken from the receiver's IQ besides the main one (receive only).
+        if (chemin == "/api/canaux" || chemin.startsWith("/api/canaux/")) {
+            val k = canaux
+            val o = when {
+                k == null -> JSONObject().put("absent", true)
+                r.methode == "POST" -> runCatching { k.action(chemin, q) }.getOrElse { JSONObject().put("ok", false).put("erreur", it.message ?: "erreur") }
+                else -> k.json()
+            }
+            envoie(sortie, "200 OK", "application/json; charset=utf-8", o.toString().toByteArray()); return
         }
         // The receiver's memories and the band plans (display and receive only).
         if (chemin == "/api/plan-bandes" || chemin == "/api/memoires-sdr" || chemin.startsWith("/api/memoires-sdr/")) {

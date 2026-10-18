@@ -343,6 +343,11 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
     @Volatile var ecouteVoix: ((ShortArray, Int, Boolean?) -> Unit)? = null
     /** The dongle's sound for the SSTV decoder ([Dsp.AUDIO_RATE]), whatever the Son tab's source. */
     @Volatile var ecouteSstv: ((ShortArray, Int) -> Unit)? = null
+    /**
+     * « Décodeurs multiples » on QO-100 ([CanauxPc]): more channels from the
+     * same IQ, each with its decoder; null or off, nothing more runs.
+     */
+    @Volatile var canaux: CanauxPc? = null
 
     /**
      * The panorama's axis, in QO-100's nominal sky: its centre and signed
@@ -548,6 +553,14 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
         var dernierPano = 0L; var panoVue = 0L
         var dernierRecentre = 0L
         val hp = HautParleurPc(Dsp.AUDIO_RATE)
+        // The secondary channels: run inside the chain on each block, for those given then.
+        var cibles = emptyList<fr.f4ioz.satcombo.sdr.CanauxSecondaires.Cible>()
+        val cp0 = canaux
+        cp0?.dsp?.vide()
+        if (cp0 != null) chaine.canaux = { aI, aQ, na, bI, bQ, n1 ->
+            val c = cibles
+            if (c.isNotEmpty()) cp0.dsp.traite(aI, aQ, na, bI, bQ, n1, c) { id, p, k -> cp0.recoit(id, p, k) }
+        }
         try {
             while (generation == gen) {
                 val voulue = voulueHz
@@ -588,10 +601,16 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
                 // Still for METEOR? (QO-100 set on the dongle, another satellite followed: the sound back.)
                 if (pourMeteor && maintenant - dernierEtat >= 200L) quitteMeteorSiBesoin()
                 val veutSpectre = maintenant - dernierSpectre >= 90L
+                cibles = if (cp0 != null && !sonde && !pourMeteor && pll > 0 && pourQo100()) cp0.cibles(axeQo100(pll)) else emptyList()
+                cp0?.tourne = cibles.isNotEmpty()
                 val veutPano = maintenant - panoramaDemandeMs < 3000L && maintenant - dernierPano >= 300L
                 val produit = if (iq16 != null) chaine.process16(iq16, n, pcm, feedSpectrum = veutSpectre, feedPanorama = veutPano)
                     else chaine.process(iq, n, pcm, feedSpectrum = veutSpectre, feedPanorama = veutPano)
                 if (veutSpectre) dernierSpectre = maintenant
+                // A channel heard in place of the main receiver; its decoders fed by the channels, not by it.
+                val ecoute = if (cibles.isNotEmpty()) cp0?.prendEcoute() else null
+                val canauxSstv = cibles.isNotEmpty() && cp0?.tientSstv() == true
+                val canauxVoix = cibles.isNotEmpty() && cp0?.tientPhonie() == true
                 if (veutPano) dernierPano = maintenant
                 if (chaine.panorama.frames != panoVue) {
                     panoVue = chaine.panorama.frames
@@ -625,13 +644,14 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
                 if (produit > 0 && sonde) sondes.ecoute(pcm, produit)
                 else if (produit > 0 && !pourMeteor) {
                     // Never waits for the speaker: kept in its ring, played at the card's pace.
-                    if (settings.sdrAudio) hp.pousse(pcm, produit)
-                    if (son.etat.value.appareil == NOM_SOURCE && son.etat.value.actif) son.distribue(pcm, produit, Dsp.AUDIO_RATE)
+                    val (ePcm, eN) = ecoute ?: (pcm to produit)
+                    if (settings.sdrAudio) hp.pousse(ePcm, eN)
+                    if (son.etat.value.appareil == NOM_SOURCE && son.etat.value.actif) son.distribue(ePcm, eN, Dsp.AUDIO_RATE)
                     if (pourQo100()) ecouteQo100?.invoke(pcm, produit)
-                    ecouteVoix?.invoke(pcm, produit, if (settings.sdrSquelchDb > -120) chaine.squelch.open else null)
-                    ecouteSstv?.let { runCatching { it(pcm, produit) } }
+                    if (!canauxVoix) ecouteVoix?.invoke(pcm, produit, if (settings.sdrSquelchDb > -120) chaine.squelch.open else null)
+                    if (!canauxSstv) ecouteSstv?.let { runCatching { it(pcm, produit) } }
                     // The browsers listening to the dongle (the page open on another PC).
-                    diffusion?.ajoute("sdr", pcm, produit, Dsp.AUDIO_RATE)
+                    diffusion?.ajoute("sdr", ePcm, eN, Dsp.AUDIO_RATE)
                 }
                 if (maintenant - dernierEtat >= 250L) {
                     val debit = ((r.octets - dernierOctets) * 1000 / maxOf(1L, maintenant - dernierEtat) / 1024).toInt()
@@ -641,6 +661,7 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
                 }
             }
         } finally {
+            cp0?.tourne = false
             hp.ferme()
         }
     }
