@@ -40,6 +40,8 @@ object PagePc {
         Onglet("sondes", "Sondes", "air", "Les radiosondes"),
         Onglet("carte", "Carte", "map", "La carte commune : satellites, APRS, sondes, avions, DATV, carrés, jour et nuit"),
         Onglet("avions", "Avions", "flight", "ADS-B 1090 MHz et la diffusion par avions"),
+        Onglet("ais", "Navires", "navire", "AIS 162 MHz : les navires et les balises entendus"),
+        Onglet("espace", "Météo spatiale", "soleil", "Kp, flux solaire, éruptions, vent solaire, aurore"),
         Onglet("meteor", "METEOR", "cloud", "Les images LRPT des satellites METEOR"),
         Onglet("son", "Son", "mic", "La carte son, l'enregistrement"),
         Onglet("sstv", "SSTV", "live_tv", "Réception, émission et images SSTV"),
@@ -55,7 +57,7 @@ object PagePc {
      * Keys 1 to 6 open them; each keeps the last tab seen.
      */
     private val ESPACES = listOf(
-        Triple("ciel", "Ciel", "public") to listOf("station", "agenda", "frise", "sked", "carres", "carte", "avions", "meteor", "sondes"),
+        Triple("ciel", "Ciel", "public") to listOf("station", "agenda", "frise", "sked", "carres", "carte", "avions", "ais", "espace", "meteor", "sondes"),
         Triple("qo", "QO-100", "satellite_alt") to listOf("qo100"),
         Triple("tv", "DATV", "tv") to listOf("datv"),
         Triple("modes", "Modes", "graphic_eq") to listOf("sstv", "aprs", "ft8"),
@@ -819,6 +821,22 @@ ${STYLE_JETONS}
   .av-table td { white-space:nowrap; }
   .av-table tr.av-pos td:first-child { color:var(--vert); }
   .av-table tr.av-vieux { opacity:.55; }
+  /* Space weather: its tiles, the Kp bars, the X-ray curve. */
+  .es-grille { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .es-tuile { background:var(--s1); border:1px solid var(--ligne); border-radius:var(--r2); padding:8px 10px; min-width:0; }
+  .es-tuile b { font-size:20px; display:block; margin:2px 0; font-variant-numeric:tabular-nums; }
+  .es-kp { grid-column:1 / -1; display:flex; gap:14px; align-items:center; }
+  .es-kp svg { width:140px; height:80px; flex:none; }
+  .es-kp b { font-size:30px; }
+  .es-large { grid-column:1 / -1; }
+  .es-toile { position:relative; height:300px; }
+  .es-toile canvas { position:absolute; inset:0; width:100%; height:100%; }
+  .es-toile-x { height:170px; }
+  .es-legende { display:flex; gap:12px; flex-wrap:wrap; margin-top:6px; }
+  .es-legende i { display:inline-block; width:10px; height:10px; border-radius:2px; margin-right:4px; vertical-align:-1px; }
+  .es-legende i.es-prevu { background:repeating-linear-gradient(45deg, var(--texte-3) 0 2px, transparent 2px 4px); border:1px solid var(--texte-3); }
+  .es-alerte { border-left:3px solid var(--warn); padding:4px 8px; margin:4px 0; background:var(--s1); border-radius:0 var(--r1) var(--r1) 0; }
+  .es-alerte.fort { border-left-color:var(--danger); }
   @media (min-width:1101px) and (min-height:600px) { .cg-boite { height:auto; position:absolute; inset:12px 16px; margin:0; } #v-carte { position:relative; } }
   .tq { padding:12px 16px 0; }
   .tq .grille { padding-left:0; padding-right:0; }
@@ -1331,7 +1349,7 @@ ${rail()}
   <div id="niv-p-soleil" hidden>
     <div class="sp-g">
       <span>Parabole</span><span class="sp-l"><input id="sol-diametre" style="width:64px" inputmode="numeric" placeholder="120"><span class="petit">cm, rendement</span><input id="sol-rendement" style="width:48px" inputmode="numeric"><span class="petit">%</span></span>
-      <span>Flux solaire</span><span class="sp-l"><input id="sol-sfu" style="width:64px" inputmode="numeric" placeholder="150" title="L'indice solaire à 10,7 cm du jour (SFU), tapé à la main"><span class="petit">SFU (10,7 cm), T<sub>sys</sub></span><input id="sol-tsys" style="width:56px" inputmode="numeric"><span class="petit">K</span>
+      <span>Flux solaire</span><span class="sp-l"><input id="sol-sfu" style="width:64px" inputmode="numeric" placeholder="150" title="L'indice solaire à 10,7 cm du jour (SFU), tapé à la main"><button type="button" class="discret" id="sol-sfu-noaa" hidden onclick="g('sol-sfu').value = this.dataset.sfu; solReglages()"></button><span class="petit">SFU (10,7 cm), T<sub>sys</sub></span><input id="sol-tsys" style="width:56px" inputmode="numeric"><span class="petit">K</span>
         <button type="button" onclick="solReglages()">OK</button></span>
     </div>
     <div class="petit" id="sol-attendu" style="margin-top:4px"></div>
@@ -2675,14 +2693,16 @@ ${rail()}
     <label><input type="checkbox" data-cg="aprs" checked> APRS</label>
     <label><input type="checkbox" data-cg="sonde" checked> Sondes</label>
     <label><input type="checkbox" data-cg="avions" checked> Avions (ADS-B)</label>
+    <label><input type="checkbox" data-cg="navires" checked> Navires (AIS)</label>
     <label><input type="checkbox" data-cg="datv" checked> Stations DATV</label>
     <label><input type="checkbox" data-cg="carres"> Carrés contactés</label>
     <label><input type="checkbox" data-cg="moi" checked> Ma station</label>
     <label><input type="checkbox" data-cg="nuit" checked> Jour et nuit</label>
+    <label><input type="checkbox" data-cg="aurore" checked> Aurore prévue</label>
     <label><input type="checkbox" data-cg="diff" checked> Diffusion par avions</label>
     <label class="cg-l">Cercles <select id="cg-cercles"><option value="0">aucun</option><option value="100">100 km</option><option value="250">250 km</option><option value="500" selected>500 km</option><option value="1000">1000 km</option></select></label>
     <label class="cg-osm"><input type="checkbox" id="cg-osm"> Fond OpenStreetMap (Internet)</label>
-    <div class="petit aide">Le fond est le trait de côte que SatMe porte (Natural Earth, domaine public) : la carte marche sans Internet. « Fond OpenStreetMap » charge les tuiles dans ce navigateur, directement depuis tile.openstreetmap.org (rien ne passe par SatMe-PC) ; décoché, aucune requête ne part. Les couches : satellites favoris et suivi (empreinte, trace au sol), stations APRS entendues, la sonde suivie, les avions de l'onglet Avions, les stations DATV dont la carte ou la fiche QRZ donne le locator, les carrés du carnet, la ligne jour/nuit.</div>
+    <div class="petit aide">Le fond est le trait de côte que SatMe porte (Natural Earth, domaine public) : la carte marche sans Internet. « Fond OpenStreetMap » charge les tuiles dans ce navigateur, directement depuis tile.openstreetmap.org (rien ne passe par SatMe-PC) ; décoché, aucune requête ne part. Les couches : satellites favoris et suivi (empreinte, trace au sol), stations APRS entendues, la sonde suivie, les avions de l'onglet Avions, les navires de l'onglet Navires, les stations DATV dont la carte ou la fiche QRZ donne le locator, les carrés du carnet, la ligne jour/nuit, l'ovale d'aurore prévu (la dernière météo spatiale reçue).</div>
     <div class="petit" id="cg-compte"></div>
   </div>
   <div id="cg-bulle" class="cg-bulle" hidden></div>
@@ -2722,6 +2742,68 @@ ${rail()}
   <div class="carte" style="margin:0;display:flex;flex-direction:column;min-height:0">
     <div class="t">Avions <span class="petit" id="av-n"></span><button style="margin-left:auto" onclick="vue('carte')">Voir sur la carte</button><button onclick="avPost('vide')">Vider</button></div>
     <div style="flex:1;min-height:0;overflow:auto"><table class="av-table"><thead><tr><th>OACI</th><th>Indicatif</th><th>Alt. ft</th><th>Vit. kt</th><th>Route</th><th>Position</th><th>Dist. / az.</th><th>Vu</th><th>Msg</th><th>RSSI</th></tr></thead><tbody id="av-liste"></tbody></table></div>
+  </div>
+</div>
+</div>
+<div class="vue" id="v-ais" hidden>
+<div class="grille2" style="grid-template-columns:minmax(360px,1fr) minmax(640px,2.3fr)">
+  <div>
+    <div class="carte">
+      <div class="t">AIS 161,975 / 162,025 MHz <span id="ai-pastille" class="pastille coupe">arrêté</span></div>
+      <div class="ligne" style="margin-top:0"><span class="petit" style="min-width:70px">Récepteur</span>
+        <select id="ai-source" onchange="aiRegle('source=' + this.value)"><option value="cle">la clé de l'onglet SDR</option><option value="rtl2">une deuxième clé (rtl_tcp -d)</option></select></div>
+      <div class="ligne" id="ai-rtl2"><span class="petit" style="min-width:70px">Clé n°</span><input id="ai-appareil" style="max-width:110px" placeholder="1 ou n° de série" onchange="aiRegle('appareil=' + enc(this.value))">
+        <span class="petit">port</span><input id="ai-port" style="max-width:70px" onchange="aiRegle('port=' + enc(this.value))">
+        <span class="petit">ppm</span><input id="ai-ppm" style="max-width:50px" onchange="aiRegle('ppm=' + enc(this.value))"></div>
+      <div class="ligne"><span class="petit" style="min-width:70px">Gain</span><select id="ai-gain" onchange="aiRegle('gain=' + this.value)"><option value="-1">automatique</option><option value="496">49,6 dB</option><option value="400">40 dB</option><option value="300">30 dB</option><option value="200">20 dB</option></select></div>
+      <div class="ligne"><button class="primaire" data-marche="ai" onclick="aiPost('demarre')">Recevoir</button><button id="ai-prendre" hidden onclick="if (confirm('Arrêter la réception en cours sur la clé SDR et la prendre pour l\'AIS ?')) aiPost('demarre?prendre=1')">Prendre la clé</button><button class="arret" data-arret="ai" hidden onclick="aiPost('arrete')">Arrêter</button>
+        <button data-marche="ai" onclick="aiPost('essai')" title="Des navires simulés autour de la station, passés par le vrai démodulateur : aucun récepteur touché">Essai</button>
+        <span class="petit" id="ai-info"></span></div>
+      <div class="avert" id="ai-erreur"></div>
+      <div class="petit" id="ai-stats"></div>
+      <label class="petit" style="display:block;margin-top:6px"><input type="checkbox" id="ai-nmea" onchange="aiRegle('nmea=' + (this.checked ? 1 : 0))"> Sortie NMEA (!AIVDM) en UDP vers 127.0.0.1:10110 <span id="ai-nmea-etat"></span></label>
+      <div class="petit aide">Réception seule. Les deux voies de l'AIS (A 161,975 MHz, B 162,025 MHz) à la fois : la clé est calée sur 162,000 MHz à 288 kS/s, chaque voie ramenée à 48 kS/s, démodulée (GMSK 9600 bit/s), puis les trames HDLC (bits de bourrage, NRZI, contrôle CRC-16) et les messages de la norme ITU-R M.1371 lus : positions des classes A (1, 2, 3) et B (18, 19), données fixes et voyage (5, 24), balises et bouées (21). Une clé ne peut écouter qu'un endroit : prise par l'onglet SDR (ou QO-100, METEOR, les sondes), l'AIS attend « Prendre la clé » ; jamais prise à l'ADS-B. La sortie NMEA n'envoie qu'à ce PC, pour un logiciel de cartes marines. « Essai » fait passer des navires simulés par le même décodeur.</div>
+    </div>
+  </div>
+  <div class="carte" style="margin:0;display:flex;flex-direction:column;min-height:0">
+    <div class="t">Navires <span class="petit" id="ai-n"></span><button style="margin-left:auto" onclick="vue('carte')">Voir sur la carte</button><button onclick="aiPost('vide')">Vider</button></div>
+    <div style="flex:1;min-height:0;overflow:auto"><table class="av-table"><thead><tr><th>MMSI</th><th>Nom</th><th>Indicatif</th><th>Type</th><th>Position</th><th>Vit. kt</th><th>Route</th><th>Dist. / az.</th><th>Vu</th><th>Voie</th></tr></thead><tbody id="ai-liste"></tbody></table></div>
+  </div>
+</div>
+</div>
+<div class="vue" id="v-espace" hidden>
+<div class="grille2" style="grid-template-columns:minmax(380px,1fr) minmax(560px,1.8fr)">
+  <div>
+    <div class="carte">
+      <div class="t">Météo spatiale <span class="petit" id="es-age"></span></div>
+      <label class="petit" style="display:block;margin-bottom:6px"><input type="checkbox" id="es-actif" onchange="esRegle(this.checked)"> Récupérer la météo spatiale (Internet)</label>
+      <div class="es-grille">
+        <div class="es-tuile es-kp"><svg id="es-jauge" viewBox="0 0 140 80" aria-label="Indice Kp"></svg><div><div class="petit">Indice Kp</div><b id="es-kp">—</b><div class="petit" id="es-kp-n"></div></div></div>
+        <div class="es-tuile"><div class="petit">Flux solaire 10,7 cm</div><b id="es-f107">—</b><div class="petit" id="es-f107-n"></div></div>
+        <div class="es-tuile"><div class="petit">Rayons X (GOES)</div><b id="es-x">—</b><div class="petit" id="es-x-n"></div></div>
+        <div class="es-tuile"><div class="petit">Vent solaire</div><b id="es-vent">—</b><div class="petit" id="es-vent-n"></div></div>
+        <div class="es-tuile es-large"><div class="petit">Aurore (prévision OVATION)</div><b id="es-aurore">—</b><div class="petit" id="es-aurore-n"></div></div>
+      </div>
+      <div class="ligne"><button id="es-maj" onclick="esMaj()">Mettre à jour</button><span class="petit" id="es-erreur"></span></div>
+      <label class="petit" style="display:block"><input type="checkbox" id="es-voix"> Dire les alertes à voix haute (ce navigateur)</label>
+      <div class="petit aide">Les produits publics du Space Weather Prediction Center de la NOAA (services.swpc.noaa.gov), demandés par SatMe-PC toutes les 15 minutes (la carte des aurores toutes les 30) une fois la case cochée ; décochée, rien ne part sur Internet et les dernières données gardées restent affichées avec leur âge. Kp : l'agitation du champ magnétique sur 3 h (0 à 9) ; 5 et plus, c'est un orage (G1 à G5). Le flux à 10,7 cm (en SFU) suit l'activité du Soleil et l'ionisation des couches hautes ; il sert aussi à la mesure du bruit solaire. Les rayons X classent les éruptions (A, B, C, M, X) : une éruption M ou X coupe la HF du côté jour. Le vent solaire rapide avec un Bz négatif (vers le sud) annonce un orage. L'aurore : la probabilité prévue au-dessus de la station et la plus forte à moins de 1 200 km.</div>
+    </div>
+    <div class="carte">
+      <div class="t">Alertes</div>
+      <div id="es-alertes" class="petit">Aucune alerte.</div>
+      <div class="petit aide">Une alerte, un message en bas à droite (et la voix si cochée) : orage géomagnétique dès Kp 5 observé ou estimé dans les 6 dernières heures (HF perturbée, aurore possible sur 2 m et 6 m en visant le nord) ; éruption dès M5 dans la dernière heure (coupure HF possible côté jour). Chacune n'est dite qu'une fois.</div>
+    </div>
+  </div>
+  <div>
+    <div class="carte">
+      <div class="t">Indice Kp sur trois jours <span class="petit" id="es-kp-t"></span></div>
+      <div class="es-toile"><canvas id="es-barres" aria-label="Indice Kp par tranche de 3 heures"></canvas></div>
+      <div class="petit es-legende"><span><i style="background:var(--ok)"></i>calme</span><span><i style="background:var(--sat)"></i>agité (4)</span><span><i style="background:var(--warn)"></i>orage (5–6)</span><span><i style="background:var(--danger)"></i>fort (7+)</span><span><i class="es-prevu"></i>prévu</span></div>
+    </div>
+    <div class="carte">
+      <div class="t">Rayons X sur 6 h <span class="petit">0,1–0,8 nm, échelle logarithmique</span></div>
+      <div class="es-toile es-toile-x"><canvas id="es-courbe" aria-label="Flux de rayons X"></canvas></div>
+    </div>
   </div>
 </div>
 </div>
@@ -4321,6 +4403,8 @@ function vue(n) {
   if (n === 'sondes') { SV2.libre = false; ticSondes(); }
   if (n === 'meteor') ticMeteor();
   if (n === 'avions') ticAvions();
+  if (n === 'ais') ticAis();
+  if (n === 'espace') { ticEspace(); setTimeout(ticEspace, 300); }
   if (n === 'carte') { CG.libre = false; cgTic(); setTimeout(dessineCg); }
   if (n === 'montage') mtOuvre();
   if (window.MT) mtPopMaj(n);
@@ -6856,11 +6940,166 @@ async function ticAvions() {
 setInterval(() => { avN++; if (!g('v-avions').hidden || (avN % 5 === 0 && AV && AV.actif && AV.diffusion && AV.diffusion.cible)) ticAvions(); }, 1000);
 ticAvions();
 
+// ------------------------------------------------------------------ AIS (the Navires tab): receive only
+let AI = null;
+async function aiPost(q) { await post('api/ais/' + q); ticAis(); }
+async function aiRegle(q) { await post('api/ais/reglage?' + q); ticAis(); }
+function aiPos(n) { return n.lat != null ? n.lat.toFixed(4) + ', ' + n.lon.toFixed(4) : ''; }
+async function ticAis() {
+  if (window.SATME_TELEPHONE) return;
+  let j; try { j = await (await fetch('api/ais')).json(); } catch (x) { return; }
+  if (!j || j.absent) return;
+  AI = j;
+  if (g('v-ais').hidden) return;
+  etatMarche('ai', j.actif, 'ai-pastille'); txt('ai-pastille', j.actif ? (j.tient === 'essai' ? 'essai' : 'réception') : 'arrêté');
+  const pose = (id, val) => { const e = g(id); if (document.activeElement !== e && e.value !== String(val)) e.value = val; };
+  pose('ai-source', j.source); pose('ai-appareil', j.appareil); pose('ai-port', j.port); pose('ai-gain', j.gain); pose('ai-ppm', j.ppm);
+  g('ai-nmea').checked = j.nmea;
+  g('ai-rtl2').hidden = j.source !== 'rtl2';
+  g('ai-prendre').hidden = j.actif || !j.occupe || j.source !== 'cle' || j.adsbTient;
+  txt('ai-info', j.actif ? j.tuner + (j.debitKo ? ' · ' + j.debitKo + ' ko/s' : '') : j.occupe ? j.occupe : '');
+  txt('ai-erreur', j.erreur || '');
+  txt('ai-stats', j.trames ? j.trames + ' trames (A ' + j.canalA + ', B ' + j.canalB + ') · ' + j.messages + ' messages lus' : '');
+  txt('ai-nmea-etat', j.nmea ? (j.erreurNmea ? '— ' + j.erreurNmea : '— ' + j.phrases + ' phrases envoyées') : '');
+  const l = j.navires || [];
+  txt('ai-n', l.length ? l.length + ' · ' + l.filter(n => n.lat != null).length + ' placés' : '');
+  g('ai-liste').innerHTML = l.map(n => '<tr class="' + (n.lat != null ? 'av-pos' : '') + (n.vu > 600000 ? ' av-vieux' : '') + '"><td>' + n.mmsi + '</td><td><b>' + esc(n.nom) + '</b>' +
+    (n.destination ? '<div class="petit">→ ' + esc(n.destination) + '</div>' : '') + '</td><td>' + esc(n.indicatif) + '</td><td>' + esc(n.typeTexte || (n.classe === 'B' ? 'classe B' : '')) +
+    (n.longueur ? '<div class="petit">' + n.longueur + ' × ' + (n.largeur || '?') + ' m</div>' : '') + (n.statut ? '<div class="petit">' + esc(n.statut) + '</div>' : '') +
+    '</td><td>' + aiPos(n) + (n.horsPosition ? ' <span class="petit" style="color:var(--rose)">hors position</span>' : '') + '</td><td>' + (n.vitesse != null ? n.vitesse.toFixed(1) : '') +
+    '</td><td>' + (n.route != null ? Math.round(n.route) + '°' : n.cap != null ? n.cap + '° <span class="petit">cap</span>' : '') + '</td><td>' + (n.km != null ? n.km.toFixed(1) + ' km · ' + n.az + '°' : '') +
+    '</td><td>' + duree(n.vu) + '</td><td>' + n.canaux + ' <span class="petit">' + n.messages + '</span></td></tr>').join('') ||
+    '<tr><td colspan="10" class="petit">' + (j.actif ? 'aucun navire entendu encore' : 'réception arrêtée') + '</td></tr>';
+}
+setInterval(() => { if (!g('v-ais').hidden) ticAis(); }, 1000);
+
+// ------------------------------------------------------------------ space weather (Météo spatiale): fetched only once ticked
+let ES = null, esVues = new Set(), esN = 0;
+try { esVues = new Set(JSON.parse(localStorage.getItem('es-vues') || '[]')); } catch (x) {}
+try { g('es-voix').checked = localStorage.getItem('es-voix') === '1'; } catch (x) {}
+g('es-voix').onchange = () => { try { localStorage.setItem('es-voix', g('es-voix').checked ? '1' : '0'); } catch (x) {} };
+async function esRegle(on) { await post('api/espace/reglage?actif=' + (on ? 1 : 0)); ticEspace(); if (on) setTimeout(ticEspace, 5000); }
+async function esMaj() { const j = await post('api/espace/maintenant'); if (j && j.ok) { txt('es-erreur', 'demandé…'); setTimeout(ticEspace, 5000); } }
+const ES_COUL = { calme: '#5BD68A', agite: '#FFD166', orage: '#FFB454', fort: '#E5484D' };
+const ES_NIVEAU = { calme: 'calme', agite: 'agité', orage: 'orage', fort: 'orage fort' };
+/** « il y a 12 min », « il y a 3 h », the date beyond a day. */
+function esAge(t) {
+  if (!t) return '';
+  const d = Date.now() - t;
+  return d < 90000 ? 'à l’instant' : d < 5400000 ? 'il y a ' + Math.round(d / 60000) + ' min' : d < 86400000 ? 'il y a ' + Math.round(d / 3600000) + ' h' : 'du ' + new Date(t).toLocaleDateString();
+}
+function esAlertes(j) {
+  let neuf = false;
+  (j.alertes || []).forEach(a => {
+    if (esVues.has(a.cle)) return;
+    esVues.add(a.cle); neuf = true;
+    toast('☀ ' + a.titre + ' — ' + a.texte);
+    if (g('es-voix').checked && window.speechSynthesis) { try { const u = new SpeechSynthesisUtterance(a.titre); u.lang = 'fr-FR'; speechSynthesis.speak(u); } catch (x) {} }
+  });
+  if (neuf) try { localStorage.setItem('es-vues', JSON.stringify([...esVues].slice(-100))); } catch (x) {}
+}
+/** The Sun noise card's flux field: the day's value offered beside it (a click sets it), never typed in by itself. */
+function esSuggereSfu(j) {
+  const b = g('sol-sfu-noaa'); if (!b) return;
+  const f = j && j.f107;
+  b.hidden = !f;
+  if (f) { b.textContent = '← ' + f.sfu + ' (NOAA)'; b.title = 'Le flux à 10,7 cm publié par la NOAA, ' + esAge(f.t) + ' : le mettre dans le champ'; b.dataset.sfu = f.sfu; }
+}
+function esJauge(kp, niveau) {
+  // A half dial 0 to 9: green to 4, yellow to 5, orange to 7, red to 9.
+  const cx = 70, cy = 72, r = 58, a = k => Math.PI * (1 - k / 9), p = k => [cx + r * Math.cos(a(k)), cy - r * Math.sin(a(k))];
+  const arc = (k1, k2, c) => { const [x1, y1] = p(k1), [x2, y2] = p(k2); return '<path d="M' + x1.toFixed(1) + ' ' + y1.toFixed(1) + ' A' + r + ' ' + r + ' 0 0 1 ' + x2.toFixed(1) + ' ' + y2.toFixed(1) + '" stroke="' + c + '" stroke-width="12" fill="none" opacity=".85"/>'; };
+  let s = arc(0, 4, ES_COUL.calme) + arc(4, 5, ES_COUL.agite) + arc(5, 7, ES_COUL.orage) + arc(7, 9, ES_COUL.fort);
+  for (let k = 0; k <= 9; k++) { const [x, y] = [cx + (r - 14) * Math.cos(a(k)), cy - (r - 14) * Math.sin(a(k))]; s += '<text x="' + x.toFixed(1) + '" y="' + (y + 3).toFixed(1) + '" font-size="8" fill="#9AA7B4" text-anchor="middle">' + k + '</text>'; }
+  if (kp != null) { const [x, y] = [cx + (r - 2) * Math.cos(a(kp)), cy - (r - 2) * Math.sin(a(kp))]; s += '<line x1="' + cx + '" y1="' + cy + '" x2="' + x.toFixed(1) + '" y2="' + y.toFixed(1) + '" stroke="' + (ES_COUL[niveau] || '#E8F0F7') + '" stroke-width="3" stroke-linecap="round"/><circle cx="' + cx + '" cy="' + cy + '" r="4" fill="#E8F0F7"/>'; }
+  g('es-jauge').innerHTML = s;
+}
+function esBarres(l) {
+  const c = g('es-barres'); if (!c.clientWidth) return;
+  const [x, w, h] = toile(c), m = { g: 26, d: 8, h: 10, b: 22 }, H = h - m.h - m.b;
+  x.clearRect(0, 0, w, h);
+  if (!l.length) { x.fillStyle = '#6B7C8F'; x.font = '12px system-ui'; x.fillText('Pas de données : cocher « Récupérer la météo spatiale (Internet) ».', m.g, h / 2); return; }
+  const t0 = l[0].t, t1 = l[l.length - 1].t + 10800000, X = t => m.g + (w - m.g - m.d) * (t - t0) / (t1 - t0), Y = k => m.h + H * (1 - k / 9);
+  x.font = '10px system-ui'; x.textAlign = 'right';
+  for (let k = 0; k <= 9; k += 1) { x.strokeStyle = k === 5 ? 'rgba(255,180,84,.45)' : 'rgba(160,200,230,.08)'; x.beginPath(); x.moveTo(m.g, Y(k)); x.lineTo(w - m.d, Y(k)); x.stroke(); if (k % 3 === 0 || k === 5) { x.fillStyle = '#6B7C8F'; x.fillText(String(k), m.g - 5, Y(k) + 3); } }
+  const bw = Math.max(2, (X(t0 + 10800000) - X(t0)) - 2);
+  l.forEach(b => {
+    const X0 = X(b.t) + 1, c0 = ES_COUL[b.niveau] || '#5BD68A';
+    x.globalAlpha = b.nature === 'prevu' ? 0.45 : 1; x.fillStyle = c0; x.fillRect(X0, Y(b.kp), bw, Y(0) - Y(b.kp));
+    x.globalAlpha = 1;
+    if (b.nature === 'prevu') { x.strokeStyle = c0; x.setLineDash([3, 2]); x.strokeRect(X0 + .5, Y(b.kp) + .5, bw - 1, Y(0) - Y(b.kp) - 1); x.setLineDash([]); }
+    if (bw > 16) { x.fillStyle = '#E8F0F7'; x.textAlign = 'center'; x.fillText(b.kp.toFixed(1).replace('.', ','), X0 + bw / 2, Y(b.kp) - 3); }
+  });
+  // The days, and now.
+  x.textAlign = 'left'; x.fillStyle = '#9AA7B4';
+  for (let t = Math.ceil(t0 / 86400000) * 86400000; t < t1; t += 86400000) { x.strokeStyle = 'rgba(160,200,230,.18)'; x.beginPath(); x.moveTo(X(t), m.h); x.lineTo(X(t), h - m.b + 4); x.stroke();
+    x.fillText(new Date(t).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', timeZone: 'UTC' }), X(t) + 4, h - 6); }
+  const n = Date.now(); if (n > t0 && n < t1) { x.strokeStyle = '#3FE0C8'; x.lineWidth = 1.5; x.beginPath(); x.moveTo(X(n), m.h); x.lineTo(X(n), h - m.b); x.stroke(); x.lineWidth = 1; x.fillStyle = '#3FE0C8'; x.fillText('maintenant', X(n) + 3, m.h + 9); }
+}
+function esCourbe(r) {
+  const c = g('es-courbe'); if (!c.clientWidth) return;
+  const [x, w, h] = toile(c), m = { g: 26, d: 8, h: 6, b: 18 }, H = h - m.h - m.b;
+  x.clearRect(0, 0, w, h);
+  const l = (r && r.courbe) || [];
+  // Classes A (1e-8) to X (1e-4) and above: one band a decade.
+  const Y = e => m.h + H * (1 - (e + 8.5) / 5.5);
+  ['A', 'B', 'C', 'M', 'X'].forEach((k, i) => { const y = Y(-8 + i); x.fillStyle = i >= 3 ? 'rgba(229,72,77,.06)' : 'rgba(160,200,230,.03)'; x.fillRect(m.g, Y(-7 + i), w - m.g - m.d, y - Y(-7 + i));
+    x.strokeStyle = 'rgba(160,200,230,.12)'; x.beginPath(); x.moveTo(m.g, y); x.lineTo(w - m.d, y); x.stroke(); x.fillStyle = '#9AA7B4'; x.font = '11px system-ui'; x.textAlign = 'right'; x.fillText(k, m.g - 6, Y(-7.5 + i) + 4); });
+  if (l.length < 2) return;
+  const t0 = l[0][0], t1 = l[l.length - 1][0], X = t => m.g + (w - m.g - m.d) * (t - t0) / Math.max(1, t1 - t0);
+  x.strokeStyle = '#FFD166'; x.lineWidth = 1.5; x.beginPath();
+  l.forEach((p, i) => { const y = Y(Math.max(-8.5, Math.min(-3, p[1]))); if (i) x.lineTo(X(p[0]), y); else x.moveTo(X(p[0]), y); });
+  x.stroke(); x.lineWidth = 1;
+  x.fillStyle = '#6B7C8F'; x.font = '10px system-ui'; x.textAlign = 'left';
+  x.fillText(hm(t0), m.g + 2, h - 4); x.textAlign = 'right'; x.fillText(hm(t1), w - m.d, h - 4);
+}
+async function ticEspace() {
+  if (window.SATME_TELEPHONE) return;
+  let j; try { j = await (await fetch('api/espace')).json(); } catch (x) { return; }
+  if (!j || j.absent) return;
+  ES = j;
+  esAlertes(j); esSuggereSfu(j);
+  if (g('v-espace').hidden) return;
+  if (document.activeElement !== g('es-actif')) g('es-actif').checked = j.actif;
+  g('es-maj').disabled = !j.actif;
+  const r = j.recus || {}, ts = Object.values(r);
+  txt('es-age', ts.length ? 'données de ' + esAge(Math.min(...ts)) + (j.actif ? '' : ' · mise à jour coupée') : (j.actif ? 'première demande…' : 'aucune donnée'));
+  const er = Object.keys(j.erreurs || {});
+  txt('es-erreur', er.length ? 'non reçu la dernière fois : ' + er.join(', ') + ' (' + j.erreurs[er[0]] + ')' : '');
+  const k = j.kp;
+  esJauge(k ? k.kp : null, k && k.niveau);
+  txt('es-kp', k ? k.texte : '—');
+  g('es-kp').style.color = k ? ES_COUL[k.niveau] : '';
+  txt('es-kp-n', k ? ES_NIVEAU[k.niveau] + (k.g ? ' · G' + k.g : '') + ' · ' + (k.nature === 'estime' ? 'estimé' : 'observé') + ' ' + hm(k.t) + ' (3 h)' +
+    (j.kpMaxPrevu ? ' · jusqu’à ' + j.kpMaxPrevu.texte + ' prévu' : '') : '');
+  const f = j.f107;
+  txt('es-f107', f ? f.sfu + ' SFU' : '—');
+  txt('es-f107-n', f ? esAge(f.t) + (f.moyenne90 ? ' · moyenne 90 j : ' + Math.round(f.moyenne90) : '') : '');
+  const x = j.rayons;
+  txt('es-x', x ? x.classe : '—');
+  g('es-x').style.color = x && x.r >= 2 ? 'var(--rose)' : x && x.r >= 1 ? 'var(--ambre)' : '';
+  txt('es-x-n', x ? (x.r ? 'R' + x.r + ' · ' : '') + 'max. 6 h : ' + (x.max6h || '—') + ' · ' + esAge(x.t) : '');
+  const vt = j.vent;
+  txt('es-vent', vt && vt.vitesse != null ? Math.round(vt.vitesse) + ' km/s' : '—');
+  txt('es-vent-n', vt ? (vt.bz != null ? 'Bz ' + (vt.bz > 0 ? '+' : '') + vt.bz + ' nT' + (vt.bz <= -10 ? ' (vers le sud : orage possible)' : '') : '') + (vt.bt != null ? ' · Bt ' + vt.bt + ' nT' : '') + ' · ' + esAge(vt.t) : '');
+  const au = j.aurore;
+  txt('es-aurore', au ? (j.station ? au.ici + ' % ici' : '—') : '—');
+  txt('es-aurore-n', au ? (j.station ? 'jusqu’à ' + au.proche + ' % à moins de ' + Math.round(au.rayonKm) + ' km' + (au.proche >= 10 ? ' : viser le nord sur 2 m et 6 m' : '') : 'position de la station inconnue') + ' · prévu pour ' + hm(au.prevision) : '');
+  const al = j.alertes || [];
+  g('es-alertes').innerHTML = al.map(a => '<div class="es-alerte ' + esc(a.niveau) + '"><b>' + esc(a.titre) + '</b> <span class="petit">' + hm(a.t) + '</span><br>' + esc(a.texte) + '</div>').join('') || 'Aucune alerte.';
+  const l = j.barres || [];
+  txt('es-kp-t', l.length ? 'par tranche de 3 h, heure UTC · prévision NOAA' : '');
+  esBarres(l); esCourbe(x);
+}
+// Every 30 s with the tab open, every 5 min otherwise (the alerts and the Sun noise field's suggestion).
+setInterval(() => { esN++; if (!g('v-espace').hidden ? esN % 30 === 0 : esN % 300 === 0) ticEspace(); }, 1000);
+setTimeout(ticEspace, 2500);
+
 // ------------------------------------------------------------------ the shared map (Carte): offline, its layers
 const CG = { cx: 0.5, cy: 0.35, z: 2, libre: false };
 let cgTraits = null, cgCouches = null, cgCarres = null, cgCarresVu = 0, cgPts = [];
 const cgOsmTuiles = new Map();
-const CGC = { sat: 1, aprs: 1, sonde: 1, avions: 1, datv: 1, carres: 0, moi: 1, nuit: 1, diff: 1 };
+const CGC = { sat: 1, aprs: 1, sonde: 1, avions: 1, navires: 1, datv: 1, carres: 0, moi: 1, nuit: 1, aurore: 1, diff: 1 };
 try { Object.assign(CGC, JSON.parse(localStorage.getItem('cg-couches') || '{}')); } catch (x) {}
 document.querySelectorAll('[data-cg]').forEach(b => {
   b.checked = !!CGC[b.dataset.cg];
@@ -6887,9 +7126,41 @@ async function cgTic() {
   cgChargeTraits();
   try { cgCouches = await (await fetch('api/carte/couches')).json(); } catch (x) {}
   if (CGC.carres && Date.now() - cgCarresVu > 60000) cgChargeCarres();
+  if (CGC.aurore && Date.now() - cgAuroreVu > 300000) cgChargeAurore();
   dessineCg();
 }
 setInterval(cgTic, 2000);
+// The aurora forecast on the map: its oval, from the space weather's last copy (nothing fetched for the map itself).
+let cgAurore = null, cgAuroreVu = 0;
+async function cgChargeAurore() {
+  cgAuroreVu = Date.now();
+  if (window.SATME_TELEPHONE) return;
+  try { const j = await (await fetch('api/espace/aurore')).json(); cgAurore = j && j.ok ? j.ovale : null; } catch (x) {}
+  dessineCg();
+}
+function cgOvale(m) {
+  const x = m.x;
+  cgAurore.forEach(c => {
+    const l = m.L(c[0]), xa = m.px(l - 1), xb = m.px(l + 1), ya = m.py(Math.min(85, c[1] + 1)), yb = m.py(Math.max(-85, c[1] - 1));
+    x.fillStyle = 'rgba(91,214,138,' + Math.min(0.5, 0.05 + c[2] / 140).toFixed(2) + ')'; x.fillRect(xa, ya, xb - xa + 0.5, yb - ya + 0.5);
+  });
+}
+const CG_NAVIRE = { passagers: '#4FC3F7', cargo: '#81C784', citerne: '#E57373', peche: '#FFB74D', plaisance: '#CE93D8', rapide: '#FFF176', remorqueur: '#A1887F', service: '#F06292', autre: '#B0BEC5', inconnu: '#90A4AE' };
+/** A vessel: a hull pointing where it heads (still: a dot); an aid to navigation: a yellow and black diamond. */
+function cgNavire(m, X, Y, s) {
+  const x = m.x; x.save(); x.translate(X, Y);
+  x.strokeStyle = '#06131A'; x.lineWidth = 1;
+  if (s.famille === 'aide') {
+    x.fillStyle = '#FFD54A'; x.beginPath(); x.moveTo(0, -6); x.lineTo(5, 0); x.lineTo(0, 6); x.lineTo(-5, 0); x.closePath(); x.fill(); x.stroke();
+    x.fillStyle = '#06131A'; x.fillRect(-2, -2, 4, 4);
+  } else if (s.vitesse != null && s.vitesse < 0.5) {
+    x.fillStyle = CG_NAVIRE[s.famille] || '#B0BEC5'; x.beginPath(); x.arc(0, 0, 4, 0, 7); x.fill(); x.stroke();
+  } else {
+    x.rotate(((s.cap != null ? s.cap : s.route) || 0) * Math.PI / 180);
+    x.fillStyle = CG_NAVIRE[s.famille] || '#B0BEC5'; x.beginPath(); x.moveTo(0, -9); x.lineTo(4, -2); x.lineTo(4, 7); x.lineTo(-4, 7); x.lineTo(-4, -2); x.closePath(); x.fill(); x.stroke();
+  }
+  x.restore();
+}
 function cgCadre() {
   const c = g('cg-carte'); if (!c.clientWidth) return;
   const moi = cgCouches && cgCouches.moi;
@@ -6987,6 +7258,7 @@ function dessineCg() {
   cgPts = [];
   const pt = (lat, lon, texte) => { const X = m.px(m.L(lon)), Y = m.py(lat); cgPts.push([X, Y, texte]); return [X, Y]; };
   if (CGC.nuit) cgNuit(m);
+  if (CGC.aurore && cgAurore && cgAurore.length) cgOvale(m);
   // Worked squares.
   if (CGC.carres && cgCarres && cgCarres.carres) {
     x.fillStyle = 'rgba(63,224,200,.22)'; x.strokeStyle = 'rgba(63,224,200,.7)'; x.lineWidth = 1;
@@ -7062,6 +7334,17 @@ function dessineCg() {
       if (CG.z >= 4.5 || ouv.has(a.icao)) cgEtiquette(m, X, Y, (a.indicatif || a.icao) + (a.alt != null ? ' ' + Math.round(a.alt / 100) : ''), '#E8F0F7');
     });
     nb.push(n + ' avions');
+  }
+  if (CGC.navires && C.navires) {
+    let n = 0;
+    C.navires.forEach(s => {
+      if (s.lat == null) return; n++;
+      if (s.trace && s.trace.length > 1) { const d0 = m.L(s.lon) - s.lon; traceCarte(m, s.trace.map(p => [p[0], p[1] + d0]), 'rgba(120,200,255,.35)', 1); }
+      const [X, Y] = pt(s.lat, s.lon, (s.nom || s.mmsi) + (s.typeTexte ? ' · ' + s.typeTexte : '') + (s.vitesse != null ? ' · ' + s.vitesse.toFixed(1) + ' kt' : '') + (s.km != null ? ' · ' + s.km.toFixed(1) + ' km' : ''));
+      cgNavire(m, X, Y, s);
+      if (CG.z >= 8) cgEtiquette(m, X, Y, s.nom || String(s.mmsi), '#9FD8FF');
+    });
+    if (n) nb.push(n + ' navires');
   }
   if (CGC.moi && moi) {
     const [X, Y] = pt(moi.lat, moi.lon, moi.nom + (moi.loc ? ' · ' + moi.loc : ''));

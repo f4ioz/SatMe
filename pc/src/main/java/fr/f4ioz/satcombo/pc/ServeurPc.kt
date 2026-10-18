@@ -96,6 +96,8 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
     @Volatile var canaux: CanauxPc? = null
     /** ADS-B (Avions tab) and the shared map (set before [demarre]). */
     @Volatile var adsb: AdsbPc? = null
+    @Volatile var ais: AisPc? = null
+    @Volatile var espace: MeteoSpatialePc? = null
     @Volatile var carte: CartePc? = null
     /** The SDR's raw I/Q kept and played back (set before [demarre]). */
     @Volatile var iqSdr: IqPc? = null
@@ -383,6 +385,17 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
         // ADS-B (receive only) and the shared map's layers.
         if (chemin == "/api/adsb" || chemin.startsWith("/api/adsb/")) {
             val rep = adsb?.sert(chemin, r.methode) { q[it].orEmpty() }
+                ?: fr.f4ioz.satcombo.demo.ReponseWeb("200 OK", "application/json; charset=utf-8", "{\"ok\":false,\"absent\":true}".toByteArray())
+            envoie(sortie, rep.statut, rep.type, rep.corps, rep.entetes); return
+        }
+        // AIS (receive only) and space weather (fetched only once opted in).
+        if (chemin == "/api/ais" || chemin.startsWith("/api/ais/")) {
+            val rep = ais?.sert(chemin, r.methode) { q[it].orEmpty() }
+                ?: fr.f4ioz.satcombo.demo.ReponseWeb("200 OK", "application/json; charset=utf-8", "{\"ok\":false,\"absent\":true}".toByteArray())
+            envoie(sortie, rep.statut, rep.type, rep.corps, rep.entetes); return
+        }
+        if (chemin == "/api/espace" || chemin.startsWith("/api/espace/")) {
+            val rep = espace?.sert(chemin, r.methode) { q[it].orEmpty() }
                 ?: fr.f4ioz.satcombo.demo.ReponseWeb("200 OK", "application/json; charset=utf-8", "{\"ok\":false,\"absent\":true}".toByteArray())
             envoie(sortie, rep.statut, rep.type, rep.corps, rep.entetes); return
         }

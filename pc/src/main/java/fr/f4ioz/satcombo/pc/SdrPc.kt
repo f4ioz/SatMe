@@ -88,6 +88,7 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
         if (station.qo100.etat.value.aLaCle) return
         // The receiver chosen held by ADS-B (Avions tab): METEOR leaves it too.
         if (adsbTient() == recepteur) return
+        if (aisTient() && recepteur == RTL) return
         // The passes asked every 15 s, not every second.
         if (now - dernierTicMeteor < 15_000L) return
         dernierTicMeteor = now
@@ -264,6 +265,8 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
     @Volatile var datvTient: String? = null
     /** The receiver ADS-B holds now ([RTL] for this tab's dongle, [PLUTO]), or null: this tab may not start on it meanwhile. */
     @Volatile var adsbTient: () -> String? = { null }
+    /** AIS (Navires tab) holds this tab's dongle: this tab may not start on it meanwhile. */
+    @Volatile var aisTient: () -> Boolean = { false }
 
     /** bladeRF-cli: in the folder set, else in the PATH; null when missing. */
     fun programmeBladerf(): String? {
@@ -542,6 +545,7 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
             return p
         }
         if (adsbTient() == RTL) throw java.io.IOException(ADSB_TIENT_CLE)
+        if (aisTient()) throw java.io.IOException(AIS_TIENT_CLE)
         runCatching { return RtlTcp.connecte(hote, port, 1500) }
         if (!lance || !estLocal(hote)) throw java.io.IOException("rtl_tcp ne répond pas sur $hote:$port")
         val p = runCatching {
@@ -789,6 +793,7 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
     companion object {
         const val DATV_TIENT_PLUTO = "l'ADALM-PLUTO reçoit la DATV (onglet DATV) : arrêter cette réception d'abord (l'onglet SDR reprendra ensuite)"
         const val DATV_TIENT_BLADERF = "le bladeRF reçoit la DATV (onglet DATV) : arrêter cette réception d'abord (l'onglet SDR reprendra ensuite)"
+        const val AIS_TIENT_CLE = "la clé reçoit l'AIS (onglet Navires) : arrêter cette réception d'abord"
         const val ADSB_TIENT_CLE = "la clé reçoit l'ADS-B (onglet Avions) : arrêter cette réception d'abord"
         const val ADSB_TIENT_PLUTO = "l'ADALM-PLUTO reçoit l'ADS-B (onglet Avions) : arrêter cette réception d'abord"
         const val NOM_SOURCE = "Clé SDR (rtl_tcp)"

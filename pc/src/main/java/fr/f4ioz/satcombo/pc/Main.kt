@@ -254,7 +254,15 @@ fun main(args: Array<String>) {
     val adsb = AdsbPc(station, sdr, station.stockage, carnet)
     sdr.adsbTient = { if (adsb.tientCleSdr) SdrPc.RTL else if (adsb.tientPluto) SdrPc.PLUTO else null }
     serveur.adsb = adsb
-    serveur.carte = CartePc(station, son, sdr, adsb, datv, { textesDatv }, { serveur.qrzDatv })
+    // AIS on 161.975 / 162.025 MHz (Navires tab): off until asked; the SDR tab's dongle taken only when the owner chooses, never from ADS-B.
+    val ais = AisPc(station, sdr, station.stockage)
+    ais.adsbTientCle = { adsb.tientCleSdr }
+    adsb.aisTientCle = { ais.tientCleSdr }
+    sdr.aisTient = { ais.tientCleSdr }
+    serveur.ais = ais
+    // Space weather: nothing asked from the Internet until ticked in its tab; the copies kept are shown meanwhile.
+    serveur.espace = MeteoSpatialePc(station, station.stockage, File(dossier, "espace")).also { it.demarre() }
+    serveur.carte = CartePc(station, son, sdr, adsb, datv, { textesDatv }, { serveur.qrzDatv }, ais = ais)
     serveur.iqSdr = iqSdr
     // Open to the network: a password for every other machine (drawn the first time, said in the log).
     val acces = AccesDistantPc(dossier, reseau)
@@ -291,6 +299,7 @@ fun main(args: Array<String>) {
         // The transmitter first: its LO powered down before anything else.
         runCatching { iq.arrete() }
         runCatching { adsb.arrete() }
+        runCatching { ais.arrete() }
         runCatching { emission.arrete("SatMe-PC fermé") }
         // No hackrf_transfer outlives SatMe-PC.
         runCatching { fr.f4ioz.satcombo.sdr.HackrfEmission.arreteTout() }
