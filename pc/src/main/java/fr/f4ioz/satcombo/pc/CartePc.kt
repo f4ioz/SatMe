@@ -17,12 +17,14 @@ import org.json.JSONObject
 /**
  * The shared map (« Carte »): its coastlines from SatMe's own data, and
  * every layer's points in one answer — satellites, APRS, the sonde, the
- * aircraft, the DATV stations heard with a locator, the scatter path.
+ * aircraft, the vessels (AIS), the DATV stations heard with a locator,
+ * the scatter path.
  * Read only; nothing here goes to the Internet.
  */
 class CartePc(private val station: StationPc, private val son: SonStation?, private val sdr: SdrPc?,
               private val adsb: AdsbPc?, private val datv: DatvPc?, private val textesDatv: () -> TextesDatvPc?,
-              private val qrzDatv: () -> QrzDatvPc?, private val horloge: () -> Long = System::currentTimeMillis) {
+              private val qrzDatv: () -> QrzDatvPc?, private val horloge: () -> Long = System::currentTimeMillis,
+              private val ais: AisPc? = null) {
 
     private val traits: ByteArray by lazy {
         val t = CartePc::class.java.getResourceAsStream("/traits/land.json")?.bufferedReader()?.use { it.readText() }
@@ -84,6 +86,10 @@ class CartePc(private val station: StationPc, private val son: SonStation?, priv
                 val ouvertes = fr.f4ioz.satcombo.adsb.DiffusionAvions.fenetres(r, a.table.liste(), now).filter { it.ouverte }.map { it.icao }
                 o.put("diffusion", fr.f4ioz.satcombo.adsb.DiffusionAvions.geometrieJson(r).put("cible", a.cible).put("bande", a.bande).put("ouvertes", JSONArray(ouvertes)))
             }
+        }
+        ais?.let { a ->
+            a.table.station = e.observateur?.let { it.latDeg to it.lonDeg }
+            o.put("navires", a.table.json(trace = true))
         }
         o.put("datv", stationsDatv())
         return o

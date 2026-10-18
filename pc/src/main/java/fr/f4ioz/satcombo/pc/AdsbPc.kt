@@ -127,9 +127,13 @@ class AdsbPc(private val station: StationPc, private val sdr: SdrPc, private val
 
     init { demod.corrige = corrige }
 
+    /** AIS (Navires tab) holds the SDR tab's dongle (set at startup): never taken from it here. */
+    @Volatile var aisTientCle: () -> Boolean = { false }
+
     /** Why [source] cannot start now without taking a receiver someone uses, or null. */
     fun occupe(s: String = source): String? = when (s) {
-        CLE_SDR -> if (sdr.etat.value.actif && sdr.recepteur == SdrPc.RTL) "la clé SDR est en service (SDR, QO-100, METEOR ou sondes)" else null
+        CLE_SDR -> if (sdr.etat.value.actif && sdr.recepteur == SdrPc.RTL) "la clé SDR est en service (SDR, QO-100, METEOR ou sondes)"
+            else if (aisTientCle()) "la clé SDR reçoit l'AIS (onglet Navires)" else null
         PLUTO -> when {
             sdr.plutoEnReception -> "l'ADALM-PLUTO reçoit (onglet SDR)"
             sdr.datvTient == SdrPc.PLUTO -> "l'ADALM-PLUTO reçoit la DATV"
@@ -147,7 +151,7 @@ class AdsbPc(private val station: StationPc, private val sdr: SdrPc, private val
         arrete()
         val s = source
         occupe(s)?.let { o ->
-            if (!(prendre && s == CLE_SDR)) return o + (if (s == CLE_SDR) " : « Prendre la clé » pour l'ADS-B" else " : l'arrêter d'abord")
+            if (!(prendre && s == CLE_SDR && !aisTientCle())) return o + (if (s == CLE_SDR && !aisTientCle()) " : « Prendre la clé » pour l'ADS-B" else " : l'arrêter d'abord")
             sdr.arrete()
         }
         val gen = ++generation
