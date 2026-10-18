@@ -84,7 +84,7 @@ object ProfilsFonction {
     private fun nomSource(v: String) = when (v) { "auto" -> "auto"; "carte" -> "carte son"; "sdr" -> "carte SDR"; "datv" -> "DATV"; else -> v }
 
     /** A step said in words. */
-    fun dit(cle: String, v: String): String = when (cle) {
+    fun dit(cle: String, v: String, libelles: Map<String, String> = emptyMap()): String = when (cle) {
         "sdr.recepteur" -> "Récepteur SDR : " + FonctionsMontage.nomRessource("sdr:$v")
         "sdr.mode" -> "Récepteur SDR : mode $v"
         "sdr.mhz" -> "Récepteur SDR : " + (v.replace(',', '.').toDoubleOrNull()?.let {
@@ -95,7 +95,7 @@ object ProfilsFonction {
         "sdr.actif" -> if (oui(v)) "Démarrer le récepteur SDR" else "Arrêter le récepteur SDR"
         "datv.recepteur" -> "Récepteur DATV : " + FonctionsMontage.nomRessource(if (v == "minitiouner") "datv:minitiouner" else "sdr:$v")
         "datv.actif" -> if (oui(v)) "Démarrer la réception DATV" else "Arrêter la réception DATV"
-        "son.entree" -> when (v) { "" -> "Arrêter la carte son"; "sdr" -> "Entrée des décodeurs : la carte SDR"; else -> "Carte son : « " + FonctionsMontage.court(v) + " »" }
+        "son.entree" -> when (v) { "" -> "Arrêter la carte son"; "sdr" -> "Entrée des décodeurs : la carte SDR"; else -> "Carte son : « " + (libelles[v] ?: FonctionsMontage.court(v)) + " »" }
         "sstv.source" -> "SSTV : source " + nomSource(v)
         "sstv.actif" -> "SSTV réception " + if (oui(v)) "activée" else "coupée"
         "ft8.mode" -> "FT8 / FT4 : mode $v"
@@ -119,7 +119,7 @@ object ProfilsFonction {
         fun change(k: String) = v[k] != null && v[k] != (avant[k] ?: "")
         val l = ArrayList<Etape>()
         fun etape(k: String, manuel: Boolean = false, texte: String? = null) {
-            if (change(k)) l += Etape(k, v[k]!!, avant[k] ?: "", texte ?: dit(k, v[k]!!), manuel)
+            if (change(k)) l += Etape(k, v[k]!!, avant[k] ?: "", texte ?: dit(k, v[k]!!, i.libelles), manuel)
         }
         val arrets = listOf("ft8.actif", "cw.actif", "aprs.actif", "sstv.actif", "phonie.actif", "datv.actif", "sdr.actif")
         // 1. Stops (DATV on a MiniTiouner left to its tab: it feeds the LNB).
@@ -138,7 +138,7 @@ object ProfilsFonction {
         // 4. The sound input: after the SDR, which takes it when it starts.
         val entree = v["son.entree"]
         if (entree != null && (change("son.entree") || (entree.isNotEmpty() && entree != "sdr" && v["sdr.actif"] == "1" && change("sdr.actif"))))
-            l += Etape("son.entree", entree, avant["son.entree"] ?: "", dit("son.entree", entree))
+            l += Etape("son.entree", entree, avant["son.entree"] ?: "", dit("son.entree", entree, i.libelles))
         // 5. The decoders.
         for (k in listOf("sstv.actif", "ft8.actif", "cw.actif", "aprs.actif", "phonie.actif")) if (v[k] == "1") etape(k)
         return l
@@ -213,6 +213,6 @@ object ProfilsFonction {
 
     /** A profile and what it would change now, for the page. */
     fun json(p: Profil, i: Instantane?): JSONObject = JSONObject().put("id", p.id).put("nom", p.nom).put("cree", p.creeMs)
-        .put("reglages", JSONArray(p.reglages.map { (k, v) -> JSONObject().put("cle", k).put("valeur", v).put("texte", dit(k, v)) }))
+        .put("reglages", JSONArray(p.reglages.map { (k, v) -> JSONObject().put("cle", k).put("valeur", v).put("texte", dit(k, v, i?.libelles.orEmpty())) }))
         .put("apercu", if (i == null) JSONArray() else JSONArray(plan(p.reglages, i).map { it.json() }))
 }

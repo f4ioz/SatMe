@@ -71,7 +71,7 @@ class SonStation(
      */
     @Volatile var horsAntenne: () -> SstvPc.HorsAntenne? = { null }
 
-    init { aprs.horsAntenne = { horsAntenne() != null } }
+    init { aprs.horsAntenne = { horsAntenne() != null }; sstv.posteEntend = { posteEntendSstv() } }
 
     var enregAuto: Boolean
         get() = station.stockage.getBoolean("pc_enreg_auto", false)
@@ -82,6 +82,64 @@ class SonStation(
         set(v) { station.stockage.edit().putString("pc_son_carte", v).apply() }
 
     @Volatile private var wav: EnregistreurWav? = null
+
+    // ------------------------------------------------------------ the cards by name
+
+    /** The rig as the cards' names need it: its model's name, Icom or not, its CAT ports. */
+    fun posteCartes(): CartesSonLinux.Poste {
+        val e = station.etat.value
+        val m = if (e.catConnecte) e.catModele else StationPc.modeleDe(station.settings.rigModel)
+        val icom = fr.f4ioz.satcombo.cat.ModeleIcom.entries.firstOrNull { it.id == m }
+        val nom = if (!e.catConnecte || e.catSimule) "" else icom?.libelle?.removePrefix("Icom ") ?: when (m) { "TS2000" -> "TS-2000"; else -> "" }
+        return CartesSonLinux.Poste(nom, icom != null, station.cheminsPoste())
+    }
+
+    /** Where Linux is read (a fixture in the tests); null: not Linux, no names. */
+    var racineSysteme: File? = File("/").takeIf { System.getProperty("os.name").orEmpty().startsWith("Linux") }
+    @Volatile private var nomsLus: Triple<Long, String, Map<String, CartesSonLinux.Libelle>> = Triple(0L, "", emptyMap())
+
+    /** The cards' friendly names, by Java's name (« CODEC [plughw:1,0] » → « IC-9700 (USB Audio CODEC) »), read again every 5 s. */
+    fun nomsCartes(appareils: List<SonPc.Appareil> = son.appareils()): Map<String, CartesSonLinux.Libelle> {
+        val r = racineSysteme ?: return emptyMap()
+        val poste = posteCartes()
+        val cle = appareils.joinToString("|") { it.nom } + "#" + poste
+        val (t, k, m) = nomsLus
+        if (k == cle && horloge() - t < 5_000L) return m
+        val n = runCatching { CartesSonLinux.tous(r, appareils.map { it.nom to it.description }, poste) }.getOrDefault(emptyMap())
+        nomsLus = Triple(horloge(), cle, n)
+        return n
+    }
+
+    @Volatile private var posteLu: Pair<Long, String?> = 0L to null
+
+    /** The rig's own card (its USB codec), when one is recognised. */
+    fun carteDuPoste(appareils: List<SonPc.Appareil> = son.appareils()): String? =
+        nomsCartes(appareils).entries.firstOrNull { it.value.poste.isNotBlank() }?.key
+
+    /**
+     * Auto SSTV prefers the rig's card: it is the card feeding, the rig is
+     * in CAT and its downlink is within its bands.
+     */
+    fun posteEntendSstv(): Boolean {
+        val e = station.etat.value
+        if (!e.catConnecte || e.catSimule || !son.etat.value.actif) return false
+        // Asked at every block: the mixers listed again only every ten seconds.
+        val (t, lu) = posteLu
+        val poste = (if (horloge() - t < 10_000L) lu else carteDuPoste().also { posteLu = horloge() to it }) ?: return false
+        return son.etat.value.appareil == poste &&
+            CartesSonLinux.posteEntend(e.catModele, runCatching { station.stationCat.etat.value.descenteHz }.getOrNull())
+    }
+
+    /**
+     * A card chosen as a decoder's source (SSTV's selector): kept as the
+     * Sound tab's and started, receive only. Null when it runs, else why not.
+     */
+    fun prendCarte(nom: String): String? {
+        if (son.etat.value.actif && son.etat.value.appareil == nom) { carte = nom; return null }
+        if (!son.demarre(nom)) return son.etat.value.erreur.ifBlank { "carte son introuvable" }
+        carte = nom
+        return null
+    }
 
     /** The rig answers by CAT (for the SSTV tuning's page). */
     fun catConnecte(): Boolean = station.etat.value.catConnecte

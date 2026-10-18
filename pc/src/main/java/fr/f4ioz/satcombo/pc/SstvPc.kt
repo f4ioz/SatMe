@@ -140,10 +140,17 @@ class SstvPc(
     @Volatile private var enCours: Pair<SstvMode, IntArray>? = null
     @Volatile private var pannes = 0
 
+    /**
+     * In « auto », the card even while the dongle plays: the rig's own card
+     * feeds it and the rig receives the satellite followed. Set by whoever
+     * knows the station.
+     */
+    @Volatile var posteEntend: () -> Boolean = { false }
+
     /** The sound card's blocks (the dongle's too when it is the card's source). */
     fun ecouteCarte(pcm: ShortArray, n: Int, rate: Int) {
         if (!actif) return
-        if (choisie(source, horloge() - sdrVuMs < SDR_VU_MS) != CARTE) return
+        if (choisie(source, horloge() - sdrVuMs < SDR_VU_MS, source == AUTO && runCatching { posteEntend() }.getOrDefault(false)) != CARTE) return
         verse(CARTE, pcm, n, rate)
     }
 
@@ -151,6 +158,7 @@ class SstvPc(
     fun ecouteSdr(pcm: ShortArray, n: Int, rate: Int) {
         sdrVuMs = horloge()
         if (!actif || source == CARTE) return
+        if (source == AUTO && runCatching { posteEntend() }.getOrDefault(false)) return
         verse(SDR, pcm, n, rate)
     }
 
@@ -281,8 +289,8 @@ class SstvPc(
             SDR -> if (sdrActive) "La clé SDR reçoit mais ne donne pas de son (METEOR ou radiosondes ?) : la démarrer depuis l'onglet SDR."
                 else "Source « clé SDR » : la clé n'est pas démarrée (onglet SDR)."
             CARTE -> if (carteActive) "La carte son ne donne rien : vérifier la carte choisie (onglet Son)."
-                else "Source « carte son » : la carte n'est pas démarrée (onglet Son)."
-            else -> "Aucun son n'arrive : démarrer la clé SDR (onglet SDR) ou la carte son (onglet Son)."
+                else "Source « carte son » : la carte n'est pas démarrée — la choisir dans « Source » (Réception)."
+            else -> "Aucun son n'arrive : choisir une carte son dans « Source » (Réception), ou démarrer la clé SDR (onglet SDR)."
         }
         if (e.niveau < 0.003f) return "Le son de la " + nomSource(sourceActive) + " est presque muet : monter le volume ou le gain."
         if (e.niveau > 0.97f) return "Le son de la " + nomSource(sourceActive) + " sature : baisser le niveau."
@@ -514,11 +522,15 @@ class SstvPc(
         private const val LARGEUR_GIF = 640
         private const val BANDEAU = 52
 
-        /** Which source feeds the decoder: the one chosen, or in « auto » the dongle while it plays. */
-        fun choisie(reglage: String, sdrJoue: Boolean): String = when (reglage) {
+        /**
+         * Which source feeds the decoder: the one chosen, or in « auto » the
+         * dongle while it plays — unless the rig's own card hears the
+         * satellite followed ([posteEntend]).
+         */
+        fun choisie(reglage: String, sdrJoue: Boolean, posteEntend: Boolean = false): String = when (reglage) {
             CARTE -> CARTE
             SDR -> SDR
-            else -> if (sdrJoue) SDR else CARTE
+            else -> if (sdrJoue && !posteEntend) SDR else CARTE
         }
 
         /** A picture is kept from an eighth of its lines, as on the phone. */

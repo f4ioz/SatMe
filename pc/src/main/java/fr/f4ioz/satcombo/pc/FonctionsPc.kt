@@ -43,6 +43,7 @@ class FonctionsPc(
         val so = son
         val c = so?.son?.etat?.value
         val ph = phonie
+        val noms = so?.nomsCartes(cartes()).orEmpty()
         fun emet(o: JSONObject?, k: String) = if (o?.optBoolean("emet", false) == true) k.ifBlank { "pluto" } else ""
         val i = FonctionsMontage.Instantane(
             sdrPresent = s != null, sdrActif = s?.optBoolean("actif") == true, sdrRecepteur = s?.optString("recepteur").orEmpty().ifBlank { "rtl" },
@@ -58,23 +59,24 @@ class FonctionsPc(
             txIq = if (iq?.optBoolean("actif") == true) iq.optString("appareil").ifBlank { "pluto" } else "",
             txDatvChoisi = e?.optString("emetteur").orEmpty(), txSstvChoisi = x?.optString("emetteur").orEmpty(),
             sonPresent = so != null, sonActif = c?.actif == true, sonAppareil = c?.appareil.orEmpty(), sonCarte = so?.carte.orEmpty(),
-            sonParSdr = c?.appareil == SdrPc.NOM_SOURCE, cartes = cartes(), sonErreur = c?.erreur.orEmpty(),
+            sonParSdr = c?.appareil == SdrPc.NOM_SOURCE, cartes = cartes().map { it.nom }, sonErreur = c?.erreur.orEmpty(),
             sstvActif = so?.sstvActif == true, sstvSource = so?.sstv?.source ?: "auto", sstvSourceActive = so?.sstv?.sourceActive.orEmpty(),
             ft8Actif = so?.ft8?.enMarche == true, ft8Mode = so?.ft8?.mode ?: "FT8", cwActif = so?.cw?.actif == true, aprsActif = so?.aprsActif == true,
             phoniePresent = ph != null, phonieActif = ph?.actif == true, phonieSource = ph?.source ?: "auto", phonieSourceActive = ph?.sourceActive.orEmpty(),
             meteorPresent = sdr?.meteor != null,
             catConnecte = cat?.optBoolean("connecte") == true, catModele = cat?.optString("modele").orEmpty(), catSimule = cat?.optBoolean("simule") == true,
             ecouteNavigateur = diffusion?.ecoute("sdr") == true,
+            libelles = noms.mapValues { it.value.libelle }, carteDuPoste = noms.entries.firstOrNull { it.value.poste.isNotBlank() }?.key.orEmpty(),
         )
         return i
     }
 
     // The sound cards Java knows, read again every ten seconds (the list asks every mixer).
-    @Volatile private var cartesLues: Pair<Long, List<String>> = 0L to emptyList()
-    private fun cartes(): List<String> {
+    @Volatile private var cartesLues: Pair<Long, List<SonPc.Appareil>> = 0L to emptyList()
+    private fun cartes(): List<SonPc.Appareil> {
         val (t, l) = cartesLues
         if (System.currentTimeMillis() - t < 10_000L) return l
-        val n = son?.son?.appareils()?.map { it.nom }.orEmpty()
+        val n = son?.son?.appareils().orEmpty()
         cartesLues = System.currentTimeMillis() to n
         return n
     }

@@ -58,6 +58,9 @@ class SstvPcTest {
         assertEquals("carte", SstvPc.choisie("carte", sdrJoue = true))
         assertEquals("sdr", SstvPc.choisie("sdr", sdrJoue = false))
         assertEquals("carte", SstvPc.choisie("n'importe quoi", sdrJoue = false))
+        // The rig's own card hearing the satellite wins over the dongle in « auto », not over a choice.
+        assertEquals("carte", SstvPc.choisie("auto", sdrJoue = true, posteEntend = true))
+        assertEquals("sdr", SstvPc.choisie("sdr", sdrJoue = true, posteEntend = true))
     }
 
     @Test fun `les reglages sont gardes, comme sur le telephone par defaut`() {

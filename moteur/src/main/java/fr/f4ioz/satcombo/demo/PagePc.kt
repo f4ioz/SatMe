@@ -1715,7 +1715,7 @@ ${rail()}
       <div class="t">Réception</div>
       <label class="petit" style="display:block;margin-top:0"><input type="checkbox" id="sstv-actif" onchange="post('api/sstv/reglage?actif=' + (this.checked ? 1 : 0))"> Décoder la SSTV en direct</label>
       <div class="ligne"><span class="petit" id="sstv-source-l">Source</span>
-        <select id="sstv-source" style="flex:none" onchange="post('api/sstv/reglage?source=' + this.value)"><option value="auto">auto : la clé SDR si elle joue, sinon la carte son</option><option value="carte">carte son (onglet Son)</option><option value="sdr">clé SDR</option></select></div>
+        <select id="sstv-source" style="flex:none;max-width:340px" onchange="sstvSource(this.value)"><option value="auto">Auto : la clé SDR si elle joue, sinon la carte son</option><option value="carte">carte son (onglet Son)</option><option value="sdr">Clé SDR</option></select></div>
       <div class="ligne"><span class="petit">Mode</span><select id="sstv-force" style="flex:none" onchange="post('api/sstv/reglage?force=' + enc(this.value || 'auto'))"></select>
         <button id="sstv-caler" onclick="post('api/sstv/caler')" title="Commencer l'image tout de suite, dans le mode choisi, sans attendre l'en-tête">⚡ Caler maintenant</button>
         <button class="arret" id="sstv-abandon" hidden onclick="post('api/sstv/abandon')" title="Finir l'image en cours (gardée si assez de lignes) et écouter à nouveau">✕ Arrêter l'image</button></div>
@@ -3325,7 +3325,7 @@ function rendCw() {
   if (document.activeElement !== g('cw-on')) g('cw-on').checked = c.on;
   g('cw-corps').hidden = !c.on;
   g('cw-led').style.background = c.on && c.marque ? 'var(--vert)' : '#22303C';
-  txt('cw-info', !c.on ? 'coupé' : !c.carte ? 'carte son arrêtée (onglet Son)' : (c.wpm ? c.wpm + ' WPM' : '') + (c.ton ? ' · ' + c.ton + ' Hz' : '') + (c.ecart ? ' · ' + c.ecart + ' dB' : '') +
+  txt('cw-info', !c.on ? 'coupé' : !c.carte ? carteArretee() : (c.wpm ? c.wpm + ' WPM' : '') + (c.ton ? ' · ' + c.ton + ' Hz' : '') + (c.ecart ? ' · ' + c.ecart + ' dB' : '') +
     ({ poste: ' · Doppler : le poste le suit', 'prédit': ' · Doppler : la note suit le passage', 'mesuré': ' · la note suivie à l’oreille' }[c.suivi] || ''));
   if (document.activeElement !== g('cw-ton')) g('cw-ton').value = c.auto ? '0' : String(c.ton);
   if (c.version === cwVu) return;
@@ -6180,13 +6180,16 @@ function rendSon() {
   const cartes = JSON.stringify(S.cartes);
   if (cartes !== cartesVues) {
     cartesVues = cartes;
-    g('s-carte').innerHTML = S.cartes.map(c => '<option value="' + esc(c.nom).replace(/"/g, '&quot;') + '">' + esc(c.nom) +
-      (c.desc ? ' — ' + esc(c.desc.slice(0, 60)) : '') + '</option>').join('') || '<option value="">aucune carte son</option>';
+    g('s-carte').innerHTML = S.cartes.map(c => '<option value="' + esc(c.nom).replace(/"/g, '&quot;') + '" title="' + esc(c.nom + (c.desc ? ' — ' + c.desc : '')).replace(/"/g, '&quot;') + '">' +
+      esc(nomCarte(c.nom)) + (nomCarte(c.nom) === c.nom && c.desc ? ' — ' + esc(c.desc.slice(0, 60)) : '') + '</option>').join('') || '<option value="">aucune carte son</option>';
+    // Nothing chosen yet: the rig's own card first.
+    if (!S.carte && S.carteDuPoste && document.activeElement !== g('s-carte')) g('s-carte').value = S.carteDuPoste;
+    sstvSources();
   }
   if (document.activeElement !== g('s-carte') && S.carte) g('s-carte').value = S.carte;
   g('s-niveau').style.width = Math.round(Math.min(1, S.niveau) * 100) + '%';
   g('s-niveau').style.background = S.niveau > 0.9 ? 'var(--rose)' : 'var(--vert)';
-  txt('s-etat', S.erreur || (S.actif ? S.carte + ' · ' + S.rate + ' Hz' : 'arrêtée'));
+  txt('s-etat', S.erreur || (S.actif ? nomCarte(S.appareil || S.carte) + ' · ' + S.rate + ' Hz' : 'arrêtée'));
   etatMarche('son', S.actif, 's-etat');
   txt('s-rec', S.enregistrement ? '■ Arrêter' : '● Enregistrer');
   txt('s-duree', S.enregistrement ? duree(S.secondes * 1000) + (S.auto ? ' (passage)' : '') : '');
@@ -6239,6 +6242,44 @@ function rendSon() {
   if (g('visionneuse').open) voisOutils();
 }
 let satsVus = '', imagesMontrees = [], modesSstvVus = '';
+// A card as the operator knows it (« IC-9700 (USB Audio CODEC) »); its own name stays the setting.
+function nomCarte(nom) {
+  const c = S && S.cartes ? S.cartes.find(x => x.nom === nom) : null;
+  return c && c.lib ? c.lib : nom;
+}
+// SSTV's sources: Auto, each sound card by its name, the SDR dongle.
+function sstvSources() {
+  if (!S || !S.cartes) return;
+  const q = s => esc(s).replace(/"/g, '&quot;');
+  const poste = S.cartes.find(c => c.poste);
+  g('sstv-source').innerHTML = '<option value="auto">Auto : ' + (poste ? (/^[AEIOUY]/i.test(poste.lib) ? 'l’' : 'le ') + esc(poste.lib.split(' (')[0]) + ' quand il reçoit, sinon la clé SDR'
+      : 'la clé SDR si elle joue, sinon la carte son') + '</option>' +
+    S.cartes.map(c => '<option value="carte:' + q(c.nom) + '" title="' + q(c.nom) + '">' + esc(c.lib || c.nom) + '</option>').join('') +
+    '<option value="carte">Carte son de l’onglet Son</option><option value="sdr">Clé SDR</option>';
+  g('sstv-source').title = poste ? 'Auto : la carte ' + poste.lib + ' quand le poste (en CAT) reçoit le satellite suivi, sinon la clé SDR si elle joue. ' +
+    poste.lib + ' : la carte son du poste, reconnue sur son port USB. Choisir une carte la démarre (réception seule).' : 'Choisir une carte la démarre (réception seule).';
+  // Phonie's « carte son » says which card.
+  const ph = g('ph-source') && g('ph-source').querySelector('option[value="carte"]');
+  if (ph) ph.textContent = 'carte son' + (S.carte ? ' : ' + nomCarte(S.carte) : '');
+}
+// The card stopped, said by FT8 and CW: the rig's own card named when there is one.
+function carteArretee() {
+  const p = S && S.cartes ? S.cartes.find(c => c.poste) : null;
+  return 'carte son arrêtée (onglet Son' + (p ? ' : ' + p.lib : '') + ')';
+}
+// The value shown: the card itself when the source is the card.
+function sstvSourceValeur(src) {
+  if (src !== 'carte') return src;
+  const nom = S.appareil && S.cartes.some(c => c.nom === S.appareil) ? S.appareil : S.carte;
+  return nom && S.cartes.some(c => c.nom === nom) ? 'carte:' + nom : 'carte';
+}
+// A card chosen here: it becomes the Sound tab's card and starts (receive only).
+async function sstvSource(v) {
+  if (v.indexOf('carte:') === 0) await post('api/sstv/reglage?source=carte&carte=' + enc(v.slice(6)));
+  else await post('api/sstv/reglage?source=' + v);
+  try { S = await (await fetch('api/son')).json(); } catch (x) { return; }
+  rendSon();
+}
 // The decoder in detail: what it hears, from where, its settings, the work under way.
 function rendSstv() {
   const D = S.sstvDetail;
@@ -6250,7 +6291,7 @@ function rendSstv() {
     g('sstv-force').innerHTML = '<option value="">Auto (VIS)</option>' + D.modes.map(m => '<option>' + esc(m) + '</option>').join('');
   }
   if (document.activeElement !== g('sstv-force')) g('sstv-force').value = D.force || '';
-  if (D.source && document.activeElement !== g('sstv-source')) g('sstv-source').value = D.source;
+  if (D.source && document.activeElement !== g('sstv-source')) g('sstv-source').value = sstvSourceValeur(D.source);
   if (document.activeElement !== g('sstv-continu')) g('sstv-continu').checked = D.continu;
   if (document.activeElement !== g('sstv-nettoyage')) g('sstv-nettoyage').checked = D.nettoyage;
   afcSstv(D.afc);
@@ -9151,7 +9192,7 @@ async function ticFt8() {
   if (!H.present) return;
   etatMarche('8', H.enMarche, 'aucune');
   if (document.activeElement !== g('8-mode')) g('8-mode').value = H.mode;
-  txt('8-etat', !H.carte ? 'carte son arrêtée (onglet Son)' : H.enMarche ? H.tranches + ' créneaux · niveau ' + Math.round(H.niveau * 100) + ' %' : 'à l’arrêt');
+  txt('8-etat', !H.carte ? carteArretee() : H.enMarche ? (S && S.actif && S.appareil ? nomCarte(S.appareil) + ' · ' : '') + H.tranches + ' créneaux · niveau ' + Math.round(H.niveau * 100) + ' %' : 'à l’arrêt');
   // The page served by the phone has no stream of rows: its whole waterfall each time.
   if (f8Complete && H.cascade) { f8Lignes = H.cascade.slice().reverse().map(b => Uint8Array.from(atob(b), ch => ch.charCodeAt(0))); f8Fin = Date.now(); f8Pas = 128; dessineCascade(); }
   for (const f of [dessineAnneau, horlogeFt8, diagFt8, guetFt8, puces, opportunites, listeFt8, messagesFt8]) { try { f(); } catch (x) { console.error(x); } }

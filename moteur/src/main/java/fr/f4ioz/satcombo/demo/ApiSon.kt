@@ -34,6 +34,10 @@ object ApiSon {
         val detail: Sstv? = null,
         /** Where the pictures are: each one says whether its sound and GIF are kept. */
         val dossierImages: File? = null,
+        /** Each card's friendly name, by its own (« IC-9700 (USB Audio CODEC) »); the own name stays the id. */
+        val libelles: Map<String, String> = emptyMap(),
+        /** The rig's own card, when one is recognised ("" none). */
+        val carteDuPoste: String = "",
     )
 
     /** The SSTV decoder: settings, what it hears, the work under way. */
@@ -110,7 +114,9 @@ object ApiSon {
         .put("modes", JSONArray(SstvMode.ALL.map { it.name }))
 
     fun json(e: Etat): JSONObject = JSONObject().put("present", true)
-        .put("cartes", JSONArray(e.cartes.map { JSONObject().put("nom", it.first).put("desc", it.second) }))
+        .put("cartes", JSONArray(e.cartes.map { JSONObject().put("nom", it.first).put("desc", it.second)
+            .put("lib", e.libelles[it.first] ?: it.first).put("poste", it.first == e.carteDuPoste) }))
+        .put("carteDuPoste", e.carteDuPoste)
         .put("carte", e.carte).put("actif", e.actif).put("rate", e.rate).put("niveau", Math.round(e.niveau * 1000.0) / 1000.0).put("erreur", e.erreur)
         .put("enregistrement", e.enregistrement).put("secondes", e.secondes).put("auto", e.auto)
         .put("enregAuto", e.enregAuto).put("sstv", e.sstv).put("aprs", e.aprs).put("coupeLos", e.coupeLos ?: JSONObject.NULL)

@@ -53,7 +53,15 @@ object FonctionsMontage {
         val catConnecte: Boolean = false, val catModele: String = "", val catSimule: Boolean = false,
         /** A browser listens to the SDR's sound (« Écouter ici »). */
         val ecouteNavigateur: Boolean = false,
+        /** The cards' friendly names, by their own (« IC-9700 (USB Audio CODEC) »). */
+        val libelles: Map<String, String> = emptyMap(),
+        /** The rig's own card, recognised on its USB hub ("" none). */
+        val carteDuPoste: String = "",
     ) {
+        /** A card as the operator knows it. */
+        fun nomCarte(c: String): String = libelles[c] ?: court(c)
+        /** The card to offer when none runs: the one chosen, else the rig's, else the first. */
+        val carteProposee: String get() = sonCarte.ifBlank { carteDuPoste.ifBlank { cartes.firstOrNull().orEmpty() } }
         /** The transmission on the air, said for a refusal, or null. */
         fun emission(): String? = when {
             txDatv.isNotBlank() -> "émission DATV en cours (" + nomRessource("sdr:$txDatv") + ")"
@@ -209,7 +217,7 @@ object FonctionsMontage {
         if (i.sonActif) {
             val ecoutent = ecoutentEntree(i)
             l += if (i.sonParSdr) Possession("son:entree", i.sdrPour ?: "sdr", Role.ENTREE_SON, ecoutent, "son démodulé de la carte SDR")
-                else Possession("son:entree", "son", Role.ENTREE_SON, ecoutent, i.sonAppareil)
+                else Possession("son:entree", "son", Role.ENTREE_SON, ecoutent, i.libelles[i.sonAppareil] ?: i.sonAppareil)
         }
         val hp = buildList {
             if (i.sdrActif && i.sdrHautParleur && !i.sdrPourMeteor && !i.sdrPourSonde) add(i.sdrPour ?: "sdr")
@@ -268,8 +276,8 @@ object FonctionsMontage {
                 libere(it, i), fonction("sstv-tx")!!.raccourci)
         }
         // The decoders and their sound.
-        val carte = i.sonCarte.ifBlank { i.cartes.firstOrNull().orEmpty() }
-        fun reprendCarte() = if (carte.isNotBlank()) listOf(Action("Reprendre la carte « " + court(carte) + " »", "son.entree", carte)) else emptyList()
+        val carte = i.carteProposee
+        fun reprendCarte() = if (carte.isNotBlank()) listOf(Action("Reprendre la carte « " + i.nomCarte(carte) + " »", "son.entree", carte)) else emptyList()
         if (i.sstvActif) when {
             i.sstvSource == "carte" && i.sonParSdr -> l += Conflit("sstv-rx", "son:entree",
                 "l'entrée son est prise par la carte SDR (son démodulé) : SSTV, réglé sur « carte son », entend la carte SDR", true,
@@ -353,7 +361,7 @@ object FonctionsMontage {
                 (if (i.sdrCielHz > 0 && i.sdrPour == id) " · " + String.format(java.util.Locale.FRANCE, "%.3f", i.sdrCielHz / 1e6) + " MHz" else "")
             "datv-rx" -> nomRessource(if (i.datvRecepteur == "minitiouner") "datv:minitiouner" else "sdr:" + i.datvRecepteur) + if (i.datvActif) (if (i.datvVerrouille) " · accrochée" else " · recherche") else ""
             "poste" -> i.catModele.ifBlank { "pas de poste en CAT" }
-            "son" -> if (i.sonParSdr) "prise par la carte SDR" else court(i.sonAppareil.ifBlank { i.sonCarte }).ifBlank { "aucune carte choisie" }
+            "son" -> if (i.sonParSdr) "prise par la carte SDR" else i.sonAppareil.ifBlank { i.sonCarte }.let { if (it.isBlank()) "aucune carte choisie" else i.nomCarte(it) }
             "sstv-rx" -> "source " + mapOf("auto" to "auto", "carte" to "carte son", "sdr" to "carte SDR")[i.sstvSource]
             "ft8" -> i.ft8Mode
             "phonie" -> "source " + i.phonieSource
@@ -375,7 +383,7 @@ object FonctionsMontage {
         "cw" -> listOf(if (i.cwActif) Action("Couper", "cw.actif", "0") else Action("Activer", "cw.actif", "1"))
         "aprs" -> listOf(if (i.aprsActif) Action("Couper", "aprs.actif", "0") else Action("Activer", "aprs.actif", "1"))
         "son" -> if (!i.sonParSdr && i.sonActif) listOf(Action("Arrêter la carte", "son.entree", ""))
-            else (i.sonCarte.ifBlank { i.cartes.firstOrNull().orEmpty() }).takeIf { it.isNotBlank() }?.let { listOf(Action("Démarrer « " + court(it) + " »", "son.entree", it)) } ?: emptyList()
+            else i.carteProposee.takeIf { it.isNotBlank() }?.let { listOf(Action("Démarrer « " + i.nomCarte(it) + " »", "son.entree", it)) } ?: emptyList()
         else -> emptyList()
     }
 
@@ -412,8 +420,9 @@ object FonctionsMontage {
         n += Noeud("s:hp", "Haut-parleur du PC", Genre2.SON, 3, listOf("materiel", "son-recoit"), if (enMarche("ecoute", i)) Statut.OK else Statut.PRET, "", raccourci = Raccourci("sdr"))
         if (i.sdrPresent) n += Noeud("s:nav", "Écouter ici (navigateur)", Genre2.SON, 3, listOf("fonction", "son-recoit"), if (i.ecouteNavigateur) Statut.OK else Statut.PRET, "", raccourci = Raccourci("sdr"))
         // Each card Java knows: the one feeding first, at most four.
-        val cartes = (listOfNotNull(i.sonAppareil.takeIf { it.isNotBlank() && !i.sonParSdr }, i.sonCarte.takeIf { it.isNotBlank() }) + i.cartes).distinct().take(3)
-        val courts = cartes.map { court(it) }
+        val cartes = (listOfNotNull(i.sonAppareil.takeIf { it.isNotBlank() && !i.sonParSdr }, i.sonCarte.takeIf { it.isNotBlank() },
+            i.carteDuPoste.takeIf { it.isNotBlank() }) + i.cartes).distinct().take(3)
+        val courts = cartes.map { i.nomCarte(it) }
         cartes.forEachIndexed { k, c ->
             val nomCarte = if (courts.count { it == courts[k] } > 1) c.take(40) else courts[k]
             val vive = i.sonActif && !i.sonParSdr && c == i.sonAppareil
@@ -421,6 +430,8 @@ object FonctionsMontage {
                 if (vive) "entrée des décodeurs" else if (c == i.sonCarte) "carte choisie (onglet Son)" else "", raccourci = Raccourci("son", ancre = "s-carte"),
                 actions = if (vive) emptyList() else listOf(Action("Prendre cette carte", "son.entree", c)))
             if (vive) a += Arc("pc", "c:$k", Type.AUDIO, Statut.OK, "USB")
+            // The rig's audio to its own card, drawn by itself once the card is recognised.
+            if (c == i.carteDuPoste) a += Arc("f:poste", "c:$k", Type.AUDIO, if (vive) Statut.OK else Statut.PRET, "audio")
         }
         if (i.cartes.size > cartes.size) n += Noeud("c:plus", "+" + (i.cartes.size - cartes.size) + " autres cartes son", Genre2.SON, 0, listOf("materiel"), Statut.PRET, "",
             raccourci = Raccourci("son", ancre = "s-carte"))
@@ -622,18 +633,23 @@ object FonctionsMontage {
             val poste = c.elements.firstOrNull { e -> Montage.modele(e)?.genre == Genre.POSTE }
             val nom = poste?.let { Montage.nom(it) } ?: i.catModele.ifBlank { "Poste" }
             val (pc, col) = materiel("cat", nom, 0, false, i.catConnecte || (i.sonActif && !i.sonParSdr), Type.AUDIO)
-            val carte = i.sonAppareil.takeIf { i.sonActif && !i.sonParSdr } ?: i.sonCarte
-            var n = noeudFonction("son", i, poss, cf, col, "Carte son").let { it.copy(detail = if (carte.isNotBlank()) court(carte) else "aucune carte choisie") }
+            val carte = i.sonAppareil.takeIf { i.sonActif && !i.sonParSdr } ?: i.sonCarte.ifBlank { i.carteDuPoste }
+            var n = noeudFonction("son", i, poss, cf, col, "Carte son").let { it.copy(detail = if (carte.isNotBlank()) i.nomCarte(carte) else "aucune carte choisie") }
             if (i.sonParSdr) n = n.copy(statut = Statut.OCCUPE, detail = "prise par la carte SDR (son démodulé)")
             ajoute(n)
-            val choix = i.sonCarte.ifBlank { i.cartes.firstOrNull().orEmpty() }
+            val choix = i.carteProposee
             when {
                 i.sonParSdr -> besoin(Besoin("L'entrée des décodeurs est prise par la carte SDR : la carte son est arrêtée",
-                    choix.takeIf { it.isNotBlank() }?.let { Action("Reprendre « " + court(it) + " »", "son.entree", it) }, Raccourci("son", ancre = "s-carte")))
-                !i.sonActif -> besoin(Besoin(if (choix.isBlank()) "Aucune carte son choisie (onglet Son)" else "La carte son « " + court(choix) + " » n'est pas démarrée",
-                    choix.takeIf { it.isNotBlank() }?.let { Action("Démarrer « " + court(it) + " »", "son.entree", it) }, Raccourci("son", ancre = "s-carte")))
+                    choix.takeIf { it.isNotBlank() }?.let { Action("Reprendre « " + i.nomCarte(it) + " »", "son.entree", it) }, Raccourci("son", ancre = "s-carte")))
+                !i.sonActif -> besoin(Besoin(if (choix.isBlank()) "Aucune carte son choisie (onglet Son)" else "La carte son « " + i.nomCarte(choix) + " » n'est pas démarrée",
+                    choix.takeIf { it.isNotBlank() }?.let { Action("Démarrer « " + i.nomCarte(it) + " »", "son.entree", it) }, Raccourci("son", ancre = "s-carte")))
+                // Another card runs while the rig's own is there: offered, never taken by itself.
+                i.carteDuPoste.isNotBlank() && i.sonAppareil != i.carteDuPoste -> besoin(Besoin("La carte du poste est « " + i.nomCarte(i.carteDuPoste) + " » ; l'entrée des décodeurs est sur « " + i.nomCarte(i.sonAppareil) + " »",
+                    Action("Prendre « " + i.nomCarte(i.carteDuPoste) + " »", "son.entree", i.carteDuPoste), Raccourci("son", ancre = "s-carte")))
             }
-            relie(pc, n.id, Type.AUDIO, if (i.sonActif && !i.sonParSdr) Statut.OK else if (i.sonParSdr) Statut.OCCUPE else Statut.PRET, "son")
+            // The rig's own card: its audio edge says so.
+            val sienne = carte.isNotBlank() && carte == i.carteDuPoste
+            relie(pc, n.id, Type.AUDIO, if (i.sonActif && !i.sonParSdr) Statut.OK else if (i.sonParSdr) Statut.OCCUPE else Statut.PRET, if (sienne) "audio" else "son")
             if (!i.catConnecte) besoin(Besoin("Le poste n'est pas en CAT : la fréquence n'est pas suivie (le son passe quand même)", raccourci = Raccourci("reglages", "materiel")))
             return n.id to col + 1
         }
@@ -785,6 +801,8 @@ object FonctionsMontage {
             "datv-pluto" -> base.copy(datvActif = true, datvRecepteur = "pluto", datvSdrTenu = "pluto", datvVerrouille = true, datvSon = true,
                 sdrRecepteur = "pluto", sdrErreur = "", catConnecte = true, catModele = "IC9700")
             "sstv-carte" -> base.copy(catConnecte = true, catModele = "IC9700", sonActif = true, sonAppareil = "USB PCM2902 Audio CODEC [plughw:1,0]",
+                libelles = mapOf("USB PCM2902 Audio CODEC [plughw:1,0]" to "IC-9700 (USB Audio CODEC)", "HDA Intel PCH [plughw:0,0]" to "Carte mère (ALC897)"),
+                carteDuPoste = "USB PCM2902 Audio CODEC [plughw:1,0]",
                 sstvActif = true, sstvSource = "carte", sstvSourceActive = "carte", ft8Actif = true, sdrRecepteur = "rtl")
             else -> null
         }

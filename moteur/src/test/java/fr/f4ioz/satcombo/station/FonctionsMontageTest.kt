@@ -121,8 +121,30 @@ class FonctionsMontageTest {
         val types = g.arcs.map { it.type }
         assertEquals(listOf(Type.RF, Type.RF, Type.AUDIO, Type.AUDIO, Type.AUDIO, Type.RESEAU), types)
         assertTrue(g.arcs.all { it.statut == Statut.OK })
-        assertEquals("USB PCM2902 Audio CODEC", g.noeud("f:son")!!.detail)
+        assertEquals("IC-9700 (USB Audio CODEC)", g.noeud("f:son")!!.detail)
+        // The rig to its own card: an audio edge.
+        assertTrue(g.arcs.any { it.vers == "f:son" && it.type == Type.AUDIO && it.texte == "audio" })
         assertEquals("En marche de bout en bout", g.resume)
+    }
+
+    @Test fun laCarteDuPosteEstNommeeEtRelieeAuPoste() {
+        val codec = "CODEC [plughw:1,0]"; val pch = "PCH [plughw:0,0]"
+        val i = base.copy(cartes = listOf(pch, codec), sonCarte = "", catConnecte = true, catModele = "IC9700",
+            libelles = mapOf(codec to "IC-9700 (USB Audio CODEC)", pch to "Carte mère (ALC897)"), carteDuPoste = codec)
+        val g = FonctionsMontage.logiciel(i)
+        val n = g.noeuds.first { it.nom == "IC-9700 (USB Audio CODEC)" }
+        assertTrue(g.noeuds.any { it.nom == "Carte mère (ALC897)" })
+        val arc = g.arcs.first { it.de == "f:poste" && it.vers == n.id }
+        assertEquals(Type.AUDIO, arc.type); assertEquals(Statut.PRET, arc.statut)
+        // Nothing runs: the rig's card is offered first, by its name; the setting keeps the card's own name.
+        val a = g.noeud("f:son")!!.actions.single()
+        assertEquals("Démarrer « IC-9700 (USB Audio CODEC) »", a.texte); assertEquals(codec, a.valeur)
+        // Another card running: the rig's is offered, never taken by itself.
+        val autre = i.copy(sonActif = true, sonAppareil = pch, sstvActif = true, sstvSource = "carte")
+        val v = FonctionsMontage.vue("sstv-rx", station(), autre)!!
+        assertEquals("Carte mère (ALC897)", v.noeud("f:son")!!.detail)
+        assertTrue(v.besoins.any { it.action?.valeur == codec && it.action?.cle == "son.entree" })
+        assertEquals("Carte son : « IC-9700 (USB Audio CODEC) »", ProfilsFonction.dit("son.entree", codec, i.libelles))
     }
 
     @Test fun laChaineSstvQuandLaCarteEstPriseParLeSdr() {

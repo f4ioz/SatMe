@@ -927,6 +927,10 @@ class StationPc(
     /** The adapters the connected rig holds (none when not connected). */
     fun clesPoste(): Set<String> = if (_etat.value.catConnecte) clePoste.split(',').filter { it.isNotBlank() }.toSet() else emptySet()
 
+    /** The connected rig's port paths ("/dev/ttyUSB0"), to find its sound card by USB place; none when simulated or off. */
+    @Volatile private var cheminsCat: List<String> = emptyList()
+    fun cheminsPoste(): List<String> = if (_etat.value.catConnecte && !_etat.value.catSimule) cheminsCat else emptyList()
+
     /** The CAT asked last: the TH-D72 panel reconnects with it when the transmit band changes. */
     @Volatile private var derniereChoixCat: ChoixCat? = null
 
@@ -1023,6 +1027,7 @@ class StationPc(
                             catStatut = if (ok) "${mi.libelle} sur ${p!!.libelle}" else "échec : ${civ.lastError.ifBlank { "port introuvable" }}") }
                     }
                 }
+                cheminsCat = listOfNotNull(p?.chemin, pTx?.chemin).filter { it.isNotBlank() }
                 if (_etat.value.catConnecte) lanceBoucleCat()
             }
         }

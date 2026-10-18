@@ -1369,6 +1369,14 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
             "/api/sstv/reglage" -> {
                 val x = son?.sstv ?: return JSONObject().put("ok", false)
                 q["source"]?.let { if (it in SstvPc.SOURCES) x.source = it else return JSONObject().put("ok", false).put("erreur", "source inconnue") }
+                // A card chosen right here: the Sound tab's card, started (receive only).
+                q["carte"]?.takeIf { it.isNotBlank() }?.let { nom ->
+                    if (son.son.appareils().none { it.nom == nom }) return JSONObject().put("ok", false).put("erreur", "carte son introuvable : $nom")
+                    son.prendCarte(nom)?.let { return JSONObject().put("ok", false).put("erreur", it) }
+                }
+                // « Auto » with nothing feeding: the rig's own card, when the rig is in CAT.
+                if (q["source"] == SstvPc.AUTO && !son.son.etat.value.actif && son.catConnecte())
+                    son.carteDuPoste()?.let { son.prendCarte(it) }
                 q["force"]?.let { x.force = fr.f4ioz.satcombo.sstv.SstvMode.byName(it) }
                 q["continu"]?.let { x.continu = it == "1" }
                 q["nettoyage"]?.let { x.nettoyage = it == "1" }
@@ -1770,16 +1778,19 @@ object JsonPc {
         val c = s.son.etat.value
         val e = s.etat.value
         val v = s.sstv.etat.value
-        return ApiSon.json(ApiSon.Etat(s.son.appareils().map { it.nom to it.description }, s.carte, c.actif, c.rate, c.niveau, c.erreur,
+        val appareils = s.son.appareils()
+        val noms = s.nomsCartes(appareils)
+        return ApiSon.json(ApiSon.Etat(appareils.map { it.nom to it.description }, s.carte, c.actif, c.rate, c.niveau, c.erreur,
             e.enregistrement, e.secondes, e.auto, s.enregAuto, s.sstvActif, s.aprsActif,
             v.mode, v.lignes, v.hauteur, v.version, v.derniere, s.enregistrements(), s.images(), s.coupeLos,
-            detail = sstvDetail(s, sdr), dossierImages = s.dossierSstv))
+            detail = sstvDetail(s, sdr, noms), dossierImages = s.dossierSstv,
+            libelles = noms.mapValues { it.value.libelle }, carteDuPoste = noms.entries.firstOrNull { it.value.poste.isNotBlank() }?.key.orEmpty()))
             // What actually feeds the decoders (the dongle when it took the card's place), not only the card chosen.
             .put("appareil", c.appareil)
     }
 
     /** The SSTV decoder in detail: its source, what it hears, its settings, the work under way. */
-    fun sstvDetail(s: SonStation, sdr: SdrPc?): ApiSon.Sstv {
+    fun sstvDetail(s: SonStation, sdr: SdrPc?, noms: Map<String, CartesSonLinux.Libelle> = emptyMap()): ApiSon.Sstv {
         val x = s.sstv
         val v = x.etat.value
         val e = x.ecoute()
@@ -1787,7 +1798,7 @@ object JsonPc {
         val carte = s.son.etat.value
         val src = when (x.sourceActive) {
             SstvPc.SDR -> "clé SDR"
-            SstvPc.CARTE -> if (carte.appareil == SdrPc.NOM_SOURCE) "clé SDR (par l'onglet Son)" else "carte son" + (carte.appareil.takeIf { it.isNotBlank() }?.let { " ($it)" } ?: "")
+            SstvPc.CARTE -> if (carte.appareil == SdrPc.NOM_SOURCE) "clé SDR (par l'onglet Son)" else "carte son" + (carte.appareil.takeIf { it.isNotBlank() }?.let { " (" + (noms[it]?.libelle ?: it) + ")" } ?: "")
             else -> ""
         }
         return ApiSon.Sstv(source = x.source, sourceActive = if (e.depuisMs in 0..SstvPc.SON_VU_MS) src else "", depuisMs = e.depuisMs,

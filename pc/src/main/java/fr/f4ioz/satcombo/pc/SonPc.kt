@@ -53,9 +53,10 @@ class SonPc {
 
     private fun formats() = listOf(48_000f, 44_100f).map { AudioFormat(it, 16, 1, true, false) }
 
-    /** The cards that can record in one of [formats]. */
+    /** The cards that can record in one of [formats] (the sound server's playback-only entry left out). */
     fun appareils(): List<Appareil> = runCatching {
         AudioSystem.getMixerInfo().toList().filter { info ->
+            if (CartesSonLinux.lectureSeule(info.name)) return@filter false
             val m = AudioSystem.getMixer(info)
             formats().any { m.isLineSupported(DataLine.Info(TargetDataLine::class.java, it)) }
         }.mapIndexed { i, info -> Appareil(i, info.name, info.description) }
