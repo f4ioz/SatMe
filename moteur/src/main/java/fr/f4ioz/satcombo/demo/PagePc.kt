@@ -21,66 +21,114 @@ object PagePc {
     /**
      * The tabs, in their order, each with its icon — the phone's for the same
      * function (Explore for the station and its aiming, MenuBook for the log,
-     * SatelliteAlt for QO-100…). The journal is a page of its own.
+     * SatelliteAlt for QO-100…) — and what it holds, said by its tooltip.
+     * The journal and the SSTV sheet are pages of their own.
      */
+    private data class Onglet(val id: String, val nom: String, val icone: String, val quoi: String)
+
     private val ONGLETS = listOf(
-        Triple("station", "Station", "explore"), Triple("carnet", "Carnet", "menu_book"), Triple("agenda", "Agenda", "calendar_month"),
-        Triple("carres", "Carrés", "grid_on"), Triple("frise", "Frise", "timeline"), Triple("sked", "Sked", "handshake"),
-        Triple("qo100", "QO-100", "satellite_alt"), Triple("datv", "DATV", "tv"), Triple("sdr", "SDR", "settings_input_antenna"),
-        Triple("sondes", "Sondes", "air"), Triple("meteor", "METEOR", "cloud"), Triple("son", "Son", "mic"),
-        Triple("sstv", "SSTV", "live_tv"), Triple("planche", "Planche", "view_quilt"), Triple("aprs", "APRS", "place"), Triple("ft8", "FT8", "graphic_eq"),
-        Triple("journal", "Journal", "history"), Triple("reglages", "Réglages", "settings"))
+        Onglet("station", "Suivi", "explore", "Passages, satellite suivi, Doppler, poste et rotor"),
+        Onglet("carnet", "Carnet", "menu_book", "Le carnet de trafic et les fiches des indicatifs"),
+        Onglet("agenda", "Agenda", "calendar_month", "Veille : les passages choisis suivis tout seuls"),
+        Onglet("carres", "Carrés", "grid_on", "Les carrés couverts par un passage"),
+        Onglet("frise", "Frise", "timeline", "Les passages des prochaines heures sur une frise"),
+        Onglet("sked", "Sked", "handshake", "Les fenêtres communes avec un correspondant"),
+        Onglet("qo100", "QO-100", "satellite_alt", "Le cockpit du transpondeur étroit"),
+        Onglet("datv", "DATV", "tv", "Réception et émission de télévision numérique"),
+        Onglet("sdr", "SDR", "settings_input_antenna", "Le récepteur SDR : écoute, spectre, cascade"),
+        Onglet("sondes", "Sondes", "air", "Les radiosondes"),
+        Onglet("meteor", "METEOR", "cloud", "Les images LRPT des satellites METEOR"),
+        Onglet("son", "Son", "mic", "La carte son, l'enregistrement"),
+        Onglet("sstv", "SSTV", "live_tv", "Réception, émission et images SSTV"),
+        Onglet("planche", "Planche", "view_quilt", "La planche SSTV : les images sur un modèle, à télécharger"),
+        Onglet("aprs", "APRS", "place", "Les trames APRS entendues, la carte, les trophées"),
+        Onglet("ft8", "FT8", "graphic_eq", "FT8 et FT4 : décodage, messages, radar"),
+        Onglet("journal", "Journal", "history", "Les passages enregistrés, rejoués"),
+        Onglet("reglages", "Réglages", "settings", "Toute la station : réglages par catégorie"))
+
+    /**
+     * The workspaces: the tabs grouped by what is being done (the sky, the
+     * geostationary transponders, the digital modes, the log, the station).
+     * Keys 1 to 6 open them; each keeps the last tab seen.
+     */
+    private val ESPACES = listOf(
+        Triple("ciel", "Ciel", "public") to listOf("station", "agenda", "frise", "sked", "carres", "meteor", "sondes"),
+        Triple("qo", "QO-100", "satellite_alt") to listOf("qo100"),
+        Triple("tv", "DATV", "tv") to listOf("datv"),
+        Triple("modes", "Modes", "graphic_eq") to listOf("sstv", "planche", "aprs", "ft8"),
+        Triple("log", "Carnet", "menu_book") to listOf("carnet", "journal"),
+        Triple("poste", "Station", "radio") to listOf("sdr", "son", "reglages"))
 
     /** Every tab's id: what a server offering all of them answers to `api/capacites`. */
-    val TOUS: List<String> get() = ONGLETS.map { it.first }
+    val TOUS: List<String> get() = ONGLETS.map { it.id }
 
-    /** A tab's content: its icon above its name. */
-    private fun contenu(nom: String, icone: String) = IconesPc.svg(icone) + "<span>$nom</span>"
+    private fun onglet(id: String) = ONGLETS.first { it.id == id }
 
     /** The settings categories' icons, for the page's script. */
     private fun icones(): String = org.json.JSONObject(listOf("person", "radio", "satellite_alt", "public", "smartphone", "save", "tune", "straighten", "mic", "cloud_upload")
         .associateWith { IconesPc.svg(it, "ico-reg") }).toString()
 
-    /** The tabs that are pages of their own (served apart), with what they are. */
-    private val PAGES = mapOf("journal" to "Les passages enregistrés, rejoués", "planche" to "La planche SSTV : les images sur un modèle, à télécharger")
-
-    /** The tabs here: buttons, the pages of their own links. */
-    private fun boutons() = ONGLETS.joinToString("") { (v, nom, ico) ->
-        if (v in PAGES) "<a href=\"$v\" style=\"text-decoration:none\"><button title=\"${PAGES[v]}\">${contenu(nom, ico)}</button></a>"
-        else "<button data-v=\"$v\"" + (if (v == "station") " class=\"actif\"" else "") + ">${contenu(nom, ico)}</button>"
-    }
-
-    /** The tabs' look, an icon above the name: shared by this page and the journal's header. */
-    private const val ONGLET_STYLE = "nav button{display:inline-flex;flex-direction:column;align-items:center;gap:1px;line-height:1.1}" +
-        "nav button .ico{width:20px;height:20px;fill:currentColor;opacity:.85}nav button.actif .ico{opacity:1}" +
-        "nav button span{font-size:11.5px}nav button:hover{color:var(--clair)}"
+    /** The tabs that are pages of their own (served apart). */
+    private val PAGES = setOf("journal", "planche")
 
     /**
-     * The same header at the top of the journal's page, a page of its own:
-     * the same title, station, tabs and clock, the same look (its styles
-     * scoped under #pcBar, the journal's own left alone). The tabs are links
-     * back to this page, opened on the tab (#carnet).
+     * The side rail: the workspaces, each with its tabs (an icon, a name the
+     * rail shows when unfolded, a tooltip always). On a phone it becomes a
+     * bar at the bottom, a workspace's tabs in a sheet above it.
+     */
+    private fun rail() = "<nav id=\"onglets\" aria-label=\"Espaces de travail\">" +
+        "<button id=\"rail-b\" class=\"rail-b\" title=\"Déplier ou replier le menu\" aria-label=\"Menu\">${IconesPc.svg("menu")}<span>Replier</span></button>" +
+        ESPACES.withIndex().joinToString("") { (i, e) ->
+            val (ws, nom, ico) = e.first
+            "<div class=\"ws\" data-ws=\"$ws\"><button class=\"ws-t\" data-ws=\"$ws\" title=\"$nom — touche ${i + 1}\">${IconesPc.svg(ico)}<span>$nom</span></button><div class=\"ws-l\">" +
+                e.second.joinToString("") { id ->
+                    val o = onglet(id)
+                    val c = IconesPc.svg(o.icone) + "<span>${o.nom}</span>"
+                    if (id in PAGES) "<a href=\"$id\" title=\"${o.nom} — ${o.quoi}\">$c</a>"
+                    else "<button data-v=\"$id\" title=\"${o.nom} — ${o.quoi}\"" + (if (id == "station") " class=\"actif\"" else "") + ">$c</button>"
+                } + "</div></div>"
+        } +
+        "<div class=\"rail-pied\"><button id=\"rail-k\" title=\"Commandes et recherche (Ctrl+K)\">${IconesPc.svg("search")}<span>Commandes</span></button>" +
+        "<button id=\"rail-aide\" title=\"Raccourcis clavier (?)\"><b class=\"ico-q\">?</b><span>Raccourcis</span></button></div></nav>"
+
+    /**
+     * The same header at the top of the journal's and the sheet's pages, pages
+     * of their own: the same title, station, workspaces (menus opening on
+     * their tabs) and clock, the same look (scoped under #pcBar, the pages'
+     * own styles left alone). The tabs are links back to this page (#carnet).
      */
     fun barre(actif: String): String = "<header id=\"pcBar\"><h1>SatMe-<span class=\"c\">PC</span></h1><span class=\"g\" id=\"pc-info\"></span><nav>" +
-        ONGLETS.joinToString("") { (v, nom, ico) ->
-            when {
-                v == actif -> "<button class=\"actif\">${contenu(nom, ico)}</button>"
-                v in PAGES -> "<a href=\"$v\"><button>${contenu(nom, ico)}</button></a>"
-                else -> "<a href=\"pc#$v\"><button>${contenu(nom, ico)}</button></a>"
-            }
+        ESPACES.joinToString("") { e ->
+            val (_, nom, ico) = e.first
+            val ici = actif in e.second
+            "<div class=\"pb-ws\"><button class=\"pb-t" + (if (ici) " actif" else "") + "\" aria-haspopup=\"true\">${IconesPc.svg(ico)}<span>$nom</span></button><div class=\"pb-menu\">" +
+                e.second.joinToString("") { id ->
+                    val o = onglet(id)
+                    val c = IconesPc.svg(o.icone) + "<span>${o.nom}</span>"
+                    when {
+                        id == actif -> "<a class=\"actif\" title=\"${o.quoi}\">$c</a>"
+                        id in PAGES -> "<a href=\"$id\" title=\"${o.quoi}\">$c</a>"
+                        else -> "<a href=\"pc#$id\" title=\"${o.quoi}\">$c</a>"
+                    }
+                } + "</div></div>"
         } + "</nav><span id=\"pc-heure\"></span></header>"
 
-    /** The header's look, as on this page (sizes, gaps, the narrower screens). */
+    /** The header's look on those pages: the same colours as this page, its menus opening under the pointer or the keyboard's focus. */
     val STYLE_BARRE = "#tTitre,#lienPlanche,#lienPupitre,#tSous{display:none}" +
-        "#pcBar{display:flex;align-items:center;gap:16px;flex-wrap:wrap;padding:10px 16px;border-bottom:1px solid var(--bord);font-size:14px}" +
-        "#pcBar h1{font-size:18px;margin:0;letter-spacing:.5px}#pcBar h1 .c{color:var(--cyan)}#pcBar .g{color:var(--gris);font-size:13px}" +
-        "#pc-heure{font-family:ui-monospace,Consolas,monospace;font-size:16px;margin-left:auto}" +
-        "#pcBar nav{display:flex;gap:4px}#pcBar nav a{text-decoration:none}" +
-        "#pcBar nav button{font-size:14px;font-family:inherit;font-weight:700;border-radius:8px;background:transparent;border:1px solid transparent;color:var(--gris);padding:6px 14px;cursor:pointer}" +
-        ONGLET_STYLE.replace("nav ", "#pcBar nav ") +
-        "#pcBar nav button.actif{color:var(--cyan);border-color:var(--bord);background:var(--carte)}" +
-        "@media (max-width:1900px){#pcBar nav button{padding:5px 8px;font-size:13px}#pcBar{gap:10px}#pcBar nav{gap:2px}}" +
-        "@media (max-width:1500px){#pcBar nav button{padding:4px 6px;font-size:12.5px}#pcBar h1{font-size:16px}#pc-info{display:none}}" +
+        "#pcBar{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:6px 14px;border-bottom:1px solid var(--bord);font-size:13px;background:#0F161D;position:relative;z-index:20}" +
+        "#pcBar h1{font-size:16px;margin:0;letter-spacing:.4px}#pcBar h1 .c{color:var(--cyan)}#pcBar .g{color:var(--gris);font-size:12px}" +
+        "#pc-heure{font-family:ui-monospace,'Cascadia Mono',Consolas,monospace;font-variant-numeric:tabular-nums;font-size:14px;margin-left:auto}" +
+        "#pcBar nav{display:flex;gap:2px}#pcBar a{text-decoration:none}" +
+        "#pcBar .pb-ws{position:relative}" +
+        "#pcBar .pb-t{display:inline-flex;align-items:center;gap:6px;font:600 13px system-ui,sans-serif;border-radius:6px;background:transparent;border:1px solid transparent;color:var(--gris);padding:5px 10px;cursor:pointer}" +
+        "#pcBar .pb-t .ico,#pcBar .pb-menu .ico{width:18px;height:18px;fill:currentColor;flex:none}" +
+        "#pcBar .pb-t:hover,#pcBar .pb-ws:focus-within .pb-t{color:var(--clair);background:#1B2833}" +
+        "#pcBar .pb-t.actif{color:var(--cyan);border-color:var(--bord);background:var(--carte)}" +
+        "#pcBar .pb-menu{display:none;position:absolute;left:0;top:100%;min-width:190px;padding:4px;border-radius:8px;background:var(--carte);border:1px solid var(--bord);box-shadow:0 10px 28px rgba(0,0,0,.45)}" +
+        "#pcBar .pb-ws:hover .pb-menu,#pcBar .pb-ws:focus-within .pb-menu{display:block}" +
+        "#pcBar .pb-menu a{display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:6px;color:var(--clair);font-size:13px;cursor:pointer}" +
+        "#pcBar .pb-menu a:hover,#pcBar .pb-menu a:focus{background:#1B2833;outline:none}#pcBar .pb-menu a.actif{color:var(--cyan);cursor:default}" +
+        "@media (max-width:1100px){#pcBar .pb-t span{display:none}#pc-info{display:none}}" +
         // The journal's own bar below, only its filter now: lighter.
         "#page>header:not(#pcBar){padding:5px 16px;border-bottom:none}"
 
@@ -92,9 +140,10 @@ object PagePc {
         "function heure(){const d=new Date(),u=utc(),h=document.getElementById('pc-heure');if(!h)return;" +
         "h.textContent=(u?[d.getUTCHours(),d.getUTCMinutes(),d.getUTCSeconds()]:[d.getHours(),d.getMinutes(),d.getSeconds()]).map(p2).join(':')+(u?' UTC':'')}" +
         "etat();setInterval(etat,30000);heure();setInterval(heure,1000);" +
-        // The tabs the server offers (the phone some of them): the others hidden.
+        // The tabs the server offers (the phone some of them): the others hidden, an empty menu too.
         "fetch('api/capacites').then(r=>r.ok?r.json():null).then(j=>{if(!j||!j.onglets)return;" +
-        "document.querySelectorAll('#pcBar nav a').forEach(a=>{const h=a.getAttribute('href').replace('pc#','');if(!j.onglets.includes(h))a.hidden=true})}).catch(()=>{})" +
+        "document.querySelectorAll('#pcBar nav a[href]').forEach(a=>{const h=a.getAttribute('href').replace('pc#','');if(!j.onglets.includes(h))a.hidden=true});" +
+        "document.querySelectorAll('#pcBar .pb-ws').forEach(w=>{if(![...w.querySelectorAll('.pb-menu a')].some(a=>!a.hidden))w.hidden=true})}).catch(()=>{})" +
         "})();"
 
     val HTML = """<!doctype html>
@@ -102,8 +151,25 @@ object PagePc {
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>SatMe — station PC</title>
 <style>
-  :root { --fond:#0B1016; --carte:#131C24; --bord:#22303B; --cyan:#3FE0C8;
-          --ambre:#FFB454; --rose:#E5484D; --vert:#5BD68A; --gris:#9AA7B4; --clair:#E8F0F7; }
+  /* Design tokens. Surfaces by tone (s0 the page, s3 a raised hover), colour kept for data and states:
+     ok / warn / danger / info, rx cyan, tx red-orange (only ever for a transmission), mark violet, sat yellow. */
+  :root {
+    --s0:#0A0F14; --s1:#0F161D; --s2:#131C24; --s3:#1A2530; --creux:#0D151C; --ligne:#22303B; --ligne-forte:#2F4150;
+    --texte:#E8F0F7; --texte-2:#9AA7B4; --texte-3:#6B7C8F;
+    --ok:#5BD68A; --warn:#FFB454; --danger:#E5484D; --info:#6F8CFF; --rx:#3FE0C8; --tx:#FF5A36; --mark:#B07CFF; --sat:#FFD166;
+    --sp1:4px; --sp2:8px; --sp3:12px; --sp4:16px; --sp5:24px;
+    --r1:6px; --r2:8px; --r3:10px;
+    --fs-xs:11px; --fs-s:12px; --fs-m:13px; --fs-l:14px;
+    --mono:ui-monospace,'Cascadia Mono','JetBrains Mono',Consolas,'DejaVu Sans Mono',monospace;
+    --ombre:0 1px 0 rgba(255,255,255,.03) inset, 0 6px 18px rgba(0,0,0,.28);
+    --ombre-pop:0 14px 40px rgba(0,0,0,.55);
+    --anim:140ms cubic-bezier(.2,.7,.3,1);
+    --rail:48px;
+    /* The names the page used before, kept as aliases. */
+    --fond:var(--s0); --carte:var(--s2); --bord:var(--ligne); --cyan:var(--rx);
+    --ambre:var(--warn); --rose:var(--danger); --vert:var(--ok); --gris:var(--texte-2); --clair:var(--texte);
+  }
+  @media (prefers-reduced-motion:reduce) { *, *::before, *::after { animation-duration:.001ms !important; animation-iteration-count:1 !important; transition-duration:.001ms !important; scroll-behavior:auto !important; } }
   * { box-sizing:border-box; }
   [hidden] { display:none !important; }
   #visionneuse { background:var(--carte); color:var(--clair); border:1px solid var(--bord); border-radius:12px; padding:10px; max-width:96vw; }
@@ -165,41 +231,48 @@ object PagePc {
   #vi-img { display:block; max-width:min(92vw,1280px); max-height:calc(92vh - 60px); min-width:320px; image-rendering:auto; border-radius:6px; cursor:zoom-out; background:#0E1720; }
   /* The flags drawn by the page itself: Windows (and a Linux without a colour emoji font) shows two letters instead. */
   @font-face { font-family:Drapeaux; src:url(api/police-drapeaux) format('woff2'); unicode-range:U+1F1E6-1F1FF,U+1F3F4,U+E0062-E007F; font-display:swap; }
-  body { margin:0; background:var(--fond); color:var(--clair); font-size:14px;
-         font-family:Drapeaux,system-ui,-apple-system,Segoe UI,Roboto,sans-serif; }
-  header { display:flex; align-items:center; gap:16px; flex-wrap:wrap; padding:10px 16px;
-           border-bottom:1px solid var(--bord); }
-  header h1 { font-size:18px; margin:0; letter-spacing:.5px; }
-  header .g { color:var(--gris); font-size:13px; }
-  #heure { font-family:ui-monospace,Consolas,monospace; font-size:16px; margin-left:auto; }
+  body { margin:0; background:var(--s0); color:var(--texte); font-size:var(--fs-m); line-height:1.4;
+         font-family:Drapeaux,system-ui,-apple-system,'Segoe UI',Roboto,'Noto Sans',sans-serif; -webkit-font-smoothing:antialiased; }
   .grille { display:grid; grid-template-columns:minmax(300px,1fr) minmax(360px,1.2fr) minmax(340px,1fr);
-            gap:12px; padding:12px 16px; }
+            gap:var(--sp3); padding:var(--sp3) var(--sp4); }
   @media (max-width:1100px) { .grille { grid-template-columns:1fr 1fr; } .col3 { grid-column:1 / -1; } }
   @media (max-width:760px) { .grille { grid-template-columns:1fr; } }
-  .carte { background:var(--carte); border:1px solid var(--bord); border-radius:12px; padding:12px 14px; margin-bottom:12px; }
-  .t { color:var(--gris); font-size:11px; letter-spacing:1.6px; text-transform:uppercase; margin-bottom:8px; }
-  .gros { font-size:30px; font-weight:800; letter-spacing:1px; }
-  .val { font-family:ui-monospace,Consolas,monospace; font-size:20px; }
-  .petit { font-size:12px; color:var(--gris); }
-  .cyan { color:var(--cyan); } .ambre { color:var(--ambre); } .rose { color:var(--rose); } .vert { color:var(--vert); }
-  .paire { display:flex; gap:22px; flex-wrap:wrap; align-items:baseline; }
-  input, select, button { font-size:14px; font-family:inherit; border-radius:8px; border:1px solid var(--bord);
-         background:#0E1720; color:var(--clair); padding:7px 9px; }
-  input:focus, select:focus { outline:2px solid var(--cyan); }
-  button { cursor:pointer; font-weight:700; }
-  .reg { display:flex; gap:16px; align-items:flex-start; padding:14px 16px; }
-  .reg-nav { flex:0 0 250px; display:flex; flex-direction:column; gap:6px; position:sticky; top:0; }
-  #v-reglages .reg-nav button { display:flex; flex-direction:row; justify-content:flex-start; width:100%; gap:12px; align-items:center; text-align:left; padding:10px 12px; background:var(--carte); border:1px solid var(--bord); border-radius:12px; }
-  #v-reglages .reg-nav button svg { margin:0; width:26px; height:26px; flex:none; fill:var(--gris); }
-  .reg-nav button b { display:block; font-size:14px; }
-  .reg-nav button small { display:block; font-size:11px; color:var(--gris); font-weight:400; margin-top:2px; }
-  .reg-nav button.actif { border-color:var(--cyan); background:rgba(63,224,200,.08); }
-  .reg-nav button.actif svg { fill:var(--cyan); }
+  .carte { background:var(--s2); border:1px solid var(--ligne); border-radius:var(--r3); padding:10px 12px; margin-bottom:10px; box-shadow:var(--ombre); }
+  .t { color:var(--texte-2); font-size:var(--fs-xs); font-weight:600; letter-spacing:1.2px; text-transform:uppercase; margin-bottom:var(--sp2); }
+  .gros { font-size:28px; font-weight:800; letter-spacing:.5px; }
+  .val { font-family:var(--mono); font-variant-numeric:tabular-nums; font-size:18px; }
+  .petit { font-size:var(--fs-s); color:var(--texte-2); }
+  .cyan { color:var(--rx); } .ambre { color:var(--warn); } .rose { color:var(--danger); } .vert { color:var(--ok); }
+  .paire { display:flex; gap:20px; flex-wrap:wrap; align-items:baseline; }
+  input, select, textarea { font-size:var(--fs-m); font-family:inherit; border-radius:var(--r1); border:1px solid var(--ligne);
+         background:var(--creux); color:var(--texte); padding:5px 8px; transition:border-color var(--anim), background-color var(--anim); }
+  /* Buttons at zero specificity: any class (.primaire, .rouge, .discret…) wins, hover included. */
+  :where(button) { font-size:var(--fs-m); font-family:inherit; border-radius:var(--r1); border:1px solid var(--ligne); color:var(--texte); padding:5px 9px;
+         transition:border-color var(--anim), background-color var(--anim), color var(--anim), box-shadow var(--anim); }
+  input[type=checkbox], input[type=radio] { accent-color:var(--rx); padding:0; vertical-align:-2px; }
+  input[type=range] { accent-color:var(--rx); padding:0; border:none; background:transparent; }
+  input:hover, select:hover, textarea:hover { border-color:var(--ligne-forte); }
+  input:focus, select:focus, textarea:focus { outline:none; border-color:var(--rx); box-shadow:0 0 0 2px rgba(63,224,200,.22); }
+  :focus-visible { outline:2px solid var(--rx); outline-offset:1px; }
+  button { cursor:pointer; font-weight:600; }
+  :where(button) { background:var(--s3); }
+  :where(button:hover:not(:disabled)) { border-color:var(--ligne-forte); background:#21303C; }
+  :where(.primaire:hover:not(:disabled)) { filter:brightness(1.08); }
+  .reg { display:flex; gap:var(--sp3); align-items:flex-start; padding:var(--sp3) var(--sp4); }
+  .reg-nav { flex:0 0 232px; display:flex; flex-direction:column; gap:4px; position:sticky; top:0; }
+  #v-reglages .reg-nav button { display:flex; flex-direction:row; justify-content:flex-start; width:100%; gap:10px; align-items:center; text-align:left; padding:7px 10px;
+    background:var(--s2); border:1px solid var(--ligne); border-radius:var(--r2); min-width:0; }
+  #v-reglages .reg-nav button svg { margin:0; width:22px; height:22px; flex:none; fill:var(--texte-2); }
+  .reg-nav button > span { min-width:0; }
+  .reg-nav button b { display:block; font-size:var(--fs-m); }
+  .reg-nav button small { display:block; font-size:var(--fs-xs); color:var(--texte-2); font-weight:400; margin-top:1px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .reg-nav button.actif { border-color:var(--rx); background:rgba(63,224,200,.08); box-shadow:inset 3px 0 0 var(--rx); }
+  .reg-nav button.actif svg { fill:var(--rx); }
   .reg-corps { flex:1; min-width:0; }
-  .reg-tete { display:flex; gap:12px; align-items:center; margin:2px 0 12px; }
-  .reg-tete svg { width:34px; height:34px; fill:var(--cyan); flex:none; }
-  .reg-nom { font-size:22px; font-weight:800; }
-  .reg-cartes { display:grid; grid-template-columns:repeat(auto-fit, minmax(440px, 1fr)); gap:12px; align-items:start; }
+  .reg-tete { display:flex; gap:10px; align-items:center; margin:0 0 10px; }
+  .reg-tete svg { width:28px; height:28px; fill:var(--rx); flex:none; }
+  .reg-nom { font-size:18px; font-weight:800; }
+  .reg-cartes { display:grid; grid-template-columns:repeat(auto-fit, minmax(420px, 1fr)); gap:10px; align-items:start; }
   .reg-cartes .carte { margin:0; }
   @media (max-width:900px) { .reg { flex-direction:column; } .reg-nav { flex:none; width:100%; position:static; flex-direction:row; flex-wrap:wrap; } .reg-nav button small { display:none; } .reg-cartes { grid-template-columns:1fr; } }
   .f8 { padding:12px 16px; display:flex; flex-direction:column; gap:12px; }
@@ -257,16 +330,18 @@ object PagePc {
   .m8-ico { font-family:system-ui; }
   /* Messages shown: the radar only where there is room for three columns. */
   @media (max-width:1500px) { .f8-messages .f8-radar-boite { display:none; } .f8-messages .f8-grille { grid-template-columns:minmax(420px,1.3fr) minmax(360px,1fr); } }
-  a.bouton { font-size:13px; font-weight:700; border-radius:8px; border:1px solid var(--bord); background:#0E1720; color:var(--clair); padding:6px 9px; text-decoration:none; white-space:nowrap; }
+  a.bouton { font-size:var(--fs-m); font-weight:600; border-radius:var(--r1); border:1px solid var(--ligne); background:var(--s3); color:var(--texte); padding:5px 9px; text-decoration:none; white-space:nowrap; }
+  a.bouton:hover { border-color:var(--ligne-forte); }
   button:disabled { opacity:.45; cursor:default; }
-  .primaire { background:var(--cyan); color:#06131A; border:none; }
-  .rouge { background:var(--rose); color:#fff; border:none; }
-  .ligne { display:flex; gap:8px; margin-top:8px; flex-wrap:wrap; align-items:center; }
+  .primaire { background:var(--rx); color:#06131A; border:1px solid var(--rx); }
+  .rouge { background:var(--danger); color:#fff; border:1px solid var(--danger); }
+  .ligne { display:flex; gap:6px 8px; margin-top:var(--sp2); flex-wrap:wrap; align-items:center; }
   .ligne > select, .ligne > input { flex:1; min-width:80px; }
-  table { width:100%; border-collapse:collapse; font-size:13px; }
-  th { text-align:left; color:var(--gris); font-weight:600; font-size:11px; padding:4px; border-bottom:1px solid var(--bord); }
-  td { padding:5px 4px; border-bottom:1px solid var(--bord); }
-  tr.p { cursor:pointer; } tr.p:hover { background:#18242E; }
+  table { width:100%; border-collapse:collapse; font-size:var(--fs-m); font-variant-numeric:tabular-nums; }
+  th { text-align:left; color:var(--texte-2); font-weight:600; font-size:var(--fs-xs); letter-spacing:.3px; padding:4px; border-bottom:1px solid var(--ligne-forte); }
+  td { padding:4px; border-bottom:1px solid var(--ligne); }
+  tbody tr:hover > td { background:rgba(255,255,255,.018); }
+  tr.p { cursor:pointer; } tr.p:hover > td { background:var(--s3); }
   tr.encours td { color:var(--vert); font-weight:700; }
   tr.choisi td:first-child { box-shadow:inset 3px 0 0 var(--cyan); }
   td.rosace { padding:2px 4px; width:1px; }
@@ -325,7 +400,7 @@ object PagePc {
   .avert { color:var(--ambre); font-size:12px; margin-top:6px; }
   .diag { font-family:ui-monospace,Consolas,monospace; font-size:11px; color:var(--gris); white-space:pre-wrap; margin-top:6px; max-height:90px; overflow:auto; }
   .bouton-gr { display:flex; gap:6px; flex-wrap:wrap; }
-  .pastille { display:inline-block; padding:2px 8px; border-radius:20px; font-size:12px; font-weight:700; }
+  .pastille { display:inline-block; padding:1px 8px; border-radius:20px; font-size:var(--fs-s); font-weight:600; background:var(--s3); }
   /* What is running or connected, at a glance: a green pill and edge; stopped, a red one. */
   .pastille.marche { background:rgba(91,214,138,.20); color:var(--vert); }
   .pastille.marche::before { content:'● '; }
@@ -342,12 +417,6 @@ object PagePc {
   .e-direct { background:rgba(229,72,77,.18); border:1px solid #E5484D; border-radius:8px; padding:8px 10px; margin-top:8px; }
   .on { background:rgba(91,214,138,.18); color:var(--vert); } .off { background:rgba(154,167,180,.15); color:var(--gris); }
   .discret { background:transparent; border:none; }
-  nav { display:flex; gap:4px; }
-  nav button { background:transparent; border:1px solid transparent; color:var(--gris); padding:6px 14px; }
-  ${ONGLET_STYLE}
-  @media (max-width:1900px) { nav button { padding:5px 8px; font-size:13px; } header { gap:10px; } nav { gap:2px; } }
-  @media (max-width:1500px) { nav button { padding:4px 6px; font-size:12.5px; } header h1 { font-size:16px; } #info-station { display:none; } }
-  nav button.actif { color:var(--cyan); border-color:var(--bord); background:var(--carte); }
   .grille2 { display:grid; grid-template-columns:minmax(320px,1fr) minmax(420px,1.6fr); gap:12px; padding:12px 16px; }
   @media (max-width:900px) { .grille2 { grid-template-columns:1fr; } }
   td.act { white-space:nowrap; text-align:right; }
@@ -403,7 +472,7 @@ object PagePc {
   /* On a computer's screen each tab fits the window: what is longer scrolls in its own box. */
   @media (min-width:1101px) and (min-height:600px) {
     body { height:100vh; display:flex; flex-direction:column; overflow:hidden; }
-    header { flex:none; }
+    body > header, #sb { flex:none; }
     .vue:not([hidden]) { flex:1; min-height:0; overflow:auto; }
     #v-station .grille { height:100%; }
     #v-station .col1, #v-station .col2, #v-station .col3 { min-height:0; overflow:auto; }
@@ -572,25 +641,165 @@ object PagePc {
   }
   @media (max-width:1100px) { .d-haut { flex-direction:column; } .d-haut #d-cadre { width:100%; } .d-haut .d-info { contain:none; } .d-info .dc-carte { flex:none; } .d-info .dc-chat { max-height:220px; } }
   .tq-cote #cw-carte, .tq-main #cw-carte { margin-bottom:0; }
-  @media (max-width:2300px) { header.a-ctx #info-station { display:none; } }
-  /* A narrow screen: the tabs scroll sideways rather than widen the page. */
-  @media (max-width:760px) { #onglets { max-width:100%; overflow-x:auto; } }
-  .ctx-chip { border:1px solid var(--bord); background:var(--carte); color:var(--gris); border-radius:14px; padding:3px 10px; font-size:12.5px; cursor:pointer; white-space:nowrap; }
-  .ctx-chip.qo { border-color:var(--cyan); color:var(--cyan); background:rgba(63,224,200,.08); font-weight:700; }
+  /* ---------------------------------------------------------------- the frame: rail, header strip, status bar */
+  * { scrollbar-width:thin; scrollbar-color:var(--ligne-forte) transparent; }
+  body { padding-left:var(--rail); }
+  body.rail-ouvert { --rail:176px; }
+  #onglets { position:fixed; left:0; top:0; bottom:0; width:var(--rail); z-index:40; display:flex; flex-direction:column; gap:1px; padding:6px 4px;
+    background:var(--s1); border-right:1px solid var(--ligne); overflow-y:auto; overflow-x:hidden; scrollbar-width:none; }
+  #onglets button, #onglets a { display:flex; align-items:center; gap:10px; width:100%; height:31px; flex:none; padding:0 10px; border:none; border-radius:var(--r1);
+    background:transparent; color:var(--texte-2); font-size:var(--fs-m); font-weight:500; text-decoration:none; white-space:nowrap; position:relative; cursor:pointer; }
+  #onglets .ico { width:20px; height:20px; fill:currentColor; flex:none; }
+  #onglets span { overflow:hidden; text-overflow:ellipsis; }
+  #onglets button:hover, #onglets a:hover { background:var(--s3); color:var(--texte); }
+  #onglets button.actif { background:rgba(63,224,200,.12); color:var(--rx); }
+  #onglets button.actif::before { content:''; position:absolute; left:-4px; top:6px; bottom:6px; width:3px; border-radius:0 2px 2px 0; background:var(--rx); }
+  body:not(.rail-ouvert) #onglets span { display:none; }
+  .ws { display:flex; flex-direction:column; gap:1px; padding:4px 0; border-top:1px solid var(--ligne); }
+  .ws-l { display:flex; flex-direction:column; gap:1px; }
+  #onglets .ws-t { display:none; }
+  body.rail-ouvert #onglets .ws-t { display:flex; height:20px; padding:0 10px; font-size:10.5px; font-weight:700; letter-spacing:1.1px; text-transform:uppercase; color:var(--texte-3); }
+  body.rail-ouvert #onglets .ws-t .ico { display:none; }
+  body.rail-ouvert #onglets .ws-t:hover { background:transparent; color:var(--texte-2); }
+  body.rail-ouvert #onglets .ws[data-ws="qo"] .ws-t, body.rail-ouvert #onglets .ws[data-ws="tv"] .ws-t { display:none; }
+  #onglets .rail-b { color:var(--texte-3); margin-bottom:2px; }
+  .rail-pied { margin-top:auto; border-top:1px solid var(--ligne); padding-top:4px; display:flex; flex-direction:column; gap:1px; }
+  .ico-q { width:20px; height:20px; flex:none; display:grid; place-items:center; border-radius:50%; border:2px solid currentColor; font-size:12px; line-height:1; }
+  @media (max-height:760px) { .rail-pied { display:none; } #onglets button, #onglets a { height:29px; } }
+  body > header#tete { display:flex; align-items:center; gap:8px; flex-wrap:wrap; padding:5px 12px; min-height:42px; background:var(--s1);
+    border-bottom:1px solid var(--ligne); position:relative; z-index:30; }
+  #tete h1 { font-size:16px; margin:0 4px 0 0; letter-spacing:.4px; font-weight:800; white-space:nowrap; }
+  #tete .g { color:var(--texte-2); font-size:var(--fs-s); white-space:nowrap; }
+  .h-esp { flex:1; }
+  .h-puce { display:inline-flex; align-items:baseline; gap:6px; padding:3px 10px; border-radius:14px; background:var(--s2); border:1px solid var(--ligne);
+    font-size:var(--fs-s); font-weight:500; color:var(--texte-2); white-space:nowrap; }
+  .h-puce b { color:var(--rx); font-size:var(--fs-xs); letter-spacing:.6px; }
+  .h-f { font-family:var(--mono); font-variant-numeric:tabular-nums; color:var(--texte); font-size:var(--fs-m); }
+  .h-m { color:var(--texte-2); font-size:var(--fs-xs); font-weight:600; }
+  .h-puce.inactif .h-f { color:var(--texte-3); }
+  #h-pass.encours { border-color:rgba(91,214,138,.55); } #h-pass.encours .h-f { color:var(--ok); }
+  #h-pass.proche { border-color:rgba(255,180,84,.55); } #h-pass.proche .h-f { color:var(--warn); }
+  .h-tx { display:inline-flex; align-items:center; gap:8px; padding:3px 10px; border-radius:14px; background:var(--tx); color:#fff; border:1px solid var(--tx);
+    font-weight:800; font-size:var(--fs-s); letter-spacing:.5px; box-shadow:0 0 0 3px rgba(255,90,54,.25); animation:h-tx 1s ease-in-out infinite alternate; }
+  .h-tx:hover { filter:brightness(1.1); }
+  .h-tx-x { font-size:var(--fs-xs); font-weight:600; border-left:1px solid rgba(255,255,255,.45); padding-left:8px; }
+  @keyframes h-tx { from { box-shadow:0 0 0 2px rgba(255,90,54,.2); } to { box-shadow:0 0 0 5px rgba(255,90,54,.45); } }
+  body.en-tx > header#tete { box-shadow:inset 0 -2px 0 var(--tx); }
+  .h-cmd { display:inline-flex; align-items:center; gap:6px; padding:4px 8px; background:var(--s2); color:var(--texte-2); font-weight:500; font-size:var(--fs-s); white-space:nowrap; }
+  .h-cmd .ico { width:16px; height:16px; fill:currentColor; flex:none; }
+  .h-cmd:hover { color:var(--texte); }
+  kbd { font-family:var(--mono); font-size:10.5px; padding:0 5px; border-radius:4px; border:1px solid var(--ligne-forte); border-bottom-width:2px; background:var(--s0); color:var(--texte-2); line-height:15px; display:inline-block; font-weight:500; }
+  .h-rond { width:26px; height:26px; border-radius:50%; padding:0; display:inline-grid; place-items:center; font-weight:800; color:var(--texte-2); background:var(--s2); }
+  #heure { font-family:var(--mono); font-variant-numeric:tabular-nums; font-size:var(--fs-l); color:var(--texte); white-space:nowrap; padding-left:4px; }
+  .h-utc { font-family:var(--mono); font-variant-numeric:tabular-nums; font-size:var(--fs-xs); color:var(--texte-2); white-space:nowrap; }
+  .ctx-chip { border:1px solid var(--ligne); background:var(--s2); color:var(--texte-2); border-radius:14px; padding:3px 10px; font-size:var(--fs-s); font-weight:500; cursor:pointer; white-space:nowrap; }
+  .ctx-chip.qo { border-color:var(--rx); color:var(--rx); background:rgba(63,224,200,.08); font-weight:700; }
+  .pop-carte { position:absolute; right:0; top:115%; z-index:50; min-width:300px; padding:10px 12px; border-radius:var(--r3); background:var(--s2); border:1px solid var(--ligne-forte); box-shadow:var(--ombre-pop); }
+  @media (max-width:1800px) { header.a-ctx #info-station { display:none; } }
+  @media (max-width:1500px) { #info-station { display:none; } .h-cmd span, .h-cmd kbd { display:none; } }
+  @media (max-width:1250px) { #cat-statut-court, #h-rx-m { display:none; } }
+  #sb { display:flex; align-items:center; gap:2px; padding:0 6px; height:24px; background:var(--s1); border-top:1px solid var(--ligne); font-size:var(--fs-xs); color:var(--texte-2); white-space:nowrap; overflow:hidden; }
+  .sb-i { display:inline-flex; align-items:center; gap:5px; height:20px; padding:0 8px; border:none; border-radius:4px; background:transparent; color:var(--texte-2); font-size:var(--fs-xs); font-weight:500; }
+  .sb-i:hover { background:var(--s3); color:var(--texte); }
+  .sb-i b { color:var(--texte); font-weight:600; font-variant-numeric:tabular-nums; max-width:260px; overflow:hidden; text-overflow:ellipsis; }
+  .sb-i i { width:7px; height:7px; border-radius:50%; background:var(--texte-3); flex:none; }
+  .sb-i.ok i { background:var(--ok); } .sb-i.warn i { background:var(--warn); } .sb-i.danger i { background:var(--danger); } .sb-i.info i { background:var(--info); }
+  .sb-i.tx i { background:var(--tx); } .sb-i.danger b { color:#FF8A8D; }
+  .sb-k { margin-left:6px; color:var(--texte-3); } .sb-k kbd { margin:0 3px 0 10px; }
+  @media (max-width:1250px) { .sb-k { display:none; } }
+  /* A phone: the rail becomes a bar at the bottom, a workspace's tabs in a sheet above it. */
+  @media (max-width:760px) {
+    body { padding-left:0; padding-bottom:60px; }
+    #onglets { top:auto; left:0; right:0; bottom:0; width:auto; height:56px; flex-direction:row; padding:4px; border-right:none; border-top:1px solid var(--ligne); overflow:visible; }
+    #onglets .rail-b, .rail-pied { display:none; }
+    .ws { flex:1; border:none; padding:0; min-width:0; }
+    #onglets .ws-t { display:flex !important; flex-direction:column; justify-content:center; height:48px; gap:2px; padding:0; font-size:10.5px; }
+    #onglets .ws-t span { display:block !important; }
+    #onglets .ws-t .ico { display:block !important; }
+    #onglets .ws.ws-actif .ws-t { color:var(--rx); }
+    .ws-l { display:none; position:fixed; left:8px; right:8px; bottom:62px; padding:6px; border-radius:12px; background:var(--s2); border:1px solid var(--ligne-forte);
+      box-shadow:var(--ombre-pop); grid-template-columns:1fr 1fr; gap:4px; }
+    .ws.ouvert .ws-l { display:grid; }
+    #onglets .ws-l span { display:inline !important; }
+    #onglets .ws-l button, #onglets .ws-l a { height:40px; }
+    #sb { display:none; }
+    body > header#tete { padding:5px 8px; gap:6px; }
+    #h-pass .h-f, .h-cmd span, .h-cmd kbd, #h-aide, #tete .g, .h-utc { display:none; }
+    #h-pass { max-width:120px; overflow:hidden; text-overflow:ellipsis; }
+    #heure { font-size:var(--fs-s); padding:0; }
+    #v-station .col2 .paire { flex-wrap:wrap !important; } .amsat-boite { max-width:none; margin-left:0; justify-content:flex-start; }
+    #tete h1 { font-size:15px; }
+  }
+  /* ---------------------------------------------------------------- help popovers, toasts, palette, help */
+  .q { display:inline-grid; place-items:center; width:16px; height:16px; padding:0; margin:0 0 0 6px; border-radius:50%; border:1px solid var(--ligne-forte);
+    background:transparent; color:var(--texte-2); font-size:10px; font-weight:800; line-height:1; letter-spacing:0; text-transform:none; vertical-align:1px; cursor:help; }
+  .q:hover, .q.ouvert, .q:focus-visible { color:var(--s0); background:var(--rx); border-color:var(--rx); }
+  .aide { display:none !important; }
+  #pop { position:fixed; z-index:200; max-width:min(400px,92vw); padding:9px 12px; border-radius:var(--r2); background:#1C2833; border:1px solid var(--ligne-forte);
+    box-shadow:var(--ombre-pop); color:var(--texte); font-size:var(--fs-s); line-height:1.5; }
+  #pop .aide-p { margin:0 0 6px; } #pop .aide-p:last-child { margin:0; }
+  #toast { position:fixed; left:50%; bottom:40px; transform:translateX(-50%); z-index:210; padding:8px 14px; border-radius:var(--r2); background:#1C2833;
+    border:1px solid var(--ligne-forte); box-shadow:var(--ombre-pop); font-weight:600; }
+  #toast.tx { border-color:var(--tx); color:#FFD9CF; }
+  dialog { color:var(--texte); }
+  dialog::backdrop { background:rgba(4,8,12,.62); }
+  .dlg-pal { width:min(660px,94vw); padding:0; margin-top:11vh; border-radius:12px; background:var(--s2); border:1px solid var(--ligne-forte); box-shadow:var(--ombre-pop); }
+  .pal-tete { display:flex; align-items:center; gap:10px; padding:8px 14px; border-bottom:1px solid var(--ligne); }
+  .pal-tete .ico { width:20px; height:20px; fill:var(--texte-2); flex:none; }
+  #pal-q { flex:1; border:none; background:transparent; font-size:15px; padding:6px 0; box-shadow:none; }
+  #pal-l { max-height:min(440px,58vh); overflow:auto; padding:6px; }
+  .pal-g { font-size:10.5px; font-weight:700; letter-spacing:1px; text-transform:uppercase; color:var(--texte-3); padding:8px 10px 3px; }
+  .pal-i { display:flex; align-items:center; gap:10px; padding:6px 10px; border-radius:var(--r1); cursor:pointer; }
+  .pal-i .ico, .pal-i .st-ico { width:18px; height:18px; fill:var(--texte-2); flex:none; }
+  .pal-i small { margin-left:auto; color:var(--texte-3); font-size:var(--fs-xs); white-space:nowrap; }
+  .pal-i.sel { background:rgba(63,224,200,.12); color:var(--rx); } .pal-i.sel .ico { fill:var(--rx); }
+  .pal-i.arret { color:#FF9A80; }
+  .pal-vide { padding:18px; text-align:center; color:var(--texte-3); }
+  .pal-pied { display:flex; gap:16px; flex-wrap:wrap; padding:7px 14px; border-top:1px solid var(--ligne); font-size:var(--fs-xs); color:var(--texte-3); }
+  .dlg-aide { width:min(640px,94vw); padding:14px 16px; border-radius:12px; background:var(--s2); border:1px solid var(--ligne-forte); box-shadow:var(--ombre-pop); }
+  .dlg-tete { display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; font-size:15px; }
+  .aide-arret { display:flex; gap:12px; align-items:flex-start; padding:10px 12px; border-radius:var(--r2); background:rgba(255,90,54,.12); border:1px solid rgba(255,90,54,.55); margin-bottom:12px; line-height:1.5; }
+  .aide-arret kbd { font-size:13px; padding:1px 8px; border-color:var(--tx); color:#FFB3A1; }
+  .tx-mot { color:var(--tx); }
+  .aide-grille { display:grid; grid-template-columns:max-content 1fr; gap:8px 14px; align-items:baseline; }
+  /* ---------------------------------------------------------------- components, polished */
+  .grille > *, .grille2 > *, .grille3c > * { min-width:0; }
+  /* A long list keeps its column names in view. */
+  .carte thead th { position:sticky; top:0; z-index:1; background:var(--s2); }
+  .carte > .t:first-child { display:flex; align-items:center; gap:4px 8px; flex-wrap:wrap; }
+  .carte .t .petit { text-transform:none; letter-spacing:0; font-weight:400; }
+  .st-nav button { border-radius:var(--r1); }
+  .st-nav button:hover:not(.actif) { color:var(--texte); }
+  .bascule button, .bascule-c button { border-radius:var(--r1); }
+  details > summary { cursor:pointer; color:var(--texte-2); }
+  details > summary:hover { color:var(--texte); }
+  a { color:var(--rx); }
+  /* Empty states: a picture box waiting for its first image says so, quietly. */
+  .m-image:has(> img:not([src])), .sx-image:has(> img:not([src])) { position:relative; }
+  .m-image:has(> img:not([src]))::before, .sx-image:has(> img:not([src]))::before { content:'En attente d’une image'; position:absolute; inset:0; display:grid; place-items:center;
+    color:var(--texte-3); font-size:var(--fs-s); letter-spacing:.4px; background:radial-gradient(circle at 50% 45%, rgba(63,224,200,.05), transparent 60%); }
+  .m-image:has(> img:not([src])) > img { display:none; }
+  label .plus { color:var(--texte-3); cursor:help; }
+  .k-vide-t { padding:32px 16px; text-align:center; color:var(--texte-3); font-size:var(--fs-m); }
+  .vue { animation:vue-in 160ms ease-out; }
+  @keyframes vue-in { from { opacity:.4; } to { opacity:1; } }
 </style></head>
 <body>
-<header>
+${rail()}
+<header id="tete">
   <h1>SatMe-<span class="cyan">PC</span></h1>
   <span class="g" id="info-station"></span>
   <span class="g" id="cat-statut-court"></span>
   <button id="ctx-chip" class="ctx-chip" hidden onclick="vue(tqQo() ? 'qo100' : 'station')"></button>
-  <nav id="onglets">
-    ${boutons()}
-  </nav>
+  <button id="h-rx" class="h-puce" onclick="vue(this.dataset.v || 'sdr')" title="Le récepteur actif : sa fréquence et son mode"><b>RX</b><span class="h-f" id="h-rx-f">—</span><span class="h-m" id="h-rx-m"></span></button>
+  <button id="h-tx" class="h-tx" hidden onclick="arretEmissions()" title="Une émission est en cours. Clic ou Échap : tout arrêter"><b>TX</b><span id="h-tx-q"></span><span class="h-tx-x">■ Échap</span></button>
+  <button id="h-pass" class="h-puce" onclick="vue('station')" title="Le prochain passage du satellite suivi"><span id="h-pass-n">—</span><span class="h-f" id="h-pass-t"></span></button>
   <span id="rec" class="pastille" style="display:none;background:rgba(229,72,77,.2);color:var(--rose)"></span>
+  <span class="h-esp"></span>
+  <button id="h-k" class="h-cmd" onclick="palette()" title="Aller à un onglet, accorder, suivre un satellite, chercher un indicatif">${IconesPc.svg("search")}<span>Commandes</span><kbd>Ctrl K</kbd></button>
   <span id="ec-boite" style="position:relative" hidden>
-    <button id="ec-btn" onclick="g('ec-pop').hidden = !g('ec-pop').hidden" title="Entendre ici, dans ce navigateur, le son de SatMe-PC (la page ouverte sur un autre PC du réseau)" style="padding:4px 10px">🔈 Écouter ici</button>
-    <div id="ec-pop" hidden style="position:absolute;right:0;top:110%;z-index:50;min-width:280px;padding:10px 12px;border-radius:12px;background:var(--carte);border:1px solid var(--bord);box-shadow:0 8px 24px rgba(0,0,0,.4)">
+    <button id="ec-btn" class="h-cmd" onclick="g('ec-pop').hidden = !g('ec-pop').hidden" title="Entendre ici, dans ce navigateur, le son de SatMe-PC (la page ouverte sur un autre PC du réseau)">${IconesPc.svg("headphones")}<span>Écouter ici</span></button>
+    <div id="ec-pop" class="pop-carte" hidden>
       <div class="t" style="margin:0 0 6px">Le son dans ce navigateur</div>
       <div class="ligne" style="margin:0"><select id="ec-source"><option value="sdr">Clé SDR (QO-100, SDR)</option><option value="carte">Carte son (le poste)</option><option value="datv">Son DATV</option></select></div>
       <div class="ligne"><button class="primaire" id="ec-go" onclick="ecouteIci()">▶ Écouter</button><button id="ec-stop" class="arret" hidden onclick="arreteEcoute()">■ Arrêter</button>
@@ -598,7 +807,8 @@ object PagePc {
       <div class="petit" id="ec-etat">Le son de la clé SDR ou de la carte son de SatMe-PC, joué par cet ordinateur — utile quand la page est ouverte sur un autre PC (--reseau).</div>
     </div>
   </span>
-  <span id="heure"></span>
+  <button id="h-aide" class="h-rond" onclick="aideClavier()" title="Raccourcis clavier (?)">?</button>
+  <span id="heure"></span><span id="h-utc" class="h-utc" title="Temps universel"></span>
 </header>
 <div class="vue" id="v-station">
 <div class="grille">
@@ -745,7 +955,7 @@ object PagePc {
           <label class="petit"><input type="checkbox" id="ph-trad" onchange="phRegle('traduire=' + (this.checked ? 1 : 0))"> Traduire en</label>
           <select id="ph-cible" style="flex:none" onchange="phRegle('cible=' + this.value)"><option value="fr">français</option><option value="en">anglais</option><option value="de">allemand</option><option value="es">espagnol</option><option value="it">italien</option><option value="nl">néerlandais</option><option value="pl">polonais</option><option value="pt">portugais</option><option value="whisper">anglais par Whisper (modèle large-v3)</option></select></div>
         <div id="ph-fil" class="ph-fil"></div>
-        <div class="petit" style="margin-top:4px">Un indicatif trouvé : un clic prépare le contact dans le carnet, avec le carré et le report entendus. Plus le texte est pâle, moins le moteur est sûr.</div>
+        <div class="petit aide" style="margin-top:4px">Un indicatif trouvé : un clic prépare le contact dans le carnet, avec le carré et le report entendus. Plus le texte est pâle, moins le moteur est sûr.</div>
       </div>
     </div></div>
     <div class="carte">
@@ -765,10 +975,10 @@ object PagePc {
       <div class="petit" style="margin-top:10px">Ou un fichier ADIF (export Wavelog, LoTW, autre logiciel) :</div>
       <input type="file" id="i-adif" accept=".adi,.adif,.txt" style="width:100%;margin-top:4px" onchange="importeAdif(this)">
       <label class="petit"><input type="checkbox" id="i-enligne" checked> ces contacts sont déjà dans le carnet en ligne (ne pas les y redéposer)</label>
-      <div class="petit" style="margin-top:6px">Les contacts satellite absents du carnet y entrent, avec la position du satellite à leur heure ; leurs passages sont reconstitués dans le Journal.</div>
+      <div class="petit aide" style="margin-top:6px">Les contacts satellite absents du carnet y entrent, avec la position du satellite à leur heure ; leurs passages sont reconstitués dans le Journal.</div>
       <div class="etat" id="i-etat"></div>
       <div class="t" style="margin-top:12px">SatMe sur le téléphone</div>
-      <div class="petit">Ses passages viennent au Journal du PC, leurs contacts au carnet, leurs images SSTV aux images.</div>
+      <div class="petit aide">Ses passages viennent au Journal du PC, leurs contacts au carnet, leurs images SSTV aux images.</div>
       <div class="ligne"><button onclick="ouvreTelephone()">Depuis le téléphone (Wi-Fi)…</button></div>
       <div class="petit" style="margin-top:6px">Ou ses fichiers de passage (.zip, « Fichier du passage » dans le Journal du téléphone) :</div>
       <input type="file" id="t-zip" accept=".zip" multiple style="width:100%;margin-top:4px" onchange="importeZips(this)">
@@ -891,7 +1101,7 @@ object PagePc {
     <div class="carte">
       <div class="t">Enregistrement</div>
       <div class="ligne" style="margin-top:0"><button class="rouge" id="s-rec" onclick="enregistre()">● Enregistrer</button><span class="val" id="s-duree"></span></div>
-      <div class="ligne rec-los-l"><label class="petit"><input type="checkbox" class="rec-los" onchange="coupeLos(this.checked)"> Couper l'enregistrement à la fin du passage, même lancé à la main (30 s après le LOS du satellite suivi)</label></div>
+      <div class="ligne rec-los-l"><label class="petit" title="Couper l'enregistrement à la fin du passage, même lancé à la main (30 s après le LOS du satellite suivi)"><input type="checkbox" class="rec-los" onchange="coupeLos(this.checked)"> Couper l'enregistrement à la fin du passage <span class="plus" aria-hidden="true">…</span></label></div>
       <div class="ligne" id="s-auto-l"><label class="petit"><input type="checkbox" id="s-auto" onchange="post('api/son/options?auto=' + (this.checked ? 1 : 0))"> Enregistrer chaque passage du satellite suivi (de l'AOS à 30 s après le LOS)</label></div>
       <div class="ligne"><label class="petit"><input type="checkbox" id="s-aprs" onchange="post('api/son/options?aprs=' + (this.checked ? 1 : 0))"> Décoder l'APRS (AFSK 1200 bauds)</label></div>
       <div class="ligne"><label class="petit"><input type="checkbox" id="s-sstv" onchange="post('api/son/options?sstv=' + (this.checked ? 1 : 0))"> Décoder la SSTV en direct</label></div>
@@ -934,11 +1144,11 @@ object PagePc {
       <div class="ligne"><span class="petit">Mode</span><select id="sstv-force" style="flex:none" onchange="post('api/sstv/reglage?force=' + enc(this.value || 'auto'))"></select>
         <button id="sstv-caler" onclick="post('api/sstv/caler')" title="Commencer l'image tout de suite, dans le mode choisi, sans attendre l'en-tête">⚡ Caler maintenant</button>
         <button class="arret" id="sstv-abandon" hidden onclick="post('api/sstv/abandon')" title="Finir l'image en cours (gardée si assez de lignes) et écouter à nouveau">✕ Arrêter l'image</button></div>
-      <div class="petit">Mode imposé : l'en-tête VIS n'est plus attendu. « Caler maintenant » accroche l'image sur la prochaine impulsion de synchro.</div>
+      <div class="petit aide">Mode imposé : l'en-tête VIS n'est plus attendu. « Caler maintenant » accroche l'image sur la prochaine impulsion de synchro.</div>
       <canvas id="sstv-spectre" width="600" height="56" style="width:100%;height:56px;background:#0E1720;border-radius:6px;margin-top:6px" title="Le son de 900 à 2600 Hz : synchro 1200, image 1500–2300, en-tête 1900"></canvas>
       <div class="petit" id="sstv-ecart"></div>
       <div id="sstv-afc-bloc" hidden>
-        <label class="petit" style="display:block;margin-top:4px"><input type="checkbox" id="sstv-afc" onchange="post('api/sstv/reglage?afc=' + (this.checked ? 1 : 0))"> Calage automatique : mesure l’écart des tons (en-tête, tops de synchro) et recale doucement la réception (clé SDR, ou poste piloté en CAT avec le Doppler) — pas de 20 Hz au plus par seconde, ±1 kHz au plus</label>
+        <label class="petit" style="display:block;margin-top:4px" title="Calage automatique : mesure l’écart des tons (en-tête, tops de synchro) et recale doucement la réception (clé SDR, ou poste piloté en CAT avec le Doppler) — pas de 20 Hz au plus par seconde, ±1 kHz au plus"><input type="checkbox" id="sstv-afc" onchange="post('api/sstv/reglage?afc=' + (this.checked ? 1 : 0))"> Calage automatique <span class="plus" aria-hidden="true">…</span></label>
         <div class="ligne" style="margin-top:2px"><span class="petit" id="sstv-afc-etat" style="flex:1"></span>
           <button id="sstv-afc-zero" onclick="post('api/sstv/afc/zero')" title="Remettre l’accord où vous l’aviez laissé et oublier les mesures">↺ Remettre à zéro</button></div>
       </div>
@@ -947,7 +1157,7 @@ object PagePc {
     <div class="st-pan" id="sx-p-tx">
     <div class="carte" id="xs-carte" hidden>
       <div class="t">Émission SSTV <span id="xs-pastille" class="pastille" style="color:var(--gris)">arrêtée</span></div>
-      <div class="petit">Une image envoyée en SSTV par l’ADALM-PLUTO ou le bladeRF, en FM étroite ou en BLU, l’indicatif écrit en haut de l’image. Rien n’est émis sans ÉMETTRE puis une confirmation ; l’émission s’arrête seule une fois l’image envoyée.</div>
+      <div class="petit aide">Une image envoyée en SSTV par l’ADALM-PLUTO ou le bladeRF, en FM étroite ou en BLU, l’indicatif écrit en haut de l’image. Rien n’est émis sans ÉMETTRE puis une confirmation ; l’émission s’arrête seule une fois l’image envoyée.</div>
       <div class="ligne"><span class="petit" style="min-width:86px">Émetteur</span><select id="xs-emetteur" style="max-width:150px" onchange="xsRegle('emetteur', this.value)">
         <option value="pluto">ADALM-PLUTO</option><option value="bladerf">bladeRF 2.0</option></select></div>
       <div class="ligne"><span class="petit" style="min-width:86px">Image</span><select id="xs-source" style="max-width:190px" onchange="xsRegle('source', this.value)">
@@ -989,7 +1199,7 @@ object PagePc {
     <div class="st-pan" id="sx-p-mire">
     <div class="carte" id="mi-carte" hidden>
       <div class="t">Mire SSTV</div>
-      <div class="petit">Une image de référence envoyée en SSTV, pour éprouver un décodeur sans satellite : celui de ce PC, d'un téléphone, ou toute une chaîne radio. Rien n'est émis : le son part sur la sortie choisie.</div>
+      <div class="petit aide">Une image de référence envoyée en SSTV, pour éprouver un décodeur sans satellite : celui de ce PC, d'un téléphone, ou toute une chaîne radio. Rien n'est émis : le son part sur la sortie choisie.</div>
       <div class="ligne"><select id="mi-mode" onchange="apercuMire()"></select><span class="petit" id="mi-duree"></span></div>
       <img id="mi-apercu" alt="" style="max-width:100%;max-height:200px;border-radius:6px;margin-top:6px;display:block">
       <div class="ligne"><span class="petit">Conditions</span>
@@ -1016,12 +1226,12 @@ object PagePc {
     <div class="st-pan" id="sx-p-reg">
     <div class="carte">
       <div class="t">Décodage</div>
-      <label class="petit" style="display:block;margin-top:0"><input type="checkbox" id="sstv-continu" onchange="post('api/sstv/reglage?continu=' + (this.checked ? 1 : 0))"> Décodage continu : démarre une image sur ses tops de synchronisation, même sans en-tête (mode reconnu à la durée des lignes)</label>
+      <label class="petit" style="display:block;margin-top:0" title="Décodage continu : démarre une image sur ses tops de synchronisation, même sans en-tête (mode reconnu à la durée des lignes)"><input type="checkbox" id="sstv-continu" onchange="post('api/sstv/reglage?continu=' + (this.checked ? 1 : 0))"> Décodage continu <span class="plus" aria-hidden="true">…</span></label>
       <label class="petit" style="display:block;margin-top:4px"><input type="checkbox" id="sstv-nettoyage" onchange="post('api/sstv/reglage?nettoyage=' + (this.checked ? 1 : 0))"> Nettoyer les images : répare les lignes et les traits perdus dans le bruit</label>
     </div>
     <div class="carte" id="sstv-redec-carte">
       <div class="t">Décoder un enregistrement</div>
-      <div class="petit">Repasse un enregistrement du PC dans le décodeur (avec le mode imposé (Réception) et le décodage continu choisis). Les images retrouvent l'heure de leur réception.</div>
+      <div class="petit aide">Repasse un enregistrement du PC dans le décodeur (avec le mode imposé (Réception) et le décodage continu choisis). Les images retrouvent l'heure de leur réception.</div>
       <div class="ligne"><select id="sstv-enreg" style="flex:1"></select><button class="primaire" id="sstv-redec" onclick="post('api/sstv/redecode?nom=' + enc(g('sstv-enreg').value))">⟳ Décoder</button>
         <button id="sstv-annule" hidden onclick="post('api/sstv/annule')">Annuler</button></div>
       <div style="height:6px;background:#0E1720;border-radius:3px;margin-top:6px;overflow:hidden"><div id="sstv-redec-barre" style="height:100%;width:0;background:var(--cyan)"></div></div>
@@ -1053,7 +1263,7 @@ object PagePc {
       <select id="kiss-travail" style="flex:none" onchange="kPost('reglage?travail=' + this.value)"><option value="AUTO">l'ISS quand elle passe, sinon 144,800</option><option value="ISS">l'ISS (145,825)</option><option value="TERRE">au sol (144,800)</option><option value="POSTE">la fréquence de la radio, sans y toucher</option></select>
       <label class="petit"><input type="checkbox" id="kiss-doppler" onchange="kPost('reglage?doppler=' + (this.checked ? 1 : 0))"> Doppler de l'ISS (pas de 5 kHz)</label></div>
     <div class="petit" id="kiss-etat" style="margin-top:6px"></div>
-    <div class="petit" style="margin-top:4px">La radio décode elle-même ; ses trames arrivent ici avec les autres. Elle n'émet que ce qui est demandé ci-dessous. Déconnectée, elle revient comme avant.</div>
+    <div class="petit aide" style="margin-top:4px">La radio décode elle-même ; ses trames arrivent ici avec les autres. Elle n'émet que ce qui est demandé ci-dessous. Déconnectée, elle revient comme avant.</div>
     <div class="t" style="margin-top:12px">Émettre par la radio <span class="petit" id="kiss-source"></span></div>
     <div class="ligne" style="margin-top:0">
       <select id="kiss-type" style="flex:none" onchange="kType()"><option value="message">Message</option><option value="position">Ma position</option><option value="statut">Statut</option></select>
@@ -1069,11 +1279,11 @@ object PagePc {
       <label class="petit"><input type="checkbox" id="kiss-floue" onchange="kPost('reglage?floue=' + (this.checked ? 1 : 0))"> position approchée (à moins de 500 m)</label></div>
     <label class="petit" style="display:block;margin-top:4px"><input type="checkbox" id="kiss-balise" onchange="kPost('reglage?balise=' + (this.checked ? 1 : 0))">
       Balise ISS : ma position une fois par passage, l'ISS à 15° — seulement quand SatMe a lu la radio sur 145,825</label>
-    <div class="petit" style="margin-top:4px">Une trame toutes les 20 s au plus : le digipeater de l'ISS est partagé par tout un continent.</div>
+    <div class="petit aide" style="margin-top:4px">Une trame toutes les 20 s au plus : le digipeater de l'ISS est partagé par tout un continent.</div>
   </details>
   <details class="carte" id="tr-carte" open>
     <summary class="t" style="cursor:pointer">🏆 Trophées APRS <span class="petit" id="tr-resume"></span></summary>
-    <div class="petit">Le jeu du téléphone : chaque station entendue, chaque carré, chaque pays, ta trame revenue par l'ISS… Gardés à part de l'historique.</div>
+    <div class="petit aide">Le jeu du téléphone : chaque station entendue, chaque carré, chaque pays, ta trame revenue par l'ISS… Gardés à part de l'historique.</div>
     <div class="paire" style="margin-top:8px" id="tr-jour"></div>
     <div class="t" style="margin-top:12px">Records</div>
     <div class="paire" id="tr-records"></div>
@@ -1096,14 +1306,13 @@ object PagePc {
   <div>
     <div class="carte">
       <div class="t">Agenda</div>
-      <div class="ligne" style="margin-top:0"><label class="petit"><input type="checkbox" id="g-suivi" onchange="post('api/agenda/suivi?on=' + (this.checked ? 1 : 0))">
-        Suivre tout seul le satellite d'un rendez-vous, 5 min avant (le poste et le rotor suivent)</label></div>
-      <div class="petit" style="margin-top:6px">📅 dans la liste des passages (onglet Station) ajoute ou retire un passage. L'agenda du téléphone arrive avec sa sauvegarde (Réglages).</div>
+      <div class="ligne" style="margin-top:0"><label class="petit" title="Suivre tout seul le satellite d'un rendez-vous, 5 min avant (le poste et le rotor suivent)"><input type="checkbox" id="g-suivi" onchange="post('api/agenda/suivi?on=' + (this.checked ? 1 : 0))"> Suivre tout seul le satellite d'un rendez-vous <span class="plus" aria-hidden="true">…</span></label></div>
+      <div class="petit aide" style="margin-top:6px">📅 dans la liste des passages (onglet Station) ajoute ou retire un passage. L'agenda du téléphone arrive avec sa sauvegarde (Réglages).</div>
     </div>
     <div class="carte va">
       <div class="t">Mode automatique : ne manquer aucun passage</div>
       <div class="ligne" style="margin-top:0"><label><input type="checkbox" id="va-on" onchange="veille('on=' + (this.checked ? 1 : 0))"> <b>Actif</b></label><span class="petit" id="va-etat"></span></div>
-      <div class="petit" style="margin-top:6px">Chaque passage gardé est suivi tout seul 5 min avant l'AOS : le poste (CAT, Doppler) et le rotor le suivent, le son est enregistré de 5 s avant l'AOS à 30 s après le LOS, et le passage va au journal. Deux passages en même temps : le premier continue (écarte-le pour garder l'autre). Changer de satellite à la main pendant un passage reste possible.</div>
+      <div class="petit aide" style="margin-top:6px">Chaque passage gardé est suivi tout seul 5 min avant l'AOS : le poste (CAT, Doppler) et le rotor le suivent, le son est enregistré de 5 s avant l'AOS à 30 s après le LOS, et le passage va au journal. Deux passages en même temps : le premier continue (écarte-le pour garder l'autre). Changer de satellite à la main pendant un passage reste possible.</div>
       <div class="ligne"><input id="va-sat" list="tous" placeholder="Ajouter un satellite : RS-44, SO-50…"><button onclick="veilleAjoute()">Ajouter</button><button onclick="veille('favoris=1')" title="Ajouter tous les satellites ★">★ favoris</button></div>
       <div id="va-sats" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px"></div>
       <div class="ligne"><span class="petit">Passages d'au moins</span><input id="va-el" type="number" min="0" max="90" style="max-width:70px" onchange="veille('el=' + (+this.value || 0))"><span class="petit">° d'élévation max</span></div>
@@ -1165,7 +1374,7 @@ object PagePc {
       <div class="ligne"><select id="k-sat"></select></div>
       <div class="ligne"><span class="petit">Il voit au-dessus de</span><input id="k-min" value="0" style="max-width:60px"><span class="petit">°</span>
         <button class="primaire" onclick="calculeSked()">Chercher</button></div>
-      <div class="petit" style="margin-top:6px">Les fenêtres des 48 h où vous voyez tous deux le satellite (une minute au moins), avec l'élévation maximale de chaque côté. ▶ les rejoue sur la carte.</div>
+      <div class="petit aide" style="margin-top:6px">Les fenêtres des 48 h où vous voyez tous deux le satellite (une minute au moins), avec l'élévation maximale de chaque côté. ▶ les rejoue sur la carte.</div>
       <div class="etat" id="k-etat"></div>
     </div>
     <div class="carte k-fenetres">
@@ -1173,7 +1382,7 @@ object PagePc {
     </div>
   </div>
   <div class="k-droite">
-    <div class="carte" id="k-vide"><div class="petit">Cherche les fenêtres communes avec une station : la première se rejoue ici, les deux ciels et la carte.</div></div>
+    <div class="carte" id="k-vide"><div class="petit k-vide-t">Cherche les fenêtres communes avec une station : la première se rejoue ici, les deux ciels et la carte.</div></div>
     <div class="carte" id="k-anim" hidden>
       <div class="ligne" style="margin-top:0;flex-wrap:wrap">
         <span class="t" id="k-titre" style="margin:0"></span>
@@ -1191,7 +1400,7 @@ object PagePc {
           <div><div class="petit" id="k-llui">Lui</div><svg id="k-clui" viewBox="-112 -112 224 224"></svg></div>
         </div>
       </div>
-      <div class="petit" style="margin-top:6px">En vert, la fenêtre où vous voyez tous deux le satellite ; la zone claire autour du satellite est la partie de la Terre qui le voit à cet instant.</div>
+      <div class="petit aide" style="margin-top:6px">En vert, la fenêtre où vous voyez tous deux le satellite ; la zone claire autour du satellite est la partie de la Terre qui le voit à cet instant.</div>
     </div>
   </div>
 </div>
@@ -1271,7 +1480,7 @@ object PagePc {
       <div class="ligne" style="margin-top:0"><span class="petit" style="min-width:86px">Où</span><span id="d-ou" class="petit" style="flex:1"></span>
         <button onclick="g('d-noeud-boite').hidden = !g('d-noeud-boite').hidden" title="Le MiniTiouner sur ce PC, ou sur un SatMe-Node près de l'antenne">Changer</button></div>
       <div id="d-noeud-boite" hidden>
-        <div class="petit">Un <b>SatMe-Node</b> (Raspberry Pi près de l'antenne, <code>satme --noeud</code>) : son adresse et le code qu'il a donné au démarrage. Adresse vide : le MiniTiouner de ce PC.</div>
+        <div class="petit aide">Un <b>SatMe-Node</b> (Raspberry Pi près de l'antenne, <code>satme --noeud</code>) : son adresse et le code qu'il a donné au démarrage. Adresse vide : le MiniTiouner de ce PC.</div>
         <div class="ligne"><input id="d-noeud" placeholder="192.168.1.30 (ou :port)" style="max-width:190px"><input id="d-noeud-code" placeholder="Code" style="max-width:90px">
           <button onclick="dNoeud()">Associer</button></div>
       </div>
@@ -1322,7 +1531,7 @@ object PagePc {
       <div class="st-pan" id="d-p-tx" hidden>
     <div class="carte" id="e-carte">
       <div class="t">Émission · <span id="e-titre">ADALM-PLUTO</span> <span id="e-pastille" class="pastille" style="color:var(--gris)">arrêtée</span></div>
-      <div class="petit">DVB-S2 ou DVB-S fait par SatMe, vers le transpondeur large bande de QO-100 ; le MiniTiouner ci-dessus vérifie le signal à la descente.</div>
+      <div class="petit aide">DVB-S2 ou DVB-S fait par SatMe, vers le transpondeur large bande de QO-100 ; le MiniTiouner ci-dessus vérifie le signal à la descente.</div>
       <div class="ligne"><span class="petit" style="min-width:86px">Émetteur</span><select id="e-emetteur" onchange="eRegle()" style="max-width:150px">
         <option value="pluto">ADALM-PLUTO</option><option value="hackrf">HackRF One</option><option value="bladerf">bladeRF 2.0</option></select>
         <span class="petit" id="e-hackrf-info" style="flex:1"></span><button id="e-hackrf-det" onclick="eDetecte()" title="hackrf_info : liste les HackRF branchés, n'émet rien">Détecter</button></div>
@@ -1363,7 +1572,7 @@ object PagePc {
           <option value="bas-droite">en bas à droite</option><option value="bandeau">bandeau en bas</option></select>
           <select id="ei-taille" onchange="eiRegle()" style="max-width:100px"><option value="petit">petit</option><option value="moyen">moyen</option><option value="grand">grand</option></select>
           <label class="petit"><input type="checkbox" id="ei-fond" onchange="eiRegle()"> fond sombre</label></div>
-        <div class="petit">Sur la mire, l’indicatif, le locator et le logo y sont déjà : seuls le texte et l’heure s’ajoutent. Le débit émis ne change pas.</div>
+        <div class="petit aide">Sur la mire, l’indicatif, le locator et le logo y sont déjà : seuls le texte et l’heure s’ajoutent. Le débit émis ne change pas.</div>
       </details>
       <div class="ligne"><button id="e-apercu-go" onclick="eApercu()" title="Une image de ce qui serait émis (source et incrustation), faite par ffmpeg : rien n’est émis">Prévisualiser</button>
         <span class="petit" id="e-apercu-msg" style="flex:1"></span></div>
@@ -1577,7 +1786,7 @@ object PagePc {
           <span class="petit">— la balise médiane mesurée toutes les 5 s, la dérive du LNB suivie toute seule (par petits pas, jamais sur une mesure faible)</span></label>
         <div class="ligne"><span class="petit">Écart mémorisé</span><span class="val" id="o-calage">0 Hz</span></div>
         <details style="margin-top:4px"><summary class="petit" style="cursor:pointer">À la main</summary>
-          <div class="petit">L'oscillateur d'un LNB dérive, surtout à froid. Accorde la balise médiane, lis où elle tombe vraiment, saisis-le : l'écart s'applique à toute la descente.</div>
+          <div class="petit aide">L'oscillateur d'un LNB dérive, surtout à froid. Accorde la balise médiane, lis où elle tombe vraiment, saisis-le : l'écart s'applique à toute la descente.</div>
           <div class="ligne"><input id="o-entendue" placeholder="MHz ciel" title="Où tombe vraiment la balise médiane, en MHz ciel : par exemple 10489,7523" style="max-width:170px"><button onclick="qCale()">Appliquer</button>
             <button onclick="qPost('calage-zero')">Remettre à zéro</button></div></details>
         <div class="etat" id="o-cmsg"></div>
@@ -1600,7 +1809,7 @@ object PagePc {
       <div class="carte" id="oq-sig-carte" hidden>
         <div class="t">Stations entendues <span class="petit" id="oq-sig-n"></span></div>
         <div style="max-height:260px;overflow:auto"><table><tbody id="oq-signaux"></tbody></table></div>
-        <div class="petit" style="margin-top:4px">Ce que la clé voit au-dessus du bruit du transpondeur (balises exclues). Un clic : s'y accorder.</div>
+        <div class="petit aide" style="margin-top:4px">Ce que la clé voit au-dessus du bruit du transpondeur (balises exclues). Un clic : s'y accorder.</div>
       </div>
         </div>
         <div class="st-pan" id="tq-p-mem" hidden>
@@ -1621,8 +1830,8 @@ object PagePc {
         <label style="display:block;margin-top:8px"><input type="checkbox" id="o-cle" onchange="qPost('cle?on=' + (this.checked ? 1 : 0))"> Appliquer à la clé SDR</label>
         <div class="paire" style="margin-top:4px"><span>Clé RX <span class="val cyan" id="o-crx">—</span></span><span class="petit" id="o-cmsg2"></span></div>
         <div class="etat" id="o-statut"></div>
-        <div class="petit" style="margin-top:6px">Les fréquences du cockpit sont celles du ciel ; le poste travaille en fréquence intermédiaire, après les convertisseurs de la chaîne. Pas de Doppler ici : le poste n'est écrit que quand tu bouges. Tant que « Appliquer au poste » est coché, le Doppler du satellite suivi est en pause et le carnet note sur QO-100.</div>
-        <div class="petit" style="margin-top:4px">« Démarrer la réception QO-100 » coche « Appliquer à la clé » et démarre le récepteur ; l'onglet SDR garde tous ses réglages.</div>
+        <div class="petit aide" style="margin-top:6px">Les fréquences du cockpit sont celles du ciel ; le poste travaille en fréquence intermédiaire, après les convertisseurs de la chaîne. Pas de Doppler ici : le poste n'est écrit que quand tu bouges. Tant que « Appliquer au poste » est coché, le Doppler du satellite suivi est en pause et le carnet note sur QO-100.</div>
+        <div class="petit aide" style="margin-top:4px">« Démarrer la réception QO-100 » coche « Appliquer à la clé » et démarre le récepteur ; l'onglet SDR garde tous ses réglages.</div>
       </div>
       <div class="carte">
         <div class="t">Transpondeur</div>
@@ -1638,7 +1847,7 @@ object PagePc {
         <div class="ligne"><span class="petit" style="min-width:95px">OL montée</span><select id="o-oltx" onchange="qOl('montee', this.value)"></select></div>
         <div class="avert" id="o-beta"></div>
         <details style="margin-top:6px"><summary class="petit" style="cursor:pointer">Mesurer un oscillateur</summary>
-          <div class="petit" style="margin-top:4px">Écoute un même signal sur une référence (WebSDR sur GPSDO) et sur ton poste ; recopie les deux fréquences : l'écart est l'oscillateur.</div>
+          <div class="petit aide" style="margin-top:4px">Écoute un même signal sur une référence (WebSDR sur GPSDO) et sur ton poste ; recopie les deux fréquences : l'écart est l'oscillateur.</div>
           <div class="ligne"><select id="o-msens" style="max-width:120px"><option value="descente">Descente</option><option value="montee">Montée</option></select>
             <input id="o-mciel" placeholder="Référence (MHz)"><input id="o-mposte" placeholder="Poste (MHz)"><button onclick="qMesure()">Mesurer</button></div>
           <div class="etat" id="o-mmsg"></div>
@@ -1680,7 +1889,7 @@ object PagePc {
       <div class="ligne"><span class="petit" style="min-width:70px">Silencieux</span><input type="range" id="r-sq" min="-120" max="-20" style="flex:1" onchange="rRegle('squelch=' + this.value)"><span class="petit" id="r-sqv"></span></div>
       <label class="petit" style="display:block;margin-top:6px"><input type="checkbox" id="r-deemph" onchange="rRegle('deemph=' + (this.checked ? 1 : 0))"> Désaccentuation (phonie FM ; à couper pour la SSTV et la télémesure)</label>
       <label style="display:block;margin-top:6px"><input type="checkbox" id="r-son" onchange="rRegle('son=' + (this.checked ? 1 : 0))"> Haut-parleur</label>
-      <div class="petit" style="margin-top:4px">Le son de la clé va aussi aux décodeurs (onglets SSTV, APRS, FT8) et à l'enregistrement, à la place de la carte son.</div>
+      <div class="petit aide" style="margin-top:4px">Le son de la clé va aussi aux décodeurs (onglets SSTV, APRS, FT8) et à l'enregistrement, à la place de la carte son.</div>
     </div>
     <div class="carte">
       <div class="t" id="r-cle-t">La clé</div>
@@ -1694,19 +1903,19 @@ object PagePc {
           <button onclick="rRegle('hote=' + enc(v('r-hote')) + '&port=' + enc(v('r-port')))">Enregistrer</button></div>
         <label class="petit" style="display:block;margin-top:4px"><input type="checkbox" id="r-lance" onchange="rRegle('lance=' + (this.checked ? 1 : 0))"> Lancer rtl_tcp sur ce PC (la clé y est branchée)</label>
         <label class="petit" style="display:block;margin-top:4px"><input type="checkbox" id="r-bias" onchange="rRegle('bias=' + (this.checked ? 1 : 0))"> Alimenter l'antenne (bias-tee, préampli ou LNB ; clés qui l'ont)</label>
-        <div class="petit" style="margin-top:4px">Une clé sur une autre machine : y lancer <code>rtl_tcp -a 0.0.0.0</code>, puis donner son adresse ici.</div>
+        <div class="petit aide" style="margin-top:4px">Une clé sur une autre machine : y lancer <code>rtl_tcp -a 0.0.0.0</code>, puis donner son adresse ici.</div>
       </details>
       <details style="margin-top:6px" id="r-liaison-pluto" hidden><summary class="petit" style="cursor:pointer">Liaison ADALM-PLUTO</summary>
         <div class="ligne"><input id="r-pluto-hote" placeholder="192.168.2.1" style="max-width:160px"><input id="r-pluto-port" placeholder="30431" style="max-width:80px">
           <button onclick="rRegle('plutoHote=' + enc(v('r-pluto-hote')) + '&plutoPort=' + enc(v('r-pluto-port')))">Enregistrer</button></div>
-        <div class="petit" style="margin-top:4px">Branché en USB, l'ADALM-PLUTO répond sur 192.168.2.1 ; sur le réseau, donner son adresse. De 70 MHz à 6 GHz : derrière un LNB (FI vers 739 MHz) ou un convertisseur, comme la clé.</div>
-        <div class="petit" style="margin-top:4px">Réception seulement : SatMe ne règle que son côté réception (oscillateur, débit, bande, gain) et n'émet jamais.</div>
+        <div class="petit aide" style="margin-top:4px">Branché en USB, l'ADALM-PLUTO répond sur 192.168.2.1 ; sur le réseau, donner son adresse. De 70 MHz à 6 GHz : derrière un LNB (FI vers 739 MHz) ou un convertisseur, comme la clé.</div>
+        <div class="petit aide" style="margin-top:4px">Réception seulement : SatMe ne règle que son côté réception (oscillateur, débit, bande, gain) et n'émet jamais.</div>
       </details>
       <details style="margin-top:6px" id="r-liaison-bladerf" hidden open><summary class="petit" style="cursor:pointer">bladeRF 2.0 (bladeRF-cli)</summary>
         <div class="ligne"><span class="petit" id="r-bladerf-info" style="flex:1"></span><button onclick="rDetecteBladerf()" title="bladeRF-cli -e info : lit le modèle, le numéro et le FPGA, n'émet rien">Détecter</button></div>
         <div class="ligne"><input id="r-bladerf-outil" placeholder="vide : bladeRF-cli du PATH" onchange="rRegle('bladerfOutil=' + enc(v('r-bladerf-outil')))"></div>
         <div class="petit" id="r-bladerf-prog"></div>
-        <div class="petit" style="margin-top:4px">De 70 MHz à 6 GHz, sur un port USB 3. Réception seulement : SatMe ne donne à bladeRF-cli que des commandes RX1 (oscillateur, débit, bande, gain) et n'émet jamais d'ici.</div>
+        <div class="petit aide" style="margin-top:4px">De 70 MHz à 6 GHz, sur un port USB 3. Réception seulement : SatMe ne donne à bladeRF-cli que des commandes RX1 (oscillateur, débit, bande, gain) et n'émet jamais d'ici.</div>
       </details>
     </div>
     <div id="ph-slot-sdr"></div>
@@ -1740,7 +1949,7 @@ object PagePc {
       <div class="ligne"><button class="primaire" data-marche="s2" onclick="sPost('demarrer')">Démarrer</button><button class="arret" data-arret="s2" hidden onclick="sPost('arreter')">Arrêter</button>
         <span class="petit" id="s2-info"></span></div>
       <div class="avert" id="s2-erreur"></div>
-      <div class="petit" style="margin-top:6px">La clé reçoit en FM étroite, à la largeur du modèle, sans désaccentuation ni silencieux. Nommer le modèle resserre le filtre : quelques dB sur une sonde lointaine.</div>
+      <div class="petit aide" style="margin-top:6px">La clé reçoit en FM étroite, à la largeur du modèle, sans désaccentuation ni silencieux. Nommer le modèle resserre le filtre : quelques dB sur une sonde lointaine.</div>
     </div>
     <div class="carte">
       <div class="t">Réception</div>
@@ -1753,7 +1962,7 @@ object PagePc {
     <div class="carte">
       <div class="t">Lâchers près d'ici</div>
       <table><tbody id="s2-sites"></tbody></table>
-      <div class="petit" style="margin-top:4px">Un clic sur une station règle sa fréquence. Heures des lâchers en UTC.</div>
+      <div class="petit aide" style="margin-top:4px">Un clic sur une station règle sa fréquence. Heures des lâchers en UTC.</div>
     </div>
     <div class="carte">
       <div class="t">Journaux</div>
@@ -1776,9 +1985,9 @@ object PagePc {
       <div class="ligne"><button class="primaire" data-marche="m" onclick="mPost('demarrer')">Recevoir</button><button class="arret" data-arret="m" hidden onclick="mPost('arreter')">Arrêter</button>
         <button onclick="mPost('enregistre')" title="Écrire ce qui est reçu, sans arrêter">Enregistrer maintenant</button></div>
       <div class="avert" id="m-erreur"></div>
-      <label class="petit" style="display:block;margin-top:8px"><input type="checkbox" id="m-auto" onchange="mPost('auto?on=' + (this.checked ? 1 : 0))"> Recevoir tout seul : la clé démarre une minute avant chaque passage METEOR (si elle est libre) et s'arrête après</label>
+      <label class="petit" style="display:block;margin-top:8px" title="Recevoir tout seul : la clé démarre une minute avant chaque passage METEOR (si elle est libre) et s'arrête après"><input type="checkbox" id="m-auto" onchange="mPost('auto?on=' + (this.checked ? 1 : 0))"> Recevoir tout seul <span class="plus" aria-hidden="true">…</span></label>
       <label class="petit" style="display:block;margin-top:4px"><input type="checkbox" id="m-cotes" onchange="mPost('cotes?on=' + (this.checked ? 1 : 0))"> Tracer les côtes et les frontières</label>
-      <div class="petit" style="margin-top:6px">La clé (onglet SDR) reçoit les 120 kHz du signal numérique sur 137,9 ou 137,1 MHz avec le Doppler ; rien à écouter. Les images sont écrites à l'arrêt, nord en haut.</div>
+      <div class="petit aide" style="margin-top:6px">La clé (onglet SDR) reçoit les 120 kHz du signal numérique sur 137,9 ou 137,1 MHz avec le Doppler ; rien à écouter. Les images sont écrites à l'arrêt, nord en haut.</div>
     </div>
     <div class="carte">
       <div class="t">Décodage</div>
@@ -1788,7 +1997,7 @@ object PagePc {
     </div>
     <div class="carte">
       <div class="t">Un enregistrement</div>
-      <div class="petit">Le signal brut d'un passage (WAV I/Q, 8, 16 ou 32 bits, 150 à 3 000 kS/s), sur ce PC : son chemin.</div>
+      <div class="petit aide">Le signal brut d'un passage (WAV I/Q, 8, 16 ou 32 bits, 150 à 3 000 kS/s), sur ce PC : son chemin.</div>
       <div class="ligne"><input id="m-chemin" placeholder="/home/…/meteor-m2-4-20260305.wav"><button onclick="mPost('fichier?chemin=' + enc(v('m-chemin')))">Décoder</button>
         <button onclick="mPost('annule')">Annuler</button></div>
       <progress id="m-prog" max="1" value="0" style="margin-top:6px" hidden></progress>
@@ -1832,14 +2041,14 @@ object PagePc {
   <div class="f8-grille">
     <div class="carte f8-cascade-boite">
       <div class="paire" style="margin:0 0 6px"><b>Cascade</b><span class="petit" id="8-libre"></span><span class="petit" style="margin-left:auto">Les indicatifs décodés écrits à leur fréquence, dans leur créneau</span></div>
-      <div style="position:relative"><canvas id="8-cascade" style="width:100%;height:420px;display:block;border-radius:8px;background:#05070D;cursor:crosshair"></canvas></div>
+      <div style="position:relative"><canvas id="8-cascade" style="width:100%;height:clamp(200px, calc(100vh - 340px), 560px);display:block;border-radius:8px;background:#05070D;cursor:crosshair"></canvas></div>
       <canvas id="8-spectre" style="width:100%;height:56px;display:block;margin-top:2px"></canvas>
-      <div class="petit" style="margin-top:4px">Le son du poste par la carte son (onglet Son), ou la clé SDR. L'horloge du PC doit être juste à la seconde (NTP). Cliquer : la fréquence audio sous la souris.</div>
+      <div class="petit aide" style="margin-top:4px">Le son du poste par la carte son (onglet Son), ou la clé SDR. L'horloge du PC doit être juste à la seconde (NTP). Cliquer : la fréquence audio sous la souris.</div>
     </div>
     <div class="carte f8-radar-boite">
       <div class="paire" style="margin:0 0 6px"><b>Radar</b><span class="petit" id="8-radar-info"></span></div>
       <canvas id="8-radar" style="width:100%;aspect-ratio:1/1;display:block;border-radius:50%;background:radial-gradient(circle,#0B1A24 0%,#05070D 75%)"></canvas>
-      <div class="petit" style="margin-top:6px">Chaque station à son azimut et sa distance depuis ton QTH. Elle pâlit avec le temps, pulse quand elle vient d'être entendue. <span style="color:#5BD68A">●</span> CQ <span style="color:#FFB454">★</span> nouveau pays <span style="color:#FF5FA2">●</span> m'appelle <span style="color:#6B7C8F">●</span> déjà contacté</div>
+      <div class="petit aide" style="margin-top:6px">Chaque station à son azimut et sa distance depuis ton QTH. Elle pâlit avec le temps, pulse quand elle vient d'être entendue. <span style="color:#5BD68A">●</span> CQ <span style="color:#FFB454">★</span> nouveau pays <span style="color:#FF5FA2">●</span> m'appelle <span style="color:#6B7C8F">●</span> déjà contacté</div>
     </div>
     <div class="m8" id="8-messages" hidden>
       <div class="carte"><div class="paire" style="margin:0 0 6px"><b>Conversations</b><span class="petit">deux stations qui se parlent</span></div><div class="m8-convs" id="8-convs"></div></div>
@@ -1865,7 +2074,7 @@ object PagePc {
   <div>
     <div class="carte" id="af-carte" hidden>
       <div class="t">Accord fin (clé SDR)</div>
-      <div class="petit">Les aides de l'onglet SDR, comme sur le téléphone : elles touchent le décalage logiciel de la clé, jamais le poste.</div>
+      <div class="petit aide">Les aides de l'onglet SDR, comme sur le téléphone : elles touchent le décalage logiciel de la clé, jamais le poste.</div>
       <label style="display:block;margin-top:8px"><input type="checkbox" id="af-loupe" onchange="post('api/sdr/accord?loupe=' + (this.checked ? 1 : 0)).then(ticSdr)"> <b>Loupe</b> <span class="petit">— une seconde vue du spectre, quelques kHz autour de l'écoute</span></label>
       <label style="display:block;margin-top:6px"><input type="checkbox" id="af-vernier" onchange="post('api/sdr/accord?vernier=' + (this.checked ? 1 : 0)).then(ticSdr)"> <b>Vernier</b> <span class="petit">— un cadran qu'on pousse : la fréquence avance de N Hz par centimètre glissé</span></label>
       <div class="ligne"><span class="petit">Rapport</span><select id="af-ratio" onchange="post('api/sdr/accord?ratio=' + this.value).then(ticSdr)"><option value="20">20 Hz / cm (fin)</option><option value="200">200 Hz / cm</option><option value="2000">2 kHz / cm (rapide)</option></select></div>
@@ -1874,15 +2083,15 @@ object PagePc {
     <div class="carte" id="rq-carte" hidden>
       <div class="t">QO-100 au démarrage</div>
       <label style="display:block"><input type="checkbox" id="rq-auto" onchange="post('api/qo100/reprise-auto?on=' + (this.checked ? 1 : 0)).then(tqTic)"> <b>Reprendre la réception QO-100 au démarrage</b></label>
-      <div class="petit" style="margin-top:4px">Si QO-100 était reçu quand SatMe-PC s'est arrêté, il est repris tout seul au démarrage suivant : le récepteur, la fréquence et le mode d'alors. Sans cette case, un bandeau le propose dans l'onglet QO-100. Réception seulement : rien n'est jamais émis, et le poste n'est pas touché.</div>
+      <div class="petit aide" style="margin-top:4px">Si QO-100 était reçu quand SatMe-PC s'est arrêté, il est repris tout seul au démarrage suivant : le récepteur, la fréquence et le mode d'alors. Sans cette case, un bandeau le propose dans l'onglet QO-100. Réception seulement : rien n'est jamais émis, et le poste n'est pas touché.</div>
     </div>
     <div class="carte" id="sv-carte" hidden>
       <div class="t">Sauvegarde générale</div>
-      <div class="petit">Toute la station dans un fichier, pour la retrouver sur un autre PC ou après une réinstallation : réglages (poste, rotor, QRZ, carnet en ligne…), carnet, journal des passages, APRS et ses trophées, planches SSTV. Elle contient tes mots de passe et clés : garde-la pour toi.</div>
+      <div class="petit aide">Toute la station dans un fichier, pour la retrouver sur un autre PC ou après une réinstallation : réglages (poste, rotor, QRZ, carnet en ligne…), carnet, journal des passages, APRS et ses trophées, planches SSTV. Elle contient tes mots de passe et clés : garde-la pour toi.</div>
       <label class="petit" style="display:block;margin-top:8px"><input type="checkbox" id="sv-medias" onchange="majSauvegarde()"> avec les enregistrements, images SSTV, METEOR et radiosondes (plus lourd)</label>
       <div class="ligne"><a class="bouton" id="sv-lien" href="sauvegarde.zip" download>⤓ Télécharger la sauvegarde</a><span class="petit" id="sv-taille"></span></div>
       <div class="t" style="margin-top:14px">Restaurer</div>
-      <div class="petit">Choisis une sauvegarde : elle est reprise au prochain démarrage de SatMe-PC. Rien n'est perdu : les réglages remplacés sont gardés à part (dossier avant-restauration-…), le carnet est fusionné, les fichiers déjà là restent.</div>
+      <div class="petit aide">Choisis une sauvegarde : elle est reprise au prochain démarrage de SatMe-PC. Rien n'est perdu : les réglages remplacés sont gardés à part (dossier avant-restauration-…), le carnet est fusionné, les fichiers déjà là restent.</div>
       <div class="ligne"><input type="file" id="sv-fichier" accept=".zip,application/zip" onchange="restaureSauvegarde(this)"></div>
       <div class="etat" id="sv-etat"></div>
     </div>
@@ -1924,7 +2133,7 @@ object PagePc {
       <div class="ligne"><span class="petit">Émission sur la bande</span>
         <select id="thd72-tx" style="flex:none" onchange="thPost('bandetx?b=' + this.value)"><option value="0">A</option><option value="1">B</option></select>
         <button onclick="thPost('lire')">Relire</button></div>
-      <div class="petit" style="margin-top:4px">Chaque changement part au poste quand tu le demandes ; la lecture ne change rien. Puissance : H haute, L basse, EL très basse.</div>
+      <div class="petit aide" style="margin-top:4px">Chaque changement part au poste quand tu le demandes ; la lecture ne change rien. Puissance : H haute, L basse, EL très basse.</div>
     </div>
 
     <div class="carte">
@@ -1939,7 +2148,7 @@ object PagePc {
     </div>
     <div class="carte">
       <div class="t">Horizon</div>
-      <div class="petit">La hauteur des obstacles (toits, arbres, relief) dans chaque direction, en degrés au-dessus de l'horizon. Les passages commencent et finissent alors quand le satellite les dépasse ; les heures sans obstacle restent en infobulle (✱). Tout à 0 : rien ne change.</div>
+      <div class="petit aide">La hauteur des obstacles (toits, arbres, relief) dans chaque direction, en degrés au-dessus de l'horizon. Les passages commencent et finissent alors quand le satellite les dépasse ; les heures sans obstacle restent en infobulle (✱). Tout à 0 : rien ne change.</div>
       <div class="ligne"><span class="petit">Secteurs</span><select id="hz-n" onchange="hzSecteurs(+this.value)"><option value="8">8 × 45°</option><option value="12">12 × 30°</option></select></div>
       <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-start;margin-top:6px">
         <svg id="hz-dessin" viewBox="-62 -62 124 124" width="150" height="150" role="img" aria-label="Le masque d'horizon vu du dessus"></svg>
@@ -1948,14 +2157,14 @@ object PagePc {
     </div>
     <div class="carte">
       <div class="t">Skeds annoncés (hams.at)</div>
-      <label class="petit"><input type="checkbox" id="sk-on" onchange="post('api/skeds/reglages?on=' + (this.checked ? 1 : 0))"> Montrer les skeds annoncés sur hams.at : sur les passages (📣), dans Station et le Carnet, sur la carte</label>
+      <label class="petit" title="Montrer les skeds annoncés sur hams.at : sur les passages (📣), dans Station et le Carnet, sur la carte"><input type="checkbox" id="sk-on" onchange="post('api/skeds/reglages?on=' + (this.checked ? 1 : 0))"> Montrer les skeds annoncés sur hams.at <span class="plus" aria-hidden="true">…</span></label>
       <div class="ligne"><input id="sk-cle" type="password" placeholder="Clé API hams.at (facultative : la fenêtre commune avec toi)" autocomplete="off">
         <button onclick="post('api/skeds/reglages?cle=' + enc(v('sk-cle'))); g('sk-cle').value = ''">Enregistrer</button></div>
-      <div class="petit">Comme sur le téléphone ; demandés toutes les 5 minutes. La clé reste sur ce PC.</div>
+      <div class="petit aide">Comme sur le téléphone ; demandés toutes les 5 minutes. La clé reste sur ce PC.</div>
     </div>
     <div class="carte">
       <div class="t">Éléments orbitaux</div>
-      <div class="petit">Serveur GP SatMe : il interroge AMSAT, CelesTrak et SatNOGS pour tout le monde, et ce PC lui demande tout. Comme sur le téléphone.</div>
+      <div class="petit aide">Serveur GP SatMe : il interroge AMSAT, CelesTrak et SatNOGS pour tout le monde, et ce PC lui demande tout. Comme sur le téléphone.</div>
       <div class="ligne"><input id="gpServeur" placeholder="https://gp.f4ioz.fr"><button onclick="essaiGp()">Essayer</button><button onclick="g('gpServeur').value = SRC.defaut; majSources()" id="gpDefaut">Par défaut</button></div>
       <div class="petit" id="gp-essai"></div>
       <label class="petit" style="display:block;margin-top:8px"><input type="checkbox" id="gpSeul" onchange="majSources()"> Uniquement ce serveur : jamais AMSAT ni SatNOGS directement</label>
@@ -1970,21 +2179,21 @@ object PagePc {
         Diffuser l'état de la station à d'autres programmes de ce PC</label>
       <div class="ligne"><span class="petit">Port</span><input id="lien-port" type="number" min="1024" max="65535" style="max-width:90px">
         <button onclick="regleLien('port=' + enc(v('lien-port')))">Appliquer</button><span class="petit" id="lien-etat"></span></div>
-      <div class="petit" style="margin-top:6px">Chaque seconde le satellite suivi (azimut, élévation, distance, fréquences et Doppler), les alertes de passage (AOS dans 5 min, AOS, LOS) et chaque contact noté au carnet, en JSON. Rien n'est accepté en retour. Sur ce PC seulement, sauf si SatMe-PC est lancé avec --reseau.</div>
+      <div class="petit aide" style="margin-top:6px">Chaque seconde le satellite suivi (azimut, élévation, distance, fréquences et Doppler), les alertes de passage (AOS dans 5 min, AOS, LOS) et chaque contact noté au carnet, en JSON. Rien n'est accepté en retour. Sur ce PC seulement, sauf si SatMe-PC est lancé avec --reseau.</div>
     </div>
     <div class="carte" id="phr-carte" hidden>
       <div class="t">Phonie → texte</div>
-      <div class="petit">La voix entendue (carte son ou clé SDR) écrite au fil de l'écoute, avec les indicatifs, carrés et reports trouvés : une fenêtre dans les onglets SDR, QO-100 et Carnet. Le moteur (faster-whisper, en Python) tourne sur ce PC : rien ne part sur Internet pendant l'écoute. Coupé par défaut : rien ne démarre sans la case de la fenêtre.</div>
+      <div class="petit aide">La voix entendue (carte son ou clé SDR) écrite au fil de l'écoute, avec les indicatifs, carrés et reports trouvés : une fenêtre dans les onglets SDR, QO-100 et Carnet. Le moteur (faster-whisper, en Python) tourne sur ce PC : rien ne part sur Internet pendant l'écoute. Coupé par défaut : rien ne démarre sans la case de la fenêtre.</div>
       <div class="ligne"><span class="petit" style="min-width:80px">Modèle</span><select id="phr-modele" onchange="phrRegle('modele=' + this.value)"></select></div>
       <div class="ligne"><span class="petit" style="min-width:80px">Calcul</span><select id="phr-calcul" onchange="phrRegle('calcul=' + this.value)"><option value="auto">carte NVIDIA si elle répond, sinon processeur</option><option value="cuda">carte NVIDIA (CUDA)</option><option value="cpu">processeur</option></select></div>
       <div class="ligne"><span class="petit" style="min-width:80px">Python</span><input id="phr-python" placeholder="celui de SatMe (stt/)"><button onclick="phrRegle('python=' + enc(g('phr-python').value.trim()))">Enregistrer</button></div>
       <div class="petit" id="phr-etat" style="margin-top:6px"></div>
       <div class="ligne"><button class="primaire" id="phr-installe" onclick="phrInstalle()">Installer le moteur</button><button id="phr-verifie" onclick="phrRegle('verifie=1')">Vérifier</button></div>
-      <div class="petit" style="margin-top:4px">Le bouton télécharge depuis PyPI faster-whisper et ce qu'il lui faut (environ 150 Mo) et, si une carte NVIDIA répond, ses bibliothèques cuBLAS et cuDNN (environ 1,3 Go de plus) ; puis le modèle choisi depuis Hugging Face. Tout va dans <code>stt/</code> du dossier de SatMe ; rien n'est téléchargé sans ce bouton. Il faut Python 3.9 ou plus récent (sous Debian/Ubuntu : python3-venv).</div>
+      <div class="petit aide" style="margin-top:4px">Le bouton télécharge depuis PyPI faster-whisper et ce qu'il lui faut (environ 150 Mo) et, si une carte NVIDIA répond, ses bibliothèques cuBLAS et cuDNN (environ 1,3 Go de plus) ; puis le modèle choisi depuis Hugging Face. Tout va dans <code>stt/</code> du dossier de SatMe ; rien n'est téléchargé sans ce bouton. Il faut Python 3.9 ou plus récent (sous Debian/Ubuntu : python3-venv).</div>
       <div class="etat" id="phr-etape"></div>
       <pre id="phr-journal" hidden style="max-height:180px;overflow:auto;font-size:11px;background:#0E1720;padding:6px;border-radius:8px;white-space:pre-wrap;word-break:break-all;margin:6px 0 0"></pre>
       <div class="t" style="margin-top:12px">Traduction</div>
-      <div class="petit">Le texte entendu traduit sur ce PC, sans Internet : les paires de langues d’Argos Translate (modèles OPUS-MT, licence CC-BY 4.0), lues par CTranslate2 comme le moteur de transcription. D’une langue à l’autre en passant par l’anglais. La case « Traduire en » de la fenêtre Phonie → texte la met en marche.</div>
+      <div class="petit aide">Le texte entendu traduit sur ce PC, sans Internet : les paires de langues d’Argos Translate (modèles OPUS-MT, licence CC-BY 4.0), lues par CTranslate2 comme le moteur de transcription. D’une langue à l’autre en passant par l’anglais. La case « Traduire en » de la fenêtre Phonie → texte la met en marche.</div>
       <div class="ligne"><span class="petit" style="min-width:80px">Traduire en</span><select id="phr-cible" onchange="phrRegle('cible=' + this.value)"></select></div>
       <div class="petit" style="margin-top:4px">Langues entendues à traduire (la paire anglais → langue choisie, commune à toutes, est comptée sur la ligne « anglais ») :</div>
       <div id="phr-langues" style="display:flex;flex-wrap:wrap;gap:4px 12px;margin-top:4px"></div>
@@ -2044,7 +2253,7 @@ object PagePc {
     <div class="carte">
       <div class="t">QRZ.com</div>
       <div class="ligne" style="margin-top:0"><input id="qrzUser" placeholder="Identifiant QRZ"><input id="qrzMdp" type="password" placeholder="Mot de passe"></div>
-      <div class="petit">Abonnement XML de QRZ nécessaire. Le mot de passe reste sur ce PC et n'est jamais réaffiché.</div>
+      <div class="petit aide">Abonnement XML de QRZ nécessaire. Le mot de passe reste sur ce PC et n'est jamais réaffiché.</div>
       <div class="ligne"><button onclick="enregistreReglages()">Enregistrer</button><button onclick="essaiQrz()">Essayer</button><span class="petit" id="qrz-etat"></span></div>
       <label class="petit" style="display:block;margin-top:8px"><input type="checkbox" id="qrzFiche" onchange="post('api/reglages?fiche=' + (this.checked ? 1 : 0)).then(() => { ficheVoulue = this.checked; csPour = ''; })"> Fiche QRZ dans le carnet : photo, distance, carte</label>
     </div>
@@ -2086,22 +2295,22 @@ object PagePc {
       <div class="t">Journal Doppler / CAT</div>
       <label class="petit" style="display:block"><input type="checkbox" id="dop-on" onchange="post('api/doppler?on=' + (this.checked ? 1 : 0)).then(chargeDoppler)">
         Noter chaque passage suivi avec le poste connecté</label>
-      <div class="petit" style="margin-top:6px">Toutes les 5 s : élévation, Doppler prévu à la descente et à la montée, fréquence écrite au poste et relue. Un fichier CSV par passage (AOS, montée, TCA, descente, LOS), avec le passage dans le Journal. SatMe ne demande rien de plus au poste.</div>
+      <div class="petit aide" style="margin-top:6px">Toutes les 5 s : élévation, Doppler prévu à la descente et à la montée, fréquence écrite au poste et relue. Un fichier CSV par passage (AOS, montée, TCA, descente, LOS), avec le passage dans le Journal. SatMe ne demande rien de plus au poste.</div>
       <div id="dop-liste" class="petit" style="margin-top:6px"></div>
     </div>
     <div class="carte" id="px-carte">
       <div class="t">ADALM-PLUTO (émission DATV)</div>
-      <div class="petit">L'émission se lance de l'onglet DATV, jamais toute seule. Ici, ce qui la borne et ce que fait le Pluto quand SatMe s'en sert en réception.</div>
+      <div class="petit aide">L'émission se lance de l'onglet DATV, jamais toute seule. Ici, ce qui la borne et ce que fait le Pluto quand SatMe s'en sert en réception.</div>
       <label class="petit" style="display:block;margin-top:8px"><input type="checkbox" id="px-coupe" onchange="post('api/datv/emission/reglage?coupeTx=' + (this.checked ? 1 : 0))">
         Couper l'oscillateur d'émission du Pluto quand SatMe s'en sert en réception</label>
-      <div class="petit" style="margin-top:4px">Allumé, le Pluto laisse son oscillateur d'émission tourner (une fuite sur la sortie TX). Coché : SatMe l'éteint à chaque démarrage de la réception par le Pluto.</div>
+      <div class="petit aide" style="margin-top:4px">Allumé, le Pluto laisse son oscillateur d'émission tourner (une fuite sur la sortie TX). Coché : SatMe l'éteint à chaque démarrage de la réception par le Pluto.</div>
       <div class="ligne"><span class="petit">Gain d'émission maximal (dB)</span><input id="px-gainmax" type="number" step="1" min="-89" max="0" style="max-width:80px">
         <button onclick="post('api/datv/emission/reglage?gainMax=' + enc(v('px-gainmax'))).then(chargePx)">Enregistrer</button></div>
-      <div class="petit">Jamais dépassé, quoi qu'on demande dans l'onglet DATV (0 dB = la pleine puissance du Pluto, environ +7 dBm).</div>
+      <div class="petit aide">Jamais dépassé, quoi qu'on demande dans l'onglet DATV (0 dB = la pleine puissance du Pluto, environ +7 dBm).</div>
     </div>
     <div class="carte" id="iq-carte">
       <div class="t">Correction I/Q des émetteurs</div>
-      <div class="petit">Chaque émetteur laisse passer un peu de son oscillateur (une fuite au centre), une image du signal (son reflet autour de l'oscillateur) et un écart de fréquence (son quartz). SatMe les corrige sur les échantillons, juste avant l'émetteur, en DATV comme en SSTV ; chaque carte garde sa correction (par numéro de série). À zéro : rien n'est changé.</div>
+      <div class="petit aide">Chaque émetteur laisse passer un peu de son oscillateur (une fuite au centre), une image du signal (son reflet autour de l'oscillateur) et un écart de fréquence (son quartz). SatMe les corrige sur les échantillons, juste avant l'émetteur, en DATV comme en SSTV ; chaque carte garde sa correction (par numéro de série). À zéro : rien n'est changé.</div>
       <div class="ligne"><span class="petit">Émetteur</span><select id="iq-app" onchange="iqTouche = 0; chargeIq()"><option value="pluto">ADALM-PLUTO</option><option value="bladerf">bladeRF 2.0</option><option value="hackrf">HackRF One</option></select>
         <span class="petit" id="iq-serie"></span></div>
       <div id="iq-curseurs"></div>
@@ -2118,16 +2327,46 @@ object PagePc {
       <div class="petit" id="iq-etat" style="margin-top:4px"></div>
       <div class="petit" id="iq-mesure" style="font-variant-numeric:tabular-nums"></div>
       <pre class="petit" id="iq-journal" hidden style="max-height:180px;overflow:auto;white-space:pre-wrap"></pre>
-      <div class="petit" style="margin-top:4px">La calibration émet une porteuse 200 kHz au-dessus de l'oscillateur ; un autre SDR de la station (le bladeRF, ou le Pluto pour le bladeRF) l'écoute, mesure la fuite et l'image, et SatMe cherche les réglages qui les éteignent. L'écart de fréquence est relevé par rapport au quartz du récepteur. Le récepteur de l'onglet SDR est prêté pendant la mesure, puis rendu.</div>
+      <div class="petit aide" style="margin-top:4px">La calibration émet une porteuse 200 kHz au-dessus de l'oscillateur ; un autre SDR de la station (le bladeRF, ou le Pluto pour le bladeRF) l'écoute, mesure la fuite et l'image, et SatMe cherche les réglages qui les éteignent. L'écart de fréquence est relevé par rapport au quartz du récepteur. Le récepteur de l'onglet SDR est prêté pendant la mesure, puis rendu.</div>
     </div>
     <div class="carte">
       <div class="t">Convertisseurs</div>
       <div class="petit" id="conv-lu">—</div>
-      <div class="petit" style="margin-top:6px">Ils se règlent dans l'onglet <a href="#qo100" onclick="vue('qo100')" style="color:var(--cyan)">QO-100</a>, par la chaîne de station : un seul endroit pour chaque oscillateur, comme sur le téléphone.</div>
+      <div class="petit aide" style="margin-top:6px">Ils se règlent dans l'onglet <a href="#qo100" onclick="vue('qo100')" style="color:var(--cyan)">QO-100</a>, par la chaîne de station : un seul endroit pour chaque oscillateur, comme sur le téléphone.</div>
     </div>
   </div>
 </div>
 </div>
+<footer id="sb" aria-label="État de la station">
+  <button id="sb-sdr" class="sb-i" onclick="vue('sdr')" title="Le récepteur SDR (onglet SDR)"><i></i><span>SDR</span><b id="sb-sdr-t">—</b></button>
+  <button id="sb-datv" class="sb-i" onclick="vue('datv')" title="Le récepteur DATV (onglet DATV)"><i></i><span>DATV</span><b id="sb-datv-t">—</b></button>
+  <button id="sb-cat" class="sb-i" onclick="vue('reglages'); montreReglages('materiel')" title="Le poste (Réglages › Poste et rotor)"><i></i><span>Poste</span><b id="sb-cat-t">—</b></button>
+  <button id="sb-rot" class="sb-i" onclick="vue('reglages'); montreReglages('materiel')" title="Le rotor (Réglages › Poste et rotor)"><i></i><span>Rotor</span><b id="sb-rot-t">—</b></button>
+  <button id="sb-rec" class="sb-i" hidden onclick="vue('son')" title="Un enregistrement est en cours (onglet Son)"><i></i><b id="sb-rec-t"></b></button>
+  <button id="sb-tel" class="sb-i" onclick="vue('reglages'); montreReglages('satellites')" title="Le lien WebSocket (téléphone, logiciels de suivi) : Réglages › Satellites"><i></i><span>Lien</span><b id="sb-tel-t">—</b></button>
+  <span class="h-esp"></span>
+  <button id="sb-err" class="sb-i" onclick="montreErreurs(this)" title="Les erreurs relevées par la page et par SatMe-PC"><i></i><span>Erreurs</span><b id="sb-err-t">0</b></button>
+  <span class="sb-k"><kbd>Échap</kbd> arrêt émission <kbd>Ctrl K</kbd> commandes <kbd>?</kbd> aide</span>
+</footer>
+<div id="pop" role="tooltip" hidden></div>
+<div id="toast" role="status" aria-live="polite" hidden></div>
+<dialog id="pal" class="dlg-pal" aria-label="Commandes">
+  <div class="pal-tete">${IconesPc.svg("search")}<input id="pal-q" autocomplete="off" spellcheck="false" placeholder="Onglet, fréquence (145.800, 10489.750 M, 437,5), satellite, indicatif, action…"></div>
+  <div id="pal-l" role="listbox"></div>
+  <div class="pal-pied"><span><kbd>↑</kbd><kbd>↓</kbd> choisir</span><span><kbd>Entrée</kbd> valider</span><span><kbd>Échap</kbd> fermer (et arrêter toute émission)</span></div>
+</dialog>
+<dialog id="aide-dlg" class="dlg-aide" aria-labelledby="aide-titre">
+  <div class="dlg-tete"><b id="aide-titre">Raccourcis clavier</b><button class="discret" onclick="g('aide-dlg').close()" aria-label="Fermer">✕</button></div>
+  <div class="aide-arret"><kbd>Échap</kbd><span><b>Arrêt de toute émission</b> : DATV, SSTV, calibration I/Q, mire. N'arrête que, ne démarre jamais rien. Aussi : le voyant <b class="tx-mot">TX</b> rouge de l'en-tête, d'un clic.</span></div>
+  <div class="aide-grille">
+    <div><kbd>Ctrl</kbd> <kbd>K</kbd></div><div>Commandes : aller à un onglet, accorder le récepteur (réception seulement), suivre un satellite, ouvrir un indicatif dans le carnet, actions courantes</div>
+    <div><kbd>1</kbd> … <kbd>6</kbd></div><div>Espaces : 1 Ciel · 2 QO-100 · 3 DATV · 4 Modes · 5 Carnet · 6 Station (le dernier onglet vu de chacun)</div>
+    <div><kbd>?</kbd></div><div>Cette aide</div>
+    <div><kbd>[</kbd></div><div>Déplier ou replier le menu de gauche</div>
+    <div><kbd>←</kbd> <kbd>→</kbd> <kbd>↑</kbd> <kbd>↓</kbd></div><div>QO-100 : accord par 100 Hz / 1 kHz (hors d'un champ de saisie)</div>
+    <div><span class="h-rond" style="display:inline-grid">?</span></div><div>Sur un titre : l'explication de la carte (survol, clic ou Entrée)</div>
+  </div>
+</dialog>
 <dialog id="fd-dlg" style="background:var(--carte);color:var(--clair);border:1px solid var(--bord);border-radius:12px;width:min(820px,96vw)">
   <div class="t">Choisir <span id="fd-quoi">une image</span> <span class="petit">sur le PC de SatMe-PC (lecture seule)</span></div>
   <div class="ligne" id="fd-raccourcis" style="flex-wrap:wrap"></div>
@@ -2152,6 +2391,10 @@ object PagePc {
   <div class="petit" id="vi-sans-son"></div>
 </dialog>
 <script>
+// The page's own errors, counted in the status bar.
+window.__err = window.__err || [];
+window.addEventListener('error', e => { window.__err.push(String(e.message || 'erreur')); });
+window.addEventListener('unhandledrejection', e => { window.__err.push('promesse : ' + String(e.reason && e.reason.message || e.reason)); });
 const g = id => document.getElementById(id);
 const v = id => g(id).value.trim();
 const enc = encodeURIComponent;
@@ -2640,7 +2883,7 @@ function rangeReglages() {
     // A card no category names still shows, under the last one.
     cartes.filter(k => k.closest('#reg-origine')).forEach(k => corps.lastChild.querySelector('.reg-cartes').appendChild(k));
     g('reg-origine').hidden = true;
-    g('reg-nav').innerHTML = CATS_REG.map(c => '<button data-cat="' + c.id + '" onclick="montreReglages(\'' + c.id + '\')">' + (ICO[c.ico] || '') +
+    g('reg-nav').innerHTML = CATS_REG.map(c => '<button data-cat="' + c.id + '" title="' + c.desc + '" onclick="montreReglages(\'' + c.id + '\')">' + (ICO[c.ico] || '') +
       '<span><b>' + c.nom + '</b><small>' + c.desc + '</small></span></button>').join('');
   }
   montreReglages(catReg);
@@ -3119,6 +3362,7 @@ function vue(n) {
   document.querySelectorAll('.vue').forEach(x => x.hidden = x.id !== 'v-' + n);
   document.querySelectorAll('#onglets button').forEach(b => b.classList.toggle('actif', b.dataset.v === n));
   try { localStorage.setItem('vue', n); } catch (x) {}
+  navMaj(n);
   if (n === 'carnet') { chargeCarnet(); g('c-call').focus(); vueCarnet(vueC); ticCw(); }
   if (n === 'carnet' || n === 'sdr' || n === 'qo100') ticPhonie(true);
   if (n === 'reglages') chargePhonieReglages();
@@ -6911,6 +7155,288 @@ async function ticVeille() {
 setInterval(() => { if (ouverte('agenda')) ticVeille(); }, 2000);
 setInterval(ticSon, 1000);
 
+// ------------------------------------------------------------------ the frame: rail, workspaces, header strip, status bar
+// Kept in var: vue() may run before this part of the script has.
+var TITRE0 = document.title, wsDernier = {}, HX = { t: {} };
+const ESPACES_WS = [...document.querySelectorAll('#onglets .ws')].map(w => w.dataset.ws);
+try { wsDernier = JSON.parse(localStorage.getItem('ws-dernier') || '{}') || {}; } catch (x) {}
+function railRegle(ouvert, garde) {
+  document.body.classList.toggle('rail-ouvert', ouvert);
+  if (garde !== false) try { localStorage.setItem('rail', ouvert ? '1' : '0'); } catch (x) {}
+  setTimeout(() => window.dispatchEvent(new Event('resize')), 40);
+}
+(() => { let r = null; try { r = localStorage.getItem('rail'); } catch (x) {}
+  railRegle(r === null ? innerWidth >= 1800 : r === '1', false); })();
+/** After a tab is shown: its workspace marked, remembered, the address and the window's title. */
+function navMaj(n) {
+  const b = document.querySelector('#onglets button[data-v="' + n + '"]');
+  const ws = b && b.closest('.ws');
+  document.querySelectorAll('#onglets .ws').forEach(w => { w.classList.toggle('ws-actif', w === ws); w.classList.remove('ouvert'); });
+  if (ws) { wsDernier = wsDernier || {}; wsDernier[ws.dataset.ws] = n; try { localStorage.setItem('ws-dernier', JSON.stringify(wsDernier)); } catch (x) {} }
+  if (TITRE0) document.title = (b ? b.querySelector('span').textContent + ' · ' : '') + TITRE0;
+  if (location.hash.slice(1) !== n) try { history.replaceState(null, '', '#' + n); } catch (x) {}
+}
+/** A workspace: its last tab seen, else its first. */
+function wsOuvre(ws) {
+  const w = document.querySelector('#onglets .ws[data-ws="' + ws + '"]'); if (!w || w.hidden) return;
+  const l = [...w.querySelectorAll('.ws-l > *')].filter(x => !x.hidden);
+  const b = l.find(x => x.dataset.v && x.dataset.v === wsDernier[ws]) || l.find(x => x.dataset.v);
+  if (b) vue(b.dataset.v); else if (l[0]) location.href = l[0].getAttribute('href');
+}
+const telephone = () => matchMedia('(max-width:760px)').matches;
+document.querySelectorAll('#onglets .ws-t').forEach(t => t.onclick = () => {
+  const w = t.closest('.ws');
+  if (!telephone()) { wsOuvre(w.dataset.ws); return; }
+  const l = [...w.querySelectorAll('.ws-l > *')].filter(x => !x.hidden);
+  if (l.length === 1 && l[0].dataset.v) { vue(l[0].dataset.v); return; }
+  const o = !w.classList.contains('ouvert');
+  document.querySelectorAll('#onglets .ws').forEach(x => x.classList.remove('ouvert'));
+  w.classList.toggle('ouvert', o);
+});
+document.addEventListener('click', e => { if (!e.target.closest('#onglets')) document.querySelectorAll('#onglets .ws.ouvert').forEach(x => x.classList.remove('ouvert')); });
+g('rail-b').onclick = () => railRegle(!document.body.classList.contains('rail-ouvert'));
+g('rail-k').onclick = () => palette();
+g('rail-aide').onclick = () => aideClavier();
+window.addEventListener('hashchange', () => { const n = location.hash.slice(1); if (document.querySelector('#onglets button[data-v="' + n + '"]') && g('v-' + n).hidden) vue(n); });
+
+/** One reading for the header, at most every [ms]. */
+async function hxLit(cle, url, ms) {
+  const t = Date.now(); if (HX.t[cle] && t - HX.t[cle] < ms) return; HX.t[cle] = t;
+  try { const r = await fetch(url); HX[cle] = r.ok ? await r.json() : null; } catch (x) { HX[cle] = null; }
+}
+async function ticTete() {
+  if (document.hidden) return;
+  await Promise.all([hxLit('dtx', 'api/datv/emission', 2000), hxLit('stx', 'api/sstv/emission', 2000), hxLit('iq', 'api/iq', 3000),
+    hxLit('sdr', 'api/sdr', 3000), hxLit('datv', 'api/datv', 10000), hxLit('lien', 'api/lien', 15000)]);
+  rendTete();
+}
+/** What transmits now: each transmitter SatMe drives. */
+function emissionsEnCours() {
+  const l = [];
+  if (HX.dtx && HX.dtx.emet) l.push('DATV');
+  if (HX.stx && HX.stx.emet) l.push('SSTV');
+  if (HX.iq && HX.iq.actif) l.push('calibration I/Q');
+  return l;
+}
+function erreursServeur() {
+  const l = [];
+  if (HX.sdr && HX.sdr.erreur) l.push('SDR : ' + HX.sdr.erreur);
+  if (HX.dtx && HX.dtx.erreur) l.push('Émission DATV : ' + HX.dtx.erreur);
+  if (HX.stx && HX.stx.erreur) l.push('Émission SSTV : ' + HX.stx.erreur);
+  if (HX.iq && HX.iq.erreur) l.push('Calibration I/Q : ' + HX.iq.erreur);
+  return l;
+}
+function rendTete() {
+  const tx = emissionsEnCours();
+  g('h-tx').hidden = !tx.length; txt('h-tx-q', tx.join(' · '));
+  document.body.classList.toggle('en-tx', tx.length > 0);
+  // RX: the rig when the CAT is connected, else the SDR receiving.
+  const r = HX.sdr || R, c = E && E.cat;
+  let f = '', m = '', vu = 'sdr', qui = '';
+  if (c && c.connecte && c.dl) { f = qFmt(c.dl); m = c.mode || ''; vu = 'station'; qui = 'le poste (CAT ' + c.modele + ')'; }
+  else if (r && !r.absent && r.actif) { f = qFmt(r.ciel + r.decalage); m = r.modeEff || r.mode || ''; qui = 'le récepteur SDR'; }
+  { const d = new Date(); txt('h-utc', utc() ? '' : String(d.getUTCHours()).padStart(2, '0') + ':' + String(d.getUTCMinutes()).padStart(2, '0') + ' UTC'); }
+  txt('h-rx-f', f ? f + ' MHz' : '—'); txt('h-rx-m', m); g('h-rx').dataset.v = vu; g('h-rx').classList.toggle('inactif', !f);
+  g('h-rx').title = f ? 'Réception : ' + qui + ', ' + f + ' MHz ' + m : 'Aucun récepteur en marche (onglet SDR, ou le poste en CAT)';
+  // The next pass of the satellite followed, counted down.
+  // The next pass of the satellite followed, else the list's next one (a favourite first).
+  const n = Date.now(), lp = (P || []).filter(x => x.los > n);
+  const p = (E && E.passage) || lp.find(x => x.fav) || lp[0];
+  if (p && p.aos) {
+    const dedans = n >= p.aos && n < p.los;
+    txt('h-pass-n', p.nom); txt('h-pass-t', dedans ? 'LOS ' + duree(p.los - n) : 'AOS ' + duree(p.aos - n));
+    g('h-pass').classList.toggle('encours', dedans); g('h-pass').classList.toggle('proche', !dedans && p.aos - n < 300000);
+    g('h-pass').title = 'Passage de ' + p.nom + ' : ' + hm(p.aos) + ' → ' + hm(p.los) + ', ' + Math.round(p.elMax) + '° au plus haut';
+  } else { txt('h-pass-n', E && E.suivi ? E.suivi.nom : 'aucun passage'); txt('h-pass-t', ''); }
+  // The status bar.
+  const sb = (id, cl, t) => { const e = g(id); const k = 'sb-i' + (cl ? ' ' + cl : ''); if (e.className !== k) e.className = k; txt(id + '-t', t); };
+  sb('sb-sdr', r && !r.absent ? (r.actif ? (r.erreur ? 'warn' : 'ok') : (r.erreur ? 'danger' : '')) : '',
+    r && !r.absent ? (r.actif ? (r.tuner || r.recepteur || 'réception') + (r.perdus ? ' · ' + r.perdus + ' perdus' : '') : (r.datvTient ? 'prêtée à la DATV' : 'arrêtée')) : '—');
+  const d = HX.datv;
+  sb('sb-datv', d && d.actif ? (d.verrouille ? 'ok' : 'info') : '', d && d.ok !== false ? (d.actif ? d.libelle + (d.verrouille && d.mer != null ? ' · MER ' + fr1(d.mer) + ' dB' : '') : 'arrêtée') : '—');
+  sb('sb-cat', c && c.connecte ? 'ok' : '', c ? (c.connecte ? c.modele + (c.simule ? ' (simulé)' : '') : 'non connecté') : '—');
+  const ro = E && E.rotor;
+  sb('sb-rot', ro && ro.connecte ? 'ok' : '', ro ? (ro.connecte ? (ro.az != null ? Math.round(ro.az) + '° / ' + Math.round(ro.el) + '°' : 'connecté') : 'non connecté') : '—');
+  const rec = g('rec').style.display !== 'none';
+  g('sb-rec').hidden = !rec; if (rec) sb('sb-rec', 'danger', g('rec').textContent);
+  const li = HX.lien;
+  sb('sb-tel', li && li.ecoute ? (li.clients ? 'ok' : 'info') : '', li && li.on !== undefined ? (li.ecoute ? li.clients + ' client' + (li.clients > 1 ? 's' : '') : 'coupé') : '—');
+  const ne = (window.__err || []).length + erreursServeur().length;
+  sb('sb-err', ne ? 'danger' : 'ok', String(ne));
+}
+function montreErreurs(b) {
+  const l = erreursServeur().concat((window.__err || []).slice(-12).map(x => 'Page : ' + x));
+  popMontre(b, l.length ? l.map(x => '<div class="aide-p">' + esc(x) + '</div>').join('') : '<div class="aide-p">Aucune erreur.</div>', true);
+}
+let toastMin = 0;
+function annonce(t, tx) {
+  const e = g('toast'); e.textContent = t; e.classList.toggle('tx', !!tx); e.hidden = false;
+  clearTimeout(toastMin); toastMin = setTimeout(() => e.hidden = true, 3200);
+}
+/**
+ * Échap, the TX pill or the palette: every transmission stopped (DATV, SSTV, the I/Q calibration, the test card).
+ * Only stops: nothing here ever starts a transmission.
+ */
+async function arretEmissions() {
+  const avant = emissionsEnCours(), inconnu = !HX.dtx && !HX.stx;
+  const l = ['api/datv/emission/arrete', 'api/sstv/emission/arrete', 'api/mire/stop'];
+  if (!HX.iq || HX.iq.actif) l.push('api/iq/arrete');
+  await Promise.all(l.map(u => fetch(u, { method: 'POST' }).catch(() => null)));
+  if (avant.length || inconnu) annonce(avant.length ? '■ Émission arrêtée : ' + avant.join(', ') : '■ Arrêt de toute émission demandé', true);
+  HX.t = {}; ticTete();
+  try { if (!g('v-datv').hidden) ticEmission(); if (!g('v-sstv').hidden) { xsCharge(); ticMire(true); } if (!g('v-reglages').hidden) chargeIq(); } catch (x) {}
+}
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') { arretEmissions(); popCache(); return; }
+  if ((e.ctrlKey || e.metaKey) && !e.altKey && (e.key === 'k' || e.key === 'K')) { e.preventDefault(); palette(); return; }
+  const a = document.activeElement;
+  if (e.ctrlKey || e.metaKey || e.altKey || (a && (/INPUT|SELECT|TEXTAREA/.test(a.tagName) || a.isContentEditable)) || document.querySelector('dialog[open]')) return;
+  if (e.key === '?') { e.preventDefault(); aideClavier(); }
+  else if (e.key >= '1' && e.key <= '6' && ESPACES_WS[+e.key - 1]) { e.preventDefault(); wsOuvre(ESPACES_WS[+e.key - 1]); }
+  else if (e.key === '[') railRegle(!document.body.classList.contains('rail-ouvert'));
+});
+function aideClavier() { popCache(); g('aide-dlg').showModal(); }
+
+// ------------------------------------------------------------------ help popovers: the « ? » beside a title
+// The long explanations (class aide) stay in the page, hidden; the nearest title before them gets a « ? » that shows them.
+let popDe = null;
+function popMontre(ancre, html, epingle) {
+  const p = g('pop'); p.innerHTML = html; p.hidden = false; p.dataset.epingle = epingle ? '1' : '';
+  const r = ancre.getBoundingClientRect(), w = p.offsetWidth, h = p.offsetHeight;
+  let y = r.bottom + 6; if (y + h > innerHeight - 8) y = Math.max(8, r.top - h - 6);
+  p.style.left = Math.min(Math.max(8, r.left + r.width / 2 - w / 2), innerWidth - w - 8) + 'px'; p.style.top = y + 'px';
+  if (popDe && popDe !== ancre) popDe.classList.remove('ouvert');
+  popDe = ancre; ancre.classList.toggle('ouvert', !!epingle);
+}
+function popCache() { g('pop').hidden = true; if (popDe) popDe.classList.remove('ouvert'); popDe = null; }
+/** A card's title: its .t, or a line opening on a bold name (FT8's cards). */
+const estTitre = c => !c.id && (c.matches('.t') || (c.matches('.paire') && c.firstElementChild && c.firstElementChild.tagName === 'B'));
+function titreDe(a) {
+  for (let x = a; x.parentElement; x = x.parentElement) {
+    const p = x.parentElement;
+    const t = [...p.children].filter(c => c !== x && estTitre(c) && (c.compareDocumentPosition(a) & 4)).pop();
+    if (t) return t;
+    if (p.matches('.carte, .vue, dialog, body')) return null;
+  }
+  return null;
+}
+function aidesInit() {
+  document.querySelectorAll('.aide').forEach(a => {
+    if (a.dataset.q) return; a.dataset.q = '1';
+    const t = titreDe(a);
+    let q = t && t.querySelector(':scope > .q');
+    if (!q) {
+      q = document.createElement('button'); q.type = 'button'; q.className = 'q'; q.textContent = '?'; q.setAttribute('aria-label', 'Aide'); q.aides = [];
+      if (t && t.matches('.paire')) t.firstElementChild.after(q); else if (t) t.appendChild(q); else a.parentNode.insertBefore(q, a);
+    }
+    q.aides.push(a);
+  });
+}
+const aideHtml = q => (q.aides || []).map(a => '<div class="aide-p">' + a.innerHTML + '</div>').join('');
+document.addEventListener('click', e => {
+  const q = e.target.closest && e.target.closest('.q');
+  if (q) { e.preventDefault(); e.stopPropagation(); if (popDe === q && g('pop').dataset.epingle) popCache(); else popMontre(q, aideHtml(q), true); return; }
+  if (!e.target.closest || !e.target.closest('#pop')) popCache();
+}, true);
+document.addEventListener('mouseover', e => {
+  const q = e.target.closest && e.target.closest('.q');
+  if (q && q !== popDe && !(popDe && g('pop').dataset.epingle)) popMontre(q, aideHtml(q), false);
+});
+document.addEventListener('mouseout', e => {
+  const q = e.target.closest && e.target.closest('.q'), r = e.relatedTarget;
+  if (q && popDe === q && !g('pop').dataset.epingle && !(r && r.closest && r.closest('#pop'))) popCache();
+});
+g('pop').addEventListener('mouseleave', () => { if (!g('pop').dataset.epingle) popCache(); });
+document.addEventListener('focusin', e => { const q = e.target; if (q.classList && q.classList.contains('q') && q !== popDe) popMontre(q, aideHtml(q), false); });
+document.addEventListener('focusout', e => { if (e.target === popDe && !g('pop').dataset.epingle) popCache(); });
+aidesInit();
+
+// ------------------------------------------------------------------ Ctrl+K: the command palette
+let palVu = [], palSel = 0;
+const sansAccent = x => String(x).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+/** A frequency typed: 145.8, 145,800, 437500 k, 10489.75 M, 1.2 G… in MHz, or null. */
+function palMhz(q) {
+  const m = /^(\d+(?:[.,]\d+)?)\s*(hz|k|khz|m|mhz|g|ghz)?$/i.exec(q.replace(/\s+/g, ' ').trim());
+  if (!m) return null;
+  const x = parseFloat(m[1].replace(',', '.')), u = (m[2] || '').toLowerCase();
+  const mhz = u === 'hz' ? x / 1e6 : u[0] === 'k' ? x / 1e3 : u[0] === 'g' ? x * 1e3 : u[0] === 'm' ? x : x >= 1e7 ? x / 1e6 : x >= 30000 ? x / 1e3 : x;
+  return mhz >= 0.5 && mhz <= 30000 && (u || /[.,]/.test(m[1]) || x >= 24) ? mhz : null;
+}
+function palSources() {
+  const l = [], ico = el => { const s = el && el.querySelector('svg'); return s ? s.outerHTML : ''; };
+  document.querySelectorAll('#onglets .ws').forEach(w => {
+    if (w.hidden) return;
+    const ws = w.querySelector('.ws-t span').textContent;
+    w.querySelectorAll('.ws-l > *').forEach(b => {
+      if (b.hidden) return;
+      const nom = b.querySelector('span').textContent, v0 = b.dataset.v;
+      l.push({ g: 'Onglets', nom, info: ws, ico: ico(b), mots: nom + ' ' + ws + ' ' + (b.title || ''), go: () => v0 ? vue(v0) : (location.href = b.getAttribute('href')) });
+      if (v0) document.querySelectorAll('#v-' + v0 + ' .st-nav button').forEach(s => {
+        if (s.hidden) return;
+        const sn = s.textContent.trim();
+        l.push({ g: 'Onglets', nom: nom + ' › ' + sn, info: s.title || '', ico: ico(s), mots: nom + ' ' + sn + ' ' + (s.title || ''), go: () => { vue(v0); s.click(); } });
+      });
+    });
+  });
+  if (!g('onglets').querySelector('button[data-v="reglages"]').hidden) CATS_REG.forEach(c => {
+    const b = document.querySelector('#reg-nav button[data-cat="' + c.id + '"]');
+    if (b && b.hidden) return;
+    l.push({ g: 'Réglages', nom: 'Réglages › ' + c.nom, info: c.desc, ico: ICO[c.ico] || '', mots: 'reglages ' + c.nom + ' ' + c.desc + ' ' + c.cartes.join(' '), go: () => { vue('reglages'); montreReglages(c.id); } });
+  });
+  const A = (nom, info, go, cl) => l.push({ g: 'Actions', nom, info, go, cl, mots: nom + ' ' + info });
+  A('■ Arrêter toute émission', 'Échap · DATV, SSTV, I/Q, mire', arretEmissions, 'arret');
+  A('Démarrer la réception SDR', 'récepteur, écoute', () => post('api/sdr/demarrer').then(() => { HX.t = {}; ticTete(); ticSdr(); }));
+  A('Arrêter la réception SDR', 'récepteur', () => post('api/sdr/arreter').then(() => { HX.t = {}; ticTete(); ticSdr(); }));
+  A('Couper le son', 'haut-parleur SDR et écoute dans ce navigateur, muet', () => { rRegle('son=0'); if (!g('ec-stop').hidden) arreteEcoute(); annonce('Son coupé'); });
+  A('Rétablir le son', 'haut-parleur SDR', () => { rRegle('son=1'); annonce('Haut-parleur SDR rétabli'); });
+  if (!g('ec-boite').hidden) A('Écouter ici', 'le son de SatMe-PC dans ce navigateur', () => { g('ec-pop').hidden = false; });
+  A('Ouvrir les réglages', 'configuration', () => vue('reglages'));
+  A('Déplier ou replier le menu', 'touche [', () => railRegle(!document.body.classList.contains('rail-ouvert')));
+  A('Raccourcis clavier', 'touche ?', aideClavier);
+  return l;
+}
+/** What the text typed itself proposes: a frequency, a satellite, a callsign. */
+function palDyn(q) {
+  const l = [], mhz = palMhz(q);
+  if (mhz != null) {
+    const s = mhz.toFixed(mhz >= 1000 ? 4 : 5).replace('.', ',');
+    l.push({ g: 'Accorder', nom: 'Écouter ' + s + ' MHz sur le récepteur SDR', info: 'réception seulement', go: () => { post('api/sdr/reglage?suit=0&mhz=' + enc(s)).then(() => { HX.t = {}; ticTete(); ticSdr(); }); annonce('Récepteur SDR : ' + s + ' MHz'); } });
+  }
+  const nq = sansAccent(q).replace(/[\s-]/g, '');
+  if (nq.length >= 2) [...g('tous').options].map(o => o.value).filter(x => sansAccent(x).replace(/[\s-]/g, '').includes(nq)).slice(0, 6)
+    .forEach(nom => l.push({ g: 'Satellites', nom: 'Suivre ' + nom, info: 'onglet Suivi', go: () => { vue('station'); g('cherche').value = nom; choisitParNom(); } }));
+  const call = q.trim().toUpperCase();
+  if (/^([A-Z0-9]{1,4}\/)?[A-Z0-9]{1,3}[0-9][A-Z]{1,4}(\/[A-Z0-9]{1,4})?$/.test(call) && !/^[0-9]+$/.test(call))
+    l.push({ g: 'Indicatif', nom: 'Ouvrir ' + call + ' dans le carnet', info: 'fiche et contacts passés', go: () => { vue('carnet'); const c = g('c-call'); c.value = call; c.dispatchEvent(new Event('input')); } });
+  return l;
+}
+function palette() {
+  popCache(); const d = g('pal'); if (d.open) return;
+  g('pal-q').value = ''; palSel = 0; d.showModal(); palRend(); g('pal-q').focus();
+}
+function palRend() {
+  const q = g('pal-q').value.trim(), mots = sansAccent(q).split(/\s+/).filter(x => x);
+  const tout = palSources().filter(i => mots.every(w => sansAccent(i.mots + ' ' + i.nom).includes(w)));
+  tout.sort((a, b) => (sansAccent(b.nom).startsWith(mots[0] || '\u0000') ? 1 : 0) - (sansAccent(a.nom).startsWith(mots[0] || '\u0000') ? 1 : 0));
+  palVu = palDyn(q).concat(tout).slice(0, 80);
+  palSel = Math.max(0, Math.min(palSel, palVu.length - 1));
+  let gr = '';
+  g('pal-l').innerHTML = palVu.map((i, k) => (i.g !== gr ? '<div class="pal-g">' + (gr = i.g) + '</div>' : '') +
+    '<div class="pal-i' + (k === palSel ? ' sel' : '') + (i.cl ? ' ' + i.cl : '') + '" role="option" data-k="' + k + '">' + (i.ico || '') + '<span>' + esc(i.nom) + '</span><small>' + esc(i.info || '') + '</small></div>').join('') ||
+    '<div class="pal-vide">Rien ne correspond. Essaie un onglet, une fréquence (145.8), un satellite ou un indicatif.</div>';
+  const s = g('pal-l').querySelector('.sel'); if (s) s.scrollIntoView({ block: 'nearest' });
+}
+function palVa(k) { const i = palVu[k]; if (!i) return; g('pal').close(); i.go(); }
+g('pal-q').addEventListener('input', () => { palSel = 0; palRend(); });
+g('pal-q').addEventListener('keydown', e => {
+  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); palSel += e.key === 'ArrowDown' ? 1 : -1; palSel = (palSel + palVu.length) % Math.max(1, palVu.length); palRend(); }
+  else if (e.key === 'Enter') { e.preventDefault(); palVa(palSel); }
+});
+g('pal-l').addEventListener('click', e => { const i = e.target.closest('.pal-i'); if (i) palVa(+i.dataset.k); });
+g('pal').addEventListener('click', e => { if (e.target === g('pal')) g('pal').close(); });
+g('aide-dlg').addEventListener('click', e => { if (e.target === g('aide-dlg')) g('aide-dlg').close(); });
+setInterval(ticTete, 2000); setInterval(rendTete, 1000); ticTete();
+
 lienRotor(); avertCat();
 // The tab from the address (#carnet, a bookmark), else the last one seen.
 // The tabs the server offers (the phone serves some of them): the others hidden, and left if open.
@@ -6918,10 +7444,12 @@ fetch('api/capacites').then(r => r.ok ? r.json() : null).then(j => {
   if (!j || !j.onglets) return;
   document.querySelectorAll('#onglets button[data-v]').forEach(b => { if (!j.onglets.includes(b.dataset.v)) b.hidden = true; });
   document.querySelectorAll('#onglets a').forEach(a => { if (!j.onglets.includes(a.getAttribute('href'))) a.hidden = true; });
+  // A workspace with none of its tabs here leaves the rail.
+  document.querySelectorAll('#onglets .ws').forEach(w => { w.hidden = ![...w.querySelectorAll('.ws-l > *')].some(x => !x.hidden); });
   const ouvert = document.querySelector('#onglets button.actif');
   if (ouvert && ouvert.hidden) vue('station');
 }).catch(() => {});
-if (['station', 'carnet', 'agenda', 'carres', 'frise', 'sked', 'qo100', 'datv', 'sdr', 'sondes', 'meteor', 'son', 'sstv', 'aprs', 'ft8', 'reglages'].includes(location.hash.slice(1))) vue(location.hash.slice(1));
+if (document.querySelector('#onglets button[data-v="' + location.hash.slice(1).replace(/[^a-z0-9]/g, '') + '"]')) vue(location.hash.slice(1));
 else try { const n = localStorage.getItem('vue'); if (n) vue(n); } catch (x) {}
 tic(); chargeListe(); chargePorts(); chargeSatellites();
 setInterval(chargeSatellites, 600000);
