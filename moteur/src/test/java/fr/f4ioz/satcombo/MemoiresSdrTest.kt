@@ -88,6 +88,68 @@ class MemoiresSdrTest {
     }
 
     @Test
+    fun un_fichier_de_version_1_range_chaque_memoire_dans_le_dossier_de_son_etiquette() {
+        val v1 = """{"format":"satme-memoires-sdr","version":1,"memoires":[
+            {"id":"a","nom":"ISS","hz":145800000,"mode":"NFM","largeur":0,"etiquette":"Satellites FM","couleur":""},
+            {"id":"b","nom":"Rien","hz":145500000,"mode":"","largeur":0,"etiquette":"","couleur":""}]}"""
+        val l = MemoiresSdr.nettoie(MemoiresSdr.lit(v1))
+        assertEquals("Satellites FM", l.first { it.id == "a" }.dossier)
+        assertEquals("Satellites FM", l.first { it.id == "a" }.etiquette)
+        assertEquals("", l.first { it.id == "b" }.dossier)
+        assertTrue(MemoiresSdr.litDossiers(v1).isEmpty())
+        // Written again in version 2, read back as it is (a folder left empty by hand kept).
+        val v2 = MemoiresSdr.ecrit(l, listOf("Relais")).toString()
+        assertEquals(l, MemoiresSdr.lit(v2))
+        assertEquals(listOf("Relais"), MemoiresSdr.litDossiers(v2))
+    }
+
+    @Test
+    fun les_dossiers_un_niveau_de_sous_dossiers() {
+        assertEquals("Satellites FM/ISS", MemoiresSdr.dossier(" Satellites FM / ISS / phonie "))
+        val l = MemoiresSdr.nettoie(listOf(iss.copy(dossier = "Satellites FM/ISS"), so50.copy(dossier = "Satellites FM"), balise.copy(dossier = "QO-100")))
+        assertEquals(listOf("Balises", "QO-100", "Satellites FM", "Satellites FM/ISS"), MemoiresSdr.dossiers(l, listOf("Balises")))
+        // Renamed: the sub-folder and its memories follow.
+        val (r, c) = MemoiresSdr.renommeDossier(l, listOf("Satellites FM/ISS"), "Satellites FM", "Sat FM")
+        assertEquals("Sat FM/ISS", r.first { it.id == "a" }.dossier)
+        assertEquals("Sat FM", r.first { it.id == "b" }.dossier)
+        assertEquals(listOf("Sat FM/ISS"), c)
+        // Removed: its memories to the parent folder, none lost.
+        val (s, c2) = MemoiresSdr.supprimeDossier(r, c, "Sat FM/ISS")
+        assertEquals(3, s.size)
+        assertEquals("Sat FM", s.first { it.id == "a" }.dossier)
+        assertTrue(c2.isEmpty())
+        val (s2, _) = MemoiresSdr.supprimeDossier(s, emptyList(), "Sat FM")
+        assertEquals("", s2.first { it.id == "a" }.dossier)
+        assertEquals("QO-100", s2.first { it.id == "c" }.dossier)
+        // Moved.
+        assertEquals("Balises", MemoiresSdr.deplace(l, setOf("c"), "Balises").first { it.id == "c" }.dossier)
+    }
+
+    @Test
+    fun trier_chercher_et_garder_la_date_et_la_tonalite() {
+        var l = MemoiresSdr.nettoie(listOf(iss, so50, balise))
+        l = MemoiresSdr.pose(l, Memoire("", "Relais F5ZXX", 145_712_500L, "NFM", ctcssHz = 123.04), maintenantMs = 5_000L)
+        val r = l.first { it.nom == "Relais F5ZXX" }
+        assertEquals(123.0, r.ctcssHz, 0.0)
+        assertEquals(5_000L, r.creeMs)
+        // Edited: its date stays.
+        l = MemoiresSdr.pose(l, r.copy(nom = "Relais", creeMs = 0L), maintenantMs = 9_000L)
+        assertEquals(5_000L, l.first { it.id == r.id }.creeMs)
+        assertEquals(0.0, MemoiresSdr.ctcss(30.0), 0.0)
+        assertEquals(listOf("Balise médiane", "ISS", "Relais", "SO-50"), MemoiresSdr.trie(l, MemoiresSdr.Tri.NOM).map { it.nom })
+        assertEquals(listOf("SO-50", "Relais", "ISS", "Balise médiane"), MemoiresSdr.trie(l, MemoiresSdr.Tri.NOM, inverse = true).map { it.nom })
+        assertEquals(listOf("Relais", "ISS", "SO-50", "Balise médiane"), MemoiresSdr.trie(l, MemoiresSdr.Tri.FREQUENCE).map { it.nom })
+        assertEquals("Balise médiane", MemoiresSdr.trie(l, MemoiresSdr.Tri.BANDE).last().nom)
+        assertEquals("Relais", MemoiresSdr.trie(l, MemoiresSdr.Tri.DATE).last().nom)
+        assertEquals(listOf("ISS"), MemoiresSdr.cherche(l, "145,8").map { it.nom })
+        assertEquals(listOf("SO-50"), MemoiresSdr.cherche(l, "so-5").map { it.nom })
+        assertEquals(2, MemoiresSdr.cherche(l, "satellites").size)
+        // The lockout is kept through the file.
+        val p = MemoiresSdr.lit(MemoiresSdr.ecrit(listOf(iss.copy(passe = true))).toString()).single()
+        assertTrue(p.passe)
+    }
+
+    @Test
     fun le_plan_couvre_les_bandes_satellites() {
         val p = PlanBandes.defaut()
         assertEquals(listOf("2m", "70cm", "23cm", "13cm", "3cm", "qo100"), PlanBandes.bandes(p))

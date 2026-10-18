@@ -446,6 +446,23 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
     /** The last spectrum: dB per bin from −88.2 to +88.2 kHz around the PLL. */
     @Volatile var spectre: FloatArray? = null; private set
     @Volatile var trames = 0L; private set
+    /** The PLL the last spectrum was taken with. */
+    @Volatile var spectrePllHz = 0L; private set
+    /** The squelch open on the last block (always open when it is off). */
+    @Volatile var squelchOuvert = false; private set
+
+    /** The sky frequency in the middle of a spectrum taken with the PLL at [pll] (the generator's, a recording's own). */
+    fun cielDePll(pll: Long): Long = generateur?.let { centreGenerateurHz } ?: lecture?.capture()?.frequenceHz ?: station.depuisCle(pll)
+
+    /** −1 when an inverting converter turns the spectrum over at [cielHz] (sky above, bins below). */
+    fun sensSpectre(cielHz: Long): Int {
+        if (fictif) return 1
+        val c = station.convRx()
+        return if (c.configure && c.inverseur && c.couvre(cielHz)) -1 else 1
+    }
+
+    /** QO-100's tab holds the receiver (its frequency, its mode). */
+    val surQo100: Boolean get() = pourQo100()
 
     /**
      * The dongle on the satellite (or QO-100, or the manual frequency).
@@ -584,7 +601,19 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
     private fun pourQo100(): Boolean = station.qo100.etat.value.aLaCle
 
     /** The mode to demodulate: chosen, or the transmitter's. */
-    private fun mode(): RxMode = when (val m = modeChoisi) {
+    /**
+     * A tuning held in memory only, over the kept one (the scan's steps):
+     * sky frequency, mode ("": the chosen one), width (−1: the chosen one).
+     * Never written to the settings — a scan writes nothing several times a
+     * second, and a scan step is never the frequency found at the next start.
+     */
+    data class AccordPassager(val hz: Long, val mode: String = "", val largeurHz: Int = -1)
+    @Volatile var passager: AccordPassager? = null
+
+    /** The width demodulated now (the transient tuning's, else the chosen one). */
+    private fun largeur(): Int = passager?.largeurHz?.takeIf { it >= 0 } ?: settings.sdrBandwidthHz
+
+    private fun mode(): RxMode = passager?.mode?.takeIf { it.isNotEmpty() }?.let { m -> runCatching { RxMode.valueOf(m) }.getOrNull() } ?: when (val m = modeChoisi) {
         "AUTO" -> if (pourQo100()) RxMode.USB else modeDe(station.ecouteSdr()?.mode.orEmpty())
         else -> runCatching { RxMode.valueOf(m) }.getOrDefault(RxMode.NFM)
     }
@@ -613,7 +642,7 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
 
     /** The Doppler loop: where the dongle should be now. */
     private fun cibleMaintenant() {
-        ecouteCw = settings.sdrBandwidthHz in 1..1_000 ||
+        ecouteCw = largeur() in 1..1_000 ||
             (if (pourQo100()) settings.qo100ModeCarnet == "CW" else station.ecouteSdr()?.mode.orEmpty().uppercase().contains("CW"))
         // A recording: its own frequency (and its Doppler's software share as heard); the generator: its centre.
         lecture?.let { l ->
@@ -641,10 +670,11 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
             _etat.update { it.copy(cielHz = ciel, reposHz = ciel, satellite = "QO-100") }
             return
         }
-        val e = if (suitSatellite) station.ecouteSdr() else null
+        val pas = passager
+        val e = if (suitSatellite && pas == null) station.ecouteSdr() else null
         val (repos, ciel) = if (e != null) {
             if (settings.sdrDopplerTrack) e.reposHz to e.cibleHz else e.reposHz to e.reposHz
-        } else manuelleHz to manuelleHz
+        } else (pas?.hz ?: manuelleHz).let { it to it }
         voulueHz = station.versCle(ciel)
         _etat.update { it.copy(cielHz = ciel, reposHz = repos, satellite = e?.satellite.orEmpty()) }
     }
@@ -693,7 +723,7 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
                 // no de-emphasis — it rounds the edges and nothing decodes.
                 val m = if (sonde) RxMode.NFM else mode()
                 if (chaine.mode != m) { chaine.mode = m; chaine.reset() }
-                val bw = (if (sonde) fr.f4ioz.satcombo.sonde.SondeModel.bandwidthFor(settings.sondeModel) else settings.sdrBandwidthHz).toDouble()
+                val bw = (if (sonde) fr.f4ioz.satcombo.sonde.SondeModel.bandwidthFor(settings.sondeModel) else largeur()).toDouble()
                 if (chaine.bandwidthHz != bw) chaine.bandwidthHz = bw
                 val sq = if (sonde) -200f else settings.sdrSquelchDb.toFloat()
                 if (chaine.squelch.thresholdDb != sq) chaine.squelch.thresholdDb = sq
@@ -738,6 +768,7 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
                 val produit = if (iq16 != null) chaine.process16(iq16, n, pcm, feedSpectrum = veutSpectre, feedPanorama = veutPano)
                     else chaine.process(iq, n, pcm, feedSpectrum = veutSpectre, feedPanorama = veutPano)
                 if (veutSpectre) dernierSpectre = maintenant
+                squelchOuvert = chaine.squelch.open
                 // A channel heard in place of the main receiver; its decoders fed by the channels, not by it.
                 val ecoute = if (cibles.isNotEmpty()) cp0?.prendEcoute() else null
                 val canauxSstv = cibles.isNotEmpty() && cp0?.tientSstv() == true
@@ -750,7 +781,7 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
                 }
                 if (chaine.spectrum.frames != trameVue) {
                     trameVue = chaine.spectrum.frames
-                    spectre = chaine.spectrum.magDb.copyOf(); trames++
+                    spectrePllHz = pll; spectre = chaine.spectrum.magDb.copyOf(); trames++
                     // The sonde: the centre of gravity of what stands above the noise, ±25 kHz
                     // around the tuning; nothing found (silence): the tuning stays.
                     if (sonde && (recentreVoulu || (recentreAuto && maintenant - dernierRecentre >= 2_000L))) {

@@ -734,6 +734,44 @@ ${STYLE_JETONS}
   .mem-f { font-family:var(--mono); font-variant-numeric:tabular-nums; color:var(--texte-2); }
   .mem-e { padding:0 6px; }
   .mem-edit { padding:8px; border:1px solid var(--ligne); border-radius:var(--r1); margin-bottom:6px; }
+  /* Memories in folders, the scan, the band stack */
+  #mem-pop { width:min(620px,calc(100vw - 16px)); } #bal-pop { width:min(560px,calc(100vw - 16px)); }
+  #mem-pop .mem-liste { max-height:330px; }
+  .mem-d { display:flex; align-items:center; gap:6px; padding:5px 8px 3px; border-top:1px solid var(--ligne); font-size:var(--fs-xs); font-weight:700;
+    letter-spacing:.6px; text-transform:uppercase; color:var(--texte-2); cursor:pointer; user-select:none; }
+  .mem-d:first-child { border-top:none; }
+  .mem-d.sous { padding-left:24px; }
+  .mem-d .n { font-weight:500; letter-spacing:0; text-transform:none; color:var(--texte-3); }
+  .mem-d .h-esp { flex:1; }
+  .mem-d button { padding:0 5px; font-size:11px; line-height:1.4; opacity:.55; }
+  .mem-d:hover button, .mem-d button:focus-visible { opacity:1; }
+  .mem-d.cible, .mem-liste.cible { background:rgba(63,224,200,.14); outline:1px dashed var(--rx); outline-offset:-1px; }
+  .mem-l.n1 { padding-left:18px; } .mem-l.n2 { padding-left:34px; }
+  .mem-l[draggable="true"] { cursor:grab; }
+  .mem-l.passee b { text-decoration:line-through; color:var(--texte-3); }
+  .mem-l .ct { font-size:10px; padding:0 4px; border:1px solid var(--ligne-forte); border-radius:3px; color:var(--texte-2); }
+  .mem-l .mem-p { padding:0 5px; color:var(--texte-3); }
+  .mem-l .mem-p[aria-pressed="true"] { color:var(--warn); }
+  .mem-l .chemin { font-size:10px; color:var(--texte-3); max-width:120px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .mem-ie { display:grid; grid-template-columns:minmax(0,1.3fr) 96px 66px 74px 56px minmax(0,1fr) auto; gap:4px; align-items:center; padding:4px 8px; background:var(--s3); }
+  .mem-ie input, .mem-ie select { min-width:0; padding:2px 4px; font-size:var(--fs-s); }
+  .mem-ie button { padding:1px 6px; }
+  .r-bandes { margin-left:auto; display:inline-flex; gap:3px; align-self:center; }
+  .r-bandes button { padding:2px 7px 1px; font-size:var(--fs-xs); line-height:1.25; display:inline-flex; flex-direction:column; align-items:center; gap:1px; min-width:44px; }
+  .r-bandes button.ici { border-color:var(--rx); color:var(--rx); }
+  .r-bandes button i { display:flex; gap:2px; height:4px; }
+  .r-bandes button i b { width:4px; height:4px; border-radius:50%; background:var(--texte-3); }
+  .r-bandes button i b.c { background:var(--rx); }
+  .bal-touches { max-height:210px; }
+  .bal-t { display:grid; grid-template-columns:62px 106px minmax(0,1fr) 58px auto; gap:6px; align-items:center; padding:3px 8px; cursor:pointer; }
+  .bal-t:hover { background:rgba(63,224,200,.08); }
+  .bal-t .mono { font-family:var(--mono); font-variant-numeric:tabular-nums; }
+  .bal-t.prio b { color:var(--warn); }
+  .bal-t button { padding:0 6px; font-size:11px; }
+  .bal-point { background:var(--rx); animation:balPulse 1.2s ease-in-out infinite; }
+  @keyframes balPulse { 50% { opacity:.35; } }
+  @media (prefers-reduced-motion: reduce) { .bal-point { animation:none; } }
+  #bal-pop[data-g="MEMOIRES"] .bal-p, #bal-pop:not([data-g="MEMOIRES"]) .bal-m { display:none; }
   .rq-lecture { margin-top:4px; padding:4px 6px; border:1px solid var(--ligne); border-radius:var(--r1); background:var(--creux); }
   .rq-lecture .mono, .rq-liste .mono { font-family:var(--mono); font-variant-numeric:tabular-nums; }
   .badge-hors { display:inline-block; padding:0 5px; border-radius:4px; font-weight:600; color:var(--danger); border:1px solid var(--danger); }
@@ -1415,8 +1453,12 @@ ${rail()}
 </div>
 <div id="mem-pop" class="sp-pop" hidden role="dialog" aria-label="Mémoires du récepteur">
   <div class="t sp-pop-t">Mémoires du récepteur<span class="h-esp"></span><button type="button" class="discret" onclick="g('mem-pop').hidden = true" aria-label="Fermer">✕</button></div>
-  <div class="sp-l"><select id="mem-filtre" title="Étiquette" style="flex:1"></select><button type="button" onclick="memEdite('')" title="La fréquence écoutée">＋ Ici</button>
-    <button type="button" onclick="g('mem-fichier').click()" title="Ajouter les mémoires d'un fichier JSON">Importer</button><a class="bouton-lien" href="api/memoires-sdr/export" download title="Toutes les mémoires dans un fichier JSON">Exporter</a>
+  <div class="sp-l"><input id="mem-cherche" type="search" placeholder="Chercher : nom, dossier, 145,8…" style="flex:1;min-width:150px" aria-label="Chercher une mémoire">
+    <select id="mem-tri" title="Trier" style="flex:none"><option value="FREQUENCE">fréquence</option><option value="NOM">nom</option><option value="BANDE">bande</option><option value="DATE">date</option></select>
+    <button type="button" id="mem-tri-inv" onclick="memTriInverse()" title="Inverser l'ordre" aria-pressed="false" style="padding:2px 8px">↑</button></div>
+  <div class="sp-l" style="margin-top:6px"><select id="mem-filtre" title="Le dossier (ou l'étiquette) montré" style="flex:1;min-width:120px"></select><button type="button" onclick="memEdite('')" title="La fréquence écoutée">＋ Ici</button>
+    <button type="button" id="mem-b-dossier" onclick="memNouveauDossier()" title="Un nouveau dossier (« Satellites FM/ISS » : un sous-dossier)">＋ Dossier</button>
+    <button type="button" onclick="g('mem-fichier').click()" title="Ajouter les mémoires d'un fichier JSON">Importer</button><a class="bouton-lien" href="api/memoires-sdr/export" download title="Toutes les mémoires et leurs dossiers dans un fichier JSON">Exporter</a>
     <input type="file" id="mem-fichier" accept=".json,application/json" hidden></div>
   <div id="mem-liste" class="mem-liste"></div>
   <div id="mem-edit" class="mem-edit" hidden>
@@ -1426,15 +1468,39 @@ ${rail()}
       <span>Fréquence</span><span class="sp-l"><input id="mem-mhz" placeholder="145,800" style="width:120px"><span class="petit">MHz (ciel)</span></span>
       <span>Mode</span><span class="sp-l"><select id="mem-mode"><option value="">celui du récepteur</option><option>NFM</option><option>USB</option><option>LSB</option><option>CW</option><option>AM</option></select>
         <select id="mem-bw" title="Largeur de réception"><option value="0">largeur du mode</option><option value="500">0,5 kHz</option><option value="2400">2,4 kHz</option><option value="3000">3 kHz</option><option value="6000">6 kHz</option><option value="12000">12 kHz</option><option value="16000">16 kHz</option><option value="20000">20 kHz</option></select></span>
+      <span>CTCSS</span><span class="sp-l"><input id="mem-ctcss" placeholder="aucune" style="width:80px" inputmode="decimal"><span class="petit">Hz (relais FM, gardée seulement)</span></span>
+      <span>Dossier</span><input id="mem-dossier" list="mem-doss-l" maxlength="81" placeholder="Satellites FM/ISS">
       <span>Étiquette</span><input id="mem-etiquette" list="mem-etiq" maxlength="40" placeholder="Satellites FM">
       <span>Couleur</span><span class="sp-l"><input type="color" id="mem-couleur" style="width:44px;padding:0 2px" oninput="g('mem-coul-auto').checked = false"><label class="petit"><input type="checkbox" id="mem-coul-auto"> celle de l'étiquette</label></span>
     </div>
-    <datalist id="mem-etiq"></datalist>
+    <datalist id="mem-etiq"></datalist><datalist id="mem-doss-l"></datalist>
     <div class="sp-l" style="margin-top:6px"><button type="button" class="primaire" onclick="memGarde()">Enregistrer</button><button type="button" onclick="g('mem-edit').hidden = true">Annuler</button>
       <button type="button" id="mem-suppr" class="discret" style="margin-left:auto;color:var(--rose)" onclick="memSupprime()">Supprimer</button></div>
   </div>
-  <div class="petit" id="mem-msg"></div>
-  <div class="aide">Un clic sur une mémoire y accorde le récepteur (réception seulement) : dans la vue, par le décalage ; au-delà, le récepteur y va et ne suit plus le satellite. Les drapeaux du spectre se cliquent aussi (clic droit : modifier). Gardées par SatMe-PC (memoires-sdr.json) ; l'export JSON se réimporte ici ou sur un autre PC sans doublons.</div>
+  <div class="sp-l"><span class="petit" id="mem-msg" style="flex:1"></span><a href="#" class="petit" onclick="event.preventDefault(); g('mem-pop').hidden = true; memVersProfils()" title="Garder et remettre tous les réglages de réception d'une fonction : Station › Montage › Profils">Profils de station…</a></div>
+  <div class="aide">Un clic sur une mémoire y accorde le récepteur (réception seulement) : dans la vue, par le décalage ; au-delà, le récepteur y va et ne suit plus le satellite. ✎ la modifie sur sa ligne (nom, fréquence, mode, largeur, tonalité CTCSS, dossier) ; glisser une mémoire sur un dossier l'y range. Un dossier supprimé rend ses mémoires au dossier du dessus ; ▶ balaie ses mémoires ; ⊘ : passée par le balayage. Les drapeaux du spectre se cliquent aussi (clic droit : modifier). Gardées par SatMe-PC (memoires-sdr.json) ; l'export JSON se réimporte ici ou sur un autre PC sans doublons ; un ancien fichier range chaque mémoire dans le dossier de son étiquette.</div>
+</div>
+<div id="bal-pop" class="sp-pop" hidden role="dialog" aria-label="Balayage du récepteur">
+  <div class="t sp-pop-t">Balayage<span class="pastille coupe" id="bal-etat">arrêté</span><span class="h-esp"></span><button type="button" class="discret" onclick="g('bal-pop').hidden = true" aria-label="Fermer">✕</button></div>
+  <div class="niv-seg" role="group" aria-label="Que balayer" id="bal-genres"><button type="button" data-g="MEMOIRES">Mémoires</button><button type="button" data-g="PLAGE">Plage, canal par canal</button><button type="button" data-g="SPECTRE">Plage, par le spectre</button></div>
+  <div class="sp-g" style="margin-top:8px">
+    <span class="bal-m">Dossier</span><select id="bal-dossier" class="bal-m"></select>
+    <span class="bal-p">De … à</span><span class="sp-l bal-p"><input id="bal-debut" placeholder="144,000" style="width:96px" inputmode="decimal"><span>à</span><input id="bal-fin" placeholder="146,000" style="width:96px" inputmode="decimal"><span class="petit">MHz</span><button type="button" class="discret" onclick="balIci()" title="La plage autour de la fréquence écoutée">ici</button></span>
+    <span class="bal-p">Pas, mode</span><span class="sp-l bal-p"><select id="bal-pas"><option value="5000">5 kHz</option><option value="6250">6,25 kHz</option><option value="8333.333">8,33 kHz</option><option value="10000">10 kHz</option><option value="12500" selected>12,5 kHz</option><option value="25000">25 kHz</option></select>
+      <select id="bal-mode"><option value="NFM">NFM</option><option value="AM">AM</option><option value="USB">USB</option><option value="LSB">LSB</option><option value="">celui du récepteur</option></select></span>
+    <span>S'arrêter</span><span class="sp-l"><select id="bal-critere"><option value="NIVEAU">niveau au-dessus du bruit</option><option value="SQUELCH">silencieux ouvert</option></select><input id="bal-seuil" value="12" style="width:52px" inputmode="decimal" title="dB au-dessus du bruit"><span class="petit">dB</span></span>
+    <span>Repartir</span><span class="sp-l"><select id="bal-reprise"><option value="PORTEUSE">quand le signal tombe</option><option value="TEMPS">au bout de</option><option value="MANUELLE">à la main</option></select><input id="bal-temps" value="2" style="width:52px" inputmode="decimal"><span class="petit">s</span></span>
+    <span>Priorité</span><span class="sp-l"><select id="bal-prio" style="max-width:190px"><option value="">aucune</option></select><span class="petit">toutes les</span><input id="bal-prio-s" value="5" style="width:44px" inputmode="decimal"><span class="petit">s</span></span>
+    <span>À l'arrêt</span><select id="bal-retour" title="Où laisser le récepteur quand le balayage s'arrête"><option value="reste">rester sur le dernier signal (sinon revenir)</option><option value="avant">revenir à la fréquence d'avant</option></select>
+  </div>
+  <div class="sp-l" style="margin-top:8px"><button type="button" class="primaire" id="bal-go" onclick="balDemarre()">Balayer</button><button type="button" class="arret" id="bal-stop" onclick="balPost('arreter')" hidden>Arrêter</button>
+    <button type="button" id="bal-reprend" onclick="balPost('reprendre')" hidden title="Repartir tout de suite">Reprendre</button><button type="button" id="bal-passe" onclick="balPasse()" hidden title="Ne plus jamais s'arrêter ici (verrouillage)">Passer</button>
+    <span class="petit mono" id="bal-ici" style="margin-left:auto"></span></div>
+  <div class="petit" id="bal-msg"></div>
+  <div class="sp-st">Signaux trouvés</div>
+  <div id="bal-touches" class="mem-liste bal-touches"></div>
+  <div class="sp-l"><span class="petit" id="bal-passes" style="flex:1"></span></div>
+  <div class="aide">Réception seulement : SatMe-PC fait tourner le balayage lui-même (la page peut se fermer ; « Arrêter », ou la puce « Balayage » de la barre d'état, l'arrête), en déplaçant le décalage d'écoute dans la bande que voit le récepteur, ou son oscillateur au-delà. <b>Mémoires</b> : celles d'un dossier, l'une après l'autre. <b>Plage, canal par canal</b> : chaque canal de la grille écouté (le silencieux peut servir). <b>Plage, par le spectre</b> : toute la bande que voit le récepteur jugée d'un coup sur son spectre, puis la suivante — bien plus rapide sur un récepteur large. Le niveau se compte au-dessus du bruit (la médiane du spectre). Un clic sur un signal trouvé y accorde le récepteur et arrête le balayage ; « Garder » le met en mémoire (dossier « Balayage ») ; « Passer » le verrouille. Refusé quand la DATV, l'ADS-B, QO-100 ou une sonde tient le récepteur ; le générateur d'essai et un enregistrement servent à l'essayer. Pendant le balayage, rien n'est écrit dans les réglages ; à l'arrêt, la fréquence où il s'est arrêté est gardée une fois — ou celle d'avant est rendue, au choix (et toujours quand rien n'a été trouvé).</div>
 </div>
 <div id="niv-pop" class="sp-pop" hidden role="dialog" aria-label="Niveau dans le temps, bruit solaire, balise">
   <div class="t sp-pop-t"><span>Mesures du récepteur</span><span class="h-esp"></span><button type="button" class="discret" onclick="g('niv-pop').hidden = true" aria-label="Fermer">✕</button></div>
@@ -2739,7 +2805,8 @@ ${rail()}
     <div id="ph-slot-sdr"></div>
   </div>
   <div class="carte r-droite">
-    <div class="paire"><span class="o-freq" id="r-freq">—</span><span class="petit" id="r-detail"></span></div>
+    <div class="paire"><span class="o-freq" id="r-freq">—</span><span class="petit" id="r-detail"></span>
+      <span class="r-bandes" id="r-bandes" role="group" aria-label="Bandes : chaque appui rappelle l'une des trois dernières fréquences écoutées sur la bande" hidden></span></div>
     <div class="ligne rq-lecture" id="r-lecture" hidden role="group" aria-label="Lecture de l'enregistrement">
       <button id="r-lec-pause" onclick="lecRegle('pause=' + (R && R.lecture && R.lecture.pause ? 0 : 1))" title="Lecture / pause">⏸</button>
       <span class="petit mono" id="r-lec-t">0:00</span>
@@ -2759,6 +2826,7 @@ ${rail()}
       <button class="sp-b" id="sp-b-aff" onclick="affOuvre(this, 'sdr')" title="Affichage : moyenne, crêtes, niveaux, palette de la cascade, molette, repères">${IconesPc.svg("tune")}<span>Affichage</span></button>
       <button class="sp-b" id="sp-b-mem" onclick="memOuvre(this, 'sdr')" title="Les mémoires du récepteur (nom, fréquence, mode, étiquette)">${IconesPc.svg("save")}<span>Mémoires</span></button>
       <button class="sp-b" id="sp-b-ici" onclick="memAjouteIci(this, 'sdr')" title="Mémoriser la fréquence écoutée" aria-label="Mémoriser la fréquence écoutée">＋</button>
+      <button class="sp-b" id="sp-b-bal" onclick="balOuvre(this)" title="Balayage : mémoires d'un dossier ou plage de fréquences, en réception seulement">${IconesPc.svg("search")}<span>Balayage</span><i class="rq-point bal-point" id="bal-point" hidden></i></button>
       <button class="sp-b" id="sp-b-niv" onclick="nivOuvre(this, 'sdr')" title="Niveau dans le temps, bruit solaire (Y), pointage">${IconesPc.svg("timeline")}<span>Mesures</span></button>
       <button class="sp-b" id="sp-b-iq" onclick="rqOuvre(this)" title="I/Q : remonter le temps (les dernières minutes gardées), enregistrer, rejouer">${IconesPc.svg("history")}<span>I/Q</span><i class="rq-point" id="rq-point" hidden></i></button>
       <button class="sp-b" id="sp-b-crete" hidden onclick="spRaz()" title="Effacer les crêtes et les minimums tenus">⟲ crêtes</button>
@@ -3383,6 +3451,7 @@ ${rail()}
   <button id="sb-cat" class="sb-i" onclick="vue('reglages'); montreReglages('materiel')" title="Le poste (Réglages › Poste et rotor)"><i></i><span>Poste</span><b id="sb-cat-t">—</b></button>
   <button id="sb-rot" class="sb-i" onclick="vue('reglages'); montreReglages('materiel')" title="Le rotor (Réglages › Poste et rotor)"><i></i><span>Rotor</span><b id="sb-rot-t">—</b></button>
   <button id="sb-rec" class="sb-i" hidden onclick="vue('son')" title="Un enregistrement est en cours (onglet Son)"><i></i><b id="sb-rec-t"></b></button>
+  <button id="sb-bal" class="sb-i" hidden onclick="vue('sdr'); balOuvre(g('sp-b-bal'))" title="Le récepteur balaie (onglet SDR, Balayage) : cliquer pour le voir ou l'arrêter"><i></i><span>Balayage</span><b id="sb-bal-t"></b></button>
   <button id="sb-tel" class="sb-i" onclick="vue('reglages'); montreReglages('interfaces')" title="Le lien WebSocket (téléphone, logiciels de suivi) : Réglages › Interfaces"><i></i><span>Lien</span><b id="sb-tel-t">—</b></button>
   <button id="sb-rig" class="sb-i" hidden onclick="vue('reglages'); montreReglages('interfaces')" title="La fréquence donnée aux logiciels de carnet (rigctld) : Réglages › Interfaces"><i></i><span>Carnets</span><b id="sb-rig-t">—</b></button>
   <span class="h-esp"></span>
@@ -8626,12 +8695,14 @@ async function planCharge() {
 /** The finest segment holding [hz]. */
 function planA(hz) { let r = null; for (const s of PLAN) if (hz >= s.bas && hz < s.haut && (!r || s.haut - s.bas < r.haut - r.bas)) r = s; return r; }
 // The memories: kept by SatMe-PC; the phone's page has none.
-let MEM = { memoires: [], etiquettes: [] };
+let MEM = { memoires: [], etiquettes: [], dossiers: [] };
 const COUL_ETIQ = ['#FFB454', '#3FE0C8', '#B07CFF', '#5BD68A', '#FF8FD0', '#6F8CFF', '#FFD166', '#E86F6F'];
 function memCouleur(m) {
   if (m.couleur) return m.couleur;
-  let h = 0; for (const c of m.etiquette || '') h = (h * 31 + c.charCodeAt(0)) >>> 0;
-  return m.etiquette ? COUL_ETIQ[h % COUL_ETIQ.length] : '#E8F0F7';
+  // The tag's colour, else its top folder's.
+  const k = m.etiquette || (m.dossier || '').split('/')[0];
+  let h = 0; for (const c of k) h = (h * 31 + c.charCodeAt(0)) >>> 0;
+  return k ? COUL_ETIQ[h % COUL_ETIQ.length] : '#E8F0F7';
 }
 async function memCharge() {
   try { const j = await (await fetch('api/memoires-sdr')).json(); if (j.memoires) MEM = j; } catch (x) {}
@@ -8992,7 +9063,7 @@ function popPlace(p, ancre) {
 function affOuvre(ancre, ou) {
   const p = g('aff-pop');
   if (!p.hidden && p.dataset.ou === ou) { p.hidden = true; return; }
-  g('mem-pop').hidden = true; g('niv-pop').hidden = true;
+  g('mem-pop').hidden = true; g('niv-pop').hidden = true; g('bal-pop').hidden = true;
   p.dataset.ou = ou; affRend(); popPlace(p, ancre);
 }
 function affRend() {
@@ -9020,19 +9091,19 @@ g('aff-pals').addEventListener('click', ev => {
 function affDefaut() { Object.assign(AFF, AFF_DEF); affGarde(); affRend(); spRaz(); spSale(true); if (!g('v-qo100').hidden) dessineQo100(); }
 // A popover closes with a click elsewhere or Escape.
 document.addEventListener('pointerdown', ev => {
-  for (const id of ['aff-pop', 'mem-pop', 'niv-pop', 'mu-pop', 'mu-menu', 'rq-pop', 'gen-pop']) {
+  for (const id of ['aff-pop', 'mem-pop', 'niv-pop', 'mu-pop', 'mu-menu', 'rq-pop', 'gen-pop', 'bal-pop']) {
     const p = g(id);
     if (!p.hidden && !p.contains(ev.target) && !(ev.target.closest && ev.target.closest('.sp-b'))) p.hidden = true;
   }
 }, true);
-document.addEventListener('keydown', ev => { if (ev.key === 'Escape') { for (const id of ['aff-pop', 'mem-pop', 'niv-pop', 'mu-pop', 'mu-menu', 'rq-pop', 'gen-pop']) g(id).hidden = true; } });
+document.addEventListener('keydown', ev => { if (ev.key === 'Escape') { for (const id of ['aff-pop', 'mem-pop', 'niv-pop', 'mu-pop', 'mu-menu', 'rq-pop', 'gen-pop', 'bal-pop']) g(id).hidden = true; } });
 
 // ---- I/Q: « remonter le temps », the recordings and their replay; the test generator (receive only)
 let RQ = null;
 const escA = x => esc(x).replace(/"/g, '&quot;');
 function rqTaille(o) { return o >= 1073741824 ? (o / 1073741824).toLocaleString('fr-FR', { maximumFractionDigits: 1 }) + ' Go' : Math.max(0, Math.round(o / 1048576)).toLocaleString('fr-FR') + ' Mo'; }
 function rqDuree(s) { s = Math.max(0, Math.round(s || 0)); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); }
-function popsFerme(sauf) { for (const id of ['aff-pop', 'mem-pop', 'niv-pop', 'mu-pop', 'mu-menu', 'rq-pop', 'gen-pop']) if (id !== sauf) g(id).hidden = true; }
+function popsFerme(sauf) { for (const id of ['aff-pop', 'mem-pop', 'niv-pop', 'mu-pop', 'mu-menu', 'rq-pop', 'gen-pop', 'bal-pop']) if (id !== sauf) g(id).hidden = true; }
 function rqOuvre(ancre) {
   const p = g('rq-pop');
   if (!p.hidden && ancre.classList.contains('sp-b')) { p.hidden = true; return; }
@@ -9171,36 +9242,205 @@ g('gen-pop').addEventListener('click', async ev => {
 function genDefaut() { genEnvoie('defaut=1'); }
 if (window.SATME_TELEPHONE) { document.querySelectorAll('.r-fictif').forEach(o => o.remove()); g('sp-b-iq').hidden = true; }
 
-// ---- the memories: a list by tag, a form, import and export
-let memFiltre = '', memEnCours = null, memOu = 'sdr';
-try { memFiltre = localStorage.getItem('mem-filtre') || ''; } catch (x) {}
+// ---- the memories: in folders (one level of sub-folders), sorted, searched, edited on their line; import and export
+let memFiltre = '', memEnCours = null, memOu = 'sdr', memTri = 'FREQUENCE', memInv = false, memLigne = null, memReplies = {}, memTire = null;
+try {
+  memFiltre = localStorage.getItem('mem-filtre') || ''; memTri = localStorage.getItem('mem-tri') || 'FREQUENCE'; memInv = localStorage.getItem('mem-tri-inv') === '1';
+  memReplies = JSON.parse(localStorage.getItem('mem-replies') || '{}') || {};
+} catch (x) {}
 function memOuvre(ancre, ou) {
   const p = g('mem-pop');
   if (!p.hidden && p.dataset.ou === ou && ancre.classList.contains('sp-b')) { p.hidden = true; return; }
-  g('aff-pop').hidden = true; g('niv-pop').hidden = true; memOu = ou; p.dataset.ou = ou;
-  g('mem-edit').hidden = true; memRend(); popPlace(p, ancre);
+  g('aff-pop').hidden = true; g('niv-pop').hidden = true; g('bal-pop').hidden = true; memOu = ou; p.dataset.ou = ou;
+  g('mem-edit').hidden = true; memLigne = null; memRend(); popPlace(p, ancre);
+}
+const memParent = d => d.indexOf('/') < 0 ? '' : d.slice(0, d.lastIndexOf('/'));
+const memSous = (d, f) => !f || d === f || d.indexOf(f + '/') === 0;
+const memMhz = hz => hz ? (hz / 1e6).toFixed(6).replace(/0{1,2}$/, '').replace('.', ',') : '';
+/** What the list shows: ['', ''] all, ['d', folder], ['e', tag] (an older filter was a tag). */
+function memPortee() {
+  const f = memFiltre;
+  if (!f) return ['', ''];
+  if (f.indexOf('d:') === 0) return ['d', f.slice(2)];
+  return ['e', f.indexOf('e:') === 0 ? f.slice(2) : f];
+}
+const MEM_BANDES = [[144e6, 146e6], [430e6, 440e6], [1240e6, 1300e6], [2300e6, 2450e6], [10000e6, 10500e6]];
+function memRang(hz) { const i = MEM_BANDES.findIndex(b => hz >= b[0] && hz <= b[1]); return i < 0 ? 9 : i; }
+function memTrie(l) {
+  const c = { NOM: (a, b) => a.nom.localeCompare(b.nom, 'fr', { sensitivity: 'base' }), BANDE: (a, b) => memRang(a.hz) - memRang(b.hz),
+    DATE: (a, b) => (a.cree || 0) - (b.cree || 0) }[memTri] || (() => 0);
+  const r = l.slice().sort((a, b) => c(a, b) || a.hz - b.hz);
+  return memInv ? r.reverse() : r;
+}
+function memCherche(l, t) {
+  t = t.trim().toLowerCase();
+  if (!t) return l;
+  const ch = t.replace(',', '.').replace(/\s/g, ''), num = /^[0-9.]+$/.test(ch);
+  return l.filter(m => m.nom.toLowerCase().includes(t) || (m.dossier || '').toLowerCase().includes(t) || (m.etiquette || '').toLowerCase().includes(t) ||
+    (m.mode || '').toLowerCase() === t || (num && (m.hz / 1e6).toFixed(6).includes(ch)));
+}
+const MEM_BW = [[0, 'du mode'], [500, '0,5 k'], [2400, '2,4 k'], [3000, '3 k'], [6000, '6 k'], [12000, '12 k'], [16000, '16 k'], [20000, '20 k']];
+function memOptions(l, v0) { return l.map(o => '<option value="' + escA(String(o[0])) + '"' + (String(o[0]) === String(v0) ? ' selected' : '') + '>' + esc(o[1]) + '</option>').join(''); }
+/** A memory edited on its line: name, frequency, mode, width, CTCSS (FM), folder. */
+function memEditeurLigne(m, n) {
+  const bw = MEM_BW.some(b => b[0] === (m.largeur || 0)) ? MEM_BW : MEM_BW.concat([[m.largeur, (m.largeur / 1000).toLocaleString('fr-FR') + ' k']]);
+  const doss = [['', '(aucun dossier)']].concat((MEM.dossiers || []).map(d => [d, d]));
+  return '<div class="mem-ie n' + n + '" data-ie="' + escA(m.id) + '">' +
+    '<input data-k="nom" value="' + escA(m.nom) + '" maxlength="60" aria-label="Nom">' +
+    '<input data-k="mhz" value="' + memMhz(m.hz) + '" aria-label="Fréquence (MHz)" inputmode="decimal">' +
+    '<select data-k="mode" aria-label="Mode">' + memOptions([['', 'auto'], ['NFM', 'NFM'], ['USB', 'USB'], ['LSB', 'LSB'], ['CW', 'CW'], ['AM', 'AM']], m.mode || '') + '</select>' +
+    '<select data-k="largeur" aria-label="Largeur">' + memOptions(bw, m.largeur || 0) + '</select>' +
+    '<input data-k="ctcss" value="' + (m.ctcss ? String(m.ctcss).replace('.', ',') : '') + '" placeholder="CTCSS" title="Tonalité CTCSS (Hz) d’un relais FM, gardée seulement" aria-label="Tonalité CTCSS"' + (m.mode === 'NFM' || m.ctcss ? '' : ' disabled') + ' inputmode="decimal">' +
+    '<select data-k="dossier" aria-label="Déplacer vers" title="Déplacer vers">' + memOptions(doss, m.dossier || '') + '</select>' +
+    '<span style="display:flex;gap:2px"><button type="button" class="primaire" data-ok="1" title="Enregistrer (Entrée)">✓</button><button type="button" data-non="1" title="Annuler (Échap)">✕</button>' +
+    '<button type="button" data-plus="1" title="Couleur, étiquette, supprimer…">⋯</button></span></div>';
+}
+function memLigneHtml(m, n, chemin) {
+  if (memLigne === m.id) return memEditeurLigne(m, n);
+  return '<div class="mem-l n' + n + (m.passe ? ' passee' : '') + '" draggable="true" data-id="' + escA(m.id) + '" title="S’y accorder (réception) ; glisser sur un dossier pour l’y ranger">' +
+    '<i style="background:' + memCouleur(m) + '"></i><b>' + esc(m.nom) + '</b>' + (chemin && m.dossier ? '<span class="chemin">' + esc(m.dossier) + '</span>' : '') +
+    (m.ctcss ? '<span class="ct" title="Tonalité CTCSS (Hz)">' + String(m.ctcss).replace('.', ',') + '</span>' : '') +
+    '<span class="mem-f">' + mhzFr(m.hz) + '</span><span class="petit">' + esc(m.mode || '') + (m.largeur ? ' ' + (m.largeur / 1000).toLocaleString('fr-FR') + ' k' : '') + '</span>' +
+    '<button type="button" class="discret mem-p" data-p="' + escA(m.id) + '" aria-pressed="' + !!m.passe + '" title="' + (m.passe ? 'Passée par le balayage : l’y reprendre' : 'La faire passer par le balayage (verrouillage)') + '">⊘</button>' +
+    '<button type="button" class="discret mem-e" data-e="' + escA(m.id) + '" title="Modifier sur la ligne">✎</button></div>';
 }
 function memRend() {
-  const f = g('mem-filtre'), et = MEM.etiquettes || [];
-  const opts = '<option value="">toutes (' + MEM.memoires.length + ')</option>' + et.map(e => '<option' + (e === memFiltre ? ' selected' : '') + '>' + esc(e) + '</option>').join('');
+  const f = g('mem-filtre'), et = MEM.etiquettes || [], ds = MEM.dossiers || [];
+  const nb = d => MEM.memoires.filter(m => memSous(m.dossier || '', d)).length;
+  const opts = '<option value="">tous les dossiers (' + MEM.memoires.length + ')</option>' +
+    ds.map(d => '<option value="d:' + escA(d) + '">' + (d.indexOf('/') >= 0 ? '   ' + esc(d.slice(d.lastIndexOf('/') + 1)) : esc(d)) + ' (' + nb(d) + ')</option>').join('') +
+    (et.length ? '<optgroup label="Étiquettes">' + et.map(e => '<option value="e:' + escA(e) + '">' + esc(e) + '</option>').join('') + '</optgroup>' : '');
   if (f.dataset.vu !== opts) { f.dataset.vu = opts; f.innerHTML = opts; }
-  f.value = et.includes(memFiltre) ? memFiltre : '';
-  g('mem-etiq').innerHTML = et.map(e => '<option value="' + esc(e) + '">').join('');
-  const l = MEM.memoires.filter(m => !f.value || m.etiquette === f.value).sort((a, b) => (a.etiquette || '\uffff').localeCompare(b.etiquette || '\uffff', 'fr') || a.hz - b.hz);
-  let avant = null;
-  g('mem-liste').innerHTML = l.map(m => {
-    const tete = !f.value && m.etiquette !== avant ? '<div class="mem-g">' + esc(m.etiquette || 'sans étiquette') + '</div>' : ''; avant = m.etiquette;
-    return tete + '<div class="mem-l" data-id="' + esc(m.id) + '" title="S’y accorder (réception)"><i style="background:' + memCouleur(m) + '"></i><b>' + esc(m.nom) + '</b>' +
-      '<span class="mem-f">' + mhzFr(m.hz) + '</span><span class="petit">' + esc(m.mode || '') + (m.largeur ? ' ' + (m.largeur / 1000).toLocaleString('fr-FR') + ' k' : '') + '</span>' +
-      '<button type="button" class="discret mem-e" data-e="' + esc(m.id) + '" title="Modifier">✎</button></div>';
-  }).join('') || '<div class="petit" style="padding:8px">' + (window.SATME_TELEPHONE ? 'Les mémoires du récepteur se gardent sur SatMe-PC.' : 'Aucune mémoire : « ＋ Ici » garde la fréquence écoutée.') + '</div>';
+  const [genre, quoi] = memPortee();
+  const ok = genre === 'd' ? ds.includes(quoi) : genre === 'e' ? et.includes(quoi) : false;
+  f.value = ok ? genre + ':' + quoi : '';
+  g('mem-etiq').innerHTML = et.map(e => '<option value="' + escA(e) + '">').join('');
+  g('mem-doss-l').innerHTML = ds.map(d => '<option value="' + escA(d) + '">').join('');
+  g('mem-tri').value = memTri; g('mem-tri-inv').textContent = memInv ? '↓' : '↑'; g('mem-tri-inv').setAttribute('aria-pressed', memInv);
+  const liste = g('mem-liste'), q = v('mem-cherche');
+  let l = MEM.memoires;
+  if (ok && genre === 'e') l = l.filter(m => m.etiquette === quoi);
+  if (ok && genre === 'd') l = l.filter(m => memSous(m.dossier || '', quoi));
+  if (!MEM.memoires.length && !ds.length) {
+    liste.innerHTML = '<div class="petit" style="padding:8px">' + (window.SATME_TELEPHONE ? 'Les mémoires du récepteur se gardent sur SatMe-PC.' : 'Aucune mémoire : « ＋ Ici » garde la fréquence écoutée.') + '</div>';
+    return;
+  }
+  // A search, or a tag: one list, each memory with its folder.
+  if (q.trim() || (ok && genre === 'e')) {
+    liste.innerHTML = memTrie(memCherche(l, q)).map(m => memLigneHtml(m, 0, true)).join('') || '<div class="petit" style="padding:8px">Aucune mémoire ne répond.</div>';
+    return;
+  }
+  const tete = (d, sous) => {
+    const replie = !!memReplies[d];
+    return '<div class="mem-d' + (sous ? ' sous' : '') + '" data-d="' + escA(d) + '" aria-expanded="' + !replie + '" title="Replier ou déplier ; y déposer une mémoire pour l’y ranger"><span aria-hidden="true">' + (replie ? '▸' : '▾') + '</span>' +
+      esc(sous ? d.slice(d.lastIndexOf('/') + 1) : d) + ' <span class="n">' + nb(d) + '</span><span class="h-esp"></span>' +
+      '<button type="button" class="discret" data-bal="' + escA(d) + '" title="Balayer les mémoires de ce dossier">▶</button>' +
+      '<button type="button" class="discret" data-ren="' + escA(d) + '" title="Renommer le dossier">✎</button>' +
+      '<button type="button" class="discret" data-sup="' + escA(d) + '" title="Supprimer le dossier (ses mémoires vont au dossier du dessus)">✕</button></div>';
+  };
+  let h = '';
+  const racines = ok && genre === 'd' ? [quoi] : ds.filter(d => d.indexOf('/') < 0);
+  for (const r of racines) {
+    const sousR = r.indexOf('/') >= 0;
+    h += tete(r, sousR);
+    if (memReplies[r]) continue;
+    h += memTrie(l.filter(m => (m.dossier || '') === r)).map(m => memLigneHtml(m, sousR ? 2 : 1)).join('');
+    for (const s of ds.filter(d => memParent(d) === r)) {
+      h += tete(s, true);
+      if (!memReplies[s]) h += memTrie(l.filter(m => m.dossier === s)).map(m => memLigneHtml(m, 2)).join('');
+    }
+  }
+  if (!(ok && genre === 'd')) {
+    const sans = l.filter(m => !m.dossier);
+    if (sans.length) h += '<div class="mem-d" data-d="" title="Y déposer une mémoire pour la sortir de son dossier"><span aria-hidden="true">▾</span>Sans dossier <span class="n">' + sans.length + '</span></div>' +
+      memTrie(sans).map(m => memLigneHtml(m, 0)).join('');
+  }
+  liste.innerHTML = h;
+  if (memLigne) { const e = liste.querySelector('.mem-ie input'); if (e) e.focus(); }
 }
 g('mem-filtre').addEventListener('change', e => { memFiltre = e.target.value; try { localStorage.setItem('mem-filtre', memFiltre); } catch (x) {} memRend(); });
+g('mem-tri').addEventListener('change', e => { memTri = e.target.value; try { localStorage.setItem('mem-tri', memTri); } catch (x) {} memRend(); });
+g('mem-cherche').addEventListener('input', () => memRend());
+function memTriInverse() { memInv = !memInv; try { localStorage.setItem('mem-tri-inv', memInv ? '1' : '0'); } catch (x) {} memRend(); }
+async function memGardeLigne(el) {
+  const m0 = MEM.memoires.find(x => x.id === el.dataset.ie); if (!m0) return;
+  const val = k => el.querySelector('[data-k="' + k + '"]').value;
+  const hz = Math.round(parseFloat(val('mhz').replace(',', '.').replace(/\s/g, '')) * 1e6);
+  if (!hz) { txt('mem-msg', 'la fréquence, en MHz (145,800)'); return; }
+  const m = Object.assign({}, m0, { nom: val('nom') || mhzFr(hz), hz: hz, mode: val('mode'), largeur: +val('largeur') || 0,
+    ctcss: parseFloat(val('ctcss').replace(',', '.')) || 0, dossier: val('dossier') });
+  memLigne = null;
+  if (!(await memEnvoie(JSON.stringify(m)))) memLigne = m0.id;
+  memRend();
+}
 g('mem-liste').addEventListener('click', ev => {
-  const e = ev.target.closest('[data-e]'); if (e) { memEdite(e.dataset.e); return; }
-  const l = ev.target.closest('.mem-l'); if (!l) return;
+  const t = ev.target, ie = t.closest('.mem-ie');
+  if (ie) {
+    if (t.closest('[data-ok]')) memGardeLigne(ie);
+    else if (t.closest('[data-non]')) { memLigne = null; memRend(); }
+    else if (t.closest('[data-plus]')) { const id = ie.dataset.ie; memLigne = null; memRend(); memEdite(id); }
+    return;
+  }
+  const b = t.closest('button');
+  if (b && b.dataset.e) { memLigne = b.dataset.e; g('mem-edit').hidden = true; memRend(); return; }
+  if (b && b.dataset.p) { const m = MEM.memoires.find(x => x.id === b.dataset.p); if (m) memEnvoie('', 'api/memoires-sdr/passe?id=' + enc(m.id) + '&on=' + (m.passe ? 0 : 1)); return; }
+  if (b && b.dataset.bal !== undefined) { balPourDossier(b.dataset.bal); return; }
+  if (b && b.dataset.ren !== undefined) { memRenomme(b.dataset.ren); return; }
+  if (b && b.dataset.sup !== undefined) { memSupprimeDossier(b.dataset.sup); return; }
+  const d = t.closest('.mem-d');
+  if (d) {
+    if (d.dataset.d) { memReplies[d.dataset.d] = !memReplies[d.dataset.d]; try { localStorage.setItem('mem-replies', JSON.stringify(memReplies)); } catch (x) {} memRend(); }
+    return;
+  }
+  const l = t.closest('.mem-l'); if (!l) return;
   const m = MEM.memoires.find(x => x.id === l.dataset.id); if (m) memAccorde(m, memOu);
 });
+g('mem-liste').addEventListener('keydown', ev => {
+  const ie = ev.target.closest && ev.target.closest('.mem-ie'); if (!ie) return;
+  if (ev.key === 'Enter') { ev.preventDefault(); memGardeLigne(ie); }
+  else if (ev.key === 'Escape') { ev.preventDefault(); ev.stopPropagation(); memLigne = null; memRend(); }
+});
+g('mem-liste').addEventListener('change', ev => {
+  const ie = ev.target.closest && ev.target.closest('.mem-ie');
+  if (ie && ev.target.dataset.k === 'mode') ie.querySelector('[data-k="ctcss"]').disabled = ev.target.value !== 'NFM';
+});
+// Drag a memory onto a folder: moved there.
+g('mem-liste').addEventListener('dragstart', ev => {
+  const l = ev.target.closest && ev.target.closest('.mem-l'); if (!l) return;
+  memTire = l.dataset.id; ev.dataTransfer.setData('text/plain', memTire); ev.dataTransfer.effectAllowed = 'move';
+});
+g('mem-liste').addEventListener('dragover', ev => {
+  const d = ev.target.closest && ev.target.closest('.mem-d'); if (!d || !memTire) return;
+  ev.preventDefault(); ev.dataTransfer.dropEffect = 'move';
+  document.querySelectorAll('#mem-liste .mem-d.cible').forEach(x => { if (x !== d) x.classList.remove('cible'); });
+  d.classList.add('cible');
+});
+g('mem-liste').addEventListener('drop', ev => {
+  const d = ev.target.closest && ev.target.closest('.mem-d'); if (!d || !memTire) return;
+  ev.preventDefault();
+  const id = memTire; memTire = null; d.classList.remove('cible');
+  memEnvoie('', 'api/memoires-sdr/deplace?ids=' + enc(id) + '&dossier=' + enc(d.dataset.d));
+});
+g('mem-liste').addEventListener('dragend', () => { memTire = null; document.querySelectorAll('#mem-liste .mem-d.cible').forEach(x => x.classList.remove('cible')); });
+async function memNouveauDossier() {
+  const [genre, quoi] = memPortee();
+  const n = prompt('Nom du nouveau dossier (« Satellites FM/ISS » : un sous-dossier)', genre === 'd' && quoi.indexOf('/') < 0 ? quoi + '/' : '');
+  if (n && n.trim() && !n.trim().endsWith('/')) memEnvoie('', 'api/memoires-sdr/dossier?action=cree&nom=' + enc(n.trim()));
+}
+async function memRenomme(d) {
+  const n = prompt('Nouveau nom du dossier « ' + d + ' »', d);
+  if (!n || !n.trim() || n.trim() === d) return;
+  if (await memEnvoie('', 'api/memoires-sdr/dossier?action=renomme&nom=' + enc(d) + '&nouveau=' + enc(n.trim())) && memFiltre === 'd:' + d) {
+    memFiltre = 'd:' + n.trim(); try { localStorage.setItem('mem-filtre', memFiltre); } catch (x) {} memRend();
+  }
+}
+async function memSupprimeDossier(d) {
+  const p = memParent(d), n = MEM.memoires.filter(m => memSous(m.dossier || '', d)).length;
+  if (!confirm('Supprimer le dossier « ' + d + ' » ?' + (n ? ' Ses ' + n + ' mémoire(s) iront ' + (p ? 'dans « ' + p + ' »' : 'hors de tout dossier') + ' : aucune n’est perdue.' : ''))) return;
+  memEnvoie('', 'api/memoires-sdr/dossier?action=supprime&nom=' + enc(d));
+}
+/** The station's profiles (all the receive settings of a function) live in Station › Montage: shown there. */
+function memVersProfils() { vue('montage'); setTimeout(() => { if (typeof mtProfils === 'function') mtProfils(true); }, 80); }
 /** Where we listen now, in the tab the memory is asked from: [hz, mode, width]. */
 function memIci() {
   if (memOu === 'qo100' && O) return [O.descente, 'USB', 2400, 'QO-100'];
@@ -9211,10 +9451,11 @@ function memIci() {
 function memEdite(id) {
   const m = id ? MEM.memoires.find(x => x.id === id) : null;
   memEnCours = m ? m.id : '';
-  const [hz, mode, bw, et] = memIci();
-  const v0 = m || { nom: '', hz: hz, mode: mode, largeur: bw, etiquette: et || (memFiltre || ''), couleur: '' };
-  g('mem-nom').value = v0.nom; g('mem-mhz').value = v0.hz ? (v0.hz / 1e6).toFixed(6).replace(/0{1,2}$/, '').replace('.', ',') : '';
+  const [hz, mode, bw, et] = memIci(), [genre, quoi] = memPortee();
+  const v0 = m || { nom: '', hz: hz, mode: mode, largeur: bw, etiquette: et || (genre === 'e' ? quoi : ''), couleur: '', dossier: et || (genre === 'd' ? quoi : ''), ctcss: 0 };
+  g('mem-nom').value = v0.nom; g('mem-mhz').value = memMhz(v0.hz);
   g('mem-mode').value = v0.mode || ''; g('mem-bw').value = String(v0.largeur || 0); g('mem-etiquette').value = v0.etiquette || '';
+  g('mem-dossier').value = v0.dossier || ''; g('mem-ctcss').value = v0.ctcss ? String(v0.ctcss).replace('.', ',') : '';
   g('mem-coul-auto').checked = !v0.couleur; g('mem-couleur').value = v0.couleur || memCouleur(v0);
   g('mem-suppr').hidden = !m; txt('mem-titre-e', m ? 'Modifier « ' + m.nom + ' »' : 'Nouvelle mémoire');
   g('mem-edit').hidden = false; txt('mem-msg', '');
@@ -9226,14 +9467,16 @@ async function memEnvoie(corps, u) {
   try {
     const j = await (await fetch(u || 'api/memoires-sdr', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: corps })).json();
     if (j.ok === false) { txt('mem-msg', j.erreur || 'refusé'); return null; }
-    MEM = j; memRend(); spSale(true); if (!g('v-qo100').hidden) dessineQo100(); return j;
+    MEM = j; memRend(); spSale(true); if (!g('v-qo100').hidden) dessineQo100(); if (!g('bal-pop').hidden) balFormRend(); return j;
   } catch (x) { txt('mem-msg', 'SatMe-PC ne répond pas'); return null; }
 }
 async function memGarde() {
   const hz = Math.round(parseFloat(v('mem-mhz').replace(',', '.').replace(/\s/g, '')) * 1e6);
   if (!hz) { txt('mem-msg', 'la fréquence, en MHz (145,800)'); return; }
+  const m0 = memEnCours ? MEM.memoires.find(x => x.id === memEnCours) : null;
   const m = { id: memEnCours || '', nom: v('mem-nom') || mhzFr(hz), hz: hz, mode: v('mem-mode'), largeur: +v('mem-bw') || 0,
-    etiquette: v('mem-etiquette'), couleur: g('mem-coul-auto').checked ? '' : g('mem-couleur').value };
+    etiquette: v('mem-etiquette'), couleur: g('mem-coul-auto').checked ? '' : g('mem-couleur').value, dossier: v('mem-dossier'),
+    ctcss: parseFloat(v('mem-ctcss').replace(',', '.')) || 0, passe: !!(m0 && m0.passe), cree: (m0 && m0.cree) || 0 };
   if (await memEnvoie(JSON.stringify(m))) g('mem-edit').hidden = true;
 }
 async function memSupprime() {
@@ -9245,6 +9488,149 @@ g('mem-fichier').addEventListener('change', async ev => {
   const j = await memEnvoie(await f.text(), 'api/memoires-sdr/import');
   if (j) txt('mem-msg', j.ajoutees + ' mémoire(s) ajoutée(s)');
 });
+
+// ---- the band stack: per band, the last three frequencies listened to (5 s at least), each press the next one (receive only)
+let PILE = null;
+async function pileCharge() {
+  if (g('v-sdr').hidden) return;
+  try { const j = await (await fetch('api/pile-bandes')).json(); PILE = j && j.ok !== false && j.bandes ? j : null; } catch (x) { return; }
+  pileRend();
+}
+function pileRend() {
+  const b = g('r-bandes');
+  b.hidden = !PILE;
+  if (!PILE) return;
+  const h = PILE.bandes.map(x => '<button type="button" data-b="' + escA(x.cle) + '"' + (x.ici ? ' class="ici"' : '') + ' title="' + escA(pileTitre(x)) + '">' + esc(x.nom) +
+    '<i aria-hidden="true">' + x.pile.map((e, k) => '<b' + (x.ici && k === x.curseur ? ' class="c"' : '') + '></b>').join('') + '</i></button>').join('');
+  if (b.dataset.vu !== h) { b.dataset.vu = h; b.innerHTML = h; }
+}
+function pileTitre(x) {
+  return x.nom + (x.pile.length ? ' : ' + x.pile.map(e => mhzFr(e.hz) + (e.mode && e.mode !== 'AUTO' ? ' ' + e.mode : '')).join(' · ') + ' — chaque appui : la suivante'
+    : x.cle === 'autre' ? ' : rien encore' : ' : rien encore (la fréquence habituelle de la bande)');
+}
+g('r-bandes').addEventListener('click', async ev => {
+  const b = ev.target.closest('[data-b]'); if (!b) return;
+  let j = null; try { j = await (await fetch('api/pile-bandes/rappel?bande=' + enc(b.dataset.b), { method: 'POST' })).json(); } catch (x) { return; }
+  if (j && j.ok === false) txt('r-erreur', j.erreur || ''); else if (j && j.bandes) { PILE = j; pileRend(); }
+  ticSdr(); balTic(true);
+});
+setInterval(pileCharge, 2000);
+
+// ---- the scan: run by SatMe-PC on the receiver (receive only); this popover only starts it, shows it, stops it
+let BALY = null, balAbsent = false, balGenre = 'PLAGE', balVu = 0;
+const BAL_CHAMPS = ['bal-dossier', 'bal-debut', 'bal-fin', 'bal-pas', 'bal-mode', 'bal-critere', 'bal-seuil', 'bal-reprise', 'bal-temps', 'bal-prio', 'bal-prio-s', 'bal-retour'];
+let balForm = {};
+try { balForm = JSON.parse(localStorage.getItem('bal-form') || '{}') || {}; if (balForm.genre) balGenre = balForm.genre; } catch (x) {}
+function balGardeForm() {
+  balForm = { genre: balGenre }; for (const id of BAL_CHAMPS) balForm[id] = v(id);
+  try { localStorage.setItem('bal-form', JSON.stringify(balForm)); } catch (x) {}
+}
+function balOuvre(ancre) {
+  const p = g('bal-pop');
+  if (!p.hidden && ancre && ancre.classList.contains('sp-b')) { p.hidden = true; return; }
+  g('aff-pop').hidden = true; g('niv-pop').hidden = true; g('mem-pop').hidden = true;
+  balFormRend();
+  for (const id of BAL_CHAMPS) if (balForm[id] !== undefined && !g(id).dataset.lu) { g(id).value = balForm[id]; g(id).dataset.lu = '1'; }
+  balRepriseRend(); balRend(); popPlace(p, ancre || g('sp-b-bal')); balTic(true);
+}
+function balFormRend() {
+  const ds = MEM.dossiers || [], et = MEM.etiquettes || [];
+  const s = g('bal-dossier'), h = '<option value="">toutes les mémoires</option>' + ds.map(d => '<option value="' + escA(d) + '">' + esc(d) + '</option>').join('') +
+    (et.length ? '<optgroup label="Étiquettes">' + et.map(e => '<option value="e:' + escA(e) + '">' + esc(e) + '</option>').join('') + '</optgroup>' : '');
+  if (s.dataset.vu !== h) { const v0 = s.value; s.dataset.vu = h; s.innerHTML = h; s.value = v0; }
+  const pr = g('bal-prio'), hp = '<option value="">aucune</option>' + MEM.memoires.map(m => '<option value="' + escA(m.id) + '">' + esc(m.nom) + ' · ' + mhzFr(m.hz) + '</option>').join('');
+  if (pr.dataset.vu !== hp) { const v0 = pr.value; pr.dataset.vu = hp; pr.innerHTML = hp; pr.value = v0; }
+  g('bal-pop').dataset.g = balGenre;
+  document.querySelectorAll('#bal-genres button').forEach(b => b.setAttribute('aria-pressed', b.dataset.g === balGenre));
+}
+g('bal-genres').addEventListener('click', ev => { const b = ev.target.closest('[data-g]'); if (!b) return; balGenre = b.dataset.g; balFormRend(); });
+function balRepriseRend() { g('bal-temps').hidden = v('bal-reprise') === 'MANUELLE'; g('bal-temps').title = v('bal-reprise') === 'TEMPS' ? 'secondes sur le signal' : 'secondes de silence avant de repartir'; }
+g('bal-reprise').addEventListener('change', balRepriseRend);
+/** The range around where we listen: 1 MHz by the spectrum, 200 kHz channel by channel. */
+function balIci() {
+  if (!R || !R.ciel) return;
+  const f = R.ciel + (R.decalage || 0), demi = balGenre === 'SPECTRE' ? 500000 : 100000, pas = balGenre === 'SPECTRE' ? 100000 : 25000;
+  g('bal-debut').value = memMhz(Math.round((f - demi) / pas) * pas); g('bal-fin').value = memMhz(Math.round((f + demi) / pas) * pas);
+}
+async function balPost(u) {
+  let j = null;
+  try { j = await (await fetch('api/balayage/' + u, { method: 'POST' })).json(); } catch (x) { txt('bal-msg', 'SatMe-PC ne répond pas'); return null; }
+  if (j.ok === false && j.erreur) { txt('bal-msg', j.erreur); return j; }
+  if (j.etat !== undefined || j.actif !== undefined) { BALY = j; balRend(); }
+  setTimeout(ticSdr, 200);
+  return j;
+}
+function balDemarre() {
+  const d = v('bal-dossier'), t = v('bal-temps');
+  balGardeForm();
+  balPost('demarrer?genre=' + balGenre + (d.indexOf('e:') === 0 ? '&etiquette=' + enc(d.slice(2)) : '&dossier=' + enc(d)) +
+    '&debut=' + enc(v('bal-debut')) + '&fin=' + enc(v('bal-fin')) + '&pas=' + enc(v('bal-pas')) + '&mode=' + enc(v('bal-mode')) +
+    '&critere=' + v('bal-critere') + '&seuil=' + enc(v('bal-seuil')) + '&reprise=' + v('bal-reprise') + '&maintien=' + enc(t) + '&temps=' + enc(t) +
+    '&priorite=' + enc(v('bal-prio')) + '&prioriteS=' + enc(v('bal-prio-s')) + '&retour=' + v('bal-retour'));
+}
+/** ▶ on a folder of the memories: its memories scanned at once. */
+function balPourDossier(d) {
+  balGenre = 'MEMOIRES';
+  g('mem-pop').hidden = true;
+  balOuvre(g('sp-b-bal'));
+  g('bal-dossier').value = d;
+  balDemarre();
+}
+function balPasse() { const a = BALY && BALY.arret; if (a) balPost('passe?hz=' + a.hz + '&id=' + enc(a.id || '')).then(memCharge); }
+function balTexte(b) {
+  const c = b.etat === 'ARRETE' ? b.arret : b.ecoute;
+  if (!c) return '';
+  return (b.etat === 'ARRETE' ? '■ ' : '▸ ') + mhzFr(c.hz) + ' MHz' + (c.nom ? ' · ' + c.nom : '');
+}
+const balHeure = ms => new Date(ms).toLocaleTimeString('fr-FR');
+function balRend() {
+  const b = BALY, actif = !!(b && b.actif);
+  g('sp-b-bal').hidden = balAbsent;
+  g('bal-point').hidden = !actif;
+  const c = g('sb-bal');
+  if (c) {
+    c.hidden = !actif;
+    if (actif) { c.className = 'sb-i ' + (b.etat === 'ARRETE' ? 'ok' : 'info'); txt('sb-bal-t', b.etat === 'ARRETE' && b.arret ? mhzFr(b.arret.hz) : b.ecoute ? mhzFr(b.ecoute.hz) : '…'); }
+  }
+  if (g('bal-pop').hidden) return;
+  const e = g('bal-etat');
+  e.className = 'pastille ' + (actif ? 'marche' : 'coupe');
+  e.textContent = actif ? ({ CHERCHE: 'cherche', ARRETE: 'sur un signal', PRIORITE: 'priorité', FINI: 'fini' }[b.etat] || b.etat) : 'arrêté';
+  g('bal-go').hidden = actif; g('bal-stop').hidden = !actif;
+  g('bal-reprend').hidden = g('bal-passe').hidden = !(actif && b.etat === 'ARRETE');
+  txt('bal-ici', actif ? balTexte(b) : '');
+  if (b) txt('bal-msg', actif ? (b.quoi || '') + ' · tour ' + (b.tours + 1) + ' · ' + Math.min(b.taille, b.position + 1) + ' / ' + b.taille + (b.genre === 'SPECTRE' ? ' bandes' : '')
+    : b.empeche ? b.empeche : b.message ? 'arrêté : ' + b.message : '');
+  const l = (b && b.touches) || [];
+  const h = l.map(t => '<div class="bal-t' + (t.prio ? ' prio' : '') + '" data-hz="' + t.hz + '" data-mode="' + escA(t.mode || '') + '" data-bw="' + (t.largeur || 0) + '" title="S’y accorder (le balayage s’arrête)">' +
+    '<span class="petit mono">' + balHeure(t.derniere) + '</span><span class="mono">' + mhzFr(t.hz) + '</span><b class="petit">' + esc(t.nom || '') + (t.fois > 1 ? ' ×' + t.fois : '') + (t.prio ? ' (priorité)' : '') + '</b>' +
+    '<span class="mono petit">+' + Math.round(t.niveau) + ' dB</span><span>' + (t.id ? '' : '<button type="button" data-garde="' + t.hz + '" title="Garder en mémoire (dossier « Balayage »)">Garder en mémoire</button>') +
+    '<button type="button" data-passe="' + t.hz + '" data-id="' + escA(t.id || '') + '" title="Passer : ne plus jamais s’y arrêter">⊘</button></span></div>').join('') ||
+    '<div class="petit" style="padding:8px">' + (actif ? 'Rien encore…' : 'Aucun signal trouvé.') + '</div>';
+  if (g('bal-touches').dataset.vu !== h) { g('bal-touches').dataset.vu = h; g('bal-touches').innerHTML = h; }
+  const ps = (b && b.passeGardees) || [];
+  g('bal-passes').innerHTML = ps.length ? 'Passées : ' + ps.map(x => '<button type="button" class="discret" data-repasse="' + x + '" title="La reprendre dans le balayage">' + mhzFr(x) + ' ✕</button>').join(' ') : '';
+}
+g('bal-touches').addEventListener('click', async ev => {
+  const b = ev.target.closest('button');
+  if (b && b.dataset.garde) { const j = await balPost('garde?hz=' + b.dataset.garde); if (j && j.garde) { txt('bal-msg', '« ' + j.garde + ' » gardée dans le dossier « Balayage »'); memCharge(); } return; }
+  if (b && b.dataset.passe) { await balPost('passe?hz=' + b.dataset.passe + '&id=' + enc(b.dataset.id || '')); memCharge(); return; }
+  const l = ev.target.closest('.bal-t'); if (!l) return;
+  memAccorde({ hz: +l.dataset.hz, mode: l.dataset.mode, largeur: +l.dataset.bw }, 'sdr');
+  setTimeout(() => balTic(true), 300);
+});
+g('bal-passes').addEventListener('click', ev => { const b = ev.target.closest('[data-repasse]'); if (b) balPost('passe?on=0&hz=' + b.dataset.repasse); });
+async function balTic(force) {
+  const vu = !g('v-sdr').hidden || !g('bal-pop').hidden;
+  if (!force && !vu && Date.now() - balVu < 4000) return;
+  balVu = Date.now();
+  let j = null;
+  try { j = await (await fetch('api/balayage')).json(); } catch (x) { return; }
+  balAbsent = !!(j && j.absent);
+  BALY = j && j.ok !== false ? j : null;
+  balRend();
+}
+setInterval(balTic, 1000);
 /** A memory clicked: the receiver tuned there (reception only), in its mode and width. */
 function memAccorde(m, ou) {
   if (ou === 'qo100') { qPost('frequence?hz=' + m.hz); return; }
@@ -9297,7 +9683,7 @@ const nivS = (x, d) => x == null || isNaN(x) ? '—' : (x > 0 ? '+' : '') + nivF
 function nivOuvre(ancre, ou) {
   const p = g('niv-pop');
   if (!p.hidden && p.dataset.ou === ou) { p.hidden = true; return; }
-  g('aff-pop').hidden = true; g('mem-pop').hidden = true;
+  g('aff-pop').hidden = true; g('mem-pop').hidden = true; g('bal-pop').hidden = true;
   p.dataset.ou = ou;
   nivOnglet(ou === 'qo100' && nivVue === 'niveau' && !BAL.vu ? 'balise' : nivVue);
   popPlace(p, ancre);
@@ -11820,6 +12206,11 @@ function palSources() {
     ((MT.d && MT.d.fonctions && MT.d.fonctions.vues) || []).forEach(f => A('Montage : chaîne ' + f.nom, 'de l’antenne à l’écran, ce qui manque', () => { vue('montage'); mtFonction(f.id); }));
   }
   if (ouverte('qo100') || ouverte('datv')) A('Schéma de la chaîne en œuvre', 'par-dessus l’onglet ' + (ouverte('qo100') ? 'QO-100' : 'DATV'), () => mtPopBascule(ouverte('qo100') ? 'qo100' : 'datv'));
+  if (!balAbsent) {
+    A('Balayage du récepteur', 'mémoires d’un dossier, plage de fréquences (réception)', () => { vue('sdr'); setTimeout(() => balOuvre(g('sp-b-bal')), 60); });
+    if (BALY && BALY.actif) A('Arrêter le balayage', BALY.quoi || '', () => balPost('arreter'));
+    A('Mémoires du récepteur', 'dossiers, recherche, tri', () => { vue('sdr'); setTimeout(() => memOuvre(g('sp-b-mem'), 'sdr'), 60); });
+  }
   A('Déplier ou replier le menu', 'touche [', () => railRegle(!document.body.classList.contains('rail-ouvert')));
   A('Raccourcis clavier', 'touche ?', aideClavier);
   if (!MAN.absent) A('Manuel', 'F1 · le guide de SatMe-PC, avec recherche', () => manOuvre());

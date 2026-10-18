@@ -247,6 +247,10 @@ fun main(args: Array<String>) {
     serveur.large = large
     serveur.montage = MontagePc(dossier, { serveur.lecturesMontage() }, { serveur.fonctionsMontage.instantane(it) }, serveur.fonctionsMontage)
     serveur.memoiresSdr = MemoiresSdrPc(dossier)
+    // The SDR tab's scan (run here until stopped) and band stack (noted every second); receive only.
+    val balayage = BalayagePc(sdr, serveur.memoiresSdr, station.stockage, dossier)
+    serveur.balayage = balayage
+    portee.launch { while (true) { runCatching { balayage.ticPile() }; kotlinx.coroutines.delay(1000) } }
     serveur.niveaux = niveaux
     serveur.soleil = soleil
     serveur.canaux = canaux

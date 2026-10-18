@@ -336,6 +336,8 @@ object PagesPcTelephone {
                 "/api/montage/suggestion", "/api/montage/detection" -> json(JSONObject().put("ok", false).put("erreur", MONTAGE_SUR_PC))
                 // Levels over time and the Sun's noise are measured on SatMe-PC's receiver: none here (the page hides them).
                 "/api/niveaux", "/api/soleil", "/api/ais", "/api/espace", "/api/espace/aurore" -> json(JSONObject().put("ok", false).put("absent", true))
+                // The scan and the band stack run on SatMe-PC's receiver: none here (the page hides them).
+                "/api/balayage", "/api/pile-bandes" -> json(JSONObject().put("ok", false).put("absent", true))
                 "/api/montage/profils" -> json(JSONObject().put("ok", true).put("telephone", true).put("profils", JSONArray()).put("actuels", JSONArray()).put("emission", ""))
                 else -> if (methode == "POST") json(action(vm, route, p)) else NON
             }
