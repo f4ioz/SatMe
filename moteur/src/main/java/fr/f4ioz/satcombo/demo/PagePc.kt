@@ -983,12 +983,89 @@ ${STYLE_JETONS}
   #mt-liens .mt-li { border-top:1px solid var(--ligne); padding:5px 2px; }
   .mt-ajout { display:grid; grid-template-columns:1fr; gap:6px; }
   .mt-ajout select { width:100%; }
+  /* The functions: who holds what, the conflicts, a function's chain, the profiles. */
+  #v-montage.mt-pf .mt { grid-template-columns:minmax(0,1fr) 380px; }
+  .mt-barre #mt-fonction { max-width:210px; }
+  .mt-tient { margin-bottom:4px; }
+  .mt-puce.tient { color:var(--rx); border-color:rgba(63,224,200,.35); }
+  .mt-puce.tient.tx { color:#FFD9CF; border-color:var(--tx); background:rgba(255,90,54,.14); }
+  .mt-puce.tient b { font-weight:700; color:var(--texte); }
+  .mt-puce.pf { cursor:pointer; color:var(--texte); border-color:rgba(111,140,255,.5); background:rgba(111,140,255,.1); }
+  .mt-puce.pf:hover, .mt-puce.pf:focus-visible { border-color:var(--info); }
+  .mt-alertes { display:flex; flex-direction:column; gap:3px; margin-bottom:5px; max-height:92px; overflow:auto; }
+  .mt-alerte { display:flex; align-items:center; gap:6px 8px; flex-wrap:wrap; padding:3px 8px; border-radius:var(--r1); font-size:var(--fs-s);
+    background:rgba(229,72,77,.1); border:1px solid rgba(229,72,77,.55); color:#FFC2C4; }
+  .mt-alerte.leger { background:rgba(255,180,84,.08); border-color:rgba(255,180,84,.45); color:var(--warn); }
+  .mt-alerte span { flex:1; min-width:200px; }
+  .mt-alerte button, .mt-besoin button, .mt-fiche .mt-actes button { padding:2px 8px; font-size:var(--fs-s); }
+  .mt-va { color:var(--info); cursor:pointer; white-space:nowrap; font-size:var(--fs-s); background:none; border:0; padding:2px 4px; }
+  .mt-va:hover { text-decoration:underline; }
+  .mt-besoins { margin-top:6px; display:flex; flex-direction:column; gap:3px; max-height:120px; overflow:auto; }
+  .mt-besoin { display:flex; align-items:center; gap:8px; font-size:var(--fs-s); color:var(--texte-2); padding:2px 4px; border-left:2px solid var(--warn); }
+  .mt-besoin span { flex:1; }
+  .mt-vue-tete { display:flex; align-items:center; gap:10px; font-size:var(--fs-s); color:var(--texte-2); margin-bottom:4px; }
+  .mt-vue-tete b { color:var(--texte); font-size:var(--fs-m); }
+  .mt-vue-tete .bloque { color:#FF8A8D; } .mt-vue-tete .marche { color:var(--rx); }
+  /* The software nodes: a function rounded, a piece of hardware square; lit by their state. */
+  .mt-n { cursor:pointer; outline:none; }
+  .mt-n-fond { fill:#131C24; stroke:var(--ligne-forte); stroke-width:1.2; }
+  .mt-n.g-son .mt-n-fond { fill:#10201A; }
+  .mt-n.g-materiel .mt-n-fond { fill:#161B21; }
+  .mt-n-nom { font-size:11px; font-weight:600; fill:var(--texte); font-family:system-ui,sans-serif; }
+  .mt-n-det { font-size:9px; fill:var(--texte-2); font-family:system-ui,sans-serif; }
+  .mt-n.st-ok .mt-n-fond { stroke:var(--rx); stroke-width:1.8; filter:drop-shadow(0 0 4px rgba(63,224,200,.4)); }
+  .mt-n.tx.st-ok .mt-n-fond { stroke:var(--tx); filter:drop-shadow(0 0 6px rgba(255,90,54,.6)); animation:mt-tx 1.2s ease-in-out infinite alternate; }
+  .mt-n.st-pret { opacity:.6; }
+  .mt-n.st-manque .mt-n-fond { stroke:var(--warn); stroke-dasharray:5 4; }
+  .mt-n.st-occupe .mt-n-fond { stroke:var(--danger); stroke-width:2; fill:rgba(229,72,77,.12); }
+  .mt-n.st-erreur .mt-n-fond { stroke:var(--danger); stroke-dasharray:4 3; }
+  .mt-n:hover .mt-n-fond, .mt-n:focus-visible .mt-n-fond, .mt-n.sel .mt-n-fond { stroke-width:2.4; }
+  .mt-n:focus-visible .mt-n-fond { stroke-dasharray:4 3; }
+  .mt-bd rect { stroke:none; } .mt-bd text { font-size:8px; font-weight:700; font-family:var(--mono); }
+  .mt-bd.rx rect { fill:rgba(63,224,200,.18); } .mt-bd.rx text { fill:var(--rx); }
+  .mt-bd.tx rect { fill:rgba(255,90,54,.22); } .mt-bd.tx text { fill:#FF9B85; }
+  .mt-bd.son rect { fill:rgba(91,214,138,.16); } .mt-bd.son text { fill:var(--ok); }
+  .mt-bd.ty rect { fill:rgba(154,167,180,.14); } .mt-bd.ty text { fill:var(--texte-3); }
+  .mt-col-t { font-size:9px; fill:var(--texte-3); letter-spacing:1px; text-transform:uppercase; font-family:system-ui,sans-serif; }
+  /* The links of the functions: radio thick, IQ dashed blue, sound green with its arrow, CAT orange, network dotted. */
+  .mt-a path { fill:none; stroke-linecap:round; }
+  .mt-a.t-rf .mt-a-l { stroke:#7D8893; stroke-width:3.4; }
+  .mt-a.t-iq .mt-a-l { stroke:#6F8CFF; stroke-width:2.2; stroke-dasharray:7 4; }
+  .mt-a.t-audio .mt-a-l { stroke:#5BD68A; stroke-width:2; }
+  .mt-a.t-cat .mt-a-l { stroke:#FFB454; stroke-width:1.6; }
+  .mt-a.t-reseau .mt-a-l { stroke:#9AA7B4; stroke-width:1.8; stroke-dasharray:1 5; }
+  .mt-a .mt-a-f { stroke:transparent; stroke-width:2.4; stroke-dasharray:2 12; }
+  .mt-a.st-ok .mt-a-f { stroke:#E8FFFB; animation:mt-flux 1s linear infinite; }
+  .mt-a.st-ok.t-rf .mt-a-l { stroke:var(--rx); }
+  .mt-a.st-pret { opacity:.35; }
+  .mt-a.st-manque .mt-a-l { stroke:var(--warn) !important; stroke-dasharray:4 4; }
+  .mt-a.st-occupe .mt-a-l { stroke:var(--danger) !important; stroke-dasharray:6 3; }
+  .mt-a text { font-size:8.5px; fill:var(--texte-3); font-family:var(--mono); }
+  .mt-tag rect { fill:rgba(63,224,200,.14); stroke:var(--rx); stroke-width:.8; }
+  .mt-tag text { font-size:9px; fill:var(--rx); font-weight:700; font-family:system-ui,sans-serif; }
+  .mt-tag.tx rect { fill:rgba(255,90,54,.2); stroke:var(--tx); } .mt-tag.tx text { fill:#FFD9CF; }
+  .mt-tag.err rect { fill:rgba(229,72,77,.18); stroke:var(--danger); stroke-dasharray:3 2; } .mt-tag.err text { fill:#FF8A8D; }
+  .mt-repere { outline:2px solid var(--rx) !important; outline-offset:2px; transition:outline-color .3s; }
+  @media (prefers-reduced-motion:reduce) { .mt-a .mt-a-f, .mt-n .mt-n-fond { animation:none !important; } }
+  /* The profiles. */
+  .mt-pf-l { display:flex; flex-direction:column; gap:6px; }
+  .mt-pf-i { border:1px solid var(--ligne); border-radius:var(--r2); padding:6px 8px; background:var(--s1); }
+  .mt-pf-i.ouvert { border-color:var(--info); }
+  .mt-pf-i .ligne { margin:0; gap:6px; }
+  .mt-pf-i .ligne b { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .mt-pf-i button { padding:2px 8px; font-size:var(--fs-s); }
+  .mt-pf-et { margin:6px 0 2px; padding:0; list-style:none; font-size:var(--fs-s); }
+  .mt-pf-et li { padding:2px 0 2px 18px; position:relative; color:var(--texte-2); }
+  .mt-pf-et li::before { content:'›'; position:absolute; left:5px; color:var(--info); }
+  .mt-pf-et li.ok::before { content:'✓'; color:var(--ok); } .mt-pf-et li.non::before { content:'✗'; color:var(--danger); } .mt-pf-et li.main::before { content:'☞'; color:var(--warn); }
+  .mt-pf-et li i { color:var(--texte-3); font-style:normal; }
+  .mt-pf-tx { padding:5px 8px; border-radius:var(--r1); background:rgba(255,90,54,.12); border:1px solid var(--tx); color:#FFD9CF; font-size:var(--fs-s); margin-bottom:6px; }
   @media (min-width:1101px) and (min-height:600px) {
     #v-montage .mt { height:100%; }
     #v-montage .mt-schema { height:100%; }
     #v-montage .mt-edition { height:100%; }
   }
-  @media (max-width:1100px) { #v-montage.mt-edite .mt { grid-template-columns:1fr; } .mt-zone { min-height:360px; } }
+  @media (max-width:1100px) { #v-montage.mt-edite .mt, #v-montage.mt-pf .mt { grid-template-columns:1fr; } .mt-zone { min-height:360px; } }
   @media (max-width:760px) { .mt { padding:8px; } .mt-zone { min-height:300px; justify-content:flex-start; align-items:flex-start; } .mt-fiche { position:fixed; left:8px; right:8px; top:auto; bottom:64px; width:auto; max-height:60vh; } }
   /* The small drawing over QO-100 and DATV. */
   .mt-pop { position:fixed; right:14px; top:52px; z-index:45; width:min(560px,calc(100vw - 28px)); padding:8px 10px 10px; border-radius:var(--r3);
@@ -2205,10 +2282,16 @@ ${rail()}
     <div class="aide">Le dessin de ta station : l'antenne à gauche, l'ordinateur à droite, la réception en haut, l'émission en bas. Il s'allume avec ce que fait SatMe : en <b class="cyan">cyan</b> ce qui reçoit, en <b class="tx-mot">rouge</b> ce qui émet (DATV, SSTV, calibration I/Q), le flux animé le long des câbles, les fréquences dessus (ciel, FI, montée). Une erreur entoure l'appareil de rouge pointillé.</div>
     <div class="aide">Rien ici ne démarre ni n'arrête quoi que ce soit, n'ouvre de port ni ne touche à l'alimentation du LNB : c'est un dessin. « Modifier » ajoute, renomme ou retire les appareils et les câbles ; un clic sur un appareil montre ses ports et sa photo (la tienne, gardée sur ce PC).</div>
     <div class="aide">« Proposer d'après SatMe » compose une chaîne à partir des réglages (poste, rotor, clé SDR, récepteur et émetteur DATV, oscillateurs des convertisseurs) : tu l'adoptes ou non.</div>
+    <div class="aide">À droite de l'ordinateur, le logiciel : chaque <b>fonction</b> de SatMe (récepteur SDR, DATV, SSTV, FT8, CW, APRS, phonie → texte, METEOR, sondes, émissions) en pastille arrondie, chaque <b>matériel</b> du son (cartes son, haut-parleur) en pastille carrée. Les marques disent qui reçoit (<b class="cyan">RX</b>), qui émet (<b class="tx-mot">TX</b>), qui fait du son (son ▶) et qui en prend (◀ son). Au-dessus d'un appareil, la fonction qui le tient (« ADALM-PLUTO → DATV réception ») ; en rouge, une fonction qui voudrait un appareil ou une entrée son déjà pris, avec la raison et le geste qui libère.</div>
+    <div class="aide">« Fonction » ne montre que la chaîne d'une fonction, de l'antenne à son écran, chaque maillon en marche, prêt, manquant ou occupé, et ce qu'il faut pour qu'elle marche. Les boutons des pastilles et des alertes ne font que de la réception (démarrer ou arrêter un récepteur, choisir une source son) ; une émission ne se démarre jamais d'ici, et rien ne touche à l'alimentation du LNB ni aux ports série.</div>
+    <div class="aide">« Profils » garde les réglages de réception actuels sous un nom (« SSTV par IC-9700 », « QO-100 Pluto + FT8 ») : récepteur SDR et sa fréquence, carte son, sources et décodeurs, récepteur DATV. « Appliquer » montre d'abord ce qui changera, puis le fait dans un ordre sûr (arrêts, réglages, récepteurs, carte son, décodeurs) ; refusé pendant une émission.</div>
     <div class="mt-barre">
       <span class="bascule-c" role="group" aria-label="Vue"><button id="mt-b-complet" onclick="mtVue(false)" title="Tout le montage">Complet</button><button id="mt-b-simple" onclick="mtVue(true)" title="Seulement ce qui reçoit ou émet maintenant">Simplifié</button></span>
+      <select id="mt-fonction" onchange="mtFonction(this.value)" aria-label="Fonction montrée" title="Ne montrer que la chaîne d'une fonction, de l'antenne à son écran" hidden><option value="">Toute la station</option></select>
       <span class="mt-puces" id="mt-etat" aria-live="polite"></span>
       <span class="h-esp"></span>
+      <span class="mt-puces" id="mt-pf-puces" aria-label="Profils de fonction"></span>
+      <button id="mt-b-profils" onclick="mtProfils()" aria-pressed="false" title="Garder et remettre des réglages de réception (profils de fonction)">Profils</button>
       <span id="mt-outils" class="mt-barre" style="margin:0">
         <select id="mt-pre" onchange="mtPrereglage()" aria-label="Partir d'un montage tout fait" title="Partir d'un montage tout fait (il remplace l'actuel)"><option value="">Montage tout fait…</option></select>
         <button onclick="mtSuggere()" title="Une chaîne composée d'après les réglages de SatMe : tu l'adoptes ou non">Proposer d'après SatMe</button>
@@ -2218,8 +2301,12 @@ ${rail()}
     <div id="mt-essai" class="mt-essai" hidden>Démonstration : l'état affiché est simulé (adresse « ?essai= »). Rien n'est reçu ni émis.</div>
     <div id="mt-tel" class="mt-essai" hidden>Le montage se compose et s'enregistre sur SatMe-PC.</div>
     <div id="mt-simple-vide" class="petit" hidden>Rien ne reçoit ni n'émet : le montage entier est montré.</div>
+    <div class="mt-puces mt-tient" id="mt-tient" aria-label="Qui tient quoi" hidden></div>
+    <div class="mt-alertes" id="mt-alertes" aria-live="polite" hidden></div>
+    <div class="mt-vue-tete" id="mt-vue-tete" hidden></div>
     <div class="mt-zone" id="mt-zone">
       <svg id="mt-svg" role="group" aria-label="Schéma de la station"></svg>
+      <svg id="mt-fsvg" role="group" aria-label="Chaîne de la fonction" style="display:none"></svg>
       <div class="mt-vide" id="mt-vide" hidden>Aucun montage pour l'instant.<br>Choisis un <b>montage tout fait</b>, demande une <b>proposition d'après SatMe</b>, ou <b>Modifier › Ajouter</b> tes appareils un à un.</div>
       <div class="mt-fiche" id="mt-fiche" hidden></div>
     </div>
@@ -2231,9 +2318,27 @@ ${rail()}
       <span><svg viewBox="0 0 30 10"><path d="M2 5H28" stroke="#5BD68A" stroke-width="1.5"/></svg>audio</span>
       <span><svg viewBox="0 0 30 10"><path d="M2 5H28" stroke="#FFB454" stroke-width="1.5"/></svg>CAT, PTT</span>
       <span><svg viewBox="0 0 30 10"><path d="M2 5H28" stroke="#B07CFF" stroke-width="1.8" stroke-dasharray="6 3"/></svg>rotor</span>
+      <span><svg viewBox="0 0 30 10"><path d="M2 5H28" stroke="#6F8CFF" stroke-width="2.2" stroke-dasharray="7 4"/></svg>IQ</span>
       <span><i style="background:var(--rx)"></i>reçoit</span><span><i style="background:var(--tx)"></i>émet</span><span><i style="background:var(--ok)"></i>connecté</span><span><i style="border:1.5px dashed var(--danger)"></i>erreur</span>
+      <span><i style="border-radius:5px;width:16px;border:1.5px solid var(--ligne-forte)"></i>fonction</span><span><i style="border-radius:1px;width:16px;border:1.5px solid var(--ligne-forte)"></i>matériel</span>
+      <span><b class="cyan">RX</b> <b class="tx-mot">TX</b> <b style="color:var(--ok)">son ▶</b> fait du son <b style="color:var(--ok)">◀ son</b> en prend</span>
+      <span><i style="background:rgba(229,72,77,.3);border:1.5px solid var(--danger)"></i>occupé</span><span><i style="border:1.5px dashed var(--warn)"></i>manque</span>
     </div>
+    <div class="mt-besoins" id="mt-besoins" hidden></div>
     <div class="etat" id="mt-msg"></div>
+  </div>
+  <div class="mt-edition" id="mt-profils" hidden>
+    <div class="carte">
+      <div class="t">Profils de fonction</div>
+      <div class="aide">Un profil garde les réglages de <b>réception</b> du moment : récepteur SDR (carte, mode, fréquence, suivi, son), entrée son des décodeurs, SSTV (source, marche), FT8 / FT4, CW, APRS, phonie → texte, récepteur DATV. Jamais rien de l'émission, ni l'alimentation du LNB.</div>
+      <div class="aide">« Aperçu » liste ce qui changera, dans l'ordre où ce sera fait. La réception DATV ne se démarre pas d'ici (l'alimentation du LNB se règle dans son onglet) : l'étape est rappelée. Tant qu'une émission est en cours, rien ne s'applique.</div>
+      <div class="mt-pf-tx" id="mt-pf-tx" hidden></div>
+      <div class="ligne" style="margin:0 0 8px"><input id="mt-pf-nom" maxlength="60" placeholder="SSTV par IC-9700" aria-label="Nom du profil" style="flex:1;min-width:120px"
+        onkeydown="if (event.key === 'Enter') mtPfGarde()"><button class="primaire" onclick="mtPfGarde()" title="Garder les réglages de réception actuels sous ce nom">Garder l'état actuel</button></div>
+      <details id="mt-pf-actuels-d"><summary class="petit">Ce qui serait gardé maintenant</summary><ul class="mt-pf-et" id="mt-pf-actuels"></ul></details>
+      <div class="mt-pf-l" id="mt-pf-liste" style="margin-top:8px"></div>
+      <div class="etat" id="mt-pf-msg" aria-live="polite"></div>
+    </div>
   </div>
   <div class="mt-edition" id="mt-edition" hidden>
     <div class="carte">
@@ -8327,7 +8432,8 @@ setInterval(ticSon, 1000);
 // Display and setup only: nothing here starts a transmission, opens a port or touches the LNB supply.
 var MT = { cat: null, d: null, cle: '', simple: false, edition: false, sel: null, essai: '', telephone: false, pop: null, popCle: '' };
 try { MT.simple = localStorage.getItem('mt-simple') === '1'; } catch (x) {}
-try { const q = new URLSearchParams(location.search).get('essai'); if (q === 'rx' || q === 'tx') MT.essai = q; } catch (x) {}
+try { const q = new URLSearchParams(location.search).get('essai'); if (['rx', 'tx', 'datv-pluto', 'sstv-carte'].includes(q)) MT.essai = q; } catch (x) {}
+try { MT.fonction = localStorage.getItem('mt-fonction') || ''; } catch (x) { MT.fonction = ''; }
 const MT_CABLES = {
   COAX_N: 'N', COAX_SMA: 'SMA', COAX_F: 'F', COAX_BNC: 'BNC', COAX_PL: 'PL', DIRECT: '', USB: 'USB', ETHERNET: 'Réseau', WIFI: 'Wi-Fi',
   AUDIO: 'Audio', CAT: 'CAT', PTT: 'PTT', ROTOR: 'Rotor'
@@ -8588,8 +8694,8 @@ function mtTaille(svg, zone, max) {
 
 // ---- the tab
 async function mtOuvre() { await mtCatalogue(); mtPrereglages(); mtTic(true); }
-async function mtLit(simple) {
-  const r = await fetch('api/montage?simple=' + (simple ? 1 : 0) + (MT.essai ? '&essai=' + MT.essai : ''));
+async function mtLit(simple, fonction) {
+  const r = await fetch('api/montage?simple=' + (simple ? 1 : 0) + (MT.essai ? '&essai=' + MT.essai : '') + (fonction ? '&fonction=' + enc(fonction) : ''));
   return r.ok ? r.json() : null;
 }
 async function mtTic(force) {
@@ -8597,15 +8703,17 @@ async function mtTic(force) {
   if (!MT.cat) await mtCatalogue();
   if (!MT.cat) return;
   if (ouverte('montage')) {
-    let d = null; try { d = await mtLit(MT.simple && !MT.edition); } catch (x) {}
+    let d = null; try { d = await mtLit(MT.simple && !MT.edition, MT.fonction); } catch (x) {}
     if (!d || d.ok === false) { txt('mt-msg', 'Le montage ne répond pas.'); return; }
     MT.d = d; MT.telephone = !!d.telephone;
     const cle = JSON.stringify([d.chaine, d.plan, d.photos]);
     const svg = g('mt-svg');
-    if (cle !== MT.cle || force) { MT.cle = cle; mtDessine(svg, d, 'mtA', false); mtListes(); } else mtAllume(svg, d);
-    mtTaille(svg, g('mt-zone'));
+    if (cle !== MT.cle || force) { MT.cle = cle; MT.logCle = ''; mtDessine(svg, d, 'mtA', false); mtListes(); } else mtAllume(svg, d);
+    mtLogiciel(svg, d, force);
+    mtFonctions(d, force);
     mtResume(d);
     if (MT.sel) mtFiche(MT.sel, true);
+    else if (MT.selN) mtFicheN(MT.selN, true);
   }
   if (MT.pop && !g('mt-pop').hidden) {
     let d = null; try { d = await mtLit(true); } catch (x) {}
@@ -8623,8 +8731,8 @@ function mtResume(d) {
   g('mt-etat').innerHTML = (r.length ? r.map(x => '<span class="mt-puce ' + (/^Émission|Calibration|émission simulée/.test(x) ? 'tx' : 'rx') + '">' + mtEsc(x) + '</span>').join('') :
     '<span class="mt-puce">Rien ne reçoit ni n’émet</span>') + Object.keys(et.erreurs || {}).map(k => '<span class="mt-puce err" title="' + mtEsc(et.erreurs[k]) + '">⚠ ' + mtEsc(mtNom(mtElem(d.chaine, k) || { m: k })) + '</span>').join('');
   g('mt-essai').hidden = !d.essai;
-  const vide = !d.chaine.elements.length;
-  g('mt-vide').hidden = !vide; g('mt-svg').style.display = vide ? 'none' : '';
+  const vide = !d.chaine.elements.length, logiciel = !!d.fonctions;
+  g('mt-vide').hidden = !vide || logiciel || !!MT.fonction; g('mt-svg').style.display = (vide && !logiciel) || MT.fonction ? 'none' : '';
   g('mt-tel').hidden = !MT.telephone;
   g('mt-b-edit').hidden = MT.telephone; g('mt-outils').hidden = MT.telephone;
   g('mt-simple-vide').hidden = !(d.simpleVide && !MT.edition);
@@ -8635,6 +8743,7 @@ function mtResume(d) {
 function mtVue(simple) { MT.simple = simple; try { localStorage.setItem('mt-simple', simple ? '1' : '0'); } catch (x) {} mtTic(true); }
 function mtEdition(o) {
   MT.edition = o === undefined ? !MT.edition : o;
+  if (MT.edition && MT.pfOuvert) mtProfils(false);
   g('mt-edition').hidden = !MT.edition; g('v-montage').classList.toggle('mt-edite', MT.edition);
   g('mt-b-edit').classList.toggle('actif', MT.edition); g('mt-b-edit').setAttribute('aria-pressed', MT.edition);
   mtTic(true);
@@ -8782,7 +8891,7 @@ function mtFiche(id, rafraichit) {
   g('mt-svg').querySelectorAll('.mt-el').forEach(n => n.classList.toggle('sel', n.dataset.id === id));
   document.querySelectorAll('#mt-liste .mt-li').forEach(n => n.classList.toggle('sel', n.dataset.id === id));
 }
-function mtFicheFerme() { MT.sel = null; g('mt-fiche').hidden = true; g('mt-svg').querySelectorAll('.mt-el.sel').forEach(n => n.classList.remove('sel')); }
+function mtFicheFerme() { MT.sel = null; MT.selN = null; g('mt-fiche').hidden = true; document.querySelectorAll('#mt-zone .mt-el.sel, #mt-zone .mt-n.sel').forEach(n => n.classList.remove('sel')); }
 async function mtPhotoEnvoie(id, f) {
   if (!f) return;
   if (!/^image\/(jpeg|png|webp|gif)$/.test(f.type)) { annonce('Seulement une image JPEG, PNG, WebP ou GIF'); return; }
@@ -8822,11 +8931,16 @@ async function mtSuggAdopte() {
   await mtEnregistre(MT.sugg.chaine, 'Montage proposé par SatMe enregistré');
 }
 // ---- the drawing's gestures: a click or Enter opens a piece's card
-g('mt-svg').addEventListener('click', e => { const n = e.target.closest('.mt-el'); if (n) mtFiche(n.dataset.id); });
-g('mt-svg').addEventListener('keydown', e => { const n = e.target.closest && e.target.closest('.mt-el'); if (n && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); mtFiche(n.dataset.id); } });
+['mt-svg', 'mt-fsvg'].forEach(id => {
+  g(id).addEventListener('click', e => { const n = e.target.closest('.mt-el, .mt-n'); if (!n) return; if (n.dataset.n) mtFicheN(n.dataset.n); else mtFiche(n.dataset.id); });
+  g(id).addEventListener('keydown', e => {
+    const n = e.target.closest && e.target.closest('.mt-el, .mt-n');
+    if (n && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); if (n.dataset.n) mtFicheN(n.dataset.n); else mtFiche(n.dataset.id); }
+  });
+});
 g('mt-l-de').onchange = mtCableMaj; g('mt-l-vers').onchange = mtCableMaj;
 g('mt-l-cable').onchange = () => { if (MT.d) txt('mt-l-msg', mtRefus(MT.d.chaine, v('mt-l-de'), v('mt-l-vers'), v('mt-l-cable'))); };
-window.addEventListener('resize', () => { if (ouverte('montage')) mtTaille(g('mt-svg'), g('mt-zone')); if (!g('mt-pop').hidden) mtTaille(g('mt-pop-svg'), g('mt-pop-zone'), 1.1); });
+window.addEventListener('resize', () => { if (ouverte('montage')) { mtTaille(g('mt-svg'), g('mt-zone')); if (MT.fonction) mtTaille(g('mt-fsvg'), g('mt-zone')); } if (!g('mt-pop').hidden) mtTaille(g('mt-pop-svg'), g('mt-pop-zone'), 1.1); });
 // ---- the small drawing over the QO-100 and DATV tabs: off unless chosen, remembered per tab
 function mtPopBascule(onglet) {
   const o = g('mt-pop').hidden || MT.pop !== onglet;
@@ -8841,6 +8955,341 @@ function mtPopMaj(n) {
   if (o) { MT.popCle = ''; mtCatalogue().then(() => mtTic(true)); }
 }
 setInterval(() => { if (ouverte('montage') || !g('mt-pop').hidden) mtTic(); }, 2000);
+// ---- SatMe's functions beside the hardware: who holds what, the conflicts, one function's chain, the profiles.
+// Receive gestures only (each one a route of its tab, through api/montage/action); never a transmission, never the LNB supply.
+const MT_COLS = ['Matériel tenu, cartes son', 'Sources du son', 'Décodeurs', 'Sorties du son'];
+const MT_STATUTS = { ok: 'en marche', pret: 'à l’arrêt', manque: 'manque', occupe: 'occupé', erreur: 'erreur' };
+const MT_BADGES = { materiel: ['M', 'ty', 'matériel'], fonction: ['F', 'ty', 'fonction de SatMe'], rx: ['RX', 'rx', 'reçoit'], tx: ['TX', 'tx', 'émet'],
+  'son-emet': ['son ▶', 'son', 'fait du son'], 'son-recoit': ['◀ son', 'son', 'prend du son'] };
+MT.actes = []; MT.vas = [];
+/** A gesture's button (kept in a list: a card's name may hold any character). */
+function mtActeBouton(a, cl) {
+  if (!a) return '';
+  if (MT.actes.length > 400) MT.actes = [];
+  MT.actes.push(a);
+  return '<button' + (cl ? ' class="' + cl + '"' : '') + ' onclick="mtActe(' + (MT.actes.length - 1) + ')" title="Réception seulement">' + mtEsc(a.texte) + '</button>';
+}
+function mtActe(k) { const a = MT.actes[k]; if (a) mtGeste(a.cle, a.valeur, a.texte); }
+function mtVaBouton(r, t) {
+  if (!r) return '';
+  if (MT.vas.length > 400) MT.vas = [];
+  MT.vas.push(r);
+  return '<button class="mt-va" onclick="mtVaK(' + (MT.vas.length - 1) + ')">' + mtEsc(t || 'Réglages ›') + '</button>';
+}
+function mtVaK(k) { mtVa(MT.vas[k]); }
+/** To the tab, sub-tab or Réglages category, and the setting shown. */
+function mtVa(r) {
+  if (!r) return;
+  if (r.onglet === 'montage') { vue('montage'); mtFonction(''); mtEdition(true); return; }
+  vue(r.onglet);
+  if (r.onglet === 'reglages' && r.sous) montreReglages(r.sous);
+  else if (r.sous) { const b = document.querySelector('#v-' + r.onglet + ' .st-nav button[data-p="' + r.sous + '"]'); if (b) b.click(); }
+  if (r.ancre) setTimeout(() => {
+    const e = g(r.ancre); if (!e) return;
+    e.scrollIntoView({ block: 'center' }); try { e.focus({ preventScroll: true }); } catch (x) {}
+    e.classList.add('mt-repere'); setTimeout(() => e.classList.remove('mt-repere'), 1800);
+  }, 150);
+}
+async function mtGeste(cle, valeur, texte) {
+  if (MT.essai) { annonce('Démonstration : rien n’est changé'); return; }
+  let j = null;
+  try { j = await (await fetch('api/montage/action?cle=' + enc(cle) + '&valeur=' + enc(valeur), { method: 'POST' })).json(); } catch (x) {}
+  annonce(j && j.ok ? (j.dit || texte) : ((j && j.erreur) || 'Refusé'));
+  await mtTic(true);
+  if (MT.pfOuvert) mtPfCharge();
+}
+/** A node's marks: hardware or function, RX, TX, sound made, sound taken. Returns [svg, width]. */
+function mtBadges(n, x, y) {
+  let s = '', w = 0;
+  (n.badges || []).forEach(b => {
+    const d = MT_BADGES[b]; if (!d) return;
+    const l = d[0].length * 5 + 7;
+    s += '<g class="mt-bd ' + d[1] + '" transform="translate(' + (x + w) + ' ' + y + ')"><title>' + d[2] + '</title><rect width="' + l + '" height="11" rx="3"/><text x="' + (l / 2) + '" y="8.3" text-anchor="middle">' + d[0] + '</text></g>';
+    w += l + 3;
+  });
+  return [s, w];
+}
+const mtCoupe = (t, n) => { t = String(t || ''); return t.length > n ? t.slice(0, Math.max(1, n - 1)) + '…' : t; };
+function mtNoeudClasse(n) { return 'mt-n g-' + n.genre + ' st-' + n.statut + ((n.badges || []).includes('tx') ? ' tx' : '') + (MT.selN === n.id ? ' sel' : ''); }
+function mtNoeudTitre(n) { return n.nom + ' — ' + (MT_STATUTS[n.statut] || n.statut) + (n.detail ? ' — ' + n.detail : ''); }
+/** A function or a sound end: a pill (rounded for a function, square for hardware). */
+function mtPastille(n, x, y, w, h) {
+  const carre = (n.badges || []).includes('materiel');
+  const bw = mtBadges(n, 0, 0)[1], [bs] = mtBadges(n, w - bw - (carre ? 6 : 12), h - 16);
+  return '<g class="' + mtNoeudClasse(n) + '" data-n="' + mtEsc(n.id) + '" transform="translate(' + x + ' ' + y + ')" tabindex="0" role="button" aria-label="' + mtEsc(mtNoeudTitre(n)) + '">' +
+    '<title>' + mtEsc(mtNoeudTitre(n)) + '</title>' +
+    '<rect class="mt-n-fond" width="' + w + '" height="' + h + '" rx="' + (carre ? 4 : h / 2) + '"/>' +
+    '<text class="mt-n-nom" x="' + (carre ? 9 : 13) + '" y="15">' + mtEsc(mtCoupe(n.nom, Math.floor((w - 22) / 6.1))) + '</text>' + bs +
+    '<text class="mt-n-det" x="' + (carre ? 9 : 13) + '" y="' + (h - 8) + '">' + mtEsc(mtCoupe(n.detail || MT_STATUTS[n.statut] || '', Math.floor((w - bw - 26) / 4.7))) + '</text></g>';
+}
+/** A piece of hardware in a function's chain: its drawing, its name, its state. */
+function mtMateriel(n, x, y, m, k, p) {
+  const dh = m.h - 18, w = m.l * k, h = dh * k;
+  const f = MT_D[m.dessin] || MT_D.sdr;
+  const [bs, bw] = mtBadges(n, 0, 0);
+  return '<g class="' + mtNoeudClasse(n) + '" data-n="' + mtEsc(n.id) + '" transform="translate(' + x + ' ' + y + ')" tabindex="0" role="button" aria-label="' + mtEsc(mtNoeudTitre(n)) + '">' +
+    '<title>' + mtEsc(mtNoeudTitre(n)) + '</title>' +
+    '<rect class="mt-n-fond" x="-6" y="-6" width="' + (w + 12) + '" height="' + (h + 40) + '" rx="8" style="fill:rgba(19,28,36,.55)"/>' +
+    '<g transform="scale(' + k + ')">' + f(m.l, dh, m.id).replace(/url\(#P-/g, 'url(#' + p + '-') + '</g>' +
+    '<text class="mt-n-nom" x="' + (w / 2) + '" y="' + (h + 13) + '" text-anchor="middle">' + mtEsc(mtCoupe(n.nom, Math.floor((w + 30) / 6))) + '</text>' +
+    '<g transform="translate(' + ((w - bw) / 2) + ' ' + (h + 18) + ')">' + bs + '</g>' +
+    (n.detail ? '<text class="mt-n-det" x="' + (w / 2) + '" y="' + (h + 40) + '" text-anchor="middle">' + mtEsc(mtCoupe(n.detail, Math.floor((w + 60) / 4.6))) + '</text>' : '') + '</g>';
+}
+/** A link the way the signal goes, its kind and state; [p1] [p2] its ends. */
+function mtArcSvg(a, p1, p2, p) {
+  const dx = Math.max(24, Math.abs(p2[0] - p1[0]) * .45);
+  const d = 'M' + p1[0] + ' ' + p1[1] + ' C' + (p1[0] + dx) + ' ' + p1[1] + ' ' + (p2[0] - dx) + ' ' + p2[1] + ' ' + p2[0] + ' ' + p2[1];
+  const fl = a.type === 'audio' ? ' marker-end="url(#' + p + '-fl-son)"' : a.type === 'rf' ? '' : ' marker-end="url(#' + p + '-fl)"';
+  const mx = (p1[0] + p2[0]) / 2, my = (p1[1] + p2[1]) / 2;
+  return '<g class="mt-a t-' + a.type + ' st-' + a.statut + '"><title>' + mtEsc((a.type === 'audio' ? 'son' : a.type.toUpperCase()) + (a.texte ? ' · ' + a.texte : '') + ' — ' + (MT_STATUTS[a.statut] || a.statut)) + '</title>' +
+    '<path class="mt-a-l" d="' + d + '"' + fl + '/><path class="mt-a-f" d="' + d + '"/>' +
+    (a.texte ? '<text x="' + mx + '" y="' + (my - 4) + '" text-anchor="middle">' + mtEsc(mtCoupe(a.texte, 22)) + '</text>' : '') + '</g>';
+}
+function mtFleches(p) {
+  return '<marker id="' + p + '-fl" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0L8 4L0 8z" fill="#9AA7B4"/></marker>' +
+    '<marker id="' + p + '-fl-son" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L8 4L0 8z" fill="#5BD68A"/></marker>';
+}
+/**
+ * The software half, right of the computer of the drawing: the functions and the sound ends in four
+ * columns, the links that carry something; above each piece of hardware held, the function holding it.
+ */
+function mtLogiciel(svg, d, force) {
+  const f = d.fonctions, pl = d.plan;
+  let old = svg.querySelector('.mt-log');
+  if (!f || MT.fonction) {
+    if (old) { old.remove(); svg.setAttribute('viewBox', '0 0 ' + pl.l + ' ' + pl.h); svg.dataset.l = pl.l; svg.dataset.h = pl.h; MT.logCle = ''; }
+    mtTaille(svg, g('mt-zone'));
+    return;
+  }
+  const cle = JSON.stringify([f.logiciel, f.elements, pl.l, pl.h, MT.simple, MT.selN]);
+  if (cle === MT.logCle && old && !force) { mtTaille(svg, g('mt-zone')); return; }
+  MT.logCle = cle;
+  const vide = !d.chaine.elements.length;
+  let noeuds = f.logiciel.noeuds, arcs = f.logiciel.arcs;
+  if (MT.simple && !MT.edition) {
+    const vifs = new Set(arcs.flatMap(a => [a.de, a.vers]));
+    noeuds = noeuds.filter(n => n.statut !== 'pret' || vifs.has(n.id));
+  }
+  let pc = null;
+  pl.boites.forEach(b => { const e = mtElem(d.chaine, b.id), m = e && mtModele(e.m); if (m && m.genre === 'ORDINATEUR' && !pc) pc = b; });
+  const W = 160, H = 36, GX = 34, GY = 7;
+  const cols = [0, 1, 2, 3].map(c => noeuds.filter(n => n.col === c));
+  const haut = Math.max(1, ...cols.map(c => c.length)) * (H + GY) + 30;
+  const Ht = Math.max(vide ? 0 : pl.h, haut);
+  const x0 = vide ? W + GX : pl.l + 56;
+  const pos = {};
+  cols.forEach((c, k) => { const top = Math.max(26, (Ht - c.length * (H + GY)) / 2 + 10); c.forEach((n, j) => pos[n.id] = [x0 + k * (W + GX), top + j * (H + GY)]); });
+  let s = '<defs>' + mtFleches('mtL') + '</defs>';
+  cols.forEach((c, k) => { if (c.length) s += '<text class="mt-col-t" x="' + (x0 + k * (W + GX) + W / 2) + '" y="' + (Math.max(26, (Ht - c.length * (H + GY)) / 2 + 10) - 8) + '" text-anchor="middle">' + MT_COLS[k] + '</text>'; });
+  let pcPt;
+  if (pc) pcPt = [pc.x + pc.l + 4, pc.y + (pc.h - 18) / 2];
+  else {
+    pos.pc = [4, Ht / 2 - H / 2];
+    pcPt = [4 + W, Ht / 2];
+  }
+  const traits = arcs.filter(a => (a.de === 'pc' || pos[a.de]) && pos[a.vers]).map(a => {
+    const p1 = a.de === 'pc' ? pcPt : [pos[a.de][0] + W, pos[a.de][1] + H / 2];
+    let p2 = [pos[a.vers][0] - 2, pos[a.vers][1] + H / 2];
+    if (a.de !== 'pc' && pos[a.de][0] === pos[a.vers][0]) p2 = [pos[a.vers][0] + W, pos[a.vers][1] + H / 2];
+    return mtArcSvg(a.de === 'pc' ? Object.assign({}, a, { texte: '' }) : a, p1, p2, 'mtL');
+  }).join('');
+  s += traits;
+  if (!pc) s += mtPastille({ id: 'pc', nom: 'SatMe-PC', genre: 'materiel', badges: ['materiel'], statut: 'ok', detail: vide ? 'aucun montage dessiné' : 'pas dans le montage' }, pos.pc[0], pos.pc[1], W, H);
+  s += noeuds.map(n => mtPastille(n, pos[n.id][0], pos[n.id][1], W, H)).join('');
+  // Who holds each piece of hardware: a tag above it.
+  pl.boites.forEach(b => {
+    const t = f.elements[b.id]; if (!t) return;
+    const tient = t.tient || [], cf = t.conflits || [];
+    if (!tient.length && !cf.length) return;
+    const texte = (tient.length ? '▸ ' + tient.map(x => x.nom).join(', ') : '⚠ voulu') + (tient.length && cf.length ? ' ⚠' : '');
+    const w = texte.length * 5.4 + 12, cl = tient.some(x => x.tx) ? 'tx' : (!tient.length ? 'err' : '');
+    s += '<g class="mt-tag ' + cl + '" transform="translate(' + (b.x + b.l / 2 - w / 2) + ' ' + (b.y - 22) + ')"><title>' +
+      mtEsc(tient.map(x => mtNom(mtElem(d.chaine, b.id) || {}) + ' → occupé par ' + x.nom + ' (' + x.role + ')').concat(cf.map(x => '⚠ ' + x)).join('\n')) + '</title>' +
+      '<rect width="' + w + '" height="13" rx="6.5"/><text x="' + (w / 2) + '" y="9.6" text-anchor="middle">' + mtEsc(texte) + '</text></g>';
+  });
+  const Wt = x0 + 4 * W + 3 * GX + 10;
+  if (!old) { old = document.createElementNS('http://www.w3.org/2000/svg', 'g'); old.setAttribute('class', 'mt-log'); svg.appendChild(old); }
+  old.innerHTML = s;
+  svg.setAttribute('viewBox', '0 -14 ' + Wt + ' ' + (Ht + 18)); svg.dataset.l = Wt; svg.dataset.h = Ht + 18;
+  mtTaille(svg, g('mt-zone'));
+}
+/** One function's chain drawn left to right: the hardware with its drawing, the functions in pills. */
+function mtGraphe(svg, v) {
+  const cols = {};
+  v.noeuds.forEach(n => (cols[n.col] = cols[n.col] || []).push(n));
+  const ks = Object.keys(cols).map(Number).sort((a, b) => a - b);
+  const W = 186, H = 38, GX = 74, GY = 30;
+  const taille = n => {
+    const m = n.modele && mtModele(n.modele);
+    if (!m) return { w: W, h: H };
+    const k = Math.min(1, 124 / m.l, 64 / (m.h - 18));
+    return { w: m.l * k, h: (m.h - 18) * k + (n.detail ? 42 : 30), k, m };
+  };
+  const t = {}; v.noeuds.forEach(n => t[n.id] = taille(n));
+  let x = 12; const xs = {};
+  ks.forEach(k => { xs[k] = x; x += Math.max(...cols[k].map(n => t[n.id].w)) + GX; });
+  const Ht = Math.max(...ks.map(k => cols[k].reduce((a, n) => a + t[n.id].h + GY, -GY))) + 24;
+  const pos = {};
+  ks.forEach(k => {
+    const cw = Math.max(...cols[k].map(n => t[n.id].w));
+    let y = (Ht - cols[k].reduce((a, n) => a + t[n.id].h + GY, -GY)) / 2;
+    cols[k].forEach(n => { pos[n.id] = [xs[k] + (cw - t[n.id].w) / 2, y]; y += t[n.id].h + GY; });
+  });
+  const milieu = n => t[n.id].m ? t[n.id].h - (n.detail ? 42 : 30) : t[n.id].h;
+  let s = mtDefs('mtF').replace('</defs>', mtFleches('mtF') + '</defs>');
+  s += v.arcs.filter(a => pos[a.de] && pos[a.vers]).map(a => {
+    const nd = v.noeuds.find(n => n.id === a.de), nv = v.noeuds.find(n => n.id === a.vers);
+    return mtArcSvg(a.type === 'rf' ? Object.assign({}, a, { texte: '' }) : a, [pos[a.de][0] + t[a.de].w + (t[a.de].m ? 6 : 0), pos[a.de][1] + milieu(nd) / 2], [pos[a.vers][0] - (t[a.vers].m ? 8 : 2), pos[a.vers][1] + milieu(nv) / 2], 'mtF');
+  }).join('');
+  s += v.noeuds.map(n => t[n.id].m ? mtMateriel(n, pos[n.id][0], pos[n.id][1], t[n.id].m, t[n.id].k, 'mtF') : mtPastille(n, pos[n.id][0], pos[n.id][1], W, H)).join('');
+  svg.setAttribute('viewBox', '0 -8 ' + (x - GX + 24) + ' ' + (Ht + 16)); svg.dataset.l = x - GX + 24; svg.dataset.h = Ht + 16;
+  svg.innerHTML = s;
+}
+function mtSet(id, h) { const e = g(id); if (e.dataset.h !== h) { e.dataset.h = h; e.innerHTML = h; } e.hidden = !h; }
+/** The functions' rows above the drawing (who holds what, the conflicts) and the function view. */
+function mtFonctions(d, force) {
+  const f = d.fonctions, sel = g('mt-fonction'), fs = g('mt-fsvg');
+  if (!f) {
+    sel.hidden = true; ['mt-tient', 'mt-alertes', 'mt-vue-tete', 'mt-besoins'].forEach(id => mtSet(id, ''));
+    fs.style.display = 'none'; if (MT.fonction) { MT.fonction = ''; } return;
+  }
+  sel.hidden = false;
+  const k = JSON.stringify(f.vues);
+  if (sel.dataset.k !== k) { sel.dataset.k = k; sel.innerHTML = '<option value="">Toute la station</option>' + f.vues.map(x => '<option value="' + x.id + '">Fonction : ' + mtEsc(x.nom) + '</option>').join(''); }
+  if (sel.value !== MT.fonction) sel.value = MT.fonction;
+  const nomF = id => { const n = f.logiciel.noeuds.find(x => x.id === 'f:' + id); return n ? n.nom : id; };
+  mtSet('mt-tient', f.possessions.map(p => p.ressource === 'cat' ? '<span class="mt-puce tient" title="' + mtEsc(p.dit) + '">Poste ' + mtEsc(p.detail) + ' → <b>CAT</b></span>' :
+    '<span class="mt-puce tient' + (p.tx ? ' tx' : '') + '" title="' + mtEsc(p.dit) + '">' + mtEsc(p.nom) +
+    (p.detail && p.ressource === 'son:entree' ? ' (' + mtEsc(mtCoupe(p.detail.replace(/ \[.*/, ''), 26)) + ')' : '') + ' → <b>' + mtEsc(p.fonctionNom) + '</b>' +
+    (p.partage.length ? ' + ' + mtEsc(p.partage.map(nomF).join(', ')) : '') + '</span>').join(''));
+  const al = (f.emission ? '<div class="mt-alerte leger"><span>⚠ ' + mtEsc(f.emission) + ' : les profils ne s’appliquent pas, aucun geste d’ici.</span></div>' : '') +
+    f.conflits.map(c => '<div class="mt-alerte' + (c.grave ? '' : ' leger') + '"><span>⚠ <b>' + mtEsc(nomF(c.fonction)) + '</b> : ' + mtEsc(c.raison) + '</span>' +
+      c.actions.map(a => mtActeBouton(a)).join('') + mtVaBouton(c.raccourci, 'Réglages ›') + '</div>').join('');
+  const kAl = JSON.stringify([f.conflits, f.emission]);
+  if (g('mt-alertes').dataset.k !== kAl || force) { g('mt-alertes').dataset.k = kAl; mtSet('mt-alertes', al); }
+  const v = d.vue;
+  if (MT.fonction && v) {
+    fs.style.display = '';
+    const kv = JSON.stringify([v, MT.selN]);
+    if (MT.vueCle !== kv || force) { MT.vueCle = kv; mtGraphe(fs, v); }
+    mtTaille(fs, g('mt-zone'));
+    const bloque = v.resume.indexOf('Bloquée') === 0, marche = v.resume.indexOf('En marche') === 0;
+    mtSet('mt-vue-tete', '<b>' + mtEsc(v.titre) + '</b><span class="' + (bloque ? 'bloque' : marche ? 'marche' : '') + '">' + mtEsc(v.resume) + '</span><span class="h-esp"></span>' +
+      '<button class="mt-va" onclick="mtFonction(\'\')">Toute la station ›</button>');
+    const kb = JSON.stringify(v.besoins);
+    if (g('mt-besoins').dataset.k !== kb || force) {
+      g('mt-besoins').dataset.k = kb;
+      mtSet('mt-besoins', v.besoins.map(b => '<div class="mt-besoin"><span>' + mtEsc(b.texte) + '</span>' + mtActeBouton(b.action) + mtVaBouton(b.raccourci, 'Réglages ›') + '</div>').join(''));
+    }
+  } else {
+    fs.style.display = 'none'; MT.vueCle = '';
+    mtSet('mt-vue-tete', ''); mtSet('mt-besoins', '');
+  }
+}
+function mtFonction(id) {
+  MT.fonction = id || '';
+  try { localStorage.setItem('mt-fonction', MT.fonction); } catch (x) {}
+  mtFicheFerme(); MT.vueCle = ''; MT.logCle = '';
+  mtTic(true);
+}
+/** A function's (or a sound end's) card: its state, what it holds, its gestures, where it is set. */
+function mtFicheN(id, rafraichit) {
+  const d = MT.d; if (!d || !d.fonctions) return;
+  const n = ((d.vue && MT.fonction) ? d.vue.noeuds : []).concat(d.fonctions.logiciel.noeuds).find(x => x.id === id);
+  if (!n) { mtFicheFerme(); return; }
+  if (n.element) { MT.selN = null; mtFiche(n.element, rafraichit); return; }
+  const fi = g('mt-fiche');
+  if (rafraichit && fi.dataset.id === id && document.activeElement && fi.contains(document.activeElement)) return;
+  MT.sel = null; MT.selN = id; fi.dataset.id = id;
+  const tient = n.fonction ? d.fonctions.possessions.filter(p => p.fonction === n.fonction) : [];
+  const cf = n.fonction ? d.fonctions.conflits.filter(c => c.fonction === n.fonction) : [];
+  const vues = (d.fonctions.vues || []).map(x => x.id);
+  const h = '<div class="mt-f-tete"><b>' + mtEsc(n.nom) + '</b><span class="mt-puce ' + (n.statut === 'ok' ? ((n.badges || []).includes('tx') ? 'tx' : 'rx') : n.statut === 'occupe' || n.statut === 'erreur' ? 'err' : '') + '">' + (MT_STATUTS[n.statut] || n.statut) + '</span>' +
+    '<button class="discret" onclick="mtFicheFerme()" aria-label="Fermer">✕</button></div>' +
+    '<div class="petit">' + (n.badges || []).map(b => (MT_BADGES[b] || [b, '', b])[2]).join(' · ') + '</div>' +
+    (n.detail ? '<div style="margin-top:4px">' + mtEsc(n.detail) + '</div>' : '') +
+    (tient.length ? '<div class="petit" style="margin-top:4px">Tient : ' + tient.map(p => mtEsc(p.nom + ' (' + p.role + ')')).join(', ') + '</div>' : '') +
+    cf.map(c => '<div class="mt-f-err">⚠ ' + mtEsc(c.raison) + '</div>').join('') +
+    '<div class="ligne mt-actes" style="flex-wrap:wrap">' + (n.actions || []).map(a => mtActeBouton(a)).join('') + cf.flatMap(c => c.actions).map(a => mtActeBouton(a)).join('') +
+    (n.fonction && vues.includes(n.fonction) && MT.fonction !== n.fonction ? '<button onclick="mtFonction(\'' + n.fonction + '\')">Voir sa chaîne</button>' : '') +
+    mtVaBouton(n.raccourci, 'Ses réglages ›') + '</div>' +
+    ((n.badges || []).includes('tx') ? '<div class="petit" style="margin-top:4px">Une émission ne se démarre jamais d’ici : son onglet, avec ses sécurités.</div>' : '');
+  if (fi.innerHTML !== h) fi.innerHTML = h;
+  fi.hidden = false;
+  document.querySelectorAll('#mt-zone .mt-n').forEach(x => x.classList.toggle('sel', x.dataset.n === id));
+}
+
+// ---- the profiles: the receive settings kept under a name, put back after a look at what changes
+MT.pf = null; MT.pfOuvert = false; MT.pfVu = ''; MT.pfBilan = null;
+async function mtPfCharge() {
+  try { const j = await (await fetch('api/montage/profils')).json(); if (j && j.ok !== false) { MT.pf = j; mtPfRendu(); } } catch (x) {}
+}
+function mtProfils(o, id) {
+  MT.pfOuvert = o === undefined ? !MT.pfOuvert : !!o;
+  if (MT.pfOuvert && MT.edition) mtEdition(false);
+  if (id) { MT.pfVu = id; MT.pfBilan = null; }
+  g('mt-profils').hidden = !MT.pfOuvert; g('v-montage').classList.toggle('mt-pf', MT.pfOuvert);
+  g('mt-b-profils').classList.toggle('actif', MT.pfOuvert); g('mt-b-profils').setAttribute('aria-pressed', MT.pfOuvert);
+  mtPfRendu();
+  if (MT.pfOuvert) mtPfCharge();
+  setTimeout(() => mtTic(true), 30);
+}
+function mtPfRendu() {
+  const j = MT.pf || { profils: [], actuels: [], emission: '' };
+  const pu = j.profils.slice(0, 6).map(p => '<button class="mt-puce pf" onclick="mtProfils(true, \'' + p.id + '\')" title="Profil : aperçu de ce qui changera, puis appliquer">' + mtEsc(mtCoupe(p.nom, 26)) + '</button>').join('');
+  mtSet('mt-pf-puces', pu);
+  g('mt-b-profils').hidden = !!j.telephone;
+  if (!MT.pfOuvert) return;
+  const tx = g('mt-pf-tx'); tx.hidden = !j.emission; tx.textContent = j.emission ? '⚠ ' + j.emission + ' : rien ne s’applique tant qu’elle dure.' : '';
+  const ac = (j.actuels || []).map(x => '<li>' + mtEsc(x.texte) + '</li>').join('') || '<li>Rien à garder ici.</li>';
+  if (g('mt-pf-actuels').innerHTML !== ac) g('mt-pf-actuels').innerHTML = ac;
+  const l = j.profils.map(p => {
+    const ouvert = MT.pfVu === p.id, b = MT.pfBilan && MT.pfBilan.id === p.id ? MT.pfBilan.j : null;
+    let corps = '';
+    if (ouvert && b) {
+      corps = b.ok ? '<ul class="mt-pf-et">' + (b.etapes.length ? b.etapes.map(e => '<li class="' + (e.manuel ? 'main' : e.ok ? 'ok' : 'non') + '">' + mtEsc(e.texte) + (e.manuel || !e.ok ? ' <i>— ' + mtEsc(e.message) + '</i>' : '') + '</li>').join('') : '<li class="ok">Rien à changer.</li>') + '</ul>'
+        : '<div class="mt-f-err">' + mtEsc(b.erreur || 'Refusé') + '</div>';
+    } else if (ouvert) {
+      corps = '<div class="petit" style="margin-top:4px">' + (p.apercu.length ? p.apercu.length + ' changement' + (p.apercu.length > 1 ? 's' : '') + ', dans cet ordre :' : 'Rien ne changerait : la station est déjà ainsi.') + '</div>' +
+        '<ul class="mt-pf-et">' + p.apercu.map(e => '<li class="' + (e.manuel ? 'main' : '') + '">' + mtEsc(e.texte) + (e.avant !== '' && e.avant !== '0' && e.avant !== '1' && !e.manuel && e.cle !== 'son.entree' ? ' <i>(avant : ' + mtEsc(e.avant.replace(/^(\d+)\.(\d+?)0*$/, (m, x, y) => x + ',' + y)) + ')</i>' : '') + '</li>').join('') + '</ul>' +
+        '<details><summary class="petit">Ce que garde ce profil (' + p.reglages.length + ')</summary><ul class="mt-pf-et">' + p.reglages.map(r => '<li>' + mtEsc(r.texte) + '</li>').join('') + '</ul></details>';
+    }
+    return '<div class="mt-pf-i' + (ouvert ? ' ouvert' : '') + '"><div class="ligne"><b title="' + mtEsc(p.nom) + '">' + mtEsc(p.nom) + '</b>' +
+      '<button onclick="mtPfApercu(\'' + p.id + '\')" aria-expanded="' + ouvert + '">Aperçu</button>' +
+      '<button class="primaire" onclick="mtPfApplique(\'' + p.id + '\')"' + (j.emission ? ' disabled title="Une émission est en cours"' : ' title="Remettre ces réglages de réception"') + '>Appliquer</button>' +
+      '<button class="discret" onclick="mtPfRetire(\'' + p.id + '\')" aria-label="Retirer le profil ' + mtEsc(p.nom) + '">✕</button></div>' + corps + '</div>';
+  }).join('') || '<div class="petit">Aucun profil : règle la réception (récepteur SDR, carte son, décodeurs), puis « Garder l’état actuel ».</div>';
+  if (g('mt-pf-liste').dataset.h !== l) { g('mt-pf-liste').dataset.h = l; g('mt-pf-liste').innerHTML = l; }
+}
+function mtPfApercu(id) { MT.pfVu = MT.pfVu === id && !MT.pfBilan ? '' : id; MT.pfBilan = null; mtPfRendu(); mtPfCharge(); }
+async function mtPfApplique(id) {
+  if (MT.essai) { annonce('Démonstration : rien n’est appliqué'); return; }
+  const p = MT.pf && MT.pf.profils.find(x => x.id === id); if (!p) return;
+  let j = null;
+  try { j = await (await fetch('api/montage/profils?id=' + enc(id) + '&applique=1', { method: 'POST' })).json(); } catch (x) {}
+  if (!j) { annonce('Profil non appliqué'); return; }
+  MT.pfVu = id; MT.pfBilan = { id, j };
+  annonce(j.ok ? (j.toutBon ? 'Profil appliqué : ' + p.nom : 'Profil appliqué en partie : ' + p.nom) : (j.erreur || 'Refusé'));
+  mtPfRendu(); await mtTic(true);
+}
+async function mtPfGarde() {
+  const nom = v('mt-pf-nom'); if (!nom) { annonce('Un nom, par exemple « SSTV par IC-9700 »'); g('mt-pf-nom').focus(); return; }
+  const meme = MT.pf && MT.pf.profils.find(x => x.nom.toLowerCase() === nom.toLowerCase());
+  if (meme && !confirm('Remplacer le profil « ' + meme.nom + ' » par l’état actuel ?')) return;
+  let j = null;
+  try { j = await (await fetch('api/montage/profils?nom=' + enc(nom) + (meme ? '&id=' + enc(meme.id) : ''), { method: 'POST' })).json(); } catch (x) {}
+  if (!j || j.ok === false) { annonce((j && j.erreur) || 'Profil non gardé'); return; }
+  g('mt-pf-nom').value = ''; MT.pfVu = j.profil.id; MT.pfBilan = null;
+  annonce('Profil gardé : ' + j.profil.nom);
+  await mtPfCharge();
+}
+async function mtPfRetire(id) {
+  const p = MT.pf && MT.pf.profils.find(x => x.id === id); if (!p || !confirm('Retirer le profil « ' + p.nom + ' » ?')) return;
+  try { await fetch('api/montage/profils?id=' + enc(id) + '&retire=1', { method: 'POST' }); } catch (x) {}
+  await mtPfCharge();
+}
+setInterval(() => { if (MT.pfOuvert && ouverte('montage') && !document.hidden) mtPfCharge(); }, 4000);
+mtPfCharge();
 
 // ------------------------------------------------------------------ the frame: rail, workspaces, header strip, status bar
 // Kept in var: vue() may run before this part of the script has.
@@ -9085,6 +9534,8 @@ function palSources() {
     A('Montage : vue simplifiée', 'seulement ce qui reçoit ou émet', () => { vue('montage'); mtVue(true); });
     A('Montage : vue complète', 'toute la chaîne de la station', () => { vue('montage'); mtVue(false); });
     A('Montage : proposer d’après SatMe', 'chaîne composée depuis les réglages', () => { vue('montage'); mtSuggere(); });
+    ((MT.pf && MT.pf.profils) || []).forEach(p => A('Profil : ' + p.nom, 'réglages de réception : aperçu puis appliquer', () => { vue('montage'); mtProfils(true, p.id); }));
+    ((MT.d && MT.d.fonctions && MT.d.fonctions.vues) || []).forEach(f => A('Montage : chaîne ' + f.nom, 'de l’antenne à l’écran, ce qui manque', () => { vue('montage'); mtFonction(f.id); }));
   }
   if (ouverte('qo100') || ouverte('datv')) A('Schéma de la chaîne en œuvre', 'par-dessus l’onglet ' + (ouverte('qo100') ? 'QO-100' : 'DATV'), () => mtPopBascule(ouverte('qo100') ? 'qo100' : 'datv'));
   A('Déplier ou replier le menu', 'touche [', () => railRegle(!document.body.classList.contains('rail-ouvert')));

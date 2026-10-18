@@ -97,6 +97,9 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
         qo100 = runCatching { JsonPc.qo100(station, false, sdr?.gammeHz) }.getOrNull(),
         lien = lien?.let { l -> JSONObject().put("on", l.actif).put("ecoute", l.ecoute).put("clients", l.nbClients) })
 
+    /** The « Montage » page's functions: their state, and its receive gestures through the page's own routes. */
+    val fonctionsMontage: FonctionsPc by lazy { FonctionsPc(station, sdr, son, datv, phonie, diffusion, { c, q -> action(c, q) }, { lecturesMontage() }) }
+
     /** The password asked of other machines when the page is open to the network (set before [demarre]). */
     @Volatile var acces: AccesDistantPc? = null
 
