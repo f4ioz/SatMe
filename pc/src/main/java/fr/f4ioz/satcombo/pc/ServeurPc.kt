@@ -88,6 +88,8 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
     /** The « Montage » page: the station's chain, its drawing lit by what happens (set before [demarre]). */
     @Volatile var montage: MontagePc? = null
     @Volatile var memoiresSdr: MemoiresSdrPc? = null
+    /** The SDR tab's scan and band stack (set before [demarre]). */
+    @Volatile var balayage: BalayagePc? = null
     /** « Niveau dans le temps » (set before [demarre]). */
     @Volatile var niveaux: NiveauxPc? = null
     /** The Sun's noise and the raster around it (set before [demarre]). */
@@ -367,6 +369,12 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
             val m = memoiresSdr
             val rep = m?.sert(chemin, r.methode, { q[it].orEmpty() }) { max -> RequeteHttp.corps(c.getInputStream(), r, max) }
                 ?: fr.f4ioz.satcombo.demo.ReponseWeb("200 OK", "application/json; charset=utf-8", "{\"ok\":false}".toByteArray())
+            envoie(sortie, rep.statut, rep.type, rep.corps, rep.entetes); return
+        }
+        // The scan and the band stack (receive only).
+        if (chemin == "/api/balayage" || chemin.startsWith("/api/balayage/") || chemin == "/api/pile-bandes" || chemin.startsWith("/api/pile-bandes/")) {
+            val rep = balayage?.sert(chemin, r.methode) { q[it].orEmpty() }
+                ?: fr.f4ioz.satcombo.demo.ReponseWeb("200 OK", "application/json; charset=utf-8", "{\"ok\":false,\"absent\":true}".toByteArray())
             envoie(sortie, rep.statut, rep.type, rep.corps, rep.entetes); return
         }
         // Levels over time and the Sun's noise (receive only; the raster moves the rotor only once confirmed).
@@ -857,11 +865,12 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 if (!d.demarre()) return JSONObject().put("ok", false).put("erreur", d.etat.value.erreur)
             }
             "/api/sdr/arreter" -> { trafic?.oublie(); sdr?.arrete() }
-            "/api/sdr/decalage" -> q["hz"]?.toIntOrNull()?.let { sdr?.decalageHz = it }
+            // A tuning by hand stops the scan (as a dial turned on a scanner).
+            "/api/sdr/decalage" -> q["hz"]?.toIntOrNull()?.let { balayage?.arrete("accord à la main"); sdr?.decalageHz = it }
             "/api/sdr/pic" -> sdr?.calePic()
             "/api/sdr/voix" -> if (sdr?.caleVoix() != true) return JSONObject().put("ok", false).put("erreur", "le calage sur la voix sert en BLU (USB / LSB)")
             // The vernier: the listened frequency pushed by [hz] (the dongle's software offset, ±80 kHz).
-            "/api/sdr/pas" -> q["hz"]?.toIntOrNull()?.let { h -> sdr?.let { it.decalageHz = it.decalageHz + h } }
+            "/api/sdr/pas" -> q["hz"]?.toIntOrNull()?.let { h -> balayage?.arrete("accord à la main"); sdr?.let { it.decalageHz = it.decalageHz + h } }
             "/api/sdr/accord" -> {
                 val st = station.settings
                 q["loupe"]?.let { st.sdrLoupe = it == "1" }
@@ -882,6 +891,7 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 q["son"]?.let { st.sdrAudio = it == "1" }
                 q["deemph"]?.let { st.sdrDeemph = it == "1" }
                 q["doppler"]?.let { st.sdrDopplerTrack = it == "1" }
+                if (q["suit"] == "1" || q["mhz"] != null) balayage?.arrete("accord à la main")
                 q["suit"]?.let { d.suitSatellite = it == "1" }
                 q["mhz"]?.replace(',', '.')?.toDoubleOrNull()?.let { d.manuelleHz = Math.round(it * 1e6); d.decalageHz = 0 }
                 q["hote"]?.let { d.hote = it }

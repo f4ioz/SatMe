@@ -436,6 +436,23 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
     /** The last spectrum: dB per bin from −88.2 to +88.2 kHz around the PLL. */
     @Volatile var spectre: FloatArray? = null; private set
     @Volatile var trames = 0L; private set
+    /** The PLL the last spectrum was taken with. */
+    @Volatile var spectrePllHz = 0L; private set
+    /** The squelch open on the last block (always open when it is off). */
+    @Volatile var squelchOuvert = false; private set
+
+    /** The sky frequency in the middle of a spectrum taken with the PLL at [pll] (the generator's, a recording's own). */
+    fun cielDePll(pll: Long): Long = generateur?.let { centreGenerateurHz } ?: lecture?.capture()?.frequenceHz ?: station.depuisCle(pll)
+
+    /** −1 when an inverting converter turns the spectrum over at [cielHz] (sky above, bins below). */
+    fun sensSpectre(cielHz: Long): Int {
+        if (fictif) return 1
+        val c = station.convRx()
+        return if (c.configure && c.inverseur && c.couvre(cielHz)) -1 else 1
+    }
+
+    /** QO-100's tab holds the receiver (its frequency, its mode). */
+    val surQo100: Boolean get() = pourQo100()
 
     /**
      * The dongle on the satellite (or QO-100, or the manual frequency).
@@ -723,6 +740,7 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
                 val produit = if (iq16 != null) chaine.process16(iq16, n, pcm, feedSpectrum = veutSpectre, feedPanorama = veutPano)
                     else chaine.process(iq, n, pcm, feedSpectrum = veutSpectre, feedPanorama = veutPano)
                 if (veutSpectre) dernierSpectre = maintenant
+                squelchOuvert = chaine.squelch.open
                 // A channel heard in place of the main receiver; its decoders fed by the channels, not by it.
                 val ecoute = if (cibles.isNotEmpty()) cp0?.prendEcoute() else null
                 val canauxSstv = cibles.isNotEmpty() && cp0?.tientSstv() == true
@@ -735,7 +753,7 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
                 }
                 if (chaine.spectrum.frames != trameVue) {
                     trameVue = chaine.spectrum.frames
-                    spectre = chaine.spectrum.magDb.copyOf(); trames++
+                    spectrePllHz = pll; spectre = chaine.spectrum.magDb.copyOf(); trames++
                     // The sonde: the centre of gravity of what stands above the noise, ±25 kHz
                     // around the tuning; nothing found (silence): the tuning stays.
                     if (sonde && (recentreVoulu || (recentreAuto && maintenant - dernierRecentre >= 2_000L))) {
