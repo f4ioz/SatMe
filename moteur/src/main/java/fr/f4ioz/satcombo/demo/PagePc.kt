@@ -1364,6 +1364,7 @@ ${rail()}
     <span>S'arrêter</span><span class="sp-l"><select id="bal-critere"><option value="NIVEAU">niveau au-dessus du bruit</option><option value="SQUELCH">silencieux ouvert</option></select><input id="bal-seuil" value="12" style="width:52px" inputmode="decimal" title="dB au-dessus du bruit"><span class="petit">dB</span></span>
     <span>Repartir</span><span class="sp-l"><select id="bal-reprise"><option value="PORTEUSE">quand le signal tombe</option><option value="TEMPS">au bout de</option><option value="MANUELLE">à la main</option></select><input id="bal-temps" value="2" style="width:52px" inputmode="decimal"><span class="petit">s</span></span>
     <span>Priorité</span><span class="sp-l"><select id="bal-prio" style="max-width:190px"><option value="">aucune</option></select><span class="petit">toutes les</span><input id="bal-prio-s" value="5" style="width:44px" inputmode="decimal"><span class="petit">s</span></span>
+    <span>À l'arrêt</span><select id="bal-retour" title="Où laisser le récepteur quand le balayage s'arrête"><option value="reste">rester sur le dernier signal (sinon revenir)</option><option value="avant">revenir à la fréquence d'avant</option></select>
   </div>
   <div class="sp-l" style="margin-top:8px"><button type="button" class="primaire" id="bal-go" onclick="balDemarre()">Balayer</button><button type="button" class="arret" id="bal-stop" onclick="balPost('arreter')" hidden>Arrêter</button>
     <button type="button" id="bal-reprend" onclick="balPost('reprendre')" hidden title="Repartir tout de suite">Reprendre</button><button type="button" id="bal-passe" onclick="balPasse()" hidden title="Ne plus jamais s'arrêter ici (verrouillage)">Passer</button>
@@ -1372,7 +1373,7 @@ ${rail()}
   <div class="sp-st">Signaux trouvés</div>
   <div id="bal-touches" class="mem-liste bal-touches"></div>
   <div class="sp-l"><span class="petit" id="bal-passes" style="flex:1"></span></div>
-  <div class="aide">Réception seulement : SatMe-PC fait tourner le balayage lui-même (la page peut se fermer ; « Arrêter », ou la puce « Balayage » de la barre d'état, l'arrête), en déplaçant le décalage d'écoute dans la bande que voit le récepteur, ou son oscillateur au-delà. <b>Mémoires</b> : celles d'un dossier, l'une après l'autre. <b>Plage, canal par canal</b> : chaque canal de la grille écouté (le silencieux peut servir). <b>Plage, par le spectre</b> : toute la bande que voit le récepteur jugée d'un coup sur son spectre, puis la suivante — bien plus rapide sur un récepteur large. Le niveau se compte au-dessus du bruit (la médiane du spectre). Un clic sur un signal trouvé y accorde le récepteur et arrête le balayage ; « Garder » le met en mémoire (dossier « Balayage ») ; « Passer » le verrouille. Refusé quand la DATV, l'ADS-B, QO-100 ou une sonde tient le récepteur ; le générateur d'essai et un enregistrement servent à l'essayer.</div>
+  <div class="aide">Réception seulement : SatMe-PC fait tourner le balayage lui-même (la page peut se fermer ; « Arrêter », ou la puce « Balayage » de la barre d'état, l'arrête), en déplaçant le décalage d'écoute dans la bande que voit le récepteur, ou son oscillateur au-delà. <b>Mémoires</b> : celles d'un dossier, l'une après l'autre. <b>Plage, canal par canal</b> : chaque canal de la grille écouté (le silencieux peut servir). <b>Plage, par le spectre</b> : toute la bande que voit le récepteur jugée d'un coup sur son spectre, puis la suivante — bien plus rapide sur un récepteur large. Le niveau se compte au-dessus du bruit (la médiane du spectre). Un clic sur un signal trouvé y accorde le récepteur et arrête le balayage ; « Garder » le met en mémoire (dossier « Balayage ») ; « Passer » le verrouille. Refusé quand la DATV, l'ADS-B, QO-100 ou une sonde tient le récepteur ; le générateur d'essai et un enregistrement servent à l'essayer. Pendant le balayage, rien n'est écrit dans les réglages ; à l'arrêt, la fréquence où il s'est arrêté est gardée une fois — ou celle d'avant est rendue, au choix (et toujours quand rien n'a été trouvé).</div>
 </div>
 <div id="niv-pop" class="sp-pop" hidden role="dialog" aria-label="Niveau dans le temps, bruit solaire, balise">
   <div class="t sp-pop-t"><span>Mesures du récepteur</span><span class="h-esp"></span><button type="button" class="discret" onclick="g('niv-pop').hidden = true" aria-label="Fermer">✕</button></div>
@@ -8929,7 +8930,7 @@ setInterval(pileCharge, 2000);
 
 // ---- the scan: run by SatMe-PC on the receiver (receive only); this popover only starts it, shows it, stops it
 let BALY = null, balAbsent = false, balGenre = 'PLAGE', balVu = 0;
-const BAL_CHAMPS = ['bal-dossier', 'bal-debut', 'bal-fin', 'bal-pas', 'bal-mode', 'bal-critere', 'bal-seuil', 'bal-reprise', 'bal-temps', 'bal-prio', 'bal-prio-s'];
+const BAL_CHAMPS = ['bal-dossier', 'bal-debut', 'bal-fin', 'bal-pas', 'bal-mode', 'bal-critere', 'bal-seuil', 'bal-reprise', 'bal-temps', 'bal-prio', 'bal-prio-s', 'bal-retour'];
 let balForm = {};
 try { balForm = JSON.parse(localStorage.getItem('bal-form') || '{}') || {}; if (balForm.genre) balGenre = balForm.genre; } catch (x) {}
 function balGardeForm() {
@@ -8977,7 +8978,7 @@ function balDemarre() {
   balPost('demarrer?genre=' + balGenre + (d.indexOf('e:') === 0 ? '&etiquette=' + enc(d.slice(2)) : '&dossier=' + enc(d)) +
     '&debut=' + enc(v('bal-debut')) + '&fin=' + enc(v('bal-fin')) + '&pas=' + enc(v('bal-pas')) + '&mode=' + enc(v('bal-mode')) +
     '&critere=' + v('bal-critere') + '&seuil=' + enc(v('bal-seuil')) + '&reprise=' + v('bal-reprise') + '&maintien=' + enc(t) + '&temps=' + enc(t) +
-    '&priorite=' + enc(v('bal-prio')) + '&prioriteS=' + enc(v('bal-prio-s')));
+    '&priorite=' + enc(v('bal-prio')) + '&prioriteS=' + enc(v('bal-prio-s')) + '&retour=' + v('bal-retour'));
 }
 /** ▶ on a folder of the memories: its memories scanned at once. */
 function balPourDossier(d) {

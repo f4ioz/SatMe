@@ -115,6 +115,90 @@ class BalayagePcTest {
         assertEquals(3, MemoiresSdrPc(dossier).memoires().size)
     }
 
+    /** A store counting its writes. */
+    private class Compte : fr.f4ioz.satcombo.plateforme.Stockage {
+        private val dedans = StockageMemoire()
+        val ecritures = java.util.concurrent.atomic.AtomicInteger()
+        override fun getString(cle: String, defaut: String?) = dedans.getString(cle, defaut)
+        override fun getInt(cle: String, defaut: Int) = dedans.getInt(cle, defaut)
+        override fun getLong(cle: String, defaut: Long) = dedans.getLong(cle, defaut)
+        override fun getFloat(cle: String, defaut: Float) = dedans.getFloat(cle, defaut)
+        override fun getBoolean(cle: String, defaut: Boolean) = dedans.getBoolean(cle, defaut)
+        override fun getStringSet(cle: String, defaut: Set<String>?) = dedans.getStringSet(cle, defaut)
+        override fun edit(): fr.f4ioz.satcombo.plateforme.Stockage.Edition {
+            val e = dedans.edit()
+            // Each put returns this one, so that apply() is counted.
+            return object : fr.f4ioz.satcombo.plateforme.Stockage.Edition {
+                override fun putString(cle: String, valeur: String?) = apply { e.putString(cle, valeur) }
+                override fun putInt(cle: String, valeur: Int) = apply { e.putInt(cle, valeur) }
+                override fun putLong(cle: String, valeur: Long) = apply { e.putLong(cle, valeur) }
+                override fun putFloat(cle: String, valeur: Float) = apply { e.putFloat(cle, valeur) }
+                override fun putBoolean(cle: String, valeur: Boolean) = apply { e.putBoolean(cle, valeur) }
+                override fun putStringSet(cle: String, valeur: Set<String>?) = apply { e.putStringSet(cle, valeur) }
+                override fun remove(cle: String) = apply { e.remove(cle) }
+                override fun apply() { ecritures.incrementAndGet(); e.apply() }
+            }
+        }
+    }
+
+    /** A fake rtl_tcp: noise, and the PLL tunings it is asked. */
+    private fun fauxRtl(serveur: java.net.ServerSocket, accords: java.util.concurrent.atomic.AtomicInteger, fini: () -> Boolean) = kotlin.concurrent.thread(isDaemon = true) {
+        runCatching {
+            serveur.accept().use { c ->
+                val o = c.getOutputStream()
+                o.write("RTL0".toByteArray() + byteArrayOf(0, 0, 0, 5, 0, 0, 0, 29)); o.flush()
+                kotlin.concurrent.thread(isDaemon = true) {
+                    val e = java.io.DataInputStream(c.getInputStream())
+                    runCatching { while (true) { if (e.readUnsignedByte() == 0x01) accords.incrementAndGet(); e.readInt() } }
+                }
+                val r = java.util.Random(1)
+                val bloc = ByteArray(16_384) { (127 + r.nextInt(41) - 20).toByte() }
+                while (!fini()) { o.write(bloc); Thread.sleep(7) }
+            }
+        }
+    }
+
+    @Test
+    fun le_balayage_n_ecrit_rien_dans_les_reglages_et_rend_la_frequence() {
+        val reglagesStation = Compte(); val reglagesSdr = Compte()
+        val st = StationPc(reglagesStation, Catalogue(dossier, enLigne = false), PortsSeriePc(), portee)
+        st.settings.sdrAudio = false
+        val d = SdrPc(st, SonPc(), reglagesSdr, portee).also { sdr = it }
+        d.suitSatellite = false; d.manuelleHz = 145_800_000L; d.lance = false
+        val serveur = java.net.ServerSocket(0)
+        d.port = serveur.localPort
+        val accords = java.util.concurrent.atomic.AtomicInteger()
+        var fini = false
+        fauxRtl(serveur, accords, { fini })
+        try {
+            assertTrue(d.demarre())
+            attends { d.trames > 2 }
+            val b = BalayagePc(d, null, StockageMemoire(), dossier)
+            val avant = reglagesStation.ecritures.get() + reglagesSdr.ecritures.get()
+            // 144–146 MHz, 25 kHz, in USB 3 kHz: the PLL moves every few channels.
+            assertTrue(b.post("/api/balayage/demarrer", "genre" to "PLAGE", "debut" to "144", "fin" to "146", "pas" to "25000",
+                "mode" to "USB", "bw" to "3000", "retour" to "avant").getBoolean("ok"))
+            attends(20_000) { b.json().getLong("vus") >= 40 }
+            assertTrue("${accords.get()} accords de la PLL", accords.get() >= 5)
+            // Steps under way: the receiver far from 145.8, nothing written.
+            assertEquals(0, reglagesStation.ecritures.get() + reglagesSdr.ecritures.get() - avant)
+            assertEquals(145_800_000L, d.manuelleHz)
+            // « Revenir à la fréquence d'avant »: given back, still nothing written.
+            b.post("/api/balayage/arreter")
+            assertEquals(null, d.passager)
+            assertEquals(0, reglagesStation.ecritures.get() + reglagesSdr.ecritures.get() - avant)
+            attends { d.etat.value.cielHz == 145_800_000L }
+            // A tuning by hand stops it where it is: kept once.
+            assertTrue(b.post("/api/balayage/demarrer", "genre" to "PLAGE", "debut" to "144", "fin" to "146", "pas" to "25000").getBoolean("ok"))
+            attends(20_000) { b.json().getLong("vus") >= 10 }
+            val ici = d.passager!!.hz
+            b.arrete("accord à la main", main = true)
+            assertEquals(ici, d.manuelleHz)
+            val n = reglagesStation.ecritures.get() + reglagesSdr.ecritures.get() - avant
+            assertTrue("$n écritures", n in 1..4)
+        } finally { fini = true; runCatching { serveur.close() } }
+    }
+
     @Test
     fun la_pile_de_bandes_note_et_rappelle() {
         val d = recepteur()

@@ -590,7 +590,19 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
     private fun pourQo100(): Boolean = station.qo100.etat.value.aLaCle
 
     /** The mode to demodulate: chosen, or the transmitter's. */
-    private fun mode(): RxMode = when (val m = modeChoisi) {
+    /**
+     * A tuning held in memory only, over the kept one (the scan's steps):
+     * sky frequency, mode ("": the chosen one), width (−1: the chosen one).
+     * Never written to the settings — a scan writes nothing several times a
+     * second, and a scan step is never the frequency found at the next start.
+     */
+    data class AccordPassager(val hz: Long, val mode: String = "", val largeurHz: Int = -1)
+    @Volatile var passager: AccordPassager? = null
+
+    /** The width demodulated now (the transient tuning's, else the chosen one). */
+    private fun largeur(): Int = passager?.largeurHz?.takeIf { it >= 0 } ?: settings.sdrBandwidthHz
+
+    private fun mode(): RxMode = passager?.mode?.takeIf { it.isNotEmpty() }?.let { m -> runCatching { RxMode.valueOf(m) }.getOrNull() } ?: when (val m = modeChoisi) {
         "AUTO" -> if (pourQo100()) RxMode.USB else modeDe(station.ecouteSdr()?.mode.orEmpty())
         else -> runCatching { RxMode.valueOf(m) }.getOrDefault(RxMode.NFM)
     }
@@ -619,7 +631,7 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
 
     /** The Doppler loop: where the dongle should be now. */
     private fun cibleMaintenant() {
-        ecouteCw = settings.sdrBandwidthHz in 1..1_000 ||
+        ecouteCw = largeur() in 1..1_000 ||
             (if (pourQo100()) settings.qo100ModeCarnet == "CW" else station.ecouteSdr()?.mode.orEmpty().uppercase().contains("CW"))
         // A recording: its own frequency (and its Doppler's software share as heard); the generator: its centre.
         lecture?.let { l ->
@@ -647,10 +659,11 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
             _etat.update { it.copy(cielHz = ciel, reposHz = ciel, satellite = "QO-100") }
             return
         }
-        val e = if (suitSatellite) station.ecouteSdr() else null
+        val pas = passager
+        val e = if (suitSatellite && pas == null) station.ecouteSdr() else null
         val (repos, ciel) = if (e != null) {
             if (settings.sdrDopplerTrack) e.reposHz to e.cibleHz else e.reposHz to e.reposHz
-        } else manuelleHz to manuelleHz
+        } else (pas?.hz ?: manuelleHz).let { it to it }
         voulueHz = station.versCle(ciel)
         _etat.update { it.copy(cielHz = ciel, reposHz = repos, satellite = e?.satellite.orEmpty()) }
     }
@@ -699,7 +712,7 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
                 // no de-emphasis — it rounds the edges and nothing decodes.
                 val m = if (sonde) RxMode.NFM else mode()
                 if (chaine.mode != m) { chaine.mode = m; chaine.reset() }
-                val bw = (if (sonde) fr.f4ioz.satcombo.sonde.SondeModel.bandwidthFor(settings.sondeModel) else settings.sdrBandwidthHz).toDouble()
+                val bw = (if (sonde) fr.f4ioz.satcombo.sonde.SondeModel.bandwidthFor(settings.sondeModel) else largeur()).toDouble()
                 if (chaine.bandwidthHz != bw) chaine.bandwidthHz = bw
                 val sq = if (sonde) -200f else settings.sdrSquelchDb.toFloat()
                 if (chaine.squelch.thresholdDb != sq) chaine.squelch.thresholdDb = sq

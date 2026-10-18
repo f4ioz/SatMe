@@ -866,11 +866,11 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
             }
             "/api/sdr/arreter" -> { trafic?.oublie(); sdr?.arrete() }
             // A tuning by hand stops the scan (as a dial turned on a scanner).
-            "/api/sdr/decalage" -> q["hz"]?.toIntOrNull()?.let { balayage?.arrete("accord à la main"); sdr?.decalageHz = it }
+            "/api/sdr/decalage" -> q["hz"]?.toIntOrNull()?.let { balayage?.arrete("accord à la main", main = true); sdr?.decalageHz = it }
             "/api/sdr/pic" -> sdr?.calePic()
             "/api/sdr/voix" -> if (sdr?.caleVoix() != true) return JSONObject().put("ok", false).put("erreur", "le calage sur la voix sert en BLU (USB / LSB)")
             // The vernier: the listened frequency pushed by [hz] (the dongle's software offset, ±80 kHz).
-            "/api/sdr/pas" -> q["hz"]?.toIntOrNull()?.let { h -> balayage?.arrete("accord à la main"); sdr?.let { it.decalageHz = it.decalageHz + h } }
+            "/api/sdr/pas" -> q["hz"]?.toIntOrNull()?.let { h -> balayage?.arrete("accord à la main", main = true); sdr?.let { it.decalageHz = it.decalageHz + h } }
             "/api/sdr/accord" -> {
                 val st = station.settings
                 q["loupe"]?.let { st.sdrLoupe = it == "1" }
@@ -891,7 +891,7 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 q["son"]?.let { st.sdrAudio = it == "1" }
                 q["deemph"]?.let { st.sdrDeemph = it == "1" }
                 q["doppler"]?.let { st.sdrDopplerTrack = it == "1" }
-                if (q["suit"] == "1" || q["mhz"] != null) balayage?.arrete("accord à la main")
+                if (q["suit"] == "1" || q["mhz"] != null) balayage?.arrete("accord à la main", main = true)
                 q["suit"]?.let { d.suitSatellite = it == "1" }
                 q["mhz"]?.replace(',', '.')?.toDoubleOrNull()?.let { d.manuelleHz = Math.round(it * 1e6); d.decalageHz = 0 }
                 q["hote"]?.let { d.hote = it }

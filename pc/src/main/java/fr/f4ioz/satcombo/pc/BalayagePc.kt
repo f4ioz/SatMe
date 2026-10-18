@@ -63,7 +63,7 @@ class BalayagePc(private val sdr: SdrPc, private val memoires: MemoiresSdrPc?, p
         if (sdr.surQo100) return JSONObject().put("ok", false).put("erreur", "le récepteur est à l'onglet QO-100 : l'y rendre d'abord")
         val e = pile.rappel(cle, ecouteHz()) ?: return JSONObject().put("ok", false).put("erreur", "rien encore sur cette bande")
         if (e.hz !in sdr.gammeHz) return JSONObject().put("ok", false).put("erreur", "hors de la gamme du récepteur (" + (e.hz / 1e6) + " MHz)")
-        arrete("bande choisie")
+        arrete("bande choisie", main = true)
         sdr.suitSatellite = false
         if (e.mode.isNotEmpty() && e.mode != sdr.modeChoisi) sdr.modeChoisi = e.mode
         sdr.station.settings.sdrBandwidthHz = e.largeurHz.coerceIn(0, 24_000)
@@ -146,22 +146,47 @@ class BalayagePc(private val sdr: SdrPc, private val memoires: MemoiresSdrPc?, p
             // The panorama's useful part: 85 % of the receiver's band.
             largeurVueHz = (Dsp.RTL_RATE * 0.85).toLong(),
             boucle = p("boucle") != "0")
-        arrete("")
+        arrete("", main = true)
         val b = Balayage(r, horloge())
-        // Not following a satellite any more: the scan sets the frequency.
-        sdr.suitSatellite = false
+        // The tuning before, given back at the stop when asked; the scan's steps held in memory only.
+        val e = sdr.etat.value
+        avant = Avant(sdr.passager, sdr.decalageHz)
+        revenir = p("retour") == "avant"
+        sdr.passager = SdrPc.AccordPassager(if (e.cielHz > 0) e.cielHz else sdr.manuelleHz)
         machine = b; actif = true; message = ""
         val gen = ++generation
         thread(isDaemon = true, name = "satme-balayage") { boucle(b, gen) }
         return json().put("ok", true)
     }
 
-    /** Stopped ([pourquoi] said on the page); the hits stay shown. */
-    fun arrete(pourquoi: String) {
+    /** The receiver as it was before the scan (its kept tuning untouched): an earlier transient one, the offset. */
+    private data class Avant(val passager: SdrPc.AccordPassager?, val decalageHz: Int)
+    @Volatile private var avant: Avant? = null
+    /** At the stop: back to the frequency before the scan (else it stays on the last one, kept once). */
+    @Volatile var revenir = false; private set
+
+    /**
+     * Stopped ([pourquoi] said on the page); the hits stay shown. The
+     * receiver stays where the scan left it — written to the settings once,
+     * now — or, when chosen and not stopped by a tuning by hand ([main]),
+     * goes back to where it was before.
+     */
+    @Synchronized fun arrete(pourquoi: String, main: Boolean = false) {
         if (!actif) return
         generation++
         actif = false
         message = pourquoi
+        val a = avant
+        val p = sdr.passager
+        avant = null
+        // Nothing found and not asked to stay: back as well.
+        val rien = machine?.touches().isNullOrEmpty()
+        if ((revenir || rien) && !main && a != null) { sdr.passager = a.passager; sdr.decalageHz = a.decalageHz; return }
+        sdr.passager = null
+        if (p == null) return
+        if (!sdr.fictif) { sdr.suitSatellite = false; sdr.manuelleHz = p.hz }
+        if (p.mode.isNotEmpty() && p.mode != sdr.modeChoisi) sdr.modeChoisi = p.mode
+        if (p.largeurHz >= 0 && p.largeurHz != sdr.station.settings.sdrBandwidthHz) sdr.station.settings.sdrBandwidthHz = p.largeurHz
     }
 
     private fun vue(spectre: Boolean): Balayage.Vue {
@@ -174,25 +199,27 @@ class BalayagePc(private val sdr: SdrPc, private val memoires: MemoiresSdrPc?, p
         return Balayage.Vue(trame, centre, bin, db, sdr.sensSpectre(centre), sdr.squelchOuvert)
     }
 
+    /** An order of the scan applied: in memory only ([SdrPc.passager], the offset), nothing written. */
     private fun applique(o: Balayage.Ordre, v: Balayage.Vue) {
+        val p0 = sdr.passager ?: SdrPc.AccordPassager(sdr.etat.value.cielHz)
         when (o) {
             is Balayage.Ordre.Accorde -> {
                 val c = o.canal
                 val m = MemoiresSdr.modeSdr(c.mode)
-                if (m.isNotEmpty() && m != sdr.modeChoisi) sdr.modeChoisi = m
-                if ((m.isNotEmpty() || c.largeurHz > 0) && sdr.station.settings.sdrBandwidthHz != c.largeurHz) sdr.station.settings.sdrBandwidthHz = c.largeurHz
-                val ciel = if (sdr.fictif) sdr.etat.value.cielHz else sdr.manuelleHz
+                val p = p0.copy(mode = m.ifEmpty { p0.mode }, largeurHz = if (m.isNotEmpty() || c.largeurHz > 0) c.largeurHz else p0.largeurHz)
+                val ciel = if (sdr.fictif) sdr.etat.value.cielHz else p.hz
                 val depuisPll = Math.abs(c.hz - v.centreHz)
                 // Within the band captured: the offset only (no PLL move, no click); else the PLL
                 // moved, the channel 40 kHz above it (never on its DC line). A recording, the generator: offset only.
                 if (sdr.fictif || (v.db != null && depuisPll in 3_000L..75_000L && Math.abs(c.hz - ciel) <= 80_000L)) {
+                    sdr.passager = p
                     sdr.decalageHz = (c.hz - ciel).coerceIn(-80_000L, 80_000L).toInt()
                 } else {
-                    sdr.manuelleHz = c.hz - 40_000L
+                    sdr.passager = p.copy(hz = c.hz - 40_000L)
                     sdr.decalageHz = 40_000
                 }
             }
-            is Balayage.Ordre.Centre -> if (!sdr.fictif) { sdr.manuelleHz = o.hz; sdr.decalageHz = 0 }
+            is Balayage.Ordre.Centre -> if (!sdr.fictif) { sdr.passager = p0.copy(hz = o.hz); sdr.decalageHz = 0 }
         }
     }
 
@@ -216,7 +243,7 @@ class BalayagePc(private val sdr: SdrPc, private val memoires: MemoiresSdrPc?, p
         val b = machine
         val o = (b?.json(horloge()) ?: JSONObject()).put("ok", true).put("actif", actif).put("message", message).put("quoi", quoi)
             .put("passeGardees", JSONArray(passesGardees()))
-            .put("pasOfferts", JSONArray(Balayage.PAS))
+            .put("pasOfferts", JSONArray(Balayage.PAS)).put("revenir", revenir)
         empeche()?.let { o.put("empeche", it) }
         return o
     }
