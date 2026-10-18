@@ -428,7 +428,13 @@ object PagePc {
     #v-sstv .sx { height:100%; box-sizing:border-box; grid-template-rows:minmax(0,1fr); }
     #v-sstv .sx-direct { min-height:0; max-height:100%; overflow:auto; box-sizing:border-box; }
     #v-sstv .sx > .st { min-height:0; display:flex; flex-direction:column; }
-    #v-datv .d-ecran { margin:0; min-height:0; overflow:auto; }
+    #v-datv .d-ecran { margin:0; min-height:0; overflow:auto; display:flex; flex-direction:column; }
+    /* The strip takes the height the picture leaves (the picture is bound by its width too). */
+    #v-datv .d-haut { flex:none; }
+    #v-datv .wb-boite:not([hidden]), #v-datv .wb-boite #wb-zone:not([hidden]), #v-datv .wb-bande { flex:1 1 auto; display:flex; flex-direction:column; min-height:0; }
+    #v-datv .wb-spectre { flex:1 1 auto; min-height:100px; max-height:150px; }
+    #v-datv .wb-grand .wb-spectre { min-height:150px; max-height:260px; }
+    #v-datv .wb-chute, #v-datv .wb-tete, #v-datv .wb-bas { flex:none; }
     .vue > .grille2, .vue > .grille3c { height:100%; }
     .vue > .grille2 > div, .vue > .grille3c > div { min-height:0; overflow:auto; }
     #k-grille { height:100%; }
@@ -525,7 +531,8 @@ object PagePc {
   .d-haut { display:flex; gap:10px; align-items:stretch; }
   .d-haut #d-cadre { flex:none; width:min(calc((100vh - var(--d-bas)) * 16 / 9), calc(100% - 330px)); }
   #v-datv { --d-bas:210px; }
-  #v-datv:has(#wb-boite:not([hidden]) #wb-zone:not([hidden])) { --d-bas:420px; }
+  #v-datv:has(#wb-boite:not([hidden]) #wb-zone:not([hidden])) { --d-bas:232px; }
+  #v-datv:has(#wb-boite.wb-grand:not([hidden]) #wb-zone:not([hidden])) { --d-bas:462px; }
   .d-info { flex:1; min-width:0; display:flex; flex-direction:column; gap:4px; }
   .d-info .dc-carte { margin-top:4px; flex:1 1 0; min-height:0; overflow:auto; }
   .d-info .dc-chat { max-height:none; }
@@ -534,11 +541,23 @@ object PagePc {
   #q-resume #q-marge { font-size:22px; }
   #q-resume #q-verdict { font-size:14px; }
   #dq-carte #q-boite { margin-top:0; border-top:0; padding-top:0; margin-bottom:10px; }
-  .wb-spectre { height:130px; } .wb-chute { height:40px; }
+  .wb-boite { margin-top:8px; border-top:1px solid var(--bord); padding-top:5px; }
+  .wb-tete { align-items:center; gap:4px 14px; }
+  .wb-tete #wb-plus-b { margin-left:auto; padding:2px 10px; }
+  .wb-bande { position:relative; margin-top:4px; }
+  .wb-spectre { display:block; width:100%; height:100px; background:#0E1720; border-radius:8px 8px 0 0; cursor:crosshair; }
+  .wb-chute { display:block; width:100%; height:12px; background:#0E1720; border-radius:0 0 8px 8px; }
+  .wb-grand .wb-spectre { height:150px; } .wb-grand .wb-chute { height:40px; }
+  .wb-bulle { position:absolute; top:4px; z-index:3; pointer-events:none; background:rgba(14,23,32,.96); border:1px solid var(--bord); border-radius:6px;
+    padding:4px 8px; font-size:12px; line-height:1.35; white-space:pre-line; color:var(--clair); max-width:340px; }
+  .d-entendus { display:flex; flex-direction:column; gap:2px; max-height:190px; overflow:auto; }
+  .d-entendus button { display:flex; gap:8px; align-items:baseline; text-align:left; padding:3px 8px; }
+  .d-entendus button b { min-width:72px; }
   .wb-bas { display:flex; gap:6px 14px; flex-wrap:wrap; align-items:center; margin-top:5px; }
   .e-boutons { position:sticky; bottom:0; z-index:1; background:var(--carte); padding:6px 0; margin-top:8px; }
   #v-datv button.emettre, #v-datv button.arret-tx { font-size:16px; padding:8px 22px; }
-  @media (min-width:1501px) { #v-datv:has(#wb-boite:not([hidden]) #wb-zone:not([hidden])) { --d-bas:385px; } }
+  @media (min-width:1501px) { #v-datv:has(#wb-boite:not([hidden]) #wb-zone:not([hidden])) { --d-bas:262px; }
+    #v-datv:has(#wb-boite.wb-grand:not([hidden]) #wb-zone:not([hidden])) { --d-bas:440px; } }
   @media (min-width:1101px) and (max-width:1500px) {
     #v-qo100 .tq-grille { grid-template-columns:minmax(0,1fr) 340px; }
     #v-qo100 .tq-haut { grid-template-columns:minmax(0,1.35fr) minmax(0,1fr); }
@@ -1211,23 +1230,27 @@ object PagePc {
     </div>
       </div>
     </div>
-    <div id="wb-boite" hidden style="margin-top:8px;border-top:1px solid var(--bord);padding-top:6px">
-      <div class="paire" style="align-items:center;gap:6px 16px">
+    <div id="wb-boite" class="wb-boite" hidden>
+      <div class="paire wb-tete">
         <label class="petit" title="Le spectre public mesuré par la station sol de QO-100 (BATC), reçu par Internet tant que l’onglet DATV est ouvert : rien n’y est envoyé"><input type="checkbox" id="wb-on" onchange="wbRegle('on=' + (this.checked ? 1 : 0))"> Spectre de la bande large (station sol)</label>
         <span class="petit" id="wb-etat"></span>
-        <span class="petit wb-aide">10490,5 – 10499,5 MHz · un clic sur un signal : le MiniTiouner s’y accorde (même OL, même entrée)</span>
+        <span class="petit" id="wb-veille-etat"></span>
+        <span class="petit wb-aide">un clic sur un signal : le récepteur s’y accorde (même OL, même entrée)</span>
+        <button id="wb-plus-b" onclick="wbPlus()" title="La liste des signaux, la veille, un spectre plus haut">Détails ▾</button>
       </div>
       <div id="wb-zone" hidden>
-        <canvas id="wb-spectre" width="900" height="130" class="wb-spectre" style="width:100%;margin-top:4px;background:#0E1720;border-radius:8px 8px 0 0;cursor:crosshair"></canvas>
-        <canvas id="wb-chute" width="900" height="40" class="wb-chute" style="width:100%;display:block;background:#0E1720;border-radius:0 0 8px 8px"></canvas>
-        <div class="wb-bas"><div id="wb-liste"></div>
+        <div class="wb-bande">
+          <canvas id="wb-spectre" class="wb-spectre"></canvas>
+          <canvas id="wb-chute" class="wb-chute"></canvas>
+          <div id="wb-bulle" class="wb-bulle" hidden></div>
+        </div>
+        <div id="wb-plus" class="wb-bas" hidden><div id="wb-liste"></div>
         <div class="ligne" style="flex-wrap:wrap;gap:4px 10px;margin-top:0">
           <label class="petit"><input type="checkbox" id="wb-veille" onchange="wbVeille(this.checked)"> Veille : passer d’un signal occupé à l’autre</label>
           <span class="petit">rester <input id="wb-attente" style="width:44px" onchange="wbRegle('attente=' + enc(this.value))"> s sans accroche</span>
           <label class="petit"><input type="checkbox" id="wb-balise" onchange="wbRegle('balise=' + (this.checked ? 1 : 0))"> avec la balise</label>
           <label class="petit"><input type="checkbox" id="wb-enr" onchange="wbRegle('enr=' + (this.checked ? 1 : 0))"> enregistrer le TS à chaque accroche</label>
         </div></div>
-        <div class="petit" id="wb-veille-etat"></div>
       </div>
     </div>
   </div>
@@ -1257,10 +1280,16 @@ object PagePc {
       <div class="ligne" id="d-ligne-entree"><span class="petit" style="min-width:86px">Entrée</span><select id="d-entree" style="max-width:150px"><option value="a">A (haut)</option><option value="b">B (bas)</option></select>
         <span class="petit">Alim. LNB</span><select id="d-lnb" style="max-width:150px" onchange="dLnb()"><option value="">coupée</option><option value="v">13 V (V)</option><option value="h">18 V (H)</option></select></div>
       <div class="avert" id="d-lnb-avert" hidden>Le MiniTiouner alimentera le LNB : seulement si rien d'autre ne l'alimente (pas de séparateur qui passe le continu vers un autre récepteur).</div>
-      <label class="petit" style="display:block;margin-top:6px"><input type="checkbox" id="d-son"> Son sur ce PC</label>
+      <div class="ligne" style="flex-wrap:wrap;gap:4px 10px"><label class="petit" title="Coupé ou remis tout de suite, pendant la réception aussi"><input type="checkbox" id="d-son" onchange="dPost('son?on=' + (this.checked ? 1 : 0))"> Son sur ce PC</label>
+        <label class="petit" title="Le flux de transport reçu, tel quel, vers un autre lecteur (VLC, ffplay…) : ce PC ou le réseau local seulement, rien vers Internet"><input type="checkbox" id="d-udp" onchange="dUdp()"> Flux TS en UDP vers</label>
+        <input id="d-udp-dest" style="max-width:140px" placeholder="127.0.0.1:9080" onchange="dUdp()"><span class="petit" id="d-udp-etat"></span></div>
       <div class="ligne"><button class="primaire" data-marche="d" onclick="dDemarre()">Recevoir</button><button class="arret" data-arret="d" hidden onclick="dPost('arrete')">Arrêter</button>
-        <button id="d-benr" onclick="dEnregistre()">Enregistrer</button><button onclick="dPost('vlc')" title="Le même flux dans VLC, pleine qualité">VLC</button></div>
+        <button id="d-benr" onclick="dEnregistre()">Enregistrer</button><button onclick="dPhoto()" title="L’image reçue, enregistrée en PNG sur cet ordinateur">Photo</button><button onclick="dPost('vlc')" title="Le même flux dans VLC, pleine qualité">VLC</button></div>
       <div class="etat" id="d-msg"></div>
+    </div>
+    <div class="carte" id="d-entendus-carte" hidden>
+      <div class="t">Stations entendues <span class="petit">(un clic : y retourner)</span></div>
+      <div id="d-entendus" class="d-entendus"></div>
     </div>
     <div class="petit" id="d-prog"></div>
       </div>
@@ -3727,6 +3756,12 @@ async function ticDatv(premier) {
   txt('d-ou', D.noeud ? 'sur le SatMe-Node ' + (D.nomNoeud ? '« ' + D.nomNoeud + ' » ' : '') + '(' + D.noeud + ')' : 'sur ce PC');
   g('d-prog').hidden = !!D.noeud || (D.recepteur && D.recepteur !== 'minitiouner');
   txt('d-titre', D.actif ? '· ' + mhz3(D.ciel) + ' MHz · ' + D.sr + ' kS/s · FI ' + mhz3(D.fi) + ' MHz' : '');
+  if (D.udp) {
+    if (document.activeElement !== g('d-udp-dest')) g('d-udp-dest').value = D.udp.dest;
+    g('d-udp').checked = D.udp.on;
+    txt('d-udp-etat', D.udp.erreur ? D.udp.erreur : D.udp.on && D.actif ? D.udp.datagrammes + ' datagrammes' : '');
+  }
+  if (document.activeElement !== g('d-son')) g('d-son').checked = D.son;
   const r = g('d-rec'); r.style.display = D.enregistrement ? '' : 'none'; r.textContent = '● ' + D.enregistrement;
   g('d-benr').textContent = D.enregistrement ? 'Arrêter l’enregistrement' : 'Enregistrer';
   if (D.erreur) txt('d-msg', D.erreur);
@@ -3879,11 +3914,24 @@ async function dCale() { const j = await dPost('cale'); if (j && j.ok) { txt('d-
 async function dEnregistre() { await dPost('enregistre?on=' + (D && D.enregistrement ? 0 : 1)); }
 function dLnb() { g('d-lnb-avert').hidden = !g('d-lnb').value; }
 // ------------------------------------------------------------------ DATV: QO-100's wide band, the ground station's spectrum
-let WB = null, wbN = -1, wbVals = null, wbDernier = 0, wbBoites = [];
+let WB = null, wbN = -1, wbVals = null, wbDernier = 0, wbBoites = [], wbSouris = null;
 const WB_MIN = 8000, WB_MAX = 44000;
 const wbSr = s => s >= 1000 ? String(s / 1000).replace('.', ',') + ' MS' : s + ' kS';
 const WB_REGLE = 'Indice : en bande large, la densité de puissance doit rester au moins 1 dB sous celle de la balise ' +
   '(≤ 333 kS en 8PSK, 16APSK ou 32APSK exemptés ; la modulation ne se voit pas sur le spectre).';
+try { if (localStorage.getItem('wb-grand') === '1') g('wb-boite').classList.add('wb-grand'); } catch (x) {}
+function wbPlus() {
+  const grand = g('wb-boite').classList.toggle('wb-grand');
+  try { localStorage.setItem('wb-grand', grand ? '1' : '0'); } catch (x) {}
+  wbVu();
+  if (WB && WB.on) wbSpectre();
+}
+function wbVu() {
+  const grand = g('wb-boite').classList.contains('wb-grand');
+  g('wb-plus').hidden = !grand;
+  g('wb-plus-b').textContent = grand ? 'Réduire ▴' : 'Détails ▾';
+}
+wbVu();
 async function ticLarge() {
   if (g('v-datv').hidden || window.SATME_TELEPHONE) return;
   const t = Date.now();
@@ -3893,12 +3941,13 @@ async function ticLarge() {
   if (!j.ok) { g('wb-boite').hidden = true; return; }
   WB = j; g('wb-boite').hidden = false;
   g('wb-on').checked = j.on;
-  g('wb-zone').hidden = !j.on;
+  g('wb-zone').hidden = !j.on; g('wb-plus-b').hidden = !j.on;
   txt('wb-etat', !j.on ? '' : j.etat === 'connecté' ? (j.frais ? (j.signaux.length + (j.signaux.length > 1 ? ' signaux' : ' signal')) : 'en attente des trames…') : j.etat);
   const vv = j.veille;
   if (document.activeElement !== g('wb-attente')) g('wb-attente').value = vv.attente;
   g('wb-veille').checked = vv.on; g('wb-balise').checked = vv.balise; g('wb-enr').checked = vv.enr;
-  txt('wb-veille-etat', vv.etat ? 'Veille : ' + vv.etat : '');
+  txt('wb-veille-etat', vv.etat && vv.on ? 'Veille : ' + vv.etat : '');
+  dEntendus(j.entendus || []);
   if (!j.on) return;
   if (j.valeurs) { wbN = j.n; wbVals = j.valeurs; wbChute(wbVals); }
   if (!j.frais) wbVals = null;
@@ -3906,22 +3955,40 @@ async function ticLarge() {
   wbListe();
 }
 setInterval(ticLarge, 500);
+// The canvas as large as shown: text at its size, not stretched.
+function wbTaille(c) {
+  const w = Math.max(200, Math.round(c.clientWidth)), h = Math.max(6, Math.round(c.clientHeight));
+  if (c.width !== w || c.height !== h) { c.width = w; c.height = h; return true; }
+  return false;
+}
 function wbX(khz, w) { return (khz - WB.debut) / WB.largeur * w; }
-function wbY(val, h) { return h - 18 - Math.max(0, Math.min(1, (val - WB_MIN) / (WB_MAX - WB_MIN))) * (h - 50); }
+function wbY(val, h) { return h - 13 - Math.max(0, Math.min(1, (val - WB_MIN) / (WB_MAX - WB_MIN))) * (h - 29); }
+// Where our receiver is, and our own signal while transmitting (sky frequency, occupied width, kHz).
+function wbRx() {
+  const r = WB && WB.recepteur;
+  return r ? { khz: r.ciel, larg: r.sr * 1.35, verrouille: r.verrouille, marge: D && D.verrouille && D.qualite ? D.qualite.marge : null } : null;
+}
+function wbTx() {
+  if (!EM || !EM.emet) return null;
+  const k = EM.khzEnCours || EM.khz;
+  return { khz: k + (EM.descenteKhz - EM.khz), larg: EM.occupeKhz || EM.sr * 1.35, sr: EM.sr };
+}
 function wbSpectre() {
-  const c = g('wb-spectre'), x = c.getContext('2d'), w = c.width, h = c.height;
+  const c = g('wb-spectre');
+  wbTaille(c);
+  const x = c.getContext('2d'), w = c.width, h = c.height, bas = h - 13;
   x.fillStyle = '#0E1720'; x.fillRect(0, 0, w, h);
-  x.font = '11px sans-serif'; x.textAlign = 'center';
+  x.font = '10px sans-serif'; x.textAlign = 'center';
   // The band plan: each MHz, the wide channels, the narrow ones, the beacon.
   x.strokeStyle = '#1C2934'; x.fillStyle = '#6F7D8A';
   for (let m = 10491; m <= 10499; m++) {
-    const px = wbX(m * 1000, w); x.beginPath(); x.moveTo(px, 0); x.lineTo(px, h - 14); x.stroke(); x.fillText(String(m), px, h - 3);
+    const px = wbX(m * 1000, w); x.beginPath(); x.moveTo(px, 0); x.lineTo(px, bas); x.stroke(); x.fillText(String(m), px, h - 2);
   }
   x.fillStyle = '#4A5A68';
-  WB.canaux.forEach(k => x.fillRect(wbX(k, w) - 0.5, h - 18, 1, 4));
+  WB.canaux.forEach(k => x.fillRect(wbX(k, w) - 0.5, bas - 3, 1, 3));
   x.fillStyle = '#7F8C99';
-  WB.canauxLarges.forEach(k => x.fillRect(wbX(k, w) - 1, h - 20, 2, 6));
-  x.fillStyle = 'rgba(63,224,200,.08)'; x.fillRect(wbX(WB.balise - 750, w), 0, wbX(WB.balise + 750, w) - wbX(WB.balise - 750, w), h - 14);
+  WB.canauxLarges.forEach(k => x.fillRect(wbX(k, w) - 1, bas - 5, 2, 5));
+  x.fillStyle = 'rgba(63,224,200,.07)'; x.fillRect(wbX(WB.balise - 750, w), 0, wbX(WB.balise + 750, w) - wbX(WB.balise - 750, w), bas);
   // The threshold, the beacon's line minus 1 dB.
   x.setLineDash([3, 4]); x.strokeStyle = '#3A4A58';
   x.beginPath(); x.moveTo(0, wbY(WB.seuil, h)); x.lineTo(w, wbY(WB.seuil, h)); x.stroke();
@@ -3929,46 +3996,87 @@ function wbSpectre() {
   if (bal) {
     const yb = wbY(bal.niveau - WB.unitesDb, h);
     x.strokeStyle = 'rgba(255,180,84,.6)'; x.beginPath(); x.moveTo(wbX(10492500, w), yb); x.lineTo(w, yb); x.stroke();
-    x.fillStyle = 'rgba(255,180,84,.8)'; x.textAlign = 'left'; x.fillText('balise − 1 dB', wbX(10492500, w) + 4, yb - 3); x.textAlign = 'center';
   }
   x.setLineDash([]);
-  if (!wbVals) { x.fillStyle = '#6F7D8A'; x.fillText('en attente du spectre…', w / 2, h / 2); wbBoites = []; return; }
+  // Our receiver's channel, our transmission's.
+  const marque = (m, fond, trait, lib) => {
+    const x0 = wbX(m.khz - m.larg / 2, w), x1 = wbX(m.khz + m.larg / 2, w);
+    x.fillStyle = fond; x.fillRect(x0, 0, x1 - x0, bas);
+    x.strokeStyle = trait; x.setLineDash([2, 3]); x.beginPath(); x.moveTo(x0, 0); x.lineTo(x0, bas); x.moveTo(x1, 0); x.lineTo(x1, bas); x.stroke(); x.setLineDash([]);
+    x.font = 'bold 10px sans-serif'; x.fillStyle = trait; x.textAlign = 'left';
+    x.fillText(lib, Math.min(w - x.measureText(lib).width - 2, x1 + 3), 10); x.textAlign = 'center'; x.font = '10px sans-serif';
+  };
+  const rx = wbRx(), tx = wbTx();
+  if (tx) marque(tx, 'rgba(229,72,77,.13)', '#E5484D', 'TX');
+  if (rx) marque(rx, rx.verrouille ? 'rgba(91,214,138,.12)' : 'rgba(255,180,84,.10)', rx.verrouille ? '#5BD68A' : '#FFB454',
+    'RX' + (rx.marge != null ? ' · D ' + (rx.marge >= 0 ? '+' : '−') + fr1(Math.abs(rx.marge)) : rx.verrouille ? '' : ' …'));
+  if (!wbVals) { x.fillStyle = '#6F7D8A'; x.font = '11px sans-serif'; x.fillText('en attente du spectre…', w / 2, h / 2); wbBoites = []; return; }
   const n = wbVals.length;
-  x.beginPath(); x.moveTo(0, h - 14);
+  x.beginPath(); x.moveTo(0, bas);
   for (let i = 0; i < n; i++) x.lineTo(i * w / n, wbY(wbVals[i], h));
-  x.lineTo(w, h - 14); x.closePath();
-  x.fillStyle = 'rgba(63,224,200,.18)'; x.fill();
+  x.lineTo(w, bas); x.closePath();
+  const gr = x.createLinearGradient(0, 0, 0, bas); gr.addColorStop(0, 'rgba(63,224,200,.35)'); gr.addColorStop(1, 'rgba(63,224,200,.05)');
+  x.fillStyle = gr; x.fill();
   x.beginPath();
   for (let i = 0; i < n; i++) { const px = i * w / n, py = wbY(wbVals[i], h); if (i) x.lineTo(px, py); else x.moveTo(px, py); }
   x.strokeStyle = '#3FE0C8'; x.lineWidth = 1; x.stroke();
-  // The signals found: their width, their name (or rate) above.
+  // The signals found: their width, their name and rate above (a label moved, or left out, where it would cover another).
   wbBoites = [];
-  (WB.signaux || []).forEach(s => {
-    const x0 = wbX(s.debut, w), x1 = wbX(s.fin, w), y = wbY(s.niveau, h) - 4;
+  const pris = [];
+  const libre = (a, b, y) => !pris.some(p => a < p.b && b > p.a && Math.abs(y - p.y) < 11);
+  (WB.signaux || []).slice().sort((a, z) => (z.nom ? 1 : 0) - (a.nom ? 1 : 0) || z.sr - a.sr).forEach(s => {
+    const x0 = wbX(s.debut, w), x1 = wbX(s.fin, w), y = wbY(s.niveau, h) - 3;
     const coul = s.tenu ? '#5BD68A' : s.auDessus ? '#E5484D' : s.balise ? '#9AA7B4' : '#FFB454';
-    if (s.tenu) { x.fillStyle = 'rgba(91,214,138,.15)'; x.fillRect(x0, y, x1 - x0, h - 14 - y); }
+    if (s.auDessus) { x.fillStyle = 'rgba(229,72,77,.22)'; x.fillRect(x0, y, x1 - x0, bas - y); }
     x.strokeStyle = coul; x.lineWidth = 2; x.beginPath(); x.moveTo(x0, y + 4); x.lineTo(x0, y); x.lineTo(x1, y); x.lineTo(x1, y + 4); x.stroke(); x.lineWidth = 1;
-    x.fillStyle = coul; x.font = (s.nom ? 'bold ' : '') + '11px sans-serif';
-    const lib = s.balise && !s.nom ? 'balise' : (s.nom || wbSr(s.sr));
-    x.fillText(lib, Math.max(24, Math.min(w - 24, (x0 + x1) / 2)), Math.max(11, y - 4));
-    x.font = '11px sans-serif';
+    x.font = (s.nom ? 'bold ' : '') + '11px sans-serif';
+    const lib = (s.auDessus ? '⚠ ' : '') + (s.balise && !s.nom ? 'balise' : (s.nom ? s.nom + ' ' : '') + wbSr(s.sr));
+    const lw = x.measureText(lib).width, cx = Math.max(lw / 2 + 2, Math.min(w - lw / 2 - 2, (x0 + x1) / 2));
+    const y0 = Math.max(11, y - 4);
+    const ly = [y0, y0 - 11, y0 + 22].find(t => t >= 11 && t < bas && libre(cx - lw / 2 - 3, cx + lw / 2 + 3, t));
+    if (ly != null) {
+      pris.push({ a: cx - lw / 2 - 3, b: cx + lw / 2 + 3, y: ly });
+      x.fillStyle = coul; x.fillText(lib, cx, ly);
+    }
+    x.font = '10px sans-serif';
     wbBoites.push({ x0: x0, x1: x1, s: s });
   });
+  // The beacon's line named where no label is (at its right end, else its left).
+  if (bal) {
+    const yb = wbY(bal.niveau - WB.unitesDb, h) - 3, lib = 'balise − 1 dB', lw = x.measureText(lib).width;
+    const ax = [w - 4 - lw, wbX(10492500, w) + 4, w / 2 - lw / 2].find(a => libre(a - 3, a + lw + 3, yb)) ?? (w - 4 - lw);
+    x.fillStyle = 'rgba(255,180,84,.85)'; x.textAlign = 'left'; x.fillText(lib, ax, yb); x.textAlign = 'center';
+  }
+  if (wbSouris != null) { x.strokeStyle = 'rgba(232,240,247,.35)'; x.beginPath(); x.moveTo(wbSouris + 0.5, 0); x.lineTo(wbSouris + 0.5, bas); x.stroke(); }
+}
+function wbSous(px) {
+  return wbBoites.filter(b => px >= b.x0 - 6 && px <= b.x1 + 6).sort((a, z) => Math.abs((a.x0 + a.x1) / 2 - px) - Math.abs((z.x0 + z.x1) / 2 - px))[0];
 }
 g('wb-spectre').onclick = e => {
   if (!WB || !wbBoites.length) return;
-  const c = g('wb-spectre'), r = c.getBoundingClientRect(), px = (e.clientX - r.left) * c.width / r.width;
-  const b = wbBoites.filter(b => px >= b.x0 - 6 && px <= b.x1 + 6).sort((a, z) => Math.abs((a.x0 + a.x1) / 2 - px) - Math.abs((z.x0 + z.x1) / 2 - px))[0];
+  const c = g('wb-spectre'), r = c.getBoundingClientRect(), b = wbSous((e.clientX - r.left) * c.width / r.width);
   if (b) wbAccorde(b.s);
 };
 g('wb-spectre').onmousemove = e => {
-  const c = g('wb-spectre'), r = c.getBoundingClientRect(), px = (e.clientX - r.left) * c.width / r.width;
-  const b = wbBoites.find(b => px >= b.x0 - 6 && px <= b.x1 + 6);
-  c.title = b ? wbTitre(b.s) : '';
+  if (!WB) return;
+  const c = g('wb-spectre'), r = c.getBoundingClientRect(), px = (e.clientX - r.left) * c.width / r.width, b = wbSous(px);
+  wbSouris = px;
+  const khz = WB.debut + px / c.width * WB.largeur, rx = wbRx(), tx = wbTx();
+  let t = b ? wbTitre(b.s) : mhz3(Math.round(khz)) + ' MHz · aucun signal ici';
+  if (!b && rx && Math.abs(khz - rx.khz) <= rx.larg / 2) t += '\ncanal du récepteur';
+  if (tx && Math.abs(khz - tx.khz) <= tx.larg / 2) t += '\nnotre émission : ' + mhz3(Math.round(tx.khz)) + ' MHz · ' + wbSr(tx.sr);
+  const bu = g('wb-bulle');
+  bu.textContent = t; bu.hidden = false;
+  const l = px + 14 + bu.offsetWidth > r.width ? px - 14 - bu.offsetWidth : px + 14;
+  bu.style.left = Math.max(0, l) + 'px';
+  c.style.cursor = b ? 'pointer' : 'crosshair';
+  if (WB.on) wbSpectre();
 };
+g('wb-spectre').onmouseleave = () => { g('wb-bulle').hidden = true; wbSouris = null; if (WB && WB.on) wbSpectre(); };
 function wbTitre(s) {
-  return mhz3(s.centre) + ' MHz · ' + wbSr(s.sr) + (s.nom ? ' · ' + s.nom : '') + (s.db != null && !s.balise ? ' · ' + (s.db >= 0 ? '+' : '−') + fr1(Math.abs(s.db)) + ' dB / balise' : '') +
-    (s.auDessus ? '\n' + WB_REGLE : '') + (s.tenu ? '\nreçu par le MiniTiouner' : '\nun clic : le MiniTiouner s’y accorde');
+  return (s.balise ? 'Balise · ' : '') + mhz3(s.centre) + ' MHz · ' + wbSr(s.sr) + (s.nom ? ' · ' + s.nom : '') +
+    (s.db != null && !s.balise ? '\n' + (s.db >= 0 ? '+' : '−') + fr1(Math.abs(s.db)) + ' dB par rapport à la balise' : '') +
+    (s.auDessus ? '\n⚠ au-dessus de la balise − 1 dB. ' + WB_REGLE : '') + (s.tenu ? '\nreçu en ce moment' : '\nun clic : le récepteur s’y accorde');
 }
 function wbListe() {
   const l = (WB.signaux || []).map((s, i) => '<button class="' + (s.tenu ? 'ici' : '') + '" title="' + esc(wbTitre(s)).replace(/"/g, '&quot;') + '" onclick="wbAccorde(WB.signaux[' + i + '])">' +
@@ -3980,8 +4088,10 @@ function wbListe() {
 }
 // The waterfall: a row per frame, the newest on top.
 function wbChute(vals) {
-  const c = g('wb-chute'), x = c.getContext('2d'), w = c.width, h = c.height;
-  x.drawImage(c, 0, 0, w, h - 1, 0, 1, w, h - 1);
+  const c = g('wb-chute');
+  wbTaille(c);
+  const x = c.getContext('2d'), w = c.width, h = c.height;
+  if (h > 1) x.drawImage(c, 0, 0, w, h - 1, 0, 1, w, h - 1);
   const im = x.createImageData(w, 1), n = vals.length;
   for (let px = 0; px < w; px++) {
     const t = Math.max(0, Math.min(1, (vals[Math.floor(px * n / w)] - 10000) / 28000));
@@ -4008,7 +4118,41 @@ async function wbVeille(on) {
   if (j && j.ok === false) { g('wb-veille').checked = false; txt('wb-veille-etat', j.erreur || ''); }
   wbDernier = 0; setTimeout(ticLarge, 150);
 }
-
+// The stations heard lately: when, where; a click goes back there.
+let dEntL = [];
+function dEntendus(l) {
+  dEntL = l;
+  g('d-entendus-carte').hidden = !l.length;
+  const maint = Date.now(), age = t => { const m = Math.round((maint - t) / 60000); return m < 1 ? 'à l’instant' : m < 60 ? 'il y a ' + m + ' min' : m < 1440 ? 'il y a ' + Math.round(m / 60) + ' h' : 'il y a ' + Math.round(m / 1440) + ' j'; };
+  const ht = l.slice(0, 20).map((s, i) => '<button onclick="dRetour(' + i + ')" title="Entendue d’abord ' + age(s.premier) + '">' +
+    '<b>' + esc(s.nom) + '</b><span>' + mhz3(s.khz) + ' · ' + wbSr(s.sr) + (s.mer != null ? ' · MER ' + fr1(s.mer) + ' dB' : '') + '</span>' +
+    '<span class="petit" style="margin-left:auto">' + age(s.dernier) + '</span></button>').join('');
+  if (g('d-entendus').dataset.h !== ht) { g('d-entendus').dataset.h = ht; g('d-entendus').innerHTML = ht; }
+}
+function dRetour(i) {
+  const s = dEntL[i]; if (!s) return;
+  if (WB && s.khz >= WB.debut && s.khz <= WB.debut + WB.largeur) { wbAccorde({ centre: s.khz, sr: s.sr }); return; }
+  g('d-ciel').value = mhz3(s.khz); dSr = s.sr; ticDatv(); dDemarre();
+}
+// The picture received, as a PNG on this computer.
+async function dPhoto() {
+  let b = null;
+  try { const r = await fetch('api/datv/image.jpg?t=' + Date.now()); if (r.ok) b = await r.blob(); } catch (x) {}
+  if (!b) { txt('d-msg', 'pas d’image à enregistrer'); return; }
+  const im = await createImageBitmap(b), c = document.createElement('canvas');
+  c.width = im.width; c.height = im.height; c.getContext('2d').drawImage(im, 0, 0);
+  const iso = new Date().toISOString(), nom = (D && D.service ? '_' + D.service.replace(/[^A-Za-z0-9-]+/g, '-').slice(0, 24) : '');
+  const f = 'SatMe_DATV_' + iso.slice(0, 10).replace(/-/g, '') + '_' + iso.slice(11, 19).replace(/:/g, '') + 'Z' + (D ? '_' + mhz3(D.ciel).replace(',', '-') : '') + nom + '.png';
+  c.toBlob(p => {
+    const a = document.createElement('a'); a.href = URL.createObjectURL(p); a.download = f;
+    document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+    txt('d-msg', 'image enregistrée : ' + f);
+  }, 'image/png');
+}
+async function dUdp() {
+  const j = await dPost('udp?on=' + (g('d-udp').checked ? 1 : 0) + '&dest=' + enc(v('d-udp-dest')));
+  if (j && j.ok === false) g('d-udp').checked = false;
+}
 // ------------------------------------------------------------------ DATV: the sound subtitled, the callsigns read in the picture
 let DT = null, dtPh = null, dtDernier = 0, dtListe = [], dtQso = 0;
 async function ticTextesDatv() {

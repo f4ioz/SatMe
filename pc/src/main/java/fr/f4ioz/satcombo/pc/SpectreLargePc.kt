@@ -13,6 +13,7 @@ import fr.f4ioz.satcombo.datv.Datv
 import fr.f4ioz.satcombo.datv.NomsSignaux
 import fr.f4ioz.satcombo.datv.ReglageDatv
 import fr.f4ioz.satcombo.datv.SignalLarge
+import fr.f4ioz.satcombo.datv.StationsEntendues
 import fr.f4ioz.satcombo.datv.VeilleDatv
 import fr.f4ioz.satcombo.plateforme.Stockage
 import org.json.JSONArray
@@ -64,6 +65,9 @@ class SpectreLargePc(
     @Volatile var signaux: List<SignalLarge> = emptyList(); private set
 
     val noms = NomsSignaux().also { it.reprends(stockage.getString(CLE_NOMS, null), horloge()) }
+    /** The stations received lately (any frequency), with when. */
+    val entendus = StationsEntendues().also { it.reprends(stockage.getString(CLE_ENTENDUS, null), horloge()) }
+    private var entendusGardesMs = 0L
     val veille = VeilleDatv(stockage.getInt("datv_veille_attente_s", 12) * 1000L, stockage.getBoolean("datv_veille_balise", false))
     var veilleEnregistre: Boolean
         get() = stockage.getBoolean("datv_veille_enr", false)
@@ -156,6 +160,10 @@ class SpectreLargePc(
         val e = datv.etat
         val maintenant = horloge()
         val r = datv.reglage
+        if (e.actif && e.verrouille) nomRecu().takeIf { it.isNotEmpty() }?.let { n ->
+            val nouveau = entendus.note(n, r.cielKhz, r.srKs, e.merDb, maintenant)
+            if (nouveau || maintenant - entendusGardesMs >= 60_000L) { entendusGardesMs = maintenant; stockage.edit().putString(CLE_ENTENDUS, entendus.texte()).apply() }
+        }
         if (e.actif && e.verrouille && r.cielKhz in BandeLarge.DEBUT_KHZ..BandeLarge.DEBUT_KHZ + BandeLarge.LARGEUR_KHZ) {
             // Under the rate tuned (as the spectrum measured it) and the one found, when they differ.
             val debits = listOf(r.srKs, e.srTrouveKs).filter { it > 0 }.map { BandeLarge.debit(it.toDouble()) }.distinct()
@@ -201,6 +209,7 @@ class SpectreLargePc(
         } else o.put("signaux", JSONArray())
         o.put("recepteur", if (datv.etat.actif) JSONObject().put("ciel", datv.reglage.cielKhz).put("sr", datv.reglage.srKs)
             .put("verrouille", datv.etat.verrouille) else JSONObject.NULL)
+        o.put("entendus", entendus.json())
         o.put("veille", JSONObject().put("on", veille.active).put("etat", if (veille.active && veillePause) "en pause : pas de spectre récent" else veille.etat)
             .put("attente", veille.attenteMs / 1000).put("balise", veille.avecBalise).put("enr", veilleEnregistre))
         return o
@@ -241,5 +250,6 @@ class SpectreLargePc(
         const val DELAI_MIN_MS = 2_000L
         const val DELAI_MAX_MS = 60_000L
         private const val CLE_NOMS = "datv_large_noms"
+        private const val CLE_ENTENDUS = "datv_entendus"
     }
 }

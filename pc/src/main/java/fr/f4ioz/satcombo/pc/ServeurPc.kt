@@ -902,6 +902,8 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
             }
             "/api/datv/emission/vie" -> emission?.vie()
             "/api/datv/enregistre" -> return ok.put("nom", datv?.enregistre(q["on"] == "1").orEmpty())
+            "/api/datv/udp" -> datv?.regleUdp(q["on"]?.let { it == "1" }, q["dest"])?.let { return JSONObject().put("ok", false).put("erreur", it) }
+            "/api/datv/son" -> datv?.coupeSon(q["on"] == "1")
             "/api/datv/vlc" -> datv?.ouvreVlc()?.let { return JSONObject().put("ok", false).put("erreur", it) }
             "/api/datv/chemin" -> datv?.chemin = q["p"].orEmpty()
             "/api/datv/noeud" -> {
@@ -1480,6 +1482,7 @@ object JsonPc {
         .put("noeud", d.noeud).put("nomNoeud", d.nomNoeud)
         .put("programme", d.programme() ?: JSONObject.NULL).put("chemin", d.chemin).put("windows", OutilsPc.windows)
         .put("debits", JSONArray(Datv.DEBITS)).put("canaux", JSONArray(Datv.CANAUX_KHZ)).put("balise", Datv.BALISE_KHZ)
+        .put("udp", JSONObject().put("on", d.udpOn).put("dest", d.udpDestination).put("datagrammes", d.udpDatagrammes).put("erreur", d.udpErreur))
         .put("recepteur", d.recepteur).put("sdrTenu", d.sdrTenu ?: "").put("s2", d.logiciel?.let { l ->
             val e = l.etatS2()
             JSONObject().put("fs", l.fs).put("trames", e.tramesDonnees).put("vides", e.tramesVides).put("echecs", e.ldpcEchecs)

@@ -17,6 +17,8 @@ import fr.f4ioz.satcombo.datv.AnalyseTs
 import fr.f4ioz.satcombo.datv.QualiteDatv
 import fr.f4ioz.satcombo.datv.SuiviQualite
 import fr.f4ioz.satcombo.datv.ReceptionSdrDatv
+import fr.f4ioz.satcombo.datv.DecoupeTs
+import fr.f4ioz.satcombo.datv.SortieUdpTs
 import fr.f4ioz.satcombo.sdr.SourceIq
 import org.json.JSONObject
 import java.io.File
@@ -389,6 +391,7 @@ class DatvPc(
             runCatching { carte.bloc(bloc) }
             runCatching { sdt.bloc(bloc) }
             enregistreur?.let { o -> runCatching { o.write(bloc) } }
+            versUdp(bloc)
             if (lecteursLocaux) {
                 if (ffmpeg == null) demarreLecteurs(gen)
                 if (sousTitres && ffmpeg != null && sonTexte?.enMarche != true && horloge() - essaiSonTexteMs >= 5000L) demarreSonTexte(gen)
@@ -537,13 +540,24 @@ class DatvPc(
             .redirectError(File(System.getProperty("java.io.tmpdir"), "satme-datv-ffmpeg.log")).start()
         ffmpeg = p
         thread(isDaemon = true, name = "satme-datv-images") { litImages(p.inputStream, gen) }
-        if (reglage.son) {
-            val play = OutilsPc.trouve("ffplay") ?: File(File(ff).parentFile, "ffplay").takeIf { it.canExecute() }?.path ?: "ffplay"
-            ffplay = runCatching {
-                ProcessBuilder(play, "-loglevel", "error", "-nodisp", "-fflags", "nobuffer", "-flags", "low_delay", "-probesize", "200000", "-analyzeduration", "1000000", "-f", "mpegts", "-i", "pipe:0")
-                    .redirectError(File(System.getProperty("java.io.tmpdir"), "satme-datv-ffplay.log")).redirectOutput(ProcessBuilder.Redirect.DISCARD).start()
-            }.getOrNull()
-        }
+        if (reglage.son) demarreSon(ff)
+    }
+
+    /** ffplay for the sound on this PC. */
+    private fun demarreSon(ff: String) {
+        val play = OutilsPc.trouve("ffplay") ?: File(File(ff).parentFile, "ffplay").takeIf { it.canExecute() }?.path ?: "ffplay"
+        ffplay = runCatching {
+            ProcessBuilder(play, "-loglevel", "error", "-nodisp", "-fflags", "nobuffer", "-flags", "low_delay", "-probesize", "200000", "-analyzeduration", "1000000", "-f", "mpegts", "-i", "pipe:0")
+                .redirectError(File(System.getProperty("java.io.tmpdir"), "satme-datv-ffplay.log")).redirectOutput(ProcessBuilder.Redirect.DISCARD).start()
+        }.getOrNull()
+    }
+
+    /** The sound on or off now (kept for the next start too): ffplay stopped, or started on the running stream. */
+    @Synchronized
+    fun coupeSon(on: Boolean) {
+        regleSon(on)
+        if (!on) { ffplay?.let { p -> runCatching { p.outputStream.close() }; p.destroy() }; ffplay = null; return }
+        if (ffmpeg != null && ffplay == null && lecteursLocaux) RenduPc.ffmpeg()?.let { demarreSon(it) }
     }
 
     /** JPEG pictures one after the other on ffmpeg's output: each kept whole, from its start to its end marker. */
@@ -661,6 +675,52 @@ class DatvPc(
         return null
     }
     private val vlcs = java.util.concurrent.CopyOnWriteArrayList<Process>()
+
+    // ------------------------------------------------------------ the stream by UDP to another player
+
+    /** The stream passed on by UDP (off unless chosen; this PC or the local network only, see [SortieUdpTs]). */
+    val udpOn: Boolean get() = stockage.getBoolean("datv_udp", false)
+    val udpDestination: String get() = stockage.getString("datv_udp_dest", null)?.takeIf { it.isNotBlank() } ?: SortieUdpTs.DESTINATION_DEFAUT
+    @Volatile var udpDatagrammes = 0L; private set
+    @Volatile var udpErreur = ""; private set
+    private val verrouUdp = Any()
+    private var udp: SortieUdp? = null
+
+    /** On, off, or elsewhere; null when done, else why not. */
+    fun regleUdp(on: Boolean?, destination: String?): String? {
+        synchronized(verrouUdp) {
+            if (destination != null) {
+                val (d, pourquoi) = SortieUdpTs.destination(destination)
+                if (d == null) return pourquoi
+                stockage.edit().putString("datv_udp_dest", d.ip + ":" + d.port).apply()
+            }
+            if (on != null) stockage.edit().putBoolean("datv_udp", on).apply()
+            udp?.ferme(); udp = null; udpErreur = ""
+            if (udpOn && SortieUdpTs.destination(udpDestination).first == null) return "destination refusée"
+        }
+        return null
+    }
+
+    /** A block of the stream to the UDP output, when on. */
+    internal fun versUdp(bloc: ByteArray) { if (udpOn) sortieUdp()?.bloc(bloc) }
+
+    private fun sortieUdp(): SortieUdp? = synchronized(verrouUdp) {
+        if (!udpOn) return null
+        udp ?: SortieUdpTs.destination(udpDestination).first?.let { d ->
+            runCatching { SortieUdp(d) }.onFailure { udpErreur = it.message ?: "UDP refusé" }.getOrNull()?.also { udp = it }
+        }
+    }
+
+    private inner class SortieUdp(d: SortieUdpTs.Destination) {
+        private val s = if (d.ip.substringBefore('.').toInt() in 224..239) java.net.MulticastSocket().also { it.timeToLive = 1 } else DatagramSocket()
+        private val vers = InetAddress.getByName(d.ip)
+        private val port = d.port
+        private val decoupe = DecoupeTs()
+        fun bloc(b: ByteArray) = decoupe.ajoute(b) { t, n ->
+            runCatching { s.send(DatagramPacket(t, n, vers, port)); udpDatagrammes++ }.onFailure { udpErreur = it.message ?: "envoi refusé" }
+        }
+        fun ferme() { runCatching { s.close() } }
+    }
 
     companion object {
         /**

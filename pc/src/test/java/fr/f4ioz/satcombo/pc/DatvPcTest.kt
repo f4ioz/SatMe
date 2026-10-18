@@ -108,4 +108,30 @@ class DatvPcTest {
         assertTrue(!d.etat.actif)
         assertTrue(d.demarre(ReglageDatv(srKs = 10))!!.contains("symboles"))
     }
+
+    @Test
+    fun le_flux_en_udp_vers_un_lecteur_local() {
+        val st = StockageMemoire()
+        val d = DatvPc(st, File(System.getProperty("java.io.tmpdir")))
+        assertEquals(false, d.udpOn)
+        assertEquals("127.0.0.1:9080", d.udpDestination)
+        // Never the internet; the setting unchanged.
+        assertTrue(d.regleUdp(true, "8.8.8.8:9080") != null)
+        assertEquals(false, d.udpOn)
+        java.net.DatagramSocket(0, java.net.InetAddress.getLoopbackAddress()).use { lecteur ->
+            lecteur.soTimeout = 3000
+            assertEquals(null, d.regleUdp(true, "127.0.0.1:" + lecteur.localPort))
+            val paquets = ByteArray(188 * 8) { if (it % 188 == 0) 0x47 else 1 }
+            d.versUdp(paquets.copyOf(500)); d.versUdp(paquets.copyOfRange(500, paquets.size))
+            val b = ByteArray(2000)
+            val p = java.net.DatagramPacket(b, b.size)
+            lecteur.receive(p)
+            assertEquals(1316, p.length)
+            assertEquals(1L, d.udpDatagrammes)
+            // Off: nothing more sent.
+            d.regleUdp(false, null)
+            d.versUdp(paquets); d.versUdp(paquets)
+            assertEquals(1L, d.udpDatagrammes)
+        }
+    }
 }
