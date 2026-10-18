@@ -60,10 +60,12 @@ class GenerateurIq(
         val ft8Message: String = "CQ Q0SAT JN18",
         val sstv: Signal = Signal(true, -45_000, 30.0),
         val sstvMode: String = "Robot 36",
+        /** A CTCSS sub-tone under the FM tone (one of [DetecteurSousTon.TONS], Hz); 0: none. */
+        val fmCtcssHz: Double = 0.0,
     ) {
         /** Flat, the keys [avec] reads: kept as is, sent to the page as is. */
         fun plat(): JSONObject {
-            val o = JSONObject().put("bruit", bruitDbfs).put("cwTexte", cwTexte).put("cwWpm", cwWpm).put("fmTon", fmTonHz)
+            val o = JSONObject().put("bruit", bruitDbfs).put("cwTexte", cwTexte).put("cwWpm", cwWpm).put("fmTon", fmTonHz).put("fmCtcss", fmCtcssHz)
                 .put("ft8Message", ft8Message).put("sstvMode", sstvMode)
             for ((nom, x) in listOf("porteuse" to porteuse, "cw" to cw, "blu" to blu, "fm" to fm, "ft8" to ft8, "sstv" to sstv))
                 o.put("${nom}On", if (x.actif) "1" else "0").put("${nom}Hz", x.decalageHz).put("${nom}Snr", x.snrDb)
@@ -86,7 +88,8 @@ class GenerateurIq(
                 sig("ft8", ft8),
                 p("ft8Message")?.trim()?.uppercase()?.takeIf { messageFt8(it) != null } ?: ft8Message,
                 sig("sstv", sstv),
-                p("sstvMode")?.takeIf { SstvMode.byName(it) != null } ?: sstvMode)
+                p("sstvMode")?.takeIf { SstvMode.byName(it) != null } ?: sstvMode,
+                p("fmCtcss")?.replace(',', '.')?.toDoubleOrNull()?.let { DetecteurSousTon.normalise(it) } ?: fmCtcssHz)
         }
     }
 
@@ -113,7 +116,7 @@ class GenerateurIq(
     private var cwElem = 0; private var cwDans = 0; private var cwEnv = 0f
     private var aBlu = 0f; private var phBlu1 = 0; private var phBlu2 = 0
     private var bluSyll = 0; private var bluF1 = 0; private var bluF2 = 0; private var bluLong = 0; private var bluSilence = true
-    private var aFm = 0f; private var phFm = 0; private var phFmTon = 0
+    private var aFm = 0f; private var phFm = 0; private var phFmTon = 0; private var phCtcss = 0
     private var aFt8 = 0f; private var phFt8 = 0
     private var ft8Freq: DoubleArray? = null
     private var aSstv = 0f; private var phSstv = 0
@@ -195,6 +198,8 @@ class GenerateurIq(
         val fmTon = pas(r.fmTonHz.toDouble())
         val fmDev = FM_DEVIATION_HZ / Dsp.RTL_RATE * 4_294_967_296.0
         val fmBase = pas(r.fm.decalageHz.toDouble())
+        val ctcss = pas(r.fmCtcssHz)
+        val ctcssDev = if (r.fmCtcssHz > 0.0) CTCSS_DEVIATION_HZ / Dsp.RTL_RATE * 4_294_967_296.0 else 0.0
         val pasSstv = pas(r.sstv.decalageHz.toDouble())
         val rampe = 1f / (CW_RAMPE_MS * Dsp.RTL_RATE / 1000f)
         var o = 0
@@ -232,8 +237,8 @@ class GenerateurIq(
             if (aFm > 0f) {
                 val x = phFm ushr 16
                 re += COS[x] * aFm; im += SIN[x] * aFm
-                phFm += fmBase + (COS[phFmTon ushr 16] * fmDev).toInt()
-                phFmTon += fmTon
+                phFm += fmBase + (COS[phFmTon ushr 16] * fmDev).toInt() + (COS[phCtcss ushr 16] * ctcssDev).toInt()
+                phFmTon += fmTon; phCtcss += ctcss
             }
             if (ft8Ici) {
                 val t = dansTrancheS + k.toDouble() / Dsp.RTL_RATE
@@ -301,6 +306,8 @@ class GenerateurIq(
     companion object {
         const val FT8_AUDIO_HZ = 1_500.0
         const val FM_DEVIATION_HZ = 3_000.0
+        /** The sub-tone's deviation: a tenth of the 5 kHz channel, as transmitters put it. */
+        const val CTCSS_DEVIATION_HZ = 500.0
         const val SSTV_DEVIATION_HZ = 5_000.0
         const val PAUSE_SSTV_S = 5.0
         const val CW_RAMPE_MS = 5f
@@ -315,7 +322,7 @@ class GenerateurIq(
             Ecoute("porteuse", "Porteuse", "USB", r.porteuse.decalageHz - 1_000, 0).takeIf { r.porteuse.actif },
             Ecoute("cw", "CW « " + r.cwTexte + " »", "USB", r.cw.decalageHz - NOTE_CW_HZ, 0).takeIf { r.cw.actif },
             Ecoute("blu", "BLU (voix de synthèse)", "USB", r.blu.decalageHz, 0).takeIf { r.blu.actif },
-            Ecoute("fm", "FM, ton " + r.fmTonHz + " Hz", "NFM", r.fm.decalageHz, 12_000).takeIf { r.fm.actif },
+            Ecoute("fm", "FM, ton " + r.fmTonHz + " Hz" + (if (r.fmCtcssHz > 0.0) ", CTCSS " + DetecteurSousTon.libelle(r.fmCtcssHz) else ""), "NFM", r.fm.decalageHz, 12_000).takeIf { r.fm.actif },
             Ecoute("ft8", "FT8 « " + r.ft8Message + " »", "USB", r.ft8.decalageHz, 3_000).takeIf { r.ft8.actif },
             Ecoute("sstv", "SSTV " + r.sstvMode + " (FM)", "NFM", r.sstv.decalageHz, 16_000).takeIf { r.sstv.actif },
         )

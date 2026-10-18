@@ -188,6 +188,11 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
         val debitKo: Int = 0,
         val perdus: Long = 0L,
         val satellite: String = "",
+        /** The CTCSS tone heard in NFM (0: none), its share of the sub-tone band, its deviation; the tone squelch shut. */
+        val ctcssHz: Double = 0.0,
+        val ctcssConfiance: Float = 0f,
+        val ctcssDevHz: Int = 0,
+        val tonFerme: Boolean = false,
     )
 
     private val _etat = MutableStateFlow(Etat())
@@ -694,6 +699,10 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
                 val net = if (sonde || pourMeteor) RxCleaning.OFF else nettoyages[m] ?: RxCleaning.OFF
                 if (chaine.cleaning !== net) chaine.cleaning = net
                 chaine.cw = ecouteCw
+                // CTCSS read in NFM (receive only), and the tone squelch when one is chosen; never for a sonde or METEOR.
+                chaine.subTones = m == RxMode.NFM && !sonde && !pourMeteor
+                val tsq = if (sonde || pourMeteor) 0.0 else fr.f4ioz.satcombo.sdr.DetecteurSousTon.normalise(settings.sdrSilencieuxTon / 10.0)
+                if (chaine.toneSquelchHz != tsq) chaine.toneSquelchHz = tsq
 
                 val n = if (iq16 != null) r.read16(iq16, 200) else r.read(iq, 200)
                 if (n < 0) {
@@ -765,7 +774,8 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
                     if (settings.sdrAudio && (fichier == null || fichier.vitesse == 1.0)) hp.pousse(ePcm, eN)
                     if (son.etat.value.appareil == NOM_SOURCE && son.etat.value.actif) son.distribue(ePcm, eN, Dsp.AUDIO_RATE)
                     if (pourQo100()) ecouteQo100?.invoke(pcm, produit)
-                    if (!canauxVoix) ecouteVoix?.invoke(pcm, produit, if (settings.sdrSquelchDb > -120) chaine.squelch.open else null)
+                    if (!canauxVoix) ecouteVoix?.invoke(pcm, produit,
+                        if (settings.sdrSquelchDb > -120 || chaine.toneSquelchHz > 0.0) chaine.squelch.open && !chaine.toneSquelchClosed else null)
                     if (!canauxSstv) ecouteSstv?.let { runCatching { it(pcm, produit) } }
                     // The browsers listening to the dongle (the page open on another PC).
                     diffusion?.ajoute("sdr", ePcm, eN, Dsp.AUDIO_RATE)
@@ -776,7 +786,9 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
                     notchesVus = chaine.autoNotches(); tauxBlanc = if (net.nb) chaine.blankedRatio() else 0f
                     val statut = if (fichier == null) "réception" else if (fichier.enPause) "en pause"
                         else if (fichier.attenteJusqua > maintenant) "calage sur les tranches FT8…" else "lecture"
+                    val st = chaine.subTone
                     _etat.update { it.copy(statut = statut, pllHz = pll, fineHz = fine, niveauDb = chaine.levelDb, saturation = chaine.clipRatio,
+                        ctcssHz = st.hz, ctcssConfiance = st.confiance, ctcssDevHz = st.deviationHz, tonFerme = chaine.toneSquelchClosed,
                         debitKo = debit, perdus = r.perdus, erreur = when (r) { is PlutoSdr -> r.avertissement; is BladerfSdr -> r.avertissement; else -> it.erreur }) }
                 }
             }

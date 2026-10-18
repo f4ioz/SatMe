@@ -33,3 +33,11 @@ dependencies {
     testImplementation("org.json:json:20240303")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.8.1")
 }
+
+// The built-in manual (F1 on the page): the SatMe-PC guide, bundled as a resource.
+val manuelPc = tasks.register<Copy>("manuelPc") {
+    from(rootProject.file("docs/station-pc.fr.md")) { rename { "manuel.fr.md" } }
+    into(layout.buildDirectory.dir("generated/manuel/fr/f4ioz/satcombo/demo"))
+}
+sourceSets["main"].resources.srcDir(layout.buildDirectory.dir("generated/manuel"))
+tasks.named("processResources") { dependsOn(manuelPc) }

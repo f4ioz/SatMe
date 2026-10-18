@@ -407,6 +407,10 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
         when (chemin) {
             "/", "/index.html", "/pc" -> envoie(sortie, "200 OK", "text/html; charset=utf-8", PagePc.HTML.toByteArray())
             "/api/police-drapeaux" -> PagePc.POLICE_DRAPEAUX?.let { envoie(sortie, "200 OK", "font/woff2", it) } ?: envoie(sortie, "404 Not Found", "text/plain", ByteArray(0))
+            // The built-in manual (F1): the guide's chapters, and its full-text search.
+            "/api/manuel" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", fr.f4ioz.satcombo.demo.Manuel.REPONSE)
+            "/api/manuel/cherche" -> envoie(sortie, "200 OK", "application/json; charset=utf-8",
+                fr.f4ioz.satcombo.demo.Manuel.chercheJson(q["q"].orEmpty().take(200)).toString().toByteArray())
             // Every tab here; the phone offers some of them.
             "/api/capacites" -> envoie(sortie, "200 OK", "application/json; charset=utf-8",
                 JSONObject().put("onglets", JSONArray(PagePc.TOUS)).put("serveur", "pc").toString().toByteArray())
@@ -879,6 +883,8 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 q["mode"]?.let { d.modeChoisi = it }
                 q["bw"]?.toIntOrNull()?.let { st.sdrBandwidthHz = it.coerceIn(0, 24_000) }
                 q["squelch"]?.toIntOrNull()?.let { st.sdrSquelchDb = it.coerceIn(-120, 0) }
+                // The tone squelch: a standard CTCSS tone (Hz), anything else turns it off.
+                q["tonSq"]?.replace(',', '.')?.toDoubleOrNull()?.let { st.sdrSilencieuxTon = Math.round(fr.f4ioz.satcombo.sdr.DetecteurSousTon.normalise(it) * 10).toInt() }
                 q["son"]?.let { st.sdrAudio = it == "1" }
                 q["deemph"]?.let { st.sdrDeemph = it == "1" }
                 q["doppler"]?.let { st.sdrDopplerTrack = it == "1" }
@@ -1594,6 +1600,9 @@ object JsonPc {
             .put("satellite", e.satellite).put("datvTient", d.datvTient ?: "")
             .put("gain", st.sdrGainTenthDb).put("agc", st.sdrAgc).put("ppm", st.sdrPpm).put("mode", d.modeChoisi).put("bw", st.sdrBandwidthHz)
             .put("squelch", st.sdrSquelchDb).put("son", st.sdrAudio).put("deemph", st.sdrDeemph).put("doppler", st.sdrDopplerTrack)
+            // CTCSS: the tone heard in NFM (receive only), and the tone squelch chosen (0: off).
+            .put("ctcss", JSONObject().put("hz", e.ctcssHz).put("confiance", Math.round(e.ctcssConfiance * 100) / 100.0).put("dev", e.ctcssDevHz))
+            .put("tonSq", st.sdrSilencieuxTon / 10.0).put("tonFerme", e.tonFerme)
             .put("suit", d.suitSatellite).put("manuelle", d.manuelleHz).put("hote", d.hote).put("port", d.port).put("lance", d.lance).put("bias", d.biasTee)
             .put("recepteur", d.recepteur).put("plutoHote", d.plutoHote).put("plutoPort", d.plutoPort)
             .put("bladerfOutil", d.bladerfOutil).put("bladerfProgramme", d.programmeBladerf() ?: "").put("bladerfConseil", d.conseilBladerf())
