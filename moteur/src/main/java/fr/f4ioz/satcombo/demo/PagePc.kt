@@ -3510,26 +3510,39 @@ async function tic() {
   if (fluxOk && E) { dessine(); return; }
   try { E = await (await fetch('api/etat')).json(); dessine(); } catch (x) {}
 }
-// The sound in this browser: SatMe-PC streams the dongle's or the sound card's audio; played here with a short buffer.
-let ecCtx = null, ecGain = null, ecLecteur = null, ecArret = null, ecFile = [], ecLu = 0, ecRate = 22050, ecPos = 0;
+// The sound in this browser: SatMe-PC streams the dongle's or the sound card's audio; played here from a ring
+// with a jitter cushion (the network's bursts absorbed), linearly interpolated to the card's rate, the pace
+// nudged gently (±0.3 %) to hold the cushion (half a second) instead of dropping blocks or running dry.
+const EC_TAILLE = 1 << 18;
+let ecCtx = null, ecGain = null, ecLecteur = null, ecArret = null, ecAnneau = new Float32Array(EC_TAILLE), ecEcrit = 0, ecLu = 0,
+    ecRate = 22050, ecAmorce = true, ecMoy = 0, ecTrous = 0;
+function ecPousse(f) {
+  for (let i = 0; i < f.length; i++) ecAnneau[(ecEcrit + i) & (EC_TAILLE - 1)] = f[i];
+  ecEcrit += f.length;
+}
 async function ecouteIci() {
   arreteEcoute();
   const source = g('ec-source').value;
   try {
     ecCtx = new (window.AudioContext || window.webkitAudioContext)();
     ecGain = ecCtx.createGain(); ecGain.gain.value = v('ec-vol') / 100; ecGain.connect(ecCtx.destination);
-    // Played from a queue, resampled to the card's rate; too far behind (more than a second), it catches up.
-    ecLecteur = ecCtx.createScriptProcessor(2048, 0, 1);
+    ecLecteur = ecCtx.createScriptProcessor(4096, 0, 1);
     ecLecteur.onaudioprocess = ev => {
-      const out = ev.outputBuffer.getChannelData(0), pas = ecRate / ecCtx.sampleRate;
-      let enFile = ecFile.reduce((a, b) => a + b.length, 0) - ecPos;
-      if (enFile > ecRate) { while (ecFile.length > 1 && enFile > ecRate * 0.3) { enFile -= ecFile[0].length - ecPos; ecFile.shift(); ecPos = 0; } }
+      const out = ev.outputBuffer.getChannelData(0), cible = ecRate * 0.5;
+      let enFile = ecEcrit - ecLu;
+      // Too far behind (a stall then a burst): back to the cushion at once.
+      if (enFile > ecRate * 1.5) { ecLu = ecEcrit - cible; enFile = cible; ecMoy = cible; }
+      // Waiting for the cushion (at start, after running dry): silence until it is there.
+      if (ecAmorce) { if (enFile < cible) { out.fill(0); return; } ecAmorce = false; ecMoy = enFile; }
+      ecMoy += (enFile - ecMoy) * 0.05;
+      const derive = Math.max(-0.003, Math.min(0.003, (ecMoy - cible) / ecRate * 0.05));
+      const pas = ecRate / ecCtx.sampleRate * (1 + derive);
       for (let i = 0; i < out.length; i++) {
-        if (!ecFile.length) { out[i] = 0; continue; }
-        const b = ecFile[0], k = Math.floor(ecPos);
-        out[i] = b[k] || 0;
-        ecPos += pas;
-        if (ecPos >= b.length) { ecPos -= b.length; ecFile.shift(); }
+        if (ecEcrit - ecLu < 2) { out.fill(0, i); ecAmorce = true; ecTrous++; break; }
+        const k = Math.floor(ecLu), x = ecLu - k;
+        const a = ecAnneau[k & (EC_TAILLE - 1)], b = ecAnneau[(k + 1) & (EC_TAILLE - 1)];
+        out[i] = a + (b - a) * x;
+        ecLu += pas;
       }
     };
     ecLecteur.connect(ecGain);
@@ -3546,7 +3559,7 @@ async function ecouteIci() {
       if (entete && t.length >= 4) { ecRate = t[0] | (t[1] << 8) | (t[2] << 16) | (t[3] << 24); o = 4; entete = false; }
       const n = Math.floor((t.length - o) / 2), f = new Float32Array(n), dv = new DataView(t.buffer, o, n * 2);
       for (let i = 0; i < n; i++) f[i] = dv.getInt16(2 * i, true) / 32768;
-      if (n) ecFile.push(f);
+      if (n) ecPousse(f);
       reste = t.slice(o + n * 2);
     }
   } catch (x) { if (ecArret && !ecArret.signal.aborted) txt('ec-etat', 'son impossible : ' + (x.message || x)); }
@@ -3556,7 +3569,7 @@ function arreteEcoute() {
   if (ecArret) ecArret.abort(); ecArret = null;
   if (ecLecteur) { try { ecLecteur.disconnect(); } catch (x) {} ecLecteur = null; }
   if (ecCtx) { try { ecCtx.close(); } catch (x) {} ecCtx = null; }
-  ecFile = []; ecPos = 0;
+  ecEcrit = 0; ecLu = 0; ecAmorce = true; ecMoy = 0;
   g('ec-go').hidden = false; g('ec-stop').hidden = true; g('ec-btn').textContent = '🔈 Écouter ici';
 }
 // Shown where SatMe-PC streams (not on the page served by the phone).

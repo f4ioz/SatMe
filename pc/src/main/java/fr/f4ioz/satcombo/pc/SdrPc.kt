@@ -27,9 +27,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.io.File
-import javax.sound.sampled.AudioFormat
-import javax.sound.sampled.AudioSystem
-import javax.sound.sampled.SourceDataLine
 import kotlin.concurrent.thread
 
 /**
@@ -550,7 +547,7 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
         var trameVue = 0L
         var dernierPano = 0L; var panoVue = 0L
         var dernierRecentre = 0L
-        val hp = hautParleur()
+        val hp = HautParleurPc(Dsp.AUDIO_RATE)
         try {
             while (generation == gen) {
                 val voulue = voulueHz
@@ -627,12 +624,8 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
                 }
                 if (produit > 0 && sonde) sondes.ecoute(pcm, produit)
                 else if (produit > 0 && !pourMeteor) {
-                    if (settings.sdrAudio && hp != null) {
-                        // Never wait for the speaker: a late block is dropped, the reading goes on.
-                        val octets = ByteArray(produit * 2)
-                        for (i in 0 until produit) { octets[2 * i] = pcm[i].toByte(); octets[2 * i + 1] = (pcm[i].toInt() shr 8).toByte() }
-                        if (hp.available() >= octets.size) hp.write(octets, 0, octets.size)
-                    }
+                    // Never waits for the speaker: kept in its ring, played at the card's pace.
+                    if (settings.sdrAudio) hp.pousse(pcm, produit)
                     if (son.etat.value.appareil == NOM_SOURCE && son.etat.value.actif) son.distribue(pcm, produit, Dsp.AUDIO_RATE)
                     if (pourQo100()) ecouteQo100?.invoke(pcm, produit)
                     ecouteVoix?.invoke(pcm, produit, if (settings.sdrSquelchDb > -120) chaine.squelch.open else null)
@@ -648,17 +641,9 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
                 }
             }
         } finally {
-            hp?.let { runCatching { it.stop(); it.close() } }
+            hp.ferme()
         }
     }
-
-    private fun hautParleur(): SourceDataLine? = runCatching {
-        val f = AudioFormat(Dsp.AUDIO_RATE.toFloat(), 16, 1, true, false)
-        (AudioSystem.getLine(javax.sound.sampled.DataLine.Info(SourceDataLine::class.java, f)) as SourceDataLine).also {
-            it.open(f, Dsp.AUDIO_RATE / 2 * 2)   // half a second
-            it.start()
-        }
-    }.getOrNull()
 
     companion object {
         const val DATV_TIENT_PLUTO = "l'ADALM-PLUTO reçoit la DATV (onglet DATV) : arrêter cette réception d'abord (l'onglet SDR reprendra ensuite)"
