@@ -6061,6 +6061,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             squelchDb = settings.sdrSquelchDb,
             offsetHz = 0)
         fr.f4ioz.satcombo.sdr.SdrHub.setDeemphasis(settings.sdrDeemph)
+        fr.f4ioz.satcombo.sdr.SdrHub.setCleaning(fr.f4ioz.satcombo.sdr.RxCleaning.parMode(settings.sdrNettoyage))
         if (ok) startSdrLoop(rest)
     }
 
@@ -6324,6 +6325,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      * FM de-emphasis. Only for wideband FM: on a repeater, a beacon or SSTV it
      * just crushes the highs.
      */
+    /** Sound cleaning settings of [mode] (the one demodulated if null) changed by [q], kept per mode. */
+    fun setSdrNettoyage(q: Map<String, String>, mode: fr.f4ioz.satcombo.sdr.RxMode? = null) {
+        val m = fr.f4ioz.satcombo.sdr.RxCleaning.parMode(settings.sdrNettoyage).toMutableMap()
+        val k = mode ?: sdrMode()
+        m[k] = (m[k] ?: fr.f4ioz.satcombo.sdr.RxCleaning.OFF).avec(q)
+        settings.sdrNettoyage = fr.f4ioz.satcombo.sdr.RxCleaning.texte(m)
+        fr.f4ioz.satcombo.sdr.SdrHub.setCleaning(m)
+    }
+
     fun setSdrDeemph(on: Boolean) {
         settings.sdrDeemph = on
         _ui.value = _ui.value.copy(sdrDeemph = on)

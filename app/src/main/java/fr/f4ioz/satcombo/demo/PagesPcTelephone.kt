@@ -115,6 +115,7 @@ object PagesPcTelephone {
                 }
                 // ---- the SDR dongle on the phone's USB port
                 "/api/sdr" -> json(sdr(vm))
+                "/api/sdr/nettoyage" -> json(nettoyage(vm))
                 "/api/sdr/spectre" -> {
                     val st = fr.f4ioz.satcombo.sdr.SdrHub.state.value
                     val sp = fr.f4ioz.satcombo.sdr.SdrHub.spectrum.value
@@ -469,6 +470,12 @@ object PagesPcTelephone {
             "/api/sdr/arreter" -> { vm.stopSdr(); OK }
             "/api/sdr/decalage" -> { p("hz").toIntOrNull()?.let { vm.setSdrOffset(it) }; OK }
             "/api/sdr/pic" -> { vm.tuneSdrPeak(30_000); OK }
+            "/api/sdr/nettoyage" -> {
+                val q = listOf("nb", "nbSeuil", "nbLargeur", "notchAuto", "notch", "notchHz", "notchLargeur", "nr", "cag")
+                    .associateWith { p(it) }.filterValues { it.isNotEmpty() }
+                vm.setSdrNettoyage(q, fr.f4ioz.satcombo.sdr.RxMode.values().firstOrNull { it.name == p("mode") })
+                nettoyage(vm)
+            }
             "/api/sdr/reglage" -> {
                 p("gain").toIntOrNull()?.let { vm.setSdrGain(it.takeIf { g -> g >= 0 }) }
                 if (p("agc").isNotEmpty()) vm.setSdrAgc(p("agc") == "1")
@@ -863,6 +870,12 @@ object PagesPcTelephone {
             .put("gain", vm.sdrGainReglage()).put("agc", u.sdrAgc).put("ppm", u.sdrPpm).put("mode", vm.sdrMode().name).put("bw", u.sdrBandwidthHz)
             .put("squelch", u.sdrSquelchDb).put("son", u.sdrAudio).put("deemph", u.sdrDeemph).put("doppler", u.sdrDopplerTrack)
             .put("suit", true).put("manuelle", 0).put("hote", "").put("port", 0).put("lance", false).put("bias", false)
+    }
+
+    /** The phone's sound cleaning, in SatMe-PC's words. */
+    private fun nettoyage(vm: MainViewModel): JSONObject {
+        val h = fr.f4ioz.satcombo.sdr.SdrHub
+        return ApiSdr.nettoyage(vm.sdrMode(), fr.f4ioz.satcombo.sdr.RxCleaning.parMode(vm.settingsStore().sdrNettoyage), h.notchesVus, h.tauxBlanc)
     }
 
     /** The sources the phone records from: the SatMe screen's choices. */

@@ -333,13 +333,25 @@ class DcBlock(private val alpha: Float = 0.9995f) {
 class AudioAgc(
     private val target: Float = 8_000f,
     private val maxGain: Float = 20_000_000f,
-    rate: Double = Dsp.AUDIO_RATE.toDouble(),
+    private val rate: Double = Dsp.AUDIO_RATE.toDouble(),
 ) {
     private var env = 0f
     private var hang = 0
-    private val attack = (1.0 - kotlin.math.exp(-1.0 / (0.002 * rate))).toFloat()
-    private val hangSamples = (0.3 * rate).toInt()
-    private val decay = Math.pow(10.0, -12.0 / 20.0 / rate).toFloat()
+    private var attack = 0f
+    private var hangSamples = 0
+    private var decay = 1f
+
+    /** Attack, hang and recovery; [AgcSpeed.MOYENNE] is the one described above. */
+    var speed: AgcSpeed = AgcSpeed.MOYENNE
+        set(v) { if (v != field) { field = v; coefficients() } }
+
+    init { coefficients() }
+
+    private fun coefficients() {
+        attack = (1.0 - kotlin.math.exp(-1.0 / (speed.attackS * rate))).toFloat()
+        hangSamples = (speed.hangS * rate).toInt()
+        decay = Math.pow(10.0, -speed.recoveryDbS / 20.0 / rate).toFloat()
+    }
 
     fun reset() { env = 0f; hang = 0 }
 
@@ -570,6 +582,29 @@ class RxChain(
     /** Squelch, dBFS. −120 dB means off. */
     val squelch = Squelch()
 
+    /** Sound cleaning ([RxCleaning]): all off by default. */
+    var cleaning: RxCleaning = RxCleaning.OFF
+
+    /**
+     * Listening to CW: the automatic notch then waits two seconds before
+     * calling a note a carrier, so the operator's own keyed signal stays.
+     */
+    var cw: Boolean = false
+
+    private val blanker = NoiseBlanker(rtlRate)
+    private val autoNotch = AutoNotch(stage2Rate)
+    private val manualNotch = NotchFilter()
+    private val nr = NoiseReduction(stage2Rate)
+    private var blankerOn = false
+    private var autoNotchOn = false
+    private var nrOn = false
+
+    /** Share of the IQ samples blanked by [NoiseBlanker] since the last call. */
+    fun blankedRatio(): Float = blanker.taux()
+
+    /** Carriers the automatic notch has notched, audio Hz. */
+    fun autoNotches(): List<Double> = if (autoNotchOn) autoNotch.notched() else emptyList()
+
     /** Spectrum analyser, fed on demand from the first stage output. */
     val spectrum = SpectrumAnalyzer(Dsp.SPECTRUM_SIZE)
 
@@ -738,6 +773,7 @@ class RxChain(
     fun reset() {
         dec1.reset(); dec2.reset(); disc.reset(); dc.reset(); deemph.reset()
         agc.reset(); squelch.reset(); ssb?.reset(); spectrum.reset()
+        blanker.reset(); autoNotch.reset(); manualNotch.reset(); nr.reset()
         nco = 0.0; level = -120f; amDc = 0f
         clip = 0f; peak = 0f; collecting = false
     }
@@ -841,6 +877,29 @@ class RxChain(
         return suite(n, out, feedSpectrum, feedPanorama)
     }
 
+    /**
+     * The demodulated sound cleaned in place: carriers notched first (before
+     * the noise estimate and the AGC see them), then the hiss lowered. The
+     * noise reduction rests while the squelch is closed: nothing to hear.
+     */
+    private fun clean(buf: FloatArray, count: Int, open: Boolean, c: RxCleaning) {
+        if (c.autoNotch) {
+            if (!autoNotchOn) { autoNotch.reset(); autoNotchOn = true }
+            autoNotch.persistS = if (cw) 2.0 else 0.3
+            autoNotch.process(buf, count)
+        } else autoNotchOn = false
+        if (c.notch && c.notchHz < stage2Rate / 2 - c.notchWidthHz) {
+            if (manualNotch.hz != c.notchHz.toDouble() || manualNotch.widthHz != c.notchWidthHz.toDouble())
+                manualNotch.set(c.notchHz.toDouble(), c.notchWidthHz.toDouble(), stage2Rate)
+            manualNotch.process(buf, count)
+        }
+        if (c.nr > 0 && open) {
+            if (!nrOn) { nr.reset(); nrOn = true }
+            nr.strength = c.nr
+            nr.process(buf, count)
+        } else if (c.nr == 0) nrOn = false
+    }
+
     /** The chain from the converted samples in [aI], [aQ] ([n] of them) on. */
     private fun suite(n: Int, out: ShortArray, feedSpectrum: Boolean, feedPanorama: Boolean): Int {
         // Panorama taken here, on the raw stream, before the fine-tuning mixer:
@@ -849,6 +908,14 @@ class RxChain(
         // slide under the markers at every cursor move.
         if (feedPanorama && !collectingPan) { panorama.begin(); collectingPan = true }
         if (collectingPan && panorama.push(aI, aQ, n)) collectingPan = false
+
+        // Impulses blanked here, at the full rate, before any filter spreads them.
+        val c = cleaning
+        if (c.nb) {
+            if (!blankerOn) { blanker.reset(); blankerOn = true }
+            blanker.threshold = c.nbThreshold; blanker.widthUs = c.nbWidthUs
+            blanker.process(aI, aQ, n)
+        } else blankerOn = false
 
         val m1 = dec1.maxOut(n)
         if (bI.size < m1) { bI = FloatArray(m1); bQ = FloatArray(m1) }
@@ -893,18 +960,27 @@ class RxChain(
         }
         val avg = mag / count
         level = if (avg <= 1e-9) -120f else (20.0 * log10(avg)).toFloat()
+        val open = squelch.update(level)
+        agc.speed = c.agc
 
         val produced = when (mode) {
             RxMode.NFM -> {
                 val p = disc.process(cI, cQ, count, out)
                 dc.process(out, p)
                 if (deemphasis) deemph.process(out, p)
+                if (c.autoNotch || c.notch || c.nr > 0) {
+                    if (fl.size < p) fl = FloatArray(p)
+                    for (k in 0 until p) fl[k] = out[k].toFloat()
+                    clean(fl, p, open, c)
+                    for (k in 0 until p) out[k] = fl[k].coerceIn(-32000f, 32000f).toInt().toShort()
+                } else { autoNotchOn = false; nrOn = false }
                 p
             }
             RxMode.USB, RxMode.LSB -> {
                 if (fl.size < count) fl = FloatArray(count)
                 val f = ssb ?: ComplexBandpass(255, 1_500.0, 2_400.0, stage2Rate).also { ssb = it }
                 f.process(cI, cQ, count, fl)
+                clean(fl, count, open, c)
                 agc.process(fl, count, out)
                 count
             }
@@ -918,12 +994,13 @@ class RxChain(
                     amDc += 0.0005f * (a - amDc)
                     fl[k] = a - amDc
                 }
+                clean(fl, count, open, c)
                 agc.process(fl, count, out)
                 count
             }
         }
 
-        if (!squelch.update(level)) {
+        if (!open) {
             java.util.Arrays.fill(out, 0, produced, 0)
         }
         var mx = 0

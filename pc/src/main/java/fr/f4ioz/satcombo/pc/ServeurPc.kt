@@ -367,6 +367,8 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 (trafic?.json() ?: JSONObject().put("absent", true)).toString().toByteArray())
             "/api/qo100/qualite" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", (qo100?.json() ?: JSONObject().put("absent", true)).toString().toByteArray())
             "/api/qo100" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JsonPc.qo100(station, q["plan"] == "1", sdr?.gammeHz).toString().toByteArray())
+            "/api/sdr/nettoyage" -> envoie(sortie, "200 OK", "application/json; charset=utf-8",
+                (sdr?.let { JsonPc.nettoyage(it) } ?: JSONObject().put("ok", false)).toString().toByteArray())
             "/api/sdr" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", (sdr?.let { JsonPc.sdr(it) } ?: JSONObject().put("absent", true)).toString().toByteArray())
             "/api/sdr/spectre" -> envoie(sortie, "200 OK", "application/json; charset=utf-8",
                 (sdr?.let { JsonPc.spectre(it, q["span"]?.toIntOrNull() ?: 48_000, q["n"]?.toIntOrNull() ?: 512, q["autour"] == "ecoute") } ?: JSONObject()).toString().toByteArray())
@@ -728,6 +730,13 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 q["bladerfOutil"]?.let { d.bladerfOutil = it }
                 q["bias"]?.let { d.biasTee = it == "1" }
             }
+            // The sound cleaning of the mode demodulated (or of [mode]), kept per mode; receive only.
+            "/api/sdr/nettoyage" -> {
+                val d = sdr ?: return JSONObject().put("ok", false)
+                val m = q["mode"]?.let { k -> fr.f4ioz.satcombo.sdr.RxMode.values().firstOrNull { it.name == k } }
+                d.regleNettoyage(q, m)
+                return JsonPc.nettoyage(d)
+            }
             // bladeRF-cli -e info only (it opens the board, prints what it is, sends nothing).
             "/api/sdr/bladerf" -> {
                 val d = sdr ?: return JSONObject().put("ok", false)
@@ -870,6 +879,13 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 val e = emission ?: return JSONObject().put("ok", false)
                 val i = e.detecteHackrf()
                 return ok.put("message", i.message).put("cartes", JSONArray(i.cartes.map { it.libelle }))
+            }
+            // The sound cleaning of the mode demodulated (or of [mode]), kept per mode; receive only.
+            "/api/sdr/nettoyage" -> {
+                val d = sdr ?: return JSONObject().put("ok", false)
+                val m = q["mode"]?.let { k -> fr.f4ioz.satcombo.sdr.RxMode.values().firstOrNull { it.name == k } }
+                d.regleNettoyage(q, m)
+                return JsonPc.nettoyage(d)
             }
             // bladeRF-cli -e info only (it opens the board, prints what it is, sends nothing).
             "/api/datv/emission/bladerf" -> {
@@ -1394,6 +1410,9 @@ object JsonPc {
             e.trames, e.rejetees, e.excursion, e.serie, e.type)
         return fr.f4ioz.satcombo.demo.ApiSondes.json(r, e.derniere, d.sondes.vol, d.station.etat.value.observateur, d.sondes.journaux())
     }
+
+    /** The dongle's sound cleaning. */
+    fun nettoyage(d: SdrPc): JSONObject = fr.f4ioz.satcombo.demo.ApiSdr.nettoyage(d.modeNettoyage(), d.nettoyages, d.notchesVus, d.tauxBlanc)
 
     /** The dongle: its state and its settings. */
     fun sdr(d: SdrPc): JSONObject {

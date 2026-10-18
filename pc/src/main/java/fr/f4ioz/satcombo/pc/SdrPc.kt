@@ -16,6 +16,7 @@ import fr.f4ioz.satcombo.sdr.BladerfSdr
 import fr.f4ioz.satcombo.sdr.PlutoSdr
 import fr.f4ioz.satcombo.sdr.RtlTcp
 import fr.f4ioz.satcombo.sdr.RxChain
+import fr.f4ioz.satcombo.sdr.RxCleaning
 import fr.f4ioz.satcombo.sdr.RxMode
 import fr.f4ioz.satcombo.sdr.SourceIq
 import kotlinx.coroutines.CoroutineScope
@@ -513,8 +514,32 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
         else -> runCatching { RxMode.valueOf(m) }.getOrDefault(RxMode.NFM)
     }
 
+    /** Sound cleaning per demodulation mode ([RxCleaning]), kept in the settings. */
+    @Volatile var nettoyages: Map<RxMode, RxCleaning> = RxCleaning.parMode(settings.sdrNettoyage); private set
+
+    /** The mode being demodulated, for the cleaning settings shown. */
+    fun modeNettoyage(): RxMode = mode()
+
+    /** [q]'s cleaning settings applied to [m]'s (the mode demodulated if null) and kept. */
+    fun regleNettoyage(q: Map<String, String>, m: RxMode? = null) {
+        val k = m ?: mode()
+        val t = nettoyages.toMutableMap()
+        t[k] = (t[k] ?: RxCleaning.OFF).avec(q)
+        nettoyages = t
+        settings.sdrNettoyage = RxCleaning.texte(t)
+    }
+
+    /** What the cleaning does now: carriers notched (audio Hz), share of IQ blanked. */
+    @Volatile var notchesVus: List<Double> = emptyList(); private set
+    @Volatile var tauxBlanc: Float = 0f; private set
+
+    /** Listening to CW (the automatic notch then waits 2 s), from the width, the transmitter or the log's QO-100 mode. */
+    @Volatile private var ecouteCw = false
+
     /** The Doppler loop: where the dongle should be now. */
     private fun cibleMaintenant() {
+        ecouteCw = settings.sdrBandwidthHz in 1..1_000 ||
+            (if (pourQo100()) settings.qo100ModeCarnet == "CW" else station.ecouteSdr()?.mode.orEmpty().uppercase().contains("CW"))
         if (pourSonde) {
             val f = settings.sondeFreqHz
             voulueHz = f
@@ -570,6 +595,10 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
                 if (chaine.offsetHz != dec) chaine.offsetHz = dec
                 val deemph = !sonde && settings.sdrDeemph
                 if (chaine.deemphasis != deemph) chaine.deemphasis = deemph
+                // A sonde's bits, METEOR's samples: never cleaned.
+                val net = if (sonde || pourMeteor) RxCleaning.OFF else nettoyages[m] ?: RxCleaning.OFF
+                if (chaine.cleaning !== net) chaine.cleaning = net
+                chaine.cw = ecouteCw
 
                 val n = if (iq16 != null) r.read16(iq16, 200) else r.read(iq, 200)
                 if (n < 0) {
@@ -636,6 +665,7 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
                 if (maintenant - dernierEtat >= 250L) {
                     val debit = ((r.octets - dernierOctets) * 1000 / maxOf(1L, maintenant - dernierEtat) / 1024).toInt()
                     dernierOctets = r.octets; dernierEtat = maintenant
+                    notchesVus = chaine.autoNotches(); tauxBlanc = if (net.nb) chaine.blankedRatio() else 0f
                     _etat.update { it.copy(pllHz = pll, fineHz = fine, niveauDb = chaine.levelDb, saturation = chaine.clipRatio,
                         debitKo = debit, perdus = r.perdus, erreur = when (r) { is PlutoSdr -> r.avertissement; is BladerfSdr -> r.avertissement; else -> it.erreur }) }
                 }
