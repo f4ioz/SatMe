@@ -91,7 +91,7 @@ class JournalPc(
         return Liens(
             qsos = contacts.filter { it.timeMs in f && (it.catnum == e.catnum || JournalPassage.memeSatellite(it.satName, e.satName)) }
                 .sortedBy { it.timeMs },
-            images = lesImages.filter { it.timeMs in f }.mapNotNull { s -> son.fichierImage(s.fileName)?.let { it to s } }
+            images = lesImages.filter { it.timeMs in f && !SstvPc.horsAntenne(it) }.mapNotNull { s -> son.fichierImage(s.fileName)?.let { it to s } }
                 .sortedBy { it.second.timeMs },
             trames = son.aprs.paquets.filter { it.quand in f && !it.emis }.sortedBy { it.quand })
     }

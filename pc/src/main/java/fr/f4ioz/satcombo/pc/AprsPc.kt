@@ -90,9 +90,17 @@ class AprsPc(private val dossier: File, private val satellite: () -> String, pri
         Aprs.lit(t, ms.toLong()).copy(emis = sat == EMIS)
     }.getOrNull()
 
+    /** True while the sound is not on the air (the SDR's test generator, a recording played back). */
+    @Volatile var horsAntenne: () -> Boolean = { false }
+    /** Frames decoded off the air: counted only, never kept, cheered nor put in a pass's journal. */
+    @Volatile var essais = 0
+        private set
+
     /** A block of the card's sound. */
     fun ecoute(pcm: ShortArray, n: Int, rate: Int) {
-        val d = demod?.takeIf { rateDemod == rate } ?: AfskDemodulateur(rate) { t -> ajoute(t, horloge()) }.also { demod = it; rateDemod = rate }
+        val d = demod?.takeIf { rateDemod == rate } ?: AfskDemodulateur(rate) { t ->
+            if (runCatching { horsAntenne() }.getOrDefault(false)) essais++ else ajoute(t, horloge())
+        }.also { demod = it; rateDemod = rate }
         runCatching { d.traite(pcm, n) }
     }
 

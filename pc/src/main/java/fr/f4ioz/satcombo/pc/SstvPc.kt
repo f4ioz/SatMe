@@ -53,6 +53,15 @@ class SstvPc(
 ) {
     class Contexte(val satellite: String = "", val locator: String = "", val indicatif: String = "", val enregistrement: String = "")
 
+    /**
+     * The sound is not on the air: [ESSAI] (the test generator) or [RELECTURE]
+     * (an I/Q recording played back, [momentMs] when it was recorded, [fichier]).
+     */
+    class HorsAntenne(val genre: String, val momentMs: Long? = null, val fichier: String = "")
+
+    /** What the sound of a source ([SDR], [CARTE]) is now, when not on the air; null: a real reception. */
+    @Volatile var horsAntenne: (String) -> HorsAntenne? = { null }
+
     data class Etat(
         /** Mode of the picture under way ("" between pictures). */
         val mode: String = "",
@@ -64,6 +73,8 @@ class SstvPc(
         val version: Long = 0L,
         /** Pictures kept since SatMe-PC started. */
         val gardees: Int = 0,
+        /** Pictures decoded from the test generator: shown while they come, never kept. */
+        val essais: Int = 0,
         /** Last failure, shown. */
         val erreur: String = "",
         /** A recording decoded again: its name, progress (0..1, -1 idle), pictures found. */
@@ -188,11 +199,16 @@ class SstvPc(
         }
         override fun onImage(mode: SstvMode, pixels: IntArray, linesDone: Int, complete: Boolean) {
             val c = runCatching { contexte() }.getOrDefault(Contexte())
-            val nom = if (linesDone >= minLignes(mode)) garde(mode, pixels, linesDone, complete, c.satellite, horloge(), "live",
-                c.enregistrement, c.locator, c.indicatif, sonDe(decodeur, memoire)) else null
+            val h = runCatching { horsAntenne(sourceActive) }.getOrNull()
             enCours = null
-            _etat.update { it.copy(mode = "", lignes = 0, derniere = nom ?: it.derniere, gardees = it.gardees + (if (nom != null) 1 else 0),
-                version = it.version + 1) }
+            // The test generator's pictures: seen while they come, never in the gallery (nor anything fed from it).
+            if (h?.genre == ESSAI) { _etat.update { it.copy(mode = "", lignes = 0, essais = it.essais + 1, version = it.version + 1) }; return }
+            // A recording played back: kept, marked, at the time it was received; no « new picture » for it.
+            val nom = if (linesDone >= minLignes(mode)) garde(mode, pixels, linesDone, complete, c.satellite, h?.momentMs ?: horloge(),
+                if (h != null) RELECTURE else "live", if (h != null) h.fichier else c.enregistrement, c.locator, c.indicatif,
+                sonDe(decodeur, memoire)) else null
+            _etat.update { it.copy(mode = "", lignes = 0, derniere = if (h == null) nom ?: it.derniere else it.derniere,
+                gardees = it.gardees + (if (nom != null) 1 else 0), version = it.version + 1) }
         }
     }
 
@@ -485,6 +501,11 @@ class SstvPc(
         const val AUTO = "auto"
         const val CARTE = "carte"
         const val SDR = "sdr"
+        /** A picture's source: the test generator (never kept), an I/Q recording played back. */
+        const val ESSAI = "essai"
+        const val RELECTURE = "relecture"
+        /** Pictures not received on the air at the time: kept out of the journal and the board. */
+        fun horsAntenne(s: SstvMeta.SstvShot) = s.source == ESSAI || s.source == RELECTURE
         val SOURCES = listOf(AUTO, CARTE, SDR)
         /** The dongle counts as playing this long after its last block. */
         const val SDR_VU_MS = 1500L

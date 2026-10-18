@@ -38,7 +38,11 @@ class PskReporterPc(
         }
     }
 
+    /** True while what is heard is not on the air (a recording played back, the test generator): nothing sent then. */
+    @Volatile var bloque: () -> Boolean = { false }
+
     fun recoit(l: List<Ft8Pc.Entendu>) {
+        if (bloque()) return
         val e = station.etat.value
         val q = station.qo100.etat.value
         val qo = q.auPoste

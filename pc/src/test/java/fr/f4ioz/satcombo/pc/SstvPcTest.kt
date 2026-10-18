@@ -115,6 +115,30 @@ class SstvPcTest {
         assertTrue(SstvPc.conseilAfc(true, -90, false, 0).contains("en FM"))
     }
 
+    @Test fun `les images du generateur d'essai ne sont jamais gardees`() {
+        val s = sstv()
+        s.horsAntenne = { src -> if (src == SstvPc.SDR) SstvPc.HorsAntenne(SstvPc.ESSAI) else null }
+        verse(signal(Dsp.AUDIO_RATE), Dsp.AUDIO_RATE) { b, n -> s.ecouteSdr(b, n, Dsp.AUDIO_RATE) }
+        assertTrue(s.images().isEmpty())
+        assertEquals(1, s.etat.value.essais)
+        assertEquals(0, s.etat.value.gardees)
+        assertEquals("", s.etat.value.derniere)
+    }
+
+    @Test fun `une image d'un enregistrement rejoue est marquee, a sa date, sans nouvelle image annoncee`() {
+        val s = sstv()
+        val quand = 1_790_000_000_000L
+        s.horsAntenne = { SstvPc.HorsAntenne(SstvPc.RELECTURE, quand, "satme-iq-x.sigmf-data") }
+        verse(signal(Dsp.AUDIO_RATE), Dsp.AUDIO_RATE) { b, n -> s.ecouteSdr(b, n, Dsp.AUDIO_RATE) }
+        val i = s.images().single()
+        assertEquals(SstvPc.RELECTURE, i.source)
+        assertEquals(quand, i.timeMs)
+        assertEquals("satme-iq-x.sigmf-data", i.recording)
+        assertTrue(SstvPc.horsAntenne(i))
+        assertEquals("", s.etat.value.derniere)
+        assertEquals(1, s.etat.value.gardees)
+    }
+
     @Test fun `le son de la cle donne une image, avec son propre son`() {
         val s = sstv()
         verse(signal(Dsp.AUDIO_RATE), Dsp.AUDIO_RATE) { b, n -> s.ecouteSdr(b, n, Dsp.AUDIO_RATE) }

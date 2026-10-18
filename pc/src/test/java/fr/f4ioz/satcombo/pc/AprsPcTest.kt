@@ -27,6 +27,20 @@ class AprsPcTest {
     private var t = 1_791_800_000_000L
 
     @Test
+    fun hors_antenne_une_trame_est_comptee_jamais_gardee() {
+        val trame = Trame(Adresse.de("APRS"), Adresse.de("F4IOZ-7"),
+            listOf(Adresse("RS0ISS", repete = true), Adresse.de("WIDE2-1")), "=4852.55N/00219.00E-SatMe".toByteArray())
+        val a = AprsPc(dossier, { "ISS" }, { t })
+        a.horsAntenne = { true }
+        val son = Afsk.module(listOf(Ax25.encode(trame)), 48_000)
+        var i = 0
+        while (i < son.size) { val n = minOf(2048, son.size - i); a.ecoute(son.copyOfRange(i, i + n), n, 48_000); i += n }
+        assertEquals(1, a.essais)
+        assertTrue(a.paquets.isEmpty())
+        assertTrue(!dossier.exists() || dossier.listFiles().isNullOrEmpty())
+    }
+
+    @Test
     fun une_trame_par_l_iss_est_decodee_gardee_et_relue() {
         val trame = Trame(Adresse.de("APRS"), Adresse.de("F4IOZ-7"),
             listOf(Adresse("RS0ISS", repete = true), Adresse.de("WIDE2-1")), "=4852.55N/00219.00E-SatMe".toByteArray())

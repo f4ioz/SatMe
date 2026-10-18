@@ -94,6 +94,8 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
     /** ADS-B (Avions tab) and the shared map (set before [demarre]). */
     @Volatile var adsb: AdsbPc? = null
     @Volatile var carte: CartePc? = null
+    /** The SDR's raw I/Q kept and played back (set before [demarre]). */
+    @Volatile var iqSdr: IqPc? = null
 
     /** What the « Montage » page lights: the same state the other tabs read. */
     fun lecturesMontage(): fr.f4ioz.satcombo.station.ActiviteMontage.Lectures = fr.f4ioz.satcombo.station.ActiviteMontage.Lectures(
@@ -347,6 +349,12 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 else -> k.json()
             }
             envoie(sortie, "200 OK", "application/json; charset=utf-8", o.toString().toByteArray()); return
+        }
+        // The SDR's raw I/Q: « Remonter le temps », the recordings, their replay, the test generator (receive only).
+        if (chemin == "/api/sdr-iq" || chemin.startsWith("/api/sdr-iq/")) {
+            val rep = iqSdr?.sert(chemin, r.methode) { q[it].orEmpty() }
+                ?: fr.f4ioz.satcombo.demo.ReponseWeb("200 OK", "application/json; charset=utf-8", "{\"ok\":false,\"absent\":true}".toByteArray())
+            envoie(sortie, rep.statut, rep.type, rep.corps, rep.entetes); return
         }
         // The receiver's memories and the band plans (display and receive only).
         if (chemin == "/api/plan-bandes" || chemin == "/api/memoires-sdr" || chemin.startsWith("/api/memoires-sdr/")) {
@@ -656,12 +664,13 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                     // A sonde's log or track: only a plain name, inside its folder.
                     chemin.startsWith("/sked-video/") -> videoSked?.fichier(java.net.URLDecoder.decode(chemin.removePrefix("/sked-video/"), "UTF-8"))
                     chemin.startsWith("/meteor/") -> sdr?.meteor?.fichier(java.net.URLDecoder.decode(chemin.removePrefix("/meteor/"), "UTF-8"))
+                    chemin.startsWith("/sdr-iq/") -> iqSdr?.fichier(java.net.URLDecoder.decode(chemin.removePrefix("/sdr-iq/"), "UTF-8"))
                     chemin.startsWith("/sondes/") -> java.net.URLDecoder.decode(chemin.removePrefix("/sondes/"), "UTF-8")
                         .takeIf { it.matches(Regex("[A-Za-z0-9._-]+")) }?.let { n -> sdr?.sondes?.journaux()?.firstOrNull { it.name == n } }
                     else -> null
                 }
                 if (f != null) envoieFichier(sortie, r, f, typeDonne = if (f.name.endsWith(".mp4")) "video/mp4" else null,
-                    entetes = if (chemin.startsWith("/sondes/") || chemin.startsWith("/sked-video/")) "Content-Disposition: attachment; filename=\"${f.name}\"\r\n" else "")
+                    entetes = if (chemin.startsWith("/sondes/") || chemin.startsWith("/sked-video/") || chemin.startsWith("/sdr-iq/")) "Content-Disposition: attachment; filename=\"${f.name}\"\r\n" else "")
                 else envoie(sortie, "404 Not Found", "text/plain; charset=utf-8", "introuvable".toByteArray())
             }
         }
@@ -1582,6 +1591,19 @@ object JsonPc {
             // Fine tuning, the phone's settings: the magnifier, the vernier, the voice netting.
             .put("modeEff", d.modeEffectif()).put("loupe", st.sdrLoupe).put("loupeSpan", st.sdrLoupeSpanHz)
             .put("vernier", st.sdrVernier).put("ratio", st.sdrVernierHzParCm).put("calageVoix", st.sdrCalageVoix)
+            // No hardware: the recording played (its transport), the generator's signals and where to hear each.
+            .put("fichierIq", java.io.File(d.fichierIq).name).put("fictif", d.fictif)
+            .put("lecture", d.lecture?.let { l ->
+                JSONObject().put("nom", l.donnees.name).put("pos", Math.round(l.positionS * 10) / 10.0).put("duree", Math.round(l.dureeS * 10) / 10.0)
+                    .put("vitesse", l.vitesse).put("pause", l.enPause).put("boucle", l.boucle).put("cale", l.caleTranches)
+                    .put("moment", l.momentMs() ?: 0L).put("debit", l.debit).put("essai", l.meta.essai)
+                    .put("attente", if (l.attenteJusqua > 0) maxOf(0L, l.attenteJusqua - System.currentTimeMillis()) / 1000.0 else 0.0)
+            } ?: JSONObject.NULL)
+            .put("generateur", d.reglagesGenerateur.let { g ->
+                g.plat().put("ecoutes", JSONArray(fr.f4ioz.satcombo.sdr.GenerateurIq.ecoutes(g).map {
+                    JSONObject().put("cle", it.cle).put("nom", it.nom).put("mode", it.mode).put("hz", it.decalageHz).put("bw", it.largeurHz) }))
+                    .put("modesSstv", JSONArray(fr.f4ioz.satcombo.sstv.SstvMode.ALL.map { it.name }))
+            })
     }
 
     /**

@@ -97,6 +97,14 @@ fun main(args: Array<String>) {
     // The SDR dongle: nothing opened until asked (rtl_tcp started then, stopped with it).
     val meteor = MeteorPc(station, File(dossier, "meteor"))
     val sdr = SdrPc(station, son.son, station.stockage, portee, dossierSondes = File(dossier, "sondes"), meteor = meteor)
+    // The raw I/Q kept and played back; nothing heard from a recording or the generator goes to PSK Reporter.
+    val iqSdr = IqPc(sdr, station, dossier, journal)
+    son.psk.bloque = { sdr.fictif }
+    // Nor do pictures and frames from them pass for real receptions (generator: never kept; recording: marked).
+    val horsAntenneSdr = { sdr.generateur?.let { SstvPc.HorsAntenne(SstvPc.ESSAI) }
+        ?: sdr.lecture?.let { SstvPc.HorsAntenne(SstvPc.RELECTURE, it.momentMs(), it.donnees.name) } }
+    son.horsAntenne = { if (son.son.etat.value.appareil == SdrPc.NOM_SOURCE) horsAntenneSdr() else null }
+    son.sstv.horsAntenne = { src -> if (src == SstvPc.SDR) horsAntenneSdr() else son.horsAntenne() }
     // QO-100 with the dongle: the beacon followed, the calibration held on it when chosen.
     val qo100 = Qo100Pc(station, sdr)
     son.son.auditeurs += { pcm, n, rate -> qo100.ecouteCarte(pcm, n, rate) }
@@ -129,6 +137,7 @@ fun main(args: Array<String>) {
             runCatching { carnet.ticAmsat() }
             runCatching { kiss.tic() }
             runCatching { sdr.ticMeteor() }
+            runCatching { iqSdr.tic() }
             runCatching { qo100.tic() }
             runCatching { trafic.tic() }
             runCatching { niveaux.tic() }
@@ -246,6 +255,7 @@ fun main(args: Array<String>) {
     sdr.adsbTient = { if (adsb.tientCleSdr) SdrPc.RTL else if (adsb.tientPluto) SdrPc.PLUTO else null }
     serveur.adsb = adsb
     serveur.carte = CartePc(station, son, sdr, adsb, datv, { textesDatv }, { serveur.qrzDatv })
+    serveur.iqSdr = iqSdr
     // Open to the network: a password for every other machine (drawn the first time, said in the log).
     val acces = AccesDistantPc(dossier, reseau)
     val ligneAcces = runCatching { acces.initialise() }.getOrNull()
