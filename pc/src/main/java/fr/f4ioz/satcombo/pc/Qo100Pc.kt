@@ -58,6 +58,9 @@ class Qo100Pc(private val station: StationPc, private val sdr: SdrPc, private va
         suivi.mesure(t, sdr.mesureBaliseCentre(fenetre), calage, auto)?.let { station.qo100.calage(it) }
     }
 
+    /** LEILA heard lately (10 s), in the dongle's sound or the card's. */
+    fun leilaEntendue(): Boolean = horloge().let { t -> listOfNotNull(leila, leilaCarte).any { it.entendue(t) } }
+
     fun json(): JSONObject {
         val t = horloge()
         val d = suivi.dernier

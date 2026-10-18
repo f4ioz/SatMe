@@ -383,6 +383,8 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
     fun demandePanorama() { panoramaDemandeMs = horloge() }
     /** The dongle's sound while on QO-100 ([Dsp.AUDIO_RATE]): LEILA listened for. */
     @Volatile var ecouteQo100: ((ShortArray, Int) -> Unit)? = null
+    /** The PC speaker's level (1 as received): lowered while a spoken announcement plays. */
+    @Volatile var gainHautParleur = 1f
     /**
      * The raw IQ while on QO-100, for the signal classifier (8-bit bytes or
      * 16-bit shorts, the count of values, the PLL): set by [SignauxQo100Pc],
@@ -771,6 +773,7 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
                     // Never waits for the speaker: kept in its ring, played at the card's pace.
                     val (ePcm, eN) = ecoute ?: (pcm to produit)
                     // A recording played faster: the decoders take it all, the speaker would only choke.
+                    hp.gain = gainHautParleur
                     if (settings.sdrAudio && (fichier == null || fichier.vitesse == 1.0)) hp.pousse(ePcm, eN)
                     if (son.etat.value.appareil == NOM_SOURCE && son.etat.value.actif) son.distribue(ePcm, eN, Dsp.AUDIO_RATE)
                     if (pourQo100()) ecouteQo100?.invoke(pcm, produit)

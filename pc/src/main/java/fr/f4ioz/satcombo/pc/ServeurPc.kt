@@ -85,6 +85,9 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
     /** The USB volume knob as a VFO, Linux (set before [demarre]). */
     @Volatile var molette: MoletteUsbPc? = null
 
+    /** Spoken announcements (set before [demarre]); their sentences ride the live stream. */
+    @Volatile var annonces: AnnoncesPc? = null
+
     /** The « Montage » page: the station's chain, its drawing lit by what happens (set before [demarre]). */
     @Volatile var montage: MontagePc? = null
     @Volatile var memoiresSdr: MemoiresSdrPc? = null
@@ -167,6 +170,8 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
         var etatMs = 0L; var sonMs = 0L; var sdrMs = 0L; var spectreTrames = -1L; var veilleMs = 0L
         var refSon: Any? = null
         var cwVersion = -1L; var cwMs = 0L
+        // The page reconnecting (a tab changed) says the last one it had: none lost between two streams.
+        var annonceVu = q["an"]?.toLongOrNull()?.takeIf { it >= 0 } ?: annonces?.dernierSeq ?: -1L
         while (true) {
             val maintenant = System.currentTimeMillis()
             if ("etat" in sujets) {
@@ -202,6 +207,17 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
             if ("spectre" in sujets && sdr != null && sdr.trames.toLong() != spectreTrames) {
                 spectreTrames = sdr.trames.toLong()
                 if (!envoie("spectre", JsonPc.spectre(sdr, span, n, dx = dx).toString())) return
+            }
+            // Spoken announcements: each sentence once, those handed out since this page joined.
+            val an = annonces
+            if ("annonce" in sujets && an != null && an.dernierSeq != annonceVu) {
+                if (annonceVu < 0) annonceVu = an.dernierSeq
+                for (a in an.depuis(annonceVu)) {
+                    annonceVu = a.getLong("seq")
+                    // Old news is not said.
+                    if (maintenant - a.getLong("ms") > 20_000L) continue
+                    if (!envoie("annonce", a.toString())) return
+                }
             }
             // A comment now and then: a page gone is noticed.
             if (maintenant - veilleMs >= 15_000L) {
@@ -423,6 +439,8 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
             "/api/rigctld" -> envoie(sortie, "200 OK", "application/json; charset=utf-8",
                 (rigctld?.json() ?: JSONObject().put("absent", true)).toString().toByteArray())
             // The USB knob: its state; the page's tab told at each reading (the « Auto » target follows it).
+            "/api/annonces" -> envoie(sortie, "200 OK", "application/json; charset=utf-8",
+                (annonces?.json() ?: JSONObject().put("absent", true)).toString().toByteArray())
             "/api/molette" -> envoie(sortie, "200 OK", "application/json; charset=utf-8",
                 (molette?.let { m -> m.contextePage(q["ctx"]); m.json() } ?: JSONObject().put("absent", true)).toString().toByteArray())
             // The Doppler/CAT log: on or not, the last files (downloaded from the journal's route).
@@ -1278,6 +1296,8 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 if (lien != null && lien.erreur.isNotEmpty()) return JSONObject().put("ok", false).put("erreur", lien.erreur)
             }
             "/api/molette" -> return (molette ?: return JSONObject().put("ok", false).put("erreur", "absent")).regle(q).put("ok", true)
+            "/api/annonces" -> return (annonces ?: return JSONObject().put("ok", false).put("erreur", "absent")).regle(q)
+            "/api/annonces/essai" -> return (annonces ?: return JSONObject().put("ok", false).put("erreur", "absent")).essai()
             "/api/rigctld" -> {
                 val r = rigctld ?: return JSONObject().put("ok", false).put("erreur", "absent")
                 fun b(k: String) = q[k]?.let { it == "1" }

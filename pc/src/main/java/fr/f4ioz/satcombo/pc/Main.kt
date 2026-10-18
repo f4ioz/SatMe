@@ -273,6 +273,22 @@ fun main(args: Array<String>) {
     val molette = MoletteUsbPc(station.stockage, station.settings, mondeMolette(station, sdr))
     molette.demarre()
     serveur.molette = molette
+    // Spoken announcements: off unless chosen in Réglages › Annonces; read from the objects above, said by the browser or this PC.
+    var annoncesRef: AnnoncesPc? = null
+    val suiviCw = AnnoncesPc.SuiviCw()
+    val annonces = AnnoncesPc(station.stockage, {
+        val a = annoncesRef ?: return@AnnoncesPc null
+        instantaneAnnonces(station, son, sdr, qo100, datv, textesDatv, adsb, suiviCw,
+            avions = a.reglages.veut(fr.f4ioz.satcombo.annonces.Annonces.Sorte.AVION),
+            emissions = buildMap {
+                if (emission.etat.emet) put("DATV", emission.etat.frequenceKhz.takeIf { it > 0 }?.let { it * 1000L })
+                if (emissionSstv.etat.emet) put("SSTV", null)
+                if (iq.enCours) put("correction I Q", null)
+            })
+    }, { station.settings.callsign }, gainSdr = { sdr.gainHautParleur = it })
+    annoncesRef = annonces
+    portee.launch { while (true) { runCatching { annonces.tic() }; kotlinx.coroutines.delay(1000) } }
+    serveur.annonces = annonces
     serveur.demarre()
     // QO-100 received when SatMe-PC stopped: taken back only when chosen in Réglages (reception only).
     Thread({ runCatching { trafic.repriseAuDemarrage() } }, "satme-qo100-reprise").apply { isDaemon = true; start() }
@@ -386,6 +402,36 @@ internal fun mondeMolette(station: StationPc, sdr: SdrPc) = object : MoletteUsbP
     override fun zeroTx() = station.reglageSat(txHz = 0L)
     override fun sdr(dHz: Long) { sdr.decalageHz = sdr.decalageHz + dHz.toInt() }
     override fun qo100(dHz: Long) = station.qo100.pas(dHz)
+}
+
+/** What the spoken announcements compare from one second to the next: the states the tabs show. */
+internal fun instantaneAnnonces(station: StationPc, son: SonStation, sdr: SdrPc, qo100: Qo100Pc, datv: DatvPc, textesDatv: TextesDatvPc,
+                                adsb: AdsbPc, cw: AnnoncesPc.SuiviCw, avions: Boolean, emissions: Map<String, Long?>): fr.f4ioz.satcombo.annonces.DetecteurAnnonces.Instantane {
+    val t = System.currentTimeMillis()
+    val e = station.etat.value
+    val moi = station.settings.callsign
+    val passage = e.suivi?.let { s -> e.passage?.let { p -> fr.f4ioz.satcombo.annonces.DetecteurAnnonces.Passage(s.name, p.aosEpochMs, p.losEpochMs, Math.round(p.maxElevationDeg).toInt()) } }
+    val ft8 = son.ft8.entendus.takeLast(60).filter { it.appele != null && it.appelant != null }.map {
+        fr.f4ioz.satcombo.annonces.DetecteurAnnonces.Decode(it.mode + ":" + it.tranche + ":" + it.texte, it.appelant!!, it.appele!!, it.mode, it.rapportDb)
+    }
+    val d = datv.etat
+    val lu = textesDatv.confirmes().filter { t - it.dernierMs < 30_000L }.maxByOrNull { it.dernierMs }?.indicatif.orEmpty()
+    val r = station.stationRotor.etat.value
+    val s = sdr.etat.value
+    val fenetres = if (!avions || !adsb.actif) emptyMap() else adsb.reglageDiffusion()?.let { rg ->
+        fr.f4ioz.satcombo.adsb.DiffusionAvions.fenetres(rg, adsb.table.liste(), t).filter { it.ouverte }
+            .associate { f -> f.indicatif.ifBlank { f.icao } to (if (f.finConnue) Math.max(1, ((f.finMs - t) / 60_000L).toInt()) else null) }
+    } ?: emptyMap()
+    return fr.f4ioz.satcombo.annonces.DetecteurAnnonces.Instantane(
+        ms = t, moi = moi, passage = passage, emissions = emissions, leila = qo100.leilaEntendue(),
+        sstvGardees = son.sstv.etat.value.gardees, sstvMode = son.sstv.etat.value.mode,
+        decodes = ft8 + cw.nouveaux(son.cw.texte(), moi),
+        datvActif = d.actif, datvVerrou = d.verrouille, datvHz = datv.reglage.cielKhz.takeIf { it > 0 }?.let { it * 1000L },
+        datvMerDb = d.merDb?.let { Math.round(it).toInt() }, datvIndicatif = lu, avions = fenetres,
+        rotorConnecte = r.rotorConnected, rotorButee = r.rotorConnected && r.rotorOutOfRange, rotorStatut = r.rotorStatus,
+        // A recording come to its end, the generator stopped: not a receiver lost.
+        sdrActif = s.actif, sdrErreur = s.erreur.takeUnless { it.startsWith("lecture terminée") || it.startsWith("générateur") }.orEmpty(),
+        molettePasHz = station.settings.molettePasHz.takeIf { station.settings.moletteVfo })
 }
 
 /** ~/.satme on Linux and macOS, %APPDATA%\SatMe on Windows. */

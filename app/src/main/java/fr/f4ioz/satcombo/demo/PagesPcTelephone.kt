@@ -295,6 +295,8 @@ object PagesPcTelephone {
                 "/api/rigctld" -> json(JSONObject().put("absent", true))
                 // The USB knob card is SatMe-PC's: the phone reads its knob itself (Réglages › clavier).
                 "/api/molette" -> json(JSONObject().put("absent", true))
+                // Spoken announcements are SatMe-PC's: their card and the header's speaker hidden here.
+                "/api/annonces" -> json(JSONObject().put("absent", true))
                 "/api/carnet" -> json(carnet(vm))
                 "/api/carnet/records" -> json(ApiStation.records(fr.f4ioz.satcombo.domain.RecordsCarnet.calcule(u.log, vm.myLocator())))
                 // The contacts ticked on the page: ADIF, or the batch for another phone (as Settings › Backup makes it).
@@ -819,6 +821,7 @@ object PagesPcTelephone {
             "/api/montage", "/api/montage/photo", "/api/montage/action", "/api/montage/profils" -> JSONObject().put("ok", false).put("erreur", MONTAGE_SUR_PC)
             "/api/memoires-sdr", "/api/memoires-sdr/import" -> JSONObject().put("ok", false).put("erreur", "les mémoires du récepteur se gardent sur SatMe-PC")
             "/api/molette" -> JSONObject().put("ok", false).put("erreur", "absent")
+            "/api/annonces", "/api/annonces/essai" -> JSONObject().put("ok", false).put("erreur", "absent")
             else -> JSONObject().put("ok", false).put("erreur", "pas encore sur le téléphone")
         }
     }
