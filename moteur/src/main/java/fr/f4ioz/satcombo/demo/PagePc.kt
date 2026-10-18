@@ -674,6 +674,7 @@ ${STYLE_JETONS}
   .mem-edit { padding:8px; border:1px solid var(--ligne); border-radius:var(--r1); margin-bottom:6px; }
   .rq-lecture { margin-top:4px; padding:4px 6px; border:1px solid var(--ligne); border-radius:var(--r1); background:var(--creux); }
   .rq-lecture .mono, .rq-liste .mono { font-family:var(--mono); font-variant-numeric:tabular-nums; }
+  .badge-hors { display:inline-block; padding:0 5px; border-radius:4px; font-weight:600; color:var(--danger); border:1px solid var(--danger); }
   .rq-point { width:8px; height:8px; border-radius:50%; background:var(--danger); display:inline-block; }
   .rq-liste { max-height:220px; }
   .rq-l { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:2px 6px; padding:4px 8px; border-bottom:1px solid var(--ligne); }
@@ -5829,7 +5830,7 @@ function rendSon() {
     g('i-galerie').innerHTML = imagesMontrees.map((i, n) => '<a href="sstv/' + enc(i.nom) + '" onclick="voisImage(' + n + '); return false" style="text-decoration:none;color:inherit">' +
       '<img src="sstv/' + enc(i.nom) + '" style="width:100%;border-radius:6px" loading="lazy"><div class="petit">' + esc(i.sat) + ' · ' + esc(i.mode) +
       ' · ' + (i.t ? new Date(i.t).toISOString().slice(0, 16).replace('T', ' ') : '') + (i.complete ? '' : ' · partielle') +
-      (i.redecode ? ' · redécodée' : '') + (i.son ? ' · ♪' : '') + '</div></a>').join('') ||
+      (i.redecode ? ' · redécodée' : '') + (i.source === 'relecture' ? ' · <b class="badge-hors" title="Décodée d’un enregistrement I/Q rejoué, à la date de cet enregistrement">relecture</b>' : '') + (i.son ? ' · ♪' : '') + '</div></a>').join('') ||
       '<div class="petit">aucune image</div>';
   }
   if (g('visionneuse').open) voisOutils();
@@ -5909,7 +5910,7 @@ function voisImage(n) {
   viN = (n + l.length) % l.length; const i = l[viN];
   g('vi-img').src = 'sstv/' + enc(i.nom); g('vi-lien').href = 'sstv/' + enc(i.nom); g('vi-lien').download = i.nom;
   txt('vi-txt', (viN + 1) + '/' + l.length + ' · ' + [i.sat, i.mode, i.t ? new Date(i.t).toISOString().slice(0, 16).replace('T', ' ') + ' UTC' : '', i.complete ? '' : 'partielle',
-    i.redecode ? 'redécodée' + (i.enregistrement ? ' de ' + i.enregistrement : '') : ''].filter(x => x).join(' · '));
+    i.redecode ? 'redécodée' + (i.enregistrement ? ' de ' + i.enregistrement : '') : '', i.source === 'relecture' ? 'relecture I/Q' + (i.enregistrement ? ' de ' + i.enregistrement : '') : ''].filter(x => x).join(' · '));
   viNom = i.nom; viSonVu = '';
   voisOutils();
   if (!g('visionneuse').open) g('visionneuse').showModal();

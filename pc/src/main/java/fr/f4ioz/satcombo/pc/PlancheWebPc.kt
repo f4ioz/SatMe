@@ -51,7 +51,7 @@ class PlancheWebPc(private val station: StationPc, private val son: SonStation, 
     @Volatile private var galerieMs = 0L
     private fun galerie(): List<Pair<File, SstvMeta.SstvShot>> {
         if (System.currentTimeMillis() - galerieMs > 5_000L) {
-            galerie = son.images().mapNotNull { s -> son.fichierImage(s.fileName)?.let { it to s } }
+            galerie = son.images().filter { !SstvPc.horsAntenne(it) }.mapNotNull { s -> son.fichierImage(s.fileName)?.let { it to s } }
             galerieMs = System.currentTimeMillis()
         }
         return galerie

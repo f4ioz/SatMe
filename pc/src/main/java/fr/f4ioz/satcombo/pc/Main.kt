@@ -100,6 +100,11 @@ fun main(args: Array<String>) {
     // The raw I/Q kept and played back; nothing heard from a recording or the generator goes to PSK Reporter.
     val iqSdr = IqPc(sdr, station, dossier, journal)
     son.psk.bloque = { sdr.fictif }
+    // Nor do pictures and frames from them pass for real receptions (generator: never kept; recording: marked).
+    val horsAntenneSdr = { sdr.generateur?.let { SstvPc.HorsAntenne(SstvPc.ESSAI) }
+        ?: sdr.lecture?.let { SstvPc.HorsAntenne(SstvPc.RELECTURE, it.momentMs(), it.donnees.name) } }
+    son.horsAntenne = { if (son.son.etat.value.appareil == SdrPc.NOM_SOURCE) horsAntenneSdr() else null }
+    son.sstv.horsAntenne = { src -> if (src == SstvPc.SDR) horsAntenneSdr() else son.horsAntenne() }
     // QO-100 with the dongle: the beacon followed, the calibration held on it when chosen.
     val qo100 = Qo100Pc(station, sdr)
     son.son.auditeurs += { pcm, n, rate -> qo100.ecouteCarte(pcm, n, rate) }

@@ -64,6 +64,15 @@ class SonStation(
     val aprs = AprsPc(File(dossierEnregistrements.parentFile, "aprs"), { station.etat.value.suivi?.name ?: "" }, horloge) {
         Triple(station.settings.callsign, station.etat.value.observateur?.latDeg, station.etat.value.observateur?.lonDeg)
     }
+    /**
+     * What the card's sound carries now when it is not on the air (the SDR in its
+     * place, playing its test generator or a recording); null: a real reception.
+     * Nothing then is kept as heard: no APRS frame, no automatic pass recording.
+     */
+    @Volatile var horsAntenne: () -> SstvPc.HorsAntenne? = { null }
+
+    init { aprs.horsAntenne = { horsAntenne() != null } }
+
     var enregAuto: Boolean
         get() = station.stockage.getBoolean("pc_enreg_auto", false)
         set(v) { station.stockage.edit().putBoolean("pc_enreg_auto", v).apply() }
@@ -132,7 +141,8 @@ class SonStation(
         val veille = station.passageVeilleAEnregistrer(maintenant)
             ?.takeIf { fr.f4ioz.satcombo.domain.VeilleAuto.cle(it) != veilleFaite }
         if (!leve && veille == null) arreteALaMain = false
-        if (wav == null && son.etat.value.actif && !arreteALaMain && ((enregAuto && leve) || veille != null)) {
+        if (wav == null && son.etat.value.actif && !arreteALaMain && ((enregAuto && leve) || veille != null) &&
+            runCatching { horsAntenne() }.getOrNull() == null) {
             demarreEnregistrement(auto = true)
             finPrevue = veille?.let { it.losEpochMs + fr.f4ioz.satcombo.domain.VeilleAuto.APRES_MS } ?: 0L
             veille?.let { veilleFaite = fr.f4ioz.satcombo.domain.VeilleAuto.cle(it) }
