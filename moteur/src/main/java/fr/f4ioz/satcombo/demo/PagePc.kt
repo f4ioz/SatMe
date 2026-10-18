@@ -663,6 +663,29 @@ ${STYLE_JETONS}
   .sp-pal { display:flex; flex-direction:column; align-items:stretch; gap:3px; padding:4px; font-size:var(--fs-xs); }
   .sp-pal i { display:block; height:12px; border-radius:3px; }
   .sp-pal.actif { border-color:var(--rx); color:var(--rx); background:rgba(63,224,200,.08); }
+  /* « Niveau dans le temps », the Sun's noise, the beacon's day: one popover */
+  #niv-pop { width:min(580px,calc(100vw - 16px)); }
+  .niv-onglets { display:flex; gap:2px; margin:0 0 8px; border-bottom:1px solid var(--ligne); }
+  .niv-onglets button { background:transparent; border:none; border-bottom:2px solid transparent; border-radius:0; padding:4px 10px; color:var(--texte-2); font-size:var(--fs-s); font-weight:600; }
+  .niv-onglets button[aria-selected="true"] { color:var(--rx); border-bottom-color:var(--rx); }
+  .niv-seg { display:inline-flex; border:1px solid var(--ligne-forte); border-radius:var(--r1); overflow:hidden; }
+  .niv-seg button { border:none; border-radius:0; padding:2px 8px; font-size:var(--fs-s); background:transparent; color:var(--texte-2); }
+  .niv-seg button[aria-pressed="true"] { background:rgba(63,224,200,.14); color:var(--rx); }
+  .niv-toile { position:relative; }
+  .niv-toile canvas { width:100%; display:block; border-radius:var(--r1); background:var(--creux); cursor:crosshair; }
+  .niv-bulle { position:absolute; pointer-events:none; padding:3px 7px; border-radius:var(--r1); background:var(--s3); border:1px solid var(--ligne-forte);
+    font-size:var(--fs-xs); color:var(--texte); white-space:nowrap; font-variant-numeric:tabular-nums; box-shadow:var(--ombre-pop); }
+  .niv-chiffres { display:flex; gap:14px; flex-wrap:wrap; margin-top:6px; font-size:var(--fs-s); color:var(--texte-2); }
+  .niv-chiffres b { color:var(--texte); font-family:var(--mono); font-variant-numeric:tabular-nums; font-weight:600; }
+  .sol-etapes { display:grid; grid-template-columns:auto minmax(0,1fr) auto auto; gap:6px 10px; align-items:center; margin:6px 0; }
+  .sol-n { width:20px; height:20px; border-radius:50%; display:grid; place-items:center; background:var(--s3); color:var(--texte-2); font-size:var(--fs-xs); font-weight:700; }
+  .sol-v { font-family:var(--mono); font-variant-numeric:tabular-nums; color:var(--texte); }
+  .sol-y { display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; padding:8px 10px; border-radius:var(--r2); background:var(--creux); border:1px solid var(--ligne); }
+  .sol-y b { font-family:var(--mono); font-size:22px; color:var(--rx); font-variant-numeric:tabular-nums; }
+  .sol-barre { height:4px; border-radius:2px; background:var(--s3); overflow:hidden; margin-top:4px; }
+  .sol-barre i { display:block; height:100%; width:0; background:var(--rx); transition:width .2s linear; }
+  .sol-grille { display:grid; grid-template-columns:200px minmax(0,1fr); gap:10px; align-items:start; margin-top:6px; }
+  .sol-grille canvas { width:200px; height:200px; display:block; border-radius:var(--r1); background:var(--creux); }
   .mem-liste { max-height:260px; overflow:auto; margin:6px 0; border:1px solid var(--ligne); border-radius:var(--r1); background:var(--creux); }
   .mem-g { padding:5px 8px 2px; font-size:var(--fs-xs); font-weight:700; letter-spacing:.8px; text-transform:uppercase; color:var(--texte-3); }
   .mem-l { display:flex; align-items:center; gap:8px; padding:3px 8px; cursor:pointer; }
@@ -1100,6 +1123,53 @@ ${rail()}
   </div>
   <div class="petit" id="mem-msg"></div>
   <div class="aide">Un clic sur une mémoire y accorde le récepteur (réception seulement) : dans la vue, par le décalage ; au-delà, le récepteur y va et ne suit plus le satellite. Les drapeaux du spectre se cliquent aussi (clic droit : modifier). Gardées par SatMe-PC (memoires-sdr.json) ; l'export JSON se réimporte ici ou sur un autre PC sans doublons.</div>
+</div>
+<div id="niv-pop" class="sp-pop" hidden role="dialog" aria-label="Niveau dans le temps, bruit solaire, balise">
+  <div class="t sp-pop-t"><span>Mesures du récepteur</span><span class="h-esp"></span><button type="button" class="discret" onclick="g('niv-pop').hidden = true" aria-label="Fermer">✕</button></div>
+  <div class="niv-onglets" role="tablist">
+    <button type="button" role="tab" id="niv-o-niveau" aria-selected="true" onclick="nivOnglet('niveau')">Niveau dans le temps</button>
+    <button type="button" role="tab" id="niv-o-soleil" aria-selected="false" onclick="nivOnglet('soleil')">Bruit solaire</button>
+    <button type="button" role="tab" id="niv-o-balise" aria-selected="false" onclick="nivOnglet('balise')">Balise QO-100 · 24 h</button>
+  </div>
+  <div id="niv-p-niveau">
+    <div class="sp-l"><select id="niv-serie" onchange="nivTic()" title="Le signal suivi">
+      <option value="canal">Canal écouté (niveau de la chaîne)</option><option value="repere">Repère sur le spectre</option><option value="plancher">Plancher de bruit</option><option value="balise">Balise QO-100 (au-dessus du bruit)</option></select>
+      <span class="niv-seg" id="niv-fen"><button type="button" data-f="10m" aria-pressed="true">10 min</button><button type="button" data-f="1h" aria-pressed="false">1 h</button><button type="button" data-f="24h" aria-pressed="false">24 h</button></span>
+      <span class="h-esp"></span><a class="bouton-lien" id="niv-csv" href="api/niveaux.csv?fenetre=10m" download title="Les quatre séries de la fenêtre choisie (moyenne, minimum, maximum), heure UTC">CSV</a>
+      <button type="button" class="discret" onclick="nivVide()" title="Effacer l'historique">⟲</button></div>
+    <div class="sp-l" id="niv-repere-l" hidden style="margin-top:6px"><span class="petit">Repère à</span><input id="niv-repere" style="width:80px" placeholder="10" title="kHz par rapport à la fréquence écoutée (il suit le Doppler avec elle)"><span class="petit">kHz de l'écoute, sur</span>
+      <select id="niv-largeur"><option value="500">0,5 kHz</option><option value="2500">2,5 kHz</option><option value="10000">10 kHz</option><option value="25000">25 kHz</option></select><button type="button" onclick="nivRepere()">Poser</button></div>
+    <div class="niv-toile" style="margin-top:6px"><canvas id="niv-graphe" style="height:170px" aria-label="Niveau dans le temps"></canvas><div class="niv-bulle" id="niv-bulle" hidden></div></div>
+    <div class="niv-chiffres" id="niv-chiffres"></div>
+    <div class="petit" id="niv-msg"></div>
+  </div>
+  <div id="niv-p-soleil" hidden>
+    <div class="sp-g">
+      <span>Parabole</span><span class="sp-l"><input id="sol-diametre" style="width:64px" inputmode="numeric" placeholder="120"><span class="petit">cm, rendement</span><input id="sol-rendement" style="width:48px" inputmode="numeric"><span class="petit">%</span></span>
+      <span>Flux solaire</span><span class="sp-l"><input id="sol-sfu" style="width:64px" inputmode="numeric" placeholder="150" title="L'indice solaire à 10,7 cm du jour (SFU), tapé à la main"><span class="petit">SFU (10,7 cm), T<sub>sys</sub></span><input id="sol-tsys" style="width:56px" inputmode="numeric"><span class="petit">K</span>
+        <button type="button" onclick="solReglages()">OK</button></span>
+    </div>
+    <div class="petit" id="sol-attendu" style="margin-top:4px"></div>
+    <div class="sol-etapes">
+      <span class="sol-n">1</span><span>Viser le <b>ciel froid</b> (loin du Soleil, haut, sans arbre)</span><span class="sol-v" id="sol-froid">—</span><button type="button" id="sol-b-froid" onclick="solMesure('froid')">Mesurer</button>
+      <span class="sol-n">2</span><span>Viser le <b>Soleil</b> (l'ombre de la source au centre)</span><span class="sol-v" id="sol-soleil">—</span><button type="button" id="sol-b-soleil" onclick="solMesure('soleil')">Mesurer</button>
+    </div>
+    <div class="sol-barre" id="sol-barre-l" hidden><i id="sol-barre"></i></div>
+    <div class="sol-y"><span class="petit">Soleil / ciel froid</span><b id="sol-y">—</b><span class="petit" id="sol-y-detail"></span><span class="h-esp"></span><button type="button" class="discret" onclick="solPost('oublie')" title="Effacer les mesures">⟲</button></div>
+    <div class="avert" id="sol-avert" style="margin-top:4px"></div>
+    <div class="sp-st">Pointage par le rotor</div>
+    <div class="sp-l"><span class="petit" id="sol-pos"></span><span class="h-esp"></span><span class="petit">±</span><select id="sol-demi"><option value="1">1°</option><option value="1.5" selected>1,5°</option><option value="2">2°</option><option value="3">3°</option></select>
+      <span class="petit">pas</span><select id="sol-pas"><option value="0.25">0,25°</option><option value="0.5" selected>0,5°</option><option value="1">1°</option></select>
+      <button type="button" class="primaire" id="sol-b-balayer" onclick="solBalaye()">Balayer</button><button type="button" class="arret" id="sol-b-arret" hidden onclick="solPost('arreter')">■ Arrêter</button></div>
+    <div class="petit" id="sol-rotor"></div>
+    <div class="sol-grille" id="sol-grille" hidden><canvas id="sol-carte" aria-label="Bruit mesuré autour du Soleil"></canvas><div><div id="sol-pic" class="petit"></div><div class="petit" id="sol-msg" style="margin-top:6px"></div></div></div>
+    <div class="aide">Réception seulement. Le bruit : la puissance moyenne d'environ 100 kHz du spectre, signaux mis de côté, sur 5 s ; gain du récepteur fixe, le même pour les deux mesures. L'attendu suit S·Ae/2k avec le flux tapé ici (rien n'est pris sur Internet ; l'indice du jour est publié par les services de météo spatiale). Le balayage ne fait bouger le rotor qu'après confirmation, par rotctld (ou le rotor simulé), dans ses butées et au-dessus de son site minimum ; le suivi automatique est arrêté ; « Arrêter » stoppe le rotor.</div>
+  </div>
+  <div id="niv-p-balise" hidden>
+    <div class="niv-toile"><canvas id="bal-graphe" style="height:220px" aria-label="Balise QO-100 sur 24 heures : niveau et erreur du LNB"></canvas><div class="niv-bulle" id="bal-bulle" hidden></div></div>
+    <div class="niv-chiffres" id="bal-chiffres"></div>
+    <div class="aide">Un point par minute (la médiane de ses mesures) tant que la balise est suivie : en haut son niveau au-dessus du bruit, en bas l'erreur du LNB (ce que le calage corrige). La dérive de la nuit au jour se lit ici.</div>
+  </div>
 </div>
 <div class="vue" id="v-station">
 <div class="grille">
@@ -2044,7 +2114,7 @@ ${rail()}
       <div class="carte tq-chute">
         <div class="t" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span>Transpondeur à bande étroite</span>
           <span class="petit" id="tq-cl-etat" style="text-transform:none;letter-spacing:0"></span>
-          <span style="margin-left:auto;text-transform:none;letter-spacing:0;display:inline-flex;gap:4px"><button class="sp-b" id="tq-b-aff" onclick="affOuvre(this, 'qo100')" title="Affichage : palette, contraste et luminosité de la cascade, drapeaux des mémoires">${IconesPc.svg("tune")}<span>Affichage</span></button><button class="sp-b" id="tq-b-mem" onclick="memOuvre(this, 'qo100')" title="Les mémoires du récepteur (étiquette « QO-100 » pour celles d'ici)">${IconesPc.svg("save")}<span>Mémoires</span></button></span>
+          <span style="margin-left:auto;text-transform:none;letter-spacing:0;display:inline-flex;gap:4px"><button class="sp-b" id="tq-b-aff" onclick="affOuvre(this, 'qo100')" title="Affichage : palette, contraste et luminosité de la cascade, drapeaux des mémoires">${IconesPc.svg("tune")}<span>Affichage</span></button><button class="sp-b" id="tq-b-mem" onclick="memOuvre(this, 'qo100')" title="Les mémoires du récepteur (étiquette « QO-100 » pour celles d'ici)">${IconesPc.svg("save")}<span>Mémoires</span></button><button class="sp-b" id="tq-b-niv" onclick="nivOuvre(this, 'qo100')" title="Niveau dans le temps, balise sur 24 h, bruit solaire">${IconesPc.svg("timeline")}<span>Mesures</span></button></span>
           <span style="text-transform:none;letter-spacing:0" class="petit">Largeur
             <select id="tq-zoom" style="flex:none" onchange="tqZoom(+this.value)"><option value="500000">500 kHz</option><option value="200000">200 kHz</option><option value="100000">100 kHz</option><option value="50000">50 kHz</option><option value="20000">20 kHz</option></select></span></div>
         <canvas id="o-reglette" class="tq-reglette" style="width:100%;display:block;cursor:crosshair" title="Cliquer ou glisser pour s'y poser · molette ±100 Hz"></canvas>
@@ -2281,6 +2351,7 @@ ${rail()}
       <button class="sp-b" id="sp-b-aff" onclick="affOuvre(this, 'sdr')" title="Affichage : moyenne, crêtes, niveaux, palette de la cascade, molette, repères">${IconesPc.svg("tune")}<span>Affichage</span></button>
       <button class="sp-b" id="sp-b-mem" onclick="memOuvre(this, 'sdr')" title="Les mémoires du récepteur (nom, fréquence, mode, étiquette)">${IconesPc.svg("save")}<span>Mémoires</span></button>
       <button class="sp-b" id="sp-b-ici" onclick="memAjouteIci(this, 'sdr')" title="Mémoriser la fréquence écoutée" aria-label="Mémoriser la fréquence écoutée">＋</button>
+      <button class="sp-b" id="sp-b-niv" onclick="nivOuvre(this, 'sdr')" title="Niveau dans le temps, bruit solaire (Y), pointage">${IconesPc.svg("timeline")}<span>Mesures</span></button>
       <button class="sp-b" id="sp-b-crete" hidden onclick="spRaz()" title="Effacer les crêtes et les minimums tenus">⟲ crêtes</button>
       <span class="petit" id="sp-zoom" title="Le zoom de la vue (molette sur le spectre ; 0 : vue entière)"></span>
       <div class="aide">Spectre : un clic s'y accorde ; la molette zoome autour du pointeur (Maj : déplace la vue), glisser déplace la vue dans les 176 kHz que voit le récepteur ; les bords orangés de la bande passante se tirent pour changer la largeur de réception. Cascade : la molette accorde, « à inertie » (un tour rapide lance l'accord, qui ralentit) ; Ctrl + molette zoome. Avec le focus (clic ou Tab) : ← → un pas, ↑ ↓ dix pas, + − zoom, 0 vue entière. Les petits drapeaux sont les mémoires (clic : s'y accorder ; clic droit : la modifier) ; le liseré coloré en haut, le plan de bandes. Réception seulement.</div>
@@ -7502,7 +7573,7 @@ function popPlace(p, ancre) {
 function affOuvre(ancre, ou) {
   const p = g('aff-pop');
   if (!p.hidden && p.dataset.ou === ou) { p.hidden = true; return; }
-  g('mem-pop').hidden = true;
+  g('mem-pop').hidden = true; g('niv-pop').hidden = true;
   p.dataset.ou = ou; affRend(); popPlace(p, ancre);
 }
 function affRend() {
@@ -7530,12 +7601,12 @@ g('aff-pals').addEventListener('click', ev => {
 function affDefaut() { Object.assign(AFF, AFF_DEF); affGarde(); affRend(); spRaz(); spSale(true); if (!g('v-qo100').hidden) dessineQo100(); }
 // A popover closes with a click elsewhere or Escape.
 document.addEventListener('pointerdown', ev => {
-  for (const id of ['aff-pop', 'mem-pop']) {
+  for (const id of ['aff-pop', 'mem-pop', 'niv-pop']) {
     const p = g(id);
     if (!p.hidden && !p.contains(ev.target) && !(ev.target.closest && ev.target.closest('.sp-b'))) p.hidden = true;
   }
 }, true);
-document.addEventListener('keydown', ev => { if (ev.key === 'Escape') { g('aff-pop').hidden = true; g('mem-pop').hidden = true; } });
+document.addEventListener('keydown', ev => { if (ev.key === 'Escape') { g('aff-pop').hidden = true; g('mem-pop').hidden = true; g('niv-pop').hidden = true; } });
 
 // ---- the memories: a list by tag, a form, import and export
 let memFiltre = '', memEnCours = null, memOu = 'sdr';
@@ -7543,7 +7614,7 @@ try { memFiltre = localStorage.getItem('mem-filtre') || ''; } catch (x) {}
 function memOuvre(ancre, ou) {
   const p = g('mem-pop');
   if (!p.hidden && p.dataset.ou === ou && ancre.classList.contains('sp-b')) { p.hidden = true; return; }
-  g('aff-pop').hidden = true; memOu = ou; p.dataset.ou = ou;
+  g('aff-pop').hidden = true; g('niv-pop').hidden = true; memOu = ou; p.dataset.ou = ou;
   g('mem-edit').hidden = true; memRend(); popPlace(p, ancre);
 }
 function memRend() {
@@ -7651,6 +7722,317 @@ if (SP_ESSAI) {
   }, 110);
 }
 planCharge(); memCharge(); g('sp-b-crete').hidden = !AFF.crete && !AFF.mini;
+// ---- « Mesures »: levels over time, the Sun's noise, the beacon's day (receive only; one popover over the SDR tab or the QO-100 cockpit)
+// The test mode (?essai-niveau=1): data pretended in this page, nothing asked of SatMe-PC nor of the rotor.
+const NIV_ESSAI = /[?&]essai-niveau=1/.test(location.search);
+let nivVue = 'niveau', nivFen = '10m', NIVD = null, SOLD = null, BAL = { nv: [], er: [] };
+try { nivFen = localStorage.getItem('niv-fen') || '10m'; nivVue = localStorage.getItem('niv-vue') || 'niveau'; } catch (x) {}
+if (!['niveau', 'soleil', 'balise'].includes(nivVue)) nivVue = 'niveau';
+if (!['10m', '1h', '24h'].includes(nivFen)) nivFen = '10m';
+const nivF = (x, d) => x == null || isNaN(x) ? '—' : x.toFixed(d == null ? 1 : d).replace('.', ',').replace('-', '−');
+const nivS = (x, d) => x == null || isNaN(x) ? '—' : (x > 0 ? '+' : '') + nivF(x, d);
+function nivOuvre(ancre, ou) {
+  const p = g('niv-pop');
+  if (!p.hidden && p.dataset.ou === ou) { p.hidden = true; return; }
+  g('aff-pop').hidden = true; g('mem-pop').hidden = true;
+  p.dataset.ou = ou;
+  nivOnglet(ou === 'qo100' && nivVue === 'niveau' && !BAL.vu ? 'balise' : nivVue);
+  popPlace(p, ancre);
+}
+function nivOnglet(k) {
+  nivVue = k; if (k === 'balise') BAL.vu = true;
+  try { localStorage.setItem('niv-vue', k); } catch (x) {}
+  for (const o of ['niveau', 'soleil', 'balise']) { g('niv-o-' + o).setAttribute('aria-selected', String(o === k)); g('niv-p-' + o).hidden = o !== k; }
+  nivTic();
+}
+async function nivJson(u) {
+  if (NIV_ESSAI) return nivFaux(u);
+  try { const r = await fetch(u); return r.ok ? await r.json() : null; } catch (x) { return null; }
+}
+async function nivPost(u) {
+  if (NIV_ESSAI) return { ok: true };
+  try { return await (await fetch(u, { method: 'POST' })).json(); } catch (x) { return null; }
+}
+async function nivTic() {
+  if (g('niv-pop').hidden) return;
+  if (nivVue === 'niveau') {
+    const s = v('niv-serie');
+    g('niv-repere-l').hidden = s !== 'repere';
+    document.querySelectorAll('#niv-fen button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.f === nivFen)));
+    g('niv-csv').href = 'api/niveaux.csv?fenetre=' + nivFen;
+    NIVD = await nivJson('api/niveaux?fenetre=' + nivFen + '&serie=' + s);
+    nivDessine();
+  } else if (nivVue === 'soleil') { SOLD = await nivJson('api/soleil'); solRend(); }
+  else balRecoit(await nivJson('api/qo100/qualite'));
+}
+setInterval(nivTic, 2000);
+g('niv-fen').addEventListener('click', ev => {
+  const b = ev.target.closest('[data-f]'); if (!b) return;
+  nivFen = b.dataset.f; try { localStorage.setItem('niv-fen', nivFen); } catch (x) {}
+  nivTic();
+});
+
+/**
+ * A strip chart in [c]: the mean as a line, the lowest and highest of each
+ * point as a band; gaps (nothing measured) left blank. [o]: t0, t1, pas,
+ * haut/hauteur (a panel of the canvas), titre, dec, plageMin, vide.
+ */
+function nivCourbe(c, pts, o) {
+  o = o || {};
+  const [x, w, hc] = toile(c), oy = o.haut || 0, h = o.hauteur || hc;
+  if (!o.garde) x.clearRect(0, 0, w, hc);
+  const G = 44, D = 8, H = o.titre ? 16 : 8, B = o.sansTemps ? 4 : 18;
+  x.font = '10px system-ui'; x.textBaseline = 'alphabetic';
+  if (o.titre) { x.fillStyle = '#9AA7B4'; x.textAlign = 'left'; x.fillText(o.titre, G, oy + 11); }
+  if (!pts || !pts.length) {
+    x.fillStyle = '#6B7C8F'; x.font = '12px system-ui'; x.textAlign = 'center'; x.fillText(o.vide || 'pas encore de mesure', w / 2, oy + h / 2 + 4);
+    return null;
+  }
+  const t1 = o.t1 || pts[pts.length - 1][0], t0 = o.t0 || pts[0][0];
+  let lo = Math.min(...pts.map(p => p[2])), hi = Math.max(...pts.map(p => p[3]));
+  const pm = o.plageMin || 4;
+  if (hi - lo < pm) { const m = (hi + lo) / 2; lo = m - pm / 2; hi = m + pm / 2; }
+  const mg = (hi - lo) * 0.08; lo -= mg; hi += mg;
+  const X = t => G + (w - G - D) * (t - t0) / Math.max(1, t1 - t0), Y = y => oy + H + (h - H - B) * (hi - y) / (hi - lo);
+  x.strokeStyle = '#22303B'; x.lineWidth = 1; x.fillStyle = '#9AA7B4'; x.textAlign = 'right';
+  for (let k = 0; k <= 3; k++) {
+    const y = lo + (hi - lo) * k / 3, py = Math.round(Y(y)) + .5;
+    x.beginPath(); x.moveTo(G, py); x.lineTo(w - D, py); x.stroke(); x.fillText(nivF(y, o.dec), G - 5, py + 3);
+  }
+  if (!o.sansTemps) {
+    x.textAlign = 'center';
+    const jour = t1 - t0 > 6 * 3600000;
+    for (let k = 0; k <= 4; k++) {
+      const t = t0 + (t1 - t0) * k / 4, d = new Date(t);
+      x.fillText(d.toLocaleTimeString('fr-FR', jour ? { hour: '2-digit', minute: '2-digit' } : { hour: '2-digit', minute: '2-digit', second: (t1 - t0) <= 900000 ? '2-digit' : undefined }),
+        Math.min(w - D - 22, Math.max(G + 22, X(t))), oy + h - 4);
+    }
+  }
+  // Runs without a gap: a hole longer than two and a half steps breaks the line.
+  const pas = o.pas || 1000, runs = [];
+  let r = [];
+  for (const p of pts) { if (r.length && p[0] - r[r.length - 1][0] > pas * 2.5) { runs.push(r); r = []; } r.push(p); }
+  if (r.length) runs.push(r);
+  for (const l of runs) {
+    x.fillStyle = 'rgba(63,224,200,.16)'; x.beginPath();
+    l.forEach((p, i) => i ? x.lineTo(X(p[0]), Y(p[3])) : x.moveTo(X(p[0]), Y(p[3])));
+    for (let i = l.length - 1; i >= 0; i--) x.lineTo(X(l[i][0]), Y(l[i][2]));
+    x.closePath(); x.fill();
+    x.strokeStyle = '#3FE0C8'; x.lineWidth = 2; x.lineJoin = 'round'; x.beginPath();
+    l.forEach((p, i) => i ? x.lineTo(X(p[0]), Y(p[1])) : x.moveTo(X(p[0]), Y(p[1])));
+    if (l.length === 1) { x.arc(X(l[0][0]), Y(l[0][1]), 2, 0, 7); }
+    x.stroke();
+  }
+  // The pointer: a dashed line and the nearest point ringed.
+  if (c.survolT != null) {
+    const p = nivProche(pts, c.survolT);
+    if (p) {
+      const px = X(p[0]);
+      x.strokeStyle = '#6B7C8F'; x.lineWidth = 1; x.setLineDash([3, 3]); x.beginPath(); x.moveTo(px, oy + H); x.lineTo(px, oy + h - B); x.stroke(); x.setLineDash([]);
+      x.fillStyle = '#3FE0C8'; x.strokeStyle = '#131C24'; x.lineWidth = 2; x.beginPath(); x.arc(px, Y(p[1]), 4.5, 0, 7); x.fill(); x.stroke();
+    }
+  }
+  return { X, t0, t1, G, D, w };
+}
+function nivProche(pts, t) {
+  let b = null, d = 1e18;
+  for (const p of pts) { const e = Math.abs(p[0] - t); if (e < d) { d = e; b = p; } }
+  return b;
+}
+/** Hover on a chart: the time under the pointer kept on the canvas, [texte] gives the bubble, [refait] redraws. */
+function nivSurvol(c, bulle, texte, refait) {
+  c.addEventListener('mousemove', ev => {
+    const geo = c.geo; if (!geo) return;
+    const r = c.getBoundingClientRect(), mx = ev.clientX - r.left;
+    c.survolT = geo.t0 + (mx - geo.G) / Math.max(1, geo.w - geo.G - geo.D) * (geo.t1 - geo.t0);
+    refait();
+    const t = texte(c.survolT), b = g(bulle);
+    if (!t) { b.hidden = true; return; }
+    b.innerHTML = t; b.hidden = false;
+    b.style.left = Math.min(r.width - b.offsetWidth - 4, Math.max(4, mx + 12)) + 'px'; b.style.top = '6px';
+  });
+  c.addEventListener('mouseleave', () => { c.survolT = null; g(bulle).hidden = true; refait(); });
+}
+const NIV_SERIES = {
+  canal: ['Canal écouté', 'dB', 'Le niveau de la chaîne de réception sur le canal écouté (dB relatifs, gain compris).'],
+  repere: ['Repère', 'dB', 'La puissance du spectre dans la largeur choisie autour du repère (dB relatifs) ; le repère suit la fréquence écoutée.'],
+  plancher: ['Plancher', 'dB', 'Le plancher de bruit : la médiane du spectre vu (dB relatifs).'],
+  balise: ['Balise', 'dB/bruit', 'La balise de QO-100 au-dessus du bruit (dB), toutes les 5 s tant qu’elle est suivie.']
+};
+function nivDessine() {
+  const d = NIVD, s = v('niv-serie'), c = g('niv-graphe');
+  if (!d || d.ok === false) {
+    c.geo = nivCourbe(c, [], { vide: d && d.absent ? 'Mesuré par le récepteur de SatMe-PC' : 'SatMe-PC ne répond pas' });
+    g('niv-chiffres').innerHTML = ''; txt('niv-msg', ''); return;
+  }
+  if (document.activeElement !== g('niv-repere')) g('niv-repere').value = nivF(d.repere / 1000, 1);
+  if ([...g('niv-largeur').options].some(o => +o.value === d.largeur) && document.activeElement !== g('niv-largeur')) g('niv-largeur').value = String(d.largeur);
+  const vide = !d.actif && s !== 'balise' ? 'le récepteur est arrêté : rien n’est mesuré' : s === 'balise' ? 'la balise n’est pas suivie (récepteur sur QO-100 ?)' : 'en attente de mesures…';
+  c.geo = nivCourbe(c, d.points || [], { t0: d.maintenant - d.fenetre, t1: d.maintenant, pas: d.pas, vide: vide, titre: NIV_SERIES[s][0] + ' (' + NIV_SERIES[s][1] + ')' });
+  const st = d.stats && d.stats[s], u = ' ' + NIV_SERIES[s][1];
+  g('niv-chiffres').innerHTML = st ? '<span>dernier <b>' + nivF(st.dernier) + u + '</b></span><span>moyenne <b>' + nivF(st.moy) + u + '</b></span><span>min <b>' + nivF(st.min) + u +
+    '</b></span><span>max <b>' + nivF(st.max) + u + '</b></span><span>écart <b>' + nivF(st.max - st.min) + ' dB</b></span><span>un point par ' + (d.pas >= 60000 ? 'minute' : d.pas <= 1000 ? 'seconde' : (d.pas / 1000) + ' s') + '</span>' : '';
+  txt('niv-msg', NIV_SERIES[s][2]);
+}
+nivSurvol(g('niv-graphe'), 'niv-bulle', t => {
+  const d = NIVD, p = d && d.points && nivProche(d.points, t); if (!p) return '';
+  const u = ' ' + NIV_SERIES[v('niv-serie')][1];
+  return new Date(p[0]).toLocaleTimeString('fr-FR') + ' · <b>' + nivF(p[1]) + u + '</b> <span style="color:var(--texte-2)">(' + nivF(p[2]) + ' … ' + nivF(p[3]) + ')</span>';
+}, nivDessine);
+async function nivRepere() {
+  const k = parseFloat(v('niv-repere').replace(',', '.').replace('−', '-'));
+  if (isNaN(k)) return;
+  await nivPost('api/niveaux/repere?hz=' + Math.round(k * 1000) + '&largeur=' + g('niv-largeur').value);
+  g('niv-repere').blur(); nivTic();
+}
+async function nivVide() { if (confirm('Effacer l’historique des niveaux (les quatre séries) ?')) { await nivPost('api/niveaux/vider'); nivTic(); } }
+
+// The beacon's day: its level above the noise on top, the LNB's error below, one time axis.
+function balRecoit(q) {
+  const ok = q && !q.absent, P = l => (l || []).map(p => [p[0], p[1], p[1], p[1]]);
+  BAL.nv = ok ? P(q.journeeNiveau) : []; BAL.er = ok ? P(q.journee) : []; BAL.ok = ok;
+  balDessine();
+  const st = l => l.length ? { min: Math.min(...l.map(p => p[1])), max: Math.max(...l.map(p => p[1])), moy: l.reduce((a, p) => a + p[1], 0) / l.length } : null;
+  const a = st(BAL.nv), b = st(BAL.er);
+  g('bal-chiffres').innerHTML = (a ? '<span>niveau <b>' + nivF(a.min) + ' … ' + nivF(a.max) + ' dB</b> (moy. ' + nivF(a.moy) + ')</span>' : '') +
+    (b ? '<span>erreur du LNB <b>' + nivS(b.min, 0) + ' … ' + nivS(b.max, 0) + ' Hz</b> (dérive ' + nivF(b.max - b.min, 0) + ' Hz)</span>' : '') +
+    (BAL.er.length ? '<span class="petit">' + BAL.er.length + ' minute(s)</span>' : '');
+}
+function balDessine() {
+  const c = g('bal-graphe'), [x, w, h] = toile(c), t1 = Math.max(Date.now(), BAL.er.length ? BAL.er[BAL.er.length - 1][0] : 0), t0 = t1 - 86400000;
+  const vide = BAL.ok ? 'pas encore de minute complète : la balise est-elle suivie ?' : 'Le suivi de la balise est fait par SatMe-PC';
+  x.clearRect(0, 0, w, h);
+  const a = nivCourbe(c, BAL.nv, { garde: true, haut: 0, hauteur: h / 2 - 4, t0, t1, pas: 60000, titre: 'Niveau de la balise (dB au-dessus du bruit)', sansTemps: true, vide: vide });
+  const b = nivCourbe(c, BAL.er, { garde: true, haut: h / 2 + 2, hauteur: h / 2 - 2, t0, t1, pas: 60000, titre: 'Erreur du LNB (Hz)', dec: 0, plageMin: 40, vide: BAL.ok ? '' : ' ' });
+  c.geo = a || b || { t0, t1, G: 44, D: 8, w };
+}
+nivSurvol(g('bal-graphe'), 'bal-bulle', t => {
+  const a = nivProche(BAL.nv, t), b = nivProche(BAL.er, t); if (!a && !b) return '';
+  const p = a || b;
+  return new Date(p[0]).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) + (a ? ' · niveau <b>' + nivF(a[1]) + ' dB</b>' : '') + (b ? ' · erreur <b>' + nivS(b[1], 0) + ' Hz</b>' : '');
+}, balDessine);
+
+// The Sun's noise: the guided measure, the expected rise, the rotor's raster.
+function solRend() {
+  const s = SOLD;
+  if (!s || s.ok === false) { txt('sol-attendu', s && s.absent ? 'Le bruit solaire se mesure avec le récepteur de SatMe-PC.' : 'SatMe-PC ne répond pas.'); return; }
+  const champ = (id, val) => { if (document.activeElement !== g(id)) g(id).value = val ? String(val) : ''; };
+  champ('sol-diametre', s.diametre); champ('sol-sfu', s.sfu); champ('sol-rendement', s.rendement); champ('sol-tsys', s.tsys);
+  const a = s.attendu;
+  txt('sol-attendu', a ? 'Attendu à ' + nivF(s.frequence / 1e9, 3) + ' GHz : +' + nivF(a.y) + ' dB (flux ' + Math.round(a.flux) + ' SFU, lobe ' + nivF(a.lobe, 2) + '°, +' + a.deltaT + ' K d’antenne).'
+    : 'Donner le diamètre de la parabole et le flux solaire du jour : SatMe en tire la montée attendue.');
+  const enCours = s.enCours || '';
+  txt('sol-froid', enCours === 'froid' ? 'mesure…' : s.froid ? nivF(s.froid.db, 2) + ' dB' : '—');
+  txt('sol-soleil', enCours === 'soleil' ? 'mesure…' : s.soleil ? nivF(s.soleil.db, 2) + ' dB' : '—');
+  g('sol-b-froid').disabled = !!enCours || !s.recepteur; g('sol-b-soleil').disabled = !!enCours || !s.recepteur;
+  g('sol-barre-l').hidden = !enCours; g('sol-barre').style.width = Math.round((s.progression || 0) * 100) + '%';
+  txt('sol-y', s.y != null ? nivS(s.y) + ' dB' : '—');
+  txt('sol-y-detail', s.y == null ? 'les deux mesures, même gain' : a ? 'attendu ' + nivS(a.y) + ' dB' + (s.conforme ? ' · conforme' : ' · écart ' + nivS(s.y - a.y) + ' dB') + (s.tsysMesure ? ' · Tsys ≈ ' + s.tsysMesure + ' K' : '') : '');
+  txt('sol-avert', !s.recepteur ? 'Le récepteur est arrêté : le démarrer (onglet SDR), sur la bande de la parabole.' : s.gainAuto ? 'Gain du récepteur automatique : le fixer (onglet SDR), sinon la montée est écrasée.' : '');
+  const p = s.position;
+  txt('sol-pos', p ? 'Soleil : az ' + nivF(p.az, 2) + '°, site ' + nivF(p.el, 2) + '°' + (p.el < 0 ? ' (couché)' : '') : 'position de la station inconnue');
+  const r = s.rotor || {};
+  txt('sol-rotor', r.pret ? 'Rotor ' + (r.simule ? 'simulé' : 'rotctld') + (r.az != null ? ' à az ' + nivF(r.az) + '°, site ' + nivF(r.el) + '°' : '') +
+    ' · butées : az 0–' + Math.round(r.bornes.azMax) + '°, site ' + Math.round(r.bornes.elMin) + '–' + Math.round(r.bornes.elMax) + '°' : (r.pourquoi || ''));
+  g('sol-b-balayer').disabled = !r.pret || !!enCours; g('sol-b-arret').hidden = !enCours;
+  const bal = s.balayage;
+  g('sol-grille').hidden = !bal;
+  txt('sol-msg', s.message || (enCours === 'balayage' ? 'balayage : ' + (bal ? bal.cellules.length : 0) + ' / ' + (bal ? bal.prevues : '?') + ' points' : ''));
+  if (bal) solCarte(bal);
+}
+/** The raster as a map: each cell's noise (one hue, dark to bright), the computed Sun at the centre, the peak ringed. */
+function solCarte(b) {
+  const c = g('sol-carte'), [x, w, h] = toile(c), n = Math.round(b.demi / b.pas), k = 2 * n + 1, m = 18, cw = (w - m - 4) / k, ch = (h - m - 4) / k;
+  x.clearRect(0, 0, w, h);
+  const l = b.cellules, lo = l.length ? Math.min(...l.map(p => p[2])) : 0, hi = l.length ? Math.max(...l.map(p => p[2])) : 1;
+  const X = dx => m + (dx / b.pas + n) * cw, Y = de => 4 + (n - de / b.pas) * ch;
+  for (let i = -n; i <= n; i++) for (let j = -n; j <= n; j++) { x.strokeStyle = '#22303B'; x.lineWidth = 1; x.strokeRect(X(j * b.pas) + .5, Y(i * b.pas) + .5, cw - 2, ch - 2); }
+  for (const p of l) {
+    const f = hi > lo ? (p[2] - lo) / (hi - lo) : 1;
+    x.fillStyle = 'rgba(63,224,200,' + (0.1 + 0.9 * f).toFixed(3) + ')';
+    x.fillRect(X(p[0]) + 1, Y(p[1]) + 1, cw - 2, ch - 2);
+  }
+  // The computed Sun.
+  const cx = X(0) + cw / 2 - 1, cy = Y(0) + ch / 2 - 1;
+  x.strokeStyle = '#FFD166'; x.lineWidth = 1.5; x.beginPath(); x.arc(cx, cy, Math.min(cw, ch) * 0.3, 0, 7); x.stroke();
+  x.beginPath(); x.moveTo(cx - 3, cy); x.lineTo(cx + 3, cy); x.moveTo(cx, cy - 3); x.lineTo(cx, cy + 3); x.stroke();
+  if (b.pic) {
+    const px = X(b.pic.dX) + cw / 2 - 1, py = Y(b.pic.dEl) + ch / 2 - 1;
+    x.strokeStyle = '#131C24'; x.lineWidth = 4; x.beginPath(); x.arc(px, py, 6, 0, 7); x.stroke();
+    x.strokeStyle = '#E8F0F7'; x.lineWidth = 2; x.beginPath(); x.arc(px, py, 6, 0, 7); x.stroke();
+  }
+  x.fillStyle = '#9AA7B4'; x.font = '10px system-ui'; x.textAlign = 'center';
+  x.fillText('Δ azimut (sur le ciel) →', m + (w - m) / 2, h - 2);
+  x.save(); x.translate(10, 4 + (h - m) / 2); x.rotate(-Math.PI / 2); x.fillText('Δ site →', 0, 0); x.restore();
+  const p = b.pic;
+  g('sol-pic').innerHTML = p ? 'Maximum à <b>' + nivS(p.dAz, 2) + '°</b> en azimut et <b>' + nivS(p.dEl, 2) + '°</b> en site du Soleil calculé (cercle jaune), ' + nivS(p.montee) + ' dB sur la grille.<br>' +
+    'La parabole vise donc à côté de ce que lit le rotor : corriger son zéro de ' + nivS(-p.dAz, 2) + '° en azimut et ' + nivS(-p.dEl, 2) + '° en site.' :
+    'Le maximum se dessinera au fil des points (± ' + nivF(b.demi) + '°, pas ' + nivF(b.pas, 2) + '°).';
+}
+async function solReglages() {
+  const n = id => encodeURIComponent(v(id));
+  const j = await nivPost('api/soleil/reglages?diametre=' + n('sol-diametre') + '&sfu=' + n('sol-sfu') + '&rendement=' + n('sol-rendement') + '&tsys=' + n('sol-tsys'));
+  if (j && j.ok !== false && j.diametre != null) { SOLD = j; solRend(); } else nivTic();
+}
+async function solMesure(quoi) {
+  const j = await nivPost('api/soleil/mesure?quoi=' + quoi);
+  if (j && j.ok === false) txt('sol-avert', j.erreur || 'refusé');
+  setTimeout(nivTic, 300);
+}
+async function solPost(k) { await nivPost('api/soleil/' + k); nivTic(); }
+async function solBalaye() {
+  const s = SOLD; if (!s || !s.rotor || !s.rotor.pret) return;
+  const demi = +g('sol-demi').value, pas = +g('sol-pas').value, k = 2 * Math.round(demi / pas) + 1;
+  const ou = s.position ? ' (az ' + nivF(s.position.az) + '°, site ' + nivF(s.position.el) + '°)' : '';
+  if (!confirm('Le rotor va bouger : une grille de ' + k + ' × ' + k + ' points au plus, ± ' + demi + '° par pas de ' + pas + '° autour du Soleil' + ou +
+    ', dans ses butées et au-dessus de son site minimum. Le suivi automatique du rotor sera arrêté ; « Arrêter » le stoppe à tout moment.\n\nLa parabole doit pouvoir tourner librement. Lancer le balayage ?')) return;
+  const j = await nivPost('api/soleil/balayer?confirme=1&demi=' + demi + '&pas=' + pas);
+  if (j && j.ok === false) txt('sol-rotor', j.erreur || 'refusé');
+  setTimeout(nivTic, 300);
+}
+if (window.SATME_TELEPHONE) { g('sp-b-niv').hidden = true; g('tq-b-niv').hidden = true; }
+
+/** ?essai-niveau=1: plausible data drawn here, to see the popover without a receiver nor a rotor. */
+function nivFaux(u) {
+  const t = Date.now(), rnd = k => Math.sin(k * 12.9898) * 43758.5453 % 1;
+  if (u.startsWith('api/niveaux')) {
+    const fen = { '10m': 600000, '1h': 3600000, '24h': 86400000 }[nivFen], pas = { '10m': 1000, '1h': 10000, '24h': 60000 }[nivFen];
+    const base = { canal: -42, repere: -61, plancher: -96, balise: 19 }, s = v('niv-serie'), pts = [];
+    for (let k = Math.floor((t - fen) / pas) + 1; k * pas <= t; k++) {
+      const tt = k * pas, ph = tt / fen * Math.PI * 2;
+      if (s === 'balise' && tt > t - fen * 0.42 && tt < t - fen * 0.36) continue;
+      let m = base[s] + 2.5 * Math.sin(ph * 1.3) + 0.8 * rnd(k);
+      if (s === 'canal' && tt > t - fen * 0.25 && tt < t - fen * 0.18) m -= 9;
+      if (s === 'repere' && tt > t - fen * 0.65 && tt < t - fen * 0.6) m += 14;
+      const e = pas > 1000 ? 1.5 + Math.abs(rnd(k + 7)) * 2 : 0.3;
+      pts.push([tt, Math.round(m * 10) / 10, Math.round((m - e) * 10) / 10, Math.round((m + e * 1.3) * 10) / 10]);
+    }
+    const st = {};
+    const mm = pts.length ? { min: Math.min(...pts.map(p => p[2])), max: Math.max(...pts.map(p => p[3])), moy: pts.reduce((a, p) => a + p[1], 0) / pts.length, dernier: pts[pts.length - 1][1] } : null;
+    if (mm) st[s] = mm;
+    return { ok: true, actif: true, maintenant: t, repere: 10000, largeur: 2500, fenetre: fen, pas: pas, qo100: true, stats: st, points: pts };
+  }
+  if (u.startsWith('api/soleil')) {
+    const cells = [], n = 3, pas = 0.5;
+    for (let i = -n; i <= n; i++) for (let j = -n; j <= n; j++) {
+      const d2 = (j * pas - 0.35) * (j * pas - 0.35) + (i * pas + 0.2) * (i * pas + 0.2);
+      if (i === n && j < -1) continue;
+      cells.push([j * pas, i * pas, Math.round((-96.8 + 11 * Math.exp(-4 * Math.LN2 * d2 / (1.67 * 1.67))) * 100) / 100]);
+    }
+    return { ok: true, diametre: 120, sfu: 150, rendement: 60, tsys: 100, frequence: 10489750000, enCours: 'balayage', progression: 0.92, message: '', recepteur: true, gainAuto: false,
+      attendu: { flux: 599.6, lobe: 1.67, deltaT: 1421, y: 11.8 }, froid: { db: -96.84, t: t - 120000, n: 52 }, soleil: { db: -85.62, t: t - 60000, n: 54 }, y: 11.2, tsysMesure: 116, conforme: true,
+      position: { az: 201.43, el: 28.71 }, rotor: { pret: true, pourquoi: '', az: 201.9, el: 29.21, simule: false, bornes: { azMax: 450, elMin: 0, elMax: 90 } },
+      balayage: { demi: 1.5, pas: 0.5, prevues: 49, cellules: cells, pic: { dX: 0.34, dEl: -0.21, dAz: 0.39, db: -85.8, montee: 9.6 } } };
+  }
+  const nv = [], er = [];
+  for (let k = 1440; k > 0; k--) {
+    const tt = Math.floor(t / 60000) * 60000 - k * 60000, ph = (tt / 86400000) * Math.PI * 2;
+    if (k > 300 && k < 340) continue;
+    nv.push([tt, Math.round((21 + 1.6 * Math.sin(ph * 2) + 0.6 * rnd(k)) * 10) / 10]);
+    er.push([tt, Math.round(-5850 + 260 * Math.sin(ph + 1) + 25 * rnd(k + 3))]);
+  }
+  return { journee: er, journeeNiveau: nv, cle: true, verrou: true };
+}
 
 // ------------------------------------------------------------------ radiosondes
 let S2 = null;

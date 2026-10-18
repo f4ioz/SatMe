@@ -490,6 +490,29 @@ class StationRotor(
     }
 
     /**
+     * A precise direction (hundredths of a degree), for a measuring raster:
+     * tracking stopped, the rotor's limits applied — refused, never clamped,
+     * nor below its lowest elevation. False when refused, not connected or
+     * not sent; through the driver already open, nothing else opened.
+     */
+    suspend fun vers(azDeg: Double, elDeg: Double): Boolean {
+        val d = rotorDriver ?: return false
+        val u = _etat.value
+        if (!u.rotorConnected || u.rotorAzOnly || elDeg < u.rotorMinEl) return false
+        val limits = rotorLimits(u)
+        val aim = RotorMath.manual(azDeg, elDeg, limits) ?: return false
+        if (u.rotorEnabled) setRotorEnabled(false)
+        val cmdAz = RotorMath.commandAz(aim.azDeg, limits, u.rotorAzFromStop)
+        val parti = runCatching { d.moveTo(cmdAz, aim.elDeg) }.getOrDefault(false)
+        rotorAt = RotorPos(aim.azDeg, aim.elDeg)
+        rotorDerniereCmd = if (parti) rotorAt else null
+        rotorCmd = rotorAt
+        rotorWasFlipped = false
+        change { copy(rotorTargetAz = aim.azDeg, rotorTargetEl = aim.elDeg, rotorOutOfRange = false) }
+        return parti
+    }
+
+    /**
      * One step more or less from where we think we are: the **read** position
      * when available, else the previous command. Handy for rough end-stop
      * setup: step ten degrees, look at the antenna, repeat.

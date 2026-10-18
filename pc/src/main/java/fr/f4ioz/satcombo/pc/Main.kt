@@ -102,6 +102,9 @@ fun main(args: Array<String>) {
     son.son.auditeurs += { pcm, n, rate -> qo100.ecouteCarte(pcm, n, rate) }
     // QO-100 from one screen; the log on QO-100 while the receiver or the rig is on it.
     val trafic = TraficQo100Pc(station, sdr, qo100)
+    // « Niveau dans le temps » and the Sun noise: read from the receiver's spectra; the Sun's raster moves the rotor only when asked and confirmed.
+    val niveaux = NiveauxPc(sdr, qo100, station.stockage)
+    val soleil = SoleilPc(station, sdr, station.stockage)
     carnet.contexte = { trafic.contexte() }
     // « Phonie → texte »: off unless chosen; the engine (a Python helper) started only then.
     val phonie = PhoniePc(station.stockage, InstallPhoniePc(dossier), File(dossier, "phonie"))
@@ -124,6 +127,7 @@ fun main(args: Array<String>) {
             runCatching { sdr.ticMeteor() }
             runCatching { qo100.tic() }
             runCatching { trafic.tic() }
+            runCatching { niveaux.tic() }
             kotlinx.coroutines.delay(1000)
         }
     }
@@ -226,6 +230,8 @@ fun main(args: Array<String>) {
     serveur.large = large
     serveur.montage = MontagePc(dossier) { serveur.lecturesMontage() }
     serveur.memoiresSdr = MemoiresSdrPc(dossier)
+    serveur.niveaux = niveaux
+    serveur.soleil = soleil
     // Open to the network: a password for every other machine (drawn the first time, said in the log).
     val acces = AccesDistantPc(dossier, reseau)
     val ligneAcces = runCatching { acces.initialise() }.getOrNull()

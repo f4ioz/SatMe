@@ -36,6 +36,9 @@ class SuiviBaliseQo100(
     private val minutes = ArrayDeque<Pair<Long, Double>>()
     private var minuteEnCours = -1L
     private val dansLaMinute = ArrayList<Double>()
+    /** The same day, the beacon's level a minute (median dB above the noise). */
+    private val minutesNiveau = ArrayDeque<Pair<Long, Double>>()
+    private val niveauxDansLaMinute = ArrayList<Double>()
     @Volatile var dernier: Point? = null
         private set
     /** Measures thrown away: too far from the others (another line, not the beacon). */
@@ -47,6 +50,9 @@ class SuiviBaliseQo100(
 
     /** The last day, a point a minute: (time, the LNB's error). */
     fun journee(): List<Pair<Long, Double>> = synchronized(points) { minutes.toList() }
+
+    /** The last day, a point a minute: (time, the beacon's level above the noise, dB). */
+    fun journeeNiveau(): List<Pair<Long, Double>> = synchronized(points) { minutesNiveau.toList() }
 
     private fun mediane(l: List<Double>): Double = l.sorted().let { if (it.size % 2 == 1) it[it.size / 2] else (it[it.size / 2 - 1] + it[it.size / 2]) / 2 }
 
@@ -76,8 +82,10 @@ class SuiviBaliseQo100(
             if (minute != minuteEnCours && dansLaMinute.isNotEmpty()) {
                 minutes.addLast(minuteEnCours * 60_000L to mediane(dansLaMinute)); dansLaMinute.clear()
                 while (minutes.isNotEmpty() && minutes.first().first < t - 86_400_000L) minutes.removeFirst()
+                minutesNiveau.addLast(minuteEnCours * 60_000L to mediane(niveauxDansLaMinute)); niveauxDansLaMinute.clear()
+                while (minutesNiveau.isNotEmpty() && minutesNiveau.first().first < t - 86_400_000L) minutesNiveau.removeFirst()
             }
-            minuteEnCours = minute; dansLaMinute += p.erreurHz
+            minuteEnCours = minute; dansLaMinute += p.erreurHz; niveauxDansLaMinute += p.rapportDb.toDouble()
         }
         if (!corrige) return null
         // The recent measures' median, never one alone: each one wavers, and the PSK beacon's two

@@ -74,6 +74,7 @@ class Qo100Pc(private val station: StationPc, private val sdr: SdrPc, private va
         suivi.deriveHzParMin(t)?.let { o.put("derive", Math.round(it * 10) / 10.0) }
         o.put("historique", JSONArray(suivi.historique().map { JSONArray().put(it.t).put(Math.round(it.erreurHz)) }))
         o.put("journee", JSONArray(suivi.journee().map { JSONArray().put(it.first).put(Math.round(it.second)) }))
+        o.put("journeeNiveau", JSONArray(suivi.journeeNiveau().map { JSONArray().put(it.first).put(Math.round(it.second * 10) / 10.0) }))
         o.put("ecartees", suivi.ecartees)
         suivi.erreurRecente()?.let { o.put("erreurMediane", Math.round(it)) }
         // The stations heard: the transponder's view, a column per 500 Hz.

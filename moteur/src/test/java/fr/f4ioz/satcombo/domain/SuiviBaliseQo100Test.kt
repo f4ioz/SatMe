@@ -85,4 +85,14 @@ class SuiviBaliseQo100Test {
         assertTrue(kotlin.math.abs(l[0].hz - 10_489_690_000L) < 1_500)
         assertEquals(20f, l[0].rapportDb, 0.1f)
     }
+
+    @Test fun `la journée garde aussi le niveau de la balise, minute par minute`() {
+        val s = SuiviBaliseQo100()
+        for (k in 0..6) s.mesure(k * 20_000L, m(100.0, 20f + k), 1_000, corrige = false)
+        // Three minutes started: the first two finished, each its median level beside its error.
+        val n = s.journeeNiveau()
+        assertEquals(listOf(0L, 60_000L), n.map { it.first })
+        assertEquals(21.0, n[0].second, 1e-6); assertEquals(24.0, n[1].second, 1e-6)
+        assertEquals(s.journee().map { it.first }, n.map { it.first })
+    }
 }
