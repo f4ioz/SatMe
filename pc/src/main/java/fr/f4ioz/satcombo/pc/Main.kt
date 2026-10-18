@@ -161,6 +161,7 @@ fun main(args: Array<String>) {
     val emission = EmissionDatvPc(station.stockage, File(dossier, "tmp"), indicatif = { station.settings.callsign },
         locator = { station.settings.manualLocator }, plutoHote = { sdr.plutoHote }, plutoPort = { sdr.plutoPort },
         plutoOccupe = { if (sdr.plutoEnReception) "l'ADALM-PLUTO reçoit (onglet SDR) : arrêter cette réception d'abord"
+            else if (sdr.adsbTient() == SdrPc.PLUTO) SdrPc.ADSB_TIENT_PLUTO
             else if (datv.sdrTenu == fr.f4ioz.satcombo.datv.Datv.PLUTO) "l'ADALM-PLUTO reçoit la DATV : arrêter cette réception d'abord" else null },
         bladerfOccupe = { if (sdr.bladerfEnReception) "le bladeRF reçoit (onglet SDR) : arrêter cette réception d'abord"
             else if (datv.sdrTenu == fr.f4ioz.satcombo.datv.Datv.BLADERF) "le bladeRF reçoit la DATV : arrêter cette réception d'abord" else null },
@@ -190,6 +191,7 @@ fun main(args: Array<String>) {
     val emissionSstv = EmissionSstvPc(station.stockage, indicatif = { station.settings.callsign }, locator = { station.settings.manualLocator },
         plutoHote = { sdr.plutoHote }, plutoPort = { sdr.plutoPort },
         plutoOccupe = { if (sdr.plutoEnReception) "l'ADALM-PLUTO reçoit (onglet SDR) : arrêter cette réception d'abord"
+            else if (sdr.adsbTient() == SdrPc.PLUTO) SdrPc.ADSB_TIENT_PLUTO
             else if (datv.sdrTenu == fr.f4ioz.satcombo.datv.Datv.PLUTO) "l'ADALM-PLUTO reçoit la DATV : arrêter cette réception d'abord" else null },
         bladerfOccupe = { if (sdr.bladerfEnReception) "le bladeRF reçoit (onglet SDR) : arrêter cette réception d'abord"
             else if (datv.sdrTenu == fr.f4ioz.satcombo.datv.Datv.BLADERF) "le bladeRF reçoit la DATV : arrêter cette réception d'abord" else null },
@@ -226,6 +228,11 @@ fun main(args: Array<String>) {
     serveur.large = large
     serveur.montage = MontagePc(dossier) { serveur.lecturesMontage() }
     serveur.memoiresSdr = MemoiresSdrPc(dossier)
+    // ADS-B on 1090 MHz (Avions tab): off until asked; the SDR tab's dongle taken only when the owner chooses.
+    val adsb = AdsbPc(station, sdr, station.stockage, carnet)
+    sdr.adsbTient = { if (adsb.tientCleSdr) SdrPc.RTL else if (adsb.tientPluto) SdrPc.PLUTO else null }
+    serveur.adsb = adsb
+    serveur.carte = CartePc(station, son, sdr, adsb, datv, { textesDatv }, { serveur.qrzDatv })
     // Open to the network: a password for every other machine (drawn the first time, said in the log).
     val acces = AccesDistantPc(dossier, reseau)
     val ligneAcces = runCatching { acces.initialise() }.getOrNull()
@@ -256,6 +263,7 @@ fun main(args: Array<String>) {
     Runtime.getRuntime().addShutdownHook(Thread {
         // The transmitter first: its LO powered down before anything else.
         runCatching { iq.arrete() }
+        runCatching { adsb.arrete() }
         runCatching { emission.arrete("SatMe-PC fermé") }
         // No hackrf_transfer outlives SatMe-PC.
         runCatching { fr.f4ioz.satcombo.sdr.HackrfEmission.arreteTout() }

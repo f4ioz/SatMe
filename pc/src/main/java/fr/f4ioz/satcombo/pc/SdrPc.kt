@@ -84,6 +84,8 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
         if (_etat.value.actif) return
         // The dongle set on QO-100 (behind its converter, 137 MHz is out of reach): METEOR leaves it alone.
         if (station.qo100.etat.value.aLaCle) return
+        // The receiver chosen held by ADS-B (Avions tab): METEOR leaves it too.
+        if (adsbTient() == recepteur) return
         // The passes asked every 15 s, not every second.
         if (now - dernierTicMeteor < 15_000L) return
         dernierTicMeteor = now
@@ -220,6 +222,8 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
     val bladerfEnReception: Boolean get() = cle is BladerfSdr
     /** The receiver DATV's demodulator holds now ("pluto", "bladerf"), or null: this tab may not start on it meanwhile. */
     @Volatile var datvTient: String? = null
+    /** The receiver ADS-B holds now ([RTL] for this tab's dongle, [PLUTO]), or null: this tab may not start on it meanwhile. */
+    @Volatile var adsbTient: () -> String? = { null }
 
     /** bladeRF-cli: in the folder set, else in the PATH; null when missing. */
     fun programmeBladerf(): String? {
@@ -470,6 +474,7 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
         if (estPluto()) {
             if (emissionPluto()) throw java.io.IOException("l'ADALM-PLUTO émet (onglet DATV ou SSTV) : arrêter l'émission d'abord")
             if (datvTient == PLUTO) throw java.io.IOException(DATV_TIENT_PLUTO)
+            if (adsbTient() == PLUTO) throw java.io.IOException(ADSB_TIENT_PLUTO)
             val p = PlutoSdr.connecte(plutoHote, plutoPort)
             if (coupeTxEnReception) {
                 val (h, n) = plutoHote to plutoPort
@@ -477,6 +482,7 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
             }
             return p
         }
+        if (adsbTient() == RTL) throw java.io.IOException(ADSB_TIENT_CLE)
         runCatching { return RtlTcp.connecte(hote, port, 1500) }
         if (!lance || !estLocal(hote)) throw java.io.IOException("rtl_tcp ne répond pas sur $hote:$port")
         val p = runCatching {
@@ -648,6 +654,8 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
     companion object {
         const val DATV_TIENT_PLUTO = "l'ADALM-PLUTO reçoit la DATV (onglet DATV) : arrêter cette réception d'abord (l'onglet SDR reprendra ensuite)"
         const val DATV_TIENT_BLADERF = "le bladeRF reçoit la DATV (onglet DATV) : arrêter cette réception d'abord (l'onglet SDR reprendra ensuite)"
+        const val ADSB_TIENT_CLE = "la clé reçoit l'ADS-B (onglet Avions) : arrêter cette réception d'abord"
+        const val ADSB_TIENT_PLUTO = "l'ADALM-PLUTO reçoit l'ADS-B (onglet Avions) : arrêter cette réception d'abord"
         const val NOM_SOURCE = "Clé SDR (rtl_tcp)"
         const val CLE_HOTE = "pc_sdr_hote"
         const val CLE_PORT = "pc_sdr_port"

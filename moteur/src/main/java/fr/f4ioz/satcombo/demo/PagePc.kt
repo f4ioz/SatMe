@@ -38,6 +38,8 @@ object PagePc {
         Onglet("montage", "Montage", "montage", "La chaîne de la station : antennes, convertisseurs, postes, câbles, ce qui reçoit et ce qui émet"),
         Onglet("sdr", "SDR", "settings_input_antenna", "Le récepteur SDR : écoute, spectre, cascade"),
         Onglet("sondes", "Sondes", "air", "Les radiosondes"),
+        Onglet("carte", "Carte", "map", "La carte commune : satellites, APRS, sondes, avions, DATV, carrés, jour et nuit"),
+        Onglet("avions", "Avions", "flight", "ADS-B 1090 MHz et la diffusion par avions"),
         Onglet("meteor", "METEOR", "cloud", "Les images LRPT des satellites METEOR"),
         Onglet("son", "Son", "mic", "La carte son, l'enregistrement"),
         Onglet("sstv", "SSTV", "live_tv", "Réception, émission et images SSTV"),
@@ -53,7 +55,7 @@ object PagePc {
      * Keys 1 to 6 open them; each keeps the last tab seen.
      */
     private val ESPACES = listOf(
-        Triple("ciel", "Ciel", "public") to listOf("station", "agenda", "frise", "sked", "carres", "meteor", "sondes"),
+        Triple("ciel", "Ciel", "public") to listOf("station", "agenda", "frise", "sked", "carres", "carte", "avions", "meteor", "sondes"),
         Triple("qo", "QO-100", "satellite_alt") to listOf("qo100"),
         Triple("tv", "DATV", "tv") to listOf("datv"),
         Triple("modes", "Modes", "graphic_eq") to listOf("sstv", "aprs", "ft8"),
@@ -736,6 +738,20 @@ ${STYLE_JETONS}
     .k-ciels { justify-content:flex-start; }
     .k-ciels svg { max-height:calc((100vh - 230px) / 2); }
   }
+  /* The shared map: the whole view, its layers in a card over it. */
+  .cg-boite { position:relative; height:calc(100vh - 110px); min-height:420px; margin:12px 16px; border-radius:var(--r3); overflow:hidden; border:1px solid var(--ligne); background:#0B1A26; }
+  .cg-boite canvas { position:absolute; inset:0; width:100%; height:100%; cursor:grab; touch-action:none; }
+  .cg-couches { position:absolute; left:10px; top:10px; width:230px; margin:0; padding:8px 10px; background:rgba(14,23,32,.92); }
+  .cg-couches label { display:block; font-size:var(--fs-s); margin:2px 0; }
+  .cg-couches .cg-l select { margin-left:6px; padding:1px 4px; }
+  .cg-couches .cg-osm { margin-top:6px; padding-top:6px; border-top:1px solid var(--ligne); }
+  .cg-bulle { position:absolute; z-index:3; pointer-events:none; background:rgba(14,23,32,.96); border:1px solid var(--bord); border-radius:6px; padding:4px 8px; font-size:12px; white-space:pre; }
+  .cg-attrib { position:absolute; right:6px; bottom:4px; background:rgba(255,255,255,.8); color:#333; padding:0 5px; border-radius:3px; font-size:11px; }
+  .cg-attrib a { color:#0B5394; }
+  .av-table td { white-space:nowrap; }
+  .av-table tr.av-pos td:first-child { color:var(--vert); }
+  .av-table tr.av-vieux { opacity:.55; }
+  @media (min-width:1101px) and (min-height:600px) { .cg-boite { height:auto; position:absolute; inset:12px 16px; margin:0; } #v-carte { position:relative; } }
   .tq { padding:12px 16px 0; }
   .tq .grille { padding-left:0; padding-right:0; }
   .tq-aide { border-color:rgba(63,224,200,.45); }
@@ -2332,6 +2348,65 @@ ${rail()}
   </div>
 </div>
 </div>
+<div class="vue" id="v-carte" hidden>
+<div class="cg-boite">
+  <canvas id="cg-carte" title="Glisser pour déplacer, molette pour zoomer, double-clic pour recadrer sur la station"></canvas>
+  <div class="cg-couches carte">
+    <div class="t">Carte <span class="petit" id="cg-heure"></span></div>
+    <label><input type="checkbox" data-cg="sat" checked> Satellites</label>
+    <label><input type="checkbox" data-cg="aprs" checked> APRS</label>
+    <label><input type="checkbox" data-cg="sonde" checked> Sondes</label>
+    <label><input type="checkbox" data-cg="avions" checked> Avions (ADS-B)</label>
+    <label><input type="checkbox" data-cg="datv" checked> Stations DATV</label>
+    <label><input type="checkbox" data-cg="carres"> Carrés contactés</label>
+    <label><input type="checkbox" data-cg="moi" checked> Ma station</label>
+    <label><input type="checkbox" data-cg="nuit" checked> Jour et nuit</label>
+    <label><input type="checkbox" data-cg="diff" checked> Diffusion par avions</label>
+    <label class="cg-l">Cercles <select id="cg-cercles"><option value="0">aucun</option><option value="100">100 km</option><option value="250">250 km</option><option value="500" selected>500 km</option><option value="1000">1000 km</option></select></label>
+    <label class="cg-osm"><input type="checkbox" id="cg-osm"> Fond OpenStreetMap (Internet)</label>
+    <div class="petit aide">Le fond est le trait de côte que SatMe porte (Natural Earth, domaine public) : la carte marche sans Internet. « Fond OpenStreetMap » charge les tuiles dans ce navigateur, directement depuis tile.openstreetmap.org (rien ne passe par SatMe-PC) ; décoché, aucune requête ne part. Les couches : satellites favoris et suivi (empreinte, trace au sol), stations APRS entendues, la sonde suivie, les avions de l'onglet Avions, les stations DATV dont la carte ou la fiche QRZ donne le locator, les carrés du carnet, la ligne jour/nuit.</div>
+    <div class="petit" id="cg-compte"></div>
+  </div>
+  <div id="cg-bulle" class="cg-bulle" hidden></div>
+  <div id="cg-attrib" class="cg-attrib" hidden>© les contributeurs d'<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a></div>
+</div>
+</div>
+<div class="vue" id="v-avions" hidden>
+<div class="grille2" style="grid-template-columns:minmax(360px,1fr) minmax(560px,1.9fr)">
+  <div>
+    <div class="carte">
+      <div class="t">ADS-B 1090 MHz <span id="av-pastille" class="pastille coupe">arrêté</span></div>
+      <div class="ligne" style="margin-top:0"><span class="petit" style="min-width:70px">Récepteur</span>
+        <select id="av-source" onchange="avRegle('source=' + this.value)"><option value="cle">la clé de l'onglet SDR</option><option value="rtl2">une deuxième clé (rtl_tcp -d)</option><option value="pluto">l'ADALM-PLUTO</option></select></div>
+      <div class="ligne" id="av-rtl2"><span class="petit" style="min-width:70px">Clé n°</span><input id="av-appareil" style="max-width:120px" placeholder="1 ou n° de série" onchange="avRegle('appareil=' + enc(this.value))">
+        <span class="petit">port</span><input id="av-port" style="max-width:80px" onchange="avRegle('port=' + enc(this.value))"></div>
+      <div class="ligne"><span class="petit" style="min-width:70px">Gain</span><select id="av-gain" onchange="avRegle('gain=' + this.value)"><option value="-1">automatique</option><option value="496">49,6 dB</option><option value="400">40 dB</option><option value="300">30 dB</option><option value="200">20 dB</option></select>
+        <label class="petit"><input type="checkbox" id="av-corrige" onchange="avRegle('corrige=' + (this.checked ? 1 : 0))"> réparer 1 bit faux</label></div>
+      <div class="ligne"><button class="primaire" data-marche="av" onclick="avPost('demarre')">Recevoir</button><button id="av-prendre" hidden onclick="if (confirm('Arrêter la réception en cours sur la clé SDR et la prendre pour l\'ADS-B ?')) avPost('demarre?prendre=1')">Prendre la clé</button><button class="arret" data-arret="av" hidden onclick="avPost('arrete')">Arrêter</button>
+        <span class="petit" id="av-info"></span></div>
+      <div class="avert" id="av-erreur"></div>
+      <div class="petit" id="av-stats"></div>
+      <label class="petit" style="display:block;margin-top:6px"><input type="checkbox" id="av-sbs" onchange="avRegle('sbs=' + (this.checked ? 1 : 0))"> Sortie BaseStation (SBS-1) sur 127.0.0.1:30003 <span id="av-sbs-etat"></span></label>
+      <div class="petit aide">Réception seule, à 1090 MHz et 2 MS/s. Une clé ne peut écouter qu'un endroit : prise par l'onglet SDR (ou QO-100, METEOR, les sondes), l'ADS-B attend qu'on choisisse « Prendre la clé » ; pendant l'ADS-B, l'onglet SDR ne démarre pas sur elle. Une deuxième clé a son propre rtl_tcp (-d index ou numéro de série, sur son port). L'ADALM-PLUTO n'est jamais pris à la DATV ni à l'émission. La sortie SBS-1 (texte « MSG,… ») n'écoute que ce PC, pour d'autres programmes.</div>
+    </div>
+    <div class="carte">
+      <div class="t">Diffusion par avions <span class="petit">prévision</span></div>
+      <div class="ligne" style="margin-top:0"><input id="av-cible" placeholder="Indicatif ou locator du correspondant" onkeydown="if (event.key === 'Enter') avCible()"><button onclick="avCible()">Choisir</button></div>
+      <div class="ligne"><span class="petit">Bande</span><select id="av-bande" onchange="avRegle('bande=' + this.value)"><option value="10G">10 GHz</option><option value="13cm">13 cm</option><option value="23cm">23 cm</option><option value="2m">2 m</option></select>
+        <span class="petit">rayon</span><input id="av-rayon" style="max-width:60px" onchange="avRegle('rayon=' + enc(this.value))"><span class="petit">km</span>
+        <span class="petit">dans</span><input id="av-horizon" style="max-width:46px" onchange="avRegle('horizon=' + enc(this.value))"><span class="petit">min</span></div>
+      <div class="ligne"><span class="petit">Hauteurs : moi</span><input id="av-hmoi" style="max-width:60px" onchange="avRegle('hMoi=' + enc(this.value))"><span class="petit">m, lui</span><input id="av-hlui" style="max-width:60px" onchange="avRegle('hLui=' + enc(this.value))"><span class="petit">m · avions au-dessus de</span><input id="av-altmin" style="max-width:70px" onchange="avRegle('altMin=' + enc(this.value))"><span class="petit">ft</span></div>
+      <div class="petit" id="av-geo"></div>
+      <div style="max-height:30vh;overflow:auto;margin-top:6px"><table><thead><tr><th>Avion</th><th>Fenêtre</th><th>Durée</th><th>Alt.</th><th>Él. moi/lui</th><th>Doppler</th></tr></thead><tbody id="av-fenetres"></tbody></table></div>
+      <div class="petit aide">Prévision seulement, rien n'est émis. Le volume commun : à moins du rayon du milieu du grand cercle, et visible des deux stations au-dessus de l'horizon radio (terre aux 4/3 : environ 4,12 (√h₁ + √h₂) km, hauteurs en mètres au-dessus du sol moyen). Chaque avion est prolongé en ligne droite à sa vitesse et sa route : la fenêtre est le temps qu'il passe dans le volume. Le Doppler est celui du trajet total à la fréquence de la bande, à l'entrée. Un message apparaît quand une fenêtre s'ouvre. La hauteur des stations inclut l'altitude du site.</div>
+    </div>
+  </div>
+  <div class="carte" style="margin:0;display:flex;flex-direction:column;min-height:0">
+    <div class="t">Avions <span class="petit" id="av-n"></span><button style="margin-left:auto" onclick="vue('carte')">Voir sur la carte</button><button onclick="avPost('vide')">Vider</button></div>
+    <div style="flex:1;min-height:0;overflow:auto"><table class="av-table"><thead><tr><th>OACI</th><th>Indicatif</th><th>Alt. ft</th><th>Vit. kt</th><th>Route</th><th>Position</th><th>Dist. / az.</th><th>Vu</th><th>Msg</th><th>RSSI</th></tr></thead><tbody id="av-liste"></tbody></table></div>
+  </div>
+</div>
+</div>
 <div class="vue" id="v-meteor" hidden>
 <div class="grille2">
   <div>
@@ -3906,6 +3981,8 @@ function vue(n) {
   g('aff-pop').hidden = true; g('mem-pop').hidden = true;
   if (n === 'sondes') { SV2.libre = false; ticSondes(); }
   if (n === 'meteor') ticMeteor();
+  if (n === 'avions') ticAvions();
+  if (n === 'carte') { CG.libre = false; cgTic(); setTimeout(dessineCg); }
   if (n === 'montage') mtOuvre();
   if (window.MT) mtPopMaj(n);
 }
@@ -6333,6 +6410,290 @@ function dessineCarteCarnet() {
 attacheCarte(g('cr-carte'), CV, dessineCarteCarnet, cadreCarnet, 0);
 montreEcran(ecranStation)
 async function skedAgenda(i) { const w = K[i]; await post('api/agenda/sked?catnum=' + g('k-sat').value + '&loc=' + enc(v('k-loc')) + '&de=' + w.de + '&a=' + w.a); alert('Sked mis à l’agenda.'); }
+
+// ------------------------------------------------------------------ ADS-B (the Avions tab): receive only
+let AV = null, avVues = new Set(), avPremier = true, avN = 0;
+async function avPost(q) { await post('api/adsb/' + q); ticAvions(); }
+async function avRegle(q) { await post('api/adsb/reglage?' + q); ticAvions(); }
+async function avCible() { const c = v('av-cible').trim(); await post('api/adsb/reglage?' + (c ? 'cible=' + enc(c) : 'efface=1')); ticAvions(); }
+/** A toast when a scatter window opens (an aircraft enters the common volume). */
+function avAlerte(j) {
+  const d = j.diffusion || {}, f = d.fenetres || [];
+  const ouvertes = new Set(f.filter(w => w.ouverte).map(w => w.icao));
+  if (!avPremier) ouvertes.forEach(i => {
+    if (avVues.has(i)) return;
+    const w = f.find(x => x.icao === i);
+    toast('✈ Diffusion vers ' + d.cible + ' : ' + (w.indicatif || w.icao) + ' entre dans le volume commun (' + w.alt + ' ft' + (w.finConnue ? ', ' + duree(w.a - w.de) : '') + ')');
+  });
+  avVues = ouvertes; avPremier = false;
+}
+function avAlt(a) { return a.surface ? 'sol' : a.alt != null ? String(a.alt) : a.altGnss != null ? a.altGnss + ' G' : ''; }
+async function ticAvions() {
+  if (window.SATME_TELEPHONE) return;
+  let j; try { j = await (await fetch('api/adsb')).json(); } catch (x) { return; }
+  if (!j || j.absent) return;
+  AV = j;
+  avAlerte(j);
+  if (g('v-avions').hidden) return;
+  etatMarche('av', j.actif, 'av-pastille'); txt('av-pastille', j.actif ? (j.tient === 'essai' ? 'essai' : 'réception') : 'arrêté');
+  const pose = (id, val) => { const e = g(id); if (document.activeElement !== e && e.value !== String(val)) e.value = val; };
+  pose('av-source', j.source); pose('av-appareil', j.appareil); pose('av-port', j.port); pose('av-gain', j.gain);
+  g('av-corrige').checked = j.corrige; g('av-sbs').checked = j.sbs;
+  g('av-rtl2').hidden = j.source !== 'rtl2';
+  g('av-prendre').hidden = j.actif || !j.occupe || j.source !== 'cle';
+  txt('av-info', j.actif ? j.tuner + (j.debitKo ? ' · ' + j.debitKo + ' ko/s' : '') : j.occupe ? j.occupe : '');
+  txt('av-erreur', j.erreur || '');
+  txt('av-stats', j.preambules ? j.trames + ' trames (' + j.corrigees + ' réparées) pour ' + j.preambules + ' préambules · ' + j.messages + ' messages · ' + j.positions + ' positions' : '');
+  txt('av-sbs-etat', j.sbs ? (j.erreurSbs ? '— ' + j.erreurSbs : '— ' + j.sbsClients + ' programme(s) branché(s)') : '');
+  const l = j.avions || [];
+  txt('av-n', l.length ? l.length + ' · ' + l.filter(a => a.lat != null).length + ' placés' : '');
+  g('av-liste').innerHTML = l.map(a => '<tr class="' + (a.lat != null ? 'av-pos' : '') + (a.vu > 30000 ? ' av-vieux' : '') + '"><td>' + a.icao + '</td><td><b>' + esc(a.indicatif) + '</b>' +
+    (a.squawk ? ' <span class="petit">' + a.squawk + '</span>' : '') + (a.categorie ? '<div class="petit">' + esc(a.categorie) + '</div>' : '') + '</td><td>' + avAlt(a) +
+    (a.vz ? '<span class="petit"> ' + (a.vz > 0 ? '↑' : '↓') + '</span>' : '') + '</td><td>' + (a.vitesse != null ? a.vitesse : '') + '</td><td>' + (a.route != null ? a.route + '°' + (a.cap ? ' <span class="petit">cap</span>' : '') : '') +
+    '</td><td>' + (a.lat != null ? a.lat.toFixed(3) + ', ' + a.lon.toFixed(3) + (a.sure ? '' : ' <span class="petit" title="placé par rapport à la station, pas encore confirmé">?</span>') : '') +
+    '</td><td>' + (a.km != null ? Math.round(a.km) + ' km · ' + a.az + '°' : '') + '</td><td>' + Math.round(a.vu / 1000) + ' s</td><td>' + a.messages + '</td><td>' + a.rssi.toFixed(1) + '</td></tr>').join('') ||
+    '<tr><td colspan="10" class="petit">' + (j.actif ? 'aucun avion entendu encore' : 'réception arrêtée') + '</td></tr>';
+  const d = j.diffusion || {};
+  if (document.activeElement !== g('av-cible')) g('av-cible').value = d.cible || '';
+  pose('av-bande', d.bande); pose('av-rayon', d.rayonKm); pose('av-horizon', d.horizonMin); pose('av-hmoi', d.hMoi); pose('av-hlui', d.hLui); pose('av-altmin', d.altMin);
+  const geo = d.geometrie;
+  g('av-geo').innerHTML = !d.cible ? 'Choisir un correspondant : son indicatif (carnet, sinon QRZ) ou son locator.' : !geo ? 'Position de la station ou du correspondant inconnue.' :
+    '<b>' + esc(d.cible) + '</b>' + (d.cible !== d.loc ? ' (' + esc(d.loc) + ')' : '') + ' · ' + geo.km + ' km · milieu ' + geo.milieu[0].toFixed(2) + ', ' + geo.milieu[1].toFixed(2) +
+    ' · horizons à ' + (geo.altRef / 1000) + ' 000 ft : ' + geo.horizonAKm + ' + ' + geo.horizonBKm + ' km' + (geo.possible ? '' : ' — <b style="color:var(--rose)">trop loin pour un avion</b>');
+  const f = d.fenetres || [], maint = Date.now();
+  g('av-fenetres').innerHTML = f.map(w => '<tr' + (w.ouverte ? ' style="color:var(--vert)"' : '') + '><td><b>' + esc(w.indicatif || w.icao) + '</b></td><td>' + (w.ouverte ? 'ouverte' : 'dans ' + duree(w.de - maint)) +
+    '</td><td>' + (w.finConnue ? duree(w.a - w.de) : w.a === w.de ? '?' : '≥ ' + duree(w.a - w.de)) + '</td><td>' + w.alt + ' ft</td><td>' + w.elA + '° / ' + w.elB + '°</td><td>' + (w.doppler > 0 ? '+' : '') + w.doppler + ' Hz</td></tr>').join('') ||
+    '<tr><td colspan="6" class="petit">' + (geo ? 'aucun avion dans le volume commun ni en route vers lui' : '') + '</td></tr>';
+}
+// Each second while the tab is open; every five seconds otherwise when a scatter target is set (its toasts).
+setInterval(() => { avN++; if (!g('v-avions').hidden || (avN % 5 === 0 && AV && AV.actif && AV.diffusion && AV.diffusion.cible)) ticAvions(); }, 1000);
+ticAvions();
+
+// ------------------------------------------------------------------ the shared map (Carte): offline, its layers
+const CG = { cx: 0.5, cy: 0.35, z: 2, libre: false };
+let cgTraits = null, cgCouches = null, cgCarres = null, cgCarresVu = 0, cgPts = [];
+const cgOsmTuiles = new Map();
+const CGC = { sat: 1, aprs: 1, sonde: 1, avions: 1, datv: 1, carres: 0, moi: 1, nuit: 1, diff: 1 };
+try { Object.assign(CGC, JSON.parse(localStorage.getItem('cg-couches') || '{}')); } catch (x) {}
+document.querySelectorAll('[data-cg]').forEach(b => {
+  b.checked = !!CGC[b.dataset.cg];
+  b.onchange = () => { CGC[b.dataset.cg] = b.checked ? 1 : 0; try { localStorage.setItem('cg-couches', JSON.stringify(CGC)); } catch (x) {} if (b.dataset.cg === 'carres' && b.checked) cgChargeCarres(); dessineCg(); };
+});
+try { g('cg-cercles').value = localStorage.getItem('cg-cercles') || '500'; } catch (x) {}
+g('cg-cercles').onchange = () => { try { localStorage.setItem('cg-cercles', v('cg-cercles')); } catch (x) {} dessineCg(); };
+// The OpenStreetMap background: only when ticked here, fetched by this browser alone (never through SatMe-PC).
+try { g('cg-osm').checked = localStorage.getItem('cg-osm') === '1'; } catch (x) {}
+g('cg-osm').onchange = () => { try { localStorage.setItem('cg-osm', g('cg-osm').checked ? '1' : '0'); } catch (x) {} dessineCg(); };
+async function cgChargeTraits() {
+  if (cgTraits) return;
+  cgTraits = [];
+  try {
+    const t = await (await fetch('api/carte/traits')).json();
+    // Each ring once as a path in Mercator units (0 to 1): drawn through a transform, never recomputed.
+    cgTraits = t.map(r => { const p = new Path2D(); for (let i = 0; i < r.length; i += 2) { const X = wxk(r[i]), Y = wyq(r[i + 1]); if (i) p.lineTo(X, Y); else p.moveTo(X, Y); } p.closePath(); return p; });
+  } catch (x) { cgTraits = null; }
+  dessineCg();
+}
+async function cgChargeCarres() { cgCarresVu = Date.now(); try { cgCarres = await (await fetch('api/carres')).json(); } catch (x) {} dessineCg(); }
+async function cgTic() {
+  if (g('v-carte').hidden) return;
+  cgChargeTraits();
+  try { cgCouches = await (await fetch('api/carte/couches')).json(); } catch (x) {}
+  if (CGC.carres && Date.now() - cgCarresVu > 60000) cgChargeCarres();
+  dessineCg();
+}
+setInterval(cgTic, 2000);
+function cgCadre() {
+  const c = g('cg-carte'); if (!c.clientWidth) return;
+  const moi = cgCouches && cgCouches.moi;
+  CG.z = Math.max(1, Math.log2(c.clientWidth / 256) + 2);
+  CG.cx = moi ? wxk(moi.lon) : 0.5; CG.cy = moi ? wyq(moi.lat) : 0.35;
+}
+function cgOsm(z, x, y) {
+  const n = 1 << z, xw = ((x % n) + n) % n, k = z + '/' + xw + '/' + y;
+  let i = cgOsmTuiles.get(k);
+  if (!i) {
+    i = new Image(); i.onload = dessineCg; i.src = 'https://tile.openstreetmap.org/' + z + '/' + xw + '/' + y + '.png'; cgOsmTuiles.set(k, i);
+    if (cgOsmTuiles.size > 400) cgOsmTuiles.delete(cgOsmTuiles.keys().next().value);
+  }
+  return i.complete && i.naturalWidth ? i : null;
+}
+/** The background: SatMe's coastlines (or the OpenStreetMap tiles when chosen); the context and projections handed back. */
+function cgFond(c, vw) {
+  const w = c.clientWidth, h = c.clientHeight, dpr = window.devicePixelRatio || 1;
+  if (c.width !== Math.round(w * dpr) || c.height !== Math.round(h * dpr)) { c.width = Math.round(w * dpr); c.height = Math.round(h * dpr); }
+  const x = c.getContext('2d'); x.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const s = 256 * Math.pow(2, vw.z), ox = w / 2 - vw.cx * s, oy = h / 2 - vw.cy * s, osm = g('cg-osm').checked;
+  x.fillStyle = osm ? '#AAD3DF' : '#0D2433'; x.fillRect(0, 0, w, h);
+  if (osm) {
+    const z = Math.max(0, Math.min(18, Math.floor(vw.z))), ts = 256 * Math.pow(2, vw.z - z), n = 1 << z;
+    for (let ty = Math.max(0, Math.floor(-oy / ts)); ty <= Math.min(n - 1, Math.floor((h - oy) / ts)); ty++)
+      for (let tx = Math.floor(-ox / ts); tx <= Math.floor((w - ox) / ts); tx++) { const i = cgOsm(z, tx, ty); if (i) x.drawImage(i, ox + tx * ts, oy + ty * ts, ts + 0.5, ts + 0.5); }
+  } else {
+    for (let k = Math.floor(-ox / s); k <= Math.floor((w - ox) / s); k++) {
+      x.setTransform(dpr * s, 0, 0, dpr * s, dpr * (ox + k * s), dpr * oy);
+      if (cgTraits) { x.fillStyle = '#1E3B30'; x.strokeStyle = '#4F8068'; x.lineWidth = 1 / s; for (const p of cgTraits) { x.fill(p); x.stroke(p); } }
+    }
+    x.setTransform(dpr, 0, 0, dpr, 0, 0);
+    // The graticule: every 30°, every 10° closer in.
+    const pas = vw.z >= 4 ? 10 : 30;
+    x.strokeStyle = 'rgba(160,200,230,.10)'; x.lineWidth = 1; x.beginPath();
+    for (let lo = -180; lo <= 180; lo += pas) for (let k = Math.floor(-ox / s); k <= Math.floor((w - ox) / s); k++) { const X = ox + (k + wxk(lo)) * s; x.moveTo(X, 0); x.lineTo(X, h); }
+    for (let la = -80; la <= 80; la += pas) { const Y = oy + wyq(la) * s; x.moveTo(0, Y); x.lineTo(w, Y); }
+    x.stroke();
+  }
+  g('cg-attrib').hidden = !osm;
+  // The longitude seen in the middle: each point drawn on the copy of the world nearest to it.
+  const cLon = vw.cx * 360 - 180, L = lon => lon + 360 * Math.round((cLon - lon) / 360);
+  return { x, w, h, px: lon => ox + wxk(lon) * s, py: lat => oy + wyq(lat) * s, L, cLon, osm };
+}
+/** Where the sun is overhead at [t] (ms): its latitude (declination) and longitude. */
+function cgSoleil(t) {
+  const r = Math.PI / 180, n = (t - 946728000000) / 86400000;
+  const L = 280.460 + 0.9856474 * n, ga = (357.528 + 0.9856003 * n) * r;
+  const lam = (L + 1.915 * Math.sin(ga) + 0.020 * Math.sin(2 * ga)) * r, eps = (23.439 - 0.0000004 * n) * r;
+  const dec = Math.asin(Math.sin(eps) * Math.sin(lam)), ra = Math.atan2(Math.cos(eps) * Math.sin(lam), Math.cos(lam));
+  let lon = (ra / r - (18.697374558 + 24.06570982441908 * n) * 15) % 360;
+  if (lon > 180) lon -= 360; if (lon < -180) lon += 360;
+  return { lat: dec / r, lon };
+}
+/** The night side, shaded: the terminator (sun on the horizon) closed along the pole in the dark. */
+function cgNuit(m) {
+  const so = cgSoleil(Date.now()), r = Math.PI / 180, td = Math.tan(so.lat * r) || 1e-6, pole = so.lat > 0 ? -85 : 85, x = m.x;
+  x.fillStyle = 'rgba(2,6,20,.38)'; x.beginPath();
+  const de = m.cLon - 540, a = m.cLon + 540;
+  for (let lo = de; lo <= a; lo += 2) { const la = Math.atan(-Math.cos((lo - so.lon) * r) / td) / r; if (lo === de) x.moveTo(m.px(lo), m.py(la)); else x.lineTo(m.px(lo), m.py(la)); }
+  x.lineTo(m.px(a), m.py(pole)); x.lineTo(m.px(de), m.py(pole)); x.closePath(); x.fill();
+  const sl = m.L(so.lon);
+  x.fillStyle = '#FFD54A'; x.beginPath(); x.arc(m.px(sl), m.py(so.lat), 5, 0, 7); x.fill();
+}
+/** The great circle from [a] to [b] ([lat, lon]), [n] steps, longitudes kept continuous. */
+function cgOrtho(a, b, n) {
+  const r = Math.PI / 180, f1 = a[0] * r, l1 = a[1] * r, f2 = b[0] * r, l2 = b[1] * r;
+  const d = 2 * Math.asin(Math.sqrt(Math.pow(Math.sin((f2 - f1) / 2), 2) + Math.cos(f1) * Math.cos(f2) * Math.pow(Math.sin((l2 - l1) / 2), 2)));
+  const out = [];
+  for (let i = 0; i <= n; i++) {
+    const t = i / n, A = d ? Math.sin((1 - t) * d) / Math.sin(d) : 1 - t, B = d ? Math.sin(t * d) / Math.sin(d) : t;
+    const X = A * Math.cos(f1) * Math.cos(l1) + B * Math.cos(f2) * Math.cos(l2), Y = A * Math.cos(f1) * Math.sin(l1) + B * Math.cos(f2) * Math.sin(l2), Z = A * Math.sin(f1) + B * Math.sin(f2);
+    let lo = Math.atan2(Y, X) / r;
+    if (out.length) { const p = out[out.length - 1][1]; while (lo - p > 180) lo -= 360; while (lo - p < -180) lo += 360; }
+    out.push([Math.atan2(Z, Math.sqrt(X * X + Y * Y)) / r, lo]);
+  }
+  return out;
+}
+function cgAvion(m, X, Y, route, couleur) {
+  const x = m.x; x.save(); x.translate(X, Y); x.rotate((route || 0) * Math.PI / 180);
+  x.fillStyle = couleur; x.strokeStyle = '#06131A'; x.lineWidth = 1; x.beginPath();
+  [[0, -9], [2, -3], [9, 1], [9, 3], [2, 2], [1.5, 6], [4, 8], [-4, 8], [-1.5, 6], [-2, 2], [-9, 3], [-9, 1], [-2, -3]].forEach((p, k) => k ? x.lineTo(p[0], p[1]) : x.moveTo(p[0], p[1]));
+  x.closePath(); x.fill(); x.stroke(); x.restore();
+}
+const cgCouleurAlt = a => a == null ? '#9AA7B4' : 'hsl(' + Math.round(30 + Math.min(1, Math.max(0, a) / 40000) * 250) + ',85%,62%)';
+function cgEtiquette(m, X, Y, t, couleur) {
+  const x = m.x; x.font = '600 11px system-ui'; x.textAlign = 'left'; x.lineWidth = 3;
+  x.strokeStyle = m.osm ? 'rgba(255,255,255,.85)' : 'rgba(6,19,26,.9)'; x.strokeText(t, X + 8, Y - 6);
+  x.fillStyle = m.osm ? '#06131A' : (couleur || '#E8F0F7'); x.fillText(t, X + 8, Y - 6);
+}
+function dessineCg() {
+  const c = g('cg-carte'); if (!c || g('v-carte').hidden || !c.clientWidth) return;
+  if (!CG.libre) cgCadre();
+  const m = cgFond(c, CG), x = m.x, C = cgCouches || {}, nb = [];
+  cgPts = [];
+  const pt = (lat, lon, texte) => { const X = m.px(m.L(lon)), Y = m.py(lat); cgPts.push([X, Y, texte]); return [X, Y]; };
+  if (CGC.nuit) cgNuit(m);
+  // Worked squares.
+  if (CGC.carres && cgCarres && cgCarres.carres) {
+    x.fillStyle = 'rgba(63,224,200,.22)'; x.strokeStyle = 'rgba(63,224,200,.7)'; x.lineWidth = 1;
+    cgCarres.carres.forEach(q => { const [lo, la] = coin(q.c), l = m.L(lo + 1) - 1, xa = m.px(l), xb = m.px(l + 2), ya = m.py(la + 1), yb = m.py(la);
+      x.fillRect(xa, ya, xb - xa, yb - ya); x.strokeRect(xa, ya, xb - xa, yb - ya); });
+    nb.push(cgCarres.carres.length + ' carrés');
+  }
+  // Range rings around the station.
+  const moi = C.moi, anneau = +v('cg-cercles');
+  if (moi && anneau) for (let k = 1; k <= 4; k++) {
+    const rk = anneau * k, cer = cercle(moi.lat, moi.lon, rk / 6371);
+    const d0 = m.L(moi.lon) - moi.lon;
+    traceCarte(m, cer.map(p => [p[0], p[1] + d0]), 'rgba(255,180,84,.45)', 1, [4, 4]);
+    const lb = cer[0]; x.fillStyle = 'rgba(255,180,84,.85)'; x.font = '10px system-ui'; x.textAlign = 'center'; x.fillText(rk + ' km', m.px(lb[1] + d0), m.py(lb[0]) - 3);
+  }
+  // Aircraft scatter: the path, the common volume, each one's horizon at cruise height.
+  const df = C.diffusion;
+  if (CGC.diff && df && df.a) {
+    const d0 = m.L(df.a[1]) - df.a[1];
+    traceCarte(m, cgOrtho(df.a, df.b, 64).map(p => [p[0], p[1] + d0]), '#E86FA8', 2, [8, 5]);
+    const vol = cercle(df.milieu[0], df.milieu[1], df.rayonKm / 6371), dm = m.L(df.milieu[1]) - df.milieu[1];
+    x.fillStyle = 'rgba(91,214,138,.18)'; x.beginPath(); vol.forEach((p, k) => k ? x.lineTo(m.px(p[1] + dm), m.py(p[0])) : x.moveTo(m.px(p[1] + dm), m.py(p[0]))); x.closePath(); x.fill();
+    traceCarte(m, vol.map(p => [p[0], p[1] + dm]), 'rgba(91,214,138,.9)', 1.5);
+    traceCarte(m, cercle(df.a[0], df.a[1], df.horizonAKm / 6371).map(p => [p[0], p[1] + d0]), 'rgba(255,180,84,.55)', 1, [2, 4]);
+    const db = m.L(df.b[1]) - df.b[1];
+    traceCarte(m, cercle(df.b[0], df.b[1], df.horizonBKm / 6371).map(p => [p[0], p[1] + db]), 'rgba(232,111,168,.55)', 1, [2, 4]);
+    const [bx, by] = pt(df.b[0], df.b[1], df.cible + ' · ' + df.km + ' km');
+    x.fillStyle = '#E86FA8'; x.beginPath(); x.arc(bx, by, 5, 0, 7); x.fill(); cgEtiquette(m, bx, by, df.cible, '#E86FA8');
+  }
+  // Satellites: the followed one's footprint and ground track, the favourites where they are.
+  if (CGC.sat && C.satellites) {
+    const s = C.satellites.find(q => q.suivi);
+    if (s && traceSol && traceSol.catnum === s.catnum && traceSol.points.length > 1) {
+      const d0 = m.L(s.lon) - s.lon;
+      traceCarte(m, traceSol.points.map(q => [q[0], q[1] + d0]), 'rgba(63,224,200,.75)', 1.5);
+    }
+    if (s && (!traceSol || traceSol.catnum !== s.catnum || Date.now() - traceVu > 60000) && Date.now() - traceVu > 3000) { traceVu = Date.now(); chargeTraceSol(); }
+    if (s) empreinte(m, s.lat, m.L(s.lon), s.alt);
+    C.satellites.forEach(q => { const [X, Y] = pt(q.lat, q.lon, q.nom + ' · ' + q.alt + ' km · él. ' + q.el + '°');
+      x.fillStyle = q.suivi ? '#3FE0C8' : q.el >= 0 ? '#5BD68A' : '#7FA7C9'; x.beginPath(); x.arc(X, Y, q.suivi ? 6 : 4, 0, 7); x.fill();
+      if (q.suivi || CG.z >= 3) cgEtiquette(m, X, Y, q.nom, q.suivi ? '#3FE0C8' : '#B8C7D3'); });
+    nb.push(C.satellites.length + ' satellites');
+  }
+  if (CGC.aprs && C.aprs) {
+    const etiq = C.aprs.length < 40 || CG.z >= 6;
+    C.aprs.forEach(a => { const [X, Y] = pt(a.lat, a.lon, a.nom + (a.carre ? ' · ' + a.carre : '') + ' · ' + hm(a.t) + (a.iss ? ' · via ISS' : ''));
+      x.fillStyle = a.iss ? '#C89BFF' : '#9C7BFF'; x.beginPath(); x.moveTo(X, Y - 5); x.lineTo(X + 5, Y + 4); x.lineTo(X - 5, Y + 4); x.closePath(); x.fill();
+      if (etiq) cgEtiquette(m, X, Y, a.nom, '#C9B6FF'); });
+    nb.push(C.aprs.length + ' APRS');
+  }
+  if (CGC.sonde && C.sonde) {
+    const s = C.sonde;
+    if (s.trace && s.trace.length > 1) { const d0 = m.L(s.lon) - s.lon; traceCarte(m, s.trace.map(p => [p[0], p[1] + d0]), 'rgba(255,213,74,.8)', 1.5); }
+    const [X, Y] = pt(s.lat, s.lon, s.nom + ' · ' + s.alt + ' m');
+    x.fillStyle = '#FFD54A'; x.beginPath(); x.arc(X, Y, 5, 0, 7); x.fill(); cgEtiquette(m, X, Y, s.nom + ' ' + s.alt + ' m', '#FFD54A');
+    nb.push('1 sonde');
+  }
+  if (CGC.datv && C.datv) {
+    C.datv.forEach(d => { const [X, Y] = pt(d.lat, d.lon, d.nom + ' · ' + d.loc + ' (DATV)');
+      x.fillStyle = '#FF7AD9'; x.fillRect(X - 4, Y - 4, 8, 8); cgEtiquette(m, X, Y, d.nom, '#FF9FE3'); });
+    if (C.datv.length) nb.push(C.datv.length + ' DATV');
+  }
+  if (CGC.avions && C.avions) {
+    const ouv = new Set((df && df.ouvertes) || []);
+    let n = 0;
+    C.avions.forEach(a => {
+      if (a.lat == null) return; n++;
+      if (a.trace && a.trace.length > 1) { const d0 = m.L(a.lon) - a.lon; traceCarte(m, a.trace.map(p => [p[0], p[1] + d0]), 'rgba(200,220,240,.35)', 1); }
+      const [X, Y] = pt(a.lat, a.lon, (a.indicatif || a.icao) + ' · ' + avAlt(a) + ' ft' + (a.vitesse != null ? ' · ' + a.vitesse + ' kt' : '') + (a.km != null ? ' · ' + Math.round(a.km) + ' km' : ''));
+      if (ouv.has(a.icao)) { x.strokeStyle = '#5BD68A'; x.lineWidth = 2.5; x.beginPath(); x.arc(X, Y, 13, 0, 7); x.stroke(); }
+      cgAvion(m, X, Y, a.route, cgCouleurAlt(a.alt != null ? a.alt : a.altGnss));
+      // Named once there is room: the whole world would be a smudge of callsigns.
+      if (CG.z >= 4.5 || ouv.has(a.icao)) cgEtiquette(m, X, Y, (a.indicatif || a.icao) + (a.alt != null ? ' ' + Math.round(a.alt / 100) : ''), '#E8F0F7');
+    });
+    nb.push(n + ' avions');
+  }
+  if (CGC.moi && moi) {
+    const [X, Y] = pt(moi.lat, moi.lon, moi.nom + (moi.loc ? ' · ' + moi.loc : ''));
+    x.fillStyle = '#FFB454'; x.strokeStyle = '#06131A'; x.lineWidth = 1.5; x.beginPath(); x.arc(X, Y, 6, 0, 7); x.fill(); x.stroke(); cgEtiquette(m, X, Y, moi.nom, '#FFB454');
+  }
+  txt('cg-compte', nb.join(' · '));
+  txt('cg-heure', C.t ? hm(C.t) + (utc() ? ' UTC' : '') : '');
+}
+attacheCarte(g('cg-carte'), CG, dessineCg, cgCadre, 0);
+g('cg-carte').addEventListener('mousemove', ev => {
+  const r = g('cg-carte').getBoundingClientRect(), mx = ev.clientX - r.left, my = ev.clientY - r.top;
+  let best = null, bd = 144;
+  cgPts.forEach(p => { const d = (p[0] - mx) * (p[0] - mx) + (p[1] - my) * (p[1] - my); if (d < bd) { bd = d; best = p; } });
+  const b = g('cg-bulle');
+  if (!best) { b.hidden = true; return; }
+  b.textContent = best[2]; b.hidden = false;
+  b.style.left = Math.min(mx + 14, r.width - b.offsetWidth - 6) + 'px'; b.style.top = Math.max(4, my - 30) + 'px';
+});
+g('cg-carte').addEventListener('mouseleave', () => { g('cg-bulle').hidden = true; });
 
 // ------------------------------------------------------------------ QO-100
 let O = null, OP = null;

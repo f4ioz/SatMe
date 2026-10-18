@@ -35,6 +35,7 @@ class MaterielSdrPc(
     override fun ouvre(recepteur: String): SourceIq {
         jeton++
         emission(recepteur)?.let { throw IOException(it) }
+        if (sdr.adsbTient() == recepteur) throw IOException(SdrPc.ADSB_TIENT_PLUTO)
         val surLuiAussi = (recepteur == Datv.PLUTO && sdr.plutoEnReception) || (recepteur == Datv.BLADERF && sdr.bladerfEnReception)
         if (surLuiAussi) {
             // The SDR tab gives way; remembered to be taken back.

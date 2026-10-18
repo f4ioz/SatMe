@@ -85,6 +85,9 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
     /** The « Montage » page: the station's chain, its drawing lit by what happens (set before [demarre]). */
     @Volatile var montage: MontagePc? = null
     @Volatile var memoiresSdr: MemoiresSdrPc? = null
+    /** ADS-B (Avions tab) and the shared map (set before [demarre]). */
+    @Volatile var adsb: AdsbPc? = null
+    @Volatile var carte: CartePc? = null
 
     /** What the « Montage » page lights: the same state the other tabs read. */
     fun lecturesMontage(): fr.f4ioz.satcombo.station.ActiviteMontage.Lectures = fr.f4ioz.satcombo.station.ActiviteMontage.Lectures(
@@ -333,6 +336,17 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
         if (chemin == "/api/plan-bandes" || chemin == "/api/memoires-sdr" || chemin.startsWith("/api/memoires-sdr/")) {
             val m = memoiresSdr
             val rep = m?.sert(chemin, r.methode, { q[it].orEmpty() }) { max -> RequeteHttp.corps(c.getInputStream(), r, max) }
+                ?: fr.f4ioz.satcombo.demo.ReponseWeb("200 OK", "application/json; charset=utf-8", "{\"ok\":false}".toByteArray())
+            envoie(sortie, rep.statut, rep.type, rep.corps, rep.entetes); return
+        }
+        // ADS-B (receive only) and the shared map's layers.
+        if (chemin == "/api/adsb" || chemin.startsWith("/api/adsb/")) {
+            val rep = adsb?.sert(chemin, r.methode) { q[it].orEmpty() }
+                ?: fr.f4ioz.satcombo.demo.ReponseWeb("200 OK", "application/json; charset=utf-8", "{\"ok\":false,\"absent\":true}".toByteArray())
+            envoie(sortie, rep.statut, rep.type, rep.corps, rep.entetes); return
+        }
+        if (chemin.startsWith("/api/carte/") && r.methode != "POST") {
+            val rep = carte?.sert(chemin)
                 ?: fr.f4ioz.satcombo.demo.ReponseWeb("200 OK", "application/json; charset=utf-8", "{\"ok\":false}".toByteArray())
             envoie(sortie, rep.statut, rep.type, rep.corps, rep.entetes); return
         }
