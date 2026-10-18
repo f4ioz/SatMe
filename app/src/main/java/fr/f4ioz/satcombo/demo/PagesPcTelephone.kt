@@ -329,6 +329,7 @@ object PagesPcTelephone {
                 "/api/montage/suggestion" -> json(JSONObject().put("ok", false).put("erreur", MONTAGE_SUR_PC))
                 // Levels over time and the Sun's noise are measured on SatMe-PC's receiver: none here (the page hides them).
                 "/api/niveaux", "/api/soleil" -> json(JSONObject().put("ok", false).put("absent", true))
+                "/api/montage/profils" -> json(JSONObject().put("ok", true).put("telephone", true).put("profils", JSONArray()).put("actuels", JSONArray()).put("emission", ""))
                 else -> if (methode == "POST") json(action(vm, route, p)) else NON
             }
         }.getOrElse { json(JSONObject().put("ok", false).put("erreur", it.message ?: it.javaClass.simpleName)) }
@@ -810,7 +811,7 @@ object PagesPcTelephone {
                 Thread { try { fr.f4ioz.satcombo.sstv.SstvVideo.fabriqueGif(ctx, png, shot) } finally { gifEnCours = "" } }.apply { isDaemon = true }.start()
                 OK
             }
-            "/api/montage", "/api/montage/photo" -> JSONObject().put("ok", false).put("erreur", MONTAGE_SUR_PC)
+            "/api/montage", "/api/montage/photo", "/api/montage/action", "/api/montage/profils" -> JSONObject().put("ok", false).put("erreur", MONTAGE_SUR_PC)
             "/api/memoires-sdr", "/api/memoires-sdr/import" -> JSONObject().put("ok", false).put("erreur", "les mémoires du récepteur se gardent sur SatMe-PC")
             else -> JSONObject().put("ok", false).put("erreur", "pas encore sur le téléphone")
         }

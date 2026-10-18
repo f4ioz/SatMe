@@ -251,6 +251,10 @@ object ActiviteMontage {
         "tx" -> Activite(rx = setOf("sdr:pluto", "datv:minitiouner", "cat", "noeud"), tx = setOf("tx:pluto", "tx:bladerf"),
             mhz = mapOf("ciel-rx" to 10489.750, "fi-rx" to 739.750, "ciel-tx" to 2400.250, "fi-tx" to 144.250),
             resume = listOf("Démonstration : émission simulée (rien n'est émis)"))
+        "datv-pluto" -> Activite(rx = setOf("datv:pluto", "cat"), mhz = mapOf("ciel-rx" to 10491.500, "fi-rx" to 741.500),
+            resume = listOf("Démonstration : DATV reçue par l'ADALM-PLUTO (rien n'est reçu)"))
+        "sstv-carte" -> Activite(rx = setOf("cat", "son"), mhz = mapOf("ciel-rx" to 10489.800),
+            resume = listOf("Démonstration : SSTV par l'IC-9700 et sa carte son (rien n'est reçu)"))
         else -> Activite()
     }
 
