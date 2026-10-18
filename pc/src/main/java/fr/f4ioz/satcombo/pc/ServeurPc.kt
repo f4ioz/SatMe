@@ -79,6 +79,20 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
     /** The transmitters' I/Q correction and its calibration (set before [demarre]). */
     @Volatile var iq: CalibrationIqPc? = null
 
+    /** The « Montage » page: the station's chain, its drawing lit by what happens (set before [demarre]). */
+    @Volatile var montage: MontagePc? = null
+
+    /** What the « Montage » page lights: the same state the other tabs read. */
+    fun lecturesMontage(): fr.f4ioz.satcombo.station.ActiviteMontage.Lectures = fr.f4ioz.satcombo.station.ActiviteMontage.Lectures(
+        etat = runCatching { JsonPc.etat(station, carnet) }.getOrNull(),
+        sdr = sdr?.let { s -> runCatching { JsonPc.sdr(s) }.getOrNull() },
+        datv = datv?.let { d -> runCatching { JsonPc.datv(d) }.getOrNull() },
+        emissionDatv = emission?.let { e -> runCatching { e.json().put("ok", true) }.getOrNull() },
+        emissionSstv = emissionSstv?.let { e -> runCatching { e.json().put("ok", true) }.getOrNull() },
+        iq = iq?.let { i -> runCatching { i.json().put("ok", true) }.getOrNull() },
+        qo100 = runCatching { JsonPc.qo100(station, false, sdr?.gammeHz) }.getOrNull(),
+        lien = lien?.let { l -> JSONObject().put("on", l.actif).put("ecoute", l.ecoute).put("clients", l.nbClients) })
+
     /** QRZ.com records of the callsigns seen in DATV, and their photos (set before [demarre]). */
     @Volatile var qrzDatv: QrzDatvPc? = null
 
@@ -299,6 +313,14 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
         }
         if (chemin.startsWith("/api/datv/sources/") || chemin.startsWith("/api/datv/emission/apercu") || chemin == "/api/datv/emission/incrustation") {
             sourcesDatv(r, c, chemin, q, sortie); return
+        }
+        // The « Montage » page: its chain (a POST saves it, a drawing only), its photos.
+        if (chemin == "/api/montage" || chemin.startsWith("/api/montage/")) {
+            val m = montage
+            val rep = if (m == null) ReponseMontageAbsente else m.sert(chemin.removePrefix("/api/montage"), r.methode, { q[it].orEmpty() }) { max ->
+                RequeteHttp.corps(c.getInputStream(), r, max)
+            }
+            envoie(sortie, rep.statut, rep.type, rep.corps, rep.entetes); return
         }
         if (r.methode == "POST") {
             val res = runCatching { action(chemin, q) }.getOrElse { JSONObject().put("ok", false).put("erreur", it.message ?: "erreur") }
@@ -1632,6 +1654,9 @@ object JsonPc {
         JSONObject().put("index", it.index).put("libelle", st.nomPort(it)).put("vendor", it.vendorId)
     })
 }
+
+private val ReponseMontageAbsente = fr.f4ioz.satcombo.demo.ReponseWeb("200 OK", "application/json; charset=utf-8",
+    "{\"ok\":false,\"erreur\":\"pas de montage ici\"}".toByteArray())
 
 /** [n] bytes of [e] at most: a request's body read as a stream. */
 private class Borne(private val e: java.io.InputStream, private var reste: Long) : java.io.InputStream() {

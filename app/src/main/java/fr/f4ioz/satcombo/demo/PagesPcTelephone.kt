@@ -62,6 +62,7 @@ object PagesPcTelephone {
     private fun stockageFt8(vm: fr.f4ioz.satcombo.MainViewModel) = fr.f4ioz.satcombo.data.stockage(vm.getApplication(), "satcombo_ft8")
 
     private fun json(o: Any) =ReponseWeb("200 OK", "application/json; charset=utf-8", o.toString().toByteArray(Charsets.UTF_8))
+    private const val MONTAGE_SUR_PC = "le montage de la station se compose et s'enregistre sur SatMe-PC"
     private const val PAS_DE_SPECTRE_LARGE = "le spectre de la bande large est sur SatMe-PC"
     private const val PAS_D_EMISSION_DATV ="pas d'émission DATV depuis le téléphone : c'est SatMe-PC qui émet"
     private val NON = ReponseWeb("404 Not Found", "application/json", "{\"ok\":false}".toByteArray())
@@ -307,6 +308,13 @@ object PagesPcTelephone {
                             .put("l", fr.f4ioz.satcombo.domain.Indicatifs.locatorPropose(k, k.indicatif))
                     })))
                 }
+                // The station's chain is drawn and kept on SatMe-PC: here an empty one (its catalogue all the same).
+                "/api/montage" -> json(JSONObject().put("ok", true).put("telephone", true)
+                    .put("chaine", fr.f4ioz.satcombo.station.Montage.ecrit(fr.f4ioz.satcombo.station.Montage.Chaine()))
+                    .put("plan", fr.f4ioz.satcombo.station.DispositionMontage.json(fr.f4ioz.satcombo.station.DispositionMontage.dispose(fr.f4ioz.satcombo.station.Montage.Chaine())))
+                    .put("etat", JSONObject()).put("photos", JSONArray()))
+                "/api/montage/catalogue" -> json(fr.f4ioz.satcombo.station.Montage.catalogueJson())
+                "/api/montage/suggestion" -> json(JSONObject().put("ok", false).put("erreur", MONTAGE_SUR_PC))
                 else -> if (methode == "POST") json(action(vm, route, p)) else NON
             }
         }.getOrElse { json(JSONObject().put("ok", false).put("erreur", it.message ?: it.javaClass.simpleName)) }
@@ -782,6 +790,7 @@ object PagesPcTelephone {
                 Thread { try { fr.f4ioz.satcombo.sstv.SstvVideo.fabriqueGif(ctx, png, shot) } finally { gifEnCours = "" } }.apply { isDaemon = true }.start()
                 OK
             }
+            "/api/montage", "/api/montage/photo" -> JSONObject().put("ok", false).put("erreur", MONTAGE_SUR_PC)
             else -> JSONObject().put("ok", false).put("erreur", "pas encore sur le téléphone")
         }
     }

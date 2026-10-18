@@ -224,6 +224,7 @@ fun main(args: Array<String>) {
     serveur.qrzDatv = QrzDatvPc(dossier, { station.settings.qrzUser.isNotBlank() && station.settings.qrzMdp.isNotBlank() },
         { c -> kotlinx.coroutines.runBlocking { carnet.ficheQrz(c) } })
     serveur.large = large
+    serveur.montage = MontagePc(dossier) { serveur.lecturesMontage() }
     datv.diffusion = diffusion
     // The wide band chat, tune requests by UDP: each off unless chosen in the DATV tab.
     serveur.chatLarge = ChatLargePc(station.stockage, { station.settings.callsign }).also { it.demarre() }
