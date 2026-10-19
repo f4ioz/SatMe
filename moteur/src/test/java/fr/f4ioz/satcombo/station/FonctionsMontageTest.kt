@@ -205,4 +205,48 @@ class FonctionsMontageTest {
         assertEquals("datv-rx", t.getString("fonction"))
         assertTrue(p.getJSONObject(plutoId).getJSONArray("conflits").length() > 0)
     }
+
+    // ------------------------------------------------------------------ what came lately: channels, no hardware, the tabs not about satellites
+
+    @Test fun lesCanauxDeQo100SontDesFonctions() {
+        val i = base.copy(sdrActif = true, sdrRecepteur = "pluto", qo100ALaCle = true,
+            canaux = listOf(FonctionsMontage.Canal("FT8", 10489.540), FonctionsMontage.Canal("CW", 10489.705)))
+        val g = FonctionsMontage.logiciel(i)
+        val k = g.noeuds.filter { it.id.startsWith("k:") }
+        assertEquals(listOf("Canal FT8", "Canal CW"), k.map { it.nom })
+        assertTrue(k.all { it.statut == Statut.OK && it.colonne == 2 })
+        assertTrue(g.arcs.any { it.de == "f:qo100" && it.vers == "k:0" && it.type == Type.IQ })
+        // The cockpit stopped: the channels at rest, no link.
+        val r = FonctionsMontage.logiciel(i.copy(sdrActif = false))
+        assertTrue(r.noeuds.filter { it.id.startsWith("k:") }.all { it.statut == Statut.PRET })
+        assertTrue(r.arcs.none { it.vers.startsWith("k:") })
+    }
+
+    @Test fun unEnregistrementOuLeGenerateurSontDitsFictifs() {
+        val i = base.copy(sdrActif = true, sdrRecepteur = "fichier", sdrFichier = "/x/satme-iq-1.sigmf-data")
+        val g = FonctionsMontage.logiciel(i)
+        val f = g.noeud("x:fictif")!!
+        assertEquals("Enregistrement I/Q", f.nom)
+        assertTrue(f.badges.contains("fictif") && f.detail == "satme-iq-1.sigmf-data")
+        // The receiver fed by it, not by the computer's hardware.
+        assertTrue(g.arcs.any { it.de == "x:fictif" && it.vers == "f:sdr" })
+        assertTrue(g.arcs.none { it.de == "pc" && it.vers == "f:sdr" })
+        assertEquals("générateur d'essai", FonctionsMontage.nomRessource("sdr:generateur"))
+        assertNull(FonctionsMontage.logiciel(base.copy(sdrRecepteur = "pluto")).noeud("x:fictif"))
+    }
+
+    @Test fun lesFonctionsNonSatelliteSeCachentQuandElleSontDecochees() {
+        val i = base.copy(sdrActif = true, sdrRecepteur = "rtl", sdrPourSonde = true)
+        assertNotNull(FonctionsMontage.logiciel(i).noeud("f:sondes"))
+        val sans = i.copy(nonSat = emptySet())
+        assertNull(FonctionsMontage.logiciel(sans).noeud("f:sondes"))
+        assertFalse(FonctionsMontage.json(sans, Montage.Chaine()).getJSONArray("vues").toString().contains("sondes"))
+        // ADS-B receiving on the Pluto: it holds it, shown while it runs and ticked.
+        val a = base.copy(adsbActif = true, adsbRecepteur = "pluto", nonSat = setOf("avions"))
+        assertTrue(FonctionsMontage.possessions(a).any { it.ressource == "sdr:pluto" && it.detenteur == "avions" })
+        assertNotNull(FonctionsMontage.logiciel(a).noeud("f:avions"))
+        assertNull(FonctionsMontage.logiciel(a.copy(nonSat = emptySet())).noeud("f:avions"))
+        // The listeners from afar counted on « Écouter ici ».
+        assertEquals("2 pages à l'écoute", FonctionsMontage.logiciel(base.copy(auditeurs = 2)).noeud("s:nav")!!.detail)
+    }
 }

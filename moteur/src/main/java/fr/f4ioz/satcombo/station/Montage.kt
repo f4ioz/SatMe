@@ -199,6 +199,9 @@ object Montage {
     /** The name shown for [e]: the owner's, else the catalogue's. */
     fun nom(e: Element): String = e.nom.ifBlank { modele(e)?.nom ?: e.modele }
 
+    /** The name under [e]'s drawing: the owner's, else the catalogue's short one. */
+    fun nomCourt(e: Element): String = e.nom.ifBlank { modele(e)?.let { CatalogueMateriel.court(it) } ?: e.modele }
+
     /** [e]'s ports, its options applied. */
     fun ports(e: Element): List<Port> = modele(e)?.portsAvec(e.options) ?: emptyList()
 

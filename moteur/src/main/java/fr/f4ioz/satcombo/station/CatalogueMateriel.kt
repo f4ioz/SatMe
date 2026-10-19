@@ -249,7 +249,8 @@ object CatalogueMateriel {
         boite("boite-lien", "Lien satellite (WebSocket)", "lien", "Les programmes et le téléphone qui suivent le satellite par le lien de SatMe."),
         boite("boite-telephone", "SatMe téléphone (appairé)", "telephone", "Le téléphone appairé à ce PC (QR code)."),
         boite("boite-noeud", "SatMe-Node (connexion)", "noeud", "Le boîtier déporté que SatMe joint par le réseau."),
-        boite("boite-ecoute", "Navigateur « Écouter ici »", "ecoute", "Le son du récepteur envoyé à une page (bouton « Écouter ici »)."),
+        boite("boite-ecoute", "Navigateur « Écouter ici »", "ecoute", "Le son du récepteur envoyé à une page (bouton « Écouter ici »), et combien l'écoutent."),
+        boite("boite-espace", "Météo spatiale (Internet)", "espace", "L'indice Kp, le vent solaire et les aurores, lus sur Internet (onglet Météo spatiale)."),
     )
 
     private val PAR_ID = MODELES.associateBy { it.id }
@@ -269,7 +270,8 @@ object CatalogueMateriel {
         "sequenceur" to "Séquenceur", "dxp-gpsdo" to "GPSDO 10 MHz", "leo-bodnar" to "GPSDO Leo Bodnar", "injecteur" to "Injecteur DC + réf.",
         "dc-block" to "DC block", "alim-138" to "Alim. 13,8 V", "molette-usb" to "Molette USB", "boite-wavelog" to "Wavelog", "boite-qrz" to "QRZ.com",
         "boite-psk" to "PSK Reporter", "boite-chat" to "Large bande · chat", "boite-carnets" to "Carnets (rigctld)", "boite-lien" to "Lien satellite",
-        "boite-telephone" to "SatMe téléphone", "boite-noeud" to "SatMe-Node (réseau)", "boite-ecoute" to "Écouter ici")
+        "boite-telephone" to "SatMe téléphone", "boite-noeud" to "SatMe-Node (réseau)", "boite-ecoute" to "Écouter ici",
+        "boite-espace" to "Météo spatiale")
 
     /** [m]'s name under its drawing. */
     fun court(m: Montage.Modele): String = COURTS[m.id] ?: m.nom

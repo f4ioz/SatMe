@@ -57,7 +57,23 @@ object FonctionsMontage {
         val libelles: Map<String, String> = emptyMap(),
         /** The rig's own card, recognised on its USB hub ("" none). */
         val carteDuPoste: String = "",
+        /** The functions not about satellites ticked in Réglages ("sondes", "avions", "ais"); null: all of them. */
+        val nonSat: Set<String>? = null,
+        /** ADS-B and AIS receiving now, and on which board ("pluto", "rtl"…). */
+        val adsbActif: Boolean = false, val adsbRecepteur: String = "", val aisActif: Boolean = false, val aisRecepteur: String = "",
+        /** QO-100's several decoders at once: each channel's name and frequency (MHz). */
+        val canaux: List<Canal> = emptyList(),
+        /** The recording played back by the SDR when it receives from a file (its name). */
+        val sdrFichier: String = "",
+        /** A tone squelch heard (Hz, 0 none), the scan running. */
+        val sdrCtcssHz: Double = 0.0, val balayage: Boolean = false,
+        /** The pages listening to the SDR's sound from afar (« Écouter ici »). */
+        val auditeurs: Int = 0,
     ) {
+        /** The SDR with no hardware: a recording or the test generator. */
+        val sdrFictif: Boolean get() = sdrRecepteur == "fichier" || sdrRecepteur == "generateur"
+        /** Whether the function not about satellites [id] is ticked (always true for the others). */
+        fun coche(id: String): Boolean = nonSat == null || id !in setOf("sondes", "avions", "ais") || id in nonSat
         /** A card as the operator knows it. */
         fun nomCarte(c: String): String = libelles[c] ?: court(c)
         /** The card to offer when none runs: the one chosen, else the rig's, else the first. */
@@ -74,6 +90,9 @@ object FonctionsMontage {
             sdrPourMeteor -> "meteor"; sdrPourSonde -> "sondes"; qo100ALaCle -> "qo100"; else -> "sdr"
         }
     }
+
+    /** One of QO-100's decoders at once: its decoder's name, its frequency (MHz, 0 unknown). */
+    data class Canal(val nom: String, val mhz: Double = 0.0)
 
     // ------------------------------------------------------------------ the functions
 
@@ -107,6 +126,8 @@ object FonctionsMontage {
         Fonction("datv-tx", "DATV émission", Sens2.TX, Son.AUCUN, Raccourci("datv"), 0, "DVB-S2 par la carte SDR (onglet DATV)"),
         Fonction("sstv-tx", "SSTV émission", Sens2.TX, Son.AUCUN, Raccourci("sstv", "sx-p-tx"), 0, "une image en FM par la carte SDR"),
         Fonction("iq", "Calibration I/Q", Sens2.TX, Son.AUCUN, Raccourci("reglages", "emission"), 0, "la correction de l'émetteur"),
+        Fonction("avions", "Avions (ADS-B)", Sens2.RX, Son.AUCUN, Raccourci("avions"), 0, "les positions des avions à 1090 MHz"),
+        Fonction("ais", "Navires (AIS)", Sens2.RX, Son.AUCUN, Raccourci("ais"), 0, "les positions des navires à 162 MHz"),
     )
     private val PAR_ID = FONCTIONS.associateBy { it.id }
     fun fonction(id: String): Fonction? = PAR_ID[id]
@@ -130,12 +151,16 @@ object FonctionsMontage {
         "datv-tx" -> i.txDatv.isNotBlank()
         "sstv-tx" -> i.txSstv.isNotBlank()
         "iq" -> i.txIq.isNotBlank()
+        "avions" -> i.adsbActif
+        "ais" -> i.aisActif
         else -> false
     }
 
     /** Whether function [id] exists on this machine (its part is there). */
     fun presente(id: String, i: Instantane): Boolean = when (id) {
-        "sdr", "qo100", "sondes", "ecoute", "navigateur" -> i.sdrPresent
+        "sondes" -> i.sdrPresent && i.coche("sondes")
+        "avions", "ais" -> i.coche(id)
+        "sdr", "qo100", "ecoute", "navigateur" -> i.sdrPresent
         "meteor" -> i.sdrPresent && i.meteorPresent
         "datv-rx" -> i.datvPresent
         "son", "sstv-rx", "ft8", "cw", "aprs" -> i.sonPresent
@@ -151,6 +176,7 @@ object FonctionsMontage {
     fun nomRessource(r: String): String = when (r) {
         "sdr:rtl" -> "clé RTL-SDR"; "sdr:pluto" -> "ADALM-PLUTO"; "sdr:bladerf" -> "bladeRF"; "sdr:hackrf" -> "HackRF"
         "datv:minitiouner" -> "MiniTiouner"; "son:entree" -> "entrée son des décodeurs"; "son:sortie" -> "haut-parleur du PC"; "cat" -> "poste (CAT)"
+        "sdr:fichier" -> "enregistrement I/Q"; "sdr:generateur" -> "générateur d'essai"
         else -> r.substringAfter(':')
     }
 
@@ -214,6 +240,8 @@ object FonctionsMontage {
             val r = board(i.sdrRecepteur)
             if (l.none { it.ressource == r }) l += Possession(r, f, Role.RECEPTION)
         }
+        if (i.adsbActif && i.coche("avions")) board(carteNonSat(i.adsbRecepteur)).let { r -> if (l.none { it.ressource == r }) l += Possession(r, "avions", Role.RECEPTION) }
+        if (i.aisActif && i.coche("ais")) board(carteNonSat(i.aisRecepteur)).let { r -> if (l.none { it.ressource == r }) l += Possession(r, "ais", Role.RECEPTION) }
         if (i.sonActif) {
             val ecoutent = ecoutentEntree(i)
             l += if (i.sonParSdr) Possession("son:entree", i.sdrPour ?: "sdr", Role.ENTREE_SON, ecoutent, "son démodulé de la carte SDR")
@@ -227,6 +255,9 @@ object FonctionsMontage {
         if (i.catConnecte) l += Possession("cat", "poste", Role.COMMANDE, detail = i.catModele + if (i.catSimule) ", simulé" else "")
         return l
     }
+
+    /** The board an ADS-B or AIS receiver names ("cle" is the RTL dongle). */
+    private fun carteNonSat(r: String) = when (r) { "cle", "", "rtl" -> "rtl"; else -> r }
 
     /** A safe receive gesture: one setting of [ProfilsFonction.CLES] to [valeur], with its button's text. */
     data class Action(val texte: String, val cle: String, val valeur: String) {
@@ -358,7 +389,11 @@ object FonctionsMontage {
         val tient = poss.filter { it.detenteur == id }.joinToString(", ") { nomRessource(it.ressource) + if (it.detail.isNotBlank() && it.ressource == "son:entree") " : " + court(it.detail) else "" }
         val base = when (id) {
             "sdr", "qo100", "meteor", "sondes" -> nomRessource("sdr:" + i.sdrRecepteur) + (if (id == "sdr" && i.sdrMode.isNotBlank()) " · " + i.sdrMode else "") +
-                (if (i.sdrCielHz > 0 && i.sdrPour == id) " · " + String.format(java.util.Locale.FRANCE, "%.3f", i.sdrCielHz / 1e6) + " MHz" else "")
+                (if (i.sdrCielHz > 0 && i.sdrPour == id) " · " + String.format(java.util.Locale.FRANCE, "%.3f", i.sdrCielHz / 1e6) + " MHz" else "") +
+                (if (id == "sdr" && i.sdrCtcssHz > 0) " · CTCSS " + String.format(java.util.Locale.FRANCE, "%.1f", i.sdrCtcssHz) + " Hz" else "") +
+                (if (id == "sdr" && i.balayage) " · balayage" else "")
+            "avions" -> nomRessource(board0(carteNonSat(i.adsbRecepteur)))
+            "ais" -> nomRessource(board0(carteNonSat(i.aisRecepteur)))
             "datv-rx" -> nomRessource(if (i.datvRecepteur == "minitiouner") "datv:minitiouner" else "sdr:" + i.datvRecepteur) + if (i.datvActif) (if (i.datvVerrouille) " · accrochée" else " · recherche") else ""
             "poste" -> i.catModele.ifBlank { "pas de poste en CAT" }
             "son" -> if (i.sonParSdr) "prise par la carte SDR" else i.sonAppareil.ifBlank { i.sonCarte }.let { if (it.isBlank()) "aucune carte choisie" else i.nomCarte(it) }
@@ -372,6 +407,8 @@ object FonctionsMontage {
         }
         return if (tient.isNotBlank() && id !in setOf("son")) base + (if (base.isNotBlank()) " — " else "") + "tient " + tient else base
     }
+
+    private fun board0(k: String) = "sdr:" + k.ifBlank { "pluto" }
 
     /** The default safe gesture on a function's node (start or stop a reception), when there is one. */
     private fun actionsDe(id: String, i: Instantane): List<Action> = when (id) {
@@ -409,7 +446,7 @@ object FonctionsMontage {
      */
     fun logiciel(i: Instantane, poss: List<Possession> = possessions(i), cf: List<Conflit> = conflits(i, poss)): Graphe {
         val n = ArrayList<Noeud>(); val a = ArrayList<Arc>()
-        val discrets = setOf("qo100", "meteor", "sondes", "iq")
+        val discrets = setOf("qo100", "meteor", "sondes", "iq", "avions", "ais")
         for (f in FONCTIONS) if (presente(f.id, i) && f.id !in setOf("ecoute", "navigateur") &&
             (f.id !in discrets || enMarche(f.id, i) || cf.any { it.fonction == f.id })) n += noeudFonction(f.id, i, poss, cf)
         // The sound ends: the SDR's sound, the cards, the PC's speaker, the browser.
@@ -418,7 +455,19 @@ object FonctionsMontage {
             if (i.sonParSdr) "nourrit les décodeurs" else "", raccourci = Raccourci("sdr"))
         if (i.datvPresent) n += Noeud("s:datv", "Son DATV", Genre2.SON, 1, listOf("fonction", "son-emet"), if (i.datvActif && i.datvSon) Statut.OK else Statut.PRET, "", raccourci = Raccourci("datv"))
         n += Noeud("s:hp", "Haut-parleur du PC", Genre2.SON, 3, listOf("materiel", "son-recoit"), if (enMarche("ecoute", i)) Statut.OK else Statut.PRET, "", raccourci = Raccourci("sdr"))
-        if (i.sdrPresent) n += Noeud("s:nav", "Écouter ici (navigateur)", Genre2.SON, 3, listOf("fonction", "son-recoit"), if (i.ecouteNavigateur) Statut.OK else Statut.PRET, "", raccourci = Raccourci("sdr"))
+        if (i.sdrPresent) n += Noeud("s:nav", "Écouter ici (navigateur)", Genre2.SON, 3, listOf("fonction", "son-recoit"), if (i.ecouteNavigateur) Statut.OK else Statut.PRET,
+            if (i.auditeurs > 0) i.auditeurs.toString() + (if (i.auditeurs > 1) " pages à l'écoute" else " page à l'écoute") else "", raccourci = Raccourci("sdr"))
+        // No hardware behind the SDR: the recording or the generator, said so, in the hardware's column.
+        if (i.sdrPresent && i.sdrFictif) n += Noeud("x:fictif", if (i.sdrRecepteur == "fichier") "Enregistrement I/Q" else "Générateur d'essai", Genre2.MATERIEL, 0,
+            listOf("materiel", "fictif"), if (i.sdrActif) Statut.OK else Statut.PRET,
+            if (i.sdrRecepteur == "fichier") i.sdrFichier.substringAfterLast('/').ifBlank { "aucun fichier choisi" } else "signaux d'essai, sans antenne", raccourci = Raccourci("sdr", ancre = "r-recepteur"))
+        // QO-100's decoders at once: one node each, fed by the cockpit's receiver.
+        val qoVif = i.sdrActif && i.sdrPour == "qo100"
+        i.canaux.take(8).forEachIndexed { k, ca ->
+            n += Noeud("k:$k", "Canal " + ca.nom, Genre2.FONCTION, 2, listOf("fonction", "rx"), if (qoVif) Statut.OK else Statut.PRET,
+                if (ca.mhz > 0) String.format(java.util.Locale.FRANCE, "%.3f", ca.mhz) + " MHz" else "", raccourci = Raccourci("qo100"))
+            if (qoVif) a += Arc("f:qo100", "k:$k", Type.IQ, Statut.OK)
+        }
         // Each card Java knows: the one feeding first, at most four.
         val cartes = (listOfNotNull(i.sonAppareil.takeIf { it.isNotBlank() && !i.sonParSdr }, i.sonCarte.takeIf { it.isNotBlank() },
             i.carteDuPoste.takeIf { it.isNotBlank() }) + i.cartes).distinct().take(3)
@@ -435,11 +484,12 @@ object FonctionsMontage {
         }
         if (i.cartes.size > cartes.size) n += Noeud("c:plus", "+" + (i.cartes.size - cartes.size) + " autres cartes son", Genre2.SON, 0, listOf("materiel"), Statut.PRET, "",
             raccourci = Raccourci("son", ancre = "s-carte"))
-        // Hardware to the functions holding it.
+        // Hardware to the functions holding it (a recording or the generator from their own node).
         for (p in poss) {
             if (p.ressource.startsWith("sdr:") || p.ressource == "datv:minitiouner" || p.ressource == "cat") {
                 val t = if (p.ressource == "cat") Type.CAT else Type.IQ
-                a += Arc("pc", "f:" + p.detenteur, t, Statut.OK, nomRessource(p.ressource))
+                val fictif = p.ressource == "sdr:fichier" || p.ressource == "sdr:generateur"
+                a += Arc(if (fictif) "x:fictif" else "pc", "f:" + p.detenteur, t, Statut.OK, nomRessource(p.ressource))
             }
         }
         // The sound: who makes it, who takes it.
@@ -561,9 +611,9 @@ object FonctionsMontage {
             val colRadio = if (tx) col0 + 1 else col0 + prof
             loin.forEachIndexed { k, id ->
                 val el = c.element(id)!!
-                ajoute(Noeud("e:$id", Montage.nom(el), Genre2.MATERIEL, if (tx) col0 + 1 + prof - k else col0 + k, badgesMat(tx), vif, "", id, el.modele))
+                ajoute(Noeud("e:$id", Montage.nomCourt(el), Genre2.MATERIEL, if (tx) col0 + 1 + prof - k else col0 + k, badgesMat(tx), vif, "", id, el.modele))
             }
-            ajoute(Noeud("e:" + e.id, Montage.nom(e), Genre2.MATERIEL, colRadio, badgesMat(tx), st, det, e.id, e.modele))
+            ajoute(Noeud("e:" + e.id, Montage.nomCourt(e), Genre2.MATERIEL, colRadio, badgesMat(tx), st, det, e.id, e.modele))
             // The cables drawn the way the signal goes: left to right.
             for (lid in ra.liens) {
                 val l = c.liens.first { it.id == lid }
@@ -573,10 +623,10 @@ object FonctionsMontage {
             }
             val genres = loin.mapNotNull { c.element(it)?.let { el -> Montage.modele(el)?.genre } }
             if (Genre.ANTENNE !in genres && Genre.CHARGE !in genres)
-                besoin(Besoin("Aucune antenne reliée à « " + Montage.nom(e) + " » dans le montage", raccourci = Raccourci("montage")))
+                besoin(Besoin("Aucune antenne reliée à « " + Montage.nomCourt(e) + " » dans le montage", raccourci = Raccourci("montage")))
             val vp = versPc(c, e.id, typeVersPc == Type.AUDIO)
             if (vp == null) {
-                besoin(Besoin("« " + Montage.nom(e) + " » n'est relié à aucun ordinateur dans le montage", raccourci = Raccourci("montage")))
+                besoin(Besoin("« " + Montage.nomCourt(e) + " » n'est relié à aucun ordinateur dans le montage", raccourci = Raccourci("montage")))
                 ajoute(Noeud("m:pc", "SatMe-PC", Genre2.MATERIEL, if (tx) col0 else colRadio + 1, listOf("materiel"), Statut.MANQUE, "câble absent du montage"))
                 relieVers("e:" + e.id, "m:pc", typeVersPc, Statut.MANQUE)
                 return "m:pc" to (if (tx) col0 + 2 + prof else colRadio + 2)
@@ -584,8 +634,8 @@ object FonctionsMontage {
             if (tx) {
                 // Transmitting: the computer, then the radio (the boxes between named on the cable).
                 val pc = vp.elements.last(); val el = c.element(pc)!!
-                ajoute(Noeud("e:$pc", Montage.nom(el), Genre2.MATERIEL, col0, listOf("materiel"), vif, "", pc, el.modele))
-                relie("e:$pc", "e:" + e.id, typeVersPc, vif, vp.elements.dropLast(1).mapNotNull { c.element(it)?.let { x -> Montage.nom(x) } }.joinToString(" › "))
+                ajoute(Noeud("e:$pc", Montage.nomCourt(el), Genre2.MATERIEL, col0, listOf("materiel"), vif, "", pc, el.modele))
+                relie("e:$pc", "e:" + e.id, typeVersPc, vif, vp.elements.dropLast(1).mapNotNull { c.element(it)?.let { x -> Montage.nomCourt(x) } }.joinToString(" › "))
                 return "e:$pc" to col0 + 2 + prof
             }
             var prec = "e:" + e.id
@@ -594,7 +644,7 @@ object FonctionsMontage {
                 val el = c.element(id)!!
                 val carte = Montage.modele(el)?.genre == Genre.CARTE_SON
                 val nid = "e:$id"
-                ajoute(Noeud(nid, Montage.nom(el), Genre2.MATERIEL, colRadio + 1 + k,
+                ajoute(Noeud(nid, Montage.nomCourt(el), Genre2.MATERIEL, colRadio + 1 + k,
                     listOf("materiel") + (if (carte) listOf("son-recoit", "son-emet") else emptyList()), vif, "", id, el.modele))
                 relie(prec, nid, if (carte || precCarte || (k == 0 && typeVersPc == Type.AUDIO)) Type.AUDIO else if (k == 0) typeVersPc else Type.IQ, vif)
                 prec = nid; precCarte = carte
@@ -631,7 +681,7 @@ object FonctionsMontage {
         /** The rig's receiving chain to the sound card's input; returns the card's node and the next column. */
         fun parCarte(): Pair<String, Int> {
             val poste = c.elements.firstOrNull { e -> Montage.modele(e)?.genre == Genre.POSTE }
-            val nom = poste?.let { Montage.nom(it) } ?: i.catModele.ifBlank { "Poste" }
+            val nom = poste?.let { Montage.nomCourt(it) } ?: i.catModele.ifBlank { "Poste" }
             val (pc, col) = materiel("cat", nom, 0, false, i.catConnecte || (i.sonActif && !i.sonParSdr), Type.AUDIO)
             val carte = i.sonAppareil.takeIf { i.sonActif && !i.sonParSdr } ?: i.sonCarte.ifBlank { i.carteDuPoste }
             var n = noeudFonction("son", i, poss, cf, col, "Carte son").let { it.copy(detail = if (carte.isNotBlank()) i.nomCarte(carte) else "aucune carte choisie") }
@@ -796,7 +846,8 @@ object FonctionsMontage {
             txDatvChoisi = "pluto", txSstvChoisi = "pluto")
         return when (quoi) {
             "rx" -> base.copy(sdrActif = true, sdrRecepteur = "pluto", sdrMode = "USB", sdrCielHz = 10_489_750_000L, sonActif = true, sonParSdr = true,
-                sonAppareil = "Clé SDR (rtl_tcp)", ft8Actif = true, datvActif = true, datvRecepteur = "minitiouner", datvSon = true, catConnecte = true, catModele = "IC9700", sdrHautParleur = true)
+                sonAppareil = "Clé SDR (rtl_tcp)", ft8Actif = true, datvActif = true, datvRecepteur = "minitiouner", datvSon = true, catConnecte = true, catModele = "IC9700", sdrHautParleur = true,
+                qo100ALaCle = true, canaux = listOf(Canal("FT8", 10489.540), Canal("CW", 10489.705)), ecouteNavigateur = true, auditeurs = 2)
             "tx" -> base.copy(datvActif = true, datvRecepteur = "minitiouner", txDatv = "pluto", txSstv = "bladerf", catConnecte = true, catModele = "IC9700")
             "datv-pluto" -> base.copy(datvActif = true, datvRecepteur = "pluto", datvSdrTenu = "pluto", datvVerrouille = true, datvSon = true,
                 sdrRecepteur = "pluto", sdrErreur = "", catConnecte = true, catModele = "IC9700")
