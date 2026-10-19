@@ -81,7 +81,51 @@ class SonStation(
     /** The sound card last used, started again at launch. */
     var carte: String
         get() = station.stockage.getString("pc_son_carte", "") ?: ""
-        set(v) { station.stockage.edit().putString("pc_son_carte", v).apply() }
+        set(v) {
+            station.stockage.edit().putString("pc_son_carte", v).apply()
+            if (v.isNotBlank()) station.stockage.edit().putString("pc_son_derniere", v).apply()
+        }
+    /** The last card started, kept even once stopped: the one a decoder switched on starts again. */
+    val derniereCarte: String get() = station.stockage.getString("pc_son_derniere", "")?.ifBlank { null } ?: carte
+
+    /** The source last chosen while [catnum] was followed (a card's name, or [fr.f4ioz.satcombo.domain.SourceAudio.SDR]). */
+    fun sourcePourSatellite(catnum: Int?): String? =
+        catnum?.let { station.stockage.getString("pc_son_sat_$it", "") }?.ifBlank { null }
+    fun suiviCatnum(): Int? = station.etat.value.suivi?.catalogNumber
+    fun memoriseSourceSatellite(source: String) {
+        val n = station.etat.value.suivi?.catalogNumber ?: return
+        station.stockage.edit().putString("pc_son_sat_$n", source).apply()
+    }
+
+    /** The rig's own sound: the IC-9700's by the network when its CAT goes that way, else its USB codec. */
+    fun sourceDuPoste(appareils: List<SonPc.Appareil> = son.appareils()): String? {
+        val e = station.etat.value
+        val reseau = fr.f4ioz.satcombo.cat.icomreseau.PosteIcomReseau.NOM_SOURCE
+        if (e.catConnecte && !e.catSimule && station.settings.icomLiaison == "RESEAU" && appareils.any { it.nom == reseau }) return reseau
+        return carteDuPoste(appareils)
+    }
+
+    /**
+     * A decoder switched on (or a recording asked) with nothing feeding: the
+     * card it needs started, receive only — the one chosen for this
+     * satellite, the last one used, the rig's own; never a guess. Null when
+     * the sound runs, else why not.
+     */
+    fun assureSource(): String? {
+        if (son.etat.value.actif) return null
+        val l = son.appareils()
+        val n = fr.f4ioz.satcombo.domain.SourceAudio.carteAPrendre(l.map { it.nom },
+            sourcePourSatellite(station.etat.value.suivi?.catalogNumber), derniereCarte, sourceDuPoste(l))
+            ?: return "aucune source audio : la choisir dans l'en-tête (« Son ») ou l'onglet Son"
+        return prendCarte(n)
+    }
+
+    /** Since when the source running has been silent (0: sound now). */
+    @Volatile var silenceDepuis = 0L
+        private set
+
+    /** One-shot: record the next time this satellite (its catalogue number), still followed, is up (a pass made ready before its AOS); 0: none. */
+    @Volatile var enregistrePassage = 0
 
     @Volatile private var wav: EnregistreurWav? = null
 
@@ -151,6 +195,8 @@ class SonStation(
 
     init {
         son.auditeurs += { pcm, n, rate ->
+            if (son.etat.value.niveau >= fr.f4ioz.satcombo.domain.SourceAudio.SILENCE) silenceDepuis = 0L
+            else if (silenceDepuis == 0L) silenceDepuis = horloge()
             wav?.let { w -> w.ajoute(pcm, n); _etat.update { it.copy(secondes = w.secondes) } }
             sstv.ecouteCarte(pcm, n, rate)
             if (aprsActif) aprs.ecoute(pcm, n, rate)
@@ -205,9 +251,11 @@ class SonStation(
         val veille = station.passageVeilleAEnregistrer(maintenant)
             ?.takeIf { fr.f4ioz.satcombo.domain.VeilleAuto.cle(it) != veilleFaite }
         if (!leve && veille == null) arreteALaMain = false
-        if (wav == null && son.etat.value.actif && !arreteALaMain && ((enregAuto && leve) || veille != null) &&
+        if (!son.etat.value.actif) silenceDepuis = 0L
+        if (wav == null && son.etat.value.actif && !arreteALaMain && ((enregAuto && leve) || veille != null || (enregistrePassage != 0 && leve && enregistrePassage == station.etat.value.suivi?.catalogNumber)) &&
             runCatching { horsAntenne() }.getOrNull() == null) {
             demarreEnregistrement(auto = true)
+            enregistrePassage = 0
             finPrevue = veille?.let { it.losEpochMs + fr.f4ioz.satcombo.domain.VeilleAuto.APRES_MS } ?: 0L
             veille?.let { veilleFaite = fr.f4ioz.satcombo.domain.VeilleAuto.cle(it) }
         }

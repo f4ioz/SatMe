@@ -225,7 +225,7 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 val bouge = avant == null || r.first !== avant.first || r.second !== avant.second
                 if (net || (bouge && maintenant - sonMs >= 500L) || maintenant - sonMs >= 1000L) {
                     refSon = r; sonMs = maintenant
-                    if (!envoie("son", JsonPc.son(son, sdr).toString())) return
+                    if (!envoie("son", JsonPc.son(son, sdr, phonie?.actif == true).toString())) return
                 }
             }
             // CW: each letter as it comes, the key's light a few times a second.
@@ -749,7 +749,7 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
             "/api/ft8/cascade" -> envoie(sortie, "200 OK", "application/json; charset=utf-8",
                 fr.f4ioz.satcombo.demo.ApiRadio.ft8Cascade(son?.ft8?.cascade, q["depuis"]?.toLongOrNull() ?: 0L, son?.ft8?.derniereLigneMs ?: 0L).toString().toByteArray())
             "/api/aprs" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JsonPc.aprs(son, station).toString().toByteArray())
-            "/api/son" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JsonPc.son(son, sdr).toString().toByteArray())
+            "/api/son" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JsonPc.son(son, sdr, phonie?.actif == true).toString().toByteArray())
             "/api/veille" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JsonPc.veille(station, son).toString().toByteArray())
             "/api/mire" -> {
                 val m = mire
@@ -928,6 +928,67 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
         else -> null
     }?.takeIf { !FonctionsNonSat.actif(station.stockage, it) }
 
+    /**
+     * The decoders' source in one gesture: a card (started, receive only), the
+     * receiver ([fr.f4ioz.satcombo.domain.SourceAudio.SDR]: given the input back
+     * if it runs, else started), or none (blank: stopped, the recording closed).
+     * Remembered for the satellite followed. Null when done, else why not.
+     */
+    private fun prendSource(s: SonStation, nom: String): String? {
+        if (nom.isBlank()) { s.arreteEnregistrement(); s.son.arrete(); return null }
+        if (nom == fr.f4ioz.satcombo.domain.SourceAudio.SDR) {
+            val d = sdr ?: return "pas de récepteur SDR ici"
+            if (d.pourSonde || d.pourMeteor) return "le récepteur sert aux radiosondes ou à METEOR"
+            if (d.etat.value.actif) s.son.prendPour(SdrPc.NOM_SOURCE, fr.f4ioz.satcombo.sdr.Dsp.AUDIO_RATE)
+            else if (!d.demarre()) return d.etat.value.erreur.ifBlank { "le récepteur n'a pas démarré" }
+            s.memoriseSourceSatellite(nom)
+            return null
+        }
+        if (s.son.appareils().none { it.nom == nom }) return "carte son introuvable : $nom"
+        s.prendCarte(nom)?.let { return it }
+        s.memoriseSourceSatellite(nom)
+        return null
+    }
+
+    /**
+     * The followed satellite's pass made ready, receive side only: the source
+     * that hears it, the decoders its transmitter calls for, the recording
+     * (now if it is up, else at AOS, stopped 30 s after LOS). Never transmits.
+     */
+    private fun preparePassage(s: SonStation, enregistrer: Boolean): JSONObject {
+        val e = station.etat.value
+        val sat = e.suivi ?: return JSONObject().put("ok", false).put("erreur", "aucun satellite suivi : en choisir un (Suivi)")
+        val tx = station.emetteurChoisi()
+        val l = s.son.appareils()
+        val p = fr.f4ioz.satcombo.domain.SourceAudio.plan(tx?.mode.orEmpty(), tx?.description.orEmpty(), l.map { it.nom },
+            s.sourcePourSatellite(sat.catalogNumber), s.derniereCarte, s.sourceDuPoste(l), e.catConnecte && !e.catSimule,
+            sdr?.etat?.value?.actif == true, enregistrer)
+        val fait = mutableListOf<String>()
+        val noms = s.nomsCartes(l)
+        val src = p.source
+        val sdrNom = fr.f4ioz.satcombo.domain.SourceAudio.SDR
+        if (src != null && !(s.son.etat.value.actif && s.son.etat.value.appareil == (if (src == sdrNom) SdrPc.NOM_SOURCE else src)))
+            prendSource(s, src)?.let { return JSONObject().put("ok", false).put("erreur", it) }
+        else if (!s.son.etat.value.actif) s.assureSource()?.let { return JSONObject().put("ok", false).put("erreur", it) }
+        // Said as it stands now: the source, the decoders on, the recording.
+        val a = s.son.etat.value.appareil
+        fait += "son : " + if (a == SdrPc.NOM_SOURCE) "récepteur SDR" else (noms[a]?.libelle ?: a)
+        for (d in p.decodeurs) when (d) {
+            "SSTV" -> s.sstvActif = true
+            "APRS" -> s.aprsActif = true
+            "CW" -> s.cw.actif = true
+            "FT8" -> if (!s.ft8.enMarche) s.ft8.demarre(s.ft8.mode)
+        }
+        if (p.decodeurs.isNotEmpty()) fait += fr.f4ioz.satcombo.domain.SourceAudio.liste(p.decodeurs)
+        if (p.enregistrer && s.etat.value.enregistrement.isBlank()) {
+            val leve = (e.position?.elevationDeg ?: -1.0) >= 0
+            if (leve) fait += s.demarreEnregistrement(auto = true)?.let { "pas d'enregistrement : $it" } ?: "enregistré jusqu'à la fin du passage"
+            else { s.enregistrePassage = sat.catalogNumber; fait += "enregistrement armé pour l'AOS" }
+        } else if (s.etat.value.enregistrement.isNotBlank()) fait += "enregistrement en cours"
+        return JSONObject().put("ok", true).put("satellite", sat.name).put("fait", JSONArray(fait))
+            .put("decodeurs", JSONArray(p.decodeurs))
+    }
+
     private fun action(chemin: String, q: Map<String, String>): JSONObject {
         val ok = JSONObject().put("ok", true)
         val rotor = station.stationRotor
@@ -970,6 +1031,7 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
             "/api/cw" -> {
                 val w = son?.cw ?: return JSONObject().put("ok", false)
                 q["on"]?.let { w.actif = it == "1" }
+                if (q["on"] == "1") son.assureSource()
                 q["ton"]?.toIntOrNull()?.let { w.tonChoisi = it }
                 if (q["efface"] == "1") w.efface()
             }
@@ -1519,13 +1581,23 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 val s = son ?: return JSONObject().put("ok", false)
                 val nom = q["nom"].orEmpty()
                 if (nom.isBlank()) { s.arreteEnregistrement(); s.son.arrete(); s.carte = "" }
-                else if (s.son.demarre(nom)) s.carte = nom
+                else if (s.son.demarre(nom)) { s.carte = nom; s.memoriseSourceSatellite(nom) }
                 else return JSONObject().put("ok", false).put("erreur", s.son.etat.value.erreur)
+            }
+            // The header's « Son »: what feeds the decoders, in one gesture (receive only).
+            "/api/son/source" -> {
+                val s = son ?: return JSONObject().put("ok", false)
+                prendSource(s, q["nom"].orEmpty())?.let { return JSONObject().put("ok", false).put("erreur", it) }
             }
             "/api/son/enregistrer" -> {
                 val s = son ?: return JSONObject().put("ok", false)
-                if (q["on"] == "1") s.demarreEnregistrement()?.let { return JSONObject().put("ok", false).put("erreur", it) }
+                // Asked with nothing feeding: the card it needs started first (receive only).
+                if (q["on"] == "1") (s.assureSource() ?: s.demarreEnregistrement())?.let { return JSONObject().put("ok", false).put("erreur", it) }
                 else s.arreteEnregistrement()
+            }
+            "/api/passage/preparer" -> {
+                val s = son ?: return JSONObject().put("ok", false)
+                return preparePassage(s, q["enregistrer"] != "0")
             }
             "/api/ft8" -> {
                 // The stations waited for: settings, kept even without a sound card.
@@ -1534,7 +1606,8 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 when {
                     q["vide"] == "1" -> f.vide()
                     q["tranches"] != null -> f.enregistreTranches = q["tranches"] == "1"
-                    q["on"] == "1" -> { if (son.son.etat.value.actif) f.demarre(q["mode"] ?: f.mode) else return JSONObject().put("ok", false).put("erreur", "démarre d'abord la carte son (onglet Son)") }
+                    // Nothing feeding: the card it needs started first (receive only), else why not.
+                    q["on"] == "1" -> { son.assureSource()?.let { return JSONObject().put("ok", false).put("erreur", it) }; f.demarre(q["mode"] ?: f.mode) }
                     q["on"] == "0" -> f.arrete()
                     q["mode"] != null -> if (f.enMarche) f.demarre(q["mode"]!!) else f.demarre(q["mode"]!!).also { f.arrete() }
                 }
@@ -1545,6 +1618,8 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 q["coupe"]?.let { s.coupeLos = it == "1" }
                 q["sstv"]?.let { s.sstvActif = it == "1" }
                 q["aprs"]?.let { s.aprsActif = it == "1" }
+                // A decoder switched on: its sound started when a card is known (else its card says why).
+                if (q["sstv"] == "1" || q["aprs"] == "1") s.assureSource()
             }
             // SSTV, as the phone's controls: source, forced mode, continuous, cleaning; start by hand, end.
             "/api/sstv/reglage" -> {
@@ -1563,6 +1638,7 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 q["nettoyage"]?.let { x.nettoyage = it == "1" }
                 q["afc"]?.let { x.afc = it == "1" }
                 q["actif"]?.let { son.sstvActif = it == "1" }
+                if (q["actif"] == "1" && x.source != SstvPc.SDR) son.assureSource()
             }
             "/api/sstv/afc/zero" -> son?.sstv?.remiseAZeroAfc() ?: return JSONObject().put("ok", false)
             "/api/sstv/caler" -> {
@@ -1974,7 +2050,7 @@ object JsonPc {
      * Where a station is from mine: its place (QRZ's coordinates, else its
      * square's centre), the distance and the bearing (great circle).
      */
-    fun son(s: SonStation?, sdr: SdrPc? = null): JSONObject {
+    fun son(s: SonStation?, sdr: SdrPc? = null, phonieActif: Boolean = false): JSONObject {
         if (s == null) return JSONObject().put("present", false)
         val c = s.son.etat.value
         val e = s.etat.value
@@ -1988,6 +2064,34 @@ object JsonPc {
             libelles = noms.mapValues { it.value.libelle }, carteDuPoste = noms.entries.firstOrNull { it.value.poste.isNotBlank() }?.key.orEmpty()))
             // What actually feeds the decoders (the dongle when it took the card's place), not only the card chosen.
             .put("appareil", c.appareil)
+            .also { resumeSource(it, s, sdr, phonieActif, appareils, noms) }
+    }
+
+    /**
+     * The header's « Son »: who listens, the source for the satellite
+     * followed, and what to do when they hear nothing (one line, one button).
+     */
+    private fun resumeSource(o: JSONObject, s: SonStation, sdr: SdrPc?, phonieActif: Boolean,
+                             appareils: List<SonPc.Appareil>, noms: Map<String, CartesSonLinux.Libelle>) {
+        val c = s.son.etat.value
+        val ecoutent = buildList {
+            if (s.sstvActif) add("SSTV")
+            if (s.ft8.enMarche) add(s.ft8.mode.ifBlank { "FT8" })
+            if (s.cw.actif) add("CW")
+            if (s.aprsActif) add("APRS")
+            if (phonieActif) add("Phonie")
+        }
+        val sat = s.sourcePourSatellite(s.suiviCatnum())
+        val duPoste = s.sourceDuPoste(appareils)
+        val carte = fr.f4ioz.satcombo.domain.SourceAudio.carteAPrendre(appareils.map { it.nom }, sat, s.derniereCarte, duPoste)
+        val lib = { n: String -> if (n == SdrPc.NOM_SOURCE) "la clé SDR" else noms[n]?.libelle ?: n }
+        val silence = s.silenceDepuis.takeIf { it > 0L }?.let { System.currentTimeMillis() - it } ?: 0L
+        val k = fr.f4ioz.satcombo.domain.SourceAudio.conseil(ecoutent.filter { it != "Phonie" }, c.actif, c.niveau.toDouble(), silence,
+            carte, carte?.let(lib).orEmpty(), sdr != null, lib(c.appareil))
+        o.put("ecoutent", JSONArray(ecoutent)).put("duPoste", duPoste.orEmpty()).put("pourSatellite", sat.orEmpty()).put("aPrendre", carte.orEmpty())
+            .put("sdrPresent", sdr != null).put("sdrActif", sdr?.etat?.value?.actif == true)
+            .put("armePassage", s.enregistrePassage != 0)
+            .put("conseil", k?.let { JSONObject().put("texte", it.texte).put("action", it.action).put("bouton", it.bouton) } ?: JSONObject.NULL)
     }
 
     /** The SSTV decoder in detail: its source, what it hears, its settings, the work under way. */
