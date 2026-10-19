@@ -1121,6 +1121,64 @@ class SettingsStore(private val prefs: Stockage) {
         get() = prefs.getInt("civ_usb_index", 0)
         set(v) { prefs.edit().putInt("civ_usb_index", v.coerceIn(0, 15)).apply() }
 
+    /** How the Icom is reached: "USB" (its cable) or "RESEAU" (its LAN server). */
+    var icomLiaison: String
+        get() = prefs.getString("icom_liaison", "USB") ?: "USB"
+        set(v) { prefs.edit().putString("icom_liaison", if (v == "RESEAU") "RESEAU" else "USB").apply() }
+
+    /** The Icom's LAN server: address and ports (Menu › Set › Network on the rig). */
+    var icomHote: String
+        get() = prefs.getString("icom_hote", "") ?: ""
+        set(v) { prefs.edit().putString("icom_hote", v.trim()).apply() }
+    var icomPortControle: Int
+        get() = prefs.getInt("icom_port_controle", 50001)
+        set(v) { prefs.edit().putInt("icom_port_controle", v.coerceIn(1, 65535)).apply() }
+    var icomPortCiv: Int
+        get() = prefs.getInt("icom_port_civ", 50002)
+        set(v) { prefs.edit().putInt("icom_port_civ", v.coerceIn(1, 65535)).apply() }
+    var icomPortAudio: Int
+        get() = prefs.getInt("icom_port_audio", 50003)
+        set(v) { prefs.edit().putInt("icom_port_audio", v.coerceIn(1, 65535)).apply() }
+
+    /** The rig's network user and password (kept like the QRZ login). */
+    var icomUtilisateur: String
+        get() = prefs.getString("icom_utilisateur", "") ?: ""
+        set(v) { prefs.edit().putString("icom_utilisateur", v.trim()).apply() }
+    var icomMdp: String
+        get() = prefs.getString("icom_mdp", "") ?: ""
+        set(v) { prefs.edit().putString("icom_mdp", v).apply() }
+
+    /** The same two as the login carries them (hex, from a trace); empty: coded from the table. */
+    var icomUtilisateurCode: String
+        get() = prefs.getString("icom_utilisateur_code", "") ?: ""
+        set(v) { prefs.edit().putString("icom_utilisateur_code", v.trim()).apply() }
+    var icomMdpCode: String
+        get() = prefs.getString("icom_mdp_code", "") ?: ""
+        set(v) { prefs.edit().putString("icom_mdp_code", v.trim()).apply() }
+
+    /** What each character becomes at each place in the login (see CodageIdentifiants), learnt from traces. */
+    var icomTableCodage: String
+        get() = prefs.getString("icom_table_codage", "") ?: ""
+        set(v) { prefs.edit().putString("icom_table_codage", v).apply() }
+
+    /** Receive audio codec (see CodecReseau) and the reorder window, ms. */
+    var icomCodec: String
+        get() = prefs.getString("icom_codec", "pcm16-16k") ?: "pcm16-16k"
+        set(v) { prefs.edit().putString("icom_codec", v).apply() }
+    var icomLatenceMs: Int
+        get() = prefs.getInt("icom_latence_ms", 80)
+        set(v) { prefs.edit().putInt("icom_latence_ms", v.coerceIn(40, 300)).apply() }
+
+    /** Packet headers written to a file, for a trace to study (off by default). */
+    var icomJournal: Boolean
+        get() = prefs.getBoolean("icom_journal", false)
+        set(v) { prefs.edit().putBoolean("icom_journal", v).apply() }
+
+    /** The rig's scope sent over CI-V and shown (off by default: it changes a rig setting while on). */
+    var icomSpectre: Boolean
+        get() = prefs.getBoolean("icom_spectre", false)
+        set(v) { prefs.edit().putBoolean("icom_spectre", v).apply() }
+
     /**
      * Automatic port scan on connect: the chosen port first, then its
      * neighbours, so the operator need not know which of the rig's two ports

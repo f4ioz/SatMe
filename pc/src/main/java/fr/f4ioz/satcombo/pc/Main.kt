@@ -82,7 +82,14 @@ fun main(args: Array<String>) {
     lien.demarreSiActif()
     val son = SonStation(SonPc(), station, File(dossier, "enregistrements"), File(dossier, "sstv"))
     // The sound card used last time, started again: listening opens nothing on the rig.
-    son.carte.takeIf { it.isNotBlank() }?.let { son.son.demarre(it) }
+    // The IC-9700 by the network: its receive audio listed as a source, nothing opened until chosen.
+    val icomReseau = IcomReseauPc(station, son.son, dossier)
+    son.carte.takeIf { it.isNotBlank() }?.let { c ->
+        // The network source logs in to the rig: in the background, the page does not wait for it.
+        if (c == fr.f4ioz.satcombo.cat.icomreseau.PosteIcomReseau.NOM_SOURCE)
+            Thread({ son.son.demarre(c) }, "satme-icom-audio").apply { isDaemon = true; start() }
+        else son.son.demarre(c)
+    }
     val journal = JournalPc(station, carnet, son, File(dossier, "journal"))
     // The CW decoder knows the log's callsigns: one of them decoded is right.
     son.cw.connus = { carnet.contacts().mapNotNull { fr.f4ioz.satcombo.cw.AnalyseCw.base(it.callsign) }.toSet() }
@@ -241,6 +248,7 @@ fun main(args: Array<String>) {
     serveur.emissionSstv = emissionSstv
     serveur.iq = iq
     serveur.textesDatv = textesDatv
+    serveur.icomReseau = icomReseau
     serveur.fichiersDatv = fichiersDatv
     serveur.qrzDatv = QrzDatvPc(dossier, { station.settings.qrzUser.isNotBlank() && station.settings.qrzMdp.isNotBlank() },
         { c -> kotlinx.coroutines.runBlocking { carnet.ficheQrz(c) } })
@@ -332,6 +340,8 @@ fun main(args: Array<String>) {
         runCatching { datv.arrete() }
         runCatching { son.arreteEnregistrement(); son.son.arrete() }
         runCatching { station.deconnecteCat() }
+        // The IC-9700's one network session handed back, or the owner is locked out a while.
+        runCatching { station.icomReseau.ferme() }
         runCatching { station.stationRotor.disconnectRotor() }
         runCatching { lien.arrete() }
         runCatching { rigctld.arrete() }

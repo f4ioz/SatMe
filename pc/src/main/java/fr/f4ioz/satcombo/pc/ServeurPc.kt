@@ -63,6 +63,9 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
     /** The DATV picture's subtitles and callsigns read in it (set before [demarre]). */
     @Volatile var textesDatv: TextesDatvPc? = null
 
+    /** The IC-9700 by the network: settings, status, scope (set before [demarre]). */
+    @Volatile var icomReseau: IcomReseauPc? = null
+
     /** QO-100's wide band spectrum from the ground station, its signals and the « veille » (set before [demarre]). */
     @Volatile var large: SpectreLargePc? = null
     /** The wide band chat (off unless chosen). */
@@ -377,6 +380,16 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
             return
         }
         if (phonie != null && (chemin.startsWith("/api/phonie") || chemin.startsWith("/phonie/"))) { phonie(r, chemin, q, sortie, phonie); return }
+        if (chemin == "/api/icomreseau" || chemin.startsWith("/api/icomreseau/")) {
+            val ir = icomReseau
+            val o = when {
+                ir == null -> JSONObject().put("ok", false).put("absent", true)
+                chemin == "/api/icomreseau/spectre" -> ir.spectre()
+                r.methode == "POST" -> runCatching { ir.action(chemin, q) }.getOrElse { JSONObject().put("ok", false).put("erreur", it.message ?: "erreur") }
+                else -> ir.json()
+            }
+            envoie(sortie, "200 OK", "application/json; charset=utf-8", o.toString().toByteArray()); return
+        }
         textesDatv?.takeIf { chemin == "/api/datv/textes" }?.let { t ->
             val o = if (r.methode == "POST") runCatching { t.action(q) }.getOrElse { JSONObject().put("ok", false).put("erreur", it.message ?: "erreur") } else t.json()
             envoie(sortie, "200 OK", "application/json; charset=utf-8", o.toString().toByteArray()); return
