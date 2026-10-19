@@ -230,7 +230,12 @@ object DetectionMontage {
                     if (clients.size > 1) {
                         val r = b.ajoute("repartiteur", Confiance.SUPPOSE, "Répartiteur : une sortie du LNB pour deux récepteurs")
                         b.relie(source.first, source.second, r, "entree")
-                        b.relie(r, "sortie1", clients[0].first, clients[0].second); b.relie(r, "sortie2", clients[1].first, clients[1].second)
+                        b.relie(r, "sortie1", clients[0].first, clients[0].second)
+                        // The MiniTiouner's LNB supply passes the splitter: a DC block keeps it off the SDR board.
+                        if (mini != null) {
+                            val k = b.ajoute("dc-block", Confiance.SUPPOSE, "DC block : la tension du LNB (par le MiniTiouner) n'arrive pas sur la carte SDR")
+                            b.relie(r, "sortie2", k, "entree"); b.relie(k, "sortie", clients[1].first, clients[1].second)
+                        } else b.relie(r, "sortie2", clients[1].first, clients[1].second)
                     } else if (clients.size == 1) b.relie(source.first, source.second, clients[0].first, clients[0].second)
                 }
             }

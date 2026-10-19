@@ -32,6 +32,8 @@ class FonctionsPc(
     private val action: (String, Map<String, String>) -> JSONObject,
     /** The montage's readings (the routes' JSON), read again for each look. */
     private val lectures: () -> ActiviteMontage.Lectures,
+    /** The rest: the tabs not about satellites ticked, ADS-B, AIS, QO-100's channels, the scan, the listeners (ServeurPc's). */
+    private val extras: () -> JSONObject? = { null },
 ) : ProfilsFonction.Executant {
 
     /** The functions' state, from [l] (the montage's readings) and the sound's and decoders' parts. */
@@ -68,7 +70,16 @@ class FonctionsPc(
             ecouteNavigateur = diffusion?.ecoute("sdr") == true,
             libelles = noms.mapValues { it.value.libelle }, carteDuPoste = noms.entries.firstOrNull { it.value.poste.isNotBlank() }?.key.orEmpty(),
         )
-        return i
+        val ex = runCatching { extras() }.getOrNull() ?: return i
+        val ns = ex.optJSONArray("nonSat")
+        val canaux = ex.optJSONArray("canaux")
+        return i.copy(
+            nonSat = ns?.let { a -> (0 until a.length()).map { a.optString(it) }.toSet() },
+            adsbActif = ex.optJSONObject("adsb")?.optBoolean("actif") == true, adsbRecepteur = ex.optJSONObject("adsb")?.optString("source").orEmpty(),
+            aisActif = ex.optJSONObject("ais")?.optBoolean("actif") == true, aisRecepteur = ex.optJSONObject("ais")?.optString("source").orEmpty(),
+            canaux = (0 until (canaux?.length() ?: 0)).mapNotNull { k -> canaux!!.optJSONObject(k)?.let { o -> FonctionsMontage.Canal(o.optString("nom"), o.optLong("hz") / 1e6) } },
+            sdrFichier = s?.optString("fichierIq").orEmpty(), sdrCtcssHz = s?.optJSONObject("ctcss")?.optDouble("hz", 0.0) ?: 0.0,
+            balayage = ex.optBoolean("balayage"), auditeurs = ex.optInt("auditeurs"))
     }
 
     // The sound cards Java knows, read again every ten seconds (the list asks every mixer).

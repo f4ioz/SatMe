@@ -256,4 +256,40 @@ class MontageTest {
         val plan = DispositionMontage.json(DispositionMontage.dispose(prereglage("fm-ic9700-yagi")))
         assertEquals(5, plan.getJSONArray("boites").length())
     }
+
+    @Test fun lIcomParLeReseauAllumeSonCableReseauPasSonUsb() {
+        val c = Montage.Bati().run {
+            val r = ajoute("ic9700"); val pc = ajoute("pc")
+            relie(r, "usb", pc, "usb"); relie(r, "lan", pc, "lan"); chaine()
+        }
+        val usb = c.liens.first { it.cable == Cable.USB }.id; val lan = c.liens.first { it.cable == Cable.ETHERNET }.id
+        val l = ActiviteMontage.Lectures(etat = JSONObject("""{"cat":{"connecte":true,"modele":"IC9700"}}"""),
+            icom = JSONObject("""{"liaison":"RESEAU","etat":"CONNECTE","latenceMs":12,"cat":true,"audio":true}"""))
+        val a = ActiviteMontage.depuis(l)
+        val al = ActiviteMontage.allume(c, a)
+        assertEquals(Etat.RX, al.liens[lan]); assertEquals(Etat.REPOS, al.liens[usb])
+        val ic = c.elements.first { it.modele == "ic9700" }.id
+        assertEquals("réseau · 12 ms · CAT + son", al.notes[ic])
+        assertTrue(a.resume.any { it.contains("par le réseau") })
+        // By USB: the USB cable, not the LAN one.
+        val b = ActiviteMontage.allume(c, ActiviteMontage.depuis(ActiviteMontage.Lectures(etat = JSONObject("""{"cat":{"connecte":true,"modele":"IC9700"}}"""))))
+        assertEquals(Etat.RX, b.liens[usb]); assertEquals(Etat.REPOS, b.liens[lan])
+        // The network link lost while used: an error on the rig.
+        val p = ActiviteMontage.allume(c, ActiviteMontage.depuis(ActiviteMontage.Lectures(
+            icom = JSONObject("""{"liaison":"RESEAU","etat":"PERDU","message":"le poste ne répond plus","cat":true}"""))))
+        assertTrue(p.erreurs[ic]!!.contains("perdue"))
+        assertEquals("réseau : perdu", p.notes[ic])
+    }
+
+    @Test fun laMoletteEtLesAuditeursSeVoient() {
+        val c = Montage.Bati().run { val m = ajoute("molette-usb"); val pc = ajoute("pc"); val e = ajoute("boite-ecoute"); relie(m, "usb", pc, "usb"); relie(pc, "logiciel", e, "net"); chaine() }
+        val l = ActiviteMontage.Lectures(molette = JSONObject("""{"on":true,"etat":"ouvert","puce":"100 Hz · QO-100"}"""),
+            boites = JSONObject("""{"ecoute":{"on":true,"clients":3}}"""))
+        val al = ActiviteMontage.allume(c, ActiviteMontage.depuis(l))
+        val m = c.elements.first { it.modele == "molette-usb" }.id; val e = c.elements.first { it.modele == "boite-ecoute" }.id
+        assertEquals(Etat.RELIE, al.elements[m])
+        assertEquals("100 Hz · QO-100", al.notes[m])
+        assertEquals("3 auditeurs", al.boites[e]!!.texte)
+    }
 }
+

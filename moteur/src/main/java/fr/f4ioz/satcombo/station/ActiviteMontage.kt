@@ -32,6 +32,10 @@ object ActiviteMontage {
         val qo100: JSONObject? = null, val lien: JSONObject? = null,
         /** The programs and services beside the computer, as the PC sees them (see [boites]). */
         val boites: JSONObject? = null,
+        /** The Icom over the network (`api/icomreseau`): its link, its state, its delay. */
+        val icom: JSONObject? = null,
+        /** The USB knob (`api/molette`). */
+        val molette: JSONObject? = null,
     )
 
     /** A boîte's state: talking with SatMe now, set up but quiet, or off (not set up). */
@@ -49,6 +53,10 @@ object ActiviteMontage {
         val erreurs: Map<String, String> = emptyMap(), val mhz: Map<String, Double> = emptyMap(), val resume: List<String> = emptyList(),
         /** The boîtes' states, by their role's name ("wavelog", "lien"…). */
         val boites: Map<String, Boite> = emptyMap(),
+        /** A word under a piece, by role ("cat" → « réseau · 12 ms »). */
+        val notes: Map<String, String> = emptyMap(),
+        /** The way a role reaches the computer when it is known: "reseau" (its LAN or Wi-Fi port), "usb". */
+        val liaisons: Map<String, String> = emptyMap(),
     ) {
         val vide get() = rx.isEmpty() && tx.isEmpty()
     }
@@ -57,7 +65,7 @@ object ActiviteMontage {
 
     /** The chain lit: each element's and cable's state, the frequency on each radio cable lit, the elements in error. */
     data class Allumage(val elements: Map<String, Etat>, val liens: Map<String, Etat>, val mhz: Map<String, Double>, val erreurs: Map<String, String>,
-                        val boites: Map<String, Boite> = emptyMap()) {
+                        val boites: Map<String, Boite> = emptyMap(), val notes: Map<String, String> = emptyMap()) {
         /** The elements taking part in what happens now (the simplified drawing). */
         fun enOeuvre(): Set<String> = elements.filterValues { it != Etat.REPOS }.keys
     }
@@ -90,7 +98,8 @@ object ActiviteMontage {
                 rx += "sdr:$r"
                 val ciel = s.d("ciel")
                 if (ciel > 1e6) mhz["ciel-rx"] = ciel / 1e6
-                resume += "Réception SDR : " + nomRecepteur(r) + (if (ciel > 1e6) ", " + f3(ciel / 1e6) + " MHz" else "")
+                resume += "Réception SDR : " + nomRecepteur(r) + (if (ciel > 1e6) ", " + f3(ciel / 1e6) + " MHz" else "") +
+                    (if (r == "fichier" || r == "generateur") " (aucun matériel)" else "")
             }
             if (s.s("erreur").isNotBlank()) err["sdr:$r"] = s.s("erreur")
         }
@@ -132,12 +141,37 @@ object ActiviteMontage {
             tx += "tx:" + iq.s("appareil")
             resume += "Calibration I/Q : " + nomRecepteur(iq.s("appareil"))
         }
+        val notes = LinkedHashMap<String, String>(); val liaisons = LinkedHashMap<String, String>()
         val cat = l.etat?.optJSONObject("cat")
+        // The Icom over the network: its LAN cable lit, not its USB; its state and delay under it.
+        val ic = l.icom
+        val parReseau = ic != null && ic.s("liaison") == "RESEAU"
+        if (parReseau) {
+            liaisons["cat"] = "reseau"
+            val sert = ic.b("cat") || ic.b("audio")
+            val quoi = listOfNotNull("CAT".takeIf { ic.b("cat") }, "son".takeIf { ic.b("audio") }).joinToString(" + ")
+            notes["cat"] = when (ic.s("etat")) {
+                "CONNECTE" -> "réseau · " + ic.optInt("latenceMs", 0) + " ms" + (if (quoi.isNotBlank()) " · $quoi" else "")
+                "RECHERCHE", "CONNEXION" -> "réseau : connexion…"
+                "REFUSE" -> "réseau : refusé"
+                "PERDU" -> "réseau : perdu"
+                else -> "réseau (arrêté)"
+            }
+            if (sert && ic.s("etat") in setOf("PERDU", "REFUSE")) err["cat"] = "liaison réseau " + (if (ic.s("etat") == "REFUSE") "refusée" else "perdue") +
+                (ic.s("message").takeIf { it.isNotBlank() }?.let { " : $it" } ?: "")
+        }
         if (cat.b("connecte")) {
             rx += "cat"
+            if (!parReseau && !cat.b("simule")) liaisons["cat"] = "usb"
             val dl = cat.d("dl")
             if (dl > 1e6 && "ciel-rx" !in mhz) mhz["ciel-rx"] = dl / 1e6
-            resume += "Poste en CAT : " + cat.s("modele") + (if (cat.b("simule")) " (simulé)" else "")
+            resume += "Poste en CAT : " + cat.s("modele") + (if (cat.b("simule")) " (simulé)" else if (parReseau) " (par le réseau)" else "")
+        }
+        // The USB knob: read, never written to.
+        val mo = l.molette
+        if (mo.b("on")) {
+            if (mo.s("etat") == "ouvert") { relies += "molette"; notes["molette"] = mo.s("puce").ifBlank { "en service" } }
+            else notes["molette"] = mo.s("message").ifBlank { "absente" }.take(40)
         }
         val rot = l.etat?.optJSONObject("rotor")
         if (rot.b("connecte")) relies += "rotor"
@@ -145,7 +179,7 @@ object ActiviteMontage {
         if (li.b("ecoute") && (li?.optInt("clients", 0) ?: 0) > 0) relies += "telephone"
         val bx = boites(l.boites)
         bx.forEach { (k, v) -> if (v.etat == EtatBoite.CONNECTE) relies += "boite:$k" }
-        return Activite(rx, tx, relies, err, mhz, resume, bx)
+        return Activite(rx, tx, relies, err, mhz, resume, bx, notes, liaisons)
     }
 
     /**
@@ -194,12 +228,26 @@ object ActiviteMontage {
                 else -> Boite(EtatBoite.CONFIGURE, k.s("nom"))
             }
         }
-        o.optJSONObject("ecoute")?.let { k -> r["ecoute"] = if (k.b("on")) Boite(EtatBoite.CONNECTE, "le son part vers une page") else Boite(EtatBoite.ARRET, "personne n'écoute") }
+        o.optJSONObject("ecoute")?.let { k ->
+            r["ecoute"] = when {
+                n(k) > 0 -> Boite(EtatBoite.CONNECTE, n(k).toString() + (if (n(k) > 1) " auditeurs" else " auditeur"))
+                k.b("on") -> Boite(EtatBoite.CONNECTE, "le son part vers une page")
+                else -> Boite(EtatBoite.ARRET, "personne n'écoute")
+            }
+        }
+        o.optJSONObject("espace")?.let { k ->
+            r["espace"] = when {
+                !k.b("on") -> Boite(EtatBoite.ARRET, "pas consultée")
+                k.s("erreur").isNotBlank() -> Boite(EtatBoite.CONFIGURE, k.s("erreur").take(30))
+                else -> Boite(EtatBoite.CONNECTE, k.s("texte").ifBlank { "à jour" })
+            }
+        }
         return r
     }
 
     private fun nomRecepteur(r: String) = when (r) {
-        "pluto" -> "ADALM-PLUTO"; "bladerf" -> "bladeRF"; "hackrf" -> "HackRF"; "minitiouner" -> "MiniTiouner"; "rtl" -> "clé RTL-SDR"; else -> r
+        "pluto" -> "ADALM-PLUTO"; "bladerf" -> "bladeRF"; "hackrf" -> "HackRF"; "minitiouner" -> "MiniTiouner"; "rtl" -> "clé RTL-SDR"
+        "fichier" -> "enregistrement I/Q"; "generateur" -> "générateur d'essai"; else -> r
     }
 
     /**
@@ -257,6 +305,8 @@ object ActiviteMontage {
                 }
             }
         }
+        // How each piece reaches the computer when the station says it (an Icom over its LAN, not its USB).
+        fun liaison(id: String): String? = roles[id]!!.firstNotNullOfOrNull { a.liaisons[it] }
         // Data: from the radio to the computer, through the boxes between.
         fun donnees(depart: String, etat: Etat) {
             val vus = HashSet<String>(); val file = ArrayDeque(listOf(depart))
@@ -270,6 +320,10 @@ object ActiviteMontage {
                     val ici = if (autre == l.vers) l.de else l.vers
                     val p = Montage.port(c, ici) ?: continue
                     if (!p.signal.versPc) continue
+                    if (id == depart) when (liaison(depart)) {
+                        "reseau" -> if (p.connecteur != "RJ45" && p.connecteur != "Wi-Fi") continue
+                        "usb" -> if (p.connecteur == "RJ45" || p.connecteur == "Wi-Fi") continue
+                    }
                     val ga = c.element(autre.element)?.let { Montage.modele(it) }?.genre
                     // Towards the computer only: a radio or an antenna beyond is not part of it.
                     if (ga !in setOf(Genre.ORDINATEUR, Genre.TELEPHONE, Genre.NOEUD, Genre.INTERFACE, Genre.CARTE_SON)) continue
@@ -298,7 +352,9 @@ object ActiviteMontage {
             val r = roles[e.id]!!.firstOrNull { it.startsWith("boite:") } ?: continue
             bx[e.id] = a.boites[r.removePrefix("boite:")] ?: Boite(EtatBoite.ARRET, "état inconnu ici")
         }
-        return Allumage(el, li, mhz, erreurs, bx)
+        val notes = HashMap<String, String>()
+        for (e in c.elements) roles[e.id]!!.firstNotNullOfOrNull { a.notes[it] }?.let { notes[e.id] = it }
+        return Allumage(el, li, mhz, erreurs, bx, notes)
     }
 
     /** The band a radio cable between [a] and [b] carries (MHz): the output's when one end is an output, else the higher. */
@@ -315,6 +371,7 @@ object ActiviteMontage {
         .put("erreurs", JSONObject(al.erreurs))
         .put("frequences", JSONObject(a.mhz))
         .put("boites", JSONObject().also { o -> al.boites.forEach { (id, b) -> o.put(id, JSONObject().put("etat", b.etat.name.lowercase()).put("texte", b.texte)) } })
+        .put("notes", JSONObject(al.notes))
         .put("resume", JSONArray(a.resume))
         .put("rx", a.rx.isNotEmpty()).put("tx", a.tx.isNotEmpty())
 
@@ -322,7 +379,8 @@ object ActiviteMontage {
     fun essai(quoi: String): Activite = when (quoi) {
         "rx" -> Activite(rx = setOf("sdr:pluto", "sdr:rtl", "cat", "datv:minitiouner"), relies = setOf("boite:lien", "boite:carnets"),
             mhz = mapOf("ciel-rx" to 10489.750, "fi-rx" to 739.750),
-            resume = listOf("Démonstration : réception (rien n'est reçu)"), boites = BOITES_ESSAI)
+            resume = listOf("Démonstration : réception (rien n'est reçu)"), boites = BOITES_ESSAI,
+            notes = mapOf("cat" to "réseau · 12 ms · CAT + son"), liaisons = mapOf("cat" to "reseau"))
         "tx" -> Activite(rx = setOf("sdr:pluto", "datv:minitiouner", "cat", "noeud"), tx = setOf("tx:pluto", "tx:bladerf", "cat"),
             mhz = mapOf("ciel-rx" to 10489.750, "fi-rx" to 739.750, "ciel-tx" to 2400.250, "fi-tx" to 144.250),
             resume = listOf("Démonstration : émission simulée (rien n'est émis)"), boites = BOITES_ESSAI)

@@ -45,7 +45,7 @@ object VerificationMontage {
     private fun sensible(m: Montage.Modele, p: Montage.Port) =
         p.signal == Signal.RF && p.sens != Sens.SORTIE && (m.genre == Genre.SDR || m.genre == Genre.POSTE)
 
-    private fun nom(c: Chaine, id: String) = c.element(id)?.let { Montage.nom(it) } ?: id
+    private fun nom(c: Chaine, id: String) = c.element(id)?.let { Montage.nomCourt(it) } ?: id
     private fun relie(c: Chaine, element: String, port: String) =
         c.liens.any { (it.de.element == element && it.de.port == port) || (it.vers.element == element && it.vers.port == port) }
 
@@ -61,20 +61,20 @@ object VerificationMontage {
                 val entree = ports.firstOrNull { it.signal == Signal.RF && it.sens == Sens.ENTREE && it.voie.emet }
                 val sortie = ports.firstOrNull { it.signal == Signal.RF && it.sens == Sens.SORTIE && it.voie.emet }
                 if (entree != null && sortie != null && relie(c, e.id, entree.id) && !relie(c, e.id, sortie.id))
-                    r += Remarque(Niveau.ATTENTION, "Sortie de « ${Montage.nom(e)} » en l'air : jamais d'émission sans antenne ni charge fictive", listOf(e.id))
+                    r += Remarque(Niveau.ATTENTION, "Sortie de « ${Montage.nomCourt(e)} » en l'air : jamais d'émission sans antenne ni charge fictive", listOf(e.id))
             }
             // A reference input fitted but free.
             ports.filter { it.signal == Signal.REF && it.sens == Sens.ENTREE && !relie(c, e.id, it.id) }.forEach { p ->
-                r += Remarque(Niveau.INFO, "« ${p.nom} » de « ${Montage.nom(e)} » non reliée : relie-la à un GPSDO, ou décoche-la dans sa fiche", listOf(e.id))
+                r += Remarque(Niveau.INFO, "« ${p.nom} » de « ${Montage.nomCourt(e)} » non reliée : relie-la à un GPSDO, ou décoche-la dans sa fiche", listOf(e.id))
             }
             // A GPSDO without its antenna.
             ports.filter { it.signal == Signal.GPS && it.sens == Sens.ENTREE && !relie(c, e.id, it.id) }.forEach {
-                r += Remarque(Niveau.INFO, "« ${Montage.nom(e)} » sans antenne GPS : sa référence ne se cale pas", listOf(e.id))
+                r += Remarque(Niveau.INFO, "« ${Montage.nomCourt(e)} » sans antenne GPS : sa référence ne se cale pas", listOf(e.id))
             }
             // A supply input not drawn (a piece cabled to the rest of the station only).
             if (ports.any { it.signal == Signal.DC && it.sens == Sens.ENTREE } && c.liens.any { it.de.element == e.id || it.vers.element == e.id })
                 ports.filter { it.signal == Signal.DC && it.sens == Sens.ENTREE && !relie(c, e.id, it.id) }.forEach {
-                    r += Remarque(Niveau.INFO, "Alimentation de « ${Montage.nom(e)} » non dessinée", listOf(e.id))
+                    r += Remarque(Niveau.INFO, "Alimentation de « ${Montage.nomCourt(e)} » non dessinée", listOf(e.id))
                 }
         }
         r += lnbSansAlimentation(c)
@@ -117,8 +117,8 @@ object VerificationMontage {
                         val chemin = pas.liens + l.id
                         if (sensible(m, port)) {
                             if (vus.add(autre.id + "." + port.id))
-                                r += Remarque(Niveau.DANGER, "Tension continue du LNB (13 / 18 V) sur « ${port.nom} » de « ${Montage.nom(autre)} » : " +
-                                    "elle vient de « ${Montage.nom(e)} »" + (if (pas.par.isNotEmpty()) " par " + pas.par.joinToString(", ") { "« " + nom(c, it) + " »" } else "") +
+                                r += Remarque(Niveau.DANGER, "Tension continue du LNB (13 / 18 V) sur « ${port.nom} » de « ${Montage.nomCourt(autre)} » : " +
+                                    "elle vient de « ${Montage.nomCourt(e)} »" + (if (pas.par.isNotEmpty()) " par " + pas.par.joinToString(", ") { "« " + nom(c, it) + " »" } else "") +
                                     ". Mets un DC block (ou un T de polarisation) devant : sans lui, l'entrée peut griller.",
                                     listOf(e.id) + pas.par + autre.id, chemin)
                         } else if (laissePasser(m)) file.add(Pas(autre.id, port.id, chemin, pas.par + autre.id))
@@ -148,7 +148,7 @@ object VerificationMontage {
                     if (laissePasser(m)) Montage.ports(autre).filter { it.signal == Signal.RF && it.id != loin.port }.forEach { file.add(autre.id to it.id) }
                 }
             }
-            if (!alimente) r += Remarque(Niveau.ATTENTION, "« ${Montage.nom(e)} » non alimenté : ni MiniTiouner, ni T de polarisation, ni injecteur sur ses sorties", listOf(e.id))
+            if (!alimente) r += Remarque(Niveau.ATTENTION, "« ${Montage.nomCourt(e)} » non alimenté : ni MiniTiouner, ni T de polarisation, ni injecteur sur ses sorties", listOf(e.id))
         }
         return r
     }
@@ -158,7 +158,7 @@ object VerificationMontage {
         if (c.elements.none { Montage.modele(it)?.genre == Genre.ORDINATEUR }) return emptyList()
         val pilotes = setOf(Genre.POSTE, Genre.SDR, Genre.RECEPTEUR_DATV)
         return c.elements.filter { Montage.modele(it)?.genre in pilotes }.filter { e -> !versOrdinateur(c, e.id) }
-            .map { Remarque(Niveau.INFO, "« ${Montage.nom(it)} » n'est relié à aucun ordinateur (USB, réseau)", listOf(it.id)) }
+            .map { Remarque(Niveau.INFO, "« ${Montage.nomCourt(it)} » n'est relié à aucun ordinateur (USB, réseau)", listOf(it.id)) }
     }
 
     private fun versOrdinateur(c: Chaine, depart: String): Boolean {

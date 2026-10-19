@@ -43,6 +43,9 @@ class DiffusionSon {
      */
     @Volatile var marqueur = System.getProperty("satme.marqueur") == "1"
 
+    /** How many pages listen now (any source). */
+    fun nombre(): Int = auditeurs.size + abonnes.size
+
     /** Someone listens to [source] ("sdr", "carte"): worth producing. */
     fun ecoute(source: String): Boolean = auditeurs.any { it.source == source } || abonnes.any { it.source == source }
 

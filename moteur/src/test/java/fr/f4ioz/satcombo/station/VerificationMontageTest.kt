@@ -89,5 +89,10 @@ class VerificationMontageTest {
         val s = ActiviteMontage.suggere(l).chaine
         assertTrue(s.elements.any { it.modele == "dc-block" })
         assertTrue(dangers(s).isEmpty())
+        // The proposal from what the system lists, the same.
+        val d = DetectionMontage.propose(ActiviteMontage.Lectures(qo100 = JSONObject("""{"olRx":9750000000}"""),
+            sdr = JSONObject("""{"recepteur":"pluto","actif":true}"""), datv = JSONObject("""{"ok":true,"recepteur":"minitiouner"}"""))).chaine
+        assertTrue(d.elements.any { it.modele == "repartiteur" } && d.elements.any { it.modele == "dc-block" })
+        assertTrue(dangers(d).isEmpty())
     }
 }

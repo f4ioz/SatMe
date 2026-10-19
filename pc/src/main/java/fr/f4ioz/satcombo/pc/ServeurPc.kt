@@ -123,7 +123,18 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
         iq = iq?.let { i -> runCatching { i.json().put("ok", true) }.getOrNull() },
         qo100 = runCatching { JsonPc.qo100(station, false, sdr?.gammeHz) }.getOrNull(),
         lien = lien?.let { l -> JSONObject().put("on", l.actif).put("ecoute", l.ecoute).put("clients", l.nbClients) },
-        boites = runCatching { boitesMontage() }.getOrNull())
+        boites = runCatching { boitesMontage() }.getOrNull(),
+        icom = icomReseau?.let { i -> runCatching { i.json() }.getOrNull() },
+        molette = molette?.let { m -> runCatching { m.json() }.getOrNull() })
+
+    /** What the montage's functions add to the parts' state: the tabs not about satellites, ADS-B, AIS, QO-100's channels, the scan, the listeners. */
+    private fun extrasMontage(): JSONObject = JSONObject()
+        .put("nonSat", JSONArray(FonctionsNonSat.choisis(station.stockage).orEmpty().toList()))
+        .put("adsb", adsb?.let { a -> runCatching { a.json() }.getOrNull()?.let { j -> JSONObject().put("actif", j.optBoolean("actif")).put("source", j.optString("source")) } } ?: JSONObject.NULL)
+        .put("ais", ais?.let { a -> runCatching { a.json() }.getOrNull()?.let { j -> JSONObject().put("actif", j.optBoolean("actif")).put("source", j.optString("source")) } } ?: JSONObject.NULL)
+        .put("canaux", canaux?.let { k -> runCatching { k.json().optJSONArray("canaux") }.getOrNull() } ?: JSONArray())
+        .put("balayage", balayage?.let { b -> runCatching { b.json().optBoolean("actif") }.getOrNull() } ?: false)
+        .put("auditeurs", diffusion?.nombre() ?: 0)
 
     /** The programs and services beside the computer, as this PC knows them (settings, services on): nothing asked of them. */
     private fun boitesMontage(): JSONObject {
@@ -133,16 +144,20 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
             .put("qrz", JSONObject().put("configure", s.qrzUser.isNotBlank() && s.qrzMdp.isNotBlank()))
             .put("psk", JSONObject().put("on", son?.psk?.actif ?: s.pskReporter).put("etat", son?.psk?.etat().orEmpty()))
             .put("telephone", JSONObject().put("connecte", telephone?.connecte == true).put("adresse", telephone?.adresse.orEmpty()))
-            .put("ecoute", JSONObject().put("on", diffusion?.ecoute("sdr") == true || diffusion?.ecoute("datv") == true))
+            .put("ecoute", JSONObject().put("on", diffusion?.ecoute("sdr") == true || diffusion?.ecoute("datv") == true).put("clients", diffusion?.nombre() ?: 0))
         chatLarge?.let { c -> o.put("chat", JSONObject().put("on", c.on).put("etat", c.etat)) }
         rigctld?.let { r -> runCatching { r.json() }.getOrNull()?.let { j -> o.put("carnets", JSONObject().put("on", j.optBoolean("on")).put("clients", j.optInt("clients")).put("port", j.optInt("port"))) } }
         lien?.let { l -> o.put("lien", JSONObject().put("on", l.actif).put("clients", l.nbClients).put("port", l.port)) }
         datv?.let { d -> o.put("noeud", JSONObject().put("nom", d.nomNoeud.ifBlank { d.noeud }).put("actif", d.noeud.isNotBlank() && d.etat.actif)) }
+        espace?.let { e -> runCatching { e.json() }.getOrNull()?.let { j ->
+            o.put("espace", JSONObject().put("on", j.optBoolean("actif")).put("erreur", if ((j.optJSONObject("erreurs")?.length() ?: 0) > 0) "lecture en erreur" else "")
+                .put("texte", j.optJSONObject("kp")?.optString("texte")?.takeIf { it.isNotBlank() }?.let { "Kp " + it } ?: ""))
+        } }
         return o
     }
 
     /** The « Montage » page's functions: their state, and its receive gestures through the page's own routes. */
-    val fonctionsMontage: FonctionsPc by lazy { FonctionsPc(station, sdr, son, datv, phonie, diffusion, { c, q -> action(c, q) }, { lecturesMontage() }) }
+    val fonctionsMontage: FonctionsPc by lazy { FonctionsPc(station, sdr, son, datv, phonie, diffusion, { c, q -> action(c, q) }, { lecturesMontage() }, { extrasMontage() }) }
 
     /** The password asked of other machines when the page is open to the network (set before [demarre]). */
     @Volatile var acces: AccesDistantPc? = null
