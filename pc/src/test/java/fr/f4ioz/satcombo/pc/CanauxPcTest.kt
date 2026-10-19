@@ -88,4 +88,39 @@ class CanauxPcTest {
         assertFalse(k.action("/api/canaux/emet", emptyMap()).getBoolean("ok"))
         assertFalse(k.action("/api/canaux/prereglage", mapOf("nom" to "x")).getBoolean("ok"))
     }
+
+    @Test fun `un canal RTTY ecrit des lignes horodatees, l'indicatif marque`() {
+        val k = CanauxPc(stockage(), horloge = { 1_700_000_000_000L })
+        k.indicatif = { "F4IOZ" }
+        assertTrue(k.action("/api/canaux/ajoute", mapOf("hz" to "10489551500", "classe" to "rtty")).getBoolean("ok"))
+        assertEquals(fr.f4ioz.satcombo.domain.DecodeursMultiples.Decodeur.RTTY, k.liste[0].decodeur)
+        assertEquals(10_489_550_000L, k.liste[0].cadranHz)
+        val a = fr.f4ioz.satcombo.clavier.SignauxEssai.audioRtty(fr.f4ioz.satcombo.clavier.SignauxEssai.Rtty("RYRY CQ DE F4IOZ K"),
+            fr.f4ioz.satcombo.sdr.Dsp.AUDIO_RATE, 1_500.0, 6.0, 0.3)
+        val pcm = ShortArray(a.size) { (a[it] * 32_767).toInt().toShort() }
+        var i = 0
+        while (i < pcm.size) { val n = minOf(4_410, pcm.size - i); k.recoit(1, pcm.copyOfRange(i, i + n), n); i += n }
+        val c = k.json().getJSONArray("canaux").getJSONObject(0)
+        val l = c.getJSONArray("lignes").getJSONObject(0)
+        assertTrue(l.toString(), l.getString("texte").contains("CQ DE F4IOZ"))
+        assertEquals(1_700_000_000_000L, l.getLong("t"))
+        assertTrue(l.getJSONArray("ind").getJSONArray(0).getBoolean(2))
+    }
+
+    @Test fun `le decodeur PSK31 RTTY du son principal, coupe d'origine`() {
+        val st = stockage()
+        val c = ClavierPc(st, { 1_700_000_000_000L })
+        assertFalse(c.actif)
+        c.action(mapOf("on" to "1", "mode" to "RTTY", "baud" to "50", "shift" to "425", "inverse" to "1"))
+        assertTrue(c.actif)
+        val r = ClavierPc(st).reglagesRtty
+        assertEquals(50.0, r.baud, 0.0); assertEquals(425.0, r.shiftHz, 0.0); assertTrue(r.inverse)
+        assertEquals(1_500.0, c.centre(), 0.0)
+        val a = fr.f4ioz.satcombo.clavier.SignauxEssai.audioRtty(fr.f4ioz.satcombo.clavier.SignauxEssai.Rtty("RYRY CQ DE F4IOZ K", r),
+            8_000, 1_500.0, 6.0, 0.3)
+        val pcm = ShortArray(a.size) { (a[it] * 32_767).toInt().toShort() }
+        c.ecoute(pcm, pcm.size, 8_000)
+        assertTrue(c.journal.texte(), c.journal.texte().contains("CQ DE F4IOZ"))
+        assertEquals("RTTY", c.json("F4IOZ").getString("mode"))
+    }
 }

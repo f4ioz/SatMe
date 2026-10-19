@@ -56,6 +56,8 @@ class SonStation(
         set(v) { station.stockage.edit().putBoolean("pc_aprs", v).apply() }
     /** CW decoded on the card (off unless chosen), for the Carnet's window. */
     val cw = CwPc(station.stockage)
+    /** PSK31 / RTTY decoded on the card (off unless chosen), for the QO-100 dock. */
+    val clavier = ClavierPc(station.stockage, horloge)
     /** FT8 / FT4 on the card, as the phone's FT8 screen. */
     val ft8 = Ft8Pc(station.stockage, File(dossierEnregistrements.parentFile, "ft8-tranches"), horloge)
     /** Its stations sent to PSK Reporter, when chosen (off by default). */
@@ -154,6 +156,7 @@ class SonStation(
             if (aprsActif) aprs.ecoute(pcm, n, rate)
             ft8.ecoute(pcm, n, rate)
             cw.ecoute(pcm, n, rate)
+            clavier.ecoute(pcm, n, rate)
         }
     }
 

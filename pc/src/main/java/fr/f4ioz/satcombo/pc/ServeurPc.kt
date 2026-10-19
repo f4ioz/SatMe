@@ -439,6 +439,22 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
         if (chemin.startsWith("/api/datv/sources/") || chemin.startsWith("/api/datv/emission/apercu") || chemin == "/api/datv/emission/incrustation") {
             sourcesDatv(r, c, chemin, q, sortie); return
         }
+        // PSK31 / RTTY on the main sound (receive only): its state and text, its settings, the text as a file.
+        if (chemin == "/api/clavier" || chemin == "/api/clavier/texte") {
+            val k = son?.clavier
+            if (chemin == "/api/clavier/texte") {
+                val nom = "SatMe_" + (k?.mode ?: "PSK31") + "_" + java.text.SimpleDateFormat("yyyyMMdd_HHmmss'Z'", java.util.Locale.ROOT)
+                    .apply { timeZone = java.util.TimeZone.getTimeZone("UTC") }.format(java.util.Date()) + ".txt"
+                envoie(sortie, "200 OK", "text/plain; charset=utf-8", (k?.journal?.texte() ?: "").toByteArray(),
+                    "Content-Disposition: attachment; filename=\"$nom\"\r\n"); return
+            }
+            val o = when {
+                k == null -> JSONObject().put("present", false)
+                r.methode == "POST" -> k.action(q)
+                else -> k.json(station.settings.callsign).put("carte", son?.son?.etat?.value?.actif == true)
+            }
+            envoie(sortie, "200 OK", "application/json; charset=utf-8", o.toString().toByteArray()); return
+        }
         // « Décodeurs multiples »: the channels taken from the receiver's IQ besides the main one (receive only).
         if (chemin == "/api/canaux" || chemin.startsWith("/api/canaux/")) {
             val k = canaux

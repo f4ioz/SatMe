@@ -8,6 +8,8 @@
  */
 package fr.f4ioz.satcombo.sdr
 
+import fr.f4ioz.satcombo.clavier.DecodeurPsk31
+import fr.f4ioz.satcombo.clavier.DecodeurRtty
 import fr.f4ioz.satcombo.cw.DecodeurCw
 import fr.f4ioz.satcombo.domain.Ft8Decodeur
 import fr.f4ioz.satcombo.domain.Ft8Signal
@@ -27,7 +29,7 @@ import kotlin.math.abs
 class GenerateurIqTest {
 
     private val rien = GenerateurIq.Signal(false, 0, 0.0)
-    private val seul = GenerateurIq.Reglages(porteuse = rien, cw = rien, blu = rien, fm = rien, ft8 = rien, sstv = rien)
+    private val seul = GenerateurIq.Reglages(porteuse = rien, cw = rien, blu = rien, fm = rien, ft8 = rien, sstv = rien, psk31 = rien, rtty = rien)
 
     /** [secondes] of the generator heard as [cle] is listened to; each audio block to [son]. */
     private fun ecoute(r: GenerateurIq.Reglages, cle: String, secondes: Double, debutMs: Long = 0L, son: (ShortArray, Int) -> Unit) {
@@ -121,5 +123,38 @@ class GenerateurIqTest {
         assertEquals("Martin M1", r.sstvMode)
         assertEquals(false, r.fm.actif)
         assertTrue(GenerateurIq.ecoutes(r).none { it.cle == "fm" })
+    }
+
+    @Test
+    fun le_psk31_et_le_rtty_du_generateur_sont_lus() {
+        val r = seul.copy(psk31 = GenerateurIq.Signal(true, 20_000, 12.0), rtty = GenerateurIq.Signal(true, -8_000, 12.0))
+        val lp = StringBuilder()
+        val p = DecodeurPsk31(Dsp.AUDIO_RATE, { lp.append(it) }, GenerateurIq.AUDIO_PSK31_HZ.toDouble())
+        ecoute(r, "psk31", 14.0) { b, n -> p.ecoute(b, n) }
+        println("PSK31 lu : « $lp », ${p.frequenceHz} Hz")
+        assertTrue(lp.toString(), lp.contains("de Q0SAT Q0SAT JN18"))
+        val lr = StringBuilder()
+        val d = DecodeurRtty(Dsp.AUDIO_RATE, { lr.append(it) }, GenerateurIq.AUDIO_RTTY_HZ.toDouble())
+        ecoute(r, "rtty", 12.0) { b, n -> d.ecoute(b, n) }
+        println("RTTY lu : « $lr », ${d.frequenceHz} Hz")
+        assertTrue(lr.toString(), lr.contains("CQ DE Q0SAT Q0SAT JN18"))
+    }
+
+    @Test
+    fun un_canal_secondaire_psk31_lit_le_generateur() {
+        // The receiver tuned elsewhere; the channel 20 kHz away takes PSK31 from the IQ.
+        val r = seul.copy(psk31 = GenerateurIq.Signal(true, 20_000, 12.0))
+        val g = GenerateurIq(r, cadence = false)
+        val chaine = RxChain().apply { mode = RxMode.USB; offsetHz = 0.0 }
+        val canaux = CanauxSecondaires()
+        val lu = StringBuilder()
+        val p = DecodeurPsk31(Dsp.AUDIO_RATE, { lu.append(it) }, GenerateurIq.AUDIO_PSK31_HZ.toDouble())
+        val cibles = listOf(CanauxSecondaires.Cible(1, 20_000.0 - GenerateurIq.AUDIO_PSK31_HZ, ModeCanal.USB))
+        chaine.canaux = { aI, aQ, n, bI, bQ, n1 -> canaux.traite(aI, aQ, n, bI, bQ, n1, cibles) { _, pcm, k -> p.ecoute(pcm, k) } }
+        val iq = ShortArray(2 * 16_384)
+        val pcm = ShortArray(chaine.maxAudio(iq.size))
+        var paires = 0L
+        while (paires < 14.0 * Dsp.RTL_RATE) { val n = g.read16(iq); chaine.process16(iq, n, pcm); paires += n / 2 }
+        assertTrue(lu.toString(), lu.contains("de Q0SAT Q0SAT JN18"))
     }
 }

@@ -135,6 +135,7 @@ fun main(args: Array<String>) {
     // « Décodeurs multiples » on QO-100: off unless chosen; a channel's voice written with its own dial.
     val canaux = CanauxPc(station.stockage, son.sstv, phonie)
     canaux.indicatif = { station.etat.value.indicatif }
+    canaux.reglagesRtty = { son.clavier.reglagesRtty }
     sdr.canaux = canaux
     phonie.demarre()
     portee.launch {

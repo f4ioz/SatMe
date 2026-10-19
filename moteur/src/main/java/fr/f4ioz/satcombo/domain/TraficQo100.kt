@@ -75,7 +75,7 @@ object TraficQo100 {
     /**
      * Tuning a signal: [cadranHz] the dial (the suppressed carrier, sky Hz),
      * [demod] the receiver's mode, [modeCarnet] the log's, [decodeur] the
-     * panel to show (phonie, cw, ft8, ft4, sstv, or "" for none).
+     * panel to show (phonie, cw, ft8, ft4, sstv, psk31, rtty, or "" for none).
      */
     data class Accord(val cadranHz: Long, val demod: String, val modeCarnet: String, val decodeur: String, val ft8Mode: String = "")
 
@@ -100,8 +100,8 @@ object TraficQo100 {
         }
         // SSTV's tones run 1 200 to 2 300 Hz: the middle at 1.9 kHz.
         "sstv" -> Accord(arrondi(hz - 1_900, 10), "USB", "SSTV", "sstv")
-        "psk31" -> Accord(arrondi(hz - 1_000, 10), "USB", "PSK31", "")
-        "rtty" -> Accord(arrondi(hz - 1_500, 10), "USB", "RTTY", "")
+        "psk31" -> Accord(arrondi(hz - 1_000, 10), "USB", "PSK31", "psk31")
+        "rtty" -> Accord(arrondi(hz - 1_500, 10), "USB", "RTTY", "rtty")
         // A voice's centre about 1.5 kHz above its carrier.
         "blu" -> Accord(arrondi(hz - 1_500, 10), "USB", "SSB", "phonie")
         // A beacon, a carrier, something unknown: heard as a note in USB.

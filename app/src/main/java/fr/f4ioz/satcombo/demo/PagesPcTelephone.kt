@@ -331,6 +331,8 @@ object PagesPcTelephone {
                     .put("ok", true).put("telephone", true).put("etiquettes", JSONArray()))
                 // « Décodeurs multiples » are SatMe-PC's for now: the cockpit hides them.
                 "/api/canaux" -> json(JSONObject().put("absent", true))
+                // PSK31 / RTTY on the main sound are SatMe-PC's for now: the dock hides them.
+                "/api/clavier" -> json(JSONObject().put("present", false))
                 "/api/plan-bandes" -> json(fr.f4ioz.satcombo.domain.PlanBandes.json(fr.f4ioz.satcombo.domain.PlanBandes.defaut {
                     fr.f4ioz.satcombo.i18n.I18n.t("qo100_seg_$it") }).put("ok", true))
                 "/api/montage/suggestion", "/api/montage/detection" -> json(JSONObject().put("ok", false).put("erreur", MONTAGE_SUR_PC))

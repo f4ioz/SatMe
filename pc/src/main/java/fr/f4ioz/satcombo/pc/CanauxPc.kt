@@ -24,7 +24,8 @@ import org.json.JSONObject
  * default: then nothing here runs and the single decoder of the cockpit is
  * fed by the main receiver as before.
  *
- * - **FT8/FT4 and CW** get a decoder of their own per channel.
+ * - **FT8/FT4, CW, PSK31 and RTTY** get a decoder of their own per channel
+ *   (PSK31 and RTTY write stamped lines; RTTY takes the dock's settings).
  * - **SSTV and voice to text** have one engine each (one picture, one helper
  *   process): a channel holding one feeds it in place of the main receiver.
  * - **« Écouter »** on a channel: its sound replaces the main one (speaker,
@@ -45,6 +46,9 @@ class CanauxPc(
 
     @Volatile var liste: List<DecodeursMultiples.Canal> = DecodeursMultiples.lit(stockage.getString(CLE_LISTE, "[]"))
         private set
+
+    /** The RTTY settings (speed, shift, sense), the dock's. */
+    @Volatile var reglagesRtty: () -> fr.f4ioz.satcombo.clavier.DecodeurRtty.Reglages = { fr.f4ioz.satcombo.clavier.DecodeurRtty.Reglages() }
 
     /** My callsign, for the FT8 decoders (what a QSO lets them expect). */
     @Volatile var indicatif: () -> String = { "" }
@@ -67,6 +71,15 @@ class CanauxPc(
                 f.auDecode = { l -> l.firstOrNull()?.let { note(it.texte, l.size) } }
             } else null
         var cw: DecodeurCw? = null
+        var psk: fr.f4ioz.satcombo.clavier.DecodeurPsk31? = null
+        var rtty: fr.f4ioz.satcombo.clavier.DecodeurRtty? = null
+        val journal: fr.f4ioz.satcombo.clavier.JournalClavier? =
+            if (canal.decodeur == Decodeur.PSK31 || canal.decodeur == Decodeur.RTTY) fr.f4ioz.satcombo.clavier.JournalClavier(horloge) else null
+        private fun texte(s: String) {
+            journal?.ajoute(s)
+            if (s.isNotBlank()) { dernierMs = horloge(); decodes++ }
+            dernier = journal?.fin(60).orEmpty()
+        }
         val texteCw = StringBuilder()
         @Volatile var dernier = ""
         @Volatile var dernierMs = 0L
@@ -87,6 +100,15 @@ class CanauxPc(
                             dernier = texteCw.toString().takeLast(60).trim()
                         }
                     }).also { cw = it }
+                    d.ecoute(pcm, n)
+                }
+                Decodeur.PSK31 -> (psk ?: fr.f4ioz.satcombo.clavier.DecodeurPsk31(Dsp.AUDIO_RATE, { texte(it) },
+                    DecodeursMultiples.AUDIO_PSK31_HZ.toDouble()).also { psk = it }).ecoute(pcm, n)
+                Decodeur.RTTY -> {
+                    val d = rtty ?: fr.f4ioz.satcombo.clavier.DecodeurRtty(Dsp.AUDIO_RATE, { texte(it) },
+                        DecodeursMultiples.AUDIO_RTTY_HZ.toDouble(), reglagesRtty()).also { rtty = it }
+                    val r = reglagesRtty()
+                    if (d.reglages != r.borne()) d.reglages = r
                     d.ecoute(pcm, n)
                 }
                 Decodeur.SSTV -> sstv?.ecouteSdr(pcm, n, Dsp.AUDIO_RATE)
@@ -232,6 +254,9 @@ class CanauxPc(
                 Decodeur.PHONIE -> if (phonie?.actif != true) o.put("info", "Phonie → texte coupé ou non installé (Réglages)") else phonie.derniere()?.takeIf { it.freqHz == c.cadranHz }?.let { b -> o.put("dernier", b.texte.take(120)).put("dernierMs", b.t) }
                 else -> if (p != null) o.put("dernier", p.dernier).put("dernierMs", p.dernierMs).put("decodes", p.decodes)
             }
+            p?.journal?.let { j -> o.put("lignes", j.json(40, indicatif())) }
+            p?.psk?.let { d -> o.put("ouvert", d.ouvert).put("qualite", Math.round(d.qualite * 100)).put("audio", Math.round(d.frequenceHz)) }
+            p?.rtty?.let { d -> o.put("ouvert", d.ouvert).put("qualite", Math.round(d.qualite * 100)).put("audio", Math.round(d.frequenceHz)) }
             p?.ft8?.let { f -> o.put("lignes", JSONArray(f.entendus.take(6).map { e2 -> JSONObject().put("t", e2.tranche).put("texte", e2.texte).put("db", e2.rapportDb).put("hz", e2.frequenceHz) })) }
             a.put(o)
         }

@@ -56,6 +56,12 @@ class DecodeursMultiplesTest {
         assertEquals(Decodeur.FT4, D.decodeurDe("ft4"))
         assertEquals(Decodeur.PHONIE, D.decodeurDe("blu"))
         assertEquals(Decodeur.AUCUN, D.decodeurDe("porteuse"))
+        // PSK31 on 1 kHz, RTTY centred on 1.5 kHz: the classifier's labels open them.
+        assertEquals(Decodeur.PSK31, D.decodeurDe("psk31"))
+        assertEquals(Decodeur.RTTY, D.decodeurDe("rtty"))
+        assertEquals(10_489_550_000L, D.cadranPour(Decodeur.PSK31, 10_489_551_000L))
+        assertEquals(10_489_550_000L, D.cadranPour(Decodeur.RTTY, 10_489_551_500L))
+        assertEquals(TraficQo100.accord("psk31", 10_489_551_234L).cadranHz, D.cadranPour(Decodeur.PSK31, 10_489_551_234L, "psk31"))
     }
 
     @Test fun `le prereglage FT8 CW phonie`() {

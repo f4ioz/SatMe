@@ -8,6 +8,7 @@
  */
 package fr.f4ioz.satcombo.sdr
 
+import fr.f4ioz.satcombo.clavier.SignauxEssai
 import fr.f4ioz.satcombo.cw.DecodeurCw
 import fr.f4ioz.satcombo.domain.Ft8
 import fr.f4ioz.satcombo.domain.Ft8Signal
@@ -26,8 +27,8 @@ import kotlin.math.sqrt
  * « Générateur d'essai »: a receiver with no hardware — noise and test
  * signals made here, at [Dsp.RTL_RATE] in 16 bits, so every decoder can be
  * tried without an antenna: a carrier, keyed CW, a sideband « voice » (tone
- * pairs in syllables), an FM tone, an FT8 call in the even 15 s slots, and
- * SSTV pictures in narrow FM.
+ * pairs in syllables), an FM tone, an FT8 call in the even 15 s slots,
+ * SSTV pictures in narrow FM, and (when ticked) a PSK31 and an RTTY call.
  *
  * A fake receiver only: what it makes goes to the reception, never to a
  * transmitter.
@@ -62,12 +63,18 @@ class GenerateurIq(
         val sstvMode: String = "Robot 36",
         /** A CTCSS sub-tone under the FM tone (one of [DetecteurSousTon.TONS], Hz); 0: none. */
         val fmCtcssHz: Double = 0.0,
+        /** PSK31 (BPSK31, varicode), heard at [AUDIO_PSK31_HZ] in USB. Off unless ticked. */
+        val psk31: Signal = Signal(false, 20_000, 15.0),
+        val psk31Texte: String = "CQ CQ de Q0SAT Q0SAT JN18 pse k",
+        /** RTTY 45.45 Bd, 170 Hz shift, centred at [AUDIO_RTTY_HZ] in USB. Off unless ticked. */
+        val rtty: Signal = Signal(false, -8_000, 15.0),
+        val rttyTexte: String = "RYRY CQ CQ DE Q0SAT Q0SAT JN18 K",
     ) {
         /** Flat, the keys [avec] reads: kept as is, sent to the page as is. */
         fun plat(): JSONObject {
             val o = JSONObject().put("bruit", bruitDbfs).put("cwTexte", cwTexte).put("cwWpm", cwWpm).put("fmTon", fmTonHz).put("fmCtcss", fmCtcssHz)
-                .put("ft8Message", ft8Message).put("sstvMode", sstvMode)
-            for ((nom, x) in listOf("porteuse" to porteuse, "cw" to cw, "blu" to blu, "fm" to fm, "ft8" to ft8, "sstv" to sstv))
+                .put("ft8Message", ft8Message).put("sstvMode", sstvMode).put("psk31Texte", psk31Texte).put("rttyTexte", rttyTexte)
+            for ((nom, x) in listOf("porteuse" to porteuse, "cw" to cw, "blu" to blu, "fm" to fm, "ft8" to ft8, "sstv" to sstv, "psk31" to psk31, "rtty" to rtty))
                 o.put("${nom}On", if (x.actif) "1" else "0").put("${nom}Hz", x.decalageHz).put("${nom}Snr", x.snrDb)
             return o
         }
@@ -89,7 +96,11 @@ class GenerateurIq(
                 p("ft8Message")?.trim()?.uppercase()?.takeIf { messageFt8(it) != null } ?: ft8Message,
                 sig("sstv", sstv),
                 p("sstvMode")?.takeIf { SstvMode.byName(it) != null } ?: sstvMode,
-                p("fmCtcss")?.replace(',', '.')?.toDoubleOrNull()?.let { DetecteurSousTon.normalise(it) } ?: fmCtcssHz)
+                p("fmCtcss")?.replace(',', '.')?.toDoubleOrNull()?.let { DetecteurSousTon.normalise(it) } ?: fmCtcssHz,
+                sig("psk31", psk31),
+                p("psk31Texte")?.filter { it.code in 32..126 }?.take(80)?.ifBlank { null } ?: psk31Texte,
+                sig("rtty", rtty),
+                p("rttyTexte")?.uppercase()?.filter { it.isLetterOrDigit() || it in " -'!:(+)#?&./=,$" }?.take(80)?.ifBlank { null } ?: rttyTexte)
         }
     }
 
@@ -122,6 +133,10 @@ class GenerateurIq(
     private var aSstv = 0f; private var phSstv = 0
     private var sstvMod: ModulateurAudio? = null
     private var sstvIq = ShortArray(0)
+    private var aPsk = 0f; private var phPsk = 0; private var pasPsk = 0
+    private var psk: SignauxEssai.Psk31? = null
+    private var aRtty = 0f; private var phRtty = 0
+    private var rtty: SignauxEssai.Rtty? = null
     private var r = Reglages()
 
     private fun amplitude(s: Signal): Float =
@@ -153,6 +168,10 @@ class GenerateurIq(
             sstvMod = ModulateurAudio(ModulationAudio.NBFM, Dsp.AUDIO_RATE, Dsp.RTL_RATE / Dsp.AUDIO_RATE, SSTV_DEVIATION_HZ,
                 niveau = 1.0 * (aSstv / ModulateurAudio.PLEIN).coerceIn(0.001, 0.9), source = SourceSstv(m))
         } else if (aSstv == 0f) sstvMod = null
+        aPsk = amplitude(n.psk31); pasPsk = pas(n.psk31.decalageHz.toDouble())
+        if (psk == null || n.psk31Texte != ancien.psk31Texte) psk = SignauxEssai.Psk31(n.psk31Texte)
+        aRtty = amplitude(n.rtty)
+        if (rtty == null || n.rttyTexte != ancien.rttyTexte) rtty = SignauxEssai.Rtty(n.rttyTexte)
     }
 
     /** SSTV pictures one after the other, [PAUSE_SSTV_S] of silence between (the FM carrier stays). */
@@ -202,6 +221,9 @@ class GenerateurIq(
         val ctcssDev = if (r.fmCtcssHz > 0.0) CTCSS_DEVIATION_HZ / Dsp.RTL_RATE * 4_294_967_296.0 else 0.0
         val pasSstv = pas(r.sstv.decalageHz.toDouble())
         val rampe = 1f / (CW_RAMPE_MS * Dsp.RTL_RATE / 1000f)
+        val pk = psk.takeIf { aPsk > 0f }
+        val rt = rtty.takeIf { aRtty > 0f }
+        val rttyBase = r.rtty.decalageHz.toDouble()
         var o = 0
         for (k in 0 until n) {
             var re = alea.gauss() * sigma
@@ -256,6 +278,19 @@ class GenerateurIq(
                 val c = COS[x]; val s = SIN[x]
                 re += si * c - sq * s; im += si * s + sq * c
                 phSstv += pasSstv
+            }
+            if (pk != null) {
+                val g = (pk.amplitude((produites + k).toDouble() / Dsp.RTL_RATE) * aPsk).toFloat()
+                if (g != 0f) { val x = phPsk ushr 16; re += COS[x] * g; im += SIN[x] * g }
+                phPsk += pasPsk
+            }
+            if (rt != null) {
+                val d = rt.decalageHz((produites + k).toDouble() / Dsp.RTL_RATE)
+                if (d != null) {
+                    val x = phRtty ushr 16
+                    re += COS[x] * aRtty; im += SIN[x] * aRtty
+                    phRtty += Math.round((rttyBase + d) / Dsp.RTL_RATE * 4_294_967_296.0).toInt()
+                }
             }
             buf[o++] = re.toInt().coerceIn(-32_767, 32_767).toShort()
             buf[o++] = im.toInt().coerceIn(-32_767, 32_767).toShort()
@@ -313,6 +348,10 @@ class GenerateurIq(
         const val CW_RAMPE_MS = 5f
         /** The CW note heard in USB (Hz): the receiver set this much below the carrier. */
         const val NOTE_CW_HZ = 700
+        /** Where PSK31 is heard in USB (Hz above the dial), as the QO-100 tuning puts it. */
+        const val AUDIO_PSK31_HZ = 1_000
+        /** Where RTTY's two tones are centred in USB. */
+        const val AUDIO_RTTY_HZ = 1_500
         private val COS = FloatArray(65_536) { cos(2.0 * PI * it / 65_536).toFloat() }
         private val SIN = FloatArray(65_536) { sin(2.0 * PI * it / 65_536).toFloat() }
         /** 65 536 standard normal values (fixed seed), each drawn equally often. */
@@ -325,6 +364,8 @@ class GenerateurIq(
             Ecoute("fm", "FM, ton " + r.fmTonHz + " Hz" + (if (r.fmCtcssHz > 0.0) ", CTCSS " + DetecteurSousTon.libelle(r.fmCtcssHz) else ""), "NFM", r.fm.decalageHz, 12_000).takeIf { r.fm.actif },
             Ecoute("ft8", "FT8 « " + r.ft8Message + " »", "USB", r.ft8.decalageHz, 3_000).takeIf { r.ft8.actif },
             Ecoute("sstv", "SSTV " + r.sstvMode + " (FM)", "NFM", r.sstv.decalageHz, 16_000).takeIf { r.sstv.actif },
+            Ecoute("psk31", "PSK31 « " + r.psk31Texte + " »", "USB", r.psk31.decalageHz - AUDIO_PSK31_HZ, 0).takeIf { r.psk31.actif },
+            Ecoute("rtty", "RTTY 45 Bd / 170 Hz « " + r.rttyTexte + " »", "USB", r.rtty.decalageHz - AUDIO_RTTY_HZ, 0).takeIf { r.rtty.actif },
         )
 
         /** « CQ CALL GRID » or « CALL1 CALL2 GRID » (standard callsigns) as FT8's 77 bits; null when it does not fit. */

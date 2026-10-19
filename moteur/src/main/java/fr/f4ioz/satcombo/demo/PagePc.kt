@@ -940,9 +940,15 @@ ${STYLE_JETONS}
   .tq-onglets button.actif { border-color:var(--cyan); color:var(--cyan); background:rgba(63,224,200,.08); }
   .tq-onglets button.auto-choisi { box-shadow:inset 0 -2px 0 var(--cyan); color:var(--clair); }
   .tq-ft8 { max-height:250px; overflow:auto; margin-top:6px; }
+  .ck-l select, .ck-l input[type=number] { flex:none; padding:2px 4px; font-size:12px; }
+  .ck-l button { padding:2px 7px !important; }
+  .ck-texte { margin-top:4px; height:120px; overflow-y:auto; padding:6px 8px; border-radius:8px; background:#0E1720; font-family:ui-monospace,Consolas,monospace; font-size:13px; line-height:1.45; word-break:break-word; }
+  .ck-texte .ck-h { color:var(--texte-3); font-size:11px; margin-right:8px; }
+  .ck-texte .ck-moi { color:#FF5FA2; background:rgba(255,95,162,.14); border-radius:4px; padding:0 2px; }
+  .ck-texte .ck-ind { color:var(--cyan); font-weight:700; text-decoration:none; }
   /* « Décodeurs multiples »: one line a channel, its colour, its level, its last decode. */
   .tq-mu { display:flex; flex-direction:column; gap:3px; margin:0 0 8px; padding-bottom:6px; border-bottom:1px solid var(--ligne); }
-  .mu-l { display:grid; grid-template-columns:10px 54px 78px 34px 46px minmax(0,1fr) auto auto; align-items:center; gap:6px; font-size:12px; min-height:22px; }
+  .mu-l { display:grid; grid-template-columns:10px 54px 78px 34px 46px minmax(0,1fr) auto auto auto; align-items:center; gap:6px; font-size:12px; min-height:22px; }
   .mu-l > i { width:10px; height:10px; border-radius:3px; background:var(--c); }
   .mu-l > b { color:var(--c); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .mu-f { font-variant-numeric:tabular-nums; cursor:pointer; white-space:nowrap; }
@@ -1605,6 +1611,8 @@ ${rail()}
       <select id="gen-fmCtcss" data-gen="fmCtcss" title="Un sous-ton CTCSS sous le ton FM (déviation 500 Hz)" aria-label="Sous-ton CTCSS du signal FM"></select></span>
     <span>Message FT8</span><input id="gen-ft8Message" data-gen="ft8Message" maxlength="40" placeholder="CQ Q0SAT JN18" title="« CQ INDICATIF CARRÉ » ou « INDICATIF INDICATIF CARRÉ »">
     <span>Mode SSTV</span><select id="gen-sstvMode" data-gen="sstvMode"></select>
+    <span>Texte PSK31</span><input id="gen-psk31Texte" data-gen="psk31Texte" maxlength="80" title="Entendu à 1 000 Hz en USB">
+    <span>Texte RTTY</span><input id="gen-rttyTexte" data-gen="rttyTexte" maxlength="80" title="45,45 Bd, écart 170 Hz, centré à 1 500 Hz en USB">
   </div>
   <div class="petit" id="gen-msg" aria-live="polite"></div>
   <div class="aide">Un faux récepteur, sans matériel : du bruit et des signaux d'essai autour de la fréquence écoutée (« Sinon (MHz) », ou QO-100 quand son onglet a le récepteur). « Écouter » règle le mode et le décalage pour l'entendre : CW à 700 Hz en USB, BLU en USB, FM et SSTV en FM étroite, FT8 dans les tranches paires (indicatif d'essai, jamais envoyé à PSK Reporter). S/B mesuré dans 3 kHz. Rien n'est émis : le générateur ne nourrit que la réception.</div>
@@ -2557,17 +2565,32 @@ ${rail()}
       <div class="carte" id="tq-dock">
         <div class="ligne" style="margin:0 0 8px"><span class="t" style="margin:0">Décodeur</span>
           <span class="tq-onglets" id="tq-onglets">
-            <button data-d="auto">Auto</button><button data-d="phonie">Phonie</button><button data-d="cw">CW</button><button data-d="ft8">FT8 / FT4</button><button data-d="sstv">SSTV</button></span>
+            <button data-d="auto">Auto</button><button data-d="phonie">Phonie</button><button data-d="cw">CW</button><button data-d="ft8">FT8 / FT4</button><button data-d="sstv">SSTV</button><button data-d="psk" hidden>PSK31 / RTTY</button></span>
           <span class="petit" id="tq-d-info" style="margin-left:auto"></span>
           <button class="sp-b" id="tq-mu-b" hidden onclick="muOuvre(this)" aria-pressed="false" title="Décodeurs multiples : plusieurs signaux décodés à la fois, chacun sur son canal">${IconesPc.svg("view_quilt")}<span>Multiples</span></button></div>
         <div id="tq-mu" class="tq-mu" hidden></div>
-        <div id="tq-d-rien" class="petit">Clique un signal dans la cascade : le décodeur de son mode s'ouvre ici (phonie écrite, CW, FT8, image SSTV).</div>
+        <div id="tq-d-rien" class="petit">Clique un signal dans la cascade : le décodeur de son mode s'ouvre ici (phonie écrite, CW, FT8, PSK31, RTTY, image SSTV).</div>
         <div id="tq-d-phonie" hidden><div id="ph-slot-qo100"></div><div class="petit" id="tq-ph-absent" hidden>« Phonie → texte » n'est pas installé : Réglages › Phonie → texte.</div></div>
         <div id="tq-d-cw" hidden><div id="cw-slot-qo100"></div><div class="petit" id="tq-cw-absent" hidden>Le décodeur CW n'est pas disponible ici.</div></div>
         <div id="tq-d-ft8" hidden>
           <div class="ligne" style="margin:0"><button id="tq-ft8-go" onclick="tqFt8Marche()">▶ Décoder</button><span class="petit" id="tq-ft8-etat"></span>
             <button style="margin-left:auto" onclick="vue('ft8')">Onglet FT8 complet ›</button></div>
           <div class="tq-ft8"><table><tbody id="tq-ft8"></tbody></table></div>
+        </div>
+        <div id="tq-d-psk" hidden>
+          <div class="ligne ck-l" style="margin:0;gap:5px;flex-wrap:wrap"><label><input type="checkbox" id="ck-on" onchange="ckPost('on=' + (this.checked ? 1 : 0))"> <b>Décoder</b></label>
+            <select id="ck-mode" style="flex:none" aria-label="Mode décodé" onchange="ckPost('mode=' + this.value)"><option value="PSK31">PSK31</option><option value="RTTY">RTTY</option></select>
+            <input type="number" id="ck-centre" min="0" max="3000" step="10" style="width:58px" placeholder="auto" aria-label="Fréquence audio écoutée (Hz)" title="Fréquence audio écoutée (Hz), l’AFC suit ±50 Hz autour ; 0 : 1 000 Hz en PSK31, 1 500 Hz en RTTY (là où un clic sur la cascade met le signal)" onchange="ckPost('centre=' + (parseInt(this.value, 10) || 0))"><span class="petit">Hz</span>
+            <span id="ck-rtty" style="display:inline-flex;gap:4px;align-items:center"><select id="ck-baud" style="flex:none" aria-label="Vitesse RTTY" onchange="ckPost('baud=' + this.value)"><option value="45.45">45,45 Bd</option><option value="50">50 Bd</option><option value="75">75 Bd</option></select>
+              <select id="ck-shift" style="flex:none" aria-label="Écart RTTY" onchange="ckPost('shift=' + this.value)"><option value="170">170 Hz</option><option value="425">425 Hz</option><option value="850">850 Hz</option></select>
+              <label class="petit" title="Marque et espace échangés (station émettant à l’envers)"><input type="checkbox" id="ck-inv" onchange="ckPost('inverse=' + (this.checked ? 1 : 0))"> inversé</label></span>
+            <select id="ck-seuil" style="flex:none" aria-label="Silencieux" title="Silencieux : la qualité de décision sous laquelle rien n’est écrit" onchange="ckPost('seuil=' + this.value)"><option value="0">sil. auto</option><option value="35">sil. bas</option><option value="70">sil. haut</option></select>
+            <span id="ck-led" title="Silencieux ouvert : un signal est lu" style="width:12px;height:12px;border-radius:6px;background:#22303C;display:inline-block"></span>
+            <span style="margin-left:auto;display:flex;gap:4px"><button style="padding:3px 9px" onclick="ckCopie()" title="Copier le texte (horodaté)">⧉</button><a href="api/clavier/texte" download title="Enregistrer le texte (horodaté, UTC)"><button style="padding:3px 9px">⤓</button></a>
+              <button style="padding:3px 9px" onclick="ckPost('efface=1')" title="Effacer le texte">✕</button></span></div>
+          <div class="petit" id="ck-etat" style="margin-top:2px"></div>
+          <div id="ck-texte" class="ck-texte" aria-live="polite"></div>
+          <div class="aide"><b>PSK31 / RTTY</b> : le son du récepteur principal décodé. PSK31 (BPSK 31,25 Bd, varicode) écouté à 1 000 Hz, RTTY (ITA2, 45,45 Bd et 170 Hz d’écart par défaut ; 50 / 75 Bd, 425 / 850 Hz au choix) centré à 1 500 Hz : là où un clic sur un signal reconnu de la cascade le met. L’AFC suit ±50 Hz ; le silencieux n’écrit rien tant que la qualité de décision est basse (S/B dans la bande du signal, IMD mesurée sur le « idle » PSK31). Chaque ligne porte son heure UTC ; ton indicatif en rose, les autres un clic pour la saisie. Un signal à part se décode aussi sur un canal des « Décodeurs multiples ». Réception seulement.</div>
         </div>
         <div id="tq-d-sstv" hidden>
           <div class="ligne" style="margin:0"><button onclick="post('api/sstv/caler').then(ticSon)" title="Commencer l'image maintenant, sans attendre son entête">Caler maintenant</button>
@@ -8665,7 +8688,7 @@ g('tq-zoom').value = String(tqZ);
 const TQ_COUL = { blu: '#3FE0C8', cw: '#6F8CFF', ft8: '#B07CFF', ft4: '#D58CFF', psk31: '#FF8FD0', rtty: '#FFD166', sstv: '#FFB454', porteuse: '#9AA7B4',
   balise: '#E5484D', numerique_large: '#8BC34A', inconnu: '#6B7C8F' };
 const TQ_NOM = { blu: 'BLU', cw: 'CW', ft8: 'FT8', ft4: 'FT4', psk31: 'PSK31', rtty: 'RTTY', sstv: 'SSTV', porteuse: 'porteuse', balise: 'balise', numerique_large: 'numérique', inconnu: '?' };
-const TQ_DEC_MODE = { SSB: 'phonie', CW: 'cw', FT8: 'ft8', FT4: 'ft8', SSTV: 'sstv' };
+const TQ_DEC_MODE = { SSB: 'phonie', CW: 'cw', FT8: 'ft8', FT4: 'ft8', SSTV: 'sstv', PSK31: 'psk31', RTTY: 'rtty' };
 /** The signals worth a label: judged with some confidence (the doubtful ones would only clutter the waterfall). */
 const TQ_SUR = 0.3;
 /** Where the receiver hears a signal: its sky frequency plus what the calibration does not hold yet (0 once the LNB is calibrated). */
@@ -8853,16 +8876,21 @@ async function tqAccorde(s) {
     if (j.decodeur === 'ft8') await tqPost('api/ft8?on=1&mode=' + (j.ft8Mode || 'FT8'));
     else if (j.decodeur === 'cw') await tqPost('api/cw?on=1');
     else if (j.decodeur === 'sstv') await tqPost('api/sstv/reglage?actif=1');
+    else if ((j.decodeur === 'psk31' || j.decodeur === 'rtty') && CK && CK.present) await tqPost('api/clavier?on=1&centre=0&mode=' + j.decodeur.toUpperCase());
     tqFt8Vu = '';
   }
-  await chargeQo100(); tqTic(); ticCw(); ticSon(); tqFt8();
+  await chargeQo100(); tqTic(); ticCw(); ticSon(); tqFt8(); ckVu = ''; ckTic(true);
 }
 // The dock: the decoder chosen by the signal tuned (« Auto »), or by hand.
-function tqDecodeur() { return tqDock !== 'auto' ? tqDock : (tqDecAuto || (tqQo() ? TQ_DEC_MODE[TQ.contexte.mode] || '' : '')); }
+function tqDecodeur() {
+  const d = tqDock !== 'auto' ? tqDock : (tqDecAuto || (tqQo() ? TQ_DEC_MODE[TQ.contexte.mode] || '' : ''));
+  // PSK31 and RTTY share one panel; without it (the phone), none.
+  return d === 'psk31' || d === 'rtty' || d === 'psk' ? (CK && CK.present ? 'psk' : '') : d;
+}
 function tqDockRend() {
   const d = tqDecodeur();
   document.querySelectorAll('#tq-onglets button').forEach(b => { b.classList.toggle('actif', b.dataset.d === tqDock); b.classList.toggle('auto-choisi', tqDock === 'auto' && b.dataset.d === d); });
-  for (const k of ['phonie', 'cw', 'ft8', 'sstv']) g('tq-d-' + k).hidden = d !== k;
+  for (const k of ['phonie', 'cw', 'ft8', 'sstv', 'psk']) g('tq-d-' + k).hidden = d !== k;
   g('tq-d-rien').hidden = !!d;
   txt('tq-d-info', tqDock === 'auto' ? (d ? 'choisi d’après le signal accordé' : '') : 'choisi à la main');
   g('tq-ph-absent').hidden = !g('ph-carte').hidden;
@@ -8870,8 +8898,59 @@ function tqDockRend() {
 }
 document.querySelectorAll('#tq-onglets button').forEach(b => b.onclick = () => {
   tqDock = b.dataset.d; try { localStorage.setItem('tq-dock', tqDock); } catch (x) {}
-  tqDockRend(); tqFt8(); tqSstv(); ticPhonie(true); ticCw();
+  tqDockRend(); tqFt8(); tqSstv(); ticPhonie(true); ticCw(); ckTic(true);
 });
+// PSK31 / RTTY in the dock: the main sound decoded, stamped lines, callsigns marked (mine in pink, the others into the entry on a click).
+let CK = null, ckVu = '';
+async function ckTic(force) {
+  if (!force && CK && (g('v-qo100').hidden || g('tq-d-psk').hidden)) return;
+  try { CK = await (await fetch('api/clavier')).json(); } catch (x) { return; }
+  ckRend();
+}
+setInterval(ckTic, 1000);
+async function ckPost(q) { try { await fetch('api/clavier?' + q, { method: 'POST' }); } catch (x) {} ckVu = ''; ckTic(true); }
+/** One decoded line: its UTC time, its callsigns marked. */
+function ckLigne(l) {
+  const t = l.texte || '';
+  let h = '', p = 0;
+  for (const [a, b, moi] of (l.ind || [])) {
+    const w = t.slice(a, b);
+    h += esc(t.slice(p, a)) + (moi ? '<b class="ck-moi">' + esc(w) + '</b>'
+      : '<a href="#" class="ck-ind" title="Un clic le met dans la saisie" onclick="ckSaisie(\'' + esc(w.toUpperCase()) + '\');return false">' + esc(w) + '</a>');
+    p = b;
+  }
+  return '<div><span class="ck-h">' + new Date(l.t).toISOString().slice(11, 19) + '</span>' + h + esc(t.slice(p)) + '</div>';
+}
+function ckSaisie(w) { const e = g('c-call'); if (!e) return; e.value = w; e.dispatchEvent(new Event('input')); versSaisie(); }
+/** Lines as text: « date time  text », UTC. */
+function ckTexte(l) { return (l || []).map(x => new Date(x.t).toISOString().slice(0, 19).replace('T', ' ') + 'Z  ' + x.texte).join('\n') + '\n'; }
+async function ckCopieTexte(t) {
+  try { await navigator.clipboard.writeText(t); return true; } catch (x) {}
+  const a = document.createElement('textarea'); a.value = t; document.body.appendChild(a); a.select();
+  let ok = false; try { ok = document.execCommand('copy'); } catch (x) {}
+  a.remove(); return ok;
+}
+async function ckCopie() { if (CK) txt('ck-etat', await ckCopieTexte(ckTexte(CK.lignes)) ? 'texte copié' : 'copie refusée par le navigateur'); }
+function ckRend() {
+  const c = CK, pres = !!(c && c.present), b = document.querySelector('#tq-onglets [data-d="psk"]');
+  if (b && b.hidden === pres) { b.hidden = !pres; tqDockRend(); }
+  if (!pres) return;
+  const garde = (id, v) => { const e = g(id); if (document.activeElement !== e) { if (e.type === 'checkbox') e.checked = !!v; else e.value = String(v); } };
+  garde('ck-on', c.actif); garde('ck-mode', c.mode); garde('ck-centre', c.centreChoisi || ''); garde('ck-seuil', c.seuil === 35 || c.seuil === 70 ? c.seuil : 0);
+  if (c.rtty) { garde('ck-baud', c.rtty.baud); garde('ck-shift', c.rtty.shift); garde('ck-inv', c.rtty.inverse); }
+  g('ck-rtty').style.display = c.mode === 'RTTY' ? 'inline-flex' : 'none';
+  g('ck-led').style.background = c.actif && c.ouvert ? 'var(--vert)' : '#22303C';
+  const e = !c.actif ? 'coupé : cocher « Décoder »' : !c.carte ? carteArretee()
+    : (c.frequence ? 'suivi à ' + fr1(c.frequence) + ' Hz' : 'à l’écoute') + (c.qualite != null ? ' · qualité ' + c.qualite + ' %' : '') +
+      (c.snr != null ? ' · S/B ' + fr1(c.snr) + ' dB' : '') + (c.imd != null ? ' · IMD ' + fr1(c.imd) + ' dB' : '') + (c.mode === 'RTTY' && c.tons === false ? ' · paire de tons non trouvée' : '');
+  if (g('ck-etat').textContent !== 'texte copié') txt('ck-etat', e);
+  const l = c.lignes || [], cle = c.version + '/' + l.length + '/' + c.actif;
+  if (cle === ckVu) return;
+  ckVu = cle;
+  const t = g('ck-texte'), bas = t.scrollTop + t.clientHeight >= t.scrollHeight - 8;
+  t.innerHTML = l.map(ckLigne).join('') || '<div class="petit">' + (c.actif ? 'rien encore : un clic sur un signal PSK31 ou RTTY de la cascade le met à ' + (c.mode === 'RTTY' ? '1 500' : '1 000') + ' Hz' : 'décodeur coupé') + '</div>';
+  if (bas) t.scrollTop = t.scrollHeight;
+}
 // FT8/FT4 in the dock: the last messages, a click prepares the contact.
 async function tqFt8() {
   if (g('v-qo100').hidden || tqDecodeur() !== 'ft8') return;
@@ -8957,7 +9036,7 @@ tqTic();
 // ---- « Décodeurs multiples »: channels taken from the receiver's IQ, each with its decoder (off by default)
 let MU = null, muVu = '';
 /** The audio each channel decodes, Hz above its dial: what the markers show. */
-function muBande(k) { return k.mode === 'CW' ? [450, 950] : k.mode === 'FM' ? [-6000, 6000] : [200, 3000]; }
+function muBande(k) { return k.decodeur === 'psk31' ? [940, 1060] : k.decodeur === 'rtty' ? [1350, 1650] : k.mode === 'CW' ? [450, 950] : k.mode === 'FM' ? [-6000, 6000] : [200, 3000]; }
 function muVisibles(b, t) { return MU && MU.option && MU.canaux ? MU.canaux.filter(k => k.hz + 3000 >= b && k.hz - 6000 <= t) : []; }
 async function muTic() {
   if (g('v-qo100').hidden && MU) return;
@@ -9004,10 +9083,20 @@ function muRend() {
       '<span class="mu-f" title="Accorder le récepteur principal ici" onclick="qPost(\'frequence?hz=' + k.hz + '\')">' + (k.hz / 1e6).toFixed(4).replace('.', ',') + '</span>' +
       '<span class="petit">' + (k.mode === 'USB' ? 'BLU' : k.mode) + '</span>' +
       '<span class="mu-niv" title="' + (k.niveau == null ? '' : k.niveau.toFixed(0) + ' dB') + (k.loin ? ' · hors du premier étage (filtre propre)' : '') + '"><i style="width:' + niv.toFixed(0) + '%"></i></span>' + d +
+      (k.decodeur === 'psk31' || k.decodeur === 'rtty' ? '<span style="display:inline-flex;gap:2px"><button title="Copier le texte de ce canal (horodaté)" onclick="muCopie(' + k.id + ')">⧉</button><button title="Enregistrer le texte de ce canal" onclick="muGarde(' + k.id + ')">⤓</button></span>' : '<span></span>') +
       '<button class="mu-ec" aria-pressed="' + !!k.ecoute + '" title="' + (k.ecoute ? 'Revenir au son de l’accord principal' : 'Écouter ce canal à la place de l’accord principal') + '" onclick="muPost(\'ecoute?id=' + k.id + '&on=' + (k.ecoute ? 0 : 1) + '\')">🔈</button>' +
       '<button class="discret" title="Retirer ce canal" onclick="muPost(\'retire?id=' + k.id + '\')">✕</button></div>';
   }).join('') || '<div class="mu-vide">Aucun canal : clic droit sur un signal de la cascade, ou un préréglage (bouton « Multiples »).</div>';
   if (h !== muVu) { muVu = h; g('tq-mu').innerHTML = h; }
+}
+function muTexte(id) { const k = MU && MU.canaux ? MU.canaux.find(x => x.id === id) : null; return k ? ckTexte(k.lignes) : ''; }
+async function muCopie(id) { txt('mu-msg', await ckCopieTexte(muTexte(id)) ? 'texte copié' : 'copie refusée par le navigateur'); }
+function muGarde(id) {
+  const k = MU && MU.canaux ? MU.canaux.find(x => x.id === id) : null; if (!k) return;
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([muTexte(id)], { type: 'text/plain' }));
+  a.download = 'SatMe_' + k.nom + '_' + (k.hz / 1e6).toFixed(4) + '_' + new Date().toISOString().slice(0, 19).replace(/[-:]/g, '').replace('T', '_') + 'Z.txt';
+  document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
 }
 /** A preset: the strongest CW and voice signals named on the waterfall go with it. */
 function muPrereglage(nom) {
@@ -9824,7 +9913,7 @@ function ctcssOptions(aucun) {
   203.5, 206.5, 210.7, 218.1, 225.7, 229.1, 233.6, 241.8, 250.3, 254.1];
   return '<option value="0">' + aucun + '</option>' + T.map(t => '<option value="' + t + '">' + fr1(t) + ' Hz</option>').join('');
 }
-const GEN_SIG = [['porteuse', 'Porteuse'], ['cw', 'CW'], ['blu', 'BLU (voix)'], ['fm', 'FM (ton)'], ['ft8', 'FT8'], ['sstv', 'SSTV (FM)']];
+const GEN_SIG = [['porteuse', 'Porteuse'], ['cw', 'CW'], ['blu', 'BLU (voix)'], ['fm', 'FM (ton)'], ['ft8', 'FT8'], ['sstv', 'SSTV (FM)'], ['psk31', 'PSK31'], ['rtty', 'RTTY']];
 function genOuvre(ancre) {
   const p = g('gen-pop');
   if (!p.hidden) { p.hidden = true; return; }

@@ -15,7 +15,7 @@ import org.json.JSONObject
 /**
  * « Décodeurs multiples » on QO-100: besides the main receiver, up to [MAX]
  * channels, each a dial in the received band, a demodulation and a decoder
- * (FT8, FT4, CW, SSTV, voice to text, or none). This is the list and its
+ * (FT8, FT4, CW, PSK31, RTTY, SSTV, voice to text, or none). This is the list and its
  * rules; the signal processing is [fr.f4ioz.satcombo.sdr.CanauxSecondaires].
  *
  * Pure logic: SatMe-PC and the phone keep the same list the same way.
@@ -27,10 +27,17 @@ object DecodeursMultiples {
     /** The usual FT4 dial on the narrow transponder (the top of the narrow digital segment). */
     const val CADRAN_FT4_HZ = 10_489_580_000L
 
+    /** Where a PSK31 channel hears its signal, Hz above the dial (as [TraficQo100.accord] tunes it). */
+    const val AUDIO_PSK31_HZ = 1_000L
+    /** Where an RTTY channel centres its two tones, Hz above the dial. */
+    const val AUDIO_RTTY_HZ = 1_500L
+
     enum class Decodeur(val cle: String, val nom: String, val mode: ModeCanal, val couleur: String) {
         FT8("ft8", "FT8", ModeCanal.USB, "#B07CFF"),
         FT4("ft4", "FT4", ModeCanal.USB, "#D58CFF"),
         CW("cw", "CW", ModeCanal.CW, "#6F8CFF"),
+        PSK31("psk31", "PSK31", ModeCanal.USB, "#5BD6E0"),
+        RTTY("rtty", "RTTY", ModeCanal.USB, "#E0D45B"),
         SSTV("sstv", "SSTV", ModeCanal.USB, "#FFB454"),
         PHONIE("phonie", "Phonie", ModeCanal.USB, "#3FE0C8"),
         AUCUN("aucun", "Écoute", ModeCanal.USB, "#9AA7B4");
@@ -66,7 +73,8 @@ object DecodeursMultiples {
      * The dial for [decodeur] on a signal centred on [hz]: the classifier's
      * tuning when it named the signal ([classe]), else where that decoder
      * hears it (CW on its 700 Hz note, FT8/FT4 on the usual dial when the
-     * signal falls in its window, SSTV around 1.9 kHz, a voice around 1.5).
+     * signal falls in its window, PSK31 on 1 kHz, RTTY centred on 1.5 kHz,
+     * SSTV around 1.9 kHz, a voice around 1.5).
      */
     fun cadranPour(decodeur: Decodeur, hz: Long, classe: String? = null): Long {
         val c = classe?.trim()?.lowercase()
@@ -75,6 +83,8 @@ object DecodeursMultiples {
             Decodeur.CW -> arrondi(hz - TraficQo100.NOTE_CW_HZ, 10)
             Decodeur.FT8 -> if (hz - TraficQo100.CADRAN_FT8_HZ in 200L..2_900L) TraficQo100.CADRAN_FT8_HZ else arrondi(hz - 1_500, 10)
             Decodeur.FT4 -> if (hz - CADRAN_FT4_HZ in 200L..2_900L) CADRAN_FT4_HZ else arrondi(hz - 1_500, 10)
+            Decodeur.PSK31 -> arrondi(hz - AUDIO_PSK31_HZ, 10)
+            Decodeur.RTTY -> arrondi(hz - AUDIO_RTTY_HZ, 10)
             Decodeur.SSTV -> arrondi(hz - 1_900, 10)
             Decodeur.PHONIE, Decodeur.AUCUN -> arrondi(hz - 1_500, 10)
         }
