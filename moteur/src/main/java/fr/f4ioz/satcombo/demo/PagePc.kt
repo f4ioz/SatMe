@@ -217,6 +217,32 @@ object PagePc {
   .md-btn.on { background:rgba(255,180,84,.16); border-color:rgba(255,180,84,.6); color:var(--warn); font-weight:700; } .md-btn.on .ico { fill:var(--warn); }
   .md-prop { left:0; right:auto; width:340px; }
   #ec-pop { min-width:400px; }
+  /* « Son » in the header: what feeds the decoders, switched without the Sound tab. */
+  .hs-boite { position:relative; display:inline-flex; }
+  #h-son { align-items:center; cursor:pointer; max-width:340px; } #h-son .ico { width:15px; height:15px; fill:var(--texte-3); flex:none; }
+  #h-son .h-m { overflow:hidden; text-overflow:ellipsis; max-width:170px; }
+  #h-son.on .ico { fill:var(--rx); } #h-son.on .h-m { color:var(--texte); }
+  #h-son.alerte { border-color:rgba(255,180,84,.6); } #h-son.alerte .ico { fill:var(--warn); } #h-son.alerte .h-m { color:var(--warn); }
+  .hs-vu { width:30px; height:5px; border-radius:3px; background:var(--creux); overflow:hidden; flex:none; align-self:center; }
+  .hs-vu > i { display:block; height:100%; width:0; background:var(--ok); }
+  .hs-dec { color:var(--rx); font-size:var(--fs-xs); font-weight:700; letter-spacing:.3px; }
+  .hs-dec:empty { display:none; }
+  .hs-pop { left:0; right:auto; width:400px; }
+  .hs-niv { display:flex; align-items:center; gap:8px; margin:2px 0 8px; }
+  .hs-niv-g { flex:1; height:8px; border-radius:4px; background:var(--creux); overflow:hidden; } .hs-niv-g > i { display:block; height:100%; width:0; background:var(--ok); }
+  .hs-src { display:flex; flex-direction:column; gap:3px; }
+  .hs-src button { display:flex; align-items:center; gap:8px; text-align:left; padding:5px 9px; background:var(--s1); border:1px solid var(--ligne); }
+  .hs-src button[aria-pressed="true"] { border-color:var(--rx); background:rgba(63,224,200,.1); color:var(--texte); }
+  .hs-src button small { margin-left:auto; color:var(--texte-3); font-size:var(--fs-xs); }
+  .hs-src button[aria-pressed="true"] small { color:var(--rx); }
+  .hs-src .hs-stop { justify-content:center; background:transparent; color:var(--texte-2); }
+  .hs-st { margin:8px 0 3px; }
+  .hs-conseil { margin-top:6px; }
+  .repare { margin-left:8px; padding:2px 10px; font-size:var(--fs-s); }
+  @media (max-width:1250px) { #h-son .hs-dec { display:none; } }
+  @media (max-width:760px) { #h-son .h-m { display:none; } .hs-pop { position:fixed; left:8px; right:8px; top:52px; width:auto; } }
+  .sb-pop-l { display:flex; flex-wrap:wrap; gap:6px; margin-top:6px; }
+  .sb-pop-l .niv-seg { margin-right:4px; }
   .ec-stats { margin-top:6px; padding:6px 8px; border-radius:6px; background:var(--s1); border:1px solid var(--ligne); font-family:var(--mono);
     font-size:var(--fs-xs); line-height:1.5; color:var(--texte-2); font-variant-numeric:tabular-nums; }
   .ec-stats b { color:var(--texte); font-size:var(--fs-s); }
@@ -1404,7 +1430,23 @@ ${rail()}
   <span class="g" id="cat-statut-court"></span>
   <button id="ctx-chip" class="ctx-chip" hidden onclick="vue(this.classList.contains('qo') ? 'qo100' : 'station')"></button>
   <button id="h-rx" class="h-puce" onclick="vue(this.dataset.v || 'sdr')" title="Le récepteur actif : sa fréquence et son mode"><b>RX</b><span class="h-f" id="h-rx-f">—</span><span class="h-m" id="h-rx-m"></span></button>
-  <button id="h-mol" class="h-puce" hidden onclick="vue('reglages'); montreReglages('interfaces')" title="La molette USB : son pas et ce qu'elle accorde (Réglages › Interfaces)">${IconesPc.svg("tune")}<span class="h-m" id="h-mol-t"></span></button>
+  <span id="hs-boite" class="hs-boite" hidden>
+    <button id="h-son" class="h-puce" onclick="hsBascule()" aria-expanded="false" aria-controls="hs-pop" title="Ce qu'entendent les décodeurs (SSTV, FT8, CW, APRS, phonie) : changer de source, démarrer, enregistrer — touche S">${IconesPc.svg("mic")}<span class="h-m" id="h-son-t">Son</span><i class="hs-vu" aria-hidden="true"><i id="h-son-vu"></i></i><span class="hs-dec" id="h-son-d"></span></button>
+    <div id="hs-pop" class="pop-carte hs-pop" hidden role="dialog" aria-label="La source audio des décodeurs">
+      <div class="t sp-pop-t">Ce qu'entendent les décodeurs<span class="h-esp"></span><button type="button" class="discret" onclick="hsFerme()" aria-label="Fermer">✕</button></div>
+      <div class="hs-niv"><div class="hs-niv-g"><i id="hs-vu"></i></div><span class="petit" id="hs-etat"></span></div>
+      <div class="hs-src" id="hs-src" role="group" aria-label="Source audio"></div>
+      <div class="avert hs-conseil" id="hs-conseil" hidden></div>
+      <div class="petit hs-st">Décodeurs à l'écoute</div>
+      <div class="niv-seg hs-decs" id="hs-decs" role="group" aria-label="Décodeurs"><button type="button" data-d="SSTV" aria-pressed="false">SSTV</button><button type="button" data-d="FT8" aria-pressed="false">FT8</button><button type="button" data-d="CW" aria-pressed="false">CW</button><button type="button" data-d="APRS" aria-pressed="false">APRS</button><button type="button" data-d="Phonie" aria-pressed="false" hidden title="Phonie → texte (sa source se règle dans sa carte)">Phonie</button></div>
+      <div class="ligne rec-l"><button class="rouge rec-b" onclick="enregistre()" title="Touche E">● Enregistrer le son</button><span class="val rec-d"></span><span class="petit rec-m"></span></div>
+      <div class="ligne rec-los-l" style="margin-top:2px"><label class="petit"><input type="checkbox" class="rec-los" onchange="coupeLos(this.checked)"> couper à la fin du passage</label></div>
+      <div class="ligne"><button id="hs-passage" onclick="preparePassage()" title="Le satellite suivi : sa source, ses décodeurs, son enregistrement (réception seulement) — touche P">⚡ Préparer le passage</button>
+        <button id="hs-ec" onclick="hsEcoute()" title="Le même son, joué par ce navigateur">🔈 Écouter ici</button>
+        <a href="#" class="petit" style="margin-left:auto" onclick="event.preventDefault(); hsFerme(); vue('son')">Onglet Son</a></div>
+    </div>
+  </span>
+  <button id="h-mol" class="h-puce" hidden onclick="molPop(this)" title="La molette USB : son pas et ce qu'elle accorde">${IconesPc.svg("tune")}<span class="h-m" id="h-mol-t"></span></button>
   <button id="h-ann" class="h-puce" hidden onclick="annMuet()" title="Annonces vocales : clic pour les couper ou les remettre (Réglages › Annonces)">🔊</button>
   <button id="h-tx" class="h-tx" hidden onclick="arretEmissions()" title="Une émission est en cours. Clic ou Échap : tout arrêter"><b>TX</b><span id="h-tx-q"></span><span class="h-tx-x">■ Échap</span></button>
   <button id="h-pass" class="h-puce" onclick="vue('station')" title="Le prochain passage du satellite suivi"><span id="h-pass-n">—</span><span class="h-f" id="h-pass-t"></span></button>
@@ -1417,14 +1459,14 @@ ${rail()}
     <div id="md-prop" class="pop-carte md-prop" hidden role="dialog" aria-label="Mode distant">
       <div class="t" style="margin:0 0 6px">Page ouverte depuis une autre machine</div>
       <div class="petit">Passer en mode distant ? Le son passe d’abord (faible latence), l’affichage est allégé. Se règle ensuite ici ou dans Réglages › Accès à distance.</div>
-      <div class="ligne"><button class="primaire" id="md-oui" onclick="mdRegle(true)">Mode distant</button><button id="md-non" onclick="mdRegle(false)">Non merci</button></div>
+      <div class="ligne"><button class="primaire" id="md-oui" onclick="mdRegle(true)">Mode distant</button><button id="md-oui-ec" onclick="mdRegle(true); hsEcoute()" title="Et entendre tout de suite ce qu'entendent les décodeurs">Mode distant + écouter</button><button id="md-non" onclick="mdRegle(false)">Non merci</button></div>
     </div>
   </span>
   <span id="ec-boite" style="position:relative" hidden>
     <button id="ec-btn" class="h-cmd" onclick="g('ec-pop').hidden = !g('ec-pop').hidden" title="Entendre ici, dans ce navigateur, le son de SatMe-PC (la page ouverte sur un autre PC du réseau)">${IconesPc.svg("headphones")}<span>Écouter ici</span></button>
     <div id="ec-pop" class="pop-carte" hidden>
       <div class="t" style="margin:0 0 6px">Le son dans ce navigateur</div>
-      <div class="ligne" style="margin:0"><select id="ec-source"><option value="sdr">Clé SDR (QO-100, SDR)</option><option value="carte">Carte son (le poste)</option><option value="datv">Son DATV</option></select></div>
+      <div class="ligne" style="margin:0"><select id="ec-source" onchange="try { localStorage.setItem('ec-source', this.value); } catch (x) {}"><option value="auto">Auto : ce qu'entendent les décodeurs</option><option value="sdr">Clé SDR (QO-100, SDR)</option><option value="carte">Carte son (le poste)</option><option value="datv">Son DATV</option></select></div>
       <div class="ligne"><button class="primaire" id="ec-go" onclick="ecSecours = ''; ecouteIci()">▶ Écouter</button><button id="ec-stop" class="arret" hidden onclick="arreteEcoute()">■ Arrêter</button>
         <span class="petit">Volume</span><input type="range" id="ec-vol" min="0" max="200" value="100" style="flex:1" oninput="if (ecGain) ecGain.gain.value = this.value / 100"></div>
       <div class="ligne"><select id="ec-voie" title="La voie du son : auto = faible latence en mode distant, flux HTTP sinon" onchange="ecVoieChange()"><option value="auto">Voie auto</option><option value="ws">Faible latence</option><option value="http">Flux HTTP</option></select>
@@ -1655,6 +1697,7 @@ ${rail()}
       </div>
       <div class="petit" id="infos-passage" style="text-align:center;margin-top:4px"></div>
       <div class="ligne rec-l"><button class="rouge rec-b" onclick="enregistre()">● Enregistrer le son</button><span class="val rec-d"></span><span class="petit rec-m"></span>
+        <button class="st-passage" onclick="preparePassage()" title="Ce satellite : la source qui l'entend, les décodeurs de son émetteur, l'enregistrement du passage (réception seulement) — touche P">⚡ Préparer le passage</button>
         <label class="petit rec-los-l" style="margin-left:auto"><input type="checkbox" class="rec-los" onchange="coupeLos(this.checked)"> couper à la fin du passage</label></div>
       <div class="t" style="margin-top:10px">Ses prochains passages <a class="petit" id="ics-suivi" href="api/passages.ics" download title="Ses prochains passages dans un fichier d'agenda" style="color:var(--cyan);font-weight:normal">⤓ .ics</a></div>
       <div id="suivants-boite"><table><tbody id="suivants"></tbody></table></div>
@@ -1693,7 +1736,7 @@ ${rail()}
 
     <div class="carte materiel" onclick="vue('reglages')" title="Poste et rotor : leurs réglages sont dans l'onglet Réglages">
       <div class="paire" style="margin:0">
-        <span><span class="petit">Poste</span> <b id="st-poste">—</b> <span id="st-poste-ok" class="coche"></span></span>
+        <span onclick="if (!window.SATME_TELEPHONE) { event.stopPropagation(); catPop(this); }" title="Connecter ou déconnecter le poste (le modèle et le port de Réglages › Poste)"><span class="petit">Poste</span> <b id="st-poste">—</b> <span id="st-poste-ok" class="coche"></span></span>
         <span><span class="petit">Rotor</span> <b id="st-rotor">—</b> <span id="st-rotor-ok" class="coche"></span></span>
       </div>
     </div>
@@ -1743,6 +1786,7 @@ ${rail()}
       <div class="ligne" style="margin:0"><label><input type="checkbox" id="cw-on" onchange="post('api/cw?on=' + (this.checked ? 1 : 0)).then(ticCw)"> <b>Décodeur CW</b></label>
         <span id="cw-led" title="Manipulateur baissé" style="width:12px;height:12px;border-radius:6px;background:#22303C;display:inline-block"></span>
         <span class="petit" id="cw-info"></span>
+        <button class="primaire repare" id="cw-repare" hidden onclick="hsRepare()"></button>
         <button style="margin-left:auto;padding:3px 9px" onclick="post('api/cw?efface=1').then(ticCw)" title="Effacer le texte">✕</button></div>
       <div id="cw-corps" hidden>
         <div id="cw-texte" style="margin-top:8px;height:96px;overflow-y:auto;padding:6px 8px;border-radius:8px;background:#0E1720;font-family:ui-monospace,Consolas,monospace;font-size:15px;line-height:1.45;letter-spacing:1px;word-break:break-word"></div>
@@ -1949,10 +1993,12 @@ ${rail()}
       <div style="height:6px;background:#0E1720;border-radius:3px;margin-top:4px;overflow:hidden"><div id="sstv-barre" style="height:100%;width:0;background:var(--vert)"></div></div>
       <div class="val" id="sstv-statut" style="font-size:15px"></div>
       <div class="avert" id="sstv-conseil" hidden></div>
+      <div class="ligne" id="sstv-repare-l" hidden style="margin-top:4px"><button class="primaire repare" id="sstv-repare" style="margin-left:0" onclick="hsRepare()"></button></div>
       <div class="ligne" style="margin-top:6px"><span class="petit" style="min-width:52px">Niveau</span>
         <div style="flex:1;height:8px;background:#0E1720;border-radius:4px;overflow:hidden"><div id="sstv-niveau" style="height:100%;width:0;background:var(--vert)"></div></div>
         <span class="petit" id="sstv-source-active" style="min-width:120px;text-align:right"></span></div>
       <div class="etat" id="sstv-etat"></div>
+      <div class="ligne rec-l"><button class="rouge rec-b" onclick="enregistre()" title="Le son du passage, en WAV (touche E)">● Enregistrer le son</button><span class="val rec-d"></span><span class="petit rec-m"></span></div>
       <div class="ligne sx-tx" id="sx-tx" hidden><span class="petit">Émission</span><span id="sx-tx-pastille" class="pastille" style="color:var(--gris)">arrêtée</span><span class="petit" id="sx-tx-pc"></span>
         <button class="emettre" id="sx-tx-go" onclick="xsEmettre()" title="Émettre avec les réglages du sous-onglet Émission (confirmation demandée)">ÉMETTRE</button><button class="arret-tx" id="sx-tx-stop" onclick="xsArrete()">ARRÊT</button></div>
   </div>
@@ -2518,12 +2564,14 @@ ${rail()}
           <button class="arret tq-go" id="tq-stop" hidden onclick="tqArrete()">■ Arrêter</button>
           <span id="tq-pastille" class="pastille coupe">arrêtée</span>
           <span class="petit" id="tq-recepteur"></span>
+          <select id="tq-rx-choix" hidden style="flex:none;max-width:150px;padding:3px 6px" title="Le récepteur de QO-100 (le même choix que l'onglet SDR, carte « La clé »)" onchange="tqRecepteur(this.value)"></select>
           <button class="mt-pop-b" data-o="qo100" style="margin-left:auto" onclick="mtPopBascule('qo100')" aria-pressed="false" title="Le schéma simplifié de la chaîne en œuvre (Station › Montage), par-dessus l'onglet">${IconesPc.svg("montage")}<span>Schéma</span></button>
           <button class="discret petit" onclick="g('tq-aide').hidden = !g('tq-aide').hidden" title="Comment ça marche">? Aide</button>
           <span id="o-leila" class="o-leila" hidden title="La sirène LEILA de la station sol : la station écoutée émet plus fort que les balises et doit baisser sa puissance.">⚠ LEILA</span>
         </div>
         <div class="tq-etat" id="tq-etapes"></div>
         <div class="avert" id="tq-msg"></div>
+        <div class="ligne" id="tq-datv-l" hidden style="margin-top:2px"><button class="primaire" id="tq-datv" onclick="tqRendDatv()" title="Arrêter la réception DATV (réception seulement), puis démarrer QO-100 sur ce récepteur">■ Arrêter la DATV, puis QO-100</button></div>
         <div class="tq-urgence" id="tq-urgence" hidden></div>
         <div class="tq-freq">
           <div>
@@ -3115,6 +3163,7 @@ ${rail()}
         <label class="petit"><input type="checkbox" id="8-cq"> CQ seulement</label>
         <span class="bascule-c" style="margin-left:auto"><button id="8-b-tableau" class="actif" onclick="f8Montre('tableau')">📊 Tableau</button><button id="8-b-messages" onclick="f8Montre('messages')">💬 Messages</button></span>
         <span class="petit" id="8-etat"></span>
+        <button class="primaire repare" id="f8-repare" hidden onclick="hsRepare()"></button>
       </div>
       <div class="f8-puces" id="8-puces"></div>
       <div class="ligne">
@@ -3568,9 +3617,9 @@ ${rail()}
 <footer id="sb" aria-label="État de la station">
   <button id="sb-sdr" class="sb-i" onclick="vue('sdr')" title="Le récepteur SDR (onglet SDR)"><i></i><span>SDR</span><b id="sb-sdr-t">—</b></button>
   <button id="sb-datv" class="sb-i" onclick="vue('datv')" title="Le récepteur DATV (onglet DATV)"><i></i><span>DATV</span><b id="sb-datv-t">—</b></button>
-  <button id="sb-cat" class="sb-i" onclick="vue('reglages'); montreReglages('materiel')" title="Le poste (Réglages › Poste et rotor)"><i></i><span>Poste</span><b id="sb-cat-t">—</b></button>
+  <button id="sb-cat" class="sb-i" onclick="catPop(this)" title="Le poste : connecter ou déconnecter le CAT d'un clic (réglages : Réglages › Poste et rotor)"><i></i><span>Poste</span><b id="sb-cat-t">—</b></button>
   <button id="sb-rot" class="sb-i" onclick="vue('reglages'); montreReglages('materiel')" title="Le rotor (Réglages › Poste et rotor)"><i></i><span>Rotor</span><b id="sb-rot-t">—</b></button>
-  <button id="sb-rec" class="sb-i" hidden onclick="vue('son')" title="Un enregistrement est en cours (onglet Son)"><i></i><b id="sb-rec-t"></b></button>
+  <button id="sb-rec" class="sb-i" hidden onclick="hsOuvre()" title="Un enregistrement est en cours : « Son » en haut pour l'arrêter (ou la touche E)"><i></i><b id="sb-rec-t"></b></button>
   <button id="sb-bal" class="sb-i" hidden onclick="vue('sdr'); balOuvre(g('sp-b-bal'))" title="Le récepteur balaie (onglet SDR, Balayage) : cliquer pour le voir ou l'arrêter"><i></i><span>Balayage</span><b id="sb-bal-t"></b></button>
   <button id="sb-tel" class="sb-i" onclick="vue('reglages'); montreReglages('interfaces')" title="Le lien WebSocket (téléphone, logiciels de suivi) : Réglages › Interfaces"><i></i><span>Lien</span><b id="sb-tel-t">—</b></button>
   <button id="sb-rig" class="sb-i" hidden onclick="vue('reglages'); montreReglages('interfaces')" title="La fréquence donnée aux logiciels de carnet (rigctld) : Réglages › Interfaces"><i></i><span>Carnets</span><b id="sb-rig-t">—</b></button>
@@ -3613,6 +3662,10 @@ ${rail()}
     <div><kbd>?</kbd></div><div>Cette aide</div>
     <div><kbd>F1</kbd></div><div><a href="#" onclick="event.preventDefault(); g('aide-dlg').close(); manOuvre()">Le manuel</a> : le guide de SatMe-PC, avec recherche, ouvert au chapitre de l'onglet en cours (Échap le ferme)</div>
     <div><kbd>[</kbd></div><div>Déplier ou replier le menu de gauche</div>
+    <div><kbd>S</kbd></div><div>Le son des décodeurs (en-tête « Son ») : changer de source, démarrer, arrêter, décodeurs, enregistrer</div>
+    <div><kbd>E</kbd></div><div>Enregistrer le son, ou arrêter l'enregistrement (la source démarre au besoin, réception seulement)</div>
+    <div><kbd>P</kbd></div><div>Préparer le passage du satellite suivi : sa source, les décodeurs de son émetteur, l'enregistrement (réception seulement)</div>
+    <div><kbd>N</kbd></div><div>Noter un contact : le carnet, le curseur sur l'indicatif</div>
     <div><kbd>←</kbd> <kbd>→</kbd> <kbd>↑</kbd> <kbd>↓</kbd></div><div>QO-100 : accord par 100 Hz / 1 kHz (hors d'un champ de saisie)</div>
     <div><span class="h-rond" style="display:inline-grid">?</span></div><div>Sur un titre : l'explication de la carte (survol, clic ou Entrée)</div>
   </div>
@@ -4738,7 +4791,7 @@ async function ecouteIci() {
   arreteEcoute();
   // The low-latency voice (« Mode distant », or chosen): its own player; this one stays the fallback.
   if (ecVoie() === 'ws' && window.WebSocket && !ecSecours) { ecouteWs(); return; }
-  const source = g('ec-source').value;
+  const source = ecSource();
   try {
     ecCtx = new (window.AudioContext || window.webkitAudioContext)();
     ecGain = ecCtx.createGain(); ecGain.gain.value = v('ec-vol') / 100; ecGain.connect(ecCtx.destination);
@@ -4797,6 +4850,16 @@ function arreteEcoute() {
 }
 // Shown where SatMe-PC streams (not on the page served by the phone).
 g('ec-boite').hidden = !!window.SATME_TELEPHONE;
+// « Auto »: what the decoders hear (the dongle when it feeds them, else the card), else the DATV sound; the choice kept per browser.
+function ecSource() {
+  const v = g('ec-source').value;
+  if (v !== 'auto') return v;
+  if (S && S.actif) return S.appareil && S.appareil.indexOf('Clé SDR') === 0 ? 'sdr' : 'carte';
+  const hx = window.HX || {};
+  if (hx.sdr && hx.sdr.actif) return 'sdr';
+  return hx.datv && hx.datv.actif ? 'datv' : 'sdr';
+}
+try { const x = localStorage.getItem('ec-source'); if (x && g('ec-source').querySelector('option[value="' + x + '"]')) g('ec-source').value = x; } catch (x) {}
 // ------------------------------------------------------------------ « Mode distant »
 // Per browser (localStorage): the sound first (a WebSocket, 20 ms frames, a jitter buffer of 60–120 ms),
 // the page lightened (spectrum, video, maps, animations). Suggested when the page comes from another machine.
@@ -4880,7 +4943,7 @@ function ecProcesseur() {
   });
 }
 async function ecouteWs() {
-  const source = g('ec-source').value, rate = +g('ec-debit').value, codec = g('ec-codec').value;
+  const source = ecSource(), rate = +g('ec-debit').value, codec = g('ec-codec').value;
   let ctx;
   try { ctx = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: 'interactive' }); }
   catch (x) { txt('ec-etat', 'son impossible : ' + (x.message || x)); return; }
@@ -5064,12 +5127,18 @@ function avertCat() {
 }
 g('cat-modele').onchange = () => { avertCat(); irMontre(); };
 function catConnecte() {
+  const u = catRequete();
+  if (!u) { alert('Aucun port série choisi.'); return; }
+  post(u);
+}
+/** The connection asked, as the form stands (null: a serial rig with no port chosen). */
+function catRequete() {
   const m = g('cat-modele').value;
-  if (irReseau()) { post('api/cat/connecter?modele=' + m); return; }
-  if (m.indexOf('SIM') < 0 && m !== 'PAIRE' && (!ports.length || g('cat-port').value === '-1')) { alert('Aucun port série choisi.'); return; }
-  post('api/cat/connecter?modele=' + m + '&port=' + enc(g('cat-port').value) + '&baud=' + g('cat-baud').value +
+  if (irReseau()) return 'api/cat/connecter?modele=' + m;
+  if (m.indexOf('SIM') < 0 && m !== 'PAIRE' && (!ports.length || g('cat-port').value === '-1')) return null;
+  return 'api/cat/connecter?modele=' + m + '&port=' + enc(g('cat-port').value) + '&baud=' + g('cat-baud').value +
        '&portTx=' + enc(g('cat-port-tx').value) + '&rxIc705=' + g('cat-rx-type').value + '&txIc705=' + g('cat-tx-type').value +
-       '&bandeTx=' + g('cat-bande').value);
+       '&bandeTx=' + g('cat-bande').value;
 }
 // ------------------------------------------------------------------ the IC-9700 by the network
 let IR = null;
@@ -7182,7 +7251,8 @@ function rendSon() {
   // The recording buttons of Station and Carnet, and the option to stop after the pass.
   document.querySelectorAll('.rec-b').forEach(b => b.textContent = S.enregistrement ? '■ Arrêter l’enregistrement' : '● Enregistrer le son');
   document.querySelectorAll('.rec-d').forEach(d => d.textContent = S.enregistrement ? duree(S.secondes * 1000) : '');
-  document.querySelectorAll('.rec-m').forEach(d => d.textContent = S.enregistrement ? (S.auto ? 'passage' : '') : S.actif ? '' : 'carte son arrêtée (onglet Son)');
+  document.querySelectorAll('.rec-m').forEach(d => d.textContent = S.enregistrement ? (S.auto ? 'passage' : '') : S.actif ? (S.armePassage ? 'armé pour l’AOS' : '')
+    : S.aPrendre === undefined ? 'carte son arrêtée (onglet Son)' : S.aPrendre ? 'démarrera ' + nomCarte(S.aPrendre) : 'aucune source (« Son » en haut)');
   document.querySelectorAll('.rec-los').forEach(c => { if (document.activeElement !== c) c.checked = !!S.coupeLos; });
   document.querySelectorAll('.rec-los-l').forEach(l => l.hidden = S.coupeLos === null || S.coupeLos === undefined);
   if (document.activeElement !== g('s-sstv')) g('s-sstv').checked = S.sstv;
@@ -7225,6 +7295,7 @@ function rendSon() {
       '<div class="petit">aucune image</div>';
   }
   if (g('visionneuse').open) voisOutils();
+  hsRend();
 }
 let satsVus = '', imagesMontrees = [], modesSstvVus = '';
 // A card as the operator knows it (« IC-9700 (USB Audio CODEC) »); its own name stays the setting.
@@ -7249,6 +7320,7 @@ function sstvSources() {
 }
 // The card stopped, said by FT8 and CW: the rig's own card named when there is one.
 function carteArretee() {
+  if (S && S.aPrendre !== undefined && !window.SATME_TELEPHONE) return S.aPrendre ? 'pas de son : ' + nomCarte(S.aPrendre) + ' démarre avec le décodeur' : 'pas de son : la source, « Son » en haut';
   const p = S && S.cartes ? S.cartes.find(c => c.poste) : null;
   return 'carte son arrêtée (onglet Son' + (p ? ' : ' + p.lib : '') + ')';
 }
@@ -8750,6 +8822,15 @@ function tqRend() {
   txt('tq-pastille', recoit ? 'réception QO-100' : r.actif ? 'récepteur sur autre chose' : 'arrêtée');
   g('tq-rx').classList.toggle('allume', recoit); g('tq-rx').classList.toggle('eteint', !recoit);
   txt('tq-recepteur', r.nom || '');
+  // Stopped: the receiver chosen right here (the SDR tab's own choice); lent to DATV: given back in one click.
+  const hs = (window.HX || {}).sdr, rc = g('tq-rx-choix');
+  const voirRc = !window.SATME_TELEPHONE && !r.actif && !tqOccupe && !!hs && !hs.absent && !hs.datvTient;
+  rc.hidden = !voirRc; g('tq-recepteur').hidden = voirRc;
+  if (voirRc && document.activeElement !== rc) {
+    if (!rc.options.length) rc.innerHTML = [...g('r-recepteur').options].map(o => '<option value="' + escA(o.value) + '">' + esc(o.textContent) + '</option>').join('');
+    if (hs.recepteur) rc.value = hs.recepteur;
+  }
+  g('tq-datv-l').hidden = !(hs && hs.datvTient && !recoit && !window.SATME_TELEPHONE);
   // The steps of the gesture, each said done or not.
   // The cockpit's form logs on QO-100 (unless another satellite is chosen in it); the Carnet tab follows the rig.
   const qoCockpit = !!(cv && cv.qo100 && carnetAuCockpit()) || !!(t.carnet && t.carnet.cockpit.qo100 && !carnetChoix);
@@ -8762,6 +8843,7 @@ function tqRend() {
     m = tqErreur || (r.erreur ? 'Le récepteur dit : ' + r.erreur + '.' : '');
     if (m) m += ' Vérifie qu’il est branché et allumé, et qu’il est bien choisi dans l’onglet SDR (carte « ' + (window.SATME_TELEPHONE ? 'La clé' : 'Le récepteur') + ' »).';
     else if (r.actif) m = 'Le récepteur écoute autre chose (onglet SDR) : « Mettre le récepteur sur QO-100 » le reprend.';
+    else if (hs && hs.datvTient) m = (hs.datvTient === 'pluto' ? 'L’ADALM-PLUTO' : 'Le bladeRF') + ' reçoit la DATV : « Arrêter la DATV, puis QO-100 » le reprend.';
     else if (!tqOccupe) m = 'Le récepteur est arrêté : un clic sur « Démarrer la réception QO-100 » fait tout (récepteur, QO-100, son).';
   }
   txt('tq-msg', m);
@@ -8778,7 +8860,7 @@ function tqRend() {
   g('tq-agc-l').hidden = r.agc === null || r.agc === undefined;
   if (r.agc !== null && r.agc !== undefined && document.activeElement !== g('tq-agc')) g('tq-agc').checked = !!r.agc;
   g('tq-ec-boite').hidden = !!window.SATME_TELEPHONE;
-  txt('tq-ec', (ecArret || ecWs) && g('ec-source').value === 'sdr' ? '■ Arrêter l’écoute ici' : '🔈 Écouter ici');
+  txt('tq-ec', (ecArret || ecWs) && ecSource() === 'sdr' ? '■ Arrêter l’écoute ici' : '🔈 Écouter ici');
   // The beacon far off and nothing following it: say so, with the remedy.
   const k = g('tq-conseil');
   k.hidden = !t.conseilCalage;
@@ -8795,9 +8877,17 @@ async function tqDemarre() {
   else if (j.ok === false) tqErreur = 'Le récepteur n’a pas démarré : ' + (j.erreur || 'raison inconnue') + '.';
   await tqTic(); chargeQo100(); ticQualite();
 }
+async function tqRecepteur(x) { await post('api/sdr/reglage?recepteur=' + enc(x)); HX.t = {}; await ticTete(); tqRend(); }
+async function tqRendDatv() {
+  tqOccupe = true; tqRend();
+  await post('api/datv/arrete');
+  // The receiver is back once DATV has let it go: a moment, then QO-100 as usual.
+  await new Promise(r => setTimeout(r, 1500));
+  HX.t = {}; await ticTete(); tqDemarre();
+}
 async function tqArrete() {
   tqErreur = '';
-  if ((ecArret || ecWs) && g('ec-source').value === 'sdr') arreteEcoute();
+  if ((ecArret || ecWs) && ecSource() === 'sdr') arreteEcoute();
   await tqPost('api/qo100/arreter'); await tqTic(); chargeQo100();
 }
 async function tqReprise(on) {
@@ -8810,7 +8900,7 @@ async function tqReprise(on) {
 async function tqMode(m) { await tqPost('api/qo100/mode?m=' + enc(m)); tqDecAuto = TQ_DEC_MODE[m] || ''; tqTic(); }
 async function tqCalageAuto() { await tqPost('api/qo100/auto?on=1'); ticQualite(); tqTic(); }
 function tqEcoute() {
-  if ((ecArret || ecWs) && g('ec-source').value === 'sdr') arreteEcoute();
+  if ((ecArret || ecWs) && ecSource() === 'sdr') arreteEcoute();
   else { g('ec-source').value = 'sdr'; g('ec-vol').value = g('tq-vol').value; ecouteIci(); }
   setTimeout(tqRend, 400);
 }
@@ -11147,8 +11237,140 @@ async function carteSon(arret) {
   const j = await post('api/son/carte?nom=' + (arret ? '' : enc(g('s-carte').value)));
   ticSon();
 }
-async function enregistre() { await post('api/son/enregistrer?on=' + (S && S.enregistrement ? 0 : 1)); ticSon(); }
+async function enregistre() {
+  const on = !(S && S.enregistrement);
+  const j = await post('api/son/enregistrer?on=' + (on ? 1 : 0));
+  if (j && j.ok !== false) annonce(on ? '● Enregistrement du son' : '■ Enregistrement arrêté');
+  hsRafraichit();
+}
 async function coupeLos(on) { await post('api/son/options?coupe=' + (on ? 1 : 0)); ticSon(); }
+// ------------------------------------------------------------------ « Son » in the header: what the decoders hear
+// The source switched, started or stopped, the decoders on or off, the recording, wherever the operator is;
+// the Sound tab stays for the cards' details and the recordings. Receive only: nothing here transmits.
+const HS_DEC = { FT4: 'FT8' };
+function hsLib(nom) { return !nom ? '' : nom.indexOf('Clé SDR') === 0 ? 'Récepteur SDR' : nomCarte(nom); }
+async function hsRafraichit() { try { S = await (await fetch('api/son')).json(); rendSon(); } catch (x) {} }
+function hsRend() {
+  if (window.SATME_TELEPHONE || !S || !S.present || !S.ecoutent) return;
+  g('hs-boite').hidden = false;
+  const b = g('h-son'), ec = S.ecoutent, k = S.conseil;
+  const lib = S.actif ? hsLib(S.appareil || S.carte) : 'Son arrêté';
+  txt('h-son-t', lib);
+  txt('h-son-d', ec.length ? '▸ ' + ec.join(' · ') : '');
+  b.classList.toggle('on', !!S.actif); b.classList.toggle('alerte', !!k);
+  g('h-son-vu').style.width = (S.actif ? Math.round(Math.min(1, S.niveau) * 100) : 0) + '%';
+  g('h-son-vu').style.background = S.niveau > 0.9 ? 'var(--danger)' : S.niveau < 0.003 ? 'var(--warn)' : 'var(--ok)';
+  b.title = (S.actif ? 'Les décodeurs entendent ' + lib : 'Aucune source audio en marche') + (ec.length ? ' · à l’écoute : ' + ec.join(', ') : '') +
+    (k ? ' · ' + k.texte : '') + ' — clic : changer, démarrer, enregistrer (touche S)';
+  // The fix, right where a decoder says it hears nothing.
+  const rep = (id, l, dec) => {
+    const on = !!(k && k.action && ec.some(d => (HS_DEC[d] || d) === dec));
+    g(l || id).hidden = !on; if (on) txt(id, k.bouton);
+  };
+  rep('sstv-repare', 'sstv-repare-l', 'SSTV'); rep('f8-repare', null, 'FT8'); rep('cw-repare', null, 'CW');
+  if (!g('hs-pop').hidden) hsPopRend();
+}
+function hsPopRend() {
+  const k = S.conseil, ec = S.ecoutent || [];
+  g('hs-vu').style.width = (S.actif ? Math.round(Math.min(1, S.niveau) * 100) : 0) + '%';
+  g('hs-vu').style.background = S.niveau > 0.9 ? 'var(--danger)' : 'var(--ok)';
+  txt('hs-etat', S.erreur || (S.actif ? hsLib(S.appareil) + ' · ' + S.rate + ' Hz' : 'arrêté'));
+  // Each card by its name, the receiver, and stop.
+  const actuel = S.actif ? S.appareil || '' : '';
+  const l = (S.cartes || []).map(c => ({ v: c.nom, nom: c.lib || c.nom, on: c.nom === actuel,
+    info: [c.poste ? 'le poste' : '', c.nom === S.pourSatellite ? 'choisie pour ce satellite' : ''].filter(x => x).join(' · ') }));
+  if (S.sdrPresent) l.push({ v: 'sdr', nom: 'Récepteur SDR', on: actuel.indexOf('Clé SDR') === 0,
+    info: (S.sdrActif ? 'en marche' : 'arrêté, il démarre') + (S.pourSatellite === 'sdr' ? ' · choisi pour ce satellite' : '') });
+  const h = l.map(x => '<button type="button" data-src="' + escA(x.v) + '" aria-pressed="' + x.on + '"><span>' + (x.on ? '● ' : '▶ ') + esc(x.nom) +
+    '</span><small>' + esc(x.on ? 'en marche' + (x.info && x.v !== 'sdr' ? ' · ' + x.info : '') : x.info) + '</small></button>').join('') +
+    (S.actif ? '<button type="button" class="hs-stop" data-src="">■ Arrêter le son des décodeurs</button>' : '');
+  if (g('hs-src').innerHTML !== h) g('hs-src').innerHTML = h || '<div class="petit">aucune carte son</div>';
+  g('hs-conseil').hidden = !k;
+  if (k) { const kh = esc(k.texte) + (k.action ? ' <button class="primaire repare" onclick="hsRepare()">' + esc(k.bouton) + '</button>' : ''); if (g('hs-conseil').innerHTML !== kh) g('hs-conseil').innerHTML = kh; }
+  document.querySelectorAll('#hs-decs button').forEach(b => b.setAttribute('aria-pressed', String(ec.some(d => (HS_DEC[d] || d) === b.dataset.d))));
+  // Phonie → texte where it is installed (its card shown).
+  g('hs-decs').querySelector('[data-d="Phonie"]').hidden = g('ph-carte').hidden;
+  g('hs-passage').disabled = !(E && E.suivi);
+  g('hs-passage').title = E && E.suivi ? E.suivi.nom + ' : la source qui l’entend, les décodeurs de son émetteur, l’enregistrement du passage (réception seulement) — touche P' : 'Suivre d’abord un satellite';
+  txt('hs-ec', (ecArret || ecWs) ? '■ Arrêter l’écoute ici' : '🔈 Écouter ici');
+  g('hs-ec').disabled = !(ecArret || ecWs) && !S.actif && !S.sdrActif;
+}
+function hsOuvre() {
+  if (g('hs-boite').hidden) { vue('son'); return; }
+  g('hs-pop').hidden = false; g('h-son').setAttribute('aria-expanded', 'true'); hsPopRend();
+  const b = g('hs-src').querySelector('button[aria-pressed="false"]') || g('hs-src').querySelector('button'); if (b) b.focus();
+}
+function hsFerme() { g('hs-pop').hidden = true; g('h-son').setAttribute('aria-expanded', 'false'); }
+function hsBascule() { if (g('hs-pop').hidden) hsOuvre(); else hsFerme(); }
+async function hsSource(nom) {
+  const j = await post('api/son/source?nom=' + enc(nom));
+  if (j && j.ok !== false) annonce(nom ? 'Décodeurs : ' + (nom === 'sdr' ? 'récepteur SDR' : hsLib(nom)) : 'Son des décodeurs arrêté');
+  HX.t = {}; await hsRafraichit(); ticTete();
+}
+function hsRepare() { const a = S && S.conseil && S.conseil.action; if (a) hsSource(a.indexOf('carte:') === 0 ? a.slice(6) : a); }
+g('hs-src').addEventListener('click', ev => {
+  const b = ev.target.closest('button[data-src]');
+  if (b && b.getAttribute('aria-pressed') !== 'true') hsSource(b.dataset.src);
+});
+g('hs-decs').addEventListener('click', async ev => {
+  const b = ev.target.closest('button[data-d]'); if (!b) return;
+  const on = b.getAttribute('aria-pressed') !== 'true' ? 1 : 0, d = b.dataset.d;
+  if (d === 'SSTV' || d === 'APRS') await post('api/son/options?' + d.toLowerCase() + '=' + on);
+  else if (d === 'CW') await post('api/cw?on=' + on);
+  else if (d === 'FT8') await post('api/ft8?on=' + on);
+  else if (d === 'Phonie') await phRegle('on=' + on);
+  hsRafraichit(); ticCw();
+});
+function hsEcoute() {
+  if (ecArret || ecWs) arreteEcoute(); else { g('ec-source').value = 'auto'; ecouteIci(); }
+  setTimeout(() => { if (!g('hs-pop').hidden) hsPopRend(); }, 400);
+}
+document.addEventListener('click', e => { if (!g('hs-pop').hidden && e.target.closest && !e.target.closest('#hs-boite')) hsFerme(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && !g('hs-pop').hidden) { hsFerme(); g('h-son').focus(); } });
+/** The satellite followed made ready, receive side only: its source, its transmitter's decoders, its recording. */
+async function preparePassage() {
+  if (window.SATME_TELEPHONE) return;
+  if (!(E && E.suivi)) { annonce('Suivre d’abord un satellite (Suivi)'); return; }
+  const j = await post('api/passage/preparer');
+  if (j && j.ok) annonce('⚡ ' + j.satellite + ' : ' + (j.fait && j.fait.length ? j.fait.join(' · ') : 'déjà prêt'));
+  hsRafraichit(); ticCw();
+}
+// ------------------------------------------------------------------ the status bar's rig, the header's knob: set in place
+function catPop(b) {
+  if (window.SATME_TELEPHONE) { vue('reglages'); montreReglages('materiel'); return; }
+  const c = E && E.cat, on = !!(c && c.connecte);
+  const mo = g('cat-modele').selectedOptions[0], po = g('cat-port').selectedOptions[0];
+  const quoi = (mo ? mo.textContent : g('cat-modele').value) + (irReseau() ? ' · par le réseau' : po && g('cat-port').value !== '-1' ? ' · ' + po.textContent : ' · aucun port choisi');
+  // Exactly what is said here is what « Connecter » asks: the form read once, now.
+  catPopU = on ? '' : catRequete();
+  const av = g('cat-avert').textContent;
+  popMontre(b, '<div class="aide-p"><b>Poste</b> ' + (on ? esc(c.statut || c.modele) + (c.dl ? ' · ' + mhz(c.dl) + ' MHz' : '') : 'non connecté') + '</div>' +
+    (on ? '' : '<div class="aide-p">' + esc(quoi) + '</div>' + (av ? '<div class="aide-p petit">' + esc(av) + '</div>' : '')) +
+    '<div class="sb-pop-l">' + (on ? '<button class="arret" onclick="popCache(); post(\'api/cat/deconnecter\')">Déconnecter</button>'
+      : catPopU ? '<button class="primaire" onclick="catPopConnecte()">Connecter</button>' : '') +
+    '<button onclick="popCache(); vue(\'reglages\'); montreReglages(\'materiel\')">Réglages du poste…</button></div>', true);
+}
+let catPopU = '';
+function catPopConnecte() {
+  popCache();
+  // The form moved since (a choice made in Réglages): said again, nothing sent.
+  if (!catPopU || catPopU !== catRequete()) { catPop(g('sb-cat')); return; }
+  post(catPopU);
+}
+function molPop(b) {
+  const j = HX.mol;
+  if (!j || window.SATME_TELEPHONE) { vue('reglages'); montreReglages('interfaces'); return; }
+  const seg = (cle, val, l) => '<span class="niv-seg" role="group">' + l.map(x => '<button type="button" aria-pressed="' + (String(val) === String(x[0])) +
+    '" onclick="molRegle(\'' + cle + '=' + x[0] + '\')">' + x[1] + '</button>').join('') + '</span>';
+  popMontre(b, '<div class="aide-p"><b>Molette</b> ' + esc(j.puce || '') + '</div>' +
+    '<div class="aide-p petit">Accorde</div>' + seg('accord', j.accord, [['AUTO', 'Auto'], ['POSTE', 'Poste'], ['SDR', 'SDR'], ['QO100', 'QO-100']]) +
+    '<div class="aide-p petit" style="margin-top:6px">Pas</div>' + seg('pas', j.pas, [[10, '10 Hz'], [100, '100 Hz'], [1000, '1 kHz']]) +
+    '<div class="aide-p petit" style="margin-top:6px">Sur le poste</div>' + seg('cible', j.cible, [['VFO', 'VFO'], ['SHIFT_RX', 'décalage RX'], ['SHIFT_TX', 'décalage TX']]) +
+    '<div class="sb-pop-l"><button onclick="popCache(); vue(\'reglages\'); montreReglages(\'interfaces\')">Tous les réglages…</button></div>', true);
+}
+// The phone's page: its own sound (it records), no pass made ready from here.
+if (window.SATME_TELEPHONE) document.querySelectorAll('.st-passage, #md-oui-ec').forEach(x => x.hidden = true);
+async function molRegle(q) { await regleMol(q); HX.t.mol = 0; await ticTete(); molPop(g('h-mol')); }
 // ------------------------------------------------------------------ automatic mode
 let VA = null, vaVu = '';
 async function veille(q) { if (q) await post('api/veille?' + q); ticVeille(); }
@@ -12566,6 +12788,11 @@ document.addEventListener('keydown', e => {
   if (e.ctrlKey || e.metaKey || e.altKey || (a && (/INPUT|SELECT|TEXTAREA/.test(a.tagName) || a.isContentEditable)) || document.querySelector('dialog[open]') || !g('man').hidden) return;
   if (e.key === '?') { e.preventDefault(); aideClavier(); }
   else if (e.key >= '1' && e.key <= '6' && ESPACES_WS[+e.key - 1]) { e.preventDefault(); wsOuvre(ESPACES_WS[+e.key - 1]); }
+  // Receive side only: the decoders' sound, the recording, the pass made ready, a contact noted.
+  else if ((e.key === 's' || e.key === 'S') && !g('hs-boite').hidden) { e.preventDefault(); hsBascule(); }
+  else if (e.key === 'e' || e.key === 'E') { e.preventDefault(); enregistre(); }
+  else if ((e.key === 'p' || e.key === 'P') && !window.SATME_TELEPHONE) { e.preventDefault(); preparePassage(); }
+  else if (e.key === 'n' || e.key === 'N') { e.preventDefault(); vue('carnet'); }
   else if (e.key === '[') railRegle(!document.body.classList.contains('rail-ouvert'));
 });
 function aideClavier() { popCache(); g('aide-dlg').showModal(); }
@@ -12827,6 +13054,16 @@ function palSources() {
   A('Rétablir le son', 'haut-parleur SDR', () => { rRegle('son=1'); annonce('Haut-parleur SDR rétabli'); });
   if (!g('ec-boite').hidden) A('Écouter ici', 'le son de SatMe-PC dans ce navigateur', () => { g('ec-pop').hidden = false; });
   A('Ouvrir les réglages', 'configuration', () => vue('reglages'));
+  if (!g('hs-boite').hidden && S) {
+    A('Son des décodeurs…', 'touche S · source, décodeurs, enregistrement', hsOuvre);
+    A(S.enregistrement ? '■ Arrêter l’enregistrement' : '● Enregistrer le son', 'touche E · WAV du passage', enregistre);
+    (S.cartes || []).forEach(c => A('Son : ' + (c.lib || c.nom), 'ce qu’entendent les décodeurs (réception)', () => hsSource(c.nom)));
+    if (S.sdrPresent) A('Son : récepteur SDR', 'ce qu’entendent les décodeurs (réception)', () => hsSource('sdr'));
+    if (E && E.suivi) A('Préparer le passage de ' + E.suivi.nom, 'touche P · source, décodeurs, enregistrement (réception)', preparePassage);
+  }
+  // The rig: its popover says which model and port before anything opens.
+  if (!window.SATME_TELEPHONE && E && E.cat) A(E.cat.connecte ? 'Poste : déconnecter…' : 'Poste : connecter…', 'CAT · ' + (E.cat.connecte ? E.cat.modele : 'le modèle et le port de Réglages › Poste'),
+    () => setTimeout(() => catPop(g('sb-cat')), 50));
   if (!g('onglets').querySelector('button[data-v="montage"]').hidden) {
     A('Montage : vue simplifiée', 'seulement ce qui reçoit ou émet', () => { vue('montage'); mtVue(true); });
     A('Montage : vue complète', 'toute la chaîne de la station', () => { vue('montage'); mtVue(false); });

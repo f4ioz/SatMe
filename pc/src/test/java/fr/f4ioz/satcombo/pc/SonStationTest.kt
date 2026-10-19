@@ -197,4 +197,44 @@ class SonStationTest {
         assertTrue(s.cw.texte(), s.cw.texte().trim().endsWith("CQ DE F4IOZ K"))
         assertTrue(s.cw.wpm in 17..23)
     }
+
+    @Test
+    fun un_decodeur_allume_sans_son_demarre_la_carte_connue_jamais_une_autre() {
+        val (s, son) = sonStation()
+        // No card names read from this PC: only the source below is known.
+        s.racineSysteme = null
+        var demarree = 0
+        son.virtuelles += SonPc.SourceVirtuelle("Essai (virtuelle)", "essai", { true }, { demarree++; null }, {})
+        // Nothing remembered, no rig: said, nothing started.
+        assertTrue(s.assureSource()!!.contains("aucune source"))
+        assertEquals(0, demarree)
+        // Used once, then stopped: started again for the decoder (the last one used, kept once stopped).
+        s.carte = "Essai (virtuelle)"; s.carte = ""
+        assertEquals("Essai (virtuelle)", s.derniereCarte)
+        assertEquals(null, s.assureSource())
+        assertEquals(1, demarree)
+        assertTrue(son.etat.value.actif)
+        assertEquals("Essai (virtuelle)", son.etat.value.appareil)
+        // Running: left alone.
+        assertEquals(null, s.assureSource())
+        assertEquals(1, demarree)
+        // No satellite followed: nothing remembered for one.
+        s.memoriseSourceSatellite("sdr")
+        assertEquals(null, s.sourcePourSatellite(s.suiviCatnum()))
+    }
+
+    @Test
+    fun le_silence_compte_depuis_le_premier_bloc_muet() {
+        var heure = 1_000_000L
+        val st = StationPc(StockageMemoire(), Catalogue(File(dossier, "cache"), enLigne = false), PortsSeriePc(), portee)
+        val son = SonPc()
+        val s = SonStation(son, st, File(dossier, "enregistrements"), File(dossier, "sstv")) { heure }
+        son.distribue(ShortArray(512), 512, 48_000)
+        assertEquals(1_000_000L, s.silenceDepuis)
+        heure += 30_000L
+        son.distribue(ShortArray(512), 512, 48_000)
+        assertEquals(1_000_000L, s.silenceDepuis)
+        son.distribue(ShortArray(512) { 8000 }, 512, 48_000)
+        assertEquals(0L, s.silenceDepuis)
+    }
 }
