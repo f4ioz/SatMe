@@ -214,7 +214,8 @@ class AccesDistantPcTest {
         "GET" to "/api/datv/video.mjpeg", "GET" to "/api/reglages", "GET" to "/sstv/x.png", "GET" to "/enregistrements/x.wav",
         "GET" to "/sauvegarde.zip", "GET" to "/carnet.adi", "GET" to "/api/acces", "GET" to "/api/montage",
         "POST" to "/api/cat/connecter?modele=SIM", "POST" to "/api/import", "POST" to "/api/sauvegarde/restaure",
-        "POST" to "/api/acces/mdp", "POST" to "/api/datv/emission/demarre", "GET" to "/planche/api/modeles", "GET" to "/journal/api/passages")
+        "POST" to "/api/acces/mdp", "POST" to "/api/datv/emission/demarre", "GET" to "/planche/api/modeles", "GET" to "/journal/api/passages",
+        "POST" to "/api/icomreseau/trace")
 
     @Test
     fun une_autre_machine_sans_session_n_a_rien_ce_pc_passe() {

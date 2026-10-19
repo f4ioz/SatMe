@@ -11,6 +11,11 @@ package fr.f4ioz.satcombo.pc
 import fr.f4ioz.satcombo.cat.icomreseau.CodageIdentifiants
 import fr.f4ioz.satcombo.cat.icomreseau.FausseRadioIcom
 import fr.f4ioz.satcombo.cat.icomreseau.PosteIcomReseau
+import fr.f4ioz.satcombo.cat.icomreseau.TraceEssai
+import fr.f4ioz.satcombo.cat.icomreseau.TraceEssai.Datagramme
+import org.json.JSONObject
+import java.net.HttpURLConnection
+import java.net.URL
 import fr.f4ioz.satcombo.data.Observer
 import fr.f4ioz.satcombo.domain.PassPredictor
 import fr.f4ioz.satcombo.plateforme.Lignes
@@ -145,9 +150,56 @@ class IcomReseauPcTest {
         assertEquals("pcm16-8k", st.settings.icomCodec)
         // The password itself never goes back to the page.
         assertFalse(r.toString().contains("abc"))
+        // Nor the coded forms: only whether they are there.
+        assertFalse(r.toString().contains("0102030405"))
+        assertTrue(r.getBoolean("utilisateurCode"))
+        // Empty keeps them.
+        ir.action("/api/icomreseau/reglage", mapOf("utilisateurCode" to ""))
+        assertEquals("0102030405", st.settings.icomUtilisateurCode)
         // Learnt: the coded forms dropped, a login is still possible from the table.
-        ir.action("/api/icomreseau/reglage", mapOf("utilisateurCode" to "", "mdpCode" to "-"))
+        ir.action("/api/icomreseau/reglage", mapOf("utilisateurCode" to "-", "mdpCode" to "-"))
+        assertEquals("", st.settings.icomUtilisateurCode)
         assertTrue(ir.json().getBoolean("pret"))
         assertFalse(ir.action("/api/icomreseau/reglage", mapOf("hote" to "a b;c")).getBoolean("ok"))
+    }
+
+    /** The owner's capture through the page's route: learnt, kept in the settings, nothing secret in the answer nor on disk. */
+    @Test fun trace_apprend_sans_rien_montrer() {
+        val st = station(Ports())
+        st.settings.apply { icomUtilisateurCode = ""; icomMdpCode = ""; icomPortControle = 50001 }
+        val ir = IcomReseauPc(st, SonPc(), dossier)
+        val serveur = ServeurPc(st, 0).apply { icomReseau = ir; demarre() }
+        fun envoie(b: ByteArray): JSONObject {
+            val c = URL("http://127.0.0.1:" + serveur.portReel + "/api/icomreseau/trace").openConnection() as HttpURLConnection
+            c.requestMethod = "POST"; c.doOutput = true; c.connectTimeout = 3000; c.readTimeout = 5000
+            c.outputStream.use { it.write(b) }
+            return JSONObject(c.inputStream.bufferedReader().readText()).also { c.disconnect() }
+        }
+        try {
+            val u = "essai"; val m = "Bidon-77"
+            val t = TraceEssai.trace(113, Datagramme(true, TraceEssai.connexion(u, m, 9)), Datagramme(false, TraceEssai.reponse(9, 0)))
+            val avant = dossier.walkTopDown().map { it.path }.toSet()
+            // Nothing typed yet: asked first.
+            val vide = envoie(t)
+            assertFalse(vide.getBoolean("ok"))
+            assertTrue(vide.getString("erreur").contains("tape d'abord"))
+            ir.action("/api/icomreseau/reglage", mapOf("utilisateur" to u, "mdp" to m))
+            val r = envoie(t)
+            assertTrue(r.toString(), r.getBoolean("ok"))
+            assertEquals("acceptée", r.getString("reponse"))
+            assertEquals(u.length + m.length, r.getInt("appris"))
+            assertEquals(1, r.getInt("connexions"))
+            val coupe = CodageIdentifiants.versHex(TraceEssai.code(m))
+            for (x in listOf(r.toString(), ir.json().toString())) {
+                assertFalse(x.contains(m)); assertFalse(x.contains(coupe)); assertFalse(x.contains(CodageIdentifiants.versHex(TraceEssai.code(u))))
+            }
+            assertEquals(coupe, st.settings.icomMdpCode)
+            assertEquals(CodageIdentifiants.versHex(TraceEssai.code(u)), st.settings.icomUtilisateurCode)
+            assertTrue(st.settings.icomTableCodage.isNotEmpty())
+            // No file left behind.
+            assertEquals(avant, dossier.walkTopDown().map { it.path }.toSet())
+            // Not a capture.
+            assertFalse(envoie("bonjour".toByteArray()).getBoolean("ok"))
+        } finally { serveur.arrete() }
     }
 }

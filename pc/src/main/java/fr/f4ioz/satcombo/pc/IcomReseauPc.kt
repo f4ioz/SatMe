@@ -8,6 +8,7 @@
  */
 package fr.f4ioz.satcombo.pc
 
+import fr.f4ioz.satcombo.cat.icomreseau.ApprentissageTrace
 import fr.f4ioz.satcombo.cat.icomreseau.CodageIdentifiants
 import fr.f4ioz.satcombo.cat.icomreseau.CodecReseau
 import fr.f4ioz.satcombo.cat.icomreseau.PosteIcomReseau
@@ -49,6 +50,11 @@ class IcomReseauPc(private val station: StationPc, private val son: SonPc, val d
 
     @Volatile private var ecouteur: ((ShortArray, Int, Int) -> Unit)? = null
 
+    companion object {
+        /** The largest capture taken for learning the coding. */
+        const val TRACE_MAX = 50L * 1024 * 1024
+    }
+
     @Synchronized private fun ecrisTrace(ligne: String) {
         runCatching {
             dossier.mkdirs()
@@ -64,7 +70,7 @@ class IcomReseauPc(private val station: StationPc, private val son: SonPc, val d
             .put("liaison", s.icomLiaison).put("hote", s.icomHote)
             .put("portControle", s.icomPortControle).put("portCiv", s.icomPortCiv).put("portAudio", s.icomPortAudio)
             .put("utilisateur", s.icomUtilisateur).put("mdp", s.icomMdp.isNotEmpty())
-            .put("utilisateurCode", s.icomUtilisateurCode).put("mdpCode", s.icomMdpCode.isNotEmpty())
+            .put("utilisateurCode", s.icomUtilisateurCode.isNotEmpty()).put("mdpCode", s.icomMdpCode.isNotEmpty())
             .put("codec", s.icomCodec).put("latence", s.icomLatenceMs).put("journal", s.icomJournal).put("spectre", s.icomSpectre)
             .put("codecs", JSONArray(CodecReseau.entries.map { JSONObject().put("id", it.id).put("libelle", it.libelle) }))
             .put("etat", st.etat.name).put("message", st.message).put("radio", st.radio)
@@ -92,9 +98,10 @@ class IcomReseauPc(private val station: StationPc, private val son: SonPc, val d
                 port("pc") { s.icomPortControle = it }; port("pv") { s.icomPortCiv = it }; port("pa") { s.icomPortAudio = it }
                 q["utilisateur"]?.let { s.icomUtilisateur = it.take(16) }
                 q["mdp"]?.takeIf { it.isNotEmpty() }?.let { s.icomMdp = it.take(16) }
-                q["utilisateurCode"]?.let { v ->
-                    if (v.isNotBlank() && CodageIdentifiants.hex(v) == null) return JSONObject().put("ok", false).put("erreur", "identifiant codé : 32 chiffres hexadécimaux au plus")
-                    s.icomUtilisateurCode = v.filter { !it.isWhitespace() }
+                // Like the password: never shown back, so empty keeps it and « - » clears it.
+                q["utilisateurCode"]?.takeIf { it.isNotBlank() }?.let { v ->
+                    if (v != "-" && CodageIdentifiants.hex(v) == null) return JSONObject().put("ok", false).put("erreur", "identifiant codé : 32 chiffres hexadécimaux au plus")
+                    s.icomUtilisateurCode = if (v == "-") "" else v.filter { !it.isWhitespace() }
                 }
                 q["mdpCode"]?.takeIf { it.isNotEmpty() }?.let { v ->
                     if (v != "-" && CodageIdentifiants.hex(v) == null) return JSONObject().put("ok", false).put("erreur", "mot de passe codé : 32 chiffres hexadécimaux au plus")
@@ -121,6 +128,32 @@ class IcomReseauPc(private val station: StationPc, private val son: SonPc, val d
         CodageIdentifiants.hex(s.icomUtilisateurCode)?.let { if (s.icomUtilisateur.isNotEmpty() && t.apprends(s.icomUtilisateur, it)) change = true }
         CodageIdentifiants.hex(s.icomMdpCode)?.let { if (s.icomMdp.isNotEmpty() && t.apprends(s.icomMdp, it)) change = true }
         if (change) s.icomTableCodage = t.ecrit()
+    }
+
+    /**
+     * The coding learnt from the owner's capture, held in memory only and
+     * wiped after. The answer says what was learnt, never a coded byte nor a
+     * clear character; nothing of it goes to the packet log.
+     */
+    fun apprendsTrace(trace: ByteArray): JSONObject {
+        try {
+            val b = ApprentissageTrace.apprends(trace, s.icomPortControle, s.icomUtilisateur, s.icomMdp, s.icomTableCodage)
+            b.aGarder()?.let { (u, m, t) -> s.icomUtilisateurCode = u; s.icomMdpCode = m; s.icomTableCodage = t }
+            val o = JSONObject().put("ok", b.ok).put("connexions", b.connexions)
+            if (b.connexions > 0) o.put("reponse", when (b.reponse) {
+                    ApprentissageTrace.Reponse.ACCEPTEE -> "acceptée"
+                    ApprentissageTrace.Reponse.REFUSEE -> "refusée"
+                    ApprentissageTrace.Reponse.INCONNUE -> "réponse du poste non reconnue"
+                })
+            if (b.ok) o.put("appris", b.appris).put("manquantes", JSONArray(b.placesManquantes)).put("message", b.message)
+            else o.put("erreur", b.message)
+            return o
+        } catch (e: Exception) {
+            // The reason only: an exception's text could quote the file.
+            return JSONObject().put("ok", false).put("erreur", "trace illisible")
+        } finally {
+            trace.fill(0)
+        }
     }
 
     /** The rig's scope, last sweep, levels 0…255. */

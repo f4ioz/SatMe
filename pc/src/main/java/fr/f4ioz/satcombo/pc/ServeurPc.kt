@@ -380,6 +380,17 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
             return
         }
         if (phonie != null && (chemin.startsWith("/api/phonie") || chemin.startsWith("/phonie/"))) { phonie(r, chemin, q, sortie, phonie); return }
+        // The owner's capture of a login: read into memory, learnt from, wiped; never written to disk.
+        if (r.methode == "POST" && chemin == "/api/icomreseau/trace") {
+            val ir = icomReseau
+            val o = when {
+                ir == null -> JSONObject().put("ok", false).put("absent", true)
+                r.longueur <= 0 -> JSONObject().put("ok", false).put("erreur", "fichier vide")
+                else -> RequeteHttp.corps(c.getInputStream(), r, IcomReseauPc.TRACE_MAX)?.let { ir.apprendsTrace(it) }
+                    ?: JSONObject().put("ok", false).put("erreur", "fichier trop gros (50 Mo au plus) ou coupé")
+            }
+            envoie(sortie, "200 OK", "application/json; charset=utf-8", o.toString().toByteArray()); return
+        }
         if (chemin == "/api/icomreseau" || chemin.startsWith("/api/icomreseau/")) {
             val ir = icomReseau
             val o = when {

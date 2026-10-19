@@ -63,6 +63,12 @@ class CodageIdentifiants {
         return t.indices.filter { table[cle(it, t[it].toInt() and 0xFF)] == null }
     }
 
+    /** The places (0…15) at which no character at all is known yet. */
+    fun placesVides(): List<Int> {
+        val pleines = table.keys.map { (it shr 16).toInt() }.toSet()
+        return (0 until Paquets.CHAMP).filter { it !in pleines }
+    }
+
     /** The table as text: one line per entry, `place code-du-caractère octet` (hex). */
     fun ecrit(): String = table.entries.sortedBy { it.key }.joinToString("\n") { (k, v) ->
         "%d %02x %02x".format((k shr 16).toInt(), (k and 0xFFFF).toInt(), v)

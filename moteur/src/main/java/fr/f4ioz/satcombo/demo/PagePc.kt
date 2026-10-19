@@ -3175,7 +3175,7 @@ ${rail()}
         <div class="t" style="margin-top:8px">IC-9700 par le réseau <span id="ir-pastille" class="pastille coupe">hors ligne</span></div>
         <div class="petit aide">Le serveur réseau intégré de l'IC-9700 : trois ports UDP (contrôle 50001, CI-V 50002, audio 50003), une seule session à la fois. SatMe y prend le CI-V (le même pilotage Doppler que par USB) et le son reçu, proposé comme carte son « IC-9700 (réseau) » à l'onglet Son, au SSTV, au FT8, à la phonie et à « Écouter ici ». <b>Réception seulement</b> : aucun son n'est envoyé, la voie d'émission n'est pas demandée et toute commande d'émission CI-V (1C 00 01…) est refusée. À la déconnexion, la session est toujours rendue au poste.</div>
         <div class="petit aide">Sur le poste : MENU › SET › Network : DHCP (ou une adresse fixe), Network Control sur ON, Network User1 ID et mot de passe, Network Radio Name, ports (50001 par défaut). L'adresse du poste s'affiche dans ce même menu.</div>
-        <div class="petit aide">Identifiant et mot de passe ne voyagent pas en clair : le poste attend une forme codée qu'aucune description publique ne donne. Relève-la une fois dans une trace d'une connexion qui marche (16 octets en hexadécimal chacun) et colle-la sous « Identifiants codés » ; donnée avec l'identifiant et le mot de passe en clair, SatMe apprend le codage de chaque caractère et s'en sert ensuite. Le journal des paquets écrit les en-têtes, sans les identifiants, dans icom-reseau-trace.txt.</div>
+        <div class="petit aide">Identifiant et mot de passe ne voyagent pas en clair : le poste attend une forme codée qu'aucune description publique ne donne. Le plus simple : capture sur ton réseau le début d'une connexion qui marche (port 50001, fichier .pcap ou .pcapng), tape l'identifiant et le mot de passe en clair, puis « Apprendre le codage depuis une trace » sous « Identifiants codés » : SatMe-PC y relève les champs codés, apprend le codage de chaque caractère et dit si le poste avait accepté cette connexion. Le fichier est lu en mémoire puis oublié ; ni les octets codés ni le texte en clair ne sont affichés ni écrits dans un journal. On peut aussi coller à la main les 16 octets codés (hexadécimal). Le journal des paquets écrit les en-têtes, sans les identifiants, dans icom-reseau-trace.txt.</div>
         <div class="petit aide">Son : PCM 16 bits à 16 kHz par défaut ; 8 kHz pour un lien lent. Le 16 bits à 24 kHz n'est pas proposé : le poste l'accepte puis n'envoie rien. Le tampon (40 à 300 ms) remet les paquets dans l'ordre et redemande ceux qui manquent ; plus long, il rattrape plus de pertes au prix du retard.</div>
         <div class="ligne"><input id="ir-hote" placeholder="adresse IP du poste" style="max-width:150px" title="L'adresse IP de l'IC-9700 (MENU › SET › Network)">
           <input id="ir-pc" type="number" min="1" max="65535" placeholder="50001" style="width:76px" title="Port de contrôle">
@@ -3183,7 +3183,9 @@ ${rail()}
           <input id="ir-pa" type="number" min="1" max="65535" placeholder="50003" style="width:76px" title="Port audio"></div>
         <div class="ligne"><input id="ir-user" maxlength="16" placeholder="Network User1 ID" autocomplete="off"><input id="ir-mdp" type="password" maxlength="16" placeholder="Mot de passe" autocomplete="new-password"></div>
         <details id="ir-codes"><summary class="petit">Identifiants codés (relevés dans une trace)</summary>
-          <div class="ligne"><input id="ir-ucode" placeholder="identifiant codé (hex)" autocomplete="off"><input id="ir-mcode" type="password" placeholder="mot de passe codé (hex)" autocomplete="off"></div></details>
+          <div class="ligne"><input id="ir-ucode" type="password" placeholder="identifiant codé (hex)" autocomplete="off"><input id="ir-mcode" type="password" placeholder="mot de passe codé (hex)" autocomplete="off"></div>
+          <div class="ligne"><button onclick="g('ir-pcap').click()">Apprendre le codage depuis une trace (.pcap)</button><input type="file" id="ir-pcap" accept=".pcap,.pcapng,.cap" hidden onchange="irTrace(this)"></div>
+          <div class="petit" id="ir-pcap-etat"></div></details>
         <div class="ligne"><select id="ir-codec" title="Le son demandé au poste"></select>
           <span class="petit">tampon</span><input id="ir-latence" type="number" min="40" max="300" step="10" style="width:64px" title="Tampon de réception, ms (40 à 300)"><span class="petit">ms</span></div>
         <div class="ligne"><label class="petit"><input type="checkbox" id="ir-journal"> journal des paquets</label>
@@ -4905,7 +4907,7 @@ async function irCharge(remplir) {
     g('ir-hote').value = IR.hote; g('ir-pc').value = IR.portControle; g('ir-pv').value = IR.portCiv; g('ir-pa').value = IR.portAudio;
     g('ir-user').value = IR.utilisateur;
     g('ir-mdp').value = ''; g('ir-mdp').placeholder = IR.mdp ? 'mot de passe enregistré' : 'Mot de passe';
-    g('ir-ucode').value = IR.utilisateurCode;
+    g('ir-ucode').value = ''; g('ir-ucode').placeholder = IR.utilisateurCode ? 'enregistré' : 'identifiant codé (hex)';
     g('ir-mcode').value = ''; g('ir-mcode').placeholder = IR.mdpCode ? 'enregistré' : 'mot de passe codé (hex)';
     g('ir-codec').innerHTML = IR.codecs.map(c => '<option value="' + c.id + '">' + esc(c.libelle) + '</option>').join('');
     g('ir-codec').value = IR.codec; g('ir-latence').value = IR.latence;
@@ -4934,6 +4936,26 @@ async function irEnregistre() {
     '&codec=' + enc(g('ir-codec').value) + '&latence=' + enc(v('ir-latence')) + '&journal=' + (g('ir-journal').checked ? 1 : 0) +
     '&spectre=' + (g('ir-spectre').checked ? 1 : 0) + '&liaison=' + g('cat-liaison').value);
   if (j && j.ok) { await irCharge(true); txt('ir-etat', 'enregistré · ' + g('ir-etat').textContent); }
+}
+// The coding learnt from the owner's own capture: the file goes to SatMe-PC only, the answer names no secret.
+async function irTrace(input) {
+  const f = input.files[0]; input.value = ''; if (!f) return;
+  if (!v('ir-user') || (!g('ir-mdp').value && !(IR && IR.mdp))) { txt('ir-pcap-etat', 'Tape d’abord l’identifiant et le mot de passe en clair.'); return; }
+  if (f.size > 50 * 1024 * 1024) { txt('ir-pcap-etat', 'Fichier trop gros (50 Mo au plus).'); return; }
+  txt('ir-pcap-etat', 'lecture de la trace…');
+  // What is typed is saved first: the server compares the trace with the saved settings.
+  await irEnregistre();
+  let j = null;
+  try { j = await (await fetch('api/icomreseau/trace', { method:'POST', body: f })).json(); } catch (x) {}
+  if (!j) { txt('ir-pcap-etat', 'Envoi impossible.'); return; }
+  const l = [];
+  if (j.connexions) l.push(j.connexions + ' connexion(s) dans la trace' + (j.reponse ? ' — ' + j.reponse : ''));
+  if (j.ok) {
+    l.push(j.appris + ' caractère(s) appris');
+    l.push(j.manquantes && j.manquantes.length ? 'places encore inconnues : ' + j.manquantes.map(p => p + 1).join(', ') : 'toutes les places ont au moins un caractère connu');
+  } else l.push(j.erreur || 'échec');
+  txt('ir-pcap-etat', l.join(' · '));
+  irCharge(true);
 }
 // The rig's scope: a waterfall strip, newest on top, while chosen and the network up.
 let ipLu = -1;
