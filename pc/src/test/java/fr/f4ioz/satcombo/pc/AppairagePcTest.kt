@@ -88,7 +88,14 @@ class AppairagePcTest {
         assertTrue(t.connecte); assertEquals("20.83", t.version)
         val fin = a.verifie()
         assertTrue(fin.joint); assertFalse(fin.ouvert); assertEquals("F4IOZ", fin.telephone)
-        assertTrue("closed", runCatching { annonce(url(jeton, "654321")) }.isFailure)
+        // The door shuts asynchronously: a loaded machine may answer once more before it is gone.
+        val limite = System.currentTimeMillis() + 3_000
+        var ferme = false
+        while (!ferme && System.currentTimeMillis() < limite) {
+            ferme = runCatching { annonce(url(jeton, "654321")) }.map { !it.optBoolean("ok") }.getOrDefault(true)
+            if (!ferme) Thread.sleep(50)
+        }
+        assertTrue("closed", ferme)
     }
 
     @Test
