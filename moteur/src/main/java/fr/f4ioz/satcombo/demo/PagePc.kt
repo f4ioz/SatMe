@@ -11456,7 +11456,7 @@ function mtTrace(c, t, p) {
   else if (fam === 'DIRECT') s += '<path class="mt-direct" d="' + d + '"/>';
   else s += '<path class="mt-fil" d="' + d + '"/>';
   s += '<path class="mt-flux" d="' + d + '"/>';
-  if (fam === 'WIFI') {
+  if (fam === 'WIFI' && t.et) {
     const [x, y] = t.et;
     s += '<path class="mt-ondes" d="M' + (x - 9) + ' ' + (y - 5) + ' q9 -8 18 0 M' + (x - 6) + ' ' + (y - 2) + ' q6 -5 12 0 M' + (x - 3) + ' ' + (y + 1) + ' q3 -2.5 6 0"/>';
   }
@@ -11477,7 +11477,7 @@ function mtEtTexte(c, l, et) {
 }
 const mtHorloge = (x, y) => '<g class="mt-horloge"><circle cx="' + x + '" cy="' + y + '" r="4"/><path d="M' + x + ' ' + (y - 2.6) + 'V' + y + 'H' + (x + 2) + '"/></g>';
 function mtEtiquette(c, t, et) {
-  const l = c.liens.find(x => x.id === t.id); if (!l) return '';
+  const l = c.liens.find(x => x.id === t.id); if (!l || !t.et) return '';
   const x = mtEtTexte(c, l, et); if (!x.t) return '';
   const ic = x.ref ? 12 : 0, w = Math.max(24, x.t.length * 5.6 + 10 + ic);
   return '<g class="mt-et' + (x.vif ? ' vif' : '') + (x.ref ? ' ref' : '') + '" data-id="' + l.id + '" transform="translate(' + (t.et[0] - w / 2) + ' ' + (t.et[1] - 17) + ')">' +

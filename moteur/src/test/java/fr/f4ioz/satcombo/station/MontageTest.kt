@@ -121,6 +121,26 @@ class MontageTest {
         }
     }
 
+    @Test fun laDispositionEviteLesCroisementsEtLesEtiquettesSeChevauchant() {
+        for (p in CatalogueMateriel.PREREGLAGES) {
+            val plan = DispositionMontage.dispose(p.chaine)
+            val m = DispositionMontage.mesure(plan, p.chaine)
+            assertEquals(p.id, 0, m.traversees)
+            assertEquals(p.id, 0, m.etiquettes)
+            // Every band and reference keeps its label; a coaxial label never covers a drawing.
+            for (t in plan.traces) {
+                val l = p.chaine.liens.first { it.id == t.id }
+                if (l.cable.famille == Montage.Famille.COAX || l.cable.famille == Montage.Famille.REFERENCE) assertNotNull(p.id + " " + t.id, t.etiquette)
+                val et = t.etiquette ?: continue
+                for (b in plan.boites) assertFalse("${p.id} ${t.id} sur ${b.id}",
+                    et.first - t.largeurEt / 2 < b.x + b.l && et.first + t.largeurEt / 2 > b.x && et.second - 16 < b.y + b.h - DispositionMontage.ETIQUETTE && et.second > b.y)
+            }
+        }
+        // The full station (GPSDO, supplies, two GPS antennas): few crossings left.
+        val c = prereglage("qo100-station")
+        assertTrue(DispositionMontage.mesure(DispositionMontage.dispose(c), c).croisements <= 16)
+    }
+
     @Test fun laReceptionEstAuDessusDeLEmission() {
         val c = prereglage("qo100-pluto")
         val plan = DispositionMontage.dispose(c)

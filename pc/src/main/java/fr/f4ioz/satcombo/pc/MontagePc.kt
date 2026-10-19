@@ -17,6 +17,7 @@ import fr.f4ioz.satcombo.station.EditionMontage
 import fr.f4ioz.satcombo.station.FonctionsMontage
 import fr.f4ioz.satcombo.station.Montage
 import fr.f4ioz.satcombo.station.ProfilsFonction
+import fr.f4ioz.satcombo.station.VerificationMontage
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -198,6 +199,7 @@ class MontagePc(dossier: File, private val lectures: () -> ActiviteMontage.Lectu
             .put("plan", DispositionMontage.json(DispositionMontage.dispose(c, garde)))
             .put("ports", Montage.portsJson(c)).put("historique", etatHistorique())
             .put("etat", ActiviteMontage.json(a, al))
+            .put("verification", VerificationMontage.json(VerificationMontage.verifie(c)))
             .put("simple", simple).put("simpleVide", simple && garde == null)
             .put("essai", if (demo) essai else "")
             .put("photos", JSONArray(c.elements.filter { photo(it.id) != null }.map { it.id }))
