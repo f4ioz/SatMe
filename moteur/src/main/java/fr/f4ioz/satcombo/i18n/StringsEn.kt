@@ -2458,7 +2458,7 @@ val EN: Map<String, String> = mapOf(
     "apt_setting" to "Decode APT (NOAA) while recording",
     "apt_setting_hint" to "Only switch this on before a NOAA pass: the decoder runs from the first second of the recording to the last.",
     "apt_help_title" to "Receiving a NOAA picture",
-    "apt_help_body" to "NOAA 15, 18 and 19 transmit continuously on 137.620 / 137.9125 / 137.100 MHz. You need a wide-FM receiver (30 to 40 kHz bandwidth, not the narrow FM used for voice), a circularly polarised antenna or a plain V-dipole, and a way into the phone: headset input, USB sound card or RTL-SDR dongle. Start recording as the satellite rises and stop when it sets — the picture is the whole pass, there is no header to wait for. A usable pass lasts ten to fifteen minutes and yields about two thousand lines.",
+    "apt_help_body" to "NOAA 15, 18 and 19 are no longer in service: NOAA-18 was switched off on 6 June 2025, NOAA-19 on 13 August and NOAA-15 on 19 August 2025. There is no live APT left to receive; the decoder stays for your old recordings and archived WAV or MP3 files. For the record, they sent on 137.620 / 137.9125 / 137.100 MHz. You needed a wide-FM receiver (30 to 40 kHz bandwidth, not the narrow FM used for voice), a circularly polarised antenna or a plain V-dipole, and a way into the phone: headset input, USB sound card or RTL-SDR dongle. The picture was the whole pass, with no header to wait for: a usable pass of ten to fifteen minutes gives about two thousand lines. For live weather pictures, see METEOR (LRPT).",
     "apt_beta" to "Beta feature: decoding is checked against a synthesised signal, never yet against a real pass.",
     "sstv_mode_auto" to "Auto (VIS)",
     "sstv_listening_forced" to "Listening — forced mode %s",

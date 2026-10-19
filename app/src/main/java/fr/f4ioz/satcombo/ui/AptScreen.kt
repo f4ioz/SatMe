@@ -67,8 +67,8 @@ import java.util.Locale
 /**
  * APT: NOAA weather images received while recording a pass.
  *
- * Unlike SSTV there is nothing to wait for: NOAA transmits continuously while in
- * view. The screen shows the image building line by line, with a button to save
+ * Unlike SSTV there was nothing to wait for: NOAA sent continuously while in
+ * view (NOAA-15/18/19 were all switched off in 2025; files remain decodable). The screen shows the image building line by line, with a button to save
  * it without stopping reception — the system may kill the app before a
  * 15-minute pass ends.
  */
