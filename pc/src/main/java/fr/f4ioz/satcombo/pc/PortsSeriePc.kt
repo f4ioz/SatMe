@@ -48,6 +48,8 @@ class PortsSeriePc : PortsSerie {
 
     override suspend fun ouvre(p: PortSerie, baud: Int, lignes: Lignes, deuxArrets: Boolean): Ouverture = withContext(Dispatchers.IO) {
         if (p.portPttRigExpert()) return@withContext Ouverture(null, "port PTT/CW d'un RigExpert : jamais ouvert")
+        // A trial copy beside the station (tests, demos): no serial port at all — opening one raises RTS/DTR.
+        if (sansSerie()) return@withContext Ouverture(null, "ports série désactivés pour cette instance (SATME_SANS_SERIE)")
         val port = decrit(ports()).firstOrNull { it.first.cle == p.cle && it.first.port == p.port }?.second
             ?: return@withContext Ouverture(null, "port introuvable : ${p.libelle}")
         // Before opening: jSerialComm applies them as the port opens.
@@ -65,6 +67,9 @@ class PortsSeriePc : PortsSerie {
     }
 
     companion object {
+        /** Set by `SATME_SANS_SERIE=1` (environment) or `-Dsatme.sansSerie=true`: this instance never opens a serial port. */
+        fun sansSerie(): Boolean = System.getenv("SATME_SANS_SERIE") == "1" || System.getProperty("satme.sansSerie") == "true"
+
         /** The port's lasting name: its serial number when it has one, else its path. */
         fun cle(p: SerialPort): String {
             val serie = runCatching { p.serialNumber }.getOrNull()?.takeIf { it.isNotBlank() && it != "Unknown" }
