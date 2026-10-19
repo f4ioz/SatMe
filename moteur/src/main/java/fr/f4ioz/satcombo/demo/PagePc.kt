@@ -93,11 +93,13 @@ object PagePc {
                     val o = onglet(id)
                     val c = IconesPc.svg(o.icone) + "<span>${o.nom}</span>"
                     val titre = "${o.nom} — ${o.quoi}"
+                    // Not about satellites: shown once the server says it is ticked (api/capacites).
+                    val cache = if (id in FonctionsNonSat.ONGLETS) " hidden" else ""
                     when {
                         id == ici -> "<a class=\"actif\" aria-current=\"page\" href=\"$id\" title=\"$titre\">$c</a>"
                         id in PAGES -> "<a href=\"$id\" title=\"$titre\">$c</a>"
-                        ici != null -> "<a href=\"pc#$id\" data-v=\"$id\" title=\"$titre\">$c</a>"
-                        else -> "<button data-v=\"$id\" title=\"$titre\"" + (if (id == "station") " class=\"actif\"" else "") + ">$c</button>"
+                        ici != null -> "<a href=\"pc#$id\" data-v=\"$id\" title=\"$titre\"$cache>$c</a>"
+                        else -> "<button data-v=\"$id\" title=\"$titre\"" + (if (id == "station") " class=\"actif\"" else "") + "$cache>$c</button>"
                     }
                 } + "</div></div>"
         } +
@@ -364,7 +366,7 @@ object PagePc {
   // The tabs the server offers (the phone some of them): the others hidden, an empty workspace too.
   json('api/capacites').then(j => {
     if (!j || !j.onglets) return;
-    document.querySelectorAll('#onglets .ws-l a').forEach(a => { const h = a.getAttribute('href').replace('pc#', ''); if (!j.onglets.includes(h)) a.hidden = true; });
+    document.querySelectorAll('#onglets .ws-l a').forEach(a => { const h = a.getAttribute('href').replace('pc#', ''); a.hidden = !j.onglets.includes(h); });
     document.querySelectorAll('#onglets .ws').forEach(w => { w.hidden = ![...w.querySelectorAll('.ws-l > a')].some(a => !a.hidden); });
     const m = g('sb-mt'); if (m && !j.onglets.includes('montage')) m.hidden = true;
   });
@@ -411,6 +413,7 @@ ${STYLE_JETONS}
   @media (prefers-reduced-motion:reduce) { *, *::before, *::after { animation-duration:.001ms !important; animation-iteration-count:1 !important; transition-duration:.001ms !important; scroll-behavior:auto !important; } }
   * { box-sizing:border-box; }
   [hidden] { display:none !important; }
+  .ns-avis { max-width:620px; margin:40px auto; }
   #visionneuse { background:var(--carte); color:var(--clair); border:1px solid var(--bord); border-radius:12px; padding:10px; max-width:96vw; }
   #c-liste td.act button { padding:3px 5px; }
   #c-liste .c-nm { max-width:96px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--gris); font-size:11px; font-weight:400; }
@@ -2944,6 +2947,12 @@ ${rail()}
   <div id="cg-attrib" class="cg-attrib" hidden>© les contributeurs d'<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a></div>
 </div>
 </div>
+<div class="vue" id="v-nonsat" hidden>
+  <div class="carte ns-avis">
+    <div class="t">Fonction non satellite désactivée — l'activer dans Réglages</div>
+    <div class="ligne"><span id="ns-nom"></span><button class="primaire" onclick="vue('reglages'); montreReglages('station')">Ouvrir Réglages › Ma station</button></div>
+  </div>
+</div>
 <div class="vue" id="v-avions" hidden>
 <div class="grille2" style="grid-template-columns:minmax(360px,1fr) minmax(560px,1.9fr)">
   <div>
@@ -3244,6 +3253,13 @@ ${rail()}
         <svg id="hz-dessin" viewBox="-62 -62 124 124" width="150" height="150" role="img" aria-label="Le masque d'horizon vu du dessus"></svg>
         <div id="hz-champs" style="display:grid;grid-template-columns:repeat(2, auto 64px);gap:4px 8px;align-items:center"></div></div>
       <div class="ligne"><button class="primaire" onclick="enregistreHorizon()">Enregistrer</button><button onclick="hzSecteurs(HZ.length, true)">Tout à 0</button><span class="petit" id="hz-etat"></span></div>
+    </div>
+    <div class="carte" id="ns-carte" hidden>
+      <div class="t">Fonctions non satellite</div>
+      <div class="petit aide">Les onglets qui n'écoutent pas les satellites. Décoché : l'onglet quitte le menu, la palette (Ctrl+K) et la carte, et la fonction ne démarre pas ; décochée pendant qu'elle reçoit, elle s'arrête (après confirmation) et rend son récepteur. Coché : l'onglet revient aussitôt. Le choix est gardé par SatMe-PC : le même menu pour tous les navigateurs.</div>
+      <label style="display:block;margin-top:8px"><input type="checkbox" id="ns-avions" onchange="nsCoche('avions', this)"> <b>Avions</b> <span class="petit">— ADS-B 1090 MHz, diffusion par avions</span></label>
+      <label style="display:block;margin-top:6px"><input type="checkbox" id="ns-ais" onchange="nsCoche('ais', this)"> <b>Navires</b> <span class="petit">— AIS 162 MHz</span></label>
+      <label style="display:block;margin-top:6px"><input type="checkbox" id="ns-sondes" onchange="nsCoche('sondes', this)"> <b>Sondes</b> <span class="petit">— radiosondes 400 à 406 MHz</span></label>
     </div>
     <div class="carte">
       <div class="t">Skeds annoncés (hams.at)</div>
@@ -4067,7 +4083,7 @@ async function xsArrete() {
 // Réglages by category: a list on the left (icon, name, what it holds), the chosen category's cards on the right.
 const ICO = ${icones()};
 const CATS_REG = [
-  { id: 'station', nom: 'Ma station', ico: 'person', desc: 'Indicatif, carré, élévation minimale, horizon', cartes: ['Station', 'Horizon'] },
+  { id: 'station', nom: 'Ma station', ico: 'person', desc: 'Indicatif, carré, élévation minimale, horizon, fonctions non satellite', cartes: ['Station', 'Horizon', 'Fonctions non satellite'] },
   { id: 'materiel', nom: 'Poste et rotor', ico: 'radio', desc: 'CAT, TH-D72, rotor, convertisseurs, ADALM-PLUTO', cartes: ['Poste', 'Kenwood TH-D72', 'Rotor', 'Convertisseurs', 'Journal Doppler', 'ADALM-PLUTO'] },
   { id: 'satellites', nom: 'Satellites', ico: 'satellite_alt', desc: 'Éléments orbitaux, statut AMSAT, QO-100 au démarrage', cartes: ['Éléments orbitaux', 'AMSAT', 'QO-100'] },
   { id: 'interfaces', nom: 'Interfaces', ico: 'handshake', desc: 'Lien WebSocket, fréquence pour les carnets (rigctld), molette USB', cartes: ['Lien satellite', 'Fréquence pour les carnets', 'Molette USB'] },
@@ -5010,10 +5026,12 @@ g('emetteur').onchange = () => post('api/emetteur?i=' + g('emetteur').value);
 function vue(n) {
   setTimeout(majFlux, 0);
   tqRange(n);
-  document.querySelectorAll('.vue').forEach(x => x.hidden = x.id !== 'v-' + n);
+  const ns = nsOff(n);
+  document.querySelectorAll('.vue').forEach(x => x.hidden = x.id !== (ns ? 'v-nonsat' : 'v-' + n));
   document.querySelectorAll('#onglets button').forEach(b => b.classList.toggle('actif', b.dataset.v === n));
   try { localStorage.setItem('vue', n); } catch (x) {}
   navMaj(n);
+  if (ns) { txt('ns-nom', (NS_NOMS[n] || n) + ' n’est pas dans le menu.'); g('aff-pop').hidden = true; g('mem-pop').hidden = true; return; }
   if (n === 'carnet') { chargeCarnet(); g('c-call').focus(); vueCarnet(vueC); ticCw(); }
   if (n === 'carnet' || n === 'sdr' || n === 'qo100') ticPhonie(true);
   if (n === 'reglages') chargePhonieReglages();
@@ -8040,7 +8058,7 @@ function dessineCg() {
   }
   // Aircraft scatter: the path, the common volume, each one's horizon at cruise height.
   const df = C.diffusion;
-  if (CGC.diff && df && df.a) {
+  if (CGC.diff && df && df.a && !nsOff('avions')) {
     const d0 = m.L(df.a[1]) - df.a[1];
     traceCarte(m, cgOrtho(df.a, df.b, 64).map(p => [p[0], p[1] + d0]), '#E86FA8', 2, [8, 5]);
     const vol = cercle(df.milieu[0], df.milieu[1], df.rayonKm / 6371), dm = m.L(df.milieu[1]) - df.milieu[1];
@@ -8073,7 +8091,7 @@ function dessineCg() {
       if (etiq) cgEtiquette(m, X, Y, a.nom, '#C9B6FF'); });
     nb.push(C.aprs.length + ' APRS');
   }
-  if (CGC.sonde && C.sonde) {
+  if (CGC.sonde && C.sonde && !nsOff('sondes')) {
     const s = C.sonde;
     if (s.trace && s.trace.length > 1) { const d0 = m.L(s.lon) - s.lon; traceCarte(m, s.trace.map(p => [p[0], p[1] + d0]), 'rgba(255,213,74,.8)', 1.5); }
     const [X, Y] = pt(s.lat, s.lon, s.nom + ' · ' + s.alt + ' m');
@@ -8085,7 +8103,7 @@ function dessineCg() {
       x.fillStyle = '#FF7AD9'; x.fillRect(X - 4, Y - 4, 8, 8); cgEtiquette(m, X, Y, d.nom, '#FF9FE3'); });
     if (C.datv.length) nb.push(C.datv.length + ' DATV');
   }
-  if (CGC.avions && C.avions) {
+  if (CGC.avions && C.avions && !nsOff('avions')) {
     const ouv = new Set((df && df.ouvertes) || []);
     let n = 0;
     C.avions.forEach(a => {
@@ -8099,7 +8117,7 @@ function dessineCg() {
     });
     nb.push(n + ' avions');
   }
-  if (CGC.navires && C.navires) {
+  if (CGC.navires && C.navires && !nsOff('ais')) {
     let n = 0;
     C.navires.forEach(s => {
       if (s.lat == null) return; n++;
@@ -12236,6 +12254,10 @@ mtPfCharge();
 // ------------------------------------------------------------------ the frame: rail, workspaces, header strip, status bar
 // Kept in var: vue() may run before this part of the script has.
 var TITRE0 = document.title, wsDernier = {}, HX = { t: {} };
+/** The functions not about satellites, ticked or not (api/capacites; null where the server does not offer the choice). */
+var NS = null;
+var NS_NOMS = { avions: 'Avions (ADS-B)', ais: 'Navires (AIS)', sondes: 'Sondes (radiosondes)' };
+function nsOff(n) { return !!(NS && NS[n] === false); }
 const ESPACES_WS = [...document.querySelectorAll('#onglets .ws')].map(w => w.dataset.ws);
 try { wsDernier = JSON.parse(localStorage.getItem('ws-dernier') || '{}') || {}; } catch (x) {}
 function railRegle(ouvert, garde) {
@@ -12708,15 +12730,35 @@ setInterval(ticTete, 2000); setInterval(rendTete, 1000); ticTete();
 lienRotor(); irMontre();
 // The tab from the address (#carnet, a bookmark), else the last one seen.
 // The tabs the server offers (the phone serves some of them): the others hidden, and left if open.
-fetch('api/capacites').then(r => r.ok ? r.json() : null).then(j => {
+// The functions not about satellites (SatMe-PC only): unticked, their tab leaves the menu, its address shows a notice.
+function appliqueCapacites(j) {
   if (!j || !j.onglets) return;
-  document.querySelectorAll('#onglets button[data-v]').forEach(b => { if (!j.onglets.includes(b.dataset.v)) b.hidden = true; });
-  document.querySelectorAll('#onglets a').forEach(a => { if (!j.onglets.includes(a.getAttribute('href'))) a.hidden = true; });
+  NS = j.nonSat || null;
+  document.querySelectorAll('#onglets button[data-v]').forEach(b => { b.hidden = !j.onglets.includes(b.dataset.v); });
+  document.querySelectorAll('#onglets a').forEach(a => { a.hidden = !j.onglets.includes(a.getAttribute('href')); });
   // A workspace with none of its tabs here leaves the rail.
   document.querySelectorAll('#onglets .ws').forEach(w => { w.hidden = ![...w.querySelectorAll('.ws-l > *')].some(x => !x.hidden); });
+  g('ns-carte').hidden = !NS;
+  if (NS) Object.keys(NS_NOMS).forEach(k => { const c = g('ns-' + k); if (c && document.activeElement !== c) c.checked = !!NS[k]; });
+  [['sonde', 'sondes'], ['avions', 'avions'], ['navires', 'ais'], ['diff', 'avions']].forEach(([c, n]) => {
+    const i = document.querySelector('[data-cg="' + c + '"]'); if (i) i.closest('label').hidden = nsOff(n);
+  });
+  if (!g('v-carte').hidden) dessineCg();
   const ouvert = document.querySelector('#onglets button.actif');
-  if (ouvert && ouvert.hidden) vue('station');
-}).catch(() => {});
+  if (ouvert && ouvert.hidden) { if (!nsOff(ouvert.dataset.v)) vue('station'); else if (g('v-nonsat').hidden) vue(ouvert.dataset.v); }
+  else if (ouvert && !g('v-nonsat').hidden) vue(ouvert.dataset.v);
+}
+function chargeCapacites() { return fetch('api/capacites').then(r => r.ok ? r.json() : null).then(appliqueCapacites).catch(() => {}); }
+async function nsCoche(id, c) {
+  let j = await post('api/nonsat?o=' + id + '&on=' + (c.checked ? 1 : 0));
+  if (j && j.enMarche) {
+    if (!confirm(j.nom + ' reçoit en ce moment : l’arrêter (le récepteur est rendu) et retirer l’onglet du menu ?')) { c.checked = true; return; }
+    j = await post('api/nonsat?o=' + id + '&on=0&force=1');
+  }
+  if (j && j.onglets) appliqueCapacites(j); else chargeCapacites();
+}
+chargeCapacites();
+setInterval(() => { if (!document.hidden) chargeCapacites(); }, 30000);
 if (document.querySelector('#onglets button[data-v="' + location.hash.slice(1).replace(/[^a-z0-9]/g, '') + '"]')) vue(location.hash.slice(1));
 else try { const n = localStorage.getItem('vue'); if (n) vue(n); } catch (x) {}
 // Ctrl+K or « ? » from the journal's or the sheet's page: opened here.

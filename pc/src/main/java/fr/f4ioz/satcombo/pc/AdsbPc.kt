@@ -401,5 +401,8 @@ class AdsbPc(private val station: StationPc, private val sdr: SdrPc, private val
         const val CLE_H_LUI = "pc_adsb_h_lui"
         const val CLE_ALT_MIN = "pc_adsb_alt_min"
         const val CLE_HORIZON = "pc_adsb_horizon"
+        /** Every setting of this tab: one written says the owner has used it. */
+        val REGLAGES = listOf(CLE_SOURCE, CLE_APPAREIL, CLE_PORT, CLE_GAIN, CLE_CORRIGE, CLE_SBS, CLE_CIBLE, CLE_CIBLE_LOC,
+            CLE_BANDE, CLE_RAYON, CLE_H_MOI, CLE_H_LUI, CLE_ALT_MIN, CLE_HORIZON)
     }
 }

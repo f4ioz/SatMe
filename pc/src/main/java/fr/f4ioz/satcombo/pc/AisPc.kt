@@ -269,5 +269,7 @@ class AisPc(private val station: StationPc, private val sdr: SdrPc, private val 
         const val CLE_GAIN = "pc_ais_gain"
         const val CLE_PPM = "pc_ais_ppm"
         const val CLE_NMEA = "pc_ais_nmea"
+        /** Every setting of this tab: one written says the owner has used it. */
+        val REGLAGES = listOf(CLE_SOURCE, CLE_APPAREIL, CLE_PORT, CLE_GAIN, CLE_PPM, CLE_NMEA)
     }
 }

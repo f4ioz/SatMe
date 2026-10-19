@@ -273,6 +273,16 @@ fun main(args: Array<String>) {
     adsb.aisTientCle = { ais.tientCleSdr }
     sdr.aisTient = { ais.tientCleSdr }
     serveur.ais = ais
+    // The functions not about satellites: their tabs only when ticked in Réglages; decided once, those the station has used kept.
+    fr.f4ioz.satcombo.demo.FonctionsNonSat.migre(station.stockage) { id ->
+        fun ecrit(l: List<String>) = l.any { fr.f4ioz.satcombo.demo.FonctionsNonSat.present(station.stockage, it) }
+        when (id) {
+            "avions" -> adsb.actif || ecrit(AdsbPc.REGLAGES)
+            "ais" -> ais.actif || ecrit(AisPc.REGLAGES)
+            "sondes" -> (sdr.pourSonde && sdr.etat.value.actif) || ecrit(listOf("sonde_freq", "sonde_model")) || sdr.sondes.journaux().isNotEmpty()
+            else -> false
+        }
+    }
     // Space weather: nothing asked from the Internet until ticked in its tab; the copies kept are shown meanwhile.
     serveur.espace = MeteoSpatialePc(station, station.stockage, File(dossier, "espace")).also { it.demarre() }
     serveur.carte = CartePc(station, son, sdr, adsb, datv, { textesDatv }, { serveur.qrzDatv }, ais = ais)

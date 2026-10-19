@@ -10,6 +10,7 @@ package fr.f4ioz.satcombo.pc
 
 import fr.f4ioz.satcombo.demo.ApiQo100
 import fr.f4ioz.satcombo.demo.ApiSon
+import fr.f4ioz.satcombo.demo.FonctionsNonSat
 import fr.f4ioz.satcombo.demo.PagePc
 
 import fr.f4ioz.satcombo.datv.Datv
@@ -466,6 +467,11 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 ?: fr.f4ioz.satcombo.demo.ReponseWeb("200 OK", "application/json; charset=utf-8", "{\"ok\":false,\"absent\":true}".toByteArray())
             envoie(sortie, rep.statut, rep.type, rep.corps, rep.entetes); return
         }
+        // A function not about satellites left unticked in Réglages: nothing of it starts.
+        if (r.methode == "POST") nonSatRefuse(chemin)?.let { id ->
+            envoie(sortie, "200 OK", "application/json; charset=utf-8", JSONObject().put("ok", false).put("nonSat", id)
+                .put("erreur", "Fonction non satellite désactivée — l'activer dans Réglages › Ma station").toString().toByteArray()); return
+        }
         // ADS-B (receive only) and the shared map's layers.
         if (chemin == "/api/adsb" || chemin.startsWith("/api/adsb/")) {
             val rep = adsb?.sert(chemin, r.methode) { q[it].orEmpty() }
@@ -508,9 +514,8 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
             "/api/manuel" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", fr.f4ioz.satcombo.demo.Manuel.REPONSE)
             "/api/manuel/cherche" -> envoie(sortie, "200 OK", "application/json; charset=utf-8",
                 fr.f4ioz.satcombo.demo.Manuel.chercheJson(q["q"].orEmpty().take(200)).toString().toByteArray())
-            // Every tab here; the phone offers some of them.
-            "/api/capacites" -> envoie(sortie, "200 OK", "application/json; charset=utf-8",
-                JSONObject().put("onglets", JSONArray(PagePc.TOUS)).put("serveur", "pc").toString().toByteArray())
+            // Every tab here but the functions not about satellites left unticked; the phone offers some of them.
+            "/api/capacites" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", capacites().toString().toByteArray())
             "/api/etat" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JsonPc.etat(station, carnet).toString().toByteArray())
             // The satellite link: on or not, its port, who listens.
             "/api/lien" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", (lien?.let { l ->
@@ -872,6 +877,29 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
         if (proposee) fr.f4ioz.satcombo.domain.GardeQo100.Origine.PROPOSEE else fr.f4ioz.satcombo.domain.GardeQo100.Origine.MAIN
 
     /** What a POST asks; the answer says whether it was done. */
+    /** The tabs offered (those not about satellites only when ticked) and which of these are ticked. */
+    private fun capacites(): JSONObject {
+        val c = FonctionsNonSat.choisis(station.stockage).orEmpty()
+        return JSONObject().put("onglets", JSONArray(FonctionsNonSat.onglets(PagePc.TOUS, c))).put("serveur", "pc")
+            .put("nonSat", JSONObject(FonctionsNonSat.ONGLETS.keys.associateWith { it in c }))
+    }
+
+    /** Whether the function behind [id] holds a receiver now. */
+    private fun nonSatTourne(id: String): Boolean = when (id) {
+        "avions" -> adsb?.actif == true
+        "ais" -> ais?.actif == true
+        "sondes" -> sdr?.let { it.pourSonde && it.etat.value.actif } == true
+        else -> false
+    }
+
+    /** The unticked function a POST to [chemin] would start, else null. */
+    private fun nonSatRefuse(chemin: String): String? = when (chemin) {
+        "/api/adsb/demarre", "/api/adsb/essai" -> "avions"
+        "/api/ais/demarre", "/api/ais/essai" -> "ais"
+        "/api/sondes/demarrer" -> "sondes"
+        else -> null
+    }?.takeIf { !FonctionsNonSat.actif(station.stockage, it) }
+
     private fun action(chemin: String, q: Map<String, String>): JSONObject {
         val ok = JSONObject().put("ok", true)
         val rotor = station.stationRotor
@@ -1012,6 +1040,18 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 val d = sdr ?: return JSONObject().put("ok", false)
                 val i = d.detecteBladerf()
                 return ok.put("message", i.message).put("libelle", i.carte?.libelle ?: "")
+            }
+            // A function not about satellites ticked or not; unticked while it runs: stopped once confirmed (the receiver given back).
+            "/api/nonsat" -> {
+                val id = q["o"].orEmpty().takeIf { it in FonctionsNonSat.ONGLETS } ?: return JSONObject().put("ok", false).put("erreur", "fonction inconnue")
+                if (q["on"] == "1") FonctionsNonSat.pose(station.stockage, id, true)
+                else {
+                    val tourne = nonSatTourne(id)
+                    if (tourne && q["force"] != "1") return JSONObject().put("ok", false).put("enMarche", true).put("nom", FonctionsNonSat.ONGLETS[id])
+                    FonctionsNonSat.pose(station.stockage, id, false)
+                    if (tourne) when (id) { "avions" -> adsb?.arrete(); "ais" -> ais?.arrete(); "sondes" -> sdr?.arrete() }
+                }
+                return capacites().put("ok", true)
             }
             "/api/sondes/demarrer" -> {
                 val d = sdr ?: return JSONObject().put("ok", false)
