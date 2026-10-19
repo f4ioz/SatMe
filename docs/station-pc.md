@@ -550,6 +550,15 @@ For other programs on the PC (a logger, a dashboard, a script): **Réglages › 
 - **Without HTTPS** the password and the page go in clear: a trusted network only (or an encrypted tunnel).
 - **Sur cet appareil**: *Garder l'écran allumé* and **Installer l'application** (a window of its own, an icon), for this browser; browsers allow them only on http://localhost or over HTTPS.
 
+### Remote mode
+
+For the page opened from afar (a VPN, another house): the **Distant** button at the top, or **Réglages › Accès à distance › Mode distant**, for this browser only (suggested when the page is opened from another machine). The **Mode distant** badge and its « ? » list what is lightened.
+
+- **🔈 Écouter ici** takes the **low-latency** path: a WebSocket (`/api/son/ws`, behind the same session), 20 ms frames at 8, 12 or 16 kHz (low-passed then resampled), as 16-bit PCM or **µ-law** (half the bandwidth: 64 kbit/s at 8 kHz). The player keeps a 60–120 ms buffer set from the measured jitter (95th percentile + 20 ms), replaces a lost frame by the previous one faded, follows the sound card's drift (±0.5 %), and shows the estimated latency, the jitter, the round trip, the frames concealed. On this PC, about 0.11 s instead of 0.6 s with the HTTP stream, which stays as the fallback (*Voie*: auto, low latency, HTTP stream).
+- Over http from another machine, browsers refuse the AudioWorklet: the same buffer then runs in a ScriptProcessor (about 20 ms more). No Opus (it would need a native encoder on the PC).
+- **Lightened**: SDR spectrum and waterfall at 5 frames a second (256 points, levels in one byte), the magnifier, the QO-100 panorama, the DATV wide band and level meter less often, DATV video as a thumbnail every 2 s (**▶ Vidéo en direct** on the picture to ask for it), map, planes and ships every 5 to 10 s, the live stream reduced to the shown tab, animations off.
+- **Receive only**: the path keeps room for a microphone and a PTT later, but SatMe-PC refuses today any sound going up and any transmit command through it (the connection is closed).
+
 ## More of the PC
 
 <p align="center">

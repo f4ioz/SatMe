@@ -550,6 +550,15 @@ Pour d'autres programmes du PC (un carnet, un tableau de bord, un script) : **R�
 - **Sans HTTPS**, le mot de passe et la page passent en clair : un réseau de confiance seulement (ou un tunnel chiffré).
 - **Sur cet appareil** : *Garder l'écran allumé* et **Installer l'application** (une fenêtre à part, une icône), pour ce navigateur ; les navigateurs ne les permettent que sur http://localhost ou en HTTPS.
 
+### Mode distant
+
+Pour la page ouverte de loin (un VPN, une autre maison) : le bouton **Distant** en haut, ou **Réglages › Accès à distance › Mode distant**, pour ce navigateur seulement (proposé quand la page s'ouvre depuis une autre machine). Le badge **Mode distant** et son « ? » disent ce qui est allégé.
+
+- **🔈 Écouter ici** prend la voie à **faible latence** : une WebSocket (`/api/son/ws`, derrière la même session), des trames de 20 ms à 8, 12 ou 16 kHz (filtrées puis rééchantillonnées), en PCM 16 bits ou en **µ-law** (moitié moins de débit : 64 kbit/s à 8 kHz). Le lecteur garde un tampon de 60 à 120 ms réglé sur la gigue mesurée (95 % des écarts + 20 ms), remplace une trame perdue par la précédente atténuée, suit la dérive de la carte son (±0,5 %), et affiche la latence estimée, la gigue, l'aller-retour, les trames masquées. Sur ce PC, environ 0,11 s au lieu de 0,6 s par le flux HTTP, qui reste en secours (choix *Voie* : auto, faible latence, flux HTTP).
+- En http depuis une autre machine, les navigateurs refusent l'AudioWorklet : le même tampon tourne alors dans un ScriptProcessor (environ 20 ms de plus). Pas d'Opus (il faudrait un codeur natif sur le PC).
+- **Allégé** : spectre et cascade SDR à 5 images par seconde (256 points, niveaux sur un octet), loupe, panorama QO-100, bande large et vumètre DATV moins souvent, vidéo DATV en vignette toutes les 2 s (**▶ Vidéo en direct** sur l'image pour la demander), carte, avions et navires toutes les 5 à 10 s, le flux en direct réduit à l'onglet affiché, animations coupées.
+- **Réception seule** : la voie garde la place d'un micro et d'un PTT pour plus tard, mais SatMe-PC refuse aujourd'hui tout son montant et toute commande d'émission par elle (la connexion est fermée).
+
 ## Encore sur le PC
 
 <p align="center">

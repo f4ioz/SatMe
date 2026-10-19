@@ -29,11 +29,28 @@ class DiffusionSon {
 
     private val auditeurs = CopyOnWriteArrayList<Auditeur>()
 
-    /** Someone listens to [source] ("sdr", "carte"): worth producing. */
-    fun ecoute(source: String): Boolean = auditeurs.any { it.source == source }
+    /** A listener of the source's own blocks, at its own rate (the low-latency sound, [SonDistantPc]). */
+    class Abonne(@Volatile var source: String, val recoit: (ShortArray, Int, Int) -> Unit)
 
-    /** A block from [source], at [rate]: halved (two samples averaged) and handed to its listeners. */
-    fun ajoute(source: String, pcm: ShortArray, n: Int, rate: Int) {
+    private val abonnes = CopyOnWriteArrayList<Abonne>()
+
+    fun abonne(a: Abonne) { abonnes += a }
+    fun desabonne(a: Abonne) { abonnes -= a }
+
+    /**
+     * Trials only (-Dsatme.marqueur=1): the sound replaced by a 1 kHz click on
+     * each second of this PC's clock, so a page on this PC can time its arrival.
+     */
+    @Volatile var marqueur = System.getProperty("satme.marqueur") == "1"
+
+    /** Someone listens to [source] ("sdr", "carte"): worth producing. */
+    fun ecoute(source: String): Boolean = auditeurs.any { it.source == source } || abonnes.any { it.source == source }
+
+    /** A block from [source], at [rate]: handed whole to its subscribers, halved (two samples averaged) to its listeners. */
+    fun ajoute(source: String, pcm0: ShortArray, n: Int, rate: Int) {
+        if (!ecoute(source)) return
+        val pcm = if (marqueur) marque(n, rate, System.currentTimeMillis()) else pcm0
+        for (a in abonnes) if (a.source == source) runCatching { a.recoit(pcm, n, rate) }
         if (auditeurs.none { it.source == source }) return
         val m = n / 2
         val o = ByteArray(m * 2)
@@ -45,6 +62,13 @@ class DiffusionSon {
             a.rate = rate / 2
             if (!a.file.offer(o)) { a.file.poll(); a.file.offer(o) }
         }
+    }
+
+    /** [n] samples ending at [ms]: silence, but 20 ms of 1 kHz from each second's start. */
+    internal fun marque(n: Int, rate: Int, ms: Long): ShortArray = ShortArray(n) { i ->
+        val t = ms - (n - 1 - i) * 1000.0 / rate
+        val dans = t - Math.floor(t / 1000.0) * 1000.0
+        if (dans < 20.0) (Math.sin(2 * Math.PI * dans) * 16000).toInt().toShort() else 0
     }
 
     /** Streams [source] to [sortie] until the browser goes. */

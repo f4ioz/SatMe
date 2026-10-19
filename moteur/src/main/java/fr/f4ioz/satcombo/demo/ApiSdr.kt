@@ -52,6 +52,20 @@ object ApiSdr {
             .put("db", JSONArray(v.toList()))
     }
 
+    /** The lowest level an 8-bit spectrum holds; 255 steps of 1 dB above it. */
+    const val DB8_BAS = -160
+
+    /**
+     * The spectrum's levels in one byte each (base64 "db8", from [DB8_BAS]):
+     * about a third of the JSON, for a page opened from afar (« Mode distant »).
+     */
+    fun octets(o: JSONObject): JSONObject {
+        val a = o.optJSONArray("db") ?: return o
+        val b = ByteArray(a.length()) { (a.optInt(it, DB8_BAS) - DB8_BAS).coerceIn(0, 255).toByte() }
+        o.remove("db")
+        return o.put("db8", java.util.Base64.getEncoder().encodeToString(b)).put("db0", DB8_BAS)
+    }
+
     /**
      * The sound cleaning in the page's words: the settings of the mode being
      * demodulated ([mode]), what it does now (carriers notched, audio Hz;

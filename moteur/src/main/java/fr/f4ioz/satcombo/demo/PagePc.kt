@@ -207,6 +207,17 @@ object PagePc {
   .h-utc { font-family:var(--mono); font-variant-numeric:tabular-nums; font-size:var(--fs-xs); color:var(--texte-2); white-space:nowrap; }
   .ctx-chip { border:1px solid var(--ligne); background:var(--s2); color:var(--texte-2); border-radius:14px; padding:3px 10px; font-size:var(--fs-s); font-weight:500; cursor:pointer; white-space:nowrap; }
   .ctx-chip.qo { border-color:var(--rx); color:var(--rx); background:rgba(63,224,200,.08); font-weight:700; }
+  .md-boite { position:relative; display:inline-flex; align-items:center; gap:4px; }
+  .md-btn { align-items:center; cursor:pointer; } .md-btn .ico { width:15px; height:15px; fill:var(--texte-3); flex:none; }
+  .md-btn.on { background:rgba(255,180,84,.16); border-color:rgba(255,180,84,.6); color:var(--warn); font-weight:700; } .md-btn.on .ico { fill:var(--warn); }
+  .md-prop { left:0; right:auto; width:340px; }
+  #ec-pop { min-width:400px; }
+  .ec-stats { margin-top:6px; padding:6px 8px; border-radius:6px; background:var(--s1); border:1px solid var(--ligne); font-family:var(--mono);
+    font-size:var(--fs-xs); line-height:1.5; color:var(--texte-2); font-variant-numeric:tabular-nums; }
+  .ec-stats b { color:var(--texte); font-size:var(--fs-s); }
+  .d-direct { position:absolute; right:8px; top:8px; z-index:2; padding:2px 8px; font-size:var(--fs-xs); background:rgba(0,0,0,.55); color:#fff; border-radius:10px; }
+  /* « Mode distant »: no animation nor transition (the TX warning keeps its pulse). */
+  body.distant *:not(.h-tx), body.distant *::before, body.distant *::after { animation:none !important; transition:none !important; }
   .pop-carte { position:absolute; right:0; top:115%; z-index:50; min-width:300px; padding:10px 12px; border-radius:var(--r3); background:var(--s2); border:1px solid var(--ligne-forte); box-shadow:var(--ombre-pop); }
   @media (max-width:1800px) { header.a-ctx #info-station { display:none; } }
   @media (max-width:1500px) { #info-station { display:none; } .h-cmd span, .h-cmd kbd { display:none; } }
@@ -1394,14 +1405,27 @@ ${rail()}
   <span id="rec" class="pastille" style="display:none;background:rgba(229,72,77,.2);color:var(--rose)"></span>
   <span class="h-esp"></span>
   <button id="h-k" class="h-cmd" onclick="palette()" title="Aller à un onglet, accorder, suivre un satellite, chercher un indicatif">${IconesPc.svg("search")}<span>Commandes</span><kbd>Ctrl K</kbd></button>
+  <span id="md-boite" class="md-boite" hidden>
+    <button id="md-btn" class="h-puce md-btn" onclick="mdRegle(!MD)" aria-pressed="false" title="Mode distant : le son à faible latence d’abord, l’affichage allégé (réglé pour ce navigateur)">${IconesPc.svg("public")}<span id="md-txt">Distant</span></button>
+    <button type="button" class="q" id="md-q" hidden aria-label="Ce que le mode distant allège">?</button>
+    <div id="md-prop" class="pop-carte md-prop" hidden role="dialog" aria-label="Mode distant">
+      <div class="t" style="margin:0 0 6px">Page ouverte depuis une autre machine</div>
+      <div class="petit">Passer en mode distant ? Le son passe d’abord (faible latence), l’affichage est allégé. Se règle ensuite ici ou dans Réglages › Accès à distance.</div>
+      <div class="ligne"><button class="primaire" id="md-oui" onclick="mdRegle(true)">Mode distant</button><button id="md-non" onclick="mdRegle(false)">Non merci</button></div>
+    </div>
+  </span>
   <span id="ec-boite" style="position:relative" hidden>
     <button id="ec-btn" class="h-cmd" onclick="g('ec-pop').hidden = !g('ec-pop').hidden" title="Entendre ici, dans ce navigateur, le son de SatMe-PC (la page ouverte sur un autre PC du réseau)">${IconesPc.svg("headphones")}<span>Écouter ici</span></button>
     <div id="ec-pop" class="pop-carte" hidden>
       <div class="t" style="margin:0 0 6px">Le son dans ce navigateur</div>
       <div class="ligne" style="margin:0"><select id="ec-source"><option value="sdr">Clé SDR (QO-100, SDR)</option><option value="carte">Carte son (le poste)</option><option value="datv">Son DATV</option></select></div>
-      <div class="ligne"><button class="primaire" id="ec-go" onclick="ecouteIci()">▶ Écouter</button><button id="ec-stop" class="arret" hidden onclick="arreteEcoute()">■ Arrêter</button>
+      <div class="ligne"><button class="primaire" id="ec-go" onclick="ecSecours = ''; ecouteIci()">▶ Écouter</button><button id="ec-stop" class="arret" hidden onclick="arreteEcoute()">■ Arrêter</button>
         <span class="petit">Volume</span><input type="range" id="ec-vol" min="0" max="200" value="100" style="flex:1" oninput="if (ecGain) ecGain.gain.value = this.value / 100"></div>
+      <div class="ligne"><select id="ec-voie" title="La voie du son : auto = faible latence en mode distant, flux HTTP sinon" onchange="ecVoieChange()"><option value="auto">Voie auto</option><option value="ws">Faible latence</option><option value="http">Flux HTTP</option></select>
+        <select id="ec-debit" title="Débit du son en faible latence" onchange="ecReglage()"><option value="8000">8 kHz</option><option value="12000" selected>12 kHz</option><option value="16000">16 kHz</option></select>
+        <select id="ec-codec" title="µ-law : moitié moins de débit" onchange="ecReglage()"><option value="ulaw" selected>µ-law</option><option value="pcm">PCM 16 bits</option></select></div>
       <div class="petit" id="ec-etat">Le son de la clé SDR ou de la carte son de SatMe-PC, joué par cet ordinateur — utile quand la page est ouverte sur un autre PC (--reseau).</div>
+      <div class="ec-stats" id="ec-stats" hidden></div>
     </div>
   </span>
   <button id="h-aide" class="h-rond" onclick="aideClavier()" title="Raccourcis clavier (?)">?</button>
@@ -2180,7 +2204,7 @@ ${rail()}
   <div class="carte d-ecran">
     <div class="t">DATV · MiniTiouner <span id="d-titre" class="petit"></span><button class="mt-pop-b" data-o="datv" style="margin-left:auto;text-transform:none;letter-spacing:0" onclick="mtPopBascule('datv')" aria-pressed="false" title="Le schéma simplifié de la chaîne en œuvre (Station › Montage), par-dessus l'onglet">${IconesPc.svg("montage")}<span>Schéma</span></button></div>
     <div class="d-haut">
-    <div id="d-cadre"><img id="d-video" alt=""><div id="d-vide">Réception arrêtée</div><div id="d-lu" class="d-lu" hidden></div><div id="d-st" class="d-st" hidden></div></div>
+    <div id="d-cadre"><button type="button" id="d-direct" class="discret d-direct" hidden onclick="dDirect = !dDirect; mdT.vign = 0; ticDatv()"></button><img id="d-video" alt=""><div id="d-vide">Réception arrêtée</div><div id="d-lu" class="d-lu" hidden></div><div id="d-st" class="d-st" hidden></div></div>
       <div class="d-info">
     <div class="paire" style="margin-top:8px;align-items:center">
       <span id="d-etat" class="pastille">arrêté</span>
@@ -3281,6 +3305,22 @@ ${rail()}
       <div class="petit aide">Le mot de passe n’est gardé qu’haché (PBKDF2) dans acces-distant.properties, jamais dans la sauvegarde. Le changer ferme les autres sessions. Une émission lancée à distance demande les mêmes confirmations qu’ici.</div>
       <div class="petit aide">Sans HTTPS, le mot de passe et la page passent en clair sur le réseau local : à réserver à un réseau de confiance (ou à un tunnel chiffré).</div>
     </div>
+    <div class="carte" id="md-carte">
+      <div class="t">Mode distant</div>
+      <label class="petit" style="display:block"><input type="checkbox" id="md-on" onchange="mdRegle(this.checked)"> Mode distant dans ce navigateur : le son d’abord, l’affichage allégé</label>
+      <div class="petit" id="md-etat"></div>
+      <div class="petit aide" id="md-liste">Le mode distant (réglé pour ce navigateur seulement) allège la page :<ul style="margin:4px 0 0;padding-left:18px">
+        <li>« Écouter ici » : la voie à faible latence (trames de 20 ms, 8 à 16 kHz, µ-law), tampon adaptatif de 60 à 120 ms ; le flux HTTP reste en secours ;</li>
+        <li>spectre et cascade SDR : 5 images par seconde, 256 points au plus, niveaux sur un octet ;</li>
+        <li>loupe, panorama QO-100, bande large et vumètre DATV : rafraîchis moins souvent ;</li>
+        <li>vidéo DATV : une vignette toutes les 2 s, la vidéo en direct sur demande ;</li>
+        <li>carte, avions, navires : toutes les 5 à 10 s ;</li>
+        <li>flux en direct : ce que l’onglet affiché demande (le décodeur CW hors de ses onglets) ;</li>
+        <li>animations coupées, images des galeries chargées à l’affichage.</li></ul></div>
+      <div class="petit aide">Proposé quand la page s’ouvre depuis une autre machine. La latence affichée sous « Écouter ici » additionne le tampon, la moitié de l’aller-retour mesuré, la trame et la sortie de la carte son.</div>
+      <div class="petit aide">Sur une page en http depuis une autre machine, le navigateur refuse l’AudioWorklet : le lecteur prend alors un ScriptProcessor (même tampon, environ 20 ms de plus). Sur ce PC ou en HTTPS, l’AudioWorklet. Pas d’Opus : il faudrait un codeur natif sur le PC ; µ-law divise le débit par deux (8 kHz : 64 kbit/s).</div>
+      <div class="petit aide">Réception seule : la voie est prête pour un micro et un PTT plus tard, mais SatMe-PC refuse aujourd’hui tout son montant et toute commande d’émission par elle.</div>
+    </div>
     <div class="carte" id="ap-carte">
       <div class="t">Sur cet appareil</div>
       <label class="petit" style="display:block"><input type="checkbox" id="ap-eveil" onchange="eveilRegle(this.checked)"> Garder l’écran allumé tant que la page est affichée</label>
@@ -3998,7 +4038,7 @@ const CATS_REG = [
   { id: 'telephone', nom: 'Téléphone', ico: 'smartphone', desc: 'SatMe sur le téléphone : réglages et contacts', cartes: ['Téléphone'] },
   { id: 'accord', nom: 'Accord fin', ico: 'tune', desc: 'Loupe, vernier, calage sur la voix (clé SDR)', cartes: ['Accord fin'] },
   { id: 'emission', nom: 'Émission', ico: 'cloud_upload', desc: 'Correction I/Q des émetteurs : fuite, image, fréquence', cartes: ['Correction I/Q'] },
-  { id: 'acces', nom: 'Accès à distance', ico: 'lock', desc: 'Mot de passe des autres machines, application, écran allumé', cartes: ['Accès à distance', 'Sur cet appareil'] },
+  { id: 'acces', nom: 'Accès à distance', ico: 'lock', desc: 'Mot de passe des autres machines, mode distant, application, écran allumé', cartes: ['Accès à distance', 'Mode distant', 'Sur cet appareil'] },
   { id: 'sauvegarde', nom: 'Sauvegarde', ico: 'save', desc: 'Toute la station dans un fichier, et la restaurer', cartes: ['Sauvegarde'] },
 ];
 // The backup: its size, the link, a backup received waiting for the next start.
@@ -4482,6 +4522,8 @@ function ecPousse(f) {
 }
 async function ecouteIci() {
   arreteEcoute();
+  // The low-latency voice (« Mode distant », or chosen): its own player; this one stays the fallback.
+  if (ecVoie() === 'ws' && window.WebSocket && !ecSecours) { ecouteWs(); return; }
   const source = g('ec-source').value;
   try {
     ecCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -4504,6 +4546,7 @@ async function ecouteIci() {
         out[i] = a + (b - a) * x;
         ecLu += pas;
       }
+      if (window.ecMesure) ecDetecte(out, ev.playbackTime);
     };
     ecLecteur.connect(ecGain);
     ecArret = new AbortController();
@@ -4526,6 +4569,12 @@ async function ecouteIci() {
   if (ecArret && !ecArret.signal.aborted) arreteEcoute();
 }
 function arreteEcoute() {
+  if (ecWs) { const w = ecWs; ecWs = null; try { w.close(); } catch (x) {} }
+  if (ecPing) { clearInterval(ecPing); ecPing = null; }
+  if (ecStatsT) { clearInterval(ecStatsT); ecStatsT = null; }
+  if (ecNoeud) { try { ecNoeud.disconnect(); } catch (x) {} ecNoeud = null; }
+  ecTampon = null; ecEtatW = null; ecRtt = [];
+  g('ec-stats').hidden = !ecSecours; if (ecSecours) txt('ec-stats', ecSecours);
   if (ecArret) ecArret.abort(); ecArret = null;
   if (ecLecteur) { try { ecLecteur.disconnect(); } catch (x) {} ecLecteur = null; }
   if (ecCtx) { try { ecCtx.close(); } catch (x) {} ecCtx = null; }
@@ -4534,6 +4583,199 @@ function arreteEcoute() {
 }
 // Shown where SatMe-PC streams (not on the page served by the phone).
 g('ec-boite').hidden = !!window.SATME_TELEPHONE;
+// ------------------------------------------------------------------ « Mode distant »
+// Per browser (localStorage): the sound first (a WebSocket, 20 ms frames, a jitter buffer of 60–120 ms),
+// the page lightened (spectrum, video, maps, animations). Suggested when the page comes from another machine.
+var MD = false, dDirect = false, mdT = {};
+const MD_CLE = 'satme.modeDistant';
+const mdLocale = () => { const h = location.hostname; return h === 'localhost' || h === '[::1]' || h === '::1' || /^127\./.test(h); };
+/** In « Mode distant », true when [cle] ran less than [ms] ago: the caller skips this turn. */
+function mdSaute(cle, ms) {
+  if (!MD) return false;
+  const t = Date.now();
+  if (t - (mdT[cle] || 0) < ms) return true;
+  mdT[cle] = t; return false;
+}
+function mdApplique() {
+  document.body.classList.toggle('distant', MD);
+  const b = g('md-btn'); b.classList.toggle('on', MD); b.setAttribute('aria-pressed', MD ? 'true' : 'false');
+  txt('md-txt', MD ? 'Mode distant' : 'Distant'); g('md-q').hidden = !MD; g('md-on').checked = MD;
+  txt('md-etat', MD ? 'Actif dans ce navigateur.' : mdLocale() ? 'Coupé (page ouverte sur ce PC).' : 'Coupé dans ce navigateur.');
+  // The stream asked again with its new topics; the DATV picture as the mode wants it.
+  setTimeout(majFlux, 0);
+  if (!MD) dDirect = false;
+}
+function mdRegle(on) {
+  MD = !!on;
+  try { localStorage.setItem(MD_CLE, MD ? '1' : '0'); } catch (x) {}
+  g('md-prop').hidden = true;
+  mdApplique();
+  // Listening on the automatic voice: taken again on the right one.
+  if (ecCtx && g('ec-voie').value === 'auto') { ecSecours = ''; ecouteIci(); }
+}
+if (window.SATME_TELEPHONE) g('md-carte').hidden = true;
+else {
+  g('md-boite').hidden = false;
+  let m = null; try { m = localStorage.getItem(MD_CLE); } catch (x) {}
+  MD = m === '1';
+  if (m === null && !mdLocale()) g('md-prop').hidden = false;
+  g('md-q').aides = [g('md-liste')];
+  mdApplique();
+}
+
+// ---- the low-latency player: frames by WebSocket into the jitter buffer (TamponSon), played by an
+// AudioWorklet where the page is « sûre » (this PC, HTTPS), else by a ScriptProcessor running the same buffer.
+${SonDistantJs.TAMPON}
+let ecWs = null, ecNoeud = null, ecTampon = null, ecEtatW = null, ecPing = null, ecPingN = 0, ecRtt = [], ecStatsT = null,
+    ecSecours = '', ecLecteurNom = '', ecPerdusSrv = 0, ecCalme = 0, ecRecus = 0;
+const EC_ULAW = (() => {
+  const t = new Float32Array(256);
+  for (let i = 0; i < 256; i++) { const u = ~i & 255, v = (((u & 15) << 3) + 132) << ((u >> 4) & 7); t[i] = ((u & 128) ? 132 - v : v - 132) / 32768; }
+  return t;
+})();
+const ecVoie = () => g('ec-voie').value === 'auto' ? (MD ? 'ws' : 'http') : g('ec-voie').value;
+function ecVoieChange() {
+  const ws = ecVoie() === 'ws';
+  g('ec-debit').hidden = !ws; g('ec-codec').hidden = !ws;
+  if (ecCtx) { ecSecours = ''; ecouteIci(); }
+}
+function ecReglage() {
+  if (ecWs && ecWs.readyState === 1) ecWs.send(JSON.stringify({ t: 'config', rate: +g('ec-debit').value, codec: g('ec-codec').value }));
+}
+/** Runs inside the AudioWorklet (its text is sent there with TamponSon's): never called on the page. */
+function ecProcesseur() {
+  registerProcessor('satme-son', class extends AudioWorkletProcessor {
+    constructor() {
+      super(); this.t = null; this.n = 0; this.mes = false; this.calme = 0;
+      this.port.onmessage = ev => {
+        const m = ev.data;
+        if (m.mesure != null) { this.mes = m.mesure; return; }
+        if (!this.t || this.t.rate !== m.r) this.t = new TamponSon(m.r, sampleRate);
+        this.t.recoit(m.seq, m.ms, m.t, m.x);
+      };
+    }
+    process(entrees, sorties) {
+      const out = sorties[0][0];
+      if (this.t) this.t.lit(out, out.length); else out.fill(0);
+      if (this.mes) for (let i = 0; i < out.length; i++) {
+        if (Math.abs(out[i]) > 0.05) { if (this.calme > sampleRate * 0.2) this.port.postMessage({ clic: currentTime + i / sampleRate }); this.calme = 0; } else this.calme++;
+      }
+      if (++this.n % 64 === 0 && this.t) this.port.postMessage({ etat: this.t.etat() });
+      return true;
+    }
+  });
+}
+async function ecouteWs() {
+  const source = g('ec-source').value, rate = +g('ec-debit').value, codec = g('ec-codec').value;
+  let ctx;
+  try { ctx = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: 'interactive' }); }
+  catch (x) { txt('ec-etat', 'son impossible : ' + (x.message || x)); return; }
+  ecCtx = ctx;
+  ecGain = ctx.createGain(); ecGain.gain.value = v('ec-vol') / 100; ecGain.connect(ctx.destination);
+  let noeud = null;
+  if (ctx.audioWorklet && window.isSecureContext && window.AudioWorkletNode) {
+    try {
+      const url = URL.createObjectURL(new Blob([TamponSon.toString() + '\n(' + ecProcesseur.toString() + ')();'], { type: 'text/javascript' }));
+      await ctx.audioWorklet.addModule(url); URL.revokeObjectURL(url);
+      noeud = new AudioWorkletNode(ctx, 'satme-son', { numberOfInputs: 0, numberOfOutputs: 1, outputChannelCount: [1] });
+      noeud.port.onmessage = ev => { const m = ev.data; if (m.etat) ecEtatW = m.etat; if (m.clic != null) ecClic(m.clic); };
+      if (window.ecMesure) noeud.port.postMessage({ mesure: true });
+      ecLecteurNom = 'AudioWorklet';
+    } catch (x) { noeud = null; }
+  }
+  if (ecCtx !== ctx) return;
+  if (!noeud) {
+    noeud = ctx.createScriptProcessor(1024, 0, 1);
+    noeud.onaudioprocess = ev => {
+      const out = ev.outputBuffer.getChannelData(0);
+      if (ecTampon) ecTampon.lit(out, out.length); else out.fill(0);
+      if (window.ecMesure) ecDetecte(out, ev.playbackTime);
+    };
+    ecLecteurNom = 'ScriptProcessor';
+  }
+  ecNoeud = noeud; noeud.connect(ecGain);
+  const u = new URL('api/son/ws?source=' + source + '&rate=' + rate + '&codec=' + codec, location.href);
+  u.protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  let ws;
+  try { ws = new WebSocket(u.href); } catch (x) { ecRepli('ouverture impossible'); return; }
+  ws.binaryType = 'arraybuffer'; ecWs = ws; ecRecus = 0;
+  let ouvert = false;
+  const delai = setTimeout(() => { if (!ouvert && ecWs === ws) ecRepli('pas de réponse'); }, 4000);
+  ws.onmessage = ev => {
+    if (ecWs !== ws) return;
+    if (typeof ev.data === 'string') {
+      let m = null; try { m = JSON.parse(ev.data); } catch (x) { return; }
+      if (m.t === 'bonjour') {
+        ouvert = true; clearTimeout(delai);
+        g('ec-go').hidden = true; g('ec-stop').hidden = false; g('ec-btn').textContent = '🔊 Écoute';
+        txt('ec-etat', 'en écoute, faible latence : ' + (source === 'sdr' ? 'clé SDR' : source === 'datv' ? 'son DATV' : 'carte son'));
+      } else if (m.t === 'pong') {
+        ecRtt.push(performance.now() - m.c); if (ecRtt.length > 15) ecRtt.shift(); ecPerdusSrv = m.perdus || 0;
+      } else if (m.t === 'refus') txt('ec-etat', 'refusé : ' + m.raison);
+      return;
+    }
+    const t = performance.now(), b = ev.data, dv = new DataView(b);
+    if (b.byteLength < 16 || dv.getUint8(0) !== 1) return;
+    ecRecus++;
+    const c = dv.getUint8(1), r = dv.getUint16(2, true), seq = dv.getUint32(4, true), ms = dv.getFloat64(8, true);
+    const n = c === 1 ? b.byteLength - 16 : (b.byteLength - 16) >> 1, x = new Float32Array(n);
+    if (c === 1) { const o = new Uint8Array(b, 16); for (let i = 0; i < n; i++) x[i] = EC_ULAW[o[i]]; }
+    else for (let i = 0; i < n; i++) x[i] = dv.getInt16(16 + 2 * i, true) / 32768;
+    // The arrival in this page's clock, the making in the server's: the buffer only uses their spread.
+    if (ecNoeud && ecNoeud.port) ecNoeud.port.postMessage({ r, seq, ms, t, x }, [x.buffer]);
+    else {
+      if (!ecTampon || ecTampon.rate !== r) ecTampon = new TamponSon(r, ctx.sampleRate);
+      ecTampon.recoit(seq, ms, t, x);
+    }
+  };
+  ws.onopen = () => {
+    ecPing = setInterval(() => { if (ws.readyState === 1) ws.send(JSON.stringify({ t: 'ping', id: ++ecPingN, c: performance.now() })); }, 2000);
+    setTimeout(() => { if (ws.readyState === 1) ws.send(JSON.stringify({ t: 'ping', id: ++ecPingN, c: performance.now() })); }, 300);
+  };
+  ws.onclose = ev => {
+    clearTimeout(delai);
+    if (ecWs !== ws) return;
+    if (!ouvert) { ecRepli('WebSocket refusé' + (ev.code && ev.code !== 1006 ? ' (' + ev.code + ')' : '')); return; }
+    arreteEcoute(); txt('ec-etat', 'son coupé' + (ev.reason ? ' : ' + ev.reason : ''));
+  };
+  ecStatsT = setInterval(ecStats, 500);
+}
+/** The low-latency voice unavailable: the HTTP stream instead, said so. */
+function ecRepli(raison) {
+  ecSecours = 'Faible latence indisponible (' + raison + ') : flux HTTP de secours.';
+  ecouteIci();
+}
+function ecStats() {
+  const e = ecEtatW || (ecTampon && ecTampon.etat());
+  if (!e || !ecCtx) return;
+  const rtt = ecRtt.length ? ecRtt.slice().sort((a, b) => a - b)[ecRtt.length >> 1] : null;
+  const carte = ((ecCtx.baseLatency || 0) + (ecCtx.outputLatency || 0)) * 1000 + (ecLecteurNom === 'ScriptProcessor' ? 1024 / ecCtx.sampleRate * 1000 : 0);
+  const lat = e.niveau + 20 + (rtt != null ? rtt / 2 : 0) + carte;
+  const f = x => String(Math.round(x));
+  g('ec-stats').hidden = false;
+  g('ec-stats').innerHTML = '<b>≈ ' + f(lat) + ' ms</b> de latence' + (e.amorce ? ' (remplissage…)' : '') +
+    '<br>tampon ' + f(e.niveau) + ' / ' + f(e.cible) + ' ms · gigue ' + f(e.gigue) + ' ms · aller-retour ' + (rtt != null ? f(rtt) + ' ms' : '—') +
+    '<br>reçues ' + e.recus + ' · masquées ' + e.masques + ' · tardives ' + e.tardifs + ' · coupures ' + e.vides + (ecPerdusSrv ? ' · perdues au PC ' + ecPerdusSrv : '') +
+    '<br>dérive ' + (e.derive >= 0 ? '+' : '−') + Math.abs(e.derive * 100).toFixed(2).replace('.', ',') + ' % · ' + ecLecteurNom + ' · ' +
+    (+g('ec-debit').value / 1000) + ' kHz ' + (g('ec-codec').value === 'ulaw' ? 'µ-law' : 'PCM');
+  window.ecDernier = { latence: lat, tampon: e.niveau, cible: e.cible, gigue: e.gigue, rtt, masques: e.masques, vides: e.vides, lecteur: ecLecteurNom };
+}
+// Trials (window.ecMesure = []): each click heard, in this PC's clock (ms since 1970), output latency included.
+function ecClic(ctxT) {
+  if (!window.ecMesure || !ecCtx) return;
+  const o = ecCtx.getOutputTimestamp ? ecCtx.getOutputTimestamp() : null;
+  const perf = o && o.performanceTime > 0 ? o.performanceTime + (ctxT - o.contextTime) * 1000
+    : performance.now() + (ctxT - ecCtx.currentTime + (ecCtx.baseLatency || 0) + (ecCtx.outputLatency || 0)) * 1000;
+  window.ecMesure.push(performance.timeOrigin + perf);
+}
+function ecDetecte(out, t0) {
+  const sr = ecCtx.sampleRate;
+  for (let i = 0; i < out.length; i++) {
+    if (Math.abs(out[i]) > 0.05) { if (ecCalme > sr * 0.2) ecClic(t0 + i / sr); ecCalme = 0; } else ecCalme++;
+  }
+}
+ecVoieChange();
+
 // Connected or not, at a glance: one button at a time (Connect when off, Disconnect when on),
 // the pill green or red, the card's edge green or red.
 function etatMarche(cle, on, pastille) {
@@ -4551,7 +4793,17 @@ function etatMarche(cle, on, pastille) {
 let flux = null, fluxOk = false, fluxSujets = '';
 function sujetsFlux() {
   const sdr = !g('v-sdr').hidden;
-  return 'etat,son,cw,annonce' + (sdr || !g('v-carnet').hidden ? ',sdr' : '') + (sdr ? ',spectre&span=' + rSpan + '&dx=' + rDx + '&n=' + Math.min(1024, Math.max(128, g('r-spectre').clientWidth || 512)) : '');
+  // « Mode distant »: CW only where it shows; the spectrum 5 times a second, 256 points at most, one byte each.
+  const cw = !MD || !g('v-carnet').hidden || !g('v-qo100').hidden;
+  return 'etat,son,' + (cw ? 'cw,' : '') + 'annonce' + (sdr || !g('v-carnet').hidden ? ',sdr' : '') + (sdr ? ',spectre&span=' + rSpan + '&dx=' + rDx + '&n=' +
+    Math.min(MD ? 256 : 1024, Math.max(128, g('r-spectre').clientWidth || 512)) + (MD ? '&fps=5&q=8' : '') : '');
+}
+/** A spectrum sent in bytes (« Mode distant »): its levels back in dB. */
+function spDe8(j) {
+  if (j.db || !j.db8) return j;
+  const b = atob(j.db8), d = new Array(b.length);
+  for (let i = 0; i < b.length; i++) d[i] = b.charCodeAt(i) + j.db0;
+  j.db = d; return j;
 }
 function majFlux() {
   if (!window.EventSource || window.SATME_TELEPHONE) return;
@@ -4565,7 +4817,7 @@ function majFlux() {
   flux.addEventListener('son', ev => { S = JSON.parse(ev.data); rendSon(); });
   flux.addEventListener('cw', ev => { CW = JSON.parse(ev.data); rendCw(); });
   flux.addEventListener('sdr', ev => { if (SP_ESSAI) return; R = JSON.parse(ev.data); rendSdr(); });
-  flux.addEventListener('spectre', ev => { const j = JSON.parse(ev.data); if (j.db && j.trames !== rTrames && !SP_ESSAI) { rTrames = j.trames; rDernier = j; spRecoit(j); } });
+  flux.addEventListener('spectre', ev => { const j = spDe8(JSON.parse(ev.data)); if (j.db && j.trames !== rTrames && !SP_ESSAI) { rTrames = j.trames; rDernier = j; spRecoit(j); } });
   // Cut: the questions take over until it comes back (the browser tries again by itself).
   flux.onerror = () => { fluxOk = false; };
 }
@@ -5468,7 +5720,11 @@ async function ticDatv(premier) {
   }
   // The video: asked once the stream runs, dropped when it stops.
   const v = g('d-video');
-  if (D.actif && D.images && v.style.display !== 'block') { v.src = 'api/datv/video.mjpeg?t=' + Date.now(); v.style.display = 'block'; g('d-vide').hidden = true; }
+  // « Mode distant »: a picture every 2 s, the video only when asked.
+  const vign = MD && !dDirect && D.actif && D.images;
+  g('d-direct').hidden = !(MD && D.actif && D.images); txt('d-direct', dDirect ? 'Vignettes' : '▶ Vidéo en direct');
+  if (vign && !mdSaute('vign', 2000)) { v.dataset.vign = '1'; v.src = 'api/datv/image.jpg?t=' + Date.now(); v.style.display = 'block'; g('d-vide').hidden = true; }
+  if (D.actif && D.images && !vign && (v.style.display !== 'block' || v.dataset.vign)) { delete v.dataset.vign; v.src = 'api/datv/video.mjpeg?t=' + Date.now(); v.style.display = 'block'; g('d-vide').hidden = true; }
   if (!D.actif && v.style.display === 'block') { v.removeAttribute('src'); v.style.display = 'none'; }
   if (v.style.display !== 'block') { g('d-vide').hidden = false; g('d-vide').textContent = !D.actif ? 'Réception arrêtée' :
     D.telephone ? (D.verrouille ? 'accroché : l’image est sur l’écran DATV du téléphone' : D.libelle + '…') : (D.verrouille ? 'accroché, en attente des images…' : D.libelle + '…'); }
@@ -5647,7 +5903,7 @@ async function ticLarge() {
 async function tqWbRegle(on) {
   await wbRegle('qo100=' + (on ? 1 : 0) + (on ? '&on=1' : ''));
 }
-setInterval(ticLarge, 500);
+setInterval(() => { if (!mdSaute('large', 2000)) ticLarge(); }, 500);
 // The canvas as large as shown: text at its size, not stretched.
 function wbTaille(c) {
   const w = Math.max(200, Math.round(c.clientWidth)), h = Math.max(6, Math.round(c.clientHeight));
@@ -5837,7 +6093,7 @@ async function ticVu() {
   txt('d-vu-etat', dVuJ.erreur || (!dVuJ.son ? 'son coupé sur ce PC' : dVuJ.enMarche ? '' : D && D.actif ? 'en attente du son…' : ''));
   dVuDessine(dVuJ);
 }
-setInterval(ticVu, 100);
+setInterval(() => { if (!mdSaute('vu', 500)) ticVu(); }, 100);
 function dVuDessine(j) {
   const c = g('d-vu'), x = c.getContext('2d'), w = c.width, h = c.height, bas = -60;
   x.fillStyle = '#0E1720'; x.fillRect(0, 0, w, h);
@@ -7293,7 +7549,7 @@ async function ticAvions() {
     '<tr><td colspan="6" class="petit">' + (geo ? 'aucun avion dans le volume commun ni en route vers lui' : '') + '</td></tr>';
 }
 // Each second while the tab is open; every five seconds otherwise when a scatter target is set (its toasts).
-setInterval(() => { avN++; if (!g('v-avions').hidden || (avN % 5 === 0 && AV && AV.actif && AV.diffusion && AV.diffusion.cible)) ticAvions(); }, 1000);
+setInterval(() => { avN++; if (MD && avN % 5) return; if (!g('v-avions').hidden || (avN % 5 === 0 && AV && AV.actif && AV.diffusion && AV.diffusion.cible)) ticAvions(); }, 1000);
 ticAvions();
 
 // ------------------------------------------------------------------ AIS (the Navires tab): receive only
@@ -7327,7 +7583,7 @@ async function ticAis() {
     '</td><td>' + duree(n.vu) + '</td><td>' + n.canaux + ' <span class="petit">' + n.messages + '</span></td></tr>').join('') ||
     '<tr><td colspan="10" class="petit">' + (j.actif ? 'aucun navire entendu encore' : 'réception arrêtée') + '</td></tr>';
 }
-setInterval(() => { if (!g('v-ais').hidden) ticAis(); }, 1000);
+setInterval(() => { if (!g('v-ais').hidden && !mdSaute('ais', 5000)) ticAis(); }, 1000);
 
 // ------------------------------------------------------------------ space weather (Météo spatiale): fetched only once ticked
 let ES = null, esVues = new Set(), esN = 0;
@@ -7485,7 +7741,7 @@ async function cgTic() {
   if (CGC.aurore && Date.now() - cgAuroreVu > 300000) cgChargeAurore();
   dessineCg();
 }
-setInterval(cgTic, 2000);
+setInterval(() => { if (!mdSaute('carte', 10000)) cgTic(); }, 2000);
 // The aurora forecast on the map: its oval, from the space weather's last copy (nothing fetched for the map itself).
 let cgAurore = null, cgAuroreVu = 0;
 async function cgChargeAurore() {
@@ -7903,7 +8159,7 @@ async function ticPano() {
   g('o-bmesure').disabled = !b || b.ok;
   dessinePano();
 }
-setInterval(ticPano, 300);
+setInterval(() => { if (!mdSaute('pano', 1000)) ticPano(); }, 300);
 function dessinePano() {
   if (!OP || g('v-qo100').hidden) return;
   const c = g('o-pano'), w = c.clientWidth, h = c.clientHeight, dpr = window.devicePixelRatio || 1;
@@ -8154,7 +8410,7 @@ function tqRend() {
   g('tq-agc-l').hidden = r.agc === null || r.agc === undefined;
   if (r.agc !== null && r.agc !== undefined && document.activeElement !== g('tq-agc')) g('tq-agc').checked = !!r.agc;
   g('tq-ec-boite').hidden = !!window.SATME_TELEPHONE;
-  txt('tq-ec', ecArret && g('ec-source').value === 'sdr' ? '■ Arrêter l’écoute ici' : '🔈 Écouter ici');
+  txt('tq-ec', (ecArret || ecWs) && g('ec-source').value === 'sdr' ? '■ Arrêter l’écoute ici' : '🔈 Écouter ici');
   // The beacon far off and nothing following it: say so, with the remedy.
   const k = g('tq-conseil');
   k.hidden = !t.conseilCalage;
@@ -8173,7 +8429,7 @@ async function tqDemarre() {
 }
 async function tqArrete() {
   tqErreur = '';
-  if (ecArret && g('ec-source').value === 'sdr') arreteEcoute();
+  if ((ecArret || ecWs) && g('ec-source').value === 'sdr') arreteEcoute();
   await tqPost('api/qo100/arreter'); await tqTic(); chargeQo100();
 }
 async function tqReprise(on) {
@@ -8186,7 +8442,7 @@ async function tqReprise(on) {
 async function tqMode(m) { await tqPost('api/qo100/mode?m=' + enc(m)); tqDecAuto = TQ_DEC_MODE[m] || ''; tqTic(); }
 async function tqCalageAuto() { await tqPost('api/qo100/auto?on=1'); ticQualite(); tqTic(); }
 function tqEcoute() {
-  if (ecArret && g('ec-source').value === 'sdr') arreteEcoute();
+  if ((ecArret || ecWs) && g('ec-source').value === 'sdr') arreteEcoute();
   else { g('ec-source').value = 'sdr'; g('ec-vol').value = g('tq-vol').value; ecouteIci(); }
   setTimeout(tqRend, 400);
 }
@@ -8592,7 +8848,7 @@ async function loupeSdr() {
   const pas = R.loupeSpan > 10000 ? 2000 : R.loupeSpan > 5000 ? 1000 : 500;
   for (let f = -Math.floor(R.loupeSpan / 2 / pas) * pas; f <= R.loupeSpan / 2; f += pas) if (f) x.fillText((f > 0 ? '+' : '') + (f / 1000).toFixed(1), w / 2 + f / R.loupeSpan * w, 10);
 }
-setInterval(loupeSdr, 200);
+setInterval(() => { if (!mdSaute('loupe', 1000)) loupeSdr(); }, 200);
 g('r-loupe').addEventListener('click', ev => {
   if (!R) return;
   const b = ev.currentTarget.getBoundingClientRect();
@@ -8938,11 +9194,11 @@ function spSur() {
 async function spectreSdr() {
   if (g('v-sdr').hidden || !R || !R.actif || SP_ESSAI || (fluxOk && fluxSujets.includes('spectre'))) return;
   let j = null;
-  try { j = await (await fetch('api/sdr/spectre?span=' + rSpan + '&dx=' + rDx + '&n=' + Math.min(1024, Math.max(128, g('r-spectre').clientWidth)))).json(); } catch (x) { return; }
+  try { j = await (await fetch('api/sdr/spectre?span=' + rSpan + '&dx=' + rDx + '&n=' + Math.min(MD ? 256 : 1024, Math.max(128, g('r-spectre').clientWidth)))).json(); } catch (x) { return; }
   if (!j.db || j.trames === rTrames) return;
   rTrames = j.trames; rDernier = j; spRecoit(j);
 }
-setInterval(spectreSdr, 120);
+setInterval(() => { if (!mdSaute('spectre', 200)) spectreSdr(); }, 120);
 function dessineSdr() { spSale(); }
 
 // ---- the mouse, the wheel, the keys
@@ -10083,7 +10339,7 @@ async function ticMeteor() {
   g('m-prog').hidden = !enFichier; if (enFichier) g('m-prog').value = m.progression;
   txt('m-fichier', m.source === 'fichier' ? m.fichier + (m.erreur ? ' : ' + m.erreur : enFichier ? '' : ' : terminé') : '');
   // The gallery.
-  const gal = m.images.map(i => '<img src="meteor/' + encodeURIComponent(i.nom) + '" title="' + esc(i.sat + ' · ' + i.note) + '" data-nom="' + esc(i.nom) + '"' +
+  const gal = m.images.map(i => '<img loading="lazy" src="meteor/' + encodeURIComponent(i.nom) + '" title="' + esc(i.sat + ' · ' + i.note) + '" data-nom="' + esc(i.nom) + '"' +
     (i.nom === mChoisie ? ' class="choisi"' : '') + ' onclick="mChoisis(this.dataset.nom)">').join('');
   if (g('m-galerie').dataset.vu !== gal) { g('m-galerie').dataset.vu = gal; g('m-galerie').innerHTML = gal || '<span class="petit">Aucune image encore.</span>'; }
   // The picture shown: the preview while receiving, else the one chosen, else the newest.

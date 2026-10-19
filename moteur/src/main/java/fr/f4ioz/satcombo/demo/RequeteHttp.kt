@@ -21,7 +21,9 @@ object RequeteHttp {
     /** [plage]: the `Range` header, when the browser asks for a part of a file (a sound it seeks in). */
     class Requete(val methode: String, val chemin: String, val longueur: Long, val plage: String? = null,
                   /** The "Cookie" header, as sent. */
-                  val cookie: String? = null) {
+                  val cookie: String? = null,
+                  /** Every header, names in lower case (a WebSocket opening reads its own). */
+                  val entetes: Map<String, String> = emptyMap()) {
         /** One cookie's value, or null. */
         fun cookie(nom: String): String? = cookie?.split(';')?.map { it.trim() }
             ?.firstOrNull { it.startsWith("$nom=") }?.substringAfter('=')
@@ -50,7 +52,10 @@ object RequeteHttp {
             ?.substringAfter(':')?.trim()?.toLongOrNull() ?: 0L
         val plage = lignes.drop(1).firstOrNull { it.startsWith("range:", ignoreCase = true) }?.substringAfter(':')?.trim()
         val cookie = lignes.drop(1).firstOrNull { it.startsWith("cookie:", ignoreCase = true) }?.substringAfter(':')?.trim()
-        return Requete(premiere[0].uppercase(), premiere[1], longueur.coerceAtLeast(0L), plage, cookie)
+        val entetes = lignes.drop(1).mapNotNull { l ->
+            val i = l.indexOf(':'); if (i <= 0) null else l.substring(0, i).trim().lowercase() to l.substring(i + 1).trim()
+        }.toMap()
+        return Requete(premiere[0].uppercase(), premiere[1], longueur.coerceAtLeast(0L), plage, cookie, entetes)
     }
 
     /**

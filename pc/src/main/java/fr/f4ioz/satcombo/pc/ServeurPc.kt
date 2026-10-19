@@ -147,6 +147,8 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
     /** QRZ.com records of the callsigns seen in DATV, and their photos (set before [demarre]). */
     @Volatile var qrzDatv: QrzDatvPc? = null
 
+    private val sonDistant: SonDistantPc? by lazy { diffusion?.let { SonDistantPc(it) } }
+
     private var socket: ServerSocket? = null
     val portReel: Int get() = socket?.localPort ?: port
 
@@ -178,6 +180,9 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
         val span = q["span"]?.toIntOrNull() ?: 48_000
         val n = q["n"]?.toIntOrNull() ?: 512
         val dx = q["dx"]?.toIntOrNull() ?: 0
+        // « Mode distant »: the spectrum at most [fps] times a second, its levels in one byte each (q=8).
+        val spectreMs = q["fps"]?.toIntOrNull()?.takeIf { it in 1..60 }?.let { 1000L / it } ?: 0L
+        val octets = q["q"] == "8"
         runCatching { sortie.write("HTTP/1.1 200 OK\r\nContent-Type: text/event-stream; charset=utf-8\r\nCache-Control: no-store\r\nConnection: close\r\nX-Accel-Buffering: no\r\n\r\nretry: 2000\n\n".toByteArray()); sortie.flush() }
             .onFailure { return }
         val envoyes = HashMap<String, String>()
@@ -188,7 +193,7 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
         }
         // What the station's state is made of: built again when one of them moved, else each second.
         var refs: List<Any?> = emptyList()
-        var etatMs = 0L; var sonMs = 0L; var sdrMs = 0L; var spectreTrames = -1L; var veilleMs = 0L
+        var etatMs = 0L; var sonMs = 0L; var sdrMs = 0L; var spectreTrames = -1L; var veilleMs = 0L; var spectreVu = 0L
         var refSon: Any? = null
         var cwVersion = -1L; var cwMs = 0L
         // The page reconnecting (a tab changed) says the last one it had: none lost between two streams.
@@ -225,9 +230,10 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 sdrMs = maintenant
                 if (!envoie("sdr", JsonPc.sdr(sdr).toString())) return
             }
-            if ("spectre" in sujets && sdr != null && sdr.trames.toLong() != spectreTrames) {
-                spectreTrames = sdr.trames.toLong()
-                if (!envoie("spectre", JsonPc.spectre(sdr, span, n, dx = dx).toString())) return
+            if ("spectre" in sujets && sdr != null && sdr.trames.toLong() != spectreTrames && maintenant - spectreVu >= spectreMs) {
+                spectreTrames = sdr.trames.toLong(); spectreVu = maintenant
+                val j = JsonPc.spectre(sdr, span, n, dx = dx)
+                if (!envoie("spectre", (if (octets) fr.f4ioz.satcombo.demo.ApiSdr.octets(j) else j).toString())) return
             }
             // Spoken announcements: each sentence once, those handed out since this page joined.
             val an = annonces
@@ -260,6 +266,19 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
         if (garde(c, r, chemin, q, sortie, local)) return
         if (chemin == "/api/acces" || chemin.startsWith("/api/acces/")) { acces(c, r, chemin, sortie, local); return }
         if (chemin == "/api/flux") { flux(c, sortie, q); return }
+        if (chemin == "/api/son/ws" && sonDistant != null) {
+            // « Mode distant »: the low-latency sound, a WebSocket from this page's own origin.
+            val d = WebSocketPc.Demande(r.methode, r.chemin, r.entetes)
+            when {
+                !d.valide -> SonDistantPc.refusHttp(sortie, "400 Bad Request", "WebSocket attendu")
+                !SonDistantPc.origineAdmise(r.entetes["origin"], r.entetes["host"]) -> SonDistantPc.refusHttp(sortie, "403 Forbidden", "origine refusée")
+                else -> {
+                    sortie.write(WebSocketPc.reponse(d.cle!!)); sortie.flush()
+                    sonDistant!!.sert(c, fr.f4ioz.satcombo.demo.SonDistant.Config.de(q["source"], q["rate"], q["codec"]))
+                }
+            }
+            return
+        }
         if (chemin == "/api/son/flux" && diffusion != null) {
             // The dongle's or the sound card's sound, to the browser asking (the page open on another PC).
             c.soTimeout = 0
@@ -587,7 +606,7 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
             "/api/datv/image.jpg" -> {
                 val img = datv?.image
                 if (img == null) envoie(sortie, "404 Not Found", "text/plain", "pas d'image".toByteArray())
-                else envoie(sortie, "200 OK", "image/jpeg", img, "Cache-Control: no-store\r\n")
+                else envoie(sortie, "200 OK", "image/jpeg", img)
             }
             "/api/frise" -> {
                 val (debut, lignes) = kotlinx.coroutines.runBlocking { station.frise((q["h"]?.toIntOrNull() ?: 12).coerceIn(2, 48)) }
