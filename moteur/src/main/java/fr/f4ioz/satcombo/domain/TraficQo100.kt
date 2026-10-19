@@ -49,20 +49,23 @@ object TraficQo100 {
     }
 
     /**
-     * The context now. QO-100 when the receiver is on it and running
+     * The cockpit's context now (its decoders, its band plan; the log's
+     * satellite is [ChoixCarnet]'s). QO-100 when the receiver is on it and running
      * ([cleSurQo100] and [recepteurActif]) or when the rig follows it
      * ([auPoste]); else the satellite followed, if any.
      */
     fun contexte(cleSurQo100: Boolean, recepteurActif: Boolean, auPoste: Boolean, descenteHz: Long, modeCarnet: String,
                  suiviNom: String?, suiviCatnum: Int): Contexte {
         val parCle = cleSurQo100 && recepteurActif
-        if (parCle || auPoste) {
-            val m = modeCarnet.ifBlank { "SSB" }
-            return Contexte(true, NOM, Qo100.NORAD, if (parCle) Par.CLE else Par.POSTE, descenteHz,
-                Qo100.monteeDepuisDescente(descenteHz), demodDe(m), m)
-        }
+        if (parCle || auPoste) return surQo100(descenteHz, modeCarnet, if (parCle) Par.CLE else Par.POSTE)
         if (!suiviNom.isNullOrBlank()) return Contexte(false, suiviNom, suiviCatnum, Par.SUIVI)
         return Contexte(false, "", 0, Par.AUCUN)
+    }
+
+    /** On QO-100 at [descenteHz] (sky), in [modeCarnet] (SSB when blank). */
+    fun surQo100(descenteHz: Long, modeCarnet: String, par: Par): Contexte {
+        val m = modeCarnet.ifBlank { "SSB" }
+        return Contexte(true, NOM, Qo100.NORAD, par, descenteHz, Qo100.monteeDepuisDescente(descenteHz), demodDe(m), m)
     }
 
     /** The receiver's demodulation on QO-100: always USB (CW heard as a note in USB). */

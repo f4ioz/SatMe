@@ -207,6 +207,9 @@ object PagePc {
   .h-utc { font-family:var(--mono); font-variant-numeric:tabular-nums; font-size:var(--fs-xs); color:var(--texte-2); white-space:nowrap; }
   .ctx-chip { border:1px solid var(--ligne); background:var(--s2); color:var(--texte-2); border-radius:14px; padding:3px 10px; font-size:var(--fs-s); font-weight:500; cursor:pointer; white-space:nowrap; }
   .ctx-chip.qo { border-color:var(--rx); color:var(--rx); background:rgba(63,224,200,.08); font-weight:700; }
+  .c-vers { margin-top:0; margin-bottom:6px; padding:4px 8px; border:1px solid var(--ligne); border-radius:8px; background:var(--s2); }
+  .c-vers.qo { border-color:var(--rx); }
+  .c-vers.qo #c-vers-sat { color:var(--rx); }
   .md-boite { position:relative; display:inline-flex; align-items:center; gap:4px; }
   .md-btn { align-items:center; cursor:pointer; } .md-btn .ico { width:15px; height:15px; fill:var(--texte-3); flex:none; }
   .md-btn.on { background:rgba(255,180,84,.16); border-color:rgba(255,180,84,.6); color:var(--warn); font-weight:700; } .md-btn.on .ico { fill:var(--warn); }
@@ -1396,7 +1399,7 @@ ${rail()}
   <h1>SatMe-<span class="cyan">PC</span></h1>
   <span class="g" id="info-station"></span>
   <span class="g" id="cat-statut-court"></span>
-  <button id="ctx-chip" class="ctx-chip" hidden onclick="vue(tqQo() ? 'qo100' : 'station')"></button>
+  <button id="ctx-chip" class="ctx-chip" hidden onclick="vue(this.classList.contains('qo') ? 'qo100' : 'station')"></button>
   <button id="h-rx" class="h-puce" onclick="vue(this.dataset.v || 'sdr')" title="Le récepteur actif : sa fréquence et son mode"><b>RX</b><span class="h-f" id="h-rx-f">—</span><span class="h-m" id="h-rx-m"></span></button>
   <button id="h-mol" class="h-puce" hidden onclick="vue('reglages'); montreReglages('interfaces')" title="La molette USB : son pas et ce qu'elle accorde (Réglages › Interfaces)">${IconesPc.svg("tune")}<span class="h-m" id="h-mol-t"></span></button>
   <button id="h-ann" class="h-puce" hidden onclick="annMuet()" title="Annonces vocales : clic pour les couper ou les remettre (Réglages › Annonces)">🔊</button>
@@ -1706,8 +1709,12 @@ ${rail()}
     <div id="c-saisie-slot"><div class="carte" id="c-saisie">
       <div class="t">Nouveau contact <span class="petit" id="c-sat"></span></div>
       <div class="ligne" id="c-satligne" style="margin-top:0;margin-bottom:6px"><span class="petit">Satellite</span>
-        <select id="c-satsel" style="flex:1" onchange="if (this.value) suivre(+this.value).then(tic)" title="Le satellite suivi : le carnet, la carte, le poste et le rotor le suivent"></select></div>
-      
+        <select id="c-satsel" style="flex:1" onchange="if (this.value) { carnetChoix = 'suivi'; suivre(+this.value).then(tic); }" title="Le satellite suivi : le carnet, la carte, le poste et le rotor le suivent"></select></div>
+      <div class="ligne c-vers" id="c-vers" hidden><span class="petit">Noté sur</span><b id="c-vers-sat"></b><span class="petit" id="c-vers-pq"></span>
+        <button type="button" class="q" id="c-vers-q" aria-label="Sur quel satellite le contact est noté">?</button>
+        <button type="button" class="discret petit" id="c-vers-bascule" style="margin-left:auto" onclick="carnetBascule()"></button>
+        <button type="button" class="discret petit" id="c-vers-auto" hidden onclick="carnetChoix = ''; carnetRend()" title="Revenir à la règle : le satellite du poste, QO-100 depuis le cockpit">auto</button></div>
+      <div id="c-vers-aide" hidden>Le contact est noté sur le satellite <b>choisi ici</b> (pour ce contact). Sinon sur celui que le <b>poste</b> travaille : le satellite suivi, Doppler par le CAT ; QO-100 quand « Appliquer au poste » est coché, ou quand le contact est saisi dans le <b>cockpit QO-100</b>. Le récepteur SDR qui écoute QO-100 en fond ne change pas le carnet.</div>
       <input id="c-call" placeholder="INDICATIF" autocomplete="off" style="width:100%;font-size:26px;font-weight:800;letter-spacing:3px;text-transform:uppercase">
       <div id="c-props" class="c-props"></div>
       <div id="c-qui" class="petit" style="min-height:20px;margin-top:4px"></div>
@@ -1879,6 +1886,9 @@ ${rail()}
 <dialog id="c-edit" style="background:var(--carte);color:var(--clair);border:1px solid var(--bord);border-radius:12px;min-width:360px">
   <div class="t">Modifier le contact <span class="petit" id="e-quand"></span></div>
   <div class="ligne"><input id="e-call" placeholder="Indicatif" style="text-transform:uppercase"><input id="e-loc" placeholder="Carré" style="text-transform:uppercase;max-width:110px"></div>
+  <div class="ligne"><span class="petit">Satellite</span><input id="e-sat" list="e-sats" placeholder="Satellite, QO-100, terrestre…" autocomplete="off" style="flex:1"
+    title="Un satellite de la liste (az/el et fréquences recalculés), QO-100, un autre nom, ou « terrestre »"><datalist id="e-sats"></datalist></div>
+  <div class="petit ambre" id="e-envoye" hidden>Déjà déposé au carnet en ligne : une modification ici n'y est pas reportée, à corriger aussi là-bas.</div>
   <div class="ligne"><input id="e-md" placeholder="Mode" style="max-width:80px"><input id="e-rs" placeholder="RS ↑" style="max-width:70px"><input id="e-rr" placeholder="RS ↓" style="max-width:70px"></div>
   <div class="ligne"><input id="e-nm" placeholder="Nom"><input id="e-qth" placeholder="QTH"></div>
   <div class="ligne"><input id="e-n" placeholder="Note"></div>
@@ -4420,7 +4430,7 @@ function dessine() {
   txt('amsat-auto', E.amsatAuto ? 'auto ✓' : 'auto ✕');
   g('amsat-auto').dataset.etat = E.amsatEtat || '';
   g('amsat-auto').title = (E.amsatAuto ? 'Signalement automatique à amsat.org activé' + (E.amsatEtat ? ' : ' + E.amsatEtat : '') : 'Signalement automatique à amsat.org coupé') + ' (Réglages)';
-  if (!tqQo()) txt('c-sat', E.suivi ? '· ' + E.suivi.nom + (E.position ? ' · El ' + Math.round(E.position.el) + '°' : '') : '· choisis le satellite ci-dessous');
+  carnetRend();
   menuSatCarnet();
   const p = E.position;
   txt('az', p ? p.az.toFixed(1) + '°' : '—');
@@ -5454,6 +5464,7 @@ async function apresBascule() {
   const on = g('ca-on').checked; g('ca').hidden = !on;
   txt('c-aide', on ? 'Daté à l’heure choisie, sur ce satellite, avec son az/el d’alors, ton carré et le mode choisi (sans fréquences).' :
     'Daté à l\'enregistrement, sur le satellite suivi, avec son az/el, ton carré, le mode et les fréquences au repos.');
+  carnetRend();
   if (!on) return;
   if (!tous.length) await chargeSatellites();
   const s = g('ca-sat');
@@ -5490,21 +5501,27 @@ async function enregistreContact() {
     apres = '&catnum=' + v('ca-sat') + '&t=' + t + '&md=' + enc(v('ca-md'));
   }
   const j = await post('api/carnet/ajoute?c=' + enc(c) + '&l=' + enc(v('c-loc')) + '&rs=' + enc(v('c-rs')) + '&rr=' + enc(v('c-rr')) + '&n=' + enc(v('c-note')) + apres +
-    (dtQso ? '&datv=' + dtQso : ''));
+    (dtQso ? '&datv=' + dtQso : '') + (carnetChoix ? '&sat=' + carnetChoix : '') + (carnetAuCockpit() ? '&cockpit=1' : ''));
   if (j && j.ok) {
+    // A satellite chosen by hand is for that contact: the next one follows the rule again.
+    carnetChoix = ''; carnetRend();
     if (dtQso) { dtQso = 0; const a = g('c-aide'); if (a.dataset.avant) { a.textContent = a.dataset.avant; a.dataset.avant = ''; } }
     txt('c-etat', c.toUpperCase() + ' enregistré');
     ['c-call', 'c-loc', 'c-note'].forEach(i => g(i).value = ''); g('c-rs').value = '59'; g('c-rr').value = '59';
     txt('c-qui', ''); quiPour = ''; stationPour(''); g('c-props').innerHTML = ''; propositions = []; iProp = -1; accepte = ''; g('c-loc').dataset.tape = ''; locPour = ''; g('c-call').style.borderColor = ''; g('c-call').focus(); chargeCarnet();
   }
 }
-function edite(t) {
+async function edite(t) {
   const e = C.find(x => x.t === t); if (!e) return;
   editT = t;
   txt('e-quand', new Date(t).toISOString().slice(0, 19).replace('T', ' ') + ' UTC · ' + e.sat);
   g('e-call').value = e.c; g('e-loc').value = e.l; g('e-md').value = e.md; g('e-rs').value = e.rs; g('e-rr').value = e.rr;
   g('e-nm').value = e.nm; g('e-qth').value = e.qth; g('e-n').value = e.n; txt('e-qrz', '');
+  g('e-sat').value = e.sat; g('e-sat').dataset.avant = e.sat; g('e-envoye').hidden = !e.envoye;
   g('c-edit').showModal();
+  if (!tous.length) await chargeSatellites();
+  g('e-sats').innerHTML = ['QO-100', 'terrestre'].concat(tous.map(s => s.nom).filter(n => n !== 'QO-100'))
+    .map(n => '<option value="' + escA(n) + '">').join('');
 }
 // QRZ on demand: fills what is empty (a square heard during the contact beats the directory).
 async function qrzEdit() {
@@ -5517,10 +5534,16 @@ async function qrzEdit() {
   if (!v('e-loc') && f.carre && v('e-call').indexOf('/') < 0) { g('e-loc').value = f.carre; g('e-loc').dataset.qrz = '1'; }
   txt('e-qrz', [f.nom, f.qth, f.carre, f.pays].filter(x => x).join(' · '));
 }
+/** The satellite changed in the editor: its name, and its number when it is one of the list. */
+function editSat() {
+  const n = v('e-sat'); if (n === (g('e-sat').dataset.avant || '')) return '';
+  const k = n.toUpperCase().replace(/[^A-Z0-9]/g, ''), s = k ? tous.find(x => x.nom.toUpperCase().replace(/[^A-Z0-9]/g, '') === k) : null;
+  return '&sat=' + enc(s ? s.nom : n) + (s ? '&satnum=' + s.catnum : '');
+}
 async function enregistreEdit() {
   const j = await post('api/carnet/modifie?t=' + editT + '&c=' + enc(v('e-call')) + '&l=' + enc(v('e-loc')) + '&md=' + enc(v('e-md')) +
     '&rs=' + enc(v('e-rs')) + '&rr=' + enc(v('e-rr')) + '&nm=' + enc(v('e-nm')) + '&qth=' + enc(v('e-qth')) + '&n=' + enc(v('e-n')) +
-    (g('e-loc').dataset.qrz ? '&lo=QRZ' : ''));
+    (g('e-loc').dataset.qrz ? '&lo=QRZ' : '') + editSat());
   delete g('e-loc').dataset.qrz;
   if (j && j.ok !== false) { g('c-edit').close(); chargeCarnet(); }
 }
@@ -8482,14 +8505,53 @@ async function tqTic() {
   tqRend();
 }
 const tqQo = () => !!(TQ && TQ.contexte && TQ.contexte.qo100);
+// The log's satellite: chosen in the form (that contact only), else the server's rule (the rig's; QO-100 from the cockpit's form).
+let carnetChoix = '';
+const carnetAuCockpit = () => g('c-saisie').parentNode === g('tq-carnet-slot') && !g('v-qo100').hidden;
+function carnetVers() {
+  const k = TQ && TQ.carnet;
+  if (!k) return null;
+  if (carnetChoix === 'qo100') return { qo100: true, satellite: 'QO-100', mot: 'choisi' };
+  if (carnetChoix === 'suivi' && k.suivi) return { qo100: false, satellite: k.suivi, mot: 'choisi' };
+  return carnetAuCockpit() ? k.cockpit : k.onglet;
+}
+function carnetBascule() {
+  const c = carnetVers(); if (!c) return;
+  carnetChoix = c.qo100 ? 'suivi' : 'qo100';
+  carnetRend();
+}
+g('c-vers-q').aides = [g('c-vers-aide')];
+function carnetRend() {
+  const k = TQ && TQ.carnet, c = carnetVers(), apres = g('ca-on').checked;
+  g('c-vers').hidden = !c || apres;
+  g('c-satligne').hidden = !!(c && c.qo100) && !apres;
+  if (c) {
+    g('c-vers').classList.toggle('qo', !!c.qo100);
+    txt('c-vers-sat', c.satellite || 'aucun satellite');
+    txt('c-vers-pq', c.mot ? '· ' + c.mot : '');
+    const b = g('c-vers-bascule'), vers = c.qo100 ? k.suivi : 'QO-100';
+    b.hidden = !k.bascule || !vers;
+    txt('c-vers-bascule', '⇄ ' + vers);
+    b.title = 'Noter ce contact sur ' + vers + ' plutôt';
+    g('c-vers-auto').hidden = !carnetChoix;
+  }
+  const qo = !!(c && c.qo100);
+  if (!apres && !g('c-aide').dataset.avant) txt('c-aide', qo ? 'Daté à l’enregistrement, sur QO-100, avec la fréquence du ciel, ton carré et le mode du signal accordé.'
+    : 'Daté à l\'enregistrement, sur le satellite noté, avec son az/el, ton carré, le mode et les fréquences au repos.');
+  if (qo) txt('c-sat', '· ' + (tqQo() ? TQ.contexte.libelle : 'QO-100'));
+  else if (E) txt('c-sat', E.suivi ? '· ' + E.suivi.nom + (E.position ? ' · El ' + Math.round(E.position.el) + '°' : '') : '· choisis le satellite ci-dessous');
+}
 function tqRend() {
   const t = TQ, c = t && t.contexte, chip = g('ctx-chip');
   // The header, whatever the tab: what the log follows.
-  chip.hidden = !c || !c.libelle;
-  if (c && c.libelle) {
-    txt('ctx-chip', (c.qo100 ? '📡 ' : '🛰 ') + c.libelle); chip.classList.toggle('qo', !!c.qo100);
-    chip.title = c.qo100 ? 'SatMe suit QO-100 (' + (c.par === 'poste' ? 'le poste y est' : 'le récepteur y est') + ') : les contacts notés vont sur QO-100, avec cette fréquence et ce mode.'
-      : 'Le satellite suivi : les contacts notés vont sur lui.';
+  // The log's satellite (the rig's, the cockpit form's), not what a receiver hears in the background.
+  const cv = carnetVers();
+  chip.hidden = !cv || !cv.satellite;
+  if (cv && cv.satellite) {
+    txt('ctx-chip', (cv.qo100 ? '📡 ' : '🛰 ') + (cv.qo100 && c.qo100 ? c.libelle : cv.satellite) + (cv.mot ? ' · ' + cv.mot : ''));
+    chip.classList.toggle('qo', !!cv.qo100);
+    chip.title = 'Le carnet note sur ' + cv.satellite + (cv.mot ? ' (' + cv.mot + ')' : '') + '.' +
+      (t.recoit && !cv.qo100 ? ' Le récepteur écoute QO-100 en fond : il ne change pas le carnet.' : '');
   }
   // Room for it in the header: the station's line gives way.
   chip.parentNode.classList.toggle('a-ctx', !chip.hidden);
@@ -8497,12 +8559,9 @@ function tqRend() {
   // Réglages: shown where the setting exists (not on the phone).
   g('rq-carte').hidden = !(t && t.repriseAuto !== undefined);
   if (t && t.repriseAuto !== undefined && document.activeElement !== g('rq-auto')) g('rq-auto').checked = !!t.repriseAuto;
-  // The log's entry, wherever it is: QO-100 said, the satellite list left aside.
+  carnetRend();
+  // The cockpit's own tuning (its mode, its band plan): the receiver or the rig on QO-100.
   const qo = tqQo();
-  g('c-satligne').hidden = qo && !g('ca-on').checked;
-  if (!g('ca-on').checked) txt('c-aide', qo ? 'Daté à l’enregistrement, sur QO-100 (' + (c.par === 'poste' ? 'le poste y est' : 'le récepteur y est') + '), avec la fréquence du ciel, ton carré et le mode du signal accordé.'
-    : 'Daté à l\'enregistrement, sur le satellite suivi, avec son az/el, ton carré, le mode et les fréquences au repos.');
-  if (qo) txt('c-sat', '· ' + c.libelle);
   if (g('v-qo100').hidden) return;
   if (!t) { txt('tq-msg', 'Le cockpit QO-100 n’est pas disponible ici.'); return; }
   const r = t.recepteur, recoit = t.recoit;
@@ -8514,7 +8573,9 @@ function tqRend() {
   g('tq-rx').classList.toggle('allume', recoit); g('tq-rx').classList.toggle('eteint', !recoit);
   txt('tq-recepteur', r.nom || '');
   // The steps of the gesture, each said done or not.
-  const etapes = [[r.actif, 'récepteur en marche'], [t.cle, 'QO-100 appliqué au récepteur'], [recoit, 'son vers les décodeurs'], [qo, 'carnet sur QO-100']];
+  // The cockpit's form logs on QO-100 (unless another satellite is chosen in it); the Carnet tab follows the rig.
+  const qoCockpit = !!(cv && cv.qo100 && carnetAuCockpit()) || !!(t.carnet && t.carnet.cockpit.qo100 && !carnetChoix);
+  const etapes = [[r.actif, 'récepteur en marche'], [t.cle, 'QO-100 appliqué au récepteur'], [recoit, 'son vers les décodeurs'], [qoCockpit, 'saisie du cockpit sur QO-100']];
   const h = etapes.map(e => '<span class="' + (e[0] ? 'ok' : 'non') + '">' + (e[0] ? '✓ ' : '○ ') + e[1] + '</span>').join('');
   if (g('tq-etapes').innerHTML !== h) g('tq-etapes').innerHTML = h;
   // Why not, and what to do.
@@ -8523,7 +8584,7 @@ function tqRend() {
     m = tqErreur || (r.erreur ? 'Le récepteur dit : ' + r.erreur + '.' : '');
     if (m) m += ' Vérifie qu’il est branché et allumé, et qu’il est bien choisi dans l’onglet SDR (carte « ' + (window.SATME_TELEPHONE ? 'La clé' : 'Le récepteur') + ' »).';
     else if (r.actif) m = 'Le récepteur écoute autre chose (onglet SDR) : « Mettre le récepteur sur QO-100 » le reprend.';
-    else if (!tqOccupe) m = 'Le récepteur est arrêté : un clic sur « Démarrer la réception QO-100 » fait tout (récepteur, QO-100, son, carnet).';
+    else if (!tqOccupe) m = 'Le récepteur est arrêté : un clic sur « Démarrer la réception QO-100 » fait tout (récepteur, QO-100, son).';
   }
   txt('tq-msg', m);
   // The level: the receiver's, in dB.
@@ -8668,6 +8729,7 @@ function tqSstv() {
 function tqRange(n) {
   if (n === 'qo100') { g('tq-carnet-slot').appendChild(g('c-saisie')); g('cw-slot-qo100').appendChild(g('cw-carte')); }
   else if (n === 'carnet') { g('c-saisie-slot').appendChild(g('c-saisie')); g('cw-slot-carnet').appendChild(g('cw-carte')); }
+  carnetRend();
 }
 /** A callsign picked in a decoder: into the entry, where it is (the cockpit's, else the Carnet's). */
 function versSaisie() { if (g('v-qo100').hidden) vue('carnet'); }

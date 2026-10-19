@@ -115,12 +115,13 @@ fun main(args: Array<String>) {
     // QO-100 with the dongle: the beacon followed, the calibration held on it when chosen.
     val qo100 = Qo100Pc(station, sdr)
     son.son.auditeurs += { pcm, n, rate -> qo100.ecouteCarte(pcm, n, rate) }
-    // QO-100 from one screen; the log on QO-100 while the receiver or the rig is on it.
+    // QO-100 from one screen; the log on QO-100 from its form or while the rig is on it.
     val trafic = TraficQo100Pc(station, sdr, qo100)
     // « Niveau dans le temps » and the Sun noise: read from the receiver's spectra; the Sun's raster moves the rotor only when asked and confirmed.
     val niveaux = NiveauxPc(sdr, qo100, station.stockage)
     val soleil = SoleilPc(station, sdr, station.stockage)
-    carnet.contexte = { trafic.contexte() }
+    carnet.choix = { d, cockpit -> trafic.choixCarnet(d, cockpit) }
+    carnet.qo100 = { trafic.qo100Carnet() }
     // « Phonie → texte »: off unless chosen; the engine (a Python helper) started only then.
     val phonie = PhoniePc(station.stockage, InstallPhoniePc(dossier), File(dossier, "phonie"))
     phonie.connus = { carnet.contacts().mapNotNull { fr.f4ioz.satcombo.cw.AnalyseCw.base(it.callsign) }.toSet() }

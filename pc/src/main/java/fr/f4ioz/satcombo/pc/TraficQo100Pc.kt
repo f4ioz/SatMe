@@ -9,6 +9,7 @@
 package fr.f4ioz.satcombo.pc
 
 import fr.f4ioz.satcombo.demo.ApiQo100
+import fr.f4ioz.satcombo.domain.ChoixCarnet
 import fr.f4ioz.satcombo.domain.GardeQo100
 import fr.f4ioz.satcombo.domain.TraficQo100
 import org.json.JSONObject
@@ -101,6 +102,24 @@ class TraficQo100Pc(private val station: StationPc, private val sdr: SdrPc, priv
             e.suivi?.name, e.suivi?.catalogNumber ?: 0)
     }
 
+    /**
+     * The satellite a new contact goes on ([ChoixCarnet]): the rig's, the
+     * cockpit's form's; the receiver on QO-100 alone does not decide it.
+     */
+    fun choixCarnet(demande: ChoixCarnet.Demande, depuisCockpit: Boolean): ChoixCarnet.Choix {
+        val q = station.qo100.etat.value
+        val e = station.etat.value
+        return ChoixCarnet.choix(demande, depuisCockpit, q.auPoste, recoit, e.catConnecte && !q.auPoste,
+            e.suivi?.name, e.suivi?.catalogNumber ?: 0)
+    }
+
+    /** A contact on QO-100: the dial now (sky), the log mode chosen. */
+    fun qo100Carnet(): TraficQo100.Contexte {
+        val q = station.qo100.etat.value
+        return TraficQo100.surQo100(q.descenteHz, s.qo100ModeCarnet,
+            if (q.auPoste) TraficQo100.Par.POSTE else if (recoit) TraficQo100.Par.CLE else TraficQo100.Par.AUCUN)
+    }
+
     fun json(): JSONObject {
         val q = station.qo100.etat.value
         val e = sdr.etat.value
@@ -110,6 +129,8 @@ class TraficQo100Pc(private val station: StationPc, private val sdr: SdrPc, priv
             if (sdr.recepteur != SdrPc.RTL) null else s.sdrAgc)
         val ecart = qo100?.suivi?.dernier?.takeIf { System.currentTimeMillis() - it.t < 60_000L }?.let { Math.round(it.ecartHz) }
         return ApiQo100.trafic(contexte(), q.aLaCle, q.auPoste, r, s.qo100EnCours, s.qo100RepriseAuto,
-            classifieur = qo100 != null, calageAuto = qo100?.auto, ecartBaliseHz = ecart, serveur = "pc")
+            classifieur = qo100 != null, calageAuto = qo100?.auto, ecartBaliseHz = ecart, serveur = "pc",
+            carnet = ApiQo100.Carnet(choixCarnet(ChoixCarnet.Demande.AUTO, false), choixCarnet(ChoixCarnet.Demande.AUTO, true),
+                station.etat.value.suivi?.name.orEmpty(), bascule = true))
     }
 }

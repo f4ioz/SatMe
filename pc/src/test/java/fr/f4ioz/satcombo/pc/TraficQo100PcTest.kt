@@ -76,7 +76,7 @@ class TraficQo100PcTest {
         sdr.modeChoisi = "NFM"
         val t = TraficQo100Pc(st, sdr)
         val carnet = CarnetPc(st, fr.f4ioz.satcombo.data.LogStore(File(dossier, "qso.json")))
-        carnet.contexte = { t.contexte() }
+        carnet.choix = { d, cockpit -> t.choixCarnet(d, cockpit) }; carnet.qo100 = { t.qo100Carnet() }
         // Nothing followed, nothing received: no contact.
         assertNull(carnet.ajoute("F5XYZ", "JN03", "59", "59"))
 
@@ -127,6 +127,71 @@ class TraficQo100PcTest {
         assertFalse(t2.recoit)
         assertFalse(t2.json().getBoolean("reprendre"))
         sdr2.arrete()
+    }
+
+    /**
+     * The rig worked on RS-44 by CAT while the receiver hears QO-100 in the
+     * background: the log goes on RS-44; QO-100 from the cockpit's form, when
+     * the rig is on it, or when chosen; the satellite chosen wins.
+     */
+    @Test
+    fun le_carnet_suit_le_poste_pas_le_recepteur() {
+        fauxRtlTcp()
+        File(dossier, "emetteurs").mkdirs()
+        // A fake RS-44 (elements of another satellite: only its name and number matter here).
+        File(dossier, "amsat-tle.txt").writeText("""RS-44
+1 44909U 98067A   26284.17638745  .00009430  00000-0  18014-3 0  9996
+2 44909  51.6312  86.0933 0006713 248.1316 111.8959 15.48821882589734
+""")
+        File(dossier, "emetteurs/44909.json").writeText("""[
+          {"description":"Linear transponder","mode":"SSB","uplink_low":145935000,"uplink_high":145995000,"downlink_low":435610000,"downlink_high":435670000,"alive":true,"invert":true,"type":"Transponder"}]""")
+        val stockage = StockageMemoire()
+        val st = station(stockage)
+        val sdr = sdr(st, stockage, serveur.localPort)
+        val t = TraficQo100Pc(st, sdr)
+        val carnet = CarnetPc(st, fr.f4ioz.satcombo.data.LogStore(File(dossier, "qso.json")))
+        carnet.choix = { d, cockpit -> t.choixCarnet(d, cockpit) }; carnet.qo100 = { t.qo100Carnet() }
+        val fin = System.currentTimeMillis() + 8_000
+        while (!st.suis(44909)) { check(System.currentTimeMillis() < fin); Thread.sleep(50) }
+        st.connecteCat("SIM", 0, 0)
+        while (!st.etat.value.catConnecte) { check(System.currentTimeMillis() < fin); Thread.sleep(50) }
+        assertNull(t.demarre())
+        assertTrue(t.recoit)
+
+        val auto = t.json().getJSONObject("carnet")
+        assertEquals("RS-44 · poste en CAT", auto.getJSONObject("onglet").getString("libelle"))
+        assertEquals("QO-100 · cockpit", auto.getJSONObject("cockpit").getString("libelle"))
+
+        // The receiver on QO-100 does not move the log: RS-44, its transponder's frequencies.
+        val rs = carnet.ajoute("F5ABC", "JN03", "59", "59")!!
+        assertEquals("RS-44", rs.satName); assertEquals(44909, rs.catnum)
+        assertTrue(rs.downlinkMhz in 435.6..435.7)
+        Thread.sleep(5)   // each contact its own time (its key)
+        // The cockpit's own form: QO-100, its dial.
+        val qo = carnet.ajoute("F5DEF", "JN03", "59", "59", depuisCockpit = true)!!
+        assertEquals("QO-100", qo.satName); assertEquals(Qo100.NORAD, qo.catnum)
+        assertTrue(qo.downlinkMhz > 10_489.0)
+        // Chosen by hand: it wins, both ways.
+        assertEquals("RS-44", carnet.ajoute("F5GHI", "", "59", "59", demande = fr.f4ioz.satcombo.domain.ChoixCarnet.Demande.SUIVI,
+            depuisCockpit = true)!!.satName)
+        assertEquals("QO-100", carnet.ajoute("F5JKL", "", "59", "59", demande = fr.f4ioz.satcombo.domain.ChoixCarnet.Demande.QO100)!!.satName)
+        // The rig on QO-100 (« Appliquer au poste »): QO-100 from the Carnet tab too.
+        st.qo100AuPoste(true)
+        assertEquals("QO-100", carnet.ajoute("F5MNO", "", "59", "59")!!.satName)
+        assertEquals("QO-100 · poste sur QO-100", t.json().getJSONObject("carnet").getJSONObject("onglet").getString("libelle"))
+        st.qo100AuPoste(false)
+        assertEquals("RS-44", carnet.ajoute("F5PQR", "", "59", "59")!!.satName)
+
+        // Edited afterwards: RS-44 → QO-100 → RS-44, the ADIF following (its transmitter's middle again).
+        val q2 = carnet.changeSatellite(rs.timeMs, "QO-100", 0)!!
+        assertEquals("QO-100", q2.satName); assertTrue(q2.downlinkMhz > 10_489.0)
+        assertTrue(carnet.adif(setOf(rs.timeMs)).contains("<SAT_NAME:6>QO-100"))
+        val r2 = carnet.changeSatellite(rs.timeMs, "RS-44", 44909)!!
+        assertEquals(44909, r2.catnum); assertEquals(435.64, r2.downlinkMhz, 1e-6)
+        assertTrue(carnet.adif(setOf(rs.timeMs)).contains("<SAT_NAME:5>RS-44"))
+        assertEquals("F5ABC", carnet.contacts().first { it.timeMs == rs.timeMs }.callsign)
+        st.deconnecteCat()
+        sdr.arrete()
     }
 
     @Test

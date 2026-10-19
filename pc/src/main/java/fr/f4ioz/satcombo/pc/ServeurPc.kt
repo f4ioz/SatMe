@@ -1333,7 +1333,9 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                     c.ajouteApres(q["catnum"]?.toIntOrNull() ?: 0, t, q["c"].orEmpty(), q["l"].orEmpty(), q["rs"].orEmpty(), q["rr"].orEmpty(),
                         q["n"].orEmpty(), q["md"].orEmpty(), fiche)
                         ?: return JSONObject().put("ok", false).put("erreur", "il faut un indicatif et un satellite")
-                } else c.ajoute(q["c"].orEmpty(), q["l"].orEmpty(), q["rs"].orEmpty(), q["rr"].orEmpty(), q["n"].orEmpty(), fiche)
+                } else c.ajoute(q["c"].orEmpty(), q["l"].orEmpty(), q["rs"].orEmpty(), q["rr"].orEmpty(), q["n"].orEmpty(), fiche,
+                    // The satellite chosen in the form; else the rig's, QO-100 from the cockpit's form.
+                    fr.f4ioz.satcombo.domain.ChoixCarnet.Demande.de(q["sat"]), q["cockpit"] == "1")
                     ?: return JSONObject().put("ok", false).put("erreur", "il faut un indicatif et un satellite suivi")
                 return ok.put("t", e.timeMs)
             }
@@ -1341,6 +1343,8 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 val c = carnet ?: return JSONObject().put("ok", false)
                 val t = q["t"]?.toLongOrNull() ?: return JSONObject().put("ok", false)
                 val avant = c.contacts().firstOrNull { it.timeMs == t } ?: return JSONObject().put("ok", false)
+                // Its satellite (a name; its number when one of the list): what belongs to it follows.
+                q["sat"]?.let { c.changeSatellite(t, it, q["satnum"]?.toIntOrNull() ?: 0) }
                 c.modifie(t, avant.copy(callsign = q["c"] ?: avant.callsign, theirLocator = q["l"] ?: avant.theirLocator,
                     rstSent = q["rs"] ?: avant.rstSent, rstRcvd = q["rr"] ?: avant.rstRcvd, note = q["n"] ?: avant.note,
                     mode = q["md"] ?: avant.mode, nom = q["nm"] ?: avant.nom, qth = q["qth"] ?: avant.qth,

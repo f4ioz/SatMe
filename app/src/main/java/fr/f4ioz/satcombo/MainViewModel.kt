@@ -3560,10 +3560,30 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val pos = if (obs != null) runCatching {
             predictor.positionAt(sat, obs, quand)
         }.getOrNull() else null
-        val l = logStore.changeSatellite(timeMs, sat.name, sat.catalogNumber,
-            pos?.azimuthDeg, pos?.elevationDeg, nouvelleHeure)
+        // What belongs to the satellite follows it (az/el, QO-100's frequencies): the shared rule.
+        val l = logStore.update(timeMs) {
+            fr.f4ioz.satcombo.domain.ChangeSatellite.applique(it, sat.name, sat.catalogNumber,
+                pos?.let { p -> p.azimuthDeg to p.elevationDeg }, null).copy(timeMs = nouvelleHeure ?: it.timeMs)
+        }
+        modifies[timeMs] = System.currentTimeMillis()
         _ui.value = _ui.value.copy(log = l,
             express = _ui.value.express.copy(memoire = construitMemoire()))
+    }
+
+    /**
+     * A contact's satellite by name (SatMe-PC's page): one of the list, else
+     * QO-100, another name, or blank / « terrestre » for none.
+     */
+    fun corrigeSatellite(timeMs: Long, nom: String) {
+        val n = nom.trim()
+        _ui.value.satellites.firstOrNull { it.name.equals(n, true) }?.let { corrigeSatellite(timeMs, it); return }
+        val qo = n.equals(fr.f4ioz.satcombo.domain.TraficQo100.NOM, true)
+        val azEl = if (qo) _ui.value.observer?.let { fr.f4ioz.satcombo.domain.Qo100.pointage(it.latDeg, it.lonDeg) }?.let { it.azDeg to it.elDeg } else null
+        val l = logStore.update(timeMs) {
+            fr.f4ioz.satcombo.domain.ChangeSatellite.applique(it, n, if (qo) fr.f4ioz.satcombo.domain.Qo100.NORAD else 0, azEl, null)
+        }
+        modifies[timeMs] = System.currentTimeMillis()
+        _ui.value = _ui.value.copy(log = l, express = _ui.value.express.copy(memoire = construitMemoire()))
     }
 
     /**

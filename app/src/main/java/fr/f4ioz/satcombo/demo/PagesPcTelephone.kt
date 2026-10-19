@@ -391,6 +391,8 @@ object PagesPcTelephone {
             "/api/carnet/modifie" -> {
                 val t = p("t").toLongOrNull() ?: return JSONObject().put("ok", false)
                 val a = u.log.firstOrNull { it.timeMs == t } ?: return JSONObject().put("ok", false)
+                // Its satellite, by name: what belongs to it follows ([fr.f4ioz.satcombo.domain.ChangeSatellite]).
+                if (p("sat").isNotEmpty() || p("satnum").isNotEmpty()) vm.corrigeSatellite(t, p("sat"))
                 fun v(k: String, d: String) = p(k).takeIf { it.isNotEmpty() } ?: d
                 vm.updateLogEntry(t, a.copy(callsign = v("c", a.callsign).uppercase(), theirLocator = v("l", a.theirLocator).uppercase(),
                     rstSent = v("rs", a.rstSent), rstRcvd = v("rr", a.rstRcvd), note = v("n", a.note), mode = v("md", a.mode),
@@ -937,8 +939,12 @@ object PagesPcTelephone {
         val r = ApiQo100.Recepteur(true, st.running, st.deviceName ?: "clé SDR du téléphone",
             if (st.running) "réception" else if (st.connected) "clé branchée" else "aucune clé branchée", st.error.orEmpty(),
             Math.round(st.levelDb * 10) / 10.0, vm.sdrMode().name, u.sdrAudio, u.sdrSquelchDb, u.sdrAgc)
+        // The phone logs on the satellite selected, whatever its form: no switch to QO-100 from the page.
+        val choix = fr.f4ioz.satcombo.domain.ChoixCarnet.choix(fr.f4ioz.satcombo.domain.ChoixCarnet.Demande.AUTO, false, false, false,
+            u.catConnected, u.selected?.name, u.selected?.catalogNumber ?: 0)
         return ApiQo100.trafic(ctx, q.aLaCle, q.auPoste, r, enCours = false, repriseAuto = null, classifieur = false,
-            calageAuto = null, ecartBaliseHz = null, serveur = "telephone")
+            calageAuto = null, ecartBaliseHz = null, serveur = "telephone",
+            carnet = ApiQo100.Carnet(choix, choix, u.selected?.name.orEmpty(), bascule = false))
     }
 
     /** The automatic mode, in SatMe-PC's words ([ApiVeille]). */

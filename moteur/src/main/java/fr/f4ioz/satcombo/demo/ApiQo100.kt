@@ -8,6 +8,7 @@
  */
 package fr.f4ioz.satcombo.demo
 
+import fr.f4ioz.satcombo.domain.ChoixCarnet
 import fr.f4ioz.satcombo.domain.Convertisseur
 import fr.f4ioz.satcombo.domain.GardeQo100
 import fr.f4ioz.satcombo.domain.MemoiresQo100
@@ -109,6 +110,17 @@ object ApiQo100 {
         return o
     }
 
+    /**
+     * Where a new contact goes, untouched by the form: typed in the Carnet
+     * tab ([onglet]) or in the cockpit ([cockpit]); [suivi] the satellite
+     * followed; [bascule] whether the form may switch to QO-100 by hand.
+     */
+    class Carnet(val onglet: ChoixCarnet.Choix, val cockpit: ChoixCarnet.Choix, val suivi: String, val bascule: Boolean) {
+        private fun ChoixCarnet.Choix.json() = JSONObject().put("qo100", qo100).put("satellite", satellite).put("catnum", catnum)
+            .put("pourquoi", pourquoi.name.lowercase()).put("mot", pourquoi.mot).put("libelle", libelle)
+        fun json(): JSONObject = JSONObject().put("onglet", onglet.json()).put("cockpit", cockpit.json()).put("suivi", suivi).put("bascule", bascule)
+    }
+
     /** The receiver as the QO-100 cockpit shows it. */
     class Recepteur(val present: Boolean, val actif: Boolean, val nom: String, val statut: String, val erreur: String,
                     val niveauDb: Double, val mode: String, val son: Boolean, val squelch: Int, val agc: Boolean?)
@@ -120,7 +132,8 @@ object ApiQo100 {
      * [classifieur] false: no labels).
      */
     fun trafic(ctx: TraficQo100.Contexte, cleSurQo100: Boolean, auPoste: Boolean, r: Recepteur, enCours: Boolean,
-               repriseAuto: Boolean?, classifieur: Boolean, calageAuto: Boolean?, ecartBaliseHz: Long?, serveur: String): JSONObject {
+               repriseAuto: Boolean?, classifieur: Boolean, calageAuto: Boolean?, ecartBaliseHz: Long?, serveur: String,
+               carnet: Carnet? = null): JSONObject {
         val recoit = r.actif && cleSurQo100
         val o = JSONObject().put("serveur", serveur).put("recoit", recoit).put("cle", cleSurQo100).put("auPoste", auPoste)
             .put("contexte", JSONObject().put("qo100", ctx.qo100).put("satellite", ctx.satellite).put("catnum", ctx.catnum)
@@ -141,6 +154,7 @@ object ApiQo100 {
             o.put("urgence", GardeQo100.urgence(dl))
             o.put("ft8Plage", GardeQo100.plageAudioNumerique(dl)?.let { JSONObject().put("bas", it.first).put("haut", it.last) } ?: JSONObject.NULL)
         }
+        carnet?.let { o.put("carnet", it.json()) }
         repriseAuto?.let { o.put("repriseAuto", it) }
         calageAuto?.let { o.put("calageAuto", it) }
         ecartBaliseHz?.let { o.put("ecartBalise", it) }

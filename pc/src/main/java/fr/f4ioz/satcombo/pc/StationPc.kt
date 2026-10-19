@@ -781,6 +781,14 @@ class StationPc(
         }
     }
 
+    /** [catnum]'s transmitter chosen last (else its first): a contact moved onto it takes its frequencies. */
+    fun emetteurDe(catnum: Int): Transmitter? {
+        val l = runCatching { catalogue.emetteurs(catnum) }.getOrDefault(emptyList())
+            .filter { it.alive && (it.downlinkLowHz != null || it.uplinkLowHz != null) }
+        val d = satConfig.load(catnum).txDescription
+        return l.firstOrNull { it.description == d } ?: l.firstOrNull()
+    }
+
     fun suis(catnum: Int): Boolean {
         val s = _etat.value.satellites.firstOrNull { it.catalogNumber == catnum } ?: return false
         suis(s); return true

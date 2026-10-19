@@ -13,6 +13,7 @@ import fr.f4ioz.satcombo.data.CarnetEnLigne
 import fr.f4ioz.satcombo.data.LogEntry
 import fr.f4ioz.satcombo.data.LogStore
 import fr.f4ioz.satcombo.data.Qrz
+import fr.f4ioz.satcombo.domain.ChoixCarnet
 import fr.f4ioz.satcombo.domain.Doppler
 import fr.f4ioz.satcombo.domain.ProfilsStation
 import fr.f4ioz.satcombo.domain.QrzReponse
@@ -63,7 +64,7 @@ class CarnetPc(private val station: StationPc, val store: LogStore, private val 
         val m = memoire()
         return fr.f4ioz.satcombo.domain.Indicatifs.etat(saisie, m) to
             fr.f4ioz.satcombo.domain.Indicatifs.suggestions(saisie, m, horloge(),
-                contexte?.invoke()?.takeIf { it.qo100 }?.satellite ?: station.etat.value.suivi?.name.orEmpty(), max = 4)
+                choix().satellite, max = 4)
     }
 
     /** The memory of callsigns made again at the next key (contacts added from elsewhere). */
@@ -75,19 +76,35 @@ class CarnetPc(private val station: StationPc, val store: LogStore, private val 
     }
 
     /**
-     * What SatMe follows for the log (set by SatMe-PC): QO-100 when the
-     * receiver or the rig is on it — then a contact goes on QO-100, with its
-     * sky frequencies and mode, whatever satellite is followed.
+     * The satellite a contact goes on (set by SatMe-PC, [ChoixCarnet]): the
+     * one chosen in the form, else the rig's, QO-100 from the cockpit's form.
+     * Unset: the satellite followed.
      */
-    @Volatile var contexte: (() -> fr.f4ioz.satcombo.domain.TraficQo100.Contexte?)? = null
+    @Volatile var choix: ((ChoixCarnet.Demande, Boolean) -> ChoixCarnet.Choix)? = null
 
-    /** A new contact, now; null without a callsign or a satellite. */
+    /** QO-100's dial and log mode now, for a contact on it. */
+    @Volatile var qo100: (() -> fr.f4ioz.satcombo.domain.TraficQo100.Contexte)? = null
+
+    fun choix(demande: ChoixCarnet.Demande = ChoixCarnet.Demande.AUTO, depuisCockpit: Boolean = false): ChoixCarnet.Choix =
+        choix?.invoke(demande, depuisCockpit) ?: station.etat.value.suivi.let {
+            ChoixCarnet.choix(demande, depuisCockpit, false, false, station.etat.value.catConnecte, it?.name, it?.catalogNumber ?: 0)
+        }
+
+    /**
+     * A new contact, now; null without a callsign or a satellite. On
+     * [demande]'s satellite, else the rig's ([ChoixCarnet]);
+     * [depuisCockpit]: typed in the QO-100 cockpit.
+     */
     fun ajoute(indicatif: String, locator: String, rstEnvoye: String, rstRecu: String, note: String = "",
-               fiche: QrzReponse.Fiche? = null): LogEntry? {
+               fiche: QrzReponse.Fiche? = null, demande: ChoixCarnet.Demande = ChoixCarnet.Demande.AUTO,
+               depuisCockpit: Boolean = false): LogEntry? {
         val call = indicatif.trim().uppercase()
         if (call.isEmpty()) return null
         val e = station.etat.value
-        val qo = contexte?.invoke()?.takeIf { it.qo100 }
+        val ch = choix(demande, depuisCockpit)
+        // QO-100 followed as a satellite keeps its transmitter's frequencies; chosen otherwise, the dial's.
+        val qo = if (ch.qo100 && e.suivi?.catalogNumber != ch.catnum) (qo100?.invoke() ?: fr.f4ioz.satcombo.domain.TraficQo100.surQo100(station.qo100.etat.value.descenteHz,
+            station.settings.qo100ModeCarnet, fr.f4ioz.satcombo.domain.TraficQo100.Par.AUCUN)) else null
         val sat = e.suivi
         if (qo == null && sat == null) return null
         val t = station.emetteurChoisi()
@@ -215,6 +232,31 @@ class CarnetPc(private val station: StationPc, val store: LogStore, private val 
                 nom = m.nom.trim(), qth = m.qth.trim(), courriel = m.courriel.trim(),
                 locatorOrigine = if (m.theirLocator.trim().uppercase() == it.theirLocator) it.locatorOrigine else m.locatorOrigine)
         }
+    }
+
+    /**
+     * A contact moved to another satellite ([ChangeSatellite]): [nom] a
+     * satellite known (its az/el then, its transmitter's frequencies), QO-100
+     * (the dish's aim), any other name, or blank / « terrestre ». Null when
+     * there is no such contact.
+     */
+    fun changeSatellite(timeMs: Long, nom: String, catnum: Int): LogEntry? {
+        val avant = store.load().firstOrNull { it.timeMs == timeMs } ?: return null
+        val e = station.etat.value
+        val n = nom.trim()
+        val qo = catnum == fr.f4ioz.satcombo.domain.Qo100.NORAD || n.equals(fr.f4ioz.satcombo.domain.TraficQo100.NOM, true)
+        val sat = if (qo) null else e.satellites.firstOrNull { catnum > 0 && it.catalogNumber == catnum }
+            ?: e.satellites.firstOrNull { n.isNotEmpty() && it.name.equals(n, true) }
+        val azEl = if (qo) e.observateur?.let { fr.f4ioz.satcombo.domain.Qo100.pointage(it.latDeg, it.lonDeg) }?.let { it.azDeg to it.elDeg }
+            else sat?.let { station.contactApres(it.catalogNumber, timeMs, "-", "", "", "", "", "") }?.let { it.azimuthDeg to it.elevationDeg }
+        val f = sat?.let { fr.f4ioz.satcombo.domain.ChangeSatellite.frequencesNominales(station.emetteurDe(it.catalogNumber)) }
+        val apres = fr.f4ioz.satcombo.domain.ChangeSatellite.applique(avant, sat?.name ?: n, sat?.catalogNumber ?: if (qo) fr.f4ioz.satcombo.domain.Qo100.NORAD else 0, azEl, f)
+        if (apres == avant) return avant
+        // As any edit: a contact waiting for the automatic upload gets its delay again.
+        modifies[timeMs] = horloge()
+        store.update(timeMs) { apres }
+        oublieMemoire()
+        return apres
     }
 
     fun supprime(timeMs: Long) { store.delete(timeMs); oublieMemoire() }
