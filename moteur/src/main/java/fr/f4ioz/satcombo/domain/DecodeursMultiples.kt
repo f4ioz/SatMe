@@ -15,7 +15,7 @@ import org.json.JSONObject
 /**
  * « Décodeurs multiples » on QO-100: besides the main receiver, up to [MAX]
  * channels, each a dial in the received band, a demodulation and a decoder
- * (FT8, FT4, CW, SSTV, voice to text, or none). This is the list and its
+ * (FT8, FT4, CW, SSTV, voice to text, the BPSK beacon, or none). This is the list and its
  * rules; the signal processing is [fr.f4ioz.satcombo.sdr.CanauxSecondaires].
  *
  * Pure logic: SatMe-PC and the phone keep the same list the same way.
@@ -27,16 +27,21 @@ object DecodeursMultiples {
     /** The usual FT4 dial on the narrow transponder (the top of the narrow digital segment). */
     const val CADRAN_FT4_HZ = 10_489_580_000L
 
+    /** The dial that puts the middle beacon at 1.5 kHz. */
+    const val CADRAN_BALISE_HZ = Qo100.BALISE_MEDIANE_HZ - 1_500L
+
     enum class Decodeur(val cle: String, val nom: String, val mode: ModeCanal, val couleur: String) {
         FT8("ft8", "FT8", ModeCanal.USB, "#B07CFF"),
         FT4("ft4", "FT4", ModeCanal.USB, "#D58CFF"),
         CW("cw", "CW", ModeCanal.CW, "#6F8CFF"),
         SSTV("sstv", "SSTV", ModeCanal.USB, "#FFB454"),
         PHONIE("phonie", "Phonie", ModeCanal.USB, "#3FE0C8"),
+        /** The middle beacon's 400 bit/s BPSK telemetry, heard around 1.5 kHz. */
+        BALISE("balise", "Balise BPSK", ModeCanal.USB, "#5BD68A"),
         AUCUN("aucun", "Écoute", ModeCanal.USB, "#9AA7B4");
 
-        /** One decoder of this kind at most (it has one engine: one picture, one voice helper). */
-        val unique: Boolean get() = this == SSTV || this == PHONIE
+        /** One decoder of this kind at most (it has one engine: one picture, one voice helper, the beacon panel). */
+        val unique: Boolean get() = this == SSTV || this == PHONIE || this == BALISE
 
         companion object {
             fun de(cle: String?): Decodeur? = entries.firstOrNull { it.cle == cle?.trim()?.lowercase() }
@@ -76,7 +81,7 @@ object DecodeursMultiples {
             Decodeur.FT8 -> if (hz - TraficQo100.CADRAN_FT8_HZ in 200L..2_900L) TraficQo100.CADRAN_FT8_HZ else arrondi(hz - 1_500, 10)
             Decodeur.FT4 -> if (hz - CADRAN_FT4_HZ in 200L..2_900L) CADRAN_FT4_HZ else arrondi(hz - 1_500, 10)
             Decodeur.SSTV -> arrondi(hz - 1_900, 10)
-            Decodeur.PHONIE, Decodeur.AUCUN -> arrondi(hz - 1_500, 10)
+            Decodeur.PHONIE, Decodeur.BALISE, Decodeur.AUCUN -> arrondi(hz - 1_500, 10)
         }
     }
 

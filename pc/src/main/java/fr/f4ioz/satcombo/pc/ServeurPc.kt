@@ -105,6 +105,7 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
     @Volatile var soleil: SoleilPc? = null
     /** « Décodeurs multiples » in the QO-100 cockpit (set before [demarre]). */
     @Volatile var canaux: CanauxPc? = null
+    @Volatile var telemesure: TelemesurePc? = null
     /** ADS-B (Avions tab) and the shared map (set before [demarre]). */
     @Volatile var adsb: AdsbPc? = null
     @Volatile var ais: AisPc? = null
@@ -442,6 +443,16 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
         // « Décodeurs multiples »: the channels taken from the receiver's IQ besides the main one (receive only).
         if (chemin == "/api/canaux" || chemin.startsWith("/api/canaux/")) {
             val k = canaux
+            val o = when {
+                k == null -> JSONObject().put("absent", true)
+                r.methode == "POST" -> runCatching { k.action(chemin, q) }.getOrElse { JSONObject().put("ok", false).put("erreur", it.message ?: "erreur") }
+                else -> k.json()
+            }
+            envoie(sortie, "200 OK", "application/json; charset=utf-8", o.toString().toByteArray()); return
+        }
+        // BPSK telemetry: the QO-100 beacon's panel, the LEO decoder, the test mode (receive only).
+        if (chemin == "/api/telemesure" || chemin.startsWith("/api/telemesure/")) {
+            val k = telemesure
             val o = when {
                 k == null -> JSONObject().put("absent", true)
                 r.methode == "POST" -> runCatching { k.action(chemin, q) }.getOrElse { JSONObject().put("ok", false).put("erreur", it.message ?: "erreur") }

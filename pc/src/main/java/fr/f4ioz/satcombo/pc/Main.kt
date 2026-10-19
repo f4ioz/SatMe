@@ -136,6 +136,10 @@ fun main(args: Array<String>) {
     val canaux = CanauxPc(station.stockage, son.sstv, phonie)
     canaux.indicatif = { station.etat.value.indicatif }
     sdr.canaux = canaux
+    // BPSK telemetry: the QO-100 beacon through its channel, FUNcube-like satellites by the main receiver (off by default).
+    val telemesure = TelemesurePc(station.stockage, dossier, canaux)
+    telemesure.satellite = { station.etat.value.suivi?.name.orEmpty() }
+    sdr.ecouteTelemesure = { pcm, n -> telemesure.ecouteSdr(pcm, n) }
     phonie.demarre()
     portee.launch {
         while (true) {
@@ -263,6 +267,7 @@ fun main(args: Array<String>) {
     serveur.niveaux = niveaux
     serveur.soleil = soleil
     serveur.canaux = canaux
+    serveur.telemesure = telemesure
     // ADS-B on 1090 MHz (Avions tab): off until asked; the SDR tab's dongle taken only when the owner chooses.
     val adsb = AdsbPc(station, sdr, station.stockage, carnet)
     sdr.adsbTient = { if (adsb.tientCleSdr) SdrPc.RTL else if (adsb.tientPluto) SdrPc.PLUTO else null }

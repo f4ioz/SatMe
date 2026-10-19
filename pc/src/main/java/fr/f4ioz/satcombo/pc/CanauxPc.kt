@@ -15,6 +15,8 @@ import fr.f4ioz.satcombo.plateforme.Stockage
 import fr.f4ioz.satcombo.sdr.CanauxSecondaires
 import fr.f4ioz.satcombo.sdr.Dsp
 import fr.f4ioz.satcombo.sdr.ModeCanal
+import fr.f4ioz.satcombo.telemesure.BlocP3
+import fr.f4ioz.satcombo.telemesure.DecodeurTelemesure
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -27,6 +29,8 @@ import org.json.JSONObject
  * - **FT8/FT4 and CW** get a decoder of their own per channel.
  * - **SSTV and voice to text** have one engine each (one picture, one helper
  *   process): a channel holding one feeds it in place of the main receiver.
+ * - **Balise BPSK**: the middle beacon's telemetry, decoded per channel
+ *   (one at most); the cockpit's « Balise » panel shows its frames.
  * - **« Écouter »** on a channel: its sound replaces the main one (speaker,
  *   browsers, Son tab); the others stay silent.
  *
@@ -55,6 +59,9 @@ class CanauxPc(
         if (d == Decodeur.PHONIE) phonie?.let { p -> if (!p.actif && runCatching { p.install.python(p.python) != null }.getOrDefault(false)) p.actif = true }
     }
 
+    /** Each beacon frame decoded, for the local log (set by [TelemesurePc]). */
+    @Volatile var auTrame: (DecodeurTelemesure.Trame) -> Unit = {}
+
     /** The signal processing, run by the receiver's thread. */
     val dsp = CanauxSecondaires()
 
@@ -67,6 +74,11 @@ class CanauxPc(
                 f.auDecode = { l -> l.firstOrNull()?.let { note(it.texte, l.size) } }
             } else null
         var cw: DecodeurCw? = null
+        val balise: DecodeurTelemesure? = if (canal.decodeur == Decodeur.BALISE)
+            DecodeurTelemesure(DecodeurTelemesure.Profil.QO100, Dsp.AUDIO_RATE, horloge = horloge) { t ->
+                if (t.valide) note(BlocP3.texte(t.donnees).firstOrNull().orEmpty().take(60))
+                runCatching { auTrame(t) }
+            } else null
         val texteCw = StringBuilder()
         @Volatile var dernier = ""
         @Volatile var dernierMs = 0L
@@ -91,6 +103,7 @@ class CanauxPc(
                 }
                 Decodeur.SSTV -> sstv?.ecouteSdr(pcm, n, Dsp.AUDIO_RATE)
                 Decodeur.PHONIE -> phonie?.ecouteSdr(pcm, n, Dsp.AUDIO_RATE, null)
+                Decodeur.BALISE -> balise?.traite(pcm, n)
                 Decodeur.AUCUN -> {}
             }
         }
@@ -132,6 +145,12 @@ class CanauxPc(
         val r = ecouteBuf to ecouteN
         ecouteN = 0
         return r
+    }
+
+    /** The beacon channel's dial and decoder, or null when there is none (or the option is off). */
+    fun balise(): Pair<DecodeursMultiples.Canal, DecodeurTelemesure?>? {
+        val c = liste.firstOrNull { it.decodeur == Decodeur.BALISE }?.takeIf { actif } ?: return null
+        return c to synchronized(this) { postes[c.id]?.balise }
     }
 
     /** True while a channel feeds the SSTV decoder: the main receiver then does not. */

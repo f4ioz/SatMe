@@ -21,15 +21,16 @@ SatMe tourne sur un PC (Linux, Windows, Raspberry Pi) et se pilote depuis un nav
 9. [DATV : émission](#datv--émission) — la station, les règles, l'essai en intérieur, carte et chat
 10. [SSTV](#sstv) — réception et émission
 11. [FT8 / FT4](#ft8--ft4)
-12. [Phonie → texte](#phonie--texte)
-13. [Le récepteur SDR](#le-récepteur-sdr) — mémoires, plan de bandes, affichage, nettoyage du son, CTCSS, I/Q, générateur d'essai, mesures
-14. [Matériel SDR](#matériel-sdr) — RTL-SDR, ADALM-PLUTO, bladeRF 2.0, HackRF One
-15. [Avions (ADS-B) et carte](#avions-ads-b-et-carte) — 1090 MHz, diffusion par avions, la carte commune
-16. [Montage : la chaîne de la station](#montage--la-chaîne-de-la-station) — schéma, fonctions, profils
-17. [Réglages](#réglages) — poste et rotor, éléments orbitaux, journal Doppler, lien satellite, rigctld, molette USB, accès à distance
-18. [Encore sur le PC](#encore-sur-le-pc)
-19. [Sécurité du matériel](#sécurité-du-matériel)
-20. [Avant le premier essai](#avant-le-premier-essai)
+12. [Télémesure BPSK](#télémesure-bpsk) — FUNcube 1200 bit/s
+13. [Phonie → texte](#phonie--texte)
+14. [Le récepteur SDR](#le-récepteur-sdr) — mémoires, plan de bandes, affichage, nettoyage du son, CTCSS, I/Q, générateur d'essai, mesures
+15. [Matériel SDR](#matériel-sdr) — RTL-SDR, ADALM-PLUTO, bladeRF 2.0, HackRF One
+16. [Avions (ADS-B) et carte](#avions-ads-b-et-carte) — 1090 MHz, diffusion par avions, la carte commune
+17. [Montage : la chaîne de la station](#montage--la-chaîne-de-la-station) — schéma, fonctions, profils
+18. [Réglages](#réglages) — poste et rotor, éléments orbitaux, journal Doppler, lien satellite, rigctld, molette USB, accès à distance
+19. [Encore sur le PC](#encore-sur-le-pc)
+20. [Sécurité du matériel](#sécurité-du-matériel)
+21. [Avant le premier essai](#avant-le-premier-essai)
 
 ## L'installer
 
@@ -173,10 +174,11 @@ L'onglet **QO-100**, c'est le transpondeur bande étroite sur un écran : le ré
 - **Classement des signaux** : chaque signal du transpondeur nommé sur la cascade (BLU, CW, FT8, FT4, PSK31, RTTY, SSTV, porteuse, balises, numérique large, inconnu), coloré par classe avec sa confiance ; une FFT à cases de 16 Hz sur le flux brut du récepteur, les peignes de raies parasites et les clics de manipulation écartés, les signaux oubliés une fois partis. Il ne tourne que tant que la page le regarde.
 - **Plan de bande** (celui d'AMSAT-DL) sur la réglette et en tête de la cascade, la règle de chaque segment au survol. **Fréquence d'urgence** (10 489,858 – 10 489,865) : contour et bandeau rouges ; SatMe n'y envoie jamais la montée au poste de lui-même (mémoire, signal cliqué, retour DATV, session reprise) — seulement accordée à la main. La place libre FT8 n'est proposée que dans les segments numériques ; un mode hors de son segment est signalé discrètement.
 - **LEILA** : quand la sirène de la station sol est entendue (la station écoutée émet plus fort que les balises et doit baisser sa puissance), un **⚠ LEILA** rouge s'affiche 10 s sous la descente.
-- **Décodeurs multiples** (bouton **Multiples**, coupé d'origine) : jusqu'à **4 canaux** pris dans ce que voit le récepteur, chacun avec son décodeur (FT8, FT4, CW, SSTV, phonie, ou simple écoute ; une seule SSTV et une seule phonie). Préréglages « FT8 + CW + phonie » et « FT8 + FT4 » ; clic droit (ou Maj + clic) sur un signal de la cascade : « Ajouter un décodeur ici ». Le son reste celui de l'accord principal, sauf le canal coché 🔈 ; un clic sur la fréquence d'un canal y accorde le récepteur principal. De l'ordre de 1 % d'un cœur par canal.
+- **Décodeurs multiples** (bouton **Multiples**, coupé d'origine) : jusqu'à **4 canaux** pris dans ce que voit le récepteur, chacun avec son décodeur (FT8, FT4, CW, SSTV, phonie, balise BPSK, ou simple écoute ; une seule SSTV, une seule phonie, une seule balise). Préréglages « FT8 + CW + phonie » et « FT8 + FT4 » ; clic droit (ou Maj + clic) sur un signal de la cascade : « Ajouter un décodeur ici ». Le son reste celui de l'accord principal, sauf le canal coché 🔈 ; un clic sur la fréquence d'un canal y accorde le récepteur principal. De l'ordre de 1 % d'un cœur par canal.
 - **Affichage** (palette, contraste et luminosité de la cascade, drapeaux des mémoires), **Mémoires**, **Mesures** et le **nettoyage du son**, comme dans l'onglet SDR (voir [Le récepteur SDR](#le-récepteur-sdr)) ; les mémoires d'ici portent l'étiquette « QO-100 ».
 - **Reprise après un arrêt** : un bandeau propose de reprendre QO-100 où il en était (récepteur, fréquence, mode) ; *Réglages › Satellites › QO-100* le fait tout seul au démarrage. Réception seulement : rien n'est jamais émis.
-- Sous-onglets : **Calage** (sur la balise, à la main ou automatique), **Qualité** (balise sur le bruit, écart, erreur et dérive du LNB sur l'heure, plancher de bruit, la courbe du jour), **Mémoires**, **Poste & chaîne** (convertisseurs), **Pointage**.
+- **Balise** (sous-onglet) : la télémesure de la balise médiane décodée — BPSK 400 bit/s, Manchester, codage différentiel ; ses trames codées (256 octets en 13 s : code convolutif r=1/2 K=7, deux Reed-Solomon (160,128), embrouillage, entrelacement 80 × 65 et synchro répartie, le format codé proposé pour AO-40) et ses blocs non codés de 512 octets (synchro 39 15 ED 30, CRC). « Décoder la balise » pose un canal des *Décodeurs multiples* sur 10 489,7485 MHz (la balise à 1,5 kHz, cherchée à ±600 Hz : garder le calage sur la balise) ; chaque trame dit ses octets corrigés, ses symboles faux et son rapport signal/bruit, le texte ou les octets bruts. « Essai » fait passer un signal fabriqué (bruit, décalage, dérive) par le même décodeur. Les trames reçues sont gardées sur le PC (`telemesure/`), rien n'est envoyé.
+- Sous-onglets : **Calage** (sur la balise, à la main ou automatique), **Qualité** (balise sur le bruit, écart, erreur et dérive du LNB sur l'heure, plancher de bruit, la courbe du jour), **Balise**, **Mémoires**, **Poste & chaîne** (convertisseurs), **Pointage**.
 
 <p align="center"><img src="images/pc-qo100-cockpit.webp" width="100%" alt="Cockpit QO-100, récepteur arrêté : les quatre étapes, le récepteur et son accord, le décodeur, la saisie du carnet, le plan de bande et ses segments sur la cascade, le calage automatique sur la balise"></p>
 
@@ -354,6 +356,14 @@ Un onglet pensé pour voir la bande, pas seulement la lire :
 <img src="images/pc-ft8.webp" width="49%" alt="FT8 sur QO-100 : l'anneau du créneau, la cascade avec les indicatifs à leur fréquence, le radar des stations, qui appeler maintenant">
 <img src="images/pc-ft8-messages.webp" width="49%" alt="FT8, les messages : les conversations entre deux stations, et le fil au fil de l'eau en bulles">
 </p>
+
+## Télémesure BPSK
+
+L'onglet **Télémesure** (espace *Modes*) décode la télémesure des satellites au format FUNcube : AO-73 (FUNcube-1) et ceux qui le reprennent, BPSK à 1200 bit/s, les mêmes trames codées que la balise QO-100 (256 octets toutes les 5 s).
+
+- Coché (coupé d'origine), il écoute le **récepteur SDR principal** hors QO-100 : l'accorder en BLU (USB) sur la descente de télémesure (AO-73 : 145,935 MHz), le Doppler suivi par SatMe ; la porteuse est cherchée dans toute la bande audio puis tenue par une boucle de Costas.
+- Chaque trame : satellite et type (orbite entière, haute résolution, message), les **valeurs temps réel** lues d'après le document de descente publié par AMSAT-UK et ses équations (tensions et courants des panneaux et de la batterie, températures, radio, ampli, antennes, état du logiciel), le message s'il y en a un, ou les octets bruts.
+- **Essai** : une trame fabriquée passe par le même décodeur. Les trames reçues sont gardées sur le PC (`telemesure/`) ; l'envoi à l'entrepôt de données FUNcube n'est pas fait.
 
 ## Phonie → texte
 

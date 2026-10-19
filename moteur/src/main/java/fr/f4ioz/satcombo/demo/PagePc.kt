@@ -48,6 +48,7 @@ object PagePc {
         Onglet("planche", "Planche", "view_quilt", "La planche SSTV : les images sur un modèle, à télécharger"),
         Onglet("aprs", "APRS", "place", "Les trames APRS entendues, la carte, les trophées"),
         Onglet("ft8", "FT8", "graphic_eq", "FT8 et FT4 : décodage, messages, radar"),
+        Onglet("tlm", "Télémesure", "settings_input_antenna", "Télémesure BPSK : FUNcube à 1200 bit/s, balise QO-100"),
         Onglet("journal", "Journal", "history", "Les passages enregistrés, rejoués"),
         Onglet("reglages", "Réglages", "settings", "Toute la station : réglages par catégorie"))
 
@@ -60,7 +61,7 @@ object PagePc {
         Triple("ciel", "Ciel", "public") to listOf("station", "agenda", "frise", "sked", "carres", "carte", "avions", "ais", "espace", "meteor", "sondes"),
         Triple("qo", "QO-100", "satellite_alt") to listOf("qo100"),
         Triple("tv", "DATV", "tv") to listOf("datv"),
-        Triple("modes", "Modes", "graphic_eq") to listOf("sstv", "aprs", "ft8"),
+        Triple("modes", "Modes", "graphic_eq") to listOf("sstv", "aprs", "ft8", "tlm"),
         Triple("log", "Carnet", "menu_book") to listOf("carnet", "journal", "planche"),
         Triple("poste", "Station", "radio") to listOf("montage", "sdr", "son", "reglages"))
 
@@ -650,6 +651,22 @@ ${STYLE_JETONS}
   .pastille.marche::before { content:'● '; }
   .pastille.coupe { background:rgba(229,72,77,.16); color:var(--rose); }
   .pastille.coupe::before { content:'○ '; }
+  /* BPSK telemetry: frames as received (text, fields, raw bytes). */
+  .tlm-trames { margin-top:8px; max-height:calc(100vh - 330px); overflow:auto; }
+  .tlm-t { border-top:1px solid var(--ligne); padding:6px 0; }
+  .tlm-t:first-child { border-top:none; }
+  .tlm-h { display:flex; gap:8px; flex-wrap:wrap; align-items:baseline; font-size:var(--fs-s); color:var(--texte-2); }
+  .tlm-h b { color:var(--texte); }
+  .tlm-b { padding:0 6px; border-radius:10px; font-size:var(--fs-xs); font-weight:700; background:var(--s3); }
+  .tlm-b.ok { background:rgba(91,214,138,.18); color:var(--ok); } .tlm-b.faux { background:rgba(229,72,77,.16); color:var(--danger); } .tlm-b.essai { background:rgba(255,180,84,.16); color:var(--warn); }
+  .tlm-pre { margin:4px 0 0; font-family:var(--mono); font-size:11px; line-height:1.45; white-space:pre-wrap; word-break:break-all; color:var(--texte); }
+  .tlm-m { display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:1px 14px; margin-top:4px; font-size:var(--fs-s); }
+  .tlm-m span { display:flex; justify-content:space-between; gap:8px; border-bottom:1px dotted var(--ligne); }
+  .tlm-m i { font-style:normal; color:var(--texte-2); } .tlm-m b { font-family:var(--mono); font-weight:600; }
+  /* In the cockpit's narrow column: smaller figures, the 64-character lines kept whole. */
+  #tb-etat, #tl-b-etat { gap:2px 12px; } #tb-etat .val, #tl-b-etat .val { font-size:15px; }
+  #tb-trames .tlm-pre, #tl-b-trames .tlm-pre { font-size:9.5px; }
+  .tlm-g { grid-column:1/-1; margin-top:4px; font-size:var(--fs-xs); font-weight:700; letter-spacing:.6px; text-transform:uppercase; color:var(--texte-3); }
   .allume { box-shadow:inset 4px 0 0 var(--vert); }
   .eteint { box-shadow:inset 4px 0 0 rgba(229,72,77,.55); }
   button.arret { background:transparent; border:1px solid var(--rose); color:var(--rose); }
@@ -2604,7 +2621,7 @@ ${rail()}
     <div class="tq-cote">
       <div id="tq-carnet-slot"></div>
       <div class="st" data-st="tq">
-        <div class="st-nav"><button data-p="tq-p-calage" title="Calage sur la balise médiane">${IconesPc.svg("tune", "st-ico")}<span>Calage</span></button><button data-p="tq-p-q" title="Qualité de la réception, stations entendues">${IconesPc.svg("graphic_eq", "st-ico")}<span>Qualité</span></button><button data-p="tq-p-mem" title="Les fréquences mémorisées">${IconesPc.svg("save", "st-ico")}<span>Mémoires</span></button><button data-p="tq-p-poste" title="Le poste, la clé, le transpondeur, la chaîne de station">${IconesPc.svg("radio", "st-ico")}<span>Poste &amp; chaîne</span></button><button data-p="tq-p-ciel" title="Réglage initial : pointage et Soleil">${IconesPc.svg("explore", "st-ico")}<span>Pointage</span></button></div>
+        <div class="st-nav"><button data-p="tq-p-calage" title="Calage sur la balise médiane">${IconesPc.svg("tune", "st-ico")}<span>Calage</span></button><button data-p="tq-p-q" title="Qualité de la réception, stations entendues">${IconesPc.svg("graphic_eq", "st-ico")}<span>Qualité</span></button><button data-p="tq-p-balise" title="La télémesure de la balise médiane, décodée">${IconesPc.svg("settings_input_antenna", "st-ico")}<span>Balise</span></button><button data-p="tq-p-mem" title="Les fréquences mémorisées">${IconesPc.svg("save", "st-ico")}<span>Mémoires</span></button><button data-p="tq-p-poste" title="Le poste, la clé, le transpondeur, la chaîne de station">${IconesPc.svg("radio", "st-ico")}<span>Poste &amp; chaîne</span></button><button data-p="tq-p-ciel" title="Réglage initial : pointage et Soleil">${IconesPc.svg("explore", "st-ico")}<span>Pointage</span></button></div>
         <div class="st-pan" id="tq-p-calage">
       <div class="carte">
         <div class="t">Calage sur la balise</div>
@@ -2639,6 +2656,20 @@ ${rail()}
         <div class="t">Stations entendues <span class="petit" id="oq-sig-n"></span></div>
         <div style="max-height:260px;overflow:auto"><table><tbody id="oq-signaux"></tbody></table></div>
         <div class="petit aide" style="margin-top:4px">Ce que la clé voit au-dessus du bruit du transpondeur (balises exclues). Un clic : s'y accorder.</div>
+      </div>
+        </div>
+        <div class="st-pan" id="tq-p-balise" hidden>
+      <div class="carte">
+        <div class="t">Balise médiane · télémesure <span id="tb-pastille" class="pastille coupe">non décodée</span></div>
+        <div class="petit aide">La balise médiane (10 489,750 MHz) émet en BPSK à 400 bit/s : des trames codées de 256 octets (code convolutif, Reed-Solomon, entrelacement : 13 s chacune) et des blocs non codés de 512 octets. SatMe les décode sur un canal des « Décodeurs multiples » posé sur elle, la porteuse cherchée à ±600 Hz. Réception seulement ; les trames sont gardées sur ce PC (dossier telemesure).</div>
+        <div class="petit aide">« Essai » fait passer un signal fabriqué (bruit, décalage, dérive) par le même décodeur : rien n'est reçu ni gardé.</div>
+        <div class="ligne" style="margin-top:0"><button class="primaire" id="tb-go" onclick="tlmPost('balise?on=1')">Décoder la balise</button>
+          <button id="tb-stop" hidden onclick="tlmPost('balise?on=0')">Retirer le canal</button>
+          <button id="tb-essai" onclick="tlmPost('essai?profil=qo100')" title="Un signal fabriqué par le même décodeur">Essai</button>
+          <label class="petit" style="margin-left:auto"><input type="checkbox" id="tb-brut" onchange="tlmBrutRegle(this.checked)"> octets bruts</label></div>
+        <div class="petit" id="tb-msg"></div>
+        <div class="paire" id="tb-etat" style="margin-top:6px"></div>
+        <div id="tb-trames" class="tlm-trames"></div>
       </div>
         </div>
         <div class="st-pan" id="tq-p-mem" hidden>
@@ -3152,6 +3183,28 @@ ${rail()}
         </div>
       </div>
     </div>
+  </div>
+</div>
+</div>
+<div class="vue" id="v-tlm" hidden>
+<div class="grille2">
+  <div class="carte">
+    <div class="t">FUNcube · BPSK 1200 bit/s <span id="tl-pastille" class="pastille coupe">coupé</span></div>
+    <div class="petit aide">Pour AO-73 (FUNcube-1) et les satellites au même format : le son du récepteur SDR principal, en BLU (USB) sur la descente de télémesure, le Doppler suivi par SatMe. La porteuse est cherchée dans toute la bande audio (1,5 kHz ± 1,2 kHz). Trames codées comme celles d'AO-40 : 256 octets toutes les 5 s, la télémesure temps réel lue d'après le document de descente publié par AMSAT-UK.</div>
+    <div class="petit aide">Les trames sont gardées sur ce PC (dossier telemesure) ; rien n'est envoyé. « Essai » fait passer un signal fabriqué par le même décodeur.</div>
+    <label style="display:block"><input type="checkbox" id="tl-on" onchange="tlmPost('leo?on=' + (this.checked ? 1 : 0))"> <b>Décoder la télémesure 1200 bit/s</b> <span class="petit">— récepteur SDR, hors QO-100</span></label>
+    <div class="ligne"><button id="tl-essai" onclick="tlmPost('essai?profil=funcube')">Essai</button><button class="discret" onclick="tlmPost('vide')">Effacer</button>
+      <label class="petit" style="margin-left:auto"><input type="checkbox" id="tl-brut" onchange="tlmBrutRegle(this.checked)"> octets bruts</label></div>
+    <div class="petit" id="tl-msg"></div>
+    <div class="paire" id="tl-etat" style="margin-top:6px"></div>
+    <div id="tl-trames" class="tlm-trames"></div>
+  </div>
+  <div class="carte">
+    <div class="t">Balise QO-100 · 400 bit/s <span id="tl-b-pastille" class="pastille coupe">non décodée</span></div>
+    <div class="petit aide">Décodée dans le cockpit QO-100 (panneau « Balise »), sur un canal des « Décodeurs multiples ».</div>
+    <div class="ligne" style="margin-top:0"><button onclick="vue('qo100'); const b = document.querySelector('#v-qo100 .st-nav button[data-p=&quot;tq-p-balise&quot;]'); if (b) b.click()">Ouvrir le panneau Balise ›</button></div>
+    <div class="paire" id="tl-b-etat" style="margin-top:6px"></div>
+    <div id="tl-b-trames" class="tlm-trames"></div>
   </div>
 </div>
 </div>
@@ -5202,6 +5255,7 @@ function vue(n) {
   if (n === 'agenda') ticVeille();
   if (n === 'aprs') { ticAprs(); ticTrophees(); }
   if (n === 'ft8') ticFt8();
+  if (n === 'tlm' || n === 'qo100') tlmTic(true);
   if (n === 'carres') chargeCarres();
   if (n === 'frise') chargeFrise();
   if (n === 'sked') { prepareSked(); setTimeout(dessineSked); }
@@ -9044,6 +9098,93 @@ async function muMenuChoix(d) {
   if (j && j.ok === false) { txt('mu-menu-msg', j.erreur || 'refusé'); return; }
   m.hidden = true; dessinePano(); dessineLoupe();
 }
+// ---- BPSK telemetry: the QO-100 beacon's panel, FUNcube by the main receiver, the test mode (receive only)
+let TLM = null, tlmBrut = false;
+const tlmVu = {};
+async function tlmTic(force) {
+  const q = !g('v-qo100').hidden && !g('tq-p-balise').hidden, t = !g('v-tlm').hidden;
+  if (!force && !q && !t) return;
+  let j = null;
+  try { j = await (await fetch('api/telemesure')).json(); } catch (x) {}
+  if (j) TLM = j;
+  tlmRend();
+}
+setInterval(tlmTic, 1500);
+async function tlmPost(u) {
+  let j = null;
+  try { j = await (await fetch('api/telemesure/' + u, { method: 'POST' })).json(); } catch (x) {}
+  if (j && j.ok === false) toast(j.erreur || 'refusé');
+  await tlmTic(true);
+  if (typeof muTic === 'function') muTic();
+  return j;
+}
+function tlmBrutRegle(on) { tlmBrut = on; g('tb-brut').checked = on; g('tl-brut').checked = on; for (const k in tlmVu) delete tlmVu[k]; tlmRend(); }
+/** A decoder's figures: frames, failures, the carrier's offset and lock. */
+function tlmEtatHtml(d) {
+  if (!d || !d.etat) return '';
+  const e = d.etat, it = (v, l, c) => '<span><span class="val' + (c ? ' ' + c : '') + '">' + v + '</span> <span class="petit">' + l + '</span></span>';
+  return it(e.trames, 'trames codées') + (d.profil === 'qo100' ? it(e.blocs, 'blocs non codés') + (e.crcFaux ? it(e.crcFaux, 'CRC faux') : '') : '') +
+    it(e.echecs, 'synchros sans trame') + it((e.decalageHz > 0 ? '+' : '') + Math.round(e.decalageHz) + ' Hz', 'porteuse') +
+    it(Math.round(e.verrou * 100) + ' %', 'verrou', e.verrou > 0.5 ? 'cyan' : '') + it(e.manchester ? 'Manchester' : 'NRZ', 'codage');
+}
+/** One frame: when, its kind and errors; the beacon's text or the FUNcube fields; the raw bytes on demand. */
+function tlmTrameHtml(t, complet) {
+  const b = t.essai ? '<span class="tlm-b essai">essai</span>' : t.format === 'p3' ? '<span class="tlm-b ' + (t.valide ? 'ok' : 'faux') + '">' + (t.valide ? 'bloc non codé' : 'CRC faux') + '</span>'
+    : '<span class="tlm-b ok">corrigée</span>';
+  const err = t.format === 'fec' ? t.corriges + ' octets corrigés · ' + t.faux + ' symboles faux' + (t.snr != null ? ' · ' + String(t.snr).replace('.', ',') + ' dB' : '') : '';
+  let h = '<div class="tlm-t"><div class="tlm-h"><b>' + hm(t.t, true) + '</b>' + b + (t.genre ? '<b>' + esc(t.genre) + '</b><span>' + esc(t.sat || '') + '</span>' : t.bloc ? '<b>bloc ' + esc(t.bloc) + '</b>' : '') +
+    '<span style="margin-left:auto">' + err + '</span></div>';
+  if (tlmBrut) h += '<pre class="tlm-pre">' + esc(t.hex.replace(/(.{64})/g, m => m + '\n')) + '</pre>';
+  else if (t.mesures) {
+    if (t.message) h += '<pre class="tlm-pre">« ' + esc(t.message) + ' »</pre>';
+    if (complet) {
+      let gp = '';
+      h += '<div class="tlm-m">' + t.mesures.map(m => (m.g !== gp ? '<div class="tlm-g">' + esc(gp = m.g) + '</div>' : '') + '<span><i>' + esc(m.n) + '</i><b>' + esc(m.v) + '</b></span>').join('') + '</div>';
+    } else {
+      const v = {}; t.mesures.forEach(m => { v[m.n] = m.v; });
+      h += '<div class="petit">Batterie ' + esc(v['Tension batterie'] || '—') + ' · ' + esc(v['Temp. batterie'] || '—') + ' · séquence ' + esc(v['Numéro de séquence'] || '—') + '</div>';
+    }
+  } else if (t.lignes) h += '<pre class="tlm-pre">' + esc((complet ? t.lignes : t.lignes.slice(0, 3)).join('\n')) + '</pre>';
+  return h + '</div>';
+}
+function tlmPose(id, html) { if (tlmVu[id] !== html) { tlmVu[id] = html; g(id).innerHTML = html; } }
+/** The frames of a decoder and of the test of the same kind, newest first. */
+function tlmListe(d, essai, profil) {
+  const l = (d && d.trames ? d.trames : []).concat(essai && essai.profil === profil && essai.trames ? essai.trames : []);
+  return l.sort((a, b) => b.t - a.t);
+}
+function tlmPastille(id, d, canal, attente) {
+  const e = d && d.etat, p = g(id), recent = e && e.derniereMs && Date.now() - e.derniereMs < 60000;
+  const t = !canal ? attente : !e ? 'à l’écoute' : recent ? 'trames reçues' : e.verrou > 0.5 ? 'porteuse tenue' : e.bits ? 'cherche la porteuse' : 'à l’écoute';
+  if (p.textContent !== t) p.textContent = t;
+  p.className = 'pastille ' + (canal ? 'marche' : 'coupe');
+}
+function tlmRend() {
+  const j = TLM;
+  if (!j) return;
+  if (j.absent) { g('tq-p-balise').hidden = true; const bb = document.querySelector('#v-qo100 .st-nav button[data-p="tq-p-balise"]'); if (bb) bb.hidden = true; return; }
+  const b = j.balise || {}, l = j.leo || {}, es = j.essai || {};
+  // The cockpit's panel.
+  g('tb-go').hidden = !!b.canal; g('tb-stop').hidden = !b.canal;
+  g('tb-essai').disabled = !!es.enCours; g('tl-essai').disabled = !!es.enCours;
+  tlmPastille('tb-pastille', b, b.canal, 'non décodée');
+  tlmPastille('tl-b-pastille', b, b.canal, 'non décodée');
+  txt('tb-msg', es.enCours ? 'Essai en cours…' : !b.canal ? 'Un clic pose un canal sur ' + qFmt(b.cadran + 1500) + ' (le récepteur QO-100 doit tourner).' : !b.tourne ? 'En attente de la réception QO-100.'
+    : b.etat && b.etat.bits > 4000 && b.etat.presenceDb < 12 ? 'Porteuse non trouvée : la balise doit tomber à ±600 Hz de 10 489,750 MHz (Calage sur la balise).' : '');
+  tlmPose('tb-etat', tlmEtatHtml(b.etat ? b : (es.profil === 'qo100' ? es : null)));
+  const lb = tlmListe(b, es, 'qo100');
+  tlmPose('tb-trames', lb.slice(0, 8).map((t, i) => tlmTrameHtml(t, i === 0)).join('') || '<div class="petit">Aucune trame pour l’instant (une trame codée toutes les 13 s, des blocs entre elles).</div>');
+  tlmPose('tl-b-etat', tlmEtatHtml(b));
+  tlmPose('tl-b-trames', (b.trames || []).slice(0, 4).map(t => tlmTrameHtml(t, false)).join(''));
+  // FUNcube by the main receiver.
+  if (document.activeElement !== g('tl-on')) g('tl-on').checked = !!l.option;
+  tlmPastille('tl-pastille', l, l.option, 'coupé');
+  txt('tl-msg', es.enCours ? 'Essai en cours…' : l.option ? (l.satellite ? 'Satellite suivi : ' + l.satellite + '. ' : '') + 'Le son du récepteur SDR principal, hors QO-100.' : '');
+  tlmPose('tl-etat', tlmEtatHtml(l.etat ? l : (es.profil === 'funcube' ? es : null)));
+  const ll = tlmListe(l, es, 'funcube');
+  tlmPose('tl-trames', ll.slice(0, 12).map((t, i) => tlmTrameHtml(t, i === 0)).join('') || '<div class="petit">Aucune trame. Accorde le récepteur SDR en BLU sur la descente de télémesure du satellite (AO-73 : 145,935 MHz) et coche la case.</div>');
+}
+
 /** The channels on the waterfall: a dashed line on the dial, the passband underlined, the decoder named. */
 function muMarques(x, X, b, t, h) {
   const l = muVisibles(b, t);

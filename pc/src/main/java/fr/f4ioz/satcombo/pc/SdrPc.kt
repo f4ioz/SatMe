@@ -398,6 +398,8 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
     @Volatile var ecouteVoix: ((ShortArray, Int, Boolean?) -> Unit)? = null
     /** The dongle's sound for the SSTV decoder ([Dsp.AUDIO_RATE]), whatever the Son tab's source. */
     @Volatile var ecouteSstv: ((ShortArray, Int) -> Unit)? = null
+    /** The dongle's sound off QO-100 ([Dsp.AUDIO_RATE]), for the 1200 bit/s BPSK telemetry ([TelemesurePc]). */
+    @Volatile var ecouteTelemesure: ((ShortArray, Int) -> Unit)? = null
     /**
      * « Décodeurs multiples » on QO-100 ([CanauxPc]): more channels from the
      * same IQ, each with its decoder; null or off, nothing more runs.
@@ -815,6 +817,7 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
                     if (!canauxVoix) ecouteVoix?.invoke(pcm, produit,
                         if (settings.sdrSquelchDb > -120 || chaine.toneSquelchHz > 0.0) chaine.squelch.open && !chaine.toneSquelchClosed else null)
                     if (!canauxSstv) ecouteSstv?.let { runCatching { it(pcm, produit) } }
+                    if (!pourQo100()) ecouteTelemesure?.let { runCatching { it(pcm, produit) } }
                     // The browsers listening to the dongle (the page open on another PC).
                     diffusion?.ajoute("sdr", ePcm, eN, Dsp.AUDIO_RATE)
                 }
