@@ -51,6 +51,21 @@ class SonPc {
     @Volatile private var ligne: TargetDataLine? = null
     @Volatile private var enMarche = false
 
+    /**
+     * A source that is not a card but is listed and started as one (the
+     * Icom's receive audio by the network): [demarre] gets the hand-out and
+     * says why it could not start, null when it runs.
+     */
+    class SourceVirtuelle(
+        val nom: String, val description: String,
+        val disponible: () -> Boolean,
+        val demarre: ((ShortArray, Int, Int) -> Unit) -> String?,
+        val arrete: () -> Unit,
+    )
+
+    val virtuelles = CopyOnWriteArrayList<SourceVirtuelle>()
+    @Volatile private var virtuelle: SourceVirtuelle? = null
+
     private fun formats() = listOf(48_000f, 44_100f).map { AudioFormat(it, 16, 1, true, false) }
 
     /** The cards that can record in one of [formats] (the sound server's playback-only entry left out). */
@@ -60,11 +75,23 @@ class SonPc {
             val m = AudioSystem.getMixer(info)
             formats().any { m.isLineSupported(DataLine.Info(TargetDataLine::class.java, it)) }
         }.mapIndexed { i, info -> Appareil(i, info.name, info.description) }
-    }.getOrDefault(emptyList())
+    }.getOrDefault(emptyList()).let { cartes ->
+        cartes + virtuelles.filter { runCatching { it.disponible() }.getOrDefault(false) }
+            .mapIndexed { i, v -> Appareil(cartes.size + i, v.nom, v.description) }
+    }
 
     /** Opens card [nom] and starts handing blocks out. */
     fun demarre(nom: String): Boolean {
         arrete()
+        virtuelles.firstOrNull { it.nom == nom }?.let { v ->
+            _etat.update { Etat(actif = false, appareil = nom, erreur = "connexion…") }
+            val err = runCatching { v.demarre { pcm, n, rate -> if (virtuelle === v) distribue(pcm, n, rate) } }
+                .getOrElse { it.message ?: "erreur" }
+            if (err != null) { runCatching { v.arrete() }; _etat.update { Etat(actif = false, appareil = nom, erreur = err) }; return false }
+            virtuelle = v
+            _etat.update { Etat(actif = true, appareil = nom, rate = fr.f4ioz.satcombo.cat.icomreseau.PosteIcomReseau.SORTIE_HZ) }
+            return true
+        }
         val info = AudioSystem.getMixerInfo().firstOrNull { it.name == nom }
             ?: run { _etat.update { it.copy(erreur = "carte son introuvable : $nom") }; return false }
         val m = AudioSystem.getMixer(info)
@@ -118,10 +145,11 @@ class SonPc {
 
     /** That source is done: nothing feeds the decoders any more. */
     fun rendPar(nom: String) {
-        if (_etat.value.appareil == nom && ligne == null) _etat.update { it.copy(actif = false, niveau = 0f) }
+        if (_etat.value.appareil == nom && ligne == null && virtuelle == null) _etat.update { it.copy(actif = false, niveau = 0f) }
     }
 
     fun arrete() {
+        virtuelle?.let { v -> virtuelle = null; runCatching { v.arrete() } }
         enMarche = false
         ligne?.let { runCatching { it.stop(); it.close() } }
         ligne = null

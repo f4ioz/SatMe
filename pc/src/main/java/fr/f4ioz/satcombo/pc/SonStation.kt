@@ -123,6 +123,9 @@ class SonStation(
     fun posteEntendSstv(): Boolean {
         val e = station.etat.value
         if (!e.catConnecte || e.catSimule || !son.etat.value.actif) return false
+        // The IC-9700's audio by the network is the rig's own, like its USB codec.
+        if (son.etat.value.appareil == fr.f4ioz.satcombo.cat.icomreseau.PosteIcomReseau.NOM_SOURCE)
+            return CartesSonLinux.posteEntend(e.catModele, runCatching { station.stationCat.etat.value.descenteHz }.getOrNull())
         // Asked at every block: the mixers listed again only every ten seconds.
         val (t, lu) = posteLu
         val poste = (if (horloge() - t < 10_000L) lu else carteDuPoste().also { posteLu = horloge() to it }) ?: return false

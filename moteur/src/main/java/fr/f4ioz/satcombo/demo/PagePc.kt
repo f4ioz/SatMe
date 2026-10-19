@@ -1668,6 +1668,11 @@ ${rail()}
       </div>
     </div>
 
+    <div class="carte" id="ip-carte" hidden>
+      <div class="paire" style="margin:0 0 4px"><b>Spectre du poste</b><span class="petit" id="ip-bornes"></span></div>
+      <canvas id="ip-chute" width="480" height="72" style="width:100%;height:72px;display:block;border-radius:6px;background:#000" title="Le spectre de l'IC-9700 (par le réseau) : le plus récent en haut"></canvas>
+    </div>
+
   </div>
 </div>
 </div>
@@ -3140,6 +3145,28 @@ ${rail()}
         <select id="cat-tx-type" style="max-width:110px"><option value="0">FT-817</option><option value="1">IC-705</option></select></div>
       <div class="ligne" id="cat-bande-ligne"><span class="petit">Émission sur la bande</span>
         <select id="cat-bande"><option value="0">A</option><option value="1">B</option></select></div>
+      <div class="ligne" id="cat-liaison-ligne"><span class="petit" style="min-width:34px">Liaison</span>
+        <select id="cat-liaison" onchange="irLiaison()"><option value="USB">USB (câble du poste)</option><option value="RESEAU">Réseau (LAN de l'IC-9700)</option></select></div>
+      <div id="ir-panneau" hidden>
+        <div class="t" style="margin-top:8px">IC-9700 par le réseau <span id="ir-pastille" class="pastille coupe">hors ligne</span></div>
+        <div class="petit aide">Le serveur réseau intégré de l'IC-9700 : trois ports UDP (contrôle 50001, CI-V 50002, audio 50003), une seule session à la fois. SatMe y prend le CI-V (le même pilotage Doppler que par USB) et le son reçu, proposé comme carte son « IC-9700 (réseau) » à l'onglet Son, au SSTV, au FT8, à la phonie et à « Écouter ici ». <b>Réception seulement</b> : aucun son n'est envoyé, la voie d'émission n'est pas demandée et toute commande d'émission CI-V (1C 00 01…) est refusée. À la déconnexion, la session est toujours rendue au poste.</div>
+        <div class="petit aide">Sur le poste : MENU › SET › Network : DHCP (ou une adresse fixe), Network Control sur ON, Network User1 ID et mot de passe, Network Radio Name, ports (50001 par défaut). L'adresse du poste s'affiche dans ce même menu.</div>
+        <div class="petit aide">Identifiant et mot de passe ne voyagent pas en clair : le poste attend une forme codée qu'aucune description publique ne donne. Relève-la une fois dans une trace d'une connexion qui marche (16 octets en hexadécimal chacun) et colle-la sous « Identifiants codés » ; donnée avec l'identifiant et le mot de passe en clair, SatMe apprend le codage de chaque caractère et s'en sert ensuite. Le journal des paquets écrit les en-têtes, sans les identifiants, dans icom-reseau-trace.txt.</div>
+        <div class="petit aide">Son : PCM 16 bits à 16 kHz par défaut ; 8 kHz pour un lien lent. Le 16 bits à 24 kHz n'est pas proposé : le poste l'accepte puis n'envoie rien. Le tampon (40 à 300 ms) remet les paquets dans l'ordre et redemande ceux qui manquent ; plus long, il rattrape plus de pertes au prix du retard.</div>
+        <div class="ligne"><input id="ir-hote" placeholder="adresse IP du poste" style="max-width:150px" title="L'adresse IP de l'IC-9700 (MENU › SET › Network)">
+          <input id="ir-pc" type="number" min="1" max="65535" placeholder="50001" style="width:76px" title="Port de contrôle">
+          <input id="ir-pv" type="number" min="1" max="65535" placeholder="50002" style="width:76px" title="Port CI-V">
+          <input id="ir-pa" type="number" min="1" max="65535" placeholder="50003" style="width:76px" title="Port audio"></div>
+        <div class="ligne"><input id="ir-user" maxlength="16" placeholder="Network User1 ID" autocomplete="off"><input id="ir-mdp" type="password" maxlength="16" placeholder="Mot de passe" autocomplete="new-password"></div>
+        <details id="ir-codes"><summary class="petit">Identifiants codés (relevés dans une trace)</summary>
+          <div class="ligne"><input id="ir-ucode" placeholder="identifiant codé (hex)" autocomplete="off"><input id="ir-mcode" type="password" placeholder="mot de passe codé (hex)" autocomplete="off"></div></details>
+        <div class="ligne"><select id="ir-codec" title="Le son demandé au poste"></select>
+          <span class="petit">tampon</span><input id="ir-latence" type="number" min="40" max="300" step="10" style="width:64px" title="Tampon de réception, ms (40 à 300)"><span class="petit">ms</span></div>
+        <div class="ligne"><label class="petit"><input type="checkbox" id="ir-journal"> journal des paquets</label>
+          <label class="petit" title="Le spectre du poste envoyé par CI-V (27 00), affiché dans l'onglet Ciel ; remis à OFF sur le poste à la déconnexion"><input type="checkbox" id="ir-spectre"> spectre du poste</label>
+          <button onclick="irEnregistre()" style="margin-left:auto">Enregistrer</button></div>
+        <div class="etat" id="ir-etat"></div>
+      </div>
       <div class="ligne">
         <button class="primaire" id="cat-co" data-marche="cat" onclick="catConnecte()">Connecter</button>
         <button id="cat-deco" class="arret" data-arret="cat" hidden onclick="post('api/cat/deconnecter')">Déconnecter</button>
@@ -4438,7 +4465,7 @@ function dessine() {
     g('cat-modele').value = c.simule ? (c.modele === 'TS2000' ? 'TS2000SIM' : 'SIM') : c.modele;
     if (!g('cat-modele').value) g('cat-modele').value = 'IC9700';
     if (ports.length && c.port >= 0 && c.port < ports.length) g('cat-port').value = String(c.port);
-    avertCat();
+    irMontre();
   }
   if (!rotTouche && ports.length && r.port >= 0 && r.port < ports.length) g('rot-port').value = String(r.port);
 }
@@ -4595,14 +4622,94 @@ function avertCat() {
     : m === 'THD72' ? 'TH-D72 en duplex : une bande émet, l’autre reçoit. Son câble demande RTS/DTR levés.'
     : m.indexOf('SIM') >= 0 ? '' : 'Le CAT Icom lève RTS/DTR : choisis bien le port du poste, jamais celui d’un autre poste.');
 }
-g('cat-modele').onchange = avertCat;
+g('cat-modele').onchange = () => { avertCat(); irMontre(); };
 function catConnecte() {
   const m = g('cat-modele').value;
+  if (irReseau()) { post('api/cat/connecter?modele=' + m); return; }
   if (m.indexOf('SIM') < 0 && m !== 'PAIRE' && (!ports.length || g('cat-port').value === '-1')) { alert('Aucun port série choisi.'); return; }
   post('api/cat/connecter?modele=' + m + '&port=' + enc(g('cat-port').value) + '&baud=' + g('cat-baud').value +
        '&portTx=' + enc(g('cat-port-tx').value) + '&rxIc705=' + g('cat-rx-type').value + '&txIc705=' + g('cat-tx-type').value +
        '&bandeTx=' + g('cat-bande').value);
 }
+// ------------------------------------------------------------------ the IC-9700 by the network
+let IR = null;
+const irReseau = () => g('cat-modele').value === 'IC9700' && g('cat-liaison').value === 'RESEAU';
+function irMontre() {
+  const icom = g('cat-modele').value === 'IC9700';
+  g('cat-liaison-ligne').style.display = icom ? '' : 'none';
+  const r = irReseau();
+  g('ir-panneau').hidden = !r;
+  // By the network no serial port nor speed: the rig's LAN only.
+  g('cat-port').parentElement.style.display = r ? 'none' : '';
+  g('cat-baud').style.display = r ? 'none' : '';
+  if (r) txt('cat-avert', 'Par le réseau : aucun port série ouvert, réception seulement (aucune commande d’émission ne part).');
+  else avertCat();
+}
+async function irCharge(remplir) {
+  try { IR = await (await fetch('api/icomreseau')).json(); } catch (x) { IR = null; }
+  if (!IR || IR.absent) { g('cat-liaison-ligne').hidden = true; return; }
+  if (remplir) {
+    g('cat-liaison').value = IR.liaison;
+    g('ir-hote').value = IR.hote; g('ir-pc').value = IR.portControle; g('ir-pv').value = IR.portCiv; g('ir-pa').value = IR.portAudio;
+    g('ir-user').value = IR.utilisateur;
+    g('ir-mdp').value = ''; g('ir-mdp').placeholder = IR.mdp ? 'mot de passe enregistré' : 'Mot de passe';
+    g('ir-ucode').value = IR.utilisateurCode;
+    g('ir-mcode').value = ''; g('ir-mcode').placeholder = IR.mdpCode ? 'enregistré' : 'mot de passe codé (hex)';
+    g('ir-codec').innerHTML = IR.codecs.map(c => '<option value="' + c.id + '">' + esc(c.libelle) + '</option>').join('');
+    g('ir-codec').value = IR.codec; g('ir-latence').value = IR.latence;
+    g('ir-journal').checked = IR.journal; g('ir-spectre').checked = IR.spectre;
+    irMontre();
+  }
+  const co = IR.etat === 'CONNECTE';
+  const p = g('ir-pastille');
+  p.textContent = co ? 'connecté' : IR.etat === 'REFUSE' ? 'refusé' : IR.etat === 'PERDU' ? 'perdu' : IR.etat === 'RECHERCHE' || IR.etat === 'CONNEXION' ? 'connexion…' : 'hors ligne';
+  p.className = 'pastille ' + (co ? 'marche' : 'coupe');
+  const l = [];
+  if (IR.message) l.push(IR.message);
+  if (co) {
+    l.push('latence ' + (IR.latenceMs >= 0 ? IR.latenceMs + ' ms' : '—'));
+    l.push('son : ' + IR.audioRecus + ' paquets, ' + IR.audioPerdus + ' perdus' + (IR.redemandes ? ', ' + IR.redemandes + ' redemandés' : ''));
+    l.push((IR.cat ? 'CAT' : '') + (IR.cat && IR.audio ? ' + ' : '') + (IR.audio ? 'son' : ''));
+  } else if (!IR.pret && IR.manque) l.push(IR.manque);
+  if (IR.refus) l.push('refusé : ' + IR.refus);
+  if (IR.journal && IR.trace) l.push('trace : ' + IR.trace.split(/[\\/]/).pop() + ' (dossier des réglages)');
+  txt('ir-etat', l.filter(x => x).join(' · '));
+}
+function irLiaison() { post('api/icomreseau/reglage?liaison=' + g('cat-liaison').value).then(() => irCharge(false)); irMontre(); }
+async function irEnregistre() {
+  const j = await post('api/icomreseau/reglage?hote=' + enc(v('ir-hote')) + '&pc=' + enc(v('ir-pc')) + '&pv=' + enc(v('ir-pv')) + '&pa=' + enc(v('ir-pa')) +
+    '&utilisateur=' + enc(v('ir-user')) + '&mdp=' + enc(g('ir-mdp').value) + '&utilisateurCode=' + enc(v('ir-ucode')) + '&mdpCode=' + enc(g('ir-mcode').value) +
+    '&codec=' + enc(g('ir-codec').value) + '&latence=' + enc(v('ir-latence')) + '&journal=' + (g('ir-journal').checked ? 1 : 0) +
+    '&spectre=' + (g('ir-spectre').checked ? 1 : 0) + '&liaison=' + g('cat-liaison').value);
+  if (j && j.ok) { await irCharge(true); txt('ir-etat', 'enregistré · ' + g('ir-etat').textContent); }
+}
+// The rig's scope: a waterfall strip, newest on top, while chosen and the network up.
+let ipLu = -1;
+async function irSpectre() {
+  const c = g('ip-carte');
+  const on = IR && IR.spectre && IR.etat === 'CONNECTE';
+  c.hidden = !on;
+  if (!on || g('v-station').hidden) return;
+  let s; try { s = await (await fetch('api/icomreseau/spectre')).json(); } catch (x) { return; }
+  if (!s.points || !s.points.length || s.n === ipLu) return;
+  ipLu = s.n;
+  txt('ip-bornes', (s.bas / 1e6).toFixed(3) + ' – ' + (s.haut / 1e6).toFixed(3) + ' MHz' + (s.hors ? ' · hors bande' : ''));
+  const cv = g('ip-chute'), x = cv.getContext('2d'), w = cv.width, h = cv.height;
+  x.drawImage(cv, 0, 0, w, h - 1, 0, 1, w, h - 1);
+  const ligne = x.createImageData(w, 1);
+  for (let i = 0; i < w; i++) {
+    const v8 = s.points[Math.floor(i * s.points.length / w)] / 255;
+    const k = 4 * i;
+    ligne.data[k] = Math.round(255 * Math.min(1, v8 * 2)); ligne.data[k + 1] = Math.round(255 * Math.max(0, v8 * 2 - 1)); ligne.data[k + 2] = Math.round(400 * v8 * (1 - v8)); ligne.data[k + 3] = 255;
+  }
+  x.putImageData(ligne, 0, 0);
+}
+setInterval(() => {
+  if (!g('v-reglages').hidden && irReseau()) irCharge(false);
+  else if (!g('v-station').hidden && IR && IR.spectre) { irCharge(false); }
+}, 1000);
+setInterval(irSpectre, 300);
+irCharge(true);
 function lienRotor() {
   const l = g('rot-lien').value;
   g('rot-serie').style.display = l === 'GS232' ? '' : 'none';
@@ -12258,7 +12365,7 @@ g('pal').addEventListener('click', e => { if (e.target === g('pal')) g('pal').cl
 g('aide-dlg').addEventListener('click', e => { if (e.target === g('aide-dlg')) g('aide-dlg').close(); });
 setInterval(ticTete, 2000); setInterval(rendTete, 1000); ticTete();
 
-lienRotor(); avertCat();
+lienRotor(); irMontre();
 // The tab from the address (#carnet, a bookmark), else the last one seen.
 // The tabs the server offers (the phone serves some of them): the others hidden, and left if open.
 fetch('api/capacites').then(r => r.ok ? r.json() : null).then(j => {

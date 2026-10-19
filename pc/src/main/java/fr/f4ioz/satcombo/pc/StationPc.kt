@@ -125,6 +125,8 @@ class StationPc(
 
     private val civ = CivController(ports)
     private val posteCiv = PosteCatCiv(civ)
+    /** The IC-9700 on the network (Réglages › Poste › Liaison « Réseau »): the CAT's CI-V and a sound source. */
+    val icomReseau = fr.f4ioz.satcombo.cat.icomreseau.PosteIcomReseau(settings)
     /** The rigs driven as a pair, the phone's drivers: FT-817 / IC-705 (one each side), TS-2000, TH-D72. */
     private val paire = fr.f4ioz.satcombo.cat.Ft817Pair(ports)
     private val postePaire = fr.f4ioz.satcombo.cat.PosteCatPaire(paire)
@@ -952,6 +954,24 @@ class StationPc(
                 val p = liste.getOrNull(c.port)
                 val pTx = liste.getOrNull(c.portTx)
                 fun echec(pourquoi: String) = change { copy(catModele = m, catConnecte = false, catSimule = false, catStatut = "échec : $pourquoi") }
+                // An Icom by its LAN server (Réglages › Poste › Liaison « Réseau »): no serial port opened at all.
+                if (settings.icomLiaison == "RESEAU" && m in ICOMS) {
+                    if (m != "IC9700") { echec("la liaison réseau sert l'IC-9700 seulement (Liaison : USB pour les autres)"); return@withLock }
+                    val mi = ModeleIcom.IC9700
+                    civ.modele = mi
+                    val err = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                        icomReseau.prends(fr.f4ioz.satcombo.cat.icomreseau.PosteIcomReseau.Usage.CAT) }
+                    if (err != null) { echec(err); return@withLock }
+                    civ.radioAddr = icomReseau.statut().adresseCiv.takeIf { it > 0 } ?: mi.adresse
+                    civ.pacingMs = 20L
+                    civ.attach(icomReseau.lienCiv())
+                    clePoste = ""
+                    cheminsCat = emptyList()
+                    change { copy(catModele = m, catConnecte = true, catSimule = false,
+                        catStatut = "${mi.libelle} par le réseau (${settings.icomHote})") }
+                    lanceBoucleCat()
+                    return@withLock
+                }
                 when (m) {
                     "SIM" -> {
                         civ.modele = ModeleIcom.IC9700
@@ -1086,6 +1106,8 @@ class StationPc(
         /** Driven as a pair: each leg its own rig or VFO. */
         val PAIRES = setOf("TS2000", "PAIRE", "THD72")
         val SIMULES = setOf("SIM", "TS2000SIM")
+        /** The Icom family on CI-V. */
+        val ICOMS = setOf("IC9700", "IC9100", "IC910")
         /** The satellite followed, kept between two starts. */
         const val CLE_SATELLITE = "pc_satellite"
         const val CLE_FAVORIS = "pc_favoris"
