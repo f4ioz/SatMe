@@ -91,6 +91,8 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
 
     /** Spoken announcements (set before [demarre]); their sentences ride the live stream. */
     @Volatile var annonces: AnnoncesPc? = null
+    /** « Traduction parlée » (off unless chosen). */
+    @Volatile var parole: ParolePc? = null
 
     /** The « Montage » page: the station's chain, its drawing lit by what happens (set before [demarre]). */
     @Volatile var montage: MontagePc? = null
@@ -202,6 +204,7 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
         var cwVersion = -1L; var cwMs = 0L
         // The page reconnecting (a tab changed) says the last one it had: none lost between two streams.
         var annonceVu = q["an"]?.toLongOrNull()?.takeIf { it >= 0 } ?: annonces?.dernierSeq ?: -1L
+        var paroleVu = q["pa"]?.toLongOrNull()?.takeIf { it >= 0 } ?: parole?.dernierSeq ?: -1L
         while (true) {
             val maintenant = System.currentTimeMillis()
             if ("etat" in sujets) {
@@ -248,6 +251,15 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                     // Old news is not said.
                     if (maintenant - a.getLong("ms") > 20_000L) continue
                     if (!envoie("annonce", a.toString())) return
+                }
+            }
+            // « Traduction parlée »: each over said once, for the pages that play it.
+            val pa = parole
+            if ("parole" in sujets && pa != null && pa.dernierSeq != paroleVu) {
+                for (a in pa.depuis(paroleVu)) {
+                    paroleVu = a.getLong("seq")
+                    if (maintenant - a.getLong("ms") > ParolePc.PERIME_MS) continue
+                    if (!envoie("parole", a.toString())) return
                 }
             }
             // A comment now and then: a page gone is noticed.
@@ -1647,6 +1659,23 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
 
     private fun phonie(r: RequeteHttp.Requete, chemin: String, q: Map<String, String>, sortie: OutputStream, p: PhoniePc) {
         val json = "application/json; charset=utf-8"
+        if (chemin == "/api/phonie/parole" || chemin.startsWith("/api/phonie/parole/")) {
+            val pa = parole ?: return envoie(sortie, "200 OK", json, JSONObject().put("present", false).toString().toByteArray())
+            if (r.methode == "POST") {
+                val res = runCatching { pa.action(q) }.getOrElse { JSONObject().put("ok", false).put("erreur", it.message ?: "erreur") }
+                return envoie(sortie, "200 OK", json, res.toString().toByteArray())
+            }
+            when (chemin) {
+                "/api/phonie/parole" -> envoie(sortie, "200 OK", json, pa.json().toString().toByteArray())
+                "/api/phonie/parole/installation" -> envoie(sortie, "200 OK", json, pa.jsonInstall().toString().toByteArray())
+                "/api/phonie/parole/son" -> {
+                    val w = q["seq"]?.toLongOrNull()?.let { pa.son(it) } ?: return envoie(sortie, "404 Not Found", "text/plain", ByteArray(0))
+                    envoie(sortie, "200 OK", "audio/wav", w)
+                }
+                else -> envoie(sortie, "404 Not Found", "text/plain", ByteArray(0))
+            }
+            return
+        }
         if (r.methode == "POST") {
             val res = runCatching { p.action(chemin, q) }.getOrElse { JSONObject().put("ok", false).put("erreur", it.message ?: "erreur") }
             envoie(sortie, "200 OK", json, res.toString().toByteArray()); return

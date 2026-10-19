@@ -1762,6 +1762,18 @@ ${rail()}
           <select id="ph-source" style="flex:none" onchange="phRegle('source=' + this.value)"><option value="auto">clé SDR si elle joue, sinon carte son</option><option value="carte">carte son</option><option value="sdr">clé SDR</option></select>
           <label class="petit"><input type="checkbox" id="ph-trad" onchange="phRegle('traduire=' + (this.checked ? 1 : 0))"> Traduire en</label>
           <select id="ph-cible" style="flex:none" onchange="phRegle('cible=' + this.value)"><option value="fr">français</option><option value="en">anglais</option><option value="de">allemand</option><option value="es">espagnol</option><option value="it">italien</option><option value="nl">néerlandais</option><option value="pl">polonais</option><option value="pt">portugais</option><option value="whisper">anglais par Whisper (modèle large-v3)</option></select></div>
+        <div class="ligne" id="ph-pa" hidden><label class="petit"><input type="checkbox" id="ph-pa-on" onchange="paRegle('on=' + (this.checked ? 1 : 0))"> 🔊 Traduction parlée</label>
+          <span class="petit" style="color:var(--ambre)">voix de synthèse</span>
+          <div class="aide">La traduction de chaque passage dite par une <b>voix de synthèse</b> (Piper, sur ce PC), sur le haut-parleur du PC (le son reçu baissé pendant ce temps) ou dans ce navigateur. Réception seulement : cette voix n'est jamais émise. Intonation « proche » : vitesse, hauteur moyenne, montées et descentes de chaque phrase et volume mesurés sur la voix entendue, appliqués doucement à la voix de synthèse ; « voix clonée » : son timbre en plus (à installer, lourd). Deux passages au plus en attente ; un passage entendu il y a plus de 30 s n'est plus dit. Voix et installation : Réglages › Phonie → texte.</div>
+          <button id="ph-pa-plus" style="padding:3px 9px" title="Voix, intonation, sortie, volume" onclick="paPlus()">⚙</button>
+          <span id="ph-pa-corps" style="display:none">
+          <select id="ph-pa-voix" style="flex:none" onchange="paRegle('voix=' + enc(this.value))"></select>
+          <select id="ph-pa-into" style="flex:none" title="Intonation" onchange="paRegle('intonation=' + this.value)"><option value="neutre">intonation neutre</option><option value="proche">intonation proche</option><option value="clonee">voix clonée</option></select>
+          <select id="ph-pa-sortie" style="flex:none" onchange="paRegle('sortie=' + this.value)"><option value="pc">haut-parleur du PC</option><option value="navigateur">ce navigateur</option><option value="deux">PC et navigateur</option></select>
+          <input type="range" id="ph-pa-vol" min="0" max="100" value="80" style="width:70px;flex:none;min-width:0" title="Volume de la voix" onchange="paRegle('volume=' + this.value)">
+          <label class="petit"><input type="checkbox" id="ph-pa-etr" onchange="paRegle('etrangere=' + (this.checked ? 1 : 0))"> langues étrangères seulement</label>
+          <button style="padding:3px 9px" onclick="paRegle('essai=1')" title="Une phrase dans la voix choisie">Essayer</button></span>
+          <span class="petit" id="ph-pa-etat" style="flex-basis:100%" hidden></span></div>
         <div id="ph-fil" class="ph-fil"></div>
         <div class="petit aide" style="margin-top:4px">Un indicatif trouvé : un clic prépare le contact dans le carnet, avec le carré et le report entendus. Plus le texte est pâle, moins le moteur est sûr.</div>
       </div>
@@ -3404,6 +3416,19 @@ ${rail()}
       <div class="ligne"><button class="primaire" id="phr-tr-installe" onclick="phrInstalleTraduction()">Installer la traduction</button></div>
       <div class="etat" id="phr-tr-etape"></div>
       <pre id="phr-tr-journal" hidden style="max-height:160px;overflow:auto;font-size:11px;background:#0E1720;padding:6px;border-radius:8px;white-space:pre-wrap;word-break:break-all;margin:6px 0 0"></pre>
+      <div id="phr-pa" hidden>
+      <div class="t" style="margin-top:12px">Traduction parlée</div>
+      <div class="petit aide">La traduction dite par une voix de synthèse, sur ce PC : Piper (piper-tts, licence GPL 3) et une voix par langue (modèles de rhasspy/piper-voices, données sous licence CC0, CC-BY ou domaine public, indiquée à côté de chacune). Réception seulement : la voix de synthèse n'est jamais émise. Sans Piper : eSpeak NG ou speech-dispatcher s'ils sont sur ce PC, sinon la voix du navigateur. « Voix clonée » : un convertisseur de timbre (OpenVoice V2, licence MIT) rapproche la voix de synthèse du timbre de la personne entendue, à partir du passage lui-même ; il tourne sur le processeur (torch), dans son propre environnement Python. Rien n'est envoyé sur Internet : seuls les boutons ci-dessous téléchargent.</div>
+      <div class="petit" id="phr-pa-etat"></div>
+      <div id="phr-pa-voix" style="display:flex;flex-wrap:wrap;gap:4px 12px;margin-top:4px"></div>
+      <div class="ligne"><button class="primaire" id="phr-pa-installe" onclick="phrInstalleVoix()">Installer la voix</button><button onclick="phrPaRegle('verifie=1')">Vérifier</button></div>
+      <div class="etat" id="phr-pa-etape"></div>
+      <pre id="phr-pa-journal" hidden style="max-height:160px;overflow:auto;font-size:11px;background:#0E1720;padding:6px;border-radius:8px;white-space:pre-wrap;word-break:break-all;margin:6px 0 0"></pre>
+      <div class="petit" id="phr-cl-etat" style="margin-top:8px"></div>
+      <div class="ligne"><button id="phr-cl-installe" onclick="phrInstalleClone()">Installer la voix clonée</button><button id="phr-cl-retire" onclick="if (confirm('Retirer la voix clonée (son environnement et son modèle) ?')) phrPaRegle('retireClone=1')">Retirer</button></div>
+      <div class="etat" id="phr-cl-etape"></div>
+      <pre id="phr-cl-journal" hidden style="max-height:160px;overflow:auto;font-size:11px;background:#0E1720;padding:6px;border-radius:8px;white-space:pre-wrap;word-break:break-all;margin:6px 0 0"></pre>
+      </div>
     </div>
     <div class="carte" id="carteTelephone">
       <div class="t">Téléphone</div>
@@ -3785,6 +3810,7 @@ async function ticPhonie(force) {
   if (j.bulles.length) { phListe = phListe.concat(j.bulles).slice(-80); phDernier = j.bulles[j.bulles.length - 1].id; neuf = true; }
   if (phListe.length && phListe[0].id < j.premier) { phListe = phListe.filter(b => b.id >= j.premier); neuf = true; }
   rendPhonie(neuf);
+  if (j.on) ticParole(); else rendParole();
 }
 function rendPhonie(neuf) {
   const j = PH; if (!j) return;
@@ -3869,8 +3895,9 @@ async function chargePhonieReglages() {
   if (pre.textContent !== t) { pre.textContent = t; if (bas) pre.scrollTop = pre.scrollHeight; }
   const tr = j.traduction;
   if (tr) phrTraduction(tr);
+  const pa = await chargeParoleReglages();
   clearTimeout(phrSuivi);
-  if ((i.enCours || j.verificationEnCours || (tr && tr.installation.enCours)) && !g('v-reglages').hidden) phrSuivi = setTimeout(chargePhonieReglages, 1000);
+  if ((i.enCours || j.verificationEnCours || (tr && tr.installation.enCours) || pa) && !g('v-reglages').hidden) phrSuivi = setTimeout(chargePhonieReglages, 1000);
 }
 // The translation: the language written, the languages heard (their pairs, sizes), its installation.
 function phrTraduction(tr) {
@@ -3910,6 +3937,138 @@ async function phrInstalle() {
   const m = g('phr-modele').value, t = (PHR && PHR.modeles.find(x => x.nom === m) || {}).taille || '';
   if (!confirm('Télécharger et installer le moteur de transcription ?\n\nfaster-whisper depuis PyPI (environ 150 Mo, et environ 1,3 Go de plus avec une carte NVIDIA), puis le modèle « ' + m + ' » (' + t + ') depuis Hugging Face, dans le dossier stt/ de SatMe.')) return;
   await post('api/phonie/moteur?installe=1');
+  setTimeout(chargePhonieReglages, 300);
+}
+// « Traduction parlée »: the translation said by a synthetic voice (this PC's speaker, this browser, or both); never transmitted.
+let PA = null, paSeq = -1, paFile = [], paJoue = false;
+async function ticParole() {
+  let j = null;
+  try { j = await (await fetch('api/phonie/parole')).json(); } catch (x) {}
+  PA = j && j.present ? j : null;
+  rendParole();
+  // The first look sets where this page starts; afterwards, without the live stream, the ones missed are taken here.
+  if (PA) { if (paSeq < 0) paSeq = PA.seq; else if (!fluxOk) (PA.dites || []).slice().reverse().forEach(paRecoit); }
+}
+function rendParole() {
+  const j = PA, l = g('ph-pa');
+  l.hidden = !j || !PH || !PH.on;
+  if (l.hidden) return;
+  if (document.activeElement !== g('ph-pa-on')) g('ph-pa-on').checked = j.on;
+  // The settings folded unless asked (the transcript keeps its room in the QO-100 dock).
+  const plus = j.on && annLs('paPlus', '0') === '1';
+  g('ph-pa-corps').style.display = plus ? 'contents' : 'none';
+  g('ph-pa-plus').hidden = !j.on; g('ph-pa-plus').classList.toggle('actif', plus);
+  const s = g('ph-pa-voix'), h = '<option value="auto">voix : selon la voix entendue</option>' + j.voixDispo.map(x => '<option value="' + esc(x.id) + '">' + esc(x.nom) + '</option>').join('');
+  if (s.dataset.h !== h) { s.innerHTML = h; s.dataset.h = h; }
+  if (document.activeElement !== s) s.value = j.voixDispo.some(x => x.id === j.voix) ? j.voix : 'auto';
+  if (document.activeElement !== g('ph-pa-into')) g('ph-pa-into').value = j.intonation;
+  g('ph-pa-into').querySelector('[value=clonee]').disabled = !j.clonage;
+  if (document.activeElement !== g('ph-pa-sortie')) g('ph-pa-sortie').value = j.sortie;
+  if (document.activeElement !== g('ph-pa-vol')) g('ph-pa-vol').value = j.volume;
+  g('ph-pa-etr').checked = j.etrangere;
+  const d = (j.dites || [])[0];
+  const moteur = j.piper ? '' : j.espeak ? 'sans Piper : eSpeak NG' : j.spd ? 'sans Piper : speech-dispatcher' : 'sans Piper : la voix du navigateur';
+  const etat = { 'synthèse': 'synthèse…', parle: 'parle…', erreur: 'en panne' }[j.etat] || '';
+  const et = !j.on ? '' : [etat, j.erreur, moteur, !j.voixDispo.length && j.piper ? 'aucune voix Piper pour « ' + (PH_CIBLES[j.cible] || j.cible) + ' » : Réglages › Phonie → texte' : '',
+    d && !d.essai ? 'dernière : ' + (d.voix || d.moteur) + (d.latence ? ', prête ' + (d.latence / 1000).toFixed(1).replace('.', ',') + ' s après la fin du passage' : '') : '',
+    j.sautees || j.perimees ? (j.sautees + j.perimees) + ' passage(s) non dit(s), en retard' : '',
+    j.intonation === 'clonee' && !j.clonage ? 'voix clonée non installée : intonation proche' : ''].filter(x => x).join(' · ');
+  txt('ph-pa-etat', et); g('ph-pa-etat').hidden = !et;
+}
+function paPlus() { annLsPose('paPlus', annLs('paPlus', '0') === '1' ? '0' : '1'); rendParole(); }
+async function paRegle(q) {
+  const j = await post('api/phonie/parole?' + q);
+  if (j && j.ok === false && j.erreur) toast(j.erreur);
+  ticParole();
+  if (q === 'essai=1') { setTimeout(ticParole, 1500); setTimeout(ticParole, 4000); }
+}
+/** One said: played here when this page is an output (two waiting at most, none older than 30 s). */
+function paRecoit(a) {
+  if (!a || a.seq <= paSeq) return;
+  paSeq = a.seq;
+  if (!a.navigateur) return;
+  a.recu = Date.now();
+  paFile.push(a);
+  while (paFile.length > 2) paFile.shift();
+  paSuivante();
+}
+function paSuivante() {
+  if (paJoue || !paFile.length) return;
+  const a = paFile.shift();
+  if (Date.now() - a.recu > 30000) return paSuivante();
+  paJoue = true;
+  const fin = () => { if (!paJoue) return; paJoue = false; paBaisse(false); paSuivante(); };
+  paBaisse(true);
+  if (a.audio) {
+    const au = new Audio('api/phonie/parole/son?seq=' + a.seq);
+    au.onended = fin; au.onerror = fin;
+    au.play().catch(fin);
+  } else if (window.speechSynthesis) {
+    // No voice on the PC: this browser's own, of the language, on this machine only.
+    const vx = speechSynthesis.getVoices().filter(x => x.localService && x.lang.toLowerCase().startsWith(a.langue));
+    if (!vx.length) return fin();
+    const u = new SpeechSynthesisUtterance(a.texte);
+    u.voice = vx[0]; u.lang = vx[0].lang; u.rate = a.vitesse || 1; u.pitch = a.hauteur || 1;
+    u.onend = fin; u.onerror = fin;
+    speechSynthesis.speak(u);
+  } else fin();
+}
+/** The receiver heard here (« Écouter ici ») lowered while the voice speaks. */
+function paBaisse(on) { if (ecGain) ecGain.gain.value = v('ec-vol') / 100 * (on ? 0.25 : 1); }
+// Its installation (Réglages › Phonie → texte).
+let PAI = null;
+async function chargeParoleReglages() {
+  let j = null;
+  try { j = await (await fetch('api/phonie/parole/installation')).json(); } catch (x) {}
+  g('phr-pa').hidden = !j || !j.voix;
+  if (g('phr-pa').hidden) return false;
+  PAI = j;
+  const ver = j.verification, box = g('phr-pa-voix');
+  const l = j.voix.filter(x => x.langue === j.cible || x.installee);
+  const cle = l.map(x => x.fichier + x.installee).join() + j.cible;
+  if (box.dataset.cle !== cle) {
+    box.dataset.cle = cle;
+    const aucune = !l.some(x => x.installee);
+    box.innerHTML = l.map(x => '<label class="petit" title="Licence des données : ' + esc(x.licence) + '"><input type="checkbox" value="' + esc(x.fichier) + '"' +
+      (x.installee ? ' checked disabled' : aucune && x.langue === j.cible && /siwis|gilles/.test(x.fichier) ? ' checked' : '') + '> ' + esc(x.noms) + ' <span style="color:' +
+      (x.installee ? 'var(--vert)' : 'var(--gris)') + '">' + (x.installee ? '✓ installée' : '≈ ' + x.mo + ' Mo') + '</span>' +
+      (x.installee ? ' <a href="#" onclick="phrPaRegle(\'retireVoix=' + esc(x.fichier) + '\');return false" title="Retirer">✕</a>' : '') + '</label>').join('') ||
+      '<span class="petit">Pas de voix Piper pour cette langue : eSpeak NG, speech-dispatcher ou le navigateur parleront.</span>';
+  }
+  txt('phr-pa-etat', 'Voix de synthèse pour « ' + (PH_CIBLES[j.cible] || j.cible) + ' » (la langue « Traduire en » ci-dessus). ' +
+    (ver ? (ver.ok ? 'piper-tts ' + ver.piper + ' · voix présentes : ' + (ver.voix.join(', ') || 'aucune') : (ver.erreur || 'Piper absent')) : '') +
+    (!j.python ? ' Installer d’abord le moteur ci-dessus.' : ''));
+  const i = j.installation;
+  g('phr-pa-installe').disabled = i.enCours || !j.python;
+  txt('phr-pa-etape', i.erreur ? 'Échec : ' + i.erreur : i.enCours ? 'En cours : ' + i.etape + (i.mo ? ' · ' + Math.round(i.mo) + ' Mo' : '') :
+    i.fini ? 'Voix installée : la case « 🔊 Traduction parlée » de la fenêtre Phonie → texte la met en marche.' : '');
+  phrJournal('phr-pa-journal', i.lignes);
+  const c = j.clonage, ci = c.installation;
+  txt('phr-cl-etat', 'Voix clonée (facultatif, lourd) : environ 330 Mo à télécharger (torch pour le processeur, le convertisseur et son modèle de 131 Mo), environ 1 Go sur le disque, dans ' + c.venv + '. ' +
+    (c.installe ? 'Installée' + (c.mo ? ' (' + Math.round(c.mo) + ' Mo)' : '') + (c.verification && c.verification.torch ? ' · torch ' + c.verification.torch : '') + '.' : 'Non installée.') +
+    ' Environ 1 à 2 s de calcul par passage de 10 s.');
+  g('phr-cl-installe').disabled = ci.enCours || c.installe; g('phr-cl-retire').hidden = !c.installe || ci.enCours;
+  txt('phr-cl-etape', ci.erreur ? 'Échec : ' + ci.erreur : ci.enCours ? 'En cours : ' + ci.etape + (ci.mo ? ' · ' + Math.round(ci.mo) + ' Mo' : '') : ci.fini ? 'Voix clonée installée : choisir « voix clonée » dans la fenêtre Phonie → texte.' : '');
+  phrJournal('phr-cl-journal', ci.lignes);
+  return i.enCours || ci.enCours;
+}
+function phrJournal(id, lignes) {
+  const pre = g(id), bas = pre.scrollTop + pre.clientHeight >= pre.scrollHeight - 8, t = lignes.join('\n');
+  pre.hidden = !lignes.length;
+  if (pre.textContent !== t) { pre.textContent = t; if (bas) pre.scrollTop = pre.scrollHeight; }
+}
+async function phrPaRegle(q) { await post('api/phonie/parole?' + q); setTimeout(chargePhonieReglages, 300); }
+async function phrInstalleVoix() {
+  const l = Array.from(g('phr-pa-voix').querySelectorAll('input:checked:not(:disabled)')).map(x => x.value);
+  const mo = (PAI ? PAI.voix : []).filter(x => l.includes(x.fichier)).reduce((s, x) => s + x.mo, 0);
+  if (!confirm('Installer la voix de synthèse ?\n\npiper-tts depuis PyPI (environ 35 Mo) dans l’environnement du moteur' + (l.length ? ', puis ' + l.join(', ') + ' depuis Hugging Face (environ ' + mo + ' Mo)' : '') +
+    ', dans le dossier stt/ de SatMe.\n\nEnsuite, rien ne part sur Internet : la voix est faite sur ce PC.')) return;
+  await post('api/phonie/parole?installeVoix=' + enc(l.join(',')));
+  setTimeout(chargePhonieReglages, 300);
+}
+async function phrInstalleClone() {
+  if (!confirm('Installer la voix clonée ?\n\nUn environnement Python à part (stt/clonage), torch pour le processeur depuis download.pytorch.org (environ 200 Mo), le convertisseur de timbre OpenVoice V2 (licence MIT) depuis GitHub, puis son modèle (131 Mo) depuis Hugging Face. Environ 1 Go sur le disque.\n\nEnsuite, rien ne part sur Internet : le passage entendu reste sur ce PC.')) return;
+  await post('api/phonie/parole?installeClone=1');
   setTimeout(chargePhonieReglages, 300);
 }
 // APRS's game: the trophies, and a cheer when one falls (whatever the tab).
@@ -4850,7 +5009,7 @@ function sujetsFlux() {
   const sdr = !g('v-sdr').hidden;
   // « Mode distant »: CW only where it shows; the spectrum 5 times a second, 256 points at most, one byte each.
   const cw = !MD || !g('v-carnet').hidden || !g('v-qo100').hidden;
-  return 'etat,son,' + (cw ? 'cw,' : '') + 'annonce' + (sdr || !g('v-carnet').hidden ? ',sdr' : '') + (sdr ? ',spectre&span=' + rSpan + '&dx=' + rDx + '&n=' +
+  return 'etat,son,' + (cw ? 'cw,' : '') + 'annonce,parole' + (sdr || !g('v-carnet').hidden ? ',sdr' : '') + (sdr ? ',spectre&span=' + rSpan + '&dx=' + rDx + '&n=' +
     Math.min(MD ? 256 : 1024, Math.max(128, g('r-spectre').clientWidth || 512)) + (MD ? '&fps=5&q=8' : '') : '');
 }
 /** A spectrum sent in bytes (« Mode distant »): its levels back in dB. */
@@ -4866,8 +5025,9 @@ function majFlux() {
   if (flux && t === fluxSujets && flux.readyState !== 2) return;
   if (flux) flux.close();
   fluxSujets = t; fluxOk = false;
-  flux = new EventSource('api/flux?t=' + t + (annSeq >= 0 ? '&an=' + annSeq : ''));
+  flux = new EventSource('api/flux?t=' + t + (annSeq >= 0 ? '&an=' + annSeq : '') + (paSeq >= 0 ? '&pa=' + paSeq : ''));
   flux.addEventListener('annonce', ev => { const a = JSON.parse(ev.data); if (a.seq <= annSeq) return; annSeq = a.seq; parleAnn(a); });
+  flux.addEventListener('parole', ev => paRecoit(JSON.parse(ev.data)));
   flux.addEventListener('etat', ev => { fluxOk = true; E = JSON.parse(ev.data); dessine(); });
   flux.addEventListener('son', ev => { S = JSON.parse(ev.data); rendSon(); });
   flux.addEventListener('cw', ev => { CW = JSON.parse(ev.data); rendCw(); });

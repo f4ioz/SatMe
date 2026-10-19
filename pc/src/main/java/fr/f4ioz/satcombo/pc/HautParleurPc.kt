@@ -104,3 +104,16 @@ class HautParleurPc(private val rate: Int, private val ouvre: () -> SourceDataLi
         }
     }
 }
+
+/**
+ * The speaker's level asked by several voices at once (the announcements,
+ * the spoken translation): the lowest wins, 1 again only when all are done.
+ */
+class BaisseSon(private val applique: (Float) -> Unit) {
+    private val niveaux = HashMap<String, Float>()
+
+    @Synchronized fun regle(qui: String, niveau: Float) {
+        if (niveau >= 1f) niveaux.remove(qui) else niveaux[qui] = niveau.coerceAtLeast(0f)
+        applique(niveaux.values.minOrNull() ?: 1f)
+    }
+}
