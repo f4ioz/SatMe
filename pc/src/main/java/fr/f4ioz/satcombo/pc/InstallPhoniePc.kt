@@ -34,12 +34,18 @@ class InstallPhoniePc(val dossier: File, private val windows: Boolean = OutilsPc
     fun python(choisi: String): String? = choisi.trim().takeIf { it.isNotEmpty() } ?: pythonVenv().takeIf { it.isFile }?.absolutePath
 
     /** The helper written next to the environment (again when SatMe-PC brings a new one). */
-    fun ecritScript(): File {
-        val contenu = InstallPhoniePc::class.java.getResourceAsStream("/phonie/satme_phonie.py")?.use { it.readBytes() }
-            ?: throw IllegalStateException("satme_phonie.py manque dans SatMe-PC")
+    fun ecritScript(): File = ecrit(script)
+
+    /** « Traduction parlée »'s helper (synthetic voice, tone colour converter). */
+    val scriptVoix = File(venv, "satme_voix.py")
+    fun ecritScriptVoix(): File = ecrit(scriptVoix)
+
+    private fun ecrit(f: File): File {
+        val contenu = InstallPhoniePc::class.java.getResourceAsStream("/phonie/" + f.name)?.use { it.readBytes() }
+            ?: throw IllegalStateException(f.name + " manque dans SatMe-PC")
         venv.mkdirs()
-        if (!script.isFile || !script.readBytes().contentEquals(contenu)) script.writeBytes(contenu)
-        return script
+        if (!f.isFile || !f.readBytes().contentEquals(contenu)) f.writeBytes(contenu)
+        return f
     }
 
     /** What the helper's process needs: UTF-8, no buffering, never the network. */
@@ -246,6 +252,141 @@ class InstallPhoniePc(val dossier: File, private val windows: Boolean = OutilsPc
         return File(traduction, paire).takeIf { it.isDirectory }?.deleteRecursively() ?: false
     }
 
+    // ------------------------------------------------------------------ « Traduction parlée »
+
+    /** The synthetic voices' models (Piper's .onnx and .onnx.json). */
+    val voix = File(venv, "voix")
+    /** The tone colour converter: an environment of its own (torch on the processor), its model in `modele/`. */
+    val clonage = File(venv, "clonage")
+    val modeleClone = File(clonage, "modele")
+
+    fun pythonClonage(): File = if (windows) File(clonage, "Scripts/python.exe") else File(clonage, "bin/python")
+
+    /** The voice models present (their file names, without .onnx). */
+    fun voixPresentes(): List<String> = (voix.listFiles() ?: emptyArray())
+        .filter { it.name.endsWith(".onnx") && File(voix, it.name + ".json").isFile }.map { it.name.removeSuffix(".onnx") }.sorted()
+
+    /** The converter's environment and model are there. */
+    fun clonageInstalle(): Boolean = pythonClonage().isFile && File(modeleClone, "checkpoint.pth").isFile && File(modeleClone, "config.json").isFile
+
+    /** The last `--verifie` of the voice helper (piper's version, voices), null before one. */
+    @Volatile var verificationVoix: JSONObject? = null
+        private set
+    @Volatile var verificationClone: JSONObject? = null
+        private set
+
+    fun verifieVoix(python: String?) {
+        if (python == null) { verificationVoix = JSONObject().put("ok", false).put("erreur", "moteur non installé"); return }
+        thread(isDaemon = true, name = "satme-voix-verifie") {
+            verificationVoix = executeCourt(listOf(python, ecritScriptVoix().absolutePath, "--verifie", "--voix", voix.absolutePath), 60, environnement())
+                ?.lineSequence()?.mapNotNull { runCatching { JSONObject(it) }.getOrNull() }?.lastOrNull()
+                ?: JSONObject().put("ok", false).put("erreur", "piper-tts absent")
+            if (pythonClonage().isFile) verificationClone = executeCourt(listOf(pythonClonage().absolutePath, ecritScriptVoix().absolutePath,
+                "--verifie-clone", "--clone", modeleClone.absolutePath), 120, environnement())
+                ?.lineSequence()?.mapNotNull { runCatching { JSONObject(it) }.getOrNull() }?.lastOrNull()
+        }
+    }
+
+    private val suiviVoix = Suivi()
+    private val suiviClone = Suivi()
+    val installationVoix: Installation get() = suiviVoix.etat
+    val installationClone: Installation get() = suiviClone.etat
+
+    /**
+     * Installs the synthetic voice: piper-tts with pip in the engine's
+     * environment (onnxruntime is already there with faster-whisper), then
+     * the voice models [ids] (files, `fr_FR-siwis-medium`) into `stt/voix/`.
+     */
+    fun installeVoix(python: String?, ids: List<String>, apres: () -> Unit = {}) {
+        if (!suiviVoix.commence()) return
+        thread(isDaemon = true, name = "satme-voix-installe") {
+            val s = suiviVoix
+            try {
+                val py = python ?: throw IllegalStateException("installer d'abord le moteur (bouton « Installer le moteur »)")
+                s.etape("installation de piper-tts (environ 35 Mo)")
+                s.lance(listOf(py, "-m", "pip", "install", "--disable-pip-version-check", "--progress-bar", "off", "piper-tts"))
+                val manquent = ids.filter { it !in voixPresentes() }
+                if (manquent.isNotEmpty()) {
+                    s.etape("téléchargement des voix " + manquent.joinToString(", ") + " (environ ${manquent.sumOf { m -> fr.f4ioz.satcombo.phonie.ParoleTraduite.VOIX.firstOrNull { it.fichier == m }?.mo ?: 65 }} Mo)")
+                    voix.mkdirs()
+                    s.lance(listOf(py, ecritScriptVoix().absolutePath, "--installe-voix", "--voix", voix.absolutePath, "--liste", manquent.joinToString(",")),
+                        environnement(horsLigne = false)) { l ->
+                        val j = runCatching { JSONObject(l) }.getOrNull() ?: return@lance false
+                        when {
+                            j.has("erreur") -> { s.note(j.optString("erreur")); true }
+                            j.has("progres") -> { s.mo(j.optDouble("mo")); true }
+                            j.has("voix") && !j.optBoolean("fini") -> { s.note(j.optString("voix") + " : installée (${j.optDouble("mo")} Mo)"); true }
+                            else -> j.optBoolean("fini")
+                        }
+                    }
+                }
+                s.note("voix présentes : " + voixPresentes().joinToString(", "))
+                verifieVoix(py)
+                s.fini()
+                apres()
+            } catch (e: Exception) { s.echec(e) }
+        }
+    }
+
+    /** Removes one voice model. */
+    fun retireVoix(id: String): Boolean {
+        if (!id.matches(Regex("[a-z]{2,3}_[A-Z]{2}-[\\p{L}0-9_]+-(x_low|low|medium|high)"))) return false
+        return listOf(File(voix, "$id.onnx"), File(voix, "$id.onnx.json")).map { it.delete() }.any { it }
+    }
+
+    /**
+     * Installs the « voix clonée »: an environment `stt/clonage/` (a Python
+     * 3.9+ of the system), torch for the processor, the tone colour
+     * converter's code (OpenVoice V2, MIT, at a fixed commit, without its
+     * many extras), then its model (131 Mo) from Hugging Face.
+     */
+    fun installeClone(apres: () -> Unit = {}) {
+        if (!suiviClone.commence()) return
+        thread(isDaemon = true, name = "satme-clone-installe") {
+            val s = suiviClone
+            try {
+                val py = pythonClonage()
+                if (!py.isFile) {
+                    s.etape("création de l'environnement ${clonage.absolutePath}")
+                    val (sys, version) = pythonSysteme() ?: throw IllegalStateException("Python 3.9 ou plus récent introuvable")
+                    s.note(version)
+                    s.lance(sys + listOf("-m", "venv", clonage.absolutePath))
+                    if (!py.isFile) throw IllegalStateException("l'environnement n'a pas été créé (sous Debian/Ubuntu : sudo apt install python3-venv)")
+                }
+                val pip = listOf(py.absolutePath, "-m", "pip", "install", "--disable-pip-version-check", "--progress-bar", "off")
+                s.etape("installation de torch pour le processeur (environ 200 Mo à télécharger)")
+                s.lance(pip + listOf("torch", "--index-url", TORCH_CPU))
+                s.etape("installation du convertisseur de timbre")
+                s.lance(pip + listOf("numpy"))
+                s.lance(pip + listOf("--no-deps", CONVERTISSEUR))
+                s.etape("téléchargement du modèle du convertisseur (131 Mo)")
+                modeleClone.mkdirs()
+                s.lance(listOf(py.absolutePath, ecritScriptVoix().absolutePath, "--installe-clone", "--clone", modeleClone.absolutePath),
+                    environnement(horsLigne = false)) { l ->
+                    val j = runCatching { JSONObject(l) }.getOrNull() ?: return@lance false
+                    if (j.has("progres")) { s.mo(j.optDouble("mo")); true } else j.optBoolean("fini")
+                }
+                s.etape("vérification")
+                val v = executeCourt(listOf(py.absolutePath, ecritScriptVoix().absolutePath, "--verifie-clone", "--clone", modeleClone.absolutePath), 180, environnement())
+                    ?.lineSequence()?.mapNotNull { runCatching { JSONObject(it) }.getOrNull() }?.lastOrNull()
+                verificationClone = v
+                if (v == null || !v.optBoolean("ok")) throw IllegalStateException(v?.optString("erreur") ?: "le convertisseur ne répond pas")
+                s.note("torch ${v.optString("torch")} · convertisseur prêt")
+                s.fini()
+                apres()
+            } catch (e: Exception) { s.echec(e) }
+        }
+    }
+
+    /** Removes the converter's environment and model. */
+    fun retireClone(): Boolean = clonage.isDirectory && clonage.deleteRecursively().also { verificationClone = null }
+
+    /** A folder's size on disk (Mo). */
+    fun mo(f: File): Double = runCatching {
+        // Links not followed (a venv's lib64 is lib again).
+        java.nio.file.Files.walk(f.toPath()).use { w -> w.filter { java.nio.file.Files.isRegularFile(it, java.nio.file.LinkOption.NOFOLLOW_LINKS) }.mapToLong { java.nio.file.Files.size(it) }.sum() }
+    }.getOrDefault(0L).let { Math.round(it / 1e5) / 10.0 }
+
     private fun executeCourt(c: List<String>, secondes: Long, env: Map<String, String> = emptyMap()): String? = runCatching {
         val pb = ProcessBuilder(c)
         pb.environment().putAll(env)
@@ -260,6 +401,11 @@ class InstallPhoniePc(val dossier: File, private val windows: Boolean = OutilsPc
     }.getOrNull()
 
     companion object {
+        /** torch for the processor only (the default one brings CUDA: gigabytes). */
+        const val TORCH_CPU = "https://download.pytorch.org/whl/cpu"
+        /** The tone colour converter's code (MIT), at a fixed commit, as an archive: no git needed. */
+        const val CONVERTISSEUR = "https://github.com/myshell-ai/OpenVoice/archive/74a1d147b17a8c3092dd5430504bd83ef6c7eb23.zip"
+
         /** The models offered, and what each weighs once downloaded. */
         val TAILLES = linkedMapOf("large-v3" to "3,1 Go", "turbo" to "1,6 Go", "medium" to "1,5 Go", "small" to "0,5 Go")
 

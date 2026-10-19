@@ -294,6 +294,8 @@ fun main(args: Array<String>) {
     molette.demarre()
     serveur.molette = molette
     // Spoken announcements: off unless chosen in Réglages › Annonces; read from the objects above, said by the browser or this PC.
+    // The SDR speaker lowered while either speaks: the lowest level asked wins.
+    val baisseSdr = BaisseSon { sdr.gainHautParleur = it }
     var annoncesRef: AnnoncesPc? = null
     val suiviCw = AnnoncesPc.SuiviCw()
     val annonces = AnnoncesPc(station.stockage, {
@@ -305,8 +307,14 @@ fun main(args: Array<String>) {
                 if (emissionSstv.etat.emet) put("SSTV", null)
                 if (iq.enCours) put("correction I Q", null)
             })
-    }, { station.settings.callsign }, gainSdr = { sdr.gainHautParleur = it })
+    }, { station.settings.callsign }, gainSdr = { baisseSdr.regle("annonces", it) })
     annoncesRef = annonces
+    // « Traduction parlée »: each over translated said by a synthetic voice (off unless chosen; never transmitted).
+    val parole = ParolePc(station.stockage, phonie.install, { phonie.install.python(phonie.python) }, { if (phonie.cible == PhoniePc.WHISPER) "en" else phonie.cible },
+        baisse = { baisseSdr.regle("parole", it) })
+    phonie.ecouteParole = { parole.entendu(it) }
+    if (parole.actif) parole.demarre()
+    serveur.parole = parole
     portee.launch { while (true) { runCatching { annonces.tic() }; kotlinx.coroutines.delay(1000) } }
     serveur.annonces = annonces
     serveur.demarre()
@@ -347,6 +355,7 @@ fun main(args: Array<String>) {
         runCatching { rigctld.arrete() }
         runCatching { molette.arrete() }
         runCatching { phonie.arrete() }
+        runCatching { parole.arrete() }
         serveur.arrete()
     })
     // The server and the loops run on their own threads; this one waits.

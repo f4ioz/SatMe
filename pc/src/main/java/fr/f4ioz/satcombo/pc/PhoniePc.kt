@@ -92,6 +92,8 @@ class PhoniePc(
     @Volatile var connus: () -> Set<String> = { emptySet() }
     /** The sky frequency and the satellite for a source ("carte", "sdr"), when known. */
     @Volatile var contexte: (String) -> Pair<Long?, String> = { null to "" }
+    /** Each over kept, with its sound (« Traduction parlée »). */
+    @Volatile var ecouteParole: ((ParolePc.Entendu) -> Unit)? = null
 
     // ------------------------------------------------------------------ the sound in
 
@@ -236,7 +238,7 @@ class PhoniePc(
                 val r = m.transcrit(++numero, pcm, langue, traduire, if (traduire && cible != WHISPER) cible else "")
                 if (g != generation) return
                 when (r) {
-                    is Message.Reponse -> recoit(a, r)
+                    is Message.Reponse -> recoit(a, r, pcm)
                     is Message.Erreur -> erreur = "dernier passage non transcrit : " + r.texte.take(200)
                     else -> {}
                 }
@@ -273,7 +275,7 @@ class PhoniePc(
     /** The last over written out, or null. */
     fun derniere(): BullePhonie? = synchronized(bulles) { bulles.lastOrNull() }
 
-    private fun recoit(a: Attente, r: Message.Reponse) {
+    private fun recoit(a: Attente, r: Message.Reponse, pcm: FloatArray) {
         val gardes = FiltrePhonie.garde(r.morceaux)
         calculMoyenS = if (calculMoyenS == 0.0) r.calculS else calculMoyenS * 0.8 + r.calculS * 0.2
         if (traduire) traductionErreur = r.traductionErreur
@@ -289,14 +291,16 @@ class PhoniePc(
         val b = BullePhonie(0, a.piece.debutMs, a.piece.segment.dureeS, a.source, a.freqHz, a.satellite, r.langue, r.proba,
             texte, traduction, BullePhonie.confiance(gardes), r.calculS, AnalysePhonie.analyse(texte, r.langue, connusCache, vus),
             if (traduction.isNotEmpty()) r.langueCible else "")
-        synchronized(bulles) {
+        val c = synchronized(bulles) {
             chargeJour()
             val c = b.copy(id = ++idBulle)
             bulles.addLast(c)
             while (bulles.size > MAX_BULLES) bulles.removeFirst()
             version++
             runCatching { fichierJour(c.t).also { it.parentFile.mkdirs() }.appendText(c.json().toString() + "\n", Charsets.UTF_8) }
+            c
         }
+        ecouteParole?.let { f -> runCatching { f(ParolePc.Entendu(c, pcm, gardes, r.traduction)) } }
     }
 
     /** Today's overs (from the file) at the first look, so a restart shows them. */
