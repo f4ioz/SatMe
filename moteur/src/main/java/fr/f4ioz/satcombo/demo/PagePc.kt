@@ -1065,6 +1065,72 @@ ${STYLE_JETONS}
     background:radial-gradient(circle at 30% 20%, rgba(63,224,200,.04), transparent 55%), repeating-linear-gradient(0deg, transparent 0 23px, rgba(255,255,255,.018) 23px 24px),
       repeating-linear-gradient(90deg, transparent 0 23px, rgba(255,255,255,.018) 23px 24px), var(--creux); border:1px solid var(--ligne); }
   .mt-zone svg { display:block; flex:none; margin:auto; overflow:visible; }
+  .mt-cadre { position:relative; flex:1; min-height:320px; display:flex; }
+  .mt-cadre > .mt-zone { flex:1; }
+  .mt-zone.pan { cursor:grabbing; } .mt-zone.pan * { cursor:grabbing !important; }
+  .mt-zoom { position:absolute; left:8px; bottom:8px; z-index:2; display:flex; align-items:center; gap:2px; padding:2px; border-radius:var(--r2);
+    background:rgba(11,16,22,.82); border:1px solid var(--ligne); }
+  .mt-zoom button { padding:1px 9px; min-height:26px; font-size:var(--fs-s); }
+  .mt-zoom button.actif { color:var(--rx); border-color:rgba(63,224,200,.45); }
+  .mt-zoom span { min-width:44px; text-align:center; font-family:var(--mono); }
+  .mt-mini { position:absolute; right:8px; bottom:8px; z-index:2; width:190px; height:110px; border-radius:var(--r1); background:rgba(11,16,22,.9);
+    border:1px solid var(--ligne-forte); cursor:pointer; touch-action:none; }
+  .mt-mini rect { fill:#3A4450; } .mt-mini rect.rx { fill:var(--rx); } .mt-mini rect.tx { fill:var(--tx); }
+  .mt-mini path { fill:none; stroke:#59636E; stroke-width:4; }
+  .mt-mini rect.v { fill:rgba(63,224,200,.08); stroke:var(--rx); stroke-width:1.5; vector-effect:non-scaling-stroke; }
+  .mt-menu { position:relative; }
+  .mt-menu > summary { list-style:none; cursor:pointer; padding:3px 10px; min-height:26px; display:flex; align-items:center; border-radius:var(--r1); border:1px solid var(--ligne); background:var(--s2); font-size:var(--fs-s); font-weight:600; }
+  .mt-menu > summary::-webkit-details-marker { display:none; }
+  .mt-menu[open] > summary { border-color:var(--rx); color:var(--rx); }
+  .mt-menu-l { position:absolute; left:0; bottom:calc(100% + 4px); z-index:20; display:flex; flex-direction:column; gap:3px; padding:5px; min-width:150px;
+    background:var(--s1); border:1px solid var(--ligne-forte); border-radius:var(--r2); box-shadow:0 8px 24px rgba(0,0,0,.5); }
+  .mt-menu-l button { text-align:left; }
+  /* What is missing or dangerous in the drawing: the dangers loud, the rest folded. */
+  .mt-manque { display:flex; flex-direction:column; gap:4px; margin-bottom:5px; }
+  .mt-danger { display:flex; gap:10px; align-items:flex-start; padding:8px 12px; border-radius:var(--r2); background:rgba(229,72,77,.16); border:2px solid var(--danger);
+    color:#FFD1D3; font-size:var(--fs-m); animation:mt-alarme 1.4s ease-in-out infinite alternate; }
+  .mt-danger b { color:#fff; white-space:nowrap; }
+  @keyframes mt-alarme { from { box-shadow:0 0 0 rgba(229,72,77,0); } to { box-shadow:0 0 14px rgba(229,72,77,.55); } }
+  .mt-manque details { font-size:var(--fs-s); color:var(--texte-2); border:1px solid rgba(255,180,84,.35); border-radius:var(--r1); padding:3px 8px; }
+  .mt-manque summary { cursor:pointer; color:var(--warn); }
+  .mt-manque ul { margin:4px 0 2px; padding-left:18px; max-height:96px; overflow:auto; }
+  .mt-manque li { margin:1px 0; cursor:default; } .mt-manque li.attention { color:var(--warn); }
+  .mt-el.danger .mt-halo { stroke:var(--danger); stroke-width:2.5; fill:rgba(229,72,77,.1); filter:drop-shadow(0 0 7px rgba(229,72,77,.8)); animation:mt-tx .7s ease-in-out infinite alternate; }
+  .mt-el.danger.photo .mt-halo { stroke:var(--danger); }
+  .mt-lien.danger .mt-flux { stroke:var(--danger) !important; stroke-dasharray:6 5; stroke-width:3.4; animation:mt-flux .6s linear infinite; }
+  .mt-el.vise .mt-halo { stroke:var(--warn); stroke-width:2; stroke-dasharray:none; }
+  .mt-note { font-size:9px; fill:var(--info); font-family:system-ui,sans-serif; }
+  .mt-el.err .mt-note { fill:#FF8A8D; }
+  .mt-legende-d { margin-top:4px; }
+  .mt-legende-d > summary { cursor:pointer; font-size:var(--fs-xs); color:var(--texte-3); width:max-content; }
+  .mt-legende-d[open] > summary { position:absolute; opacity:0; pointer-events:none; }
+  .mt-legende-d:not([open]) + .mt-besoins { margin-top:2px; }
+  .mt-legende-d .mt-legende { margin-top:2px; }
+  .mt-legende .mt-lg-x { margin-left:auto; cursor:pointer; color:var(--texte-3); background:none; border:0; padding:0 4px; font-size:var(--fs-xs); }
+  .mt-lg-t { color:var(--texte-2); font-weight:700; text-transform:uppercase; letter-spacing:.5px; font-size:10px; margin-left:6px; }
+  .mt-lg-t:first-child { margin-left:0; }
+  .mt-fx { font-family:var(--mono); font-size:9px; padding:0 4px; border-radius:3px; border:1px dashed var(--warn); color:var(--warn); }
+  .mt-bd.fx rect { fill:rgba(255,180,84,.14); stroke:var(--warn); stroke-dasharray:2 1.5; stroke-width:.8; } .mt-bd.fx text { fill:var(--warn); }
+  .mt-n.fictif .mt-n-fond { stroke-dasharray:5 3; stroke:var(--warn); }
+  /* The print: the drawing alone, light, fitted to the page's width. */
+  @media print {
+    body.mt-imprime { background:#fff !important; display:block !important; }
+    body.mt-imprime #onglets, body.mt-imprime #tete, body.mt-imprime #sb, body.mt-imprime .vue:not(#v-montage), body.mt-imprime #mt-palette, body.mt-imprime #mt-edition,
+    body.mt-imprime #mt-profils, body.mt-imprime .mt-barre, body.mt-imprime .mt-zoom, body.mt-imprime .mt-mini, body.mt-imprime #mt-alertes, body.mt-imprime #mt-tient,
+    body.mt-imprime #mt-essai, body.mt-imprime .aide, body.mt-imprime .q, body.mt-imprime #mt-fiche, body.mt-imprime #mt-cpop, body.mt-imprime #mt-msg, body.mt-imprime .mt-pop { display:none !important; }
+    body.mt-imprime #v-montage, body.mt-imprime .mt, body.mt-imprime .mt-schema { display:block !important; height:auto !important; padding:0 !important; background:#fff !important; border:0 !important; box-shadow:none !important; }
+    body.mt-imprime .mt-schema .t { color:#111 !important; }
+    body.mt-imprime .mt-cadre, body.mt-imprime .mt-zone { display:block !important; overflow:visible !important; min-height:0 !important; background:#fff !important; border:1px solid #bbb !important; }
+    body.mt-imprime .mt-zone svg { width:100% !important; height:auto !important; }
+    body.mt-imprime .mt-nom, body.mt-imprime .mt-n-nom, body.mt-imprime .mt-et text, body.mt-imprime .mt-n-det, body.mt-imprime .mt-col-t { fill:#111 !important; }
+    body.mt-imprime .mt-et rect, body.mt-imprime .mt-n-fond { fill:#fff !important; stroke:#888 !important; }
+    body.mt-imprime .mt-gaine { stroke:#444 !important; } body.mt-imprime .mt-gaine2 { stroke:#A9B2BB !important; } body.mt-imprime .mt-ame { stroke:#333 !important; }
+    body.mt-imprime .mt-legende, body.mt-imprime .mt-manque, body.mt-imprime .mt-manque details { color:#222 !important; }
+    body.mt-imprime .mt-lg-x, body.mt-imprime .mt-legende-d > summary { display:none !important; }
+    body.mt-imprime .mt-danger { color:#7A0B0F !important; background:#FFECEC !important; } body.mt-imprime .mt-danger b { color:#7A0B0F !important; }
+    body.mt-imprime .mt-manque summary, body.mt-imprime .mt-manque li.attention { color:#8A4B00 !important; }
+    body.mt-imprime * { -webkit-print-color-adjust:exact; print-color-adjust:exact; animation:none !important; }
+  }
   .mt-vide { color:var(--texte-3); text-align:center; padding:24px; max-width:520px; line-height:1.6; }
   .mt-legende { display:flex; gap:4px 14px; flex-wrap:wrap; margin-top:6px; font-size:var(--fs-xs); color:var(--texte-3); align-items:center; }
   .mt-legende svg { width:30px; height:10px; vertical-align:middle; margin-right:4px; }
@@ -1285,7 +1351,7 @@ ${STYLE_JETONS}
     #v-montage .mt-edition { height:100%; }
   }
   @media (max-width:1100px) { #v-montage.mt-edite .mt, #v-montage.mt-pf .mt { grid-template-columns:1fr; } .mt-zone { min-height:360px; } .mt-palette { max-height:240px; } }
-  @media (max-width:760px) { .mt { padding:8px; } .mt-zone { min-height:300px; justify-content:flex-start; align-items:flex-start; } .mt-fiche { position:fixed; left:8px; right:8px; top:auto; bottom:64px; width:auto; max-height:60vh; } }
+  @media (max-width:760px) { .mt { padding:8px; } .mt-cadre { min-height:300px; } .mt-zone { min-height:300px; justify-content:flex-start; align-items:flex-start; } .mt-mini { width:120px; height:72px; } .mt-fiche { position:fixed; left:8px; right:8px; top:auto; bottom:64px; width:auto; max-height:60vh; } }
   /* The small drawing over QO-100 and DATV. */
   .mt-pop { position:fixed; right:14px; top:52px; z-index:45; width:min(560px,calc(100vw - 28px)); padding:8px 10px 10px; border-radius:var(--r3);
     background:rgba(19,28,36,.97); border:1px solid var(--ligne-forte); box-shadow:var(--ombre-pop); }
@@ -2721,7 +2787,7 @@ ${rail()}
         <select id="mt-pre" onchange="mtPrereglage()" aria-label="Partir d'un montage tout fait" title="Partir d'un montage tout fait (il remplace l'actuel)"><option value="">Montage tout fait…</option></select>
         <button onclick="mtSuggere()" title="Une chaîne composée d'après les réglages de SatMe : tu l'adoptes ou non">Proposer d'après SatMe</button>
       </span>
-      <button id="mt-b-edit" onclick="mtEdition()" aria-pressed="false" title="Ajouter, renommer, retirer les appareils et les câbles">✎ Modifier</button>
+      <button id="mt-b-edit" onclick="mtEdition()" aria-pressed="false" title="Ajouter, renommer, retirer les appareils et les câbles (E)">✎ Modifier</button>
       <span id="mt-edit-outils" class="mt-barre" style="margin:0" hidden>
         <button id="mt-b-annule" onclick="mtHisto('annule')" title="Annuler la dernière modification (Ctrl+Z)" aria-label="Annuler">↶</button>
         <button id="mt-b-refait" onclick="mtHisto('refait')" title="Rétablir (Ctrl+Y)" aria-label="Rétablir">↷</button>
@@ -2733,7 +2799,9 @@ ${rail()}
     <div id="mt-simple-vide" class="petit" hidden>Rien ne reçoit ni n'émet : le montage entier est montré.</div>
     <div class="mt-puces mt-tient" id="mt-tient" aria-label="Qui tient quoi" hidden></div>
     <div class="mt-alertes" id="mt-alertes" aria-live="polite" hidden></div>
+    <div class="mt-manque" id="mt-manque" aria-live="polite" hidden></div>
     <div class="mt-vue-tete" id="mt-vue-tete" hidden></div>
+    <div class="mt-cadre">
     <div class="mt-zone" id="mt-zone">
       <svg id="mt-svg" role="group" aria-label="Schéma de la station"></svg>
       <svg id="mt-fsvg" role="group" aria-label="Chaîne de la fonction" style="display:none"></svg>
@@ -2741,7 +2809,14 @@ ${rail()}
       <div class="mt-fiche" id="mt-fiche" hidden></div>
       <div class="mt-cpop" id="mt-cpop" hidden role="dialog" aria-label="Câble"></div>
     </div>
+    <div class="mt-zoom" role="group" aria-label="Zoom du dessin"><button id="mt-z-moins" onclick="mtZoom(1 / 1.25)" aria-label="Réduire" title="Réduire (−, Ctrl + molette)">−</button><span id="mt-z-k" class="petit" aria-live="polite">100 %</span><button id="mt-z-plus" onclick="mtZoom(1.25)" aria-label="Agrandir" title="Agrandir (+, Ctrl + molette) ; agrandi, le fond se tire à la souris">+</button><button id="mt-z-fit" onclick="mtZoom(0)" title="Tout le dessin dans la zone (0)">Ajuster</button>
+      <details class="mt-menu" id="mt-export"><summary title="Enregistrer le dessin dans un fichier ou l'imprimer">⤓ Exporter</summary>
+        <div class="mt-menu-l"><button onclick="mtExporte('svg')">Dessin SVG</button><button onclick="mtExporte('png')">Image PNG</button><button onclick="mtExporte('imprimer')">Imprimer…</button></div></details></div>
+    <svg id="mt-mini" class="mt-mini" hidden role="img" aria-label="Vue d'ensemble : un clic y déplace la partie montrée"></svg>
+    </div>
+    <details class="mt-legende-d" id="mt-legende-d" open ontoggle="try { localStorage.setItem('mt-legende', this.open ? '1' : '0'); } catch (x) {}"><summary>Légende</summary>
     <div class="mt-legende" aria-label="Légende">
+      <b class="mt-lg-t">Câbles</b>
       <span><svg viewBox="0 0 30 10"><path d="M2 5H28" stroke="#06090C" stroke-width="8"/><path d="M2 5H28" stroke="#262E36" stroke-width="5.5"/><path d="M2 5H28" stroke="#7D8893" stroke-width="1.4"/></svg>coaxial</span>
       <span><svg viewBox="0 0 30 10"><path d="M2 5H28" stroke="#6F8CFF" stroke-width="2.6" stroke-dasharray="8 5"/></svg>réseau</span>
       <span><svg viewBox="0 0 30 10"><path d="M2 5H28" stroke="#8A96A2" stroke-width="3"/></svg>USB</span>
@@ -2754,11 +2829,16 @@ ${rail()}
       <span><svg viewBox="0 0 30 10"><path d="M2 5H28" stroke="#E5484D" stroke-width="2"/></svg>alimentation</span>
       <span><svg viewBox="0 0 30 10"><path d="M2 5H28" stroke="#E8C547" stroke-width="2.2"/></svg>GPS</span>
       <span><svg viewBox="0 0 30 10"><path d="M2 5H28" stroke="#4FC3F7" stroke-width="1.8" stroke-dasharray="1 4" stroke-linecap="round"/></svg>Internet</span>
+      <b class="mt-lg-t">États</b>
       <span><i style="background:var(--rx)"></i>reçoit</span><span><i style="background:var(--tx)"></i>émet</span><span><i style="background:var(--ok)"></i>connecté</span><span><i style="border:1.5px dashed var(--danger)"></i>erreur</span>
+      <span><i style="border:2px solid var(--danger);box-shadow:0 0 6px var(--danger)"></i>danger (voir « Ce qui manque »)</span>
+      <b class="mt-lg-t">Logiciel</b>
       <span><i style="border-radius:5px;width:16px;border:1.5px solid var(--ligne-forte)"></i>fonction</span><span><i style="border-radius:1px;width:16px;border:1.5px solid var(--ligne-forte)"></i>matériel</span>
       <span><b class="cyan">RX</b> <b class="tx-mot">TX</b> <b style="color:var(--ok)">son ▶</b> fait du son <b style="color:var(--ok)">◀ son</b> en prend</span>
       <span><i style="background:rgba(229,72,77,.3);border:1.5px solid var(--danger)"></i>occupé</span><span><i style="border:1.5px dashed var(--warn)"></i>manque</span>
-    </div>
+      <span><b class="mt-fx">FICTIF</b> sans matériel (enregistrement, générateur)</span>
+      <button class="mt-lg-x" onclick="g('mt-legende-d').open = false" title="Replier la légende (plus de place pour le dessin)">replier ▴</button>
+    </div></details>
     <div class="mt-besoins" id="mt-besoins" hidden></div>
     <div class="etat" id="mt-msg"></div>
   </div>
@@ -3614,6 +3694,7 @@ ${rail()}
     <div><kbd>F1</kbd></div><div><a href="#" onclick="event.preventDefault(); g('aide-dlg').close(); manOuvre()">Le manuel</a> : le guide de SatMe-PC, avec recherche, ouvert au chapitre de l'onglet en cours (Échap le ferme)</div>
     <div><kbd>[</kbd></div><div>Déplier ou replier le menu de gauche</div>
     <div><kbd>←</kbd> <kbd>→</kbd> <kbd>↑</kbd> <kbd>↓</kbd></div><div>QO-100 : accord par 100 Hz / 1 kHz (hors d'un champ de saisie)</div>
+    <div><kbd>+</kbd> <kbd>−</kbd> <kbd>0</kbd></div><div>Montage : agrandir, réduire, tout le dessin (aussi Ctrl + molette ; agrandi, le fond se tire à la souris) · <kbd>E</kbd> modifier · <kbd>V</kbd> vue complète ou simplifiée</div>
     <div><span class="h-rond" style="display:inline-grid">?</span></div><div>Sur un titre : l'explication de la carte (survol, clic ou Entrée)</div>
   </div>
 </dialog>
@@ -11404,7 +11485,8 @@ const MT_D = (() => {
         lien: P('M10 16h18l-4 -4 M32 24h-18l4 4', 'none', '#3FE0C8', 1.8),
         telephone: R(15, 8, 13, 24, 3, '#15181C', '#9AA7B4', 1.2) + R(17, 11, 9, 16, 1, '#0F3A44'),
         noeud: R(10, 15, 22, 13, 3, '#15181C', '#9AA7B4', 1.2) + P('M27 15v-6', 'none', '#9AA7B4', 1.4) + led(15, 22, '#5BD68A'),
-        ecoute: R(9, 10, 24, 18, 2, '#22303B', '#9AA7B4', 1) + R(9, 10, 24, 4, 1, '#3A4450') + P('M17 18h3l4 -3v10l-4 -3h-3z', '#C9D2DB') + P('M27 17q2 3 0 6', 'none', '#C9D2DB', 1)
+        ecoute: R(9, 10, 24, 18, 2, '#22303B', '#9AA7B4', 1) + R(9, 10, 24, 4, 1, '#3A4450') + P('M17 18h3l4 -3v10l-4 -3h-3z', '#C9D2DB') + P('M27 17q2 3 0 6', 'none', '#C9D2DB', 1),
+        espace: C(21, 20, 6, '#FFB454') + P('M21 8v4 M21 28v4 M9 20h4 M29 20h4 M12.5 11.5l2.8 2.8 M26.7 25.7l2.8 2.8 M12.5 28.5l2.8 -2.8 M26.7 14.3l2.8 -2.8', 'none', '#FFB454', 1.4)
       }[k] || C(21, 20, 9, 'none', '#9AA7B4', 1.4);
       return R(1, 1, w - 2, h - 2, 8, '#141D26', '#3A4A5A', 1.2) + ic + '<text class="mt-bt-t" x="38" y="' + (h * .6) + '"></text>';
     },
@@ -11445,7 +11527,8 @@ function mtGroupe(c, b, p, compact) {
     '<g class="mt-dessin">' + dessin + '</g>' + ph +
     '<circle class="mt-voyant" cx="' + (b.l - 2) + '" cy="-2" r="4"/>' +
     (photo ? '<g class="mt-photo-b" transform="translate(-4 -6)"><rect width="13" height="10" rx="2" fill="#1C2833" stroke="#9AA7B4" stroke-width=".8"/><circle cx="6.5" cy="5" r="2.6" fill="none" stroke="#9AA7B4" stroke-width=".9"/></g>' : '') +
-    '<text class="mt-nom" x="' + (b.l / 2) + '" y="' + (dh + 13) + '" text-anchor="middle">' + mtEsc(court) + '</text></g>';
+    '<text class="mt-nom" x="' + (b.l / 2) + '" y="' + (dh + 13) + '" text-anchor="middle">' + mtEsc(court) + '</text>' +
+    (compact ? '' : '<text class="mt-note" x="' + (b.l / 2) + '" y="' + (dh + 24) + '" text-anchor="middle"></text>') + '</g>';
 }
 function mtTrace(c, t, p) {
   const l = c.liens.find(x => x.id === t.id); if (!l) return '';
@@ -11496,18 +11579,23 @@ function mtDessine(svg, d, p, compact) {
 }
 /** Only the lights and the frequencies: the drawing stays (its animations go on). */
 function mtAllume(svg, d) {
-  const et = d.etat || {}, el = et.elements || {}, li = et.liens || {}, er = et.erreurs || {}, bx = et.boites || {};
+  const et = d.etat || {}, el = et.elements || {}, li = et.liens || {}, er = et.erreurs || {}, bx = et.boites || {}, no = et.notes || {};
+  // The dangers of « Ce qui manque »: their pieces and cables lit red.
+  const dEl = new Set(), dLi = new Set();
+  (d.verification || []).filter(r => r.niveau === 'danger').forEach(r => { r.elements.forEach(x => dEl.add(x)); r.liens.forEach(x => dLi.add(x)); });
   svg.querySelectorAll('.mt-el').forEach(n => {
     const id = n.dataset.id, b = bx[id], s = el[id] || 'repos';
-    const k = 'mt-el ' + s + (er[id] ? ' err' : '') + (MT.sel === id ? ' sel' : '') + (b ? ' b-' + b.etat : '') + (n.classList.contains('photo') ? ' photo' : '') + (n.classList.contains('mt-off') ? ' mt-off' : '');
+    const k = 'mt-el ' + s + (er[id] ? ' err' : '') + (dEl.has(id) ? ' danger' : '') + (MT.sel === id ? ' sel' : '') + (b ? ' b-' + b.etat : '') + (n.classList.contains('photo') ? ' photo' : '') +
+      (n.classList.contains('mt-off') ? ' mt-off' : '') + (n.classList.contains('vise') ? ' vise' : '');
     if (n.getAttribute('class') !== k) n.setAttribute('class', k);
-    const nom = mtNom(mtElem(d.chaine, id) || {}), t = nom + ' — ' + (b ? b.texte : (MT_ETATS[s] || s)) + (er[id] ? ' — erreur : ' + er[id] : '');
+    const nt = n.querySelector('.mt-note'); if (nt && nt.textContent !== (no[id] || '')) nt.textContent = no[id] || '';
+    const nom = mtNom(mtElem(d.chaine, id) || {}), t = nom + ' — ' + (b ? b.texte : (MT_ETATS[s] || s)) + (no[id] ? ' — ' + no[id] : '') + (er[id] ? ' — erreur : ' + er[id] : '');
     if (n.getAttribute('aria-label') !== t) { n.setAttribute('aria-label', t); n.querySelector('title').textContent = t; }
     const bt = n.querySelector('.mt-bt-t');
     if (bt) { const v = b ? mtCoupe(b.texte, 15) : '—'; if (bt.textContent !== v) bt.textContent = v; }
   });
   svg.querySelectorAll('.mt-lien').forEach(n => {
-    const s = li[n.dataset.id] || 'repos', k = n.getAttribute('class').replace(/ (rx|tx|rxtx|relie|repos)\b/g, '') + ' ' + s;
+    const s = li[n.dataset.id] || 'repos', k = n.getAttribute('class').replace(/ (rx|tx|rxtx|relie|repos|danger)\b/g, '') + ' ' + s + (dLi.has(n.dataset.id) ? ' danger' : '');
     if (n.getAttribute('class') !== k) n.setAttribute('class', k);
   });
   svg.querySelectorAll('.mt-et').forEach(n => {
@@ -11528,11 +11616,13 @@ function mtTaille(svg, zone, max) {
   const l = +svg.dataset.l || 100, h = +svg.dataset.h || 100, W = zone.clientWidth - 4, H = zone.clientHeight - 4;
   let k = Math.min(W / l, H > 60 ? H / h : 9, max || 1.4);
   if (telephone() && !max) k = Math.max(k, .62);
+  // The Montage's own zone: the scale chosen (+, −, Ctrl + wheel) over the fitted one.
+  if (zone.id === 'mt-zone') { MT.kFit = k; if (MT.k) k = MT.k; }
   svg.style.width = Math.floor(l * k) + 'px'; svg.style.height = Math.floor(h * k) + 'px';
 }
 
 // ---- the tab
-async function mtOuvre() { await mtCatalogue(); mtPrereglages(); mtTic(true); }
+async function mtOuvre() { try { if (localStorage.getItem('mt-legende') === '0') g('mt-legende-d').open = false; } catch (x) {} await mtCatalogue(); mtPrereglages(); mtTic(true); }
 async function mtLit(simple, fonction) {
   const r = await fetch('api/montage?simple=' + (simple ? 1 : 0) + (MT.essai ? '&essai=' + MT.essai : '') + (fonction ? '&fonction=' + enc(fonction) : ''));
   return r.ok ? r.json() : null;
@@ -11560,6 +11650,8 @@ async function mtTic(force) {
     mtLogiciel(svg, d, force);
     mtFonctions(d, force);
     mtResume(d);
+    mtManque(d);
+    mtMini();
     if (MT.sel) mtFiche(MT.sel, true);
     else if (MT.selN) mtFicheN(MT.selN, true);
   }
@@ -11859,9 +11951,188 @@ async function mtSuggAdopte() {
     if (n && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); if (n.dataset.n) mtFicheN(n.dataset.n); else mtFiche(n.dataset.id); }
   });
 });
+// ---- zoom, pan, minimap: the drawing fitted to its zone, or at the scale chosen (Ctrl + wheel, the buttons, + − 0)
+MT.k = null; MT.kFit = 1;
+/** The drawing shown now: the station's or one function's chain. */
+const mtSvgVu = () => (MT.fonction && g('mt-fsvg').style.display !== 'none') ? g('mt-fsvg') : g('mt-svg');
+function mtZoom(f, cx, cy) {
+  const z = g('mt-zone'), svg = mtSvgVu(), l = +svg.dataset.l || 100;
+  const k0 = MT.k || MT.kFit;
+  let k = f === 0 ? null : Math.max(.2, Math.min(4, k0 * f));
+  if (k && Math.abs(k - MT.kFit) < .02) k = null;
+  // The point under the pointer (or the zone's middle) stays where it is.
+  const r = z.getBoundingClientRect(), px = cx == null ? r.width / 2 : cx - r.left, py = cy == null ? r.height / 2 : cy - r.top;
+  const sr = svg.getBoundingClientRect(), ux = (px + r.left - sr.left) / k0, uy = (py + r.top - sr.top) / k0;
+  MT.k = k;
+  mtTaille(svg, z);
+  if (MT.k) { const s2 = svg.getBoundingClientRect(); z.scrollLeft += (s2.left + ux * MT.k) - (r.left + px); z.scrollTop += (s2.top + uy * MT.k) - (r.top + py); }
+  mtMini();
+}
+g('mt-zone').addEventListener('wheel', e => {
+  if (!e.ctrlKey && !e.metaKey) return;
+  e.preventDefault();
+  mtZoom(e.deltaY < 0 ? 1.15 : 1 / 1.15, e.clientX, e.clientY);
+}, { passive: false });
+// A drag on the background moves the drawing (a piece, a port, a cable keep their own gestures).
+g('mt-zone').addEventListener('pointerdown', e => {
+  if (e.button > 0 || MT.glisse || !MT.k) return;
+  if (e.target.closest('.mt-el, .mt-n, .mt-ph, .mt-lien, .mt-et, .mt-tag, .mt-fiche, .mt-cpop, button, input, select, a')) return;
+  const z = g('mt-zone');
+  MT.pan = { x: e.clientX, y: e.clientY, sl: z.scrollLeft, st: z.scrollTop };
+  z.classList.add('pan');
+});
+document.addEventListener('pointermove', e => {
+  const P = MT.pan; if (!P) return;
+  const z = g('mt-zone'); z.scrollLeft = P.sl - (e.clientX - P.x); z.scrollTop = P.st - (e.clientY - P.y);
+});
+document.addEventListener('pointerup', () => { if (MT.pan) { MT.pan = null; g('mt-zone').classList.remove('pan'); } });
+g('mt-zone').addEventListener('scroll', () => mtMiniVue());
+/** The minimap: the pieces and cables in small, the part seen framed; shown once the drawing is larger than its zone. */
+function mtMini() {
+  const m = g('mt-mini'), z = g('mt-zone'), svg = mtSvgVu();
+  const sr = svg.getBoundingClientRect(), grand = !!MT.k && (sr.width > z.clientWidth + 8 || sr.height > z.clientHeight + 8);
+  m.toggleAttribute('hidden', !grand);
+  txt('mt-z-k', Math.round((MT.k || MT.kFit) * 100) + ' %');
+  g('mt-z-fit').classList.toggle('actif', !MT.k);
+  if (!grand) return;
+  const vb = (svg.getAttribute('viewBox') || '0 0 100 100').split(' ').map(Number);
+  const cle = JSON.stringify([vb, MT.cle, MT.logCle, MT.vueCle]);
+  if (m.dataset.k !== cle) {
+    m.dataset.k = cle;
+    m.setAttribute('viewBox', vb.join(' '));
+    let s = '';
+    svg.querySelectorAll('.mt-el, .mt-n').forEach(n => { try { const b = n.getBBox(), t = n.transform.baseVal.consolidate(), x = t ? t.matrix.e : 0, y = t ? t.matrix.f : 0;
+      const el = n.classList.contains('mt-el'); s += '<rect x="' + (x + b.x) + '" y="' + (y + b.y) + '" width="' + b.width + '" height="' + b.height + '" class="' + (el && n.classList.contains('rx') ? 'rx' : el && (n.classList.contains('tx') || n.classList.contains('rxtx')) ? 'tx' : '') + '"/>'; } catch (x) {} });
+    svg.querySelectorAll('.mt-lien .mt-hit').forEach(p => { s += '<path d="' + p.getAttribute('d') + '"/>'; });
+    m.innerHTML = s + '<rect id="mt-mini-v" class="v"/>';
+  }
+  mtMiniVue();
+}
+function mtMiniVue() {
+  const m = g('mt-mini'), r = g('mt-mini-v'); if (!r || m.hasAttribute('hidden')) return;
+  const z = g('mt-zone'), svg = mtSvgVu(), k = MT.k || MT.kFit;
+  const vb = (svg.getAttribute('viewBox') || '0 0 100 100').split(' ').map(Number);
+  const zr = z.getBoundingClientRect(), sr = svg.getBoundingClientRect();
+  r.setAttribute('x', vb[0] + (zr.left - sr.left) / k); r.setAttribute('y', vb[1] + (zr.top - sr.top) / k);
+  r.setAttribute('width', zr.width / k); r.setAttribute('height', zr.height / k);
+}
+// A click or a drag on the minimap: the part seen moves there.
+g('mt-mini').addEventListener('pointerdown', e => {
+  const m = g('mt-mini');
+  const va = ev => {
+    const p = mtPointSvg(m, ev.clientX, ev.clientY), z = g('mt-zone'), svg = mtSvgVu(), k = MT.k || MT.kFit;
+    const vb = (svg.getAttribute('viewBox') || '0 0 100 100').split(' ').map(Number);
+    const zr = z.getBoundingClientRect(), sr = svg.getBoundingClientRect();
+    z.scrollLeft += (sr.left + (p[0] - vb[0]) * k) - (zr.left + zr.width / 2); z.scrollTop += (sr.top + (p[1] - vb[1]) * k) - (zr.top + zr.height / 2);
+  };
+  va(e); m.setPointerCapture(e.pointerId);
+  const bouge = ev => va(ev), fin = () => { m.removeEventListener('pointermove', bouge); m.removeEventListener('pointerup', fin); };
+  m.addEventListener('pointermove', bouge); m.addEventListener('pointerup', fin);
+  e.preventDefault(); e.stopPropagation();
+});
+// ---- the drawing kept as a file (SVG, PNG) or printed: what is on screen, its styles and photos inside
+/** The drawing shown, standalone: its styles copied in (the page's colours resolved), the photos inlined, a background and a title. */
+async function mtSvgAutonome() {
+  const src = mtSvgVu(), c = src.cloneNode(true);
+  const vb = (src.getAttribute('viewBox') || '0 0 100 100').split(' ').map(Number);
+  const regles = [];
+  for (const f of document.styleSheets) { let rs; try { rs = f.cssRules; } catch (x) { continue; } for (const r of rs) if (r.selectorText && /\.mt-|#mt-/.test(r.selectorText)) regles.push(r.cssText); }
+  const css = regles.join('\n'), cs = getComputedStyle(document.documentElement);
+  const vars = [...new Set(css.match(/--[a-z0-9-]+/g) || [])].map(n => n + ':' + cs.getPropertyValue(n).trim()).join(';');
+  const st = document.createElementNS('http://www.w3.org/2000/svg', 'style');
+  st.textContent = 'svg{' + vars + ';font-family:system-ui,sans-serif}' + css.replace(/#mt-(f?svg)\b/g, 'svg');
+  c.insertBefore(st, c.firstChild);
+  const fond = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+  fond.setAttribute('x', vb[0] - 10); fond.setAttribute('y', vb[1] - 34); fond.setAttribute('width', vb[2] + 20); fond.setAttribute('height', vb[3] + 44);
+  fond.setAttribute('fill', cs.getPropertyValue('--creux').trim() || '#0B1016');
+  c.insertBefore(fond, st.nextSibling);
+  const titre = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+  titre.setAttribute('x', vb[0]); titre.setAttribute('y', vb[1] - 14); titre.setAttribute('fill', '#E8F0F7'); titre.setAttribute('font-size', '14'); titre.setAttribute('font-weight', '700');
+  titre.textContent = ((MT.d && MT.d.chaine.nom) || 'Montage de la station') + (MT.fonction ? ' — ' + (g('mt-fonction').selectedOptions[0] || {}).textContent : '') + ' — ' + new Date().toLocaleDateString('fr-FR');
+  c.insertBefore(titre, fond.nextSibling);
+  c.setAttribute('viewBox', (vb[0] - 10) + ' ' + (vb[1] - 34) + ' ' + (vb[2] + 20) + ' ' + (vb[3] + 44));
+  c.setAttribute('width', vb[2] + 20); c.setAttribute('height', vb[3] + 44);
+  c.setAttribute('xmlns', 'http://www.w3.org/2000/svg'); c.removeAttribute('style'); c.removeAttribute('id'); c.removeAttribute('class');
+  c.querySelectorAll('.mt-hit, .mt-tmp, .mt-phs').forEach(n => n.remove());
+  // The photos: inlined (a file on its own, and a PNG, cannot fetch them).
+  for (const im of c.querySelectorAll('image')) {
+    try {
+      const b = await (await fetch(im.getAttribute('href'))).blob();
+      const u = await new Promise(ok => { const r = new FileReader(); r.onload = () => ok(r.result); r.readAsDataURL(b); });
+      im.setAttribute('href', u);
+    } catch (x) { im.remove(); }
+  }
+  return { texte: '<?xml version="1.0" encoding="UTF-8"?>\n' + new XMLSerializer().serializeToString(c), l: vb[2] + 20, h: vb[3] + 44 };
+}
+function mtTelecharge(blob, nom) {
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = nom;
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+}
+const mtNomFichier = ext => { const n = ((MT.d && MT.d.chaine.nom) || 'station').toLowerCase().normalize('NFD').replace(/[^a-z0-9]+/g, ' ').trim().split(' ').join('-') || 'station';
+  return 'montage-' + n + (MT.fonction ? '-' + MT.fonction : '') + '.' + ext; };
+async function mtExporte(quoi) {
+  const m = g('mt-export'); if (m) m.open = false;
+  if (quoi === 'imprimer') { mtImprime(); return; }
+  annonce('Préparation du dessin…');
+  const s = await mtSvgAutonome();
+  if (quoi === 'svg') { mtTelecharge(new Blob([s.texte], { type: 'image/svg+xml' }), mtNomFichier('svg')); annonce('Dessin enregistré (SVG)'); return; }
+  const img = new Image(), u = URL.createObjectURL(new Blob([s.texte], { type: 'image/svg+xml' }));
+  img.onload = () => {
+    const k = Math.min(2, 8000 / Math.max(s.l, s.h)), cv = document.createElement('canvas');
+    cv.width = Math.round(s.l * k); cv.height = Math.round(s.h * k);
+    const x = cv.getContext('2d'); x.scale(k, k); x.drawImage(img, 0, 0, s.l, s.h); URL.revokeObjectURL(u);
+    cv.toBlob(b => { if (b) { mtTelecharge(b, mtNomFichier('png')); annonce('Dessin enregistré (PNG)'); } else annonce('PNG impossible ici'); }, 'image/png');
+  };
+  img.onerror = () => { URL.revokeObjectURL(u); annonce('PNG impossible ici : essaie le SVG'); };
+  img.src = u;
+}
+/** The print: the drawing alone on the page (with its legend and what is missing), fitted to its width. */
+function mtImprime() {
+  const k = MT.k; MT.k = null;
+  // Everything said on paper: the legend and « Ce qui manque » unfolded.
+  const plis = [g('mt-legende-d'), g('mt-manque').querySelector('details')].filter(x => x && !x.open);
+  plis.forEach(x => x.open = true);
+  document.body.classList.add('mt-imprime');
+  mtTaille(mtSvgVu(), g('mt-zone'));
+  const fin = () => { document.body.classList.remove('mt-imprime'); plis.forEach(x => x.open = false); MT.k = k; mtTaille(mtSvgVu(), g('mt-zone')); window.removeEventListener('afterprint', fin); };
+  window.addEventListener('afterprint', fin);
+  setTimeout(() => window.print(), 60);
+}
+// ---- « Ce qui manque » : what the drawing says is missing, the dangers first (a DC voltage on an SDR's input)
+function mtManque(d) {
+  const l = (d.verification || []), z = g('mt-manque');
+  const cle = JSON.stringify(l);
+  if (z.dataset.k === cle) return;
+  z.dataset.k = cle;
+  const dangers = l.filter(r => r.niveau === 'danger'), autres = l.filter(r => r.niveau !== 'danger');
+  const li = r => '<li class="' + r.niveau + '" data-els="' + mtEsc(r.elements.join(' ')) + '">' + mtEsc(r.texte) + '</li>';
+  let ouvert = false; try { ouvert = localStorage.getItem('mt-manque') === '1'; } catch (x) {}
+  z.innerHTML = dangers.map(r => '<div class="mt-danger" role="alert" data-els="' + mtEsc(r.elements.join(' ')) + '"><b>⚡ Danger</b><span>' + mtEsc(r.texte) + '</span></div>').join('') +
+    (autres.length ? '<details' + (ouvert ? ' open' : '') + ' ontoggle="try { localStorage.setItem(\'mt-manque\', this.open ? \'1\' : \'0\'); } catch (x) {}"><summary>Ce qui manque (' + autres.length + ')</summary><ul>' + autres.map(li).join('') + '</ul></details>' : '');
+  z.hidden = !l.length;
+}
+// A remark pointed at: its pieces outlined on the drawing.
+['mouseover', 'focusin'].forEach(t => g('mt-manque').addEventListener(t, e => {
+  const x = e.target.closest('[data-els]'); const ids = x ? x.dataset.els.split(' ') : [];
+  g('mt-svg').querySelectorAll('.mt-el').forEach(n => n.classList.toggle('vise', ids.includes(n.dataset.id)));
+}));
+g('mt-manque').addEventListener('mouseleave', () => g('mt-svg').querySelectorAll('.mt-el.vise').forEach(n => n.classList.remove('vise')));
+// The Montage's keys (out of a field, no dialog open): + − 0 the zoom, E edit, V the full or simplified view.
+document.addEventListener('keydown', e => {
+  if (!ouverte('montage') || document.querySelector('dialog[open]') || e.ctrlKey || e.metaKey || e.altKey) return;
+  const a = document.activeElement;
+  if (a && (/INPUT|SELECT|TEXTAREA/.test(a.tagName) || a.isContentEditable)) return;
+  if (e.key === '+' || e.key === '=') { e.preventDefault(); mtZoom(1.25); }
+  else if (e.key === '-' || e.key === '_') { e.preventDefault(); mtZoom(1 / 1.25); }
+  else if (e.key === '0') { e.preventDefault(); mtZoom(0); }
+  else if ((e.key === 'e' || e.key === 'E') && !MT.telephone) { e.preventDefault(); mtEdition(); }
+  else if (e.key === 'v' || e.key === 'V') { e.preventDefault(); mtVue(!MT.simple); }
+});
+// A click outside closes the export menu.
+document.addEventListener('click', e => { const m = g('mt-export'); if (m && m.open && !m.contains(e.target)) m.open = false; });
 g('mt-l-de').onchange = mtCableMaj; g('mt-l-vers').onchange = mtCableMaj;
 g('mt-l-cable').onchange = () => { if (MT.d) txt('mt-l-msg', mtRefus(MT.d.chaine, v('mt-l-de'), v('mt-l-vers'), v('mt-l-cable'))); };
-window.addEventListener('resize', () => { if (ouverte('montage')) { mtTaille(g('mt-svg'), g('mt-zone')); if (MT.fonction) mtTaille(g('mt-fsvg'), g('mt-zone')); } if (!g('mt-pop').hidden) mtTaille(g('mt-pop-svg'), g('mt-pop-zone'), 1.1); });
+window.addEventListener('resize', () => { if (ouverte('montage')) { mtTaille(g('mt-svg'), g('mt-zone')); if (MT.fonction) mtTaille(g('mt-fsvg'), g('mt-zone')); mtMini(); } if (!g('mt-pop').hidden) mtTaille(g('mt-pop-svg'), g('mt-pop-zone'), 1.1); });
 // ---- editing by hand: the palette, pieces dragged, cables drawn from port to port, undo / redo.
 // Each gesture is one edit of the drawing (api/montage/edition): it changes no setting of the station.
 MT.glisse = null; MT.sansClic = false; MT.relierDe = null; MT.relierMenu = null;
@@ -12080,7 +12351,7 @@ setInterval(() => { if (ouverte('montage') || !g('mt-pop').hidden) mtTic(); }, 2
 const MT_COLS = ['Matériel tenu, cartes son', 'Sources du son', 'Décodeurs', 'Sorties du son'];
 const MT_STATUTS = { ok: 'en marche', pret: 'à l’arrêt', manque: 'manque', occupe: 'occupé', erreur: 'erreur' };
 const MT_BADGES = { materiel: ['M', 'ty', 'matériel'], fonction: ['F', 'ty', 'fonction de SatMe'], rx: ['RX', 'rx', 'reçoit'], tx: ['TX', 'tx', 'émet'],
-  'son-emet': ['son ▶', 'son', 'fait du son'], 'son-recoit': ['◀ son', 'son', 'prend du son'] };
+  'son-emet': ['son ▶', 'son', 'fait du son'], 'son-recoit': ['◀ son', 'son', 'prend du son'], fictif: ['FICTIF', 'fx', 'pas de matériel : un enregistrement ou le générateur d’essai'] };
 MT.actes = []; MT.vas = [];
 /** A gesture's button (kept in a list: a card's name may hold any character). */
 function mtActeBouton(a, cl) {
@@ -12130,7 +12401,7 @@ function mtBadges(n, x, y) {
   return [s, w];
 }
 const mtCoupe = (t, n) => { t = String(t || ''); return t.length > n ? t.slice(0, Math.max(1, n - 1)) + '…' : t; };
-function mtNoeudClasse(n) { return 'mt-n g-' + n.genre + ' st-' + n.statut + ((n.badges || []).includes('tx') ? ' tx' : '') + (MT.selN === n.id ? ' sel' : ''); }
+function mtNoeudClasse(n) { return 'mt-n g-' + n.genre + ' st-' + n.statut + ((n.badges || []).includes('tx') ? ' tx' : '') + ((n.badges || []).includes('fictif') ? ' fictif' : '') + (MT.selN === n.id ? ' sel' : ''); }
 function mtNoeudTitre(n) { return n.nom + ' — ' + (MT_STATUTS[n.statut] || n.statut) + (n.detail ? ' — ' + n.detail : ''); }
 /** A function or a sound end: a pill (rounded for a function, square for hardware). */
 function mtPastille(n, x, y, w, h) {
@@ -12176,7 +12447,7 @@ function mtFleches(p) {
 function mtLogiciel(svg, d, force) {
   const f = d.fonctions, pl = d.plan;
   let old = svg.querySelector('.mt-log');
-  if (!f || MT.fonction) {
+  if (!f || MT.fonction || MT.edition) {
     if (old) { old.remove(); svg.setAttribute('viewBox', '0 0 ' + pl.l + ' ' + pl.h); svg.dataset.l = pl.l; svg.dataset.h = pl.h; MT.logCle = ''; }
     mtTaille(svg, g('mt-zone'));
     return;
@@ -12307,6 +12578,7 @@ function mtFonctions(d, force) {
   }
 }
 function mtFonction(id) {
+  if ((id || '') !== MT.fonction) MT.k = null;
   MT.fonction = id || '';
   try { localStorage.setItem('mt-fonction', MT.fonction); } catch (x) {}
   mtFicheFerme(); MT.vueCle = ''; MT.logCle = '';
