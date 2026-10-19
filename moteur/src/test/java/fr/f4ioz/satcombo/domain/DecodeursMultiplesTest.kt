@@ -104,4 +104,13 @@ class DecodeursMultiplesTest {
         assertEquals(20_000.0, D.decalage(10_489_770_000L, 10_489_750_000.0, 1), 0.0)
         assertEquals(-20_000.0, D.decalage(10_489_770_000L, 10_489_750_000.0, -1), 0.0)
     }
+
+    @Test fun laBaliseUneSeuleFoisSurSonCadran() {
+        assertEquals(10_489_748_500L, D.CADRAN_BALISE_HZ)
+        assertEquals(10_489_748_500L, D.cadranPour(Decodeur.BALISE, 10_489_750_000L))
+        var l = D.ajoute(emptyList(), D.CADRAN_BALISE_HZ, Decodeur.BALISE).liste
+        assertTrue(D.ajoute(l, 10_489_700_000L, Decodeur.BALISE).erreur!!.contains("un seul"))
+        l = D.lit(D.json(l).toString())
+        assertEquals(Decodeur.BALISE, l.single().decodeur)
+    }
 }
