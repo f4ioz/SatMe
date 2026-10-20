@@ -49,6 +49,73 @@ object DecodeAudio {
 
     fun decode(codec: CodecReseau, b: ByteArray): ShortArray =
         if (codec.octetsParEchantillon == 2) pcm16(b) else ShortArray(b.size) { ulaw(b[it].toInt() and 0xFF) }
+
+    /** 16-bit samples read one of the ways the bytes may come. */
+    fun pcm16(b: ByteArray, f: FormatPcm16): ShortArray {
+        val d = f.decalage
+        val n = (b.size - d) / 2
+        return ShortArray(maxOf(0, n)) {
+            val p = d + 2 * it
+            val (hi, lo) = if (f.grosBout) b[p].toInt() to b[p + 1].toInt() else b[p + 1].toInt() to b[p].toInt()
+            val v = ((hi and 0xFF) shl 8) or (lo and 0xFF)
+            (if (f.nonSigne) v - 32768 else v).toShort()
+        }
+    }
+}
+
+/**
+ * How 16-bit samples may sit in the packets: byte order and offset binary.
+ * (A payload one byte off reads, in the other order, as the right sound
+ * with a little low-byte noise: the order covers it.)
+ */
+enum class FormatPcm16(val grosBout: Boolean, val nonSigne: Boolean, val decalage: Int = 0) {
+    PETIT(false, false), GROS(true, false), PETIT_NON_SIGNE(false, true), GROS_NON_SIGNE(true, true)
+}
+
+/**
+ * Finds how the radio lays its 16-bit samples out, from the samples
+ * themselves: real sound sampled at 8–16 kHz moves by small steps from one
+ * sample to the next; bytes read the wrong way (order, sign)
+ * jump across the whole range. The reading with the smallest steps wins
+ * when it is clearly smaller (four times) than the next. Judged over about a second
+ * of sound that is not silence, kept once one way is clearly ahead, judged
+ * again every minute or so (a firmware or setting change).
+ */
+class DetecteurFormatPcm16(private val echantillonsParJugement: Int = 16_000) {
+    @Volatile var format: FormatPcm16 = FormatPcm16.PETIT; private set
+    @Volatile var sur = false; private set
+    private val sommes = DoubleArray(FormatPcm16.entries.size)
+    private var vus = 0
+    private var depuisJugement = 0
+
+    fun decode(b: ByteArray): ShortArray {
+        if (!sur || depuisJugement > 60 * echantillonsParJugement) observe(b)
+        val s = DecodeAudio.pcm16(b, format)
+        depuisJugement += s.size
+        return s
+    }
+
+    private fun observe(b: ByteArray) {
+        var bruit = false
+        for ((i, f) in FormatPcm16.entries.withIndex()) {
+            val s = DecodeAudio.pcm16(b, f)
+            if (s.size < 8) return
+            // The size of the steps from one sample to the next: smallest for the right reading
+            // (wrong byte order or sign makes jumps across the whole range).
+            var pas = 0.0; var e = 0.0
+            for (k in 1 until s.size) { val d = (s[k] - s[k - 1]).toDouble(); pas += d * d; e += s[k].toDouble() * s[k] }
+            if (i == 0 && e / s.size < 4.0) return    // silence: says nothing
+            sommes[i] += pas / s.size
+            if (i == 0) bruit = true
+        }
+        if (!bruit) return
+        vus++
+        val n = (b.size / 2)
+        if (vus * n < echantillonsParJugement) return
+        val ordre = sommes.indices.sortedBy { sommes[it] }
+        if (sommes[ordre[0]] * 4 < sommes[ordre[1]]) { format = FormatPcm16.entries[ordre[0]]; sur = true }
+        sommes.fill(0.0); vus = 0; depuisJugement = 0
+    }
 }
 
 /**

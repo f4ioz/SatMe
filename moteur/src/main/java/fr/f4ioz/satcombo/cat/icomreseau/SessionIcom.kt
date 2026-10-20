@@ -320,9 +320,12 @@ class SessionIcom(
         for (f in fr.f4ioz.satcombo.cat.CatDecode.splitCiv(t)) civRecue?.invoke(f)
     }
 
+    /** The radio's 16-bit layout, found from the sound itself (the descriptions disagree). */
+    val formatPcm = DetecteurFormatPcm16()
+
     private fun sortieAudio(donnees: ByteArray) {
         val a = audioRecu ?: return
-        a(DecodeAudio.decode(config.codec, donnees), config.codec.taux)
+        a(if (config.codec.octetsParEchantillon == 2) formatPcm.decode(donnees) else DecodeAudio.decode(config.codec, donnees), config.codec.taux)
     }
 
     /** Keepalive: pings, idles, token renewal, retransmit requests, liveness. */
