@@ -76,7 +76,7 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
      */
     fun ticMeteor() {
         // A recording or the generator chosen: no antenna to take the pass with.
-        if (meteor == null || !settings.meteorAuto || (meteorAutoArme == 0 && choixFictif())) { meteorAutoArme = 0; return }
+        if (meteor == null || !settings.meteorAuto || (meteorAutoArme == 0 && (choixFictif() || recepteur == FI_POSTE))) { meteorAutoArme = 0; return }
         val now = horloge()
         if (meteorAutoArme != 0) {
             if (!_etat.value.actif) { meteorAutoArme = 0; rendSatellite(); return }
@@ -215,7 +215,7 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
     var biasTee: Boolean
         get() = stockage.getBoolean(CLE_BIAS, false)
         set(v) { stockage.edit().putBoolean(CLE_BIAS, v).apply(); (cle as? RtlTcp)?.let { runCatching { it.setBiasTee(v) } } }
-    /** The receiver: [RTL] (the dongle, rtl_tcp), [PLUTO], [BLADERF], or no hardware: [FICHIER], [GENERATEUR]; taken at the next start. */
+    /** The receiver: [RTL] (the dongle, rtl_tcp), [PLUTO], [BLADERF], the rig's IF [FI_POSTE], or no hardware: [FICHIER], [GENERATEUR]; taken at the next start. */
     var recepteur: String
         get() = stockage.getString(CLE_RECEPTEUR, RTL).takeIf { it in RECEPTEURS } ?: RTL
         set(v) { stockage.edit().putString(CLE_RECEPTEUR, if (v in RECEPTEURS) v else RTL).apply() }
@@ -247,6 +247,27 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
     /** Receiving from no antenna now (a recording, the generator): nothing heard is sent anywhere (PSK Reporter). */
     val fictif: Boolean get() = lecture != null || generateur != null
     private fun choixFictif() = recepteur == FICHIER || recepteur == GENERATEUR
+    // ------------------------------------------------------------ the rig's IF (« IC-9700 FI »)
+
+    /** Opens the rig's IF as a receiver (by the network or its USB card; set by Main), throws with the reason. */
+    @Volatile var ouvreFi: (() -> SourceIq)? = null
+    /** The rig's RX dial (sky Hz) as the CAT reads it, null when not known: the IF's centre. */
+    @Volatile var cadranPoste: () -> Long? = { null }
+    /** Moves the rig's RX dial by [Int] Hz by CAT (receive only); false when it cannot. */
+    @Volatile var deplacePoste: (Int) -> Boolean = { false }
+    /** The rig's IF being received now, or null. */
+    val fiPoste: fr.f4ioz.satcombo.sdr.SourceFiPoste? get() = cle as? fr.f4ioz.satcombo.sdr.SourceFiPoste
+    /**
+     * With the rig's IF: a tuning on the waterfall moves the rig (its RX
+     * dial, by CAT) rather than the listening point within the IF.
+     */
+    var recentrePoste: Boolean
+        get() = stockage.getBoolean(CLE_FI_RECENTRE, false)
+        set(v) { stockage.edit().putBoolean(CLE_FI_RECENTRE, v).apply() }
+    /** The IF's centre (sky Hz) now: the rig's dial, or where it should be when the CAT says nothing. */
+    @Volatile private var cadranFiHz = 0L
+    @Volatile private var cadranLu = false
+
     /** The generator's centre (sky Hz), fixed at its start. */
     @Volatile private var centreGenerateurHz = 0L
     /** Counted at each start: the « remonter le temps » ring starts again with it. */
@@ -323,7 +344,7 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
 
     /** The frequencies the chosen receiver tunes to (Hz): the dongle's, or the Pluto's. */
     val gammeHz: LongRange get() = (cle as? PlutoSdr)?.let { it.frequenceMinHz..it.frequenceMaxHz }
-        ?: if (choixFictif()) 24_000_000L..12_000_000_000L
+        ?: if (choixFictif() || recepteur == FI_POSTE) 24_000_000L..12_000_000_000L
         else if (estPluto()) 70_000_000L..6_000_000_000L
         else if (estBladerf()) BladerfSdr.FREQ_MIN_HZ..BladerfSdr.FREQ_MAX_HZ else 24_000_000L..1_766_000_000L
     /** "AUTO": the transmitter's mode; or NFM, USB, LSB, AM. */
@@ -428,7 +449,7 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
     /** The same axis for a stream read with the PLL at [pll]. */
     fun axeQo100(pll: Long): Pair<Double, Double> {
         val q = station.qo100.etat.value
-        val centre = station.depuisCle(pll).toDouble() - q.calageHz
+        val centre = (if (cle is fr.f4ioz.satcombo.sdr.SourceFiPoste) pll else station.depuisCle(pll)).toDouble() - q.calageHz
         val conv = station.convRx()
         val inverse = conv.configure && conv.inverseur && conv.couvre(q.descenteHz + q.calageHz)
         return centre to (if (inverse) -Dsp.RTL_RATE.toDouble() else Dsp.RTL_RATE.toDouble())
@@ -461,11 +482,13 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
     @Volatile var squelchOuvert = false; private set
 
     /** The sky frequency in the middle of a spectrum taken with the PLL at [pll] (the generator's, a recording's own). */
-    fun cielDePll(pll: Long): Long = generateur?.let { centreGenerateurHz } ?: lecture?.capture()?.frequenceHz ?: station.depuisCle(pll)
+    fun cielDePll(pll: Long): Long = generateur?.let { centreGenerateurHz } ?: lecture?.capture()?.frequenceHz
+        // The rig's IF: its dial is the sky already.
+        ?: if (cle is fr.f4ioz.satcombo.sdr.SourceFiPoste) pll else station.depuisCle(pll)
 
     /** −1 when an inverting converter turns the spectrum over at [cielHz] (sky above, bins below). */
     fun sensSpectre(cielHz: Long): Int {
-        if (fictif) return 1
+        if (fictif || cle is fr.f4ioz.satcombo.sdr.SourceFiPoste) return 1
         val c = station.convRx()
         return if (c.configure && c.inverseur && c.couvre(cielHz)) -1 else 1
     }
@@ -500,7 +523,8 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
         if (recepteur == GENERATEUR) centreGenerateurHz = if (pourQo100()) station.qo100.etat.value.let { it.descenteHz + it.calageHz } else manuelleHz
         val r = runCatching { connecte() }.getOrElse { e ->
             arreteProcessus()
-            _etat.update { Etat(erreur = e.message ?: if (estPluto()) "ADALM-PLUTO injoignable" else if (estBladerf()) "bladeRF injoignable" else "rtl_tcp injoignable") }
+            _etat.update { Etat(erreur = e.message ?: if (estPluto()) "ADALM-PLUTO injoignable" else if (estBladerf()) "bladeRF injoignable"
+                else if (recepteur == FI_POSTE) "FI de l'IC-9700 indisponible" else "rtl_tcp injoignable") }
             return false
         }
         cle = r
@@ -514,7 +538,10 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
         cibleMaintenant()
         val nom = when (r) { is RtlTcp -> RtlTcp.nomTuner(r.tuner); is PlutoSdr -> r.description; is BladerfSdr -> r.description
             is fr.f4ioz.satcombo.sdr.SourceFichierIq -> "Fichier I/Q " + r.donnees.name.removeSuffix(fr.f4ioz.satcombo.sdr.SigMF.EXT_DATA)
-            is fr.f4ioz.satcombo.sdr.GenerateurIq -> "Générateur d'essai"; else -> "" }
+            is fr.f4ioz.satcombo.sdr.GenerateurIq -> "Générateur d'essai"
+            is fr.f4ioz.satcombo.sdr.SourceFiPoste -> "IC-9700 FI · " + (if (r.transport == "usb") "carte USB" else "réseau") +
+                " ±" + String.format(java.util.Locale.FRANCE, "%.1f", r.plan.demiUtileHz / 1000) + " kHz"
+            else -> "" }
         _etat.update { it.copy(actif = true, statut = "réception", erreur = "", tuner = nom) }
         // METEOR: 120 kHz of digital signal, nothing to hear — the raw samples to the picture decoder.
         val m = meteor
@@ -552,6 +579,8 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
     private fun connecte(): SourceIq {
         // No hardware: nothing to lend to DATV, nothing that could transmit.
         if (recepteur == GENERATEUR) return fr.f4ioz.satcombo.sdr.GenerateurIq(reglagesGenerateur)
+        // The rig's IF: no SDR hardware, the rig tunes itself (CAT).
+        if (recepteur == FI_POSTE) return (ouvreFi ?: throw java.io.IOException("la FI du poste n'est pas disponible ici"))()
         if (recepteur == FICHIER) {
             val f = File(fichierIq)
             if (fichierIq.isBlank() || !f.isFile) throw java.io.IOException("aucun enregistrement choisi : « I/Q » › Rejouer")
@@ -666,6 +695,21 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
             _etat.update { it.copy(cielHz = centreGenerateurHz, reposHz = centreGenerateurHz, satellite = "Générateur d'essai") }
             return
         }
+        if (cle is fr.f4ioz.satcombo.sdr.SourceFiPoste) {
+            // The IF is centred on the rig's dial, which the CAT Doppler loop keeps tuning: the axis follows it.
+            val pas = passager
+            val e = if (suitSatellite && pas == null) station.ecouteSdr() else null
+            val lu = cadranPoste()
+            cadranLu = lu != null
+            val dial = lu ?: e?.let { if (settings.sdrDopplerTrack) it.cibleHz else it.reposHz } ?: pas?.hz ?: manuelleHz
+            cadranFiHz = dial
+            voulueHz = 0L
+            // « Recentrer le poste »: the tuning moves the rig's RX dial instead, the IF's listening point back in the middle.
+            val d = decalageHz
+            if (recentrePoste && d != 0 && lu != null && deplacePoste(d)) decalageHz = 0
+            _etat.update { it.copy(cielHz = dial, reposHz = e?.reposHz ?: dial, satellite = e?.satellite.orEmpty()) }
+            return
+        }
         if (pourSonde) {
             val f = settings.sondeFreqHz
             voulueHz = f
@@ -711,6 +755,7 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
         try {
             val fichier = r as? fr.f4ioz.satcombo.sdr.SourceFichierIq
             val essai = r is fr.f4ioz.satcombo.sdr.GenerateurIq
+            val fi = r as? fr.f4ioz.satcombo.sdr.SourceFiPoste
             while (generation == gen) {
                 val voulue = voulueHz
                 if (fichier != null) {
@@ -721,6 +766,9 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
                     if (f != fine) { fine = f; chaine.dopplerFineHz = fine.toDouble() }
                 } else if (essai) {
                     pll = station.versCle(centreGenerateurHz)
+                } else if (fi != null) {
+                    // The rig's dial, sky Hz: the IF's centre, nothing to tune here.
+                    pll = cadranFiHz
                 } else if (voulue > 0) {
                     val plan = DopplerTuner.plan(voulue, pll, fine)
                     if (plan.retune) { r.setCenterFreq(plan.pllHz); pll = plan.pllHz }
@@ -754,14 +802,14 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
                     val pourquoi = if (r is PlutoSdr) r.erreur ?: "l'ADALM-PLUTO a coupé la liaison"
                         else if (r is BladerfSdr) r.erreur ?: "bladeRF-cli s'est arrêté"
                         else if (fichier != null) "lecture terminée (fin de l'enregistrement)"
-                        else if (essai) "générateur arrêté" else "rtl_tcp a coupé la liaison"
+                        else if (essai) "générateur arrêté" else if (fi != null) "la FI du poste ne vient plus" else "rtl_tcp a coupé la liaison"
                     if (generation == gen) _etat.update { it.copy(actif = false, statut = "arrêtée", erreur = pourquoi) }
                     break
                 }
                 if (n == 0 && fichier != null) _etat.update { it.copy(statut = if (fichier.enPause) "en pause" else "calage sur les tranches FT8…") }
                 if (n == 0) continue
                 // The raw I/Q kept (« Remonter le temps », « Enregistrer »): a real receiver's, or the generator's — never a recording's again.
-                if (fichier == null) iqBrut?.let { runCatching { it(if (iq16 == null) iq else null, iq16, n, if (essai) centreGenerateurHz else station.depuisCle(pll), pll, fine.toDouble()) } }
+                if (fichier == null) iqBrut?.let { runCatching { it(if (iq16 == null) iq else null, iq16, n, if (essai) centreGenerateurHz else if (fi != null) pll else station.depuisCle(pll), pll, fine.toDouble()) } }
                 // METEOR pictures: the raw samples, before any audio chain, decoded on their own thread.
                 if (pourMeteor) meteor?.recepteur?.let { m ->
                     if (iq16 != null) m.iq16(iq16, n, (fine + decalageHz).toDouble()) else m.iq(iq, n, (fine + decalageHz).toDouble())
@@ -838,7 +886,10 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
                     val st = chaine.subTone
                     _etat.update { it.copy(statut = statut, pllHz = pll, fineHz = fine, niveauDb = chaine.levelDb, saturation = chaine.clipRatio,
                         ctcssHz = st.hz, ctcssConfiance = st.confiance, ctcssDevHz = st.deviationHz, tonFerme = chaine.toneSquelchClosed,
-                        debitKo = debit, perdus = r.perdus, erreur = when (r) { is PlutoSdr -> r.avertissement; is BladerfSdr -> r.avertissement; else -> it.erreur }) }
+                        debitKo = debit, perdus = r.perdus, erreur = when (r) { is PlutoSdr -> r.avertissement; is BladerfSdr -> r.avertissement
+                            is fr.f4ioz.satcombo.sdr.SourceFiPoste -> r.avertissement()
+                                ?: if (!cadranLu) "cadran du poste non lu (CAT non connecté) : l'axe suit la fréquence visée" else ""
+                            else -> it.erreur }) }
                 }
             }
         } finally {
@@ -873,7 +924,10 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
         const val FICHIER = "fichier"
         /** The test generator: noise and test signals, no hardware. */
         const val GENERATEUR = "generateur"
-        val RECEPTEURS = setOf(RTL, PLUTO, BLADERF, FICHIER, GENERATEUR)
+        /** The rig's IF output (IC-9700 set to IF), by its network audio or its USB sound card. */
+        const val FI_POSTE = "fiposte"
+        const val CLE_FI_RECENTRE = "pc_sdr_fi_recentre"
+        val RECEPTEURS = setOf(RTL, PLUTO, BLADERF, FICHIER, GENERATEUR, FI_POSTE)
         const val CLE_FICHIER = "pc_sdr_fichier_iq"
         const val CLE_FICHIER_DEBIT = "pc_sdr_fichier_debit"
         const val CLE_FICHIER_FREQ = "pc_sdr_fichier_freq"

@@ -427,6 +427,7 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
             val o = when {
                 ir == null -> JSONObject().put("ok", false).put("absent", true)
                 chemin == "/api/icomreseau/spectre" -> ir.spectre()
+                chemin == "/api/icomreseau/cartes" -> ir.cartes()
                 r.methode == "POST" -> runCatching { ir.action(chemin, q) }.getOrElse { JSONObject().put("ok", false).put("erreur", it.message ?: "erreur") }
                 else -> ir.json()
             }
@@ -1158,6 +1159,7 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 q["plutoPort"]?.toIntOrNull()?.let { d.plutoPort = it }
                 q["bladerfOutil"]?.let { d.bladerfOutil = it }
                 q["bias"]?.let { d.biasTee = it == "1" }
+                q["fiRecentre"]?.let { d.recentrePoste = it == "1" }
             }
             // The sound cleaning of the mode demodulated (or of [mode]), kept per mode; receive only.
             "/api/sdr/nettoyage" -> {
@@ -1933,6 +1935,9 @@ object JsonPc {
             .put("tonSq", st.sdrSilencieuxTon / 10.0).put("tonFerme", e.tonFerme)
             .put("suit", d.suitSatellite).put("manuelle", d.manuelleHz).put("hote", d.hote).put("port", d.port).put("lance", d.lance).put("bias", d.biasTee)
             .put("recepteur", d.recepteur).put("plutoHote", d.plutoHote).put("plutoPort", d.plutoPort)
+            // The rig's IF (« IC-9700 FI »): its transport and the half-span usable; « recentrer le poste ».
+            .put("fiRecentre", d.recentrePoste)
+            .put("fi", d.fiPoste?.let { f -> JSONObject().put("transport", f.transport).put("demiHz", Math.round(f.plan.demiUtileHz)) } ?: JSONObject.NULL)
             .put("bladerfOutil", d.bladerfOutil).put("bladerfProgramme", d.programmeBladerf() ?: "").put("bladerfConseil", d.conseilBladerf())
             .put("bladerf", d.infoBladerf.let { i -> JSONObject().put("lu", i.lu).put("message", i.message).put("libelle", i.carte?.libelle ?: "") })
             // Fine tuning, the phone's settings: the magnifier, the vernier, the voice netting.

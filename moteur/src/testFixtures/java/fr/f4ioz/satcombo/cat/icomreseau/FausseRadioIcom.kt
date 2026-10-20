@@ -57,6 +57,9 @@ class FausseRadioIcom(
     val reprisesAudio = CopyOnWriteArrayList<Int>()
     @Volatile var renouvellements = 0
     @Volatile var frequenceHz = 145_800_000L
+    /** The sound sent (sample number, rate → sample); null: a 1 kHz tone. Its IF, set to IF. */
+    @Volatile var son: ((Long, Int) -> Short)? = null
+    private var echantillon = 0L
 
     private inner class Port(val nom: String, val s: DatagramSocket) {
         val moi = 0x4B8B0000 or nom.hashCode().and(0xFFFF)
@@ -237,7 +240,7 @@ class FausseRadioIcom(
                 val k = taux / 50
                 val d = ByteArray(2 * k)
                 for (i in 0 until k) {
-                    val v = (8000 * Math.sin(phase)).toInt(); phase += 2 * Math.PI * 1000 / taux
+                    val v = son?.invoke(echantillon++, taux)?.toInt() ?: (8000 * Math.sin(phase)).toInt(); phase += 2 * Math.PI * 1000 / taux
                     d[2 * i] = v.toByte(); d[2 * i + 1] = (v shr 8).toByte()
                 }
                 val sa = seqAudio++

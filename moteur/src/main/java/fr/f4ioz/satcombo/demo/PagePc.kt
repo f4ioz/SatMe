@@ -3024,11 +3024,17 @@ ${rail()}
     <div class="carte">
       <div class="t" id="r-cle-t">La clé</div>
       <div class="ligne" style="margin-top:0"><span class="petit" style="min-width:70px">Récepteur</span>
-        <select id="r-recepteur" onchange="rRegle('recepteur=' + this.value)"><option value="rtl">Clé RTL-SDR (rtl_tcp)</option><option value="pluto">ADALM-PLUTO (réseau)</option><option value="bladerf">bladeRF 2.0 (USB)</option><option value="fichier" class="r-fictif">Fichier I/Q (relecture)</option><option value="generateur" class="r-fictif">Générateur d'essai</option></select></div>
+        <select id="r-recepteur" onchange="rRegle('recepteur=' + this.value)"><option value="rtl">Clé RTL-SDR (rtl_tcp)</option><option value="pluto">ADALM-PLUTO (réseau)</option><option value="bladerf">bladeRF 2.0 (USB)</option><option value="fiposte">IC-9700 FI (son du poste)</option><option value="fichier" class="r-fictif">Fichier I/Q (relecture)</option><option value="generateur" class="r-fictif">Générateur d'essai</option></select></div>
       <div class="ligne" id="r-fichier-l" hidden><span class="petit" style="min-width:70px">Fichier</span><b class="petit" id="r-fichier-nom" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></b>
         <button onclick="rqOuvre(this)" title="Les enregistrements I/Q : en choisir un à rejouer">Choisir…</button></div>
       <div class="ligne" id="r-gen-l" hidden><span class="petit" style="flex:1">Bruit et signaux d'essai, sans antenne ni matériel.</span>
         <button class="sp-b" id="sp-b-gen" onclick="genOuvre(this)" title="Les signaux du générateur : où, à quel niveau, et comment les écouter">${IconesPc.svg("tune")}<span>Signaux…</span></button></div>
+      <div id="r-fi-l" hidden>
+        <div class="ligne"><span class="petit" id="r-fi-info" style="flex:1">La FI de l'IC-9700, démodulée ici ; centrée sur le cadran du poste.</span>
+          <button type="button" class="q" id="r-fi-q" aria-label="Le récepteur IC-9700 FI">?</button></div>
+        <label class="petit" style="display:block;margin-top:4px" title="Un accord sur la cascade déplace la réception du poste (par le CAT) au lieu de l'écoute dans la FI"><input type="checkbox" id="r-fi-recentre" onchange="rRegle('fiRecentre=' + (this.checked ? 1 : 0))"> Recentrer le poste</label>
+        <div id="r-fi-aide" hidden>Le poste réglé sur <b>IF</b> (Réglages › Poste › Son du poste) envoie sa dernière FI, centrée sur 12 kHz ; SatMe la démodule comme les échantillons d'une clé : cascade, USB, LSB, CW, FM, AM, nettoyage, décodeurs, enregistrement. Le centre de la cascade est le cadran RX du poste lu par le CAT ; le Doppler continue d'accorder le poste et l'axe le suit. Un clic sur la cascade accorde l'écoute dans la FI sans toucher au poste : ±3,6 kHz par le réseau (son à 16 kHz, FI repliée), ±7,5 kHz par la carte son USB (48 kHz). « Recentrer le poste » : le clic déplace plutôt la réception du poste (décalage RX du satellite, par le CAT), l'écoute revient au milieu. Réception seulement.</div>
+      </div>
       <div id="r-materiel">
       <div class="ligne"><span class="petit" style="min-width:70px">Gain</span><select id="r-gain" onchange="rRegle('gain=' + this.value)"></select>
         <label class="petit" id="r-agc-l"><input type="checkbox" id="r-agc" onchange="rRegle('agc=' + (this.checked ? 1 : 0))"> CAG numérique</label></div>
@@ -3462,6 +3468,16 @@ ${rail()}
         <select id="cat-bande"><option value="0">A</option><option value="1">B</option></select></div>
       <div class="ligne" id="cat-liaison-ligne"><span class="petit" style="min-width:34px">Liaison</span>
         <select id="cat-liaison" onchange="irLiaison()"><option value="USB">USB (câble du poste)</option><option value="RESEAU">Réseau (LAN de l'IC-9700)</option></select></div>
+      <div id="cat-fi-ligne" hidden>
+        <div class="ligne"><span class="petit" style="min-width:34px">Son</span>
+          <select id="cat-son-fi" onchange="irFi()" title="Ce que le poste envoie sur sa sortie son (USB ou réseau)"><option value="af">AF — démodulé par le poste</option><option value="fi">FI — démodulé par SatMe</option></select>
+          <button type="button" class="q" id="cat-fi-q" aria-label="Son du poste : AF ou FI">?</button></div>
+        <div class="ligne" id="cat-fi-detail" hidden><select id="cat-fi-transport" onchange="irFi()" title="Par où la FI arrive"><option value="reseau">par le réseau (±3,6 kHz)</option><option value="usb">carte son USB (±7,5 kHz)</option></select>
+          <select id="cat-fi-carte" onchange="irFi()" style="max-width:190px" title="La carte son USB de l'IC-9700" hidden></select>
+          <label class="petit" title="Si les stations montent quand le cadran descend : la FI de ce poste est dans l'autre sens"><input type="checkbox" id="cat-fi-inverse" onchange="irFi()"> sens inversé</label></div>
+        <div class="avert" id="cat-fi-avert"></div>
+        <div id="cat-fi-aide" hidden><b>AF</b> (réglage d'usine) : le poste démodule, SatMe reçoit son son. <b>FI</b> : le poste envoie sa dernière FI, centrée sur 12 kHz, large d'environ 15 kHz ; SatMe la démodule lui-même dans l'onglet SDR, récepteur « IC-9700 FI » (cascade, USB, LSB, CW, FM, AM, nettoyage, décodeurs). Sur le poste : <b>MENU › SET › Connectors › USB AF/IF Output › Output Select : IF</b> (AF pour revenir). Par le réseau, le son à 16 kHz replie la FI : ±3,6 kHz utiles autour du cadran ; par la carte son USB (48 kHz) : toute la FI, ±7,5 kHz. En FI, la source « IC-9700 (réseau) » ne nourrit plus les décodeurs : ils reçoivent le son démodulé par SatMe.</div>
+      </div>
       <div id="ir-panneau" hidden>
         <div class="t" style="margin-top:8px">IC-9700 par le réseau <span id="ir-pastille" class="pastille coupe">hors ligne</span></div>
         <div class="petit aide">Le serveur réseau intégré de l'IC-9700 : trois ports UDP (contrôle 50001, CI-V 50002, audio 50003), une seule session à la fois. SatMe y prend le CI-V (le même pilotage Doppler que par USB) et le son reçu, proposé comme carte son « IC-9700 (réseau) » à l'onglet Son, au SSTV, au FT8, à la phonie et à « Écouter ici ». <b>Réception seulement</b> : aucun son n'est envoyé, la voie d'émission n'est pas demandée et toute commande d'émission CI-V (1C 00 01…) est refusée. À la déconnexion, la session est toujours rendue au poste.</div>
@@ -5362,6 +5378,10 @@ const irReseau = () => g('cat-modele').value === 'IC9700' && g('cat-liaison').va
 function irMontre() {
   const icom = g('cat-modele').value === 'IC9700';
   g('cat-liaison-ligne').style.display = icom ? '' : 'none';
+  // The rig's sound, AF or IF: an IC-9700's (by the network or its USB card).
+  g('cat-fi-ligne').hidden = !(icom || g('cat-modele').value === 'SIM') || !IR || IR.absent;
+  g('cat-fi-detail').hidden = g('cat-son-fi').value !== 'fi';
+  g('cat-fi-carte').hidden = g('cat-fi-transport').value !== 'usb';
   const r = irReseau();
   g('ir-panneau').hidden = !r;
   // By the network no serial port nor speed: the rig's LAN only.
@@ -5385,6 +5405,8 @@ async function irCharge(remplir) {
     g('ir-codec').innerHTML = IR.codecs.map(c => '<option value="' + c.id + '">' + esc(c.libelle) + '</option>').join('');
     g('ir-codec').value = IR.codec; g('ir-latence').value = IR.latence;
     g('ir-journal').checked = IR.journal; g('ir-spectre').checked = IR.spectre;
+    g('cat-son-fi').value = IR.fiChoisie ? 'fi' : 'af'; g('cat-fi-transport').value = IR.fiTransport || 'reseau'; g('cat-fi-inverse').checked = !!IR.fiInverse;
+    irCartes();
     irMontre();
   }
   const co = IR.etat === 'CONNECTE';
@@ -5398,10 +5420,29 @@ async function irCharge(remplir) {
     l.push('son : ' + IR.audioRecus + ' paquets, ' + IR.audioPerdus + ' perdus' + (IR.redemandes ? ', ' + IR.redemandes + ' redemandés' : ''));
     l.push((IR.cat ? 'CAT' : '') + (IR.cat && IR.audio ? ' + ' : '') + (IR.audio ? 'son' : ''));
   } else if (!IR.pret && IR.manque) l.push(IR.manque);
-  if (IR.sonFi) l.push('⚠ le poste semble envoyer sa FI (IF) et non le son : sur l’IC-9700, régler la sortie audio LAN/USB sur AF');
+  if (IR.sonFi && !IR.fiChoisie) l.push('⚠ le poste semble envoyer sa FI (IF) et non le son : sur l’IC-9700, régler la sortie audio LAN/USB sur AF, ou choisir « FI » (Son, ci-dessus)');
+  // The choice and what the rig sends, both ways.
+  txt('cat-fi-avert', IR.fiChoisie && IR.sonAf ? '⚠ FI choisie, mais le poste semble envoyer son son démodulé (AF) : régler sa sortie sur IF (Output Select)' :
+    !IR.fiChoisie && IR.sonFi ? '⚠ le poste semble envoyer sa FI : choisir « FI » ici, ou régler sa sortie sur AF' : '');
   if (IR.refus) l.push('refusé : ' + IR.refus);
   if (IR.journal && IR.trace) l.push('trace : ' + IR.trace.split(/[\\/]/).pop() + ' (dossier des réglages)');
   txt('ir-etat', l.filter(x => x).join(' · '));
+}
+/** Son du poste: AF or IF, and how the IF comes. */
+async function irFi() {
+  irMontre();
+  await post('api/icomreseau/reglage?sonFi=' + (g('cat-son-fi').value === 'fi' ? 1 : 0) + '&fiTransport=' + g('cat-fi-transport').value +
+    '&fiInverse=' + (g('cat-fi-inverse').checked ? 1 : 0) + (g('cat-fi-carte').value ? '&fiCarte=' + enc(g('cat-fi-carte').value) : ''));
+  irCharge(false);
+}
+/** The sound cards for the IF by USB: the rig's own first. */
+async function irCartes() {
+  let c; try { c = await (await fetch('api/icomreseau/cartes')).json(); } catch (x) { return; }
+  if (!c || !c.cartes) return;
+  const s = g('cat-fi-carte');
+  s.innerHTML = '<option value="">' + (c.poste ? 'celle du poste' : '(choisir la carte)') + '</option>' +
+    c.cartes.map(k => '<option value="' + esc(k.nom) + '">' + esc(k.libelle) + (k.nom === c.poste ? ' ★' : '') + '</option>').join('');
+  s.value = c.carte || '';
 }
 function irLiaison() { post('api/icomreseau/reglage?liaison=' + g('cat-liaison').value).then(() => irCharge(false)); irMontre(); }
 async function irEnregistre() {
@@ -9037,6 +9078,7 @@ function carnetBascule() {
   carnetRend();
 }
 g('c-vers-q').aides = [g('c-vers-aide')];
+g('cat-fi-q').aides = [g('cat-fi-aide')]; g('r-fi-q').aides = [g('r-fi-aide')];
 function carnetRend() {
   const k = TQ && TQ.carnet, c = carnetVers(), apres = g('ca-on').checked;
   g('c-vers').hidden = !c || apres;
@@ -9643,6 +9685,7 @@ async function ticSdr() {
   if (!SP_ESSAI && !(fluxOk && R && fluxSujets.includes('sdr'))) { try { R = await (await fetch('api/sdr')).json(); } catch (x) { return; } }
   rendSdr();
 }
+let rFiVu = '';
 function rendSdr() {
   if (!R) return;
   const r = R;
@@ -9660,9 +9703,18 @@ function rendSdr() {
   const blade = r.recepteur === 'bladerf', pluto = r.recepteur === 'pluto' || blade;
   if (g('r-gain').dataset.src !== (blade ? 'bladerf' : pluto ? 'pluto' : 'rtl')) remplitGain(blade ? 'bladerf' : pluto);
   const fictif = r.recepteur === 'fichier' || r.recepteur === 'generateur';
-  txt('r-titre', r.recepteur === 'fichier' ? 'Fichier I/Q (relecture)' : r.recepteur === 'generateur' ? 'Générateur d’essai' :
-    blade ? 'bladeRF 2.0 (USB)' : pluto ? 'ADALM-PLUTO (réseau)' : 'Clé SDR (rtl_tcp)'); txt('r-cle-t', pluto || fictif ? 'Le récepteur' : 'La clé');
+  const fi = r.recepteur === 'fiposte';
+  txt('r-titre', r.recepteur === 'fichier' ? 'Fichier I/Q (relecture)' : r.recepteur === 'generateur' ? 'Générateur d’essai' : fi ? 'IC-9700 FI' :
+    blade ? 'bladeRF 2.0 (USB)' : pluto ? 'ADALM-PLUTO (réseau)' : 'Clé SDR (rtl_tcp)'); txt('r-cle-t', pluto || fictif || fi ? 'Le récepteur' : 'La clé');
   if (r.generateur !== undefined) rendFictif(r);
+  // The rig's IF: no gain nor link here (the rig tunes itself); the view narrowed to its span once at each start.
+  g('r-fi-l').hidden = !fi; if (fi) g('r-materiel').hidden = true; else if (!fictif) g('r-materiel').hidden = false;
+  coche('r-fi-recentre', !!r.fiRecentre);
+  const fiCle = r.fi ? r.fi.transport + r.fi.demiHz : '';
+  if (fiCle && rFiVu !== fiCle) { rFiVu = fiCle; spVue(r.fi.demiHz > 5000 ? 24000 : 12000, 0); }
+  if (!r.fi) rFiVu = '';
+  if (fi) txt('r-fi-info', r.fi ? (r.fi.transport === 'usb' ? 'Carte son USB' : 'Réseau') + ' : ±' + (r.fi.demiHz / 1000).toLocaleString('fr-FR', { maximumFractionDigits: 1 }) + ' kHz autour du cadran du poste.'
+    : 'La FI de l’IC-9700 (poste réglé sur IF), démodulée ici ; centrée sur le cadran du poste.');
   g('r-agc-l').hidden = pluto; g('r-liaison').hidden = pluto; g('r-liaison-pluto').hidden = !pluto || blade; g('r-liaison-bladerf').hidden = !blade;
   if (blade && r.bladerf) {
     txt('r-bladerf-info', !r.bladerf.lu ? 'non détecté (bouton Détecter)' : r.bladerf.libelle || r.bladerf.message);

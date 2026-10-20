@@ -106,6 +106,9 @@ class DetecteurFormatPcm16(private val echantillonsParJugement: Int = 16_000) {
 
     /** The radio seems to send its IF, not the demodulated sound (a setting on the radio). */
     val fi: Boolean get() = rapportAigus > 1.2
+    /** Sound heard long enough, with little high in the band: the demodulated sound (AF), not the IF. */
+    val af: Boolean get() = jugesAigus >= 200 && rapportAigus < 0.8
+    @Volatile private var jugesAigus = 0
 
     private fun aigus(s: ShortArray) {
         if (s.size < 8) return
@@ -113,6 +116,7 @@ class DetecteurFormatPcm16(private val echantillonsParJugement: Int = 16_000) {
         for (k in 1 until s.size) { val x = (s[k] - s[k - 1]).toDouble(); d += x * x; e += s[k].toDouble() * s[k] }
         if (e / s.size < 100.0) return    // silence: says nothing
         rapportAigus += (d / e - rapportAigus) * 0.01
+        if (jugesAigus < 1_000) jugesAigus++
     }
 
     private fun observe(b: ByteArray) {
