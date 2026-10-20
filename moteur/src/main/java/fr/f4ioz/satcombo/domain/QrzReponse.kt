@@ -61,8 +61,32 @@ object QrzReponse {
         val surnom: String = "",
         /** Licensed since (a year, as QRZ gives it). */
         val depuis: String = "",
+        /**
+         * Set when the compound callsign was not in the directory and its
+         * operator's record was taken instead (EA3/M5JFS → M5JFS): who, not
+         * where. [lieuOpere] is where they operate from (EA3, /P…).
+         */
+        val identiteDe: String = "",
+        val lieuOpere: String = "",
     ) {
         val vide: Boolean get() = carre.isBlank() && nom.isBlank() && pays.isBlank()
+    }
+
+    /** The directory does not know the callsign (as opposed to no session, no subscription, no network). */
+    fun introuvable(f: Fiche): Boolean =
+        f.erreur.contains("not found", ignoreCase = true) || (f.erreur.isBlank() && f.vide)
+
+    /**
+     * The operator's record [b] for compound callsign [d]: the identity only.
+     * Their home square, coordinates, address, zones and country are not
+     * this contact's place; the country becomes the operating prefix's.
+     */
+    fun identiteSeule(b: Fiche, d: IndicatifCompose.Decoupe): Fiche {
+        val lieu = d.prefixe.ifEmpty { (d.suffixes.map { "/$it" } + listOfNotNull(d.chiffre.ifEmpty { null }?.let { "/$it" })).joinToString("") }
+        if (!d.deplace) return b.copy(indicatif = d.complet, identiteDe = d.base, lieuOpere = lieu)
+        return b.copy(indicatif = d.complet, identiteDe = d.base, lieuOpere = lieu,
+            carre = "", lat = null, lon = null, adresse = "", qth = "", etat = "", comte = "", zoneCq = "", zoneItu = "",
+            pays = if (d.maritime) "maritime mobile" else if (d.aeronautique) "aéronautique mobile" else Dxcc.entite(d.complet)?.nom.orEmpty())
     }
 
     private fun balise(xml: String, nom: String): String =

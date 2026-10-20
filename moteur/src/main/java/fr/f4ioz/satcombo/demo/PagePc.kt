@@ -443,6 +443,13 @@ ${STYLE_JETONS}
   .ns-avis { max-width:620px; margin:40px auto; }
   #visionneuse { background:var(--carte); color:var(--clair); border:1px solid var(--bord); border-radius:12px; padding:10px; max-width:96vw; }
   #c-liste td.act button { padding:3px 5px; }
+  .c-quiligne { min-height:20px; margin-top:4px; display:flex; gap:6px; align-items:baseline; flex-wrap:wrap; }
+  .c-pays:empty { display:none; }
+  .c-pays { font-family:Drapeaux,system-ui; white-space:nowrap; }
+  .c-dr { font-family:Drapeaux,system-ui; margin-right:4px; font-weight:400; }
+  .cs-ident { color:var(--ambre); }
+  .edc-carte { position:relative; height:150px; margin-top:8px; border-radius:8px; overflow:hidden; }
+  .edc-carte canvas { position:absolute; inset:0; width:100%; height:100%; }
   #c-liste .c-nm { max-width:96px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--gris); font-size:11px; font-weight:400; }
   #c-liste td.act { white-space:nowrap; }
   .fd-grille { display:grid; grid-template-columns:repeat(auto-fill,minmax(120px,1fr)); gap:6px; max-height:50vh; overflow:auto; margin-top:6px; }
@@ -1060,7 +1067,7 @@ ${STYLE_JETONS}
   #v-qo100 .tq-legende, #v-qo100 .tq-signaux { margin-top:4px; }
   #v-qo100 #c-saisie #c-call { font-size:20px; padding:5px 9px; }
   #v-qo100 #c-saisie .c-props { min-height:0; }
-  #v-qo100 #c-saisie #c-qui { min-height:0; }
+  #v-qo100 #c-saisie .c-quiligne { min-height:0; }
   #v-qo100 #c-saisie #c-aide { display:none; }
   .d-haut { display:flex; gap:10px; align-items:stretch; }
   .d-haut #d-cadre { flex:none; width:min(calc((100vh - var(--d-bas)) * 16 / 9), calc(100% - 330px)); }
@@ -1865,7 +1872,7 @@ ${rail()}
       <div id="c-vers-aide" hidden>Le contact est noté sur le satellite <b>choisi ici</b> (pour ce contact). Sinon sur celui que le <b>poste</b> travaille : le satellite suivi, Doppler par le CAT ; QO-100 quand « Appliquer au poste » est coché, ou quand le contact est saisi dans le <b>cockpit QO-100</b>. Le récepteur SDR qui écoute QO-100 en fond ne change pas le carnet.</div>
       <input id="c-call" placeholder="INDICATIF" autocomplete="off" style="width:100%;font-size:26px;font-weight:800;letter-spacing:3px;text-transform:uppercase">
       <div id="c-props" class="c-props"></div>
-      <div id="c-qui" class="petit" style="min-height:20px;margin-top:4px"></div>
+      <div class="petit c-quiligne"><span id="c-pays" class="c-pays"></span><span id="c-qui"></span></div>
       <div class="ligne">
         <input id="c-loc" placeholder="Carré" style="text-transform:uppercase;max-width:120px">
         <span class="petit">RS ↑</span><input id="c-rs" value="59" style="max-width:60px">
@@ -2046,7 +2053,9 @@ ${rail()}
 </dialog>
 <dialog id="c-edit" style="background:var(--carte);color:var(--clair);border:1px solid var(--bord);border-radius:12px;min-width:360px">
   <div class="t">Modifier le contact <span class="petit" id="e-quand"></span></div>
-  <div class="ligne"><input id="e-call" placeholder="Indicatif" style="text-transform:uppercase"><input id="e-loc" placeholder="Carré" style="text-transform:uppercase;max-width:110px"></div>
+  <div class="ligne"><span id="e-dr" class="c-pays" style="font-size:20px"></span><input id="e-call" placeholder="Indicatif" style="text-transform:uppercase"><input id="e-loc" placeholder="Carré" style="text-transform:uppercase;max-width:110px"></div>
+  <div class="edc-carte" id="edc-boite" hidden><canvas id="edc-carte"></canvas></div>
+  <div class="petit" id="e-ou"></div>
   <div class="ligne"><span class="petit">Satellite</span><input id="e-sat" list="e-sats" placeholder="Satellite, QO-100, terrestre…" autocomplete="off" style="flex:1"
     title="Un satellite de la liste (az/el et fréquences recalculés), QO-100, un autre nom, ou « terrestre »"><datalist id="e-sats"></datalist></div>
   <div class="ligne"><span class="petit">Date</span><input id="e-date" type="date" style="max-width:150px" oninput="editHeure()" title="Date du contact, en UTC">
@@ -4752,7 +4761,7 @@ function pointsDuPassage(m) {
     (pc.skeds || []).forEach(k => { if (k.lat == null) return;
       x.strokeStyle = '#FFB454'; x.lineWidth = 3; x.beginPath(); x.arc(m.px(k.lon + d), m.py(k.lat), 6, 0, 7); x.stroke();
       etiquetteCarte(m, k.lat, k.lon + d, '📣 ' + k.call, '#8A5300'); });
-    (pc.contacts || []).forEach(c => { if (c.lat == null) return; pointCarte(m, c.lat, c.lon + d, '#FF5FA2', 5, c.call); });
+    (pc.contacts || []).forEach(c => { if (c.lat == null) return; pointCarte(m, c.lat, c.lon + d, c.faible ? 'rgba(255,95,162,.4)' : '#FF5FA2', c.faible ? 4 : 5, (c.dr ? c.dr + ' ' : '') + c.call); });
   }
 }
 function etiquetteCarte(m, lat, lon, nom, coul) {
@@ -5580,7 +5589,35 @@ stMaj(); setInterval(stMaj, 1000);
 // ------------------------------------------------------------------ log
 let C = [], minuteurQrz = 0, quiPour = '', editT = 0;
 const esc = x => String(x == null ? '' : x).replace(/&/g, '&amp;').replace(/</g, '&lt;');
-const base = c => c.toUpperCase().split('/')[0];
+// The operator of a callsign, wherever from: EA3/M5JFS, M5JFS/P, F/ON4ABC/P → M5JFS, M5JFS, ON4ABC (the same rule as the server's).
+const SUF_OP = ['P', 'M', 'MM', 'AM', 'QRP', 'QRPP', 'A', 'B', 'LH'];
+function base(c) {
+  let m = String(c || '').toUpperCase().replace(/\s/g, '').split('/').filter(x => x);
+  while (m.length > 1 && (SUF_OP.includes(m[m.length - 1]) || /^[0-9]$/.test(m[m.length - 1]))) m.pop();
+  if (m.length < 2) return m[0] || '';
+  const ind = m.filter(x => x.length >= 3 && /[0-9]/.test(x) && /[A-Z]/.test(x) && /[A-Z]$/.test(x));
+  return (ind.length ? ind : m).reduce((a, b) => b.length > a.length ? b : a);
+}
+const plein = c => String(c || '').trim().toUpperCase();
+/** A square's centre (4, 6 or 8 characters), or null when it is not one. */
+function carreLL(l) {
+  l = String(l || '').trim().toUpperCase();
+  if (!/^[A-R]{2}[0-9]{2}([A-X]{2}([0-9]{2})?)?$/.test(l)) return null;
+  let lon = (l.charCodeAt(0) - 65) * 20 - 180 + (+l[2]) * 2, lat = (l.charCodeAt(1) - 65) * 10 - 90 + (+l[3]), dx = 2, dy = 1;
+  if (l.length >= 6) { dx /= 24; dy /= 24; lon += (l.charCodeAt(4) - 65) * dx; lat += (l.charCodeAt(5) - 65) * dy; }
+  if (l.length === 8) { dx /= 10; dy /= 10; lon += (+l[6]) * dx; lat += (+l[7]) * dy; }
+  return { lat: lat + dy / 2, lon: lon + dx / 2 };
+}
+/** From me ([a]) to [b]: km, azimuth and its compass point, as the server gives them. */
+function versLui(a, b) {
+  const r = Math.PI / 180, f1 = a.lat * r, f2 = b.lat * r, dl = (b.lon - a.lon) * r;
+  const km = 2 * 6371 * Math.asin(Math.sqrt(Math.sin((f2 - f1) / 2) ** 2 + Math.cos(f1) * Math.cos(f2) * Math.sin(dl / 2) ** 2));
+  const az = (Math.atan2(Math.sin(dl) * Math.cos(f2), Math.cos(f1) * Math.sin(f2) - Math.sin(f1) * Math.cos(f2) * Math.cos(dl)) / r + 360) % 360;
+  const roses = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSO', 'SO', 'OSO', 'O', 'ONO', 'NO', 'NNO'];
+  return { lat: b.lat, lon: b.lon, moi: { lat: a.lat, lon: a.lon }, km: Math.round(km), azimut: Math.round(az), rose: roses[Math.round(az / 22.5) % 16] };
+}
+/** The flag before a callsign in the lists. */
+const drC = e => e && e.dr ? '<span class="c-dr" title="' + escA(e.py || '') + '">' + esc(e.dr) + '</span>' : '';
 async function chargeCarnet() {
   try {
     const j = await (await fetch('api/carnet')).json();
@@ -5596,7 +5633,7 @@ function dessineCarnet() {
   const reste = tous.length > 1000 ? '<tr><td colspan="8" class="petit">… et ' + (tous.length - 1000) + ' autres : filtre pour les voir</td></tr>' : '';
   vusCarnet = tous.slice(0, 1000).map(e => e.t);
   g('c-liste').innerHTML = tous.slice(0, 1000).map(e =>
-    '<tr><td><input type="checkbox" class="c-coche" data-t="' + e.t + '"' + (coches.has(e.t) ? ' checked' : '') + ' onchange="coche(' + e.t + ', this.checked)"></td><td style="white-space:nowrap">' + new Date(e.t).toISOString().slice(0, 16).replace('T', ' ') + '</td><td><b>' + esc(e.c) + '</b>' + (e.nm ? '<div class="c-nm" title="' + esc(e.nm).replace(/"/g, '&quot;') + '">' + esc(e.nm) + '</div>' : '') + '</td><td>' + esc(e.l) +
+    '<tr><td><input type="checkbox" class="c-coche" data-t="' + e.t + '"' + (coches.has(e.t) ? ' checked' : '') + ' onchange="coche(' + e.t + ', this.checked)"></td><td style="white-space:nowrap">' + new Date(e.t).toISOString().slice(0, 16).replace('T', ' ') + '</td><td>' + drC(e) + '<b>' + esc(e.c) + '</b>' + (e.nm ? '<div class="c-nm" title="' + esc(e.nm).replace(/"/g, '&quot;') + '">' + esc(e.nm) + '</div>' : '') + '</td><td>' + esc(e.l) +
     '</td><td>' + esc(e.sat) + '</td><td>' + esc(e.md) + '</td><td>' + esc(e.rs) + '/' + esc(e.rr) +
     '</td><td class="act">' + envoiCarnet(e) +
     '<button title="Modifier" onclick="edite(' + e.t + ')">✎</button> <button title="Supprimer ce contact" onclick="supprimeContacts([' + e.t + '])">🗑</button></td></tr>').join('') + reste ||
@@ -5811,22 +5848,28 @@ function stationPour(brut) {
 }
 function dessineStation() {
   const h = CSH; if (!h || !csPour) return;
-  const q = CSQ && CSQPour === csPour ? CSQ : null;
+  const tape = plein(v('c-call')), q = CSQ && CSQPour === tape ? CSQ : null, ls = LS && LS.pour === tape ? LS : null;
   g('cs-vide').hidden = true; g('cs-plein').hidden = false;
   const der = h.contacts[0];
-  txt('cs-call', q && q.indicatif ? q.indicatif : csPour);
+  g('cs-call').innerHTML = (ls && ls.dr ? '<span class="c-dr" title="' + escA(ls.py || '') + '">' + esc(ls.dr) + '</span>' : '') + esc(q && q.indicatif ? q.indicatif : tape || csPour);
   txt('cs-nom', q ? q.nom + (q.surnom ? ' « ' + q.surnom + ' »' : '') : der && der.nm ? der.nm : '');
   txt('cs-lieu', q ? [q.adresse, q.qth, q.etat, q.pays].filter(x => x).join(' · ') : der && der.qth ? der.qth : '');
+  if (q && q.identiteDe) g('cs-lieu').innerHTML = '<span class="cs-ident">identité de ' + esc(q.identiteDe) + ' ; position non reprise : opère depuis ' + esc(q.lieuOpere) + '</span>' + (q.pays ? ' · ' + esc(q.pays) : '');
   txt('cs-info', q ? [q.carre, q.zoneCq ? 'CQ ' + q.zoneCq : '', q.zoneItu ? 'ITU ' + q.zoneItu : '', q.classe ? 'classe ' + q.classe : '', q.depuis ? 'licence ' + q.depuis : ''].filter(x => x).join(' · ') : '');
   g('cs-qsl').innerHTML = q ? '<span' + (q.lotw ? '' : ' class="non"') + '>LoTW</span><span' + (q.eqsl ? '' : ' class="non"') + '>eQSL</span><span' + (q.qslPapier ? '' : ' class="non"') + '>QSL papier</span>' +
     (q.qslManager ? '<span>' + esc(q.qslManager) + '</span>' : '') + (q.site ? '<a href="' + esc(q.site).replace(/"/g, '') + '" target="_blank" rel="noopener" style="color:var(--cyan);font-size:11px">site</a>' : '') : '';
   const ph = g('cs-photo');
   if (q && q.image && ficheVoulue) { if (ph.getAttribute('src') !== q.image) ph.src = q.image; ph.hidden = false; } else { ph.hidden = true; ph.removeAttribute('src'); }
-  // Where: QRZ's place, else the log's square.
-  const ou = q && q.lat != null ? q : (h.lat != null ? h : null);
+  // Where: the square being typed (live; a wrong one shows nothing), else QRZ's place, the log's square, the entity's centre (fainter).
+  const moi = E && E.observateur, lt = v('c-loc'), ct = carreLL(lt);
+  let ou = null, faible = false;
+  if (lt) ou = ct && moi ? versLui(moi, ct) : null;
+  else if (q && q.lat != null) ou = q;
+  else if (h.lat != null && !(ls && ls.op)) ou = h;
+  else if (ls && ls.clat != null && moi) { ou = versLui(moi, { lat: ls.clat, lon: ls.clon }); faible = true; }
   const voir = ficheVoulue && ou && ou.km != null;
   g('cs-dist').hidden = !voir; g('cs-carte-boite').hidden = !voir;
-  if (voir) { txt('cs-km', ou.km.toLocaleString('fr-FR') + ' km'); txt('cs-az', ou.azimut + '° ' + ou.rose); dessineCarteStation2(ou); }
+  if (voir) { txt('cs-km', (faible ? '≈ ' : '') + ou.km.toLocaleString('fr-FR') + ' km'); txt('cs-az', ou.azimut + '° ' + ou.rose); dessineCarteStation2(ou, faible); }
   // The log: how many, since when, on which satellites; each contact and its note.
   const jour = t => new Date(t).toISOString().slice(0, 10);
   txt('cs-resume', h.total ? h.total + ' contact' + (h.total > 1 ? 's' : '') + ' · premier ' + jour(h.premier) + ' · dernier ' + jour(h.dernier) +
@@ -5837,8 +5880,9 @@ function dessineStation() {
     '</td></tr>' + (e.n ? '<tr><td></td><td colspan="4" class="note">' + esc(e.n) + '</td></tr>' : '')).join('');
 }
 /** The two stations and the great circle between them, on the map. */
-function dessineCarteStation2(ou) {
-  const c = g('cs-carte'); if (!c.clientWidth || !ou.moi) return;
+function dessineCarteStation2(ou, faible, c, vue, nom) {
+  c = c || g('cs-carte'); vue = vue || CSV; nom = nom || plein(v('c-call')) || csPour;
+  if (!c.clientWidth || !ou.moi) return;
   const a = ou.moi, b = { lat: ou.lat, lon: ou.lon };
   // The great circle, a point every few degrees, longitudes continuous from mine.
   const rad = Math.PI / 180, p1 = [a.lat * rad, a.lon * rad], p2 = [b.lat * rad, b.lon * rad];
@@ -5856,12 +5900,12 @@ function dessineCarteStation2(ou) {
   const lb = arc.length ? arc[arc.length - 1][1] : b.lon;
   const xs = [wxk(a.lon), wxk(lb)].concat(arc.map(p => wxk(p[1]))), ys = [wyq(a.lat), wyq(b.lat)].concat(arc.map(p => wyq(p[0])));
   const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
-  CSV.cx = (x0 + x1) / 2; CSV.cy = (y0 + y1) / 2;
-  CSV.z = Math.max(1, Math.min(10, Math.log2(Math.min(c.clientWidth / 256 / Math.max(x1 - x0, 1e-4), c.clientHeight / 256 / Math.max(y1 - y0, 1e-4)) * 0.75)));
-  const m = fondCarte(c, CSV);
-  traceCarte(m, arc, '#E86FA8', 2.5, [6, 4]);
+  vue.cx = (x0 + x1) / 2; vue.cy = (y0 + y1) / 2;
+  vue.z = Math.max(1, Math.min(10, Math.log2(Math.min(c.clientWidth / 256 / Math.max(x1 - x0, 1e-4), c.clientHeight / 256 / Math.max(y1 - y0, 1e-4)) * 0.75)));
+  const m = fondCarte(c, vue);
+  traceCarte(m, arc, faible ? 'rgba(232,111,168,.45)' : '#E86FA8', faible ? 1.5 : 2.5, [6, 4]);
   pointCarte(m, a.lat, a.lon, '#FFB454', 6, E && E.indicatif ? E.indicatif : 'Moi');
-  pointCarte(m, b.lat, lb, '#E86FA8', 7, csPour);
+  pointCarte(m, b.lat, lb, faible ? 'rgba(232,111,168,.45)' : '#E86FA8', faible ? 5 : 7, nom);
 }
 
 // The stations it may be, as typed (the phone's prediction: the log's contacts, how recent, the same
@@ -5877,13 +5921,22 @@ function proposeIndicatifs() {
     const saisie = v('c-call');
     let j = null;
     try { j = await (await fetch('api/carnet/propositions?c=' + enc(saisie))).json(); } catch (x) { return; }
-    if (v('c-call') !== saisie || iProp >= 0) return;
+    if (v('c-call') !== saisie) return;
+    lieuSaisi(j, saisie);
+    if (iProp >= 0) return;
     g('c-call').style.borderColor = COUL_ETAT[j.etat] || '';
     g('c-call').title = { DEJA_CONTACTE: 'déjà contacté', PLAUSIBLE: 'indicatif plausible', INHABITUEL: 'indicatif inhabituel (rien n’empêche de l’enregistrer)' }[j.etat] || '';
     // A prediction just taken: no more to offer.
     propositions = saisie.toUpperCase() === accepte ? [] : j.propositions.filter(p => p.c !== saisie.toUpperCase());
     dessinePropositions();
   }, 120);
+}
+// Where the callsign typed operates from (the server's split): its flag beside the field, the map's fallback.
+let LS = null;
+function lieuSaisi(j, saisie) {
+  LS = j && j.base ? { pour: plein(saisie), dr: j.dr || '', py: j.py || '', op: j.op || '', base: j.base, clat: j.clat, clon: j.clon } : null;
+  g('c-pays').innerHTML = LS && (LS.dr || LS.py) ? esc(LS.dr) + ' ' + esc(LS.py) + (LS.op ? ' <span class="petit">(opère depuis ' + esc(LS.op) + ', indicatif ' + esc(LS.base) + ')</span>' : '') : '';
+  dessineStation();
 }
 function dessinePropositions() {
   g('c-props').innerHTML = propositions.map((p, i) => '<button tabindex="-1"' + (i === iProp ? ' class="choisie"' : '') + ' onclick="prendProposition(' + i + ')" title="' + esc(p.c) + (p.sat ? ' · dernier contact sur ' + esc(p.sat) : '') + '"><b>' + esc(p.c) + '</b><span>' +
@@ -5912,7 +5965,7 @@ function prendProposition(i) {
 // A square typed by hand is kept while going through the predictions.
 // The callsign the square belongs to: typed for it, or filled from it. Another callsign that knows its square replaces it.
 let locPour = '';
-g('c-loc').addEventListener('input', () => { g('c-loc').dataset.tape = v('c-loc') ? '1' : ''; locPour = base(v('c-call')); });
+g('c-loc').addEventListener('input', () => { g('c-loc').dataset.tape = v('c-loc') ? '1' : ''; locPour = base(v('c-call')); dessineStation(); });
 function locPourIndicatif(l, c) {
   if (!l || v('c-call').indexOf('/') >= 0) return;
   if (v('c-loc') && locPour === c) return;
@@ -5951,16 +6004,17 @@ g('c-call').addEventListener('input', () => {
     // Known by name: QRZ only for the station's card, when it is wanted.
     if (!ficheVoulue) return;
   }
+  const tout = plein(v('c-call'));
   minuteurQrz = setTimeout(async () => {
     if (!connu) txt('c-qui', 'QRZ…');
     let f = null;
-    try { f = await (await fetch('api/qrz?c=' + enc(c))).json(); } catch (x) {}
-    if (base(v('c-call')) !== c) return;
-    CSQ = f && f.ok ? f : null; CSQPour = c; dessineStation();
+    try { f = await (await fetch('api/qrz?c=' + enc(tout))).json(); } catch (x) {}
+    if (plein(v('c-call')) !== tout) return;
+    CSQ = f && f.ok ? f : null; CSQPour = tout; dessineStation();
     if (connu) return;
     if (!f || !f.ok) { txt('c-qui', f && f.erreur ? f.erreur : ''); return; }
     quiPour = c;
-    txt('c-qui', [f.nom, f.qth, f.pays].filter(x => x).join(' · '));
+    txt('c-qui', [f.nom, f.qth, f.identiteDe ? 'identité de ' + f.identiteDe + ', position non reprise' : f.pays].filter(x => x).join(' · '));
     // Its square, unless one is there for this very callsign — never for a /P or /M (QRZ gives the home address).
     locPourIndicatif(f.carre, c);
   }, 600);
@@ -6016,7 +6070,7 @@ async function enregistreContact() {
     if (dtQso) { dtQso = 0; const a = g('c-aide'); if (a.dataset.avant) { a.textContent = a.dataset.avant; a.dataset.avant = ''; } }
     g('c-etat').className = 'petit'; txt('c-etat', c.toUpperCase() + ' enregistré');
     ['c-call', 'c-loc', 'c-note'].forEach(i => g(i).value = ''); g('c-rs').value = '59'; g('c-rr').value = '59';
-    txt('c-qui', ''); quiPour = ''; stationPour(''); g('c-props').innerHTML = ''; propositions = []; iProp = -1; accepte = ''; g('c-loc').dataset.tape = ''; locPour = ''; g('c-call').style.borderColor = ''; g('c-call').focus(); chargeCarnet();
+    txt('c-qui', ''); quiPour = ''; lieuSaisi(null, ''); stationPour(''); g('c-props').innerHTML = ''; propositions = []; iProp = -1; accepte = ''; g('c-loc').dataset.tape = ''; locPour = ''; g('c-call').style.borderColor = ''; g('c-call').focus(); chargeCarnet();
   }
 }
 async function edite(t) {
@@ -6028,20 +6082,49 @@ async function edite(t) {
   g('e-sat').value = e.sat; g('e-sat').dataset.avant = e.sat; g('e-envoye').hidden = !e.envoye;
   editPoseHeure(t); g('e-date').dataset.avant = v('e-date'); g('e-heure').dataset.avant = v('e-heure'); editHeure();
   g('c-edit').showModal();
+  editLieu();
   if (!tous.length) await chargeSatellites();
   g('e-sats').innerHTML = ['QO-100', 'terrestre'].concat(tous.map(s => s.nom).filter(n => n !== 'QO-100'))
     .map(n => '<option value="' + escA(n) + '">').join('');
 }
+// The editor's map: the contact's square (as typed), else the centre of the entity it operates from (fainter).
+const EV = { cx: 0.5, cy: 0.4, z: 3 };
+let EL = null, minuteurEl = null;
+function editLieu() {
+  clearTimeout(minuteurEl);
+  const c = plein(v('e-call'));
+  if (EL && EL.pour === c) { dessineEditCarte(); return; }
+  minuteurEl = setTimeout(async () => {
+    let j = null;
+    try { j = await (await fetch('api/carnet/propositions?c=' + enc(c))).json(); } catch (x) {}
+    if (plein(v('e-call')) !== c) return;
+    EL = j ? { pour: c, dr: j.dr || '', py: j.py || '', op: j.op || '', clat: j.clat, clon: j.clon } : null;
+    dessineEditCarte();
+  }, 150);
+}
+function dessineEditCarte() {
+  const moi = E && E.observateur, lt = v('e-loc'), ct = carreLL(lt), el = EL && EL.pour === plein(v('e-call')) ? EL : null;
+  g('e-dr').textContent = el ? el.dr : ''; g('e-dr').title = el ? el.py : '';
+  let ou = null, faible = false;
+  if (ct && moi) ou = versLui(moi, ct);
+  else if (!lt && el && el.clat != null && moi) { ou = versLui(moi, { lat: el.clat, lon: el.clon }); faible = true; }
+  g('edc-boite').hidden = !ou;
+  txt('e-ou', ou ? (faible ? '≈ ' : '') + ou.km.toLocaleString('fr-FR') + ' km · ' + ou.azimut + '° ' + ou.rose + (faible ? ' (centre de ' + el.py + ', sans carré)' : '') :
+    lt && !ct ? 'carré incomplet ou invalide' : '');
+  if (ou) requestAnimationFrame(() => dessineCarteStation2(ou, faible, g('edc-carte'), EV, plein(v('e-call'))));
+}
+g('e-call').addEventListener('input', editLieu);
+g('e-loc').addEventListener('input', dessineEditCarte);
 // QRZ on demand: fills what is empty (a square heard during the contact beats the directory).
 async function qrzEdit() {
   txt('e-qrz', 'QRZ…');
   let f = null;
-  try { f = await (await fetch('api/qrz?c=' + enc(base(v('e-call'))))).json(); } catch (x) {}
+  try { f = await (await fetch('api/qrz?c=' + enc(plein(v('e-call'))))).json(); } catch (x) {}
   if (!f || !f.ok) { txt('e-qrz', f && f.erreur ? f.erreur : 'QRZ ne connaît pas cet indicatif.'); return; }
   if (!v('e-nm')) g('e-nm').value = f.nom;
   if (!v('e-qth')) g('e-qth').value = f.qth;
   if (!v('e-loc') && f.carre && v('e-call').indexOf('/') < 0) { g('e-loc').value = f.carre; g('e-loc').dataset.qrz = '1'; }
-  txt('e-qrz', [f.nom, f.qth, f.carre, f.pays].filter(x => x).join(' · '));
+  txt('e-qrz', [f.nom, f.qth, f.carre, f.pays, f.identiteDe ? 'identité de ' + f.identiteDe + ' ; position non reprise : opère depuis ' + f.lieuOpere : ''].filter(x => x).join(' · '));
 }
 /** The satellite changed in the editor: its name, and its number when it is one of the list. */
 function editSat() {

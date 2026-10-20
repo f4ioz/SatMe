@@ -21,7 +21,10 @@ import java.net.URLEncoder
  * beats the directory: the station may have been portable, and QRZ gives the
  * home address. Overwriting would replace a fact with a guess.
  */
-class Qrz {
+class Qrz(
+    /** The XML answer to a query string; null: QRZ.com itself (tests give their own). */
+    private val transport: ((String) -> String)? = null,
+) {
 
     private var cle: String? = null
     private val cache = HashMap<String, QrzReponse.Fiche>()
@@ -29,6 +32,7 @@ class Qrz {
     val connecte: Boolean get() = cle != null
 
     private fun demande(params: String): String {
+        transport?.let { return it(params) }
         val url = URL("https://xmldata.qrz.com/xml/current/?$params;agent=SatMe")
         val c = url.openConnection() as HttpURLConnection
         return try {
@@ -58,10 +62,29 @@ class Qrz {
     fun oublie() { cle = null; cache.clear() }
 
     /**
-     * The record for a callsign. Cached: QRZ counts queries, and a busy pass
-     * repeats callsigns.
+     * The record for a callsign. A compound one the directory does not know
+     * (EA3/M5JFS) falls back on its operator's record (M5JFS), identity
+     * only: the home square is not where they operate from. The same when
+     * QRZ answers the compound call with the home record.
      */
     fun cherche(indicatif: String): QrzReponse.Fiche {
+        val d = fr.f4ioz.satcombo.domain.IndicatifCompose.decoupe(indicatif)
+        val f = chercheTel(d.complet)
+        if (!d.compose || d.base.isEmpty()) return f
+        val trouve = f.erreur.isBlank() && !f.vide
+        val celuiDeBase = trouve && f.indicatif.isNotBlank() && f.indicatif != d.complet && f.indicatif == d.base
+        if (trouve && !celuiDeBase) return f
+        if (!trouve && !QrzReponse.introuvable(f)) return f
+        val b = if (celuiDeBase) f else chercheTel(d.base)
+        if (b.erreur.isNotBlank() || b.vide) return f
+        return QrzReponse.identiteSeule(b, d)
+    }
+
+    /**
+     * The record for a callsign as written. Cached: QRZ counts queries, and
+     * a busy pass repeats callsigns.
+     */
+    private fun chercheTel(indicatif: String): QrzReponse.Fiche {
         val ind = indicatif.trim().uppercase()
         if (ind.isEmpty()) return QrzReponse.Fiche()
         cache[ind]?.let { return it }
