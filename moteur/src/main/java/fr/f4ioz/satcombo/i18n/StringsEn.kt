@@ -2206,6 +2206,7 @@ val EN: Map<String, String> = mapOf(
     "pj_planche" to "SSTV sheet",
     "pj_onglet_rejeu" to "Replay",
     "pj_onglet_fabriquer" to "Make",
+    "pj_rapport" to "Pass report",
     "pj_accelere" to "Accelerated replay: fast and silent where nothing was logged or heard",
     "pj_avant" to "Start before a contact, a frame (s)",
     "pj_apres" to "Go on after a contact (s)",

@@ -31,7 +31,7 @@ object PageJournal {
         "pj_fabriquer", "pj_de_quoi_sel", "pj_de_quoi_tout", "pj_titre_extrait", "pj_son", "pj_video", "pj_gif", "pj_image",
         "pj_paquet", "pj_paquet_qsos", "pj_vue", "pj_vue_ciel", "pj_vue_carte", "pj_en_cours", "pj_pret", "pj_telecharger", "pj_echec",
         "pj_sons", "pj_qso", "pj_aprs", "pj_via_iss", "pj_sstv", "pj_signet", "pj_activite", "pj_smetre", "pj_reconstitue",
-        "pj_planche", "pj_onglet_rejeu", "pj_onglet_fabriquer", "pj_accelere", "pj_avant", "pj_apres", "pj_activite_opt",
+        "pj_planche", "pj_rapport", "pj_onglet_rejeu", "pj_onglet_fabriquer", "pj_accelere", "pj_avant", "pj_apres", "pj_activite_opt",
         "pj_afficher", "pj_aff_sstv", "pj_aff_fiche", "pj_aff_smetre", "pj_aff_freq", "pj_aff_locator", "pj_resolution",
         "pj_res_xs", "pj_res_m", "pj_res_hd", "pj_ouverture", "pj_recap", "pj_avec_son", "pj_accelere_video",
         "pj_options_aide", "pj_accelere_actif", "pj_format", "pj_format_portrait", "pj_format_paysage", "pw_code", "pw_entrer", "pw_code_faux", "pw_hors_ligne", "pw_pupitre",
@@ -275,7 +275,9 @@ function chargeSegments() { if (!P) return; const id = P.id; lire('/segments', o
 function construitVue() {
   const v = g('vue'); v.innerHTML = '';
   v.appendChild(el('div', { class: 'entete' }, [el('span', { class: 's', text: P.sat }),
-    el('span', { class: 'd', text: jour(P.de) + ' · ' + tf('duree', duree(P.a - P.de), P.el) + (P.loc ? ' · ' + P.loc : '') + (P.tp ? ' · ' + P.tp : '') })]));
+    el('span', { class: 'd', text: jour(P.de) + ' · ' + tf('duree', duree(P.a - P.de), P.el) + (P.loc ? ' · ' + P.loc : '') + (P.tp ? ' · ' + P.tp : '') })].concat(
+    // The observation report (SatMe-PC): its own page, beside the replay.
+    window.SATME_PC ? [el('a', { class: 'discret', id: 'lienRapport', target: '_blank', href: url('/rapport', { id: P.id }), text: T.rapport })] : [])));
   const mo = el('div', { class: 'moment' }, [
     el('div', { class: 'heure', id: 'heure' }), el('div', { class: 'val', id: 'angles' }), el('div', { class: 'val', id: 'rx' }),
     el('div', { class: 'smetre', id: 'smetre' }), el('div', { class: 'graduation', id: 'grad' }), el('div', { id: 'lectureS' }),
