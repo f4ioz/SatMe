@@ -1514,12 +1514,23 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 val c = carnet ?: return JSONObject().put("ok", false)
                 val t = q["t"]?.toLongOrNull() ?: return JSONObject().put("ok", false)
                 val avant = c.contacts().firstOrNull { it.timeMs == t } ?: return JSONObject().put("ok", false)
+                // Its date and time (UTC), when changed: checked before anything is written.
+                val R = fr.f4ioz.satcombo.domain.RedateContact
+                val nouveau = if (q["date"] != null || q["heure"] != null)
+                    R.lis(q["date"].orEmpty(), q["heure"].orEmpty()) ?: return JSONObject().put("ok", false).put("erreur", "date ou heure illisible")
+                else null
+                nouveau?.let { R.pourquoiPas(it, System.currentTimeMillis()) }?.let { return JSONObject().put("ok", false).put("erreur", it) }
                 // Its satellite (a name; its number when one of the list): what belongs to it follows.
                 q["sat"]?.let { c.changeSatellite(t, it, q["satnum"]?.toIntOrNull() ?: 0) }
                 c.modifie(t, avant.copy(callsign = q["c"] ?: avant.callsign, theirLocator = q["l"] ?: avant.theirLocator,
                     rstSent = q["rs"] ?: avant.rstSent, rstRcvd = q["rr"] ?: avant.rstRcvd, note = q["n"] ?: avant.note,
                     mode = q["md"] ?: avant.mode, nom = q["nm"] ?: avant.nom, qth = q["qth"] ?: avant.qth,
                     locatorOrigine = q["lo"] ?: avant.locatorOrigine))
+                // The time last: it changes the key; az/el and the order follow.
+                val r = if (nouveau != null && nouveau != t) c.redate(t, nouveau) else null
+                val apres = r?.contact ?: c.contacts().firstOrNull { it.timeMs == t }
+                return ok.put("t", apres?.timeMs ?: t).put("doublon", (r?.doublons ?: apres?.let { R.doublons(it, c.contacts()) }.orEmpty())
+                    .let { R.avertissement(it) } ?: "")
             }
             "/api/carnet/supprime" -> {
                 // One contact (t=…) or a selection (t=a,b,c).

@@ -2049,12 +2049,17 @@ ${rail()}
   <div class="ligne"><input id="e-call" placeholder="Indicatif" style="text-transform:uppercase"><input id="e-loc" placeholder="Carré" style="text-transform:uppercase;max-width:110px"></div>
   <div class="ligne"><span class="petit">Satellite</span><input id="e-sat" list="e-sats" placeholder="Satellite, QO-100, terrestre…" autocomplete="off" style="flex:1"
     title="Un satellite de la liste (az/el et fréquences recalculés), QO-100, un autre nom, ou « terrestre »"><datalist id="e-sats"></datalist></div>
+  <div class="ligne"><span class="petit">Date</span><input id="e-date" type="date" style="max-width:150px" oninput="editHeure()" title="Date du contact, en UTC">
+    <input id="e-heure" placeholder="HH:MM:SS" autocomplete="off" inputmode="numeric" style="max-width:96px;font-family:var(--mono)" oninput="editHeure()"
+      title="Heure du contact en UTC (les secondes sont facultatives) : az/el, ordre du carnet et ADIF suivent"><span class="petit">UTC</span>
+    <button type="button" class="discret petit" id="e-maintenant" onclick="editMaintenant()" title="La date et l'heure de maintenant, en UTC">maintenant</button></div>
+  <div class="petit" style="min-height:16px"><span id="e-local" class="petit"></span> <span id="e-heure-dit"></span></div>
   <div class="petit ambre" id="e-envoye" hidden>Déjà déposé au carnet en ligne : une modification ici n'y est pas reportée, à corriger aussi là-bas.</div>
   <div class="ligne"><input id="e-md" placeholder="Mode" style="max-width:80px"><input id="e-rs" placeholder="RS ↑" style="max-width:70px"><input id="e-rr" placeholder="RS ↓" style="max-width:70px"></div>
   <div class="ligne"><input id="e-nm" placeholder="Nom"><input id="e-qth" placeholder="QTH"></div>
   <div class="ligne"><input id="e-n" placeholder="Note"></div>
   <div class="ligne"><button onclick="qrzEdit()">QRZ</button><span class="petit" id="e-qrz"></span></div>
-  <div class="ligne"><button class="primaire" onclick="enregistreEdit()">Enregistrer</button><button onclick="g('c-edit').close()">Annuler</button>
+  <div class="ligne"><button class="primaire" id="e-enregistre" onclick="enregistreEdit()">Enregistrer</button><button onclick="g('c-edit').close()">Annuler</button>
     <button class="rouge" onclick="supprimeEdit()" style="margin-left:auto">Supprimer</button></div>
 </dialog>
 </div>
@@ -5968,7 +5973,7 @@ async function enregistreContact() {
     // A satellite chosen by hand is for that contact: the next one follows the rule again.
     carnetChoix = ''; carnetRend();
     if (dtQso) { dtQso = 0; const a = g('c-aide'); if (a.dataset.avant) { a.textContent = a.dataset.avant; a.dataset.avant = ''; } }
-    txt('c-etat', c.toUpperCase() + ' enregistré');
+    g('c-etat').className = 'petit'; txt('c-etat', c.toUpperCase() + ' enregistré');
     ['c-call', 'c-loc', 'c-note'].forEach(i => g(i).value = ''); g('c-rs').value = '59'; g('c-rr').value = '59';
     txt('c-qui', ''); quiPour = ''; stationPour(''); g('c-props').innerHTML = ''; propositions = []; iProp = -1; accepte = ''; g('c-loc').dataset.tape = ''; locPour = ''; g('c-call').style.borderColor = ''; g('c-call').focus(); chargeCarnet();
   }
@@ -5980,6 +5985,7 @@ async function edite(t) {
   g('e-call').value = e.c; g('e-loc').value = e.l; g('e-md').value = e.md; g('e-rs').value = e.rs; g('e-rr').value = e.rr;
   g('e-nm').value = e.nm; g('e-qth').value = e.qth; g('e-n').value = e.n; txt('e-qrz', '');
   g('e-sat').value = e.sat; g('e-sat').dataset.avant = e.sat; g('e-envoye').hidden = !e.envoye;
+  editPoseHeure(t); g('e-date').dataset.avant = v('e-date'); g('e-heure').dataset.avant = v('e-heure'); editHeure();
   g('c-edit').showModal();
   if (!tous.length) await chargeSatellites();
   g('e-sats').innerHTML = ['QO-100', 'terrestre'].concat(tous.map(s => s.nom).filter(n => n !== 'QO-100'))
@@ -6002,12 +6008,56 @@ function editSat() {
   const k = n.toUpperCase().replace(/[^A-Z0-9]/g, ''), s = k ? tous.find(x => x.nom.toUpperCase().replace(/[^A-Z0-9]/g, '') === k) : null;
   return '&sat=' + enc(s ? s.nom : n) + (s ? '&satnum=' + s.catnum : '');
 }
+// The contact's date and time, in UTC: two fields, the local time said beside.
+const pad2 = n => String(n).padStart(2, '0');
+function editPoseHeure(ms) {
+  const d = new Date(ms);
+  g('e-date').value = d.getUTCFullYear() + '-' + pad2(d.getUTCMonth() + 1) + '-' + pad2(d.getUTCDate());
+  g('e-heure').value = pad2(d.getUTCHours()) + ':' + pad2(d.getUTCMinutes()) + ':' + pad2(d.getUTCSeconds());
+}
+function editMaintenant() { editPoseHeure(Date.now()); editHeure(); }
+/** The fields read (UTC ms), or null; seconds optional. */
+function editLit() {
+  const md = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(v('e-date')), mh = /^(\d{1,2}):?(\d{2})(?::?(\d{2}))?$/.exec(v('e-heure'));
+  if (!md || !mh) return null;
+  const h = +mh[1], m = +mh[2], s = +(mh[3] || 0);
+  if (h > 23 || m > 59 || s > 59) return null;
+  const ms = Date.UTC(+md[1], +md[2] - 1, +md[3], h, m, s), d = new Date(ms);
+  return d.getUTCDate() === +md[3] && d.getUTCMonth() === +md[2] - 1 ? ms : null;
+}
+const editHeureChangee = () => v('e-date') !== (g('e-date').dataset.avant || '') || v('e-heure') !== (g('e-heure').dataset.avant || '');
+/** Said under the fields: the local time, then what is wrong (blocks) or looks like a duplicate (warns). */
+function editHeure() {
+  const ms = editLit();
+  let m = '', bloque = false;
+  if (ms === null) { m = 'Date ou heure illisible (HH:MM ou HH:MM:SS, en UTC).'; bloque = true; }
+  else if (ms > Date.now() + 5 * 60000) { m = 'Dans le futur : l’heure est en UTC.'; bloque = true; }
+  else if (ms < Date.UTC(1961, 11, 12)) { m = 'Avant le premier satellite amateur (1961).'; bloque = true; }
+  else if (editHeureChangee()) {
+    const e = C.find(x => x.t === editT), call = v('e-call').toUpperCase(), sat = v('e-sat').toUpperCase();
+    const d = call ? C.find(x => x.t !== editT && x.c.toUpperCase() === call && x.sat.toUpperCase() === sat && Math.abs(x.t - ms) <= 10 * 60000) : null;
+    if (d) m = 'Doublon possible : ' + d.c + ' déjà noté à ' + new Date(d.t).toISOString().slice(11, 16) + ' UTC.';
+    else if (e && Math.abs(ms - e.t) > 6 * 3600000) m = 'Décalé de ' + Math.round(Math.abs(ms - e.t) / 3600000) + ' h : vérifie la date.';
+  }
+  txt('e-local', ms === null ? '' : 'heure locale ' + new Date(ms).toLocaleString('fr-FR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit', second:'2-digit' }));
+  txt('e-heure-dit', m); g('e-heure-dit').className = bloque ? 'rose' : 'ambre';
+  g('e-enregistre').disabled = bloque;
+}
 async function enregistreEdit() {
+  if (g('e-enregistre').disabled) return;
+  // The time only when changed: the fields show whole seconds, the contact keeps its own otherwise.
+  const ms = editHeureChangee() ? editLit() : null;
+  let quand = '';
+  if (ms !== null) { const d = new Date(ms); quand = '&date=' + d.toISOString().slice(0, 10) + '&heure=' + d.toISOString().slice(11, 19); }
   const j = await post('api/carnet/modifie?t=' + editT + '&c=' + enc(v('e-call')) + '&l=' + enc(v('e-loc')) + '&md=' + enc(v('e-md')) +
     '&rs=' + enc(v('e-rs')) + '&rr=' + enc(v('e-rr')) + '&nm=' + enc(v('e-nm')) + '&qth=' + enc(v('e-qth')) + '&n=' + enc(v('e-n')) +
-    (g('e-loc').dataset.qrz ? '&lo=QRZ' : '') + editSat());
+    (g('e-loc').dataset.qrz ? '&lo=QRZ' : '') + editSat() + quand);
   delete g('e-loc').dataset.qrz;
-  if (j && j.ok !== false) { g('c-edit').close(); chargeCarnet(); }
+  if (j && j.ok !== false) {
+    if (j.t) editT = j.t;
+    g('c-edit').close(); chargeCarnet();
+    if (j.doublon) { txt('c-etat', j.doublon); g('c-etat').className = 'petit ambre'; }
+  }
 }
 async function supprimeEdit() {
   if (await supprimeContacts([editT])) g('c-edit').close();

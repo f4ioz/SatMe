@@ -1560,7 +1560,9 @@ internal fun LogEditDialog(entry: fr.f4ioz.satcombo.data.LogEntry, useUtc: Boole
                            * describe where the antenna pointed, not user input.
                            */
                           satellites: List<fr.f4ioz.satcombo.data.TleEntry> = emptyList(),
-                          onCorrigeSat: ((fr.f4ioz.satcombo.data.TleEntry, Long?) -> Unit)? = null) {
+                          onCorrigeSat: ((fr.f4ioz.satcombo.data.TleEntry, Long?) -> Unit)? = null,
+                          /** The time alone, when the satellite is not one of the list (QO-100, terrestrial…). */
+                          onRedate: ((Long) -> Unit)? = null) {
     // Chosen satellite and time, **not yet written**. Writing on tap made
     // "Cancel" a lie; a dialog writes only on confirm.
     var satChoisi by remember(entry.timeMs) {
@@ -1604,6 +1606,8 @@ internal fun LogEditDialog(entry: fr.f4ioz.satcombo.data.LogEntry, useUtc: Boole
                 // took a second save; 11/10).
                 val nouvelleHeure = heure.trim().takeIf { it != heureInitiale }
                     ?.let { heureVersMs(it, entry.timeMs, useUtc) }?.takeIf { it != entry.timeMs }
+                    // Not in the future, not before the first amateur satellite (the shared rule).
+                    ?.takeIf { fr.f4ioz.satcombo.domain.RedateContact.pourquoiPas(it, System.currentTimeMillis()) == null }
                 val sa = satChoisi
                 // **The fields first, under the contact's present time**; then
                 // the satellite/time correction, which changes that key.
@@ -1611,8 +1615,9 @@ internal fun LogEditDialog(entry: fr.f4ioz.satcombo.data.LogEntry, useUtc: Boole
                     rstSent = rstS, rstRcvd = rstR, nom = nom, qth = qth, courriel = courriel,
                     locatorOrigine = if (grid.trim().uppercase() == entry.theirLocator) entry.locatorOrigine else origineCarre))
                 if (onCorrigeSat != null && (sa != null || nouvelleHeure != null)) {
-                    (sa ?: satellites.firstOrNull { it.name == entry.satName })?.let { onCorrigeSat(it, nouvelleHeure) }
-                }
+                    val s = sa ?: satellites.firstOrNull { it.name == entry.satName }
+                    if (s != null) onCorrigeSat(s, nouvelleHeure) else if (nouvelleHeure != null) onRedate?.invoke(nouvelleHeure)
+                } else if (nouvelleHeure != null) onRedate?.invoke(nouvelleHeure)
             }) {
                 Text(t("save"), color = Cyan, fontWeight = FontWeight.Bold)
             }
