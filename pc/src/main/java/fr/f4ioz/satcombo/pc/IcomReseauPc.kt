@@ -69,6 +69,7 @@ class IcomReseauPc(private val station: StationPc, private val son: SonPc, val d
         val o = JSONObject()
             .put("liaison", s.icomLiaison).put("hote", s.icomHote)
             .put("formatPcm", poste.session?.formatPcm?.let { (if (it.sur) "" else "? ") + it.format.name.lowercase() } ?: "")
+            .put("sonFi", poste.session?.formatPcm?.fi == true)
             .put("portControle", s.icomPortControle).put("portCiv", s.icomPortCiv).put("portAudio", s.icomPortAudio)
             .put("utilisateur", s.icomUtilisateur).put("mdp", s.icomMdp.isNotEmpty())
             .put("utilisateurCode", s.icomUtilisateurCode.isNotEmpty()).put("mdpCode", s.icomMdpCode.isNotEmpty())

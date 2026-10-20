@@ -92,7 +92,27 @@ class DetecteurFormatPcm16(private val echantillonsParJugement: Int = 16_000) {
         if (!sur || depuisJugement > 60 * echantillonsParJugement) observe(b)
         val s = DecodeAudio.pcm16(b, format)
         depuisJugement += s.size
+        aigus(s)
         return s
+    }
+
+    /**
+     * How much of the sound sits high in the band, smoothed over a few
+     * seconds: step energy over signal energy, about 0.3–0.6 for audio the
+     * radio has filtered to 3 kHz, near 2 when it sends its IF instead of AF
+     * (an IF centred at 12 kHz folds to 4 kHz at 16 kHz sampling).
+     */
+    @Volatile var rapportAigus = 0.0; private set
+
+    /** The radio seems to send its IF, not the demodulated sound (a setting on the radio). */
+    val fi: Boolean get() = rapportAigus > 1.2
+
+    private fun aigus(s: ShortArray) {
+        if (s.size < 8) return
+        var d = 0.0; var e = 0.0
+        for (k in 1 until s.size) { val x = (s[k] - s[k - 1]).toDouble(); d += x * x; e += s[k].toDouble() * s[k] }
+        if (e / s.size < 100.0) return    // silence: says nothing
+        rapportAigus += (d / e - rapportAigus) * 0.01
     }
 
     private fun observe(b: ByteArray) {

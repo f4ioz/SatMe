@@ -5390,6 +5390,7 @@ async function irCharge(remplir) {
     l.push('son : ' + IR.audioRecus + ' paquets, ' + IR.audioPerdus + ' perdus' + (IR.redemandes ? ', ' + IR.redemandes + ' redemandés' : ''));
     l.push((IR.cat ? 'CAT' : '') + (IR.cat && IR.audio ? ' + ' : '') + (IR.audio ? 'son' : ''));
   } else if (!IR.pret && IR.manque) l.push(IR.manque);
+  if (IR.sonFi) l.push('⚠ le poste semble envoyer sa FI (IF) et non le son : sur l’IC-9700, régler la sortie audio LAN/USB sur AF');
   if (IR.refus) l.push('refusé : ' + IR.refus);
   if (IR.journal && IR.trace) l.push('trace : ' + IR.trace.split(/[\\/]/).pop() + ' (dossier des réglages)');
   txt('ir-etat', l.filter(x => x).join(' · '));

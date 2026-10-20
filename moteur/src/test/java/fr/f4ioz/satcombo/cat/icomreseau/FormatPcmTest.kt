@@ -51,4 +51,15 @@ class FormatPcmTest {
         assertEquals(false, d.sur)
         assertEquals(FormatPcm16.PETIT, d.format)
     }
+
+    /** A 4 kHz tone (an IF folded) is flagged; voice-band sound is not. */
+    @Test fun la_fi_est_reperee() {
+        fun paquet(f: Double, t0: Int) = ByteArray(640).also { b ->
+            for (i in 0 until 320) { val v = (8000 * sin(2 * PI * f * (t0 + i) / 16000.0)).toInt(); b[2 * i] = v.toByte(); b[2 * i + 1] = (v shr 8).toByte() }
+        }
+        val a = DetecteurFormatPcm16(); repeat(400) { a.decode(paquet(1000.0, it * 320)) }
+        val b = DetecteurFormatPcm16(); repeat(400) { b.decode(paquet(4000.0, it * 320)) }
+        assertEquals(false, a.fi)
+        assertEquals(true, b.fi)
+    }
 }
