@@ -18,7 +18,9 @@ data class Transmitter(
     val downlinkHighHz: Long?,
     val invert: Boolean,
     val alive: Boolean,
-    val type: String
+    val type: String,
+    /** Symbol rate of a data transmitter (SatNOGS' « baud »), when known. */
+    val baud: Double? = null,
 ) {
     /** A linear/inverting transponder spans a passband (high != low). */
     val isTransponder: Boolean

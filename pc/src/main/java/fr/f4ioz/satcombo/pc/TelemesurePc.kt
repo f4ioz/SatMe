@@ -15,6 +15,8 @@ import fr.f4ioz.satcombo.telemesure.Ao40Fec
 import fr.f4ioz.satcombo.telemesure.BlocP3
 import fr.f4ioz.satcombo.telemesure.DecodeurTelemesure
 import fr.f4ioz.satcombo.telemesure.DecodeurTelemesure.Profil
+import fr.f4ioz.satcombo.telemesure.RecepteurPaquets
+import fr.f4ioz.satcombo.telemesure.Sids
 import fr.f4ioz.satcombo.telemesure.SignalEssai
 import org.json.JSONArray
 import org.json.JSONObject
@@ -40,6 +42,8 @@ class TelemesurePc(
     private val dossier: File,
     private val canaux: CanauxPc?,
     private val horloge: () -> Long = System::currentTimeMillis,
+    /** Where SiDS frames go: SatNOGS DB, or a test server (SATME_SIDS_URL, the tests). */
+    private val urlSids: String = System.getenv("SATME_SIDS_URL")?.takeIf { it.startsWith("http") } ?: Sids.URL_DB,
 ) {
     /** The tracked satellite's name, for the LEO frames' log. */
     @Volatile var satellite: () -> String = { "" }
@@ -55,6 +59,127 @@ class TelemesurePc(
 
     init {
         canaux?.auTrame = { t -> garde(t, Profil.QO100, "QO-100") }
+    }
+
+    // ---------------------------------------------------------------- packets 1200–9600 bit/s, SSDV, SiDS
+
+    /** The packet decoder on the main SDR's raw I/Q (off by default); its frames and pictures under `telemesure/`. */
+    val paquets = RecepteurPaquets(dossier, horloge)
+    /** The test mode's own decoder: a made-up signal, nothing written nor shared. */
+    private val essaiPaquets = RecepteurPaquets(null, horloge).also { it.contexte = { RecepteurPaquets.Contexte("Essai", essai = true) } }
+    @Volatile private var essaiPaquetsEnCours = false
+
+    /** What the frames are stamped with (the followed satellite, the frequencies); [essai]: the generator or a recording. */
+    @Volatile var contextePaquets: (essai: Boolean) -> RecepteurPaquets.Contexte = { RecepteurPaquets.Contexte(essai = it) }
+    /** The followed satellite's packet transmitter (SatNOGS DB): rate, description, mode; null: none known. */
+    @Volatile var emetteurPaquets: () -> Triple<Int, String, String>? = { null }
+    /** The station's callsign and position, for SiDS. */
+    @Volatile var station: () -> Triple<String, Double, Double>? = { null }
+
+    var paquetsActif: Boolean
+        get() = stockage.getBoolean(CLE_PAQUETS, false)
+        set(v) { stockage.edit().putBoolean(CLE_PAQUETS, v).apply(); if (!v) paquets.arrete() }
+    /** 0: from the transmitter (SatNOGS DB), else 1200 … 9600. */
+    var debitChoisi: Int
+        get() = stockage.getInt(CLE_DEBIT, 0)
+        set(v) { stockage.edit().putInt(CLE_DEBIT, v).apply() }
+    var kiss: Boolean
+        get() = stockage.getBoolean(CLE_KISS, false)
+        set(v) { stockage.edit().putBoolean(CLE_KISS, v).apply(); paquets.kiss = v }
+    /** Sharing with SatNOGS DB (SiDS): off unless ticked. */
+    var sidsActif: Boolean
+        get() = stockage.getBoolean(CLE_SIDS, false)
+        set(v) { stockage.edit().putBoolean(CLE_SIDS, v).apply() }
+
+    val sids = Sids(urlSids, horloge = horloge)
+    @Volatile private var fictif = false
+
+    init {
+        paquets.kiss = kiss
+        paquets.contexte = { contextePaquets(fictif) }
+        paquets.surTrame = { t -> partage(t) }
+        Thread({
+            while (true) {
+                runCatching { Thread.sleep(5_000) }
+                if (sidsActif && sids.enAttente > 0) runCatching { sids.vide() }
+            }
+        }, "satme-sids").apply { isDaemon = true; start() }
+    }
+
+    /** A frame received for real: queued for SatNOGS DB when the operator chose so. */
+    private fun partage(t: RecepteurPaquets.TramePaquet) {
+        if (t.essai || !sidsActif || t.norad <= 0) return
+        val (indicatif, lat, lon) = station() ?: return
+        if (indicatif.isBlank()) return
+        sids.ajoute(fr.f4ioz.satcombo.telemesure.Sids.Envoi(t.norad, indicatif, t.t, t.hex(), lat, lon))
+    }
+
+    /** The rate to decode at: the operator's, or the transmitter's, 9600 when unknown. */
+    fun debitVoulu(): Int = debitChoisi.takeIf { it in RecepteurPaquets.DEBITS } ?: emetteurPaquets()?.first ?: 9_600
+
+    /** The main SDR's raw I/Q off QO-100 (from [SdrPc]). */
+    fun iqSdr(iq: ByteArray?, iq16: ShortArray?, n: Int, decalageHz: Double, essai: Boolean) {
+        if (!paquetsActif) { if (paquets.actif) paquets.arrete(); return }
+        if (!paquets.actif) paquets.demarre(fr.f4ioz.satcombo.sdr.Dsp.RTL_RATE.toDouble())
+        fictif = essai
+        paquets.debit = debitVoulu()
+        if (iq16 != null) paquets.iq16(iq16, n, decalageHz) else if (iq != null) paquets.iq(iq, n, decalageHz)
+    }
+
+    /** The test mode for packets: a made-up 9600 bit/s burst (telemetry, part of a picture) through its own decoder. */
+    fun lanceEssaiPaquets(): Boolean {
+        if (essaiPaquetsEnCours) return false
+        essaiPaquetsEnCours = true
+        Thread {
+            try {
+                val fs = RecepteurPaquets.FS_CIBLE
+                val image = fr.f4ioz.satcombo.telemesure.SignalPaquets.paquetsMire((horloge() / 1000 % 200).toInt())
+                val trames = listOf(fr.f4ioz.satcombo.telemesure.SignalPaquets.trameTelemesure(1)) +
+                    image.map { fr.f4ioz.satcombo.telemesure.SignalPaquets.trameSsdv(it) }.filterIndexed { i, _ -> i != 4 }
+                val (re, im) = fr.f4ioz.satcombo.telemesure.SignalPaquets.baseband(fr.f4ioz.satcombo.telemesure.G3ruh.bits(trames), fs, 9_600,
+                    1_800.0, 16.0, horloge())
+                essaiPaquets.debit = 9_600
+                var k = 0
+                while (k < re.size) {
+                    val m = minOf(8_192, re.size - k)
+                    essaiPaquets.traiteBaseband(re.copyOfRange(k, k + m), im.copyOfRange(k, k + m), m, fs); k += m
+                }
+            } finally { essaiPaquetsEnCours = false }
+        }.apply { isDaemon = true; name = "essai-paquets" }.start()
+        return true
+    }
+
+    /** One SSDV picture's JPEG (live or the test's), or a saved one by its file name. */
+    fun jpegSsdv(q: Map<String, String>): ByteArray? {
+        q["cle"]?.let { c -> return paquets.jpeg(c) ?: essaiPaquets.jpeg(c) }
+        val f = q["f"]?.takeIf { Regex("[A-Za-z0-9_.-]+\\.jpg").matches(it) } ?: return null
+        return File(dossier, "telemesure/ssdv/$f").takeIf { it.isFile }?.readBytes()
+    }
+
+    private fun jsonPaquets(): JSONObject {
+        val e = paquets.etat
+        val em = emetteurPaquets()
+        val o = JSONObject().put("option", paquetsActif).put("debit", debitVoulu()).put("choisi", debitChoisi)
+            .put("kiss", kiss).put("essaiEnCours", essaiPaquetsEnCours)
+        if (em != null) o.put("emetteur", JSONObject().put("debit", em.first).put("description", em.second).put("mode", em.third)
+            .put("note", RecepteurPaquets.noteMode(em.third) ?: ""))
+        o.put("etat", JSONObject().put("actif", e.actif).put("bits", e.bits).put("trames", e.trames).put("crcFaux", e.crcFaux)
+            .put("afcHz", Math.round(e.afcHz)).put("niveauDb", Math.round(e.niveauDb * 10) / 10.0).put("plancherDb", Math.round(e.plancherDb * 10) / 10.0)
+            .put("presence", e.presence).put("signal", e.signal).put("perdus", e.perdus).put("derniereMs", e.derniereMs))
+        val l = (paquets.trames.take(40) + essaiPaquets.trames.take(40)).sortedByDescending { it.t }.take(40)
+        o.put("trames", JSONArray(l.map { RecepteurPaquets.json(it).put("hex", it.hex()) }))
+        val imgs = JSONArray()
+        for (j in listOf(paquets.imagesJson(), essaiPaquets.imagesJson())) for (i in 0 until j.length()) imgs.put(j.get(i))
+        o.put("images", imgs)
+        // Saved pictures (the latest 24).
+        val sauvees = File(dossier, "telemesure/ssdv").listFiles { f -> f.name.endsWith(".jpg") }.orEmpty()
+            .sortedByDescending { it.lastModified() }.take(24).map { JSONObject().put("f", it.name).put("t", it.lastModified()) }
+        o.put("sauvees", JSONArray(sauvees))
+        val st = station()
+        o.put("sids", JSONObject().put("option", sidsActif).put("indicatif", st?.first.orEmpty()).put("envoyees", sids.envoyees)
+            .put("attente", sids.enAttente).put("echecs", sids.echecs).put("erreur", sids.derniereErreur ?: "").put("dernierMs", sids.dernierEnvoiMs)
+            .put("essai", urlSids != Sids.URL_DB))
+        return o
     }
 
     /** The main receiver's audio ([Dsp.AUDIO_RATE]) when it is not on QO-100. */
@@ -127,6 +252,16 @@ class TelemesurePc(
             "leo" -> leoActif = q["on"] == "1"
             "essai" -> if (!lanceEssai(Profil.de(q["profil"]) ?: Profil.QO100)) return erreur("un essai est déjà en cours")
             "vide" -> { leo?.vide(); canaux?.balise()?.second?.vide(); essai = null }
+            "paquets" -> paquetsActif = q["on"] == "1"
+            "paquets/debit" -> debitChoisi = q["v"]?.toIntOrNull()?.takeIf { it == 0 || it in RecepteurPaquets.DEBITS } ?: return erreur("débit inconnu")
+            "paquets/kiss" -> kiss = q["on"] == "1"
+            "paquets/sids" -> {
+                val on = q["on"] == "1"
+                if (on && station()?.first.isNullOrBlank()) return erreur("indicatif de la station manquant (Réglages)")
+                sidsActif = on
+            }
+            "paquets/essai" -> if (!lanceEssaiPaquets()) return erreur("un essai est déjà en cours")
+            "paquets/vide" -> { paquets.vide(); essaiPaquets.vide() }
             else -> return erreur("geste inconnu")
         }
         return ok
@@ -141,6 +276,7 @@ class TelemesurePc(
             .put("tourne", canaux?.tourne ?: false).also { j -> b?.second?.let { decodeur(j, it) } })
         o.put("leo", JSONObject().put("option", leoActif).put("satellite", satellite()).also { j -> leo?.let { decodeur(j, it) } })
         o.put("essai", JSONObject().put("enCours", essaiEnCours).also { j -> essai?.let { decodeur(j, it) } })
+        o.put("paquets", jsonPaquets())
         return o.put("ok", true)
     }
 
@@ -157,6 +293,10 @@ class TelemesurePc(
 
     companion object {
         const val CLE_LEO = "pc_tlm_leo"
+        const val CLE_PAQUETS = "pc_tlm_paquets"
+        const val CLE_DEBIT = "pc_tlm_paquets_debit"
+        const val CLE_KISS = "pc_tlm_paquets_kiss"
+        const val CLE_SIDS = "pc_tlm_sids"
 
         /** Plausible real-time values for the test frames (raw counts, in the document's order). */
         val ESSAI_FUNCUBE: List<Pair<Int, Long>> = buildList {

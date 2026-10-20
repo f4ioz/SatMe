@@ -136,7 +136,8 @@ class TransmittersRepository(
                 downlinkHighHz = o.optLong("downlink_high", -1).takeIf { it > 0 },
                 invert = o.optBoolean("invert", false),
                 alive = o.optBoolean("alive", false),
-                type = o.optString("type", "Transmitter")
+                type = o.optString("type", "Transmitter"),
+                baud = o.optDouble("baud", Double.NaN).takeIf { it.isFinite() && it > 0 }
             )
         }
             // active first, then those with a downlink

@@ -482,6 +482,13 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
             envoie(sortie, "200 OK", "application/json; charset=utf-8", o.toString().toByteArray()); return
         }
         // BPSK telemetry: the QO-100 beacon's panel, the LEO decoder, the test mode (receive only).
+        // An SSDV picture as it stands (missing blocks grey), or a saved one.
+        if (chemin == "/api/telemesure/ssdv.jpg") {
+            val j = telemesure?.jpegSsdv(q)
+            if (j == null) envoie(sortie, "404 Not Found", "text/plain; charset=utf-8", "absente".toByteArray())
+            else envoie(sortie, "200 OK", "image/jpeg", j)
+            return
+        }
         if (chemin == "/api/telemesure" || chemin.startsWith("/api/telemesure/")) {
             val k = telemesure
             val o = when {

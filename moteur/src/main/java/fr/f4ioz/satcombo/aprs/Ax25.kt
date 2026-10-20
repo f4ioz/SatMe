@@ -115,6 +115,57 @@ object Ax25 {
         return Adresse(sb.toString(), (dernier ushr 1) and 0x0F) to dernier
     }
 
+    /**
+     * Any AX.25 frame's header, FCS left off (as satellites send telemetry:
+     * UI frames with any PID, or other kinds): addresses, control, PID when
+     * the kind has one, the rest. Null when the addresses are not AX.25's.
+     */
+    fun entete(octets: ByteArray): Entete? {
+        val n = octets.size
+        val adresses = ArrayList<Pair<Adresse, Int>>()
+        var i = 0
+        while (true) {
+            if (i + 7 > n || adresses.size > 10) return null
+            val a = adresseLibre(octets, i) ?: return null
+            adresses += a
+            i += 7
+            if (a.second and 1 != 0) break
+        }
+        if (adresses.size < 2 || i >= n) return null
+        val controle = octets[i].toInt() and 0xFF
+        // I frames and UI frames carry a PID; S and other U frames do not.
+        val avecPid = controle and 1 == 0 || controle and 0xEF == 0x03
+        if (avecPid && i + 1 >= n) return null
+        val pid = if (avecPid) octets[i + 1].toInt() and 0xFF else null
+        val relais = adresses.drop(2).map { (a, b) -> a.copy(repete = b and 0x80 != 0) }
+        return Entete(adresses[0].first, adresses[1].first, relais, controle, pid, octets.copyOfRange(i + (if (avecPid) 2 else 1), n))
+    }
+
+    class Entete(val destination: Adresse, val source: Adresse, val relais: List<Adresse>, val controle: Int, val pid: Int?, val info: ByteArray) {
+        val ui: Boolean get() = controle and 0xEF == 0x03
+        fun ligne(): String = buildString {
+            append(source).append('>').append(destination)
+            relais.forEach { append(',').append(it) }
+        }
+    }
+
+    /** As [adresse], lower case allowed (some satellites send it). */
+    private fun adresseLibre(o: ByteArray, debut: Int): Pair<Adresse, Int>? {
+        val sb = StringBuilder()
+        for (k in 0 until 6) {
+            val b = o[debut + k].toInt() and 0xFF
+            if (b and 1 != 0) return null
+            val c = (b ushr 1).toChar()
+            if (c != ' ') {
+                if (!(c in 'A'..'Z' || c in 'a'..'z' || c in '0'..'9')) return null
+                sb.append(c)
+            }
+        }
+        if (sb.isEmpty()) return null
+        val dernier = o[debut + 6].toInt() and 0xFF
+        return Adresse(sb.toString(), (dernier ushr 1) and 0x0F) to dernier
+    }
+
     /** A frame without its FCS, as a KISS TNC passes it (the radio checked it already). */
     fun decodeSansFcs(octets: ByteArray): Trame? {
         val c = crc(octets)
