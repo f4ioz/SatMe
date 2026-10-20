@@ -5948,7 +5948,7 @@ function montreProposition(i) {
   const p = propositions[i];
   g('c-call').value = p ? p.c : tape;
   stationPour(g('c-call').value);
-  if (p && p.l && (!g('c-loc').dataset.tape || locPour !== base(p.c))) { g('c-loc').value = p.l; g('c-loc').dataset.tape = ''; locPour = base(p.c); }
+  if (p && p.l && (!g('c-loc').dataset.tape || locPour !== p.c.toUpperCase())) { g('c-loc').value = p.l; g('c-loc').dataset.tape = ''; locPour = p.c.toUpperCase(); }
   if (!p && !g('c-loc').dataset.tape) g('c-loc').value = '';
   dessinePropositions();
 }
@@ -5956,7 +5956,7 @@ function prendProposition(i) {
   const p = propositions[i]; if (!p) return;
   accepte = p.c;
   g('c-call').value = p.c;
-  if (p.l) { g('c-loc').value = p.l; g('c-loc').dataset.tape = ''; locPour = base(p.c); }
+  if (p.l) { g('c-loc').value = p.l; g('c-loc').dataset.tape = ''; locPour = p.c.toUpperCase(); }
   g('c-props').innerHTML = ''; propositions = []; iProp = -1;
   // The name from the log or QRZ, as for a callsign typed whole.
   g('c-call').dispatchEvent(new Event('input'));
@@ -5965,11 +5965,14 @@ function prendProposition(i) {
 // A square typed by hand is kept while going through the predictions.
 // The callsign the square belongs to: typed for it, or filled from it. Another callsign that knows its square replaces it.
 let locPour = '';
-g('c-loc').addEventListener('input', () => { g('c-loc').dataset.tape = v('c-loc') ? '1' : ''; locPour = base(v('c-call')); dessineStation(); });
-function locPourIndicatif(l, c) {
-  if (!l || v('c-call').indexOf('/') >= 0) return;
-  if (v('c-loc') && locPour === c) return;
-  g('c-loc').value = l; g('c-loc').dataset.tape = ''; locPour = c;
+g('c-loc').addEventListener('input', () => { g('c-loc').dataset.tape = v('c-loc') ? '1' : ''; locPour = v('c-call').trim().toUpperCase(); dessineStation(); });
+// A square filled for the callsign as typed (« F4IOZ/P » is not « F4IOZ »): a compound one only from a source
+// for that very callsign — never from the home call's record (QRZ gives the home address).
+function locPourIndicatif(l, c, exact) {
+  if (!l) return;
+  if (v('c-call').indexOf('/') >= 0 && !exact) return;
+  if (v('c-loc') && (locPour === c || g('c-loc').dataset.tape)) return;
+  g('c-loc').value = l; g('c-loc').dataset.tape = ''; locPour = c; dessineStation();
 }
 // Tab: the next prediction (Shift+Tab: the one before); Enter takes it; Esc: back to what was typed.
 // Before the other keys of the field (capture): Enter here takes the prediction, it does not save yet.
@@ -5988,19 +5991,19 @@ g('c-call').addEventListener('keydown', e => {
 g('c-call').addEventListener('input', proposeIndicatifs);
 g('c-call').addEventListener('input', () => {
   clearTimeout(minuteurQrz);
-  const c = base(v('c-call'));
+  const c = base(v('c-call')), cp = v('c-call').trim().toUpperCase();
   if (c !== quiPour) txt('c-qui', '');
-  // Another callsign: a square filled for the previous one goes (one typed by hand stays).
-  if (locPour && locPour !== c && !g('c-loc').dataset.tape) { g('c-loc').value = ''; locPour = ''; }
+  // Another callsign (« F4IOZ » then « F4IOZ/P » too): a square filled for the previous one goes (one typed by hand stays).
+  if (locPour && locPour !== cp && !g('c-loc').dataset.tape) { g('c-loc').value = ''; locPour = ''; dessineStation(); }
   stationPour(v('c-call'));
   if (c.length < 4 || !/[0-9]/.test(c)) return;
-  // Its square from the log's last contact that has one (with or without a name).
-  const avecCarre = C.find(e => base(e.c) === c && e.l);
-  if (avecCarre) locPourIndicatif(avecCarre.l, c);
+  // Its square from the log's last contact that has one: the same callsign as typed, /P included.
+  const avecCarre = C.find(e => (e.c || '').toUpperCase() === cp && e.l);
+  if (avecCarre) locPourIndicatif(avecCarre.l, cp, true);
   const connu = C.find(e => base(e.c) === c && e.nm);
   if (connu) {
     quiPour = c; txt('c-qui', connu.nm + (connu.qth ? ' · ' + connu.qth : '') + ' (carnet)');
-    locPourIndicatif(connu.l, c);
+    if ((connu.c || '').toUpperCase() === cp) locPourIndicatif(connu.l, cp, true);
     // Known by name: QRZ only for the station's card, when it is wanted.
     if (!ficheVoulue) return;
   }
@@ -6015,8 +6018,9 @@ g('c-call').addEventListener('input', () => {
     if (!f || !f.ok) { txt('c-qui', f && f.erreur ? f.erreur : ''); return; }
     quiPour = c;
     txt('c-qui', [f.nom, f.qth, f.identiteDe ? 'identité de ' + f.identiteDe + ', position non reprise' : f.pays].filter(x => x).join(' · '));
-    // Its square, unless one is there for this very callsign — never for a /P or /M (QRZ gives the home address).
-    locPourIndicatif(f.carre, c);
+    // Its square, unless one is there for this very callsign: for a /P or /M only when QRZ has a record of its own
+    // (an identity borrowed from the home call carries no square).
+    locPourIndicatif(f.carre, tout.toUpperCase(), !f.identiteDe);
   }, 600);
 });
 ['c-call', 'c-loc', 'c-rs', 'c-rr', 'c-note'].forEach(i => g(i).addEventListener('keydown', e => { if (e.key === 'Enter') enregistreContact(); }));
