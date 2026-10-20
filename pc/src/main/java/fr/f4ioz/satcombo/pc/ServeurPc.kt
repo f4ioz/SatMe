@@ -729,6 +729,7 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                         JSONObject().put("c", k.indicatif).put("nm", k.nom).put("n", k.contacts).put("sat", k.dernierSat)
                             .put("l", fr.f4ioz.satcombo.domain.Indicatifs.locatorPropose(k, k.indicatif)) }))
                 } ?: JSONObject().put("etat", "VIDE").put("propositions", JSONArray())
+                fr.f4ioz.satcombo.demo.ApiStation.lieuSaisi(o, saisie)
                 envoie(sortie, "200 OK", "application/json; charset=utf-8", o.toString().toByteArray())
             }
             "/api/carnet/station" -> {
@@ -2039,6 +2040,9 @@ object JsonPc {
         JSONObject().put("nom", it.name).put("catnum", it.catalogNumber)
     })
 
+    /** Each callsign's flag, worked out once (the log is sent every few seconds). */
+    private val drapeaux = java.util.concurrent.ConcurrentHashMap<String, JSONObject>()
+
     fun carnet(c: CarnetPc?): JSONObject {
         val l = c?.contacts().orEmpty()
         val maintenant = System.currentTimeMillis()
@@ -2054,6 +2058,8 @@ object JsonPc {
                     .put("md", e.mode).put("rs", e.rstSent).put("rr", e.rstRcvd).put("n", e.note).put("nm", e.nom)
                     .put("qth", e.qth).put("az", e.azimuthDeg).put("el", e.elevationDeg).put("dl", e.downlinkMhz)
                     .put("ul", e.uplinkMhz).put("envoye", e.envoyeMs > 0).put("ml", e.myLocator)
+                    .also { o -> drapeaux.getOrPut(e.callsign) { fr.f4ioz.satcombo.demo.ApiStation.drapeau(JSONObject(), e.callsign) }
+                        .let { d -> d.optString("dr").takeIf { it.isNotEmpty() }?.let { o.put("dr", it) }; d.optString("py").takeIf { it.isNotEmpty() }?.let { o.put("py", it) } } }
             }))
     }
 

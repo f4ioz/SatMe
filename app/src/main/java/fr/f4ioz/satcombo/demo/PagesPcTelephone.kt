@@ -318,7 +318,7 @@ object PagesPcTelephone {
                     json(JSONObject().put("etat", fr.f4ioz.satcombo.domain.Indicatifs.etat(saisie, m).name).put("propositions", JSONArray(l.map { k ->
                         JSONObject().put("c", k.indicatif).put("nm", k.nom).put("n", k.contacts).put("sat", k.dernierSat)
                             .put("l", fr.f4ioz.satcombo.domain.Indicatifs.locatorPropose(k, k.indicatif))
-                    })))
+                    })).let { o -> ApiStation.lieuSaisi(o, saisie) })
                 }
                 // The station's chain is drawn and kept on SatMe-PC: here an empty one (its catalogue all the same).
                 "/api/montage" -> json(JSONObject().put("ok", true).put("telephone", true)
@@ -1079,6 +1079,9 @@ object PagesPcTelephone {
     }
 
     /** The log, in SatMe-PC's words, with each contact's upload state. */
+    /** Each callsign's flag, worked out once. */
+    private val drapeaux = java.util.concurrent.ConcurrentHashMap<String, JSONObject>()
+
     private fun carnet(vm: MainViewModel): JSONObject {
         val u = vm.ui.value
         val maintenant = System.currentTimeMillis()
@@ -1094,6 +1097,8 @@ object PagesPcTelephone {
                     .put("md", e.mode).put("rs", e.rstSent).put("rr", e.rstRcvd).put("n", e.note).put("nm", e.nom)
                     .put("qth", e.qth).put("az", e.azimuthDeg).put("el", e.elevationDeg).put("dl", e.downlinkMhz)
                     .put("ul", e.uplinkMhz).put("envoye", e.envoyeMs > 0).put("ml", e.myLocator)
+                    .also { o -> drapeaux.getOrPut(e.callsign) { fr.f4ioz.satcombo.demo.ApiStation.drapeau(JSONObject(), e.callsign) }
+                        .let { d -> d.optString("dr").takeIf { it.isNotEmpty() }?.let { o.put("dr", it) }; d.optString("py").takeIf { it.isNotEmpty() }?.let { o.put("py", it) } } }
             }))
     }
 }

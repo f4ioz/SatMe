@@ -60,9 +60,12 @@ object ApiStation {
      */
     fun passageCarnet(aos: Long, los: Long, skeds: List<fr.f4ioz.satcombo.data.SkedAlert>,
                       contactsAos: Long, contactsLos: Long, contacts: List<fr.f4ioz.satcombo.data.LogEntry>): JSONObject {
-        fun lieu(o: JSONObject, carre: String?): JSONObject {
+        fun lieu(o: JSONObject, carre: String?, indicatif: String = ""): JSONObject {
             val c = carre?.takeIf { it.isNotBlank() }?.let { fr.f4ioz.satcombo.location.Maidenhead.centre(it) }
-            if (c != null) o.put("lat", c.first).put("lon", c.second)
+            if (c != null) return o.put("lat", c.first).put("lon", c.second)
+            // No square: the centre of the entity it operates from, drawn fainter.
+            val e = if (indicatif.isBlank()) null else fr.f4ioz.satcombo.domain.Dxcc.entite(indicatif)
+            if (e?.lat != null && e.lon != null) o.put("lat", e.lat).put("lon", e.lon).put("faible", true)
             return o
         }
         return JSONObject().put("aos", aos).put("los", los).put("cAos", contactsAos).put("cLos", contactsLos)
@@ -73,7 +76,8 @@ object ApiStation {
                     .put("commun", s.isWorkable ?: JSONObject.NULL), s.grids.firstOrNull())
             }))
             .put("contacts", JSONArray(contacts.map { c ->
-                lieu(JSONObject().put("call", c.callsign).put("t", c.timeMs).put("carre", c.theirLocator).put("mode", c.mode), c.theirLocator)
+                lieu(drapeau(JSONObject().put("call", c.callsign).put("t", c.timeMs).put("carre", c.theirLocator).put("mode", c.mode), c.callsign),
+                    c.theirLocator, c.callsign)
             }))
     }
 
@@ -135,8 +139,45 @@ object ApiStation {
             .put("adresse", f.adresse).put("etat", f.etat).put("comte", f.comte).put("zoneCq", f.zoneCq).put("zoneItu", f.zoneItu)
             .put("classe", f.classe).put("lotw", f.lotw).put("eqsl", f.eqsl).put("qslPapier", f.qslPapier)
             .put("qslManager", f.qslManager).put("site", f.site).put("surnom", f.surnom).put("depuis", f.depuis)
+        if (f.identiteDe.isNotBlank()) o.put("identiteDe", f.identiteDe).put("lieuOpere", f.lieuOpere)
+        drapeau(o, f.indicatif)
         ouEstIl(o, moi, f.lat, f.lon, f.carre)
         return o.put("image", if (fiche) f.image else "").put("fiche", fiche)
+    }
+
+    /**
+     * Where a callsign operates from, for the flag beside it: `dr` (the
+     * flag, ⚓ at sea, ✈ in the air), `py` (the entity), from the location
+     * prefix of a compound callsign (EA3/M5JFS: Spain).
+     */
+    fun drapeau(o: JSONObject, indicatif: String): JSONObject {
+        val d = fr.f4ioz.satcombo.domain.IndicatifCompose.decoupe(indicatif)
+        when {
+            d.base.isEmpty() -> {}
+            d.maritime -> o.put("dr", "⚓").put("py", "maritime mobile")
+            d.aeronautique -> o.put("dr", "✈").put("py", "aéronautique mobile")
+            else -> fr.f4ioz.satcombo.domain.Dxcc.entite(d.complet)?.let { e ->
+                fr.f4ioz.satcombo.domain.Dxcc.emoji(e).takeIf { it.isNotEmpty() }?.let { o.put("dr", it) }
+                o.put("py", e.nom)
+            }
+        }
+        return o
+    }
+
+    /**
+     * The callsign being typed, split: its operator (`base`), its location
+     * prefix (`op`), its flag, and the entity's centre (`clat`, `clon`) for
+     * the map while no square is typed.
+     */
+    fun lieuSaisi(o: JSONObject, indicatif: String): JSONObject {
+        val d = fr.f4ioz.satcombo.domain.IndicatifCompose.decoupe(indicatif)
+        if (d.base.isEmpty()) return o
+        o.put("base", d.base).put("op", d.prefixe)
+        drapeau(o, indicatif)
+        if (!d.maritime && !d.aeronautique) fr.f4ioz.satcombo.domain.Dxcc.entite(d.complet)?.let { e ->
+            if (e.lat != null && e.lon != null) o.put("clat", e.lat).put("clon", e.lon)
+        }
+        return o
     }
 
     /** Where a station is (its coordinates, else its square's centre), and its distance and bearing from [moi]. */
@@ -153,11 +194,15 @@ object ApiStation {
             .put("rose", fr.f4ioz.satcombo.sonde.Geo.compass(az))
     }
 
-    /** A station's contacts in the log, newest first: those of the same base callsign; none under three characters. */
+    /**
+     * A station's contacts in the log, newest first: those of the same
+     * operator, wherever from (M5JFS, M5JFS/P, EA3/M5JFS); none under three
+     * characters.
+     */
     fun historique(log: List<fr.f4ioz.satcombo.data.LogEntry>, indicatif: String): List<fr.f4ioz.satcombo.data.LogEntry> {
-        val b = fr.f4ioz.satcombo.domain.Indicatifs.base(indicatif)
+        val b = fr.f4ioz.satcombo.domain.IndicatifCompose.base(indicatif)
         if (b.length < 3) return emptyList()
-        return log.filter { fr.f4ioz.satcombo.domain.Indicatifs.base(it.callsign) == b }.sortedByDescending { it.timeMs }
+        return log.filter { fr.f4ioz.satcombo.domain.IndicatifCompose.base(it.callsign) == b }.sortedByDescending { it.timeMs }
     }
 
     /**
