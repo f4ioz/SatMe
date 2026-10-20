@@ -189,4 +189,92 @@ class StationCatTest {
         assertEquals(435_640_000L, sim.mainHz)
         assertEquals(145_000_000L, sim.subHz)
     }
+
+    /** The rig left on SO-50 (FM, with Doppler), then the operator picks RS-44. */
+    private suspend fun so50PuisRs44(appelNouveauSatellite: Boolean): Pair<StationCat, Monde> {
+        val (st, m) = station(fm)
+        m.rr = -5.7
+        repeat(10) { st.tour(); t += 100 }
+        assertEquals(Doppler.downlink(436_795_000L, -5.7), sim.mainHz)
+        // RS-44: no rest chosen yet, the satellite receding.
+        m.t = lineaire; m.repos = null; m.rr = 5.61
+        if (appelNouveauSatellite) st.nouveauSatellite() else st.oublieArmement()
+        st.tour(); t += 100
+        return st to m
+    }
+
+    @Test
+    fun de_so50_a_rs44_le_poste_va_au_centre_de_la_bande_en_un_tour() = runBlocking {
+        for (nouveau in listOf(true, false)) {
+            val (st, _) = so50PuisRs44(nouveau)
+            assertEquals(Doppler.downlink(435_640_000L, 5.61), sim.mainHz)
+            assertEquals(Doppler.uplink(145_965_000L, 5.61), sim.subHz)
+            assertTrue(st.etat.value.rxPilote)
+            // The transponder's modes: USB down, LSB up (inverting), no tone.
+            assertEquals(0x01, sim.mainMode); assertEquals(0x00, sim.subMode)
+            assertFalse(sim.toneOn)
+            assertEquals(0, sim.refusals)
+            // Then it keeps following, not falling back to the old frequency.
+            repeat(30) { st.tour(); t += 100 }
+            assertEquals(Doppler.downlink(435_640_000L, 5.61), sim.mainHz)
+            assertTrue(st.etat.value.rxPilote)
+        }
+    }
+
+    @Test
+    fun apres_le_changement_la_main_dans_la_bande_est_toujours_suivie() = runBlocking {
+        val (st, m) = so50PuisRs44(true)
+        repeat(10) { st.tour(); t += 100 }
+        val operateur = CivController().apply { pacingMs = 0L; attach(sim) }
+        operateur.selectMainSub(false); operateur.setFrequency(435_652_000L)
+        st.tour(); t += 100
+        assertFalse(st.etat.value.rxPilote)
+        assertEquals(435_652_000L, sim.mainHz)
+        assertEquals(Doppler.restFromDownlink(435_652_000L, 5.61), m.repos)
+        // After the hold, SatMe drives from the operator's rest.
+        repeat(30) { st.tour(); t += 100 }
+        assertTrue(st.etat.value.rxPilote)
+        assertEquals(Doppler.downlink(m.repos!!, 5.61), sim.mainHz)
+    }
+
+    @Test
+    fun une_relecture_sur_une_autre_bande_n_est_pas_un_geste() = runBlocking {
+        val (st, m) = station(lineaire)
+        m.repos = 435_640_000L
+        repeat(10) { st.tour(); t += 100 }
+        // The rig is found on 23 cm (band memory, another program...).
+        val autre = CivController().apply { pacingMs = 0L; attach(sim) }
+        autre.selectMainSub(false); autre.setFrequency(1_296_200_000L)
+        assertEquals(1_296_200_000L, sim.mainHz)
+        st.tour(); t += 100
+        assertTrue(st.etat.value.rxPilote)
+        assertEquals(435_640_000L, sim.mainHz)
+        assertEquals(435_640_000L, m.repos)
+        // Far on the same band too (beyond the band, its Doppler and the margin),
+        // a second later: the rewrite after a far read-back is paced to once a second.
+        t += 1_000
+        autre.selectMainSub(false); autre.setFrequency(437_800_000L)
+        st.tour(); t += 100
+        assertTrue(st.etat.value.rxPilote)
+        assertEquals(435_640_000L, sim.mainHz)
+        assertEquals(0, sim.refusals)
+    }
+
+    @Test
+    fun d_un_satellite_fm_a_un_autre_le_poste_change_de_canal() = runBlocking {
+        val (st, m) = station(fm)
+        repeat(10) { st.tour(); t += 100 }
+        assertEquals(436_795_000L, sim.mainHz)
+        // U up, V down: the bands swap.
+        val autreFm = Transmitter("Mode U/V FM", "FM", 437_500_000L, 437_500_000L,
+            145_900_000L, 145_900_000L, invert = false, alive = true, type = "Transceiver")
+        m.t = autreFm; m.repos = null
+        st.nouveauSatellite()
+        st.tour(); t += 100
+        assertEquals(145_900_000L, sim.mainHz)
+        assertEquals(437_500_000L, sim.subHz)
+        assertTrue(st.etat.value.rxPilote)
+        assertFalse("no tone in its description", sim.toneOn)
+        assertEquals(0, sim.refusals)
+    }
 }

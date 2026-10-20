@@ -130,6 +130,9 @@ class StationCat(private val monde: MondeCat, private val horloge: () -> Long = 
      */
     @Volatile private var mainSurMoletteTx = false
 
+    /** When a read-back far outside the band last had everything written again (ms). */
+    private var repriseHorsBandeMs = Long.MIN_VALUE / 2
+
     /** Loop rounds since the rig's mode was last asked. */
     private var toursDepuisLeMode = 0
 
@@ -166,9 +169,17 @@ class StationCat(private val monde: MondeCat, private val horloge: () -> Long = 
         if (!on) change { copy(rxPilote = false) }
     }
 
-    /** Another satellite: nothing read from the rig stands for it. */
+    /**
+     * Another satellite: nothing read from the rig stands for it. Where the
+     * rig sits is the old satellite's frequency, not an operator's choice:
+     * SatMe drives again, everything written again, the rig set up again.
+     */
     fun nouveauSatellite() {
         ecritDescenteHz = 0L; ecritMonteeHz = 0L; luDescenteHz = 0L
+        lastSentDl = 0L; lastSentUl = 0L
+        rxArbiter.reset(); fmArbiter.reset(); txArbiter.reset()
+        mainSurMoletteTx = false; repriseHorsBandeMs = Long.MIN_VALUE / 2
+        oublieArmement()
         change { copy(descenteHz = null, monteeHz = null) }
     }
 
@@ -245,6 +256,13 @@ class StationCat(private val monde: MondeCat, private val horloge: () -> Long = 
         return (lo + hi) / 2
     }
 
+    private companion object {
+        /** The fastest range rate of a low orbit, km/s. */
+        const val VITESSE_MAX_KMS = 7.6
+        /** Beyond the band and its Doppler, what a hand might still do (tuning past an edge, another FM channel). */
+        const val MARGE_HORS_BANDE_HZ = 20_000L
+    }
+
     /** True if the chosen transmitter is FM (fixed channels) vs linear transponder. */
     private fun isFmMode(t: Transmitter): Boolean {
         if (t.isTransponder) return false
@@ -310,6 +328,38 @@ class StationCat(private val monde: MondeCat, private val horloge: () -> Long = 
     fun effectiveCtcss(t: Transmitter): Int {
         if (monde.ctcssChoisi() > 0) return monde.ctcssChoisi()
         return if (monde.ctcssAuto()) autoCtcssTenthHz(t) else 0
+    }
+
+    /**
+     * A read-back (sky Hz, offsets removed) no hand on this satellite would
+     * give: on another band, or beyond the band plus the largest Doppler of a
+     * low orbit (7.6 km/s) plus a margin. It is where the previous satellite
+     * left the rig (SO-50 at 436.795, then RS-44 chosen): taking it for a
+     * gesture kept the rig there for a whole pass.
+     */
+    private fun loinDeLaBande(t: Transmitter, luHz: Long): Boolean {
+        val bas = minOf(t.downlinkLowHz ?: return false, t.downlinkHighHz ?: t.downlinkLowHz!!)
+        val haut = maxOf(t.downlinkLowHz!!, t.downlinkHighHz ?: bas)
+        if (BandPlan.band(luHz) != BandPlan.band(bas)) return true
+        val marge = Math.round(haut * VITESSE_MAX_KMS / Doppler.C_KM_S) + MARGE_HORS_BANDE_HZ
+        return luHz < bas - marge || luHz > haut + marge
+    }
+
+    /**
+     * Before the arbiter: a read-back far outside the band is not a gesture,
+     * SatMe drives. When the rig is not where we last put it, everything is
+     * written again — at most once a second, so a rig that refuses is not
+     * hammered ten times a second.
+     */
+    private fun horsBande(t: Transmitter, luHz: Long, lu: Long, arbitre: RxArbiter): Boolean {
+        if (!loinDeLaBande(t, luHz)) return false
+        arbitre.reset()
+        val now = horloge()
+        if (kotlin.math.abs(lu - lastSentDl) >= 20 && now - repriseHorsBandeMs >= 1_000L) {
+            lastSentDl = 0L; lastSentUl = 0L
+            repriseHorsBandeMs = now
+        }
+        return true
     }
 
     /** Doppler threshold: FM channels move by 200 Hz steps at least, SSB by 20. */
@@ -445,7 +495,7 @@ class StationCat(private val monde: MondeCat, private val horloge: () -> Long = 
         val ulRest = t.uplinkLowHz ?: return
         val dlObserved = lireDescente(sameBand)
 
-        if (dlObserved != null) {
+        if (dlObserved != null && !horsBande(t, dlObserved - shift, dlObserved, fmArbiter)) {
             val geste = fmArbiter.observe(dlObserved, horloge())
             if (geste) {
                 lastSentDl = 0L
@@ -496,7 +546,9 @@ class StationCat(private val monde: MondeCat, private val horloge: () -> Long = 
         val dlObserved = if (auPoste) lireDescente(sameBand) else null
         if (auPoste && dlObserved == null) return
         val now = horloge()
-        val geste = dlObserved != null && rxArbiter.observe(dlObserved, now)
+        val loin = dlObserved != null &&
+            horsBande(t, dlObserved - shift - monde.decalageRxHz() - monde.afcRxHz(), dlObserved, rxArbiter)
+        val geste = dlObserved != null && !loin && rxArbiter.observe(dlObserved, now)
         if (geste) lastSentDl = 0L
         val pilote = (!auPoste || rxArbiter.driven) && monde.dopplerRx() && !monde.maintienDoppler()
 
@@ -513,7 +565,10 @@ class StationCat(private val monde: MondeCat, private val horloge: () -> Long = 
             val r = monde.repos()
             if (r == null || kotlin.math.abs(r - clamped) >= 20) monde.poseRepos(clamped)
         }
-        val rest = monde.repos() ?: lu
+        // Driving with no rest chosen: the passband centre, never the rig's
+        // read-back — that only told the rig it was right, and kept it on the
+        // previous satellite's frequency.
+        val rest = monde.repos() ?: if (pilote) centreRx(t) ?: lu else lu
 
         val ulRest = Doppler.transponderUplinkRest(
             rest, t.downlinkLowHz ?: rest, t.downlinkHighHz ?: rest,
