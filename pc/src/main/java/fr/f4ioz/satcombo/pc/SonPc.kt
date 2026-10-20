@@ -110,6 +110,39 @@ class SonPc {
         return false
     }
 
+    /**
+     * Card [nom] opened for one listener of its own, beside the decoders' card
+     * (the rig's IF for the SDR tab): the same formats and reading as [demarre].
+     * The rate and a closer, or null and why.
+     */
+    fun capture(nom: String, recoit: (ShortArray, Int, Int) -> Unit): Pair<Pair<Int, () -> Unit>?, String> {
+        val info = AudioSystem.getMixerInfo().firstOrNull { it.name == nom } ?: return null to "carte son introuvable : $nom"
+        // The decoders' card on the same card: let go first (one line a card on some systems).
+        if (_etat.value.appareil == nom && ligne != null) arrete()
+        val m = AudioSystem.getMixer(info)
+        for (f in formats()) {
+            val di = DataLine.Info(TargetDataLine::class.java, f)
+            if (!m.isLineSupported(di)) continue
+            val l = runCatching { (m.getLine(di) as TargetDataLine).also { it.open(f, f.frameSize * 4096); it.start() } }.getOrNull() ?: continue
+            val rate = f.sampleRate.toInt()
+            val marche = java.util.concurrent.atomic.AtomicBoolean(true)
+            thread(isDaemon = true, name = "satme-son-fi") {
+                val octets = ByteArray(3840)
+                val pcm = ShortArray(1920)
+                while (marche.get()) {
+                    val n = runCatching { l.read(octets, 0, octets.size) }.getOrDefault(-1)
+                    if (n < 0) break
+                    if (n == 0) continue
+                    val k = n / 2
+                    for (i in 0 until k) pcm[i] = ((octets[2 * i + 1].toInt() shl 8) or (octets[2 * i].toInt() and 0xFF)).toShort()
+                    runCatching { recoit(pcm, k, rate) }
+                }
+            }
+            return (rate to { marche.set(false); runCatching { l.stop(); l.close() }; Unit }) to ""
+        }
+        return null to "$nom n'accepte ni 48 ni 44,1 kHz en 16 bits mono"
+    }
+
     private fun boucle(l: TargetDataLine, rate: Int) {
         val octets = ByteArray(4096)
         val pcm = ShortArray(2048)

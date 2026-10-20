@@ -29,7 +29,8 @@ class PosteIcomReseau(
     var ecrisJournal: ((String) -> Unit)? = null,
     private val horloge: () -> Long = System::currentTimeMillis,
 ) {
-    enum class Usage { CAT, AUDIO }
+    /** [FI]: the rig's sound taken raw, its IF demodulated by SatMe (« IC-9700 FI »). */
+    enum class Usage { CAT, AUDIO, FI }
 
     private val usages = HashSet<Usage>()
     @Volatile var session: SessionIcom? = null; private set
@@ -39,6 +40,10 @@ class PosteIcomReseau(
 
     /** The decoders' audio: 48 kHz 16-bit, (samples, count, rate). */
     val auditeurs = CopyOnWriteArrayList<(ShortArray, Int, Int) -> Unit>()
+    /** The same sound as it comes, at the wire's rate (16 kHz): the IF, folded, for [fr.f4ioz.satcombo.sdr.SourceFiPoste]. */
+    val auditeursBruts = CopyOnWriteArrayList<(ShortArray, Int, Int) -> Unit>()
+    /** The wire's rate (Hz) of the session open, 0 when none. */
+    val tauxSon: Int get() = session?.config?.codec?.taux ?: 0
     val spectre = SpectrePoste()
     private var sur: Surechantillonneur? = null
 
@@ -155,6 +160,7 @@ class PosteIcomReseau(
     }
 
     private fun audio(pcm: ShortArray) {
+        if (auditeursBruts.isNotEmpty()) { val t = sur?.tauxEntree ?: 0; for (a in auditeursBruts) runCatching { a(pcm, pcm.size, t) } }
         if (auditeurs.isEmpty()) return
         val s = (sur ?: return).traite(pcm)
         for (a in auditeurs) runCatching { a(s, s.size, SORTIE_HZ) }

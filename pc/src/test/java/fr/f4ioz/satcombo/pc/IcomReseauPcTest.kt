@@ -139,6 +139,47 @@ class IcomReseauPcTest {
         assertFalse(son.appareils().any { it.nom == PosteIcomReseau.NOM_SOURCE })
     }
 
+    /**
+     * The rig set to IF, by the network: its sound becomes the SDR tab's
+     * receiver, centred on the dial; the decoders get SatMe's demodulated
+     * sound, never the raw IF; the session given back at the stop.
+     */
+    @Test fun la_fi_par_le_reseau_dans_l_onglet_sdr() {
+        val st = station(Ports())
+        val son = SonPc()
+        val ir = IcomReseauPc(st, son, dossier)
+        // A carrier 1.5 kHz above the dial, as the IF folded at 16 kHz: 12 kHz + 1.5 kHz.
+        radio.son = { i, taux -> (8000 * Math.cos(2 * Math.PI * 13_500.0 * i / taux)).toInt().toShort() }
+        ir.action("/api/icomreseau/reglage", mapOf("sonFi" to "1"))
+        assertTrue(ir.sonFi)
+        // The network's AF source refused: raw IF would be noise to the decoders.
+        assertFalse(son.demarre(PosteIcomReseau.NOM_SOURCE))
+        assertTrue(son.etat.value.erreur.contains("IC-9700 FI"))
+        val sdr = SdrPc(st, son, StockageMemoire(), portee)
+        sdr.ouvreFi = { ir.ouvreSourceFi() }
+        sdr.cadranPoste = { 435_000_000L }
+        sdr.recepteur = SdrPc.FI_POSTE
+        sdr.modeChoisi = "USB"
+        st.settings.sdrAudio = false
+        var recu = 0
+        son.auditeurs += { _, n, rate -> assertEquals(fr.f4ioz.satcombo.sdr.Dsp.AUDIO_RATE, rate); recu += n }
+        try {
+            assertTrue(sdr.etat.value.erreur, sdr.demarre())
+            assertTrue(sdr.etat.value.tuner.contains("réseau"))
+            attends { sdr.trames > 5 && recu > 44_100 }
+            assertEquals(SdrPc.NOM_SOURCE, son.etat.value.appareil)
+            assertEquals(435_000_000L, sdr.etat.value.cielHz)
+            assertEquals(435_000_000L, sdr.cielDePll(sdr.spectrePllHz))
+            // The carrier stands at +1.5 kHz on the waterfall (43 Hz bins around the dial).
+            val sp = sdr.spectre!!
+            val hz = fr.f4ioz.satcombo.sdr.Dsp.RTL_RATE.toDouble() / fr.f4ioz.satcombo.sdr.Dsp.DECIM_1 / sp.size
+            val pic = (sp.size / 2 - (4_000 / hz).toInt() until sp.size / 2 + (4_000 / hz).toInt()).maxByOrNull { sp[it] }!!
+            assertEquals(1_500.0, (pic - sp.size / 2) * hz, 2 * hz)
+            assertTrue(ir.json().getBoolean("fi"))
+        } finally { sdr.arrete() }
+        attends { radio.jetonRendu }
+    }
+
     @Test fun reglages_apprennent_le_codage() {
         val st = station(Ports())
         val ir = IcomReseauPc(st, SonPc(), dossier)

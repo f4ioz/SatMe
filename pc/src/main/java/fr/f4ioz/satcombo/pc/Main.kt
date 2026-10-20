@@ -106,6 +106,14 @@ fun main(args: Array<String>) {
     val sdr = SdrPc(station, son.son, station.stockage, portee, dossierSondes = File(dossier, "sondes"), meteor = meteor)
     // The raw I/Q kept and played back; nothing heard from a recording or the generator goes to PSK Reporter.
     val iqSdr = IqPc(sdr, station, dossier, journal)
+    // The rig's IF as a receiver (« IC-9700 FI »): centred on its dial as the CAT reads it; « recentrer le poste »
+    // moves its RX by the satellite's RX shift (the CAT loop writes it; receive only).
+    icomReseau.sonStation = son
+    sdr.ouvreFi = { icomReseau.ouvreSourceFi() }
+    sdr.cadranPoste = { if (station.etat.value.catConnecte) station.stationCat.etat.value.descenteHz else null }
+    sdr.deplacePoste = { d ->
+        if (station.etat.value.catConnecte && station.emetteurChoisi() != null) { station.reglageSat(calibHz = station.etat.value.calibHz + d); true } else false
+    }
     son.psk.bloque = { sdr.fictif }
     // Nor do pictures and frames from them pass for real receptions (generator: never kept; recording: marked).
     val horsAntenneSdr = { sdr.generateur?.let { SstvPc.HorsAntenne(SstvPc.ESSAI) }

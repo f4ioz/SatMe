@@ -339,7 +339,7 @@ object PagesPcTelephone {
                     fr.f4ioz.satcombo.i18n.I18n.t("qo100_seg_$it") }).put("ok", true))
                 "/api/montage/suggestion", "/api/montage/detection" -> json(JSONObject().put("ok", false).put("erreur", MONTAGE_SUR_PC))
                 // Levels over time and the Sun's noise are measured on SatMe-PC's receiver: none here (the page hides them).
-                "/api/niveaux", "/api/soleil", "/api/ais", "/api/espace", "/api/espace/aurore", "/api/icomreseau", "/api/icomreseau/spectre", "/api/icomreseau/trace" -> json(JSONObject().put("ok", false).put("absent", true))
+                "/api/niveaux", "/api/soleil", "/api/ais", "/api/espace", "/api/espace/aurore", "/api/icomreseau", "/api/icomreseau/spectre", "/api/icomreseau/trace", "/api/icomreseau/cartes" -> json(JSONObject().put("ok", false).put("absent", true))
                 // The scan and the band stack run on SatMe-PC's receiver: none here (the page hides them).
                 "/api/balayage", "/api/pile-bandes" -> json(JSONObject().put("ok", false).put("absent", true))
                 "/api/montage/profils" -> json(JSONObject().put("ok", true).put("telephone", true).put("profils", JSONArray()).put("actuels", JSONArray()).put("emission", ""))
