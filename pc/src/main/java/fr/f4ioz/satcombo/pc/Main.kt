@@ -162,6 +162,16 @@ fun main(args: Array<String>) {
     sdr.diffusion = diffusion
     son.son.auditeurs += { pcm, n, rate -> diffusion.ajoute("carte", pcm, n, rate) }
     val journalWeb = JournalWebPc(journal, station, dossier)
+    // « Journal détaillé »: the spectrum around the downlink and the decoders' text noted per pass (off unless chosen).
+    val ft8Recents = { son.ft8.entendus.map { Triple(it.tranche, it.texte, listOfNotNull(it.mode, "${it.rapportDb} dB", "${it.frequenceHz} Hz").joinToString(" · ")) } }
+    val spectreJournal = SpectreJournalPc(station.stockage, File(dossier, "journal/spectres"),
+        passage = {
+            val e = station.etat.value; val s = e.suivi; val p = e.position
+            if (s != null && p != null && p.elevationDeg > -1.0 && sdr.etat.value.actif && !sdr.fictif && sdr.suitSatellite) s.catalogNumber to s.name else null
+        },
+        spectre = { sdr.spectre?.let { sp -> sdr.etat.value.let { e -> Triple(sp, sdr.trames, (e.fineHz + e.decalageHz).toDouble()) } } },
+        cw = { son.cw.texte() }, ft8 = ft8Recents)
+    portee.launch { while (true) { runCatching { spectreJournal.tic() }; kotlinx.coroutines.delay(250) } }
     // A sked as a video, on the journal's map tiles.
     val videoSked = VideoSked(File(dossier, "exports")) { z, x, y -> journalWeb.tuile(z, x, y)?.let { f -> runCatching { javax.imageio.ImageIO.read(f) }.getOrNull() } }
     // SatMe on the phone: its passes, their contacts and pictures, to the PC.
@@ -291,6 +301,11 @@ fun main(args: Array<String>) {
     }
     // Space weather: nothing asked from the Internet until ticked in its tab; the copies kept are shown meanwhile.
     serveur.espace = MeteoSpatialePc(station, station.stockage, File(dossier, "espace")).also { it.demarre() }
+    // The pass report (Journal › Rapport): read from the data folder, the levels and the space weather kept.
+    journalWeb.rapport = RapportPc(journal, station, dossier,
+        niveaux = { niveaux.series.getValue(NiveauxPc.CANAL).points(86_400_000L, System.currentTimeMillis()).map { it.t to it.moy } },
+        kp = { serveur.espace?.etat()?.kp.orEmpty() }, ft8 = ft8Recents)
+    serveur.spectreJournal = spectreJournal
     serveur.carte = CartePc(station, son, sdr, adsb, datv, { textesDatv }, { serveur.qrzDatv }, ais = ais)
     serveur.iqSdr = iqSdr
     // Open to the network: a password for every other machine (drawn the first time, said in the log).
@@ -357,6 +372,7 @@ fun main(args: Array<String>) {
         // No hackrf_transfer outlives SatMe-PC.
         runCatching { fr.f4ioz.satcombo.sdr.HackrfEmission.arreteTout() }
         runCatching { journal.ferme() }
+        runCatching { spectreJournal.ferme() }
         // The KISS radio put back as it was.
         runCatching { kiss.deconnecte() }
         runCatching { sdr.arrete() }

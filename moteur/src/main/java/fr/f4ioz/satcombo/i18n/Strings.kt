@@ -2230,6 +2230,7 @@ val FR: Map<String, String> = mapOf(
     "pj_planche" to "Planche SSTV",
     "pj_onglet_rejeu" to "Rejeu",
     "pj_onglet_fabriquer" to "Fabriquer",
+    "pj_rapport" to "Rapport du passage",
     "pj_accelere" to "Lecture accélérée : rapide et muette là où rien n'est consigné ni entendu",
     "pj_avant" to "Commencer avant un contact, une trame (s)",
     "pj_apres" to "Continuer après un contact (s)",

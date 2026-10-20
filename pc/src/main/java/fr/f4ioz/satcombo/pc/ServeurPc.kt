@@ -110,6 +110,8 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
     @Volatile var adsb: AdsbPc? = null
     @Volatile var ais: AisPc? = null
     @Volatile var espace: MeteoSpatialePc? = null
+    /** « Journal détaillé » (spectra and decodes per pass, for the report). */
+    @Volatile var spectreJournal: SpectreJournalPc? = null
     @Volatile var carte: CartePc? = null
     /** The SDR's raw I/Q kept and played back (set before [demarre]). */
     @Volatile var iqSdr: IqPc? = null
@@ -585,6 +587,7 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 (molette?.let { m -> m.contextePage(q["ctx"]); m.json() } ?: JSONObject().put("absent", true)).toString().toByteArray())
             // The Doppler/CAT log: on or not, the last files (downloaded from the journal's route).
             "/api/doppler" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JSONObject().put("on", station.settings.journalDoppler)
+                .put("detaille", spectreJournal?.actif ?: false)
                 .put("fichiers", JSONArray(station.journauxDoppler().take(8).map { JSONObject().put("nom", it.name).put("taille", it.length()) }))
                 .toString().toByteArray())
             "/api/passages" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JsonPc.passages(station).toString().toByteArray())
@@ -1533,7 +1536,7 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 q["amsatAuto"]?.let { s.amsatAuto = it == "1" }
                 q["pskReporter"]?.let { v -> son?.psk?.let { it.actif = v == "1" } ?: run { s.pskReporter = v == "1" } }
             }
-            "/api/doppler" -> station.journalDoppler(q["on"] == "1")
+            "/api/doppler" -> q["detaille"]?.let { d -> spectreJournal?.actif = d == "1" } ?: station.journalDoppler(q["on"] == "1")
             "/api/lien" -> {
                 lien?.regle(q["on"]?.let { it == "1" }, q["port"]?.trim()?.toIntOrNull())
                 if (lien != null && lien.erreur.isNotEmpty()) return JSONObject().put("ok", false).put("erreur", lien.erreur)

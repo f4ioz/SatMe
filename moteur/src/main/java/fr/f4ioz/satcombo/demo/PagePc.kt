@@ -3729,6 +3729,9 @@ ${rail()}
       <label class="petit" style="display:block"><input type="checkbox" id="dop-on" onchange="post('api/doppler?on=' + (this.checked ? 1 : 0)).then(chargeDoppler)">
         Noter chaque passage suivi avec le poste connecté</label>
       <div class="petit aide" style="margin-top:6px">Toutes les 5 s : élévation, Doppler prévu à la descente et à la montée, fréquence écrite au poste et relue. Un fichier CSV par passage (AOS, montée, TCA, descente, LOS), avec le passage dans le Journal. SatMe ne demande rien de plus au poste.</div>
+      <label class="petit" style="display:block;margin-top:8px"><input type="checkbox" id="jd-on" onchange="post('api/doppler?detaille=' + (this.checked ? 1 : 0)).then(chargeDoppler)">
+        Journal détaillé : noter le spectre autour de la descente pendant les passages suivis</label>
+      <div class="petit aide">Une ligne moyennée toutes les 2 s (25 kHz autour de la fréquence écoutée, Doppler suivi) quand le SDR reçoit le satellite, et le texte CW / FT8 décodé : la cascade du « Rapport » du passage dans le Journal.</div>
       <div id="dop-liste" class="petit" style="margin-top:6px"></div>
     </div>
     <div class="carte" id="px-carte">
@@ -6175,6 +6178,7 @@ async function chargeDoppler() {
   try { j = await (await fetch('api/doppler')).json(); } catch (x) {}
   if (!j || j.on === undefined) { g('dop-carte').hidden = true; return; }
   g('dop-on').checked = !!j.on;
+  g('jd-on').checked = !!j.detaille;
   g('dop-liste').innerHTML = j.fichiers.length ? 'Derniers : ' + j.fichiers.map(f => '<a href="journal/doppler?nom=' + enc(f.nom) + '" download style="color:var(--cyan)">' +
     esc(f.nom) + '</a> (' + Math.max(1, Math.round(f.taille / 1024)) + ' ko)').join(' · ') : 'Aucun journal pour l’instant.';
 }

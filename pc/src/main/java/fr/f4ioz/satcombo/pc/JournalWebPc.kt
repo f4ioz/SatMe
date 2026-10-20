@@ -49,6 +49,9 @@ class JournalWebPc(private val j: JournalPc, private val station: StationPc, pri
         }
     }
 
+    /** The pass report's routes (`/rapport…`), when SatMe-PC gives them. */
+    @Volatile var rapport: RapportPc? = null
+
     private fun json(s: String) = ReponseWeb("200 OK", "application/json; charset=utf-8", s.toByteArray())
     private val NON = ReponseWeb("404 Not Found", "application/json; charset=utf-8", "{\"ok\":false}".toByteArray())
     private fun d(v: Double) = "%.2f".format(Locale.US, v)
@@ -94,6 +97,7 @@ class JournalWebPc(private val j: JournalPc, private val station: StationPc, pri
     fun sert(route: String, p: (String) -> String): ReponseWeb = sert(route, p) { false }
 
     fun sert(route: String, p: (String) -> String, corps: (File) -> Boolean): ReponseWeb = runCatching {
+        if (route == "/rapport" || route.startsWith("/rapport/")) return rapport?.sert(route.removePrefix("/rapport"), p) ?: NON
         when (route) {
             // ---- a pass from nothing: its satellite and times, then its sound, pictures and contacts
             "/nouveau/satellites" -> json(org.json.JSONArray(station.etat.value.satellites.sortedBy { it.name.uppercase() }
