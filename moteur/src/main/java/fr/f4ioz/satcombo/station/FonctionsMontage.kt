@@ -69,6 +69,11 @@ object FonctionsMontage {
         val sdrCtcssHz: Double = 0.0, val balayage: Boolean = false,
         /** The pages listening to the SDR's sound from afar (« Écouter ici »). */
         val auditeurs: Int = 0,
+        /** The rig reached over the network (its CAT link set to « Réseau »): its state ("CONNECTE"…), its delay (ms, 0 unknown), what it carries. */
+        val posteReseau: Boolean = false, val reseauEtat: String = "", val reseauLatenceMs: Int = 0,
+        val reseauCat: Boolean = false, val reseauSon: Boolean = false,
+        /** The rig's receive frequency (MHz, 0 unknown): picks the antenna port of its band. */
+        val posteMhz: Double = 0.0,
     ) {
         /** The SDR with no hardware: a recording or the test generator. */
         val sdrFictif: Boolean get() = sdrRecepteur == "fichier" || sdrRecepteur == "generateur"
@@ -76,8 +81,16 @@ object FonctionsMontage {
         fun coche(id: String): Boolean = nonSat == null || id !in setOf("sondes", "avions", "ais") || id in nonSat
         /** A card as the operator knows it. */
         fun nomCarte(c: String): String = libelles[c] ?: court(c)
+        /** The rig's own sound: its network source when its CAT goes that way, else its USB card ("" none). */
+        val sonDuPoste: String get() = if (posteReseau && SOURCE_RESEAU in cartes) SOURCE_RESEAU else carteDuPoste
+        /** Whether [c] is the rig's own sound: its USB card, or its sound over the network (AF or IF). */
+        fun estSonDuPoste(c: String): Boolean = c.isNotBlank() && (c == carteDuPoste || c == SOURCE_RESEAU)
         /** The card to offer when none runs: the one chosen, else the rig's, else the first. */
-        val carteProposee: String get() = sonCarte.ifBlank { carteDuPoste.ifBlank { cartes.firstOrNull().orEmpty() } }
+        val carteProposee: String get() = sonCarte.ifBlank { sonDuPoste.ifBlank { cartes.firstOrNull().orEmpty() } }
+        /** The rig's network link in words: « réseau (LAN) · 12 ms ». */
+        val reseauTexte: String get() = "réseau (LAN)" + if (reseauEtat == "CONNECTE" && reseauLatenceMs > 0) " · $reseauLatenceMs ms" else ""
+        /** What the network link carries: « CAT + son ». */
+        val reseauQuoi: String get() = listOfNotNull("CAT".takeIf { reseauCat || catConnecte }, "son".takeIf { reseauSon || sonAppareil == SOURCE_RESEAU }).joinToString(" + ")
         /** The transmission on the air, said for a refusal, or null. */
         fun emission(): String? = when {
             txDatv.isNotBlank() -> "émission DATV en cours (" + nomRessource("sdr:$txDatv") + ")"
@@ -90,6 +103,9 @@ object FonctionsMontage {
             sdrPourMeteor -> "meteor"; sdrPourSonde -> "sondes"; qo100ALaCle -> "qo100"; else -> "sdr"
         }
     }
+
+    /** The rig's sound over the network, as the sound tab names it. */
+    const val SOURCE_RESEAU = fr.f4ioz.satcombo.cat.icomreseau.PosteIcomReseau.NOM_SOURCE
 
     /** One of QO-100's decoders at once: its decoder's name, its frequency (MHz, 0 unknown). */
     data class Canal(val nom: String, val mhz: Double = 0.0)
@@ -341,8 +357,8 @@ object FonctionsMontage {
     // ------------------------------------------------------------------ the graph drawn
 
     enum class Genre2 { MATERIEL, FONCTION, SON }
-    /** A cable's or a data path's kind: radio, IQ samples (USB, network), sound, commands, network. */
-    enum class Type { RF, IQ, AUDIO, CAT, RESEAU }
+    /** A cable's or a data path's kind: radio, IQ samples (USB, network), sound, commands, network, a rig's LAN (CAT + sound). */
+    enum class Type { RF, IQ, AUDIO, CAT, RESEAU, LAN }
     /** A node's or a link's state: running, in place but at rest, missing, held by another, in error. */
     enum class Statut { OK, PRET, MANQUE, OCCUPE, ERREUR }
 
@@ -360,14 +376,24 @@ object FonctionsMontage {
             .put("raccourci", raccourci?.json() ?: JSONObject.NULL).put("actions", JSONArray(actions.map { it.json() }))
     }
 
-    /** A link from [de] to [vers] (the way the signal or the sound goes). */
-    data class Arc(val de: String, val vers: String, val type: Type, val statut: Statut, val texte: String = "") {
+    /**
+     * A link from [de] to [vers] (the way the signal or the sound goes);
+     * [sous] a second line under it; [detecte]: seen live, not drawn in the montage.
+     */
+    data class Arc(val de: String, val vers: String, val type: Type, val statut: Statut, val texte: String = "", val sous: String = "", val detecte: Boolean = false) {
         fun json(): JSONObject = JSONObject().put("de", de).put("vers", vers).put("type", type.name.lowercase()).put("statut", statut.name.lowercase()).put("texte", texte)
+            .put("sous", sous).put("detecte", detecte)
     }
 
-    /** One thing to do for a chain to work: in words, a safe gesture, where to set it. */
-    data class Besoin(val texte: String, val action: Action? = null, val raccourci: Raccourci? = null) {
+    /** An edit of the montage's drawing offered in one click ([params] those of `api/montage/edition`): never a setting of the station. */
+    data class Edition(val texte: String, val params: Map<String, String>) {
+        fun json(): JSONObject = JSONObject().put("texte", texte).put("params", JSONObject(params))
+    }
+
+    /** One thing to do for a chain to work: in words, a safe gesture, where to set it, a fix of the drawing. */
+    data class Besoin(val texte: String, val action: Action? = null, val raccourci: Raccourci? = null, val edition: Edition? = null) {
         fun json(): JSONObject = JSONObject().put("texte", texte).put("action", action?.json() ?: JSONObject.NULL).put("raccourci", raccourci?.json() ?: JSONObject.NULL)
+            .put("edition", edition?.json() ?: JSONObject.NULL)
     }
 
     data class Graphe(val noeuds: List<Noeud>, val arcs: List<Arc>, val besoins: List<Besoin> = emptyList(), val titre: String = "", val resume: String = "") {
@@ -470,7 +496,7 @@ object FonctionsMontage {
         }
         // Each card Java knows: the one feeding first, at most four.
         val cartes = (listOfNotNull(i.sonAppareil.takeIf { it.isNotBlank() && !i.sonParSdr }, i.sonCarte.takeIf { it.isNotBlank() },
-            i.carteDuPoste.takeIf { it.isNotBlank() }) + i.cartes).distinct().take(3)
+            i.sonDuPoste.takeIf { it.isNotBlank() }) + i.cartes).distinct().take(3)
         val courts = cartes.map { i.nomCarte(it) }
         cartes.forEachIndexed { k, c ->
             val nomCarte = if (courts.count { it == courts[k] } > 1) c.take(40) else courts[k]
@@ -478,9 +504,10 @@ object FonctionsMontage {
             n += Noeud("c:$k", nomCarte, Genre2.SON, 0, listOf("materiel", "son-emet"), if (vive) Statut.OK else Statut.PRET,
                 if (vive) "entrée des décodeurs" else if (c == i.sonCarte) "carte choisie (onglet Son)" else "", raccourci = Raccourci("son", ancre = "s-carte"),
                 actions = if (vive) emptyList() else listOf(Action("Prendre cette carte", "son.entree", c)))
-            if (vive) a += Arc("pc", "c:$k", Type.AUDIO, Statut.OK, "USB")
-            // The rig's audio to its own card, drawn by itself once the card is recognised.
-            if (c == i.carteDuPoste) a += Arc("f:poste", "c:$k", Type.AUDIO, if (vive) Statut.OK else Statut.PRET, "audio")
+            val parReseau = c == SOURCE_RESEAU
+            if (vive) a += Arc("pc", "c:$k", if (parReseau) Type.LAN else Type.AUDIO, Statut.OK, if (parReseau) "réseau" else "USB")
+            // The rig's audio to its own card (or its sound over the network), drawn by itself once recognised.
+            if (i.estSonDuPoste(c)) a += Arc("f:poste", "c:$k", Type.AUDIO, if (vive) Statut.OK else Statut.PRET, if (parReseau) "réseau" else "audio")
         }
         if (i.cartes.size > cartes.size) n += Noeud("c:plus", "+" + (i.cartes.size - cartes.size) + " autres cartes son", Genre2.SON, 0, listOf("materiel"), Statut.PRET, "",
             raccourci = Raccourci("son", ancre = "s-carte"))
@@ -520,9 +547,11 @@ object FonctionsMontage {
     /**
      * The radio path from [depart] to the antenna: back along the receiving
      * ports ([tx] false), or on along the transmitting ones ([tx] true).
+     * [mhz] known: from the start, only its port of that band (when it has one).
      * The far end first.
      */
-    private fun radio(c: Chaine, depart: String, tx: Boolean): Chemin {
+    private fun radio(c: Chaine, depart: String, tx: Boolean, mhz: Double = 0.0): Chemin {
+        val bande = portsDeBande(c, depart, tx, mhz).map { it.id }.toSet()
         val prof = LinkedHashMap<String, Int>(); val liens = LinkedHashSet<String>()
         val file = ArrayDeque<Triple<String, String?, Int>>(); file.add(Triple(depart, null, 0)); prof[depart] = 0
         while (file.isNotEmpty()) {
@@ -532,6 +561,7 @@ object FonctionsMontage {
                 if (p.signal != Signal.RF || p.id == arrivee) continue
                 if (tx && !(p.voie.emet && p.sens != Sens.ENTREE)) continue
                 if (!tx && !(p.voie.recoit && p.sens != Sens.SORTIE)) continue
+                if (id == depart && bande.isNotEmpty() && p.id !in bande) continue
                 for (l in c.liens) {
                     val la = when {
                         l.de.element == id && l.de.port == p.id -> l.vers
@@ -548,8 +578,28 @@ object FonctionsMontage {
         return Chemin(prof.entries.sortedByDescending { it.value }.map { it.key }, liens.toList())
     }
 
-    /** The data path from [depart] to the computer (through a node, an interface, a sound card), nearest first. */
-    private fun versPc(c: Chaine, depart: String, audio: Boolean = false): Chemin? {
+    /** The radio ports of [id] (receiving, or transmitting when [tx]) of the band of [mhz]; empty when none or [mhz] unknown. */
+    private fun portsDeBande(c: Chaine, id: String, tx: Boolean, mhz: Double): List<Montage.Port> {
+        if (mhz <= 0) return emptyList()
+        val e = c.element(id) ?: return emptyList()
+        return Montage.ports(e).filter { p ->
+            p.signal == Signal.RF && (if (tx) p.voie.emet && p.sens != Sens.ENTREE else p.voie.recoit && p.sens != Sens.SORTIE) &&
+                p.mhz != null && kotlin.math.abs(p.mhz - mhz) / p.mhz < 0.25
+        }
+    }
+
+    /** « 2 m », « 70 cm », « 23 cm » for a port's band. */
+    private fun nomBande(mhz: Int?): String = when { mhz == null -> ""; mhz < 300 -> "2 m"; mhz < 1000 -> "70 cm"; else -> "23 cm" }
+
+    /** Whether [p] of [e] is a network port (LAN or Wi-Fi). */
+    private fun portReseau(p: Montage.Port) = p.signal == Signal.DONNEES && (p.connecteur == "RJ45" || p.connecteur == "Wi-Fi")
+
+    /**
+     * The data path from [depart] to the computer (through a node, an
+     * interface, a sound card), nearest first; [reseau]: leaving [depart] by
+     * its LAN or Wi-Fi only.
+     */
+    private fun versPc(c: Chaine, depart: String, audio: Boolean = false, reseau: Boolean = false): Chemin? {
         val parent = HashMap<String, Pair<String, String>>(); val file = ArrayDeque(listOf(depart)); val vus = hashSetOf(depart)
         while (file.isNotEmpty()) {
             val id = file.removeFirst()
@@ -564,6 +614,7 @@ object FonctionsMontage {
                 val p = Montage.port(c, ici) ?: continue
                 if (!p.signal.versPc) continue
                 if (audio && id == depart && p.signal == Signal.COMMANDE) continue
+                if (reseau && id == depart && !portReseau(p)) continue
                 val ga = c.element(autre.element)?.let { Montage.modele(it) }?.genre
                 if (ga !in setOf(Genre.ORDINATEUR, Genre.NOEUD, Genre.INTERFACE, Genre.CARTE_SON)) continue
                 if (vus.add(autre.element)) { parent[autre.element] = id to l.id; file.add(autre.element) }
@@ -576,7 +627,9 @@ object FonctionsMontage {
     private class Bati(val c: Chaine, val i: Instantane, val poss: List<Possession>, val cf: List<Conflit>, val famille: Set<String>) {
         val noeuds = LinkedHashMap<String, Noeud>(); val arcs = ArrayList<Arc>(); val besoins = ArrayList<Besoin>()
         fun ajoute(n: Noeud) { if (n.id !in noeuds) noeuds[n.id] = n }
-        fun relie(de: String, vers: String, t: Type, s: Statut, texte: String = "") { if (arcs.none { it.de == de && it.vers == vers }) arcs += Arc(de, vers, t, s, texte) }
+        fun relie(de: String, vers: String, t: Type, s: Statut, texte: String = "", sous: String = "", detecte: Boolean = false) {
+            if (arcs.none { it.de == de && it.vers == vers }) arcs += Arc(de, vers, t, s, texte, sous, detecte)
+        }
         fun besoin(b: Besoin) { if (besoins.none { it.texte == b.texte }) besoins += b }
 
         /** The holder of [r] when it is not one of this chain's functions. */
@@ -586,9 +639,11 @@ object FonctionsMontage {
          * The hardware for [role]: receiving, from the antenna (column
          * [col0]) to the radio, then the boxes to the computer; transmitting,
          * the computer at [col0], the radio, then on to the antenna. Returns
-         * the computer's node and the next free column.
+         * the computer's node and the next free column. [mhz]: the band
+         * received (its antenna port); [reseau]: the piece reaches the
+         * computer by its LAN (a rig over the network), whatever else is cabled.
          */
-        fun materiel(role: String, nom: String, col0: Int, tx: Boolean, actif: Boolean, typeVersPc: Type): Pair<String, Int> {
+        fun materiel(role: String, nom: String, col0: Int, tx: Boolean, actif: Boolean, typeVersPc: Type, mhz: Double = 0.0, reseau: Boolean = false): Pair<String, Int> {
             val r = ressourceDuRole(role)
             val e = elementsDuRole(c, role).firstOrNull()
             val occ = r?.let { autre(it) }
@@ -605,7 +660,7 @@ object FonctionsMontage {
                 relieVers(id, "m:pc", typeVersPc, vif)
                 return "m:pc" to col0 + 2
             }
-            val ra = radio(c, e.id, tx)
+            val ra = radio(c, e.id, tx, mhz)
             val loin = ra.elements.filter { it != e.id }
             val prof = loin.size
             val colRadio = if (tx) col0 + 1 else col0 + prof
@@ -622,9 +677,18 @@ object FonctionsMontage {
                 relie(x, y, Type.RF, vif, l.cable.nom)
             }
             val genres = loin.mapNotNull { c.element(it)?.let { el -> Montage.modele(el)?.genre } }
-            if (Genre.ANTENNE !in genres && Genre.CHARGE !in genres)
-                besoin(Besoin("Aucune antenne reliée à « " + Montage.nomCourt(e) + " » dans le montage", raccourci = Raccourci("montage")))
-            val vp = versPc(c, e.id, typeVersPc == Type.AUDIO)
+            if (Genre.ANTENNE !in genres && Genre.CHARGE !in genres) besoin(sansAntenne(e, tx, mhz))
+            val vp = versPc(c, e.id, typeVersPc == Type.AUDIO, reseau && !tx)
+            // Over the network with no LAN cable drawn: the link seen live, lighter, and the cable offered.
+            val pcEl = if (vp == null && reseau && !tx) c.elements.firstOrNull { Montage.modele(it)?.genre == Genre.ORDINATEUR } else null
+            if (pcEl != null) {
+                val nid = "e:" + pcEl.id
+                ajoute(Noeud(nid, Montage.nomCourt(pcEl), Genre2.MATERIEL, colRadio + 1, listOf("materiel"), vif, "", pcEl.id, pcEl.modele))
+                relie("e:" + e.id, nid, Type.LAN, vif, i.reseauTexte + " · détecté", i.reseauQuoi, detecte = true)
+                besoin(Besoin("« " + Montage.nomCourt(e) + " » passe par le réseau : câble LAN absent du montage", raccourci = Raccourci("montage"),
+                    edition = cableReseau(c, e, pcEl)))
+                return nid to colRadio + 2
+            }
             if (vp == null) {
                 besoin(Besoin("« " + Montage.nomCourt(e) + " » n'est relié à aucun ordinateur dans le montage", raccourci = Raccourci("montage")))
                 ajoute(Noeud("m:pc", "SatMe-PC", Genre2.MATERIEL, if (tx) col0 else colRadio + 1, listOf("materiel"), Statut.MANQUE, "câble absent du montage"))
@@ -646,13 +710,46 @@ object FonctionsMontage {
                 val nid = "e:$id"
                 ajoute(Noeud(nid, Montage.nomCourt(el), Genre2.MATERIEL, colRadio + 1 + k,
                     listOf("materiel") + (if (carte) listOf("son-recoit", "son-emet") else emptyList()), vif, "", id, el.modele))
-                relie(prec, nid, if (carte || precCarte || (k == 0 && typeVersPc == Type.AUDIO)) Type.AUDIO else if (k == 0) typeVersPc else Type.IQ, vif)
+                if (k == 0 && reseau) relie(prec, nid, Type.LAN, vif, i.reseauTexte, i.reseauQuoi)
+                else relie(prec, nid, if (carte || precCarte || (k == 0 && typeVersPc == Type.AUDIO)) Type.AUDIO else if (k == 0) typeVersPc else Type.IQ, vif)
                 prec = nid; precCarte = carte
             }
             return prec to colRadio + 1 + vp.elements.size
         }
 
         fun badgesMat(tx: Boolean) = listOf("materiel", if (tx) "tx" else "rx")
+
+        /**
+         * No antenna behind [e]: said for the band received when its port
+         * goes elsewhere (a rig's 70 cm feeding an up-converter), with the
+         * antenna offered on the free ports of a rig.
+         */
+        fun sansAntenne(e: Montage.Element, tx: Boolean, mhz: Double): Besoin {
+            val nom = Montage.nomCourt(e)
+            val libres = if (Montage.modele(e)?.genre == Genre.POSTE && !tx) EditionMontage.antennesLibres(c, e.id) else emptyList()
+            val ed = if (libres.isEmpty()) null else Edition((if (EditionMontage.antennePourPoste(c, e.id) == "yagi-bibande") "Ajouter une antenne 2 m / 70 cm" else "Ajouter une antenne") +
+                (if (libres.size == 1) " (sur « " + libres.single().nom + " »)" else ""), mapOf("op" to "antenne", "id" to e.id))
+            val bande = portsDeBande(c, e.id, tx, mhz)
+            val pris = bande.firstOrNull()?.let { p -> c.liens.firstOrNull { (it.de.element == e.id && it.de.port == p.id) || (it.vers.element == e.id && it.vers.port == p.id) }?.let { p to it } }
+            if (pris != null && bande.size == 1) {
+                val (p, l) = pris
+                val la = if (l.de.element == e.id) l.vers.element else l.de.element
+                return Besoin("Aucune antenne " + nomBande(p.mhz) + " reliée à « " + nom + " » pour " + String.format(java.util.Locale.FRANCE, "%.3f", mhz) +
+                    " MHz : « " + p.nom + " » va à « " + (c.element(la)?.let { Montage.nomCourt(it) } ?: la) + " » (le câble se change à la main)", raccourci = Raccourci("montage"), edition = ed)
+            }
+            return Besoin("Aucune antenne reliée à « " + nom + " » dans le montage", raccourci = Raccourci("montage"), edition = ed)
+        }
+
+        /** The LAN (or Wi-Fi) cable from [e] to the computer [pc], when both have the port: an edit offered. */
+        fun cableReseau(c: Chaine, e: Montage.Element, pc: Montage.Element): Edition? {
+            for (p in Montage.ports(e).filter { portReseau(it) }) {
+                val q = Montage.ports(pc).firstOrNull { it.connecteur == p.connecteur && portReseau(it) } ?: continue
+                val cable = if (p.connecteur == "Wi-Fi") Montage.Cable.WIFI else Montage.Cable.ETHERNET
+                if (Montage.refus(c, Montage.Bout(e.id, p.id), Montage.Bout(pc.id, q.id), cable) != null) continue
+                return Edition("Ajouter ce câble", mapOf("op" to "relie", "de" to e.id + "." + p.id, "vers" to pc.id + "." + q.id, "c" to cable.name))
+            }
+            return null
+        }
 
         fun libereAction(p: Possession): Action? = if (p.role == Role.EMISSION) null else when (p.detenteur) {
             "sdr", "qo100", "meteor", "sondes" -> Action("Arrêter " + (fonction(p.detenteur)?.nom ?: ""), "sdr.actif", "0")
@@ -682,8 +779,8 @@ object FonctionsMontage {
         fun parCarte(): Pair<String, Int> {
             val poste = c.elements.firstOrNull { e -> Montage.modele(e)?.genre == Genre.POSTE }
             val nom = poste?.let { Montage.nomCourt(it) } ?: i.catModele.ifBlank { "Poste" }
-            val (pc, col) = materiel("cat", nom, 0, false, i.catConnecte || (i.sonActif && !i.sonParSdr), Type.AUDIO)
-            val carte = i.sonAppareil.takeIf { i.sonActif && !i.sonParSdr } ?: i.sonCarte.ifBlank { i.carteDuPoste }
+            val (pc, col) = materiel("cat", nom, 0, false, i.catConnecte || (i.sonActif && !i.sonParSdr), Type.AUDIO, i.posteMhz, i.posteReseau)
+            val carte = i.sonAppareil.takeIf { i.sonActif && !i.sonParSdr } ?: i.sonCarte.ifBlank { i.sonDuPoste }
             var n = noeudFonction("son", i, poss, cf, col, "Carte son").let { it.copy(detail = if (carte.isNotBlank()) i.nomCarte(carte) else "aucune carte choisie") }
             if (i.sonParSdr) n = n.copy(statut = Statut.OCCUPE, detail = "prise par la carte SDR (son démodulé)")
             ajoute(n)
@@ -693,13 +790,14 @@ object FonctionsMontage {
                     choix.takeIf { it.isNotBlank() }?.let { Action("Reprendre « " + i.nomCarte(it) + " »", "son.entree", it) }, Raccourci("son", ancre = "s-carte")))
                 !i.sonActif -> besoin(Besoin(if (choix.isBlank()) "Aucune carte son choisie (onglet Son)" else "La carte son « " + i.nomCarte(choix) + " » n'est pas démarrée",
                     choix.takeIf { it.isNotBlank() }?.let { Action("Démarrer « " + i.nomCarte(it) + " »", "son.entree", it) }, Raccourci("son", ancre = "s-carte")))
-                // Another card runs while the rig's own is there: offered, never taken by itself.
-                i.carteDuPoste.isNotBlank() && i.sonAppareil != i.carteDuPoste -> besoin(Besoin("La carte du poste est « " + i.nomCarte(i.carteDuPoste) + " » ; l'entrée des décodeurs est sur « " + i.nomCarte(i.sonAppareil) + " »",
-                    Action("Prendre « " + i.nomCarte(i.carteDuPoste) + " »", "son.entree", i.carteDuPoste), Raccourci("son", ancre = "s-carte")))
+                // Another card runs while the rig's own sound is there (its USB card or its network source): offered, never taken by itself.
+                i.sonDuPoste.isNotBlank() && !i.estSonDuPoste(i.sonAppareil) -> besoin(Besoin("Le son du poste est « " + i.nomCarte(i.sonDuPoste) + " » ; l'entrée des décodeurs est sur « " + i.nomCarte(i.sonAppareil) + " »",
+                    Action("Prendre « " + i.nomCarte(i.sonDuPoste) + " »", "son.entree", i.sonDuPoste), Raccourci("son", ancre = "s-carte")))
             }
-            // The rig's own card: its audio edge says so.
-            val sienne = carte.isNotBlank() && carte == i.carteDuPoste
-            relie(pc, n.id, Type.AUDIO, if (i.sonActif && !i.sonParSdr) Statut.OK else if (i.sonParSdr) Statut.OCCUPE else Statut.PRET, if (sienne) "audio" else "son")
+            // The rig's own sound: its audio edge says so (« réseau » when it comes over the LAN).
+            val sienne = i.estSonDuPoste(carte)
+            relie(pc, n.id, Type.AUDIO, if (i.sonActif && !i.sonParSdr) Statut.OK else if (i.sonParSdr) Statut.OCCUPE else Statut.PRET,
+                if (carte == SOURCE_RESEAU) "son réseau" else if (sienne) "audio" else "son")
             if (!i.catConnecte) besoin(Besoin("Le poste n'est pas en CAT : la fréquence n'est pas suivie (le son passe quand même)", raccourci = Raccourci("reglages", "materiel")))
             return n.id to col + 1
         }
@@ -855,8 +953,14 @@ object FonctionsMontage {
                 libelles = mapOf("USB PCM2902 Audio CODEC [plughw:1,0]" to "IC-9700 (USB Audio CODEC)", "HDA Intel PCH [plughw:0,0]" to "Carte mère (ALC897)"),
                 carteDuPoste = "USB PCM2902 Audio CODEC [plughw:1,0]",
                 sstvActif = true, sstvSource = "carte", sstvSourceActive = "carte", ft8Actif = true, sdrRecepteur = "rtl")
+            // The IC-9700 over the network: its CAT and its sound by the LAN, its USB card still plugged.
+            "sstv-reseau" -> base.copy(catConnecte = true, catModele = "IC9700", sonActif = true, sonAppareil = SOURCE_RESEAU,
+                cartes = listOf("USB PCM2902 Audio CODEC [plughw:1,0]", SOURCE_RESEAU), sonCarte = "",
+                libelles = mapOf("USB PCM2902 Audio CODEC [plughw:1,0]" to "IC-9700 (USB Audio CODEC)"), carteDuPoste = "USB PCM2902 Audio CODEC [plughw:1,0]",
+                sstvActif = true, sstvSource = "carte", sstvSourceActive = "carte", aprsActif = true, sdrRecepteur = "rtl",
+                posteReseau = true, reseauEtat = "CONNECTE", reseauLatenceMs = 12, reseauCat = true, reseauSon = true, posteMhz = 145.800)
             else -> null
         }
     }
-    val ESSAIS = listOf("rx", "tx", "datv-pluto", "sstv-carte")
+    val ESSAIS = listOf("rx", "tx", "datv-pluto", "sstv-carte", "sstv-reseau")
 }

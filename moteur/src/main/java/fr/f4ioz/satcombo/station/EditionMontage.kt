@@ -44,6 +44,32 @@ object EditionMontage {
         data class Photo(val id: String, val on: Boolean) : Op()
         /** The places the owner gave forgotten: the automatic layout again. */
         object DispositionAuto : Op()
+        /** A 2 m / 70 cm antenna added to the rig [id], cabled to its free receiving ports of those bands. */
+        data class Antenne(val id: String) : Op()
+    }
+
+    /** The receiving antenna ports of the rig [id] in the 2 m and 70 cm bands with no cable yet. */
+    fun antennesLibres(c: Chaine, id: String): List<Montage.Port> {
+        val e = c.element(id) ?: return emptyList()
+        if (Montage.modele(e)?.genre != Montage.Genre.POSTE) return emptyList()
+        return Montage.ports(e).filter { p ->
+            p.signal == Montage.Signal.RF && p.voie.recoit && p.sens != Montage.Sens.SORTIE && (p.mhz ?: 0) in 100..999 &&
+                c.liens.none { (it.de.element == id && it.de.port == p.id) || (it.vers.element == id && it.vers.port == p.id) }
+        }
+    }
+
+    /** The antenna that suits the rig [id]: a dual-band Yagi for separate 2 m and 70 cm ports, a single-band Yagi for one, a vertical for a shared port. */
+    fun antennePourPoste(c: Chaine, id: String): String? {
+        val e = c.element(id) ?: return null
+        val ports = Montage.ports(e).filter { it.signal == Montage.Signal.RF && it.voie.recoit && (it.mhz ?: 0) in 100..999 }
+        val deux = ports.any { it.mhz!! < 300 }; val soixante = ports.any { it.mhz!! >= 300 }
+        return when {
+            ports.isEmpty() -> null
+            ports.size == 1 && ports.single().id == "ant" -> "colineaire"
+            deux && soixante -> "yagi-bibande"
+            deux -> "yagi-2m"
+            else -> "yagi-70cm"
+        }
     }
 
     /** What an edit gives: the new chain, the id of what it added, or why it could not be (the chain unchanged). */
@@ -144,6 +170,24 @@ object EditionMontage {
             else Resultat(c.copy(elements = c.elements.map { if (it.id == op.id) it.copy(photo = op.on) else it }), op.id,
                 dit = if (op.on) "Photo à la place du dessin" else "Dessin de SatMe")
         Op.DispositionAuto -> Resultat(c.copy(elements = c.elements.map { it.copy(x = null, y = null) }), dit = "Disposition automatique")
+        is Op.Antenne -> {
+            val libres = antennesLibres(c, op.id)
+            val m = antennePourPoste(c, op.id)?.let { CatalogueMateriel.modele(it) }
+            if (c.element(op.id) == null || m == null) non(c, "pas un poste 2 m / 70 cm")
+            else if (libres.isEmpty()) non(c, "les prises d'antenne 2 m / 70 cm du poste ont déjà leur câble")
+            else {
+                val a = applique(c, Op.Ajoute(m.id))
+                var n = a.chaine; val relies = ArrayList<String>()
+                for (p in libres) {
+                    // The antenna's port of the same band (a dual-band Yagi has one each; the others one for all).
+                    val q = m.ports.filter { it.signal == Montage.Signal.RF }.minByOrNull { kotlin.math.abs((it.mhz ?: 0) - (p.mhz ?: 0)) } ?: continue
+                    if (n.liens.any { (it.de.element == a.id && it.de.port == q.id) || (it.vers.element == a.id && it.vers.port == q.id) }) continue
+                    val r = applique(n, Op.Relie(Bout(a.id!!, q.id), Bout(op.id, p.id), Cable.coax(p.connecteur)))
+                    if (r.ok) { n = r.chaine; relies += p.nom }
+                }
+                Resultat(n, a.id, dit = "Ajoutée : " + m.nom + (if (relies.isNotEmpty()) ", reliée à " + relies.joinToString(" et ") { "« $it »" } else ""))
+            }
+        }
     }
 
     /** The edit a page asks by its parameters (`op=ajoute&m=…&x=…&y=…`, `op=relie&de=e1.sortie&vers=e2.entree&c=COAX_N`…), or null. */
@@ -165,6 +209,7 @@ object EditionMontage {
             "modele" -> Op.Modele(id, p("m"))
             "photo" -> Op.Photo(id, p("on") == "1")
             "auto" -> Op.DispositionAuto
+            "antenne" -> Op.Antenne(id)
             else -> null
         }
     }

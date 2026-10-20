@@ -194,7 +194,9 @@ class MontagePc(dossier: File, private val lectures: () -> ActiviteMontage.Lectu
         val l = if (demo) null else lectures()
         val a = if (l == null) ActiviteMontage.essai(essai) else ActiviteMontage.depuis(l)
         val al = ActiviteMontage.allume(c, a)
-        val garde = if (simple) al.enOeuvre().takeIf { it.isNotEmpty() } else null
+        // SatMe-PC itself always stays in the simplified drawing.
+        val garde = if (simple) al.enOeuvre().takeIf { it.isNotEmpty() }
+            ?.plus(c.elements.filter { Montage.modele(it)?.genre == Montage.Genre.ORDINATEUR }.map { it.id }) else null
         val o = JSONObject().put("ok", true).put("chaine", Montage.ecrit(c))
             .put("plan", DispositionMontage.json(DispositionMontage.dispose(c, garde)))
             .put("ports", Montage.portsJson(c)).put("historique", etatHistorique())

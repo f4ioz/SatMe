@@ -63,9 +63,16 @@ object ActiviteMontage {
 
     enum class Etat { REPOS, RELIE, RX, TX, RXTX }
 
+    /** A cable seen live but not drawn: from [de] to [vers], the [cable] to add, [texte] what it carries. */
+    data class Detecte(val de: Montage.Bout, val vers: Montage.Bout, val cable: Montage.Cable, val texte: String) {
+        fun json(): JSONObject = JSONObject().put("de", de.toString()).put("vers", vers.toString()).put("cable", cable.name).put("texte", texte)
+    }
+
     /** The chain lit: each element's and cable's state, the frequency on each radio cable lit, the elements in error. */
     data class Allumage(val elements: Map<String, Etat>, val liens: Map<String, Etat>, val mhz: Map<String, Double>, val erreurs: Map<String, String>,
-                        val boites: Map<String, Boite> = emptyMap(), val notes: Map<String, String> = emptyMap()) {
+                        val boites: Map<String, Boite> = emptyMap(), val notes: Map<String, String> = emptyMap(),
+                        /** The links the station uses but the drawing lacks (an Icom over its LAN, no LAN cable drawn). */
+                        val detectes: List<Detecte> = emptyList()) {
         /** The elements taking part in what happens now (the simplified drawing). */
         fun enOeuvre(): Set<String> = elements.filterValues { it != Etat.REPOS }.keys
     }
@@ -332,7 +339,26 @@ object ActiviteMontage {
                 }
             }
         }
-        for (id in sources(a.rx)) { marque(el, id, Etat.RX); suis(id, Etat.RX); donnees(id, Etat.RX) }
+        // A piece reaching the computer over the network with no LAN or Wi-Fi cable drawn: the cable seen, offered.
+        val detectes = ArrayList<Detecte>()
+        val ordinateur = c.elements.firstOrNull { Montage.modele(it)?.genre == Genre.ORDINATEUR }
+        fun detecte(depart: String) {
+            if (liaison(depart) != "reseau" || ordinateur == null) return
+            val e = c.element(depart) ?: return
+            val reseau = Montage.ports(e).filter { it.signal == Signal.DONNEES && (it.connecteur == "RJ45" || it.connecteur == "Wi-Fi") }
+            val dessine = c.liens.any { l -> reseau.any { p -> (l.de.element == depart && l.de.port == p.id) || (l.vers.element == depart && l.vers.port == p.id) } }
+            if (dessine) return
+            for (p in reseau) {
+                val q = Montage.ports(ordinateur).firstOrNull { it.connecteur == p.connecteur && it.signal == Signal.DONNEES } ?: continue
+                val k = if (p.connecteur == "Wi-Fi") Montage.Cable.WIFI else Montage.Cable.ETHERNET
+                if (Montage.refus(c, Montage.Bout(depart, p.id), Montage.Bout(ordinateur.id, q.id), k) != null) continue
+                detectes += Detecte(Montage.Bout(depart, p.id), Montage.Bout(ordinateur.id, q.id), k,
+                    roles[depart]!!.firstNotNullOfOrNull { a.notes[it] } ?: "réseau")
+                marque(el, ordinateur.id, Etat.RELIE)
+                return
+            }
+        }
+        for (id in sources(a.rx)) { marque(el, id, Etat.RX); suis(id, Etat.RX); donnees(id, Etat.RX); detecte(id) }
         for (id in sources(a.tx)) { marque(el, id, Etat.TX); suis(id, Etat.TX); donnees(id, Etat.TX) }
         for (id in sources(a.relies)) {
             marque(el, id, Etat.RELIE)
@@ -343,6 +369,8 @@ object ActiviteMontage {
                 marque(li, l.id, Etat.RELIE); marque(el, autre.element, Etat.RELIE)
             }
         }
+        // SatMe runs on the computer: always part of what happens (the simplified drawing keeps it).
+        if (ordinateur != null && el.values.any { it != Etat.REPOS }) marque(el, ordinateur.id, Etat.RELIE)
         val erreurs = HashMap<String, String>()
         for ((role, texte) in a.erreurs) sources(setOf(role)).forEach { erreurs[it] = texte }
         c.elements.forEach { if (it.id !in el) el[it.id] = Etat.REPOS }
@@ -354,7 +382,7 @@ object ActiviteMontage {
         }
         val notes = HashMap<String, String>()
         for (e in c.elements) roles[e.id]!!.firstNotNullOfOrNull { a.notes[it] }?.let { notes[e.id] = it }
-        return Allumage(el, li, mhz, erreurs, bx, notes)
+        return Allumage(el, li, mhz, erreurs, bx, notes, detectes)
     }
 
     /** The band a radio cable between [a] and [b] carries (MHz): the output's when one end is an output, else the higher. */
@@ -372,6 +400,7 @@ object ActiviteMontage {
         .put("frequences", JSONObject(a.mhz))
         .put("boites", JSONObject().also { o -> al.boites.forEach { (id, b) -> o.put(id, JSONObject().put("etat", b.etat.name.lowercase()).put("texte", b.texte)) } })
         .put("notes", JSONObject(al.notes))
+        .put("detectes", JSONArray(al.detectes.map { it.json() }))
         .put("resume", JSONArray(a.resume))
         .put("rx", a.rx.isNotEmpty()).put("tx", a.tx.isNotEmpty())
 
@@ -388,6 +417,9 @@ object ActiviteMontage {
             resume = listOf("Démonstration : DATV reçue par l'ADALM-PLUTO (rien n'est reçu)"))
         "sstv-carte" -> Activite(rx = setOf("cat", "son"), mhz = mapOf("ciel-rx" to 10489.800),
             resume = listOf("Démonstration : SSTV par l'IC-9700 et sa carte son (rien n'est reçu)"))
+        "sstv-reseau" -> Activite(rx = setOf("cat", "son"), mhz = mapOf("ciel-rx" to 145.800),
+            resume = listOf("Démonstration : SSTV par l'IC-9700 sur le réseau (rien n'est reçu)"),
+            notes = mapOf("cat" to "réseau · 12 ms · CAT + son"), liaisons = mapOf("cat" to "reseau"))
         else -> Activite()
     }
 

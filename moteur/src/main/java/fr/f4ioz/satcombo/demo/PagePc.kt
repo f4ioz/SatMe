@@ -1386,6 +1386,11 @@ ${STYLE_JETONS}
   .mt-a.t-audio .mt-a-l { stroke:#5BD68A; stroke-width:2; }
   .mt-a.t-cat .mt-a-l { stroke:#FFB454; stroke-width:1.6; }
   .mt-a.t-reseau .mt-a-l { stroke:#9AA7B4; stroke-width:1.8; stroke-dasharray:1 5; }
+  .mt-a.t-lan .mt-a-l { stroke:#5AA9FF; stroke-width:2.2; stroke-dasharray:8 5; }
+  .mt-a.detecte { opacity:.55; } .mt-a.detecte.st-pret { opacity:.3; }
+  .mt-a text.sous { fill:#8FC3FF; }
+  .mt-detecte path { fill:none; stroke:#5AA9FF; stroke-width:2; stroke-dasharray:8 5; opacity:.5; }
+  .mt-detecte text { font-size:8.5px; fill:#8FC3FF; font-family:var(--mono); opacity:.85; }
   .mt-a .mt-a-f { stroke:transparent; stroke-width:2.4; stroke-dasharray:2 12; }
   .mt-a.st-ok .mt-a-f { stroke:#E8FFFB; animation:mt-flux 1s linear infinite; }
   .mt-a.st-ok.t-rf .mt-a-l { stroke:var(--rx); }
@@ -12029,7 +12034,7 @@ setInterval(ticSon, 1000);
 // Display and setup only: nothing here starts a transmission, opens a port or touches the LNB supply.
 var MT = { cat: null, d: null, cle: '', simple: false, edition: false, sel: null, essai: '', telephone: false, pop: null, popCle: '' };
 try { MT.simple = localStorage.getItem('mt-simple') === '1'; } catch (x) {}
-try { const q = new URLSearchParams(location.search).get('essai'); if (['rx', 'tx', 'datv-pluto', 'sstv-carte'].includes(q)) MT.essai = q; } catch (x) {}
+try { const q = new URLSearchParams(location.search).get('essai'); if (['rx', 'tx', 'datv-pluto', 'sstv-carte', 'sstv-reseau'].includes(q)) MT.essai = q; } catch (x) {}
 try { MT.fonction = localStorage.getItem('mt-fonction') || ''; } catch (x) { MT.fonction = ''; }
 const MT_CABLES = {
   COAX_N: 'N', COAX_SMA: 'SMA', COAX_F: 'F', COAX_BNC: 'BNC', COAX_PL: 'PL', DIRECT: '', USB: 'USB', ETHERNET: 'Réseau', WIFI: 'Wi-Fi',
@@ -12321,11 +12326,24 @@ function mtDessine(svg, d, p, compact) {
   const c = d.chaine, pl = d.plan;
   svg.setAttribute('viewBox', '0 0 ' + pl.l + ' ' + pl.h);
   svg.dataset.l = pl.l; svg.dataset.h = pl.h;
-  svg.innerHTML = mtDefs(p) + '<g class="mt-liens">' + pl.traces.map(t => mtTrace(c, t, p)).join('') + '</g>' +
+  svg.innerHTML = mtDefs(p) + '<g class="mt-liens">' + pl.traces.map(t => mtTrace(c, t, p)).join('') + mtDetectes(d) + '</g>' +
     '<g class="mt-els">' + pl.boites.map(b => mtGroupe(c, b, p, compact)).join('') + '</g>' +
     '<g class="mt-ets">' + pl.traces.map(t => mtEtiquette(c, t, d.etat)).join('') + '</g><g class="mt-tmp"></g>';
   svg.classList.toggle('edite', !!MT.edition && !compact);
   mtAllume(svg, d);
+}
+/** The cables the station uses but the drawing lacks (an Icom over its LAN): dashed, lighter, from piece to piece. */
+function mtDetectes(d) {
+  const pl = d.plan, et = d.etat || {};
+  return (et.detectes || []).map(x => {
+    const a = pl.boites.find(b => b.id === x.de.split('.')[0]), b = pl.boites.find(q => q.id === x.vers.split('.')[0]);
+    if (!a || !b) return '';
+    // A little under the middles: beside a cable drawn between the same pieces (a USB one), never on it.
+    const p1 = [a.x + a.l / 2, a.y + (a.h - 18) / 2 + 12], p2 = [b.x + b.l / 2, b.y + (b.h - 18) / 2 + 12];
+    const mx = (p1[0] + p2[0]) / 2, my = (p1[1] + p2[1]) / 2 + 17, t = 'LAN · détecté';
+    return '<g class="mt-detecte"><title>' + mtEsc('Câble absent du montage, liaison vue en direct : ' + x.texte) + '</title><path d="M' + p1[0] + ' ' + p1[1] + ' L' + p2[0] + ' ' + p2[1] + '"/>' +
+      '<text x="' + mx + '" y="' + (my - 5) + '" text-anchor="middle">' + mtEsc(t) + '</text></g>';
+  }).join('');
 }
 /** Only the lights and the frequencies: the drawing stays (its animations go on). */
 function mtAllume(svg, d) {
@@ -12388,7 +12406,7 @@ async function mtTic(force) {
     if (MT.glisse) return;
     mtAttachePorts(d);
     MT.d = d; MT.telephone = !!d.telephone;
-    const cle = JSON.stringify([d.chaine, d.plan, d.photos, d.detoures, MT.edition, MT.photoV]);
+    const cle = JSON.stringify([d.chaine, d.plan, d.photos, d.detoures, MT.edition, MT.photoV, (d.etat || {}).detectes]);
     const svg = g('mt-svg');
     if (cle !== MT.cle || force) {
       MT.cle = cle; MT.logCle = ''; mtDessine(svg, d, 'mtA', false); mtListes();
@@ -12410,7 +12428,7 @@ async function mtTic(force) {
     if (!d || d.ok === false) return;
     const vide = !d.chaine.elements.length;
     g('mt-pop-vide').hidden = !vide; g('mt-pop-svg').style.display = vide ? 'none' : '';
-    const cle = JSON.stringify([d.chaine, d.plan]);
+    const cle = JSON.stringify([d.chaine, d.plan, (d.etat || {}).detectes]);
     if (cle !== MT.popCle) { MT.popCle = cle; mtDessine(g('mt-pop-svg'), d, 'mtB', true); } else mtAllume(g('mt-pop-svg'), d);
     mtTaille(g('mt-pop-svg'), g('mt-pop-zone'), 1.1);
     txt('mt-pop-etat', (d.etat && d.etat.resume && d.etat.resume.length ? d.etat.resume.join(' · ') : 'Rien ne reçoit ni n’émet.'));
@@ -12850,16 +12868,19 @@ function mtImprime() {
 }
 // ---- « Ce qui manque » : what the drawing says is missing, the dangers first (a DC voltage on an SDR's input)
 function mtManque(d) {
-  const l = (d.verification || []), z = g('mt-manque');
-  const cle = JSON.stringify(l);
+  // The cable seen is offered here in the full view; a function's view offers it among its own needs.
+  const l = (d.verification || []), z = g('mt-manque'), det = MT.telephone || MT.fonction ? [] : ((d.etat || {}).detectes || []);
+  const cle = JSON.stringify([l, det]);
   if (z.dataset.k === cle) return;
   z.dataset.k = cle;
   const dangers = l.filter(r => r.niveau === 'danger'), autres = l.filter(r => r.niveau !== 'danger');
   const li = r => '<li class="' + r.niveau + '" data-els="' + mtEsc(r.elements.join(' ')) + '">' + mtEsc(r.texte) + '</li>';
   let ouvert = false; try { ouvert = localStorage.getItem('mt-manque') === '1'; } catch (x) {}
   z.innerHTML = dangers.map(r => '<div class="mt-danger" role="alert" data-els="' + mtEsc(r.elements.join(' ')) + '"><b>⚡ Danger</b><span>' + mtEsc(r.texte) + '</span></div>').join('') +
+    det.map(x => '<div class="mt-besoin" data-els="' + mtEsc(x.de.split('.')[0] + ' ' + x.vers.split('.')[0]) + '"><span>Liaison réseau vue en direct (' + mtEsc(x.texte) + '), câble absent du montage</span>' +
+      mtEditBouton({ texte: 'Ajouter ce câble', params: { op: 'relie', de: x.de, vers: x.vers, c: x.cable } }) + '</div>').join('') +
     (autres.length ? '<details' + (ouvert ? ' open' : '') + ' ontoggle="try { localStorage.setItem(\'mt-manque\', this.open ? \'1\' : \'0\'); } catch (x) {}"><summary>Ce qui manque (' + autres.length + ')</summary><ul>' + autres.map(li).join('') + '</ul></details>' : '');
-  z.hidden = !l.length;
+  z.hidden = !l.length && !det.length;
 }
 // A remark pointed at: its pieces outlined on the drawing.
 ['mouseover', 'focusin'].forEach(t => g('mt-manque').addEventListener(t, e => {
@@ -13111,6 +13132,19 @@ function mtActeBouton(a, cl) {
   return '<button' + (cl ? ' class="' + cl + '"' : '') + ' onclick="mtActe(' + (MT.actes.length - 1) + ')" title="Réception seulement">' + mtEsc(a.texte) + '</button>';
 }
 function mtActe(k) { const a = MT.actes[k]; if (a) mtGeste(a.cle, a.valeur, a.texte); }
+/** A fix of the drawing (a cable, an antenna): an edit of the montage only, never a setting of the station. */
+MT.eds = [];
+function mtEditBouton(e) {
+  if (!e || MT.telephone) return '';
+  if (MT.eds.length > 200) MT.eds = [];
+  MT.eds.push(e);
+  return '<button onclick="mtEditK(' + (MT.eds.length - 1) + ')" title="Ajouté au dessin du montage (Annuler le retire)">' + mtEsc(e.texte) + '</button>';
+}
+function mtEditK(k) {
+  const e = MT.eds[k]; if (!e) return;
+  if (MT.essai) { annonce('Démonstration : rien n’est changé'); return; }
+  MT.vueCle = ''; mtOp(e.params, e.texte);
+}
 function mtVaBouton(r, t) {
   if (!r) return '';
   if (MT.vas.length > 400) MT.vas = [];
@@ -13182,9 +13216,11 @@ function mtArcSvg(a, p1, p2, p) {
   const d = 'M' + p1[0] + ' ' + p1[1] + ' C' + (p1[0] + dx) + ' ' + p1[1] + ' ' + (p2[0] - dx) + ' ' + p2[1] + ' ' + p2[0] + ' ' + p2[1];
   const fl = a.type === 'audio' ? ' marker-end="url(#' + p + '-fl-son)"' : a.type === 'rf' ? '' : ' marker-end="url(#' + p + '-fl)"';
   const mx = (p1[0] + p2[0]) / 2, my = (p1[1] + p2[1]) / 2;
-  return '<g class="mt-a t-' + a.type + ' st-' + a.statut + '"><title>' + mtEsc((a.type === 'audio' ? 'son' : a.type.toUpperCase()) + (a.texte ? ' · ' + a.texte : '') + ' — ' + (MT_STATUTS[a.statut] || a.statut)) + '</title>' +
+  return '<g class="mt-a t-' + a.type + ' st-' + a.statut + (a.detecte ? ' detecte' : '') + '"><title>' + mtEsc((a.type === 'audio' ? 'son' : a.type.toUpperCase()) + (a.texte ? ' · ' + a.texte : '') + (a.sous ? ' · ' + a.sous : '') +
+    ' — ' + (MT_STATUTS[a.statut] || a.statut) + (a.detecte ? ' (câble absent du montage)' : '')) + '</title>' +
     '<path class="mt-a-l" d="' + d + '"' + fl + '/><path class="mt-a-f" d="' + d + '"/>' +
-    (a.texte ? '<text x="' + mx + '" y="' + (my - 4) + '" text-anchor="middle">' + mtEsc(mtCoupe(a.texte, 22)) + '</text>' : '') + '</g>';
+    (a.texte ? '<text x="' + mx + '" y="' + (my - 4) + '" text-anchor="middle">' + mtEsc(mtCoupe(a.texte, a.type === 'lan' ? 30 : 22)) + '</text>' : '') +
+    (a.sous ? '<text class="sous" x="' + mx + '" y="' + (my + 11) + '" text-anchor="middle">' + mtEsc(mtCoupe(a.sous, 22)) + '</text>' : '') + '</g>';
 }
 function mtFleches(p) {
   return '<marker id="' + p + '-fl" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0L8 4L0 8z" fill="#9AA7B4"/></marker>' +
@@ -13211,13 +13247,16 @@ function mtLogiciel(svg, d, force) {
     const vifs = new Set(arcs.flatMap(a => [a.de, a.vers]));
     noeuds = noeuds.filter(n => n.statut !== 'pret' || vifs.has(n.id));
   }
-  let pc = null;
-  pl.boites.forEach(b => { const e = mtElem(d.chaine, b.id), m = e && mtModele(e.m); if (m && m.genre === 'ORDINATEUR' && !pc) pc = b; });
+  // SatMe-PC: the computer of the drawing (any piece of the computer kind), else a phone; a pill of its own only when none is drawn.
+  const genreDe = b => { const e = mtElem(d.chaine, b.id), m = e && mtModele(e.m); return m ? m.genre : ''; };
+  const pc = pl.boites.find(b => genreDe(b) === 'ORDINATEUR') || pl.boites.find(b => genreDe(b) === 'TELEPHONE') || null;
   const W = 160, H = 36, GX = 34, GY = 7;
   const cols = [0, 1, 2, 3].map(c => noeuds.filter(n => n.col === c));
   const haut = Math.max(1, ...cols.map(c => c.length)) * (H + GY) + 30;
   const Ht = Math.max(vide ? 0 : pl.h, haut);
-  const x0 = vide ? W + GX : pl.l + 56;
+  // The pill gets its own column, right of the hardware: never over a piece (a photo's box included).
+  const xPc = vide ? 4 : pl.l + 56;
+  const x0 = pc ? pl.l + 56 : xPc + W + GX;
   const pos = {};
   cols.forEach((c, k) => { const top = Math.max(26, (Ht - c.length * (H + GY)) / 2 + 10); c.forEach((n, j) => pos[n.id] = [x0 + k * (W + GX), top + j * (H + GY)]); });
   let s = '<defs>' + mtFleches('mtL') + '</defs>';
@@ -13225,8 +13264,8 @@ function mtLogiciel(svg, d, force) {
   let pcPt;
   if (pc) pcPt = [pc.x + pc.l + 4, pc.y + (pc.h - 18) / 2];
   else {
-    pos.pc = [4, Ht / 2 - H / 2];
-    pcPt = [4 + W, Ht / 2];
+    pos.pc = [xPc, Ht / 2 - H / 2];
+    pcPt = [xPc + W, Ht / 2];
   }
   const traits = arcs.filter(a => (a.de === 'pc' || pos[a.de]) && pos[a.vers]).map(a => {
     const p1 = a.de === 'pc' ? pcPt : [pos[a.de][0] + W, pos[a.de][1] + H / 2];
@@ -13268,7 +13307,9 @@ function mtGraphe(svg, v) {
   };
   const t = {}; v.noeuds.forEach(n => t[n.id] = taille(n));
   let x = 12; const xs = {};
-  ks.forEach(k => { xs[k] = x; x += Math.max(...cols[k].map(n => t[n.id].w)) + GX; });
+  // A rig's LAN link carries two lines of words: a wider gap after its column.
+  const colDe = id => { const n = v.noeuds.find(m => m.id === id); return n ? n.col : -1; };
+  ks.forEach(k => { xs[k] = x; x += Math.max(...cols[k].map(n => t[n.id].w)) + (v.arcs.some(a => a.type === 'lan' && colDe(a.de) === k) ? 170 : GX); });
   const Ht = Math.max(...ks.map(k => cols[k].reduce((a, n) => a + t[n.id].h + GY, -GY))) + 24;
   const pos = {};
   ks.forEach(k => {
@@ -13320,7 +13361,7 @@ function mtFonctions(d, force) {
     const kb = JSON.stringify(v.besoins);
     if (g('mt-besoins').dataset.k !== kb || force) {
       g('mt-besoins').dataset.k = kb;
-      mtSet('mt-besoins', v.besoins.map(b => '<div class="mt-besoin"><span>' + mtEsc(b.texte) + '</span>' + mtActeBouton(b.action) + mtVaBouton(b.raccourci, 'Réglages ›') + '</div>').join(''));
+      mtSet('mt-besoins', v.besoins.map(b => '<div class="mt-besoin"><span>' + mtEsc(b.texte) + '</span>' + mtActeBouton(b.action) + mtEditBouton(b.edition) + mtVaBouton(b.raccourci, 'Réglages ›') + '</div>').join(''));
     }
   } else {
     fs.style.display = 'none'; MT.vueCle = '';

@@ -320,11 +320,14 @@ object PagesPcTelephone {
                             .put("l", fr.f4ioz.satcombo.domain.Indicatifs.locatorPropose(k, k.indicatif))
                     })).let { o -> ApiStation.lieuSaisi(o, saisie) })
                 }
-                // The station's chain is drawn and kept on SatMe-PC: here an empty one (its catalogue all the same).
-                "/api/montage" -> json(JSONObject().put("ok", true).put("telephone", true)
-                    .put("chaine", fr.f4ioz.satcombo.station.Montage.ecrit(fr.f4ioz.satcombo.station.Montage.Chaine()))
-                    .put("plan", fr.f4ioz.satcombo.station.DispositionMontage.json(fr.f4ioz.satcombo.station.DispositionMontage.dispose(fr.f4ioz.satcombo.station.Montage.Chaine())))
-                    .put("etat", JSONObject()).put("photos", JSONArray()))
+                // The station's chain is drawn and kept on SatMe-PC: here SatMe itself, this phone (its catalogue all the same).
+                "/api/montage" -> {
+                    val c = fr.f4ioz.satcombo.station.Montage.Chaine(listOf(fr.f4ioz.satcombo.station.Montage.Element("e1", "telephone", "SatMe (ce téléphone)")))
+                    json(JSONObject().put("ok", true).put("telephone", true)
+                        .put("chaine", fr.f4ioz.satcombo.station.Montage.ecrit(c))
+                        .put("plan", fr.f4ioz.satcombo.station.DispositionMontage.json(fr.f4ioz.satcombo.station.DispositionMontage.dispose(c)))
+                        .put("etat", JSONObject().put("elements", JSONObject().put("e1", "relie"))).put("photos", JSONArray()))
+                }
                 "/api/montage/catalogue" -> json(fr.f4ioz.satcombo.station.Montage.catalogueJson())
                 // The receiver's memories are kept on SatMe-PC: none here; the band plans, SatMe's own.
                 "/api/memoires-sdr", "/api/memoires-sdr/export" -> json(fr.f4ioz.satcombo.domain.MemoiresSdr.ecrit(emptyList())

@@ -42,6 +42,7 @@ class FonctionsPc(
         val d = l.datv?.takeIf { it.optBoolean("ok", true) && datv != null }
         val e = l.emissionDatv; val x = l.emissionSstv; val iq = l.iq
         val cat = l.etat?.optJSONObject("cat")
+        val ic = l.icom?.takeIf { !it.optBoolean("absent", false) }
         val so = son
         val c = so?.son?.etat?.value
         val ph = phonie
@@ -69,6 +70,9 @@ class FonctionsPc(
             catConnecte = cat?.optBoolean("connecte") == true, catModele = cat?.optString("modele").orEmpty(), catSimule = cat?.optBoolean("simule") == true,
             ecouteNavigateur = diffusion?.ecoute("sdr") == true,
             libelles = noms.mapValues { it.value.libelle }, carteDuPoste = noms.entries.firstOrNull { it.value.poste.isNotBlank() }?.key.orEmpty(),
+            posteReseau = ic?.optString("liaison") == "RESEAU", reseauEtat = ic?.optString("etat").orEmpty(), reseauLatenceMs = ic?.optInt("latenceMs", 0) ?: 0,
+            reseauCat = ic?.optBoolean("cat") == true, reseauSon = ic?.optBoolean("audio") == true,
+            posteMhz = if (cat?.optBoolean("connecte") == true) (cat.optDouble("dl", 0.0).takeIf { it.isFinite() } ?: 0.0) / 1e6 else 0.0,
         )
         val ex = runCatching { extras() }.getOrNull() ?: return i
         val ns = ex.optJSONArray("nonSat")
