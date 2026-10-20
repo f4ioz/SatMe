@@ -259,6 +259,26 @@ class CarnetPc(private val station: StationPc, val store: LogStore, private val 
         return apres
     }
 
+    /**
+     * A contact given another time ([fr.f4ioz.satcombo.domain.RedateContact]):
+     * az/el where its satellite was then, the log in order again. Null when
+     * there is no such contact.
+     */
+    fun redate(timeMs: Long, nouveauMs: Long): fr.f4ioz.satcombo.domain.RedateContact.Resultat? {
+        val e = station.etat.value
+        val r = fr.f4ioz.satcombo.domain.RedateContact.redate(store.load(), timeMs, nouveauMs) { c, t ->
+            val sat = e.satellites.firstOrNull { c.catnum > 0 && it.catalogNumber == c.catnum }
+                ?: e.satellites.firstOrNull { c.satName.isNotBlank() && it.name.equals(c.satName, true) }
+            sat?.let { station.contactApres(it.catalogNumber, t, "-", "", "", "", "", "") }?.let { it.azimuthDeg to it.elevationDeg }
+        } ?: return null
+        if (r.contact.timeMs == timeMs) return r
+        store.save(r.log)
+        // As any edit, under its new key: a contact waiting for the automatic upload gets its delay again.
+        modifies.remove(timeMs); modifies[r.contact.timeMs] = horloge()
+        oublieMemoire()
+        return r
+    }
+
     fun supprime(timeMs: Long) { store.delete(timeMs); oublieMemoire() }
 
     /** Several contacts (a selection on the page); how many went. */

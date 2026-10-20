@@ -3563,11 +3563,34 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         // What belongs to the satellite follows it (az/el, QO-100's frequencies): the shared rule.
         val l = logStore.update(timeMs) {
             fr.f4ioz.satcombo.domain.ChangeSatellite.applique(it, sat.name, sat.catalogNumber,
-                pos?.let { p -> p.azimuthDeg to p.elevationDeg }, null).copy(timeMs = nouvelleHeure ?: it.timeMs)
+                pos?.let { p -> p.azimuthDeg to p.elevationDeg }, null)
         }
         modifies[timeMs] = System.currentTimeMillis()
         _ui.value = _ui.value.copy(log = l,
             express = _ui.value.express.copy(memoire = construitMemoire()))
+        // The time last (the shared rule): az/el recomputed even on the same satellite, the log in order.
+        if (nouvelleHeure != null && nouvelleHeure != timeMs) redateContact(timeMs, nouvelleHeure)
+    }
+
+    /**
+     * A contact given another time ([fr.f4ioz.satcombo.domain.RedateContact],
+     * as SatMe-PC): az/el where its satellite was then, the log in order
+     * again, the upload's delays under the new key. Null: no such contact.
+     */
+    fun redateContact(timeMs: Long, nouveauMs: Long): fr.f4ioz.satcombo.domain.RedateContact.Resultat? {
+        val obs = _ui.value.observer
+        val r = fr.f4ioz.satcombo.domain.RedateContact.redate(logStore.load(), timeMs, nouveauMs) { c, t ->
+            val sat = _ui.value.satellites.firstOrNull { c.catnum > 0 && it.catalogNumber == c.catnum }
+                ?: _ui.value.satellites.firstOrNull { c.satName.isNotBlank() && it.name.equals(c.satName, true) }
+            if (sat == null || obs == null) null
+            else runCatching { predictor.positionAt(sat, obs, t) }.getOrNull()?.let { it.azimuthDeg to it.elevationDeg }
+        } ?: return null
+        if (r.contact.timeMs == timeMs) return r
+        logStore.save(r.log)
+        modifies.remove(timeMs); refusAuto.remove(timeMs); reessai.remove(timeMs)
+        modifies[r.contact.timeMs] = System.currentTimeMillis()
+        _ui.value = _ui.value.copy(log = r.log, express = _ui.value.express.copy(memoire = construitMemoire()))
+        return r
     }
 
     /**

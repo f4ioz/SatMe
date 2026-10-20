@@ -395,13 +395,22 @@ object PagesPcTelephone {
             "/api/carnet/modifie" -> {
                 val t = p("t").toLongOrNull() ?: return JSONObject().put("ok", false)
                 val a = u.log.firstOrNull { it.timeMs == t } ?: return JSONObject().put("ok", false)
+                // Its date and time (UTC), when changed: checked before anything is written.
+                val R = fr.f4ioz.satcombo.domain.RedateContact
+                val nouveau = if (p("date").isNotEmpty() || p("heure").isNotEmpty())
+                    R.lis(p("date"), p("heure")) ?: return JSONObject().put("ok", false).put("erreur", "date ou heure illisible")
+                else null
+                nouveau?.let { R.pourquoiPas(it, System.currentTimeMillis()) }?.let { return JSONObject().put("ok", false).put("erreur", it) }
                 // Its satellite, by name: what belongs to it follows ([fr.f4ioz.satcombo.domain.ChangeSatellite]).
                 if (p("sat").isNotEmpty() || p("satnum").isNotEmpty()) vm.corrigeSatellite(t, p("sat"))
                 fun v(k: String, d: String) = p(k).takeIf { it.isNotEmpty() } ?: d
                 vm.updateLogEntry(t, a.copy(callsign = v("c", a.callsign).uppercase(), theirLocator = v("l", a.theirLocator).uppercase(),
                     rstSent = v("rs", a.rstSent), rstRcvd = v("rr", a.rstRcvd), note = v("n", a.note), mode = v("md", a.mode),
                     nom = v("nm", a.nom), qth = v("qth", a.qth), locatorOrigine = v("lo", a.locatorOrigine)))
-                OK
+                // The time last: it changes the key; az/el and the order follow.
+                val r = if (nouveau != null && nouveau != t) vm.redateContact(t, nouveau) else null
+                val apres = r?.contact ?: vm.ui.value.log.firstOrNull { it.timeMs == t }
+                OK.put("t", apres?.timeMs ?: t).put("doublon", R.avertissement(r?.doublons ?: apres?.let { R.doublons(it, vm.ui.value.log) }.orEmpty()) ?: "")
             }
             "/api/carnet/supprime" -> {
                 val l = p("t").split(',').mapNotNull { it.trim().toLongOrNull() }
