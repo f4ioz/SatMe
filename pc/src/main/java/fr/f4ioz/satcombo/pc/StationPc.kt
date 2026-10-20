@@ -115,6 +115,14 @@ class StationPc(
 ) {
     private val satConfig = fr.f4ioz.satcombo.data.SatConfigStore(stockageSat)
     val settings = SettingsStore(stockage)
+    /**
+     * The rig tuned to the followed satellite even while it is below the
+     * horizon (to be ready before AOS, or on the bench) — off unless chosen;
+     * the phone's own setting has another default.
+     */
+    var catSousHorizon: Boolean
+        get() = stockage.getBoolean("cat_sous_horizon_pc", false)
+        set(v) { stockage.edit().putBoolean("cat_sous_horizon_pc", v).apply() }
     private val predicteur = PassPredictor()
 
     private val _etat = MutableStateFlow(EtatPc())
@@ -150,7 +158,7 @@ class StationPc(
         override fun satellite() = _etat.value.position
         override fun catnum() = _etat.value.suivi?.catalogNumber
         override fun transpondeur() = emetteurChoisi()
-        override fun sousHorizonAussi() = false
+        override fun sousHorizonAussi() = catSousHorizon
         override fun calibrationHz() = _etat.value.calibHz
         override fun decalageTxHz() = _etat.value.txShiftHz
         override fun poseDecalageTx(hz: Long) = reglageSat(txHz = hz)

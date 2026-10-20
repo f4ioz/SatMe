@@ -3479,7 +3479,8 @@ ${rail()}
           <button onclick="irEnregistre()" style="margin-left:auto">Enregistrer</button></div>
         <div class="etat" id="ir-etat"></div>
       </div>
-      <div class="ligne">
+            <label class="petit" id="cat-sh-l" hidden title="Le poste est réglé sur le satellite suivi même sous l'horizon : prêt avant l'AOS, ou pour un essai à l'établi. Réception et Doppler calculés comme pendant un passage ; jamais d'émission."><input type="checkbox" id="cat-sh" onchange="post('api/cat/sous-horizon?on=' + (this.checked ? 1 : 0))"> Régler le poste même quand le satellite n'est pas visible</label>
+<div class="ligne">
         <button class="primaire" id="cat-co" data-marche="cat" onclick="catConnecte()">Connecter</button>
         <button id="cat-deco" class="arret" data-arret="cat" hidden onclick="post('api/cat/deconnecter')">Déconnecter</button>
       </div>
@@ -5364,6 +5365,8 @@ function irMontre() {
   if (r) txt('cat-avert', 'Par le réseau : aucun port série ouvert, réception seulement (aucune commande d’émission ne part).');
   else avertCat();
 }
+// « Even below the horizon »: read once; absent (the phone's page) keeps the box hidden.
+(async () => { try { const j = await (await fetch('api/cat/sous-horizon', { method: 'POST' })).json(); if (j && j.ok && 'on' in j) { g('cat-sh').checked = !!j.on; g('cat-sh-l').hidden = false; } } catch (x) {} })();
 async function irCharge(remplir) {
   try { IR = await (await fetch('api/icomreseau')).json(); } catch (x) { IR = null; }
   if (!IR || IR.absent) { g('cat-liaison-ligne').hidden = true; return; }

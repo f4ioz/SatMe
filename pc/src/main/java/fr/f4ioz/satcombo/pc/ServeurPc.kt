@@ -1094,6 +1094,11 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 port = entier("port") ?: -1, baud = entier("baud") ?: 0, portTx = entier("portTx") ?: -1,
                 rxIc705 = q["rxIc705"] == "1", txIc705 = q["txIc705"] == "1", bandeTx = entier("bandeTx") ?: 0))
             "/api/cat/deconnecter" -> station.deconnecteCat()
+            // The rig tuned even below the horizon: asked with « on », read without.
+            "/api/cat/sous-horizon" -> {
+                q["on"]?.let { station.catSousHorizon = it == "1" }
+                return JSONObject().put("ok", true).put("on", station.catSousHorizon)
+            }
             "/api/rotor/connecter" -> {
                 val lien = if (q["lien"] == "ROTCTLD") "ROTCTLD" else "GS232"
                 rotor.setRotorSim(q["sim"] == "1")
