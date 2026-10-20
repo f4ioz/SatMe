@@ -222,7 +222,7 @@ class TelemesurePc(
                         val t1 = SignalEssai.trameFuncube(14, champs, "Essai SatMe : trame FUNcube fabriquee".toByteArray())
                         val t2 = SignalEssai.trameFuncube(1, champs)
                         SignalEssai.audio(Ao40Fec.code(t1) + IntArray(240) { (it / 2) and 1 } + Ao40Fec.code(t2), p.debit, manchester = false,
-                            porteuseHz = 1_220.0, deriveHzS = 12.0, ebN0Db = 6.0, graine = horloge())
+                            porteuseHz = 1_220.0, deriveHzS = 12.0, ebN0Db = 9.0, graine = horloge())
                     }
                 }
                 var k = 0
