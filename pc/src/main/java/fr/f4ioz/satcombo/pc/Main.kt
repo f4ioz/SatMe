@@ -141,6 +141,25 @@ fun main(args: Array<String>) {
     val telemesure = TelemesurePc(station.stockage, dossier, canaux)
     telemesure.satellite = { station.etat.value.suivi?.name.orEmpty() }
     sdr.ecouteTelemesure = { pcm, n -> telemesure.ecouteSdr(pcm, n) }
+    // 1200–9600 bit/s packets (FSK, GMSK, G3RUH) and SSDV on the dongle's raw I/Q (off by default); SiDS sharing off unless ticked.
+    sdr.iqPaquets = { iq, iq16, n, dec, essai -> telemesure.iqSdr(iq, iq16, n, dec, essai) }
+    telemesure.contextePaquets = { essai ->
+        val e = sdr.etat.value
+        val s = station.etat.value.suivi
+        fr.f4ioz.satcombo.telemesure.RecepteurPaquets.Contexte(if (essai) e.satellite else s?.name.orEmpty(), if (essai) 0 else s?.catalogNumber ?: 0,
+            e.cielHz, e.reposHz, essai)
+    }
+    telemesure.emetteurPaquets = {
+        val e = station.etat.value
+        val choisi = station.emetteurChoisi()
+        val t = choisi?.takeIf { fr.f4ioz.satcombo.telemesure.RecepteurPaquets.debitPour(it.mode, it.baud) != null }
+            ?: e.emetteurs.firstOrNull { it.alive && fr.f4ioz.satcombo.telemesure.RecepteurPaquets.debitPour(it.mode, it.baud) != null }
+        t?.let { Triple(fr.f4ioz.satcombo.telemesure.RecepteurPaquets.debitPour(it.mode, it.baud)!!, it.description, it.mode.orEmpty()) }
+    }
+    telemesure.station = {
+        val e = station.etat.value
+        e.observateur?.let { Triple(e.indicatif, it.latDeg, it.lonDeg) }
+    }
     phonie.demarre()
     portee.launch {
         while (true) {

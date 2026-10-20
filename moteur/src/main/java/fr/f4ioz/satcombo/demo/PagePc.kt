@@ -48,7 +48,7 @@ object PagePc {
         Onglet("planche", "Planche", "view_quilt", "La planche SSTV : les images sur un modèle, à télécharger"),
         Onglet("aprs", "APRS", "place", "Les trames APRS entendues, la carte, les trophées"),
         Onglet("ft8", "FT8", "graphic_eq", "FT8 et FT4 : décodage, messages, radar"),
-        Onglet("tlm", "Télémesure", "settings_input_antenna", "Télémesure BPSK : FUNcube à 1200 bit/s, balise QO-100"),
+        Onglet("tlm", "Télémesure", "settings_input_antenna", "Télémesure : paquets 1200 à 9600 bit/s, images SSDV, FUNcube, balise QO-100"),
         Onglet("journal", "Journal", "history", "Les passages enregistrés, rejoués"),
         Onglet("reglages", "Réglages", "settings", "Toute la station : réglages par catégorie"))
 
@@ -692,6 +692,17 @@ ${STYLE_JETONS}
   /* In the cockpit's narrow column: smaller figures, the 64-character lines kept whole. */
   #tb-etat, #tl-b-etat { gap:2px 12px; } #tb-etat .val, #tl-b-etat .val { font-size:15px; }
   #tb-trames .tlm-pre, #tl-b-trames .tlm-pre { font-size:9.5px; }
+  .tl-st { padding:12px 16px 0; }
+  .tl-st > .st-pan > .grille2 { padding:0; }
+  .tl-st > .st-pan > .carte { margin:0; }
+  .tp-derniere img { display:block; width:100%; max-width:400px; margin-top:4px; border-radius:4px; background:#7f7f7f; cursor:pointer; }
+  .tp-sids { margin-top:10px; padding-top:8px; border-top:1px solid var(--ligne); }
+  #tp-trames { max-height:calc(100vh - 250px); }
+  .tlm-b.ax { background:rgba(63,224,200,.14); color:var(--cyan); } .tlm-b.ssdv { background:rgba(176,124,255,.18); color:#C9A8FF; }
+  .ts-galerie { display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); gap:12px; margin-top:8px; max-height:calc(100vh - 230px); overflow:auto; }
+  .ts-img { background:var(--s3); border-radius:var(--r2); padding:6px; font-size:var(--fs-s); }
+  .ts-img img { display:block; width:100%; height:auto; border-radius:4px; background:#7f7f7f; }
+  .ts-img .tlm-h { margin-top:4px; }
   .tlm-g { grid-column:1/-1; margin-top:4px; font-size:var(--fs-xs); font-weight:700; letter-spacing:.6px; text-transform:uppercase; color:var(--texte-3); }
   .allume { box-shadow:inset 4px 0 0 var(--vert); }
   .eteint { box-shadow:inset 4px 0 0 rgba(229,72,77,.55); }
@@ -3339,6 +3350,43 @@ ${rail()}
 </div>
 </div>
 <div class="vue" id="v-tlm" hidden>
+<div class="st tl-st" data-st="tlm">
+  <div class="st-nav"><button data-p="tl-p-paq" title="Paquets FSK / GMSK de 1200 à 9600 bit/s (AX.25, G3RUH)">${IconesPc.svg("settings_input_antenna", "st-ico")}<span>Paquets</span></button><button data-p="tl-p-ssdv" title="Les images SSDV reconstituées depuis les trames">${IconesPc.svg("grid_on", "st-ico")}<span>Images SSDV</span></button><button data-p="tl-p-bpsk" title="FUNcube à 1200 bit/s, balise QO-100">${IconesPc.svg("graphic_eq", "st-ico")}<span>BPSK</span></button></div>
+  <div class="st-pan" id="tl-p-paq">
+<div class="grille2">
+  <div class="carte">
+    <div class="t">Paquets FSK · GMSK <span id="tp-pastille" class="pastille coupe">coupé</span></div>
+    <div class="petit aide">Les cubesats en FSK ou GMSK de 1200 à 9600 bit/s, dont le « G3RUH » à 9600 bit/s : embrouilleur 1 + x¹² + x¹⁷, NRZI, trames HDLC (CRC-16) le plus souvent en AX.25. SatMe démodule les échantillons I/Q bruts du récepteur SDR principal, pas le son : discriminateur FM, rattrapage de fréquence résiduel (±12 kHz autour du Doppler suivi par SatMe), récupération d'horloge, puis deux lectures (avec et sans embrouilleur).</div>
+    <div class="petit aide">Le débit vient de l'émetteur SatNOGS DB du satellite suivi (mode FSK, GFSK, GMSK, MSK et sa vitesse), ou se choisit à la main. Les trames AX.100 « mode 5 » (ASM + Golay) et les protocoles propres à un satellite ne sont pas lus. Réception seulement.</div>
+    <div class="petit aide">Les trames sont gardées par passage dans le dossier de données (telemesure/paquets : une ligne JSON par trame, et un fichier KISS si coché) ; les images SSDV dans telemesure/ssdv. Les signaux du générateur d'essai et des enregistrements rejoués ne sont ni gardés ni partagés.</div>
+    <label style="display:block"><input type="checkbox" id="tp-on" onchange="tlmPost('paquets?on=' + (this.checked ? 1 : 0))"> <b>Décoder les paquets</b> <span class="petit">— récepteur SDR, hors QO-100</span></label>
+    <div class="ligne"><span class="petit">Débit</span><select id="tp-debit" style="flex:none" onchange="tlmPost('paquets/debit?v=' + this.value)"><option value="0">selon l’émetteur</option><option value="1200">1200 bit/s</option><option value="2400">2400 bit/s</option><option value="4800">4800 bit/s</option><option value="9600">9600 bit/s</option></select>
+      <label class="petit"><input type="checkbox" id="tp-kiss" onchange="tlmPost('paquets/kiss?on=' + (this.checked ? 1 : 0))"> fichier KISS</label></div>
+    <div class="petit" id="tp-em"></div>
+    <div class="paire" id="tp-etat" style="margin-top:6px"></div>
+    <div class="ligne"><button id="tp-essai" onclick="tlmPost('paquets/essai')" title="Une salve fabriquée (télémesure, paquets SSDV) passée dans un décodeur à part">Essai</button><button class="discret" onclick="tlmPost('paquets/vide')">Effacer</button></div>
+    <div id="tp-derniere" class="tp-derniere"></div>
+    <div class="tp-sids">
+      <label style="display:block"><input type="checkbox" id="tp-sids" onchange="tlmPost('paquets/sids?on=' + (this.checked ? 1 : 0))"> <b>Partager les trames avec SatNOGS DB</b> <span class="petit">— coupé d’origine</span></label>
+      <div class="petit">Chaque trame reçue d’un satellite suivi part sur Internet avec l’indicatif de la station, l’heure UTC et la position arrondie à 0,1° (≈ 10 km). Rien ne part sans cette case.</div>
+      <div class="petit aide">Le protocole public SiDS de SatNOGS DB : un envoi HTTP par trame (numéro NORAD, indicatif, horodatage, trame en hexadécimal, longitude et latitude arrondies). Les trames y sont publiées sous licence ouverte et servent aux équipes des satellites. Sans réseau, elles attendent (500 au plus) et repartent ensuite.</div>
+      <div class="petit" id="tp-sids-etat"></div>
+    </div>
+  </div>
+  <div class="carte">
+    <div class="t">Trames reçues <label class="petit" style="margin-left:auto;font-weight:400"><input type="checkbox" id="tp-brut" onchange="tlmBrutRegle(this.checked)"> octets bruts</label></div>
+    <div id="tp-trames" class="tlm-trames"></div>
+  </div>
+</div>
+  </div>
+  <div class="st-pan" id="tl-p-ssdv">
+  <div class="carte">
+    <div class="t">Images SSDV <span class="petit" id="ts-n"></span></div>
+    <div class="petit aide">SSDV : une image JPEG découpée en paquets numérotés de 256 octets (CRC-32, Reed-Solomon CCSDS), envoyés par certains satellites dans leurs trames. SatMe les y cherche et reconstitue l’image au fil des paquets ; les blocs des paquets manquants restent gris. Les images reçues sont gardées dans telemesure/ssdv.</div>
+    <div id="ts-galerie" class="ts-galerie"></div>
+  </div>
+  </div>
+  <div class="st-pan" id="tl-p-bpsk">
 <div class="grille2">
   <div class="carte">
     <div class="t">FUNcube · BPSK 1200 bit/s <span id="tl-pastille" class="pastille coupe">coupé</span></div>
@@ -3357,6 +3405,8 @@ ${rail()}
     <div class="ligne" style="margin-top:0"><button onclick="vue('qo100'); const b = document.querySelector('#v-qo100 .st-nav button[data-p=&quot;tq-p-balise&quot;]'); if (b) b.click()">Ouvrir le panneau Balise ›</button></div>
     <div class="paire" id="tl-b-etat" style="margin-top:6px"></div>
     <div id="tl-b-trames" class="tlm-trames"></div>
+  </div>
+</div>
   </div>
 </div>
 </div>
@@ -9382,7 +9432,7 @@ async function tlmPost(u) {
   if (typeof muTic === 'function') muTic();
   return j;
 }
-function tlmBrutRegle(on) { tlmBrut = on; g('tb-brut').checked = on; g('tl-brut').checked = on; for (const k in tlmVu) delete tlmVu[k]; tlmRend(); }
+function tlmBrutRegle(on) { tlmBrut = on; g('tb-brut').checked = on; g('tl-brut').checked = on; g('tp-brut').checked = on; for (const k in tlmVu) delete tlmVu[k]; tlmRend(); }
 /** A decoder's figures: frames, failures, the carrier's offset and lock. */
 function tlmEtatHtml(d) {
   if (!d || !d.etat) return '';
@@ -9447,6 +9497,57 @@ function tlmRend() {
   tlmPose('tl-etat', tlmEtatHtml(l.etat ? l : (es.profil === 'funcube' ? es : null)));
   const ll = tlmListe(l, es, 'funcube');
   tlmPose('tl-trames', ll.slice(0, 12).map((t, i) => tlmTrameHtml(t, i === 0)).join('') || '<div class="petit">Aucune trame. Accorde le récepteur SDR en BLU sur la descente de télémesure du satellite (AO-73 : 145,935 MHz) et coche la case.</div>');
+  if (j.paquets) tpRend(j.paquets);
+}
+// ---- 1200–9600 bit/s packets (FSK, GMSK, G3RUH), SSDV pictures, SiDS sharing (receive only; sharing off unless ticked)
+const tpMhz = f => f ? (f / 1e6).toFixed(4).replace('.', ',') + ' MHz' : '—';
+function tpTrameHtml(t) {
+  const a = t.ax25;
+  let b = t.essai ? '<span class="tlm-b essai">essai</span>' : '';
+  b += a ? '<span class="tlm-b ax">AX.25</span>' : '<span class="tlm-b ok">HDLC</span>';
+  if (t.ssdv) b += '<span class="tlm-b ssdv">SSDV</span>';
+  const qui = a ? '<b>' + esc(a.de) + ' › ' + esc(a.vers) + (a.relais && a.relais.length ? ',' + esc(a.relais.join(',')) : '') + '</b>' : '';
+  const f = t.f ? '<span title="Fréquence reçue (Doppler compris) ; entre parenthèses, celle d’émission, le Doppler retiré">' + tpMhz(t.f) + (t.fc ? ' (' + tpMhz(t.fc) + ')' : '') + '</span>' : '';
+  let h = '<div class="tlm-t"><div class="tlm-h"><b>' + hm(t.t, true) + '</b>' + b + qui + (t.sat ? '<span>' + esc(t.sat) + '</span>' : '') +
+    '<span style="margin-left:auto">' + t.n + ' octets · ' + (t.g3ruh ? 'G3RUH' : 'NRZI') + ' · AFC ' + (t.afc > 0 ? '+' : '') + t.afc + ' Hz</span>' + f + '</div>';
+  if (t.ssdv && !tlmBrut) h += '<pre class="tlm-pre">' + t.ssdv.map(s => 'Paquet SSDV n° ' + s.n + ' de l’image ' + esc(s.cle)).join('\n') + '</pre>';
+  else if (tlmBrut || !a) h += '<pre class="tlm-pre">' + esc(String(t.hex || '').replace(/(..)/g, m => m + ' ').replace(/((?:.. ){32})/g, m => m + '\n')) + '</pre>';
+  else h += '<pre class="tlm-pre">' + esc(a.texte) + '</pre>';
+  return h + '</div>';
+}
+function tpRend(p) {
+  const e = p.etat || {}, recent = e.derniereMs && Date.now() - e.derniereMs < 60000;
+  if (document.activeElement !== g('tp-on')) g('tp-on').checked = !!p.option;
+  if (document.activeElement !== g('tp-debit')) g('tp-debit').value = String(p.choisi || 0);
+  g('tp-kiss').checked = !!p.kiss; g('tp-essai').disabled = !!p.essaiEnCours;
+  const pa = g('tp-pastille'), pt = !p.option ? 'coupé' : !e.actif ? 'en attente du SDR' : recent ? 'trames reçues' : e.signal ? 'signal tenu' : e.presence ? 'signal vu' : 'à l’écoute';
+  if (pa.textContent !== pt) pa.textContent = pt;
+  pa.className = 'pastille ' + (p.option ? 'marche' : 'coupe');
+  const em = p.emetteur;
+  txt('tp-em', p.essaiEnCours ? 'Essai en cours…' : (em ? 'Émetteur du satellite suivi : ' + em.description + ' (' + em.mode + ', ' + em.debit + ' bit/s)' + (em.note ? ' — ' + em.note : '') + '. ' : 'Aucun émetteur FSK/GMSK connu pour le satellite suivi. ') +
+    'Décodage à ' + p.debit + ' bit/s.');
+  const it = (v, l, c) => '<span><span class="val' + (c ? ' ' + c : '') + '">' + v + '</span> <span class="petit">' + l + '</span></span>';
+  tlmPose('tp-etat', p.option && e.actif ? it(e.trames, 'trames') + it(e.crcFaux, 'CRC faux') + it((e.afcHz > 0 ? '+' : '') + e.afcHz + ' Hz', 'AFC', e.presence ? 'cyan' : '') +
+    it(Math.round(e.niveauDb - e.plancherDb) + ' dB', 'au-dessus du bruit') + (e.perdus ? it(e.perdus, 'blocs perdus') : '') : '');
+  const s = p.sids || {};
+  if (document.activeElement !== g('tp-sids')) g('tp-sids').checked = !!s.option;
+  txt('tp-sids-etat', !s.option ? '' : (s.indicatif ? 'Indicatif ' + s.indicatif + ' · ' : 'Indicatif manquant (Réglages) · ') + s.envoyees + ' envoyée' + (s.envoyees > 1 ? 's' : '') +
+    (s.attente ? ' · ' + s.attente + ' en attente' : '') + (s.erreur ? ' · dernier échec : ' + s.erreur : '') + (s.essai ? ' · serveur d’essai' : ''));
+  tlmPose('tp-trames', (p.trames || []).map(tpTrameHtml).join('') ||
+    '<div class="petit">Aucune trame. Suis un satellite qui émet en FSK/GMSK (9600 bit/s le plus souvent), démarre le récepteur SDR sur sa descente et coche la case. Sans antenne : le générateur d’essai du SDR a un signal « Paquets 9600 ».</div>');
+  // The gallery: pictures being received first, then those saved.
+  const vus = {}, l = [];
+  (p.images || []).forEach(i => { vus[i.fichier] = 1; l.push('<div class="ts-img"><a href="api/telemesure/ssdv.jpg?cle=' + encodeURIComponent(i.cle) + '&v=' + i.recus + '" target="_blank"><img loading="lazy" alt="" src="api/telemesure/ssdv.jpg?cle=' +
+    encodeURIComponent(i.cle) + '&v=' + i.recus + '"></a><div class="tlm-h"><span class="tlm-b ssdv">SSDV</span>' + (i.essai ? '<span class="tlm-b essai">essai</span>' : '') + '<b>' + esc(i.indicatif) + ' n° ' + i.numero +
+    '</b><span>' + i.largeur + '×' + i.hauteur + '</span><span style="margin-left:auto">' + i.recus + ' paquets' + (i.manquants ? ' · ' + i.manquants + ' manquant' + (i.manquants > 1 ? 's' : '') : '') + (i.dernier >= 0 ? ' · fin reçue' : '') + '</span></div></div>'); });
+  (p.sauvees || []).forEach(s2 => { if (!vus[s2.f]) l.push('<div class="ts-img"><a href="api/telemesure/ssdv.jpg?f=' + encodeURIComponent(s2.f) + '" target="_blank"><img loading="lazy" alt="" src="api/telemesure/ssdv.jpg?f=' +
+    encodeURIComponent(s2.f) + '"></a><div class="tlm-h"><span class="tlm-b ssdv">SSDV</span><span>' + esc(s2.f) + '</span></div></div>'); });
+  txt('ts-n', l.length ? '— ' + l.length : '');
+  // The latest picture under the options, as it fills.
+  const d0 = (p.images || [])[0];
+  tlmPose('tp-derniere', d0 ? '<div class="petit">Dernière image SSDV : ' + esc(d0.indicatif) + ' n° ' + d0.numero + ' — ' + d0.recus + ' paquets</div><img alt="" src="api/telemesure/ssdv.jpg?cle=' +
+    encodeURIComponent(d0.cle) + '&v=' + d0.recus + '" onclick="document.querySelector(&quot;#v-tlm .st-nav button[data-p=tl-p-ssdv]&quot;).click()" title="Toutes les images">' : '');
+  tlmPose('ts-galerie', l.join('') || '<div class="petit">Aucune image. Les paquets SSDV sont cherchés dans chaque trame décodée (onglet Paquets).</div>');
 }
 
 /** The channels on the waterfall: a dashed line on the dial, the passband underlined, the decoder named. */
@@ -10229,7 +10330,7 @@ function ctcssOptions(aucun) {
   203.5, 206.5, 210.7, 218.1, 225.7, 229.1, 233.6, 241.8, 250.3, 254.1];
   return '<option value="0">' + aucun + '</option>' + T.map(t => '<option value="' + t + '">' + fr1(t) + ' Hz</option>').join('');
 }
-const GEN_SIG = [['porteuse', 'Porteuse'], ['cw', 'CW'], ['blu', 'BLU (voix)'], ['fm', 'FM (ton)'], ['ft8', 'FT8'], ['sstv', 'SSTV (FM)'], ['psk31', 'PSK31'], ['rtty', 'RTTY']];
+const GEN_SIG = [['porteuse', 'Porteuse'], ['cw', 'CW'], ['blu', 'BLU (voix)'], ['fm', 'FM (ton)'], ['ft8', 'FT8'], ['sstv', 'SSTV (FM)'], ['psk31', 'PSK31'], ['rtty', 'RTTY'], ['paquets', 'Paquets 9600']];
 function genOuvre(ancre) {
   const p = g('gen-pop');
   if (!p.hidden) { p.hidden = true; return; }

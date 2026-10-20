@@ -230,7 +230,8 @@ class Catalogue(
                     uplinkLowHz = hz("uplink_low"), uplinkHighHz = hz("uplink_high"),
                     downlinkLowHz = hz("downlink_low"), downlinkHighHz = hz("downlink_high"),
                     invert = o.optBoolean("invert", false), alive = o.optBoolean("alive", false),
-                    type = o.optString("type", "Transmitter"))
+                    type = o.optString("type", "Transmitter"),
+                    baud = o.optDouble("baud", Double.NaN).takeIf { it.isFinite() && it > 0 })
             }.sortedWith(compareByDescending<Transmitter> { it.alive }.thenByDescending { it.downlinkLowHz != null })
         }.getOrDefault(emptyList())
     }

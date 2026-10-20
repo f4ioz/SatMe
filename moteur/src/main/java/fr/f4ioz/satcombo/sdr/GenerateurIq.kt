@@ -28,7 +28,8 @@ import kotlin.math.sqrt
  * signals made here, at [Dsp.RTL_RATE] in 16 bits, so every decoder can be
  * tried without an antenna: a carrier, keyed CW, a sideband « voice » (tone
  * pairs in syllables), an FM tone, an FT8 call in the even 15 s slots,
- * SSTV pictures in narrow FM, and (when ticked) a PSK31 and an RTTY call.
+ * SSTV pictures in narrow FM, and (when ticked) a PSK31 and an RTTY call
+ * and 9600 bit/s cubesat packets.
  *
  * A fake receiver only: what it makes goes to the reception, never to a
  * transmitter.
@@ -69,12 +70,14 @@ class GenerateurIq(
         /** RTTY 45.45 Bd, 170 Hz shift, centred at [AUDIO_RTTY_HZ] in USB. Off unless ticked. */
         val rtty: Signal = Signal(false, -8_000, 15.0),
         val rttyTexte: String = "RYRY CQ CQ DE Q0SAT Q0SAT JN18 K",
+        /** Cubesat packets: 9600 bit/s G3RUH FSK bursts (AX.25 telemetry, an SSDV picture). Off unless ticked. */
+        val paquets: Signal = Signal(false, 60_000, 25.0),
     ) {
         /** Flat, the keys [avec] reads: kept as is, sent to the page as is. */
         fun plat(): JSONObject {
             val o = JSONObject().put("bruit", bruitDbfs).put("cwTexte", cwTexte).put("cwWpm", cwWpm).put("fmTon", fmTonHz).put("fmCtcss", fmCtcssHz)
                 .put("ft8Message", ft8Message).put("sstvMode", sstvMode).put("psk31Texte", psk31Texte).put("rttyTexte", rttyTexte)
-            for ((nom, x) in listOf("porteuse" to porteuse, "cw" to cw, "blu" to blu, "fm" to fm, "ft8" to ft8, "sstv" to sstv, "psk31" to psk31, "rtty" to rtty))
+            for ((nom, x) in listOf("porteuse" to porteuse, "cw" to cw, "blu" to blu, "fm" to fm, "ft8" to ft8, "sstv" to sstv, "psk31" to psk31, "rtty" to rtty, "paquets" to paquets))
                 o.put("${nom}On", if (x.actif) "1" else "0").put("${nom}Hz", x.decalageHz).put("${nom}Snr", x.snrDb)
             return o
         }
@@ -100,7 +103,8 @@ class GenerateurIq(
                 sig("psk31", psk31),
                 p("psk31Texte")?.filter { it.code in 32..126 }?.take(80)?.ifBlank { null } ?: psk31Texte,
                 sig("rtty", rtty),
-                p("rttyTexte")?.uppercase()?.filter { it.isLetterOrDigit() || it in " -'!:(+)#?&./=,$" }?.take(80)?.ifBlank { null } ?: rttyTexte)
+                p("rttyTexte")?.uppercase()?.filter { it.isLetterOrDigit() || it in " -'!:(+)#?&./=,$" }?.take(80)?.ifBlank { null } ?: rttyTexte,
+                sig("paquets", paquets))
         }
     }
 
@@ -137,6 +141,8 @@ class GenerateurIq(
     private var psk: SignauxEssai.Psk31? = null
     private var aRtty = 0f; private var phRtty = 0
     private var rtty: SignauxEssai.Rtty? = null
+    private var aPaq = 0f; private var phPaq = 0
+    private val paquets = SalvePaquets()
     private var r = Reglages()
 
     private fun amplitude(s: Signal): Float =
@@ -172,6 +178,50 @@ class GenerateurIq(
         if (psk == null || n.psk31Texte != ancien.psk31Texte) psk = SignauxEssai.Psk31(n.psk31Texte)
         aRtty = amplitude(n.rtty)
         if (rtty == null || n.rttyTexte != ancien.rttyTexte) rtty = SignauxEssai.Rtty(n.rttyTexte)
+        aPaq = amplitude(n.paquets)
+    }
+
+    /**
+     * The packet bursts, one after the other with [PAUSE_PAQUETS_S] of
+     * silence: a telemetry frame and [SSDV_PAR_SALVE] SSDV packets of the
+     * test picture each (a new picture number when one is done), G3RUH
+     * scrambled, 9600 bit/s. [frequence] gives the deviation (Hz) of each
+     * sample, null between bursts (no carrier).
+     */
+    private class SalvePaquets {
+        private var bits = IntArray(0)
+        private var pos = 0L
+        private var silence = 0L
+        private var numero = 0
+        private var image = 0
+        private var ssdv: List<ByteArray> = emptyList()
+        private var suivant = 0
+        private val parBit = Dsp.RTL_RATE.toDouble() / DEBIT_PAQUETS
+
+        fun frequence(): Double? {
+            if (silence > 0) { silence--; return null }
+            if (bits.isEmpty()) salve()
+            val t = pos / parBit
+            if (t >= bits.size) {
+                bits = IntArray(0); pos = 0
+                silence = (PAUSE_PAQUETS_S * Dsp.RTL_RATE).toLong()
+                return null
+            }
+            pos++
+            return fr.f4ioz.satcombo.telemesure.SignalPaquets.DEVIATION_HZ * fr.f4ioz.satcombo.telemesure.SignalPaquets.niveau(bits, t)
+        }
+
+        private fun salve() {
+            if (suivant >= ssdv.size) {
+                ssdv = fr.f4ioz.satcombo.telemesure.SignalPaquets.paquetsMire(image++)
+                suivant = 0
+            }
+            val trames = ArrayList<ByteArray>()
+            trames += fr.f4ioz.satcombo.telemesure.SignalPaquets.trameTelemesure(++numero)
+            repeat(SSDV_PAR_SALVE) { if (suivant < ssdv.size) trames += fr.f4ioz.satcombo.telemesure.SignalPaquets.trameSsdv(ssdv[suivant++]) }
+            bits = fr.f4ioz.satcombo.telemesure.G3ruh.bits(trames)
+            pos = 0
+        }
     }
 
     /** SSTV pictures one after the other, [PAUSE_SSTV_S] of silence between (the FM carrier stays). */
@@ -224,6 +274,7 @@ class GenerateurIq(
         val pk = psk.takeIf { aPsk > 0f }
         val rt = rtty.takeIf { aRtty > 0f }
         val rttyBase = r.rtty.decalageHz.toDouble()
+        val paqBase = r.paquets.decalageHz.toDouble()
         var o = 0
         for (k in 0 until n) {
             var re = alea.gauss() * sigma
@@ -292,6 +343,14 @@ class GenerateurIq(
                     phRtty += Math.round((rttyBase + d) / Dsp.RTL_RATE * 4_294_967_296.0).toInt()
                 }
             }
+            if (aPaq > 0f) {
+                val d = paquets.frequence()
+                if (d != null) {
+                    val x = phPaq ushr 16
+                    re += COS[x] * aPaq; im += SIN[x] * aPaq
+                    phPaq += Math.round((paqBase + d) / Dsp.RTL_RATE * 4_294_967_296.0).toInt()
+                }
+            }
             buf[o++] = re.toInt().coerceIn(-32_767, 32_767).toShort()
             buf[o++] = im.toInt().coerceIn(-32_767, 32_767).toShort()
         }
@@ -352,6 +411,9 @@ class GenerateurIq(
         const val AUDIO_PSK31_HZ = 1_000
         /** Where RTTY's two tones are centred in USB. */
         const val AUDIO_RTTY_HZ = 1_500
+        const val DEBIT_PAQUETS = 9_600
+        const val PAUSE_PAQUETS_S = 1.0
+        const val SSDV_PAR_SALVE = 6
         private val COS = FloatArray(65_536) { cos(2.0 * PI * it / 65_536).toFloat() }
         private val SIN = FloatArray(65_536) { sin(2.0 * PI * it / 65_536).toFloat() }
         /** 65 536 standard normal values (fixed seed), each drawn equally often. */
@@ -366,6 +428,7 @@ class GenerateurIq(
             Ecoute("sstv", "SSTV " + r.sstvMode + " (FM)", "NFM", r.sstv.decalageHz, 16_000).takeIf { r.sstv.actif },
             Ecoute("psk31", "PSK31 « " + r.psk31Texte + " »", "USB", r.psk31.decalageHz - AUDIO_PSK31_HZ, 0).takeIf { r.psk31.actif },
             Ecoute("rtty", "RTTY 45 Bd / 170 Hz « " + r.rttyTexte + " »", "USB", r.rtty.decalageHz - AUDIO_RTTY_HZ, 0).takeIf { r.rtty.actif },
+            Ecoute("paquets", "Paquets 9600 bit/s G3RUH (AX.25, image SSDV)", "NFM", r.paquets.decalageHz, 20_000).takeIf { r.paquets.actif },
         )
 
         /** « CQ CALL GRID » or « CALL1 CALL2 GRID » (standard callsigns) as FT8's 77 bits; null when it does not fit. */

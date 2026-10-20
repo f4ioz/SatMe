@@ -365,6 +365,22 @@ L'onglet **Télémesure** (espace *Modes*) décode la télémesure des satellite
 - Chaque trame : satellite et type (orbite entière, haute résolution, message), les **valeurs temps réel** lues d'après le document de descente publié par AMSAT-UK et ses équations (tensions et courants des panneaux et de la batterie, températures, radio, ampli, antennes, état du logiciel), le message s'il y en a un, ou les octets bruts.
 - **Essai** : une trame fabriquée passe par le même décodeur. Les trames reçues sont gardées sur le PC (`telemesure/`) ; l'envoi à l'entrepôt de données FUNcube n'est pas fait.
 
+Ces décodeurs BPSK sont dans le sous-onglet **BPSK**.
+
+### Paquets FSK · GMSK
+
+Le sous-onglet **Paquets** décode les cubesats en FSK ou GMSK de 1200 à 9600 bit/s, dont le « G3RUH » à 9600 bit/s (embrouilleur 1 + x¹² + x¹⁷, NRZI, trames HDLC avec CRC-16, le plus souvent en AX.25).
+
+- Coché (coupé d'origine), il prend les **échantillons I/Q bruts** du récepteur SDR principal hors QO-100 (pas le son) : discriminateur FM, rattrapage de fréquence résiduel jusqu'à ±12 kHz autour du Doppler suivi, récupération d'horloge, puis deux lectures des bits (avec et sans embrouilleur).
+- Le **débit** vient de l'émetteur SatNOGS DB du satellite suivi (FSK, GFSK, GMSK, MSK et sa vitesse) ou se choisit à la main. Les trames AX.100 « mode 5 » (ASM + Golay) et les protocoles propres à un satellite ne sont pas lus.
+- Chaque trame : l'heure, l'en-tête AX.25 et son texte (ou les octets), la fréquence reçue et celle d'émission (Doppler retiré), l'écart rattrapé. Gardées par passage dans `telemesure/paquets/` (une ligne JSON par trame, et un fichier KISS si coché).
+- **Essai** : une salve fabriquée (télémesure et paquets SSDV) passe par un décodeur à part. Le **générateur d'essai** du récepteur SDR a aussi un signal « Paquets 9600 » : salves de télémesure et image SSDV, de bout en bout.
+- **Partager avec SatNOGS DB** (coupé d'origine) : chaque trame reçue d'un satellite suivi est envoyée par le protocole public SiDS, avec l'indicatif de la station, l'heure UTC et la position arrondie à 0,1°. Les trames du générateur et des enregistrements rejoués ne partent jamais.
+
+### Images SSDV
+
+Le sous-onglet **Images SSDV** reconstitue les images SSDV (JPEG en paquets de 256 octets, CRC-32 et Reed-Solomon) trouvées dans les trames décodées, au fil des paquets ; les blocs des paquets manquants restent gris. Les images sont gardées dans `telemesure/ssdv/`.
+
 ## Phonie → texte
 
 Ce que la station entend en BLU ou en FM — la carte son, le son de la clé SDR, ou celui d'un flux DATV — écrit passage par passage : la BLU de QO-100 d'abord. Une fenêtre **Phonie → texte** dans les onglets **SDR**, **QO-100** et **Carnet** montre chaque passage en bulle : heure, fréquence (la descente de QO-100 quand on y est), langue, texte (plus pâle quand le moteur est moins sûr), et sa traduction si on la demande. Les indicatifs (écrits ou épelés : « Sierra Papa five Alfa Bravo Charlie », « Fox quatre Italie Oscar Zoulou », en anglais, français, allemand, espagnol, italien, polonais), les carrés (« Juliette Novembre un huit ») et les reports (« cinq neuf », « five nine ») sont mis en couleur ; la puce d'un indicatif prépare le contact dans le carnet, avec le carré et le report entendus.

@@ -401,6 +401,13 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
     /** The dongle's sound off QO-100 ([Dsp.AUDIO_RATE]), for the 1200 bit/s BPSK telemetry ([TelemesurePc]). */
     @Volatile var ecouteTelemesure: ((ShortArray, Int) -> Unit)? = null
     /**
+     * The raw I/Q off QO-100 and METEOR, for the 1200–9600 bit/s packet
+     * decoder ([TelemesurePc]): bytes or 16-bit pairs, the count, the
+     * listened frequency's offset from the centre (Hz), the receiver being
+     * the test generator or a recording. Returns at once when the option is off.
+     */
+    @Volatile var iqPaquets: ((ByteArray?, ShortArray?, Int, Double, Boolean) -> Unit)? = null
+    /**
      * « Décodeurs multiples » on QO-100 ([CanauxPc]): more channels from the
      * same IQ, each with its decoder; null or off, nothing more runs.
      */
@@ -760,6 +767,7 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
                     if (iq16 != null) m.iq16(iq16, n, (fine + decalageHz).toDouble()) else m.iq(iq, n, (fine + decalageHz).toDouble())
                 }
                 iqQo100?.let { if (pourQo100()) it(if (iq16 == null) iq else null, iq16, n, pll) }
+                if (!pourMeteor && !sonde && !pourQo100()) iqPaquets?.let { runCatching { it(if (iq16 == null) iq else null, iq16, n, (fine + decalageHz).toDouble(), essai || fichier != null) } }
                 val maintenant = horloge()
                 // Still for METEOR? (QO-100 set on the dongle, another satellite followed: the sound back.)
                 if (pourMeteor && maintenant - dernierEtat >= 200L) quitteMeteorSiBesoin()
