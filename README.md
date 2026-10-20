@@ -107,34 +107,46 @@ The phone also serves pages to the PC's browser (USB cable or Wi-Fi, nothing to 
 
 ## New on SatMe-PC (October 2026)
 
-SatMe-PC grew from a satellite station into a whole QO-100 and DATV station, with its own DVB-S2 modem and three SDR boards. Everything below is in the [SatMe-PC guide](docs/station-pc.md) and the [wiki](https://github.com/f4ioz/SatMe/wiki/SatMe-PC).
+SatMe-PC grew from a satellite station into a whole station in a browser: QO-100 and DATV with its own DVB-S2 modem, an SDR receiver with every comfort, telemetry, aircraft and ships, the station drawn as it is wired. Everything below is in the [SatMe-PC guide](docs/station-pc.md) (also built in: **F1**) and the [wiki](https://github.com/f4ioz/SatMe/wiki/SatMe-PC).
+
+<p align="center"><img src="docs/images/pc-espaces-palette.png" width="98%" alt="SatMe-PC: the workspaces rail, the header strip, the status bar, and the Ctrl+K palette offering to listen to 145.800 MHz on the SDR receiver"></p>
+
+**🧭 A new page** — six workspaces in a side rail (Ciel, QO-100, DATV, Modes, Carnet, Station; keys 1–6), a header strip (what is followed, the active receiver, the next pass, a red **TX** light that only stops), a status bar, the **Ctrl+K** palette (a tab, a satellite, a callsign, a typed frequency), « ? » help on every card, the **built-in manual (F1)** with search, keyboard shortcuts. The header's **« Son »** chip: what the decoders hear, the rig's sound card recognised by name, one-key **Prepare the pass** and record. Non-satellite tabs (aircraft, ships, sondes) only when ticked.
+
+**🔌 Montage: the station as it is wired** — the station drawn from antenna to PC, lit live (cyan receives, red transmits, frequencies on the cables); drag-and-drop editing from a catalogue (dishes, LNBs, DX Patrol converters and PAs, GPSDOs including Leo Bodnar, bias-T, DC block…), photos cut out automatically, **what is missing** checked with dangers flagged (an LNB supply reaching an SDR board); which SatMe function holds which board, conflicts and how to free them, receive profiles applied in a safe order.
 
 <p align="center">
-<img src="docs/images/pc-datv.webp" width="49%" alt="SatMe-PC, DATV: an indoor test at 23 cm, ADALM-PLUTO transmitting and bladeRF 2.0 receiving with SatMe's own DVB-S2 demodulator; margin +5.5 dB, picture perfect, the callsign read in the picture with its QRZ record">
-<img src="docs/images/pc-datv-qualite.webp" width="49%" alt="DATV reception quality: the margin against the MODCOD's threshold, packets received and expected, errors, curves over two minutes, the PIDs, the constellation">
+<img src="docs/images/pc-montage.png" width="49%" alt="Montage of a QO-100 station: dish, LNB, converters, ADALM-PLUTO, amplifier, IC-9700, MiniTiouner, GPSDOs, lit as a simulated transmission; SatMe's functions on the right">
+<img src="docs/images/pc-sdr.png" width="49%" alt="SDR tab with the test generator: spectrum, magnifier and waterfall with made-up CW, SSB, FM, FT8 and SSTV signals">
 </p>
 
-**📡 QO-100 cockpit** — the narrow band on one screen: one click starts the reception, the waterfall **names each signal** (SSB, CW, FT8, FT4, PSK31, RTTY, SSTV, beacons…), a click tunes it and opens the right decoder, the log entry beside it. The band plan with its segments, a guard on the **emergency frequency**, the beacon calibration held by itself, **LEILA** flagged, the session resumed after a restart.
+**📻 SDR receiver** — memories in folders with flags on the spectrum, band plans, band stack, receive-only **scanning** (memories, ranges, priority channel), display options (averaging, peak hold, seven palettes), **sound cleaning** (noise blanker, automatic and manual notch, noise reduction, AGC), **CTCSS** reading and tone squelch, **I/Q** « back in time », SigMF recording and replay, a **test generator** with no hardware, **measurements** (level over time, Sun noise, the QO-100 beacon over 24 h). Receivers: RTL-SDR, ADALM-PLUTO, bladeRF 2.0 — and the **IC-9700's IF** demodulated by SatMe.
 
-**📺 DATV, reception and transmission**
-- Receive with a **MiniTiouner**, a **SatMe-Node** at the mast, or an **ADALM-PLUTO / bladeRF 2.0** with SatMe's own **DVB-S2 demodulator**.
-- **Reception quality** in plain words: the margin against the MODCOD, lost packets, a verdict. The **wide band at a glance** from the ground station's spectrum, named stations, click to tune.
-- **Live subtitles** of the received sound, **callsigns read in the picture** with their QRZ card, a **station card and chat** carried in the stream.
-- **Transmit** with SatMe's own **DVB-S2 modulator** (Pluto, bladeRF): test card, video or camera, overlay, a MODCOD fitted to your own reception — and **indoor or dummy-load tests** (HackRF One too), every safety rule in the code.
+**📡 IC-9700 over the network** — CAT and receive audio through the rig's LAN (Network Control ON), no USB cable; receive only, every transmit command refused; AF or IF output; the coded credentials learnt from a capture of your own login.
 
-**🖼 SSTV** — as on the phone: the SDR heard directly, forced mode, continuous decoding without a header, **automatic tuning**, the picture drawn line by line in a one-screen tab — and **SSTV on the air** with the Pluto or the bladeRF (FM or SSB, band and satellite rules built in).
+**📡 QO-100 cockpit** — the waterfall **names each signal**, a click tunes it and opens the right decoder; **up to four decoders at once** (FT8, FT4, CW, SSTV, voice, PSK31, RTTY, beacon); the band plan and an **emergency frequency** guard, beacon calibration, **LEILA** flagged; the **middle beacon's BPSK telemetry** decoded.
 
-**🔤 FT8 / FT4** — a decoder that removes the satellite's Doppler, subtracts what it decoded, resolves hashed callsigns and expects your partner's answers; the clock from the stations, watched stations, marks everywhere, **PSK Reporter** (opt-in).
+**📺 DATV** — MiniTiouner, SatMe-Node or SatMe's own **DVB-S2 demodulator** (Pluto, bladeRF); quality in plain words, the wide band at a glance, subtitles, callsigns read in the picture; **transmission in DVB-S2 or DVB-S** with every safety rule in the code, indoor and dummy-load tests, per-board **I/Q correction**.
 
-**🗣 Voice to text** — SSB and FM written out over by over, callsigns, squares and reports lit, **translated into French** — all offline on the PC.
+**🛰 Telemetry** — 1200–9600 bit/s FSK / GMSK packets (G3RUH, AX.25), **SSDV pictures** rebuilt, **FUNcube** real-time values; optional sharing with SatNOGS DB (off by default).
 
-**🛰 Station** — horizon mask, passes to any calendar (`.ics`), a Doppler / CAT log per pass, a **WebSocket** link for other programs, a general backup.
+<p align="center">
+<img src="docs/images/pc-telemesure-paquets.png" width="49%" alt="Telemetry: 9600 bit/s AX.25 frames from a test and the SSDV picture rebuilt">
+<img src="docs/images/pc-meteo-spatiale.png" width="49%" alt="Space weather: Kp gauge and three days of bars, solar flux, X-rays, solar wind, aurora, alerts">
+</p>
+
+**✈ Aircraft, ships, space weather** — **ADS-B** at 1090 MHz with **aircraft scatter** windows, **AIS** at 162 MHz, both on a shared **offline map** with the forecast aurora; **space weather** (Kp, flux, X-rays, solar wind, aurora, alerts), downloaded only when ticked.
+
+**📒 Log and journal** — the contact goes on the satellite the rig works; date, time and satellite editable; **compound callsigns** (EA3/M5JFS) with their country and flag; a **pass report** per pass (Doppler-followed waterfall, level, decodes, contacts) as one HTML file.
+
+**🔗 Interfaces** — a **rigctld** server for logging programs (receive only, PTT refused), the **USB volume knob** as a VFO (Linux), **spoken announcements** (passes, transmissions, your call decoded…), **spoken translation** of voice to text, a WebSocket link, CAT that follows the satellite change at once.
+
+**🔒 Remote** — the page **behind a password** for other machines, installable as an app, a **remote mode** with low-latency audio for a VPN link. Receive only from afar.
 
 <p align="center">
 <img src="docs/images/pc-ft8.webp" width="49%" alt="FT8 on QO-100: the slot's ring, the waterfall with the callsigns at their frequency, the radar, who to call now">
-<img src="docs/images/pc-ft8-messages.webp" width="49%" alt="FT8, the messages: the conversations between two stations, as bubbles">
+<img src="docs/images/pc-datv.webp" width="49%" alt="SatMe-PC, DATV: an indoor test at 23 cm, ADALM-PLUTO transmitting and bladeRF 2.0 receiving with SatMe's own DVB-S2 demodulator">
 </p>
-<p align="center"><img src="docs/images/pc-sstv.webp" width="98%" alt="SatMe-PC, SSTV pictures received: RS-44, UmKA-1 and the ISS, each with its satellite, mode and time"></p>
 
 ## What's new in 20.82
 
@@ -209,14 +221,14 @@ French and English. Controls readable by screen readers.
 
 | Type | Models |
 |---|---|
-| Radios | Icom IC-9700 · Icom IC-910H¹ · Icom IC-9100¹ · Kenwood TS-2000 (SAT mode; RigExpert Tiny tried) · Kenwood TH-D72 (FM, full duplex) · Yaesu FT-817 or Icom IC-705¹ on each side · FT-817 or IC-705¹ + SDR dongle |
+| Radios | Icom IC-9700 (SatMe-PC: USB or the rig's network) · Icom IC-910H¹ · Icom IC-9100¹ · Kenwood TS-2000 (SAT mode; RigExpert Tiny tried) · Kenwood TH-D72 (FM, full duplex) · Yaesu FT-817 or Icom IC-705¹ on each side · FT-817 or IC-705¹ + SDR dongle |
 | APRS | KISS radio over USB: Kenwood TH-D72 (tried); other KISS TNCs on a USB serial line¹ · Yaesu FT3D: stations it decodes (positions, WAY.P output) |
-| SDR | RTL2832U (voice, SSTV, METEOR pictures with a 137 MHz antenna) · SatMe-PC also: ADALM-PLUTO (network), Nuand bladeRF 2.0 micro (USB 3, Linux) — receive, and transmit DATV and SSTV · HackRF One (test transmitter, indoor or dummy load only) |
+| SDR | RTL2832U (voice, SSTV, METEOR pictures with a 137 MHz antenna) · SatMe-PC also: ADALM-PLUTO (network), Nuand bladeRF 2.0 micro (USB 3, Linux) — receive, and transmit DATV and SSTV · HackRF One (test transmitter, indoor or dummy load only) · the IC-9700's IF · ADS-B and AIS on an RTL-SDR |
 | DATV | MiniTiouner (through LongMynd, on the PC or a SatMe-Node) · ADALM-PLUTO or bladeRF 2.0 with SatMe's DVB-S2 demodulator |
 | Compass | WitMotion WT901BLE, WT9011DCL-BT50 |
 | Rotators | Yaesu GS-232 · Hamlib rotctld (network) |
 | USB serial | CP210x, FTDI, PL2303, CH340/341/9102, MCP2200/2221, CDC |
-| Other | USB sound cards · USB knob/keypad (keys learned by pressing) |
+| Other | USB sound cards · USB knob/keypad (keys learned by pressing; SatMe-PC too, Linux) |
 
 ¹ Built and bench-tested, not yet tried on the real hardware.
 

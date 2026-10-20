@@ -107,34 +107,46 @@ Le téléphone sert aussi des pages au navigateur du PC (câble USB ou Wi-Fi, ri
 
 ## Nouveau sur SatMe-PC (octobre 2026)
 
-SatMe-PC est passé d'une station satellites à toute une station QO-100 et DATV, avec son propre modem DVB-S2 et trois cartes SDR. Tout ce qui suit est détaillé dans le [guide SatMe-PC](docs/station-pc.fr.md) et le [wiki](https://github.com/f4ioz/SatMe/wiki/SatMe-PC-fr).
+SatMe-PC est passé d'une station satellites à toute une station dans un navigateur : QO-100 et DATV avec son propre modem DVB-S2, un récepteur SDR tout confort, la télémesure, les avions et les navires, la station dessinée telle qu'elle est câblée. Tout ce qui suit est détaillé dans le [guide SatMe-PC](docs/station-pc.fr.md) (aussi intégré : **F1**) et le [wiki](https://github.com/f4ioz/SatMe/wiki/SatMe-PC-fr).
+
+<p align="center"><img src="docs/images/pc-espaces-palette.png" width="98%" alt="SatMe-PC : le rail des espaces de travail, le bandeau, la barre d'état, et la palette Ctrl+K qui propose d'écouter 145,800 MHz sur le récepteur SDR"></p>
+
+**🧭 Une nouvelle page** — six espaces de travail dans un rail (Ciel, QO-100, DATV, Modes, Carnet, Station ; touches 1 à 6), un bandeau (ce qui est suivi, le récepteur actif, le prochain passage, un voyant **TX** rouge qui ne fait qu'arrêter), une barre d'état, la palette **Ctrl+K** (un onglet, un satellite, un indicatif, une fréquence tapée), des « ? » sur chaque carte, le **manuel intégré (F1)** avec recherche, des raccourcis clavier. La puce **« Son »** du bandeau : ce qu'entendent les décodeurs, la carte son du poste reconnue par son nom, **Préparer le passage** et enregistrer d'une touche. Les onglets hors satellites (avions, navires, sondes) seulement cochés.
+
+**🔌 Montage : la station telle qu'elle est câblée** — la station dessinée de l'antenne au PC, allumée en direct (cyan reçoit, rouge émet, les fréquences sur les câbles) ; modifiée par glisser-déposer depuis un catalogue (paraboles, LNB, convertisseurs et amplis DX Patrol, GPSDO dont Leo Bodnar, bias-T, bloqueur de continu…), photos détourées toutes seules, **ce qui manque** vérifié avec les dangers signalés (une alimentation LNB qui atteindrait une carte SDR) ; quelle fonction de SatMe tient quelle carte, les conflits et comment les lever, des profils de réception appliqués dans un ordre sûr.
 
 <p align="center">
-<img src="docs/images/pc-datv.webp" width="49%" alt="SatMe-PC, DATV : un essai en intérieur sur 23 cm, l'ADALM-PLUTO émet et le bladeRF 2.0 reçoit avec le démodulateur DVB-S2 de SatMe ; marge +5,5 dB, image parfaite, l'indicatif lu dans l'image avec sa fiche QRZ">
-<img src="docs/images/pc-datv-qualite.webp" width="49%" alt="Qualité de réception DATV : la marge face au seuil du MODCOD, paquets reçus et attendus, erreurs, courbes sur deux minutes, les PID, la constellation">
+<img src="docs/images/pc-montage.png" width="49%" alt="Montage d'une station QO-100 : parabole, LNB, convertisseurs, ADALM-PLUTO, ampli, IC-9700, MiniTiouner, GPSDO, allumés pour une émission simulée ; les fonctions de SatMe à droite">
+<img src="docs/images/pc-sdr.png" width="49%" alt="Onglet SDR avec le générateur d'essai : spectre, loupe et cascade avec une CW, une BLU, une FM, un FT8 et une SSTV fabriqués">
 </p>
 
-**📡 Cockpit QO-100** — la bande étroite sur un écran : un clic démarre la réception, la cascade **nomme chaque signal** (BLU, CW, FT8, FT4, PSK31, RTTY, SSTV, balises…), un clic s'y accorde et ouvre le bon décodeur, la saisie du carnet à côté. Le plan de bande et ses segments, une garde sur la **fréquence d'urgence**, le calage sur la balise tenu tout seul, **LEILA** signalée, la session reprise après un arrêt.
+**📻 Récepteur SDR** — mémoires en dossiers avec drapeaux sur le spectre, plans de bandes, pile de bandes, **balayage** en réception seulement (mémoires, plages, canal prioritaire), affichage réglable (moyenne, crêtes, sept palettes), **nettoyage du son** (antiparasite, notch automatique et manuel, réduction de bruit, CAG), lecture du **CTCSS** et silencieux sur sous-ton, **I/Q** « remonter le temps », enregistrement SigMF et relecture, un **générateur d'essai** sans matériel, des **mesures** (niveau dans le temps, bruit solaire, la balise QO-100 sur 24 h). Récepteurs : RTL-SDR, ADALM-PLUTO, bladeRF 2.0 — et la **FI de l'IC-9700** démodulée par SatMe.
 
-**📺 DATV, réception et émission**
-- Recevoir avec un **MiniTiouner**, un **SatMe-Node** au pied du mât, ou un **ADALM-PLUTO / bladeRF 2.0** avec le **démodulateur DVB-S2** de SatMe.
-- La **qualité de réception** en clair : la marge face au MODCOD, les paquets perdus, un verdict. **La bande large d'un coup d'œil** d'après le spectre de la station sol, les stations nommées, un clic pour s'accorder.
-- Les **sous-titres en direct** du son reçu, les **indicatifs lus dans l'image** avec leur fiche QRZ, une **carte de visite et un chat** portés dans le flux.
-- **Émettre** avec le **modulateur DVB-S2** de SatMe (Pluto, bladeRF) : mire, vidéo ou caméra, incrustation, un MODCOD ajusté à sa propre réception — et des **essais en intérieur ou sur charge** (HackRF One aussi), toutes les règles de sécurité dans le code.
+**📡 L'IC-9700 par le réseau** — CAT et son reçu par le LAN du poste (Network Control sur ON), sans câble USB ; réception seulement, toute commande d'émission refusée ; sortie AF ou FI ; les identifiants codés appris d'une capture de sa propre connexion.
 
-**🖼 SSTV** — comme sur le téléphone : la SDR écoutée directement, mode imposé, décodage continu sans en-tête, **calage automatique**, l'image dessinée ligne à ligne dans un onglet qui tient sur un écran — et **la SSTV à l'émission** avec le Pluto ou le bladeRF (FM ou BLU, règles des bandes et des satellites dans le code).
+**📡 Cockpit QO-100** — la cascade **nomme chaque signal**, un clic s'y accorde et ouvre le bon décodeur ; **jusqu'à quatre décodeurs à la fois** (FT8, FT4, CW, SSTV, phonie, PSK31, RTTY, balise) ; le plan de bande et une garde sur la **fréquence d'urgence**, le calage sur la balise, **LEILA** signalée ; la **télémesure BPSK de la balise médiane** décodée.
 
-**🔤 FT8 / FT4** — un décodeur qui retire le Doppler du satellite, soustrait ce qu'il a décodé, retrouve les indicatifs hachés et attend les réponses du correspondant ; l'horloge d'après les stations, les stations guettées, des marques partout, **PSK Reporter** (au choix).
+**📺 DATV** — MiniTiouner, SatMe-Node ou le **démodulateur DVB-S2** de SatMe (Pluto, bladeRF) ; la qualité en clair, la bande large d'un coup d'œil, sous-titres, indicatifs lus dans l'image ; **émission en DVB-S2 ou DVB-S** avec toutes les règles de sécurité dans le code, essais en intérieur et sur charge, **correction I/Q** par carte.
 
-**🗣 Phonie → texte** — la BLU et la FM écrites passage par passage, indicatifs, carrés et reports en couleur, **traduites en français** — le tout sur le PC, sans Internet.
+**🛰 Télémesure** — paquets FSK / GMSK de 1200 à 9600 bit/s (G3RUH, AX.25), **images SSDV** reconstituées, valeurs temps réel de **FUNcube** ; partage SatNOGS DB au choix (coupé d'origine).
 
-**🛰 Station** — masque d'horizon, passages vers n'importe quel agenda (`.ics`), un journal Doppler / CAT par passage, un **lien WebSocket** pour d'autres programmes, une sauvegarde générale.
+<p align="center">
+<img src="docs/images/pc-telemesure-paquets.png" width="49%" alt="Télémesure : des trames AX.25 à 9600 bit/s d'un essai et l'image SSDV reconstituée">
+<img src="docs/images/pc-meteo-spatiale.png" width="49%" alt="Météo spatiale : le cadran Kp et trois jours de barres, flux solaire, rayons X, vent solaire, aurore, alertes">
+</p>
+
+**✈ Avions, navires, météo spatiale** — l'**ADS-B** à 1090 MHz avec les fenêtres de **diffusion par avions**, l'**AIS** à 162 MHz, sur une **carte commune sans Internet** avec l'aurore prévue ; la **météo spatiale** (Kp, flux, rayons X, vent solaire, aurore, alertes), téléchargée seulement si on le coche.
+
+**📒 Carnet et journal** — le contact noté sur le satellite que travaille le poste ; date, heure et satellite modifiables ; **indicatifs composés** (EA3/M5JFS) avec leur pays et leur drapeau ; un **rapport par passage** (cascade suivie du Doppler, niveau, décodages, contacts) en un fichier HTML.
+
+**🔗 Interfaces** — un serveur **rigctld** pour les logiciels de carnet (réception seulement, PTT refusé), la **molette de volume USB** en VFO (Linux), des **annonces vocales** (passages, émissions, son indicatif décodé…), la **traduction parlée** de phonie → texte, un lien WebSocket, le CAT qui suit tout de suite le changement de satellite.
+
+**🔒 À distance** — la page **derrière un mot de passe** pour les autres machines, installable comme une application, un **mode distant** au son à faible latence pour un lien VPN. Réception seulement de loin.
 
 <p align="center">
 <img src="docs/images/pc-ft8.webp" width="49%" alt="FT8 sur QO-100 : l'anneau du créneau, la cascade avec les indicatifs à leur fréquence, le radar, qui appeler maintenant">
-<img src="docs/images/pc-ft8-messages.webp" width="49%" alt="FT8, les messages : les conversations entre deux stations, en bulles">
+<img src="docs/images/pc-datv.webp" width="49%" alt="SatMe-PC, DATV : un essai en intérieur sur 23 cm, l'ADALM-PLUTO émet et le bladeRF 2.0 reçoit avec le démodulateur DVB-S2 de SatMe">
 </p>
-<p align="center"><img src="docs/images/pc-sstv.webp" width="98%" alt="SatMe-PC, images SSTV reçues : RS-44, UmKA-1 et l'ISS, chacune avec son satellite, son mode et son heure"></p>
 
 ## Nouveautés de la 20.82
 
@@ -209,14 +221,14 @@ Français et anglais. Commandes lisibles par les lecteurs d'écran.
 
 | Type | Modèles |
 |---|---|
-| Postes | Icom IC-9700 · Icom IC-910H¹ · Icom IC-9100¹ · Kenwood TS-2000 (mode SAT ; RigExpert Tiny essayé) · Kenwood TH-D72 (FM, full duplex) · Yaesu FT-817 ou Icom IC-705¹ de chaque côté · FT-817 ou IC-705¹ + clé SDR |
+| Postes | Icom IC-9700 (SatMe-PC : USB ou le réseau du poste) · Icom IC-910H¹ · Icom IC-9100¹ · Kenwood TS-2000 (mode SAT ; RigExpert Tiny essayé) · Kenwood TH-D72 (FM, full duplex) · Yaesu FT-817 ou Icom IC-705¹ de chaque côté · FT-817 ou IC-705¹ + clé SDR |
 | APRS | Poste KISS en USB : Kenwood TH-D72 (essayé) ; autres TNC KISS sur une ligne série USB¹ · Yaesu FT3D : les stations qu'il décode (positions, sortie WAY.P) |
-| SDR | RTL2832U (phonie, SSTV, images METEOR avec une antenne 137 MHz) · SatMe-PC en plus : ADALM-PLUTO (réseau), Nuand bladeRF 2.0 micro (USB 3, Linux) — en réception, et en émission DATV et SSTV · HackRF One (émetteur d'essai, en intérieur ou sur charge seulement) |
+| SDR | RTL2832U (phonie, SSTV, images METEOR avec une antenne 137 MHz) · SatMe-PC en plus : ADALM-PLUTO (réseau), Nuand bladeRF 2.0 micro (USB 3, Linux) — en réception, et en émission DATV et SSTV · HackRF One (émetteur d'essai, en intérieur ou sur charge seulement) · la FI de l'IC-9700 · ADS-B et AIS sur une RTL-SDR |
 | DATV | MiniTiouner (par LongMynd, sur le PC ou un SatMe-Node) · ADALM-PLUTO ou bladeRF 2.0 avec le démodulateur DVB-S2 de SatMe |
 | Boussole | WitMotion WT901BLE, WT9011DCL-BT50 |
 | Rotors | Yaesu GS-232 · Hamlib rotctld (réseau) |
 | Série USB | CP210x, FTDI, PL2303, CH340/341/9102, MCP2200/2221, CDC |
-| Divers | Cartes son USB · molette/clavier USB (touches apprises par appui) |
+| Divers | Cartes son USB · molette/clavier USB (touches apprises par appui ; aussi SatMe-PC, Linux) |
 
 ¹ Écrit et testé au banc, pas encore essayé sur le matériel réel.
 

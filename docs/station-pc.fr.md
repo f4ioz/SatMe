@@ -11,26 +11,28 @@ SatMe tourne sur un PC (Linux, Windows, Raspberry Pi) et se pilote depuis un nav
 ## Sommaire
 
 1. [L'installer](#linstaller) — options, la page sur les autres machines et son mot de passe
-2. [Les onglets d'un coup d'œil](#les-onglets-dun-coup-dœil) — espaces de travail, manuel intégré (F1)
-3. [Station et passages](#station-et-passages) — mode automatique, enregistrement, agenda, horizon
-4. [Le carnet](#le-carnet)
+2. [Les onglets d'un coup d'œil](#les-onglets-dun-coup-dœil) — espaces de travail, bandeau, « Son », raccourcis, manuel intégré (F1)
+3. [Station et passages](#station-et-passages) — mode automatique, préparer un passage, enregistrement, agenda, horizon
+4. [Le carnet](#le-carnet) — choix du satellite, correction d'un contact, indicatifs composés
 5. [SatMe sur le téléphone](#satme-sur-le-téléphone)
-6. [Journal des passages](#journal-des-passages)
-7. [QO-100 : le cockpit](#qo-100--le-cockpit) — décodeurs multiples
+6. [Journal des passages](#journal-des-passages) — rapport de passage
+7. [QO-100 : le cockpit](#qo-100--le-cockpit) — décodeurs multiples, PSK31 et RTTY, balise
 8. [DATV : réception](#datv--réception) — MiniTiouner, SatMe-Node, Pluto / bladeRF, bande large, qualité, sous-titres
-9. [DATV : émission](#datv--émission) — la station, les règles, l'essai en intérieur, carte et chat
+9. [DATV : émission](#datv--émission) — DVB-S2 et DVB-S, la station, les règles, l'essai en intérieur, carte et chat
 10. [SSTV](#sstv) — réception et émission
 11. [FT8 / FT4](#ft8--ft4)
-12. [Télémesure BPSK](#télémesure-bpsk) — FUNcube 1200 bit/s
-13. [Phonie → texte](#phonie--texte)
-14. [Le récepteur SDR](#le-récepteur-sdr) — mémoires, plan de bandes, affichage, nettoyage du son, CTCSS, I/Q, générateur d'essai, mesures
-15. [Matériel SDR](#matériel-sdr) — RTL-SDR, ADALM-PLUTO, bladeRF 2.0, HackRF One
+12. [Télémesure](#télémesure) — paquets 1200 à 9600 bit/s, images SSDV, FUNcube, SatNOGS
+13. [Phonie → texte](#phonie--texte) — traduction écrite et parlée
+14. [Le récepteur SDR](#le-récepteur-sdr) — mémoires, plan de bandes, affichage, nettoyage du son, CTCSS, balayage, I/Q, générateur d'essai, mesures
+15. [Matériel SDR](#matériel-sdr) — RTL-SDR, ADALM-PLUTO, bladeRF 2.0, HackRF One, la FI de l'IC-9700
 16. [Avions (ADS-B) et carte](#avions-ads-b-et-carte) — 1090 MHz, diffusion par avions, la carte commune
-17. [Montage : la chaîne de la station](#montage--la-chaîne-de-la-station) — schéma, fonctions, profils
-18. [Réglages](#réglages) — poste et rotor, éléments orbitaux, journal Doppler, lien satellite, rigctld, molette USB, accès à distance
-19. [Encore sur le PC](#encore-sur-le-pc)
-20. [Sécurité du matériel](#sécurité-du-matériel)
-21. [Avant le premier essai](#avant-le-premier-essai)
+17. [Navires (AIS)](#navires-ais)
+18. [Météo spatiale](#météo-spatiale)
+19. [Montage : la chaîne de la station](#montage--la-chaîne-de-la-station) — schéma, modification, catalogue, fonctions, profils
+20. [Réglages](#réglages) — poste et rotor, IC-9700 par le réseau, éléments orbitaux, journal Doppler, lien satellite, rigctld, molette USB, annonces, correction I/Q, accès à distance
+21. [Encore sur le PC](#encore-sur-le-pc)
+22. [Sécurité du matériel](#sécurité-du-matériel)
+23. [Avant le premier essai](#avant-le-premier-essai)
 
 ## L'installer
 
@@ -69,27 +71,64 @@ SatMe tourne sur un PC (Linux, Windows, Raspberry Pi) et se pilote depuis un nav
 | **QO-100** | le cockpit de la bande étroite : la réception en un clic, les signaux nommés, un clic pour s'accorder avec le bon décodeur |
 | **DATV** | la bande large de QO-100 : réception (MiniTiouner, node, Pluto ou bladeRF), qualité, sous-titres, émission |
 | **Montage** | le schéma de la station, ce que tient chaque fonction de SatMe, les profils de réception |
-| **SDR** | le récepteur : RTL-SDR, ADALM-PLUTO, bladeRF 2.0, fichier I/Q, générateur d'essai ; cascade, vernier, loupe, mémoires, nettoyage du son, mesures |
-| **Carte** · **Avions** | la carte commune (satellites, APRS, sondes, avions, DATV, carrés) ; l'ADS-B à 1090 MHz et la diffusion par avions |
+| **SDR** | le récepteur : RTL-SDR, ADALM-PLUTO, bladeRF 2.0, la FI de l'IC-9700, fichier I/Q, générateur d'essai ; cascade, vernier, loupe, mémoires, balayage, nettoyage du son, mesures |
+| **Carte** · **Avions** · **Navires** | la carte commune (satellites, APRS, sondes, avions, navires, DATV, carrés, aurore) ; l'ADS-B à 1090 MHz et la diffusion par avions ; l'AIS à 162 MHz |
+| **Météo spatiale** | indice Kp, flux solaire, rayons X, vent solaire, aurore, alertes (téléchargées seulement si on le coche) |
+| **Télémesure** | paquets FSK / GMSK de 1200 à 9600 bit/s, images SSDV, FUNcube, balise QO-100 |
 | **Sondes** · **METEOR** | radiosondes ; images LRPT de METEOR-M |
 | **Son** | la carte son, l'enregistrement |
 | **SSTV** | le décodage en direct, les images, la mire, l'émission |
 | **Planche** | la planche SSTV : les images sur un modèle, téléchargée en pleine taille |
 | **APRS** · **FT8** | l'APRS (radio KISS comprise) et son jeu ; le tableau FT8 / FT4 |
 | **Journal** | les passages rejoués avec leur son, faits en image, vidéo ou GIF |
-| **Réglages** | par catégorie : Ma station, Poste et rotor, Satellites, Interfaces, Services en ligne, Phonie → texte, Téléphone, Accord fin, Émission, Accès à distance, Sauvegarde |
+| **Réglages** | par catégorie : Ma station, Poste et rotor, Satellites, Interfaces, Annonces, Services en ligne, Phonie → texte, Téléphone, Accord fin, Émission, Accès à distance, Sauvegarde |
 
 Les onglets QO-100, DATV et SSTV tiennent sur un écran (de 1920×970 à 1366×700) : la vue principale reste en vue, les cartes secondaires sont des **sous-onglets** à icônes, le dernier ouvert gardé.
 
-- **Espaces de travail**, dans le rail de gauche (touches **1** à **6**, chacun rouvert à son dernier onglet) : **Ciel** (Suivi, Agenda, Frise, Sked, Carrés, Carte, Avions, METEOR, Sondes), **QO-100**, **DATV**, **Modes** (SSTV, APRS, FT8), **Carnet** (Carnet, Journal, Planche), **Station** (Montage, SDR, Son, Réglages).
+<p align="center"><img src="images/pc-espaces-palette.png" width="100%" alt="SatMe-PC : le rail des espaces de travail déplié à gauche, le bandeau en haut, la barre d'état en bas, et la palette Ctrl+K qui propose d'écouter 145,800 MHz sur le récepteur SDR"></p>
+
+- **Espaces de travail**, dans le rail de gauche (touches **1** à **6**, chacun rouvert à son dernier onglet ; **[** le déplie ou le replie) : **Ciel** (Suivi, Agenda, Frise, Sked, Carrés, Carte, Avions, Navires, Météo spatiale, METEOR, Sondes), **QO-100**, **DATV**, **Modes** (SSTV, APRS, FT8, Télémesure), **Carnet** (Carnet, Journal, Planche), **Station** (Montage, SDR, Son, Réglages). Sur un téléphone, le rail devient une barre en bas. Avions, Navires et Sondes ne sont dans le rail que cochés (voir [Fonctions hors satellites](#fonctions-hors-satellites)).
 - **Ctrl+K** : la palette de commandes — onglets et sous-onglets, catégories de réglages, actions (« Arrêter toute émission »…), un satellite, ou une fréquence tapée (« 145,8 ») que le récepteur SDR écoute.
-- **Le manuel intégré** : **F1** l'ouvre, sur le chapitre de l'onglet en cours ; on y cherche un mot ; ses chapitres sont ceux de ce guide. **Échap** le ferme — un second **Échap** arrête les émissions, comme toujours.
+- **Le manuel intégré** : **F1** l'ouvre, sur le chapitre de l'onglet en cours ; on y cherche un mot ; ses chapitres sont ceux de ce guide. **Échap** le ferme — un second **Échap** arrête les émissions, comme toujours. Les « ? » à côté des titres des cartes donnent l'explication courte, avec « En savoir plus » vers le manuel.
+
+<p align="center"><img src="images/pc-manuel.png" width="100%" alt="Le manuel intégré (F1) ouvert sur le chapitre du récepteur SDR : le sommaire à gauche, la recherche en haut"></p>
+
+### Le bandeau et la barre d'état
+
+- **Le bandeau** (en haut) : l'indicatif et le carré, ce qui est suivi (un satellite, le cockpit QO-100), la fréquence et le mode du récepteur actif (le poste en CAT, sinon le SDR), la puce **Son**, le prochain passage avec son décompte, l'heure locale et UTC, **Distant** (voir [Mode distant](#mode-distant)), **🔈 Écouter ici**. Pendant une émission (DATV, SSTV, calibration I/Q), un voyant **TX** rouge-orange : un clic arrête tout.
+- **La barre d'état** (en bas) : le SDR, le récepteur DATV, le poste, le rotor, l'enregistrement, le lien satellite, les clients rigctld, les erreurs (de la page et du serveur) — chacun mène d'un clic à son onglet. Un clic sur **Poste** ouvre un petit menu Connecter / Déconnecter qui envoie exactement le modèle et le port affichés.
+
+### Le son des décodeurs (« Son »)
+
+La puce **Son** du bandeau (touche **S**) dit ce qu'entendent SSTV, FT8, CW, APRS et phonie → texte, avec un petit vumètre. Son menu : les sources (les cartes son par leur nom — « IC-9700 (USB Audio CODEC) », « Carte mère (ALC897) » —, le récepteur SDR, l'IC-9700 par le réseau), démarrer ou arrêter, les décodeurs à l'écoute, **● Enregistrer le son**, **Préparer le passage**, **Écouter ici**. Un décodeur qui n'entend rien propose le geste qui le répare.
+
+- Allumer un décodeur ou demander un enregistrement démarre la carte qu'il lui faut : celle choisie pour le satellite, la dernière utilisée, celle du poste — jamais une carte devinée. Réception seulement.
+- Les cartes son sont reconnues et nommées d'après le système (`/proc/asound`, sysfs ; aucun port ouvert) : un codec sur le même concentrateur USB que le poste en CAT devient « IC-9700 (USB Audio CODEC) ».
+
+<p align="center"><img src="images/pc-son.png" width="100%" alt="La puce Son du bandeau ouverte : la carte mère, la carte son de l'IC-9700 (le poste), le récepteur SDR en marche, les décodeurs à l'écoute SSTV et APRS, Enregistrer le son, Préparer le passage, Écouter ici"></p>
+
+### Raccourcis clavier
+
+| Touche | Effet |
+|---|---|
+| **Échap** | arrêt de toute émission (DATV, SSTV, calibration I/Q, mire) ; n'arrête que, ne démarre jamais rien |
+| **Ctrl+K** | la palette de commandes |
+| **1** … **6** | les espaces de travail |
+| **?** | l'aide des raccourcis · **F1** le manuel · **[** le rail |
+| **S** | le son des décodeurs |
+| **E** | enregistrer le son, ou arrêter l'enregistrement |
+| **P** | préparer le passage du satellite suivi |
+| **N** | noter un contact (le carnet, le curseur sur l'indicatif) |
+| ← → ↑ ↓ | QO-100 : accord par 100 Hz / 1 kHz |
+| **+** **−** **0** · **E** · **V** | Montage : agrandir, réduire, tout le dessin · modifier · vue complète ou simplifiée |
 
 ## Station et passages
 
 **Suivi** (espace **Ciel**) liste les passages des 24 prochaines heures (favoris, entendus ces jours-ci sur AMSAT, agenda), le satellite suivi sur le ciel ou la carte, à droite de son nom l'**encart AMSAT** (ce que les stations entendent, « Entendu » / « Pas entendu » en un clic), les fréquences corrigées du Doppler avec les calages RX/TX, **● Enregistrer le son**, et **le poste et le rotor par leur nom, une coche verte ✓ quand ils sont connectés** — un clic mène à leurs réglages.
 
 - **⤓ Agenda (.ics)** : les passages de la liste (ses filtres gardés), ou ceux du satellite suivi, dans un fichier d'agenda (RFC 5545, UTC ; satellite, élévation maximale, azimuts d'AOS et de LOS) pour n'importe quel agenda.
+- **⚡ Préparer le passage** (touche **P**) : pour le satellite suivi, la source son, les décodeurs de son émetteur (SSTV, APRS, FT8, CW…) et l'enregistrement armé pour l'AOS. Réception seulement.
+- **Le poste suit tout de suite** : changer de satellite suivi réaccorde le poste en CAT aussitôt, sur le milieu de la bande passante d'un transpondeur linéaire. *Régler le poste même quand le satellite n'est pas visible* (Réglages › Poste et rotor, décoché d'origine) : le poste est prêt avant l'AOS, ou pour un essai à l'établi — accord seulement, jamais d'émission.
 - **Horizon** (Réglages › Ma station) : la hauteur des obstacles par secteur d'azimut (8 × 45° ou 12 × 30°), dessinée vue de dessus. Les passages commencent et finissent alors quand le satellite les dépasse (l'AOS/LOS géométrique sous ✱) ; ceux cachés de bout en bout sont écartés. Tout à 0 ne change rien. Même réglage sur le téléphone.
 
 ### Mode automatique : ne manquer aucun passage
@@ -125,6 +164,9 @@ Un contact se saisit avec l'indicatif prédit d'après le carnet et QRZ (Tab pas
 - **Les profils de station de Wavelog** : « Lire les profils » montre où l'on est (son carré, ou les deux d'une ligne de carrés) et le profil où cela part — choisi dans la liste, ou **créé** quand Wavelog n'en a pas (DXCC, zones CQ et ITU demandés). Chaque contact part au profil de l'endroit d'où il a été fait ; un profil choisi à la main pour un autre carré est signalé.
 - **Chaque nouveau contact envoyé tout seul à Wavelog / Cloudlog**, après un délai au choix (30 s à 30 min) : le temps de le corriger ou de le retenir (⏸, décompte dans le carnet). Un contact que le serveur refuse est mis en pause, avec la raison. Le téléphone a le même choix de délai.
 - L'export **ADIF**, et le dépôt à la main (⬆).
+- **Sur quel satellite** : un contact est noté sur le satellite choisi dans la saisie, sinon celui du poste (le satellite suivi, Doppler par CAT), QO-100 quand le poste y est ou que le contact est saisi dans le cockpit. Un récepteur qui écoute QO-100 en arrière-plan ne change plus le carnet. La saisie dit où elle note et pourquoi, avec un bouton pour changer.
+- **Corriger un contact** : le satellite (la liste, QO-100, un nom libre, terrestre), la **date et l'heure UTC** (l'heure locale à côté, « maintenant » ; ni dans le futur, ni avant 1961). Azimut, élévation, fréquences et ordre du carnet suivent ; un doublon (même indicatif, même satellite, 10 min) est signalé. Le téléphone fait de même.
+- **Indicatifs composés** (`EA3/M5JFS`, `DL1ABC/P`, `F/ON4ABC/P`) : le pays est celui du préfixe d'opération (EA3/M5JFS = M5JFS depuis l'Espagne), avec son **drapeau** dans la liste, la saisie, la fiche et l'éditeur. Quand QRZ n'a pas la forme composée, la fiche est celle de l'opérateur, identité seulement (ni carré, ni position, ni adresse). Le carré pris d'une fiche est celui de l'indicatif tel qu'il est tapé (« F4IOZ/P » ne reprend pas le carré de « F4IOZ »). **La carte** suit le carré tapé, sinon le centre du pays, plus pâle.
 
 <p align="center">
 <img src="images/pc-carnet.webp" width="49%" alt="Onglet Carnet : un nouveau contact, et à côté la station en direct — FO-29, ses fréquences, le polar plot, le rotor">
@@ -155,6 +197,15 @@ La page du journal du téléphone, sous les onglets du PC : les passages listés
 - **+ Passage** : un passage fait de rien — le satellite et ses heures, des contacts, un son, des images.
 - Le **journal Doppler / CAT** du passage (quand il est tenu, voir [Réglages](#réglages)) y est relié.
 
+### Rapport de passage
+
+**Rapport**, dans un passage du journal : le compte rendu d'observation du passage, en une page.
+
+- L'en-tête : AOS, TCA, LOS, élévation maximale, la station telle que dessinée dans le Montage, l'indice Kp du moment.
+- **La cascade suivie du Doppler** : tirée de l'enregistrement I/Q SigMF du passage, ou du *Journal détaillé* (Réglages › Poste et rotor › Journal Doppler / CAT, décoché d'origine : le spectre autour de la descente noté pendant les passages suivis).
+- La frise du niveau et de l'élévation, avec les décodages et les contacts marqués ; les décodages (SSTV, APRS, télémesure, phonie), les contacts, les sons à écouter, une note de qualité.
+- **Enregistrer** en un seul fichier HTML, ou en ZIP avec ses fichiers ; **Partager** ne fait qu'un fichier local. Rien n'est envoyé.
+
 <p align="center"><img src="images/pc-journal-carte.webp" width="100%" alt="Journal : RS-44 rejoué sur la carte, la trace prévue en pointillés, l'empreinte, F5RRO à sa place sur la trace et à son carré"></p>
 
 <p align="center">
@@ -175,10 +226,13 @@ L'onglet **QO-100**, c'est le transpondeur bande étroite sur un écran : le ré
 - **Plan de bande** (celui d'AMSAT-DL) sur la réglette et en tête de la cascade, la règle de chaque segment au survol. **Fréquence d'urgence** (10 489,858 – 10 489,865) : contour et bandeau rouges ; SatMe n'y envoie jamais la montée au poste de lui-même (mémoire, signal cliqué, retour DATV, session reprise) — seulement accordée à la main. La place libre FT8 n'est proposée que dans les segments numériques ; un mode hors de son segment est signalé discrètement.
 - **LEILA** : quand la sirène de la station sol est entendue (la station écoutée émet plus fort que les balises et doit baisser sa puissance), un **⚠ LEILA** rouge s'affiche 10 s sous la descente.
 - **Décodeurs multiples** (bouton **Multiples**, coupé d'origine) : jusqu'à **4 canaux** pris dans ce que voit le récepteur, chacun avec son décodeur (FT8, FT4, CW, SSTV, phonie, balise BPSK, ou simple écoute ; une seule SSTV, une seule phonie, une seule balise). Préréglages « FT8 + CW + phonie » et « FT8 + FT4 » ; clic droit (ou Maj + clic) sur un signal de la cascade : « Ajouter un décodeur ici ». Le son reste celui de l'accord principal, sauf le canal coché 🔈 ; un clic sur la fréquence d'un canal y accorde le récepteur principal. De l'ordre de 1 % d'un cœur par canal.
+- **PSK31 et RTTY** : deux décodeurs de plus (onglet *PSK31 / RTTY* du décodeur, ou un canal des *Décodeurs multiples*). PSK31 : varicode, rattrapage de ±50 Hz, silencieux sur la qualité, S/B et IMD au repos. RTTY : ITA2, 45,45 / 50 / 75 Bd, déplacement 170 / 425 / 850 Hz, inversion. Lignes horodatées, indicatifs mis en couleur, copier et enregistrer ; une étiquette PSK31 ou RTTY de la cascade les ouvre.
 - **Affichage** (palette, contraste et luminosité de la cascade, drapeaux des mémoires), **Mémoires**, **Mesures** et le **nettoyage du son**, comme dans l'onglet SDR (voir [Le récepteur SDR](#le-récepteur-sdr)) ; les mémoires d'ici portent l'étiquette « QO-100 ».
 - **Reprise après un arrêt** : un bandeau propose de reprendre QO-100 où il en était (récepteur, fréquence, mode) ; *Réglages › Satellites › QO-100* le fait tout seul au démarrage. Réception seulement : rien n'est jamais émis.
 - **Balise** (sous-onglet) : la télémesure de la balise médiane décodée — BPSK 400 bit/s, Manchester, codage différentiel ; ses trames codées (256 octets en 13 s : code convolutif r=1/2 K=7, deux Reed-Solomon (160,128), embrouillage, entrelacement 80 × 65 et synchro répartie, le format codé proposé pour AO-40) et ses blocs non codés de 512 octets (synchro 39 15 ED 30, CRC). « Décoder la balise » pose un canal des *Décodeurs multiples* sur 10 489,7485 MHz (la balise à 1,5 kHz, cherchée à ±600 Hz : garder le calage sur la balise) ; chaque trame dit ses octets corrigés, ses symboles faux et son rapport signal/bruit, le texte ou les octets bruts. « Essai » fait passer un signal fabriqué (bruit, décalage, dérive) par le même décodeur. Les trames reçues sont gardées sur le PC (`telemesure/`), rien n'est envoyé.
 - Sous-onglets : **Calage** (sur la balise, à la main ou automatique), **Qualité** (balise sur le bruit, écart, erreur et dérive du LNB sur l'heure, plancher de bruit, la courbe du jour), **Balise**, **Mémoires**, **Poste & chaîne** (convertisseurs), **Pointage**.
+
+<p align="center"><img src="images/pc-qo100-multiples.png" width="49%" alt="Cockpit QO-100 : le menu Décodeurs multiples, jusqu'à quatre canaux, les préréglages FT8 + CW + phonie et FT8 + FT4"></p>
 
 <p align="center"><img src="images/pc-qo100-cockpit.webp" width="100%" alt="Cockpit QO-100, récepteur arrêté : les quatre étapes, le récepteur et son accord, le décodeur, la saisie du carnet, le plan de bande et ses segments sur la cascade, le calage automatique sur la balise"></p>
 
@@ -256,8 +310,9 @@ Tous deux coupés tant qu'on ne les choisit pas dans l'onglet DATV.
 
 ## DATV : émission
 
-Le sous-onglet **Émission** de l'onglet DATV envoie un signal DVB-S2 au transpondeur large bande de QO-100 avec un **ADALM-PLUTO** ou un **bladeRF 2.0** (un **HackRF One** seulement pour les essais en intérieur et sur charge). SatMe fabrique lui-même le DVB-S2 (EN 302 307-1 : QPSK à tous les taux, 8PSK de 3/5 à 9/10, trames normales ou courtes, pilotes, roll-off 0,35 / 0,25 / 0,20) ; **ffmpeg** fait de l'image un flux de transport exactement au débit que porte le MODCOD (`-muxrate`, complété de paquets nuls), en H.264 ou H.265, le nom du service et du fournisseur étant l'indicatif de la station.
+Le sous-onglet **Émission** de l'onglet DATV envoie un signal DVB-S2 (ou DVB-S) au transpondeur large bande de QO-100 avec un **ADALM-PLUTO** ou un **bladeRF 2.0** (un **HackRF One** seulement pour les essais en intérieur et sur charge). SatMe fabrique lui-même le DVB-S2 (EN 302 307-1 : QPSK à tous les taux, 8PSK de 3/5 à 9/10, trames normales ou courtes, pilotes, roll-off 0,35 / 0,25 / 0,20) ; **ffmpeg** fait de l'image un flux de transport exactement au débit que porte le MODCOD (`-muxrate`, complété de paquets nuls), en H.264 ou H.265, le nom du service et du fournisseur étant l'indicatif de la station.
 
+- **Norme** : DVB-S2, ou **DVB-S** (EN 300 421 : dispersion d'énergie, RS(204,188), entrelaceur I=12, code K=7 poinçonné de 1/2 à 7/8, QPSK) pour les récepteurs qui ne lisent que lui. Même carte de visite ; l'adaptation du MODCOD reste en DVB-S2.
 - **L'image** : la mire SatMe avec l'indicatif, une **mire animée** (une image qui bouge sur les barres, un bip chaque seconde), une image fixe, un **fichier vidéo en boucle**, ou une caméra (`/dev/video…`, seulement listée tant qu'aucune émission ne démarre).
 - **Parcourir…** : les dossiers du PC (dossier personnel, supports amovibles, `datv-sources` de SatMe), en lecture seule, avec vignettes ; les fichiers envoyés depuis le navigateur (500 Mo au plus) sont gardés dans `datv-sources`. **Prévisualiser** fait une image avec la même commande, rien n'est émis.
 - **Incrustation** (coupée d'origine) : indicatif, locator, une ligne libre, l'heure UTC et la marque SatMe, dans un coin ou un bandeau, sur l'image.
@@ -357,15 +412,9 @@ Un onglet pensé pour voir la bande, pas seulement la lire :
 <img src="images/pc-ft8-messages.webp" width="49%" alt="FT8, les messages : les conversations entre deux stations, et le fil au fil de l'eau en bulles">
 </p>
 
-## Télémesure BPSK
+## Télémesure
 
-L'onglet **Télémesure** (espace *Modes*) décode la télémesure des satellites au format FUNcube : AO-73 (FUNcube-1) et ceux qui le reprennent, BPSK à 1200 bit/s, les mêmes trames codées que la balise QO-100 (256 octets toutes les 5 s).
-
-- Coché (coupé d'origine), il écoute le **récepteur SDR principal** hors QO-100 : l'accorder en BLU (USB) sur la descente de télémesure (AO-73 : 145,935 MHz), le Doppler suivi par SatMe ; la porteuse est cherchée dans toute la bande audio puis tenue par une boucle de Costas.
-- Chaque trame : satellite et type (orbite entière, haute résolution, message), les **valeurs temps réel** lues d'après le document de descente publié par AMSAT-UK et ses équations (tensions et courants des panneaux et de la batterie, températures, radio, ampli, antennes, état du logiciel), le message s'il y en a un, ou les octets bruts.
-- **Essai** : une trame fabriquée passe par le même décodeur. Les trames reçues sont gardées sur le PC (`telemesure/`) ; l'envoi à l'entrepôt de données FUNcube n'est pas fait.
-
-Ces décodeurs BPSK sont dans le sous-onglet **BPSK**.
+L'onglet **Télémesure** (espace *Modes*) décode ce que les satellites envoient d'eux-mêmes : paquets FSK / GMSK de 1200 à 9600 bit/s, images SSDV, télémesure BPSK au format FUNcube. Trois sous-onglets : **Paquets**, **Images SSDV**, **BPSK**. Tout est coupé d'origine ; réception seulement. Les trames reçues sont gardées sur le PC (`telemesure/`) ; rien ne part sur Internet sans la case *Partager avec SatNOGS DB*.
 
 ### Paquets FSK · GMSK
 
@@ -375,11 +424,24 @@ Le sous-onglet **Paquets** décode les cubesats en FSK ou GMSK de 1200 à 9600 b
 - Le **débit** vient de l'émetteur SatNOGS DB du satellite suivi (FSK, GFSK, GMSK, MSK et sa vitesse) ou se choisit à la main. Les trames AX.100 « mode 5 » (ASM + Golay) et les protocoles propres à un satellite ne sont pas lus.
 - Chaque trame : l'heure, l'en-tête AX.25 et son texte (ou les octets), la fréquence reçue et celle d'émission (Doppler retiré), l'écart rattrapé. Gardées par passage dans `telemesure/paquets/` (une ligne JSON par trame, et un fichier KISS si coché).
 - **Essai** : une salve fabriquée (télémesure et paquets SSDV) passe par un décodeur à part. Le **générateur d'essai** du récepteur SDR a aussi un signal « Paquets 9600 » : salves de télémesure et image SSDV, de bout en bout.
-- **Partager avec SatNOGS DB** (coupé d'origine) : chaque trame reçue d'un satellite suivi est envoyée par le protocole public SiDS, avec l'indicatif de la station, l'heure UTC et la position arrondie à 0,1°. Les trames du générateur et des enregistrements rejoués ne partent jamais.
+- **Partager avec SatNOGS DB** (coupé d'origine) : chaque trame reçue d'un satellite suivi est envoyée par le protocole public SiDS, avec l'indicatif de la station, l'heure UTC et la position arrondie à 0,1° (≈ 10 km). Les trames de l'essai, du générateur et des enregistrements rejoués ne partent jamais.
+
+<p align="center"><img src="images/pc-telemesure-paquets.png" width="100%" alt="Télémesure, sous-onglet Paquets après un essai : des trames AX.25 à 9600 bit/s (G3RUH) marquées essai, et l'image SSDV reconstituée paquet par paquet"></p>
 
 ### Images SSDV
 
 Le sous-onglet **Images SSDV** reconstitue les images SSDV (JPEG en paquets de 256 octets, CRC-32 et Reed-Solomon) trouvées dans les trames décodées, au fil des paquets ; les blocs des paquets manquants restent gris. Les images sont gardées dans `telemesure/ssdv/`.
+
+### BPSK : FUNcube et la balise QO-100
+
+Le sous-onglet **BPSK** décode la télémesure au format FUNcube : AO-73 (FUNcube-1) et ceux qui le reprennent, BPSK à 1200 bit/s, les mêmes trames codées que la balise QO-100 (256 octets toutes les 5 s).
+
+- Coché (*Décoder la télémesure 1200 bit/s*, coupé d'origine), il écoute le **récepteur SDR principal** hors QO-100 : l'accorder en BLU (USB) sur la descente de télémesure (AO-73 : 145,935 MHz), le Doppler suivi par SatMe ; la porteuse est cherchée dans toute la bande audio puis tenue par une boucle de Costas.
+- Chaque trame : satellite et type (orbite entière, haute résolution, message), les **valeurs temps réel** lues d'après le document de descente publié par AMSAT-UK et ses équations (tensions et courants des panneaux et de la batterie, températures, radio, ampli, antennes, état du logiciel), le message s'il y en a un, ou les octets bruts.
+- **Essai** : un signal fabriqué passe par le même décodeur (marqué *essai*). L'envoi à l'entrepôt de données FUNcube n'est pas fait.
+- **Balise QO-100** : la balise médiane à 400 bit/s se décode dans le cockpit QO-100 (sous-onglet *Balise*) ; un lien y mène.
+
+<p align="center"><img src="images/pc-telemesure-funcube.png" width="50%" alt="Télémesure BPSK après un essai : une trame FUNcube-1 décodée, ses valeurs d'énergie, de panneaux, de radio, d'ampli et d'antennes"></p>
 
 ## Phonie → texte
 
@@ -397,18 +459,35 @@ Ce que la station entend en BLU ou en FM — la carte son, le son de la clé SDR
 
 ## Le récepteur SDR
 
+<p align="center"><img src="images/pc-sdr.png" width="100%" alt="Onglet SDR avec le générateur d'essai : 145,800 MHz, la loupe, le spectre de 176 kHz et la cascade avec une porteuse, une CW, une BLU, une FM, un appel FT8 et une image SSTV fabriqués ; à gauche l'écoute, la démodulation et le nettoyage du son"></p>
+
 L'onglet **SDR** (espace **Station**) : l'écoute (le satellite suivi, Doppler corrigé, ou une fréquence), la démodulation (NFM, USB, LSB, AM ; largeur, silencieux, désaccentuation), le spectre et la cascade, le vernier et la loupe. Le spectre : un clic s'y accorde, la molette zoome, glisser déplace la vue dans les 176 kHz que voit le récepteur, les bords de la bande passante se tirent ; la cascade : la molette accorde ; au clavier ← → un pas, ↑ ↓ dix pas. **Réception seulement.**
 
 - **CTCSS** : en NFM, le sous-ton entendu (les 50 tons de 67,0 à 254,1 Hz) est lu sous la voix en moins d'une seconde et affiché à côté du niveau (« CTCSS 67,0 Hz », sa déviation au survol). **Sous-ton** (carte Démodulation, *aucun* d'origine) : le silencieux sur sous-ton — le son (haut-parleur, décodeurs, phonie) ne passe que tant que ce ton est entendu. Réception seulement ; le générateur d'essai peut en mettre un sous son signal FM.
 
 ### Mémoires et plan de bandes
 
-**Mémoires** (et **＋** pour la fréquence écoutée) : des fréquences nommées avec leur mode, leur largeur, une **étiquette** et une couleur.
+**Mémoires** (et **＋** pour la fréquence écoutée) : des fréquences nommées avec leur mode, leur largeur, leur sous-ton CTCSS, une **étiquette** et une couleur, rangées dans des **dossiers** (un niveau de sous-dossiers).
 
 - Un clic sur une mémoire y accorde le récepteur : dans la vue, par le décalage ; au-delà, le récepteur y va et ne suit plus le satellite.
+- Glisser-déposer d'un dossier à l'autre, renommer, supprimer (les mémoires passent au dossier parent), trier, chercher, modifier dans la ligne ; une mémoire peut être **écartée du balayage**.
 - Sur le spectre, de **petits drapeaux** : clic pour s'y accorder, clic droit pour la modifier. Filtre par étiquette.
 - Gardées par SatMe-PC (`memoires-sdr.json`) ; **Exporter** / **Importer** en JSON, sans doublons, d'un PC à l'autre.
 - **Plan de bandes** : un liseré coloré en haut du spectre — IARU Région 1 pour 2 m, 70 cm, 23 cm, 13 cm et 3 cm, et celui de QO-100. Il se remplace bande par bande avec un fichier `plan-bandes.json` dans le dossier de SatMe-PC (le plan d'origine se télécharge depuis **Affichage** comme modèle).
+- **Pile de bandes** : les boutons de bande (2 m, 70 cm, 23 cm, 13 cm, 3 cm / QO-100) gardent les trois dernières fréquences, modes et largeurs restés plus de 5 s ; appuyer encore sur la bande passe de l'une à l'autre.
+
+### Balayage
+
+**Balayage** (onglet SDR), réception seulement :
+
+- **Ce qui est balayé** : les mémoires d'un dossier, une plage canal par canal (pas et mode au choix), ou une plage jugée tranche par tranche sur le spectre large.
+- **S'arrêter** sur un niveau au-dessus du bruit ou sur l'ouverture du silencieux ; **repartir** quand le signal tombe, après un temps, ou à la main ; un **canal prioritaire** revu toutes les N secondes ; les canaux écartés sautés ; les signaux trouvés gardés comme mémoires.
+- Les pas du balayage ne sont jamais écrits dans les réglages ; à l'arrêt, la fréquence est gardée une fois, ou celle d'avant rendue (*revenir à la fréquence d'avant*, et toujours quand rien n'a été trouvé). Refusé quand la DATV, l'ADS-B, QO-100, une sonde ou METEOR tient le récepteur ; un accord à la main l'arrête.
+
+<p align="center">
+<img src="images/pc-sdr-balayage.png" width="49%" alt="Le menu Balayage : mémoires, plage canal par canal ou par le spectre, pas et mode, seuil, reprise, canal prioritaire, et à l'arrêt rester sur le signal ou revenir">
+<img src="images/pc-sdr-mesures.png" width="49%" alt="Mesures du récepteur, la balise QO-100 sur 24 h : son niveau au-dessus du bruit et l'erreur du LNB, du soir au soir">
+</p>
 
 ### Affichage
 
@@ -437,11 +516,11 @@ Le bouton **I/Q** garde les échantillons bruts du récepteur (1,0584 Méch/s : 
 - **Remonter le temps** (coupé d'origine) : les 1 à 10 dernières minutes gardées en permanence dans un fichier de taille fixe sur le disque ; **Garder les dernières minutes** en fait un enregistrement — le signal entendu trop tard n'est pas perdu.
 - **● Enregistrer** : de 1 à 60 minutes au plus.
 - **Rejouer** : le *Récepteur* **Fichier I/Q** prend l'enregistrement comme récepteur ; spectre, démodulation et décodeurs (SSTV, CW, FT8, phonie) travaillent dessus. Pause, position, vitesse ×1 / ×2 / ×4, en boucle, et *tranches FT8* (repartir calé sur les créneaux de 15 s). Des fichiers bruts (`.cu8`, `.cs8`, `.cs16`, `.cf32`) déposés dans le dossier se rejouent aussi.
-- Ce qui est décodé d'un enregistrement est marqué « relecture » (daté de l'enregistrement), jamais pris pour une vraie réception : ni journal, ni planche, ni PSK Reporter.
+- Ce qui est décodé d'un enregistrement est marqué « relecture » (daté de l'enregistrement), jamais pris pour une vraie réception : ni journal, ni planche, ni PSK Reporter, ni SatNOGS, ni « nouvelle image » ; les trames APRS sont comptées, jamais gardées, et aucun enregistrement automatique de passage ne démarre.
 
 ### Générateur d'essai
 
-Le *Récepteur* **Générateur d'essai** : un faux récepteur, sans antenne ni matériel — du bruit (fort, moyen, faible) et des signaux autour de la fréquence écoutée, chacun avec son décalage et son S/B : porteuse, CW manipulée (texte et vitesse au choix), BLU (voix de synthèse), ton FM, appel FT8 dans les créneaux pairs, images SSTV en FM étroite. **Écouter** règle le mode et le décalage pour l'entendre. Rien n'est émis ; les images SSTV s'affichent sans être gardées, rien ne part à PSK Reporter.
+Le *Récepteur* **Générateur d'essai** : un faux récepteur, sans antenne ni matériel — du bruit (fort, moyen, faible) et des signaux autour de la fréquence écoutée, chacun avec son décalage et son S/B : porteuse, CW manipulée (texte et vitesse au choix), BLU (voix de synthèse), ton FM (avec un sous-ton CTCSS au choix), appel FT8 dans les créneaux pairs, images SSTV en FM étroite, PSK31, RTTY, « Paquets 9600 » (télémesure et image SSDV). **Écouter** règle le mode et le décalage pour l'entendre. Rien n'est émis ; les images SSTV s'affichent sans être gardées, rien ne part à PSK Reporter.
 
 ### Mesures
 
@@ -462,6 +541,7 @@ Le *Récepteur* de l'onglet **SDR** choisit le récepteur ; tout marche pareil a
 | **bladeRF 2.0** micro | USB 3, par bladeRF-cli (Linux) | 70 MHz – 6 GHz | DATV, SSTV |
 | **HackRF One** | USB, par hackrf_transfer | — | essais DATV seulement (intérieur, charge) |
 | **MiniTiouner** | USB, par LongMynd (ou un SatMe-Node) | DVB-S / S2 | — |
+| **IC-9700 FI** | le son du poste réglé en FI (réseau ou carte son USB) | la FI de 12 kHz, ±3,6 ou ±7,5 kHz | — |
 
 ### ADALM-PLUTO
 
@@ -504,20 +584,66 @@ L'onglet **Avions** reçoit l'**ADS-B** à 1090 MHz (2 MS/s), coupé tant qu'on 
 - **Sortie SBS-1** (lignes texte « MSG,… ») sur 127.0.0.1:30003, coupée d'origine, pour d'autres programmes de ce PC.
 - **Diffusion par avions** (prévision, rien n'est émis) : un correspondant par son indicatif ou son locator, une bande (10 GHz, 13 cm, 23 cm, 2 m), un rayon, un horizon en minutes, les hauteurs des deux stations et une altitude minimale. Chaque avion est prolongé en ligne droite : la **fenêtre** est le temps qu'il passe dans le volume commun visible des deux stations (horizon radio, terre aux 4/3), avec sa durée, son altitude, les élévations et le Doppler. Un message quand une fenêtre s'ouvre.
 
-L'onglet **Carte** : la carte commune, **sans Internet** (le trait de côte que SatMe porte). Couches : satellites (empreinte, trace au sol), APRS, la sonde suivie, les avions, les stations DATV dont on connaît le locator, les carrés contactés, sa station, jour et nuit, la diffusion par avions, des cercles de distance. *Fond OpenStreetMap* (décoché d'origine) : les tuiles chargées par le navigateur, rien ne passe par SatMe-PC.
+<p align="center"><img src="images/pc-avions.png" width="100%" alt="Onglet Avions (avions simulés pour la capture) : les avions avec indicatif, altitude, vitesse, route, distance et azimut ; à gauche une fenêtre de diffusion par avions ouverte vers JO22 sur 10 GHz"></p>
+
+L'onglet **Carte** : la carte commune, **sans Internet** (le trait de côte que SatMe porte). Couches : satellites (empreinte, trace au sol), APRS, la sonde suivie, les avions, les navires, les stations DATV dont on connaît le locator, les carrés contactés, sa station, jour et nuit, l'aurore prévue, la diffusion par avions, des cercles de distance. *Fond OpenStreetMap* (décoché d'origine) : les tuiles chargées par le navigateur, rien ne passe par SatMe-PC.
+
+<p align="center"><img src="images/pc-carte.png" width="100%" alt="La carte commune : les avions autour de la station, le trajet de diffusion vers JO22, l'ovale d'aurore prévu au nord, les cercles de 500 km"></p>
+
+## Navires (AIS)
+
+L'onglet **Navires** reçoit l'**AIS** à 162 MHz, coupé tant qu'on ne clique pas **Recevoir**. Réception seulement.
+
+- Les deux voies (161,975 et 162,025 MHz) d'une seule clé à 288 kéch/s : messages de position, de voyage, des classes A et B, des balises et aides à la navigation (ITU-R M.1371).
+- **Récepteur** : la clé de l'onglet SDR (prise seulement sur demande) ou une deuxième clé (son propre rtl_tcp). L'AIS ne prend jamais la clé de l'ADS-B, ni l'inverse.
+- **La liste** : MMSI, nom, destination, indicatif, type et taille, position, vitesse, route, distance et azimut, vu il y a, voies ; **Voir sur la carte**.
+- **Sortie NMEA** (lignes `!AIVDM` en UDP vers 127.0.0.1:10110), coupée d'origine, pour un logiciel de navigation de ce PC.
+- **Essai** : des navires simulés autour de la station.
+
+<p align="center"><img src="images/pc-navires.png" width="100%" alt="Onglet Navires en essai : six navires simulés avec MMSI, nom, destination, indicatif, type, position, vitesse, route et distance"></p>
+
+## Météo spatiale
+
+L'onglet **Météo spatiale** (espace *Ciel*) : de quoi juger la propagation et l'aurore.
+
+- **Rien n'est téléchargé** tant que *Récupérer la météo spatiale (Internet)* n'est pas coché. Alors seulement, les produits publics de la NOAA (services.swpc.noaa.gov, et lui seul) sont demandés toutes les 15 min (l'aurore toutes les 30 min) et gardés sur le disque ; au démarrage, les copies gardées sont montrées avec leur âge.
+- **Indice Kp** sur un cadran, ses barres sur trois jours (observé et prévu), le **flux solaire** à 10,7 cm (proposé à la mesure du bruit solaire), les **rayons X** (GOES) sur 6 h, le **vent solaire** (vitesse, Bz, Bt), l'**aurore** prévue (OVATION) ici et à moins de 1200 km, et son ovale sur la carte.
+- **Alertes** : orage géomagnétique (Kp ≥ 5) et éruption solaire (≥ M5), avec ce qu'elles changent pour le trafic ; dites à voix haute si on le coche.
+
+<p align="center"><img src="images/pc-meteo-spatiale.png" width="100%" alt="Météo spatiale (données d'essai) : Kp 5+ sur le cadran, flux solaire 168 SFU, rayons X C2.0, vent solaire 642 km/s, aurore, l'alerte d'orage G1, les barres de Kp sur trois jours et la courbe des rayons X"></p>
 
 ## Montage : la chaîne de la station
 
 L'onglet **Montage** (espace **Station**) dessine la station : l'antenne à gauche, l'ordinateur à droite, la réception en haut, l'émission en bas. Il s'allume avec ce que fait SatMe : en **cyan** ce qui reçoit, en **rouge** ce qui émet, le flux animé le long des câbles, les fréquences dessus (ciel, FI, montée). C'est un dessin : rien n'y démarre une émission, n'ouvre de port ni ne touche à l'alimentation du LNB.
 
-- **Composer** : un *montage tout fait*, **Proposer d'après SatMe** (une chaîne tirée des réglages : poste, rotor, clé SDR, récepteur et émetteur DATV, convertisseurs), ou **✎ Modifier** (appareils et câbles, un à un). Un clic sur un appareil montre ses ports et sa photo. *Complet* ou *Simplifié* (ce qui reçoit ou émet maintenant).
+<p align="center"><img src="images/pc-montage.png" width="100%" alt="Montage d'une station QO-100 (démonstration, émission simulée) : parabole, LNB, convertisseurs, ADALM-PLUTO, ampli 2,4 GHz, IC-9700, MiniTiouner, GPSDO et alimentation, câbles typés avec leurs fréquences ; à droite les fonctions de SatMe, qui tient quel appareil"></p>
+
+- **Composer** : un *montage tout fait*, **Proposer d'après SatMe**, ou **✎ Modifier**. Un clic sur un appareil montre ses ports, ses notes et sa photo. *Complet* ou *Simplifié* (ce qui reçoit ou émet maintenant). Zoom (**+** **−** **0**, Ctrl + molette), déplacement à la souris, mini-carte ; **Exporter** en SVG, en PNG ou en page à imprimer ; une légende des câbles et des états, repliable.
+- **Ce qui vit** : le CAT et le rotor, les récepteurs SDR et DATV, l'IC-9700 par le réseau (son câble réseau allumé, le retard, le lien perdu), la molette USB, les écouteurs, la météo spatiale, les canaux QO-100, l'enregistrement et le générateur, l'ADS-B et l'AIS qui tiennent une clé. Les fonctions hors satellites décochées disparaissent du dessin.
+- **Ce qui manque** : chaque fonction vérifiée de l'antenne à l'écran ; un **danger** est dit fort — par exemple l'alimentation du LNB qui atteindrait une carte SDR à travers un répartiteur (un bloqueur de continu est alors proposé).
+
+### Dessiner et modifier
+
+**✎ Modifier** ouvre la **palette** du catalogue, par groupe : antennes (paraboles, Yagi, X-quad, colinéaire, antenne intérieure, antenne GPS), têtes et convertisseurs (LNB PLL, LNB Twin dont l'Octagon à référence 25 MHz externe, convertisseurs DX Patrol MK3 / MK4 montants et descendants avec leur entrée 10 MHz), amplificateurs (DX Patrol 2,4 GHz 20 / 15 W), filtres, bias-T, injecteur DC + référence, bloqueur de continu, répartiteur, références (GPSDO DX Patrol 10 MHz, GPSDO Leo Bodnar programmable), alimentation 13,8 V, séquenceur, postes, cartes SDR, MiniTiouner, SatMe-Node, carte son, molette USB, rotor, PC, téléphone.
+
+- **Glisser** une pièce sur le dessin ; **tirer un câble** d'un port à l'autre (son type vient des ports : coaxial, réseau, USB, Wi-Fi, audio, CAT, rotor, IQ, référence, alimentation, GPS, Internet) ; la fiche du câble (type, étiquette, supprimer). Chaque pièce a ses options (sortie FI, référence, fréquences).
+- Placement libre ou **Disposition auto** (plusieurs dispositions essayées, celle qui croise le moins gardée) ; **Annuler / Rétablir** (Ctrl+Z / Ctrl+Y), gardés par SatMe-PC ; tout se fait aussi au clavier.
+- **Proposer d'après SatMe** : une chaîne tirée de l'état de SatMe (poste, rotor, cartes SDR, récepteur et émetteur DATV, convertisseurs, oscillateurs de la chaîne QO-100) et des listes du système (USB, cartes son) lues sans rien ouvrir ; chaque pièce *détectée* ou *supposée*, reprise pièce par pièce.
+- Les **boîtes** des services : Wavelog, QRZ.com, PSK Reporter, salon de la bande large, clients rigctld, lien satellite, téléphone appairé, SatMe-Node, « Écouter ici », avec leur état.
+- **Photos** : la photo d'un appareil (8 Mo au plus) est **détourée** toute seule (fond retiré, tolérance réglable, l'original gardé à côté) ; *Photo à la place du dessin* l'affiche dans le schéma, la lueur RX / TX suivant sa forme.
+
+<p align="center"><img src="images/pc-montage-edition.png" width="100%" alt="Montage en modification : la palette du catalogue à gauche (paraboles, Yagi, antenne GPS, rotor, LNB, convertisseurs DX Patrol), le dessin au centre, la liste des appareils et des câbles à droite"></p>
+
+### Les fonctions et les profils
+
 - **Les fonctions** de SatMe (récepteur SDR, DATV, SSTV, FT8, CW, APRS, phonie → texte, METEOR, sondes, émissions) à droite de l'ordinateur, avec le matériel du son : **qui tient quel appareil** (« ADALM-PLUTO → DATV réception »), qui reçoit, qui émet, qui fait ou prend du son. Un **conflit** (une fonction qui voudrait un appareil ou une entrée son déjà pris) s'affiche en rouge avec sa raison et le geste qui le libère.
 - **Fonction** : la chaîne d'une seule fonction, de l'antenne à son écran, chaque maillon en marche, prêt, manquant ou occupé, et ce qu'il manque. Les boutons ne font que de la réception (démarrer ou arrêter un récepteur, choisir une source son).
 - **Profils** : les réglages de réception du moment gardés sous un nom (« SSTV par IC-9700 ») — récepteur SDR (carte, mode, fréquence, suivi, son), entrée son des décodeurs, SSTV, FT8 / FT4, CW, APRS, phonie → texte, récepteur DATV ; jamais rien de l'émission ni l'alimentation du LNB. **Aperçu** liste ce qui changera ; **Appliquer** le fait dans un ordre sûr (arrêts, réglages, récepteurs, carte son, décodeurs). **Refusé pendant une émission.** La réception DATV ne se démarre pas d'ici : l'étape est rappelée.
+- **Schéma** (cockpit QO-100 et DATV, décoché d'origine) : le dessin simplifié par-dessus l'onglet.
 
 ## Réglages
 
-Par catégorie, une liste à gauche : **Ma station** (indicatif, carré, élévation minimale, horizon), **Poste et rotor** (CAT, TH-D72, rotor, convertisseurs, journal Doppler, ADALM-PLUTO), **Satellites** (éléments orbitaux, AMSAT, QO-100 au démarrage), **Interfaces** (lien satellite, rigctld, molette USB), **Services en ligne** (QRZ.com, Wavelog / Cloudlog, skeds hams.at), **Phonie → texte**, **Téléphone**, **Accord fin**, **Émission** (correction I/Q des émetteurs), **Accès à distance** (mot de passe, application, écran allumé), **Sauvegarde** (toute la station dans un fichier, restaurée au démarrage suivant).
+Par catégorie, une liste à gauche : **Ma station** (indicatif, carré, élévation minimale, horizon, fonctions hors satellites), **Poste et rotor** (CAT par USB ou par le réseau, TH-D72, rotor, convertisseurs, journal Doppler, ADALM-PLUTO), **Satellites** (éléments orbitaux, AMSAT, QO-100 au démarrage), **Interfaces** (lien satellite, rigctld, molette USB), **Annonces** (annonces vocales), **Services en ligne** (QRZ.com, Wavelog / Cloudlog, skeds hams.at), **Phonie → texte**, **Téléphone**, **Accord fin**, **Émission** (correction I/Q des émetteurs), **Accès à distance** (mot de passe, application, écran allumé), **Sauvegarde** (toute la station dans un fichier, restaurée au démarrage suivant).
 
 ### Le poste et le rotor
 
@@ -525,7 +651,28 @@ Le modèle du poste (IC-9700, IC-9100, IC-910H, TS-2000, deux postes FT-817 / IC
 
 <p align="center"><img src="images/pc-reglages-materiel.webp" width="100%" alt="Réglages : le poste (CAT) et le rotor, leurs ports et leur connexion"></p>
 
-**Journal Doppler / CAT** (coupé d'origine) : pendant un passage suivi avec le poste connecté, toutes les 5 s l'heure, l'azimut, l'élévation, la distance, le Doppler prévu sur les deux voies, la fréquence que la boucle a écrite et celle relue — un CSV par passage dans `doppler/`, relié au passage dans le Journal. Seul ce que fait déjà la boucle CAT est noté.
+### L'IC-9700 par le réseau
+
+**Réglages › Poste et rotor › Liaison : Réseau (LAN de l'IC-9700)** : SatMe-PC rejoint le serveur réseau intégré de l'IC-9700 (trois ports UDP : contrôle 50001, CI-V 50002, son 50003 ; une seule session à la fois), sans câble USB. Il y prend le **CI-V** (le même pilotage Doppler que par USB) et le **son reçu**, proposé comme source « IC-9700 (réseau) » à l'onglet Son, au SSTV, au FT8, à la phonie et à « Écouter ici ».
+
+- **Sur le poste** : *MENU › SET › Network* : DHCP (ou une adresse fixe), **Network Control : ON**, *Network User1 ID* et son mot de passe, *Network Radio Name*, les ports (50001 d'origine). L'adresse du poste s'affiche dans ce même menu ; la taper dans SatMe-PC avec les ports.
+- **Réception seulement** : aucun son n'est envoyé, la voie d'émission n'est pas demandée, toute commande d'émission CI-V (PTT `1C 00`, accordeur `1C 01`, `17`, `28`, même derrière le préfixe `29`) est refusée. À la déconnexion, la session est toujours rendue au poste ; un lien perdu est repris en arrière-plan.
+- **Son** : PCM 16 bits à 16 kHz d'origine, 8 kHz pour un lien lent ; un tampon de 40 à 300 ms remet les paquets dans l'ordre et redemande ceux qui manquent. La disposition des échantillons (ordre des octets, signé ou non) est reconnue d'après le son lui-même.
+- **Identifiants** : le poste attend une forme codée de l'identifiant et du mot de passe. Le plus simple : capturer sur son réseau le début d'une connexion qui marche (port 50001, fichier `.pcap` ou `.pcapng`), taper l'identifiant et le mot de passe en clair, puis *Identifiants codés › Apprendre le codage depuis une trace* : SatMe-PC y relève les champs codés, apprend le codage et dit si le poste avait accepté cette connexion. Le fichier est lu en mémoire puis oublié ; ni les octets codés ni le texte en clair ne sont affichés ni écrits dans un journal. On peut aussi coller les 16 octets codés (hexadécimal).
+- *Spectre du poste* (option) : le spectre que le poste envoie par CI-V, en bandeau dans l'onglet Suivi ; remis à OFF sur le poste à la déconnexion. *Journal des paquets* : les en-têtes seulement, dans `icom-reseau-trace.txt`.
+
+**Son AF ou FI.** Le menu *Son* dit ce que le poste envoie sur sa sortie son (USB ou réseau) :
+
+- **AF** (réglage d'usine du poste) : le poste démodule, SatMe reçoit son son. Si le poste envoie en fait sa FI, SatMe le remarque (l'énergie haut dans la bande, une FI repliée vers 4 kHz) et le dit : régler la sortie du poste sur AF.
+- **FI** : le poste envoie sa dernière FI, centrée sur 12 kHz, large d'environ 15 kHz ; SatMe la démodule lui-même dans l'onglet SDR, récepteur **« IC-9700 FI »** : cascade, USB, LSB, CW, FM, AM, nettoyage, canaux, enregistrement et décodeurs. Sur le poste : **MENU › SET › Connectors › USB AF/IF Output › Output Select : IF** (AF pour revenir). Par le réseau, le son à 16 kHz replie la FI : ±3,6 kHz utiles autour du cadran ; par la carte son USB (48 kHz) : toute la FI, ±7,5 kHz. Le centre est le cadran RX du poste lu en CAT ; *Recentrer le poste* déplace le décalage RX du poste (réception seulement). *Sens inversé* si les stations montent quand le cadran descend.
+
+<p align="center"><img src="images/pc-reglages-icom-reseau.png" width="50%" alt="Réglages, Poste : l'IC-9700 par le réseau — liaison réseau, son AF, adresse et ports 50001 à 50003, identifiant et mot de passe (vides ici), identifiants codés, son PCM 16 bits 16 kHz, tampon 80 ms"></p>
+
+**Journal Doppler / CAT** (coupé d'origine) : pendant un passage suivi avec le poste connecté, toutes les 5 s l'heure, l'azimut, l'élévation, la distance, le Doppler prévu sur les deux voies, la fréquence que la boucle a écrite et celle relue — un CSV par passage dans `doppler/`, relié au passage dans le Journal. Seul ce que fait déjà la boucle CAT est noté. *Journal détaillé* (décoché d'origine) : le spectre autour de la descente noté pendant les passages suivis, pour le [rapport de passage](#rapport-de-passage).
+
+### Fonctions hors satellites
+
+**Réglages › Ma station** : les onglets qui ne parlent pas de satellites — **Avions**, **Navires**, **Sondes** — ne sont montrés que cochés (décochés d'origine ; au premier démarrage, ceux que la station utilisait déjà restent). Décoché : l'onglet quitte le rail, la palette et les couches de la carte, son adresse affiche un avis et ses démarrages sont refusés ; décoché pendant qu'il reçoit, il s'arrête après confirmation et rend sa clé.
 
 ### Éléments orbitaux
 
@@ -566,6 +713,29 @@ Pour d'autres programmes du PC (un carnet, un tableau de bord, un script) : **R�
 - **Accorde** : *Auto* (l'onglet SDR accorde le récepteur SDR, le cockpit QO-100 la bande étroite ; ailleurs le poste relié en CAT, sinon le SDR en marche), ou toujours le *Poste* (VFO, décalage RX ou TX), le *SDR*, *QO-100*.
 - **Capturer** (option) : SatMe seul lit la molette, le volume du bureau ne bouge plus tant que SatMe-PC tourne ; jamais un clavier complet.
 - **Réception seulement** : la molette ne passe jamais en émission et ne lance rien.
+- **La règle udev** (Linux), si la carte dit la molette illisible — dans un terminal, puis débrancher et rebrancher la molette (le compte doit être dans le groupe `plugdev`) :
+
+  ```
+  echo 'SUBSYSTEM=="input", ATTRS{idVendor}=="2341", ATTRS{idProduct}=="484d", MODE="0660", GROUP="plugdev"' | sudo tee /etc/udev/rules.d/70-satme-molette.rules && sudo udevadm control --reload && sudo udevadm trigger
+  ```
+
+  (la carte donne la même ligne avec les numéros de la molette branchée). Une puce dans le bandeau montre la cible et le pas, et les change.
+
+<p align="center"><img src="images/pc-reglages-interfaces.png" width="80%" alt="Réglages, Interfaces : le lien satellite (WebSocket, port 8095), la fréquence pour les carnets (rigctld, port 4532, réseau local, montée, changement de fréquence), la molette USB (cible, pas, appui, touches A B C)"></p>
+
+### Annonces vocales
+
+**Réglages › Annonces**, coupé d'origine : ce que fait la station, dit à voix haute en français.
+
+- **Quoi** (chaque annonce a sa case) : le satellite suivi N minutes avant l'AOS, son AOS et son LOS (élévation maximale), une émission DATV / SSTV / I/Q qui commence ou s'arrête et « Émission en cours » toutes les N minutes, LEILA sur QO-100, une nouvelle image SSTV, son propre indicatif décodé en FT8 / FT4 ou en CW, la DATV accrochée ou perdue et l'indicatif lu dans l'image, une fenêtre de diffusion par avion, le rotor en butée ou perdu, le récepteur SDR arrêté de lui-même, le pas de la molette.
+- **Comment** : les nombres en toutes lettres, les indicatifs épelés (Alfa, Bravo…), les fréquences chiffre par chiffre ; trois niveaux de détail ; une même phrase jamais deux fois en 30 s, trois en attente au plus.
+- **Par où** : la voix du navigateur (une voix française locale), ou une voix du PC (speech-dispatcher, eSpeak NG, Piper), le haut-parleur SDR baissé pendant ce temps. **Tester** ; un haut-parleur dans le bandeau coupe tout de suite.
+
+<p align="center"><img src="images/pc-reglages-annonces.png" width="80%" alt="Réglages, Annonces : voix, détail, vitesse, volume, minutes avant le passage, indicatifs épelés, et une case par événement"></p>
+
+### Correction I/Q des émetteurs
+
+**Réglages › Émission** : pour chaque carte d'émission (ADALM-PLUTO, bladeRF, HackRF, par son numéro de série), la fuite de l'oscillateur, l'image et l'erreur du quartz corrigées juste avant l'émetteur, pour la DATV comme pour la SSTV. Neutre d'origine : les échantillons et l'oscillateur exactement comme avant. Des curseurs (appliqués en direct à une émission de cette carte), un ton d'essai et une **calibration automatique en boucle fermée**, en intérieur seulement (1245 MHz, −40 dB au plus, VGA du HackRF à 0) : un autre récepteur SDR de la station entend le ton, la fuite et l'image, et SatMe cherche le fond ; le récepteur prêté par l'onglet SDR est rendu comme il était.
 
 ### Accès à distance
 
@@ -575,6 +745,7 @@ Pour d'autres programmes du PC (un carnet, un tableau de bord, un script) : **R�
 - Une session dure **30 jours** (un cookie). **Cinq essais faux** depuis une adresse : une minute d'attente, puis le double après chaque série (une heure au plus).
 - Le mot de passe n'est gardé qu'**haché** (PBKDF2) dans `acces-distant.properties`, jamais dans la sauvegarde ; le changer ferme les autres sessions (**Fermer les autres sessions** aussi). Une émission lancée à distance demande les mêmes confirmations qu'ici.
 - **Sans HTTPS**, le mot de passe et la page passent en clair : un réseau de confiance seulement (ou un tunnel chiffré).
+- **Pare-feu** (Linux, ufw) : ouvrir le port de la page au réseau de la maison seulement, une fois, dans un terminal : `sudo ufw allow from 192.168.1.0/24 to any port 8090 proto tcp` (adapter la plage). Pour l'appairage du téléphone par QR code, le port suivant : `sudo ufw allow from 192.168.1.0/24 to any port 8091 proto tcp`. **De l'extérieur**, passer par un **VPN** vers la maison (et autoriser la plage du VPN de la même façon) ; ne jamais ouvrir le port sur Internet.
 - **Sur cet appareil** : *Garder l'écran allumé* et **Installer l'application** (une fenêtre à part, une icône), pour ce navigateur ; les navigateurs ne les permettent que sur http://localhost ou en HTTPS.
 
 ### Mode distant
@@ -605,7 +776,9 @@ Pour la page ouverte de loin (un VPN, une autre maison) : le bouton **Distant** 
 - **Le CAT n'émet jamais** (`TX`, `KY` refusés par le pilote TS-2000). L'APRS par un TNC KISS n'émet que quand on envoie soi-même un message, sa position ou un statut.
 - **L'alimentation LNB du MiniTiouner est coupée** tant qu'on ne la choisit pas.
 - **L'ADALM-PLUTO et le bladeRF 2.0 n'émettent que depuis les onglets DATV et SSTV**, sur un clic confirmé, dans les règles ci-dessus ; leurs récepteurs n'écrivent jamais le côté émission. DATV et SSTV n'émettent jamais en même temps.
-- **Les interfaces ne passent jamais en émission** : rigctld refuse le PTT, la molette USB n'accorde que la réception, l'ADS-B, les mesures et le générateur ne font que recevoir, les profils du Montage ne s'appliquent pas pendant une émission ; le balayage du Soleil ne bouge le rotor qu'après confirmation.
+- **L'IC-9700 par le réseau ne fait que recevoir** : la voie son d'émission n'est jamais demandée, les commandes CI-V d'émission sont refusées avant d'atteindre le poste.
+- **Rien ne part sur Internet sans une case cochée** : météo spatiale, partage SatNOGS, PSK Reporter, fond OpenStreetMap, salon de la bande large, envoi au carnet en ligne — tous coupés d'origine.
+- **Les interfaces ne passent jamais en émission** : rigctld refuse le PTT, la molette USB n'accorde que la réception, l'ADS-B, l'AIS, le balayage, les mesures et le générateur ne font que recevoir, les profils du Montage ne s'appliquent pas pendant une émission ; le balayage du Soleil ne bouge le rotor qu'après confirmation.
 - **Le HackRF One n'émet que depuis l'onglet DATV**, sur un clic confirmé, en essai en intérieur ou sur charge, son amplificateur RF toujours coupé et son gain à 20 dB au plus ; jamais vers QO-100.
 
 ## Avant le premier essai
@@ -613,3 +786,5 @@ Pour la page ouverte de loin (un VPN, une autre maison) : le bouton **Distant** 
 - **Linux** : être dans le groupe `dialout` (`sudo usermod -aG dialout $USER`, puis se reconnecter).
 - **Windows** : installer le pilote de l'adaptateur (CP210x, FTDI, CH340) ; le poste apparaît en `COM3`, `COM4`…
 - Commencer avec le **poste simulé** et le **rotor simulé**, puis brancher le vrai matériel un élément à la fois.
+- Pour essayer **une deuxième copie** de SatMe-PC à côté de la station (autre port, autre dossier), la lancer avec `SATME_SANS_SERIE=1` (ou `-Dsatme.sansSerie=true`) : elle n'ouvre alors aucun port série, et ne peut pas lever RTS/DTR sur un poste ou une carte.
+- Sans matériel du tout : le **générateur d'essai** du récepteur SDR, et les boutons **Essai** de la télémesure et des navires.
