@@ -67,6 +67,8 @@ class SdrNoeudPc(
     )
 
     @Volatile var etat = Etat(); private set
+    /** Bytes sent to SatMe-PC so far (the stream's throughput, for the health page). */
+    val octets = java.util.concurrent.atomic.AtomicLong()
 
     /** The device held now ("bladerf", "pluto"), or null. */
     val tient: String? get() = etat.takeIf { it.actif }?.appareil
@@ -101,6 +103,7 @@ class SdrNoeudPc(
             try { diffuse(s, src, app, etages, centre, gain, ppm, c, o) } finally { runCatching { src.close() } }
         } finally {
             synchronized(verrou) { s.fini = true; if (courante === s) courante = null; verrou.notifyAll() }
+            if (etat.actif) println("SDR : " + etat.client + " parti, " + nomAppareil(app) + " rendu")
             etat = etat.copy(actif = false, client = "")
         }
     }
@@ -124,6 +127,7 @@ class SdrNoeudPc(
             .put("etages", etages).put("appareil", app).put("libelle", "SDR du SatMe-Node · $libelle").put("bloc", BLOC))
         val e = FluxNoeud.Ecrivain(o, horloge)
         etat = Etat(true, c.inetAddress?.hostAddress.orEmpty(), app, libelle, centre, debit, gain0, depuisMs = horloge())
+        println("SDR : " + nomAppareil(app) + " prêté à " + etat.client + " (" + debit + " S/s)")
         val dernierVu = java.util.concurrent.atomic.AtomicLong(horloge())
         // The client's lines: tuning, gain, correction; its « still there ».
         val lecture = Thread({
@@ -152,7 +156,7 @@ class SdrNoeudPc(
             try {
                 while (!s.fin) {
                     val f = file.poll(200, TimeUnit.MILLISECONDS)
-                    if (f != null) { e.iq(f.first, f.first.size, f.second, debit); etat = etat.copy(trames = e.ecrites) }
+                    if (f != null) { e.iq(f.first, f.first.size, f.second, debit); octets.addAndGet(2L * f.first.size + FluxNoeud.ENTETE); etat = etat.copy(trames = e.ecrites) }
                     val t = horloge()
                     if (t - dernierEtat >= 1000) {
                         dernierEtat = t
@@ -205,10 +209,16 @@ class SdrNoeudPc(
     }
 
     private fun refus(o: OutputStream, pourquoi: String) {
+        println("SDR refusé : $pourquoi")
         etat = etat.copy(erreur = pourquoi)
         val b = JSONObject().put("ok", false).put("erreur", pourquoi).toString().toByteArray()
         o.write("HTTP/1.1 409 Conflict\r\nContent-Type: application/json; charset=utf-8\r\nContent-Length: ${b.size}\r\nConnection: close\r\n\r\n".toByteArray())
         o.write(b); o.flush()
+    }
+
+    /** Ends the stream now (the board let go); the PC's source tries again by itself. */
+    fun arrete() {
+        synchronized(verrou) { courante?.let { a -> a.fin = true; runCatching { a.socket.close() } } }
     }
 
     /** For the node's API and page. */

@@ -110,6 +110,17 @@ class ClientNoeud(private val stockage: Stockage) {
         if (x.message?.contains("404") == true) JSONObject().put("ancien", true) else throw x
     }
 
+    /** The node's health ([SanteNoeud]); an older node: null. */
+    fun sante(): JSONObject? = runCatching { JSONObject(get("/noeud/sante")) }.getOrElse { x ->
+        if (x.message?.contains("404") == true) null else throw x
+    }
+
+    /** A supervision action on the node ("datv-arrete", "sdr-arrete", "tx-arrete", "relance"); null when done, else why not. */
+    fun action(quoi: String): String? = runCatching {
+        val r = post("/noeud/action?quoi=" + java.net.URLEncoder.encode(quoi, "UTF-8"))
+        if (r.optBoolean("ok")) null else r.optString("erreur", "le node refuse")
+    }.getOrElse { "node injoignable : " + (it.message ?: "") }
+
     /** Sets which device the node lends as its SDR (receive only); null when done, else why not. */
     fun choisitSdr(appareil: String): String? = runCatching {
         val r = post("/noeud/sdr/appareil?appareil=" + java.net.URLEncoder.encode(appareil, "UTF-8"))

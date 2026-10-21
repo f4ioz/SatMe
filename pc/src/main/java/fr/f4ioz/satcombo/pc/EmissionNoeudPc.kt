@@ -147,6 +147,7 @@ class EmissionNoeudPc(
             if (refusTx != null) return refuse(o, refusTx)
             tx = e; socket = c
             etat = Etat(true, c.inetAddress?.hostAddress.orEmpty(), app, hz, gainNoeud, horloge())
+            println("ÉMISSION : " + SdrNoeudPc.nomAppareil(app) + " sur " + hz + " Hz, gain " + gainNoeud + " dB, pour " + etat.client)
         }
         c.soTimeout = 0
         c.tcpNoDelay = true
@@ -212,7 +213,7 @@ class EmissionNoeudPc(
         synchronized(this) {
             if (tx === e) { tx = null; socket = null }
             val pe = e.etatCommun()
-            if (etat.emet) etat = etat.copy(emet = false, raison = pe.raison.ifBlank { raison }, erreur = pe.erreur)
+            if (etat.emet) { etat = etat.copy(emet = false, raison = pe.raison.ifBlank { raison }, erreur = pe.erreur); println("ÉMISSION arrêtée : " + etat.raison) }
         }
     }
 
@@ -224,6 +225,7 @@ class EmissionNoeudPc(
     }
 
     private fun refuse(o: OutputStream, pourquoi: String) {
+        println("ÉMISSION refusée : $pourquoi")
         etat = etat.copy(raison = "", erreur = pourquoi)
         val b = JSONObject().put("ok", false).put("erreur", pourquoi).toString().toByteArray()
         o.write("HTTP/1.1 409 Conflict\r\nContent-Type: application/json; charset=utf-8\r\nContent-Length: ${b.size}\r\nConnection: close\r\n\r\n".toByteArray())

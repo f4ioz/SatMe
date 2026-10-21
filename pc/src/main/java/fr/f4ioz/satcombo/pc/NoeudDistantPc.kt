@@ -43,12 +43,16 @@ class NoeudDistantPc(
     @Volatile var materiel: JSONObject? = null; private set
     @Volatile var materielMs = 0L; private set
     @Volatile var erreur = ""; private set
+    /** The node's last health ([fr.f4ioz.satcombo.datv.SanteNoeud]), null for an older node or before the first read. */
+    @Volatile var sante: JSONObject? = null; private set
 
-    /** Reads the node's devices now (blocking, off the page's thread). */
+    /** Reads the node's devices and health now (blocking, off the page's thread). */
     fun lit(): JSONObject? {
-        if (!client.associe) { materiel = null; erreur = ""; return null }
-        return runCatching { client.materiel() }.onSuccess { materiel = it; materielMs = horloge(); erreur = "" }
-            .onFailure { erreur = it.message ?: "node injoignable" }.getOrNull()
+        if (!client.associe) { materiel = null; sante = null; erreur = ""; return null }
+        return runCatching { client.materiel() }.onSuccess { m ->
+            materiel = m; materielMs = horloge(); erreur = ""
+            sante = runCatching { client.sante() }.getOrNull()
+        }.onFailure { erreur = it.message ?: "node injoignable" }.getOrNull()
     }
 
     /** Read again when older than a few seconds (a page asking). */
@@ -74,14 +78,30 @@ class NoeudDistantPc(
 
     /** For the page: what was last read, a new read started in the background when it is old (the page never waits for the node). */
     fun jsonPage(): JSONObject {
-        if (client.associe && horloge() - materielMs > 4_000L && lecture?.isAlive != true)
+        val t = horloge()
+        // Every 3 s while a page asks (a failed read too: « injoignable » until it answers again).
+        if (client.associe && t - essaiMs > 3_000L && lecture?.isAlive != true) {
+            essaiMs = t
             lecture = Thread({ lit() }, "satme-noeud-materiel").apply { isDaemon = true; start() }
+        }
         if (!client.associe) materiel = null
         return json().put("ok", true)
     }
 
-    /** The page's settings: the stream's weight, « émettre par le node », the node's SDR device (asked to the node). */
+    @Volatile private var essaiMs = 0L
+
+    /**
+     * The page's settings: the stream's weight, « émettre par le node », the
+     * node's SDR device (asked to the node); a supervision action ([q] « quoi »:
+     * a service stopped, the node's SatMe started again).
+     */
     fun action(q: Map<String, String>): JSONObject {
+        q["quoi"]?.let { quoi ->
+            if (!client.associe) return JSONObject().put("ok", false).put("erreur", "aucun SatMe-Node associé")
+            client.action(quoi)?.let { return JSONObject().put("ok", false).put("erreur", it) }
+            essaiMs = 0L
+            return json().put("ok", true)
+        }
         q["etages"]?.toIntOrNull()?.let { etages = it }
         q["tx"]?.let { emissionParNoeud = it == "1" }
         q["sdr"]?.let { a ->
@@ -97,6 +117,10 @@ class NoeudDistantPc(
         return JSONObject().put("associe", client.associe).put("adresse", client.adresse).put("nom", client.nom)
             .put("etages", etages).put("emissionParNoeud", emissionParNoeud).put("erreur", erreur)
             .put("materiel", m ?: JSONObject.NULL).put("age", if (m == null) JSONObject.NULL else (horloge() - materielMs) / 1000)
+            .put("sante", sante ?: JSONObject.NULL)
+            .put("alertes", fr.f4ioz.satcombo.datv.SanteNoeud.json(if (!client.associe) emptyList()
+                else if (erreur.isNotBlank()) fr.f4ioz.satcombo.datv.SanteNoeud.alertes(null, erreur)
+                else fr.f4ioz.satcombo.datv.SanteNoeud.alertes(sante)))
     }
 
     companion object {

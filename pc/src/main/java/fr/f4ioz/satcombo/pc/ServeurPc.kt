@@ -180,7 +180,49 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
     private var socket: ServerSocket? = null
     val portReel: Int get() = socket?.localPort ?: port
 
+    /** Who drives the transmissions now, for every client ([fr.f4ioz.satcombo.datv.ControleEmission]). */
+    val controle = fr.f4ioz.satcombo.datv.ControleEmission()
+
+    private val ROUTES_TX = setOf("/api/datv/emission/demarre", "/api/datv/emission/vie", "/api/datv/emission/arrete",
+        "/api/sstv/emission/demarre", "/api/sstv/emission/vie", "/api/sstv/emission/arrete")
+
+    private fun emetQuelqueChose() = emission?.etat?.emet == true || emissionSstv?.etat?.emet == true
+
+    /** A transmission route through the controller's rules, then as before. */
+    private fun controleTx(chemin: String, methode: String, q: Map<String, String>, cl: fr.f4ioz.satcombo.datv.ControleEmission.Client): JSONObject {
+        fun etat() = controle.json(cl).put("ok", true)
+            .put("datv", emission?.etat?.let { e -> JSONObject().put("emet", e.emet).put("khz", e.frequenceKhz).put("parNoeud", e.parNoeud).put("emetteur", e.emetteur.libelle) } ?: JSONObject.NULL)
+            .put("sstv", emissionSstv?.etat?.let { e -> JSONObject().put("emet", e.emet).put("hz", e.frequenceHz).put("parNoeud", e.parNoeud).put("emetteur", e.emetteur.libelle) } ?: JSONObject.NULL)
+        if (chemin == "/api/emission/controle") {
+            if (methode == "POST" && q["confirme"] == "1") controle.confirme(cl)
+            return etat()
+        }
+        val quoi = if (chemin.startsWith("/api/datv/")) "DATV" else "SSTV"
+        return when {
+            chemin.endsWith("/demarre") -> {
+                controle.refus(cl, emetQuelqueChose())?.let { return JSONObject().put("ok", false).put("erreur", it).put("controle", controle.json(cl)) }
+                val r = runCatching { action(chemin, q) }.getOrElse { JSONObject().put("ok", false).put("erreur", it.message ?: "erreur") }
+                if (r.optBoolean("ok", true)) controle.prend(cl, quoi)
+                r
+            }
+            // Only the controller's « still there » keeps the transmission.
+            chemin.endsWith("/vie") -> if (controle.vie(cl)) action(chemin, q) else JSONObject().put("ok", false).put("erreur", "un autre client pilote l'émission")
+            // STOP: always, from anyone.
+            else -> action(chemin, q).also { if (!emetQuelqueChose()) controle.libere() }
+        }
+    }
+
     fun demarre() {
+        // A remote controller gone silent: the transmissions stopped within its watchdog; nobody holds once all stopped.
+        thread(isDaemon = true, name = "satme-controle-tx") {
+            while (socket?.isClosed != true) {
+                runCatching {
+                    if (!emetQuelqueChose()) controle.libere()
+                    else controle.perdu()?.let { r -> emission?.arrete(r); emissionSstv?.arrete(r); controle.libere() }
+                }
+                Thread.sleep(200)
+            }
+        }
         val s = ServerSocket()
         s.reuseAddress = true
         s.bind(if (reseau) InetSocketAddress(port) else InetSocketAddress(InetAddress.getLoopbackAddress(), port))
@@ -585,6 +627,12 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 RequeteHttp.corps(c.getInputStream(), r, max)
             }
             envoie(sortie, rep.statut, rep.type, rep.corps, rep.entetes); return
+        }
+        // The transmissions: one controller at a time, its heartbeat, STOP from anyone ([ControleEmission]).
+        if (chemin == "/api/emission/controle" || (r.methode == "POST" && chemin in ROUTES_TX)) {
+            val cl = fr.f4ioz.satcombo.datv.ControleEmission.Client(q["client"].orEmpty().take(40).ifBlank { "ip:" + c.inetAddress?.hostAddress },
+                !local, c.inetAddress?.hostAddress.orEmpty())
+            envoie(sortie, "200 OK", "application/json; charset=utf-8", controleTx(chemin, r.methode, q, cl).toString().toByteArray()); return
         }
         if (r.methode == "POST") {
             val res = runCatching { action(chemin, q) }.getOrElse { JSONObject().put("ok", false).put("erreur", it.message ?: "erreur") }

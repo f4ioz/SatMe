@@ -579,7 +579,8 @@ private fun mainNoeud(port: Int, dossier: File) {
     val txN = EmissionNoeudPc(stockage, EmissionNoeudPc.reels(stockage),
         occupe = { a -> datvTient(a) ?: if (sdr?.tient == a) SdrNoeudPc.nomAppareil(a) + " sert de SDR à SatMe-PC : l'arrêter d'abord" else null })
     sdr = sdrN; tx = txN
-    val n = NoeudPc(datv, stockage, port, sdr = sdrN, tx = txN)
+    JournalNoeud.capture()
+    val n = NoeudPc(datv, stockage, port, sdr = sdrN, tx = txN, sante = SanteNoeudPc(datv, sdrN, txN))
     n.demarre()
     println("SatMe-Node ${versionPc()} « ${n.nom} » : port ${n.portReel}")
     println("  LongMynd   : " + (datv.programme() ?: "INTROUVABLE (le compiler, ou --dossier/chemin)"))

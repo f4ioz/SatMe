@@ -43,6 +43,12 @@ class NoeudPc(
     val sdr: SdrNoeudPc? = null,
     /** Its transmitter driven from SatMe-PC ([EmissionNoeudPc]), behind its own guards. */
     val tx: EmissionNoeudPc? = null,
+    /** Its health ([SanteNoeudPc]), for SatMe-PC's « Node » panel. */
+    val sante: SanteNoeudPc? = null,
+    /** Run by systemd, which starts it again when it ends in error: « relancer » allowed. */
+    private val relancable: () -> Boolean = { SanteNoeudPc.sousSystemd() },
+    /** Ends the process for systemd to start it again (never in the tests). */
+    private val quitte: () -> Unit = { Runtime.getRuntime().halt(3) },
 ) {
     private var socket: ServerSocket? = null
     val portReel: Int get() = socket?.localPort ?: port
@@ -149,6 +155,13 @@ class NoeudPc(
                 t.sert(c, q, o)
             }
             "/noeud/tx/arrete" -> { tx?.arrete(); json(o, JSONObject().put("ok", true)) }
+            // Its health: system, network, boards, services, last log lines (read only).
+            "/noeud/sante" -> json(o, sante?.json() ?: JSONObject().put("ok", false))
+            // A service stopped, or the node's SatMe started again (by systemd); never the OS.
+            "/noeud/action" -> {
+                if (methode != "POST") { envoie(o, "405 Method Not Allowed", "text/plain", ByteArray(0)); return }
+                json(o, action(q["quoi"].orEmpty()))
+            }
             "/noeud/datv/ts" -> {
                 // The stream as it comes, for as long as the client reads it.
                 c.soTimeout = 0
@@ -166,6 +179,25 @@ class NoeudPc(
             }
             else -> envoie(o, "404 Not Found", "text/plain", "non".toByteArray())
         }
+    }
+
+    /** One supervision action from SatMe-PC: stops only, or SatMe started again by systemd. */
+    fun action(quoi: String): JSONObject {
+        println("Action demandée : $quoi")
+        when (quoi) {
+            "datv-arrete" -> datv.arrete()
+            "sdr-arrete" -> sdr?.arrete()
+            "tx-arrete" -> tx?.arrete("arrêt demandé depuis SatMe-PC (supervision)")
+            "relance" -> {
+                if (!relancable()) return JSONObject().put("ok", false).put("erreur", "SatMe-Node lancé à la main (pas par son service systemd) : rien pour le relancer")
+                tx?.arrete("SatMe-Node relancé")
+                runCatching { datv.arrete() }
+                Thread({ Thread.sleep(600); quitte() }, "satme-noeud-relance").apply { isDaemon = true; start() }
+                return JSONObject().put("ok", true).put("message", "SatMe-Node se relance (quelques secondes)")
+            }
+            else -> return JSONObject().put("ok", false).put("erreur", "action inconnue")
+        }
+        return JSONObject().put("ok", true)
     }
 
     /** The node's devices and their roles: DATV receiver, SDR receiver, transmitter. */

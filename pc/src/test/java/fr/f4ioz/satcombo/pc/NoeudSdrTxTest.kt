@@ -362,6 +362,44 @@ class NoeudSdrTxTest {
     }
 
     @Test
+    fun la_sante_du_node_et_ses_actions() {
+        // A Pi of a few files: hot, throttled, the bladeRF on USB 2.
+        val r = File(dossier, "racine")
+        File(r, "proc").mkdirs(); File(r, "sys/class/thermal/thermal_zone0").mkdirs()
+        File(r, "proc/uptime").writeText("7200.5 100\n"); File(r, "proc/loadavg").writeText("1.20 0.80 0.50 2/300 99\n")
+        File(r, "sys/class/thermal/thermal_zone0/temp").writeText("82000\n")
+        File(r, "proc/meminfo").writeText("MemTotal: 4000000 kB\nMemAvailable: 3000000 kB\n")
+        val u = File(r, "sys/bus/usb/devices/2-1").apply { mkdirs() }
+        File(u, "idVendor").writeText("2cf0\n"); File(u, "idProduct").writeText("5250\n"); File(u, "speed").writeText("480\n")
+        val relances = java.util.concurrent.atomic.AtomicInteger()
+        val datv = DatvPc(stockageNoeud, dossier, lecteursLocaux = false)
+        val n = NoeudPc(datv, stockageNoeud, 0, nom = "sante", sdr = sdrNoeud, tx = txNoeud,
+            sante = SanteNoeudPc(datv, sdrNoeud, txNoeud, "essai", racine = r, vcgencmd = { "throttled=0x4\n" }),
+            relancable = { true }, quitte = { relances.incrementAndGet() }).also { it.demarre() }
+        try {
+            val k = JSONObject(lit("/noeud/entrer?code=" + n.code, port = n.portReel).second).getString("cle")
+            assertEquals(403, lit("/noeud/sante", port = n.portReel).first)
+            val s = JSONObject(lit("/noeud/sante?cle=$k", port = n.portReel).second)
+            assertEquals("essai", s.getString("version"))
+            assertEquals(82.0, s.getJSONObject("systeme").getDouble("temperature"), 0.01)
+            assertEquals("USB 2", s.getJSONArray("usb").getJSONObject(0).getString("vitesse"))
+            assertEquals("arret", s.getJSONObject("services").getJSONObject("tx").getString("etat"))
+            val a = s.getJSONArray("alertes").toString()
+            assertTrue(a, a.contains("surchauffe") && a.contains("bridé") && a.contains("USB 3"))
+            // Actions: by POST with the key; a service stopped, SatMe started again (by systemd: here a counter).
+            assertEquals(405, lit("/noeud/action?cle=$k&quoi=relance", port = n.portReel).first)
+            assertTrue(JSONObject(lit("/noeud/action?cle=$k&quoi=sdr-arrete", post = true, port = n.portReel).second).getBoolean("ok"))
+            assertFalse(JSONObject(lit("/noeud/action?cle=$k&quoi=reboot", post = true, port = n.portReel).second).getBoolean("ok"))
+            assertTrue(JSONObject(lit("/noeud/action?cle=$k&quoi=relance", post = true, port = n.portReel).second).getBoolean("ok"))
+            attends(3_000) { relances.get() == 1 }
+        } finally { n.arrete() }
+        // Started by hand (no systemd): nothing to start it again, refused.
+        val m = NoeudPc(datv, stockageNoeud, 0, sdr = sdrNoeud, relancable = { false }, quitte = { relances.incrementAndGet() })
+        assertFalse(m.action("relance").getBoolean("ok"))
+        assertEquals(1, relances.get())
+    }
+
+    @Test
     fun le_sdr_et_l_emetteur_ne_prennent_pas_la_meme_carte() {
         autorise()
         sdrNoeud.appareil = "pluto"

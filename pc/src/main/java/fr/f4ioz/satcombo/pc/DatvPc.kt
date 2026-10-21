@@ -412,6 +412,9 @@ class DatvPc(
 
     fun abonne(): ArrayBlockingQueue<ByteArray> = ArrayBlockingQueue<ByteArray>(1024).also { abonnes += it }
 
+    /** Network clients reading the stream now. */
+    val clients: Int get() = abonnes.size
+
     fun desabonne(q: ArrayBlockingQueue<ByteArray>) { abonnes -= q }
 
     // ------------------------------------------------------------ a SatMe-Node receiving for us
