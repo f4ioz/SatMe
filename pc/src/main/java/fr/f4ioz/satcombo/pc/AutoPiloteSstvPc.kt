@@ -388,8 +388,17 @@ class AutoPiloteSstvPc(
             val e = r.etat.value
             if (e.rotorConnected) { r.setRotorEnabled(true); return "rotor : suit le satellite" }
             if (!connecter) return "rotor non connecté"
-            // rotctld (the network) or the simulated mast only: never a serial port by itself.
-            if (e.rotorLink != "ROTCTLD" && !e.rotorSim) return "rotor sur port série : à connecter à la main"
+            if (e.rotorLink != "ROTCTLD" && !e.rotorSim) {
+                // A serial controller only when it is the very one the owner connected before: the port at the
+                // saved index must carry the saved serial number (an index alone may now be a rig — RTS/DTR key them).
+                val cle = station.settings.rotorUsbCle.trim()
+                if (cle.isEmpty()) return "rotor sur port série : connecte-le une fois à la main (son port sera alors reconnu)"
+                val l = station.ports.liste()
+                val pt = l.getOrNull(e.rotorUsbIndex)
+                if (pt == null || pt.cle != cle) return "rotor : son port USB (" + cle + ") n'est pas à sa place, à connecter à la main"
+                r.connectRotor(); r.setRotorEnabled(true)
+                return "rotor : connexion par " + pt.libelle + ", suit le satellite"
+            }
             r.connectRotor(); r.setRotorEnabled(true)
             return "rotor : connexion " + (if (e.rotorSim) "simulée" else "rotctld") + ", suit le satellite"
         }
