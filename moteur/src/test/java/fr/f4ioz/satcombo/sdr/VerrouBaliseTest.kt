@@ -48,7 +48,7 @@ class VerrouBaliseTest {
 
     /** Runs the chain over the synthetic stream; returns the slot's audio (44.1 kHz). */
     private fun ecoute(gigueRms: Double, verrou: Boolean, balise: Boolean = true, deriveHzS: Double = 5.0,
-                       sauteS: Double = -1.0): Ecoute {
+                       erreurHz: Double = 0.0, calageSuit: Boolean = false): Ecoute {
         val total = avanceS + 15.0
         val j = gigue(gigueRms, total, 5)
         val alea = java.util.Random(11)
@@ -77,14 +77,23 @@ class VerrouBaliseTest {
         // The stream's clock: the slot starts at avanceS on a 15 s boundary.
         val debutTranche = 1_792_603_530_000L
         chaine.verrou.horloge = { debutTranche + ((i / rate - avanceS) * 1000).toLong() }
+        // The slow calibration (as on the PC): following the LNB's error, it writes in the last
+        // second of each slot; the dongle's fine tuning and the beacon's expected place move with it.
+        var calage = 0.0
+        var dernierCreneau = -1L
         while (i < nTotal) {
             val n = minOf(bloc, nTotal - i)
-            // The calibration moved once (the dongle retuned by 300 Hz, the expected place with it).
-            val decale = if (sauteS >= 0 && i / rate >= sauteS) 300.0 else 0.0
-            chaine.verrou.decalageHz = baliseHz - 150.0 + decale
+            val tb = i / rate
+            val horsTranche = Math.floorMod(((tb - avanceS) * 1000).toLong(), 15_000L)
+            val creneau = Math.floorDiv(((tb - avanceS) * 1000).toLong(), 15_000L)
+            if (calageSuit && horsTranche >= 14_200L && creneau != dernierCreneau) {
+                dernierCreneau = creneau; calage = erreurHz + deriveHzS * tb
+            }
+            chaine.offsetHz = canalHz + calage
+            chaine.verrou.decalageHz = baliseHz - 150.0 + calage
             for (k in 0 until n) {
                 val t = (i + k) / rate
-                val fj = j[(t * 100).toInt()] + deriveHzS * t - decale
+                val fj = j[(t * 100).toInt()] + erreurHz + deriveHzS * t
                 phaseJ += 2 * PI * fj / rate
                 var re = 0.0; var im = 0.0
                 // The BPSK beacon, its transitions smoothed over a symbol.
@@ -151,10 +160,16 @@ class VerrouBaliseTest {
     }
 
     @Test
-    fun un_calage_qui_bouge_est_repris_sans_a_coup() {
-        // The calibration moves 1 s into the stream: the lock lets go, finds the beacon again, holds.
-        val e = ecoute(12.0, verrou = true, sauteS = 1.0)
-        assertTrue(e.chaine.verrou.verrouille)
-        assertTrue(lus(e).size >= 4)
+    fun engage_loin_puis_le_calage_le_rattrape_et_il_tient() {
+        // As live on 21 October: locked first with the beacon 1 kHz from where it should be, then the
+        // slow calibration writes it (−1 kHz) between transmissions while the LNB walks 7 Hz/s: the
+        // lock finds the beacon again at once and carries its correction on — no letting go.
+        val e = ecoute(12.0, verrou = true, deriveHzS = 7.0, erreurHz = 1_000.0, calageSuit = true)
+        val v = e.chaine.verrou
+        assertTrue("tient", v.verrouille)
+        assertTrue("incohérent", !v.incoherent)
+        val r = lus(e)
+        println("Engagé à 1 kHz, calage qui suit, 7 Hz/s : ${r.size}/5")
+        assertTrue("$r", r.size >= 4)
     }
 }

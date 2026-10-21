@@ -33,7 +33,7 @@ import kotlin.math.sqrt
  *  - Squared: the middle beacon is BPSK (its phase jumps by π); squaring
  *    leaves a plain line at twice its offset.
  *  - Found by a transform of half a second — only a line standing well
- *    clear of the rest ([SNR_ACQUISITION]) — then followed by a
+ *    clear of the rest ([PIC_ACQUISITION], [BANDE_ACQUISITION]) — then followed by a
  *    second-order phase loop of [bandeHz]; the beacon's frequency is read
  *    from the loop's integrator (smooth), not from its phase steps. Not
  *    narrow: ±25 Hz within half a second is a phase swing of several
@@ -113,7 +113,11 @@ class VerrouBalise(private val rate: Double, private val bandeHz: Double = 30.0)
     private var si = 0.0; private var sq = 0.0; private var dans = 0
 
     // Acquisition.
-    private val nAcq = 2048
+    private val nAcq = 1024
+    private var tenue = 0L
+    private var ecartTenu = 0.0
+    private var rapideTenu = 0.0
+    private var dernierHz = 0.0
     private val acqI = FloatArray(nAcq)
     private val acqQ = FloatArray(nAcq)
     private var nAcqPleins = 0
@@ -152,15 +156,20 @@ class VerrouBalise(private val rate: Double, private val bandeHz: Double = 30.0)
         suit = false; verrouille = false; nAcqPleins = 0; accord = 0.0; basDepuis = 0; pause = 0
         poids = 0.0; rapideHz = 0.0; correctionHz = 0.0; gigue2 = 0.0; gigueHz = 0.0; aLaBorne = 0.0
         cr = 1.0; ci = 0.0; si = 0.0; sq = 0.0; dans = 0; incoherent = false
-        bufI.fill(0f); bufQ.fill(0f); pos = 0; phase2 = 0
+        bufI.fill(0f); bufQ.fill(0f); pos = 0; phase2 = 0; tenue = 0
     }
 
     /** [n] raw samples, turned in place by the quick correction. */
     fun process(re: FloatArray, im: FloatArray, n: Int) {
         if (!actif) return
         if (mixHz != decalageHz) {
-            // The calibration moved: the beacon jumps in its channel; searched again (the correction fades meanwhile).
-            if (!mixHz.isNaN()) { suit = false; nAcqPleins = 0 }
+            // The calibration moved: the beacon jumps in its channel (or not, when the dongle's PLL moved
+            // with it); searched again at once, the correction held as it was meanwhile ([TENUE_S]) and
+            // carried on from where it was — no fade, no jump at the start of a slot.
+            if (!mixHz.isNaN() && suit) {
+                suit = false; nAcqPleins = 0; tenue = (TENUE_S * fs).toLong()
+                ecartTenu = dernierHz - lentHz; rapideTenu = dernierHz - refHz
+            }
             mixHz = decalageHz
             val w = -2.0 * PI * mixHz / rate
             pr = cos(w); pi = sin(w)
@@ -218,8 +227,8 @@ class VerrouBalise(private val rate: Double, private val bandeHz: Double = 30.0)
         val wi = zi * zi - zq * zq
         val wq = 2 * zi * zq
         if (!suit) {
-            // Fading out whatever was taken (a second).
-            poids = maxOf(0.0, poids - 1.0 / fs)
+            // Held while found again after a calibration step, else faded out (a second).
+            if (tenue > 0) tenue-- else poids = maxOf(0.0, poids - 1.0 / fs)
             gigue2 += (correctionHz * correctionHz - gigue2) / (10.0 * fs)
             if (pause > 0) { pause--; return }
             acqI[nAcqPleins] = wi.toFloat(); acqQ[nAcqPleins] = wq.toFloat()
@@ -236,7 +245,7 @@ class VerrouBalise(private val rate: Double, private val bandeHz: Double = 30.0)
         if (theta2 > PI) theta2 -= 2 * PI else if (theta2 < -PI) theta2 += 2 * PI
         // The beacon's frequency (half the squared one's), from the loop's integrator, Hz.
         val hz = omega2 / 2.0 * fs / (2 * PI)
-        // The slow part: a tracker that keeps up with a drift.
+        dernierHz = hz
         // The slow part: critically damped, keeps up with a ramp.
         val ecart = hz - lentHz
         val w = 1.0 / (TAU_LENT_S * fs)
@@ -261,7 +270,12 @@ class VerrouBalise(private val rate: Double, private val bandeHz: Double = 30.0)
         }
     }
 
-    /** The squared beacon's line in half a second of channel: found clear of the rest, the loop starts on it. */
+    /**
+     * The squared beacon's line in a quarter second of channel, found clear of the rest, and the loop
+     * starts on it. Judged on its peak and on the power around it (±[DEMI_RAIE] bins, ±30 Hz): a
+     * wandering LNB spreads the line over tens of hertz in that time, and a peak alone then looked
+     * like noise — the lock let go and did not take again for minutes (21 October).
+     */
     private fun acquiert() {
         val re = acqI.copyOf(); val im = acqQ.copyOf()
         fr.f4ioz.satcombo.domain.Ft8Signal.fft(re, im)
@@ -270,7 +284,10 @@ class VerrouBalise(private val rate: Double, private val bandeHz: Double = 30.0)
         for (k in 0 until nAcq) if (p[k] > p[meilleur]) meilleur = k
         val tri = p.sortedArray()
         val mediane = tri[nAcq / 2]
-        if (mediane <= 0.0 || p[meilleur] < SNR_ACQUISITION * mediane) return
+        if (mediane <= 0.0 || p[meilleur] < PIC_ACQUISITION * mediane) return
+        var autour = 0.0
+        for (d in -DEMI_RAIE..DEMI_RAIE) autour += p[((meilleur + d) % nAcq + nAcq) % nAcq]
+        if (autour < BANDE_ACQUISITION * mediane * (2 * DEMI_RAIE + 1)) return
         val k = if (meilleur > nAcq / 2) meilleur - nAcq else meilleur
         fun pw(i: Int) = p[((i % nAcq) + nAcq) % nAcq]
         val a = pw(meilleur - 1); val b = pw(meilleur); val c = pw(meilleur + 1)
@@ -279,9 +296,17 @@ class VerrouBalise(private val rate: Double, private val bandeHz: Double = 30.0)
         omega2 = 2 * PI * fin / nAcq
         theta2 = atan2(acqQ[nAcq - 1].toDouble(), acqI[nAcq - 1].toDouble())
         val hz = omega2 / 2.0 * fs / (2 * PI)
-        // The slow part starts where the beacon is: nothing quick to take yet.
-        lentHz = hz; lentPente = 0.0; rapideHz = 0.0; refHz = hz
-        accord = 0.0; basDepuis = 0; aLaBorne = 0.0; incoherent = false
+        if (tenue > 0) {
+            // Found again after a calibration step: carried on where it was.
+            lentHz = hz - ecartTenu; refHz = hz - rapideTenu
+            accord = ACCORD_MIN
+        } else {
+            // A fresh lock starts where the beacon is: nothing to take yet.
+            lentHz = hz; lentPente = 0.0; rapideHz = 0.0; refHz = hz
+            accord = 0.0
+        }
+        dernierHz = hz; tenue = 0
+        basDepuis = 0; aLaBorne = 0.0; incoherent = false
         suit = true
     }
 
@@ -293,8 +318,13 @@ class VerrouBalise(private val rate: Double, private val bandeHz: Double = 30.0)
         const val BORNE_HZ = 250.0
         /** Beyond this (rms over 10 s), the loop is on something else. */
         const val GIGUE_MAX_HZ = 35.0
-        /** The squared line over the median of half a second's spectrum (≈ 22 dB) before locking. */
-        const val SNR_ACQUISITION = 150.0
+        /** Before locking: the squared line's peak over the spectrum's median (≈ 15 dB; noise alone reaches ≈ 10 dB)… */
+        const val PIC_ACQUISITION = 30.0
+        /** …and the power around it over as many bins of median (≈ 9 dB; noise alone ≈ 2 dB). */
+        const val BANDE_ACQUISITION = 8.0
+        const val DEMI_RAIE = 7
+        /** After a calibration step, the correction held this long (s) while the beacon is found again. */
+        const val TENUE_S = 2.0
         /** The loop's agreement for the correction to weigh in, and below which it is lost (after 2 s). */
         const val ACCORD_MIN = 0.5
         const val ACCORD_PERDU = 0.25
