@@ -275,6 +275,17 @@ class StationPc(
 
     // ---------------------------------------------------------------- QO-100
 
+    /** [catnum]'s passes between [deMs] and [aMs] (any height: the caller sorts them out); empty when unknown. */
+    fun passagesDe(catnum: Int, deMs: Long, aMs: Long): List<SatPass> {
+        val e = _etat.value
+        val sat = e.satellites.firstOrNull { it.catalogNumber == catnum } ?: return emptyList()
+        val obs = e.observateur ?: return emptyList()
+        if (aMs <= deMs || !PassPredictor.elementsUtilisables(sat)) return emptyList()
+        val heures = ((aMs - deMs + 3_599_999L) / 3_600_000L).toInt().coerceIn(1, 24 * 15)
+        return runCatching { predicteur.upcomingPasses(sat, obs, deMs, heures, 0.0, settings.masqueHorizon) }.getOrDefault(emptyList())
+            .filter { it.aosEpochMs < aMs }
+    }
+
     /** The pass of [catnum] under way at [t] (AOS, LOS); null when it is down or unknown. */
     fun passageEnCours(catnum: Int, t: Long): Pair<Long, Long>? {
         val e = _etat.value
@@ -642,11 +653,12 @@ class StationPc(
      * the agenda's) over [heures] hours from now, one value a minute — the
      * engine's [fr.f4ioz.satcombo.demo.ApiCalculs], shared with the phone.
      */
-    suspend fun frise(heures: Int = 12): Pair<Long, List<fr.f4ioz.satcombo.demo.ApiCalculs.LigneFrise>> = withContext(Dispatchers.Default) {
+    suspend fun frise(heures: Int = 12, aussi: Set<Int> = emptySet()): Pair<Long, List<fr.f4ioz.satcombo.demo.ApiCalculs.LigneFrise>> = withContext(Dispatchers.Default) {
         val e = _etat.value
         val obs = e.observateur ?: return@withContext horloge() to emptyList()
         val debut = horloge() / 60_000L * 60_000L
-        val sats = fr.f4ioz.satcombo.demo.ApiCalculs.satellitesFrise(e.satellites, e.favoris, e.suivi, e.agenda, debut)
+        // [aussi]: the SSTV campaigns' satellites, their passes marked on the timeline.
+        val sats = fr.f4ioz.satcombo.demo.ApiCalculs.satellitesFrise(e.satellites, e.favoris + aussi, e.suivi, e.agenda, debut)
         debut to fr.f4ioz.satcombo.demo.ApiCalculs.frise(predicteur, obs, sats, debut, heures)
     }
 
@@ -769,7 +781,12 @@ class StationPc(
 
     // ------------------------------------------------------------- choices
 
-    fun suis(sat: TleEntry) {
+    /**
+     * [sat] followed; [emetteurVoulu] picks its transmitter among those known
+     * (the list it may add to, and the one chosen) — the SSTV auto-pilot's
+     * frequency of its own; null: the one chosen last for it.
+     */
+    fun suis(sat: TleEntry, emetteurVoulu: ((List<Transmitter>) -> Pair<List<Transmitter>, Int>)? = null) {
         stockage.edit().putInt(CLE_SATELLITE, sat.catalogNumber).apply()
         stationCat.nouveauSatellite()
         // The SSTV tuning's share belonged to the old satellite.
@@ -785,7 +802,8 @@ class StationPc(
             val l = catalogue.emetteurs(sat.catalogNumber).filter { it.alive && (it.downlinkLowHz != null || it.uplinkLowHz != null) }
             // The transmitter chosen last time for this satellite, as on the phone.
             val i = c.txDescription?.let { d -> l.indexOfFirst { it.description == d } }?.takeIf { it >= 0 } ?: 0
-            change { if (suivi?.catalogNumber == sat.catalogNumber) copy(emetteurs = l, emetteur = i) else this }
+            val (liste, choisi) = emetteurVoulu?.let { f -> runCatching { f(l) }.getOrNull() } ?: (l to i)
+            change { if (suivi?.catalogNumber == sat.catalogNumber) copy(emetteurs = liste, emetteur = choisi.coerceIn(0, (liste.size - 1).coerceAtLeast(0))) else this }
         }
     }
 

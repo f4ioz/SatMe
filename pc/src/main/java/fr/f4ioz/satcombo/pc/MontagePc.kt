@@ -271,6 +271,24 @@ class MontagePc(dossier: File, private val lectures: () -> ActiviteMontage.Lectu
         }
     }
 
+    // ------------------------------------------------- for the SSTV auto-pilot
+
+    /** The profiles kept (an SSTV campaign's chain may name one). */
+    fun profilsGardes(): List<ProfilsFonction.Profil> = profils
+
+    /** The functions' state now; null: unreadable. */
+    fun etatFonctions(): FonctionsMontage.Instantane? = maintenant()
+
+    /** The receive settings now, as a profile keeps them; null: unreadable. */
+    fun reglagesActuels(): Map<String, String>? = maintenant()?.let { ProfilsFonction.capture(it) }
+
+    /** [voulu] put in place in the profiles' safe order (refused while a transmission is on); null: nothing to do it with here. */
+    fun appliqueReglages(voulu: Map<String, String>): ProfilsFonction.Bilan? {
+        val ex = executant ?: return null
+        val i = maintenant() ?: return null
+        return ProfilsFonction.applique(ProfilsFonction.plan(voulu, i), ex)
+    }
+
     private fun ecritProfils() {
         fichierProfils.parentFile?.mkdirs()
         val tmp = File(fichierProfils.parentFile, fichierProfils.name + ".tmp")

@@ -49,8 +49,10 @@ class SonStation(
     /** SSTV live (the card or the dongle), its settings, its pictures. */
     val sstv = SstvPc(station.stockage, dossierSstv, {
         val e = station.etat.value
-        SstvPc.Contexte(e.suivi?.name.orEmpty(), e.locator, e.indicatif, _etat.value.enregistrement)
+        SstvPc.Contexte(e.suivi?.name.orEmpty(), e.locator, e.indicatif, _etat.value.enregistrement, noteSstv)
     }, horloge)
+    /** Written on the pictures received meanwhile (the SSTV auto-pilot's campaign); "" none. */
+    @Volatile var noteSstv: String = ""
     var aprsActif: Boolean
         get() = station.stockage.getBoolean("pc_aprs", true)
         set(v) { station.stockage.edit().putBoolean("pc_aprs", v).apply() }

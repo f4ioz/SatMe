@@ -345,6 +345,8 @@ object PagesPcTelephone {
                 "/api/niveaux", "/api/soleil", "/api/ais", "/api/espace", "/api/espace/aurore", "/api/icomreseau", "/api/icomreseau/spectre", "/api/icomreseau/trace", "/api/icomreseau/cartes" -> json(JSONObject().put("ok", false).put("absent", true))
                 // The scan and the band stack run on SatMe-PC's receiver: none here (the page hides them).
                 "/api/balayage", "/api/pile-bandes" -> json(JSONObject().put("ok", false).put("absent", true))
+                // The SSTV campaigns' auto-pilot runs on SatMe-PC: none here (the page hides Agenda › SSTV and its chip).
+                "/api/autopilote", "/api/autopilote/emetteurs" -> json(JSONObject().put("ok", false).put("absent", true))
                 "/api/montage/profils" -> json(JSONObject().put("ok", true).put("telephone", true).put("profils", JSONArray()).put("actuels", JSONArray()).put("emission", ""))
                 else -> if (methode == "POST") json(action(vm, route, p)) else NON
             }

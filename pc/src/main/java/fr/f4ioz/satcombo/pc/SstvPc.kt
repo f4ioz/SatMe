@@ -51,7 +51,9 @@ class SstvPc(
     private val contexte: () -> Contexte,
     private val horloge: () -> Long = System::currentTimeMillis,
 ) {
-    class Contexte(val satellite: String = "", val locator: String = "", val indicatif: String = "", val enregistrement: String = "")
+    class Contexte(val satellite: String = "", val locator: String = "", val indicatif: String = "", val enregistrement: String = "",
+                   /** Written on each live picture (« Campagne : … » while the SSTV auto-pilot runs). */
+                   val note: String = "")
 
     /**
      * The sound is not on the air: [ESSAI] (the test generator) or [RELECTURE]
@@ -214,7 +216,7 @@ class SstvPc(
             // A recording played back: kept, marked, at the time it was received; no « new picture » for it.
             val nom = if (linesDone >= minLignes(mode)) garde(mode, pixels, linesDone, complete, c.satellite, h?.momentMs ?: horloge(),
                 if (h != null) RELECTURE else "live", if (h != null) h.fichier else c.enregistrement, c.locator, c.indicatif,
-                sonDe(decodeur, memoire)) else null
+                sonDe(decodeur, memoire), note = if (h == null) c.note else "") else null
             _etat.update { it.copy(mode = "", lignes = 0, derniere = if (h == null) nom ?: it.derniere else it.derniere,
                 gardees = it.gardees + (if (nom != null) 1 else 0), version = it.version + 1) }
         }
@@ -310,7 +312,7 @@ class SstvPc(
     /** A picture received: PNG, sidecar and its own sound, named as on the phone; a second decoding never overwrites the first. */
     private fun garde(mode: SstvMode, pixels: IntArray, lignes: Int, complete: Boolean, sat: String, quandMs: Long,
                       origine: String, enregistrement: String, locator: String, indicatif: String,
-                      son: Pair<ShortArray, Int>?, recale: Boolean = false): String? = synchronized(verrouFichiers) {
+                      son: Pair<ShortArray, Int>?, recale: Boolean = false, note: String = ""): String? = synchronized(verrouFichiers) {
         dossier.mkdirs()
         val px = if (nettoyage) runCatching { SstvNettoyage.nettoie(pixels, mode.width, mode.height, lignes) }.getOrDefault(pixels) else pixels
         var nom = SstvMeta.fileName(sat.ifBlank { "SAT" }, quandMs, mode.name, complete)
@@ -323,7 +325,7 @@ class SstvPc(
         if (runCatching { ImageIO.write(img, "png", png) }.isFailure) return null
         val meta = SstvMeta.SstvShot(fileName = nom, satName = sat, timeMs = quandMs, mode = mode.name, complete = complete,
             redecodeMs = if (origine == "file") horloge() else 0L, recale = recale,
-            locator = locator, callsign = indicatif, source = origine, recording = enregistrement)
+            locator = locator, callsign = indicatif, source = origine, recording = enregistrement, note = note)
         runCatching { File(dossier, SstvMeta.sidecarName(nom)).writeText(SstvMeta.encode(meta), Charsets.UTF_8) }
         son?.let { (pcm, rate) -> if (pcm.isNotEmpty()) runCatching { SstvSon.ecritWav(SstvSon.fichier(png), pcm, rate) } }
         nom

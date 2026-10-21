@@ -323,13 +323,15 @@ class TextesDatvPc(
          * only, its neural reader); its text, or its words with their boxes
          * when [tsv]; null when it fails.
          */
-        fun tesseract(prog: String, img: BufferedImage, psm: Int, tsv: Boolean = false, delaiS: Long = 15): String? {
+        fun tesseract(prog: String, img: BufferedImage, psm: Int, tsv: Boolean = false, delaiS: Long = 15, signes: String? = LISTE): String? {
             val png = File.createTempFile("satme-ocr-", ".png")
             val sortie = File.createTempFile("satme-ocr-", ".txt")
             try {
                 ImageIO.write(img, "png", png)
-                val args = arrayListOf(prog, png.absolutePath, "stdout", "--oem", "1", "--psm", psm.toString(),
-                    "-c", "tessedit_char_whitelist=$LISTE", "-c", "preserve_interword_spaces=1")
+                val args = arrayListOf(prog, png.absolutePath, "stdout", "--oem", "1", "--psm", psm.toString())
+                // The signs a callsign is made of (a flyer: null, every sign).
+                if (signes != null) args += listOf("-c", "tessedit_char_whitelist=$signes")
+                args += listOf("-c", "preserve_interword_spaces=1")
                 if (tsv) args += "tsv"
                 val p = ProcessBuilder(args).redirectOutput(sortie).redirectError(ProcessBuilder.Redirect.DISCARD).start()
                 if (!p.waitFor(delaiS, TimeUnit.SECONDS)) { p.destroyForcibly(); return null }

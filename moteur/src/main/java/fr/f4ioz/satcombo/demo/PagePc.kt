@@ -700,6 +700,40 @@ ${STYLE_JETONS}
   #tb-etat, #tl-b-etat { gap:2px 12px; } #tb-etat .val, #tl-b-etat .val { font-size:15px; }
   #tb-trames .tlm-pre, #tl-b-trames .tlm-pre { font-size:9.5px; }
   .tl-st { padding:12px 16px 0; }
+  /* Agenda › SSTV: campaigns and their auto-pilot. */
+  .ag-st { padding:12px 16px 0; }
+  .ag-st > .st-pan > .grille2 { padding:0; }
+  .ap-grille { display:grid; grid-template-columns:minmax(380px,1fr) minmax(360px,1fr) minmax(420px,1.25fr); gap:12px; }
+  .ap-f { display:grid; grid-template-columns:max-content 1fr; gap:5px 10px; align-items:center; font-size:var(--fs-s); }
+  .ap-f > label:not(.ap-c) { color:var(--texte-2); }
+  .ap-f .ligne { margin:0; flex-wrap:nowrap; }
+  .ap-f input, .ap-f select, .ap-f textarea { width:100%; min-width:0; box-sizing:border-box; }
+  .ap-f input[type=checkbox] { width:auto; }
+  .ap-f textarea { resize:vertical; min-height:34px; font:inherit; }
+  .ap-c2 { display:grid; grid-template-columns:1fr 1fr; gap:3px 12px; font-size:var(--fs-s); margin-top:6px; }
+  .ap-c2 label { display:flex; gap:6px; align-items:center; }
+  .ap-c2 label.sous { padding-left:20px; color:var(--texte-2); }
+  .ap-camp { border:1px solid var(--ligne); border-radius:var(--r2); padding:7px 9px; margin-top:6px; background:var(--s1); }
+  .ap-camp.off { opacity:.55; }
+  .ap-camp .ap-camp-t { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .ap-camp .ap-camp-t b { font-size:var(--fs-l); }
+  .ap-camp .ap-camp-t .act { margin-left:auto; display:flex; gap:4px; }
+  .ap-camp .petit a { color:var(--rx); }
+  .ap-tab { max-height:calc(50vh - 120px); overflow:auto; }
+  #ap-liste { max-height:calc(100vh - 470px); min-height:60px; overflow:auto; }
+  .ap-bot { font-size:13px; }
+  .pastille.ap-st-PREVU { background:rgba(63,224,200,.14); color:var(--rx); }
+  .pastille.ap-st-EN_COURS { background:rgba(255,180,84,.2); color:var(--ambre); }
+  .pastille.ap-st-FAIT { background:rgba(91,214,138,.2); color:var(--vert); }
+  .pastille.ap-st-ECARTE, .pastille.ap-st-CHEVAUCHE, .pastille.ap-st-INTERROMPU, .pastille.ap-st-ARRETE { background:rgba(229,72,77,.14); color:var(--rose); }
+  #ap-ocr { max-height:160px; overflow:auto; white-space:pre-wrap; font-size:11px; margin:4px 0 0; color:var(--texte-2); }
+  #h-ap { align-items:center; } #h-ap.on { border-color:var(--rx); color:var(--rx); } #h-ap.encours { border-color:var(--ambre); color:var(--ambre); }
+  .ap-bandeau { position:fixed; top:48px; left:calc(50% + var(--rail) / 2); transform:translateX(-50%); z-index:45; display:flex; align-items:center; gap:10px;
+    padding:6px 8px 6px 14px; border-radius:22px; background:rgba(26,37,48,.96); border:1px solid var(--ambre); box-shadow:var(--ombre-pop); font-size:var(--fs-m); max-width:calc(100vw - var(--rail) - 40px); }
+  .ap-bandeau b { color:var(--ambre); white-space:nowrap; }
+  .ap-bandeau span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .ap-bandeau button { flex:none; }
+  .ap-bandeau a { color:var(--texte-2); font-size:var(--fs-s); flex:none; }
   .tl-st > .st-pan > .grille2 { padding:0; }
   .tl-st > .st-pan > .carte { margin:0; }
   .tp-derniere img { display:block; width:100%; max-width:400px; margin-top:4px; border-radius:4px; background:#7f7f7f; cursor:pointer; }
@@ -1560,6 +1594,7 @@ ${rail()}
   </span>
   <button id="h-mol" class="h-puce" hidden onclick="molPop(this)" title="La molette USB : son pas et ce qu'elle accorde">${IconesPc.svg("tune")}<span class="h-m" id="h-mol-t"></span></button>
   <button id="h-ann" class="h-puce" hidden onclick="annMuet()" title="Annonces vocales : clic pour les couper ou les remettre (Réglages › Annonces)">🔊</button>
+  <button id="h-ap" class="h-puce" hidden onclick="apMaitreBascule()" aria-pressed="false" title="Auto-pilote SSTV (Agenda › SSTV) : clic pour l'activer ou le couper. Réception seulement">🤖<span class="h-m" id="h-ap-t">Auto-pilote</span></button>
   <button id="h-tx" class="h-tx" hidden onclick="arretEmissions()" title="Une émission est en cours. Clic ou Échap : tout arrêter"><b>TX</b><span id="h-tx-q"></span><span class="h-tx-x">■ Échap</span></button>
   <button id="h-pass" class="h-puce" onclick="vue('station')" title="Le prochain passage du satellite suivi"><span id="h-pass-n">—</span><span class="h-f" id="h-pass-t"></span></button>
   <span id="rec" class="pastille" style="display:none;background:rgba(229,72,77,.2);color:var(--rose)"></span>
@@ -1591,6 +1626,8 @@ ${rail()}
   <button id="h-aide" class="h-rond" onclick="aideClavier()" title="Raccourcis clavier (?)">?</button>
   <span id="heure"></span><span id="h-utc" class="h-utc" title="Temps universel"></span>
 </header>
+<div id="ap-bandeau" class="ap-bandeau" hidden role="status" aria-live="polite"><b>🤖 Auto-pilote :</b><span id="ap-b-t"></span>
+  <a href="#" onclick="event.preventDefault(); apOuvre()">Voir</a><button class="arret" onclick="apStop()" title="Arrêter ce passage : l'enregistrement s'arrête, la réception est remise comme avant">■ STOP</button></div>
 <div id="mu-pop" class="sp-pop" hidden role="dialog" aria-label="Décodeurs multiples">
   <div class="t sp-pop-t">Décodeurs multiples<span class="h-esp"></span><button type="button" class="discret" onclick="g('mu-pop').hidden = true" aria-label="Fermer">✕</button></div>
   <label style="display:block"><input type="checkbox" id="mu-on" onchange="muPost('option?on=' + (this.checked ? 1 : 0))"> <b>Plusieurs décodeurs à la fois</b></label>
@@ -2293,6 +2330,9 @@ ${rail()}
 </div>
 </div>
 <div class="vue" id="v-agenda" hidden>
+<div class="st ag-st" data-st="agenda">
+  <div class="st-nav"><button data-p="ag-p-rdv" title="Les rendez-vous et le mode automatique">${IconesPc.svg("calendar_month", "st-ico")}<span>Rendez-vous</span></button><button data-p="ag-p-sstv" title="Les campagnes SSTV et leur auto-pilote : chaque passage reçu tout seul (réception seulement)">${IconesPc.svg("live_tv", "st-ico")}<span>SSTV · auto-pilote</span></button></div>
+  <div class="st-pan" id="ag-p-rdv">
 <div class="grille2">
   <div>
     <div class="carte">
@@ -2319,6 +2359,77 @@ ${rail()}
       <div class="t">Passages du mode automatique (24 h)</div>
       <table><thead><tr><th>Quand</th><th>Satellite</th><th>El max</th><th>Durée</th><th></th></tr></thead><tbody id="va-plan"></tbody></table>
     </div>
+  </div>
+</div>
+  </div>
+  <div class="st-pan" id="ag-p-sstv">
+<div class="ap-grille" id="ap-zone" hidden>
+  <div>
+    <div class="carte" id="ap-form">
+      <div class="t">Campagne SSTV <span class="petit" id="ap-f-titre">nouvelle</span></div>
+      <div class="aide">Un événement SSTV entré comme un rendez-vous : le satellite, son émetteur (ou une fréquence à part), le mode SSTV, la période. L'auto-pilote reçoit ensuite chacun de ses passages assez hauts. « Horaire à confirmer » : les journées entières.</div>
+      <div class="ap-f">
+        <label for="ap-nom">Nom</label><input id="ap-nom" maxlength="60" placeholder="ARISS SSTV Series 34">
+        <label for="ap-sat">Satellite</label><input id="ap-sat" list="tous" placeholder="ISS, UMKA-1…" onchange="apSatChange()">
+        <label for="ap-emetteur">Émetteur</label><select id="ap-emetteur" onchange="apEmetteurChange()"><option value="">Fréquence personnalisée…</option></select>
+        <label for="ap-freq" class="ap-perso">Fréquence</label><div class="ligne ap-perso"><input id="ap-freq" placeholder="437,550" title="MHz (le Doppler est suivi)"><span class="petit">MHz</span><select id="ap-modulation" style="max-width:76px"><option>FM</option><option>NFM</option></select><input id="ap-largeur" type="number" min="3" max="250" value="15" style="max-width:62px" title="Largeur de bande (kHz)"><span class="petit">kHz</span></div>
+        <label for="ap-mode">Mode SSTV</label><select id="ap-mode"></select>
+        <label for="ap-de">Début</label><div class="ligne"><input id="ap-de" type="datetime-local"><label class="petit" style="flex:none"><input type="checkbox" id="ap-aconf" onchange="apAconf()"> horaire à confirmer</label></div>
+        <label for="ap-a">Fin</label><input id="ap-a" type="datetime-local">
+        <label for="ap-el">Élévation</label><div class="ligne"><input id="ap-el" type="number" min="0" max="90" value="10" style="max-width:62px"><span class="petit">° au moins · préparer</span><input id="ap-avant" type="number" min="0" max="30" value="2" style="max-width:56px"><span class="petit">min avant l'AOS</span></div>
+        <label for="ap-horaire">Rythme</label><input id="ap-horaire" maxlength="80" placeholder="36 s on / 2 min off (pour mémoire)">
+        <label for="ap-lien">Lien</label><input id="ap-lien" maxlength="300" placeholder="https://… (galerie : un lien, rien n'est envoyé)">
+        <label for="ap-notes">Notes</label><textarea id="ap-notes" rows="2" maxlength="600"></textarea>
+      </div>
+      <div class="t" style="margin-top:10px">Chaîne de réception</div>
+      <div class="ap-f">
+        <label for="ap-profil">Profil</label><select id="ap-profil"><option value="">— aucun (réglages ci-dessous) —</option></select>
+        <label for="ap-source">Son</label><select id="ap-source"></select>
+      </div>
+      <div class="ap-c2">
+        <label><input type="checkbox" id="ap-poste" checked> Poste (CAT, Doppler)</label>
+        <label><input type="checkbox" id="ap-rotor" checked> Rotor suit le satellite</label>
+        <label class="sous" title="Seulement l'IC-9700 par le réseau, ou le port USB propre de l'Icom (reconnu par son numéro de série) : jamais un autre port"><input type="checkbox" id="ap-cposte"> le connecter tout seul</label>
+        <label class="sous" title="Seulement par rotctld (réseau) : un rotor sur port série reste à connecter à la main"><input type="checkbox" id="ap-crotor"> le connecter tout seul</label>
+        <label><input type="checkbox" id="ap-enreg" checked> Enregistrer le son</label>
+        <label><input type="checkbox" id="ap-parquer"> Parquer le rotor après</label>
+        <label><input type="checkbox" id="ap-sstv" checked> Décodeur SSTV prêt</label>
+        <label><input type="checkbox" id="ap-annonce" checked> Annonce vocale</label>
+      </div>
+      <div class="aide">Réception seulement : l'auto-pilote n'émet jamais et ne touche à aucun réglage d'émission. Une émission en cours, la DATV qui tient le récepteur ou une autre campagne au même moment : le passage est écarté, la raison notée. Après le LOS l'enregistrement s'arrête, les images sont rattachées à la campagne et la réception est remise comme avant.</div>
+      <div class="ligne"><button class="primaire" onclick="apGarde()">Enregistrer la campagne</button><button onclick="apNouvelle()">Effacer</button><span class="petit" id="ap-f-etat"></span></div>
+    </div>
+  </div>
+  <div>
+    <div class="carte">
+      <div class="t">Auto-pilote</div>
+      <div class="ligne" style="margin-top:0"><label><input type="checkbox" id="ap-maitre" onchange="apMaitre(this.checked)"> <b>Actif</b> <span class="petit">(interrupteur général, aussi dans l'en-tête)</span></label></div>
+      <div class="petit" id="ap-etat" style="margin-top:4px"></div>
+    </div>
+    <div class="carte">
+      <div class="t">Importer une affiche</div>
+      <div class="aide">L'image de l'affiche (JPEG, PNG) est lue sur ce PC par tesseract : fréquence, mode, dates, satellite, rythme et lien remplissent le formulaire, à vérifier avant d'enregistrer. Une adresse n'est demandée que si tu la donnes.</div>
+      <div class="ligne" style="margin-top:0"><input type="file" id="ap-fichier" accept="image/*" hidden onchange="apAfficheFichier(this)"><button onclick="g('ap-fichier').click()">🖼 Choisir une image…</button>
+        <input id="ap-url" placeholder="ou l'adresse de l'image (https://…)"><button onclick="apAfficheUrl()">Lire</button></div>
+      <div class="petit" id="ap-imp-etat"></div>
+      <details id="ap-ocr-d" hidden><summary class="petit">Texte lu sur l'affiche</summary><pre id="ap-ocr"></pre></details>
+    </div>
+    <div class="carte">
+      <div class="t">Campagnes</div>
+      <div id="ap-liste"></div>
+    </div>
+  </div>
+  <div>
+    <div class="carte">
+      <div class="t">Prochains passages 🤖</div>
+      <div class="ap-tab"><table><thead><tr><th>Quand</th><th>Campagne</th><th>El</th><th></th></tr></thead><tbody id="ap-prochains"></tbody></table></div>
+    </div>
+    <div class="carte">
+      <div class="t">Historique</div>
+      <div class="ap-tab"><table><thead><tr><th>Passage</th><th>Campagne</th><th>Devenu</th></tr></thead><tbody id="ap-histo"></tbody></table></div>
+    </div>
+  </div>
+</div>
   </div>
 </div>
 </div>
@@ -2350,7 +2461,7 @@ ${rail()}
 <div style="padding:12px 16px">
   <div class="carte">
     <div class="ligne" style="margin-top:0"><span class="t" style="margin:0">Frise des passages</span>
-      <span class="petit">les ★ favoris, le satellite suivi et ceux de l'agenda · clic : le suivre</span>
+      <span class="petit">les ★ favoris, le satellite suivi et ceux de l'agenda · 🤖 passage de l'auto-pilote SSTV · clic : le suivre</span>
       <select id="f-h" style="margin-left:auto;max-width:120px" onchange="chargeFrise()"><option value="6">6 h</option><option value="12" selected>12 h</option><option value="24">24 h</option><option value="48">48 h</option></select></div>
     <canvas id="f-canvas" style="width:100%;display:block;margin-top:8px;cursor:pointer"></canvas>
   </div>
@@ -4026,6 +4137,7 @@ function dessineAgenda() {
     '</td><td>' + esc(a.sat) + '</td><td class="act"><label class="petit"><input type="checkbox" ' + (a.actif ? 'checked' : '') +
     ' onchange="post(\'api/agenda/active?id=' + a.id + '\')"> actif</label> <button onclick="post(\'api/agenda/retire?id=' + a.id + '\')">✕</button></td></tr>').join('') ||
     '<tr><td colspan="4" class="petit">rien de prévu</td></tr>';
+  if (typeof dessineAgendaAp === 'function') dessineAgendaAp();
 }
 const hz = v => (v > 0 ? '+' : '') + v + ' Hz';
 // The log's records: the farthest contacts, by satellite, mode, continent, country; the distances crossed.
@@ -5542,7 +5654,7 @@ function vue(n) {
   if (n === 'reglages') { chargeReglages().then(() => { if (!wlLu && v('carnetUrl')) { wlLu = true; essaiCarnet(); } }); chargeSources(); }
   if (n === 'son' || n === 'sstv') ticSon();
   if (n === 'sstv') { ticMire(true); xsCharge(); }
-  if (n === 'agenda') ticVeille();
+  if (n === 'agenda') { ticVeille(); apVu = ''; apCharge(); }
   if (n === 'aprs') { ticAprs(); ticTrophees(); }
   if (n === 'ft8') ticFt8();
   if (n === 'tlm' || n === 'qo100') tlmTic(true);
@@ -7994,6 +8106,15 @@ function dessineFrise() {
       if (tx(j) - tx(k) > 18) x.fillText(Math.round(top) + '°', tx(kTop), base - (ligneH - 12) * top / 90 - 2);
       k = j;
     }
+  });
+  // The SSTV auto-pilot's passes: framed, with their 🤖.
+  if (AP && AP.prochains) AP.prochains.filter(p => p.statut === 'PREVU' || p.statut === 'EN_COURS').forEach(p => {
+    const i = F.lignes.findIndex(l => l.catnum === p.catnum); if (i < 0) return;
+    const k0 = (p.aos - F.debut) / 60000, k1 = (p.los - F.debut) / 60000; if (k1 < 0 || k0 > minutes) return;
+    const y0 = haut + i * ligneH;
+    x.strokeStyle = p.statut === 'EN_COURS' ? '#FFB454' : '#B07CFF'; x.lineWidth = 1.5; x.setLineDash([4, 3]);
+    x.strokeRect(tx(Math.max(0, k0)) - 2, y0 + 2, Math.max(4, tx(Math.min(minutes, k1)) - tx(Math.max(0, k0)) + 4), ligneH - 6);
+    x.setLineDash([]); x.lineWidth = 1; x.font = '12px Drapeaux,system-ui'; x.textAlign = 'left'; x.fillText('🤖', tx(Math.max(0, k0)) - 1, y0 + 14);
   });
   // Now.
   x.strokeStyle = '#FFB454'; x.lineWidth = 2; x.beginPath(); x.moveTo(tx((Date.now() - F.debut) / 60000), haut - 6); x.lineTo(tx((Date.now() - F.debut) / 60000), h); x.stroke(); x.lineWidth = 1;
@@ -12028,6 +12149,216 @@ async function ticVeille() {
     '<tr><td colspan="5" class="petit">' + (VA.sats.length ? (VA.calcul ? 'calcul…' : 'aucun passage dans les 24 h') : 'choisis des satellites') + '</td></tr>';
 }
 setInterval(() => { if (ouverte('agenda')) ticVeille(); }, 2000);
+
+// ------------------------------------------------------------------ Agenda › SSTV: campaigns and their auto-pilot (receive only)
+let AP = null, apVu = '', apEdit = '', apEmisSat = 0, apListesVu = '';
+const AP_STATUTS = { PREVU: 'prévu', CHEVAUCHE: 'perdu (autre passage)', EN_COURS: 'en cours', FAIT: 'reçu', ECARTE: 'écarté', ARRETE: 'arrêté', INTERROMPU: 'interrompu' };
+async function apCharge() {
+  try { AP = await (await fetch('api/autopilote')).json(); } catch (x) { AP = null; }
+  const ok = !!(AP && !AP.absent && AP.campagnes);
+  g('ap-zone').hidden = !ok;
+  apTete();
+  if (ok && ouverte('agenda')) apDessine();
+  if (ok && ouverte('frise') && F) dessineFrise();
+}
+/** The header's chip (the master switch) and the banner while a pass runs. */
+function apTete() {
+  const b = g('h-ap'), ok = !!(AP && !AP.absent && AP.campagnes);
+  b.hidden = !ok || (!AP.maitre && !AP.campagnes.length);
+  if (!ok) { g('ap-bandeau').hidden = true; return; }
+  const e = AP.enCours;
+  b.setAttribute('aria-pressed', AP.maitre ? 'true' : 'false');
+  b.classList.toggle('on', AP.maitre && !e); b.classList.toggle('encours', !!e);
+  txt('h-ap-t', e ? e.sat + ' SSTV' : AP.maitre ? 'Auto-pilote' : 'Auto-pilote coupé');
+  g('ap-bandeau').hidden = !e;
+  // Just under the header strip, however many lines it takes.
+  if (e) g('ap-bandeau').style.top = (g('tete').offsetHeight + 6) + 'px';
+  if (e) txt('ap-b-t', e.nom + ' — ' + e.sat + (e.phase === 'PRET' ? ' prêt, AOS ' + hm(e.aos) : ' en cours, LOS ' + hm(e.los)) +
+    ' · ' + (e.mode === 'Auto' ? 'mode auto' : e.mode) + (e.enregistrement ? ' · ● enregistré' : '') + ' · ' + e.images + ' image' + (e.images > 1 ? 's' : ''));
+}
+function apOuvre() {
+  vue('agenda');
+  const b = document.querySelector('#v-agenda .st-nav button[data-p="ag-p-sstv"]'); if (b) b.click();
+}
+async function apMaitreBascule() {
+  if (!AP) return;
+  if (!AP.maitre && !confirm('Activer l’auto-pilote SSTV ?\nChaque passage des campagnes actives sera reçu tout seul : satellite suivi, poste et rotor, son, décodeur, enregistrement. Réception seulement.')) return;
+  await apMaitre(!AP.maitre);
+}
+async function apMaitre(on) {
+  await post('api/autopilote/maitre?on=' + (on ? 1 : 0));
+  annonce(on ? 'Auto-pilote SSTV activé' : 'Auto-pilote SSTV coupé');
+  apCharge();
+}
+async function apStop() {
+  if (!confirm('Arrêter ce passage ? L’enregistrement s’arrête et la réception est remise comme avant.')) return;
+  await post('api/autopilote/stop'); apCharge();
+}
+const apFreq = hz => (hz / 1e6).toFixed(3).replace('.', ',');
+function apQuand(c) {
+  const j = ms => { const d = new Date(ms); return utc() ? d.toISOString().slice(5, 10).split('-').reverse().join('/') : d.toLocaleDateString(undefined, { day: '2-digit', month: '2-digit' }); };
+  return c.aConfirmer ? 'du ' + j(c.de) + ' au ' + j(c.a) + ' (horaire à confirmer)' : jourHeure(c.de) + ' → ' + jourHeure(c.a);
+}
+function apChaineTexte(c) {
+  const h = c.chaine, l = [];
+  if (h.profil) l.push('profil ' + h.profil);
+  if (h.poste) l.push('poste' + (h.connecterPoste ? ' (connecté tout seul)' : ''));
+  if (h.rotor) l.push('rotor' + (h.parquer ? ' puis parqué' : ''));
+  l.push(h.source === 'poste' ? 'son du poste' : h.source === 'sdr' ? 'son SDR' : h.source ? 'son : ' + h.source : 'son inchangé');
+  if (h.enregistrer) l.push('enregistré'); if (h.sstv) l.push('SSTV'); if (h.annonce) l.push('annonce');
+  return l.join(' · ');
+}
+function apDessine() {
+  if (!AP || !AP.campagnes) return;
+  if (document.activeElement !== g('ap-maitre')) g('ap-maitre').checked = AP.maitre;
+  const e = AP.enCours, proch = AP.prochains.find(p => p.statut === 'PREVU');
+  txt('ap-etat', !AP.campagnes.length ? 'Aucune campagne : en créer une (ou importer une affiche).' :
+    e ? '🤖 ' + e.nom + ' : ' + (e.phase === 'PRET' ? 'chaîne prête, AOS ' + hm(e.aos) : 'passage en cours, LOS ' + hm(e.los)) + ' · ' + e.faits.join(' · ') :
+    !AP.maitre ? 'Coupé : rien ne démarre tout seul.' + (proch ? ' Prochain passage : ' + jourHeure(proch.aos) + '.' : '') :
+    proch ? 'Prochain : ' + proch.nom + ', ' + jourHeure(proch.aos) + ' (' + proch.el + '°), chaîne prête à ' + hm(proch.prep) + '.' : 'Aucun passage à venir dans les campagnes actives.');
+  // The form's lists: SSTV modes, profiles, sound sources.
+  const lc = JSON.stringify([AP.modes, AP.profils, AP.cartes, AP.sdr]);
+  if (lc !== apListesVu) {
+    apListesVu = lc;
+    const m = g('ap-mode').value, pr = g('ap-profil').value, so = g('ap-source').value;
+    g('ap-mode').innerHTML = AP.modes.map(x => '<option value="' + esc(x) + '">' + (x === 'Auto' ? 'Auto (l’en-tête VIS le dit)' : esc(x)) + '</option>').join('');
+    g('ap-profil').innerHTML = '<option value="">— aucun (réglages ci-dessous) —</option>' + AP.profils.map(x => '<option value="' + esc(x.id) + '">' + esc(x.nom) + '</option>').join('');
+    g('ap-source').innerHTML = '<option value="poste">Le son du poste (IC-9700 réseau ou carte USB)</option>' + (AP.sdr ? '<option value="sdr">Le récepteur SDR</option>' : '') +
+      AP.cartes.map(x => '<option value="' + esc(x.nom) + '">' + esc(x.lib) + '</option>').join('') + '<option value="">Ne pas toucher au son</option>';
+    if (m) g('ap-mode').value = m; else g('ap-mode').value = 'Auto';
+    g('ap-profil').value = pr; if (so || so === '') g('ap-source').value = so || g('ap-source').value;
+  }
+  const cle = JSON.stringify([AP.campagnes, AP.prochains, AP.historique, AP.maitre, e && e.campagne]);
+  if (cle === apVu) return;
+  apVu = cle;
+  g('ap-liste').innerHTML = AP.campagnes.map(c => '<div class="ap-camp' + (c.active ? '' : ' off') + '"><div class="ap-camp-t"><b>' + esc(c.nom) + '</b><span class="pastille">' + esc(c.sat) + '</span>' +
+    '<span class="act"><label class="petit"><input type="checkbox" ' + (c.active ? 'checked' : '') + ' onchange="apActive(\'' + c.id + '\', this.checked)"> active</label>' +
+    '<button onclick="apEdite(\'' + c.id + '\')" title="Modifier">✎</button><button onclick="apRetire(\'' + c.id + '\')" title="Retirer">✕</button></span></div>' +
+    '<div class="petit">' + (c.freqHz ? apFreq(c.freqHz) + ' MHz ' + esc(c.modulation) : esc(c.emetteur)) + ' · ' + (c.mode === 'Auto' ? 'mode auto' : esc(c.mode)) + ' · ' + apQuand(c) +
+    ' · ≥ ' + Math.round(c.elMin) + '°' + (c.horaire ? ' · ' + esc(c.horaire) : '') + '</div>' +
+    '<div class="petit">' + esc(apChaineTexte(c)) + '</div>' +
+    '<div class="petit">' + (AP.enCours && AP.enCours.campagne === c.id ? '🤖 passage en cours' + (c.nb ? ' · ' : '') : '') + (c.nb ? c.nb + ' passage' + (c.nb > 1 ? 's' : '') + ' à recevoir' + (c.prochain ? ', le prochain ' + jourHeure(c.prochain) : '') : (AP.enCours && AP.enCours.campagne === c.id ? '' : 'aucun passage à venir')) +
+    (c.lien ? ' · <a href="' + esc(c.lien).replace(/"/g, '&quot;') + '" target="_blank" rel="noopener noreferrer">lien ↗</a>' : '') + '</div>' +
+    (c.notes ? '<div class="petit">' + esc(c.notes) + '</div>' : '') + '</div>').join('') || '<div class="petit">Aucune campagne.</div>';
+  g('ap-prochains').innerHTML = AP.prochains.map(p => '<tr' + (p.statut === 'EN_COURS' ? ' class="encours"' : '') + (p.statut === 'PREVU' || p.statut === 'EN_COURS' ? '' : ' style="opacity:.6"') + '><td>' + jourHeure(p.aos) + ' → ' + hm(p.los) +
+    '</td><td><span class="ap-bot" title="Auto-pilote">🤖</span> ' + esc(p.nom) + '<div class="petit">' + esc(p.sat) + (p.raison ? ' · ' + esc(p.raison) : '') + '</div></td><td>' + p.el + '°</td><td><span class="pastille ap-st-' + p.statut + '">' + AP_STATUTS[p.statut] + '</span></td></tr>').join('') ||
+    '<tr><td colspan="4" class="petit">' + (AP.campagnes.length ? 'aucun passage dans les campagnes actives' : 'les passages des campagnes viendront ici') + '</td></tr>';
+  g('ap-histo').innerHTML = AP.historique.map(t => '<tr><td>' + jourHeure(t.aos) + '<div class="petit">' + t.el.toFixed(0) + '°</div></td><td>' + esc(t.nom) +
+    (t.images.length ? '<div class="petit">' + t.images.length + ' image' + (t.images.length > 1 ? 's' : '') + '</div>' : '') + (t.enregistrement ? '<div class="petit">' + esc(t.enregistrement) + '</div>' : '') +
+    '</td><td><span class="pastille ap-st-' + t.statut + '">' + AP_STATUTS[t.statut] + '</span>' + (t.raison ? '<div class="petit">' + esc(t.raison) + '</div>' : '') +
+    (t.faits.length ? '<div class="petit" title="' + esc(t.faits.join('\n')).replace(/"/g, '&quot;') + '">' + t.faits.length + ' étape' + (t.faits.length > 1 ? 's' : '') + '</div>' : '') + '</td></tr>').join('') ||
+    '<tr><td colspan="3" class="petit">rien encore</td></tr>';
+  dessineAgendaAp();
+}
+/** The campaigns' passes in the appointments' list too, with their 🤖. */
+function dessineAgendaAp() {
+  const t = g('g-liste'); if (!t) return;
+  t.querySelectorAll('tr.ap-rdv').forEach(r => r.remove());
+  if (!AP || !AP.prochains) return;
+  const l = AP.prochains.filter(p => p.statut === 'PREVU' || p.statut === 'EN_COURS').slice(0, 6);
+  if (l.length && t.querySelector('td[colspan]')) t.innerHTML = '';
+  t.insertAdjacentHTML('beforeend', l.map(p => '<tr class="ap-rdv' + (p.statut === 'EN_COURS' ? ' encours' : '') + '"><td>' + jourHeure(p.aos) + ' → ' + hm(p.los) + '</td><td><span title="Auto-pilote SSTV">🤖</span> ' + esc(p.nom) +
+    ' <span class="pastille off">SSTV</span></td><td>' + esc(p.sat) + '</td><td class="act"><button onclick="apOuvre()" title="Agenda › SSTV">›</button></td></tr>').join(''));
+}
+async function apSatChange() {
+  const q = v('ap-sat').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  if (!tous.length) await chargeSatellites();
+  const s = tous.find(x => x.nom.toUpperCase().replace(/[^A-Z0-9]/g, '') === q) || tous.find(x => x.nom.toUpperCase().replace(/[^A-Z0-9]/g, '').includes(q)) || tous.find(x => String(x.catnum) === v('ap-sat'));
+  apEmisSat = s ? s.catnum : 0;
+  if (s) g('ap-sat').value = s.nom;
+  await apEmetteurs('');
+}
+async function apEmetteurs(choisi) {
+  let l = [];
+  if (apEmisSat) try { l = (await (await fetch('api/autopilote/emetteurs?catnum=' + apEmisSat)).json()).emetteurs || []; } catch (x) {}
+  g('ap-emetteur').innerHTML = l.map(t => '<option value="' + esc(t.description).replace(/"/g, '&quot;') + '">' + esc(t.description) + ' — ' + apFreq(t.bas) + ' MHz ' + esc(t.mode) + '</option>').join('') +
+    '<option value="">Fréquence personnalisée…</option>';
+  g('ap-emetteur').value = choisi && l.some(t => t.description === choisi) ? choisi : (v('ap-freq') || !l.length ? '' : l[0].description);
+  apEmetteurChange();
+}
+function apEmetteurChange() { document.querySelectorAll('#ap-form .ap-perso').forEach(x => x.style.display = g('ap-emetteur').value ? 'none' : ''); }
+const apLocal = ms => { const d = new Date(ms - new Date(ms).getTimezoneOffset() * 60000); return d.toISOString().slice(0, 16); };
+function apAconf() {
+  if (!g('ap-aconf').checked) return;
+  if (v('ap-de')) g('ap-de').value = v('ap-de').slice(0, 10) + 'T00:00';
+  if (v('ap-a')) g('ap-a').value = v('ap-a').slice(0, 10) + 'T23:59';
+}
+function apNouvelle() {
+  apEdit = ''; txt('ap-f-titre', 'nouvelle'); txt('ap-f-etat', '');
+  ['ap-nom', 'ap-sat', 'ap-freq', 'ap-de', 'ap-a', 'ap-horaire', 'ap-lien', 'ap-notes'].forEach(i => g(i).value = '');
+  g('ap-el').value = 10; g('ap-avant').value = 2; g('ap-largeur').value = 15; g('ap-mode').value = 'Auto'; g('ap-aconf').checked = false; g('ap-profil').value = '';
+  g('ap-source').value = 'poste';
+  ['ap-poste', 'ap-rotor', 'ap-enreg', 'ap-sstv', 'ap-annonce'].forEach(i => g(i).checked = true);
+  ['ap-cposte', 'ap-crotor', 'ap-parquer'].forEach(i => g(i).checked = false);
+  apEmisSat = 0; apEmetteurs('');
+}
+async function apEdite(id) {
+  const c = AP.campagnes.find(x => x.id === id); if (!c) return;
+  apEdit = id; txt('ap-f-titre', 'modifier « ' + c.nom + ' »'); txt('ap-f-etat', '');
+  g('ap-nom').value = c.nom; g('ap-sat').value = c.sat; apEmisSat = c.catnum;
+  g('ap-freq').value = c.freqHz ? apFreq(c.freqHz) : ''; g('ap-modulation').value = c.modulation; g('ap-largeur').value = Math.round(c.largeurHz / 1000);
+  g('ap-mode').value = c.mode; g('ap-de').value = apLocal(c.de); g('ap-a').value = apLocal(c.a); g('ap-aconf').checked = c.aConfirmer;
+  g('ap-el').value = Math.round(c.elMin); g('ap-avant').value = c.avantMin; g('ap-horaire').value = c.horaire; g('ap-lien').value = c.lien; g('ap-notes').value = c.notes;
+  const h = c.chaine;
+  g('ap-profil').value = h.profil; g('ap-source').value = h.source;
+  g('ap-poste').checked = h.poste; g('ap-cposte').checked = h.connecterPoste; g('ap-rotor').checked = h.rotor; g('ap-crotor').checked = h.connecterRotor;
+  g('ap-enreg').checked = h.enregistrer; g('ap-sstv').checked = h.sstv; g('ap-annonce').checked = h.annonce; g('ap-parquer').checked = h.parquer;
+  await apEmetteurs(c.emetteur);
+  g('ap-form').scrollIntoView({ block: 'nearest' });
+}
+async function apGarde() {
+  if (!apEmisSat && v('ap-sat')) await apSatChange();
+  if (!apEmisSat) { txt('ap-f-etat', 'Choisis le satellite.'); return; }
+  if (g('ap-aconf').checked) apAconf();
+  const de = v('ap-de') ? new Date(v('ap-de')).getTime() : 0, a = v('ap-a') ? new Date(v('ap-a')).getTime() : 0;
+  if (!de || !a) { txt('ap-f-etat', 'Donne le début et la fin.'); return; }
+  const em = g('ap-emetteur').value, b = id => g(id).checked ? 1 : 0;
+  const q = { id: apEdit, nom: v('ap-nom'), catnum: apEmisSat, sat: v('ap-sat'), emetteur: em, freq: em ? '' : v('ap-freq'), modulation: g('ap-modulation').value,
+    largeur: v('ap-largeur'), mode: g('ap-mode').value, de: de, a: a, aconfirmer: b('ap-aconf'), el: v('ap-el'), avant: v('ap-avant'), horaire: v('ap-horaire'),
+    lien: v('ap-lien'), notes: v('ap-notes'), profil: g('ap-profil').value, source: g('ap-source').value, poste: b('ap-poste'), cposte: b('ap-cposte'),
+    rotor: b('ap-rotor'), crotor: b('ap-crotor'), enreg: b('ap-enreg'), sstv: b('ap-sstv'), annonce: b('ap-annonce'), parquer: b('ap-parquer') };
+  const j = await post('api/autopilote/campagne?' + Object.keys(q).map(k => k + '=' + enc(q[k])).join('&'));
+  if (j && j.ok) { txt('ap-f-etat', 'Campagne enregistrée.'); apEdit = j.campagne.id; txt('ap-f-titre', 'modifier « ' + j.campagne.nom + ' »'); annonce('Campagne SSTV enregistrée'); apVu = ''; apCharge(); }
+  else txt('ap-f-etat', (j && j.erreur) || 'Refusé.');
+}
+async function apActive(id, on) { await post('api/autopilote/active?id=' + enc(id) + '&on=' + (on ? 1 : 0)); apCharge(); }
+async function apRetire(id) {
+  const c = AP.campagnes.find(x => x.id === id);
+  if (!confirm('Retirer la campagne « ' + (c ? c.nom : id) + ' » ? Son historique reste.')) return;
+  await post('api/autopilote/retire?id=' + enc(id)); if (apEdit === id) apNouvelle(); apCharge();
+}
+/** A flyer's proposal into the form, to check before saving. */
+async function apPropose(j) {
+  if (!j || !j.ok) { txt('ap-imp-etat', (j && j.erreur) || 'Affiche non lue.'); return; }
+  const p = j.proposition;
+  g('ap-ocr-d').hidden = false; g('ap-ocr').textContent = j.texte || '';
+  apNouvelle();
+  if (p.nom) g('ap-nom').value = p.nom;
+  if (p.catnum) { if (!tous.length) await chargeSatellites(); const s = tous.find(x => x.catnum === p.catnum); g('ap-sat').value = s ? s.nom : p.sat; apEmisSat = s ? p.catnum : 0; }
+  if (p.freqHz) g('ap-freq').value = apFreq(p.freqHz);
+  await apEmetteurs('');
+  if (p.freqHz) { g('ap-emetteur').value = ''; apEmetteurChange(); }
+  if (p.mode) g('ap-mode').value = p.mode;
+  if (p.de) g('ap-de').value = apLocal(p.de);
+  if (p.a) g('ap-a').value = apLocal(p.a);
+  g('ap-aconf').checked = !!p.aConfirmer;
+  g('ap-horaire').value = p.horaire || ''; g('ap-lien').value = p.lien || '';
+  txt('ap-imp-etat', p.trouve.length ? 'Lu : ' + p.trouve.join(', ') + '. Vérifie puis « Enregistrer la campagne ».' : 'Rien d’utile lu : remplir à la main.');
+  txt('ap-f-titre', 'proposée par l’affiche');
+}
+async function apAfficheFichier(inp) {
+  const f = inp.files && inp.files[0]; inp.value = ''; if (!f) return;
+  if (f.size > 10 * 1024 * 1024) { txt('ap-imp-etat', 'Image trop grande (10 Mo au plus).'); return; }
+  txt('ap-imp-etat', 'Lecture de « ' + f.name + ' » par tesseract…');
+  try { apPropose(await (await fetch('api/autopilote/affiche', { method: 'POST', body: f })).json()); } catch (x) { txt('ap-imp-etat', 'Lecture impossible.'); }
+}
+async function apAfficheUrl() {
+  const u = v('ap-url'); if (!/^https?:\/\//i.test(u)) { txt('ap-imp-etat', 'Une adresse https://… vers une image.'); return; }
+  txt('ap-imp-etat', 'Téléchargement et lecture…');
+  try { apPropose(await (await fetch('api/autopilote/affiche?url=' + enc(u), { method: 'POST' })).json()); } catch (x) { txt('ap-imp-etat', 'Lecture impossible.'); }
+}
+apCharge();
+setInterval(apCharge, 3000);
 setInterval(ticSon, 1000);
 
 // ------------------------------------------------------------------ Montage: the station's chain, drawn and lit
@@ -13888,6 +14219,11 @@ function palSources() {
   });
   const A = (nom, info, go, cl) => l.push({ g: 'Actions', nom, info, go, cl, mots: nom + ' ' + info });
   A('■ Arrêter toute émission', 'Échap · DATV, SSTV, I/Q, mire', arretEmissions, 'arret');
+  if (AP && AP.campagnes) {
+    A('Auto-pilote SSTV : ' + (AP.maitre ? 'couper' : 'activer'), 'interrupteur général · campagnes de l’agenda (réception)', apMaitreBascule);
+    A('Agenda › SSTV : campagnes', 'auto-pilote, importer une affiche', apOuvre);
+    if (AP.enCours) A('■ Arrêter le passage de l’auto-pilote', AP.enCours.nom, apStop, 'arret');
+  }
   A('Démarrer la réception SDR', 'récepteur, écoute', () => post('api/sdr/demarrer').then(() => { HX.t = {}; ticTete(); ticSdr(); }));
   A('Arrêter la réception SDR', 'récepteur', () => post('api/sdr/arreter').then(() => { HX.t = {}; ticTete(); ticSdr(); }));
   if (HX.ann && HX.ann.on) A('Annonces vocales : ' + (HX.ann.muet ? 'remettre' : 'couper'), 'voix, parole, muet', annMuet);

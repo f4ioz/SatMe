@@ -115,6 +115,8 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
     @Volatile var carte: CartePc? = null
     /** The SDR's raw I/Q kept and played back (set before [demarre]). */
     @Volatile var iqSdr: IqPc? = null
+    /** « Agenda › SSTV »: the campaigns and their auto-pilot (set before [demarre]). */
+    @Volatile var autopilote: AutoPiloteSstvPc? = null
 
     /** What the « Montage » page lights: the same state the other tabs read. */
     fun lecturesMontage(): fr.f4ioz.satcombo.station.ActiviteMontage.Lectures = fr.f4ioz.satcombo.station.ActiviteMontage.Lectures(
@@ -558,6 +560,12 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 ?: fr.f4ioz.satcombo.demo.ReponseWeb("200 OK", "application/json; charset=utf-8", "{\"ok\":false}".toByteArray())
             envoie(sortie, rep.statut, rep.type, rep.corps, rep.entetes); return
         }
+        // « Agenda › SSTV »: the campaigns, their auto-pilot, a flyer read (its picture in a POST's body).
+        if (chemin == "/api/autopilote" || chemin.startsWith("/api/autopilote/")) {
+            val rep = autopilote?.sert(chemin, r.methode, { q[it].orEmpty() }) { max -> RequeteHttp.corps(c.getInputStream(), r, max) }
+                ?: fr.f4ioz.satcombo.demo.ReponseWeb("200 OK", "application/json; charset=utf-8", "{\"ok\":false,\"absent\":true}".toByteArray())
+            envoie(sortie, rep.statut, rep.type, rep.corps, rep.entetes); return
+        }
         // The « Montage » page: its chain (a POST saves it, a drawing only), its photos.
         if (chemin == "/api/montage" || chemin.startsWith("/api/montage/")) {
             val m = montage
@@ -703,7 +711,7 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 else envoie(sortie, "200 OK", "image/jpeg", img)
             }
             "/api/frise" -> {
-                val (debut, lignes) = kotlinx.coroutines.runBlocking { station.frise((q["h"]?.toIntOrNull() ?: 12).coerceIn(2, 48)) }
+                val (debut, lignes) = kotlinx.coroutines.runBlocking { station.frise((q["h"]?.toIntOrNull() ?: 12).coerceIn(2, 48), autopilote?.catnums().orEmpty()) }
                 envoie(sortie, "200 OK", "application/json; charset=utf-8", fr.f4ioz.satcombo.demo.ApiCalculs.friseJson(debut, lignes).toString().toByteArray())
             }
             "/api/sked" -> {
@@ -972,7 +980,7 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
      * if it runs, else started), or none (blank: stopped, the recording closed).
      * Remembered for the satellite followed. Null when done, else why not.
      */
-    private fun prendSource(s: SonStation, nom: String): String? {
+    internal fun prendSource(s: SonStation, nom: String): String? {
         if (nom.isBlank()) { s.arreteEnregistrement(); s.son.arrete(); return null }
         if (nom == fr.f4ioz.satcombo.domain.SourceAudio.SDR) {
             val d = sdr ?: return "pas de récepteur SDR ici"

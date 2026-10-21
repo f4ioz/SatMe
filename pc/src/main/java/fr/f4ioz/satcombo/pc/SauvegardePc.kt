@@ -145,8 +145,8 @@ class SauvegardePc(private val dossier: File, private val horloge: () -> Long = 
         const val MANIFESTE = "sauvegarde.json"
         const val CARNET = "qso_log.json"
         const val ATTENTE = "restauration"
-        /** The settings (the phone's stores), the log, APRS's trophies. */
-        val FICHIERS = listOf("reglages.properties", "satellites.properties", "agenda.properties", CARNET, "aprs-trophees.txt")
+        /** The settings (the phone's stores), the log, APRS's trophies, the SSTV campaigns. */
+        val FICHIERS = listOf("reglages.properties", "satellites.properties", "agenda.properties", CARNET, "aprs-trophees.txt", "sstv-campagnes.json")
         /** The pass journal, APRS heard, the SSTV sheets. */
         val DOSSIERS = listOf("journal", "aprs", "planches")
         /** Heavy: only when asked. */

@@ -376,6 +376,21 @@ fun main(args: Array<String>) {
     serveur.parole = parole
     portee.launch { while (true) { runCatching { annonces.tic() }; kotlinx.coroutines.delay(1000) } }
     serveur.annonces = annonces
+    // « Agenda › SSTV »: the campaigns kept; the auto-pilot receives their passes once its master switch is on (off by default).
+    val autopilote = AutoPiloteSstvPc(station, dossier)
+    autopilote.son = son
+    autopilote.sdr = sdr
+    autopilote.montage = serveur.montage
+    autopilote.prendSource = { nom -> serveur.prendSource(son, nom) }
+    autopilote.emissionEnCours = {
+        if (emission.etat.emet) "émission DATV" else if (emissionSstv.etat.emet) "émission SSTV" else if (iq.enCours) "correction I/Q" else null
+    }
+    autopilote.annonce = { t ->
+        val r = annonces.reglages
+        if (r.on && r.veut(fr.f4ioz.satcombo.annonces.Annonces.Sorte.AOS)) annonces.file.propose(fr.f4ioz.satcombo.annonces.Annonces.Sorte.AOS, t)
+    }
+    serveur.autopilote = autopilote
+    portee.launch { while (true) { runCatching { autopilote.tic() }; kotlinx.coroutines.delay(1000) } }
     serveur.demarre()
     // QO-100 received when SatMe-PC stopped: taken back only when chosen in Réglages (reception only).
     Thread({ runCatching { trafic.repriseAuDemarrage() } }, "satme-qo100-reprise").apply { isDaemon = true; start() }
