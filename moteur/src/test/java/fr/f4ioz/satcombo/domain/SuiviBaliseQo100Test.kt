@@ -95,4 +95,20 @@ class SuiviBaliseQo100Test {
         assertEquals(21.0, n[0].second, 1e-6); assertEquals(24.0, n[1].second, 1e-6)
         assertEquals(s.journee().map { it.first }, n.map { it.first })
     }
+
+    @Test fun `une tete qui derive de 4 Hz par seconde est suivie de pres`() {
+        // 21 October: a new LNB walking 240 Hz a minute; a measure a second, ±40 Hz of scatter.
+        val s = SuiviBaliseQo100()
+        val r = java.util.Random(7)
+        var calage = 0L
+        val ecarts = ArrayList<Double>()
+        for (k in 0 until 120) {
+            val t = k * 1_000L
+            val vraie = -600.0 - 4.0 * k
+            s.mesure(t, m(vraie - calage + r.nextGaussian() * 40, 20f), calage, corrige = true)?.let { calage = it }
+            if (k >= 40) ecarts += Math.abs(vraie - calage)
+        }
+        // Behind by little once the drift is known (a two-minute mean lagged ~240 Hz).
+        assertTrue("retard moyen ${ecarts.average()}", ecarts.average() < 40.0)
+    }
 }

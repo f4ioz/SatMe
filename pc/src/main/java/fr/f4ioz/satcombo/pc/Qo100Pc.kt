@@ -46,10 +46,15 @@ class Qo100Pc(private val station: StationPc, private val sdr: SdrPc, private va
 
     private fun surLeTranspondeur() = sdr.etat.value.actif && station.qo100.etat.value.aLaCle
 
-    /** Every second: every 5 s the beacon measured, and the calibration moved when chosen. */
+    /**
+     * Every second: the beacon measured — every second while the calibration
+     * follows it (a drifting LNB moves several hertz a second), every 5 s
+     * otherwise — and the calibration moved when chosen.
+     */
     fun tic() {
         val t = horloge()
-        if (!surLeTranspondeur() || t - dernierMs < 5_000L) return
+        val periode = if (auto && suivi.verrouille(t, 30_000L)) 1_000L else 5_000L
+        if (!surLeTranspondeur() || t - dernierMs < periode - 50L) return
         dernierMs = t
         sdr.demandePanorama()
         val calage = station.qo100.etat.value.calageHz

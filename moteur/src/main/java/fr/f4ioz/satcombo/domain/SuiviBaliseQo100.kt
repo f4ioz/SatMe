@@ -72,7 +72,9 @@ class SuiviBaliseQo100(
     fun mesure(t: Long, m: MesureBalise.Mesure?, calageHz: Long, corrige: Boolean): Long? {
         if (m == null || m.rapportDb < seuilDb) return null
         val p = Point(t, calageHz, m.ecartHz, m.rapportDb)
-        val ref = historique().takeLast(12).takeIf { it.size >= 3 }?.map { it.erreurHz }?.let { mediane(it) }
+        // Compared with where the drift says the beacon should be now (a fast-drifting LNB walks
+        // away from the last minute's median), else with that median.
+        val ref = erreurPrevue(t) ?: historique().takeLast(12).takeIf { it.size >= 3 }?.map { it.erreurHz }?.let { mediane(it) }
         if (ref != null && abs(p.erreurHz - ref) > ECARTEE_HZ) { ecartees++; return null }
         dernier = p
         synchronized(points) {
@@ -90,10 +92,34 @@ class SuiviBaliseQo100(
         if (!corrige) return null
         // The recent measures' median, never one alone: each one wavers, and the PSK beacon's two
         // lobes pull it either way. Nothing written before half a minute of them.
-        val cible = erreurRecente() ?: return null
+        val cible = erreurPrevue(t) ?: erreurRecente() ?: return null
         val delta = cible - calageHz
         if (abs(delta) < toleranceHz || abs(delta) > sautMaxHz) return null
         return calageHz + (delta * 0.8).roundToLong()
+    }
+
+    /**
+     * The LNB's error now, from the straight line through the last
+     * [fenetreMs] of measures: a new or warming LNB drifts several hertz a
+     * second, which a two-minute mean follows hundreds of hertz behind (FT8
+     * then decodes nothing). Null with too few measures or too short a span.
+     */
+    fun erreurPrevue(t: Long, fenetreMs: Long = 30_000L, minimum: Int = 6): Double? {
+        val l = historique().filter { it.t >= t - fenetreMs }
+        if (l.size < minimum || l.last().t - l.first().t < 8_000L) return null
+        val t0 = l.first().t
+        val xs = l.map { (it.t - t0) / 1000.0 }; val ys = l.map { it.erreurHz }
+        val mx = xs.average(); val my = ys.average()
+        val den = xs.sumOf { (it - mx) * (it - mx) }
+        if (den == 0.0) return null
+        val pente = xs.indices.sumOf { (xs[it] - mx) * (ys[it] - my) } / den
+        // A steady LNB (or the PSK beacon's two lobes in turn): the mean of the last minutes is calmer.
+        if (Math.abs(pente) < PENTE_MIN_HZ_S) return null
+        // And only a slope the scatter cannot explain (three standard errors): lobes in turn make none.
+        val residus = xs.indices.sumOf { val e = ys[it] - (my + pente * (xs[it] - mx)); e * e }
+        val erreurPente = Math.sqrt(residus / maxOf(1, l.size - 2) / den)
+        if (Math.abs(pente) < 3 * erreurPente) return null
+        return my + pente * ((t - t0) / 1000.0 - mx)
     }
 
     /** The beacon heard lately (within [depuisMs]). */
@@ -116,6 +142,8 @@ class SuiviBaliseQo100(
         fun ppm(erreurHz: Double, oscillateurHz: Double = 9_750_000_000.0): Double = erreurHz / oscillateurHz * 1e6
         /** Further than this from the recent measures: not the beacon. */
         const val ECARTEE_HZ = 1_500.0
+        /** Below this drift (Hz a second, 60 Hz a minute), the calibration follows the mean, not the line. */
+        const val PENTE_MIN_HZ_S = 1.0
     }
 }
 
