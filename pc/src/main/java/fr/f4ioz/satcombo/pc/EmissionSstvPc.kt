@@ -71,6 +71,8 @@ class EmissionSstvPc(
     private val horloge: () -> Long = System::currentTimeMillis,
     /** Silence from the page longer than this: stopped. */
     private val vieMs: Long = 15_000L,
+    /** The SatMe-Node's transmitter when the operator chose to transmit through it, else null (no network asked). */
+    private val noeudTx: () -> fr.f4ioz.satcombo.sdr.EmetteurNoeud.Fabrique? = { null },
 ) {
     /** The transmitters' I/Q corrections, each board its own (none: the samples as made). */
     @Volatile var corrections: fr.f4ioz.satcombo.sdr.CorrectionsIq? = null
@@ -159,6 +161,8 @@ class EmissionSstvPc(
         val frequenceHz: Long = 0L,
         val modulation: ModulationAudio = ModulationAudio.NBFM,
         val mode: String = "",
+        /** Sent by the SatMe-Node's transmitter, not this PC's board. */
+        val parNoeud: Boolean = false,
         val raison: String = "",
         val erreur: String = "",
     )
@@ -174,8 +178,8 @@ class EmissionSstvPc(
     val boucle = BoucleNiveau()
     @Volatile var niveauQo100 = NiveauSstvQo100.Mesure(null, null); private set
 
-    /** Transmitting with [e] now. */
-    fun emetAvec(e: Emetteur): Boolean = etat.emet && etat.emetteur == e
+    /** Transmitting with this PC's [e] now (the node's board is the node's). */
+    fun emetAvec(e: Emetteur): Boolean = etat.emet && etat.emetteur == e && !etat.parNoeud
 
     /** The page is there (each second while transmitting). */
     fun vie() { derniereVie = horloge() }
@@ -205,7 +209,9 @@ class EmissionSstvPc(
         autreEmission()?.let { return it }
         val qui = emetteur
         val blade = qui == Emetteur.BLADERF
-        (if (blade) bladerfOccupe() else plutoOccupe())?.let { return it }
+        // Through the node: its board of this kind, its guards there; this PC's board stays free.
+        val noeud = noeudTx()
+        if (noeud == null) (if (blade) bladerfOccupe() else plutoOccupe())?.let { return it }
         val m = mode
         val px = image(m).getOrElse { return it.message ?: "image impossible" }
         val call = indicatif().trim().uppercase()
@@ -213,7 +219,7 @@ class EmissionSstvPc(
         val d = demande(true, interieur, charge, satellite, prog.secondes)
         ReglesSstvRf.refus(d)?.let { return it }
         val plafond = ReglesSstvRf.plafondDb(d, minOf(gainMaxDb(), 0.0))
-        val programmeCli = if (blade) bladerfProgramme() ?: return "bladeRF-cli introuvable : installer bladerf (sudo apt install bladerf), ou donner son chemin dans l'onglet SDR" else ""
+        val programmeCli = if (blade && noeud == null) bladerfProgramme() ?: return "bladeRF-cli introuvable : installer bladerf (sudo apt install bladerf), ou donner son chemin dans l'onglet SDR" else ""
         val facteur = if (blade) FACTEUR_BLADERF else FACTEUR_PLUTO
         val mod = ModulateurAudio(d.modulation, DEBIT_AUDIO, facteur, d.deviationHz, preaccentuation && d.modulation == ModulationAudio.NBFM, NIVEAU, prog)
         val gen = ++generation
@@ -223,7 +229,12 @@ class EmissionSstvPc(
         val paires = EmissionDatvPc.paires(mod.debit)
         val e: EmetteurDatv
         val refus: String?
-        if (blade) {
+        if (noeud != null) {
+            val nx = noeud.cree()
+            refus = nx.demarre(fr.f4ioz.satcombo.sdr.EmetteurNoeud.Reglage(qui.cle, d.frequenceHz, mod.debit, d.gainDb, duree, plafondDb = plafond, paires = paires,
+                garde = { garde(gen) })) { b -> mod.remplis(b, b.size / 2) }
+            e = nx
+        } else if (blade) {
             val bx = BladerfEmission(programmeCli, gainMaxDb = plafond)
             refus = bx.demarre(BladerfEmission.Reglage(d.frequenceHz, mod.debit, d.gainDb, duree, plafondDb = plafond, paires = paires,
                 garde = { garde(gen) }, correction = { s -> corrections?.aAppliquer(fr.f4ioz.satcombo.sdr.CorrectionsIq.BLADERF, s) })) { b -> mod.remplis(b, b.size / 2) }
@@ -238,7 +249,7 @@ class EmissionSstvPc(
         tx = e
         occupe = ReglesSstvRf.occupe(d)
         niveauQo100 = NiveauSstvQo100.Mesure(null, null)
-        etat = Etat(true, interieur, charge, satellite, qui, d.frequenceHz, d.modulation, m.name)
+        etat = Etat(true, interieur, charge, satellite, qui, d.frequenceHz, d.modulation, m.name, parNoeud = noeud != null)
         return null
     }
 
@@ -297,7 +308,7 @@ class EmissionSstvPc(
         val pe = tx?.etatCommun()
         val t = horloge()
         val p = programme
-        val o = JSONObject().put("emet", e.emet && pe?.emet == true)
+        val o = JSONObject().put("emet", e.emet && pe?.emet == true).put("parNoeud", noeudTx() != null).put("parNoeudEnCours", e.parNoeud)
             .put("emetteur", emetteur.cle).put("modulation", modulation.cle).put("dev", deviationHz).put("preacc", preaccentuation)
             .put("khz", frequenceKhz).put("intKhz", frequenceInterieurKhz).put("intDefautKhz", DEFAUT_INTERIEUR_KHZ)
             .put("gain", gainDb).put("gainMax", gainMaxDb()).put("gainInterieur", ReglesSstvRf.GAIN_INTERIEUR_DB).put("gainCharge", ReglesSstvRf.GAIN_CHARGE_DB)

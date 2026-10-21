@@ -96,6 +96,26 @@ class ClientNoeud(private val stockage: Stockage) {
     /** Where the transport stream is read (HTTP, as long as it is read). */
     fun urlFlux(): String = avecCle("/noeud/datv/ts")
 
+    /** The node's host and port, for a connection of its own (the SDR's and the transmitter's streams). */
+    fun hotePort(): Pair<String, Int> {
+        val b = base().removePrefix("http://")
+        return b.substringBeforeLast(':') to (b.substringAfterLast(':').toIntOrNull() ?: PORT)
+    }
+
+    /** [chemin] with the key, as a raw request asks it. */
+    fun cheminAvecCle(chemin: String): String = chemin + (if ('?' in chemin) "&" else "?") + "cle=" + cle
+
+    /** The node's devices and their roles (an older node: only its DATV receiver). */
+    fun materiel(): JSONObject = runCatching { JSONObject(get("/noeud/materiel")) }.getOrElse { x ->
+        if (x.message?.contains("404") == true) JSONObject().put("ancien", true) else throw x
+    }
+
+    /** Sets which device the node lends as its SDR (receive only); null when done, else why not. */
+    fun choisitSdr(appareil: String): String? = runCatching {
+        val r = post("/noeud/sdr/appareil?appareil=" + java.net.URLEncoder.encode(appareil, "UTF-8"))
+        if (r.optBoolean("ok")) null else r.optString("erreur", "le node refuse")
+    }.getOrElse { "node injoignable : " + (it.message ?: "") }
+
     companion object {
         const val PORT = 8090
         private const val CLE_ADRESSE = "datv_noeud"

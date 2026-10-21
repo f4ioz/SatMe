@@ -123,7 +123,7 @@ class TraficQo100Pc(private val station: StationPc, private val sdr: SdrPc, priv
     fun json(): JSONObject {
         val q = station.qo100.etat.value
         val e = sdr.etat.value
-        val nom = when (sdr.recepteur) { SdrPc.PLUTO -> "ADALM-PLUTO"; SdrPc.BLADERF -> "bladeRF 2.0"; else -> "clé RTL-SDR" }
+        val nom = when (sdr.recepteur) { SdrPc.PLUTO -> "ADALM-PLUTO"; SdrPc.BLADERF -> "bladeRF 2.0"; SdrPc.NOEUD -> "SDR du SatMe-Node"; else -> "clé RTL-SDR" }
         val r = ApiQo100.Recepteur(true, e.actif, if (e.tuner.isNotBlank()) "$nom · ${e.tuner}" else nom, e.statut, e.erreur,
             Math.round(e.niveauDb * 10) / 10.0, sdr.modeEffectif(), s.sdrAudio, s.sdrSquelchDb,
             if (sdr.recepteur != SdrPc.RTL) null else s.sdrAgc)

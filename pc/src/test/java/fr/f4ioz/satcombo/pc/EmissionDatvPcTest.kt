@@ -242,6 +242,55 @@ class EmissionDatvPcTest {
         assertEquals(setOf(6), b.modcods)
     }
 
+    /**
+     * The same transmission through a SatMe-Node in this process: modulated
+     * here, sent over the network, given there to the Pluto's own class
+     * (against the fake Pluto): the packets come out byte for byte. This PC's
+     * Pluto, busy, is not asked.
+     */
+    @Test
+    fun bout_en_bout_par_le_satme_node() {
+        val p = FauxPluto().also { ouverts += it }
+        val sn = StockageMemoire().apply { edit().putString("noeud_pluto_hote", "127.0.0.1").putInt("noeud_pluto_port", p.port).apply() }
+        val tx = EmissionNoeudPc(sn, EmissionNoeudPc.reels(sn))
+        val noeud = NoeudPc(DatvPc(sn, File(System.getProperty("java.io.tmpdir")), lecteursLocaux = false), sn, 0, nom = "essai", tx = tx).also { it.demarre() }
+        try {
+            val cle = org.json.JSONObject(java.net.URL("http://127.0.0.1:${noeud.portReel}/noeud/entrer?code=" + noeud.code).readText()).getString("cle")
+            val fab = fr.f4ioz.satcombo.sdr.EmetteurNoeud.Fabrique {
+                fr.f4ioz.satcombo.sdr.EmetteurNoeud("127.0.0.1", noeud.portReel, "/noeud/tx/flux?cle=$cle", -10.0)
+            }
+            fun emission(ts: TsSynthetique) = EmissionDatvPc(StockageMemoire(), File(System.getProperty("java.io.tmpdir"), "satme-test-datv"), { "F4IOZ" },
+                plutoOccupe = { "l'ADALM-PLUTO de ce PC reçoit" }, fabrique = ts, noeudTx = { fab }).apply {
+                modcodTexte = "QPSK 2/3"; srKs = 333; rolloff = Rolloff.A25; pilotes = true; courtes = false
+                frequenceKhz = 2_409_750L; gainDb = -30.0
+            }
+            // « émission autorisée » off on the node (its default): refused there, nothing configured on the Pluto.
+            assertTrue(emission(TsSynthetique(10)).demarre(confirme = true, chargeFictive = false)!!.contains("non autorisée"))
+            assertTrue(p.attributs.isEmpty())
+            val ts = TsSynthetique(450)
+            val e = emission(ts)
+            assertNull(tx.regleLocal(true, true, "pluto", null))
+            assertNull(e.demarre(confirme = true, chargeFictive = false))
+            assertTrue(e.etat.parNoeud)
+            val ok = attends(10_000) { e.vie(); e.tic(); p.octets > 4L * 2_331_000 * 2 }
+            assertTrue(e.json().toString().take(400) + " octets " + p.octets, ok)
+            assertTrue(tx.etat.emet)
+            e.arrete()
+            assertFalse(e.etat.emet)
+            assertTrue(attends(3_000) { p.loEteint && !tx.etat.emet })
+            assertEquals("2409750000", p.attributs["ad9361-phy OUTPUT altvoltage1 frequency"])
+            assertEquals("-30.00", p.attributs["ad9361-phy OUTPUT voltage0 hardwaregain"])
+            val rx = RecepteurDvbs2(Rolloff.A25, 7)
+            val b = rx.decode(rx.symboles(p.iq()))
+            assertTrue("${b.paquets.size} paquets", b.paquets.size >= 300)
+            // A run of the packets made, in order, byte for byte (the decoder may pick up a frame late).
+            val k0 = ts.paquets.indexOfFirst { it.contentEquals(b.paquets[0]) }
+            assertTrue("premier paquet $k0", k0 in 0..60)
+            for (k in b.paquets.indices) assertArrayEquals("paquet $k", ts.paquets[k0 + k], b.paquets[k])
+            assertEquals(0, b.crcPaquetsFaux)
+        } finally { noeud.arrete() }
+    }
+
     @Test
     fun la_page_muette_arrete_l_emission() {
         val p = FauxPluto().also { ouverts += it }

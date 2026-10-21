@@ -33,6 +33,7 @@ import fr.f4ioz.satcombo.sdr.Bladerf
 import fr.f4ioz.satcombo.sdr.BladerfEmission
 import fr.f4ioz.satcombo.sdr.CorrectionsIq
 import fr.f4ioz.satcombo.sdr.EmetteurDatv
+import fr.f4ioz.satcombo.sdr.EmetteurNoeud
 import fr.f4ioz.satcombo.sdr.HackrfEmission
 import fr.f4ioz.satcombo.sdr.Melangeur
 import fr.f4ioz.satcombo.sdr.PlutoEmission
@@ -93,6 +94,8 @@ class EmissionDatvPc(
     private val retourParDefaut: () -> Long? = { null },
     /** The MODCOD's adaptation for each transmission (its timings shortened in the tests). */
     private val nouvelleAdaptation: () -> AdaptationModcod = { AdaptationModcod() },
+    /** The SatMe-Node's transmitter when the operator chose to transmit through it, else null (no network asked). */
+    private val noeudTx: () -> EmetteurNoeud.Fabrique? = { null },
 ) {
     /**
      * The MiniTiouner's view: locked, MER, where it is tuned (sky kHz), the
@@ -398,6 +401,8 @@ class EmissionDatvPc(
         val emetteur: Emetteur = Emetteur.PLUTO,
         val frequenceKhz: Long = 0L,
         val debitTs: Long = 0L,
+        /** Sent by the SatMe-Node's transmitter (a board of the same kind there, not this PC's). */
+        val parNoeud: Boolean = false,
         val raison: String = "",
         val erreur: String = "",
     )
@@ -449,7 +454,9 @@ class EmissionDatvPc(
         val qui = emetteur
         val hackrf = qui == Emetteur.HACKRF
         val blade = qui == Emetteur.BLADERF
-        if (blade) bladerfOccupe()?.let { return it } else if (!hackrf) plutoOccupe()?.let { return it }
+        // Through the node: its board of this kind, its guards there; this PC's board stays free.
+        val noeud = if (hackrf) null else noeudTx()
+        if (noeud == null) { if (blade) bladerfOccupe()?.let { return it } else if (!hackrf) plutoOccupe()?.let { return it } }
         val m = modcod()
         val nrm = norme
         val td = tauxDvbs()
@@ -460,7 +467,7 @@ class EmissionDatvPc(
         val d = DemandeEmission(khz, srKs, m, rolloff, gain, duree, chargeFictive, indicatif(), interieur, qui)
         ReglesEmission.refus(d, gainMaxDb)?.let { return it }
         val programme = if (hackrf) outilHackrf("hackrf_transfer") ?: return conseilHackrf()
-            else if (blade) bladerfProgramme() ?: return conseilBladerf() else ""
+            else if (blade && noeud == null) bladerfProgramme() ?: return conseilBladerf() else ""
         // The HackRF's LO beside the signal: the band rules above stay on the signal itself.
         val plan = if (hackrf && hackrfDecalage) DecalageHackrf.plan(khz, srKs, rolloff.alpha, interieur)
             ?: return DecalageHackrf.refus(khz, srKs, rolloff.alpha, interieur) else null
@@ -502,6 +509,14 @@ class EmissionDatvPc(
             val mel = plan?.let { Melangeur(it.decalageHz.toDouble(), debit.toDouble()) }
             refus = hx.demarre(r) { b -> mod.remplis(b, b.size / 2); mel?.applique(b) }
             e = hx
+        } else if (noeud != null) {
+            // The same samples, the same ceilings as on this PC: the node's board does the radio.
+            val nx = noeud.cree()
+            val r = EmetteurNoeud.Reglage(appareil = qui.cle, frequenceHz = khz * 1000L, debit = debit, gainDb = gain, dureeMs = duree * 1000L,
+                plafondDb = when { chargeFictive -> ReglesEmission.GAIN_CHARGE_DB; interieur -> PlanInterieur.GAIN_PLUTO_DB; else -> 0.0 },
+                paires = paires(debit), garde = { garde(gen) })
+            refus = nx.demarre(r) { b -> mod.remplis(b, b.size / 2) }
+            e = nx
         } else if (blade) {
             val bx = BladerfEmission(programme, gainMaxDb = minOf(gainMaxDb, 0.0))
             val r = BladerfEmission.Reglage(
@@ -525,7 +540,7 @@ class EmissionDatvPc(
         tx = e
         inserteur = ins; modcodEnCours = m; normeEnCours = nrm; tauxEnCours = if (nrm == Norme.DVBS) td else null; srEnCours = srKs; spsEnCours = sps; parametresEnCours = pts
         adaptation = nouvelleAdaptation()
-        etat = Etat(emet = true, chargeFictive = chargeFictive, interieur = interieur, emetteur = qui, frequenceKhz = khz, debitTs = debitTs)
+        etat = Etat(emet = true, chargeFictive = chargeFictive, interieur = interieur, emetteur = qui, frequenceKhz = khz, debitTs = debitTs, parNoeud = noeud != null)
         return null
     }
 
@@ -609,7 +624,7 @@ class EmissionDatvPc(
         if (emetteur == Emetteur.BLADERF) gainBladerf = db else gainDb = db
         val px = tx
         // The HackRF takes its gain at the start; the Pluto's only goes to the Pluto, the bladeRF's to the bladeRF.
-        return when (px) { is PlutoEmission -> px.regleGain(db); is BladerfEmission -> px.regleGain(db); else -> null }
+        return when (px) { is PlutoEmission -> px.regleGain(db); is BladerfEmission -> px.regleGain(db); is EmetteurNoeud -> px.regleGain(db); else -> null }
     }
 
     /**
@@ -632,7 +647,7 @@ class EmissionDatvPc(
             merBalise = r.merDb; merBaliseMs = t
         }
         // The closed loop on the beacon: on QO-100 only (the Pluto, the bladeRF).
-        if (!etat.emet || etat.chargeFictive || etat.interieur || !(px is PlutoEmission || px is BladerfEmission)) return
+        if (!etat.emet || etat.chargeFictive || etat.interieur || !(px is PlutoEmission || px is BladerfEmission || px is EmetteurNoeud)) return
         val nous = r.verrouille && (r.service.equals(indicatif().trim(), true) ||
             kotlin.math.abs(r.cielKhz - (etat.frequenceKhz + PlanQo100.DECALAGE_KHZ)) < srKs / 2)
         val g = boucle.mesure(if (nous) r.merDb else null, merBalise, 0L, px.etatCommun().gainDb, t) ?: return
@@ -659,7 +674,7 @@ class EmissionDatvPc(
         val min = Modcod.de(adaptMin, courant.courte, courant.pilotes) ?: return
         val max = Modcod.de(adaptMax, courant.courte, courant.pilotes) ?: return
         val nous = nousRecoit(r)
-        val qo100 = !etat.chargeFictive && !etat.interieur && (tx is PlutoEmission || tx is BladerfEmission)
+        val qo100 = !etat.chargeFictive && !etat.interieur && (tx is PlutoEmission || tx is BladerfEmission || tx is EmetteurNoeud)
         val m = AdaptationModcod.Mesure(nous && r?.merDb != null, if (nous) r?.merDb else null, nous && r?.pertes == true)
         val vers = a.tic(courant, min, max, adaptMarge, m, horloge(), qo100) ?: return
         erreurAdaptation = commute(vers).orEmpty()
@@ -748,6 +763,7 @@ class EmissionDatvPc(
         // The HackRF, the indoor test and what the MiniTiouner needs for it.
         val ik = frequenceInterieurKhz
         val ih = infoHackrf
+        o.put("parNoeud", noeudTx() != null).put("parNoeudEnCours", e.parNoeud)
         o.put("emetteur", emetteur.cle).put("emetteurNom", emetteur.libelle).put("interieur", e.interieur).put("emetteurEnCours", e.emetteur.cle)
             .put("vga", vgaHackrf).put("vgaMax", ReglesEmission.HACKRF_VGA_MAX).put("hackrfOutil", hackrfOutil)
             .put("hackrfProgramme", outilHackrf("hackrf_transfer") ?: "").put("hackrfConseil", conseilHackrf())

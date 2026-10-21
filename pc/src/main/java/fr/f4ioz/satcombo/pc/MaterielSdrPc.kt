@@ -72,8 +72,15 @@ class MaterielSdrPc(
  * On a SatMe-Node: the ADALM-PLUTO (its address kept, 192.168.2.1 by
  * default) or the bladeRF (bladeRF-cli in the PATH) opened as they are.
  */
-class MaterielNoeud(private val stockage: Stockage) : MaterielSdrDatv {
-    override fun ouvre(recepteur: String): SourceIq = when (recepteur) {
+class MaterielNoeud(
+    private val stockage: Stockage,
+    /** Why the board is held on the node (its SDR lent to SatMe-PC, its transmitter), or null. */
+    private val occupe: (String) -> String? = { null },
+) : MaterielSdrDatv {
+    override fun ouvre(recepteur: String): SourceIq = occupe(recepteur)?.let { throw IOException(it) } ?: ouvreLibre(recepteur)
+
+    /** The board as it is, for DATV or for the SDR lent to SatMe-PC. */
+    fun ouvreLibre(recepteur: String): SourceIq = when (recepteur) {
         Datv.PLUTO -> PlutoSdr.connecte(stockage.getString("noeud_pluto_hote", PlutoSdr.HOTE) ?: PlutoSdr.HOTE,
             stockage.getInt("noeud_pluto_port", PlutoSdr.PORT))
         Datv.BLADERF -> BladerfSdr.ouvre(OutilsPc.trouve("bladeRF-cli") ?: throw IOException("bladeRF-cli introuvable sur le node : sudo apt install bladerf"))

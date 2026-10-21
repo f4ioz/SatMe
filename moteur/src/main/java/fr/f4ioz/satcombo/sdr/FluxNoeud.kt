@@ -68,13 +68,16 @@ object FluxNoeud {
 
     /** Writes frames; safe from several threads (a frame is never cut by another). */
     class Ecrivain(private val o: OutputStream, private val horloge: () -> Long = System::currentTimeMillis) {
-        private var seq = 0L
+        private val seq = java.util.concurrent.atomic.AtomicLong()
         private var tampon = ByteArray(ENTETE + 2 * 16_384)
-        /** Frames written so far. */
-        val ecrites: Long get() = seq
+        /** Frame numbers used so far (written or dropped). */
+        val ecrites: Long get() = seq.get()
 
-        /** A frame number used without writing it (a frame dropped on purpose): the reader sees the gap. */
-        @Synchronized fun saute() { seq = (seq + 1) and 0xFFFFFFFFL }
+        /**
+         * A frame number used without writing it (a frame dropped on purpose):
+         * the reader sees the gap. Never waits for a write under way.
+         */
+        fun saute() { seq.incrementAndGet() }
 
         @Synchronized fun iq(v: ShortArray, n: Int, centreHz: Long, debit: Int, tMs: Long = horloge()) {
             val m = n and 1.inv()
@@ -107,10 +110,9 @@ object FluxNoeud {
 
         private fun entete(t: ByteArray, type: Char, tMs: Long, centreHz: Long, debit: Int, n: Int) {
             t[0] = 'S'.code.toByte(); t[1] = 'M'.code.toByte(); t[2] = 'F'.code.toByte(); t[3] = type.code.toByte()
-            ecrisInt(t, 4, seq.toInt())
+            ecrisInt(t, 4, seq.getAndIncrement().toInt())
             ecrisLong(t, 8, tMs); ecrisLong(t, 16, centreHz)
             ecrisInt(t, 24, debit); ecrisInt(t, 28, n)
-            seq = (seq + 1) and 0xFFFFFFFFL
         }
     }
 

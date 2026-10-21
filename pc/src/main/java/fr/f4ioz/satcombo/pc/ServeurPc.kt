@@ -79,6 +79,8 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
 
     /** SSTV on the air with the Pluto or the bladeRF (set before [demarre]). */
     @Volatile var emissionSstv: EmissionSstvPc? = null
+    /** The SatMe-Node joined, beyond DATV: its SDR, its transmitter. */
+    @Volatile var noeudDistant: NoeudDistantPc? = null
 
     /** The transmitters' I/Q correction and its calibration (set before [demarre]). */
     @Volatile var iq: CalibrationIqPc? = null
@@ -432,6 +434,16 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 chemin == "/api/icomreseau/cartes" -> ir.cartes()
                 r.methode == "POST" -> runCatching { ir.action(chemin, q) }.getOrElse { JSONObject().put("ok", false).put("erreur", it.message ?: "erreur") }
                 else -> ir.json()
+            }
+            envoie(sortie, "200 OK", "application/json; charset=utf-8", o.toString().toByteArray()); return
+        }
+        // The SatMe-Node joined: its devices and roles; its SDR's settings, « émettre par le node » (off by default).
+        if (chemin == "/api/noeud" || chemin == "/api/noeud/reglage") {
+            val n = noeudDistant
+            val o = when {
+                n == null -> JSONObject().put("ok", false).put("absent", true)
+                r.methode == "POST" -> runCatching { n.action(q) }.getOrElse { JSONObject().put("ok", false).put("erreur", it.message ?: "erreur") }
+                else -> n.jsonPage()
             }
             envoie(sortie, "200 OK", "application/json; charset=utf-8", o.toString().toByteArray()); return
         }

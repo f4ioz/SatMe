@@ -255,6 +255,10 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
     @Volatile var cadranPoste: () -> Long? = { null }
     /** Moves the rig's RX dial by [Int] Hz by CAT (receive only); false when it cannot. */
     @Volatile var deplacePoste: (Int) -> Boolean = { false }
+    /** Opens a SatMe-Node's SDR (its bladeRF or Pluto) as a receiver (set by Main), throws with the reason. */
+    @Volatile var ouvreNoeud: (() -> SourceIq)? = null
+    /** The node's SDR being received now, or null. */
+    val sdrNoeud: fr.f4ioz.satcombo.sdr.SourceNoeudIq? get() = cle as? fr.f4ioz.satcombo.sdr.SourceNoeudIq
     /** The rig's IF being received now, or null. */
     val fiPoste: fr.f4ioz.satcombo.sdr.SourceFiPoste? get() = cle as? fr.f4ioz.satcombo.sdr.SourceFiPoste
     /**
@@ -345,7 +349,7 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
     /** The frequencies the chosen receiver tunes to (Hz): the dongle's, or the Pluto's. */
     val gammeHz: LongRange get() = (cle as? PlutoSdr)?.let { it.frequenceMinHz..it.frequenceMaxHz }
         ?: if (choixFictif() || recepteur == FI_POSTE) 24_000_000L..12_000_000_000L
-        else if (estPluto()) 70_000_000L..6_000_000_000L
+        else if (estPluto() || recepteur == NOEUD) 70_000_000L..6_000_000_000L
         else if (estBladerf()) BladerfSdr.FREQ_MIN_HZ..BladerfSdr.FREQ_MAX_HZ else 24_000_000L..1_766_000_000L
     /** "AUTO": the transmitter's mode; or NFM, USB, LSB, AM. */
     var modeChoisi: String
@@ -528,7 +532,7 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
         val r = runCatching { connecte() }.getOrElse { e ->
             arreteProcessus()
             _etat.update { Etat(erreur = e.message ?: if (estPluto()) "ADALM-PLUTO injoignable" else if (estBladerf()) "bladeRF injoignable"
-                else if (recepteur == FI_POSTE) "FI de l'IC-9700 indisponible" else "rtl_tcp injoignable") }
+                else if (recepteur == FI_POSTE) "FI de l'IC-9700 indisponible" else if (recepteur == NOEUD) "SatMe-Node injoignable" else "rtl_tcp injoignable") }
             return false
         }
         cle = r
@@ -541,6 +545,7 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
         }
         cibleMaintenant()
         val nom = when (r) { is RtlTcp -> RtlTcp.nomTuner(r.tuner); is PlutoSdr -> r.description; is BladerfSdr -> r.description
+            is fr.f4ioz.satcombo.sdr.SourceNoeudIq -> r.description
             is fr.f4ioz.satcombo.sdr.SourceFichierIq -> "Fichier I/Q " + r.donnees.name.removeSuffix(fr.f4ioz.satcombo.sdr.SigMF.EXT_DATA)
             is fr.f4ioz.satcombo.sdr.GenerateurIq -> "Générateur d'essai"
             is fr.f4ioz.satcombo.sdr.SourceFiPoste -> "IC-9700 FI · " + (if (r.transport == "usb") "carte USB" else "réseau") +
@@ -585,6 +590,8 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
         if (recepteur == GENERATEUR) return fr.f4ioz.satcombo.sdr.GenerateurIq(reglagesGenerateur)
         // The rig's IF: no SDR hardware, the rig tunes itself (CAT).
         if (recepteur == FI_POSTE) return (ouvreFi ?: throw java.io.IOException("la FI du poste n'est pas disponible ici"))()
+        // A SatMe-Node's SDR: the board is there, its guards there too.
+        if (recepteur == NOEUD) return (ouvreNoeud ?: throw java.io.IOException("aucun SatMe-Node associé : l'associer dans Station › SatMe-Node"))()
         if (recepteur == FICHIER) {
             val f = File(fichierIq)
             if (fichierIq.isBlank() || !f.isFile) throw java.io.IOException("aucun enregistrement choisi : « I/Q » › Rejouer")
@@ -805,6 +812,7 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
                 if (n < 0) {
                     val pourquoi = if (r is PlutoSdr) r.erreur ?: "l'ADALM-PLUTO a coupé la liaison"
                         else if (r is BladerfSdr) r.erreur ?: "bladeRF-cli s'est arrêté"
+                        else if (r is fr.f4ioz.satcombo.sdr.SourceNoeudIq) r.erreur ?: "le SatMe-Node a coupé la liaison"
                         else if (fichier != null) "lecture terminée (fin de l'enregistrement)"
                         else if (essai) "générateur arrêté" else if (fi != null) "la FI du poste ne vient plus" else "rtl_tcp a coupé la liaison"
                     if (generation == gen) _etat.update { it.copy(actif = false, statut = "arrêtée", erreur = pourquoi) }
@@ -900,6 +908,7 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
                     _etat.update { it.copy(statut = statut, pllHz = pll, fineHz = fine, niveauDb = chaine.levelDb, saturation = chaine.clipRatio,
                         ctcssHz = st.hz, ctcssConfiance = st.confiance, ctcssDevHz = st.deviationHz, tonFerme = chaine.toneSquelchClosed,
                         debitKo = debit, perdus = r.perdus, erreur = when (r) { is PlutoSdr -> r.avertissement; is BladerfSdr -> r.avertissement
+                            is fr.f4ioz.satcombo.sdr.SourceNoeudIq -> r.avertissement
                             is fr.f4ioz.satcombo.sdr.SourceFiPoste -> r.avertissement()
                                 ?: if (!cadranLu) "cadran du poste non lu (CAT non connecté) : l'axe suit la fréquence visée" else ""
                             else -> it.erreur }) }
@@ -940,7 +949,9 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
         /** The rig's IF output (IC-9700 set to IF), by its network audio or its USB sound card. */
         const val FI_POSTE = "fiposte"
         const val CLE_FI_RECENTRE = "pc_sdr_fi_recentre"
-        val RECEPTEURS = setOf(RTL, PLUTO, BLADERF, FICHIER, GENERATEUR, FI_POSTE)
+        /** A SatMe-Node's SDR (its bladeRF or Pluto), over the network. */
+        const val NOEUD = "noeud"
+        val RECEPTEURS = setOf(RTL, PLUTO, BLADERF, FICHIER, GENERATEUR, FI_POSTE, NOEUD)
         const val CLE_FICHIER = "pc_sdr_fichier_iq"
         const val CLE_FICHIER_DEBIT = "pc_sdr_fichier_debit"
         const val CLE_FICHIER_FREQ = "pc_sdr_fichier_freq"

@@ -212,6 +212,9 @@ fun main(args: Array<String>) {
     val appairage = AppairagePc(telephone, port + 1)
     // DATV with a MiniTiouner, through LongMynd: nothing started until asked.
     val datv = DatvPc(station.stockage, File(dossier, "enregistrements"))
+    // The SatMe-Node joined: its SDR as the receiver « SDR du Node », its transmitter when chosen (off by default).
+    val noeudDistant = NoeudDistantPc(station.stockage, datv.client)
+    sdr.ouvreNoeud = { noeudDistant.ouvreSdr(0L, station.settings.sdrGainTenthDb.takeIf { it >= 0 }, station.settings.sdrPpm) }
     // Its sound subtitled, the callsigns written in its picture: each off unless chosen in the DATV tab.
     val textesDatv = TextesDatvPc(station.stockage, TextesDatvPc.Source.de(datv), phonie,
         carnet = { carnet.contacts().map { it.callsign } }, moi = { station.settings.callsign })
@@ -252,7 +255,8 @@ fun main(args: Array<String>) {
         nom = { station.settings.plancheNom }, logiciel = "SatMe-PC " + versionPc(),
         // Talkback by default: where the rig is on QO-100's narrow band, when SatMe may propose it.
         retourParDefaut = { station.qo100.etat.value.let { q ->
-            q.descenteHz.takeIf { q.auPoste && q.transpondeur == fr.f4ioz.satcombo.domain.Qo100.NB.cle && fr.f4ioz.satcombo.domain.GardeQo100.proposable(it) } } })
+            q.descenteHz.takeIf { q.auPoste && q.transpondeur == fr.f4ioz.satcombo.domain.Qo100.NB.cle && fr.f4ioz.satcombo.domain.GardeQo100.proposable(it) } } },
+        noeudTx = { noeudDistant.fabriqueTx { station.stockage.getFloat("datv_tx_gain_max", -10f).toDouble() } })
     // The transmitters' I/Q correction (Réglages › Émission): kept per board, used by DATV and SSTV; calibrated indoors only.
     val corrections = fr.f4ioz.satcombo.sdr.CorrectionsIq(station.stockage)
     emission.corrections = corrections
@@ -273,7 +277,8 @@ fun main(args: Array<String>) {
         autreEmission = { if (emission.etat.emet) "une émission DATV est en cours : l'arrêter d'abord" else if (iq.enCours) iqEnCours else null },
         gainMaxDb = { emission.gainMaxDb },
         planche = { planche.image(it) }, planches = { planche.modeles() },
-        signauxQo100 = { qo100.signaux.recents() })
+        signauxQo100 = { qo100.signaux.recents() },
+        noeudTx = { noeudDistant.fabriqueTx { emission.gainMaxDb } })
     sstvRef = emissionSstv
     emissionSstv.corrections = corrections
     emission.autreEmission = { if (emissionSstv.etat.emet) "une émission SSTV est en cours : l'arrêter d'abord" else if (iq.enCours) iqEnCours else null }
@@ -281,11 +286,11 @@ fun main(args: Array<String>) {
     datv.materiel = MaterielSdrPc(sdr, { trafic.reprend() }, { station.settings.qo100EnCours }) { r ->
         val qui = if (r == fr.f4ioz.satcombo.datv.Datv.PLUTO) fr.f4ioz.satcombo.datv.Emetteur.PLUTO else fr.f4ioz.satcombo.datv.Emetteur.BLADERF
         if (iq.enCours) iqEnCours
-        else if ((emission.etat.emet && emission.etat.emetteur == qui) || emissionSstv.emetAvec(qui))
+        else if ((emission.etat.emet && emission.etat.emetteur == qui && !emission.etat.parNoeud) || emissionSstv.emetAvec(qui))
             (if (qui == fr.f4ioz.satcombo.datv.Emetteur.PLUTO) "l'ADALM-PLUTO" else "le bladeRF") + " émet : arrêter l'émission d'abord" else null
     }
-    sdr.emissionPluto = { emission.etat.emet || emissionSstv.emetAvec(fr.f4ioz.satcombo.datv.Emetteur.PLUTO) || iq.tient(fr.f4ioz.satcombo.datv.Emetteur.PLUTO) }
-    sdr.emissionBladerf = { (emission.etat.emet && emission.etat.emetteur == fr.f4ioz.satcombo.datv.Emetteur.BLADERF) ||
+    sdr.emissionPluto = { (emission.etat.emet && !emission.etat.parNoeud) || emissionSstv.emetAvec(fr.f4ioz.satcombo.datv.Emetteur.PLUTO) || iq.tient(fr.f4ioz.satcombo.datv.Emetteur.PLUTO) }
+    sdr.emissionBladerf = { (emission.etat.emet && emission.etat.emetteur == fr.f4ioz.satcombo.datv.Emetteur.BLADERF && !emission.etat.parNoeud) ||
         emissionSstv.emetAvec(fr.f4ioz.satcombo.datv.Emetteur.BLADERF) || iq.tient(fr.f4ioz.satcombo.datv.Emetteur.BLADERF) }
     // Text and the mark over the transmitted picture; its pictures and videos chosen from the page.
     emission.incrustation = IncrustationDatvPc(station.stockage)
@@ -294,6 +299,7 @@ fun main(args: Array<String>) {
     val serveur = ServeurPc(station, port, reseau, carnet, son, journalWeb, ImportPc(station, carnet, journal), sdr, videoSked, telephone, appairage, datv,
         planche, kiss, sauvegarde, MirePc(File(dossier, "exports")), diffusion, qo100, lien, phonie, emission, trafic)
     serveur.emissionSstv = emissionSstv
+    serveur.noeudDistant = noeudDistant
     serveur.iq = iq
     serveur.textesDatv = textesDatv
     serveur.icomReseau = icomReseau
@@ -560,13 +566,27 @@ fun dossierParDefaut(): File {
 private fun mainNoeud(port: Int, dossier: File) {
     val stockage = StockageFichier(File(dossier, "reglages.properties"))
     val datv = DatvPc(stockage, File(dossier, "enregistrements"), lecteursLocaux = false)
-    datv.materiel = MaterielNoeud(stockage)
-    val n = NoeudPc(datv, stockage, port)
+    // Each board one role at a time: DATV reception, the SDR lent to SatMe-PC, the transmitter.
+    var sdr: SdrNoeudPc? = null
+    var tx: EmissionNoeudPc? = null
+    fun datvTient(a: String) = if (datv.etat.actif && datv.recepteur == a) SdrNoeudPc.nomAppareil(a) + " reçoit la DATV sur le node : arrêter cette réception d'abord" else null
+    val materiel = MaterielNoeud(stockage) { a ->
+        if (sdr?.tient == a) SdrNoeudPc.nomAppareil(a) + " sert de SDR à SatMe-PC : l'arrêter d'abord"
+        else if (tx?.tient == a) SdrNoeudPc.nomAppareil(a) + " émet" else null
+    }
+    datv.materiel = materiel
+    val sdrN = SdrNoeudPc(stockage, ouvre = { materiel.ouvreLibre(it) }, occupe = { a -> datvTient(a) ?: if (tx?.tient == a) SdrNoeudPc.nomAppareil(a) + " émet" else null })
+    val txN = EmissionNoeudPc(stockage, EmissionNoeudPc.reels(stockage),
+        occupe = { a -> datvTient(a) ?: if (sdr?.tient == a) SdrNoeudPc.nomAppareil(a) + " sert de SDR à SatMe-PC : l'arrêter d'abord" else null })
+    sdr = sdrN; tx = txN
+    val n = NoeudPc(datv, stockage, port, sdr = sdrN, tx = txN)
     n.demarre()
     println("SatMe-Node ${versionPc()} « ${n.nom} » : port ${n.portReel}")
     println("  LongMynd   : " + (datv.programme() ?: "INTROUVABLE (le compiler, ou --dossier/chemin)"))
+    println("  SDR prêté  : " + SdrNoeudPc.nomAppareil(sdrN.appareil) + " · émetteur : " + SdrNoeudPc.nomAppareil(txN.appareil) +
+        (if (txN.autorisee) " (émission AUTORISÉE)" else " (émission non autorisée)"))
     println("  Code à donner à SatMe-PC ou au téléphone : ${n.code}")
-    Runtime.getRuntime().addShutdownHook(Thread { runCatching { datv.arrete() }; n.arrete() })
+    Runtime.getRuntime().addShutdownHook(Thread { runCatching { txN.arrete("SatMe-Node arrêté") }; runCatching { datv.arrete() }; n.arrete() })
     while (true) Thread.sleep(3_600_000L)
 }
 
