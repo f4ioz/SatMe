@@ -875,6 +875,8 @@ data class UiState(
     val rotorCmdAz: Double? get() = rotor.mat.rotorCmdAz
     val rotorDerouleAt: Long? get() = rotor.mat.rotorDerouleAt
     val rotorTourS: Int get() = rotor.mat.rotorTourS
+    /** The pass plan's line: flip or unwind and when, or why none (empty without a plan). */
+    val rotorPlanTexte: String get() = rotor.mat.rotorPlan?.texte ?: ""
     val rotorChemin: List<Pair<Double, Double>> get() = rotor.mat.rotorChemin
     val rotorTrajet: List<Pair<Double, Double>> get() = rotor.mat.rotorTrajet
     val compassRotorPath: Boolean get() = rotor.compassRotorPath

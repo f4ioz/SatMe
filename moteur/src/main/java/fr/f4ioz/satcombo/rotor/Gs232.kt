@@ -386,12 +386,14 @@ class Gs232Simulator(
     val azMaxDeg: Double = 450.0,
     val elMaxDeg: Double = 180.0,
     /** Degrees per second, azimuth and elevation alike. */
-    val speedDegPerSec: Double = 6.0
+    val speedDegPerSec: Double = 6.0,
+    /** Where the mast stands at start: a south-stop ring starts at 180, not 0. */
+    azInitDeg: Double = 0.0
 ) : SerialLink {
 
-    var azDeg: Double = 0.0; private set
+    var azDeg: Double = azInitDeg; private set
     var elDeg: Double = 0.0; private set
-    private var azTarget: Double = 0.0
+    private var azTarget: Double = azInitDeg
     private var elTarget: Double = 0.0
 
     /** Azimuth degrees actually travelled since start. */

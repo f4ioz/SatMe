@@ -1847,6 +1847,7 @@ ${rail()}
         <canvas id="st-carte" hidden title="Glisser pour déplacer, molette pour zoomer, double-clic pour revoir le monde"></canvas>
       </div>
       <div class="petit" id="infos-passage" style="text-align:center;margin-top:4px"></div>
+      <div class="petit" id="ciel-plan" style="text-align:center" title="Le plan du rotor pour ce passage. Violet : le rotor prévu ; ambre : retourné (par-dessus le zénith) ; rouge : un changement (retournement, déroulement) et son heure ; gris : les zones cachées"></div>
       <div class="ligne rec-l"><button class="rouge rec-b" onclick="enregistre()">● Enregistrer le son</button><span class="val rec-d"></span><span class="petit rec-m"></span>
         <button class="st-passage" onclick="preparePassage()" title="Ce satellite : la source qui l'entend, les décodeurs de son émetteur, l'enregistrement du passage (réception seulement) — touche P">⚡ Préparer le passage</button>
         <label class="petit rec-los-l" style="margin-left:auto"><input type="checkbox" class="rec-los" onchange="coupeLos(this.checked)"> couper à la fin du passage</label></div>
@@ -3867,17 +3868,22 @@ ${rail()}
       <div class="etat" id="rot-statut"></div>
       <div class="diag" id="rot-diag"></div>
       <details id="rot-reg" style="margin-top:8px"><summary class="petit" style="cursor:pointer">Réglages du rotor</summary>
-        <div class="ligne"><span class="petit" style="min-width:120px">Azimut max</span><select id="r-maxAz"><option>360</option><option>450</option><option>540</option></select>
-          <span class="petit">Élévation max</span><select id="r-maxEl"><option>90</option><option>180</option></select></div>
-        <div class="ligne"><span class="petit" style="min-width:120px">Butée</span><select id="r-butee"><option value="NORTH">au nord</option><option value="SOUTH">au sud</option></select>
+        <div class="ligne"><span class="petit" style="min-width:120px">Course en azimut</span><select id="r-maxAz" title="360° : un tour, butée à butée. 450° ou 540° : un recouvrement, le même ciel par deux côtés"><option value="360">360° (un tour)</option><option value="450">450° (recouvrement 90°)</option><option value="540">540° (recouvrement 180°)</option></select>
+          <span class="petit">Butée</span><select id="r-butee" title="Où le câble arrive en bout de course : un passage qui la franchit fait le tour (déroulement), sauf retournement"><option value="NORTH">au nord</option><option value="SOUTH">au sud</option></select></div>
+        <div class="ligne"><span class="petit" style="min-width:120px">Monte à 180° ?</span><select id="r-maxEl" title="Ton rotor monte-t-il à 180° en élévation ? Seul un rotor qui va jusqu'à 180° peut se retourner (az + 180°, 180° − el) : il suit alors un passage par la butée sans déroulement"><option value="90">non : 90° au plus</option><option value="180">oui : 180° (retournement)</option></select>
           <label class="petit"><input type="checkbox" id="r-depuisButee"> compte depuis la butée</label></div>
-        <div class="ligne"><label class="petit"><input type="checkbox" id="r-flip"> retournement (flip)</label>
+        <div class="ligne"><label class="petit" title="Ancien réglage : coché, le rotor est traité comme montant à 180°"><input type="checkbox" id="r-flip"> retournement (flip)</label>
           <label class="petit"><input type="checkbox" id="r-azSeul"> azimut seul</label></div>
         <div class="ligne"><span class="petit" style="min-width:120px">Parking az / el</span><input id="r-parkAz" style="max-width:70px"><input id="r-parkEl" style="max-width:70px"></div>
         <div class="ligne"><span class="petit" style="min-width:120px">Élévation min</span><input id="r-minEl" style="max-width:70px">
           <span class="petit">Écart avant de bouger</span><input id="r-ecart" style="max-width:60px"></div>
-        <div class="ligne"><span class="petit" style="min-width:120px">Attente avant AOS (min)</span><input id="r-avantAos" style="max-width:60px">
-          <button onclick="reglagesRotor()">Appliquer</button></div>
+        <div class="ligne"><span class="petit" style="min-width:120px">Attente avant AOS (min)</span><input id="r-avantAos" style="max-width:60px"></div>
+        <div class="ligne"><span class="petit" style="min-width:120px" title="Les parts du ciel cachées (toit, arbre, colline) : azimut de-à, sous une élévation. Le plan n'y tient presque pas et y place ses déroulements. Glisser sur le ciel pour en tracer une">Zones cachées</span><input id="r-zones" placeholder="170-190<20 ; 300-330<10" style="flex:1" oninput="dessinePlanReglages()"><button onclick="g('r-zones').value = ''; dessinePlanReglages()" title="Aucune zone">✕</button></div>
+        <div style="display:flex;gap:10px;align-items:flex-start;margin-top:4px">
+          <svg id="r-plan-ciel" viewBox="-110 -110 220 220" style="width:170px;height:170px;flex:none;touch-action:none;cursor:crosshair" role="img" aria-label="Zones cachées et plan du prochain passage : glisser pour tracer une zone"></svg>
+          <div class="petit" id="r-plan-txt" style="flex:1"></div></div>
+        <div class="ligne"><button onclick="reglagesRotor()">Appliquer</button></div>
+        <div class="aide">Le plan du passage est fait avant l'AOS, pour tout le passage : de quel côté de la butée, droit ou retourné, et s'il le faut le seul moment où le rotor change (retournement ou déroulement), joué à la vitesse mesurée du rotor. Il garde le plus de passage, compté selon l'élévation (une minute à 60° vaut bien plus qu'à 5°), puis la plus petite course, puis le moins de changements. Avec 90° au plus, un passage qui franchit la butée demande un déroulement (un tour, ~1 min sans réception) : le plan le place quand le satellite est bas ou caché. Avec 180°, le rotor se retourne et suit par-dessus le zénith, sans tour. Le rotor attend au départ du plan quelques minutes avant l'AOS. Violet : le rotor prévu ; ambre : retourné ; rouge : un changement en cours et son heure ; gris : les zones cachées.</div>
       </details>
     </div>
     <div class="carte">
@@ -4973,13 +4979,21 @@ function polaire(az, el) {
   const a = az * Math.PI / 180;
   return [r * Math.sin(a), -r * Math.cos(a)];
 }
-/** The sky (SVG inside, -110..110): the pass's arc, the rotor, the satellite now. */
-function cielSvg() {
+/** The sky's grid (SVG inside, -110..110): horizon, 30°, 60°, the cardinal points. */
+function grilleCiel() {
   let s = '';
   for (const el of [0, 30, 60]) s += '<circle r="' + (100 * (1 - el / 90)) + '" fill="none" stroke="#22303B"/>';
   s += '<line x1="-100" y1="0" x2="100" y2="0" stroke="#22303B"/><line x1="0" y1="-100" x2="0" y2="100" stroke="#22303B"/>';
   for (const [t, x, y] of [['N', 0, -103], ['E', 104, 4], ['S', 0, 110], ['O', -104, 4]])
     s += '<text x="' + x + '" y="' + y + '" fill="#9AA7B4" font-size="8" text-anchor="middle">' + t + '</text>';
+  return s;
+}
+/** The sky (SVG inside, -110..110): the pass's arc, the rotor's plan, the rotor, the satellite now. */
+function cielSvg() {
+  let s = grilleCiel();
+  const rg = E && E.rotor && E.rotor.reglages;
+  if (rg && rg.zones) for (const z of litZones(rg.zones)) s += zoneSvg(z);
+  if (planDuPassage()) s += planSvg(PLANR);
   if (E && E.arc && E.arc.length > 1) {
     s += '<polyline fill="none" stroke="#3FE0C8" stroke-opacity=".55" stroke-width="1.6" points="' +
       E.arc.map(p => polaire(p[0], p[1]).map(x => x.toFixed(1)).join(',')).join(' ') + '"/>';
@@ -4996,7 +5010,134 @@ function cielSvg() {
   }
   return s;
 }
-function dessineCiel() { g('ciel').innerHTML = cielSvg(); dessineStationDirect(); }
+function dessineCiel() {
+  chargePlanRotor(false);
+  g('ciel').innerHTML = cielSvg(); dessineStationDirect();
+  const r = E && E.rotor;
+  txt('ciel-plan', r && (r.connecte || r.suit) ? (r.deroule || (planDuPassage() ? 'Rotor : ' + PLANR.texte : '')) : '');
+}
+
+// ------------------------------------------------------------------ the mast's plan: on the sky, in the settings, in the log
+let PLANR = null, planrCle = '', planrMs = 0, planrEnCours = false;
+/** The mast's plan for the pass followed (or next): asked again when the pass or the settings change, else every 30 s. */
+async function chargePlanRotor(force) {
+  const pa = E && E.passage, rg = E && E.rotor && E.rotor.reglages;
+  const cle = (pa ? pa.aos : '') + '|' + (rg ? [rg.maxAz, rg.maxEl, rg.butee, rg.flip, rg.zones].join(',') : '');
+  if (planrEnCours || (!force && cle === planrCle && Date.now() - planrMs < 30000)) return;
+  planrCle = cle; planrMs = Date.now(); planrEnCours = true;
+  try { PLANR = await (await fetch('api/rotor/plan')).json(); } catch (x) { PLANR = null; }
+  planrEnCours = false;
+  dessinePlanReglages();
+}
+/** The plan is this pass's, and the mast is there to follow it. */
+function planDuPassage() {
+  const r = E && E.rotor, pa = E && E.passage;
+  return !!(PLANR && PLANR.ok && pa && Math.abs(PLANR.aos - pa.aos) < 120000 && r && (r.connecte || r.suit));
+}
+/** Hidden zones as stored, « 170-190<20;… »: [from, to, below]. */
+function litZones(t) {
+  return String(t || '').split(';').map(p => /^\s*(-?\d+(?:\.\d+)?)\s*-\s*(-?\d+(?:\.\d+)?)\s*<\s*(\d+(?:\.\d+)?)\s*$/.exec(p))
+    .filter(m => m && +m[3] > 0 && +m[3] <= 90).map(m => [((+m[1]) % 360 + 360) % 360, ((+m[2]) % 360 + 360) % 360, +m[3]]);
+}
+/** A zone on the sky: azimuth from-to clockwise, horizon up to its elevation. */
+function zoneSvg(z) {
+  const a2 = z[1] >= z[0] ? z[1] : z[1] + 360, n = Math.max(2, Math.ceil((a2 - z[0]) / 4)), pts = [];
+  for (let i = 0; i <= n; i++) pts.push(polaire(z[0] + (a2 - z[0]) * i / n, 0));
+  for (let i = n; i >= 0; i--) pts.push(polaire(z[0] + (a2 - z[0]) * i / n, z[2]));
+  return '<polygon points="' + pts.map(q => q[0].toFixed(1) + ',' + q[1].toFixed(1)).join(' ') + '" style="fill:var(--texte-3);fill-opacity:.3;stroke:var(--texte-3);stroke-width:.8"/>';
+}
+/** The mast's planned path (where the antennas look): upright violet, over the top amber, changing red, and when it changes. */
+function planSvg(pl) {
+  if (!pl || !pl.ok || !pl.mat || pl.mat.length < 2) return '';
+  let s = '';
+  for (let i = 1; i < pl.mat.length; i++) {
+    const a = pl.mat[i - 1], b = pl.mat[i], A = polaire(a[1], a[2]), B = polaire(b[1], b[2]);
+    const c = b[4] ? 'var(--danger)' : (b[3] ? 'var(--warn)' : 'var(--mark)');
+    s += '<line x1="' + A[0].toFixed(1) + '" y1="' + A[1].toFixed(1) + '" x2="' + B[0].toFixed(1) + '" y2="' + B[1].toFixed(1) +
+      '" style="stroke:' + c + '" stroke-width="1.8" stroke-linecap="round"' + (b[4] ? ' stroke-dasharray="2 3"' : '') + '/>';
+  }
+  if (pl.changementMs) {
+    const m = pl.mat.reduce((x, y) => Math.abs(y[0] - pl.changementMs) < Math.abs(x[0] - pl.changementMs) ? y : x);
+    const q = polaire(m[1], m[2]);
+    s += '<circle cx="' + q[0].toFixed(1) + '" cy="' + q[1].toFixed(1) + '" r="5" fill="none" style="stroke:var(--danger)" stroke-width="1.5"/>' +
+      '<text x="' + q[0].toFixed(1) + '" y="' + (q[1] - 8).toFixed(1) + '" font-size="8" text-anchor="middle" style="fill:var(--danger)">' + (pl.changement === 'flip' ? '⤾ ' : '↻ ') + hm(pl.changementMs) + '</text>';
+  }
+  return s;
+}
+/** Settings › Rotor: the zones being typed or drawn, the next pass and the plan made with the settings applied. */
+let zoneTrace = null;
+function dessinePlanReglages() {
+  const sv = g('r-plan-ciel'); if (!sv) return;
+  let s = grilleCiel();
+  for (const z of litZones(v('r-zones'))) s += zoneSvg(z);
+  if (zoneTrace && Math.abs(zoneTrace.sweep) >= 2) {
+    const a1 = zoneTrace.sweep > 0 ? zoneTrace.a0 : zoneTrace.a0 + zoneTrace.sweep;
+    s += zoneSvg([((a1 % 360) + 360) % 360, ((a1 + Math.abs(zoneTrace.sweep)) % 360 + 360) % 360, zoneTrace.el]);
+  }
+  const pl = PLANR;
+  if (pl && pl.ok) {
+    s += '<polyline fill="none" style="stroke:var(--rx)" stroke-opacity=".6" stroke-width="1.4" points="' + pl.sat.map(q => polaire(q[1], q[2]).map(x => x.toFixed(1)).join(',')).join(' ') + '"/>';
+    s += planSvg(pl);
+  }
+  sv.innerHTML = s;
+  txt('r-plan-txt', pl && pl.ok ? 'Prochain passage : plan (AOS ' + hm(pl.aos) + ') — ' + pl.texte + ' Couverture ' + Math.round(pl.couverture * 100) +
+    ' %, course ' + pl.course + '°. Fait avec les réglages appliqués.' : 'Prochain passage : aucun pour l’instant (suis un satellite).');
+}
+/** Drawing a zone: press where it starts, slide round the sky, at the height it hides up to. */
+function cielVers(sv, ev) {
+  const pt = sv.createSVGPoint(); pt.x = ev.clientX; pt.y = ev.clientY;
+  const q = pt.matrixTransform(sv.getScreenCTM().inverse());
+  const az = (Math.atan2(q.x, -q.y) * 180 / Math.PI + 360) % 360;
+  return [az, Math.max(0, Math.min(90, 90 * (1 - Math.hypot(q.x, q.y) / 100)))];
+}
+(function () {
+  const sv = g('r-plan-ciel'); if (!sv) return;
+  sv.addEventListener('pointerdown', ev => {
+    const [a, e] = cielVers(sv, ev);
+    zoneTrace = { a0: a, prec: a, sweep: 0, el: Math.max(5, Math.round(e)) };
+    sv.setPointerCapture(ev.pointerId);
+  });
+  sv.addEventListener('pointermove', ev => {
+    if (!zoneTrace) return;
+    const [a, e] = cielVers(sv, ev);
+    let d = a - zoneTrace.prec; if (d > 180) d -= 360; if (d < -180) d += 360;
+    zoneTrace.sweep = Math.max(-359, Math.min(359, zoneTrace.sweep + d)); zoneTrace.prec = a;
+    zoneTrace.el = Math.max(zoneTrace.el, Math.round(e));
+    dessinePlanReglages();
+  });
+  const fin = () => {
+    const z = zoneTrace; zoneTrace = null;
+    if (z && Math.abs(z.sweep) >= 3) {
+      const a1 = z.sweep > 0 ? z.a0 : z.a0 + z.sweep, n = x => Math.round(((x % 360) + 360) % 360);
+      const t = n(a1) + '-' + n(a1 + Math.abs(z.sweep)) + '<' + Math.min(90, z.el);
+      g('r-zones').value = (v('r-zones') ? v('r-zones') + ';' : '') + t;
+    }
+    dessinePlanReglages();
+  };
+  sv.addEventListener('pointerup', fin); sv.addEventListener('pointercancel', fin);
+})();
+/** A logged contact's pass: the satellite's track and the mast as it went, from the pass journal. */
+async function cheminContact(b, t, sat) {
+  let j = null;
+  try { j = await (await fetch('api/carnet/rotor?t=' + t + '&sat=' + enc(sat))).json(); } catch (x) {}
+  if (!j || !j.ok) { popMontre(b, '<div class="petit">' + esc((j && j.erreur) || 'aucun passage au journal pour ce contact') + '</div>', true); return; }
+  let s = grilleCiel();
+  const pts = l => l.map(q => polaire(q[1], q[2]).map(x => x.toFixed(1)).join(',')).join(' ');
+  if (j.trace.length > 1) s += '<polyline fill="none" style="stroke:var(--rx)" stroke-opacity=".7" stroke-width="1.6" points="' + pts(j.trace) + '"/>';
+  if (j.rotor) for (let i = 1; i < j.mat.length; i++) {
+    const A = polaire(j.mat[i - 1][1], j.mat[i - 1][2]), B = polaire(j.mat[i][1], j.mat[i][2]);
+    s += '<line x1="' + A[0].toFixed(1) + '" y1="' + A[1].toFixed(1) + '" x2="' + B[0].toFixed(1) + '" y2="' + B[1].toFixed(1) +
+      '" style="stroke:' + (j.mat[i][3] ? 'var(--warn)' : 'var(--mark)') + '" stroke-width="1.6" stroke-dasharray="5 3"/>';
+  }
+  if (j.trace.length) {
+    const m = j.trace.reduce((x, y) => Math.abs(y[0] - t) < Math.abs(x[0] - t) ? y : x), q = polaire(m[1], m[2]);
+    s += '<circle cx="' + q[0].toFixed(1) + '" cy="' + q[1].toFixed(1) + '" r="4.5" style="fill:var(--sat)"/>';
+  }
+  popMontre(b, '<div class="t">' + esc(j.sat) + ' · ' + hm(j.aos) + '–' + hm(j.los) + '</div>' +
+    '<svg viewBox="-110 -110 220 220" width="210" height="210" role="img" aria-label="Le passage du contact et le chemin du rotor">' + s + '</svg>' +
+    '<div class="petit">' + (j.rotor ? 'Rotor (violet, ambre retourné) : course ' + j.course + '°, couverture ' + Math.round(j.couverture * 100) + ' %' :
+      'Pas de rotor enregistré sur ce passage') + ' · cyan : le satellite · jaune : le contact</div>', true);
+}
 
 function dessine() {
   if (!E) return;
@@ -5093,6 +5234,7 @@ function dessine() {
     g('r-depuisButee').checked = s.depuisButee; g('r-flip').checked = s.flip; g('r-azSeul').checked = s.azSeul;
     g('r-parkAz').value = s.parkAz; g('r-parkEl').value = s.parkEl; g('r-minEl').value = s.minEl;
     g('r-ecart').value = s.ecart; g('r-avantAos').value = s.avantAos;
+    if (!zoneTrace && document.activeElement !== g('r-zones')) g('r-zones').value = (s.zones || '').split(';').join(' ; ');
   }
   if (E.convertisseurs) {
     const k = E.convertisseurs, ol = x => x ? (x / 1e6).toFixed(3) + ' MHz' : 'aucun';
@@ -5115,7 +5257,8 @@ function reglagesRotor() {
   post('api/rotor/reglages?maxAz=' + g('r-maxAz').value + '&maxEl=' + g('r-maxEl').value + '&butee=' + g('r-butee').value +
        '&depuisButee=' + b('r-depuisButee') + '&flip=' + b('r-flip') + '&azSeul=' + b('r-azSeul') +
        '&parkAz=' + enc(v('r-parkAz')) + '&parkEl=' + enc(v('r-parkEl')) + '&minEl=' + enc(v('r-minEl')) +
-       '&ecart=' + enc(v('r-ecart')) + '&avantAos=' + enc(v('r-avantAos')));
+       '&ecart=' + enc(v('r-ecart')) + '&avantAos=' + enc(v('r-avantAos')) + '&zones=' + enc(v('r-zones').replace(/\s+/g, '') || 'aucune'))
+    .then(() => { if (typeof tic === 'function') tic(); setTimeout(() => chargePlanRotor(true), 1500); });
   g('rot-reg').open = false;
 }
 async function importe(input) {
@@ -5752,7 +5895,7 @@ function dessineCarnet() {
   g('c-liste').innerHTML = tous.slice(0, 1000).map(e =>
     '<tr><td><input type="checkbox" class="c-coche" data-t="' + e.t + '"' + (coches.has(e.t) ? ' checked' : '') + ' onchange="coche(' + e.t + ', this.checked)"></td><td style="white-space:nowrap">' + new Date(e.t).toISOString().slice(0, 16).replace('T', ' ') + '</td><td>' + drC(e) + '<b>' + esc(e.c) + '</b>' + (e.nm ? '<div class="c-nm" title="' + esc(e.nm).replace(/"/g, '&quot;') + '">' + esc(e.nm) + '</div>' : '') + '</td><td>' + esc(e.l) +
     '</td><td>' + esc(e.sat) + '</td><td>' + esc(e.md) + '</td><td>' + esc(e.rs) + '/' + esc(e.rr) +
-    '</td><td class="act">' + envoiCarnet(e) +
+    '</td><td class="act">' + envoiCarnet(e) + (e.sat ? '<button title="Son passage et le chemin du rotor (journal des passages)" onclick="cheminContact(this, ' + e.t + ', ' + JSON.stringify(String(e.sat)).replace(/"/g, '&quot;') + ')">⌖</button> ' : '') +
     '<button title="Modifier" onclick="edite(' + e.t + ')">✎</button> <button title="Supprimer ce contact" onclick="supprimeContacts([' + e.t + '])">🗑</button></td></tr>').join('') + reste ||
     '<tr><td colspan="8" class="petit">aucun contact</td></tr>';
   majSelection();

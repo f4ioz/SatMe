@@ -30,6 +30,9 @@ import java.util.concurrent.ConcurrentHashMap
  */
 class JournalWebPc(private val j: JournalPc, private val station: StationPc, private val dossier: File) {
 
+    /** The passes kept (a contact's pass, its rotor path). */
+    fun passages() = j.passages()
+
     /** The page, opened at once (no code on this PC) and without the phone-only links. */
     fun page(): String = PageJournal.html()
         .replace("<script>", "<script>window.SATME_PC=true;try{localStorage.setItem('satme-cle','pc')}catch(e){}</script>\n<style>${PagePc.STYLE_BARRE}</style>\n<script>")

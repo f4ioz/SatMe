@@ -21,6 +21,7 @@ import fr.f4ioz.satcombo.rotor.RotorDeroule
 import fr.f4ioz.satcombo.rotor.RotorDriver
 import fr.f4ioz.satcombo.rotor.RotorMath
 import fr.f4ioz.satcombo.rotor.RotorPas
+import fr.f4ioz.satcombo.rotor.RotorPlanPassage
 import fr.f4ioz.satcombo.rotor.RotorPos
 import fr.f4ioz.satcombo.rotor.RotorTenue
 import kotlinx.coroutines.CoroutineScope
@@ -95,7 +96,8 @@ class StationRotor(
         rotorSim = settings.rotorSim,
         rotorAzStop = settings.rotorAzStop,
         rotorAzFromStop = settings.rotorAzFromStop,
-        rotorMaxError = settings.rotorMaxError))
+        rotorMaxError = settings.rotorMaxError,
+        rotorZones = settings.rotorZones))
     val etat: StateFlow<EtatRotor> = _etat.asStateFlow()
 
     private fun change(f: EtatRotor.() -> EtatRotor) = _etat.update { it.f() }
@@ -148,6 +150,8 @@ class StationRotor(
     /** Mast turn chosen for the current pass, at AOS. */
     private var rotorPlan: RotorMath.Plan? = null
     private var rotorPlanKey: String? = null
+    /** The whole pass decided before AOS (side, flip, unwind and when), null without the pass's times. */
+    private var rotorPlanPassage: RotorPlanPassage.Plan? = null
     private var rotorLoopJob: Job? = null
     private var rotorWasFlipped = false
     private var rotorSimLink: Gs232Simulator? = null
@@ -205,6 +209,7 @@ class StationRotor(
             rotorAzStop = settings.rotorAzStop,
             rotorAzFromStop = settings.rotorAzFromStop,
             rotorMaxError = settings.rotorMaxError,
+            rotorZones = settings.rotorZones,
             rotorMinEl = settings.rotorMinEl,
             rotorDeadband = settings.rotorDeadband,
             rotorFlip = settings.rotorFlip,
@@ -281,7 +286,15 @@ class StationRotor(
 
     fun setRotorMaxEl(v: Int) {
         settings.rotorMaxEl = v
+        rotorPlan = null; rotorPlanKey = null
         change { copy(rotorMaxEl = settings.rotorMaxEl) }
+    }
+
+    /** Obstacle zones (`170-190<20;…`): the plan weighs them; the current one is redone. */
+    fun setRotorZones(v: String) {
+        settings.rotorZones = RotorPlanPassage.ecritZones(RotorPlanPassage.litZones(v))
+        rotorPlan = null; rotorPlanKey = null
+        change { copy(rotorZones = settings.rotorZones) }
     }
 
     fun setRotorDeadband(v: Int) {
@@ -292,6 +305,7 @@ class StationRotor(
     fun setRotorFlip(v: Boolean) {
         settings.rotorFlip = v
         rotorWasFlipped = false
+        rotorPlan = null; rotorPlanKey = null
         change { copy(rotorFlip = v) }
     }
 
@@ -351,16 +365,19 @@ class StationRotor(
         val u = _etat.value
         if (u.rotorSim) {
             // A mast that does not exist: everything shows, nothing moves.
+            // Its frames are the ring's own numbers: a south-stop mast is sent 180 to 540.
+            val l = rotorLimits(u)
             val sim = Gs232Simulator(
-                azMaxDeg = u.rotorMaxAz.toDouble(),
-                elMaxDeg = if (u.rotorFlip) 180.0 else u.rotorMaxEl.toDouble())
+                azMaxDeg = l.azMaxReach,
+                elMaxDeg = l.elMaxDeg,
+                azInitDeg = l.azMinReach)
             val d = Gs232Rotor(ports)
             d.pacingMs = 0L
             d.attach(sim)
             rotorSimLink = sim
             rotorDriver = d
             rotorSerial = d
-            rotorAt = RotorPos(0.0, 0.0)
+            rotorAt = RotorPos(l.azMinReach, 0.0)
             rotorWasFlipped = false
             change { copy(rotorConnected = true, rotorStatus = t("rotor_sim_on")) }
             startRotorLoop()
@@ -607,59 +624,66 @@ class StationRotor(
 
     private fun rotorLimits(u: EtatRotor) = RotorMath.Limits(
         azMaxDeg = u.rotorMaxAz.toDouble(),
-        elMaxDeg = if (u.rotorFlip) 180.0 else u.rotorMaxEl.toDouble(),
+        // Over the top needs a rotator reaching 180°: said by its travel (180) or the flip box.
+        elMaxDeg = if (u.rotorFlip || u.rotorMaxEl >= 180) 180.0 else u.rotorMaxEl.toDouble(),
         deadbandDeg = u.rotorDeadband.toDouble(),
         azStopDeg = if (u.rotorAzStop == "SOUTH") 180.0 else 0.0)
 
     /**
      * The pass plan: chosen once, held to the end. Recomputed only when pass,
-     * end stop, travel or tolerance change; recomputing every second would
-     * give a mast changing its mind mid-pass, with two minutes of rotation to
-     * reach a place the satellite has already left.
+     * end stop, travel, tolerance or zones change; recomputing every second
+     * would give a mast changing its mind mid-pass, with a minute of rotation
+     * to reach a place the satellite has already left.
+     *
+     * With the pass's times ([traceTemps]) the whole pass is decided here
+     * ([RotorPlanPassage]): side of the stop, upright or over the top, the
+     * one flip or unwind and its moment. Without them, only the side
+     * ([RotorMath.plan]) and the unwind is decided as it comes ([RotorDeroule]).
      */
     private fun ensureRotorPlan(u: EtatRotor, limits: RotorMath.Limits): RotorMath.Plan? {
         val track = monde.arcDuPassage()
         if (track.isEmpty()) {
-            rotorPlan = null; rotorPlanKey = null
-            if (_etat.value.rotorTrajet.isNotEmpty()) change { copy(rotorTrajet = emptyList()) }
+            rotorPlan = null; rotorPlanKey = null; rotorPlanPassage = null; rotorChemin = emptyList()
+            val e = _etat.value
+            if (e.rotorTrajet.isNotEmpty() || e.rotorPlan != null || e.rotorChemin.isNotEmpty())
+                change { copy(rotorTrajet = emptyList(), rotorChemin = emptyList(), rotorPlan = null, rotorDerouleAt = null) }
             return null
         }
+        val tt = traceTemps
         val key = "${track.size}|${track.first()}|${track.last()}|" +
-            "${limits.azStopDeg}|${limits.azMaxDeg}|${u.rotorMaxError}"
+            "${limits.azStopDeg}|${limits.azMaxDeg}|${limits.elMaxDeg}|${u.rotorMaxError}|${u.rotorZones}|" +
+            "${tt.size}|${tt.firstOrNull()?.first}"
         if (key == rotorPlanKey) return rotorPlan
-        val p = RotorMath.plan(track, limits, toleranceDeg = u.rotorMaxError.toDouble())
+        // At equal coverage, the side nearest the mast: a short pass costs no turn.
+        val p = RotorMath.plan(track, limits, startNearDeg = matDeroule(limits), toleranceDeg = u.rotorMaxError.toDouble())
         rotorPlanKey = key
         rotorPlan = p
         if (p != null) {
             rotorCmd = RotorPos(RotorMath.clampAz(p.startAzDeg, limits), rotorCmd.elDeg)
             rotorWasFlipped = false
         }
-        // Does this pass cross the stop? Followed directly, would the mast miss it beyond the
-        // dead zone somewhere? If not, nothing to think about: it follows. If so, the whole
-        // path is planned (other side of the zenith, a turn only when worth it).
-        var traverse = false
-        // Where the antennas point along the way, as seen on the sky (the compass's white path).
-        val suivi = ArrayList<Pair<Double, Double>>()
-        if (p != null) {
-            var pres = RotorMath.clampAz(p.startAzDeg, limits)
-            for ((_, az, el) in traceTemps) {
-                val a = RotorMath.follow(az, el, RotorPos(pres, el), limits)
-                if (a.errorDeg > u.rotorMaxError + 1e-9) { traverse = true; break }
-                pres = a.azDeg
-                suivi += versCiel(a.azDeg, a.elDeg)
-            }
-        }
-        rotorChemin = emptyList(); rotorCheminARefaire = false
-        if (traverse) planifieChemin(u, limits, depuis = null)
-        val derouleAt = RotorChemin.tours(rotorChemin).firstOrNull()?.first
-        val tourS = RotorChemin.tours(rotorChemin).firstOrNull()?.let { ((it.last - it.first) / 1000).toInt() }
-            ?: ((RotorDeroule.dureeMs(360.0, settings.rotorVitesse.toDouble()) - RotorDeroule.MARGE_MS) / 1000).toInt()
-        // No crossing: the mast follows the pass itself, the last pass's path must not linger.
-        change { copy(rotorCoverage = p?.coverage, rotorDerouleAt = derouleAt, rotorTourS = tourS,
-            rotorChemin = if (traverse) this.rotorChemin else emptyList(),
-            rotorTrajet = if (traverse) this.rotorChemin else suivi) }
+        rotorChemin = emptyList(); rotorCheminARefaire = false; rotorPlanPassage = null
+        if (tt.size >= 2) planifieChemin(u, limits, depuis = null)
+        if (rotorPlanPassage == null)
+            change { copy(rotorCoverage = p?.coverage, rotorDerouleAt = null, rotorChemin = emptyList(),
+                rotorTrajet = emptyList(), rotorPlan = null) }
         return p
     }
+
+    /**
+     * The mast's azimuth on its ring: the reading is a sky azimuth (147 on a
+     * south-stop mast is its 507), written on the turn nearest the last command.
+     */
+    private fun matDeroule(limits: RotorMath.Limits): Double {
+        val ref = rotorDerniereCmd?.azDeg ?: rotorCmd.azDeg
+        val a = rotorAt.azDeg
+        return (-2..2).map { a + it * 360.0 }
+            .filter { it >= limits.azMinReach - 5.0 && it <= limits.azMaxReach + 5.0 }
+            .minByOrNull { kotlin.math.abs(it - ref) } ?: RotorMath.clampAz(a, limits)
+    }
+
+    /** The rotator's speed for planning: as measured, never below 2°/s (a bad measure must not forbid every flip). */
+    private fun vitessePlan(): Double = maxOf(2.0, settings.rotorVitesse.toDouble())
 
     /**
      * Mast tracking loop: one command per second, no more. A rotor gains
@@ -676,6 +700,9 @@ class StationRotor(
             }
         }
     }
+
+    /** Two azimuths apart on the sky, whatever turn of the ring each is written on. */
+    private fun ecartAz(a: Double, b: Double): Double = kotlin.math.abs(RotorMath.norm360(a - b + 180.0) - 180.0)
 
     /** One round of the loop (public for the tests, which drive the clock). */
     suspend fun rotorTick() {
@@ -698,7 +725,12 @@ class StationRotor(
         val maintenant = horloge()
         // The rotator's speed, measured while it turns (simulated mast excepted): the time a turn takes.
         val avantLu = rotorLu
-        if (frais != null && avantLu != null && !u.rotorSim)
+        // Only while it runs flat out, far from its command: tracking moves in short steps,
+        // starts and stops included, and measured 1.3°/s on a 6.5°/s rotator (21/10).
+        val cmdLoin = rotorDerniereCmd
+        val aFond = cmdLoin != null && frais != null && avantLu != null &&
+            ecartAz(cmdLoin.azDeg, frais.azDeg) >= 20.0 && ecartAz(cmdLoin.azDeg, avantLu.azDeg) >= 20.0
+        if (frais != null && avantLu != null && !u.rotorSim && aFond)
             RotorDeroule.mesureVitesse(avantLu.azDeg, rotorLuMs, frais.azDeg, maintenant,
                 settings.rotorVitesse.toDouble())?.let { settings.rotorVitesse = it.toFloat() }
         if (frais != null) { rotorLu = frais; rotorLuMs = maintenant }
@@ -741,14 +773,15 @@ class StationRotor(
         val avance = garage && plan != null &&
             RotorMath.prePositionDue(horloge(), monde.aosDuPassage().takeIf { it > 0L }, u.rotorPreAos)
         if (avance != _etat.value.rotorPrePositioning) change { copy(rotorPrePositioning = avance) }
-        val aim = if (avance && rotorChemin.isNotEmpty())
-            // Waiting where the planned path starts.
-            RotorMath.park(rotorChemin.first().azDeg, maxOf(0.0, u.rotorMinEl.toDouble()), limits)
+        val depart = rotorPlanPassage?.points?.firstOrNull()
+        val aim = if (avance && depart != null)
+            // Waiting where the planned path starts — lying back already when the pass starts over the top.
+            RotorMath.park(depart.azDeg, if (depart.elDeg > 90.0) depart.elDeg else maxOf(0.0, u.rotorMinEl.toDouble()), limits)
         else if (avance)
             RotorMath.park(RotorMath.clampAz(plan!!.startAzDeg, limits), maxOf(0.0, u.rotorMinEl.toDouble()), limits)
         else if (garage)
             RotorMath.park(u.rotorParkAz.toDouble(), u.rotorParkEl.toDouble(), limits)
-        else if (rotorChemin.isNotEmpty()) viseeSurChemin(u, limits)
+        else if (rotorPlanPassage != null) viseeSurPlan(u, limits, pos)
         else viseeAvecDeroule(u, pos, limits)
         if (garage && (_etat.value.rotorDeroule.isNotBlank() || _etat.value.rotorDerouleAlerte))
             change { copy(rotorDeroule = "", rotorDerouleAlerte = false) }
@@ -827,62 +860,115 @@ class StationRotor(
         else RotorMath.norm360(azDeg) to elDeg
 
     /**
-     * Plans the mast's path over the rest of the pass, from now (or the whole pass before
-     * AOS), with the expected SSTV pictures; from [depuis] (the mast's unwrapped azimuth)
-     * when redone during the pass. Shown on the dial.
+     * Plans the mast over the rest of the pass ([RotorPlanPassage]), from now
+     * (or the whole pass before AOS), with the expected SSTV pictures; from
+     * [depuis] (the mast, unwrapped) when redone during the pass. Shown on the
+     * dial and the page.
      */
-    private fun planifieChemin(u: EtatRotor, limits: RotorMath.Limits, depuis: Double?) {
+    private fun planifieChemin(u: EtatRotor, limits: RotorMath.Limits, depuis: RotorPos?) {
         val maintenant = horloge()
-        val trace = traceTemps.filter { depuis == null || it.first >= maintenant - 5_000L }
+        val tt = traceTemps
+        val enCours = tt.isNotEmpty() && maintenant > tt.first().first + 5_000L
+        val trace = if (enCours) tt.filter { it.first >= maintenant - 5_000L } else tt
         val images = imagesSstv(maintenant)
         rotorCheminImages = images
-        rotorChemin = RotorChemin.plan(trace, limits, settings.rotorVitesse.toDouble(),
-            u.rotorMaxError.toDouble(), images, depuisAz = depuis, imposeDepart = depuis != null)
-        val chemin = rotorChemin
-        val pire = chemin.maxByOrNull { if (it.tour) -1.0 else it.erreurDeg }
-        val premierTour = RotorChemin.tours(chemin).firstOrNull()?.first
+        val mat = depuis ?: RotorPos(matDeroule(limits), rotorAt.elDeg)
+        val plan = RotorPlanPassage.plan(trace, limits, vitessePlan(), u.rotorMaxError.toDouble(),
+            RotorPlanPassage.litZones(u.rotorZones), depuis = mat, imposeDepart = enCours, images = images)
+        rotorPlanPassage = plan
+        rotorChemin = plan?.points ?: emptyList()
+        if (plan == null) return
+        val ciel = plan.points.map { p -> versCiel(p.azDeg, p.elDeg) }
+        val pire = plan.points.filter { !it.tour }.maxByOrNull { it.erreurDeg }
+        val ev = plan.evenement
+        val resume = resume(plan, tt, u)
         change { copy(
-            rotorChemin = chemin.map { p -> versCiel(p.azDeg, p.elDeg) },
-            rotorTrajet = chemin.map { p -> versCiel(p.azDeg, p.elDeg) },
+            rotorCoverage = plan.couverture,
+            rotorChemin = ciel, rotorTrajet = ciel,
             rotorEcartMax = pire?.erreurDeg, rotorEcartMaxAt = pire?.tMs,
-            rotorDerouleAt = premierTour) }
+            rotorDerouleAt = ev?.debutMs, rotorTourS = ev?.dureeS ?: rotorTourS,
+            rotorPlan = resume) }
+    }
+
+    /** The plan as the screens show it, with its banner line. */
+    private fun resume(plan: RotorPlanPassage.Plan, tt: List<Triple<Long, Double, Double>>, u: EtatRotor): ResumePlanRotor {
+        val ev = plan.evenement
+        val heure = java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault())
+        val texte = when {
+            ev != null && ev.retournement -> tf("rotor_plan_flip", heure.format(java.util.Date(ev.debutMs)), ev.dureeS)
+            ev != null -> tf("rotor_plan_deroule", heure.format(java.util.Date(ev.debutMs)), ev.dureeS)
+            plan.retourne -> t("rotor_plan_retourne")
+            else -> tf("rotor_cadran_pas_de_tour", u.rotorMaxError)
+        }
+        return ResumePlanRotor(
+            aosMs = tt.first().first, losMs = tt.last().first, sat = tt,
+            mat = plan.points.map { p -> val c = versCiel(p.azDeg, p.elDeg); PointPlanRotor(p.tMs, c.first, c.second, p.elDeg > 90.0, p.tour) },
+            couverture = plan.couverture, courseAzDeg = RotorPlanPassage.courseAz(plan.points),
+            retourne = plan.retourne,
+            changement = if (ev == null) "" else if (ev.retournement) "flip" else "deroule",
+            changementMs = ev?.debutMs, changementS = ev?.dureeS ?: 0, texte = texte)
+    }
+
+    private var apercuCle: String? = null
+    private var apercu: ResumePlanRotor? = null
+
+    /**
+     * The plan of the pass known, for the screens: the one in force when the
+     * mast follows this pass, else the one that would be made now with the
+     * settings as they are (no mast needed: a preview). Null without a pass.
+     */
+    fun apercuPlan(): ResumePlanRotor? {
+        val tt = traceTemps
+        if (tt.size < 2) return null
+        val u = _etat.value
+        u.rotorPlan?.takeIf { u.rotorConnected && u.rotorEnabled && it.aosMs == tt.first().first }?.let { return it }
+        val l = rotorLimits(u)
+        val cle = "${tt.first().first}|${tt.size}|${l.azStopDeg}|${l.azMaxDeg}|${l.elMaxDeg}|${u.rotorMaxError}|${u.rotorZones}"
+        if (cle == apercuCle) return apercu
+        val plan = RotorPlanPassage.plan(tt, l, vitessePlan(), u.rotorMaxError.toDouble(), RotorPlanPassage.litZones(u.rotorZones))
+        apercuCle = cle
+        apercu = plan?.let { resume(it, tt, u) }
+        return apercu
     }
 
     /**
-     * Following the planned path: the command a little ahead (the rotator lags). A turn
-     * is held while transmitting or while a picture comes in — the mast stays — and the
-     * path is planned again from where it is once that is over. A new picture received
-     * changes the pictures to expect: planned again too.
+     * Following the plan: the satellite where it is, on the branch the plan
+     * gives for this time (a little ahead, the rotator lags) — the flip and
+     * the side come from the clock, so nothing flaps. A change (flip, unwind)
+     * is held while transmitting or while a picture comes in — the mast stays
+     * — and the plan is made again from where it is once that is over. A new
+     * picture received changes the pictures to expect: planned again too.
      */
-    private fun viseeSurChemin(u: EtatRotor, limits: RotorMath.Limits): RotorMath.Aim {
+    private fun viseeSurPlan(u: EtatRotor, limits: RotorMath.Limits, pos: SatPosition): RotorMath.Aim {
         val maintenant = horloge()
         val images = imagesSstv(maintenant)
         val imageEnCours = monde.imageEnCours(maintenant) != null
         val emission = monde.enEmission()
-        val pt = RotorChemin.a(rotorChemin, maintenant + 2_000L)
-            ?: return RotorMath.Aim(rotorCmd.azDeg, rotorCmd.elDeg, rotorCmd.elDeg > 90.0)
         fun dit(m: String, alerte: Boolean = false) {
             if (_etat.value.rotorDeroule != m || _etat.value.rotorDerouleAlerte != alerte)
                 change { copy(rotorDeroule = m, rotorDerouleAlerte = alerte) }
         }
-        if (pt.tour && (emission || imageEnCours)) {
+        val plan0 = rotorPlanPassage ?: return viseeAvecDeroule(u, pos, limits)
+        val dans = { p: RotorPlanPassage.Plan -> p.evenement?.let { maintenant + 2_000L in it.debutMs..it.finMs } == true }
+        if (dans(plan0) && (emission || imageEnCours)) {
             rotorCheminARefaire = true
             if (emission) dit(t("rotor_deroule_emission"), alerte = true)
             else dit(tf("rotor_deroule_image", java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault())
                 .format(java.util.Date(images.firstOrNull { maintenant in it }?.last ?: maintenant))))
             return RotorMath.Aim(rotorCmd.azDeg, rotorCmd.elDeg, rotorCmd.elDeg > 90.0)
         }
-        // Planned again from the mast: after a held turn, or when the pictures to expect changed.
+        // Planned again from the mast: after a held change, or when the pictures to expect changed.
         val imagesChangees = images.map { it.first / 10_000 } != rotorCheminImages.map { it.first / 10_000 }
-        if ((rotorCheminARefaire && !emission && !imageEnCours) || (imagesChangees && !pt.tour)) {
+        if ((rotorCheminARefaire && !emission && !imageEnCours) || (imagesChangees && !dans(plan0))) {
             rotorCheminARefaire = false
-            planifieChemin(u, limits, depuis = rotorCmd.azDeg)
-            val p2 = RotorChemin.a(rotorChemin, maintenant + 2_000L)
-            if (p2 != null) return RotorMath.Aim(p2.azDeg, p2.elDeg.coerceIn(0.0, limits.elMaxDeg), p2.elDeg > 90.0, p2.erreurDeg)
+            planifieChemin(u, limits, depuis = rotorCmd)
         }
-        val tour = RotorChemin.tours(rotorChemin).firstOrNull { maintenant + 2_000L in it }
-        dit(if (tour != null) tf("rotor_deroule_tour", ((tour.last - tour.first) / 1000).coerceAtLeast(1)) else "")
-        return RotorMath.Aim(pt.azDeg, pt.elDeg.coerceIn(0.0, limits.elMaxDeg), pt.elDeg > 90.0, pt.erreurDeg)
+        val plan = rotorPlanPassage ?: return viseeAvecDeroule(u, pos, limits)
+        val ev = plan.evenement
+        dit(if (ev != null && dans(plan))
+            (if (ev.retournement) tf("rotor_plan_flip_cours", ev.dureeS) else tf("rotor_deroule_tour", ev.dureeS))
+            else "")
+        return RotorPlanPassage.vise(plan, maintenant + 2_000L, pos.azimuthDeg, pos.elevationDeg, limits)
     }
 
     /** Where the satellite will be at [tMs] on the tracked pass (az, el), null outside it. */
