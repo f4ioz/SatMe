@@ -591,7 +591,7 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
         // The rig's IF: no SDR hardware, the rig tunes itself (CAT).
         if (recepteur == FI_POSTE) return (ouvreFi ?: throw java.io.IOException("la FI du poste n'est pas disponible ici"))()
         // A SatMe-Node's SDR: the board is there, its guards there too.
-        if (recepteur == NOEUD) return (ouvreNoeud ?: throw java.io.IOException("aucun SatMe-Node associé : l'associer dans Station › SatMe-Node"))()
+        if (recepteur == NOEUD) return (ouvreNoeud ?: throw java.io.IOException("aucun SatMe-Node associé : l'associer dans l'onglet DATV (Changer : son adresse et son code)"))()
         if (recepteur == FICHIER) {
             val f = File(fichierIq)
             if (fichierIq.isBlank() || !f.isFile) throw java.io.IOException("aucun enregistrement choisi : « I/Q » › Rejouer")

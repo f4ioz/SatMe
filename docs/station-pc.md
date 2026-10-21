@@ -303,6 +303,31 @@ The MiniTiouner works best close to the LNB. A **SatMe-Node** is SatMe on a smal
 
 Installing it on the Pi: [Installing SatMe-Node on a Raspberry Pi](installer-satme-node.md) — three commands, about ten minutes on a Pi 3. The script installs Java, builds LongMynd, lets it open the MiniTiouner (udev), and starts the **satme-noeud** service (`satme --noeud`, port 8090). At its first start the node draws a **six-digit code**, shown at the end of the installation (again: `journalctl -u satme-noeud | grep Code`). In SatMe-PC, DATV tab, **Changer**: the node's address and its code, **Associer**. The PC keeps the key the node gave: either can restart. An empty address goes back to the receiver on the PC. Without its key the node only says what it is; its LNB supply stays off unless chosen.
 
+### SatMe-Node: its SDR, its transmitter, its health
+
+The node is not only for DATV. Suggested wiring, with a **twin-output LNB**:
+
+- **output 1 → MiniTiouner**, which powers the LNB with **18 V** (**horizontal** polarisation, wide-band DATV);
+- **output 2 → a bias tee (DC block on the board side) → bladeRF**: the tee powers that output with **13 V** (**vertical**, the narrow band), the board only gets the RF;
+- the **bladeRF on a USB 3 port** (blue) of a **Raspberry Pi 4 or 5**; a Pluto can replace it, and/or transmit.
+
+Montage proposes this wiring as soon as a joined node reports a MiniTiouner and an SDR.
+
+**The node's SDR as this PC's receiver.** On the node's page (opened on the node), or in SatMe-PC's SDR tab: the board lent as the SDR (bladeRF or Pluto), independent of the DATV one — MiniTiouner and bladeRF receive at the same time. In the SDR tab, receiver **« SDR du SatMe-Node »**: it works everywhere a board plugged in here does (QO-100 cockpit, waterfall, FT8, beacon calibration and lock, recording). The node tunes its board as the PC asks (frequency, gain, correction), brings the stream down to the chosen rate in half-band steps (1.0584 MS/s: the whole narrow-band transponder, about 34 Mbit/s, a cable is advised; 529 or 265 kS/s for a slow network), and sends it over **one connection**: a header (rate, centre, format), numbered and timestamped frames (lost frames are counted). Network gone: the reception waits, says why, and resumes by itself.
+
+**The node's transmitter.** Station › SatMe-Node › **« Émettre par le SatMe-Node »** (off by default): DATV and SSTV (FM or SSB) transmissions go out through the node's transmitter (Pluto or bladeRF, the same kind as the transmitter chosen here). SatMe-PC modulates as usual and applies **all** its rules (confirmation, callsign, bands, duration, ceiling, beacon loop); the node adds its own:
+
+- **« émission autorisée sur ce node »**, off by default, can be ticked **only on the node itself** (its page opened on the Raspberry Pi, or through a tunnel `ssh -L 8091:localhost:8090 pi@node` then `http://localhost:8091`); unticking it stops a transmission at once;
+- its bands (144–146, 430–440, 1240–1300, 2300–2450 MHz), its maximum duration and its own gain ceiling;
+- a **watchdog**: nothing from SatMe-PC for 1.5 s (samples or « still there »), or the connection closed, and the transmission stops;
+- never a board that is already receiving (lent SDR, DATV).
+
+**One controller for transmitting.** This PC's page, the same page opened from another machine (remote mode, password), later the phone: all go through SatMe-PC's same routes and rules. One client holds the transmission at a time; everyone sees who, since when, what (the header's TX light); **STOP** is always possible from anywhere. Only the holding client's « still there » counts: from **another machine**, a link lost for more than **2 s** stops the transmission, and the session's first transmission asks for one more confirmation.
+
+**Its health.** The Station › SatMe-Node card (and the status bar's **Node** chip) reads the node every 3 s: the Pi's temperature and throttling (`vcgencmd`), load, memory, microSD free space, network and I/Q stream throughput, USB boards and their speed (a bladeRF on USB 2 is flagged), each service's state and client, the last log lines, the version. **Détails…**: all of it, plus stopping a service, stopping the node's transmission, or **restarting SatMe on the node** (only when its systemd service restarts it; the Raspberry Pi itself is never rebooted from here).
+
+**The phone, next.** It will go through SatMe-PC (its remote mode), not straight to the node: one set of transmit rules, one controller, the 2 s watchdog. The node only takes one transmit client at a time and keeps its own guards. These routes answer harmlessly when the phone serves the page.
+
 ### The wide band at a glance
 
 *Spectre de la bande large (station sol)*, off by default: the QO-100 ground station's public spectrum of the wide band (10490.5 – 10499.5 MHz, 4 frames a second), read while the option is on and the tab open.

@@ -60,7 +60,7 @@ class NoeudDistantPc(
 
     /** The node's SDR, opened as a receiver at [centreHz] with [gain] (tenths of dB, null: AGC) and [ppm]. */
     fun ouvreSdr(centreHz: Long, gain: Int?, ppm: Int): SourceNoeudIq {
-        if (!client.associe) throw java.io.IOException("aucun SatMe-Node associé : l'associer dans Station › SatMe-Node")
+        if (!client.associe) throw java.io.IOException("aucun SatMe-Node associé : l'associer dans l'onglet DATV (Changer : son adresse et son code)")
         val (h, p) = client.hotePort()
         return SourceNoeudIq.connecte(h, p, client.cheminAvecCle("/noeud/sdr/flux"), etages, centreHz, gain, ppm, horloge)
     }

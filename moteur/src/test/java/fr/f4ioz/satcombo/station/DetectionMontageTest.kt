@@ -143,4 +143,25 @@ class DetectionMontageTest {
         assertEquals(0, g.ajoutes); assertEquals(0, g.relies)
         assertFalse(DetectionMontage.fusionne(actuelle, p.chaine, emptySet()).chaine != actuelle)
     }
+
+    /** The owner's node: MiniTiouner on LNB output 1, the bladeRF on output 2 through a T, a Pluto to transmit; all on the node. */
+    @Test fun leSatMeNodeEtSesCartes() {
+        val datv = JSONObject("""{"recepteur":"minitiouner","noeud":"192.168.1.30","nomNoeud":"pi-antenne",
+            "noeudMateriel":{"datv":"minitiouner","sdr":"bladerf","tx":"pluto"}}""")
+        for (c in listOf(DetectionMontage.propose(ActiviteMontage.Lectures(datv = datv, qo100 = JSONObject("""{"olRx":9750000000}"""))).chaine,
+                ActiviteMontage.suggere(ActiviteMontage.Lectures(datv = datv, etat = JSONObject("""{"convertisseurs":{"rxOl":9750000000}}"""))).chaine)) {
+            fun un(m: String) = c.elements.single { it.modele == m }
+            fun relie(a: String, pa: String, b: String, pb: String) = c.liens.any { l ->
+                (l.de == Bout(un(a).id, pa) && l.vers == Bout(un(b).id, pb)) || (l.vers == Bout(un(a).id, pa) && l.de == Bout(un(b).id, pb)) }
+            assertTrue(c.toString(), relie("minitiouner", "usb", "satme-node", "usb"))
+            assertTrue(relie("bladerf", "usb", "satme-node", "usb"))
+            assertTrue(relie("pluto", "usb", "satme-node", "usb"))
+            assertTrue(relie("lnb-twin", "sortie1", "minitiouner", "lnb_a"))
+            assertTrue(relie("lnb-twin", "sortie2", "bias-t", "lnb"))
+            assertTrue(relie("bias-t", "rx", "bladerf", "rx1"))
+            assertTrue(relie("satme-node", "lan", "pc", "lan"))
+            // Nothing of the node's plugged into the PC.
+            assertFalse(relie("bladerf", "usb", "pc", "usb"))
+        }
+    }
 }

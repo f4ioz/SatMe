@@ -165,8 +165,10 @@ object DetectionMontage {
 
         // ---- the MiniTiouner: its FTDI chip, its LongMynd receiver set
         val ftdi = usb.firstOrNull { it.id == "0403:6010" }
-        val miniReglee = datv?.s("recepteur") == "minitiouner"
-        val noeudNom = datv.s("noeud").takeIf { miniReglee }.orEmpty()
+        // A SatMe-Node joined: its boards as it reports them (DATV receiver, SDR lent to SatMe-PC, transmitter).
+        val nm = datv?.optJSONObject("noeudMateriel")
+        val miniReglee = datv?.s("recepteur") == "minitiouner" || nm.s("datv") == "minitiouner"
+        val noeudNom = datv.s("noeud").takeIf { miniReglee || nm != null }.orEmpty()
         val mini = when {
             ftdi != null && (ftdi.nom.contains("tiouner", true) || miniReglee) -> b.ajoute("minitiouner", Confiance.DETECTE,
                 "Puce FTDI double sur l'USB (0403:6010" + (if (ftdi.nom.isNotBlank()) ", « " + ftdi.nom + " »" else "") + ")" + (if (miniReglee) " et récepteur DATV réglé" else ""))
@@ -175,7 +177,15 @@ object DetectionMontage {
                 "Récepteur DATV réglé : MiniTiouner" + (if (noeudNom.isNotBlank()) " sur le SatMe-Node « $noeudNom »" else ""))
             else -> null
         }
-        val noeud = if (mini != null && noeudNom.isNotBlank()) b.ajoute("satme-node", Confiance.DETECTE, "MiniTiouner joint par le SatMe-Node « $noeudNom »") else null
+        val noeud = if (noeudNom.isNotBlank() && (mini != null || nm != null)) b.ajoute("satme-node", Confiance.DETECTE,
+            if (mini != null) "MiniTiouner joint par le SatMe-Node « $noeudNom »" else "SatMe-Node « $noeudNom » associé") else null
+        // Its SDR and its transmitter: boards plugged into the node, not into this PC.
+        fun carteNoeud(k: String, role: String): String? = when (k) {
+            "bladerf" -> "bladerf"; "pluto" -> "pluto"; else -> null
+        }?.let { m -> b.ajoute(m, Confiance.DETECTE, (if (m == "bladerf") "bladeRF 2.0" else "ADALM-PLUTO") + " sur le SatMe-Node « $noeudNom » : $role") }
+        val sdrNoeud = if (noeud != null) carteNoeud(nm.s("sdr"), "SDR prêté à SatMe-PC") else null
+        val txNoeud = if (noeud == null) null else if (nm.s("tx") == nm.s("sdr") && sdrNoeud != null) sdrNoeud else carteNoeud(nm.s("tx"), "émetteur")
+        listOfNotNull(sdrNoeud, txNoeud).distinct().forEach { b.relie(it, "usb", noeud, "usb") }
 
         // ---- QO-100: the chain's oscillators say what stands between the dish and the receivers
         val q = l.qo100
@@ -198,6 +208,16 @@ object DetectionMontage {
             }
             val fiSeule = olRx?.let { (descente - it) / 1e6 }
             when {
+                // The node's twin LNB: output 1 to the MiniTiouner (it powers it), output 2 through a T to the node's SDR.
+                sortieDc == null && mini != null && sdrNoeud != null -> {
+                    val lnb = b.ajoute("lnb-twin", Confiance.SUPPOSE, "LNB à deux sorties : la 1 vers le MiniTiouner (18 V, horizontale), " +
+                        "la 2 vers le SDR du SatMe-Node par un T de polarisation (13 V, verticale, bande étroite)")
+                    b.relie(d, "lnb", lnb, "entree")
+                    b.relie(lnb, "sortie1", mini, "lnb_a")
+                    val t = b.ajoute("bias-t", Confiance.SUPPOSE, "T de polarisation (DC block côté SDR) : alimente la sortie 2 du LNB en 13 V, la HF seule vers le SDR")
+                    b.relie(lnb, "sortie2", t, "lnb")
+                    b.relieUn(t, listOf("rx"), sdrNoeud, if (b.modele(sdrNoeud) == "bladerf") "rx1" else "rx")
+                }
                 sortieDc != null -> {
                     val twin = mini != null
                     val lnb = b.ajoute(if (twin) "lnb-twin" else "lnb-pll", Confiance.SUPPOSE,
@@ -241,7 +261,7 @@ object DetectionMontage {
             }
             // The uplink: an up-converter from the rig's band (the chain's transmit oscillator), or the DATV transmitter straight on.
             val fiTx = olTx?.let { kotlin.math.abs(2400.25e6 - it) / 1e6 }
-            val emetteur = dtx?.s("emetteur")?.let { cartesSdr[it] }
+            val emetteur = (if (dtx.b("parNoeud")) txNoeud else null) ?: dtx?.s("emetteur")?.let { cartesSdr[it] } ?: txNoeud
             if (fiTx != null && fiTx in 120.0..460.0) {
                 val bandeFi = if (fiTx < 300) 144 else 432
                 val up = b.ajoute("dxp-up-mk4", Confiance.SUPPOSE, "Convertisseur montant $bandeFi → 2400 MHz : oscillateur d'émission " + f3(olTx!!) + " MHz (modèle à vérifier dans sa fiche)",

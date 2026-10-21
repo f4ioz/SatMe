@@ -399,6 +399,92 @@ class NoeudSdrTxTest {
         assertEquals(1, relances.get())
     }
 
+    /** A transport stream maker without ffmpeg: null packets only, until stopped. */
+    private class TsNul : EmissionDatvPc.FabriqueTs {
+        override fun demarre(p: EmissionDatvPc.ParametresTs): EmissionDatvPc.Processus {
+            val vivant = java.util.concurrent.atomic.AtomicBoolean(true)
+            val e = object : java.io.InputStream() {
+                override fun read(): Int = throw UnsupportedOperationException()
+                override fun read(b: ByteArray, o: Int, n: Int): Int {
+                    if (!vivant.get()) return -1
+                    Thread.sleep(20)
+                    val k = minOf(n, 188 * 8) / 188 * 188
+                    for (i in 0 until k step 188) { b[o + i] = 0x47; b[o + i + 1] = 0x1F; b[o + i + 2] = 0xFF.toByte(); b[o + i + 3] = 0x10 }
+                    return k
+                }
+            }
+            return object : EmissionDatvPc.Processus {
+                override val sortie: java.io.InputStream = e
+                override val vivant: Boolean get() = vivant.get()
+                override fun arrete() { vivant.set(false) }
+            }
+        }
+    }
+
+    /**
+     * The whole chain from a browser on another machine: SatMe-PC's routes
+     * (session, one controller, the remote confirmation), its DATV
+     * transmission sent through the node to the fake transmitter; the
+     * remote browser falling silent stops it within 2 s; another client
+     * may not take over, but may stop it.
+     */
+    @Test
+    fun un_seul_pilote_et_le_chien_distant() {
+        autorise()
+        val st = StationPc(StockageMemoire(), Catalogue(dossier, enLigne = false), PortsSeriePc(), portee)
+        st.settings.manualLocator = "JN18FS"
+        val fab = EmetteurNoeud.Fabrique { EmetteurNoeud("127.0.0.1", noeud.portReel, "/noeud/tx/flux?cle=$cle", -10.0) }
+        val e = EmissionDatvPc(StockageMemoire(), File(dossier, "img"), { "F4IOZ" }, fabrique = TsNul(), noeudTx = { fab })
+            .apply { frequenceKhz = 2_409_750L; gainDb = -30.0 }
+        val acces = AccesDistantPc(File(dossier, "acces").apply { mkdirs() }, reseau = true, iterations = 1000)
+        acces.regle("mot-de-passe-du-mat")
+        val s = ServeurPc(st, 0, emission = e)
+        s.acces = acces
+        s.demarre()
+        try {
+            s.estLocal = { false }
+            val base = "http://127.0.0.1:${s.portReel}"
+            fun req(chemin: String, post: Boolean = true, cookie: String? = null, corps: String? = null): Pair<Int, String> {
+                val c = URL(base + chemin).openConnection() as HttpURLConnection
+                c.instanceFollowRedirects = false
+                cookie?.let { c.setRequestProperty("Cookie", it) }
+                if (post) { c.requestMethod = "POST"; c.doOutput = true; c.outputStream.use { o -> corps?.let { o.write(it.toByteArray()) } } }
+                val code = c.responseCode
+                if (code == 303) return code to (c.getHeaderField("Set-Cookie") ?: "")
+                return code to (if (code < 400) c.inputStream else c.errorStream)?.readBytes()?.toString(Charsets.UTF_8).orEmpty()
+            }
+            val cookie = req("/connexion", corps = "mdp=mot-de-passe-du-mat&suite=%2Fpc").second.substringBefore(';')
+            // Remote, not confirmed for this session: refused before any radio.
+            val r0 = JSONObject(req("/api/datv/emission/demarre?confirme=1&client=tablette", cookie = cookie).second)
+            assertFalse(r0.getBoolean("ok")); assertTrue(r0.getString("erreur"), r0.getString("erreur").contains("confirmer"))
+            assertEquals(0, fauxTx.demarre)
+            req("/api/emission/controle?confirme=1&client=tablette", cookie = cookie)
+            assertTrue(JSONObject(req("/api/datv/emission/demarre?confirme=1&client=tablette", cookie = cookie).second).getBoolean("ok"))
+            attends { fauxTx.etat.emet }
+            // Everyone sees who holds it; another client may not take over.
+            val vu = JSONObject(req("/api/emission/controle?client=autre", post = false, cookie = cookie).second)
+            assertTrue(vu.getBoolean("tenue")); assertFalse(vu.getBoolean("moi")); assertTrue(vu.getString("client").contains("autre appareil"))
+            req("/api/emission/controle?confirme=1&client=autre", cookie = cookie)
+            assertTrue(JSONObject(req("/api/datv/emission/demarre?confirme=1&client=autre", cookie = cookie).second).getString("erreur").contains("tenue par"))
+            // Its « still there » keeps it; the other client's does not count.
+            repeat(4) { req("/api/datv/emission/vie?client=tablette", cookie = cookie); Thread.sleep(500) }
+            assertTrue(fauxTx.etat.emet)
+            assertFalse(JSONObject(req("/api/datv/emission/vie?client=autre", cookie = cookie).second).getBoolean("ok"))
+            // The tablet falls silent: stopped on the PC within its 2 s, then on the node.
+            val t0 = System.currentTimeMillis()
+            attends(4_000) { !e.etat.emet }
+            assertTrue("arrêtée après " + (System.currentTimeMillis() - t0) + " ms", System.currentTimeMillis() - t0 < 2_800)
+            assertTrue(e.etat.raison, e.etat.raison.contains("liaison perdue"))
+            attends(3_000) { !fauxTx.etat.emet }
+            // Started again by the tablet, stopped by the other client: STOP from anyone.
+            assertTrue(JSONObject(req("/api/datv/emission/demarre?confirme=1&client=tablette", cookie = cookie).second).getBoolean("ok"))
+            attends { fauxTx.etat.emet }
+            req("/api/datv/emission/arrete?client=autre", cookie = cookie)
+            attends(3_000) { !fauxTx.etat.emet && !e.etat.emet }
+            assertFalse(JSONObject(req("/api/emission/controle?client=autre", post = false, cookie = cookie).second).getBoolean("tenue"))
+        } finally { s.arrete(); e.arrete() }
+    }
+
     @Test
     fun le_sdr_et_l_emetteur_ne_prennent_pas_la_meme_carte() {
         autorise()

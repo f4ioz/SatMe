@@ -303,6 +303,31 @@ Le MiniTiouner travaille mieux près du LNB. Un **SatMe-Node**, c'est SatMe sur 
 
 L'installer sur le Pi : [Installer SatMe-Node sur un Raspberry Pi](installer-satme-node.fr.md) — trois commandes, une dizaine de minutes sur un Pi 3. Le script installe Java, compile LongMynd, lui donne accès au MiniTiouner (udev) et démarre le service **satme-noeud** (`satme --noeud`, port 8090). À son premier démarrage, le node tire un **code à six chiffres**, affiché à la fin de l'installation (le revoir : `journalctl -u satme-noeud | grep Code`). Dans SatMe-PC, onglet DATV, **Changer** : l'adresse du node et son code, **Associer**. Le PC garde la clé que le node lui a donnée : l'un comme l'autre peut redémarrer. Une adresse vide revient au récepteur du PC. Sans sa clé, le node ne dit que ce qu'il est ; son alimentation LNB reste coupée tant qu'on ne la choisit pas.
 
+### SatMe-Node : son SDR, son émetteur, sa santé
+
+Le node ne sert pas qu'à la DATV. Branchements conseillés, avec un **LNB à deux sorties** :
+
+- **sortie 1 → MiniTiouner**, qui alimente le LNB en **18 V** (polarisation **horizontale**, la DATV large bande) ;
+- **sortie 2 → un T de polarisation (DC block côté carte) → bladeRF** : le T alimente cette sortie en **13 V** (**verticale**, la bande étroite), la carte ne reçoit que la HF ;
+- le **bladeRF sur un port USB 3** (bleu) d'un **Raspberry Pi 4 ou 5** ; un Pluto peut le remplacer, et/ou servir d'émetteur.
+
+Le Montage propose ce câblage dès qu'un node associé annonce un MiniTiouner et un SDR.
+
+**Le SDR du node, récepteur de ce PC.** Sur la page du node (ouverte sur le node), ou dans l'onglet SDR de SatMe-PC : la carte prêtée comme SDR (bladeRF ou Pluto), indépendante de celle de la DATV — MiniTiouner et bladeRF reçoivent en même temps. Dans l'onglet SDR, récepteur **« SDR du SatMe-Node »** : il sert partout comme une carte branchée ici (cockpit QO-100, cascade, FT8, calage et verrouillage sur la balise, enregistrement). Le node accorde sa carte comme le PC le demande (fréquence, gain, correction), ramène le flux au débit choisi par demi-bandes successives (1,058 MS/s : tout le transpondeur bande étroite, environ 34 Mbit/s, câble conseillé ; 529 ou 265 kS/s pour un réseau lent), et l'envoie sur **une seule connexion** : un en-tête (débit, centre, format), des trames numérotées et datées (les trames perdues se comptent). Réseau coupé : la réception attend, dit pourquoi, et reprend seule.
+
+**L'émetteur du node.** Station › SatMe-Node › **« Émettre par le SatMe-Node »** (décoché au départ) : les émissions DATV et SSTV (FM ou BLU) partent par l'émetteur du node (Pluto ou bladeRF, du même type que l'émetteur choisi ici). SatMe-PC module comme d'habitude et applique **toutes** ses règles (confirmation, indicatif, bandes, durée, plafond, boucle sur la balise) ; le node ajoute les siennes :
+
+- **« émission autorisée sur ce node »**, décochée au départ, ne se coche **que sur le node lui-même** (sa page ouverte sur le Raspberry Pi, ou par un tunnel `ssh -L 8091:localhost:8090 pi@node` puis `http://localhost:8091`) ; la décocher coupe aussitôt une émission ;
+- ses bandes (144–146, 430–440, 1240–1300, 2300–2450 MHz), sa durée maximale et son propre plafond de gain ;
+- un **chien de garde** : plus rien de SatMe-PC pendant 1,5 s (échantillons ou « toujours là »), ou la connexion fermée, et l'émission s'arrête ;
+- jamais une carte qui reçoit déjà (SDR prêté, DATV).
+
+**Un seul pilote pour l'émission.** La page de ce PC, la même page ouverte d'une autre machine (mode distant, mot de passe), demain le téléphone : tous passent par les mêmes routes de SatMe-PC et ses règles. Un seul client tient l'émission à la fois ; tous voient qui, depuis quand, quoi (le témoin TX du bandeau) ; **STOP** reste possible de partout. Seul le « toujours là » du client qui tient l'émission compte : depuis **une autre machine**, une liaison coupée plus de **2 s** arrête l'émission, et la première émission de la session demande une confirmation de plus.
+
+**Sa santé.** La carte Station › SatMe-Node (et la puce **Node** de la barre d'état) lit le node toutes les 3 s : température et bridage du Pi (`vcgencmd`), charge, mémoire, place sur la carte microSD, réseau et débit du flux I/Q, cartes USB et leur vitesse (un bladeRF en USB 2 est signalé), état de chaque service et son client, dernières lignes du journal, version. **Détails…** : tout cela, et arrêter un service, couper l'émission du node, ou **relancer SatMe sur le node** (seulement quand son service systemd le redémarre ; le Raspberry Pi, lui, ne redémarre jamais d'ici).
+
+**Le téléphone, ensuite.** Il passera par SatMe-PC (son mode distant), pas directement par le node : une seule paire de règles d'émission, un seul pilote, le chien de garde de 2 s. Le node, lui, n'accepte qu'un client d'émission à la fois et garde ses propres gardes. Ces routes répondent sans rien faire quand c'est le téléphone qui sert la page.
+
 ### La bande large d'un coup d'œil
 
 *Spectre de la bande large (station sol)*, décoché d'origine : le spectre public de la bande large que publie la station sol de QO-100 (10490,5 – 10499,5 MHz, 4 images par seconde), lu tant que l'option est cochée et l'onglet ouvert.

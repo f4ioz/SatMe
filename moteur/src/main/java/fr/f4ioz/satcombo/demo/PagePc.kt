@@ -1893,6 +1893,18 @@ ${rail()}
       </div>
     </div>
 
+    <div class="carte" id="nd-carte" hidden>
+      <div class="paire" style="margin:0;flex-wrap:nowrap;align-items:center"><b style="white-space:nowrap">SatMe-Node</b><button type="button" class="q" id="nd-q" aria-label="Le SatMe-Node">?</button>
+        <span class="petit" id="nd-nom" style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span><span class="h-esp"></span>
+        <span class="nd-etat" id="nd-etat" style="white-space:nowrap">—</span></div>
+      <div class="petit" id="nd-roles" style="margin-top:4px"></div>
+      <div class="petit" id="nd-sante" style="margin-top:2px"></div>
+      <div id="nd-alertes" class="petit"></div>
+      <div class="ligne"><label class="petit" title="Les émissions DATV et SSTV par l'émetteur du node (Pluto ou bladeRF) au lieu de celui de ce PC ; toutes les règles d'émission restent, et le node a les siennes"><input type="checkbox" id="nd-tx" onchange="ndRegle('tx=' + (this.checked ? 1 : 0))"> Émettre par le SatMe-Node</label>
+        <button style="margin-left:auto" onclick="ndOuvre()">Détails…</button></div>
+      <div id="nd-aide" hidden>Le <b>SatMe-Node</b> (Raspberry Pi près de la parabole, <code>satme --noeud</code>) : sa réception DATV (MiniTiouner), son SDR prêté à ce PC (récepteur « SDR du SatMe-Node » de l'onglet SDR) et son émetteur. Sa santé se lit toutes les 3 s : température, bridage, mémoire, carte microSD, réseau, cartes USB, services. « Émettre par le SatMe-Node » : DATV et SSTV partent par son émetteur, après les mêmes règles qu'ici ; le node ajoute les siennes : « émission autorisée » (cochée seulement sur le node lui-même, décochée au départ), ses bandes, son plafond, et il coupe l'émission si ce PC se tait 1,5 s.</div>
+    </div>
+
     <div class="carte" id="ip-carte" hidden>
       <div class="paire" style="margin:0 0 4px"><b>Spectre du poste</b><span class="petit" id="ip-bornes"></span></div>
       <canvas id="ip-chute" width="480" height="72" style="width:100%;height:72px;display:block;border-radius:6px;background:#000" title="Le spectre de l'IC-9700 (par le réseau) : le plus récent en haut"></canvas>
@@ -3152,7 +3164,7 @@ ${rail()}
     <div class="carte">
       <div class="t" id="r-cle-t">La clé</div>
       <div class="ligne" style="margin-top:0"><span class="petit" style="min-width:70px">Récepteur</span>
-        <select id="r-recepteur" onchange="rRegle('recepteur=' + this.value)"><option value="rtl">Clé RTL-SDR (rtl_tcp)</option><option value="pluto">ADALM-PLUTO (réseau)</option><option value="bladerf">bladeRF 2.0 (USB)</option><option value="fiposte">IC-9700 FI (son du poste)</option><option value="fichier" class="r-fictif">Fichier I/Q (relecture)</option><option value="generateur" class="r-fictif">Générateur d'essai</option></select></div>
+        <select id="r-recepteur" onchange="rRegle('recepteur=' + this.value)"><option value="rtl">Clé RTL-SDR (rtl_tcp)</option><option value="pluto">ADALM-PLUTO (réseau)</option><option value="bladerf">bladeRF 2.0 (USB)</option><option value="fiposte">IC-9700 FI (son du poste)</option><option value="noeud" class="r-noeud">SDR du SatMe-Node (réseau)</option><option value="fichier" class="r-fictif">Fichier I/Q (relecture)</option><option value="generateur" class="r-fictif">Générateur d'essai</option></select></div>
       <div class="ligne" id="r-fichier-l" hidden><span class="petit" style="min-width:70px">Fichier</span><b class="petit" id="r-fichier-nom" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></b>
         <button onclick="rqOuvre(this)" title="Les enregistrements I/Q : en choisir un à rejouer">Choisir…</button></div>
       <div class="ligne" id="r-gen-l" hidden><span class="petit" style="flex:1">Bruit et signaux d'essai, sans antenne ni matériel.</span>
@@ -3185,6 +3197,15 @@ ${rail()}
         <div class="ligne"><input id="r-bladerf-outil" placeholder="vide : bladeRF-cli du PATH" onchange="rRegle('bladerfOutil=' + enc(v('r-bladerf-outil')))"></div>
         <div class="petit" id="r-bladerf-prog"></div>
         <div class="petit aide" style="margin-top:4px">De 70 MHz à 6 GHz, sur un port USB 3. Réception seulement : SatMe ne donne à bladeRF-cli que des commandes RX1 (oscillateur, débit, bande, gain) et n'émet jamais d'ici.</div>
+      </details>
+      <details style="margin-top:6px" id="r-liaison-noeud" hidden open><summary class="petit" style="cursor:pointer">SDR du SatMe-Node</summary>
+        <div class="ligne"><span class="petit" id="r-noeud-info" style="flex:1"></span>
+          <button type="button" class="q" id="r-noeud-q" aria-label="Le SDR du SatMe-Node">?</button></div>
+        <div class="ligne"><span class="petit" style="min-width:70px">Carte</span><select id="r-noeud-carte" onchange="ndRegle('sdr=' + this.value)" title="La carte du node prêtée comme SDR (pas celle de sa réception DATV)">
+          <option value="aucun">aucune</option><option value="bladerf">bladeRF 2.0</option><option value="pluto">ADALM-PLUTO</option></select>
+          <select id="r-noeud-flux" onchange="ndRegle('etages=' + this.value)" title="Le débit du flux I/Q entre le node et ce PC : plus léger pour un réseau lent (Wi-Fi)">
+          <option value="0">1,058 MS/s (tout le transpondeur)</option><option value="1">529 kS/s (réseau lent)</option><option value="2">265 kS/s (très lent)</option></select></div>
+        <div id="r-noeud-aide" hidden>La carte SDR branchée sur le <b>SatMe-Node</b> (son bladeRF ou son Pluto, à côté du MiniTiouner) sert de récepteur à ce PC : le node l'accorde comme demandé ici, ramène son flux au débit choisi (par moitiés) et l'envoie par une seule connexion, numérotée (les trames perdues se comptent). Tout le reste se fait ici comme avec une carte sur ce PC : cockpit QO-100, cascade, FT8, calage et verrouillage sur la balise, enregistrement. Réseau coupé : la réception attend et reprend seule. 1,058 MS/s demande environ 34 Mbit/s (câble conseillé) ; 529 kS/s, 17 Mbit/s. Réception seulement.</div>
       </details>
       </div>
     </div>
@@ -3986,6 +4007,7 @@ ${rail()}
   <button id="sb-rec" class="sb-i" hidden onclick="hsOuvre()" title="Un enregistrement est en cours : « Son » en haut pour l'arrêter (ou la touche E)"><i></i><b id="sb-rec-t"></b></button>
   <button id="sb-bal" class="sb-i" hidden onclick="vue('sdr'); balOuvre(g('sp-b-bal'))" title="Le récepteur balaie (onglet SDR, Balayage) : cliquer pour le voir ou l'arrêter"><i></i><span>Balayage</span><b id="sb-bal-t"></b></button>
   <button id="sb-tel" class="sb-i" onclick="vue('reglages'); montreReglages('interfaces')" title="Le lien WebSocket (téléphone, logiciels de suivi) : Réglages › Interfaces"><i></i><span>Lien</span><b id="sb-tel-t">—</b></button>
+  <button id="sb-noeud" class="sb-i" hidden onclick="vue('station'); ndOuvre()" title="Le SatMe-Node : sa santé et ses alertes (Station › SatMe-Node)"><i></i><span>Node</span><b id="sb-noeud-t">—</b></button>
   <button id="sb-rig" class="sb-i" hidden onclick="vue('reglages'); montreReglages('interfaces')" title="La fréquence donnée aux logiciels de carnet (rigctld) : Réglages › Interfaces"><i></i><span>Carnets</span><b id="sb-rig-t">—</b></button>
   <span class="h-esp"></span>
   <button id="sb-err" class="sb-i" onclick="montreErreurs(this)" title="Les erreurs relevées par la page et par SatMe-PC"><i></i><span>Erreurs</span><b id="sb-err-t">0</b></button>
@@ -4012,6 +4034,16 @@ ${rail()}
 </dialog>
 <div id="pop" role="tooltip" hidden></div>
 <div id="toast" role="status" aria-live="polite" hidden></div>
+<dialog id="nd-dlg" style="background:var(--carte);color:var(--clair);border:1px solid var(--bord);border-radius:12px;width:min(760px,94vw)" aria-labelledby="nd-dlg-t">
+  <div class="paire" style="margin:0"><b id="nd-dlg-t">SatMe-Node</b><span class="h-esp"></span><button onclick="g('nd-dlg').close()">Fermer</button></div>
+  <div id="nd-detail" class="petit" style="margin-top:8px;max-height:60vh;overflow:auto"></div>
+  <div class="ligne" style="flex-wrap:wrap;gap:6px">
+    <button onclick="ndAction('datv-arrete', 'Arrêter la réception DATV du node ?')">Arrêter la DATV</button>
+    <button onclick="ndAction('sdr-arrete', 'Couper le flux SDR du node ? (ce PC le reprend seul s’il le reçoit)')">Couper le flux SDR</button>
+    <button class="arret" onclick="ndAction('tx-arrete', '')">■ Arrêter l’émission du node</button>
+    <button onclick="ndAction('relance', 'Relancer SatMe sur le node ? Son service systemd le redémarre en quelques secondes (le Raspberry Pi, lui, ne redémarre pas).')">Relancer SatMe sur le node</button>
+    <span class="petit" id="nd-msg"></span></div>
+</dialog>
 <dialog id="pal" class="dlg-pal" aria-label="Commandes">
   <div class="pal-tete">${IconesPc.svg("search")}<input id="pal-q" autocomplete="off" spellcheck="false" placeholder="Onglet, fréquence (145.800, 10489.750 M, 437,5), satellite, indicatif, action…"></div>
   <div id="pal-l" role="listbox"></div>
@@ -4559,7 +4591,7 @@ let XS = null, xsVieW = null, xsSuivi = false, xsApercuCle = '';
 function xsCtxCle() { return g('xs-interieur').checked ? 'int' : g('xs-charge').checked ? 'charge' : g('xs-sat').checked ? 'sat' : 'air'; }
 function xsVie(on) {
   if (on && !xsVieW) {
-    const bat = () => fetch('api/sstv/emission/vie', { method: 'POST' }).catch(() => {});
+    const bat = () => fetch('api/sstv/emission/vie?client=' + TX_CLIENT, { method: 'POST' }).catch(() => {});
     try {
       xsVieW = new Worker(URL.createObjectURL(new Blob(['setInterval(function () { postMessage(0); }, 1000);'], { type: 'text/javascript' })));
       xsVieW.onmessage = bat;
@@ -4641,7 +4673,8 @@ async function xsEmettre() {
   if (!confirm(q)) return;
   txt('xs-msg', 'démarrage de l’émission…');
   let r = null;
-  try { r = await (await fetch('api/sstv/emission/demarre?confirme=1&interieur=' + (inter ? 1 : 0) + '&charge=' + (charge ? 1 : 0) + '&satellite=' + (sat ? 1 : 0), { method: 'POST' })).json(); } catch (x) {}
+  if (!(await txPeutDemarrer())) return;
+  try { r = await (await fetch('api/sstv/emission/demarre?confirme=1&interieur=' + (inter ? 1 : 0) + '&charge=' + (charge ? 1 : 0) + '&satellite=' + (sat ? 1 : 0) + '&client=' + TX_CLIENT, { method: 'POST' })).json(); } catch (x) {}
   txt('xs-msg', r && r.ok === false ? 'Refusé : ' + r.erreur : (r ? 'émission en cours' : 'pas de réponse de SatMe-PC'));
   if (r && r.ok !== false) xsVie(true);
   xsCharge();
@@ -7360,7 +7393,7 @@ async function chargePx() {
 // The page says it is there while transmitting: from a worker, which a hidden tab does not slow down.
 function eVie(on) {
   if (on && !eVieW) {
-    const bat = () => fetch('api/datv/emission/vie', { method: 'POST' }).catch(() => {});
+    const bat = () => fetch('api/datv/emission/vie?client=' + TX_CLIENT, { method: 'POST' }).catch(() => {});
     try {
       eVieW = new Worker(URL.createObjectURL(new Blob(['setInterval(function () { postMessage(0); }, 1000);'], { type: 'text/javascript' })));
       eVieW.onmessage = bat;
@@ -7551,10 +7584,11 @@ async function eEmettre() {
       'Indicatif ' + EM.indicatif + '. Radioamateur titulaire d’une licence, petite antenne à l’intérieur, aucun amplificateur ?'
     : charge ? 'TEST SUR CHARGE à ' + v('e-mhz') + ' MHz, ' + gainTxt + '.\n\nLa sortie TX du ' + (hk ? 'HackRF' : EM.emetteur === 'bladerf' ? 'bladeRF' : 'Pluto') + ' est-elle bien sur une charge fictive ou un atténuateur, et rien d’autre ?'
     : 'ÉMETTRE vers QO-100 avec le ' + EM.emetteurNom + ' à ' + v('e-mhz') + ' MHz (descente ' + mhz3(EM.descenteKhz) + ' MHz), ' + v('e-sr') + ' kS/s, ' + v('e-norme') + ' ' + v('e-modcod') + ', gain ' + v('e-gain') + ' dB, ' + v('e-duree') + ' min au plus.\n\nCanal libre vérifié ? Indicatif ' + EM.indicatif + '.';
-  if (!confirm(q)) return;
+  if (!confirm(q + (EM.parNoeud ? '\n\nPar l’émetteur du SatMe-Node.' : ''))) return;
+  if (!(await txPeutDemarrer())) return;
   txt('e-msg', 'démarrage : ffmpeg, puis ' + (hk ? 'hackrf_transfer…' : EM.emetteur === 'bladerf' ? 'bladeRF-cli…' : 'l’ADALM-PLUTO…'));
   let j = null;
-  try { j = await (await fetch('api/datv/emission/demarre?confirme=1&charge=' + (charge ? 1 : 0) + '&interieur=' + (inter ? 1 : 0), { method: 'POST' })).json(); } catch (x) {}
+  try { j = await (await fetch('api/datv/emission/demarre?confirme=1&charge=' + (charge ? 1 : 0) + '&interieur=' + (inter ? 1 : 0) + '&client=' + TX_CLIENT, { method: 'POST' })).json(); } catch (x) {}
   txt('e-msg', j && j.ok === false ? 'Refusé : ' + j.erreur : (j ? 'émission en cours' : 'pas de réponse de SatMe-PC'));
   if (j && j.ok !== false) eVie(true);
   setTimeout(ticEmission, 300);
@@ -9440,6 +9474,7 @@ function carnetBascule() {
 }
 g('c-vers-q').aides = [g('c-vers-aide')];
 g('cat-fi-q').aides = [g('cat-fi-aide')]; g('r-fi-q').aides = [g('r-fi-aide')];
+g('nd-q').aides = [g('nd-aide')]; g('r-noeud-q').aides = [g('r-noeud-aide')];
 function carnetRend() {
   const k = TQ && TQ.carnet, c = carnetVers(), apres = g('ca-on').checked;
   g('c-vers').hidden = !c || apres;
@@ -10061,12 +10096,12 @@ function rendSdr() {
   coche('r-lance', r.lance); coche('r-bias', r.bias);
   const val = (id, x) => { if (document.activeElement !== g(id)) g(id).value = String(x); };
   // The receiver: the dongle (rtl_tcp) or the Pluto, each with its own settings shown.
-  const blade = r.recepteur === 'bladerf', pluto = r.recepteur === 'pluto' || blade;
+  const noeud = r.recepteur === 'noeud', blade = r.recepteur === 'bladerf' || noeud, pluto = r.recepteur === 'pluto' || blade;
   if (g('r-gain').dataset.src !== (blade ? 'bladerf' : pluto ? 'pluto' : 'rtl')) remplitGain(blade ? 'bladerf' : pluto);
   const fictif = r.recepteur === 'fichier' || r.recepteur === 'generateur';
   const fi = r.recepteur === 'fiposte';
   txt('r-titre', r.recepteur === 'fichier' ? 'Fichier I/Q (relecture)' : r.recepteur === 'generateur' ? 'Générateur d’essai' : fi ? 'IC-9700 FI' :
-    blade ? 'bladeRF 2.0 (USB)' : pluto ? 'ADALM-PLUTO (réseau)' : 'Clé SDR (rtl_tcp)'); txt('r-cle-t', pluto || fictif || fi ? 'Le récepteur' : 'La clé');
+    noeud ? 'SDR du SatMe-Node' : blade ? 'bladeRF 2.0 (USB)' : pluto ? 'ADALM-PLUTO (réseau)' : 'Clé SDR (rtl_tcp)'); txt('r-cle-t', pluto || fictif || fi ? 'Le récepteur' : 'La clé');
   if (r.generateur !== undefined) rendFictif(r);
   // The rig's IF: no gain nor link here (the rig tunes itself); the view narrowed to its span once at each start.
   g('r-fi-l').hidden = !fi; if (fi) g('r-materiel').hidden = true; else if (!fictif) g('r-materiel').hidden = false;
@@ -10076,8 +10111,9 @@ function rendSdr() {
   if (!r.fi) rFiVu = '';
   if (fi) txt('r-fi-info', r.fi ? (r.fi.transport === 'usb' ? 'Carte son USB' : 'Réseau') + ' : ±' + (r.fi.demiHz / 1000).toLocaleString('fr-FR', { maximumFractionDigits: 1 }) + ' kHz autour du cadran du poste.'
     : 'La FI de l’IC-9700 (poste réglé sur IF), démodulée ici ; centrée sur le cadran du poste.');
-  g('r-agc-l').hidden = pluto; g('r-liaison').hidden = pluto; g('r-liaison-pluto').hidden = !pluto || blade; g('r-liaison-bladerf').hidden = !blade;
-  if (blade && r.bladerf) {
+  g('r-agc-l').hidden = pluto; g('r-liaison').hidden = pluto; g('r-liaison-pluto').hidden = !pluto || blade; g('r-liaison-bladerf').hidden = !blade || noeud;
+  g('r-liaison-noeud').hidden = !noeud;
+  if (blade && !noeud && r.bladerf) {
     txt('r-bladerf-info', !r.bladerf.lu ? 'non détecté (bouton Détecter)' : r.bladerf.libelle || r.bladerf.message);
     txt('r-bladerf-prog', r.bladerfProgramme ? 'bladeRF-cli : ' + r.bladerfProgramme : r.bladerfConseil);
     val('r-bladerf-outil', r.bladerfOutil || '');
@@ -14001,6 +14037,101 @@ g('rail-k').onclick = () => palette();
 g('rail-aide').onclick = () => aideClavier();
 window.addEventListener('hashchange', () => { const n = location.hash.slice(1); if (document.querySelector('#onglets button[data-v="' + n + '"]') && g('v-' + n).hidden) vue(n); });
 
+// ------------------------------------------------------------------ one controller for the transmissions (api/emission/controle)
+/** This tab's id for the transmissions: only the client that started one keeps it alive; everyone may stop it. */
+var TX_CLIENT = (function () { const n = () => Math.random().toString(36).slice(2, 12);
+  try { let k = sessionStorage.getItem('satme-tx-client'); if (!k) { k = n(); sessionStorage.setItem('satme-tx-client', k); } return k; } catch (x) { return n(); } })();
+/** Before a start: another client holding the transmissions said; from another machine, the session's confirmation. */
+async function txPeutDemarrer() {
+  let j = null;
+  try { const r = await fetch('api/emission/controle?client=' + TX_CLIENT); if (r.ok) j = await r.json(); } catch (x) {}
+  if (!j || !j.vous) return true;
+  if (j.tenue && !j.moi && emissionsEnCours().length) { alert('L’émission est tenue par ' + j.client + ' : seul ce client la pilote. STOP reste possible ici.'); return false; }
+  if (j.vous.distant && !j.vous.confirme) {
+    if (!confirm('Émettre DEPUIS UN AUTRE APPAREIL que le PC de la station.\n\nSi la liaison avec SatMe-PC se coupe plus de ' + fr1(j.chienDistantS) + ' s, l’émission s’arrête. ' +
+      'Toutes les règles d’émission restent. Confirmer pour cette session ?')) return false;
+    try { await fetch('api/emission/controle?confirme=1&client=' + TX_CLIENT, { method: 'POST' }); } catch (x) { return false; }
+  }
+  return true;
+}
+
+// ------------------------------------------------------------------ the SatMe-Node: its boards, its health, its settings
+async function ndRegle(q) {
+  const j = await post('api/noeud/reglage?' + q);
+  if (j && j.ok === false) { txt('nd-msg', j.erreur); txt('r-noeud-info', j.erreur); }
+  HX.t.noeud = 0; HX.t.sdr = 0; await ticTete();
+}
+const ND_ETATS = { marche: 'en marche', arret: 'à l’arrêt', erreur: 'en erreur' };
+function ndRole(n, cle, nom) {
+  const s = n.sante && n.sante.services ? n.sante.services[cle] : null, m = n.materiel || {};
+  const app = cle === 'datv' ? m.datv : cle === 'sdr' ? m.sdr : m.tx;
+  if (!app || app === 'aucun') return nom + ' : —';
+  const lib = { minitiouner: 'MiniTiouner', bladerf: 'bladeRF', pluto: 'Pluto' }[app] || app;
+  return nom + ' : <b>' + esc(lib) + '</b>' + (s ? ' ' + esc(ND_ETATS[s.etat] || s.etat) : '') +
+    (cle === 'tx' ? (m.txAutorise ? ' · autorisée' : ' · <span style="color:var(--ambre)">non autorisée</span>') : '');
+}
+function ndRend() {
+  const n = HX.noeud, vu = !!(n && n.ok && n.associe);
+  g('nd-carte').hidden = !vu || !!window.SATME_TELEPHONE;
+  const sel = g('r-recepteur'); if (sel) [...sel.options].forEach(o => { if (o.value === 'noeud') o.hidden = !vu; });
+  if (!vu) return;
+  txt('nd-nom', (n.nom ? '« ' + n.nom + ' » ' : '') + n.adresse);
+  const al = n.alertes || [], dg = al.some(a => a.niveau === 'danger');
+  const e = g('nd-etat'); txt('nd-etat', n.erreur ? 'injoignable' : !n.materiel ? 'lecture…' : al.length ? (dg ? '● alerte' : '● attention') : '● en forme');
+  e.style.color = n.erreur || dg ? 'var(--rouge)' : al.length ? 'var(--ambre)' : 'var(--vert)';
+  const r = ndRole(n, 'datv', 'DATV') + ' · ' + ndRole(n, 'sdr', 'SDR') + ' · ' + ndRole(n, 'tx', 'TX');
+  if (g('nd-roles').innerHTML !== r) g('nd-roles').innerHTML = r;
+  const s = n.sante, sy = s && s.systeme ? s.systeme : null;
+  txt('nd-sante', !sy ? (n.materiel && !s ? 'santé : node à mettre à jour' : '') :
+    (sy.temperature != null ? fr1(sy.temperature) + ' °C · ' : '') + (sy.charge ? 'charge ' + fr1(sy.charge[0]) + ' · ' : '') +
+    (sy.uptimeS != null ? 'allumé depuis ' + duree(sy.uptimeS * 1000) + ' · ' : '') +
+    (s.reseau && s.reseau.fluxIqKbps ? 'flux I/Q ' + fr1(s.reseau.fluxIqKbps / 1000) + ' Mbit/s · ' : '') + 'v' + (s.version || '?'));
+  const ah = al.slice(0, 3).map(a => '<div style="color:' + (a.niveau === 'danger' ? 'var(--rouge)' : 'var(--ambre)') + '">⚠ ' + esc(a.texte) + '</div>').join('');
+  if (g('nd-alertes').innerHTML !== ah) g('nd-alertes').innerHTML = ah;
+  if (document.activeElement !== g('nd-tx')) g('nd-tx').checked = !!n.emissionParNoeud;
+  // The SDR tab's settings for the node's board.
+  const m = n.materiel || {};
+  txt('r-noeud-info', n.erreur ? 'node injoignable : ' + n.erreur : (n.nom || n.adresse) + ' · ' + (m.sdrActif ? 'flux vers ' + (m.sdrClient || '?') : 'au repos'));
+  if (document.activeElement !== g('r-noeud-carte')) g('r-noeud-carte').value = m.sdr || 'aucun';
+  if (document.activeElement !== g('r-noeud-flux')) g('r-noeud-flux').value = String(n.etages || 0);
+  if (g('nd-dlg').open) ndDetail();
+}
+function ndDetail() {
+  const n = HX.noeud; if (!n) return;
+  const s = n.sante || {}, sy = s.systeme || {}, l = [];
+  const ligne = (k, v) => l.push('<div><span style="color:var(--gris);display:inline-block;min-width:150px">' + esc(k) + '</span>' + v + '</div>');
+  ligne('Node', esc((n.nom || '') + ' · ' + n.adresse + ' · version ' + (s.version || '?')));
+  if (n.erreur) ligne('Liaison', '<b style="color:var(--rouge)">' + esc(n.erreur) + '</b>');
+  (n.alertes || []).forEach(a => ligne('Alerte', '<span style="color:' + (a.niveau === 'danger' ? 'var(--rouge)' : 'var(--ambre)') + '">' + esc(a.texte) + '</span>'));
+  if (sy.temperature != null) ligne('Température', fr1(sy.temperature) + ' °C');
+  if (sy.bridage) ligne('Bridage', sy.bridage.length ? esc(sy.bridage.join(', ')) : 'aucun' + (sy.bridageDepuis && sy.bridageDepuis.length ? ' (depuis le démarrage : ' + esc(sy.bridageDepuis.join(', ')) + ')' : ''));
+  if (sy.charge) ligne('Charge', sy.charge.map(fr1).join(' / ') + ' (' + sy.coeurs + ' cœurs)');
+  if (sy.memoire) ligne('Mémoire', Math.round(sy.memoire.libreKo / 1024) + ' Mo libres sur ' + Math.round(sy.memoire.totalKo / 1024));
+  if (sy.disqueLibreMo != null) ligne('microSD', sy.disqueLibreMo + ' Mo libres');
+  if (sy.uptimeS != null) ligne('Allumé depuis', duree(sy.uptimeS * 1000));
+  if (s.reseau) ligne('Réseau', (s.reseau.interfaces || []).map(i => esc(i.nom + ' ' + (i.adresses || []).join(' ') + (i.lien ? ' (' + i.lien + ')' : ''))).join(' · ') +
+    ' · flux I/Q ' + fr1((s.reseau.fluxIqKbps || 0) / 1000) + ' Mbit/s');
+  ligne('USB', (s.usb || []).length ? s.usb.map(u => esc(u.nom + (u.vitesse ? ' (' + u.vitesse + ')' : ''))).join(' · ') : '—');
+  const sv = s.services || {};
+  [['datv', 'Réception DATV'], ['sdr', 'SDR prêté'], ['tx', 'Émission']].forEach(([k, nom]) => { const o = sv[k]; if (!o) return;
+    ligne(nom, esc((o.appareil || '') + ' — ' + (ND_ETATS[o.etat] || o.etat)) + (o.client ? ' · client ' + esc(o.client) : '') + (o.clients ? ' · ' + o.clients + ' client(s)' : '') +
+      (o.pertesPct ? ' · ' + fr1(o.pertesPct) + ' % perdues' : '') + (o.erreur ? ' · <span style="color:var(--ambre)">' + esc(o.erreur) + '</span>' : '') +
+      (k === 'tx' ? (o.autorisee ? ' · autorisée' : ' · non autorisée (se coche sur le node)') : '')); });
+  ligne('Relance', s.systemd ? 'par son service systemd' : 'lancé à la main : « Relancer » refusé');
+  const j = (s.journal || []).slice(-14);
+  if (j.length) l.push('<pre class="petit" style="white-space:pre-wrap;margin-top:6px">' + esc(j.join('\n')) + '</pre>');
+  const h = l.join('');
+  if (g('nd-detail').innerHTML !== h) g('nd-detail').innerHTML = h;
+}
+function ndOuvre() { txt('nd-msg', ''); ndDetail(); if (!g('nd-dlg').open) g('nd-dlg').showModal(); }
+async function ndAction(quoi, question) {
+  if (question && !confirm(question)) return;
+  txt('nd-msg', '…');
+  const j = await post('api/noeud/reglage?quoi=' + enc(quoi));
+  txt('nd-msg', j && j.ok !== false ? 'fait' : 'refusé : ' + (j ? j.erreur : 'pas de réponse'));
+  HX.t.noeud = 0; await ticTete();
+}
+
 /** One reading for the header, at most every [ms]. */
 async function hxLit(cle, url, ms) {
   const t = Date.now(); if (HX.t[cle] && t - HX.t[cle] < ms) return; HX.t[cle] = t;
@@ -14010,7 +14141,9 @@ async function ticTete() {
   if (document.hidden) return;
   await Promise.all([hxLit('dtx', 'api/datv/emission', 2000), hxLit('stx', 'api/sstv/emission', 2000), hxLit('iq', 'api/iq', 3000),
     hxLit('sdr', 'api/sdr', 3000), hxLit('datv', 'api/datv', 10000), hxLit('lien', 'api/lien', 15000), hxLit('rig', 'api/rigctld', 5000),
-    hxLit('mol', 'api/molette?ctx=' + enc(molVue()), 2000), hxLit('ann', 'api/annonces', 3000)]);
+    hxLit('mol', 'api/molette?ctx=' + enc(molVue()), 2000), hxLit('ann', 'api/annonces', 3000),
+    hxLit('noeud', 'api/noeud', 3000), hxLit('ctl', 'api/emission/controle?client=' + TX_CLIENT, 2000)]);
+  ndRend();
   if (HX.ann && HX.ann.on !== undefined) annRattrape(HX.ann);
   rendTete();
 }
@@ -14032,7 +14165,9 @@ function erreursServeur() {
 }
 function rendTete() {
   const tx = emissionsEnCours();
-  g('h-tx').hidden = !tx.length; txt('h-tx-q', tx.join(' · '));
+  const ctl = HX.ctl && HX.ctl.tenue ? HX.ctl : null;
+  g('h-tx').hidden = !tx.length; txt('h-tx-q', tx.join(' · ') + (ctl && !ctl.moi ? ' — par ' + ctl.client : '') +
+    ((HX.dtx && HX.dtx.emet && HX.dtx.parNoeudEnCours) || (HX.stx && HX.stx.emet && HX.stx.parNoeudEnCours) ? ' (SatMe-Node)' : ''));
   document.body.classList.toggle('en-tx', tx.length > 0);
   // RX: the rig when the CAT is connected, else the SDR receiving.
   const r = HX.sdr || R, c = E && E.cat;
@@ -14076,6 +14211,10 @@ function rendTete() {
   const rg = HX.rig, rgVu = !!(rg && rg.on !== undefined);
   g('sb-rig').hidden = !rgVu;
   if (rgVu) sb('sb-rig', rg.erreur ? 'warn' : rg.ecoute ? (rg.clients ? 'ok' : 'info') : '', rg.erreur ? 'erreur' : rg.ecoute ? rg.clients + ' client' + (rg.clients > 1 ? 's' : '') : 'coupé');
+  const nd = HX.noeud, ndVu = !!(nd && nd.ok && nd.associe);
+  g('sb-noeud').hidden = !ndVu;
+  if (ndVu) { const al = nd.alertes || [], dg = al.some(a => a.niveau === 'danger');
+    sb('sb-noeud', dg ? 'danger' : al.length ? 'warn' : nd.materiel ? 'ok' : 'info', al.length ? (al.length === 1 ? al[0].texte : al.length + ' alertes') : nd.materiel ? 'en forme' : 'lecture…'); }
   const ne = (window.__err || []).length + erreursServeur().length;
   sb('sb-err', ne ? 'danger' : 'ok', String(ne));
 }

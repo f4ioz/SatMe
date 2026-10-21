@@ -472,8 +472,16 @@ object ActiviteMontage {
         l.iq?.optJSONArray("appareils")?.let { a ->
             for (i in 0 until a.length()) a.optJSONObject(i)?.let { o -> if (o.s("serie").isNotBlank()) sdr(o.s("cle"), "Calibration I/Q faite : " + o.s("nom")) }
         }
-        val mini = if (datv?.s("recepteur") == "minitiouner") b.ajoute("minitiouner").also { pourquoi += "Récepteur DATV : MiniTiouner" } else null
-        val noeud = if (mini != null && datv.s("noeud").isNotBlank()) b.ajoute("satme-node").also { pourquoi += "MiniTiouner sur un SatMe-Node (" + datv.s("noeud") + ")" } else null
+        val nm = datv?.optJSONObject("noeudMateriel")
+        val mini = if (datv?.s("recepteur") == "minitiouner" || nm.s("datv") == "minitiouner") b.ajoute("minitiouner").also { pourquoi += "Récepteur DATV : MiniTiouner" } else null
+        val noeud = if ((mini != null || nm != null) && datv.s("noeud").isNotBlank()) b.ajoute("satme-node").also {
+            pourquoi += (if (mini != null) "MiniTiouner sur un SatMe-Node (" else "SatMe-Node associé (") + datv.s("noeud") + ")" } else null
+        // The node's SDR and transmitter: its boards, not this PC's.
+        fun carteNoeud(k: String): String? = when (k) { "bladerf" -> "bladerf"; "pluto" -> "pluto"; else -> null }?.let { b.ajoute(it) }
+        val sdrNoeud = if (noeud != null) carteNoeud(nm.s("sdr"))?.also { pourquoi += "SDR du SatMe-Node : " + nomRecepteur(nm.s("sdr")) } else null
+        val txNoeud = if (noeud == null) null else if (nm.s("tx") == nm.s("sdr") && sdrNoeud != null) sdrNoeud
+            else carteNoeud(nm.s("tx"))?.also { pourquoi += "Émetteur du SatMe-Node : " + nomRecepteur(nm.s("tx")) }
+        listOfNotNull(sdrNoeud, txNoeud).distinct().forEach { b.relie(it, "usb", noeud!!, "usb") }
 
         // QO-100: the dish when something works there (an SDR board, the MiniTiouner, a converter).
         val olRx = conv.d("rxOl").takeIf { it > 0 }; val olTx = conv.d("txOl").takeIf { it > 0 }
@@ -485,7 +493,12 @@ object ActiviteMontage {
             pourquoi += "Parabole QO-100 : un récepteur ou un convertisseur de QO-100 est réglé"
             // The front end: a converter to the rig's band, else an LNB to 739 MHz.
             val versPoste = fiRx != null && poste != null && (fiRx in 120.0..160.0 || fiRx in 400.0..460.0)
-            if (versPoste) {
+            if (!versPoste && mini != null && sdrNoeud != null) {
+                // The node's twin LNB: output 1 to the MiniTiouner (18 V), output 2 through a T (13 V) to the node's SDR.
+                val lnb = b.ajoute("lnb-twin"); b.relie(d, "lnb", lnb, "entree"); b.relie(lnb, "sortie1", mini, "lnb_a")
+                val t = b.ajoute("bias-t"); b.relie(lnb, "sortie2", t, "lnb"); b.relie(t, "rx", sdrNoeud, if (nm.s("sdr") == "bladerf") "rx1" else "rx")
+                pourquoi += "LNB à deux sorties : MiniTiouner (18 V, horizontale) et SDR du node par un T de polarisation (13 V, verticale)"
+            } else if (versPoste) {
                 val dc = b.ajoute(if (fiRx!! < 300) "dc-144" else "dc-432")
                 pourquoi += "Oscillateur de réception " + String.format(java.util.Locale.FRANCE, "%.3f", olRx!! / 1e6) + " MHz : FI vers " + Math.round(fiRx) + " MHz"
                 b.relie(d, "lnb", dc, "entree")
@@ -512,7 +525,7 @@ object ActiviteMontage {
                 } else if (clients.size == 1) b.relie(source.first, source.second, clients[0].first, clients[0].second)
             }
             // The uplink: the DATV transmitter if one is set, else the rig through an up-converter.
-            val emetteur = dtx?.s("emetteur")?.let { sdrs[it] }
+            val emetteur = (if (dtx.b("parNoeud")) txNoeud else null) ?: dtx?.s("emetteur")?.let { sdrs[it] } ?: txNoeud
             val pa = b.ajoute("pa-2400")
             b.relie(pa, "sortie", d, "patch")
             when {

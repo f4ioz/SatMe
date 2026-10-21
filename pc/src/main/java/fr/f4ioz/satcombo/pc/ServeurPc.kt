@@ -1969,6 +1969,8 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
 
 /** The station as the page reads it. */
 object JsonPc {
+    /** The joined SatMe-Node's boards and roles as last read (set by Main), for the Montage's proposals. */
+    @Volatile var noeudMateriel: () -> JSONObject? = { null }
     fun bilanTelephone(b: TelephonePc.Bilan?): JSONObject =
         if (b == null) JSONObject().put("ok", false).put("erreur", "fichier illisible ou trop gros")
         else JSONObject().put("ok", b.erreur.isEmpty()).put("erreur", b.erreur).put("sat", b.satellite).put("de", b.debutMs)
@@ -2162,7 +2164,7 @@ object JsonPc {
      */
     /** The settings shown on the page; passwords and keys never come back, only whether they are set. */
     fun datv(d: DatvPc): JSONObject = Datv.json(d.etat, d.reglage, d.constellation()).put("qualite", d.qualite() ?: JSONObject.NULL)
-        .put("noeud", d.noeud).put("nomNoeud", d.nomNoeud)
+        .put("noeud", d.noeud).put("nomNoeud", d.nomNoeud).put("noeudMateriel", noeudMateriel()?.takeIf { d.noeud.isNotBlank() } ?: JSONObject.NULL)
         .put("programme", d.programme() ?: JSONObject.NULL).put("chemin", d.chemin).put("windows", OutilsPc.windows)
         .put("debits", JSONArray(Datv.DEBITS)).put("canaux", JSONArray(Datv.CANAUX_KHZ)).put("balise", Datv.BALISE_KHZ)
         .put("sonReglable", d.sonReglable).put("volume", d.volume)

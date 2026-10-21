@@ -300,6 +300,7 @@ fun main(args: Array<String>) {
         planche, kiss, sauvegarde, MirePc(File(dossier, "exports")), diffusion, qo100, lien, phonie, emission, trafic)
     serveur.emissionSstv = emissionSstv
     serveur.noeudDistant = noeudDistant
+    JsonPc.noeudMateriel = { noeudDistant.materiel }
     serveur.iq = iq
     serveur.textesDatv = textesDatv
     serveur.icomReseau = icomReseau
