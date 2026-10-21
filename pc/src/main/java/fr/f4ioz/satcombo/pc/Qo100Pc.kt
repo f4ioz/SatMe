@@ -55,13 +55,22 @@ class Qo100Pc(private val station: StationPc, private val sdr: SdrPc, private va
         val t = horloge()
         val periode = if (auto && suivi.verrouille(t, 30_000L)) 1_000L else 5_000L
         if (!surLeTranspondeur() || t - dernierMs < periode - 50L) return
-        dernierMs = t
         sdr.demandePanorama()
+        // After a calibration step, only a panorama made since counts: an older one was taken at the
+        // old tuning, read on the new axis it pushes the calibration further each time (it swung
+        // ±150 Hz and FT8 slid 7 Hz a second, 21 October).
+        if (sdr.panoramaTrames < trameEcrite + TRAMES_APRES_ECRITURE) return
+        dernierMs = t
         val calage = station.qo100.etat.value.calageHz
         // Known lately: looked for within 3 kHz only; lost, within 20 kHz.
         val fenetre = if (suivi.verrouille(t, 120_000L)) 3_000.0 else 20_000.0
-        suivi.mesure(t, sdr.mesureBaliseCentre(fenetre), calage, auto)?.let { station.qo100.calage(it) }
+        suivi.mesure(t, sdr.mesureBaliseCentre(fenetre), calage, auto)?.let {
+            station.qo100.calage(it)
+            trameEcrite = sdr.panoramaTrames
+        }
     }
+    /** The panorama count when the calibration last moved. */
+    private var trameEcrite = Long.MIN_VALUE / 2
 
     /** LEILA heard lately (10 s), in the dongle's sound or the card's. */
     fun leilaEntendue(): Boolean = horloge().let { t -> listOfNotNull(leila, leilaCarte).any { it.entendue(t) } }
@@ -99,5 +108,10 @@ class Qo100Pc(private val station: StationPc, private val sdr: SdrPc, private va
             }
         }
         return o
+    }
+
+    companion object {
+        /** Panoramas to wait after a calibration step before measuring again (one is made every 300 ms). */
+        const val TRAMES_APRES_ECRITURE = 3L
     }
 }
