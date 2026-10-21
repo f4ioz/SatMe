@@ -62,10 +62,13 @@ class SanteNoeudPc(
 
     private fun lit(chemin: String): String? = runCatching { File(racine, chemin).takeIf { it.isFile }?.readText() }.getOrNull()
 
+    // Container bridges and veth pairs say nothing about the node's link
+    private val VIRTUELLES = Regex("^(veth|br-|docker|virbr|lxc|cni|flannel)")
+
     private fun reseau(): JSONObject {
         val ips = runCatching {
             java.net.NetworkInterface.getNetworkInterfaces().toList()
-                .filter { it.isUp && !it.isLoopback && it.inetAddresses.toList().any { a -> a is java.net.Inet4Address } }.map { n ->
+                .filter { it.isUp && !it.isLoopback && !it.isVirtual && !VIRTUELLES.containsMatchIn(it.name) && it.inetAddresses.toList().any { a -> a is java.net.Inet4Address } }.map { n ->
                 JSONObject().put("nom", n.name).put("adresses", JSONArray(n.inetAddresses.toList().filter { it is java.net.Inet4Address }.map { it.hostAddress }))
                     .put("lien", lit("sys/class/net/${n.name}/speed")?.trim()?.toIntOrNull()?.takeIf { it > 0 }?.let { "$it Mb/s" } ?: "")
             }
