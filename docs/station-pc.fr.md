@@ -12,11 +12,11 @@ SatMe tourne sur un PC (Linux, Windows, Raspberry Pi) et se pilote depuis un nav
 
 1. [L'installer](#linstaller) — options, la page sur les autres machines et son mot de passe
 2. [Les onglets d'un coup d'œil](#les-onglets-dun-coup-dœil) — espaces de travail, bandeau, « Son », raccourcis, manuel intégré (F1)
-3. [Station et passages](#station-et-passages) — mode automatique, préparer un passage, enregistrement, agenda, horizon
-4. [Le carnet](#le-carnet) — choix du satellite, correction d'un contact, indicatifs composés
+3. [Station et passages](#station-et-passages) — plan du rotor, mode automatique, campagnes SSTV et leur auto-pilote, préparer un passage, enregistrement, agenda, horizon
+4. [Le carnet](#le-carnet) — choix du satellite, correction d'un contact, indicatifs composés, le passage et le rotor d'un contact
 5. [SatMe sur le téléphone](#satme-sur-le-téléphone)
 6. [Journal des passages](#journal-des-passages) — rapport de passage
-7. [QO-100 : le cockpit](#qo-100--le-cockpit) — décodeurs multiples, PSK31 et RTTY, balise
+7. [QO-100 : le cockpit](#qo-100--le-cockpit) — décodeurs multiples, PSK31 et RTTY, balise, un LNB qui dérive, LNB et référence GPSDO
 8. [DATV : réception](#datv--réception) — MiniTiouner, SatMe-Node, Pluto / bladeRF, bande large, qualité, sous-titres
 9. [DATV : émission](#datv--émission) — DVB-S2 et DVB-S, la station, les règles, l'essai en intérieur, carte et chat
 10. [SSTV](#sstv) — réception et émission
@@ -130,6 +130,9 @@ La puce **Son** du bandeau (touche **S**) dit ce qu'entendent SSTV, FT8, CW, APR
 - **⚡ Préparer le passage** (touche **P**) : pour le satellite suivi, la source son, les décodeurs de son émetteur (SSTV, APRS, FT8, CW…) et l'enregistrement armé pour l'AOS. Réception seulement.
 - **Le poste suit tout de suite** : changer de satellite suivi réaccorde le poste en CAT aussitôt, sur le milieu de la bande passante d'un transpondeur linéaire. *Régler le poste même quand le satellite n'est pas visible* (Réglages › Poste et rotor, décoché d'origine) : le poste est prêt avant l'AOS, ou pour un essai à l'établi — accord seulement, jamais d'émission.
 - **Horizon** (Réglages › Ma station) : la hauteur des obstacles par secteur d'azimut (8 × 45° ou 12 × 30°), dessinée vue de dessus. Les passages commencent et finissent alors quand le satellite les dépasse (l'AOS/LOS géométrique sous ✱) ; ceux cachés de bout en bout sont écartés. Tout à 0 ne change rien. Même réglage sur le téléphone.
+- **Le plan du rotor** : avant l'AOS, SatMe prévoit tout le passage — de quel côté de la butée, droit ou **retourné** (un rotor qui monte à 180° suit par-dessus le zénith : az + 180°, 180° − el, sans tour), et s'il le faut le seul moment où le rotor change (retournement, ou **déroulement** : un tour, ~1 min sans réception), joué à la vitesse mesurée du rotor et placé quand le satellite est bas ou caché. Le plan est dessiné sur le ciel de Suivi — violet : droit ; ambre : retourné ; rouge pointillé : le changement, avec son heure — et dit en une phrase dessous. Le suivi prend la branche du plan d'après l'horloge : plus d'hésitation au bord de la butée. Les réglages : [Le poste et le rotor](#le-poste-et-le-rotor).
+
+<p align="center"><img src="images/pc-rotor-plan.webp" width="49%" alt="Suivi, le ciel de CroCube avant l'AOS (rotor simulé, butée au sud, 90° d'élévation au plus) : le passage en bleu passe par la butée, le plan prévoit un déroulement à 21:58 en rouge pointillé ; la zone cachée au sud en gris ; dessous, « Passage par la butée : déroulement prévu à 21:58, ~46 s »"></p>
 
 ### Mode automatique : ne manquer aucun passage
 
@@ -148,12 +151,25 @@ Le même mode est sur le téléphone (*Réglages → Enregistrement / SSTV & NOA
 <img src="images/fr-veille.webp" width="24%" alt="Le mode automatique sur le téléphone : les satellites choisis, 16 passages armés">
 </p>
 
+### Campagnes SSTV : l'auto-pilote
+
+Onglet **Agenda › SSTV · auto-pilote**. Un événement SSTV — une série ARISS, un satellite qui envoie ses images quelques jours — s'entre comme un rendez-vous : le satellite, son émetteur ou une fréquence à part (FM ou BLU, largeur), le mode SSTV (ou *Auto* : l'en-tête VIS le dit), la période (« horaire à confirmer » : des journées entières), l'élévation minimale, le rythme (« 36 s on / 2 min off », pour mémoire), le lien et des notes.
+
+- **Importer une affiche** : l'image de l'annonce (JPEG, PNG), ou son adresse, est lue sur ce PC par **tesseract** (`sudo apt install tesseract-ocr`) ; fréquence, mode, dates, satellite, rythme et lien remplissent le formulaire, à vérifier avant d'enregistrer. Rien n'est envoyé ; une adresse n'est demandée que si on la donne.
+- **La chaîne de réception** de la campagne : un profil du [Montage](#les-fonctions-et-les-profils), ou case par case — le poste (CAT, Doppler), le rotor qui suit le satellite, le son (celui du poste, IC-9700 par le réseau ou carte USB ; une carte son ; le récepteur SDR ; ou ne pas y toucher), l'enregistrement, le décodeur SSTV tenu sur le mode, l'annonce vocale, le rotor parqué après le LOS. *Le connecter tout seul* : le poste seulement par la liaison réseau de l'IC-9700 ou le port USB de l'Icom lui-même, le rotor seulement par rotctld.
+- **L'auto-pilote** (interrupteur général, coupé d'origine, aussi dans le bandeau) : quelques minutes avant l'AOS de chaque passage assez haut, il prépare la chaîne ; il enregistre de l'AOS à après le LOS, rattache les images reçues à la campagne, puis remet la réception comme avant. Pendant le passage, un bandeau avec **■ STOP**.
+- **Réception seulement** : il n'émet jamais et ne touche à aucun réglage d'émission. Une émission en cours, la DATV qui tient le récepteur, ou une autre campagne au même moment : le passage est écarté et la raison notée dans l'**historique**.
+- Les **passages 🤖** dans la liste de l'onglet, dans Suivi et sur la frise ; la campagne dans la palette **Ctrl+K**. Les campagnes sont gardées sur le PC (`sstv-campagnes.json`) et réarmées après un redémarrage.
+
+<p align="center"><img src="images/pc-agenda-sstv.webp" width="100%" alt="Agenda › SSTV · auto-pilote (données simulées) : le formulaire d'une campagne et sa chaîne de réception, l'auto-pilote actif et le prochain passage, l'import d'une affiche, la campagne ARISS SSTV Series 34 sur l'ISS, ses prochains passages prévus, l'historique"></p>
+
 ### Enregistrer le son
 
 - **● Enregistrer le son** dans Suivi, Carnet et Son : un WAV au nom du satellite (`SatMe_RS-44_20261013_203051Z.wav`), comme sur le téléphone.
 - **Couper à la fin du passage** (option) : même lancé à la main, l'enregistrement s'arrête 30 s après le LOS du passage qu'il a pris.
 - **Chaque passage du satellite suivi** (option de l'onglet Son), ou ceux du **mode automatique**.
 - Un enregistrement arrêté à la main ne repart pas tout seul avant le passage suivant.
+- **Une carte son qui enregistre garde ses décodeurs** quand le récepteur SDR démarre : QO-100 allumé pour écouter est seulement entendu, jamais enregistré à sa place (et à la mauvaise cadence). Sinon, le SDR rend en s'arrêtant la carte son qu'il avait prise : le son de l'IC-9700 ne reste plus muet.
 
 ## Le carnet
 
@@ -166,7 +182,8 @@ Un contact se saisit avec l'indicatif prédit d'après le carnet et QRZ (Tab pas
 - L'export **ADIF**, et le dépôt à la main (⬆).
 - **Sur quel satellite** : un contact est noté sur le satellite choisi dans la saisie, sinon celui du poste (le satellite suivi, Doppler par CAT), QO-100 quand le poste y est ou que le contact est saisi dans le cockpit. Un récepteur qui écoute QO-100 en arrière-plan ne change plus le carnet. La saisie dit où elle note et pourquoi, avec un bouton pour changer.
 - **Corriger un contact** : le satellite (la liste, QO-100, un nom libre, terrestre), la **date et l'heure UTC** (l'heure locale à côté, « maintenant » ; ni dans le futur, ni avant 1961). Azimut, élévation, fréquences et ordre du carnet suivent ; un doublon (même indicatif, même satellite, 10 min) est signalé. Le téléphone fait de même.
-- **Indicatifs composés** (`EA3/M5JFS`, `DL1ABC/P`, `F/ON4ABC/P`) : le pays est celui du préfixe d'opération (EA3/M5JFS = M5JFS depuis l'Espagne), avec son **drapeau** dans la liste, la saisie, la fiche et l'éditeur. Quand QRZ n'a pas la forme composée, la fiche est celle de l'opérateur, identité seulement (ni carré, ni position, ni adresse). Le carré pris d'une fiche est celui de l'indicatif tel qu'il est tapé (« F4IOZ/P » ne reprend pas le carré de « F4IOZ »). **La carte** suit le carré tapé, sinon le centre du pays, plus pâle.
+- **Indicatifs composés** (`EA3/M5JFS`, `DL1ABC/P`, `F/ON4ABC/P`) : le pays est celui du préfixe d'opération (EA3/M5JFS = M5JFS depuis l'Espagne), avec son **drapeau** dans la liste, la saisie, la fiche et l'éditeur. Quand QRZ n'a pas la forme composée, la fiche est celle de l'opérateur, identité seulement (ni carré, ni position, ni adresse). Le carré pris d'une fiche est celui de l'indicatif tel qu'il est tapé (« F4IOZ/P » ne reprend pas le carré de « F4IOZ »). **La carte** suit la saisie en direct : le carré tapé (un carré invalide : pas de point), sinon le centre du pays, plus pâle ; l'éditeur d'un contact a sa propre carte.
+- **⌖ sur la ligne d'un contact** : son passage sur le ciel et le chemin du rotor tel qu'il est allé, tirés du journal (cyan : le satellite, jaune : le moment du contact). Le téléphone sert la même vue.
 
 <p align="center">
 <img src="images/pc-carnet.webp" width="49%" alt="Onglet Carnet : un nouveau contact, et à côté la station en direct — FO-29, ses fréquences, le polar plot, le rotor">
@@ -220,7 +237,7 @@ L'onglet **QO-100**, c'est le transpondeur bande étroite sur un écran : le ré
 1. **Démarrer la réception QO-100** : un clic démarre le récepteur (clé SDR, ADALM-PLUTO ou bladeRF derrière le LNB ou un convertisseur), le met sur QO-100 et envoie son son aux décodeurs et au carnet.
 2. **Cliquer un signal** dans la cascade : SatMe s'y accorde dans son mode (BLU, CW, FT8, SSTV) et ouvre le bon décodeur en bas — phonie écrite, CW, FT8 / FT4 ou SSTV (*Auto*, ou choisi à la main).
 3. **Noter le contact** à droite : le satellite QO-100, les fréquences et le mode sont déjà là.
-4. La **balise médiane** est la référence : avec le *Calage automatique*, elle est mesurée toutes les 5 s et la dérive du LNB suivie par petits pas, jamais sur une mesure faible.
+4. La **balise médiane** est la référence : avec le *Calage automatique*, elle est mesurée toutes les 5 s et la dérive du LNB suivie par petits pas, jamais sur une mesure faible — de plus près quand le LNB dérive vite (voir [Un LNB qui dérive](#un-lnb-qui-dérive)).
 
 - **Classement des signaux** : chaque signal du transpondeur nommé sur la cascade (BLU, CW, FT8, FT4, PSK31, RTTY, SSTV, porteuse, balises, numérique large, inconnu), coloré par classe avec sa confiance ; une FFT à cases de 16 Hz sur le flux brut du récepteur, les peignes de raies parasites et les clics de manipulation écartés, les signaux oubliés une fois partis. Il ne tourne que tant que la page le regarde.
 - **Plan de bande** (celui d'AMSAT-DL) sur la réglette et en tête de la cascade, la règle de chaque segment au survol. **Fréquence d'urgence** (10 489,858 – 10 489,865) : contour et bandeau rouges ; SatMe n'y envoie jamais la montée au poste de lui-même (mémoire, signal cliqué, retour DATV, session reprise) — seulement accordée à la main. La place libre FT8 n'est proposée que dans les segments numériques ; un mode hors de son segment est signalé discrètement.
@@ -235,6 +252,29 @@ L'onglet **QO-100**, c'est le transpondeur bande étroite sur un écran : le ré
 <p align="center"><img src="images/pc-qo100-multiples.png" width="49%" alt="Cockpit QO-100 : le menu Décodeurs multiples, jusqu'à quatre canaux, les préréglages FT8 + CW + phonie et FT8 + FT4"></p>
 
 <p align="center"><img src="images/pc-qo100-cockpit.webp" width="100%" alt="Cockpit QO-100, récepteur arrêté : les quatre étapes, le récepteur et son accord, le décodeur, la saisie du carnet, le plan de bande et ses segments sur la cascade, le calage automatique sur la balise"></p>
+
+### Un LNB qui dérive
+
+Un LNB sans référence extérieure bouge avec la température : quelques hertz par seconde après sa mise sous tension ou au soleil, parfois des sautillements de ±25 Hz en une seconde. Les tons de FT8 sont à 6,25 Hz les uns des autres : un tel LNB suffit à ne plus rien décoder. SatMe-PC fait trois choses, toutes en réception :
+
+- **Le calage qui suit** : quand le *Calage automatique* voit une dérive réelle (plus de 1 Hz/s, au-delà de trois écarts types), la balise est mesurée chaque seconde et l'erreur prise sur la droite des 30 dernières secondes plutôt que sur une moyenne. Après un pas, seules les mesures faites depuis comptent. Pendant que FT8 ou FT4 décode le son du récepteur, les pas ne tombent que dans la dernière seconde du créneau, entre deux émissions.
+- **Verrouillage sur la balise** (sous-onglet *Calage*, coupé d'origine) : la balise médiane suivie par une boucle de phase dans le flux I/Q brut ; ses sautillements sont ôtés de tout le transpondeur, en continu, sans à-coup, et le calage garde l'écart lent. La correction est bornée (±250 Hz) et se surveille : butée atteinte ou correction trop agitée, elle lâche pour 30 s ; un pas du calage relance aussitôt la recherche, la correction gardée. État : *balise cherchée*, ou *tient · N Hz rms ôtés*.
+- **FT8 qui tolère la dérive** : la dérive commune d'un créneau (jusqu'à ±15 Hz/s) est cherchée sur les synchros, puis ôtée avant une seconde lecture.
+
+Sur des créneaux fabriqués comme en vrai (balise à 17 dB, gigue de 12 Hz rms, 5 à 7 Hz/s de dérive), FT8 passe de 0 à 4 ou 5 décodages sur 5. Cela **atténue** le problème sans le régler : le verrouillage a besoin d'une balise bien au-dessus du bruit, et un LNB qui saute plus vite que la boucle reste un LNB qui saute. **La vraie réponse est un LNB tenu par une référence.**
+
+<p align="center"><img src="images/pc-qo100-calage.webp" width="40%" alt="Cockpit QO-100, sous-onglet Calage : le calage automatique et le verrouillage sur la balise cochés, « balise cherchée » tant que le récepteur ne tourne pas, l'écart mémorisé"></p>
+
+### LNB et référence GPSDO
+
+Un LNB dont l'oscillateur est verrouillé sur une référence tenue par le GPS ne dérive plus : plus de calage qui court, FT8 et la DATV tranquilles. Le plan de la station de F4IOZ, que le [Montage](#dessiner-et-modifier) sait dessiner (catalogue : LNB Twin à référence 25 MHz externe, GPSDO Leo Bodnar programmable, injecteur, bloqueur de continu) :
+
+- un **LNB Twin** dont la PLL prend une référence externe de **25 MHz** ;
+- ce 25 MHz donné par un **GPSDO Leo Bodnar**, câblé jusqu'à la PLL du LNB ;
+- une sortie vers le **MiniTiouner** (DATV), qui alimente le LNB en **18 V** ;
+- l'autre vers le **bladeRF 2.0** (bande étroite) par un **injecteur qui bloque le continu** : l'alimentation du LNB n'atteint jamais l'entrée du bladeRF.
+
+Le calage sur la balise reste utile pour l'écart fixe ; le verrouillage peut alors rester coupé.
 
 ## DATV : réception
 
@@ -384,6 +424,7 @@ L'onglet **SSTV**, comme sur le téléphone : l'**image en direct** (dessinée �
 - Un spectre avec les tons marqués (1200 synchro, 1500 noir, 1900 VIS, 2300 blanc), le niveau, un conseil quand la source se tait.
 - **Images** : chaque image gardée dès un huitième de ses lignes, avec son propre son ; filtrées par satellite, ouvertes dans une visionneuse, redécodées, faites en GIF, supprimées.
 - **Mire** : la mire SSTV (comme sur le téléphone), jouée sur une sortie au choix ou écrite en WAV.
+- **Campagnes** : une série ARISS, ou un satellite qui envoie des images quelques jours, reçue toute seule passage après passage — voir [Campagnes SSTV : l'auto-pilote](#campagnes-sstv--lauto-pilote).
 
 **Émission**, avec l'**ADALM-PLUTO** ou le **bladeRF 2.0** :
 
@@ -403,7 +444,7 @@ Un onglet pensé pour voir la bande, pas seulement la lire :
 - Des **marques** pareilles partout (liste, messages, cascade) : m'appelle, guettée, nouveau pays, nouveau carré, déjà contactée. **Stations guettées** : les indicatifs à surveiller. Un **bandeau** quand la réception va mal (pas de son, silence numérique, rien de décodé depuis 40 créneaux).
 - **💬 Messages**, comme une messagerie : les conversations entre deux stations (drapeaux, dernier message, ✓ quand le QSO est bouclé), chacune en bulles, ou tout au fil de l'eau. Chaque message dit ce qu'il est : 📣 appel, 📍 carré, 📶 report, ✅ report reçu, 🤝 RR73 / 73.
 
-**Le décodeur**, mesuré sur un corpus de créneaux entiers (stations faibles jusqu'à −22 dB, chevauchements, pentes Doppler, FT4) : la **dérive Doppler** connue du satellite retirée avant le décodage ; chaque candidat lu dans son propre canal étroit (début au 1/32 de symbole, fréquence au 1/16 de ton) ; les signaux décodés **soustraits** et le reste fouillé à nouveau ; la dérive résiduelle cherchée ; les **indicatifs hachés** retrouvés (`<INDICATIF>` quand il est connu) ; pendant un QSO, le **décodage par attente** des réponses possibles du correspondant (marqué *ap*). SatMe-PC creuse plus quand le satellite est bas ou qu'il reste du temps dans le créneau.
+**Le décodeur**, mesuré sur un corpus de créneaux entiers (stations faibles jusqu'à −22 dB, chevauchements, pentes Doppler, FT4) : la **dérive Doppler** connue du satellite retirée avant le décodage ; chaque candidat lu dans son propre canal étroit (début au 1/32 de symbole, fréquence au 1/16 de ton) ; les signaux décodés **soustraits** et le reste fouillé à nouveau ; la dérive résiduelle cherchée, et celle d'un LNB qui bouge (jusqu'à ±15 Hz/s, voir [Un LNB qui dérive](#un-lnb-qui-dérive)) ; les **indicatifs hachés** retrouvés (`<INDICATIF>` quand il est connu) ; pendant un QSO, le **décodage par attente** des réponses possibles du correspondant (marqué *ap*). SatMe-PC creuse plus quand le satellite est bas ou qu'il reste du temps dans le créneau. L'écoute FT8 (en marche ou non) et le mode FT8 / FT4 sont gardés d'un redémarrage à l'autre.
 
 **PSK Reporter** (Réglages, coupé d'origine) : les stations FT8 / FT4 entendues envoyées toutes les 5 minutes avec leur carré, la fréquence et le satellite — seulement quand la fréquence est sûre (poste en CAT).
 
@@ -620,6 +661,7 @@ L'onglet **Montage** (espace **Station**) dessine la station : l'antenne à gauc
 
 - **Composer** : un *montage tout fait*, **Proposer d'après SatMe**, ou **✎ Modifier**. Un clic sur un appareil montre ses ports, ses notes et sa photo. *Complet* ou *Simplifié* (ce qui reçoit ou émet maintenant). Zoom (**+** **−** **0**, Ctrl + molette), déplacement à la souris, mini-carte ; **Exporter** en SVG, en PNG ou en page à imprimer ; une légende des câbles et des états, repliable.
 - **Ce qui vit** : le CAT et le rotor, les récepteurs SDR et DATV, l'IC-9700 par le réseau (son câble réseau allumé, le retard, le lien perdu), la molette USB, les écouteurs, la météo spatiale, les canaux QO-100, l'enregistrement et le générateur, l'ADS-B et l'AIS qui tiennent une clé. Les fonctions hors satellites décochées disparaissent du dessin.
+- **L'IC-9700 par le réseau** dans les vues des fonctions : le son réseau du poste est son propre son (plus de conseil de prendre le codec USB, proposé seulement quand une autre carte tourne) ; le lien poste → PC dessiné comme il passe, en pointillé bleu avec son retard et « CAT + son » ; sans câble réseau dessiné, il est montré *détecté*, plus pâle, avec **Ajouter ce câble**. « Aucune antenne » propose **Ajouter une antenne 2 m / 70 cm** (une Yagi bibande sur les prises libres du poste) ; la bande de la fréquence du poste choisit la prise d'antenne, et une prise déjà prise (le 70 cm vers le convertisseur QO-100) est dite. SatMe-PC reste dans le dessin simplifié, à sa place, jamais par-dessus une pièce.
 - **Ce qui manque** : chaque fonction vérifiée de l'antenne à l'écran ; un **danger** est dit fort — par exemple l'alimentation du LNB qui atteindrait une carte SDR à travers un répartiteur (un bloqueur de continu est alors proposé).
 
 ### Dessiner et modifier
@@ -648,6 +690,8 @@ Par catégorie, une liste à gauche : **Ma station** (indicatif, carré, éléva
 ### Le poste et le rotor
 
 Le modèle du poste (IC-9700, IC-9100, IC-910H, TS-2000, deux postes FT-817 / IC-705, TH-D72, ou simulé), son port et sa vitesse, Connecter / Déconnecter ; le rotor (GS-232 en série, rotctld par le réseau, ou simulé), Suivre le satellite, Parquer, Stop, ses butées et son parking. L'onglet Suivi ne garde que leur nom et une coche verte.
+
+**Le plan du passage** (Réglages › Poste et rotor › Rotor) : la **course en azimut** (360°, ou 450° / 540° avec un recouvrement), **Monte à 180° ?** (seul un rotor qui monte à 180° peut se retourner), la butée nord ou sud, l'**attente avant l'AOS**, et les **zones cachées** (toit, arbre, colline : `170-190<20 ; 300-330<10`, ou tracées en glissant sur le petit ciel) — le plan n'y tient presque pas et y place ses déroulements. Il garde le plus de passage, compté selon l'élévation (une minute à 60° vaut bien plus qu'à 5°), puis la plus petite course, puis le moins de changements. Le petit ciel montre le plan du prochain passage avec les réglages appliqués. La vitesse du rotor est mesurée quand le mât court loin de sa consigne.
 
 <p align="center"><img src="images/pc-reglages-materiel.webp" width="100%" alt="Réglages : le poste (CAT) et le rotor, leurs ports et leur connexion"></p>
 

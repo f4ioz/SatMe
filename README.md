@@ -111,6 +111,17 @@ SatMe-PC grew from a satellite station into a whole station in a browser: QO-100
 
 <p align="center"><img src="docs/images/pc-espaces-palette.png" width="98%" alt="SatMe-PC: the workspaces rail, the header strip, the status bar, and the Ctrl+K palette offering to listen to 145.800 MHz on the SDR receiver"></p>
 
+**🤖 SSTV campaigns on auto-pilot** — an ARISS series or a satellite sending pictures for a few days is entered like an appointment in the **Agenda**, or from the announcement's **flyer** read on the PC; the auto-pilot (off by default) prepares the rig, rotator, sound and decoder before each pass, records, keeps the pictures and puts everything back. Receive only, never transmits.
+
+**🧭 The rotator's plan** — the whole pass planned before AOS: which side of the end stop, **flipped at 180°** over the zenith or a single unwind placed where the satellite is low; **hidden zones** (roof, tree); the plan drawn on the Suivi sky, and each logged contact's rotator path.
+
+**🛰 QO-100 with a drifting LNB** — the beacon calibration follows a drift of a few Hz/s, a **beacon lock** takes the jumps out of the whole transponder, and FT8 tolerates drift. This mitigates, it does not replace an **LNB held by a GPSDO reference** ([how](docs/station-pc.md#lnb-and-gpsdo-reference)).
+
+<p align="center">
+<img src="docs/images/pc-agenda-sstv.webp" width="64%" alt="Agenda › SSTV · auto-pilote (simulated data): an ARISS campaign on the ISS, its receive chain, its next passes">
+<img src="docs/images/pc-rotor-plan.webp" width="34%" alt="The rotator's plan on the Suivi sky: a pass over the end stop, the planned unwind in dashed red">
+</p>
+
 **🧭 A new page** — six workspaces in a side rail (Ciel, QO-100, DATV, Modes, Carnet, Station; keys 1–6), a header strip (what is followed, the active receiver, the next pass, a red **TX** light that only stops), a status bar, the **Ctrl+K** palette (a tab, a satellite, a callsign, a typed frequency), « ? » help on every card, the **built-in manual (F1)** with search, keyboard shortcuts. The header's **« Son »** chip: what the decoders hear, the rig's sound card recognised by name, one-key **Prepare the pass** and record. Non-satellite tabs (aircraft, ships, sondes) only when ticked.
 
 **🔌 Montage: the station as it is wired** — the station drawn from antenna to PC, lit live (cyan receives, red transmits, frequencies on the cables); drag-and-drop editing from a catalogue (dishes, LNBs, DX Patrol converters and PAs, GPSDOs including Leo Bodnar, bias-T, DC block…), photos cut out automatically, **what is missing** checked with dangers flagged (an LNB supply reaching an SDR board); which SatMe function holds which board, conflicts and how to free them, receive profiles applied in a safe order.
@@ -124,7 +135,7 @@ SatMe-PC grew from a satellite station into a whole station in a browser: QO-100
 
 **📡 IC-9700 over the network** — CAT and receive audio through the rig's LAN (Network Control ON), no USB cable; receive only, every transmit command refused; AF or IF output; the coded credentials learnt from a capture of your own login.
 
-**📡 QO-100 cockpit** — the waterfall **names each signal**, a click tunes it and opens the right decoder; **up to four decoders at once** (FT8, FT4, CW, SSTV, voice, PSK31, RTTY, beacon); the band plan and an **emergency frequency** guard, beacon calibration, **LEILA** flagged; the **middle beacon's BPSK telemetry** decoded.
+**📡 QO-100 cockpit** — the waterfall **names each signal**, a click tunes it and opens the right decoder; **up to four decoders at once** (FT8, FT4, CW, SSTV, voice, PSK31, RTTY, beacon); the band plan and an **emergency frequency** guard, beacon calibration and beacon lock, **LEILA** flagged; the **middle beacon's BPSK telemetry** decoded.
 
 **📺 DATV** — MiniTiouner, SatMe-Node or SatMe's own **DVB-S2 demodulator** (Pluto, bladeRF); quality in plain words, the wide band at a glance, subtitles, callsigns read in the picture; **transmission in DVB-S2 or DVB-S** with every safety rule in the code, indoor and dummy-load tests, per-board **I/Q correction**.
 
@@ -137,9 +148,9 @@ SatMe-PC grew from a satellite station into a whole station in a browser: QO-100
 
 **✈ Aircraft, ships, space weather** — **ADS-B** at 1090 MHz with **aircraft scatter** windows, **AIS** at 162 MHz, both on a shared **offline map** with the forecast aurora; **space weather** (Kp, flux, X-rays, solar wind, aurora, alerts), downloaded only when ticked.
 
-**📒 Log and journal** — the contact goes on the satellite the rig works; date, time and satellite editable; **compound callsigns** (EA3/M5JFS) with their country and flag; a **pass report** per pass (Doppler-followed waterfall, level, decodes, contacts) as one HTML file.
+**📒 Log and journal** — the contact goes on the satellite the rig works; date, time and satellite editable; **compound callsigns** (EA3/M5JFS) with their country and flag, the square of the callsign as typed, the map following the entry; a **pass report** per pass (Doppler-followed waterfall, level, decodes, contacts) as one HTML file.
 
-**🔗 Interfaces** — a **rigctld** server for logging programs (receive only, PTT refused), the **USB volume knob** as a VFO (Linux), **spoken announcements** (passes, transmissions, your call decoded…), **spoken translation** of voice to text, a WebSocket link, CAT that follows the satellite change at once.
+**🔗 Interfaces** — a **rigctld** server for logging programs (receive only, PTT refused), the **USB volume knob** as a VFO (Linux), **spoken announcements** (passes, transmissions, your call decoded…), **spoken translation** of voice to text, a WebSocket link, CAT that follows the satellite change at once and, if chosen, tunes the rig even when the satellite is not visible.
 
 **🔒 Remote** — the page **behind a password** for other machines, installable as an app, a **remote mode** with low-latency audio for a VPN link. Receive only from afar.
 
@@ -148,7 +159,15 @@ SatMe-PC grew from a satellite station into a whole station in a browser: QO-100
 <img src="docs/images/pc-datv.webp" width="49%" alt="SatMe-PC, DATV: an indoor test at 23 cm, ADALM-PLUTO transmitting and bladeRF 2.0 receiving with SatMe's own DVB-S2 demodulator">
 </p>
 
-## What's new in 20.82
+## What's new in 20.83
+
+- **CAT**: the rig moves to the new satellite at once (linear or FM).
+- **Rotator**: the pass planned before AOS, a 180° flip instead of a full turn.
+- **Log**: the satellite taken from the rig; satellite, date and time editable; compound calls (EA3/M5JFS) and flags.
+- **QO-100**: the beacon calibration follows a drifting LNB; FT8 tolerates drift.
+- **SatMe-PC**: many new features (station layout, IC-9700 over the LAN, telemetry…), see above.
+
+### And in 20.82
 
 - **METEOR weather pictures (LRPT)**, beta: METEOR-M2-3 and M2-4 decoded on the phone from an RTL-SDR dongle and a 137 MHz antenna — colour by day and infrared, north up, a preview while the pass comes in; started by hand or by itself before each pass; a raw I/Q WAV recording decoded too. Coastlines and borders drawn from the orbit. On the satellite's page, one button: **Receive the pictures**. Checked on the recording of a real pass, not yet live.
 - **Icom IC-910H and IC-9100** in satellite mode, beside the IC-9700: their own CI-V address and speed (19,200 baud), and the IC-910H's own satellite-mode command. Bench-tested, not yet on the real rigs.

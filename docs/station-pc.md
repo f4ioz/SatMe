@@ -12,11 +12,11 @@ SatMe runs on a PC (Linux, Windows, Raspberry Pi) and is driven from a browser. 
 
 1. [Installing it](#installing-it) — options, the page on other machines and its password
 2. [The tabs at a glance](#the-tabs-at-a-glance) — workspaces, header, « Son », shortcuts, built-in manual (F1)
-3. [Station and passes](#station-and-passes) — automatic mode, preparing a pass, recording, calendar, horizon
-4. [The log (Carnet)](#the-log-carnet) — which satellite, correcting a contact, compound callsigns
+3. [Station and passes](#station-and-passes) — the rotator's plan, automatic mode, SSTV campaigns and their auto-pilot, preparing a pass, recording, calendar, horizon
+4. [The log (Carnet)](#the-log-carnet) — which satellite, correcting a contact, compound callsigns, a contact's pass and rotator path
 5. [SatMe on the phone](#satme-on-the-phone)
 6. [Pass journal](#pass-journal) — pass report
-7. [QO-100: the cockpit](#qo-100-the-cockpit) — multiple decoders, PSK31 and RTTY, beacon
+7. [QO-100: the cockpit](#qo-100-the-cockpit) — multiple decoders, PSK31 and RTTY, beacon, a drifting LNB, LNB and GPSDO reference
 8. [DATV: reception](#datv-reception) — MiniTiouner, SatMe-Node, Pluto / bladeRF, wide band, quality, subtitles
 9. [DATV: transmission](#datv-transmission) — DVB-S2 and DVB-S, the station, the rules, the indoor test, card and chat
 10. [SSTV](#sstv) — reception and transmission
@@ -130,6 +130,9 @@ The header's **Son** chip (key **S**) says what SSTV, FT8, CW, APRS and voice to
 - **⚡ Préparer le passage** (key **P**): for the followed satellite, the sound source, its transmitter's decoders (SSTV, APRS, FT8, CW…) and the recording armed for AOS. Receive only.
 - **The rig follows at once**: changing the followed satellite retunes the rig on CAT immediately, to the middle of a linear transponder's passband. *Régler le poste même quand le satellite n'est pas visible* (Réglages › Poste et rotor, unticked by default): the rig is ready before AOS, or for a bench test — tuning only, never transmission.
 - **Horizon mask** (Réglages › Ma station): the obstacles' height per azimuth sector (8 × 45° or 12 × 30°), drawn from above. Passes then start and end when the satellite clears them (the geometric AOS/LOS shown under ✱); passes hidden all along are left out. All at 0 changes nothing. Same setting on the phone.
+- **The rotator's plan**: before AOS, SatMe plans the whole pass — which side of the end stop, upright or **flipped** (a rotator that goes to 180° elevation follows over the zenith: az + 180°, 180° − el, no turn), and if needed the one moment the rotator changes (a flip, or an **unwind**: one turn, ~1 min without reception), played at the rotator's measured speed and placed where the satellite is low or hidden. The plan is drawn on the Suivi sky — violet: upright; amber: flipped; dashed red: the change, with its time — and said in one sentence below. Tracking takes the plan's branch from the clock: no more hesitating at the end stop. Settings: [The rig and the rotator](#the-rig-and-the-rotator).
+
+<p align="center"><img src="images/pc-rotor-plan.webp" width="49%" alt="Suivi, CroCube's sky before AOS (simulated rotator, south end stop, 90° elevation at most): the pass in blue crosses the end stop, the plan has an unwind at 21:58 in dashed red; the hidden zone in the south in grey; below, the plan in one sentence"></p>
 
 ### Automatic mode: miss no pass
 
@@ -148,12 +151,25 @@ The same mode is on the phone (*Settings → Recording / SSTV & NOAA → Automat
 <img src="images/fr-veille.webp" width="24%" alt="The automatic mode on the phone: the satellites chosen, 16 passes armed">
 </p>
 
+### SSTV campaigns: the auto-pilot
+
+**Agenda › SSTV · auto-pilote** tab. An SSTV event — an ARISS series, a satellite sending pictures for a few days — is entered like an appointment: the satellite, its transmitter or a frequency of its own (FM or SSB, width), the SSTV mode (or *Auto*: the VIS header says it), the period (« horaire à confirmer »: whole days), the minimum elevation, the rhythm (« 36 s on / 2 min off », as a reminder), the link and notes.
+
+- **Importer une affiche** (import a flyer): the announcement's picture (JPEG, PNG), or its address, is read on this PC by **tesseract** (`sudo apt install tesseract-ocr`); frequency, mode, dates, satellite, rhythm and link fill the form, to check before saving. Nothing is sent; an address is fetched only if you give one.
+- **The campaign's receive chain**: a [Montage](#functions-and-profiles) profile, or box by box — the rig (CAT, Doppler), the rotator following the satellite, the sound (the rig's, IC-9700 over the network or USB card; a sound card; the SDR receiver; or leave it alone), the recording, the SSTV decoder held on the mode, the spoken announcement, the rotator parked after LOS. *Le connecter tout seul* (connect it by itself): the rig only over the IC-9700's network link or the Icom's own USB port, the rotator only through rotctld.
+- **The auto-pilot** (master switch, off by default, also in the header): a few minutes before the AOS of each pass high enough it prepares the chain; it records from AOS to after LOS, attaches the pictures received to the campaign, then puts the reception back as it was. During the pass, a banner with **■ STOP**.
+- **Receive only**: it never transmits and touches no transmit setting. A transmission under way, DATV holding the receiver, or another campaign at the same time: the pass is set aside and the reason noted in the **history**.
+- The **🤖 passes** in the tab's list, in Suivi and on the timeline (Frise); the campaign in the **Ctrl+K** palette. Campaigns are kept on the PC (`sstv-campagnes.json`) and re-armed after a restart.
+
+<p align="center"><img src="images/pc-agenda-sstv.webp" width="100%" alt="Agenda › SSTV · auto-pilote (simulated data): a campaign's form and its receive chain, the auto-pilot on and its next pass, the flyer import, the ARISS SSTV Series 34 campaign on the ISS, its next passes planned, the history"></p>
+
 ### Recording the sound
 
 - **● Record the sound** in Suivi, Carnet and Son: a WAV named after the satellite (`SatMe_RS-44_20261013_203051Z.wav`), as on the phone.
 - **Stop at the end of the pass** (option): even started by hand, the recording stops 30 s after the LOS of the pass it caught.
 - **Every pass of the satellite followed** (option in the Son tab), or those of the **automatic mode**.
 - A recording stopped by hand does not start again by itself before the next pass.
+- **A sound card being recorded keeps its decoders** when the SDR receiver starts: QO-100 switched on to listen is only heard, never recorded in its place (at the wrong rate). Otherwise the SDR gives back, when it stops, the sound card it borrowed: the IC-9700's sound no longer stays silent.
 
 ## The log (Carnet)
 
@@ -166,7 +182,8 @@ A contact is typed with the callsign predicted from your log and QRZ (Tab goes t
 - **ADIF** export, and the deposit by hand (⬆).
 - **Which satellite**: a contact is logged on the satellite chosen in the entry, else the rig's (the followed satellite, Doppler by CAT), QO-100 when the rig is on it or the contact is typed in the cockpit. A receiver listening to QO-100 in the background no longer switches the log. The entry says where it logs and why, with a one-click switch.
 - **Correcting a contact**: the satellite (the list, QO-100, a free name, terrestrial), the **date and UTC time** (local time beside it, « maintenant »; not in the future, not before 1961). Azimuth, elevation, frequencies and the log's order follow; a duplicate (same call, same satellite, 10 min) is reported. The phone does the same.
-- **Compound callsigns** (`EA3/M5JFS`, `DL1ABC/P`, `F/ON4ABC/P`): the country is the operating prefix's (EA3/M5JFS = M5JFS operating from Spain), with its **flag** in the list, the entry, the card and the editor. When QRZ has no record for the compound form, the card is the operator's, identity only (no square, position or address). A square taken from a record belongs to the callsign as typed (« F4IOZ/P » does not take « F4IOZ »'s square). **The map** follows the square typed, else the country's centre, fainter.
+- **Compound callsigns** (`EA3/M5JFS`, `DL1ABC/P`, `F/ON4ABC/P`): the country is the operating prefix's (EA3/M5JFS = M5JFS operating from Spain), with its **flag** in the list, the entry, the card and the editor. When QRZ has no record for the compound form, the card is the operator's, identity only (no square, position or address). A square taken from a record belongs to the callsign as typed (« F4IOZ/P » does not take « F4IOZ »'s square). **The map** follows the entry live: the square typed (an invalid square: no point), else the country's centre, fainter; a contact's editor has its own map.
+- **⌖ on a contact's row**: its pass on the sky and the rotator's path as it went, taken from the journal (cyan: the satellite, yellow: the moment of the contact). The phone serves the same view.
 
 <p align="center">
 <img src="images/pc-carnet.webp" width="49%" alt="Log tab: a new contact, and beside it the station live — FO-29, its frequencies, the polar plot, the rotator">
@@ -220,7 +237,7 @@ The **QO-100** tab is the narrow band transponder on one screen: the receiver, t
 1. **Démarrer la réception QO-100**: one click starts the receiver (SDR dongle, ADALM-PLUTO or bladeRF behind the LNB or a converter), puts it on QO-100 and sends its sound to the decoders and the log.
 2. **Click a signal** in the waterfall: SatMe tunes it in its mode (SSB, CW, FT8, SSTV) and opens the right decoder in the dock — voice to text, CW, FT8 / FT4 or SSTV (*Auto*, or chosen by hand).
 3. **Log the contact** on the right: satellite QO-100, frequencies and mode already filled in.
-4. The **middle beacon** is the reference: with *Calage automatique* it is measured every 5 s and the LNB's drift followed by small steps, never on a weak measure.
+4. The **middle beacon** is the reference: with *Calage automatique* it is measured every 5 s and the LNB's drift followed by small steps, never on a weak measure — more closely when the LNB drifts fast (see [A drifting LNB](#a-drifting-lnb)).
 
 - **Signal classifier**: each signal of the transponder named on the waterfall (SSB, CW, FT8, FT4, PSK31, RTTY, SSTV, carrier, beacons, wide digital, unknown), coloured by class with its confidence; one FFT of 16 Hz bins over the receiver's raw stream, combs of spurious lines and key clicks left out, signals forgotten once gone. It runs only while the page looks at it.
 - **Band plan** (AMSAT-DL's) on the ruler and atop the waterfall, each segment's rule on hover. **Emergency frequency** (10 489.858 – 10 489.865): red outline and banner; SatMe never sends the uplink there to the rig by itself (a memory, a signal clicked, a DATV talkback, a restored session) — only when tuned by hand. The FT8 free spot is offered only in the digital segments; a mode out of its segment gets a discreet hint.
@@ -235,6 +252,29 @@ The **QO-100** tab is the narrow band transponder on one screen: the receiver, t
 <p align="center"><img src="images/pc-qo100-multiples.png" width="49%" alt="QO-100 cockpit: the Multiple decoders menu, up to four channels, the FT8 + CW + voice and FT8 + FT4 presets"></p>
 
 <p align="center"><img src="images/pc-qo100-cockpit.webp" width="100%" alt="QO-100 cockpit, receiver stopped: the four steps, the receiver and its tuning, the decoder dock, the log entry, the band plan with its segments over the waterfall, the automatic beacon calibration"></p>
+
+### A drifting LNB
+
+An LNB without an external reference moves with temperature: a few hertz per second after power-up or in the sun, sometimes jumps of ±25 Hz within a second. FT8's tones are 6.25 Hz apart: such an LNB is enough to decode nothing. SatMe-PC does three things, all receive-only:
+
+- **Calibration that follows**: when *Calage automatique* sees a real drift (over 1 Hz/s, beyond three standard errors), the beacon is measured every second and the error taken from the straight line through the last 30 seconds rather than from a mean. After a step, only measures made since count. While FT8 or FT4 decode the receiver's sound, steps fall only in the last second of a slot, between two transmissions.
+- **Verrouillage sur la balise** (beacon lock; *Calage* sub-tab, off by default): the middle beacon followed by a phase loop in the raw I/Q stream; its jumps are taken out of the whole transponder, continuously, smoothly, while the calibration keeps the slow error. The correction is bounded (±250 Hz) and checks itself: hitting the bound or too restless a correction lets go for 30 s; a calibration step searches again at once, the correction kept. Status: *balise cherchée* (searching), or *tient · N Hz rms ôtés* (holding, N Hz rms removed).
+- **FT8 tolerating drift**: a slot's shared drift (up to ±15 Hz/s) is found from the sync arrays, then taken out before a second reading.
+
+On slots made as live (beacon at 17 dB, 12 Hz rms jitter, 5 to 7 Hz/s drift), FT8 goes from 0 to 4 or 5 decodes out of 5. This **mitigates** the problem without solving it: the lock needs a beacon well above the noise, and an LNB that jumps faster than the loop is still an LNB that jumps. **The real answer is an LNB held by a reference.**
+
+<p align="center"><img src="images/pc-qo100-calage.webp" width="40%" alt="QO-100 cockpit, Calage sub-tab: automatic calibration and beacon lock ticked, « balise cherchée » while the receiver is stopped, the stored offset"></p>
+
+### LNB and GPSDO reference
+
+An LNB whose oscillator is locked to a GPS-held reference no longer drifts: no more running calibration, FT8 and DATV at peace. The plan for F4IOZ's station, which the [Montage](#drawing-and-editing) can draw (catalogue: Twin LNB with external 25 MHz reference, programmable Leo Bodnar GPSDO, injector, DC block):
+
+- a **Twin LNB** whose PLL takes an external **25 MHz** reference;
+- that 25 MHz from a **Leo Bodnar GPSDO**, cabled to the LNB's PLL;
+- one output to the **MiniTiouner** (DATV), which powers the LNB with **18 V**;
+- the other to the **bladeRF 2.0** (narrow band) through a **DC-blocking injector**: the LNB supply never reaches the bladeRF's input.
+
+Beacon calibration stays useful for the fixed offset; the lock can then stay off.
 
 ## DATV: reception
 
@@ -384,6 +424,7 @@ The **SSTV** tab, as on the phone: the **live picture** (drawn at its true size 
 - A spectrum with the tones marked (1200 sync, 1500 black, 1900 VIS, 2300 white), the level, a hint when the source is silent.
 - **Images**: every picture kept from an eighth of its lines, with its own sound; filtered by satellite, opened in a viewer, decoded again, made into a GIF, deleted.
 - **Mire**: the SSTV test card (as on the phone), played on a chosen output or written to WAV.
+- **Campaigns**: an ARISS series, or a satellite sending pictures for a few days, received by itself pass after pass — see [SSTV campaigns: the auto-pilot](#sstv-campaigns-the-auto-pilot).
 
 **Transmission** (*Émission*), with the **ADALM-PLUTO** or the **bladeRF 2.0**:
 
@@ -403,7 +444,7 @@ A tab made to see the band, not only to read it:
 - **Marks** the same everywhere (list, messages, waterfall): calls me, watched, new country, new square, already worked. **Stations guettées**: the callsigns to watch for. One **banner** when the reception goes wrong (no sound, digital silence, nothing decoded for 40 slots).
 - **💬 Messages**, as a messenger: the conversations between two stations (flags, the last message, ✓ when the QSO is closed), each one as bubbles, or everything as it comes. Each message says what it is: 📣 call, 📍 square, 📶 report, ✅ report received, 🤝 RR73 / 73.
 
-**The decoder**, measured on a corpus of whole slots (weak stations down to −22 dB, overlaps, Doppler slopes, FT4): the satellite's known **Doppler drift removed** before decoding; each candidate read in its own narrow channel (start to 1/32 symbol, frequency to 1/16 tone); decoded signals **subtracted** and the rest searched again; residual drift searched; **hashed callsigns** resolved (`<CALL>` when known); during a QSO, **decoding by expectation** of the partner's possible answers (marked *ap*). SatMe-PC goes deep when the satellite is low or there is time left in the slot.
+**The decoder**, measured on a corpus of whole slots (weak stations down to −22 dB, overlaps, Doppler slopes, FT4): the satellite's known **Doppler drift removed** before decoding; each candidate read in its own narrow channel (start to 1/32 symbol, frequency to 1/16 tone); decoded signals **subtracted** and the rest searched again; residual drift searched, and that of a moving LNB (up to ±15 Hz/s, see [A drifting LNB](#a-drifting-lnb)); **hashed callsigns** resolved (`<CALL>` when known); during a QSO, **decoding by expectation** of the partner's possible answers (marked *ap*). SatMe-PC goes deep when the satellite is low or there is time left in the slot. FT8 listening (on or off) and the FT8 / FT4 mode are kept across restarts.
 
 **PSK Reporter** (Réglages, off by default): the FT8 / FT4 stations heard sent every 5 minutes with their square, the frequency and the satellite — only when the frequency is sure (rig on CAT).
 
@@ -620,6 +661,7 @@ The **Montage** tab (workspace **Station**) draws the station: the antenna on th
 
 - **Composing**: a ready-made *montage*, **Proposer d'après SatMe**, or **✎ Modifier**. A click on a device shows its ports, notes and photo. *Complet* or *Simplifié* (what receives or transmits now). Zoom (**+** **−** **0**, Ctrl + wheel), pan with the mouse, minimap; **Exporter** as SVG, PNG or a print view; a foldable legend of cables and states.
 - **What is live**: CAT and rotator, the SDR and DATV receivers, the IC-9700 over the network (its LAN cable lit, the delay, a lost link), the USB knob, listeners, space weather, the QO-100 channels, recording and generator, ADS-B and AIS holding a dongle. Non-satellite functions unticked disappear from the drawing.
+- **The IC-9700 over the network** in the function views: the rig's network sound is its own sound (no more advice to take the USB codec, offered only when another card runs); the rig → PC link drawn as it goes, dashed blue with its delay and « CAT + son »; with no LAN cable drawn, it is shown *détecté* (detected), lighter, with **Ajouter ce câble** (add this cable). « Aucune antenne » offers **Ajouter une antenne 2 m / 70 cm** (a dual-band Yagi on the rig's free ports); the band of the rig's frequency picks the antenna port, and a port already taken (70 cm to the QO-100 up-converter) is said. SatMe-PC stays in the simplified drawing, in its own place, never over a piece.
 - **Ce qui manque** (what is missing): each function checked from antenna to screen; a **danger** is said loudly — for instance the LNB supply that would reach an SDR board through a splitter (a DC block is then proposed).
 
 ### Drawing and editing
@@ -648,6 +690,8 @@ By category, a list on the left: **Ma station** (callsign, square, minimum eleva
 ### The rig and the rotator
 
 The rig's model (IC-9700, IC-9100, IC-910H, TS-2000, two rigs FT-817 / IC-705, TH-D72, or simulated), its port and speed, Connect / Disconnect; the rotator (GS-232 over serial, rotctld over the network, or simulated), Follow the satellite, Park, Stop, its end stops and parking. The Suivi tab keeps only their name and a green tick.
+
+**The pass plan** (Réglages › Poste et rotor › Rotor): the **azimuth travel** (360°, or 450° / 540° with an overlap), **Monte à 180° ?** (only a rotator that goes to 180° can flip), the north or south end stop, the **wait before AOS**, and **hidden zones** (roof, tree, hill: `170-190<20 ; 300-330<10`, or drawn by dragging on the small sky) — the plan gives them almost no weight and puts its unwinds there. It keeps the most of the pass, weighed by elevation (a minute at 60° is worth far more than at 5°), then the shortest travel, then the fewest changes. The small sky shows the next pass's plan with the settings applied. The rotator's speed is measured while the mast runs far from its command.
 
 <p align="center"><img src="images/pc-reglages-materiel.webp" width="100%" alt="Settings: the rig (CAT) and the rotator, their ports and connection"></p>
 

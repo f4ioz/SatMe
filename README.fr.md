@@ -111,6 +111,17 @@ SatMe-PC est passé d'une station satellites à toute une station dans un naviga
 
 <p align="center"><img src="docs/images/pc-espaces-palette.png" width="98%" alt="SatMe-PC : le rail des espaces de travail, le bandeau, la barre d'état, et la palette Ctrl+K qui propose d'écouter 145,800 MHz sur le récepteur SDR"></p>
 
+**🤖 Campagnes SSTV en auto-pilote** — une série ARISS ou un satellite qui envoie des images quelques jours s'entre comme un rendez-vous dans l'**Agenda**, ou depuis l'**affiche** de l'annonce lue sur le PC ; l'auto-pilote (coupé d'origine) prépare le poste, le rotor, le son et le décodeur avant chaque passage, enregistre, garde les images et remet tout comme avant. Réception seulement, jamais d'émission.
+
+**🧭 Le plan du rotor** — tout le passage prévu avant l'AOS : de quel côté de la butée, **retourné à 180°** par-dessus le zénith ou un seul déroulement placé quand le satellite est bas ; des **zones cachées** (toit, arbre) ; le plan dessiné sur le ciel de Suivi, et le chemin du rotor de chaque contact du carnet.
+
+**🛰 QO-100 avec un LNB qui dérive** — le calage sur la balise suit une dérive de quelques Hz/s, un **verrouillage sur la balise** ôte les sautillements de tout le transpondeur, et FT8 tolère la dérive. Cela atténue, sans remplacer un **LNB tenu par une référence GPSDO** ([la marche à suivre](docs/station-pc.fr.md#lnb-et-référence-gpsdo)).
+
+<p align="center">
+<img src="docs/images/pc-agenda-sstv.webp" width="64%" alt="Agenda › SSTV · auto-pilote (données simulées) : une campagne ARISS sur l'ISS, sa chaîne de réception, ses prochains passages">
+<img src="docs/images/pc-rotor-plan.webp" width="34%" alt="Le plan du rotor sur le ciel de Suivi : un passage par la butée, le déroulement prévu en rouge pointillé">
+</p>
+
 **🧭 Une nouvelle page** — six espaces de travail dans un rail (Ciel, QO-100, DATV, Modes, Carnet, Station ; touches 1 à 6), un bandeau (ce qui est suivi, le récepteur actif, le prochain passage, un voyant **TX** rouge qui ne fait qu'arrêter), une barre d'état, la palette **Ctrl+K** (un onglet, un satellite, un indicatif, une fréquence tapée), des « ? » sur chaque carte, le **manuel intégré (F1)** avec recherche, des raccourcis clavier. La puce **« Son »** du bandeau : ce qu'entendent les décodeurs, la carte son du poste reconnue par son nom, **Préparer le passage** et enregistrer d'une touche. Les onglets hors satellites (avions, navires, sondes) seulement cochés.
 
 **🔌 Montage : la station telle qu'elle est câblée** — la station dessinée de l'antenne au PC, allumée en direct (cyan reçoit, rouge émet, les fréquences sur les câbles) ; modifiée par glisser-déposer depuis un catalogue (paraboles, LNB, convertisseurs et amplis DX Patrol, GPSDO dont Leo Bodnar, bias-T, bloqueur de continu…), photos détourées toutes seules, **ce qui manque** vérifié avec les dangers signalés (une alimentation LNB qui atteindrait une carte SDR) ; quelle fonction de SatMe tient quelle carte, les conflits et comment les lever, des profils de réception appliqués dans un ordre sûr.
@@ -124,7 +135,7 @@ SatMe-PC est passé d'une station satellites à toute une station dans un naviga
 
 **📡 L'IC-9700 par le réseau** — CAT et son reçu par le LAN du poste (Network Control sur ON), sans câble USB ; réception seulement, toute commande d'émission refusée ; sortie AF ou FI ; les identifiants codés appris d'une capture de sa propre connexion.
 
-**📡 Cockpit QO-100** — la cascade **nomme chaque signal**, un clic s'y accorde et ouvre le bon décodeur ; **jusqu'à quatre décodeurs à la fois** (FT8, FT4, CW, SSTV, phonie, PSK31, RTTY, balise) ; le plan de bande et une garde sur la **fréquence d'urgence**, le calage sur la balise, **LEILA** signalée ; la **télémesure BPSK de la balise médiane** décodée.
+**📡 Cockpit QO-100** — la cascade **nomme chaque signal**, un clic s'y accorde et ouvre le bon décodeur ; **jusqu'à quatre décodeurs à la fois** (FT8, FT4, CW, SSTV, phonie, PSK31, RTTY, balise) ; le plan de bande et une garde sur la **fréquence d'urgence**, le calage et le verrouillage sur la balise, **LEILA** signalée ; la **télémesure BPSK de la balise médiane** décodée.
 
 **📺 DATV** — MiniTiouner, SatMe-Node ou le **démodulateur DVB-S2** de SatMe (Pluto, bladeRF) ; la qualité en clair, la bande large d'un coup d'œil, sous-titres, indicatifs lus dans l'image ; **émission en DVB-S2 ou DVB-S** avec toutes les règles de sécurité dans le code, essais en intérieur et sur charge, **correction I/Q** par carte.
 
@@ -137,9 +148,9 @@ SatMe-PC est passé d'une station satellites à toute une station dans un naviga
 
 **✈ Avions, navires, météo spatiale** — l'**ADS-B** à 1090 MHz avec les fenêtres de **diffusion par avions**, l'**AIS** à 162 MHz, sur une **carte commune sans Internet** avec l'aurore prévue ; la **météo spatiale** (Kp, flux, rayons X, vent solaire, aurore, alertes), téléchargée seulement si on le coche.
 
-**📒 Carnet et journal** — le contact noté sur le satellite que travaille le poste ; date, heure et satellite modifiables ; **indicatifs composés** (EA3/M5JFS) avec leur pays et leur drapeau ; un **rapport par passage** (cascade suivie du Doppler, niveau, décodages, contacts) en un fichier HTML.
+**📒 Carnet et journal** — le contact noté sur le satellite que travaille le poste ; date, heure et satellite modifiables ; **indicatifs composés** (EA3/M5JFS) avec leur pays et leur drapeau, le carré propre à l'indicatif tapé, la carte qui suit la saisie ; un **rapport par passage** (cascade suivie du Doppler, niveau, décodages, contacts) en un fichier HTML.
 
-**🔗 Interfaces** — un serveur **rigctld** pour les logiciels de carnet (réception seulement, PTT refusé), la **molette de volume USB** en VFO (Linux), des **annonces vocales** (passages, émissions, son indicatif décodé…), la **traduction parlée** de phonie → texte, un lien WebSocket, le CAT qui suit tout de suite le changement de satellite.
+**🔗 Interfaces** — un serveur **rigctld** pour les logiciels de carnet (réception seulement, PTT refusé), la **molette de volume USB** en VFO (Linux), des **annonces vocales** (passages, émissions, son indicatif décodé…), la **traduction parlée** de phonie → texte, un lien WebSocket, le CAT qui suit tout de suite le changement de satellite et, au choix, règle le poste même quand le satellite n'est pas visible.
 
 **🔒 À distance** — la page **derrière un mot de passe** pour les autres machines, installable comme une application, un **mode distant** au son à faible latence pour un lien VPN. Réception seulement de loin.
 
@@ -148,7 +159,15 @@ SatMe-PC est passé d'une station satellites à toute une station dans un naviga
 <img src="docs/images/pc-datv.webp" width="49%" alt="SatMe-PC, DATV : un essai en intérieur sur 23 cm, l'ADALM-PLUTO émet et le bladeRF 2.0 reçoit avec le démodulateur DVB-S2 de SatMe">
 </p>
 
-## Nouveautés de la 20.82
+## Nouveautés de la 20.83
+
+- **CAT** : le poste se cale aussitôt sur le nouveau satellite (linéaire ou FM).
+- **Rotor** : le passage planifié avant l'AOS, retournement à 180° plutôt que le grand tour.
+- **Carnet** : le satellite noté d'après le poste ; satellite, date et heure modifiables ; indicatifs composés (EA3/M5JFS) et drapeaux.
+- **QO-100** : le calage sur la balise suit un LNB qui dérive ; FT8 tolère la dérive.
+- **SatMe-PC** : nombreuses nouveautés (Montage, IC-9700 par le réseau, télémesure…), voir plus haut.
+
+### Et dans la 20.82
 
 - **Images météo METEOR (LRPT)**, en bêta : METEOR-M2-3 et M2-4 décodés sur le téléphone depuis une clé RTL-SDR et une antenne 137 MHz — couleur de jour et infrarouge, nord en haut, un aperçu pendant le passage ; démarrage à la main ou tout seul avant chaque passage ; un enregistrement WAV I/Q brut décodé aussi. Côtes et frontières tracées d'après l'orbite. Sur la page du satellite, un bouton : **Recevoir les images**. Vérifié sur l'enregistrement d'un vrai passage, pas encore en direct.
 - **Icom IC-910H et IC-9100** en mode satellite, à côté de l'IC-9700 : leur adresse CI-V et leur vitesse (19 200 bauds), et la commande de mode satellite propre à l'IC-910H. Éprouvés au banc, pas encore sur les vrais postes.
