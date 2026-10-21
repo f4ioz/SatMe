@@ -756,6 +756,11 @@ class SettingsStore(private val prefs: Stockage) {
         get() = prefs.getBoolean("qo100_cale_auto", false)
         set(v) { prefs.edit().putBoolean("qo100_cale_auto", v).apply() }
 
+    /** QO-100: the receiver's stream locked on the middle beacon (the LNB's quick wanderings taken out; off by default). */
+    var qo100VerrouBalise: Boolean
+        get() = prefs.getBoolean("qo100_verrou_balise", false)
+        set(v) { prefs.edit().putBoolean("qo100_verrou_balise", v).apply() }
+
     /**
      * QO-100 being received (the receiver on it) when SatMe last ran: kept
      * through a restart, cleared only when the operator stops it. With the

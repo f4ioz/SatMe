@@ -648,6 +648,13 @@ class RxChain(
      */
     @Volatile var canaux: ((FloatArray, FloatArray, Int, FloatArray, FloatArray, Int) -> Unit)? = null
 
+    /**
+     * The lock on a QO-100 beacon ([VerrouBalise]): the raw stream turned by
+     * the LNB's quick wanderings before anything else sees it (panorama,
+     * channels, demodulation). Off until [VerrouBalise.actif].
+     */
+    val verrou = VerrouBalise(rtlRate)
+
     /** Spectrum span, Hz (first stage rate). */
     val spectrumSpanHz: Double get() = stage1Rate
 
@@ -802,7 +809,7 @@ class RxChain(
     fun reset() {
         dec1.reset(); dec2.reset(); disc.reset(); dc.reset(); deemph.reset(); sousTon.reset()
         agc.reset(); squelch.reset(); ssb?.reset(); spectrum.reset()
-        blanker.reset(); autoNotch.reset(); manualNotch.reset(); nr.reset()
+        blanker.reset(); autoNotch.reset(); manualNotch.reset(); nr.reset(); verrou.reset()
         nco = 0.0; level = -120f; amDc = 0f
         clip = 0f; peak = 0f; collecting = false
     }
@@ -931,6 +938,7 @@ class RxChain(
 
     /** The chain from the converted samples in [aI], [aQ] ([n] of them) on. */
     private fun suite(n: Int, out: ShortArray, feedSpectrum: Boolean, feedPanorama: Boolean): Int {
+        if (verrou.actif) verrou.process(aI, aQ, n)
         // Panorama taken here, on the raw stream, before the fine-tuning mixer:
         // anchored to the PLL frequency alone, so an absolute frequency scale
         // with fixed markers can be drawn. Taken after the mixer, it would

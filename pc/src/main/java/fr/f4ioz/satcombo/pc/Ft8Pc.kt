@@ -166,12 +166,19 @@ class Ft8Pc(
         mode = if (m == "FT4") "FT4" else "FT8"
         enMarche = true; premiere = true; trancheCourante = -1L; ecrit = 0; cadence = 0
         dernierSonMs = horloge(); sansDecodage = 0
+        stockage?.edit()?.putBoolean(CLE_MARCHE, true)?.putString(CLE_MODE, mode)?.apply()
     }
 
-    @Synchronized fun arrete() { enMarche = false }
+    @Synchronized fun arrete() { enMarche = false; stockage?.edit()?.putBoolean(CLE_MARCHE, false)?.apply() }
+
+    /** Listening again as it was left (on when SatMe-PC was closed with it on). */
+    fun reprend() {
+        val s = stockage ?: return
+        if (s.getBoolean(CLE_MARCHE, false)) demarre(s.getString(CLE_MODE, "FT8") ?: "FT8")
+    }
 
     /** Stopped for good (a channel removed): its decoding thread let go. */
-    fun ferme() { arrete(); decodeur.shutdown() }
+    fun ferme() { synchronized(this) { enMarche = false }; decodeur.shutdown() }
 
     @Synchronized fun vide() { entendus = emptyList(); tranches = 0; sansDecodage = 0 }
 
@@ -274,6 +281,9 @@ class Ft8Pc(
         decode(audio, cadence, signal(), mode, debut, penteHzS)
 
     companion object {
+        /** Listening on or off, and the mode, kept across restarts. */
+        const val CLE_MARCHE = "pc_ft8_marche"
+        const val CLE_MODE = "pc_ft8_mode"
         /** About 5.5 Hz a column (FT8's tones are 6.25 Hz apart). */
         const val COLONNES = 512
         /** About 46 s: three FT8 slots. */

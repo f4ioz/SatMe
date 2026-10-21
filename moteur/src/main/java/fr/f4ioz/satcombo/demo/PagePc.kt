@@ -2909,6 +2909,8 @@ ${rail()}
         <div class="ligne" style="margin-top:4px"><button id="o-bmesure" onclick="qCaleMesure()">Caler sur la mesure</button></div>
         <label style="display:block;margin-top:6px" id="oq-auto-l"><input type="checkbox" id="oq-auto" onchange="post('api/qo100/auto?on=' + (this.checked ? 1 : 0)).then(ticQualite).then(tqTic)"> <b>Calage automatique</b>
           <span class="petit">— la balise médiane mesurée toutes les 5 s, la dérive du LNB suivie toute seule (par petits pas, jamais sur une mesure faible)</span></label>
+        <label style="display:block;margin-top:6px" id="oq-vb-l" hidden title="La balise médiane suivie échantillon par échantillon dans le flux I/Q : ses sautillements rapides (un LNB instable, ±25 Hz en une seconde) sont ôtés de tout le transpondeur, en continu, sans à-coup. Le calage garde l'écart lent. Utile surtout pour FT8, dont les tons sont à 6,25 Hz."><input type="checkbox" id="oq-vb" onchange="post('api/qo100/verrou?on=' + (this.checked ? 1 : 0)).then(ticQualite)"> <b>Verrouillage sur la balise</b>
+          <span id="oq-vb-etat" class="pastille coupe">coupé</span> <span class="petit">— les sautillements du LNB ôtés de tout le transpondeur</span></label>
         <div class="ligne"><span class="petit">Écart mémorisé</span><span class="val" id="o-calage">0 Hz</span></div>
         <details style="margin-top:4px"><summary class="petit" style="cursor:pointer">À la main</summary>
           <div class="petit aide">L'oscillateur d'un LNB dérive, surtout à froid. Accorde la balise médiane, lis où elle tombe vraiment, saisis-le : l'écart s'applique à toute la descente.</div>
@@ -9070,11 +9072,14 @@ async function ticQualite() {
   if (g('v-qo100').hidden) return;
   try { OQ = await (await fetch('api/qo100/qualite')).json(); } catch (x) { OQ = null; }
   const q = OQ, ok = q && !q.absent;
-  g('oq-auto-l').hidden = !ok; g('oq-carte').hidden = !ok || !q.cle; g('oq-sig-carte').hidden = !ok || !q.cle;
+  g('oq-auto-l').hidden = !ok; g('oq-vb-l').hidden = !ok; g('oq-carte').hidden = !ok || !q.cle; g('oq-sig-carte').hidden = !ok || !q.cle;
   g('o-leila').hidden = !(ok && q.leila);
   if (ok && q.leila) g('o-leila').title = 'La sirène LEILA de la station sol, entendue il y a ' + q.leilaIlYa + ' s (vers ' + q.leilaHz + ' Hz dans le son) : la station écoutée émet plus fort que les balises et doit baisser sa puissance.';
   if (!ok) return;
   if (document.activeElement !== g('oq-auto')) g('oq-auto').checked = q.auto;
+  if (document.activeElement !== g('oq-vb')) g('oq-vb').checked = !!q.verrouBalise;
+  etatMarche('oq-vb', q.verrouBalise && q.vbTient, 'oq-vb-etat');
+  txt('oq-vb-etat', !q.verrouBalise ? 'coupé' : q.vbTient ? 'tient · ' + q.vbGigue + ' Hz rms ôtés' : 'balise cherchée');
   etatMarche('oq', q.verrou, 'oq-verrou'); txt('oq-verrou', q.verrou ? (q.auto ? 'calée sur la balise' : 'balise suivie') : 'balise non vue');
   const sg = (v, u) => v == null ? '—' : (v > 0 ? '+' : '') + v + (u || '');
   txt('oq-snr', q.rapport != null ? q.rapport.toFixed(1) : '—');

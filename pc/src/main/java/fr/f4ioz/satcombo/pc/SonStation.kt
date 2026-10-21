@@ -78,7 +78,7 @@ class SonStation(
      */
     @Volatile var horsAntenne: () -> SstvPc.HorsAntenne? = { null }
 
-    init { aprs.horsAntenne = { horsAntenne() != null }; sstv.posteEntend = { posteEntendSstv() } }
+    init { aprs.horsAntenne = { horsAntenne() != null }; sstv.posteEntend = { posteEntendSstv() }; ft8.reprend() }
 
     var enregAuto: Boolean
         get() = station.stockage.getBoolean("pc_enreg_auto", false)

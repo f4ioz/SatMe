@@ -176,6 +176,14 @@ class CanauxPc(
     }
 
     /** True while a channel feeds the SSTV decoder: the main receiver then does not. */
+    /** The slot of the FT8 (15 s) or FT4 (7.5 s) channels, null with none: FT8's last second is FT4's too. */
+    fun creneauMs(): Long? = when {
+        !actif -> null
+        liste.any { it.decodeur == Decodeur.FT8 } -> 15_000L
+        liste.any { it.decodeur == Decodeur.FT4 } -> 7_500L
+        else -> null
+    }
+
     fun tientSstv(): Boolean = actif && liste.any { it.decodeur == Decodeur.SSTV }
     /** True while a channel feeds voice to text: the main receiver then does not. */
     fun tientPhonie(): Boolean = actif && liste.any { it.decodeur == Decodeur.PHONIE }

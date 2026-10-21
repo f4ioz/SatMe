@@ -1497,6 +1497,7 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
             }
             "/api/qo100/calage-zero" -> station.qo100.annuleCalage()
             "/api/qo100/auto" -> qo100?.auto = q["on"] == "1"
+            "/api/qo100/verrou" -> qo100?.verrouBalise = q["on"] == "1"
             "/api/convertisseurs" -> {
                 // MHz on the page, Hz here; an empty field leaves it as it is.
                 fun hz(k: String) = q[k]?.trim()?.replace(',', '.')?.takeIf { it.isNotEmpty() }?.toDoubleOrNull()?.let { Math.round(it * 1e6) }

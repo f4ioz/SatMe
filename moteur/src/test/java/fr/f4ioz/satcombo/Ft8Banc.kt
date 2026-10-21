@@ -53,6 +53,9 @@ object Ft8Banc {
         val moi: String? = null,
         val partenaire: String? = null,
         val rapportsEchanges: Boolean = false,
+        /** The receiver retuned by this much (Hz) at [sautS] into the slot: a calibration step. */
+        val sautHz: Double = 0.0,
+        val sautS: Double = 0.0,
     ) {
         val attendus: Set<String> get() = stations.mapNotNull { it.attendu }.toSet()
     }
@@ -130,7 +133,25 @@ object Ft8Banc {
             val a = sqrt(2.0 * bruit2500 * 10.0.pow(10.0 / 10.0))
             for (i in 0 until n) sortie[i] += (a * kotlin.math.sin(2 * Math.PI * f * i / mode.cadenceHz)).toFloat()
         }
-        return sortie
+        return if (s.sautHz == 0.0) sortie else saut(sortie, mode.cadenceHz, s.sautHz, s.sautS)
+    }
+
+    /** Everything heard moved by [hz] from [depuisS] on, phase continuous (the analytic signal turned). */
+    fun saut(audio: FloatArray, cadenceHz: Double, hz: Double, depuisS: Double): FloatArray {
+        val n = Ft8Signal.puissanceDeDeux(audio.size + audio.size / 8)
+        val re = FloatArray(n); val im = FloatArray(n)
+        audio.copyInto(re)
+        Ft8Signal.fft(re, im)
+        for (k in 1 until n / 2) { re[k] *= 2f; im[k] *= 2f }
+        for (k in n / 2 + 1 until n) { re[k] = 0f; im[k] = 0f }
+        Ft8Signal.fftInverse(re, im)
+        return FloatArray(audio.size) { i ->
+            val t = i / cadenceHz - depuisS
+            if (t < 0) re[i] else {
+                val phi = 2 * Math.PI * hz * t
+                (re[i] * kotlin.math.cos(phi) - im[i] * kotlin.math.sin(phi)).toFloat()
+            }
+        }
     }
 
     // ------------------------------------------------------------ corpus
@@ -208,6 +229,9 @@ object Ft8Banc {
         l += Scenario("pentes_propres_2Hz/s", bande(21, 8, -14.0..0.0, pentes = 2.0), graine = 121)
         l += Scenario("pente_connue_et_propre", bande(22, 8, -14.0..0.0, pentes = 1.5),
             penteCommuneHzS = 2.5, penteConnue = true, graine = 122)
+        // A new LNB warming up: every station slides the same way, nobody knows how fast.
+        l += Scenario("lnb_qui_derive_8Hz/s", bande(23, 10, -14.0..0.0), penteCommuneHzS = 8.0, graine = 123)
+        l += Scenario("lnb_qui_derive_-12Hz/s", bande(24, 10, -14.0..0.0), penteCommuneHzS = -12.0, graine = 124)
         run {
             val hache1 = message("CQ", "", "JN18", hacheAppelant = 1_234_567L)
             val hache2 = message("F4IOZ", "", "-10", hacheAppelant = 3_456_789L)

@@ -193,6 +193,14 @@ object Ft8Decodeur {
      * matched against what the partner is expected to send (see [Apriori]);
      * such decodes carry [Decode.ap].
      *
+     * With a search budget that allows a drift ([Profondeur.penteMaxHzS]),
+     * the slot's own shared drift is looked for too ([Ft8Signal.penteCommune]):
+     * a receiver whose oscillator walks (a new LNB warming up drifted
+     * 8–12 Hz/s on QO-100, 21 October) slides every station the same way,
+     * beyond what each candidate's search reaches. When one stands out, the
+     * slot is read again with it taken out and what is new is added.
+     * [chercheDerive] false skips that (the second reading itself).
+     *
      * Returns messages strongest first. An empty list — nothing passed the
      * CRC — is the most common and normal case.
      */
@@ -205,7 +213,8 @@ object Ft8Decodeur {
         maximumCandidats: Int = 32,
         penteHzS: Double = 0.0,
         profondeur: Profondeur? = null,
-        apriori: Apriori? = null
+        apriori: Apriori? = null,
+        chercheDerive: Boolean = true,
     ): List<Decode> {
         if (mode.synchro.isEmpty()) return emptyList()
         val entree = Ft8Signal.reechantillonne(audio, cadenceHz, mode.cadenceHz)
@@ -222,8 +231,10 @@ object Ft8Decodeur {
         // Drift searches spent so far, against the budget's.
         val essaisPente = IntArray(1)
         val attendus = apriori?.let { attendus(it, mode) }.orEmpty()
+        var premier: Ft8Signal.Spectrogramme? = null
         for (passe in 1..passes) {
             val spec = Ft8Signal.spectrogramme(reste, mode, basseHz, hauteHz)
+            if (premier == null) premier = spec
             val seuil = profondeur?.seuilSynchro ?: Profondeur.LEGERE.seuilSynchro
             // During a QSO, fainter spots too: the partner may be below what
             // the code alone reads, and its expected messages are a far
@@ -256,8 +267,23 @@ object Ft8Decodeur {
                 Ft8Signal.soustrait(reste, lu.tons, mode, lu.decode.frequenceHz, lu.decode.instantS, lu.penteHzS)
             }
         }
+        // --- the slot's own drift ---
+        val spec = premier
+        if (chercheDerive && spec != null && profondeur != null && profondeur.penteMaxHzS > 0.0) {
+            val derive = Ft8Signal.penteCommune(spec, maxHzS = DERIVE_MAX_HZ_S)
+            if (abs(derive) >= DERIVE_MIN_HZ_S) {
+                val vus = sortie.map { it.message.brut }.toHashSet()
+                decode(audio, cadenceHz, mode, basseHz, hauteHz, maximumCandidats, penteHzS + derive, profondeur, apriori,
+                    chercheDerive = false).filter { vus.add(it.message.brut) }.let { sortie.addAll(it) }
+            }
+        }
         return sortie
     }
+
+    /** The slot's shared drift looked for up to this, Hz/s each side. */
+    const val DERIVE_MAX_HZ_S = 15.0
+    /** Below this, each candidate's own search is enough. */
+    const val DERIVE_MIN_HZ_S = 1.5
 
     /** A decode and what is needed to take it out of the audio. */
     private class Lu(val decode: Decode, val tons: IntArray, val penteHzS: Double)

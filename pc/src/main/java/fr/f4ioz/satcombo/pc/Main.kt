@@ -145,6 +145,11 @@ fun main(args: Array<String>) {
     canaux.indicatif = { station.etat.value.indicatif }
     canaux.reglagesRtty = { son.clavier.reglagesRtty }
     sdr.canaux = canaux
+    // The QO-100 calibration moves only between FT8/FT4 transmissions while they decode the dongle's sound.
+    qo100.creneauMs = {
+        val f = son.ft8.takeIf { it.enMarche && son.son.etat.value.appareil == SdrPc.NOM_SOURCE && son.son.etat.value.actif }
+        listOfNotNull(f?.let { if (it.mode == "FT4") 7_500L else 15_000L }, if (sdr.etat.value.actif) canaux.creneauMs() else null).maxOrNull()
+    }
     // BPSK telemetry: the QO-100 beacon through its channel, FUNcube-like satellites by the main receiver (off by default).
     val telemesure = TelemesurePc(station.stockage, dossier, canaux)
     telemesure.satellite = { station.etat.value.suivi?.name.orEmpty() }

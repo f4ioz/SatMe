@@ -455,6 +455,10 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
         return centre to (if (inverse) -Dsp.RTL_RATE.toDouble() else Dsp.RTL_RATE.toDouble())
     }
 
+    /** The running chain's lock on the middle beacon (null before the receiver first runs). */
+    @Volatile var verrou: fr.f4ioz.satcombo.sdr.VerrouBalise? = null
+        private set
+
     /** The middle beacon in the last panorama: its offset and how far above the noise. */
     fun mesureBalise(): fr.f4ioz.satcombo.domain.MesureBalise.Mesure? {
         val pan = panorama ?: return null
@@ -823,6 +827,15 @@ class SdrPc(val station: StationPc, private val son: SonPc, private val stockage
                 cibles = if (cp0 != null && !sonde && !pourMeteor && pll > 0 && pourQo100()) cp0.cibles(axeQo100(pll)) else emptyList()
                 cp0?.tourne = cibles.isNotEmpty()
                 val veutPano = maintenant - panoramaDemandeMs < 3000L && maintenant - dernierPano >= 300L
+                // Locked on the middle beacon when chosen: QO-100 on the dongle, its axis known.
+                val vb = chaine.verrou
+                val verrouVoulu = settings.qo100VerrouBalise && !sonde && !pourMeteor && pll > 0 && pourQo100() && fi == null
+                if (verrouVoulu != vb.actif) { vb.reset(); vb.actif = verrouVoulu }
+                if (verrouVoulu) {
+                    val (c, e) = axeQo100(pll)
+                    vb.decalageHz = (fr.f4ioz.satcombo.domain.Qo100.BALISE_MEDIANE_HZ - c) * Math.signum(e)
+                }
+                verrou = vb
                 val produit = if (iq16 != null) chaine.process16(iq16, n, pcm, feedSpectrum = veutSpectre, feedPanorama = veutPano)
                     else chaine.process(iq, n, pcm, feedSpectrum = veutSpectre, feedPanorama = veutPano)
                 if (veutSpectre) dernierSpectre = maintenant

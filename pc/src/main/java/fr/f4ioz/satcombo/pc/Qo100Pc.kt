@@ -44,6 +44,11 @@ class Qo100Pc(private val station: StationPc, private val sdr: SdrPc, private va
         get() = station.settings.qo100CaleAuto
         set(v) { station.settings.qo100CaleAuto = v }
 
+    /** The stream locked on the middle beacon ([fr.f4ioz.satcombo.sdr.VerrouBalise]; off by default). */
+    var verrouBalise: Boolean
+        get() = station.settings.qo100VerrouBalise
+        set(v) { station.settings.qo100VerrouBalise = v }
+
     private fun surLeTranspondeur() = sdr.etat.value.actif && station.qo100.etat.value.aLaCle
 
     /**
@@ -64,13 +69,24 @@ class Qo100Pc(private val station: StationPc, private val sdr: SdrPc, private va
         val calage = station.qo100.etat.value.calageHz
         // Known lately: looked for within 3 kHz only; lost, within 20 kHz.
         val fenetre = if (suivi.verrouille(t, 120_000L)) 3_000.0 else 20_000.0
-        suivi.mesure(t, sdr.mesureBaliseCentre(fenetre), calage, auto)?.let {
+        suivi.mesure(t, sdr.mesureBaliseCentre(fenetre), calage, auto && entreEmissions(t))?.let {
             station.qo100.calage(it)
             trameEcrite = sdr.panoramaTrames
         }
     }
     /** The panorama count when the calibration last moved. */
     private var trameEcrite = Long.MIN_VALUE / 2
+
+    /**
+     * The slot (ms) of an FT8/FT4 decoder hearing the dongle's sound, null
+     * when none. Each calibration write retunes: every station jumps by as
+     * much at once, and a jump of a tone or more inside a transmission
+     * loses it (on 21 October, writes a second apart, tens to hundreds of
+     * hertz each, left FT8 with nothing for dozens of slots).
+     */
+    @Volatile var creneauMs: () -> Long? = { null }
+
+    private fun entreEmissions(t: Long): Boolean = entreEmissions(t, creneauMs())
 
     /** LEILA heard lately (10 s), in the dongle's sound or the card's. */
     fun leilaEntendue(): Boolean = horloge().let { t -> listOfNotNull(leila, leilaCarte).any { it.entendue(t) } }
@@ -80,6 +96,12 @@ class Qo100Pc(private val station: StationPc, private val sdr: SdrPc, private va
         val d = suivi.dernier
         val o = JSONObject().put("auto", auto).put("cle", surLeTranspondeur()).put("verrou", suivi.verrouille(t))
             .put("calage", station.qo100.etat.value.calageHz)
+        // The lock on the beacon: chosen, holding, what it takes out.
+        o.put("verrouBalise", verrouBalise)
+        sdr.verrou?.takeIf { verrouBalise && it.actif }?.let { v ->
+            o.put("vbTient", v.verrouille).put("vbGigue", Math.round(v.gigueHz * 10) / 10.0)
+                .put("vbEcart", Math.round(v.ecartLentHz))
+        }
         d?.let { p ->
             o.put("ecart", Math.round(p.ecartHz)).put("rapport", Math.round(p.rapportDb * 10) / 10.0).put("quand", p.t)
                 .put("erreur", Math.round(p.erreurHz)).put("ppm", Math.round(SuiviBaliseQo100.ppm(p.erreurHz) * 1000) / 1000.0)
@@ -113,5 +135,17 @@ class Qo100Pc(private val station: StationPc, private val sdr: SdrPc, private va
     companion object {
         /** Panoramas to wait after a calibration step before measuring again (one is made every 300 ms). */
         const val TRAMES_APRES_ECRITURE = 3L
+        /**
+         * The end of a slot where the calibration may move: transmissions
+         * start at 0.5 s and last 12.64 s (FT8) or 5.04 s (FT4); a late
+         * station still ends before the last second.
+         */
+        const val FIN_DE_CRENEAU_MS = 1_000L
+
+        /** A calibration write allowed at [t]: no FT8/FT4 slot heard, or its last second (between transmissions). */
+        fun entreEmissions(t: Long, creneauMs: Long?): Boolean {
+            val c = creneauMs?.takeIf { it > FIN_DE_CRENEAU_MS } ?: return true
+            return Math.floorMod(t, c) >= c - FIN_DE_CRENEAU_MS
+        }
     }
 }

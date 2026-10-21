@@ -56,7 +56,7 @@ class Ft8CorpusTest {
         "doppler_connu_-3.0Hz/s" to 8, "doppler_connu_3.0Hz/s" to 8,
         "doppler_inconnu_1Hz/s" to 8, "pentes_propres_2Hz/s" to 8, "pente_connue_et_propre" to 8,
         "indicatifs_composes" to 5, "qso_rapport" to 3, "qso_r_rapport" to 2, "qso_rr73" to 3,
-        "qso_rr73_trop_tot" to 2, "ft4" to 8,
+        "qso_rr73_trop_tot" to 2, "ft4" to 8, "lnb_qui_derive_8Hz/s" to 10, "lnb_qui_derive_-12Hz/s" to 10,
     )
 
     @Test

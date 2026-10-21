@@ -429,6 +429,99 @@ object Ft8Signal {
         return gardes
     }
 
+    /**
+     * The drift shared by the whole slot, Hz/s, as heard: zero when none
+     * stands out.
+     *
+     * A receiver's oscillator walking (a new or warming LNB moves 5 to 15 Hz
+     * a second) drags every station the same way, by tones over a
+     * transmission: the sync arrays at the end sit far from those at the
+     * start, and the search per candidate ([Ft8Decodeur.Profondeur.penteMaxHzS])
+     * is not wide enough. Here each sync symbol's score is laid out once
+     * over the possible starts and bins, then the arrays are summed along
+     * slanted lines, one slope after another ([pasHzS] apart, up to
+     * [maxHzS] each side): the slope whose best spots ([garder], one per
+     * signal width) add up highest is the slot's, when it beats the
+     * straight one by [gain]. Cheap: the starts span only the slot's slack.
+     */
+    fun penteCommune(
+        spec: Spectrogramme,
+        maxHzS: Double = 15.0,
+        pasHzS: Double = 0.5,
+        garder: Int = 8,
+        gain: Double = 1.3,
+    ): Double {
+        val mode = spec.mode
+        if (mode.synchro.isEmpty()) return 0.0
+        val pasParSymbole = mode.parSymbole / spec.pasTemps
+        val raieDernierTon = (mode.tons - 1) * spec.raieParTon
+        val pasMaximum = spec.nbPas - mode.symboles * pasParSymbole
+        if (pasMaximum < 0 || spec.nbRaies <= raieDernierTon) return 0.0
+        var reference = 0.0
+        var comptes = 0L
+        for (ligne in spec.puissances) for (v in ligne) { reference += v; comptes++ }
+        reference = if (comptes > 0) reference / comptes else 0.0
+        if (reference <= 0.0) return 0.0
+
+        // Each sync symbol's score at each start and bin of tone 0 (its own symbol's time).
+        val nbP = pasMaximum + 1
+        val nbR = spec.nbRaies
+        val cartes = Array(mode.synchro.size) { FloatArray(nbP * nbR) }
+        for ((q, s) in mode.synchro.withIndex()) {
+            val (position, tonAttendu) = s
+            val carte = cartes[q]
+            for (pas in 0 until nbP) {
+                val t = pas + position * pasParSymbole
+                for (raie in 0 until nbR) {
+                    var attendu = 0f; var autres = 0f
+                    for (ton in 0 until mode.tons) {
+                        val p = spec.puissance(t, raie + ton * spec.raieParTon)
+                        if (ton == tonAttendu) attendu = p else autres += p
+                    }
+                    carte[pas * nbR + raie] = ((attendu - autres / (mode.tons - 1)) / reference).toFloat()
+                }
+            }
+        }
+        // Half-bins a sync symbol has moved from symbol 0 at a given slope.
+        val raieHz = mode.ecartHz / spec.raieParTon
+        val k = (maxHzS / pasHzS).toInt()
+        val somme = FloatArray(nbP * nbR)
+        fun note(pente: Double): Double {
+            java.util.Arrays.fill(somme, 0f)
+            for ((q, s) in mode.synchro.withIndex()) {
+                val decale = Math.round(pente * s.first * mode.dureeSymbole / raieHz).toInt()
+                val carte = cartes[q]
+                for (pas in 0 until nbP) {
+                    val o = pas * nbR
+                    val de = maxOf(0, -decale); val a = minOf(nbR, nbR - decale)
+                    for (raie in de until a) somme[o + raie] += carte[o + raie + decale]
+                }
+            }
+            // The best spots, one per signal width (whatever the start).
+            val meilleurs = FloatArray(nbR) { Float.NEGATIVE_INFINITY }
+            for (pas in 0 until nbP) for (raie in 0 until nbR) {
+                val v = somme[pas * nbR + raie]; if (v > meilleurs[raie]) meilleurs[raie] = v
+            }
+            val ordre = meilleurs.indices.sortedByDescending { meilleurs[it] }
+            val pris = ArrayList<Int>(garder)
+            var total = 0.0
+            for (r in ordre) {
+                if (pris.size >= garder) break
+                if (pris.any { kotlin.math.abs(it - r) <= raieDernierTon }) continue
+                pris.add(r); total += meilleurs[r]
+            }
+            return total
+        }
+        val droite = note(0.0)
+        var meilleure = 0.0; var haut = droite
+        for (i in -k..k) {
+            if (i == 0) continue
+            val v = note(i * pasHzS)
+            if (v > haut) { haut = v; meilleure = i * pasHzS }
+        }
+        return if (meilleure != 0.0 && droite > 0.0 && haut > gain * droite) meilleure else 0.0
+    }
+
     /** Reads a candidate's symbols: the strongest tone at each position. */
     fun tons(spec: Spectrogramme, c: Candidat): IntArray {
         val mode = spec.mode

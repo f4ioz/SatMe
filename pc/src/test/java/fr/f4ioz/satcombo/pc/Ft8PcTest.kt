@@ -138,4 +138,18 @@ class Ft8PcTest {
         t += 600_000L
         assertEquals(null, f.apriori())
     }
+
+    @Test
+    fun lecoute_reprend_comme_elle_a_ete_laissee() {
+        val stockage = fr.f4ioz.satcombo.plateforme.StockageMemoire()
+        Ft8Pc(stockage, null).demarre("FT4")
+        // SatMe-PC started again: listening again, same mode.
+        val apres = Ft8Pc(stockage, null).also { it.reprend() }
+        assertTrue(apres.enMarche); assertEquals("FT4", apres.mode)
+        apres.arrete()
+        val encore = Ft8Pc(stockage, null).also { it.reprend() }
+        assertTrue(!encore.enMarche)
+        // Never on its own the first time.
+        assertTrue(!Ft8Pc(fr.f4ioz.satcombo.plateforme.StockageMemoire(), null).also { it.reprend() }.enMarche)
+    }
 }
