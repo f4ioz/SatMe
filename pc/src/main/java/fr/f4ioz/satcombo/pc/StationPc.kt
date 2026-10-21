@@ -485,6 +485,16 @@ class StationPc(
 
     @Volatile private var derniereRecherche = 0L
 
+    /** A pass's track with its times, every 5 s from AOS to LOS (above the horizon only). */
+    private fun traceTemps(sat: fr.f4ioz.satcombo.data.TleEntry, obs: fr.f4ioz.satcombo.data.Observer,
+                           aos: Long, los: Long): List<Triple<Long, Double, Double>> {
+        val n = ((los - aos) / 5_000L).toInt().coerceIn(2, 400)
+        return (0..n).mapNotNull { i ->
+            val t = aos + (los - aos) * i / n
+            predicteur.positionAt(sat, obs, t).let { p -> if (p.elevationDeg >= 0) Triple(t, p.azimuthDeg, p.elevationDeg) else null }
+        }
+    }
+
     /** The satellite followed, now: where it is, its pass. */
     private suspend fun tic() {
         val maintenant = horloge()
@@ -508,9 +518,15 @@ class StationPc(
                     ?.firstOrNull { it.losEpochMs >= maintenant }
             }
         }
-        val arc = if (passage != null && passage != e.passage && sat != null && obs != null)
-            runCatching { predicteur.passTrack(sat, obs, passage.aosEpochMs, passage.losEpochMs) }.getOrDefault(emptyList())
+        val nouveau = passage != null && passage != e.passage && sat != null && obs != null
+        val arc = if (nouveau)
+            runCatching { predicteur.passTrack(sat!!, obs!!, passage!!.aosEpochMs, passage.losEpochMs) }.getOrDefault(emptyList())
         else e.arc
+        // The same pass with its times, every 5 s: the mast's whole-pass plan is made on it
+        // (side of the stop, flip, unwind and when). Without it the PC only unwound as it came.
+        if (nouveau) stationRotor.traceTemps = withContext(Dispatchers.Default) {
+            runCatching { traceTemps(sat!!, obs!!, passage!!.aosEpochMs, passage.losEpochMs) }.getOrDefault(emptyList())
+        } else if (passage == null && stationRotor.traceTemps.isNotEmpty()) stationRotor.traceTemps = emptyList()
         // Its next passes, again when they move on (one gone) or the satellite changed.
         val suivants = e.passagesSuivi
         val aRefaire = sat != null && obs != null && (suivants.isEmpty() || suivants.first().losEpochMs < maintenant ||

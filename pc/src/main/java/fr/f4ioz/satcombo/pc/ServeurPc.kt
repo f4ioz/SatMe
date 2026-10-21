@@ -607,6 +607,13 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 .put("fichiers", JSONArray(station.journauxDoppler().take(8).map { JSONObject().put("nom", it.name).put("taille", it.length()) }))
                 .toString().toByteArray())
             "/api/passages" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JsonPc.passages(station).toString().toByteArray())
+            // The mast's plan for the pass followed or next (a preview without a mast), and a contact's pass as the mast went.
+            "/api/rotor/plan" -> envoie(sortie, "200 OK", "application/json; charset=utf-8",
+                fr.f4ioz.satcombo.demo.ApiRotorPlan.plan(station.stationRotor.apercuPlan(), station.stationRotor.etat.value).toString().toByteArray())
+            "/api/carnet/rotor" -> envoie(sortie, "200 OK", "application/json; charset=utf-8",
+                fr.f4ioz.satcombo.demo.ApiRotorPlan.journal(journal?.passages() ?: emptyList(), q["t"]?.toLongOrNull() ?: 0L, q["sat"].orEmpty(),
+                    fr.f4ioz.satcombo.demo.ApiRotorPlan.limites(station.stationRotor.etat.value),
+                    station.stationRotor.etat.value.rotorMaxError.toDouble()).toString().toByteArray())
             "/api/satellites" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JsonPc.satellites(station).toString().toByteArray())
             "/api/ports" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JsonPc.ports(station).toString().toByteArray())
             "/api/trace" -> envoie(sortie, "200 OK", "application/json; charset=utf-8", JSONObject()
@@ -1739,6 +1746,7 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 entier("minEl")?.let { rotor.setRotorMinEl(it) }
                 entier("ecart")?.let { rotor.setRotorDeadband(it) }
                 entier("avantAos")?.let { rotor.setRotorPreAos(it) }
+                q["zones"]?.let { rotor.setRotorZones(it) }
             }
             "/api/rotor/aller" -> {
                 entier("az")?.let { rotor.setRotorManualAz(it) }

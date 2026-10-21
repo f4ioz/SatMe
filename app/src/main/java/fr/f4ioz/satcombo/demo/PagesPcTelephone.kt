@@ -110,6 +110,11 @@ object PagesPcTelephone {
                 }
                 // QRZ, as the phone looks it up (its credentials, its session); the card shown, as on the phone.
                 "/api/qrz" -> json(ApiStation.qrz(kotlinx.coroutines.runBlocking { vm.ficheQrz(p("c")) }, u.observer, true))
+                // The mast's plan for the pass, and a contact's pass as the mast went (the phone's journal).
+                "/api/rotor/plan" -> json(fr.f4ioz.satcombo.demo.ApiRotorPlan.plan(vm.rotorPourPage().apercuPlan(), u.rotor.mat))
+                "/api/carnet/rotor" -> json(fr.f4ioz.satcombo.demo.ApiRotorPlan.journal(vm.journal.passages(),
+                    p("t").toLongOrNull() ?: 0L, p("sat"), fr.f4ioz.satcombo.demo.ApiRotorPlan.limites(u.rotor.mat),
+                    u.rotor.mat.rotorMaxError.toDouble()))
                 "/api/carnet/passages" -> {
                     val sat = u.satellites.firstOrNull { it.catalogNumber == p("catnum").toIntOrNull() }
                     val obs = u.observer
@@ -471,7 +476,7 @@ object PagesPcTelephone {
                 p("flip").takeIf { it.isNotEmpty() }?.let { r.setRotorFlip(it == "1") }
                 p("azSeul").takeIf { it.isNotEmpty() }?.let { r.setRotorAzOnly(it == "1") }
                 n("parkAz")?.let { r.setRotorParkAz(it) }; n("parkEl")?.let { r.setRotorParkEl(it) }
-                n("minEl")?.let { r.setRotorMinEl(it) }; n("ecart")?.let { r.setRotorDeadband(it) }; n("avantAos")?.let { r.setRotorPreAos(it) }
+                n("minEl")?.let { r.setRotorMinEl(it) }; n("ecart")?.let { r.setRotorDeadband(it) }; n("avantAos")?.let { r.setRotorPreAos(it) }; p("zones").takeIf { it.isNotEmpty() }?.let { r.setRotorZones(it) }
                 OK
             }
             // ---- the agenda: the phone's own (the same AgendaStore as SatMe-PC's)

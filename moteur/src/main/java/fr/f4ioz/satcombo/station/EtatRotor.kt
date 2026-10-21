@@ -109,5 +109,32 @@ data class EtatRotor(
     val rotorEcartMax: Double? = null,
     val rotorEcartMaxAt: Long? = null,
     /** How long a full turn takes at the measured speed, seconds. */
-    val rotorTourS: Int = 0
+    val rotorTourS: Int = 0,
+    /** Obstacle zones, as stored (see SettingsStore.rotorZones). */
+    val rotorZones: String = "",
+    /** The whole-pass plan in force, for the screens; null when none. */
+    val rotorPlan: ResumePlanRotor? = null
 )
+
+/**
+ * The pass plan as the screens show it: the satellite's track and the mast's
+ * planned path on the sky (az, el, flipped, changing), what changes and when.
+ */
+data class ResumePlanRotor(
+    val aosMs: Long,
+    val losMs: Long,
+    val sat: List<Triple<Long, Double, Double>>,
+    /** tMs, sky az, sky el, flipped (el beyond 90), a change under way. */
+    val mat: List<PointPlanRotor>,
+    val couverture: Double,
+    val courseAzDeg: Double,
+    val retourne: Boolean,
+    /** "flip", "deroule" or "" */
+    val changement: String,
+    val changementMs: Long?,
+    val changementS: Int,
+    /** The banner line: the change and when, or why there is none. */
+    val texte: String = ""
+)
+
+data class PointPlanRotor(val tMs: Long, val az: Double, val el: Double, val retourne: Boolean, val bascule: Boolean)

@@ -461,6 +461,7 @@ private fun CadranRotor(ui: UiState) {
     if (ui.passTrack.isNotEmpty() && ui.rotorConnected && ui.rotorCoverage != null) {
         val heure = remember { java.text.SimpleDateFormat("HH:mm:ss", Locale.getDefault()) }
         val texte = when {
+            ui.rotorPlanTexte.isNotEmpty() -> ui.rotorPlanTexte
             ui.rotorChemin.isEmpty() -> tf("rotor_cadran_pas_de_tour", ui.rotorMaxError)
             ui.rotorDerouleAt != null -> tf("rotor_chemin_tour", heure.format(java.util.Date(ui.rotorDerouleAt ?: 0L)), ui.rotorTourS)
             else -> tf("rotor_chemin_sans_tour", (ui.rotorEcartMax ?: 0.0).roundToInt(),

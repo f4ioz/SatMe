@@ -1730,6 +1730,15 @@ class SettingsStore(private val prefs: Stockage) {
         get() = prefs.getFloat("rotor_vitesse", fr.f4ioz.satcombo.rotor.RotorDeroule.VITESSE_DEFAUT.toFloat())
         set(v) { prefs.edit().putFloat("rotor_vitesse", v.coerceIn(0.5f, 30f)).apply() }
 
+    /**
+     * Parts of the sky not worth pointing at (roof, tree, hill), as
+     * `azFrom-azTo<elBelow;…`: the pass plan gives them almost no weight and
+     * takes its unwinds there. Empty: none.
+     */
+    var rotorZones: String
+        get() = prefs.getString("rotor_zones", "") ?: ""
+        set(v) { prefs.edit().putString("rotor_zones", v).apply() }
+
     /** Pointing error tolerated before the banner reports it, in degrees. */
     var rotorMaxError: Int
         get() = prefs.getInt("rotor_max_error", 15)
