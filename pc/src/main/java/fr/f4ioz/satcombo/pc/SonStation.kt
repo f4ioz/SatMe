@@ -42,6 +42,9 @@ class SonStation(
     private val _etat = MutableStateFlow(Etat())
     val etat: StateFlow<Etat> = _etat.asStateFlow()
 
+    // A recording keeps its card: the dongle started meanwhile is only heard, never recorded in its place.
+    init { son.gardeCarte = { wav != null } }
+
     // The PC's own choices, kept with its settings.
     var sstvActif: Boolean
         get() = sstv.actif

@@ -82,6 +82,7 @@ class SonPc {
 
     /** Opens card [nom] and starts handing blocks out. */
     fun demarre(nom: String): Boolean {
+        reprendre = null
         arrete()
         virtuelles.firstOrNull { it.nom == nom }?.let { v ->
             _etat.update { Etat(actif = false, appareil = nom, erreur = "connexion…") }
@@ -172,14 +173,28 @@ class SonPc {
      * and the state says who feeds them, at what rate, as a card would.
      */
     fun prendPour(nom: String, rate: Int) {
+        val carte = (ligne != null || virtuelle != null) && _etat.value.actif
+        // A card being recorded keeps the decoders: the dongle is then only heard (speaker, « Écouter ici »),
+        // never mixed into a recording made at the card's rate (an IC-9700 pass, QO-100 switched on to listen).
+        if (carte && gardeCarte()) return
+        reprendre = if (carte) _etat.value.appareil else null
         arrete()
         _etat.update { Etat(actif = true, appareil = nom, rate = rate) }
     }
 
-    /** That source is done: nothing feeds the decoders any more. */
+    /** That source is done: the card it replaced gets the decoders back, else nothing feeds them any more. */
     fun rendPar(nom: String) {
-        if (_etat.value.appareil == nom && ligne == null && virtuelle == null) _etat.update { it.copy(actif = false, niveau = 0f) }
+        if (_etat.value.appareil != nom || ligne != null || virtuelle != null) return
+        val r = reprendre
+        reprendre = null
+        if (r != null && demarre(r)) return
+        _etat.update { it.copy(actif = false, niveau = 0f) }
     }
+
+    /** True while the card must keep the decoders (a recording runs on it). */
+    @Volatile var gardeCarte: () -> Boolean = { false }
+    /** The card a borrowing source (the dongle) took the decoders from, given back when it stops. */
+    @Volatile private var reprendre: String? = null
 
     fun arrete() {
         virtuelle?.let { v -> virtuelle = null; runCatching { v.arrete() } }
