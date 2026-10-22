@@ -2,13 +2,27 @@
 
 *[Version française](installer-satme-node.fr.md)*
 
-**SatMe-Node** puts the MiniTiouner (QO-100's wide band, DATV) next to the antenna, on a Raspberry Pi, and drives it over the network from [SatMe-PC](station-pc.md) or the phone. The node only receives: LongMynd runs there and sends its status and the video stream (0.3 to 2 Mbit/s). Nothing is decoded on it, which is why a **Raspberry Pi 3** is enough.
+**SatMe-Node** puts QO-100's receivers and transmitter next to the antenna, on a Raspberry Pi, and drives them over the network from [SatMe-PC](station-pc.md) or the phone:
+
+- **DATV**: the MiniTiouner (LongMynd) — or SatMe's DVB-S2 demodulator with a Pluto or a bladeRF;
+- **SDR**: a bladeRF or a Pluto, whose narrow band reaches SatMe-PC like a board plugged in there (QO-100 cockpit, waterfall, FT8, beacon, recording);
+- **transmitting** (Pluto or bladeRF), DATV and SSTV, off at first;
+- **its health**: temperature, load, memory, microSD, network, USB, services, log.
+
+## Which Raspberry Pi
+
+| What the node does | Pi |
+|---|---|
+| MiniTiouner only | a **Pi 3** (B or B+) is enough |
+| MiniTiouner + bladeRF (SDR, transmitting) | **Pi 4 or Pi 5**, the bladeRF on a **USB 3** port (blue) |
+| MiniTiouner + Pluto | Pi 4 or Pi 5 advised |
 
 ## What you need
 
-- A Raspberry Pi 3 (B or B+), 4 or 5, its power supply, a microSD card of 8 GB or more.
-- **Ethernet** preferably (the Pi 3's Wi-Fi is weak by a dish).
-- The MiniTiouner (Pro TS2 included), its own supply if it has one, and the LNB's cable.
+- The Raspberry Pi, its **official power supply** (3 A for a Pi 4, 5 A for a Pi 5: the bladeRF draws current, a weak supply throttles the Pi), a microSD card of 16 GB or more.
+- **Ethernet**: the SDR stream is about 34 Mbit/s at the full rate (1.058 MS/s); over Wi-Fi, choose 529 or 265 kS/s.
+- The MiniTiouner (Pro TS2 included) and its supply if it has one; the bladeRF or the Pluto.
+- With a twin-output LNB: **output 1 → MiniTiouner**, which powers the LNB at 18 V (horizontal, DATV); **output 2 → bladeRF** through a **13 V bias injector with a DC block** (vertical, narrow band) — the bladeRF must never get the LNB's voltage.
 
 ## 1. Prepare the card
 
@@ -21,10 +35,15 @@ Put the card in the Pi, plug in the network, power it up, wait a minute.
 
 ## 2. Install
 
-From a PC on the same network, the guided install (it sees a Raspberry Pi without a desktop and offers SatMe-Node):
+From a PC on the same network, log in to the Pi:
 
 ```
 ssh <user>@satme-node.local
+```
+
+Then, **in the home folder** (where `ssh` lands), the guided install (it sees a Raspberry Pi without a desktop and offers SatMe-Node):
+
+```
 curl -fsSL https://raw.githubusercontent.com/f4ioz/SatMe/main/installe-satme.sh -o installe-satme.sh
 bash installe-satme.sh
 ```
@@ -32,39 +51,49 @@ bash installe-satme.sh
 Or by hand:
 
 ```
-ssh <user>@satme-node.local
+cd ~
 curl -LO https://github.com/f4ioz/SatMe/releases/latest/download/satme-pc.tar
 tar xf satme-pc.tar
 sudo ./satme/noeud/installe-noeud.sh
 ```
 
-About ten minutes on a Pi 3. The script installs Java, builds LongMynd (BATC), lets it open the MiniTiouner (udev), installs the bladeRF tool and its FPGA image, copies SatMe to `/opt/satme` and starts the **satme-noeud** service (port 8090). It ends with the node's **address** and its **six-digit code**: write them down.
+The script is not in the home folder but in **`satme/noeud/`**, made by `tar` (it is already executable). "command not found": check with `ls satme/noeud/` that the archive was unpacked.
 
-Then plug the MiniTiouner into the Pi (or unplug and plug it in again).
+About ten minutes on a Pi 3, a little more on a Pi 4 (LongMynd is compiled). The script:
+
+- installs **Java** (the first the system offers: 21 on a recent Raspberry Pi OS, Debian 13 "trixie");
+- builds **LongMynd** (BATC) and opens the MiniTiouner to it (udev);
+- installs the **bladeRF** tool (`bladeRF-cli`), its USB access and its **FPGA image** (xA4 and xA9);
+- copies SatMe to `/opt/satme` and starts the **satme-noeud** service (port 8090), its user in the `plugdev` (bladeRF) and `video` (the Pi's temperature) groups.
+
+It ends with the node's **address** and its **six-digit code**: write them down. Running it again breaks nothing: it redoes everything.
+
+Then plug the MiniTiouner and the bladeRF (USB 3) into the Pi, or unplug and plug them in again. The **Pluto** needs nothing: plugged in over USB it shows up as a network card (192.168.2.1).
 
 ## 3. Join it
 
-- **SatMe-PC**: DATV tab → MiniTiouner **Changer** → the node's address (`192.168.1.30` or `satme-node.local`) and its code → **Associer**.
+- **SatMe-PC**: DATV tab → MiniTiouner **Changer** → the node's address (`192.168.1.30` or `satme-node.local`) and its code → **Associer**. Then:
+  - **SDR** tab → receiver **"SDR du SatMe-Node"**: the narrow band of the node's bladeRF or Pluto;
+  - **Station › SatMe-Node**: its health, its boards and their roles; **Détails…** for its actions.
 - **The phone**: QO-100 screen → **DATV** → the node's address (its IP: phones do not always find `.local` names) and its code → **Join**.
 
 Each keeps the key the node gave: the node, the PC or the phone can restart without joining again. The code again, on the Pi: `journalctl -u satme-noeud | grep Code`.
 
 ## Checking
 
-- `http://satme-node.local:8090/` in a browser: what the node is and what its MiniTiouner does (never its code).
+- `http://satme-node.local:8090/` in a browser: what the node is and what its boards do (never its code).
 - On the Pi: `systemctl status satme-noeud`, `journalctl -u satme-noeud -f`.
+- `bladeRF-cli -p`: is the bladeRF seen? The health card flags a bladeRF on **USB 2** (black port): move it to a blue one.
 - "MiniTiouner introuvable": plugged in? "pas d'accès": unplug and plug it in again (the udev rule applies on plugging).
+- High temperature or "throttled" in the health card: a heatsink or a fan, a better supply.
 
 ## Update
 
-On the Pi, the same three commands as in step 2. Settings, code and keys are kept in `/var/lib/satme-noeud`.
+On the Pi, the same commands as in step 2 (latest published release). Settings, code and keys are kept in `/var/lib/satme-noeud`. **Relancer SatMe sur le node** from SatMe-PC (Station › SatMe-Node › Détails…) only restarts the service, never the Pi.
 
 ## Safety
 
 - Without its key the node only says what it is; what changes it is a POST.
 - Its **LNB supply stays off** unless chosen from SatMe-PC or the phone (13 V or 18 V): never when something else powers the LNB.
+- **The node's transmitter** needs two boxes, both off at first: "Émettre par le SatMe-Node" in SatMe-PC, and **"émission autorisée"**, which can only be ticked on the node itself (its page opened on the Pi, or through an SSH tunnel). The node has its own bands, duration and power cap; it stops transmitting if SatMe-PC is silent for 1.5 s or disconnects. One board never receives and transmits at once.
 - Meant for your home network: do not open the port to the Internet (no encryption).
-
-## Raspberry Pi 4 or 5
-
-Installed the same way. They leave room for what can come to the node next — the rotator, the rig, the SDR dongle at the mast — the Pi 3 staying a MiniTiouner node.

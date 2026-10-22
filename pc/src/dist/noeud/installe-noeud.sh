@@ -4,15 +4,15 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 #
 # Installs a SatMe-Node on a Raspberry Pi (Raspberry Pi OS 64-bit, Debian):
-# the MiniTiouner next to the antenna, driven over the network by SatMe-PC
-# or the phone. A Pi 3 is enough: the node only receives, nothing is decoded
-# on it.
+# the MiniTiouner, a bladeRF or a Pluto next to the antenna, driven over the
+# network by SatMe-PC or the phone. A Pi 3 is enough for the MiniTiouner
+# alone; a bladeRF wants a Pi 4 or 5 and its USB 3.
 #
 #   sudo ./installe-noeud.sh                # from the unpacked satme.tar
 #   sudo ./installe-noeud.sh --port 8090    # another port
 #
 # It installs Java, builds LongMynd (BATC), lets it open the MiniTiouner
-# (udev), copies SatMe to /opt/satme and starts the satme-noeud service.
+# (udev), installs the bladeRF tool and FPGA image, copies SatMe to /opt/satme and starts the satme-noeud service.
 # Run again to update: settings, code and keys are kept.
 set -euo pipefail
 
