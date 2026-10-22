@@ -74,7 +74,7 @@ Brancher ensuite le MiniTiouner et le bladeRF (USB 3) sur le Pi, ou les débranc
 
 - **SatMe-PC** : onglet DATV → MiniTiouner **Changer** → l'adresse du node (`192.168.1.30` ou `satme-node.local`) et son code → **Associer**. Puis :
   - onglet **SDR** → récepteur **« SDR du SatMe-Node »** : la bande étroite du bladeRF ou du Pluto du node ;
-  - **Station › SatMe-Node** : sa santé, ses cartes et leur rôle ; **Détails…** pour ses actions.
+  - **Station › SatMe-Node** : sa page — santé, cartes et leur rôle, services et leurs actions, version (et comment la mettre à jour).
 - **Le téléphone** : écran QO-100 → **DATV** → l'adresse du node (son IP : les téléphones ne trouvent pas toujours les noms en `.local`) et son code → **Associer**.
 
 Chacun garde la clé que le node lui a donnée : le node, le PC ou le téléphone peuvent redémarrer sans tout refaire. Revoir le code, sur le Pi : `journalctl -u satme-noeud | grep Code`.
@@ -89,7 +89,7 @@ Chacun garde la clé que le node lui a donnée : le node, le PC ou le téléphon
 
 ## Mettre à jour
 
-Sur le Pi, les mêmes commandes qu'à l'étape 2 (version publiée la plus récente). Réglages, code et clés restent dans `/var/lib/satme-noeud`. **Relancer SatMe sur le node** depuis SatMe-PC (Station › SatMe-Node › Détails…) redémarre seulement le service, jamais le Pi.
+Sur le Pi, les mêmes commandes qu'à l'étape 2 (version publiée la plus récente). Réglages, code et clés restent dans `/var/lib/satme-noeud`. **Relancer SatMe sur le node** depuis SatMe-PC (Station › SatMe-Node › Services) redémarre seulement le service, jamais le Pi.
 
 ## Sécurité
 

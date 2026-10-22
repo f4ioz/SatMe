@@ -74,7 +74,7 @@ Then plug the MiniTiouner and the bladeRF (USB 3) into the Pi, or unplug and plu
 
 - **SatMe-PC**: DATV tab → MiniTiouner **Changer** → the node's address (`192.168.1.30` or `satme-node.local`) and its code → **Associer**. Then:
   - **SDR** tab → receiver **"SDR du SatMe-Node"**: the narrow band of the node's bladeRF or Pluto;
-  - **Station › SatMe-Node**: its health, its boards and their roles; **Détails…** for its actions.
+  - **Station › SatMe-Node**: its page — health, boards and their roles, services and their actions, version (and how to update it).
 - **The phone**: QO-100 screen → **DATV** → the node's address (its IP: phones do not always find `.local` names) and its code → **Join**.
 
 Each keeps the key the node gave: the node, the PC or the phone can restart without joining again. The code again, on the Pi: `journalctl -u satme-noeud | grep Code`.
@@ -89,7 +89,7 @@ Each keeps the key the node gave: the node, the PC or the phone can restart with
 
 ## Update
 
-On the Pi, the same commands as in step 2 (latest published release). Settings, code and keys are kept in `/var/lib/satme-noeud`. **Relancer SatMe sur le node** from SatMe-PC (Station › SatMe-Node › Détails…) only restarts the service, never the Pi.
+On the Pi, the same commands as in step 2 (latest published release). Settings, code and keys are kept in `/var/lib/satme-noeud`. **Relancer SatMe sur le node** from SatMe-PC (Station › SatMe-Node › Services) only restarts the service, never the Pi.
 
 ## Safety
 
