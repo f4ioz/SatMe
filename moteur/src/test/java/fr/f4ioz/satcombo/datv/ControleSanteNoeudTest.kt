@@ -45,6 +45,18 @@ class ControleSanteNoeudTest {
     }
 
     @Test
+    fun en_option_la_page_du_pc_tenue_aux_memes_2_s() {
+        c.chienLocal = true
+        c.prend(pc, "DATV")
+        t += 1_900; assertNull(c.perdu())
+        assertTrue(c.vie(pc)); t += 1_900; assertNull(c.perdu())
+        t += 200
+        val p = c.perdu()!!
+        assertTrue(p, p.contains("page de ce PC"))
+        assertTrue(c.json(pc).getBoolean("chienLocal"))
+    }
+
+    @Test
     fun a_distance_une_confirmation_puis_le_chien_de_2_s() {
         assertEquals(ControleEmission.CONFIRMATION, c.refus(loin, emet = false))
         assertFalse(c.json(loin).getJSONObject("vous").getBoolean("confirme"))

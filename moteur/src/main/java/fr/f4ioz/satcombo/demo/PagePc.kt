@@ -3970,6 +3970,11 @@ ${rail()}
         <button onclick="post('api/datv/emission/reglage?gainMax=' + enc(v('px-gainmax'))).then(chargePx)">Enregistrer</button></div>
       <div class="petit aide">Jamais dépassé, quoi qu'on demande dans l'onglet DATV (0 dB = la pleine puissance du Pluto, environ +7 dBm).</div>
     </div>
+    <div class="carte" id="cl-carte" hidden>
+      <div class="t">Liaison pendant l'émission</div>
+      <label class="petit"><input type="checkbox" id="cl-on" onchange="post('api/emission/chien-local?on=' + (this.checked ? 1 : 0))"> Couper aussi l'émission lancée depuis ce PC après 2 s sans nouvelles de sa page</label>
+      <div class="petit aide">Depuis un autre appareil (mode distant, téléphone), c'est toujours 2 s. Ici, sans cette case, 15 s. La page bat toutes les demi-secondes ; un onglet longtemps caché ou un PC très chargé peut alors couper une émission.</div>
+    </div>
     <div class="carte" id="iq-carte">
       <div class="t">Correction I/Q des émetteurs</div>
       <div class="petit aide">Chaque émetteur laisse passer un peu de son oscillateur (une fuite au centre), une image du signal (son reflet autour de l'oscillateur) et un écart de fréquence (son quartz). SatMe les corrige sur les échantillons, juste avant l'émetteur, en DATV comme en SSTV ; chaque carte garde sa correction (par numéro de série). À zéro : rien n'est changé.</div>
@@ -4593,9 +4598,9 @@ function xsVie(on) {
   if (on && !xsVieW) {
     const bat = () => fetch('api/sstv/emission/vie?client=' + TX_CLIENT, { method: 'POST' }).catch(() => {});
     try {
-      xsVieW = new Worker(URL.createObjectURL(new Blob(['setInterval(function () { postMessage(0); }, 1000);'], { type: 'text/javascript' })));
+      xsVieW = new Worker(URL.createObjectURL(new Blob(['setInterval(function () { postMessage(0); }, 500);'], { type: 'text/javascript' })));
       xsVieW.onmessage = bat;
-    } catch (x) { xsVieW = { t: setInterval(bat, 1000), terminate() { clearInterval(this.t); } }; }
+    } catch (x) { xsVieW = { t: setInterval(bat, 500), terminate() { clearInterval(this.t); } }; }
     bat();
   } else if (!on && xsVieW) { xsVieW.terminate(); xsVieW = null; }
 }
@@ -4703,7 +4708,7 @@ const CATS_REG = [
   { id: 'phonie', nom: 'Phonie → texte', ico: 'mic', desc: 'La voix entendue écrite : moteur, modèle, installation', cartes: ['Phonie → texte'] },
   { id: 'telephone', nom: 'Téléphone', ico: 'smartphone', desc: 'SatMe sur le téléphone : réglages et contacts', cartes: ['Téléphone'] },
   { id: 'accord', nom: 'Accord fin', ico: 'tune', desc: 'Loupe, vernier, calage sur la voix (clé SDR)', cartes: ['Accord fin'] },
-  { id: 'emission', nom: 'Émission', ico: 'cloud_upload', desc: 'Correction I/Q des émetteurs : fuite, image, fréquence', cartes: ['Correction I/Q'] },
+  { id: 'emission', nom: 'Émission', ico: 'cloud_upload', desc: 'Coupure si la page se tait, correction I/Q des émetteurs', cartes: ['Liaison pendant', 'Correction I/Q'] },
   { id: 'acces', nom: 'Accès à distance', ico: 'lock', desc: 'Mot de passe des autres machines, mode distant, application, écran allumé', cartes: ['Accès à distance', 'Mode distant', 'Sur cet appareil'] },
   { id: 'sauvegarde', nom: 'Sauvegarde', ico: 'save', desc: 'Toute la station dans un fichier, et la restaurer', cartes: ['Sauvegarde'] },
 ];
@@ -5695,6 +5700,7 @@ function irMontre() {
   else avertCat();
 }
 // « Even below the horizon »: read once; absent (the phone's page) keeps the box hidden.
+(async () => { try { const j = await (await fetch('api/emission/chien-local', { method: 'POST' })).json(); if (j && j.ok && 'on' in j) { g('cl-on').checked = !!j.on; g('cl-carte').hidden = false; } } catch (x) {} })();
 (async () => { try { const j = await (await fetch('api/cat/sous-horizon', { method: 'POST' })).json(); if (j && j.ok && 'on' in j) { g('cat-sh').checked = !!j.on; g('cat-sh-l').hidden = false; } } catch (x) {} })();
 async function irCharge(remplir) {
   try { IR = await (await fetch('api/icomreseau')).json(); } catch (x) { IR = null; }
@@ -7395,9 +7401,9 @@ function eVie(on) {
   if (on && !eVieW) {
     const bat = () => fetch('api/datv/emission/vie?client=' + TX_CLIENT, { method: 'POST' }).catch(() => {});
     try {
-      eVieW = new Worker(URL.createObjectURL(new Blob(['setInterval(function () { postMessage(0); }, 1000);'], { type: 'text/javascript' })));
+      eVieW = new Worker(URL.createObjectURL(new Blob(['setInterval(function () { postMessage(0); }, 500);'], { type: 'text/javascript' })));
       eVieW.onmessage = bat;
-    } catch (x) { eVieW = { t: setInterval(bat, 1000), terminate() { clearInterval(this.t); } }; }
+    } catch (x) { eVieW = { t: setInterval(bat, 500), terminate() { clearInterval(this.t); } }; }
     bat();
   } else if (!on && eVieW) { eVieW.terminate(); eVieW = null; }
 }

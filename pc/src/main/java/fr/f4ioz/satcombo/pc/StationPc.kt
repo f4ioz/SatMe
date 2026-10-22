@@ -120,6 +120,11 @@ class StationPc(
      * horizon (to be ready before AOS, or on the bench) — off unless chosen;
      * the phone's own setting has another default.
      */
+    /** The page on this PC stops a transmission after 2 s without news too, like a remote one. */
+    var txChienLocal: Boolean
+        get() = stockage.getBoolean("tx_chien_local_pc", false)
+        set(v) { stockage.edit().putBoolean("tx_chien_local_pc", v).apply() }
+
     var catSousHorizon: Boolean
         get() = stockage.getBoolean("cat_sous_horizon_pc", false)
         set(v) { stockage.edit().putBoolean("cat_sous_horizon_pc", v).apply() }

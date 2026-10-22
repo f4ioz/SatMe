@@ -181,7 +181,7 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
     val portReel: Int get() = socket?.localPort ?: port
 
     /** Who drives the transmissions now, for every client ([fr.f4ioz.satcombo.datv.ControleEmission]). */
-    val controle = fr.f4ioz.satcombo.datv.ControleEmission()
+    val controle = fr.f4ioz.satcombo.datv.ControleEmission().also { it.chienLocal = station.txChienLocal }
 
     private val ROUTES_TX = setOf("/api/datv/emission/demarre", "/api/datv/emission/vie", "/api/datv/emission/arrete",
         "/api/sstv/emission/demarre", "/api/sstv/emission/vie", "/api/sstv/emission/arrete")
@@ -1172,6 +1172,10 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 rxIc705 = q["rxIc705"] == "1", txIc705 = q["txIc705"] == "1", bandeTx = entier("bandeTx") ?: 0))
             "/api/cat/deconnecter" -> station.deconnecteCat()
             // The rig tuned even below the horizon: asked with « on », read without.
+            "/api/emission/chien-local" -> {
+                q["on"]?.let { station.txChienLocal = it == "1"; controle.chienLocal = it == "1" }
+                return JSONObject().put("ok", true).put("on", controle.chienLocal)
+            }
             "/api/cat/sous-horizon" -> {
                 q["on"]?.let { station.catSousHorizon = it == "1" }
                 return JSONObject().put("ok", true).put("on", station.catSousHorizon)

@@ -21,7 +21,8 @@ import org.json.JSONObject
  * - **Its heartbeat.** Only the controller's « still there » counts; a
  *   remote controller silent for [chienDistantMs] (its link lost, the phone
  *   gone) stops the transmission ([perdu]). The page on the PC itself
- *   keeps the transmitters' own, longer guard (no link to lose).
+ *   keeps the transmitters' own, longer guard (no link to lose), unless the
+ *   owner asks for the same 2 s there too ([chienLocal]).
  * - **Remote: one more word.** A remote client confirms once per session
  *   ([confirme]) that it means to transmit from there, before its first start.
  *
@@ -37,6 +38,8 @@ class ControleEmission(
     data class Tenue(val client: Client, val depuisMs: Long, val quoi: String, val vieMs: Long)
 
     @Volatile var tenue: Tenue? = null; private set
+    /** The page on this PC is held to the same 2 s as a remote one (an option, off: a long-hidden tab may be slowed). */
+    @Volatile var chienLocal: Boolean = false
     private val confirmes = java.util.Collections.synchronizedSet(HashSet<String>())
 
     /** Why [c] may not start a transmission now ([emet]: one is on), or null. */
@@ -74,7 +77,7 @@ class ControleEmission(
     /** Why the transmission must stop now (a remote controller silent too long), or null. */
     fun perdu(): String? {
         val t = tenue ?: return null
-        if (!t.client.distant) return null
+        if (!t.client.distant && !chienLocal) return null
         val d = horloge() - t.vieMs
         return if (d > chienDistantMs) "liaison perdue avec " + nom(t.client) + " (" + d / 1000.0 + " s sans nouvelles) : émission coupée" else null
     }
@@ -87,7 +90,7 @@ class ControleEmission(
             .put("depuisS", (horloge() - t.depuisMs) / 1000).put("vieS", (horloge() - t.vieMs) / 1000.0)
             .put("moi", pour != null && pour.id == t.client.id)
         if (pour != null) o.put("vous", JSONObject().put("distant", pour.distant).put("confirme", estConfirme(pour)))
-        return o.put("chienDistantS", chienDistantMs / 1000.0)
+        return o.put("chienDistantS", chienDistantMs / 1000.0).put("chienLocal", chienLocal)
     }
 
     private fun nom(c: Client) = if (c.distant) "un autre appareil" + (if (c.adresse.isNotBlank()) " (" + c.adresse + ")" else "") else "la page de ce PC"
