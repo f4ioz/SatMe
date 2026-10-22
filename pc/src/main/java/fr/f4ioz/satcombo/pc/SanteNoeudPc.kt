@@ -45,6 +45,7 @@ class SanteNoeudPc(
         lit("sys/class/thermal/thermal_zone0/temp")?.let { SanteNoeud.temperature(it) }?.let { sys.put("temperature", Math.round(it * 10) / 10.0) }
         lit("proc/meminfo")?.let { SanteNoeud.memoire(it) }?.let { (t, l) -> sys.put("memoire", JSONObject().put("totalKo", t).put("libreKo", l)) }
         runCatching { File(racine, ".").usableSpace / (1024 * 1024) }.getOrNull()?.takeIf { it > 0 }?.let { sys.put("disqueLibreMo", it) }
+        runCatching { File(racine, ".").totalSpace / (1024 * 1024) }.getOrNull()?.takeIf { it > 0 }?.let { sys.put("disqueTotalMo", it) }
         runCatching { vcgencmd() }.getOrNull()?.let { SanteNoeud.bridage(it) }?.let { b ->
             sys.put("bridage", JSONArray(b.maintenant)).put("bridageDepuis", JSONArray(b.depuisDemarrage)).put("bridageBrut", "0x" + Integer.toHexString(b.brut))
         }

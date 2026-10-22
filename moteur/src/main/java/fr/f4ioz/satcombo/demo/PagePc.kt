@@ -44,6 +44,7 @@ object PagePc {
         Onglet("espace", "Météo spatiale", "soleil", "Kp, flux solaire, éruptions, vent solaire, aurore"),
         Onglet("meteor", "METEOR", "cloud", "Les images LRPT des satellites METEOR"),
         Onglet("son", "Son", "mic", "La carte son, l'enregistrement"),
+        Onglet("noeud", "SatMe-Node", "noeud", "Le Raspberry Pi près de l'antenne : santé, cartes et leurs rôles, services, version"),
         Onglet("sstv", "SSTV", "live_tv", "Réception, émission et images SSTV"),
         Onglet("planche", "Planche", "view_quilt", "La planche SSTV : les images sur un modèle, à télécharger"),
         Onglet("aprs", "APRS", "place", "Les trames APRS entendues, la carte, les trophées"),
@@ -63,7 +64,7 @@ object PagePc {
         Triple("tv", "DATV", "tv") to listOf("datv"),
         Triple("modes", "Modes", "graphic_eq") to listOf("sstv", "aprs", "ft8", "tlm"),
         Triple("log", "Carnet", "menu_book") to listOf("carnet", "journal", "planche"),
-        Triple("poste", "Station", "radio") to listOf("montage", "sdr", "son", "reglages"))
+        Triple("poste", "Station", "radio") to listOf("montage", "sdr", "son", "noeud", "reglages"))
 
     /** Every tab's id: what a server offering all of them answers to `api/capacites`. */
     val TOUS: List<String> get() = ONGLETS.map { it.id }
@@ -919,6 +920,9 @@ ${STYLE_JETONS}
     .vue:not([hidden]) { flex:1; min-height:0; overflow:auto; }
     #v-station .grille { height:100%; }
     #v-station .col1, #v-station .col2, #v-station .col3 { min-height:0; overflow:auto; }
+    #v-noeud .nx { height:100%; display:flex; flex-direction:column; }
+    #v-noeud .nx-grille:not([hidden]) { flex:1; min-height:0; }
+    #v-noeud .nx-grille > div { min-height:0; overflow:auto; }
     #v-station .col1 .carte { height:100%; display:flex; flex-direction:column; margin:0; }
     #v-station #liste { flex:1; max-height:none; min-height:0; }
     #v-station .col2 .carte { height:100%; display:flex; flex-direction:column; margin:0; }
@@ -1500,6 +1504,41 @@ ${STYLE_JETONS}
   .dlg-mt { width:min(980px,96vw); padding:14px 16px; border-radius:12px; background:var(--s2); border:1px solid var(--ligne-forte); box-shadow:var(--ombre-pop); }
   #mt-ph-img { display:block; max-width:min(90vw,1100px); max-height:78vh; border-radius:var(--r1); margin:auto; }
 ${STYLE_CADRE}
+  /* ---------------------------------------------------------------- the SatMe-Node's page */
+  .nx { padding:12px 16px 0; box-sizing:border-box; }
+  .nx-sans, .nx-assoc { max-width:820px; }
+  .nx-liste { margin:0; padding-left:20px; line-height:1.6; }
+  .nx-tete { margin-bottom:0; }
+  .nx-tete-l { display:flex; flex-wrap:wrap; align-items:center; gap:6px 12px; }
+  .nx-nom-b { display:flex; align-items:baseline; gap:8px; min-width:0; }
+  .nx-nom-b b { font-size:16px; }
+  .nx-alertes:empty { display:none; }
+  .nx-alertes { margin-top:6px; display:flex; flex-direction:column; gap:2px; font-size:var(--fs-s); }
+  .nx-alertes .danger { color:var(--danger); } .nx-alertes .warn { color:var(--warn); }
+  .nx-grille { padding:12px 0 !important; }
+  .nx-j { margin-top:8px; }
+  .nx-j-l { display:flex; justify-content:space-between; gap:8px; font-size:var(--fs-s); color:var(--texte-2); }
+  .nx-j-l b { color:var(--texte); font-variant-numeric:tabular-nums; }
+  .nx-barre { position:relative; height:8px; margin-top:3px; border-radius:4px; background:var(--creux); border:1px solid var(--ligne); overflow:hidden; }
+  .nx-barre i { position:absolute; left:0; top:0; bottom:0; width:0; background:var(--ok); border-radius:3px; transition:width .4s; }
+  .nx-barre i.warn { background:var(--warn); } .nx-barre i.danger { background:var(--danger); } .nx-barre i.info { background:var(--rx); }
+  .nx-barre s { position:absolute; top:0; bottom:0; width:1px; background:var(--texte-3); text-decoration:none; }
+  .nx-drap { display:flex; flex-wrap:wrap; gap:4px; margin-top:6px; }
+  .nx-drap span { font-size:var(--fs-xs); padding:1px 7px; border-radius:20px; border:1px solid var(--ligne); color:var(--texte-3); }
+  .nx-drap span.danger { color:var(--danger); border-color:var(--danger); } .nx-drap span.warn { color:var(--warn); border-color:var(--warn); }
+  .nx-role { display:grid; grid-template-columns:110px minmax(120px,170px) 1fr; gap:8px; align-items:center; margin-top:6px; font-size:var(--fs-s); }
+  .nx-role > span:first-child { color:var(--texte-2); }
+  .nx-regle { margin-top:8px; padding:6px 8px; border-left:3px solid var(--rx); background:var(--creux); border-radius:4px; }
+  #nx-conflits div { color:var(--warn); font-size:var(--fs-s); margin-top:4px; }
+  .nx-usb { display:flex; align-items:center; gap:8px; margin-top:4px; font-size:var(--fs-s); }
+  .nx-usb .pastille { font-size:var(--fs-xs); }
+  .nx-sv { display:grid; grid-template-columns:110px 1fr auto; gap:8px; align-items:center; margin-top:6px; font-size:var(--fs-s); }
+  .nx-sv > span { color:var(--texte-2); } .nx-sv > b { font-weight:600; min-width:0; overflow:hidden; text-overflow:ellipsis; }
+  .nx-code { margin:6px 0; padding:6px 8px; background:var(--creux); border:1px solid var(--ligne); border-radius:var(--r1); font-family:var(--mono); font-size:var(--fs-xs); white-space:pre-wrap; word-break:break-all; user-select:all; }
+  .nx-journal { margin:0; font-family:var(--mono); font-size:var(--fs-xs); white-space:pre-wrap; word-break:break-word; color:var(--texte-2); max-height:260px; overflow:auto; }
+  .pastille.ok { background:rgba(91,214,138,.15); color:var(--ok); } .pastille.warn { background:rgba(255,180,84,.15); color:var(--warn); }
+  .pastille.danger { background:rgba(229,72,77,.18); color:var(--danger); }
+  @media (max-width:760px) { .nx { padding:8px 8px 0; } .nx-role, .nx-sv { grid-template-columns:96px 1fr; } .nx-role > span:last-child, .nx-sv > button { grid-column:1 / -1; } }
   /* ---------------------------------------------------------------- help popovers, toasts, palette, help */
   .q { display:inline-grid; place-items:center; width:16px; height:16px; padding:0; margin:0 0 0 6px; border-radius:50%; border:1px solid var(--ligne-forte);
     background:transparent; color:var(--texte-2); font-size:10px; font-weight:800; line-height:1; letter-spacing:0; text-transform:none; vertical-align:1px; cursor:help; }
@@ -1936,14 +1975,14 @@ ${rail()}
       <div class="petit aide">La molette (USB ou de la souris sur les fréquences) accorde pendant l’émission comme en réception : sur un satellite linéaire elle déplace la position dans le transpondeur, montée et descente liées, le Doppler continue ; sans satellite suivi, elle accorde le cadran du poste (BLU terrestre).</div>
     </div></div>
     <div class="carte" id="nd-carte" hidden>
-      <div class="paire" style="margin:0;flex-wrap:nowrap;align-items:center"><b style="white-space:nowrap">SatMe-Node</b><button type="button" class="q" id="nd-q" aria-label="Le SatMe-Node">?</button>
+      <div class="paire" style="margin:0;flex-wrap:nowrap;align-items:center"><b style="white-space:nowrap;cursor:pointer" onclick="vue('noeud')" title="La page du SatMe-Node">SatMe-Node</b><button type="button" class="q" id="nd-q" aria-label="Le SatMe-Node">?</button>
         <span class="petit" id="nd-nom" style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span><span class="h-esp"></span>
         <span class="nd-etat" id="nd-etat" style="white-space:nowrap">—</span></div>
       <div class="petit" id="nd-roles" style="margin-top:4px"></div>
       <div class="petit" id="nd-sante" style="margin-top:2px"></div>
       <div id="nd-alertes" class="petit"></div>
       <div class="ligne"><label class="petit" title="Les émissions DATV et SSTV par l'émetteur du node (Pluto ou bladeRF) au lieu de celui de ce PC ; toutes les règles d'émission restent, et le node a les siennes"><input type="checkbox" id="nd-tx" onchange="ndRegle('tx=' + (this.checked ? 1 : 0))"> Émettre par le SatMe-Node</label>
-        <button style="margin-left:auto" onclick="ndOuvre()">Détails…</button></div>
+        <button style="margin-left:auto" onclick="vue('noeud')" title="Station › SatMe-Node : santé, rôles des cartes, services, version">Ouvrir la page</button></div>
       <div id="nd-aide" hidden>Le <b>SatMe-Node</b> (Raspberry Pi près de la parabole, <code>satme --noeud</code>) : sa réception DATV (MiniTiouner), son SDR prêté à ce PC (récepteur « SDR du SatMe-Node » de l'onglet SDR) et son émetteur. Sa santé se lit toutes les 3 s : température, bridage, mémoire, carte microSD, réseau, cartes USB, services. « Émettre par le SatMe-Node » : DATV et SSTV partent par son émetteur, après les mêmes règles qu'ici ; le node ajoute les siennes : « émission autorisée » (cochée seulement sur le node lui-même, décochée au départ), ses bandes, son plafond, et il coupe l'émission si ce PC se tait 1,5 s.</div>
     </div>
 
@@ -3175,6 +3214,112 @@ ${rail()}
   </div>
 </div>
 </div>
+<div class="vue" id="v-noeud" hidden>
+<div class="nx">
+  <div class="nx-sans" id="nx-sans" hidden>
+    <div class="carte">
+      <div class="t">SatMe-Node</div>
+      <p style="margin:0 0 8px">Un <b>SatMe-Node</b> est un Raspberry Pi posé près de l'antenne, qui fait tourner <code>satme --noeud</code> : ce PC le pilote par le réseau.</p>
+      <ul class="nx-liste">
+        <li><b>Réception DATV</b> : le MiniTiouner (ou un Pluto, un bladeRF) branché sur le Pi ;</li>
+        <li><b>SDR</b> : son bladeRF ou son Pluto prêté à ce PC (onglet SDR, « SDR du SatMe-Node ») ;</li>
+        <li><b>Émission</b> DATV et SSTV par sa carte, décochée au départ, autorisée seulement sur le node ;</li>
+        <li><b>Santé</b> : température, bridage, mémoire, microSD, réseau, cartes USB, services, journal.</li>
+      </ul>
+      <p class="petit" style="margin:8px 0">L'installer : <a id="nx-guide" href="https://github.com/f4ioz/SatMe/blob/main/docs/installer-satme-node.fr.md" target="_blank" rel="noopener">le guide d'installation ↗</a> (carte microSD, script d'installation, son adresse et son code à six chiffres).</p>
+      <div id="nx-absent" class="avert" hidden>Ce serveur ne pilote pas de SatMe-Node.</div>
+    </div>
+  </div>
+  <div class="carte nx-tete" id="nx-tete" hidden>
+    <div class="nx-tete-l">
+      <span class="nx-nom-b"><b id="nx-nom">SatMe-Node</b><span class="petit" id="nx-adr"></span></span>
+      <span class="pastille" id="nx-etat">—</span>
+      <span class="petit" id="nx-resume"></span>
+      <span class="h-esp"></span>
+      <a class="bouton" id="nx-lien" href="#" target="_blank" rel="noopener" title="La page du node lui-même (sur son Raspberry Pi)">Page du node ↗</a>
+      <button id="nx-b-sdr" onclick="nxSdr()" title="Le récepteur de l'onglet SDR devient le SDR du node (sa carte SDR choisie ci-dessous)">Utiliser comme récepteur SDR</button>
+      <button onclick="vue('datv')" title="L'onglet DATV : la réception par le node">Aller à la DATV</button>
+      <button id="nx-b-change" onclick="nxChange()" title="Associer un autre node, ou l'oublier">Changer…</button>
+    </div>
+    <div id="nx-alertes" class="nx-alertes"></div>
+  </div>
+  <div class="carte nx-assoc" id="nx-assoc" hidden>
+    <div class="t">Associer un SatMe-Node</div>
+    <div class="petit">Son adresse et le code à six chiffres qu'il a donnés à la fin de son installation (revoir le code sur le Pi : <code>journalctl -u satme-noeud | grep Code</code>).</div>
+    <div class="ligne"><input id="nx-adresse" placeholder="192.168.1.30 ou satme-node.local" aria-label="Adresse du node" style="max-width:240px">
+      <input id="nx-code" placeholder="Code" aria-label="Code du node" inputmode="numeric" style="max-width:100px">
+      <button class="primaire" onclick="nxAssocie()">Associer</button>
+      <button id="nx-oublie" onclick="nxOublie()" hidden title="La DATV revient au MiniTiouner de ce PC">Oublier ce node</button>
+      <span class="petit" id="nx-assoc-msg" aria-live="polite"></span></div>
+  </div>
+  <div class="grille3c nx-grille" id="nx-avec" hidden>
+    <div>
+      <div class="carte">
+        <div class="t">Santé <span class="petit" id="nx-age"></span></div>
+        <div class="nx-j"><div class="nx-j-l"><span>Température du processeur</span><b id="nx-temp">—</b></div><div class="nx-barre"><i id="nx-temp-b"></i><s style="left:75%"></s><s style="left:83.3%"></s></div></div>
+        <div class="nx-drap" id="nx-bridage"></div>
+        <div class="nx-j"><div class="nx-j-l"><span>Charge</span><b id="nx-charge">—</b></div><div class="nx-barre"><i id="nx-charge-b"></i></div><div class="petit" id="nx-charge-n"></div></div>
+        <div class="nx-j"><div class="nx-j-l"><span>Mémoire</span><b id="nx-mem">—</b></div><div class="nx-barre"><i id="nx-mem-b"></i></div></div>
+        <div class="nx-j"><div class="nx-j-l"><span>Carte microSD</span><b id="nx-sd">—</b></div><div class="nx-barre" id="nx-sd-barre"><i id="nx-sd-b"></i></div></div>
+        <div class="petit aide">Lu sur le node toutes les 3 s. Température : bridé vers 80 °C (traits à 75 et 80 °C) : un dissipateur, un ventilateur. Les drapeaux du Pi (<code>vcgencmd get_throttled</code>) : rouges maintenant, orange s'ils sont arrivés depuis le démarrage — une sous-alimentation vient d'un bloc trop faible (3 A pour un Pi 4, 5 A pour un Pi 5). Charge : la moyenne sur 1 min rapportée aux cœurs. microSD : moins de 500 Mo libres, le journal et les enregistrements manquent de place.</div>
+      </div>
+      <div class="carte">
+        <div class="t">Réseau et flux I/Q</div>
+        <div id="nx-if" class="petit"></div>
+        <div class="nx-j"><div class="nx-j-l"><span>Flux I/Q vers ce PC</span><b id="nx-flux">—</b></div><div class="nx-barre"><i id="nx-flux-b"></i></div><div class="petit" id="nx-flux-n"></div></div>
+        <div class="petit aide">Le flux du SDR du node : environ 34 Mbit/s à 1,058 MS/s, 17 à 529 kS/s, 8,5 à 265 kS/s (onglet SDR, « SDR du SatMe-Node » : son débit). La barre : le débit mesuré sur celui attendu. Les trames perdues se comptent : au-delà de 1 %, alléger le flux ou passer au câble.</div>
+      </div>
+    </div>
+    <div>
+      <div class="carte">
+        <div class="t">Rôles des cartes</div>
+        <div class="nx-role"><span>Réception DATV</span><select id="nx-r-datv" aria-label="Carte de la réception DATV" onchange="nxRole('datv', this.value)"></select><span class="petit" id="nx-r-datv-e"></span></div>
+        <div class="nx-role"><span>Récepteur SDR</span><select id="nx-r-sdr" aria-label="Carte prêtée comme SDR" onchange="nxRole('sdr', this.value)"></select><span class="petit" id="nx-r-sdr-e"></span></div>
+        <div class="nx-role"><span>Émetteur</span><select id="nx-r-tx" aria-label="Carte de l'émetteur" onchange="nxRole('emetteur', this.value)"></select><span class="petit" id="nx-r-tx-e"></span></div>
+        <div class="petit nx-regle">Une carte ne reçoit et n'émet jamais à la fois, et ne sert pas deux réceptions en même temps.</div>
+        <div id="nx-conflits"></div>
+        <div class="petit" id="nx-roles-msg" aria-live="polite"></div>
+        <div class="petit aide">Réception DATV : la carte avec laquelle le node reçoit au prochain démarrage (le même choix que « Récepteur » de l'onglet DATV). Récepteur SDR : la carte prêtée à ce PC (pas pendant que son flux tourne). Émetteur : changer de carte d'ici décoche « émission autorisée » sur le node ; il faut la recocher sur le node lui-même. Le node refuse le second usage tant que le premier tient la carte.</div>
+      </div>
+      <div class="carte">
+        <div class="t">Cartes USB vues</div>
+        <div id="nx-usb"></div>
+      </div>
+      <div class="carte">
+        <div class="t">Émission</div>
+        <div class="ligne" style="margin-top:0"><span class="pastille" id="nx-autorise">—</span><span class="petit" id="nx-plafond"></span></div>
+        <label class="petit" style="display:block;margin-top:6px" title="Les émissions DATV et SSTV par l'émetteur du node au lieu de celui de ce PC ; toutes les règles d'émission restent, et le node a les siennes"><input type="checkbox" id="nx-tx-pc" onchange="nxRegle('tx=' + (this.checked ? 1 : 0))"> Émettre par le SatMe-Node (DATV et SSTV)</label>
+        <div class="petit" style="margin-top:6px">« Émission autorisée » ne se coche que <b>sur le node lui-même</b> : sa page ouverte sur le Raspberry Pi, ou d'ici par un tunnel SSH :</div>
+        <pre class="nx-code" id="nx-tunnel"></pre>
+        <div class="petit">puis ouvrir <a id="nx-tunnel-lien" href="http://localhost:18090/" target="_blank" rel="noopener">http://localhost:18090/</a> (la page du node, vue comme sur le Pi).</div>
+      </div>
+    </div>
+    <div>
+      <div class="carte">
+        <div class="t">Services</div>
+        <div class="nx-sv"><span>Réception DATV</span><b id="nx-s-datv">—</b><button onclick="ndAction('datv-arrete', 'Arrêter la réception DATV du node ?', 'nx-sv-msg')">Arrêter</button></div>
+        <div class="nx-sv"><span>SDR prêté</span><b id="nx-s-sdr">—</b><button onclick="ndAction('sdr-arrete', 'Couper le flux SDR du node ? (ce PC le reprend seul s’il le reçoit)', 'nx-sv-msg')">Couper le flux</button></div>
+        <div class="nx-sv"><span>Émission</span><b id="nx-s-tx">—</b><button class="arret" onclick="ndAction('tx-arrete', '', 'nx-sv-msg')">■ Arrêter</button></div>
+        <div class="ligne"><button id="nx-relance" onclick="ndAction('relance', 'Relancer SatMe sur le node ? Son service systemd le redémarre en quelques secondes (le Raspberry Pi, lui, ne redémarre pas).', 'nx-sv-msg')">Relancer SatMe sur le node</button>
+          <span class="petit" id="nx-sv-msg" aria-live="polite"></span></div>
+      </div>
+      <div class="carte">
+        <div class="t">Version</div>
+        <div class="petit" id="nx-version"></div>
+        <details id="nx-maj" style="margin-top:6px"><summary class="petit" style="cursor:pointer">Mettre à jour le node</summary>
+          <div class="petit" style="margin-top:4px">Sur le Pi (réglages, code et clés gardés dans <code>/var/lib/satme-noeud</code>) :</div>
+          <pre class="nx-code" id="nx-maj-cmd"></pre>
+          <div class="petit">Le détail : <a href="https://github.com/f4ioz/SatMe/blob/main/docs/installer-satme-node.fr.md#mettre-à-jour" target="_blank" rel="noopener">guide d'installation, « Mettre à jour » ↗</a></div>
+        </details>
+      </div>
+      <div class="carte nx-journal-c">
+        <div class="t">Journal du node</div>
+        <pre class="nx-journal" id="nx-journal">—</pre>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
 <div class="vue" id="v-sdr" hidden>
 <div class="grille2" id="r-grille">
   <div>
@@ -4082,7 +4227,7 @@ ${rail()}
   <button id="sb-rec" class="sb-i" hidden onclick="hsOuvre()" title="Un enregistrement est en cours : « Son » en haut pour l'arrêter (ou la touche E)"><i></i><b id="sb-rec-t"></b></button>
   <button id="sb-bal" class="sb-i" hidden onclick="vue('sdr'); balOuvre(g('sp-b-bal'))" title="Le récepteur balaie (onglet SDR, Balayage) : cliquer pour le voir ou l'arrêter"><i></i><span>Balayage</span><b id="sb-bal-t"></b></button>
   <button id="sb-tel" class="sb-i" onclick="vue('reglages'); montreReglages('interfaces')" title="Le lien WebSocket (téléphone, logiciels de suivi) : Réglages › Interfaces"><i></i><span>Lien</span><b id="sb-tel-t">—</b></button>
-  <button id="sb-noeud" class="sb-i" hidden onclick="vue('station'); ndOuvre()" title="Le SatMe-Node : sa santé et ses alertes (Station › SatMe-Node)"><i></i><span>Node</span><b id="sb-noeud-t">—</b></button>
+  <button id="sb-noeud" class="sb-i" hidden onclick="vue('noeud')" title="Le SatMe-Node : sa santé et ses alertes (Station › SatMe-Node)"><i></i><span>Node</span><b id="sb-noeud-t">—</b></button>
   <button id="sb-rig" class="sb-i" hidden onclick="vue('reglages'); montreReglages('interfaces')" title="La fréquence donnée aux logiciels de carnet (rigctld) : Réglages › Interfaces"><i></i><span>Carnets</span><b id="sb-rig-t">—</b></button>
   <span class="h-esp"></span>
   <button id="sb-err" class="sb-i" onclick="montreErreurs(this)" title="Les erreurs relevées par la page et par SatMe-PC"><i></i><span>Erreurs</span><b id="sb-err-t">0</b></button>
@@ -5966,6 +6111,7 @@ function vue(n) {
   if (n === 'espace') { ticEspace(); setTimeout(ticEspace, 300); }
   if (n === 'carte') { CG.libre = false; cgTic(); setTimeout(dessineCg); }
   if (n === 'montage') mtOuvre();
+  if (n === 'noeud') { nxRend(); HX.t.noeud = 0; ticTete(); }
   if (window.MT) mtPopMaj(n);
 }
 document.querySelectorAll('#onglets button[data-v]').forEach(b => b.onclick = () => vue(b.dataset.v));
@@ -14553,12 +14699,186 @@ function ndDetail() {
   if (g('nd-detail').innerHTML !== h) g('nd-detail').innerHTML = h;
 }
 function ndOuvre() { txt('nd-msg', ''); ndDetail(); if (!g('nd-dlg').open) g('nd-dlg').showModal(); }
-async function ndAction(quoi, question) {
+async function ndAction(quoi, question, ou) {
   if (question && !confirm(question)) return;
-  txt('nd-msg', '…');
-  const j = await post('api/noeud/reglage?quoi=' + enc(quoi));
-  txt('nd-msg', j && j.ok !== false ? 'fait' : 'refusé : ' + (j ? j.erreur : 'pas de réponse'));
+  ou = ou || 'nd-msg';
+  txt(ou, '…');
+  let j = null;
+  try { j = await (await fetch('api/noeud/reglage?quoi=' + enc(quoi), { method: 'POST' })).json(); } catch (x) {}
+  txt(ou, j && j.ok !== false ? (j.message || 'fait') : 'refusé : ' + (j ? j.erreur : 'pas de réponse'));
   HX.t.noeud = 0; await ticTete();
+}
+
+// ------------------------------------------------------------------ the SatMe-Node's page (Station › SatMe-Node)
+const NX_CARTES = { minitiouner: 'MiniTiouner', pluto: 'ADALM-PLUTO', bladerf: 'bladeRF 2.0', aucun: 'aucune' };
+const NX_ROLES = { datv: ['minitiouner', 'pluto', 'bladerf'], sdr: ['aucun', 'bladerf', 'pluto'], tx: ['aucun', 'pluto', 'bladerf'] };
+const NX_DRAPEAUX = ['sous-alimentation', 'fréquence plafonnée', 'ralenti (bridé)', 'limite de température'];
+let nxChangeOuvert = false;
+/** The node's host and port from its address (« 192.168.0.49:8090 », « satme-node.local »). */
+function nxHote(a) {
+  const s = String(a || '').replace(/^https?:\/\//, '').replace(/\/+$/, '');
+  const m = s.match(/^(.*):(\d+)$/);
+  return m ? { h: m[1], p: +m[2] } : { h: s, p: 8090 };
+}
+/** One gauge: its bar's width (0..1) and level. */
+function nxBarre(id, f, niveau) {
+  const e = g(id); if (!e) return;
+  e.style.width = Math.round(Math.max(0, Math.min(1, f || 0)) * 100) + '%';
+  e.className = niveau || '';
+}
+function nxHtml(id, h) { const e = g(id); if (e.innerHTML !== h) e.innerHTML = h; }
+/** The boards seen on the node's USB, by name. */
+function nxVues(s) { return (s && s.usb ? s.usb : []).map(u => u.nom); }
+function nxVu(a, vus) {
+  const nom = { minitiouner: 'MiniTiouner', pluto: 'ADALM-PLUTO', bladerf: 'bladeRF 2.0' }[a];
+  return !nom || vus.includes(nom);
+}
+function nxOptions(sel, liste, choisi, vus, lu) {
+  const h = liste.map(a => '<option value="' + a + '"' + (a === choisi ? ' selected' : '') + '>' + NX_CARTES[a] +
+    (lu && a !== 'aucun' && !nxVu(a, vus) ? ' (pas vue)' : '') + '</option>').join('');
+  const e = g(sel);
+  if (document.activeElement !== e && e.dataset.h !== h) { e.innerHTML = h; e.dataset.h = h; }
+  if (document.activeElement !== e) e.value = choisi;
+}
+function nxEtat(o) { return !o ? '—' : (ND_ETATS[o.etat] || o.etat); }
+function nxRend() {
+  if (g('v-noeud').hidden || window.SATME_TELEPHONE) return;
+  const n = HX.noeud, absent = !n || n.absent, vu = !!(n && n.ok && n.associe);
+  g('nx-sans').hidden = vu; g('nx-absent').hidden = !absent;
+  g('nx-tete').hidden = !vu; g('nx-avec').hidden = !vu;
+  g('nx-assoc').hidden = absent || (vu && !nxChangeOuvert);
+  g('nx-oublie').hidden = !vu;
+  if (!vu) return;
+  const s = n.sante || {}, sy = s.systeme || {}, m = n.materiel || {}, sv = s.services || {}, al = n.alertes || [];
+  const hp = nxHote(n.adresse);
+  // The header: who, where, which version, since when, how it is.
+  txt('nx-nom', n.nom ? '« ' + n.nom + ' »' : 'SatMe-Node');
+  txt('nx-adr', n.adresse || '');
+  const dg = al.some(a => a.niveau === 'danger'), e = g('nx-etat');
+  txt('nx-etat', n.erreur ? 'injoignable' : !n.materiel ? 'lecture…' : al.length ? (dg ? '● alerte' : '● attention') : '● en forme');
+  e.className = 'pastille ' + (n.erreur || dg ? 'danger' : al.length || !n.materiel ? 'warn' : 'ok');
+  txt('nx-resume', [s.version ? 'version ' + s.version : '', sy.uptimeS != null ? 'allumé depuis ' + duree(sy.uptimeS * 1000) : '',
+    n.age != null && n.age > 6 ? 'lu il y a ' + n.age + ' s' : ''].filter(x => x).join(' · '));
+  g('nx-lien').href = 'http://' + hp.h + ':' + hp.p + '/';
+  nxHtml('nx-alertes', (n.erreur && !al.length ? [{ niveau: 'danger', texte: 'node injoignable : ' + n.erreur }] : al)
+    .map(a => '<div class="' + (a.niveau === 'danger' ? 'danger' : 'warn') + '">⚠ ' + esc(a.texte) + '</div>').join(''));
+  const bs = g('nx-b-sdr'); bs.disabled = !m.sdr || m.sdr === 'aucun';
+  bs.title = bs.disabled ? 'Choisir d’abord la carte « Récepteur SDR » du node (Rôles des cartes)' : 'Le récepteur de l’onglet SDR devient le SDR du node (' + (NX_CARTES[m.sdr] || m.sdr) + ')';
+  txt('nx-age', n.age != null ? '· lue il y a ' + n.age + ' s' : '');
+  // Health: temperature and throttling, load, memory, microSD.
+  const t = sy.temperature;
+  txt('nx-temp', t != null ? fr1(t) + ' °C' : 'non lue');
+  nxBarre('nx-temp-b', t != null ? (t - 30) / 60 : 0, t >= 80 ? 'danger' : t >= 75 ? 'warn' : '');
+  const br = sy.bridage, bd = sy.bridageDepuis || [];
+  nxHtml('nx-bridage', !br ? '<span title="vcgencmd absent : pas un Raspberry Pi, ou pas encore lu">bridage : non lu</span>' :
+    NX_DRAPEAUX.map(d => '<span class="' + (br.includes(d) ? 'danger' : bd.includes(d) ? 'warn' : '') + '" title="' +
+      (br.includes(d) ? 'maintenant' : bd.includes(d) ? 'arrivé depuis le démarrage' : 'jamais depuis le démarrage') + '">' + esc(d) + '</span>').join(''));
+  const ch = sy.charge, co = sy.coeurs || 1;
+  txt('nx-charge', ch && ch.length ? ch.map(fr1).join(' · ') : '—');
+  nxBarre('nx-charge-b', ch && ch.length ? ch[0] / co : 0, ch && ch[0] / co > 1.5 ? 'danger' : ch && ch[0] / co > 0.8 ? 'warn' : '');
+  txt('nx-charge-n', ch && ch.length ? '1, 5 et 15 min, ' + co + ' cœurs' + (sy.javaMemoireMo != null ? ' · SatMe ' + sy.javaMemoireMo + ' Mo' : '') : '');
+  const me = sy.memoire;
+  if (me && me.totalKo) {
+    const u = (me.totalKo - me.libreKo) / me.totalKo;
+    txt('nx-mem', Math.round(me.libreKo / 1024) + ' Mo libres sur ' + Math.round(me.totalKo / 1024));
+    nxBarre('nx-mem-b', u, u > 0.9 ? 'warn' : '');
+  } else { txt('nx-mem', '—'); nxBarre('nx-mem-b', 0); }
+  const sd = sy.disqueLibreMo, sdt = sy.disqueTotalMo, go = x => x >= 1024 ? fr1(x / 1024) + ' Go' : x + ' Mo';
+  txt('nx-sd', sd == null ? '—' : go(sd) + ' libres' + (sdt ? ' sur ' + go(sdt) : ''));
+  g('nx-sd-barre').hidden = !sdt;
+  if (sdt) nxBarre('nx-sd-b', 1 - sd / sdt, sd < 100 ? 'danger' : sd < 500 ? 'warn' : '');
+  // Network: its links, the I/Q stream against what its rate needs.
+  const rs = s.reseau || {}, ifs = rs.interfaces || [];
+  nxHtml('nx-if', ifs.length ? ifs.map(i => '<div>' + esc(i.nom) + ' · ' + esc((i.adresses || []).join(' ')) + (i.lien ? ' · lien <b>' + esc(i.lien) + '</b>' : '') +
+    (/^wl/.test(i.nom) ? ' · <span style="color:var(--warn)">Wi-Fi : flux allégé conseillé</span>' : '') + '</div>').join('') : 'réseau : —');
+  const besoin = [34000, 17000, 8500][n.etages || 0] || 34000, kb = rs.fluxIqKbps || 0, ss = sv.sdr;
+  txt('nx-flux', ss && ss.etat === 'marche' ? fr1(kb / 1000) + ' Mbit/s' : 'au repos');
+  nxBarre('nx-flux-b', ss && ss.etat === 'marche' ? kb / besoin : 0, ss && ss.pertesPct >= 1 ? 'warn' : 'info');
+  txt('nx-flux-n', ss ? 'attendu ' + fr1(besoin / 1000) + ' Mbit/s' + (ss.trames ? ' · ' + ss.trames + ' trames, ' + (ss.sautees || 0) + ' perdues (' + fr1(ss.pertesPct || 0) + ' %)' : '') +
+    (ss.client ? ' · vers ' + ss.client : '') : '');
+  // Roles: each a board the node can use; a board shared said.
+  const vus = nxVues(s), lu = !!s.usb;
+  nxOptions('nx-r-datv', NX_ROLES.datv, n.datvChoisi || m.datv || 'minitiouner', vus, lu);
+  nxOptions('nx-r-sdr', NX_ROLES.sdr, m.sdr || 'aucun', vus, lu);
+  nxOptions('nx-r-tx', NX_ROLES.tx, m.tx || 'aucun', vus, lu);
+  g('nx-r-tx').disabled = !!m.txEmet;
+  txt('nx-r-datv-e', (m.datvActif ? 'reçoit avec ' + (NX_CARTES[m.datv] || m.datv) : 'à l’arrêt') +
+    (m.datvActif && n.datvChoisi && n.datvChoisi !== m.datv ? ' · le choix vaudra au prochain démarrage' : ''));
+  txt('nx-r-sdr-e', m.sdrActif ? 'flux vers ' + (m.sdrClient || '?') + ' (couper le flux pour changer)' : m.sdr && m.sdr !== 'aucun' ? 'au repos' : '');
+  txt('nx-r-tx-e', m.txEmet ? 'ÉMET' : m.tx && m.tx !== 'aucun' ? (m.txAutorise ? 'autorisée' : 'non autorisée') : '');
+  nxHtml('nx-conflits', (n.conflits || []).map(c => '<div>⚠ ' + esc(c) + '</div>').join(''));
+  // USB: each board with its speed; a bladeRF on USB 2 said.
+  nxHtml('nx-usb', !lu ? '<div class="petit">non lues (node à mettre à jour)</div>' : !s.usb.length ? '<div class="petit">aucune carte connue branchée</div>' :
+    s.usb.map(u => { const lent = u.nom === 'bladeRF 2.0' && u.vitesse === 'USB 2';
+      return '<div class="nx-usb"><b>' + esc(u.nom) + '</b><span class="pastille ' + (lent ? 'warn' : u.vitesse === 'USB 3' ? 'ok' : '') + '">' + esc(u.vitesse || '?') + '</span>' +
+        (lent ? '<span style="color:var(--warn)">le brancher sur un port USB 3 (bleu)</span>' : '') + '<span class="petit">' + esc(u.id) + '</span></div>'; }).join('') +
+    ['datv', 'sdr', 'tx'].map(r => { const a = r === 'datv' ? (n.datvChoisi || m.datv) : m[r];
+      return a && a !== 'aucun' && !nxVu(a, vus) ? '<div class="petit" style="color:var(--warn);margin-top:4px">' + NX_CARTES[a] + ' choisie (' + { datv: 'DATV', sdr: 'SDR', tx: 'émetteur' }[r] + ') mais pas vue sur USB' + (a === 'pluto' ? ' (un Pluto peut être en réseau)' : '') + '</div>' : ''; }).join(''));
+  // Transmission: « émission autorisée » read only here.
+  const et = g('nx-autorise');
+  txt('nx-autorise', m.txEmet ? '● le node émet' : !m.tx || m.tx === 'aucun' ? 'aucun émetteur' : m.txAutorise ? 'émission autorisée' : 'émission non autorisée');
+  et.className = 'pastille ' + (m.txEmet ? 'danger' : m.txAutorise ? 'warn' : '');
+  txt('nx-plafond', m.txGainMax != null ? 'plafond du node ' + fr1(m.txGainMax) + ' dB' : '');
+  if (document.activeElement !== g('nx-tx-pc')) g('nx-tx-pc').checked = !!n.emissionParNoeud;
+  txt('nx-tunnel', 'ssh -L 18090:localhost:' + hp.p + ' <utilisateur>@' + hp.h);
+  // Services and their actions.
+  txt('nx-s-datv', sv.datv ? nxEtat(sv.datv) + (sv.datv.libelle && sv.datv.etat === 'marche' ? ' · ' + sv.datv.libelle : '') + (sv.datv.clients ? ' · ' + sv.datv.clients + ' client(s)' : '') : '—');
+  txt('nx-s-sdr', sv.sdr ? nxEtat(sv.sdr) + (sv.sdr.client ? ' · ' + sv.sdr.client : '') + (sv.sdr.erreur ? ' · ' + sv.sdr.erreur : '') : '—');
+  txt('nx-s-tx', sv.tx ? nxEtat(sv.tx) + (sv.tx.etat === 'marche' ? ' · ' + mhz(sv.tx.hz) + ' MHz' : '') + (sv.tx.raison && sv.tx.etat !== 'marche' ? ' · ' + sv.tx.raison : '') : '—');
+  const rl = g('nx-relance'); rl.disabled = s.systemd === false;
+  rl.title = s.systemd === false ? 'Lancé à la main sur le node (pas par son service systemd) : rien pour le relancer' : 'Son service systemd le redémarre ; le Raspberry Pi ne redémarre pas';
+  // Version: the node's against this SatMe-PC's.
+  const vn = n.versionNoeud, vp = n.versionPc || '?';
+  nxHtml('nx-version', 'Node : <b>' + esc(s.version || '?') + '</b> · ce SatMe-PC : <b>' + esc(vp) + '</b><br>' +
+    (vn === 'ancienne' ? '<span style="color:var(--warn)">Le node est plus ancien que ce PC : le mettre à jour.</span>' :
+     vn === 'recente' ? '<span style="color:var(--warn)">Le node est plus récent que ce PC : mettre à jour SatMe-PC.</span>' :
+     vn === 'egale' ? '<span style="color:var(--ok)">À jour.</span>' : 'Versions non comparables (l’une est faite à la main).'));
+  const md = g('nx-maj');
+  if (vn === 'ancienne' && !md.dataset.vu) { md.open = true; md.dataset.vu = '1'; }
+  txt('nx-maj-cmd', 'ssh <utilisateur>@' + hp.h + '\ncd ~\ncurl -LO https://github.com/f4ioz/SatMe/releases/latest/download/satme-pc.tar\ntar xf satme-pc.tar\nsudo ./satme/noeud/installe-noeud.sh');
+  // Its log, the last lines.
+  const j = (s.journal || []).slice(-40).join('\n') || '—', pj = g('nx-journal');
+  if (pj.textContent !== j) { const bas = pj.scrollTop + pj.clientHeight >= pj.scrollHeight - 4; pj.textContent = j; if (bas) pj.scrollTop = pj.scrollHeight; }
+}
+/** A setting through the node's route, its refusal said here (no alert). */
+async function nxRegle(q, ou) {
+  let j = null;
+  try { j = await (await fetch('api/noeud/reglage?' + q, { method: 'POST' })).json(); } catch (x) {}
+  txt(ou || 'nx-roles-msg', !j ? 'pas de réponse' : j.ok === false ? 'Refusé : ' + (j.erreur || '') : '');
+  HX.t.noeud = 0; HX.t.sdr = 0; await ticTete();
+  return j;
+}
+async function nxRole(role, a) {
+  const n = HX.noeud || {}, m = n.materiel || {};
+  if (role === 'emetteur' && a !== (m.tx || 'aucun') && m.txAutorise && a !== 'aucun' &&
+      !confirm('Changer l’émetteur du node pour ' + NX_CARTES[a] + ' ? « Émission autorisée » sera décochée : il faudra la recocher sur le node lui-même.')) { nxRend(); return; }
+  txt('nx-roles-msg', '…');
+  const j = await nxRegle(role + '=' + enc(a));
+  if (j && j.ok !== false) {
+    txt('nx-roles-msg', 'fait');
+    // The DATV tab's « Récepteur » is the same choice.
+    if (role === 'datv' && g('d-recepteur')) { g('d-recepteur').value = a; dRecepteurVu(); }
+  }
+}
+async function nxSdr() {
+  await post('api/sdr/reglage?recepteur=noeud');
+  if (g('r-recepteur')) g('r-recepteur').value = 'noeud';
+  HX.t.sdr = 0; toast('Récepteur SDR : SDR du SatMe-Node'); vue('sdr');
+}
+function nxChange() { nxChangeOuvert = !nxChangeOuvert; nxRend(); if (nxChangeOuvert) g('nx-adresse').focus(); }
+async function nxAssocie() {
+  if (!v('nx-adresse')) { txt('nx-assoc-msg', 'L’adresse du node, puis son code.'); return; }
+  txt('nx-assoc-msg', 'association au node…');
+  let j = null;
+  try { j = await (await fetch('api/datv/noeud?adresse=' + enc(v('nx-adresse')) + '&code=' + enc(v('nx-code')), { method: 'POST' })).json(); } catch (x) {}
+  if (j && j.ok !== false) { txt('nx-assoc-msg', 'associé'); g('nx-code').value = ''; nxChangeOuvert = false; }
+  else txt('nx-assoc-msg', 'Refusé : ' + (j && j.erreur ? j.erreur : 'pas de réponse'));
+  HX.t.noeud = 0; await ticTete();
+}
+async function nxOublie() {
+  if (!confirm('Oublier ce SatMe-Node ? La DATV revient au MiniTiouner de ce PC ; il faudra son code pour l’associer de nouveau.')) return;
+  try { await fetch('api/datv/noeud?adresse=&code=', { method: 'POST' }); } catch (x) {}
+  nxChangeOuvert = false; txt('nx-assoc-msg', ''); HX.t.noeud = 0; await ticTete();
 }
 
 /** One reading for the header, at most every [ms]. */
@@ -14573,7 +14893,7 @@ async function ticTete() {
     hxLit('mol', 'api/molette?ctx=' + enc(molVue()), 2000), hxLit('ann', 'api/annonces', 3000),
     hxLit('noeud', 'api/noeud', 3000), hxLit('ctl', 'api/emission/controle?client=' + TX_CLIENT, 2000),
     hxLit('ptx', 'api/poste/emission?client=' + TX_CLIENT, 1000)]);
-  ndRend();
+  ndRend(); nxRend();
   if (HX.ptx && !pxTenu) { PX = HX.ptx; pxRend(); }
   if (HX.ann && HX.ann.on !== undefined) annRattrape(HX.ann);
   rendTete();
@@ -14951,6 +15271,8 @@ function palSources() {
   A('Rétablir le son', 'haut-parleur SDR', () => { rRegle('son=1'); annonce('Haut-parleur SDR rétabli'); });
   if (!g('ec-boite').hidden) A('Écouter ici', 'le son de SatMe-PC dans ce navigateur', () => { g('ec-pop').hidden = false; });
   A('Ouvrir les réglages', 'configuration', () => vue('reglages'));
+  if (HX.noeud && HX.noeud.associe && HX.noeud.materiel && HX.noeud.materiel.sdr && HX.noeud.materiel.sdr !== 'aucun' && !window.SATME_TELEPHONE)
+    A('SatMe-Node : utiliser comme récepteur SDR', 'le récepteur de l’onglet SDR devient le SDR du node', nxSdr);
   if (!g('hs-boite').hidden && S) {
     A('Son des décodeurs…', 'touche S · source, décodeurs, enregistrement', hsOuvre);
     A(S.enregistrement ? '■ Arrêter l’enregistrement' : '● Enregistrer le son', 'touche E · WAV du passage', enregistre);

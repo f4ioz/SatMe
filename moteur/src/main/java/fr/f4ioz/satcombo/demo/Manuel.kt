@@ -46,6 +46,7 @@ object Manuel {
         "datv" to "datv--réception",
         "montage" to "montage--la-chaîne-de-la-station",
         "sdr" to "le-récepteur-sdr",
+        "noeud" to "satme-node--son-sdr-son-émetteur-sa-santé",
         "carte" to "avions-ads-b-et-carte",
         "avions" to "avions-ads-b-et-carte",
         "ais" to "navires-ais",

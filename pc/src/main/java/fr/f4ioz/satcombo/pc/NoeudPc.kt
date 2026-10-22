@@ -245,8 +245,8 @@ class NoeudPc(
         fun choix(champ: String, v: String) = "<select name=\"$champ\">" + SdrNoeudPc.APPAREILS.joinToString("") { a ->
             "<option value=\"$a\"" + (if (a == v) " selected" else "") + ">" + SdrNoeudPc.nomAppareil(a) + "</option>" } + "</select>"
         val reglages = if (!local) "<p style=\"color:#9AA7B4\">Son SDR et son émetteur se choisissent aussi depuis SatMe-PC (Station › SatMe-Node) ; " +
-            "« émission autorisée » et le plafond se changent <b>sur le node lui-même</b> : ouvrir cette page sur le Raspberry Pi, ou par un tunnel <code>ssh -L 8091:localhost:$portReel pi@node</code> " +
-            "puis <code>http://localhost:8091</code>.</p>"
+            "« émission autorisée » et le plafond se changent <b>sur le node lui-même</b> : ouvrir cette page sur le Raspberry Pi, ou par un tunnel <code>ssh -L 18090:localhost:$portReel pi@node</code> " +
+            "puis <code>http://localhost:18090</code>.</p>"
         else """<form id="f" style="background:#121A23;padding:12px 16px;border-radius:8px;max-width:560px">
 <p><b>Réglages du node</b> (page ouverte sur le node : modifiable)</p>
 <p>SDR prêté à SatMe-PC : ${choix("sdr", sdr?.appareil ?: SdrNoeudPc.AUCUN)}</p>
