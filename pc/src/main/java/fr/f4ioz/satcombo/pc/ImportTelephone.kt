@@ -80,7 +80,8 @@ object ImportTelephone {
         val ed = stockage.edit()
         var n = 0
         for (k in reglages.keys()) {
-            if (k in DU_TELEPHONE) continue
+            // This PC's transmit settings are never taken from elsewhere.
+            if (k in DU_TELEPHONE || k.startsWith("pc_tx_poste")) continue
             val e = reglages.optJSONObject(k) ?: continue
             when (e.optString("t")) {
                 "b" -> ed.putBoolean(k, e.optBoolean("v"))

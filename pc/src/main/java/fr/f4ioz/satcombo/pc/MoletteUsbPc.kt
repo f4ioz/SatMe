@@ -241,9 +241,10 @@ finally:
  * Linux only: the knob's keyboard read from /dev/input, captured for SatMe
  * when chosen so that the desktop stops changing the volume.
  *
- * Receive tuning only: the satellite VFO, the RX and TX shifts (the
- * frequencies the CAT loop writes), the SDR dongle, QO-100's narrow band.
- * Never PTT, never a transmission started.
+ * Tuning only: the satellite VFO, the RX and TX shifts (the frequencies
+ * the CAT loop writes), the rig's own dial when nothing drives it, the SDR
+ * dongle, QO-100's narrow band — the same while the rig transmits. Never
+ * PTT, never a transmission started.
  */
 class MoletteUsbPc(
     private val stockage: Stockage,
@@ -393,6 +394,22 @@ class MoletteUsbPc(
         // A held key repeats: only a turn may (a held press would cycle the step).
         if (valeur == 2 && g !is MoletteUsb.Geste.Bouge) return
         note(codeLinux, valeur, applique(g))
+    }
+
+    /**
+     * The page's wheel or drag on a frequency: [crans] steps of the knob's
+     * step, on what the knob tunes now ([poste]: the rig, whatever the « Auto »
+     * says — the wheel is on the rig's frequency). Works without the knob.
+     */
+    fun tourne(crans: Int, poste: Boolean = false): String {
+        if (crans == 0) return "ignorée"
+        val d = crans.coerceIn(-50, 50) * settings.molettePasHz
+        if (poste) return when (settings.moletteCible) {
+            "SHIFT_TX" -> { monde.shiftTx(d); "décalage TX " + signe(d) }
+            "SHIFT_RX" -> { monde.shiftRx(d); "décalage RX " + signe(d) }
+            else -> { monde.vfo(d); "VFO " + signe(d) }
+        }
+        return applique(MoletteUsb.Geste.Bouge(d))
     }
 
     private fun note(code: Int, valeur: Int, quoi: String) {

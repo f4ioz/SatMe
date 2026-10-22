@@ -25,7 +25,10 @@ import javax.sound.sampled.SourceDataLine
  * (≤ 0.7 %, unheard), linearly interpolated. Run dry, it plays silence until
  * the cushion is back; far behind (a stall then a burst), it skips to it.
  */
-class HautParleurPc(private val rate: Int, private val ouvre: () -> SourceDataLine? = { ligne(rate) }) {
+class HautParleurPc(private val rate: Int,
+                    /** The cushion held (s): 0.15 for listening; less for the microphone to the rig. */
+                    cibleS: Double = CIBLE_S,
+                    private val ouvre: () -> SourceDataLine? = { ligne(rate) }) {
 
     private val anneau = ShortArray(Integer.highestOneBit(rate * 4))
     private val masque = anneau.size - 1
@@ -33,7 +36,7 @@ class HautParleurPc(private val rate: Int, private val ouvre: () -> SourceDataLi
     private var lu = 0.0
     private var amorce = true
     private val bloc = rate / 100
-    private val cible = (rate * CIBLE_S).toLong()
+    private val cible = (rate * cibleS).toLong()
     @Volatile private var enMarche = true
     /** The level asked (1 as received): lowered while SatMe speaks; reached over about 30 ms, no click. */
     @Volatile var gain = 1f
@@ -95,9 +98,15 @@ class HautParleurPc(private val rate: Int, private val ouvre: () -> SourceDataLi
         const val CIBLE_S = 0.15
         const val MAX_S = 0.6
 
-        private fun ligne(rate: Int): SourceDataLine? {
+        private fun ligne(rate: Int): SourceDataLine? = ligne(rate, null)
+
+        /** A playback line at [rate] on the card [mixer] (Java's name; null: the default one), 100 ms of buffer. */
+        fun ligne(rate: Int, mixer: String?): SourceDataLine? {
             val f = AudioFormat(rate.toFloat(), 16, 1, true, false)
-            return (AudioSystem.getLine(DataLine.Info(SourceDataLine::class.java, f)) as SourceDataLine).also {
+            val di = DataLine.Info(SourceDataLine::class.java, f)
+            val l = if (mixer == null) AudioSystem.getLine(di)
+                else AudioSystem.getMixer(AudioSystem.getMixerInfo().firstOrNull { it.name == mixer } ?: return null).getLine(di)
+            return (l as SourceDataLine).also {
                 it.open(f, rate / 10 * 2)   // 100 ms
                 it.start()
             }

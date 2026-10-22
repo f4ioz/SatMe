@@ -91,6 +91,21 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
     /** The USB volume knob as a VFO, Linux (set before [demarre]). */
     @Volatile var molette: MoletteUsbPc? = null
 
+    /** The IC-9700 transmitting: PTT, microphone, power (set before [demarre]). */
+    @Volatile var emissionPoste: EmissionPostePc? = null
+
+    /** HTTPS for the remote page: its certificate (set before [demarre]); on only when chosen, on this PC. */
+    @Volatile var certificat: CertificatPc? = null
+    private var socketHttps: ServerSocket? = null
+    @Volatile var erreurHttps = ""; private set
+    var httpsActif: Boolean
+        get() = station.stockage.getBoolean("pc_https", false)
+        set(v) { station.stockage.edit().putBoolean("pc_https", v).apply() }
+    var httpsPort: Int
+        get() = station.stockage.getInt("pc_https_port", 8443).coerceIn(1, 65535)
+        set(v) { station.stockage.edit().putInt("pc_https_port", v.coerceIn(1, 65535)).apply() }
+    val portHttpsReel: Int get() = socketHttps?.takeIf { !it.isClosed }?.localPort ?: 0
+
     /** Spoken announcements (set before [demarre]); their sentences ride the live stream. */
     @Volatile var annonces: AnnoncesPc? = null
     /** « Traduction parlée » (off unless chosen). */
@@ -184,9 +199,20 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
     val controle = fr.f4ioz.satcombo.datv.ControleEmission().also { it.chienLocal = station.txChienLocal }
 
     private val ROUTES_TX = setOf("/api/datv/emission/demarre", "/api/datv/emission/vie", "/api/datv/emission/arrete",
-        "/api/sstv/emission/demarre", "/api/sstv/emission/vie", "/api/sstv/emission/arrete")
+        "/api/sstv/emission/demarre", "/api/sstv/emission/vie", "/api/sstv/emission/arrete",
+        "/api/poste/emission/demarre", "/api/poste/emission/vie", "/api/poste/emission/arrete")
 
-    private fun emetQuelqueChose() = emission?.etat?.emet == true || emissionSstv?.etat?.emet == true
+    private fun emetQuelqueChose() = emission?.etat?.emet == true || emissionSstv?.etat?.emet == true || emissionPoste?.poste?.etat?.emet == true
+
+    /** The rig's PTT routes: hold (demarre), still holding (vie), release (arrete). */
+    private fun actionPoste(chemin: String, cl: fr.f4ioz.satcombo.datv.ControleEmission.Client): JSONObject {
+        val p = emissionPoste ?: return JSONObject().put("ok", false).put("absent", true)
+        return when {
+            chemin.endsWith("/demarre") -> p.appuie(cl.id, cl.distant, cl.adresse)?.let { JSONObject().put("ok", false).put("erreur", it) } ?: p.json(cl.id)
+            chemin.endsWith("/vie") -> if (p.vie(cl.id)) p.json(cl.id) else JSONObject().put("ok", false).put("erreur", "PTT non tenu par ce client")
+            else -> { p.relache("relâché"); p.json(cl.id) }
+        }
+    }
 
     /** A transmission route through the controller's rules, then as before. */
     private fun controleTx(chemin: String, methode: String, q: Map<String, String>, cl: fr.f4ioz.satcombo.datv.ControleEmission.Client): JSONObject {
@@ -197,18 +223,20 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
             if (methode == "POST" && q["confirme"] == "1") controle.confirme(cl)
             return etat()
         }
-        val quoi = if (chemin.startsWith("/api/datv/")) "DATV" else "SSTV"
+        val poste = chemin.startsWith("/api/poste/")
+        val quoi = if (poste) "IC-9700" else if (chemin.startsWith("/api/datv/")) "DATV" else "SSTV"
+        fun faire() = if (poste) actionPoste(chemin, cl) else action(chemin, q)
         return when {
             chemin.endsWith("/demarre") -> {
                 controle.refus(cl, emetQuelqueChose())?.let { return JSONObject().put("ok", false).put("erreur", it).put("controle", controle.json(cl)) }
-                val r = runCatching { action(chemin, q) }.getOrElse { JSONObject().put("ok", false).put("erreur", it.message ?: "erreur") }
+                val r = runCatching { faire() }.getOrElse { JSONObject().put("ok", false).put("erreur", it.message ?: "erreur") }
                 if (r.optBoolean("ok", true)) controle.prend(cl, quoi)
                 r
             }
             // Only the controller's « still there » keeps the transmission.
-            chemin.endsWith("/vie") -> if (controle.vie(cl)) action(chemin, q) else JSONObject().put("ok", false).put("erreur", "un autre client pilote l'émission")
+            chemin.endsWith("/vie") -> if (controle.vie(cl)) faire() else JSONObject().put("ok", false).put("erreur", "un autre client pilote l'émission")
             // STOP: always, from anyone.
-            else -> action(chemin, q).also { if (!emetQuelqueChose()) controle.libere() }
+            else -> faire().also { if (!emetQuelqueChose()) controle.libere() }
         }
     }
 
@@ -218,7 +246,7 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
             while (socket?.isClosed != true) {
                 runCatching {
                     if (!emetQuelqueChose()) controle.libere()
-                    else controle.perdu()?.let { r -> emission?.arrete(r); emissionSstv?.arrete(r); controle.libere() }
+                    else controle.perdu()?.let { r -> emission?.arrete(r); emissionSstv?.arrete(r); emissionPoste?.relache(r); controle.libere() }
                 }
                 Thread.sleep(200)
             }
@@ -227,15 +255,64 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
         s.reuseAddress = true
         s.bind(if (reseau) InetSocketAddress(port) else InetSocketAddress(InetAddress.getLoopbackAddress(), port))
         socket = s
-        thread(isDaemon = true, name = "satme-web") {
+        ecoute(s, "satme-web")
+        relanceHttps()
+    }
+
+    private fun ecoute(s: ServerSocket, nom: String) {
+        thread(isDaemon = true, name = nom) {
             while (!s.isClosed) {
                 val c = runCatching { s.accept() }.getOrNull() ?: continue
-                thread(isDaemon = true, name = "satme-web-client") { runCatching { sert(c) }; runCatching { c.close() } }
+                thread(isDaemon = true, name = "$nom-client") { runCatching { sert(c) }; runCatching { c.close() } }
             }
         }
     }
 
-    fun arrete() { runCatching { socket?.close() } }
+    /**
+     * The HTTPS port opened, closed or moved as the settings say: the same
+     * page and routes, the same password, over TLS with this PC's
+     * self-signed certificate. Plain http stays as it was.
+     */
+    @Synchronized fun relanceHttps() {
+        runCatching { socketHttps?.close() }
+        socketHttps = null
+        erreurHttps = ""
+        val cert = certificat ?: return
+        if (!httpsActif || socket?.isClosed != false) return
+        try {
+            val ss = cert.contexte().serverSocketFactory.createServerSocket() as javax.net.ssl.SSLServerSocket
+            ss.reuseAddress = true
+            ss.bind(if (reseau) InetSocketAddress(httpsPort) else InetSocketAddress(InetAddress.getLoopbackAddress(), httpsPort))
+            socketHttps = ss
+            ecoute(ss, "satme-https")
+        } catch (e: Exception) {
+            erreurHttps = "port " + httpsPort + " : " + (e.message ?: e.javaClass.simpleName)
+        }
+    }
+
+    /** Réglages › Accès à distance › HTTPS: its state; [local] sees the settings it may change. */
+    private fun jsonHttps(local: Boolean, r: RequeteHttp.Requete): JSONObject {
+        val c = certificat ?: return JSONObject().put("ok", false).put("absent", true)
+        val o = JSONObject().put("ok", true).put("on", httpsActif).put("port", httpsPort).put("ecoute", portHttpsReel).put("reseau", reseau)
+            .put("erreur", erreurHttps).put("local", local).put("ici", r.entetes["host"].orEmpty())
+        if (httpsActif || c.fichier.exists()) runCatching { val x = c.certificat()
+            o.put("empreinte", CertificatPc.empreinte(x)).put("jusqua", x.notAfter.time)
+                .put("noms", JSONArray(runCatching { x.subjectAlternativeNames.map { it[1].toString() } }.getOrDefault(emptyList()))) }
+        return o
+    }
+
+    private fun reglageHttps(q: Map<String, String>): String? {
+        q["port"]?.let { t ->
+            val v = t.toIntOrNull() ?: return "port non reconnu"
+            if (v !in 1024..65535 || v == portReel) return "port 1024 à 65535, autre que celui de la page"
+            httpsPort = v
+        }
+        q["on"]?.let { httpsActif = it == "1" }
+        relanceHttps()
+        return null
+    }
+
+    fun arrete() { runCatching { socket?.close() }; runCatching { socketHttps?.close() } }
 
     /**
      * The page kept up to date as things change (server-sent events): the
@@ -627,6 +704,45 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 RequeteHttp.corps(c.getInputStream(), r, max)
             }
             envoie(sortie, rep.statut, rep.type, rep.corps, rep.entetes); return
+        }
+        // The IC-9700's microphone from the page: its own WebSocket, the PTT holder's frames only to the rig.
+        if (chemin == "/api/poste/micro/ws") {
+            val p = emissionPoste
+            val d = WebSocketPc.Demande(r.methode, r.chemin, r.entetes)
+            when {
+                p == null -> SonDistantPc.refusHttp(sortie, "404 Not Found", "absent")
+                !d.valide -> SonDistantPc.refusHttp(sortie, "400 Bad Request", "WebSocket attendu")
+                !SonDistantPc.origineAdmise(r.entetes["origin"], r.entetes["host"]) -> SonDistantPc.refusHttp(sortie, "403 Forbidden", "origine refusée")
+                else -> {
+                    sortie.write(WebSocketPc.reponse(d.cle!!)); sortie.flush()
+                    p.sertMicro(c, q["client"].orEmpty().take(40).ifBlank { "ip:" + c.inetAddress?.hostAddress })
+                }
+            }
+            return
+        }
+        // The IC-9700's TX panel: its state, its settings and power (POST), a TX capture to learn from (this PC only).
+        if (chemin == "/api/poste/emission" || chemin == "/api/poste/emission/reglage" || chemin == "/api/poste/emission/trace") {
+            val p = emissionPoste
+            val o = when {
+                p == null -> JSONObject().put("ok", false).put("absent", true)
+                chemin == "/api/poste/emission/trace" && r.methode == "POST" ->
+                    if (!local) JSONObject().put("ok", false).put("erreur", "seulement depuis le PC de la station")
+                    else RequeteHttp.corps(c.getInputStream(), r, IcomReseauPc.TRACE_MAX)?.let { p.apprendsTrace(it) }
+                        ?: JSONObject().put("ok", false).put("erreur", "fichier trop gros (50 Mo au plus) ou coupé")
+                r.methode == "POST" -> p.reglage(q, local).let { res -> if (res.optBoolean("ok")) p.json(q["client"]).put("local", local) else res }
+                else -> p.json(q["client"]).put("local", local)
+            }
+            envoie(sortie, "200 OK", "application/json; charset=utf-8", o.toString().toByteArray()); return
+        }
+        if (chemin == "/api/https" || chemin == "/api/https/reglage" || chemin == "/api/https/regenere") {
+            val o = when {
+                certificat == null -> JSONObject().put("ok", false).put("absent", true)
+                r.methode != "POST" -> jsonHttps(local, r)
+                !local -> JSONObject().put("ok", false).put("erreur", "seulement depuis le PC de la station")
+                chemin == "/api/https/regenere" -> { runCatching { certificat?.regenere() }; relanceHttps(); jsonHttps(local, r) }
+                else -> reglageHttps(q)?.let { JSONObject().put("ok", false).put("erreur", it) } ?: jsonHttps(local, r)
+            }
+            envoie(sortie, "200 OK", "application/json; charset=utf-8", o.toString().toByteArray()); return
         }
         // The transmissions: one controller at a time, its heartbeat, STOP from anyone ([ControleEmission]).
         if (chemin == "/api/emission/controle" || (r.methode == "POST" && chemin in ROUTES_TX)) {
@@ -1648,6 +1764,12 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 if (lien != null && lien.erreur.isNotEmpty()) return JSONObject().put("ok", false).put("erreur", lien.erreur)
             }
             "/api/molette" -> return (molette ?: return JSONObject().put("ok", false).put("erreur", "absent")).regle(q).put("ok", true)
+            // The page's wheel or drag on a frequency: the knob's steps, its settings.
+            "/api/molette/tourne" -> {
+                val m = molette ?: return JSONObject().put("ok", false).put("erreur", "absent")
+                m.contextePage(q["ctx"])
+                return JSONObject().put("ok", true).put("geste", m.tourne(q["n"]?.toIntOrNull() ?: 0, q["poste"] == "1"))
+            }
             "/api/annonces" -> return (annonces ?: return JSONObject().put("ok", false).put("erreur", "absent")).regle(q)
             "/api/annonces/essai" -> return (annonces ?: return JSONObject().put("ok", false).put("erreur", "absent")).essai()
             "/api/rigctld" -> {

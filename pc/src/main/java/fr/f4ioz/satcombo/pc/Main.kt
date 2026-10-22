@@ -356,8 +356,14 @@ fun main(args: Array<String>) {
     serveur.chatLarge = ChatLargePc(station.stockage, { station.settings.callsign }).also { it.demarre() }
     serveur.accordUdp = AccordUdpPc(station.stockage, reseau, { datv.reglage },
         { r -> large.veilleArrete("arrêtée : accord reçu par UDP"); datv.demarre(r) }, { datv.etat.actif }).also { it.relance() }
+    // The IC-9700 transmitting (PTT held by a page's button, its microphone, the power): nothing keyed until asked.
+    val emissionPoste = EmissionPostePc(station, { son.carteDuPoste() })
+    emissionPoste.demarre()
+    serveur.emissionPoste = emissionPoste
+    // HTTPS for the remote page (its microphone needs it): off unless chosen on this PC.
+    serveur.certificat = CertificatPc(dossier)
     // The station's frequency for logging programs (rigctld protocol): off unless chosen in Réglages › Interfaces.
-    val rigctld = RigctldPc(station, sdr, reseau) { emission.etat.emet || emissionSstv.etat.emet || iq.enCours }
+    val rigctld = RigctldPc(station, sdr, reseau) { emission.etat.emet || emissionSstv.etat.emet || iq.enCours || emissionPoste.poste.etat.emet }
     rigctld.demarreSiActif()
     serveur.rigctld = rigctld
     // The USB volume knob as a VFO (Linux): off unless chosen in Réglages › Interfaces; receive tuning only.
@@ -377,6 +383,7 @@ fun main(args: Array<String>) {
                 if (emission.etat.emet) put("DATV", emission.etat.frequenceKhz.takeIf { it > 0 }?.let { it * 1000L })
                 if (emissionSstv.etat.emet) put("SSTV", null)
                 if (iq.enCours) put("correction I Q", null)
+                if (emissionPoste.poste.etat.emet) put("IC-9700", null)
             })
     }, { station.settings.callsign }, gainSdr = { baisseSdr.regle("annonces", it) })
     annoncesRef = annonces
@@ -395,7 +402,8 @@ fun main(args: Array<String>) {
     autopilote.montage = serveur.montage
     autopilote.prendSource = { nom -> serveur.prendSource(son, nom) }
     autopilote.emissionEnCours = {
-        if (emission.etat.emet) "émission DATV" else if (emissionSstv.etat.emet) "émission SSTV" else if (iq.enCours) "correction I/Q" else null
+        if (emission.etat.emet) "émission DATV" else if (emissionSstv.etat.emet) "émission SSTV" else if (iq.enCours) "correction I/Q"
+        else if (emissionPoste.poste.etat.emet) "émission IC-9700" else null
     }
     autopilote.annonce = { t ->
         val r = annonces.reglages
@@ -408,6 +416,8 @@ fun main(args: Array<String>) {
     Thread({ runCatching { trafic.repriseAuDemarrage() } }, "satme-qo100-reprise").apply { isDaemon = true; start() }
     println("SatMe-PC " + versionPc())
     println("  page      : http://localhost:${serveur.portReel}/" + if (reseau) "  (ouverte au réseau)" else "")
+    if (serveur.portHttpsReel > 0) println("  https     : port ${serveur.portHttpsReel} (certificat de ce PC, empreinte dans Réglages › Accès à distance)")
+    else if (serveur.erreurHttps.isNotBlank()) println("  https     : " + serveur.erreurHttps)
     if (reseau) println(ligneAcces ?: if (acces.defini) "  accès à distance : mot de passe demandé aux autres machines"
         else "  accès à distance : aucun mot de passe, les autres machines n'ont rien (Réglages › Accès à distance)")
     println("  réglages  : ${dossier.absolutePath}")
@@ -418,6 +428,8 @@ fun main(args: Array<String>) {
         BureauPc.ouvre(url)
     }
     Runtime.getRuntime().addShutdownHook(Thread {
+        // The rig's PTT released first, while the CAT still reaches it.
+        runCatching { emissionPoste.arreteTout("SatMe-PC fermé") }
         // The transmitter first: its LO powered down before anything else.
         runCatching { iq.arrete() }
         runCatching { adsb.arrete() }
@@ -512,6 +524,8 @@ internal fun mondeMolette(station: StationPc, sdr: SdrPc) = object : MoletteUsbP
         return fr.f4ioz.satcombo.domain.MoletteUsb.Contexte(page, station.etat.value.catConnecte, sdr.etat.value.actif, q.auPoste, q.aLaCle)
     }
     override fun vfo(dHz: Long) {
+        // The rig on CAT and nothing driving it (terrestrial SSB, Doppler on hold, the satellite down): its own dial.
+        if (station.accordeDirect(dHz)) return
         // As on the phone: off a transponder there is no uplink to follow, the RX shift is the control.
         if (station.emetteurChoisi()?.isTransponder == true) station.deplaceRepos(dHz) else shiftRx(dHz)
     }

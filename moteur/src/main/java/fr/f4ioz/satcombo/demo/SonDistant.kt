@@ -22,8 +22,10 @@ import org.json.JSONObject
  * number (uint32), the server's clock in ms (float64) — then the samples.
  *
  * Text from the page (JSON): `config` (source, rate, codec), `ping` (answered
- * `pong` with the server's clock). Room is kept for a sound and a PTT going
- * up later (binary kind [AMONT_SON], `ptt`): refused now, the socket closed.
+ * `pong` with the server's clock). This socket stays receive only: a sound
+ * or a PTT going up on it is refused and the socket closed. The microphone
+ * goes up on a socket of its own (SatMe-PC's `/api/poste/micro/ws`), in
+ * frames of kind [AMONT_SON] ([trameAmont], [litAmont]).
  */
 object SonDistant {
 
@@ -117,6 +119,29 @@ object SonDistant {
             else -> return null
         }
         return Lue(codec, rate, seq, java.lang.Double.longBitsToDouble(m), pcm)
+    }
+
+    /** A microphone frame going up (kind [AMONT_SON]): the same head, PCM 16 bits. */
+    fun trameAmont(rate: Int, seq: Long, ms: Double, pcm: ShortArray, n: Int = pcm.size): ByteArray {
+        val b = ByteArray(ENTETE + 2 * n)
+        b[0] = AMONT_SON.toByte(); b[1] = PCM16.toByte()
+        b[2] = rate.toByte(); b[3] = (rate ushr 8).toByte()
+        for (i in 0 until 4) b[4 + i] = (seq ushr (8 * i)).toByte()
+        val m = java.lang.Double.doubleToLongBits(ms)
+        for (i in 0 until 8) b[8 + i] = (m ushr (8 * i)).toByte()
+        for (i in 0 until n) { val v = pcm[i].toInt(); b[ENTETE + 2 * i] = v.toByte(); b[ENTETE + 2 * i + 1] = (v shr 8).toByte() }
+        return b
+    }
+
+    /** A microphone frame read; null when it is not one (another kind, another codec, a rate out of 8–48 kHz, odd length). */
+    fun litAmont(b: ByteArray): Lue? {
+        if (b.size < ENTETE || (b[0].toInt() and 255) != AMONT_SON || b[1].toInt() != PCM16 || (b.size - ENTETE) % 2 != 0) return null
+        val rate = (b[2].toInt() and 255) or ((b[3].toInt() and 255) shl 8)
+        if (rate !in 8_000..48_000) return null
+        var seq = 0L; for (i in 3 downTo 0) seq = (seq shl 8) or (b[4 + i].toLong() and 255)
+        var m = 0L; for (i in 7 downTo 0) m = (m shl 8) or (b[8 + i].toLong() and 255)
+        val pcm = ShortArray((b.size - ENTETE) / 2) { (((b[ENTETE + 2 * it + 1].toInt()) shl 8) or (b[ENTETE + 2 * it].toInt() and 255)).toShort() }
+        return Lue(PCM16, rate, seq, java.lang.Double.longBitsToDouble(m), pcm)
     }
 
     /** G.711 µ-law: 14 bits of magnitude in 8 (sign, 3 bits of segment, 4 of step). */

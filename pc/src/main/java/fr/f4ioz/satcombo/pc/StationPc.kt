@@ -138,8 +138,17 @@ class StationPc(
 
     private val civ = CivController(ports)
     private val posteCiv = PosteCatCiv(civ)
+    /**
+     * « Émission par le réseau autorisée » (Réglages › Émission du poste): off
+     * by default, changed only from this PC (never from a remote page nor a
+     * phone backup). Off, the network link refuses PTT and asks no TX audio.
+     */
+    var txReseauAutorise: Boolean
+        get() = stockage.getBoolean(CLE_TX_RESEAU, false)
+        set(v) { stockage.edit().putBoolean(CLE_TX_RESEAU, v).apply() }
+
     /** The IC-9700 on the network (Réglages › Poste › Liaison « Réseau »): the CAT's CI-V and a sound source. */
-    val icomReseau = fr.f4ioz.satcombo.cat.icomreseau.PosteIcomReseau(settings)
+    val icomReseau = fr.f4ioz.satcombo.cat.icomreseau.PosteIcomReseau(settings, emissionAutorisee = { txReseauAutorise })
     /** The rigs driven as a pair, the phone's drivers: FT-817 / IC-705 (one each side), TS-2000, TH-D72. */
     private val paire = fr.f4ioz.satcombo.cat.Ft817Pair(ports)
     private val postePaire = fr.f4ioz.satcombo.cat.PosteCatPaire(paire)
@@ -1003,6 +1012,7 @@ class StationPc(
         portee.launch {
             fil.withLock {
                 deconnecteCatDedans()
+                catParReseau = false
                 val m = modeleDe(c.modele)
                 if (m !in SIMULES) settings.rigModel = m
                 val liste = ports.liste()
@@ -1020,6 +1030,7 @@ class StationPc(
                     civ.radioAddr = icomReseau.statut().adresseCiv.takeIf { it > 0 } ?: mi.adresse
                     civ.pacingMs = 20L
                     civ.attach(icomReseau.lienCiv())
+                    catParReseau = true
                     clePoste = ""
                     cheminsCat = emptyList()
                     change { copy(catModele = m, catConnecte = true, catSimule = false,
@@ -1032,7 +1043,7 @@ class StationPc(
                         civ.modele = ModeleIcom.IC9700
                         civ.radioAddr = ModeleIcom.IC9700.adresse
                         civ.pacingMs = 0L
-                        civ.attach(Ic9700Sim())
+                        civ.attach(Ic9700Sim().also { posteSimule = it })
                         change { copy(catModele = "IC9700", catConnecte = true, catSimule = true,
                             catStatut = "IC-9700 simulé : rien n'est ouvert") }
                     }
@@ -1110,7 +1121,11 @@ class StationPc(
 
     fun deconnecteCat() { portee.launch { fil.withLock { deconnecteCatDedans() } } }
 
-    private fun deconnecteCatDedans() {
+    /** Called before the CAT closes (a disconnection, another connection): the PTT released while the rig still hears. */
+    @Volatile var avantCoupureCat: (suspend () -> Unit)? = null
+
+    private suspend fun deconnecteCatDedans() {
+        if (_etat.value.catConnecte) avantCoupureCat?.let { f -> runCatching { kotlinx.coroutines.withTimeoutOrNull(1_500L) { f() } } }
         boucleCat?.cancel(); boucleCat = null
         civ.close()
         paire.close()
@@ -1118,17 +1133,83 @@ class StationPc(
         change { copy(catConnecte = false, catSimule = false, catStatut = "poste déconnecté") }
     }
 
-    /** The Doppler loop, ten times a second, as on the phone. */
+    /** The Doppler loop, ten times a second, as on the phone; between two rounds the knob's direct tuning and the RF power. */
     private fun lanceBoucleCat() {
         boucleCat?.cancel()
         boucleCat = portee.launch {
             while (_etat.value.catConnecte) {
                 runCatching { stationCat.tour() }
+                runCatching { tourPoste() }
                 runCatching { lisSmetre() }
                 delay(100)
             }
         }
     }
+
+    // ------------------------------------------------------- the rig's dial, its power, its PTT
+
+    /** The simulated IC-9700 when that is the rig (the tests read it back). */
+    @Volatile internal var posteSimule: Ic9700Sim? = null; private set
+
+    /** The knob's steps on the rig's own dial (terrestrial SSB, nothing else driving it). */
+    val accordDirect = fr.f4ioz.satcombo.station.AccordDirect()
+
+    /**
+     * Is the Doppler loop writing the rig now? The conditions of its round
+     * ([StationCat.tour]): connected, a transmitter, the satellite up (or
+     * « sous l'horizon »), not on hold (QO-100 holding the rig counts).
+     */
+    fun pilotageDoppler(): Boolean {
+        val e = _etat.value
+        if (!e.catConnecte || emetteurChoisi() == null || e.suivi == null) return false
+        if ((e.position?.elevationDeg ?: -1.0) < 0.0 && !catSousHorizon) return false
+        return !(e.maintienDoppler || qo100.etat.value.auPoste)
+    }
+
+    /** The knob on the rig's dial when the loop does not drive it: true when taken. */
+    fun accordeDirect(dHz: Long): Boolean {
+        if (!_etat.value.catConnecte || pilotageDoppler()) return false
+        accordDirect.ajoute(dHz)
+        return true
+    }
+
+    /** The RF power level to write (0..255) on the band that transmits, null: nothing to write. */
+    @Volatile var puissanceAEcrire: Int? = null
+    /** The level read last, and when (ms); null: not read. */
+    @Volatile var puissanceLue: Int? = null; private set
+    @Volatile var puissanceLueMs = 0L; private set
+    /** Read again soon (the page opened its panel, a level written). */
+    @Volatile var puissanceARelire = true
+
+    /** The CAT connected through the rig's network server (not its USB cable): set at connection. */
+    @Volatile var catParReseau = false; private set
+
+    /** The IC-9700 on CI-V (USB, network or simulated): what the TX panel drives. */
+    fun posteIc9700(): Boolean = _etat.value.let { it.catConnecte && it.catModele == "IC9700" }
+
+    private suspend fun tourPoste() {
+        val poste: PosteCat = if (_etat.value.catModele in PAIRES) postePaire else posteCiv
+        if (accordDirect.attente != 0L) {
+            if (pilotageDoppler()) accordDirect.applique({ null }, {})
+            else accordDirect.applique({ poste.lisDescente(false) }, { poste.ecrisDescente(it) })
+        }
+        if (!posteIc9700()) return
+        puissanceAEcrire?.let { v ->
+            puissanceAEcrire = null
+            if (civ.setRfPowerTx(v)) { puissanceLue = v; puissanceLueMs = horloge() }
+        }
+        if (puissanceARelire || horloge() - puissanceLueMs > 10_000L) {
+            puissanceARelire = false
+            civ.readRfPowerTx()?.let { puissanceLue = it }
+            puissanceLueMs = horloge()
+        }
+    }
+
+    /** Keys or unkeys the IC-9700 (CI-V 1C 00 01/00, behind the network link's guard); true when it took it. */
+    suspend fun pttPoste(on: Boolean): Boolean = if (_etat.value.catModele in ICOMS && _etat.value.catConnecte) civ.setTransmit(on) else false
+
+    /** The rig's TX state read back (CI-V 1C 00), null when it does not answer. */
+    suspend fun etatTxPoste(): Boolean? = if (_etat.value.catModele in ICOMS && _etat.value.catConnecte) civ.isTransmitting() else null
 
     /** The S-meter, read once a second for the journal (0..241, the Icom scale); when it was read. */
     @Volatile private var smetre: Int? = null
@@ -1167,6 +1248,8 @@ class StationPc(
         const val CLE_SATELLITE = "pc_satellite"
         const val CLE_FAVORIS = "pc_favoris"
         const val CLE_AGENDA_SUIVI = "pc_agenda_suivi"
+        /** « Émission par le réseau autorisée »: this PC's alone, never taken from a phone's backup. */
+        const val CLE_TX_RESEAU = "pc_tx_poste_reseau"
         fun modeleDe(id: String): String = id.takeIf { it in MODELES } ?: "IC9700"
     }
 }
