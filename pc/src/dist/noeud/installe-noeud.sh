@@ -79,6 +79,15 @@ if apt-get install -y -q bladerf; then
 else
   echo "  paquet bladerf indisponible : bladeRF non utilisable sur ce node"
 fi
+# The package's rule may only open the board to a desktop session (uaccess),
+# never to the service: the node is a machine of its own, every bladeRF
+# (Nuand 2cf0, and the first bladeRF 1d50:6066) open to it, as the MiniTiouner.
+cat > /etc/udev/rules.d/60-satme-bladerf.rules <<'RULES'
+SUBSYSTEMS=="usb", ATTRS{idVendor}=="2cf0", MODE:="0666"
+SUBSYSTEMS=="usb", ATTRS{idVendor}=="1d50", ATTRS{idProduct}=="6066", MODE:="0666"
+RULES
+udevadm control --reload-rules 2>/dev/null || true
+udevadm trigger 2>/dev/null || true
 # The Pluto needs nothing here: plugged in USB it is a network card (192.168.2.1).
 
 echo "==> SatMe dans /opt/satme"
