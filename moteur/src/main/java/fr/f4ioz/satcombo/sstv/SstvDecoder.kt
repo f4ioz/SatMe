@@ -100,6 +100,26 @@ class SstvDecoder(
     private var missedRun = 0
 
     /**
+     * Blocks in a row without a clean sync pulse (a steady 1200 Hz, not a dip
+     * of the noise), the pulses found where the line expects them meanwhile,
+     * and the last block that had a clean one (-1: none yet). An FM
+     * receiver's noise dips under the sync tone often enough to pass for
+     * pulses, found by the wide search: a picture started on a
+     * transmission's last lines ran 36 s on it and came out « complete »
+     * (22/10). A weak picture's pulses are seldom clean but stay in line.
+     */
+    private var sansNette = 0
+    private var enLigneSansNette = 0
+    private var derniereNette = -1
+    private var nettes = 0
+
+    /** The tuning correction before this frame's header: a frame that proves false gives it back. */
+    private var correctionDepart = 0f
+
+    /** Where the decoder last went idle (samples fed). */
+    private var idleDepuis = 0L
+
+    /**
      * Tuning error removed from every frequency, Hz. Measured on the VIS leader
      * (1900 Hz nominal): on SSB a mistuned receiver shifts every tone, and
      * beyond ±70 Hz the header used to be refused outright.
@@ -258,6 +278,7 @@ class SstvDecoder(
         correction = 0f
         entetePrevue = null
         pulseCount = 0; pulseScan = 0L; wasIdle = true
+        sansNette = 0; enLigneSansNette = 0; derniereNette = -1; nettes = 0; correctionDepart = 0f; idleDepuis = 0L
     }
 
     // A header read by the automatic tuning, beyond this decoder's reach: mode, end (samples fed), offset.
@@ -277,6 +298,7 @@ class SstvDecoder(
         if (fin < freqBase + (60 * spms).toLong() || fin > total) return
         if (state != State.IDLE) emitPartial()
         val m = forcedMode ?: m0
+        val avant = correction
         // The sound from the header's end on, corrected as the header says.
         val d = (ecartHz - correction).toFloat()
         correction = ecartHz.toFloat().coerceIn(-ENTETE_MAX_HZ, ENTETE_MAX_HZ)
@@ -284,6 +306,7 @@ class SstvDecoder(
         for (i in i0 until freqLen) { freq[i] -= d; freqN[i] -= d }
         nextTest = maxOf(nextTest, (fin / spms).toLong() + 60)
         startImage(m, fin)
+        correctionDepart = avant
     }
 
     /** Push audio in. Chunks of a few thousand samples are ideal. */
@@ -297,7 +320,10 @@ class SstvDecoder(
         entetePrevue?.let { (m, fin, e) -> if (fin <= total) { entetePrevue = null; lisEntete(m, fin, e) } }
         // Back to idle: pulses of the picture just decoded must not start it
         // again.
-        if (state == State.IDLE && !wasIdle) { pulseScan = total; pulseCount = 0 }
+        if (state == State.IDLE && !wasIdle) { pulseScan = total; pulseCount = 0; idleDepuis = total }
+        // Long idle: the tuning learnt on an old picture (or a false header) no longer holds — Doppler
+        // moved on, and an FM tone never moves at all. Left, it hid the next weak header (22/10).
+        if (state == State.IDLE && correction != 0f && total - idleDepuis > OUBLI_ACCORD_S * sampleRate) retune(-correction.toDouble(), freqBase)
         wasIdle = state == State.IDLE
         when (state) {
             State.IDLE -> if (!huntVis()) huntTrain()
@@ -528,8 +554,10 @@ class SstvDecoder(
             if (state != State.IDLE) emitPartial()
             // Do not re-read the header just consumed.
             nextTest = s + VIS_MS + 60
+            val avant = correction
             retune(off, ((s + VIS_MS - 60) * spms).toLong())
             startImage(m, ((s + VIS_MS) * spms).toLong())
+            correctionDepart = avant
             return true
         }
         return false
@@ -557,13 +585,13 @@ class SstvDecoder(
      * tenth of the error applied: a drift is slow, and on a noisy signal a
      * quarter made the colours shimmer from line to line.
      */
-    private fun followTuning(m: SstvMode, start: Long, end: Long) {
+    private fun followTuning(m: SstvMode, start: Long, end: Long): Boolean {
         val len = end - start
-        if (len < m.syncMs * 0.7 * spms) return
+        if (len < m.syncMs * 0.7 * spms) return false
         val a = start + len * 0.25; val b = end - len * 0.25
         var i0 = a.roundToLong(); val i1 = minOf(b.roundToLong(), freqBase + freqLen)
         if (i0 < freqBase) i0 = freqBase
-        if (i1 - i0 < 4) return
+        if (i1 - i0 < 4) return false
         var s = 0.0; var s2 = 0.0
         for (i in i0 until i1) {
             val f = freqN[(i - freqBase).toInt()].coerceIn(900f, 1500f).toDouble()
@@ -576,14 +604,17 @@ class SstvDecoder(
         mesureSync?.let { f -> runCatching { mesureLarge(i0, i1)?.let { (med, mad) ->
             val bruit = maxOf(mad, sqrt(maxOf(0.0, s2 / n - mean * mean)))
             f(med + correction - SstvTone.SYNC, if (abs(med - mean) > ACCORD_LECTURES_HZ) 999.0 else bruit) } } }
-        syncSpread = noiseSpread(i0, i1, mean).let { if (syncSpread < 0) it else syncSpread + (it - syncSpread) * 0.2 }
+        val etale = noiseSpread(i0, i1, mean)
+        syncSpread = if (syncSpread < 0) etale else syncSpread + (etale - syncSpread) * 0.2
+        val nette = etale < PULSE_NETTE_HZ && abs(mean - SstvTone.SYNC) < PULSE_NETTE_HZ
         // Only a clean pulse is a reference. Receiver noise sits mostly above
         // 1200 Hz and pulls a noisy reading up: followed, it shifted every
         // colour of a weak picture to "correct" an error that was not there.
-        if (s2 / n - mean * mean > NOISY_SYNC_HZ * NOISY_SYNC_HZ) return
+        if (s2 / n - mean * mean > NOISY_SYNC_HZ * NOISY_SYNC_HZ) return nette
         val err = mean - SstvTone.SYNC
-        if (abs(err) > 150.0) return
+        if (abs(err) > 150.0) return nette
         retune(err * 0.1, start)
+        return nette
     }
 
     /**
@@ -725,6 +756,8 @@ class SstvDecoder(
         blockIndex = 0
         lastSync = -1.0
         missedRun = 0
+        sansNette = 0; enLigneSansNette = 0; derniereNette = -1; nettes = 0
+        correctionDepart = correction
         heldY = null; heldC = null; heldRow = -1
         histLen = 0; histNext = 0
         residual = 0.0; pendingStep = Double.NaN
@@ -998,8 +1031,9 @@ class SstvDecoder(
                 if (wide) histLen = 0          // relocked: the old line is history
                 remember(blockIndex, hit.toDouble())
                 missedRun = 0
-                followTuning(m, hit, lastRunEnd)
-            } else if (blockIndex > 0) missedRun++
+                if (followTuning(m, hit, lastRunEnd)) { sansNette = 0; enLigneSansNette = 0; derniereNette = blockIndex; nettes++ }
+                else if (blockIndex > 0) { sansNette++; if (!wide) enLigneSansNette++ }
+            } else if (blockIndex > 0) { missedRun++; sansNette++ }
             // **The line, fitted on recent pulses.** One pulse, one correction
             // made every line dance on a noisy signal; a straight line through
             // the last dozen pulses averages their noise, and its slope is the
@@ -1023,7 +1057,15 @@ class SstvDecoder(
             // **Except on a forced start.** The operator chose to force (weak
             // signal, late start, sync fading) and gets no second chance on a
             // pass; a forced decode runs to the end, noise and all.
-            if (missedRun >= missLimit && !forcedAnchor) {
+            // Only noise for seconds: no clean pulse, hardly one in line.
+            val bruit = sansNette >= missLimit && enLigneSansNette * 4 < sansNette
+            if ((missedRun >= missLimit || bruit) && !forcedAnchor) {
+                // The picture ends at its last clean pulse, not after the noise.
+                if (bruit && missedRun < missLimit) {
+                    blockIndex = derniereNette + 1
+                    // Hardly a clean pulse: no picture at all, and its header's tuning was no tuning.
+                    if (nettes < NETTES_MIN) correction = correctionDepart
+                }
                 emitPartial()
                 state = State.IDLE
                 mode = null
@@ -1240,5 +1282,11 @@ class SstvDecoder(
         private const val WIDE_AFTER = 3
         /** Tolerated sync loss, ms, before abandoning the frame. */
         private const val ABORT_MS = 8000.0
+        /** A sync pulse is a clean one when its reading spreads less than this and sits this close to 1200 Hz (noise: 90 to 300 Hz of spread), Hz. */
+        private const val PULSE_NETTE_HZ = 100.0
+        /** Clean pulses a frame needs for its header's tuning to be kept. */
+        private const val NETTES_MIN = 8
+        /** Idle this long, the tuning correction is forgotten, s. */
+        private const val OUBLI_ACCORD_S = 60L
     }
 }

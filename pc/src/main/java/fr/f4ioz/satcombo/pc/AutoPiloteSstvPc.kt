@@ -403,14 +403,19 @@ class AutoPiloteSstvPc(
             return "rotor : connexion " + (if (e.rotorSim) "simulée" else "rotctld") + ", suit le satellite"
         }
 
+        // The pass's recording, also when the automatic pass recording had started it first and stopped it at LOS
+        // (the 13:08 pass on 22/10 kept no name for its recording).
+        @Volatile private var enregistrementDuPassage = ""
+
         override fun enregistre(c: Campagne): String? {
             val s = son ?: return "pas de carte son ici"
-            return s.demarreEnregistrement(auto = true)
+            return s.demarreEnregistrement(auto = true).also { if (it == null) enregistrementDuPassage = s.etat.value.enregistrement }
         }
 
         override fun arreteEnregistrement(): String {
             val s = son ?: return ""
-            val nom = s.etat.value.enregistrement
+            val nom = s.etat.value.enregistrement.ifBlank { enregistrementDuPassage }
+            enregistrementDuPassage = ""
             s.arreteEnregistrement(parLaMain = false)
             return nom
         }
