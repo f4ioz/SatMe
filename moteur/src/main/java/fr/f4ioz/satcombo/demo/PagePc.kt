@@ -372,7 +372,7 @@ object PagePc {
   }
   async function radio() {
     if (document.hidden) return;
-    [S, D, X.dtx, X.stx, X.iq] = await Promise.all([json('api/sdr'), json('api/datv'), json('api/datv/emission'), json('api/sstv/emission'), json('api/iq')]);
+    [S, D, X.dtx, X.stx, X.iq, X.ptx] = await Promise.all([json('api/sdr'), json('api/datv'), json('api/datv/emission'), json('api/sstv/emission'), json('api/iq'), json('api/poste/emission')]);
     sb('sb-sdr', S && !S.absent ? (S.actif ? (S.erreur ? 'warn' : 'ok') : (S.erreur ? 'danger' : '')) : '',
       S && !S.absent ? (S.actif ? (S.tuner || S.recepteur || 'réception') : (S.datvTient ? 'prêtée à la DATV' : 'arrêtée')) : '—');
     sb('sb-datv', D && D.actif ? (D.verrouille ? 'ok' : 'info') : '', D && D.ok !== false ? (D.actif ? D.libelle : 'arrêtée') : '—');
@@ -380,6 +380,7 @@ object PagePc {
     if (X.dtx && X.dtx.emet) tx.push('DATV');
     if (X.stx && X.stx.emet) tx.push('SSTV');
     if (X.iq && X.iq.actif) tx.push('calibration I/Q');
+    if (X.ptx && X.ptx.emet) tx.push('IC-9700');
     const h = g('h-tx'); if (h) { h.hidden = !tx.length; g('h-tx-q').textContent = tx.join(' · '); }
     document.body.classList.toggle('en-tx', tx.length > 0);
     const rx = (S && S.actif) || (D && D.actif) || (E && E.cat && E.cat.connecte);
@@ -387,7 +388,7 @@ object PagePc {
   }
   // The light: only stops (never starts anything).
   const htx = g('h-tx');
-  if (htx) htx.onclick = () => Promise.all(['api/datv/emission/arrete', 'api/sstv/emission/arrete', 'api/mire/stop', 'api/iq/arrete']
+  if (htx) htx.onclick = () => Promise.all(['api/datv/emission/arrete', 'api/sstv/emission/arrete', 'api/mire/stop', 'api/iq/arrete', 'api/poste/emission/arrete']
     .map(u => fetch(u, { method: 'POST' }).catch(() => null))).then(radio);
   heure(); setInterval(heure, 1000); etat(); setInterval(etat, 15000); radio(); setInterval(radio, 3000);
   // The tabs the server offers (the phone some of them): the others hidden, an empty workspace too.
@@ -1070,6 +1071,27 @@ ${STYLE_JETONS}
   .st-nav button.actif { border-color:var(--cyan); color:var(--cyan); background:rgba(63,224,200,.08); }
   .st-nav button[hidden] { display:none; }
   .st-pan > .carte:last-child { margin-bottom:0; }
+  /* The IC-9700's TX panel: PTT held, the microphone, the power. */
+  .ptx .t { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  .ptx-etat { font-size:var(--fs-xs); font-weight:700; padding:1px 8px; border-radius:10px; border:1px solid var(--ligne); color:var(--texte-2); }
+  .ptx-etat.ok { color:var(--ok); border-color:rgba(91,214,138,.4); }
+  .ptx-etat.tx { color:#fff; background:var(--tx); border-color:var(--tx); }
+  .ptx.emet { border-color:var(--tx); box-shadow:0 0 0 2px rgba(255,90,54,.35); }
+  .ptx:focus-visible { outline:2px solid var(--info); outline-offset:2px; }
+  .ptx-l { display:flex; gap:10px; align-items:stretch; margin-top:6px; }
+  .ptx-l2 { display:flex; gap:6px; align-items:center; margin-top:6px; flex-wrap:wrap; }
+  .ptx-l2 input[type=range] { flex:1; min-width:70px; }
+  .ptx-ptt { flex:none; width:84px; min-height:62px; font-size:18px; font-weight:800; letter-spacing:1px; border-radius:12px; border:2px solid var(--tx); color:var(--tx);
+    background:transparent; touch-action:none; user-select:none; -webkit-user-select:none; }
+  .ptx-ptt.on { background:var(--tx); color:#fff; }
+  .ptx-ptt:disabled { border-color:var(--ligne); color:var(--texte-3); }
+  .ptx-mic { flex:1; min-width:0; }
+  .ptx-vu { height:8px; border-radius:4px; background:var(--creux); overflow:hidden; margin-top:6px; }
+  .ptx-vu i { display:block; height:100%; width:0; background:var(--ok); }
+  .ptx-pre button { padding:2px 8px; font-size:var(--fs-xs); }
+  #ptx-info.avert, #ptx-mic-etat.avert { color:var(--warn); }
+  .f-molette { cursor:ew-resize; touch-action:none; }
+  .https-emp { font-family:var(--mono); font-size:var(--fs-xs); word-break:break-all; }
   /* Denser type for the cockpits. */
   :where(#v-qo100, #v-datv, #v-sstv) { font-size:13px; }
   :where(#v-qo100, #v-datv, #v-sstv) .carte { padding:9px 11px; margin-bottom:8px; border-radius:10px; }
@@ -1893,6 +1915,25 @@ ${rail()}
       </div>
     </div>
 
+    <div id="ptx-slot-st"><div class="carte ptx" id="ptx" hidden tabindex="0" aria-label="Émission IC-9700 : maintenir PTT, ou la barre d’espace le panneau sélectionné">
+      <div class="t">Émission IC-9700 <span class="ptx-etat" id="ptx-etat">—</span><span class="petit" id="ptx-qui"></span></div>
+      <div class="ptx-l">
+        <button type="button" class="ptx-ptt" id="ptx-ptt" title="Maintenir pour émettre (ou la barre d’espace, le panneau sélectionné) ; relâcher : réception">PTT</button>
+        <div class="ptx-mic">
+          <div class="ptx-l2" style="margin-top:0"><label class="petit"><input type="checkbox" id="ptx-mic-on" onchange="pxMicChange(this.checked)"> micro de ce navigateur</label>
+            <label class="petit" title="Le contrôle de gain du navigateur, en plus du compresseur léger de SatMe"><input type="checkbox" id="ptx-cag" onchange="pxCag(this.checked)"> CAG</label></div>
+          <div class="ptx-vu" title="Niveau du micro après le compresseur (crête)"><i id="ptx-vu"></i></div>
+          <div class="ptx-l2"><span class="petit">Niveau</span><input type="range" id="ptx-gain" min="0" max="200" value="100" title="Gain du micro (100 % : tel quel)" oninput="pxGainRegle(this.value)"><span class="petit" id="ptx-mic-db" style="min-width:52px">—</span></div>
+        </div>
+      </div>
+      <div class="ptx-l2"><span class="petit">Puissance</span><input type="range" id="ptx-p" min="1" max="100" value="10" title="Puissance RF du poste (% du réglage du poste ; les watts sont une estimation pour la bande)" oninput="txt('ptx-pv', this.value + ' %')" onchange="pxPuissance(this.value)"><b class="val" id="ptx-pv" style="font-size:14px;min-width:90px">—</b></div>
+      <div class="ptx-l2 ptx-pre" id="ptx-pre"><span class="petit">Préréglages</span><button type="button" data-pp="5">5 %</button><button type="button" data-pp="10">10 %</button><button type="button" data-pp="25">25 %</button><button type="button" data-pp="50">50 %</button><button type="button" data-pp="100">100 %</button></div>
+      <div class="petit" id="ptx-mic-etat"></div>
+      <div class="petit" id="ptx-info"></div>
+      <div class="petit aide">Le PTT de l’IC-9700 par CI-V (USB ou réseau), tenu tant que le bouton (ou la barre d’espace, le panneau sélectionné) reste enfoncé. Relâché tout seul : 2 s sans nouvelles de la page qui le tient (onglet caché, liaison perdue), la minuterie écoulée (Réglages › Émission), le poste qui ne répond plus, SatMe-PC fermé. Un seul client tient le PTT ; tout le monde peut l’arrêter (bandeau TX, Échap).</div>
+      <div class="petit aide">Le micro de ce navigateur part vers le poste seulement pendant le PTT : par sa carte son USB, ou par le réseau. Il faut une page sûre (ce PC, ou HTTPS depuis une autre machine : Réglages › Accès à distance). Sur le poste, la source de modulation doit être USB (ou LAN par le réseau) et le VOX coupé.</div>
+      <div class="petit aide">La molette (USB ou de la souris sur les fréquences) accorde pendant l’émission comme en réception : sur un satellite linéaire elle déplace la position dans le transpondeur, montée et descente liées, le Doppler continue ; sans satellite suivi, elle accorde le cadran du poste (BLU terrestre).</div>
+    </div></div>
     <div class="carte" id="nd-carte" hidden>
       <div class="paire" style="margin:0;flex-wrap:nowrap;align-items:center"><b style="white-space:nowrap">SatMe-Node</b><button type="button" class="q" id="nd-q" aria-label="Le SatMe-Node">?</button>
         <span class="petit" id="nd-nom" style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span><span class="h-esp"></span>
@@ -2910,6 +2951,7 @@ ${rail()}
       </div>
     </div>
     <div class="tq-cote">
+      <div id="ptx-slot-qo"></div>
       <div id="tq-carnet-slot"></div>
       <div class="st" data-st="tq">
         <div class="st-nav"><button data-p="tq-p-calage" title="Calage sur la balise médiane">${IconesPc.svg("tune", "st-ico")}<span>Calage</span></button><button data-p="tq-p-q" title="Qualité de la réception, stations entendues">${IconesPc.svg("graphic_eq", "st-ico")}<span>Qualité</span></button><button data-p="tq-p-balise" title="La télémesure de la balise médiane, décodée">${IconesPc.svg("settings_input_antenna", "st-ico")}<span>Balise</span></button><button data-p="tq-p-mem" title="Les fréquences mémorisées">${IconesPc.svg("save", "st-ico")}<span>Mémoires</span></button><button data-p="tq-p-poste" title="Le poste, la clé, le transpondeur, la chaîne de station">${IconesPc.svg("radio", "st-ico")}<span>Poste &amp; chaîne</span></button><button data-p="tq-p-ciel" title="Réglage initial : pointage et Soleil">${IconesPc.svg("explore", "st-ico")}<span>Pointage</span></button></div>
@@ -3798,6 +3840,17 @@ ${rail()}
       <div class="petit aide">Le mot de passe n’est gardé qu’haché (PBKDF2) dans acces-distant.properties, jamais dans la sauvegarde. Le changer ferme les autres sessions. Une émission lancée à distance demande les mêmes confirmations qu’ici.</div>
       <div class="petit aide">Sans HTTPS, le mot de passe et la page passent en clair sur le réseau local : à réserver à un réseau de confiance (ou à un tunnel chiffré).</div>
     </div>
+    <div class="carte" id="https-carte" hidden>
+      <div class="t">HTTPS</div>
+      <label class="petit" style="display:block"><input type="checkbox" id="https-on" onchange="httpsRegle('on=' + (this.checked ? 1 : 0))"> Page aussi en HTTPS (certificat de ce PC)</label>
+      <div class="ligne"><span class="petit" style="min-width:60px">Port</span><input id="https-port" type="number" min="1024" max="65535" style="max-width:100px">
+        <button onclick="httpsRegle('port=' + enc(v('https-port')))">Enregistrer</button><a class="bouton" id="https-lien" hidden target="_blank" rel="noopener">Ouvrir en HTTPS</a></div>
+      <div class="petit" id="https-etat"></div>
+      <div class="petit">Empreinte SHA-256 : <span class="https-emp" id="https-emp">—</span></div>
+      <div class="ligne"><button id="https-regen" onclick="httpsRegen()">Nouveau certificat</button><span class="petit" id="https-msg"></span></div>
+      <div class="petit aide">En HTTPS, la page devient « sûre » pour le navigateur d’une autre machine : le micro (émission IC-9700), l’écran allumé et l’installation y marchent. Le certificat est fait par ce PC au premier usage (environ un an, refait seul avant la fin) : le navigateur prévient une fois ; comparer alors l’empreinte affichée par le navigateur avec celle-ci avant d’accepter. La page en http reste comme avant.</div>
+      <div class="petit aide">Pare-feu : ouvrir le port choisi, dans un terminal à part, par exemple <code>sudo ufw allow 8443/tcp</code>. Le réglage ne se change que sur le PC de la station.</div>
+    </div>
     <div class="carte" id="md-carte">
       <div class="t">Mode distant</div>
       <label class="petit" style="display:block"><input type="checkbox" id="md-on" onchange="mdRegle(this.checked)"> Mode distant dans ce navigateur : le son d’abord, l’affichage allégé</label>
@@ -3812,7 +3865,7 @@ ${rail()}
         <li>animations coupées, images des galeries chargées à l’affichage.</li></ul></div>
       <div class="petit aide">Proposé quand la page s’ouvre depuis une autre machine. La latence affichée sous « Écouter ici » additionne le tampon, la moitié de l’aller-retour mesuré, la trame et la sortie de la carte son.</div>
       <div class="petit aide">Sur une page en http depuis une autre machine, le navigateur refuse l’AudioWorklet : le lecteur prend alors un ScriptProcessor (même tampon, environ 20 ms de plus). Sur ce PC ou en HTTPS, l’AudioWorklet. Pas d’Opus : il faudrait un codeur natif sur le PC ; µ-law divise le débit par deux (8 kHz : 64 kbit/s).</div>
-      <div class="petit aide">Réception seule : la voie est prête pour un micro et un PTT plus tard, mais SatMe-PC refuse aujourd’hui tout son montant et toute commande d’émission par elle.</div>
+      <div class="petit aide">Cette voie reste en réception seule : le micro et le PTT de l’IC-9700 ont la leur (panneau « Émission IC-9700 » de Suivi et du cockpit QO-100), et le micro du navigateur demande une page sûre (ce PC, ou HTTPS : carte ci-dessus).</div>
     </div>
     <div class="carte" id="ap-carte">
       <div class="t">Sur cet appareil</div>
@@ -3969,6 +4022,22 @@ ${rail()}
       <div class="ligne"><span class="petit">Gain d'émission maximal (dB)</span><input id="px-gainmax" type="number" step="1" min="-89" max="0" style="max-width:80px">
         <button onclick="post('api/datv/emission/reglage?gainMax=' + enc(v('px-gainmax'))).then(chargePx)">Enregistrer</button></div>
       <div class="petit aide">Jamais dépassé, quoi qu'on demande dans l'onglet DATV (0 dB = la pleine puissance du Pluto, environ +7 dBm).</div>
+    </div>
+    <div class="carte" id="ptxr-carte" hidden>
+      <div class="t">Émission du poste (IC-9700)</div>
+      <label class="petit" style="display:block"><input type="checkbox" id="ptxr-reseau" onchange="pxRegle('reseau=' + (this.checked ? 1 : 0))"> Émission par le réseau autorisée</label>
+      <div class="petit" id="ptxr-reseau-etat"></div>
+      <div class="ligne"><span class="petit" style="min-width:150px">Minuterie d’émission</span><select id="ptxr-tot" style="flex:none" onchange="pxRegle('tot=' + this.value)">
+        <option value="1">1 min</option><option value="2">2 min</option><option value="3">3 min</option><option value="5">5 min</option><option value="10">10 min</option></select></div>
+      <div class="ligne"><span class="petit" style="min-width:150px">Puissance au plus</span><input id="ptxr-plafond" type="number" min="1" max="100" style="max-width:80px"><span class="petit">%</span>
+        <button onclick="pxRegle('plafond=' + enc(v('ptxr-plafond')))">Enregistrer</button></div>
+      <div class="ligne"><span class="petit" style="min-width:150px">Carte son du poste</span><select id="ptxr-carte-son" onchange="pxRegle('carte=' + enc(this.value))"></select></div>
+      <div class="ligne" id="ptxr-trace-l"><span class="petit" style="min-width:150px">Son par le réseau</span><span class="petit" id="ptxr-format"></span>
+        <button onclick="g('ptxr-trace').click()">Vérifier sur une capture (.pcap)</button><input type="file" id="ptxr-trace" accept=".pcap,.pcapng,.cap" hidden onchange="pxTrace(this)"></div>
+      <div class="petit" id="ptxr-msg"></div>
+      <div class="petit aide">« Émission par le réseau autorisée » : décochée au départ, elle ne se coche que sur le PC de la station (jamais depuis une autre machine ni par une sauvegarde du téléphone). Décochée, la liaison réseau refuse le PTT et ne demande pas de son d’émission. Cochée, seul le PTT passe (CI-V 1C 00) : boîte d’accord, CW et mémoires vocales restent refusées. Le son d’émission se demande à la connexion : reconnecter le poste après l’avoir cochée.</div>
+      <div class="petit aide">La minuterie relâche le PTT au bout du temps choisi, quoi que dise la page. La puissance au plus n’est jamais dépassée (curseur et préréglages) ; sous ce plafond, le PTT attend que le poste confirme une puissance en dessous. Régler aussi la minuterie du poste lui-même (son menu) : c’est la dernière garde si le PC s’arrête net.</div>
+      <div class="petit aide">Le son d’émission par le réseau suit le format décrit publiquement pour la réception (paquets de 20 ms, 16 bits) : il n’a pas encore été vérifié sur un poste. Pour le vérifier : capturer (Wireshark) le logiciel d’Icom qui émet quelques secondes dans une charge fictive, puis donner la capture ici ; SatMe la lit, compare et retient ce qu’il y trouve. Rien de la capture n’est gardé.</div>
     </div>
     <div class="carte" id="cl-carte" hidden>
       <div class="t">Liaison pendant l'émission</div>
@@ -4708,8 +4777,8 @@ const CATS_REG = [
   { id: 'phonie', nom: 'Phonie → texte', ico: 'mic', desc: 'La voix entendue écrite : moteur, modèle, installation', cartes: ['Phonie → texte'] },
   { id: 'telephone', nom: 'Téléphone', ico: 'smartphone', desc: 'SatMe sur le téléphone : réglages et contacts', cartes: ['Téléphone'] },
   { id: 'accord', nom: 'Accord fin', ico: 'tune', desc: 'Loupe, vernier, calage sur la voix (clé SDR)', cartes: ['Accord fin'] },
-  { id: 'emission', nom: 'Émission', ico: 'cloud_upload', desc: 'Coupure si la page se tait, correction I/Q des émetteurs', cartes: ['Liaison pendant', 'Correction I/Q'] },
-  { id: 'acces', nom: 'Accès à distance', ico: 'lock', desc: 'Mot de passe des autres machines, mode distant, application, écran allumé', cartes: ['Accès à distance', 'Mode distant', 'Sur cet appareil'] },
+  { id: 'emission', nom: 'Émission', ico: 'cloud_upload', desc: 'IC-9700 (PTT, minuterie, puissance), coupure si la page se tait, correction I/Q des émetteurs', cartes: ['Émission du poste', 'Liaison pendant', 'Correction I/Q'] },
+  { id: 'acces', nom: 'Accès à distance', ico: 'lock', desc: 'Mot de passe des autres machines, HTTPS, mode distant, application, écran allumé', cartes: ['Accès à distance', 'HTTPS', 'Mode distant', 'Sur cet appareil'] },
   { id: 'sauvegarde', nom: 'Sauvegarde', ico: 'save', desc: 'Toute la station dans un fichier, et la restaurer', cartes: ['Sauvegarde'] },
 ];
 // The backup: its size, the link, a backup received waiting for the next start.
@@ -4764,8 +4833,8 @@ function montreReglages(id) {
   catReg = id; try { localStorage.setItem('reglages', id); } catch (x) {}
   document.querySelectorAll('#reg-corps .reg-sec').forEach(s => s.hidden = s.dataset.cat !== id);
   document.querySelectorAll('#reg-nav button').forEach(b => b.classList.toggle('actif', b.dataset.cat === id));
-  if (id === 'emission') chargeIq();
-  if (id === 'acces') { majAcces(); eveilMaj(); apMaj(); }
+  if (id === 'emission') { chargeIq(); pxLit(); pxCartes(); }
+  if (id === 'acces') { majAcces(); eveilMaj(); apMaj(); majHttps(); }
 }
 // Réglages › Accès à distance: the password other machines are asked, set from this PC or a session.
 var AD = null;
@@ -5223,7 +5292,9 @@ function dessine() {
   if (document.activeElement !== g('emetteur')) g('emetteur').value = String(E.emetteur);
   const t = E.emetteurs[E.emetteur];
   g('repos-ligne').style.display = t && t.lineaire ? '' : 'none';
-  txt('dl', mhz(E.ciel.dl)); txt('ul', mhz(E.ciel.ul));
+  // No satellite's frequencies: the rig's dial as the CAT reads it (terrestrial SSB, the wheel tunes it).
+  const cadran = E.ciel.dl == null && E.cat && E.cat.connecte && E.cat.dl ? E.cat.dl : null;
+  txt('dl', cadran != null ? (cadran / 1e6).toFixed(5) : mhz(E.ciel.dl)); txt('ul', mhz(E.ciel.ul));
   const rs = E.reglageSat;
   if (rs) {
     txt('r-calib', hz(rs.calib)); txt('r-tx', hz(rs.tx));
@@ -5825,6 +5896,7 @@ g('emetteur').onchange = () => post('api/emetteur?i=' + g('emetteur').value);
 function vue(n) {
   setTimeout(majFlux, 0);
   tqRange(n);
+  pxPlace(n);
   const ns = nsOff(n);
   document.querySelectorAll('.vue').forEach(x => x.hidden = x.id !== (ns ? 'v-nonsat' : 'v-' + n));
   document.querySelectorAll('#onglets button').forEach(b => b.classList.toggle('actif', b.dataset.v === n));
@@ -14061,6 +14133,310 @@ async function txPeutDemarrer() {
   return true;
 }
 
+// ------------------------------------------------------------------ the IC-9700 transmitting (api/poste/emission): the PTT held, this browser's microphone, the power
+var PX = null, pxTenu = false, pxVieW = null, pxPuisT = null;
+var pxMic = null, pxWs = null, pxPic = 0, pxSeq = 0, pxGainN = null;
+function pxCle(k, d) { try { const x = localStorage.getItem('ptx-' + k); return x === null ? d : x; } catch (e) { return d; } }
+function pxGarde(k, x) { try { localStorage.setItem('ptx-' + k, x); } catch (e) {} }
+async function pxLit() {
+  if (window.SATME_TELEPHONE) return;
+  try { const r = await fetch('api/poste/emission?client=' + TX_CLIENT); PX = r.ok ? await r.json() : null; } catch (x) { PX = null; }
+  pxRend();
+}
+/** The panel where the operator works: the QO-100 cockpit while it is shown, else the Suivi tab. */
+function pxPlace(n) {
+  const p = g('ptx'), slot = g(n === 'qo100' ? 'ptx-slot-qo' : 'ptx-slot-st');
+  if (p && slot && p.parentElement !== slot) slot.appendChild(p);
+}
+function pxRend() {
+  const j = PX, p = g('ptx');
+  if (!p) return;
+  pxReglagesRend();
+  const vu = !!(j && j.ok && !j.absent && (j.poste || j.emet)) && !window.SATME_TELEPHONE;
+  p.hidden = !vu;
+  if (!vu) { if (pxTenu) pxRelache(); return; }
+  const moi = !!(j.emet && j.moi);
+  p.classList.toggle('emet', !!j.emet);
+  const e = g('ptx-etat');
+  e.textContent = j.emet ? '● TX' + (j.restant != null ? ' ' + Math.floor(j.restant / 60) + ':' + String(j.restant % 60).padStart(2, '0') : '') : j.pret ? 'prêt' : 'indisponible';
+  e.className = 'ptx-etat' + (j.emet ? ' tx' : j.pret ? ' ok' : '');
+  e.title = j.emet ? 'En émission ; temps restant avant la minuterie (' + j.tot + ' min)' : j.pret ? 'Prêt : maintenir PTT pour émettre' : j.pourquoi;
+  txt('ptx-qui', j.emet ? (moi ? 'par cette page' : 'par ' + j.client) : (j.liaison === 'reseau' ? 'par le réseau' : 'par USB') + (j.simule ? ' · simulé' : ''));
+  const b = g('ptx-ptt');
+  b.disabled = !j.pret && !moi && !pxTenu;
+  b.classList.toggle('on', moi || pxTenu);
+  if (document.activeElement !== g('ptx-p') && !pxPuisT && j.pct != null) g('ptx-p').value = j.pct;
+  txt('ptx-pv', j.pct != null ? j.pct + ' %' + (j.watts != null ? ' ≈ ' + fr1(j.watts) + ' W' : '') : '—');
+  g('ptx-pv').title = j.maxWatts != null ? 'Estimation : ' + j.maxWatts + ' W à 100 % sur cette bande' : 'Bande inconnue : pas d’estimation en watts';
+  g('ptx-pre').querySelectorAll('button').forEach(x => { x.disabled = +x.dataset.pp > j.plafond; x.title = x.disabled ? 'Au-dessus du plafond (' + j.plafond + ' %, Réglages › Émission)' : ''; });
+  const l = [];
+  if (!j.pret && !j.emet) l.push(j.pourquoi);
+  if (j.erreur) l.push(j.erreur);
+  else if (!j.emet && j.raison && j.raison !== 'relâché') l.push('dernière émission : ' + j.raison);
+  if (j.emet && j.sortieErreur) l.push(j.sortieErreur);
+  if (j.emet && j.posteEmet === false) l.push('le poste ne se dit pas en émission');
+  if (j.plafond < 100) l.push('plafond ' + j.plafond + ' %');
+  txt('ptx-info', l.filter(x => x).join(' · '));
+  g('ptx-info').classList.toggle('avert', !!(j.erreur || (j.emet && (j.sortieErreur || j.posteEmet === false)) || (!j.pret && !j.emet)));
+}
+async function pxAppuie() {
+  if (pxTenu || !PX || g('ptx-ptt').disabled) return;
+  pxTenu = true; g('ptx-ptt').classList.add('on');
+  // From another machine: the session's confirmation first (asked once); then press again.
+  let c = null;
+  try { const r = await fetch('api/emission/controle?client=' + TX_CLIENT); if (r.ok) c = await r.json(); } catch (x) {}
+  if (c && c.vous && c.vous.distant && !c.vous.confirme) {
+    pxTenu = false; g('ptx-ptt').classList.remove('on');
+    if (await txPeutDemarrer()) txt('ptx-info', 'Émission depuis cet appareil confirmée : maintenir PTT de nouveau.');
+    return;
+  }
+  if (!pxTenu) return;
+  // The microphone unavailable: keyed all the same (the rig's own microphone may be the one), said in the panel.
+  if (g('ptx-mic-on').checked) await pxMicro();
+  if (!pxTenu) return;
+  let r = null;
+  try { r = await (await fetch('api/poste/emission/demarre?client=' + TX_CLIENT, { method: 'POST' })).json(); } catch (x) {}
+  if (!r || r.ok === false) {
+    pxTenu = false; g('ptx-ptt').classList.remove('on');
+    txt('ptx-info', 'PTT refusé : ' + (r && r.erreur || 'pas de réponse')); g('ptx-info').classList.add('avert');
+    return;
+  }
+  // Released while the rig was being keyed: unkeyed at once.
+  if (!pxTenu) { fetch('api/poste/emission/arrete?client=' + TX_CLIENT, { method: 'POST' }).catch(() => {}); return; }
+  PX = r; pxRend(); pxVie(true);
+  HX.t.ptx = 0; HX.t.ctl = 0;
+}
+function pxRelache() {
+  const etait = pxTenu; pxTenu = false;
+  const b = g('ptx-ptt'); if (b) b.classList.remove('on');
+  pxVie(false);
+  if (etait) fetch('api/poste/emission/arrete?client=' + TX_CLIENT, { method: 'POST' }).then(r => r.json())
+    .then(j => { if (j && j.ok !== false) { PX = j; pxRend(); } HX.t.ptx = 0; ticTete(); }).catch(() => {});
+}
+// While held, the page says it is there from a worker (a hidden tab does not slow it; the server's 2 s watchdog counts on it).
+function pxVie(on) {
+  if (on && !pxVieW) {
+    const bat = () => fetch('api/poste/emission/vie?client=' + TX_CLIENT, { method: 'POST' }).then(r => r.json()).then(j => {
+      if (!pxTenu) return;
+      if (j && j.ok === false) { pxTenu = false; pxVie(false); g('ptx-ptt').classList.remove('on'); txt('ptx-info', 'PTT perdu : ' + (j.erreur || '?')); g('ptx-info').classList.add('avert'); pxLit(); }
+      else if (j) { PX = j; pxRend(); }
+    }).catch(() => {});
+    try {
+      pxVieW = new Worker(URL.createObjectURL(new Blob(['setInterval(function () { postMessage(0); }, 400);'], { type: 'text/javascript' })));
+      pxVieW.onmessage = bat;
+    } catch (x) { pxVieW = { t: setInterval(bat, 400), terminate() { clearInterval(this.t); } }; }
+  } else if (!on && pxVieW) { pxVieW.terminate(); pxVieW = null; }
+}
+(function () {
+  const b = g('ptx-ptt'), p = g('ptx');
+  if (!b || !p) return;
+  b.addEventListener('pointerdown', ev => { if (ev.button !== 0) return; ev.preventDefault(); try { b.setPointerCapture(ev.pointerId); } catch (x) {} b.focus(); pxAppuie(); });
+  ['pointerup', 'pointercancel', 'lostpointercapture'].forEach(t => b.addEventListener(t, () => { if (pxTenu) pxRelache(); }));
+  b.addEventListener('contextmenu', ev => ev.preventDefault());
+  // The space bar, the panel (or its PTT) focused: held, it transmits.
+  p.addEventListener('keydown', ev => { if (ev.code !== 'Space' || (ev.target !== p && ev.target !== b)) return; ev.preventDefault(); ev.stopPropagation(); if (!ev.repeat) pxAppuie(); });
+  p.addEventListener('keyup', ev => { if (ev.code !== 'Space') return; ev.preventDefault(); if (pxTenu) pxRelache(); });
+  p.addEventListener('focusout', ev => { if (pxTenu && !p.contains(ev.relatedTarget)) pxRelache(); });
+  window.addEventListener('blur', () => { if (pxTenu) pxRelache(); });
+  document.addEventListener('visibilitychange', () => { if (document.hidden && pxTenu) pxRelache(); });
+  window.addEventListener('pagehide', () => { if (pxTenu) navigator.sendBeacon('api/poste/emission/arrete?client=' + TX_CLIENT); });
+  g('ptx-pre').addEventListener('click', ev => { const x = ev.target.closest('button[data-pp]'); if (x && !x.disabled) { g('ptx-p').value = x.dataset.pp; pxPuissance(x.dataset.pp); } });
+  g('ptx-gain').value = pxCle('gain', '100'); g('ptx-cag').checked = pxCle('cag', '0') === '1'; g('ptx-mic-on').checked = pxCle('micro', '1') === '1';
+})();
+function pxPuissance(pct) {
+  clearTimeout(pxPuisT);
+  pxPuisT = setTimeout(async () => {
+    pxPuisT = null;
+    try { const j = await (await fetch('api/poste/emission/reglage?client=' + TX_CLIENT + '&pct=' + enc(pct), { method: 'POST' })).json(); if (j && j.ok !== false) PX = j; } catch (x) {}
+    pxRend();
+  }, 250);
+}
+
+// ---- the microphone: getUserMedia at 48 kHz, a light compressor, 20 ms frames by WebSocket (sent only while the PTT is held)
+const pxGainVal = () => Math.max(0, +g('ptx-gain').value || 0) / 100;
+function pxGainRegle(x) { pxGarde('gain', String(x)); if (pxGainN) pxGainN.gain.value = pxGainVal(); }
+function pxCag(on) { pxGarde('cag', on ? '1' : '0'); if (pxMic) { pxMicFerme(); pxMicro(); } }
+function pxMicChange(on) { pxGarde('micro', on ? '1' : '0'); if (on) pxMicro(); else pxMicFerme(); }
+/** Runs inside the AudioWorklet (its text is sent there): 20 ms blocks to the page. Never called on the page. */
+function pxProcesseur() {
+  registerProcessor('satme-micro', class extends AudioWorkletProcessor {
+    constructor() { super(); this.n = Math.round(sampleRate / 50); this.b = new Float32Array(this.n); this.k = 0; }
+    process(entrees) {
+      const x = entrees[0] && entrees[0][0];
+      if (x) for (let i = 0; i < x.length; i++) { this.b[this.k++] = x[i]; if (this.k === this.n) { this.port.postMessage(this.b.slice(0)); this.k = 0; } }
+      return true;
+    }
+  });
+}
+function pxMicEtat(t, avert) { txt('ptx-mic-etat', t); g('ptx-mic-etat').classList.toggle('avert', !!avert); }
+/** The microphone opened (asked once by the browser) and its socket; true when ready. */
+async function pxMicro() {
+  if (pxMic) return true;
+  if (!window.isSecureContext || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    pxMicEtat('micro refusé par le navigateur : page non sûre (http depuis une autre machine). Passer en HTTPS : Réglages › Accès à distance.', true); return false;
+  }
+  let flux;
+  try { flux = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, sampleRate: 48000, echoCancellation: false, noiseSuppression: false, autoGainControl: g('ptx-cag').checked } }); }
+  catch (x) { pxMicEtat('micro : ' + (x.message || x.name), true); return false; }
+  let ctx;
+  try { ctx = new AudioContext({ sampleRate: 48000, latencyHint: 'interactive' }); } catch (x) { ctx = new AudioContext({ latencyHint: 'interactive' }); }
+  const src = ctx.createMediaStreamSource(flux);
+  const gain = ctx.createGain(); gain.gain.value = pxGainVal(); pxGainN = gain;
+  const comp = ctx.createDynamicsCompressor();
+  comp.threshold.value = -24; comp.knee.value = 12; comp.ratio.value = 3; comp.attack.value = 0.003; comp.release.value = 0.25;
+  src.connect(gain); gain.connect(comp);
+  let noeud = null;
+  try {
+    const url = URL.createObjectURL(new Blob(['(' + pxProcesseur.toString() + ')();'], { type: 'text/javascript' }));
+    await ctx.audioWorklet.addModule(url); URL.revokeObjectURL(url);
+    noeud = new AudioWorkletNode(ctx, 'satme-micro', { numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [1] });
+    noeud.port.onmessage = ev => pxBloc(ev.data, ctx.sampleRate);
+  } catch (x) {
+    // No worklet: a ScriptProcessor cutting the same 20 ms blocks.
+    noeud = ctx.createScriptProcessor(1024, 1, 1);
+    const n = Math.round(ctx.sampleRate / 50), b = new Float32Array(n); let k = 0;
+    noeud.onaudioprocess = ev => { const x = ev.inputBuffer.getChannelData(0); for (let i = 0; i < x.length; i++) { b[k++] = x[i]; if (k === n) { pxBloc(b.slice(0), ctx.sampleRate); k = 0; } } };
+  }
+  comp.connect(noeud); noeud.connect(ctx.destination);
+  pxMic = { flux, ctx, noeud };
+  pxSocket();
+  pxMicEtat('micro ouvert : ' + Math.round(ctx.sampleRate / 100) / 10 + ' kHz, trames de 20 ms' + (g('ptx-cag').checked ? ', CAG du navigateur' : ''));
+  return true;
+}
+function pxSocket() {
+  if (pxWs && pxWs.readyState <= 1) return;
+  const u = new URL('api/poste/micro/ws?client=' + TX_CLIENT, location.href);
+  u.protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  try { pxWs = new WebSocket(u.href); pxWs.binaryType = 'arraybuffer'; } catch (x) { pxWs = null; return; }
+  const ws = pxWs;
+  ws.onclose = () => { if (pxWs === ws) { pxWs = null; if (pxMic) setTimeout(pxSocket, 1000); } };
+}
+function pxMicFerme() {
+  const m = pxMic; pxMic = null; pxGainN = null;
+  if (pxWs) { const w = pxWs; pxWs = null; try { w.close(); } catch (x) {} }
+  if (!m) return;
+  try { m.flux.getTracks().forEach(t => t.stop()); } catch (x) {}
+  try { m.noeud.disconnect(); } catch (x) {}
+  try { m.ctx.close(); } catch (x) {}
+  pxMicEtat('micro fermé');
+}
+/** One 20 ms block: its peak for the meter; to the rig (16-bit, the remote sound's head, kind 0x81) while the PTT is held. */
+function pxBloc(x, rate) {
+  let c = 0; for (let i = 0; i < x.length; i++) { const a = Math.abs(x[i]); if (a > c) c = a; }
+  if (c > pxPic) pxPic = c;
+  if (!pxTenu || !pxWs || pxWs.readyState !== 1) return;
+  // A slow link: old sound dropped here, never piled up (the rig would lag behind the voice).
+  if (pxWs.bufferedAmount > 64000) return;
+  const b = new ArrayBuffer(16 + 2 * x.length), dv = new DataView(b);
+  dv.setUint8(0, 0x81); dv.setUint8(1, 0); dv.setUint16(2, rate, true); dv.setUint32(4, pxSeq++ >>> 0, true); dv.setFloat64(8, performance.now(), true);
+  for (let i = 0; i < x.length; i++) dv.setInt16(16 + 2 * i, Math.max(-32768, Math.min(32767, Math.round(x[i] * 32767))), true);
+  pxWs.send(b);
+}
+setInterval(() => {
+  const i = g('ptx-vu'); if (!i || g('ptx').hidden) return;
+  const db = pxPic > 0 ? 20 * Math.log10(pxPic) : -99;
+  i.style.width = Math.max(0, Math.min(100, (db + 60) / 60 * 100)) + '%';
+  i.style.background = db > -3 ? 'var(--danger)' : db > -10 ? 'var(--warn)' : 'var(--ok)';
+  txt('ptx-mic-db', pxMic ? (db > -99 ? Math.round(db) + ' dBFS' : '—') : '');
+  pxPic *= 0.5;
+}, 100);
+
+// ---- Réglages › Émission › the rig: allowed over the network (this PC only), time-out, cap, the rig's card, the network TX format checked on a capture
+function pxReglagesRend() {
+  const j = PX, k = g('ptxr-carte');
+  if (!k) return;
+  k.hidden = !(j && j.ok && !j.absent) || !!window.SATME_TELEPHONE;
+  if (k.hidden) return;
+  const r = g('ptxr-reseau');
+  r.checked = !!j.reseauAutorise; r.disabled = !j.local;
+  txt('ptxr-reseau-etat', (j.local ? '' : 'Se règle seulement sur le PC de la station. ') + (j.reseauAutorise ? (j.liaison === 'reseau' ? (j.sonTxDemande ? 'Son d’émission demandé à la connexion.' : 'Reconnecter le poste pour demander le son d’émission.') : 'Le poste est en USB : sans effet tant que la liaison n’est pas « Réseau ».') : 'Par le réseau : réception seule.'));
+  ['ptxr-tot', 'ptxr-plafond', 'ptxr-carte-son'].forEach(id => { g(id).disabled = !j.local; });
+  if (document.activeElement !== g('ptxr-tot')) g('ptxr-tot').value = String(j.tot);
+  if (document.activeElement !== g('ptxr-plafond')) g('ptxr-plafond').value = j.plafond;
+  const s = g('ptxr-carte-son'); if (document.activeElement !== s && s.options.length) s.value = j.carte || '';
+  g('ptxr-trace-l').hidden = !j.local;
+  txt('ptxr-format', (j.txMarque >= 0 ? 'appris d’une capture : marque ' + j.txMarque.toString(16).padStart(4, '0') + ', ' + j.txOctets + ' octets' : 'format par défaut, non vérifié sur un poste') + ' · ');
+}
+async function pxRegle(q) {
+  let j = null;
+  try { j = await (await fetch('api/poste/emission/reglage?client=' + TX_CLIENT + '&' + q, { method: 'POST' })).json(); } catch (x) {}
+  if (j && j.ok === false) txt('ptxr-msg', 'Refusé : ' + j.erreur); else { txt('ptxr-msg', ''); if (j) PX = j; }
+  pxRend();
+}
+async function pxCartes() {
+  let j = null;
+  try { j = await (await fetch('api/icomreseau/cartes')).json(); } catch (x) {}
+  const s = g('ptxr-carte-son');
+  const l = (j && j.cartes) || [];
+  s.innerHTML = '<option value="">' + esc('la carte reconnue du poste' + (j && j.poste ? ' (' + j.poste + ')' : '')) + '</option>' +
+    l.map(c => '<option value="' + esc(c.nom) + '">' + esc(c.libelle) + '</option>').join('');
+  if (PX) s.value = PX.carte || '';
+}
+async function pxTrace(input) {
+  const f = input.files[0]; input.value = ''; if (!f) return;
+  if (f.size > 50 * 1024 * 1024) { txt('ptxr-msg', 'Fichier trop gros (50 Mo au plus).'); return; }
+  txt('ptxr-msg', 'lecture de la capture…');
+  let j = null;
+  try { j = await (await fetch('api/poste/emission/trace', { method: 'POST', body: f })).json(); } catch (x) {}
+  if (!j) { txt('ptxr-msg', 'Envoi impossible.'); return; }
+  if (!j.ok) { txt('ptxr-msg', j.erreur || 'échec'); return; }
+  const l = [j.message];
+  if (j.demande) l.push('demande du logiciel : émission ' + (j.demande.actif ? 'oui' : 'non') + ', codec ' + j.demande.codec + ', ' + j.demande.taux + ' Hz, tampon ' + j.demande.tamponMs + ' ms');
+  l.push('marques ' + Object.keys(j.marques || {}).join(', ') + ' · tailles ' + Object.keys(j.tailles || {}).join(', ') + ' octets');
+  l.push(j.longueurCoherente ? 'longueur cohérente' : 'longueur incohérente'); if (j.format) l.push('ordre ' + j.format);
+  l.push(j.conforme ? 'conforme au format par défaut de SatMe' : j.appris ? 'retenu : marque ' + j.marque + ', ' + j.octets + ' octets' : 'rien de sûr à retenir');
+  txt('ptxr-msg', l.join(' · '));
+  pxLit();
+}
+
+// ---- Réglages › Accès à distance › HTTPS
+var HS = null;
+async function majHttps() {
+  try { const r = await fetch('api/https'); HS = r.ok ? await r.json() : null; } catch (x) { HS = null; }
+  const ok = !!(HS && HS.ok && !HS.absent) && !window.SATME_TELEPHONE;
+  g('https-carte').hidden = !ok;
+  if (!ok) return;
+  g('https-on').checked = !!HS.on; g('https-on').disabled = !HS.local;
+  if (document.activeElement !== g('https-port')) g('https-port').value = HS.port;
+  g('https-port').disabled = !HS.local; g('https-regen').disabled = !HS.local;
+  txt('https-etat', (HS.local ? '' : 'Se règle seulement sur le PC de la station. ') + (HS.erreur ? 'Refusé : ' + HS.erreur :
+    HS.ecoute ? 'En écoute sur le port ' + HS.ecoute + (HS.reseau ? ' (réseau)' : ' (ce PC seulement : lancé sans --reseau)') + (HS.jusqua ? ' · certificat valable jusqu’au ' + new Date(HS.jusqua).toLocaleDateString() : '') : 'Coupé : la page reste en http.'));
+  txt('https-emp', HS.empreinte || '—');
+  const h = (HS.ici || location.host).replace(/:\d+$/, '');
+  const a = g('https-lien'); a.hidden = !HS.ecoute || location.protocol === 'https:'; a.href = 'https://' + h + ':' + HS.ecoute + location.pathname;
+}
+async function httpsRegle(q) {
+  let j = null;
+  try { j = await (await fetch('api/https/reglage?' + q, { method: 'POST' })).json(); } catch (x) {}
+  txt('https-msg', j && j.ok === false ? 'Refusé : ' + j.erreur : '');
+  majHttps();
+}
+async function httpsRegen() {
+  if (!confirm('Faire un nouveau certificat ? Les navigateurs qui avaient accepté l’ancien préviendront de nouveau.')) return;
+  try { await fetch('api/https/regenere', { method: 'POST' }); } catch (x) {}
+  majHttps();
+}
+
+// ---- the rig's frequencies (Suivi): the mouse wheel or a drag turn the knob (its step, Réglages › Interfaces › Molette USB)
+(function () {
+  let acc = 0, t = null;
+  const pousse = n => {
+    acc += n; if (t) return;
+    t = setTimeout(() => { const k = acc; acc = 0; t = null; if (k) fetch('api/molette/tourne?poste=1&n=' + k + '&ctx=' + enc(molVue()), { method: 'POST' }).then(() => setTimeout(tic, 120)).catch(() => {}); }, 60);
+  };
+  const relie = () => !!(E && E.cat && E.cat.connecte);
+  ['dl', 'ul'].forEach(id => {
+    const e = g(id); if (!e) return;
+    e.classList.add('f-molette');
+    e.title = 'Molette ou glisser : accorder comme la molette USB (son pas, sa cible) — aussi pendant l’émission';
+    e.addEventListener('wheel', ev => { if (!relie()) return; ev.preventDefault(); pousse(ev.deltaY < 0 ? 1 : -1); }, { passive: false });
+    let x0 = null;
+    e.addEventListener('pointerdown', ev => { if (!relie()) return; x0 = ev.clientX; try { e.setPointerCapture(ev.pointerId); } catch (x) {} });
+    e.addEventListener('pointermove', ev => { if (x0 == null) return; const d = ev.clientX - x0; if (Math.abs(d) >= 14) { const n = Math.trunc(d / 14); x0 += n * 14; pousse(n); } });
+    ['pointerup', 'pointercancel'].forEach(k => e.addEventListener(k, () => { x0 = null; }));
+  });
+})();
+
 // ------------------------------------------------------------------ the SatMe-Node: its boards, its health, its settings
 async function ndRegle(q) {
   const j = await post('api/noeud/reglage?' + q);
@@ -14148,8 +14524,10 @@ async function ticTete() {
   await Promise.all([hxLit('dtx', 'api/datv/emission', 2000), hxLit('stx', 'api/sstv/emission', 2000), hxLit('iq', 'api/iq', 3000),
     hxLit('sdr', 'api/sdr', 3000), hxLit('datv', 'api/datv', 10000), hxLit('lien', 'api/lien', 15000), hxLit('rig', 'api/rigctld', 5000),
     hxLit('mol', 'api/molette?ctx=' + enc(molVue()), 2000), hxLit('ann', 'api/annonces', 3000),
-    hxLit('noeud', 'api/noeud', 3000), hxLit('ctl', 'api/emission/controle?client=' + TX_CLIENT, 2000)]);
+    hxLit('noeud', 'api/noeud', 3000), hxLit('ctl', 'api/emission/controle?client=' + TX_CLIENT, 2000),
+    hxLit('ptx', 'api/poste/emission?client=' + TX_CLIENT, 1000)]);
   ndRend();
+  if (HX.ptx && !pxTenu) { PX = HX.ptx; pxRend(); }
   if (HX.ann && HX.ann.on !== undefined) annRattrape(HX.ann);
   rendTete();
 }
@@ -14159,6 +14537,7 @@ function emissionsEnCours() {
   if (HX.dtx && HX.dtx.emet) l.push('DATV');
   if (HX.stx && HX.stx.emet) l.push('SSTV');
   if (HX.iq && HX.iq.actif) l.push('calibration I/Q');
+  if (HX.ptx && HX.ptx.emet) l.push('IC-9700');
   return l;
 }
 function erreursServeur() {
@@ -14239,8 +14618,9 @@ function annonce(t, tx) {
  */
 async function arretEmissions() {
   const avant = emissionsEnCours(), inconnu = !HX.dtx && !HX.stx;
-  const l = ['api/datv/emission/arrete', 'api/sstv/emission/arrete', 'api/mire/stop'];
+  const l = ['api/datv/emission/arrete', 'api/sstv/emission/arrete', 'api/mire/stop', 'api/poste/emission/arrete?client=' + TX_CLIENT];
   if (!HX.iq || HX.iq.actif) l.push('api/iq/arrete');
+  pxTenu = false; pxVie(false);
   await Promise.all(l.map(u => fetch(u, { method: 'POST' }).catch(() => null)));
   if (avant.length || inconnu) annonce(avant.length ? '■ Émission arrêtée : ' + avant.join(', ') : '■ Arrêt de toute émission demandé', true);
   HX.t = {}; ticTete();
