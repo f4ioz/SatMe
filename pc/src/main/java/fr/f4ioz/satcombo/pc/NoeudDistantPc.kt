@@ -51,13 +51,42 @@ class NoeudDistantPc(
     /** The node's last health ([fr.f4ioz.satcombo.datv.SanteNoeud]), null for an older node or before the first read. */
     @Volatile var sante: JSONObject? = null; private set
 
+    /**
+     * The node's Pi asked from here to restart ([REDEMARRAGE]) or switch off
+     * ([ETEINT]), until it answers again as a new boot; "" otherwise. Kept,
+     * with the node's address: a PC started again still knows it is off.
+     */
+    val arretPi: String
+        get() = stockage.getString(CLE_ARRET, "").orEmpty().takeIf { stockage.getString(CLE_ARRET_ADRESSE, "") == client.adresse && client.associe }.orEmpty()
+    private val arretPiMs: Long get() = stockage.getLong(CLE_ARRET_MS, 0L)
+    private fun arretPi(etat: String) {
+        stockage.edit().putString(CLE_ARRET, etat).putLong(CLE_ARRET_MS, horloge()).putString(CLE_ARRET_ADRESSE, client.adresse).apply()
+    }
+    /** The node unreachable at least once since the request (it went down). */
+    @Volatile private var absentVu = false
+    /** When the node came back after a restart asked from here (0: not lately). */
+    @Volatile var revenuMs = 0L; private set
+
     /** Reads the node's devices and health now (blocking, off the page's thread). */
     fun lit(): JSONObject? {
         if (!client.associe) { materiel = null; sante = null; erreur = ""; return null }
         return runCatching { client.materiel() }.onSuccess { m ->
             materiel = m; materielMs = horloge(); erreur = ""
             sante = runCatching { client.sante() }.getOrNull()
-        }.onFailure { erreur = it.message ?: "node injoignable" }.getOrNull()
+            if (arretPi.isNotEmpty()) revenu(m)
+        }.onFailure { erreur = it.message ?: "node injoignable"; if (arretPi.isNotEmpty()) absentVu = true }.getOrNull()
+    }
+
+    /** Back after a restart (or switched on again): gone meanwhile, or booted since the request; no longer going down. */
+    private fun revenu(m: JSONObject) {
+        if (m.optJSONObject("pi")?.optString("arret").orEmpty().isNotEmpty()) return
+        val up = sante?.optJSONObject("systeme")?.optLong("uptimeS", -1L) ?: -1L
+        val ecoule = (horloge() - arretPiMs) / 1000
+        if (absentVu || (up in 0 until ecoule)) {
+            println("SatMe-Node revenu après " + ecoule + " s")
+            stockage.edit().putString(CLE_ARRET, "").apply()
+            absentVu = false; revenuMs = horloge()
+        }
     }
 
     /** Read again when older than a few seconds (a page asking). */
@@ -84,8 +113,8 @@ class NoeudDistantPc(
     /** For the page: what was last read, a new read started in the background when it is old (the page never waits for the node). */
     fun jsonPage(): JSONObject {
         val t = horloge()
-        // Every 3 s while a page asks (a failed read too: « injoignable » until it answers again).
-        if (client.associe && t - essaiMs > 3_000L && lecture?.isAlive != true) {
+        // Every 3 s while a page asks (a failed read too: « injoignable » until it answers again); every 30 s once switched off.
+        if (client.associe && t - essaiMs > (if (arretPi == ETEINT) 30_000L else 3_000L) && lecture?.isAlive != true) {
             essaiMs = t
             lecture = Thread({ lit() }, "satme-noeud-materiel").apply { isDaemon = true; start() }
         }
@@ -106,6 +135,15 @@ class NoeudDistantPc(
             client.action(quoi)?.let { return JSONObject().put("ok", false).put("erreur", it) }
             essaiMs = 0L
             return json().put("ok", true)
+        }
+        // The Pi itself restarted or switched off (by the node, once everything there is stopped).
+        q["systeme"]?.let { s ->
+            if (!client.associe) return JSONObject().put("ok", false).put("erreur", "aucun SatMe-Node associé")
+            if (s != "redemarre" && s != "eteint") return JSONObject().put("ok", false).put("erreur", "action inconnue")
+            val r = client.systeme(s == "eteint", q["arreteTx"] == "1")
+            val ok = r.optBoolean("ok")
+            if (ok) { arretPi(if (s == "eteint") ETEINT else REDEMARRAGE); absentVu = false; revenuMs = 0L; essaiMs = 0L }
+            return json().put("ok", ok).put("erreur", r.optString("erreur")).put("emet", r.optBoolean("emet")).put("message", r.optString("message"))
         }
         q["etages"]?.toIntOrNull()?.let { etages = it }
         // The node's DATV receiver: this PC's choice, sent at each start (the DATV tab's « Récepteur »).
@@ -137,9 +175,20 @@ class NoeudDistantPc(
             .put("versionNoeud", versionCompare(sante?.optString("version").orEmpty()))
             .put("conflits", org.json.JSONArray(if (m == null) emptyList() else fr.f4ioz.satcombo.datv.RolesNoeud.conflits(recepteurDatv(),
                 m.optString("sdr"), m.optString("tx"))))
-            .put("alertes", fr.f4ioz.satcombo.datv.SanteNoeud.json(if (!client.associe) emptyList()
+            .put("pi", piJson())
+            // Down on purpose: no alarm for it.
+            .put("alertes", fr.f4ioz.satcombo.datv.SanteNoeud.json(if (!client.associe || arretPi.isNotEmpty()) emptyList()
                 else if (erreur.isNotBlank()) fr.f4ioz.satcombo.datv.SanteNoeud.alertes(null, erreur)
                 else fr.f4ioz.satcombo.datv.SanteNoeud.alertes(sante)))
+    }
+
+    /** The Pi's restart or power off asked from here: under way, how long, late; back lately. */
+    private fun piJson(): JSONObject {
+        val a = arretPi
+        val depuis = if (a.isEmpty()) 0L else (horloge() - arretPiMs) / 1000
+        val revenu = revenuMs.takeIf { it > 0 && horloge() - it < 120_000L }
+        return JSONObject().put("arret", a).put("depuisS", depuis).put("enRetard", a == REDEMARRAGE && depuis > RETARD_S)
+            .put("revenuS", revenu?.let { (horloge() - it) / 1000 } ?: JSONObject.NULL)
     }
 
     /** The node's version against this PC's: « ancienne », « egale », « recente », or "" (one built by hand, or not read). */
@@ -150,5 +199,12 @@ class NoeudDistantPc(
     companion object {
         const val CLE_ETAGES = "pc_noeud_sdr_etages"
         const val CLE_TX = "pc_noeud_tx"
+        private const val CLE_ARRET = "pc_noeud_arret_pi"
+        private const val CLE_ARRET_MS = "pc_noeud_arret_pi_ms"
+        private const val CLE_ARRET_ADRESSE = "pc_noeud_arret_pi_adresse"
+        const val REDEMARRAGE = "redemarrage"
+        const val ETEINT = "eteint"
+        /** A restart not back after this long: said. */
+        const val RETARD_S = 180L
     }
 }

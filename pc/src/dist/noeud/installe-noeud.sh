@@ -12,7 +12,8 @@
 #   sudo ./installe-noeud.sh --port 8090    # another port
 #
 # It installs Java, builds LongMynd (BATC), lets it open the MiniTiouner
-# (udev), installs the bladeRF tool and FPGA image, copies SatMe to /opt/satme and starts the satme-noeud service.
+# (udev), installs the bladeRF tool and FPGA image, copies SatMe to /opt/satme and starts the satme-noeud service,
+# allowed to restart or power off the Pi (/etc/sudoers.d/satme-noeud, those two commands only).
 # Run again to update: settings, code and keys are kept.
 set -euo pipefail
 
@@ -117,6 +118,21 @@ RestartSec=5
 [Install]
 WantedBy=multi-user.target
 UNIT
+  echo "==> Redémarrer et éteindre le Pi depuis SatMe-PC (sudo, ces deux commandes seulement)"
+  # Checked by visudo before it goes in: a broken file in sudoers.d would lock sudo out.
+  if ! command -v sudo >/dev/null 2>&1; then apt-get install -y -q sudo; fi
+  if [ -x /usr/bin/systemctl ] && command -v visudo >/dev/null 2>&1; then
+    TMP_SUDO="$(mktemp)"
+    cp "$ICI/satme-noeud.sudoers" "$TMP_SUDO"
+    if visudo -cf "$TMP_SUDO" >/dev/null; then
+      install -m 0440 -o root -g root "$TMP_SUDO" /etc/sudoers.d/satme-noeud
+    else
+      echo "  règle sudo refusée par visudo : redémarrer et éteindre le Pi depuis SatMe-PC impossibles" >&2
+    fi
+    rm -f "$TMP_SUDO"
+  else
+    echo "  systemctl ou visudo absent : redémarrer et éteindre le Pi depuis SatMe-PC impossibles"
+  fi
   systemctl daemon-reload
   systemctl enable satme-noeud >/dev/null
   systemctl restart satme-noeud

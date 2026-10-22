@@ -65,6 +65,11 @@ class StockageFichier(private val fichier: File) : Stockage {
         }
     }
 
+    /** The settings forced onto the disk now (before the system goes down). */
+    fun synchronise() {
+        synchronized(this) { runCatching { java.io.FileOutputStream(fichier, true).use { it.fd.sync() } } }
+    }
+
     private fun ecris() {
         runCatching {
             fichier.parentFile?.mkdirs()

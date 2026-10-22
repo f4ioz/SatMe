@@ -121,6 +121,18 @@ class ClientNoeud(private val stockage: Stockage) {
         if (r.optBoolean("ok")) null else r.optString("erreur", "le node refuse")
     }.getOrElse { "node injoignable : " + (it.message ?: "") }
 
+    /**
+     * The node's Pi restarted ([eteint] false) or switched off, its
+     * transmission stopped first when [arreteTx]; the node's answer
+     * (`ok`, `erreur`, `emet` when it refused for a transmission under way).
+     */
+    fun systeme(eteint: Boolean, arreteTx: Boolean): JSONObject = runCatching {
+        post("/noeud/systeme/" + (if (eteint) "eteint" else "redemarre") + (if (arreteTx) "?arreteTx=1" else ""))
+    }.getOrElse {
+        JSONObject().put("ok", false).put("erreur", if (it is org.json.JSONException) "ce SatMe-Node ne sait pas encore redémarrer ni éteindre son Pi : le mettre à jour"
+            else "node injoignable : " + (it.message ?: ""))
+    }
+
     /** Sets which device the node lends as its SDR (receive only); null when done, else why not. */
     fun choisitSdr(appareil: String): String? = runCatching {
         val r = post("/noeud/sdr/appareil?appareil=" + java.net.URLEncoder.encode(appareil, "UTF-8"))

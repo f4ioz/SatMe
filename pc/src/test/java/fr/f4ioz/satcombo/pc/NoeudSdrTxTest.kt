@@ -52,6 +52,8 @@ class NoeudSdrTxTest {
     private val stockageNoeud = StockageMemoire()
     @Volatile private var fini = false
     private val fermes = CopyOnWriteArrayList<String>()
+    /** What the node stopped, in order, up to the system command (the Pi restarted or switched off). */
+    private val ordre = CopyOnWriteArrayList<String>()
 
     /** The node's SDR: the QO-100 beacon (absolute IF) 300 Hz off, wherever it is tuned, at the reception's rate. */
     private val baliseFausseHz = 739_750_300L
@@ -83,7 +85,7 @@ class NoeudSdrTxTest {
             paires += buf.size / 2
             return buf.size
         }
-        override fun close() { ouvert = false; fermes += "sdr" }
+        override fun close() { ouvert = false; fermes += "sdr"; ordre += "sdr" }
     }
 
     /** The node's transmitter: counts what it is given, checks its guard as the real ones do; never radiates. */
@@ -94,7 +96,7 @@ class NoeudSdrTxTest {
         override val libelle = "Pluto d'essai"
         override val nom = "Pluto d'essai"
         override fun etatCommun() = etat
-        override fun arrete(raison: String) { if (etat.emet) etat = etat.copy(emet = false, raison = raison) }
+        override fun arrete(raison: String) { if (etat.emet) { ordre += "tx"; etat = etat.copy(emet = false, raison = raison) } }
         override fun regleGain(db: Double): Double? { etat = etat.copy(gainDb = db); return db }
         override fun demarre(hz: Long, debit: Long, gainDb: Double, dureeMs: Long, bandeHz: Long, plafondDb: Double, paires: Int,
                              garde: () -> String?, producteur: (ShortArray) -> Unit): String? {
@@ -375,7 +377,7 @@ class NoeudSdrTxTest {
         val datv = DatvPc(stockageNoeud, dossier, lecteursLocaux = false)
         val n = NoeudPc(datv, stockageNoeud, 0, nom = "sante", sdr = sdrNoeud, tx = txNoeud,
             sante = SanteNoeudPc(datv, sdrNoeud, txNoeud, "essai", racine = r, vcgencmd = { "throttled=0x4\n" }),
-            relancable = { true }, quitte = { relances.incrementAndGet() }).also { it.demarre() }
+            relancable = { true }, quitte = { relances.incrementAndGet() }, systeme = FauxSysteme()).also { it.demarre() }
         try {
             val k = JSONObject(lit("/noeud/entrer?code=" + n.code, port = n.portReel).second).getString("cle")
             assertEquals(403, lit("/noeud/sante", port = n.portReel).first)
@@ -538,5 +540,147 @@ class NoeudSdrTxTest {
         assertEquals(c.toString(), 1, c.length()); assertTrue(c.getString(0).contains("ADALM-PLUTO"))
         // The node's version (here « dev »'s health is not read: none) said only for two releases.
         assertEquals("", j.getString("versionNoeud"))
+    }
+
+    // ------------------------------------------------------------ the Pi restarted or switched off
+
+    /** The system command: recorded, never run; [permis] what the node's sudo would say. */
+    private inner class FauxSysteme(val permis: String? = null) : SystemeNoeudPc {
+        val lances = CopyOnWriteArrayList<String>()
+        override fun permis(verbe: String) = permis
+        override fun lance(verbe: String): String? { ordre += verbe; lances += verbe; return null }
+    }
+
+    private fun noeudSysteme(sys: SystemeNoeudPc, systemd: Boolean = true, port: Int = 0) =
+        NoeudPc(DatvPc(stockageNoeud, dossier, lecteursLocaux = false), stockageNoeud, port, nom = "pi", sdr = sdrNoeud, tx = txNoeud,
+            relancable = { systemd }, systeme = sys, synchronise = { ordre += "reglages" }, delaiSystemeMs = 300L).also { it.demarre() }
+
+    private fun cleDe(n: NoeudPc) = JSONObject(lit("/noeud/entrer?code=" + n.code, port = n.portReel).second).getString("cle")
+
+    @Test
+    fun le_pi_redemarre_apres_tout_arreter() {
+        val sys = FauxSysteme()
+        val n = noeudSysteme(sys)
+        try {
+            val k = cleDe(n)
+            // The SDR lent (bladeRF) and the transmitter (Pluto) both at work.
+            sdrNoeud.appareil = "bladerf"
+            val src = SourceNoeudIq.connecte("127.0.0.1", n.portReel, "/noeud/sdr/flux?cle=$k", 0, 739_700_000L, null, 0, reprisesMs = 300L)
+            val buf = ShortArray(16_384)
+            attends { src.read16(buf, 200) > 0 }
+            autorise()
+            val e = EmetteurNoeud("127.0.0.1", n.portReel, "/noeud/tx/flux?cle=$k", -10.0)
+            assertNull(e.demarre(reglage()) { it.fill(5) })
+            attends { fauxTx.recus.get() > 10_000 }
+            // No key, a wrong one, a GET: refused.
+            assertEquals(403, lit("/noeud/systeme/redemarre", post = true, port = n.portReel).first)
+            assertEquals(403, lit("/noeud/systeme/eteint?cle=mauvaise", post = true, port = n.portReel).first)
+            assertEquals(405, lit("/noeud/systeme/redemarre?cle=$k", port = n.portReel).first)
+            // Transmitting: refused unless asked to stop it, nothing stopped.
+            val r = JSONObject(lit("/noeud/systeme/redemarre?cle=$k", post = true, port = n.portReel).second)
+            assertFalse(r.getBoolean("ok")); assertTrue(r.getBoolean("emet")); assertTrue(r.getString("erreur"), r.getString("erreur").contains("émet"))
+            assertTrue(fauxTx.etat.emet); assertTrue(sdrNoeud.etat.actif); assertTrue(ordre.isEmpty())
+            // Asked with the stop: the answer first, the system command after.
+            val ok = JSONObject(lit("/noeud/systeme/redemarre?cle=$k&arreteTx=1", post = true, port = n.portReel).second)
+            assertTrue(ok.toString(), ok.getBoolean("ok"))
+            assertTrue(sys.lances.isEmpty())
+            assertEquals("reboot", n.arretSysteme)
+            // Nothing new starts meanwhile; its devices still answer.
+            assertEquals(503, lit("/noeud/sdr/flux?cle=$k", port = n.portReel).first)
+            assertEquals(503, lit("/noeud/datv/demarre?cle=$k", post = true, port = n.portReel).first)
+            assertEquals("reboot", JSONObject(lit("/noeud/materiel?cle=$k", port = n.portReel).second).getJSONObject("pi").getString("arret"))
+            attends(3_000) { sys.lances.isNotEmpty() }
+            // In order: the transmission, the SDR's board let go, the settings, then the system.
+            assertEquals(listOf("tx", "sdr", "reglages", "reboot"), ordre.toList())
+            assertFalse(fauxTx.etat.emet); assertFalse(sdrNoeud.etat.actif)
+            src.close()
+        } finally { n.arrete() }
+    }
+
+    @Test
+    fun le_pi_ne_s_eteint_pas_sans_son_service_ni_sa_permission() {
+        // Started by hand: refused, nothing stopped.
+        val sys = FauxSysteme()
+        val m = noeudSysteme(sys, systemd = false)
+        try {
+            val k = cleDe(m)
+            val r = JSONObject(lit("/noeud/systeme/eteint?cle=$k", post = true, port = m.portReel).second)
+            assertFalse(r.getBoolean("ok")); assertTrue(r.getString("erreur"), r.getString("erreur").contains("systemd"))
+            assertFalse(JSONObject(lit("/noeud/materiel?cle=$k", port = m.portReel).second).getJSONObject("pi").getBoolean("systemd"))
+        } finally { m.arrete() }
+        // Under systemd, without the sudo rule: the fix said (the installer again).
+        val p = noeudSysteme(FauxSysteme(SystemeNoeudPc.SANS_PERMISSION))
+        try {
+            val r = p.systeme(SystemeNoeudPc.ETEINT, arreteTx = true)
+            assertFalse(r.getBoolean("ok")); assertTrue(r.getString("erreur"), r.getString("erreur").contains("installe-noeud.sh"))
+            assertNull(p.arretSysteme)
+        } finally { p.arrete() }
+        assertTrue(sys.lances.isEmpty()); assertTrue(ordre.isEmpty())
+        // Switched off with nothing at work: the settings, then the system; a second request refused.
+        val s2 = FauxSysteme()
+        val q = noeudSysteme(s2)
+        try {
+            assertTrue(q.systeme(SystemeNoeudPc.ETEINT, arreteTx = false).getBoolean("ok"))
+            assertFalse(q.systeme(SystemeNoeudPc.REDEMARRE, arreteTx = false).getBoolean("ok"))
+            attends(3_000) { s2.lances.isNotEmpty() }
+            assertEquals(listOf("reglages", "poweroff"), ordre.toList())
+        } finally { q.arrete() }
+    }
+
+    @Test
+    fun la_regle_sudo_n_accorde_que_ces_deux_commandes() {
+        val f = File("src/dist/noeud/satme-noeud.sudoers")
+        assertTrue(f.absolutePath, f.isFile)
+        val lignes = f.readLines().map { it.trim() }.filter { it.isNotEmpty() && !it.startsWith("#") }
+        assertEquals(listOf("satme ALL=(root) NOPASSWD: " + SystemeNoeudPc.SYSTEMCTL + " " + SystemeNoeudPc.REDEMARRE + ", " +
+            SystemeNoeudPc.SYSTEMCTL + " " + SystemeNoeudPc.ETEINT), lignes)
+        // The installer checks it with visudo before it goes in, and installs it 0440.
+        val inst = File("src/dist/noeud/installe-noeud.sh").readText()
+        assertTrue(inst.contains("visudo -cf") && inst.contains("install -m 0440") && inst.contains("/etc/sudoers.d/satme-noeud"))
+        val visudo = listOf("/usr/sbin/visudo", "/usr/bin/visudo").firstOrNull { File(it).canExecute() } ?: return
+        val p = ProcessBuilder(visudo, "-cf", f.absolutePath).redirectErrorStream(true).start()
+        val sortie = p.inputStream.bufferedReader().readText()
+        assertEquals(sortie, 0, p.waitFor())
+    }
+
+    @Test
+    fun le_pc_suit_le_redemarrage_puis_le_retour() {
+        val sys = FauxSysteme()
+        val n = noeudSysteme(sys)
+        val stockagePc = StockageMemoire()
+        val client = fr.f4ioz.satcombo.datv.ClientNoeud(stockagePc)
+        var maintenant = 1_000_000L
+        val d = NoeudDistantPc(stockagePc, client, horloge = { maintenant })
+        try {
+            assertNull(client.rejoins("127.0.0.1:" + n.portReel, n.code))
+            assertNotNull(d.lit())
+            // Refused (the node transmits, no stop asked): no state.
+            autorise()
+            val em = EmetteurNoeud("127.0.0.1", n.portReel, "/noeud/tx/flux?cle=" + cleDe(n), -10.0)
+            assertNull(em.demarre(reglage()) { it.fill(2) })
+            attends { fauxTx.etat.emet }
+            val r = d.action(mapOf("systeme" to "redemarre"))
+            assertFalse(r.getBoolean("ok")); assertTrue(r.getBoolean("emet"))
+            assertEquals("", d.arretPi)
+            // Asked with the stop: « redémarrage » until the node answers as a new boot; no alarm meanwhile.
+            assertTrue(d.action(mapOf("systeme" to "redemarre", "arreteTx" to "1")).getBoolean("ok"))
+            assertEquals(NoeudDistantPc.REDEMARRAGE, d.arretPi)
+            attends(3_000) { sys.lances.isNotEmpty() }
+            // Still answering (the fake restarts nothing): not back; late after 3 min.
+            d.lit(); assertEquals(NoeudDistantPc.REDEMARRAGE, d.arretPi)
+            maintenant += 200_000L
+            assertTrue(d.json().getJSONObject("pi").getBoolean("enRetard"))
+            // Gone (no alarm), then back: said.
+            val port = n.portReel
+            n.arrete()
+            d.lit(); assertEquals(NoeudDistantPc.REDEMARRAGE, d.arretPi)
+            assertEquals(0, d.json().getJSONArray("alertes").length())
+            val n2 = noeudSysteme(sys, port = port)
+            try {
+                assertNotNull(d.lit())
+                assertEquals("", d.arretPi)
+                assertEquals(0L, d.json().getJSONObject("pi").getLong("revenuS"))
+            } finally { n2.arrete() }
+        } finally { n.arrete() }
     }
 }

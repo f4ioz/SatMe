@@ -1,0 +1,4 @@
+# SatMe-Node: its service (user satme) may restart or power off the Pi from
+# SatMe-PC's « Station › SatMe-Node » page, and nothing else.
+# Installed by installe-noeud.sh as /etc/sudoers.d/satme-noeud (mode 0440).
+satme ALL=(root) NOPASSWD: /usr/bin/systemctl reboot, /usr/bin/systemctl poweroff

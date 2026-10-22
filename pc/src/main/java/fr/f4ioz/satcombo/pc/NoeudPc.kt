@@ -49,7 +49,16 @@ class NoeudPc(
     private val relancable: () -> Boolean = { SanteNoeudPc.sousSystemd() },
     /** Ends the process for systemd to start it again (never in the tests). */
     private val quitte: () -> Unit = { Runtime.getRuntime().halt(3) },
+    /** The Pi restarted or switched off ([SystemeNoeudPc]; the tests: a fake). */
+    private val systeme: SystemeNoeudPc = SystemeNoeudPc.reel(),
+    /** The settings forced onto the disk before the system goes down. */
+    private val synchronise: () -> Unit = {},
+    /** Between the answer to the client and the system command. */
+    private val delaiSystemeMs: Long = 1_500L,
 ) {
+    /** The system command under way ([SystemeNoeudPc.REDEMARRE], [SystemeNoeudPc.ETEINT]), null otherwise: nothing new starts then. */
+    @Volatile var arretSysteme: String? = null; private set
+
     private var socket: ServerSocket? = null
     val portReel: Int get() = socket?.localPort ?: port
 
@@ -82,6 +91,14 @@ class NoeudPc(
             val i = it.indexOf('='); if (i <= 0) null else it.substring(0, i) to java.net.URLDecoder.decode(it.substring(i + 1), "UTF-8")
         }.toMap()
         val o = c.getOutputStream()
+        // Going down: nothing new starts (the PC's transmitter or SDR coming back); only what it is and its health.
+        arretSysteme?.let { v ->
+            if (chemin !in LIBRES_EN_ARRET) {
+                envoie(o, "503 Service Unavailable", "application/json; charset=utf-8",
+                    JSONObject().put("ok", false).put("erreur", "le node " + (if (v == SystemeNoeudPc.ETEINT) "s'éteint" else "redémarre")).toString().toByteArray())
+                return
+            }
+        }
         when (chemin) {
             // What it is, for anyone: nothing more.
             "/noeud/api" -> json(o, JSONObject().put("noeud", true).put("nom", nom)
@@ -98,6 +115,15 @@ class NoeudPc(
                 q["sdr"]?.let { a -> if (sdr?.etat?.actif != true) sdr?.appareil = a }
                 val e = tx?.regleLocal(true, q["autorise"]?.let { it == "1" }, q["tx"], q["gainMax"]?.replace(',', '.')?.toDoubleOrNull())
                 json(o, if (e == null) JSONObject().put("ok", true).put("appareils", appareils()) else JSONObject().put("ok", false).put("erreur", e))
+            }
+            // The Pi restarted or switched off from its own page (on the node, or through an SSH tunnel).
+            "/noeud/reglages/systeme" -> {
+                if (r.methode != "POST") { envoie(o, "405 Method Not Allowed", "text/plain", ByteArray(0)); return }
+                if (c.inetAddress?.isLoopbackAddress != true) {
+                    envoie(o, "403 Forbidden", "application/json; charset=utf-8", JSONObject().put("ok", false).put("erreur", SUR_PLACE).toString().toByteArray())
+                    return
+                }
+                json(o, systeme(if (q["quoi"] == "eteint") SystemeNoeudPc.ETEINT else SystemeNoeudPc.REDEMARRE, q["arreteTx"] == "1", "sa page"))
             }
             "/noeud/entrer" -> {
                 if (q["code"]?.trim() == code) {
@@ -134,7 +160,8 @@ class NoeudPc(
             }
             "/noeud/datv/arrete" -> { datv.arrete(); json(o, JSONObject().put("ok", true)) }
             // The node's devices and what each does now.
-            "/noeud/materiel" -> json(o, appareils().put("sdrEtat", sdr?.json() ?: JSONObject.NULL).put("txEtat", tx?.json() ?: JSONObject.NULL))
+            "/noeud/materiel" -> json(o, appareils().put("sdrEtat", sdr?.json() ?: JSONObject.NULL).put("txEtat", tx?.json() ?: JSONObject.NULL)
+                .put("pi", JSONObject().put("systemd", relancable()).put("permis", piPermis).put("arret", arretSysteme ?: "")))
             // Its SDR as a receiver: one connection, I/Q one way, tuning the other ([SdrNoeudPc]).
             "/noeud/sdr/flux" -> sdr?.sert(c, q, o) ?: envoie(o, "404 Not Found", "text/plain", "non".toByteArray())
             // Which device is its SDR (receive only, harmless): from SatMe-PC with the key too.
@@ -168,6 +195,12 @@ class NoeudPc(
             "/noeud/action" -> {
                 if (methode != "POST") { envoie(o, "405 Method Not Allowed", "text/plain", ByteArray(0)); return }
                 json(o, action(q["quoi"].orEmpty()))
+            }
+            // The Pi restarted or switched off: by its service (systemd) only, after everything is stopped.
+            "/noeud/systeme/redemarre", "/noeud/systeme/eteint" -> {
+                if (methode != "POST") { envoie(o, "405 Method Not Allowed", "text/plain", ByteArray(0)); return }
+                json(o, systeme(if (chemin.endsWith("eteint")) SystemeNoeudPc.ETEINT else SystemeNoeudPc.REDEMARRE, q["arreteTx"] == "1",
+                    c.inetAddress?.hostAddress ?: "SatMe-PC"))
             }
             "/noeud/datv/ts" -> {
                 // The stream as it comes, for as long as the client reads it.
@@ -207,6 +240,53 @@ class NoeudPc(
         return JSONObject().put("ok", true)
     }
 
+    /**
+     * The Pi restarted ([SystemeNoeudPc.REDEMARRE]) or switched off
+     * ([SystemeNoeudPc.ETEINT]) for [qui]. Refused when not run by its
+     * service, without the permission, or while it transmits unless
+     * [arreteTx]. Otherwise, in this order: nothing new accepted, the
+     * transmission stopped (waited for), DATV stopped (LongMynd, and the LNB
+     * supply with it), the SDR stream ended and its board let go, the
+     * settings on the disk; the answer sent, the system command a moment later.
+     */
+    @Synchronized
+    fun systeme(verbe: String, arreteTx: Boolean, qui: String = "SatMe-PC"): JSONObject {
+        fun non(e: String) = JSONObject().put("ok", false).put("erreur", e)
+        if (verbe != SystemeNoeudPc.REDEMARRE && verbe != SystemeNoeudPc.ETEINT) return non("action inconnue")
+        val eteint = verbe == SystemeNoeudPc.ETEINT
+        val quoi = if (eteint) "éteindre" else "redémarrer"
+        if (arretSysteme != null) return non("le node s'arrête déjà")
+        if (!relancable()) return non("SatMe-Node lancé à la main (pas par son service systemd) : il ne peut pas $quoi le Pi")
+        systeme.permis(verbe)?.let { return non(it) }
+        val t = tx
+        if (t != null && t.etat.emet && !arreteTx)
+            return non("le node émet : arrêter l'émission d'abord (ou demander son arrêt avec)").put("emet", true)
+        arretSysteme = verbe
+        println("Pi à $quoi, demandé par $qui : tout s'arrête d'abord")
+        try {
+            if (t != null) {
+                t.arrete(if (eteint) "le Pi s'éteint" else "le Pi redémarre")
+                if (!attends(5_000) { !t.etat.emet && t.tient == null }) { arretSysteme = null; return non("l'émission ne s'arrête pas : Pi laissé allumé") }
+            }
+            runCatching { datv.arrete() }
+            sdr?.let { s -> s.arrete(); attends(5_000) { s.tient == null } }
+            runCatching { synchronise() }
+        } catch (x: Exception) { arretSysteme = null; return non("arrêt interrompu : " + (x.message ?: "")) }
+        Thread({
+            Thread.sleep(delaiSystemeMs)
+            println("Pi : systemctl $verbe")
+            systeme.lance(verbe)?.let { e -> println("Pi pas " + (if (eteint) "éteint" else "redémarré") + " : $e"); arretSysteme = null }
+        }, "satme-noeud-systeme").apply { isDaemon = true; start() }
+        return JSONObject().put("ok", true).put("message",
+            if (eteint) "le Pi s'éteint : à rallumer sur place (alimentation coupée puis remise)" else "le Pi redémarre (une à deux minutes)")
+    }
+
+    private fun attends(ms: Long, ok: () -> Boolean): Boolean {
+        val fin = System.currentTimeMillis() + ms
+        while (!ok()) { if (System.currentTimeMillis() > fin) return false; Thread.sleep(50) }
+        return true
+    }
+
     /** The node's devices and their roles: DATV receiver, SDR receiver, transmitter. */
     fun appareils(): JSONObject {
         val s = sdr; val t = tx
@@ -215,6 +295,11 @@ class NoeudPc(
             .put("sdrLibelle", s?.etat?.libelle ?: "")
             .put("tx", t?.appareil ?: "").put("txAutorise", t?.autorisee == true).put("txEmet", t?.etat?.emet == true)
             .put("txGainMax", t?.gainMaxDb ?: JSONObject.NULL)
+    }
+
+    /** The Pi's restart and power off allowed to the service: "" yes, else why not (read once: the installer restarts the service). */
+    private val piPermis: String by lazy {
+        if (!relancable()) "SatMe-Node lancé à la main (pas par son service systemd)" else systeme.permis(SystemeNoeudPc.REDEMARRE).orEmpty()
     }
 
     /**
@@ -257,7 +342,18 @@ class NoeudPc(
 <script>document.getElementById('f').onsubmit = async ev => { ev.preventDefault(); const f = ev.target;
 const q = 'sdr=' + f.sdr.value + '&tx=' + f.tx.value + '&gainMax=' + encodeURIComponent(f.gainMax.value) + '&autorise=' + (f.autorise.checked ? '1' : '0');
 const r = await fetch('/noeud/reglages?' + q, { method: 'POST' }); const j = await r.json();
-document.getElementById('m').textContent = j.ok ? 'enregistré' : j.erreur; };</script>"""
+document.getElementById('m').textContent = j.ok ? 'enregistré' : j.erreur; };</script>
+<div style="background:#121A23;padding:12px 16px;border-radius:8px;max-width:560px;margin-top:12px">
+<p><b>Raspberry Pi</b></p>
+<button onclick="pi('redemarre')">Redémarrer le Pi</button> <button onclick="pi('eteint')" style="color:#FF6B6B">Éteindre le Pi</button> <span id="pm"></span>
+<br><small style="color:#9AA7B4">Tout s'arrête d'abord : émission, réception DATV (et l'alimentation LNB), flux SDR. Éteint, il ne se rallume que sur place (alimentation coupée puis remise).</small></div>
+<script>async function pi(quoi) {
+const emet = ${t?.etat?.emet == true};
+if (!confirm(quoi === 'eteint' ? 'Éteindre le Raspberry Pi ? Il ne se rallumera que sur place (alimentation coupée puis remise). DATV, SDR et émission s’arrêtent, l’alimentation LNB est coupée.' : 'Redémarrer le Raspberry Pi ? DATV, SDR et émission s’arrêtent ; le node revient en une à deux minutes.')) return;
+let tx = '';
+if (emet) { if (!confirm('Le node émet : arrêter l’émission d’abord ?')) return; tx = '&arreteTx=1'; }
+const r = await fetch('/noeud/reglages/systeme?quoi=' + quoi + tx, { method: 'POST' }); const j = await r.json();
+document.getElementById('pm').textContent = j.ok ? j.message : j.erreur; }</script>"""
         val h = """<!doctype html><html lang="fr"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>SatMe-Node</title><body style="font-family:system-ui,sans-serif;background:#0B1016;color:#E8F0F7;padding:24px;line-height:1.6">
 <h2>SatMe-Node · ${esc(nom)}</h2>
@@ -282,6 +378,8 @@ $reglages
     companion object {
         private const val CLE_CODE = "noeud_code"
         private const val CLE_CLES = "noeud_cles"
+        /** What still answers while the Pi goes down. */
+        private val LIBRES_EN_ARRET = setOf("/", "/noeud/api", "/noeud/sante", "/noeud/materiel", "/noeud/datv")
         const val SUR_PLACE = "ce réglage se change sur le node lui-même (sa page ouverte sur le node, ou par un tunnel SSH)"
     }
 }
