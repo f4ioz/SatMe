@@ -127,6 +127,16 @@ class ClientNoeud(private val stockage: Stockage) {
         if (r.optBoolean("ok")) null else r.optString("erreur", "le node refuse")
     }.getOrElse { "node injoignable : " + (it.message ?: "") }
 
+    /**
+     * Sets which board the node transmits with ("aucun", "pluto", "bladerf");
+     * a new one leaves « émission autorisée » off until ticked on the node.
+     * Null when done, else why not.
+     */
+    fun choisitTx(appareil: String): String? = runCatching {
+        val r = post("/noeud/tx/appareil?appareil=" + java.net.URLEncoder.encode(appareil, "UTF-8"))
+        if (r.optBoolean("ok")) null else r.optString("erreur", "le node refuse")
+    }.getOrElse { if (it is org.json.JSONException) "ce SatMe-Node choisit son émetteur sur sa propre page : le mettre à jour" else "node injoignable : " + (it.message ?: "") }
+
     companion object {
         const val PORT = 8090
         private const val CLE_ADRESSE = "datv_noeud"

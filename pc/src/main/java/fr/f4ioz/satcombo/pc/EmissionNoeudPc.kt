@@ -29,10 +29,10 @@ import java.util.concurrent.TimeUnit
  * checked there first ([fr.f4ioz.satcombo.sdr.EmetteurNoeud]).
  *
  * Guards of its own, on the node:
- * - **« émission autorisée sur ce node »**, off by default, changed only
+ * - **« émission autorisée sur ce node »**, off by default, ticked only
  *   from the node itself (its page opened on the node, or through an SSH
  *   tunnel): nothing transmits while it is off, and turning it off stops a
- *   transmission at once;
+ *   transmission at once; the board chosen from SatMe-PC unticks it;
  * - its bands, its rate, its duration and its own gain ceiling ([ReglesNoeud]);
  * - **the watchdog**: nothing from the PC (samples or « still there ») for
  *   [chienMs] and the transmission stops; the connection closed stops it too;
@@ -77,6 +77,20 @@ class EmissionNoeudPc(
         e.apply()
         if (autorise == false) arrete("émission désautorisée sur le node")
         if (appareil != null && appareil != tient) arrete("émetteur du node changé")
+        return null
+    }
+
+    /**
+     * The transmitter chosen from SatMe-PC (with the key). Another board than
+     * the one ticked « émission autorisée » for is ticked off again: only
+     * someone at the node ticks it for the new one. Not while transmitting.
+     */
+    fun choisitADistance(nouveau: String): String? {
+        if (nouveau !in SdrNoeudPc.APPAREILS) return "carte inconnue"
+        if (nouveau == appareil) return null
+        if (etat.emet) return "le node émet : arrêter l'émission d'abord"
+        stockage.edit().putString(CLE_APPAREIL, nouveau).putBoolean(CLE_AUTORISEE, false).apply()
+        arrete("émetteur du node changé depuis SatMe-PC")
         return null
     }
 

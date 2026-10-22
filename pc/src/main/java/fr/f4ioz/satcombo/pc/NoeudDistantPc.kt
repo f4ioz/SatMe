@@ -24,6 +24,11 @@ class NoeudDistantPc(
     private val stockage: Stockage,
     val client: ClientNoeud,
     private val horloge: () -> Long = System::currentTimeMillis,
+    /** This PC's DATV receiver, the board the node receives DATV with at the next start ([DatvPc.recepteur]). */
+    private val recepteurDatv: () -> String = { fr.f4ioz.satcombo.datv.Datv.MINITIOUNER },
+    private val choisitRecepteurDatv: (String) -> Unit = {},
+    /** This SatMe-PC's version, to tell an older node. */
+    private val version: String = versionPc(),
 ) {
     /**
      * The stream from the node's SDR 2^etages times lighter than the
@@ -103,6 +108,16 @@ class NoeudDistantPc(
             return json().put("ok", true)
         }
         q["etages"]?.toIntOrNull()?.let { etages = it }
+        // The node's DATV receiver: this PC's choice, sent at each start (the DATV tab's « Récepteur »).
+        q["datv"]?.let { a ->
+            if (a !in fr.f4ioz.satcombo.datv.RolesNoeud.DATV) return JSONObject().put("ok", false).put("erreur", "carte inconnue")
+            choisitRecepteurDatv(a)
+        }
+        q["emetteur"]?.let { a ->
+            if (!client.associe) return JSONObject().put("ok", false).put("erreur", "aucun SatMe-Node associé")
+            client.choisitTx(a)?.let { return JSONObject().put("ok", false).put("erreur", it) }
+            lit()
+        }
         q["tx"]?.let { emissionParNoeud = it == "1" }
         q["sdr"]?.let { a ->
             if (!client.associe) return JSONObject().put("ok", false).put("erreur", "aucun SatMe-Node associé")
@@ -118,9 +133,18 @@ class NoeudDistantPc(
             .put("etages", etages).put("emissionParNoeud", emissionParNoeud).put("erreur", erreur)
             .put("materiel", m ?: JSONObject.NULL).put("age", if (m == null) JSONObject.NULL else (horloge() - materielMs) / 1000)
             .put("sante", sante ?: JSONObject.NULL)
+            .put("datvChoisi", recepteurDatv()).put("versionPc", version)
+            .put("versionNoeud", versionCompare(sante?.optString("version").orEmpty()))
+            .put("conflits", org.json.JSONArray(if (m == null) emptyList() else fr.f4ioz.satcombo.datv.RolesNoeud.conflits(recepteurDatv(),
+                m.optString("sdr"), m.optString("tx"))))
             .put("alertes", fr.f4ioz.satcombo.datv.SanteNoeud.json(if (!client.associe) emptyList()
                 else if (erreur.isNotBlank()) fr.f4ioz.satcombo.datv.SanteNoeud.alertes(null, erreur)
                 else fr.f4ioz.satcombo.datv.SanteNoeud.alertes(sante)))
+    }
+
+    /** The node's version against this PC's: « ancienne », « egale », « recente », or "" (one built by hand, or not read). */
+    private fun versionCompare(n: String): String = when (val c = fr.f4ioz.satcombo.datv.RolesNoeud.compareVersions(n, version)) {
+        null -> ""; 0 -> "egale"; else -> if (c < 0) "ancienne" else "recente"
     }
 
     companion object {

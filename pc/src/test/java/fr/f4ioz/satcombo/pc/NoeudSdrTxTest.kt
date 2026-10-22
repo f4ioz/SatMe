@@ -494,4 +494,49 @@ class NoeudSdrTxTest {
         assertTrue(emetteur().demarre(reglage()) { }!!.contains("occupé"))
         src.close()
     }
+
+    @Test
+    fun l_emetteur_choisi_de_loin_se_desautorise() {
+        autorise("pluto")
+        // The same board: nothing changes, « émission autorisée » kept.
+        assertTrue(JSONObject(lit("/noeud/tx/appareil?cle=$cle&appareil=pluto", post = true).second).getBoolean("ok"))
+        assertTrue(txNoeud.autorisee)
+        assertEquals(405, lit("/noeud/tx/appareil?cle=$cle&appareil=bladerf").first)
+        assertEquals(403, lit("/noeud/tx/appareil?appareil=bladerf", post = true).first)
+        assertFalse(JSONObject(lit("/noeud/tx/appareil?cle=$cle&appareil=hackrf", post = true).second).getBoolean("ok"))
+        // Another board from SatMe-PC: kept, but to be ticked again on the node.
+        val r = JSONObject(lit("/noeud/tx/appareil?cle=$cle&appareil=bladerf", post = true).second)
+        assertTrue(r.toString(), r.getBoolean("ok"))
+        assertEquals("bladerf", txNoeud.appareil); assertFalse(txNoeud.autorisee)
+        assertFalse(r.getJSONObject("appareils").getBoolean("txAutorise"))
+        // Not while transmitting.
+        autorise("pluto")
+        val e = emetteur()
+        assertNull(e.demarre(reglage()) { it.fill(7) })
+        attends { fauxTx.etat.emet }
+        assertFalse(JSONObject(lit("/noeud/tx/appareil?cle=$cle&appareil=aucun", post = true).second).getBoolean("ok"))
+        assertTrue(fauxTx.etat.emet)
+        e.arrete("fin de l'essai")
+    }
+
+    @Test
+    fun les_roles_du_node_depuis_satme_pc() {
+        val pc = StockageMemoire()
+        val client = fr.f4ioz.satcombo.datv.ClientNoeud(pc)
+        assertNull(client.rejoins("127.0.0.1:" + noeud.portReel, noeud.code))
+        var datvPc = "minitiouner"
+        val d = NoeudDistantPc(pc, client, recepteurDatv = { datvPc }, choisitRecepteurDatv = { datvPc = it }, version = "2026.10.30")
+        assertTrue(d.action(mapOf("datv" to "bladerf")).getBoolean("ok")); assertEquals("bladerf", datvPc)
+        assertFalse(d.action(mapOf("datv" to "hackrf")).getBoolean("ok")); assertEquals("bladerf", datvPc)
+        assertTrue(d.action(mapOf("sdr" to "pluto")).getBoolean("ok")); assertEquals("pluto", sdrNoeud.appareil)
+        assertTrue(d.action(mapOf("emetteur" to "pluto")).getBoolean("ok")); assertEquals("pluto", txNoeud.appareil)
+        assertFalse(txNoeud.autorisee)
+        // The SDR and the transmitter on one board: said, not refused.
+        val j = d.json()
+        assertEquals("bladerf", j.getString("datvChoisi")); assertEquals("2026.10.30", j.getString("versionPc"))
+        val c = j.getJSONArray("conflits")
+        assertEquals(c.toString(), 1, c.length()); assertTrue(c.getString(0).contains("ADALM-PLUTO"))
+        // The node's version (here « dev »'s health is not read: none) said only for two releases.
+        assertEquals("", j.getString("versionNoeud"))
+    }
 }

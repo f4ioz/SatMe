@@ -215,7 +215,7 @@ fun main(args: Array<String>) {
     // DATV with a MiniTiouner, through LongMynd: nothing started until asked.
     val datv = DatvPc(station.stockage, File(dossier, "enregistrements"))
     // The SatMe-Node joined: its SDR as the receiver « SDR du Node », its transmitter when chosen (off by default).
-    val noeudDistant = NoeudDistantPc(station.stockage, datv.client)
+    val noeudDistant = NoeudDistantPc(station.stockage, datv.client, recepteurDatv = { datv.recepteur }, choisitRecepteurDatv = { datv.recepteur = it })
     sdr.ouvreNoeud = { noeudDistant.ouvreSdr(0L, station.settings.sdrGainTenthDb.takeIf { it >= 0 }, station.settings.sdrPpm) }
     // Its sound subtitled, the callsigns written in its picture: each off unless chosen in the DATV tab.
     val textesDatv = TextesDatvPc(station.stockage, TextesDatvPc.Source.de(datv), phonie,

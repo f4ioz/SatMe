@@ -148,6 +148,13 @@ class NoeudPc(
                     else -> { s.appareil = a; JSONObject().put("ok", true).put("appareils", appareils()) }
                 })
             }
+            // Which board transmits: from SatMe-PC too, « émission autorisée » ticked off by a change ([EmissionNoeudPc.choisitADistance]).
+            "/noeud/tx/appareil" -> {
+                val t = tx ?: return envoie(o, "404 Not Found", "text/plain", "non".toByteArray())
+                if (methode != "POST") { envoie(o, "405 Method Not Allowed", "text/plain", ByteArray(0)); return }
+                val e = t.choisitADistance(q["appareil"].orEmpty())
+                json(o, if (e == null) JSONObject().put("ok", true).put("appareils", appareils()) else JSONObject().put("ok", false).put("erreur", e))
+            }
             // Its transmitter: a POST, behind « émission autorisée » and the watchdog ([EmissionNoeudPc]).
             "/noeud/tx/flux" -> {
                 val t = tx ?: return envoie(o, "404 Not Found", "text/plain", "non".toByteArray())
@@ -237,8 +244,8 @@ class NoeudPc(
         }
         fun choix(champ: String, v: String) = "<select name=\"$champ\">" + SdrNoeudPc.APPAREILS.joinToString("") { a ->
             "<option value=\"$a\"" + (if (a == v) " selected" else "") + ">" + SdrNoeudPc.nomAppareil(a) + "</option>" } + "</select>"
-        val reglages = if (!local) "<p style=\"color:#9AA7B4\">Les réglages du node (son SDR, son émetteur, « émission autorisée ») se changent " +
-            "<b>sur le node lui-même</b> : ouvrir cette page sur le Raspberry Pi, ou par un tunnel <code>ssh -L 8091:localhost:$portReel pi@node</code> " +
+        val reglages = if (!local) "<p style=\"color:#9AA7B4\">Son SDR et son émetteur se choisissent aussi depuis SatMe-PC (Station › SatMe-Node) ; " +
+            "« émission autorisée » et le plafond se changent <b>sur le node lui-même</b> : ouvrir cette page sur le Raspberry Pi, ou par un tunnel <code>ssh -L 8091:localhost:$portReel pi@node</code> " +
             "puis <code>http://localhost:8091</code>.</p>"
         else """<form id="f" style="background:#121A23;padding:12px 16px;border-radius:8px;max-width:560px">
 <p><b>Réglages du node</b> (page ouverte sur le node : modifiable)</p>
