@@ -45,6 +45,19 @@ class JournalWebPc(private val j: JournalPc, private val station: StationPc, pri
     private val TEXTES_PC = mapOf("pj_sous" to "pc_pj_sous", "pj_aucun" to "pc_pj_aucun", "pw_pupitre" to "pc_pj_station",
         "pj_echec" to "pc_pj_echec")
 
+    /** A received picture by its name: only a PNG of the SSTV folder, never another file. */
+    private fun imageSstv(nom: String): File? =
+        File(dossier, "sstv").let { d -> File(d, File(nom).name) }.takeIf { it.isFile && it.name.endsWith(".png") }
+
+    // Small pictures, kept: the moments' list asks for them each time it is drawn.
+    private val vignettes = object : LinkedHashMap<String, ByteArray>(32, 0.75f, true) {
+        override fun removeEldestEntry(e: MutableMap.MutableEntry<String, ByteArray>?) = size > 120
+    }
+    private fun vignette(f: File, w: Int): ByteArray? = synchronized(vignettes) {
+        val cle = f.name + "@" + w + "@" + f.lastModified()
+        vignettes[cle] ?: PlancheRenduPc.charge(f, w)?.let { PlancheRenduPc.jpeg(PlancheRenduPc.rgb(it), 0.85f) }?.also { vignettes[cle] = it }
+    }
+
     private fun js(s: String): String = buildString {
         for (ch in s) when {
             ch == '"' -> append("\\\""); ch == '\\' -> append("\\\\"); ch == '<' -> append("\\u003c"); ch < ' ' -> append(' ')
@@ -201,8 +214,14 @@ class JournalWebPc(private val j: JournalPc, private val station: StationPc, pri
                 ReponseWeb("200 OK", "audio/wav", fichier = m.f)
             }
             "/image" -> {
-                val f = File(dossier, "sstv").let { d -> File(d, File(p("f")).name) }.takeIf { it.isFile && it.name.endsWith(".png") } ?: return NON
+                val f = imageSstv(p("f")) ?: return NON
                 ReponseWeb("200 OK", "image/png", fichier = f)
+            }
+            // A picture of the pass, small, for its row among the moments (the page asked, nothing answered: 22/10).
+            "/vignette" -> {
+                val f = imageSstv(p("f")) ?: return NON
+                val b = vignette(f, p("w").toIntOrNull()?.coerceIn(80, 800) ?: 160) ?: return NON
+                ReponseWeb("200 OK", "image/jpeg", b, "Cache-Control: max-age=3600\r\n")
             }
             "/fabrique" -> {
                 val e = j.passage(p("id")) ?: return NON

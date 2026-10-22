@@ -63,7 +63,8 @@ class JournalPcTest {
         // A contact at 2 min, a picture at 4 min.
         carnet.store.add(LogEntry(t0 + 120_000L, "SO-50", 27607, 120.0, 7.0, callsign = "F5XYZ", theirLocator = "JN03", mode = "FM", nom = "Jean"))
         val image = SstvMeta.fileName("SO-50", t0 + 240_000L, "Robot 36", true)
-        File(dossier, "sstv").mkdirs(); File(dossier, "sstv/$image").writeBytes(ByteArray(10))
+        File(dossier, "sstv").mkdirs()
+        javax.imageio.ImageIO.write(java.awt.image.BufferedImage(320, 240, java.awt.image.BufferedImage.TYPE_INT_RGB), "png", File(dossier, "sstv/$image"))
         File(dossier, "sstv/" + SstvMeta.sidecarName(image)).writeText(
             SstvMeta.encode(SstvMeta.SstvShot(image, "SO-50", t0 + 240_000L, mode = "Robot 36", source = "live")))
 
@@ -81,6 +82,11 @@ class JournalPcTest {
         assertEquals(t0, sons.getJSONObject(0).getLong("o"))
         assertEquals(60_000L, sons.getJSONObject(0).getLong("du"))
         assertEquals("Jean", JSONObject(lit("/fiches", mapOf("id" to e.id))).getJSONObject("F5XYZ").getString("nom"))
+        // The picture's thumbnail for the moments' list (the PC answered nothing: empty thumbnails, 22/10); never another file.
+        val v = web.sert("/vignette") { mapOf("f" to image, "w" to "160")[it].orEmpty() }
+        assertEquals("200 OK", v.statut); assertEquals("image/jpeg", v.type)
+        assertEquals(160, javax.imageio.ImageIO.read(java.io.ByteArrayInputStream(v.corps)).width)
+        assertTrue(web.sert("/vignette") { mapOf("f" to "../qso_log.json")[it].orEmpty() }.statut != "200 OK")
 
         // Accelerated: normal speed around the contact.
         val seg = JSONArray(lit("/segments", mapOf("id" to e.id, "avant" to "10", "apres" to "30", "surActivite" to "0", "sstv" to "0")))

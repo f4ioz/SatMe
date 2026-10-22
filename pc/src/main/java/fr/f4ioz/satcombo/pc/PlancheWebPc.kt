@@ -17,9 +17,7 @@ import fr.f4ioz.satcombo.sstv.SstvMeta
 import java.awt.image.BufferedImage
 import java.io.ByteArrayOutputStream
 import java.io.File
-import javax.imageio.IIOImage
 import javax.imageio.ImageIO
-import javax.imageio.ImageWriteParam
 
 /**
  * The SSTV sheet on SatMe-PC: the phone's page (PagePlanche) and its routes,
@@ -66,17 +64,7 @@ class PlancheWebPc(private val station: StationPc, private val son: SonStation, 
         vignettes[cle] ?: PlancheRenduPc.charge(f, w)?.also { vignettes[cle] = it }
     }
 
-    private fun jpeg(b: BufferedImage, q: Float = 0.88f): ByteArray {
-        val o = ByteArrayOutputStream()
-        val w = ImageIO.getImageWritersByFormatName("jpg").next()
-        ImageIO.createImageOutputStream(o).use { s ->
-            w.output = s
-            val p = w.defaultWriteParam.apply { compressionMode = ImageWriteParam.MODE_EXPLICIT; compressionQuality = q }
-            w.write(null, IIOImage(b, null, null), p)
-        }
-        w.dispose()
-        return o.toByteArray()
-    }
+    private fun jpeg(b: BufferedImage, q: Float = 0.88f): ByteArray = PlancheRenduPc.jpeg(b, q)
 
     /** What the texts say: what was typed on the page, else what SatMe would write. */
     private fun valeurs(m: Planche.Modele, places: Map<Int, Pair<File, SstvMeta.SstvShot>>, p: (String) -> String): PlancheRenduPc.Valeurs {
@@ -214,13 +202,7 @@ class PlancheWebPc(private val station: StationPc, private val son: SonStation, 
         }.getOrElse { json("{\"ok\":false,\"raison\":\"${js(it.javaClass.simpleName)}\"}") }
     }
 
-    /** JPEG wants no transparency: a picture with alpha is laid on black first. */
-    private fun rgb(b: BufferedImage): BufferedImage {
-        if (b.type == BufferedImage.TYPE_INT_RGB || b.type == BufferedImage.TYPE_3BYTE_BGR) return b
-        val r = BufferedImage(b.width, b.height, BufferedImage.TYPE_INT_RGB)
-        r.createGraphics().apply { drawImage(b, 0, 0, null); dispose() }
-        return r
-    }
+    private fun rgb(b: BufferedImage): BufferedImage = PlancheRenduPc.rgb(b)
 
     companion object {
         /** A template sent from the page: a picture, 25 MB at most. */

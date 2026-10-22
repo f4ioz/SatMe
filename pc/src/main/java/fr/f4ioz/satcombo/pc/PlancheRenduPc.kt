@@ -43,6 +43,27 @@ object PlancheRenduPc {
         }
     }
 
+    /** A picture as JPEG, at quality [q]. */
+    fun jpeg(b: BufferedImage, q: Float = 0.88f): ByteArray {
+        val o = java.io.ByteArrayOutputStream()
+        val w = ImageIO.getImageWritersByFormatName("jpg").next()
+        ImageIO.createImageOutputStream(o).use { s ->
+            w.output = s
+            val p = w.defaultWriteParam.apply { compressionMode = javax.imageio.ImageWriteParam.MODE_EXPLICIT; compressionQuality = q }
+            w.write(null, javax.imageio.IIOImage(b, null, null), p)
+        }
+        w.dispose()
+        return o.toByteArray()
+    }
+
+    /** JPEG wants no transparency: a picture with alpha is laid on black first. */
+    fun rgb(b: BufferedImage): BufferedImage {
+        if (b.type == BufferedImage.TYPE_INT_RGB || b.type == BufferedImage.TYPE_3BYTE_BGR) return b
+        val r = BufferedImage(b.width, b.height, BufferedImage.TYPE_INT_RGB)
+        r.createGraphics().apply { drawImage(b, 0, 0, null); dispose() }
+        return r
+    }
+
     /** An image file, made no wider than [largeurMax]. */
     fun charge(f: File, largeurMax: Int): BufferedImage? = runCatching {
         val b = ImageIO.read(f) ?: return null
