@@ -329,11 +329,44 @@ class CivController(private val ports: PortsSerie? = null) : RigDriver {
         send(frame(0x0F, byteArrayOf(if (on) 0x01 else 0x00)))
 
     /**
-     * Keys (true) or unkeys the transmitter: CI-V 0x1C 0x00 01/00. Used only
-     * by APRS transmission, one frame at a time, always unkeyed after.
+     * Keys (true) or unkeys the transmitter: CI-V 0x1C 0x00 01/00. Used by
+     * APRS transmission (one frame at a time, always unkeyed after) and by
+     * the rig's PTT on SatMe-PC ([EmissionPoste], behind its guards).
      */
     suspend fun setTransmit(on: Boolean): Boolean =
         send(frame(0x1C, byteArrayOf(0x00, if (on) 0x01 else 0x00)))
+
+    /** The RF power level of the band in use (CI-V 0x14 0x0A, 0 to 255), null when not answered. */
+    suspend fun readRfPower(): Int? {
+        if (link == null) return null
+        val frames = exchange(0x14, byteArrayOf(0x0A), expect = 0x14, expectSub = 0x0A)
+        return CatDecode.payload(frames, radioAddr, controllerAddr, 0x14, 0x0A)?.let { PuissanceRf.decode(it) }
+    }
+
+    /** Sets the RF power level of the band in use (0 to 255). Not a transmit command: it keys nothing. */
+    suspend fun setRfPower(niveau: Int): Boolean =
+        send(frame(0x14, byteArrayOf(0x0A) + PuissanceRf.encode(niveau)))
+
+    /**
+     * The RF power of the band that transmits: SUB in satellite mode
+     * (selected for the reading, MAIN again after), else the band in use.
+     */
+    suspend fun readRfPowerTx(): Int? {
+        val sat = modele.vfoDirect && readSatelliteMode() == true
+        if (sat) selectMainSub(true)
+        val v = readRfPower()
+        if (sat) selectMainSub(false)
+        return v
+    }
+
+    /** Sets the RF power of the band that transmits (see [readRfPowerTx]). */
+    suspend fun setRfPowerTx(niveau: Int): Boolean {
+        val sat = modele.vfoDirect && readSatelliteMode() == true
+        if (sat) selectMainSub(true)
+        val ok = setRfPower(niveau)
+        if (sat) selectMainSub(false)
+        return ok
+    }
 
     /** Satellite mode on? (IC-9700 and IC-9100: 0x16 0x5A; IC-910: 0x1A 0x07), null when unknown. */
     suspend fun readSatelliteMode(): Boolean? {

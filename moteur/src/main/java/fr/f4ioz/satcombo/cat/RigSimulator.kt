@@ -47,6 +47,11 @@ class Ic9700Sim(
     var transmitting: Boolean = false
     /** Every key/unkey command, in order: a test reads the sequence back. */
     val commandesPtt = ArrayList<Boolean>()
+    /** RF power level (0x14 0x0A, 0..255) of each band: MAIN and SUB keep their own. */
+    var puissanceMain: Int = 255
+    var puissanceSub: Int = 255
+    /** Every frame other than PTT received while keyed (a test checks the tuning goes on during TX). */
+    val pendantEmission = ArrayList<ByteArray>()
 
     /** Number of commands refused so far. */
     var refusals: Int = 0; private set
@@ -137,8 +142,17 @@ class Ic9700Sim(
         val cmd = f[4].toInt() and 0xFF
         val d = f.copyOfRange(5, f.size - 1)
         fun at(i: Int) = if (d.size > i) d[i].toInt() and 0xFF else -1
+        if (transmitting && cmd != 0x1C) pendantEmission += f
 
         when (cmd) {
+            0x14 -> when {
+                at(0) != 0x0A -> nak()
+                d.size < 3 -> reply(0x14, byteArrayOf(0x0A) + PuissanceRf.encode(if (onSub) puissanceSub else puissanceMain))
+                else -> {
+                    val v = PuissanceRf.decode(d, 1)
+                    if (v == null) nak() else { if (onSub) puissanceSub = v else puissanceMain = v; ack() }
+                }
+            }
             0x03 -> reply(0x03, CatDecode.freqToBcdLe(if (onSub) subHz else mainHz))
             0x04 -> reply(0x04, byteArrayOf((if (onSub) subMode else mainMode).toByte(), 0x01))
             0x05 -> {
