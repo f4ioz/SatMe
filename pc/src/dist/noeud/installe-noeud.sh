@@ -55,8 +55,24 @@ RULES
 udevadm control --reload-rules 2>/dev/null || true
 udevadm trigger 2>/dev/null || true
 
+echo "==> bladeRF (outil, accès USB, image FPGA)"
+# bladeRF-cli drives the board; its udev rule opens it to the plugdev group.
+# The FPGA image, loaded at each opening: the latest, as used with libbladeRF 2023.02 on the PC.
+if apt-get install -y -q bladerf; then
+  mkdir -p /usr/share/Nuand/bladeRF
+  for f in hostedxA4 hostedxA9; do
+    [ -s /usr/share/Nuand/bladeRF/$f.rbf ] || curl -fsSL "https://www.nuand.com/fpga/$f-latest.rbf" -o /usr/share/Nuand/bladeRF/$f.rbf \
+      || { rm -f /usr/share/Nuand/bladeRF/$f.rbf; echo "  image FPGA $f non téléchargée (le bladeRF $f ne pourra pas recevoir)"; }
+  done
+else
+  echo "  paquet bladerf indisponible : bladeRF non utilisable sur ce node"
+fi
+# The Pluto needs nothing here: plugged in USB it is a network card (192.168.2.1).
+
 echo "==> SatMe dans /opt/satme"
 id satme >/dev/null 2>&1 || useradd --system --home-dir /var/lib/satme-noeud --shell /usr/sbin/nologin satme
+# plugdev: the bladeRF; video: vcgencmd (temperature, throttling) for the node's health
+for g in plugdev video; do getent group $g >/dev/null && usermod -aG $g satme; done
 mkdir -p /opt/satme /var/lib/satme-noeud
 if [ "$SATME" != /opt/satme ]; then rm -rf /opt/satme/lib; cp -a "$SATME/." /opt/satme/; fi
 chown -R satme:satme /var/lib/satme-noeud
@@ -65,7 +81,7 @@ if [ "$SERVICE" -eq 1 ]; then
   echo "==> Service satme-noeud"
   cat > /etc/systemd/system/satme-noeud.service <<UNIT
 [Unit]
-Description=SatMe-Node (MiniTiouner piloté par le réseau)
+Description=SatMe-Node (MiniTiouner, SDR et émetteur pilotés par le réseau)
 After=network-online.target
 Wants=network-online.target
 

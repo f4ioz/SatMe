@@ -38,7 +38,7 @@ tar xf satme-pc.tar
 sudo ./satme/noeud/installe-noeud.sh
 ```
 
-Une dizaine de minutes sur un Pi 3. Le script installe Java, compile LongMynd (BATC), lui donne accès au MiniTiouner (udev), copie SatMe dans `/opt/satme` et démarre le service **satme-noeud** (port 8090). Il finit par l'**adresse** du node et son **code à six chiffres** : les noter.
+Une dizaine de minutes sur un Pi 3. Le script installe Java, compile LongMynd (BATC), lui donne accès au MiniTiouner (udev), installe l'outil du bladeRF et son image FPGA, copie SatMe dans `/opt/satme` et démarre le service **satme-noeud** (port 8090). Il finit par l'**adresse** du node et son **code à six chiffres** : les noter.
 
 Brancher ensuite le MiniTiouner sur le Pi (ou le débrancher et le rebrancher).
 
