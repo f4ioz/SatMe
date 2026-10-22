@@ -11,6 +11,8 @@ package fr.f4ioz.satcombo.ui
 import androidx.annotation.OptIn
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -22,6 +24,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
@@ -30,6 +34,8 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
@@ -41,6 +47,7 @@ import androidx.media3.exoplayer.source.ProgressiveMediaSource
 import androidx.media3.extractor.DefaultExtractorsFactory
 import androidx.media3.extractor.ts.DefaultTsPayloadReaderFactory
 import androidx.media3.ui.PlayerView
+import fr.f4ioz.satcombo.datv.BandeLarge
 import fr.f4ioz.satcombo.datv.Datv
 import fr.f4ioz.satcombo.datv.DatvTelephone
 import fr.f4ioz.satcombo.i18n.t
@@ -63,9 +70,88 @@ fun DatvScreen(d: DatvTelephone) {
         Video(u.flux, u.etat.actif, if (!u.etat.actif) t("datv_arrete") else if (u.etat.verrouille) t("datv_attente_image") else u.etat.libelle + "…")
         Etat(u)
         if (u.message.isNotBlank()) Text(u.message, color = Amber, fontSize = 12.sp)
+        if (u.associe) StationsLarge(d)
         if (!u.associe) Noeud(u, d) else Reglages(u, d)
         if (u.associe) Constellation(u)
         if (u.associe) Noeud(u, d, replie = true)
+    }
+}
+
+/**
+ * The stations on the air now, from the ground station's public spectrum:
+ * the band drawn, each signal named once received, a touch to receive it.
+ */
+@Composable
+private fun StationsLarge(d: DatvTelephone) {
+    val on by d.largeOn.collectAsState()
+    val l by d.large.ui.collectAsState()
+    val u by d.ui.collectAsState()
+    Surface(color = SpaceCard, shape = RoundedCornerShape(14.dp)) {
+        Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(t("datv_large_titre"), color = TextHi, fontWeight = FontWeight.SemiBold)
+                    Text(if (on) t("datv_large_toucher") else t("datv_large_desc"), color = TextLo, fontSize = 11.sp)
+                }
+                Switch(checked = on, onCheckedChange = { d.largeOn(it) })
+            }
+            if (!on) return@Column
+            if (!l.frais) { Text(l.etat.ifBlank { "connexion…" }, color = Amber, fontSize = 12.sp); return@Column }
+            val signaux = l.signaux
+            val maintenant = System.currentTimeMillis()
+            fun nom(sg: fr.f4ioz.satcombo.datv.SignalLarge) = d.noms.nom(sg.centreKhz, sg.srKs, maintenant)
+                ?: if (sg.balise) t("datv_balise") else ""
+            Spectre(l.spectre, signaux, u.etat.actif, { d.tenu(it) }) { d.choisis(it) }
+            signaux.forEach { sg ->
+                val tenu = d.tenu(sg)
+                Row(Modifier.fillMaxWidth().clickable(enabled = !u.occupe) { d.choisis(sg) }.padding(vertical = 5.dp),
+                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(if (tenu) "●" else "○", color = if (tenu) Aurora else TextLo, fontSize = 12.sp)
+                    Column(Modifier.weight(1f)) {
+                        Text(nom(sg).ifBlank { t("datv_large_inconnu") }, color = if (tenu) Aurora else TextHi, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                        Text("%.3f MHz · %s".format(java.util.Locale.FRANCE, sg.centreKhz / 1000.0, if (sg.srKs >= 1000) "%s MS/s".format(java.util.Locale.FRANCE, (sg.srKs / 1000.0).toString().removeSuffix(".0")) else "${sg.srKs} kS/s"),
+                            color = TextLo, fontSize = 12.sp, fontFamily = FontFamily.Monospace)
+                    }
+                    sg.parRapportBaliseDb?.takeIf { !sg.balise }?.let {
+                        Text("%+.1f dB".format(java.util.Locale.FRANCE, it), color = if (sg.auDessusBalise) Amber else TextLo, fontSize = 12.sp, fontFamily = FontFamily.Monospace)
+                    }
+                }
+            }
+            if (signaux.isEmpty()) Text(t("datv_large_vide"), color = TextLo, fontSize = 12.sp)
+        }
+    }
+}
+
+/** The band as the ground station measures it, the signals shaded; a touch on one receives it. */
+@Composable
+private fun Spectre(v: IntArray, signaux: List<fr.f4ioz.satcombo.datv.SignalLarge>, actif: Boolean,
+                    tenu: (fr.f4ioz.satcombo.datv.SignalLarge) -> Boolean, choisis: (fr.f4ioz.satcombo.datv.SignalLarge) -> Unit) {
+    val sg by rememberUpdatedState(signaux)
+    val ch by rememberUpdatedState(choisis)
+    val bas = 8000f; val haut = 44000f
+    fun x(khz: Double, w: Float) = ((khz - BandeLarge.DEBUT_KHZ) / BandeLarge.LARGEUR_KHZ * w).toFloat()
+    Canvas(Modifier.fillMaxWidth().height(84.dp).background(Color(0xFF0E1720), RoundedCornerShape(8.dp))
+        .pointerInput(Unit) {
+            detectTapGestures { o ->
+                val khz = BandeLarge.DEBUT_KHZ + o.x / size.width * BandeLarge.LARGEUR_KHZ
+                sg.firstOrNull { khz >= it.debutKhz && khz <= it.finKhz }?.let(ch)
+            }
+        }) {
+        val w = size.width; val h = size.height
+        signaux.forEach { s ->
+            val a = x(s.debutKhz.toDouble(), w); val b = x(s.finKhz.toDouble(), w)
+            val c = if (actif && tenu(s)) Aurora else if (s.balise) Cyan else Amber
+            drawRect(c.copy(alpha = 0.18f), Offset(a, 0f), Size(maxOf(2f, b - a), h))
+        }
+        if (v.size > 1) {
+            var px = 0f; var py = 0f
+            v.forEachIndexed { i, n ->
+                val xx = i * w / (v.size - 1)
+                val yy = h - ((n - bas) / (haut - bas)).coerceIn(0f, 1f) * h
+                if (i > 0) drawLine(Cyan, Offset(px, py), Offset(xx, yy), 1.5f)
+                px = xx; py = yy
+            }
+        }
     }
 }
 
@@ -76,6 +162,7 @@ private fun Video(flux: String, actif: Boolean, attente: String) {
     val ctx = LocalContext.current
     var images by remember { mutableStateOf(false) }
     var essai by remember { mutableIntStateOf(0) }
+    var plein by remember { mutableStateOf(false) }
     val lecteur = remember {
         ExoPlayer.Builder(ctx)
             // Small buffers: a live picture, not a film.
@@ -101,9 +188,27 @@ private fun Video(flux: String, actif: Boolean, attente: String) {
         lecteur.prepare()
         lecteur.playWhenReady = true
     }
-    Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f).background(Color.Black, RoundedCornerShape(10.dp)), contentAlignment = Alignment.Center) {
-        AndroidView(factory = { PlayerView(it).apply { useController = false; player = lecteur } }, modifier = Modifier.fillMaxSize())
+    // One view holds the player at a time: here, or full screen (in landscape) after a touch.
+    @Composable
+    fun Image(m: Modifier) = Box(m, contentAlignment = Alignment.Center) {
+        AndroidView(factory = { PlayerView(it).apply { useController = false } }, modifier = Modifier.fillMaxSize(),
+            update = { it.player = lecteur }, onRelease = { it.player = null })
         if (!images || !actif) Text(attente, color = TextLo, fontSize = 14.sp)
+    }
+    Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f).background(Color.Black, RoundedCornerShape(10.dp)).clickable { plein = true },
+        contentAlignment = Alignment.Center) {
+        if (!plein) Image(Modifier.fillMaxSize())
+        Text("⛶", color = TextLo, fontSize = 18.sp, modifier = Modifier.align(Alignment.BottomEnd).padding(8.dp))
+    }
+    if (plein) {
+        val activite = ctx as? android.app.Activity
+        DisposableEffect(Unit) {
+            activite?.requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+            onDispose { activite?.requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT }
+        }
+        Dialog(onDismissRequest = { plein = false }, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+            Image(Modifier.fillMaxSize().background(Color.Black).clickable { plein = false })
+        }
     }
 }
 

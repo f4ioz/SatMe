@@ -442,6 +442,38 @@ class DatvPc(
         return null
     }
 
+    /**
+     * The node found receiving while this PC does not follow it (SatMe-PC
+     * restarted, the phone started it): followed again, its settings — LNB
+     * supply included — taken up, so that tuning from here keeps them.
+     * Nothing is started or changed on the node. True when followed.
+     */
+    @Synchronized
+    fun retrouveNoeud(): Boolean {
+        if (!distant || etat.actif) return false
+        val j = runCatching { client.etat() }.getOrNull() ?: return false
+        if (!j.optBoolean("actif") || etat.actif) return false
+        reglage = Datv.reglageDe(j, reglage)
+        recepteur = j.optString("recepteur").takeIf { it in Datv.RECEPTEURS } ?: recepteur
+        val gen = ++generation
+        synchronized(points) { points.clear() }
+        carte.oublie(); sdt.oublie()
+        etat = Datv.etatDe(j, EtatDatv(actif = true, depuis = horloge())).copy(actif = true)
+        suisQualite(gen)
+        thread(isDaemon = true, name = "satme-datv-noeud-etat") { suisNoeud(gen) }
+        thread(isDaemon = true, name = "satme-datv-noeud-ts") { litTsNoeud(gen) }
+        return true
+    }
+
+    @Volatile private var retrouveMs = 0L
+
+    /** [retrouveNoeud] in the background, at most every 10 s, while the page asks and nothing is followed. */
+    fun retrouveDeTempsEnTemps() {
+        if (!distant || etat.actif || horloge() - retrouveMs < 10_000L) return
+        retrouveMs = horloge()
+        thread(isDaemon = true, name = "satme-datv-noeud-retrouve") { runCatching { retrouveNoeud() } }
+    }
+
     /** The node's status, twice a second: its words become ours (the stream's rate and the recording stay ours). */
     private fun suisNoeud(gen: Int) {
         var echecs = 0
@@ -450,6 +482,8 @@ class DatvPc(
                 echecs = 0
                 synchronized(points) { points.clear(); Datv.points(j).forEach { points.addLast(it) } }
                 etat = Datv.etatDe(j, etat)
+                // What the node really receives with (the phone may have tuned it, the LNB supply is its own).
+                if (j.optBoolean("actif") && generation == gen) reglage = Datv.reglageDe(j, reglage)
                 if (!j.optBoolean("actif") && j.optString("erreur").isNotBlank()) {
                     // LongMynd stopped there: said here, the stream closed.
                     synchronized(this) { if (generation == gen) { arreteIci(); etat = etat.copy(erreur = "sur le node : " + j.optString("erreur")) } }

@@ -123,10 +123,23 @@ object Datv {
         0x81 -> "AC-3"; 0x06 -> "données"; else -> "type 0x" + t.toString(16)
     }
 
+    /**
+     * The settings a receiver works with, from its status ([json]): what the
+     * phone takes up when it comes back to a node already receiving, so that
+     * tuning elsewhere keeps the LNB supply as it is (an older node does not
+     * say it: [ici]'s kept).
+     */
+    fun reglageDe(j: JSONObject, ici: ReglageDatv): ReglageDatv = ici.copy(
+        cielKhz = j.optLong("ciel", ici.cielKhz).takeIf { it > 0 } ?: ici.cielKhz,
+        srKs = j.optInt("sr", ici.srKs).takeIf { it > 0 } ?: ici.srKs,
+        olKhz = j.optLong("ol", ici.olKhz).takeIf { it > 0 } ?: ici.olKhz,
+        entreeB = if (j.has("entree")) j.optString("entree") == "b" else ici.entreeB,
+        lnb = if (j.has("lnb")) j.optString("lnb").takeIf { it in setOf("", "v", "h") } ?: ici.lnb else ici.lnb)
+
     /** The status as JSON, as a node and SatMe-PC's page give it. */
     fun json(e: EtatDatv, r: ReglageDatv, points: List<Pair<Int, Int>>): JSONObject =
         JSONObject().put("ok", true).put("actif", e.actif).put("etat", e.etat).put("libelle", e.libelle).put("verrouille", e.verrouille)
-            .put("ciel", r.cielKhz).put("sr", r.srKs).put("ol", r.olKhz).put("fi", r.fiKhz).put("entree", if (r.entreeB) "b" else "a").put("son", r.son)
+            .put("ciel", r.cielKhz).put("sr", r.srKs).put("ol", r.olKhz).put("fi", r.fiKhz).put("entree", if (r.entreeB) "b" else "a").put("son", r.son).put("lnb", r.lnb)
             .put("fiTrouvee", e.fiTrouveeKhz).put("cielTrouve", if (e.fiTrouveeKhz > 0) e.fiTrouveeKhz + r.olKhz else 0L).put("srTrouve", e.srTrouveKs)
             .put("mer", e.merDb ?: JSONObject.NULL).put("modcod", e.modcod).put("fournisseur", e.fournisseur).put("service", e.service)
             .put("nuls", e.nulsPct).put("agc1", e.agc1).put("agc2", e.agc2).put("kbps", e.kbps).put("images", e.images)

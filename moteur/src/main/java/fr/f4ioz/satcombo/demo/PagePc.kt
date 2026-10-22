@@ -7023,11 +7023,15 @@ function marqueHorizon(p) {
 // ------------------------------------------------------------------ DATV (MiniTiouner, through LongMynd)
 let D = null, dSr = 0;
 const mhz3 = k => (k / 1000).toFixed(3).replace('.', ',');
+let dLnbVu = null;
 async function ticDatv(premier) {
   if (g('v-datv').hidden) return;
   try { D = await (await fetch('api/datv')).json(); } catch (x) { return; }
   if (!D.ok) return;
   if (premier || !document.activeElement || !document.activeElement.id.startsWith('d-')) {
+    // The LNB supply the receiver really works with (a node found receiving, tuned from the phone): shown, so that « Recevoir » keeps it.
+    if (D.actif && D.lnb != null && D.lnb !== dLnbVu) { g('d-lnb').value = D.lnb; dLnb(); }
+    dLnbVu = D.actif ? D.lnb : null;
     if (premier) {
       g('d-ciel').value = mhz3(D.ciel); g('d-ol').value = mhz3(D.ol); g('d-entree').value = D.entree; g('d-son').checked = D.son; dSr = D.sr;
       g('d-recepteur').value = D.recepteur || 'minitiouner'; dRecepteurVu();

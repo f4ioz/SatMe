@@ -49,6 +49,43 @@ class DatvTelephone(context: Context) {
     private val _ui = MutableStateFlow(Ui(associe = client.associe, adresse = client.adresse, nom = client.nom, reglage = lisReglage()))
     val ui = _ui.asStateFlow()
 
+    /** The wide band's spectrum (the ground station's), off unless chosen; read only while the screen shows. */
+    val large = SpectreLargeTelephone(portee)
+    private val _largeOn = MutableStateFlow(stockage.getBoolean("datv_large", false))
+    val largeOn = _largeOn.asStateFlow()
+    @Volatile private var ecranVu = false
+    /** The names heard on the wide band (frequency + rate → name), kept 24 h. */
+    val noms = NomsSignaux().also { it.reprends(stockage.getString("datv_large_noms", null), System.currentTimeMillis()) }
+
+    fun largeOn(on: Boolean) {
+        stockage.edit().putBoolean("datv_large", on).apply()
+        _largeOn.value = on
+        if (on && ecranVu) large.ouvre() else large.ferme()
+    }
+
+    /** A signal of the wide band received: its frequency and rate, the rest (oscillator, input, LNB supply) as it is. */
+    fun choisis(sg: SignalLarge) {
+        regle(_ui.value.reglage.copy(cielKhz = sg.centreKhz, srKs = sg.srKs))
+        recois()
+    }
+
+    /** The signal the node is on, when it receives. */
+    fun tenu(sg: SignalLarge): Boolean {
+        val u = _ui.value
+        return u.etat.actif && Math.abs(sg.centreKhz - u.reglage.cielKhz) <= maxOf(NomsSignaux.tolerance(sg.srKs), sg.largeurKhz / 2)
+    }
+
+    /** The name received now (the service's, else its provider's) noted for this frequency and rate. */
+    private fun noteNom(e: EtatDatv) {
+        val r = _ui.value.reglage
+        val n = e.service.ifBlank { e.fournisseur }.trim()
+        if (!e.verrouille || n.isEmpty()) return
+        var nouveau = false
+        listOf(r.srKs, e.srTrouveKs).filter { it > 0 }.map { BandeLarge.debit(it.toDouble()) }.distinct()
+            .forEach { if (noms.note(r.cielKhz, it, n, System.currentTimeMillis())) nouveau = true }
+        if (nouveau) stockage.edit().putString("datv_large_noms", noms.texte()).apply()
+    }
+
     private fun lisReglage() = ReglageDatv(
         cielKhz = stockage.getLong("ciel_khz", Datv.BALISE_KHZ), srKs = stockage.getInt("sr", 1500),
         olKhz = stockage.getLong("ol_khz", 9_750_000L), entreeB = stockage.getBoolean("entree_b", false),
@@ -94,6 +131,7 @@ class DatvTelephone(context: Context) {
                 runCatching { client.etat() }.onSuccess { j ->
                     echecs = 0
                     val e = Datv.etatDe(j, _ui.value.etat).copy(actif = j.optBoolean("actif"), erreur = j.optString("erreur"))
+                    noteNom(e)
                     _ui.update { it.copy(etat = e, points = Datv.points(j), flux = if (e.actif) it.flux else "",
                         message = if (!e.actif && e.erreur.isNotBlank()) e.erreur else it.message) }
                     if (!e.actif) return@launch
@@ -122,15 +160,21 @@ class DatvTelephone(context: Context) {
     }
 
     /** The screen left: the phone stops following (the node keeps receiving until asked to stop). */
-    fun quitte() { suivi?.cancel() }
+    fun quitte() { suivi?.cancel(); ecranVu = false; large.ferme() }
 
     /** Back on the screen: follow again if the node is receiving. */
     fun revient() {
+        ecranVu = true
+        if (_largeOn.value) large.ouvre()
         if (!client.associe) return
         portee.launch {
             runCatching { client.etat() }.onSuccess { j ->
+                // The node's own oscillator, input and LNB supply as last used (calibrated on the beacon from the PC, say):
+                // this phone's stored ones may be old, and « Recevoir » must not cut the LNB the node feeds.
+                _ui.update { u -> Datv.reglageDe(j, u.reglage).let { n -> u.copy(reglage = u.reglage.copy(olKhz = n.olKhz, entreeB = n.entreeB, lnb = n.lnb)) } }
                 if (j.optBoolean("actif")) {
-                    _ui.update { it.copy(etat = Datv.etatDe(j, it.etat).copy(actif = true), flux = client.urlFlux()) }
+                    // What it receives with, LNB supply included: tuning from here keeps it.
+                    _ui.update { it.copy(etat = Datv.etatDe(j, it.etat).copy(actif = true), flux = client.urlFlux(), reglage = Datv.reglageDe(j, it.reglage)) }
                     suis()
                 }
             }

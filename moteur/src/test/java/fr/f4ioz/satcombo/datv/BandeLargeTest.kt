@@ -163,4 +163,14 @@ class BandeLargeTest {
         assertNull(w.tic(0L, listOf(sg(Datv.BALISE_KHZ, 1500, true)), false))
         assertEquals("aucun signal occupé", w.etat)
     }
+
+    @Test
+    fun le_reglage_du_node_repris_avec_son_alimentation_lnb() {
+        val node = ReglageDatv(cielKhz = 10_494_750L, srKs = 333, olKhz = 9_749_766L, entreeB = true, lnb = "h")
+        val j = Datv.json(EtatDatv(actif = true), node, emptyList())
+        assertEquals(node.copy(son = false), Datv.reglageDe(j, ReglageDatv(son = false)))
+        // An older node says no supply: the one known here is kept.
+        j.remove("lnb")
+        assertEquals("v", Datv.reglageDe(j, ReglageDatv(lnb = "v")).lnb)
+    }
 }
