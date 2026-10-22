@@ -651,8 +651,9 @@ ${STYLE_JETONS}
   .sked-bandeau { margin-top:6px; padding:6px 10px; border-radius:8px; background:rgba(255,180,84,.14); border:1px solid rgba(255,180,84,.45); font-size:12px; }
   .sked-bandeau b.k { color:var(--ambre); letter-spacing:1px; font-size:11px; margin-right:6px; }
   .sked-bandeau a { color:var(--clair); }
-  .qso-passage { margin-top:6px; font-size:12px; display:flex; flex-wrap:wrap; gap:4px 6px; align-items:center; }
-  .qso-passage span.q { padding:1px 8px; border-radius:10px; background:rgba(255,95,162,.16); color:#FF8CC0; font-weight:700; cursor:pointer; }
+  .qso-passage { margin-top:6px; font-size:12px; display:flex; flex-wrap:wrap; gap:4px 6px; align-items:center; max-height:46px; overflow-y:auto; }
+  .qso-passage span.qp { flex:none; padding:1px 8px; border-radius:10px; background:rgba(255,95,162,.16); color:#FF8CC0; font-weight:700; cursor:pointer; white-space:nowrap; }
+  .qso-passage span.qp i { font-style:normal; font-weight:400; opacity:.75; margin-right:4px; }
   .cr-carte canvas { position:absolute; inset:0; width:100%; height:100%; cursor:grab; }
   .cr-bornes { display:flex; justify-content:space-between; font-size:11px; color:var(--gris); margin-top:2px; }
   .cr-bande { position:relative; height:14px; margin-top:6px; background:linear-gradient(90deg, rgba(63,224,200,.15), rgba(63,224,200,.35), rgba(63,224,200,.15)); border-radius:7px; }
@@ -4981,25 +4982,61 @@ function bandeauSkeds(id) {
 function majPassageCarnet() {
   bandeauSkeds('cr-skeds');
   const pc = E && E.passageCarnet, l = (pc && pc.contacts) || [];
-  g('cr-qso').innerHTML = l.length ? '<span class="petit">Ce passage :</span>' + l.map(c =>
-    '<span class="q" title="' + hm(c.t) + (c.carre ? ' · ' + esc(c.carre) : '') + (c.mode ? ' · ' + esc(c.mode) : '') + '" onclick="g(\'c-call\').value=\'' + esc(c.call) +
-    '\';g(\'c-call\').dispatchEvent(new Event(\'input\'))">' + esc(c.call) + '</span>').join('') : (pc ? '<span class="petit">Aucun contact sur ce passage pour l’instant.</span>' : '');
+  const h = l.length ? '<span class="petit">Ce passage (' + l.length + ') :</span>' + l.slice().sort((a, b) => a.t - b.t).map(c =>
+    '<span class="qp" title="' + hm(c.t) + (c.carre ? ' · ' + esc(c.carre) : '') + (c.mode ? ' · ' + esc(c.mode) : '') + '" onclick="g(\'c-call\').value=\'' + esc(c.call) +
+    '\';g(\'c-call\').dispatchEvent(new Event(\'input\'))"><i>' + hm(c.t) + '</i>' + esc(c.call) + '</span>').join('') : (pc ? '<span class="petit">Aucun contact sur ce passage pour l’instant.</span>' : '');
+  // Two rows at most, scrolled to the newest.
+  if (g('cr-qso').dataset.vu !== h) { g('cr-qso').dataset.vu = h; g('cr-qso').innerHTML = h; g('cr-qso').scrollTop = 1e6; }
 }
 // The pass's contacts (pink) and the announced stations (amber ring) on a map, at their squares.
+// Points close on the screen (the same square, or a few pixels apart) make one marker with their count,
+// their label one line per station; the labels spread so none covers another, a leader line when moved.
+${EtiquettesCarteJs.JS}
+const ETQ_H = 14;
 function pointsDuPassage(m) {
   const pc = E && E.passageCarnet; if (!pc) return;
-  const x = m.x;
-  for (const d of [-360, 0, 360]) {
-    (pc.skeds || []).forEach(k => { if (k.lat == null) return;
-      x.strokeStyle = '#FFB454'; x.lineWidth = 3; x.beginPath(); x.arc(m.px(k.lon + d), m.py(k.lat), 6, 0, 7); x.stroke();
-      etiquetteCarte(m, k.lat, k.lon + d, '📣 ' + k.call, '#8A5300'); });
-    (pc.contacts || []).forEach(c => { if (c.lat == null) return; pointCarte(m, c.lat, c.lon + d, c.faible ? 'rgba(255,95,162,.4)' : '#FF5FA2', c.faible ? 4 : 5, (c.dr ? c.dr + ' ' : '') + c.call); });
-  }
-}
-function etiquetteCarte(m, lat, lon, nom, coul) {
-  const x = m.x;
-  x.font = 'bold 12px Drapeaux,system-ui'; x.textAlign = 'left'; x.lineWidth = 3; x.strokeStyle = 'rgba(255,255,255,.85)';
-  x.strokeText(nom, m.px(lon) + 9, m.py(lat) + 14); x.fillStyle = coul; x.fillText(nom, m.px(lon) + 9, m.py(lat) + 14);
+  const x = m.x, dans = p => p.x > -60 && p.x < m.w + 60 && p.y > -60 && p.y < m.h + 60;
+  const sur = l => { const o = []; for (const d of [-360, 0, 360]) l.forEach(e => { if (e.lat == null) return;
+    const p = { x: m.px(e.lon + d), y: m.py(e.lat), cle: e.carre ? e.carre.slice(0, 6).toUpperCase() + d : '', e }; if (dans(p)) o.push(p); }); return o; };
+  const ks = sur(pc.skeds || []), cs = sur((pc.contacts || []).slice().sort((a, b) => a.t - b.t));
+  x.font = 'bold 12px Drapeaux,system-ui';
+  const items = [], L = Math.max(4, Math.min(10, Math.floor(m.h * 0.4 / ETQ_H)));
+  // A big group's names in columns (three at most), the rest counted; a station worked twice once, « ×2 ».
+  const ajoute = (pts, sked) => groupesCarte(pts, 16).forEach(gr => {
+    const l = gr.membres.map(i => pts[i].e), n = l.length, fois = new Map();
+    l.forEach(e => fois.set(e.call, (fois.get(e.call) || 0) + 1));
+    const u = l.filter((e, i) => l.findIndex(f => f.call === e.call) === i), k = colonnesEtiquette(u.length, L, 3);
+    const noms = u.slice(0, k.montres).map(e => (sked ? '📣 ' : e.dr ? e.dr + ' ' : '') + e.call + (fois.get(e.call) > 1 ? ' ×' + fois.get(e.call) : ''));
+    if (k.montres < u.length) noms.push('+ ' + (u.length - k.montres) + ' autres');
+    const col = Math.max(...noms.map(t => x.measureText(t).width)) + 10;
+    items.push({ x: gr.x, y: gr.y, r: sked ? 7 : n > 1 ? 8 : 5, n, sked, faible: l.every(e => e.faible), noms, lignes: k.lignes, col,
+      w: k.colonnes * col - 8, h: k.lignes * ETQ_H + 2 });
+  });
+  ajoute(ks, true); ajoute(cs, false);
+  // Markers first, then the labels around them.
+  items.forEach(it => {
+    if (it.sked) { x.strokeStyle = '#FFB454'; x.lineWidth = 3; x.beginPath(); x.arc(it.x, it.y, 6, 0, 7); x.stroke(); }
+    else {
+      x.fillStyle = it.faible ? 'rgba(255,95,162,.4)' : '#FF5FA2'; x.strokeStyle = '#06131A'; x.lineWidth = 1.5;
+      x.beginPath(); x.arc(it.x, it.y, it.r, 0, 7); x.fill(); x.stroke();
+      if (it.n > 1) { x.fillStyle = '#06131A'; x.font = 'bold 10px system-ui'; x.textAlign = 'center'; x.fillText(String(it.n), it.x, it.y + 3.5); }
+    }
+  });
+  const pos = placeEtiquettes(items, m.boites, m.w, m.h);
+  x.font = 'bold 12px Drapeaux,system-ui'; x.textAlign = 'left';
+  items.forEach((it, i) => {
+    const b = pos[i], coul = it.sked ? '#8A5300' : '#06131A';
+    if (b.trait) {
+      const ax = Math.max(b.x, Math.min(b.x + it.w, it.x)), ay = Math.max(b.y, Math.min(b.y + it.h, it.y)), d = Math.hypot(ax - it.x, ay - it.y) || 1;
+      x.strokeStyle = it.sked ? 'rgba(138,83,0,.8)' : 'rgba(6,19,26,.7)'; x.lineWidth = 1;
+      x.beginPath(); x.moveTo(it.x + (ax - it.x) * it.r / d, it.y + (ay - it.y) * it.r / d); x.lineTo(ax, ay); x.stroke();
+    }
+    it.noms.forEach((t, k) => {
+      const tx = b.x + 1 + Math.floor(k / it.lignes) * it.col, ty = b.y + (k % it.lignes + 1) * ETQ_H - 2;
+      x.lineWidth = 3; x.strokeStyle = 'rgba(255,255,255,.85)'; x.strokeText(t, tx, ty);
+      x.fillStyle = coul; x.fillText(t, tx, ty);
+    });
+  });
 }
 async function rapportAmsat(entendu) {
   if (!E || !E.suivi) return;
@@ -8493,7 +8530,7 @@ function fondCarte(c, v) {
   const n = 1 << z, ox = w / 2 - v.cx * s, oy = h / 2 - v.cy * s;
   for (let ty = Math.max(0, Math.floor(-oy / ts)); ty <= Math.min(n - 1, Math.floor((h - oy) / ts)); ty++)
     for (let tx = Math.floor(-ox / ts); tx <= Math.floor((w - ox) / ts); tx++) { const i = qTuile(z, tx, ty); if (i) x.drawImage(i, ox + tx * ts, oy + ty * ts, ts + 0.5, ts + 0.5); }
-  return { x, w, h, px: lon => ox + wxk(lon) * s, py: lat => oy + wyq(lat) * s };
+  return { x, w, h, px: lon => ox + wxk(lon) * s, py: lat => oy + wyq(lat) * s, boites: [] };
 }
 /** Drag, wheel and double-click on a map canvas. */
 function attacheCarte(c, v, redessine, recadre, zMin) {
@@ -8525,8 +8562,10 @@ function traceCarte(m, l, couleur, larg, tirets) {
 function pointCarte(m, lat, lon, couleur, r, nom) {
   const x = m.x;
   x.fillStyle = couleur; x.strokeStyle = '#06131A'; x.lineWidth = 1.5; x.beginPath(); x.arc(m.px(lon), m.py(lat), r, 0, 7); x.fill(); x.stroke();
+  if (m.boites) m.boites.push({ x: m.px(lon) - r, y: m.py(lat) - r, w: 2 * r, h: 2 * r });
   if (!nom) return;
   x.font = 'bold 12px Drapeaux,system-ui'; x.textAlign = 'left'; x.lineWidth = 3; x.strokeStyle = 'rgba(255,255,255,.85)';
+  if (m.boites) m.boites.push({ x: m.px(lon) + r + 2, y: m.py(lat) - 18, w: x.measureText(nom).width + 2, h: 16 });
   x.strokeText(nom, m.px(lon) + r + 3, m.py(lat) - 5); x.fillStyle = '#06131A'; x.fillText(nom, m.px(lon) + r + 3, m.py(lat) - 5);
 }
 const KV = { cx: 0.5, cy: 0.35, z: 3 };
