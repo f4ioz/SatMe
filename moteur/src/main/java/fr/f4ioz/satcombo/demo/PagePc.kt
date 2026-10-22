@@ -3302,6 +3302,12 @@ ${rail()}
         <div class="nx-sv"><span>Émission</span><b id="nx-s-tx">—</b><button class="arret" onclick="ndAction('tx-arrete', '', 'nx-sv-msg')">■ Arrêter</button></div>
         <div class="ligne"><button id="nx-relance" onclick="ndAction('relance', 'Relancer SatMe sur le node ? Son service systemd le redémarre en quelques secondes (le Raspberry Pi, lui, ne redémarre pas).', 'nx-sv-msg')">Relancer SatMe sur le node</button>
           <span class="petit" id="nx-sv-msg" aria-live="polite"></span></div>
+        <div class="ligne nx-pi"><span class="petit">Raspberry Pi</span>
+          <button id="nx-pi-redem" onclick="nxPi('redemarre')">Redémarrer le Pi</button>
+          <button id="nx-pi-eteint" class="arret" onclick="nxPi('eteint')">Éteindre le Pi</button>
+          <button type="button" class="q" id="nx-pi-q" aria-label="Redémarrer ou éteindre le Pi">?</button></div>
+        <div id="nx-pi-aide" hidden>Le <b>Raspberry Pi</b> lui-même. Le node arrête d'abord tout : émission (s'il émet, le dialogue propose de l'arrêter), réception DATV (LongMynd, et l'alimentation LNB), flux SDR ; ses réglages sont écrits, puis le système redémarre ou s'éteint. Redémarré, il revient seul en une à deux minutes et cette page le retrouve. <b>Éteint, il ne se rallume que sur place</b> (alimentation coupée puis remise). Seulement s'il tourne par son service systemd, avec le droit que l'installeur lui donne (<code>/etc/sudoers.d/satme-noeud</code> : ces deux commandes seulement).</div>
+        <div class="petit" id="nx-pi-msg" aria-live="polite"></div>
       </div>
       <div class="carte">
         <div class="t">Version</div>
@@ -4263,6 +4269,13 @@ ${rail()}
     <button class="arret" onclick="ndAction('tx-arrete', '')">■ Arrêter l’émission du node</button>
     <button onclick="ndAction('relance', 'Relancer SatMe sur le node ? Son service systemd le redémarre en quelques secondes (le Raspberry Pi, lui, ne redémarre pas).')">Relancer SatMe sur le node</button>
     <span class="petit" id="nd-msg"></span></div>
+</dialog>
+<dialog id="nx-pi-dlg" class="dlg-mt" style="width:min(540px,94vw)" aria-labelledby="nx-pi-t">
+  <div class="dlg-tete"><b id="nx-pi-t">Redémarrer le Pi</b><button class="discret" onclick="g('nx-pi-dlg').close()" aria-label="Fermer">✕</button></div>
+  <ul class="petit" id="nx-pi-cons" style="margin:0 0 8px;padding-left:18px;line-height:1.6"></ul>
+  <label class="petit" id="nx-pi-tx-l" hidden style="display:block;color:var(--danger)"><input type="checkbox" id="nx-pi-tx" onchange="nxPiTx()"> <b>Le node émet</b> : arrêter l'émission d'abord</label>
+  <div class="ligne"><button id="nx-pi-ok" class="arret" onclick="nxPiConfirme()">Redémarrer</button><button onclick="g('nx-pi-dlg').close()">Annuler</button>
+    <span class="petit" id="nx-pi-dmsg" aria-live="polite"></span></div>
 </dialog>
 <dialog id="pal" class="dlg-pal" aria-label="Commandes">
   <div class="pal-tete">${IconesPc.svg("search")}<input id="pal-q" autocomplete="off" spellcheck="false" placeholder="Onglet, fréquence (145.800, 10489.750 M, 437,5), satellite, indicatif, action…"></div>
@@ -9745,7 +9758,7 @@ function carnetBascule() {
 }
 g('c-vers-q').aides = [g('c-vers-aide')];
 g('cat-fi-q').aides = [g('cat-fi-aide')]; g('r-fi-q').aides = [g('r-fi-aide')];
-g('nd-q').aides = [g('nd-aide')]; g('r-noeud-q').aides = [g('r-noeud-aide')];
+g('nd-q').aides = [g('nd-aide')]; g('r-noeud-q').aides = [g('r-noeud-aide')]; g('nx-pi-q').aides = [g('nx-pi-aide')];
 function carnetRend() {
   const k = TQ && TQ.carnet, c = carnetVers(), apres = g('ca-on').checked;
   g('c-vers').hidden = !c || apres;
@@ -14637,6 +14650,9 @@ async function ndRegle(q) {
   HX.t.noeud = 0; HX.t.sdr = 0; await ticTete();
 }
 const ND_ETATS = { marche: 'en marche', arret: 'à l’arrêt', erreur: 'en erreur' };
+/** The Pi's restart or power off asked from here (« redemarrage », « eteint », ''), as last seen: its return said once. */
+let nxPiAvant = '';
+function ndArret(n) { return n && n.pi ? n.pi.arret || '' : ''; }
 function ndRole(n, cle, nom) {
   const s = n.sante && n.sante.services ? n.sante.services[cle] : null, m = n.materiel || {};
   const app = cle === 'datv' ? m.datv : cle === 'sdr' ? m.sdr : m.tx;
@@ -14650,10 +14666,13 @@ function ndRend() {
   g('nd-carte').hidden = !vu || !!window.SATME_TELEPHONE;
   const sel = g('r-recepteur'); if (sel) [...sel.options].forEach(o => { if (o.value === 'noeud') o.hidden = !vu; });
   if (!vu) return;
+  const ar = ndArret(n);
+  if (nxPiAvant === 'redemarrage' && !ar && n.pi && n.pi.revenuS != null) toast('SatMe-Node de retour après le redémarrage du Pi');
+  nxPiAvant = ar;
   txt('nd-nom', (n.nom ? '« ' + n.nom + ' » ' : '') + n.adresse);
   const al = n.alertes || [], dg = al.some(a => a.niveau === 'danger');
-  const e = g('nd-etat'); txt('nd-etat', n.erreur ? 'injoignable' : !n.materiel ? 'lecture…' : al.length ? (dg ? '● alerte' : '● attention') : '● en forme');
-  e.style.color = n.erreur || dg ? 'var(--rouge)' : al.length ? 'var(--ambre)' : 'var(--vert)';
+  const e = g('nd-etat'); txt('nd-etat', ar === 'eteint' ? '○ éteint' : ar ? '↻ redémarrage…' : n.erreur ? 'injoignable' : !n.materiel ? 'lecture…' : al.length ? (dg ? '● alerte' : '● attention') : '● en forme');
+  e.style.color = ar === 'eteint' ? 'var(--gris)' : ar ? 'var(--ambre)' : n.erreur || dg ? 'var(--rouge)' : al.length ? 'var(--ambre)' : 'var(--vert)';
   const r = ndRole(n, 'datv', 'DATV') + ' · ' + ndRole(n, 'sdr', 'SDR') + ' · ' + ndRole(n, 'tx', 'TX');
   if (g('nd-roles').innerHTML !== r) g('nd-roles').innerHTML = r;
   const s = n.sante, sy = s && s.systeme ? s.systeme : null;
@@ -14666,7 +14685,7 @@ function ndRend() {
   if (document.activeElement !== g('nd-tx')) g('nd-tx').checked = !!n.emissionParNoeud;
   // The SDR tab's settings for the node's board.
   const m = n.materiel || {};
-  txt('r-noeud-info', n.erreur ? 'node injoignable : ' + n.erreur : (n.nom || n.adresse) + ' · ' + (m.sdrActif ? 'flux vers ' + (m.sdrClient || '?') : 'au repos'));
+  txt('r-noeud-info', ar === 'eteint' ? 'node éteint' : ar ? 'node en redémarrage' : n.erreur ? 'node injoignable : ' + n.erreur : (n.nom || n.adresse) + ' · ' + (m.sdrActif ? 'flux vers ' + (m.sdrClient || '?') : 'au repos'));
   if (document.activeElement !== g('r-noeud-carte')) g('r-noeud-carte').value = m.sdr || 'aucun';
   if (document.activeElement !== g('r-noeud-flux')) g('r-noeud-flux').value = String(n.etages || 0);
   if (g('nd-dlg').open) ndDetail();
@@ -14754,13 +14773,13 @@ function nxRend() {
   // The header: who, where, which version, since when, how it is.
   txt('nx-nom', n.nom ? '« ' + n.nom + ' »' : 'SatMe-Node');
   txt('nx-adr', n.adresse || '');
-  const dg = al.some(a => a.niveau === 'danger'), e = g('nx-etat');
-  txt('nx-etat', n.erreur ? 'injoignable' : !n.materiel ? 'lecture…' : al.length ? (dg ? '● alerte' : '● attention') : '● en forme');
-  e.className = 'pastille ' + (n.erreur || dg ? 'danger' : al.length || !n.materiel ? 'warn' : 'ok');
+  const dg = al.some(a => a.niveau === 'danger'), e = g('nx-etat'), ar = ndArret(n), pi = n.pi || {};
+  txt('nx-etat', ar === 'eteint' ? '○ éteint' : ar ? '↻ redémarrage…' : n.erreur ? 'injoignable' : !n.materiel ? 'lecture…' : al.length ? (dg ? '● alerte' : '● attention') : '● en forme');
+  e.className = 'pastille ' + (ar === 'eteint' ? '' : ar ? 'warn' : n.erreur || dg ? 'danger' : al.length || !n.materiel ? 'warn' : 'ok');
   txt('nx-resume', [s.version ? 'version ' + s.version : '', sy.uptimeS != null ? 'allumé depuis ' + duree(sy.uptimeS * 1000) : '',
     n.age != null && n.age > 6 ? 'lu il y a ' + n.age + ' s' : ''].filter(x => x).join(' · '));
   g('nx-lien').href = 'http://' + hp.h + ':' + hp.p + '/';
-  nxHtml('nx-alertes', (n.erreur && !al.length ? [{ niveau: 'danger', texte: 'node injoignable : ' + n.erreur }] : al)
+  nxHtml('nx-alertes', (n.erreur && !al.length && !ar ? [{ niveau: 'danger', texte: 'node injoignable : ' + n.erreur }] : al)
     .map(a => '<div class="' + (a.niveau === 'danger' ? 'danger' : 'warn') + '">⚠ ' + esc(a.texte) + '</div>').join(''));
   const bs = g('nx-b-sdr'); bs.disabled = !m.sdr || m.sdr === 'aucun';
   bs.title = bs.disabled ? 'Choisir d’abord la carte « Récepteur SDR » du node (Rôles des cartes)' : 'Le récepteur de l’onglet SDR devient le SDR du node (' + (NX_CARTES[m.sdr] || m.sdr) + ')';
@@ -14827,6 +14846,16 @@ function nxRend() {
   txt('nx-s-tx', sv.tx ? nxEtat(sv.tx) + (sv.tx.etat === 'marche' ? ' · ' + mhz(sv.tx.hz) + ' MHz' : '') + (sv.tx.raison && sv.tx.etat !== 'marche' ? ' · ' + sv.tx.raison : '') : '—');
   const rl = g('nx-relance'); rl.disabled = s.systemd === false;
   rl.title = s.systemd === false ? 'Lancé à la main sur le node (pas par son service systemd) : rien pour le relancer' : 'Son service systemd le redémarre ; le Raspberry Pi ne redémarre pas';
+  // The Pi itself: restarting, switched off, back; what forbids it (by hand, no sudo rule, an older node).
+  const mp = m.pi, bloque = ar === 'eteint' ? 'Le Pi est éteint' : ar ? 'Le Pi redémarre' : n.erreur ? 'Node injoignable' : !n.materiel ? 'Node pas encore lu' :
+    !mp ? 'Ce node ne sait pas encore redémarrer ni éteindre son Pi : le mettre à jour' :
+    mp.systemd === false ? 'Lancé à la main sur le node (pas par son service systemd)' : mp.permis || '';
+  ['nx-pi-redem', 'nx-pi-eteint'].forEach(id => { const b = g(id); b.disabled = !!bloque; b.title = bloque; });
+  nxHtml('nx-pi-msg', ar === 'redemarrage' ? (pi.enRetard ? '<span style="color:var(--danger)">Pas revenu après ' + duree(pi.depuisS * 1000) + ' : vérifier son alimentation et son réseau.</span>'
+      : 'Redémarrage du Pi… (' + pi.depuisS + ' s) : le node revient seul, cette page le retrouve.') :
+    ar === 'eteint' ? 'Pi éteint à la demande (il y a ' + duree(pi.depuisS * 1000) + ') : à rallumer sur place. Cette page le retrouvera à son retour.' :
+    pi.revenuS != null ? '<span style="color:var(--ok)">Node de retour après le redémarrage du Pi.</span>' :
+    mp && mp.systemd !== false && mp.permis ? '<span style="color:var(--warn)">' + esc(mp.permis) + '</span>' : '');
   // Version: the node's against this SatMe-PC's.
   const vn = n.versionNoeud, vp = n.versionPc || '?';
   nxHtml('nx-version', 'Node : <b>' + esc(s.version || '?') + '</b> · ce SatMe-PC : <b>' + esc(vp) + '</b><br>' +
@@ -14873,6 +14902,33 @@ async function nxAssocie() {
   try { j = await (await fetch('api/datv/noeud?adresse=' + enc(v('nx-adresse')) + '&code=' + enc(v('nx-code')), { method: 'POST' })).json(); } catch (x) {}
   if (j && j.ok !== false) { txt('nx-assoc-msg', 'associé'); g('nx-code').value = ''; nxChangeOuvert = false; }
   else txt('nx-assoc-msg', 'Refusé : ' + (j && j.erreur ? j.erreur : 'pas de réponse'));
+  HX.t.noeud = 0; await ticTete();
+}
+/** The Pi restarted or switched off: its consequences said first; a transmission under way stopped only when ticked. */
+let nxPiQuoi = '';
+function nxPi(quoi) {
+  if (window.SATME_TELEPHONE) return;
+  const n = HX.noeud || {}, m = n.materiel || {}, e = quoi === 'eteint';
+  nxPiQuoi = quoi;
+  txt('nx-pi-t', e ? 'Éteindre le Raspberry Pi du node ?' : 'Redémarrer le Raspberry Pi du node ?');
+  g('nx-pi-cons').innerHTML = ['L’émission s’arrête, la réception DATV aussi (LongMynd, et <b>l’alimentation LNB est coupée</b>), le flux SDR vers ce PC se coupe.',
+    'Les réglages du node sont écrits avant.',
+    e ? '<b>Éteint, il ne se rallume que sur place</b> : son alimentation coupée puis remise. Cette page le dit éteint, sans alarme, jusqu’à son retour.'
+      : 'Il revient seul en une à deux minutes ; cette page le retrouve et le dit (au-delà de 3 min, elle prévient).'].map(x => '<li>' + x + '</li>').join('');
+  g('nx-pi-tx-l').hidden = !m.txEmet; g('nx-pi-tx').checked = false;
+  txt('nx-pi-ok', e ? 'Éteindre le Pi' : 'Redémarrer le Pi'); txt('nx-pi-dmsg', '');
+  nxPiTx();
+  g('nx-pi-dlg').showModal();
+}
+function nxPiTx() { g('nx-pi-ok').disabled = !g('nx-pi-tx-l').hidden && !g('nx-pi-tx').checked; }
+async function nxPiConfirme() {
+  const tx = !g('nx-pi-tx-l').hidden && g('nx-pi-tx').checked;
+  txt('nx-pi-dmsg', '…'); g('nx-pi-ok').disabled = true;
+  let j = null;
+  try { j = await (await fetch('api/noeud/reglage?systeme=' + nxPiQuoi + (tx ? '&arreteTx=1' : ''), { method: 'POST' })).json(); } catch (x) {}
+  if (j && j.ok) { g('nx-pi-dlg').close(); txt('nx-pi-msg', j.message || ''); }
+  else if (j && j.emet) { g('nx-pi-tx-l').hidden = false; nxPiTx(); txt('nx-pi-dmsg', 'Le node émet : cocher l’arrêt de l’émission pour continuer.'); }
+  else { txt('nx-pi-dmsg', 'Refusé : ' + (j && j.erreur ? j.erreur : 'pas de réponse')); g('nx-pi-ok').disabled = false; }
   HX.t.noeud = 0; await ticTete();
 }
 async function nxOublie() {
@@ -14965,7 +15021,8 @@ function rendTete() {
   if (rgVu) sb('sb-rig', rg.erreur ? 'warn' : rg.ecoute ? (rg.clients ? 'ok' : 'info') : '', rg.erreur ? 'erreur' : rg.ecoute ? rg.clients + ' client' + (rg.clients > 1 ? 's' : '') : 'coupé');
   const nd = HX.noeud, ndVu = !!(nd && nd.ok && nd.associe);
   g('sb-noeud').hidden = !ndVu;
-  if (ndVu) { const al = nd.alertes || [], dg = al.some(a => a.niveau === 'danger');
+  if (ndVu && ndArret(nd)) sb('sb-noeud', ndArret(nd) === 'eteint' ? '' : 'warn', ndArret(nd) === 'eteint' ? 'éteint' : 'redémarrage…');
+  else if (ndVu) { const al = nd.alertes || [], dg = al.some(a => a.niveau === 'danger');
     sb('sb-noeud', dg ? 'danger' : al.length ? 'warn' : nd.materiel ? 'ok' : 'info', al.length ? (al.length === 1 ? al[0].texte : al.length + ' alertes') : nd.materiel ? 'en forme' : 'lecture…'); }
   const ne = (window.__err || []).length + erreursServeur().length;
   sb('sb-err', ne ? 'danger' : 'ok', String(ne));

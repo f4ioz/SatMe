@@ -89,7 +89,11 @@ Each keeps the key the node gave: the node, the PC or the phone can restart with
 
 ## Update
 
-On the Pi, the same commands as in step 2 (latest published release). Settings, code and keys are kept in `/var/lib/satme-noeud`. **Relancer SatMe sur le node** from SatMe-PC (Station › SatMe-Node › Services) only restarts the service, never the Pi.
+On the Pi, the same commands as in step 2 (latest published release). Settings, code and keys are kept in `/var/lib/satme-noeud`. **Relancer SatMe sur le node** from SatMe-PC (Station › SatMe-Node › Services) only restarts the service, not the Pi.
+
+### Restarting or switching off the Pi
+
+From SatMe-PC, Station › SatMe-Node › Services: **Redémarrer le Pi** and **Éteindre le Pi** (also on the node's own page opened on the Pi). The node first stops the transmission (only when asked in the dialog; otherwise it refuses while transmitting), DATV reception and its LNB supply, the SDR stream, writes its settings, answers, then runs `sudo -n /usr/bin/systemctl reboot` or `poweroff`. The installer grants **those two commands only** to the service's `satme` account, in `/etc/sudoers.d/satme-noeud` (checked by `visudo -cf`, mode 0440). If SatMe-PC says the right is missing: run the installer again (`sudo ./satme/noeud/installe-noeud.sh`). A node started by hand (not by its service) refuses. **Once off, the Pi only comes back on site**: remove and restore its power.
 
 ## Safety
 

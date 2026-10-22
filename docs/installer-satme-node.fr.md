@@ -89,7 +89,11 @@ Chacun garde la clé que le node lui a donnée : le node, le PC ou le téléphon
 
 ## Mettre à jour
 
-Sur le Pi, les mêmes commandes qu'à l'étape 2 (version publiée la plus récente). Réglages, code et clés restent dans `/var/lib/satme-noeud`. **Relancer SatMe sur le node** depuis SatMe-PC (Station › SatMe-Node › Services) redémarre seulement le service, jamais le Pi.
+Sur le Pi, les mêmes commandes qu'à l'étape 2 (version publiée la plus récente). Réglages, code et clés restent dans `/var/lib/satme-noeud`. **Relancer SatMe sur le node** depuis SatMe-PC (Station › SatMe-Node › Services) redémarre seulement le service, pas le Pi.
+
+### Redémarrer ou éteindre le Pi
+
+Depuis SatMe-PC, Station › SatMe-Node › Services : **Redémarrer le Pi** et **Éteindre le Pi** (aussi sur la page du node ouverte sur le Pi). Le node arrête d'abord l'émission (seulement si on le demande dans le dialogue ; sinon il refuse tant qu'il émet), la réception DATV et son alimentation LNB, le flux SDR, écrit ses réglages, répond, puis lance `sudo -n /usr/bin/systemctl reboot` ou `poweroff`. L'installeur accorde ces **deux commandes seulement** au compte `satme` du service, dans `/etc/sudoers.d/satme-noeud` (vérifié par `visudo -cf`, mode 0440). Si SatMe-PC dit que le droit manque : relancer l'installeur (`sudo ./satme/noeud/installe-noeud.sh`). Un node lancé à la main (pas par son service) refuse. **Éteint, le Pi ne se rallume que sur place** : couper puis remettre son alimentation.
 
 ## Sécurité
 
