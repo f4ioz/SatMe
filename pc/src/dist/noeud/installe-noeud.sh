@@ -34,8 +34,13 @@ SATME="$(cd "$ICI/.." && pwd)"
 echo "==> Paquets (Java, outils pour LongMynd)"
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -q
-JRE=openjdk-17-jre-headless
-apt-cache show "$JRE" >/dev/null 2>&1 || JRE=openjdk-21-jre-headless
+# The first Java the system can really install (a name only referred to, as
+# openjdk-17 on Debian 13, has no candidate).
+JRE=
+for j in openjdk-21-jre-headless openjdk-17-jre-headless openjdk-25-jre-headless default-jre-headless; do
+  LC_ALL=C apt-cache policy "$j" 2>/dev/null | grep -q 'Candidate: [0-9]' && { JRE=$j; break; }
+done
+[ -n "$JRE" ] || { echo "Aucun Java 17 ou plus à installer sur ce système." >&2; exit 1; }
 apt-get install -y -q "$JRE" build-essential libusb-1.0-0-dev libasound2-dev curl ca-certificates
 
 echo "==> LongMynd (BATC)"
