@@ -55,14 +55,20 @@ data class ConfigReseau(
     val codec: CodecReseau = CodecReseau.DEFAUT,
     val latenceMs: Int = 80,
     val audio: Boolean = true,
+    /** The TX audio stream asked at login: only when the owner allowed transmitting over the network. */
+    val audioTx: Boolean = false,
+    /** The TX packets' mark at 0x10 and payload size (0: 20 ms), learnt from a capture ([AnalyseTraceTx]). */
+    val marqueTx: Int = FormatTxReseau.MARQUE_DEFAUT,
+    val octetsTx: Int = 0,
 )
 
 /**
  * One session with an Icom's LAN server: the control port's login and
  * keepalive, the CI-V stream, the receive audio stream.
  *
- * Receive only: the connection request leaves the TX audio path off, no
- * audio is ever sent, and every CI-V frame passes [GardeEmission] first.
+ * Receive only unless the owner allowed transmitting over the network:
+ * then the connection request asks for the TX audio path ([ConfigReseau.audioTx])
+ * and [envoieAudio] may send; every CI-V frame passes [GardeEmission] first.
  *
  * The radio holds one remote session: [ferme] always hands the token back
  * and says goodbye on each port, also after a login that failed part-way,
@@ -74,6 +80,8 @@ class SessionIcom(
     private val horloge: () -> Long = System::currentTimeMillis,
     /** The packet log (headers only, no credential): null when off. */
     @Volatile var journal: ((String) -> Unit)? = null,
+    /** The owner allowed transmitting over the network (set on the PC itself): `1C 00 01` passes the guard. */
+    private val pttAutorise: () -> Boolean = { false },
 ) {
     enum class Etat { ARRET, RECHERCHE, CONNEXION, CONNECTE, REFUSE, PERDU }
 
@@ -280,7 +288,8 @@ class SessionIcom(
         if (offerts.isNotEmpty() && config.codec.taux !in offerts)
             return echec(Etat.REFUSE, "le poste n'offre pas " + config.codec.taux / 1000 + " kHz (il offre " + offerts.joinToString(", ") { (it / 1000).toString() } + " kHz)")
         val si2 = prochainInterne()
-        val flux = Paquets.Flux(config.codec.octet, config.codec.taux, config.portCiv, config.portAudio)
+        val flux = Paquets.Flux(config.codec.octet, config.codec.taux, config.portCiv, config.portAudio,
+            txActif = config.audioTx, txCodec = FormatTxReseau.CODEC_TX, txTaux = config.codec.taux)
         c.envoieSuivi { Paquets.infoHote(it, c.moi, c.lui, si2, demande, jeton, r, config.utilisateurCode, flux) }
         val st = c.attendsPaquet(3_000) { it.size == Paquets.STATUT_LONGUEUR }?.let { Paquets.statut(it) }
             ?: return echec(Etat.PERDU, "le poste n'a pas accordé les flux" + if (occupe) " (une autre session le tient)" else "")
@@ -372,7 +381,7 @@ class SessionIcom(
      * not: a transmit command refused, or no session.
      */
     fun envoieCiv(trame: ByteArray): String? {
-        GardeEmission.refus(trame)?.let { journal?.invoke("!! " + it); return it }
+        GardeEmission.refus(trame, pttAutorise())?.let { journal?.invoke("!! " + it); return it }
         val v = civ ?: return "pas de session"
         if (!enMarche) return "pas de session"
         v.envoieSuivi { Paquets.civ(it, v.moi, v.lui, prochainCiv(), trame) }
@@ -380,6 +389,26 @@ class SessionIcom(
     }
 
     val connecte: Boolean get() = enMarche
+
+    private val seqAudioTx = java.util.concurrent.atomic.AtomicInteger()
+
+    /** The TX packets' payload size (bytes of 16-bit samples). */
+    val octetsTx: Int get() = config.octetsTx.takeIf { it >= 2 && it % 2 == 0 } ?: FormatTxReseau.octetsDefaut(config.codec.taux)
+
+    /**
+     * One packet of TX audio ([donnees]: 16-bit samples at the link's rate,
+     * [octetsTx] bytes) to the radio. Null when sent, else why not: the TX
+     * stream was not asked at login, transmitting is not allowed, no session.
+     */
+    fun envoieAudio(donnees: ByteArray): String? {
+        if (!config.audioTx) return "son d'émission non demandé à la connexion (cocher « émission par le réseau autorisée », puis reconnecter)"
+        if (!pttAutorise()) return "émission par le réseau non autorisée"
+        val a = audio ?: return "pas de session"
+        if (!enMarche) return "pas de session"
+        val sa = seqAudioTx.getAndIncrement() and 0xFFFF
+        a.envoieSuivi { Paquets.nouvelAudio(it, a.moi, a.lui, sa, donnees, config.marqueTx) }
+        return null
+    }
 
     // ------------------------------------------------------------ closing
 

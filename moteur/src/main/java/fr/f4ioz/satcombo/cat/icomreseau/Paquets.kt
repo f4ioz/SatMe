@@ -255,7 +255,7 @@ object Paquets {
         return r.sorted()
     }
 
-    /** What the host asks for its streams. Receive only here: TX stays off. */
+    /** What the host asks for its streams. TX off unless the owner allowed transmitting over the network. */
     data class Flux(
         val rxCodec: Int, val rxTaux: Int, val portCiv: Int, val portAudio: Int,
         val txActif: Boolean = false, val txCodec: Int = rxCodec, val txTaux: Int = rxTaux, val tamponTxMs: Int = 100,
@@ -330,7 +330,7 @@ object Paquets {
         return Audio(e.seq, u16be(b, A_SEQ), b.copyOfRange(AUDIO_ENTETE, AUDIO_ENTETE + n))
     }
 
-    /** An audio packet as the radio sends it (the tests' fake radio). */
+    /** An audio packet: as the radio sends it (the tests' fake radio), or the host's TX audio ([FormatTxReseau]). */
     fun nouvelAudio(seq: Int, moi: Int, lui: Int, seqAudio: Int, donnees: ByteArray, marque: Int = 0x8006): ByteArray {
         val b = nouveau(AUDIO_ENTETE + donnees.size, T_DONNEES, seq, moi, lui)
         p16be(b, 0x10, marque)

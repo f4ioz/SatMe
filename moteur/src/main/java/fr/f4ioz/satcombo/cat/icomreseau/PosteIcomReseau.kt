@@ -28,6 +28,13 @@ class PosteIcomReseau(
     /** Where the packet log goes when switched on (a file on the PC). */
     var ecrisJournal: ((String) -> Unit)? = null,
     private val horloge: () -> Long = System::currentTimeMillis,
+    /**
+     * The owner allowed transmitting over the network (« émission par le
+     * réseau autorisée », off by default, set on the PC itself): only then
+     * does PTT (`1C 00 01`) pass the guard and is the TX audio stream asked
+     * at login. Tuner, CW and voice memories stay refused.
+     */
+    val emissionAutorisee: () -> Boolean = { false },
 ) {
     /** [FI]: the rig's sound taken raw, its IF demodulated by SatMe (« IC-9700 FI »). */
     enum class Usage { CAT, AUDIO, FI }
@@ -63,7 +70,8 @@ class PosteIcomReseau(
         if (s.icomUtilisateur.isBlank() && s.icomUtilisateurCode.isBlank()) return null to "identifiant réseau du poste à renseigner"
         if (u == null || m == null) return null to "identifiants à coder : donne leur forme codée (relevée dans une trace), voir « ? »"
         return ConfigReseau(s.icomHote, s.icomPortControle, s.icomPortCiv, s.icomPortAudio, u, m,
-            codec = CodecReseau.de(s.icomCodec), latenceMs = s.icomLatenceMs) to ""
+            codec = CodecReseau.de(s.icomCodec), latenceMs = s.icomLatenceMs,
+            marqueTx = s.icomTxMarque.takeIf { it >= 0 } ?: FormatTxReseau.MARQUE_DEFAUT, octetsTx = s.icomTxOctets) to ""
     }
 
     /** [u] starts using the rig; null when the session is up, else why not. */
@@ -83,7 +91,7 @@ class PosteIcomReseau(
     }
 
     private fun ouvreSession(c: ConfigReseau): SessionIcom? {
-        val s = SessionIcom(c, fabrique, horloge, if (settings.icomJournal) ecrisJournal else null)
+        val s = SessionIcom(c.copy(audioTx = emissionAutorisee()), fabrique, horloge, if (settings.icomJournal) ecrisJournal else null, emissionAutorisee)
         sur = Surechantillonneur(c.codec.taux)
         s.civRecue = { f -> civRecue(f) }
         s.audioRecu = { pcm, _ -> audio(pcm) }
@@ -166,6 +174,29 @@ class PosteIcomReseau(
         for (a in auditeurs) runCatching { a(s, s.size, SORTIE_HZ) }
     }
 
+    @Volatile private var paquetiseur: Pair<SessionIcom, PaquetiseurTx>? = null
+
+    /** The session open asked for the TX audio stream at login (the setting was on then). */
+    val sonTxDemande: Boolean get() = session?.config?.audioTx == true
+
+    /**
+     * Microphone audio ([n] samples at [taux]) to the radio's TX stream,
+     * packet by packet. Null when sent (or kept for the next packet), else
+     * why not. Only ever called while SatMe keys the rig.
+     */
+    fun sonTx(pcm: ShortArray, n: Int, taux: Int): String? {
+        val s = session ?: return "pas de session"
+        if (!s.config.audioTx) return "son d'émission non demandé à la connexion (cocher « émission par le réseau autorisée », puis reconnecter)"
+        if (!emissionAutorisee()) return "émission par le réseau non autorisée"
+        val p = paquetiseur?.takeIf { it.first === s }?.second
+            ?: PaquetiseurTx(s.config.codec.taux, s.formatPcm.format, s.octetsTx).also { paquetiseur = s to it }
+        for (b in p.pousse(pcm, n, taux)) s.envoieAudio(b)?.let { return it }
+        return null
+    }
+
+    /** The end of an over: what waits for a packet dropped. */
+    fun finSonTx() { paquetiseur?.second?.vide() }
+
     /** The CI-V seen by the CAT: what goes through the session, what comes back. */
     fun lienCiv(): SerialLink = LienCivReseau()
 
@@ -182,7 +213,8 @@ class PosteIcomReseau(
             val trames = CatDecode.splitCiv(bytes)
             if (trames.isEmpty()) return false
             // The guard first, on every frame: nothing goes when one is refused.
-            trames.firstNotNullOfOrNull { GardeEmission.refus(it) }?.let { dernierRefus = it; return false }
+            val ptt = emissionAutorisee()
+            trames.firstNotNullOfOrNull { GardeEmission.refus(it, ptt) }?.let { dernierRefus = it; return false }
             for (t in trames) if (s.envoieCiv(t) != null) return false
             return true
         }

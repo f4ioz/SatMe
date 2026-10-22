@@ -54,6 +54,13 @@ class FausseRadioIcom(
     @Volatile var txActifDemande: Boolean? = null
     @Volatile var codecDemande = -1
     @Volatile var tauxDemande = -1
+    @Volatile var codecTxDemande = -1
+    @Volatile var tauxTxDemande = -1
+    /** The host's audio packets on the audio port (its TX audio), whole. */
+    val audioTx = CopyOnWriteArrayList<ByteArray>()
+    /** Keyed by CI-V `1C 00 01`, unkeyed by `1C 00 00`; every key/unkey in order. */
+    @Volatile var emet = false
+    val commandesPtt = CopyOnWriteArrayList<Boolean>()
     val reprisesAudio = CopyOnWriteArrayList<Int>()
     @Volatile var renouvellements = 0
     @Volatile var frequenceHz = 145_800_000L
@@ -116,7 +123,7 @@ class FausseRadioIcom(
             Paquets.T_DONNEES -> when (p) {
                 ctl -> controle(b)
                 civ -> civ(b)
-                else -> {}
+                else -> if (b.size > Paquets.AUDIO_ENTETE) audioTx += b
             }
         }
     }
@@ -141,6 +148,8 @@ class FausseRadioIcom(
                 txActifDemande = b[Paquets.I_TX_ACTIF].toInt() != 0
                 codecDemande = b[Paquets.I_RX_CODEC].toInt() and 0xFF
                 tauxDemande = Paquets.u32be(b, Paquets.I_RX_TAUX)
+                codecTxDemande = b[Paquets.I_TX_CODEC].toInt() and 0xFF
+                tauxTxDemande = Paquets.u32be(b, Paquets.I_TX_TAUX)
                 ctl.suivi { q ->
                     Paquets.nouveauJeton(Paquets.STATUT_LONGUEUR, q, ctl.moi, ctl.lui,
                         Paquets.Jeton(Paquets.SENS_REPONSE, Paquets.G_INFO, j.seqInterne, j.demande, jeton)).also {
@@ -211,6 +220,8 @@ class FausseRadioIcom(
         when (t[4].toInt() and 0xFF) {
             0x03 -> repondCiv(reponse(0x03, *fr.f4ioz.satcombo.cat.CatDecode.freqToBcdLe(frequenceHz)))
             0x05 -> { fr.f4ioz.satcombo.cat.CatDecode.bcdLeToFreq(t, 5)?.let { frequenceHz = it }; repondCiv(ok) }
+            0x1C -> if (t.size >= 8 && t[5].toInt() == 0x00) { emet = t[6].toInt() != 0; commandesPtt += emet; repondCiv(ok) }
+                else repondCiv(reponse(0x1C, 0x00, if (emet) 1 else 0))
             0x27 -> { if (t.size >= 8 && (t[5].toInt() and 0xFF) == 0x11) spectre = t[6].toInt() == 1; repondCiv(ok) }
             else -> repondCiv(ok)
         }

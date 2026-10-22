@@ -1179,6 +1179,18 @@ class SettingsStore(private val prefs: Stockage) {
         get() = prefs.getBoolean("icom_journal", false)
         set(v) { prefs.edit().putBoolean("icom_journal", v).apply() }
 
+    /**
+     * The network TX audio packets' mark at 0x10 and payload size, learnt
+     * from a capture of the radio's own software transmitting; -1 / 0: the
+     * design's defaults (not verified on a radio).
+     */
+    var icomTxMarque: Int
+        get() = prefs.getInt("icom_tx_marque", -1)
+        set(v) { prefs.edit().putInt("icom_tx_marque", if (v in 0..0xFFFF) v else -1).apply() }
+    var icomTxOctets: Int
+        get() = prefs.getInt("icom_tx_octets", 0)
+        set(v) { prefs.edit().putInt("icom_tx_octets", if (v in 2..4000 && v % 2 == 0) v else 0).apply() }
+
     /** The rig's scope sent over CI-V and shown (off by default: it changes a rig setting while on). */
     var icomSpectre: Boolean
         get() = prefs.getBoolean("icom_spectre", false)
