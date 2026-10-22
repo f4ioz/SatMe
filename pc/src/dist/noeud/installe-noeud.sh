@@ -47,7 +47,12 @@ echo "==> LongMynd (BATC)"
 SRC=/opt/longmynd-src
 rm -rf "$SRC"; mkdir -p "$SRC"
 curl -fsSL https://github.com/BritishAmateurTelevisionClub/longmynd/archive/refs/heads/master.tar.gz | tar xz -C "$SRC" --strip-components=1
-make -C "$SRC" -s longmynd
+# Its Makefile adds -mfpu (32-bit ARM only) on a Pi 3 or 4, which a 64-bit
+# compiler refuses: there, its flags without it.
+case "$(uname -m)" in
+  armv6l|armv7l) make -C "$SRC" -s longmynd ;;
+  *) make -C "$SRC" -s longmynd COPT="-O3 -march=native -mtune=native -funsafe-math-optimizations" ;;
+esac
 install -m 0755 "$SRC/longmynd" /usr/local/bin/longmynd
 
 echo "==> Accès au MiniTiouner (udev)"
