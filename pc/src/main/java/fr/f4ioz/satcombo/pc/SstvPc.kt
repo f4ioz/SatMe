@@ -64,6 +64,14 @@ class SstvPc(
     /** What the sound of a source ([SDR], [CARTE]) is now, when not on the air; null: a real reception. */
     @Volatile var horsAntenne: (String) -> HorsAntenne? = { null }
 
+    /**
+     * The satellite a source ([SDR], [CARTE]) hears now (see [satelliteDuSon]);
+     * null: the one followed. A picture is named after the sound that made it:
+     * QO-100's, decoded from the dongle on QO-100, came out named after the
+     * LEO followed meanwhile (22/10).
+     */
+    @Volatile var satelliteDe: (String) -> String? = { null }
+
     data class Etat(
         /** Mode of the picture under way ("" between pictures). */
         val mode: String = "",
@@ -213,10 +221,12 @@ class SstvPc(
             enCours = null
             // The test generator's pictures: seen while they come, never in the gallery (nor anything fed from it).
             if (h?.genre == ESSAI) { _etat.update { it.copy(mode = "", lignes = 0, essais = it.essais + 1, version = it.version + 1) }; return }
+            // The satellite of the sound that made it; the campaign's note only on the campaign's satellite.
+            val sat = runCatching { satelliteDe(sourceActive) }.getOrNull() ?: c.satellite
             // A recording played back: kept, marked, at the time it was received; no « new picture » for it.
-            val nom = if (linesDone >= minLignes(mode)) garde(mode, pixels, linesDone, complete, c.satellite, h?.momentMs ?: horloge(),
-                if (h != null) RELECTURE else "live", if (h != null) h.fichier else c.enregistrement, c.locator, c.indicatif,
-                sonDe(decodeur, memoire), note = if (h == null) c.note else "") else null
+            val nom = if (linesDone >= minLignes(mode)) garde(mode, pixels, linesDone, complete, sat, h?.momentMs ?: horloge(),
+                if (h != null) RELECTURE else "live", if (h != null) h.fichier else if (sat == c.satellite) c.enregistrement else "", c.locator, c.indicatif,
+                sonDe(decodeur, memoire), note = if (h == null && sat == c.satellite) c.note else "", entree = sourceActive) else null
             _etat.update { it.copy(mode = "", lignes = 0, derniere = if (h == null) nom ?: it.derniere else it.derniere,
                 gardees = it.gardees + (if (nom != null) 1 else 0), version = it.version + 1) }
         }
@@ -312,7 +322,7 @@ class SstvPc(
     /** A picture received: PNG, sidecar and its own sound, named as on the phone; a second decoding never overwrites the first. */
     private fun garde(mode: SstvMode, pixels: IntArray, lignes: Int, complete: Boolean, sat: String, quandMs: Long,
                       origine: String, enregistrement: String, locator: String, indicatif: String,
-                      son: Pair<ShortArray, Int>?, recale: Boolean = false, note: String = ""): String? = synchronized(verrouFichiers) {
+                      son: Pair<ShortArray, Int>?, recale: Boolean = false, note: String = "", entree: String = ""): String? = synchronized(verrouFichiers) {
         dossier.mkdirs()
         val px = if (nettoyage) runCatching { SstvNettoyage.nettoie(pixels, mode.width, mode.height, lignes) }.getOrDefault(pixels) else pixels
         var nom = SstvMeta.fileName(sat.ifBlank { "SAT" }, quandMs, mode.name, complete)
@@ -325,7 +335,7 @@ class SstvPc(
         if (runCatching { ImageIO.write(img, "png", png) }.isFailure) return null
         val meta = SstvMeta.SstvShot(fileName = nom, satName = sat, timeMs = quandMs, mode = mode.name, complete = complete,
             redecodeMs = if (origine == "file") horloge() else 0L, recale = recale,
-            locator = locator, callsign = indicatif, source = origine, recording = enregistrement, note = note)
+            locator = locator, callsign = indicatif, source = origine, recording = enregistrement, note = note, entree = entree)
         runCatching { File(dossier, SstvMeta.sidecarName(nom)).writeText(SstvMeta.encode(meta), Charsets.UTF_8) }
         son?.let { (pcm, rate) -> if (pcm.isNotEmpty()) runCatching { SstvSon.ecritWav(SstvSon.fichier(png), pcm, rate) } }
         nom
@@ -367,6 +377,12 @@ class SstvPc(
     }
 
     /** Removes a picture with its sidecar, sound and GIF. */
+    /** A picture named after another satellite (its sidecar only: the file keeps its name). False when not found. */
+    fun renommeSatellite(nom: String, sat: String): Boolean {
+        val png = fichier(nom)?.takeIf { it.name.endsWith(".png") } ?: return false
+        return synchronized(verrouFichiers) { SstvMeta.changeSatellite(png, sat) }
+    }
+
     fun supprime(nom: String): Boolean {
         val png = fichier(nom)?.takeIf { it.name.endsWith(".png") } ?: return false
         runCatching { File(dossier, SstvMeta.sidecarName(png.name)).delete() }
@@ -529,6 +545,18 @@ class SstvPc(
          * dongle while it plays — unless the rig's own card hears the
          * satellite followed ([posteEntend]).
          */
+        /**
+         * The satellite a picture's sound came from: by the dongle ([parLaCle]:
+         * the decoder's own SDR source, or the card when the dongle feeds it),
+         * QO-100 while QO-100's tab holds it, else what the dongle receives
+         * ([satelliteCle]: the satellite it follows; on a frequency of its own,
+         * the one followed); by the rig, QO-100 while the rig is on it, else the satellite
+         * followed ([suivi]).
+         */
+        fun satelliteDuSon(parLaCle: Boolean, cleSurQo100: Boolean, satelliteCle: String, posteSurQo100: Boolean, suivi: String): String =
+            if (parLaCle) { if (cleSurQo100) QO100 else satelliteCle.ifBlank { suivi } } else if (posteSurQo100) QO100 else suivi
+        const val QO100 = "QO-100"
+
         fun choisie(reglage: String, sdrJoue: Boolean, posteEntend: Boolean = false): String = when (reglage) {
             CARTE -> CARTE
             SDR -> SDR

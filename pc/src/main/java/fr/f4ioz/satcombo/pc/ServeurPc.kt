@@ -1917,6 +1917,10 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
                 val x = son?.sstv ?: return JSONObject().put("ok", false)
                 if (!x.supprime(q["nom"].orEmpty())) return JSONObject().put("ok", false).put("erreur", "image introuvable")
             }
+            "/api/sstv/satellite" -> {
+                val x = son?.sstv ?: return JSONObject().put("ok", false)
+                if (!x.renommeSatellite(q["nom"].orEmpty(), q["sat"].orEmpty())) return JSONObject().put("ok", false).put("erreur", "image ou nom de satellite refusé")
+            }
             "/api/sstv/gif" -> {
                 val x = son?.sstv ?: return JSONObject().put("ok", false)
                 x.gif(q["nom"].orEmpty())?.let { return JSONObject().put("ok", false).put("erreur", it) }

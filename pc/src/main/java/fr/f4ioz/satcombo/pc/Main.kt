@@ -120,6 +120,8 @@ fun main(args: Array<String>) {
         ?: sdr.lecture?.let { SstvPc.HorsAntenne(SstvPc.RELECTURE, it.momentMs(), it.donnees.name) } }
     son.horsAntenne = { if (son.son.etat.value.appareil == SdrPc.NOM_SOURCE) horsAntenneSdr() else null }
     son.sstv.horsAntenne = { src -> if (src == SstvPc.SDR) horsAntenneSdr() else son.horsAntenne() }
+    // A picture is named after the satellite its sound came from (QO-100 by the dongle on QO-100, not the LEO followed).
+    son.sstv.satelliteDe = { src -> satelliteSstv(src, son, sdr, station) }
     // QO-100 with the dongle: the beacon followed, the calibration held on it when chosen.
     val qo100 = Qo100Pc(station, sdr)
     son.son.auditeurs += { pcm, n, rate -> qo100.ecouteCarte(pcm, n, rate) }
@@ -476,6 +478,13 @@ private fun contextePhonie(station: StationPc, sdr: SdrPc, source: String): Pair
         if (q.auPoste) q.descenteHz to "QO-100"
         else (if (e.catConnecte) station.stationCat.etat.value.descenteHz else null) to (e.suivi?.name ?: "")
     }
+}
+
+/** The satellite an SSTV picture's sound came from, by [source] (see [SstvPc.satelliteDuSon]). */
+internal fun satelliteSstv(source: String, son: SonStation, sdr: SdrPc, station: StationPc): String {
+    val q = station.qo100.etat.value
+    return SstvPc.satelliteDuSon(source == SstvPc.SDR || son.son.etat.value.appareil == SdrPc.NOM_SOURCE,
+        q.aLaCle, sdr.etat.value.satellite, q.auPoste, station.etat.value.suivi?.name.orEmpty())
 }
 
 /**

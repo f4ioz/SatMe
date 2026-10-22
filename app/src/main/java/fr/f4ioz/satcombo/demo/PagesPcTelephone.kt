@@ -838,6 +838,11 @@ object PagesPcTelephone {
                 val f = ApiSon.fichier(fr.f4ioz.satcombo.sstv.SstvHub.dir(ctx), p("nom"), ".png") ?: return JSONObject().put("ok", false).put("erreur", "image introuvable")
                 fr.f4ioz.satcombo.sstv.SstvHub.delete(f); OK
             }
+            "/api/sstv/satellite" -> {
+                val ctx = vm.getApplication<android.app.Application>()
+                val f = ApiSon.fichier(fr.f4ioz.satcombo.sstv.SstvHub.dir(ctx), p("nom"), ".png") ?: return JSONObject().put("ok", false).put("erreur", "image introuvable")
+                if (fr.f4ioz.satcombo.sstv.SstvMeta.changeSatellite(f, p("sat"))) OK else JSONObject().put("ok", false).put("erreur", "nom de satellite refusé")
+            }
             "/api/sstv/gif" -> {
                 val ctx = vm.getApplication<android.app.Application>()
                 val (png, shot) = fr.f4ioz.satcombo.sstv.SstvHub.shots(ctx).firstOrNull { it.first.name == p("nom") }

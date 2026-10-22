@@ -4176,6 +4176,7 @@ ${rail()}
     <audio id="vi-son" controls style="flex:1;min-width:200px;height:32px"></audio>
     <button id="vi-redec" onclick="viAction('redecode?image=')" title="Repasser le son de cette image dans le décodeur">⟳ Redécoder son son</button>
     <button id="vi-gif" onclick="viAction('gif?nom=')" title="L'image qui arrive, en boucle, sans son">🎞 GIF</button><a id="vi-gif-lien" download hidden><button>⤓ GIF</button></a>
+    <button id="vi-sat" onclick="viSatellite()" title="Le satellite écrit sur cette image (une image de QO-100 reçue par la clé SDR portait le nom du satellite suivi) ; le nom du fichier ne change pas">🛰 Satellite…</button>
     <button class="arret" onclick="viSupprime()">🗑 Supprimer</button></div>
   <div class="petit" id="vi-sans-son"></div>
 </dialog>
@@ -8253,6 +8254,13 @@ function afcSstv(A) {
   g('sstv-afc-zero').disabled = !A.actif || (A.totalHz === 0 && A.mesureHz == null);
 }
 async function viAction(a) { if (viNom) await post('api/sstv/' + a + enc(viNom)); }
+async function viSatellite() {
+  const i = ((S && S.images) || []).find(x => x.nom === viNom); if (!i) return;
+  const v = prompt('Satellite de cette image (QO-100, ISS…) :', i.sat || '');
+  if (v == null || !v.trim() || v.trim() === i.sat) return;
+  const j = await post('api/sstv/satellite?nom=' + enc(viNom) + '&sat=' + enc(v.trim()));
+  if (j && j.ok !== false) { i.sat = v.trim(); imagesVus = ''; voisImage(viN); }
+}
 async function viSupprime() {
   if (!viNom || !confirm('Supprimer ' + viNom + ' (avec son son et son GIF) ?')) return;
   const j = await post('api/sstv/supprime?nom=' + enc(viNom));

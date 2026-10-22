@@ -158,6 +158,35 @@ class SstvPcTest {
         assertFalse(SstvSon.fichier(png).exists())
     }
 
+    @Test fun `une image de la cle sur QO-100 porte QO-100, pas le satellite suivi - et se renomme sans changer de fichier`() {
+        // The rig follows RS-44 for a campaign; the dongle is on QO-100 (22/10: its pictures came out « RS-44 »).
+        val s = SstvPc(StockageMemoire(), File(dossier, "sstv"), { SstvPc.Contexte("RS-44", "JN18FS", "F4IOZ", "SatMe_RS-44_x.wav", "Campagne : RS-44") }) { maintenant }
+        s.satelliteDe = { src -> SstvPc.satelliteDuSon(src == SstvPc.SDR, cleSurQo100 = true, satelliteCle = "QO-100", posteSurQo100 = false, suivi = "RS-44") }
+        verse(signal(Dsp.AUDIO_RATE), Dsp.AUDIO_RATE) { b, n -> s.ecouteSdr(b, n, Dsp.AUDIO_RATE) }
+        val i = s.images().single()
+        assertEquals("QO-100", i.satName)
+        assertTrue(i.fileName.startsWith("SatMe_SSTV_QO-100_"))
+        assertEquals("sdr", i.entree)
+        // Neither the rig's campaign note nor its pass recording.
+        assertEquals("", i.note); assertEquals("", i.recording)
+        // An older one, named wrongly: its sidecar says another satellite, the file stays.
+        assertTrue(s.renommeSatellite(i.fileName, " ISS "))
+        assertEquals("ISS", s.images().single().satName)
+        assertEquals(i.fileName, s.images().single().fileName)
+        assertFalse(s.renommeSatellite(i.fileName, ""))
+        assertFalse(s.renommeSatellite("../x.png", "ISS"))
+    }
+
+    @Test fun `le satellite d'une image vient de son son`() {
+        // By the dongle: QO-100 while QO-100's tab holds it, else what the dongle follows (on its own frequency: the one followed).
+        assertEquals("QO-100", SstvPc.satelliteDuSon(true, true, "QO-100", false, "ISS"))
+        assertEquals("SO-50", SstvPc.satelliteDuSon(true, false, "SO-50", false, "ISS"))
+        assertEquals("ISS", SstvPc.satelliteDuSon(true, false, "", false, "ISS"))
+        // By the rig: the satellite followed, QO-100 while the rig is on it.
+        assertEquals("ISS", SstvPc.satelliteDuSon(false, true, "QO-100", false, "ISS"))
+        assertEquals("QO-100", SstvPc.satelliteDuSon(false, false, "", true, "ISS"))
+    }
+
     @Test fun `en auto, la carte se tait pendant que la cle joue - jamais deux sources dans le decodeur`() {
         val s = sstv()
         val bruit = ShortArray(2048) { ((it * 7919) % 2000 - 1000).toShort() }

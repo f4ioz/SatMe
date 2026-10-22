@@ -53,8 +53,24 @@ object SstvMeta {
         /** Source recording, when re-decoded. */
         val recording: String = "",
         /** Free note for the operator. */
-        val note: String = ""
+        val note: String = "",
+        /** The sound that fed the decoder: "sdr" (the dongle) or "carte" (the rig's card); "" not said. */
+        val entree: String = ""
     )
+
+    /**
+     * Names a picture after another satellite: its sidecar's satellite
+     * changed (written when it had none), the file left as it is. False when
+     * the name is not one.
+     */
+    fun changeSatellite(png: java.io.File, sat: String): Boolean {
+        val s = sat.trim()
+        if (s.isEmpty() || s.length > 40 || s.any { it < ' ' }) return false
+        if (!png.isFile) return false
+        val side = java.io.File(png.parentFile, sidecarName(png.name))
+        val avant = decode(png.name, runCatching { side.readText(Charsets.UTF_8) }.getOrNull())
+        return runCatching { side.writeText(encode(avant.copy(satName = s)), Charsets.UTF_8) }.isSuccess
+    }
 
     /**
      * Image kinds SatMe archives. Same name and sidecar format for all, only
@@ -176,6 +192,7 @@ object SstvMeta {
         put("source", shot.source)
         put("recording", shot.recording)
         put("note", shot.note)
+        put("input", shot.entree)
         return sb.toString()
     }
 
@@ -205,6 +222,7 @@ object SstvMeta {
                 "source" -> shot.copy(source = v)
                 "recording" -> shot.copy(recording = v)
                 "note" -> shot.copy(note = v)
+                "input" -> shot.copy(entree = v)
                 else -> shot
             }
         }
