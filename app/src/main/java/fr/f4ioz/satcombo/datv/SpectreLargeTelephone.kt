@@ -61,7 +61,7 @@ class SpectreLargeTelephone(private val portee: CoroutineScope) {
                 val fini = kotlinx.coroutines.CompletableDeferred<String>()
                 var recues = 0
                 _ui.update { it.copy(etat = "connexion…") }
-                ws = client.newWebSocket(Request.Builder().url(URL).header("Sec-WebSocket-Protocol", PROTOCOLE).header("User-Agent", AGENT).build(),
+                ws = client.newWebSocket(Request.Builder().url(URL).header("Sec-WebSocket-Protocol", PROTOCOLE).header("User-Agent", fr.f4ioz.satcombo.data.TleRepository.USER_AGENT).build(),
                     object : WebSocketListener() {
                         override fun onOpen(webSocket: WebSocket, response: Response) { _ui.update { it.copy(etat = "connecté") } }
                         override fun onMessage(webSocket: WebSocket, bytes: ByteString) { if (trame(bytes.toByteArray())) recues++ }
@@ -105,7 +105,6 @@ class SpectreLargeTelephone(private val portee: CoroutineScope) {
     companion object {
         const val URL = "wss://eshail.batc.org.uk/wb/fft"
         const val PROTOCOLE = "fft"
-        const val AGENT = "SatMe-Android"
         const val DELAI_MIN_MS = 2_000L
         const val DELAI_MAX_MS = 60_000L
         /** Points drawn across the band. */
