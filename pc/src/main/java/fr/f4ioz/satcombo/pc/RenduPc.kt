@@ -8,6 +8,7 @@
  */
 package fr.f4ioz.satcombo.pc
 
+import fr.f4ioz.satcombo.domain.CadreSstv
 import fr.f4ioz.satcombo.domain.JournalPassage
 import fr.f4ioz.satcombo.domain.JournalPassage.Marque
 import fr.f4ioz.satcombo.domain.JournalPassage.TypeMarque
@@ -59,6 +60,8 @@ object RenduPc {
         val paysage: Boolean = false,
         /** The whole sky, as the page shows it; else framed to the pass. */
         val cielEntier: Boolean = false,
+        /** The SSTV picture where the page placed it, shares of the view; null: the corner away from the satellite. */
+        val cadreSstv: CadreSstv? = null,
         /** An OpenStreetMap tile (z, x, y), from the disk or the network; null: none. */
         val tuile: (Int, Int, Int) -> BufferedImage? = { _, _, _ -> null },
     ) {
@@ -357,6 +360,16 @@ object RenduPc {
 
     // ---------------------------------------------------------------- frames
 
+    /**
+     * Where the SSTV picture goes in a view [w]×[h]: where the page placed it
+     * ([cadre]), else top, in the corner away from the satellite ([satX], a share of the width).
+     */
+    fun placeSstv(cadre: CadreSstv?, w: Float, h: Float, satX: Float, dp: Float): CadreSstv.Place {
+        if (cadre != null) return cadre.place(w, h)
+        val lw = minOf(w * 0.42f, h * 0.5f * 4 / 3); val lh = lw * 3 / 4
+        return CadreSstv.Place(if (satX >= 0.5f) 8 * dp else w - lw - 8 * dp, 8 * dp, lw, lh)
+    }
+
     /** One frame of the replay: the sky above a caption. */
     fun image(w: Int, h: Int, sc: Scene, instant: Long): BufferedImage {
         val e = sc.e
@@ -373,9 +386,8 @@ object RenduPc {
         }
         if (sc.affSstv) imageA(sc.marques, instant, sc.flashMs)?.let { (m, part) ->
             val bm = m.fichier?.let { sc.images[it] } ?: return@let
-            val lw = minOf(w * 0.42f, haut * 0.5f * 4 / 3); val lh = lw * 3 / 4
-            val x = if (satX >= 0.5f) 8 * dp else w - lw - 8 * dp
-            arrivee(g, bm, x, 8 * dp, lw, lh, part, dp)
+            val pl = placeSstv(sc.cadreSstv, w.toFloat(), haut.toFloat(), satX, dp)
+            arrivee(g, bm, pl.x, pl.y, pl.l, pl.h, part, dp)
         }
         if (sc.affFiches) {
             val lw = minOf(w * 0.58f, 260 * dp)

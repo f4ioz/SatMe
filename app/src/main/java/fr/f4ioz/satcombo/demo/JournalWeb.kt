@@ -11,6 +11,7 @@ package fr.f4ioz.satcombo.demo
 import android.content.Context
 import fr.f4ioz.satcombo.JournalDesPassages
 import fr.f4ioz.satcombo.data.SettingsStore
+import fr.f4ioz.satcombo.domain.CadreSstv
 import fr.f4ioz.satcombo.domain.JournalPaquet
 import fr.f4ioz.satcombo.domain.JournalPassage
 import fr.f4ioz.satcombo.sstv.SstvHub
@@ -111,7 +112,8 @@ object JournalWeb {
             nomFichier = moment?.let { JournalRendu.nomExtrait(e, titre?.substringAfter(' ')?.ifBlank { null } ?: "moment", it.first) },
             titreExtrait = if (moment != null) titre?.trim()?.ifBlank { null } else null,
             affSmetre = opt(p, "smetre", j.affSmetre()), affFreq = opt(p, "freq", j.affFreq()), etiquetteQth = etiquette,
-            frequences = frequences(j, e, l), affTx = opt(p, "tx", j.affTx()))
+            frequences = frequences(j, e, l), affTx = opt(p, "tx", j.affTx()),
+            cadreSstv = if (p("cadreSstv").isBlank()) CadreSstv.lit(j.cadreSstv()) else CadreSstv.lit(p("cadreSstv")))
     }
 
     private fun fabrique(ctx: Context, j: JournalDesPassages, e: JournalPassage.Entree, quoi: String,
@@ -282,7 +284,13 @@ object JournalWeb {
                 "/reglages" -> json("{\"avant\":${j.avantS()},\"apres\":${j.apresQsoS()},\"rapide\":${j.rapide()}," +
                     "\"accelere\":${j.accelere()},\"surActivite\":${j.surActivite()},\"sstv\":${j.affSstv()}," +
                     "\"fiches\":${j.affFiches()},\"smetre\":${j.affSmetre()},\"freq\":${j.affFreq()}," +
-                    "\"locator\":${j.affLocator()},\"tx\":${j.affTx()},\"res\":\"${js(j.videoRes())}\",\"ouverture\":${j.ouverture()},\"recap\":${j.recap()}}")
+                    "\"locator\":${j.affLocator()},\"tx\":${j.affTx()},\"res\":\"${js(j.videoRes())}\",\"ouverture\":${j.ouverture()},\"recap\":${j.recap()}," +
+                    "\"cadreSstv\":\"${js(CadreSstv.lit(j.cadreSstv())?.texte() ?: "")}\",\"tailleSstv\":${j.flashTaille()}}")
+                // The SSTV picture placed with the mouse on the page (v: "x,y,l"), or back to by itself (v empty).
+                "/cadreSstv" -> {
+                    j.setCadreSstv(CadreSstv.lit(p("v"))?.texte() ?: "")
+                    json("{\"ok\":true,\"cadreSstv\":\"${js(j.cadreSstv())}\"}")
+                }
 
                 // A map tile, fetched by the phone (as for its own map) and kept: the PC asks nothing outside.
                 "/tuile" -> {

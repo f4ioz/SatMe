@@ -372,6 +372,10 @@ class SettingsStore(private val prefs: Stockage) {
     var journalFlashTaille: Float
         get() = prefs.getFloat("journal_flash_taille", 0.32f)
         set(v) { prefs.edit().putFloat("journal_flash_taille", v).apply() }
+    /** Journal page: the SSTV picture placed by hand, "x,y,l" shares of the view ([fr.f4ioz.satcombo.domain.CadreSstv]); empty: by itself. */
+    var journalCadreSstv: String
+        get() = prefs.getString("journal_cadre_sstv", "") ?: ""
+        set(v) { prefs.edit().putString("journal_cadre_sstv", v).apply() }
 
     /** SSTV sheet: the operator's name, written under the callsign ("Olivier @ JN18FS"). */
     var plancheNom: String

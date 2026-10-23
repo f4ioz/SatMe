@@ -12,6 +12,7 @@ import fr.f4ioz.satcombo.demo.PagePc
 
 import fr.f4ioz.satcombo.demo.PageJournal
 import fr.f4ioz.satcombo.demo.ReponseWeb
+import fr.f4ioz.satcombo.domain.CadreSstv
 import fr.f4ioz.satcombo.domain.Doppler
 import fr.f4ioz.satcombo.domain.JournalPassage
 import fr.f4ioz.satcombo.domain.JournalPaquet
@@ -198,7 +199,13 @@ class JournalWebPc(private val j: JournalPc, private val station: StationPc, pri
                 "\"accelere\":${s.journalAccelere},\"surActivite\":${s.journalActivite},\"sstv\":${affSstv()}," +
                 "\"fiches\":${s.journalAffFiches},\"smetre\":${s.journalAffSmetre},\"freq\":${s.journalAffFreq}," +
                 "\"locator\":${s.journalAffLocator},\"tx\":${s.journalAffTx},\"res\":\"${js(s.journalVideoRes)}\"," +
-                "\"ouverture\":${s.journalOuverture},\"recap\":${s.journalRecap}}")
+                "\"ouverture\":${s.journalOuverture},\"recap\":${s.journalRecap}," +
+                "\"cadreSstv\":\"${js(CadreSstv.lit(s.journalCadreSstv)?.texte() ?: "")}\"}")
+            // The SSTV picture placed with the mouse on the page (v: "x,y,l"), or back to by itself (v empty).
+            "/cadreSstv" -> {
+                s.journalCadreSstv = CadreSstv.lit(p("v"))?.texte() ?: ""
+                json("{\"ok\":true,\"cadreSstv\":\"${js(s.journalCadreSstv)}\"}")
+            }
             "/tuile" -> {
                 val z = p("z").toIntOrNull() ?: return NON; val x = p("x").toIntOrNull() ?: return NON; val y = p("y").toIntOrNull() ?: return NON
                 val f = tuile(z, x, y) ?: return NON
@@ -330,9 +337,13 @@ class JournalWebPc(private val j: JournalPc, private val station: StationPc, pri
                 val cx = p("mcx").toDoubleOrNull(); val cy = p("mcy").toDoubleOrNull(); val z = p("zc").toDoubleOrNull(); val cw = p("cw").toFloatOrNull()
                 if (cx != null && cy != null && z != null && cw != null && cw > 0f) JournalPassage.VueCarte(cx, cy, z) to cw else null
             },
+            cadreSstv = cadreSstv(p("cadreSstv")),
             paysage = p("format") == "paysage", cielEntier = p("format").isNotEmpty(),
             tuile = { z, x, y -> tuile(z, x, y)?.let { f -> runCatching { javax.imageio.ImageIO.read(f) }.getOrNull() } })
     }
+
+    /** The SSTV picture's place sent with a request ("auto": by itself), else the one kept. */
+    private fun cadreSstv(v: String): CadreSstv? = if (v.isBlank()) CadreSstv.lit(s.journalCadreSstv) else CadreSstv.lit(v)
 
     /** The video, with the pass's sound when asked and recorded (the opening title's seconds silent). */
     private fun video(e: JournalPassage.Entree, sc: RenduPc.Scene, avecSon: Boolean, sortie: File, travail: File, progres: (Float) -> Unit): File? {

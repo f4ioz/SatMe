@@ -35,7 +35,8 @@ object PageJournal {
         "pj_afficher", "pj_aff_sstv", "pj_aff_fiche", "pj_aff_smetre", "pj_aff_freq", "pj_aff_locator", "pj_resolution",
         "pj_res_xs", "pj_res_m", "pj_res_hd", "pj_ouverture", "pj_recap", "pj_avec_son", "pj_accelere_video",
         "pj_options_aide", "pj_accelere_actif", "pj_format", "pj_format_portrait", "pj_format_paysage", "pw_code", "pw_entrer", "pw_code_faux", "pw_hors_ligne", "pw_pupitre",
-        "pj_doppler", "pj_n_bouton", "pj_n_rs", "pj_n_rr", "pj_n_note", "pj_n_carnet", "pj_n_sat_inconnu", "pj_n_mode_auto", "pj_n_dernier", "pj_n_titre", "pj_n_aide", "pj_n_sat", "pj_n_passage", "pj_n_autre", "pj_n_aucun", "pj_n_aos", "pj_n_los", "pj_n_creer", "pj_n_refus", "pj_n_trop_gros", "pj_n_indicatif", "pj_n_onglet", "pj_n_contact", "pj_n_son", "pj_n_images", "pj_n_mode", "pj_n_envoyer", "pj_n_envoi", "pj_n_fait", "pj_n_call", "pj_n_loc")
+        "pj_doppler", "pj_n_bouton", "pj_n_rs", "pj_n_rr", "pj_n_note", "pj_n_carnet", "pj_n_sat_inconnu", "pj_n_mode_auto", "pj_n_dernier", "pj_n_titre", "pj_n_aide", "pj_n_sat", "pj_n_passage", "pj_n_autre", "pj_n_aucun", "pj_n_aos", "pj_n_los", "pj_n_creer", "pj_n_refus", "pj_n_trop_gros", "pj_n_indicatif", "pj_n_onglet", "pj_n_contact", "pj_n_son", "pj_n_images", "pj_n_mode", "pj_n_envoyer", "pj_n_envoi", "pj_n_fait", "pj_n_call", "pj_n_loc",
+        "pj_sstv_cadre", "pj_sstv_cadre_aide", "pj_sstv_auto", "pj_sstv_auto_aide")
 
     private fun js(s: String): String = buildString {
         for (ch in s) when {
@@ -118,7 +119,21 @@ object PageJournal {
   #cadreF .legF b { display:block; font-size:15px; color:#fff; }
   #cadreF .legF span { font-size:11px; color:#A0AFC3; }
   #cadreF .fmtF { position:absolute; right:8px; top:8px; font-size:11px; color:var(--cyan); background:rgba(5,10,16,.8); padding:2px 6px; border-radius:5px; }
-  .bascule { position:absolute; left:8px; top:8px; display:flex; gap:4px; z-index:2; }
+  /* The SSTV picture where the video puts it: dragged, resized by its corner or the wheel. */
+  #cadreSstv { position:absolute; z-index:3; display:none; cursor:move; touch-action:none; user-select:none; }
+  #cadreSstv.possible.vu, .ecran:hover #cadreSstv.possible, #cadreSstv.possible.prise { display:block; }
+  #cadreSstv img { position:absolute; inset:0; width:100%; height:100%; display:none; outline:2px solid var(--sstv); pointer-events:none; }
+  #cadreSstv.vu img { display:block; }
+  #cadreSstv .vide { position:absolute; inset:0; border:2px dashed var(--sstv); background:rgba(255,138,31,.12); color:var(--sstv);
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px; text-align:center; padding:6px; font-size:11px; pointer-events:none; }
+  #cadreSstv .vide b { font-size:13px; }
+  #cadreSstv.vu .vide { display:none; }
+  #cadreSstv:hover, #cadreSstv.prise { outline:1px solid rgba(255,255,255,.75); outline-offset:2px; }
+  #cadreSstv .poignee { position:absolute; right:0; bottom:0; width:16px; height:16px; background:var(--sstv); border:2px solid #0B1016; border-radius:3px; cursor:nwse-resize; display:none; }
+  .ecran:hover #cadreSstv .poignee, #cadreSstv.prise .poignee { display:block; }
+  #cadreSstv .auto { position:absolute; left:4px; top:4px; font-size:11px; padding:1px 7px; background:rgba(5,10,16,.85); display:none; }
+  #cadreSstv.manuel:hover .auto { display:block; }
+  .bascule { position:absolute; left:8px; top:8px; display:flex; gap:4px; z-index:4; }
   .attrib { position:absolute; right:4px; bottom:2px; font-size:10px; color:#333; background:rgba(255,255,255,.7); padding:0 4px; display:none; }
   .moment { align-self:start; background:#0E1720; border:1px solid var(--bord); border-radius:8px; padding:9px; }
   .heure { font-family:ui-monospace,Consolas,monospace; font-size:24px; font-weight:700; }
@@ -225,6 +240,7 @@ async function demarre() {
   g('porte').classList.add('cache'); g('page').classList.remove('cache');
   const [l, r] = await Promise.all([lire('/liste'), lire('/reglages')]);
   utc = l.utc; passages = l.passages;
+  cadreSstv = lisCadre(r.cadreSstv); tailleSstv = r.tailleSstv || 0;
   chargeOptions({ accelere: r.accelere, rapide: r.rapide, avant: r.avant, apres: r.apres, surActivite: r.surActivite, sstv: r.sstv,
     fiches: r.fiches, smetre: r.smetre, freq: r.freq, locator: r.locator, res: r.res, ouverture: r.ouverture, recap: r.recap });
   const sats = [...new Set(passages.map(p => p.sat))].sort();
@@ -285,7 +301,10 @@ function construitVue() {
   const ecran = el('div', { class: 'ecran', id: 'ecran' }, [sv('svg', { id: 'ciel', viewBox: '0 0 440 440', preserveAspectRatio: 'xMidYMid meet' }),
     el('canvas', { id: 'carte' }), el('div', { class: 'attrib', id: 'attrib', text: '© OpenStreetMap' }),
     el('div', { class: 'bascule' }, [el('button', { id: 'bCiel', text: T.vue_ciel, onclick: () => montreVue('ciel') }),
-      el('button', { id: 'bCarte', text: T.vue_carte, onclick: () => montreVue('carte') })])]);
+      el('button', { id: 'bCarte', text: T.vue_carte, onclick: () => montreVue('carte') })]),
+    el('div', { id: 'cadreSstv', title: T.sstv_cadre_aide }, [el('img', { alt: '' }),
+      el('div', { class: 'vide' }, [el('b', { text: T.sstv_cadre }), el('span', { text: T.sstv_cadre_aide })]),
+      el('button', { class: 'auto discret', text: T.sstv_auto, title: T.sstv_auto_aide }), el('div', { class: 'poignee' })])]);
   // Two columns on a wide screen (the replay on the left, the moment and the lists on the right), one below.
   const gauche = el('div', { class: 'gauche' }), cote = el('div', { class: 'cote' });
   v.appendChild(el('div', { class: 'deux' }, [gauche, cote]));
@@ -315,7 +334,76 @@ function construitVue() {
     el('button', { id: 'oFabriquer', text: T.onglet_fabriquer, onclick: () => { onglet = 'fabriquer'; panneau(); } }),
     el('button', { id: 'oAjouter', text: T.n_onglet, onclick: () => { onglet = 'ajouter'; panneau(); } })]));
   cote.appendChild(el('div', { class: 'panneau', id: 'panneau' }));
-  installeFrise(); installeCarte(); montreVue(O.vue); panneau();
+  installeFrise(); installeCarte(); installeSstv(); montreVue(O.vue); panneau();
+}
+// ------------------------------------------------------------ the SSTV picture over the replay
+// Where the video puts it: placed by hand (shares of the view: left, top, width;
+// 4:3, 15 to 90 % of the width, inside the view; kept by the station), else by
+// itself, at the top, in the corner away from the satellite. The view: the
+// file's frame on the Make tab (PC), else the replay (the phone's: its square).
+let cadreSstv = null, tailleSstv = 0, satEcranX = null;
+function lisCadre(s) { const v = String(s || '').split(',').map(x => x.trim() === '' ? NaN : +x); return v.length === 3 && v.every(isFinite) ? { x: v[0], y: v[1], l: v[2] } : null; }
+function texteCadre(c) { return c ? [c.x, c.y, c.l].map(v => v.toFixed(4)).join(',') : 'auto'; }
+function vueSstv() {
+  const e = g('ecran'); if (!e) return null; const W = e.clientWidth, H = e.clientHeight; if (!W || !H) return null;
+  const f = onglet === 'fabriquer' ? cadreFichier() : null;
+  if (f) return { x: f.fx, y: f.fy, w: f.fw, h: f.vh, dp: Math.min(f.fw / 360, f.fh / 480) };
+  if (window.SATME_PC) return { x: 0, y: 0, w: W, h: H, dp: Math.min(W / 360, H / 380) };
+  const c = Math.min(W, H); return { x: (W - c) / 2, y: (H - c) / 2, w: c, h: c, dp: c / 360 };
+}
+function placeSstv(c, w, h) {
+  const l = Math.min(Math.max(0.15, Math.min(0.9, c.l)) * w, h * 4 / 3), lh = l * 3 / 4;
+  return { x: Math.max(0, Math.min(w - l, c.x * w)), y: Math.max(0, Math.min(h - lh, c.y * h)), l: l, h: lh };
+}
+function satX(v) {
+  let x = null;
+  if (O.vue === 'carte') x = satEcranX;
+  else { const s = g('sat'), e = g('ecran'); if (s && e) { const a = s.getBoundingClientRect(); if (a.width) x = a.left + a.width / 2 - e.getBoundingClientRect().left; } }
+  return x == null ? 0.5 : (x - v.x) / v.w;
+}
+function placeAuto(v) {
+  const l = tailleSstv > 0 ? v.w * tailleSstv : Math.min(v.w * 0.42, v.h * 0.5 * 4 / 3), m = 8 * v.dp;
+  return { x: satX(v) >= 0.5 ? m : v.w - l - m, y: m, l: l, h: l * 3 / 4 };
+}
+function borneSstv(c, v) { const r = placeSstv(c, v.w, v.h); return { x: r.x / v.w, y: r.y / v.h, l: r.l / v.w }; }
+function majSstv() {
+  const o = g('cadreSstv'); if (!o || !P) return;
+  const v = vueSstv(), possible = !!(O.sstv && v && P.marques.some(m => m.k === 'SSTV' && m.f));
+  o.classList.toggle('possible', possible);
+  if (!possible) return;
+  const r = cadreSstv ? placeSstv(cadreSstv, v.w, v.h) : placeAuto(v);
+  Object.assign(o.style, { left: (v.x + r.x) + 'px', top: (v.y + r.y) + 'px', width: r.l + 'px', height: r.h + 'px' });
+  o.classList.toggle('manuel', !!cadreSstv);
+  const img = P.marques.find(m => m.k === 'SSTV' && m.f && t >= m.de && t <= m.a + 4000), im = o.firstChild;
+  if (img) { if (im.dataset.f !== img.f) { im.src = url('/image', { f: img.f }); im.dataset.f = img.f; }
+    im.style.clipPath = 'inset(0 0 ' + ((1 - Math.max(0, Math.min(1, (t - img.de) / Math.max(1, img.a - img.de)))) * 100).toFixed(1) + '% 0)'; }
+  o.classList.toggle('vu', !!img);
+}
+function installeSstv() {
+  const o = g('cadreSstv'); let pres = null, envoi = 0;
+  const retiens = () => { clearTimeout(envoi); envoi = setTimeout(() => lire('/cadreSstv', { v: cadreSstv ? texteCadre(cadreSstv) : '' }).catch(() => {}), 300); };
+  const ici = v => cadreSstv ? placeSstv(cadreSstv, v.w, v.h) : placeAuto(v);
+  o.addEventListener('pointerdown', ev => {
+    if (ev.target.classList.contains('auto')) return;
+    ev.preventDefault(); ev.stopPropagation(); const v = vueSstv(); if (!v) return;
+    o.setPointerCapture(ev.pointerId); o.classList.add('prise');
+    pres = { x: ev.clientX, y: ev.clientY, r: ici(v), v: v, taille: ev.target.classList.contains('poignee') };
+  });
+  o.addEventListener('pointermove', ev => {
+    if (!pres) return; const dx = ev.clientX - pres.x, dy = ev.clientY - pres.y, r = pres.r, v = pres.v;
+    // The corner: the larger of the two pulls, the picture staying 4:3 from its top left.
+    const c = pres.taille ? { x: r.x / v.w, y: r.y / v.h, l: Math.max(r.l + dx, (r.h + dy) * 4 / 3) / v.w }
+      : { x: (r.x + dx) / v.w, y: (r.y + dy) / v.h, l: r.l / v.w };
+    cadreSstv = borneSstv(c, v); majSstv();
+  });
+  const lache = () => { if (!pres) return; pres = null; o.classList.remove('prise'); retiens(); };
+  o.addEventListener('pointerup', lache); o.addEventListener('pointercancel', lache);
+  o.addEventListener('wheel', ev => {
+    ev.preventDefault(); const v = vueSstv(); if (!v) return;
+    const r = ici(v), l = r.l * (ev.deltaY > 0 ? 1 / 1.1 : 1.1);
+    cadreSstv = borneSstv({ x: (r.x + (r.l - l) / 2) / v.w, y: (r.y + (r.h - l * 3 / 4) / 2) / v.h, l: l / v.w }, v); majSstv(); retiens();
+  }, { passive: false });
+  o.querySelector('.auto').addEventListener('click', ev => { ev.stopPropagation(); cadreSstv = null; majSstv(); retiens(); });
 }
 // ------------------------------------------------------------ the file's frame (PC)
 // Making a file on the PC: where its view and its caption fall on the replay
@@ -350,6 +438,7 @@ function montreVue(v) {
   g('attrib').style.display = v === 'carte' ? 'block' : 'none';
   g('bCiel').classList.toggle('actif', v === 'ciel'); g('bCarte').classList.toggle('actif', v === 'carte');
   if (v === 'carte') dessineCarte();
+  majSstv();
 }
 
 // ------------------------------------------------------------ the side panels
@@ -368,7 +457,7 @@ function panneau() {
   const p = g('panneau'); p.innerHTML = '';
   if (onglet === 'moments') panneauMoments(p); else if (onglet === 'rejeu') panneauRejeu(p);
   else if (onglet === 'ajouter') panneauAjouter(p); else panneauFabriquer(p);
-  dessineCadre();
+  dessineCadre(); majSstv();
 }
 function panneauMoments(p) {
   if (!P.marques.length) p.appendChild(el('p', { class: 'aide', text: T.aucun_moment }));
@@ -412,6 +501,7 @@ function panneauRejeu(p) {
   c.appendChild(caseOpt('smetre', T.aff_smetre)); c.appendChild(caseOpt('freq', T.aff_freq));
   c.appendChild(caseOpt('locator', T.aff_locator, dessineCarte));
   p.appendChild(c);
+  if (P.marques.some(m => m.k === 'SSTV' && m.f)) p.appendChild(el('p', { class: 'aide', text: T.sstv_cadre + ' — ' + T.sstv_cadre_aide }));
   p.appendChild(el('p', { class: 'aide', text: T.options_aide }));
 }
 // ------------------------------------------------------------ a pass from nothing, and what it holds
@@ -732,6 +822,7 @@ function dessineCarte() {
   });
   if (P.qth) { const p = ecran(P.qth[0], P.qth[1]); x.fillStyle = '#111'; x.beginPath(); x.arc(p[0], p[1], 7, 0, 7); x.fill(); x.strokeStyle = '#fff'; x.lineWidth = 2; x.stroke();
     if (O.locator) etiquette(x, [P.indicatif, P.loc].filter(v => v).join(' · '), p[0] - 12, p[1] + 4, true); }
+  satEcranX = ici ? ecran(ici[1], ici[2])[0] : null;
   if (ici) { const p = ecran(ici[1], ici[2]); x.fillStyle = '#FFC21A'; x.beginPath(); x.arc(p[0], p[1], 9, 0, 7); x.fill(); x.strokeStyle = '#0B1016'; x.lineWidth = 2; x.stroke(); }
 }
 function etiquette(x, texte, px, py, gauche) {
@@ -840,7 +931,7 @@ let carteMs = 0;
 function maj() {
   if (!P) return;
   majHeureContact();
-  majCiel(); majMoment(); dessineFrise();
+  majCiel(); majMoment(); dessineFrise(); majSstv();
   // The map, redrawn a few times a second during the replay (its tiles are pictures).
   if (O.vue === 'carte' && performance.now() - carteMs > 120) { carteMs = performance.now(); dessineCarte(); }
   g('lecture').textContent = joue ? '⏸ ' + T.pause : '▶ ' + T.lecture;
@@ -856,7 +947,7 @@ document.addEventListener('keydown', ev => {
   else if (ev.key === 'ArrowLeft') { ev.preventDefault(); cherche(t - (ev.shiftKey ? 30000 : 5000)); }
   else if (ev.key === 'ArrowRight') { ev.preventDefault(); cherche(t + (ev.shiftKey ? 30000 : 5000)); }
 });
-window.addEventListener('resize', () => { if (P) { dessineFrise(); dessineCarte(); dessineCadre(); } });
+window.addEventListener('resize', () => { if (P) { dessineFrise(); dessineCarte(); dessineCadre(); majSstv(); } });
 
 // ------------------------------------------------------------ making on the phone
 async function fabrique(quoi) {
@@ -872,6 +963,8 @@ async function fabrique(quoi) {
     const f = cadreFichier();
     if (f) { const s = 256 * Math.pow(2, zc); p.mcx = mcx + (f.fx + f.fw / 2 - f.W / 2) / s; p.mcy = mcy + (f.fy + f.vh / 2 - f.H / 2) / s; p.cw = f.fw; p.ch = f.vh; } }
   if (window.SATME_PC) p.format = O.format || 'paysage';
+  // The SSTV picture where it shows here (or "auto").
+  p.cadreSstv = texteCadre(cadreSstv);
   const zone = g('fabrication'); zone.innerHTML = '';
   const barre = el('progress', { max: 100, value: 0 }), mot = el('div', { class: 'aide', text: tf('en_cours', 0) });
   zone.appendChild(mot); zone.appendChild(barre);
