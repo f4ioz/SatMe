@@ -413,6 +413,13 @@ fun main(args: Array<String>) {
     }
     serveur.autopilote = autopilote
     portee.launch { while (true) { runCatching { autopilote.tic() }; kotlinx.coroutines.delay(1000) } }
+    // « Agenda › Activités à venir »: the online sources (on by default, each one can be turned off), read at their own pace.
+    val activites = ActivitesPc(station, dossier)
+    serveur.activites = activites
+    portee.launch(kotlinx.coroutines.Dispatchers.IO) {
+        kotlinx.coroutines.delay(20_000)
+        while (true) { runCatching { activites.tic() }; repeat(60) { if (!activites.rafraichissementDemande) kotlinx.coroutines.delay(1000) } }
+    }
     serveur.demarre()
     // QO-100 received when SatMe-PC stopped: taken back only when chosen in Réglages (reception only).
     Thread({ runCatching { trafic.repriseAuDemarrage() } }, "satme-qo100-reprise").apply { isDaemon = true; start() }

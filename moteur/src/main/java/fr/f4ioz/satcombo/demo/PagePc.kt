@@ -750,6 +750,29 @@ ${STYLE_JETONS}
   .pastille.ap-st-EN_COURS { background:rgba(255,180,84,.2); color:var(--ambre); }
   .pastille.ap-st-FAIT { background:rgba(91,214,138,.2); color:var(--vert); }
   .pastille.ap-st-ECARTE, .pastille.ap-st-CHEVAUCHE, .pastille.ap-st-INTERROMPU, .pastille.ap-st-ARRETE { background:rgba(229,72,77,.14); color:var(--rose); }
+  /* Agenda › Activités à venir: what the online sources announce. */
+  .ac-grille { display:grid; grid-template-columns:minmax(320px,1fr) minmax(480px,2.2fr); gap:12px; }
+  .ac-src { display:grid; grid-template-columns:auto 1fr; gap:3px 8px; font-size:var(--fs-s); align-items:center; }
+  .ac-src .petit { color:var(--texte-2); }
+  .ac-src .err { color:var(--ambre); }
+  .ac-jour { margin:12px 0 2px; font-size:var(--fs-s); font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--texte-2); }
+  .ac-act { border:1px solid var(--ligne); border-radius:var(--r2); padding:8px 10px; margin-top:6px; background:var(--s1); }
+  .ac-act.encours { border-color:var(--ambre); }
+  .ac-act .ac-t { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .ac-act .ac-t b { font-size:var(--fs-l); }
+  .ac-act .ac-t .act { margin-left:auto; display:flex; gap:4px; }
+  .ac-act .petit a { color:var(--rx); }
+  .ac-act .ac-f { font-family:var(--mono); color:var(--ambre); font-weight:600; }
+  .pastille.ac-SSTV { background:rgba(63,224,200,.14); color:var(--rx); }
+  .pastille.ac-CONTACT { background:rgba(120,160,255,.16); color:#8fb0ff; }
+  .pastille.ac-SSDV { background:rgba(255,180,84,.18); color:var(--ambre); }
+  .pastille.ac-LRPT { background:rgba(91,214,138,.18); color:var(--vert); }
+  .pastille.ac-c-CONFIRME { background:rgba(91,214,138,.2); color:var(--vert); }
+  .ac-pass { display:flex; flex-wrap:wrap; gap:4px 10px; font-size:var(--fs-s); margin-top:3px; }
+  .ac-pass span { font-family:var(--mono); }
+  #ac-liste { max-height:calc(100vh - 200px); overflow:auto; }
+  .st-nav button .ac-n { background:var(--ambre); color:#111; border-radius:9px; padding:0 6px; font-size:10px; display:inline !important; }
+  .st-nav button .ac-n[hidden] { display:none !important; }
   #ap-ocr { max-height:160px; overflow:auto; white-space:pre-wrap; font-size:11px; margin:4px 0 0; color:var(--texte-2); }
   #h-ap { align-items:center; } #h-ap.on { border-color:var(--rx); color:var(--rx); } #h-ap.encours { border-color:var(--ambre); color:var(--ambre); }
   .ap-bandeau { position:fixed; top:48px; left:calc(50% + var(--rail) / 2); transform:translateX(-50%); z-index:45; display:flex; align-items:center; gap:10px;
@@ -2453,7 +2476,7 @@ ${rail()}
 </div>
 <div class="vue" id="v-agenda" hidden>
 <div class="st ag-st" data-st="agenda">
-  <div class="st-nav"><button data-p="ag-p-rdv" title="Les rendez-vous et le mode automatique">${IconesPc.svg("calendar_month", "st-ico")}<span>Rendez-vous</span></button><button data-p="ag-p-sstv" title="Les campagnes SSTV et leur auto-pilote : chaque passage reçu tout seul (réception seulement)">${IconesPc.svg("live_tv", "st-ico")}<span>SSTV · auto-pilote</span></button></div>
+  <div class="st-nav"><button data-p="ag-p-rdv" title="Les rendez-vous et le mode automatique">${IconesPc.svg("calendar_month", "st-ico")}<span>Rendez-vous</span></button><button data-p="ag-p-sstv" title="Les campagnes SSTV et leur auto-pilote : chaque passage reçu tout seul (réception seulement)">${IconesPc.svg("live_tv", "st-ico")}<span>SSTV · auto-pilote</span></button><button data-p="ag-p-act" title="Ce que les satellites vont émettre et que SatMe décode : SSTV, contacts ARISS, SSDV, METEOR — d'après les sources en ligne">${IconesPc.svg("campaign", "st-ico")}<span>Activités à venir</span><span class="ac-n" id="ac-nb" hidden></span></button></div>
   <div class="st-pan" id="ag-p-rdv">
 <div class="grille2">
   <div>
@@ -2549,6 +2572,37 @@ ${rail()}
     <div class="carte">
       <div class="t">Historique</div>
       <div class="ap-tab"><table><thead><tr><th>Passage</th><th>Campagne</th><th>Devenu</th></tr></thead><tbody id="ap-histo"></tbody></table></div>
+    </div>
+  </div>
+</div>
+  </div>
+  <div class="st-pan" id="ag-p-act">
+<div class="ac-grille">
+  <div>
+    <div class="carte">
+      <div class="t">Activités à venir (sources en ligne)</div>
+      <div class="ligne" style="margin-top:0"><label><input type="checkbox" id="ac-actif" onchange="acReglage('actif', this.checked)"> <b>Actif</b></label><button onclick="acActualise()" title="Demander les sources maintenant (chacune au plus toutes les 5 min)">Actualiser</button></div>
+      <div class="aide">SSTV de l'ISS et d'autres satellites, contacts ARISS (phonie FM), SSDV, images METEOR LRPT : lus dans des sources publiques, à leur rythme (agenda ARISS et flux toutes les 6 h au plus, SatNOGS deux fois par jour, écoutes AMSAT toutes les 30 min seulement pendant une SSTV annoncée). Gardé sur ce PC : la liste reste hors ligne.</div>
+      <div class="ac-src" id="ac-sources"></div>
+    </div>
+    <div class="carte">
+      <div class="t">Prévenir</div>
+      <div class="ap-c2" style="grid-template-columns:1fr">
+        <label><input type="checkbox" id="ac-n-nouvelle" onchange="acReglage('nouvelle', this.checked)"> Une nouvelle activité annoncée (une fois)</label>
+        <label><input type="checkbox" id="ac-n-passage" onchange="acReglage('passage', this.checked)"> Avant chaque passage utile pendant une activité : <input id="ac-avant" type="number" min="1" max="60" style="max-width:56px" onchange="post('api/activites/reglage?k=avant&avant=' + (+this.value || 10)).then(acCharge)"> min avant l'AOS</label>
+        <label><input type="checkbox" id="ac-n-emet" onchange="acReglage('emet', this.checked)"> « Ça émet maintenant » : des écoutes AMSAT pendant une SSTV/SSDV annoncée</label>
+      </div>
+      <div class="petit" id="ac-elmin" style="margin-top:4px"></div>
+    </div>
+    <div class="carte">
+      <div class="t">Dernières alertes</div>
+      <div class="petit" id="ac-annonces"></div>
+    </div>
+  </div>
+  <div>
+    <div class="carte">
+      <div class="t">À venir <span class="petit" id="ac-resume"></span></div>
+      <div id="ac-liste"></div>
     </div>
   </div>
 </div>
@@ -6139,7 +6193,7 @@ function vue(n) {
   if (n === 'reglages') { chargeReglages().then(() => { if (!wlLu && v('carnetUrl')) { wlLu = true; essaiCarnet(); } }); chargeSources(); }
   if (n === 'son' || n === 'sstv') ticSon();
   if (n === 'sstv') { ticMire(true); xsCharge(); }
-  if (n === 'agenda') { ticVeille(); apVu = ''; apCharge(); }
+  if (n === 'agenda') { ticVeille(); apVu = ''; apCharge(); acVu = ''; acCharge(); }
   if (n === 'aprs') { ticAprs(); ticTrophees(); }
   if (n === 'ft8') ticFt8();
   if (n === 'tlm' || n === 'qo100') tlmTic(true);
@@ -12959,6 +13013,98 @@ apCharge();
 setInterval(apCharge, 3000);
 setInterval(ticSon, 1000);
 
+// ------------------------------------------------------------------ Agenda › Activités à venir (online sources)
+let AC = null, acVu = '', acNVu = 0;
+try { acNVu = +(localStorage.getItem('ac-vu') || 0); } catch (x) {}
+const AC_SRC = { ARISS: 'ariss', AMSAT_UK: 'rss', AMSAT_F: 'rss', SATNOGS_M23: 'satnogs', SATNOGS_M24: 'satnogs', AMSAT: 'amsat' };
+async function acCharge() {
+  try { AC = await (await fetch('api/activites')).json(); } catch (x) { AC = null; }
+  if (!AC || !AC.ok) return;
+  // The notices not seen yet: a toast each (three at most), the tab's count.
+  const nouv = AC.annonces.filter(a => a.n > acNVu);
+  nouv.slice(-3).forEach(a => toast((a.sorte === 'emet' ? '📡 ' : a.sorte === 'passage' ? '⏰ ' : '🛰 ') + a.texte));
+  if (nouv.length) { acNVu = Math.max.apply(null, nouv.map(a => a.n)); try { localStorage.setItem('ac-vu', acNVu); } catch (x) {} acNonLues += nouv.length; }
+  if (ouverte('agenda') && g('ag-p-act') && !g('ag-p-act').hidden) acNonLues = 0;
+  g('ac-nb').hidden = !acNonLues; txt('ac-nb', String(acNonLues));
+  if (ouverte('agenda')) acDessine();
+}
+let acNonLues = 0;
+const acDate = ms => new Date(ms).toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' });
+const acHmUtc = ms => new Date(ms).toISOString().slice(11, 16);
+const acHmLoc = ms => { const d = new Date(ms); return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); };
+const acJourLoc = ms => new Date(ms).toLocaleDateString(undefined, { day: '2-digit', month: '2-digit' });
+/** A period in local time and UTC: « 22/10 17:10 → 26/10 18:45 (15:10 → 17:45 UTC) ». */
+function acPeriode(a) {
+  if (a.type === 'LRPT') return 'vu le ' + acJourLoc(a.derniere) + ' ' + acHmLoc(a.derniere) + ' (' + acHmUtc(a.derniere) + ' UTC)';
+  if (a.precision === 'INCONNUE') return 'annoncé le ' + acJourLoc(a.de) + ', sans horaire : voir le lien';
+  if (a.precision === 'JOURS') return 'du ' + acJourLoc(a.de) + ' au ' + acJourLoc(a.a) + ' (horaire à confirmer)';
+  const meme = acJourLoc(a.de) === acJourLoc(a.a);
+  return acJourLoc(a.de) + ' ' + acHmLoc(a.de) + ' → ' + (meme ? '' : acJourLoc(a.a) + ' ') + acHmLoc(a.a) + ' <span class="petit">(' + acHmUtc(a.de) + ' → ' + acHmUtc(a.a) + ' UTC)</span>';
+}
+function acReglages() {
+  const r = AC.reglages;
+  [['ac-actif', r.actif], ['ac-n-nouvelle', r.nouvelle], ['ac-n-passage', r.passage], ['ac-n-emet', r.emet]].forEach(([i, b]) => { if (document.activeElement !== g(i)) g(i).checked = b; });
+  if (document.activeElement !== g('ac-avant')) g('ac-avant').value = r.avant;
+  txt('ac-elmin', 'Passages d’au moins ' + r.elMin + '° (Réglages › élévation minimale).');
+  // One switch per kind of source; its state said quietly (last success, the error).
+  const vus = {};
+  g('ac-sources').innerHTML = AC.sources.map(s => {
+    const k = AC_SRC[s.id], premier = !vus[k]; vus[k] = 1;
+    const etat = !s.actif ? 'coupée' : s.erreur ? '<span class="err" title="' + escA(s.erreur) + '">⚠ ' + esc(s.erreur.slice(0, 40)) + '</span>' + (s.succes ? ' · lu le ' + jourHeure(s.succes) : '') :
+      s.succes ? 'lu le ' + jourHeure(s.succes) : s.id === 'AMSAT' ? 'seulement pendant une SSTV/SSDV annoncée' : 'pas encore lu';
+    return '<span>' + (premier ? '<input type="checkbox" title="Cette source" ' + (r[k] ? 'checked' : '') + (r.actif ? '' : ' disabled') + ' onchange="acReglage(\'' + k + '\', this.checked)">' : '') + '</span>' +
+      '<span><a href="' + escA(s.lien) + '" target="_blank" rel="noopener noreferrer">' + esc(s.nom) + '</a> <span class="petit">' + etat + '</span></span>';
+  }).join('');
+}
+function acDessine() {
+  if (!AC || !AC.ok) return;
+  acReglages();
+  g('ac-annonces').innerHTML = AC.annonces.slice().reverse().slice(0, 10).map(a => jourHeure(a.quand) + ' — ' + esc(a.texte)).join('<br>') || 'aucune depuis le démarrage';
+  const cle = JSON.stringify([AC.activites, AC.reglages.actif, utc()]);
+  if (cle === acVu) return;
+  acVu = cle;
+  const l = AC.activites;
+  txt('ac-resume', !AC.reglages.actif ? 'coupé' : l.length + ' activité' + (l.length > 1 ? 's' : ''));
+  if (!AC.reglages.actif) { g('ac-liste').innerHTML = '<div class="petit">Coupé : aucune source n’est demandée.</div>'; return; }
+  // Seen recently (METEOR) first, then by day.
+  const vus = l.filter(a => a.type === 'LRPT'), annonces = l.filter(a => a.type !== 'LRPT');
+  let h = '', jour = '';
+  if (vus.length) h += '<div class="ac-jour">Vu récemment</div>' + vus.map(acCarte).join('');
+  annonces.forEach(a => { const j = acDate(Math.max(a.de, Math.min(AC.maintenant, a.a))); if (j !== jour) { jour = j; h += '<div class="ac-jour">' + esc(j) + '</div>'; } h += acCarte(a); });
+  g('ac-liste').innerHTML = h || '<div class="petit">Rien d’annoncé pour l’instant' + (AC.sources.some(s => s.succes) ? '.' : ' (les sources n’ont pas encore été lues).') + '</div>';
+}
+function acCarte(a) {
+  const enCours = a.type !== 'LRPT' && a.de <= AC.maintenant && AC.maintenant <= a.a;
+  const src = a.sources.map(s => s.lien ? '<a href="' + escA(s.lien) + '" target="_blank" rel="noopener noreferrer">' + esc(s.nom) + '</a>' : esc(s.nom)).join(', ');
+  const pass = a.passages.length ? '<div class="ac-pass">' + (a.type === 'LRPT' ? 'Passages (24 h) :' : 'Tes passages :') + a.passages.map(p => ' <span title="' + acHmUtc(p.aos) + ' UTC">' + acJourLoc(p.aos) + ' ' + acHmLoc(p.aos) + ' · ' + p.el + '°</span>').join('') + '</div>' :
+    a.catnum ? '<div class="petit">Aucun passage assez haut ici' + (a.type === 'CONTACT' ? ' (contact entendu ailleurs)' : '') + '.</div>' : '';
+  return '<div class="ac-act' + (enCours ? ' encours' : '') + '"><div class="ac-t"><b>' + esc(a.sat || '?') + '</b><span class="pastille ac-' + a.type + '">' + esc(a.libelle) + '</span>' +
+    '<span class="pastille' + (a.confiance === 'CONFIRME' ? ' ac-c-CONFIRME' : ' off') + '">' + esc(a.confianceLibelle) + (a.ecoutes && a.type !== 'LRPT' ? ' · ' + a.ecoutes : '') + '</span>' + (enCours ? '<span class="pastille ap-st-EN_COURS">en cours</span>' : '') +
+    '<span class="act">' + (a.campagne ? '<button onclick="acPrepare(\'' + escA(a.id).replace(/'/g, '') + '\')" title="Ouvrir Agenda › SSTV avec la campagne remplie, à vérifier puis enregistrer">Préparer la campagne SSTV</button>' : '') + '</span></div>' +
+    '<div>' + esc(a.titre) + '</div>' +
+    '<div class="petit">' + acPeriode(a) + '</div>' +
+    '<div class="petit">' + (a.freqHz ? '<span class="ac-f">' + apFreq(a.freqHz) + ' MHz</span> ' + esc(a.modulation === 'LRPT' ? '' : a.modulation) : 'fréquence non dite') + (a.mode && a.mode !== 'LRPT' ? ' · ' + esc(a.mode) : '') + (a.horaire ? ' · ' + esc(a.horaire) : '') + '</div>' +
+    (a.details ? '<div class="petit">' + esc(a.details) + '</div>' : '') + pass +
+    '<div class="petit">Sources : ' + src + a.liens.filter(x => !a.sources.some(s => s.lien === x)).slice(0, 2).map(x => ' · <a href="' + escA(x) + '" target="_blank" rel="noopener noreferrer">lien ↗</a>').join('') + '</div></div>';
+}
+async function acReglage(k, on) { await post('api/activites/reglage?k=' + k + '&on=' + (on ? 1 : 0)); acVu = ''; acCharge(); }
+async function acActualise() { await post('api/activites/rafraichit'); annonce('Sources demandées'); setTimeout(acCharge, 8000); }
+/** « Préparer la campagne SSTV »: Agenda › SSTV's form filled, to check before saving (nothing saved here). */
+async function acPrepare(id) {
+  let j = null;
+  try { j = await (await fetch('api/activites/campagne?id=' + enc(id))).json(); } catch (x) {}
+  if (!j || !j.ok) { alert((j && j.erreur) || 'Activité introuvable.'); return; }
+  apOuvre();
+  await apPropose(j);
+  g('ap-ocr-d').hidden = true;
+  if (j.proposition.notes) g('ap-notes').value = j.proposition.notes;
+  txt('ap-f-titre', 'proposée par « Activités à venir »');
+  txt('ap-imp-etat', 'Rempli d’après l’activité : vérifie puis « Enregistrer la campagne ».');
+  g('ap-form').scrollIntoView({ block: 'nearest' });
+}
+acCharge();
+setInterval(acCharge, 60000);
+
 // ------------------------------------------------------------------ Montage: the station's chain, drawn and lit
 // Display and setup only: nothing here starts a transmission, opens a port or touches the LNB supply.
 var MT = { cat: null, d: null, cle: '', simple: false, edition: false, sel: null, essai: '', telephone: false, pop: null, popCle: '' };
@@ -15451,6 +15597,7 @@ function palSources() {
     A('Agenda › SSTV : campagnes', 'auto-pilote, importer une affiche', apOuvre);
     if (AP.enCours) A('■ Arrêter le passage de l’auto-pilote', AP.enCours.nom, apStop, 'arret');
   }
+  A('Agenda › Activités à venir', 'SSTV, contacts ARISS, SSDV, METEOR annoncés en ligne', () => { vue('agenda'); const b = document.querySelector('#v-agenda .st-nav button[data-p="ag-p-act"]'); if (b) b.click(); acVu = ''; acCharge(); });
   A('Démarrer la réception SDR', 'récepteur, écoute', () => post('api/sdr/demarrer').then(() => { HX.t = {}; ticTete(); ticSdr(); }));
   A('Arrêter la réception SDR', 'récepteur', () => post('api/sdr/arreter').then(() => { HX.t = {}; ticTete(); ticSdr(); }));
   if (HX.ann && HX.ann.on) A('Annonces vocales : ' + (HX.ann.muet ? 'remettre' : 'couper'), 'voix, parole, muet', annMuet);

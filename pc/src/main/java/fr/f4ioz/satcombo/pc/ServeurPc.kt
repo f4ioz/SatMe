@@ -134,6 +134,7 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
     @Volatile var iqSdr: IqPc? = null
     /** « Agenda › SSTV »: the campaigns and their auto-pilot (set before [demarre]). */
     @Volatile var autopilote: AutoPiloteSstvPc? = null
+    @Volatile var activites: ActivitesPc? = null
 
     /** What the « Montage » page lights: the same state the other tabs read. */
     fun lecturesMontage(): fr.f4ioz.satcombo.station.ActiviteMontage.Lectures = fr.f4ioz.satcombo.station.ActiviteMontage.Lectures(
@@ -723,6 +724,12 @@ class ServeurPc(private val station: StationPc, private val port: Int, private v
         // « Agenda › SSTV »: the campaigns, their auto-pilot, a flyer read (its picture in a POST's body).
         if (chemin == "/api/autopilote" || chemin.startsWith("/api/autopilote/")) {
             val rep = autopilote?.sert(chemin, r.methode, { q[it].orEmpty() }) { max -> RequeteHttp.corps(c.getInputStream(), r, max) }
+                ?: fr.f4ioz.satcombo.demo.ReponseWeb("200 OK", "application/json; charset=utf-8", "{\"ok\":false,\"absent\":true}".toByteArray())
+            envoie(sortie, rep.statut, rep.type, rep.corps, rep.entetes); return
+        }
+        // « Agenda › Activités à venir »: what the online sources announce, the passes during it, the notices.
+        if (chemin == "/api/activites" || chemin.startsWith("/api/activites/")) {
+            val rep = activites?.sert(chemin, r.methode) { q[it].orEmpty() }
                 ?: fr.f4ioz.satcombo.demo.ReponseWeb("200 OK", "application/json; charset=utf-8", "{\"ok\":false,\"absent\":true}".toByteArray())
             envoie(sortie, rep.statut, rep.type, rep.corps, rep.entetes); return
         }
