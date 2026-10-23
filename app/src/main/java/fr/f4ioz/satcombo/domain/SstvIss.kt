@@ -49,12 +49,21 @@ object SstvIss {
     fun candidats(liste: List<Transmitter>): List<Transmitter> =
         liste.filter { it.downlinkLowHz != null }.sortedByDescending { estSstv(it) }
 
-    /** The SSTV transmitter among [liste]: named SSTV, else the 145.800 MHz downlink. −1 if none. */
+    /** ISS SSTV since the 2026 series: 437.550 MHz FM, Robot 36 (145.800 MHz before). */
+    const val ISS_SSTV_HZ = 437_550_000L
+
+    /**
+     * The SSTV transmitter among [liste]: named SSTV, else the 437.550 MHz
+     * downlink (the 2026 series), else the 145.800 MHz one (the older
+     * series). −1 if none.
+     */
     fun indexSstv(liste: List<Transmitter>): Int {
         val i = liste.indexOfFirst {
             it.mode.orEmpty().uppercase().contains("SSTV") || it.description.uppercase().contains("SSTV")
         }
         if (i >= 0) return i
+        val u = liste.indexOfFirst { it.downlinkLowHz?.let { hz -> hz in ISS_SSTV_HZ - 5_000L..ISS_SSTV_HZ + 5_000L } == true }
+        if (u >= 0) return u
         return liste.indexOfFirst { it.downlinkLowHz?.let { hz -> hz in 145_795_000L..145_805_000L } == true }
     }
 }

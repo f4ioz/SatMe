@@ -6073,7 +6073,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      */
     fun sdrRestHz(): Long {
         val t = activeTransmitters().getOrNull(_ui.value.selectedTxIndex)
-        return _ui.value.rxRestHz ?: t?.let { centreRx(it) } ?: 145_800_000L
+        return _ui.value.rxRestHz ?: t?.let { centreRx(it) } ?: fr.f4ioz.satcombo.domain.SstvIss.ISS_SSTV_HZ
     }
 
     private var sdrLoopJob: kotlinx.coroutines.Job? = null

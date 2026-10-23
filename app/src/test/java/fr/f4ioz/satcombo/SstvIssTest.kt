@@ -60,5 +60,7 @@ class SstvIssTest {
         // Without the word SSTV: the 145.800 MHz downlink.
         assertEquals(1, SstvIss.indexSstv(listOf(liste[0], tx("Downlink", "FM", 145_800_000L))))
         assertEquals(-1, SstvIss.indexSstv(liste.take(2)))
+        // The 2026 series: 437.550 MHz before the old 145.800 MHz.
+        assertEquals(2, SstvIss.indexSstv(listOf(liste[0], tx("Downlink", "FM", 145_800_000L), tx("Downlink UHF", "FM", 437_550_000L))))
     }
 }

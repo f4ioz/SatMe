@@ -56,10 +56,10 @@ object SdrHub {
         val deviceName: String? = null,
         /** Reader thread running. */
         val running: Boolean = false,
-        /** Rest frequency, without Doppler. */
-        val restHz: Long = 145_800_000L,
+        /** Rest frequency, without Doppler (ISS SSTV until a satellite is chosen). */
+        val restHz: Long = fr.f4ioz.satcombo.domain.SstvIss.ISS_SSTV_HZ,
         /** Frequency actually set on the dongle (rest + Doppler). */
-        val centerHz: Long = 145_800_000L,
+        val centerHz: Long = fr.f4ioz.satcombo.domain.SstvIss.ISS_SSTV_HZ,
         /** Applied Doppler correction, Hz. */
         val dopplerHz: Long = 0L,
         /** Actual dongle sample rate. */

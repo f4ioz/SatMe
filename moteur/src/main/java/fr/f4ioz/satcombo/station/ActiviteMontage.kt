@@ -417,7 +417,7 @@ object ActiviteMontage {
             resume = listOf("Démonstration : DATV reçue par l'ADALM-PLUTO (rien n'est reçu)"))
         "sstv-carte" -> Activite(rx = setOf("cat", "son"), mhz = mapOf("ciel-rx" to 10489.800),
             resume = listOf("Démonstration : SSTV par l'IC-9700 et sa carte son (rien n'est reçu)"))
-        "sstv-reseau" -> Activite(rx = setOf("cat", "son"), mhz = mapOf("ciel-rx" to 145.800),
+        "sstv-reseau" -> Activite(rx = setOf("cat", "son"), mhz = mapOf("ciel-rx" to 437.550),
             resume = listOf("Démonstration : SSTV par l'IC-9700 sur le réseau (rien n'est reçu)"),
             notes = mapOf("cat" to "réseau · 12 ms · CAT + son"), liaisons = mapOf("cat" to "reseau"))
         else -> Activite()
