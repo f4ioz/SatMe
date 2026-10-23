@@ -255,6 +255,7 @@ fun SstvScreen(ui: UiState, vm: MainViewModel) {
 
         // -------------------------------------------------------- re-decode
         // ISS SSTV on its own, pass after pass.
+        if (onglet == "AUTO") item { LienActivites(vm) }
         if (onglet == "AUTO") item { CarteSstvIss(ui, vm) }
 
         if (onglet == "REDECODE") item {

@@ -174,6 +174,8 @@ class MainActivity : ComponentActivity() {
         }
         // An appointment reminder opens the agenda, not a satellite.
         if (intent?.getBooleanExtra("open_agenda", false) == true) vm.openAgenda()
+        // An « Activités à venir » notice opens that page.
+        if (intent?.getBooleanExtra(fr.f4ioz.satcombo.notify.ActivitesWorker.EXTRA_OUVRE, false) == true) vm.openActivites()
         // A pass kept by itself: the journal opened on it.
         val N = fr.f4ioz.satcombo.notify.JournalNotifier
         val jc = intent?.getIntExtra(N.EXTRA_CATNUM, -1) ?: -1

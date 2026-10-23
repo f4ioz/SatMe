@@ -34,6 +34,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.FilterAlt
 import androidx.compose.material.icons.filled.Timeline
+import androidx.compose.material.icons.filled.Campaign
 import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.SettingsInputAntenna
 import androidx.compose.material.icons.filled.Tv
@@ -218,6 +219,7 @@ fun SatComboApp(vm: MainViewModel) {
             RetourArriere.Geste.FERMER_QO100 -> vm.closeQo100()
             RetourArriere.Geste.FERMER_NOMMAGE -> vm.fermeNommage()
             RetourArriere.Geste.FERMER_AGENDA -> vm.closeAgenda()
+            RetourArriere.Geste.FERMER_ACTIVITES -> vm.closeActivites()
             RetourArriere.Geste.RETOUR_LISTE -> vm.backToList()
             RetourArriere.Geste.QUITTER_SELECTION -> vm.toggleSelectionMode()
             RetourArriere.Geste.RIEN -> Unit
@@ -247,6 +249,7 @@ fun SatComboApp(vm: MainViewModel) {
                     ui.screen == Screen.DATV -> DatvScreen(vm.datv)
                     ui.screen == Screen.NOMMAGE -> NommageScreen(ui, vm)
                     ui.screen == Screen.AGENDA -> AgendaScreen(ui, vm)
+                    ui.screen == Screen.ACTIVITES -> ActivitesScreen(ui, vm)
                     ui.screen == Screen.LOCATOR -> LocatorScreen(ui, vm)
                     ui.screen == Screen.FT8 -> Ft8Screen(ui, vm)
                     ui.screen == Screen.GLOBE -> GlobeScreen(ui, vm)
@@ -377,6 +380,7 @@ private fun TopBar(ui: UiState, vm: MainViewModel) {
                             Screen.DATV -> t("datv_titre")
                             Screen.NOMMAGE -> t("entry_title")
                             Screen.AGENDA -> t("agenda_title")
+                            Screen.ACTIVITES -> t("act_avenir_titre")
                             else -> "SatMe"
                         },
                         fontWeight = FontWeight.Black, letterSpacing = 0.5.sp,
@@ -463,6 +467,7 @@ private fun TopBar(ui: UiState, vm: MainViewModel) {
                 RetourArriere.Geste.FERMER_ROTOR -> vm::closeRotor
                 RetourArriere.Geste.FERMER_QO100 -> vm::closeQo100
                 RetourArriere.Geste.FERMER_AGENDA -> vm::closeAgenda
+                RetourArriere.Geste.FERMER_ACTIVITES -> vm::closeActivites
                 RetourArriere.Geste.FERMER_NOMMAGE -> vm::fermeNommage
                 // The satellite page: its header is the bar, so is its way back.
                 else -> if (ui.screen == Screen.PASSES && ui.selected != null) vm::backToList else null
@@ -567,6 +572,10 @@ private fun OverflowMenu(ui: UiState, vm: MainViewModel) {
                 text = { Text(t("agenda_title")) },
                 leadingIcon = { Icon(Icons.Default.CalendarMonth, null, tint = Cyan) },
                 onClick = { open = false; vm.openAgenda() })
+            DropdownMenuItem(
+                text = { Text(t("act_avenir_titre")) },
+                leadingIcon = { Icon(Icons.Default.Campaign, null, tint = Cyan) },
+                onClick = { open = false; vm.openActivites() })
             DropdownMenuItem(
                 text = { Text(t("sked_page_title")) },
                 leadingIcon = { Icon(Icons.Default.Handshake, null, tint = Cyan) },

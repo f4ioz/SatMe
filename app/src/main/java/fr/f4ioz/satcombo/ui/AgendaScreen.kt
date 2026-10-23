@@ -72,6 +72,8 @@ fun AgendaScreen(ui: UiState, vm: MainViewModel) {
     var events by remember { mutableStateOf(AgendaStore.purge(ctx)) }
     var editing by remember { mutableStateOf<AgendaEvent?>(null) }
     var creating by remember { mutableStateOf(false) }
+    // An entry proposed by « Activités à venir »: its form opened, filled, to check and save.
+    var brouillon by remember { mutableStateOf(vm.brouillonAgenda.also { vm.brouillonAgenda = null }) }
 
     fun refresh() {
         events = AgendaStore.load(ctx)
@@ -139,9 +141,10 @@ fun AgendaScreen(ui: UiState, vm: MainViewModel) {
         item { Spacer(Modifier.height(20.dp)) }
     }
 
-    if (creating || editing != null) {
+    if (creating || editing != null || brouillon != null) {
         AgendaEditDialog(
-            initial = editing,
+            initial = editing ?: brouillon,
+            propose = editing == null && brouillon != null,
             useUtc = ui.useUtc,
             // Favourites first, then the whole loaded catalogue. Using only
             // computed passes emptied the list for a satellite with no pass in
@@ -155,8 +158,8 @@ fun AgendaScreen(ui: UiState, vm: MainViewModel) {
                 (favs + fromPasses + others).map { it.trim() }
                     .filter { it.isNotBlank() }.distinct()
             },
-            onSave = { e -> AgendaStore.put(ctx, e); creating = false; editing = null; refresh() },
-            onDismiss = { creating = false; editing = null })
+            onSave = { e -> AgendaStore.put(ctx, e); creating = false; editing = null; brouillon = null; refresh() },
+            onDismiss = { creating = false; editing = null; brouillon = null })
     }
 }
 
@@ -276,6 +279,8 @@ private data class Stamp(
 @Composable
 private fun AgendaEditDialog(
     initial: AgendaEvent?,
+    /** [initial] is a proposal (« Activités à venir »), not a saved entry: a new one. */
+    propose: Boolean = false,
     useUtc: Boolean,
     satNames: List<String>,
     onSave: (AgendaEvent) -> Unit,
@@ -356,13 +361,14 @@ private fun AgendaEditDialog(
             ) { Text(t("save"), color = if (badWindow) TextLo else Cyan) }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text(t("cancel"), color = TextLo) } },
-        title = { Text(if (initial == null) t("agenda_add") else t("agenda_edit"),
+        title = { Text(if (initial == null || propose) t("agenda_add") else t("agenda_edit"),
             color = TextHi) },
         text = {
             Column(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
                 modifier = Modifier.verticalScroll(rememberScrollState())
             ) {
+                if (propose) Text(t("act_agenda_rempli"), color = Aurora, fontSize = 11.sp)
                 OutlinedTextField(
                     value = title, onValueChange = { title = it },
                     label = { Text(t("agenda_what")) },

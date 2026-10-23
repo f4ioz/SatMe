@@ -69,7 +69,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-enum class Screen { PASSES, SETTINGS, LOCATOR, SKED, TIMELINE, PHOTO, ACTIVATION, SSTV, SDR, APT, METEOR, AGENDA, SONDE, ROTOR, QO100, NOMMAGE, GLOBE, FT8, APRS, DATV }
+enum class Screen { PASSES, SETTINGS, LOCATOR, SKED, TIMELINE, PHOTO, ACTIVATION, SSTV, SDR, APT, METEOR, AGENDA, SONDE, ROTOR, QO100, NOMMAGE, GLOBE, FT8, APRS, DATV, ACTIVITES }
 
 /**
  * Fine-tuning settings, kept out of [UiState] because of the 255-register
@@ -1553,6 +1553,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             settings.uniformUi, settings.uiScaleStep, settings.uiFollowSystemFont)
         fr.f4ioz.satcombo.i18n.I18n.apply(settings.language, java.util.Locale.getDefault().language)
         TleRefreshWorker.schedule(app)
+        // « Activités à venir »: on by default, the worker does nothing once switched off.
+        fr.f4ioz.satcombo.notify.ActivitesWorker.schedule(app)
         _ui.value = _ui.value.copy(
             potaRegionLabel = potaRepo.downloadedRegion,
             potaCount = potaRepo.downloadedCount)
@@ -4731,6 +4733,18 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      */
     fun openAgenda() { va(Screen.AGENDA); _ui.value = _ui.value.copy(screen = Screen.AGENDA) }
     fun closeAgenda() { _ui.value = retour() }
+
+    /** « Activités à venir »: what the online sources announce (SSTV, ARISS contacts, SSDV, METEOR). */
+    fun openActivites() { va(Screen.ACTIVITES); _ui.value = _ui.value.copy(screen = Screen.ACTIVITES) }
+    fun closeActivites() { _ui.value = retour() }
+
+    /**
+     * An agenda entry proposed by « Activités à venir » (« Préparer la
+     * campagne SSTV »): the agenda opens on its form, filled, for the owner to
+     * check and save — never saved without him. Taken once by the screen.
+     */
+    @Volatile var brouillonAgenda: fr.f4ioz.satcombo.data.AgendaStore.AgendaEvent? = null
+    fun prepareRendezVous(e: fr.f4ioz.satcombo.data.AgendaStore.AgendaEvent) { brouillonAgenda = e; openAgenda() }
 
     /**
      * Re-reads the agenda from disk, at startup and after every change on the
