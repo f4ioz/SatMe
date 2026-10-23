@@ -88,6 +88,27 @@ those services' rules.
 
 ---
 
+## Pictures
+
+The SSTV sheet offers four backgrounds made from **NASA** pictures, reduced to
+the sheet's size (2400 × 1697) and recompressed, in
+`moteur/src/main/resources/fr/f4ioz/satcombo/sstv/decors/`. NASA pictures are
+generally not subject to copyright in the United States (NASA Images and
+Media Usage Guidelines, nasa.gov/nasa-brand-center/images-and-media); they
+are credited here, and do not imply any endorsement by NASA. Only pictures
+released by NASA itself were chosen: none credited to a third party alone.
+
+| File | Title | Source | Credit, licence |
+|---|---|---|---|
+| `aurore.jpg` | Aurora australis above the Indian Ocean, from the ISS (iss066e146457, 18 Feb 2022) | https://images.nasa.gov/details/iss066e146457 | NASA (ISS crew photograph, JSC) — public domain |
+| `limbe.jpg` | The Earth's glow and the aurora australis over the Indian Ocean (iss062e148363, 13 Apr 2020) | https://images.nasa.gov/details/iss062e148363 | NASA (ISS crew photograph, JSC) — public domain |
+| `lever.jpg` | An orbital sunrise over the Pacific, north of Auckland (iss071e439624, 6 Aug 2024) | https://images.nasa.gov/details/iss071e439624 | NASA (ISS crew photograph, JSC) — public domain |
+| `lagune.jpg` | Hubble reveals heart of Lagoon Nebula (released 22 Sep 2010) | https://images.nasa.gov/details/GSFC_20171208_Archive_e001955 | NASA, ESA (NASA Goddard release) — public domain under NASA's guidelines |
+
+The other backgrounds (starry sky, dusk, abyss, slate) are drawn by SatMe.
+
+---
+
 ## What publishing the source exposes
 
 Two mechanisms in the app relied on the source being private, and no longer

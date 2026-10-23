@@ -68,11 +68,28 @@ object Planche {
          */
         val origine: List<Zone> = emptyList(),
         /** The texts where the template had them, when fitting moved them aside. */
-        val textesOrigine: List<Texte> = emptyList()
+        val textesOrigine: List<Texte> = emptyList(),
+        /**
+         * The background of a generic sheet ([PlancheDecor]): "" the SatMe
+         * starry sky, a built-in one's id, or a picture's file name in the
+         * sheets folder — always fitted to the sheet (cover), never stretched.
+         */
+        val decor: String = "",
+        /** Patches laid over the sheet, at most [ECUSSONS_MAX], the last on top. */
+        val ecussons: List<Ecusson> = emptyList()
     ) {
         /** Fitted to the pictures chosen, not the template's boxes. */
         val ajustee: Boolean get() = origine.isNotEmpty()
     }
+
+    /**
+     * A patch (a mission badge…): a picture of the sheets folder over the
+     * sheet. [zone] keeps the picture's shape; [sansContour]: its plain
+     * surround made transparent ([PlancheDecor.detoure]).
+     */
+    data class Ecusson(val fichier: String, val zone: Zone, val sansContour: Boolean = false)
+
+    const val ECUSSONS_MAX = 3
 
     const val BLANC = 0xFFFFFFFF.toInt()
     const val NOIR = 0xFF000000.toInt()
@@ -503,6 +520,45 @@ object Planche {
         return out
     }
 
+    // ------------------------------------------------------------ patches
+
+    /**
+     * A patch [fichier] of [largeur]×[hauteur] pixels put on the sheet, a
+     * sixth of its width, near the middle (each new one a little lower);
+     * unchanged when it has [ECUSSONS_MAX] already.
+     */
+    fun ajouteEcusson(m: Modele, fichier: String, largeur: Int, hauteur: Int, ratioPlanche: Float = m.ratio): Modele {
+        if (m.ecussons.size >= ECUSSONS_MAX || largeur <= 0 || hauteur <= 0) return m
+        val w = 0.16f; val h = w * ratioPlanche * hauteur / largeur
+        val k = m.ecussons.size * 0.05f
+        val z = Zone(0.5f - w / 2 + k, 0.5f - h / 2 + k, w, h)
+        return m.copy(ecussons = m.ecussons + Ecusson(fichier, ecussonBorne(z)))
+    }
+
+    /** [z] scaled by [facteur] round its centre, its shape kept, within the sheet. */
+    fun echelle(z: Zone, facteur: Float): Zone {
+        val f = facteur.coerceIn(0.03f / z.w.coerceAtLeast(0.001f), 1f / maxOf(z.w, z.h, 0.001f))
+        val w = z.w * f; val h = z.h * f
+        return ecussonBorne(Zone(z.x + (z.w - w) / 2, z.y + (z.h - h) / 2, w, h))
+    }
+
+    /** A patch's place within the sheet, its shape kept (no larger than the sheet). */
+    fun ecussonBorne(z: Zone): Zone {
+        val f = minOf(1f, 1f / maxOf(z.w, z.h, 0.001f))
+        val w = (z.w * f).coerceAtLeast(0.005f); val h = (z.h * f).coerceAtLeast(0.005f)
+        return Zone(z.x.coerceIn(0f, 1f - w), z.y.coerceIn(0f, 1f - h), w, h)
+    }
+
+    /**
+     * A sheet received from a page, its background and patches checked:
+     * a built-in background or a file there is ([existe]), patches that are
+     * files there, [ECUSSONS_MAX] at most, within the sheet.
+     */
+    fun decorVerifie(m: Modele, existe: (String) -> Boolean): Modele = m.copy(
+        decor = m.decor.takeIf { PlancheDecor.integre(it) != null || (PlancheDecor.nomFichier(it) && existe(it)) } ?: "",
+        ecussons = m.ecussons.filter { PlancheDecor.nomFichier(it.fichier) && existe(it.fichier) }
+            .take(ECUSSONS_MAX).map { it.copy(zone = ecussonBorne(it.zone)) })
+
     // ------------------------------------------------------------ storage
 
     private fun esc(s: String) = s.replace("\\", "\\\\").replace("\n", "\\n").replace("\t", " ")
@@ -536,12 +592,16 @@ object Planche {
         // A sheet fitted to its pictures: the template's layout, to go back to (read by older versions as nothing).
         m.origine.forEach { append("origine=").append(z(it)).append('\n') }
         m.textesOrigine.forEach { texte("texteorigine", it) }
+        // Background and patches (read by older versions as nothing).
+        if (m.decor.isNotBlank()) append("decor=").append(esc(m.decor)).append('\n')
+        m.ecussons.forEach { append("ecusson=").append(it.fichier).append(';').append(z(it.zone)).append(';')
+            .append(if (it.sansContour) 1 else 0).append('\n') }
     }
 
     fun lit(id: String, texte: String): Modele? = runCatching {
         var m = Modele(id = id, nom = id)
         val cases = ArrayList<Zone>(); val textes = ArrayList<Texte>(); val images = HashMap<Int, String>()
-        val origine = ArrayList<Zone>(); val textesOrigine = ArrayList<Texte>()
+        val origine = ArrayList<Zone>(); val textesOrigine = ArrayList<Texte>(); val ecussons = ArrayList<Ecusson>()
         fun texte(v: String): Texte {
             val p = v.split(';')
             return Texte(Champ.valueOf(p[0]), zone(p, 1), p[5].toInt(), p[6].toInt(), unesc(p.getOrElse(7) { "" }))
@@ -560,12 +620,15 @@ object Planche {
                 "image" -> runCatching { images[v.substringBefore(';').toInt()] = v.substringAfter(';') }
                 "origine" -> runCatching { origine += zone(v.split(';'), 0) }
                 "texteorigine" -> runCatching { textesOrigine += texte(v) }
+                "decor" -> m = m.copy(decor = unesc(v))
+                "ecusson" -> runCatching { val p = v.split(';'); ecussons += Ecusson(p[0], zone(p, 1), p.getOrNull(5) == "1") }
             }
         }
-        m.copy(cases = cases, textes = textes, images = images, origine = origine, textesOrigine = textesOrigine)
+        m.copy(cases = cases, textes = textes, images = images, origine = origine, textesOrigine = textesOrigine,
+            ecussons = ecussons)
     }.getOrNull()
 
-    /** The sheets folder: templates ("*.planche") and their backgrounds. */
+    /** The sheets folder: templates ("*.planche"), their backgrounds and patches. */
     class Rangement(val dossier: File) {
         init { dossier.mkdirs() }
         fun modeles(): List<Modele> = (dossier.listFiles { f -> f.name.endsWith(".planche") } ?: emptyArray())
@@ -575,8 +638,30 @@ object Planche {
         fun supprime(m: Modele) {
             File(dossier, m.id + ".planche").delete()
             if (m.fond.isNotBlank() && modeles().none { it.fond == m.fond }) File(dossier, m.fond).delete()
+            nettoie()
         }
         fun fond(m: Modele): File? = m.fond.takeIf { it.isNotBlank() }?.let { File(dossier, it) }?.takeIf { it.isFile }
         fun nouvelId(): String = "p" + System.currentTimeMillis().toString(36)
+
+        /** A picture of this folder by its name — only a plain name ([PlancheDecor.nomFichier]). */
+        fun fichier(nom: String): File? = nom.takeIf { PlancheDecor.nomFichier(it) }?.let { File(dossier, it) }?.takeIf { it.isFile }
+        /** The background picture chosen, when it is a file (not a built-in one). */
+        fun decor(m: Modele): File? = if (PlancheDecor.integre(m.decor) != null) null else fichier(m.decor)
+        /** A new file name for a background ("decor") or a patch ("ecusson"). */
+        fun nouveauNom(genre: String, ext: String): String =
+            genre + "_" + System.currentTimeMillis().toString(36) + (0..1295).random().toString(36) + "." + ext
+
+        /**
+         * Backgrounds and patches no sheet uses any more, deleted — not those
+         * just written (a minute), whose sheet may not be saved yet.
+         */
+        fun nettoie() {
+            val l = modeles()
+            val utilises = l.flatMap { m -> m.ecussons.map { it.fichier } + m.decor }.toSet()
+            (dossier.listFiles() ?: return).filter { f ->
+                (f.name.startsWith("decor_") || f.name.startsWith("ecusson_")) && f.name !in utilises &&
+                    System.currentTimeMillis() - f.lastModified() > 60_000L
+            }.forEach { it.delete() }
+        }
     }
 }

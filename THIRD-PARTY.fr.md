@@ -91,6 +91,28 @@ reprend ce code s'en remet aux règles de ces services.
 
 ---
 
+## Images
+
+La planche SSTV propose quatre fonds tirés d'images de la **NASA**, réduites à
+la taille de la planche (2400 × 1697) et recompressées, dans
+`moteur/src/main/resources/fr/f4ioz/satcombo/sstv/decors/`. Les images de la
+NASA ne sont en général pas protégées par le droit d'auteur aux États-Unis
+(NASA Images and Media Usage Guidelines, nasa.gov/nasa-brand-center/images-and-media) ;
+elles sont créditées ici, et n'impliquent aucun soutien de la NASA. Seules
+des images publiées par la NASA elle-même ont été retenues : aucune créditée à
+un tiers seul.
+
+| Fichier | Titre | Source | Crédit, licence |
+|---|---|---|---|
+| `aurore.jpg` | Aurore australe au-dessus de l'océan Indien, vue de l'ISS (iss066e146457, 18 février 2022) | https://images.nasa.gov/details/iss066e146457 | NASA (photo de l'équipage de l'ISS, JSC) — domaine public |
+| `limbe.jpg` | La lueur de la Terre et l'aurore australe sur l'océan Indien (iss062e148363, 13 avril 2020) | https://images.nasa.gov/details/iss062e148363 | NASA (photo de l'équipage de l'ISS, JSC) — domaine public |
+| `lever.jpg` | Un lever de soleil orbital sur le Pacifique, au nord d'Auckland (iss071e439624, 6 août 2024) | https://images.nasa.gov/details/iss071e439624 | NASA (photo de l'équipage de l'ISS, JSC) — domaine public |
+| `lagune.jpg` | Hubble reveals heart of Lagoon Nebula (publiée le 22 septembre 2010) | https://images.nasa.gov/details/GSFC_20171208_Archive_e001955 | NASA, ESA (publication NASA Goddard) — domaine public selon les règles de la NASA |
+
+Les autres fonds (ciel étoilé, crépuscule, abysse, ardoise) sont dessinés par SatMe.
+
+---
+
 ## Ce que la publication rend visible
 
 Deux mécanismes de l'application reposaient sur la discrétion de la source, et
