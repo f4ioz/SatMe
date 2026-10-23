@@ -71,6 +71,23 @@ class PlancheWebPcTest {
     }
 
     @Test
+    fun une_planche_ajustee_a_deux_images_puis_rendue_au_modele() {
+        val pl = planche()
+        val id = JSONObject(String(pl.lit("/nouveau", mapOf("type" to "tour")).corps)).getString("id")
+        assertEquals(2, JSONObject(String(pl.lit("/nombre", mapOf("id" to id, "n" to "2")).corps)).getInt("cases"))
+        val texte = JSONObject(String(pl.lit("/modele", mapOf("id" to id)).corps)).getString("texte")
+        assertTrue(texte.contains("origine="))
+        // The page sends the template back as it read it: the fitting stays.
+        pl.lit("/enregistre", mapOf("id" to id), "POST", texte.toByteArray())
+        val nom = JSONArray(String(pl.lit("/galerie").corps)).getJSONObject(0).getString("f")
+        val r = JSONObject(String(pl.lit("/bascule", mapOf("id" to id, "f" to nom)).corps))
+        assertTrue(r.getBoolean("ok")); assertEquals(3, r.getInt("cases"))
+        assertEquals(800, ImageIO.read(pl.lit("/apercu", mapOf("id" to id, "w" to "800")).corps.inputStream()).width)
+        assertEquals(12, JSONObject(String(pl.lit("/nombre", mapOf("id" to id, "n" to "0")).corps)).getInt("cases"))
+        assertEquals("404 Not Found", pl.lit("/bascule", mapOf("id" to id, "f" to "../x.png")).statut)
+    }
+
+    @Test
     fun un_modele_importe_ses_cases_trouvees() {
         val pl = planche()
         // A template: a dark sheet with four light boxes.

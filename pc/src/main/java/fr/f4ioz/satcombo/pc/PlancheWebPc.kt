@@ -125,7 +125,8 @@ class PlancheWebPc(private val station: StationPc, private val son: SonStation, 
                     val m = lu.copy(fond = avant.fond, nom = lu.nom.take(60).ifBlank { avant.nom },
                         cases = lu.cases.take(60).map { it.bornee() },
                         textes = lu.textes.take(20).map { it.copy(zone = it.zone.bornee(), libre = it.libre.take(200)) },
-                        titre = lu.titre.take(120), images = lu.images.filterKeys { it in lu.cases.indices.take(60) })
+                        titre = lu.titre.take(120), images = lu.images.filterKeys { it in lu.cases.indices.take(60) },
+                        origine = lu.origine.take(60).map { it.bornee() }, textesOrigine = lu.textesOrigine.take(20))
                     synchronized(this) { r.enregistre(m) }
                     if (p("nom_station").isNotBlank()) station.settings.plancheNom = p("nom_station").take(60)
                     json("{\"ok\":true}")
@@ -157,12 +158,25 @@ class PlancheWebPc(private val station: StationPc, private val son: SonStation, 
                 }
 
                 // The boxes filled in order of reception, from the pictures shown (one satellite, or all).
-                "/remplit" -> {
+                // [n]: the sheet fitted to that many pictures (0: the template's boxes); one copy of each slide.
+                "/remplit", "/nombre" -> {
                     val m = modele(p("id")) ?: return NON
                     val sat = p("sat")
-                    val l = galerie().filter { sat.isBlank() || it.second.satName == sat }.map { it.second }
-                    synchronized(this) { r.enregistre(m.copy(images = Planche.remplitParReception(m.cases.size, l))) }
-                    json("{\"ok\":true}")
+                    val l = galerie().filter { sat.isBlank() || it.second.satName == sat }
+                    val sig = PlancheRenduPc.signatures(l.map { it.first })
+                    val n = if (chemin == "/remplit") Planche.remplit(m, l.map { it.second }, sig)
+                        else Planche.avecNombre(m, p("n").toIntOrNull()?.coerceIn(0, Planche.nombreMax(m)) ?: 0, l.map { it.second }, sig)
+                    synchronized(this) { r.enregistre(n) }
+                    json("{\"ok\":true,\"cases\":${n.cases.size}}")
+                }
+
+                // A picture put on a fitted sheet, or taken off it.
+                "/bascule" -> {
+                    val m = modele(p("id")) ?: return NON
+                    val f = galerie().firstOrNull { it.first.name == p("f") }?.first?.name ?: return NON
+                    val n = Planche.bascule(m, f)
+                    synchronized(this) { r.enregistre(n) }
+                    json("{\"ok\":${n != m || f !in Planche.choisies(m)},\"cases\":${n.cases.size}}")
                 }
 
                 "/galerie" -> json(galerie().joinToString(",", "[", "]") { (f, s) ->

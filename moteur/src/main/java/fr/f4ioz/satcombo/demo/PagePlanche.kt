@@ -32,7 +32,8 @@ object PagePlanche {
         "titre_planche", "ajouter_texte", "retirer_texte", "texte_choisi", "couleur", "fond", "sans", "voile_blanc",
         "voile_noir", "libre", "champ_indicatif", "champ_nom_locator", "champ_dates", "champ_titre", "champ_libre",
         "telecharger", "fabrication", "enregistre", "hors_ligne", "aucun_modele", "aucune_image", "choisir_case",
-        "par_defaut", "pupitre", "journal")
+        "par_defaut", "pupitre", "journal", "nb_images", "nb_modele", "ajustee", "aide_ajustee", "avant", "apres",
+        "pleine")
 
     private fun js(s: String): String = buildString {
         for (ch in s) when {
@@ -197,7 +198,7 @@ function unesc(s) { let b = '', i = 0; while (i < s.length) { const c = s[i]; if
 function esc(s) { return String(s).split('\\').join('\\\\').split('\n').join('\\n').split('\t').join(' '); }
 function r5(v) { return Math.round(v * 100000) / 100000; }
 function litModele(txt) {
-  const m = { nom: '', fond: '', ratio: 1.414, legende: false, numeros: false, titre: '', cases: [], textes: [], images: {} };
+  const m = { nom: '', fond: '', ratio: 1.414, legende: false, numeros: false, titre: '', cases: [], textes: [], images: {}, origine: [], autres: [] };
   txt.split('\n').forEach(l => {
     const i = l.indexOf('='); if (i < 0) return;
     const k = l.slice(0, i), v = l.slice(i + 1);
@@ -208,6 +209,9 @@ function litModele(txt) {
     else if (k === 'case') { const p = v.split(';').map(Number); m.cases.push({ x: p[0], y: p[1], w: p[2], h: p[3] }); }
     else if (k === 'texte') { const p = v.split(';'); m.textes.push({ champ: p[0], x: +p[1], y: +p[2], w: +p[3], h: +p[4], couleur: parseInt(p[5]), fond: parseInt(p[6]), libre: unesc(p.slice(7).join(';')) }); }
     else if (k === 'image') { const j = v.indexOf(';'); m.images[+v.slice(0, j)] = v.slice(j + 1); }
+    else if (k === 'origine') { const p = v.split(';').map(Number); m.origine.push({ x: p[0], y: p[1], w: p[2], h: p[3] }); }
+    // What this page does not know (the texts' template places…) goes back as it came.
+    else if (k !== 'planche') m.autres.push(l);
   });
   return m;
 }
@@ -217,6 +221,8 @@ function ecrit(m) {
   m.cases.forEach(z => s += 'case=' + [r5(z.x), r5(z.y), r5(z.w), r5(z.h)].join(';') + '\n');
   m.textes.forEach(t => s += 'texte=' + [t.champ, r5(t.x), r5(t.y), r5(t.w), r5(t.h), t.couleur | 0, t.fond | 0, esc(t.libre).split(';').join(',')].join(';') + '\n');
   Object.keys(m.images).forEach(i => s += 'image=' + i + ';' + m.images[i] + '\n');
+  m.origine.forEach(z => s += 'origine=' + [r5(z.x), r5(z.y), r5(z.w), r5(z.h)].join(';') + '\n');
+  m.autres.forEach(l => s += l + '\n');
   return s;
 }
 
@@ -329,6 +335,7 @@ function suivi() {
   M.cases.forEach((_, i) => { if (!noms.has(M.images[i])) manquent.push(i + 1); });
   const recues = M.cases.length - manquent.length;
   const s = g('suivi');
+  if (M.origine.length) { s.textContent = tf('ajustee', M.cases.length, M.origine.length); s.style.color = 'var(--cyan)'; return; }
   if (!manquent.length && recues > 0) { s.textContent = tf('serie_complete', recues); s.style.color = 'var(--cyan)'; }
   else { s.textContent = tf('serie', recues, M.cases.length, manquent.join(', ')); s.style.color = ''; }
 }
@@ -349,11 +356,25 @@ function panneauImages() {
   sel.value = filtre;
   p.appendChild(el('div', { class: 'rangee' }, [sel,
     el('button', { class: 'discret', text: T.remplir, onclick: async () => { await sauveMaintenant(); await lire('/remplit', { id: id, sat: filtre }); await charge(id); } })]));
+  // How many pictures: the template's boxes, or the sheet fitted to fewer.
+  const max = M.origine.length || M.cases.length, n = M.origine.length ? M.cases.length : 0;
+  const rn = el('div', { class: 'rangee', style: 'margin-top:6px' }, [el('span', { class: 'aide', text: T.nb_images })]);
+  [...new Set([0, 1, 2, 3, 4, 6, 8, 9, 12, 16, n])].filter(k => k <= max).sort((a, b) => a - b).forEach(k => {
+    rn.appendChild(el('button', { class: k === n ? 'primaire' : 'discret', text: k ? String(k) : tf('nb_modele', max), onclick: async () => {
+      await sauveMaintenant(); await lire('/nombre', { id: id, n: k, sat: filtre }); await charge(id); } }));
+  });
+  p.appendChild(rn);
   const r2 = el('div', { class: 'rangee', style: 'margin-top:6px' });
-  if (choix && choix.k === 'c') r2.appendChild(el('button', { class: 'discret', text: T.vider_case, onclick: () => { delete M.images[choix.i]; change(); } }));
+  if (choix && choix.k === 'c' && M.images[choix.i] !== undefined) {
+    const i = choix.i, va = j => { const a = M.images[i], b = M.images[j]; delete M.images[i]; delete M.images[j];
+      if (a !== undefined) M.images[j] = a; if (b !== undefined) M.images[i] = b; choix = { k: 'c', i: j }; change(); };
+    if (i > 0) r2.appendChild(el('button', { class: 'discret', text: T.avant, onclick: () => va(i - 1) }));
+    if (i < M.cases.length - 1) r2.appendChild(el('button', { class: 'discret', text: T.apres, onclick: () => va(i + 1) }));
+  }
+  if (choix && choix.k === 'c' && !M.origine.length) r2.appendChild(el('button', { class: 'discret', text: T.vider_case, onclick: () => { delete M.images[choix.i]; change(); } }));
   r2.appendChild(el('button', { class: 'rouge', text: T.tout_vider, onclick: () => { M.images = {}; change(); } }));
   p.appendChild(r2);
-  p.appendChild(el('p', { class: 'aide', text: choix && choix.k === 'c' ? tf('choisir_case', choix.i + 1) : T.aide_images }));
+  p.appendChild(el('p', { class: 'aide', text: M.origine.length ? T.aide_ajustee : choix && choix.k === 'c' ? tf('choisir_case', choix.i + 1) : T.aide_images }));
   const liste = galerie.filter(x => !filtre || x.s === filtre);
   if (!liste.length) { p.appendChild(el('p', { class: 'aide', text: T.aucune_image })); return; }
   const ou = {}; for (const k in M.images) ou[M.images[k]] = +k;
@@ -366,7 +387,12 @@ function panneauImages() {
       el('div', { class: 'l2', text: heure(x.t) + ' · ' + (x.d ? T.direct : T.redecodee) + (x.c ? '' : ' · ' + T.partielle) })]);
     if (placee) d.appendChild(el('span', { class: 'num', text: (ou[x.f] + 1) + '/' + M.cases.length }));
     d.addEventListener('dragstart', ev => ev.dataTransfer.setData('text/plain', x.f));
-    d.addEventListener('click', () => {
+    d.addEventListener('click', async () => {
+      // A fitted sheet: the picture goes on it or comes off, the sheet fitted again.
+      if (M.origine.length) {
+        await sauveMaintenant(); const j = await lire('/bascule', { id: id, f: x.f });
+        await charge(id); if (!j.ok) g('message').textContent = T.pleine; return;
+      }
       let i = choix && choix.k === 'c' ? choix.i : -1;
       if (i < 0) i = M.cases.findIndex((_, j) => M.images[j] === undefined);
       if (i >= 0) metImage(i, x.f);
@@ -399,7 +425,11 @@ function positionChoisie(p) {
 function panneauDispo() {
   const p = g('pDispo'); p.innerHTML = '';
   p.appendChild(champ(T.nom_modele, M.nom, v => { M.nom = v; clearTimeout(minuteur); minuteur = setTimeout(async () => { await sauve(); listeModeles(); }, 800); }));
-  p.appendChild(caseACocher(T.legende, M.legende, v => { M.legende = v; change(); }));
+  p.appendChild(caseACocher(T.legende, M.legende, async v => {
+    M.legende = v; change();
+    // The line under each picture changes the boxes' shape: a fitted sheet is fitted again.
+    if (M.origine.length) { await sauveMaintenant(); await lire('/nombre', { id: id, n: M.cases.length, sat: filtre }); await charge(id); }
+  }));
   p.appendChild(caseACocher(T.numeros, M.numeros, v => { M.numeros = v; change(); }));
   const r = el('div', { class: 'rangee' });
   r.appendChild(el('button', { class: 'discret', text: T.ajouter_case, onclick: () => {

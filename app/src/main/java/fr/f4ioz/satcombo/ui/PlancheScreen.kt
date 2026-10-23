@@ -88,11 +88,22 @@ fun PlancheScreen(onClose: () -> Unit) {
     var message by remember { mutableStateOf<String?>(null) }
     var occupe by remember { mutableStateOf(false) }
     val vignettes = remember { mutableStateMapOf<String, Bitmap>() }
+    // The pictures of the preview, kept a little larger than the gallery's.
+    val apercus = remember { java.util.concurrent.ConcurrentHashMap<String, Bitmap>() }
     val logo = remember { runCatching { ctx.packageManager.getApplicationIcon(ctx.applicationInfo) }.getOrNull() }
 
     fun change(n: Planche.Modele) {
         m = n
         modeles = modeles.map { if (it.id == n.id) n else it }.let { l -> if (l.any { it.id == n.id }) l else l + n }
+    }
+    // Work that reads the pictures (one copy of each slide): off the screen's thread, the sheet changed after.
+    fun calcule(bloc: () -> Planche.Modele) {
+        occupe = true
+        scope.launch {
+            val n = withContext(Dispatchers.Default) { runCatching(bloc).getOrNull() }
+            occupe = false
+            if (n != null) { change(n); choix = null }
+        }
     }
     // Saved shortly after each change: no save button to forget.
     LaunchedEffect(m) { val x = m ?: return@LaunchedEffect; delay(600); withContext(Dispatchers.IO) { rangement.enregistre(x) } }
@@ -113,9 +124,10 @@ fun PlancheScreen(onClose: () -> Unit) {
         apercu = withContext(Dispatchers.Default) {
             val imgs = x.images.mapNotNull { (i, f) ->
                 val s = parNom[f] ?: return@mapNotNull null
-                val b = vignettes[f] ?: PlancheRendu.charge(s.first, 400)?.also { vignettes[f] = it } ?: return@mapNotNull null
+                val b = apercus[f] ?: PlancheRendu.charge(s.first, 640)?.also { apercus[f] = it } ?: return@mapNotNull null
                 i to (b to s.second)
             }.toMap()
+            apercus.keys.retainAll(x.images.values.toSet())
             PlancheRendu.dessine(x, fondApercu, 1000, imgs, valeurs, logo)
         }
     }
@@ -147,8 +159,13 @@ fun PlancheScreen(onClose: () -> Unit) {
                 val b = PlancheRendu.dessine(x, fond, fond?.width ?: 2400, imgs, valeurs, logo)
                 val sat = imgs.values.firstOrNull()?.second?.satName?.replace(Regex("[^A-Za-z0-9-]"), "-") ?: "SSTV"
                 val jour = valeurs.dates.take(10).replace("-", "").ifBlank { "planche" }
-                val out = File(File(ctx.cacheDir, "export").apply { mkdirs() }, "SatMe_Planche_${sat}_$jour.png")
-                out.outputStream().use { b.compress(Bitmap.CompressFormat.PNG, 100, it) }
+                // Shared: a JPEG, far smaller and quicker to make than the PNG (mail and messaging take it); saved: the PNG.
+                val ext = if (partager) "jpg" else "png"
+                val out = File(File(ctx.cacheDir, "export").apply { mkdirs() }, "SatMe_Planche_${sat}_$jour.$ext")
+                out.outputStream().use {
+                    if (partager) b.compress(Bitmap.CompressFormat.JPEG, 95, it) else b.compress(Bitmap.CompressFormat.PNG, 100, it)
+                }
+                b.recycle()
                 out
             }.getOrNull() }
             occupe = false
@@ -156,7 +173,7 @@ fun PlancheScreen(onClose: () -> Unit) {
             if (partager) runCatching {
                 val u = androidx.core.content.FileProvider.getUriForFile(ctx, "${ctx.packageName}.fileprovider", f)
                 ctx.startActivity(android.content.Intent.createChooser(
-                    android.content.Intent(android.content.Intent.ACTION_SEND).setType("image/png")
+                    android.content.Intent(android.content.Intent.ACTION_SEND).setType("image/jpeg")
                         .putExtra(android.content.Intent.EXTRA_STREAM, u)
                         .addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION), f.name))
             } else enregistre(f.name, "image/png", depuisFichier(f))
@@ -199,7 +216,9 @@ fun PlancheScreen(onClose: () -> Unit) {
                 ApercuPlanche(x, apercu, ratio, choix, onChoix = { choix = it }, onChange = { change(it) })
                 // Where the series stands: what is still to receive.
                 val (recues, manquent) = Planche.suivi(x) { it in parNom }
-                Text(if (manquent.isEmpty() && recues > 0) tf("planche_serie_complete", recues)
+                if (x.ajustee) Text(tf("planche_ajustee", x.cases.size, x.origine.size), color = Cyan, fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 4.dp))
+                else Text(if (manquent.isEmpty() && recues > 0) tf("planche_serie_complete", recues)
                     else tf("planche_serie", recues, x.cases.size, manquent.joinToString(", ")),
                     color = if (manquent.isEmpty() && recues > 0) Cyan else TextHi, fontSize = 13.sp, fontWeight = FontWeight.Bold,
                     modifier = Modifier.padding(top = 4.dp))
@@ -221,7 +240,8 @@ fun PlancheScreen(onClose: () -> Unit) {
                 Spacer(Modifier.height(6.dp))
                 when (onglet) {
                     0 -> OngletImages(x, galerie, places, choix, filtreSat, vignettes,
-                        onFiltre = { filtreSat = it }, onChoix = { choix = it }, onChange = { change(it) })
+                        onFiltre = { filtreSat = it }, onChoix = { choix = it }, onChange = { change(it) },
+                        onCalcule = { calcule(it) }, onMessage = { message = it })
                     1 -> OngletDisposition(x, choix, fondApercu, onChoix = { choix = it }, onChange = { change(it) })
                     else -> OngletTextes(x, choix, indicatif, nom, valeurs,
                         onIndicatif = { indicatif = it },
@@ -314,10 +334,22 @@ private fun OngletImages(
     m: Planche.Modele, galerie: List<Pair<File, SstvMeta.SstvShot>>,
     places: Map<Int, Pair<File, SstvMeta.SstvShot>>, choix: Int?, filtreSat: String,
     vignettes: MutableMap<String, Bitmap>,
-    onFiltre: (String) -> Unit, onChoix: (Int?) -> Unit, onChange: (Planche.Modele) -> Unit
+    onFiltre: (String) -> Unit, onChoix: (Int?) -> Unit, onChange: (Planche.Modele) -> Unit,
+    onCalcule: (() -> Planche.Modele) -> Unit, onMessage: (String) -> Unit
 ) {
     val sats = galerie.map { it.second.satName }.filter { it.isNotBlank() }.distinct()
     val liste = galerie.filter { filtreSat.isBlank() || it.second.satName == filtreSat }
+    fun signatures() = PlancheRendu.signatures(liste.map { it.first })
+    // How many pictures: the template's boxes, or the sheet fitted to fewer (the largest they can be).
+    val max = Planche.nombreMax(m); val n = if (m.ajustee) m.cases.size else 0
+    Text(t("planche_nb_images"), color = TextLo, fontSize = 11.sp)
+    Row(Modifier.horizontalScroll(rememberScrollState()).padding(bottom = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        (listOf(0, 1, 2, 3, 4, 6, 8, 9, 12, 16, n).filter { it <= max }.distinct().sorted()).forEach { k ->
+            FilterChip(selected = k == n, onClick = {
+                onCalcule { Planche.avecNombre(m, k, liste.map { it.second }, signatures()) }
+            }, label = { Text(if (k == 0) tf("planche_nb_modele", max) else "$k", fontSize = 12.sp) })
+        }
+    }
     Text(if (choix != null && choix >= 0) tf("planche_choisir_image", choix + 1, m.cases.size) else t("planche_toucher_case"),
         color = TextHi, fontSize = 12.sp)
     Row(Modifier.horizontalScroll(rememberScrollState()).padding(vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -326,25 +358,45 @@ private fun OngletImages(
     }
     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         OutlinedButton(onClick = {
-            onChange(m.copy(images = Planche.remplitParReception(m.cases.size, liste.map { it.second })))
+            onCalcule { Planche.remplit(m, liste.map { it.second }, signatures()) }
         }) { Text(t("planche_remplir"), color = Cyan, fontSize = 11.sp) }
-        if (choix != null && choix >= 0) OutlinedButton(onClick = { onChange(m.copy(images = m.images - choix)) }) {
+        if (choix != null && choix >= 0 && !m.ajustee) OutlinedButton(onClick = { onChange(m.copy(images = m.images - choix)) }) {
             Text(t("planche_vider_case"), color = Cyan, fontSize = 11.sp)
         }
         OutlinedButton(onClick = { onChange(m.copy(images = emptyMap())) }) { Text(t("planche_tout_vider"), color = Magenta, fontSize = 11.sp) }
     }
-    Text(t("planche_ordre_aide"), color = TextLo, fontSize = 10.sp, modifier = Modifier.padding(vertical = 4.dp))
+    // The picture of the box chosen, one place earlier or later.
+    if (choix != null && choix >= 0 && m.images[choix] != null) Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        if (choix > 0) OutlinedButton(onClick = { onChange(Planche.echange(m, choix, choix - 1)); onChoix(choix - 1) }) {
+            Text(t("planche_avant"), color = Cyan, fontSize = 11.sp)
+        }
+        if (choix < m.cases.size - 1) OutlinedButton(onClick = { onChange(Planche.echange(m, choix, choix + 1)); onChoix(choix + 1) }) {
+            Text(t("planche_apres"), color = Cyan, fontSize = 11.sp)
+        }
+    }
+    Text(t(if (m.ajustee) "planche_aide_ajustee" else "planche_ordre_aide"), color = TextLo, fontSize = 10.sp,
+        modifier = Modifier.padding(vertical = 4.dp))
     val utilise = m.images.entries.associate { it.value to it.key }
     // Large, two a row: here a picture is only chosen, so it gets the room to be seen.
     val heure = remember { java.text.SimpleDateFormat("dd/MM/yy HH:mm", java.util.Locale.getDefault()) }
     liste.chunked(2).forEach { rang ->
         Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             rang.forEach { (f, s) ->
-                val b = remember(f.name) { vignettes[f.name] ?: PlancheRendu.charge(f, 500)?.also { vignettes[f.name] = it } }
+                // Read off the screen's thread: a week of ISS passes is many pictures.
+                val b by produceState(vignettes[f.name], f.name) {
+                    if (value == null) value = withContext(Dispatchers.IO) { PlancheRendu.charge(f, 300, leger = true) }
+                        ?.also { vignettes[f.name] = it }
+                }
                 val place = utilise[f.name]
                 Column(Modifier.weight(1f).clip(RoundedCornerShape(8.dp)).background(SpaceCard)
                     .border(3.dp, if (place != null) Cyan else Color.Transparent, RoundedCornerShape(8.dp))
                     .clickable {
+                        // A fitted sheet: on it or off it, the sheet fitted again.
+                        if (m.ajustee) {
+                            val n2 = Planche.bascule(m, f.name)
+                            if (n2 == m && place == null) onMessage(tf("planche_pleine", m.cases.size)) else { onChange(n2); onChoix(null) }
+                            return@clickable
+                        }
                         // Into the box chosen, else the first empty one.
                         val c = choix?.takeIf { it >= 0 } ?: m.cases.indices.firstOrNull { it !in m.images.keys } ?: return@clickable
                         // One picture per box: taken from where it was before.
@@ -353,8 +405,9 @@ private fun OngletImages(
                         onChoix((c + 1).takeIf { it < m.cases.size } ?: c)
                     }) {
                     Box {
-                        if (b != null) Image(b.asImageBitmap(), null, contentScale = ContentScale.Crop,
-                            modifier = Modifier.fillMaxWidth().aspectRatio(4f / 3f))
+                        b?.let { Image(it.asImageBitmap(), null, contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxWidth().aspectRatio(4f / 3f)) }
+                            ?: Box(Modifier.fillMaxWidth().aspectRatio(4f / 3f))
                         if (place != null) Text("${place + 1}/${m.cases.size}", color = Color.Black, fontSize = 13.sp, fontWeight = FontWeight.Bold,
                             modifier = Modifier.padding(4.dp).background(Cyan, RoundedCornerShape(6.dp)).padding(horizontal = 6.dp, vertical = 1.dp))
                     }
@@ -380,7 +433,8 @@ private fun OngletDisposition(
     Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         if (fond != null) OutlinedButton(onClick = {
             val (c, _) = detecte(fond)
-            if (c.isNotEmpty()) { onChange(m.copy(cases = c, images = m.images.filterKeys { it < c.size })); onChoix(null) }
+            val d = Planche.duModele(m)
+            if (c.isNotEmpty()) { onChange(d.copy(cases = c, images = d.images.filterKeys { it < c.size })); onChoix(null) }
         }) { Text(t("planche_detecter"), color = Cyan, fontSize = 11.sp) }
         OutlinedButton(onClick = {
             val z = Planche.Zone(0.4f, 0.4f, 0.16f, 0.16f * m.ratio * 0.75f).bornee()
@@ -395,18 +449,18 @@ private fun OngletDisposition(
     Text(t("planche_nb_cases"), color = TextLo, fontSize = 11.sp, modifier = Modifier.padding(top = 6.dp))
     Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         listOf(4, 6, 8, 9, 10, 12, 16).forEach { n ->
-            FilterChip(selected = m.cases.size == n, onClick = {
-                // Over the same area as the boxes there are.
-                val zone = if (m.cases.isEmpty()) Planche.Zone(0.33f, 0.03f, 0.65f, 0.94f) else {
-                    val x0 = m.cases.minOf { it.x }; val y0 = m.cases.minOf { it.y }
-                    Planche.Zone(x0, y0, m.cases.maxOf { it.x + it.w } - x0, m.cases.maxOf { it.y + it.h } - y0)
-                }
+            FilterChip(selected = m.cases.size == n && !m.ajustee, onClick = {
+                // Over the same area as the template's boxes, as large as they can be: the template's new layout.
+                val d = Planche.duModele(m)
+                val zone = Planche.englobe(d.cases) ?: Planche.Zone(0.33f, 0.03f, 0.65f, 0.94f)
                 val ratio = fond?.let { it.width.toFloat() / it.height } ?: m.ratio
-                onChange(m.copy(cases = Planche.grille(n, zone, ratio), images = m.images.filterKeys { it < n })); onChoix(null)
+                onChange(d.copy(cases = Planche.grilleOptimale(n, zone, ratio, Planche.aspectCase(m.legende)),
+                    images = d.images.filterKeys { it < n })); onChoix(null)
             }, label = { Text("$n", fontSize = 12.sp) })
         }
     }
-    Interrupteur(t("planche_legende"), t("planche_legende_desc"), m.legende) { onChange(m.copy(legende = it)) }
+    // The line under each picture changes the boxes' shape: a fitted sheet is fitted again.
+    Interrupteur(t("planche_legende"), t("planche_legende_desc"), m.legende) { onChange(Planche.reajuste(m.copy(legende = it))) }
     Interrupteur(t("planche_numeros"), t("planche_numeros_desc"), m.numeros) { onChange(m.copy(numeros = it)) }
 }
 
