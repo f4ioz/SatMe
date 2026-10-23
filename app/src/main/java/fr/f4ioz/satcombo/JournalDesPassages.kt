@@ -354,6 +354,9 @@ class JournalDesPassages(
     fun rapide(): Int = settings.journalRapide
     fun setRapide(x: Int) { settings.journalRapide = x }
     fun setFlashTaille(v: Float) { settings.journalFlashTaille = v }
+    /** The journal page's SSTV picture placed by hand ("x,y,l", empty: by itself). */
+    fun cadreSstv(): String = settings.journalCadreSstv
+    fun setCadreSstv(v: String) { settings.journalCadreSstv = v }
 
     /** Length of a recording (ms), read once. */
     private val dureesEnregistrements = java.util.concurrent.ConcurrentHashMap<String, Long>()

@@ -209,6 +209,7 @@ La page du journal du téléphone, sous les onglets du PC : les passages listés
 
 - **Le passage entier** sur la carte : la trace prévue en pointillés, la partie suivie en plein — même quand SatMe-PC a été lancé en cours de passage.
 - **Chaque contact à sa place, comme dans la vidéo** : un point sur la trace au moment du QSO, avec l'indicatif, et la station à son carré, reliée à lui.
+- **L'image SSTV de la vidéo, à la souris** : sur le rejeu, la glisser pour la déplacer, tirer son coin (ou la molette) pour sa taille (4:3, de 15 à 90 % de la largeur) ; un cadre pointillé la montre au survol même quand aucune image n'arrive. Gardée par la station et reprise telle quelle par l'image, le GIF et la vidéo, en 16:9 comme en 3:4. **Auto** la remet à sa place d'origine : en haut, dans le coin opposé au satellite.
 - **Le S-mètre** lu par le CAT (IC-9700, IC-9100, IC-910H, TS-2000), en réception seulement.
 - **Ajouter** un contact au rejeu : en pause, l'heure est celle du son ; indicatif prédit et QRZ, mode et fréquences du satellite, RST (59 / 59 d'origine) et commentaire ; Entrée valide.
 - **+ Passage** : un passage fait de rien — le satellite et ses heures, des contacts, un son, des images.

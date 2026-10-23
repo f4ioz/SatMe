@@ -350,7 +350,9 @@ object JournalRendu {
         /** The RX frequency at rest, moment by moment (where the rig was in the passband). */
         val frequences: List<Pair<Long, Long>> = emptyList(),
         /** "TX" while the station transmitted. */
-        val affTx: Boolean = true
+        val affTx: Boolean = true,
+        /** The SSTV picture where the journal page placed it, shares of the view; null: [tailleFlash], away from the satellite. */
+        val cadreSstv: fr.f4ioz.satcombo.domain.CadreSstv? = null
     ) {
         val cadre = cadreVu ?: JournalPassage.cadre(e.points.map { it.az to it.el })
         var vueCarte = JournalPassage.VueCarte()
@@ -380,9 +382,11 @@ object JournalRendu {
         // The SSTV picture arriving, in the corner away from the satellite.
         if (sc.affSstv) imageA(sc.marques, instant, sc.flashMs)?.let { (m, part) ->
             val bm = m.fichier?.let { sc.images[it] } ?: return@let
-            val lw = w * sc.tailleFlash; val lh = lw * 3 / 4
-            val x = if (satX >= 0.5f) 8 * dp else w - lw - 8 * dp
-            dessineArrivee(c, bm, android.graphics.RectF(x, 8 * dp, x + lw, 8 * dp + lh), part, dp)
+            val pl = sc.cadreSstv?.place(w.toFloat(), haut.toFloat())
+            val lw = pl?.l ?: (w * sc.tailleFlash); val lh = lw * 3 / 4
+            val x = pl?.x ?: if (satX >= 0.5f) 8 * dp else w - lw - 8 * dp
+            val y = pl?.y ?: (8 * dp)
+            dessineArrivee(c, bm, android.graphics.RectF(x, y, x + lw, y + lh), part, dp)
         }
         // The stations just worked and heard: their cards stacked at the bottom, on the same
         // side as the picture (away from the satellite), the picture being at the top.

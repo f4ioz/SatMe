@@ -209,6 +209,7 @@ The phone's journal page, under the PC's tabs: passes listed (♪ when there is 
 
 - **The whole pass** on the map: the predicted track dashed, the part followed solid — even when SatMe-PC was started mid-pass.
 - **Each contact in its place, as in the video**: a dot on the track at the QSO's moment, with the callsign, and the station at its square, linked to it.
+- **The video's SSTV picture, with the mouse**: on the replay, drag it to move it, pull its corner (or use the wheel) to size it (4:3, 15 to 90 % of the width); a dashed frame shows it on hover even when no picture is arriving. Kept by the station and used as is by the picture, the GIF and the video, in 16:9 as in 3:4. **Auto** puts it back in its original place: at the top, in the corner away from the satellite.
 - **The S-meter** read through CAT (IC-9700, IC-9100, IC-910H, TS-2000), receiving only.
 - **Add** a contact during the replay: paused, the time is the sound's; callsign predicted and QRZ, the satellite's mode and frequencies, RST (59 / 59 by default) and a comment; Enter confirms.
 - **+ Passage**: a pass made from nothing — the satellite and its times, contacts, a sound, pictures.
