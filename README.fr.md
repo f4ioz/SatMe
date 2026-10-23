@@ -111,6 +111,20 @@ SatMe-PC est passé d'une station satellites à toute une station dans un naviga
 
 <p align="center"><img src="docs/images/pc-espaces-palette.png" width="98%" alt="SatMe-PC : le rail des espaces de travail, le bandeau, la barre d'état, et la palette Ctrl+K qui propose d'écouter 145,800 MHz sur le récepteur SDR"></p>
 
+**🔧 SatMe-Node depuis la page** *(en cours, après la 20.83)* — Station › **SatMe-Node** : la santé du Pi, le rôle de chaque carte (réception DATV, récepteur SDR, émetteur), les services, la version et le journal ; **redémarrer ou éteindre le Pi** après une confirmation. L'alimentation LNB du node est gardée quand on change de station, depuis le PC comme depuis le téléphone ; SatMe-PC redémarré retrouve seul un node qui reçoit ; le téléphone liste les stations de la bande large à recevoir d'un toucher, l'image en plein écran. [Installer SatMe-Node](docs/installer-satme-node.fr.md)
+
+**📺 Émis | Reçu** *(en cours)* — pendant une émission DATV, l'image émise à côté de l'image reçue de QO-100, chacune agrandie d'un clic.
+
+**🎙 L'IC-9700 en émission** *(en cours)* — PTT tenu depuis la page (un seul client, 2 s de garde, minuterie), le micro du navigateur vers le poste par sa carte son USB ou par le réseau, puissance plafonnée ; HTTPS pour la page ouverte d'une autre machine.
+
+**🖼 La planche SSTV** *(en cours)* — moins d'images que le modèle, disposées le plus grand possible, une copie de chaque diapo ; un fond (intégré, images NASA ou la vôtre) et jusqu'à trois écussons de mission, leur contour uni enlevé.
+
+<p align="center">
+<img src="docs/images/pc-planche-decor.webp" width="58%" alt="La planche SSTV dans SatMe-PC, onglet Décor : six images de l'ISS ajustées en grand sur un modèle de douze cases, le fond NASA « Lueur de la Terre », l'écusson de l'Expédition 75 placé à gauche, son contour enlevé">
+<img src="docs/images/pc-datv-emis-recu.webp" width="40%" alt="DATV, Émis | Reçu (états simulés pour la capture) : la mire émise à gauche, l'image reçue de retour à droite, accrochée, MER 7,4 dB">
+</p>
+<p align="center"><img src="docs/images/pc-satme-node.webp" width="98%" alt="Station › SatMe-Node, un vrai node : la santé du Pi, le réseau et le flux I/Q, les rôles des cartes, les cartes USB vues, l'émission (non autorisée), les services avec redémarrer et éteindre, la version, le journal du node"></p>
+
 **🤖 Campagnes SSTV en auto-pilote** — une série ARISS ou un satellite qui envoie des images quelques jours s'entre comme un rendez-vous dans l'**Agenda**, ou depuis l'**affiche** de l'annonce lue sur le PC ; l'auto-pilote (coupé d'origine) prépare le poste, le rotor, le son et le décodeur avant chaque passage, enregistre, garde les images et remet tout comme avant. Réception seulement, jamais d'émission.
 
 **🧭 Le plan du rotor** — tout le passage prévu avant l'AOS : de quel côté de la butée, **retourné à 180°** par-dessus le zénith ou un seul déroulement placé quand le satellite est bas ; des **zones cachées** (toit, arbre) ; le plan dessiné sur le ciel de Suivi, et le chemin du rotor de chaque contact du carnet.

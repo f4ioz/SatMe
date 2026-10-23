@@ -111,6 +111,20 @@ SatMe-PC grew from a satellite station into a whole station in a browser: QO-100
 
 <p align="center"><img src="docs/images/pc-espaces-palette.png" width="98%" alt="SatMe-PC: the workspaces rail, the header strip, the status bar, and the Ctrl+K palette offering to listen to 145.800 MHz on the SDR receiver"></p>
 
+**🔧 SatMe-Node from the page** *(upcoming, after 20.83)* — Station › **SatMe-Node**: the Pi's health, each board's role (DATV receiver, SDR receiver, transmitter), services, version and log; **restart or switch off the Pi** after a confirmation. The node's LNB supply is kept when changing station, from the PC or the phone; a restarted SatMe-PC finds a receiving node by itself; the phone lists the wide band's stations to receive with a touch, the picture full screen. [Installing SatMe-Node](docs/installer-satme-node.md)
+
+**📺 Émis | Reçu** *(upcoming)* — while transmitting DATV, the picture sent beside the picture received back from QO-100, each one enlarged with a click.
+
+**🎙 The IC-9700 transmitting** *(upcoming)* — PTT held from the page (one client, 2 s watchdog, time-out), the browser's microphone to the rig through its USB sound card or the network, RF power capped; HTTPS for the page opened from another machine.
+
+**🖼 The SSTV sheet** *(upcoming)* — fewer pictures than the template, laid out as large as can be, one copy of each slide; a background (built in, NASA pictures or your own) and up to three mission patches, their plain surround removed.
+
+<p align="center">
+<img src="docs/images/pc-planche-decor.webp" width="58%" alt="The SSTV sheet in SatMe-PC (French page), Décor tab: six ISS pictures fitted large on a twelve-box template, the NASA « Earth's glow » background, the Expedition 75 patch placed on the left, its surround removed">
+<img src="docs/images/pc-datv-emis-recu.webp" width="40%" alt="DATV, Émis | Reçu (states simulated for the screenshot): the test card sent on the left, the picture received back on the right, locked, MER 7.4 dB">
+</p>
+<p align="center"><img src="docs/images/pc-satme-node.webp" width="98%" alt="Station › SatMe-Node, a real node: the Pi's health, network and I/Q stream, board roles, USB boards seen, transmission (not allowed), services with restart and power off, version, the node's log"></p>
+
 **🤖 SSTV campaigns on auto-pilot** — an ARISS series or a satellite sending pictures for a few days is entered like an appointment in the **Agenda**, or from the announcement's **flyer** read on the PC; the auto-pilot (off by default) prepares the rig, rotator, sound and decoder before each pass, records, keeps the pictures and puts everything back. Receive only, never transmits.
 
 **🧭 The rotator's plan** — the whole pass planned before AOS: which side of the end stop, **flipped at 180°** over the zenith or a single unwind placed where the satellite is low; **hidden zones** (roof, tree); the plan drawn on the Suivi sky, and each logged contact's rotator path.
